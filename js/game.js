@@ -218,6 +218,7 @@ export class Game {
       if (code === "Enter" || code === "Space") {
         this.audio.init();
         this.audio.resume();
+        this.applyAudioSettings();
         this.audio.menuConfirm();
         this.state = GameState.MODE_SELECT;
         this.menuSelection = 0;
@@ -897,8 +898,8 @@ export class Game {
       this.player.maxHealth,
     );
     this.player.ammo = Math.min(this.player.ammo + 20, 999);
-    this.saveCampaign();
     this.loadCampaignLevel(this.campaignLevel);
+    this.saveCampaign();
   }
 
   interact() {
