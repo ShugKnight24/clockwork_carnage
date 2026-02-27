@@ -486,11 +486,6 @@ export class Game {
             this.settings[key] = saved[key];
           }
         }
-        // Migrate old single volume to split volumes
-        if (saved.volume !== undefined && saved.musicVolume === undefined) {
-          this.settings.musicVolume = saved.volume;
-          this.settings.sfxVolume = saved.volume;
-        }
       }
     } catch (_) {}
   }
