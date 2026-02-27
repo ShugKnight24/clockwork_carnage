@@ -401,6 +401,18 @@ export class AudioManager {
     }
   }
 
+  setMusicVolume(v) {
+    if (this.musicGain) {
+      this.musicGain.gain.value = Math.max(0, Math.min(1, v * 0.15));
+    }
+  }
+
+  setSfxVolume(v) {
+    if (this.sfxGain) {
+      this.sfxGain.gain.value = Math.max(0, Math.min(1, v));
+    }
+  }
+
   stopMusic() {
     if (this._musicTimer) {
       clearTimeout(this._musicTimer);

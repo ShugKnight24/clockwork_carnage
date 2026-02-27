@@ -152,16 +152,21 @@ export class Game {
     this.weaponAnimFrame = 0;
     this.weaponAnimTime = 0;
     this.roundStartTime = 0;
+    this.deathTimer = 0;
+    this.pauseSaveFlash = 0;
     this.settings = {
       crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
       difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
       minimapSize: 200,
-      volume: 80, // 0..100
+      musicVolume: 80, // 0..100
+      sfxVolume: 80, // 0..100
+      sensitivity: 1.0, // 0.5..2.0
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
 
     this.setupInput();
+    this.loadSettings();
   }
 
   // TODO: Abstract out InputManager
@@ -213,6 +218,7 @@ export class Game {
       if (code === "Enter" || code === "Space") {
         this.audio.init();
         this.audio.resume();
+        this.applyAudioSettings();
         this.audio.menuConfirm();
         this.state = GameState.MODE_SELECT;
         this.menuSelection = 0;
@@ -221,22 +227,7 @@ export class Game {
     }
 
     if (this.state === GameState.MODE_SELECT) {
-      if (code === "ArrowUp" || code === "KeyW") {
-        this.menuSelection = (this.menuSelection + 1) % 2;
-        this.audio.menuSelect();
-      }
-      if (code === "ArrowDown" || code === "KeyS") {
-        this.menuSelection = (this.menuSelection + 1) % 2;
-        this.audio.menuSelect();
-      }
-      if (code === "Enter" || code === "Space") {
-        this.audio.menuConfirm();
-        if (this.menuSelection === 0) {
-          this.startArena();
-        } else {
-          this.startCampaign();
-        }
-      }
+      // Navigation handled by main.js via HTML button focus
       if (code === "Escape") {
         this.state = GameState.TITLE;
       }
@@ -282,12 +273,16 @@ export class Game {
         this.settingsSelection = 0;
         this.state = GameState.SETTINGS;
       }
+      if (code === "KeyF" && this.mode === "campaign") {
+        this.saveCampaign();
+        this.pauseSaveFlash = performance.now();
+      }
       return;
     }
 
     if (this.state === GameState.SETTINGS) {
       // TODO: Too many magic numbers here, terrible to maintain
-      const settingsCount = 4; // difficulty, crosshair, minimapSize, volume
+      const settingsCount = 6; // difficulty, crosshair, minimapSize, musicVolume, sfxVolume, sensitivity
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
@@ -308,8 +303,19 @@ export class Game {
             this.settings.minimapSize + 20,
           );
         } else if (this.settingsSelection === 3) {
-          this.settings.volume = Math.min(100, this.settings.volume + 10);
-          this.audio.setVolume(this.settings.volume / 100);
+          this.settings.musicVolume = Math.min(
+            100,
+            this.settings.musicVolume + 10,
+          );
+          this.audio.setMusicVolume(this.settings.musicVolume / 100);
+        } else if (this.settingsSelection === 4) {
+          this.settings.sfxVolume = Math.min(100, this.settings.sfxVolume + 10);
+          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+        } else if (this.settingsSelection === 5) {
+          this.settings.sensitivity = Math.min(
+            2.0,
+            Math.round((this.settings.sensitivity + 0.1) * 10) / 10,
+          );
         }
         this.audio.menuConfirm();
       }
@@ -324,8 +330,19 @@ export class Game {
             this.settings.minimapSize - 20,
           );
         } else if (this.settingsSelection === 3) {
-          this.settings.volume = Math.max(0, this.settings.volume - 10);
-          this.audio.setVolume(this.settings.volume / 100);
+          this.settings.musicVolume = Math.max(
+            0,
+            this.settings.musicVolume - 10,
+          );
+          this.audio.setMusicVolume(this.settings.musicVolume / 100);
+        } else if (this.settingsSelection === 4) {
+          this.settings.sfxVolume = Math.max(0, this.settings.sfxVolume - 10);
+          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+        } else if (this.settingsSelection === 5) {
+          this.settings.sensitivity = Math.max(
+            0.5,
+            Math.round((this.settings.sensitivity - 0.1) * 10) / 10,
+          );
         }
         this.audio.menuConfirm();
       }
@@ -333,6 +350,7 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
+        this.saveSettings();
         this.state = GameState.PAUSED;
       }
       return;
@@ -429,6 +447,232 @@ export class Game {
       }
       return;
     }
+  }
+
+  applyAudioSettings() {
+    this.audio.setMusicVolume(this.settings.musicVolume / 100);
+    this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+  }
+
+  // Save / Load
+  saveSettings() {
+    try {
+      localStorage.setItem("cc_settings", JSON.stringify(this.settings));
+    } catch (_) {}
+  }
+
+  loadSettings() {
+    try {
+      const raw = localStorage.getItem("cc_settings");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        // Whitelist known keys to avoid prototype pollution
+        for (const key of Object.keys(this.settings)) {
+          if (Object.prototype.hasOwnProperty.call(saved, key)) {
+            const val = saved[key];
+            if (typeof val !== typeof this.settings[key]) continue;
+            this.settings[key] = val;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  saveArena() {
+    try {
+      const data = {
+        round: this.arenaRound,
+        score: this.player.score,
+        kills: this.player.kills,
+        health: this.player.health,
+        maxHealth: this.player.maxHealth,
+        armor: this.player.armor,
+        ammo: this.player.ammo,
+        weapons: this.player.weapons,
+        moveSpeed: this.player.moveSpeed,
+        damageMultiplier: this.player.damageMultiplier,
+        regenRate: this.player.regenRate,
+        critChance: this.player.critChance,
+        lifeSteal: this.player.lifeSteal,
+        splashDamage: this.player.splashDamage,
+        fireRateMultiplier: this.player.fireRateMultiplier,
+        dodgeChance: this.player.dodgeChance,
+        maxShield: this.player.maxShield,
+        shield: this.player.shield,
+        multiShot: this.player.multiShot,
+        thorns: this.player.thorns,
+        upgradeLevels: this.upgradeLevels,
+        difficulty: this.settings.difficulty,
+      };
+      localStorage.setItem("cc_arena_save", JSON.stringify(data));
+    } catch (_) {}
+  }
+
+  // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
+  loadArena() {
+    try {
+      const raw = localStorage.getItem("cc_arena_save");
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      this.mode = "arena";
+      this.arenaRound = data.round;
+      this.player.reset();
+      this.player.score = data.score;
+      this.player.kills = data.kills;
+      this.player.health = data.health;
+      this.player.maxHealth = data.maxHealth;
+      this.player.armor = data.armor;
+      this.player.ammo = data.ammo;
+      this.player.weapons = data.weapons;
+      this.player.moveSpeed = data.moveSpeed;
+      this.player.damageMultiplier = data.damageMultiplier;
+      this.player.regenRate = data.regenRate;
+      this.player.critChance = data.critChance;
+      this.player.lifeSteal = data.lifeSteal;
+      this.player.splashDamage = data.splashDamage;
+      this.player.fireRateMultiplier = data.fireRateMultiplier;
+      this.player.dodgeChance = data.dodgeChance;
+      this.player.maxShield = data.maxShield;
+      this.player.shield = data.shield;
+      this.player.multiShot = data.multiShot;
+      this.player.thorns = data.thorns;
+      this.upgradeLevels = data.upgradeLevels || {};
+      this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
+      this.startArenaRound();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  clearArenaSave() {
+    try {
+      localStorage.removeItem("cc_arena_save");
+    } catch (_) {}
+  }
+
+  saveCampaign() {
+    try {
+      const entityStates = this.entities.map((e) => {
+        if (e.type === "enemy") {
+          return {
+            type: "enemy",
+            active: e.active,
+            health: e.health,
+            x: e.x,
+            y: e.y,
+            state: e.state,
+          };
+        }
+        return { type: e.type, active: e.active };
+      });
+      const data = {
+        level: this.campaignLevel,
+        playerX: this.player.x,
+        playerY: this.player.y,
+        playerAngle: this.player.angle,
+        currentWeapon: this.player.currentWeapon,
+        health: this.player.health,
+        maxHealth: this.player.maxHealth,
+        armor: this.player.armor,
+        ammo: this.player.ammo,
+        weapons: this.player.weapons,
+        score: this.player.score,
+        kills: this.player.kills,
+        secretsFound: this.player.secretsFound,
+        difficulty: this.settings.difficulty,
+        mapGrid: this.map.grid,
+        entityStates,
+        killedEnemies: this.killedEnemies,
+      };
+      localStorage.setItem("cc_campaign_save", JSON.stringify(data));
+    } catch (_) {}
+  }
+
+  loadCampaignSave() {
+    try {
+      const raw = localStorage.getItem("cc_campaign_save");
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      this.mode = "campaign";
+      this.campaignLevel = data.level;
+      this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
+      this.player.reset();
+      this.loadCampaignLevel(this.campaignLevel);
+
+      // Restore player stats and position
+      this.player.health = data.health;
+      this.player.maxHealth = data.maxHealth;
+      this.player.armor = data.armor;
+      this.player.ammo = data.ammo;
+      this.player.weapons = data.weapons;
+      this.player.currentWeapon = data.currentWeapon ?? 0;
+      this.player.score = data.score;
+      this.player.kills = data.kills;
+      this.player.secretsFound = data.secretsFound;
+
+      // Restore exact position if save has it
+      if (data.playerX !== undefined) {
+        this.player.x = data.playerX;
+        this.player.y = data.playerY;
+        this.player.angle = data.playerAngle;
+      }
+
+      // Restore map grid (opened doors/secrets)
+      if (data.mapGrid) {
+        this.map.grid = data.mapGrid;
+      }
+
+      // Restore entity states (dead enemies, collected pickups)
+      if (
+        data.entityStates &&
+        data.entityStates.length === this.entities.length
+      ) {
+        for (let i = 0; i < data.entityStates.length; i++) {
+          const saved = data.entityStates[i];
+          const ent = this.entities[i];
+          ent.active = saved.active;
+          if (saved.type === "enemy" && ent.type === "enemy") {
+            ent.health = saved.health;
+            ent.x = saved.x;
+            ent.y = saved.y;
+            ent.state = saved.state;
+          }
+        }
+        this.killedEnemies = data.killedEnemies ?? 0;
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  clearCampaignSave() {
+    try {
+      localStorage.removeItem("cc_campaign_save");
+    } catch (_) {}
+  }
+
+  hasSave() {
+    return this.getSaveInfo().length > 0;
+  }
+
+  getSaveInfo() {
+    const info = [];
+    try {
+      const arena = localStorage.getItem("cc_arena_save");
+      if (arena) {
+        const d = JSON.parse(arena);
+        info.push({ mode: "arena", round: d.round, score: d.score });
+      }
+      const campaign = localStorage.getItem("cc_campaign_save");
+      if (campaign) {
+        const d = JSON.parse(campaign);
+        info.push({ mode: "campaign", level: d.level + 1, score: d.score });
+      }
+    } catch (_) {}
+    return info;
   }
 
   getDifficultyMultipliers() {
@@ -578,6 +822,8 @@ export class Game {
       this.state = GameState.VICTORY;
       this.audio.stopMusic();
       this.audio.roundComplete();
+      this.clearCampaignSave();
+      document.exitPointerLock();
       return;
     }
     const level = CAMPAIGN_LEVELS[index];
@@ -641,6 +887,7 @@ export class Game {
     );
     this.player.ammo = Math.min(this.player.ammo + 20, 999);
     this.loadCampaignLevel(this.campaignLevel);
+    this.saveCampaign();
   }
 
   interact() {
@@ -837,9 +1084,12 @@ export class Game {
           if (e2.health <= 0) {
             e2.state = "dead";
             e2.active = false;
+            e2.deathTime = this.time;
             this.player.score += e2.def.score;
             this.player.kills++;
             this.killedEnemies++;
+            this.audio.enemyDeath();
+            this.glitchEffect = 0.3;
           }
         }
       }
@@ -848,6 +1098,7 @@ export class Game {
     if (enemy.health <= 0) {
       enemy.state = "dead";
       enemy.active = false;
+      enemy.deathTime = this.time;
       this.player.score += enemy.def.score;
       this.player.kills++;
       this.killedEnemies++;
@@ -859,6 +1110,8 @@ export class Game {
         this.state = GameState.VICTORY;
         this.audio.stopMusic();
         this.audio.roundComplete();
+        this.clearCampaignSave();
+        document.exitPointerLock();
       }
     }
   }
@@ -885,7 +1138,6 @@ export class Game {
     this.screenShake = Math.max(this.screenShake, 4);
     this.audio.playerHit();
 
-    // TODO: Resolve the Thorns death bug
     // Thorns: reflect damage back to attacker
     if (
       this.player.thorns > 0 &&
@@ -896,22 +1148,21 @@ export class Game {
       attacker.health -= amount * this.player.thorns;
       if (attacker.health <= 0) {
         attacker.state = "dead";
+        attacker.active = false;
         attacker.deathTime = this.time;
         this.killedEnemies++;
         this.player.score += attacker.def.score;
         this.player.kills++;
+        this.audio.enemyDeath();
+        this.glitchEffect = 0.3;
       }
     }
 
     if (this.player.health <= 0) {
       this.player.health = 0;
       this.player.alive = false;
+      this.deathTimer = 1.5;
       this.audio.playerDeath();
-      setTimeout(() => {
-        this.state = GameState.GAME_OVER;
-        this.audio.stopMusic();
-        document.exitPointerLock();
-      }, 1500);
     }
   }
 
@@ -929,15 +1180,34 @@ export class Game {
     }
 
     if (this.state !== GameState.PLAYING) return;
-    if (!this.player.alive) return;
+
+    // Death transition timer
+    if (!this.player.alive) {
+      if (this.deathTimer > 0) {
+        this.deathTimer -= this.deltaTime;
+        if (this.deathTimer <= 0) {
+          this.state = GameState.GAME_OVER;
+          this.audio.stopMusic();
+          if (this.mode === "arena") this.clearArenaSave();
+          else this.clearCampaignSave();
+          document.exitPointerLock();
+        }
+      }
+      return;
+    }
 
     const dt = this.deltaTime;
 
     // Arena timer
     if (this.mode === "arena") {
+      const prevTimer = this.arenaTimer;
       this.arenaTimer -= dt;
-      if (this.arenaTimer <= 10 && Math.floor(this.arenaTimer * 2) % 2 === 0) {
-        // Warning flash handled in HUD
+
+      // Timer warning beep once per second when under 10s
+      if (this.arenaTimer <= 10 && this.arenaTimer > 0) {
+        if (Math.floor(prevTimer) !== Math.floor(this.arenaTimer)) {
+          this.audio.timerWarning();
+        }
       }
 
       // Auto-end round when all enemies killed
@@ -966,6 +1236,7 @@ export class Game {
         this.state = GameState.UPGRADE;
         this.upgradeSelection = 0;
         this.arenaClearTimer = null;
+        this.saveArena();
         document.exitPointerLock();
         return;
       }
@@ -1011,6 +1282,15 @@ export class Game {
     // Weapon kick recovery
     this.player.weaponKick *= 0.85;
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+
+    // TODO: Find a better solution here
+    // Clean up dead entities (arena only — campaign uses index-based system)
+    if (this.mode === "arena" && this.entities.length > 30) {
+      this.entities = this.entities.filter(
+        (e) =>
+          e.active || (e.deathTime != null && this.time - e.deathTime < 2000),
+      );
+    }
 
     // Update enemies
     this.updateEnemies(dt);
@@ -1082,10 +1362,9 @@ export class Game {
       p.weaponBob *= 0.9;
     }
 
-    // TODO: Add a mouse sensitivity setting
-    // Mouse look
+    // Mouse look w/ Sensitivity
     if (this.mouse.dx !== 0) {
-      p.angle += this.mouse.dx * 0.002 * p.rotSpeed;
+      p.angle += this.mouse.dx * 0.002 * p.rotSpeed * this.settings.sensitivity;
       this.mouse.dx = 0;
     }
 
@@ -2797,10 +3076,11 @@ export class Game {
   }
 
   drawControlsOverlay(ctx, w, h, alpha) {
+    const saveMessage = this.mode === "campaign" ? "F     - Save Game" : "";
     ctx.save();
     ctx.globalAlpha = alpha;
-    const boxW = 260;
-    const boxH = 160;
+    const boxW = 240;
+    const boxH = 180;
     const bx = (w - boxW) / 2;
     const by = (h - boxH) / 2;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -2820,7 +3100,11 @@ export class Game {
     ctx.fillText("Click - Shoot", lx, by + 84);
     ctx.fillText("1-4   - Weapons", lx, by + 102);
     ctx.fillText("E     - Interact/Open", lx, by + 120);
-    ctx.fillText("ESC   - Pause", lx, by + 138);
+    ctx.fillText("ESC/P - Pause", lx, by + 138);
+    if (saveMessage) {
+      ctx.fillStyle = "#aaccaa";
+      ctx.fillText(saveMessage, lx, by + 156);
+    }
     ctx.restore();
   }
 
@@ -2835,11 +3119,18 @@ export class Game {
     ctx.font = "14px monospace";
     ctx.fillStyle = "#aaaacc";
     ctx.textAlign = "center";
+    const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
     ctx.fillText(
-      "ESC / P to resume  |  S for settings  |  Q to quit",
+      "ESC / P to resume  |  S for settings  |  Q to quit" + saveHint,
       w / 2,
       h / 2 + 110,
     );
+    if (this.pauseSaveFlash && performance.now() - this.pauseSaveFlash < 1500) {
+      const alpha = 1 - (performance.now() - this.pauseSaveFlash) / 1500;
+      ctx.fillStyle = `rgba(0, 255, 100, ${alpha.toFixed(2)})`;
+      ctx.font = "bold 16px monospace";
+      ctx.fillText("GAME SAVED", w / 2, h / 2 + 140);
+    }
     ctx.textAlign = "left";
   }
 
@@ -2870,9 +3161,22 @@ export class Game {
       { label: "Crosshair", value: crosshairNames[this.settings.crosshair] },
       { label: "Minimap Size", value: `${this.settings.minimapSize}px` },
       {
-        label: "Volume",
+        label: "Music Volume",
         value:
-          this.settings.volume === 0 ? "MUTED" : `${this.settings.volume}%`,
+          this.settings.musicVolume === 0
+            ? "MUTED"
+            : `${this.settings.musicVolume}%`,
+      },
+      {
+        label: "SFX Volume",
+        value:
+          this.settings.sfxVolume === 0
+            ? "MUTED"
+            : `${this.settings.sfxVolume}%`,
+      },
+      {
+        label: "Sensitivity",
+        value: `${this.settings.sensitivity.toFixed(1)}x`,
       },
     ];
 
@@ -2880,9 +3184,8 @@ export class Game {
     const barH = 6;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    // Heights: simple items 44px, items with sub-widget 70px
-    const itemHeights = [44, 70, 60, 60]; // difficulty, crosshair, minimap, volume
-    let startY = h / 2 - 100;
+    const itemHeights = [44, 70, 60, 60, 60, 60]; // difficulty, crosshair, minimap, music, sfx, sensitivity
+    let startY = h / 2 - 130;
 
     for (let i = 0; i < items.length; i++) {
       const selected = this.settingsSelection === i;
@@ -2936,13 +3239,33 @@ export class Game {
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       } else if (i === 3) {
-        // Volume bar
+        // Music volume bar
         const sliderY = y + 32;
-        const volPct = this.settings.volume / 100;
+        const volPct = this.settings.musicVolume / 100;
         ctx.fillStyle = "rgba(255,255,255,0.08)";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = this.settings.volume === 0 ? "#ff4444" : "#00ff88";
+        ctx.fillStyle = this.settings.musicVolume === 0 ? "#ff4444" : "#00ff88";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 4) {
+        // SFX volume bar
+        const sliderY = y + 32;
+        const volPct = this.settings.sfxVolume / 100;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = this.settings.sfxVolume === 0 ? "#ff4444" : "#88aaff";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 5) {
+        // Sensitivity bar
+        const sliderY = y + 32;
+        const sensPct = (this.settings.sensitivity - 0.5) / 1.5;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = "#ffcc00";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * sensPct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       }
