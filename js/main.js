@@ -81,15 +81,21 @@ document.getElementById("btnBack").addEventListener("click", () => {
 btnContinueCampaign.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
-  showGameCanvases();
-  game.loadCampaignSave();
+  if (game.loadCampaignSave()) {
+    showGameCanvases();
+  } else {
+    updateContinueButtons();
+  }
 });
 
 btnContinueArena.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
-  showGameCanvases();
-  game.loadArena();
+  if (game.loadArena()) {
+    showGameCanvases();
+  } else {
+    updateContinueButtons();
+  }
 });
 
 titleScreen.addEventListener("click", () => {

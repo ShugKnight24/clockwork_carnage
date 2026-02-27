@@ -480,7 +480,12 @@ export class Game {
       const raw = localStorage.getItem("cc_settings");
       if (raw) {
         const saved = JSON.parse(raw);
-        Object.assign(this.settings, saved);
+        // Whitelist known keys to avoid prototype pollution
+        for (const key of Object.keys(this.settings)) {
+          if (Object.prototype.hasOwnProperty.call(saved, key)) {
+            this.settings[key] = saved[key];
+          }
+        }
         // Migrate old single volume to split volumes
         if (saved.volume !== undefined && saved.musicVolume === undefined) {
           this.settings.musicVolume = saved.volume;
@@ -666,10 +671,7 @@ export class Game {
   }
 
   hasSave() {
-    return !!(
-      localStorage.getItem("cc_arena_save") ||
-      localStorage.getItem("cc_campaign_save")
-    );
+    return this.getSaveInfo().length > 0;
   }
 
   getSaveInfo() {
@@ -1300,7 +1302,8 @@ export class Game {
     // Clean up dead entities
     if (this.entities.length > 30) {
       this.entities = this.entities.filter(
-        (e) => e.active || (e.deathTime && this.time - e.deathTime < 2000),
+        (e) =>
+          e.active || (e.deathTime != null && this.time - e.deathTime < 2000),
       );
     }
 
