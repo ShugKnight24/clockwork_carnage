@@ -227,22 +227,7 @@ export class Game {
     }
 
     if (this.state === GameState.MODE_SELECT) {
-      if (code === "ArrowUp" || code === "KeyW") {
-        this.menuSelection = (this.menuSelection + 1) % 2;
-        this.audio.menuSelect();
-      }
-      if (code === "ArrowDown" || code === "KeyS") {
-        this.menuSelection = (this.menuSelection + 1) % 2;
-        this.audio.menuSelect();
-      }
-      if (code === "Enter" || code === "Space") {
-        this.audio.menuConfirm();
-        if (this.menuSelection === 0) {
-          this.startArena();
-        } else {
-          this.startCampaign();
-        }
-      }
+      // Navigation handled by main.js via HTML button focus
       if (code === "Escape") {
         this.state = GameState.TITLE;
       }

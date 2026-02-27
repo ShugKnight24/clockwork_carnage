@@ -127,6 +127,26 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnArena").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
+    } else if (
+      e.code === "ArrowUp" ||
+      e.code === "ArrowDown" ||
+      e.code === "KeyW" ||
+      e.code === "KeyS"
+    ) {
+      const btns = Array.from(
+        modeSelect.querySelectorAll(".mode-btn:not(.hidden)"),
+      );
+      if (btns.length === 0) return;
+      const idx = btns.indexOf(document.activeElement);
+      const dir = e.code === "ArrowUp" || e.code === "KeyW" ? -1 : 1;
+      const next = (idx + dir + btns.length) % btns.length;
+      btns[next].focus();
+      game.audio.menuSelect();
+    } else if (e.code === "Enter" || e.code === "Space") {
+      const focused = document.activeElement;
+      if (focused && focused.classList.contains("mode-btn")) {
+        focused.click();
+      }
     }
   }
   if (
