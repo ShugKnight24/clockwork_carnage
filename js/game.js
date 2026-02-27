@@ -152,6 +152,7 @@ export class Game {
     this.weaponAnimFrame = 0;
     this.weaponAnimTime = 0;
     this.roundStartTime = 0;
+    this.deathTimer = 0;
     this.settings = {
       crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
       difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
@@ -578,6 +579,7 @@ export class Game {
       this.state = GameState.VICTORY;
       this.audio.stopMusic();
       this.audio.roundComplete();
+      document.exitPointerLock();
       return;
     }
     const level = CAMPAIGN_LEVELS[index];
@@ -837,9 +839,12 @@ export class Game {
           if (e2.health <= 0) {
             e2.state = "dead";
             e2.active = false;
+            e2.deathTime = this.time;
             this.player.score += e2.def.score;
             this.player.kills++;
             this.killedEnemies++;
+            this.audio.enemyDeath();
+            this.glitchEffect = 0.3;
           }
         }
       }
@@ -848,6 +853,7 @@ export class Game {
     if (enemy.health <= 0) {
       enemy.state = "dead";
       enemy.active = false;
+      enemy.deathTime = this.time;
       this.player.score += enemy.def.score;
       this.player.kills++;
       this.killedEnemies++;
@@ -859,6 +865,7 @@ export class Game {
         this.state = GameState.VICTORY;
         this.audio.stopMusic();
         this.audio.roundComplete();
+        document.exitPointerLock();
       }
     }
   }
@@ -885,7 +892,6 @@ export class Game {
     this.screenShake = Math.max(this.screenShake, 4);
     this.audio.playerHit();
 
-    // TODO: Resolve the Thorns death bug
     // Thorns: reflect damage back to attacker
     if (
       this.player.thorns > 0 &&
@@ -896,22 +902,21 @@ export class Game {
       attacker.health -= amount * this.player.thorns;
       if (attacker.health <= 0) {
         attacker.state = "dead";
+        attacker.active = false;
         attacker.deathTime = this.time;
         this.killedEnemies++;
         this.player.score += attacker.def.score;
         this.player.kills++;
+        this.audio.enemyDeath();
+        this.glitchEffect = 0.3;
       }
     }
 
     if (this.player.health <= 0) {
       this.player.health = 0;
       this.player.alive = false;
+      this.deathTimer = 1.5;
       this.audio.playerDeath();
-      setTimeout(() => {
-        this.state = GameState.GAME_OVER;
-        this.audio.stopMusic();
-        document.exitPointerLock();
-      }, 1500);
     }
   }
 
@@ -929,15 +934,32 @@ export class Game {
     }
 
     if (this.state !== GameState.PLAYING) return;
-    if (!this.player.alive) return;
+
+    // Death transition timer
+    if (!this.player.alive) {
+      if (this.deathTimer > 0) {
+        this.deathTimer -= this.deltaTime;
+        if (this.deathTimer <= 0) {
+          this.state = GameState.GAME_OVER;
+          this.audio.stopMusic();
+          document.exitPointerLock();
+        }
+      }
+      return;
+    }
 
     const dt = this.deltaTime;
 
     // Arena timer
     if (this.mode === "arena") {
+      const prevTimer = this.arenaTimer;
       this.arenaTimer -= dt;
-      if (this.arenaTimer <= 10 && Math.floor(this.arenaTimer * 2) % 2 === 0) {
-        // Warning flash handled in HUD
+
+      // Timer warning beep once per second when under 10s
+      if (this.arenaTimer <= 10 && this.arenaTimer > 0) {
+        if (Math.floor(prevTimer) !== Math.floor(this.arenaTimer)) {
+          this.audio.timerWarning();
+        }
       }
 
       // Auto-end round when all enemies killed
@@ -1011,6 +1033,13 @@ export class Game {
     // Weapon kick recovery
     this.player.weaponKick *= 0.85;
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+
+    // Clean up dead entities
+    if (this.entities.length > 30) {
+      this.entities = this.entities.filter(
+        (e) => e.active || (e.deathTime && this.time - e.deathTime < 2000),
+      );
+    }
 
     // Update enemies
     this.updateEnemies(dt);
@@ -2820,7 +2849,7 @@ export class Game {
     ctx.fillText("Click - Shoot", lx, by + 84);
     ctx.fillText("1-4   - Weapons", lx, by + 102);
     ctx.fillText("E     - Interact/Open", lx, by + 120);
-    ctx.fillText("ESC   - Pause", lx, by + 138);
+    ctx.fillText("ESC/P - Pause", lx, by + 138);
     ctx.restore();
   }
 
