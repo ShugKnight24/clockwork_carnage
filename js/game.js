@@ -157,7 +157,8 @@ export class Game {
       crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
       difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
       minimapSize: 200,
-      volume: 80, // 0..100
+      musicVolume: 80, // 0..100
+      sfxVolume: 80, // 0..100
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -288,7 +289,7 @@ export class Game {
 
     if (this.state === GameState.SETTINGS) {
       // TODO: Too many magic numbers here, terrible to maintain
-      const settingsCount = 4; // difficulty, crosshair, minimapSize, volume
+      const settingsCount = 5; // difficulty, crosshair, minimapSize, musicVolume, sfxVolume
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
@@ -309,8 +310,14 @@ export class Game {
             this.settings.minimapSize + 20,
           );
         } else if (this.settingsSelection === 3) {
-          this.settings.volume = Math.min(100, this.settings.volume + 10);
-          this.audio.setVolume(this.settings.volume / 100);
+          this.settings.musicVolume = Math.min(
+            100,
+            this.settings.musicVolume + 10,
+          );
+          this.audio.setMusicVolume(this.settings.musicVolume / 100);
+        } else if (this.settingsSelection === 4) {
+          this.settings.sfxVolume = Math.min(100, this.settings.sfxVolume + 10);
+          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
         }
         this.audio.menuConfirm();
       }
@@ -325,8 +332,14 @@ export class Game {
             this.settings.minimapSize - 20,
           );
         } else if (this.settingsSelection === 3) {
-          this.settings.volume = Math.max(0, this.settings.volume - 10);
-          this.audio.setVolume(this.settings.volume / 100);
+          this.settings.musicVolume = Math.max(
+            0,
+            this.settings.musicVolume - 10,
+          );
+          this.audio.setMusicVolume(this.settings.musicVolume / 100);
+        } else if (this.settingsSelection === 4) {
+          this.settings.sfxVolume = Math.max(0, this.settings.sfxVolume - 10);
+          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
         }
         this.audio.menuConfirm();
       }
@@ -430,6 +443,11 @@ export class Game {
       }
       return;
     }
+  }
+
+  applyAudioSettings() {
+    this.audio.setMusicVolume(this.settings.musicVolume / 100);
+    this.audio.setSfxVolume(this.settings.sfxVolume / 100);
   }
 
   getDifficultyMultipliers() {
@@ -2899,9 +2917,18 @@ export class Game {
       { label: "Crosshair", value: crosshairNames[this.settings.crosshair] },
       { label: "Minimap Size", value: `${this.settings.minimapSize}px` },
       {
-        label: "Volume",
+        label: "Music Volume",
         value:
-          this.settings.volume === 0 ? "MUTED" : `${this.settings.volume}%`,
+          this.settings.musicVolume === 0
+            ? "MUTED"
+            : `${this.settings.musicVolume}%`,
+      },
+      {
+        label: "SFX Volume",
+        value:
+          this.settings.sfxVolume === 0
+            ? "MUTED"
+            : `${this.settings.sfxVolume}%`,
       },
     ];
 
@@ -2909,9 +2936,7 @@ export class Game {
     const barH = 6;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    // Heights: simple items 44px, items with sub-widget 70px
-    const itemHeights = [44, 70, 60, 60]; // difficulty, crosshair, minimap, volume
-    let startY = h / 2 - 100;
+    const itemHeights = [44, 70, 60, 60, 60]; // difficulty, crosshair, minimap, music, sfx
 
     for (let i = 0; i < items.length; i++) {
       const selected = this.settingsSelection === i;
@@ -2965,12 +2990,22 @@ export class Game {
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       } else if (i === 3) {
-        // Volume bar
+        // Music volume bar
         const sliderY = y + 32;
-        const volPct = this.settings.volume / 100;
+        const volPct = this.settings.musicVolume / 100;
         ctx.fillStyle = "rgba(255,255,255,0.08)";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = this.settings.volume === 0 ? "#ff4444" : "#00ff88";
+        ctx.fillStyle = this.settings.musicVolume === 0 ? "#ff4444" : "#00ff88";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 4) {
+        // SFX volume bar
+        const sliderY = y + 32;
+        const volPct = this.settings.sfxVolume / 100;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = this.settings.sfxVolume === 0 ? "#ff4444" : "#88aaff";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);

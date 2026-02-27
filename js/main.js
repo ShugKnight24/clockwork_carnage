@@ -30,16 +30,21 @@ function showGameCanvases() {
 }
 
 document.getElementById("btnArena").addEventListener("click", () => {
+function initAudio() {
   game.audio.init();
   game.audio.resume();
+  game.applyAudioSettings();
+}
+
+document.getElementById("btnArena").addEventListener("click", () => {
+  initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
   game.startArena();
 });
 
 document.getElementById("btnCampaign").addEventListener("click", () => {
-  game.audio.init();
-  game.audio.resume();
+  initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
   game.startCampaign();
@@ -53,8 +58,7 @@ document.getElementById("btnBack").addEventListener("click", () => {
 });
 
 titleScreen.addEventListener("click", () => {
-  game.audio.init();
-  game.audio.resume();
+  initAudio();
   game.audio.menuConfirm();
   titleScreen.classList.add("hidden");
   modeSelect.classList.remove("hidden");
@@ -66,8 +70,7 @@ document.addEventListener("keydown", (e) => {
     game.state === GameState.TITLE &&
     (e.code === "Enter" || e.code === "Space")
   ) {
-    game.audio.init();
-    game.audio.resume();
+    initAudio();
     game.audio.menuConfirm();
     titleScreen.classList.add("hidden");
     modeSelect.classList.remove("hidden");
