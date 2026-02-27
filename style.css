@@ -65,6 +65,7 @@ body {
 }
 
 #titleScreen .title-svg-container {
+  position: relative;
   width: 700px;
   max-width: 90vw;
   height: 400px;
@@ -178,11 +179,13 @@ body {
   min-width: 400px;
 }
 
-#modeSelect .mode-btn:hover {
+#modeSelect .mode-btn:hover,
+#modeSelect .mode-btn:focus-visible {
   background: rgba(0, 200, 255, 0.18);
   border-color: #00ffcc;
   color: #00ffcc;
   transform: translateX(5px);
+  outline: none;
 }
 
 #modeSelect .mode-btn .key-hint {
@@ -231,9 +234,26 @@ body {
   padding: 22px 50px;
 }
 
-#modeSelect .mode-btn.featured:hover {
+#modeSelect .mode-btn.featured:hover,
+#modeSelect .mode-btn.featured:focus-visible {
   background: rgba(0, 255, 200, 0.22);
   box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
+}
+
+#modeSelect .continue-btn {
+  border-color: #ffcc00;
+  background: rgba(255, 200, 0, 0.08);
+  min-width: 400px;
+  text-align: left;
+  font-size: 16px;
+  padding: 12px 50px;
+}
+
+#modeSelect .continue-btn:hover {
+  background: rgba(255, 200, 0, 0.18);
+  border-color: #ffdd44;
+  color: #ffdd44;
+  box-shadow: 0 0 15px rgba(255, 200, 0, 0.12);
 }
 
 #modeSelect .coming-soon {
