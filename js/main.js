@@ -4,6 +4,10 @@ const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
 const titleScreen = document.getElementById("titleScreen");
 const modeSelect = document.getElementById("modeSelect");
+const btnContinueCampaign = document.getElementById("btnContinueCampaign");
+const continueCampaignDesc = document.getElementById("continueCampaignDesc");
+const btnContinueArena = document.getElementById("btnContinueArena");
+const continueArenaDesc = document.getElementById("continueArenaDesc");
 
 const game = new Game(gameCanvas, hudCanvas);
 
@@ -29,7 +33,24 @@ function showGameCanvases() {
   hudCanvas.style.display = "block";
 }
 
-document.getElementById("btnArena").addEventListener("click", () => {
+function updateContinueButtons() {
+  const saves = game.getSaveInfo();
+  const campaign = saves.find((s) => s.mode === "campaign");
+  const arena = saves.find((s) => s.mode === "arena");
+  if (campaign) {
+    btnContinueCampaign.classList.remove("hidden");
+    continueCampaignDesc.textContent = `Level ${campaign.level} (${campaign.score} pts)`;
+  } else {
+    btnContinueCampaign.classList.add("hidden");
+  }
+  if (arena) {
+    btnContinueArena.classList.remove("hidden");
+    continueArenaDesc.textContent = `Round ${arena.round} (${arena.score} pts)`;
+  } else {
+    btnContinueArena.classList.add("hidden");
+  }
+}
+
 function initAudio() {
   game.audio.init();
   game.audio.resume();
@@ -57,11 +78,26 @@ document.getElementById("btnBack").addEventListener("click", () => {
   game.state = GameState.TITLE;
 });
 
+btnContinueCampaign.addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.loadCampaignSave();
+});
+
+btnContinueArena.addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.loadArena();
+});
+
 titleScreen.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   titleScreen.classList.add("hidden");
   modeSelect.classList.remove("hidden");
+  updateContinueButtons();
   game.state = GameState.MODE_SELECT;
 });
 
@@ -74,6 +110,7 @@ document.addEventListener("keydown", (e) => {
     game.audio.menuConfirm();
     titleScreen.classList.add("hidden");
     modeSelect.classList.remove("hidden");
+    updateContinueButtons();
     game.state = GameState.MODE_SELECT;
     return;
   }
@@ -110,6 +147,7 @@ function gameLoop(timestamp) {
     } else if (game.state === GameState.MODE_SELECT) {
       titleScreen.classList.add("hidden");
       modeSelect.classList.remove("hidden");
+      updateContinueButtons();
       gameCanvas.style.display = "none";
       hudCanvas.style.display = "none";
     } else {

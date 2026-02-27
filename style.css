@@ -236,6 +236,22 @@ body {
   box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
 }
 
+#modeSelect .continue-btn {
+  border-color: #ffcc00;
+  background: rgba(255, 200, 0, 0.08);
+  min-width: 400px;
+  text-align: left;
+  font-size: 16px;
+  padding: 12px 50px;
+}
+
+#modeSelect .continue-btn:hover {
+  background: rgba(255, 200, 0, 0.18);
+  border-color: #ffdd44;
+  color: #ffdd44;
+  box-shadow: 0 0 15px rgba(255, 200, 0, 0.12);
+}
+
 #modeSelect .coming-soon {
   color: #8866aa;
   font-size: 14px;
