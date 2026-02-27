@@ -159,6 +159,7 @@ export class Game {
       minimapSize: 200,
       musicVolume: 80, // 0..100
       sfxVolume: 80, // 0..100
+      sensitivity: 1.0, // 0.5..2.0
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -289,7 +290,7 @@ export class Game {
 
     if (this.state === GameState.SETTINGS) {
       // TODO: Too many magic numbers here, terrible to maintain
-      const settingsCount = 5; // difficulty, crosshair, minimapSize, musicVolume, sfxVolume
+      const settingsCount = 6; // difficulty, crosshair, minimapSize, musicVolume, sfxVolume, sensitivity
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
@@ -318,6 +319,11 @@ export class Game {
         } else if (this.settingsSelection === 4) {
           this.settings.sfxVolume = Math.min(100, this.settings.sfxVolume + 10);
           this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+        } else if (this.settingsSelection === 5) {
+          this.settings.sensitivity = Math.min(
+            2.0,
+            Math.round((this.settings.sensitivity + 0.1) * 10) / 10,
+          );
         }
         this.audio.menuConfirm();
       }
@@ -340,6 +346,11 @@ export class Game {
         } else if (this.settingsSelection === 4) {
           this.settings.sfxVolume = Math.max(0, this.settings.sfxVolume - 10);
           this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+        } else if (this.settingsSelection === 5) {
+          this.settings.sensitivity = Math.max(
+            0.5,
+            Math.round((this.settings.sensitivity - 0.1) * 10) / 10,
+          );
         }
         this.audio.menuConfirm();
       }
@@ -1129,10 +1140,9 @@ export class Game {
       p.weaponBob *= 0.9;
     }
 
-    // TODO: Add a mouse sensitivity setting
-    // Mouse look
+    // Mouse look w/ Sensitivity
     if (this.mouse.dx !== 0) {
-      p.angle += this.mouse.dx * 0.002 * p.rotSpeed;
+      p.angle += this.mouse.dx * 0.002 * p.rotSpeed * this.settings.sensitivity;
       this.mouse.dx = 0;
     }
 
@@ -2930,13 +2940,18 @@ export class Game {
             ? "MUTED"
             : `${this.settings.sfxVolume}%`,
       },
+      {
+        label: "Sensitivity",
+        value: `${this.settings.sensitivity.toFixed(1)}x`,
+      },
     ];
 
     const barW = 200;
     const barH = 6;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    const itemHeights = [44, 70, 60, 60, 60]; // difficulty, crosshair, minimap, music, sfx
+    const itemHeights = [44, 70, 60, 60, 60, 60]; // difficulty, crosshair, minimap, music, sfx, sensitivity
+    let startY = h / 2 - 130;
 
     for (let i = 0; i < items.length; i++) {
       const selected = this.settingsSelection === i;
@@ -3007,6 +3022,16 @@ export class Game {
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
         ctx.fillStyle = this.settings.sfxVolume === 0 ? "#ff4444" : "#88aaff";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 5) {
+        // Sensitivity bar
+        const sliderY = y + 32;
+        const sensPct = (this.settings.sensitivity - 0.5) / 1.5;
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = "#ffcc00";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * sensPct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       }
