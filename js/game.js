@@ -469,7 +469,9 @@ export class Game {
         // Whitelist known keys to avoid prototype pollution
         for (const key of Object.keys(this.settings)) {
           if (Object.prototype.hasOwnProperty.call(saved, key)) {
-            this.settings[key] = saved[key];
+            const val = saved[key];
+            if (typeof val !== typeof this.settings[key]) continue;
+            this.settings[key] = val;
           }
         }
       }
@@ -506,6 +508,7 @@ export class Game {
     } catch (_) {}
   }
 
+  // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
   loadArena() {
     try {
       const raw = localStorage.getItem("cc_arena_save");
@@ -1280,8 +1283,9 @@ export class Game {
     this.player.weaponKick *= 0.85;
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
 
-    // Clean up dead entities
-    if (this.entities.length > 30) {
+    // TODO: Find a better solution here
+    // Clean up dead entities (arena only — campaign uses index-based system)
+    if (this.mode === "arena" && this.entities.length > 30) {
       this.entities = this.entities.filter(
         (e) =>
           e.active || (e.deathTime != null && this.time - e.deathTime < 2000),

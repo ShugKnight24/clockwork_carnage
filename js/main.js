@@ -139,7 +139,15 @@ document.addEventListener("keydown", (e) => {
       if (btns.length === 0) return;
       const idx = btns.indexOf(document.activeElement);
       const dir = e.code === "ArrowUp" || e.code === "KeyW" ? -1 : 1;
-      const next = (idx + dir + btns.length) % btns.length;
+
+      // When no button is focused, start at first (down) or last (up)
+      // Otherwise cycle through the list
+      let next;
+      if (idx === -1) {
+        next = dir === 1 ? 0 : btns.length - 1;
+      } else {
+        next = (idx + dir + btns.length) % btns.length;
+      }
       btns[next].focus();
       game.audio.menuSelect();
     } else if (e.code === "Enter" || e.code === "Space") {
