@@ -68,8 +68,34 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
-  game.startCampaign();
+  if (game.shouldShowTutorial()) {
+    game.startTutorial();
+  } else {
+    game.startCampaign();
+  }
 });
+
+document.getElementById("btnTutorial").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.startTutorial();
+});
+
+document.getElementById("btnBuilder").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.startBuilder();
+});
+
+// Expose dev flag toggle on window for console access
+window.ccDevTutorial = (on) => {
+  game.setAlwaysTutorial(on !== false);
+  console.log(
+    `[CC DEV] Always-show-tutorial: ${game.alwaysShowTutorial ? "ON" : "OFF"}`,
+  );
+};
 
 document.getElementById("btnBack").addEventListener("click", () => {
   game.audio.menuSelect();
@@ -125,6 +151,10 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnCampaign").click();
     } else if (e.code === "Digit2") {
       document.getElementById("btnArena").click();
+    } else if (e.code === "Digit3") {
+      document.getElementById("btnTutorial").click();
+    } else if (e.code === "Digit4") {
+      document.getElementById("btnBuilder").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
