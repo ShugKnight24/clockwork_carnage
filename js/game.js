@@ -8,116 +8,14 @@ import {
   TUTORIAL_MAP,
   CUTSCENE_SCRIPTS,
   ACHIEVEMENTS,
+  ACHIEVEMENT_ICON_SVGS,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
 import { AudioManager } from "./audio.js";
+import { BuilderMode } from "./builder.js";
+import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
-// TODO: extract a Entity Component system that deals with shared info
-class Player {
-  constructor() {
-    this.reset();
-  }
-  reset() {
-    this.x = 2;
-    this.y = 2;
-    this.angle = 0;
-    this.health = 100;
-    this.maxHealth = 100;
-    this.armor = 0;
-    this.ammo = 50;
-    this.moveSpeed = 3.5;
-    this.rotSpeed = 3.0;
-    this.weapons = [0]; // weapon IDs owned
-    this.currentWeapon = 0;
-    this.damageMultiplier = 1;
-    this.regenRate = 0;
-    this.critChance = 0;
-    this.lifeSteal = 0;
-    this.splashDamage = 0;
-    this.fireRateMultiplier = 1;
-    this.dodgeChance = 0;
-    this.maxShield = 0;
-    this.shield = 0;
-    this.multiShot = 1;
-    this.thorns = 0;
-    this.score = 0;
-    this.kills = 0;
-    this.secretsFound = 0;
-    this.lastFireTime = 0;
-    this.isFiring = false;
-    this.weaponBob = 0;
-    this.weaponKick = 0;
-    this.hurtTime = 0;
-    this.alive = true;
-    // Sprint & Dash
-    this.stamina = 100;
-    this.maxStamina = 100;
-    this.isSprinting = false;
-    this.isDashing = false;
-    this.dashTime = 0;
-    this.dashDirX = 0;
-    this.dashDirY = 0;
-    this.dashCooldown = 0;
-    this.staminaRegenDelay = 0;
-    // Upgrade-driven stamina modifiers
-    this.staminaRegenRate = 1; // multiplier for stamina regen speed
-    this.dashDistMult = 1; // multiplier for dash distance/speed
-    this.dashStaminaCost = 20; // stamina cost per dash
-    this.sprintDrainMult = 1; // multiplier for sprint drain rate
-  }
-  getWeaponDef() {
-    return WEAPONS[this.weapons[this.currentWeapon]];
-  }
-}
-
-class Enemy {
-  constructor(x, y, type) {
-    const def = ENEMY_TYPES[type];
-    this.x = x;
-    this.y = y;
-    this.enemyType = type;
-    this.def = def;
-    this.health = def.health;
-    this.maxHealth = def.health;
-    this.speed = def.speed;
-    // TODO: Improve Enemy AI
-    this.state = "idle"; // idle, chase, attack, pain, dead
-    this.active = true;
-    this.lastAttackTime = 0;
-    this.hitTime = 0;
-    this.stateTime = 0;
-    this.type = "enemy";
-    this.angle = Math.random() * Math.PI * 2;
-    this.painTimer = 0;
-    this.alertRange = def.sightRange;
-  }
-}
-
-class Pickup {
-  constructor(x, y, type, extra = {}) {
-    this.x = x;
-    this.y = y;
-    this.type = type;
-    this.active = true;
-    this.weaponId = extra.weaponId;
-  }
-}
-
-class Projectile {
-  constructor(x, y, dirX, dirY, damage, speed, owner) {
-    this.x = x;
-    this.y = y;
-    this.dirX = dirX;
-    this.dirY = dirY;
-    this.damage = damage;
-    this.speed = speed;
-    this.owner = owner;
-    this.type = "projectile";
-    this.active = true;
-    this.color = "#ff0044";
-    this.life = 3; // seconds
-  }
-}
+const SAVE_VERSION = 1;
 
 export const GameState = {
   TITLE: "title",
@@ -133,6 +31,8 @@ export const GameState = {
   LEVEL_COMPLETE: "levelComplete",
   TUTORIAL: "tutorial",
   CUTSCENE: "cutscene",
+  CAMPAIGN_PROMPT: "campaignPrompt",
+  TUTORIAL_COMPLETE: "tutorialComplete",
 };
 
 // TODO: Restructure this entire file, but especially this class... it's a mess. It handles too much. 3k lines for a class is normal right? Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
@@ -156,7 +56,7 @@ export class Game {
     this.arenaRound = 1;
     this.campaignLevel = 0;
     this.keys = {};
-    this.mouse = { dx: 0, locked: false };
+    this.mouse = { dx: 0, dy: 0, locked: false };
     this.menuSelection = 0;
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
@@ -170,6 +70,19 @@ export class Game {
     this.fpsTime = 0;
     this.showFPS = false;
     this.glitchEffect = 0;
+    this.hitMarker = 0;
+    this.damageNumbers = [];
+    // Kill streak system
+    this.killStreak = 0;
+    this.killStreakTimer = 0; // time since last kill, resets streak if > 3s
+    this.killStreakDisplay = null; // { text, color, size, life }
+    this.bestStreak = 0;
+    // Slow-motion last kill
+    this.timeScale = 1;
+    this.slowMoTimer = 0;
+    // Stats tracking
+    this.shotsFired = 0;
+    this.shotsHit = 0;
     this.exitEntity = null;
     this.weaponAnimFrame = 0;
     this.weaponAnimTime = 0;
@@ -211,6 +124,15 @@ export class Game {
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
+    // Builder mode (extracted)
+    this.builder = new BuilderMode({
+      renderer: this.renderer,
+      audio: this.audio,
+      settings: this.settings,
+      keybinds: this.keybinds,
+      canvas: this.canvas,
+    });
+
     // Dev flags
     this.alwaysShowTutorial = false;
 
@@ -218,6 +140,16 @@ export class Game {
     this.unlockedAchievements = {};
     this.achievementQueue = []; // toast notification queue
     this.achievementToast = null; // currently displaying toast
+
+    // Preload achievement SVG icons into Image objects
+    this.achievementIcons = {};
+    for (const [key, svgStr] of Object.entries(ACHIEVEMENT_ICON_SVGS)) {
+      const img = new Image();
+      img.src =
+        "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
+      this.achievementIcons[key] = img;
+    }
+
     this.achievementStats = {
       totalKills: 0,
       totalDashes: 0,
@@ -241,20 +173,9 @@ export class Game {
   // TODO: Abstract out InputManager
   setupInput() {
     document.addEventListener("keydown", (e) => {
-      // Builder special keys (prevent browser defaults)
+      // Builder delegates input to its own handler
       if (this.state === GameState.BUILDER) {
-        if (e.code === "KeyS" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          this.saveBuilderMap();
-          return;
-        }
-        if (e.code === "Tab") {
-          e.preventDefault();
-          this.builderOverhead = !this.builderOverhead;
-          if (this.builderOverhead) document.exitPointerLock();
-          else this.canvas.requestPointerLock();
-          return;
-        }
+        if (this.builder.handleKeyDown(e)) return;
       }
       // Rebinding mode — capture the next key
       if (this.state === GameState.CONTROLS && this.rebindingKey) {
@@ -297,17 +218,17 @@ export class Game {
     document.addEventListener("mousemove", (e) => {
       if (this.mouse.locked) {
         this.mouse.dx += e.movementX;
+        this.mouse.dy += e.movementY;
       }
     });
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     this.canvas.addEventListener("mousedown", (e) => {
       if (this.state === GameState.BUILDER) {
-        if (!this.mouse.locked && !this.builderOverhead) {
+        if (!this.mouse.locked && !this.builder.overhead) {
           this.canvas.requestPointerLock();
           return;
         }
-        if (e.button === 0) this.builderPlaceBlock();
-        if (e.button === 2) this.builderRemoveBlock();
+        this.builder.handleMouseDown(e.button);
         return;
       }
       if (e.button === 0) {
@@ -361,59 +282,115 @@ export class Game {
     }
 
     if (this.state === GameState.BUILDER) {
-      if (code >= "Digit1" && code <= "Digit9") {
-        this.builderTile = parseInt(code.charAt(5));
-        this.audio.menuSelect();
-      }
-      if (code === "KeyN") this.builderNoclip = !this.builderNoclip;
-      if (code === "KeyH") this.builderShowHelp = !this.builderShowHelp;
+      // Only Escape is handled by the host (for pause)
       if (code === "Escape") {
-        this.state = GameState.TITLE;
+        this.pausedFromState = GameState.BUILDER;
+        this.state = GameState.PAUSED;
         document.exitPointerLock();
-        this.audio.stopMusic();
+      }
+      return;
+    }
+
+    // Campaign prompt (with/without tutorial)
+    if (this.state === GameState.CAMPAIGN_PROMPT) {
+      const menuLen = 2;
+      if (code === "ArrowUp" || code === "KeyW") {
+        this.campaignPromptSelection =
+          (this.campaignPromptSelection - 1 + menuLen) % menuLen;
+        this.audio.menuSelect();
+        return;
+      }
+      if (code === "ArrowDown" || code === "KeyS") {
+        this.campaignPromptSelection =
+          (this.campaignPromptSelection + 1) % menuLen;
+        this.audio.menuSelect();
+        return;
+      }
+      if (code === "Enter" || code === "Space") {
+        this.audio.menuConfirm();
+        this.executeCampaignPromptChoice(this.campaignPromptSelection);
+        return;
+      }
+      if (code === "Digit1") {
+        this.audio.menuConfirm();
+        this.executeCampaignPromptChoice(0);
+        return;
+      }
+      if (code === "Digit2") {
+        this.audio.menuConfirm();
+        this.executeCampaignPromptChoice(1);
+        return;
+      }
+      if (code === "Escape") {
+        this.audio.menuConfirm();
+        this.state = GameState.MODE_SELECT;
+        return;
+      }
+      return;
+    }
+
+    // Tutorial completion — standalone full-screen menu
+    if (this.state === GameState.TUTORIAL_COMPLETE) {
+      const menuLen = 3;
+      if (code === "ArrowUp" || code === "KeyW") {
+        this.tutorialMenuSelection =
+          (this.tutorialMenuSelection - 1 + menuLen) % menuLen;
+        this.audio.menuSelect();
+        return;
+      }
+      if (code === "ArrowDown" || code === "KeyS") {
+        this.tutorialMenuSelection = (this.tutorialMenuSelection + 1) % menuLen;
+        this.audio.menuSelect();
+        return;
+      }
+      if (code === "Enter" || code === "Space") {
+        this.audio.menuConfirm();
+        this.executeTutorialCompletionChoice(this.tutorialMenuSelection);
+        return;
+      }
+      if (code === "Digit1") {
+        this.audio.menuConfirm();
+        this.executeTutorialCompletionChoice(0);
+        return;
+      }
+      if (code === "Digit2") {
+        this.audio.menuConfirm();
+        this.executeTutorialCompletionChoice(1);
+        return;
+      }
+      if (code === "Escape") {
+        this.audio.menuConfirm();
+        this.executeTutorialCompletionChoice(2);
+        return;
       }
       return;
     }
 
     if (this.state === GameState.PLAYING) {
-      // Tutorial sandbox menu
-      if (this.mode === "tutorial" && this.tutorialStep === 9) {
-        const menuLen = 4;
-        if (code === "ArrowUp" || code === "KeyW") {
-          this.tutorialMenuSelection =
-            (this.tutorialMenuSelection - 1 + menuLen) % menuLen;
-          this.audio.menuSelect();
-          return;
-        }
-        if (code === "ArrowDown" || code === "KeyS") {
-          this.tutorialMenuSelection =
-            (this.tutorialMenuSelection + 1) % menuLen;
-          this.audio.menuSelect();
-          return;
-        }
-        if (code === "Enter" || code === "Space") {
+      // Tutorial sandbox — ESC/Q returns to title, C starts campaign
+      if (this.mode === "tutorial" && this.tutorialStep === 10) {
+        if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
-          this.executeTutorialMenuChoice(this.tutorialMenuSelection);
+          this.executeTutorialMenuChoice(3); // Main menu
           return;
         }
-        if (code === "Digit1") {
+        if (code === "KeyC") {
           this.audio.menuConfirm();
-          this.executeTutorialMenuChoice(0);
+          this.executeTutorialCompletionChoice(1); // Begin Campaign
           return;
         }
-        if (code === "Digit2") {
-          this.audio.menuConfirm();
-          this.executeTutorialMenuChoice(1);
-          return;
-        }
-        if (code === "KeyR") {
-          this.audio.menuConfirm();
-          this.executeTutorialMenuChoice(2);
-          return;
-        }
+      }
+
+      // Tutorial (non-sandbox steps): ESC exits tutorial to title
+      if (this.mode === "tutorial" && this.tutorialStep < 10) {
         if (code === "Escape") {
-          this.audio.menuConfirm();
-          this.executeTutorialMenuChoice(3);
+          const now = performance.now();
+          if (now - this.lastEscTime < 200) return;
+          this.lastEscTime = now;
+          document.exitPointerLock();
+          this.audio.stopMusic();
+          this.mode = null;
+          this.state = GameState.TITLE;
           return;
         }
       }
@@ -433,6 +410,11 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
+        if (this.mode === "playtest") {
+          this.exitBuilderPlayTest();
+          return;
+        }
+        this.pausedFromState = GameState.PLAYING;
         this.state = GameState.PAUSED;
         document.exitPointerLock();
       }
@@ -445,7 +427,7 @@ export class Game {
         const now = performance.now();
         if (code === "Escape" && now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
-        this.state = GameState.PLAYING;
+        this.state = this.pausedFromState || GameState.PLAYING;
         this.canvas.requestPointerLock();
       }
       if (code === "KeyQ") {
@@ -469,8 +451,33 @@ export class Game {
     }
 
     if (this.state === GameState.SETTINGS) {
-      // TODO: Too many magic numbers here, terrible to maintain
-      const settingsCount = 9; // difficulty, crosshair, minimapSize, musicVolume, sfxVolume, sensitivity, fov, viewMode, invertX
+      // Table-driven settings: each entry defines key, min, max, step, wrap, and optional onChange
+      const settingsDef = [
+        { key: "difficulty", min: 0, max: 3, step: 1, wrap: true },
+        { key: "crosshair", min: 0, max: 5, step: 1, wrap: true },
+        { key: "minimapSize", min: 100, max: 300, step: 20 },
+        {
+          key: "musicVolume",
+          min: 0,
+          max: 100,
+          step: 10,
+          onChange: () =>
+            this.audio.setMusicVolume(this.settings.musicVolume / 100),
+        },
+        {
+          key: "sfxVolume",
+          min: 0,
+          max: 100,
+          step: 10,
+          onChange: () =>
+            this.audio.setSfxVolume(this.settings.sfxVolume / 100),
+        },
+        { key: "sensitivity", min: 0.5, max: 2.0, step: 0.1, round: 1 },
+        { key: "fov", min: 50, max: 120, step: 5 },
+        { key: "viewMode", min: 0, max: 1, step: 1, wrap: true },
+        { key: "invertX", toggle: true },
+      ];
+      const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
@@ -480,70 +487,31 @@ export class Game {
         this.settingsSelection = (this.settingsSelection + 1) % settingsCount;
         this.audio.menuSelect();
       }
-      if (code === "Enter" || code === "Space" || code === "ArrowRight") {
-        if (this.settingsSelection === 0) {
-          this.settings.difficulty = (this.settings.difficulty + 1) % 4;
-        } else if (this.settingsSelection === 1) {
-          this.settings.crosshair = (this.settings.crosshair + 1) % 6;
-        } else if (this.settingsSelection === 2) {
-          this.settings.minimapSize = Math.min(
-            300,
-            this.settings.minimapSize + 20,
-          );
-        } else if (this.settingsSelection === 3) {
-          this.settings.musicVolume = Math.min(
-            100,
-            this.settings.musicVolume + 10,
-          );
-          this.audio.setMusicVolume(this.settings.musicVolume / 100);
-        } else if (this.settingsSelection === 4) {
-          this.settings.sfxVolume = Math.min(100, this.settings.sfxVolume + 10);
-          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
-        } else if (this.settingsSelection === 5) {
-          this.settings.sensitivity = Math.min(
-            2.0,
-            Math.round((this.settings.sensitivity + 0.1) * 10) / 10,
-          );
-        } else if (this.settingsSelection === 6) {
-          this.settings.fov = Math.min(120, this.settings.fov + 5);
-        } else if (this.settingsSelection === 7) {
-          this.settings.viewMode = (this.settings.viewMode + 1) % 2;
-        } else if (this.settingsSelection === 8) {
-          this.settings.invertX = !this.settings.invertX;
+      if (
+        code === "Enter" ||
+        code === "Space" ||
+        code === "ArrowRight" ||
+        code === "ArrowLeft"
+      ) {
+        const def = settingsDef[this.settingsSelection];
+        const dir = code === "ArrowLeft" ? -1 : 1;
+        if (def.toggle) {
+          this.settings[def.key] = !this.settings[def.key];
+        } else if (def.wrap) {
+          const range = def.max - def.min + 1;
+          this.settings[def.key] =
+            def.min +
+            ((this.settings[def.key] - def.min + dir + range) % range);
+        } else {
+          let val = this.settings[def.key] + def.step * dir;
+          val = Math.max(def.min, Math.min(def.max, val));
+          if (def.round != null)
+            val =
+              Math.round(val * Math.pow(10, def.round)) /
+              Math.pow(10, def.round);
+          this.settings[def.key] = val;
         }
-        this.audio.menuConfirm();
-      }
-      if (code === "ArrowLeft") {
-        if (this.settingsSelection === 0) {
-          this.settings.difficulty = (this.settings.difficulty + 3) % 4;
-        } else if (this.settingsSelection === 1) {
-          this.settings.crosshair = (this.settings.crosshair + 5) % 6;
-        } else if (this.settingsSelection === 2) {
-          this.settings.minimapSize = Math.max(
-            100,
-            this.settings.minimapSize - 20,
-          );
-        } else if (this.settingsSelection === 3) {
-          this.settings.musicVolume = Math.max(
-            0,
-            this.settings.musicVolume - 10,
-          );
-          this.audio.setMusicVolume(this.settings.musicVolume / 100);
-        } else if (this.settingsSelection === 4) {
-          this.settings.sfxVolume = Math.max(0, this.settings.sfxVolume - 10);
-          this.audio.setSfxVolume(this.settings.sfxVolume / 100);
-        } else if (this.settingsSelection === 5) {
-          this.settings.sensitivity = Math.max(
-            0.5,
-            Math.round((this.settings.sensitivity - 0.1) * 10) / 10,
-          );
-        } else if (this.settingsSelection === 6) {
-          this.settings.fov = Math.max(50, this.settings.fov - 5);
-        } else if (this.settingsSelection === 7) {
-          this.settings.viewMode = (this.settings.viewMode + 1) % 2;
-        } else if (this.settingsSelection === 8) {
-          this.settings.invertX = !this.settings.invertX;
-        }
+        if (def.onChange) def.onChange();
         this.audio.menuConfirm();
       }
       if (code === "Escape") {
@@ -898,10 +866,16 @@ export class Game {
     ctx.roundRect(bx, by, 4, boxH, [8, 0, 0, 8]);
     ctx.fill();
 
-    // Icon
-    ctx.font = "28px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(toast.icon, bx + 30, by + 44);
+    // Icon — draw SVG image or fall back to text
+    const iconImg = this.achievementIcons[toast.icon];
+    if (iconImg && iconImg.complete && iconImg.naturalWidth > 0) {
+      const iconSize = 32;
+      ctx.drawImage(iconImg, bx + 14, by + 19, iconSize, iconSize);
+    } else {
+      ctx.font = "28px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(toast.icon, bx + 30, by + 44);
+    }
 
     // "ACHIEVEMENT UNLOCKED"
     ctx.fillStyle = "#ffcc00";
@@ -925,26 +899,9 @@ export class Game {
   saveArena() {
     try {
       const data = {
+        version: SAVE_VERSION,
         round: this.arenaRound,
-        score: this.player.score,
-        kills: this.player.kills,
-        health: this.player.health,
-        maxHealth: this.player.maxHealth,
-        armor: this.player.armor,
-        ammo: this.player.ammo,
-        weapons: this.player.weapons,
-        moveSpeed: this.player.moveSpeed,
-        damageMultiplier: this.player.damageMultiplier,
-        regenRate: this.player.regenRate,
-        critChance: this.player.critChance,
-        lifeSteal: this.player.lifeSteal,
-        splashDamage: this.player.splashDamage,
-        fireRateMultiplier: this.player.fireRateMultiplier,
-        dodgeChance: this.player.dodgeChance,
-        maxShield: this.player.maxShield,
-        shield: this.player.shield,
-        multiShot: this.player.multiShot,
-        thorns: this.player.thorns,
+        ...this.player.serialize(),
         upgradeLevels: this.upgradeLevels,
         difficulty: this.settings.difficulty,
       };
@@ -958,28 +915,14 @@ export class Game {
       const raw = localStorage.getItem("cc_arena_save");
       if (!raw) return false;
       const data = JSON.parse(raw);
+      if (data.version !== SAVE_VERSION) {
+        this.clearArenaSave();
+        return false;
+      }
       this.mode = "arena";
       this.arenaRound = data.round;
       this.player.reset();
-      this.player.score = data.score;
-      this.player.kills = data.kills;
-      this.player.health = data.health;
-      this.player.maxHealth = data.maxHealth;
-      this.player.armor = data.armor;
-      this.player.ammo = data.ammo;
-      this.player.weapons = data.weapons;
-      this.player.moveSpeed = data.moveSpeed;
-      this.player.damageMultiplier = data.damageMultiplier;
-      this.player.regenRate = data.regenRate;
-      this.player.critChance = data.critChance;
-      this.player.lifeSteal = data.lifeSteal;
-      this.player.splashDamage = data.splashDamage;
-      this.player.fireRateMultiplier = data.fireRateMultiplier;
-      this.player.dodgeChance = data.dodgeChance;
-      this.player.maxShield = data.maxShield;
-      this.player.shield = data.shield;
-      this.player.multiShot = data.multiShot;
-      this.player.thorns = data.thorns;
+      this.player.deserialize(data);
       this.upgradeLevels = data.upgradeLevels || {};
       this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
       this.startArenaRound();
@@ -1011,20 +954,13 @@ export class Game {
         return { type: e.type, active: e.active };
       });
       const data = {
+        version: SAVE_VERSION,
         level: this.campaignLevel,
         act: this.campaignAct || 1,
         playerX: this.player.x,
         playerY: this.player.y,
         playerAngle: this.player.angle,
-        currentWeapon: this.player.currentWeapon,
-        health: this.player.health,
-        maxHealth: this.player.maxHealth,
-        armor: this.player.armor,
-        ammo: this.player.ammo,
-        weapons: this.player.weapons,
-        score: this.player.score,
-        kills: this.player.kills,
-        secretsFound: this.player.secretsFound,
+        ...this.player.serialize(),
         difficulty: this.settings.difficulty,
         mapGrid: this.map.grid,
         entityStates,
@@ -1039,6 +975,10 @@ export class Game {
       const raw = localStorage.getItem("cc_campaign_save");
       if (!raw) return false;
       const data = JSON.parse(raw);
+      if (data.version !== SAVE_VERSION) {
+        this.clearCampaignSave();
+        return false;
+      }
       this.mode = "campaign";
       this.campaignLevel = data.level;
       this.campaignAct = data.act || 1;
@@ -1046,16 +986,8 @@ export class Game {
       this.player.reset();
       this.loadCampaignLevel(this.campaignLevel);
 
-      // Restore player stats and position
-      this.player.health = data.health;
-      this.player.maxHealth = data.maxHealth;
-      this.player.armor = data.armor;
-      this.player.ammo = data.ammo;
-      this.player.weapons = data.weapons;
-      this.player.currentWeapon = data.currentWeapon ?? 0;
-      this.player.score = data.score;
-      this.player.kills = data.kills;
-      this.player.secretsFound = data.secretsFound;
+      // Restore player stats
+      this.player.deserialize(data);
 
       // Restore exact position if save has it
       if (data.playerX !== undefined) {
@@ -1176,7 +1108,7 @@ export class Game {
 
   startArenaRound() {
     // TODO: Refactor as we don't properly clean the Arena between rounds, we just reset the player and spawn new enemies on top. Deep cloning will cause performance issues on later levels. Clear entities properly after levels
-    this.map = JSON.parse(JSON.stringify(ARENA_MAP));
+    this.map = structuredClone(ARENA_MAP);
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
@@ -1250,6 +1182,14 @@ export class Game {
     this.killedEnemies = 0;
     this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
     this.roundDamageTaken = 0;
+    this.killStreak = 0;
+    this.killStreakTimer = 0;
+    this.killStreakDisplay = null;
+    this.bestStreak = 0;
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.slowMoTimer = 0;
+    this.timeScale = 1;
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
@@ -1276,11 +1216,182 @@ export class Game {
     }
   }
 
+  showCampaignPrompt() {
+    this.state = GameState.CAMPAIGN_PROMPT;
+    this.campaignPromptSelection = 0;
+  }
+
+  executeCampaignPromptChoice(choice) {
+    if (choice === 0) {
+      // With tutorial
+      this.startTutorial();
+    } else {
+      // Without tutorial — straight to campaign
+      this.startCampaign();
+    }
+  }
+
+  renderCampaignPrompt(ctx, w, h) {
+    const now = performance.now();
+    const sel = this.campaignPromptSelection || 0;
+
+    // Background
+    const grad = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      0,
+      w / 2,
+      h / 2,
+      w * 0.7,
+    );
+    grad.addColorStop(0, "#0a0a2a");
+    grad.addColorStop(0.5, "#050515");
+    grad.addColorStop(1, "#000005");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Animated ring
+    const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
+    ctx.save();
+    ctx.translate(w / 2, h * 0.25);
+    ctx.strokeStyle = `rgba(0, 200, 255, ${0.06 + ringPulse * 0.05})`;
+    ctx.lineWidth = 2;
+    for (let ring = 0; ring < 3; ring++) {
+      const radius = 40 + ring * 18 + Math.sin(now * 0.001 + ring) * 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Title
+    const titleY = h * 0.2;
+    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
+    ctx.save();
+    ctx.shadowColor = "#00ccff";
+    ctx.shadowBlur = 16 * titlePulse;
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 32px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("START CAMPAIGN", w / 2, titleY);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
+    ctx.font = "14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "Would you like to run through training first?",
+      w / 2,
+      titleY + 28,
+    );
+
+    // Menu
+    const menuItems = [
+      {
+        label: "WITH TUTORIAL",
+        key: "[1]",
+        color: "#00ffcc",
+        desc: "Run station training before deploying",
+      },
+      {
+        label: "SKIP TO CAMPAIGN",
+        key: "[2]",
+        color: "#ff8844",
+        desc: "Deploy directly to the mission",
+      },
+    ];
+
+    const menuW = 380;
+    const itemH = 56;
+    const menuH = menuItems.length * itemH + 16;
+    const mx = (w - menuW) / 2;
+    const my = h * 0.38;
+
+    ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
+    ctx.beginPath();
+    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 200, 255, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
+    ctx.stroke();
+
+    for (let i = 0; i < menuItems.length; i++) {
+      const item = menuItems[i];
+      const iy = my + 8 + i * itemH;
+      const isSelected = i === sel;
+
+      if (isSelected) {
+        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
+        ctx.fillStyle = `rgba(0, 200, 255, ${0.06 * sPulse})`;
+        ctx.beginPath();
+        ctx.roundRect(mx, iy, menuW, itemH - 6, 6);
+        ctx.fill();
+        ctx.fillStyle = item.color;
+        ctx.fillRect(mx, iy + 4, 3, itemH - 14);
+        ctx.fillStyle = "#00ccff";
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("\u25B8", mx + 12, iy + 26);
+      }
+
+      ctx.fillStyle = isSelected ? item.color : "rgba(255,255,255,0.45)";
+      ctx.font = `${isSelected ? "bold " : ""}16px monospace`;
+      ctx.textAlign = "left";
+      ctx.fillText(item.label, mx + 32, iy + 26);
+
+      if (item.desc && isSelected) {
+        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
+        ctx.font = "11px monospace";
+        ctx.fillText(item.desc, mx + 32, iy + 42);
+      }
+
+      ctx.fillStyle = isSelected
+        ? "rgba(255,255,255,0.5)"
+        : "rgba(255,255,255,0.2)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(item.key, mx + menuW - 8, iy + 26);
+    }
+    ctx.textAlign = "left";
+
+    // Letterbox bars
+    const barHeight = h * 0.06;
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, w, barHeight);
+    ctx.fillRect(0, h - barHeight, w, barHeight);
+
+    // Bottom hint
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back",
+      w / 2,
+      h - barHeight / 2 + 4,
+    );
+    ctx.textAlign = "left";
+  }
+
   // ── Tutorial system ──────────────────────────────────────────────
   startTutorial() {
+    // Play the clocking_in cutscene first to set the scene,
+    // then initialize the tutorial level
     this.mode = "tutorial";
     this.player.reset();
-    this.map = JSON.parse(JSON.stringify(TUTORIAL_MAP));
+    if (CUTSCENE_SCRIPTS["clocking_in"]) {
+      this.startCutscene("clocking_in", () => {
+        this.initTutorialLevel();
+      });
+    } else {
+      this.initTutorialLevel();
+    }
+  }
+
+  initTutorialLevel() {
+    this.map = structuredClone(TUTORIAL_MAP);
     this.player.x = TUTORIAL_MAP.playerStart.x;
     this.player.y = TUTORIAL_MAP.playerStart.y;
     this.player.angle = TUTORIAL_MAP.playerStart.dir;
@@ -1307,6 +1418,7 @@ export class Game {
     this.tutorialStartY = this.player.y;
     this.tutorialSprintTime = 0;
     this.tutorialPickedUp = false;
+    this.tutorialDoorOpened = false;
     this.tutorialEnemySpawned = false;
     this.tutorialEnemyKilled = false;
     this.tutorialDashed = false;
@@ -1314,6 +1426,7 @@ export class Game {
     this.tutorialSandboxInit = false;
     this.tutorialMenuSelection = 0;
     this.tutorialOriginPlayed = false;
+    this.tutorialShowCompletionMenu = false;
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now() + 99999; // suppress controls overlay
@@ -1370,11 +1483,15 @@ export class Game {
         if (this.tutorialDashed) this.advanceTutorialStep();
         break;
 
-      case 6: // Pick up items
+      case 6: // Open a door with E
+        if (this.tutorialDoorOpened) this.advanceTutorialStep();
+        break;
+
+      case 7: // Pick up items (health & ammo behind the door)
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 7: // Combat
+      case 8: // Combat
         if (!this.tutorialEnemySpawned) {
           const enemy = new Enemy(12.5, 12.5, "drone");
           enemy.health = 15;
@@ -1388,33 +1505,23 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 8: // Calibration complete banner → comic origin → sandbox
-        if (elapsed > 3 && !this.tutorialOriginPlayed) {
+      case 9: // Training complete → show completion menu
+        if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
           this.tutorialOriginPlayed = true;
-          // Play comic book origin panels if available
-          if (CUTSCENE_SCRIPTS["origin_panels"]) {
-            this.audio.stopMusic();
-            document.exitPointerLock();
-            this.startCutscene("origin_panels", () => {
-              this.state = GameState.PLAYING;
-              this.mode = "tutorial";
-              this.advanceTutorialStep();
-              this.canvas.requestPointerLock();
-              this.audio.startMusic(130);
-            });
-          } else {
-            this.advanceTutorialStep();
-          }
+          this.tutorialMenuSelection = 0;
+          this.tutorialShowCompletionMenu = true;
+          this.audio.stopMusic();
+          this.state = GameState.TUTORIAL_COMPLETE;
+          document.exitPointerLock();
         }
         break;
 
-      case 9: {
+      case 10: {
         // Sandbox — spawn training dummies, let player practice
         if (!this.tutorialSandboxInit) {
           this.tutorialSandboxInit = true;
-          this.tutorialMenuSelection = 0;
           this.spawnTrainingDummies();
         }
         // Respawn dummies when all killed
@@ -1474,6 +1581,36 @@ export class Game {
     }
   }
 
+  executeTutorialCompletionChoice(choice) {
+    this.tutorialShowCompletionMenu = false;
+    switch (choice) {
+      case 0: // Continue Training (go to sandbox step 9)
+        this.state = GameState.PLAYING;
+        this.advanceTutorialStep();
+        this.audio.startMusic(130);
+        this.canvas.requestPointerLock();
+        break;
+      case 1: // Begin Campaign (skip clocking_in — already seen before tutorial)
+        document.exitPointerLock();
+        this.mode = "campaign";
+        this.campaignLevel = 0;
+        this.campaignAct = 1;
+        this.player.reset();
+        this.startCutscene("the_hunt_begins", () => {
+          this.startCutscene("intro", () => {
+            this.loadCampaignLevel(0);
+          });
+        });
+        break;
+      case 2: // Main Menu
+      default:
+        document.exitPointerLock();
+        this.mode = null;
+        this.state = GameState.TITLE;
+        break;
+    }
+  }
+
   shouldShowTutorial() {
     if (this.alwaysShowTutorial) return true;
     return !this.achievementStats.tutorialComplete;
@@ -1484,45 +1621,58 @@ export class Game {
 
     const steps = [
       {
-        title: "SYSTEM INITIALIZING...",
-        hint: "Temporal calibration in progress...",
+        title: "ARRIVING AT CHRONOS STATION...",
+        hint: "Armor calibration in progress...",
         color: "#00ffcc",
       },
       {
-        title: "LOOK AROUND",
-        hint: "Move your mouse to survey the area",
+        title: "SERVO CALIBRATION — VISUAL TRACKING",
+        hint: "Move your mouse to look around — the armor tracks your head movement",
         color: "#00ccff",
       },
-      { title: "MOVE", hint: "Use  W A S D  to move", color: "#00ccff" },
-      { title: "FIRE WEAPON", hint: "Click to shoot", color: "#ff8844" },
       {
-        title: "SPRINT",
-        hint: "Hold  SHIFT  while moving to sprint",
+        title: "LOCOMOTION SYNC",
+        hint: "W A S D  to move — the armor amplifies each step precisely",
+        color: "#00ccff",
+      },
+      {
+        title: "WEAPONS INTEGRATION",
+        hint: "Click to fire — the rifle syncs to your armor's targeting HUD",
+        color: "#ff8844",
+      },
+      {
+        title: "SPRINT BURST CALIBRATION",
+        hint: "Hold  SHIFT  to sprint — the servos let you move faster and longer",
         color: "#ffcc00",
       },
       {
-        title: "DASH",
-        hint: "Double-tap a movement key to dash",
+        title: "EVASIVE DASH PROTOCOL",
+        hint: "Double-tap a movement key to dash — each step must be precise",
         color: "#ff44ff",
       },
       {
-        title: "PICK UP SUPPLIES",
-        hint: "Walk over the glowing items on the ground",
+        title: "OPEN THE ARMORY DOOR",
+        hint: "Face the door and press  E  to interact",
+        color: "#ff8844",
+      },
+      {
+        title: "GRAB SUPPLIES",
+        hint: "Walk over health packs & ammo — the armor carries more than standard kit",
         color: "#44ff88",
       },
       {
-        title: "THREAT DETECTED",
-        hint: "Engage the hostile!",
+        title: "HOSTILE DETECTED!",
+        hint: "Engage the threat — take it down!",
         color: "#ff2244",
       },
       {
-        title: "CALIBRATION COMPLETE",
-        hint: "You're ready, agent.",
+        title: "TRAINING COMPLETE",
+        hint: "Alpha program passed. You're the last one standing.",
         color: "#00ffcc",
       },
       {
         title: "TRAINING GROUND",
-        hint: "Practice on the dummies — or choose your path",
+        hint: "Free practice — Q to quit · C to start the campaign",
         color: "#00ffcc",
       },
     ];
@@ -1566,8 +1716,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 8) {
-      ctx.fillText(`${this.tutorialStep}/7`, bx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 9) {
+      ctx.fillText(`${this.tutorialStep}/8`, bx + 14, by + 18);
     }
 
     // Title
@@ -1581,12 +1731,148 @@ export class Game {
     ctx.font = "14px monospace";
     ctx.fillText(step.hint, w / 2, by + 58);
 
-    // Sandbox menu
-    if (this.tutorialStep === 9) {
-      this.renderTutorialMenu(ctx, w, h);
+    // Sandbox - no overlay menu, just the step indicator
+    if (this.tutorialStep === 10) {
+      // No menu — sandbox is pure practice mode
     }
 
     ctx.restore();
+  }
+
+  renderTutorialCompletionMenu(ctx, w, h) {
+    const now = performance.now();
+    const sel = this.tutorialMenuSelection || 0;
+
+    // Full-screen cinematic backdrop
+    ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
+    ctx.fillRect(0, 0, w, h);
+
+    // Animated energy ring
+    const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
+    ctx.save();
+    ctx.translate(w / 2, h * 0.2);
+    ctx.strokeStyle = `rgba(0, 255, 200, ${0.08 + ringPulse * 0.06})`;
+    ctx.lineWidth = 2;
+    for (let ring = 0; ring < 3; ring++) {
+      const radius = 50 + ring * 20 + Math.sin(now * 0.001 + ring) * 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Title
+    const titleY = h * 0.14;
+    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
+    ctx.save();
+    ctx.shadowColor = "#00ffcc";
+    ctx.shadowBlur = 20 * titlePulse;
+    ctx.fillStyle = "#00ffcc";
+    ctx.font = "bold 36px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("TRAINING COMPLETE", w / 2, titleY);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    ctx.fillStyle = "rgba(170, 200, 220, 0.6)";
+    ctx.font = "13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "All systems nominal. What's your next move, agent?",
+      w / 2,
+      titleY + 24,
+    );
+
+    // Decorative line
+    ctx.strokeStyle = "rgba(0, 255, 200, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 100, titleY + 36);
+    ctx.lineTo(w / 2 + 100, titleY + 36);
+    ctx.stroke();
+
+    // Menu items
+    const menuItems = [
+      {
+        label: "CONTINUE TRAINING",
+        key: "[1]",
+        color: "#ffcc00",
+        desc: "Stay in the sandbox",
+      },
+      {
+        label: "BEGIN CAMPAIGN",
+        key: "[2]",
+        color: "#00ccff",
+        desc: "Face the Paradox Lord",
+      },
+      {
+        label: "MAIN MENU",
+        key: "[ESC]",
+        color: "#666666",
+        desc: "Return to title screen",
+      },
+    ];
+
+    const menuW = 360;
+    const itemH = 52;
+    const menuH = menuItems.length * itemH + 16;
+    const mx = (w - menuW) / 2;
+    const my = h * 0.35;
+
+    ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
+    ctx.beginPath();
+    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 255, 200, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
+    ctx.stroke();
+
+    for (let i = 0; i < menuItems.length; i++) {
+      const item = menuItems[i];
+      const iy = my + 8 + i * itemH;
+      const isSelected = i === sel;
+
+      if (isSelected) {
+        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
+        ctx.fillStyle = `rgba(0, 255, 200, ${0.06 * sPulse})`;
+        ctx.beginPath();
+        ctx.roundRect(mx, iy, menuW, itemH - 6, 6);
+        ctx.fill();
+        ctx.fillStyle = item.color;
+        ctx.fillRect(mx, iy + 4, 3, itemH - 14);
+        ctx.fillStyle = "#00ffcc";
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("\u25B8", mx + 12, iy + 24);
+      }
+
+      ctx.fillStyle = isSelected ? item.color : "rgba(255,255,255,0.45)";
+      ctx.font = `${isSelected ? "bold " : ""}16px monospace`;
+      ctx.textAlign = "left";
+      ctx.fillText(item.label, mx + 32, iy + 24);
+
+      if (item.desc && isSelected) {
+        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
+        ctx.font = "11px monospace";
+        ctx.fillText(item.desc, mx + 32, iy + 40);
+      }
+
+      ctx.fillStyle = isSelected
+        ? "rgba(255,255,255,0.5)"
+        : "rgba(255,255,255,0.2)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(item.key, mx + menuW - 8, iy + 24);
+    }
+    ctx.textAlign = "left";
+
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("W/S to navigate  \u00B7  ENTER to select", w / 2, h - 30);
+    ctx.textAlign = "left";
   }
 
   renderTutorialMenu(ctx, w, h) {
@@ -1759,7 +2045,7 @@ export class Game {
       frameStart: performance.now(),
       onComplete,
       particles: [],
-      skipHeld: false,
+      skipHeldStart: 0,
     };
     this.state = GameState.CUTSCENE;
   }
@@ -1788,6 +2074,17 @@ export class Game {
     if (!frame) return;
 
     const elapsed = performance.now() - cs.frameStart;
+
+    // Hold Space to skip entire cutscene (1 second hold)
+    if (this.keys["Space"]) {
+      if (!cs.skipHeldStart) cs.skipHeldStart = performance.now();
+      if (performance.now() - cs.skipHeldStart >= 1000) {
+        this.endCutscene();
+        return;
+      }
+    } else {
+      cs.skipHeldStart = 0;
+    }
 
     // Auto-advance
     if (frame.duration > 0 && elapsed > frame.duration) {
@@ -2005,6 +2302,26 @@ export class Game {
       w - 20,
       h - barHeight / 2 + 4,
     );
+
+    // === Hold-to-skip progress bar ===
+    if (cs.skipHeldStart > 0) {
+      const holdProgress = Math.min(
+        1,
+        (performance.now() - cs.skipHeldStart) / 1000,
+      );
+      const skipBarW = 120;
+      const skipBarH = 4;
+      const skipBarX = w - 20 - skipBarW;
+      const skipBarY = h - barHeight / 2 + 12;
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarH);
+      ctx.fillStyle = "#00ffcc";
+      ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarH);
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.font = "10px monospace";
+      ctx.fillText("Hold SPACE to skip all...", w - 20, skipBarY + 16);
+    }
+
     ctx.textAlign = "left";
   }
 
@@ -2272,6 +2589,26 @@ export class Game {
     ctx.fillStyle = `rgba(255,255,255,${skipAlpha})`;
     ctx.font = "12px monospace";
     ctx.fillText("[ENTER] next  ·  [ESC] skip", w - 240, barH / 2 + 4);
+
+    // === Hold-to-skip progress bar ===
+    if (cs.skipHeldStart > 0) {
+      const holdProgress = Math.min(
+        1,
+        (performance.now() - cs.skipHeldStart) / 1000,
+      );
+      const skipBarW = 120;
+      const skipBarBH = 4;
+      const skipBarX = w - 240;
+      const skipBarY = barH / 2 + 12;
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarBH);
+      ctx.fillStyle = "#00ffcc";
+      ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarBH);
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.font = "10px monospace";
+      ctx.fillText("Hold SPACE to skip all...", w - 240, skipBarY + 16);
+    }
+
     ctx.textAlign = "left";
   }
 
@@ -2359,121 +2696,786 @@ export class Game {
     ctx.save();
     ctx.translate(cx, cy);
 
+    // Base scale: make characters larger in all cutscene art
+    const baseScale = 1.6;
+    ctx.scale(baseScale, baseScale);
+
     switch (art) {
       case "hero": {
-        // Silhouette of the temporal agent — dramatic pose
+        // Armored temporal agent — adult proportions (tall torso, long legs)
         const fadeIn = Math.min(1, t / 1.2);
         const scale = 0.9 + fadeIn * 0.1;
         ctx.scale(scale, scale);
         ctx.globalAlpha = fadeIn;
 
         // Glow aura
-        const glowGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+        const glowGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 90);
         glowGrad.addColorStop(0, "rgba(0,255,200,0.15)");
         glowGrad.addColorStop(1, "rgba(0,255,200,0)");
         ctx.fillStyle = glowGrad;
-        ctx.fillRect(-100, -100, 200, 200);
+        ctx.fillRect(-120, -120, 240, 240);
 
-        // Cape
+        // Cape (shoulder-length, not floor-length)
         ctx.fillStyle = "#6b1515";
         ctx.beginPath();
-        ctx.moveTo(-15, -20);
-        ctx.quadraticCurveTo(-22, 10, -20 + Math.sin(t * 2) * 3, 50);
-        ctx.lineTo(18 + Math.sin(t * 2.3) * 2, 48);
-        ctx.quadraticCurveTo(20, 10, 13, -20);
+        ctx.moveTo(-16, -30);
+        ctx.quadraticCurveTo(-26, 0, -22 + Math.sin(t * 2) * 3, 30);
+        ctx.lineTo(-10 + Math.sin(t * 1.8) * 2, 28);
+        ctx.quadraticCurveTo(-8, -5, -10, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#7a1818";
+        ctx.beginPath();
+        ctx.moveTo(-10, -30);
+        ctx.quadraticCurveTo(-4, 5, 0 + Math.sin(t * 2.2) * 2, 32);
+        ctx.lineTo(12 + Math.sin(t * 1.9) * 2, 30);
+        ctx.quadraticCurveTo(8, 0, 4, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#5c1212";
+        ctx.beginPath();
+        ctx.moveTo(4, -30);
+        ctx.quadraticCurveTo(18, -2, 20 + Math.sin(t * 2.4) * 3, 28);
+        ctx.lineTo(22 + Math.sin(t * 2.1) * 2, 26);
+        ctx.quadraticCurveTo(20, -6, 14, -30);
         ctx.closePath();
         ctx.fill();
 
-        // Body
+        // Torso (wide, tall — adult proportions)
         ctx.fillStyle = "#2a3a4a";
-        ctx.fillRect(-10, -30, 20, 35);
-
-        // Helmet
-        ctx.fillStyle = "#1a2a3a";
         ctx.beginPath();
-        ctx.arc(0, -38, 10, 0, Math.PI * 2);
+        ctx.moveTo(-14, -38);
+        ctx.lineTo(-16, 12);
+        ctx.lineTo(16, 12);
+        ctx.lineTo(14, -38);
+        ctx.closePath();
         ctx.fill();
 
-        // Visor glow
-        ctx.fillStyle = "#00ffcc";
+        // Chest plate (broad)
+        ctx.fillStyle = "#334455";
+        ctx.beginPath();
+        ctx.moveTo(-10, -36);
+        ctx.quadraticCurveTo(0, -30, 10, -36);
+        ctx.lineTo(9, -16);
+        ctx.quadraticCurveTo(0, -13, -9, -16);
+        ctx.closePath();
+        ctx.fill();
+
+        // Pec detail lines
+        ctx.strokeStyle = "#446688";
+        ctx.lineWidth = 0.6;
+        ctx.globalAlpha = fadeIn * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(-8, -30);
+        ctx.quadraticCurveTo(-3, -27, 0, -30);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.quadraticCurveTo(3, -27, 8, -30);
+        ctx.stroke();
+        ctx.globalAlpha = fadeIn;
+
+        // Abs detail lines
+        ctx.strokeStyle = "#446688";
+        ctx.lineWidth = 0.5;
+        ctx.globalAlpha = fadeIn * 0.3;
+        for (let i = 0; i < 4; i++) {
+          const ay = -12 + i * 5;
+          ctx.beginPath();
+          ctx.moveTo(-7, ay);
+          ctx.lineTo(7, ay);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = fadeIn;
+
+        // Belt
+        ctx.fillStyle = "#1a1a2a";
+        ctx.fillRect(-15, 8, 30, 4);
+        ctx.fillStyle = "#00aacc";
+        ctx.fillRect(-3, 9, 6, 2);
+
+        // Collar
+        ctx.fillStyle = "#3a4a5a";
+        ctx.beginPath();
+        ctx.moveTo(-14, -38);
+        ctx.quadraticCurveTo(0, -34, 14, -38);
+        ctx.lineTo(12, -41);
+        ctx.quadraticCurveTo(0, -37, -12, -41);
+        ctx.closePath();
+        ctx.fill();
+
+        // Shoulder pauldrons (large, curved)
+        ctx.fillStyle = "#3a4a5a";
+        ctx.beginPath();
+        ctx.arc(-18, -36, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(18, -36, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.strokeStyle = "#556688";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(-18, -36, 10, Math.PI, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(18, -36, 10, Math.PI, 0);
+        ctx.stroke();
+
+        // Neck
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(-5, -46, 10, 8);
+
+        // Helmet (shaped, not just a circle)
+        ctx.fillStyle = "#1a2a3a";
+        ctx.beginPath();
+        ctx.moveTo(-10, -48);
+        ctx.quadraticCurveTo(-13, -56, -10, -64);
+        ctx.quadraticCurveTo(0, -69, 10, -64);
+        ctx.quadraticCurveTo(13, -56, 10, -48);
+        ctx.quadraticCurveTo(0, -45, -10, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Helmet ridge
+        ctx.strokeStyle = "#334466";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-5, -66);
+        ctx.quadraticCurveTo(0, -70, 5, -66);
+        ctx.stroke();
+
+        // Visor (curved, glowing)
+        ctx.fillStyle = "#00aadd";
         ctx.shadowColor = "#00ffcc";
-        ctx.shadowBlur = 8;
-        ctx.fillRect(-6, -40, 12, 3);
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(-8, -57);
+        ctx.quadraticCurveTo(-10, -53, -7, -50);
+        ctx.quadraticCurveTo(0, -48, 7, -50);
+        ctx.quadraticCurveTo(10, -53, 8, -57);
+        ctx.quadraticCurveTo(0, -59, -8, -57);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#00ddff";
+        ctx.globalAlpha = fadeIn * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-6, -56);
+        ctx.quadraticCurveTo(0, -58, 6, -56);
+        ctx.quadraticCurveTo(4, -53, 0, -52);
+        ctx.quadraticCurveTo(-4, -53, -6, -56);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = fadeIn;
         ctx.shadowBlur = 0;
 
-        // Shoulders
-        ctx.fillStyle = "#3a4a5a";
-        ctx.fillRect(-16, -28, 6, 10);
-        ctx.fillRect(10, -28, 6, 10);
-
-        // Legs
+        // Upper arms
         ctx.fillStyle = "#1a2a3a";
-        ctx.fillRect(-7, 5, 6, 20);
-        ctx.fillRect(1, 5, 6, 20);
+        ctx.beginPath();
+        ctx.moveTo(-18, -30);
+        ctx.quadraticCurveTo(-22, -18, -20, -6);
+        ctx.lineTo(-15, -6);
+        ctx.quadraticCurveTo(-14, -18, -14, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(18, -30);
+        ctx.quadraticCurveTo(22, -18, 20, -6);
+        ctx.lineTo(15, -6);
+        ctx.quadraticCurveTo(14, -18, 14, -30);
+        ctx.closePath();
+        ctx.fill();
+
+        // Forearms
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(-21, -6, 6, 16);
+        ctx.fillRect(15, -6, 6, 16);
+        ctx.fillStyle = "#243d50";
+        ctx.fillRect(-20, 0, 4, 5);
+        ctx.fillRect(16, 0, 4, 5);
+
+        // Fists
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.arc(-18, 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(18, 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs (long — adult proportions)
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(-11, 12, 9, 32);
+        ctx.fillRect(2, 12, 9, 32);
+        // Knee detail
+        ctx.fillStyle = "#243d50";
+        ctx.fillRect(-10, 24, 7, 4);
+        ctx.fillRect(3, 24, 7, 4);
+        // Shin armor stripe
+        ctx.fillStyle = "#2a4055";
+        ctx.fillRect(-9, 32, 5, 6);
+        ctx.fillRect(4, 32, 5, 6);
+
+        // Boots
+        ctx.fillStyle = "#111a22";
+        ctx.fillRect(-12, 42, 10, 6);
+        ctx.fillRect(2, 42, 10, 6);
 
         ctx.globalAlpha = 1;
         break;
       }
 
       case "hero_armed": {
+        // Armed temporal agent — adult proportions, rifle in hand
         const fadeIn = Math.min(1, t / 0.8);
         ctx.globalAlpha = fadeIn;
 
-        // Same hero but with weapon raised
         // Glow
         const glowGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 90);
         glowGrad.addColorStop(0, "rgba(0,255,200,0.2)");
         glowGrad.addColorStop(1, "rgba(0,255,200,0)");
         ctx.fillStyle = glowGrad;
-        ctx.fillRect(-100, -100, 200, 200);
+        ctx.fillRect(-120, -120, 240, 240);
 
-        // Cape (more dramatic)
+        // Cape (shoulder-length, dramatic flow)
         ctx.fillStyle = "#8b1a1a";
         ctx.beginPath();
-        ctx.moveTo(-15, -20);
-        ctx.quadraticCurveTo(-28, 15, -24 + Math.sin(t * 2.5) * 4, 55);
-        ctx.lineTo(20 + Math.sin(t * 2) * 3, 52);
-        ctx.quadraticCurveTo(22, 10, 13, -20);
+        ctx.moveTo(-16, -30);
+        ctx.quadraticCurveTo(-30, 2, -26 + Math.sin(t * 2.5) * 4, 34);
+        ctx.lineTo(-12 + Math.sin(t * 2) * 2, 32);
+        ctx.quadraticCurveTo(-10, -3, -10, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#9a1e1e";
+        ctx.beginPath();
+        ctx.moveTo(-10, -30);
+        ctx.quadraticCurveTo(-2, 6, 2 + Math.sin(t * 2.3) * 3, 36);
+        ctx.lineTo(14 + Math.sin(t * 2.1) * 2, 34);
+        ctx.quadraticCurveTo(10, 2, 4, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#6b1515";
+        ctx.beginPath();
+        ctx.moveTo(4, -30);
+        ctx.quadraticCurveTo(20, 0, 24 + Math.sin(t * 2.6) * 4, 32);
+        ctx.lineTo(26 + Math.sin(t * 2.2) * 2, 30);
+        ctx.quadraticCurveTo(22, -4, 14, -30);
         ctx.closePath();
         ctx.fill();
 
-        // Body
+        // Torso (wide, tall)
         ctx.fillStyle = "#2a3a4a";
-        ctx.fillRect(-10, -30, 20, 35);
+        ctx.beginPath();
+        ctx.moveTo(-14, -38);
+        ctx.lineTo(-16, 12);
+        ctx.lineTo(16, 12);
+        ctx.lineTo(14, -38);
+        ctx.closePath();
+        ctx.fill();
+
+        // Chest plate
+        ctx.fillStyle = "#334455";
+        ctx.beginPath();
+        ctx.moveTo(-10, -36);
+        ctx.quadraticCurveTo(0, -30, 10, -36);
+        ctx.lineTo(9, -16);
+        ctx.quadraticCurveTo(0, -13, -9, -16);
+        ctx.closePath();
+        ctx.fill();
+
+        // Belt
+        ctx.fillStyle = "#1a1a2a";
+        ctx.fillRect(-15, 8, 30, 4);
+        ctx.fillStyle = "#00aacc";
+        ctx.fillRect(-3, 9, 6, 2);
+
+        // Collar
+        ctx.fillStyle = "#3a4a5a";
+        ctx.beginPath();
+        ctx.moveTo(-14, -38);
+        ctx.quadraticCurveTo(0, -34, 14, -38);
+        ctx.lineTo(12, -41);
+        ctx.quadraticCurveTo(0, -37, -12, -41);
+        ctx.closePath();
+        ctx.fill();
+
+        // Pauldrons
+        ctx.fillStyle = "#3a4a5a";
+        ctx.beginPath();
+        ctx.arc(-18, -36, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(18, -36, 10, Math.PI, 0);
+        ctx.fill();
+        ctx.strokeStyle = "#556688";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(-18, -36, 10, Math.PI, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(18, -36, 10, Math.PI, 0);
+        ctx.stroke();
+
+        // Neck
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(-5, -46, 10, 8);
 
         // Helmet
         ctx.fillStyle = "#1a2a3a";
         ctx.beginPath();
-        ctx.arc(0, -38, 10, 0, Math.PI * 2);
+        ctx.moveTo(-10, -48);
+        ctx.quadraticCurveTo(-13, -56, -10, -64);
+        ctx.quadraticCurveTo(0, -69, 10, -64);
+        ctx.quadraticCurveTo(13, -56, 10, -48);
+        ctx.quadraticCurveTo(0, -45, -10, -48);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#00ffcc";
+
+        // Helmet ridge
+        ctx.strokeStyle = "#334466";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-5, -66);
+        ctx.quadraticCurveTo(0, -70, 5, -66);
+        ctx.stroke();
+
+        // Visor
+        ctx.fillStyle = "#00aadd";
         ctx.shadowColor = "#00ffcc";
-        ctx.shadowBlur = 10;
-        ctx.fillRect(-6, -40, 12, 3);
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(-8, -57);
+        ctx.quadraticCurveTo(-10, -53, -7, -50);
+        ctx.quadraticCurveTo(0, -48, 7, -50);
+        ctx.quadraticCurveTo(10, -53, 8, -57);
+        ctx.quadraticCurveTo(0, -59, -8, -57);
+        ctx.closePath();
+        ctx.fill();
         ctx.shadowBlur = 0;
 
-        // Shoulders
-        ctx.fillStyle = "#3a4a5a";
-        ctx.fillRect(-16, -28, 6, 10);
-        ctx.fillRect(10, -28, 6, 10);
+        // Left arm (at side)
+        ctx.fillStyle = "#1a2a3a";
+        ctx.beginPath();
+        ctx.moveTo(-18, -30);
+        ctx.quadraticCurveTo(-22, -18, -20, -6);
+        ctx.lineTo(-15, -6);
+        ctx.quadraticCurveTo(-14, -18, -14, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillRect(-21, -6, 6, 16);
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.arc(-18, 12, 3, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Rifle (held forward)
-        ctx.fillStyle = "#555";
+        // Right arm + Rifle (held forward)
+        ctx.fillStyle = "#1a2a3a";
         ctx.save();
-        ctx.translate(14, -20);
+        ctx.translate(18, -30);
         ctx.rotate(-0.3);
-        ctx.fillRect(0, -2, 30, 4);
+        // Upper arm
+        ctx.fillRect(-3, 0, 7, 18);
+        // Forearm + hand
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.arc(0.5, 20, 3, 0, Math.PI * 2);
+        ctx.fill();
+        // Rifle
+        ctx.fillStyle = "#2a2a2a";
+        ctx.fillRect(-2, 17, 36, 6);
+        // Barrel
+        ctx.fillStyle = "#3a3a3a";
+        ctx.fillRect(30, 18, 12, 4);
+        // Magazine
+        ctx.fillStyle = "#1a3a4a";
+        ctx.fillRect(8, 23, 6, 10);
+        // Muzzle glow
         ctx.fillStyle = "#00ccff";
         ctx.shadowColor = "#00ccff";
-        ctx.shadowBlur = 6;
-        ctx.fillRect(28, -1, 3, 2);
+        ctx.shadowBlur = 10;
+        ctx.fillRect(40, 18.5, 4, 3);
         ctx.shadowBlur = 0;
+        // Rail
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(2, 16, 28, 2);
         ctx.restore();
 
-        // Legs
+        // Legs (long)
         ctx.fillStyle = "#1a2a3a";
-        ctx.fillRect(-7, 5, 6, 20);
-        ctx.fillRect(1, 5, 6, 20);
+        ctx.fillRect(-11, 12, 9, 32);
+        ctx.fillRect(2, 12, 9, 32);
+        ctx.fillStyle = "#243d50";
+        ctx.fillRect(-10, 24, 7, 4);
+        ctx.fillRect(3, 24, 7, 4);
+
+        // Boots
+        ctx.fillStyle = "#111a22";
+        ctx.fillRect(-12, 42, 10, 6);
+        ctx.fillRect(2, 42, 10, 6);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "hero_human": {
+        // Unarmored agent in casual work clothes — adult male proportions
+        const fadeIn = Math.min(1, t / 1.0);
+        ctx.globalAlpha = fadeIn;
+
+        // Hair (short, dark)
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.moveTo(-9, -62);
+        ctx.quadraticCurveTo(-12, -68, -8, -72);
+        ctx.quadraticCurveTo(0, -76, 8, -72);
+        ctx.quadraticCurveTo(12, -68, 9, -62);
+        ctx.closePath();
+        ctx.fill();
+
+        // Head (skin tone)
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.moveTo(-8, -48);
+        ctx.quadraticCurveTo(-10, -56, -8, -64);
+        ctx.quadraticCurveTo(0, -68, 8, -64);
+        ctx.quadraticCurveTo(10, -56, 8, -48);
+        ctx.quadraticCurveTo(0, -45, -8, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-5, -58, 4, 3);
+        ctx.fillRect(1, -58, 4, 3);
+        ctx.fillStyle = "#2a4a3a";
+        ctx.fillRect(-4, -57, 2, 2);
+        ctx.fillRect(2, -57, 2, 2);
+
+        // Eyebrows
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-6, -60);
+        ctx.lineTo(-1, -61);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1, -61);
+        ctx.lineTo(6, -60);
+        ctx.stroke();
+
+        // Mouth
+        ctx.strokeStyle = "#8a6050";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-3, -50);
+        ctx.quadraticCurveTo(0, -49, 3, -50);
+        ctx.stroke();
+
+        // Neck
+        ctx.fillStyle = "#c8956c";
+        ctx.fillRect(-4, -48, 8, 8);
+
+        // Jacket/shirt (casual work — dark grey jacket, white shirt)
+        ctx.fillStyle = "#3a3a44";
+        ctx.beginPath();
+        ctx.moveTo(-14, -40);
+        ctx.lineTo(-16, 12);
+        ctx.lineTo(16, 12);
+        ctx.lineTo(14, -40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Shirt collar (white V-neck visible)
+        ctx.fillStyle = "#d8d8d8";
+        ctx.beginPath();
+        ctx.moveTo(-5, -40);
+        ctx.lineTo(0, -32);
+        ctx.lineTo(5, -40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Jacket lapels
+        ctx.strokeStyle = "#2a2a30";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-6, -40);
+        ctx.lineTo(-8, -20);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(6, -40);
+        ctx.lineTo(8, -20);
+        ctx.stroke();
+
+        // ID badge clipped to pocket
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-12, -18, 6, 8);
+        ctx.fillStyle = "#0066aa";
+        ctx.fillRect(-11, -16, 4, 4);
+        // Badge lanyard
+        ctx.strokeStyle = "#0066aa";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-9, -18);
+        ctx.quadraticCurveTo(-6, -30, -4, -40);
+        ctx.stroke();
+
+        // Belt
+        ctx.fillStyle = "#2a2020";
+        ctx.fillRect(-15, 8, 30, 4);
+        ctx.fillStyle = "#888888";
+        ctx.fillRect(-2, 9, 4, 2);
+
+        // Arms (jacket sleeves)
+        ctx.fillStyle = "#3a3a44";
+        ctx.beginPath();
+        ctx.moveTo(-14, -36);
+        ctx.quadraticCurveTo(-20, -20, -18, -4);
+        ctx.lineTo(-13, -4);
+        ctx.quadraticCurveTo(-12, -20, -10, -36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(14, -36);
+        ctx.quadraticCurveTo(20, -20, 18, -4);
+        ctx.lineTo(13, -4);
+        ctx.quadraticCurveTo(12, -20, 10, -36);
+        ctx.closePath();
+        ctx.fill();
+
+        // Hands (skin)
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.arc(-15.5, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(15.5, -2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pants (dark slacks)
+        ctx.fillStyle = "#2a2a33";
+        ctx.fillRect(-11, 12, 9, 32);
+        ctx.fillRect(2, 12, 9, 32);
+
+        // Shoes
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(-12, 42, 10, 5);
+        ctx.fillRect(2, 42, 10, 5);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "hero_at_desk": {
+        // Hero standing at front desk, secretary ignoring him
+        const fadeIn = Math.min(1, t / 1.0);
+        ctx.globalAlpha = fadeIn;
+
+        // --- Front desk counter ---
+        ctx.fillStyle = "#3a3022";
+        ctx.fillRect(-60, 5, 120, 8);
+        // Desk front panel
+        ctx.fillStyle = "#2a2418";
+        ctx.fillRect(-60, 13, 120, 35);
+        // Desk edge highlight
+        ctx.strokeStyle = "#4a4030";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-60, 5);
+        ctx.lineTo(60, 5);
+        ctx.stroke();
+
+        // --- Secretary (right side, behind desk, looking at monitor) ---
+        ctx.save();
+        ctx.translate(28, 0);
+
+        // Monitor
+        ctx.fillStyle = "#111111";
+        ctx.fillRect(10, -22, 20, 16);
+        ctx.fillStyle = "#2244aa";
+        ctx.fillRect(11, -21, 18, 14);
+        // Screen glare
+        ctx.fillStyle = "rgba(100,150,255,0.15)";
+        ctx.fillRect(12, -20, 8, 6);
+        // Monitor stand
+        ctx.fillStyle = "#222222";
+        ctx.fillRect(18, -6, 4, 6);
+
+        // Hair (long, flowing — she's not looking at hero, facing her screen)
+        ctx.fillStyle = "#2a1508";
+        ctx.beginPath();
+        ctx.moveTo(-6, -52);
+        ctx.quadraticCurveTo(-10, -46, -10, -38);
+        ctx.quadraticCurveTo(-12, -20, -10, -10);
+        ctx.lineTo(-6, -10);
+        ctx.quadraticCurveTo(-6, -30, -4, -42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(6, -52);
+        ctx.quadraticCurveTo(10, -46, 10, -38);
+        ctx.quadraticCurveTo(12, -20, 10, -10);
+        ctx.lineTo(6, -10);
+        ctx.quadraticCurveTo(6, -30, 4, -42);
+        ctx.closePath();
+        ctx.fill();
+
+        // Face (turned toward monitor — 3/4 view)
+        ctx.fillStyle = "#dba882";
+        ctx.beginPath();
+        ctx.moveTo(-6, -42);
+        ctx.quadraticCurveTo(-8, -48, -6, -54);
+        ctx.quadraticCurveTo(2, -58, 8, -54);
+        ctx.quadraticCurveTo(10, -48, 8, -42);
+        ctx.quadraticCurveTo(2, -39, -6, -42);
+        ctx.closePath();
+        ctx.fill();
+
+        // Eye (one visible — looking at screen, NOT at hero)
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(2, -50, 4, 2.5);
+        ctx.fillStyle = "#3a2a1a";
+        ctx.fillRect(4, -49.5, 1.5, 1.5);
+
+        // Eyelash
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(1, -50.5);
+        ctx.lineTo(7, -51.5);
+        ctx.stroke();
+
+        // Lips
+        ctx.fillStyle = "#cc6666";
+        ctx.beginPath();
+        ctx.moveTo(0, -43);
+        ctx.quadraticCurveTo(3, -41.5, 6, -43);
+        ctx.quadraticCurveTo(3, -42, 0, -43);
+        ctx.closePath();
+        ctx.fill();
+
+        // Blouse (professional, teal)
+        ctx.fillStyle = "#2a7a7a";
+        ctx.beginPath();
+        ctx.moveTo(-8, -36);
+        ctx.lineTo(-10, 4);
+        ctx.lineTo(10, 4);
+        ctx.lineTo(8, -36);
+        ctx.closePath();
+        ctx.fill();
+
+        // Necklace
+        ctx.strokeStyle = "#ccaa44";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-4, -36);
+        ctx.quadraticCurveTo(1, -32, 4, -36);
+        ctx.stroke();
+        ctx.fillStyle = "#ccaa44";
+        ctx.beginPath();
+        ctx.arc(1, -33, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arm (on desk, typing — visible above counter)
+        ctx.fillStyle = "#dba882";
+        ctx.fillRect(8, -6, 10, 3);
+        // Hand on keyboard area
+        ctx.beginPath();
+        ctx.arc(19, -4, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // --- Hero (left side, standing at counter, facing desk) ---
+        ctx.save();
+        ctx.translate(-30, 0);
+
+        // Head (3/4 view facing right toward desk)
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.moveTo(-7, -56);
+        ctx.quadraticCurveTo(-10, -62, -7, -66);
+        ctx.quadraticCurveTo(0, -69, 7, -66);
+        ctx.quadraticCurveTo(10, -62, 7, -56);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.moveTo(-7, -44);
+        ctx.quadraticCurveTo(-9, -52, -7, -58);
+        ctx.quadraticCurveTo(0, -61, 7, -58);
+        ctx.quadraticCurveTo(9, -52, 7, -44);
+        ctx.quadraticCurveTo(0, -41, -7, -44);
+        ctx.closePath();
+        ctx.fill();
+        // Eye (looking toward desk/secretary)
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(2, -52, 3.5, 2.5);
+        ctx.fillStyle = "#2a4a3a";
+        ctx.fillRect(4, -51.5, 1.5, 1.5);
+
+        // Neck
+        ctx.fillStyle = "#c8956c";
+        ctx.fillRect(-3, -44, 6, 6);
+
+        // Jacket
+        ctx.fillStyle = "#3a3a44";
+        ctx.beginPath();
+        ctx.moveTo(-12, -38);
+        ctx.lineTo(-14, 12);
+        ctx.lineTo(14, 12);
+        ctx.lineTo(12, -38);
+        ctx.closePath();
+        ctx.fill();
+
+        // Badge on chest
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(5, -26, 5, 7);
+        ctx.fillStyle = "#0066aa";
+        ctx.fillRect(6, -24, 3, 3);
+
+        // Arm resting on counter
+        ctx.fillStyle = "#3a3a44";
+        ctx.beginPath();
+        ctx.moveTo(12, -34);
+        ctx.quadraticCurveTo(18, -20, 16, -2);
+        ctx.lineTo(11, -2);
+        ctx.quadraticCurveTo(10, -18, 8, -34);
+        ctx.closePath();
+        ctx.fill();
+        // Hand on counter
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.arc(14, -1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Other arm at side
+        ctx.fillStyle = "#3a3a44";
+        ctx.beginPath();
+        ctx.moveTo(-12, -34);
+        ctx.quadraticCurveTo(-18, -18, -16, 0);
+        ctx.lineTo(-11, 0);
+        ctx.quadraticCurveTo(-10, -18, -8, -34);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.arc(-13.5, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Belt
+        ctx.fillStyle = "#2a2020";
+        ctx.fillRect(-13, 8, 26, 3);
+
+        // Pants
+        ctx.fillStyle = "#2a2a33";
+        ctx.fillRect(-9, 12, 8, 28);
+        ctx.fillRect(1, 12, 8, 28);
+
+        // Shoes
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(-10, 38, 9, 5);
+        ctx.fillRect(1, 38, 9, 5);
+
+        ctx.restore();
 
         ctx.globalAlpha = 1;
         break;
@@ -2482,60 +3484,152 @@ export class Game {
       case "villain": {
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.02;
-        ctx.scale(breathe, breathe);
+        ctx.scale(breathe * 1.15, breathe * 1.15); // Bulkier scale
         ctx.globalAlpha = fadeIn;
 
-        // Dark aura
-        const auraGrad = ctx.createRadialGradient(0, 0, 20, 0, 0, 100);
-        auraGrad.addColorStop(0, "rgba(200,30,60,0.15)");
+        // Dark aura (larger)
+        const auraGrad = ctx.createRadialGradient(0, 0, 25, 0, 0, 120);
+        auraGrad.addColorStop(0, "rgba(200,30,60,0.2)");
+        auraGrad.addColorStop(0.5, "rgba(150,0,40,0.1)");
         auraGrad.addColorStop(1, "rgba(100,0,30,0)");
         ctx.fillStyle = auraGrad;
-        ctx.fillRect(-120, -120, 240, 240);
+        ctx.fillRect(-140, -140, 280, 280);
 
-        // Robes
+        // Ambient energy wisps
+        for (let i = 0; i < 3; i++) {
+          const angle = t * (1.5 + i * 0.4) + (i * Math.PI * 2) / 3;
+          ctx.strokeStyle = `rgba(255,34,68,${0.15 + Math.sin(t * 3 + i) * 0.1})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(0, -10, 60 + i * 12, angle, angle + 0.6);
+          ctx.stroke();
+        }
+
+        // Robes (wider, heavier)
         ctx.fillStyle = "#1a0520";
         ctx.beginPath();
-        ctx.moveTo(-20, -15);
-        ctx.lineTo(-30, 60);
-        ctx.lineTo(30, 60);
-        ctx.lineTo(20, -15);
+        ctx.moveTo(-25, -15);
+        ctx.quadraticCurveTo(-38, 20, -35 + Math.sin(t * 1.6) * 3, 65);
+        ctx.lineTo(35 + Math.sin(t * 1.9) * 3, 65);
+        ctx.quadraticCurveTo(38, 20, 25, -15);
         ctx.closePath();
         ctx.fill();
 
-        // Armored torso
+        // Armored torso (wider, plated)
         ctx.fillStyle = "#2a1030";
-        ctx.fillRect(-12, -30, 24, 30);
+        ctx.beginPath();
+        ctx.moveTo(-16, -32);
+        ctx.lineTo(-18, 0);
+        ctx.lineTo(18, 0);
+        ctx.lineTo(16, -32);
+        ctx.closePath();
+        ctx.fill();
 
-        // Pauldrons
+        // Chest plate detail
+        ctx.fillStyle = "#3a1545";
+        ctx.beginPath();
+        ctx.moveTo(-10, -28);
+        ctx.quadraticCurveTo(0, -24, 10, -28);
+        ctx.lineTo(8, -12);
+        ctx.quadraticCurveTo(0, -10, -8, -12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Chest core (pulsing)
+        const corePulse = 0.4 + Math.sin(t * 2.5) * 0.4;
+        ctx.fillStyle = `rgba(255,34,68,${corePulse * 0.5})`;
+        ctx.shadowColor = "#ff2244";
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(0, -20, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Massive pauldrons (spiked)
         ctx.fillStyle = "#3a1040";
         ctx.beginPath();
-        ctx.arc(-16, -25, 8, Math.PI, 0);
+        ctx.moveTo(-24, -32);
+        ctx.quadraticCurveTo(-28, -42, -20, -38);
+        ctx.lineTo(-10, -28);
+        ctx.closePath();
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(16, -25, 8, Math.PI, 0);
+        ctx.moveTo(24, -32);
+        ctx.quadraticCurveTo(28, -42, 20, -38);
+        ctx.lineTo(10, -28);
+        ctx.closePath();
+        ctx.fill();
+        // Pauldron edge glow
+        ctx.strokeStyle = "#ff224440";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-24, -32);
+        ctx.quadraticCurveTo(-28, -42, -20, -38);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(24, -32);
+        ctx.quadraticCurveTo(28, -42, 20, -38);
+        ctx.stroke();
+
+        // Arms (thick, armored)
+        ctx.fillStyle = "#1a0520";
+        ctx.fillRect(-26, -26, 8, 24);
+        ctx.fillRect(18, -26, 8, 24);
+        // Arm armor bands
+        ctx.fillStyle = "#3a1040";
+        ctx.fillRect(-25, -20, 6, 4);
+        ctx.fillRect(19, -20, 6, 4);
+        ctx.fillRect(-25, -10, 6, 4);
+        ctx.fillRect(19, -10, 6, 4);
+
+        // Fists (gauntlets)
+        ctx.fillStyle = "#2a0830";
+        ctx.beginPath();
+        ctx.arc(-22, 1, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(22, 1, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        // Head/Hood
+        // Head/Hood (larger, more imposing)
         ctx.fillStyle = "#0d0315";
         ctx.beginPath();
-        ctx.arc(0, -38, 12, 0, Math.PI * 2);
+        ctx.moveTo(-12, -34);
+        ctx.quadraticCurveTo(-14, -48, -10, -52);
+        ctx.quadraticCurveTo(0, -56, 10, -52);
+        ctx.quadraticCurveTo(14, -48, 12, -34);
+        ctx.quadraticCurveTo(0, -30, -12, -34);
+        ctx.closePath();
         ctx.fill();
 
-        // Three eyes (pulsing)
+        // Hood ridges
+        ctx.strokeStyle = "#1a0828";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-10, -50);
+        ctx.quadraticCurveTo(0, -55, 10, -50);
+        ctx.stroke();
+
+        // Three eyes (pulsing, brighter)
         const eyeGlow = 0.7 + Math.sin(t * 3) * 0.3;
         ctx.fillStyle = `rgba(255,34,68,${eyeGlow})`;
         ctx.shadowColor = "#ff2244";
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 14;
         ctx.beginPath();
-        ctx.arc(-5, -40, 2, 0, Math.PI * 2);
+        ctx.arc(-6, -42, 2.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(5, -40, 2, 0, Math.PI * 2);
+        ctx.arc(6, -42, 2.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(0, -44, 1.8, 0, Math.PI * 2);
+        ctx.arc(0, -47, 2.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+
+        // Legs (visible under robes)
+        ctx.fillStyle = "#150418";
+        ctx.fillRect(-10, 0, 8, 20);
+        ctx.fillRect(2, 0, 8, 20);
 
         ctx.globalAlpha = 1;
         break;
@@ -2821,22 +3915,23 @@ export class Game {
       }
 
       case "party": {
-        // The four-person squad — silhouettes with class identifiers
+        // The five-person squad — silhouettes with class identifiers
         const fadeIn = Math.min(1, t / 1.2);
         ctx.globalAlpha = fadeIn;
 
         // Group glow
-        const partyGrad = ctx.createRadialGradient(0, 0, 20, 0, 0, 110);
+        const partyGrad = ctx.createRadialGradient(0, 0, 20, 0, 0, 130);
         partyGrad.addColorStop(0, "rgba(0,200,255,0.1)");
         partyGrad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = partyGrad;
-        ctx.fillRect(-120, -80, 240, 160);
+        ctx.fillRect(-140, -80, 280, 160);
 
         const members = [
-          { x: -50, color: "#4488ff", visor: "#4488ff", label: "KAEL" }, // Vanguard
-          { x: -17, color: "#00ffcc", visor: "#00ffcc", label: "YOU" }, // Agent
-          { x: 17, color: "#ff4488", visor: "#ff4488", label: "NOVA" }, // Striker
-          { x: 50, color: "#44ff88", visor: "#44ff88", label: "ROOK" }, // Engineer
+          { x: -56, color: "#4488ff", visor: "#4488ff", label: "KAEL" }, // Vanguard
+          { x: -28, color: "#ffaa44", visor: "#ffaa44", label: "LYRA" }, // Chrono-Analyst
+          { x: 0, color: "#00ffcc", visor: "#00ffcc", label: "YOU" }, // Agent
+          { x: 28, color: "#ff4488", visor: "#ff4488", label: "NOVA" }, // Striker
+          { x: 56, color: "#44ff88", visor: "#44ff88", label: "ROOK" }, // Engineer
         ];
 
         for (const m of members) {
@@ -2844,7 +3939,12 @@ export class Game {
           ctx.translate(m.x, 0);
 
           // Cape (small)
-          ctx.fillStyle = m.x === -17 ? "#6b1515" : "#1a2a3a";
+          ctx.fillStyle =
+            m.label === "YOU"
+              ? "#6b1515"
+              : m.label === "LYRA"
+                ? "#3a2a10"
+                : "#1a2a3a";
           ctx.beginPath();
           ctx.moveTo(-6, -12);
           ctx.quadraticCurveTo(-9, 8, -8 + Math.sin(t * 2 + m.x) * 1.5, 28);
@@ -2894,6 +3994,219 @@ export class Game {
 
           ctx.restore();
         }
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "lyra": {
+        // LYRA — The Chrono-Analyst, holographic data displays around her
+        const fadeIn = Math.min(1, t / 1.0);
+        ctx.globalAlpha = fadeIn;
+
+        // Ambient glow
+        const lyraGlow = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+        lyraGlow.addColorStop(0, "rgba(255,170,68,0.12)");
+        lyraGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = lyraGlow;
+        ctx.fillRect(-100, -80, 200, 160);
+
+        // Holographic data panels floating around her
+        const panelAlpha = 0.15 + Math.sin(t * 1.5) * 0.08;
+        ctx.save();
+        // Left panel
+        ctx.translate(-55, -20);
+        ctx.rotate(-0.15 + Math.sin(t * 0.8) * 0.03);
+        ctx.fillStyle = `rgba(255,170,68,${panelAlpha})`;
+        ctx.fillRect(0, 0, 28, 40);
+        ctx.strokeStyle = `rgba(255,170,68,${panelAlpha + 0.15})`;
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(0, 0, 28, 40);
+        // Data lines
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = `rgba(255,200,100,${panelAlpha * 0.7})`;
+          ctx.fillRect(3, 4 + i * 6, 10 + Math.sin(t + i) * 4, 1.5);
+        }
+        ctx.restore();
+
+        // Right panel
+        ctx.save();
+        ctx.translate(28, -30);
+        ctx.rotate(0.12 + Math.sin(t * 0.9 + 1) * 0.03);
+        ctx.fillStyle = `rgba(255,170,68,${panelAlpha})`;
+        ctx.fillRect(0, 0, 24, 35);
+        ctx.strokeStyle = `rgba(255,170,68,${panelAlpha + 0.15})`;
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(0, 0, 24, 35);
+        // Timeline graph
+        ctx.strokeStyle = `rgba(255,200,100,${panelAlpha + 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(3, 25);
+        for (let i = 0; i < 18; i++) {
+          ctx.lineTo(3 + i, 25 - Math.sin(t * 0.5 + i * 0.5) * 8 - i * 0.3);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // --- Character body ---
+        // Hair — long, dark with amber highlights, flowing past shoulders
+        ctx.fillStyle = "#1a1208";
+        ctx.beginPath();
+        ctx.moveTo(-9, -62);
+        ctx.quadraticCurveTo(-14, -50, -13, -30);
+        ctx.quadraticCurveTo(-14, -10, -11 + Math.sin(t * 1.5) * 1, 5);
+        ctx.lineTo(-7, 5);
+        ctx.quadraticCurveTo(-8, -20, -7, -45);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(9, -62);
+        ctx.quadraticCurveTo(14, -50, 13, -30);
+        ctx.quadraticCurveTo(14, -10, 11 + Math.sin(t * 1.5 + 0.5) * 1, 5);
+        ctx.lineTo(7, 5);
+        ctx.quadraticCurveTo(8, -20, 7, -45);
+        ctx.closePath();
+        ctx.fill();
+        // Amber shimmer strand
+        ctx.strokeStyle = "rgba(255,170,68,0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-10, -48);
+        ctx.quadraticCurveTo(-12, -30, -10 + Math.sin(t * 1.2) * 1, 0);
+        ctx.stroke();
+
+        // Face
+        ctx.fillStyle = "#dba882";
+        ctx.beginPath();
+        ctx.moveTo(-8, -48);
+        ctx.quadraticCurveTo(-10, -56, -8, -62);
+        ctx.quadraticCurveTo(0, -66, 8, -62);
+        ctx.quadraticCurveTo(10, -56, 8, -48);
+        ctx.quadraticCurveTo(0, -44, -8, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Eyes — warm amber
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(-5, -57, 4, 3);
+        ctx.fillRect(2, -57, 4, 3);
+        ctx.fillStyle = "#cc7722";
+        ctx.fillRect(-3.5, -56.5, 2, 2);
+        ctx.fillRect(3.5, -56.5, 2, 2);
+        // Pupils
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(-3, -56, 1, 1);
+        ctx.fillRect(4, -56, 1, 1);
+
+        // Eyebrows
+        ctx.strokeStyle = "#2a1a08";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-6, -59);
+        ctx.lineTo(-1, -60);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1, -60);
+        ctx.lineTo(6, -59);
+        ctx.stroke();
+
+        // Lips
+        ctx.fillStyle = "#cc6655";
+        ctx.beginPath();
+        ctx.moveTo(-3, -49);
+        ctx.quadraticCurveTo(0, -47, 3, -49);
+        ctx.quadraticCurveTo(0, -48, -3, -49);
+        ctx.closePath();
+        ctx.fill();
+
+        // Neck
+        ctx.fillStyle = "#dba882";
+        ctx.fillRect(-3, -48, 6, 6);
+
+        // Analyst coat — dark with amber trim
+        ctx.fillStyle = "#1a1a2a";
+        ctx.beginPath();
+        ctx.moveTo(-12, -42);
+        ctx.lineTo(-14, 20);
+        ctx.lineTo(14, 20);
+        ctx.lineTo(12, -42);
+        ctx.closePath();
+        ctx.fill();
+        // Amber collar trim
+        ctx.strokeStyle = "#ffaa44";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-8, -42);
+        ctx.lineTo(-4, -38);
+        ctx.lineTo(4, -38);
+        ctx.lineTo(8, -42);
+        ctx.stroke();
+
+        // Chrono-Analyst badge — glowing amber circle
+        ctx.fillStyle = "#ffaa44";
+        ctx.shadowColor = "#ffaa44";
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(6, -32, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Belt with data modules
+        ctx.fillStyle = "#2a2020";
+        ctx.fillRect(-13, 8, 26, 3);
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillRect(-4, 8.5, 3, 2);
+        ctx.fillRect(1, 8.5, 3, 2);
+
+        // Arms — one raised, palm-up projecting holo
+        ctx.fillStyle = "#1a1a2a";
+        // Left arm at side
+        ctx.beginPath();
+        ctx.moveTo(-12, -38);
+        ctx.quadraticCurveTo(-16, -22, -14, 2);
+        ctx.lineTo(-10, 2);
+        ctx.quadraticCurveTo(-10, -20, -8, -38);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#dba882";
+        ctx.beginPath();
+        ctx.arc(-12, 4, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Right arm raised, projecting
+        ctx.fillStyle = "#1a1a2a";
+        ctx.beginPath();
+        ctx.moveTo(12, -38);
+        ctx.quadraticCurveTo(20, -42, 22, -36);
+        ctx.lineTo(18, -34);
+        ctx.quadraticCurveTo(16, -38, 10, -36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#dba882";
+        ctx.beginPath();
+        ctx.arc(22, -35, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Holographic emission from raised hand
+        ctx.strokeStyle = `rgba(255,170,68,${0.3 + Math.sin(t * 3) * 0.15})`;
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(22, -35, 6 + i * 4, -0.8, 0.8);
+          ctx.stroke();
+        }
+
+        // Legs
+        ctx.fillStyle = "#1a1a2a";
+        ctx.fillRect(-6, 12, 5, 22);
+        ctx.fillRect(1, 12, 5, 22);
+
+        // Boots — sleek with amber accents
+        ctx.fillStyle = "#111118";
+        ctx.fillRect(-7, 32, 6, 6);
+        ctx.fillRect(1, 32, 6, 6);
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillRect(-7, 32, 6, 1);
+        ctx.fillRect(1, 32, 6, 1);
 
         ctx.globalAlpha = 1;
         break;
@@ -2984,7 +4297,7 @@ export class Game {
       return;
     }
     const level = CAMPAIGN_LEVELS[index];
-    this.map = JSON.parse(JSON.stringify(level));
+    this.map = structuredClone(level);
     this.player.x = level.playerStart.x;
     this.player.y = level.playerStart.y;
     this.player.angle = level.playerStart.dir;
@@ -3038,6 +4351,14 @@ export class Game {
 
     this.killedEnemies = 0;
     this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
+    this.killStreak = 0;
+    this.killStreakTimer = 0;
+    this.killStreakDisplay = null;
+    this.bestStreak = 0;
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.slowMoTimer = 0;
+    this.timeScale = 1;
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
@@ -3100,6 +4421,7 @@ export class Game {
         // Door
         this.map.grid[checkY][checkX] = 0;
         this.audio.doorOpen();
+        if (this.mode === "tutorial") this.tutorialDoorOpened = true;
         return;
       } else if (tile === 6) {
         // Secret wall
@@ -3146,6 +4468,7 @@ export class Game {
     this.player.weaponKick = 1;
     this.weaponAnimFrame = 1;
     this.weaponAnimTime = now;
+    this.shotsFired++;
     if (this.mode === "tutorial") this.tutorialFired = true;
 
     // Sound
@@ -3194,6 +4517,44 @@ export class Game {
     );
   }
 
+  _onEnemyKill() {
+    this.killStreak++;
+    this.killStreakTimer = 0;
+    if (this.killStreak > this.bestStreak) this.bestStreak = this.killStreak;
+
+    const STREAK_TIERS = [
+      null, // 1 kill — no announcement
+      { text: "DOUBLE KILL", color: "#ffcc00", size: 32 }, // 2
+      { text: "TRIPLE KILL", color: "#ff8800", size: 36 }, // 3
+      { text: "OVERKILL", color: "#ff4400", size: 40 }, // 4
+      { text: "RAMPAGE", color: "#ff0044", size: 44 }, // 5
+      { text: "UNSTOPPABLE", color: "#ff00ff", size: 48 }, // 6
+      { text: "GODLIKE", color: "#aa00ff", size: 52 }, // 7+
+    ];
+    const tier = Math.min(this.killStreak, STREAK_TIERS.length) - 1;
+    if (tier >= 1) {
+      const t = STREAK_TIERS[tier];
+      this.killStreakDisplay = {
+        text: t.text,
+        color: t.color,
+        size: t.size,
+        life: 2.0,
+      };
+      this.screenShake = Math.max(this.screenShake, 4 + tier * 2);
+      this.audio.roundComplete(); // big pop for streak
+    }
+
+    // Slow-mo last kill — triggers when all enemies dead
+    if (
+      this.totalEnemies > 0 &&
+      this.killedEnemies >= this.totalEnemies &&
+      this.mode !== "tutorial"
+    ) {
+      this.slowMoTimer = 1.5;
+      this.timeScale = 0.25;
+    }
+  }
+
   hitscan(angle, damage, range) {
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
@@ -3226,6 +4587,7 @@ export class Game {
   }
 
   damageEnemy(enemy, damage) {
+    this.shotsHit++;
     // Critical hit check
     let finalDamage = damage;
     let isCrit = false;
@@ -3239,6 +4601,18 @@ export class Game {
     enemy.state = "pain";
     enemy.painTimer = isCrit ? 250 : 150;
     this.audio.enemyHit();
+
+    // Hit marker
+    this.hitMarker = 0.15;
+
+    // Floating damage number
+    this.damageNumbers.push({
+      x: enemy.x,
+      y: enemy.y,
+      value: Math.round(finalDamage),
+      crit: isCrit,
+      life: 0.8,
+    });
 
     // Life steal
     if (this.player.lifeSteal && this.player.alive) {
@@ -3276,6 +4650,7 @@ export class Game {
             this.achievementStats.totalKills++;
             this.audio.enemyDeath();
             this.glitchEffect = 0.3;
+            this._onEnemyKill();
           }
         }
       }
@@ -3291,6 +4666,7 @@ export class Game {
       this.achievementStats.totalKills++;
       this.audio.enemyDeath();
       this.glitchEffect = 0.3;
+      this._onEnemyKill();
 
       // Check if boss killed in campaign
       const isBoss =
@@ -3302,16 +4678,14 @@ export class Game {
         this.checkAchievements();
 
         if (this.campaignAct === 1) {
-          // Act 1 complete — false victory subversion
+          // Act 1 complete — false victory subversion, then end game for now
           this.audio.stopMusic();
           this.startCutscene("false_victory", () => {
-            this.campaignAct = 2;
-            this.campaignLevel = 0;
-            this.player.health = this.player.maxHealth;
-            this.player.ammo = Math.min(this.player.ammo + 50, 999);
-            this.startCutscene("act2_intro", () => {
-              this.loadCampaignLevel(0);
-              this.saveCampaign();
+            this.startCutscene("coming_soon", () => {
+              this.state = GameState.TITLE;
+              this.mode = null;
+              this.clearCampaignSave();
+              document.exitPointerLock();
             });
           });
         } else if (this.campaignAct === 2) {
@@ -3322,9 +4696,11 @@ export class Game {
             this.campaignLevel = 0;
             this.player.health = this.player.maxHealth;
             this.player.ammo = Math.min(this.player.ammo + 50, 999);
-            this.startCutscene("act3_intro", () => {
-              this.loadCampaignLevel(0);
-              this.saveCampaign();
+            this.startCutscene("lyra_reveal", () => {
+              this.startCutscene("act3_intro", () => {
+                this.loadCampaignLevel(0);
+                this.saveCampaign();
+              });
             });
           });
         } else {
@@ -3383,6 +4759,7 @@ export class Game {
         this.player.kills++;
         this.audio.enemyDeath();
         this.glitchEffect = 0.3;
+        this._onEnemyKill();
       }
     }
 
@@ -3399,6 +4776,16 @@ export class Game {
     this.lastFrameTime = timestamp;
     this.time = timestamp;
 
+    // Slow-motion time scale
+    if (this.slowMoTimer > 0) {
+      this.slowMoTimer -= this.deltaTime;
+      this.timeScale = 0.25;
+      if (this.slowMoTimer <= 0) {
+        this.slowMoTimer = 0;
+        this.timeScale = 1;
+      }
+    }
+
     // FPS counter
     this.frameCount++;
     if (timestamp - this.fpsTime > 1000) {
@@ -3412,7 +4799,11 @@ export class Game {
       return;
     }
     if (this.state === GameState.BUILDER) {
-      this.updateBuilder(this.deltaTime);
+      this.builder.feedKeys(this.keys);
+      this.builder.feedMouse(this.mouse.dx, this.mouse.dy, this.mouse.locked);
+      this.mouse.dx = 0;
+      this.mouse.dy = 0;
+      this.builder.update(this.deltaTime);
       return;
     }
     if (this.state !== GameState.PLAYING) return;
@@ -3422,6 +4813,10 @@ export class Game {
       if (this.deathTimer > 0) {
         this.deathTimer -= this.deltaTime;
         if (this.deathTimer <= 0) {
+          if (this.mode === "playtest") {
+            this.exitBuilderPlayTest();
+            return;
+          }
           this.state = GameState.GAME_OVER;
           this.audio.stopMusic();
           if (this.mode === "arena") this.clearArenaSave();
@@ -3432,7 +4827,21 @@ export class Game {
       return;
     }
 
-    const dt = this.deltaTime;
+    const dt = this.deltaTime * this.timeScale;
+
+    // Kill streak timer decay
+    if (this.killStreak > 0) {
+      this.killStreakTimer += this.deltaTime;
+      if (this.killStreakTimer > 3) {
+        this.killStreak = 0;
+        this.killStreakTimer = 0;
+      }
+    }
+    // Kill streak display decay
+    if (this.killStreakDisplay) {
+      this.killStreakDisplay.life -= this.deltaTime;
+      if (this.killStreakDisplay.life <= 0) this.killStreakDisplay = null;
+    }
 
     // Arena timer
     if (this.mode === "arena") {
@@ -3483,6 +4892,25 @@ export class Game {
         this.saveArena();
         document.exitPointerLock();
         return;
+      }
+    }
+
+    // Playtest — return to builder when all enemies killed (after slow-mo)
+    if (this.mode === "playtest") {
+      if (
+        this.totalEnemies > 0 &&
+        this.killedEnemies >= this.totalEnemies &&
+        this.slowMoTimer <= 0
+      ) {
+        if (!this._playtestEndTimer) {
+          this._playtestEndTimer = 2.0; // 2-second victory pause
+        }
+        this._playtestEndTimer -= this.deltaTime;
+        if (this._playtestEndTimer <= 0) {
+          this._playtestEndTimer = null;
+          this.exitBuilderPlayTest();
+          return;
+        }
       }
     }
 
@@ -3569,6 +4997,18 @@ export class Game {
     // Glitch effect decay
     this.glitchEffect *= 0.95;
     if (this.glitchEffect < 0.01) this.glitchEffect = 0;
+
+    // Hit marker decay
+    if (this.hitMarker > 0) {
+      this.hitMarker -= dt;
+      if (this.hitMarker < 0) this.hitMarker = 0;
+    }
+
+    // Damage numbers decay
+    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+      this.damageNumbers[i].life -= dt;
+      if (this.damageNumbers[i].life <= 0) this.damageNumbers.splice(i, 1);
+    }
 
     // Achievement checks (periodic, not every frame)
     this.checkAchievements();
@@ -3749,6 +5189,7 @@ export class Game {
         invertMul;
       this.mouse.dx = 0;
     }
+    this.mouse.dy = 0;
 
     // Keyboard rotation
     if (this.keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
@@ -3926,7 +5367,6 @@ export class Game {
           break;
         }
 
-        // TODO: Add a hit indicator or display damage
         // Hit enemies
         if (p.owner === "player") {
           for (const e of this.entities) {
@@ -3997,13 +5437,15 @@ export class Game {
           );
           e.active = false;
           this.audio.pickup();
-          if (this.mode === "tutorial") this.tutorialPickedUp = true;
+          if (this.mode === "tutorial" && this.tutorialStep >= 7)
+            this.tutorialPickedUp = true;
         }
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial") this.tutorialPickedUp = true;
+        if (this.mode === "tutorial" && this.tutorialStep >= 7)
+          this.tutorialPickedUp = true;
       } else if (e.type === "weapon") {
         if (!this.player.weapons.includes(e.weaponId)) {
           this.player.weapons.push(e.weaponId);
@@ -4030,12 +5472,26 @@ export class Game {
     }
 
     if (this.state === GameState.CUTSCENE) {
+      // Clear HUD canvas so it doesn't overlay the cutscene
+      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
       this.renderCutscene(ctx, w, h);
       return;
     }
 
+    if (this.state === GameState.CAMPAIGN_PROMPT) {
+      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.renderCampaignPrompt(ctx, w, h);
+      return;
+    }
+
+    if (this.state === GameState.TUTORIAL_COMPLETE) {
+      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.renderTutorialCompletionMenu(ctx, w, h);
+      return;
+    }
+
     if (this.state === GameState.BUILDER) {
-      this.renderBuilder(ctx, w, h);
+      this.builder.render(ctx, w, h, this.time);
       return;
     }
 
@@ -4413,13 +5869,31 @@ export class Game {
     if (this.state !== GameState.PLAYING && this.state !== GameState.PAUSED)
       return;
 
+    // Playtest mode banner
+    if (this.mode === "playtest") {
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 200, 255, 0.15)";
+      ctx.fillRect(0, 0, w, 32);
+      ctx.fillStyle = "#00ccff";
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const allDead =
+        this.killedEnemies >= this.totalEnemies && this.totalEnemies > 0;
+      const label = allDead
+        ? "PLAY TEST COMPLETE — Returning to builder..."
+        : `PLAY TEST — ${this.killedEnemies}/${this.totalEnemies} killed — ESC to return`;
+      ctx.fillText(label, w / 2, 16);
+      ctx.restore();
+    }
+
     const barH = 160;
 
     // Stamina bar (above the HUD bar)
     const staminaPct = this.player.stamina / this.player.maxStamina;
-    const staminaBarH = 14;
-    const staminaBarY = h - barH - staminaBarH - 6;
-    const staminaBarW = 320;
+    const staminaBarH = 22;
+    const staminaBarY = h - barH - staminaBarH - 8;
+    const staminaBarW = 420;
     const staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
     const isActive = this.player.isSprinting || this.player.isDashing;
 
@@ -4518,16 +5992,16 @@ export class Game {
           ? "SPRINT"
           : "STAMINA";
       ctx.fillStyle = isActive ? staminaColor : "rgba(255,255,255,0.6)";
-      ctx.font = "bold 11px monospace";
+      ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(label, w / 2 - 40, staminaBarY + staminaBarH / 2 + 4);
+      ctx.fillText(label, w / 2 - 60, staminaBarY + staminaBarH / 2 + 5);
       // Percentage
       ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "bold 11px monospace";
+      ctx.font = "bold 13px monospace";
       ctx.fillText(
         `${Math.floor(staminaPct * 100)}%`,
-        w / 2 + 40,
-        staminaBarY + staminaBarH / 2 + 4,
+        w / 2 + 60,
+        staminaBarY + staminaBarH / 2 + 5,
       );
     }
 
@@ -4825,6 +6299,96 @@ export class Game {
     const chx = w / 2;
     const chy = (h - barH) / 2;
     this.drawCrosshairAt(ctx, chx, chy);
+
+    // Hit marker
+    if (this.hitMarker > 0) {
+      const a = Math.min(1, this.hitMarker / 0.08);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = "#ff3333";
+      ctx.lineWidth = 2;
+      ctx.translate(chx, chy);
+      ctx.rotate(Math.PI / 4);
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(8, 0);
+      ctx.moveTo(0, -8);
+      ctx.lineTo(0, 8);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Floating damage numbers
+    for (const dn of this.damageNumbers) {
+      const dx = dn.x - this.player.x;
+      const dy = dn.y - this.player.y;
+      let angle = Math.atan2(dy, dx) - this.player.angle;
+      while (angle < -Math.PI) angle += Math.PI * 2;
+      while (angle > Math.PI) angle -= Math.PI * 2;
+      const fov = ((this.settings.fov || 70) * Math.PI) / 180;
+      if (Math.abs(angle) > fov / 2) continue;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.1) continue;
+      const screenX = w / 2 + (angle / (fov / 2)) * (w / 2);
+      const rise = (0.8 - dn.life) * 60;
+      const screenY = (h - barH) / 2 - rise;
+      const alpha = Math.min(1, dn.life / 0.3);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = dn.crit ? "bold 18px monospace" : "bold 14px monospace";
+      ctx.fillStyle = dn.crit ? "#ffcc00" : "#ffffff";
+      ctx.textAlign = "center";
+      ctx.fillText(dn.value, screenX, screenY);
+      if (dn.crit) {
+        ctx.fillStyle = "rgba(255,204,0,0.3)";
+        ctx.fillText(dn.value, screenX + 1, screenY + 1);
+      }
+      ctx.restore();
+    }
+
+    // Kill streak announcement
+    if (this.killStreakDisplay) {
+      const ksd = this.killStreakDisplay;
+      const alpha =
+        ksd.life > 1.5
+          ? Math.min(1, (2.0 - ksd.life) * 4)
+          : Math.min(1, ksd.life / 0.5);
+      const scale = ksd.life > 1.8 ? 1.2 + (2.0 - ksd.life) * 3 : 1.0;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `bold ${Math.round(ksd.size * scale)}px monospace`;
+      const ky = (h - barH) * 0.3;
+      // Glow
+      ctx.shadowColor = ksd.color;
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = ksd.color;
+      ctx.fillText(ksd.text, w / 2, ky);
+      // White outline pass
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(255,255,255,0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeText(ksd.text, w / 2, ky);
+      ctx.restore();
+    }
+
+    // Slow-mo vignette overlay
+    if (this.slowMoTimer > 0) {
+      const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
+      const gradient = ctx.createRadialGradient(
+        w / 2,
+        (h - barH) / 2,
+        w * 0.25,
+        w / 2,
+        (h - barH) / 2,
+        w * 0.7,
+      );
+      gradient.addColorStop(0, "rgba(0,0,0,0)");
+      gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h - barH);
+    }
 
     // FPS
     if (this.showFPS) {
@@ -6163,29 +7727,27 @@ export class Game {
   }
 
   renderGameOver(ctx, w, h) {
-    ctx.fillStyle = "rgba(40,0,0,0.9)";
+    ctx.fillStyle = "rgba(40,0,0,0.92)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#ff2200";
     ctx.font = "bold 42px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("TIMELINE COLLAPSED", w / 2, h / 2 - 40);
-    ctx.fillStyle = "#ff8866";
-    ctx.font = "18px monospace";
-    ctx.fillText(
-      `Final Score: ${this.player.score}  |  Kills: ${this.player.kills}`,
-      w / 2,
-      h / 2 + 10,
-    );
+    ctx.fillText("TIMELINE COLLAPSED", w / 2, h / 2 - 110);
+
+    this._renderStatsCard(ctx, w, h / 2 - 60, "#ff2200", "#ff6644");
+
     if (this.mode === "arena") {
+      ctx.fillStyle = "#ff8866";
+      ctx.font = "16px monospace";
       ctx.fillText(
         `Rounds Survived: ${this.arenaRound - 1}`,
         w / 2,
-        h / 2 + 35,
+        h / 2 + 72,
       );
     }
     ctx.fillStyle = "#aaaaaa";
     ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 70);
+    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 100);
     ctx.textAlign = "left";
   }
 
@@ -6220,604 +7782,187 @@ export class Game {
       h / 2 + 20,
     );
 
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 22px monospace";
-    ctx.fillText(
-      `Score: ${this.player.score}  |  Kills: ${this.player.kills}`,
-      w / 2,
-      h / 2 + 55,
-    );
+    this._renderStatsCard(ctx, w, h / 2 + 40, "#ffcc00", "#aaddff");
 
     ctx.fillStyle = "#aaaaaa";
     ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 95);
+    ctx.textAlign = "center";
+    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 180);
     ctx.textAlign = "left";
   }
 
   renderLevelComplete(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,5,20,0.9)";
+    ctx.fillStyle = "rgba(0,5,20,0.92)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#00ffcc";
     ctx.font = "bold 36px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("LEVEL COMPLETE", w / 2, h / 2 - 40);
+    ctx.fillText("LEVEL COMPLETE", w / 2, h / 2 - 110);
+
+    this._renderStatsCard(ctx, w, h / 2 - 60, "#00ffcc", "#aaddff");
+
     ctx.fillStyle = "#aaddff";
-    ctx.font = "18px monospace";
+    ctx.font = "16px monospace";
     ctx.fillText(
-      `Kills: ${this.killedEnemies}/${this.totalEnemies}  |  Secrets: ${this.player.secretsFound}`,
+      `Secrets: ${this.player.secretsFound || 0}`,
       w / 2,
-      h / 2,
+      h / 2 + 72,
     );
-    ctx.fillText(`Score: ${this.player.score}`, w / 2, h / 2 + 30);
     ctx.fillStyle = "#aaaaaa";
     ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 70);
+    ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 100);
     ctx.textAlign = "left";
   }
 
-  // ── Builder Mode ──────────────────────────────────────────────
+  _renderStatsCard(ctx, w, startY, accentColor, textColor) {
+    const accuracy =
+      this.shotsFired > 0
+        ? Math.round((this.shotsHit / this.shotsFired) * 100)
+        : 0;
+    const elapsed = Math.round(
+      (performance.now() - this.roundStartTime) / 1000,
+    );
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = `${mins}:${String(secs).padStart(2, "0")}`;
+
+    // Card background
+    const cardW = 320;
+    const cardH = 110;
+    const cx = w / 2 - cardW / 2;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cx, startY, cardW, cardH, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // Stats in 2x2 grid
+    const stats = [
+      { label: "KILLS", value: `${this.killedEnemies}/${this.totalEnemies}` },
+      { label: "TIME", value: timeStr },
+      { label: "ACCURACY", value: `${accuracy}%` },
+      { label: "BEST STREAK", value: `${this.bestStreak}x` },
+    ];
+
+    const colW = cardW / 2;
+    const rowH = cardH / 2;
+    ctx.textAlign = "center";
+    for (let i = 0; i < stats.length; i++) {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const sx = cx + col * colW + colW / 2;
+      const sy = startY + row * rowH + 20;
+
+      ctx.fillStyle = textColor;
+      ctx.font = "10px monospace";
+      ctx.fillText(stats[i].label, sx, sy);
+
+      ctx.fillStyle = accentColor;
+      ctx.font = "bold 22px monospace";
+      ctx.fillText(stats[i].value, sx, sy + 24);
+    }
+
+    // Score bar at bottom of card
+    ctx.fillStyle = accentColor;
+    ctx.font = "bold 14px monospace";
+    ctx.fillText(`SCORE: ${this.player.score}`, w / 2, startY + cardH + 16);
+  }
+
+  // ── Builder Mode (delegated to BuilderMode) ────────────────────
 
   startBuilder() {
-    const size = 32;
-    const saved = this.loadBuilderMap();
-    if (saved) {
-      this.map = saved;
-    } else {
-      const grid = [];
-      for (let y = 0; y < size; y++) {
-        const row = [];
-        for (let x = 0; x < size; x++) {
-          row.push(
-            y === 0 || y === size - 1 || x === 0 || x === size - 1 ? 1 : 0,
-          );
-        }
-        grid.push(row);
-      }
-      this.map = {
-        name: "My Creation",
-        width: size,
-        height: size,
-        grid,
-        playerStart: { x: size / 2 + 0.5, y: size / 2 + 0.5, dir: 0 },
-        enemySpawns: [],
-        entities: [],
-        exit: null,
-      };
-    }
-    this.player.x = this.map.playerStart.x;
-    this.player.y = this.map.playerStart.y;
-    this.player.angle = this.map.playerStart.dir;
-    this.player.alive = true;
+    this.builder.start();
+    this.builder.onPlayTest = () => this.startBuilderPlayTest();
+    this.map = this.builder.map;
     this.entities = [];
     this.state = GameState.BUILDER;
-    this.builderTile = 1;
-    this.builderTarget = null;
-    this.builderOverhead = false;
-    this.builderShowHelp = true;
-    this.builderSaveFlash = 0;
-    this.builderNoclip = false;
+  }
+
+  startBuilderPlayTest() {
+    // Save builder state so we can return
+    this._builderSnapshot = {
+      playerX: this.builder.player.x,
+      playerY: this.builder.player.y,
+      playerAngle: this.builder.player.angle,
+    };
+
+    // Use the builder's map as the gameplay map
+    this.map = this.builder.map;
+    this.entities = [];
+    this.projectiles = [];
+
+    // Find a spawn point — center of map or player position
+    const spawnX = this.builder.player.x;
+    const spawnY = this.builder.player.y;
+
+    // Reset player for play-test
+    this.player = new Player(spawnX, spawnY);
+    this.player.health = 100;
+    this.player.maxHealth = 100;
+    this.player.ammo = 50;
+    this.player.angle = this.builder.player.angle;
+    this.player.weapons = [0, 1]; // pistol + shotgun
+    this.player.currentWeapon = 0;
+
+    // Spawn some enemies scattered around the map
+    const enemyTypes = ["drone", "phantom", "beast"];
+    let spawned = 0;
+    const maxEnemies = 8;
+    for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
+      const ex = 1.5 + Math.random() * (this.map.width - 3);
+      const ey = 1.5 + Math.random() * (this.map.height - 3);
+      const gx = Math.floor(ex),
+        gy = Math.floor(ey);
+      if (
+        gx >= 0 &&
+        gy >= 0 &&
+        gx < this.map.width &&
+        gy < this.map.height &&
+        this.map.grid[gy][gx] === 0
+      ) {
+        const dist = Math.sqrt((ex - spawnX) ** 2 + (ey - spawnY) ** 2);
+        if (dist > 3) {
+          const etype = enemyTypes[spawned % enemyTypes.length];
+          const enemy = new Enemy(ex, ey, etype);
+          this.entities.push(enemy);
+          spawned++;
+        }
+      }
+    }
+
+    this.killedEnemies = 0;
+    this.totalEnemies = spawned;
+    this.killStreak = 0;
+    this.killStreakTimer = 0;
+    this.killStreakDisplay = null;
+    this.bestStreak = 0;
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.slowMoTimer = 0;
+    this.timeScale = 1;
+
+    this.mode = "playtest";
+    this.state = GameState.PLAYING;
+    this.roundStartTime = performance.now();
+    this.audio.startMusic(140);
     this.canvas.requestPointerLock();
   }
 
-  updateBuilder(dt) {
-    if (this.builderOverhead) return;
-    // Mouse look
-    if (this.mouse.locked) {
-      const sens = (this.settings.sensitivity || 1.0) * 0.002;
-      const inv = this.settings.invertX ? -1 : 1;
-      this.player.angle += this.mouse.dx * sens * inv;
-      this.mouse.dx = 0;
+  exitBuilderPlayTest() {
+    this.audio.stopMusic();
+    this._playtestEndTimer = null;
+    this.state = GameState.BUILDER;
+    this.mode = "builder";
+    this.map = this.builder.map;
+    this.entities = [];
+    this.projectiles = [];
+    if (this._builderSnapshot) {
+      this.builder.player.x = this._builderSnapshot.playerX;
+      this.builder.player.y = this._builderSnapshot.playerY;
+      this.builder.player.angle = this._builderSnapshot.playerAngle;
+      this._builderSnapshot = null;
     }
-    // Movement
-    const speed = 8.0 * dt;
-    const dx = Math.cos(this.player.angle);
-    const dy = Math.sin(this.player.angle);
-    let mx = 0,
-      my = 0;
-    if (this.keys[this.keybinds.moveForward]) {
-      mx += dx;
-      my += dy;
-    }
-    if (this.keys[this.keybinds.moveBack]) {
-      mx -= dx;
-      my -= dy;
-    }
-    if (this.keys[this.keybinds.moveLeft]) {
-      mx += dy;
-      my -= dx;
-    }
-    if (this.keys[this.keybinds.moveRight]) {
-      mx -= dy;
-      my += dx;
-    }
-    const len = Math.sqrt(mx * mx + my * my);
-    if (len > 0) {
-      mx = (mx / len) * speed;
-      my = (my / len) * speed;
-    }
-    if (this.builderNoclip) {
-      this.player.x += mx;
-      this.player.y += my;
-    } else {
-      const margin = 0.3;
-      const nx = this.player.x + mx;
-      const ny = this.player.y + my;
-      if (
-        this.isPassable(
-          Math.floor(nx + (mx > 0 ? margin : -margin)),
-          Math.floor(this.player.y),
-        )
-      )
-        this.player.x = nx;
-      if (
-        this.isPassable(
-          Math.floor(this.player.x),
-          Math.floor(ny + (my > 0 ? margin : -margin)),
-        )
-      )
-        this.player.y = ny;
-    }
-    // Raycast target
-    this.builderTarget = this.builderRaycast();
-    if (this.builderSaveFlash > 0) this.builderSaveFlash -= dt;
-  }
-
-  builderRaycast() {
-    const px = this.player.x;
-    const py = this.player.y;
-    const dirX = Math.cos(this.player.angle);
-    const dirY = Math.sin(this.player.angle);
-    let mapX = Math.floor(px);
-    let mapY = Math.floor(py);
-    const stepX = dirX >= 0 ? 1 : -1;
-    const stepY = dirY >= 0 ? 1 : -1;
-    const ddx = Math.abs(1 / (dirX || 1e-10));
-    const ddy = Math.abs(1 / (dirY || 1e-10));
-    let sdx = dirX >= 0 ? (mapX + 1 - px) * ddx : (px - mapX) * ddx;
-    let sdy = dirY >= 0 ? (mapY + 1 - py) * ddy : (py - mapY) * ddy;
-    let prevX = mapX,
-      prevY = mapY;
-    for (let i = 0; i < 80; i++) {
-      if (sdx < sdy) {
-        prevX = mapX;
-        prevY = mapY;
-        mapX += stepX;
-        sdx += ddx;
-      } else {
-        prevX = mapX;
-        prevY = mapY;
-        mapY += stepY;
-        sdy += ddy;
-      }
-      const dist = Math.sqrt((mapX + 0.5 - px) ** 2 + (mapY + 0.5 - py) ** 2);
-      if (dist > 10) return null;
-      if (
-        mapX < 0 ||
-        mapY < 0 ||
-        mapX >= this.map.width ||
-        mapY >= this.map.height
-      )
-        return null;
-      if (this.map.grid[mapY][mapX] > 0) {
-        return { hitX: mapX, hitY: mapY, placeX: prevX, placeY: prevY };
-      }
-    }
-    return null;
-  }
-
-  builderPlaceBlock() {
-    if (this.builderOverhead) return;
-    const target = this.builderTarget;
-    if (target) {
-      const { placeX, placeY } = target;
-      if (
-        placeX >= 0 &&
-        placeY >= 0 &&
-        placeX < this.map.width &&
-        placeY < this.map.height &&
-        this.map.grid[placeY][placeX] === 0 &&
-        !(
-          Math.floor(this.player.x) === placeX &&
-          Math.floor(this.player.y) === placeY
-        )
-      ) {
-        this.map.grid[placeY][placeX] = this.builderTile;
-        this.audio.menuConfirm();
-      }
-    } else {
-      // No wall in range — place a few units ahead
-      const d = 3;
-      const tx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
-      const ty = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
-      if (
-        tx >= 0 &&
-        ty >= 0 &&
-        tx < this.map.width &&
-        ty < this.map.height &&
-        this.map.grid[ty][tx] === 0 &&
-        !(Math.floor(this.player.x) === tx && Math.floor(this.player.y) === ty)
-      ) {
-        this.map.grid[ty][tx] = this.builderTile;
-        this.audio.menuConfirm();
-      }
-    }
-  }
-
-  builderRemoveBlock() {
-    if (this.builderOverhead) return;
-    const target = this.builderTarget;
-    if (!target) return;
-    const { hitX, hitY } = target;
-    if (
-      hitX <= 0 ||
-      hitY <= 0 ||
-      hitX >= this.map.width - 1 ||
-      hitY >= this.map.height - 1
-    )
-      return;
-    if (this.map.grid[hitY][hitX] > 0) {
-      this.map.grid[hitY][hitX] = 0;
-      this.audio.menuSelect();
-    }
-  }
-
-  saveBuilderMap() {
-    try {
-      const data = {
-        name: this.map.name,
-        width: this.map.width,
-        height: this.map.height,
-        grid: this.map.grid,
-        playerStart: {
-          x: this.player.x,
-          y: this.player.y,
-          dir: this.player.angle,
-        },
-      };
-      localStorage.setItem("cc_builder_map", JSON.stringify(data));
-      this.builderSaveFlash = 2;
-    } catch (_) {
-      /* localStorage full */
-    }
-  }
-
-  loadBuilderMap() {
-    try {
-      const raw = localStorage.getItem("cc_builder_map");
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (!data.grid || !data.width || !data.height) return null;
-      return {
-        name: data.name || "My Creation",
-        width: data.width,
-        height: data.height,
-        grid: data.grid,
-        playerStart: data.playerStart || {
-          x: data.width / 2 + 0.5,
-          y: data.height / 2 + 0.5,
-          dir: 0,
-        },
-        enemySpawns: [],
-        entities: [],
-        exit: null,
-      };
-    } catch (_) {
-      return null;
-    }
-  }
-
-  renderBuilder(ctx, w, h) {
-    if (this.builderOverhead) {
-      this.renderBuilderOverhead(ctx, w, h);
-      return;
-    }
-    this.renderer.renderScene(
-      this.player,
-      this.map,
-      [],
-      this.time,
-      this.settings.fov,
-      0,
-    );
-    this.renderBuilderHUD(ctx, w, h);
-  }
-
-  renderBuilderHUD(ctx, w, h) {
-    const TILE_NAMES = [
-      "",
-      "Stone",
-      "Tech",
-      "Metal",
-      "Energy",
-      "Door",
-      "Secret",
-      "Boss",
-      "Glass",
-      "Rift",
-    ];
-    const TILE_COLORS = [
-      "",
-      "#505064",
-      "#285078",
-      "#64646e",
-      "#3c1478",
-      "#78501e",
-      "#4e4e62",
-      "#1e0a3c",
-      "#648ca0",
-      "#143c50",
-    ];
-
-    // Crosshair
-    const cx = w / 2,
-      cy = h / 2;
-    ctx.strokeStyle = this.builderTarget ? "#00ffcc" : "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx - 12, cy);
-    ctx.lineTo(cx - 4, cy);
-    ctx.moveTo(cx + 4, cy);
-    ctx.lineTo(cx + 12, cy);
-    ctx.moveTo(cx, cy - 12);
-    ctx.lineTo(cx, cy - 4);
-    ctx.moveTo(cx, cy + 4);
-    ctx.lineTo(cx, cy + 12);
-    ctx.stroke();
-
-    // Target indicator text
-    if (this.builderTarget) {
-      const t = this.builderTarget;
-      const tile = this.map.grid[t.hitY][t.hitX];
-      ctx.fillStyle = "rgba(255,255,255,0.4)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        `[${t.hitX},${t.hitY}] ${TILE_NAMES[tile] || ""}`,
-        cx,
-        cy + 22,
-      );
-      ctx.textAlign = "left";
-    }
-
-    // Palette
-    const palW = 36,
-      palGap = 4;
-    const totalW = 9 * (palW + palGap) - palGap;
-    const palX = (w - totalW) / 2;
-    const palY = h - 60;
-
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.beginPath();
-    ctx.roundRect(palX - 10, palY - 30, totalW + 20, palW + 46, 8);
-    ctx.fill();
-
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(TILE_NAMES[this.builderTile], w / 2, palY - 12);
-
-    for (let i = 1; i <= 9; i++) {
-      const x = palX + (i - 1) * (palW + palGap);
-      const sel = i === this.builderTile;
-
-      ctx.fillStyle = TILE_COLORS[i];
-      ctx.fillRect(x, palY, palW, palW);
-
-      if (sel) {
-        ctx.strokeStyle = "#00ffcc";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x - 2, palY - 2, palW + 4, palW + 4);
-      }
-
-      ctx.fillStyle = sel ? "#ffffff" : "rgba(255,255,255,0.4)";
-      ctx.font = "bold 10px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(String(i), x + palW / 2, palY + palW + 12);
-    }
-    ctx.textAlign = "left";
-
-    // Help panel
-    if (this.builderShowHelp) {
-      const hints = [
-        "WASD — Move",
-        "Mouse — Look",
-        "LClick — Place",
-        "RClick — Remove",
-        "1-9 — Block Type",
-        "N — Noclip",
-        "Tab — Overhead",
-        "Ctrl+S — Save",
-        "H — Toggle Help",
-        "ESC — Exit",
-      ];
-      ctx.fillStyle = "rgba(0,0,0,0.65)";
-      ctx.beginPath();
-      ctx.roundRect(8, 8, 175, hints.length * 17 + 12, 6);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.font = "11px monospace";
-      for (let i = 0; i < hints.length; i++) {
-        ctx.fillText(hints[i], 16, 24 + i * 17);
-      }
-    }
-
-    // Status indicators
-    if (this.builderNoclip) {
-      ctx.fillStyle = "rgba(255,200,0,0.8)";
-      ctx.font = "bold 12px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText("NOCLIP", w - 14, 24);
-      ctx.textAlign = "left";
-    }
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "right";
-    ctx.fillText(
-      `${Math.floor(this.player.x)}, ${Math.floor(this.player.y)}`,
-      w - 14,
-      h - 75,
-    );
-    ctx.textAlign = "left";
-
-    // Save flash
-    if (this.builderSaveFlash > 0) {
-      ctx.fillStyle = `rgba(0,255,200,${Math.min(1, this.builderSaveFlash) * 0.9})`;
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("MAP SAVED", w / 2, 36);
-      ctx.textAlign = "left";
-    }
-
-    // Minimap (top right)
-    this.renderBuilderMinimap(ctx, w);
-  }
-
-  renderBuilderMinimap(ctx, w) {
-    const mapPx = 150;
-    const mx = w - mapPx - 12,
-      my = 36;
-    const cs = mapPx / this.map.width;
-    const TC = [
-      "#0a0a14",
-      "#505064",
-      "#285078",
-      "#64646e",
-      "#3c1478",
-      "#78501e",
-      "#4e4e62",
-      "#1e0a3c",
-      "#648ca0",
-      "#143c50",
-    ];
-
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(mx - 2, my - 2, mapPx + 4, mapPx + 4);
-
-    for (let y = 0; y < this.map.height; y++) {
-      for (let x = 0; x < this.map.width; x++) {
-        ctx.fillStyle = TC[this.map.grid[y][x]] || "#333";
-        ctx.fillRect(mx + x * cs, my + y * cs, cs + 0.5, cs + 0.5);
-      }
-    }
-
-    // Player
-    const px = mx + this.player.x * cs;
-    const py = my + this.player.y * cs;
-    ctx.fillStyle = "#00ffcc";
-    ctx.beginPath();
-    ctx.arc(px, py, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#00ffcc";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(
-      px + Math.cos(this.player.angle) * 8,
-      py + Math.sin(this.player.angle) * 8,
-    );
-    ctx.stroke();
-
-    // Target highlight
-    if (this.builderTarget) {
-      ctx.strokeStyle = "#ffcc00";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(
-        mx + this.builderTarget.hitX * cs,
-        my + this.builderTarget.hitY * cs,
-        cs,
-        cs,
-      );
-    }
-  }
-
-  renderBuilderOverhead(ctx, w, h) {
-    const grid = this.map.grid;
-    const mw = this.map.width,
-      mh = this.map.height;
-    const pad = 60;
-    const cs = Math.min((w - pad * 2) / mw, (h - pad * 2) / mh);
-    const ox = (w - mw * cs) / 2;
-    const oy = (h - mh * cs) / 2;
-    const TC = [
-      "#0d0d1a",
-      "#505064",
-      "#285078",
-      "#64646e",
-      "#3c1478",
-      "#78501e",
-      "#4e4e62",
-      "#1e0a3c",
-      "#648ca0",
-      "#143c50",
-    ];
-    const TILE_NAMES = [
-      "",
-      "Stone",
-      "Tech",
-      "Metal",
-      "Energy",
-      "Door",
-      "Secret",
-      "Boss",
-      "Glass",
-      "Rift",
-    ];
-
-    ctx.fillStyle = "#050510";
-    ctx.fillRect(0, 0, w, h);
-
-    for (let y = 0; y < mh; y++) {
-      for (let x = 0; x < mw; x++) {
-        ctx.fillStyle = TC[grid[y][x]] || "#333";
-        ctx.fillRect(ox + x * cs, oy + y * cs, cs - 0.5, cs - 0.5);
-      }
-    }
-
-    // Grid lines
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x <= mw; x++) {
-      ctx.beginPath();
-      ctx.moveTo(ox + x * cs, oy);
-      ctx.lineTo(ox + x * cs, oy + mh * cs);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= mh; y++) {
-      ctx.beginPath();
-      ctx.moveTo(ox, oy + y * cs);
-      ctx.lineTo(ox + mw * cs, oy + y * cs);
-      ctx.stroke();
-    }
-
-    // Player
-    const px = ox + this.player.x * cs;
-    const py = oy + this.player.y * cs;
-    ctx.fillStyle = "#00ffcc";
-    ctx.beginPath();
-    ctx.arc(px, py, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#00ffcc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(
-      px + Math.cos(this.player.angle) * 14,
-      py + Math.sin(this.player.angle) * 14,
-    );
-    ctx.stroke();
-
-    // Title
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("OVERHEAD VIEW — TAB to return", w / 2, 28);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.font = "13px monospace";
-    ctx.fillText(
-      `Selected: ${TILE_NAMES[this.builderTile]}  |  Map: ${mw}×${mh}`,
-      w / 2,
-      h - 16,
-    );
-    ctx.textAlign = "left";
   }
 }
