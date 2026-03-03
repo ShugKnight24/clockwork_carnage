@@ -1,5 +1,6 @@
 import { Game, GameState } from "./game.js";
 import { createTestRunner } from "./testing/harness.js";
+import { TouchControls } from "./touch.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -234,3 +235,6 @@ requestAnimationFrame(gameLoop);
 
 // Expose test runner on window for console access
 window.ccTest = createTestRunner(game);
+
+// Mobile touch controls — auto-activates on touch devices
+const touch = TouchControls.init(game);

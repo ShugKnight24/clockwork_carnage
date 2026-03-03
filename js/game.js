@@ -57,6 +57,7 @@ export class Game {
     this.campaignLevel = 0;
     this.keys = {};
     this.mouse = { dx: 0, dy: 0, locked: false };
+    this.isTouchDevice = "ontouchstart" in window;
     this.menuSelection = 0;
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
@@ -171,6 +172,15 @@ export class Game {
   }
 
   // TODO: Abstract out InputManager
+
+  lockPointer() {
+    if (!this.isTouchDevice) this.canvas.requestPointerLock();
+  }
+
+  unlockPointer() {
+    if (!this.isTouchDevice) document.exitPointerLock();
+  }
+
   setupInput() {
     document.addEventListener("keydown", (e) => {
       // Builder delegates input to its own handler
@@ -225,7 +235,7 @@ export class Game {
     this.canvas.addEventListener("mousedown", (e) => {
       if (this.state === GameState.BUILDER) {
         if (!this.mouse.locked && !this.builder.overhead) {
-          this.canvas.requestPointerLock();
+          this.lockPointer();
           return;
         }
         this.builder.handleMouseDown(e.button);
@@ -236,7 +246,7 @@ export class Game {
           this.player.isFiring = true;
         }
         if (!this.mouse.locked && this.state === GameState.PLAYING) {
-          this.canvas.requestPointerLock();
+          this.lockPointer();
         }
       }
     });
@@ -246,6 +256,7 @@ export class Game {
       }
     });
     document.addEventListener("pointerlockchange", () => {
+      if (this.isTouchDevice) return; // touch controls manage their own state
       const wasLocked = this.mouse.locked;
       this.mouse.locked = document.pointerLockElement === this.canvas;
       // Only auto-pause if we lost pointer lock without ESC (e.g. alt-tab)
@@ -286,7 +297,7 @@ export class Game {
       if (code === "Escape") {
         this.pausedFromState = GameState.BUILDER;
         this.state = GameState.PAUSED;
-        document.exitPointerLock();
+        this.unlockPointer();
       }
       return;
     }
@@ -387,7 +398,7 @@ export class Game {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
           this.lastEscTime = now;
-          document.exitPointerLock();
+          this.unlockPointer();
           this.audio.stopMusic();
           this.mode = null;
           this.state = GameState.TITLE;
@@ -416,7 +427,7 @@ export class Game {
         }
         this.pausedFromState = GameState.PLAYING;
         this.state = GameState.PAUSED;
-        document.exitPointerLock();
+        this.unlockPointer();
       }
       if (code === this.keybinds.toggleFPS) this.showFPS = !this.showFPS;
       return;
@@ -428,7 +439,7 @@ export class Game {
         if (code === "Escape" && now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
         this.state = this.pausedFromState || GameState.PLAYING;
-        this.canvas.requestPointerLock();
+        this.lockPointer();
       }
       if (code === "KeyQ") {
         this.state = GameState.TITLE;
@@ -1194,7 +1205,7 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
     this.audio.startMusic(140 + this.arenaRound * 5);
-    this.canvas.requestPointerLock();
+    this.lockPointer();
   }
 
   startCampaign() {
@@ -1431,7 +1442,7 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now() + 99999; // suppress controls overlay
     this.audio.startMusic(130);
-    this.canvas.requestPointerLock();
+    this.lockPointer();
   }
 
   advanceTutorialStep() {
@@ -1514,7 +1525,7 @@ export class Game {
           this.tutorialShowCompletionMenu = true;
           this.audio.stopMusic();
           this.state = GameState.TUTORIAL_COMPLETE;
-          document.exitPointerLock();
+          this.unlockPointer();
         }
         break;
 
@@ -1561,7 +1572,7 @@ export class Game {
   }
 
   executeTutorialMenuChoice(choice) {
-    document.exitPointerLock();
+    this.unlockPointer();
     this.audio.stopMusic();
     this.mode = null;
     switch (choice) {
@@ -1588,10 +1599,10 @@ export class Game {
         this.state = GameState.PLAYING;
         this.advanceTutorialStep();
         this.audio.startMusic(130);
-        this.canvas.requestPointerLock();
+        this.lockPointer();
         break;
       case 1: // Begin Campaign (skip clocking_in — already seen before tutorial)
-        document.exitPointerLock();
+        this.unlockPointer();
         this.mode = "campaign";
         this.campaignLevel = 0;
         this.campaignAct = 1;
@@ -1604,7 +1615,7 @@ export class Game {
         break;
       case 2: // Main Menu
       default:
-        document.exitPointerLock();
+        this.unlockPointer();
         this.mode = null;
         this.state = GameState.TITLE;
         break;
@@ -4293,7 +4304,7 @@ export class Game {
       this.audio.stopMusic();
       this.audio.roundComplete();
       this.clearCampaignSave();
-      document.exitPointerLock();
+      this.unlockPointer();
       return;
     }
     const level = CAMPAIGN_LEVELS[index];
@@ -4363,7 +4374,7 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
     this.audio.startMusic(130);
-    this.canvas.requestPointerLock();
+    this.lockPointer();
   }
 
   nextCampaignLevel() {
@@ -4685,7 +4696,7 @@ export class Game {
               this.state = GameState.TITLE;
               this.mode = null;
               this.clearCampaignSave();
-              document.exitPointerLock();
+              this.unlockPointer();
             });
           });
         } else if (this.campaignAct === 2) {
@@ -4712,7 +4723,7 @@ export class Game {
             this.state = GameState.VICTORY;
             this.audio.roundComplete();
             this.clearCampaignSave();
-            document.exitPointerLock();
+            this.unlockPointer();
           });
         }
       }
@@ -4821,7 +4832,7 @@ export class Game {
           this.audio.stopMusic();
           if (this.mode === "arena") this.clearArenaSave();
           else this.clearCampaignSave();
-          document.exitPointerLock();
+          this.unlockPointer();
         }
       }
       return;
@@ -4890,7 +4901,7 @@ export class Game {
         this.upgradeSelection = 0;
         this.arenaClearTimer = null;
         this.saveArena();
-        document.exitPointerLock();
+        this.unlockPointer();
         return;
       }
     }
@@ -4986,7 +4997,7 @@ export class Game {
         this.state = GameState.LEVEL_COMPLETE;
         this.audio.stopMusic();
         this.audio.roundComplete();
-        document.exitPointerLock();
+        this.unlockPointer();
       }
     }
 
@@ -7947,7 +7958,7 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
     this.audio.startMusic(140);
-    this.canvas.requestPointerLock();
+    this.lockPointer();
   }
 
   exitBuilderPlayTest() {
