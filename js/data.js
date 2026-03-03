@@ -22,7 +22,7 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "deep_space",
       lines: [
-        { text: "THE YEAR IS 2187.", delay: 0, color: "#556677", size: 14 },
+        { text: "THE YEAR IS 2181.", delay: 0, color: "#556677", size: 14 },
         { text: "Time is broken.", delay: 1200, color: "#00ccff", size: 22 },
       ],
       particles: "stars",
@@ -160,7 +160,113 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
+  coming_soon: [
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "The Paradox Lord is not finished.",
+          delay: 0,
+          color: "#ff4466",
+          size: 18,
+        },
+        {
+          text: "The timeline fractures deepen.",
+          delay: 2000,
+          color: "#cc4466",
+          size: 16,
+        },
+        {
+          text: "Your fight is far from over...",
+          delay: 4000,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "MORE COMING SOON",
+          delay: 0,
+          color: "#00ffcc",
+          size: 28,
+        },
+        {
+          text: "Acts 2 & 3 are in development.",
+          delay: 2000,
+          color: "#556677",
+          size: 14,
+        },
+        {
+          text: "Thank you for playing.",
+          delay: 3500,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      duration: 7000,
+    },
+  ],
+
   level3_briefing: [
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        {
+          text: "Your temporal scanner is going haywire.",
+          delay: 0,
+          color: "#00ccff",
+          size: 16,
+        },
+        {
+          text: "Chronal distortion readings... climbing fast.",
+          delay: 2000,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "300... 1,200... 4,500...",
+          delay: 4000,
+          color: "#ffcc00",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffcc00",
+      shake: 2,
+      lines: [
+        {
+          text: "The scanner maxes out. The display flickers:",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: '"IT\'S OVER 9,000!!!"',
+          delay: 1800,
+          color: "#ff4444",
+          size: 26,
+        },
+        {
+          text: "...that can't be right.",
+          delay: 4000,
+          color: "#8899aa",
+          size: 14,
+        },
+      ],
+      particles: "embers",
+      duration: 6500,
+    },
     {
       bg: "boss_lair",
       lines: [
@@ -175,6 +281,27 @@ export const CUTSCENE_SCRIPTS = {
       particles: "embers",
       shake: 2,
       duration: 4000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      shake: 3,
+      lines: [
+        {
+          text: "A voice. Not from the room — from inside your head.",
+          delay: 0,
+          color: "#ff6644",
+          size: 16,
+        },
+        {
+          text: "The visor cracks. Static floods your HUD.",
+          delay: 2200,
+          color: "#ff4444",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 5000,
     },
     {
       bg: "boss_lair",
@@ -619,6 +746,38 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "A voice. The Station's temporal analyst — someone you never noticed before.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: '"I\'ve been monitoring the data. Everyone ignores it. Not me."',
+          delay: 2500,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "She pulls up holographic timelines. Your readings are off the charts.",
+          delay: 5000,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: '"You\'re not baseline, Agent. You never were."',
+          delay: 7500,
+          color: "#ffaa44",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "station",
       lines: [
         {
           text: "But others survived the temporal collapse too.",
@@ -685,26 +844,32 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "NOVA — The Striker. Speed demon. Hits like a comet.",
+          text: "LYRA — The Chrono-Analyst. Saw the data no one else could read.",
           delay: 2000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "NOVA — The Striker. Speed demon. Hits like a comet.",
+          delay: 4000,
           color: "#ff4488",
           size: 15,
         },
         {
           text: "ROOK — The Engineer. Builds turrets. Master of tech.",
-          delay: 4000,
+          delay: 6000,
           color: "#44ff88",
           size: 15,
         },
         {
           text: "And you. The Temporal Agent. The one who came back.",
-          delay: 6000,
+          delay: 8000,
           color: "#00ffcc",
           size: 16,
         },
       ],
       particles: "glow",
-      duration: 9000,
+      duration: 11000,
     },
     {
       bg: "station",
@@ -1038,6 +1203,171 @@ export const CUTSCENE_SCRIPTS = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════
+  // LYRA REVEAL — The Chrono-Analyst's Awakening
+  // Death Note energy — she figured out what nobody else could
+  // Solo Leveling energy — the hero was always powerful, she proves it
+  // Kaiju No. 8 — the nobody who changes everything
+  // ═══════════════════════════════════════════════════════════════════
+  lyra_reveal: [
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "While the squad patches their wounds, Lyra works.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Holographic timelines cascade around her like waterfalls.",
+          delay: 2500,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: "She's been mapping the Paradox Lord's decisions since the Collapse.",
+          delay: 5000,
+          color: "#ffaa44",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 8000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: '"Everyone looks at the battles. I look at the spaces between."',
+          delay: 0,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "\"There's a pattern. He doesn't see what he doesn't expect.\"",
+          delay: 3000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "Like Light Yagami's notebook — power through perfect information.",
+          delay: 6000,
+          color: "#ff8866",
+          size: 14,
+        },
+        {
+          text: "But information has blind spots.",
+          delay: 8000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        {
+          text: "She turns to you. Her eyes are burning amber.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 16,
+        },
+        {
+          text: '"Your temporal readings... they don\'t match any baseline."',
+          delay: 2500,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"Not even close. You\'ve been holding back something immense."',
+          delay: 5000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"Like Jinwoo before his Awakening... the power was always there."',
+          delay: 7500,
+          color: "#ffcc44",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffaa44",
+      lines: [
+        {
+          text: "Something clicks. Deep inside, past the damage, past the doubt.",
+          delay: 0,
+          color: "#00ffcc",
+          size: 16,
+        },
+        {
+          text: "She didn't give you new power. She showed you what was already there.",
+          delay: 3000,
+          color: "#ffcc88",
+          size: 16,
+        },
+        {
+          text: "The nobody who kept clocking in... was the strongest one all along.",
+          delay: 6000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      shake: 3,
+      duration: 9500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: 'Kael grips his cracked shield. "So we fight."',
+          delay: 0,
+          color: "#4488ff",
+          size: 15,
+        },
+        {
+          text: 'Nova cracks her knuckles. "Wouldn\'t miss it."',
+          delay: 2000,
+          color: "#ff4488",
+          size: 15,
+        },
+        {
+          text: 'Rook powers up his last turret. "All systems nominal. Mostly."',
+          delay: 4000,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: "Lyra closes her holoscreens. \"I'll be watching. I'll find your opening.\"",
+          delay: 6000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "You look at them — your team, your friends — and you know.",
+          delay: 8500,
+          color: "#ffffff",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 11500,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
   // ACT III — THE FINAL STAND
   // All-out war against the Final Form
   // One Punch Man energy — sometimes one hero makes the difference
@@ -1104,26 +1434,44 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Rook's turrets are slag. But they're still standing.",
+          text: "Rook's turrets are slag. Lyra's screens are flickering.",
           delay: 2000,
           color: "#aabbcc",
           size: 15,
         },
         {
-          text: "And you...you remember what Saitama taught us.",
+          text: "But they're still standing. All of them.",
           delay: 4000,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: 'Lyra pulls you aside. "I found a blind spot in his timeline-sight."',
+          delay: 6000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "\"One moment he can't predict — because it hasn't been written yet.\"",
+          delay: 8500,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "And you...you remember what Saitama taught us.",
+          delay: 11000,
           color: "#ffcc44",
           size: 16,
         },
         {
           text: "Sometimes, one serious punch is all it takes.",
-          delay: 6000,
+          delay: 13000,
           color: "#ffffff",
           size: 18,
         },
       ],
       particles: "glow",
-      duration: 8500,
+      duration: 15500,
     },
     {
       bg: "dark",
@@ -1339,32 +1687,38 @@ export const CUTSCENE_SCRIPTS = {
       art: "party",
       lines: [
         {
-          text: "Because you saw the puzzle from the top.",
+          text: "Lyra steps forward.",
           delay: 0,
-          color: "#00ffcc",
-          size: 18,
-        },
-        {
-          text: "We built ours from the bottom up.",
-          delay: 2000,
-          color: "#aaddff",
+          color: "#ffaa44",
           size: 16,
         },
         {
+          text: '"You saw the puzzle from the top. Every timeline, every outcome."',
+          delay: 2000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"We built ours from the bottom up."',
+          delay: 4500,
+          color: "#ffcc88",
+          size: 18,
+        },
+        {
           text: "Piece by piece. Bond by bond.",
-          delay: 4000,
+          delay: 6500,
           color: "#aaddff",
           size: 16,
         },
         {
           text: "You can't predict what people do for each other.",
-          delay: 6000,
+          delay: 8500,
           color: "#ffffff",
           size: 18,
         },
       ],
       particles: "glow",
-      duration: 9000,
+      duration: 11000,
     },
     {
       bg: "deep_space",
@@ -1396,7 +1750,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "party",
       lines: [
         {
-          text: "Kael. Nova. Rook. You.",
+          text: "Kael. Lyra. Nova. Rook. You.",
           delay: 0,
           color: "#aaddff",
           size: 16,
@@ -1475,7 +1829,7 @@ export const CUTSCENE_SCRIPTS = {
           h: 0.3,
           bg: "dark",
           art: "hero",
-          caption: "Badge 2187. Just a beat cop.",
+          caption: "Badge 11235. Just a beat cop.",
           captionPos: "bottom",
           captionColor: "#00ccff",
           captionSize: 11,
@@ -1693,179 +2047,278 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
-  clocking_in: [
-    {
-      bg: "station",
-      lines: [
-        { text: "06:47 AM.", delay: 0, color: "#556677", size: 14 },
-        {
-          text: "Same precinct. Same locker. Same coffee.",
-          delay: 1200,
-          color: "#8899aa",
-          size: 16,
-        },
-        {
-          text: "You've done this a thousand times.",
-          delay: 3000,
-          color: "#aabbcc",
-          size: 16,
-        },
-      ],
-      art: "station",
-      particles: "sparks",
-      duration: 5500,
-    },
+  the_hunt_begins: [
     {
       bg: "dark",
-      art: "hero",
+      art: "hero_armed",
       lines: [
         {
-          text: "Badge number 2187. Officer on duty.",
+          text: "Training's over. The real world hits different.",
           delay: 0,
           color: "#8899aa",
           size: 16,
         },
         {
-          text: "They don't pay you enough for this.",
-          delay: 1800,
+          text: "The other Alpha candidates washed out. Every one.",
+          delay: 2200,
           color: "#aabbcc",
           size: 16,
         },
         {
-          text: "But you show up. Every. Single. Day.",
-          delay: 3600,
+          text: "You're the only one left.",
+          delay: 4400,
           color: "#00ccff",
-          size: 18,
-        },
-      ],
-      duration: 6000,
-    },
-    {
-      bg: "dark",
-      art: "hero",
-      lines: [
-        {
-          text: "Some people are born heroes.",
-          delay: 0,
-          color: "#556677",
-          size: 16,
-        },
-        {
-          text: "You weren't.",
-          delay: 1500,
-          color: "#aabbcc",
-          size: 18,
-        },
-        {
-          text: "You were just the guy who didn't quit.",
-          delay: 3200,
-          color: "#00ffcc",
-          size: 20,
-        },
-      ],
-      duration: 5500,
-    },
-    {
-      bg: "station",
-      lines: [
-        {
-          text: "Then the sky cracked open.",
-          delay: 0,
-          color: "#ff6644",
-          size: 18,
-        },
-        {
-          text: "Time folded in on itself like wet paper.",
-          delay: 1800,
-          color: "#ff4444",
-          size: 18,
-        },
-        {
-          text: "And everything you knew... stopped making sense.",
-          delay: 3800,
-          color: "#ff2244",
-          size: 20,
-        },
-      ],
-      art: "rift",
-      particles: "embers",
-      shake: 3,
-      duration: 6500,
-    },
-    {
-      bg: "dark",
-      art: "hero",
-      lines: [
-        {
-          text: "The others ran.",
-          delay: 0,
-          color: "#556677",
-          size: 16,
-        },
-        {
-          text: "Command went silent.",
-          delay: 1200,
-          color: "#778899",
-          size: 16,
-        },
-        {
-          text: "The precinct was overrun in minutes.",
-          delay: 2800,
-          color: "#aabbcc",
-          size: 16,
-        },
-        {
-          text: "You just stood there.",
-          delay: 4500,
-          color: "#ffffff",
-          size: 18,
+          size: 17,
         },
       ],
       duration: 6500,
-    },
-    {
-      bg: "dark",
-      art: "hero",
-      lines: [
-        {
-          text: "Not because you were brave.",
-          delay: 0,
-          color: "#8899aa",
-          size: 16,
-        },
-        {
-          text: "Because you were too stubborn to die.",
-          delay: 2000,
-          color: "#00ccff",
-          size: 20,
-        },
-      ],
-      duration: 5000,
     },
     {
       bg: "dark",
       art: "hero_armed",
       lines: [
         {
-          text: "You opened your locker one last time.",
+          text: "Something's wrong with time. You can feel it in the armor.",
           delay: 0,
           color: "#8899aa",
           size: 16,
         },
         {
-          text: "Pulled out the gear they told you you'd never need.",
+          text: "The chronal readings on your HUD are spiking. Hard.",
+          delay: 2500,
+          color: "#ff8844",
+          size: 16,
+        },
+      ],
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "villain",
+      flash: "#ff2244",
+      shake: 2,
+      lines: [
+        {
+          text: "A voice. Not in the room — in your skull.",
+          delay: 0,
+          color: "#ff6644",
+          size: 17,
+        },
+        {
+          text: '"There you are. I\'ve been watching your little program."',
+          delay: 2200,
+          color: "#ff2244",
+          size: 18,
+        },
+        {
+          text: '"The others broke so easily. But you... you activated the prototype."',
+          delay: 5000,
+          color: "#ff4466",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 8000,
+    },
+    {
+      bg: "dark",
+      art: "rift",
+      shake: 1,
+      lines: [
+        {
+          text: "The lights flicker. The clock on the wall runs backwards.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Then everything goes sideways.",
+          delay: 2500,
+          color: "#ff4444",
+          size: 18,
+        },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffffff",
+      lines: [
+        {
+          text: "The Alpha program is down to one. You.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Whatever that thing is — you're going to find it.",
+          delay: 2500,
+          color: "#00ccff",
+          size: 18,
+        },
+        {
+          text: "The hunt begins.",
+          delay: 5000,
+          color: "#00ffcc",
+          size: 22,
+        },
+      ],
+      particles: "glow",
+      duration: 7000,
+    },
+  ],
+
+  clocking_in: [
+    {
+      bg: "station",
+      art: "station",
+      lines: [
+        {
+          text: "06:47 AM. Chronos Station.",
+          delay: 0,
+          color: "#556677",
+          size: 14,
+        },
+        {
+          text: "Another morning. Another shift.",
+          delay: 1200,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The coffee's bad and the commute was worse.",
+          delay: 3000,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      duration: 5500,
+    },
+    {
+      bg: "dark",
+      art: "hero_at_desk",
+      lines: [
+        {
+          text: "You badge in at the front desk. Same as always.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The receptionist doesn't look up. Never does.",
+          delay: 2200,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: '"Morning." Nothing. You keep walking.',
+          delay: 4400,
+          color: "#667788",
+          size: 15,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "hero_human",
+      lines: [
+        {
+          text: "Three years at the Bureau. Still a field cadet.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "Every Alpha-class promotion exam — failed.",
+          delay: 2200,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: '"Not quick enough. Not precise enough."',
+          delay: 4400,
+          color: "#887766",
+          size: 15,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "Locker room. Third row, second from the left.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "You've opened this locker a thousand times.",
           delay: 2000,
           color: "#aabbcc",
           size: 16,
         },
         {
-          text: "Temporal Combat Armor. Experimental prototype.",
-          delay: 4200,
+          text: "But today something's different.",
+          delay: 4000,
+          color: "#00ccff",
+          size: 17,
+        },
+      ],
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "hero_human",
+      lines: [
+        {
+          text: "Unmarked crate from R&D. Your name's on it.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: '"Temporal Combat Armor — Alpha Prototype."',
+          delay: 2200,
           color: "#00ccff",
           size: 18,
         },
+        {
+          text: 'A sticky note from your supervisor: "You\'re up. Put it on."',
+          delay: 4500,
+          color: "#aabbcc",
+          size: 16,
+        },
       ],
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "hero",
       particles: "sparks",
+      lines: [
+        {
+          text: "It fits better than you expected.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "Helmet on. Visor down. HUD flickers to life.",
+          delay: 2200,
+          color: "#00ffcc",
+          size: 18,
+        },
+        {
+          text: "Everything feels... enhanced. Sharper. Faster.",
+          delay: 4500,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
       duration: 7000,
     },
     {
@@ -1874,48 +2327,31 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#00ccff",
       lines: [
         {
-          text: "Helmet on. Visor down. Rifle loaded.",
+          text: "Standard-issue temporal rifle. Heavier than expected.",
           delay: 0,
-          color: "#00ffcc",
-          size: 18,
-        },
-        {
-          text: "You looked at the door.",
-          delay: 2000,
           color: "#aabbcc",
           size: 16,
         },
         {
-          text: "Behind it — every nightmare that ever existed.",
+          text: "\"Calibrated to the armor's servo profile. You'll sprint faster,",
+          delay: 2000,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: 'carry more, and hit harder — but you need to learn the steps."',
           delay: 3800,
-          color: "#ff4444",
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: "Time to test what this thing can do.",
+          delay: 6000,
+          color: "#00ffcc",
           size: 18,
         },
       ],
-      particles: "embers",
-      duration: 6500,
-    },
-    {
-      bg: "dark",
-      art: "hero_armed",
-      flash: "#ffffff",
-      shake: 2,
-      lines: [
-        {
-          text: "You kicked it open.",
-          delay: 0,
-          color: "#ffffff",
-          size: 22,
-        },
-        {
-          text: '"I\'M NOT GOING DOWN WITHOUT A FIGHT."',
-          delay: 2000,
-          color: "#ffcc00",
-          size: 26,
-        },
-      ],
-      particles: "glow",
-      duration: 5500,
+      duration: 8000,
     },
   ],
 };
@@ -1939,7 +2375,7 @@ export const WALL_COLORS = {
 // TODO: Add additional variety to Arena map... procedurally generate or randomize, otherwise it gets repetitive
 
 export const TUTORIAL_MAP = {
-  name: "Temporal Calibration Chamber",
+  name: "Chronos Station - Training Wing",
   width: 16,
   height: 16,
   grid: [
@@ -1951,10 +2387,10 @@ export const TUTORIAL_MAP = {
     [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 5, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 3, 0, 2, 0, 0, 3, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
     [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
@@ -1962,9 +2398,9 @@ export const TUTORIAL_MAP = {
   ],
   playerStart: { x: 3.5, y: 3.5, dir: 0 },
   pickups: [
+    { x: 3.5, y: 10.5, type: "health" },
+    { x: 5.5, y: 10.5, type: "ammo" },
     { x: 12.5, y: 4.5, type: "health" },
-    { x: 12.5, y: 6.5, type: "ammo" },
-    { x: 8.5, y: 12.5, type: "health" },
   ],
 };
 
@@ -2900,103 +3336,276 @@ export const UPGRADES = {
   },
 };
 
+// ── Achievement Icon SVGs ──────────────────────────────────────────
+// 64×64 vector icons, game palette: gold #ffcc00, teal #00e5ff, dark #0a0a1e
+// Loaded as Image objects at startup via data:image/svg+xml URIs
+
+function svg(inner) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${inner}</svg>`;
+}
+
+export const ACHIEVEMENT_ICON_SVGS = {
+  skull: svg(`
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <path d="M32 6C18.5 6 9 16 9 28c0 9 5 16 12 19v5c0 1.5 1 2.5 2.5 2.5H26v4h3v-4h6v4h3v-4h2.5c1.5 0 2.5-1 2.5-2.5v-5c7-3 12-10 12-19C55 16 45.5 6 32 6z" fill="url(#sg)"/>
+    <ellipse cx="24" cy="26" rx="5.5" ry="6.5" fill="#0a0a1e"/>
+    <ellipse cx="40" cy="26" rx="5.5" ry="6.5" fill="#0a0a1e"/>
+    <ellipse cx="32" cy="36" rx="3" ry="2.5" fill="#0a0a1e"/>
+    <rect x="27" y="41" width="2.5" height="6" rx="0.5" fill="#0a0a1e"/>
+    <rect x="34.5" y="41" width="2.5" height="6" rx="0.5" fill="#0a0a1e"/>
+  `),
+
+  target: svg(`
+    <circle cx="32" cy="32" r="26" fill="none" stroke="#ff4444" stroke-width="3"/>
+    <circle cx="32" cy="32" r="17" fill="none" stroke="#ff4444" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="8" fill="none" stroke="#ff4444" stroke-width="2"/>
+    <circle cx="32" cy="32" r="3" fill="#ff4444"/>
+    <line x1="32" y1="2" x2="32" y2="14" stroke="#ff4444" stroke-width="2"/>
+    <line x1="32" y1="50" x2="32" y2="62" stroke="#ff4444" stroke-width="2"/>
+    <line x1="2" y1="32" x2="14" y2="32" stroke="#ff4444" stroke-width="2"/>
+    <line x1="50" y1="32" x2="62" y2="32" stroke="#ff4444" stroke-width="2"/>
+  `),
+
+  ghost: svg(`
+    <defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0e8ff"/><stop offset="100%" stop-color="#8090c0"/></linearGradient></defs>
+    <path d="M32 6C20 6 12 15 12 26v24l5-5 5 5 5-5 5 5 5-5 5 5 5-5 5 5V26C52 15 44 6 32 6z" fill="url(#gg)" opacity="0.85"/>
+    <ellipse cx="24" cy="25" rx="5" ry="6" fill="#1a1a3e"/>
+    <ellipse cx="40" cy="25" rx="5" ry="6" fill="#1a1a3e"/>
+    <circle cx="25" cy="24" r="2" fill="#fff"/>
+    <circle cx="41" cy="24" r="2" fill="#fff"/>
+    <ellipse cx="32" cy="35" rx="4" ry="3" fill="#1a1a3e" opacity="0.5"/>
+  `),
+
+  dragon: svg(`
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff6633"/><stop offset="100%" stop-color="#cc2200"/></linearGradient></defs>
+    <path d="M16 12l-4-8 6 5-1-7 4 6 2-6 1 7 5-5-2 8" fill="#ff8844" opacity="0.7"/>
+    <path d="M12 20c0-10 8-16 18-16s20 6 20 18c0 8-4 14-10 18l-4 8-3-6-3 10-3-10-3 6-4-8C14 36 12 28 12 20z" fill="url(#dg)"/>
+    <ellipse cx="24" cy="22" rx="4" ry="5" fill="#ffcc00"/>
+    <ellipse cx="24" cy="23" rx="1.5" ry="4" fill="#0a0a1e"/>
+    <ellipse cx="40" cy="22" rx="4" ry="5" fill="#ffcc00"/>
+    <ellipse cx="40" cy="23" rx="1.5" ry="4" fill="#0a0a1e"/>
+    <path d="M26 34c2 2 8 2 10 0" fill="none" stroke="#0a0a1e" stroke-width="1.5"/>
+    <circle cx="29" cy="32" r="1" fill="#0a0a1e"/>
+    <circle cx="33" cy="32" r="1" fill="#0a0a1e"/>
+  `),
+
+  helmet: svg(`
+    <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffdd44"/><stop offset="100%" stop-color="#bb8800"/></linearGradient></defs>
+    <path d="M32 4C18 4 10 14 10 26v8h8v-4c0-2 6-4 14-4s14 2 14 4v4h8v-8C54 14 46 4 32 4z" fill="url(#hg)"/>
+    <path d="M32 4C28 4 26 10 26 16h12c0-6-2-12-6-12z" fill="#cc2200"/>
+    <rect x="10" y="30" width="44" height="6" rx="2" fill="#bb8800"/>
+    <path d="M18 36v12c0 4 6 8 14 8s14-4 14-8V36" fill="none" stroke="#bb8800" stroke-width="2.5"/>
+    <rect x="18" y="42" width="28" height="3" rx="1" fill="#bb8800" opacity="0.5"/>
+    <path d="M26 36v10M38 36v10" stroke="#bb8800" stroke-width="1.5" opacity="0.5"/>
+  `),
+
+  stopwatch: svg(`
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#0088aa"/></linearGradient></defs>
+    <circle cx="32" cy="36" r="24" fill="#0a0a1e" stroke="url(#wg)" stroke-width="3"/>
+    <rect x="29" y="4" width="6" height="8" rx="2" fill="#00e5ff"/>
+    <rect x="26" y="4" width="12" height="3" rx="1.5" fill="#00e5ff"/>
+    <line x1="48" y1="14" x2="52" y2="10" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="32" cy="36" r="20" fill="none" stroke="#00e5ff" stroke-width="1" opacity="0.3"/>
+    <line x1="32" y1="36" x2="32" y2="20" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="32" y1="36" x2="44" y2="40" stroke="#ffcc00" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="32" cy="36" r="2.5" fill="#ffcc00"/>
+    <g fill="#00e5ff" opacity="0.5"><circle cx="32" cy="17" r="1.5"/><circle cx="32" cy="55" r="1.5"/><circle cx="13" cy="36" r="1.5"/><circle cx="51" cy="36" r="1.5"/></g>
+  `),
+
+  colosseum: svg(`
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#996600"/></linearGradient></defs>
+    <rect x="4" y="48" width="56" height="6" rx="1" fill="url(#cg)"/>
+    <rect x="6" y="44" width="52" height="5" rx="1" fill="#bb8800"/>
+    <g fill="url(#cg)"><rect x="10" y="22" width="4" height="22" rx="1"/><rect x="18" y="22" width="4" height="22" rx="1"/><rect x="26" y="22" width="4" height="22" rx="1"/><rect x="34" y="22" width="4" height="22" rx="1"/><rect x="42" y="22" width="4" height="22" rx="1"/><rect x="50" y="22" width="4" height="22" rx="1"/></g>
+    <path d="M8 22h48" stroke="#ffcc00" stroke-width="3"/>
+    <path d="M6 22Q32 4 58 22" fill="none" stroke="#ffcc00" stroke-width="2.5"/>
+    <g fill="#0a0a1e" opacity="0.4"><rect x="14" y="28" width="4" height="10" rx="2"/><rect x="22" y="28" width="4" height="10" rx="2"/><rect x="30" y="28" width="4" height="10" rx="2"/><rect x="38" y="28" width="4" height="10" rx="2"/><rect x="46" y="28" width="4" height="10" rx="2"/></g>
+  `),
+
+  trophy: svg(`
+    <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="60%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <path d="M18 8h28v4c0 14-6 22-14 26-8-4-14-12-14-26V8z" fill="url(#tg)"/>
+    <path d="M18 12H8c0 10 4 16 10 16v-4c-4-2-6-6-6-12z" fill="#cc9900"/>
+    <path d="M46 12h10c0 10-4 16-10 16v-4c4-2 6-6 6-12z" fill="#cc9900"/>
+    <rect x="28" y="36" width="8" height="10" rx="1" fill="#bb8800"/>
+    <rect x="22" y="46" width="20" height="5" rx="2" fill="#cc9900"/>
+    <rect x="20" y="51" width="24" height="4" rx="1" fill="#bb8800"/>
+    <path d="M26 18l6-4 6 4" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.5"/>
+    <circle cx="32" cy="22" r="3" fill="#fff" opacity="0.3"/>
+  `),
+
+  crown: svg(`
+    <defs><linearGradient id="kg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc8800"/></linearGradient></defs>
+    <path d="M8 44V20l10 10 14-18 14 18 10-10v24z" fill="url(#kg)"/>
+    <rect x="8" y="44" width="48" height="8" rx="2" fill="#cc8800"/>
+    <circle cx="8" cy="20" r="4" fill="#ff4444"/>
+    <circle cx="56" cy="20" r="4" fill="#00e5ff"/>
+    <circle cx="32" cy="12" r="4" fill="#ff4444"/>
+    <circle cx="18" cy="30" r="3" fill="#00e5ff"/>
+    <circle cx="46" cy="30" r="3" fill="#ff4444"/>
+    <rect x="8" y="44" width="48" height="2" fill="#ffe066" opacity="0.5"/>
+    <g fill="#fff" opacity="0.15"><rect x="14" y="46" width="3" height="4" rx="0.5"/><rect x="22" y="46" width="3" height="4" rx="0.5"/><rect x="30" y="46" width="3" height="4" rx="0.5"/><rect x="38" y="46" width="3" height="4" rx="0.5"/><rect x="46" y="46" width="3" height="4" rx="0.5"/></g>
+  `),
+
+  bolt: svg(`
+    <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#0088cc"/></linearGradient></defs>
+    <polygon points="36,2 14,34 28,34 22,62 50,26 34,26 40,2" fill="url(#bg)"/>
+    <polygon points="34,8 20,32 29,32 24,54 44,28 35,28 38,8" fill="#fff" opacity="0.25"/>
+    <line x1="6" y1="20" x2="16" y2="20" stroke="#00e5ff" stroke-width="2" opacity="0.4"/>
+    <line x1="6" y1="26" x2="12" y2="26" stroke="#00e5ff" stroke-width="1.5" opacity="0.3"/>
+    <line x1="48" y1="38" x2="58" y2="38" stroke="#00e5ff" stroke-width="2" opacity="0.4"/>
+    <line x1="52" y1="44" x2="58" y2="44" stroke="#00e5ff" stroke-width="1.5" opacity="0.3"/>
+  `),
+
+  mortarboard: svg(`
+    <defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1a3e"/><stop offset="100%" stop-color="#0a0a1e"/></linearGradient></defs>
+    <polygon points="32,8 4,24 32,38 60,24" fill="url(#mg)"/>
+    <polygon points="32,8 4,24 32,38 60,24" fill="none" stroke="#ffcc00" stroke-width="1.5"/>
+    <line x1="32" y1="38" x2="32" y2="24" stroke="#ffcc00" stroke-width="1"/>
+    <path d="M16 28v14c0 6 8 10 16 10s16-4 16-10V28" fill="none" stroke="#ffcc00" stroke-width="2"/>
+    <line x1="52" y1="26" x2="52" y2="50" stroke="#ffcc00" stroke-width="2"/>
+    <circle cx="52" cy="52" r="3" fill="#ffcc00"/>
+    <path d="M50 52c-2 4-2 6 0 8h4c2-2 2-4 0-8" fill="#ffcc00" opacity="0.6"/>
+  `),
+
+  coins: svg(`
+    <defs><linearGradient id="c1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <ellipse cx="26" cy="44" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="26" cy="42" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="26" cy="42" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="26" y="45" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+    <ellipse cx="38" cy="34" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="38" cy="32" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="38" cy="32" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="38" y="35" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+    <ellipse cx="28" cy="24" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="28" cy="22" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="28" cy="22" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="28" y="25" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+  `),
+
+  star: svg(`
+    <defs><linearGradient id="stg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#ffaa00"/></linearGradient></defs>
+    <polygon points="32,4 39,22 58,24 44,38 48,58 32,48 16,58 20,38 6,24 25,22" fill="url(#stg)"/>
+    <polygon points="32,4 39,22 58,24 44,38 48,58 32,48 16,58 20,38 6,24 25,22" fill="none" stroke="#cc8800" stroke-width="1"/>
+    <polygon points="32,12 36,24 48,25 39,34 42,48 32,42 22,48 25,34 16,25 28,24" fill="#fff" opacity="0.2"/>
+  `),
+
+  shield: svg(`
+    <defs><linearGradient id="shg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#006688"/></linearGradient></defs>
+    <path d="M32 4L8 16v16c0 14 10 22 24 28 14-6 24-14 24-28V16L32 4z" fill="url(#shg)"/>
+    <path d="M32 4L8 16v16c0 14 10 22 24 28 14-6 24-14 24-28V16L32 4z" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+    <path d="M32 10L14 20v12c0 10 8 18 18 22 10-4 18-12 18-22V20L32 10z" fill="none" stroke="#fff" stroke-width="1" opacity="0.3"/>
+    <polyline points="22,34 30,42 44,24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  `),
+
+  lock: svg(`
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#666"/><stop offset="100%" stop-color="#333"/></linearGradient></defs>
+    <path d="M20 28V20c0-7 5-12 12-12s12 5 12 12v8" fill="none" stroke="#555" stroke-width="4" stroke-linecap="round"/>
+    <rect x="14" y="28" width="36" height="26" rx="4" fill="url(#lg)"/>
+    <rect x="14" y="28" width="36" height="26" rx="4" fill="none" stroke="#555" stroke-width="1.5"/>
+    <circle cx="32" cy="38" r="4" fill="#222"/>
+    <rect x="30" y="38" width="4" height="8" rx="1" fill="#222"/>
+  `),
+};
+
 // ── Achievements ───────────────────────────────────────────────────
 export const ACHIEVEMENTS = {
   firstBlood: {
     name: "First Blood",
     description: "Eliminate your first enemy",
-    icon: "☠",
+    icon: "skull",
     category: "combat",
     check: (stats) => stats.totalKills >= 1,
   },
   droneHunter: {
     name: "Drone Hunter",
     description: "Eliminate 10 enemies",
-    icon: "🎯",
+    icon: "target",
     category: "combat",
     check: (stats) => stats.totalKills >= 10,
   },
   phantomSlayer: {
     name: "Phantom Slayer",
     description: "Eliminate 25 enemies",
-    icon: "👻",
+    icon: "ghost",
     category: "combat",
     check: (stats) => stats.totalKills >= 25,
   },
   beastTamer: {
     name: "Beast Tamer",
     description: "Eliminate 50 enemies",
-    icon: "🐉",
+    icon: "dragon",
     category: "combat",
     check: (stats) => stats.totalKills >= 50,
   },
   centurion: {
     name: "Centurion",
     description: "Eliminate 100 enemies",
-    icon: "💯",
+    icon: "helmet",
     category: "combat",
     check: (stats) => stats.totalKills >= 100,
   },
   roundSurvivor: {
     name: "Clockwork Survivor",
     description: "Survive 5 arena rounds",
-    icon: "⏱",
+    icon: "stopwatch",
     category: "arena",
     check: (stats) => stats.highestArenaRound >= 5,
   },
   roundVeteran: {
     name: "Arena Veteran",
     description: "Survive 10 arena rounds",
-    icon: "🏟",
+    icon: "colosseum",
     category: "arena",
     check: (stats) => stats.highestArenaRound >= 10,
   },
   campaignClear: {
     name: "Timeline Restored",
     description: "Complete the campaign",
-    icon: "🏆",
+    icon: "trophy",
     category: "campaign",
     check: (stats) => stats.campaignComplete,
   },
   lordSlayer: {
     name: "Lord Slayer",
     description: "Defeat the Paradox Lord",
-    icon: "👑",
+    icon: "crown",
     category: "campaign",
     check: (stats) => stats.bossKilled,
   },
   speedDemon: {
     name: "Speed Demon",
     description: "Perform 50 dashes",
-    icon: "💨",
+    icon: "bolt",
     category: "movement",
     check: (stats) => stats.totalDashes >= 50,
   },
   tutorialGrad: {
     name: "Calibrated",
     description: "Complete the tutorial",
-    icon: "🎓",
+    icon: "mortarboard",
     category: "general",
     check: (stats) => stats.tutorialComplete,
   },
   bigSpender: {
     name: "Big Spender",
     description: "Purchase 10 upgrades",
-    icon: "💰",
+    icon: "coins",
     category: "arena",
     check: (stats) => stats.upgradesBought >= 10,
   },
   scoreMaster: {
     name: "Score Master",
     description: "Reach a score of 10,000",
-    icon: "⭐",
+    icon: "star",
     category: "general",
     check: (stats) => stats.highestScore >= 10000,
   },
   untouchable: {
     name: "Untouchable",
     description: "Complete an arena round without taking damage",
-    icon: "🛡",
+    icon: "shield",
     category: "arena",
     check: (stats) => stats.flawlessRounds >= 1,
   },
@@ -3004,21 +3613,21 @@ export const ACHIEVEMENTS = {
   _comingSoon1: {
     name: "???",
     description: "More achievements coming soon...",
-    icon: "🔒",
+    icon: "lock",
     category: "hidden",
     check: () => false,
   },
   _comingSoon2: {
     name: "???",
     description: "More achievements coming soon...",
-    icon: "🔒",
+    icon: "lock",
     category: "hidden",
     check: () => false,
   },
   _comingSoon3: {
     name: "???",
     description: "More achievements coming soon...",
-    icon: "🔒",
+    icon: "lock",
     category: "hidden",
     check: () => false,
   },

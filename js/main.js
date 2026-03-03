@@ -1,4 +1,5 @@
 import { Game, GameState } from "./game.js";
+import { createTestRunner } from "./testing/harness.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -71,7 +72,7 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   if (game.shouldShowTutorial()) {
     game.startTutorial();
   } else {
-    game.startCampaign();
+    game.showCampaignPrompt();
   }
 });
 
@@ -230,3 +231,6 @@ function gameLoop(timestamp) {
 }
 
 requestAnimationFrame(gameLoop);
+
+// Expose test runner on window for console access
+window.ccTest = createTestRunner(game);

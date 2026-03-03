@@ -266,8 +266,35 @@ export class Renderer {
       this.zBuffer[x] = perpWallDist;
 
       const lineHeight = Math.floor(h / perpWallDist);
-      let drawStart = Math.floor(-lineHeight / 2 + h / 2);
-      let drawEnd = Math.floor(lineHeight / 2 + h / 2);
+      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2);
+      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2);
+
+      // Variable height: heightMap determines how tall the wall renders
+      // 5 layers = full wall, 1 layer = 20% wall (from ground up)
+      let heightFrac = 1;
+      if (
+        map.heightMap &&
+        mapX >= 0 &&
+        mapY >= 0 &&
+        mapX < map.width &&
+        mapY < map.height
+      ) {
+        const hCount = map.heightMap[mapY][mapX];
+        if (hCount > 0 && hCount < 5) {
+          heightFrac = hCount / 5;
+        }
+      }
+
+      let drawStart, drawEnd;
+      if (heightFrac < 1) {
+        // Short wall: grows upward from floor level
+        drawEnd = fullDrawEnd;
+        const wallPx = fullDrawEnd - fullDrawStart;
+        drawStart = Math.floor(drawEnd - wallPx * heightFrac);
+      } else {
+        drawStart = fullDrawStart;
+        drawEnd = fullDrawEnd;
+      }
 
       if (drawStart < 0) drawStart = 0;
       if (drawEnd >= h) drawEnd = h - 1;
