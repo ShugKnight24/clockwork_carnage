@@ -263,6 +263,9 @@ export class Renderer {
 
       if (perpWallDist < 0.01) perpWallDist = 0.01;
 
+      // TODO: For short walls (heightFrac < 1), store wall-top Y per column
+      // so renderSprites() can show sprites above short walls instead of
+      // fully occluding them based on distance alone.
       this.zBuffer[x] = perpWallDist;
 
       const lineHeight = Math.floor(h / perpWallDist);

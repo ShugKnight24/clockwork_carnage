@@ -1,13 +1,13 @@
 import { WEAPONS, ENEMY_TYPES } from "./data.js";
 
 export class Player {
-  constructor() {
-    this.reset();
+  constructor(x = 2, y = 2, angle = 0) {
+    this.reset(x, y, angle);
   }
-  reset() {
-    this.x = 2;
-    this.y = 2;
-    this.angle = 0;
+  reset(x = 2, y = 2, angle = 0) {
+    this.x = x;
+    this.y = y;
+    this.angle = angle;
     this.health = 100;
     this.maxHealth = 100;
     this.armor = 0;

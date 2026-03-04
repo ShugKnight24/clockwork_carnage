@@ -4,7 +4,7 @@
 // Run: node js/net/server.js [port]
 // ═══════════════════════════════════════════════════════════════════
 
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import { MSG, encode, decode, unpackInput } from "./protocol.js";
 
 const PORT = parseInt(process.argv[2], 10) || 8080;
@@ -48,7 +48,7 @@ wss.on("connection", (ws) => {
   }
 
   const id = nextId++;
-  const spawn = SPAWN_POINTS[id % SPAWN_POINTS.length];
+  const spawn = SPAWN_POINTS[(id - 1) % SPAWN_POINTS.length];
   const player = {
     ws,
     x: spawn.x,
@@ -251,7 +251,7 @@ function tick(dt) {
 function respawn(id) {
   const p = players.get(id);
   if (!p) return;
-  const spawn = SPAWN_POINTS[id % SPAWN_POINTS.length];
+  const spawn = SPAWN_POINTS[(id - 1) % SPAWN_POINTS.length];
   p.x = spawn.x;
   p.y = spawn.y;
   p.hp = MAX_HP;
@@ -260,7 +260,7 @@ function respawn(id) {
 // ── Broadcast Utility ───────────────────────────────────────────
 function broadcast(data, excludeId) {
   for (const [id, p] of players) {
-    if (id !== excludeId && p.ws.readyState === 1) {
+    if (id !== excludeId && p.ws.readyState === WebSocket.OPEN) {
       p.ws.send(data);
     }
   }

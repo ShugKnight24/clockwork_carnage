@@ -59,15 +59,16 @@ export function packInput(keys, angle, shooting) {
 }
 
 /**
- * Unpack input on serve side.
+ * Unpack input on server side.
  */
 export function unpackInput(packed) {
+  const rawAngle = Number(packed.a);
   return {
     forward: !!packed.f,
     backward: !!packed.b,
     left: !!packed.l,
     right: !!packed.r,
-    angle: packed.a,
+    angle: Number.isFinite(rawAngle) ? rawAngle : 0,
     shooting: !!packed.s,
   };
 }
