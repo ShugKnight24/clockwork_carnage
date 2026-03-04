@@ -1,0 +1,26 @@
+IDEAS.md
+NOTES.md
+PLAN.md
+REVIEW.md
+ROADMAP.md
+TESTING.md
+
+.archive/
+
+# Generated changelog reports (local dev tool)
+.changelog/
+
+# Dev scripts (local tooling, not part of the game)
+scripts/
+
+# Testing
+js/testing/
+
+# Forge editor (deferred to next sprint)
+js/editor/
+
+# Editor
+.vscode/
+
+# Untracked game prototypes (experimental, not part of Clockwork Carnage)
+prototypes/

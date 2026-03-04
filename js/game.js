@@ -3351,7 +3351,22 @@ export class Game {
     }
 
     if (this.state === GameState.BUILDER) {
+      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
       this.builder.render(ctx, w, h, this.time);
+      return;
+    }
+
+    // When paused from builder, render builder scene as the background
+    if (
+      this.state === GameState.PAUSED &&
+      this.pausedFromState === GameState.BUILDER
+    ) {
+      this.builder.render(ctx, w, h, this.time);
+      const hctx = this.hudCtx;
+      const hw = this.hudCanvas.width;
+      const hh = this.hudCanvas.height;
+      hctx.clearRect(0, 0, hw, hh);
+      this.renderPauseScreen(hctx, hw, hh);
       return;
     }
 
@@ -5886,28 +5901,39 @@ export class Game {
     this.player.weapons = [0, 1]; // pistol + shotgun
     this.player.currentWeapon = 0;
 
-    // Spawn some enemies scattered around the map
-    const enemyTypes = ["drone", "phantom", "beast"];
+    // Spawn enemies — prefer placed spawns, fallback to random
     let spawned = 0;
-    const maxEnemies = 8;
-    for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
-      const ex = 1.5 + Math.random() * (this.map.width - 3);
-      const ey = 1.5 + Math.random() * (this.map.height - 3);
-      const gx = Math.floor(ex),
-        gy = Math.floor(ey);
-      if (
-        gx >= 0 &&
-        gy >= 0 &&
-        gx < this.map.width &&
-        gy < this.map.height &&
-        this.map.grid[gy][gx] === 0
-      ) {
-        const dist = Math.sqrt((ex - spawnX) ** 2 + (ey - spawnY) ** 2);
-        if (dist > 3) {
-          const etype = enemyTypes[spawned % enemyTypes.length];
-          const enemy = new Enemy(ex, ey, etype);
-          this.entities.push(enemy);
-          spawned++;
+    if (
+      this.map.enemySpawns &&
+      this.map.enemySpawns.length > 0
+    ) {
+      for (const s of this.map.enemySpawns) {
+        const enemy = new Enemy(s.x + 0.5, s.y + 0.5, s.enemy || "drone");
+        this.entities.push(enemy);
+        spawned++;
+      }
+    } else {
+      const enemyTypes = ["drone", "phantom", "beast"];
+      const maxEnemies = 8;
+      for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
+        const ex = 1.5 + Math.random() * (this.map.width - 3);
+        const ey = 1.5 + Math.random() * (this.map.height - 3);
+        const gx = Math.floor(ex),
+          gy = Math.floor(ey);
+        if (
+          gx >= 0 &&
+          gy >= 0 &&
+          gx < this.map.width &&
+          gy < this.map.height &&
+          this.map.grid[gy][gx] === 0
+        ) {
+          const dist = Math.sqrt((ex - spawnX) ** 2 + (ey - spawnY) ** 2);
+          if (dist > 3) {
+            const etype = enemyTypes[spawned % enemyTypes.length];
+            const enemy = new Enemy(ex, ey, etype);
+            this.entities.push(enemy);
+            spawned++;
+          }
         }
       }
     }
@@ -5938,11 +5964,14 @@ export class Game {
     this.map = this.builder.map;
     this.entities = [];
     this.projectiles = [];
+    // Clear stale gameplay HUD
+    this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
     if (this._builderSnapshot) {
       this.builder.player.x = this._builderSnapshot.playerX;
       this.builder.player.y = this._builderSnapshot.playerY;
       this.builder.player.angle = this._builderSnapshot.playerAngle;
       this._builderSnapshot = null;
     }
+    this.lockPointer();
   }
 }

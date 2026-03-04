@@ -67,6 +67,13 @@ export class BuilderMode {
     this.height = 0;
     this.active = false;
 
+    // Undo / redo history
+    this.history = [];
+    this.historyIndex = -1;
+
+    // Tool mode: 'block' (default) or 'spawn'
+    this.toolMode = "block";
+
     // Input accumulators (fed from host)
     this.keys = {};
     this.mouseDx = 0;
@@ -101,6 +108,9 @@ export class BuilderMode {
     this.layer = 0;
     this.height = 0;
     this.active = true;
+    this.toolMode = "block";
+    this.history = [];
+    this.historyIndex = -1;
 
     this.canvas.requestPointerLock();
   }
@@ -125,6 +135,36 @@ export class BuilderMode {
       this.saveMap();
       return true;
     }
+    // Ctrl+Z / Cmd+Z → undo
+    if (code === "KeyZ" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      e.preventDefault();
+      this.undo();
+      return true;
+    }
+    // Ctrl+Shift+Z / Cmd+Shift+Z → redo
+    if (code === "KeyZ" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      this.redo();
+      return true;
+    }
+    // Ctrl+E / Cmd+E → export map
+    if (code === "KeyE" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.exportMap();
+      return true;
+    }
+    // Ctrl+I / Cmd+I → import map
+    if (code === "KeyI" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.importMap();
+      return true;
+    }
+    // T → toggle tool mode (block / spawn)
+    if (code === "KeyT") {
+      this.toolMode = this.toolMode === "block" ? "spawn" : "block";
+      this.audio.menuSelect();
+      return true;
+    }
     // Tab → toggle overhead
     if (code === "Tab") {
       e.preventDefault();
@@ -139,13 +179,13 @@ export class BuilderMode {
       this.audio.menuSelect();
       return true;
     }
-    // Layer
-    if (code === "KeyQ") {
+    // Layer — only when not using Ctrl modifier
+    if (code === "KeyQ" && !e.ctrlKey && !e.metaKey) {
       this.layer = Math.max(0, this.layer - 1);
       this.audio.menuSelect();
       return true;
     }
-    if (code === "KeyE") {
+    if (code === "KeyE" && !e.ctrlKey && !e.metaKey) {
       this.layer = Math.min(NUM_LAYERS - 1, this.layer + 1);
       this.audio.menuSelect();
       return true;
@@ -185,6 +225,11 @@ export class BuilderMode {
 
   handleMouseDown(button) {
     if (this.overhead) return;
+    if (this.toolMode === "spawn") {
+      if (button === 0) this.placeSpawn();
+      if (button === 2) this.removeSpawn();
+      return;
+    }
     if (button === 0) this.placeBlock();
     if (button === 2) this.removeBlock();
   }
@@ -285,50 +330,121 @@ export class BuilderMode {
 
   // ─── Block operations ────────────────────────────────────
 
+  _recordAction(action) {
+    // Truncate any redo-able future
+    this.history.length = this.historyIndex + 1;
+    this.history.push(action);
+    this.historyIndex++;
+    // Cap history at 200
+    if (this.history.length > 200) {
+      this.history.shift();
+      this.historyIndex--;
+    }
+  }
+
+  undo() {
+    if (this.historyIndex < 0) return;
+    const action = this.history[this.historyIndex--];
+    if (action.type === "place" || action.type === "remove") {
+      if (!this._inBounds(action.x, action.y)) return;
+      const layer = this.map.layers
+        ? this.map.layers[action.layer]
+        : null;
+      if (layer) {
+        layer[action.y][action.x] = action.oldTile;
+      } else {
+        this.map.grid[action.y][action.x] = action.oldTile;
+      }
+      this.syncGrid();
+    } else if (action.type === "addSpawn") {
+      this.map.enemySpawns = this.map.enemySpawns.filter(
+        (s) => !(s.x === action.x && s.y === action.y),
+      );
+    } else if (action.type === "removeSpawn") {
+      this.map.enemySpawns.push({
+        x: action.x,
+        y: action.y,
+        enemy: action.enemy,
+      });
+    }
+    this.audio.menuSelect();
+  }
+
+  redo() {
+    if (this.historyIndex >= this.history.length - 1) return;
+    const action = this.history[++this.historyIndex];
+    if (action.type === "place" || action.type === "remove") {
+      if (!this._inBounds(action.x, action.y)) return;
+      const layer = this.map.layers
+        ? this.map.layers[action.layer]
+        : null;
+      if (layer) {
+        layer[action.y][action.x] = action.newTile;
+      } else {
+        this.map.grid[action.y][action.x] = action.newTile;
+      }
+      this.syncGrid();
+    } else if (action.type === "addSpawn") {
+      this.map.enemySpawns.push({
+        x: action.x,
+        y: action.y,
+        enemy: action.enemy,
+      });
+    } else if (action.type === "removeSpawn") {
+      this.map.enemySpawns = this.map.enemySpawns.filter(
+        (s) => !(s.x === action.x && s.y === action.y),
+      );
+    }
+    this.audio.menuSelect();
+  }
+
   placeBlock() {
     if (this.overhead) return;
     const layer = this.map.layers ? this.map.layers[this.layer] : null;
     const target = this.target;
 
-    if (target) {
-      const { placeX, placeY } = target;
+    const tryPlace = (px, py) => {
       if (
-        this._inBounds(placeX, placeY) &&
-        !(
-          Math.floor(this.player.x) === placeX &&
-          Math.floor(this.player.y) === placeY
-        )
-      ) {
-        if (layer) {
-          if (layer[placeY][placeX] === 0) {
-            layer[placeY][placeX] = this.tile;
-            this.syncGrid();
-            this.audio.menuConfirm();
-          }
-        } else if (this.map.grid[placeY][placeX] === 0) {
-          this.map.grid[placeY][placeX] = this.tile;
+        !this._inBounds(px, py) ||
+        (Math.floor(this.player.x) === px &&
+          Math.floor(this.player.y) === py)
+      )
+        return;
+      if (layer) {
+        if (layer[py][px] === 0) {
+          this._recordAction({
+            type: "place",
+            layer: this.layer,
+            x: px,
+            y: py,
+            oldTile: 0,
+            newTile: this.tile,
+          });
+          layer[py][px] = this.tile;
+          this.syncGrid();
           this.audio.menuConfirm();
         }
+      } else if (this.map.grid[py][px] === 0) {
+        this._recordAction({
+          type: "place",
+          layer: this.layer,
+          x: px,
+          y: py,
+          oldTile: 0,
+          newTile: this.tile,
+        });
+        this.map.grid[py][px] = this.tile;
+        this.audio.menuConfirm();
       }
+    };
+
+    if (target) {
+      tryPlace(target.placeX, target.placeY);
     } else {
       const d = 3;
       const tx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
       const ty = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
-      if (
-        this._inBounds(tx, ty) &&
-        !(Math.floor(this.player.x) === tx && Math.floor(this.player.y) === ty)
-      ) {
-        if (layer) {
-          if (layer[ty][tx] === 0) {
-            layer[ty][tx] = this.tile;
-            this.syncGrid();
-            this.audio.menuConfirm();
-          }
-        } else if (this.map.grid[ty][tx] === 0) {
-          this.map.grid[ty][tx] = this.tile;
-          this.audio.menuConfirm();
-        }
-      }
+      tryPlace(tx, ty);
     }
   }
 
@@ -349,14 +465,187 @@ export class BuilderMode {
     const layer = this.map.layers ? this.map.layers[this.layer] : null;
     if (layer) {
       if (layer[hitY][hitX] > 0) {
+        this._recordAction({
+          type: "remove",
+          layer: this.layer,
+          x: hitX,
+          y: hitY,
+          oldTile: layer[hitY][hitX],
+          newTile: 0,
+        });
         layer[hitY][hitX] = 0;
         this.syncGrid();
         this.audio.menuSelect();
       }
     } else if (this.map.grid[hitY][hitX] > 0) {
+      this._recordAction({
+        type: "remove",
+        layer: this.layer,
+        x: hitX,
+        y: hitY,
+        oldTile: this.map.grid[hitY][hitX],
+        newTile: 0,
+      });
       this.map.grid[hitY][hitX] = 0;
       this.audio.menuSelect();
     }
+  }
+
+  // ─── Enemy spawn placement ──────────────────────────────
+
+  placeSpawn() {
+    if (this.overhead) return;
+    const target = this.target;
+    let sx, sy;
+    if (target) {
+      sx = target.placeX;
+      sy = target.placeY;
+    } else {
+      const d = 3;
+      sx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      sy = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
+    }
+    if (!this._inBounds(sx, sy)) return;
+    if (this.map.grid[sy][sx] !== 0) return;
+    // Don't stack spawns on the same cell
+    if (!this.map.enemySpawns) this.map.enemySpawns = [];
+    if (this.map.enemySpawns.some((s) => s.x === sx && s.y === sy)) return;
+    const types = ["drone", "phantom", "beast"];
+    const enemy = types[this.map.enemySpawns.length % types.length];
+    this._recordAction({
+      type: "addSpawn",
+      x: sx,
+      y: sy,
+      enemy,
+    });
+    this.map.enemySpawns.push({ x: sx, y: sy, enemy });
+    this.audio.menuConfirm();
+  }
+
+  removeSpawn() {
+    if (this.overhead) return;
+    const target = this.target;
+    if (!target) return;
+    if (!this.map.enemySpawns || this.map.enemySpawns.length === 0) return;
+    const { hitX, hitY } = target;
+    const idx = this.map.enemySpawns.findIndex(
+      (s) => s.x === hitX && s.y === hitY,
+    );
+    if (idx < 0) {
+      // Also check placeX/placeY for spawns on empty tiles
+      const idx2 = this.map.enemySpawns.findIndex(
+        (s) => s.x === target.placeX && s.y === target.placeY,
+      );
+      if (idx2 >= 0) {
+        const removed = this.map.enemySpawns.splice(idx2, 1)[0];
+        this._recordAction({
+          type: "removeSpawn",
+          x: removed.x,
+          y: removed.y,
+          enemy: removed.enemy,
+        });
+        this.audio.menuSelect();
+      }
+      return;
+    }
+    const removed = this.map.enemySpawns.splice(idx, 1)[0];
+    this._recordAction({
+      type: "removeSpawn",
+      x: removed.x,
+      y: removed.y,
+      enemy: removed.enemy,
+    });
+    this.audio.menuSelect();
+  }
+
+  // ─── Export / Import ─────────────────────────────────────
+
+  exportMap() {
+    const data = {
+      name: this.map.name,
+      width: this.map.width,
+      height: this.map.height,
+      grid: this.map.grid,
+      layers: this.map.layers || null,
+      playerStart: {
+        x: this.player.x,
+        y: this.player.y,
+        dir: this.player.angle,
+      },
+      enemySpawns: this.map.enemySpawns || [],
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(this.map.name || "map").replace(/[^a-z0-9_-]/gi, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.saveFlash = 2;
+  }
+
+  importMap() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          // Validate same structure as _loadMap
+          if (!Array.isArray(data.grid)) return;
+          if (!Number.isInteger(data.width) || !Number.isInteger(data.height))
+            return;
+          if (data.width <= 0 || data.height <= 0) return;
+          if (data.width > 128 || data.height > 128) return;
+          if (data.grid.length !== data.height) return;
+          for (let y = 0; y < data.height; y++) {
+            const row = data.grid[y];
+            if (!Array.isArray(row) || row.length !== data.width) return;
+            for (let x = 0; x < data.width; x++) {
+              if (typeof row[x] !== "number" || !Number.isFinite(row[x]))
+                return;
+              row[x] = Math.max(0, Math.min(9, Math.floor(row[x])));
+            }
+          }
+          this.map = {
+            name: data.name || "Imported",
+            width: data.width,
+            height: data.height,
+            grid: data.grid,
+            layers: data.layers || null,
+            playerStart: data.playerStart || {
+              x: data.width / 2 + 0.5,
+              y: data.height / 2 + 0.5,
+              dir: 0,
+            },
+            enemySpawns: Array.isArray(data.enemySpawns)
+              ? data.enemySpawns
+              : [],
+            entities: [],
+            exit: null,
+          };
+          this._ensureLayers();
+          this.syncGrid();
+          this.player.x = this.map.playerStart.x;
+          this.player.y = this.map.playerStart.y;
+          this.player.angle = this.map.playerStart.dir;
+          this.history = [];
+          this.historyIndex = -1;
+          this.saveFlash = 2;
+          this.audio.menuConfirm();
+        } catch (_) {
+          /* invalid file */
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   }
 
   // ─── Map data ────────────────────────────────────────────
@@ -417,6 +706,7 @@ export class BuilderMode {
           y: this.player.y,
           dir: this.player.angle,
         },
+        enemySpawns: this.map.enemySpawns || [],
       };
       localStorage.setItem(BUILDER_SAVE_KEY, JSON.stringify(data));
       this.saveFlash = 2;
@@ -455,7 +745,9 @@ export class BuilderMode {
           y: data.height / 2 + 0.5,
           dir: 0,
         },
-        enemySpawns: [],
+        enemySpawns: Array.isArray(data.enemySpawns)
+          ? data.enemySpawns
+          : [],
         entities: [],
         exit: null,
       };
@@ -570,6 +862,22 @@ export class BuilderMode {
     }
     ctx.textAlign = "left";
 
+    // Tool mode indicator
+    const modeLabel =
+      this.toolMode === "spawn" ? "SPAWN" : "BLOCK";
+    const modeColor =
+      this.toolMode === "spawn" ? "#ff6644" : "#00ffcc";
+    ctx.fillStyle = modeColor;
+    ctx.font = "bold 13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`TOOL: ${modeLabel}`, w / 2, palY - 28);
+    ctx.textAlign = "left";
+
+    // Ghost preview (block placement preview)
+    if (this.toolMode === "block" && !this.overhead) {
+      this._renderGhostPreview(ctx, w, h);
+    }
+
     // Help panel
     if (this.showHelp) {
       const hints = [
@@ -579,6 +887,7 @@ export class BuilderMode {
         "RClick \u2014 Remove",
         "1-9 \u2014 Block Type",
         "Q/E \u2014 Layer Down/Up",
+        "T \u2014 Tool (Block/Spawn)",
         "[ / ] \u2014 FOV -/+",
         "Space \u2014 Rise",
         "Ctrl \u2014 Lower",
@@ -586,12 +895,17 @@ export class BuilderMode {
         "N \u2014 Noclip",
         "Tab \u2014 Overhead",
         "Ctrl+S \u2014 Save",
+        "Ctrl+Z \u2014 Undo",
+        "Ctrl+Shift+Z \u2014 Redo",
+        "Ctrl+E \u2014 Export JSON",
+        "Ctrl+I \u2014 Import JSON",
+        "P \u2014 Play-test",
         "H \u2014 Toggle Help",
         "ESC \u2014 Pause",
       ];
       ctx.fillStyle = "rgba(0,0,0,0.65)";
       ctx.beginPath();
-      ctx.roundRect(8, 8, 195, hints.length * 17 + 12, 6);
+      ctx.roundRect(8, 8, 210, hints.length * 17 + 12, 6);
       ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.7)";
       ctx.font = "11px monospace";
@@ -614,6 +928,24 @@ export class BuilderMode {
     ctx.textAlign = "right";
     ctx.fillText(`LAYER ${this.layer}`, w - 14, h - 90);
     ctx.fillText(`FOV ${this.settings.fov}`, w - 14, h - 106);
+    // Undo depth
+    const undoCount = this.historyIndex + 1;
+    const redoCount = this.history.length - this.historyIndex - 1;
+    if (undoCount > 0 || redoCount > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "11px monospace";
+      ctx.fillText(`U:${undoCount} R:${redoCount}`, w - 14, h - 122);
+    }
+    // Spawn count
+    if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
+      ctx.fillStyle = "rgba(255,100,68,0.7)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(
+        `SPAWNS: ${this.map.enemySpawns.length}`,
+        w - 14,
+        h - 138,
+      );
+    }
     ctx.textAlign = "left";
 
     ctx.fillStyle = "rgba(255,255,255,0.25)";
@@ -659,6 +991,16 @@ export class BuilderMode {
             ctx.fillRect(mx + x * cs, my + y * cs, cs + 0.5, cs + 0.5);
           }
         }
+      }
+    }
+
+    // Enemy spawn markers
+    if (this.map.enemySpawns) {
+      for (const s of this.map.enemySpawns) {
+        ctx.fillStyle = "rgba(255,100,68,0.8)";
+        ctx.beginPath();
+        ctx.arc(mx + s.x * cs + cs / 2, my + s.y * cs + cs / 2, cs * 0.35, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -751,6 +1093,27 @@ export class BuilderMode {
       ctx.stroke();
     }
 
+    // Enemy spawn markers in overhead
+    if (this.map.enemySpawns) {
+      for (const s of this.map.enemySpawns) {
+        const sx = ox + s.x * cs + cs / 2;
+        const sy = oy + s.y * cs + cs / 2;
+        ctx.fillStyle = "rgba(255,100,68,0.85)";
+        ctx.beginPath();
+        ctx.arc(sx, sy, cs * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        if (cs >= 14) {
+          ctx.fillStyle = "#fff";
+          ctx.font = `${Math.max(7, cs * 0.3) | 0}px monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(s.enemy.charAt(0).toUpperCase(), sx, sy);
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
+        }
+      }
+    }
+
     // Player
     const px = ox + this.player.x * cs;
     const py = oy + this.player.y * cs;
@@ -784,6 +1147,65 @@ export class BuilderMode {
   }
 
   // ─── Private helpers ─────────────────────────────────────
+
+  _renderGhostPreview(ctx, w, h) {
+    // Show a translucent colored indicator at the crosshair for where a block would be placed
+    const cx = w / 2;
+    const cy = h / 2;
+    const gSize = 18;
+    let canPlace = false;
+    if (this.target) {
+      const { placeX, placeY } = this.target;
+      if (
+        this._inBounds(placeX, placeY) &&
+        !(
+          Math.floor(this.player.x) === placeX &&
+          Math.floor(this.player.y) === placeY
+        )
+      ) {
+        const layer = this.map.layers
+          ? this.map.layers[this.layer]
+          : null;
+        canPlace = layer
+          ? layer[placeY][placeX] === 0
+          : this.map.grid[placeY][placeX] === 0;
+      }
+    } else {
+      // No target = placing 3 units ahead
+      const d = 3;
+      const tx = Math.floor(
+        this.player.x + Math.cos(this.player.angle) * d,
+      );
+      const ty = Math.floor(
+        this.player.y + Math.sin(this.player.angle) * d,
+      );
+      if (
+        this._inBounds(tx, ty) &&
+        !(
+          Math.floor(this.player.x) === tx &&
+          Math.floor(this.player.y) === ty
+        )
+      ) {
+        const layer = this.map.layers
+          ? this.map.layers[this.layer]
+          : null;
+        canPlace = layer
+          ? layer[ty][tx] === 0
+          : this.map.grid[ty][tx] === 0;
+      }
+    }
+    if (canPlace) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = TILE_COLORS[this.tile];
+      ctx.fillRect(cx - gSize / 2, cy - gSize / 2, gSize, gSize);
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = "#00ffcc";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - gSize / 2, cy - gSize / 2, gSize, gSize);
+      ctx.restore();
+    }
+  }
 
   _raycast() {
     const px = this.player.x;
