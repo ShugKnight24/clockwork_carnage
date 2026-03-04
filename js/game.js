@@ -3401,6 +3401,13 @@ export class Game {
 
     ctx.restore();
 
+    // Subtle ambient vignette (always-on depth effect)
+    const vigGrad = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, h * 0.9);
+    vigGrad.addColorStop(0, "transparent");
+    vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
+    ctx.fillStyle = vigGrad;
+    ctx.fillRect(0, 0, w, h);
+
     // Draw weapon (hidden in third person)
     if (this.settings.viewMode === 0) {
       this.drawWeapon(ctx, w, h);
@@ -4251,13 +4258,25 @@ export class Game {
       const alpha = Math.min(1, dn.life / 0.3);
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = dn.crit ? "bold 18px monospace" : "bold 14px monospace";
-      ctx.fillStyle = dn.crit ? "#ffcc00" : "#ffffff";
       ctx.textAlign = "center";
-      ctx.fillText(dn.value, screenX, screenY);
       if (dn.crit) {
-        ctx.fillStyle = "rgba(255,204,0,0.3)";
-        ctx.fillText(dn.value, screenX + 1, screenY + 1);
+        ctx.font = "bold 18px monospace";
+        ctx.shadowColor = "#ffcc00";
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = "#ffcc00";
+        ctx.fillText(dn.value, screenX, screenY);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(0,0,0,0.5)";
+        ctx.lineWidth = 2;
+        ctx.strokeText(dn.value, screenX, screenY);
+        ctx.fillText(dn.value, screenX, screenY);
+      } else {
+        ctx.font = "bold 14px monospace";
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 2;
+        ctx.strokeText(dn.value, screenX, screenY);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(dn.value, screenX, screenY);
       }
       ctx.restore();
     }
@@ -4270,13 +4289,29 @@ export class Game {
           ? Math.min(1, (2.0 - ksd.life) * 4)
           : Math.min(1, ksd.life / 0.5);
       const scale = ksd.life > 1.8 ? 1.2 + (2.0 - ksd.life) * 3 : 1.0;
+      const fontSize = Math.round(ksd.size * scale);
+      const ky = (h - barH) * 0.3;
+
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = `bold ${Math.round(ksd.size * scale)}px monospace`;
-      const ky = (h - barH) * 0.3;
-      // Glow
+      ctx.font = `bold ${fontSize}px monospace`;
+
+      // Background plate
+      const textW = ctx.measureText(ksd.text).width;
+      const plateW = textW + 60;
+      const plateH = fontSize + 20;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, plateH);
+      // Accent lines
+      ctx.fillStyle = ksd.color;
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, 2);
+      ctx.fillRect(w / 2 - plateW / 2, ky + plateH / 2 - 2, plateW, 2);
+      ctx.globalAlpha = alpha;
+
+      // Glow text
       ctx.shadowColor = ksd.color;
       ctx.shadowBlur = 20;
       ctx.fillStyle = ksd.color;
@@ -4289,9 +4324,13 @@ export class Game {
       ctx.restore();
     }
 
-    // Slow-mo vignette overlay
+    // Slow-mo vignette overlay with temporal blue tint
     if (this.slowMoTimer > 0) {
       const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
+      // Blue tint overlay
+      ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
+      ctx.fillRect(0, 0, w, h - barH);
+      // Edge vignette
       const gradient = ctx.createRadialGradient(
         w / 2,
         (h - barH) / 2,
@@ -5903,10 +5942,7 @@ export class Game {
 
     // Spawn enemies — prefer placed spawns, fallback to random
     let spawned = 0;
-    if (
-      this.map.enemySpawns &&
-      this.map.enemySpawns.length > 0
-    ) {
+    if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
       for (const s of this.map.enemySpawns) {
         const enemy = new Enemy(s.x + 0.5, s.y + 0.5, s.enemy || "drone");
         this.entities.push(enemy);
