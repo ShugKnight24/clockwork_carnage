@@ -102,6 +102,12 @@ export class Game {
       invertX: false,
       fontScale: 100, // 100, 125, 150 percent
       colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
+      hudScale: 100, // 75, 100, 125 percent
+      staminaBarSize: 100, // 75, 100, 125, 150 percent
+      showPortrait: true,
+      showWeapons: true,
+      showKills: true,
+      showScore: true,
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -529,6 +535,12 @@ export class Game {
         { key: "invertX", toggle: true },
         { key: "fontScale", min: 100, max: 150, step: 25 },
         { key: "colorblind", min: 0, max: 3, step: 1, wrap: true },
+        { key: "hudScale", min: 75, max: 125, step: 25 },
+        { key: "staminaBarSize", min: 75, max: 150, step: 25 },
+        { key: "showPortrait", toggle: true },
+        { key: "showWeapons", toggle: true },
+        { key: "showKills", toggle: true },
+        { key: "showScore", toggle: true },
       ];
       const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
@@ -1746,13 +1758,22 @@ export class Game {
     const bx = (w - boxW) / 2;
     const by = 60;
 
+    // Measure text to auto-size the box
+    ctx.font = "bold 20px monospace";
+    const titleW = ctx.measureText(step.title).width;
+    ctx.font = "14px monospace";
+    const hintW = ctx.measureText(step.hint).width;
+    const textMaxW = Math.max(titleW, hintW);
+    const dynamicW = Math.max(boxW, textMaxW + 60);
+    const dynamicBx = (w - dynamicW) / 2;
+
     ctx.save();
     ctx.globalAlpha = fadeIn * 0.9;
 
     // Background
     ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
     ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 8);
+    ctx.roundRect(dynamicBx, by, dynamicW, boxH, 8);
     ctx.fill();
 
     // Border
@@ -1760,7 +1781,7 @@ export class Game {
     ctx.lineWidth = 2;
     ctx.globalAlpha = fadeIn * pulse * 0.8;
     ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 8);
+    ctx.roundRect(dynamicBx, by, dynamicW, boxH, 8);
     ctx.stroke();
 
     ctx.globalAlpha = fadeIn;
@@ -1770,7 +1791,7 @@ export class Game {
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
     if (this.tutorialStep > 0 && this.tutorialStep < 9) {
-      ctx.fillText(`${this.tutorialStep}/8`, bx + 14, by + 18);
+      ctx.fillText(`${this.tutorialStep}/8`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2265,6 +2286,11 @@ export class Game {
       this.drawCutsceneArt(ctx, w, h, frame.art, t);
     }
 
+    // === Scanner effect ===
+    if (frame.scanner) {
+      this.drawScannerEffect(ctx, w, h, t);
+    }
+
     // === Text (typewriter reveal) ===
     if (frame.lines) {
       const centerY = frame.art ? h * 0.72 : h * 0.4;
@@ -2676,6 +2702,109 @@ export class Game {
     ctx.textAlign = "left";
   }
 
+  drawScannerEffect(ctx, w, h, t) {
+    // Power-level scanner: numbers cascade upward, counter climbs to 9000+
+    const maxVal = 9001;
+    const rampDur = 4.0; // seconds to reach 9000+
+    const progress = Math.min(1, t / rampDur);
+    // Ease-in-out cubic for dramatic pacing
+    const eased =
+      progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    const currentVal = Math.floor(eased * maxVal);
+
+    // Cascading number columns (background rain)
+    ctx.save();
+    ctx.globalAlpha = 0.15 + 0.1 * progress;
+    ctx.font = "14px monospace";
+    const cols = 18;
+    for (let c = 0; c < cols; c++) {
+      const cx = (w / (cols + 1)) * (c + 1);
+      const speed = 60 + (c % 5) * 20;
+      for (let r = 0; r < 12; r++) {
+        const baseY = ((t * speed + r * 55 + c * 37) % (h + 60)) - 30;
+        const num = Math.floor(
+          Math.abs(Math.sin(c * 7.3 + r * 2.1 + t * 3)) * currentVal,
+        );
+        const bright = 0.3 + 0.7 * (1 - baseY / h);
+        ctx.fillStyle = `rgba(0,255,200,${bright * 0.4})`;
+        ctx.textAlign = "center";
+        ctx.fillText(num.toString(), cx, baseY);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Main counter display
+    const counterY = h * 0.28;
+    const pulse = 1 + 0.04 * Math.sin(t * 12);
+    const fontSize = Math.round(48 * pulse + 20 * progress);
+    ctx.save();
+    ctx.textAlign = "center";
+
+    // Glow behind counter
+    const glowAlpha = 0.3 + 0.4 * progress;
+    ctx.shadowColor = currentVal >= 9000 ? "#ff4444" : "#00ffcc";
+    ctx.shadowBlur = 20 + 30 * progress;
+
+    // Counter label
+    ctx.font = "bold 14px monospace";
+    ctx.fillStyle = `rgba(170,187,204,${0.6 + 0.4 * progress})`;
+    ctx.fillText("POWER LEVEL SCAN", w / 2, counterY - fontSize / 2 - 16);
+
+    // Counter value
+    ctx.font = `bold ${fontSize}px monospace`;
+    if (currentVal >= 9000) {
+      // Red and shaking when over 9000
+      ctx.fillStyle = "#ff4444";
+      const shakeX = (Math.random() - 0.5) * 8;
+      const shakeY = (Math.random() - 0.5) * 8;
+      ctx.fillText(
+        currentVal.toLocaleString(),
+        w / 2 + shakeX,
+        counterY + shakeY,
+      );
+    } else {
+      ctx.fillStyle = "#00ffcc";
+      ctx.fillText(currentVal.toLocaleString(), w / 2, counterY);
+    }
+
+    // Horizontal scan line sweeping across
+    ctx.shadowBlur = 0;
+    const scanY = (t * 120) % h;
+    ctx.strokeStyle = `rgba(0,255,204,${0.25 + 0.15 * Math.sin(t * 5)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, scanY);
+    ctx.lineTo(w, scanY);
+    ctx.stroke();
+
+    // Bar graph that fills as value climbs
+    const barW = w * 0.4;
+    const barH = 12;
+    const barX = (w - barW) / 2;
+    const barY = counterY + fontSize / 2 + 20;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(barX, barY, barW, barH);
+    const fillColor = currentVal >= 9000 ? "#ff4444" : "#00ffcc";
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(barX, barY, barW * eased, barH);
+    // Bar border
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // Warning flash when hitting 9000
+    if (currentVal >= 9000 && t < rampDur + 1.5) {
+      const warnAlpha = 0.15 * Math.abs(Math.sin(t * 8));
+      ctx.fillStyle = `rgba(255,0,0,${warnAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    ctx.restore();
+  }
+
   drawCutsceneBg(ctx, w, h, bg, t) {
     switch (bg) {
       case "deep_space": {
@@ -2761,7 +2890,7 @@ export class Game {
     ctx.translate(cx, cy);
 
     // Base scale: make characters larger in all cutscene art
-    const baseScale = 1.6;
+    const baseScale = 2.0;
     ctx.scale(baseScale, baseScale);
 
     switch (art) {
@@ -3548,7 +3677,7 @@ export class Game {
       case "villain": {
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.02;
-        ctx.scale(breathe * 1.15, breathe * 1.15); // Bulkier scale
+        ctx.scale(breathe * 1.5, breathe * 1.5); // Bulkier scale
         ctx.globalAlpha = fadeIn;
 
         // Dark aura (larger)
@@ -3703,7 +3832,7 @@ export class Game {
         // Paradox Lord — Evolved Form: larger, more defined, crackling energy
         const fadeIn = Math.min(1, t / 1.2);
         const breathe = 1 + Math.sin(t * 2) * 0.03;
-        ctx.scale(breathe * 1.3, breathe * 1.3);
+        ctx.scale(breathe * 1.7, breathe * 1.7);
         ctx.globalAlpha = fadeIn;
 
         // Intense aura
@@ -3817,7 +3946,7 @@ export class Game {
         // Paradox Lord — FINAL FORM: terrifying, cosmic, reality-bending
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.04;
-        ctx.scale(breathe * 1.6, breathe * 1.6);
+        ctx.scale(breathe * 2.0, breathe * 2.0);
         ctx.globalAlpha = fadeIn;
 
         // Reality distortion rings
@@ -3931,46 +4060,101 @@ export class Game {
       }
 
       case "hero_fallen": {
-        // Hero defeated — lying on the ground
+        // Hero defeated — lying on the ground, scaled up to fill the scene
         const fadeIn = Math.min(1, t / 1.5);
         ctx.globalAlpha = fadeIn;
+        ctx.scale(1.8, 1.8); // Much bigger fallen hero
 
         // Dim glow (fading)
-        const dimGrad = ctx.createRadialGradient(0, 15, 5, 0, 15, 50);
-        dimGrad.addColorStop(0, "rgba(0,100,80,0.08)");
+        const dimGrad = ctx.createRadialGradient(0, 15, 10, 0, 15, 80);
+        dimGrad.addColorStop(0, "rgba(0,100,80,0.12)");
         dimGrad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = dimGrad;
-        ctx.fillRect(-60, -30, 120, 90);
+        ctx.fillRect(-100, -60, 200, 140);
+
+        // Ground shadow
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.beginPath();
+        ctx.ellipse(0, 35, 50, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
 
         // Body (lying horizontal)
         ctx.save();
-        ctx.translate(0, 20);
+        ctx.translate(0, 10);
         ctx.rotate(Math.PI / 2.2);
 
-        // Cape (crumpled)
+        // Cape (crumpled, larger)
         ctx.fillStyle = "#4a1010";
-        ctx.fillRect(-12, -5, 24, 35);
+        ctx.fillRect(-14, -8, 28, 40);
+        // Cape tattered edge
+        ctx.fillStyle = "#3a0808";
+        ctx.beginPath();
+        ctx.moveTo(-14, 32);
+        ctx.lineTo(-16, 38);
+        ctx.lineTo(-8, 35);
+        ctx.lineTo(0, 40);
+        ctx.lineTo(8, 35);
+        ctx.lineTo(14, 38);
+        ctx.lineTo(14, 32);
+        ctx.closePath();
+        ctx.fill();
 
-        // Body
+        // Body (larger)
         ctx.fillStyle = "#1a2a3a";
-        ctx.fillRect(-8, -25, 16, 30);
+        ctx.fillRect(-10, -30, 20, 38);
+
+        // Armor detail lines
+        ctx.strokeStyle = "rgba(0,200,255,0.15)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-8, -20);
+        ctx.lineTo(-8, 5);
+        ctx.moveTo(8, -20);
+        ctx.lineTo(8, 5);
+        ctx.stroke();
 
         // Helmet (cracked — visor flickering)
         ctx.fillStyle = "#1a2a3a";
         ctx.beginPath();
-        ctx.arc(0, -32, 9, 0, Math.PI * 2);
+        ctx.arc(0, -38, 12, 0, Math.PI * 2);
         ctx.fill();
+        // Visor (flickering)
         ctx.fillStyle = `rgba(0,255,200,${0.2 + Math.sin(t * 8) * 0.15})`;
-        ctx.fillRect(-5, -34, 10, 2);
-
-        // Crack lines on armor
-        ctx.strokeStyle = "rgba(255,100,50,0.4)";
+        ctx.fillRect(-7, -41, 14, 3);
+        // Visor crack
+        ctx.strokeStyle = "rgba(255,100,50,0.6)";
         ctx.lineWidth = 0.8;
         ctx.beginPath();
-        ctx.moveTo(-3, -20);
-        ctx.lineTo(2, -10);
-        ctx.lineTo(-1, 0);
+        ctx.moveTo(-2, -41);
+        ctx.lineTo(3, -38);
         ctx.stroke();
+
+        // Crack lines on armor (more prominent)
+        ctx.strokeStyle = "rgba(255,100,50,0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-4, -24);
+        ctx.lineTo(3, -14);
+        ctx.lineTo(-2, -4);
+        ctx.lineTo(4, 4);
+        ctx.stroke();
+
+        // Arm reaching out
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(10, -20, 18, 6);
+        // Hand
+        ctx.fillStyle = "#2a3a4a";
+        ctx.beginPath();
+        ctx.arc(28, -17, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sparking energy fragments around the body
+        for (let i = 0; i < 4; i++) {
+          const px = Math.cos(t * 3 + i * 1.5) * (25 + i * 8);
+          const py = Math.sin(t * 2.5 + i * 2) * 15 - 10;
+          ctx.fillStyle = `rgba(0,255,200,${0.15 + Math.sin(t * 5 + i) * 0.1})`;
+          ctx.fillRect(px - 1, py - 1, 2, 2);
+        }
 
         ctx.restore();
 
@@ -5493,6 +5677,11 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
+      // In tutorial, block pickups until step 7 ("Grab Supplies")
+      if (this.mode === "tutorial" && this.tutorialStep < 7) {
+        if (e.type === "health" || e.type === "ammo") continue;
+      }
+
       if (e.type === "health") {
         if (this.player.health < this.player.maxHealth) {
           this.player.health = Math.min(
@@ -5951,13 +6140,15 @@ export class Game {
       ctx.restore();
     }
 
-    const barH = 160;
+    const hudFactor = this.settings.hudScale / 100;
+    const barH = Math.round(160 * hudFactor);
 
     // Stamina bar (above the HUD bar)
+    const staminaFactor = this.settings.staminaBarSize / 100;
     const staminaPct = this.player.stamina / this.player.maxStamina;
-    const staminaBarH = 22;
+    const staminaBarH = Math.round(22 * staminaFactor);
     const staminaBarY = h - barH - staminaBarH - 8;
-    const staminaBarW = 420;
+    const staminaBarW = Math.round(420 * staminaFactor);
     const staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
     const isActive = this.player.isSprinting || this.player.isDashing;
 
@@ -6152,85 +6343,100 @@ export class Game {
     );
 
     // Portrait
-    this.drawPortrait(ctx, portraitX, portraitY, portraitW, portraitH);
-    ctx.strokeStyle = "rgba(0,200,255,0.5)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(portraitX - 1, portraitY - 1, portraitW + 2, portraitH + 2);
-    const accentL = 12;
-    ctx.strokeStyle = "#00ddff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(portraitX - 1, portraitY + accentL);
-    ctx.lineTo(portraitX - 1, portraitY - 1);
-    ctx.lineTo(portraitX + accentL, portraitY - 1);
-    ctx.moveTo(portraitX + portraitW + 1 - accentL, portraitY - 1);
-    ctx.lineTo(portraitX + portraitW + 1, portraitY - 1);
-    ctx.lineTo(portraitX + portraitW + 1, portraitY + accentL);
-    ctx.stroke();
+    if (this.settings.showPortrait) {
+      this.drawPortrait(ctx, portraitX, portraitY, portraitW, portraitH);
+      ctx.strokeStyle = "rgba(0,200,255,0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        portraitX - 1,
+        portraitY - 1,
+        portraitW + 2,
+        portraitH + 2,
+      );
+      const accentL = 12;
+      ctx.strokeStyle = "#00ddff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(portraitX - 1, portraitY + accentL);
+      ctx.lineTo(portraitX - 1, portraitY - 1);
+      ctx.lineTo(portraitX + accentL, portraitY - 1);
+      ctx.moveTo(portraitX + portraitW + 1 - accentL, portraitY - 1);
+      ctx.lineTo(portraitX + portraitW + 1, portraitY - 1);
+      ctx.lineTo(portraitX + portraitW + 1, portraitY + accentL);
+      ctx.stroke();
+    }
 
     // Weapons
-    const wpnX = portraitX + portraitW + pad;
-    ctx.fillStyle = "rgba(0,200,255,0.6)";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("WEAPONS", wpnX + rsecW / 2, topY + 4);
-
-    const slotW = 42;
-    const slotH = 38;
-    const slotGap = 6;
-    const gridW = slotW * 2 + slotGap;
-    const gridH = slotH * 2 + slotGap;
-    const gridStartX = wpnX + rsecW / 2 - gridW / 2;
-    const gridStartY = topY + 16;
-    ctx.font = "bold 16px monospace";
-    for (let i = 0; i < this.player.weapons.length; i++) {
-      const active = i === this.player.currentWeapon;
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const sx = gridStartX + col * (slotW + slotGap);
-      const sy = gridStartY + row * (slotH + slotGap);
-      ctx.fillStyle = active ? "rgba(0,200,255,0.4)" : "rgba(255,255,255,0.06)";
-      ctx.fillRect(sx, sy, slotW, slotH);
-      ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.15)";
-      ctx.lineWidth = active ? 2 : 1;
-      ctx.strokeRect(sx, sy, slotW, slotH);
-      ctx.fillStyle = active ? "#ffffff" : "#666666";
-      ctx.textAlign = "center";
-      ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
-    }
-    // Current weapon name below grid
-    if (wep) {
-      ctx.fillStyle = wep.color;
+    if (this.settings.showWeapons) {
+      const wpnX = portraitX + portraitW + pad;
+      ctx.fillStyle = "rgba(0,200,255,0.6)";
       ctx.font = "bold 16px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(wep.name, wpnX + rsecW / 2, gridStartY + gridH + 14);
+      ctx.fillText("WEAPONS", wpnX + rsecW / 2, topY + 4);
+
+      const slotW = 42;
+      const slotH = 38;
+      const slotGap = 6;
+      const gridW = slotW * 2 + slotGap;
+      const gridH = slotH * 2 + slotGap;
+      const gridStartX = wpnX + rsecW / 2 - gridW / 2;
+      const gridStartY = topY + 16;
+      ctx.font = "bold 16px monospace";
+      for (let i = 0; i < this.player.weapons.length; i++) {
+        const active = i === this.player.currentWeapon;
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const sx = gridStartX + col * (slotW + slotGap);
+        const sy = gridStartY + row * (slotH + slotGap);
+        ctx.fillStyle = active
+          ? "rgba(0,200,255,0.4)"
+          : "rgba(255,255,255,0.06)";
+        ctx.fillRect(sx, sy, slotW, slotH);
+        ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.15)";
+        ctx.lineWidth = active ? 2 : 1;
+        ctx.strokeRect(sx, sy, slotW, slotH);
+        ctx.fillStyle = active ? "#ffffff" : "#666666";
+        ctx.textAlign = "center";
+        ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
+      }
+      // Current weapon name below grid
+      if (wep) {
+        ctx.fillStyle = wep.color;
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(wep.name, wpnX + rsecW / 2, gridStartY + gridH + 14);
+      }
     }
 
     // Kills
-    const killsX = wpnX + rsecW + pad;
-    ctx.fillStyle = "rgba(255,136,102,0.6)";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("KILLS", killsX + rsecW / 2, topY + 4);
-    ctx.fillStyle = "#ff8866";
-    ctx.font = this.scaledFont(42, "bold");
-    ctx.fillText(`${this.killedEnemies}`, killsX + rsecW / 2, midY + 12);
-    ctx.fillStyle = "rgba(255,136,102,0.6)";
-    ctx.font = "bold 18px monospace";
-    ctx.fillText(`/ ${this.totalEnemies}`, killsX + rsecW / 2, midY + 34);
+    if (this.settings.showKills) {
+      const killsX = portraitX + portraitW + rsecW + pad * 2;
+      ctx.fillStyle = "rgba(255,136,102,0.6)";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("KILLS", killsX + rsecW / 2, topY + 4);
+      ctx.fillStyle = "#ff8866";
+      ctx.font = this.scaledFont(42, "bold");
+      ctx.fillText(`${this.killedEnemies}`, killsX + rsecW / 2, midY + 12);
+      ctx.fillStyle = "rgba(255,136,102,0.6)";
+      ctx.font = "bold 18px monospace";
+      ctx.fillText(`/ ${this.totalEnemies}`, killsX + rsecW / 2, midY + 34);
+    }
 
     // Score
-    const scoreX = killsX + rsecW + pad;
-    ctx.fillStyle = "rgba(0,221,255,0.6)";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("SCORE", scoreX + rsecW / 2, topY + 4);
-    ctx.fillStyle = "#00ddff";
-    ctx.font = this.scaledFont(40, "bold");
-    ctx.fillText(`${this.player.score}`, scoreX + rsecW / 2, midY + 14);
+    if (this.settings.showScore) {
+      const scoreX = portraitX + portraitW + rsecW * 2 + pad * 3;
+      ctx.fillStyle = "rgba(0,221,255,0.6)";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("SCORE", scoreX + rsecW / 2, topY + 4);
+      ctx.fillStyle = "#00ddff";
+      ctx.font = this.scaledFont(40, "bold");
+      ctx.fillText(`${this.player.score}`, scoreX + rsecW / 2, midY + 14);
+    }
 
     // Location
-    const locX = scoreX + rsecW + pad;
+    const locX = portraitX + portraitW + rsecW * 3 + pad * 4;
     const locCx = Math.min(locX + rsecW / 2, w - 50);
 
     if (this.mode === "arena") {
@@ -6283,29 +6489,18 @@ export class Game {
     ctx.lineTo(portraitX - pad / 2, divBot);
     ctx.stroke();
     // Right of portrait
-    const div3X = portraitX + portraitW + pad / 2;
     ctx.beginPath();
-    ctx.moveTo(div3X, divTop);
-    ctx.lineTo(div3X, divBot);
+    ctx.moveTo(portraitX + portraitW + pad / 2, divTop);
+    ctx.lineTo(portraitX + portraitW + pad / 2, divBot);
     ctx.stroke();
-    // Between Weapons and Kills
-    const div4X = wpnX + rsecW + pad / 2;
-    ctx.beginPath();
-    ctx.moveTo(div4X, divTop);
-    ctx.lineTo(div4X, divBot);
-    ctx.stroke();
-    // Between Kills and Score
-    const div5X = killsX + rsecW + pad / 2;
-    ctx.beginPath();
-    ctx.moveTo(div5X, divTop);
-    ctx.lineTo(div5X, divBot);
-    ctx.stroke();
-    // Between Score and Location
-    const div6X = scoreX + rsecW + pad / 2;
-    ctx.beginPath();
-    ctx.moveTo(div6X, divTop);
-    ctx.lineTo(div6X, divBot);
-    ctx.stroke();
+    // Between right-side sections
+    for (let s = 1; s <= 3; s++) {
+      const dx = portraitX + portraitW + rsecW * s + pad * s + pad / 2;
+      ctx.beginPath();
+      ctx.moveTo(dx, divTop);
+      ctx.lineTo(dx, divBot);
+      ctx.stroke();
+    }
 
     // Arena Timer in the Top Left Corner
     if (this.mode === "arena") {
@@ -7435,7 +7630,7 @@ export class Game {
     ctx.fillStyle = "#00ffcc";
     ctx.font = "bold 30px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("SETTINGS", w / 2, h / 2 - 170);
+    ctx.fillText("SETTINGS", w / 2, 40);
 
     const crosshairNames = [
       "Red Dot",
@@ -7497,14 +7692,59 @@ export class Game {
         value: colorblindNames[this.settings.colorblind],
         color: this.settings.colorblind > 0 ? "#ffcc00" : "#888888",
       },
+      {
+        label: "HUD Scale",
+        value: `${this.settings.hudScale}%`,
+      },
+      {
+        label: "Stamina Bar Size",
+        value: `${this.settings.staminaBarSize}%`,
+      },
+      {
+        label: "Show Portrait",
+        value: this.settings.showPortrait ? "ON" : "OFF",
+        color: this.settings.showPortrait ? "#00ccff" : "#888888",
+      },
+      {
+        label: "Show Weapons",
+        value: this.settings.showWeapons ? "ON" : "OFF",
+        color: this.settings.showWeapons ? "#00ccff" : "#888888",
+      },
+      {
+        label: "Show Kills",
+        value: this.settings.showKills ? "ON" : "OFF",
+        color: this.settings.showKills ? "#00ccff" : "#888888",
+      },
+      {
+        label: "Show Score",
+        value: this.settings.showScore ? "ON" : "OFF",
+        color: this.settings.showScore ? "#00ccff" : "#888888",
+      },
     ];
 
     const barW = 200;
     const barH = 6;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind
-    let startY = h / 2 - 155;
+    const itemHeights = [
+      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
+    ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore
+
+    // Scroll the settings panel so the selected item stays visible
+    const totalH = itemHeights.reduce((a, b) => a + b, 0);
+    const visibleH = h - 120; // leave room for title + hint
+    const titleAreaY = 50;
+    let startY = titleAreaY + 40;
+    if (totalH > visibleH) {
+      // Calculate selected item center and scroll to keep it visible
+      let selTop = 0;
+      for (let i = 0; i < this.settingsSelection; i++) selTop += itemHeights[i];
+      const selCenter = selTop + itemHeights[this.settingsSelection] / 2;
+      const idealOffset = visibleH / 2 - selCenter;
+      const maxOffset = 0;
+      const minOffset = visibleH - totalH;
+      startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
+    }
 
     for (let i = 0; i < items.length; i++) {
       const selected = this.settingsSelection === i;
@@ -7595,6 +7835,26 @@ export class Game {
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
         ctx.fillStyle = "#cc88ff";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * fovPct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 11) {
+        // HUD Scale bar
+        const sliderY = y + 32;
+        const pct = (this.settings.hudScale - 75) / 50; // range 75-125
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = "#44ffaa";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 12) {
+        // Stamina Bar Size bar
+        const sliderY = y + 32;
+        const pct = (this.settings.staminaBarSize - 75) / 75; // range 75-150
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = "#00ccff";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       }

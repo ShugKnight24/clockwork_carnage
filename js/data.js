@@ -244,6 +244,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "hero_armed",
       flash: "#ffcc00",
       shake: 2,
+      scanner: true,
       lines: [
         {
           text: "The scanner maxes out. The display flickers:",
@@ -604,18 +605,19 @@ export const CUTSCENE_SCRIPTS = {
       art: "villain_form2",
       flash: "#ff0088",
       shake: 5,
+      scanner: true,
       lines: [
         {
-          text: '"My power level? As your human cartoons say..."',
+          text: '"You measured me once, little clock soldier..."',
           delay: 0,
           color: "#ff88aa",
           size: 15,
         },
         {
-          text: '"IT\'S OVER NINE THOUSAND."',
+          text: '"YOUR SCANNER LIED. I AM BEYOND MEASURE."',
           delay: 2000,
           color: "#ff0044",
-          size: 28,
+          size: 26,
         },
         {
           text: '"And this body? THIS ISN\'T EVEN MY FINAL FORM."',
