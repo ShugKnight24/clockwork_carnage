@@ -271,7 +271,7 @@ export class Renderer {
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
   }
 
-  renderScene(player, map, entities, time, fov = 70, viewMode = 0) {
+  renderScene(player, map, entities, time, fov = 70, viewMode = 0, skipFloorCeil = false) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -312,8 +312,23 @@ export class Renderer {
       camY = tryY;
     }
 
-    // Draw textured floor and ceiling
-    this._renderFloorCeiling(camX, camY, dirX, dirY, -dirY * planeMul, dirX * planeMul);
+    // Draw textured floor and ceiling (or gradient fallback for builder)
+    if (!skipFloorCeil) {
+      this._renderFloorCeiling(camX, camY, dirX, dirY, -dirY * planeMul, dirX * planeMul);
+    } else {
+      // Gradient fallback — works correctly with canvas transforms
+      const halfH = h >> 1;
+      const ceilGrad = ctx.createLinearGradient(0, 0, 0, halfH);
+      ceilGrad.addColorStop(0, "#0a0a1a");
+      ceilGrad.addColorStop(1, "#1a1a2e");
+      ctx.fillStyle = ceilGrad;
+      ctx.fillRect(0, 0, w, halfH);
+      const floorGrad = ctx.createLinearGradient(0, halfH, 0, h);
+      floorGrad.addColorStop(0, "#1a1a2e");
+      floorGrad.addColorStop(1, "#0d0d1a");
+      ctx.fillStyle = floorGrad;
+      ctx.fillRect(0, halfH, w, halfH);
+    }
 
     // Raycasting
     const planeX = -dirY * planeMul;
@@ -2851,7 +2866,19 @@ export class Renderer {
       const gW = bodyWidth * 0.7;
       const gTop = centerY - halfH * 0.2;
       const gBot = centerY + halfH * 0.3;
-      // Triangular body
+
+      // Afterimage/ghost trail
+      ctx.globalAlpha = alpha * 0.12;
+      ctx.fillStyle = "#00ff66";
+      ctx.beginPath();
+      ctx.moveTo(screenX + glitchOff * 2.5, gTop - halfH * 0.12);
+      ctx.lineTo(screenX - gW * 1.1 + glitchOff2 * 2, gBot + halfH * 0.02);
+      ctx.lineTo(screenX + gW * 1.1 + glitchOff2 * 2, gBot + halfH * 0.02);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Triangular body - outer
       ctx.fillStyle = darkColor;
       ctx.beginPath();
       ctx.moveTo(screenX + glitchOff, gTop - halfH * 0.1);
@@ -2859,6 +2886,7 @@ export class Renderer {
       ctx.lineTo(screenX + gW + glitchOff2, gBot);
       ctx.closePath();
       ctx.fill();
+
       // Inner triangle
       ctx.fillStyle = baseColor;
       ctx.beginPath();
@@ -2867,24 +2895,82 @@ export class Renderer {
       ctx.lineTo(screenX + gW * 0.65 + glitchOff2, gBot - halfH * 0.04);
       ctx.closePath();
       ctx.fill();
-      // Eye
-      ctx.fillStyle = "#00ff66";
+
+      // Data corruption pattern inside body
+      ctx.fillStyle = "#00ff44";
+      ctx.globalAlpha = alpha * 0.15;
+      const patternY = gTop + halfH * 0.08;
+      const patternH = (gBot - gTop) * 0.7;
+      for (let p = 0; p < 6; p++) {
+        const py = patternY + (p / 6) * patternH;
+        const pw = gW * 0.4 * (1 - p / 8);
+        if (Math.sin(time * 0.03 + p * 1.7) > 0) {
+          ctx.fillRect(screenX - pw + glitchOff * 0.5, py, pw * 2, 1.5);
+        }
+      }
+      ctx.globalAlpha = alpha;
+
+      // Eye - pulsing
+      const eyePulse = 0.7 + Math.sin(time * 0.012) * 0.3;
       const eyeSize2 = gW * 0.3;
+
+      // Eye glow
+      ctx.fillStyle = "#00ff66";
+      ctx.globalAlpha = alpha * 0.3 * eyePulse;
+      ctx.beginPath();
+      ctx.arc(screenX + glitchOff, centerY, eyeSize2 * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Eye core
+      ctx.fillStyle = "#00ff66";
       ctx.fillRect(
         screenX - eyeSize2 / 2 + glitchOff,
         centerY - eyeSize2 / 2,
         eyeSize2,
         eyeSize2,
       );
-      // Glitch static lines
+
+      // Eye pupil
+      ctx.fillStyle = "#003311";
+      const pupilS = eyeSize2 * 0.35;
+      ctx.fillRect(
+        screenX - pupilS / 2 + glitchOff,
+        centerY - pupilS / 2,
+        pupilS,
+        pupilS,
+      );
+
+      // Scan line across eye
+      ctx.fillStyle = "#00ff66";
+      ctx.globalAlpha = alpha * 0.6;
+      const scanY = centerY - eyeSize2 / 2 + ((time * 0.05) % eyeSize2);
+      ctx.fillRect(screenX - eyeSize2 / 2 + glitchOff, scanY, eyeSize2, 1);
+      ctx.globalAlpha = alpha;
+
+      // Glitch static lines (more varied)
       ctx.fillStyle = "#00ff44";
       ctx.globalAlpha = alpha * 0.5;
-      for (let g = 0; g < 4; g++) {
+      for (let g = 0; g < 5; g++) {
         const gy = gTop + Math.random() * (gBot - gTop);
         const gx = (Math.random() - 0.5) * bodyWidth * 0.4;
-        ctx.fillRect(screenX - gW + gx, gy, gW * 2, 1);
+        const gLen = gW * (0.5 + Math.random() * 1.5);
+        ctx.fillRect(screenX - gLen / 2 + gx, gy, gLen, 1);
       }
       ctx.globalAlpha = alpha;
+
+      // Floating data fragments around body
+      ctx.fillStyle = "#00ff66";
+      ctx.globalAlpha = alpha * 0.35;
+      for (let f = 0; f < 3; f++) {
+        const fAngle = time * 0.004 + f * (Math.PI * 2 / 3);
+        const fDist = gW * 1.1;
+        const fx = screenX + Math.cos(fAngle) * fDist;
+        const fy = centerY + Math.sin(fAngle) * halfH * 0.3;
+        ctx.fillRect(fx - 2, fy - 1, 4, 2);
+      }
+      ctx.globalAlpha = alpha;
+
       // No legs - it floats/glitches
     } else {
       // Fallback: generic rectangle
@@ -2935,17 +3021,61 @@ export class Renderer {
     if (fog <= 0) return;
     const size = Math.max(4, sprWidth * 0.3);
     const bob = Math.sin(time * 0.004) * size * 0.2;
+    const spin = time * 0.003;
     const y = centerY + sprHeight * 0.15 + bob;
 
-    // Glow
+    // Outer pulsing glow
+    const pulse = 0.3 + Math.sin(time * 0.006) * 0.15;
+    ctx.globalAlpha = fog * pulse;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(screenX, y, size * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner glow
     ctx.globalAlpha = fog * 0.4;
     ctx.fillStyle = color;
-    ctx.fillRect(screenX - size * 0.8, y - size * 0.8, size * 1.6, size * 1.6);
+    ctx.beginPath();
+    ctx.arc(screenX, y, size * 0.9, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Core
+    // Diamond-shaped core (rotates)
+    ctx.save();
+    ctx.translate(screenX, y);
+    ctx.rotate(spin);
     ctx.globalAlpha = fog;
     ctx.fillStyle = color;
-    ctx.fillRect(screenX - size / 2, y - size / 2, size, size);
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.55);
+    ctx.lineTo(size * 0.55, 0);
+    ctx.lineTo(0, size * 0.55);
+    ctx.lineTo(-size * 0.55, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Inner highlight
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.3);
+    ctx.lineTo(size * 0.3, 0);
+    ctx.lineTo(0, size * 0.3);
+    ctx.lineTo(-size * 0.3, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Sparkle particles
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 3; i++) {
+      const angle = spin * 2 + i * (Math.PI * 2 / 3);
+      const sparkR = size * 0.8;
+      const sx = Math.cos(angle) * sparkR;
+      const sy = Math.sin(angle) * sparkR;
+      ctx.globalAlpha = fog * (0.3 + Math.sin(time * 0.01 + i) * 0.3);
+      ctx.beginPath();
+      ctx.arc(screenX + sx, y + sy, Math.max(1, size * 0.08), 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.globalAlpha = 1;
   }
@@ -2964,30 +3094,62 @@ export class Renderer {
     const size = Math.max(6, sprWidth * 0.35);
     const bob = Math.sin(time * 0.004) * size * 0.2;
     const y = centerY + sprHeight * 0.15 + bob;
-    // Soft glow
+    const pulse = 0.8 + Math.sin(time * 0.006) * 0.2;
+
+    // Outer radial glow
+    ctx.globalAlpha = fog * 0.2 * pulse;
+    ctx.fillStyle = "#00ff44";
+    ctx.beginPath();
+    ctx.arc(screenX, y, size * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Soft glow ring
     ctx.globalAlpha = fog * 0.3;
     ctx.fillStyle = "#00ff44";
     ctx.beginPath();
     ctx.arc(screenX, y, size * 1.2, 0, Math.PI * 2);
     ctx.fill();
-    // Background
+
+    // White background with rounded look
     ctx.globalAlpha = fog;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(screenX - size * 0.6, y - size * 0.6, size * 1.2, size * 1.2);
+
+    // Highlight on box
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillRect(screenX - size * 0.6, y - size * 0.6, size * 0.4, size * 1.2);
+
     // Red cross
     const crossT = size * 0.22;
     ctx.fillStyle = "#ff2222";
     ctx.fillRect(screenX - crossT / 2, y - size * 0.45, crossT, size * 0.9);
     ctx.fillRect(screenX - size * 0.45, y - crossT / 2, size * 0.9, crossT);
-    // Border
+
+    // Cross highlight
+    ctx.fillStyle = "rgba(255,100,100,0.3)";
+    ctx.fillRect(screenX - crossT / 2, y - size * 0.45, crossT * 0.4, size * 0.9);
+
+    // Border with pulse
     ctx.strokeStyle = "#00cc44";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = fog * pulse;
     ctx.strokeRect(
       screenX - size * 0.6,
       y - size * 0.6,
       size * 1.2,
       size * 1.2,
     );
+
+    // Corner dots
+    ctx.fillStyle = "#00ff44";
+    ctx.globalAlpha = fog * 0.6;
+    const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+    corners.forEach(([cx, cy]) => {
+      ctx.beginPath();
+      ctx.arc(screenX + cx * size * 0.6, y + cy * size * 0.6, Math.max(1, size * 0.06), 0, Math.PI * 2);
+      ctx.fill();
+    });
+
     ctx.globalAlpha = 1;
   }
 

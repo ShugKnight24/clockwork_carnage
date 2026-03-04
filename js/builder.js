@@ -24,6 +24,8 @@ const TILE_COLORS = [
 ];
 
 const BUILDER_SAVE_KEY = "cc_builder_map";
+const BUILDER_INDEX_KEY = "cc_builder_maps_index";
+const BUILDER_CURRENT_KEY = "cc_builder_current_slot";
 const DEFAULT_MAP_SIZE = 32;
 const NUM_LAYERS = 5;
 const MAX_RAYCAST_DIST = 10;
@@ -74,6 +76,10 @@ export class BuilderMode {
     // Tool mode: 'block' (default) or 'spawn'
     this.toolMode = "block";
 
+    // Multi-map management
+    this.currentSlot = 0;
+    this.mapIndex = []; // [{id, name}]
+
     // Input accumulators (fed from host)
     this.keys = {};
     this.mouseDx = 0;
@@ -84,11 +90,33 @@ export class BuilderMode {
   // ─── Lifecycle ───────────────────────────────────────────
 
   start() {
-    const saved = this._loadMap();
-    if (saved) {
-      this.map = saved;
+    this._loadIndex();
+    // Migrate legacy single-slot save to multi-map
+    if (this.mapIndex.length === 0) {
+      const legacy = this._loadMapFromKey(BUILDER_SAVE_KEY);
+      if (legacy) {
+        this.mapIndex.push({ id: 0, name: legacy.name || "My Creation" });
+        this.currentSlot = 0;
+        this.map = legacy;
+        this._saveIndex();
+        this._saveCurrentMap();
+        try { localStorage.removeItem(BUILDER_SAVE_KEY); } catch (_) { /* ok */ }
+      } else {
+        this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+        this.mapIndex.push({ id: 0, name: this.map.name });
+        this.currentSlot = 0;
+        this._saveIndex();
+        this._saveCurrentMap();
+      }
     } else {
-      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+      const savedSlot = this._loadCurrentSlot();
+      this.currentSlot = savedSlot;
+      const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+      if (saved) {
+        this.map = saved;
+      } else {
+        this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+      }
     }
 
     this._ensureLayers();
@@ -157,6 +185,28 @@ export class BuilderMode {
     if (code === "KeyI" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       this.importMap();
+      return true;
+    }
+    // Ctrl+N / Cmd+N → new map
+    if (code === "KeyN" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.newMap();
+      return true;
+    }
+    // Ctrl+D / Cmd+D → delete current map (if more than one)
+    if (code === "KeyD" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.deleteCurrentMap();
+      return true;
+    }
+    // , → previous map
+    if (code === "Comma" && !e.ctrlKey && !e.metaKey) {
+      this.switchMap(-1);
+      return true;
+    }
+    // . → next map
+    if (code === "Period" && !e.ctrlKey && !e.metaKey) {
+      this.switchMap(1);
       return true;
     }
     // T → toggle tool mode (block / spawn)
@@ -347,9 +397,7 @@ export class BuilderMode {
     const action = this.history[this.historyIndex--];
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
-      const layer = this.map.layers
-        ? this.map.layers[action.layer]
-        : null;
+      const layer = this.map.layers ? this.map.layers[action.layer] : null;
       if (layer) {
         layer[action.y][action.x] = action.oldTile;
       } else {
@@ -375,9 +423,7 @@ export class BuilderMode {
     const action = this.history[++this.historyIndex];
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
-      const layer = this.map.layers
-        ? this.map.layers[action.layer]
-        : null;
+      const layer = this.map.layers ? this.map.layers[action.layer] : null;
       if (layer) {
         layer[action.y][action.x] = action.newTile;
       } else {
@@ -406,8 +452,7 @@ export class BuilderMode {
     const tryPlace = (px, py) => {
       if (
         !this._inBounds(px, py) ||
-        (Math.floor(this.player.x) === px &&
-          Math.floor(this.player.y) === py)
+        (Math.floor(this.player.x) === px && Math.floor(this.player.y) === py)
       )
         return;
       if (layer) {
@@ -637,6 +682,12 @@ export class BuilderMode {
           this.player.angle = this.map.playerStart.dir;
           this.history = [];
           this.historyIndex = -1;
+          // Save imported map as a new slot
+          const id = this._nextId();
+          this.mapIndex.push({ id, name: this.map.name });
+          this.currentSlot = id;
+          this._saveIndex();
+          this._saveCurrentMap();
           this.saveFlash = 2;
           this.audio.menuConfirm();
         } catch (_) {
@@ -694,6 +745,15 @@ export class BuilderMode {
   // ─── Save / Load ─────────────────────────────────────────
 
   saveMap() {
+    this._saveCurrentMap();
+    // Update name in index
+    const entry = this.mapIndex.find((e) => e.id === this.currentSlot);
+    if (entry) entry.name = this.map.name;
+    this._saveIndex();
+    this.saveFlash = 2;
+  }
+
+  _saveCurrentMap() {
     try {
       const data = {
         name: this.map.name,
@@ -708,23 +768,22 @@ export class BuilderMode {
         },
         enemySpawns: this.map.enemySpawns || [],
       };
-      localStorage.setItem(BUILDER_SAVE_KEY, JSON.stringify(data));
-      this.saveFlash = 2;
+      localStorage.setItem(this._slotKey(this.currentSlot), JSON.stringify(data));
+      localStorage.setItem(BUILDER_CURRENT_KEY, String(this.currentSlot));
     } catch (_) {
       /* localStorage full */
     }
   }
 
-  _loadMap() {
+  _loadMapFromKey(key) {
     try {
-      const raw = localStorage.getItem(BUILDER_SAVE_KEY);
+      const raw = localStorage.getItem(key);
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!Array.isArray(data.grid)) return null;
       if (!Number.isInteger(data.width) || !Number.isInteger(data.height))
         return null;
       if (data.width <= 0 || data.height <= 0) return null;
-      // Validate grid dimensions and contents
       if (data.grid.length !== data.height) return null;
       for (let y = 0; y < data.height; y++) {
         const row = data.grid[y];
@@ -745,15 +804,129 @@ export class BuilderMode {
           y: data.height / 2 + 0.5,
           dir: 0,
         },
-        enemySpawns: Array.isArray(data.enemySpawns)
-          ? data.enemySpawns
-          : [],
+        enemySpawns: Array.isArray(data.enemySpawns) ? data.enemySpawns : [],
         entities: [],
         exit: null,
       };
     } catch (_) {
       return null;
     }
+  }
+
+  _slotKey(id) {
+    return `${BUILDER_SAVE_KEY}_${id}`;
+  }
+
+  _loadIndex() {
+    try {
+      const raw = localStorage.getItem(BUILDER_INDEX_KEY);
+      this.mapIndex = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(this.mapIndex)) this.mapIndex = [];
+    } catch (_) {
+      this.mapIndex = [];
+    }
+  }
+
+  _saveIndex() {
+    try {
+      localStorage.setItem(BUILDER_INDEX_KEY, JSON.stringify(this.mapIndex));
+    } catch (_) {
+      /* localStorage full */
+    }
+  }
+
+  _loadCurrentSlot() {
+    try {
+      const raw = localStorage.getItem(BUILDER_CURRENT_KEY);
+      if (raw !== null) {
+        const id = parseInt(raw, 10);
+        if (this.mapIndex.some((e) => e.id === id)) return id;
+      }
+    } catch (_) { /* ok */ }
+    return this.mapIndex.length > 0 ? this.mapIndex[0].id : 0;
+  }
+
+  _nextId() {
+    let maxId = -1;
+    for (const entry of this.mapIndex) {
+      if (entry.id > maxId) maxId = entry.id;
+    }
+    return maxId + 1;
+  }
+
+  newMap() {
+    // Save the current map first
+    this._saveCurrentMap();
+    const id = this._nextId();
+    this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    this.map.name = `Map ${id + 1}`;
+    this.mapIndex.push({ id, name: this.map.name });
+    this.currentSlot = id;
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+    this.pitch = 0;
+    this.height = 0;
+    this.layer = 0;
+    this._saveIndex();
+    this._saveCurrentMap();
+    this.saveFlash = 2;
+    this.audio.menuConfirm();
+  }
+
+  switchMap(dir) {
+    if (this.mapIndex.length < 2) return;
+    this._saveCurrentMap();
+    const curIdx = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
+    const nextIdx = (curIdx + dir + this.mapIndex.length) % this.mapIndex.length;
+    this.currentSlot = this.mapIndex[nextIdx].id;
+    const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+    if (saved) {
+      this.map = saved;
+    } else {
+      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    }
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+    this.pitch = 0;
+    this.height = 0;
+    this.layer = 0;
+    this.saveFlash = 2;
+    this.audio.menuSelect();
+  }
+
+  deleteCurrentMap() {
+    if (this.mapIndex.length <= 1) return; // Can't delete last map
+    try {
+      localStorage.removeItem(this._slotKey(this.currentSlot));
+    } catch (_) { /* ok */ }
+    this.mapIndex = this.mapIndex.filter((e) => e.id !== this.currentSlot);
+    this._saveIndex();
+    this.currentSlot = this.mapIndex[0].id;
+    const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+    if (saved) {
+      this.map = saved;
+    } else {
+      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    }
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+    this.saveFlash = 2;
+    this.audio.menuConfirm();
   }
 
   // ─── Rendering ───────────────────────────────────────────
@@ -775,6 +948,7 @@ export class BuilderMode {
       time,
       this.settings.fov,
       0,
+      true,
     );
     ctx.restore();
     // Fill exposed areas above/below with floor/ceiling colors
@@ -863,10 +1037,8 @@ export class BuilderMode {
     ctx.textAlign = "left";
 
     // Tool mode indicator
-    const modeLabel =
-      this.toolMode === "spawn" ? "SPAWN" : "BLOCK";
-    const modeColor =
-      this.toolMode === "spawn" ? "#ff6644" : "#00ffcc";
+    const modeLabel = this.toolMode === "spawn" ? "SPAWN" : "BLOCK";
+    const modeColor = this.toolMode === "spawn" ? "#ff6644" : "#00ffcc";
     ctx.fillStyle = modeColor;
     ctx.font = "bold 13px monospace";
     ctx.textAlign = "center";
@@ -889,12 +1061,15 @@ export class BuilderMode {
         "Q/E \u2014 Layer Down/Up",
         "T \u2014 Tool (Block/Spawn)",
         "[ / ] \u2014 FOV -/+",
+        ", / . \u2014 Prev/Next Map",
         "Space \u2014 Rise",
         "Ctrl \u2014 Lower",
         "R \u2014 Reset Pitch",
         "N \u2014 Noclip",
         "Tab \u2014 Overhead",
         "Ctrl+S \u2014 Save",
+        "Ctrl+N \u2014 New Map",
+        "Ctrl+D \u2014 Delete Map",
         "Ctrl+Z \u2014 Undo",
         "Ctrl+Shift+Z \u2014 Redo",
         "Ctrl+E \u2014 Export JSON",
@@ -940,11 +1115,7 @@ export class BuilderMode {
     if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
       ctx.fillStyle = "rgba(255,100,68,0.7)";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(
-        `SPAWNS: ${this.map.enemySpawns.length}`,
-        w - 14,
-        h - 138,
-      );
+      ctx.fillText(`SPAWNS: ${this.map.enemySpawns.length}`, w - 14, h - 138);
     }
     ctx.textAlign = "left";
 
@@ -966,6 +1137,15 @@ export class BuilderMode {
       ctx.fillText("MAP SAVED", w / 2, 36);
       ctx.textAlign = "left";
     }
+
+    // Map name & slot indicator (top center)
+    const mapIdx = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
+    const mapLabel = `${this.map.name} [${mapIdx + 1}/${this.mapIndex.length}]`;
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(mapLabel, w / 2, 56);
+    ctx.textAlign = "left";
 
     // Minimap (top right)
     this._renderMinimap(ctx, w);
@@ -999,7 +1179,13 @@ export class BuilderMode {
       for (const s of this.map.enemySpawns) {
         ctx.fillStyle = "rgba(255,100,68,0.8)";
         ctx.beginPath();
-        ctx.arc(mx + s.x * cs + cs / 2, my + s.y * cs + cs / 2, cs * 0.35, 0, Math.PI * 2);
+        ctx.arc(
+          mx + s.x * cs + cs / 2,
+          my + s.y * cs + cs / 2,
+          cs * 0.35,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
       }
     }
@@ -1163,9 +1349,7 @@ export class BuilderMode {
           Math.floor(this.player.y) === placeY
         )
       ) {
-        const layer = this.map.layers
-          ? this.map.layers[this.layer]
-          : null;
+        const layer = this.map.layers ? this.map.layers[this.layer] : null;
         canPlace = layer
           ? layer[placeY][placeX] === 0
           : this.map.grid[placeY][placeX] === 0;
@@ -1173,25 +1357,14 @@ export class BuilderMode {
     } else {
       // No target = placing 3 units ahead
       const d = 3;
-      const tx = Math.floor(
-        this.player.x + Math.cos(this.player.angle) * d,
-      );
-      const ty = Math.floor(
-        this.player.y + Math.sin(this.player.angle) * d,
-      );
+      const tx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      const ty = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
       if (
         this._inBounds(tx, ty) &&
-        !(
-          Math.floor(this.player.x) === tx &&
-          Math.floor(this.player.y) === ty
-        )
+        !(Math.floor(this.player.x) === tx && Math.floor(this.player.y) === ty)
       ) {
-        const layer = this.map.layers
-          ? this.map.layers[this.layer]
-          : null;
-        canPlace = layer
-          ? layer[ty][tx] === 0
-          : this.map.grid[ty][tx] === 0;
+        const layer = this.map.layers ? this.map.layers[this.layer] : null;
+        canPlace = layer ? layer[ty][tx] === 0 : this.map.grid[ty][tx] === 0;
       }
     }
     if (canPlace) {
