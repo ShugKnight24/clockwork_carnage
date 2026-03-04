@@ -430,10 +430,19 @@ export class BuilderMode {
       const raw = localStorage.getItem(BUILDER_SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
-      if (!data.grid || !data.width || !data.height) return null;
-      // Validate grid dimensions
+      if (!Array.isArray(data.grid)) return null;
+      if (!Number.isInteger(data.width) || !Number.isInteger(data.height)) return null;
+      if (data.width <= 0 || data.height <= 0) return null;
+      // Validate grid dimensions and contents
       if (data.grid.length !== data.height) return null;
-      if (data.grid[0] && data.grid[0].length !== data.width) return null;
+      for (let y = 0; y < data.height; y++) {
+        const row = data.grid[y];
+        if (!Array.isArray(row) || row.length !== data.width) return null;
+        for (let x = 0; x < data.width; x++) {
+          const cell = row[x];
+          if (typeof cell !== "number" || !Number.isFinite(cell)) return null;
+        }
+      }
       return {
         name: data.name || "My Creation",
         width: data.width,
@@ -854,8 +863,8 @@ export class BuilderMode {
   _ensureLayers() {
     if (this.map.layers) {
       // Validate dimensions for all layers and rows
-      let valid = Array.isArray(this.map.layers) &&
-        this.map.layers.length === NUM_LAYERS;
+      let valid =
+        Array.isArray(this.map.layers) && this.map.layers.length === NUM_LAYERS;
       if (valid) {
         for (let l = 0; l < NUM_LAYERS && valid; l++) {
           const layer = this.map.layers[l];
@@ -864,7 +873,10 @@ export class BuilderMode {
             break;
           }
           for (let y = 0; y < this.map.height; y++) {
-            if (!Array.isArray(layer[y]) || layer[y].length !== this.map.width) {
+            if (
+              !Array.isArray(layer[y]) ||
+              layer[y].length !== this.map.width
+            ) {
               valid = false;
               break;
             }

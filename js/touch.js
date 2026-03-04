@@ -9,6 +9,8 @@
  * Only activates on touch-capable devices.
  */
 
+import { UPGRADES } from "./data.js";
+
 export class TouchControls {
   static init(game) {
     // Only activate on touch devices
@@ -52,7 +54,9 @@ export class TouchControls {
 
     // Mobile tutorial overlay state
     let tutorialDone = false;
-    try { tutorialDone = !!localStorage.getItem("cc_touch_tutorial_done"); } catch (_) {}
+    try {
+      tutorialDone = !!localStorage.getItem("cc_touch_tutorial_done");
+    } catch (_) {}
     this.showTutorial = !tutorialDone;
     this.tutorialDismissed = false;
   }
@@ -96,7 +100,6 @@ export class TouchControls {
 
     // Hide cursor on mobile
     document.body.style.cursor = "none";
-
   }
 
   resize() {
@@ -160,7 +163,9 @@ export class TouchControls {
     // Dismiss mobile tutorial on any touch
     if (this.showTutorial && !this.tutorialDismissed && g.state === "playing") {
       this.tutorialDismissed = true;
-      try { localStorage.setItem("cc_touch_tutorial_done", "1"); } catch (_) {}
+      try {
+        localStorage.setItem("cc_touch_tutorial_done", "1");
+      } catch (_) {}
       return;
     }
 
@@ -175,8 +180,13 @@ export class TouchControls {
     }
 
     // Campaign prompt / tutorial complete / game over / victory / level complete: tap to advance
-    if (g.state === "campaignPrompt" || g.state === "tutorialComplete" ||
-        g.state === "gameOver" || g.state === "victory" || g.state === "levelComplete") {
+    if (
+      g.state === "campaignPrompt" ||
+      g.state === "tutorialComplete" ||
+      g.state === "gameOver" ||
+      g.state === "victory" ||
+      g.state === "levelComplete"
+    ) {
       if (e.changedTouches.length > 0) {
         g.handleKeyPress("Enter");
       }
@@ -199,6 +209,22 @@ export class TouchControls {
       return;
     }
 
+    // Upgrade screen: tap to navigate and select upgrades
+    if (g.state === "upgrade") {
+      if (e.changedTouches.length > 0) {
+        this.handleUpgradeTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
+    // Controls rebinding screen: tap to navigate and select
+    if (g.state === "controls") {
+      if (e.changedTouches.length > 0) {
+        this.handleControlsTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
     for (const touch of e.changedTouches) {
       const x = touch.clientX;
       const y = touch.clientY;
@@ -212,7 +238,7 @@ export class TouchControls {
       } else if (zone === "look" && this.lookTouch === null) {
         this.lookTouch = touch.identifier;
         this.lookLast = { x, y };
-      } else if (zone === "fire") {
+      } else if (zone === "fire" && this.fireTouch === null) {
         this.fireTouch = touch.identifier;
         g.player.isFiring = true;
         this.activeButtons.add("fire");
@@ -326,9 +352,12 @@ export class TouchControls {
       for (let i = 0; i < labels.length; i++) {
         const bx = startX + i * (btnW + gap);
         if (x >= bx && x <= bx + btnW) {
-          if (i === 0) this.game.handleKeyPress("Escape"); // Resume
-          else if (i === 1) this.game.handleKeyPress("KeyS"); // Settings
-          else if (i === 2) this.game.handleKeyPress("KeyC"); // Controls
+          if (i === 0)
+            this.game.handleKeyPress("Escape"); // Resume
+          else if (i === 1)
+            this.game.handleKeyPress("KeyS"); // Settings
+          else if (i === 2)
+            this.game.handleKeyPress("KeyC"); // Controls
           else if (i === 3) this.game.handleKeyPress("KeyQ"); // Quit
           return;
         }
@@ -339,17 +368,25 @@ export class TouchControls {
       const saveY = btnY + btnH + 10;
       const saveBtnW = 100;
       const saveX = (w - saveBtnW) / 2;
-      if (y >= saveY && y <= saveY + 40 && x >= saveX && x <= saveX + saveBtnW) {
+      if (
+        y >= saveY &&
+        y <= saveY + 40 &&
+        x >= saveX &&
+        x <= saveX + saveBtnW
+      ) {
         this.game.handleKeyPress("KeyF");
       }
     }
   }
 
   handleSettingsTap(touch) {
-    const w = this.zones.w;
-    const h = this.zones.h;
-    const x = touch.clientX;
-    const y = touch.clientY;
+    const hud = this.game.hudCanvas;
+    const scaleX = hud.width / window.innerWidth;
+    const scaleY = hud.height / window.innerHeight;
+    const w = hud.width;
+    const h = hud.height;
+    const x = touch.clientX * scaleX;
+    const y = touch.clientY * scaleY;
     const panelX = w / 2 - 220;
     const panelW = 440;
     const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44];
@@ -364,7 +401,12 @@ export class TouchControls {
 
     // Find which setting was tapped
     for (let i = 0; i < itemHeights.length; i++) {
-      if (y >= startY && y <= startY + itemHeights[i] && x >= panelX && x <= panelX + panelW) {
+      if (
+        y >= startY &&
+        y <= startY + itemHeights[i] &&
+        x >= panelX &&
+        x <= panelX + panelW
+      ) {
         this.game.settingsSelection = i;
         // Left half = decrease, right half = increase
         if (x < w / 2) {
@@ -376,6 +418,84 @@ export class TouchControls {
       }
       startY += itemHeights[i];
     }
+  }
+
+  handleUpgradeTap(touch) {
+    const hud = this.game.hudCanvas;
+    const scaleX = hud.width / window.innerWidth;
+    const scaleY = hud.height / window.innerHeight;
+    const w = hud.width;
+    const x = touch.clientX * scaleX;
+    const y = touch.clientY * scaleY;
+
+    const g = this.game;
+    const upgradeKeys = Object.keys(UPGRADES);
+    const cols = 2;
+    const startY = 140;
+    const lineH = 50;
+    const colW = 340;
+    const leftX = w / 2 - colW - 15;
+    const totalRows = Math.ceil(upgradeKeys.length / cols);
+    const contY = startY + totalRows * lineH + 25;
+
+    // Check continue button area
+    if (y >= contY - 15 && y <= contY + 15) {
+      g.upgradeSelection = upgradeKeys.length;
+      g.handleKeyPress("Enter");
+      return;
+    }
+
+    // Check upgrade grid
+    for (let i = 0; i < upgradeKeys.length; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const baseX = col === 0 ? leftX : w / 2 + 15;
+      const uy = startY + row * lineH;
+      if (x >= baseX - 5 && x <= baseX + colW - 5 && y >= uy - 16 && y <= uy + lineH - 18) {
+        g.upgradeSelection = i;
+        g.handleKeyPress("Enter");
+        return;
+      }
+    }
+  }
+
+  handleControlsTap(touch) {
+    const hud = this.game.hudCanvas;
+    const scaleX = hud.width / window.innerWidth;
+    const scaleY = hud.height / window.innerHeight;
+    const w = hud.width;
+    const x = touch.clientX * scaleX;
+    const y = touch.clientY * scaleY;
+
+    const g = this.game;
+    if (g.rebindingKey) return; // rebinding handled by keyboard
+
+    const bindKeys = Object.keys(g.keybinds);
+    const panelX = w / 2 - 240;
+    const panelW = 480;
+    const itemH = 36;
+    const startY = 100;
+
+    // Check each binding row
+    for (let i = 0; i < bindKeys.length; i++) {
+      const ry = startY + i * itemH;
+      if (x >= panelX && x <= panelX + panelW && y >= ry - 2 && y <= ry + itemH - 6) {
+        g.controlsSelection = i;
+        g.handleKeyPress("Enter");
+        return;
+      }
+    }
+
+    // Check "Reset Defaults" button
+    const resetY = startY + bindKeys.length * itemH + 10;
+    if (x >= panelX && x <= panelX + panelW && y >= resetY - 2 && y <= resetY + itemH - 6) {
+      g.controlsSelection = bindKeys.length;
+      g.handleKeyPress("Enter");
+      return;
+    }
+
+    // Tap outside = back
+    g.handleKeyPress("Escape");
   }
 
   render() {
@@ -603,7 +723,11 @@ export class TouchControls {
     // Hint text
     ctx.fillStyle = "#8899aa";
     ctx.font = "12px monospace";
-    ctx.fillText("Tap setting to change  ·  Left = decrease  ·  Right = increase", w / 2, by - 12);
+    ctx.fillText(
+      "Tap setting to change  ·  Left = decrease  ·  Right = increase",
+      w / 2,
+      by - 12,
+    );
     ctx.globalAlpha = 1;
   }
 

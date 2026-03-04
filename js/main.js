@@ -246,9 +246,15 @@ requestAnimationFrame(gameLoop);
 
 // Expose test runner on window for console access (dynamic import so
 // production works even when js/testing/ is not deployed)
+// TODO: this file is currently not tracked by the git repo... will decide on best approach to testing and test code organization after MVP
+// currently for internal use only, but may want to expose some testing utilities in production build for easier debugging
 import("./testing/harness.js")
-  .then((mod) => { window.ccTest = mod.createTestRunner(game); })
-  .catch(() => { /* harness not available — skip */ });
+  .then((mod) => {
+    window.ccTest = mod.createTestRunner(game);
+  })
+  .catch(() => {
+    /* harness not available — skip */
+  });
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);
