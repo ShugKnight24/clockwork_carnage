@@ -347,6 +347,9 @@ export class Game {
     if (this.state === GameState.BUILDER) {
       // Only Escape is handled by the host (for pause)
       if (code === "Escape") {
+        const now = performance.now();
+        if (now - this.lastEscTime < 200) return;
+        this.lastEscTime = now;
         this.pausedFromState = GameState.BUILDER;
         this.state = GameState.PAUSED;
         this.unlockPointer();
@@ -473,10 +476,6 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
-        if (this.mode === "playtest") {
-          this.exitBuilderPlayTest();
-          return;
-        }
         this.pausedFromState = GameState.PLAYING;
         this.state = GameState.PAUSED;
         this.unlockPointer();
@@ -494,6 +493,14 @@ export class Game {
         this.lockPointer();
       }
       if (code === "KeyQ") {
+        if (this.mode === "playtest") {
+          this.exitBuilderPlayTest();
+          return;
+        }
+        if (this.builder && this.pausedFromState === GameState.BUILDER) {
+          this.builder.saveMap();
+          this.builder.stop();
+        }
         this.state = GameState.TITLE;
         this.audio.stopMusic();
       }
@@ -3557,15 +3564,26 @@ export class Game {
     // Muzzle flash
     if (this.weaponAnimFrame === 1) {
       ctx.fillStyle = wep.color;
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.arc(0, -40, 20, 0, Math.PI * 2);
+      ctx.arc(0, -40, 24, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.globalAlpha = 0.9;
       ctx.beginPath();
       ctx.arc(0, -40, 8, 0, Math.PI * 2);
       ctx.fill();
+      // Flash spikes
+      ctx.strokeStyle = wep.color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + this.time * 0.02;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 10, -40 + Math.sin(a) * 10);
+        ctx.lineTo(Math.cos(a) * 22, -40 + Math.sin(a) * 22);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -3576,18 +3594,41 @@ export class Game {
       ctx.fillRect(-6, -35, 12, 15);
       ctx.fillStyle = "#556677";
       ctx.fillRect(-4, -32, 8, 10);
+      // Barrel bore
+      ctx.fillStyle = "#222233";
+      ctx.beginPath();
+      ctx.arc(0, -35, 3, 0, Math.PI * 2);
+      ctx.fill();
       // Barrel tip glow
       ctx.fillStyle = wep.color;
       ctx.fillRect(-3, -35, 6, 3);
+      // Barrel highlight
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(-5, -34, 2, 12);
       // Main body/slide
       ctx.fillStyle = "#334455";
       ctx.fillRect(-9, -20, 18, 35);
       ctx.fillStyle = "#3d4f60";
       ctx.fillRect(-7, -18, 14, 30);
+      // Slide serrations
+      ctx.fillStyle = "#2a3a4a";
+      for (let i = 0; i < 5; i++) {
+        ctx.fillRect(-8, -18 + i * 3, 16, 1);
+      }
+      // Ejection port
+      ctx.fillStyle = "#222233";
+      ctx.fillRect(5, -16, 3, 6);
       // Chrono energy line
       ctx.fillStyle = wep.color;
       ctx.globalAlpha = 0.6 + Math.sin(this.time * 0.008) * 0.3;
       ctx.fillRect(-2, -18, 4, 25);
+      // Energy dots along line
+      for (let i = 0; i < 4; i++) {
+        const dotY = -16 + i * 6 + Math.sin(this.time * 0.01 + i) * 2;
+        ctx.beginPath();
+        ctx.arc(0, dotY, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
       // Trigger guard
       ctx.strokeStyle = "#445566";
@@ -3595,6 +3636,9 @@ export class Game {
       ctx.beginPath();
       ctx.arc(0, 12, 6, 0, Math.PI);
       ctx.stroke();
+      // Trigger
+      ctx.fillStyle = "#334455";
+      ctx.fillRect(-1, 8, 2, 6);
       // Grip
       ctx.fillStyle = "#223344";
       ctx.fillRect(-7, 15, 16, 25);
@@ -3605,6 +3649,24 @@ export class Game {
       for (let i = 0; i < 4; i++) {
         ctx.fillRect(-5, 19 + i * 5, 12, 1);
       }
+      // Grip bottom cap
+      ctx.fillStyle = "#445566";
+      ctx.fillRect(-6, 38, 14, 3);
+      // Rear sight
+      ctx.fillStyle = "#2a3a4a";
+      ctx.fillRect(-5, -20, 3, 3);
+      ctx.fillRect(2, -20, 3, 3);
+      // Front sight
+      ctx.fillStyle = wep.color;
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(-1, -36, 2, 2);
+      ctx.globalAlpha = 1;
+      // Screws/rivets
+      ctx.fillStyle = "#667788";
+      ctx.beginPath(); ctx.arc(-6, -5, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, -5, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-6, 8, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, 8, 1, 0, Math.PI * 2); ctx.fill();
     } else if (wep.id === 1) {
       // Temporal Shotgun
       // Barrels
@@ -3614,56 +3676,132 @@ export class Game {
       ctx.fillStyle = "#444444";
       ctx.fillRect(-8, -46, 4, 8);
       ctx.fillRect(4, -46, 4, 8);
+      // Barrel bores
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath(); ctx.arc(-6, -48, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, -48, 2.5, 0, Math.PI * 2); ctx.fill();
       // Barrel tips glow
       ctx.fillStyle = wep.color;
       ctx.fillRect(-8, -48, 3, 2);
       ctx.fillRect(5, -48, 3, 2);
+      // Barrel clamp
+      ctx.fillStyle = "#555555";
+      ctx.fillRect(-10, -40, 20, 2);
+      // Metal highlight on barrels
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillRect(-9, -47, 1.5, 10);
+      ctx.fillRect(3, -47, 1.5, 10);
       // Main body/receiver
       ctx.fillStyle = "#554433";
       ctx.fillRect(-14, -36, 28, 50);
       ctx.fillStyle = "#665544";
       ctx.fillRect(-11, -33, 22, 44);
+      // Receiver detail — loading port
+      ctx.fillStyle = "#443322";
+      ctx.fillRect(-5, -34, 10, 6);
+      // Shell-shaped detail
+      ctx.fillStyle = "#887766";
+      ctx.beginPath(); ctx.arc(0, -31, 3, 0, Math.PI * 2); ctx.fill();
       // Pump grip
       ctx.fillStyle = "#776655";
       ctx.fillRect(-12, -10, 24, 12);
       ctx.fillStyle = "#887766";
       ctx.fillRect(-10, -8, 20, 8);
+      // Pump grip ridges
+      ctx.fillStyle = "#665544";
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(-11, -9 + i * 3, 22, 1);
+      }
       // Shell ejection port
       ctx.fillStyle = "#222222";
       ctx.fillRect(8, -30, 5, 8);
+      // Visible shell brass
+      ctx.fillStyle = "#ccaa44";
+      ctx.fillRect(9, -28, 3, 4);
       // Stock
       ctx.fillStyle = "#443322";
       ctx.fillRect(-11, 14, 24, 30);
       ctx.fillStyle = "#554433";
       ctx.fillRect(-9, 16, 20, 26);
+      // Stock checkering
+      ctx.fillStyle = "#3a2a1a";
+      for (let i = 0; i < 5; i++) {
+        ctx.fillRect(-8, 18 + i * 5, 18, 1);
+      }
+      // Stock butt plate
+      ctx.fillStyle = "#332211";
+      ctx.fillRect(-10, 42, 22, 3);
       // Temporal coils
       ctx.fillStyle = wep.color;
       ctx.globalAlpha = 0.4 + Math.sin(this.time * 0.006) * 0.2;
       ctx.fillRect(-12, -25, 2, 20);
       ctx.fillRect(10, -25, 2, 20);
+      // Coil energy dots
+      for (let i = 0; i < 3; i++) {
+        const dotY = -23 + i * 7 + Math.sin(this.time * 0.008 + i * 1.5) * 2;
+        ctx.beginPath(); ctx.arc(-11, dotY, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(11, dotY, 1.2, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.globalAlpha = 1;
+      // Screws
+      ctx.fillStyle = "#998877";
+      ctx.beginPath(); ctx.arc(-10, -15, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(10, -15, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-10, 5, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(10, 5, 1.2, 0, Math.PI * 2); ctx.fill();
     } else if (wep.id === 2) {
       // Plasma Rifle
-      // Barrel
+      // Barrel shroud
       ctx.fillStyle = "#2a2a44";
       ctx.fillRect(-5, -58, 10, 30);
       ctx.fillStyle = "#3a3a55";
       ctx.fillRect(-3, -55, 6, 25);
+      // Barrel bore
+      ctx.fillStyle = "#1a1a33";
+      ctx.beginPath(); ctx.arc(0, -58, 3, 0, Math.PI * 2); ctx.fill();
       // Barrel tip
       ctx.fillStyle = wep.color;
       ctx.fillRect(-4, -60, 8, 3);
+      // Cooling vents on barrel
+      ctx.fillStyle = "#222244";
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(-4, -52 + i * 7, 2, 4);
+        ctx.fillRect(2, -52 + i * 7, 2, 4);
+      }
+      // Barrel highlight
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fillRect(-4, -57, 1.5, 28);
       // Body/receiver
       ctx.fillStyle = "#2a2a44";
       ctx.fillRect(-10, -28, 20, 48);
       ctx.fillStyle = "#3a3a55";
       ctx.fillRect(-8, -25, 16, 42);
-      // Energy rings
+      // Panel lines
+      ctx.strokeStyle = "#222244";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-8, -10); ctx.lineTo(8, -10);
+      ctx.moveTo(-8, 5); ctx.lineTo(8, 5);
+      ctx.stroke();
+      // Side panels
+      ctx.fillStyle = "#252545";
+      ctx.fillRect(-9, -22, 3, 15);
+      ctx.fillRect(6, -22, 3, 15);
+      // Energy rings (animated)
       ctx.fillStyle = wep.color;
       for (let i = 0; i < 5; i++) {
         const ringA = 0.3 + Math.sin(this.time * 0.01 + i * 1.2) * 0.3;
         ctx.globalAlpha = ringA;
         ctx.fillRect(-6, -50 + i * 8, 12, 2);
+        // Small side indicator dots
+        ctx.beginPath(); ctx.arc(-7, -49 + i * 8, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(7, -49 + i * 8, 1, 0, Math.PI * 2); ctx.fill();
       }
+      ctx.globalAlpha = 1;
+      // Plasma core chamber (visible through body)
+      ctx.fillStyle = wep.color;
+      ctx.globalAlpha = 0.15 + Math.sin(this.time * 0.008) * 0.1;
+      ctx.fillRect(-5, -20, 10, 12);
       ctx.globalAlpha = 1;
       // Scope
       ctx.fillStyle = "#222244";
@@ -3678,31 +3816,84 @@ export class Game {
       ctx.arc(0, -59, 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+      // Scope cross-hair
+      ctx.strokeStyle = wep.color;
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(-2, -59); ctx.lineTo(2, -59);
+      ctx.moveTo(0, -61); ctx.lineTo(0, -57);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      // Magazine/power cell
+      ctx.fillStyle = "#1a1a33";
+      ctx.fillRect(-4, 8, 10, 14);
+      ctx.fillStyle = wep.color;
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(-2, 10, 6, 10);
+      ctx.globalAlpha = 1;
       // Stock
       ctx.fillStyle = "#1a1a33";
       ctx.fillRect(-7, 20, 16, 25);
       ctx.fillStyle = "#252545";
       ctx.fillRect(-5, 22, 12, 20);
+      // Stock padding
+      ctx.fillStyle = "#1a1a33";
+      ctx.fillRect(-6, 43, 14, 3);
+      // Rivets
+      ctx.fillStyle = "#5555aa";
+      ctx.beginPath(); ctx.arc(-8, -8, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -8, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-8, 10, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, 10, 1, 0, Math.PI * 2); ctx.fill();
     } else if (wep.id === 3) {
       // Quantum Cannon
-      // Barrel
+      // Barrel housing
       ctx.fillStyle = "#331111";
       ctx.fillRect(-12, -55, 24, 20);
       ctx.fillStyle = "#441122";
       ctx.fillRect(-10, -52, 20, 15);
+      // Barrel bore
+      ctx.fillStyle = "#110008";
+      ctx.beginPath(); ctx.arc(0, -55, 5, 0, Math.PI * 2); ctx.fill();
+      // Barrel rim glow
+      ctx.strokeStyle = wep.color;
+      ctx.lineWidth = 1.5;
+      const pulse = 0.4 + Math.sin(this.time * 0.01) * 0.4;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath(); ctx.arc(0, -55, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
       // Barrel glow core
       ctx.fillStyle = wep.color;
-      const pulse = 0.4 + Math.sin(this.time * 0.01) * 0.4;
       ctx.globalAlpha = pulse;
       ctx.beginPath();
       ctx.arc(0, -48, 6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = pulse * 0.3;
+      ctx.beginPath();
+      ctx.arc(0, -48, 9, 0, Math.PI * 2);
+      ctx.fill();
       ctx.globalAlpha = 1;
+      // Barrel highlight
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(-11, -54, 2, 18);
       // Main body
       ctx.fillStyle = "#441122";
       ctx.fillRect(-18, -35, 36, 55);
       ctx.fillStyle = "#552233";
       ctx.fillRect(-15, -32, 30, 48);
+      // Body panel lines
+      ctx.strokeStyle = "#331122";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-15, -15); ctx.lineTo(15, -15);
+      ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
+      ctx.stroke();
+      // Warning stripe
+      ctx.fillStyle = "#ff3333";
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(-15, -35, 30, 3);
+      ctx.globalAlpha = 1;
       // Quantum energy core
       ctx.fillStyle = wep.color;
       ctx.globalAlpha = pulse * 0.8;
@@ -3710,11 +3901,29 @@ export class Game {
       ctx.globalAlpha = pulse * 0.4;
       ctx.fillRect(-12, -28, 24, 22);
       ctx.globalAlpha = 1;
+      // Core crosshair
+      ctx.strokeStyle = wep.color;
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(-4, -17); ctx.lineTo(4, -17);
+      ctx.moveTo(0, -21); ctx.lineTo(0, -13);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
       // Energy conduits on sides
       ctx.fillStyle = wep.color;
       ctx.globalAlpha = 0.5;
       ctx.fillRect(-17, -28, 3, 35);
       ctx.fillRect(14, -28, 3, 35);
+      ctx.globalAlpha = 1;
+      // Conduit energy dots
+      for (let i = 0; i < 4; i++) {
+        const dotA = 0.3 + Math.sin(this.time * 0.012 + i * 1.5) * 0.3;
+        ctx.fillStyle = wep.color;
+        ctx.globalAlpha = dotA;
+        ctx.beginPath(); ctx.arc(-15.5, -22 + i * 8, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(15.5, -22 + i * 8, 1.2, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.globalAlpha = 1;
       // Ventilation slits
       ctx.fillStyle = "#220011";
@@ -3722,11 +3931,33 @@ export class Game {
         ctx.fillRect(-14, -5 + i * 6, 10, 2);
         ctx.fillRect(4, -5 + i * 6, 10, 2);
       }
+      // Heat glow in vents
+      ctx.fillStyle = wep.color;
+      ctx.globalAlpha = pulse * 0.2;
+      for (let i = 0; i < 3; i++) {
+        ctx.fillRect(-13, -4 + i * 6, 8, 1);
+        ctx.fillRect(5, -4 + i * 6, 8, 1);
+      }
+      ctx.globalAlpha = 1;
       // Grip
       ctx.fillStyle = "#330011";
       ctx.fillRect(-12, 20, 26, 28);
       ctx.fillStyle = "#440022";
       ctx.fillRect(-10, 22, 22, 24);
+      // Grip texture ridges
+      ctx.fillStyle = "#2a000e";
+      for (let i = 0; i < 4; i++) {
+        ctx.fillRect(-9, 24 + i * 5, 20, 1.5);
+      }
+      // Grip cap
+      ctx.fillStyle = "#330011";
+      ctx.fillRect(-11, 46, 24, 3);
+      // Rivets
+      ctx.fillStyle = "#aa3355";
+      ctx.beginPath(); ctx.arc(-16, -30, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(16, -30, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-16, 10, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(16, 10, 1.2, 0, Math.PI * 2); ctx.fill();
     }
 
     ctx.restore();
@@ -5761,90 +5992,161 @@ export class Game {
   }
 
   renderGameOver(ctx, w, h) {
-    ctx.fillStyle = "rgba(40,0,0,0.92)";
+    // Animated red-tinged background
+    ctx.fillStyle = "rgba(30,0,0,0.94)";
     ctx.fillRect(0, 0, w, h);
+    // Pulsing red vignette
+    const pulse = 0.5 + Math.sin(this.time * 0.003) * 0.2;
+    const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.15, w / 2, h / 2, h * 0.7);
+    vig.addColorStop(0, "rgba(80,0,0,0)");
+    vig.addColorStop(0.5, `rgba(60,0,0,${pulse * 0.15})`);
+    vig.addColorStop(1, `rgba(40,0,0,${0.4 + pulse * 0.15})`);
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+    // Floating static debris
+    ctx.fillStyle = "rgba(255,30,0,0.06)";
+    for (let i = 0; i < 12; i++) {
+      const sx = w * (0.1 + ((Math.sin(this.time * 0.0005 + i * 1.7) + 1) * 0.4));
+      const sy = h * (0.05 + ((Math.cos(this.time * 0.0007 + i * 2.3) + 1) * 0.45));
+      const sz = 20 + Math.sin(i * 3) * 15;
+      ctx.fillRect(sx - sz / 2, sy - 1, sz, 2);
+    }
+    // Horizontal divider lines
+    const divY1 = h / 2 - 135;
+    const divY2 = h / 2 - 40;
+    ctx.strokeStyle = "rgba(255,34,0,0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.2, divY1); ctx.lineTo(w * 0.8, divY1);
+    ctx.moveTo(w * 0.25, divY2); ctx.lineTo(w * 0.75, divY2);
+    ctx.stroke();
+    // Title with glow
+    ctx.shadowColor = "#ff2200";
+    ctx.shadowBlur = 20;
     ctx.fillStyle = "#ff2200";
     ctx.font = "bold 42px monospace";
     ctx.textAlign = "center";
     ctx.fillText("TIMELINE COLLAPSED", w / 2, h / 2 - 110);
+    ctx.shadowBlur = 0;
+    // Subtitle
+    ctx.fillStyle = "rgba(255,100,70,0.7)";
+    ctx.font = "14px monospace";
+    ctx.fillText("Temporal integrity failed — reality unraveled", w / 2, h / 2 - 75);
 
-    this._renderStatsCard(ctx, w, h / 2 - 60, "#ff2200", "#ff6644");
+    this._renderStatsCard(ctx, w, h / 2 - 50, "#ff2200", "#ff6644");
 
     if (this.mode === "arena") {
       ctx.fillStyle = "#ff8866";
-      ctx.font = "16px monospace";
-      ctx.fillText(
-        `Rounds Survived: ${this.arenaRound - 1}`,
-        w / 2,
-        h / 2 + 72,
-      );
+      ctx.font = "bold 18px monospace";
+      ctx.fillText(`Rounds Survived: ${this.arenaRound - 1}`, w / 2, h / 2 + 100);
     }
-    ctx.fillStyle = "#aaaaaa";
+    // Prompt with pulsing alpha
+    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
     ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 100);
+    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 130);
     ctx.textAlign = "left";
   }
 
   renderVictory(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,10,30,0.92)";
+    ctx.fillStyle = "rgba(0,6,20,0.95)";
     ctx.fillRect(0, 0, w, h);
-
-    // Animated glow
+    // Animated aurora glow
     const pulse = 0.7 + Math.sin(this.time * 0.003) * 0.3;
-    ctx.fillStyle = `rgba(0,255,200,${pulse * 0.15})`;
+    const auroraGrad = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.6);
+    auroraGrad.addColorStop(0, `rgba(0,255,200,${pulse * 0.08})`);
+    auroraGrad.addColorStop(0.4, `rgba(0,180,255,${pulse * 0.04})`);
+    auroraGrad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = auroraGrad;
     ctx.fillRect(0, 0, w, h);
-
+    // Rising particle streaks
+    ctx.globalAlpha = 0.15;
+    for (let i = 0; i < 20; i++) {
+      const px = w * (0.1 + (i / 20) * 0.8);
+      const py = h - ((this.time * 0.04 + i * 73) % h);
+      const pLen = 8 + Math.sin(i * 2) * 5;
+      ctx.fillStyle = i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#ffcc00" : "#aaddff";
+      ctx.fillRect(px, py, 1.5, pLen);
+    }
+    ctx.globalAlpha = 1;
+    // Decorative dividers
+    ctx.strokeStyle = "rgba(0,255,200,0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.15, h / 2 - 100); ctx.lineTo(w * 0.85, h / 2 - 100);
+    ctx.stroke();
+    // Title with teal glow
+    ctx.shadowColor = "#00ffcc";
+    ctx.shadowBlur = 25;
     ctx.fillStyle = "#00ffcc";
     ctx.font = "bold 42px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("TIMELINE RESTORED", w / 2, h / 2 - 80);
-
+    ctx.fillText("TIMELINE RESTORED", w / 2, h / 2 - 75);
+    ctx.shadowBlur = 0;
+    // Subtitles with stagger
     ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 20px monospace";
-    ctx.fillText(
-      "The Paradox Lord has been destroyed — for good.",
-      w / 2,
-      h / 2 - 35,
-    );
-
-    ctx.fillStyle = "#aaddff";
-    ctx.font = "18px monospace";
-    ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 5);
-    ctx.fillText(
-      "The quantum continuum is stable once more.",
-      w / 2,
-      h / 2 + 20,
-    );
+    ctx.font = "bold 18px monospace";
+    ctx.fillText("The Paradox Lord has been destroyed — for good.", w / 2, h / 2 - 35);
+    ctx.fillStyle = "rgba(170,220,255,0.7)";
+    ctx.font = "16px monospace";
+    ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 8);
+    ctx.fillText("The quantum continuum is stable once more.", w / 2, h / 2 + 14);
+    // Divider below text
+    ctx.strokeStyle = "rgba(255,204,0,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(w * 0.25, h / 2 + 28); ctx.lineTo(w * 0.75, h / 2 + 28);
+    ctx.stroke();
 
     this._renderStatsCard(ctx, w, h / 2 + 40, "#ffcc00", "#aaddff");
 
-    ctx.fillStyle = "#aaaaaa";
+    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
     ctx.font = "14px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 180);
+    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 190);
     ctx.textAlign = "left";
   }
 
   renderLevelComplete(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,5,20,0.92)";
+    ctx.fillStyle = "rgba(0,4,18,0.94)";
     ctx.fillRect(0, 0, w, h);
+    // Subtle cyan glow
+    const pulse = 0.6 + Math.sin(this.time * 0.004) * 0.3;
+    const glow = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.5);
+    glow.addColorStop(0, `rgba(0,255,200,${pulse * 0.06})`);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+    // Decorative top line
+    ctx.strokeStyle = "rgba(0,255,200,0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.2, h / 2 - 130); ctx.lineTo(w * 0.8, h / 2 - 130);
+    ctx.stroke();
+    // Title with glow
+    ctx.shadowColor = "#00ffcc";
+    ctx.shadowBlur = 15;
     ctx.fillStyle = "#00ffcc";
     ctx.font = "bold 36px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("LEVEL COMPLETE", w / 2, h / 2 - 110);
+    ctx.fillText("LEVEL COMPLETE", w / 2, h / 2 - 100);
+    ctx.shadowBlur = 0;
+    // Divider
+    ctx.strokeStyle = "rgba(0,255,200,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(w * 0.25, h / 2 - 75); ctx.lineTo(w * 0.75, h / 2 - 75);
+    ctx.stroke();
 
-    this._renderStatsCard(ctx, w, h / 2 - 60, "#00ffcc", "#aaddff");
+    this._renderStatsCard(ctx, w, h / 2 - 55, "#00ffcc", "#aaddff");
 
     ctx.fillStyle = "#aaddff";
     ctx.font = "16px monospace";
-    ctx.fillText(
-      `Secrets: ${this.player.secretsFound || 0}`,
-      w / 2,
-      h / 2 + 72,
-    );
-    ctx.fillStyle = "#aaaaaa";
+    ctx.fillText(`Secrets: ${this.player.secretsFound || 0}`, w / 2, h / 2 + 80);
+
+    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
     ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 100);
+    ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 110);
     ctx.textAlign = "left";
   }
 
@@ -5860,16 +6162,42 @@ export class Game {
     const secs = elapsed % 60;
     const timeStr = `${mins}:${String(secs).padStart(2, "0")}`;
 
-    // Card background
-    const cardW = 320;
-    const cardH = 110;
+    // Card background with inner glow
+    const cardW = 380;
+    const cardH = 130;
     const cx = w / 2 - cardW / 2;
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    // Outer glow
+    ctx.shadowColor = accentColor;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.beginPath();
+    ctx.roundRect(cx, startY, cardW, cardH, 8);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Border
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(cx, startY, cardW, cardH, 6);
+    ctx.roundRect(cx, startY, cardW, cardH, 8);
+    ctx.stroke();
+    // Inner accent line at top of card
+    ctx.fillStyle = accentColor;
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    ctx.roundRect(cx + 1, startY + 1, cardW - 2, 3, [7, 7, 0, 0]);
     ctx.fill();
+    ctx.globalAlpha = 1;
+    // Vertical divider
+    ctx.strokeStyle = `${accentColor}33`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 2, startY + 12);
+    ctx.lineTo(w / 2, startY + cardH - 12);
+    ctx.stroke();
+    // Horizontal divider
+    ctx.beginPath();
+    ctx.moveTo(cx + 16, startY + cardH / 2);
+    ctx.lineTo(cx + cardW - 16, startY + cardH / 2);
     ctx.stroke();
 
     // Stats in 2x2 grid
@@ -5887,21 +6215,23 @@ export class Game {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const sx = cx + col * colW + colW / 2;
-      const sy = startY + row * rowH + 20;
+      const sy = startY + row * rowH + 18;
 
       ctx.fillStyle = textColor;
-      ctx.font = "10px monospace";
+      ctx.globalAlpha = 0.6;
+      ctx.font = "bold 10px monospace";
       ctx.fillText(stats[i].label, sx, sy);
+      ctx.globalAlpha = 1;
 
       ctx.fillStyle = accentColor;
-      ctx.font = "bold 22px monospace";
-      ctx.fillText(stats[i].value, sx, sy + 24);
+      ctx.font = "bold 24px monospace";
+      ctx.fillText(stats[i].value, sx, sy + 26);
     }
 
     // Score bar at bottom of card
     ctx.fillStyle = accentColor;
     ctx.font = "bold 14px monospace";
-    ctx.fillText(`SCORE: ${this.player.score}`, w / 2, startY + cardH + 16);
+    ctx.fillText(`SCORE: ${this.player.score}`, w / 2, startY + cardH + 20);
   }
 
   // ── Builder Mode (delegated to BuilderMode) ────────────────────
@@ -6008,6 +6338,7 @@ export class Game {
       this.builder.player.angle = this._builderSnapshot.playerAngle;
       this._builderSnapshot = null;
     }
-    this.lockPointer();
+    // Delay pointer lock to avoid race with browser's ESC-triggered unlock
+    setTimeout(() => this.lockPointer(), 120);
   }
 }
