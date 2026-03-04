@@ -100,7 +100,11 @@ export class BuilderMode {
         this.map = legacy;
         this._saveIndex();
         this._saveCurrentMap();
-        try { localStorage.removeItem(BUILDER_SAVE_KEY); } catch (_) { /* ok */ }
+        try {
+          localStorage.removeItem(BUILDER_SAVE_KEY);
+        } catch (_) {
+          /* ok */
+        }
       } else {
         this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
         this.mapIndex.push({ id: 0, name: this.map.name });
@@ -768,7 +772,10 @@ export class BuilderMode {
         },
         enemySpawns: this.map.enemySpawns || [],
       };
-      localStorage.setItem(this._slotKey(this.currentSlot), JSON.stringify(data));
+      localStorage.setItem(
+        this._slotKey(this.currentSlot),
+        JSON.stringify(data),
+      );
       localStorage.setItem(BUILDER_CURRENT_KEY, String(this.currentSlot));
     } catch (_) {
       /* localStorage full */
@@ -842,7 +849,9 @@ export class BuilderMode {
         const id = parseInt(raw, 10);
         if (this.mapIndex.some((e) => e.id === id)) return id;
       }
-    } catch (_) { /* ok */ }
+    } catch (_) {
+      /* ok */
+    }
     return this.mapIndex.length > 0 ? this.mapIndex[0].id : 0;
   }
 
@@ -882,7 +891,8 @@ export class BuilderMode {
     if (this.mapIndex.length < 2) return;
     this._saveCurrentMap();
     const curIdx = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
-    const nextIdx = (curIdx + dir + this.mapIndex.length) % this.mapIndex.length;
+    const nextIdx =
+      (curIdx + dir + this.mapIndex.length) % this.mapIndex.length;
     this.currentSlot = this.mapIndex[nextIdx].id;
     const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
     if (saved) {
@@ -908,7 +918,9 @@ export class BuilderMode {
     if (this.mapIndex.length <= 1) return; // Can't delete last map
     try {
       localStorage.removeItem(this._slotKey(this.currentSlot));
-    } catch (_) { /* ok */ }
+    } catch (_) {
+      /* ok */
+    }
     this.mapIndex = this.mapIndex.filter((e) => e.id !== this.currentSlot);
     this._saveIndex();
     this.currentSlot = this.mapIndex[0].id;

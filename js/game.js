@@ -3409,7 +3409,14 @@ export class Game {
     ctx.restore();
 
     // Subtle ambient vignette (always-on depth effect)
-    const vigGrad = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, h * 0.9);
+    const vigGrad = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      h * 0.35,
+      w / 2,
+      h / 2,
+      h * 0.9,
+    );
     vigGrad.addColorStop(0, "transparent");
     vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
     ctx.fillStyle = vigGrad;
@@ -3663,10 +3670,18 @@ export class Game {
       ctx.globalAlpha = 1;
       // Screws/rivets
       ctx.fillStyle = "#667788";
-      ctx.beginPath(); ctx.arc(-6, -5, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6, -5, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-6, 8, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6, 8, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-6, -5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, -5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-6, 8, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, 8, 1, 0, Math.PI * 2);
+      ctx.fill();
     } else if (wep.id === 1) {
       // Temporal Shotgun
       // Barrels
@@ -3678,8 +3693,12 @@ export class Game {
       ctx.fillRect(4, -46, 4, 8);
       // Barrel bores
       ctx.fillStyle = "#1a1a1a";
-      ctx.beginPath(); ctx.arc(-6, -48, 2.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6, -48, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-6, -48, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, -48, 2.5, 0, Math.PI * 2);
+      ctx.fill();
       // Barrel tips glow
       ctx.fillStyle = wep.color;
       ctx.fillRect(-8, -48, 3, 2);
@@ -3701,7 +3720,9 @@ export class Game {
       ctx.fillRect(-5, -34, 10, 6);
       // Shell-shaped detail
       ctx.fillStyle = "#887766";
-      ctx.beginPath(); ctx.arc(0, -31, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, -31, 3, 0, Math.PI * 2);
+      ctx.fill();
       // Pump grip
       ctx.fillStyle = "#776655";
       ctx.fillRect(-12, -10, 24, 12);
@@ -3739,16 +3760,28 @@ export class Game {
       // Coil energy dots
       for (let i = 0; i < 3; i++) {
         const dotY = -23 + i * 7 + Math.sin(this.time * 0.008 + i * 1.5) * 2;
-        ctx.beginPath(); ctx.arc(-11, dotY, 1.2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(11, dotY, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(-11, dotY, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(11, dotY, 1.2, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       // Screws
       ctx.fillStyle = "#998877";
-      ctx.beginPath(); ctx.arc(-10, -15, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(10, -15, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-10, 5, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(10, 5, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-10, -15, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(10, -15, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-10, 5, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(10, 5, 1.2, 0, Math.PI * 2);
+      ctx.fill();
     } else if (wep.id === 2) {
       // Plasma Rifle
       // Barrel shroud
@@ -3758,7 +3791,9 @@ export class Game {
       ctx.fillRect(-3, -55, 6, 25);
       // Barrel bore
       ctx.fillStyle = "#1a1a33";
-      ctx.beginPath(); ctx.arc(0, -58, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, -58, 3, 0, Math.PI * 2);
+      ctx.fill();
       // Barrel tip
       ctx.fillStyle = wep.color;
       ctx.fillRect(-4, -60, 8, 3);
@@ -3780,8 +3815,10 @@ export class Game {
       ctx.strokeStyle = "#222244";
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(-8, -10); ctx.lineTo(8, -10);
-      ctx.moveTo(-8, 5); ctx.lineTo(8, 5);
+      ctx.moveTo(-8, -10);
+      ctx.lineTo(8, -10);
+      ctx.moveTo(-8, 5);
+      ctx.lineTo(8, 5);
       ctx.stroke();
       // Side panels
       ctx.fillStyle = "#252545";
@@ -3794,8 +3831,12 @@ export class Game {
         ctx.globalAlpha = ringA;
         ctx.fillRect(-6, -50 + i * 8, 12, 2);
         // Small side indicator dots
-        ctx.beginPath(); ctx.arc(-7, -49 + i * 8, 1, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(7, -49 + i * 8, 1, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(-7, -49 + i * 8, 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(7, -49 + i * 8, 1, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       // Plasma core chamber (visible through body)
@@ -3821,8 +3862,10 @@ export class Game {
       ctx.lineWidth = 0.5;
       ctx.globalAlpha = 0.4;
       ctx.beginPath();
-      ctx.moveTo(-2, -59); ctx.lineTo(2, -59);
-      ctx.moveTo(0, -61); ctx.lineTo(0, -57);
+      ctx.moveTo(-2, -59);
+      ctx.lineTo(2, -59);
+      ctx.moveTo(0, -61);
+      ctx.lineTo(0, -57);
       ctx.stroke();
       ctx.globalAlpha = 1;
       // Magazine/power cell
@@ -3842,10 +3885,18 @@ export class Game {
       ctx.fillRect(-6, 43, 14, 3);
       // Rivets
       ctx.fillStyle = "#5555aa";
-      ctx.beginPath(); ctx.arc(-8, -8, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(8, -8, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-8, 10, 1, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(8, 10, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-8, -8, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(8, -8, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-8, 10, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(8, 10, 1, 0, Math.PI * 2);
+      ctx.fill();
     } else if (wep.id === 3) {
       // Quantum Cannon
       // Barrel housing
@@ -3855,13 +3906,17 @@ export class Game {
       ctx.fillRect(-10, -52, 20, 15);
       // Barrel bore
       ctx.fillStyle = "#110008";
-      ctx.beginPath(); ctx.arc(0, -55, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, -55, 5, 0, Math.PI * 2);
+      ctx.fill();
       // Barrel rim glow
       ctx.strokeStyle = wep.color;
       ctx.lineWidth = 1.5;
       const pulse = 0.4 + Math.sin(this.time * 0.01) * 0.4;
       ctx.globalAlpha = pulse;
-      ctx.beginPath(); ctx.arc(0, -55, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -55, 6, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
       // Barrel glow core
       ctx.fillStyle = wep.color;
@@ -3886,8 +3941,10 @@ export class Game {
       ctx.strokeStyle = "#331122";
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(-15, -15); ctx.lineTo(15, -15);
-      ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
+      ctx.moveTo(-15, -15);
+      ctx.lineTo(15, -15);
+      ctx.moveTo(-15, 0);
+      ctx.lineTo(15, 0);
       ctx.stroke();
       // Warning stripe
       ctx.fillStyle = "#ff3333";
@@ -3906,8 +3963,10 @@ export class Game {
       ctx.lineWidth = 0.5;
       ctx.globalAlpha = 0.4;
       ctx.beginPath();
-      ctx.moveTo(-4, -17); ctx.lineTo(4, -17);
-      ctx.moveTo(0, -21); ctx.lineTo(0, -13);
+      ctx.moveTo(-4, -17);
+      ctx.lineTo(4, -17);
+      ctx.moveTo(0, -21);
+      ctx.lineTo(0, -13);
       ctx.stroke();
       ctx.globalAlpha = 1;
       // Energy conduits on sides
@@ -3921,8 +3980,12 @@ export class Game {
         const dotA = 0.3 + Math.sin(this.time * 0.012 + i * 1.5) * 0.3;
         ctx.fillStyle = wep.color;
         ctx.globalAlpha = dotA;
-        ctx.beginPath(); ctx.arc(-15.5, -22 + i * 8, 1.2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(15.5, -22 + i * 8, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(-15.5, -22 + i * 8, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(15.5, -22 + i * 8, 1.2, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       // Ventilation slits
@@ -3954,10 +4017,18 @@ export class Game {
       ctx.fillRect(-11, 46, 24, 3);
       // Rivets
       ctx.fillStyle = "#aa3355";
-      ctx.beginPath(); ctx.arc(-16, -30, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(16, -30, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(-16, 10, 1.2, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(16, 10, 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-16, -30, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(16, -30, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-16, 10, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(16, 10, 1.2, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -5997,7 +6068,14 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
     // Pulsing red vignette
     const pulse = 0.5 + Math.sin(this.time * 0.003) * 0.2;
-    const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.15, w / 2, h / 2, h * 0.7);
+    const vig = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      h * 0.15,
+      w / 2,
+      h / 2,
+      h * 0.7,
+    );
     vig.addColorStop(0, "rgba(80,0,0,0)");
     vig.addColorStop(0.5, `rgba(60,0,0,${pulse * 0.15})`);
     vig.addColorStop(1, `rgba(40,0,0,${0.4 + pulse * 0.15})`);
@@ -6006,8 +6084,9 @@ export class Game {
     // Floating static debris
     ctx.fillStyle = "rgba(255,30,0,0.06)";
     for (let i = 0; i < 12; i++) {
-      const sx = w * (0.1 + ((Math.sin(this.time * 0.0005 + i * 1.7) + 1) * 0.4));
-      const sy = h * (0.05 + ((Math.cos(this.time * 0.0007 + i * 2.3) + 1) * 0.45));
+      const sx = w * (0.1 + (Math.sin(this.time * 0.0005 + i * 1.7) + 1) * 0.4);
+      const sy =
+        h * (0.05 + (Math.cos(this.time * 0.0007 + i * 2.3) + 1) * 0.45);
       const sz = 20 + Math.sin(i * 3) * 15;
       ctx.fillRect(sx - sz / 2, sy - 1, sz, 2);
     }
@@ -6017,8 +6096,10 @@ export class Game {
     ctx.strokeStyle = "rgba(255,34,0,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.2, divY1); ctx.lineTo(w * 0.8, divY1);
-    ctx.moveTo(w * 0.25, divY2); ctx.lineTo(w * 0.75, divY2);
+    ctx.moveTo(w * 0.2, divY1);
+    ctx.lineTo(w * 0.8, divY1);
+    ctx.moveTo(w * 0.25, divY2);
+    ctx.lineTo(w * 0.75, divY2);
     ctx.stroke();
     // Title with glow
     ctx.shadowColor = "#ff2200";
@@ -6031,14 +6112,22 @@ export class Game {
     // Subtitle
     ctx.fillStyle = "rgba(255,100,70,0.7)";
     ctx.font = "14px monospace";
-    ctx.fillText("Temporal integrity failed — reality unraveled", w / 2, h / 2 - 75);
+    ctx.fillText(
+      "Temporal integrity failed — reality unraveled",
+      w / 2,
+      h / 2 - 75,
+    );
 
     this._renderStatsCard(ctx, w, h / 2 - 50, "#ff2200", "#ff6644");
 
     if (this.mode === "arena") {
       ctx.fillStyle = "#ff8866";
       ctx.font = "bold 18px monospace";
-      ctx.fillText(`Rounds Survived: ${this.arenaRound - 1}`, w / 2, h / 2 + 100);
+      ctx.fillText(
+        `Rounds Survived: ${this.arenaRound - 1}`,
+        w / 2,
+        h / 2 + 100,
+      );
     }
     // Prompt with pulsing alpha
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
@@ -6053,7 +6142,14 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
     // Animated aurora glow
     const pulse = 0.7 + Math.sin(this.time * 0.003) * 0.3;
-    const auroraGrad = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.6);
+    const auroraGrad = ctx.createRadialGradient(
+      w / 2,
+      h * 0.35,
+      0,
+      w / 2,
+      h * 0.35,
+      h * 0.6,
+    );
     auroraGrad.addColorStop(0, `rgba(0,255,200,${pulse * 0.08})`);
     auroraGrad.addColorStop(0.4, `rgba(0,180,255,${pulse * 0.04})`);
     auroraGrad.addColorStop(1, "rgba(0,0,0,0)");
@@ -6065,7 +6161,8 @@ export class Game {
       const px = w * (0.1 + (i / 20) * 0.8);
       const py = h - ((this.time * 0.04 + i * 73) % h);
       const pLen = 8 + Math.sin(i * 2) * 5;
-      ctx.fillStyle = i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#ffcc00" : "#aaddff";
+      ctx.fillStyle =
+        i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#ffcc00" : "#aaddff";
       ctx.fillRect(px, py, 1.5, pLen);
     }
     ctx.globalAlpha = 1;
@@ -6073,7 +6170,8 @@ export class Game {
     ctx.strokeStyle = "rgba(0,255,200,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.15, h / 2 - 100); ctx.lineTo(w * 0.85, h / 2 - 100);
+    ctx.moveTo(w * 0.15, h / 2 - 100);
+    ctx.lineTo(w * 0.85, h / 2 - 100);
     ctx.stroke();
     // Title with teal glow
     ctx.shadowColor = "#00ffcc";
@@ -6086,15 +6184,24 @@ export class Game {
     // Subtitles with stagger
     ctx.fillStyle = "#ffcc00";
     ctx.font = "bold 18px monospace";
-    ctx.fillText("The Paradox Lord has been destroyed — for good.", w / 2, h / 2 - 35);
+    ctx.fillText(
+      "The Paradox Lord has been destroyed — for good.",
+      w / 2,
+      h / 2 - 35,
+    );
     ctx.fillStyle = "rgba(170,220,255,0.7)";
     ctx.font = "16px monospace";
     ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 8);
-    ctx.fillText("The quantum continuum is stable once more.", w / 2, h / 2 + 14);
+    ctx.fillText(
+      "The quantum continuum is stable once more.",
+      w / 2,
+      h / 2 + 14,
+    );
     // Divider below text
     ctx.strokeStyle = "rgba(255,204,0,0.15)";
     ctx.beginPath();
-    ctx.moveTo(w * 0.25, h / 2 + 28); ctx.lineTo(w * 0.75, h / 2 + 28);
+    ctx.moveTo(w * 0.25, h / 2 + 28);
+    ctx.lineTo(w * 0.75, h / 2 + 28);
     ctx.stroke();
 
     this._renderStatsCard(ctx, w, h / 2 + 40, "#ffcc00", "#aaddff");
@@ -6112,7 +6219,14 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
     // Subtle cyan glow
     const pulse = 0.6 + Math.sin(this.time * 0.004) * 0.3;
-    const glow = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.5);
+    const glow = ctx.createRadialGradient(
+      w / 2,
+      h * 0.35,
+      0,
+      w / 2,
+      h * 0.35,
+      h * 0.5,
+    );
     glow.addColorStop(0, `rgba(0,255,200,${pulse * 0.06})`);
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
@@ -6121,7 +6235,8 @@ export class Game {
     ctx.strokeStyle = "rgba(0,255,200,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.2, h / 2 - 130); ctx.lineTo(w * 0.8, h / 2 - 130);
+    ctx.moveTo(w * 0.2, h / 2 - 130);
+    ctx.lineTo(w * 0.8, h / 2 - 130);
     ctx.stroke();
     // Title with glow
     ctx.shadowColor = "#00ffcc";
@@ -6134,14 +6249,19 @@ export class Game {
     // Divider
     ctx.strokeStyle = "rgba(0,255,200,0.15)";
     ctx.beginPath();
-    ctx.moveTo(w * 0.25, h / 2 - 75); ctx.lineTo(w * 0.75, h / 2 - 75);
+    ctx.moveTo(w * 0.25, h / 2 - 75);
+    ctx.lineTo(w * 0.75, h / 2 - 75);
     ctx.stroke();
 
     this._renderStatsCard(ctx, w, h / 2 - 55, "#00ffcc", "#aaddff");
 
     ctx.fillStyle = "#aaddff";
     ctx.font = "16px monospace";
-    ctx.fillText(`Secrets: ${this.player.secretsFound || 0}`, w / 2, h / 2 + 80);
+    ctx.fillText(
+      `Secrets: ${this.player.secretsFound || 0}`,
+      w / 2,
+      h / 2 + 80,
+    );
 
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
