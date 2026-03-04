@@ -153,19 +153,39 @@ export class Renderer {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const i = (y * size + x) * 4;
-        let r = 22, g = 25, b = 32;
+        let r = 22,
+          g = 25,
+          b = 32;
         const noise = (Math.random() * 8 - 4) | 0;
         // Grid lines every 16px
-        if (x % 16 === 0 || y % 16 === 0) { r += 12; g += 15; b += 20; }
+        if (x % 16 === 0 || y % 16 === 0) {
+          r += 12;
+          g += 15;
+          b += 20;
+        }
         // Heavier seam every 32px
-        if (x % 32 < 2 || y % 32 < 2) { r += 8; g += 10; b += 14; }
+        if (x % 32 < 2 || y % 32 < 2) {
+          r += 8;
+          g += 10;
+          b += 14;
+        }
         // Rivets at intersections
-        const rx = x % 32, ry = y % 32;
-        if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) { r += 20; g += 22; b += 28; }
+        const rx = x % 32,
+          ry = y % 32;
+        if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) {
+          r += 20;
+          g += 22;
+          b += 28;
+        }
         // Subtle glow spots (embedded floor lights)
-        const cx = (x % 32) - 16, cy = (y % 32) - 16;
+        const cx = (x % 32) - 16,
+          cy = (y % 32) - 16;
         const d = Math.sqrt(cx * cx + cy * cy);
-        if (d < 2.5) { r += 8; g += 18; b += 30; }
+        if (d < 2.5) {
+          r += 8;
+          g += 18;
+          b += 30;
+        }
         fd[i] = Math.max(0, Math.min(255, r + noise));
         fd[i + 1] = Math.max(0, Math.min(255, g + noise));
         fd[i + 2] = Math.max(0, Math.min(255, b + noise));
@@ -180,16 +200,31 @@ export class Renderer {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const i = (y * size + x) * 4;
-        let r = 10, g = 10, b = 20;
+        let r = 10,
+          g = 10,
+          b = 20;
         const noise = (Math.random() * 6 - 3) | 0;
         // Panel edges
-        if (x % 32 === 0 || y % 32 === 0) { r -= 3; g -= 3; b -= 3; }
+        if (x % 32 === 0 || y % 32 === 0) {
+          r -= 3;
+          g -= 3;
+          b -= 3;
+        }
         // Structural beam strips every 32px (horizontal)
-        if (y % 32 < 3) { r += 6; g += 6; b += 8; }
+        if (y % 32 < 3) {
+          r += 6;
+          g += 6;
+          b += 8;
+        }
         // Recessed light in panel center
-        const px = (x % 32) - 16, py = (y % 32) - 16;
+        const px = (x % 32) - 16,
+          py = (y % 32) - 16;
         const dl = Math.sqrt(px * px + py * py);
-        if (dl < 2) { r += 15; g += 20; b += 35; }
+        if (dl < 2) {
+          r += 15;
+          g += 20;
+          b += 35;
+        }
         cd[i] = Math.max(0, Math.min(255, r + noise));
         cd[i + 1] = Math.max(0, Math.min(255, g + noise));
         cd[i + 2] = Math.max(0, Math.min(255, b + noise));
@@ -204,7 +239,11 @@ export class Renderer {
     const h = this.height;
     const halfH = h >> 1;
 
-    if (!this._floorCeilBuffer || this._floorCeilBuffer.width !== w || this._floorCeilBuffer.height !== h) {
+    if (
+      !this._floorCeilBuffer ||
+      this._floorCeilBuffer.width !== w ||
+      this._floorCeilBuffer.height !== h
+    ) {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
     }
     const buf = this._floorCeilBuffer.data;
@@ -216,19 +255,23 @@ export class Renderer {
     const rayDirX1 = dirX + planeX;
     const rayDirY1 = dirY + planeY;
 
-    const fogR = 8, fogG = 8, fogB = 20;
+    const fogR = 8,
+      fogG = 8,
+      fogB = 20;
 
     for (let y = halfH + 1; y < h; y += 2) {
       const p = y - halfH;
       const rowDist = halfH / p;
-      const stepX = rowDist * (rayDirX1 - rayDirX0) / w;
-      const stepY = rowDist * (rayDirY1 - rayDirY0) / w;
+      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
+      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
       let fx = camX + rowDist * rayDirX0;
       let fy = camY + rowDist * rayDirY0;
 
       const fog = Math.min(0.92, rowDist / 12);
       const invFog = 1 - fog;
-      const fR = fogR * fog, fG = fogG * fog, fB = fogB * fog;
+      const fR = fogR * fog,
+        fG = fogG * fog,
+        fB = fogB * fog;
 
       for (let x = 0; x < w; x++) {
         const tx = ((fx * 64) | 0) & 63;
@@ -240,10 +283,16 @@ export class Renderer {
         const fr = floorTex[ti] * invFog + fR;
         const fg = floorTex[ti + 1] * invFog + fG;
         const fb = floorTex[ti + 2] * invFog + fB;
-        buf[fi] = fr; buf[fi + 1] = fg; buf[fi + 2] = fb; buf[fi + 3] = 255;
+        buf[fi] = fr;
+        buf[fi + 1] = fg;
+        buf[fi + 2] = fb;
+        buf[fi + 3] = 255;
         // Copy to skipped row
         const fi2 = ((y - 1) * w + x) * 4;
-        buf[fi2] = fr; buf[fi2 + 1] = fg; buf[fi2 + 2] = fb; buf[fi2 + 3] = 255;
+        buf[fi2] = fr;
+        buf[fi2 + 1] = fg;
+        buf[fi2 + 2] = fb;
+        buf[fi2 + 3] = 255;
 
         // Ceiling pixel (mirrored)
         const cy = h - 1 - y;
@@ -251,10 +300,16 @@ export class Renderer {
         const cr = ceilTex[ti] * invFog + fR;
         const cg = ceilTex[ti + 1] * invFog + fG;
         const cb = ceilTex[ti + 2] * invFog + fB;
-        buf[ci] = cr; buf[ci + 1] = cg; buf[ci + 2] = cb; buf[ci + 3] = 255;
+        buf[ci] = cr;
+        buf[ci + 1] = cg;
+        buf[ci + 2] = cb;
+        buf[ci + 3] = 255;
         // Copy ceiling skipped row
         const ci2 = ((cy + 1) * w + x) * 4;
-        buf[ci2] = cr; buf[ci2 + 1] = cg; buf[ci2 + 2] = cb; buf[ci2 + 3] = 255;
+        buf[ci2] = cr;
+        buf[ci2 + 1] = cg;
+        buf[ci2 + 2] = cb;
+        buf[ci2 + 3] = 255;
 
         fx += stepX;
         fy += stepY;
@@ -265,13 +320,24 @@ export class Renderer {
     const hi = halfH * w * 4;
     for (let x = 0; x < w; x++) {
       const idx = hi + x * 4;
-      buf[idx] = fogR; buf[idx + 1] = fogG; buf[idx + 2] = fogB; buf[idx + 3] = 255;
+      buf[idx] = fogR;
+      buf[idx + 1] = fogG;
+      buf[idx + 2] = fogB;
+      buf[idx + 3] = 255;
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
   }
 
-  renderScene(player, map, entities, time, fov = 70, viewMode = 0, skipFloorCeil = false) {
+  renderScene(
+    player,
+    map,
+    entities,
+    time,
+    fov = 70,
+    viewMode = 0,
+    skipFloorCeil = false,
+  ) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -314,7 +380,14 @@ export class Renderer {
 
     // Draw textured floor and ceiling (or gradient fallback for builder)
     if (!skipFloorCeil) {
-      this._renderFloorCeiling(camX, camY, dirX, dirY, -dirY * planeMul, dirX * planeMul);
+      this._renderFloorCeiling(
+        camX,
+        camY,
+        dirX,
+        dirY,
+        -dirY * planeMul,
+        dirX * planeMul,
+      );
     } else {
       // Gradient fallback — works correctly with canvas transforms
       const halfH = h >> 1;
@@ -2963,7 +3036,7 @@ export class Renderer {
       ctx.fillStyle = "#00ff66";
       ctx.globalAlpha = alpha * 0.35;
       for (let f = 0; f < 3; f++) {
-        const fAngle = time * 0.004 + f * (Math.PI * 2 / 3);
+        const fAngle = time * 0.004 + f * ((Math.PI * 2) / 3);
         const fDist = gW * 1.1;
         const fx = screenX + Math.cos(fAngle) * fDist;
         const fy = centerY + Math.sin(fAngle) * halfH * 0.3;
@@ -3067,7 +3140,7 @@ export class Renderer {
     // Sparkle particles
     ctx.fillStyle = "#ffffff";
     for (let i = 0; i < 3; i++) {
-      const angle = spin * 2 + i * (Math.PI * 2 / 3);
+      const angle = spin * 2 + i * ((Math.PI * 2) / 3);
       const sparkR = size * 0.8;
       const sx = Math.cos(angle) * sparkR;
       const sy = Math.sin(angle) * sparkR;
@@ -3127,7 +3200,12 @@ export class Renderer {
 
     // Cross highlight
     ctx.fillStyle = "rgba(255,100,100,0.3)";
-    ctx.fillRect(screenX - crossT / 2, y - size * 0.45, crossT * 0.4, size * 0.9);
+    ctx.fillRect(
+      screenX - crossT / 2,
+      y - size * 0.45,
+      crossT * 0.4,
+      size * 0.9,
+    );
 
     // Border with pulse
     ctx.strokeStyle = "#00cc44";
@@ -3143,10 +3221,21 @@ export class Renderer {
     // Corner dots
     ctx.fillStyle = "#00ff44";
     ctx.globalAlpha = fog * 0.6;
-    const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+    const corners = [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ];
     corners.forEach(([cx, cy]) => {
       ctx.beginPath();
-      ctx.arc(screenX + cx * size * 0.6, y + cy * size * 0.6, Math.max(1, size * 0.06), 0, Math.PI * 2);
+      ctx.arc(
+        screenX + cx * size * 0.6,
+        y + cy * size * 0.6,
+        Math.max(1, size * 0.06),
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
     });
 
@@ -3344,7 +3433,14 @@ export class Renderer {
 
     // Outer glow halo
     ctx.globalAlpha = fog * 0.35;
-    const glow = ctx.createRadialGradient(screenX, centerY, 0, screenX, centerY, size * 3);
+    const glow = ctx.createRadialGradient(
+      screenX,
+      centerY,
+      0,
+      screenX,
+      centerY,
+      size * 3,
+    );
     glow.addColorStop(0, color);
     glow.addColorStop(1, "transparent");
     ctx.fillStyle = glow;
