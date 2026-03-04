@@ -451,7 +451,12 @@ export class TouchControls {
       const row = Math.floor(i / cols);
       const baseX = col === 0 ? leftX : w / 2 + 15;
       const uy = startY + row * lineH;
-      if (x >= baseX - 5 && x <= baseX + colW - 5 && y >= uy - 16 && y <= uy + lineH - 18) {
+      if (
+        x >= baseX - 5 &&
+        x <= baseX + colW - 5 &&
+        y >= uy - 16 &&
+        y <= uy + lineH - 18
+      ) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -479,7 +484,12 @@ export class TouchControls {
     // Check each binding row
     for (let i = 0; i < bindKeys.length; i++) {
       const ry = startY + i * itemH;
-      if (x >= panelX && x <= panelX + panelW && y >= ry - 2 && y <= ry + itemH - 6) {
+      if (
+        x >= panelX &&
+        x <= panelX + panelW &&
+        y >= ry - 2 &&
+        y <= ry + itemH - 6
+      ) {
         g.controlsSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -488,7 +498,12 @@ export class TouchControls {
 
     // Check "Reset Defaults" button
     const resetY = startY + bindKeys.length * itemH + 10;
-    if (x >= panelX && x <= panelX + panelW && y >= resetY - 2 && y <= resetY + itemH - 6) {
+    if (
+      x >= panelX &&
+      x <= panelX + panelW &&
+      y >= resetY - 2 &&
+      y <= resetY + itemH - 6
+    ) {
       g.controlsSelection = bindKeys.length;
       g.handleKeyPress("Enter");
       return;
