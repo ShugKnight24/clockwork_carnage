@@ -14,8 +14,17 @@ const continueArenaDesc = document.getElementById("continueArenaDesc");
 const game = new Game(gameCanvas, hudCanvas);
 
 function resizeCanvases() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  let w = window.innerWidth;
+  let h = window.innerHeight;
+  // Cap render resolution on mobile to maintain playable FPS
+  if (game.isTouchDevice) {
+    const maxDim = 960;
+    if (w > maxDim || h > maxDim) {
+      const scale = maxDim / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+  }
   gameCanvas.width = w;
   gameCanvas.height = h;
   hudCanvas.width = w;
@@ -228,6 +237,9 @@ function gameLoop(timestamp) {
     game.render();
   }
 
+  // Render touch controls overlay (merged into main rAF)
+  if (touch) touch.render();
+
   requestAnimationFrame(gameLoop);
 }
 
@@ -238,3 +250,4 @@ window.ccTest = createTestRunner(game);
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);
+if (touch) game.touchControls = touch;

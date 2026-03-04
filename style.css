@@ -286,3 +286,43 @@ body {
   );
   pointer-events: none;
 }
+
+/* ── Portrait Orientation Prompt (touch devices) ── */
+#orientationPrompt {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.orientation-icon {
+  font-size: 72px;
+  color: #00ffcc;
+  animation: spin-hint 2s ease-in-out infinite;
+}
+
+.orientation-text {
+  font-family: "Courier New", monospace;
+  font-size: 18px;
+  color: #aabbcc;
+  text-align: center;
+}
+
+@keyframes spin-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
+@media (orientation: portrait) and (hover: none) and (pointer: coarse) {
+  #orientationPrompt {
+    display: flex;
+  }
+}
