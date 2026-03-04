@@ -45,6 +45,14 @@ export class TouchControls {
 
     // Track active button touches
     this.activeButtons = new Set();
+
+    // Cutscene hold-to-skip state
+    this.cutsceneHoldTouch = null;
+    this.cutsceneHoldStart = 0;
+
+    // Mobile tutorial overlay state
+    this.showTutorial = !localStorage.getItem("cc_touch_tutorial_done");
+    this.tutorialDismissed = false;
   }
 
   setup() {
@@ -87,8 +95,6 @@ export class TouchControls {
     // Hide cursor on mobile
     document.body.style.cursor = "none";
 
-    // Start render loop
-    this.renderLoop();
   }
 
   resize() {
@@ -149,6 +155,48 @@ export class TouchControls {
     e.preventDefault();
     const g = this.game;
 
+    // Dismiss mobile tutorial on any touch
+    if (this.showTutorial && !this.tutorialDismissed && g.state === "playing") {
+      this.tutorialDismissed = true;
+      try { localStorage.setItem("cc_touch_tutorial_done", "1"); } catch (_) {}
+      return;
+    }
+
+    // Cutscene: tap to advance, track hold start for skip
+    if (g.state === "cutscene") {
+      if (e.changedTouches.length > 0) {
+        this.cutsceneHoldTouch = e.changedTouches[0].identifier;
+        this.cutsceneHoldStart = performance.now();
+        g.advanceCutsceneFrame();
+      }
+      return;
+    }
+
+    // Campaign prompt / tutorial complete / game over / victory / level complete: tap to advance
+    if (g.state === "campaignPrompt" || g.state === "tutorialComplete" ||
+        g.state === "gameOver" || g.state === "victory" || g.state === "levelComplete") {
+      if (e.changedTouches.length > 0) {
+        g.handleKeyPress("Enter");
+      }
+      return;
+    }
+
+    // Paused menu: route taps to key commands
+    if (g.state === "paused") {
+      if (e.changedTouches.length > 0) {
+        this.handlePauseTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
+    // Settings menu: route taps to navigation
+    if (g.state === "settings") {
+      if (e.changedTouches.length > 0) {
+        this.handleSettingsTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
     for (const touch of e.changedTouches) {
       const x = touch.clientX;
       const y = touch.clientY;
@@ -182,6 +230,17 @@ export class TouchControls {
 
   onTouchMove(e) {
     e.preventDefault();
+
+    // During cutscene hold-to-skip, check if still holding
+    if (this.game.state === "cutscene" && this.cutsceneHoldTouch !== null) {
+      // If held for 1s, skip entire cutscene
+      if (performance.now() - this.cutsceneHoldStart >= 1000) {
+        this.game.endCutscene();
+        this.cutsceneHoldTouch = null;
+        return;
+      }
+    }
+
     for (const touch of e.changedTouches) {
       if (touch.identifier === this.joyTouch) {
         this.joyPos = { x: touch.clientX, y: touch.clientY };
@@ -199,6 +258,17 @@ export class TouchControls {
 
   onTouchEnd(e) {
     e.preventDefault();
+
+    // Clear cutscene hold
+    if (this.cutsceneHoldTouch !== null) {
+      for (const touch of e.changedTouches) {
+        if (touch.identifier === this.cutsceneHoldTouch) {
+          this.cutsceneHoldTouch = null;
+          break;
+        }
+      }
+    }
+
     for (const touch of e.changedTouches) {
       if (touch.identifier === this.joyTouch) {
         this.joyTouch = null;
@@ -243,9 +313,74 @@ export class TouchControls {
     this.game.keys[kb.sprint] = false;
   }
 
-  renderLoop() {
-    this.render();
-    requestAnimationFrame(() => this.renderLoop());
+  handlePauseTap(touch) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const x = touch.clientX;
+    const y = touch.clientY;
+    // Pause menu touch buttons are rendered in a row at h/2 + 130
+    const btnY = h / 2 + 115;
+    const btnH = 50;
+    const btnW = 90;
+    const gap = 10;
+    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
+    const totalW = labels.length * btnW + (labels.length - 1) * gap;
+    const startX = (w - totalW) / 2;
+
+    if (y >= btnY && y <= btnY + btnH) {
+      for (let i = 0; i < labels.length; i++) {
+        const bx = startX + i * (btnW + gap);
+        if (x >= bx && x <= bx + btnW) {
+          if (i === 0) this.game.handleKeyPress("Escape"); // Resume
+          else if (i === 1) this.game.handleKeyPress("KeyS"); // Settings
+          else if (i === 2) this.game.handleKeyPress("KeyC"); // Controls
+          else if (i === 3) this.game.handleKeyPress("KeyQ"); // Quit
+          return;
+        }
+      }
+    }
+    // Save button for campaign (below main row)
+    if (this.game.mode === "campaign") {
+      const saveY = btnY + btnH + 10;
+      const saveBtnW = 100;
+      const saveX = (w - saveBtnW) / 2;
+      if (y >= saveY && y <= saveY + 40 && x >= saveX && x <= saveX + saveBtnW) {
+        this.game.handleKeyPress("KeyF");
+      }
+    }
+  }
+
+  handleSettingsTap(touch) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const x = touch.clientX;
+    const y = touch.clientY;
+    const panelX = w / 2 - 220;
+    const panelW = 440;
+    const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44];
+    let startY = h / 2 - 155;
+
+    // Check if tap is in the "Back" area (bottom)
+    const totalH = itemHeights.reduce((a, b) => a + b, 0);
+    if (y > startY + totalH) {
+      this.game.handleKeyPress("Escape");
+      return;
+    }
+
+    // Find which setting was tapped
+    for (let i = 0; i < itemHeights.length; i++) {
+      if (y >= startY && y <= startY + itemHeights[i] && x >= panelX && x <= panelX + panelW) {
+        this.game.settingsSelection = i;
+        // Left half = decrease, right half = increase
+        if (x < w / 2) {
+          this.game.handleKeyPress("ArrowLeft");
+        } else {
+          this.game.handleKeyPress("ArrowRight");
+        }
+        return;
+      }
+      startY += itemHeights[i];
+    }
   }
 
   render() {
@@ -253,9 +388,28 @@ export class TouchControls {
     const z = this.zones;
     ctx.clearRect(0, 0, z.w, z.h);
 
-    // Only draw during gameplay
     const gs = this.game.state;
-    if (gs !== "playing" && gs !== "paused") return;
+
+    // Draw pause menu touch buttons
+    if (gs === "paused") {
+      this.renderPauseButtons(ctx);
+      return;
+    }
+
+    // Draw settings back button hint
+    if (gs === "settings") {
+      this.renderSettingsHint(ctx);
+      return;
+    }
+
+    // Nothing to draw during cutscenes (prompts are in game.js)
+    if (gs !== "playing") return;
+
+    // First-launch mobile tutorial overlay
+    if (this.showTutorial && !this.tutorialDismissed) {
+      this.renderTouchTutorial(ctx);
+      return;
+    }
 
     ctx.globalAlpha = 0.35;
 
@@ -327,6 +481,134 @@ export class TouchControls {
     ctx.textBaseline = "middle";
     ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
 
+    ctx.globalAlpha = 1;
+  }
+
+  renderTouchTutorial(ctx) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+
+    // Semi-transparent overlay
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Title
+    ctx.fillStyle = "#00ffcc";
+    ctx.font = "bold 24px monospace";
+    ctx.fillText("TOUCH CONTROLS", w / 2, 50);
+
+    // Left side: joystick
+    ctx.fillStyle = "rgba(0, 200, 255, 0.2)";
+    ctx.fillRect(0, 80, w * 0.4, h - 160);
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("MOVE", w * 0.2, h / 2 - 40);
+    ctx.fillStyle = "#aabbcc";
+    ctx.font = "14px monospace";
+    ctx.fillText("Left stick", w * 0.2, h / 2 - 15);
+    ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
+
+    // Right side: look
+    ctx.fillStyle = "rgba(0, 200, 255, 0.1)";
+    ctx.fillRect(w * 0.4, 80, w * 0.6, h - 160);
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("LOOK", w * 0.7, h / 2 - 40);
+    ctx.fillStyle = "#aabbcc";
+    ctx.font = "14px monospace";
+    ctx.fillText("Drag to aim", w * 0.7, h / 2 - 15);
+
+    // Button hints
+    const hints = [
+      { label: "FIRE", desc: "Big button", color: "#ff6644", y: h - 120 },
+      { label: "DASH", desc: "Top-right", color: "#00cccc", y: h - 95 },
+      { label: "USE", desc: "Top-left", color: "#00cc44", y: h - 70 },
+    ];
+    for (const hint of hints) {
+      ctx.fillStyle = hint.color;
+      ctx.font = "bold 14px monospace";
+      ctx.fillText(`${hint.label} — ${hint.desc}`, w / 2, hint.y);
+    }
+
+    // Dismiss prompt
+    const pulse = 0.5 + 0.3 * Math.sin(performance.now() / 400);
+    ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - 30);
+  }
+
+  renderPauseButtons(ctx) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const btnY = h / 2 + 115;
+    const btnH = 50;
+    const btnW = 90;
+    const gap = 10;
+    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
+    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
+    const totalW = labels.length * btnW + (labels.length - 1) * gap;
+    const startX = (w - totalW) / 2;
+
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i < labels.length; i++) {
+      const bx = startX + i * (btnW + gap);
+      ctx.fillStyle = colors[i];
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bx, btnY, btnW, btnH, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labels[i], bx + btnW / 2, btnY + btnH / 2);
+    }
+
+    if (this.game.mode === "campaign") {
+      const saveY = btnY + btnH + 10;
+      const saveBtnW = 100;
+      const saveX = (w - saveBtnW) / 2;
+      ctx.fillStyle = "#00aa44";
+      ctx.beginPath();
+      ctx.roundRect(saveX, saveY, saveBtnW, 40, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText("SAVE", saveX + saveBtnW / 2, saveY + 20);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  renderSettingsHint(ctx) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+    ctx.globalAlpha = 0.6;
+    // Back button at bottom
+    const btnW = 120;
+    const btnH = 44;
+    const bx = (w - btnW) / 2;
+    const by = h - 60;
+    ctx.fillStyle = "#556677";
+    ctx.strokeStyle = "#aabbcc";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, btnW, btnH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("< BACK", bx + btnW / 2, by + btnH / 2);
+    // Hint text
+    ctx.fillStyle = "#8899aa";
+    ctx.font = "12px monospace";
+    ctx.fillText("Tap setting to change  ·  Left = decrease  ·  Right = increase", w / 2, by - 12);
     ctx.globalAlpha = 1;
   }
 

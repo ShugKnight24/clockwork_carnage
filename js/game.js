@@ -100,6 +100,8 @@ export class Game {
       fov: 70, // 50..120 degrees
       viewMode: 0, // 0=first-person, 1=third-person
       invertX: false,
+      fontScale: 100, // 100, 125, 150 percent
+      colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -179,6 +181,44 @@ export class Game {
 
   unlockPointer() {
     if (!this.isTouchDevice) document.exitPointerLock();
+  }
+
+  // Returns a font string with the size scaled by the fontScale setting
+  scaledFont(sizePx, style = "") {
+    const s = Math.round(sizePx * (this.settings.fontScale / 100));
+    return `${style ? style + " " : ""}${s}px monospace`;
+  }
+
+  // Remap UI colors for colorblind accessibility
+  cbColor(hex) {
+    const m = this.settings.colorblind;
+    if (!m) return hex;
+    const lower = hex.toLowerCase();
+    // Deuteranopia & Protanopia: remap red/green
+    if (m === 1 || m === 2) {
+      if (
+        lower === "#ff2200" ||
+        lower === "#ff4400" ||
+        lower === "#ff4444" ||
+        lower === "#ff0000"
+      )
+        return "#ff8800"; // red → orange
+      if (
+        lower === "#00ff66" ||
+        lower === "#44ff44" ||
+        lower === "#00ff00" ||
+        lower === "#00cc44"
+      )
+        return "#00ccff"; // green → cyan
+      if (lower === "#ff8866") return "#ffbb44"; // kill orange → gold
+    }
+    // Tritanopia: remap blue/yellow
+    if (m === 3) {
+      if (lower === "#00ccff" || lower === "#00ddff" || lower === "#00ffcc")
+        return "#ff88cc"; // cyan → pink
+      if (lower === "#ffcc00" || lower === "#ffaa00") return "#ff8844"; // yellow → orange
+    }
+    return hex;
   }
 
   setupInput() {
@@ -487,6 +527,8 @@ export class Game {
         { key: "fov", min: 50, max: 120, step: 5 },
         { key: "viewMode", min: 0, max: 1, step: 1, wrap: true },
         { key: "invertX", toggle: true },
+        { key: "fontScale", min: 100, max: 150, step: 25 },
+        { key: "colorblind", min: 0, max: 3, step: 1, wrap: true },
       ];
       const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
@@ -2086,8 +2128,11 @@ export class Game {
 
     const elapsed = performance.now() - cs.frameStart;
 
-    // Hold Space to skip entire cutscene (1 second hold)
-    if (this.keys["Space"]) {
+    // Hold Space (or touch hold) to skip entire cutscene (1 second hold)
+    const holdingSkip =
+      this.keys["Space"] ||
+      (this.touchControls && this.touchControls.cutsceneHoldTouch !== null);
+    if (holdingSkip) {
       if (!cs.skipHeldStart) cs.skipHeldStart = performance.now();
       if (performance.now() - cs.skipHeldStart >= 1000) {
         this.endCutscene();
@@ -2309,7 +2354,9 @@ export class Game {
     ctx.font = "12px monospace";
     ctx.textAlign = "right";
     ctx.fillText(
-      "[ENTER] continue  ·  [ESC] skip",
+      this.isTouchDevice
+        ? "Tap to continue  ·  Hold to skip"
+        : "[ENTER] continue  ·  [ESC] skip",
       w - 20,
       h - barHeight / 2 + 4,
     );
@@ -2330,7 +2377,13 @@ export class Game {
       ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarH);
       ctx.fillStyle = "rgba(255,255,255,0.5)";
       ctx.font = "10px monospace";
-      ctx.fillText("Hold SPACE to skip all...", w - 20, skipBarY + 16);
+      ctx.fillText(
+        this.isTouchDevice
+          ? "Hold to skip all..."
+          : "Hold SPACE to skip all...",
+        w - 20,
+        skipBarY + 16,
+      );
     }
 
     ctx.textAlign = "left";
@@ -6029,7 +6082,11 @@ export class Game {
     const wep = this.player.getWeaponDef();
     const healthPct = this.player.health / this.player.maxHealth;
     const healthColor =
-      healthPct > 0.6 ? "#00ff66" : healthPct > 0.3 ? "#ffaa00" : "#ff2200";
+      healthPct > 0.6
+        ? this.cbColor("#00ff66")
+        : healthPct > 0.3
+          ? this.cbColor("#ffaa00")
+          : this.cbColor("#ff2200");
 
     // TODO: Allow users to customize based off what they find useful for different modes?
     // TODO: Can still be improved - too much empty space
@@ -6057,7 +6114,7 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("AMMO", ammoX + ammoSecW / 2, topY + 4);
     ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 46px monospace";
+    ctx.font = this.scaledFont(46, "bold");
     ctx.fillText(`${this.player.ammo}`, ammoX + ammoSecW / 2, midY + 14);
 
     // Health
@@ -6071,7 +6128,7 @@ export class Game {
     ctx.fillText("HEALTH", healthX + hbW / 2, topY + 4);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 46px monospace";
+    ctx.font = this.scaledFont(46, "bold");
     ctx.fillText(
       `${Math.ceil(this.player.health)}`,
       healthX + hbW / 2,
@@ -6156,7 +6213,7 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("KILLS", killsX + rsecW / 2, topY + 4);
     ctx.fillStyle = "#ff8866";
-    ctx.font = "bold 42px monospace";
+    ctx.font = this.scaledFont(42, "bold");
     ctx.fillText(`${this.killedEnemies}`, killsX + rsecW / 2, midY + 12);
     ctx.fillStyle = "rgba(255,136,102,0.6)";
     ctx.font = "bold 18px monospace";
@@ -6169,7 +6226,7 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("SCORE", scoreX + rsecW / 2, topY + 4);
     ctx.fillStyle = "#00ddff";
-    ctx.font = "bold 40px monospace";
+    ctx.font = this.scaledFont(40, "bold");
     ctx.fillText(`${this.player.score}`, scoreX + rsecW / 2, midY + 14);
 
     // Location
@@ -6256,14 +6313,14 @@ export class Game {
       const warning = secs <= 10;
       const cleared = this.arenaClearTimer != null;
       ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(10, 10, 160, 72);
+      ctx.fillRect(10, 10, 160, 90);
       ctx.strokeStyle = warning
         ? "rgba(255,34,0,0.6)"
         : cleared
           ? "rgba(0,255,100,0.5)"
           : "rgba(0,200,255,0.3)";
       ctx.lineWidth = 2;
-      ctx.strokeRect(10, 10, 160, 72);
+      ctx.strokeRect(10, 10, 160, 90);
 
       ctx.fillStyle = cleared
         ? "#00ff66"
@@ -6278,6 +6335,22 @@ export class Game {
       ctx.fillStyle = cleared ? "rgba(0,255,100,0.7)" : "rgba(255,255,255,0.5)";
       ctx.font = "bold 14px monospace";
       ctx.fillText(cleared ? "CLEARED!" : "TIME", 90, 28);
+
+      // Elapsed time
+      if (this.roundStartTime) {
+        const elapsedSec = Math.floor(
+          (performance.now() - this.roundStartTime) / 1000,
+        );
+        const mins = Math.floor(elapsedSec / 60);
+        const secs2 = elapsedSec % 60;
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.font = "12px monospace";
+        ctx.fillText(
+          `${mins}:${secs2.toString().padStart(2, "0")} elapsed`,
+          90,
+          82,
+        );
+      }
 
       // Stage Cleared Notification
       if (cleared) {
@@ -6298,6 +6371,21 @@ export class Game {
         );
         ctx.textAlign = "left";
       }
+    }
+
+    // Campaign elapsed timer (top-left)
+    if (this.mode === "campaign" && this.roundStartTime) {
+      const elapsedSec = Math.floor(
+        (performance.now() - this.roundStartTime) / 1000,
+      );
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(10, 10, 90, 24);
+      ctx.fillStyle = "rgba(200,220,255,0.5)";
+      ctx.font = "12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 55, 27);
     }
 
     ctx.textAlign = "left";
@@ -7325,11 +7413,13 @@ export class Game {
     ctx.fillStyle = "#aaaacc";
     ctx.textAlign = "center";
     const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
-    ctx.fillText(
-      "ESC / P to resume  |  S settings  |  C controls  |  Q quit" + saveHint,
-      w / 2,
-      h / 2 + 110,
-    );
+    if (!this.isTouchDevice) {
+      ctx.fillText(
+        "ESC / P to resume  |  S settings  |  C controls  |  Q quit" + saveHint,
+        w / 2,
+        h / 2 + 110,
+      );
+    }
     if (this.pauseSaveFlash && performance.now() - this.pauseSaveFlash < 1500) {
       const alpha = 1 - (performance.now() - this.pauseSaveFlash) / 1500;
       ctx.fillStyle = `rgba(0, 255, 100, ${alpha.toFixed(2)})`;
@@ -7357,6 +7447,7 @@ export class Game {
     ];
     const difficultyNames = ["Easy", "Normal", "Hard", "Nightmare"];
     const difficultyColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
+    const colorblindNames = ["Off", "Deuteranopia", "Protanopia", "Tritanopia"];
     const items = [
       {
         label: "Difficulty",
@@ -7397,13 +7488,22 @@ export class Game {
         value: this.settings.invertX ? "ON" : "OFF",
         color: this.settings.invertX ? "#ff8844" : "#888888",
       },
+      {
+        label: "Font Scale",
+        value: `${this.settings.fontScale}%`,
+      },
+      {
+        label: "Colorblind Mode",
+        value: colorblindNames[this.settings.colorblind],
+        color: this.settings.colorblind > 0 ? "#ffcc00" : "#888888",
+      },
     ];
 
     const barW = 200;
     const barH = 6;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX
+    const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind
     let startY = h / 2 - 155;
 
     for (let i = 0; i < items.length; i++) {
@@ -7505,11 +7605,13 @@ export class Game {
     ctx.fillStyle = "#556677";
     ctx.font = "12px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(
-      "W/S to navigate, LEFT/RIGHT to change, ESC to go back",
-      w / 2,
-      startY + 20,
-    );
+    if (!this.isTouchDevice) {
+      ctx.fillText(
+        "W/S to navigate, LEFT/RIGHT to change, ESC to go back",
+        w / 2,
+        startY + 20,
+      );
+    }
     ctx.textAlign = "left";
   }
 
