@@ -123,8 +123,11 @@ function handleMessage(id, msg) {
       const now = Date.now();
       if (now - player.lastShot < 200) break; // rate limit: 5 shots/sec
       player.lastShot = now;
-      const dx = Math.cos(player.angle) * BULLET_SPEED;
-      const dy = Math.sin(player.angle) * BULLET_SPEED;
+      // Use input.angle (updated on MSG.INPUT) instead of player.angle
+      // which only syncs on tick() — avoids stale aim direction
+      const aimAngle = player.input.angle;
+      const dx = Math.cos(aimAngle) * BULLET_SPEED;
+      const dy = Math.sin(aimAngle) * BULLET_SPEED;
       bullets.push({
         x: player.x,
         y: player.y,
