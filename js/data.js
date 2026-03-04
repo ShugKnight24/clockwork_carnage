@@ -2,6 +2,1932 @@
 // 0 = empty, 1 = stone, 2 = tech, 3 = metal, 4 = energy, 5 = door, 6 = secret
 // 7 = boss wall, 8 = glass, 9 = temporal rift wall
 
+// ── Cutscene Story Scripts ─────────────────────────────────────────
+// Each cutscene is an array of frames. Each frame has:
+//   bg: background style (color or gradient key)
+//   title: large text at top (optional)
+//   lines: array of { text, delay(ms), color, size }
+//   art: drawing function key (hero, villain, station, explosion, etc.)
+//   particles: particle effect key
+//   duration: auto-advance time in ms (0 = wait for input)
+//   shake: screen shake intensity (optional)
+//   flash: flash color on entry (optional)
+
+export const CUTSCENE_SCRIPTS = {
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT I — THE FALL (Intro → Level 1-3)
+  // The hero charges in alone, defeats the "boss"... but it's a trap.
+  // ═══════════════════════════════════════════════════════════════════
+  intro: [
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "THE YEAR IS 2181.", delay: 0, color: "#556677", size: 14 },
+        { text: "Time is broken.", delay: 1200, color: "#00ccff", size: 22 },
+      ],
+      particles: "stars",
+      duration: 4000,
+    },
+    {
+      bg: "deep_space",
+      lines: [
+        {
+          text: "The Paradox Lord seized the Chronos Engine —",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "a device that bends the fabric of reality itself.",
+          delay: 1500,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Past, present, and future collapsed into one.",
+          delay: 3200,
+          color: "#ff6644",
+          size: 18,
+        },
+      ],
+      art: "rift",
+      particles: "embers",
+      duration: 6000,
+    },
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "Chronos Station — humanity's last anchor in time.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "Its corridors now crawl with temporal abominations.",
+          delay: 1800,
+          color: "#ff8844",
+          size: 16,
+        },
+        {
+          text: "Drones, phantoms, beasts — all glitched into existence.",
+          delay: 3600,
+          color: "#ff4444",
+          size: 16,
+        },
+      ],
+      art: "station",
+      particles: "sparks",
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "hero",
+      lines: [
+        {
+          text: "You are the last Temporal Agent.",
+          delay: 0,
+          color: "#00ffcc",
+          size: 20,
+        },
+        {
+          text: "Armed. Alone. Out of time.",
+          delay: 1800,
+          color: "#ffffff",
+          size: 24,
+        },
+      ],
+      particles: "glow",
+      duration: 4500,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        { text: "Fix the timeline.", delay: 0, color: "#00ffcc", size: 18 },
+        {
+          text: "Kill the Paradox Lord.",
+          delay: 1200,
+          color: "#ff2244",
+          size: 22,
+        },
+        { text: "Or die trying.", delay: 2400, color: "#ffffff", size: 26 },
+      ],
+      flash: "#00ccff",
+      duration: 5000,
+    },
+  ],
+
+  level2_briefing: [
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "CHRONOS STATION — SECTOR 2",
+          delay: 0,
+          color: "#00ccff",
+          size: 20,
+        },
+        { text: "The Temporal Nexus", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "The deeper corridors pulse with unstable energy.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Time itself fractures here — enemies phase in and out.",
+          delay: 1800,
+          color: "#ff8844",
+          size: 16,
+        },
+        {
+          text: "Stay sharp. Stay alive.",
+          delay: 3600,
+          color: "#ffcc00",
+          size: 18,
+        },
+      ],
+      art: "rift",
+      particles: "embers",
+      duration: 6000,
+    },
+  ],
+
+  coming_soon: [
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "The Paradox Lord is not finished.",
+          delay: 0,
+          color: "#ff4466",
+          size: 18,
+        },
+        {
+          text: "The timeline fractures deepen.",
+          delay: 2000,
+          color: "#cc4466",
+          size: 16,
+        },
+        {
+          text: "Your fight is far from over...",
+          delay: 4000,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "MORE COMING SOON",
+          delay: 0,
+          color: "#00ffcc",
+          size: 28,
+        },
+        {
+          text: "Acts 2 & 3 are in development.",
+          delay: 2000,
+          color: "#556677",
+          size: 14,
+        },
+        {
+          text: "Thank you for playing.",
+          delay: 3500,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      duration: 7000,
+    },
+  ],
+
+  level3_briefing: [
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        {
+          text: "Your temporal scanner is going haywire.",
+          delay: 0,
+          color: "#00ccff",
+          size: 16,
+        },
+        {
+          text: "Chronal distortion readings... climbing fast.",
+          delay: 2000,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "300... 1,200... 4,500...",
+          delay: 4000,
+          color: "#ffcc00",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffcc00",
+      shake: 2,
+      lines: [
+        {
+          text: "The scanner maxes out. The display flickers:",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: '"IT\'S OVER 9,000!!!"',
+          delay: 1800,
+          color: "#ff4444",
+          size: 26,
+        },
+        {
+          text: "...that can't be right.",
+          delay: 4000,
+          color: "#8899aa",
+          size: 14,
+        },
+      ],
+      particles: "embers",
+      duration: 6500,
+    },
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE PARADOX CORE", delay: 0, color: "#ff2244", size: 22 },
+        {
+          text: "Heart of the temporal collapse.",
+          delay: 1500,
+          color: "#cc4466",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 4000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      shake: 3,
+      lines: [
+        {
+          text: "A voice. Not from the room — from inside your head.",
+          delay: 0,
+          color: "#ff6644",
+          size: 16,
+        },
+        {
+          text: "The visor cracks. Static floods your HUD.",
+          delay: 2200,
+          color: "#ff4444",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"You FOOL. You think you can defeat ME?"',
+          delay: 0,
+          color: "#ff4466",
+          size: 18,
+        },
+        {
+          text: '"I am the master of time itself!"',
+          delay: 2000,
+          color: "#ff4466",
+          size: 18,
+        },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"In your foolish human terms — imagine Biff Tannen"',
+          delay: 0,
+          color: "#ff6688",
+          size: 15,
+        },
+        {
+          text: '"with the almanac from Back to the Future."',
+          delay: 2000,
+          color: "#ff6688",
+          size: 15,
+        },
+        {
+          text: '"Except instead of sports scores..."',
+          delay: 3800,
+          color: "#ff4466",
+          size: 16,
+        },
+        {
+          text: '"it contains every possible future of this battle."',
+          delay: 5600,
+          color: "#ff2244",
+          size: 17,
+        },
+      ],
+      particles: "embers",
+      duration: 8500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"I\'ve seen EVERY outcome. I am always one step ahead."',
+          delay: 0,
+          color: "#ff4466",
+          size: 16,
+        },
+        {
+          text: '"But since I\'m about to end your pathetic life..."',
+          delay: 2400,
+          color: "#cc4466",
+          size: 15,
+        },
+        {
+          text: '"...let me tell you an incredible tale."',
+          delay: 4500,
+          color: "#cc4466",
+          size: 15,
+        },
+      ],
+      particles: "embers",
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"Have you ever heard the tragedy of Darth Plagueis the Wise?"',
+          delay: 0,
+          color: "#ff6688",
+          size: 15,
+        },
+        {
+          text: '"He was so powerful... he could use the Force"',
+          delay: 2500,
+          color: "#cc88aa",
+          size: 14,
+        },
+        {
+          text: '"to influence time to create... life."',
+          delay: 4800,
+          color: "#cc88aa",
+          size: 14,
+        },
+        {
+          text: '"The only thing he feared was losing his power."',
+          delay: 7000,
+          color: "#ff4466",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"His apprentice killed him in his sleep. Ironic."',
+          delay: 0,
+          color: "#cc88aa",
+          size: 15,
+        },
+        {
+          text: '"He could save others from death... but not himself."',
+          delay: 2500,
+          color: "#ff4466",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 6000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: '"Okay, okay... I\'m monologuing like some corny villain."',
+          delay: 0,
+          color: "#ffaa88",
+          size: 14,
+        },
+        {
+          text: '"Wait — you\'re wearing a CAPE? Heroes stopped wearing capes."',
+          delay: 2200,
+          color: "#ffcc88",
+          size: 14,
+        },
+        {
+          text: '"Who does this guy think he is? Dr. Strange? FFS!"',
+          delay: 4400,
+          color: "#ffcc88",
+          size: 14,
+        },
+      ],
+      particles: "embers",
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      flash: "#ff0000",
+      lines: [
+        {
+          text: '"THIS ISN\'T EVEN MY FINAL FORM."',
+          delay: 0,
+          color: "#ff2244",
+          size: 22,
+        },
+        {
+          text: '"I have THREE. And trust me..."',
+          delay: 1800,
+          color: "#ff4466",
+          size: 16,
+        },
+        {
+          text: '"the bigger they are is NOT how this works."',
+          delay: 3400,
+          color: "#ff6644",
+          size: 15,
+        },
+      ],
+      shake: 3,
+      particles: "embers",
+      duration: 6500,
+    },
+    {
+      bg: "boss_lair",
+      art: "hero_armed",
+      flash: "#ff2200",
+      lines: [
+        {
+          text: "Enough talk.",
+          delay: 0,
+          color: "#00ffcc",
+          size: 20,
+        },
+        { text: "End this. NOW.", delay: 1200, color: "#ffffff", size: 28 },
+      ],
+      shake: 4,
+      duration: 3500,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FALSE VICTORY — Plays after "defeating" the boss in Level 3
+  // The subversion: you think you won... but the Lord was toying with you
+  // ═══════════════════════════════════════════════════════════════════
+  false_victory: [
+    {
+      bg: "boss_lair",
+      art: "hero_armed",
+      flash: "#00ffcc",
+      lines: [
+        {
+          text: "The Paradox Lord crumbles before you.",
+          delay: 0,
+          color: "#00ffcc",
+          size: 20,
+        },
+        {
+          text: "You did it. The timeline is—",
+          delay: 2000,
+          color: "#aaddff",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 4500,
+    },
+    {
+      bg: "boss_lair",
+      flash: "#ff0000",
+      shake: 6,
+      lines: [
+        {
+          text: "...wait.",
+          delay: 0,
+          color: "#ff4444",
+          size: 24,
+        },
+      ],
+      duration: 2500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      flash: "#ff0044",
+      shake: 8,
+      lines: [
+        {
+          text: '"Did you really think that was ME?"',
+          delay: 0,
+          color: "#ff2266",
+          size: 20,
+        },
+        {
+          text: '"That was my FIRST form. A shell. A test."',
+          delay: 2200,
+          color: "#ff4488",
+          size: 16,
+        },
+        {
+          text: '"And you barely passed."',
+          delay: 4200,
+          color: "#ff2244",
+          size: 18,
+        },
+      ],
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        {
+          text: '"You see, little agent, I grow from the BOTTOM UP."',
+          delay: 0,
+          color: "#ff6688",
+          size: 16,
+        },
+        {
+          text: '"While you scramble to understand one piece of the puzzle..."',
+          delay: 2400,
+          color: "#ff88aa",
+          size: 15,
+        },
+        {
+          text: '"I see the ENTIRE board. Every move. Every timeline."',
+          delay: 4800,
+          color: "#ff4466",
+          size: 17,
+        },
+      ],
+      particles: "embers",
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      flash: "#ff0088",
+      shake: 5,
+      lines: [
+        {
+          text: '"My power level? As your human cartoons say..."',
+          delay: 0,
+          color: "#ff88aa",
+          size: 15,
+        },
+        {
+          text: '"IT\'S OVER NINE THOUSAND."',
+          delay: 2000,
+          color: "#ff0044",
+          size: 28,
+        },
+        {
+          text: '"And this body? THIS ISN\'T EVEN MY FINAL FORM."',
+          delay: 4000,
+          color: "#ff2266",
+          size: 20,
+        },
+      ],
+      shake: 6,
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      flash: "#ffffff",
+      shake: 10,
+      lines: [
+        {
+          text: "A wave of temporal energy tears through the station.",
+          delay: 0,
+          color: "#ff8844",
+          size: 18,
+        },
+        {
+          text: "Your weapons shatter. Your armor cracks.",
+          delay: 2000,
+          color: "#ff4444",
+          size: 18,
+        },
+        {
+          text: "You are thrown across the room like a ragdoll.",
+          delay: 4000,
+          color: "#ff2222",
+          size: 20,
+        },
+      ],
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "hero_fallen",
+      lines: [
+        {
+          text: "Everything goes dark.",
+          delay: 0,
+          color: "#445566",
+          size: 20,
+        },
+        {
+          text: "You should have brought friends.",
+          delay: 2000,
+          color: "#667788",
+          size: 16,
+        },
+      ],
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "END OF ACT I",
+          delay: 0,
+          color: "#334455",
+          size: 28,
+        },
+        {
+          text: "— THE FALL —",
+          delay: 1500,
+          color: "#556677",
+          size: 18,
+        },
+      ],
+      duration: 4000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT II — THE GATHERING
+  // The hero recovers, finds allies, trains together
+  // Like Goku gathering the Z-Fighters / Chief rallying Spartans
+  // ═══════════════════════════════════════════════════════════════════
+  act2_intro: [
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "ACT II", delay: 0, color: "#00ccff", size: 28 },
+        { text: "— THE BONDS —", delay: 1500, color: "#aaddff", size: 18 },
+      ],
+      duration: 4000,
+    },
+    {
+      bg: "station",
+      art: "hero_fallen",
+      lines: [
+        { text: "Three days later. Chronos Station medbay.", delay: 0, color: "#8899aa", size: 15 },
+        { text: "You wake up. Broken, but alive.", delay: 2000, color: "#aabbcc", size: 16 },
+        { text: "The Paradox Lord left you alive on purpose. A message.", delay: 4000, color: "#ff8844", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 7000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "A voice. Soft. Steady. Like she's been waiting.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: '"I\'ve been watching your temporal readings for months."', delay: 2500, color: "#ffaa44", size: 16 },
+        { text: '"Everyone else looked at you and saw a beat cop."', delay: 5000, color: "#ffcc88", size: 15 },
+        { text: '"I looked at you and saw... something impossible."', delay: 7500, color: "#ffaa44", size: 18 },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "station",
+      lines: [
+        { text: "Others survived the temporal collapse too.", delay: 0, color: "#aabbcc", size: 16 },
+        { text: "Not soldiers. Not heroes. Just people who lost everything.", delay: 2000, color: "#aabbcc", size: 16 },
+        { text: "People who had nothing left... except each other.", delay: 4000, color: "#00ffcc", size: 18 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "party",
+      lines: [
+        { text: "KAEL — The Vanguard. Lost his whole squad. Swore he'd never lose anyone again.", delay: 0, color: "#4488ff", size: 15 },
+        { text: "LYRA — The Chrono-Analyst. Saw the truth in the data. Nobody listened... until you.", delay: 2500, color: "#ffaa44", size: 15 },
+        { text: "NOVA — The Striker. Fastest thing alive. Running from a past she won't talk about.", delay: 5000, color: "#ff4488", size: 15 },
+        { text: "ROOK — The Engineer. Builds anything. Trusts no one. Learned to trust YOU.", delay: 7500, color: "#44ff88", size: 15 },
+        { text: "And you. The Temporal Agent. The one who came back for ALL of them.", delay: 10000, color: "#00ffcc", size: 16 },
+      ],
+      particles: "glow",
+      duration: 13000,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: "You don't build a team. You build a family.", delay: 0, color: "#aabbcc", size: 16 },
+        { text: "Kael teaches you to hold the line. You teach him to let people in.", delay: 2500, color: "#4488ff", size: 15 },
+        { text: "Nova shows you speed. You show her it's okay to stand still.", delay: 5000, color: "#ff4488", size: 15 },
+        { text: "Rook builds the weapons. You give him something worth fighting for.", delay: 7500, color: "#44ff88", size: 15 },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "And Lyra...", delay: 0, color: "#ffcc88", size: 16 },
+        { text: "She stays up late running calculations. You bring her coffee.", delay: 2000, color: "#ffaa44", size: 15 },
+        { text: "She tells you about the timelines she's seen die. You listen.", delay: 4500, color: "#ffaa44", size: 15 },
+        { text: '"No one ever listened before."', delay: 7000, color: "#ffcc88", size: 18 },
+      ],
+      particles: "glow",
+      duration: 9500,
+    },
+    {
+      bg: "station",
+      art: "hero_armed",
+      flash: "#00ccff",
+      lines: [
+        { text: "The Lord thinks this is a war.", delay: 0, color: "#aabbcc", size: 16 },
+        { text: "He's wrong. This isn't about power.", delay: 2000, color: "#00ffcc", size: 18 },
+        { text: "It's about the people standing next to you.", delay: 4000, color: "#ffffff", size: 22 },
+      ],
+      particles: "sparks",
+      duration: 7000,
+    },
+  ],
+
+  act2_level2: [
+    {
+      bg: "station",
+      lines: [
+        { text: "THE PROVING GROUNDS", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Where bonds are forged in fire.", delay: 1400, color: "#aabbcc", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: "You train together. Eat together. Bleed together.", delay: 0, color: "#8899aa", size: 16 },
+        { text: "Kael guards everyone's back. Nova makes them laugh. Rook fixes what breaks.", delay: 2500, color: "#aabbcc", size: 15 },
+        { text: "Late one night, Nova finally tells you about the people she lost.", delay: 5000, color: "#ff4488", size: 15 },
+        { text: '"I ran. I always ran. Not this time."', delay: 7500, color: "#ff4488", size: 17 },
+      ],
+      particles: "embers",
+      duration: 10000,
+    },
+  ],
+
+  act2_level3: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE LORD'S CATHEDRAL", delay: 0, color: "#ff2244", size: 22 },
+        { text: "His temporal fortress. He's been waiting.", delay: 1500, color: "#cc4466", size: 16 },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        { text: '"Oh? You brought FRIENDS this time?"', delay: 0, color: "#ff4466", size: 18 },
+        { text: '"How... sentimental."', delay: 2000, color: "#ff6688", size: 16 },
+        { text: '"I\'ve killed you in a thousand timelines. Each time, alone."', delay: 3800, color: "#ff88aa", size: 15 },
+        { text: '"Having people you care about just gives me more things to break."', delay: 6000, color: "#ff4466", size: 16 },
+      ],
+      particles: "embers",
+      duration: 8500,
+    },
+    {
+      bg: "boss_lair",
+      art: "hero_armed",
+      flash: "#00ffcc",
+      lines: [
+        { text: "Kael steps in front of you. Shield up.", delay: 0, color: "#4488ff", size: 16 },
+        { text: '"You talk too much.\"', delay: 2000, color: "#4488ff", size: 16 },
+        { text: "Nova's already flanking. Rook's turrets hum to life.", delay: 3800, color: "#44ff88", size: 15 },
+        { text: "You lock eyes with Lyra. She nods. You both know the plan.", delay: 5500, color: "#ffaa44", size: 16 },
+        { text: "TOGETHER.", delay: 7500, color: "#ffffff", size: 26 },
+      ],
+      shake: 4,
+      duration: 9000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT II VICTORY — Beat Form 2, bonds tested, the Lord transforms
+  // ═══════════════════════════════════════════════════════════════════
+  act2_victory: [
+    {
+      bg: "boss_lair",
+      flash: "#00ffcc",
+      lines: [
+        { text: "Form Two crumbles. The Lord staggers.", delay: 0, color: "#00ffcc", size: 18 },
+        { text: "For the first time... he looks hurt.", delay: 2000, color: "#aaddff", size: 16 },
+      ],
+      particles: "glow",
+      duration: 5000,
+    },
+    {
+      bg: "boss_lair",
+      art: "party",
+      lines: [
+        { text: "Kael's shield held. Nova's still standing. Rook's grinning.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "You did this TOGETHER.", delay: 2500, color: "#00ffcc", size: 18 },
+        { text: "For the first time, the Lord sees something he doesn't understand:", delay: 4500, color: "#aaddff", size: 15 },
+        { text: "People fighting for each other. Not for power. For love.", delay: 7000, color: "#ffffff", size: 18 },
+      ],
+      particles: "glow",
+      duration: 9500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        { text: '"...interesting. You actually hurt me."', delay: 0, color: "#ff6688", size: 16 },
+        { text: '"Not with strength. With something I can\\'t calculate."', delay: 2500, color: "#ff88aa", size: 15 },
+        { text: '"I\\'ll need to... reconfigure."', delay: 5000, color: "#ff2244", size: 18 },
+      ],
+      particles: "embers",
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      flash: "#ffffff",
+      shake: 10,
+      lines: [
+        { text: "The chamber erupts in light.", delay: 0, color: "#ff88aa", size: 16 },
+        { text: "Something ancient and terrible awakens.", delay: 2500, color: "#ff4488", size: 18 },
+      ],
+      particles: "embers",
+      duration: 5500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      flash: "#ff0000",
+      shake: 12,
+      lines: [
+        { text: '"THIS... IS MY FINAL FORM."', delay: 0, color: "#ff0044", size: 28 },
+        { text: '"I am no longer bound by time."', delay: 2500, color: "#ff2266", size: 18 },
+        { text: '"I AM time."', delay: 4500, color: "#ffffff", size: 24 },
+      ],
+      shake: 8,
+      particles: "embers",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "party",
+      lines: [
+        { text: "Lyra grabs your hand. For just a second.", delay: 0, color: "#ffaa44", size: 16 },
+        { text: '"We can do this. I believe in us."', delay: 2500, color: "#ffcc88", size: 17 },
+        { text: "Not 'I believe in you.' In US.", delay: 5000, color: "#ffffff", size: 18 },
+      ],
+      particles: "glow",
+      duration: 7500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "END OF ACT II", delay: 0, color: "#334455", size: 28 },
+        { text: "— THE BONDS —", delay: 1500, color: "#556677", size: 18 },
+      ],
+      duration: 4000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LYRA REVEAL — The Chrono-Analyst's Awakening
+  // Death Note energy — she figured out what nobody else could
+  // Solo Leveling energy — the hero was always powerful, she proves it
+  // Kaiju No. 8 — the nobody who changes everything
+  // ═══════════════════════════════════════════════════════════════════
+  lyra_reveal: [
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "While the squad patches their wounds, Lyra works.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Holographic timelines cascade around her like waterfalls.",
+          delay: 2500,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: "She's been mapping the Paradox Lord's decisions since the Collapse.",
+          delay: 5000,
+          color: "#ffaa44",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 8000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: '"Everyone looks at the battles. I look at the spaces between."',
+          delay: 0,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "\"There's a pattern. He doesn't see what he doesn't expect.\"",
+          delay: 3000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "Like Light Yagami's notebook — power through perfect information.",
+          delay: 6000,
+          color: "#ff8866",
+          size: 14,
+        },
+        {
+          text: "But information has blind spots.",
+          delay: 8000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        {
+          text: "She turns to you. Her eyes are burning amber.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 16,
+        },
+        {
+          text: '"Your temporal readings... they don\'t match any baseline."',
+          delay: 2500,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"Not even close. You\'ve been holding back something immense."',
+          delay: 5000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"Like Jinwoo before his Awakening... the power was always there."',
+          delay: 7500,
+          color: "#ffcc44",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffaa44",
+      lines: [
+        {
+          text: "Something clicks. Deep inside, past the damage, past the doubt.",
+          delay: 0,
+          color: "#00ffcc",
+          size: 16,
+        },
+        {
+          text: "She didn't give you new power. She showed you what was already there.",
+          delay: 3000,
+          color: "#ffcc88",
+          size: 16,
+        },
+        {
+          text: "The nobody who kept clocking in... was the strongest one all along.",
+          delay: 6000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      shake: 3,
+      duration: 9500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: 'Kael grips his cracked shield. "So we fight."',
+          delay: 0,
+          color: "#4488ff",
+          size: 15,
+        },
+        {
+          text: 'Nova cracks her knuckles. "Wouldn\'t miss it."',
+          delay: 2000,
+          color: "#ff4488",
+          size: 15,
+        },
+        {
+          text: 'Rook powers up his last turret. "All systems nominal. Mostly."',
+          delay: 4000,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: "Lyra closes her holoscreens. \"I'll be watching. I'll find your opening.\"",
+          delay: 6000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "You look at them — your team, your friends — and you know.",
+          delay: 8500,
+          color: "#ffffff",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 11500,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT III — THE SACRIFICE
+  // The hero realizes the cost. Sacrifices everything.
+  // Gets the girl. Redeems himself.
+  // ═══════════════════════════════════════════════════════════════════
+  act3_intro: [
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "ACT III", delay: 0, color: "#ff2244", size: 28 },
+        { text: "— THE SACRIFICE —", delay: 1500, color: "#ff8866", size: 18 },
+      ],
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      lines: [
+        { text: "The Paradox Lord, Final Form.", delay: 0, color: "#ff4466", size: 18 },
+        { text: "He doesn't just see the future. He IS the future.", delay: 2000, color: "#ff6688", size: 15 },
+        { text: "Every strategy you've planned — he's already countered it.", delay: 4000, color: "#ff88aa", size: 15 },
+        { text: "Every move with your team — he's already seen it.", delay: 6000, color: "#ff2244", size: 16 },
+      ],
+      particles: "embers",
+      duration: 8500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: "Kael's shield is cracked. Nova is limping.", delay: 0, color: "#8899aa", size: 15 },
+        { text: "Rook's turrets are slag. Lyra's screens are flickering.", delay: 2000, color: "#aabbcc", size: 15 },
+        { text: "But they're still standing. All of them.", delay: 4000, color: "#aabbcc", size: 16 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "Lyra pulls you aside. Her voice is shaking.", delay: 0, color: "#ffaa44", size: 15 },
+        { text: '"I found a blind spot. One moment he can\\'t predict."', delay: 2500, color: "#ffaa44", size: 16 },
+        { text: '"But there\\'s a cost. Someone has to enter the Paradox Core alone."', delay: 5000, color: "#ffaa44", size: 15 },
+        { text: '"The energy will... it will rewrite whoever goes in."', delay: 7500, color: "#ffcc88", size: 15 },
+        { text: "She can't finish the sentence. She doesn't need to.", delay: 10000, color: "#aabbcc", size: 16 },
+      ],
+      particles: "glow",
+      duration: 12500,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#00ffcc",
+      lines: [
+        { text: "You already know who's going.", delay: 0, color: "#00ffcc", size: 18 },
+        { text: "You were always going.", delay: 2000, color: "#aaddff", size: 16 },
+        { text: "That's what a badge means. You protect the people you love.", delay: 4000, color: "#ffffff", size: 18 },
+        { text: "Even if it costs everything.", delay: 6500, color: "#ffcc00", size: 22 },
+      ],
+      shake: 4,
+      particles: "embers",
+      duration: 9000,
+    },
+  ],
+
+  act3_level2: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE TEMPORAL THRONE", delay: 0, color: "#ff2244", size: 22 },
+        { text: "Where time itself kneels.", delay: 1400, color: "#cc4466", size: 16 },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: '"You can\\'t go alone." Kael blocks the door.', delay: 0, color: "#4488ff", size: 16 },
+        { text: '"I\\'m faster — I should be the one." Nova steps forward.', delay: 2500, color: "#ff4488", size: 16 },
+        { text: '"My turrets can — \" Rook starts.', delay: 4500, color: "#44ff88", size: 16 },
+        { text: "You shake your head. Look at each of them.", delay: 6500, color: "#aabbcc", size: 16 },
+        { text: '"You\\'re my family. That\\'s WHY it has to be me."', delay: 8500, color: "#00ffcc", size: 18 },
+      ],
+      particles: "glow",
+      duration: 11000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "Lyra is the last one standing in your way.", delay: 0, color: "#ffcc88", size: 16 },
+        { text: '\"Don\\'t you DARE.\"', delay: 2000, color: "#ffaa44", size: 22 },
+        { text: "Her eyes are burning. Not with data. With tears.", delay: 4000, color: "#ffcc88", size: 15 },
+        { text: '"You just got here. I just found you. You can\\'t —"', delay: 6000, color: "#ffaa44", size: 16 },
+        { text: "You take her hand. Hold it. Let it go.", delay: 8500, color: "#ffffff", size: 18 },
+        { text: '"I\\'m coming back. I promise.\"', delay: 10500, color: "#00ffcc", size: 20 },
+      ],
+      particles: "glow",
+      duration: 13000,
+    },
+  ],
+
+  act3_boss: [
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      shake: 3,
+      lines: [
+        { text: "THE PARADOX CORE — TRUE HEART", delay: 0, color: "#ff0044", size: 22 },
+        { text: "You enter alone.", delay: 1500, color: "#ff4466", size: 16 },
+      ],
+      particles: "embers",
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      lines: [
+        { text: '"Oh. Just you?"', delay: 0, color: "#ff4466", size: 18 },
+        { text: '"Your friends aren\\'t coming to save you this time?"', delay: 2200, color: "#ff6688", size: 16 },
+        { text: '"How... disappointing."', delay: 4200, color: "#ff88aa", size: 16 },
+      ],
+      particles: "embers",
+      duration: 6500,
+    },
+    {
+      bg: "boss_lair",
+      art: "hero_armed",
+      flash: "#00ffcc",
+      shake: 5,
+      lines: [
+        { text: "They're not here because I love them too much to let them die.", delay: 0, color: "#00ffcc", size: 16 },
+        { text: "And that... is something you'll never understand.", delay: 2500, color: "#ffffff", size: 18 },
+        { text: "That's your blind spot.", delay: 4500, color: "#ffcc00", size: 24 },
+      ],
+      shake: 6,
+      particles: "embers",
+      duration: 7000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TRUE VICTORY — Sacrifice, redemption, the hero gets the girl
+  // ═══════════════════════════════════════════════════════════════════
+  true_victory: [
+    {
+      bg: "boss_lair",
+      flash: "#ffffff",
+      shake: 10,
+      lines: [
+        { text: "The Final Form shatters.", delay: 0, color: "#ffffff", size: 22 },
+        { text: "But the Core is collapsing. Taking you with it.", delay: 2000, color: "#ff8844", size: 18 },
+      ],
+      particles: "embers",
+      duration: 5500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      lines: [
+        { text: '"Im...possible. I saw every timeline."', delay: 0, color: "#ff6688", size: 16 },
+        { text: '"A sacrifice? For THEM? That\\'s not... logical."', delay: 2500, color: "#ff88aa", size: 15 },
+        { text: '"You couldn\\'t have known you\\'d survive this."', delay: 5000, color: "#cc4466", size: 16 },
+      ],
+      particles: "glow",
+      duration: 8000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        { text: "The chamber tears apart around you.", delay: 0, color: "#ff4444", size: 16 },
+        { text: "Time fractures. Your body burns.", delay: 2000, color: "#ff6644", size: 16 },
+        { text: "Every timeline flashes before your eyes.", delay: 4000, color: "#aaddff", size: 16 },
+        { text: "In every one... they're smiling. Because of you.", delay: 6000, color: "#ffffff", size: 18 },
+        { text: "That's enough. That's always been enough.", delay: 8000, color: "#00ffcc", size: 18 },
+      ],
+      particles: "embers",
+      shake: 6,
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "Darkness.", delay: 0, color: "#334455", size: 20 },
+        { text: "Silence.", delay: 2000, color: "#334455", size: 20 },
+        { text: "...", delay: 4000, color: "#556677", size: 24 },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: '"WAKE UP."', delay: 0, color: "#ffaa44", size: 28 },
+        { text: "Lyra's voice. Close. Desperate.", delay: 1500, color: "#ffcc88", size: 16 },
+        { text: '"You promised, you absolute idiot. You PROMISED."', delay: 3500, color: "#ffaa44", size: 16 },
+        { text: "Her hand on your face. Warm.", delay: 6000, color: "#ffcc88", size: 16 },
+        { text: "You open your eyes.", delay: 8000, color: "#ffffff", size: 20 },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: "You're in the medbay. Same bed you woke up in before.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "But this time, the room is full.", delay: 2000, color: "#aabbcc", size: 16 },
+        { text: "Kael is trying not to cry. Failing.", delay: 3800, color: "#4488ff", size: 15 },
+        { text: "Nova is laughing through tears. Rook just nods. That's enough from him.", delay: 5500, color: "#ff4488", size: 15 },
+        { text: "And Lyra... hasn't let go of your hand.", delay: 7500, color: "#ffaa44", size: 17 },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "The Chronos Engine stabilizes.", delay: 0, color: "#00ccff", size: 18 },
+        { text: "Timelines heal. The rift closes.", delay: 2000, color: "#aaddff", size: 16 },
+        { text: "The world doesn't end today.", delay: 4000, color: "#00ffcc", size: 20 },
+      ],
+      particles: "stars",
+      duration: 7000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "Later. The station is quiet.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "Lyra finds you on the observation deck, staring at the stars.", delay: 2000, color: "#ffcc88", size: 15 },
+        { text: '"You\\'re an idiot, you know that?"', delay: 4500, color: "#ffaa44", size: 16 },
+        { text: '"Yeah.\"', delay: 6500, color: "#00ffcc", size: 16 },
+        { text: '"...my idiot."', delay: 8000, color: "#ffaa44", size: 20 },
+        { text: "She kisses you. The stars have never looked brighter.", delay: 10000, color: "#ffffff", size: 18 },
+      ],
+      particles: "glow",
+      duration: 13000,
+    },
+    {
+      bg: "deep_space",
+      art: "party",
+      lines: [
+        { text: "Kael. Lyra. Nova. Rook. You.", delay: 0, color: "#aaddff", size: 16 },
+        { text: "Not just agents. Family.", delay: 2000, color: "#00ccff", size: 18 },
+        { text: "The ones who stayed. The ones who fought.", delay: 4000, color: "#00ffcc", size: 18 },
+        { text: "The ones who loved.", delay: 6000, color: "#ffcc00", size: 22 },
+        { text: "The ones who WON.", delay: 8000, color: "#ffffff", size: 26 },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "TIMELINE RESTORED", delay: 0, color: "#00ffcc", size: 28 },
+        { text: "— FIN —", delay: 2000, color: "#ffffff", size: 22 },
+      ],
+      duration: 5000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CLOCKING IN — Post-tutorial pre-campaign origin story
+  // A cop. A nobody. Just another shift... until it wasn't.
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── Comic Book Origin Panels ──────────────────────────────────────
+  // Plays after tutorial — the hero's journey in panels
+  origin_panels: [
+    {
+      // Page 1: The mundane life
+      bg: "dark",
+      panels: [
+        {
+          x: 0,
+          y: 0,
+          w: 0.55,
+          h: 0.5,
+          bg: "station",
+          art: "station",
+          caption: "Chronos Station. 06:47 AM. Another day.",
+          captionPos: "top",
+          captionColor: "#8899aa",
+          captionSize: 11,
+          halftone: 0.15,
+        },
+        {
+          x: 0.55,
+          y: 0,
+          w: 0.45,
+          h: 0.3,
+          bg: "dark",
+          art: "hero",
+          caption: "Badge 11235. Just a beat cop.",
+          captionPos: "bottom",
+          captionColor: "#00ccff",
+          captionSize: 11,
+        },
+        {
+          x: 0.55,
+          y: 0.3,
+          w: 0.45,
+          h: 0.2,
+          caption: "Nobody special. Nobody watching.",
+          captionPos: "center",
+          captionColor: "#556677",
+          captionBg: "rgba(5,5,15,0.95)",
+          captionSize: 13,
+        },
+        {
+          x: 0,
+          y: 0.5,
+          w: 1.0,
+          h: 0.5,
+          bg: "station",
+          art: "hero",
+          caption: "You show up. Clock in. Do the work. Go home. Repeat.",
+          captionPos: "bottom",
+          captionColor: "#aabbcc",
+          captionSize: 12,
+          halftone: 0.1,
+        },
+      ],
+      duration: 8000,
+    },
+    {
+      // Page 2: The fracture
+      bg: "dark",
+      panels: [
+        {
+          x: 0,
+          y: 0,
+          w: 1.0,
+          h: 0.35,
+          bg: "deep_space",
+          art: "rift",
+          caption: "Then the sky broke.",
+          captionPos: "top",
+          captionColor: "#ff4444",
+          captionSize: 14,
+          action: true,
+          sfx: "KRAA-KOOM",
+          sfxColor: "#ff4444",
+          sfxSize: 32,
+          sfxX: 0.75,
+          sfxY: 0.4,
+          sfxRot: -12,
+        },
+        {
+          x: 0,
+          y: 0.35,
+          w: 0.5,
+          h: 0.35,
+          bg: "station",
+          caption: "Reality folded. Time collapsed.",
+          captionPos: "center",
+          captionColor: "#ff8844",
+          captionBg: "rgba(20,5,5,0.9)",
+          captionSize: 12,
+          halftone: 0.2,
+        },
+        {
+          x: 0.5,
+          y: 0.35,
+          w: 0.5,
+          h: 0.35,
+          bg: "dark",
+          art: "villain",
+          caption: "Something came through.",
+          captionPos: "bottom",
+          captionColor: "#ff0066",
+          captionSize: 12,
+          action: true,
+        },
+        {
+          x: 0,
+          y: 0.7,
+          w: 1.0,
+          h: 0.3,
+          caption: "The Paradox Lord. Ancient. Patient. Hungry.",
+          captionPos: "center",
+          captionColor: "#ff2244",
+          captionBg: "rgba(10,0,5,0.95)",
+          captionSize: 15,
+        },
+      ],
+      duration: 9000,
+    },
+    {
+      // Page 3: Everyone falls
+      bg: "dark",
+      panels: [
+        {
+          x: 0,
+          y: 0,
+          w: 0.5,
+          h: 0.45,
+          bg: "station",
+          caption: "Most people ran.",
+          captionPos: "top",
+          captionColor: "#8899aa",
+          captionSize: 13,
+          halftone: 0.2,
+        },
+        {
+          x: 0.5,
+          y: 0,
+          w: 0.5,
+          h: 0.45,
+          bg: "dark",
+          caption: "Command went dark. Comms — static.",
+          captionPos: "center",
+          captionColor: "#556677",
+          captionBg: "rgba(5,5,15,0.95)",
+          captionSize: 12,
+        },
+        {
+          x: 0,
+          y: 0.45,
+          w: 0.65,
+          h: 0.55,
+          bg: "dark",
+          art: "hero",
+          caption: "You didn't run.",
+          captionPos: "bottom",
+          captionColor: "#00ffcc",
+          captionSize: 14,
+        },
+        {
+          x: 0.65,
+          y: 0.45,
+          w: 0.35,
+          h: 0.55,
+          caption:
+            "Not because you're brave. Because you're too stubborn to die.",
+          captionPos: "center",
+          captionColor: "#00ccff",
+          captionBg: "rgba(0,10,20,0.95)",
+          captionSize: 11,
+        },
+      ],
+      duration: 8000,
+    },
+    {
+      // Page 4: Suiting up - THE moment
+      bg: "dark",
+      panels: [
+        {
+          x: 0,
+          y: 0,
+          w: 0.4,
+          h: 0.4,
+          bg: "station",
+          caption: "The locker. One last time.",
+          captionPos: "top",
+          captionColor: "#8899aa",
+          captionSize: 11,
+        },
+        {
+          x: 0.4,
+          y: 0,
+          w: 0.6,
+          h: 0.4,
+          bg: "dark",
+          art: "hero_armed",
+          caption: "Temporal Combat Armor. Prototype 7.",
+          captionPos: "bottom",
+          captionColor: "#00ccff",
+          captionSize: 12,
+          sfx: "KLANK",
+          sfxColor: "#00ccff",
+          sfxSize: 22,
+          sfxX: 0.2,
+          sfxY: 0.3,
+          sfxRot: 8,
+        },
+        {
+          x: 0,
+          y: 0.4,
+          w: 1.0,
+          h: 0.35,
+          bg: "dark",
+          art: "hero_armed",
+          action: true,
+          caption: "Helmet on. Visor down. Rifle loaded.",
+          captionPos: "bottom",
+          captionColor: "#00ffcc",
+          captionSize: 14,
+          sfx: "CHKK-CHKK",
+          sfxColor: "#00ffcc",
+          sfxSize: 24,
+          sfxX: 0.8,
+          sfxY: 0.25,
+          sfxRot: -6,
+        },
+        {
+          x: 0,
+          y: 0.75,
+          w: 1.0,
+          h: 0.25,
+          caption: '"I\'M NOT GOING DOWN WITHOUT A FIGHT."',
+          captionPos: "center",
+          captionColor: "#ffcc00",
+          captionBg: "rgba(0,0,0,0.95)",
+          captionSize: 18,
+        },
+      ],
+      duration: 9000,
+    },
+  ],
+
+  the_hunt_begins: [
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        {
+          text: "Training's over. The real world hits different.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The other Alpha candidates washed out. Every one.",
+          delay: 2200,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "You're the only one left.",
+          delay: 4400,
+          color: "#00ccff",
+          size: 17,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        {
+          text: "Something's wrong with time. You can feel it in the armor.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The chronal readings on your HUD are spiking. Hard.",
+          delay: 2500,
+          color: "#ff8844",
+          size: 16,
+        },
+      ],
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "villain",
+      flash: "#ff2244",
+      shake: 2,
+      lines: [
+        {
+          text: "A voice. Not in the room — in your skull.",
+          delay: 0,
+          color: "#ff6644",
+          size: 17,
+        },
+        {
+          text: '"There you are. I\'ve been watching your little program."',
+          delay: 2200,
+          color: "#ff2244",
+          size: 18,
+        },
+        {
+          text: '"The others broke so easily. But you... you activated the prototype."',
+          delay: 5000,
+          color: "#ff4466",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 8000,
+    },
+    {
+      bg: "dark",
+      art: "rift",
+      shake: 1,
+      lines: [
+        {
+          text: "The lights flicker. The clock on the wall runs backwards.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Then everything goes sideways.",
+          delay: 2500,
+          color: "#ff4444",
+          size: 18,
+        },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#ffffff",
+      lines: [
+        {
+          text: "The Alpha program is down to one. You.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "Whatever that thing is — you're going to find it.",
+          delay: 2500,
+          color: "#00ccff",
+          size: 18,
+        },
+        {
+          text: "The hunt begins.",
+          delay: 5000,
+          color: "#00ffcc",
+          size: 22,
+        },
+      ],
+      particles: "glow",
+      duration: 7000,
+    },
+  ],
+
+  clocking_in: [
+    {
+      bg: "station",
+      art: "station",
+      lines: [
+        {
+          text: "06:47 AM. Chronos Station.",
+          delay: 0,
+          color: "#556677",
+          size: 14,
+        },
+        {
+          text: "Another morning. Another shift.",
+          delay: 1200,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The coffee's bad and the commute was worse.",
+          delay: 3000,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      duration: 5500,
+    },
+    {
+      bg: "dark",
+      art: "hero_at_desk",
+      lines: [
+        {
+          text: "You badge in at the front desk. Same as always.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "The receptionist doesn't look up. Never does.",
+          delay: 2200,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: '"Morning." Nothing. You keep walking.',
+          delay: 4400,
+          color: "#667788",
+          size: 15,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "hero_human",
+      lines: [
+        {
+          text: "Three years at the Bureau. Still a field cadet.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "Every Alpha-class promotion exam — failed.",
+          delay: 2200,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: '"Not quick enough. Not precise enough."',
+          delay: 4400,
+          color: "#887766",
+          size: 15,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "Locker room. Third row, second from the left.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "You've opened this locker a thousand times.",
+          delay: 2000,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "But today something's different.",
+          delay: 4000,
+          color: "#00ccff",
+          size: 17,
+        },
+      ],
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "hero_human",
+      lines: [
+        {
+          text: "Unmarked crate from R&D. Your name's on it.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: '"Temporal Combat Armor — Alpha Prototype."',
+          delay: 2200,
+          color: "#00ccff",
+          size: 18,
+        },
+        {
+          text: 'A sticky note from your supervisor: "You\'re up. Put it on."',
+          delay: 4500,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "hero",
+      particles: "sparks",
+      lines: [
+        {
+          text: "It fits better than you expected.",
+          delay: 0,
+          color: "#8899aa",
+          size: 16,
+        },
+        {
+          text: "Helmet on. Visor down. HUD flickers to life.",
+          delay: 2200,
+          color: "#00ffcc",
+          size: 18,
+        },
+        {
+          text: "Everything feels... enhanced. Sharper. Faster.",
+          delay: 4500,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      flash: "#00ccff",
+      lines: [
+        {
+          text: "Standard-issue temporal rifle. Heavier than expected.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: "\"Calibrated to the armor's servo profile. You'll sprint faster,",
+          delay: 2000,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: 'carry more, and hit harder — but you need to learn the steps."',
+          delay: 3800,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: "Time to test what this thing can do.",
+          delay: 6000,
+          color: "#00ffcc",
+          size: 18,
+        },
+      ],
+      duration: 8000,
+    },
+  ],
+};
+
 export const WALL_COLORS = {
   1: { r: 80, g: 80, b: 100 }, // Stone - blue-grey
   2: { r: 40, g: 80, b: 120 }, // Tech - dark blue
@@ -19,6 +1945,37 @@ export const WALL_COLORS = {
 // K = key, S = secret trigger, D = door trigger, B = boss, X = exit
 
 // TODO: Add additional variety to Arena map... procedurally generate or randomize, otherwise it gets repetitive
+
+export const TUTORIAL_MAP = {
+  name: "Chronos Station - Training Wing",
+  width: 16,
+  height: 16,
+  grid: [
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 5, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 3, 0, 2, 0, 0, 3, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+  ],
+  playerStart: { x: 3.5, y: 3.5, dir: 0 },
+  pickups: [
+    { x: 3.5, y: 10.5, type: "health" },
+    { x: 5.5, y: 10.5, type: "ammo" },
+    { x: 12.5, y: 4.5, type: "health" },
+  ],
+};
+
 export const ARENA_MAP = {
   name: "Temporal Arena",
   width: 24,
@@ -682,6 +2639,39 @@ export const ENEMY_TYPES = {
     color2: "#440022",
     xp: 200,
     attackType: "ranged",
+    form: 1,
+  },
+  boss_form2: {
+    name: "Paradox Lord — Evolved",
+    health: 1600,
+    speed: 1.4,
+    damage: 50,
+    attackRate: 450,
+    attackRange: 18,
+    sightRange: 30,
+    radius: 0.65,
+    score: 10000,
+    color1: "#ff0066",
+    color2: "#660033",
+    xp: 400,
+    attackType: "ranged",
+    form: 2,
+  },
+  boss_form3: {
+    name: "Paradox Lord — Final Form",
+    health: 3000,
+    speed: 1.8,
+    damage: 70,
+    attackRate: 350,
+    attackRange: 20,
+    sightRange: 30,
+    radius: 0.7,
+    score: 25000,
+    color1: "#ff0044",
+    color2: "#880022",
+    xp: 1000,
+    attackType: "ranged",
+    form: 3,
   },
   corruptCop: {
     name: "Corrupt SWAT Officer",
@@ -873,5 +2863,344 @@ export const UPGRADES = {
     apply: (player) => {
       player.thorns = (player.thorns || 0) + 0.12;
     },
+  },
+  maxStamina: {
+    name: "Rift Endurance",
+    description: "+25 Max Stamina",
+    baseCost: 200,
+    costScale: 1.5,
+    maxLevel: 5,
+    apply: (player) => {
+      player.maxStamina = (player.maxStamina || 100) + 25;
+      player.stamina = Math.min(player.stamina + 25, player.maxStamina);
+    },
+  },
+  staminaRegen: {
+    name: "Chrono Fuel",
+    description: "+30% Stamina Recovery",
+    baseCost: 275,
+    costScale: 1.6,
+    maxLevel: 4,
+    apply: (player) => {
+      player.staminaRegenRate = (player.staminaRegenRate || 1) + 0.3;
+    },
+  },
+  dashPower: {
+    name: "Rift Step",
+    description: "Dash farther, costs -4 stamina",
+    baseCost: 350,
+    costScale: 1.8,
+    maxLevel: 4,
+    apply: (player) => {
+      player.dashDistMult = (player.dashDistMult || 1) + 0.25;
+      player.dashStaminaCost = (player.dashStaminaCost || 20) - 4;
+    },
+  },
+  sprintEfficiency: {
+    name: "Phase Stride",
+    description: "-15% Sprint stamina drain",
+    baseCost: 250,
+    costScale: 1.6,
+    maxLevel: 4,
+    apply: (player) => {
+      player.sprintDrainMult = (player.sprintDrainMult || 1) - 0.15;
+    },
+  },
+};
+
+// ── Achievement Icon SVGs ──────────────────────────────────────────
+// 64×64 vector icons, game palette: gold #ffcc00, teal #00e5ff, dark #0a0a1e
+// Loaded as Image objects at startup via data:image/svg+xml URIs
+
+function svg(inner) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${inner}</svg>`;
+}
+
+export const ACHIEVEMENT_ICON_SVGS = {
+  skull: svg(`
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <path d="M32 6C18.5 6 9 16 9 28c0 9 5 16 12 19v5c0 1.5 1 2.5 2.5 2.5H26v4h3v-4h6v4h3v-4h2.5c1.5 0 2.5-1 2.5-2.5v-5c7-3 12-10 12-19C55 16 45.5 6 32 6z" fill="url(#sg)"/>
+    <ellipse cx="24" cy="26" rx="5.5" ry="6.5" fill="#0a0a1e"/>
+    <ellipse cx="40" cy="26" rx="5.5" ry="6.5" fill="#0a0a1e"/>
+    <ellipse cx="32" cy="36" rx="3" ry="2.5" fill="#0a0a1e"/>
+    <rect x="27" y="41" width="2.5" height="6" rx="0.5" fill="#0a0a1e"/>
+    <rect x="34.5" y="41" width="2.5" height="6" rx="0.5" fill="#0a0a1e"/>
+  `),
+
+  target: svg(`
+    <circle cx="32" cy="32" r="26" fill="none" stroke="#ff4444" stroke-width="3"/>
+    <circle cx="32" cy="32" r="17" fill="none" stroke="#ff4444" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="8" fill="none" stroke="#ff4444" stroke-width="2"/>
+    <circle cx="32" cy="32" r="3" fill="#ff4444"/>
+    <line x1="32" y1="2" x2="32" y2="14" stroke="#ff4444" stroke-width="2"/>
+    <line x1="32" y1="50" x2="32" y2="62" stroke="#ff4444" stroke-width="2"/>
+    <line x1="2" y1="32" x2="14" y2="32" stroke="#ff4444" stroke-width="2"/>
+    <line x1="50" y1="32" x2="62" y2="32" stroke="#ff4444" stroke-width="2"/>
+  `),
+
+  ghost: svg(`
+    <defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0e8ff"/><stop offset="100%" stop-color="#8090c0"/></linearGradient></defs>
+    <path d="M32 6C20 6 12 15 12 26v24l5-5 5 5 5-5 5 5 5-5 5 5 5-5 5 5V26C52 15 44 6 32 6z" fill="url(#gg)" opacity="0.85"/>
+    <ellipse cx="24" cy="25" rx="5" ry="6" fill="#1a1a3e"/>
+    <ellipse cx="40" cy="25" rx="5" ry="6" fill="#1a1a3e"/>
+    <circle cx="25" cy="24" r="2" fill="#fff"/>
+    <circle cx="41" cy="24" r="2" fill="#fff"/>
+    <ellipse cx="32" cy="35" rx="4" ry="3" fill="#1a1a3e" opacity="0.5"/>
+  `),
+
+  dragon: svg(`
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#ff6633"/><stop offset="100%" stop-color="#cc2200"/></linearGradient></defs>
+    <path d="M16 12l-4-8 6 5-1-7 4 6 2-6 1 7 5-5-2 8" fill="#ff8844" opacity="0.7"/>
+    <path d="M12 20c0-10 8-16 18-16s20 6 20 18c0 8-4 14-10 18l-4 8-3-6-3 10-3-10-3 6-4-8C14 36 12 28 12 20z" fill="url(#dg)"/>
+    <ellipse cx="24" cy="22" rx="4" ry="5" fill="#ffcc00"/>
+    <ellipse cx="24" cy="23" rx="1.5" ry="4" fill="#0a0a1e"/>
+    <ellipse cx="40" cy="22" rx="4" ry="5" fill="#ffcc00"/>
+    <ellipse cx="40" cy="23" rx="1.5" ry="4" fill="#0a0a1e"/>
+    <path d="M26 34c2 2 8 2 10 0" fill="none" stroke="#0a0a1e" stroke-width="1.5"/>
+    <circle cx="29" cy="32" r="1" fill="#0a0a1e"/>
+    <circle cx="33" cy="32" r="1" fill="#0a0a1e"/>
+  `),
+
+  helmet: svg(`
+    <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffdd44"/><stop offset="100%" stop-color="#bb8800"/></linearGradient></defs>
+    <path d="M32 4C18 4 10 14 10 26v8h8v-4c0-2 6-4 14-4s14 2 14 4v4h8v-8C54 14 46 4 32 4z" fill="url(#hg)"/>
+    <path d="M32 4C28 4 26 10 26 16h12c0-6-2-12-6-12z" fill="#cc2200"/>
+    <rect x="10" y="30" width="44" height="6" rx="2" fill="#bb8800"/>
+    <path d="M18 36v12c0 4 6 8 14 8s14-4 14-8V36" fill="none" stroke="#bb8800" stroke-width="2.5"/>
+    <rect x="18" y="42" width="28" height="3" rx="1" fill="#bb8800" opacity="0.5"/>
+    <path d="M26 36v10M38 36v10" stroke="#bb8800" stroke-width="1.5" opacity="0.5"/>
+  `),
+
+  stopwatch: svg(`
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#0088aa"/></linearGradient></defs>
+    <circle cx="32" cy="36" r="24" fill="#0a0a1e" stroke="url(#wg)" stroke-width="3"/>
+    <rect x="29" y="4" width="6" height="8" rx="2" fill="#00e5ff"/>
+    <rect x="26" y="4" width="12" height="3" rx="1.5" fill="#00e5ff"/>
+    <line x1="48" y1="14" x2="52" y2="10" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="32" cy="36" r="20" fill="none" stroke="#00e5ff" stroke-width="1" opacity="0.3"/>
+    <line x1="32" y1="36" x2="32" y2="20" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="32" y1="36" x2="44" y2="40" stroke="#ffcc00" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="32" cy="36" r="2.5" fill="#ffcc00"/>
+    <g fill="#00e5ff" opacity="0.5"><circle cx="32" cy="17" r="1.5"/><circle cx="32" cy="55" r="1.5"/><circle cx="13" cy="36" r="1.5"/><circle cx="51" cy="36" r="1.5"/></g>
+  `),
+
+  colosseum: svg(`
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#996600"/></linearGradient></defs>
+    <rect x="4" y="48" width="56" height="6" rx="1" fill="url(#cg)"/>
+    <rect x="6" y="44" width="52" height="5" rx="1" fill="#bb8800"/>
+    <g fill="url(#cg)"><rect x="10" y="22" width="4" height="22" rx="1"/><rect x="18" y="22" width="4" height="22" rx="1"/><rect x="26" y="22" width="4" height="22" rx="1"/><rect x="34" y="22" width="4" height="22" rx="1"/><rect x="42" y="22" width="4" height="22" rx="1"/><rect x="50" y="22" width="4" height="22" rx="1"/></g>
+    <path d="M8 22h48" stroke="#ffcc00" stroke-width="3"/>
+    <path d="M6 22Q32 4 58 22" fill="none" stroke="#ffcc00" stroke-width="2.5"/>
+    <g fill="#0a0a1e" opacity="0.4"><rect x="14" y="28" width="4" height="10" rx="2"/><rect x="22" y="28" width="4" height="10" rx="2"/><rect x="30" y="28" width="4" height="10" rx="2"/><rect x="38" y="28" width="4" height="10" rx="2"/><rect x="46" y="28" width="4" height="10" rx="2"/></g>
+  `),
+
+  trophy: svg(`
+    <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="60%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <path d="M18 8h28v4c0 14-6 22-14 26-8-4-14-12-14-26V8z" fill="url(#tg)"/>
+    <path d="M18 12H8c0 10 4 16 10 16v-4c-4-2-6-6-6-12z" fill="#cc9900"/>
+    <path d="M46 12h10c0 10-4 16-10 16v-4c4-2 6-6 6-12z" fill="#cc9900"/>
+    <rect x="28" y="36" width="8" height="10" rx="1" fill="#bb8800"/>
+    <rect x="22" y="46" width="20" height="5" rx="2" fill="#cc9900"/>
+    <rect x="20" y="51" width="24" height="4" rx="1" fill="#bb8800"/>
+    <path d="M26 18l6-4 6 4" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.5"/>
+    <circle cx="32" cy="22" r="3" fill="#fff" opacity="0.3"/>
+  `),
+
+  crown: svg(`
+    <defs><linearGradient id="kg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc8800"/></linearGradient></defs>
+    <path d="M8 44V20l10 10 14-18 14 18 10-10v24z" fill="url(#kg)"/>
+    <rect x="8" y="44" width="48" height="8" rx="2" fill="#cc8800"/>
+    <circle cx="8" cy="20" r="4" fill="#ff4444"/>
+    <circle cx="56" cy="20" r="4" fill="#00e5ff"/>
+    <circle cx="32" cy="12" r="4" fill="#ff4444"/>
+    <circle cx="18" cy="30" r="3" fill="#00e5ff"/>
+    <circle cx="46" cy="30" r="3" fill="#ff4444"/>
+    <rect x="8" y="44" width="48" height="2" fill="#ffe066" opacity="0.5"/>
+    <g fill="#fff" opacity="0.15"><rect x="14" y="46" width="3" height="4" rx="0.5"/><rect x="22" y="46" width="3" height="4" rx="0.5"/><rect x="30" y="46" width="3" height="4" rx="0.5"/><rect x="38" y="46" width="3" height="4" rx="0.5"/><rect x="46" y="46" width="3" height="4" rx="0.5"/></g>
+  `),
+
+  bolt: svg(`
+    <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#0088cc"/></linearGradient></defs>
+    <polygon points="36,2 14,34 28,34 22,62 50,26 34,26 40,2" fill="url(#bg)"/>
+    <polygon points="34,8 20,32 29,32 24,54 44,28 35,28 38,8" fill="#fff" opacity="0.25"/>
+    <line x1="6" y1="20" x2="16" y2="20" stroke="#00e5ff" stroke-width="2" opacity="0.4"/>
+    <line x1="6" y1="26" x2="12" y2="26" stroke="#00e5ff" stroke-width="1.5" opacity="0.3"/>
+    <line x1="48" y1="38" x2="58" y2="38" stroke="#00e5ff" stroke-width="2" opacity="0.4"/>
+    <line x1="52" y1="44" x2="58" y2="44" stroke="#00e5ff" stroke-width="1.5" opacity="0.3"/>
+  `),
+
+  mortarboard: svg(`
+    <defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a1a3e"/><stop offset="100%" stop-color="#0a0a1e"/></linearGradient></defs>
+    <polygon points="32,8 4,24 32,38 60,24" fill="url(#mg)"/>
+    <polygon points="32,8 4,24 32,38 60,24" fill="none" stroke="#ffcc00" stroke-width="1.5"/>
+    <line x1="32" y1="38" x2="32" y2="24" stroke="#ffcc00" stroke-width="1"/>
+    <path d="M16 28v14c0 6 8 10 16 10s16-4 16-10V28" fill="none" stroke="#ffcc00" stroke-width="2"/>
+    <line x1="52" y1="26" x2="52" y2="50" stroke="#ffcc00" stroke-width="2"/>
+    <circle cx="52" cy="52" r="3" fill="#ffcc00"/>
+    <path d="M50 52c-2 4-2 6 0 8h4c2-2 2-4 0-8" fill="#ffcc00" opacity="0.6"/>
+  `),
+
+  coins: svg(`
+    <defs><linearGradient id="c1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#cc9900"/></linearGradient></defs>
+    <ellipse cx="26" cy="44" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="26" cy="42" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="26" cy="42" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="26" y="45" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+    <ellipse cx="38" cy="34" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="38" cy="32" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="38" cy="32" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="38" y="35" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+    <ellipse cx="28" cy="24" rx="18" ry="8" fill="#996600"/>
+    <ellipse cx="28" cy="22" rx="18" ry="8" fill="url(#c1)"/>
+    <ellipse cx="28" cy="22" rx="12" ry="5" fill="none" stroke="#996600" stroke-width="1"/>
+    <text x="28" y="25" text-anchor="middle" font-size="10" font-weight="bold" fill="#996600" font-family="serif">$</text>
+  `),
+
+  star: svg(`
+    <defs><linearGradient id="stg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe066"/><stop offset="100%" stop-color="#ffaa00"/></linearGradient></defs>
+    <polygon points="32,4 39,22 58,24 44,38 48,58 32,48 16,58 20,38 6,24 25,22" fill="url(#stg)"/>
+    <polygon points="32,4 39,22 58,24 44,38 48,58 32,48 16,58 20,38 6,24 25,22" fill="none" stroke="#cc8800" stroke-width="1"/>
+    <polygon points="32,12 36,24 48,25 39,34 42,48 32,42 22,48 25,34 16,25 28,24" fill="#fff" opacity="0.2"/>
+  `),
+
+  shield: svg(`
+    <defs><linearGradient id="shg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#006688"/></linearGradient></defs>
+    <path d="M32 4L8 16v16c0 14 10 22 24 28 14-6 24-14 24-28V16L32 4z" fill="url(#shg)"/>
+    <path d="M32 4L8 16v16c0 14 10 22 24 28 14-6 24-14 24-28V16L32 4z" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+    <path d="M32 10L14 20v12c0 10 8 18 18 22 10-4 18-12 18-22V20L32 10z" fill="none" stroke="#fff" stroke-width="1" opacity="0.3"/>
+    <polyline points="22,34 30,42 44,24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  `),
+
+  lock: svg(`
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#666"/><stop offset="100%" stop-color="#333"/></linearGradient></defs>
+    <path d="M20 28V20c0-7 5-12 12-12s12 5 12 12v8" fill="none" stroke="#555" stroke-width="4" stroke-linecap="round"/>
+    <rect x="14" y="28" width="36" height="26" rx="4" fill="url(#lg)"/>
+    <rect x="14" y="28" width="36" height="26" rx="4" fill="none" stroke="#555" stroke-width="1.5"/>
+    <circle cx="32" cy="38" r="4" fill="#222"/>
+    <rect x="30" y="38" width="4" height="8" rx="1" fill="#222"/>
+  `),
+};
+
+// ── Achievements ───────────────────────────────────────────────────
+export const ACHIEVEMENTS = {
+  firstBlood: {
+    name: "First Blood",
+    description: "Eliminate your first enemy",
+    icon: "skull",
+    category: "combat",
+    check: (stats) => stats.totalKills >= 1,
+  },
+  droneHunter: {
+    name: "Drone Hunter",
+    description: "Eliminate 10 enemies",
+    icon: "target",
+    category: "combat",
+    check: (stats) => stats.totalKills >= 10,
+  },
+  phantomSlayer: {
+    name: "Phantom Slayer",
+    description: "Eliminate 25 enemies",
+    icon: "ghost",
+    category: "combat",
+    check: (stats) => stats.totalKills >= 25,
+  },
+  beastTamer: {
+    name: "Beast Tamer",
+    description: "Eliminate 50 enemies",
+    icon: "dragon",
+    category: "combat",
+    check: (stats) => stats.totalKills >= 50,
+  },
+  centurion: {
+    name: "Centurion",
+    description: "Eliminate 100 enemies",
+    icon: "helmet",
+    category: "combat",
+    check: (stats) => stats.totalKills >= 100,
+  },
+  roundSurvivor: {
+    name: "Clockwork Survivor",
+    description: "Survive 5 arena rounds",
+    icon: "stopwatch",
+    category: "arena",
+    check: (stats) => stats.highestArenaRound >= 5,
+  },
+  roundVeteran: {
+    name: "Arena Veteran",
+    description: "Survive 10 arena rounds",
+    icon: "colosseum",
+    category: "arena",
+    check: (stats) => stats.highestArenaRound >= 10,
+  },
+  campaignClear: {
+    name: "Timeline Restored",
+    description: "Complete the campaign",
+    icon: "trophy",
+    category: "campaign",
+    check: (stats) => stats.campaignComplete,
+  },
+  lordSlayer: {
+    name: "Lord Slayer",
+    description: "Defeat the Paradox Lord",
+    icon: "crown",
+    category: "campaign",
+    check: (stats) => stats.bossKilled,
+  },
+  speedDemon: {
+    name: "Speed Demon",
+    description: "Perform 50 dashes",
+    icon: "bolt",
+    category: "movement",
+    check: (stats) => stats.totalDashes >= 50,
+  },
+  tutorialGrad: {
+    name: "Calibrated",
+    description: "Complete the tutorial",
+    icon: "mortarboard",
+    category: "general",
+    check: (stats) => stats.tutorialComplete,
+  },
+  bigSpender: {
+    name: "Big Spender",
+    description: "Purchase 10 upgrades",
+    icon: "coins",
+    category: "arena",
+    check: (stats) => stats.upgradesBought >= 10,
+  },
+  scoreMaster: {
+    name: "Score Master",
+    description: "Reach a score of 10,000",
+    icon: "star",
+    category: "general",
+    check: (stats) => stats.highestScore >= 10000,
+  },
+  untouchable: {
+    name: "Untouchable",
+    description: "Complete an arena round without taking damage",
+    icon: "shield",
+    category: "arena",
+    check: (stats) => stats.flawlessRounds >= 1,
+  },
+  // Placeholder achievements — more coming soon
+  _comingSoon1: {
+    name: "???",
+    description: "More achievements coming soon...",
+    icon: "lock",
+    category: "hidden",
+    check: () => false,
+  },
+  _comingSoon2: {
+    name: "???",
+    description: "More achievements coming soon...",
+    icon: "lock",
+    category: "hidden",
+    check: () => false,
+  },
+  _comingSoon3: {
+    name: "???",
+    description: "More achievements coming soon...",
+    icon: "lock",
+    category: "hidden",
+    check: () => false,
   },
 };
