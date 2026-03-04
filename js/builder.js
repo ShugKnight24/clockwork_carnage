@@ -146,7 +146,7 @@ export class BuilderMode {
       return true;
     }
     if (code === "KeyE") {
-      this.layer = Math.min(4, this.layer + 1);
+      this.layer = Math.min(NUM_LAYERS - 1, this.layer + 1);
       this.audio.menuSelect();
       return true;
     }
@@ -853,12 +853,25 @@ export class BuilderMode {
 
   _ensureLayers() {
     if (this.map.layers) {
-      // Validate dimensions
-      if (
-        this.map.layers.length !== NUM_LAYERS ||
-        this.map.layers[0].length !== this.map.height ||
-        this.map.layers[0][0].length !== this.map.width
-      ) {
+      // Validate dimensions for all layers and rows
+      let valid = Array.isArray(this.map.layers) &&
+        this.map.layers.length === NUM_LAYERS;
+      if (valid) {
+        for (let l = 0; l < NUM_LAYERS && valid; l++) {
+          const layer = this.map.layers[l];
+          if (!Array.isArray(layer) || layer.length !== this.map.height) {
+            valid = false;
+            break;
+          }
+          for (let y = 0; y < this.map.height; y++) {
+            if (!Array.isArray(layer[y]) || layer[y].length !== this.map.width) {
+              valid = false;
+              break;
+            }
+          }
+        }
+      }
+      if (!valid) {
         this.map.layers = null; // Force rebuild
       }
     }

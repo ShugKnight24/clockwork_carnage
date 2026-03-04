@@ -51,7 +51,9 @@ export class TouchControls {
     this.cutsceneHoldStart = 0;
 
     // Mobile tutorial overlay state
-    this.showTutorial = !localStorage.getItem("cc_touch_tutorial_done");
+    let tutorialDone = false;
+    try { tutorialDone = !!localStorage.getItem("cc_touch_tutorial_done"); } catch (_) {}
+    this.showTutorial = !tutorialDone;
     this.tutorialDismissed = false;
   }
 
@@ -231,15 +233,8 @@ export class TouchControls {
   onTouchMove(e) {
     e.preventDefault();
 
-    // During cutscene hold-to-skip, check if still holding
-    if (this.game.state === "cutscene" && this.cutsceneHoldTouch !== null) {
-      // If held for 1s, skip entire cutscene
-      if (performance.now() - this.cutsceneHoldStart >= 1000) {
-        this.game.endCutscene();
-        this.cutsceneHoldTouch = null;
-        return;
-      }
-    }
+    // Hold-to-skip is checked every frame in game.js updateCutscene()
+    // via this.cutsceneHoldTouch — no need to duplicate here.
 
     for (const touch of e.changedTouches) {
       if (touch.identifier === this.joyTouch) {

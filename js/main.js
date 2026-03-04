@@ -1,5 +1,4 @@
 import { Game, GameState } from "./game.js";
-import { createTestRunner } from "./testing/harness.js";
 import { TouchControls } from "./touch.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
@@ -245,8 +244,11 @@ function gameLoop(timestamp) {
 
 requestAnimationFrame(gameLoop);
 
-// Expose test runner on window for console access
-window.ccTest = createTestRunner(game);
+// Expose test runner on window for console access (dynamic import so
+// production works even when js/testing/ is not deployed)
+import("./testing/harness.js")
+  .then((mod) => { window.ccTest = mod.createTestRunner(game); })
+  .catch(() => { /* harness not available — skip */ });
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);
