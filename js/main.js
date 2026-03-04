@@ -1,4 +1,5 @@
 import { Game, GameState } from "./game.js";
+import { TouchControls } from "./touch.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -12,8 +13,17 @@ const continueArenaDesc = document.getElementById("continueArenaDesc");
 const game = new Game(gameCanvas, hudCanvas);
 
 function resizeCanvases() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  let w = window.innerWidth;
+  let h = window.innerHeight;
+  // Cap render resolution on mobile to maintain playable FPS
+  if (game.isTouchDevice) {
+    const maxDim = 960;
+    if (w > maxDim || h > maxDim) {
+      const scale = maxDim / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+  }
   gameCanvas.width = w;
   gameCanvas.height = h;
   hudCanvas.width = w;
@@ -68,8 +78,34 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
-  game.startCampaign();
+  if (game.shouldShowTutorial()) {
+    game.startTutorial();
+  } else {
+    game.showCampaignPrompt();
+  }
 });
+
+document.getElementById("btnTutorial").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.startTutorial();
+});
+
+document.getElementById("btnBuilder").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.startBuilder();
+});
+
+// Expose dev flag toggle on window for console access
+window.ccDevTutorial = (on) => {
+  game.setAlwaysTutorial(on !== false);
+  console.log(
+    `[CC DEV] Always-show-tutorial: ${game.alwaysShowTutorial ? "ON" : "OFF"}`,
+  );
+};
 
 document.getElementById("btnBack").addEventListener("click", () => {
   game.audio.menuSelect();
@@ -125,6 +161,10 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnCampaign").click();
     } else if (e.code === "Digit2") {
       document.getElementById("btnArena").click();
+    } else if (e.code === "Digit3") {
+      document.getElementById("btnTutorial").click();
+    } else if (e.code === "Digit4") {
+      document.getElementById("btnBuilder").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
@@ -196,7 +236,26 @@ function gameLoop(timestamp) {
     game.render();
   }
 
+  // Render touch controls overlay (merged into main rAF)
+  if (touch) touch.render();
+
   requestAnimationFrame(gameLoop);
 }
 
 requestAnimationFrame(gameLoop);
+
+// Expose test runner on window for console access (dynamic import so
+// production works even when js/testing/ is not deployed)
+// TODO: this file is currently not tracked by the git repo... will decide on best approach to testing and test code organization after MVP
+// currently for internal use only, but may want to expose some testing utilities in production build for easier debugging
+import("./testing/harness.js")
+  .then((mod) => {
+    window.ccTest = mod.createTestRunner(game);
+  })
+  .catch(() => {
+    /* harness not available — skip */
+  });
+
+// Mobile touch controls — auto-activates on touch devices
+const touch = TouchControls.init(game);
+if (touch) game.touchControls = touch;

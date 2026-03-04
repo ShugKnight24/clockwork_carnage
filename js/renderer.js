@@ -141,13 +141,46 @@ export class Renderer {
     }
   }
 
-  renderScene(player, map, entities, time) {
+  renderScene(player, map, entities, time, fov = 70, viewMode = 0) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
 
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
+
+    // Convert FOV degrees to camera plane multiplier
+    const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
+
+    // Camera position (offset behind player in third-person)
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    let camX = player.x;
+    let camY = player.y;
+
+    if (viewMode === 1) {
+      const offset = 1.8;
+      let tryX = player.x - dirX * offset;
+      let tryY = player.y - dirY * offset;
+      // Push camera forward if it would be inside a wall
+      for (let step = 0; step < 6; step++) {
+        const mx = Math.floor(tryX);
+        const my = Math.floor(tryY);
+        if (
+          mx >= 0 &&
+          my >= 0 &&
+          mx < map.width &&
+          my < map.height &&
+          map.grid[my][mx] === 0
+        ) {
+          break;
+        }
+        tryX += dirX * 0.3;
+        tryY += dirY * 0.3;
+      }
+      camX = tryX;
+      camY = tryY;
+    }
 
     // Draw ceiling gradient
     const ceilGrad = ctx.createLinearGradient(0, 0, 0, h / 2);
@@ -164,18 +197,16 @@ export class Renderer {
     ctx.fillRect(0, h / 2, w, h / 2);
 
     // Raycasting
-    const dirX = Math.cos(player.angle);
-    const dirY = Math.sin(player.angle);
-    const planeX = -dirY * 0.66;
-    const planeY = dirX * 0.66;
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
 
     for (let x = 0; x < w; x++) {
       const cameraX = (2 * x) / w - 1;
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      let mapX = Math.floor(player.x);
-      let mapY = Math.floor(player.y);
+      let mapX = Math.floor(camX);
+      let mapY = Math.floor(camY);
 
       const deltaDistX = Math.abs(1 / rayDirX);
       const deltaDistY = Math.abs(1 / rayDirY);
@@ -184,17 +215,17 @@ export class Renderer {
 
       if (rayDirX < 0) {
         stepX = -1;
-        sideDistX = (player.x - mapX) * deltaDistX;
+        sideDistX = (camX - mapX) * deltaDistX;
       } else {
         stepX = 1;
-        sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
+        sideDistX = (mapX + 1.0 - camX) * deltaDistX;
       }
       if (rayDirY < 0) {
         stepY = -1;
-        sideDistY = (player.y - mapY) * deltaDistY;
+        sideDistY = (camY - mapY) * deltaDistY;
       } else {
         stepY = 1;
-        sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
+        sideDistY = (mapY + 1.0 - camY) * deltaDistY;
       }
 
       let hit = 0;
@@ -225,18 +256,48 @@ export class Renderer {
 
       let perpWallDist;
       if (side === 0) {
-        perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
+        perpWallDist = (mapX - camX + (1 - stepX) / 2) / rayDirX;
       } else {
-        perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
+        perpWallDist = (mapY - camY + (1 - stepY) / 2) / rayDirY;
       }
 
       if (perpWallDist < 0.01) perpWallDist = 0.01;
 
+      // TODO: For short walls (heightFrac < 1), store wall-top Y per column
+      // so renderSprites() can show sprites above short walls instead of
+      // fully occluding them based on distance alone.
       this.zBuffer[x] = perpWallDist;
 
       const lineHeight = Math.floor(h / perpWallDist);
-      let drawStart = Math.floor(-lineHeight / 2 + h / 2);
-      let drawEnd = Math.floor(lineHeight / 2 + h / 2);
+      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2);
+      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2);
+
+      // Variable height: heightMap determines how tall the wall renders
+      // 5 layers = full wall, 1 layer = 20% wall (from ground up)
+      let heightFrac = 1;
+      if (
+        map.heightMap &&
+        mapX >= 0 &&
+        mapY >= 0 &&
+        mapX < map.width &&
+        mapY < map.height
+      ) {
+        const hCount = map.heightMap[mapY][mapX];
+        if (hCount > 0 && hCount < 5) {
+          heightFrac = hCount / 5;
+        }
+      }
+
+      let drawStart, drawEnd;
+      if (heightFrac < 1) {
+        // Short wall: grows upward from floor level
+        drawEnd = fullDrawEnd;
+        const wallPx = fullDrawEnd - fullDrawStart;
+        drawStart = Math.floor(drawEnd - wallPx * heightFrac);
+      } else {
+        drawStart = fullDrawStart;
+        drawEnd = fullDrawEnd;
+      }
 
       if (drawStart < 0) drawStart = 0;
       if (drawEnd >= h) drawEnd = h - 1;
@@ -244,9 +305,9 @@ export class Renderer {
       // Texture coordinate
       let wallX;
       if (side === 0) {
-        wallX = player.y + perpWallDist * rayDirY;
+        wallX = camY + perpWallDist * rayDirY;
       } else {
-        wallX = player.x + perpWallDist * rayDirX;
+        wallX = camX + perpWallDist * rayDirX;
       }
       wallX -= Math.floor(wallX);
 
@@ -295,30 +356,34 @@ export class Renderer {
     }
 
     // Render sprites
-    this.renderSprites(player, entities, time);
+    this.renderSprites(player, entities, time, planeMul, camX, camY);
   }
 
-  renderSprites(player, entities, time) {
+  renderSprites(player, entities, time, planeMul = 0.66, camX, camY) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
     const dirX = Math.cos(player.angle);
     const dirY = Math.sin(player.angle);
-    const planeX = -dirY * 0.66;
-    const planeY = dirX * 0.66;
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
 
-    // Sort entities by distance
+    // Use camera position for sprite rendering (defaults to player pos)
+    const cx = camX != null ? camX : player.x;
+    const cy = camY != null ? camY : player.y;
+
+    // Sort entities by distance from camera
     const sorted = entities
       .filter((e) => e.active !== false)
       .map((e) => ({
         ...e,
-        dist: (player.x - e.x) ** 2 + (player.y - e.y) ** 2,
+        dist: (cx - e.x) ** 2 + (cy - e.y) ** 2,
       }))
       .sort((a, b) => b.dist - a.dist);
 
     for (const entity of sorted) {
-      const spriteX = entity.x - player.x;
-      const spriteY = entity.y - player.y;
+      const spriteX = entity.x - cx;
+      const spriteY = entity.y - cy;
 
       const invDet = 1.0 / (planeX * dirY - dirX * planeY);
       const transformX = invDet * (dirY * spriteX - dirX * spriteY);
@@ -1126,18 +1191,24 @@ export class Renderer {
         ctx.lineTo(sx + 2, backCurveY);
         ctx.fill();
       }
-    } else if (enemy.enemyType === "boss") {
-      // ─── Paradox Lord ───
-      const bW = bodyWidth * 1.15;
+    } else if (
+      enemy.enemyType === "boss" ||
+      enemy.enemyType === "boss_form2" ||
+      enemy.enemyType === "boss_form3"
+    ) {
+      // ─── Paradox Lord (all forms) ───
+      const bossForm = enemy.def.form || 1;
+      const formScale = 1 + (bossForm - 1) * 0.08;
+      const bW = bodyWidth * 1.15 * formScale;
       const bTop = bodyTop - halfH * 0.12;
       const bBot = bodyBottom + halfH * 0.05;
       const torsoH = bBot - bTop;
       const breathe = Math.sin(time * 0.002) * halfH * 0.015;
       const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
 
-      // Dark aura
+      // Dark aura — intensifies with form
       ctx.save();
-      const auraR = bW * 1.8 + pulse * bW * 0.3;
+      const auraR = bW * (1.8 + (bossForm - 1) * 0.3) + pulse * bW * 0.3;
       const auraGrad = ctx.createRadialGradient(
         screenX,
         centerY,
@@ -1497,6 +1568,26 @@ export class Renderer {
       drawEye(headCX - headW * 0.35, eyeY, eSize, false);
       drawEye(headCX, eyeY - headH * 0.05, eSize, true);
       drawEye(headCX + headW * 0.35, eyeY, eSize, false);
+      // Form 2+: extra eyes
+      if (bossForm >= 2) {
+        drawEye(headCX - headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
+        drawEye(headCX + headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
+      }
+      // Form 3: even more eyes
+      if (bossForm >= 3) {
+        drawEye(
+          headCX - headW * 0.15,
+          eyeY + headH * 0.18,
+          eSize * 0.55,
+          false,
+        );
+        drawEye(
+          headCX + headW * 0.15,
+          eyeY + headH * 0.18,
+          eSize * 0.55,
+          false,
+        );
+      }
 
       // Jaw / mouth
       const jawY = headCY + headH * 0.2;
@@ -1734,7 +1825,8 @@ export class Renderer {
       }
 
       // Floating debris / temporal shards
-      for (let s = 0; s < 5; s++) {
+      const shardCount = 5 + (bossForm - 1) * 3;
+      for (let s = 0; s < shardCount; s++) {
         const sAng = time * 0.001 + s * Math.PI * 0.4;
         const sR = bW * 1.2 + Math.sin(time * 0.003 + s * 2) * bW * 0.2;
         const sx2 = screenX + Math.cos(sAng) * sR;
@@ -1745,6 +1837,46 @@ export class Renderer {
         ctx.translate(sx2, sy2);
         ctx.rotate(time * 0.002 + s);
         ctx.fillRect(-sSize, -sSize * 0.5, sSize * 2, sSize);
+        ctx.restore();
+      }
+
+      // Form 2+: crackling energy corona
+      if (bossForm >= 2) {
+        ctx.strokeStyle = `rgba(255,0,100,${0.2 + pulse * 0.15})`;
+        ctx.lineWidth = 1.5;
+        for (let arc = 0; arc < 3 + bossForm; arc++) {
+          const arcAng =
+            time * (0.0015 + arc * 0.0003) +
+            (arc * Math.PI * 2) / (3 + bossForm);
+          const arcR = bW * (1.4 + bossForm * 0.15);
+          ctx.beginPath();
+          ctx.arc(screenX, centerY, arcR, arcAng, arcAng + 0.8);
+          ctx.stroke();
+        }
+      }
+
+      // Form 3: reality distortion rings
+      if (bossForm >= 3) {
+        ctx.save();
+        ctx.globalAlpha = alpha * (0.08 + pulse * 0.06);
+        for (let ring = 0; ring < 3; ring++) {
+          const ringR =
+            bW * (1.6 + ring * 0.4) + Math.sin(time * 0.002 + ring) * bW * 0.1;
+          ctx.strokeStyle = `rgba(255,${ring * 40},${200 - ring * 60},0.4)`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(
+            screenX,
+            centerY,
+            ringR,
+            ringR * 0.3,
+            time * 0.001 + ring * 0.5,
+            0,
+            Math.PI * 2,
+          );
+          ctx.stroke();
+        }
+        ctx.globalAlpha = alpha;
         ctx.restore();
       }
     } else if (enemy.enemyType === "corruptCop") {
