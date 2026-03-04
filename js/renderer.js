@@ -13,6 +13,8 @@ export class Renderer {
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
     this.generateTextures();
+    this._generateFloorCeilTextures();
+    this._floorCeilBuffer = null;
   }
 
   resize(w, h) {
@@ -21,6 +23,7 @@ export class Renderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.zBuffer = new Float64Array(w);
+    this._floorCeilBuffer = null;
   }
 
   generateTextures() {
@@ -141,6 +144,133 @@ export class Renderer {
     }
   }
 
+  _generateFloorCeilTextures() {
+    const size = 64;
+
+    // Floor: dark metallic grating with grid lines and rivets
+    const floorImg = new ImageData(size, size);
+    const fd = floorImg.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        let r = 22, g = 25, b = 32;
+        const noise = (Math.random() * 8 - 4) | 0;
+        // Grid lines every 16px
+        if (x % 16 === 0 || y % 16 === 0) { r += 12; g += 15; b += 20; }
+        // Heavier seam every 32px
+        if (x % 32 < 2 || y % 32 < 2) { r += 8; g += 10; b += 14; }
+        // Rivets at intersections
+        const rx = x % 32, ry = y % 32;
+        if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) { r += 20; g += 22; b += 28; }
+        // Subtle glow spots (embedded floor lights)
+        const cx = (x % 32) - 16, cy = (y % 32) - 16;
+        const d = Math.sqrt(cx * cx + cy * cy);
+        if (d < 2.5) { r += 8; g += 18; b += 30; }
+        fd[i] = Math.max(0, Math.min(255, r + noise));
+        fd[i + 1] = Math.max(0, Math.min(255, g + noise));
+        fd[i + 2] = Math.max(0, Math.min(255, b + noise));
+        fd[i + 3] = 255;
+      }
+    }
+    this._floorTexPixels = fd;
+
+    // Ceiling: dark panels with recessed lights and structural beams
+    const ceilImg = new ImageData(size, size);
+    const cd = ceilImg.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        let r = 10, g = 10, b = 20;
+        const noise = (Math.random() * 6 - 3) | 0;
+        // Panel edges
+        if (x % 32 === 0 || y % 32 === 0) { r -= 3; g -= 3; b -= 3; }
+        // Structural beam strips every 32px (horizontal)
+        if (y % 32 < 3) { r += 6; g += 6; b += 8; }
+        // Recessed light in panel center
+        const px = (x % 32) - 16, py = (y % 32) - 16;
+        const dl = Math.sqrt(px * px + py * py);
+        if (dl < 2) { r += 15; g += 20; b += 35; }
+        cd[i] = Math.max(0, Math.min(255, r + noise));
+        cd[i + 1] = Math.max(0, Math.min(255, g + noise));
+        cd[i + 2] = Math.max(0, Math.min(255, b + noise));
+        cd[i + 3] = 255;
+      }
+    }
+    this._ceilTexPixels = cd;
+  }
+
+  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY) {
+    const w = this.width;
+    const h = this.height;
+    const halfH = h >> 1;
+
+    if (!this._floorCeilBuffer || this._floorCeilBuffer.width !== w || this._floorCeilBuffer.height !== h) {
+      this._floorCeilBuffer = this.ctx.createImageData(w, h);
+    }
+    const buf = this._floorCeilBuffer.data;
+    const floorTex = this._floorTexPixels;
+    const ceilTex = this._ceilTexPixels;
+
+    const rayDirX0 = dirX - planeX;
+    const rayDirY0 = dirY - planeY;
+    const rayDirX1 = dirX + planeX;
+    const rayDirY1 = dirY + planeY;
+
+    const fogR = 8, fogG = 8, fogB = 20;
+
+    for (let y = halfH + 1; y < h; y += 2) {
+      const p = y - halfH;
+      const rowDist = halfH / p;
+      const stepX = rowDist * (rayDirX1 - rayDirX0) / w;
+      const stepY = rowDist * (rayDirY1 - rayDirY0) / w;
+      let fx = camX + rowDist * rayDirX0;
+      let fy = camY + rowDist * rayDirY0;
+
+      const fog = Math.min(0.92, rowDist / 12);
+      const invFog = 1 - fog;
+      const fR = fogR * fog, fG = fogG * fog, fB = fogB * fog;
+
+      for (let x = 0; x < w; x++) {
+        const tx = ((fx * 64) | 0) & 63;
+        const ty = ((fy * 64) | 0) & 63;
+        const ti = (ty * 64 + tx) * 4;
+
+        // Floor pixel
+        const fi = (y * w + x) * 4;
+        const fr = floorTex[ti] * invFog + fR;
+        const fg = floorTex[ti + 1] * invFog + fG;
+        const fb = floorTex[ti + 2] * invFog + fB;
+        buf[fi] = fr; buf[fi + 1] = fg; buf[fi + 2] = fb; buf[fi + 3] = 255;
+        // Copy to skipped row
+        const fi2 = ((y - 1) * w + x) * 4;
+        buf[fi2] = fr; buf[fi2 + 1] = fg; buf[fi2 + 2] = fb; buf[fi2 + 3] = 255;
+
+        // Ceiling pixel (mirrored)
+        const cy = h - 1 - y;
+        const ci = (cy * w + x) * 4;
+        const cr = ceilTex[ti] * invFog + fR;
+        const cg = ceilTex[ti + 1] * invFog + fG;
+        const cb = ceilTex[ti + 2] * invFog + fB;
+        buf[ci] = cr; buf[ci + 1] = cg; buf[ci + 2] = cb; buf[ci + 3] = 255;
+        // Copy ceiling skipped row
+        const ci2 = ((cy + 1) * w + x) * 4;
+        buf[ci2] = cr; buf[ci2 + 1] = cg; buf[ci2 + 2] = cb; buf[ci2 + 3] = 255;
+
+        fx += stepX;
+        fy += stepY;
+      }
+    }
+
+    // Horizon line
+    const hi = halfH * w * 4;
+    for (let x = 0; x < w; x++) {
+      const idx = hi + x * 4;
+      buf[idx] = fogR; buf[idx + 1] = fogG; buf[idx + 2] = fogB; buf[idx + 3] = 255;
+    }
+
+    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
   renderScene(player, map, entities, time, fov = 70, viewMode = 0) {
     const ctx = this.ctx;
     const w = this.width;
@@ -182,19 +312,8 @@ export class Renderer {
       camY = tryY;
     }
 
-    // Draw ceiling gradient
-    const ceilGrad = ctx.createLinearGradient(0, 0, 0, h / 2);
-    ceilGrad.addColorStop(0, "#0a0a1a");
-    ceilGrad.addColorStop(1, "#141428");
-    ctx.fillStyle = ceilGrad;
-    ctx.fillRect(0, 0, w, h / 2);
-
-    // Draw floor gradient
-    const floorGrad = ctx.createLinearGradient(0, h / 2, 0, h);
-    floorGrad.addColorStop(0, "#1a1a24");
-    floorGrad.addColorStop(1, "#0d0d14");
-    ctx.fillStyle = floorGrad;
-    ctx.fillRect(0, h / 2, w, h / 2);
+    // Draw textured floor and ceiling
+    this._renderFloorCeiling(camX, camY, dirX, dirY, -dirY * planeMul, dirX * planeMul);
 
     // Raycasting
     const planeX = -dirY * planeMul;
@@ -2999,41 +3118,99 @@ export class Renderer {
   drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
     if (fog <= 0) return;
     const size = Math.max(8, sprWidth * 0.5);
-    const pulse = 0.7 + Math.sin(time * 0.005) * 0.3;
+    const t = time * 0.003;
+    const pulse = 0.7 + Math.sin(t * 1.7) * 0.3;
 
+    ctx.save();
+    ctx.translate(screenX, centerY);
+
+    // Outer radial glow
+    ctx.globalAlpha = fog * pulse * 0.25;
+    const grd = ctx.createRadialGradient(0, 0, size * 0.3, 0, 0, size * 2.2);
+    grd.addColorStop(0, "#00ffaa");
+    grd.addColorStop(0.5, "#00aa66");
+    grd.addColorStop(1, "transparent");
+    ctx.fillStyle = grd;
+    ctx.fillRect(-size * 2.2, -size * 2.2, size * 4.4, size * 4.4);
+
+    // Swirling ring
     ctx.globalAlpha = fog * pulse * 0.6;
-    ctx.fillStyle = "#00ff88";
-    ctx.fillRect(screenX - size, centerY - size * 1.5, size * 2, size * 3);
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = Math.max(2, size * 0.15);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 1.1, size * 1.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
 
+    // Inner ring
+    ctx.globalAlpha = fog * pulse * 0.9;
+    ctx.strokeStyle = "#aaffdd";
+    ctx.lineWidth = Math.max(1, size * 0.08);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.7, size * 1.1, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Rotating energy arcs
+    for (let i = 0; i < 4; i++) {
+      const a = t * 2 + (i * Math.PI) / 2;
+      const rx = Math.cos(a) * size * 0.9;
+      const ry = Math.sin(a) * size * 1.3;
+      ctx.globalAlpha = fog * 0.6;
+      ctx.fillStyle = i % 2 === 0 ? "#00ffcc" : "#88ffdd";
+      ctx.beginPath();
+      ctx.arc(rx, ry, Math.max(2, size * 0.12), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Central bright core
     ctx.globalAlpha = fog * pulse;
-    ctx.fillStyle = "#aaffdd";
-    ctx.fillRect(
-      screenX - size * 0.6,
-      centerY - size * 1.2,
-      size * 1.2,
-      size * 2.4,
-    );
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.5);
+    core.addColorStop(0, "#ffffff");
+    core.addColorStop(0.3, "#aaffee");
+    core.addColorStop(1, "transparent");
+    ctx.fillStyle = core;
+    ctx.fillRect(-size * 0.5, -size * 0.5, size, size);
 
     ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
   drawProjectile(ctx, screenX, centerY, sprWidth, dist, entity, time, fog) {
     if (fog <= 0) return;
     const size = Math.max(3, sprWidth * 0.15);
     const color = entity.color || "#ff0044";
+    const t = time * 0.006;
 
-    ctx.globalAlpha = fog * 0.7;
+    // Outer glow halo
+    ctx.globalAlpha = fog * 0.35;
+    const glow = ctx.createRadialGradient(screenX, centerY, 0, screenX, centerY, size * 3);
+    glow.addColorStop(0, color);
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.fillRect(screenX - size * 3, centerY - size * 3, size * 6, size * 6);
+
+    // Core orb
+    ctx.globalAlpha = fog * 0.8;
     ctx.fillStyle = color;
-    ctx.fillRect(
-      screenX - size * 1.5,
-      centerY - size * 1.5,
-      size * 3,
-      size * 3,
-    );
+    ctx.beginPath();
+    ctx.arc(screenX, centerY, size * 0.9, 0, Math.PI * 2);
+    ctx.fill();
 
+    // Bright center
     ctx.globalAlpha = fog;
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(screenX - size / 2, centerY - size / 2, size, size);
+    ctx.beginPath();
+    ctx.arc(screenX, centerY, size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sparks
+    ctx.globalAlpha = fog * 0.6;
+    for (let i = 0; i < 3; i++) {
+      const a = t + i * 2.1;
+      const sx = screenX + Math.cos(a) * size * 1.4;
+      const sy = centerY + Math.sin(a) * size * 1.4;
+      ctx.fillStyle = color;
+      ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
 
     ctx.globalAlpha = 1;
   }
