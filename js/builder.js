@@ -431,7 +431,8 @@ export class BuilderMode {
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!Array.isArray(data.grid)) return null;
-      if (!Number.isInteger(data.width) || !Number.isInteger(data.height)) return null;
+      if (!Number.isInteger(data.width) || !Number.isInteger(data.height))
+        return null;
       if (data.width <= 0 || data.height <= 0) return null;
       // Validate grid dimensions and contents
       if (data.grid.length !== data.height) return null;
