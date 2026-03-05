@@ -984,7 +984,10 @@ export class Renderer {
         ctx.fillStyle = `rgba(0,255,170,${0.15 * thrustFlicker})`;
         ctx.beginPath();
         ctx.moveTo(screenX + txOff - 4, thrustBase + sphereR * 0.15);
-        ctx.lineTo(screenX + txOff, thrustBase + sphereR * 0.4 + thrustFlicker * sphereR * 0.1);
+        ctx.lineTo(
+          screenX + txOff,
+          thrustBase + sphereR * 0.4 + thrustFlicker * sphereR * 0.1,
+        );
         ctx.lineTo(screenX + txOff + 4, thrustBase + sphereR * 0.15);
         ctx.fill();
       }
@@ -1062,7 +1065,10 @@ export class Renderer {
       ctx.fillStyle = darkColor;
       ctx.globalAlpha = alpha * 0.2;
       ctx.beginPath();
-      ctx.moveTo(screenX - bodyWidth * 0.2 + phaseOff * 0.5, bodyTop + halfH * 0.05 + drift);
+      ctx.moveTo(
+        screenX - bodyWidth * 0.2 + phaseOff * 0.5,
+        bodyTop + halfH * 0.05 + drift,
+      );
       ctx.quadraticCurveTo(
         screenX - bodyWidth * 0.8 + phaseOff * 0.5,
         centerY + drift,
@@ -1256,9 +1262,11 @@ export class Renderer {
 
       // Glitch lines (2 for more effect)
       ctx.fillStyle = `rgba(150,50,255,0.35)`;
-      const glitchY = bodyTop + ((time * 0.7 + enemy.x * 100) % (bodyBottom - bodyTop));
+      const glitchY =
+        bodyTop + ((time * 0.7 + enemy.x * 100) % (bodyBottom - bodyTop));
       ctx.fillRect(screenX - bodyWidth - 3, glitchY, bodyWidth * 2 + 6, 2);
-      const glitchY2 = bodyTop + ((time * 0.4 + enemy.y * 80) % (bodyBottom - bodyTop));
+      const glitchY2 =
+        bodyTop + ((time * 0.4 + enemy.y * 80) % (bodyBottom - bodyTop));
       ctx.fillStyle = `rgba(100,30,200,0.2)`;
       ctx.fillRect(screenX - bodyWidth * 0.5, glitchY2, bodyWidth, 1);
     } else if (enemy.enemyType === "beast") {
@@ -1633,14 +1641,25 @@ export class Renderer {
         // Eye highlight
         ctx.fillStyle = "rgba(255,200,150,0.35)";
         ctx.beginPath();
-        ctx.arc(eyeX - er * 0.25, eyeBaseY - er * 0.25, er * 0.25, 0, Math.PI * 2);
+        ctx.arc(
+          eyeX - er * 0.25,
+          eyeBaseY - er * 0.25,
+          er * 0.25,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
         // Brow ridge (heavier)
         ctx.strokeStyle = darkColor;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(hx + sw * 0.02, hy - sh * 0.48);
-        ctx.quadraticCurveTo(hx + sw * 0.25, hy - sh * 0.55, hx + sw * 0.48, hy - sh * 0.4);
+        ctx.quadraticCurveTo(
+          hx + sw * 0.25,
+          hy - sh * 0.55,
+          hx + sw * 0.48,
+          hy - sh * 0.4,
+        );
         ctx.stroke();
         ctx.lineWidth = 1.5;
 
@@ -1651,7 +1670,12 @@ export class Renderer {
           const wry = hy + sh * 0.0 + wr * sh * 0.1;
           ctx.beginPath();
           ctx.moveTo(hx + sw * 0.55, wry);
-          ctx.quadraticCurveTo(hx + sw * 0.7, wry - sh * 0.03, hx + sw * 0.85, wry + sh * 0.01);
+          ctx.quadraticCurveTo(
+            hx + sw * 0.7,
+            wry - sh * 0.03,
+            hx + sw * 0.85,
+            wry + sh * 0.01,
+          );
           ctx.stroke();
         }
 
@@ -1680,10 +1704,26 @@ export class Renderer {
         // Nostrils
         ctx.fillStyle = "#000000";
         ctx.beginPath();
-        ctx.ellipse(hx + sw * 1.02, hy + sh * 0.19, sw * 0.03, sh * 0.04, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+          hx + sw * 1.02,
+          hy + sh * 0.19,
+          sw * 0.03,
+          sh * 0.04,
+          0,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(hx + sw * 1.08, hy + sh * 0.19, sw * 0.03, sh * 0.04, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+          hx + sw * 1.08,
+          hy + sh * 0.19,
+          sw * 0.03,
+          sh * 0.04,
+          0,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
         // Nostril smoke/breath
         const smokePhase = Math.sin(time * 0.004 + hx * 2);

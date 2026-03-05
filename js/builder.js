@@ -402,7 +402,10 @@ export class BuilderMode {
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
       const li = action.layer;
-      const layer = this.map.layers && li >= 0 && li < NUM_LAYERS ? this.map.layers[li] : null;
+      const layer =
+        this.map.layers && li >= 0 && li < NUM_LAYERS
+          ? this.map.layers[li]
+          : null;
       if (layer) {
         layer[action.y][action.x] = action.oldTile;
       } else {
@@ -429,7 +432,10 @@ export class BuilderMode {
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
       const li = action.layer;
-      const layer = this.map.layers && li >= 0 && li < NUM_LAYERS ? this.map.layers[li] : null;
+      const layer =
+        this.map.layers && li >= 0 && li < NUM_LAYERS
+          ? this.map.layers[li]
+          : null;
       if (layer) {
         layer[action.y][action.x] = action.newTile;
       } else {
