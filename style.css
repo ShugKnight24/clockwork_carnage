@@ -240,6 +240,22 @@ body {
   box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
 }
 
+#modeSelect .mode-btn.mode-btn-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: rgba(100, 100, 120, 0.3);
+  background: rgba(60, 60, 80, 0.08);
+  color: #667788;
+}
+
+#modeSelect .mode-btn.mode-btn-disabled:hover,
+#modeSelect .mode-btn.mode-btn-disabled:focus-visible {
+  background: rgba(60, 60, 80, 0.08);
+  border-color: rgba(100, 100, 120, 0.3);
+  color: #667788;
+  transform: none;
+}
+
 #modeSelect .continue-btn {
   border-color: #ffcc00;
   background: rgba(255, 200, 0, 0.08);

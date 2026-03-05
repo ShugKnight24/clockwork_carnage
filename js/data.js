@@ -2487,6 +2487,38 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "dark",
+      art: "aria",
+      flash: "#00ddff",
+      lines: [
+        {
+          text: "[ INITIALIZING... A.R.I.A. — ARMOR-RESIDENT INTELLIGENCE ASSIST ]",
+          delay: 0,
+          color: "#00aacc",
+          size: 12,
+        },
+        {
+          text: "\"Good morning. — I'm ARIA, your tactical co-pilot.\"",
+          delay: 1800,
+          color: "#00ffdd",
+          size: 17,
+        },
+        {
+          text: "\"Neural link confirmed. Biometrics nominal. Let's get to work.\"",
+          delay: 4000,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: "A calm voice in the static. You're not doing this alone.",
+          delay: 6500,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      duration: 9000,
+    },
+    {
+      bg: "dark",
       art: "hero_armed",
       flash: "#00ccff",
       lines: [
@@ -2497,15 +2529,15 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "\"Calibrated to the armor's servo profile. You'll sprint faster,",
+          text: "ARIA: \"Calibrated to the armor's servo profile. You'll sprint faster,",
           delay: 2000,
-          color: "#00ccff",
+          color: "#00ffdd",
           size: 15,
         },
         {
           text: 'carry more, and hit harder — but you need to learn the steps."',
           delay: 3800,
-          color: "#00ccff",
+          color: "#00ffdd",
           size: 15,
         },
         {
@@ -2517,6 +2549,62 @@ export const CUTSCENE_SCRIPTS = {
       ],
       duration: 8000,
     },
+  ],
+};
+
+// ARIA in-game comms — contextual callouts during gameplay
+export const ARIA_COMMS = {
+  firstKill: [
+    "Neural sync confirmed. Combat systems online.",
+    "First contact. You're a natural.",
+    "Target neutralized. Suit telemetry looks good.",
+  ],
+  lowHealth: [
+    "Biometrics critical — find cover, now.",
+    "Your vitals are dropping. I'm not losing you on day one.",
+    "Armor integrity failing. Move!",
+  ],
+  criticalHealth: [
+    "You're flatlining. MOVE!",
+    "I can't patch you from here — find health NOW.",
+  ],
+  weaponPickup: [
+    "New hardware acquired. Syncing to servo profile.",
+    "Weapon detected. Auto-calibrating.",
+    "Added to your loadout. Try not to break it.",
+  ],
+  killStreak3: [
+    "Triple kill. Not bad for a temp.",
+    "Three down. The suit is reading your intent before you pull the trigger.",
+  ],
+  killStreak5: [
+    "Five confirmed. You're on a rampage.",
+    "Impressive. Even my projections didn't account for this.",
+  ],
+  killStreak7: [
+    "Seven. I'm adjusting my threat model — upward.",
+    "You're rewriting the combat logs. Keep it up.",
+  ],
+  roundComplete: [
+    "Round clear. Diagnostics nominal.",
+    "All hostiles down. Catch your breath — more incoming.",
+    "Area secure. Recalibrating sensors for the next wave.",
+  ],
+  levelComplete: [
+    "Objective achieved. Marking safe passage.",
+    "That sector is clear. Well done.",
+  ],
+  bossEncounter: [
+    "Temporal anomaly detected — massive energy signature. Be ready.",
+    "This one's different. Prioritize evasion.",
+  ],
+  playerDeath: [
+    "Rebooting… I'll be here when you're back.",
+    "Suit failsafe engaged. Rewind in progress.",
+  ],
+  arenaStart: [
+    "Arena protocol active. Survive.",
+    "Welcome to the arena. I'll track your stats.",
   ],
 };
 

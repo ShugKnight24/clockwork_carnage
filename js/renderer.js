@@ -786,62 +786,230 @@ export class Renderer {
     ctx.globalAlpha = alpha;
 
     if (enemy.enemyType === "drone") {
-      // Drone
+      // Drone (Enhanced hovering combat sphere)
       const sphereR = bodyWidth * 0.8;
       const sphereCY = centerY - halfH * 0.05;
+      const dronePulse = Math.sin(time * 0.004 + enemy.x * 3);
+      const hover = Math.sin(time * 0.005 + enemy.y * 2) * halfH * 0.01;
+
+      // Outer energy field
+      ctx.fillStyle = `rgba(0,255,170,${0.04 + dronePulse * 0.02})`;
+      ctx.beginPath();
+      ctx.arc(screenX, sphereCY + hover, sphereR * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
       // Main sphere body
       ctx.fillStyle = darkColor;
       ctx.beginPath();
-      ctx.arc(screenX, sphereCY, sphereR, 0, Math.PI * 2);
+      ctx.arc(screenX, sphereCY + hover, sphereR, 0, Math.PI * 2);
       ctx.fill();
-      // Inner glow
+
+      // Equator ring (tech seam)
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        sphereCY + hover,
+        sphereR * 0.95,
+        sphereR * 0.15,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+
+      // Upper hemisphere highlight
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.beginPath();
+      ctx.arc(
+        screenX,
+        sphereCY + hover - sphereR * 0.2,
+        sphereR * 0.75,
+        Math.PI,
+        0,
+      );
+      ctx.fill();
+
+      // Inner glow ring
       ctx.fillStyle = baseColor;
       ctx.beginPath();
-      ctx.arc(screenX, sphereCY, sphereR * 0.7, 0, Math.PI * 2);
+      ctx.arc(screenX, sphereCY + hover, sphereR * 0.65, 0, Math.PI * 2);
       ctx.fill();
-      // Highlight
+
+      // Panel seams (4 meridian lines)
+      ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      ctx.lineWidth = 1;
+      for (let ps = 0; ps < 4; ps++) {
+        const angle = (ps / 4) * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(
+          screenX + Math.cos(angle) * sphereR * 0.15,
+          sphereCY + hover - sphereR * 0.85,
+        );
+        ctx.quadraticCurveTo(
+          screenX + Math.cos(angle) * sphereR * 0.9,
+          sphereCY + hover,
+          screenX + Math.cos(angle) * sphereR * 0.15,
+          sphereCY + hover + sphereR * 0.85,
+        );
+        ctx.stroke();
+      }
+
+      // Specular highlight
       ctx.fillStyle = "rgba(255,255,255,0.3)";
       ctx.beginPath();
       ctx.arc(
         screenX - sphereR * 0.25,
-        sphereCY - sphereR * 0.3,
-        sphereR * 0.2,
+        sphereCY + hover - sphereR * 0.3,
+        sphereR * 0.18,
         0,
         Math.PI * 2,
       );
       ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.beginPath();
+      ctx.arc(
+        screenX - sphereR * 0.15,
+        sphereCY + hover - sphereR * 0.2,
+        sphereR * 0.08,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Eye housing (recessed ring)
+      ctx.strokeStyle = "rgba(0,0,0,0.3)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(screenX, sphereCY + hover, sphereR * 0.32, 0, Math.PI * 2);
+      ctx.stroke();
+
       // Eye
       const blink = Math.sin(time * 0.005 + enemy.x * 10) > 0.95;
       if (!blink) {
+        // Eye glow halo
+        ctx.fillStyle = "rgba(0,255,170,0.15)";
+        ctx.beginPath();
+        ctx.arc(screenX, sphereCY + hover, sphereR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        // Iris
         ctx.fillStyle = "#00ffaa";
         ctx.beginPath();
-        ctx.arc(screenX, sphereCY, sphereR * 0.25, 0, Math.PI * 2);
+        ctx.arc(screenX, sphereCY + hover, sphereR * 0.25, 0, Math.PI * 2);
         ctx.fill();
+        // Iris ring detail
+        ctx.strokeStyle = "rgba(0,200,150,0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(screenX, sphereCY + hover, sphereR * 0.18, 0, Math.PI * 2);
+        ctx.stroke();
+        // Pupil (tracks slightly)
+        const pupilTrack = Math.sin(time * 0.002 + enemy.y) * sphereR * 0.04;
+        ctx.fillStyle = "#003322";
+        ctx.beginPath();
+        ctx.arc(
+          screenX + pupilTrack,
+          sphereCY + hover,
+          sphereR * 0.1,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        // Pupil highlight
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(screenX, sphereCY, sphereR * 0.1, 0, Math.PI * 2);
+        ctx.arc(
+          screenX + pupilTrack + sphereR * 0.04,
+          sphereCY + hover - sphereR * 0.04,
+          sphereR * 0.04,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      } else {
+        // Blink — thin line
+        ctx.strokeStyle = "#00ffaa";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screenX - sphereR * 0.2, sphereCY + hover);
+        ctx.lineTo(screenX + sphereR * 0.2, sphereCY + hover);
+        ctx.stroke();
+      }
+
+      // Sensor dots (3 around equator)
+      for (let sd = 0; sd < 3; sd++) {
+        const sda = (sd / 3) * Math.PI * 2 + time * 0.002;
+        const sdx = screenX + Math.cos(sda) * sphereR * 0.8;
+        const sdy = sphereCY + hover + Math.sin(sda) * sphereR * 0.12;
+        ctx.fillStyle = `rgba(0,255,170,${0.3 + dronePulse * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(sdx, sdy, 1.5, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Antenna
+
+      // Antenna (more detailed)
       ctx.strokeStyle = baseColor;
       ctx.lineWidth = 2;
+      const antBaseY = sphereCY + hover - sphereR;
+      const antTipY = antBaseY - halfH * 0.2;
       ctx.beginPath();
-      ctx.moveTo(screenX, sphereCY - sphereR);
-      ctx.lineTo(screenX, sphereCY - sphereR - halfH * 0.2);
+      ctx.moveTo(screenX, antBaseY);
+      ctx.lineTo(screenX, antTipY);
       ctx.stroke();
+      // Antenna joint
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.arc(screenX, antBaseY, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Antenna tip glow
+      ctx.fillStyle = `rgba(0,255,170,${0.3 + dronePulse * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(screenX, antTipY, 4, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#00ffaa";
       ctx.beginPath();
-      ctx.arc(screenX, sphereCY - sphereR - halfH * 0.2, 3, 0, Math.PI * 2);
+      ctx.arc(screenX, antTipY, 2.5, 0, Math.PI * 2);
       ctx.fill();
-      // Hover glow underneath
-      ctx.fillStyle = baseColor;
-      ctx.globalAlpha = alpha * 0.3;
+
+      // Thruster jets underneath (3 small vents)
+      const thrustBase = sphereCY + hover + sphereR * 0.7;
+      for (let tj = 0; tj < 3; tj++) {
+        const txOff = (tj - 1) * bodyWidth * 0.25;
+        // Vent housing
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(screenX + txOff - 3, thrustBase, 6, sphereR * 0.2);
+        // Thrust glow
+        const thrustFlicker = 0.5 + Math.sin(time * 0.015 + tj * 2) * 0.3;
+        ctx.fillStyle = `rgba(0,255,170,${0.15 * thrustFlicker})`;
+        ctx.beginPath();
+        ctx.moveTo(screenX + txOff - 4, thrustBase + sphereR * 0.15);
+        ctx.lineTo(screenX + txOff, thrustBase + sphereR * 0.4 + thrustFlicker * sphereR * 0.1);
+        ctx.lineTo(screenX + txOff + 4, thrustBase + sphereR * 0.15);
+        ctx.fill();
+      }
+
+      // Hover glow underneath (enhanced)
+      ctx.fillStyle = `rgba(0,255,170,${0.06 + dronePulse * 0.03})`;
       ctx.beginPath();
       ctx.ellipse(
         screenX,
         bodyBottom + halfH * 0.1,
-        bodyWidth * 0.5,
-        halfH * 0.06,
+        bodyWidth * 0.6,
+        halfH * 0.08,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = baseColor;
+      ctx.globalAlpha = alpha * 0.2;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        bodyBottom + halfH * 0.1,
+        bodyWidth * 0.35,
+        halfH * 0.04,
         0,
         0,
         Math.PI * 2,
@@ -849,36 +1017,76 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = alpha;
     } else if (enemy.enemyType === "phantom") {
-      // Phantom
+      // Phantom (Enhanced ethereal wraith)
       const phaseOff = Math.sin(time * 0.003 + enemy.y * 5) * bodyWidth * 0.15;
+      const drift = Math.sin(time * 0.002 + enemy.x * 3) * halfH * 0.01;
+      const phantomPulse = (Math.sin(time * 0.004 + enemy.y * 2) + 1) * 0.5;
+
+      // Outer ethereal aura
+      ctx.fillStyle = "rgba(150,50,255,0.04)";
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX + phaseOff,
+        centerY + drift,
+        bodyWidth * 1.2,
+        halfH * 0.55,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
       // Ghostly body
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = alpha * 0.5;
       ctx.beginPath();
-      ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, bodyTop);
+      ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, bodyTop + drift);
       ctx.quadraticCurveTo(
         screenX - bodyWidth * 1.0 + phaseOff,
-        centerY,
+        centerY + drift,
         screenX - bodyWidth * 0.6,
-        bodyBottom,
+        bodyBottom + drift,
       );
-      ctx.lineTo(screenX + bodyWidth * 0.6, bodyBottom);
+      ctx.lineTo(screenX + bodyWidth * 0.6, bodyBottom + drift);
       ctx.quadraticCurveTo(
         screenX + bodyWidth * 1.0 + phaseOff,
-        centerY,
+        centerY + drift,
         screenX + bodyWidth * 0.3 + phaseOff,
-        bodyTop,
+        bodyTop + drift,
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // Secondary body layer (depth)
+      ctx.fillStyle = darkColor;
+      ctx.globalAlpha = alpha * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bodyWidth * 0.2 + phaseOff * 0.5, bodyTop + halfH * 0.05 + drift);
+      ctx.quadraticCurveTo(
+        screenX - bodyWidth * 0.8 + phaseOff * 0.5,
+        centerY + drift,
+        screenX - bodyWidth * 0.5,
+        bodyBottom - halfH * 0.02 + drift,
+      );
+      ctx.lineTo(screenX + bodyWidth * 0.5, bodyBottom - halfH * 0.02 + drift);
+      ctx.quadraticCurveTo(
+        screenX + bodyWidth * 0.8 + phaseOff * 0.5,
+        centerY + drift,
+        screenX + bodyWidth * 0.2 + phaseOff * 0.5,
+        bodyTop + halfH * 0.05 + drift,
       );
       ctx.closePath();
       ctx.fill();
       ctx.globalAlpha = alpha;
+
       // Inner ethereal core
       ctx.fillStyle = darkColor;
       ctx.globalAlpha = alpha * 0.7;
       ctx.beginPath();
       ctx.ellipse(
         screenX + phaseOff,
-        centerY - halfH * 0.05,
+        centerY - halfH * 0.05 + drift,
         bodyWidth * 0.45,
         halfH * 0.25,
         0,
@@ -887,12 +1095,52 @@ export class Renderer {
       );
       ctx.fill();
       ctx.globalAlpha = alpha;
-      // Two hollow eyes
+
+      // Rib-like internal structures (showing through translucent body)
+      ctx.strokeStyle = "rgba(100,30,180,0.15)";
+      ctx.lineWidth = 1;
+      for (let rb = 0; rb < 4; rb++) {
+        const rby = centerY - halfH * 0.08 + rb * halfH * 0.08 + drift;
+        ctx.beginPath();
+        ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, rby);
+        ctx.quadraticCurveTo(
+          screenX + phaseOff,
+          rby + halfH * 0.02,
+          screenX + bodyWidth * 0.3 + phaseOff,
+          rby - halfH * 0.01,
+        );
+        ctx.stroke();
+      }
+
+      // Two hollow eyes (enhanced with glow layers)
+      const eyeY = centerY - halfH * 0.1 + drift;
+      // Left eye glow
+      ctx.fillStyle = `rgba(204,102,255,${0.15 + phantomPulse * 0.1})`;
+      ctx.beginPath();
+      ctx.arc(
+        screenX - bodyWidth * 0.25 + phaseOff,
+        eyeY,
+        bodyWidth * 0.18,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      // Right eye glow
+      ctx.beginPath();
+      ctx.arc(
+        screenX + bodyWidth * 0.25 + phaseOff,
+        eyeY,
+        bodyWidth * 0.18,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      // Eye orbs
       ctx.fillStyle = "#cc66ff";
       ctx.beginPath();
       ctx.arc(
         screenX - bodyWidth * 0.25 + phaseOff,
-        centerY - halfH * 0.1,
+        eyeY,
         bodyWidth * 0.12,
         0,
         Math.PI * 2,
@@ -901,7 +1149,7 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(
         screenX + bodyWidth * 0.25 + phaseOff,
-        centerY - halfH * 0.1,
+        eyeY,
         bodyWidth * 0.12,
         0,
         Math.PI * 2,
@@ -912,7 +1160,7 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(
         screenX - bodyWidth * 0.25 + phaseOff,
-        centerY - halfH * 0.1,
+        eyeY,
         bodyWidth * 0.05,
         0,
         Math.PI * 2,
@@ -921,42 +1169,121 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(
         screenX + bodyWidth * 0.25 + phaseOff,
-        centerY - halfH * 0.1,
+        eyeY,
         bodyWidth * 0.05,
         0,
         Math.PI * 2,
       );
       ctx.fill();
-      // Tendrils hanging down
-      ctx.strokeStyle = baseColor;
+      // Eye highlights
+      ctx.fillStyle = "rgba(255,200,255,0.4)";
+      ctx.beginPath();
+      ctx.arc(
+        screenX - bodyWidth * 0.28 + phaseOff,
+        eyeY - bodyWidth * 0.04,
+        bodyWidth * 0.03,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        screenX + bodyWidth * 0.22 + phaseOff,
+        eyeY - bodyWidth * 0.04,
+        bodyWidth * 0.03,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Wailing mouth
+      const mouthOpen = 0.5 + Math.sin(time * 0.006 + enemy.x * 4) * 0.3;
+      ctx.fillStyle = "#110022";
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX + phaseOff,
+        centerY + halfH * 0.08 + drift,
+        bodyWidth * 0.1,
+        halfH * 0.04 * mouthOpen,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Tendrils hanging down (more variety)
       ctx.globalAlpha = alpha * 0.4;
       ctx.lineWidth = 2;
-      for (let t = 0; t < 4; t++) {
-        const tx = screenX - bodyWidth * 0.45 + t * bodyWidth * 0.3;
-        const tWave = Math.sin(time * 0.004 + t * 2) * bodyWidth * 0.1;
+      for (let t = 0; t < 5; t++) {
+        const tx = screenX - bodyWidth * 0.5 + t * bodyWidth * 0.25;
+        const tWave = Math.sin(time * 0.004 + t * 1.7) * bodyWidth * 0.1;
+        const tLen = halfH * (0.2 + (t % 2) * 0.12);
+        ctx.strokeStyle = `rgba(${150 + t * 15},${50 + t * 10},255,0.4)`;
         ctx.beginPath();
-        ctx.moveTo(tx, bodyBottom);
+        ctx.moveTo(tx, bodyBottom + drift);
         ctx.quadraticCurveTo(
           tx + tWave,
-          bodyBottom + halfH * 0.15,
+          bodyBottom + drift + tLen * 0.5,
           tx + tWave * 0.5,
-          bodyBottom + halfH * 0.3,
+          bodyBottom + drift + tLen,
         );
         ctx.stroke();
+        // Tendril tip fade
+        ctx.fillStyle = `rgba(150,50,255,${0.15 - t * 0.02})`;
+        ctx.beginPath();
+        ctx.arc(
+          tx + tWave * 0.5,
+          bodyBottom + drift + tLen,
+          1.5,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
       }
       ctx.globalAlpha = alpha;
-      // Glitch lines
-      ctx.fillStyle = `rgba(150,50,255,0.4)`;
-      const glitchY = bodyTop + Math.random() * (bodyBottom - bodyTop);
+
+      // Floating soul wisps (orbiting particles)
+      for (let w = 0; w < 3; w++) {
+        const wa = time * 0.003 + w * ((Math.PI * 2) / 3);
+        const wDist = bodyWidth * (0.7 + Math.sin(time * 0.002 + w) * 0.15);
+        const wx = screenX + Math.cos(wa) * wDist;
+        const wy = centerY + drift + Math.sin(wa) * halfH * 0.3;
+        ctx.fillStyle = `rgba(180,100,255,${0.2 + phantomPulse * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Glitch lines (2 for more effect)
+      ctx.fillStyle = `rgba(150,50,255,0.35)`;
+      const glitchY = bodyTop + ((time * 0.7 + enemy.x * 100) % (bodyBottom - bodyTop));
       ctx.fillRect(screenX - bodyWidth - 3, glitchY, bodyWidth * 2 + 6, 2);
+      const glitchY2 = bodyTop + ((time * 0.4 + enemy.y * 80) % (bodyBottom - bodyTop));
+      ctx.fillStyle = `rgba(100,30,200,0.2)`;
+      ctx.fillRect(screenX - bodyWidth * 0.5, glitchY2, bodyWidth, 1);
     } else if (enemy.enemyType === "beast") {
-      // Beast
+      // Beast (Cerberus)
       const bW = bodyWidth * 1.4;
       const breathe = Math.sin(time * 0.006 + enemy.x * 3) * halfH * 0.015;
       const backY = centerY - halfH * 0.22 + breathe;
       const chestY = centerY - halfH * 0.28 + breathe;
       const bellyY = centerY + halfH * 0.18;
       const rumpY = centerY - halfH * 0.08 + breathe;
+
+      // Ground shadow
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        bellyY + halfH * 0.28,
+        bW * 0.9,
+        halfH * 0.04,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
       // Torso
       ctx.fillStyle = darkColor;
       ctx.beginPath();
@@ -1006,6 +1333,20 @@ export class Renderer {
       );
       ctx.closePath();
       ctx.fill();
+
+      // Belly underside highlight
+      ctx.strokeStyle = hitFlash ? "#ffcccc" : "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bW * 0.4, bellyY + halfH * 0.1);
+      ctx.quadraticCurveTo(
+        screenX + bW * 0.1,
+        bellyY + halfH * 0.13,
+        screenX + bW * 0.5,
+        bellyY + halfH * 0.08,
+      );
+      ctx.stroke();
+
       // Muscle definition
       ctx.strokeStyle = baseColor;
       ctx.lineWidth = 1.5;
@@ -1019,6 +1360,20 @@ export class Renderer {
         Math.PI * 1.9,
       );
       ctx.stroke();
+      // Shoulder highlight
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(
+        screenX + bW * 0.35,
+        centerY - halfH * 0.06,
+        bW * 0.28,
+        Math.PI * 1.3,
+        Math.PI * 1.7,
+      );
+      ctx.stroke();
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 1.5;
       // Haunch muscles
       ctx.beginPath();
       ctx.arc(
@@ -1029,6 +1384,20 @@ export class Renderer {
         Math.PI * 1.8,
       );
       ctx.stroke();
+      // Haunch highlight
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(
+        screenX - bW * 0.5,
+        centerY + halfH * 0.01,
+        bW * 0.24,
+        Math.PI * 1.4,
+        Math.PI * 1.7,
+      );
+      ctx.stroke();
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = 1.5;
       // Ribcage lines
       for (let r = 0; r < 3; r++) {
         const rx = screenX - bW * 0.1 + r * bW * 0.15;
@@ -1052,7 +1421,51 @@ export class Renderer {
         Math.PI * 1.5,
       );
       ctx.stroke();
+
+      // Fur texture strokes along the back and sides
+      ctx.strokeStyle = "rgba(255,255,255,0.05)";
+      ctx.lineWidth = 1;
+      for (let f = 0; f < 8; f++) {
+        const ft = f / 7;
+        const fx = screenX - bW * 0.65 + ft * bW * 1.2;
+        const fy =
+          rumpY +
+          (backY - rumpY) * ft +
+          breathe -
+          Math.sin(ft * Math.PI) * halfH * 0.03;
+        const fDir = -1 + Math.sin(f * 2.3) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + bW * 0.03 * fDir, fy + halfH * 0.06);
+        ctx.stroke();
+      }
+      // Darker fur strokes on belly
+      ctx.strokeStyle = "rgba(0,0,0,0.1)";
+      for (let f = 0; f < 5; f++) {
+        const fx = screenX - bW * 0.3 + f * bW * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(fx, bellyY);
+        ctx.lineTo(fx + bW * 0.02, bellyY + halfH * 0.05);
+        ctx.stroke();
+      }
+
+      // Battle scars
+      ctx.strokeStyle = "rgba(80,20,20,0.4)";
+      ctx.lineWidth = 1.5;
+      // Scar across shoulder
+      ctx.beginPath();
+      ctx.moveTo(screenX + bW * 0.15, backY + halfH * 0.05);
+      ctx.lineTo(screenX + bW * 0.3, backY + halfH * 0.12);
+      ctx.lineTo(screenX + bW * 0.25, backY + halfH * 0.18);
+      ctx.stroke();
+      // Scar on flank
+      ctx.beginPath();
+      ctx.moveTo(screenX - bW * 0.35, centerY - halfH * 0.02);
+      ctx.lineTo(screenX - bW * 0.2, centerY + halfH * 0.03);
+      ctx.stroke();
+
       // Neck muscles
+      ctx.strokeStyle = baseColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(screenX + bW * 0.5, chestY + halfH * 0.02);
@@ -1091,6 +1504,46 @@ export class Renderer {
         chestY - halfH * 0.08,
       );
       ctx.fill();
+
+      // Chain collar around neck mass
+      ctx.strokeStyle = "#555566";
+      ctx.lineWidth = 2.5;
+      const collarY = chestY + halfH * 0.02;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX + bW * 0.55,
+        collarY,
+        bW * 0.18,
+        halfH * 0.06,
+        -0.2,
+        Math.PI * 0.3,
+        Math.PI * 1.7,
+      );
+      ctx.stroke();
+      // Chain links
+      ctx.strokeStyle = "#777788";
+      ctx.lineWidth = 1.5;
+      for (let cl = 0; cl < 4; cl++) {
+        const ca = Math.PI * 0.4 + cl * 0.35;
+        const cx = screenX + bW * 0.55 + Math.cos(ca) * bW * 0.17;
+        const cy = collarY + Math.sin(ca) * halfH * 0.055;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Hanging chain segment
+      ctx.strokeStyle = "#555566";
+      ctx.lineWidth = 2;
+      const chainHangX = screenX + bW * 0.55 + bW * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(chainHangX, collarY + halfH * 0.04);
+      ctx.quadraticCurveTo(
+        chainHangX + bW * 0.05,
+        collarY + halfH * 0.12,
+        chainHangX - bW * 0.02,
+        collarY + halfH * 0.16,
+      );
+      ctx.stroke();
 
       const drawHoundHead = (hx, hy, sc) => {
         const sw = bW * 0.28 * sc;
@@ -1158,25 +1611,49 @@ export class Renderer {
         ctx.lineTo(hx + sw * 0.24, hy - sh * 0.95);
         ctx.fill();
 
-        // Eye
-        ctx.fillStyle = "#ff2200";
-        ctx.shadowColor = "#ff0000";
-        ctx.shadowBlur = 8 * sc;
+        // Eye (layered glow, no shadowBlur for performance)
         const er = sw * 0.14;
+        const eyeX = hx + sw * 0.28;
+        const eyeBaseY = hy - sh * 0.25;
+        ctx.fillStyle = "rgba(255,34,0,0.15)";
         ctx.beginPath();
-        ctx.arc(hx + sw * 0.28, hy - sh * 0.25, er, 0, Math.PI * 2);
+        ctx.arc(eyeX, eyeBaseY, er * 2.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255,34,0,0.3)";
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeBaseY, er * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ff2200";
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeBaseY, er, 0, Math.PI * 2);
+        ctx.fill();
         // Slit pupil
         ctx.fillStyle = "#000000";
         ctx.fillRect(hx + sw * 0.26, hy - sh * 0.3, er * 0.3, er * 1.2);
-        // Brow ridge
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 2;
+        // Eye highlight
+        ctx.fillStyle = "rgba(255,200,150,0.35)";
         ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.05, hy - sh * 0.45);
-        ctx.lineTo(hx + sw * 0.45, hy - sh * 0.38);
+        ctx.arc(eyeX - er * 0.25, eyeBaseY - er * 0.25, er * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        // Brow ridge (heavier)
+        ctx.strokeStyle = darkColor;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(hx + sw * 0.02, hy - sh * 0.48);
+        ctx.quadraticCurveTo(hx + sw * 0.25, hy - sh * 0.55, hx + sw * 0.48, hy - sh * 0.4);
         ctx.stroke();
+        ctx.lineWidth = 1.5;
+
+        // Snout wrinkles
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.lineWidth = 1;
+        for (let wr = 0; wr < 3; wr++) {
+          const wry = hy + sh * 0.0 + wr * sh * 0.1;
+          ctx.beginPath();
+          ctx.moveTo(hx + sw * 0.55, wry);
+          ctx.quadraticCurveTo(hx + sw * 0.7, wry - sh * 0.03, hx + sw * 0.85, wry + sh * 0.01);
+          ctx.stroke();
+        }
 
         // Upper jaw / snout
         ctx.fillStyle = darkColor;
@@ -1200,6 +1677,29 @@ export class Renderer {
           Math.PI * 2,
         );
         ctx.fill();
+        // Nostrils
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.ellipse(hx + sw * 1.02, hy + sh * 0.19, sw * 0.03, sh * 0.04, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(hx + sw * 1.08, hy + sh * 0.19, sw * 0.03, sh * 0.04, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Nostril smoke/breath
+        const smokePhase = Math.sin(time * 0.004 + hx * 2);
+        if (smokePhase > 0) {
+          ctx.globalAlpha = smokePhase * 0.2;
+          ctx.fillStyle = "rgba(180,120,120,0.3)";
+          for (let sm = 0; sm < 3; sm++) {
+            const smOff = sm * sw * 0.08;
+            const smY = hy + sh * 0.15 - smOff * 0.5 - smokePhase * sh * 0.15;
+            const smR = sw * 0.04 + sm * sw * 0.03;
+            ctx.beginPath();
+            ctx.arc(hx + sw * 1.12 + smOff * 0.3, smY, smR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
 
         // Lower jaw
         ctx.fillStyle = darkColor;
@@ -1263,20 +1763,36 @@ export class Renderer {
           ctx.lineTo(tx + 1, hy + sh * 0.47 + jawAmt * 0.4);
           ctx.fill();
         }
-        // Drool
-        ctx.strokeStyle = "rgba(200,50,50,0.4)";
+        // Drool (thicker, more strands)
         ctx.lineWidth = 1;
-        for (let d = 0; d < 2; d++) {
-          const dx = hx + sw * 0.5 + d * sw * 0.25;
+        for (let d = 0; d < 3; d++) {
+          const dx = hx + sw * 0.45 + d * sw * 0.2;
           const dLen =
-            halfH * 0.04 + Math.sin(time * 0.008 + d + hx) * halfH * 0.02;
+            halfH * 0.05 + Math.sin(time * 0.008 + d + hx) * halfH * 0.025;
+          // Drool strand
+          ctx.strokeStyle = `rgba(200,50,50,${0.3 + d * 0.1})`;
           ctx.beginPath();
           ctx.moveTo(dx, hy + sh * 0.46 + jawAmt * 0.3);
-          ctx.lineTo(
-            dx + Math.sin(time * 0.003 + d) * 1.5,
+          ctx.quadraticCurveTo(
+            dx + Math.sin(time * 0.003 + d) * 2.5,
+            hy + sh * 0.46 + jawAmt * 0.3 + dLen * 0.6,
+            dx + Math.sin(time * 0.004 + d) * 1.5,
             hy + sh * 0.46 + jawAmt * 0.3 + dLen,
           );
           ctx.stroke();
+          // Drool droplet at tip
+          if (d < 2) {
+            ctx.fillStyle = "rgba(200,50,50,0.3)";
+            ctx.beginPath();
+            ctx.arc(
+              dx + Math.sin(time * 0.004 + d) * 1.5,
+              hy + sh * 0.46 + jawAmt * 0.3 + dLen,
+              1.2,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
+          }
         }
       };
 
@@ -1294,20 +1810,48 @@ export class Renderer {
         const pawY = ly + upperLen + lowerLen;
         // Upper leg
         ctx.fillRect(lx - legW * 0.6, ly, legW * 1.2, upperLen);
+        // Upper leg muscle highlight
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lx - legW * 0.2, ly + 2);
+        ctx.lineTo(lx - legW * 0.15, ly + upperLen * 0.7);
+        ctx.stroke();
         // Joint
+        ctx.fillStyle = darkColor;
         ctx.beginPath();
         ctx.arc(lx, ly + upperLen, legW * 0.5, 0, Math.PI * 2);
         ctx.fill();
+        // Joint ring
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.beginPath();
+        ctx.arc(lx, ly + upperLen, legW * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
         // Lower leg
         const offset = isRear ? -legW * 0.3 : legW * 0.3;
+        ctx.fillStyle = darkColor;
         ctx.beginPath();
         ctx.moveTo(lx - legW * 0.4, ly + upperLen);
         ctx.lineTo(lx + offset - legW * 0.3, pawY);
         ctx.lineTo(lx + offset + legW * 0.3, pawY);
         ctx.lineTo(lx + legW * 0.4, ly + upperLen);
         ctx.fill();
-        // Paw with claws
+        // Paw base
         ctx.fillRect(lx + offset - legW * 0.6, pawY, legW * 1.2, halfH * 0.03);
+        // Paw pad
+        ctx.fillStyle = "#1a1008";
+        ctx.beginPath();
+        ctx.ellipse(
+          lx + offset,
+          pawY + halfH * 0.015,
+          legW * 0.35,
+          halfH * 0.012,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        // Claws
         ctx.fillStyle = "#ccccaa";
         for (let c = 0; c < 3; c++) {
           ctx.beginPath();
@@ -1364,39 +1908,74 @@ export class Renderer {
       ctx.save();
       ctx.translate(tailEndX, tailEndY);
       ctx.rotate(sAng);
+      // Blade glow
+      ctx.fillStyle = "rgba(176,184,192,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(-2, -halfH * 0.08);
+      ctx.lineTo(swordLen + 2, 0);
+      ctx.lineTo(-2, halfH * 0.08);
+      ctx.fill();
+      // Main blade
       ctx.fillStyle = "#b0b8c0";
       ctx.beginPath();
       ctx.moveTo(0, -halfH * 0.06);
       ctx.lineTo(swordLen, 0);
       ctx.lineTo(0, halfH * 0.06);
       ctx.fill();
+      // Blade edge highlight
       ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(1, -halfH * 0.04);
       ctx.lineTo(swordLen * 0.9, 0);
       ctx.stroke();
-      // Cross guard
+      // Blood edge
+      ctx.strokeStyle = "rgba(180,30,30,0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(2, halfH * 0.04);
+      ctx.lineTo(swordLen * 0.7, halfH * 0.01);
+      ctx.stroke();
+      // Cross guard (more detailed)
       ctx.fillStyle = "#665544";
-      ctx.fillRect(-3, -halfH * 0.08, 6, halfH * 0.16);
+      ctx.fillRect(-4, -halfH * 0.09, 8, halfH * 0.18);
+      // Guard ornamentation
+      ctx.fillStyle = "#887766";
+      ctx.fillRect(-3, -halfH * 0.09, 6, 2);
+      ctx.fillRect(-3, halfH * 0.07, 6, 2);
       ctx.restore();
-      // Spines
-      ctx.fillStyle = baseColor;
-      for (let sp = 0; sp < 5; sp++) {
-        const t = sp / 4; // 0 to 1 along the back
-        const sx = screenX - bW * 0.6 + t * bW * 1.0;
-        // Interpolate Y along back curve (rump to chest)
+
+      // Spines (enhanced with glow tips)
+      for (let sp = 0; sp < 7; sp++) {
+        const t = sp / 6;
+        const sx = screenX - bW * 0.65 + t * bW * 1.1;
         const backCurveY =
           rumpY +
           (backY - rumpY) * t +
           breathe -
           Math.sin(t * Math.PI) * halfH * 0.04;
-        const spH = halfH * (0.05 + Math.sin(sp * 1.5 + time * 0.003) * 0.015);
+        const spH = halfH * (0.055 + Math.sin(sp * 1.5 + time * 0.003) * 0.015);
+        // Spine base shadow
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.beginPath();
+        ctx.moveTo(sx - 3, backCurveY);
+        ctx.lineTo(sx, backCurveY - spH * 0.3);
+        ctx.lineTo(sx + 3, backCurveY);
+        ctx.fill();
+        // Spine
+        ctx.fillStyle = baseColor;
         ctx.beginPath();
         ctx.moveTo(sx - 2, backCurveY);
         ctx.lineTo(sx, backCurveY - spH);
         ctx.lineTo(sx + 2, backCurveY);
         ctx.fill();
+        // Spine highlight
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(sx - 1, backCurveY);
+        ctx.lineTo(sx, backCurveY - spH);
+        ctx.stroke();
       }
     } else if (
       enemy.enemyType === "boss" ||
@@ -1495,11 +2074,13 @@ export class Renderer {
       ctx.lineTo(screenX, bBot - torsoH * 0.1);
       ctx.stroke();
 
-      // Chest energy core
+      // Chest energy core (layered glow, no shadowBlur for performance)
       const coreY = bTop + torsoH * 0.3 + breathe;
       const coreR = bW * 0.12 + pulse * bW * 0.04;
-      ctx.shadowColor = "#ff0044";
-      ctx.shadowBlur = 15 * (0.5 + pulse * 0.5);
+      ctx.fillStyle = `rgba(255,0,68,${0.12 + pulse * 0.12})`;
+      ctx.beginPath();
+      ctx.arc(screenX, coreY, coreR * 2.2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = `rgba(255,0,68,${0.3 + pulse * 0.3})`;
       ctx.beginPath();
       ctx.arc(screenX, coreY, coreR * 1.6, 0, Math.PI * 2);
@@ -1512,7 +2093,6 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(screenX, coreY, coreR * 0.4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
 
       // Shoulder pauldrons with spikes
       const drawPauldron = (side) => {
@@ -1689,9 +2269,17 @@ export class Renderer {
           ctx.lineTo(rx + thickness * (1 - t * 0.5), ry);
           ctx.stroke();
         }
-        // Glowing tip
-        ctx.shadowColor = "#ff0044";
-        ctx.shadowBlur = 6;
+        // Glowing tip (layered glow, no shadowBlur)
+        ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(
+          hx + side * headW * curve * 0.8,
+          hy - length + 1,
+          5 + pulse * 2,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
         ctx.fillStyle = `rgba(255,0,68,${0.4 + pulse * 0.4})`;
         ctx.beginPath();
         ctx.arc(
@@ -1702,7 +2290,6 @@ export class Renderer {
           Math.PI * 2,
         );
         ctx.fill();
-        ctx.shadowBlur = 0;
       };
       drawHorn(-1, halfH * 0.35, 0.7, 3);
       drawHorn(1, halfH * 0.35, 0.7, 3);
@@ -1720,13 +2307,14 @@ export class Renderer {
       );
       ctx.quadraticCurveTo(chx + 2, chy - halfH * 0.25, chx + 3.5, chy);
       ctx.fill();
-      ctx.shadowColor = "#ff0044";
-      ctx.shadowBlur = 8;
+      ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(chx, chy - halfH * 0.45, 6 + pulse * 2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = `rgba(255,0,68,${0.5 + pulse * 0.4})`;
       ctx.beginPath();
       ctx.arc(chx, chy - halfH * 0.45, 2.5 + pulse * 1.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
 
       // Three eyes
       const eyeY = headCY - headH * 0.05;
@@ -1738,14 +2326,19 @@ export class Renderer {
         ctx.beginPath();
         ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Eye glow
-        ctx.shadowColor = "#ff0000";
-        ctx.shadowBlur = 10 + pulse * 8;
+        // Eye glow (layered fills, no shadowBlur for performance)
+        ctx.fillStyle = `rgba(255,0,0,${0.12 + pulse * 0.1})`;
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, sw * 1.8, sh * 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,0,0,${0.3 + pulse * 0.15})`;
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = `rgba(255,0,0,${0.7 + pulse * 0.3})`;
         ctx.beginPath();
         ctx.ellipse(ex, ey, sw, sh, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
         // Bright iris
         ctx.fillStyle = `rgba(255,${80 + pulse * 50},${80 + pulse * 50},0.9)`;
         ctx.beginPath();
@@ -2615,10 +3208,21 @@ export class Renderer {
         helmW * 0.12,
         helmH * 0.35,
       );
-      // Glowing eyes behind visor slit
+      // Glowing eyes behind visor slit (layered glow, no shadowBlur)
+      ctx.fillStyle = "rgba(136,187,255,0.2)";
+      ctx.fillRect(
+        screenX - helmW * 0.35 - 3,
+        helmY + helmH * 0.37 - 3,
+        helmW * 0.2 + 6,
+        helmH * 0.08 + 6,
+      );
+      ctx.fillRect(
+        screenX + helmW * 0.15 - 3,
+        helmY + helmH * 0.37 - 3,
+        helmW * 0.2 + 6,
+        helmH * 0.08 + 6,
+      );
       ctx.fillStyle = "#aaddff";
-      ctx.shadowColor = "#88bbff";
-      ctx.shadowBlur = 8;
       ctx.fillRect(
         screenX - helmW * 0.35,
         helmY + helmH * 0.37,
@@ -2631,7 +3235,6 @@ export class Renderer {
         helmW * 0.2,
         helmH * 0.08,
       );
-      ctx.shadowBlur = 0;
       // Breathing holes on face plate
       ctx.fillStyle = "#111122";
       for (let bh = 0; bh < 3; bh++) {

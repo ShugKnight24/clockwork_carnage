@@ -615,63 +615,145 @@ export class CutsceneEngine {
   }
 
   drawScannerEffect(ctx, w, h, t) {
-    // Power-level scanner: numbers cascade upward, counter climbs to 9000+
-    const maxVal = 9001;
-    const rampDur = 4.0; // seconds to reach 9000+
-    const progress = Math.min(1, t / rampDur);
-    // Ease-in-out cubic for dramatic pacing
-    const eased =
-      progress < 0.5
-        ? 4 * progress * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-    const currentVal = Math.floor(eased * maxVal);
+    // Power-level scanner: climbs to ~9000, then ROCKETS off the page
+    const rampDur = 3.5; // seconds to reach ~9000
+    const blowoffStart = rampDur; // when it goes ballistic
+    const blowoffDur = 3.0; // seconds of exponential blowoff
 
-    // Cascading number columns (background rain)
+    let currentVal, eased, phase;
+    if (t < rampDur) {
+      // Phase 1: Steady climb to ~9000
+      phase = "climb";
+      const progress = t / rampDur;
+      eased =
+        progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      currentVal = Math.floor(eased * 9000);
+    } else {
+      // Phase 2: Exponential blowoff — rockets through the roof
+      phase = "blowoff";
+      eased = 1;
+      const bt = t - blowoffStart;
+      const blowProg = Math.min(1, bt / blowoffDur);
+      // Exponential: 9000 → 99,999 → 999,999 → ∞
+      const expo = Math.pow(10, 1 + blowProg * 5);
+      currentVal = Math.floor(9000 + expo);
+    }
+
+    const isBlowoff = phase === "blowoff";
+    const bt = Math.max(0, t - blowoffStart);
+    const blowProg = isBlowoff ? Math.min(1, bt / blowoffDur) : 0;
+
+    // ── Background number rain ──
     ctx.save();
-    ctx.globalAlpha = 0.15 + 0.1 * progress;
-    ctx.font = "14px monospace";
+    const rainAlpha = isBlowoff
+      ? 0.25 + 0.4 * blowProg
+      : 0.15 + 0.1 * eased;
+    ctx.globalAlpha = rainAlpha;
+    const rainFont = isBlowoff ? 14 + Math.floor(blowProg * 10) : 14;
+    ctx.font = `${rainFont}px monospace`;
     const cols = 18;
     for (let c = 0; c < cols; c++) {
-      const cx = (w / (cols + 1)) * (c + 1);
-      const speed = 60 + (c % 5) * 20;
-      for (let r = 0; r < 12; r++) {
+      // Columns scatter outward during blowoff
+      const scatter = isBlowoff ? (c - cols / 2) * blowProg * 30 : 0;
+      const cx = (w / (cols + 1)) * (c + 1) + scatter;
+      const speed = isBlowoff
+        ? (60 + (c % 5) * 20) * (1 + blowProg * 8)
+        : 60 + (c % 5) * 20;
+      const rowCount = isBlowoff ? 12 + Math.floor(blowProg * 6) : 12;
+      for (let r = 0; r < rowCount; r++) {
         const baseY = ((t * speed + r * 55 + c * 37) % (h + 60)) - 30;
         const num = Math.floor(
           Math.abs(Math.sin(c * 7.3 + r * 2.1 + t * 3)) * currentVal,
         );
         const bright = 0.3 + 0.7 * (1 - baseY / h);
-        ctx.fillStyle = `rgba(0,255,200,${bright * 0.4})`;
+        const rc = isBlowoff ? Math.min(255, Math.floor(blowProg * 255)) : 0;
+        const gc = isBlowoff ? Math.max(0, 255 - Math.floor(blowProg * 100)) : 255;
+        ctx.fillStyle = `rgba(${rc},${gc},200,${bright * 0.5})`;
         ctx.textAlign = "center";
-        ctx.fillText(num.toString(), cx, baseY);
+        ctx.fillText(num.toLocaleString(), cx, baseY);
       }
     }
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    // Main counter display
+    // ── Main counter ──
     const counterY = h * 0.28;
     const pulse = 1 + 0.04 * Math.sin(t * 12);
-    const fontSize = Math.round(48 * pulse + 20 * progress);
+    let fontSize;
+    if (isBlowoff) {
+      // Font grows massive — rockets off the page
+      fontSize = Math.round(68 + blowProg * 120);
+    } else {
+      fontSize = Math.round(48 * pulse + 20 * eased);
+    }
+
     ctx.save();
     ctx.textAlign = "center";
 
-    // Glow behind counter
-    const glowAlpha = 0.3 + 0.4 * progress;
-    ctx.shadowColor = currentVal >= 9000 ? "#ff4444" : "#00ffcc";
-    ctx.shadowBlur = 20 + 30 * progress;
-
     // Counter label
     ctx.font = "bold 14px monospace";
-    ctx.fillStyle = `rgba(170,187,204,${0.6 + 0.4 * progress})`;
-    ctx.fillText("POWER LEVEL SCAN", w / 2, counterY - fontSize / 2 - 16);
+    if (isBlowoff) {
+      // Label glitches and fades
+      const labelAlpha = Math.max(0, 1 - blowProg * 2);
+      const labelShake = blowProg * 15;
+      ctx.fillStyle = `rgba(255,${Math.floor(100 - blowProg * 100)},${Math.floor(100 - blowProg * 100)},${labelAlpha})`;
+      ctx.fillText(
+        blowProg > 0.6 ? "!!! CRITICAL !!!" : "POWER LEVEL SCAN",
+        w / 2 + (Math.random() - 0.5) * labelShake,
+        counterY - fontSize / 2 - 16 + (Math.random() - 0.5) * labelShake,
+      );
+    } else {
+      ctx.fillStyle = `rgba(170,187,204,${0.6 + 0.4 * eased})`;
+      ctx.fillText("POWER LEVEL SCAN", w / 2, counterY - fontSize / 2 - 16);
+    }
 
     // Counter value
     ctx.font = `bold ${fontSize}px monospace`;
-    if (currentVal >= 9000) {
-      // Red and shaking when over 9000
-      ctx.fillStyle = "#ff4444";
-      const shakeX = (Math.random() - 0.5) * 8;
-      const shakeY = (Math.random() - 0.5) * 8;
+    if (isBlowoff) {
+      // Red → white hot, massive shake, rising off-screen
+      const heat = Math.min(1, blowProg * 2);
+      const r2 = 255;
+      const g2 = Math.floor(heat * 200);
+      const b2 = Math.floor(heat * 200);
+      ctx.fillStyle = `rgb(${r2},${g2},${b2})`;
+      // Shake intensifies
+      const shake = 8 + blowProg * 40;
+      const shakeX = (Math.random() - 0.5) * shake;
+      const shakeY = (Math.random() - 0.5) * shake;
+      // Counter rises off screen
+      const lift = blowProg * blowProg * h * 0.4;
+      const displayY = counterY - lift + shakeY;
+
+      // Motion blur streaks behind the number
+      for (let streak = 3; streak > 0; streak--) {
+        const sa = 0.08 * streak;
+        ctx.fillStyle = `rgba(${r2},${g2 >> 1},0,${sa})`;
+        ctx.fillText(
+          currentVal.toLocaleString(),
+          w / 2 + shakeX * 0.5,
+          displayY + streak * (10 + blowProg * 20),
+        );
+      }
+
+      // Main number
+      ctx.fillStyle = `rgb(${r2},${g2},${b2})`;
+      ctx.fillText(currentVal.toLocaleString(), w / 2 + shakeX, displayY);
+
+      // Overflow symbol when it gets too big to read
+      if (blowProg > 0.7) {
+        const oAlpha = (blowProg - 0.7) / 0.3;
+        ctx.font = `bold ${Math.round(80 + oAlpha * 60)}px monospace`;
+        ctx.fillStyle = `rgba(255,255,255,${oAlpha * 0.9})`;
+        ctx.fillText("∞", w / 2 + (Math.random() - 0.5) * 10, counterY - lift * 0.5);
+      }
+    } else if (currentVal >= 8000) {
+      // Early warning — starts shaking before 9000
+      const warn = (currentVal - 8000) / 1000;
+      ctx.fillStyle = `rgb(255,${Math.floor(255 - warn * 200)},${Math.floor(200 - warn * 200)})`;
+      const shakeX = (Math.random() - 0.5) * warn * 6;
+      const shakeY = (Math.random() - 0.5) * warn * 6;
       ctx.fillText(
         currentVal.toLocaleString(),
         w / 2 + shakeX,
@@ -682,35 +764,74 @@ export class CutsceneEngine {
       ctx.fillText(currentVal.toLocaleString(), w / 2, counterY);
     }
 
-    // Horizontal scan line sweeping across
-    ctx.shadowBlur = 0;
-    const scanY = (t * 120) % h;
-    ctx.strokeStyle = `rgba(0,255,204,${0.25 + 0.15 * Math.sin(t * 5)})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, scanY);
-    ctx.lineTo(w, scanY);
-    ctx.stroke();
+    // ── Horizontal scan lines ──
+    const scanCount = isBlowoff ? 3 + Math.floor(blowProg * 5) : 1;
+    for (let s = 0; s < scanCount; s++) {
+      const scanSpeed = 120 * (1 + s * 0.5 + blowProg * 3);
+      const scanY = ((t * scanSpeed + s * 97) % h);
+      const sa = isBlowoff
+        ? 0.3 + 0.3 * blowProg
+        : 0.25 + 0.15 * Math.sin(t * 5);
+      ctx.strokeStyle = isBlowoff
+        ? `rgba(255,${Math.floor(150 - blowProg * 150)},${Math.floor(200 - blowProg * 200)},${sa})`
+        : `rgba(0,255,204,${sa})`;
+      ctx.lineWidth = isBlowoff ? 1 + blowProg * 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(0, scanY);
+      ctx.lineTo(w, scanY);
+      ctx.stroke();
+    }
 
-    // Bar graph that fills as value climbs
+    // ── Progress bar → explosion ──
     const barW = w * 0.4;
-    const barH = 12;
+    const barH2 = 12;
     const barX = (w - barW) / 2;
     const barY = counterY + fontSize / 2 + 20;
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(barX, barY, barW, barH);
-    const fillColor = currentVal >= 9000 ? "#ff4444" : "#00ffcc";
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(barX, barY, barW * eased, barH);
-    // Bar border
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(barX, barY, barW, barH);
 
-    // Warning flash when hitting 9000
-    if (currentVal >= 9000 && t < rampDur + 1.5) {
-      const warnAlpha = 0.15 * Math.abs(Math.sin(t * 8));
-      ctx.fillStyle = `rgba(255,0,0,${warnAlpha})`;
+    if (isBlowoff) {
+      // Bar shatters — fragments fly outward
+      const fragCount = 12;
+      for (let f = 0; f < fragCount; f++) {
+        const seed = f * 7.31;
+        const angle = (f / fragCount) * Math.PI * 2 + Math.sin(seed) * 0.5;
+        const dist = blowProg * (80 + Math.sin(seed * 3) * 40);
+        const fx = (w / 2) + Math.cos(angle) * dist;
+        const fy = barY + Math.sin(angle) * dist;
+        const fragAlpha = Math.max(0, 1 - blowProg * 1.5);
+        const fw = 8 + Math.sin(seed * 2) * 6;
+        const fh = 3 + Math.sin(seed * 5) * 2;
+        ctx.fillStyle = `rgba(255,${Math.floor(100 + Math.sin(seed) * 100)},0,${fragAlpha})`;
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(angle + blowProg * 3);
+        ctx.fillRect(-fw / 2, -fh / 2, fw, fh);
+        ctx.restore();
+      }
+    } else {
+      // Normal bar
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(barX, barY, barW, barH2);
+      const barColor = currentVal >= 8000
+        ? `rgb(255,${Math.floor(255 - ((currentVal - 8000) / 1000) * 200)},${Math.floor(200 - ((currentVal - 8000) / 1000) * 200)})`
+        : "#00ffcc";
+      ctx.fillStyle = barColor;
+      ctx.fillRect(barX, barY, barW * eased, barH2);
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, barY, barW, barH2);
+    }
+
+    // ── Warning / white-out flash ──
+    if (isBlowoff) {
+      // Screen goes white-hot at peak
+      const flashAlpha = blowProg > 0.8
+        ? (blowProg - 0.8) / 0.2 * 0.6
+        : 0.15 * Math.abs(Math.sin(t * 12));
+      ctx.fillStyle = `rgba(255,${Math.floor(200 - blowProg * 200)},${Math.floor(200 - blowProg * 200)},${flashAlpha})`;
+      ctx.fillRect(0, 0, w, h);
+    } else if (currentVal >= 8000) {
+      const warnAlpha = 0.08 * ((currentVal - 8000) / 1000) * Math.abs(Math.sin(t * 6));
+      ctx.fillStyle = `rgba(255,100,0,${warnAlpha})`;
       ctx.fillRect(0, 0, w, h);
     }
 
@@ -2372,10 +2493,348 @@ export class CutsceneEngine {
         break;
       }
 
+      case "aria": {
+        // ARIA — Armor-Resident Intelligence Assistant
+        // AI companion rendered as holographic female face in visor HUD
+        const fadeIn = Math.min(1, t / 0.8);
+        ctx.globalAlpha = fadeIn;
+
+        // Holographic interference / boot-up scanlines
+        const bootProg = Math.min(1, t / 2.0);
+        if (bootProg < 1) {
+          for (let sl = 0; sl < 20; sl++) {
+            const sly = -80 + sl * 8 + Math.sin(t * 10 + sl) * 2;
+            ctx.fillStyle = `rgba(0,220,255,${0.03 * (1 - bootProg)})`;
+            ctx.fillRect(-60, sly, 120, 1);
+          }
+        }
+
+        // Hexagonal visor frame (the HUD window ARIA lives in)
+        const visorPulse = 0.6 + Math.sin(t * 2) * 0.1;
+        ctx.strokeStyle = `rgba(0,200,255,${visorPulse * 0.4})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-45, -60);
+        ctx.lineTo(-55, -20);
+        ctx.lineTo(-45, 25);
+        ctx.lineTo(45, 25);
+        ctx.lineTo(55, -20);
+        ctx.lineTo(45, -60);
+        ctx.closePath();
+        ctx.stroke();
+        // Inner visor glow
+        ctx.fillStyle = `rgba(0,180,255,${0.03 + Math.sin(t * 1.5) * 0.01})`;
+        ctx.fill();
+
+        // Ambient holographic glow behind her
+        const ariaGlow = ctx.createRadialGradient(0, -20, 5, 0, -20, 70);
+        ariaGlow.addColorStop(0, "rgba(0,200,255,0.08)");
+        ariaGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = ariaGlow;
+        ctx.fillRect(-80, -90, 160, 130);
+
+        // --- Hair: short asymmetric bob, electric blue-black ---
+        ctx.fillStyle = "#0a0a1a";
+        // Left side (longer)
+        ctx.beginPath();
+        ctx.moveTo(-9, -62);
+        ctx.quadraticCurveTo(-16, -56, -15, -42);
+        ctx.quadraticCurveTo(-14, -30, -12 + Math.sin(t * 2) * 0.5, -22);
+        ctx.lineTo(-7, -22);
+        ctx.quadraticCurveTo(-8, -35, -7, -50);
+        ctx.closePath();
+        ctx.fill();
+        // Right side (shorter, swept)
+        ctx.beginPath();
+        ctx.moveTo(9, -62);
+        ctx.quadraticCurveTo(14, -56, 12, -46);
+        ctx.quadraticCurveTo(11, -38, 9, -34);
+        ctx.lineTo(7, -34);
+        ctx.quadraticCurveTo(8, -42, 7, -50);
+        ctx.closePath();
+        ctx.fill();
+        // Cyan highlight streak (left side)
+        ctx.strokeStyle = `rgba(0,220,255,${0.35 + Math.sin(t * 3) * 0.1})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-10, -58);
+        ctx.quadraticCurveTo(-13, -44, -11 + Math.sin(t * 2) * 0.5, -24);
+        ctx.stroke();
+
+        // --- Face (holographic skin tone — pale with blue tint) ---
+        ctx.fillStyle = "#c8bdd4";
+        ctx.beginPath();
+        ctx.moveTo(-8, -48);
+        ctx.quadraticCurveTo(-10, -56, -8, -62);
+        ctx.quadraticCurveTo(0, -66, 8, -62);
+        ctx.quadraticCurveTo(10, -56, 8, -48);
+        ctx.quadraticCurveTo(0, -44, -8, -48);
+        ctx.closePath();
+        ctx.fill();
+        // Holographic grid faintly overlaid on face
+        ctx.strokeStyle = `rgba(0,200,255,${0.06 + Math.sin(t * 2.5) * 0.02})`;
+        ctx.lineWidth = 0.3;
+        for (let gy = -62; gy < -44; gy += 4) {
+          ctx.beginPath();
+          ctx.moveTo(-8, gy);
+          ctx.lineTo(8, gy);
+          ctx.stroke();
+        }
+
+        // --- Eyes: bright cyan, sharp, expressive ---
+        // Whites
+        ctx.fillStyle = "#e0e8f0";
+        ctx.beginPath();
+        ctx.ellipse(-3.5, -55.5, 2.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(3.5, -55.5, 2.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Iris — glowing cyan
+        const eyeGlow = `rgba(0,220,255,${0.8 + Math.sin(t * 4) * 0.2})`;
+        ctx.fillStyle = eyeGlow;
+        ctx.beginPath();
+        ctx.arc(-3.5, -55.5, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(3.5, -55.5, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        // Pupil
+        ctx.fillStyle = "#0a0a2a";
+        ctx.beginPath();
+        ctx.arc(-3.5, -55.5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(3.5, -55.5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Eye highlight
+        ctx.fillStyle = "rgba(200,240,255,0.6)";
+        ctx.beginPath();
+        ctx.arc(-4.2, -56.2, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(2.8, -56.2, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyeliner (sharp, tech-styled)
+        ctx.strokeStyle = "#1a1a3a";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(-6.5, -56);
+        ctx.quadraticCurveTo(-3.5, -58, -0.5, -56.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0.5, -56.5);
+        ctx.quadraticCurveTo(3.5, -58, 6.5, -56);
+        ctx.stroke();
+
+        // Eyebrows — thin, angular
+        ctx.strokeStyle = "#2a2040";
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-6, -59);
+        ctx.lineTo(-1, -60.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1, -60.5);
+        ctx.lineTo(6, -59);
+        ctx.stroke();
+
+        // --- Nose (subtle) ---
+        ctx.strokeStyle = "rgba(180,170,190,0.3)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -54);
+        ctx.lineTo(-0.5, -50.5);
+        ctx.stroke();
+
+        // --- Lips (soft lilac) ---
+        ctx.fillStyle = "#b088a0";
+        ctx.beginPath();
+        ctx.moveTo(-3, -49);
+        ctx.quadraticCurveTo(0, -47.5, 3, -49);
+        ctx.quadraticCurveTo(0, -47.8, -3, -49);
+        ctx.closePath();
+        ctx.fill();
+
+        // --- Headset (over-ear, tech) ---
+        // Left earpiece
+        ctx.fillStyle = "#1a1a2a";
+        ctx.beginPath();
+        ctx.ellipse(-11, -54, 3.5, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(0,200,255,${0.5 + Math.sin(t * 3) * 0.2})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.ellipse(-11, -54, 3.5, 5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Pulsing LED on earpiece
+        ctx.fillStyle = `rgba(0,255,220,${0.5 + Math.sin(t * 5) * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(-12, -52, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        // Right earpiece
+        ctx.fillStyle = "#1a1a2a";
+        ctx.beginPath();
+        ctx.ellipse(11, -54, 3.5, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(0,200,255,${0.5 + Math.sin(t * 3) * 0.2})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.ellipse(11, -54, 3.5, 5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Headband arc over hair
+        ctx.strokeStyle = "#2a2a3a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, -54, 12.5, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(0,200,255,${0.2 + Math.sin(t * 2) * 0.1})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, -54, 12.5, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.stroke();
+        // Boom microphone extending from left earpiece
+        ctx.strokeStyle = "#2a2a3a";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-11, -50);
+        ctx.quadraticCurveTo(-8, -46, -4, -46);
+        ctx.stroke();
+        // Mic tip
+        ctx.fillStyle = "#2a2a3a";
+        ctx.beginPath();
+        ctx.arc(-4, -46, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Mic active indicator
+        ctx.fillStyle = `rgba(0,255,180,${0.4 + Math.sin(t * 6) * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(-4, -46, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // --- Neck ---
+        ctx.fillStyle = "#c8bdd4";
+        ctx.fillRect(-3, -47, 6, 6);
+
+        // --- Body: sleek tech suit, high collar ---
+        ctx.fillStyle = "#0f0f1a";
+        ctx.beginPath();
+        ctx.moveTo(-12, -41);
+        ctx.lineTo(-14, 18);
+        ctx.lineTo(14, 18);
+        ctx.lineTo(12, -41);
+        ctx.closePath();
+        ctx.fill();
+        // High collar
+        ctx.fillStyle = "#1a1a30";
+        ctx.beginPath();
+        ctx.moveTo(-8, -42);
+        ctx.quadraticCurveTo(-5, -44, -3, -42);
+        ctx.lineTo(3, -42);
+        ctx.quadraticCurveTo(5, -44, 8, -42);
+        ctx.lineTo(8, -38);
+        ctx.lineTo(-8, -38);
+        ctx.closePath();
+        ctx.fill();
+        // Cyan trim lines on suit
+        ctx.strokeStyle = `rgba(0,200,255,${0.3 + Math.sin(t * 2) * 0.1})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-5, -38);
+        ctx.lineTo(-5, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(5, -38);
+        ctx.lineTo(5, 0);
+        ctx.stroke();
+        // Center chest line
+        ctx.beginPath();
+        ctx.moveTo(0, -38);
+        ctx.lineTo(0, 18);
+        ctx.stroke();
+
+        // Status indicator on chest
+        ctx.fillStyle = `rgba(0,255,200,${0.5 + Math.sin(t * 4) * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(0, -30, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Arms
+        ctx.fillStyle = "#0f0f1a";
+        // Left arm (at side)
+        ctx.beginPath();
+        ctx.moveTo(-12, -38);
+        ctx.quadraticCurveTo(-16, -22, -14, 0);
+        ctx.lineTo(-10, 0);
+        ctx.quadraticCurveTo(-10, -20, -8, -38);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#c8bdd4";
+        ctx.beginPath();
+        ctx.arc(-12, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Right arm (raised, touching headset)
+        ctx.fillStyle = "#0f0f1a";
+        ctx.beginPath();
+        ctx.moveTo(12, -38);
+        ctx.quadraticCurveTo(17, -44, 14, -50);
+        ctx.lineTo(11, -49);
+        ctx.quadraticCurveTo(13, -43, 10, -36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#c8bdd4";
+        ctx.beginPath();
+        ctx.arc(13, -51, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs
+        ctx.fillStyle = "#0f0f1a";
+        ctx.fillRect(-6, 12, 5, 22);
+        ctx.fillRect(1, 12, 5, 22);
+        // Boots
+        ctx.fillStyle = "#0a0a14";
+        ctx.fillRect(-7, 32, 6, 6);
+        ctx.fillRect(1, 32, 6, 6);
+        // Cyan boot trim
+        ctx.fillStyle = `rgba(0,200,255,${0.3})`;
+        ctx.fillRect(-7, 32, 6, 0.8);
+        ctx.fillRect(1, 32, 6, 0.8);
+
+        // Floating data readouts (near her hand / headset)
+        const dataAlpha = 0.2 + Math.sin(t * 2.5) * 0.08;
+        ctx.save();
+        ctx.translate(-50, -15);
+        ctx.rotate(-0.1 + Math.sin(t * 0.7) * 0.02);
+        ctx.fillStyle = `rgba(0,200,255,${dataAlpha})`;
+        ctx.fillRect(0, 0, 22, 30);
+        ctx.strokeStyle = `rgba(0,200,255,${dataAlpha + 0.15})`;
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(0, 0, 22, 30);
+        for (let i = 0; i < 5; i++) {
+          ctx.fillStyle = `rgba(0,255,220,${dataAlpha * 0.6})`;
+          ctx.fillRect(2, 3 + i * 5, 8 + Math.sin(t * 2 + i) * 4, 1.2);
+        }
+        ctx.restore();
+
+        // Waveform readout (right side — voice analysis)
+        ctx.save();
+        ctx.translate(30, -25);
+        ctx.rotate(0.08);
+        ctx.strokeStyle = `rgba(0,255,200,${dataAlpha + 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, 15);
+        for (let i = 0; i < 20; i++) {
+          ctx.lineTo(i, 15 - Math.sin(t * 4 + i * 0.8) * 6 * (1 - i / 25));
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
       case "rift": {
-        // Temporal rift / portal
-        const pulse = 0.8 + Math.sin(t * 2) * 0.2;
-        ctx.globalAlpha = Math.min(1, t / 1.0);
 
         // Outer ring
         for (let ring = 3; ring >= 0; ring--) {
