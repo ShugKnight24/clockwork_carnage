@@ -197,6 +197,9 @@ export class Game {
     this.ariaMessage = null; // { text, color, life, duration }
     this.ariaTriggered = {}; // tracks one-shot triggers per level
     this.ariaEnabled = false; // enabled after clocking_in cutscene
+    this.ariaIdleTimer = 0; // seconds since last ARIA message
+    this.ariaIdleThreshold = 30; // seconds of silence before idle chatter
+    this.ariaCombatTimer = 0; // track time in combat for longSurvival
 
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
@@ -298,10 +301,7 @@ export class Game {
       }
       this.keys[e.code] = true;
       // Prevent Tab from shifting DOM focus in menus
-      if (
-        e.code === "Tab" &&
-        this.state === GameState.CHARACTER_CREATE
-      ) {
+      if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
         e.preventDefault();
       }
       this.handleKeyPress(e.code);
@@ -594,6 +594,7 @@ export class Game {
       }
 
       // Weapon switching
+      const prevWeapon = this.player.currentWeapon;
       if (code === this.keybinds.weapon1 && this.player.weapons.length >= 1)
         this.player.currentWeapon = 0;
       if (code === this.keybinds.weapon2 && this.player.weapons.length >= 2)
@@ -602,6 +603,8 @@ export class Game {
         this.player.currentWeapon = 2;
       if (code === this.keybinds.weapon4 && this.player.weapons.length >= 4)
         this.player.currentWeapon = 3;
+      if (this.player.currentWeapon !== prevWeapon)
+        this.triggerAriaOnce("weaponSwitch", "weaponSwitch");
 
       if (code === this.keybinds.interact) this.interact();
       if (code === this.keybinds.pause || code === "KeyP") {
@@ -623,6 +626,7 @@ export class Game {
         this.lastEscTime = now;
         this.state = this.pausedFromState || GameState.PLAYING;
         this.lockPointer();
+        this.triggerAriaOnce("pauseResume", "pauseResume");
       }
       if (code === "KeyQ") {
         if (this.mode === "playtest") {
@@ -1163,11 +1167,36 @@ export class Game {
     if (!this.ariaMessage && this.ariaQueue.length > 0) {
       const msg = this.ariaQueue.shift();
       this.ariaMessage = { ...msg, life: 0 };
+      this.ariaIdleTimer = 0; // reset idle clock when speaking
     }
     if (this.ariaMessage) {
       this.ariaMessage.life += dt;
       if (this.ariaMessage.life >= this.ariaMessage.duration) {
         this.ariaMessage = null;
+      }
+    }
+
+    // Track combat time for longSurvival trigger
+    if (this.state === GameState.PLAYING) {
+      this.ariaCombatTimer += dt;
+      // Long survival callout at 120s
+      if (this.ariaCombatTimer > 120) {
+        this.triggerAriaOnce("longSurvival", "longSurvival");
+      }
+
+      // Idle chatter — ARIA talks when nothing's been said for a while
+      this.ariaIdleTimer += dt;
+      if (
+        this.ariaIdleTimer >= this.ariaIdleThreshold &&
+        !this.ariaMessage &&
+        this.ariaQueue.length === 0
+      ) {
+        // 50% chance idle, 50% chance personality moment
+        const pool = Math.random() < 0.5 ? "idle" : "ariaPersonality";
+        this.queueAriaMessage(pool);
+        // Randomize next idle between 25-50s
+        this.ariaIdleThreshold = 25 + Math.random() * 25;
+        this.ariaIdleTimer = 0;
       }
     }
   }
@@ -1182,9 +1211,9 @@ export class Game {
     // Slide in from left (0-0.3s), hold, slide out (last 0.4s)
     let slideX = 0;
     if (t < 0.3) {
-      slideX = (1 - t / 0.3) * -320;
+      slideX = (1 - t / 0.3) * -360;
     } else if (t > dur - 0.4) {
-      slideX = ((t - (dur - 0.4)) / 0.4) * -320;
+      slideX = ((t - (dur - 0.4)) / 0.4) * -360;
     }
     // Fade
     let alpha = 1;
@@ -1194,47 +1223,215 @@ export class Game {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    const boxW = 300;
-    const boxH = 48;
+    const boxW = 340;
+    const boxH = 54;
     const bx = 16 + slideX;
-    const by = h - 120;
+    const by = h - 124;
 
     // Background
-    ctx.fillStyle = "rgba(0, 10, 20, 0.88)";
+    ctx.fillStyle = "rgba(0, 10, 20, 0.92)";
     ctx.beginPath();
     ctx.roundRect(bx, by, boxW, boxH, 6);
     ctx.fill();
 
-    // Cyan left accent bar
-    ctx.fillStyle = "#00ddff";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, 3, boxH, [6, 0, 0, 6]);
-    ctx.fill();
-
     // Cyan border (subtle)
-    ctx.strokeStyle = "rgba(0,200,255,0.4)";
+    ctx.strokeStyle = "rgba(0,200,255,0.35)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(bx, by, boxW, boxH, 6);
     ctx.stroke();
 
+    // --- ARIA Mini Portrait ---
+    const px = bx + 7;
+    const py = by + 5;
+    const pw = 40;
+    const ph = 44;
+
+    // Portrait background
+    ctx.fillStyle = "rgba(0, 30, 50, 0.9)";
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, 4);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,200,255,0.5)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, 4);
+    ctx.stroke();
+
+    const cx = px + pw / 2;
+    const cy = py + ph / 2 - 1;
+    const breathe = Math.sin(t * 2) * 0.5;
+
+    // Neck
+    ctx.fillStyle = "rgba(180, 220, 240, 0.7)";
+    ctx.fillRect(cx - 3, cy + 8, 6, 7);
+
+    // High-collar suit top
+    ctx.fillStyle = "rgba(20, 50, 70, 0.95)";
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy + 14 + breathe);
+    ctx.lineTo(cx - 6, cy + 9);
+    ctx.lineTo(cx - 3, cy + 13);
+    ctx.lineTo(cx + 3, cy + 13);
+    ctx.lineTo(cx + 6, cy + 9);
+    ctx.lineTo(cx + 14, cy + 14 + breathe);
+    ctx.lineTo(cx + 14, cy + 22);
+    ctx.lineTo(cx - 14, cy + 22);
+    ctx.closePath();
+    ctx.fill();
+    // Suit collar cyan trim
+    ctx.strokeStyle = "#00ddff";
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(cx - 6, cy + 9);
+    ctx.lineTo(cx - 14, cy + 14 + breathe);
+    ctx.moveTo(cx + 6, cy + 9);
+    ctx.lineTo(cx + 14, cy + 14 + breathe);
+    ctx.stroke();
+    // Suit center line
+    ctx.strokeStyle = "rgba(0,200,255,0.4)";
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 13);
+    ctx.lineTo(cx, cy + 22);
+    ctx.stroke();
+
+    // Face (slightly oval)
+    ctx.fillStyle = "rgba(190, 225, 245, 0.8)";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 2, 9, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Holographic grid overlay on face
+    ctx.strokeStyle = "rgba(0,200,255,0.12)";
+    ctx.lineWidth = 0.3;
+    for (let gy = cy - 12; gy < cy + 9; gy += 3) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, gy);
+      ctx.lineTo(cx + 9, gy);
+      ctx.stroke();
+    }
+
+    // Hair — asymmetric bob
+    ctx.fillStyle = "rgba(40, 50, 70, 0.9)";
+    // Left side (longer)
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, cy - 14);
+    ctx.quadraticCurveTo(cx - 13, cy - 10, cx - 12, cy + 3);
+    ctx.lineTo(cx - 9, cy + 2);
+    ctx.quadraticCurveTo(cx - 10, cy - 8, cx - 3, cy - 11);
+    ctx.closePath();
+    ctx.fill();
+    // Right side (shorter)
+    ctx.beginPath();
+    ctx.moveTo(cx + 3, cy - 14);
+    ctx.quadraticCurveTo(cx + 12, cy - 10, cx + 10, cy - 1);
+    ctx.lineTo(cx + 8, cy - 2);
+    ctx.quadraticCurveTo(cx + 9, cy - 8, cx + 3, cy - 11);
+    ctx.closePath();
+    ctx.fill();
+    // Top hair
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, cy - 13);
+    ctx.quadraticCurveTo(cx, cy - 16, cx + 5, cy - 13);
+    ctx.quadraticCurveTo(cx, cy - 11, cx - 5, cy - 13);
+    ctx.fill();
+
+    // Cyan highlight streak (left side)
+    ctx.strokeStyle = "#00eeff";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, cy - 13);
+    ctx.quadraticCurveTo(cx - 12, cy - 7, cx - 11, cy + 1);
+    ctx.stroke();
+
+    // Eyes — glowing cyan
+    const eyeGlow = 0.7 + Math.sin(t * 3) * 0.3;
+    ctx.fillStyle = `rgba(0, 230, 255, ${eyeGlow})`;
+    ctx.beginPath();
+    ctx.ellipse(cx - 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Eye glow bloom
+    ctx.fillStyle = `rgba(0, 200, 255, ${eyeGlow * 0.15})`;
+    ctx.beginPath();
+    ctx.ellipse(cx - 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Slight smile
+    ctx.strokeStyle = "rgba(100, 160, 200, 0.5)";
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy + 1, 3, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+
+    // Tech headset with boom mic
+    ctx.strokeStyle = "rgba(80, 100, 120, 0.9)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 3, 11, -0.65 * Math.PI, -0.15 * Math.PI);
+    ctx.stroke();
+    // Earpiece
+    ctx.fillStyle = "rgba(30, 50, 70, 0.9)";
+    ctx.beginPath();
+    ctx.ellipse(cx + 10, cy - 1, 2.5, 4, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    // Boom mic arm
+    ctx.strokeStyle = "rgba(80, 100, 120, 0.7)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx + 9, cy + 2);
+    ctx.quadraticCurveTo(cx + 8, cy + 6, cx + 3, cy + 7);
+    ctx.stroke();
+    // Mic tip
+    ctx.fillStyle = "#00ddff";
+    ctx.beginPath();
+    ctx.arc(cx + 3, cy + 7, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Holographic scanlines over portrait
+    ctx.fillStyle = `rgba(0, 200, 255, ${0.03 + Math.sin(t * 8) * 0.02})`;
+    for (let sy = 0; sy < ph; sy += 2) {
+      ctx.fillRect(px, py + sy, pw, 1);
+    }
+
+    // --- Text area ---
+    const tx = bx + 54;
+
     // "ARIA" label
     ctx.fillStyle = "#00ccff";
     ctx.font = "bold 10px monospace";
     ctx.textAlign = "left";
-    ctx.fillText("ARIA", bx + 12, by + 15);
+    ctx.fillText("ARIA", tx, by + 17);
 
     // Pulsing indicator dot
     const dotAlpha = 0.5 + Math.sin(t * 6) * 0.4;
     ctx.fillStyle = `rgba(0,255,200,${dotAlpha})`;
     ctx.beginPath();
-    ctx.arc(bx + 42, by + 12, 2.5, 0, Math.PI * 2);
+    ctx.arc(tx + 32, by + 14, 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    // Waveform visualizer (animated while speaking)
+    ctx.strokeStyle = `rgba(0, 200, 255, ${0.3 + Math.sin(t * 4) * 0.15})`;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    for (let i = 0; i < 20; i++) {
+      const wx = tx + 42 + i * 3;
+      const wh = Math.sin(t * 10 + i * 0.7) * (3 + Math.sin(t * 3 + i) * 2);
+      ctx.moveTo(wx, by + 14 - wh);
+      ctx.lineTo(wx, by + 14 + wh);
+    }
+    ctx.stroke();
 
     // Message text
     ctx.fillStyle = msg.color;
     ctx.font = "13px monospace";
-    ctx.fillText(msg.text, bx + 12, by + 35);
+    ctx.fillText(msg.text, tx, by + 38);
 
     ctx.restore();
   }
@@ -1539,6 +1736,7 @@ export class Game {
     this.shotsHit = 0;
     this.slowMoTimer = 0;
     this.timeScale = 1;
+    this.ariaCombatTimer = 0;
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
@@ -1556,6 +1754,7 @@ export class Game {
     if (this.cutsceneEngine.hasScript("clocking_in")) {
       this.startCutscene("clocking_in", () => {
         this.ariaEnabled = true;
+        this.queueAriaMessage("campaignStart");
         this.startCutscene("intro", () => {
           this.loadCampaignLevel(0);
         });
@@ -2997,6 +3196,22 @@ export class Game {
     this.shotsHit = 0;
     this.slowMoTimer = 0;
     this.timeScale = 1;
+    this.ariaCombatTimer = 0;
+
+    // ARIA boss encounter callout
+    const hasBoss = this.entities.some(
+      (e) =>
+        e.type === "enemy" &&
+        (e.enemyType === "boss" ||
+          e.enemyType === "boss_form2" ||
+          e.enemyType === "boss_form3"),
+    );
+    if (hasBoss) {
+      const form = this.campaignAct;
+      if (form === 2) this.queueAriaMessage("bossForm2");
+      else if (form === 3) this.queueAriaMessage("bossForm3");
+      else this.queueAriaMessage("bossEncounter");
+    }
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
@@ -3089,6 +3304,7 @@ export class Game {
       this.achievementStats.upgradesBought++;
       this.checkAchievements();
       this.audio.pickup();
+      this.queueAriaMessage("upgradeChosen");
     }
   }
 
@@ -3276,6 +3492,7 @@ export class Game {
     if (this.player.splashDamage && finalDamage > 0) {
       const splashRadius = 2.5;
       const splashDmg = finalDamage * this.player.splashDamage;
+      let splashKills = 0;
       for (const e2 of this.entities) {
         if (
           e2 === enemy ||
@@ -3300,9 +3517,12 @@ export class Game {
             this.audio.enemyDeath();
             this.glitchEffect = 0.3;
             this._onEnemyKill();
+            splashKills++;
           }
         }
       }
+      if (splashKills >= 2)
+        this.triggerAriaOnce("multiKillSplash", "multiKillSplash");
     }
 
     if (enemy.health <= 0) {
@@ -3425,6 +3645,7 @@ export class Game {
       this.player.alive = false;
       this.deathTimer = 1.5;
       this.audio.playerDeath();
+      this.queueAriaMessage("playerDeath");
     }
   }
 
@@ -3539,6 +3760,7 @@ export class Game {
         );
         if (this.roundDamageTaken === 0) {
           this.achievementStats.flawlessRounds++;
+          this.queueAriaMessage("noHitRound");
         }
         this.checkAchievements();
         this.audio.stopMusic();
@@ -3548,6 +3770,10 @@ export class Game {
         this.arenaClearTimer = null;
         this.saveArena();
         this.unlockPointer();
+        const accuracy =
+          this.shotsFired > 0 ? (this.shotsHit / this.shotsFired) * 100 : 0;
+        if (accuracy >= 75 && this.shotsFired >= 10)
+          this.queueAriaMessage("highAccuracy");
         this.queueAriaMessage("roundComplete");
         this.ariaTriggered = {}; // reset one-shot triggers per round
         return;
@@ -3709,6 +3935,7 @@ export class Game {
     p.staminaRegenDelay = 0.5;
     if (this.mode === "tutorial") this.tutorialDashed = true;
     this.achievementStats.totalDashes++;
+    this.triggerAriaOnce("dash", "dashUsed");
   }
 
   updatePlayer(dt) {
@@ -4103,6 +4330,7 @@ export class Game {
           );
           e.active = false;
           this.audio.pickup();
+          this.triggerAriaOnce("healthPickup", "healthPickup");
           if (this.mode === "tutorial" && this.tutorialStep >= 7)
             this.tutorialPickedUp = true;
         }
