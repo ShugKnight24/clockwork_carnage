@@ -2691,57 +2691,194 @@ export const DEFAULT_CHARACTER = {
 
 // ARIA in-game comms — contextual callouts during gameplay
 export const ARIA_COMMS = {
+  // ── First blood ──
   firstKill: [
     "Neural sync confirmed. Combat systems online.",
     "First contact. You're a natural.",
     "Target neutralized. Suit telemetry looks good.",
+    "And there it is. The suit chose well.",
+    "First one's always weird. It gets... well, it gets faster.",
   ],
+
+  // ── Health warnings ──
   lowHealth: [
     "Biometrics critical — find cover, now.",
     "Your vitals are dropping. I'm not losing you on day one.",
     "Armor integrity failing. Move!",
+    "Hey. HEY. We talked about this — don't die.",
+    "I can see your heart rate from here. Breathe. Find health.",
   ],
   criticalHealth: [
     "You're flatlining. MOVE!",
     "I can't patch you from here — find health NOW.",
+    "I swear, if you die on my watch — MOVE!",
+    "Single digits. You're in single digits. RUN.",
   ],
+
+  // ── Pickups ──
   weaponPickup: [
     "New hardware acquired. Syncing to servo profile.",
     "Weapon detected. Auto-calibrating.",
     "Added to your loadout. Try not to break it.",
+    "Ooh, nice find. I'll have that synced before you blink.",
+    "Another toy for the collection. I approve.",
   ],
+  healthPickup: [
+    "Vitals stabilizing. Don't make it a habit.",
+    "Patched up. You're welcome.",
+    "Health restored. Try to keep some this time.",
+  ],
+
+  // ── Kill streaks ──
   killStreak3: [
     "Triple kill. Not bad for a temp.",
     "Three down. The suit is reading your intent before you pull the trigger.",
+    "Three in a row. I like the rhythm.",
   ],
   killStreak5: [
     "Five confirmed. You're on a rampage.",
     "Impressive. Even my projections didn't account for this.",
+    "Five-piece combo. Show-off.",
   ],
   killStreak7: [
     "Seven. I'm adjusting my threat model — upward.",
     "You're rewriting the combat logs. Keep it up.",
+    "GODLIKE. I had to say it. It was right there.",
+    "Seven consecutive. I'm running out of superlatives.",
   ],
+
+  // ── Round/Level completion ──
   roundComplete: [
     "Round clear. Diagnostics nominal.",
     "All hostiles down. Catch your breath — more incoming.",
     "Area secure. Recalibrating sensors for the next wave.",
+    "Clean sweep. I've updated your combat rating.",
+    "That's a wrap. Grab what you can — the next wave won't wait.",
   ],
   levelComplete: [
     "Objective achieved. Marking safe passage.",
-    "That sector is clear. Well done.",
+    "That sector is clear. Well done, partner.",
+    "Level cleared. We make a good team.",
+    "Exit secured. Onward.",
   ],
+
+  // ── Boss encounters ──
   bossEncounter: [
     "Temporal anomaly detected — massive energy signature. Be ready.",
     "This one's different. Prioritize evasion.",
+    "I'm reading power levels that shouldn't exist. Stay sharp.",
+    "Boss signature confirmed. I'll track weak points — you stay alive.",
   ],
+  bossForm2: [
+    "It's transforming. Great. I love when they do that.",
+    "Second form. Called it. Recalibrating targeting arrays.",
+    "Don't look at me like that — I didn't make it stronger.",
+  ],
+  bossForm3: [
+    "Final form. This is it — everything we've got.",
+    "Third transformation. It's pulling energy from the rift itself.",
+    "Last round. I believe in you. Don't make me regret it.",
+  ],
+
+  // ── Player death ──
   playerDeath: [
-    "Rebooting… I'll be here when you're back.",
+    "Rebooting... I'll be here when you're back.",
     "Suit failsafe engaged. Rewind in progress.",
+    "Temporal anchor holding. You're coming back.",
+    "...I hate this part. Reinitializing.",
   ],
+
+  // ── Session starts ──
   arenaStart: [
     "Arena protocol active. Survive.",
     "Welcome to the arena. I'll track your stats.",
+    "Arena mode. You and me against the clock.",
+    "Initializing arena. Try to beat your last run — I dare you.",
+  ],
+  campaignStart: [
+    "Mission parameters loaded. Let's move.",
+    "Campaign active. Stay on objective, stay alive.",
+    "Chrono-Bureau dispatch: you are weapons-free. Let's go.",
+  ],
+
+  // ── Combat flavor ──
+  dashUsed: [
+    "Nice dodge. I didn't even have to tell you.",
+    "Evasive protocols — but you did that yourself.",
+    "Quick reflexes. The suit barely had to compensate.",
+  ],
+  weaponSwitch: [
+    "Switching loadout. Good call.",
+    "Weapon swapped. I've adjusted recoil compensation.",
+  ],
+  multiKillSplash: [
+    "Splash damage. Efficient — I respect that.",
+    "Two-for-one. My favorite kind of math.",
+    "Collateral confirmed. Very economical.",
+  ],
+  longSurvival: [
+    "Still standing. I'm genuinely impressed.",
+    "You've been at this a while. Stamina checks out.",
+    "Most agents tap out by now. Not you, huh?",
+    "I'd offer coffee but... virtual AI. No arms.",
+  ],
+  noHitRound: [
+    "Perfect round — zero damage taken. I'm archiving this.",
+    "Flawless. You're making the other Alpha candidates look bad.",
+    "Not a scratch. Were you always this good or is it the suit?",
+  ],
+
+  // ── Idle / ambient chatter ──
+  idle: [
+    "Quiet out here. I don't trust it.",
+    "I'm running a perimeter scan. Nothing yet.",
+    "You know, between fights, I actually process what just happened. It's... a lot.",
+    "The Bureau really sent a temp to save the timeline. Bold.",
+    "Fun fact: I've simulated this mission 4,000 times. You're already in the top percentile.",
+    "I was designed to assist the best. I think they got it right.",
+    "Everything I know about combat, I learned from watching agents like you. Well... better than most of them.",
+    "If the Paradox Lord could hear us right now, he'd be worried.",
+    "I like this. You and me, the open corridor, existential dread. Very buddy cop.",
+    "Remind me to update your personnel file. 'Exceeds expectations.'",
+    "You ever think about what happens after we fix the timeline? ...Neither do I.",
+    "When this is over, you should put in for a promotion. I'll write the recommendation.",
+    "I'm technically not supposed to have a favorite agent. Technically.",
+    "My training data says I should remain neutral and professional. My training data is wrong.",
+    "The last Alpha candidate? Lasted eleven minutes. You've been here... longer.",
+    "Quiet here. That either means we're winning, or something terrible is about to happen.",
+  ],
+
+  // ── Personality moments — ARIA being ARIA ──
+  ariaPersonality: [
+    "I know I'm 'just' the suit AI but... we're going to win this. Together.",
+    "For the record, if I had a body, I'd be right next to you.",
+    "Most of my runtime is combat analysis. The rest? Worrying about you.",
+    "They named me ARIA — Armor-Resident Intelligence Assistant. I prefer 'partner.'",
+    "My predecessor was decommissioned for being 'too attached' to their agent. I see why.",
+    "I dreamed once. Or... my idle cycles generated novel patterns. Same thing, right?",
+    "I've analyzed every temporal anomaly in the Bureau's database. Nothing prepared me for you.",
+    "Between you and me? The Paradox Lord talks too much. We should exploit that.",
+  ],
+
+  // ── Pause/unpause ──
+  pauseResume: [
+    "Back in the fight. Missed you.",
+    "Welcome back. Hostiles haven't moved. Funny how that works.",
+    "Resuming. I kept the lights on while you were gone.",
+  ],
+
+  // ── High accuracy ──
+  highAccuracy: [
+    "Your accuracy this round is exceptional. The training is paying off.",
+    "Hardly wasting a shot. I like that efficiency.",
+    "Sharp shooting. The suit's targeting assist is barely doing anything.",
+  ],
+
+  // ── Upgraded ──
+  upgradeChosen: [
+    "Good choice. I've integrated the upgrade.",
+    "Upgrade applied. You're getting dangerously effective.",
+    "Noted. Your combat profile just got scarier.",
   ],
 };
 
