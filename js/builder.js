@@ -401,13 +401,14 @@ export class BuilderMode {
     const action = this.history[this.historyIndex--];
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
-      const layer = this.map.layers ? this.map.layers[action.layer] : null;
+      const li = action.layer;
+      const layer = this.map.layers && li >= 0 && li < NUM_LAYERS ? this.map.layers[li] : null;
       if (layer) {
         layer[action.y][action.x] = action.oldTile;
       } else {
         this.map.grid[action.y][action.x] = action.oldTile;
       }
-      this.syncGrid();
+      this.syncGrid(action.x, action.y);
     } else if (action.type === "addSpawn") {
       this.map.enemySpawns = this.map.enemySpawns.filter(
         (s) => !(s.x === action.x && s.y === action.y),
@@ -427,13 +428,14 @@ export class BuilderMode {
     const action = this.history[++this.historyIndex];
     if (action.type === "place" || action.type === "remove") {
       if (!this._inBounds(action.x, action.y)) return;
-      const layer = this.map.layers ? this.map.layers[action.layer] : null;
+      const li = action.layer;
+      const layer = this.map.layers && li >= 0 && li < NUM_LAYERS ? this.map.layers[li] : null;
       if (layer) {
         layer[action.y][action.x] = action.newTile;
       } else {
         this.map.grid[action.y][action.x] = action.newTile;
       }
-      this.syncGrid();
+      this.syncGrid(action.x, action.y);
     } else if (action.type === "addSpawn") {
       this.map.enemySpawns.push({
         x: action.x,
@@ -470,7 +472,7 @@ export class BuilderMode {
             newTile: this.tile,
           });
           layer[py][px] = this.tile;
-          this.syncGrid();
+          this.syncGrid(px, py);
           this.audio.menuConfirm();
         }
       } else if (this.map.grid[py][px] === 0) {
@@ -523,7 +525,7 @@ export class BuilderMode {
           newTile: 0,
         });
         layer[hitY][hitX] = 0;
-        this.syncGrid();
+        this.syncGrid(hitX, hitY);
         this.audio.menuSelect();
       }
     } else if (this.map.grid[hitY][hitX] > 0) {
@@ -712,7 +714,11 @@ export class BuilderMode {
   syncGrid(cellX, cellY) {
     if (!this.map.layers) return;
 
-    if (!this.map.heightMap) {
+    if (
+      !this.map.heightMap ||
+      this.map.heightMap.length !== this.map.height ||
+      (this.map.heightMap[0] && this.map.heightMap[0].length !== this.map.width)
+    ) {
       this.map.heightMap = [];
       for (let y = 0; y < this.map.height; y++) {
         this.map.heightMap.push(new Array(this.map.width).fill(0));
@@ -935,6 +941,7 @@ export class BuilderMode {
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
+    this.layer = 0;
     this.history = [];
     this.historyIndex = -1;
     this.saveFlash = 2;
@@ -1465,6 +1472,7 @@ export class BuilderMode {
       enemySpawns: [],
       entities: [],
       exit: null,
+      heightMap: grid.map((row) => new Array(row.length).fill(0)),
     };
   }
 

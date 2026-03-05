@@ -8,6 +8,7 @@ import {
   TUTORIAL_MAP,
   ACHIEVEMENTS,
   ACHIEVEMENT_ICON_SVGS,
+  ARIA_COMMS,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
 import { AudioManager } from "./audio.js";
@@ -151,6 +152,11 @@ export class Game {
     // Dev flags
     this.alwaysShowTutorial = false;
 
+    // Cached vignette (recreated on resize)
+    this._vignetteCanvas = null;
+    this._vignetteW = 0;
+    this._vignetteH = 0;
+
     // Achievement system
     this.unlockedAchievements = {};
     this.achievementQueue = []; // toast notification queue
@@ -178,6 +184,12 @@ export class Game {
     };
     // Track damage taken per round for flawless detection
     this.roundDamageTaken = 0;
+
+    // ARIA in-game comms system
+    this.ariaQueue = [];      // queued messages
+    this.ariaMessage = null;  // { text, color, life, duration }
+    this.ariaTriggered = {};  // tracks one-shot triggers per level
+    this.ariaEnabled = false; // enabled after clocking_in cutscene
 
     this.setupInput();
     this.loadSettings();
@@ -324,23 +336,13 @@ export class Game {
   handleKeyPress(code) {
     // Nested Spaghetti 😂🤦‍♂️
     // TODO: Abstract into StateManager
-    if (this.state === GameState.TITLE) {
-      if (code === "Enter" || code === "Space") {
-        this.audio.init();
-        this.audio.resume();
-        this.applyAudioSettings();
-        this.audio.menuConfirm();
-        this.state = GameState.MODE_SELECT;
-        this.menuSelection = 0;
-      }
-      return;
-    }
 
-    if (this.state === GameState.MODE_SELECT) {
-      // Navigation handled by main.js via HTML button focus
-      if (code === "Escape") {
-        this.state = GameState.TITLE;
-      }
+    // TITLE and MODE_SELECT input is handled exclusively by main.js
+    // (which owns the DOM elements for those screens)
+    if (
+      this.state === GameState.TITLE ||
+      this.state === GameState.MODE_SELECT
+    ) {
       return;
     }
 
@@ -487,7 +489,7 @@ export class Game {
     if (this.state === GameState.PAUSED) {
       if (code === "Escape" || code === "Enter" || code === "KeyP") {
         const now = performance.now();
-        if (code === "Escape" && now - this.lastEscTime < 200) return;
+        if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
         this.state = this.pausedFromState || GameState.PLAYING;
         this.lockPointer();
@@ -747,6 +749,9 @@ export class Game {
         this.advanceCutsceneFrame();
       }
       if (code === "Escape") {
+        const now = performance.now();
+        if (now - this.lastEscTime < 200) return;
+        this.lastEscTime = now;
         this.endCutscene();
       }
       return;
@@ -974,6 +979,103 @@ export class Game {
     ctx.restore();
   }
 
+  // ── ARIA in-game comms ──────────────────────────────────
+  queueAriaMessage(category) {
+    if (!this.ariaEnabled) return;
+    const pool = ARIA_COMMS[category];
+    if (!pool || pool.length === 0) return;
+    const text = pool[Math.floor(Math.random() * pool.length)];
+    this.ariaQueue.push({ text, color: "#00ffdd", duration: 3.5 });
+  }
+
+  triggerAriaOnce(key, category) {
+    if (this.ariaTriggered[key]) return;
+    this.ariaTriggered[key] = true;
+    this.queueAriaMessage(category);
+  }
+
+  updateAriaComms(dt) {
+    if (!this.ariaEnabled) return;
+    // Drain queue into active message
+    if (!this.ariaMessage && this.ariaQueue.length > 0) {
+      const msg = this.ariaQueue.shift();
+      this.ariaMessage = { ...msg, life: 0 };
+    }
+    if (this.ariaMessage) {
+      this.ariaMessage.life += dt;
+      if (this.ariaMessage.life >= this.ariaMessage.duration) {
+        this.ariaMessage = null;
+      }
+    }
+  }
+
+  renderAriaComms(ctx, w, h) {
+    const msg = this.ariaMessage;
+    if (!msg) return;
+
+    const t = msg.life;
+    const dur = msg.duration;
+
+    // Slide in from left (0-0.3s), hold, slide out (last 0.4s)
+    let slideX = 0;
+    if (t < 0.3) {
+      slideX = (1 - t / 0.3) * -320;
+    } else if (t > dur - 0.4) {
+      slideX = ((t - (dur - 0.4)) / 0.4) * -320;
+    }
+    // Fade
+    let alpha = 1;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const boxW = 300;
+    const boxH = 48;
+    const bx = 16 + slideX;
+    const by = h - 120;
+
+    // Background
+    ctx.fillStyle = "rgba(0, 10, 20, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 6);
+    ctx.fill();
+
+    // Cyan left accent bar
+    ctx.fillStyle = "#00ddff";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, 3, boxH, [6, 0, 0, 6]);
+    ctx.fill();
+
+    // Cyan border (subtle)
+    ctx.strokeStyle = "rgba(0,200,255,0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 6);
+    ctx.stroke();
+
+    // "ARIA" label
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("ARIA", bx + 12, by + 15);
+
+    // Pulsing indicator dot
+    const dotAlpha = 0.5 + Math.sin(t * 6) * 0.4;
+    ctx.fillStyle = `rgba(0,255,200,${dotAlpha})`;
+    ctx.beginPath();
+    ctx.arc(bx + 42, by + 12, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Message text
+    ctx.fillStyle = msg.color;
+    ctx.font = "13px monospace";
+    ctx.fillText(msg.text, bx + 12, by + 35);
+
+    ctx.restore();
+  }
+
   saveArena() {
     try {
       const data = {
@@ -1087,6 +1189,8 @@ export class Game {
         for (let i = 0; i < data.entityStates.length; i++) {
           const saved = data.entityStates[i];
           const ent = this.entities[i];
+          // Validate type match before restoring to prevent index-order corruption
+          if (saved.type !== ent.type) continue;
           ent.active = saved.active;
           if (saved.type === "enemy" && ent.type === "enemy") {
             ent.health = saved.health;
@@ -1181,6 +1285,9 @@ export class Game {
     this.arenaRound = 1;
     this.player.reset();
     this.upgradeLevels = {};
+    this.ariaEnabled = true;
+    this.ariaTriggered = {};
+    this.queueAriaMessage("arenaStart");
     this.startArenaRound();
   }
 
@@ -1283,6 +1390,7 @@ export class Game {
     // Play origin story cutscene, then campaign intro
     if (this.cutsceneEngine.hasScript("clocking_in")) {
       this.startCutscene("clocking_in", () => {
+        this.ariaEnabled = true;
         this.startCutscene("intro", () => {
           this.loadCampaignLevel(0);
         });
@@ -1461,6 +1569,7 @@ export class Game {
     this.player.reset();
     if (this.cutsceneEngine.hasScript("clocking_in")) {
       this.startCutscene("clocking_in", () => {
+        this.ariaEnabled = true;
         this.initTutorialLevel();
       });
     } else {
@@ -2230,6 +2339,10 @@ export class Game {
 
   nextCampaignLevel() {
     this.campaignLevel++;
+    if (this.campaignLevel >= CAMPAIGN_LEVELS.length) {
+      this.loadCampaignLevel(this.campaignLevel); // triggers VICTORY via bounds check
+      return;
+    }
     // Keep player stats but heal a bit
     this.player.health = Math.min(
       this.player.health + 30,
@@ -2404,7 +2517,14 @@ export class Game {
       };
       this.screenShake = Math.max(this.screenShake, 4 + tier * 2);
       this.audio.roundComplete(); // big pop for streak
+      // ARIA streak callouts
+      if (this.killStreak === 3) this.queueAriaMessage("killStreak3");
+      else if (this.killStreak === 5) this.queueAriaMessage("killStreak5");
+      else if (this.killStreak === 7) this.queueAriaMessage("killStreak7");
     }
+
+    // ARIA first kill callout
+    this.triggerAriaOnce("firstKill", "firstKill");
 
     // Slow-mo last kill — triggers when all enemies dead
     if (
@@ -2604,6 +2724,14 @@ export class Game {
     this.audio.playerHit();
     this.roundDamageTaken += actualDamage;
 
+    // ARIA low health warnings
+    const hpPct = this.player.health / this.player.maxHealth;
+    if (hpPct <= 0.1 && hpPct > 0) {
+      this.triggerAriaOnce("critical", "criticalHealth");
+    } else if (hpPct <= 0.3 && hpPct > 0.1) {
+      this.triggerAriaOnce("lowHp", "lowHealth");
+    }
+
     // Thorns: reflect damage back to attacker
     if (
       this.player.thorns > 0 &&
@@ -2753,6 +2881,8 @@ export class Game {
         this.arenaClearTimer = null;
         this.saveArena();
         this.unlockPointer();
+        this.queueAriaMessage("roundComplete");
+        this.ariaTriggered = {}; // reset one-shot triggers per round
         return;
       }
     }
@@ -2849,6 +2979,7 @@ export class Game {
         this.audio.stopMusic();
         this.audio.roundComplete();
         this.unlockPointer();
+        this.queueAriaMessage("levelComplete");
       }
     }
 
@@ -2875,6 +3006,7 @@ export class Game {
     // Achievement checks (periodic, not every frame)
     this.checkAchievements();
     this.updateAchievementToast(dt);
+    this.updateAriaComms(dt);
   }
 
   triggerDash(code) {
@@ -3318,6 +3450,7 @@ export class Game {
           this.player.weapons.push(e.weaponId);
           this.player.currentWeapon = this.player.weapons.length - 1;
           this.audio.pickup();
+          this.queueAriaMessage("weaponPickup");
         }
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
@@ -3408,19 +3541,28 @@ export class Game {
 
     ctx.restore();
 
-    // Subtle ambient vignette (always-on depth effect)
-    const vigGrad = ctx.createRadialGradient(
-      w / 2,
-      h / 2,
-      h * 0.35,
-      w / 2,
-      h / 2,
-      h * 0.9,
-    );
-    vigGrad.addColorStop(0, "transparent");
-    vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
-    ctx.fillStyle = vigGrad;
-    ctx.fillRect(0, 0, w, h);
+    // Subtle ambient vignette (cached offscreen for performance)
+    if (!this._vignetteCanvas || this._vignetteW !== w || this._vignetteH !== h) {
+      this._vignetteCanvas = document.createElement("canvas");
+      this._vignetteCanvas.width = w;
+      this._vignetteCanvas.height = h;
+      const vCtx = this._vignetteCanvas.getContext("2d");
+      const vigGrad = vCtx.createRadialGradient(
+        w / 2,
+        h / 2,
+        h * 0.35,
+        w / 2,
+        h / 2,
+        h * 0.9,
+      );
+      vigGrad.addColorStop(0, "transparent");
+      vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
+      vCtx.fillStyle = vigGrad;
+      vCtx.fillRect(0, 0, w, h);
+      this._vignetteW = w;
+      this._vignetteH = h;
+    }
+    ctx.drawImage(this._vignetteCanvas, 0, 0);
 
     // Draw weapon (hidden in third person)
     if (this.settings.viewMode === 0) {
@@ -4083,14 +4225,25 @@ export class Game {
     const staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
     const isActive = this.player.isSprinting || this.player.isDashing;
 
-    // Glow when sprinting or dashing
+    // Glow when sprinting or dashing (no shadowBlur for performance)
     if (isActive) {
       const glowColor = this.player.isDashing
+        ? "rgba(0,255,255,0.15)"
+        : "rgba(255,170,0,0.12)";
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.roundRect(
+        staminaBarX - 6,
+        staminaBarY - 6,
+        staminaBarW + 12,
+        staminaBarH + 12,
+        8,
+      );
+      ctx.fill();
+      const innerGlow = this.player.isDashing
         ? "rgba(0,255,255,0.25)"
         : "rgba(255,170,0,0.2)";
-      ctx.shadowColor = this.player.isDashing ? "#00ffff" : "#ffaa00";
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = glowColor;
+      ctx.fillStyle = innerGlow;
       ctx.beginPath();
       ctx.roundRect(
         staminaBarX - 4,
@@ -4100,7 +4253,6 @@ export class Game {
         6,
       );
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
 
     // Background
@@ -4665,6 +4817,9 @@ export class Game {
 
     // Achievement toast (above minimap area)
     this.renderAchievementToast(ctx, w, h);
+
+    // ARIA comms overlay (bottom-left)
+    this.renderAriaComms(ctx, w, h);
   }
 
   // Multistage portrait drawing based on health and alive status - can be improved with better art and more stages / smoother transitions between stages
