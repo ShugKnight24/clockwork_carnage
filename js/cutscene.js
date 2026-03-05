@@ -647,9 +647,7 @@ export class CutsceneEngine {
 
     // ── Background number rain ──
     ctx.save();
-    const rainAlpha = isBlowoff
-      ? 0.25 + 0.4 * blowProg
-      : 0.15 + 0.1 * eased;
+    const rainAlpha = isBlowoff ? 0.25 + 0.4 * blowProg : 0.15 + 0.1 * eased;
     ctx.globalAlpha = rainAlpha;
     const rainFont = isBlowoff ? 14 + Math.floor(blowProg * 10) : 14;
     ctx.font = `${rainFont}px monospace`;
@@ -669,7 +667,9 @@ export class CutsceneEngine {
         );
         const bright = 0.3 + 0.7 * (1 - baseY / h);
         const rc = isBlowoff ? Math.min(255, Math.floor(blowProg * 255)) : 0;
-        const gc = isBlowoff ? Math.max(0, 255 - Math.floor(blowProg * 100)) : 255;
+        const gc = isBlowoff
+          ? Math.max(0, 255 - Math.floor(blowProg * 100))
+          : 255;
         ctx.fillStyle = `rgba(${rc},${gc},200,${bright * 0.5})`;
         ctx.textAlign = "center";
         ctx.fillText(num.toLocaleString(), cx, baseY);
@@ -746,7 +746,11 @@ export class CutsceneEngine {
         const oAlpha = (blowProg - 0.7) / 0.3;
         ctx.font = `bold ${Math.round(80 + oAlpha * 60)}px monospace`;
         ctx.fillStyle = `rgba(255,255,255,${oAlpha * 0.9})`;
-        ctx.fillText("∞", w / 2 + (Math.random() - 0.5) * 10, counterY - lift * 0.5);
+        ctx.fillText(
+          "∞",
+          w / 2 + (Math.random() - 0.5) * 10,
+          counterY - lift * 0.5,
+        );
       }
     } else if (currentVal >= 8000) {
       // Early warning — starts shaking before 9000
@@ -768,7 +772,7 @@ export class CutsceneEngine {
     const scanCount = isBlowoff ? 3 + Math.floor(blowProg * 5) : 1;
     for (let s = 0; s < scanCount; s++) {
       const scanSpeed = 120 * (1 + s * 0.5 + blowProg * 3);
-      const scanY = ((t * scanSpeed + s * 97) % h);
+      const scanY = (t * scanSpeed + s * 97) % h;
       const sa = isBlowoff
         ? 0.3 + 0.3 * blowProg
         : 0.25 + 0.15 * Math.sin(t * 5);
@@ -795,7 +799,7 @@ export class CutsceneEngine {
         const seed = f * 7.31;
         const angle = (f / fragCount) * Math.PI * 2 + Math.sin(seed) * 0.5;
         const dist = blowProg * (80 + Math.sin(seed * 3) * 40);
-        const fx = (w / 2) + Math.cos(angle) * dist;
+        const fx = w / 2 + Math.cos(angle) * dist;
         const fy = barY + Math.sin(angle) * dist;
         const fragAlpha = Math.max(0, 1 - blowProg * 1.5);
         const fw = 8 + Math.sin(seed * 2) * 6;
@@ -811,9 +815,10 @@ export class CutsceneEngine {
       // Normal bar
       ctx.fillStyle = "rgba(0,0,0,0.5)";
       ctx.fillRect(barX, barY, barW, barH2);
-      const barColor = currentVal >= 8000
-        ? `rgb(255,${Math.floor(255 - ((currentVal - 8000) / 1000) * 200)},${Math.floor(200 - ((currentVal - 8000) / 1000) * 200)})`
-        : "#00ffcc";
+      const barColor =
+        currentVal >= 8000
+          ? `rgb(255,${Math.floor(255 - ((currentVal - 8000) / 1000) * 200)},${Math.floor(200 - ((currentVal - 8000) / 1000) * 200)})`
+          : "#00ffcc";
       ctx.fillStyle = barColor;
       ctx.fillRect(barX, barY, barW * eased, barH2);
       ctx.strokeStyle = "rgba(255,255,255,0.3)";
@@ -824,13 +829,15 @@ export class CutsceneEngine {
     // ── Warning / white-out flash ──
     if (isBlowoff) {
       // Screen goes white-hot at peak
-      const flashAlpha = blowProg > 0.8
-        ? (blowProg - 0.8) / 0.2 * 0.6
-        : 0.15 * Math.abs(Math.sin(t * 12));
+      const flashAlpha =
+        blowProg > 0.8
+          ? ((blowProg - 0.8) / 0.2) * 0.6
+          : 0.15 * Math.abs(Math.sin(t * 12));
       ctx.fillStyle = `rgba(255,${Math.floor(200 - blowProg * 200)},${Math.floor(200 - blowProg * 200)},${flashAlpha})`;
       ctx.fillRect(0, 0, w, h);
     } else if (currentVal >= 8000) {
-      const warnAlpha = 0.08 * ((currentVal - 8000) / 1000) * Math.abs(Math.sin(t * 6));
+      const warnAlpha =
+        0.08 * ((currentVal - 8000) / 1000) * Math.abs(Math.sin(t * 6));
       ctx.fillStyle = `rgba(255,100,0,${warnAlpha})`;
       ctx.fillRect(0, 0, w, h);
     }
@@ -2835,7 +2842,6 @@ export class CutsceneEngine {
       }
 
       case "rift": {
-
         // Outer ring
         for (let ring = 3; ring >= 0; ring--) {
           const r = 40 + ring * 20;

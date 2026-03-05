@@ -333,8 +333,13 @@ body {
 }
 
 @keyframes spin-hint {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(90deg); }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
 }
 
 @media (orientation: portrait) and (hover: none) and (pointer: coarse) {
