@@ -961,11 +961,10 @@ export class BuilderMode {
       this._renderOverhead(ctx, w, h);
       return;
     }
-    // Apply pitch as y-shearing (vertical look offset)
+    // Vertical shift from pitch and layer height — passed to renderer
     const pitchOffset = this.pitch * h * 0.5;
     const heightOffset = this.height * h * 0.15;
-    ctx.save();
-    ctx.translate(0, pitchOffset + heightOffset);
+    const yShift = pitchOffset + heightOffset;
     this.renderer.renderScene(
       this.player,
       this.map,
@@ -974,17 +973,8 @@ export class BuilderMode {
       this.settings.fov,
       0,
       true,
+      yShift,
     );
-    ctx.restore();
-    // Fill exposed areas above/below with floor/ceiling colors
-    const totalOffset = pitchOffset + heightOffset;
-    if (totalOffset > 0) {
-      ctx.fillStyle = "#1a1a2e";
-      ctx.fillRect(0, 0, w, totalOffset);
-    } else if (totalOffset < 0) {
-      ctx.fillStyle = "#0a0a1a";
-      ctx.fillRect(0, h + totalOffset, w, -totalOffset);
-    }
     this._renderHUD(ctx, w, h);
   }
 

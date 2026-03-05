@@ -337,6 +337,7 @@ export class Renderer {
     fov = 70,
     viewMode = 0,
     skipFloorCeil = false,
+    yShift = 0,
   ) {
     const ctx = this.ctx;
     const w = this.width;
@@ -389,18 +390,18 @@ export class Renderer {
         dirX * planeMul,
       );
     } else {
-      // Gradient fallback — works correctly with canvas transforms
-      const halfH = h >> 1;
-      const ceilGrad = ctx.createLinearGradient(0, 0, 0, halfH);
+      // Gradient fallback for builder mode (uses yShift for vertical offset)
+      const centerY = (h >> 1) + yShift;
+      const ceilGrad = ctx.createLinearGradient(0, 0, 0, centerY);
       ceilGrad.addColorStop(0, "#0a0a1a");
       ceilGrad.addColorStop(1, "#1a1a2e");
       ctx.fillStyle = ceilGrad;
-      ctx.fillRect(0, 0, w, halfH);
-      const floorGrad = ctx.createLinearGradient(0, halfH, 0, h);
+      ctx.fillRect(0, 0, w, centerY);
+      const floorGrad = ctx.createLinearGradient(0, centerY, 0, h);
       floorGrad.addColorStop(0, "#1a1a2e");
       floorGrad.addColorStop(1, "#0d0d1a");
       ctx.fillStyle = floorGrad;
-      ctx.fillRect(0, halfH, w, halfH);
+      ctx.fillRect(0, centerY, w, h - centerY);
     }
 
     // Raycasting
@@ -476,8 +477,8 @@ export class Renderer {
       this.zBuffer[x] = perpWallDist;
 
       const lineHeight = Math.floor(h / perpWallDist);
-      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2);
-      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2);
+      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2 + yShift);
+      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2 + yShift);
 
       // Variable height: heightMap determines how tall the wall renders
       // 5 layers = full wall, 1 layer = 20% wall (from ground up)

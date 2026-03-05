@@ -271,6 +271,14 @@ export class Game {
       if (this.state === GameState.CONTROLS && this.rebindingKey) {
         e.preventDefault();
         if (e.code !== "Escape") {
+          const oldCode = this.keybinds[this.rebindingKey];
+          // Swap with any action already using this key
+          for (const action of Object.keys(this.keybinds)) {
+            if (action !== this.rebindingKey && this.keybinds[action] === e.code) {
+              this.keybinds[action] = oldCode;
+              break;
+            }
+          }
           this.keybinds[this.rebindingKey] = e.code;
           this.saveSettings();
         }
