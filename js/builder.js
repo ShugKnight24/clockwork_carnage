@@ -24,6 +24,8 @@ const TILE_COLORS = [
 ];
 
 const BUILDER_SAVE_KEY = "cc_builder_map";
+const BUILDER_INDEX_KEY = "cc_builder_maps_index";
+const BUILDER_CURRENT_KEY = "cc_builder_current_slot";
 const DEFAULT_MAP_SIZE = 32;
 const NUM_LAYERS = 5;
 const MAX_RAYCAST_DIST = 10;
@@ -65,7 +67,20 @@ export class BuilderMode {
     this.pitch = 0;
     this.layer = 0;
     this.height = 0;
+    this.verticalVelocity = 0;
+    this.grounded = true;
     this.active = false;
+
+    // Undo / redo history
+    this.history = [];
+    this.historyIndex = -1;
+
+    // Tool mode: 'block' (default) or 'spawn'
+    this.toolMode = "block";
+
+    // Multi-map management
+    this.currentSlot = 0;
+    this.mapIndex = []; // [{id, name}]
 
     // Input accumulators (fed from host)
     this.keys = {};
@@ -77,11 +92,37 @@ export class BuilderMode {
   // ─── Lifecycle ───────────────────────────────────────────
 
   start() {
-    const saved = this._loadMap();
-    if (saved) {
-      this.map = saved;
+    this._loadIndex();
+    // Migrate legacy single-slot save to multi-map
+    if (this.mapIndex.length === 0) {
+      const legacy = this._loadMapFromKey(BUILDER_SAVE_KEY);
+      if (legacy) {
+        this.mapIndex.push({ id: 0, name: legacy.name || "My Creation" });
+        this.currentSlot = 0;
+        this.map = legacy;
+        this._saveIndex();
+        this._saveCurrentMap();
+        try {
+          localStorage.removeItem(BUILDER_SAVE_KEY);
+        } catch (_) {
+          /* ok */
+        }
+      } else {
+        this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+        this.mapIndex.push({ id: 0, name: this.map.name });
+        this.currentSlot = 0;
+        this._saveIndex();
+        this._saveCurrentMap();
+      }
     } else {
-      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+      const savedSlot = this._loadCurrentSlot();
+      this.currentSlot = savedSlot;
+      const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+      if (saved) {
+        this.map = saved;
+      } else {
+        this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+      }
     }
 
     this._ensureLayers();
@@ -100,7 +141,12 @@ export class BuilderMode {
     this.pitch = 0;
     this.layer = 0;
     this.height = 0;
+    this.verticalVelocity = 0;
+    this.grounded = true;
     this.active = true;
+    this.toolMode = "block";
+    this.history = [];
+    this.historyIndex = -1;
 
     this.canvas.requestPointerLock();
   }
@@ -125,6 +171,58 @@ export class BuilderMode {
       this.saveMap();
       return true;
     }
+    // Ctrl+Z / Cmd+Z → undo
+    if (code === "KeyZ" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      e.preventDefault();
+      this.undo();
+      return true;
+    }
+    // Ctrl+Shift+Z / Cmd+Shift+Z → redo
+    if (code === "KeyZ" && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      this.redo();
+      return true;
+    }
+    // Ctrl+E / Cmd+E → export map
+    if (code === "KeyE" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.exportMap();
+      return true;
+    }
+    // Ctrl+I / Cmd+I → import map
+    if (code === "KeyI" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.importMap();
+      return true;
+    }
+    // Ctrl+N / Cmd+N → new map
+    if (code === "KeyN" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.newMap();
+      return true;
+    }
+    // Ctrl+D / Cmd+D → delete current map (if more than one)
+    if (code === "KeyD" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.deleteCurrentMap();
+      return true;
+    }
+    // , → previous map
+    if (code === "Comma" && !e.ctrlKey && !e.metaKey) {
+      this.switchMap(-1);
+      return true;
+    }
+    // . → next map
+    if (code === "Period" && !e.ctrlKey && !e.metaKey) {
+      this.switchMap(1);
+      return true;
+    }
+    // T → toggle tool mode (block / spawn)
+    if (code === "KeyT") {
+      this.toolMode = this.toolMode === "block" ? "spawn" : "block";
+      this.audio.menuSelect();
+      return true;
+    }
     // Tab → toggle overhead
     if (code === "Tab") {
       e.preventDefault();
@@ -139,13 +237,13 @@ export class BuilderMode {
       this.audio.menuSelect();
       return true;
     }
-    // Layer
-    if (code === "KeyQ") {
+    // Layer — only when not using Ctrl modifier
+    if (code === "KeyQ" && !e.ctrlKey && !e.metaKey) {
       this.layer = Math.max(0, this.layer - 1);
       this.audio.menuSelect();
       return true;
     }
-    if (code === "KeyE") {
+    if (code === "KeyE" && !e.ctrlKey && !e.metaKey) {
       this.layer = Math.min(NUM_LAYERS - 1, this.layer + 1);
       this.audio.menuSelect();
       return true;
@@ -185,6 +283,11 @@ export class BuilderMode {
 
   handleMouseDown(button) {
     if (this.overhead) return;
+    if (this.toolMode === "spawn") {
+      if (button === 0) this.placeSpawn();
+      if (button === 2) this.removeSpawn();
+      return;
+    }
     if (button === 0) this.placeBlock();
     if (button === 2) this.removeBlock();
   }
@@ -244,11 +347,42 @@ export class BuilderMode {
       my += dx;
     }
 
-    // Vertical movement
-    const riseSpeed = RISE_SPEED * dt;
-    if (this.keys["Space"]) this.height = Math.min(5, this.height + riseSpeed);
-    if (this.keys["ControlLeft"] || this.keys["ControlRight"])
-      this.height = Math.max(-2, this.height - riseSpeed);
+    // Vertical movement — jump physics when not noclip, free-fly when noclip
+    if (this.noclip) {
+      const riseSpeed = RISE_SPEED * dt;
+      if (this.keys["Space"])
+        this.height = Math.min(5, this.height + riseSpeed);
+      if (this.keys["ControlLeft"] || this.keys["ControlRight"])
+        this.height = Math.max(-2, this.height - riseSpeed);
+    } else {
+      // Ground level based on heightMap at player's cell
+      const gx = Math.floor(this.player.x);
+      const gy = Math.floor(this.player.y);
+      let groundLevel = 0;
+      if (
+        this.map.heightMap &&
+        gx >= 0 &&
+        gy >= 0 &&
+        gx < this.map.width &&
+        gy < this.map.height
+      ) {
+        groundLevel = this.map.heightMap[gy][gx] * 0.7;
+      }
+      // Jump
+      if (this.keys["Space"] && this.grounded) {
+        this.verticalVelocity = 5.5;
+        this.grounded = false;
+      }
+      // Gravity
+      this.verticalVelocity -= 12.0 * dt;
+      this.height += this.verticalVelocity * dt;
+      // Land on surface
+      if (this.height <= groundLevel) {
+        this.height = groundLevel;
+        this.verticalVelocity = 0;
+        this.grounded = true;
+      }
+    }
 
     const len = Math.sqrt(mx * mx + my * my);
     if (len > 0) {
@@ -285,50 +419,124 @@ export class BuilderMode {
 
   // ─── Block operations ────────────────────────────────────
 
+  _recordAction(action) {
+    // Truncate any redo-able future
+    this.history.length = this.historyIndex + 1;
+    this.history.push(action);
+    this.historyIndex++;
+    // Cap history at 200
+    if (this.history.length > 200) {
+      this.history.shift();
+      this.historyIndex--;
+    }
+  }
+
+  undo() {
+    if (this.historyIndex < 0) return;
+    const action = this.history[this.historyIndex--];
+    if (action.type === "place" || action.type === "remove") {
+      if (!this._inBounds(action.x, action.y)) return;
+      const li = action.layer;
+      const layer =
+        this.map.layers && li >= 0 && li < NUM_LAYERS
+          ? this.map.layers[li]
+          : null;
+      if (layer) {
+        layer[action.y][action.x] = action.oldTile;
+      } else {
+        this.map.grid[action.y][action.x] = action.oldTile;
+      }
+      this.syncGrid(action.x, action.y);
+    } else if (action.type === "addSpawn") {
+      this.map.enemySpawns = this.map.enemySpawns.filter(
+        (s) => !(s.x === action.x && s.y === action.y),
+      );
+    } else if (action.type === "removeSpawn") {
+      this.map.enemySpawns.push({
+        x: action.x,
+        y: action.y,
+        enemy: action.enemy,
+      });
+    }
+    this.audio.menuSelect();
+  }
+
+  redo() {
+    if (this.historyIndex >= this.history.length - 1) return;
+    const action = this.history[++this.historyIndex];
+    if (action.type === "place" || action.type === "remove") {
+      if (!this._inBounds(action.x, action.y)) return;
+      const li = action.layer;
+      const layer =
+        this.map.layers && li >= 0 && li < NUM_LAYERS
+          ? this.map.layers[li]
+          : null;
+      if (layer) {
+        layer[action.y][action.x] = action.newTile;
+      } else {
+        this.map.grid[action.y][action.x] = action.newTile;
+      }
+      this.syncGrid(action.x, action.y);
+    } else if (action.type === "addSpawn") {
+      this.map.enemySpawns.push({
+        x: action.x,
+        y: action.y,
+        enemy: action.enemy,
+      });
+    } else if (action.type === "removeSpawn") {
+      this.map.enemySpawns = this.map.enemySpawns.filter(
+        (s) => !(s.x === action.x && s.y === action.y),
+      );
+    }
+    this.audio.menuSelect();
+  }
+
   placeBlock() {
     if (this.overhead) return;
     const layer = this.map.layers ? this.map.layers[this.layer] : null;
     const target = this.target;
 
-    if (target) {
-      const { placeX, placeY } = target;
+    const tryPlace = (px, py) => {
       if (
-        this._inBounds(placeX, placeY) &&
-        !(
-          Math.floor(this.player.x) === placeX &&
-          Math.floor(this.player.y) === placeY
-        )
-      ) {
-        if (layer) {
-          if (layer[placeY][placeX] === 0) {
-            layer[placeY][placeX] = this.tile;
-            this.syncGrid();
-            this.audio.menuConfirm();
-          }
-        } else if (this.map.grid[placeY][placeX] === 0) {
-          this.map.grid[placeY][placeX] = this.tile;
+        !this._inBounds(px, py) ||
+        (Math.floor(this.player.x) === px && Math.floor(this.player.y) === py)
+      )
+        return;
+      if (layer) {
+        if (layer[py][px] === 0) {
+          this._recordAction({
+            type: "place",
+            layer: this.layer,
+            x: px,
+            y: py,
+            oldTile: 0,
+            newTile: this.tile,
+          });
+          layer[py][px] = this.tile;
+          this.syncGrid(px, py);
           this.audio.menuConfirm();
         }
+      } else if (this.map.grid[py][px] === 0) {
+        this._recordAction({
+          type: "place",
+          layer: this.layer,
+          x: px,
+          y: py,
+          oldTile: 0,
+          newTile: this.tile,
+        });
+        this.map.grid[py][px] = this.tile;
+        this.audio.menuConfirm();
       }
+    };
+
+    if (target) {
+      tryPlace(target.placeX, target.placeY);
     } else {
       const d = 3;
       const tx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
       const ty = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
-      if (
-        this._inBounds(tx, ty) &&
-        !(Math.floor(this.player.x) === tx && Math.floor(this.player.y) === ty)
-      ) {
-        if (layer) {
-          if (layer[ty][tx] === 0) {
-            layer[ty][tx] = this.tile;
-            this.syncGrid();
-            this.audio.menuConfirm();
-          }
-        } else if (this.map.grid[ty][tx] === 0) {
-          this.map.grid[ty][tx] = this.tile;
-          this.audio.menuConfirm();
-        }
-      }
+      tryPlace(tx, ty);
     }
   }
 
@@ -349,14 +557,200 @@ export class BuilderMode {
     const layer = this.map.layers ? this.map.layers[this.layer] : null;
     if (layer) {
       if (layer[hitY][hitX] > 0) {
+        this._recordAction({
+          type: "remove",
+          layer: this.layer,
+          x: hitX,
+          y: hitY,
+          oldTile: layer[hitY][hitX],
+          newTile: 0,
+        });
         layer[hitY][hitX] = 0;
-        this.syncGrid();
+        this.syncGrid(hitX, hitY);
         this.audio.menuSelect();
       }
     } else if (this.map.grid[hitY][hitX] > 0) {
+      this._recordAction({
+        type: "remove",
+        layer: this.layer,
+        x: hitX,
+        y: hitY,
+        oldTile: this.map.grid[hitY][hitX],
+        newTile: 0,
+      });
       this.map.grid[hitY][hitX] = 0;
       this.audio.menuSelect();
     }
+  }
+
+  // ─── Enemy spawn placement ──────────────────────────────
+
+  placeSpawn() {
+    if (this.overhead) return;
+    const target = this.target;
+    let sx, sy;
+    if (target) {
+      sx = target.placeX;
+      sy = target.placeY;
+    } else {
+      const d = 3;
+      sx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      sy = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
+    }
+    if (!this._inBounds(sx, sy)) return;
+    if (this.map.grid[sy][sx] !== 0) return;
+    // Don't stack spawns on the same cell
+    if (!this.map.enemySpawns) this.map.enemySpawns = [];
+    if (this.map.enemySpawns.some((s) => s.x === sx && s.y === sy)) return;
+    const types = ["drone", "phantom", "beast"];
+    const enemy = types[this.map.enemySpawns.length % types.length];
+    this._recordAction({
+      type: "addSpawn",
+      x: sx,
+      y: sy,
+      enemy,
+    });
+    this.map.enemySpawns.push({ x: sx, y: sy, enemy });
+    this.audio.menuConfirm();
+  }
+
+  removeSpawn() {
+    if (this.overhead) return;
+    const target = this.target;
+    if (!target) return;
+    if (!this.map.enemySpawns || this.map.enemySpawns.length === 0) return;
+    const { hitX, hitY } = target;
+    const idx = this.map.enemySpawns.findIndex(
+      (s) => s.x === hitX && s.y === hitY,
+    );
+    if (idx < 0) {
+      // Also check placeX/placeY for spawns on empty tiles
+      const idx2 = this.map.enemySpawns.findIndex(
+        (s) => s.x === target.placeX && s.y === target.placeY,
+      );
+      if (idx2 >= 0) {
+        const removed = this.map.enemySpawns.splice(idx2, 1)[0];
+        this._recordAction({
+          type: "removeSpawn",
+          x: removed.x,
+          y: removed.y,
+          enemy: removed.enemy,
+        });
+        this.audio.menuSelect();
+      }
+      return;
+    }
+    const removed = this.map.enemySpawns.splice(idx, 1)[0];
+    this._recordAction({
+      type: "removeSpawn",
+      x: removed.x,
+      y: removed.y,
+      enemy: removed.enemy,
+    });
+    this.audio.menuSelect();
+  }
+
+  // ─── Export / Import ─────────────────────────────────────
+
+  exportMap() {
+    const data = {
+      name: this.map.name,
+      width: this.map.width,
+      height: this.map.height,
+      grid: this.map.grid,
+      layers: this.map.layers || null,
+      playerStart: {
+        x: this.player.x,
+        y: this.player.y,
+        dir: this.player.angle,
+      },
+      enemySpawns: this.map.enemySpawns || [],
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(this.map.name || "map").replace(/[^a-z0-9_-]/gi, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.saveFlash = 2;
+  }
+
+  importMap() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          // Validate same structure as _loadMap
+          if (!Array.isArray(data.grid)) return;
+          if (!Number.isInteger(data.width) || !Number.isInteger(data.height))
+            return;
+          if (data.width <= 0 || data.height <= 0) return;
+          if (data.width > 128 || data.height > 128) return;
+          if (data.grid.length !== data.height) return;
+          for (let y = 0; y < data.height; y++) {
+            const row = data.grid[y];
+            if (!Array.isArray(row) || row.length !== data.width) return;
+            for (let x = 0; x < data.width; x++) {
+              if (typeof row[x] !== "number" || !Number.isFinite(row[x]))
+                return;
+              row[x] = Math.max(0, Math.min(9, Math.floor(row[x])));
+            }
+          }
+          this.map = {
+            name: data.name || "Imported",
+            width: data.width,
+            height: data.height,
+            grid: data.grid,
+            layers: data.layers || null,
+            playerStart: data.playerStart || {
+              x: data.width / 2 + 0.5,
+              y: data.height / 2 + 0.5,
+              dir: 0,
+            },
+            enemySpawns: Array.isArray(data.enemySpawns)
+              ? data.enemySpawns.filter(
+                  (s) =>
+                    s &&
+                    typeof s === "object" &&
+                    Number.isFinite(s.x) &&
+                    Number.isFinite(s.y) &&
+                    (typeof s.enemy === "string" || s.enemy === undefined),
+                )
+              : [],
+            entities: [],
+            exit: null,
+          };
+          this._ensureLayers();
+          this.syncGrid();
+          this.player.x = this.map.playerStart.x;
+          this.player.y = this.map.playerStart.y;
+          this.player.angle = this.map.playerStart.dir;
+          this.history = [];
+          this.historyIndex = -1;
+          // Save imported map as a new slot
+          const id = this._nextId();
+          this.mapIndex.push({ id, name: this.map.name });
+          this.currentSlot = id;
+          this._saveIndex();
+          this._saveCurrentMap();
+          this.saveFlash = 2;
+          this.audio.menuConfirm();
+        } catch (_) {
+          /* invalid file */
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   }
 
   // ─── Map data ────────────────────────────────────────────
@@ -368,7 +762,11 @@ export class BuilderMode {
   syncGrid(cellX, cellY) {
     if (!this.map.layers) return;
 
-    if (!this.map.heightMap) {
+    if (
+      !this.map.heightMap ||
+      this.map.heightMap.length !== this.map.height ||
+      (this.map.heightMap[0] && this.map.heightMap[0].length !== this.map.width)
+    ) {
       this.map.heightMap = [];
       for (let y = 0; y < this.map.height; y++) {
         this.map.heightMap.push(new Array(this.map.width).fill(0));
@@ -405,8 +803,18 @@ export class BuilderMode {
   // ─── Save / Load ─────────────────────────────────────────
 
   saveMap() {
+    this._saveCurrentMap();
+    // Update name in index
+    const entry = this.mapIndex.find((e) => e.id === this.currentSlot);
+    if (entry) entry.name = this.map.name;
+    this._saveIndex();
+    this.saveFlash = 2;
+  }
+
+  _saveCurrentMap() {
     try {
       const data = {
+        version: 2,
         name: this.map.name,
         width: this.map.width,
         height: this.map.height,
@@ -417,23 +825,27 @@ export class BuilderMode {
           y: this.player.y,
           dir: this.player.angle,
         },
+        enemySpawns: this.map.enemySpawns || [],
       };
-      localStorage.setItem(BUILDER_SAVE_KEY, JSON.stringify(data));
-      this.saveFlash = 2;
+      localStorage.setItem(
+        this._slotKey(this.currentSlot),
+        JSON.stringify(data),
+      );
+      localStorage.setItem(BUILDER_CURRENT_KEY, String(this.currentSlot));
     } catch (_) {
       /* localStorage full */
     }
   }
 
-  _loadMap() {
+  _loadMapFromKey(key) {
     try {
-      const raw = localStorage.getItem(BUILDER_SAVE_KEY);
+      const raw = localStorage.getItem(key);
       if (!raw) return null;
       const data = JSON.parse(raw);
       if (!Array.isArray(data.grid)) return null;
-      if (!Number.isInteger(data.width) || !Number.isInteger(data.height)) return null;
+      if (!Number.isInteger(data.width) || !Number.isInteger(data.height))
+        return null;
       if (data.width <= 0 || data.height <= 0) return null;
-      // Validate grid dimensions and contents
       if (data.grid.length !== data.height) return null;
       for (let y = 0; y < data.height; y++) {
         const row = data.grid[y];
@@ -444,23 +856,163 @@ export class BuilderMode {
         }
       }
       return {
+        version: data.version || 0,
         name: data.name || "My Creation",
         width: data.width,
         height: data.height,
         grid: data.grid,
-        layers: data.layers || null,
+        layers: data.version >= 2 ? data.layers || null : null,
         playerStart: data.playerStart || {
           x: data.width / 2 + 0.5,
           y: data.height / 2 + 0.5,
           dir: 0,
         },
-        enemySpawns: [],
+        enemySpawns: Array.isArray(data.enemySpawns)
+          ? data.enemySpawns.filter(
+              (s) =>
+                s &&
+                typeof s === "object" &&
+                Number.isFinite(s.x) &&
+                Number.isFinite(s.y) &&
+                (typeof s.enemy === "string" || s.enemy === undefined),
+            )
+          : [],
         entities: [],
         exit: null,
       };
     } catch (_) {
       return null;
     }
+  }
+
+  _slotKey(id) {
+    return `${BUILDER_SAVE_KEY}_${id}`;
+  }
+
+  _loadIndex() {
+    try {
+      const raw = localStorage.getItem(BUILDER_INDEX_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      this.mapIndex = Array.isArray(parsed)
+        ? parsed.filter(
+            (e) =>
+              e &&
+              typeof e.id === "number" &&
+              Number.isFinite(e.id) &&
+              typeof e.name === "string",
+          )
+        : [];
+    } catch (_) {
+      this.mapIndex = [];
+    }
+  }
+
+  _saveIndex() {
+    try {
+      localStorage.setItem(BUILDER_INDEX_KEY, JSON.stringify(this.mapIndex));
+    } catch (_) {
+      /* localStorage full */
+    }
+  }
+
+  _loadCurrentSlot() {
+    try {
+      const raw = localStorage.getItem(BUILDER_CURRENT_KEY);
+      if (raw !== null) {
+        const id = parseInt(raw, 10);
+        if (this.mapIndex.some((e) => e.id === id)) return id;
+      }
+    } catch (_) {
+      /* ok */
+    }
+    return this.mapIndex.length > 0 ? this.mapIndex[0].id : 0;
+  }
+
+  _nextId() {
+    let maxId = -1;
+    for (const entry of this.mapIndex) {
+      if (entry.id > maxId) maxId = entry.id;
+    }
+    return maxId + 1;
+  }
+
+  newMap() {
+    // Save the current map first
+    this._saveCurrentMap();
+    const id = this._nextId();
+    this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    this.map.name = `Map ${id + 1}`;
+    this.mapIndex.push({ id, name: this.map.name });
+    this.currentSlot = id;
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+    this.pitch = 0;
+    this.height = 0;
+    this.layer = 0;
+    this._saveIndex();
+    this._saveCurrentMap();
+    this.saveFlash = 2;
+    this.audio.menuConfirm();
+  }
+
+  switchMap(dir) {
+    if (this.mapIndex.length < 2) return;
+    this._saveCurrentMap();
+    const curIdx = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
+    const nextIdx =
+      (curIdx + dir + this.mapIndex.length) % this.mapIndex.length;
+    this.currentSlot = this.mapIndex[nextIdx].id;
+    const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+    if (saved) {
+      this.map = saved;
+    } else {
+      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    }
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+    this.pitch = 0;
+    this.height = 0;
+    this.layer = 0;
+    this.saveFlash = 2;
+    this.audio.menuSelect();
+  }
+
+  deleteCurrentMap() {
+    if (this.mapIndex.length <= 1) return; // Can't delete last map
+    try {
+      localStorage.removeItem(this._slotKey(this.currentSlot));
+    } catch (_) {
+      /* ok */
+    }
+    this.mapIndex = this.mapIndex.filter((e) => e.id !== this.currentSlot);
+    this._saveIndex();
+    this.currentSlot = this.mapIndex[0].id;
+    const saved = this._loadMapFromKey(this._slotKey(this.currentSlot));
+    if (saved) {
+      this.map = saved;
+    } else {
+      this.map = this._createDefaultMap(DEFAULT_MAP_SIZE);
+    }
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.layer = 0;
+    this.history = [];
+    this.historyIndex = -1;
+    this.saveFlash = 2;
+    this.audio.menuConfirm();
   }
 
   // ─── Rendering ───────────────────────────────────────────
@@ -470,11 +1022,13 @@ export class BuilderMode {
       this._renderOverhead(ctx, w, h);
       return;
     }
-    // Apply pitch as y-shearing (vertical look offset)
+    // Vertical shift from pitch and layer height — passed to renderer
     const pitchOffset = this.pitch * h * 0.5;
     const heightOffset = this.height * h * 0.15;
-    ctx.save();
-    ctx.translate(0, pitchOffset + heightOffset);
+    const yShift = Math.max(
+      -h * 0.4,
+      Math.min(h * 0.4, pitchOffset + heightOffset),
+    );
     this.renderer.renderScene(
       this.player,
       this.map,
@@ -482,17 +1036,9 @@ export class BuilderMode {
       time,
       this.settings.fov,
       0,
+      true,
+      yShift,
     );
-    ctx.restore();
-    // Fill exposed areas above/below with floor/ceiling colors
-    const totalOffset = pitchOffset + heightOffset;
-    if (totalOffset > 0) {
-      ctx.fillStyle = "#1a1a2e";
-      ctx.fillRect(0, 0, w, totalOffset);
-    } else if (totalOffset < 0) {
-      ctx.fillStyle = "#0a0a1a";
-      ctx.fillRect(0, h + totalOffset, w, -totalOffset);
-    }
     this._renderHUD(ctx, w, h);
   }
 
@@ -569,6 +1115,20 @@ export class BuilderMode {
     }
     ctx.textAlign = "left";
 
+    // Tool mode indicator
+    const modeLabel = this.toolMode === "spawn" ? "SPAWN" : "BLOCK";
+    const modeColor = this.toolMode === "spawn" ? "#ff6644" : "#00ffcc";
+    ctx.fillStyle = modeColor;
+    ctx.font = "bold 13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`TOOL: ${modeLabel}`, w / 2, palY - 28);
+    ctx.textAlign = "left";
+
+    // Ghost preview (block placement preview)
+    if (this.toolMode === "block" && !this.overhead) {
+      this._renderGhostPreview(ctx, w, h);
+    }
+
     // Help panel
     if (this.showHelp) {
       const hints = [
@@ -578,19 +1138,28 @@ export class BuilderMode {
         "RClick \u2014 Remove",
         "1-9 \u2014 Block Type",
         "Q/E \u2014 Layer Down/Up",
+        "T \u2014 Tool (Block/Spawn)",
         "[ / ] \u2014 FOV -/+",
-        "Space \u2014 Rise",
-        "Ctrl \u2014 Lower",
+        ", / . \u2014 Prev/Next Map",
+        "Space \u2014 Jump (Fly in Noclip)",
+        "Ctrl \u2014 Lower (Noclip)",
         "R \u2014 Reset Pitch",
         "N \u2014 Noclip",
         "Tab \u2014 Overhead",
         "Ctrl+S \u2014 Save",
+        "Ctrl+N \u2014 New Map",
+        "Ctrl+D \u2014 Delete Map",
+        "Ctrl+Z \u2014 Undo",
+        "Ctrl+Shift+Z \u2014 Redo",
+        "Ctrl+E \u2014 Export JSON",
+        "Ctrl+I \u2014 Import JSON",
+        "P \u2014 Play-test",
         "H \u2014 Toggle Help",
         "ESC \u2014 Pause",
       ];
       ctx.fillStyle = "rgba(0,0,0,0.65)";
       ctx.beginPath();
-      ctx.roundRect(8, 8, 195, hints.length * 17 + 12, 6);
+      ctx.roundRect(8, 8, 210, hints.length * 17 + 12, 6);
       ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.7)";
       ctx.font = "11px monospace";
@@ -613,6 +1182,20 @@ export class BuilderMode {
     ctx.textAlign = "right";
     ctx.fillText(`LAYER ${this.layer}`, w - 14, h - 90);
     ctx.fillText(`FOV ${this.settings.fov}`, w - 14, h - 106);
+    // Undo depth
+    const undoCount = this.historyIndex + 1;
+    const redoCount = this.history.length - this.historyIndex - 1;
+    if (undoCount > 0 || redoCount > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "11px monospace";
+      ctx.fillText(`U:${undoCount} R:${redoCount}`, w - 14, h - 122);
+    }
+    // Spawn count
+    if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
+      ctx.fillStyle = "rgba(255,100,68,0.7)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`SPAWNS: ${this.map.enemySpawns.length}`, w - 14, h - 138);
+    }
     ctx.textAlign = "left";
 
     ctx.fillStyle = "rgba(255,255,255,0.25)";
@@ -633,6 +1216,15 @@ export class BuilderMode {
       ctx.fillText("MAP SAVED", w / 2, 36);
       ctx.textAlign = "left";
     }
+
+    // Map name & slot indicator (top center)
+    const mapIdx = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
+    const mapLabel = `${this.map.name} [${mapIdx + 1}/${this.mapIndex.length}]`;
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(mapLabel, w / 2, 56);
+    ctx.textAlign = "left";
 
     // Minimap (top right)
     this._renderMinimap(ctx, w);
@@ -658,6 +1250,22 @@ export class BuilderMode {
             ctx.fillRect(mx + x * cs, my + y * cs, cs + 0.5, cs + 0.5);
           }
         }
+      }
+    }
+
+    // Enemy spawn markers
+    if (this.map.enemySpawns) {
+      for (const s of this.map.enemySpawns) {
+        ctx.fillStyle = "rgba(255,100,68,0.8)";
+        ctx.beginPath();
+        ctx.arc(
+          mx + s.x * cs + cs / 2,
+          my + s.y * cs + cs / 2,
+          cs * 0.35,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
       }
     }
 
@@ -750,6 +1358,31 @@ export class BuilderMode {
       ctx.stroke();
     }
 
+    // Enemy spawn markers in overhead
+    if (this.map.enemySpawns) {
+      for (const s of this.map.enemySpawns) {
+        const sx = ox + s.x * cs + cs / 2;
+        const sy = oy + s.y * cs + cs / 2;
+        ctx.fillStyle = "rgba(255,100,68,0.85)";
+        ctx.beginPath();
+        ctx.arc(sx, sy, cs * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        if (cs >= 14) {
+          ctx.fillStyle = "#fff";
+          ctx.font = `${Math.max(7, cs * 0.3) | 0}px monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const label =
+            typeof s.enemy === "string" && s.enemy.length
+              ? s.enemy.charAt(0).toUpperCase()
+              : "?";
+          ctx.fillText(label, sx, sy);
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
+        }
+      }
+    }
+
     // Player
     const px = ox + this.player.x * cs;
     const py = oy + this.player.y * cs;
@@ -783,6 +1416,52 @@ export class BuilderMode {
   }
 
   // ─── Private helpers ─────────────────────────────────────
+
+  _renderGhostPreview(ctx, w, h) {
+    // Show a translucent colored indicator at the crosshair for where a block would be placed
+    const cx = w / 2;
+    const cy = h / 2;
+    const gSize = 18;
+    let canPlace = false;
+    if (this.target) {
+      const { placeX, placeY } = this.target;
+      if (
+        this._inBounds(placeX, placeY) &&
+        !(
+          Math.floor(this.player.x) === placeX &&
+          Math.floor(this.player.y) === placeY
+        )
+      ) {
+        const layer = this.map.layers ? this.map.layers[this.layer] : null;
+        canPlace = layer
+          ? layer[placeY][placeX] === 0
+          : this.map.grid[placeY][placeX] === 0;
+      }
+    } else {
+      // No target = placing 3 units ahead
+      const d = 3;
+      const tx = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      const ty = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
+      if (
+        this._inBounds(tx, ty) &&
+        !(Math.floor(this.player.x) === tx && Math.floor(this.player.y) === ty)
+      ) {
+        const layer = this.map.layers ? this.map.layers[this.layer] : null;
+        canPlace = layer ? layer[ty][tx] === 0 : this.map.grid[ty][tx] === 0;
+      }
+    }
+    if (canPlace) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = TILE_COLORS[this.tile];
+      ctx.fillRect(cx - gSize / 2, cy - gSize / 2, gSize, gSize);
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = "#00ffcc";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - gSize / 2, cy - gSize / 2, gSize, gSize);
+      ctx.restore();
+    }
+  }
 
   _raycast() {
     const px = this.player.x;
@@ -857,6 +1536,7 @@ export class BuilderMode {
       enemySpawns: [],
       entities: [],
       exit: null,
+      heightMap: grid.map((row) => new Array(row.length).fill(0)),
     };
   }
 
@@ -888,13 +1568,15 @@ export class BuilderMode {
       }
     }
     if (!this.map.layers) {
+      // When rebuilding layers from a flat grid, copy walls to ALL layers
+      // so they render at full height (5/5) instead of 20% stubs.
       this.map.layers = [];
       for (let l = 0; l < NUM_LAYERS; l++) {
         const layer = [];
         for (let y = 0; y < this.map.height; y++) {
           const row = [];
           for (let x = 0; x < this.map.width; x++) {
-            row.push(l === 0 ? this.map.grid[y][x] : 0);
+            row.push(this.map.grid[y][x]);
           }
           layer.push(row);
         }

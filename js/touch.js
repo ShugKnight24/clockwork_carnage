@@ -269,9 +269,12 @@ export class TouchControls {
       } else if (touch.identifier === this.lookTouch) {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
-        // Feed into mouse look system (scaled for touch sensitivity)
-        this.game.mouse.dx += dx * 1.5;
-        this.game.mouse.dy += dy * 1.5;
+        // Feed into mouse look system (scaled for touch sensitivity from settings)
+        let rawSens = Number(this.game.settings.touchSensitivity);
+        if (!Number.isFinite(rawSens)) rawSens = 1.5;
+        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+        this.game.mouse.dx += dx * touchSens;
+        this.game.mouse.dy += dy * touchSens;
         this.lookLast = { x: touch.clientX, y: touch.clientY };
       }
     }
@@ -451,7 +454,12 @@ export class TouchControls {
       const row = Math.floor(i / cols);
       const baseX = col === 0 ? leftX : w / 2 + 15;
       const uy = startY + row * lineH;
-      if (x >= baseX - 5 && x <= baseX + colW - 5 && y >= uy - 16 && y <= uy + lineH - 18) {
+      if (
+        x >= baseX - 5 &&
+        x <= baseX + colW - 5 &&
+        y >= uy - 16 &&
+        y <= uy + lineH - 18
+      ) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -479,7 +487,12 @@ export class TouchControls {
     // Check each binding row
     for (let i = 0; i < bindKeys.length; i++) {
       const ry = startY + i * itemH;
-      if (x >= panelX && x <= panelX + panelW && y >= ry - 2 && y <= ry + itemH - 6) {
+      if (
+        x >= panelX &&
+        x <= panelX + panelW &&
+        y >= ry - 2 &&
+        y <= ry + itemH - 6
+      ) {
         g.controlsSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -488,7 +501,12 @@ export class TouchControls {
 
     // Check "Reset Defaults" button
     const resetY = startY + bindKeys.length * itemH + 10;
-    if (x >= panelX && x <= panelX + panelW && y >= resetY - 2 && y <= resetY + itemH - 6) {
+    if (
+      x >= panelX &&
+      x <= panelX + panelW &&
+      y >= resetY - 2 &&
+      y <= resetY + itemH - 6
+    ) {
       g.controlsSelection = bindKeys.length;
       g.handleKeyPress("Enter");
       return;
