@@ -7,6 +7,10 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Clockwork Carnage</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
+    />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css" />
     <!-- Google tag (gtag.js) -->
@@ -37,6 +41,7 @@
 
       <div class="subtitle">Glitch Protocol</div>
       <div class="start-prompt">[ CLICK OR PRESS ENTER TO START ]</div>
+      <div class="version-label" id="versionLabel"></div>
     </div>
 
     <!-- Mode Select Screen -->
@@ -340,8 +345,16 @@
     </div>
 
     <!-- Game Canvases -->
-    <canvas id="gameCanvas"></canvas>
-    <canvas id="hudCanvas"></canvas>
+    <canvas
+      id="gameCanvas"
+      role="img"
+      aria-label="Clockwork Carnage game viewport — 3D first-person shooter"
+    ></canvas>
+    <canvas
+      id="hudCanvas"
+      role="img"
+      aria-label="Heads-up display showing health, ammo, score, and round information"
+    ></canvas>
 
     <!-- Portrait orientation prompt (touch devices only) -->
     <div id="orientationPrompt">

@@ -203,10 +203,27 @@ export class CutsceneEngine {
       this.drawScannerEffect(ctx, w, h, t);
     }
 
-    // === Text (typewriter reveal) ===
+    // === Text (typewriter reveal with glow) ===
     if (frame.lines) {
       const centerY = frame.art ? h * 0.72 : h * 0.4;
       let lineY = centerY;
+
+      // Text backdrop gradient
+      if (frame.art) {
+        const tbg = ctx.createLinearGradient(
+          0,
+          centerY - 30,
+          0,
+          centerY + frame.lines.length * 36,
+        );
+        tbg.addColorStop(0, "rgba(0,0,10,0)");
+        tbg.addColorStop(0.15, "rgba(0,0,10,0.65)");
+        tbg.addColorStop(0.85, "rgba(0,0,10,0.65)");
+        tbg.addColorStop(1, "rgba(0,0,10,0)");
+        ctx.fillStyle = tbg;
+        ctx.fillRect(0, centerY - 30, w, frame.lines.length * 36 + 30);
+      }
+
       for (const line of frame.lines) {
         const lineElapsed = elapsed - line.delay;
         if (lineElapsed < 0) continue;
@@ -218,31 +235,59 @@ export class CutsceneEngine {
           Math.floor((lineElapsed / 1000) * charsPerSec),
         );
         const displayText = line.text.substring(0, visibleChars);
+        const typing = visibleChars < line.text.length;
 
         // Fade in
         const fadeIn = Math.min(1, lineElapsed / 400);
+        const sz = line.size || 16;
 
         ctx.globalAlpha = fadeIn;
-        ctx.fillStyle = line.color || "#ffffff";
-        ctx.font = `bold ${line.size || 16}px monospace`;
+        ctx.font = `bold ${sz}px monospace`;
         ctx.textAlign = "center";
-        ctx.fillText(displayText, w / 2, lineY);
 
-        // Cursor blink while typing
-        if (visibleChars < line.text.length) {
-          const cursorAlpha = Math.floor(elapsed / 200) % 2 ? 0.8 : 0.2;
-          ctx.globalAlpha = cursorAlpha;
+        // Detect speaker lines ("NAME:" pattern)
+        const speakerMatch = displayText.match(/^([A-Z\s]+):(.*)/);
+
+        if (speakerMatch) {
+          // Speaker name with accent color
+          const speakerName = speakerMatch[1] + ":";
+          const restText = speakerMatch[2];
+          const nameW = ctx.measureText(speakerName).width;
+          const restW = ctx.measureText(restText).width;
+          const totalW = nameW + restW;
+
+          ctx.save();
+          ctx.shadowColor = line.color || "#00ffcc";
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = line.color || "#00ffcc";
+          ctx.fillText(speakerName, w / 2 - totalW / 2 + nameW / 2, lineY);
+          ctx.shadowBlur = 0;
+          ctx.restore();
+
+          ctx.fillStyle = "#dde4f0";
+          ctx.fillText(restText, w / 2 - totalW / 2 + nameW + restW / 2, lineY);
+        } else {
+          // Normal text with subtle glow
+          ctx.save();
+          ctx.shadowColor = line.color || "#88bbff";
+          ctx.shadowBlur = typing ? 10 : 4;
+          ctx.fillStyle = line.color || "#ffffff";
+          ctx.fillText(displayText, w / 2, lineY);
+          ctx.shadowBlur = 0;
+          ctx.restore();
+        }
+
+        // Cursor blink while typing — thin beam
+        if (typing) {
+          const cursorPhase = (Math.sin(elapsed * 0.008) + 1) / 2;
+          ctx.globalAlpha = 0.3 + cursorPhase * 0.6;
           const textW = ctx.measureText(displayText).width;
-          ctx.fillRect(
-            w / 2 + textW / 2 + 4,
-            lineY - (line.size || 16) + 4,
-            2,
-            line.size || 16,
-          );
+          ctx.fillStyle = line.color || "#00ffcc";
+          ctx.fillRect(w / 2 + textW / 2 + 3, lineY - sz + 4, 2, sz);
         }
 
         ctx.globalAlpha = 1;
-        lineY += (line.size || 16) + 12;
+        lineY += sz + 14;
       }
     }
 
@@ -250,40 +295,103 @@ export class CutsceneEngine {
       ctx.restore();
     }
 
-    // === Letterbox bars ===
+    // === Vignette overlay ===
+    const vign = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      h * 0.25,
+      w / 2,
+      h / 2,
+      h * 0.85,
+    );
+    vign.addColorStop(0, "rgba(0,0,0,0)");
+    vign.addColorStop(1, "rgba(0,0,8,0.45)");
+    ctx.fillStyle = vign;
+    ctx.fillRect(0, 0, w, h);
+
+    // === Letterbox bars (gradient fade) ===
     const barHeight = h * 0.08;
-    ctx.fillStyle = "#000000";
+    const topBar = ctx.createLinearGradient(0, 0, 0, barHeight);
+    topBar.addColorStop(0, "#000000");
+    topBar.addColorStop(0.8, "rgba(0,0,0,0.95)");
+    topBar.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = topBar;
     ctx.fillRect(0, 0, w, barHeight);
+    const botBar = ctx.createLinearGradient(0, h - barHeight, 0, h);
+    botBar.addColorStop(0, "rgba(0,0,0,0)");
+    botBar.addColorStop(0.2, "rgba(0,0,0,0.95)");
+    botBar.addColorStop(1, "#000000");
+    ctx.fillStyle = botBar;
     ctx.fillRect(0, h - barHeight, w, barHeight);
 
-    // === Scanlines ===
-    ctx.fillStyle = "rgba(0,0,0,0.06)";
+    // Thin accent lines on bar edges
+    ctx.strokeStyle = "rgba(0,200,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, barHeight);
+    ctx.lineTo(w, barHeight);
+    ctx.moveTo(0, h - barHeight);
+    ctx.lineTo(w, h - barHeight);
+    ctx.stroke();
+
+    // === Scanlines (alternating density) ===
     for (let y = 0; y < h; y += 3) {
+      ctx.fillStyle = y % 6 === 0 ? "rgba(0,0,0,0.07)" : "rgba(0,0,0,0.03)";
       ctx.fillRect(0, y, w, 1);
     }
 
-    // === Progress indicator ===
+    // === Progress indicator (connected dots) ===
     const frameCount = cs.script.length;
     const dotSize = 6;
     const dotGap = 14;
     const dotsW = frameCount * dotGap;
     const dotsX = (w - dotsW) / 2;
+
+    // Connecting track line
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dotsX + dotGap / 2, h - barHeight / 2);
+    ctx.lineTo(
+      dotsX + (frameCount - 1) * dotGap + dotGap / 2,
+      h - barHeight / 2,
+    );
+    ctx.stroke();
+    // Filled portion
+    if (cs.frame > 0) {
+      ctx.strokeStyle = "rgba(0,200,200,0.3)";
+      ctx.beginPath();
+      ctx.moveTo(dotsX + dotGap / 2, h - barHeight / 2);
+      ctx.lineTo(dotsX + cs.frame * dotGap + dotGap / 2, h - barHeight / 2);
+      ctx.stroke();
+    }
+
     for (let i = 0; i < frameCount; i++) {
-      ctx.fillStyle =
-        i === cs.frame
-          ? "#00ffcc"
-          : i < cs.frame
-            ? "rgba(0,200,200,0.5)"
-            : "rgba(255,255,255,0.15)";
+      const dx = dotsX + i * dotGap + dotGap / 2;
+      const dy = h - barHeight / 2;
+      const isCurrent = i === cs.frame;
+      ctx.fillStyle = isCurrent
+        ? "#00ffcc"
+        : i < cs.frame
+          ? "rgba(0,200,200,0.5)"
+          : "rgba(255,255,255,0.15)";
+      if (isCurrent) {
+        ctx.save();
+        ctx.shadowColor = "#00ffcc";
+        ctx.shadowBlur = 6;
+      }
       ctx.beginPath();
       ctx.arc(
-        dotsX + i * dotGap + dotGap / 2,
-        h - barHeight / 2,
-        i === cs.frame ? dotSize / 2 + 1 : dotSize / 2,
+        dx,
+        dy,
+        isCurrent ? dotSize / 2 + 1.5 : dotSize / 2,
         0,
         Math.PI * 2,
       );
       ctx.fill();
+      if (isCurrent) {
+        ctx.restore();
+      }
     }
 
     // === Skip prompt ===
@@ -510,17 +618,24 @@ export class CutsceneEngine {
 
           ctx.globalAlpha = panelAlpha * capFade;
           ctx.fillStyle = capBg;
-          ctx.fillRect(boxX, boxY, boxW, boxH);
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 3);
+          ctx.fill();
           ctx.strokeStyle = capColor;
           ctx.lineWidth = 1;
-          ctx.strokeRect(boxX, boxY, boxW, boxH);
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 3);
+          ctx.stroke();
 
-          // Typewriter reveal
+          // Typewriter reveal with glow
           const charsPerSec = 35;
           const visibleChars = Math.min(
             panel.caption.length,
             Math.floor((captionElapsed / 1000) * charsPerSec),
           );
+          ctx.save();
+          ctx.shadowColor = capColor;
+          ctx.shadowBlur = visibleChars < panel.caption.length ? 8 : 3;
           ctx.fillStyle = capColor;
           ctx.textAlign = "center";
           ctx.fillText(
@@ -529,6 +644,7 @@ export class CutsceneEngine {
             boxY + capSize + 4,
           );
           ctx.textAlign = "left";
+          ctx.restore();
         }
       }
 
@@ -565,15 +681,24 @@ export class CutsceneEngine {
     }
 
     // === Page-level scanlines ===
-    ctx.fillStyle = "rgba(0,0,0,0.04)";
     for (let y = 0; y < h; y += 3) {
+      ctx.fillStyle = y % 6 === 0 ? "rgba(0,0,0,0.05)" : "rgba(0,0,0,0.02)";
       ctx.fillRect(0, y, w, 1);
     }
 
-    // === Letterbox ===
+    // === Letterbox with gradient fade ===
     const barH = h * 0.04;
-    ctx.fillStyle = "#000000";
+    const topBarC = ctx.createLinearGradient(0, 0, 0, barH);
+    topBarC.addColorStop(0, "#000000");
+    topBarC.addColorStop(0.85, "rgba(0,0,0,0.9)");
+    topBarC.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = topBarC;
     ctx.fillRect(0, 0, w, barH);
+    const botBarC = ctx.createLinearGradient(0, h - barH, 0, h);
+    botBarC.addColorStop(0, "rgba(0,0,0,0)");
+    botBarC.addColorStop(0.15, "rgba(0,0,0,0.9)");
+    botBarC.addColorStop(1, "#000000");
+    ctx.fillStyle = botBarC;
     ctx.fillRect(0, h - barH, w, barH);
 
     // === Frame page number ===
@@ -2842,6 +2967,7 @@ export class CutsceneEngine {
       }
 
       case "rift": {
+        const pulse = 0.7 + 0.3 * Math.sin(t * 3);
         // Outer ring
         for (let ring = 3; ring >= 0; ring--) {
           const r = 40 + ring * 20;

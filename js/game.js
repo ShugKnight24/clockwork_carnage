@@ -23,6 +23,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
 const SAVE_VERSION = 1;
+export const GAME_VERSION = "0.7.0";
 
 export const GameState = {
   TITLE: "title",
@@ -122,6 +123,7 @@ export class Game {
       showWeapons: true,
       showKills: true,
       showScore: true,
+      touchSensitivity: 1.5,
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -216,11 +218,23 @@ export class Game {
   // TODO: Abstract out InputManager
 
   lockPointer() {
-    if (!this.isTouchDevice) this.canvas.requestPointerLock();
+    if (!this.isTouchDevice) {
+      try {
+        this.canvas.requestPointerLock();
+      } catch (e) {
+        /* requires gesture */
+      }
+    }
   }
 
   unlockPointer() {
-    if (!this.isTouchDevice) document.exitPointerLock();
+    if (!this.isTouchDevice && document.pointerLockElement) {
+      try {
+        document.exitPointerLock();
+      } catch (e) {
+        /* already unlocked */
+      }
+    }
   }
 
   // Returns a font string with the size scaled by the fontScale setting
@@ -273,13 +287,24 @@ export class Game {
         if (e.code !== "Escape") {
           const oldCode = this.keybinds[this.rebindingKey];
           // Swap with any action already using this key
+          let swappedAction = null;
           for (const action of Object.keys(this.keybinds)) {
-            if (action !== this.rebindingKey && this.keybinds[action] === e.code) {
+            if (
+              action !== this.rebindingKey &&
+              this.keybinds[action] === e.code
+            ) {
               this.keybinds[action] = oldCode;
+              swappedAction = action;
               break;
             }
           }
           this.keybinds[this.rebindingKey] = e.code;
+          if (swappedAction) {
+            this._keybindSwapFlash = {
+              action: swappedAction,
+              time: performance.now(),
+            };
+          }
           this.saveSettings();
         }
         this.rebindingKey = null;
@@ -698,6 +723,7 @@ export class Game {
         { key: "showWeapons", toggle: true },
         { key: "showKills", toggle: true },
         { key: "showScore", toggle: true },
+        { key: "touchSensitivity", min: 0.5, max: 3.0, step: 0.1, round: 1 },
       ];
       const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
@@ -874,6 +900,11 @@ export class Game {
         this.audio.menuConfirm();
         this.state = GameState.TITLE;
         this.audio.stopMusic();
+      }
+      if (code === "KeyR" && this.state === GameState.GAME_OVER) {
+        this.audio.menuConfirm();
+        if (this.mode === "arena") this.startArena();
+        else if (this.mode === "campaign") this.startCampaign();
       }
       return;
     }
@@ -2320,6 +2351,49 @@ export class Game {
     ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
     ctx.fillRect(0, 0, w, h);
 
+    // Subtle animated grid
+    ctx.strokeStyle = "rgba(0,200,255,0.02)";
+    ctx.lineWidth = 1;
+    const gridSz = 48;
+    const gridOff = (now * 0.008) % gridSz;
+    for (let gx = -gridOff; gx < w; gx += gridSz) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, h);
+      ctx.stroke();
+    }
+    for (let gy = -gridOff; gy < h; gy += gridSz) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(w, gy);
+      ctx.stroke();
+    }
+
+    // Ambient particles
+    ctx.fillStyle = "rgba(0,255,200,0.1)";
+    for (let i = 0; i < 20; i++) {
+      const px = w * 0.5 + Math.sin(now * 0.00025 + i * 2.3) * w * 0.42;
+      const py = h * 0.5 + Math.cos(now * 0.0003 + i * 1.9) * h * 0.42;
+      const ps = 1 + Math.sin(now * 0.002 + i) * 0.5;
+      ctx.beginPath();
+      ctx.arc(px, py, ps, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Radial vignette
+    const vig = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      h * 0.2,
+      w / 2,
+      h / 2,
+      h * 0.8,
+    );
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(0,0,10,0.5)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+
     // Animated energy ring
     const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
     ctx.save();
@@ -2451,6 +2525,12 @@ export class Game {
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText("W/S to navigate  \u00B7  ENTER to select", w / 2, h - 30);
+
+    // Scanline overlay
+    ctx.fillStyle = "rgba(0,0,0,0.03)";
+    for (let sy = 0; sy < h; sy += 4) {
+      ctx.fillRect(0, sy, w, 1);
+    }
     ctx.textAlign = "left";
   }
 
@@ -3383,10 +3463,15 @@ export class Game {
     );
   }
 
-  _onEnemyKill() {
+  _onEnemyKill(enemy) {
     this.killStreak++;
     this.killStreakTimer = 0;
     if (this.killStreak > this.bestStreak) this.bestStreak = this.killStreak;
+
+    // Campaign ammo drops — 40% chance to drop ammo on kill
+    if (enemy && this.mode === "campaign" && Math.random() < 0.4) {
+      this.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
+    }
 
     const STREAK_TIERS = [
       null, // 1 kill — no announcement
@@ -3524,7 +3609,7 @@ export class Game {
             this.achievementStats.totalKills++;
             this.audio.enemyDeath();
             this.glitchEffect = 0.3;
-            this._onEnemyKill();
+            this._onEnemyKill(e2);
             splashKills++;
           }
         }
@@ -3543,7 +3628,7 @@ export class Game {
       this.achievementStats.totalKills++;
       this.audio.enemyDeath();
       this.glitchEffect = 0.3;
-      this._onEnemyKill();
+      this._onEnemyKill(enemy);
 
       // Check if boss killed in campaign
       const isBoss =
@@ -3644,7 +3729,7 @@ export class Game {
         this.player.kills++;
         this.audio.enemyDeath();
         this.glitchEffect = 0.3;
-        this._onEnemyKill();
+        this._onEnemyKill(attacker);
       }
     }
 
@@ -4627,6 +4712,15 @@ export class Game {
     ctx.scale(sc, sc);
     // All coordinates now relative to (0, 0) at weapon center
 
+    // Recoil animation for frames 2 & 3
+    if (this.weaponAnimFrame === 2) {
+      ctx.translate(0, -3); // barrel rise
+      ctx.rotate(-0.03); // slight kick angle
+    } else if (this.weaponAnimFrame === 3) {
+      ctx.translate(0, -1); // settling back
+      ctx.rotate(-0.01);
+    }
+
     // Muzzle flash
     if (this.weaponAnimFrame === 1) {
       ctx.fillStyle = energyColor;
@@ -4651,6 +4745,23 @@ export class Game {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    }
+
+    // Shell casing ejection (frame 2)
+    if (this.weaponAnimFrame === 2 && wep.id !== 2) {
+      // not plasma
+      ctx.fillStyle = "#ddaa44";
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(7, -18, 3, 2);
+      ctx.globalAlpha = 1;
+    }
+
+    // Smoke wisp (frame 3)
+    if (this.weaponAnimFrame === 3) {
+      ctx.fillStyle = "rgba(180,180,180,0.15)";
+      ctx.beginPath();
+      ctx.arc(1, -42, 5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     if (wep.id === 0) {
@@ -5342,6 +5453,36 @@ export class Game {
       hbY + 22,
     );
 
+    // Shield bar (below health bar, only when player has shield upgrade)
+    if (this.player.maxShield > 0) {
+      const sbH = 12;
+      const sbY = hbY + hbH + 4;
+      const shieldPct = this.player.shield / this.player.maxShield;
+      const shieldRegenning = this.player.shield < this.player.maxShield;
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillRect(healthX, sbY, hbW, sbH);
+      const shieldColor = shieldRegenning ? "#4488ff" : "#66aaff";
+      ctx.fillStyle = shieldColor;
+      ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
+      // Pulse effect when regenerating
+      if (shieldRegenning) {
+        const pulse = 0.1 + Math.sin(this.time * 0.006) * 0.06;
+        ctx.fillStyle = `rgba(100,160,255,${pulse})`;
+        ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
+      }
+      ctx.strokeStyle = "rgba(100,160,255,0.4)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(healthX, sbY, hbW, sbH);
+      ctx.fillStyle = "#88bbff";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        `SHIELD ${Math.ceil(this.player.shield)} / ${this.player.maxShield}`,
+        healthX + hbW / 2,
+        sbY + 10,
+      );
+    }
+
     // Portrait
     if (this.settings.showPortrait) {
       this.drawPortrait(ctx, portraitX, portraitY, portraitW, portraitH);
@@ -5743,6 +5884,8 @@ export class Game {
   drawPortrait(ctx, x, y, w, h) {
     const healthPct = this.player.health / this.player.maxHealth;
     const isDead = !this.player.alive || this.player.health <= 0;
+    // Use modular time to prevent floating-point precision loss after hours of play
+    const animTime = this.time % 25132; // ~4*PI*2000, covers all portrait sin periods
 
     ctx.fillStyle = "#0a0a18";
     ctx.fillRect(x, y, w, h);
@@ -5843,7 +5986,7 @@ export class Game {
       ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
       ctx.fillStyle = "#00ddff";
-      ctx.globalAlpha = 0.8 + Math.sin(this.time / 400) * 0.15;
+      ctx.globalAlpha = 0.8 + Math.sin(animTime / 400) * 0.15;
       ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
       ctx.globalAlpha = 1;
 
@@ -5855,7 +5998,7 @@ export class Game {
       ctx.fillRect(cx - 12 * s, cy - 4 * s, 10 * s, 3 * s);
 
       ctx.fillStyle = "#66ffff";
-      ctx.globalAlpha = 0.4 + Math.sin(this.time / 200) * 0.2;
+      ctx.globalAlpha = 0.4 + Math.sin(animTime / 200) * 0.2;
       ctx.fillRect(cx + 8 * s, cy - 4 * s, 2 * s, 2 * s);
       ctx.fillRect(cx + 12 * s, cy - 3 * s, 2 * s, 2 * s);
       ctx.globalAlpha = 1;
@@ -5882,7 +6025,7 @@ export class Game {
       ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
       ctx.fillStyle = "#00ddff";
-      ctx.globalAlpha = 0.75 + Math.sin(this.time / 400) * 0.12;
+      ctx.globalAlpha = 0.75 + Math.sin(animTime / 400) * 0.12;
       ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
       ctx.globalAlpha = 1;
 
@@ -5922,7 +6065,7 @@ export class Game {
       ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
       ctx.fillStyle = "#00ccee";
-      ctx.globalAlpha = 0.65 + Math.sin(this.time / 350) * 0.1;
+      ctx.globalAlpha = 0.65 + Math.sin(animTime / 350) * 0.1;
       ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
       ctx.globalAlpha = 1;
 
@@ -5966,7 +6109,7 @@ export class Game {
       ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
       ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.55 + Math.sin(this.time / 250) * 0.12;
+      ctx.globalAlpha = 0.55 + Math.sin(animTime / 250) * 0.12;
       ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
       ctx.globalAlpha = 1;
 
@@ -6024,7 +6167,7 @@ export class Game {
       ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
       ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.5 + Math.sin(this.time / 300) * 0.1;
+      ctx.globalAlpha = 0.5 + Math.sin(animTime / 300) * 0.1;
       ctx.fillRect(cx - 16 * s, cy - 6 * s, 14 * s, 10 * s);
       ctx.globalAlpha = 0.2;
       ctx.fillRect(cx + 2 * s, cy - 6 * s, 14 * s, 10 * s);
@@ -6102,7 +6245,7 @@ export class Game {
       ctx.fillRect(cx - 17 * s, cy - 7 * s, 17 * s, 18 * s);
 
       ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.3 + Math.sin(this.time / 200) * 0.1;
+      ctx.globalAlpha = 0.3 + Math.sin(animTime / 200) * 0.1;
       ctx.fillRect(cx - 15 * s, cy - 5 * s, 14 * s, 7 * s);
       ctx.globalAlpha = 1;
 
@@ -6191,7 +6334,7 @@ export class Game {
       ctx.fill();
 
       ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.15 + Math.sin(this.time / 100) * 0.1;
+      ctx.globalAlpha = 0.15 + Math.sin(animTime / 100) * 0.1;
       ctx.fillRect(cx - 16 * s, cy - 16 * s, 6 * s, 3 * s);
       ctx.globalAlpha = 1;
 
@@ -6522,6 +6665,10 @@ export class Game {
       // Minimal
       ctx.fillStyle = "rgba(255,255,255,0.8)";
       ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    } else if (type === 5) {
+      // None — very subtle center reference
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(cx, cy, 1, 1);
     }
   }
 
@@ -6755,6 +6902,10 @@ export class Game {
         value: this.settings.showScore ? "ON" : "OFF",
         color: this.settings.showScore ? "#00ccff" : "#888888",
       },
+      {
+        label: "Touch Sensitivity",
+        value: `${this.settings.touchSensitivity.toFixed(1)}x`,
+      },
     ];
 
     const barW = 200;
@@ -6762,8 +6913,8 @@ export class Game {
     const panelX = w / 2 - 220;
     const panelW = 440;
     const itemHeights = [
-      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
-    ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore
+      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44, 60,
+    ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity
 
     // Scroll the settings panel so the selected item stays visible
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
@@ -6892,6 +7043,16 @@ export class Game {
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+      } else if (i === 17) {
+        // Touch Sensitivity bar
+        const sliderY = y + 32;
+        const pct = (this.settings.touchSensitivity - 0.5) / 2.5; // range 0.5-3.0
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillStyle = "#ff88cc";
+        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.2)";
+        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
       }
 
       startY += itemH;
@@ -6946,7 +7107,19 @@ export class Game {
       const y = startY + i * itemH;
 
       // Selection highlight
-      if (selected) {
+      const isSwapFlashed =
+        this._keybindSwapFlash &&
+        this._keybindSwapFlash.action === key &&
+        performance.now() - this._keybindSwapFlash.time < 1500;
+      if (isSwapFlashed) {
+        const flashAlpha =
+          0.3 * (1 - (performance.now() - this._keybindSwapFlash.time) / 1500);
+        ctx.fillStyle = `rgba(255,170,0,${flashAlpha})`;
+        ctx.fillRect(panelX, y - 2, panelW, itemH - 4);
+        ctx.strokeStyle = `rgba(255,170,0,${flashAlpha + 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(panelX, y - 2, panelW, itemH - 4);
+      } else if (selected) {
         ctx.fillStyle = "rgba(0,200,255,0.12)";
         ctx.fillRect(panelX, y - 2, panelW, itemH - 4);
         ctx.strokeStyle = "rgba(0,200,255,0.25)";
@@ -6968,7 +7141,11 @@ export class Game {
         ctx.font = "bold 15px monospace";
         ctx.fillText("[ Press a key... ]", panelX + panelW - 16, y + 20);
       } else {
-        ctx.fillStyle = selected ? "#ffffff" : "#aaaacc";
+        ctx.fillStyle = isSwapFlashed
+          ? "#ffaa00"
+          : selected
+            ? "#ffffff"
+            : "#aaaacc";
         ctx.font = "15px monospace";
         ctx.fillText(
           this.formatKeyCode(this.keybinds[key]),
@@ -7042,30 +7219,109 @@ export class Game {
   }
 
   renderUpgradeScreen(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,0,10,0.92)";
+    const now = performance.now();
+
+    // ── Deep space backdrop ──
+    ctx.fillStyle = "#020510";
     ctx.fillRect(0, 0, w, h);
 
+    // Subtle animated grid
+    ctx.strokeStyle = "rgba(0,200,255,0.03)";
+    ctx.lineWidth = 1;
+    const gridSize = 40;
+    const gridOff = (now * 0.01) % gridSize;
+    for (let gx = -gridOff; gx < w; gx += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, h);
+      ctx.stroke();
+    }
+    for (let gy = -gridOff; gy < h; gy += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(w, gy);
+      ctx.stroke();
+    }
+
+    // Ambient particle field
+    ctx.fillStyle = "rgba(0,255,200,0.12)";
+    for (let i = 0; i < 30; i++) {
+      const px = w * 0.5 + Math.sin(now * 0.0003 + i * 2.1) * w * 0.45;
+      const py = h * 0.5 + Math.cos(now * 0.0004 + i * 1.7) * h * 0.45;
+      const ps = 1 + Math.sin(now * 0.002 + i) * 0.5;
+      ctx.beginPath();
+      ctx.arc(px, py, ps, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Radial vignette
+    const vig = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      h * 0.2,
+      w / 2,
+      h / 2,
+      h * 0.8,
+    );
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(0,0,10,0.6)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+
+    // ── Header section ──
+    const headerY = 40;
+    // Horizontal accent line
+    const lineW = 200;
+    ctx.strokeStyle = "rgba(0,255,200,0.3)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - lineW, headerY + 14);
+    ctx.lineTo(w / 2 + lineW, headerY + 14);
+    ctx.stroke();
+
+    // Round complete title
+    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
+    ctx.save();
+    ctx.shadowColor = "#00ffcc";
+    ctx.shadowBlur = 18 * titlePulse;
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 36px monospace";
+    ctx.font = "bold 32px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`ROUND ${this.arenaRound - 1} COMPLETE!`, w / 2, 50);
+    ctx.fillText(`ROUND ${this.arenaRound - 1} COMPLETE`, w / 2, headerY);
+    ctx.shadowBlur = 0;
+    ctx.restore();
 
+    // Score with animated counter feel
     ctx.fillStyle = "#ffcc00";
-    ctx.font = "20px monospace";
-    ctx.fillText(`Score: ${this.player.score}`, w / 2, 80);
+    ctx.font = "bold 18px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `\u2605  SCORE: ${this.player.score}  \u2605`,
+      w / 2,
+      headerY + 34,
+    );
 
-    ctx.fillStyle = "#aaddff";
-    ctx.font = "bold 22px monospace";
-    ctx.fillText("UPGRADES", w / 2, 112);
+    // Section divider
+    ctx.strokeStyle = "rgba(0,200,255,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(w * 0.15, headerY + 52);
+    ctx.lineTo(w * 0.85, headerY + 52);
+    ctx.stroke();
 
-    // Arena upgrades are currently a 2 column grid
+    // UPGRADES subtitle
+    ctx.fillStyle = "rgba(170,200,255,0.6)";
+    ctx.font = "bold 14px monospace";
+    ctx.fillText("\u25C6  UPGRADES  \u25C6", w / 2, headerY + 70);
+
+    // ── Upgrade cards ──
     const upgradeKeys = Object.keys(UPGRADES);
-    const startY = 140;
-    const lineH = 50;
-    const colW = 340;
+    const startY = headerY + 90;
+    const cardH = 64;
+    const cardGap = 6;
+    const colW = 320;
     const cols = 2;
-    const leftX = w / 2 - colW - 15;
-    const rightX = w / 2 + 15;
+    const leftX = w / 2 - colW - 12;
+    const rightX = w / 2 + 12;
 
     for (let i = 0; i < upgradeKeys.length; i++) {
       const key = upgradeKeys[i];
@@ -7079,57 +7335,143 @@ export class Game {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const baseX = col === 0 ? leftX : rightX;
-      const y = startY + row * lineH;
+      const y = startY + row * (cardH + cardGap);
 
+      // Card background
+      ctx.fillStyle = selected ? "rgba(0,200,255,0.08)" : "rgba(10,15,30,0.6)";
+      ctx.beginPath();
+      ctx.roundRect(baseX, y, colW, cardH, 6);
+      ctx.fill();
+
+      // Card border
       if (selected) {
-        ctx.fillStyle = "rgba(0,200,255,0.15)";
-        ctx.fillRect(baseX - 5, y - 16, colW, lineH - 2);
-        ctx.strokeStyle = "rgba(0,255,200,0.4)";
+        const borderPulse = 0.5 + 0.5 * Math.sin(now * 0.005);
+        ctx.strokeStyle = `rgba(0,255,200,${0.3 + borderPulse * 0.3})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(baseX, y, colW, cardH, 6);
+        ctx.stroke();
+        // Left accent bar
+        ctx.fillStyle = maxed ? "#44ff44" : "#00ffcc";
+        ctx.beginPath();
+        ctx.roundRect(baseX, y, 3, cardH, [3, 0, 0, 3]);
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = "rgba(50,60,80,0.4)";
         ctx.lineWidth = 1;
-        ctx.strokeRect(baseX - 5, y - 16, colW, lineH - 2);
+        ctx.beginPath();
+        ctx.roundRect(baseX, y, colW, cardH, 6);
+        ctx.stroke();
       }
 
-      ctx.fillStyle = selected ? "#00ffcc" : "#8888aa";
-      ctx.font = "bold 17px monospace";
+      // Upgrade name
+      ctx.fillStyle = selected ? "#ffffff" : "#8888aa";
+      ctx.font = `${selected ? "bold " : ""}15px monospace`;
       ctx.textAlign = "left";
-      ctx.fillText(upg.name, baseX, y);
+      ctx.fillText(upg.name, baseX + 14, y + 20);
 
-      ctx.font = "13px monospace";
-      ctx.fillStyle = "#7777aa";
-      ctx.fillText(upg.description, baseX, y + 16);
+      // Description
+      ctx.fillStyle = selected
+        ? "rgba(170,200,220,0.7)"
+        : "rgba(100,110,130,0.6)";
+      ctx.font = "11px monospace";
+      ctx.fillText(upg.description, baseX + 14, y + 36);
 
+      // Cost or MAX badge
       ctx.textAlign = "right";
       if (maxed) {
+        // MAX badge
+        ctx.fillStyle = "rgba(0,255,100,0.15)";
+        ctx.beginPath();
+        ctx.roundRect(baseX + colW - 52, y + 8, 40, 20, 4);
+        ctx.fill();
         ctx.fillStyle = "#44ff44";
-        ctx.font = "bold 15px monospace";
-        ctx.fillText("MAX", baseX + colW - 10, y);
+        ctx.font = "bold 12px monospace";
+        ctx.fillText("MAX", baseX + colW - 16, y + 22);
       } else {
-        ctx.fillStyle = affordable ? "#ffcc00" : "#ff4444";
-        ctx.font = "bold 15px monospace";
-        ctx.fillText(`${cost}`, baseX + colW - 10, y);
+        ctx.fillStyle = affordable ? "#ffcc00" : "#ff4455";
+        ctx.font = "bold 14px monospace";
+        ctx.fillText(`${cost}`, baseX + colW - 12, y + 22);
+        // Cost label
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.font = "9px monospace";
+        ctx.fillText("COST", baseX + colW - 12, y + 12);
       }
 
-      // Level pips
+      // Level pips — progress bar style
       const maxPips = Math.min(upg.maxLevel, 10);
-      const pipW = Math.min(12, (colW - 20) / maxPips - 2);
-      for (let l = 0; l < maxPips; l++) {
-        ctx.fillStyle = l < level ? "#00ffcc" : "#333344";
-        ctx.fillRect(baseX + l * (pipW + 2), y + 22, pipW, 5);
+      const pipBarW = colW - 28;
+      const pipH = 3;
+      const pipY = y + cardH - 12;
+      // Track
+      ctx.fillStyle = "rgba(30,40,60,0.8)";
+      ctx.beginPath();
+      ctx.roundRect(baseX + 14, pipY, pipBarW, pipH, 2);
+      ctx.fill();
+      // Filled
+      if (level > 0) {
+        const fillW = (pipBarW * level) / maxPips;
+        const pipGrad = ctx.createLinearGradient(
+          baseX + 14,
+          0,
+          baseX + 14 + fillW,
+          0,
+        );
+        pipGrad.addColorStop(0, maxed ? "#44ff44" : "#00ffcc");
+        pipGrad.addColorStop(1, maxed ? "#22cc22" : "#0088aa");
+        ctx.fillStyle = pipGrad;
+        ctx.beginPath();
+        ctx.roundRect(baseX + 14, pipY, fillW, pipH, 2);
+        ctx.fill();
       }
+
+      // Level text (right side)
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(150,170,190,0.4)";
+      ctx.font = "9px monospace";
+      ctx.fillText(`LV ${level}/${upg.maxLevel}`, baseX + colW - 12, pipY + 3);
+
+      ctx.textAlign = "left";
     }
 
-    // Continue button
+    // ── Continue button ──
     const totalRows = Math.ceil(upgradeKeys.length / cols);
-    const contY = startY + totalRows * lineH + 25;
+    const contY = startY + totalRows * (cardH + cardGap) + 20;
     const contSelected = this.upgradeSelection === upgradeKeys.length;
-    ctx.fillStyle = contSelected ? "#00ffcc" : "#888888";
-    ctx.font = "bold 22px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("[ CONTINUE TO NEXT ROUND ]", w / 2, contY);
 
-    ctx.fillStyle = "#556677";
-    ctx.font = "14px monospace";
-    ctx.fillText("W/S/A/D to navigate, ENTER to select", w / 2, contY + 30);
+    if (contSelected) {
+      const btnPulse = 0.5 + 0.5 * Math.sin(now * 0.004);
+      ctx.fillStyle = `rgba(0,255,200,${0.06 + btnPulse * 0.04})`;
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - 180, contY - 18, 360, 36, 8);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(0,255,200,${0.3 + btnPulse * 0.3})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - 180, contY - 18, 360, 36, 8);
+      ctx.stroke();
+    }
+    ctx.fillStyle = contSelected ? "#00ffcc" : "#556677";
+    ctx.font = `bold 18px monospace`;
+    ctx.textAlign = "center";
+    ctx.fillText(
+      contSelected
+        ? "\u25B6  CONTINUE TO NEXT ROUND  \u25B6"
+        : "CONTINUE TO NEXT ROUND",
+      w / 2,
+      contY + 5,
+    );
+
+    // ── Footer hint ──
+    ctx.fillStyle = "rgba(100,120,140,0.4)";
+    ctx.font = "11px monospace";
+    ctx.fillText("W/S/A/D navigate  \u00B7  ENTER select", w / 2, contY + 34);
+
+    // ── Top scanline overlay ──
+    ctx.fillStyle = "rgba(0,0,0,0.03)";
+    for (let sy = 0; sy < h; sy += 4) {
+      ctx.fillRect(0, sy, w, 1);
+    }
 
     ctx.textAlign = "left";
   }
@@ -7206,7 +7548,15 @@ export class Game {
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
     ctx.font = "14px monospace";
     ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 130);
+    ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
+    ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
     ctx.textAlign = "left";
+
+    // Scanline overlay
+    ctx.fillStyle = "rgba(0,0,0,0.04)";
+    for (let sy = 0; sy < h; sy += 3) {
+      ctx.fillRect(0, sy, w, 1);
+    }
   }
 
   renderVictory(ctx, w, h) {
@@ -7284,6 +7634,12 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 190);
     ctx.textAlign = "left";
+
+    // Scanline overlay
+    ctx.fillStyle = "rgba(0,0,0,0.03)";
+    for (let sy = 0; sy < h; sy += 4) {
+      ctx.fillRect(0, sy, w, 1);
+    }
   }
 
   renderLevelComplete(ctx, w, h) {
@@ -7340,6 +7696,12 @@ export class Game {
     ctx.font = "14px monospace";
     ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 110);
     ctx.textAlign = "left";
+
+    // Scanline overlay
+    ctx.fillStyle = "rgba(0,0,0,0.03)";
+    for (let sy = 0; sy < h; sy += 4) {
+      ctx.fillRect(0, sy, w, 1);
+    }
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor) {
