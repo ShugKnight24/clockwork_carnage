@@ -87,6 +87,8 @@ export class Player {
     "dashDistMult",
     "dashStaminaCost",
     "sprintDrainMult",
+    "chronoEnergy",
+    "maxChronoEnergy",
   ];
 
   serialize() {
