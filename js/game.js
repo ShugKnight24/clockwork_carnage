@@ -42,6 +42,7 @@ export const GameState = {
   CAMPAIGN_PROMPT: "campaignPrompt",
   TUTORIAL_COMPLETE: "tutorialComplete",
   CHARACTER_CREATE: "characterCreate",
+  ACHIEVEMENTS: "achievements",
 };
 
 // TODO: Restructure this entire file, but especially this class... it's a mess. It handles too much. 3k lines for a class is normal right? Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
@@ -57,6 +58,7 @@ export class Game {
       getKeys: () => this.keys,
       getTouchControls: () => this.touchControls,
       isTouchDevice: "ontouchstart" in window,
+      getPlayerName: () => this.character.name || "Agent",
     });
     this.player = new Player();
     this.entities = [];
@@ -145,6 +147,7 @@ export class Game {
       weapon3: "Digit3",
       weapon4: "Digit4",
       toggleFPS: "KeyF",
+      chronoShift: "KeyQ",
     };
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
@@ -202,11 +205,15 @@ export class Game {
     this.ariaIdleTimer = 0; // seconds since last ARIA message
     this.ariaIdleThreshold = 30; // seconds of silence before idle chatter
     this.ariaCombatTimer = 0; // track time in combat for longSurvival
+    this.ariaMessageLog = []; // all ARIA messages for review
+    this.showAriaLog = false; // toggle ARIA message log overlay
+    this.ariaLogScroll = 0; // scroll position in log
 
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
-    this.creatorCategory = 0; // 0=color, 1=armor, 2=badge, 3=weaponSkin, 4=loadout
+    this.creatorCategory = 0; // 0=name, 1=color, 2=armor, 3=badge, 4=weaponSkin, 5=loadout
     this.creatorReturnState = null; // state to return to after saving
+    this._creatorSaveCallback = null; // optional callback after creator save
 
     this.setupInput();
     this.loadSettings();
@@ -337,7 +344,7 @@ export class Game {
       if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
         e.preventDefault();
       }
-      this.handleKeyPress(e.code);
+      this.handleKeyPress(e.code, e);
       // Prevent ESC from leaking to main.js when CHARACTER_CREATE changes state
       if (
         e.code === "Escape" &&
@@ -362,6 +369,10 @@ export class Game {
     });
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     this.canvas.addEventListener("mousedown", (e) => {
+      if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
+        this._handleCreatorClick(e);
+        return;
+      }
       if (this.state === GameState.BUILDER) {
         if (!this.mouse.locked && !this.builder.overhead) {
           this.lockPointer();
@@ -398,7 +409,7 @@ export class Game {
     });
   }
 
-  handleKeyPress(code) {
+  handleKeyPress(code, e) {
     // Nested Spaghetti 😂🤦‍♂️
     // TODO: Abstract into StateManager
 
@@ -507,6 +518,7 @@ export class Game {
     // Character creator — full-screen customization
     if (this.state === GameState.CHARACTER_CREATE) {
       const categories = [
+        null, // NAME tab — handled specially
         CHARACTER_COLORS,
         ARMOR_STYLES,
         BADGES,
@@ -514,6 +526,7 @@ export class Game {
         LOADOUT_CLASSES,
       ];
       const catKeys = [
+        null, // NAME
         "colorIndex",
         "armorIndex",
         "badgeIndex",
@@ -521,6 +534,58 @@ export class Game {
         "loadoutIndex",
       ];
       const catLen = categories.length;
+
+      // NAME tab (0) — typed text input
+      if (this.creatorCategory === 0) {
+        // Confirm / Cancel still work
+        if (code === "Enter" || code === "Space") {
+          this.audio.menuConfirm();
+          this._exitCreator(true);
+          return;
+        }
+        if (code === "Escape") {
+          const now = performance.now();
+          if (now - this.lastEscTime < 200) return;
+          this.lastEscTime = now;
+          this._creatorExitTime = now;
+          this.audio.menuConfirm();
+          this._exitCreator(false);
+          return;
+        }
+        // Tab / Arrow to switch category
+        if (code === "Tab") {
+          if (this.keys["ShiftLeft"] || this.keys["ShiftRight"]) {
+            this.creatorCategory = (this.creatorCategory - 1 + catLen) % catLen;
+          } else {
+            this.creatorCategory = (this.creatorCategory + 1) % catLen;
+          }
+          this.audio.menuSelect();
+          return;
+        }
+        if (code === "ArrowRight") {
+          this.creatorCategory = (this.creatorCategory + 1) % catLen;
+          this.audio.menuSelect();
+          return;
+        }
+        if (code === "ArrowLeft") {
+          this.creatorCategory = (this.creatorCategory - 1 + catLen) % catLen;
+          this.audio.menuSelect();
+          return;
+        }
+        // Backspace deletes last char
+        if (code === "Backspace") {
+          if (this.character.name.length > 0) {
+            this.character.name = this.character.name.slice(0, -1);
+          }
+          return;
+        }
+        // Typed letter/number — append to name (max 16 chars)
+        if (e?.key && e.key.length === 1 && this.character.name.length < 16) {
+          this.character.name += e.key;
+        }
+        return;
+      }
+
       const itemLen = categories[this.creatorCategory].length;
 
       // Switch category
@@ -550,9 +615,9 @@ export class Game {
         const key = catKeys[this.creatorCategory];
         let next = (this.character[key] - 1 + itemLen) % itemLen;
         // Skip locked loadouts
-        if (this.creatorCategory === 4) {
+        if (this.creatorCategory === 5) {
           for (let tries = 0; tries < itemLen; tries++) {
-            if (categories[4][next].unlocked !== false) break;
+            if (categories[5][next].unlocked !== false) break;
             next = (next - 1 + itemLen) % itemLen;
           }
         }
@@ -564,9 +629,9 @@ export class Game {
         const key = catKeys[this.creatorCategory];
         let next = (this.character[key] + 1) % itemLen;
         // Skip locked loadouts
-        if (this.creatorCategory === 4) {
+        if (this.creatorCategory === 5) {
           for (let tries = 0; tries < itemLen; tries++) {
-            if (categories[4][next].unlocked !== false) break;
+            if (categories[5][next].unlocked !== false) break;
             next = (next + 1) % itemLen;
           }
         }
@@ -578,8 +643,7 @@ export class Game {
       // Confirm — save and return
       if (code === "Enter" || code === "Space") {
         this.audio.menuConfirm();
-        this.saveCharacter();
-        this.state = this.creatorReturnState || GameState.TUTORIAL_COMPLETE;
+        this._exitCreator(true);
         return;
       }
 
@@ -590,8 +654,7 @@ export class Game {
         this.lastEscTime = now;
         this._creatorExitTime = now;
         this.audio.menuConfirm();
-        this.loadCharacter(); // revert changes
-        this.state = this.creatorReturnState || GameState.TUTORIAL_COMPLETE;
+        this._exitCreator(false);
         return;
       }
       return;
@@ -599,7 +662,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 10) {
+      if (this.mode === "tutorial" && this.tutorialStep === 11) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -613,7 +676,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC exits tutorial to title
-      if (this.mode === "tutorial" && this.tutorialStep < 10) {
+      if (this.mode === "tutorial" && this.tutorialStep < 11) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -657,6 +720,7 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
+        this.showAriaLog = false;
         this.state = this.pausedFromState || GameState.PLAYING;
         this.lockPointer();
         this.triggerAriaOnce("pauseResume", "pauseResume");
@@ -681,6 +745,23 @@ export class Game {
         this.controlsSelection = 0;
         this.rebindingKey = null;
         this.state = GameState.CONTROLS;
+      }
+      if (code === "KeyA") {
+        this.achievementsScroll = 0;
+        this.state = GameState.ACHIEVEMENTS;
+      }
+      if (code === "KeyL") {
+        this.showAriaLog = !this.showAriaLog;
+        this.ariaLogScroll = 0;
+      }
+      // Scroll ARIA log with W/S
+      if (this.showAriaLog) {
+        if (code === "KeyW" || code === "ArrowUp") {
+          this.ariaLogScroll = Math.min(this.ariaLogScroll + 1, Math.max(0, this.ariaMessageLog.length - 5));
+        }
+        if (code === "KeyS" || code === "ArrowDown") {
+          this.ariaLogScroll = Math.max(0, this.ariaLogScroll - 1);
+        }
       }
       if (code === "KeyF" && this.mode === "campaign") {
         this.saveCampaign();
@@ -816,6 +897,25 @@ export class Game {
         this.lastEscTime = now;
         this.saveSettings();
         this.state = GameState.PAUSED;
+      }
+      return;
+    }
+
+    if (this.state === GameState.ACHIEVEMENTS) {
+      if (code === "Escape" || code === "KeyA") {
+        const now = performance.now();
+        if (now - this.lastEscTime < 200) return;
+        this.lastEscTime = now;
+        this.state = GameState.PAUSED;
+      }
+      if (code === "ArrowUp" || code === "KeyW") {
+        this.achievementsScroll = Math.max(
+          0,
+          (this.achievementsScroll || 0) - 1,
+        );
+      }
+      if (code === "ArrowDown" || code === "KeyS") {
+        this.achievementsScroll = (this.achievementsScroll || 0) + 1;
       }
       return;
     }
@@ -1191,7 +1291,14 @@ export class Game {
     const pool = ARIA_COMMS[category];
     if (!pool || pool.length === 0) return;
     const text = pool[Math.floor(Math.random() * pool.length)];
-    this.ariaQueue.push({ text, color: "#00ffdd", duration: 3.5 });
+    // Only idle chatter and personality moments use the subtle bottom-left style
+    const prominent = !["idle", "ariaPersonality"].includes(category);
+    this.ariaQueue.push({
+      text,
+      color: "#00ffdd",
+      duration: prominent ? 4.5 : 3.5,
+      prominent,
+    });
   }
 
   triggerAriaOnce(key, category) {
@@ -1207,6 +1314,8 @@ export class Game {
       const msg = this.ariaQueue.shift();
       this.ariaMessage = { ...msg, life: 0 };
       this.ariaIdleTimer = 0; // reset idle clock when speaking
+      // Log the message for review
+      this.ariaMessageLog.push(msg.text);
     }
     if (this.ariaMessage) {
       this.ariaMessage.life += dt;
@@ -1246,6 +1355,83 @@ export class Game {
 
     const t = msg.life;
     const dur = msg.duration;
+
+    // ── Prominent (centered) messages ──
+    if (msg.prominent) {
+      let alpha = 1;
+      const fadeIn = 0.4;
+      const fadeOut = 0.5;
+      if (t < fadeIn) alpha = t / fadeIn;
+      else if (t > dur - fadeOut) alpha = 1 - (t - (dur - fadeOut)) / fadeOut;
+
+      // Slide down from top
+      let slideY = 0;
+      if (t < fadeIn) slideY = (1 - t / fadeIn) * -40;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      const pBoxW = 460;
+      const pBx = (w - pBoxW) / 2;
+      const pBy = h * 0.28 + slideY;
+
+      // Pre-compute wrapped text lines to size the box
+      const ariaText = msg.text.replace(
+        /\{AGENT\}/g,
+        this.character.name || "Agent",
+      );
+      ctx.font = "14px monospace";
+      const maxTextW = pBoxW - 32;
+      const words = ariaText.split(" ");
+      const lines = [];
+      let currentLine = "";
+      for (const word of words) {
+        const testLine = currentLine ? currentLine + " " + word : word;
+        if (ctx.measureText(testLine).width > maxTextW && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+      const lineH = 17;
+      const pBoxH = 64 + Math.max(0, lines.length - 1) * lineH;
+
+      // Background with stronger presence
+      ctx.fillStyle = "rgba(0, 8, 16, 0.95)";
+      ctx.beginPath();
+      ctx.roundRect(pBx, pBy, pBoxW, pBoxH, 8);
+      ctx.fill();
+
+      // Glowing border
+      ctx.shadowColor = "#00ccff";
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = "rgba(0, 200, 255, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(pBx, pBy, pBoxW, pBoxH, 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // ARIA label centered
+      ctx.fillStyle = "#00ccff";
+      ctx.font = "bold 11px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("ARIA", w / 2, pBy + 18);
+
+      // Message text centered
+      ctx.fillStyle = msg.color;
+      ctx.font = "14px monospace";
+      const textStartY = lines.length > 1 ? pBy + 36 : pBy + 44;
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], w / 2, textStartY + i * lineH);
+      }
+
+      ctx.textAlign = "left";
+      ctx.restore();
+      return;
+    }
 
     // Slide in from left (0-0.3s), hold, slide out (last 0.4s)
     let slideX = 0;
@@ -1468,9 +1654,13 @@ export class Game {
     ctx.stroke();
 
     // Message text
+    const ariaText = msg.text.replace(
+      /\{AGENT\}/g,
+      this.character.name || "Agent",
+    );
     ctx.fillStyle = msg.color;
     ctx.font = "13px monospace";
-    ctx.fillText(msg.text, tx, by + 38);
+    ctx.fillText(ariaText, tx, by + 38);
 
     ctx.restore();
   }
@@ -1787,6 +1977,7 @@ export class Game {
     this.mode = "campaign";
     this.campaignLevel = 0;
     this.campaignAct = 1;
+    this.campaignMissedWeapons = []; // weapon IDs skipped in previous levels
     this.player.reset();
     this.applyLoadoutBonuses();
     // Play origin story cutscene, then campaign intro
@@ -1811,13 +2002,16 @@ export class Game {
   }
 
   executeCampaignPromptChoice(choice) {
-    if (choice === 0) {
-      // With tutorial
-      this.startTutorial();
-    } else {
-      // Without tutorial — straight to campaign
-      this.startCampaign();
-    }
+    const afterCreator = () => {
+      if (choice === 0) {
+        this.startTutorial();
+      } else {
+        this.startCampaign();
+      }
+    };
+    this.creatorCategory = 0;
+    this._creatorSaveCallback = () => afterCreator();
+    this.state = GameState.CHARACTER_CREATE;
   }
 
   renderCampaignPrompt(ctx, w, h) {
@@ -2013,6 +2207,7 @@ export class Game {
     this.tutorialEnemyKilled = false;
     this.tutorialDashed = false;
     this.tutorialFired = false;
+    this.tutorialChronoUsed = false;
     this.tutorialSandboxInit = false;
     this.tutorialMenuSelection = 0;
     this.tutorialOriginPlayed = false;
@@ -2060,7 +2255,8 @@ export class Game {
         break;
       }
 
-      case 3: // Shoot
+      case 3: // Shoot — reset flag so pre-step firing doesn't skip
+        if (elapsed < 0.05) { this.tutorialFired = false; break; }
         if (this.tutorialFired) this.advanceTutorialStep();
         break;
 
@@ -2073,15 +2269,20 @@ export class Game {
         if (this.tutorialDashed) this.advanceTutorialStep();
         break;
 
-      case 6: // Open a door with E
+      case 6: // Chrono Shift — reset flag so pre-step usage doesn't skip
+        if (elapsed < 0.05) { this.tutorialChronoUsed = false; break; }
+        if (this.tutorialChronoUsed) this.advanceTutorialStep();
+        break;
+
+      case 7: // Open a door with E
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 7: // Pick up items (health & ammo behind the door)
+      case 8: // Pick up items (health & ammo behind the door)
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 8: // Combat
+      case 9: // Combat
         if (!this.tutorialEnemySpawned) {
           const enemy = new Enemy(12.5, 12.5, "drone");
           enemy.health = 15;
@@ -2095,7 +2296,7 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 9: // Training complete → show completion menu
+      case 10: // Training complete → show completion menu
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2108,7 +2309,7 @@ export class Game {
         }
         break;
 
-      case 10: {
+      case 11: {
         // Sandbox — spawn training dummies, let player practice
         if (!this.tutorialSandboxInit) {
           this.tutorialSandboxInit = true;
@@ -2246,6 +2447,11 @@ export class Game {
         color: "#ff44ff",
       },
       {
+        title: "CHRONO SHIFT — TIME CONTROL",
+        hint: "Press  Q  to slow time — the Paradox Lord won't see you coming",
+        color: "#8844ff",
+      },
+      {
         title: "OPEN THE ARMORY DOOR",
         hint: "Face the door and press  E  to interact",
         color: "#ff8844",
@@ -2320,8 +2526,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 9) {
-      ctx.fillText(`${this.tutorialStep}/8`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 10) {
+      ctx.fillText(`${this.tutorialStep}/9`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2336,7 +2542,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 10) {
+    if (this.tutorialStep === 11) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -2550,6 +2756,16 @@ export class Game {
       this.player.stamina = b.maxStamina;
     }
     if (cls.startWeapons) this.player.weapons = [...cls.startWeapons];
+    // Class-specific chrono energy tuning
+    if (cls.id === "phantom") {
+      this.player.maxChronoEnergy = 120; // speed demon gets more chrono
+      this.player.dashStaminaCost = 15;
+    } else if (cls.id === "enforcer") {
+      this.player.maxChronoEnergy = 80; // tank gets less chrono
+      this.player.damageMultiplier = 1.15;
+    } else if (cls.id === "gunslinger") {
+      this.player.maxChronoEnergy = 100;
+    }
   }
 
   getCharacterColor() {
@@ -2571,6 +2787,7 @@ export class Game {
     const loadout = LOADOUT_CLASSES[char.loadoutIndex];
 
     const categories = [
+      { name: "NAME", data: null, key: null },
       { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
       { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
       { name: "BADGE", data: BADGES, key: "badgeIndex" },
@@ -2661,6 +2878,84 @@ export class Game {
     const totalContentW = listW + previewW + infoW + 40;
     const contentX = (w - totalContentW) / 2;
 
+    // ─── NAME tab — special rendering ───
+    if (cat === 0) {
+      const nameBoxW = 320;
+      const nameBoxH = 50;
+      const nameBoxX = w / 2 - nameBoxW / 2;
+      const nameBoxY = contentY + 40;
+
+      // Label
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("AGENT CALLSIGN", w / 2, nameBoxY - 12);
+
+      // Input box
+      ctx.fillStyle = "rgba(0, 5, 15, 0.8)";
+      ctx.beginPath();
+      ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 6);
+      ctx.fill();
+
+      const blink = Math.sin(now * 0.005) > 0;
+      ctx.strokeStyle = blink ? palette.accent : `${palette.accent}88`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 6);
+      ctx.stroke();
+
+      // Name text
+      const displayName = char.name || "";
+      const cursor = blink ? "▌" : "";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 22px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(displayName + cursor, w / 2, nameBoxY + 33);
+
+      // Hint
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "11px monospace";
+      ctx.fillText(
+        "Type your name (max 16 chars) · Backspace to delete",
+        w / 2,
+        nameBoxY + nameBoxH + 20,
+      );
+
+      // Still show character preview below
+      const prevCX = w / 2;
+      const prevCY = nameBoxY + nameBoxH + 160;
+      this._renderCharacterPreview(
+        ctx,
+        prevCX,
+        prevCY,
+        palette,
+        armor,
+        badge,
+        skin,
+        now,
+        loadout,
+        1.5,
+      );
+
+      // Agent name under preview
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(char.name || "Agent", prevCX, prevCY + 100);
+
+      // Footer controls
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "Click or TAB/←/→ = category  ·  ENTER = save  ·  ESC = cancel",
+        w / 2,
+        h - 20,
+      );
+      ctx.textAlign = "left";
+      return;
+    }
+
     // ─── Item list (left panel) ───
     const curCat = categories[cat];
     const items = curCat.data;
@@ -2704,7 +2999,7 @@ export class Game {
       }
 
       // Color swatch for color category
-      if (cat === 0 && item.primary) {
+      if (cat === 1 && item.primary) {
         ctx.fillStyle = item.primary;
         ctx.beginPath();
         ctx.roundRect(listX + 14, iy + 8, 18, 18, 3);
@@ -2715,14 +3010,14 @@ export class Game {
         ctx.fill();
       }
 
-      const labelX = cat === 0 ? listX + 40 : listX + 16;
+      const labelX = cat === 1 ? listX + 40 : listX + 16;
       ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.45)";
       ctx.font = `${isSelected ? "bold " : ""}12px monospace`;
       ctx.textAlign = "left";
       ctx.fillText(item.name, labelX, iy + 22);
 
       // Lock icon for locked loadouts
-      if (cat === 4 && item.unlocked === false) {
+      if (cat === 5 && item.unlocked === false) {
         ctx.fillStyle = "rgba(255,100,100,0.6)";
         ctx.font = "10px monospace";
         ctx.fillText("\uD83D\uDD12", listX + listW - 28, iy + 22);
@@ -2754,6 +3049,8 @@ export class Game {
       badge,
       skin,
       now,
+      loadout,
+      1.3,
     );
 
     // ─── Info panel (right) ───
@@ -2797,7 +3094,7 @@ export class Game {
     }
 
     // Loadout bonuses
-    if (cat === 4 && loadout.bonuses) {
+    if (cat === 5 && loadout.bonuses) {
       let by = contentY + 90;
       ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
       ctx.font = "11px monospace";
@@ -2827,7 +3124,7 @@ export class Game {
     }
 
     // Color swatches in info panel
-    if (cat === 0) {
+    if (cat === 1) {
       let sy = contentY + 80;
       ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
       ctx.font = "10px monospace";
@@ -2859,19 +3156,116 @@ export class Game {
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(
-      "A/D or TAB = category  \u00B7  W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
+      "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
       w / 2,
       h - 20,
     );
     ctx.textAlign = "left";
   }
 
-  _renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now) {
+  _exitCreator(saved) {
+    if (saved) this.saveCharacter();
+    else this.loadCharacter();
+    if (this._creatorSaveCallback) {
+      const cb = this._creatorSaveCallback;
+      this._creatorSaveCallback = null;
+      cb(saved);
+    } else {
+      this.state = this.creatorReturnState || GameState.TUTORIAL_COMPLETE;
+    }
+  }
+
+  _handleCreatorClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    const w = this.canvas.width;
+    const categories = [
+      { name: "NAME", data: null, key: null },
+      { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
+      { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
+      { name: "BADGE", data: BADGES, key: "badgeIndex" },
+      { name: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
+      { name: "LOADOUT", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+    ];
+
+    const titleY = 44;
+    const tabW = 90;
+    const tabH = 28;
+    const tabGap = 8;
+    const totalTabW =
+      categories.length * tabW + (categories.length - 1) * tabGap;
+    const tabX0 = (w - totalTabW) / 2;
+    const tabY = titleY + 22;
+
+    // Tab click detection
+    if (my >= tabY && my <= tabY + tabH) {
+      for (let i = 0; i < categories.length; i++) {
+        const tx = tabX0 + i * (tabW + tabGap);
+        if (mx >= tx && mx <= tx + tabW) {
+          this.creatorCategory = i;
+          return;
+        }
+      }
+    }
+
+    // Item list click detection (non-NAME tabs)
+    const cat = this.creatorCategory;
+    if (cat === 0) return;
+
+    const curCat = categories[cat];
+    const items = curCat.data;
+    if (!items) return;
+
+    const contentY = tabY + tabH + 20;
+    const listW = 200;
+    const previewW = 200;
+    const infoW = 200;
+    const totalContentW = listW + previewW + infoW + 40;
+    const contentX = (w - totalContentW) / 2;
+    const listX = contentX;
+    const maxVisible = Math.min(items.length, 8);
+    const itemH = 36;
+
+    const selIdx = this.character[curCat.key];
+    let scrollOff = 0;
+    if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
+
+    if (mx >= listX && mx <= listX + listW) {
+      for (let vi = 0; vi < maxVisible; vi++) {
+        const idx = vi + scrollOff;
+        if (idx >= items.length) break;
+        const iy = contentY + 8 + vi * itemH;
+        if (my >= iy && my <= iy + itemH) {
+          this.character[curCat.key] = idx;
+          return;
+        }
+      }
+    }
+  }
+
+  _renderCharacterPreview(
+    ctx,
+    cx,
+    cy,
+    palette,
+    armor,
+    badge,
+    skin,
+    now,
+    loadout,
+    scale,
+  ) {
+    const s = scale || 1;
     const rotAngle = now * 0.001;
     const breathe = Math.sin(now * 0.002) * 2;
 
     ctx.save();
     ctx.translate(cx, cy + breathe);
+    ctx.scale(s, s);
 
     // ── Armor body ──
     const armorW = 52;
@@ -2887,6 +3281,27 @@ export class Game {
     ctx.fillStyle = palette.dark;
     ctx.fillRect(-14, armorH / 2 - 5, 10, 25);
     ctx.fillRect(4, armorH / 2 - 5, 10, 25);
+    // Boots
+    ctx.fillStyle = palette.primary;
+    ctx.beginPath();
+    ctx.roundRect(-16, armorH / 2 + 16, 14, 8, 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(2, armorH / 2 + 16, 14, 8, 2);
+    ctx.fill();
+    // Boot sole accent
+    ctx.fillStyle = palette.accent + "44";
+    ctx.fillRect(-15, armorH / 2 + 22, 12, 2);
+    ctx.fillRect(3, armorH / 2 + 22, 12, 2);
+
+    // Knee pads
+    ctx.fillStyle = palette.primary + "88";
+    ctx.beginPath();
+    ctx.ellipse(-9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     // Main torso
     ctx.fillStyle = palette.primary;
@@ -2937,6 +3352,23 @@ export class Game {
     ctx.fillRect(-2, -armorH / 2 + 8, 4, armorH - 16);
     ctx.globalAlpha = 1;
 
+    // Belt
+    ctx.fillStyle = palette.dark;
+    ctx.fillRect(-armorW / 2 + 2, armorH / 2 - 10, armorW - 4, 6);
+    ctx.fillStyle = palette.accent + "88";
+    ctx.beginPath();
+    ctx.arc(0, armorH / 2 - 7, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Chest emblem glow
+    ctx.save();
+    ctx.globalAlpha = 0.15 + 0.1 * Math.sin(now * 0.005);
+    ctx.fillStyle = palette.accent;
+    ctx.beginPath();
+    ctx.arc(0, -10, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     // Collar / neck
     ctx.fillStyle = palette.dark;
     ctx.fillRect(-10, -armorH / 2 - 6, 20, 8);
@@ -2974,11 +3406,7 @@ export class Game {
     // ── Badge ──
     if (badge.icon) {
       const bx = -8;
-      const by = -armorH / 2 + 14;
-      ctx.fillStyle = palette.accent;
-      ctx.globalAlpha = 0.8;
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
+      const by = -armorH / 2 + 16;
       const icons = {
         shield: "\u25C6",
         skull: "\u2620",
@@ -2988,8 +3416,24 @@ export class Game {
         eye: "\u25C9",
         rift: "\u00D7",
       };
-      ctx.fillText(icons[badge.icon] || "\u2726", bx, by);
+      // Badge backing circle with glow
+      const badgePulse = 0.6 + 0.4 * Math.sin(now * 0.004);
+      ctx.fillStyle = `${palette.dark}cc`;
+      ctx.beginPath();
+      ctx.arc(bx, by - 4, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = palette.accent;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = badgePulse;
+      ctx.beginPath();
+      ctx.arc(bx, by - 4, 12, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
+      // Badge icon
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 18px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(icons[badge.icon] || "\u2726", bx, by + 2);
       ctx.textAlign = "left";
     }
 
@@ -3012,6 +3456,63 @@ export class Game {
     ctx.globalAlpha = 0.6 + 0.3 * Math.sin(now * 0.006);
     ctx.fillRect(wpnX + 1, wpnY - 4, 4, 6);
     ctx.globalAlpha = 1;
+
+    // ── Class-specific visual traits ──
+    if (loadout) {
+      if (loadout.id === "gunslinger") {
+        // Dual weapon holsters on hips
+        ctx.fillStyle = "#664422";
+        ctx.fillRect(-armorW / 2 - 4, 4, 6, 14);
+        ctx.fillRect(armorW / 2 - 2, 4, 6, 14);
+        // Speed lines
+        ctx.strokeStyle = palette.accent + "44";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+          const ly = -armorH / 2 + 20 + i * 18;
+          ctx.beginPath();
+          ctx.moveTo(armorW / 2 + 18, ly);
+          ctx.lineTo(armorW / 2 + 28 + i * 4, ly);
+          ctx.stroke();
+        }
+      } else if (loadout.id === "enforcer") {
+        // Heavy shoulder pads
+        ctx.fillStyle = palette.dark;
+        ctx.fillRect(-armorW / 2 - 14, -armorH / 2 + 4, 14, 12);
+        ctx.fillRect(armorW / 2, -armorH / 2 + 4, 14, 12);
+        // Thick border
+        ctx.strokeStyle = palette.primary;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(
+          -armorW / 2 - 2,
+          -armorH / 2 - 2,
+          armorW + 4,
+          armorH + 4,
+          8,
+        );
+        ctx.stroke();
+      } else if (loadout.id === "phantom") {
+        // Ghost after-image
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = palette.accent;
+        const ghostOff = 8 + Math.sin(now * 0.003) * 3;
+        ctx.beginPath();
+        ctx.roundRect(-armorW / 2 + ghostOff, -armorH / 2, armorW, armorH, 6);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Dash trail particles
+        for (let i = 0; i < 4; i++) {
+          const px = armorW / 2 + 14 + i * 8;
+          const py = Math.sin(now * 0.004 + i) * 10;
+          ctx.fillStyle = palette.accent;
+          ctx.globalAlpha = 0.3 - i * 0.06;
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // ── Rotating energy ring (behind character) ──
     ctx.strokeStyle = palette.accent + "22";
@@ -3274,6 +3775,21 @@ export class Game {
       this.exitEntity = null;
     }
 
+    // Spawn missed weapons from previous levels near the player start
+    if (this.campaignMissedWeapons && this.campaignMissedWeapons.length > 0) {
+      const sx = level.playerStart.x;
+      const sy = level.playerStart.y;
+      for (let i = 0; i < this.campaignMissedWeapons.length; i++) {
+        const wid = this.campaignMissedWeapons[i];
+        if (!this.player.weapons.includes(wid)) {
+          const angle = (i / this.campaignMissedWeapons.length) * Math.PI * 2;
+          this.entities.push(
+            new Pickup(sx + Math.cos(angle) * 1.5, sy + Math.sin(angle) * 1.5, "weapon", { weaponId: wid }),
+          );
+        }
+      }
+    }
+
     this.killedEnemies = 0;
     this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
     this.killStreak = 0;
@@ -3308,6 +3824,20 @@ export class Game {
   }
 
   nextCampaignLevel() {
+    // Track uncollected weapons from the level we just finished
+    if (this.campaignMissedWeapons == null) this.campaignMissedWeapons = [];
+    for (const e of this.entities) {
+      if (e.type === "weapon" && e.active && e.weaponId != null) {
+        if (!this.campaignMissedWeapons.includes(e.weaponId)) {
+          this.campaignMissedWeapons.push(e.weaponId);
+        }
+      }
+    }
+    // Remove any missed weapons the player has since acquired
+    this.campaignMissedWeapons = this.campaignMissedWeapons.filter(
+      (id) => !this.player.weapons.includes(id),
+    );
+
     this.campaignLevel++;
     if (this.campaignLevel >= CAMPAIGN_LEVELS.length) {
       this.loadCampaignLevel(this.campaignLevel); // triggers VICTORY via bounds check
@@ -3468,10 +3998,17 @@ export class Game {
     this.killStreakTimer = 0;
     if (this.killStreak > this.bestStreak) this.bestStreak = this.killStreak;
 
-    // Campaign ammo drops — 40% chance to drop ammo on kill
-    if (enemy && this.mode === "campaign" && Math.random() < 0.4) {
+    // Campaign ammo drops — 18% chance to drop ammo on kill
+    if (enemy && this.mode === "campaign" && Math.random() < 0.18) {
       this.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
     }
+
+    // Chrono energy on kill (+20, bonus on streaks)
+    const chronoGain = this.killStreak >= 3 ? 30 : 20;
+    this.player.chronoEnergy = Math.min(
+      this.player.maxChronoEnergy,
+      this.player.chronoEnergy + chronoGain,
+    );
 
     const STREAK_TIERS = [
       null, // 1 kill — no announcement
@@ -3747,14 +4284,25 @@ export class Game {
     this.lastFrameTime = timestamp;
     this.time = timestamp;
 
-    // Slow-motion time scale
+    // Slow-motion time scale (last-kill effect takes priority)
     if (this.slowMoTimer > 0) {
       this.slowMoTimer -= this.deltaTime;
       this.timeScale = 0.25;
       if (this.slowMoTimer <= 0) {
         this.slowMoTimer = 0;
+        this.timeScale = this.player.chronoActive ? 0.3 : 1;
+      }
+    } else if (this.player.chronoActive) {
+      // Chrono Shift — player-activated time slow
+      this.player.chronoEnergy -= 33 * this.deltaTime; // ~3s at full
+      this.timeScale = 0.3;
+      if (this.player.chronoEnergy <= 0) {
+        this.player.chronoEnergy = 0;
+        this.player.chronoActive = false;
         this.timeScale = 1;
       }
+    } else if (this.timeScale !== 1 && this.slowMoTimer <= 0) {
+      this.timeScale = 1;
     }
 
     // FPS counter
@@ -3799,6 +4347,30 @@ export class Game {
     }
 
     const dt = this.deltaTime * this.timeScale;
+
+    // Chrono Shift activation (Q key toggle)
+    if (this.keys[this.keybinds.chronoShift] && !this._chronoKeyHeld) {
+      this._chronoKeyHeld = true;
+      if (this.player.chronoActive) {
+        this.player.chronoActive = false;
+        this.timeScale = 1;
+      } else if (this.player.chronoEnergy >= 15) {
+        this.player.chronoActive = true;
+        if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+      }
+    }
+    if (!this.keys[this.keybinds.chronoShift]) this._chronoKeyHeld = false;
+
+    // Passive chrono energy regen (+5/sec)
+    if (
+      !this.player.chronoActive &&
+      this.player.chronoEnergy < this.player.maxChronoEnergy
+    ) {
+      this.player.chronoEnergy = Math.min(
+        this.player.maxChronoEnergy,
+        this.player.chronoEnergy + 5 * this.deltaTime,
+      );
+    }
 
     // Kill streak timer decay
     if (this.killStreak > 0) {
@@ -4411,7 +4983,7 @@ export class Game {
       if (dx * dx + dy * dy > 1.0) continue;
 
       // In tutorial, block pickups until step 7 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 7) {
+      if (this.mode === "tutorial" && this.tutorialStep < 8) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -4424,14 +4996,14 @@ export class Game {
           e.active = false;
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep >= 7)
+          if (this.mode === "tutorial" && this.tutorialStep >= 8)
             this.tutorialPickedUp = true;
         }
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep >= 7)
+        if (this.mode === "tutorial" && this.tutorialStep >= 8)
           this.tutorialPickedUp = true;
       } else if (e.type === "weapon") {
         if (!this.player.weapons.includes(e.weaponId)) {
@@ -4607,6 +5179,8 @@ export class Game {
       this.renderSettingsScreen(hctx, hw, hh);
     if (this.state === GameState.CONTROLS)
       this.renderControlsScreen(hctx, hw, hh);
+    if (this.state === GameState.ACHIEVEMENTS)
+      this.renderAchievementsScreen(hctx, hw, hh);
     if (this.state === GameState.UPGRADE)
       this.renderUpgradeScreen(hctx, hw, hh);
     if (this.state === GameState.GAME_OVER) this.renderGameOver(hctx, hw, hh);
@@ -5369,6 +5943,112 @@ export class Game {
         w / 2 + 60,
         staminaBarY + staminaBarH / 2 + 5,
       );
+    }
+
+    // ─── Chrono Shift bar (above stamina, only when player has energy) ───
+    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
+    if (chronoPct > 0.005 || this.player.chronoActive) {
+      const chronoBarH = Math.round(14 * staminaFactor);
+      const chronoBarW = Math.round(280 * staminaFactor);
+      const chronoBarX = Math.floor(w / 2 - chronoBarW / 2);
+      const chronoBarY = staminaBarY - chronoBarH - 6;
+      const chronoIsActive = this.player.chronoActive;
+
+      // Glow when active
+      if (chronoIsActive) {
+        ctx.fillStyle = "rgba(180,0,255,0.15)";
+        ctx.beginPath();
+        ctx.roundRect(
+          chronoBarX - 4,
+          chronoBarY - 4,
+          chronoBarW + 8,
+          chronoBarH + 8,
+          6,
+        );
+        ctx.fill();
+      }
+
+      // Background
+      ctx.fillStyle = "rgba(5,5,15,0.7)";
+      ctx.beginPath();
+      ctx.roundRect(
+        chronoBarX - 1,
+        chronoBarY - 1,
+        chronoBarW + 2,
+        chronoBarH + 2,
+        4,
+      );
+      ctx.fill();
+
+      // Empty track
+      ctx.fillStyle = "rgba(255,255,255,0.04)";
+      ctx.beginPath();
+      ctx.roundRect(chronoBarX, chronoBarY, chronoBarW, chronoBarH, 3);
+      ctx.fill();
+
+      // Filled portion
+      if (chronoPct > 0.005) {
+        const chronoColor = chronoIsActive
+          ? "#cc44ff"
+          : chronoPct >= 0.15
+            ? "#9944ff"
+            : "#664488";
+        ctx.fillStyle = chronoColor;
+        ctx.beginPath();
+        ctx.roundRect(
+          chronoBarX,
+          chronoBarY,
+          chronoBarW * chronoPct,
+          chronoBarH,
+          3,
+        );
+        ctx.fill();
+
+        // Shine
+        const cShine = ctx.createLinearGradient(
+          chronoBarX,
+          chronoBarY,
+          chronoBarX,
+          chronoBarY + chronoBarH,
+        );
+        cShine.addColorStop(0, "rgba(255,255,255,0.2)");
+        cShine.addColorStop(0.5, "rgba(255,255,255,0)");
+        cShine.addColorStop(1, "rgba(0,0,0,0.1)");
+        ctx.fillStyle = cShine;
+        ctx.beginPath();
+        ctx.roundRect(
+          chronoBarX,
+          chronoBarY,
+          chronoBarW * chronoPct,
+          chronoBarH,
+          3,
+        );
+        ctx.fill();
+      }
+
+      // Border
+      ctx.strokeStyle = chronoIsActive ? "#cc44ff" : "rgba(150,100,200,0.3)";
+      ctx.lineWidth = chronoIsActive ? 1.5 : 1;
+      ctx.beginPath();
+      ctx.roundRect(chronoBarX, chronoBarY, chronoBarW, chronoBarH, 3);
+      ctx.stroke();
+
+      // Label
+      const chronoLabel = chronoIsActive ? "CHRONO SHIFT" : "CHRONO";
+      ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.6)";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(chronoLabel, w / 2 - 50, chronoBarY + chronoBarH / 2 + 4);
+      ctx.fillStyle = "rgba(180,140,220,0.5)";
+      ctx.fillText(
+        `${Math.floor(chronoPct * 100)}%`,
+        w / 2 + 50,
+        chronoBarY + chronoBarH / 2 + 4,
+      );
+      // Key hint
+      ctx.fillStyle = "rgba(150,120,200,0.3)";
+      ctx.font = "bold 9px monospace";
+      ctx.fillText("[Q]", w / 2 + 80, chronoBarY + chronoBarH / 2 + 4);
     }
 
     // Bottom Bar
@@ -6781,6 +7461,13 @@ export class Game {
   renderPauseScreen(ctx, w, h) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, w, h);
+
+    // ARIA log overlay
+    if (this.showAriaLog) {
+      this.renderAriaLog(ctx, w, h);
+      return;
+    }
+
     ctx.fillStyle = "#00ffcc";
     ctx.font = "bold 36px monospace";
     ctx.textAlign = "center";
@@ -6792,7 +7479,8 @@ export class Game {
     const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
     if (!this.isTouchDevice) {
       ctx.fillText(
-        "ESC / P to resume  |  S settings  |  C controls  |  Q quit" + saveHint,
+        "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  L ARIA log  |  Q quit" +
+          saveHint,
         w / 2,
         h / 2 + 110,
       );
@@ -6803,6 +7491,78 @@ export class Game {
       ctx.font = "bold 16px monospace";
       ctx.fillText("GAME SAVED", w / 2, h / 2 + 140);
     }
+    ctx.textAlign = "left";
+  }
+
+  renderAriaLog(ctx, w, h) {
+    const panelW = Math.min(520, w - 40);
+    const panelH = Math.min(400, h - 80);
+    const panelX = (w - panelW) / 2;
+    const panelY = (h - panelH) / 2;
+
+    // Panel background
+    ctx.fillStyle = "rgba(0, 8, 16, 0.96)";
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 10);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 200, 255, 0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 10);
+    ctx.stroke();
+
+    // Title
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 18px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("ARIA COMMS LOG", w / 2, panelY + 28);
+
+    // Messages
+    const log = this.ariaMessageLog;
+    const lineH = 22;
+    const maxLines = Math.floor((panelH - 70) / lineH);
+    const startIdx = Math.max(0, log.length - maxLines - this.ariaLogScroll);
+    const endIdx = Math.min(log.length, startIdx + maxLines);
+
+    ctx.font = "13px monospace";
+    ctx.textAlign = "left";
+    const textX = panelX + 16;
+    const textMaxW = panelW - 32;
+
+    if (log.length === 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.textAlign = "center";
+      ctx.fillText("No messages yet", w / 2, panelY + panelH / 2);
+    } else {
+      for (let i = startIdx; i < endIdx; i++) {
+        const y = panelY + 50 + (i - startIdx) * lineH;
+        const msgNum = i + 1;
+        ctx.fillStyle = "rgba(0, 200, 255, 0.4)";
+        ctx.fillText(`${String(msgNum).padStart(2, " ")}.`, textX, y);
+        const text = log[i].replace(/\{AGENT\}/g, this.character.name || "Agent");
+        ctx.fillStyle = "#00ffdd";
+        // Truncate if too long for panel
+        let display = text;
+        while (ctx.measureText(display).width > textMaxW - 30 && display.length > 3) {
+          display = display.slice(0, -4) + "...";
+        }
+        ctx.fillText(display, textX + 30, y);
+      }
+    }
+
+    // Scroll hint
+    if (log.length > maxLines) {
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("W/S to scroll", w / 2, panelY + panelH - 10);
+    }
+
+    // Footer
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("L to close  |  ESC to resume", w / 2, panelY + panelH + 20);
     ctx.textAlign = "left";
   }
 
@@ -7093,6 +7853,7 @@ export class Game {
       weapon3: "Weapon 3",
       weapon4: "Weapon 4",
       toggleFPS: "Toggle FPS",
+      chronoShift: "Chrono Shift (Slow Time)",
     };
 
     const panelX = w / 2 - 240;
@@ -7216,6 +7977,122 @@ export class Game {
       Backspace: "Backspace",
     };
     return map[code] || code.replace("Key", "").replace("Digit", "");
+  }
+
+  renderAchievementsScreen(ctx, w, h) {
+    ctx.fillStyle = "rgba(0,0,0,0.92)";
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = "#ffcc00";
+    ctx.font = "bold 28px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("ACHIEVEMENTS", w / 2, 50);
+
+    const entries = Object.entries(ACHIEVEMENTS);
+    const cols = 2;
+    const cardW = 260;
+    const cardH = 72;
+    const gap = 12;
+    const totalW = cols * cardW + (cols - 1) * gap;
+    const startX = w / 2 - totalW / 2;
+    const startY = 80;
+    const maxScroll = Math.max(
+      0,
+      Math.ceil(entries.length / cols) -
+        Math.floor((h - startY - 50) / (cardH + gap)),
+    );
+    this.achievementsScroll = Math.min(this.achievementsScroll || 0, maxScroll);
+    const scroll = this.achievementsScroll || 0;
+
+    let unlocked = 0;
+    for (const [id] of entries) {
+      if (this.unlockedAchievements[id]) unlocked++;
+    }
+
+    // Progress bar
+    const progW = 300;
+    const progH = 10;
+    const progX = w / 2 - progW / 2;
+    const progY = 58;
+    const progPct = entries.length > 0 ? unlocked / entries.length : 0;
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.beginPath();
+    ctx.roundRect(progX, progY, progW, progH, 4);
+    ctx.fill();
+    if (progPct > 0) {
+      ctx.fillStyle = "#ffcc00";
+      ctx.beginPath();
+      ctx.roundRect(progX, progY, progW * progPct, progH, 4);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "10px monospace";
+    ctx.fillText(`${unlocked} / ${entries.length}`, w / 2, progY + progH + 12);
+
+    const visibleRows = Math.floor((h - startY - 50) / (cardH + gap));
+
+    for (let idx = 0; idx < entries.length; idx++) {
+      const [id, ach] = entries[idx];
+      const row = Math.floor(idx / cols) - scroll;
+      const col = idx % cols;
+      if (row < 0 || row >= visibleRows) continue;
+
+      const cx = startX + col * (cardW + gap);
+      const cy = startY + row * (cardH + gap);
+      const isUnlocked = !!this.unlockedAchievements[id];
+
+      // Card bg
+      ctx.fillStyle = isUnlocked ? "rgba(40,40,10,0.7)" : "rgba(10,10,20,0.6)";
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cardW, cardH, 6);
+      ctx.fill();
+      ctx.strokeStyle = isUnlocked
+        ? "rgba(255,204,0,0.4)"
+        : "rgba(100,100,120,0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cardW, cardH, 6);
+      ctx.stroke();
+
+      // Icon
+      const iconKey = ach.icon;
+      const iconImg = this.achievementIcons[iconKey];
+      if (iconImg && iconImg.complete) {
+        ctx.globalAlpha = isUnlocked ? 1 : 0.25;
+        ctx.drawImage(iconImg, cx + 8, cy + 10, 48, 48);
+        ctx.globalAlpha = 1;
+      }
+
+      // Name
+      ctx.fillStyle = isUnlocked ? "#ffcc00" : "#555566";
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(ach.name, cx + 64, cy + 24);
+
+      // Description
+      ctx.fillStyle = isUnlocked
+        ? "rgba(200,210,220,0.7)"
+        : "rgba(100,100,120,0.5)";
+      ctx.font = "11px monospace";
+      ctx.fillText(ach.description, cx + 64, cy + 42);
+
+      // Status
+      if (isUnlocked) {
+        ctx.fillStyle = "rgba(0,255,100,0.6)";
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "right";
+        ctx.fillText("UNLOCKED", cx + cardW - 8, cy + 60);
+        ctx.textAlign = "left";
+      }
+    }
+
+    // Footer
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("W/S to scroll  ·  ESC to go back", w / 2, h - 20);
+    ctx.textAlign = "left";
   }
 
   renderUpgradeScreen(ctx, w, h) {
@@ -7632,7 +8509,7 @@ export class Game {
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
     ctx.font = "14px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 190);
+    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 215);
     ctx.textAlign = "left";
 
     // Scanline overlay

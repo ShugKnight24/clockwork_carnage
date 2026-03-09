@@ -2033,6 +2033,14 @@ export class Renderer {
       const breathe = Math.sin(time * 0.002) * halfH * 0.015;
       const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
 
+      // Form-dependent brighter colors (original c1/c2 are too dark)
+      const formBaseColors = ["#ff3399", "#ff2277", "#ff1155"];
+      const formDarkColors = ["#881144", "#771144", "#991133"];
+      const formAccents = ["#ff66bb", "#ff44aa", "#ff2299"];
+      const bossBaseColor = hitFlash ? "#ffffff" : formBaseColors[bossForm - 1];
+      const bossDarkColor = hitFlash ? "#ffaaaa" : formDarkColors[bossForm - 1];
+      const bossAccent = hitFlash ? "#ffcccc" : formAccents[bossForm - 1];
+
       // Dark aura — intensifies with form
       ctx.save();
       const auraR = bW * (1.8 + (bossForm - 1) * 0.3) + pulse * bW * 0.3;
@@ -2044,8 +2052,8 @@ export class Renderer {
         centerY,
         auraR,
       );
-      auraGrad.addColorStop(0, "rgba(80,0,30,0.15)");
-      auraGrad.addColorStop(0.6, "rgba(40,0,15,0.06)");
+      auraGrad.addColorStop(0, `rgba(120,0,50,${0.18 + bossForm * 0.04})`);
+      auraGrad.addColorStop(0.6, `rgba(60,0,25,${0.08 + bossForm * 0.02})`);
       auraGrad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = auraGrad;
       ctx.beginPath();
@@ -2054,7 +2062,7 @@ export class Renderer {
       ctx.restore();
 
       // Shadow/cape mass behind body
-      ctx.fillStyle = "#0a0004";
+      ctx.fillStyle = "#1a0010";
       ctx.beginPath();
       ctx.moveTo(screenX - bW * 1.1, bTop + torsoH * 0.1);
       ctx.quadraticCurveTo(
@@ -2072,9 +2080,13 @@ export class Renderer {
       );
       ctx.closePath();
       ctx.fill();
+      // Cape rim glow
+      ctx.strokeStyle = `rgba(255,0,100,${0.12 + pulse * 0.08})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
       // Main body
-      ctx.fillStyle = darkColor;
+      ctx.fillStyle = bossDarkColor;
       ctx.beginPath();
       ctx.moveTo(screenX - bW * 0.85, bTop + breathe);
       ctx.lineTo(screenX - bW, bTop + torsoH * 0.15 + breathe);
@@ -2084,9 +2096,13 @@ export class Renderer {
       ctx.lineTo(screenX + bW * 0.85, bTop + breathe);
       ctx.closePath();
       ctx.fill();
+      // Body edge highlight
+      ctx.strokeStyle = `rgba(255,80,160,${0.2 + pulse * 0.1})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
       // Chest armor plate
-      ctx.fillStyle = baseColor;
+      ctx.fillStyle = bossBaseColor;
       ctx.beginPath();
       ctx.moveTo(screenX - bW * 0.7, bTop + torsoH * 0.08 + breathe);
       ctx.lineTo(screenX - bW * 0.8, bTop + torsoH * 0.2 + breathe);
@@ -2098,7 +2114,7 @@ export class Renderer {
       ctx.closePath();
       ctx.fill();
       // Armor ribbing
-      ctx.strokeStyle = hitFlash ? "#ff8888" : "#660033";
+      ctx.strokeStyle = hitFlash ? "#ff8888" : bossAccent;
       ctx.lineWidth = 1;
       for (let r = 0; r < 5; r++) {
         const ry = bTop + torsoH * (0.2 + r * 0.12) + breathe;
@@ -2108,7 +2124,7 @@ export class Renderer {
         ctx.stroke();
       }
       // Center chest seam
-      ctx.strokeStyle = hitFlash ? "#ff8888" : "#880044";
+      ctx.strokeStyle = hitFlash ? "#ff8888" : formAccents[bossForm - 1];
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(screenX, bTop + torsoH * 0.08 + breathe);
@@ -2142,12 +2158,12 @@ export class Renderer {
         const pW = bW * 0.4;
         const pH = torsoH * 0.25;
         // Base plate
-        ctx.fillStyle = darkColor;
+        ctx.fillStyle = bossDarkColor;
         ctx.beginPath();
         ctx.arc(sx + side * pW * 0.2, sy + pH * 0.4, pW * 0.55, 0, Math.PI * 2);
         ctx.fill();
         // Outer armor shell
-        ctx.fillStyle = baseColor;
+        ctx.fillStyle = bossBaseColor;
         ctx.beginPath();
         ctx.ellipse(
           sx + side * pW * 0.15,
@@ -2160,7 +2176,7 @@ export class Renderer {
         );
         ctx.fill();
         // Edge highlight
-        ctx.strokeStyle = hitFlash ? "#ffcccc" : "#aa0055";
+        ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.ellipse(
@@ -2174,7 +2190,7 @@ export class Renderer {
         );
         ctx.stroke();
         // Spikes
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#550028";
+        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
         // Main spike
         ctx.beginPath();
         ctx.moveTo(sx + side * pW * 0.2, sy + pH * 0.1);
@@ -2204,7 +2220,7 @@ export class Renderer {
       const headCX = screenX;
       const headCY = headTop + headH * 0.5;
       // Neck
-      ctx.fillStyle = darkColor;
+      ctx.fillStyle = bossDarkColor;
       ctx.fillRect(
         screenX - bW * 0.2,
         headTop + headH * 0.7,
@@ -2212,7 +2228,7 @@ export class Renderer {
         torsoH * 0.15,
       );
       // Skull shape
-      ctx.fillStyle = darkColor;
+      ctx.fillStyle = bossDarkColor;
       ctx.beginPath();
       ctx.moveTo(headCX - headW * 0.8, headCY + headH * 0.15);
       ctx.quadraticCurveTo(
@@ -2247,7 +2263,7 @@ export class Renderer {
       );
       ctx.fill();
       // Helmet plate
-      ctx.fillStyle = baseColor;
+      ctx.fillStyle = bossBaseColor;
       ctx.beginPath();
       ctx.moveTo(headCX - headW * 0.65, headCY - headH * 0.1);
       ctx.quadraticCurveTo(
@@ -2270,7 +2286,7 @@ export class Renderer {
       );
       ctx.fill();
       // Center ridge
-      ctx.strokeStyle = hitFlash ? "#ffcccc" : "#880044";
+      ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(headCX, headCY - headH * 0.5);
@@ -2281,7 +2297,7 @@ export class Renderer {
       const drawHorn = (side, length, curve, thickness) => {
         const hx = headCX + side * headW * 0.5;
         const hy = headCY - headH * 0.35;
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#440020";
+        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#773344";
         ctx.beginPath();
         ctx.moveTo(hx - thickness, hy);
         ctx.quadraticCurveTo(
@@ -2299,7 +2315,7 @@ export class Renderer {
         );
         ctx.fill();
         // Horn ridges
-        ctx.strokeStyle = hitFlash ? "#ff8888" : "#330015";
+        ctx.strokeStyle = hitFlash ? "#ff8888" : "#553322";
         ctx.lineWidth = 0.8;
         for (let rr = 0; rr < 3; rr++) {
           const t = 0.2 + rr * 0.25;
@@ -2337,7 +2353,7 @@ export class Renderer {
       // Center horn (taller)
       const chx = headCX;
       const chy = headCY - headH * 0.45;
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#550028";
+      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#883344";
       ctx.beginPath();
       ctx.moveTo(chx - 3.5, chy);
       ctx.quadraticCurveTo(
@@ -2434,7 +2450,7 @@ export class Renderer {
       const jawY = headCY + headH * 0.2;
       const jawOpen = 1.5 + Math.sin(time * 0.003) * 1.5;
       // Upper jaw
-      ctx.fillStyle = darkColor;
+      ctx.fillStyle = bossDarkColor;
       ctx.beginPath();
       ctx.moveTo(headCX - headW * 0.5, jawY);
       ctx.lineTo(headCX - headW * 0.55, jawY + headH * 0.15);
@@ -2442,7 +2458,7 @@ export class Renderer {
       ctx.lineTo(headCX + headW * 0.5, jawY);
       ctx.fill();
       // Lower jaw
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#220010";
+      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#441122";
       ctx.beginPath();
       ctx.moveTo(headCX - headW * 0.45, jawY + headH * 0.15 + jawOpen);
       ctx.quadraticCurveTo(
@@ -2514,7 +2530,7 @@ export class Renderer {
         const handX = screenX + side * bW * 0.9;
         const handY = bBot + halfH * 0.15;
         // Upper arm
-        ctx.strokeStyle = darkColor;
+        ctx.strokeStyle = bossDarkColor;
         ctx.lineWidth = bW * 0.22;
         ctx.lineCap = "round";
         ctx.beginPath();
@@ -2522,28 +2538,28 @@ export class Renderer {
         ctx.quadraticCurveTo(elbX, elbY, handX, handY);
         ctx.stroke();
         // Armor on upper arm
-        ctx.strokeStyle = baseColor;
+        ctx.strokeStyle = bossBaseColor;
         ctx.lineWidth = bW * 0.15;
         ctx.beginPath();
         ctx.moveTo(shX, shY + torsoH * 0.05);
         ctx.lineTo(elbX * 0.7 + shX * 0.3, (shY + elbY) * 0.5);
         ctx.stroke();
         // Elbow spike
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#550028";
+        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
         ctx.beginPath();
         ctx.moveTo(elbX, elbY - bW * 0.05);
         ctx.lineTo(elbX + side * bW * 0.2, elbY - halfH * 0.08);
         ctx.lineTo(elbX, elbY + bW * 0.05);
         ctx.fill();
         // Forearm armor
-        ctx.strokeStyle = baseColor;
+        ctx.strokeStyle = bossBaseColor;
         ctx.lineWidth = bW * 0.13;
         ctx.beginPath();
         ctx.moveTo(elbX, elbY);
         ctx.lineTo((elbX + handX) * 0.5, (elbY + handY) * 0.5);
         ctx.stroke();
         // Clawed hand
-        ctx.fillStyle = darkColor;
+        ctx.fillStyle = bossDarkColor;
         ctx.beginPath();
         ctx.arc(handX, handY, bW * 0.12, 0, Math.PI * 2);
         ctx.fill();
@@ -2569,7 +2585,7 @@ export class Renderer {
       drawArm(1);
 
       // Belt / midsection
-      ctx.fillStyle = hitFlash ? "#666666" : "#1a000a";
+      ctx.fillStyle = hitFlash ? "#666666" : "#331118";
       ctx.fillRect(
         screenX - bW * 0.85,
         bBot - torsoH * 0.12,
@@ -2577,7 +2593,7 @@ export class Renderer {
         torsoH * 0.08,
       );
       // Buckle
-      ctx.fillStyle = baseColor;
+      ctx.fillStyle = bossBaseColor;
       ctx.beginPath();
       ctx.arc(screenX, bBot - torsoH * 0.08, bW * 0.08, 0, Math.PI * 2);
       ctx.fill();
@@ -2596,7 +2612,7 @@ export class Renderer {
         const footY = bBot + halfH * 0.5;
         const legW = bW * 0.25;
         // Upper leg
-        ctx.fillStyle = darkColor;
+        ctx.fillStyle = bossDarkColor;
         ctx.beginPath();
         ctx.moveTo(hipX - legW, hipY);
         ctx.lineTo(kneeX - legW * 0.8, kneeY);
@@ -2604,19 +2620,19 @@ export class Renderer {
         ctx.lineTo(hipX + legW, hipY);
         ctx.fill();
         // Knee armor
-        ctx.fillStyle = baseColor;
+        ctx.fillStyle = bossBaseColor;
         ctx.beginPath();
         ctx.arc(kneeX, kneeY, legW * 0.7, 0, Math.PI * 2);
         ctx.fill();
         // Knee spike
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#550028";
+        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
         ctx.beginPath();
         ctx.moveTo(kneeX + side * legW * 0.4, kneeY - legW * 0.3);
         ctx.lineTo(kneeX + side * legW * 1.2, kneeY);
         ctx.lineTo(kneeX + side * legW * 0.4, kneeY + legW * 0.3);
         ctx.fill();
         // Shin
-        ctx.fillStyle = darkColor;
+        ctx.fillStyle = bossDarkColor;
         ctx.beginPath();
         ctx.moveTo(kneeX - legW * 0.7, kneeY);
         ctx.lineTo(footX - legW * 0.9, footY);
@@ -2624,7 +2640,7 @@ export class Renderer {
         ctx.lineTo(kneeX + legW * 0.7, kneeY);
         ctx.fill();
         // Shin guard
-        ctx.fillStyle = baseColor;
+        ctx.fillStyle = bossBaseColor;
         ctx.fillRect(
           kneeX - legW * 0.4,
           kneeY + legW * 0.3,

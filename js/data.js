@@ -85,7 +85,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "hero",
       lines: [
         {
-          text: "You are the last Temporal Agent.",
+          text: "You are {AGENT} — the last Temporal Agent.",
           delay: 0,
           color: "#00ffcc",
           size: 20,
@@ -157,6 +157,31 @@ export const CUTSCENE_SCRIPTS = {
       art: "rift",
       particles: "embers",
       duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "A whisper in the back of your mind. ARIA.",
+          delay: 0,
+          color: "#8899aa",
+          size: 15,
+        },
+        {
+          text: '"I\'m reading temporal fluctuations off the charts in there."',
+          delay: 2000,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: '"Try not to die. I\'m starting to like having someone to talk to."',
+          delay: 4200,
+          color: "#00ffdd",
+          size: 14,
+        },
+      ],
+      duration: 6500,
     },
   ],
 
@@ -472,19 +497,19 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#ff0000",
       lines: [
         {
-          text: '"THIS ISN\'T EVEN MY FINAL FORM."',
+          text: '"YOU DARE CHALLENGE ME?"',
           delay: 0,
           color: "#ff2244",
           size: 22,
         },
         {
-          text: '"I have THREE. And trust me..."',
+          text: '"You have no idea what you\'re walking into..."',
           delay: 1800,
           color: "#ff4466",
           size: 16,
         },
         {
-          text: '"the bigger they are is NOT how this works."',
+          text: '"But by all means — try."',
           delay: 3400,
           color: "#ff6644",
           size: 15,
@@ -493,6 +518,31 @@ export const CUTSCENE_SCRIPTS = {
       shake: 3,
       particles: "embers",
       duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "ARIA's voice cuts through the static. Quieter now. Almost... concerned.",
+          delay: 0,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: '"Hey. I know that look. Don\'t you dare give up on me."',
+          delay: 2200,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: '"We didn\'t come this far for you to die looking dramatic."',
+          delay: 4500,
+          color: "#00ffdd",
+          size: 15,
+        },
+      ],
+      duration: 7000,
     },
     {
       bg: "boss_lair",
@@ -681,6 +731,37 @@ export const CUTSCENE_SCRIPTS = {
         },
       ],
       duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "Fading. Everything fading. But then—",
+          delay: 0,
+          color: "#445566",
+          size: 14,
+        },
+        {
+          text: '"Don\'t you DARE flatline on me."',
+          delay: 2000,
+          color: "#00ffdd",
+          size: 18,
+        },
+        {
+          text: '"I\'m rerouting emergency power. Stay with me."',
+          delay: 4000,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: '"...please."',
+          delay: 6000,
+          color: "#00aabb",
+          size: 16,
+        },
+      ],
+      duration: 8000,
     },
     {
       bg: "dark",
@@ -2445,7 +2526,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "hero_human",
       lines: [
         {
-          text: "Unmarked crate from R&D. Your name's on it.",
+          text: "Unmarked crate from R&D. Your name is on it.",
           delay: 0,
           color: "#8899aa",
           size: 16,
@@ -2503,7 +2584,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 12,
         },
         {
-          text: '"Good morning. — I\'m ARIA, your tactical co-pilot."',
+          text: '"Good morning, {AGENT}. — I\'m ARIA, your tactical co-pilot."',
           delay: 1800,
           color: "#00ffdd",
           size: 17,
@@ -2525,6 +2606,62 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: '"Your heart rate just spiked. Nervous?"',
+          delay: 0,
+          color: "#00ffdd",
+          size: 17,
+        },
+        {
+          text: "...was she flirting? No. She's an AI. Focus.",
+          delay: 2200,
+          color: "#8899aa",
+          size: 15,
+        },
+        {
+          text: '"I can hear you thinking. Relax — I\'m on your side."',
+          delay: 4500,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: "\"Besides... you're the best candidate they've sent me, {AGENT}. Don't prove them wrong.\"",
+          delay: 7000,
+          color: "#00ffdd",
+          size: 14,
+        },
+      ],
+      duration: 10000,
+    },
+    {
+      bg: "dark",
+      art: "hero",
+      lines: [
+        {
+          text: "Great. A voice in your head with opinions.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
+        },
+        {
+          text: 'ARIA: "I also have excellent taste. You\'re welcome."',
+          delay: 2200,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: "Okay. Maybe this won't be so bad.",
+          delay: 4500,
+          color: "#8899aa",
+          size: 16,
+        },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "dark",
       art: "hero_armed",
       flash: "#00ccff",
       lines: [
@@ -2535,7 +2672,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "ARIA: \"Calibrated to the armor's servo profile. You'll sprint faster,",
+          text: "ARIA: \"Calibrated to your servo profile. You'll sprint faster,",
           delay: 2000,
           color: "#00ffdd",
           size: 15,
@@ -2709,7 +2846,7 @@ export const ARIA_COMMS = {
   // ── Health warnings ──
   lowHealth: [
     "Biometrics critical — find cover, now.",
-    "Your vitals are dropping. I'm not losing you on day one.",
+    "Your vitals are dropping. I'm not losing you on day one, {AGENT}.",
     "Armor integrity failing. Move!",
     "Hey. HEY. We talked about this — don't die.",
     "I can see your heart rate from here. Breathe. Find health.",
@@ -2763,7 +2900,7 @@ export const ARIA_COMMS = {
   ],
   levelComplete: [
     "Objective achieved. Marking safe passage.",
-    "That sector is clear. Well done, partner.",
+    "That sector is clear. Well done, {AGENT}.",
     "Level cleared. We make a good team.",
     "Exit secured. Onward.",
   ],
@@ -2783,7 +2920,7 @@ export const ARIA_COMMS = {
   bossForm3: [
     "Final form. This is it — everything we've got.",
     "Third transformation. It's pulling energy from the rift itself.",
-    "Last round. I believe in you. Don't make me regret it.",
+    "Last round. I believe in you, {AGENT}. Don't make me regret it.",
   ],
 
   // ── Player death ──
@@ -2856,8 +2993,8 @@ export const ARIA_COMMS = {
 
   // ── Personality moments — ARIA being ARIA ──
   ariaPersonality: [
-    "I know I'm 'just' the suit AI but... we're going to win this. Together.",
-    "For the record, if I had a body, I'd be right next to you.",
+    "I know I'm 'just' the suit AI but... we're going to win this, {AGENT}. Together.",
+    "For the record, if I had a body, I'd be right next to you, {AGENT}.",
     "Most of my runtime is combat analysis. The rest? Worrying about you.",
     "They named me ARIA — Armor-Resident Intelligence Assistant. I prefer 'partner.'",
     "My predecessor was decommissioned for being 'too attached' to their agent. I see why.",

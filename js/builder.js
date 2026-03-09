@@ -67,6 +67,8 @@ export class BuilderMode {
     this.pitch = 0;
     this.layer = 0;
     this.height = 0;
+    this.verticalVelocity = 0;
+    this.grounded = true;
     this.active = false;
 
     // Undo / redo history
@@ -139,6 +141,8 @@ export class BuilderMode {
     this.pitch = 0;
     this.layer = 0;
     this.height = 0;
+    this.verticalVelocity = 0;
+    this.grounded = true;
     this.active = true;
     this.toolMode = "block";
     this.history = [];
@@ -343,11 +347,42 @@ export class BuilderMode {
       my += dx;
     }
 
-    // Vertical movement
-    const riseSpeed = RISE_SPEED * dt;
-    if (this.keys["Space"]) this.height = Math.min(5, this.height + riseSpeed);
-    if (this.keys["ControlLeft"] || this.keys["ControlRight"])
-      this.height = Math.max(-2, this.height - riseSpeed);
+    // Vertical movement — jump physics when not noclip, free-fly when noclip
+    if (this.noclip) {
+      const riseSpeed = RISE_SPEED * dt;
+      if (this.keys["Space"])
+        this.height = Math.min(5, this.height + riseSpeed);
+      if (this.keys["ControlLeft"] || this.keys["ControlRight"])
+        this.height = Math.max(-2, this.height - riseSpeed);
+    } else {
+      // Ground level based on heightMap at player's cell
+      const gx = Math.floor(this.player.x);
+      const gy = Math.floor(this.player.y);
+      let groundLevel = 0;
+      if (
+        this.map.heightMap &&
+        gx >= 0 &&
+        gy >= 0 &&
+        gx < this.map.width &&
+        gy < this.map.height
+      ) {
+        groundLevel = this.map.heightMap[gy][gx] * 0.7;
+      }
+      // Jump
+      if (this.keys["Space"] && this.grounded) {
+        this.verticalVelocity = 5.5;
+        this.grounded = false;
+      }
+      // Gravity
+      this.verticalVelocity -= 12.0 * dt;
+      this.height += this.verticalVelocity * dt;
+      // Land on surface
+      if (this.height <= groundLevel) {
+        this.height = groundLevel;
+        this.verticalVelocity = 0;
+        this.grounded = true;
+      }
+    }
 
     const len = Math.sqrt(mx * mx + my * my);
     if (len > 0) {
@@ -772,6 +807,7 @@ export class BuilderMode {
   _saveCurrentMap() {
     try {
       const data = {
+        version: 2,
         name: this.map.name,
         width: this.map.width,
         height: this.map.height,
@@ -813,11 +849,12 @@ export class BuilderMode {
         }
       }
       return {
+        version: data.version || 0,
         name: data.name || "My Creation",
         width: data.width,
         height: data.height,
         grid: data.grid,
-        layers: data.layers || null,
+        layers: data.version >= 2 ? data.layers || null : null,
         playerStart: data.playerStart || {
           x: data.width / 2 + 0.5,
           y: data.height / 2 + 0.5,
@@ -1080,8 +1117,8 @@ export class BuilderMode {
         "T \u2014 Tool (Block/Spawn)",
         "[ / ] \u2014 FOV -/+",
         ", / . \u2014 Prev/Next Map",
-        "Space \u2014 Rise",
-        "Ctrl \u2014 Lower",
+        "Space \u2014 Jump (Fly in Noclip)",
+        "Ctrl \u2014 Lower (Noclip)",
         "R \u2014 Reset Pitch",
         "N \u2014 Noclip",
         "Tab \u2014 Overhead",
@@ -1503,13 +1540,15 @@ export class BuilderMode {
       }
     }
     if (!this.map.layers) {
+      // When rebuilding layers from a flat grid, copy walls to ALL layers
+      // so they render at full height (5/5) instead of 20% stubs.
       this.map.layers = [];
       for (let l = 0; l < NUM_LAYERS; l++) {
         const layer = [];
         for (let y = 0; y < this.map.height; y++) {
           const row = [];
           for (let x = 0; x < this.map.width; x++) {
-            row.push(l === 0 ? this.map.grid[y][x] : 0);
+            row.push(this.map.grid[y][x]);
           }
           layer.push(row);
         }

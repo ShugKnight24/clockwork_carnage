@@ -1,11 +1,18 @@
 import { CUTSCENE_SCRIPTS } from "./data.js";
 
 export class CutsceneEngine {
-  constructor({ audio, getKeys, getTouchControls, isTouchDevice }) {
+  constructor({
+    audio,
+    getKeys,
+    getTouchControls,
+    isTouchDevice,
+    getPlayerName,
+  }) {
     this.audio = audio;
     this.getKeys = getKeys;
     this.getTouchControls = getTouchControls;
     this.isTouchDevice = isTouchDevice;
+    this.getPlayerName = getPlayerName || (() => "Agent");
     this.cutscene = null;
   }
 
@@ -154,6 +161,7 @@ export class CutsceneEngine {
 
     const elapsed = performance.now() - cs.frameStart;
     const t = elapsed / 1000; // seconds
+    const s = h / 900; // responsive scale factor
 
     // === Comic panel layout ===
     if (frame.panels) {
@@ -187,10 +195,13 @@ export class CutsceneEngine {
     for (const p of cs.particles) {
       ctx.globalAlpha = p.alpha * 0.8;
       ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = p.size * s * 3;
       ctx.beginPath();
-      ctx.arc(p.x * w, p.y * h, p.size, 0, Math.PI * 2);
+      ctx.arc(p.x * w, p.y * h, p.size * s, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     // === Art ===
@@ -207,39 +218,52 @@ export class CutsceneEngine {
     if (frame.lines) {
       const centerY = frame.art ? h * 0.72 : h * 0.4;
       let lineY = centerY;
+      const textPad = Math.round(30 * s);
+      const textLineH = Math.round(36 * s);
 
       // Text backdrop gradient
       if (frame.art) {
         const tbg = ctx.createLinearGradient(
           0,
-          centerY - 30,
+          centerY - textPad,
           0,
-          centerY + frame.lines.length * 36,
+          centerY + frame.lines.length * textLineH,
         );
         tbg.addColorStop(0, "rgba(0,0,10,0)");
         tbg.addColorStop(0.15, "rgba(0,0,10,0.65)");
         tbg.addColorStop(0.85, "rgba(0,0,10,0.65)");
         tbg.addColorStop(1, "rgba(0,0,10,0)");
         ctx.fillStyle = tbg;
-        ctx.fillRect(0, centerY - 30, w, frame.lines.length * 36 + 30);
+        ctx.fillRect(
+          0,
+          centerY - textPad,
+          w,
+          frame.lines.length * textLineH + textPad,
+        );
       }
 
       for (const line of frame.lines) {
         const lineElapsed = elapsed - line.delay;
         if (lineElapsed < 0) continue;
 
+        // Template variable substitution
+        const resolvedText = line.text.replace(
+          /\{AGENT\}/g,
+          this.getPlayerName(),
+        );
+
         // Typewriter
         const charsPerSec = 40;
         const visibleChars = Math.min(
-          line.text.length,
+          resolvedText.length,
           Math.floor((lineElapsed / 1000) * charsPerSec),
         );
-        const displayText = line.text.substring(0, visibleChars);
-        const typing = visibleChars < line.text.length;
+        const displayText = resolvedText.substring(0, visibleChars);
+        const typing = visibleChars < resolvedText.length;
 
         // Fade in
         const fadeIn = Math.min(1, lineElapsed / 400);
-        const sz = line.size || 16;
+        const sz = Math.round((line.size || 16) * s);
 
         ctx.globalAlpha = fadeIn;
         ctx.font = `bold ${sz}px monospace`;
@@ -258,19 +282,34 @@ export class CutsceneEngine {
 
           ctx.save();
           ctx.shadowColor = line.color || "#00ffcc";
-          ctx.shadowBlur = 6;
+          ctx.shadowBlur = 6 * s;
+          // Text outline for readability
+          ctx.strokeStyle = "rgba(0,0,0,0.6)";
+          ctx.lineWidth = Math.max(1, 2.5 * s);
+          ctx.strokeText(speakerName, w / 2 - totalW / 2 + nameW / 2, lineY);
           ctx.fillStyle = line.color || "#00ffcc";
           ctx.fillText(speakerName, w / 2 - totalW / 2 + nameW / 2, lineY);
           ctx.shadowBlur = 0;
           ctx.restore();
 
+          ctx.strokeStyle = "rgba(0,0,0,0.5)";
+          ctx.lineWidth = Math.max(1, 2 * s);
+          ctx.strokeText(
+            restText,
+            w / 2 - totalW / 2 + nameW + restW / 2,
+            lineY,
+          );
           ctx.fillStyle = "#dde4f0";
           ctx.fillText(restText, w / 2 - totalW / 2 + nameW + restW / 2, lineY);
         } else {
           // Normal text with subtle glow
           ctx.save();
           ctx.shadowColor = line.color || "#88bbff";
-          ctx.shadowBlur = typing ? 10 : 4;
+          ctx.shadowBlur = (typing ? 10 : 4) * s;
+          // Text outline for readability
+          ctx.strokeStyle = "rgba(0,0,0,0.5)";
+          ctx.lineWidth = Math.max(1, 2 * s);
+          ctx.strokeText(displayText, w / 2, lineY);
           ctx.fillStyle = line.color || "#ffffff";
           ctx.fillText(displayText, w / 2, lineY);
           ctx.shadowBlur = 0;
@@ -283,11 +322,16 @@ export class CutsceneEngine {
           ctx.globalAlpha = 0.3 + cursorPhase * 0.6;
           const textW = ctx.measureText(displayText).width;
           ctx.fillStyle = line.color || "#00ffcc";
-          ctx.fillRect(w / 2 + textW / 2 + 3, lineY - sz + 4, 2, sz);
+          ctx.fillRect(
+            w / 2 + textW / 2 + 3 * s,
+            lineY - sz + 4 * s,
+            Math.max(1, 2 * s),
+            sz,
+          );
         }
 
         ctx.globalAlpha = 1;
-        lineY += sz + 14;
+        lineY += sz + Math.round(14 * s);
       }
     }
 
@@ -295,7 +339,13 @@ export class CutsceneEngine {
       ctx.restore();
     }
 
-    // === Vignette overlay ===
+    // === Vignette overlay (tinted per scene) ===
+    const vignTint =
+      frame.bg === "boss_lair"
+        ? "8,0,0"
+        : frame.bg === "station"
+          ? "0,0,8"
+          : "0,0,8";
     const vign = ctx.createRadialGradient(
       w / 2,
       h / 2,
@@ -305,7 +355,7 @@ export class CutsceneEngine {
       h * 0.85,
     );
     vign.addColorStop(0, "rgba(0,0,0,0)");
-    vign.addColorStop(1, "rgba(0,0,8,0.45)");
+    vign.addColorStop(1, `rgba(${vignTint},0.5)`);
     ctx.fillStyle = vign;
     ctx.fillRect(0, 0, w, h);
 
@@ -342,8 +392,8 @@ export class CutsceneEngine {
 
     // === Progress indicator (connected dots) ===
     const frameCount = cs.script.length;
-    const dotSize = 6;
-    const dotGap = 14;
+    const dotSize = Math.round(6 * s);
+    const dotGap = Math.round(14 * s);
     const dotsW = frameCount * dotGap;
     const dotsX = (w - dotsW) / 2;
 
@@ -397,14 +447,14 @@ export class CutsceneEngine {
     // === Skip prompt ===
     const skipAlpha = 0.3 + 0.15 * Math.sin(elapsed / 500);
     ctx.fillStyle = `rgba(255,255,255,${skipAlpha})`;
-    ctx.font = "12px monospace";
+    ctx.font = `${Math.round(12 * s)}px monospace`;
     ctx.textAlign = "right";
     ctx.fillText(
       this.isTouchDevice
         ? "Tap to continue  ·  Hold to skip"
         : "[ENTER] continue  ·  [ESC] skip",
-      w - 20,
-      h - barHeight / 2 + 4,
+      w - Math.round(20 * s),
+      h - barHeight / 2 + Math.round(4 * s),
     );
 
     // === Hold-to-skip progress bar ===
@@ -413,22 +463,22 @@ export class CutsceneEngine {
         1,
         (performance.now() - cs.skipHeldStart) / 1000,
       );
-      const skipBarW = 120;
-      const skipBarH = 4;
-      const skipBarX = w - 20 - skipBarW;
-      const skipBarY = h - barHeight / 2 + 12;
+      const skipBarW = Math.round(120 * s);
+      const skipBarH = Math.round(4 * s);
+      const skipBarX = w - Math.round(20 * s) - skipBarW;
+      const skipBarY = h - barHeight / 2 + Math.round(12 * s);
       ctx.fillStyle = "rgba(255,255,255,0.2)";
       ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarH);
       ctx.fillStyle = "#00ffcc";
       ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarH);
       ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "10px monospace";
+      ctx.font = `${Math.round(10 * s)}px monospace`;
       ctx.fillText(
         this.isTouchDevice
           ? "Hold to skip all..."
           : "Hold SPACE to skip all...",
-        w - 20,
-        skipBarY + 16,
+        w - Math.round(20 * s),
+        skipBarY + Math.round(16 * s),
       );
     }
 
@@ -438,6 +488,7 @@ export class CutsceneEngine {
   // ── Comic Book Panel Renderer ───────────────────────────────────
   renderComicPanels(ctx, w, h, frame, elapsed, t) {
     const cs = this.cutscene;
+    const s = h / 900; // responsive scale factor
 
     // Page background — vintage paper
     const paperGrad = ctx.createRadialGradient(
@@ -454,15 +505,15 @@ export class CutsceneEngine {
     ctx.fillStyle = paperGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Constrain comic page area on very wide screens
-    const maxPageW = Math.min(w, 1400);
-    const maxPageH = Math.min(h, 900);
+    // Constrain comic page area proportionally
+    const maxPageW = w * 0.94;
+    const maxPageH = h * 0.92;
     const pageX = (w - maxPageW) / 2;
     const pageY = (h - maxPageH) / 2;
 
     const panels = frame.panels;
-    const gutter = 8;
-    const margin = 24;
+    const gutter = Math.round(8 * s);
+    const margin = Math.round(24 * s);
     const panelDelay = 800;
 
     for (let i = 0; i < panels.length; i++) {
@@ -589,10 +640,10 @@ export class CutsceneEngine {
       ctx.translate(-cx, -cy);
 
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = Math.max(1, 3 * s);
       ctx.strokeRect(px, py, pw, ph);
       ctx.strokeStyle = "rgba(0,200,255,0.15)";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = Math.max(1, s);
       ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
 
       // Caption box text
@@ -602,7 +653,7 @@ export class CutsceneEngine {
           const capFade = Math.min(1, captionElapsed / 400);
           const capBg = panel.captionBg || "rgba(0,0,0,0.85)";
           const capColor = panel.captionColor || "#ffffff";
-          const capSize = panel.captionSize || 12;
+          const capSize = Math.round((panel.captionSize || 12) * s);
           const capPos = panel.captionPos || "bottom";
 
           ctx.font = `bold ${capSize}px monospace`;
@@ -664,7 +715,7 @@ export class CutsceneEngine {
             ctx.translate(sfxX, sfxY);
             ctx.scale(sfxScale, sfxScale);
             ctx.rotate(((panel.sfxRot || 0) * Math.PI) / 180);
-            ctx.font = `bold ${panel.sfxSize || 28}px monospace`;
+            ctx.font = `bold ${Math.round((panel.sfxSize || 28) * s)}px monospace`;
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = 4;
             ctx.textAlign = "center";
@@ -703,19 +754,23 @@ export class CutsceneEngine {
 
     // === Frame page number ===
     ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = "italic 11px monospace";
+    ctx.font = `italic ${Math.round(11 * s)}px monospace`;
     ctx.textAlign = "right";
     ctx.fillText(
       `${cs.frame + 1} / ${cs.script.length}`,
-      w - 16,
-      h - barH / 2 + 4,
+      w - Math.round(16 * s),
+      h - barH / 2 + Math.round(4 * s),
     );
 
     // === Skip prompt ===
     const skipAlpha = 0.3 + 0.1 * Math.sin(elapsed / 500);
     ctx.fillStyle = `rgba(255,255,255,${skipAlpha})`;
-    ctx.font = "12px monospace";
-    ctx.fillText("[ENTER] next  ·  [ESC] skip", w - 240, barH / 2 + 4);
+    ctx.font = `${Math.round(12 * s)}px monospace`;
+    ctx.fillText(
+      "[ENTER] next  ·  [ESC] skip",
+      w - Math.round(240 * s),
+      barH / 2 + Math.round(4 * s),
+    );
 
     // === Hold-to-skip progress bar ===
     if (cs.skipHeldStart > 0) {
@@ -723,23 +778,28 @@ export class CutsceneEngine {
         1,
         (performance.now() - cs.skipHeldStart) / 1000,
       );
-      const skipBarW = 120;
-      const skipBarBH = 4;
-      const skipBarX = w - 240;
-      const skipBarY = barH / 2 + 12;
+      const skipBarW = Math.round(120 * s);
+      const skipBarBH = Math.round(4 * s);
+      const skipBarX = w - Math.round(240 * s);
+      const skipBarY = barH / 2 + Math.round(12 * s);
       ctx.fillStyle = "rgba(255,255,255,0.2)";
       ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarBH);
       ctx.fillStyle = "#00ffcc";
       ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarBH);
       ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "10px monospace";
-      ctx.fillText("Hold SPACE to skip all...", w - 240, skipBarY + 16);
+      ctx.font = `${Math.round(10 * s)}px monospace`;
+      ctx.fillText(
+        "Hold SPACE to skip all...",
+        w - Math.round(240 * s),
+        skipBarY + Math.round(16 * s),
+      );
     }
 
     ctx.textAlign = "left";
   }
 
   drawScannerEffect(ctx, w, h, t) {
+    const s = h / 900; // responsive scale factor
     // Power-level scanner: climbs to ~9000, then ROCKETS off the page
     const rampDur = 3.5; // seconds to reach ~9000
     const blowoffStart = rampDur; // when it goes ballistic
@@ -774,7 +834,9 @@ export class CutsceneEngine {
     ctx.save();
     const rainAlpha = isBlowoff ? 0.25 + 0.4 * blowProg : 0.15 + 0.1 * eased;
     ctx.globalAlpha = rainAlpha;
-    const rainFont = isBlowoff ? 14 + Math.floor(blowProg * 10) : 14;
+    const rainFont = Math.round(
+      (isBlowoff ? 14 + Math.floor(blowProg * 10) : 14) * s,
+    );
     ctx.font = `${rainFont}px monospace`;
     const cols = 18;
     for (let c = 0; c < cols; c++) {
@@ -809,16 +871,16 @@ export class CutsceneEngine {
     let fontSize;
     if (isBlowoff) {
       // Font grows massive — rockets off the page
-      fontSize = Math.round(68 + blowProg * 120);
+      fontSize = Math.round((68 + blowProg * 120) * s);
     } else {
-      fontSize = Math.round(48 * pulse + 20 * eased);
+      fontSize = Math.round((48 * pulse + 20 * eased) * s);
     }
 
     ctx.save();
     ctx.textAlign = "center";
 
     // Counter label
-    ctx.font = "bold 14px monospace";
+    ctx.font = `bold ${Math.round(14 * s)}px monospace`;
     if (isBlowoff) {
       // Label glitches and fades
       const labelAlpha = Math.max(0, 1 - blowProg * 2);
@@ -869,7 +931,7 @@ export class CutsceneEngine {
       // Overflow symbol when it gets too big to read
       if (blowProg > 0.7) {
         const oAlpha = (blowProg - 0.7) / 0.3;
-        ctx.font = `bold ${Math.round(80 + oAlpha * 60)}px monospace`;
+        ctx.font = `bold ${Math.round((80 + oAlpha * 60) * s)}px monospace`;
         ctx.fillStyle = `rgba(255,255,255,${oAlpha * 0.9})`;
         ctx.fillText(
           "∞",
@@ -986,6 +1048,56 @@ export class CutsceneEngine {
         grad.addColorStop(1, "#000005");
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
+
+        // Star field with twinkling
+        for (let i = 0; i < 80; i++) {
+          const seed = i * 127.1 + 7.3;
+          const sx = (Math.sin(seed) * 0.5 + 0.5) * w;
+          const sy = (Math.cos(seed * 1.3) * 0.5 + 0.5) * h;
+          const twinkle =
+            0.3 + 0.7 * Math.abs(Math.sin(t * (0.5 + (i % 5) * 0.3) + seed));
+          const starSize = i % 3 === 0 ? 2 : 1;
+          ctx.fillStyle = `rgba(200,220,255,${twinkle * 0.6})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, starSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Nebula cloud
+        const nebula = ctx.createRadialGradient(
+          w * 0.7,
+          h * 0.3,
+          0,
+          w * 0.7,
+          h * 0.3,
+          w * 0.3,
+        );
+        nebula.addColorStop(
+          0,
+          `rgba(40,10,80,${0.15 + 0.05 * Math.sin(t * 0.5)})`,
+        );
+        nebula.addColorStop(0.5, "rgba(20,5,60,0.08)");
+        nebula.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = nebula;
+        ctx.fillRect(0, 0, w, h);
+
+        // Second nebula on opposite side
+        const nebula2 = ctx.createRadialGradient(
+          w * 0.2,
+          h * 0.7,
+          0,
+          w * 0.2,
+          h * 0.7,
+          w * 0.25,
+        );
+        nebula2.addColorStop(
+          0,
+          `rgba(10,30,80,${0.12 + 0.04 * Math.sin(t * 0.7 + 2)})`,
+        );
+        nebula2.addColorStop(0.5, "rgba(5,15,50,0.06)");
+        nebula2.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = nebula2;
+        ctx.fillRect(0, 0, w, h);
         break;
       }
       case "station": {
@@ -1010,6 +1122,27 @@ export class CutsceneEngine {
           ctx.lineTo(w, y);
           ctx.stroke();
         }
+        // Blinking panel lights
+        for (let i = 0; i < 8; i++) {
+          const lx = w * (0.08 + i * 0.12);
+          const ly = h * (0.08 + (i % 3) * 0.12);
+          const blink = Math.sin(t * (2 + i * 0.7) + i * 1.5) > 0.3;
+          if (blink) {
+            ctx.fillStyle = "rgba(0,180,255,0.2)";
+            ctx.shadowColor = "#00aaff";
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.shadowBlur = 0;
+        // Atmospheric haze
+        const haze = ctx.createLinearGradient(0, h * 0.6, 0, h);
+        haze.addColorStop(0, "rgba(0,40,80,0)");
+        haze.addColorStop(1, "rgba(0,40,80,0.12)");
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, 0, w, h);
         break;
       }
       case "boss_lair": {
@@ -1029,16 +1162,42 @@ export class CutsceneEngine {
         // Pulsing energy veins
         ctx.strokeStyle = `rgba(200,30,60,${0.06 + 0.04 * Math.sin(t * 2)})`;
         ctx.lineWidth = 2;
-        for (let i = 0; i < 8; i++) {
-          const angle = (i / 8) * Math.PI * 2 + t * 0.3;
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * Math.PI * 2 + t * 0.3;
           ctx.beginPath();
           ctx.moveTo(w / 2, h / 2);
-          ctx.lineTo(
-            w / 2 + Math.cos(angle) * w * 0.6,
-            h / 2 + Math.sin(angle) * h * 0.6,
+          ctx.quadraticCurveTo(
+            w / 2 + Math.cos(angle + 0.3) * w * 0.3,
+            h / 2 + Math.sin(angle + 0.3) * h * 0.3,
+            w / 2 + Math.cos(angle) * w * 0.7,
+            h / 2 + Math.sin(angle) * h * 0.7,
           );
           ctx.stroke();
         }
+        // Dark floating particles
+        for (let i = 0; i < 20; i++) {
+          const seed = i * 97.3;
+          const px = (Math.sin(seed + t * 0.3) * 0.5 + 0.5) * w;
+          const py = (Math.cos(seed * 0.7 + t * 0.2) * 0.5 + 0.5) * h;
+          const pa = 0.1 + 0.08 * Math.sin(t + seed);
+          ctx.fillStyle = `rgba(200,30,60,${pa})`;
+          ctx.beginPath();
+          ctx.arc(px, py, 2 + Math.sin(seed) * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Menacing fog
+        const fog = ctx.createRadialGradient(
+          w / 2,
+          h * 0.8,
+          0,
+          w / 2,
+          h * 0.8,
+          w * 0.5,
+        );
+        fog.addColorStop(0, `rgba(80,0,20,${0.1 + 0.04 * Math.sin(t * 0.8)})`);
+        fog.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = fog;
+        ctx.fillRect(0, 0, w, h);
         break;
       }
       default: {
@@ -1054,8 +1213,8 @@ export class CutsceneEngine {
     ctx.save();
     ctx.translate(cx, cy);
 
-    // Base scale: make characters larger in all cutscene art
-    const baseScale = 2.0;
+    // Base scale: proportional to screen — characters fill the scene
+    const baseScale = 2.0 * (h / 900);
     ctx.scale(baseScale, baseScale);
 
     switch (art) {
