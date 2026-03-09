@@ -269,9 +269,10 @@ export class TouchControls {
       } else if (touch.identifier === this.lookTouch) {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
-        // Feed into mouse look system (scaled for touch sensitivity)
-        this.game.mouse.dx += dx * 1.5;
-        this.game.mouse.dy += dy * 1.5;
+        // Feed into mouse look system (scaled for touch sensitivity from settings)
+        const touchSens = this.game.settings.touchSensitivity || 1.5;
+        this.game.mouse.dx += dx * touchSens;
+        this.game.mouse.dy += dy * touchSens;
         this.lookLast = { x: touch.clientX, y: touch.clientY };
       }
     }

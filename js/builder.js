@@ -964,7 +964,10 @@ export class BuilderMode {
     // Vertical shift from pitch and layer height — passed to renderer
     const pitchOffset = this.pitch * h * 0.5;
     const heightOffset = this.height * h * 0.15;
-    const yShift = pitchOffset + heightOffset;
+    const yShift = Math.max(
+      -h * 0.4,
+      Math.min(h * 0.4, pitchOffset + heightOffset),
+    );
     this.renderer.renderScene(
       this.player,
       this.map,

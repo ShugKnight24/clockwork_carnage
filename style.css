@@ -13,6 +13,7 @@ body {
   width: 100vw;
   height: 100vh;
   cursor: none;
+  overscroll-behavior: none;
 }
 
 /* Restore cursor on menu screens */
@@ -30,6 +31,7 @@ body {
   height: 100vh;
   display: none;
   image-rendering: pixelated;
+  touch-action: none;
 }
 
 #hudCanvas {
@@ -41,6 +43,7 @@ body {
   display: none;
   pointer-events: none;
   z-index: 10;
+  touch-action: none;
 }
 
 /* Title Screen */
@@ -104,6 +107,13 @@ body {
   animation: blink 1.5s ease-in-out infinite;
 }
 
+#titleScreen .version-label {
+  font-size: 11px;
+  color: rgba(136, 153, 170, 0.5);
+  margin-top: 12px;
+  letter-spacing: 2px;
+}
+
 @keyframes titlePulse {
   0%,
   100% {
@@ -161,7 +171,7 @@ body {
 #modeSelect .mode-buttons {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 30px;
 }
 
@@ -177,6 +187,7 @@ body {
   text-align: left;
   position: relative;
   min-width: 400px;
+  min-height: 44px;
 }
 
 #modeSelect .mode-btn:hover,
@@ -185,7 +196,8 @@ body {
   border-color: #00ffcc;
   color: #00ffcc;
   transform: translateX(5px);
-  outline: none;
+  outline: 2px solid #00ffcc;
+  outline-offset: 2px;
 }
 
 #modeSelect .mode-btn .key-hint {
@@ -194,12 +206,12 @@ body {
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
-  color: #556677;
+  color: #8899aa;
 }
 
 #modeSelect .mode-btn .mode-desc {
-  font-size: 12px;
-  color: #556677;
+  font-size: 13px;
+  color: #8899aa;
   margin-top: 4px;
 }
 
@@ -214,8 +226,9 @@ body {
 #modeSelect .back-btn {
   background: none;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #556677;
+  color: #8899aa;
   font-size: 14px;
+  min-height: 44px;
   font-family: "Courier New", monospace;
   padding: 10px 30px;
   cursor: pointer;
@@ -263,6 +276,7 @@ body {
   text-align: left;
   font-size: 16px;
   padding: 12px 50px;
+  min-height: 44px;
 }
 
 #modeSelect .continue-btn:hover {
@@ -270,6 +284,16 @@ body {
   border-color: #ffdd44;
   color: #ffdd44;
   box-shadow: 0 0 15px rgba(255, 200, 0, 0.12);
+}
+
+#modeSelect .continue-btn:focus-visible {
+  outline: 2px solid #ffdd44;
+  outline-offset: 2px;
+}
+
+#modeSelect .back-btn:focus-visible {
+  outline: 2px solid #8899aa;
+  outline-offset: 2px;
 }
 
 #modeSelect .coming-soon {
@@ -345,5 +369,15 @@ body {
 @media (orientation: portrait) and (hover: none) and (pointer: coarse) {
   #orientationPrompt {
     display: flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
