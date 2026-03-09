@@ -51,6 +51,10 @@ export class Player {
     this.dashDistMult = 1; // multiplier for dash distance/speed
     this.dashStaminaCost = 20; // stamina cost per dash
     this.sprintDrainMult = 1; // multiplier for sprint drain rate
+    // Chrono Shift (player-activated time slow)
+    this.chronoEnergy = 50; // 0–100, starts half-charged
+    this.maxChronoEnergy = 100;
+    this.chronoActive = false;
   }
   getWeaponDef() {
     return WEAPONS[this.weapons[this.currentWeapon]];
