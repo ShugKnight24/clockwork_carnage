@@ -7,6 +7,10 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Clockwork Carnage</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
+    />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css" />
     <!-- Google tag (gtag.js) -->
@@ -37,6 +41,7 @@
 
       <div class="subtitle">Glitch Protocol</div>
       <div class="start-prompt">[ CLICK OR PRESS ENTER TO START ]</div>
+      <div class="version-label" id="versionLabel"></div>
     </div>
 
     <!-- Mode Select Screen -->
@@ -247,9 +252,41 @@
           </svg>
           TEMPORAL FORGE
           <div class="mode-desc">
-            Build worlds block by block. Minecraft meets the rift.
+            Build your own arenas. Place walls, enemies, and test your
+            creations.
           </div>
           <span class="key-hint">[4]</span>
+        </button>
+        <button class="mode-btn" id="btnCustomize">
+          <!-- Person/gear icon -->
+          <svg
+            class="btn-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="7"
+              r="4"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M4 21v-2c0-3.3 2.7-6 6-6h4c3.3 0 6 2.7 6 6v2"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+            <circle cx="18" cy="18" r="3" fill="currentColor" opacity="0.5" class="pulse-dot" />
+          </svg>
+          CUSTOMIZE AGENT
+          <div class="mode-desc">
+            Colors, armor, badges, weapon skins, loadouts.
+          </div>
+          <span class="key-hint">[5]</span>
         </button>
       </div>
       <div class="coming-soon">
@@ -301,8 +338,16 @@
     </div>
 
     <!-- Game Canvases -->
-    <canvas id="gameCanvas"></canvas>
-    <canvas id="hudCanvas"></canvas>
+    <canvas
+      id="gameCanvas"
+      role="img"
+      aria-label="Clockwork Carnage game viewport — 3D first-person shooter"
+    ></canvas>
+    <canvas
+      id="hudCanvas"
+      role="img"
+      aria-label="Heads-up display showing health, ammo, score, and round information"
+    ></canvas>
 
     <!-- Portrait orientation prompt (touch devices only) -->
     <div id="orientationPrompt">

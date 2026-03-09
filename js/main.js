@@ -1,4 +1,4 @@
-import { Game, GameState } from "./game.js";
+import { Game, GameState, GAME_VERSION } from "./game.js";
 import { TouchControls } from "./touch.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
@@ -11,6 +11,10 @@ const btnContinueArena = document.getElementById("btnContinueArena");
 const continueArenaDesc = document.getElementById("continueArenaDesc");
 
 const game = new Game(gameCanvas, hudCanvas);
+
+// Set version label on title screen
+const versionLabel = document.getElementById("versionLabel");
+if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
 
 function resizeCanvases() {
   let w = window.innerWidth;
@@ -99,6 +103,14 @@ document.getElementById("btnBuilder").addEventListener("click", () => {
   game.startBuilder();
 });
 
+document.getElementById("btnCustomize").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.creatorReturnState = GameState.MODE_SELECT;
+  game.state = GameState.CHARACTER_CREATE;
+});
+
 // Expose dev flag toggle on window for console access
 window.ccDevTutorial = (on) => {
   game.setAlwaysTutorial(on !== false);
@@ -165,6 +177,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnTutorial").click();
     } else if (e.code === "Digit4") {
       document.getElementById("btnBuilder").click();
+    } else if (e.code === "Digit5") {
+      document.getElementById("btnCustomize").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
@@ -244,16 +258,40 @@ function gameLoop(timestamp) {
 
 requestAnimationFrame(gameLoop);
 
+// Auto-save on tab close / navigate away
+window.addEventListener("beforeunload", () => {
+  if (game.state === GameState.PLAYING && game.mode === "arena") game.saveArena();
+  if (game.state === GameState.PLAYING && game.mode === "campaign") game.saveCampaign();
+});
+window.__ccBeforeUnloadRegistered = true;
+
 // Expose test runner on window for console access (dynamic import so
 // production works even when js/testing/ is not deployed)
-// TODO: this file is currently not tracked by the git repo... will decide on best approach to testing and test code organization after MVP
-// currently for internal use only, but may want to expose some testing utilities in production build for easier debugging
 import("./testing/harness.js")
   .then((mod) => {
     window.ccTest = mod.createTestRunner(game);
   })
   .catch(() => {
     /* harness not available — skip */
+  });
+
+// Expose debug bridge for Playwright / external automation
+import("./testing/debug-bridge.js")
+  .then((mod) => {
+    window.ccDebug = mod.createDebugBridge(game);
+  })
+  .catch(() => {
+    /* debug bridge not available — skip */
+  });
+
+// Expose telemetry collector for session data capture
+import("./testing/telemetry.js")
+  .then((mod) => {
+    window._ccTelemetryModule = mod;
+    window.ccTelemetry = mod.createTelemetry(game);
+  })
+  .catch(() => {
+    /* telemetry not available — skip */
   });
 
 // Mobile touch controls — auto-activates on touch devices

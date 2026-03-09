@@ -1,0 +1,43 @@
+IDEAS.md
+NOTES.md
+PLAN.md
+REVIEW.md
+ROADMAP.md
+TESTING.md
+
+archive/
+
+# Generated changelog reports
+.changelog/
+
+# Dev scripts
+scripts/
+
+# Testing
+js/testing/
+
+# Playwright / automation engine
+tests/
+playwright-report/
+test-results/
+playwright.config.*
+screenshots/
+.playwright/
+
+# Node tooling (npm/Playwright deps)
+node_modules/
+package.json
+package-lock.json
+
+# Telemetry & simulation data
+telemetry/
+simulations/
+
+# Forge editor (deferred to next sprint)
+js/editor/
+
+# Editor
+.vscode/
+
+# Untracked game prototypes (experimental, not part of Clockwork Carnage)
+prototypes/
