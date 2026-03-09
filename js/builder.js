@@ -892,8 +892,16 @@ export class BuilderMode {
   _loadIndex() {
     try {
       const raw = localStorage.getItem(BUILDER_INDEX_KEY);
-      this.mapIndex = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(this.mapIndex)) this.mapIndex = [];
+      const parsed = raw ? JSON.parse(raw) : [];
+      this.mapIndex = Array.isArray(parsed)
+        ? parsed.filter(
+            (e) =>
+              e &&
+              typeof e.id === "number" &&
+              Number.isFinite(e.id) &&
+              typeof e.name === "string",
+          )
+        : [];
     } catch (_) {
       this.mapIndex = [];
     }
@@ -1364,7 +1372,10 @@ export class BuilderMode {
           ctx.font = `${Math.max(7, cs * 0.3) | 0}px monospace`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          const label = typeof s.enemy === "string" && s.enemy.length ? s.enemy.charAt(0).toUpperCase() : "?";
+          const label =
+            typeof s.enemy === "string" && s.enemy.length
+              ? s.enemy.charAt(0).toUpperCase()
+              : "?";
           ctx.fillText(label, sx, sy);
           ctx.textAlign = "left";
           ctx.textBaseline = "alphabetic";
