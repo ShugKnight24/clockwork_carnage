@@ -16,7 +16,7 @@ Open `index.html` in a modern browser. No build step required.
 
 **Character Creator** — Customize across 5 categories with loadout bonuses that affect gameplay.
 
-- Work in progress - Still to improve graphical fidelity, add have the selections made have impact on gameplay, and add more options.
+- Work in progress - Still improving graphical fidelity, making selections impact gameplay, and adding more options.
 
 **Accessibility** — Colorblind mode, font scaling, mobile touch controls, orientation lock.
 

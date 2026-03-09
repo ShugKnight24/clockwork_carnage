@@ -329,8 +329,8 @@ export class Renderer {
         buf[dst + 2] = buf[src + 2];
         buf[dst + 3] = 255;
         // Mirror for ceiling top row
-        const cSrc = ((h - prevY) * w + x) * 4;
-        const cDst = ((h - lastY) * w + x) * 4;
+        const cSrc = ((h - 1 - prevY) * w + x) * 4;
+        const cDst = ((h - 1 - lastY) * w + x) * 4;
         if (cDst >= 0) {
           buf[cDst] = buf[cSrc] || fogR;
           buf[cDst + 1] = buf[cSrc + 1] || fogG;
