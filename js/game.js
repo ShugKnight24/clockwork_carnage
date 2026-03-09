@@ -216,7 +216,14 @@ export class Game {
     this._creatorSaveCallback = null; // optional callback after creator save
 
     this.setupInput();
+    // Apply mobile-optimized defaults before loading saved settings.
+    // Wider FOV + smaller HUD keeps the game playable on small screens.
+    if (this.isTouchDevice) {
+      this.settings.fov = 90;
+      this.settings.hudScale = 75;
+    }
     this.loadSettings();
+    this._applyMobileMigration();
     this.loadDevFlags();
     this.loadAchievements();
     this.loadCharacter();
@@ -1075,6 +1082,19 @@ export class Game {
           }
         }
       }
+    } catch (_) {}
+  }
+
+  // One-time migration for existing mobile users who had desktop-tuned defaults
+  _applyMobileMigration() {
+    if (!this.isTouchDevice) return;
+    try {
+      if (localStorage.getItem('cc_mobile_v1')) return;
+      // Override desktop-era defaults for mobile users who never tweaked them
+      this.settings.fov = 90;
+      this.settings.hudScale = 75;
+      this.saveSettings();
+      localStorage.setItem('cc_mobile_v1', '1');
     } catch (_) {}
   }
 
@@ -5290,9 +5310,11 @@ export class Game {
     const tiltAngle = isSprinting ? Math.sin(this.player.weaponBob) * 0.06 : 0;
 
     // weapon scale (larger to stay visible above HUD) - increase assets size instead of scaling up as much in the future by default?
-    const sc = 4.8;
+    // Scale weapon down on mobile so it doesn't dominate the small viewport
+    const mobileFactor = this.isTouchDevice ? Math.min(1, h / 720) : 1;
+    const sc = 4.8 * mobileFactor;
     const cx = w / 2 + bobX;
-    const cy = h - 190 + bobY + kickY;
+    const cy = h - 190 * mobileFactor + bobY + kickY;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -6088,8 +6110,8 @@ export class Game {
     // TODO: Can still be improved - too much empty space
     // ─── Layout: AMMO | HEALTH | PORTRAIT | WEAPONS(2x2) | KILLS | SCORE | ROUND/LOC ───
     const pad = 14;
-    const portraitW = 180;
-    const portraitH = 160;
+    const portraitW = Math.round(180 * hudFactor);
+    const portraitH = Math.round(160 * hudFactor);
     const portraitX = Math.floor(w / 2 - portraitW / 2);
     const portraitY = h - barH;
 

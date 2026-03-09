@@ -21,7 +21,7 @@ function resizeCanvases() {
   let h = window.innerHeight;
   // Cap render resolution on mobile to maintain playable FPS
   if (game.isTouchDevice) {
-    const maxDim = 960;
+    const maxDim = 1280;
     if (w > maxDim || h > maxDim) {
       const scale = maxDim / Math.max(w, h);
       w = Math.round(w * scale);
