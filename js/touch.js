@@ -270,7 +270,9 @@ export class TouchControls {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
         // Feed into mouse look system (scaled for touch sensitivity from settings)
-        const touchSens = this.game.settings.touchSensitivity || 1.5;
+        let rawSens = Number(this.game.settings.touchSensitivity);
+        if (!Number.isFinite(rawSens)) rawSens = 1.5;
+        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
         this.game.mouse.dx += dx * touchSens;
         this.game.mouse.dy += dy * touchSens;
         this.lookLast = { x: touch.clientX, y: touch.clientY };
