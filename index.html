@@ -9,7 +9,7 @@
     <title>Clockwork Carnage</title>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css" />
@@ -280,14 +280,7 @@
               stroke-width="1.5"
               stroke-linecap="round"
             />
-            <circle cx="18" cy="18" r="3" fill="currentColor" opacity="0.5">
-              <animate
-                attributeName="opacity"
-                values="0.5;0.8;0.5"
-                dur="2s"
-                repeatCount="indefinite"
-              />
-            </circle>
+            <circle cx="18" cy="18" r="3" fill="currentColor" opacity="0.5" class="pulse-dot" />
           </svg>
           CUSTOMIZE AGENT
           <div class="mode-desc">

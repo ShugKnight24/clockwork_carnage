@@ -1348,7 +1348,8 @@ export class BuilderMode {
           ctx.font = `${Math.max(7, cs * 0.3) | 0}px monospace`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(s.enemy.charAt(0).toUpperCase(), sx, sy);
+          const label = typeof s.enemy === "string" && s.enemy.length ? s.enemy.charAt(0).toUpperCase() : "?";
+          ctx.fillText(label, sx, sy);
           ctx.textAlign = "left";
           ctx.textBaseline = "alphabetic";
         }
