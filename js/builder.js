@@ -717,7 +717,14 @@ export class BuilderMode {
               dir: 0,
             },
             enemySpawns: Array.isArray(data.enemySpawns)
-              ? data.enemySpawns
+              ? data.enemySpawns.filter(
+                  (s) =>
+                    s &&
+                    typeof s === "object" &&
+                    Number.isFinite(s.x) &&
+                    Number.isFinite(s.y) &&
+                    (typeof s.enemy === "string" || s.enemy === undefined),
+                )
               : [],
             entities: [],
             exit: null,
@@ -860,7 +867,16 @@ export class BuilderMode {
           y: data.height / 2 + 0.5,
           dir: 0,
         },
-        enemySpawns: Array.isArray(data.enemySpawns) ? data.enemySpawns : [],
+        enemySpawns: Array.isArray(data.enemySpawns)
+          ? data.enemySpawns.filter(
+              (s) =>
+                s &&
+                typeof s === "object" &&
+                Number.isFinite(s.x) &&
+                Number.isFinite(s.y) &&
+                (typeof s.enemy === "string" || s.enemy === undefined),
+            )
+          : [],
         entities: [],
         exit: null,
       };

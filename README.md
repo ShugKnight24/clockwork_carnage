@@ -36,7 +36,7 @@ Open `index.html` in a modern browser. No build step required.
 
 All controls are rebindable in Settings → Controls.
 
-**Builder:** Arrow keys to move, Q/E to switch layers, Space to place, X to remove, T for spawn points, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import.
+**Builder:** WASD to move, Mouse to look, Left Click to place, Right Click to remove, Q/E to switch layers, T for spawn points, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import.
 
 **Mobile:** Full touch control support with virtual joystick and action buttons.
 

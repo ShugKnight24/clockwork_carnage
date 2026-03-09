@@ -259,7 +259,8 @@ export class Renderer {
       fogG = 8,
       fogB = 20;
 
-    for (let y = halfH + 1; y < h; y += 2) {
+    const loopEnd = h % 2 === 0 ? h : h - 1;
+    for (let y = halfH + 1; y < loopEnd; y += 2) {
       const p = y - halfH;
       const rowDist = halfH / p;
       const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
@@ -313,6 +314,29 @@ export class Renderer {
 
         fx += stepX;
         fy += stepY;
+      }
+    }
+
+    // Fill leftover row when height is odd
+    if (h % 2 !== 0 && h > halfH + 1) {
+      const lastY = h - 1;
+      const prevY = lastY - 1;
+      for (let x = 0; x < w; x++) {
+        const src = (prevY * w + x) * 4;
+        const dst = (lastY * w + x) * 4;
+        buf[dst] = buf[src];
+        buf[dst + 1] = buf[src + 1];
+        buf[dst + 2] = buf[src + 2];
+        buf[dst + 3] = 255;
+        // Mirror for ceiling top row
+        const cSrc = ((h - prevY) * w + x) * 4;
+        const cDst = ((h - lastY) * w + x) * 4;
+        if (cDst >= 0) {
+          buf[cDst] = buf[cSrc] || fogR;
+          buf[cDst + 1] = buf[cSrc + 1] || fogG;
+          buf[cDst + 2] = buf[cSrc + 2] || fogB;
+          buf[cDst + 3] = 255;
+        }
       }
     }
 
