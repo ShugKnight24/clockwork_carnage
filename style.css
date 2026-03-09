@@ -373,8 +373,13 @@ body {
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 .pulse-dot {
   animation: pulse-dot 2s infinite;
