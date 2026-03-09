@@ -757,7 +757,10 @@ export class Game {
       // Scroll ARIA log with W/S
       if (this.showAriaLog) {
         if (code === "KeyW" || code === "ArrowUp") {
-          this.ariaLogScroll = Math.min(this.ariaLogScroll + 1, Math.max(0, this.ariaMessageLog.length - 5));
+          this.ariaLogScroll = Math.min(
+            this.ariaLogScroll + 1,
+            Math.max(0, this.ariaMessageLog.length - 5),
+          );
         }
         if (code === "KeyS" || code === "ArrowDown") {
           this.ariaLogScroll = Math.max(0, this.ariaLogScroll - 1);
@@ -2256,7 +2259,10 @@ export class Game {
       }
 
       case 3: // Shoot — reset flag so pre-step firing doesn't skip
-        if (elapsed < 0.05) { this.tutorialFired = false; break; }
+        if (elapsed < 0.05) {
+          this.tutorialFired = false;
+          break;
+        }
         if (this.tutorialFired) this.advanceTutorialStep();
         break;
 
@@ -2270,7 +2276,10 @@ export class Game {
         break;
 
       case 6: // Chrono Shift — reset flag so pre-step usage doesn't skip
-        if (elapsed < 0.05) { this.tutorialChronoUsed = false; break; }
+        if (elapsed < 0.05) {
+          this.tutorialChronoUsed = false;
+          break;
+        }
         if (this.tutorialChronoUsed) this.advanceTutorialStep();
         break;
 
@@ -3784,7 +3793,12 @@ export class Game {
         if (!this.player.weapons.includes(wid)) {
           const angle = (i / this.campaignMissedWeapons.length) * Math.PI * 2;
           this.entities.push(
-            new Pickup(sx + Math.cos(angle) * 1.5, sy + Math.sin(angle) * 1.5, "weapon", { weaponId: wid }),
+            new Pickup(
+              sx + Math.cos(angle) * 1.5,
+              sy + Math.sin(angle) * 1.5,
+              "weapon",
+              { weaponId: wid },
+            ),
           );
         }
       }
@@ -7539,11 +7553,17 @@ export class Game {
         const msgNum = i + 1;
         ctx.fillStyle = "rgba(0, 200, 255, 0.4)";
         ctx.fillText(`${String(msgNum).padStart(2, " ")}.`, textX, y);
-        const text = log[i].replace(/\{AGENT\}/g, this.character.name || "Agent");
+        const text = log[i].replace(
+          /\{AGENT\}/g,
+          this.character.name || "Agent",
+        );
         ctx.fillStyle = "#00ffdd";
         // Truncate if too long for panel
         let display = text;
-        while (ctx.measureText(display).width > textMaxW - 30 && display.length > 3) {
+        while (
+          ctx.measureText(display).width > textMaxW - 30 &&
+          display.length > 3
+        ) {
           display = display.slice(0, -4) + "...";
         }
         ctx.fillText(display, textX + 30, y);

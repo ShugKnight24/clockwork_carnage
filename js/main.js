@@ -260,8 +260,10 @@ requestAnimationFrame(gameLoop);
 
 // Auto-save on tab close / navigate away
 window.addEventListener("beforeunload", () => {
-  if (game.state === GameState.PLAYING && game.mode === "arena") game.saveArena();
-  if (game.state === GameState.PLAYING && game.mode === "campaign") game.saveCampaign();
+  if (game.state === GameState.PLAYING && game.mode === "arena")
+    game.saveArena();
+  if (game.state === GameState.PLAYING && game.mode === "campaign")
+    game.saveCampaign();
 });
 window.__ccBeforeUnloadRegistered = true;
 
