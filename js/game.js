@@ -2,6 +2,7 @@ import {
   WEAPONS,
   ENEMY_TYPES,
   ARENA_MAP,
+  ARENA_MAPS,
   CAMPAIGN_LEVELS,
   UPGRADES,
   WALL_COLORS,
@@ -2229,7 +2230,9 @@ export class Game {
 
   startArenaRound() {
     // TODO: Refactor as we don't properly clean the Arena between rounds, we just reset the player and spawn new enemies on top. Deep cloning will cause performance issues on later levels. Clear entities properly after levels
-    this.map = structuredClone(ARENA_MAP);
+    // Rotate maps each round
+    const mapIdx = (this.arenaRound - 1) % ARENA_MAPS.length;
+    this.map = structuredClone(ARENA_MAPS[mapIdx]);
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
@@ -2293,11 +2296,12 @@ export class Game {
       );
     }
 
-    // Spawn one extra weapon pickup at milestone rounds
-    if (this.arenaRound >= 3 && this.arenaRound < 5) {
-      this.entities.push(new Pickup(19.5, 5.5, "weapon", { weaponId: 2 }));
-    } else if (this.arenaRound >= 5) {
-      this.entities.push(new Pickup(19.5, 5.5, "weapon", { weaponId: 3 }));
+    // Spawn one extra weapon pickup at milestone rounds (placed near top-right)
+    if (this.arenaRound >= 3) {
+      const mx = this.map.width - 4.5;
+      const my = 4.5;
+      const weaponId = this.arenaRound >= 5 ? 3 : 2;
+      this.entities.push(new Pickup(mx, my, "weapon", { weaponId }));
     }
 
     this.killedEnemies = 0;
