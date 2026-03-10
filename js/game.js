@@ -23,7 +23,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
 const SAVE_VERSION = 1;
-export const GAME_VERSION = "0.7.1";
+export const GAME_VERSION = "0.7.2";
 
 export const GameState = {
   TITLE: "title",
@@ -217,10 +217,10 @@ export class Game {
 
     this.setupInput();
     // Apply mobile-optimized defaults before loading saved settings.
-    // Wider FOV + smaller HUD keeps the game playable on small screens.
+    // Wide FOV + compact HUD keeps the game playable on small screens.
     if (this.isTouchDevice) {
-      this.settings.fov = 90;
-      this.settings.hudScale = 75;
+      this.settings.fov = 100;
+      this.settings.hudScale = 65;
     }
     this.loadSettings();
     this._applyMobileMigration();
@@ -1089,18 +1089,21 @@ export class Game {
   _applyMobileMigration() {
     if (!this.isTouchDevice) return;
     try {
-      if (localStorage.getItem("cc_mobile_v1")) return;
-      // Only override when user still has old desktop defaults or no saved
-      // settings yet — don't clobber customized preferences.
-      const hasExisting = localStorage.getItem("cc_settings") !== null;
-      const usesDesktopDefaults =
-        this.settings.fov === 70 && this.settings.hudScale === 100;
-      if (!hasExisting || usesDesktopDefaults) {
-        this.settings.fov = 90;
-        this.settings.hudScale = 75;
-        this.saveSettings();
+      // v2 migration: widen FOV to 100, shrink HUD to 65
+      if (!localStorage.getItem("cc_mobile_v2")) {
+        const hasExisting = localStorage.getItem("cc_settings") !== null;
+        // Only override if user still has old v1 defaults or desktop defaults
+        const usesOldDefaults =
+          (this.settings.fov === 90 && this.settings.hudScale === 75) ||
+          (this.settings.fov === 70 && this.settings.hudScale === 100);
+        if (!hasExisting || usesOldDefaults) {
+          this.settings.fov = 100;
+          this.settings.hudScale = 65;
+          this.saveSettings();
+        }
+        localStorage.setItem("cc_mobile_v2", "1");
+        localStorage.setItem("cc_mobile_v1", "1");
       }
-      localStorage.setItem("cc_mobile_v1", "1");
     } catch (_) {}
   }
 
@@ -5316,13 +5319,15 @@ export class Game {
     const tiltAngle = isSprinting ? Math.sin(this.player.weaponBob) * 0.06 : 0;
 
     // weapon scale (larger to stay visible above HUD) - increase assets size instead of scaling up as much in the future by default?
-    // On touch devices with small viewports (h < 720), proportionally
-    // shrink the weapon so it doesn't dominate the screen. Devices at
-    // or above 720px height get no reduction (factor clamped to 1).
-    const viewportFactor = this.isTouchDevice ? Math.min(1, h / 720) : 1;
+    // On touch devices, scale the weapon linearly with viewport height so the view
+    // stays clear. The factor is clamped between 0.55 and 1.0 (h/720, with a 0.55 minimum)
+    // to keep the weapon visible but not dominate the screen on small displays.
+    const viewportFactor = this.isTouchDevice
+      ? Math.max(0.55, Math.min(1, h / 720))
+      : 1;
     const sc = 4.8 * viewportFactor;
     const cx = w / 2 + bobX;
-    const cy = h - 190 * viewportFactor + bobY + kickY;
+    const cy = h - 170 * viewportFactor + bobY + kickY;
 
     ctx.save();
     ctx.translate(cx, cy);
