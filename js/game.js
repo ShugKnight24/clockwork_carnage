@@ -23,7 +23,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
 const SAVE_VERSION = 1;
-export const GAME_VERSION = "0.7.0";
+export const GAME_VERSION = "0.7.1";
 
 export const GameState = {
   TITLE: "title",
