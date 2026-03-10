@@ -126,6 +126,25 @@ document.getElementById("btnBack").addEventListener("click", () => {
   game.state = GameState.TITLE;
 });
 
+// Fullscreen toggle
+const btnFullscreen = document.getElementById("btnFullscreen");
+if (btnFullscreen) {
+  btnFullscreen.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (_) {}
+  });
+  document.addEventListener("fullscreenchange", () => {
+    btnFullscreen.textContent = document.fullscreenElement
+      ? "⛶ EXIT FULLSCREEN"
+      : "⛶ FULLSCREEN";
+  });
+}
+
 btnContinueCampaign.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
