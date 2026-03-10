@@ -65,6 +65,14 @@ export class TouchControls {
     } catch (_) {}
     this.showTutorial = !tutorialDone;
     this.tutorialDismissed = false;
+
+    // Detect fullscreen API support (iPhone has none) — computed once, never changes
+    this.canFullscreen =
+      typeof document.documentElement.requestFullscreen === "function" ||
+      typeof document.documentElement.webkitRequestFullscreen === "function";
+    this.isStandalone =
+      window.navigator.standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches;
   }
 
   setup() {
@@ -171,6 +179,8 @@ export class TouchControls {
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
     if (
+      this.canFullscreen &&
+      !this.isStandalone &&
       this.dist(x, y, z.fullscreenBtn.x, z.fullscreenBtn.y) < z.fullscreenBtn.r
     )
       return "fullscreen";
@@ -683,23 +693,25 @@ export class TouchControls {
     ctx.textBaseline = "middle";
     ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
 
-    // ── Fullscreen button (top-right, next to pause) ──
-    const isFS = !!(
-      document.fullscreenElement || document.webkitFullscreenElement
-    );
-    ctx.beginPath();
-    ctx.arc(
-      z.fullscreenBtn.x,
-      z.fullscreenBtn.y,
-      z.fullscreenBtn.r,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fillStyle = isFS ? "rgba(0,255,200,0.35)" : "rgba(255,255,255,0.3)";
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText(isFS ? "⊡" : "⊞", z.fullscreenBtn.x, z.fullscreenBtn.y);
+    // ── Fullscreen button (top-right, next to pause) — hidden when API unavailable ──
+    if (this.canFullscreen && !this.isStandalone) {
+      const isFS = !!(
+        document.fullscreenElement || document.webkitFullscreenElement
+      );
+      ctx.beginPath();
+      ctx.arc(
+        z.fullscreenBtn.x,
+        z.fullscreenBtn.y,
+        z.fullscreenBtn.r,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = isFS ? "rgba(0,255,200,0.35)" : "rgba(255,255,255,0.3)";
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px monospace";
+      ctx.fillText(isFS ? "⊡" : "⊞", z.fullscreenBtn.x, z.fullscreenBtn.y);
+    }
 
     ctx.globalAlpha = 1;
   }
@@ -839,6 +851,7 @@ export class TouchControls {
   }
 
   toggleFullscreen() {
+    if (!this.canFullscreen || this.isStandalone) return;
     const el = document.fullscreenElement || document.webkitFullscreenElement;
     let p;
     if (el) {
