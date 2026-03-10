@@ -3,7 +3,7 @@
  *
  * Left side: Virtual joystick for movement (feeds game.keys)
  * Right side: Touch-drag area for look (feeds game.mouse.dx/dy)
- * Buttons: Fire, Dash, Interact, Pause
+ * Buttons: Fire, Dash, Interact, Chrono Shift, Sprint toggle, Pause
  *
  * Self-contained — call TouchControls.init(game) after game is created.
  * Only activates on touch-capable devices.
@@ -47,6 +47,12 @@ export class TouchControls {
 
     // Track active button touches
     this.activeButtons = new Set();
+
+    // Sprint toggle state (tap to toggle auto-sprint)
+    this.sprintToggleActive = false;
+
+    // Chrono shift touch tracking
+    this.chronoTouch = null;
 
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
@@ -132,6 +138,18 @@ export class TouchControls {
         y: h - pad - btnSize * 3,
         r: btnSize * 0.65,
       },
+      // Chrono Shift (time slow) — above dash/interact cluster
+      chronoBtn: {
+        x: w - pad - btnSize * 2.2,
+        y: h - pad - btnSize * 4.6,
+        r: btnSize * 0.6,
+      },
+      // Sprint toggle — left side above joystick
+      sprintBtn: {
+        x: 70,
+        y: h - 250,
+        r: btnSize * 0.55,
+      },
       pauseBtn: { x: w - 50, y: 40, r: 24 },
       // Divider: left half = movement, right half = look
       midX: w * 0.4,
@@ -145,6 +163,10 @@ export class TouchControls {
     if (this.dist(x, y, z.dashBtn.x, z.dashBtn.y) < z.dashBtn.r) return "dash";
     if (this.dist(x, y, z.interactBtn.x, z.interactBtn.y) < z.interactBtn.r)
       return "interact";
+    if (this.dist(x, y, z.chronoBtn.x, z.chronoBtn.y) < z.chronoBtn.r)
+      return "chrono";
+    if (this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) < z.sprintBtn.r)
+      return "sprint";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
     // Left region = joystick, right region = look
@@ -249,6 +271,14 @@ export class TouchControls {
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         g.interact();
+      } else if (zone === "chrono") {
+        this.activeButtons.add("chrono");
+        this.chronoTouch = touch.identifier;
+        g.keys[g.keybinds.chronoShift] = true;
+      } else if (zone === "sprint") {
+        this.sprintToggleActive = !this.sprintToggleActive;
+        this.activeButtons.add("sprint");
+        g.keys[g.keybinds.sprint] = this.sprintToggleActive;
       } else if (zone === "pause") {
         this.activeButtons.add("pause");
         g.handleKeyPress("Escape");
@@ -304,12 +334,17 @@ export class TouchControls {
         this.fireTouch = null;
         this.game.player.isFiring = false;
         this.activeButtons.delete("fire");
+      } else if (touch.identifier === this.chronoTouch) {
+        this.chronoTouch = null;
+        this.game.keys[this.game.keybinds.chronoShift] = false;
+        this.activeButtons.delete("chrono");
       }
     }
     // Clear transient buttons
     this.activeButtons.delete("dash");
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
+    this.activeButtons.delete("sprint");
   }
 
   updateJoystickKeys() {
@@ -323,9 +358,9 @@ export class TouchControls {
     this.game.keys[kb.moveLeft] = dx < -deadzone;
     this.game.keys[kb.moveRight] = dx > deadzone;
 
-    // Sprint if joystick pushed far enough
+    // Sprint if toggle is active OR joystick pushed far enough
     const dist = Math.sqrt(dx * dx + dy * dy);
-    this.game.keys[kb.sprint] = dist > this.joyRadius * 1.2;
+    this.game.keys[kb.sprint] = this.sprintToggleActive || dist > this.joyRadius * 1.2;
   }
 
   clearMovementKeys() {
@@ -334,7 +369,8 @@ export class TouchControls {
     this.game.keys[kb.moveBack] = false;
     this.game.keys[kb.moveLeft] = false;
     this.game.keys[kb.moveRight] = false;
-    this.game.keys[kb.sprint] = false;
+    // Preserve sprint toggle state
+    this.game.keys[kb.sprint] = this.sprintToggleActive;
   }
 
   handlePauseTap(touch) {
@@ -603,6 +639,27 @@ export class TouchControls {
       this.activeButtons.has("interact") ? "#44ff44" : "#00cc44",
     );
 
+    // ── Chrono Shift button ──
+    const chronoActive = this.game.player && this.game.player.chronoActive;
+    this.drawButton(
+      ctx,
+      z.chronoBtn.x,
+      z.chronoBtn.y,
+      z.chronoBtn.r,
+      "SLOW",
+      chronoActive ? "#cc44ff" : this.activeButtons.has("chrono") ? "#aa44dd" : "#9944ff",
+    );
+
+    // ── Sprint toggle button (left side) ──
+    this.drawButton(
+      ctx,
+      z.sprintBtn.x,
+      z.sprintBtn.y,
+      z.sprintBtn.r,
+      this.sprintToggleActive ? "RUN" : "WALK",
+      this.sprintToggleActive ? "#ffaa00" : "#887744",
+    );
+
     // ── Pause button (top-right) ──
     ctx.beginPath();
     ctx.arc(z.pauseBtn.x, z.pauseBtn.y, z.pauseBtn.r, 0, Math.PI * 2);
@@ -656,9 +713,11 @@ export class TouchControls {
 
     // Button hints
     const hints = [
-      { label: "FIRE", desc: "Big button", color: "#ff6644", y: h - 120 },
-      { label: "DASH", desc: "Top-right", color: "#00cccc", y: h - 95 },
-      { label: "USE", desc: "Top-left", color: "#00cc44", y: h - 70 },
+      { label: "FIRE", desc: "Big button", color: "#ff6644", y: h - 145 },
+      { label: "DASH", desc: "Top-right", color: "#00cccc", y: h - 120 },
+      { label: "USE", desc: "Top-left", color: "#00cc44", y: h - 95 },
+      { label: "SLOW", desc: "Time slow", color: "#9944ff", y: h - 70 },
+      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00", y: h - 45 },
     ];
     for (const hint of hints) {
       ctx.fillStyle = hint.color;

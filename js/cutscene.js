@@ -161,7 +161,9 @@ export class CutsceneEngine {
 
     const elapsed = performance.now() - cs.frameStart;
     const t = elapsed / 1000; // seconds
-    const s = h / 900; // responsive scale factor
+    // Responsive scale: on mobile, enforce a minimum so text stays readable
+    const rawScale = h / 900;
+    const s = this.isTouchDevice ? Math.max(0.82, rawScale) : rawScale;
 
     // === Comic panel layout ===
     if (frame.panels) {
@@ -360,7 +362,9 @@ export class CutsceneEngine {
     ctx.fillRect(0, 0, w, h);
 
     // === Letterbox bars (gradient fade) ===
-    const barHeight = h * 0.08;
+    // Thinner bars on mobile to reclaim vertical space
+    const barPct = this.isTouchDevice ? 0.035 : 0.08;
+    const barHeight = h * barPct;
     const topBar = ctx.createLinearGradient(0, 0, 0, barHeight);
     topBar.addColorStop(0, "#000000");
     topBar.addColorStop(0.8, "rgba(0,0,0,0.95)");
@@ -488,7 +492,8 @@ export class CutsceneEngine {
   // ── Comic Book Panel Renderer ───────────────────────────────────
   renderComicPanels(ctx, w, h, frame, elapsed, t) {
     const cs = this.cutscene;
-    const s = h / 900; // responsive scale factor
+    const rawS = h / 900;
+    const s = this.isTouchDevice ? Math.max(0.82, rawS) : rawS;
 
     // Page background — vintage paper
     const paperGrad = ctx.createRadialGradient(
@@ -505,9 +510,11 @@ export class CutsceneEngine {
     ctx.fillStyle = paperGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Constrain comic page area proportionally
-    const maxPageW = w * 0.94;
-    const maxPageH = h * 0.92;
+    // Constrain comic page area — use more space on mobile
+    const pageWPct = this.isTouchDevice ? 0.98 : 0.94;
+    const pageHPct = this.isTouchDevice ? 0.96 : 0.92;
+    const maxPageW = w * pageWPct;
+    const maxPageH = h * pageHPct;
     const pageX = (w - maxPageW) / 2;
     const pageY = (h - maxPageH) / 2;
 
@@ -799,7 +806,8 @@ export class CutsceneEngine {
   }
 
   drawScannerEffect(ctx, w, h, t) {
-    const s = h / 900; // responsive scale factor
+    const rawS = h / 900;
+    const s = this.isTouchDevice ? Math.max(0.82, rawS) : rawS;
     // Power-level scanner: climbs to ~9000, then ROCKETS off the page
     const rampDur = 3.5; // seconds to reach ~9000
     const blowoffStart = rampDur; // when it goes ballistic
@@ -1214,7 +1222,8 @@ export class CutsceneEngine {
     ctx.translate(cx, cy);
 
     // Base scale: proportional to screen — characters fill the scene
-    const baseScale = 2.0 * (h / 900);
+    const rawBaseScale = 2.0 * (h / 900);
+    const baseScale = this.isTouchDevice ? Math.max(1.64, rawBaseScale) : rawBaseScale;
     ctx.scale(baseScale, baseScale);
 
     switch (art) {
