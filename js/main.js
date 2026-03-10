@@ -21,7 +21,7 @@ function resizeCanvases() {
   let h = window.innerHeight;
   // Cap render resolution on mobile to maintain playable FPS
   if (game.isTouchDevice) {
-    const maxDim = 960;
+    const maxDim = 1280;
     if (w > maxDim || h > maxDim) {
       const scale = maxDim / Math.max(w, h);
       w = Math.round(w * scale);
@@ -260,8 +260,10 @@ requestAnimationFrame(gameLoop);
 
 // Auto-save on tab close / navigate away
 window.addEventListener("beforeunload", () => {
-  if (game.state === GameState.PLAYING && game.mode === "arena") game.saveArena();
-  if (game.state === GameState.PLAYING && game.mode === "campaign") game.saveCampaign();
+  if (game.state === GameState.PLAYING && game.mode === "arena")
+    game.saveArena();
+  if (game.state === GameState.PLAYING && game.mode === "campaign")
+    game.saveCampaign();
 });
 window.__ccBeforeUnloadRegistered = true;
 
