@@ -1,6 +1,6 @@
 {
   "name": "clockwork-carnage-tools",
-  "version": "0.7.2",
+  "version": "0.7.6",
   "private": true,
   "description": "Proprietary testing, automation, and telemetry engine for Clockwork Carnage",
   "scripts": {
