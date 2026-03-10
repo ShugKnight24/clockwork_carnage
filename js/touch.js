@@ -96,9 +96,6 @@ export class TouchControls {
     this.resize();
     window.addEventListener("resize", () => this.resize());
 
-    // Read safe area insets from CSS env vars (iPhone X+ notch/Dynamic Island)
-    this._updateSafeArea();
-
     // Touch events on the touch layer
     this.touchLayer.addEventListener(
       "touchstart",
