@@ -4913,18 +4913,16 @@ export class Game {
 
     const dt = this.deltaTime * this.timeScale;
 
-    // Chrono Shift activation (Q key toggle)
-    if (this.keys[this.keybinds.chronoShift] && !this._chronoKeyHeld) {
-      this._chronoKeyHeld = true;
-      if (this.player.chronoActive) {
-        this.player.chronoActive = false;
-        this.timeScale = 1;
-      } else if (this.player.chronoEnergy >= 15) {
-        this.player.chronoActive = true;
-        if (this.mode === "tutorial") this.tutorialChronoUsed = true;
-      }
+    // Chrono Shift activation (hold-to-activate, like sprint)
+    // Need 15 energy to engage; once active, stays on until key released or energy depleted
+    const chronoKeyHeld = !!this.keys[this.keybinds.chronoShift];
+    if (chronoKeyHeld && !this.player.chronoActive && this.player.chronoEnergy >= 15) {
+      this.player.chronoActive = true;
+      if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+    } else if (this.player.chronoActive && !chronoKeyHeld) {
+      this.player.chronoActive = false;
+      this.timeScale = 1;
     }
-    if (!this.keys[this.keybinds.chronoShift]) this._chronoKeyHeld = false;
 
     // Passive chrono energy regen (+5/sec)
     if (
@@ -6752,14 +6750,50 @@ export class Game {
       return;
     }
 
-    // Stamina bar (above the HUD bar)
+    // ─── Stamina + Chrono bars (responsive: side-by-side desktop, stacked mobile) ───
     const staminaFactor = this.settings.staminaBarSize / 100;
     const staminaPct = this.player.stamina / this.player.maxStamina;
-    const staminaBarH = Math.round(22 * staminaFactor);
-    const staminaBarY = h - barH - staminaBarH - 8;
-    const staminaBarW = Math.round(420 * staminaFactor);
-    const staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
+    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
+    const showChrono = chronoPct > 0.005 || this.player.chronoActive;
     const isActive = this.player.isSprinting || this.player.isDashing;
+    const chronoIsActive = this.player.chronoActive;
+    const isMobile = this.isTouchDevice;
+    const gap = 10;
+
+    let staminaBarX, staminaBarY, staminaBarW, staminaBarH;
+    let chronoBarX, chronoBarY, chronoBarW, chronoBarH;
+
+    if (isMobile) {
+      // Mobile: vertically stacked, full-width-ish
+      staminaBarH = Math.round(20 * staminaFactor);
+      staminaBarW = Math.round(Math.min(380, w * 0.75) * staminaFactor);
+      staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
+      staminaBarY = h - barH - staminaBarH - 8;
+
+      chronoBarH = Math.round(16 * staminaFactor);
+      chronoBarW = staminaBarW;
+      chronoBarX = staminaBarX;
+      chronoBarY = staminaBarY - chronoBarH - gap;
+    } else {
+      // Desktop: side-by-side, larger bars
+      staminaBarH = Math.round(24 * staminaFactor);
+      const totalW = Math.round(520 * staminaFactor);
+      if (showChrono) {
+        staminaBarW = Math.round(totalW * 0.55);
+        chronoBarW = totalW - staminaBarW - gap;
+        staminaBarX = Math.floor(w / 2 - totalW / 2);
+        chronoBarX = staminaBarX + staminaBarW + gap;
+      } else {
+        staminaBarW = totalW;
+        staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
+      }
+      staminaBarY = h - barH - staminaBarH - 8;
+
+      chronoBarH = staminaBarH;
+      chronoBarY = staminaBarY;
+    }
+
+    // ─── Stamina bar ───
 
     // Glow when sprinting or dashing (no shadowBlur for performance)
     if (isActive) {
@@ -6868,25 +6902,23 @@ export class Game {
       ctx.fillStyle = isActive ? staminaColor : "rgba(255,255,255,0.6)";
       ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(label, w / 2 - 60, staminaBarY + staminaBarH / 2 + 5);
+      ctx.fillText(
+        label,
+        staminaBarX + staminaBarW * 0.25,
+        staminaBarY + staminaBarH / 2 + 5,
+      );
       // Percentage
       ctx.fillStyle = "rgba(255,255,255,0.5)";
       ctx.font = "bold 13px monospace";
       ctx.fillText(
         `${Math.floor(staminaPct * 100)}%`,
-        w / 2 + 60,
+        staminaBarX + staminaBarW * 0.75,
         staminaBarY + staminaBarH / 2 + 5,
       );
     }
 
-    // ─── Chrono Shift bar (above stamina, only when player has energy) ───
-    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
-    if (chronoPct > 0.005 || this.player.chronoActive) {
-      const chronoBarH = Math.round(14 * staminaFactor);
-      const chronoBarW = Math.round(280 * staminaFactor);
-      const chronoBarX = Math.floor(w / 2 - chronoBarW / 2);
-      const chronoBarY = staminaBarY - chronoBarH - 6;
-      const chronoIsActive = this.player.chronoActive;
+    // ─── Chrono Shift bar (side-by-side on desktop, stacked on mobile) ───
+    if (showChrono) {
 
       // Glow when active
       if (chronoIsActive) {
@@ -6970,19 +7002,30 @@ export class Game {
       // Label
       const chronoLabel = chronoIsActive ? "CHRONO SHIFT" : "CHRONO";
       ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.6)";
-      ctx.font = "bold 10px monospace";
+      ctx.font = "bold 11px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(chronoLabel, w / 2 - 50, chronoBarY + chronoBarH / 2 + 4);
-      ctx.fillStyle = "rgba(180,140,220,0.5)";
       ctx.fillText(
-        `${Math.floor(chronoPct * 100)}%`,
-        w / 2 + 50,
+        chronoLabel,
+        chronoBarX + chronoBarW * 0.3,
         chronoBarY + chronoBarH / 2 + 4,
       );
-      // Key hint
-      ctx.fillStyle = "rgba(150,120,200,0.3)";
-      ctx.font = "bold 9px monospace";
-      ctx.fillText("[Q]", w / 2 + 80, chronoBarY + chronoBarH / 2 + 4);
+      ctx.fillStyle = "rgba(180,140,220,0.5)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(
+        `${Math.floor(chronoPct * 100)}%`,
+        chronoBarX + chronoBarW * 0.75,
+        chronoBarY + chronoBarH / 2 + 4,
+      );
+      // Key hint (desktop only)
+      if (!isMobile) {
+        ctx.fillStyle = "rgba(150,120,200,0.3)";
+        ctx.font = "bold 9px monospace";
+        ctx.fillText(
+          "[HOLD Q]",
+          chronoBarX + chronoBarW - 15,
+          chronoBarY + chronoBarH / 2 + 4,
+        );
+      }
     }
 
     // Bottom Bar
