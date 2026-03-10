@@ -151,6 +151,7 @@ export class TouchControls {
         r: btnSize * 0.55,
       },
       pauseBtn: { x: w - 50, y: 40, r: 24 },
+      fullscreenBtn: { x: w - 110, y: 40, r: 24 },
       // Divider: left half = movement, right half = look
       midX: w * 0.4,
     };
@@ -169,6 +170,8 @@ export class TouchControls {
       return "sprint";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
+    if (this.dist(x, y, z.fullscreenBtn.x, z.fullscreenBtn.y) < z.fullscreenBtn.r)
+      return "fullscreen";
     // Left region = joystick, right region = look
     if (x < z.midX) return "joy";
     return "look";
@@ -279,6 +282,8 @@ export class TouchControls {
         this.sprintToggleActive = !this.sprintToggleActive;
         this.activeButtons.add("sprint");
         g.keys[g.keybinds.sprint] = this.sprintToggleActive;
+      } else if (zone === "fullscreen") {
+        this.toggleFullscreen();
       } else if (zone === "pause") {
         this.activeButtons.add("pause");
         g.handleKeyPress("Escape");
@@ -671,6 +676,16 @@ export class TouchControls {
     ctx.textBaseline = "middle";
     ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
 
+    // ── Fullscreen button (top-right, next to pause) ──
+    const isFS = !!document.fullscreenElement;
+    ctx.beginPath();
+    ctx.arc(z.fullscreenBtn.x, z.fullscreenBtn.y, z.fullscreenBtn.r, 0, Math.PI * 2);
+    ctx.fillStyle = isFS ? "rgba(0,255,200,0.35)" : "rgba(255,255,255,0.3)";
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px monospace";
+    ctx.fillText(isFS ? "⊡" : "⊞", z.fullscreenBtn.x, z.fullscreenBtn.y);
+
     ctx.globalAlpha = 1;
   }
 
@@ -806,6 +821,16 @@ export class TouchControls {
       by - 12,
     );
     ctx.globalAlpha = 1;
+  }
+
+  toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
+    } catch (_) {}
   }
 
   drawButton(ctx, x, y, r, label, color) {
