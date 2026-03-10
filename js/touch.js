@@ -170,7 +170,9 @@ export class TouchControls {
       return "sprint";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
-    if (this.dist(x, y, z.fullscreenBtn.x, z.fullscreenBtn.y) < z.fullscreenBtn.r)
+    if (
+      this.dist(x, y, z.fullscreenBtn.x, z.fullscreenBtn.y) < z.fullscreenBtn.r
+    )
       return "fullscreen";
     // Left region = joystick, right region = look
     if (x < z.midX) return "joy";
@@ -365,7 +367,8 @@ export class TouchControls {
 
     // Sprint if toggle is active OR joystick pushed far enough
     const dist = Math.sqrt(dx * dx + dy * dy);
-    this.game.keys[kb.sprint] = this.sprintToggleActive || dist > this.joyRadius * 1.2;
+    this.game.keys[kb.sprint] =
+      this.sprintToggleActive || dist > this.joyRadius * 1.2;
   }
 
   clearMovementKeys() {
@@ -652,7 +655,11 @@ export class TouchControls {
       z.chronoBtn.y,
       z.chronoBtn.r,
       "SLOW",
-      chronoActive ? "#cc44ff" : this.activeButtons.has("chrono") ? "#aa44dd" : "#9944ff",
+      chronoActive
+        ? "#cc44ff"
+        : this.activeButtons.has("chrono")
+          ? "#aa44dd"
+          : "#9944ff",
     );
 
     // ── Sprint toggle button (left side) ──
@@ -679,7 +686,13 @@ export class TouchControls {
     // ── Fullscreen button (top-right, next to pause) ──
     const isFS = !!document.fullscreenElement;
     ctx.beginPath();
-    ctx.arc(z.fullscreenBtn.x, z.fullscreenBtn.y, z.fullscreenBtn.r, 0, Math.PI * 2);
+    ctx.arc(
+      z.fullscreenBtn.x,
+      z.fullscreenBtn.y,
+      z.fullscreenBtn.r,
+      0,
+      Math.PI * 2,
+    );
     ctx.fillStyle = isFS ? "rgba(0,255,200,0.35)" : "rgba(255,255,255,0.3)";
     ctx.fill();
     ctx.fillStyle = "#fff";
@@ -824,13 +837,10 @@ export class TouchControls {
   }
 
   toggleFullscreen() {
-    try {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else {
-        document.documentElement.requestFullscreen();
-      }
-    } catch (_) {}
+    const p = document.fullscreenElement
+      ? document.exitFullscreen()
+      : document.documentElement.requestFullscreen();
+    if (p && typeof p.catch === "function") p.catch(() => {});
   }
 
   drawButton(ctx, x, y, r, label, color) {
