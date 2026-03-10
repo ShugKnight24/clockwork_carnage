@@ -24,7 +24,7 @@ export class TouchControls {
   constructor(game) {
     this.game = game;
 
-    // Joystick state
+    // Joystick state — floating origin: spawns where thumb touches
     this.joyTouch = null; // active touch ID
     this.joyOrigin = { x: 0, y: 0 };
     this.joyPos = { x: 0, y: 0 };
@@ -40,6 +40,9 @@ export class TouchControls {
 
     // Layout zones (set on resize)
     this.zones = {};
+
+    // Safe area insets (iPhone X+ notch/Dynamic Island)
+    this.safeArea = { top: 0, right: 0, bottom: 0, left: 0 };
 
     // Canvas for drawing touch controls
     this.canvas = null;
@@ -93,6 +96,9 @@ export class TouchControls {
     this.resize();
     window.addEventListener("resize", () => this.resize());
 
+    // Read safe area insets from CSS env vars (iPhone X+ notch/Dynamic Island)
+    this._updateSafeArea();
+
     // Touch events on the touch layer
     this.touchLayer.addEventListener(
       "touchstart",
@@ -122,47 +128,73 @@ export class TouchControls {
     this.canvas.width = w;
     this.canvas.height = h;
 
-    // Define zones — compact button cluster in bottom-right corner
-    const btnSize = Math.min(56, w * 0.09);
-    const pad = 14;
+    this._updateSafeArea();
+    const sa = this.safeArea;
+
+    // Button sizing — enforce minimum 44px touch targets (Apple HIG)
+    const btnSize = Math.max(44, Math.min(56, w * 0.09));
+    const pad = 14 + sa.right;
+    const bottomPad = 14 + sa.bottom;
+
+    // Default joystick hint center (shown when no thumb is on left zone)
+    const joyHintX = Math.max(100, 80 + sa.left);
+    const joyHintY = h - 140 - sa.bottom;
+
     this.zones = {
       w,
       h,
       btnSize,
-      joyCenter: { x: 100, y: h - 140 },
-      // Right side buttons — tighter cluster in corner
+      // Hint position for joystick (shown when not touching)
+      joyCenter: { x: joyHintX, y: joyHintY },
+      // Right side buttons — fire is large and accessible, others spaced around it
       fireBtn: {
         x: w - pad - btnSize * 1.6,
-        y: h - pad - btnSize * 1.2,
+        y: h - bottomPad - btnSize * 1.3,
         r: btnSize,
       },
       dashBtn: {
         x: w - pad - btnSize * 0.5,
-        y: h - pad - btnSize * 2.8,
-        r: btnSize * 0.6,
+        y: h - bottomPad - btnSize * 3.2,
+        r: btnSize * 0.65,
       },
       interactBtn: {
-        x: w - pad - btnSize * 2.7,
-        y: h - pad - btnSize * 2.8,
-        r: btnSize * 0.6,
+        x: w - pad - btnSize * 2.9,
+        y: h - bottomPad - btnSize * 3.2,
+        r: btnSize * 0.65,
       },
       // Sprint toggle — left side above joystick
       sprintBtn: {
-        x: 70,
-        y: h - 250,
+        x: Math.max(70, 50 + sa.left),
+        y: h - 260 - sa.bottom,
         r: btnSize * 0.55,
       },
       // Chrono Shift (time slow) — left side above sprint
       chronoBtn: {
-        x: 70,
-        y: h - 340,
+        x: Math.max(70, 50 + sa.left),
+        y: h - 350 - sa.bottom,
         r: btnSize * 0.6,
       },
-      pauseBtn: { x: w - 50, y: 40, r: 24 },
-      fullscreenBtn: { x: w - 110, y: 40, r: 24 },
-      // Divider: left third = movement, rest = look
-      midX: w * 0.3,
+      pauseBtn: { x: w - 50 - sa.right, y: 40 + sa.top, r: 26 },
+      fullscreenBtn: { x: w - 110 - sa.right, y: 40 + sa.top, r: 26 },
+      // Divider: left quarter = movement, rest = look
+      midX: w * 0.28,
     };
+  }
+
+  /** Read CSS env() safe area insets (iPhone X+ notch, Dynamic Island) */
+  _updateSafeArea() {
+    try {
+      const style = getComputedStyle(document.documentElement);
+      const parse = (prop) => parseInt(style.getPropertyValue(prop), 10) || 0;
+      this.safeArea = {
+        top: parse("--sat") || parse("env(safe-area-inset-top)") || 0,
+        right: parse("--sar") || parse("env(safe-area-inset-right)") || 0,
+        bottom: parse("--sab") || parse("env(safe-area-inset-bottom)") || 0,
+        left: parse("--sal") || parse("env(safe-area-inset-left)") || 0,
+      };
+    } catch (_) {
+      // Fallback: no safe area
+    }
   }
 
   hitTest(x, y) {
@@ -189,7 +221,7 @@ export class TouchControls {
       z.sprintBtn.r * hitShrink
     )
       return "sprint";
-    if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
+    if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r * hitShrink)
       return "pause";
     if (
       this.canFullscreen &&
@@ -229,10 +261,17 @@ export class TouchControls {
       return;
     }
 
-    // Campaign prompt / tutorial complete / game over / victory / level complete: tap to advance
+    // Tutorial completion: route taps to menu items
+    if (g.state === "tutorialComplete") {
+      if (e.changedTouches.length > 0) {
+        this.handleTutorialCompleteTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
+    // Campaign prompt / game over / victory / level complete: tap to advance
     if (
       g.state === "campaignPrompt" ||
-      g.state === "tutorialComplete" ||
       g.state === "gameOver" ||
       g.state === "victory" ||
       g.state === "levelComplete"
@@ -281,18 +320,13 @@ export class TouchControls {
         const t = e.changedTouches[0];
         const w = this.zones.w;
         const h = this.zones.h;
-        const btnH = 52;
-        const btnW = 120;
-        const gap = 16;
-        const btnY = h - btnH - 16;
-        const saveX = w / 2 + gap / 2;
-        const cancelX = w / 2 - gap / 2 - btnW;
+        const bounds = this._creatorButtonBounds(w, h);
         // SAVE button (exact rendered bounds)
         if (
-          t.clientX >= saveX &&
-          t.clientX <= saveX + btnW &&
-          t.clientY >= btnY &&
-          t.clientY <= btnY + btnH
+          t.clientX >= bounds.saveX &&
+          t.clientX <= bounds.saveX + bounds.btnW &&
+          t.clientY >= bounds.btnY &&
+          t.clientY <= bounds.btnY + bounds.btnH
         ) {
           g.audio.menuConfirm();
           g._exitCreator(true);
@@ -300,10 +334,10 @@ export class TouchControls {
         }
         // CANCEL button (exact rendered bounds)
         if (
-          t.clientX >= cancelX &&
-          t.clientX <= cancelX + btnW &&
-          t.clientY >= btnY &&
-          t.clientY <= btnY + btnH
+          t.clientX >= bounds.cancelX &&
+          t.clientX <= bounds.cancelX + bounds.btnW &&
+          t.clientY >= bounds.btnY &&
+          t.clientY <= bounds.btnY + bounds.btnH
         ) {
           g.audio.menuConfirm();
           g._exitCreator(false);
@@ -312,12 +346,12 @@ export class TouchControls {
         // Left/right edge taps = switch tab (near arrow affordance at y≈72)
         if (t.clientY > 40 && t.clientY < 110) {
           const catLen = g.creatorCategoryCount || 6;
-          if (t.clientX < 44) {
+          if (t.clientX < 60) {
             g.creatorCategory = (g.creatorCategory - 1 + catLen) % catLen;
             g.audio.menuSelect();
             return;
           }
-          if (t.clientX > w - 44) {
+          if (t.clientX > w - 60) {
             g.creatorCategory = (g.creatorCategory + 1) % catLen;
             g.audio.menuSelect();
             return;
@@ -335,6 +369,7 @@ export class TouchControls {
       const zone = this.hitTest(x, y);
 
       if (zone === "joy" && this.joyTouch === null) {
+        // Floating joystick: origin spawns at touch point, not fixed position
         this.joyTouch = touch.identifier;
         this.joyOrigin = { x, y };
         this.joyPos = { x, y };
@@ -466,7 +501,7 @@ export class TouchControls {
     // Pause menu touch buttons are rendered in a row at h/2 + 130
     const btnY = h / 2 + 115;
     const btnH = 50;
-    const btnW = 90;
+    const btnW = Math.min(90, (w - 60) / 4 - 10);
     const gap = 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;
@@ -499,6 +534,31 @@ export class TouchControls {
         x <= saveX + saveBtnW
       ) {
         this.game.handleKeyPress("KeyF");
+      }
+    }
+  }
+
+  handleTutorialCompleteTap(touch) {
+    const g = this.game;
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const x = touch.clientX;
+    const y = touch.clientY;
+
+    // Menu layout must match renderTutorialCompletionMenu in game.js
+    const menuW = Math.min(360, w - 40);
+    const itemH = 52;
+    const menuItems = 4;
+    const mx = (w - menuW) / 2;
+    const my = h * 0.35;
+
+    for (let i = 0; i < menuItems; i++) {
+      const iy = my + 8 + i * itemH;
+      if (x >= mx && x <= mx + menuW && y >= iy && y <= iy + itemH - 6) {
+        g.tutorialMenuSelection = i;
+        g.audio.menuConfirm();
+        g.executeTutorialCompletionChoice(i);
+        return;
       }
     }
   }
@@ -687,32 +747,46 @@ export class TouchControls {
       ctx.globalAlpha = 0.35;
     }
 
-    // ── Joystick ──
-    const jc = this.joyActive ? this.joyOrigin : z.joyCenter;
-    // Outer ring
-    ctx.beginPath();
-    ctx.arc(jc.x, jc.y, this.joyRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = "#00ccff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Inner stick
-    let sx = jc.x,
-      sy = jc.y;
+    // ── Joystick (floating: ghost ring when idle, active ring at touch origin) ──
     if (this.joyActive) {
+      // Active joystick at touch origin
+      const jc = this.joyOrigin;
+      ctx.beginPath();
+      ctx.arc(jc.x, jc.y, this.joyRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#00ccff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Inner stick follows thumb
       const dx = this.joyPos.x - jc.x;
       const dy = this.joyPos.y - jc.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const clamped = Math.min(dist, this.joyRadius);
+      let sx = jc.x,
+        sy = jc.y;
       if (dist > 0) {
         sx = jc.x + (dx / dist) * clamped;
         sy = jc.y + (dy / dist) * clamped;
       }
+      ctx.beginPath();
+      ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+      ctx.fillStyle = "#00ccff";
+      ctx.fill();
+    } else {
+      // Ghost joystick ring at default position (hint)
+      const jc = z.joyCenter;
+      ctx.globalAlpha = 0.15;
+      ctx.beginPath();
+      ctx.arc(jc.x, jc.y, this.joyRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#00ccff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(jc.x, jc.y, 22, 0, Math.PI * 2);
+      ctx.fillStyle = "#00ccff";
+      ctx.fill();
+      ctx.globalAlpha = 0.35;
     }
-    ctx.beginPath();
-    ctx.arc(sx, sy, 22, 0, Math.PI * 2);
-    ctx.fillStyle = "#00ccff";
-    ctx.fill();
 
     // ── Fire button ──
     this.drawButton(
@@ -827,7 +901,7 @@ export class TouchControls {
     ctx.fillText("MOVE", w * 0.2, h / 2 - 40);
     ctx.fillStyle = "#aabbcc";
     ctx.font = "14px monospace";
-    ctx.fillText("Left stick", w * 0.2, h / 2 - 15);
+    ctx.fillText("Touch to place stick", w * 0.2, h / 2 - 15);
     ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
 
     // Right side: look
@@ -864,17 +938,14 @@ export class TouchControls {
   renderCreatorOverlay(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
-    const btnH = 52;
-    const btnW = 120;
-    const gap = 16;
-    const btnY = h - btnH - 16;
+    const bounds = this._creatorButtonBounds(w, h);
+    const { btnH, btnW, btnY, saveX, cancelX } = bounds;
 
     ctx.globalAlpha = 0.9;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     // SAVE button (bottom right)
-    const saveX = w / 2 + gap / 2;
     ctx.fillStyle = "rgba(0, 180, 80, 0.5)";
     ctx.beginPath();
     ctx.roundRect(saveX, btnY, btnW, btnH, 8);
@@ -889,7 +960,6 @@ export class TouchControls {
     ctx.fillText("\u2713 SAVE", saveX + btnW / 2, btnY + btnH / 2);
 
     // CANCEL button (bottom left)
-    const cancelX = w / 2 - gap / 2 - btnW;
     ctx.fillStyle = "rgba(180, 40, 40, 0.4)";
     ctx.beginPath();
     ctx.roundRect(cancelX, btnY, btnW, btnH, 8);
@@ -903,11 +973,11 @@ export class TouchControls {
     ctx.font = "bold 16px monospace";
     ctx.fillText("\u2717 BACK", cancelX + btnW / 2, btnY + btnH / 2);
 
-    // Tab navigation arrows (left/right edges)
-    ctx.font = "bold 32px monospace";
+    // Tab navigation arrows — wider tap targets
+    ctx.font = "bold 36px monospace";
     ctx.fillStyle = "rgba(0, 255, 200, 0.6)";
-    ctx.fillText("\u25C0", 22, 72);
-    ctx.fillText("\u25B6", w - 22, 72);
+    ctx.fillText("\u25C0", 30, 72);
+    ctx.fillText("\u25B6", w - 30, 72);
 
     // Hint text
     ctx.font = "11px monospace";
@@ -921,12 +991,24 @@ export class TouchControls {
     ctx.globalAlpha = 1;
   }
 
+  /** Shared creator button bounds — used by both touch handler and renderer */
+  _creatorButtonBounds(w, h) {
+    const sa = this.safeArea;
+    const btnH = 52;
+    const btnW = Math.min(140, Math.max(110, w * 0.18));
+    const gap = 16;
+    const btnY = h - btnH - 16 - sa.bottom;
+    const saveX = w / 2 + gap / 2;
+    const cancelX = w / 2 - gap / 2 - btnW;
+    return { btnH, btnW, gap, btnY, saveX, cancelX };
+  }
+
   renderPauseButtons(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
     const btnY = h / 2 + 115;
     const btnH = 50;
-    const btnW = 90;
+    const btnW = Math.min(90, (w - 60) / 4 - 10);
     const gap = 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
