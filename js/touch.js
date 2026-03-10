@@ -311,14 +311,13 @@ export class TouchControls {
         }
         // Left/right edge taps = switch tab (near arrow affordance at y≈72)
         if (t.clientY > 40 && t.clientY < 110) {
+          const catLen = g.creatorCategoryCount || 6;
           if (t.clientX < 44) {
-            const catLen = 6;
             g.creatorCategory = (g.creatorCategory - 1 + catLen) % catLen;
             g.audio.menuSelect();
             return;
           }
           if (t.clientX > w - 44) {
-            const catLen = 6;
             g.creatorCategory = (g.creatorCategory + 1) % catLen;
             g.audio.menuSelect();
             return;
