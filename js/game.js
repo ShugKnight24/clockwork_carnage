@@ -125,7 +125,7 @@ export class Game {
       showWeapons: true,
       showKills: true,
       showScore: true,
-      touchSensitivity: 1.5,
+      touchSensitivity: 2.0,
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -212,6 +212,7 @@ export class Game {
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
     this.creatorCategory = 0; // 0=name, 1=color, 2=armor, 3=badge, 4=weaponSkin, 5=loadout
+    this.creatorCategoryCount = 6;
     this.creatorReturnState = null; // state to return to after saving
     this._creatorSaveCallback = null; // optional callback after creator save
 
@@ -1103,6 +1104,14 @@ export class Game {
         }
         localStorage.setItem("cc_mobile_v2", "1");
         localStorage.setItem("cc_mobile_v1", "1");
+      }
+      // v3 migration: bump touch sensitivity from 1.5 to 2.0
+      if (!localStorage.getItem("cc_mobile_v3")) {
+        if (this.settings.touchSensitivity === 1.5) {
+          this.settings.touchSensitivity = 2.0;
+          this.saveSettings();
+        }
+        localStorage.setItem("cc_mobile_v3", "1");
       }
     } catch (_) {}
   }
@@ -2453,6 +2462,8 @@ export class Game {
   renderTutorialOverlay(ctx, w, h) {
     if (this.mode !== "tutorial") return;
 
+    const isMobile = this.isTouchDevice;
+
     const steps = [
       {
         title: "ARRIVING AT CHRONOS STATION...",
@@ -2461,37 +2472,51 @@ export class Game {
       },
       {
         title: "SERVO CALIBRATION — VISUAL TRACKING",
-        hint: "Move your mouse to look around — the armor tracks your head movement",
+        hint: isMobile
+          ? "Drag the right side of the screen to look around"
+          : "Move your mouse to look around — the armor tracks your head movement",
         color: "#00ccff",
       },
       {
         title: "LOCOMOTION SYNC",
-        hint: "W A S D  to move — the armor amplifies each step precisely",
+        hint: isMobile
+          ? "Use the joystick on the left to move"
+          : "W A S D  to move — the armor amplifies each step precisely",
         color: "#00ccff",
       },
       {
         title: "WEAPONS INTEGRATION",
-        hint: "Click to fire — the rifle syncs to your armor's targeting HUD",
+        hint: isMobile
+          ? "Tap the FIRE button to shoot — the rifle syncs to your HUD"
+          : "Click to fire — the rifle syncs to your armor's targeting HUD",
         color: "#ff8844",
       },
       {
         title: "SPRINT BURST CALIBRATION",
-        hint: "Hold  SHIFT  to sprint — the servos let you move faster and longer",
+        hint: isMobile
+          ? "Tap RUN/WALK to toggle sprint — the servos amplify your speed"
+          : "Hold  SHIFT  to sprint — the servos let you move faster and longer",
         color: "#ffcc00",
       },
       {
         title: "EVASIVE DASH PROTOCOL",
-        hint: "Double-tap a movement key to dash — each step must be precise",
+        hint: isMobile
+          ? "Tap the DASH button to dash forward"
+          : "Double-tap a movement key to dash — each step must be precise",
         color: "#ff44ff",
       },
       {
         title: "CHRONO SHIFT — TIME CONTROL",
-        hint: "Press  Q  to slow time — the Paradox Lord won't see you coming",
+        hint: isMobile
+          ? "Hold the SLOW button to bend time — release to resume"
+          : "Press  Q  to slow time — the Paradox Lord won't see you coming",
         color: "#8844ff",
       },
       {
         title: "OPEN THE ARMORY DOOR",
-        hint: "Face the door and press  E  to interact",
+        hint: isMobile
+          ? "Face the door and tap USE to interact"
+          : "Face the door and press  E  to interact",
         color: "#ff8844",
       },
       {
@@ -2511,7 +2536,9 @@ export class Game {
       },
       {
         title: "TRAINING GROUND",
-        hint: "Free practice — Q to quit · C to start the campaign",
+        hint: isMobile
+          ? "Free practice — tap PAUSE to quit or start the campaign"
+          : "Free practice — Q to quit · C to start the campaign",
         color: "#00ffcc",
       },
     ];
@@ -2825,12 +2852,32 @@ export class Game {
     const loadout = LOADOUT_CLASSES[char.loadoutIndex];
 
     const categories = [
-      { name: "NAME", data: null, key: null },
-      { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
-      { name: "BADGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      { name: "NAME", shortLabel: "NAME", data: null, key: null },
+      {
+        name: "COLOR",
+        shortLabel: "CLR",
+        data: CHARACTER_COLORS,
+        key: "colorIndex",
+      },
+      {
+        name: "ARMOR",
+        shortLabel: "ARMR",
+        data: ARMOR_STYLES,
+        key: "armorIndex",
+      },
+      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
+      {
+        name: "SKIN",
+        shortLabel: "SKIN",
+        data: WEAPON_SKINS,
+        key: "weaponSkinIndex",
+      },
+      {
+        name: "LOADOUT",
+        shortLabel: "LOAD",
+        data: LOADOUT_CLASSES,
+        key: "loadoutIndex",
+      },
     ];
 
     // Full-screen dark backdrop
@@ -2874,14 +2921,25 @@ export class Game {
     ctx.lineTo(w / 2 + 120, titleY + 10);
     ctx.stroke();
 
-    // ─── Category tabs ───
-    const tabW = 90;
+    // ─── Category tabs (responsive) ───
+    const isMobile = this.isTouchDevice && w < 700;
+    const tabGap = isMobile ? 4 : 8;
+    const tabW = isMobile
+      ? Math.max(
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
+      : 90;
     const tabH = 28;
-    const tabGap = 8;
     const totalTabW =
       categories.length * tabW + (categories.length - 1) * tabGap;
     const tabX0 = (w - totalTabW) / 2;
     const tabY = titleY + 22;
+    const tabLabels = isMobile
+      ? categories.map((c) => c.shortLabel)
+      : categories.map((c) => c.name);
 
     for (let i = 0; i < categories.length; i++) {
       const tx = tabX0 + i * (tabW + tabGap);
@@ -2903,22 +2961,24 @@ export class Game {
       }
 
       ctx.fillStyle = selected ? palette.accent : "rgba(255,255,255,0.35)";
-      ctx.font = `${selected ? "bold " : ""}11px monospace`;
+      ctx.font = `${selected ? "bold " : ""}${isMobile ? 9 : 11}px monospace`;
       ctx.textAlign = "center";
-      ctx.fillText(categories[i].name, tx + tabW / 2, tabY + 18);
+      ctx.fillText(tabLabels[i], tx + tabW / 2, tabY + 18);
     }
 
-    // ─── Layout: left = item list, center = preview, right = info ───
+    // ─── Layout: responsive (3-col desktop, 2-col mobile) ───
     const contentY = tabY + tabH + 20;
-    const listW = 200;
-    const previewW = 200;
-    const infoW = 200;
-    const totalContentW = listW + previewW + infoW + 40;
+    const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
+    const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
+    const infoW = isMobile ? 0 : 200;
+    const contentGap = isMobile ? 8 : 20;
+    const totalContentW =
+      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
 
     // ─── NAME tab — special rendering ───
     if (cat === 0) {
-      const nameBoxW = 320;
+      const nameBoxW = isMobile ? Math.min(320, w - 40) : 320;
       const nameBoxH = 50;
       const nameBoxX = w / 2 - nameBoxW / 2;
       const nameBoxY = contentY + 40;
@@ -2982,15 +3042,17 @@ export class Game {
       ctx.fillText(char.name || "Agent", prevCX, prevCY + 100);
 
       // Footer controls
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        "Click or TAB/←/→ = category  ·  ENTER = save  ·  ESC = cancel",
-        w / 2,
-        h - 20,
-      );
-      ctx.textAlign = "left";
+      if (!isMobile) {
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        ctx.font = "11px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          "Click or TAB/\u2190/\u2192 = category  \u00B7  ENTER = save  \u00B7  ESC = cancel",
+          w / 2,
+          h - 20,
+        );
+        ctx.textAlign = "left";
+      }
       return;
     }
 
@@ -3063,7 +3125,7 @@ export class Game {
     }
 
     // ─── Character preview (center panel) ───
-    const prevX = contentX + listW + 20;
+    const prevX = contentX + listW + contentGap;
     const prevCX = prevX + previewW / 2;
     const prevH = listH;
 
@@ -3091,96 +3153,98 @@ export class Game {
       1.3,
     );
 
-    // ─── Info panel (right) ───
-    const infoX = prevX + previewW + 20;
+    // ─── Info panel (right) — hidden on mobile ───
+    const infoX = prevX + previewW + contentGap;
     const selectedItem = items[selIdx];
 
-    ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
-    ctx.beginPath();
-    ctx.roundRect(infoX, contentY, infoW, prevH, 8);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(infoX, contentY, infoW, prevH, 8);
-    ctx.stroke();
+    if (!isMobile) {
+      ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
+      ctx.beginPath();
+      ctx.roundRect(infoX, contentY, infoW, prevH, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 255, 200, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(infoX, contentY, infoW, prevH, 8);
+      ctx.stroke();
 
-    // Info title
-    ctx.fillStyle = palette.accent;
-    ctx.font = "bold 13px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText(selectedItem.name, infoX + 12, contentY + 28);
+      // Info title
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(selectedItem.name, infoX + 12, contentY + 28);
 
-    // Description
-    if (selectedItem.desc) {
-      ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
-      ctx.font = "11px monospace";
-      const words = selectedItem.desc.split(" ");
-      let line = "";
-      let lineY = contentY + 50;
-      for (const word of words) {
-        const test = line + (line ? " " : "") + word;
-        if (ctx.measureText(test).width > infoW - 24) {
-          ctx.fillText(line, infoX + 12, lineY);
-          line = word;
-          lineY += 16;
-        } else {
-          line = test;
+      // Description
+      if (selectedItem.desc) {
+        ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
+        ctx.font = "11px monospace";
+        const words = selectedItem.desc.split(" ");
+        let line = "";
+        let lineY = contentY + 50;
+        for (const word of words) {
+          const test = line + (line ? " " : "") + word;
+          if (ctx.measureText(test).width > infoW - 24) {
+            ctx.fillText(line, infoX + 12, lineY);
+            line = word;
+            lineY += 16;
+          } else {
+            line = test;
+          }
+        }
+        if (line) ctx.fillText(line, infoX + 12, lineY);
+      }
+
+      // Loadout bonuses
+      if (cat === 5 && loadout.bonuses) {
+        let by = contentY + 90;
+        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
+        ctx.font = "11px monospace";
+        const b = loadout.bonuses;
+        if (b.fireRateMultiplier != null) {
+          ctx.fillText(`Fire Rate: ${b.fireRateMultiplier}x`, infoX + 12, by);
+          by += 16;
+        }
+        if (b.maxHealth != null) {
+          ctx.fillText(`Max Health: ${b.maxHealth}`, infoX + 12, by);
+          by += 16;
+        }
+        if (b.moveSpeed != null) {
+          const sign = b.moveSpeed > 0 ? "+" : "";
+          ctx.fillText(`Move Speed: ${sign}${b.moveSpeed}`, infoX + 12, by);
+          by += 16;
+        }
+        if (b.maxStamina != null) {
+          ctx.fillText(`Max Stamina: ${b.maxStamina}`, infoX + 12, by);
+          by += 16;
+        }
+        if (loadout.unlocked === false) {
+          ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
+          ctx.font = "bold 12px monospace";
+          ctx.fillText("LOCKED", infoX + 12, by + 10);
         }
       }
-      if (line) ctx.fillText(line, infoX + 12, lineY);
-    }
 
-    // Loadout bonuses
-    if (cat === 5 && loadout.bonuses) {
-      let by = contentY + 90;
-      ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-      ctx.font = "11px monospace";
-      const b = loadout.bonuses;
-      if (b.fireRateMultiplier != null) {
-        ctx.fillText(`Fire Rate: ${b.fireRateMultiplier}x`, infoX + 12, by);
-        by += 16;
+      // Color swatches in info panel
+      if (cat === 1) {
+        let sy = contentY + 80;
+        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
+        ctx.font = "10px monospace";
+        ctx.fillText("PRIMARY", infoX + 12, sy);
+        ctx.fillStyle = palette.primary;
+        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
+        sy += 30;
+        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
+        ctx.font = "10px monospace";
+        ctx.fillText("ACCENT", infoX + 12, sy);
+        ctx.fillStyle = palette.accent;
+        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
+        sy += 30;
+        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
+        ctx.font = "10px monospace";
+        ctx.fillText("DARK", infoX + 12, sy);
+        ctx.fillStyle = palette.dark;
+        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
       }
-      if (b.maxHealth != null) {
-        ctx.fillText(`Max Health: ${b.maxHealth}`, infoX + 12, by);
-        by += 16;
-      }
-      if (b.moveSpeed != null) {
-        const sign = b.moveSpeed > 0 ? "+" : "";
-        ctx.fillText(`Move Speed: ${sign}${b.moveSpeed}`, infoX + 12, by);
-        by += 16;
-      }
-      if (b.maxStamina != null) {
-        ctx.fillText(`Max Stamina: ${b.maxStamina}`, infoX + 12, by);
-        by += 16;
-      }
-      if (loadout.unlocked === false) {
-        ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
-        ctx.font = "bold 12px monospace";
-        ctx.fillText("LOCKED", infoX + 12, by + 10);
-      }
-    }
-
-    // Color swatches in info panel
-    if (cat === 1) {
-      let sy = contentY + 80;
-      ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-      ctx.font = "10px monospace";
-      ctx.fillText("PRIMARY", infoX + 12, sy);
-      ctx.fillStyle = palette.primary;
-      ctx.fillRect(infoX + 12, sy + 4, 40, 16);
-      sy += 30;
-      ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-      ctx.font = "10px monospace";
-      ctx.fillText("ACCENT", infoX + 12, sy);
-      ctx.fillStyle = palette.accent;
-      ctx.fillRect(infoX + 12, sy + 4, 40, 16);
-      sy += 30;
-      ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-      ctx.font = "10px monospace";
-      ctx.fillText("DARK", infoX + 12, sy);
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(infoX + 12, sy + 4, 40, 16);
     }
 
     // Agent name at bottom of preview
@@ -3190,15 +3254,17 @@ export class Game {
     ctx.fillText(char.name || "Agent", prevCX, contentY + prevH - 12);
 
     // ─── Footer controls ───
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
-      w / 2,
-      h - 20,
-    );
-    ctx.textAlign = "left";
+    if (!isMobile) {
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
+        w / 2,
+        h - 20,
+      );
+      ctx.textAlign = "left";
+    }
   }
 
   _exitCreator(saved) {
@@ -3221,19 +3287,47 @@ export class Game {
     const my = (e.clientY - rect.top) * scaleY;
 
     const w = this.canvas.width;
+    const isMobile = this.isTouchDevice && w < 700;
     const categories = [
-      { name: "NAME", data: null, key: null },
-      { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
-      { name: "BADGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      { name: "NAME", shortLabel: "NAME", data: null, key: null },
+      {
+        name: "COLOR",
+        shortLabel: "CLR",
+        data: CHARACTER_COLORS,
+        key: "colorIndex",
+      },
+      {
+        name: "ARMOR",
+        shortLabel: "ARMR",
+        data: ARMOR_STYLES,
+        key: "armorIndex",
+      },
+      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
+      {
+        name: "SKIN",
+        shortLabel: "SKIN",
+        data: WEAPON_SKINS,
+        key: "weaponSkinIndex",
+      },
+      {
+        name: "LOADOUT",
+        shortLabel: "LOAD",
+        data: LOADOUT_CLASSES,
+        key: "loadoutIndex",
+      },
     ];
 
     const titleY = 44;
-    const tabW = 90;
+    const tabGap = isMobile ? 4 : 8;
+    const tabW = isMobile
+      ? Math.max(
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
+      : 90;
     const tabH = 28;
-    const tabGap = 8;
     const totalTabW =
       categories.length * tabW + (categories.length - 1) * tabGap;
     const tabX0 = (w - totalTabW) / 2;
@@ -3245,6 +3339,7 @@ export class Game {
         const tx = tabX0 + i * (tabW + tabGap);
         if (mx >= tx && mx <= tx + tabW) {
           this.creatorCategory = i;
+          this.audio.menuSelect();
           return;
         }
       }
@@ -3259,10 +3354,12 @@ export class Game {
     if (!items) return;
 
     const contentY = tabY + tabH + 20;
-    const listW = 200;
-    const previewW = 200;
-    const infoW = 200;
-    const totalContentW = listW + previewW + infoW + 40;
+    const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
+    const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
+    const infoW = isMobile ? 0 : 200;
+    const contentGap = isMobile ? 8 : 20;
+    const totalContentW =
+      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
     const listX = contentX;
     const maxVisible = Math.min(items.length, 8);

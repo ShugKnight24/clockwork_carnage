@@ -122,34 +122,28 @@ export class TouchControls {
     this.canvas.width = w;
     this.canvas.height = h;
 
-    // Define zones
-    const btnSize = Math.min(64, w * 0.1);
-    const pad = 20;
+    // Define zones — compact button cluster in bottom-right corner
+    const btnSize = Math.min(56, w * 0.09);
+    const pad = 14;
     this.zones = {
       w,
       h,
       btnSize,
       joyCenter: { x: 100, y: h - 140 },
-      // Right side buttons
+      // Right side buttons — tighter cluster in corner
       fireBtn: {
-        x: w - pad - btnSize * 2.5,
-        y: h - pad - btnSize * 1.5,
+        x: w - pad - btnSize * 1.6,
+        y: h - pad - btnSize * 1.2,
         r: btnSize,
       },
       dashBtn: {
-        x: w - pad - btnSize,
-        y: h - pad - btnSize * 3,
-        r: btnSize * 0.65,
+        x: w - pad - btnSize * 0.5,
+        y: h - pad - btnSize * 2.8,
+        r: btnSize * 0.6,
       },
       interactBtn: {
-        x: w - pad - btnSize * 3.5,
-        y: h - pad - btnSize * 3,
-        r: btnSize * 0.65,
-      },
-      // Chrono Shift (time slow) — above dash/interact cluster
-      chronoBtn: {
-        x: w - pad - btnSize * 2.2,
-        y: h - pad - btnSize * 4.6,
+        x: w - pad - btnSize * 2.7,
+        y: h - pad - btnSize * 2.8,
         r: btnSize * 0.6,
       },
       // Sprint toggle — left side above joystick
@@ -158,23 +152,42 @@ export class TouchControls {
         y: h - 250,
         r: btnSize * 0.55,
       },
+      // Chrono Shift (time slow) — left side above sprint
+      chronoBtn: {
+        x: 70,
+        y: h - 340,
+        r: btnSize * 0.6,
+      },
       pauseBtn: { x: w - 50, y: 40, r: 24 },
       fullscreenBtn: { x: w - 110, y: 40, r: 24 },
-      // Divider: left half = movement, right half = look
-      midX: w * 0.4,
+      // Divider: left third = movement, rest = look
+      midX: w * 0.3,
     };
   }
 
   hitTest(x, y) {
     const z = this.zones;
-    // Check buttons first (right side)
-    if (this.dist(x, y, z.fireBtn.x, z.fireBtn.y) < z.fireBtn.r) return "fire";
-    if (this.dist(x, y, z.dashBtn.x, z.dashBtn.y) < z.dashBtn.r) return "dash";
-    if (this.dist(x, y, z.interactBtn.x, z.interactBtn.y) < z.interactBtn.r)
+    // Use tighter hit radii than visual radii for buttons
+    // so dragging to look doesn't accidentally trigger buttons
+    const hitShrink = 0.85;
+    if (this.dist(x, y, z.fireBtn.x, z.fireBtn.y) < z.fireBtn.r * hitShrink)
+      return "fire";
+    if (this.dist(x, y, z.dashBtn.x, z.dashBtn.y) < z.dashBtn.r * hitShrink)
+      return "dash";
+    if (
+      this.dist(x, y, z.interactBtn.x, z.interactBtn.y) <
+      z.interactBtn.r * hitShrink
+    )
       return "interact";
-    if (this.dist(x, y, z.chronoBtn.x, z.chronoBtn.y) < z.chronoBtn.r)
+    if (
+      this.dist(x, y, z.chronoBtn.x, z.chronoBtn.y) <
+      z.chronoBtn.r * hitShrink
+    )
       return "chrono";
-    if (this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) < z.sprintBtn.r)
+    if (
+      this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) <
+      z.sprintBtn.r * hitShrink
+    )
       return "sprint";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
@@ -258,6 +271,60 @@ export class TouchControls {
     if (g.state === "controls") {
       if (e.changedTouches.length > 0) {
         this.handleControlsTap(e.changedTouches[0]);
+      }
+      return;
+    }
+
+    // Character creator: forward taps for tab/item clicks + nav
+    if (g.state === "characterCreate") {
+      if (e.changedTouches.length > 0) {
+        const t = e.changedTouches[0];
+        const w = this.zones.w;
+        const h = this.zones.h;
+        const btnH = 52;
+        const btnW = 120;
+        const gap = 16;
+        const btnY = h - btnH - 16;
+        const saveX = w / 2 + gap / 2;
+        const cancelX = w / 2 - gap / 2 - btnW;
+        // SAVE button (exact rendered bounds)
+        if (
+          t.clientX >= saveX &&
+          t.clientX <= saveX + btnW &&
+          t.clientY >= btnY &&
+          t.clientY <= btnY + btnH
+        ) {
+          g.audio.menuConfirm();
+          g._exitCreator(true);
+          return;
+        }
+        // CANCEL button (exact rendered bounds)
+        if (
+          t.clientX >= cancelX &&
+          t.clientX <= cancelX + btnW &&
+          t.clientY >= btnY &&
+          t.clientY <= btnY + btnH
+        ) {
+          g.audio.menuConfirm();
+          g._exitCreator(false);
+          return;
+        }
+        // Left/right edge taps = switch tab (near arrow affordance at y≈72)
+        if (t.clientY > 40 && t.clientY < 110) {
+          const catLen = g.creatorCategoryCount || 6;
+          if (t.clientX < 44) {
+            g.creatorCategory = (g.creatorCategory - 1 + catLen) % catLen;
+            g.audio.menuSelect();
+            return;
+          }
+          if (t.clientX > w - 44) {
+            g.creatorCategory = (g.creatorCategory + 1) % catLen;
+            g.audio.menuSelect();
+            return;
+          }
+        }
+        // Forward to creator click handler (tab and item taps)
+        g._handleCreatorClick({ clientX: t.clientX, clientY: t.clientY });
       }
       return;
     }
@@ -589,7 +656,13 @@ export class TouchControls {
       return;
     }
 
-    // Nothing to draw during cutscenes (prompts are in game.js)
+    // Character creator: draw save/cancel buttons + nav arrows
+    if (gs === "characterCreate") {
+      this.renderCreatorOverlay(ctx);
+      return;
+    }
+
+    // Nothing to draw during cutscenes or other non-playing states
     if (gs !== "playing") return;
 
     // First-launch mobile tutorial overlay
@@ -599,6 +672,20 @@ export class TouchControls {
     }
 
     ctx.globalAlpha = 0.35;
+
+    // ── Look zone hint (fades after 5 seconds) ──
+    if (!this._lookHintStart) this._lookHintStart = performance.now();
+    const lookHintAge = (performance.now() - this._lookHintStart) / 1000;
+    if (lookHintAge < 6) {
+      const hintAlpha = lookHintAge < 5 ? 0.12 : 0.12 * (6 - lookHintAge);
+      ctx.globalAlpha = hintAlpha;
+      ctx.fillStyle = "#00ccff";
+      ctx.font = "14px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("↔ DRAG TO LOOK ↔", z.w * 0.55, z.h * 0.35);
+      ctx.globalAlpha = 0.35;
+    }
 
     // ── Joystick ──
     const jc = this.joyActive ? this.joyOrigin : z.joyCenter;
@@ -772,6 +859,66 @@ export class TouchControls {
     ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
     ctx.font = "bold 16px monospace";
     ctx.fillText("TAP ANYWHERE TO START", w / 2, h - 30);
+  }
+
+  renderCreatorOverlay(ctx) {
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const btnH = 52;
+    const btnW = 120;
+    const gap = 16;
+    const btnY = h - btnH - 16;
+
+    ctx.globalAlpha = 0.9;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // SAVE button (bottom right)
+    const saveX = w / 2 + gap / 2;
+    ctx.fillStyle = "rgba(0, 180, 80, 0.5)";
+    ctx.beginPath();
+    ctx.roundRect(saveX, btnY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#00cc66";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(saveX, btnY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("\u2713 SAVE", saveX + btnW / 2, btnY + btnH / 2);
+
+    // CANCEL button (bottom left)
+    const cancelX = w / 2 - gap / 2 - btnW;
+    ctx.fillStyle = "rgba(180, 40, 40, 0.4)";
+    ctx.beginPath();
+    ctx.roundRect(cancelX, btnY, btnW, btnH, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#cc3333";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(cancelX, btnY, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px monospace";
+    ctx.fillText("\u2717 BACK", cancelX + btnW / 2, btnY + btnH / 2);
+
+    // Tab navigation arrows (left/right edges)
+    ctx.font = "bold 32px monospace";
+    ctx.fillStyle = "rgba(0, 255, 200, 0.6)";
+    ctx.fillText("\u25C0", 22, 72);
+    ctx.fillText("\u25B6", w - 22, 72);
+
+    // Hint text
+    ctx.font = "11px monospace";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillText(
+      "Tap tabs \u00B7 \u25C0 \u25B6 to switch \u00B7 Tap items to select",
+      w / 2,
+      btnY - 12,
+    );
+
+    ctx.globalAlpha = 1;
   }
 
   renderPauseButtons(ctx) {
