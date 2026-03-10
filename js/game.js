@@ -212,6 +212,7 @@ export class Game {
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
     this.creatorCategory = 0; // 0=name, 1=color, 2=armor, 3=badge, 4=weaponSkin, 5=loadout
+    this.creatorCategoryCount = 6;
     this.creatorReturnState = null; // state to return to after saving
     this._creatorSaveCallback = null; // optional callback after creator save
 
@@ -2852,11 +2853,31 @@ export class Game {
 
     const categories = [
       { name: "NAME", shortLabel: "NAME", data: null, key: null },
-      { name: "COLOR", shortLabel: "CLR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
+      {
+        name: "COLOR",
+        shortLabel: "CLR",
+        data: CHARACTER_COLORS,
+        key: "colorIndex",
+      },
+      {
+        name: "ARMOR",
+        shortLabel: "ARMR",
+        data: ARMOR_STYLES,
+        key: "armorIndex",
+      },
       { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", shortLabel: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", shortLabel: "LOAD", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      {
+        name: "SKIN",
+        shortLabel: "SKIN",
+        data: WEAPON_SKINS,
+        key: "weaponSkinIndex",
+      },
+      {
+        name: "LOADOUT",
+        shortLabel: "LOAD",
+        data: LOADOUT_CLASSES,
+        key: "loadoutIndex",
+      },
     ];
 
     // Full-screen dark backdrop
@@ -3269,11 +3290,31 @@ export class Game {
     const isMobile = this.isTouchDevice && w < 700;
     const categories = [
       { name: "NAME", shortLabel: "NAME", data: null, key: null },
-      { name: "COLOR", shortLabel: "CLR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
+      {
+        name: "COLOR",
+        shortLabel: "CLR",
+        data: CHARACTER_COLORS,
+        key: "colorIndex",
+      },
+      {
+        name: "ARMOR",
+        shortLabel: "ARMR",
+        data: ARMOR_STYLES,
+        key: "armorIndex",
+      },
       { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", shortLabel: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", shortLabel: "LOAD", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      {
+        name: "SKIN",
+        shortLabel: "SKIN",
+        data: WEAPON_SKINS,
+        key: "weaponSkinIndex",
+      },
+      {
+        name: "LOADOUT",
+        shortLabel: "LOAD",
+        data: LOADOUT_CLASSES,
+        key: "loadoutIndex",
+      },
     ];
 
     const titleY = 44;
