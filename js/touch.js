@@ -282,28 +282,42 @@ export class TouchControls {
         const w = this.zones.w;
         const h = this.zones.h;
         const btnH = 52;
+        const btnW = 120;
+        const gap = 16;
         const btnY = h - btnH - 16;
-        // SAVE button (bottom right area)
-        if (t.clientY >= btnY && t.clientX > w / 2) {
+        const saveX = w / 2 + gap / 2;
+        const cancelX = w / 2 - gap / 2 - btnW;
+        // SAVE button (exact rendered bounds)
+        if (
+          t.clientX >= saveX &&
+          t.clientX <= saveX + btnW &&
+          t.clientY >= btnY &&
+          t.clientY <= btnY + btnH
+        ) {
           g.audio.menuConfirm();
           g._exitCreator(true);
           return;
         }
-        // CANCEL button (bottom left area)
-        if (t.clientY >= btnY && t.clientX <= w / 2) {
+        // CANCEL button (exact rendered bounds)
+        if (
+          t.clientX >= cancelX &&
+          t.clientX <= cancelX + btnW &&
+          t.clientY >= btnY &&
+          t.clientY <= btnY + btnH
+        ) {
           g.audio.menuConfirm();
           g._exitCreator(false);
           return;
         }
-        // Left/right edge taps = switch tab
-        if (t.clientY < h - 80) {
-          if (t.clientX < 40) {
+        // Left/right edge taps = switch tab (near arrow affordance at y≈72)
+        if (t.clientY > 40 && t.clientY < 110) {
+          if (t.clientX < 44) {
             const catLen = 6;
             g.creatorCategory = (g.creatorCategory - 1 + catLen) % catLen;
             g.audio.menuSelect();
             return;
           }
-          if (t.clientX > w - 40) {
+          if (t.clientX > w - 44) {
             const catLen = 6;
             g.creatorCategory = (g.creatorCategory + 1) % catLen;
             g.audio.menuSelect();
