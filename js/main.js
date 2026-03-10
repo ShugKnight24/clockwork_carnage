@@ -140,16 +140,19 @@ if (btnFullscreen) {
     // Show "Add to Home Screen" hint or hide button.
     if (isStandalone) {
       btnFullscreen.style.display = "none"; // Already fullscreen via home screen
-    } else if ("ontouchstart" in window) {
-      // Detect if we're in Safari (only iOS browser that supports PWA install)
+    } else if (
+      "ontouchstart" in window &&
+      /iP(hone|ad|od)/.test(navigator.userAgent)
+    ) {
+      // iOS device without Fullscreen API — offer PWA install via home screen
       const ua = navigator.userAgent;
       const isSafari =
         /Safari/.test(ua) &&
         !/CriOS|FxiOS|OPiOS|EdgiOS|DuckDuckGo|brave/i.test(ua) &&
         /Apple/.test(navigator.vendor);
-      btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
-      btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
       if (isSafari) {
+        btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
+        btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
         btnFullscreen.title =
           "Tap Share → Add to Home Screen for fullscreen mode";
         btnFullscreen.addEventListener("click", () => {
@@ -162,6 +165,11 @@ if (btnFullscreen) {
           );
         });
       } else {
+        btnFullscreen.textContent = "📲 OPEN IN SAFARI";
+        btnFullscreen.setAttribute(
+          "aria-label",
+          "Open in Safari to add to Home Screen",
+        );
         btnFullscreen.title = "Open in Safari to add as home screen app";
         btnFullscreen.addEventListener("click", () => {
           alert(
@@ -175,7 +183,7 @@ if (btnFullscreen) {
         });
       }
     } else {
-      btnFullscreen.style.display = "none"; // Desktop without API — unusual, just hide
+      btnFullscreen.style.display = "none"; // Non-iOS or desktop without API — hide
     }
   } else {
     if (isStandalone) {
