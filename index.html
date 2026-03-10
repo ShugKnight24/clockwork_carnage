@@ -7,6 +7,14 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Clockwork Carnage</title>
+    <!-- PWA: open in standalone (fullscreen-like) when added to home screen -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0a0e14" />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
@@ -342,7 +350,13 @@
         </svg>
       </div>
       <button class="back-btn" id="btnBack">← BACK [ESC]</button>
-      <button class="fullscreen-btn" id="btnFullscreen" aria-label="Toggle fullscreen">⛶ FULLSCREEN</button>
+      <button
+        class="fullscreen-btn"
+        id="btnFullscreen"
+        aria-label="Toggle fullscreen"
+      >
+        ⛶ FULLSCREEN
+      </button>
     </div>
 
     <!-- Game Canvases -->
