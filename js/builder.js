@@ -1,3 +1,5 @@
+import { trackEvent } from "./analytics.js";
+
 const TILE_NAMES = [
   "",
   "Stone",
@@ -809,6 +811,11 @@ export class BuilderMode {
     if (entry) entry.name = this.map.name;
     this._saveIndex();
     this.saveFlash = 2;
+    const tileCount = this.map.grid.flat().filter((t) => t > 0).length;
+    trackEvent("builder_save", {
+      map_name: this.map.name,
+      tile_count: tileCount,
+    });
   }
 
   _saveCurrentMap() {
