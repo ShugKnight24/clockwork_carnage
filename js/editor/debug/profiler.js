@@ -15,20 +15,20 @@
 
 /** Phase keys and display colors */
 const RENDER_PHASES = [
-  { key: "raycast",  label: "ray",  color: "rgba(0,100,255,0.5)" },
-  { key: "vignette", label: "vig",  color: "rgba(0,60,180,0.4)" },
-  { key: "weapon",   label: "wpn",  color: "rgba(80,80,255,0.4)" },
-  { key: "effects",  label: "fx",   color: "rgba(120,40,200,0.4)" },
-  { key: "hud",      label: "hud",  color: "rgba(200,200,0,0.4)" },
-  { key: "overlays", label: "ovr",  color: "rgba(180,120,0,0.4)" },
+  { key: "raycast", label: "ray", color: "rgba(0,100,255,0.5)" },
+  { key: "vignette", label: "vig", color: "rgba(0,60,180,0.4)" },
+  { key: "weapon", label: "wpn", color: "rgba(80,80,255,0.4)" },
+  { key: "effects", label: "fx", color: "rgba(120,40,200,0.4)" },
+  { key: "hud", label: "hud", color: "rgba(200,200,0,0.4)" },
+  { key: "overlays", label: "ovr", color: "rgba(180,120,0,0.4)" },
 ];
 
 const UPDATE_PHASES = [
-  { key: "player",      label: "plr",  color: "rgba(0,255,100,0.5)" },
-  { key: "enemies",     label: "ent",  color: "rgba(0,200,60,0.4)" },
-  { key: "projectiles", label: "prj",  color: "rgba(0,160,40,0.4)" },
-  { key: "pickups",     label: "pkp",  color: "rgba(0,120,30,0.4)" },
-  { key: "misc",        label: "msc",  color: "rgba(0,80,20,0.3)" },
+  { key: "player", label: "plr", color: "rgba(0,255,100,0.5)" },
+  { key: "enemies", label: "ent", color: "rgba(0,200,60,0.4)" },
+  { key: "projectiles", label: "prj", color: "rgba(0,160,40,0.4)" },
+  { key: "pickups", label: "pkp", color: "rgba(0,120,30,0.4)" },
+  { key: "misc", label: "msc", color: "rgba(0,80,20,0.3)" },
 ];
 
 const HISTORY_SIZE = 120; // ~2 seconds at 60fps
@@ -154,7 +154,9 @@ export class Profiler {
     // Aggregate timing
     ctx.font = "9px monospace";
     ctx.fillStyle = "#aaa";
-    const entCount = this.entityHistory[(this.historyIdx - 1 + HISTORY_SIZE) % HISTORY_SIZE] || 0;
+    const entCount =
+      this.entityHistory[(this.historyIdx - 1 + HISTORY_SIZE) % HISTORY_SIZE] ||
+      0;
     ctx.fillText(
       `upd: ${this.avgUpdate.toFixed(1)}ms  rnd: ${this.avgRender.toFixed(1)}ms  ent: ${entCount}`,
       x + 80,

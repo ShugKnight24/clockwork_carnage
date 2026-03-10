@@ -5305,6 +5305,7 @@ export class Game {
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      const ai = e.def.ai || "chase";
 
       // Pain state
       if (e.painTimer > 0) {
@@ -5315,30 +5316,57 @@ export class Game {
         continue;
       }
 
+      // Track time in current state
+      e.stateTime += dt;
+
       // State machine
       if (e.state === "idle") {
+        // Patrol AI: wander randomly while idle
+        if (ai === "patrol") {
+          this._aiPatrolWander(e, dt);
+        }
+        // Ambush AI: stay completely still until the player is close
+        // (default idle does nothing, which is correct for ambush)
+
         if (dist < e.alertRange) {
-          // Line of sight check
           if (this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y)) {
             e.state = "chase";
+            e.stateTime = 0;
           }
         }
       }
 
       if (e.state === "chase") {
-        // Move toward player
         const angle = Math.atan2(dy, dx);
         e.angle = angle;
-        const speed = e.speed * dt;
 
         if (dist > e.def.attackRange * 0.8) {
-          const newX = e.x + Math.cos(angle) * speed;
-          const newY = e.y + Math.sin(angle) * speed;
+          let moveAngle = angle;
+          let moveSpeed = e.speed;
+
+          // AI archetype movement overrides
+          if (ai === "flanker") {
+            // Circle-strafe: offset approach angle by ±60° and close in
+            const strafeDir = Math.floor(e.x * 7 + e.y * 13) % 2 ? 1 : -1;
+            const strafeFactor = Math.min(1, dist / (e.def.attackRange * 1.5));
+            moveAngle = angle + strafeDir * strafeFactor * 1.05; // ~60°
+            moveSpeed *= 1.1;
+          } else if (ai === "ambush") {
+            // Rush: burst speed for first 2s after spotting player
+            if (e.stateTime < 2) {
+              moveSpeed *= 1.8;
+            }
+          }
+          // patrol and default: move straight toward player (unchanged)
+
+          const speed = moveSpeed * dt;
+          const newX = e.x + Math.cos(moveAngle) * speed;
+          const newY = e.y + Math.sin(moveAngle) * speed;
 
           // Collision with wall margin to prevent clipping
           const margin = 0.3;
-          const mx = Math.cos(angle) >= 0 ? margin : -margin;
-          const my = Math.sin(angle) >= 0 ? margin : -margin;
+          const mx = Math.cos(moveAngle) >= 0 ? margin : -margin;
+          const my = Math.sin(moveAngle) >= 0 ? margin : -margin;
           if (
             this.isPassable(Math.floor(newX + mx), Math.floor(e.y)) &&
             this.isPassable(Math.floor(newX + mx), Math.floor(e.y + margin)) &&
@@ -5362,6 +5390,7 @@ export class Game {
         ) {
           if (this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y)) {
             e.state = "attack";
+            e.stateTime = 0;
             e.lastAttackTime = this.time;
           }
         }
@@ -5391,8 +5420,48 @@ export class Game {
           }
         }
         e.state = "chase";
+        e.stateTime = 0;
       }
     }
+  }
+
+  /** Patrol wander: pick a random direction and drift slowly */
+  _aiPatrolWander(e, dt) {
+    // Initialize wander state on first call
+    if (e._wanderAngle == null) {
+      e._wanderAngle = e.angle;
+      e._wanderTimer = 0;
+    }
+    e._wanderTimer -= dt;
+    if (e._wanderTimer <= 0) {
+      e._wanderAngle += (Math.random() - 0.5) * Math.PI;
+      e._wanderTimer = 1.5 + Math.random() * 2;
+    }
+    const speed = e.speed * 0.35 * dt;
+    const newX = e.x + Math.cos(e._wanderAngle) * speed;
+    const newY = e.y + Math.sin(e._wanderAngle) * speed;
+    const margin = 0.3;
+    const mx = Math.cos(e._wanderAngle) >= 0 ? margin : -margin;
+    const my = Math.sin(e._wanderAngle) >= 0 ? margin : -margin;
+    if (
+      this.isPassable(Math.floor(newX + mx), Math.floor(e.y)) &&
+      this.isPassable(Math.floor(newX + mx), Math.floor(e.y + margin)) &&
+      this.isPassable(Math.floor(newX + mx), Math.floor(e.y - margin))
+    ) {
+      e.x = newX;
+    } else {
+      e._wanderAngle += Math.PI; // bounce off walls
+    }
+    if (
+      this.isPassable(Math.floor(e.x), Math.floor(newY + my)) &&
+      this.isPassable(Math.floor(e.x + margin), Math.floor(newY + my)) &&
+      this.isPassable(Math.floor(e.x - margin), Math.floor(newY + my))
+    ) {
+      e.y = newY;
+    } else {
+      e._wanderAngle += Math.PI;
+    }
+    e.angle = e._wanderAngle;
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
