@@ -10,7 +10,13 @@
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
-import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./game.js";
+import { COMPACT_PHONE_HEIGHT } from "./game.js";
+import {
+  pauseLayout,
+  settingsLayout,
+  upgradeLayout,
+  tutorialMenuLayout,
+} from "./layout.js";
 
 export class TouchControls {
   static init(game) {
@@ -304,7 +310,7 @@ export class TouchControls {
       return;
     }
 
-    // Tutorial completion: route taps to menu items
+    // Tutorial completion: route taps to specific menu items
     if (g.state === "tutorialComplete") {
       if (e.changedTouches.length > 0) {
         this.handleTutorialCompleteTap(e.changedTouches[0]);
@@ -637,67 +643,56 @@ export class TouchControls {
     this.game.keys[kb.sprint] = this.sprintToggleActive;
   }
 
-  /** Shared pause menu button layout — used by both tap handler and renderer */
-  _pauseButtonLayout() {
+  handlePauseTap(touch) {
     const w = this.zones.w;
     const h = this.zones.h;
-    const isCompact = this.zones.isCompactPhone;
-    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
-    const btnH = isCompact ? 40 : 50;
-    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
-    const gap = isCompact ? 6 : 10;
-    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
-    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
-    const totalW = labels.length * btnW + (labels.length - 1) * gap;
-    const startX = (w - totalW) / 2;
-    return {
-      w,
-      h,
-      isCompact,
-      btnY,
-      btnH,
-      btnW,
-      gap,
-      labels,
-      colors,
-      totalW,
-      startX,
-    };
-  }
-
-  handlePauseTap(touch) {
-    const { w, h, btnY, btnH, btnW, gap, labels, startX } =
-      this._pauseButtonLayout();
     const x = touch.clientX;
     const y = touch.clientY;
+    const layout = pauseLayout(w, h, this.game.mode);
 
-    if (y >= btnY && y <= btnY + btnH) {
-      for (let i = 0; i < labels.length; i++) {
-        const bx = startX + i * (btnW + gap);
-        if (x >= bx && x <= bx + btnW) {
-          if (i === 0)
-            this.game.handleKeyPress("Escape"); // Resume
-          else if (i === 1)
-            this.game.handleKeyPress("KeyS"); // Settings
-          else if (i === 2)
-            this.game.handleKeyPress("KeyC"); // Controls
-          else if (i === 3) this.game.handleKeyPress("KeyQ"); // Quit
-          return;
-        }
+    for (const btn of layout.buttons) {
+      if (
+        x >= btn.x &&
+        x <= btn.x + btn.w &&
+        y >= btn.y &&
+        y <= btn.y + btn.h
+      ) {
+        if (btn.index === 0) this.game.handleKeyPress("Escape"); // Resume
+        else if (btn.index === 1) this.game.handleKeyPress("KeyS"); // Settings
+        else if (btn.index === 2) this.game.handleKeyPress("KeyC"); // Controls
+        else if (btn.index === 3) this.game.handleKeyPress("KeyQ"); // Quit
+        return;
       }
     }
-    // Save button for campaign (below main row)
-    if (this.game.mode === "campaign") {
-      const saveY = btnY + btnH + 10;
-      const saveBtnW = 100;
-      const saveX = (w - saveBtnW) / 2;
-      if (
-        y >= saveY &&
-        y <= saveY + 40 &&
-        x >= saveX &&
-        x <= saveX + saveBtnW
-      ) {
+
+    if (layout.saveBtn) {
+      const s = layout.saveBtn;
+      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
         this.game.handleKeyPress("KeyF");
+      }
+    }
+  }
+
+  handleTutorialCompleteTap(touch) {
+    const g = this.game;
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const x = touch.clientX;
+    const y = touch.clientY;
+    const layout = tutorialMenuLayout(w, h, 4);
+
+    for (let i = 0; i < 4; i++) {
+      const iy = layout.my + 8 + i * layout.itemH;
+      if (
+        x >= layout.mx &&
+        x <= layout.mx + layout.menuW &&
+        y >= iy &&
+        y <= iy + layout.itemH - 6
+      ) {
+        g.tutorialMenuSelection = i;
+        g.audio.menuConfirm();
+        g.executeTutorialCompletionChoice(i);
+        return;
       }
     }
   }
@@ -778,39 +773,19 @@ export class TouchControls {
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
-    const compactSettings = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
-    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
-    const panelX = w / 2 - panelW / 2;
-    const visibleDefs = getVisibleSettings(this.game.isTouchDevice);
-    const itemHeights = visibleDefs.map((def) =>
-      compactSettings ? def.height.compact : def.height.normal,
-    );
+    const layout = settingsLayout(w, h, this.game.settingsSelection, this.game.isTouchDevice);
+    const { panelX, panelW, itemHeights, totalH } = layout;
+    let cursorY = layout.startY;
 
-    // Scroll-aware startY — must match renderSettingsScreen in game.js
-    const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - (compactSettings ? 60 : 120);
-    const titleAreaY = compactSettings ? 28 : 50;
-    let startY = titleAreaY + (compactSettings ? 20 : 40);
-    if (totalH > visibleH) {
-      let selTop = 0;
-      for (let si = 0; si < this.game.settingsSelection; si++)
-        selTop += itemHeights[si];
-      const selCenter = selTop + itemHeights[this.game.settingsSelection] / 2;
-      const idealOffset = visibleH / 2 - selCenter;
-      const maxOffset = 0;
-      const minOffset = visibleH - totalH;
-      startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
-    }
-    if (y > startY + totalH) {
+    if (y > layout.startY + totalH) {
       this.game.handleKeyPress("Escape");
       return;
     }
 
-    // Find which setting was tapped
     for (let i = 0; i < itemHeights.length; i++) {
       if (
-        y >= startY &&
-        y <= startY + itemHeights[i] &&
+        y >= cursorY &&
+        y <= cursorY + itemHeights[i] &&
         x >= panelX &&
         x <= panelX + panelW
       ) {
@@ -823,7 +798,7 @@ export class TouchControls {
         }
         return;
       }
-      startY += itemHeights[i];
+      cursorY += itemHeights[i];
     }
   }
 
@@ -838,32 +813,25 @@ export class TouchControls {
 
     const g = this.game;
     const upgradeKeys = Object.keys(UPGRADES);
-    const cols = 2;
-    // Must match renderUpgradeScreen in game.js
-    const compactUpg = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
-    const headerY = compactUpg ? 14 : 40;
-    const startY = headerY + (compactUpg ? 30 : 90);
-    const cardH = compactUpg ? 40 : 64;
-    const cardGap = compactUpg ? 3 : 6;
-    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
-    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
-    const totalRows = Math.ceil(upgradeKeys.length / cols);
-    const contY = startY + totalRows * (cardH + cardGap) + 20;
+    const layout = upgradeLayout(w, h, upgradeKeys.length, this.game.isTouchDevice);
 
-    // Check continue button area
-    if (y >= contY - 18 && y <= contY + 18) {
+    if (y >= layout.contY - 18 && y <= layout.contY + 18) {
       g.upgradeSelection = upgradeKeys.length;
       g.handleKeyPress("Enter");
       return;
     }
 
-    // Check upgrade grid
     for (let i = 0; i < upgradeKeys.length; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : w / 2 + (compactUpg ? 6 : 12);
-      const uy = startY + row * (cardH + cardGap);
-      if (x >= baseX && x <= baseX + colW && y >= uy && y <= uy + cardH) {
+      const col = i % layout.cols;
+      const row = Math.floor(i / layout.cols);
+      const baseX = col === 0 ? layout.leftX : layout.rightX;
+      const uy = layout.startY + row * (layout.cardH + layout.cardGap);
+      if (
+        x >= baseX &&
+        x <= baseX + layout.colW &&
+        y >= uy &&
+        y <= uy + layout.cardH
+      ) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -1254,37 +1222,39 @@ export class TouchControls {
   }
 
   renderPauseButtons(ctx) {
-    const { w, h, btnY, btnH, btnW, gap, labels, colors, startX } =
-      this._pauseButtonLayout();
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const layout = pauseLayout(w, h, this.game.mode);
 
     ctx.globalAlpha = 0.7;
-    for (let i = 0; i < labels.length; i++) {
-      const bx = startX + i * (btnW + gap);
-      ctx.fillStyle = colors[i];
+    for (const btn of layout.buttons) {
+      const bx = btn.x;
+      const by = btn.y;
+      const btnW = btn.w;
+      const btnH = btn.h;
+      ctx.fillStyle = btn.color;
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(bx, btnY, btnW, btnH, 8);
+      ctx.roundRect(bx, by, btnW, btnH, 8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#fff";
       ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(labels[i], bx + btnW / 2, btnY + btnH / 2);
+      ctx.fillText(btn.label, bx + btnW / 2, by + btnH / 2);
     }
 
-    if (this.game.mode === "campaign") {
-      const saveY = btnY + btnH + 10;
-      const saveBtnW = 100;
-      const saveX = (w - saveBtnW) / 2;
+    if (layout.saveBtn) {
+      const s = layout.saveBtn;
       ctx.fillStyle = "#00aa44";
       ctx.beginPath();
-      ctx.roundRect(saveX, saveY, saveBtnW, 40, 8);
+      ctx.roundRect(s.x, s.y, s.w, s.h, 8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#fff";
-      ctx.fillText("SAVE", saveX + saveBtnW / 2, saveY + 20);
+      ctx.fillText("SAVE", s.x + s.w / 2, s.y + s.h / 2);
     }
     ctx.globalAlpha = 1;
   }

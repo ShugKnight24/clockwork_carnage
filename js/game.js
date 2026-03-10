@@ -24,6 +24,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
 import { trackEvent } from "./analytics.js";
+import { settingsLayout, upgradeLayout, tutorialMenuLayout } from "./layout.js";
 
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.7.7";
@@ -3090,11 +3091,8 @@ export class Game {
       },
     ];
 
-    const menuW = Math.min(360, w - 40);
-    const itemH = 52;
-    const menuH = menuItems.length * itemH + 16;
-    const mx = (w - menuW) / 2;
-    const my = h * 0.35;
+    const layout = tutorialMenuLayout(w, h, menuItems.length);
+    const { menuW, itemH, menuH, mx, my } = layout;
 
     ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
     ctx.beginPath();
@@ -4114,11 +4112,8 @@ export class Game {
       { label: "MAIN MENU", key: "[ESC]", color: "#666666", desc: "" },
     ];
 
-    const menuW = Math.min(360, w - 40);
-    const itemH = 52;
-    const menuH = menuItems.length * itemH + 16;
-    const mx = (w - menuW) / 2;
-    const my = h * 0.35;
+    const layout = tutorialMenuLayout(w, h, menuItems.length);
+    const { menuW, itemH, menuH, mx, my } = layout;
 
     // Menu container
     ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
@@ -4916,7 +4911,11 @@ export class Game {
     // Chrono Shift activation (hold-to-activate, like sprint)
     // Need 15 energy to engage; once active, stays on until key released or energy depleted
     const chronoKeyHeld = !!this.keys[this.keybinds.chronoShift];
-    if (chronoKeyHeld && !this.player.chronoActive && this.player.chronoEnergy >= 15) {
+    if (
+      chronoKeyHeld &&
+      !this.player.chronoActive &&
+      this.player.chronoEnergy >= 15
+    ) {
       this.player.chronoActive = true;
       if (this.mode === "tutorial") this.tutorialChronoUsed = true;
     } else if (this.player.chronoActive && !chronoKeyHeld) {
@@ -6919,7 +6918,6 @@ export class Game {
 
     // ─── Chrono Shift bar (side-by-side on desktop, stacked on mobile) ───
     if (showChrono) {
-
       // Glow when active
       if (chronoIsActive) {
         ctx.fillStyle = "rgba(180,0,255,0.15)";
@@ -8742,26 +8740,9 @@ export class Game {
       compactSettings ? def.height.compact : def.height.normal,
     );
 
-    const barW = compactSettings ? 140 : 200;
-    const barH = compactSettings ? 4 : 6;
-    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
-    const panelX = w / 2 - panelW / 2;
-
-    // Scroll the settings panel so the selected item stays visible
-    const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - (compactSettings ? 60 : 120); // leave room for title + hint
-    const titleAreaY = compactSettings ? 28 : 50;
-    let startY = titleAreaY + (compactSettings ? 20 : 40);
-    if (totalH > visibleH) {
-      // Calculate selected item center and scroll to keep it visible
-      let selTop = 0;
-      for (let i = 0; i < this.settingsSelection; i++) selTop += itemHeights[i];
-      const selCenter = selTop + itemHeights[this.settingsSelection] / 2;
-      const idealOffset = visibleH / 2 - selCenter;
-      const maxOffset = 0;
-      const minOffset = visibleH - totalH;
-      startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
-    }
+    const layout = settingsLayout(w, h, this.settingsSelection, this.isTouchDevice);
+    const { panelX, panelW, barW, barH } = layout;
+    let startY = layout.startY;
 
     for (let i = 0; i < items.length; i++) {
       const def = visibleDefs[i];
@@ -9210,13 +9191,14 @@ export class Game {
 
     // ── Upgrade cards ──
     const upgradeKeys = Object.keys(UPGRADES);
-    const startY = headerY + (compactUpg ? 30 : 90);
-    const cardH = compactUpg ? 40 : 64;
-    const cardGap = compactUpg ? 3 : 6;
-    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
-    const cols = 2;
-    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
-    const rightX = w / 2 + (compactUpg ? 6 : 12);
+    const layout = upgradeLayout(w, h, upgradeKeys.length, this.isTouchDevice);
+    const startY = layout.startY;
+    const cardH = layout.cardH;
+    const cardGap = layout.cardGap;
+    const colW = layout.colW;
+    const cols = layout.cols;
+    const leftX = layout.leftX;
+    const rightX = layout.rightX;
 
     for (let i = 0; i < upgradeKeys.length; i++) {
       const key = upgradeKeys[i];
@@ -9358,8 +9340,8 @@ export class Game {
     }
 
     // ── Continue button ──
-    const totalRows = Math.ceil(upgradeKeys.length / cols);
-    const contY = startY + totalRows * (cardH + cardGap) + 20;
+    const totalRows = layout.totalRows;
+    const contY = layout.contY;
     const contSelected = this.upgradeSelection === upgradeKeys.length;
 
     const contBtnW = compactUpg ? 260 : 360;
