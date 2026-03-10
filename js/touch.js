@@ -128,7 +128,8 @@ export class TouchControls {
     this._updateSafeArea();
     const sa = this.safeArea;
 
-    // Button sizing — enforce minimum 44px touch targets (Apple HIG)
+    // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
+    // stays ≥ 44px (Apple HIG) thanks to this floor
     const btnSize = Math.max(44, Math.min(56, w * 0.09));
     const pad = 14 + sa.right;
     const bottomPad = 14 + sa.bottom;
