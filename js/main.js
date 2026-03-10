@@ -141,19 +141,38 @@ if (btnFullscreen) {
     if (isStandalone) {
       btnFullscreen.style.display = "none"; // Already fullscreen via home screen
     } else if ("ontouchstart" in window) {
+      // Detect if we're in Safari (only iOS browser that supports PWA install)
+      const ua = navigator.userAgent;
+      const isSafari =
+        /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|brave/i.test(ua);
       btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
       btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
-      btnFullscreen.title =
-        "Tap Share → Add to Home Screen for fullscreen mode";
-      btnFullscreen.addEventListener("click", () => {
-        alert(
-          "To play fullscreen on this device:\n\n" +
-            "1. Tap the Share button (↑) in your browser\n" +
-            '2. Select "Add to Home Screen"\n' +
-            "3. Open Clockwork Carnage from your home screen\n\n" +
-            "The game will run in fullscreen mode!",
-        );
-      });
+      if (isSafari) {
+        btnFullscreen.title =
+          "Tap Share → Add to Home Screen for fullscreen mode";
+        btnFullscreen.addEventListener("click", () => {
+          alert(
+            "To play fullscreen on this device:\n\n" +
+              '1. Tap the Share button (↑) in Safari\n' +
+              '2. Select "Add to Home Screen"\n' +
+              "3. Open Clockwork Carnage from your home screen\n\n" +
+              "The game will run in fullscreen mode!",
+          );
+        });
+      } else {
+        btnFullscreen.title =
+          "Open in Safari to add as home screen app";
+        btnFullscreen.addEventListener("click", () => {
+          alert(
+            "To play fullscreen on this device:\n\n" +
+              "1. Open this page in Safari\n" +
+              '2. Tap the Share button (↑)\n' +
+              '3. Select "Add to Home Screen"\n' +
+              "4. Open Clockwork Carnage from your home screen\n\n" +
+              "Note: Only Safari supports home screen apps on iOS.",
+          );
+        });
+      }
     } else {
       btnFullscreen.style.display = "none"; // Desktop without API — unusual, just hide
     }
