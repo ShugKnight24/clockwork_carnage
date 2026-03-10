@@ -17,6 +17,7 @@ import {
   WEAPONS,
   ENEMY_TYPES,
   ARENA_MAP,
+  ARENA_MAPS,
   CAMPAIGN_LEVELS,
   UPGRADES,
   ACHIEVEMENTS,
@@ -320,10 +321,11 @@ function runDataValidation() {
   }
 
   // Maps
-  for (const [name, map] of [
-    ["TUTORIAL_MAP", TUTORIAL_MAP],
-    ["ARENA_MAP", ARENA_MAP],
-  ]) {
+  const mapEntries = [["TUTORIAL_MAP", TUTORIAL_MAP]];
+  for (let i = 0; i < ARENA_MAPS.length; i++) {
+    mapEntries.push([`ARENA_MAPS[${i}] "${ARENA_MAPS[i].name}"`, ARENA_MAPS[i]]);
+  }
+  for (const [name, map] of mapEntries) {
     r.assert(
       map.grid.length === map.height,
       `${name}: grid height matches (${map.height})`,
@@ -427,16 +429,19 @@ function runDataValidation() {
     );
   }
 
-  // Arena spawn validation
-  if (ARENA_MAP.enemySpawns) {
-    for (const s of ARENA_MAP.enemySpawns) {
-      const sx = Math.floor(s.x);
-      const sy = Math.floor(s.y);
-      r.assert(
-        ARENA_MAP.grid[sy][sx] === 0,
-        `Arena spawn (${s.x},${s.y}) on empty tile`,
-        `Arena spawn (${s.x},${s.y}) inside wall tile=${ARENA_MAP.grid[sy][sx]}`,
-      );
+  // Arena spawn validation (all maps)
+  for (let mi = 0; mi < ARENA_MAPS.length; mi++) {
+    const amap = ARENA_MAPS[mi];
+    if (amap.enemySpawns) {
+      for (const s of amap.enemySpawns) {
+        const sx = Math.floor(s.x);
+        const sy = Math.floor(s.y);
+        r.assert(
+          amap.grid[sy][sx] === 0,
+          `Arena[${mi}] spawn (${s.x},${s.y}) on empty tile`,
+          `Arena[${mi}] "${amap.name}" spawn (${s.x},${s.y}) inside wall tile=${amap.grid[sy][sx]}`,
+        );
+      }
     }
   }
 
@@ -582,7 +587,7 @@ function runMapReachability() {
 
   const allMaps = [
     { name: "Tutorial", map: TUTORIAL_MAP },
-    { name: "Arena", map: ARENA_MAP },
+    ...ARENA_MAPS.map((m, i) => ({ name: `Arena[${i}] "${m.name}"`, map: m })),
     ...CAMPAIGN_LEVELS.map((m, i) => ({ name: `Campaign ${i}`, map: m })),
   ];
 
