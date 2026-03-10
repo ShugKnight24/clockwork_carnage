@@ -2946,7 +2946,8 @@ export class Game {
     const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
     const infoW = isMobile ? 0 : 200;
     const contentGap = isMobile ? 8 : 20;
-    const totalContentW = listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
+    const totalContentW =
+      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
 
     // ─── NAME tab — special rendering ───
@@ -3306,7 +3307,8 @@ export class Game {
     const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
     const infoW = isMobile ? 0 : 200;
     const contentGap = isMobile ? 8 : 20;
-    const totalContentW = listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
+    const totalContentW =
+      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
     const listX = contentX;
     const maxVisible = Math.min(items.length, 8);

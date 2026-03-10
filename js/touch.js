@@ -179,9 +179,15 @@ export class TouchControls {
       z.interactBtn.r * hitShrink
     )
       return "interact";
-    if (this.dist(x, y, z.chronoBtn.x, z.chronoBtn.y) < z.chronoBtn.r * hitShrink)
+    if (
+      this.dist(x, y, z.chronoBtn.x, z.chronoBtn.y) <
+      z.chronoBtn.r * hitShrink
+    )
       return "chrono";
-    if (this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) < z.sprintBtn.r * hitShrink)
+    if (
+      this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) <
+      z.sprintBtn.r * hitShrink
+    )
       return "sprint";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r)
       return "pause";
@@ -893,7 +899,11 @@ export class TouchControls {
     // Hint text
     ctx.font = "11px monospace";
     ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.fillText("Tap tabs \u00B7 \u25C0 \u25B6 to switch \u00B7 Tap items to select", w / 2, btnY - 12);
+    ctx.fillText(
+      "Tap tabs \u00B7 \u25C0 \u25B6 to switch \u00B7 Tap items to select",
+      w / 2,
+      btnY - 12,
+    );
 
     ctx.globalAlpha = 1;
   }
