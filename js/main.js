@@ -133,14 +133,16 @@ if (btnFullscreen) {
     try {
       const el = document.fullscreenElement || document.webkitFullscreenElement;
       if (el) {
-        await (document.exitFullscreen || document.webkitExitFullscreen).call(
-          document,
-        );
+        const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exitFn) {
+          await exitFn.call(document);
+        }
       } else {
         const root = document.documentElement;
-        await (root.requestFullscreen || root.webkitRequestFullscreen).call(
-          root,
-        );
+        const reqFn = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (reqFn) {
+          await reqFn.call(root);
+        }
       }
     } catch (_) {}
   });
