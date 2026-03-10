@@ -5319,9 +5319,9 @@ export class Game {
     const tiltAngle = isSprinting ? Math.sin(this.player.weaponBob) * 0.06 : 0;
 
     // weapon scale (larger to stay visible above HUD) - increase assets size instead of scaling up as much in the future by default?
-    // On touch devices, proportionally shrink the weapon so the view
-    // stays clear. Uses a gentler curve: below 720px it reduces faster
-    // but never below 0.55 to keep the weapon recognizable.
+    // On touch devices, scale the weapon linearly with viewport height so the view
+    // stays clear. The factor is clamped between 0.55 and 1.0 (h/720, with a 0.55 minimum)
+    // to keep the weapon visible but not dominate the screen on small displays.
     const viewportFactor = this.isTouchDevice
       ? Math.max(0.55, Math.min(1, h / 720))
       : 1;

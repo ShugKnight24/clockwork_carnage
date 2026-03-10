@@ -129,12 +129,12 @@ document.getElementById("btnBack").addEventListener("click", () => {
 // Fullscreen toggle
 const btnFullscreen = document.getElementById("btnFullscreen");
 if (btnFullscreen) {
-  btnFullscreen.addEventListener("click", () => {
+  btnFullscreen.addEventListener("click", async () => {
     try {
       if (document.fullscreenElement) {
-        document.exitFullscreen();
+        await document.exitFullscreen();
       } else {
-        document.documentElement.requestFullscreen();
+        await document.documentElement.requestFullscreen();
       }
     } catch (_) {}
   });
