@@ -181,16 +181,16 @@ export class TouchControls {
     };
   }
 
-  /** Read CSS env() safe area insets (iPhone X+ notch, Dynamic Island) */
+  /** Read CSS custom property safe area insets (iPhone X+ notch, Dynamic Island) */
   _updateSafeArea() {
     try {
       const style = getComputedStyle(document.documentElement);
       const parse = (prop) => parseInt(style.getPropertyValue(prop), 10) || 0;
       this.safeArea = {
-        top: parse("--sat") || parse("env(safe-area-inset-top)") || 0,
-        right: parse("--sar") || parse("env(safe-area-inset-right)") || 0,
-        bottom: parse("--sab") || parse("env(safe-area-inset-bottom)") || 0,
-        left: parse("--sal") || parse("env(safe-area-inset-left)") || 0,
+        top: parse("--sat"),
+        right: parse("--sar"),
+        bottom: parse("--sab"),
+        left: parse("--sal"),
       };
     } catch (_) {
       // Fallback: no safe area
@@ -501,7 +501,7 @@ export class TouchControls {
     // Pause menu touch buttons are rendered in a row at h/2 + 130
     const btnY = h / 2 + 115;
     const btnH = 50;
-    const btnW = Math.min(90, (w - 60) / 4 - 10);
+    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
     const gap = 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;
@@ -573,11 +573,24 @@ export class TouchControls {
     const y = touch.clientY * scaleY;
     const panelX = w / 2 - 220;
     const panelW = 440;
-    const itemHeights = [44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44];
-    let startY = h / 2 - 155;
+    const itemHeights = [
+      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44, 60,
+    ];
 
-    // Check if tap is in the "Back" area (bottom)
+    // Scroll-aware startY — must match renderSettingsScreen in game.js
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
+    const visibleH = h - 120;
+    const titleAreaY = 50;
+    let startY = titleAreaY + 40;
+    if (totalH > visibleH) {
+      let selTop = 0;
+      for (let si = 0; si < this.game.settingsSelection; si++) selTop += itemHeights[si];
+      const selCenter = selTop + itemHeights[this.game.settingsSelection] / 2;
+      const idealOffset = visibleH / 2 - selCenter;
+      const maxOffset = 0;
+      const minOffset = visibleH - totalH;
+      startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
+    }
     if (y > startY + totalH) {
       this.game.handleKeyPress("Escape");
       return;
@@ -615,15 +628,18 @@ export class TouchControls {
     const g = this.game;
     const upgradeKeys = Object.keys(UPGRADES);
     const cols = 2;
-    const startY = 140;
-    const lineH = 50;
-    const colW = 340;
-    const leftX = w / 2 - colW - 15;
+    // Must match renderUpgradeScreen in game.js
+    const headerY = 40;
+    const startY = headerY + 90; // 130
+    const cardH = 64;
+    const cardGap = 6;
+    const colW = 320;
+    const leftX = w / 2 - colW - 12;
     const totalRows = Math.ceil(upgradeKeys.length / cols);
-    const contY = startY + totalRows * lineH + 25;
+    const contY = startY + totalRows * (cardH + cardGap) + 20;
 
     // Check continue button area
-    if (y >= contY - 15 && y <= contY + 15) {
+    if (y >= contY - 18 && y <= contY + 18) {
       g.upgradeSelection = upgradeKeys.length;
       g.handleKeyPress("Enter");
       return;
@@ -633,13 +649,13 @@ export class TouchControls {
     for (let i = 0; i < upgradeKeys.length; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : w / 2 + 15;
-      const uy = startY + row * lineH;
+      const baseX = col === 0 ? leftX : w / 2 + 12;
+      const uy = startY + row * (cardH + cardGap);
       if (
-        x >= baseX - 5 &&
-        x <= baseX + colW - 5 &&
-        y >= uy - 16 &&
-        y <= uy + lineH - 18
+        x >= baseX &&
+        x <= baseX + colW &&
+        y >= uy &&
+        y <= uy + cardH
       ) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
@@ -1008,7 +1024,7 @@ export class TouchControls {
     const h = this.zones.h;
     const btnY = h / 2 + 115;
     const btnH = 50;
-    const btnW = Math.min(90, (w - 60) / 4 - 10);
+    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
     const gap = 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];

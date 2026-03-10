@@ -2737,7 +2737,7 @@ export class Game {
       },
     ];
 
-    const menuW = 360;
+    const menuW = Math.min(360, w - 40);
     const itemH = 52;
     const menuH = menuItems.length * itemH + 16;
     const mx = (w - menuW) / 2;
@@ -3753,7 +3753,7 @@ export class Game {
       { label: "MAIN MENU", key: "[ESC]", color: "#666666", desc: "" },
     ];
 
-    const menuW = 360;
+    const menuW = Math.min(360, w - 40);
     const itemH = 52;
     const menuH = menuItems.length * itemH + 16;
     const mx = (w - menuW) / 2;
