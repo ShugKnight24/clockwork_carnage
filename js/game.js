@@ -23,7 +23,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
 const SAVE_VERSION = 1;
-export const GAME_VERSION = "0.7.2";
+export const GAME_VERSION = "0.7.6";
 
 export const GameState = {
   TITLE: "title",
@@ -2737,7 +2737,7 @@ export class Game {
       },
     ];
 
-    const menuW = 360;
+    const menuW = Math.min(360, w - 40);
     const itemH = 52;
     const menuH = menuItems.length * itemH + 16;
     const mx = (w - menuW) / 2;
@@ -2900,14 +2900,16 @@ export class Game {
       ctx.stroke();
     }
 
+    const isMobile = this.isTouchDevice && w < 700;
+
     // Title
-    const titleY = 44;
+    const titleY = isMobile ? 34 : 44;
     const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
     ctx.save();
     ctx.shadowColor = palette.accent;
     ctx.shadowBlur = 16 * titlePulse;
     ctx.fillStyle = palette.accent;
-    ctx.font = "bold 28px monospace";
+    ctx.font = `bold ${isMobile ? 20 : 28}px monospace`;
     ctx.textAlign = "center";
     ctx.fillText("AGENT CUSTOMIZATION", w / 2, titleY);
     ctx.shadowBlur = 0;
@@ -2922,7 +2924,6 @@ export class Game {
     ctx.stroke();
 
     // ─── Category tabs (responsive) ───
-    const isMobile = this.isTouchDevice && w < 700;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
@@ -2967,7 +2968,7 @@ export class Game {
     }
 
     // ─── Layout: responsive (3-col desktop, 2-col mobile) ───
-    const contentY = tabY + tabH + 20;
+    const contentY = tabY + tabH + (isMobile ? 12 : 20);
     const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
     const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
     const infoW = isMobile ? 0 : 200;
@@ -2979,9 +2980,9 @@ export class Game {
     // ─── NAME tab — special rendering ───
     if (cat === 0) {
       const nameBoxW = isMobile ? Math.min(320, w - 40) : 320;
-      const nameBoxH = 50;
+      const nameBoxH = isMobile ? 44 : 50;
       const nameBoxX = w / 2 - nameBoxW / 2;
-      const nameBoxY = contentY + 40;
+      const nameBoxY = contentY + (isMobile ? 20 : 40);
 
       // Label
       ctx.fillStyle = palette.accent;
@@ -3021,7 +3022,12 @@ export class Game {
 
       // Still show character preview below
       const prevCX = w / 2;
-      const prevCY = nameBoxY + nameBoxH + 160;
+      const prevCY = isMobile
+        ? nameBoxY +
+          nameBoxH +
+          Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
+        : nameBoxY + nameBoxH + 160;
+      const prevScale = isMobile ? 1.0 : 1.5;
       this._renderCharacterPreview(
         ctx,
         prevCX,
@@ -3032,14 +3038,18 @@ export class Game {
         skin,
         now,
         loadout,
-        1.5,
+        prevScale,
       );
 
       // Agent name under preview
       ctx.fillStyle = palette.accent;
       ctx.font = "bold 14px monospace";
       ctx.textAlign = "center";
-      ctx.fillText(char.name || "Agent", prevCX, prevCY + 100);
+      ctx.fillText(
+        char.name || "Agent",
+        prevCX,
+        prevCY + (isMobile ? 70 : 100),
+      );
 
       // Footer controls
       if (!isMobile) {
@@ -3061,8 +3071,11 @@ export class Game {
     const items = curCat.data;
     const selIdx = char[curCat.key];
     const listX = contentX;
-    const maxVisible = Math.min(items.length, 8);
-    const itemH = 36;
+    const itemH = isMobile ? 32 : 36;
+    // On mobile, cap visible items to fit: leave 80px for save/cancel buttons
+    const availH = isMobile ? h - contentY - 80 : 999;
+    const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
+    const maxVisible = Math.min(items.length, isMobile ? maxBySpace : 8);
     const listH = maxVisible * itemH + 16;
 
     ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
@@ -3287,6 +3300,7 @@ export class Game {
     const my = (e.clientY - rect.top) * scaleY;
 
     const w = this.canvas.width;
+    const h = this.canvas.height;
     const isMobile = this.isTouchDevice && w < 700;
     const categories = [
       { name: "NAME", shortLabel: "NAME", data: null, key: null },
@@ -3317,7 +3331,7 @@ export class Game {
       },
     ];
 
-    const titleY = 44;
+    const titleY = isMobile ? 34 : 44;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
@@ -3353,7 +3367,7 @@ export class Game {
     const items = curCat.data;
     if (!items) return;
 
-    const contentY = tabY + tabH + 20;
+    const contentY = tabY + tabH + (isMobile ? 12 : 20);
     const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
     const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
     const infoW = isMobile ? 0 : 200;
@@ -3362,8 +3376,10 @@ export class Game {
       listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
     const listX = contentX;
-    const maxVisible = Math.min(items.length, 8);
-    const itemH = 36;
+    const itemH = isMobile ? 32 : 36;
+    const availH = isMobile ? h - contentY - 80 : 999;
+    const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
+    const maxVisible = Math.min(items.length, isMobile ? maxBySpace : 8);
 
     const selIdx = this.character[curCat.key];
     let scrollOff = 0;
@@ -3741,7 +3757,7 @@ export class Game {
       { label: "MAIN MENU", key: "[ESC]", color: "#666666", desc: "" },
     ];
 
-    const menuW = 360;
+    const menuW = Math.min(360, w - 40);
     const itemH = 52;
     const menuH = menuItems.length * itemH + 16;
     const mx = (w - menuW) / 2;
@@ -6552,8 +6568,11 @@ export class Game {
 
     ctx.textAlign = "left";
 
-    // Minimap - Top Right Corner
-    const mmSize = this.settings.minimapSize;
+    // Minimap - Top Right Corner (capped on mobile so it doesn't dominate)
+    let mmSize = this.settings.minimapSize;
+    if (this.isTouchDevice && w < 700) {
+      mmSize = Math.min(mmSize, Math.round(w * 0.28));
+    }
     this.drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize);
 
     // Crosshair
