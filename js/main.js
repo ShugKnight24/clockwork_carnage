@@ -128,33 +128,69 @@ document.getElementById("btnBack").addEventListener("click", () => {
 
 // Fullscreen toggle (with iOS webkit prefix fallback)
 const btnFullscreen = document.getElementById("btnFullscreen");
+const canFullscreen =
+  typeof document.documentElement.requestFullscreen === "function" ||
+  typeof document.documentElement.webkitRequestFullscreen === "function";
+const isStandalone =
+  window.navigator.standalone === true ||
+  window.matchMedia("(display-mode: standalone)").matches;
 if (btnFullscreen) {
-  btnFullscreen.addEventListener("click", async () => {
-    try {
-      const el = document.fullscreenElement || document.webkitFullscreenElement;
-      if (el) {
-        const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
-        if (exitFn) {
-          await exitFn.call(document);
-        }
-      } else {
-        const root = document.documentElement;
-        const reqFn = root.requestFullscreen || root.webkitRequestFullscreen;
-        if (reqFn) {
-          await reqFn.call(root);
-        }
-      }
-    } catch (_) {}
-  });
-  const updateFSLabel = () => {
-    btnFullscreen.textContent =
-      document.fullscreenElement || document.webkitFullscreenElement
-        ? "⛶ EXIT FULLSCREEN"
-        : "⛶ FULLSCREEN";
-  };
-  document.addEventListener("fullscreenchange", updateFSLabel);
-  document.addEventListener("webkitfullscreenchange", updateFSLabel);
-  updateFSLabel();
+  if (!canFullscreen) {
+    // Fullscreen API not supported (e.g. iPhone Safari/Brave).
+    // Show "Add to Home Screen" hint or hide button.
+    if (isStandalone) {
+      btnFullscreen.style.display = "none"; // Already fullscreen via home screen
+    } else if ("ontouchstart" in window) {
+      btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
+      btnFullscreen.title =
+        "Tap Share → Add to Home Screen for fullscreen mode";
+      btnFullscreen.addEventListener("click", () => {
+        alert(
+          "To play fullscreen on this device:\n\n" +
+            "1. Tap the Share button (↑) in your browser\n" +
+            '2. Select "Add to Home Screen"\n' +
+            "3. Open Clockwork Carnage from your home screen\n\n" +
+            "The game will run in fullscreen mode!",
+        );
+      });
+    } else {
+      btnFullscreen.style.display = "none"; // Desktop without API — unusual, just hide
+    }
+  } else {
+    if (isStandalone) {
+      btnFullscreen.style.display = "none"; // Already standalone
+    } else {
+      btnFullscreen.addEventListener("click", async () => {
+        try {
+          const el =
+            document.fullscreenElement || document.webkitFullscreenElement;
+          if (el) {
+            const exitFn =
+              document.exitFullscreen || document.webkitExitFullscreen;
+            if (exitFn) {
+              await exitFn.call(document);
+            }
+          } else {
+            const root = document.documentElement;
+            const reqFn =
+              root.requestFullscreen || root.webkitRequestFullscreen;
+            if (reqFn) {
+              await reqFn.call(root);
+            }
+          }
+        } catch (_) {}
+      });
+      const updateFSLabel = () => {
+        btnFullscreen.textContent =
+          document.fullscreenElement || document.webkitFullscreenElement
+            ? "⛶ EXIT FULLSCREEN"
+            : "⛶ FULLSCREEN";
+      };
+      document.addEventListener("fullscreenchange", updateFSLabel);
+      document.addEventListener("webkitfullscreenchange", updateFSLabel);
+      updateFSLabel();
+    }
+  }
 }
 
 btnContinueCampaign.addEventListener("click", () => {
