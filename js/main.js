@@ -154,6 +154,7 @@ if (btnFullscreen) {
   };
   document.addEventListener("fullscreenchange", updateFSLabel);
   document.addEventListener("webkitfullscreenchange", updateFSLabel);
+  updateFSLabel();
 }
 
 btnContinueCampaign.addEventListener("click", () => {
