@@ -85,6 +85,7 @@ document.getElementById("btnArena").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
+  trackEvent("mode_start", { mode: "arena" });
   game.startArena();
 });
 
@@ -92,6 +93,7 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
+  trackEvent("mode_start", { mode: "campaign" });
   if (game.shouldShowTutorial()) {
     game.startTutorial();
   } else {
@@ -103,6 +105,7 @@ document.getElementById("btnTutorial").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
+  trackEvent("mode_start", { mode: "tutorial" });
   game.startTutorial();
 });
 
@@ -110,6 +113,7 @@ document.getElementById("btnBuilder").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
+  trackEvent("mode_start", { mode: "builder" });
   game.startBuilder();
 });
 
@@ -117,6 +121,7 @@ document.getElementById("btnCustomize").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
+  trackEvent("mode_start", { mode: "creator" });
   game.creatorReturnState = GameState.MODE_SELECT;
   game.state = GameState.CHARACTER_CREATE;
 });

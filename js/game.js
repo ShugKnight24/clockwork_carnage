@@ -23,6 +23,7 @@ import { BuilderMode } from "./builder.js";
 import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
+import { trackEvent } from "./analytics.js";
 
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.7.7";
@@ -3633,8 +3634,12 @@ export class Game {
   }
 
   _exitCreator(saved) {
-    if (saved) this.saveCharacter();
-    else this.loadCharacter();
+    if (saved) {
+      this.saveCharacter();
+      trackEvent("character_create", {
+        loadout_class: this.character.loadoutClass || "default",
+      });
+    } else this.loadCharacter();
     if (this._creatorSaveCallback) {
       const cb = this._creatorSaveCallback;
       this._creatorSaveCallback = null;
@@ -4713,6 +4718,13 @@ export class Game {
       if (isBoss && this.mode === "campaign") {
         this.achievementStats.bossKilled = true;
         this.checkAchievements();
+        trackEvent("boss_kill", {
+          mode: "campaign",
+          form: this.campaignAct,
+          time_seconds: Math.floor(
+            (performance.now() - this.roundStartTime) / 1000,
+          ),
+        });
 
         if (this.campaignAct === 1) {
           // Act 1 complete — false victory subversion, then end game for now
@@ -4883,6 +4895,14 @@ export class Game {
           }
           this.state = GameState.GAME_OVER;
           this.audio.stopMusic();
+          trackEvent("player_death", {
+            mode: this.mode,
+            round: this.arenaRound,
+            cause: "health",
+            time_seconds: Math.floor(
+              (performance.now() - this.roundStartTime) / 1000,
+            ),
+          });
           if (this.mode === "arena") this.clearArenaSave();
           else this.clearCampaignSave();
           this.unlockPointer();
@@ -4964,6 +4984,12 @@ export class Game {
         // Round complete
         this.arenaRound++;
         this.player.score += 1000 + this.killedEnemies * 50;
+        trackEvent("round_complete", {
+          mode: "arena",
+          round: this.arenaRound - 1,
+          kills: this.killedEnemies,
+          time_seconds: 60,
+        });
         this.achievementStats.highestArenaRound = Math.max(
           this.achievementStats.highestArenaRound,
           this.arenaRound - 1,
@@ -5476,7 +5502,11 @@ export class Game {
         if (e._summonTimer >= e.def.summonInterval) {
           e._summonTimer = 0;
           const summonCount = this.entities.filter(
-            (s) => s.type === "enemy" && s.active && s._summoned && s.state !== "dead"
+            (s) =>
+              s.type === "enemy" &&
+              s.active &&
+              s._summoned &&
+              s.state !== "dead",
           ).length;
           if (summonCount < (e.def.summonMax || 3)) {
             const angle = Math.random() * Math.PI * 2;
@@ -5499,10 +5529,12 @@ export class Game {
           e._bombTimer = 0;
           this._chronoBombs = this._chronoBombs || [];
           this._chronoBombs.push({
-            x: e.x, y: e.y,
+            x: e.x,
+            y: e.y,
             radius: e.def.bombRadius || 2.0,
             damage: e.def.bombDamage || 25,
-            fuseLife: 0, fuseDuration: 1.5,
+            fuseLife: 0,
+            fuseDuration: 1.5,
             active: true,
           });
         }
