@@ -325,7 +325,9 @@ document.addEventListener("keydown", (e) => {
 let prevState = null;
 
 function gameLoop(timestamp) {
+  const _tUpd0 = performance.now();
   game.update(timestamp);
+  const updateMs = performance.now() - _tUpd0;
 
   if (game.state !== prevState) {
     prevState = game.state;
@@ -348,8 +350,22 @@ function gameLoop(timestamp) {
     }
   }
 
+  let renderMs = 0;
   if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
+    const _tRnd0 = performance.now();
     game.render();
+    renderMs = performance.now() - _tRnd0;
+  }
+
+  // Feed profiler
+  game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
+
+  // Draw profiler overlay when showFPS is active
+  if (game.showFPS) {
+    const ctx = game.hudCtx;
+    const pw = 220;
+    const ph = 280;
+    game.profiler.render(ctx, 4, 4, pw, ph);
   }
 
   // Render touch controls overlay (merged into main rAF)
@@ -368,6 +384,9 @@ window.addEventListener("beforeunload", () => {
     game.saveCampaign();
 });
 window.__ccBeforeUnloadRegistered = true;
+
+// Expose profiler snapshot for test harness / telemetry
+window.ccProfiler = () => game.profiler.getSnapshot();
 
 // Expose test runner on window for console access (dynamic import so
 // production works even when js/testing/ is not deployed)

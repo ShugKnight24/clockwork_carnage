@@ -21,6 +21,7 @@ import { AudioManager } from "./audio.js";
 import { BuilderMode } from "./builder.js";
 import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
+import { Profiler } from "./editor/debug/profiler.js";
 
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.7.7";
@@ -396,6 +397,7 @@ export class Game {
     this.frameCount = 0;
     this.fpsTime = 0;
     this.showFPS = false;
+    this.profiler = new Profiler();
     this.glitchEffect = 0;
     this.hitMarker = 0;
     this.damageNumbers = [];
@@ -4986,6 +4988,7 @@ export class Game {
     }
 
     // Player movement
+    const _tPlr0 = performance.now();
     this.updatePlayer(dt);
 
     // Firing
@@ -5005,6 +5008,7 @@ export class Game {
     // Weapon kick recovery
     this.player.weaponKick *= 0.85;
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+    this.profiler.currentPhases.player = performance.now() - _tPlr0;
 
     // TODO: Find a better solution here
     // Clean up dead entities (keep recently-dead for death animation)
@@ -5016,13 +5020,22 @@ export class Game {
     }
 
     // Update enemies
+    const _tEnt0 = performance.now();
     this.updateEnemies(dt);
+    this.profiler.currentPhases.enemies = performance.now() - _tEnt0;
 
     // Update projectiles
+    const _tPrj0 = performance.now();
     this.updateProjectiles(dt);
+    this.profiler.currentPhases.projectiles = performance.now() - _tPrj0;
 
     // Check pickups
+    const _tPkp0 = performance.now();
     this.checkPickups();
+    this.profiler.currentPhases.pickups = performance.now() - _tPkp0;
+
+    // Misc: exit check, decay, achievements
+    const _tMisc0 = performance.now();
 
     // Check exit (campaign)
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
@@ -5061,6 +5074,7 @@ export class Game {
     this.checkAchievements();
     this.updateAchievementToast(dt);
     this.updateAriaComms(dt);
+    this.profiler.currentPhases.misc = performance.now() - _tMisc0;
   }
 
   triggerDash(code, rawDirX, rawDirY) {
@@ -5603,7 +5617,8 @@ export class Game {
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    // Render 3D scene
+    // Render 3D scene — timed: raycast phase
+    const _tRay0 = performance.now();
     this.renderer.renderScene(
       this.player,
       this.map,
@@ -5614,8 +5629,10 @@ export class Game {
     );
 
     ctx.restore();
+    this.profiler.currentPhases.raycast = performance.now() - _tRay0;
 
     // Subtle ambient vignette (cached offscreen for performance)
+    const _tVig0 = performance.now();
     if (
       !this._vignetteCanvas ||
       this._vignetteW !== w ||
@@ -5641,8 +5658,10 @@ export class Game {
       this._vignetteH = h;
     }
     ctx.drawImage(this._vignetteCanvas, 0, 0);
+    this.profiler.currentPhases.vignette = performance.now() - _tVig0;
 
     // Draw weapon (hidden in third person)
+    const _tWpn0 = performance.now();
     if (this.settings.viewMode === 0) {
       this.drawWeapon(ctx, w, h);
     }
@@ -5651,6 +5670,10 @@ export class Game {
     if (this.settings.viewMode === 1) {
       this.drawThirdPersonModel(ctx, w, h);
     }
+    this.profiler.currentPhases.weapon = performance.now() - _tWpn0;
+
+    // Effects: hurt flash, glitch, death fade
+    const _tFx0 = performance.now();
 
     // Hurt flash
     if (this.player.hurtTime && this.time - this.player.hurtTime < 200) {
@@ -5669,16 +5692,20 @@ export class Game {
       ctx.fillStyle = "rgba(80,0,0,0.5)";
       ctx.fillRect(0, 0, w, h);
     }
+    this.profiler.currentPhases.effects = performance.now() - _tFx0;
 
     // Render HUD on overlay canvas
+    const _tHud0 = performance.now();
     this.renderHUD();
 
     // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
     if (this.mode === "tutorial") {
       this.renderTutorialOverlay(ctx, w, h);
     }
+    this.profiler.currentPhases.hud = performance.now() - _tHud0;
 
     // Render overlay screens on HUD canvas (it's on top via z-index)
+    const _tOvr0 = performance.now();
     const hctx = this.hudCtx;
     const hw = this.hudCanvas.width;
     const hh = this.hudCanvas.height;
@@ -5695,6 +5722,7 @@ export class Game {
     if (this.state === GameState.VICTORY) this.renderVictory(hctx, hw, hh);
     if (this.state === GameState.LEVEL_COMPLETE)
       this.renderLevelComplete(hctx, hw, hh);
+    this.profiler.currentPhases.overlays = performance.now() - _tOvr0;
   }
 
   // Third-person player silhouette (back view)
@@ -7238,12 +7266,7 @@ export class Game {
       ctx.fillRect(0, 0, w, h - barH);
     }
 
-    // FPS
-    if (this.showFPS) {
-      ctx.fillStyle = "#00ff00";
-      ctx.font = "12px monospace";
-      ctx.fillText(`FPS: ${this.fps}`, 10, 95);
-    }
+    // FPS / profiler overlay is drawn by main.js gameLoop after render()
 
     // Controls hint (only first round, not during cutscenes/tutorial)
     if (this.mode !== "tutorial") {
