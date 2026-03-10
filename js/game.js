@@ -2900,6 +2900,8 @@ export class Game {
       ctx.stroke();
     }
 
+    const isMobile = this.isTouchDevice && w < 700;
+
     // Title
     const titleY = isMobile ? 34 : 44;
     const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
@@ -2922,7 +2924,6 @@ export class Game {
     ctx.stroke();
 
     // ─── Category tabs (responsive) ───
-    const isMobile = this.isTouchDevice && w < 700;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
@@ -3299,6 +3300,7 @@ export class Game {
     const my = (e.clientY - rect.top) * scaleY;
 
     const w = this.canvas.width;
+    const h = this.canvas.height;
     const isMobile = this.isTouchDevice && w < 700;
     const categories = [
       { name: "NAME", shortLabel: "NAME", data: null, key: null },
@@ -3329,7 +3331,7 @@ export class Game {
       },
     ];
 
-    const titleY = 44;
+    const titleY = isMobile ? 34 : 44;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
@@ -3365,7 +3367,7 @@ export class Game {
     const items = curCat.data;
     if (!items) return;
 
-    const contentY = tabY + tabH + 20;
+    const contentY = tabY + tabH + (isMobile ? 12 : 20);
     const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
     const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
     const infoW = isMobile ? 0 : 200;
@@ -3374,8 +3376,10 @@ export class Game {
       listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
     const contentX = (w - totalContentW) / 2;
     const listX = contentX;
-    const maxVisible = Math.min(items.length, 8);
-    const itemH = 36;
+    const itemH = isMobile ? 32 : 36;
+    const availH = isMobile ? h - contentY - 80 : 999;
+    const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
+    const maxVisible = Math.min(items.length, isMobile ? maxBySpace : 8);
 
     const selIdx = this.character[curCat.key];
     let scrollOff = 0;
