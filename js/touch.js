@@ -684,7 +684,9 @@ export class TouchControls {
     ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
 
     // ── Fullscreen button (top-right, next to pause) ──
-    const isFS = !!document.fullscreenElement;
+    const isFS = !!(
+      document.fullscreenElement || document.webkitFullscreenElement
+    );
     ctx.beginPath();
     ctx.arc(
       z.fullscreenBtn.x,
@@ -837,9 +839,22 @@ export class TouchControls {
   }
 
   toggleFullscreen() {
-    const p = document.fullscreenElement
-      ? document.exitFullscreen()
-      : document.documentElement.requestFullscreen();
+    const el = document.fullscreenElement || document.webkitFullscreenElement;
+    let p;
+    if (el) {
+      p = document.exitFullscreen
+        ? document.exitFullscreen()
+        : document.webkitExitFullscreen
+          ? document.webkitExitFullscreen()
+          : undefined;
+    } else {
+      const root = document.documentElement;
+      p = root.requestFullscreen
+        ? root.requestFullscreen()
+        : root.webkitRequestFullscreen
+          ? root.webkitRequestFullscreen()
+          : undefined;
+    }
     if (p && typeof p.catch === "function") p.catch(() => {});
   }
 
