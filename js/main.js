@@ -142,6 +142,7 @@ if (btnFullscreen) {
       btnFullscreen.style.display = "none"; // Already fullscreen via home screen
     } else if ("ontouchstart" in window) {
       btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
+      btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
       btnFullscreen.title =
         "Tap Share → Add to Home Screen for fullscreen mode";
       btnFullscreen.addEventListener("click", () => {
