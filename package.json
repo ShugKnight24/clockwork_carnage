@@ -1,0 +1,22 @@
+{
+  "name": "clockwork-carnage-tools",
+  "version": "0.7.1",
+  "private": true,
+  "description": "Proprietary testing, automation, and telemetry engine for Clockwork Carnage",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:smoke": "npx playwright test tests/smoke.spec.js",
+    "test:screenshots": "npx playwright test tests/screenshots.spec.js",
+    "test:bots": "npx playwright test tests/bots.spec.js",
+    "test:telemetry": "npx playwright test tests/telemetry.spec.js",
+    "test:experts": "npx playwright test tests/experts.spec.js",
+    "test:journeys": "npx playwright test tests/user-journeys.spec.js",
+    "test:extremes": "npx playwright test tests/extremes.spec.js",
+    "screenshots": "npx playwright test tests/screenshots.spec.js --headed",
+    "simulate": "node simulations/run.mjs",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
