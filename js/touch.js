@@ -276,7 +276,7 @@ export class TouchControls {
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         g.interact();
-      } else if (zone === "chrono") {
+      } else if (zone === "chrono" && this.chronoTouch === null) {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;
         g.keys[g.keybinds.chronoShift] = true;
