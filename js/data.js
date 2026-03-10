@@ -3068,7 +3068,7 @@ export const TUTORIAL_MAP = {
   playerStart: { x: 3.5, y: 3.5, dir: 0 },
   pickups: [
     { x: 3.5, y: 10.5, type: "health" },
-    { x: 5.5, y: 10.5, type: "ammo" },
+    { x: 6.5, y: 10.5, type: "ammo" },
     { x: 12.5, y: 4.5, type: "health" },
     { x: 8.5, y: 7.5, type: "weapon", weaponId: 1 },
   ],
