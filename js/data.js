@@ -243,6 +243,248 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
+  // ── New Level Transition Briefings (Dr. Voss narrative) ──────────
+
+  security_briefing: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CHRONOS STATION — SECURITY WING", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Security Checkpoint", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        { text: '"Security wing ahead. These officers were supposed to protect the station."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"Now they\'re just protecting... whatever\'s left."', delay: 2200, color: "#00ffdd", size: 15 },
+        { text: '"Stay alert. They know the layout better than we do."', delay: 4200, color: "#ffcc00", size: 16 },
+      ],
+      duration: 6500,
+    },
+  ],
+
+  research_briefing: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CHRONOS STATION — RESEARCH DIVISION", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Research Wing", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        { text: '"Research wing. Whatever they were studying here..."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"The glass walls are shattered. Something phased through them."', delay: 2200, color: "#ff8844", size: 15 },
+        { text: '"I\'m detecting phantom signatures. Enemies that can pass through walls."', delay: 4400, color: "#ffcc00", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 7000,
+    },
+  ],
+
+  containment_briefing: [
+    {
+      bg: "dark",
+      lines: [
+        { text: "CHRONOS STATION — DETENTION LEVEL", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Containment Block", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "The cells are open. The prisoners are long gone.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "But something else moved in.", delay: 2000, color: "#ff8844", size: 15 },
+      ],
+      duration: 4500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: '"I\'m picking up a strong hostile — something heavily armored."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"Shield Commander class. Frontal attacks won\'t work. Flank it."', delay: 2500, color: "#ffcc00", size: 16 },
+        { text: '"Also — prisoner logs mention someone called Dr. Voss. Pulling files now..."', delay: 5000, color: "#00ffdd", size: 14 },
+      ],
+      duration: 7500,
+    },
+  ],
+
+  server_briefing: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CHRONOS STATION — DATA CENTER", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Server Farm", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        { text: '"Mainframe access. Give me a minute to pull classified files."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"Dr. Elias Voss. Lead temporal physicist. Omega clearance."', delay: 2500, color: "#ffcc00", size: 16 },
+        { text: '"Official status: DECEASED. Three years ago."', delay: 5000, color: "#ff4444", size: 16 },
+        { text: '"...but the temporal signatures say otherwise."', delay: 7000, color: "#ff8844", size: 14 },
+      ],
+      duration: 9500,
+    },
+  ],
+
+  reactor_briefing: [
+    {
+      bg: "dark",
+      lines: [
+        { text: "CHRONOS STATION — REACTOR LEVEL", delay: 0, color: "#ff8844", size: 20 },
+        { text: "Reactor Access", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      particles: "embers",
+      duration: 3500,
+    },
+    {
+      bg: "dark",
+      shake: 1,
+      lines: [
+        { text: "The energy readings are off the scale.", delay: 0, color: "#ff8844", size: 16 },
+        { text: "Something went catastrophically wrong here.", delay: 2000, color: "#ff4444", size: 16 },
+        { text: "Scorch marks. Temporal discharge residue. A failed experiment.", delay: 4000, color: "#aabbcc", size: 14 },
+      ],
+      particles: "embers",
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: '"The reactor was part of something called Project PARADOX."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"Voss built a suit that merges with temporal energy. Sound familiar?"', delay: 2500, color: "#ffcc00", size: 16 },
+        { text: '"Your suit. He designed your suit. Badge C-0017."', delay: 5000, color: "#ff4444", size: 16 },
+      ],
+      duration: 7500,
+    },
+  ],
+
+  voss_lab_briefing: [
+    {
+      bg: "dark",
+      shake: 2,
+      lines: [
+        { text: "CHRONOS STATION — RESTRICTED LEVEL", delay: 0, color: "#cc44ff", size: 20 },
+        { text: "Dr. Voss's Personal Laboratory", delay: 1500, color: "#ffffff", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 4000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      flash: "#cc44ff",
+      lines: [
+        { text: '"This is it. Voss\'s private lab. Temporal rift at the center."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"The readings match the Paradox Lord\'s signature exactly."', delay: 2500, color: "#ff4444", size: 16 },
+        { text: '"...because they\'re the same person."', delay: 5000, color: "#ff2244", size: 18 },
+      ],
+      duration: 7500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "Dr. Elias Voss didn't die.", delay: 0, color: "#cc44ff", size: 18 },
+        { text: "He merged with the temporal field.", delay: 2000, color: "#cc44ff", size: 18 },
+        { text: "He became the Paradox Lord.", delay: 4000, color: "#ff2244", size: 22 },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 7000,
+    },
+  ],
+
+  nexus_briefing: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CHRONOS STATION — SECTOR 7", delay: 0, color: "#00ccff", size: 20 },
+        { text: "The Temporal Nexus", delay: 1200, color: "#ffffff", size: 16 },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "rift",
+      lines: [
+        { text: "The deeper corridors pulse with unstable energy.", delay: 0, color: "#aabbcc", size: 16 },
+        { text: "Time itself fractures here — enemies phase in and out.", delay: 1800, color: "#ff8844", size: 16 },
+        { text: "Almost there. The Core is just beyond.", delay: 3600, color: "#ffcc00", size: 18 },
+      ],
+      particles: "embers",
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: '"Voss is waiting. He knows you\'re wearing his prototype."', delay: 0, color: "#00ffdd", size: 15 },
+        { text: '"He built the suit. He knows its weaknesses."', delay: 2200, color: "#ffcc00", size: 15 },
+        { text: '"But he also knows its strengths. And so do we."', delay: 4400, color: "#00ffdd", size: 16 },
+      ],
+      duration: 7000,
+    },
+  ],
+
+  paradox_core_briefing: [
+    {
+      bg: "dark",
+      art: "hero_armed",
+      lines: [
+        { text: "Your temporal scanner is going haywire.", delay: 0, color: "#00ccff", size: 16 },
+        { text: "Chronal distortion readings — climbing fast.", delay: 2000, color: "#aabbcc", size: 15 },
+        { text: "200... 800... 3,600... 9,001...", delay: 4000, color: "#ffcc00", size: 18 },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE PARADOX CORE", delay: 0, color: "#ff2244", size: 22 },
+        { text: "Where Dr. Elias Voss became something else.", delay: 1500, color: "#cc4466", size: 16 },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 4000,
+    },
+    {
+      bg: "dark",
+      art: "hero_armed",
+      shake: 3,
+      lines: [
+        { text: "A voice. Not from the room — from inside your head.", delay: 0, color: "#ff6644", size: 16 },
+        { text: "The visor cracks. Static floods your HUD.", delay: 2200, color: "#ff4444", size: 16 },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        { text: '"You\'re wearing MY suit."', delay: 0, color: "#ff4466", size: 18 },
+        { text: '"I built it. I know every circuit, every paradox loop."', delay: 2200, color: "#ff4466", size: 16 },
+        { text: '"You can\'t save what was never meant to exist."', delay: 4500, color: "#ff2244", size: 18 },
+      ],
+      particles: "embers",
+      duration: 7000,
+    },
+  ],
+
   level3_briefing: [
     {
       bg: "dark",
@@ -3023,6 +3265,44 @@ export const ARIA_COMMS = {
     "Upgrade applied. You're getting dangerously effective.",
     "Noted. Your combat profile just got scarier.",
   ],
+
+  // ── Arena Narrative ───────────────────────────────────────────────
+  arenaIntro: [
+    "Arena mode. This is a closed-loop combat sim — no objectives, no exit. Just survival.",
+    "Welcome to the Arena. The Paradox Lord's forces are being channeled here. Hold your ground.",
+    "Combat simulator online. ARIA monitoring all vitals. Try not to flatline.",
+    "Arena protocols engaged. Waves incoming. Let's see what you're made of.",
+  ],
+  arenaRound5: [
+    "Five rounds down. You're still standing. I'm almost impressed.",
+    "Round five. The patterns are adapting. Stay unpredictable.",
+    "Halfway to double digits. They're starting to take you seriously.",
+  ],
+  arenaRound10: [
+    "Ten rounds. That's... genuinely impressive. Don't let it go to your head.",
+    "Double digits. The temporal signature is intensifying. They're sending the heavy hitters.",
+    "Round ten. You've outlasted 96% of combat simulations. The other 4% were bugs.",
+  ],
+  arenaNewBest: [
+    "New personal best. I'll mark that in the file I'm definitely keeping on you.",
+    "Record broken. You keep getting better at controlled violence.",
+    "That's a new high score. Somewhere, a leaderboard is very impressed.",
+  ],
+  arenaDefeat: [
+    "Down. But you lasted {ROUNDS} rounds. That's not nothing.",
+    "Combat terminated at round {ROUNDS}. Analyzing what went wrong...",
+    "You survived {ROUNDS} rounds. Next time, survive {ROUNDS}+1. That's the goal.",
+  ],
+  subBossEncounter: [
+    "Sub-boss detected. High threat level. Watch your flanks.",
+    "That one's different — stronger, smarter. Don't trade hits.",
+    "Elevated hostile. This one won't go down easy.",
+  ],
+  secretFound: [
+    "Hidden cache found. Nice instincts.",
+    "You found something they tried to hide. Interesting...",
+    "Secret area. Someone didn't want this found.",
+  ],
 };
 
 export const WALL_COLORS = {
@@ -3417,6 +3697,393 @@ export const CAMPAIGN_LEVELS = [
     secrets: [
       { wallX: 6, wallY: 13, description: "Hidden supply cache" },
       { wallX: 5, wallY: 23, description: "Secret armory" },
+    ],
+  },
+  // ── Level 2: Security Checkpoint ──────────────────────────────────
+  // Tighter corridors, first encounter with Corrupt SWAT officers.
+  // ARIA: "Security wing. These officers were supposed to protect the station."
+  {
+    name: "Security Checkpoint",
+    width: 24,
+    height: 24,
+    grid: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+      [1,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,3,3,0,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,5,1,1,1,0,0,0,0,3,3,0,0,0,0,1,1,1,5,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,1],
+      [1,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,1],
+      [1,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3,3,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,5,1,1,1,0,0,0,0,3,3,0,0,0,0,1,1,1,5,1,1,1],
+      [1,0,0,0,0,0,1,0,0,0,0,3,3,0,0,0,0,1,0,0,0,0,0,1],
+      [1,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    playerStart: { x: 2.5, y: 2.5, dir: Math.PI / 2 },
+    entities: [
+      { x: 11.5, y: 2.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 15.5, y: 3.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 3.5, y: 7.5, type: "enemy", enemyType: "drone" },
+      { x: 20.5, y: 7.5, type: "enemy", enemyType: "drone" },
+      { x: 11.5, y: 11.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 12.5, y: 12.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 6.5, y: 14.5, type: "enemy", enemyType: "glitchling" },
+      { x: 17.5, y: 14.5, type: "enemy", enemyType: "glitchling" },
+      { x: 11.5, y: 17.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 3.5, y: 20.5, type: "enemy", enemyType: "drone" },
+      { x: 20.5, y: 20.5, type: "enemy", enemyType: "drone" },
+      { x: 12.5, y: 7.5, type: "health" },
+      { x: 11.5, y: 21.5, type: "ammo" },
+    ],
+    exit: { x: 21.5, y: 21.5 },
+    secrets: [
+      { wallX: 11, wallY: 10, description: "Security locker" },
+    ],
+  },
+  // ── Level 3: Research Wing ────────────────────────────────────────
+  // Glass walls, open labs. Phantoms phase through. ARIA finds early files.
+  // ARIA: "Research wing. Whatever they were studying here... it didn't end well."
+  {
+    name: "Research Wing",
+    width: 28,
+    height: 24,
+    grid: [
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,8,8,8,5,8,2,0,0,0,2,8,8,2,0,0,0,2,8,5,8,8,2,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,2,8,8,2,0,0,0,0,0,0,0,0,2,8,5,8,8,2],
+      [2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,2],
+      [2,2,2,5,2,2,2,0,0,0,0,0,0,0,0,0,0,2,2,2,5,2,2,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,2,2,5,2,2,2,0,0,0,0,0,0,0,0,0,0,2,2,2,5,2,2,0,0,0,0,2],
+      [2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,2,8,8,2,0,0,0,0,0,0,0,0,2,8,5,8,8,2],
+      [2,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,8,8,8,5,8,2,0,0,0,2,8,8,2,0,0,0,2,8,5,8,8,2,0,0,0,0,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,2],
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    ],
+    playerStart: { x: 2.5, y: 1.5, dir: Math.PI / 2 },
+    entities: [
+      { x: 11.5, y: 5.5, type: "enemy", enemyType: "phantom" },
+      { x: 11.5, y: 11.5, type: "enemy", enemyType: "phantom" },
+      { x: 20.5, y: 2.5, type: "enemy", enemyType: "drone" },
+      { x: 25.5, y: 5.5, type: "enemy", enemyType: "drone" },
+      { x: 3.5, y: 11.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 14.5, y: 8.5, type: "enemy", enemyType: "glitchling" },
+      { x: 14.5, y: 15.5, type: "enemy", enemyType: "glitchling" },
+      { x: 25.5, y: 9.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 20.5, y: 12.5, type: "enemy", enemyType: "phantom" },
+      { x: 3.5, y: 17.5, type: "enemy", enemyType: "drone" },
+      { x: 11.5, y: 17.5, type: "enemy", enemyType: "phantom" },
+      { x: 25.5, y: 17.5, type: "enemy", enemyType: "drone" },
+      { x: 20.5, y: 21.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 14.5, y: 11.5, type: "health" },
+      { x: 2.5, y: 21.5, type: "ammo" },
+      { x: 25.5, y: 21.5, type: "weapon", weaponId: 1 },
+    ],
+    exit: { x: 25.5, y: 1.5 },
+    secrets: [
+      { wallX: 10, wallY: 5, description: "Dr. Voss's early research notes" },
+    ],
+  },
+  // ── Level 4: Containment Block ────────────────────────────────────
+  // Prison cells, heavy sentinels. Sub-boss: Shield Commander.
+  // Narrative: Prisoner logs mention "Dr. Voss" and the Chronos Experiment.
+  {
+    name: "Containment Block",
+    width: 28,
+    height: 28,
+    grid: [
+      [3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],
+      [3,0,0,0,0,3,0,0,0,0,3,0,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,3],
+      [3,0,0,0,0,3,0,0,0,0,3,0,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,3],
+      [3,0,0,0,0,5,0,0,0,0,5,0,0,0,0,0,0,5,0,0,0,0,5,0,0,0,0,3],
+      [3,0,0,0,0,3,0,0,0,0,3,0,0,0,0,0,0,3,0,0,0,0,3,0,0,0,0,3],
+      [3,3,3,5,3,3,3,3,5,3,3,0,0,0,0,0,0,3,3,5,3,3,3,3,5,3,3,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,3,3,3,3,3,0,0,0,3,3,3,5,3,3,3,3,5,3,3,3,0,0,0,3,3,3,3],
+      [3,0,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,3,0,0,3],
+      [3,0,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,3,0,0,3],
+      [3,0,0,0,0,5,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,5,0,0,3],
+      [3,0,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,3,0,0,3],
+      [3,0,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,3,0,0,3],
+      [3,0,0,0,0,5,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,5,0,0,3],
+      [3,0,0,0,0,3,0,0,0,3,0,0,0,0,0,0,0,0,0,0,3,0,0,0,3,0,0,3],
+      [3,3,3,3,3,3,0,0,0,3,3,3,5,3,3,3,3,5,3,3,3,0,0,0,3,3,3,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+      [3,3,5,3,3,3,3,5,3,3,0,0,0,0,0,0,0,0,3,3,5,3,3,3,3,5,3,3],
+      [3,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,3],
+      [3,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,3],
+      [3,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,3],
+      [3,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,3],
+      [3,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,3],
+      [3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],
+    ],
+    playerStart: { x: 1.5, y: 7.5, dir: 0 },
+    entities: [
+      // Cells - sentinels guarding prisoners
+      { x: 2.5, y: 2.5, type: "enemy", enemyType: "sentinel" },
+      { x: 7.5, y: 2.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 21.5, y: 2.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 26.5, y: 2.5, type: "enemy", enemyType: "sentinel" },
+      // Central block - sub-boss
+      { x: 14.5, y: 13.5, type: "enemy", enemyType: "shieldCommander" },
+      { x: 11.5, y: 11.5, type: "enemy", enemyType: "henchman" },
+      { x: 17.5, y: 15.5, type: "enemy", enemyType: "henchman" },
+      // Lower cells
+      { x: 2.5, y: 13.5, type: "enemy", enemyType: "drone" },
+      { x: 25.5, y: 13.5, type: "enemy", enemyType: "drone" },
+      { x: 2.5, y: 23.5, type: "enemy", enemyType: "sentinel" },
+      { x: 25.5, y: 23.5, type: "enemy", enemyType: "corruptCop" },
+      // Glitchlings in corridors
+      { x: 7.5, y: 7.5, type: "enemy", enemyType: "glitchling" },
+      { x: 20.5, y: 7.5, type: "enemy", enemyType: "glitchling" },
+      { x: 7.5, y: 19.5, type: "enemy", enemyType: "glitchling" },
+      { x: 20.5, y: 19.5, type: "enemy", enemyType: "glitchling" },
+      // Pickups
+      { x: 14.5, y: 7.5, type: "health" },
+      { x: 14.5, y: 19.5, type: "ammo" },
+      { x: 7.5, y: 13.5, type: "health" },
+      { x: 20.5, y: 13.5, type: "weapon", weaponId: 1 },
+    ],
+    exit: { x: 14.5, y: 25.5 },
+    secrets: [
+      { wallX: 12, wallY: 9, description: "Prisoner log: Subject V — 'He volunteered for the experiment. Nobody told him what it really was.'" },
+      { wallX: 5, wallY: 21, description: "Classified memo: Project PARADOX approval — signed by Dr. Elias Voss" },
+    ],
+  },
+  // ── Level 5: Server Farm ──────────────────────────────────────────
+  // Tech walls everywhere, drones patrol data corridors. Narrative-heavy.
+  // ARIA discovers classified files about Voss's temporal research.
+  {
+    name: "Server Farm",
+    width: 24,
+    height: 28,
+    grid: [
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,2,2,5,2,2,5,2,2,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,5,0,0,2,0,0,0,0,0,0,2,0,0,5,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,2,0,0,0,0,0,0,2,0,0,2,0,0,0,0,2],
+      [2,2,2,5,2,2,0,0,2,0,0,0,0,0,0,2,0,0,2,2,5,2,2,2],
+      [2,0,0,0,0,0,0,0,2,5,2,2,2,2,5,2,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,2,2,2,2,0,0,0,0,0,2,2,2,2,0,0,0,0,0,2,2,2,2,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,2,0,0,0,0,0,2,0,0,0,2],
+      [2,0,0,0,5,0,0,0,0,0,5,0,0,5,0,0,0,0,0,5,0,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,2,0,0,0,0,0,2,0,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,2,0,0,0,0,0,2,0,0,0,2],
+      [2,0,0,0,5,0,0,0,0,0,5,0,0,5,0,0,0,0,0,5,0,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,2,0,0,0,0,0,2,0,0,0,2],
+      [2,2,2,2,2,0,0,0,0,0,2,2,2,2,0,0,0,0,0,2,2,2,2,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,2,5,2,2,2,2,5,2,0,0,0,0,0,0,0,2],
+      [2,2,2,5,2,2,0,0,2,0,0,0,0,0,0,2,0,0,2,2,5,2,2,2],
+      [2,0,0,0,0,2,0,0,2,0,0,0,0,0,0,2,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,2,0,0,0,0,0,0,2,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,5,0,0,2,2,5,2,2,5,2,2,0,0,5,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,2],
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    ],
+    playerStart: { x: 2.5, y: 1.5, dir: Math.PI / 2 },
+    entities: [
+      // Drone patrols in data corridors
+      { x: 11.5, y: 5.5, type: "enemy", enemyType: "drone" },
+      { x: 12.5, y: 5.5, type: "enemy", enemyType: "drone" },
+      { x: 2.5, y: 8.5, type: "enemy", enemyType: "drone" },
+      { x: 21.5, y: 8.5, type: "enemy", enemyType: "drone" },
+      { x: 11.5, y: 12.5, type: "enemy", enemyType: "drone" },
+      { x: 12.5, y: 15.5, type: "enemy", enemyType: "drone" },
+      // Henchmen guarding server rooms
+      { x: 2.5, y: 12.5, type: "enemy", enemyType: "henchman" },
+      { x: 21.5, y: 12.5, type: "enemy", enemyType: "henchman" },
+      { x: 11.5, y: 22.5, type: "enemy", enemyType: "chronoBomber" },
+      // Phantoms roaming
+      { x: 8.5, y: 9.5, type: "enemy", enemyType: "phantom" },
+      { x: 15.5, y: 18.5, type: "enemy", enemyType: "phantom" },
+      // Glitchlings
+      { x: 7.5, y: 4.5, type: "enemy", enemyType: "glitchling" },
+      { x: 16.5, y: 23.5, type: "enemy", enemyType: "glitchling" },
+      { x: 2.5, y: 18.5, type: "enemy", enemyType: "glitchling" },
+      // Pickups
+      { x: 11.5, y: 8.5, type: "health" },
+      { x: 11.5, y: 18.5, type: "ammo" },
+      { x: 2.5, y: 25.5, type: "health" },
+      { x: 21.5, y: 25.5, type: "weapon", weaponId: 2 },
+    ],
+    exit: { x: 21.5, y: 1.5 },
+    secrets: [
+      { wallX: 10, wallY: 7, description: "ARIA: 'I'm pulling files from the mainframe... Dr. Elias Voss — lead temporal physicist. Clearance level: Omega. Status: DECEASED.'" },
+      { wallX: 4, wallY: 10, description: "Recovered audio log: 'The suit prototype works. Subject merges with the temporal field. But the side effects... we can't control the paradox feedback.'" },
+    ],
+  },
+  // ── Level 6: Reactor Access ───────────────────────────────────────
+  // Energy walls, beasts lurking. Signs of the experiment gone wrong.
+  // ARIA: "Reactor level. The energy readings are off the scale."
+  {
+    name: "Reactor Access",
+    width: 28,
+    height: 24,
+    grid: [
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,4,4,4,4,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,4,0,0,4,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,4,4,4,5,4,4,4,4,0,0,0,4,0,0,4,0,0,0,4,4,4,4,5,4,4,4,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,5,0,0,5,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,4,4,0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,4,4,0,0,0,4],
+      [4,0,0,0,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,4,0,0,0,4],
+      [4,0,0,0,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,4,0,0,0,4],
+      [4,0,0,0,4,4,0,0,0,0,0,0,4,4,4,4,0,0,0,0,0,0,4,4,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,5,0,0,5,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4],
+      [4,4,4,4,5,4,4,4,4,0,0,0,4,0,0,4,0,0,0,4,4,4,4,5,4,4,4,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,4,4,4,4,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,4],
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+    ],
+    playerStart: { x: 2.5, y: 1.5, dir: Math.PI / 2 },
+    entities: [
+      // Beasts lurking near reactor
+      { x: 13.5, y: 5.5, type: "enemy", enemyType: "beast" },
+      { x: 14.5, y: 13.5, type: "enemy", enemyType: "beast" },
+      { x: 13.5, y: 18.5, type: "enemy", enemyType: "beast" },
+      // Chrono-bombers near energy conduits
+      { x: 7.5, y: 7.5, type: "enemy", enemyType: "chronoBomber" },
+      { x: 20.5, y: 7.5, type: "enemy", enemyType: "chronoBomber" },
+      // Drones patrolling perimeter
+      { x: 2.5, y: 7.5, type: "enemy", enemyType: "drone" },
+      { x: 25.5, y: 7.5, type: "enemy", enemyType: "drone" },
+      { x: 2.5, y: 16.5, type: "enemy", enemyType: "drone" },
+      { x: 25.5, y: 16.5, type: "enemy", enemyType: "drone" },
+      // Henchmen
+      { x: 7.5, y: 15.5, type: "enemy", enemyType: "henchman" },
+      { x: 20.5, y: 15.5, type: "enemy", enemyType: "henchman" },
+      // Glitchlings in vents
+      { x: 4.5, y: 11.5, type: "enemy", enemyType: "glitchling" },
+      { x: 23.5, y: 11.5, type: "enemy", enemyType: "glitchling" },
+      { x: 14.5, y: 8.5, type: "enemy", enemyType: "glitchling" },
+      // Pickups
+      { x: 14.5, y: 11.5, type: "health" },
+      { x: 2.5, y: 21.5, type: "ammo" },
+      { x: 25.5, y: 21.5, type: "health" },
+      { x: 14.5, y: 21.5, type: "ammo" },
+    ],
+    exit: { x: 25.5, y: 21.5 },
+    secrets: [
+      { wallX: 4, wallY: 6, description: "Scorched lab coat with name badge: 'Dr. E. Voss — Temporal Division.' Burn marks suggest temporal energy discharge." },
+      { wallX: 23, wallY: 17, description: "Emergency shutdown terminal — failed. Log: 'Reactor containment breach. Subject Voss has... merged with the temporal field. God help us.'" },
+    ],
+  },
+  // ── Level 7: Dr. Voss's Laboratory ────────────────────────────────
+  // Personal lab of the Paradox Lord's former self. Narrative climax before boss.
+  // Full reveal: Voss IS the Paradox Lord. His final research notes.
+  {
+    name: "Dr. Voss's Laboratory",
+    width: 28,
+    height: 28,
+    grid: [
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,2,2,2,5,2,2,2,0,0,0,8,0,0,0,2,2,2,5,2,2,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,8,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,5,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,5,0,0,0,0,0,5,0,0,0,0,0,0,0,5,0,0,0,0,0,5,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,2,2,5,2,2,2,0,0,0,0,0,0,0,2,2,2,5,2,2,2,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,8,8,8,8,8,8,8,8,0,0,0,9,0,0,0,9,0,0,0,8,8,8,8,8,8,8,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,9,0,0,0,9,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,2,2,2,5,2,2,2,0,0,0,0,0,0,0,2,2,2,5,2,2,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,5,0,0,0,0,0,5,0,0,0,0,0,0,0,5,0,0,0,0,0,5,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,0,0,0,0,0,2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,0,0,2],
+      [2,0,0,0,2,2,2,5,2,2,2,0,0,0,0,0,0,0,2,2,2,5,2,2,2,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+    ],
+    playerStart: { x: 1.5, y: 1.5, dir: Math.PI / 4 },
+    entities: [
+      // Temporal Summoner in the central rift chamber
+      { x: 14.5, y: 14.5, type: "enemy", enemyType: "temporalSummoner" },
+      // Henchmen guarding lab wings
+      { x: 7.5, y: 7.5, type: "enemy", enemyType: "henchman" },
+      { x: 21.5, y: 7.5, type: "enemy", enemyType: "henchman" },
+      { x: 7.5, y: 21.5, type: "enemy", enemyType: "henchman" },
+      { x: 21.5, y: 21.5, type: "enemy", enemyType: "henchman" },
+      // Phantoms near rift
+      { x: 10.5, y: 14.5, type: "enemy", enemyType: "phantom" },
+      { x: 18.5, y: 14.5, type: "enemy", enemyType: "phantom" },
+      // Chrono-bombers in corridors
+      { x: 4.5, y: 14.5, type: "enemy", enemyType: "chronoBomber" },
+      { x: 24.5, y: 14.5, type: "enemy", enemyType: "chronoBomber" },
+      // Drones
+      { x: 14.5, y: 2.5, type: "enemy", enemyType: "drone" },
+      { x: 14.5, y: 25.5, type: "enemy", enemyType: "drone" },
+      { x: 2.5, y: 14.5, type: "enemy", enemyType: "drone" },
+      { x: 26.5, y: 14.5, type: "enemy", enemyType: "drone" },
+      // Pickups
+      { x: 7.5, y: 5.5, type: "health" },
+      { x: 21.5, y: 5.5, type: "ammo" },
+      { x: 7.5, y: 22.5, type: "ammo" },
+      { x: 21.5, y: 22.5, type: "health" },
+      { x: 14.5, y: 7.5, type: "weapon", weaponId: 2 },
+    ],
+    exit: { x: 26.5, y: 26.5 },
+    secrets: [
+      { wallX: 6, wallY: 6, description: "ARIA: 'These are Voss's personal journals. He wrote about the suit — YOUR suit. He built the prototype. Badge number C-0017.'" },
+      { wallX: 13, wallY: 13, description: "Final entry — Dr. Voss: 'The Paradox Engine responds to consciousness, not controls. I didn't break it. I became it. If you're reading this, I'm sorry. I was trying to save everyone.'" },
+      { wallX: 22, wallY: 20, description: "ARIA: 'Temporal signature matches... Oh. Oh no. The Paradox Lord. He was listed as deceased three years ago. Dr. Elias Voss didn't die. He became something else.'" },
     ],
   },
   {
@@ -3936,6 +4603,80 @@ export const ENEMY_TYPES = {
     xp: 8,
     attackType: "melee",
     ai: "ambush",
+  },
+  // ── Sub-bosses & Henchmen (v0.8.0) ──
+  shieldCommander: {
+    name: "Shield Commander",
+    health: 300,
+    speed: 1.0,
+    damage: 20,
+    attackRate: 1400,
+    attackRange: 8,
+    sightRange: 16,
+    radius: 0.5,
+    score: 1200,
+    color1: "#4488dd",
+    color2: "#223366",
+    xp: 120,
+    attackType: "ranged",
+    ai: "patrol",
+    subBoss: true,
+    frontShield: true,
+  },
+  temporalSummoner: {
+    name: "Temporal Summoner",
+    health: 250,
+    speed: 0.8,
+    damage: 15,
+    attackRate: 1800,
+    attackRange: 12,
+    sightRange: 20,
+    radius: 0.45,
+    score: 1500,
+    color1: "#cc44ff",
+    color2: "#440066",
+    xp: 150,
+    attackType: "ranged",
+    ai: "patrol",
+    subBoss: true,
+    summonType: "drone",
+    summonInterval: 8000,
+    summonMax: 3,
+  },
+  henchman: {
+    name: "Voss's Henchman",
+    health: 90,
+    speed: 1.6,
+    damage: 18,
+    attackRate: 800,
+    attackRange: 10,
+    sightRange: 16,
+    radius: 0.35,
+    score: 400,
+    color1: "#ff6600",
+    color2: "#663300",
+    xp: 40,
+    attackType: "ranged",
+    ai: "flanker",
+  },
+  chronoBomber: {
+    name: "Chrono-Bomber",
+    health: 70,
+    speed: 1.4,
+    damage: 10,
+    attackRate: 1200,
+    attackRange: 9,
+    sightRange: 15,
+    radius: 0.35,
+    score: 350,
+    color1: "#ffaa00",
+    color2: "#664400",
+    xp: 35,
+    attackType: "ranged",
+    ai: "patrol",
+    dropsBombs: true,
+    bombDamage: 25,
+    bombRadius: 2.0,
   },
 };
 

@@ -374,6 +374,7 @@ export class Game {
     this.player = new Player();
     this.entities = [];
     this.projectiles = [];
+    this._chronoBombs = [];
     this.map = null;
     this.state = GameState.TITLE;
     this.mode = null; // 'arena' or 'campaign'
@@ -1615,7 +1616,8 @@ export class Game {
     if (!this.ariaEnabled) return;
     const pool = ARIA_COMMS[category];
     if (!pool || pool.length === 0) return;
-    const text = pool[Math.floor(Math.random() * pool.length)];
+    let text = pool[Math.floor(Math.random() * pool.length)];
+    text = text.replace("{ROUNDS}", String(this.arenaRound || 0));
     // Only idle chatter and personality moments use the subtle bottom-left style
     const prominent = !["idle", "ariaPersonality"].includes(category);
     this.ariaQueue.push({
@@ -2225,6 +2227,7 @@ export class Game {
     this.ariaEnabled = true;
     this.ariaTriggered = {};
     this.queueAriaMessage("arenaStart");
+    this.queueAriaMessage("arenaIntro");
     this.startArenaRound();
   }
 
@@ -2241,6 +2244,7 @@ export class Game {
     this.arenaClearTimer = null;
     this.entities = [];
     this.projectiles = [];
+    this._chronoBombs = [];
 
     const diff = this.getDifficultyMultipliers();
     this.arenaTimer = Math.max(30, 60 + diff.timerBonus);
@@ -2253,6 +2257,9 @@ export class Game {
     const types = ["drone", "glitchling"];
     if (this.arenaRound >= 2) types.push("phantom", "corruptCop");
     if (this.arenaRound >= 4) types.push("beast", "sentinel");
+    if (this.arenaRound >= 6) types.push("henchman", "chronoBomber");
+    if (this.arenaRound >= 8) types.push("shieldCommander");
+    if (this.arenaRound >= 10) types.push("temporalSummoner");
 
     // TODO: Reconsider this for later levels... this gets brutally difficult
     // Filter spawns to minimum distance 5 from player AND on empty tiles, then shuffle
@@ -4226,6 +4233,7 @@ export class Game {
     this.player.alive = true;
     this.entities = [];
     this.projectiles = [];
+    this._chronoBombs = [];
 
     const diff = this.getDifficultyMultipliers();
 
@@ -4353,7 +4361,16 @@ export class Game {
 
     // Act-aware level briefing cutscenes
     const actBriefings = {
-      1: { 1: "level2_briefing", 2: "level3_briefing" },
+      1: {
+        1: "security_briefing",
+        2: "research_briefing",
+        3: "containment_briefing",
+        4: "server_briefing",
+        5: "reactor_briefing",
+        6: "voss_lab_briefing",
+        7: "nexus_briefing",
+        8: "paradox_core_briefing",
+      },
       2: { 1: "act2_level2", 2: "act2_level3" },
       3: { 1: "act3_level2", 2: "act3_boss" },
     };
@@ -4405,6 +4422,7 @@ export class Game {
         this.player.secretsFound++;
         this.player.score += 500;
         this.audio.secretFound();
+        this.queueAriaMessage("secretFound");
         return;
       }
     }
@@ -4590,6 +4608,25 @@ export class Game {
     if (this.player.critChance && Math.random() < this.player.critChance) {
       finalDamage *= 2;
       isCrit = true;
+    }
+
+    // Front shield — shield commanders take 80% less damage from the front
+    if (enemy.def.frontShield) {
+      const dx = this.player.x - enemy.x;
+      const dy = this.player.y - enemy.y;
+      const angleToPlayer = Math.atan2(dy, dx);
+      const facingAngle = enemy.angle || 0;
+      let angleDiff = Math.abs(angleToPlayer - facingAngle);
+      if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+      if (angleDiff < Math.PI / 3) {
+        finalDamage *= 0.2;
+      }
+    }
+
+    // Sub-boss encounter ARIA callout
+    if (enemy.def.subBoss && !enemy._ariaTriggered) {
+      enemy._ariaTriggered = true;
+      this.queueAriaMessage("subBossEncounter");
     }
 
     enemy.health -= finalDamage;
@@ -4778,6 +4815,12 @@ export class Game {
       this.deathTimer = 1.5;
       this.audio.playerDeath();
       this.queueAriaMessage("playerDeath");
+      if (this.mode === "arena") {
+        this.queueAriaMessage("arenaDefeat");
+        if (this.arenaRound > this.achievementStats.highestArenaRound) {
+          this.queueAriaMessage("arenaNewBest");
+        }
+      }
     }
   }
 
@@ -4942,6 +4985,9 @@ export class Game {
         if (accuracy >= 75 && this.shotsFired >= 10)
           this.queueAriaMessage("highAccuracy");
         this.queueAriaMessage("roundComplete");
+        // Arena milestone callouts
+        if (this.arenaRound - 1 === 5) this.queueAriaMessage("arenaRound5");
+        if (this.arenaRound - 1 === 10) this.queueAriaMessage("arenaRound10");
         this.ariaTriggered = {}; // reset one-shot triggers per round
         return;
       }
@@ -5422,6 +5468,63 @@ export class Game {
         e.state = "chase";
         e.stateTime = 0;
       }
+
+      // ── Sub-boss special abilities ──────────────────────────────
+      // Temporal Summoner: periodically spawn drones
+      if (e.def.summonType && e.state !== "dead") {
+        e._summonTimer = (e._summonTimer || 0) + dt * 1000;
+        if (e._summonTimer >= e.def.summonInterval) {
+          e._summonTimer = 0;
+          const summonCount = this.entities.filter(
+            (s) => s.type === "enemy" && s.active && s._summoned && s.state !== "dead"
+          ).length;
+          if (summonCount < (e.def.summonMax || 3)) {
+            const angle = Math.random() * Math.PI * 2;
+            const sx = e.x + Math.cos(angle) * 1.5;
+            const sy = e.y + Math.sin(angle) * 1.5;
+            if (this.isPassable(Math.floor(sx), Math.floor(sy))) {
+              const summon = new Enemy(sx, sy, e.def.summonType);
+              summon._summoned = true;
+              this.entities.push(summon);
+              this.totalEnemies++;
+            }
+          }
+        }
+      }
+
+      // Chrono-Bomber: drop area-denial bombs while chasing
+      if (e.def.dropsBombs && e.state === "chase") {
+        e._bombTimer = (e._bombTimer || 0) + dt * 1000;
+        if (e._bombTimer >= 4000) {
+          e._bombTimer = 0;
+          this._chronoBombs = this._chronoBombs || [];
+          this._chronoBombs.push({
+            x: e.x, y: e.y,
+            radius: e.def.bombRadius || 2.0,
+            damage: e.def.bombDamage || 25,
+            fuseLife: 0, fuseDuration: 1.5,
+            active: true,
+          });
+        }
+      }
+    }
+
+    // Update chrono-bombs (area denial)
+    if (this._chronoBombs) {
+      for (const bomb of this._chronoBombs) {
+        if (!bomb.active) continue;
+        bomb.fuseLife += dt;
+        if (bomb.fuseLife >= bomb.fuseDuration) {
+          // Detonate — damage player if in radius
+          const bdx = this.player.x - bomb.x;
+          const bdy = this.player.y - bomb.y;
+          if (bdx * bdx + bdy * bdy < bomb.radius * bomb.radius) {
+            this.damagePlayer(bomb.damage);
+          }
+          bomb.active = false;
+        }
+      }
+      this._chronoBombs = this._chronoBombs.filter((b) => b.active);
     }
   }
 
@@ -8366,6 +8469,22 @@ export class Game {
       py + Math.sin(this.player.angle) * 8,
     );
     ctx.stroke();
+
+    // Chrono-bombs (pulsing orange circles)
+    if (this._chronoBombs) {
+      for (const bomb of this._chronoBombs) {
+        if (!bomb.active) continue;
+        const bx = ox + bomb.x * scale;
+        const by = oy + bomb.y * scale;
+        const progress = bomb.fuseLife / bomb.fuseDuration;
+        const pulse = 0.5 + 0.5 * Math.sin(progress * Math.PI * 6);
+        const alpha = 0.4 + 0.6 * pulse;
+        ctx.fillStyle = `rgba(255,170,0,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(bx, by, bomb.radius * scale * progress, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   drawControlsOverlay(ctx, w, h, alpha) {
