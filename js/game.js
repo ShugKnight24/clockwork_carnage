@@ -1089,12 +1089,18 @@ export class Game {
   _applyMobileMigration() {
     if (!this.isTouchDevice) return;
     try {
-      if (localStorage.getItem('cc_mobile_v1')) return;
-      // Override desktop-era defaults for mobile users who never tweaked them
-      this.settings.fov = 90;
-      this.settings.hudScale = 75;
-      this.saveSettings();
-      localStorage.setItem('cc_mobile_v1', '1');
+      if (localStorage.getItem("cc_mobile_v1")) return;
+      // Only override when user still has old desktop defaults or no saved
+      // settings yet — don't clobber customized preferences.
+      const hasExisting = localStorage.getItem("cc_settings") !== null;
+      const usesDesktopDefaults =
+        this.settings.fov === 70 && this.settings.hudScale === 100;
+      if (!hasExisting || usesDesktopDefaults) {
+        this.settings.fov = 90;
+        this.settings.hudScale = 75;
+        this.saveSettings();
+      }
+      localStorage.setItem("cc_mobile_v1", "1");
     } catch (_) {}
   }
 
@@ -5310,11 +5316,13 @@ export class Game {
     const tiltAngle = isSprinting ? Math.sin(this.player.weaponBob) * 0.06 : 0;
 
     // weapon scale (larger to stay visible above HUD) - increase assets size instead of scaling up as much in the future by default?
-    // Scale weapon down on mobile so it doesn't dominate the small viewport
-    const mobileFactor = this.isTouchDevice ? Math.min(1, h / 720) : 1;
-    const sc = 4.8 * mobileFactor;
+    // On touch devices with small viewports (h < 720), proportionally
+    // shrink the weapon so it doesn't dominate the screen. Devices at
+    // or above 720px height get no reduction (factor clamped to 1).
+    const viewportFactor = this.isTouchDevice ? Math.min(1, h / 720) : 1;
+    const sc = 4.8 * viewportFactor;
     const cx = w / 2 + bobX;
-    const cy = h - 190 * mobileFactor + bobY + kickY;
+    const cy = h - 190 * viewportFactor + bobY + kickY;
 
     ctx.save();
     ctx.translate(cx, cy);
