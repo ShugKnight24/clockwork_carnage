@@ -65,6 +65,14 @@ export class TouchControls {
     } catch (_) {}
     this.showTutorial = !tutorialDone;
     this.tutorialDismissed = false;
+
+    // Detect fullscreen API support (iPhone has none) — computed once, never changes
+    this.canFullscreen =
+      typeof document.documentElement.requestFullscreen === "function" ||
+      typeof document.documentElement.webkitRequestFullscreen === "function";
+    this.isStandalone =
+      window.navigator.standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches;
   }
 
   setup() {
@@ -155,14 +163,6 @@ export class TouchControls {
       // Divider: left half = movement, right half = look
       midX: w * 0.4,
     };
-
-    // Detect fullscreen API support (iPhone has none)
-    this.canFullscreen =
-      typeof document.documentElement.requestFullscreen === "function" ||
-      typeof document.documentElement.webkitRequestFullscreen === "function";
-    this.isStandalone =
-      window.navigator.standalone === true ||
-      window.matchMedia("(display-mode: standalone)").matches;
   }
 
   hitTest(x, y) {
