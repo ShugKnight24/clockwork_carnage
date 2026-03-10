@@ -144,7 +144,9 @@ if (btnFullscreen) {
       // Detect if we're in Safari (only iOS browser that supports PWA install)
       const ua = navigator.userAgent;
       const isSafari =
-        /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|brave/i.test(ua);
+        /Safari/.test(ua) &&
+        !/CriOS|FxiOS|OPiOS|EdgiOS|DuckDuckGo|brave/i.test(ua) &&
+        /Apple/.test(navigator.vendor);
       btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
       btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
       if (isSafari) {

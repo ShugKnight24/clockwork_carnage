@@ -2851,12 +2851,12 @@ export class Game {
     const loadout = LOADOUT_CLASSES[char.loadoutIndex];
 
     const categories = [
-      { name: "NAME", data: null, key: null },
-      { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
-      { name: "BADGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      { name: "NAME", shortLabel: "NAME", data: null, key: null },
+      { name: "COLOR", shortLabel: "CLR", data: CHARACTER_COLORS, key: "colorIndex" },
+      { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
+      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
+      { name: "SKIN", shortLabel: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
+      { name: "LOADOUT", shortLabel: "LOAD", data: LOADOUT_CLASSES, key: "loadoutIndex" },
     ];
 
     // Full-screen dark backdrop
@@ -2904,7 +2904,12 @@ export class Game {
     const isMobile = this.isTouchDevice && w < 700;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
-      ? Math.max(40, Math.floor((w - 50) / categories.length - tabGap))
+      ? Math.max(
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
       : 90;
     const tabH = 28;
     const totalTabW =
@@ -2912,7 +2917,7 @@ export class Game {
     const tabX0 = (w - totalTabW) / 2;
     const tabY = titleY + 22;
     const tabLabels = isMobile
-      ? ["NAME", "CLR", "ARMR", "BDGE", "SKIN", "LOAD"]
+      ? categories.map((c) => c.shortLabel)
       : categories.map((c) => c.name);
 
     for (let i = 0; i < categories.length; i++) {
@@ -3263,18 +3268,23 @@ export class Game {
     const w = this.canvas.width;
     const isMobile = this.isTouchDevice && w < 700;
     const categories = [
-      { name: "NAME", data: null, key: null },
-      { name: "COLOR", data: CHARACTER_COLORS, key: "colorIndex" },
-      { name: "ARMOR", data: ARMOR_STYLES, key: "armorIndex" },
-      { name: "BADGE", data: BADGES, key: "badgeIndex" },
-      { name: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-      { name: "LOADOUT", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+      { name: "NAME", shortLabel: "NAME", data: null, key: null },
+      { name: "COLOR", shortLabel: "CLR", data: CHARACTER_COLORS, key: "colorIndex" },
+      { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
+      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
+      { name: "SKIN", shortLabel: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
+      { name: "LOADOUT", shortLabel: "LOAD", data: LOADOUT_CLASSES, key: "loadoutIndex" },
     ];
 
     const titleY = 44;
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
-      ? Math.max(40, Math.floor((w - 50) / categories.length - tabGap))
+      ? Math.max(
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
       : 90;
     const tabH = 28;
     const totalTabW =
