@@ -18,19 +18,10 @@
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="stylesheet" href="style.css" />
-    <!-- Google tag (gtag.js) -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-M2ETG779YT"
-    ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-
-      gtag("config", "G-M2ETG779YT");
+    <!-- Analytics loader (consent-first) -->
+    <script type="module">
+      import { initAnalytics } from "./js/analytics.js";
+      initAnalytics();
     </script>
   </head>
   <body>

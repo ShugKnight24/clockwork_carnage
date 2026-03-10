@@ -1,5 +1,6 @@
 import { Game, GameState, GAME_VERSION } from "./game.js";
 import { TouchControls } from "./touch.js";
+import { initAnalytics, trackEvent } from "./analytics.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -11,6 +12,9 @@ const btnContinueArena = document.getElementById("btnContinueArena");
 const continueArenaDesc = document.getElementById("continueArenaDesc");
 
 const game = new Game(gameCanvas, hudCanvas);
+
+// initialize analytics (will prompt consent if needed)
+initAnalytics();
 
 // Set version label on title screen
 const versionLabel = document.getElementById("versionLabel");
