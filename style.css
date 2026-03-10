@@ -65,6 +65,9 @@ body {
   );
   z-index: 100;
   cursor: pointer;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 10px;
 }
 
 #titleScreen .title-svg-container {
@@ -150,7 +153,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   background: radial-gradient(
     ellipse at center,
     #0a0a2e 0%,
@@ -159,6 +162,9 @@ body {
   );
   z-index: 100;
   cursor: pointer;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 10px;
 }
 
 #modeSelect h2 {
@@ -238,6 +244,29 @@ body {
 #modeSelect .back-btn:hover {
   border-color: rgba(255, 255, 255, 0.3);
   color: #aaaaaa;
+}
+
+#modeSelect .fullscreen-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8899aa;
+  font-size: 13px;
+  min-height: 44px;
+  font-family: "Courier New", monospace;
+  padding: 8px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+#modeSelect .fullscreen-btn:hover {
+  border-color: rgba(0, 255, 200, 0.4);
+  color: #00ffcc;
+}
+
+#modeSelect .fullscreen-btn:focus-visible {
+  outline: 2px solid #00ffcc;
+  outline-offset: 2px;
 }
 
 #modeSelect .mode-btn.featured {
@@ -383,6 +412,103 @@ body {
 }
 .pulse-dot {
   animation: pulse-dot 2s infinite;
+}
+
+/* ── Small screen responsive ── */
+@media (max-width: 520px) {
+  #titleScreen h1 {
+    font-size: 28px;
+    letter-spacing: 3px;
+  }
+
+  #titleScreen .title-svg-container {
+    width: 90vw;
+    height: 220px;
+    margin-bottom: 16px;
+  }
+
+  #titleScreen .subtitle {
+    font-size: 12px;
+    letter-spacing: 4px;
+    margin-bottom: 20px;
+  }
+
+  #titleScreen .start-prompt {
+    font-size: 14px;
+  }
+
+  #modeSelect h2 {
+    font-size: 22px;
+    margin-bottom: 20px;
+  }
+
+  #modeSelect .mode-btn {
+    min-width: unset;
+    width: 90vw;
+    font-size: 16px;
+    padding: 14px 20px;
+  }
+
+  #modeSelect .mode-btn.featured {
+    font-size: 17px;
+    padding: 16px 20px;
+  }
+
+  #modeSelect .mode-btn .key-hint {
+    display: none;
+  }
+
+  #modeSelect .continue-btn {
+    min-width: unset;
+    width: 90vw;
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+
+  #modeSelect .coming-soon {
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+}
+
+@media (max-height: 500px) {
+  #titleScreen h1 {
+    font-size: 30px;
+    margin-bottom: 6px;
+  }
+
+  #titleScreen .title-svg-container {
+    height: 160px;
+    margin-bottom: 10px;
+  }
+
+  #titleScreen .subtitle {
+    margin-bottom: 14px;
+  }
+
+  #modeSelect h2 {
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+
+  #modeSelect .mode-buttons {
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  #modeSelect .mode-btn {
+    padding: 10px 30px;
+    font-size: 16px;
+  }
+
+  #modeSelect .mode-btn.featured {
+    padding: 12px 30px;
+    font-size: 17px;
+  }
+
+  #modeSelect .mode-btn .mode-desc {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
