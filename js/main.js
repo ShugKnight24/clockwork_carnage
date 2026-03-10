@@ -126,23 +126,32 @@ document.getElementById("btnBack").addEventListener("click", () => {
   game.state = GameState.TITLE;
 });
 
-// Fullscreen toggle
+// Fullscreen toggle (with iOS webkit prefix fallback)
 const btnFullscreen = document.getElementById("btnFullscreen");
 if (btnFullscreen) {
   btnFullscreen.addEventListener("click", async () => {
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
+      const el = document.fullscreenElement || document.webkitFullscreenElement;
+      if (el) {
+        await (document.exitFullscreen || document.webkitExitFullscreen).call(
+          document,
+        );
       } else {
-        await document.documentElement.requestFullscreen();
+        const root = document.documentElement;
+        await (root.requestFullscreen || root.webkitRequestFullscreen).call(
+          root,
+        );
       }
     } catch (_) {}
   });
-  document.addEventListener("fullscreenchange", () => {
-    btnFullscreen.textContent = document.fullscreenElement
-      ? "⛶ EXIT FULLSCREEN"
-      : "⛶ FULLSCREEN";
-  });
+  const updateFSLabel = () => {
+    btnFullscreen.textContent =
+      document.fullscreenElement || document.webkitFullscreenElement
+        ? "⛶ EXIT FULLSCREEN"
+        : "⛶ FULLSCREEN";
+  };
+  document.addEventListener("fullscreenchange", updateFSLabel);
+  document.addEventListener("webkitfullscreenchange", updateFSLabel);
 }
 
 btnContinueCampaign.addEventListener("click", () => {
