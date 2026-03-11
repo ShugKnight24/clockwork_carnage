@@ -1488,10 +1488,34 @@ export class Game {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    const boxW = 340;
-    const boxH = 54;
-    const bx = 16 + slideX;
-    const by = h - 124;
+    // Pre-compute wrapped text for dynamic box sizing
+    const ariaText = msg.text.replace(
+      /\{AGENT\}/g,
+      this.character.name || "Agent",
+    );
+    const isCompactMobile = this.isTouchDevice && h < 420;
+    const boxW = isCompactMobile ? Math.min(340, w - 32) : 340;
+    const textAreaX = 54; // offset from box left to text start
+    const maxTextW = boxW - textAreaX - 12;
+    ctx.font = "13px monospace";
+    const words = ariaText.split(" ");
+    const msgLines = [];
+    let curLine = "";
+    for (const word of words) {
+      const test = curLine ? curLine + " " + word : word;
+      if (ctx.measureText(test).width > maxTextW && curLine) {
+        msgLines.push(curLine);
+        curLine = word;
+      } else {
+        curLine = test;
+      }
+    }
+    if (curLine) msgLines.push(curLine);
+    const lineH = 15;
+    const baseBoxH = 54;
+    const boxH = baseBoxH + Math.max(0, msgLines.length - 1) * lineH;
+    const bx = isCompactMobile ? (w - boxW) / 2 + slideX : 16 + slideX;
+    const by = isCompactMobile ? h - boxH - 70 : h - boxH - 70;
 
     // Background
     ctx.fillStyle = "rgba(0, 10, 20, 0.92)";
@@ -1693,14 +1717,12 @@ export class Game {
     }
     ctx.stroke();
 
-    // Message text
-    const ariaText = msg.text.replace(
-      /\{AGENT\}/g,
-      this.character.name || "Agent",
-    );
+    // Message text (word-wrapped)
     ctx.fillStyle = msg.color;
     ctx.font = "13px monospace";
-    ctx.fillText(ariaText, tx, by + 38);
+    for (let i = 0; i < msgLines.length; i++) {
+      ctx.fillText(msgLines[i], tx, by + 38 + i * lineH);
+    }
 
     ctx.restore();
   }

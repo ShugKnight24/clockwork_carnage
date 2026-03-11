@@ -9,7 +9,7 @@
  * Only activates on touch-capable devices.
  */
 
-import { UPGRADES } from "./data.js";
+import { UPGRADES, WEAPONS } from "./data.js";
 
 export class TouchControls {
   static init(game) {
@@ -415,15 +415,21 @@ export class TouchControls {
         this.activeButtons.add("fire");
       } else if (zone === "dash") {
         this.activeButtons.add("dash");
-        // Dash in joystick direction if active, otherwise forward
-        const jdx = this.joyPos.x - this.joyOrigin.x;
-        const jdy = this.joyPos.y - this.joyOrigin.y;
-        if (this.joyActive && (jdx * jdx + jdy * jdy) > 15 * 15) {
+        // Dash in current movement direction (from joystick or keys)
+        const kb = g.keybinds;
+        const fwd = g.keys[kb.moveForward];
+        const back = g.keys[kb.moveBack];
+        const left = g.keys[kb.moveLeft];
+        const right = g.keys[kb.moveRight];
+        const hasDir = fwd || back || left || right;
+        if (hasDir) {
           const cos = Math.cos(g.player.angle);
           const sin = Math.sin(g.player.angle);
-          // Map joystick to world-space: -jdy=forward, jdx=strafe right
-          let dX = -jdy * cos - jdx * sin;
-          let dY = -jdy * sin + jdx * cos;
+          let dX = 0, dY = 0;
+          if (fwd)   { dX += cos;  dY += sin; }
+          if (back)  { dX -= cos;  dY -= sin; }
+          if (left)  { dX += sin;  dY -= cos; }
+          if (right) { dX -= sin;  dY += cos; }
           const len = Math.sqrt(dX * dX + dY * dY);
           if (len > 0) { dX /= len; dY /= len; }
           g.triggerDash(null, dX, dY);
@@ -918,18 +924,18 @@ export class TouchControls {
     // ── Weapon cycle button ──
     {
       const p = this.game.player;
-      const wCount = p ? p.weapons.length : 1;
-      const wLabel = wCount > 1
-        ? `W${p.currentWeapon + 1}`
-        : "W1";
-      this.drawButton(
-        ctx,
-        z.weaponBtn.x,
-        z.weaponBtn.y,
-        z.weaponBtn.r,
-        wLabel,
-        this.activeButtons.has("weapon") ? "#ffdd44" : "#aa8833",
-      );
+      if (p) {
+        const wDef = WEAPONS[p.weapons[p.currentWeapon]];
+        const wName = wDef ? wDef.name.split(" ")[0].toUpperCase() : "W1";
+        this.drawButton(
+          ctx,
+          z.weaponBtn.x,
+          z.weaponBtn.y,
+          z.weaponBtn.r,
+          wName,
+          this.activeButtons.has("weapon") ? "#ffdd44" : "#aa8833",
+        );
+      }
     }
 
     // ── Pause / Menu button (top-right) ──
