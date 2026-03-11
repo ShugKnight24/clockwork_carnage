@@ -683,16 +683,15 @@ export class Game {
         }
       }
 
-      // Tutorial (non-sandbox steps): ESC exits tutorial to title
+      // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
       if (this.mode === "tutorial" && this.tutorialStep < 11) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
           this.lastEscTime = now;
+          this.pausedFromState = GameState.PLAYING;
+          this.state = GameState.PAUSED;
           this.unlockPointer();
-          this.audio.stopMusic();
-          this.mode = null;
-          this.state = GameState.TITLE;
           return;
         }
       }
@@ -6143,8 +6142,12 @@ export class Game {
         ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
         ctx.fillRect(0, 0, w, h - barH);
         const gradient = ctx.createRadialGradient(
-          w / 2, (h - barH) / 2, w * 0.25,
-          w / 2, (h - barH) / 2, w * 0.7,
+          w / 2,
+          (h - barH) / 2,
+          w * 0.25,
+          w / 2,
+          (h - barH) / 2,
+          w * 0.7,
         );
         gradient.addColorStop(0, "rgba(0,0,0,0)");
         gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
