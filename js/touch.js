@@ -185,15 +185,23 @@ export class TouchControls {
         y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
         r: btnSize * 0.6,
       },
+      // Weapon cycle — left of fire, easily reachable by right thumb
+      weaponBtn: {
+        x: w - pad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 1.0
+          : h - bottomPad - btnSize * 1.3,
+        r: btnSize * 0.55,
+      },
       pauseBtn: {
         x: w - 50 - sa.right,
         y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 20 : 26,
+        r: isCompactPhone ? 22 : 26,
       },
       fullscreenBtn: {
         x: w - 110 - sa.right,
         y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 20 : 26,
+        r: isCompactPhone ? 22 : 26,
       },
       // Divider: left quarter = movement, rest = look
       midX: w * 0.28,
@@ -240,6 +248,11 @@ export class TouchControls {
       z.sprintBtn.r * hitShrink
     )
       return "sprint";
+    if (
+      this.dist(x, y, z.weaponBtn.x, z.weaponBtn.y) <
+      z.weaponBtn.r * hitShrink
+    )
+      return "weapon";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r * hitShrink)
       return "pause";
     if (
@@ -428,6 +441,13 @@ export class TouchControls {
         this.sprintToggleActive = !this.sprintToggleActive;
         this.activeButtons.add("sprint");
         g.keys[g.keybinds.sprint] = this.sprintToggleActive;
+      } else if (zone === "weapon") {
+        this.activeButtons.add("weapon");
+        const p = g.player;
+        if (p.weapons.length > 1) {
+          p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
+          g.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+        }
       } else if (zone === "fullscreen") {
         this.toggleFullscreen();
       } else if (zone === "pause") {
@@ -496,6 +516,7 @@ export class TouchControls {
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
     this.activeButtons.delete("sprint");
+    this.activeButtons.delete("weapon");
   }
 
   updateJoystickKeys() {
@@ -894,16 +915,32 @@ export class TouchControls {
       this.sprintToggleActive ? "#ffaa00" : "#887744",
     );
 
-    // ── Pause button (top-right) ──
-    ctx.beginPath();
-    ctx.arc(z.pauseBtn.x, z.pauseBtn.y, z.pauseBtn.r, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
+    // ── Weapon cycle button ──
+    {
+      const p = this.game.player;
+      const wCount = p ? p.weapons.length : 1;
+      const wLabel = wCount > 1
+        ? `W${p.currentWeapon + 1}`
+        : "W1";
+      this.drawButton(
+        ctx,
+        z.weaponBtn.x,
+        z.weaponBtn.y,
+        z.weaponBtn.r,
+        wLabel,
+        this.activeButtons.has("weapon") ? "#ffdd44" : "#aa8833",
+      );
+    }
+
+    // ── Pause / Menu button (top-right) ──
+    this.drawButton(
+      ctx,
+      z.pauseBtn.x,
+      z.pauseBtn.y,
+      z.pauseBtn.r,
+      "II",
+      this.activeButtons.has("pause") ? "#ffffff" : "rgba(200,200,200,0.5)",
+    );
 
     // ── Fullscreen button (top-right, next to pause) — hidden when API unavailable ──
     if (this.canFullscreen && !this.isStandalone) {
