@@ -29,7 +29,7 @@ export class TouchControls {
     this.joyOrigin = { x: 0, y: 0 };
     this.joyPos = { x: 0, y: 0 };
     this.joyActive = false;
-    this.joyRadius = 60;
+    this.joyRadius = window.innerHeight < 420 ? 45 : 60;
 
     // Look state
     this.lookTouch = null;
@@ -128,52 +128,73 @@ export class TouchControls {
     this._updateSafeArea();
     const sa = this.safeArea;
 
+    // Compact phone detection: landscape phone with short viewport
+    const isCompactPhone = h < 420;
+
     // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
     // stays ≥ 44px (Apple HIG) thanks to this floor
-    const btnSize = Math.max(44, Math.min(56, w * 0.09));
-    const pad = 14 + sa.right;
-    const bottomPad = 14 + sa.bottom;
+    // On compact phones, slightly smaller buttons to avoid crowding
+    const btnSize = isCompactPhone
+      ? Math.max(40, Math.min(46, w * 0.07))
+      : Math.max(44, Math.min(56, w * 0.09));
+    const pad = (isCompactPhone ? 10 : 14) + sa.right;
+    const bottomPad = (isCompactPhone ? 8 : 14) + sa.bottom;
 
     // Default joystick hint center (shown when no thumb is on left zone)
-    const joyHintX = Math.max(100, 80 + sa.left);
-    const joyHintY = h - 140 - sa.bottom;
+    const joyHintX = Math.max(80, 60 + sa.left);
+    const joyHintY = isCompactPhone ? h - 90 - sa.bottom : h - 140 - sa.bottom;
 
     this.zones = {
       w,
       h,
       btnSize,
+      isCompactPhone,
       // Hint position for joystick (shown when not touching)
       joyCenter: { x: joyHintX, y: joyHintY },
       // Right side buttons — fire is large and accessible, others spaced around it
       fireBtn: {
         x: w - pad - btnSize * 1.6,
-        y: h - bottomPad - btnSize * 1.3,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 1.0
+          : h - bottomPad - btnSize * 1.3,
         r: btnSize,
       },
       dashBtn: {
         x: w - pad - btnSize * 0.5,
-        y: h - bottomPad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 2.5
+          : h - bottomPad - btnSize * 3.2,
         r: btnSize * 0.65,
       },
       interactBtn: {
         x: w - pad - btnSize * 2.9,
-        y: h - bottomPad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 2.5
+          : h - bottomPad - btnSize * 3.2,
         r: btnSize * 0.65,
       },
       // Sprint toggle — left side above joystick
       sprintBtn: {
-        x: Math.max(70, 50 + sa.left),
-        y: h - 260 - sa.bottom,
+        x: Math.max(60, 42 + sa.left),
+        y: isCompactPhone ? h - 170 - sa.bottom : h - 260 - sa.bottom,
         r: btnSize * 0.55,
       },
       // Chrono Shift (time slow) — left side above sprint
       chronoBtn: {
-        x: Math.max(70, 50 + sa.left),
-        y: h - 350 - sa.bottom,
+        x: Math.max(60, 42 + sa.left),
+        y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
         r: btnSize * 0.6,
       },
-      pauseBtn: { x: w - 50 - sa.right, y: 40 + sa.top, r: 26 },
-      fullscreenBtn: { x: w - 110 - sa.right, y: 40 + sa.top, r: 26 },
+      pauseBtn: {
+        x: w - 50 - sa.right,
+        y: (isCompactPhone ? 28 : 40) + sa.top,
+        r: isCompactPhone ? 20 : 26,
+      },
+      fullscreenBtn: {
+        x: w - 110 - sa.right,
+        y: (isCompactPhone ? 28 : 40) + sa.top,
+        r: isCompactPhone ? 20 : 26,
+      },
       // Divider: left quarter = movement, rest = look
       midX: w * 0.28,
     };
@@ -494,13 +515,14 @@ export class TouchControls {
   handlePauseTap(touch) {
     const w = this.zones.w;
     const h = this.zones.h;
+    const isCompact = this.zones.isCompactPhone;
     const x = touch.clientX;
     const y = touch.clientY;
-    // Pause menu touch buttons are rendered in a row at h/2 + 130
-    const btnY = h / 2 + 115;
-    const btnH = 50;
-    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
-    const gap = 10;
+    // Pause menu touch buttons are rendered in a row
+    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
+    const btnH = isCompact ? 40 : 50;
+    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
+    const gap = isCompact ? 6 : 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;
     const startX = (w - totalW) / 2;
@@ -569,20 +591,25 @@ export class TouchControls {
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
-    const panelX = w / 2 - 220;
-    const panelW = 440;
-    const itemHeights = [
-      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44, 60,
-    ];
+    const compactSettings = this.game.isTouchDevice && h < 420;
+    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
+    const panelX = w / 2 - panelW / 2;
+    const itemHeights = compactSettings
+      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42]
+      : [
+          44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
+          60,
+        ];
 
     // Scroll-aware startY — must match renderSettingsScreen in game.js
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - 120;
-    const titleAreaY = 50;
-    let startY = titleAreaY + 40;
+    const visibleH = h - (compactSettings ? 60 : 120);
+    const titleAreaY = compactSettings ? 28 : 50;
+    let startY = titleAreaY + (compactSettings ? 20 : 40);
     if (totalH > visibleH) {
       let selTop = 0;
-      for (let si = 0; si < this.game.settingsSelection; si++) selTop += itemHeights[si];
+      for (let si = 0; si < this.game.settingsSelection; si++)
+        selTop += itemHeights[si];
       const selCenter = selTop + itemHeights[this.game.settingsSelection] / 2;
       const idealOffset = visibleH / 2 - selCenter;
       const maxOffset = 0;
@@ -620,6 +647,7 @@ export class TouchControls {
     const scaleX = hud.width / window.innerWidth;
     const scaleY = hud.height / window.innerHeight;
     const w = hud.width;
+    const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 
@@ -627,12 +655,13 @@ export class TouchControls {
     const upgradeKeys = Object.keys(UPGRADES);
     const cols = 2;
     // Must match renderUpgradeScreen in game.js
-    const headerY = 40;
-    const startY = headerY + 90; // 130
-    const cardH = 64;
-    const cardGap = 6;
-    const colW = 320;
-    const leftX = w / 2 - colW - 12;
+    const compactUpg = this.game.isTouchDevice && h < 420;
+    const headerY = compactUpg ? 14 : 40;
+    const startY = headerY + (compactUpg ? 30 : 90);
+    const cardH = compactUpg ? 40 : 64;
+    const cardGap = compactUpg ? 3 : 6;
+    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
+    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
     const totalRows = Math.ceil(upgradeKeys.length / cols);
     const contY = startY + totalRows * (cardH + cardGap) + 20;
 
@@ -649,12 +678,7 @@ export class TouchControls {
       const row = Math.floor(i / cols);
       const baseX = col === 0 ? leftX : w / 2 + 12;
       const uy = startY + row * (cardH + cardGap);
-      if (
-        x >= baseX &&
-        x <= baseX + colW &&
-        y >= uy &&
-        y <= uy + cardH
-      ) {
+      if (x >= baseX && x <= baseX + colW && y >= uy && y <= uy + cardH) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -894,6 +918,7 @@ export class TouchControls {
   renderTouchTutorial(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
+    const isCompact = this.zones.isCompactPhone;
 
     // Semi-transparent overlay
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
@@ -904,49 +929,59 @@ export class TouchControls {
 
     // Title
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 24px monospace";
-    ctx.fillText("TOUCH CONTROLS", w / 2, 50);
+    ctx.font = `bold ${isCompact ? 18 : 24}px monospace`;
+    ctx.fillText("TOUCH CONTROLS", w / 2, isCompact ? 24 : 50);
+
+    const zoneTop = isCompact ? 42 : 80;
+    const zoneH = isCompact ? h - 80 : h - 160;
 
     // Left side: joystick
     ctx.fillStyle = "rgba(0, 200, 255, 0.2)";
-    ctx.fillRect(0, 80, w * 0.4, h - 160);
+    ctx.fillRect(0, zoneTop, w * 0.4, zoneH);
     ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("MOVE", w * 0.2, h / 2 - 40);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("MOVE", w * 0.2, h / 2 - (isCompact ? 24 : 40));
     ctx.fillStyle = "#aabbcc";
-    ctx.font = "14px monospace";
-    ctx.fillText("Touch to place stick", w * 0.2, h / 2 - 15);
-    ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
+    ctx.font = `${isCompact ? 11 : 14}px monospace`;
+    ctx.fillText("Touch to place stick", w * 0.2, h / 2 - (isCompact ? 8 : 15));
+    if (!isCompact) ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
 
     // Right side: look
     ctx.fillStyle = "rgba(0, 200, 255, 0.1)";
-    ctx.fillRect(w * 0.4, 80, w * 0.6, h - 160);
+    ctx.fillRect(w * 0.4, zoneTop, w * 0.6, zoneH);
     ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("LOOK", w * 0.7, h / 2 - 40);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("LOOK", w * 0.7, h / 2 - (isCompact ? 24 : 40));
     ctx.fillStyle = "#aabbcc";
-    ctx.font = "14px monospace";
-    ctx.fillText("Drag to aim", w * 0.7, h / 2 - 15);
+    ctx.font = `${isCompact ? 11 : 14}px monospace`;
+    ctx.fillText("Drag to aim", w * 0.7, h / 2 - (isCompact ? 8 : 15));
 
     // Button hints
+    const hintFont = isCompact ? 11 : 14;
+    const hintGap = isCompact ? 16 : 25;
+    const hintBase = isCompact ? h - 80 : h - 145;
     const hints = [
-      { label: "FIRE", desc: "Big button", color: "#ff6644", y: h - 145 },
-      { label: "DASH", desc: "Top-right", color: "#00cccc", y: h - 120 },
-      { label: "USE", desc: "Top-left", color: "#00cc44", y: h - 95 },
-      { label: "SLOW", desc: "Time slow", color: "#9944ff", y: h - 70 },
-      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00", y: h - 45 },
+      { label: "FIRE", desc: "Big button", color: "#ff6644" },
+      { label: "DASH", desc: "Top-right", color: "#00cccc" },
+      { label: "USE", desc: "Top-left", color: "#00cc44" },
+      { label: "SLOW", desc: "Time slow", color: "#9944ff" },
+      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00" },
     ];
-    for (const hint of hints) {
-      ctx.fillStyle = hint.color;
-      ctx.font = "bold 14px monospace";
-      ctx.fillText(`${hint.label} — ${hint.desc}`, w / 2, hint.y);
+    for (let i = 0; i < hints.length; i++) {
+      ctx.fillStyle = hints[i].color;
+      ctx.font = `bold ${hintFont}px monospace`;
+      ctx.fillText(
+        `${hints[i].label} — ${hints[i].desc}`,
+        w / 2,
+        hintBase + i * hintGap,
+      );
     }
 
     // Dismiss prompt
     const pulse = 0.5 + 0.3 * Math.sin(performance.now() / 400);
     ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - 30);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - (isCompact ? 12 : 30));
   }
 
   renderCreatorOverlay(ctx) {
@@ -1020,10 +1055,11 @@ export class TouchControls {
   renderPauseButtons(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
-    const btnY = h / 2 + 115;
-    const btnH = 50;
-    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
-    const gap = 10;
+    const isCompact = this.zones.isCompactPhone;
+    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
+    const btnH = isCompact ? 40 : 50;
+    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
+    const gap = isCompact ? 6 : 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
     const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;

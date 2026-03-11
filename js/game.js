@@ -23,7 +23,7 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 
 const SAVE_VERSION = 1;
-export const GAME_VERSION = "0.7.6";
+export const GAME_VERSION = "0.7.7";
 
 export const GameState = {
   TITLE: "title",
@@ -5978,7 +5978,187 @@ export class Game {
     }
 
     const hudFactor = this.settings.hudScale / 100;
-    const barH = Math.round(160 * hudFactor);
+    const isCompactMobile = this.isTouchDevice && h < 420;
+    const barH = isCompactMobile
+      ? Math.round(60 * hudFactor)
+      : Math.round(160 * hudFactor);
+
+    // On compact mobile, render a slim HUD and skip the full layout
+    if (isCompactMobile) {
+      this._renderCompactMobileHUD(ctx, w, h, barH, hudFactor);
+
+      // Minimap (smaller on compact mobile)
+      let mmSize = Math.min(this.settings.minimapSize, Math.round(w * 0.18));
+      this.drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize);
+
+      // Crosshair
+      const chx = w / 2;
+      const chy = (h - barH) / 2;
+      this.drawCrosshairAt(ctx, chx, chy);
+
+      // Hit marker
+      if (this.hitMarker > 0) {
+        const a = Math.min(1, this.hitMarker / 0.08);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = "#ff3333";
+        ctx.lineWidth = 2;
+        ctx.translate(chx, chy);
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.moveTo(0, -8);
+        ctx.lineTo(0, 8);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Floating damage numbers
+      for (const dn of this.damageNumbers) {
+        const ddx = dn.x - this.player.x;
+        const ddy = dn.y - this.player.y;
+        let dAngle = Math.atan2(ddy, ddx) - this.player.angle;
+        while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+        while (dAngle > Math.PI) dAngle -= Math.PI * 2;
+        const fov = ((this.settings.fov || 70) * Math.PI) / 180;
+        if (Math.abs(dAngle) > fov / 2) continue;
+        const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (ddist < 0.1) continue;
+        const dsX = w / 2 + (dAngle / (fov / 2)) * (w / 2);
+        const dsRise = (0.8 - dn.life) * 60;
+        const dsY = (h - barH) / 2 - dsRise;
+        const dAlpha = Math.min(1, dn.life / 0.3);
+        ctx.save();
+        ctx.globalAlpha = dAlpha;
+        ctx.textAlign = "center";
+        if (dn.crit) {
+          ctx.font = "bold 16px monospace";
+          ctx.shadowColor = "#ffcc00";
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = "#ffcc00";
+          ctx.fillText(dn.value, dsX, dsY);
+          ctx.shadowBlur = 0;
+        } else {
+          ctx.font = "bold 12px monospace";
+          ctx.strokeStyle = "rgba(0,0,0,0.6)";
+          ctx.lineWidth = 2;
+          ctx.strokeText(dn.value, dsX, dsY);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(dn.value, dsX, dsY);
+        }
+        ctx.restore();
+      }
+
+      // Kill streak
+      if (this.killStreakDisplay) {
+        const ksd = this.killStreakDisplay;
+        const kAlpha =
+          ksd.life > 1.5
+            ? Math.min(1, (2.0 - ksd.life) * 4)
+            : Math.min(1, ksd.life / 0.5);
+        ctx.save();
+        ctx.globalAlpha = kAlpha;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `bold ${Math.round(ksd.size * 0.8)}px monospace`;
+        ctx.fillStyle = ksd.color;
+        ctx.fillText(ksd.text, w / 2, (h - barH) * 0.3);
+        ctx.restore();
+      }
+
+      // Achievement toast
+      this.renderAchievementToast(ctx, w, h);
+
+      // Arena timer (compact)
+      if (this.mode === "arena") {
+        const secs = Math.ceil(this.arenaTimer);
+        const warning = secs <= 10;
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(10, 10, 100, 50);
+        ctx.strokeStyle = warning
+          ? "rgba(255,34,0,0.6)"
+          : "rgba(0,200,255,0.3)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(10, 10, 100, 50);
+        ctx.fillStyle = warning
+          ? Math.floor(this.time / 250) % 2
+            ? "#ff2200"
+            : "#ffaa00"
+          : "#00ffcc";
+        ctx.font = "bold 28px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${secs}s`, 60, 44);
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.font = "bold 10px monospace";
+        ctx.fillText("TIME", 60, 22);
+      }
+
+      // Campaign timer
+      if (this.mode === "campaign" && this.roundStartTime) {
+        const elSec = Math.floor(
+          (performance.now() - this.roundStartTime) / 1000,
+        );
+        const mins = Math.floor(elSec / 60);
+        const secs = elSec % 60;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(10, 10, 70, 20);
+        ctx.fillStyle = "rgba(200,220,255,0.5)";
+        ctx.font = "11px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 45, 24);
+      }
+
+      ctx.textAlign = "left";
+
+      // Stage cleared notification
+      if (this.mode === "arena" && this.arenaClearTimer != null) {
+        const countSecs = Math.ceil(this.arenaClearTimer);
+        const pulse = 0.7 + Math.sin(this.time * 0.005) * 0.3;
+        ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
+        ctx.fillRect(0, (h - barH) / 2 - 36, w, 72);
+        ctx.fillStyle = `rgba(0,255,100,${pulse})`;
+        ctx.font = "bold 28px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("STAGE CLEARED!", w / 2, (h - barH) / 2 - 6);
+        ctx.fillStyle = "rgba(200,230,255,0.8)";
+        ctx.font = "bold 14px monospace";
+        ctx.fillText(
+          `Next round in ${countSecs}s...`,
+          w / 2,
+          (h - barH) / 2 + 18,
+        );
+        ctx.textAlign = "left";
+      }
+
+      // Slow-mo vignette overlay
+      if (this.slowMoTimer > 0) {
+        const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
+        ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
+        ctx.fillRect(0, 0, w, h - barH);
+        const gradient = ctx.createRadialGradient(
+          w / 2, (h - barH) / 2, w * 0.25,
+          w / 2, (h - barH) / 2, w * 0.7,
+        );
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, w, h - barH);
+      }
+
+      // FPS counter
+      if (this.showFPS) {
+        ctx.fillStyle = "#ffcc00";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(`FPS: ${this.fps}`, 10, h - barH - 8);
+      }
+
+      // ARIA comms overlay
+      this.renderAriaComms(ctx, w, h);
+
+      return;
+    }
 
     // Stamina bar (above the HUD bar)
     const staminaFactor = this.settings.staminaBarSize / 100;
@@ -6723,6 +6903,164 @@ export class Game {
 
     // ARIA comms overlay (bottom-left)
     this.renderAriaComms(ctx, w, h);
+  }
+
+  /** Compact mobile HUD: slim bar with health, ammo, and key info only */
+  _renderCompactMobileHUD(ctx, w, h, barH, hudFactor) {
+    const wep = this.player.getWeaponDef();
+    const healthPct = this.player.health / this.player.maxHealth;
+    const healthColor =
+      healthPct > 0.6
+        ? this.cbColor("#00ff66")
+        : healthPct > 0.3
+          ? this.cbColor("#ffaa00")
+          : this.cbColor("#ff2200");
+
+    // Stamina bar (slim, above the bar)
+    const staminaPct = this.player.stamina / this.player.maxStamina;
+    const stBarH = Math.round(8 * hudFactor);
+    const stBarW = Math.round(220 * hudFactor);
+    const stBarX = Math.floor(w / 2 - stBarW / 2);
+    const stBarY = h - barH - stBarH - 4;
+    const isActive = this.player.isSprinting || this.player.isDashing;
+
+    ctx.fillStyle = "rgba(5,5,15,0.7)";
+    ctx.fillRect(stBarX - 1, stBarY - 1, stBarW + 2, stBarH + 2);
+    if (staminaPct > 0.005) {
+      const stColor = this.player.isDashing
+        ? "#00ffff"
+        : this.player.isSprinting
+          ? "#ffaa00"
+          : staminaPct > 0.3
+            ? "#00ccff"
+            : "#ff4400";
+      ctx.fillStyle = stColor;
+      ctx.fillRect(stBarX, stBarY, stBarW * staminaPct, stBarH);
+    }
+    ctx.strokeStyle = isActive ? "#ffaa00" : "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(stBarX, stBarY, stBarW, stBarH);
+
+    // Chrono bar (smaller, above stamina)
+    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
+    if (chronoPct > 0.005 || this.player.chronoActive) {
+      const cBarH = Math.round(5 * hudFactor);
+      const cBarW = Math.round(140 * hudFactor);
+      const cBarX = Math.floor(w / 2 - cBarW / 2);
+      const cBarY = stBarY - cBarH - 3;
+      ctx.fillStyle = "rgba(5,5,15,0.6)";
+      ctx.fillRect(cBarX - 1, cBarY - 1, cBarW + 2, cBarH + 2);
+      if (chronoPct > 0.005) {
+        ctx.fillStyle = this.player.chronoActive ? "#cc44ff" : "#9944ff";
+        ctx.fillRect(cBarX, cBarY, cBarW * chronoPct, cBarH);
+      }
+      ctx.strokeStyle = this.player.chronoActive
+        ? "#cc44ff"
+        : "rgba(150,100,200,0.25)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cBarX, cBarY, cBarW, cBarH);
+    }
+
+    // Bottom bar background
+    ctx.fillStyle = "rgba(5,5,15,0.88)";
+    ctx.fillRect(0, h - barH, w, barH);
+    ctx.strokeStyle = "rgba(0,200,255,0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h - barH);
+    ctx.lineTo(w, h - barH);
+    ctx.stroke();
+
+    const pad = 8;
+    const midY = h - barH / 2;
+
+    // Left: HEALTH number + bar
+    const hpW = Math.round(w * 0.22);
+    ctx.fillStyle = healthColor;
+    ctx.font = "bold 22px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`${Math.ceil(this.player.health)}`, pad, midY + 3);
+    // Health bar below number
+    const hbW = hpW - pad;
+    const hbH = 6;
+    const hbY = midY + 10;
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(pad, hbY, hbW, hbH);
+    ctx.fillStyle = healthColor;
+    ctx.fillRect(pad, hbY, hbW * healthPct, hbH);
+
+    // Shield (if any)
+    if (this.player.maxShield > 0) {
+      const shieldPct = this.player.shield / this.player.maxShield;
+      const sbY = hbY + hbH + 2;
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      ctx.fillRect(pad, sbY, hbW, 4);
+      ctx.fillStyle = "#4488ff";
+      ctx.fillRect(pad, sbY, hbW * shieldPct, 4);
+    }
+
+    // Center-left: AMMO
+    const ammoX = hpW + pad * 2;
+    ctx.fillStyle = "#ffcc00";
+    ctx.font = "bold 22px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`${this.player.ammo}`, ammoX + 30, midY + 3);
+    ctx.fillStyle = "rgba(255,204,0,0.5)";
+    ctx.font = "bold 8px monospace";
+    ctx.fillText("AMMO", ammoX + 30, midY - 12);
+
+    // Center: Weapon name
+    if (wep) {
+      ctx.fillStyle = wep.color;
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(wep.name, w / 2, midY + 14);
+    }
+
+    // Weapon number
+    ctx.fillStyle = "rgba(0,200,255,0.5)";
+    ctx.font = "bold 9px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`W${this.player.currentWeapon + 1}`, w / 2, midY - 12);
+
+    // Right: Kills + Score
+    if (this.settings.showKills) {
+      const kx = w - pad - 110;
+      ctx.fillStyle = "#ff8866";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`${this.killedEnemies}/${this.totalEnemies}`, kx, midY + 2);
+      ctx.fillStyle = "rgba(255,136,102,0.5)";
+      ctx.font = "bold 8px monospace";
+      ctx.fillText("KILLS", kx, midY - 10);
+    }
+
+    if (this.settings.showScore) {
+      const sx = w - pad;
+      ctx.fillStyle = "#00ddff";
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`${this.player.score}`, sx, midY + 2);
+      ctx.fillStyle = "rgba(0,221,255,0.5)";
+      ctx.font = "bold 8px monospace";
+      ctx.fillText("SCORE", sx, midY - 10);
+    }
+
+    // Round indicator (arena)
+    if (this.mode === "arena") {
+      ctx.fillStyle = "#ffaa00";
+      ctx.font = "bold 9px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`R${this.arenaRound}`, w - pad, midY + 14);
+    }
+
+    // Difficulty
+    const diffNames = ["EASY", "NORM", "HARD", "NITE"];
+    const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
+    ctx.fillStyle = diffColors[this.settings.difficulty];
+    ctx.font = "bold 8px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(diffNames[this.settings.difficulty], pad, midY - 12);
   }
 
   // Multistage portrait drawing based on health and alive status - can be improved with better art and more stages / smoother transitions between stages
@@ -7624,6 +7962,7 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
+    const compact = this.isTouchDevice && h < 420;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, w, h);
 
@@ -7634,11 +7973,13 @@ export class Game {
     }
 
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 36px monospace";
+    ctx.font = `bold ${compact ? 24 : 36}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("PAUSED", w / 2, h / 2 - 100);
-    this.drawControlsOverlay(ctx, w, h, 0.9);
-    ctx.font = "14px monospace";
+    ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
+    if (!compact) {
+      this.drawControlsOverlay(ctx, w, h, 0.9);
+    }
+    ctx.font = `${compact ? 11 : 14}px monospace`;
     ctx.fillStyle = "#aaaacc";
     ctx.textAlign = "center";
     const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
@@ -7653,8 +7994,8 @@ export class Game {
     if (this.pauseSaveFlash && performance.now() - this.pauseSaveFlash < 1500) {
       const alpha = 1 - (performance.now() - this.pauseSaveFlash) / 1500;
       ctx.fillStyle = `rgba(0, 255, 100, ${alpha.toFixed(2)})`;
-      ctx.font = "bold 16px monospace";
-      ctx.fillText("GAME SAVED", w / 2, h / 2 + 140);
+      ctx.font = `bold ${compact ? 13 : 16}px monospace`;
+      ctx.fillText("GAME SAVED", w / 2, compact ? h * 0.7 : h / 2 + 140);
     }
     ctx.textAlign = "left";
   }
@@ -7738,12 +8079,13 @@ export class Game {
   }
 
   renderSettingsScreen(ctx, w, h) {
+    const compactSettings = this.isTouchDevice && h < 420;
     ctx.fillStyle = "rgba(0,0,0,0.85)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 30px monospace";
+    ctx.font = `bold ${compactSettings ? 20 : 30}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("SETTINGS", w / 2, 40);
+    ctx.fillText("SETTINGS", w / 2, compactSettings ? 24 : 40);
 
     const crosshairNames = [
       "Red Dot",
@@ -7839,19 +8181,22 @@ export class Game {
       },
     ];
 
-    const barW = 200;
-    const barH = 6;
-    const panelX = w / 2 - 220;
-    const panelW = 440;
-    const itemHeights = [
-      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44, 60,
-    ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity
+    const barW = compactSettings ? 140 : 200;
+    const barH = compactSettings ? 4 : 6;
+    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
+    const panelX = w / 2 - panelW / 2;
+    const itemHeights = compactSettings
+      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42]
+      : [
+          44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
+          60,
+        ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity
 
     // Scroll the settings panel so the selected item stays visible
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - 120; // leave room for title + hint
-    const titleAreaY = 50;
-    let startY = titleAreaY + 40;
+    const visibleH = h - (compactSettings ? 60 : 120); // leave room for title + hint
+    const titleAreaY = compactSettings ? 28 : 50;
+    let startY = titleAreaY + (compactSettings ? 20 : 40);
     if (totalH > visibleH) {
       // Calculate selected item center and scroll to keep it visible
       let selTop = 0;
@@ -7877,15 +8222,25 @@ export class Game {
       }
 
       // Label
+      const labelSize = compactSettings ? 12 : 16;
       ctx.fillStyle = selected ? "#00ffcc" : "#8888aa";
-      ctx.font = "bold 16px monospace";
+      ctx.font = `bold ${labelSize}px monospace`;
       ctx.textAlign = "left";
-      ctx.fillText(items[i].label, panelX + 16, y + 18);
+      ctx.fillText(
+        items[i].label,
+        panelX + (compactSettings ? 8 : 16),
+        y + (compactSettings ? 14 : 18),
+      );
 
       // Value
       ctx.textAlign = "right";
       ctx.fillStyle = items[i].color || (selected ? "#ffffff" : "#aaaacc");
-      ctx.fillText(`< ${items[i].value} >`, panelX + panelW - 16, y + 18);
+      ctx.font = `bold ${labelSize}px monospace`;
+      ctx.fillText(
+        `< ${items[i].value} >`,
+        panelX + panelW - (compactSettings ? 8 : 16),
+        y + (compactSettings ? 14 : 18),
+      );
 
       // Sub-widgets under their setting
       if (i === 1) {
@@ -8317,15 +8672,18 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
 
     // ── Header section ──
-    const headerY = 40;
+    const compactUpg = this.isTouchDevice && h < 420;
+    const headerY = compactUpg ? 14 : 40;
     // Horizontal accent line
-    const lineW = 200;
-    ctx.strokeStyle = "rgba(0,255,200,0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - lineW, headerY + 14);
-    ctx.lineTo(w / 2 + lineW, headerY + 14);
-    ctx.stroke();
+    if (!compactUpg) {
+      const lineW = 200;
+      ctx.strokeStyle = "rgba(0,255,200,0.3)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w / 2 - lineW, headerY + 14);
+      ctx.lineTo(w / 2 + lineW, headerY + 14);
+      ctx.stroke();
+    }
 
     // Round complete title
     const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
@@ -8333,7 +8691,7 @@ export class Game {
     ctx.shadowColor = "#00ffcc";
     ctx.shadowBlur = 18 * titlePulse;
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 32px monospace";
+    ctx.font = `bold ${compactUpg ? 18 : 32}px monospace`;
     ctx.textAlign = "center";
     ctx.fillText(`ROUND ${this.arenaRound - 1} COMPLETE`, w / 2, headerY);
     ctx.shadowBlur = 0;
@@ -8341,35 +8699,37 @@ export class Game {
 
     // Score with animated counter feel
     ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 18px monospace";
+    ctx.font = `bold ${compactUpg ? 13 : 18}px monospace`;
     ctx.textAlign = "center";
     ctx.fillText(
       `\u2605  SCORE: ${this.player.score}  \u2605`,
       w / 2,
-      headerY + 34,
+      headerY + (compactUpg ? 20 : 34),
     );
 
-    // Section divider
-    ctx.strokeStyle = "rgba(0,200,255,0.15)";
-    ctx.beginPath();
-    ctx.moveTo(w * 0.15, headerY + 52);
-    ctx.lineTo(w * 0.85, headerY + 52);
-    ctx.stroke();
+    if (!compactUpg) {
+      // Section divider
+      ctx.strokeStyle = "rgba(0,200,255,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.15, headerY + 52);
+      ctx.lineTo(w * 0.85, headerY + 52);
+      ctx.stroke();
 
-    // UPGRADES subtitle
-    ctx.fillStyle = "rgba(170,200,255,0.6)";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText("\u25C6  UPGRADES  \u25C6", w / 2, headerY + 70);
+      // UPGRADES subtitle
+      ctx.fillStyle = "rgba(170,200,255,0.6)";
+      ctx.font = "bold 14px monospace";
+      ctx.fillText("\u25C6  UPGRADES  \u25C6", w / 2, headerY + 70);
+    }
 
     // ── Upgrade cards ──
     const upgradeKeys = Object.keys(UPGRADES);
-    const startY = headerY + 90;
-    const cardH = 64;
-    const cardGap = 6;
-    const colW = 320;
+    const startY = headerY + (compactUpg ? 30 : 90);
+    const cardH = compactUpg ? 40 : 64;
+    const cardGap = compactUpg ? 3 : 6;
+    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
     const cols = 2;
-    const leftX = w / 2 - colW - 12;
-    const rightX = w / 2 + 12;
+    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
+    const rightX = w / 2 + (compactUpg ? 6 : 12);
 
     for (let i = 0; i < upgradeKeys.length; i++) {
       const key = upgradeKeys[i];
@@ -8414,70 +8774,98 @@ export class Game {
 
       // Upgrade name
       ctx.fillStyle = selected ? "#ffffff" : "#8888aa";
-      ctx.font = `${selected ? "bold " : ""}15px monospace`;
+      ctx.font = `${selected ? "bold " : ""}${compactUpg ? 11 : 15}px monospace`;
       ctx.textAlign = "left";
-      ctx.fillText(upg.name, baseX + 14, y + 20);
+      ctx.fillText(
+        upg.name,
+        baseX + (compactUpg ? 8 : 14),
+        y + (compactUpg ? 14 : 20),
+      );
 
-      // Description
-      ctx.fillStyle = selected
-        ? "rgba(170,200,220,0.7)"
-        : "rgba(100,110,130,0.6)";
-      ctx.font = "11px monospace";
-      ctx.fillText(upg.description, baseX + 14, y + 36);
+      // Description (skip on compact mobile)
+      if (!compactUpg) {
+        ctx.fillStyle = selected
+          ? "rgba(170,200,220,0.7)"
+          : "rgba(100,110,130,0.6)";
+        ctx.font = "11px monospace";
+        ctx.fillText(upg.description, baseX + 14, y + 36);
+      }
 
       // Cost or MAX badge
       ctx.textAlign = "right";
       if (maxed) {
         // MAX badge
         ctx.fillStyle = "rgba(0,255,100,0.15)";
+        const badgeW = compactUpg ? 30 : 40;
+        const badgeH = compactUpg ? 14 : 20;
         ctx.beginPath();
-        ctx.roundRect(baseX + colW - 52, y + 8, 40, 20, 4);
+        ctx.roundRect(
+          baseX + colW - badgeW - 12,
+          y + (compactUpg ? 4 : 8),
+          badgeW,
+          badgeH,
+          4,
+        );
         ctx.fill();
         ctx.fillStyle = "#44ff44";
-        ctx.font = "bold 12px monospace";
-        ctx.fillText("MAX", baseX + colW - 16, y + 22);
+        ctx.font = `bold ${compactUpg ? 9 : 12}px monospace`;
+        ctx.fillText(
+          "MAX",
+          baseX + colW - (compactUpg ? 8 : 16),
+          y + (compactUpg ? 14 : 22),
+        );
       } else {
         ctx.fillStyle = affordable ? "#ffcc00" : "#ff4455";
-        ctx.font = "bold 14px monospace";
-        ctx.fillText(`${cost}`, baseX + colW - 12, y + 22);
-        // Cost label
-        ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.font = "9px monospace";
-        ctx.fillText("COST", baseX + colW - 12, y + 12);
+        ctx.font = `bold ${compactUpg ? 11 : 14}px monospace`;
+        ctx.fillText(
+          `${cost}`,
+          baseX + colW - (compactUpg ? 6 : 12),
+          y + (compactUpg ? 14 : 22),
+        );
+        if (!compactUpg) {
+          // Cost label
+          ctx.fillStyle = "rgba(255,255,255,0.2)";
+          ctx.font = "9px monospace";
+          ctx.fillText("COST", baseX + colW - 12, y + 12);
+        }
       }
 
       // Level pips — progress bar style
       const maxPips = Math.min(upg.maxLevel, 10);
-      const pipBarW = colW - 28;
-      const pipH = 3;
-      const pipY = y + cardH - 12;
+      const pipBarW = colW - (compactUpg ? 16 : 28);
+      const pipH = compactUpg ? 2 : 3;
+      const pipY = y + cardH - (compactUpg ? 6 : 12);
       // Track
       ctx.fillStyle = "rgba(30,40,60,0.8)";
       ctx.beginPath();
-      ctx.roundRect(baseX + 14, pipY, pipBarW, pipH, 2);
+      ctx.roundRect(baseX + (compactUpg ? 8 : 14), pipY, pipBarW, pipH, 2);
       ctx.fill();
       // Filled
       if (level > 0) {
         const fillW = (pipBarW * level) / maxPips;
         const pipGrad = ctx.createLinearGradient(
-          baseX + 14,
+          baseX + (compactUpg ? 8 : 14),
           0,
-          baseX + 14 + fillW,
+          baseX + (compactUpg ? 8 : 14) + fillW,
           0,
         );
         pipGrad.addColorStop(0, maxed ? "#44ff44" : "#00ffcc");
         pipGrad.addColorStop(1, maxed ? "#22cc22" : "#0088aa");
         ctx.fillStyle = pipGrad;
         ctx.beginPath();
-        ctx.roundRect(baseX + 14, pipY, fillW, pipH, 2);
+        ctx.roundRect(baseX + (compactUpg ? 8 : 14), pipY, fillW, pipH, 2);
         ctx.fill();
       }
 
       // Level text (right side)
       ctx.textAlign = "right";
       ctx.fillStyle = "rgba(150,170,190,0.4)";
-      ctx.font = "9px monospace";
-      ctx.fillText(`LV ${level}/${upg.maxLevel}`, baseX + colW - 12, pipY + 3);
+      ctx.font = `${compactUpg ? 7 : 9}px monospace`;
+      ctx.fillText(
+        `LV ${level}/${upg.maxLevel}`,
+        baseX + colW - (compactUpg ? 6 : 12),
+        pipY + 3,
+      );
 
       ctx.textAlign = "left";
     }
@@ -8487,33 +8875,47 @@ export class Game {
     const contY = startY + totalRows * (cardH + cardGap) + 20;
     const contSelected = this.upgradeSelection === upgradeKeys.length;
 
+    const contBtnW = compactUpg ? 260 : 360;
+    const contBtnH = compactUpg ? 28 : 36;
     if (contSelected) {
       const btnPulse = 0.5 + 0.5 * Math.sin(now * 0.004);
       ctx.fillStyle = `rgba(0,255,200,${0.06 + btnPulse * 0.04})`;
       ctx.beginPath();
-      ctx.roundRect(w / 2 - 180, contY - 18, 360, 36, 8);
+      ctx.roundRect(
+        w / 2 - contBtnW / 2,
+        contY - contBtnH / 2,
+        contBtnW,
+        contBtnH,
+        8,
+      );
       ctx.fill();
       ctx.strokeStyle = `rgba(0,255,200,${0.3 + btnPulse * 0.3})`;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(w / 2 - 180, contY - 18, 360, 36, 8);
+      ctx.roundRect(
+        w / 2 - contBtnW / 2,
+        contY - contBtnH / 2,
+        contBtnW,
+        contBtnH,
+        8,
+      );
       ctx.stroke();
     }
     ctx.fillStyle = contSelected ? "#00ffcc" : "#556677";
-    ctx.font = `bold 18px monospace`;
+    ctx.font = `bold ${compactUpg ? 13 : 18}px monospace`;
     ctx.textAlign = "center";
     ctx.fillText(
-      contSelected
-        ? "\u25B6  CONTINUE TO NEXT ROUND  \u25B6"
-        : "CONTINUE TO NEXT ROUND",
+      contSelected ? "\u25B6  CONTINUE  \u25B6" : "CONTINUE",
       w / 2,
-      contY + 5,
+      contY + (compactUpg ? 3 : 5),
     );
 
     // ── Footer hint ──
-    ctx.fillStyle = "rgba(100,120,140,0.4)";
-    ctx.font = "11px monospace";
-    ctx.fillText("W/S/A/D navigate  \u00B7  ENTER select", w / 2, contY + 34);
+    if (!compactUpg) {
+      ctx.fillStyle = "rgba(100,120,140,0.4)";
+      ctx.font = "11px monospace";
+      ctx.fillText("W/S/A/D navigate  \u00B7  ENTER select", w / 2, contY + 34);
+    }
 
     // ── Top scanline overlay ──
     ctx.fillStyle = "rgba(0,0,0,0.03)";
@@ -8525,6 +8927,7 @@ export class Game {
   }
 
   renderGameOver(ctx, w, h) {
+    const compact = this.isTouchDevice && h < 420;
     // Animated red-tinged background
     ctx.fillStyle = "rgba(30,0,0,0.94)";
     ctx.fillRect(0, 0, w, h);
@@ -8552,52 +8955,61 @@ export class Game {
       const sz = 20 + Math.sin(i * 3) * 15;
       ctx.fillRect(sx - sz / 2, sy - 1, sz, 2);
     }
+
+    const titleSize = compact ? 24 : 42;
+    const titleY = compact ? h * 0.15 : h / 2 - 110;
+    const subY = compact ? titleY + 22 : h / 2 - 75;
+    const statsY = compact ? titleY + 36 : h / 2 - 50;
+
     // Horizontal divider lines
-    const divY1 = h / 2 - 135;
-    const divY2 = h / 2 - 40;
-    ctx.strokeStyle = "rgba(255,34,0,0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.2, divY1);
-    ctx.lineTo(w * 0.8, divY1);
-    ctx.moveTo(w * 0.25, divY2);
-    ctx.lineTo(w * 0.75, divY2);
-    ctx.stroke();
+    if (!compact) {
+      const divY1 = h / 2 - 135;
+      const divY2 = h / 2 - 40;
+      ctx.strokeStyle = "rgba(255,34,0,0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.2, divY1);
+      ctx.lineTo(w * 0.8, divY1);
+      ctx.moveTo(w * 0.25, divY2);
+      ctx.lineTo(w * 0.75, divY2);
+      ctx.stroke();
+    }
     // Title with glow
     ctx.shadowColor = "#ff2200";
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = compact ? 10 : 20;
     ctx.fillStyle = "#ff2200";
-    ctx.font = "bold 42px monospace";
+    ctx.font = `bold ${titleSize}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("TIMELINE COLLAPSED", w / 2, h / 2 - 110);
+    ctx.fillText("TIMELINE COLLAPSED", w / 2, titleY);
     ctx.shadowBlur = 0;
     // Subtitle
     ctx.fillStyle = "rgba(255,100,70,0.7)";
-    ctx.font = "14px monospace";
-    ctx.fillText(
-      "Temporal integrity failed — reality unraveled",
-      w / 2,
-      h / 2 - 75,
-    );
+    ctx.font = `${compact ? 11 : 14}px monospace`;
+    ctx.fillText("Temporal integrity failed — reality unraveled", w / 2, subY);
 
-    this._renderStatsCard(ctx, w, h / 2 - 50, "#ff2200", "#ff6644");
+    this._renderStatsCard(ctx, w, statsY, "#ff2200", "#ff6644");
 
     if (this.mode === "arena") {
       ctx.fillStyle = "#ff8866";
-      ctx.font = "bold 18px monospace";
+      ctx.font = `bold ${compact ? 14 : 18}px monospace`;
       ctx.fillText(
         `Rounds Survived: ${this.arenaRound - 1}`,
         w / 2,
-        h / 2 + 100,
+        compact ? h * 0.78 : h / 2 + 100,
       );
     }
     // Prompt with pulsing alpha
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 130);
+    ctx.font = `${compact ? 12 : 14}px monospace`;
+    const promptText = this.isTouchDevice
+      ? "Tap to return to title"
+      : "Press ENTER to return to title";
+    ctx.fillText(promptText, w / 2, compact ? h * 0.88 : h / 2 + 130);
     ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
-    ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
+    if (!this.isTouchDevice) {
+      ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
+    }
     ctx.textAlign = "left";
 
     // Scanline overlay
@@ -8608,6 +9020,7 @@ export class Game {
   }
 
   renderVictory(ctx, w, h) {
+    const compact = this.isTouchDevice && h < 420;
     ctx.fillStyle = "rgba(0,6,20,0.95)";
     ctx.fillRect(0, 0, w, h);
     // Animated aurora glow
@@ -8627,7 +9040,7 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
     // Rising particle streaks
     ctx.globalAlpha = 0.15;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < (compact ? 10 : 20); i++) {
       const px = w * (0.1 + (i / 20) * 0.8);
       const py = h - ((this.time * 0.04 + i * 73) % h);
       const pLen = 8 + Math.sin(i * 2) * 5;
@@ -8636,51 +9049,68 @@ export class Game {
       ctx.fillRect(px, py, 1.5, pLen);
     }
     ctx.globalAlpha = 1;
-    // Decorative dividers
-    ctx.strokeStyle = "rgba(0,255,200,0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.15, h / 2 - 100);
-    ctx.lineTo(w * 0.85, h / 2 - 100);
-    ctx.stroke();
+
+    const titleSize = compact ? 24 : 42;
+    const titleY = compact ? h * 0.12 : h / 2 - 75;
+
+    if (!compact) {
+      // Decorative dividers
+      ctx.strokeStyle = "rgba(0,255,200,0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.15, h / 2 - 100);
+      ctx.lineTo(w * 0.85, h / 2 - 100);
+      ctx.stroke();
+    }
     // Title with teal glow
     ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = 25;
+    ctx.shadowBlur = compact ? 12 : 25;
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 42px monospace";
+    ctx.font = `bold ${titleSize}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("TIMELINE RESTORED", w / 2, h / 2 - 75);
+    ctx.fillText("TIMELINE RESTORED", w / 2, titleY);
     ctx.shadowBlur = 0;
-    // Subtitles with stagger
+    // Subtitles
     ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 18px monospace";
+    ctx.font = `bold ${compact ? 12 : 18}px monospace`;
     ctx.fillText(
       "The Paradox Lord has been destroyed — for good.",
       w / 2,
-      h / 2 - 35,
+      compact ? titleY + 22 : h / 2 - 35,
     );
-    ctx.fillStyle = "rgba(170,220,255,0.7)";
-    ctx.font = "16px monospace";
-    ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 8);
-    ctx.fillText(
-      "The quantum continuum is stable once more.",
-      w / 2,
-      h / 2 + 14,
-    );
-    // Divider below text
-    ctx.strokeStyle = "rgba(255,204,0,0.15)";
-    ctx.beginPath();
-    ctx.moveTo(w * 0.25, h / 2 + 28);
-    ctx.lineTo(w * 0.75, h / 2 + 28);
-    ctx.stroke();
+    if (!compact) {
+      ctx.fillStyle = "rgba(170,220,255,0.7)";
+      ctx.font = "16px monospace";
+      ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 8);
+      ctx.fillText(
+        "The quantum continuum is stable once more.",
+        w / 2,
+        h / 2 + 14,
+      );
+      // Divider below text
+      ctx.strokeStyle = "rgba(255,204,0,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.25, h / 2 + 28);
+      ctx.lineTo(w * 0.75, h / 2 + 28);
+      ctx.stroke();
+    }
 
-    this._renderStatsCard(ctx, w, h / 2 + 40, "#ffcc00", "#aaddff");
+    this._renderStatsCard(
+      ctx,
+      w,
+      compact ? titleY + 38 : h / 2 + 40,
+      "#ffcc00",
+      "#aaddff",
+    );
 
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = "14px monospace";
+    ctx.font = `${compact ? 12 : 14}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("Press ENTER to return to title", w / 2, h / 2 + 215);
+    const victoryPrompt = this.isTouchDevice
+      ? "Tap to return to title"
+      : "Press ENTER to return to title";
+    ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
     ctx.textAlign = "left";
 
     // Scanline overlay
@@ -8691,6 +9121,7 @@ export class Game {
   }
 
   renderLevelComplete(ctx, w, h) {
+    const compact = this.isTouchDevice && h < 420;
     ctx.fillStyle = "rgba(0,4,18,0.94)";
     ctx.fillRect(0, 0, w, h);
     // Subtle cyan glow
@@ -8707,42 +9138,59 @@ export class Game {
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
-    // Decorative top line
-    ctx.strokeStyle = "rgba(0,255,200,0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.2, h / 2 - 130);
-    ctx.lineTo(w * 0.8, h / 2 - 130);
-    ctx.stroke();
+
+    const titleY = compact ? h * 0.12 : h / 2 - 100;
+
+    if (!compact) {
+      // Decorative top line
+      ctx.strokeStyle = "rgba(0,255,200,0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.2, h / 2 - 130);
+      ctx.lineTo(w * 0.8, h / 2 - 130);
+      ctx.stroke();
+    }
     // Title with glow
     ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = compact ? 8 : 15;
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 36px monospace";
+    ctx.font = `bold ${compact ? 22 : 36}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("LEVEL COMPLETE", w / 2, h / 2 - 100);
+    ctx.fillText("LEVEL COMPLETE", w / 2, titleY);
     ctx.shadowBlur = 0;
-    // Divider
-    ctx.strokeStyle = "rgba(0,255,200,0.15)";
-    ctx.beginPath();
-    ctx.moveTo(w * 0.25, h / 2 - 75);
-    ctx.lineTo(w * 0.75, h / 2 - 75);
-    ctx.stroke();
 
-    this._renderStatsCard(ctx, w, h / 2 - 55, "#00ffcc", "#aaddff");
+    if (!compact) {
+      // Divider
+      ctx.strokeStyle = "rgba(0,255,200,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.25, h / 2 - 75);
+      ctx.lineTo(w * 0.75, h / 2 - 75);
+      ctx.stroke();
+    }
+
+    this._renderStatsCard(
+      ctx,
+      w,
+      compact ? titleY + 18 : h / 2 - 55,
+      "#00ffcc",
+      "#aaddff",
+    );
 
     ctx.fillStyle = "#aaddff";
-    ctx.font = "16px monospace";
+    ctx.font = `${compact ? 12 : 16}px monospace`;
     ctx.fillText(
       `Secrets: ${this.player.secretsFound || 0}`,
       w / 2,
-      h / 2 + 80,
+      compact ? h * 0.75 : h / 2 + 80,
     );
 
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
     ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = "14px monospace";
-    ctx.fillText("Press ENTER to continue", w / 2, h / 2 + 110);
+    ctx.font = `${compact ? 12 : 14}px monospace`;
+    const lcPrompt = this.isTouchDevice
+      ? "Tap to continue"
+      : "Press ENTER to continue";
+    ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
     ctx.textAlign = "left";
 
     // Scanline overlay
@@ -8753,6 +9201,7 @@ export class Game {
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor) {
+    const compact = this.isTouchDevice && this.hudCanvas.height < 420;
     const accuracy =
       this.shotsFired > 0
         ? Math.round((this.shotsHit / this.shotsFired) * 100)
@@ -8765,8 +9214,8 @@ export class Game {
     const timeStr = `${mins}:${String(secs).padStart(2, "0")}`;
 
     // Card background with inner glow
-    const cardW = 380;
-    const cardH = 130;
+    const cardW = compact ? Math.min(300, w - 40) : 380;
+    const cardH = compact ? 80 : 130;
     const cx = w / 2 - cardW / 2;
     // Outer glow
     ctx.shadowColor = accentColor;
@@ -8821,19 +9270,23 @@ export class Game {
 
       ctx.fillStyle = textColor;
       ctx.globalAlpha = 0.6;
-      ctx.font = "bold 10px monospace";
+      ctx.font = `bold ${compact ? 8 : 10}px monospace`;
       ctx.fillText(stats[i].label, sx, sy);
       ctx.globalAlpha = 1;
 
       ctx.fillStyle = accentColor;
-      ctx.font = "bold 24px monospace";
-      ctx.fillText(stats[i].value, sx, sy + 26);
+      ctx.font = `bold ${compact ? 16 : 24}px monospace`;
+      ctx.fillText(stats[i].value, sx, sy + (compact ? 18 : 26));
     }
 
     // Score bar at bottom of card
     ctx.fillStyle = accentColor;
-    ctx.font = "bold 14px monospace";
-    ctx.fillText(`SCORE: ${this.player.score}`, w / 2, startY + cardH + 20);
+    ctx.font = `bold ${compact ? 12 : 14}px monospace`;
+    ctx.fillText(
+      `SCORE: ${this.player.score}`,
+      w / 2,
+      startY + cardH + (compact ? 14 : 20),
+    );
   }
 
   // ── Builder Mode (delegated to BuilderMode) ────────────────────

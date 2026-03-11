@@ -16,6 +16,12 @@ const game = new Game(gameCanvas, hudCanvas);
 const versionLabel = document.getElementById("versionLabel");
 if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
 
+// Update start prompt for touch devices
+if ("ontouchstart" in window) {
+  const startPrompt = titleScreen.querySelector(".start-prompt");
+  if (startPrompt) startPrompt.textContent = "[ TAP TO START ]";
+}
+
 function resizeCanvases() {
   let w = window.innerWidth;
   let h = window.innerHeight;
