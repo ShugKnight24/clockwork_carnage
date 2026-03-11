@@ -4723,28 +4723,34 @@ export class Game {
     this.updateAriaComms(dt);
   }
 
-  triggerDash(code) {
+  triggerDash(code, rawDirX, rawDirY) {
     const p = this.player;
     const cost = Math.max(0, p.dashStaminaCost);
     if (p.dashCooldown > 0 || p.stamina < cost || p.isDashing) return;
 
-    const cos = Math.cos(p.angle);
-    const sin = Math.sin(p.angle);
     let dirX = 0,
       dirY = 0;
 
-    if (code === this.keybinds.moveForward) {
-      dirX = cos;
-      dirY = sin;
-    } else if (code === this.keybinds.moveBack) {
-      dirX = -cos;
-      dirY = -sin;
-    } else if (code === this.keybinds.moveLeft) {
-      dirX = sin;
-      dirY = -cos;
-    } else if (code === this.keybinds.moveRight) {
-      dirX = -sin;
-      dirY = cos;
+    if (rawDirX !== undefined && rawDirY !== undefined) {
+      // Direct world-space direction (from joystick)
+      dirX = rawDirX;
+      dirY = rawDirY;
+    } else {
+      const cos = Math.cos(p.angle);
+      const sin = Math.sin(p.angle);
+      if (code === this.keybinds.moveForward) {
+        dirX = cos;
+        dirY = sin;
+      } else if (code === this.keybinds.moveBack) {
+        dirX = -cos;
+        dirY = -sin;
+      } else if (code === this.keybinds.moveLeft) {
+        dirX = sin;
+        dirY = -cos;
+      } else if (code === this.keybinds.moveRight) {
+        dirX = -sin;
+        dirY = cos;
+      }
     }
 
     p.isDashing = true;

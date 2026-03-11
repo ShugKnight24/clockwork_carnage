@@ -401,9 +401,22 @@ export class TouchControls {
         g.player.isFiring = true;
         this.activeButtons.add("fire");
       } else if (zone === "dash") {
-        // Trigger dash forward
         this.activeButtons.add("dash");
-        g.triggerDash(g.keybinds.moveForward);
+        // Dash in joystick direction if active, otherwise forward
+        const jdx = this.joyPos.x - this.joyOrigin.x;
+        const jdy = this.joyPos.y - this.joyOrigin.y;
+        if (this.joyActive && (jdx * jdx + jdy * jdy) > 15 * 15) {
+          const cos = Math.cos(g.player.angle);
+          const sin = Math.sin(g.player.angle);
+          // Map joystick to world-space: -jdy=forward, jdx=strafe right
+          let dX = -jdy * cos - jdx * sin;
+          let dY = -jdy * sin + jdx * cos;
+          const len = Math.sqrt(dX * dX + dY * dY);
+          if (len > 0) { dX /= len; dY /= len; }
+          g.triggerDash(null, dX, dY);
+        } else {
+          g.triggerDash(g.keybinds.moveForward);
+        }
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         g.interact();
