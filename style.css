@@ -582,10 +582,12 @@ body {
 
   #titleScreen .version-label {
     position: absolute;
-    bottom: 2px;
+    top: max(4px, env(safe-area-inset-top, 4px));
     right: max(8px, env(safe-area-inset-right, 8px));
     z-index: 2;
     margin-top: 0;
+    font-size: 9px;
+    opacity: 0.4;
   }
 
   /* ─── Mode select: 2-column grid for landscape ─── */
