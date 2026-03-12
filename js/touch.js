@@ -668,9 +668,12 @@ export class TouchControls {
         y >= btn.y &&
         y <= btn.y + btn.h
       ) {
-        if (btn.index === 0) this.game.handleKeyPress("Escape"); // Resume
-        else if (btn.index === 1) this.game.handleKeyPress("KeyS"); // Settings
-        else if (btn.index === 2) this.game.handleKeyPress("KeyC"); // Controls
+        if (btn.index === 0)
+          this.game.handleKeyPress("Escape"); // Resume
+        else if (btn.index === 1)
+          this.game.handleKeyPress("KeyS"); // Settings
+        else if (btn.index === 2)
+          this.game.handleKeyPress("KeyC"); // Controls
         else if (btn.index === 3) this.game.handleKeyPress("KeyQ"); // Quit
         return;
       }
@@ -784,7 +787,12 @@ export class TouchControls {
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
-    const layout = settingsLayout(w, h, this.game.settingsSelection, this.game.isTouchDevice);
+    const layout = settingsLayout(
+      w,
+      h,
+      this.game.settingsSelection,
+      this.game.isTouchDevice,
+    );
     const { panelX, panelW, itemHeights, totalH } = layout;
     let cursorY = layout.startY;
 
@@ -824,7 +832,12 @@ export class TouchControls {
 
     const g = this.game;
     const upgradeKeys = Object.keys(UPGRADES);
-    const layout = upgradeLayout(w, h, upgradeKeys.length, this.game.isTouchDevice);
+    const layout = upgradeLayout(
+      w,
+      h,
+      upgradeKeys.length,
+      this.game.isTouchDevice,
+    );
 
     if (y >= layout.contY - 18 && y <= layout.contY + 18) {
       g.upgradeSelection = upgradeKeys.length;

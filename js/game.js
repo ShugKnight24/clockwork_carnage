@@ -8740,7 +8740,12 @@ export class Game {
       compactSettings ? def.height.compact : def.height.normal,
     );
 
-    const layout = settingsLayout(w, h, this.settingsSelection, this.isTouchDevice);
+    const layout = settingsLayout(
+      w,
+      h,
+      this.settingsSelection,
+      this.isTouchDevice,
+    );
     const { panelX, panelW, barW, barH } = layout;
     let startY = layout.startY;
 
