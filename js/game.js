@@ -126,6 +126,9 @@ export class Game {
       showKills: true,
       showScore: true,
       touchSensitivity: 2.0,
+      haptics: true,
+      autoFire: false,
+      swipeWeapons: true,
     };
     this.settingsSelection = 0;
     this.lastEscTime = 0;
@@ -815,6 +818,9 @@ export class Game {
         { key: "showKills", toggle: true },
         { key: "showScore", toggle: true },
         { key: "touchSensitivity", min: 0.5, max: 3.0, step: 0.1, round: 1 },
+        { key: "haptics", toggle: true },
+        { key: "autoFire", toggle: true },
+        { key: "swipeWeapons", toggle: true },
       ];
       const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
@@ -1051,7 +1057,7 @@ export class Game {
     try {
       localStorage.setItem("cc_settings", JSON.stringify(this.settings));
       localStorage.setItem("cc_keybinds", JSON.stringify(this.keybinds));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   loadSettings() {
@@ -1068,7 +1074,7 @@ export class Game {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     try {
       const raw = localStorage.getItem("cc_keybinds");
       if (raw) {
@@ -1082,7 +1088,7 @@ export class Game {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // One-time migration for existing mobile users who had desktop-tuned defaults
@@ -1112,7 +1118,7 @@ export class Game {
         }
         localStorage.setItem("cc_mobile_v3", "1");
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Dev feature flags
@@ -1120,13 +1126,13 @@ export class Game {
     try {
       this.alwaysShowTutorial =
         localStorage.getItem("cc_dev_always_tutorial") === "1";
-    } catch (_) {}
+    } catch (_) { }
   }
 
   saveCharacter() {
     try {
       localStorage.setItem("cc_character", JSON.stringify(this.character));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   loadCharacter() {
@@ -1153,7 +1159,7 @@ export class Game {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   setAlwaysTutorial(on) {
@@ -1164,7 +1170,7 @@ export class Game {
       } else {
         localStorage.removeItem("cc_dev_always_tutorial");
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Achievement persistence
@@ -1177,7 +1183,7 @@ export class Game {
           stats: this.achievementStats,
         }),
       );
-    } catch (_) {}
+    } catch (_) { }
   }
 
   loadAchievements() {
@@ -1203,7 +1209,7 @@ export class Game {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   unlockAchievement(id) {
@@ -1737,7 +1743,7 @@ export class Game {
         difficulty: this.settings.difficulty,
       };
       localStorage.setItem("cc_arena_save", JSON.stringify(data));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
@@ -1766,7 +1772,7 @@ export class Game {
   clearArenaSave() {
     try {
       localStorage.removeItem("cc_arena_save");
-    } catch (_) {}
+    } catch (_) { }
   }
 
   saveCampaign() {
@@ -1798,7 +1804,7 @@ export class Game {
         killedEnemies: this.killedEnemies,
       };
       localStorage.setItem("cc_campaign_save", JSON.stringify(data));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   loadCampaignSave() {
@@ -1862,7 +1868,7 @@ export class Game {
   clearCampaignSave() {
     try {
       localStorage.removeItem("cc_campaign_save");
-    } catch (_) {}
+    } catch (_) { }
   }
 
   hasSave() {
@@ -1882,7 +1888,7 @@ export class Game {
         const d = JSON.parse(campaign);
         info.push({ mode: "campaign", level: d.level + 1, score: d.score });
       }
-    } catch (_) {}
+    } catch (_) { }
     return info;
   }
 
@@ -2968,11 +2974,11 @@ export class Game {
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
-          30,
-          Math.floor(
-            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-          ),
-        )
+        30,
+        Math.floor(
+          (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+        ),
+      )
       : 90;
     const tabH = 28;
     const totalTabW =
@@ -3065,8 +3071,8 @@ export class Game {
       const prevCX = w / 2;
       const prevCY = isMobile
         ? nameBoxY +
-          nameBoxH +
-          Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
+        nameBoxH +
+        Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
         : nameBoxY + nameBoxH + 160;
       const prevScale = isMobile ? 1.0 : 1.5;
       this._renderCharacterPreview(
@@ -3376,11 +3382,11 @@ export class Game {
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
-          30,
-          Math.floor(
-            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-          ),
-        )
+        30,
+        Math.floor(
+          (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+        ),
+      )
       : 90;
     const tabH = 28;
     const totalTabW =
@@ -4131,7 +4137,7 @@ export class Game {
     if (
       !wep ||
       now - this.player.lastFireTime <
-        wep.fireRate / (this.player.fireRateMultiplier || 1)
+      wep.fireRate / (this.player.fireRateMultiplier || 1)
     )
       return;
     if (this.player.ammo < wep.ammoPerShot && wep.id !== 0) return;
@@ -4436,6 +4442,7 @@ export class Game {
     this.player.hurtTime = this.time;
     this.screenShake = Math.max(this.screenShake, 4);
     this.audio.playerHit();
+    if (this.settings.haptics && navigator.vibrate) navigator.vibrate(50);
     this.roundDamageTaken += actualDamage;
 
     // ARIA low health warnings
@@ -8043,7 +8050,7 @@ export class Game {
     if (!this.isTouchDevice) {
       ctx.fillText(
         "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  L ARIA log  |  Q quit" +
-          saveHint,
+        saveHint,
         w / 2,
         h / 2 + 110,
       );
@@ -8236,6 +8243,21 @@ export class Game {
         label: "Touch Sensitivity",
         value: `${this.settings.touchSensitivity.toFixed(1)}x`,
       },
+      {
+        label: "Haptic Feedback",
+        value: this.settings.haptics ? "ON" : "OFF",
+        color: this.settings.haptics ? "#00ffcc" : "#888888",
+      },
+      {
+        label: "Auto-Fire (Twin Stick)",
+        value: this.settings.autoFire ? "ON" : "OFF",
+        color: this.settings.autoFire ? "#ffaa00" : "#888888",
+      },
+      {
+        label: "Swipe to Swap Weapons",
+        value: this.settings.swipeWeapons ? "ON" : "OFF",
+        color: this.settings.swipeWeapons ? "#00ccff" : "#888888",
+      },
     ];
 
     const barW = compactSettings ? 140 : 200;
@@ -8243,11 +8265,12 @@ export class Game {
     const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
     const panelX = w / 2 - panelW / 2;
     const itemHeights = compactSettings
-      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42]
+      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42, 30, 30, 30]
       : [
-          44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
-          60,
-        ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity
+        44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
+        60, 44, 44, 44,
+      ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity, hapticFeedback, autoFire, swipeWeapons
+    // TODO: Remove growing list of settings
 
     // Scroll the settings panel so the selected item stays visible
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
@@ -8583,7 +8606,7 @@ export class Game {
     const maxScroll = Math.max(
       0,
       Math.ceil(entries.length / cols) -
-        Math.floor((h - startY - 50) / (cardH + gap)),
+      Math.floor((h - startY - 50) / (cardH + gap)),
     );
     this.achievementsScroll = Math.min(this.achievementsScroll || 0, maxScroll);
     const scroll = this.achievementsScroll || 0;
