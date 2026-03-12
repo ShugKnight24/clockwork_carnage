@@ -46,6 +46,235 @@ export const GameState = {
 };
 
 // TODO: Restructure this entire file, but especially this class... it's a mess. It handles too much. 3k lines for a class is normal right? Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
+
+// TODO: abstract this out into a settings module
+// TODO: consider the impact on the platform for different settings - maybe more both?
+// ── Settings Registry ──────────────────────────────────
+// Single source of truth for all settings. Adding a new setting = adding one object here.
+// Fields:
+//   key         – property name in this.settings
+//   label       – display name in the settings menu
+//   type        – "slider" | "toggle" | "enum"
+//   platform    – "all" | "mobile" | "desktop"
+//   height      – { compact, normal } row heights
+//   --- slider-specific ---
+//   min, max, step, round  – numeric range
+//   format(v)              – value → display string
+//   barColor(v)            – value → slider fill color
+//   --- enum-specific ---
+//   values[]     – display names for each integer value
+//   colors[]     – optional per-value colors
+//   wrap         – whether cycling wraps around
+//   --- toggle-specific ---
+//   onColor      – color when ON (defaults to "#00ccff")
+//   --- shared ---
+//   onChange(game) – callback after value changes
+//   widget         – special sub-widget key ("crosshairPreview")
+export const SETTINGS_REGISTRY = [
+  // ─── Gameplay ───
+  {
+    key: "difficulty", label: "Difficulty",
+    type: "enum",
+    values: ["Easy", "Normal", "Hard", "Nightmare"],
+    colors: ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"],
+    min: 0, max: 3, step: 1, wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "crosshair", label: "Crosshair",
+    type: "enum",
+    values: ["Red Dot", "Green Cross", "ACOG Scope", "Circle", "Minimal", "None"],
+    min: 0, max: 5, step: 1, wrap: true,
+    platform: "all",
+    height: { compact: 50, normal: 70 },
+    widget: "crosshairPreview",
+  },
+  // ─── Display ───
+  {
+    key: "minimapSize", label: "Minimap Size",
+    type: "slider", min: 100, max: 300, step: 20,
+    format: v => `${v}px`,
+    barColor: () => "#00ccff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  // ─── Audio ───
+  {
+    key: "musicVolume", label: "Music Volume",
+    type: "slider", min: 0, max: 100, step: 10,
+    format: v => v === 0 ? "MUTED" : `${v}%`,
+    barColor: v => v === 0 ? "#ff4444" : "#00ff88",
+    onChange: (g) => g.audio.setMusicVolume(g.settings.musicVolume / 100),
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "sfxVolume", label: "SFX Volume",
+    type: "slider", min: 0, max: 100, step: 10,
+    format: v => v === 0 ? "MUTED" : `${v}%`,
+    barColor: v => v === 0 ? "#ff4444" : "#88aaff",
+    onChange: (g) => g.audio.setSfxVolume(g.settings.sfxVolume / 100),
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  // ─── Controls ───
+  {
+    key: "sensitivity", label: "Mouse Sensitivity",
+    type: "slider", min: 0.5, max: 2.0, step: 0.1, round: 1,
+    format: v => `${v.toFixed(1)}x`,
+    barColor: () => "#ffcc00",
+    platform: "desktop",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "fov", label: "FOV",
+    type: "slider", min: 50, max: 120, step: 5,
+    format: v => `${v}°`,
+    barColor: () => "#cc88ff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "viewMode", label: "View Mode",
+    type: "enum",
+    values: ["First Person", "Third Person"],
+    colors: ["#00ccff", "#ff88cc"],
+    min: 0, max: 1, step: 1, wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "invertX", label: "Invert X Axis",
+    type: "toggle",
+    onColor: "#ff8844",
+    platform: "desktop",
+    height: { compact: 30, normal: 44 },
+  },
+  // ─── Accessibility ───
+  {
+    key: "fontScale", label: "Font Scale",
+    type: "slider", min: 100, max: 150, step: 25,
+    format: v => `${v}%`,
+    barColor: () => "#aaaacc",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "colorblind", label: "Colorblind Mode",
+    type: "enum",
+    values: ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
+    colors: ["#888888", "#ffcc00", "#ffcc00", "#ffcc00"],
+    min: 0, max: 3, step: 1, wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  // ─── HUD ───
+  {
+    key: "hudScale", label: "HUD Scale",
+    type: "slider", min: 75, max: 125, step: 25,
+    format: v => `${v}%`,
+    barColor: () => "#44ffaa",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "staminaBarSize", label: "Stamina Bar Size",
+    type: "slider", min: 75, max: 150, step: 25,
+    format: v => `${v}%`,
+    barColor: () => "#00ccff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "showPortrait", label: "Show Portrait",
+    type: "toggle", onColor: "#00ccff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "showWeapons", label: "Show Weapons",
+    type: "toggle", onColor: "#00ccff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "showKills", label: "Show Kills",
+    type: "toggle", onColor: "#00ccff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "showScore", label: "Show Score",
+    type: "toggle", onColor: "#00ccff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  // ─── Touch / Mobile ───
+  {
+    key: "touchSensitivity", label: "Touch Sensitivity",
+    type: "slider", min: 0.5, max: 3.0, step: 0.1, round: 1,
+    format: v => `${v.toFixed(1)}x`,
+    barColor: () => "#ff88cc",
+    platform: "mobile",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "haptics", label: "Haptic Feedback",
+    type: "toggle", onColor: "#00ffcc",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "autoFire", label: "Auto-Fire (Twin Stick)",
+    type: "toggle", onColor: "#ffaa00",
+    platform: "mobile",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "swipeWeapons", label: "Swipe to Swap Weapons",
+    type: "toggle", onColor: "#00ccff",
+    platform: "mobile",
+    height: { compact: 30, normal: 44 },
+  },
+];
+
+// Helper: filter registry by platform
+export function getVisibleSettings(isTouchDevice) {
+  return SETTINGS_REGISTRY.filter(s =>
+    s.platform === "all" ||
+    (s.platform === "mobile" && isTouchDevice) ||
+    (s.platform === "desktop" && !isTouchDevice)
+  );
+}
+
+// Helper: compute a display item { label, value, color } from a registry entry
+export function settingDisplayItem(def, settings) {
+  const v = settings[def.key];
+  switch (def.type) {
+    case "toggle":
+      return {
+        label: def.label,
+        value: v ? "ON" : "OFF",
+        color: v ? (def.onColor || "#00ccff") : "#888888",
+      };
+    case "enum":
+      return {
+        label: def.label,
+        value: def.values[v] || String(v),
+        color: def.colors ? def.colors[v] : undefined,
+      };
+    case "slider":
+      return {
+        label: def.label,
+        value: def.format ? def.format(v) : String(v),
+        color: undefined,
+      };
+    default:
+      return { label: def.label, value: String(v) };
+  }
+}
+
 export class Game {
   constructor(canvas, hudCanvas) {
     this.canvas = canvas;
@@ -673,7 +902,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 12) {
+      if (this.mode === "tutorial" && this.tutorialStep === 13) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -687,7 +916,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 12) {
+      if (this.mode === "tutorial" && this.tutorialStep < 13) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -709,8 +938,10 @@ export class Game {
         this.player.currentWeapon = 2;
       if (code === this.keybinds.weapon4 && this.player.weapons.length >= 4)
         this.player.currentWeapon = 3;
-      if (this.player.currentWeapon !== prevWeapon)
+      if (this.player.currentWeapon !== prevWeapon) {
         this.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+        if (this.mode === "tutorial") this.tutorialWeaponSwapped = true;
+      }
 
       if (code === this.keybinds.interact) this.interact();
       if (code === this.keybinds.pause || code === "KeyP") {
@@ -784,44 +1015,8 @@ export class Game {
     }
 
     if (this.state === GameState.SETTINGS) {
-      // Table-driven settings: each entry defines key, min, max, step, wrap, and optional onChange
-      const settingsDef = [
-        { key: "difficulty", min: 0, max: 3, step: 1, wrap: true },
-        { key: "crosshair", min: 0, max: 5, step: 1, wrap: true },
-        { key: "minimapSize", min: 100, max: 300, step: 20 },
-        {
-          key: "musicVolume",
-          min: 0,
-          max: 100,
-          step: 10,
-          onChange: () =>
-            this.audio.setMusicVolume(this.settings.musicVolume / 100),
-        },
-        {
-          key: "sfxVolume",
-          min: 0,
-          max: 100,
-          step: 10,
-          onChange: () =>
-            this.audio.setSfxVolume(this.settings.sfxVolume / 100),
-        },
-        { key: "sensitivity", min: 0.5, max: 2.0, step: 0.1, round: 1 },
-        { key: "fov", min: 50, max: 120, step: 5 },
-        { key: "viewMode", min: 0, max: 1, step: 1, wrap: true },
-        { key: "invertX", toggle: true },
-        { key: "fontScale", min: 100, max: 150, step: 25 },
-        { key: "colorblind", min: 0, max: 3, step: 1, wrap: true },
-        { key: "hudScale", min: 75, max: 125, step: 25 },
-        { key: "staminaBarSize", min: 75, max: 150, step: 25 },
-        { key: "showPortrait", toggle: true },
-        { key: "showWeapons", toggle: true },
-        { key: "showKills", toggle: true },
-        { key: "showScore", toggle: true },
-        { key: "touchSensitivity", min: 0.5, max: 3.0, step: 0.1, round: 1 },
-        { key: "haptics", toggle: true },
-        { key: "autoFire", toggle: true },
-        { key: "swipeWeapons", toggle: true },
-      ];
+      // Use the declarative registry, filtered by platform
+      const settingsDef = getVisibleSettings(this.isTouchDevice);
       const settingsCount = settingsDef.length;
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
@@ -840,7 +1035,7 @@ export class Game {
       ) {
         const def = settingsDef[this.settingsSelection];
         const dir = code === "ArrowLeft" ? -1 : 1;
-        if (def.toggle) {
+        if (def.type === "toggle") {
           this.settings[def.key] = !this.settings[def.key];
         } else if (def.wrap) {
           const range = def.max - def.min + 1;
@@ -856,7 +1051,7 @@ export class Game {
               Math.pow(10, def.round);
           this.settings[def.key] = val;
         }
-        if (def.onChange) def.onChange();
+        if (def.onChange) def.onChange(this);
         this.audio.menuConfirm();
       }
       if (code === "Escape") {
@@ -2271,6 +2466,7 @@ export class Game {
     this.tutorialSprintTime = 0;
     this.tutorialPickedUp = false;
     this.tutorialWeaponPickedUp = false;
+    this.tutorialWeaponSwapped = false;
     this.tutorialDoorOpened = false;
     this.tutorialEnemySpawned = false;
     this.tutorialEnemyKilled = false;
@@ -2361,15 +2557,23 @@ export class Game {
         if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
         break;
 
-      case 8: // Open a door with E
+      case 8: // Swap weapons
+        if (elapsed < 0.05) {
+          this.tutorialWeaponSwapped = false;
+          break;
+        }
+        if (this.tutorialWeaponSwapped) this.advanceTutorialStep();
+        break;
+
+      case 9: // Open a door with E
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 9: // Pick up items (health & ammo behind the door)
+      case 10: // Pick up items (health & ammo behind the door)
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 10: // Combat
+      case 11: // Combat
         if (!this.tutorialEnemySpawned) {
           const enemy = new Enemy(12.5, 12.5, "drone");
           enemy.health = 15;
@@ -2383,7 +2587,7 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 11: // Training complete → show completion menu
+      case 12: // Training complete → show completion menu
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2396,7 +2600,7 @@ export class Game {
         }
         break;
 
-      case 12: {
+      case 13: {
         // Sandbox — spawn training dummies, let player practice
         if (!this.tutorialSandboxInit) {
           this.tutorialSandboxInit = true;
@@ -2560,6 +2764,13 @@ export class Game {
         color: "#ff6600",
       },
       {
+        title: "WEAPON SYSTEMS — SWITCH LOADOUT",
+        hint: isMobile
+          ? "Tap the WEAPON button or swipe right to switch weapons"
+          : "Press  1  or  2  (or scroll wheel) to switch weapons",
+        color: "#ffcc00",
+      },
+      {
         title: "OPEN THE ARMORY DOOR",
         hint: isMobile
           ? "Face the door and tap USE to interact"
@@ -2638,8 +2849,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 11) {
-      ctx.fillText(`${this.tutorialStep}/10`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 12) {
+      ctx.fillText(`${this.tutorialStep}/11`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2654,7 +2865,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 12) {
+    if (this.tutorialStep === 13) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -5193,7 +5404,7 @@ export class Game {
       if (dx * dx + dy * dy > 1.0) continue;
 
       // In tutorial, block pickups until step 9 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 9) {
+      if (this.mode === "tutorial" && this.tutorialStep < 10) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -5206,7 +5417,7 @@ export class Game {
           e.active = false;
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep >= 9)
+          if (this.mode === "tutorial" && this.tutorialStep >= 10)
             this.tutorialPickedUp = true;
           if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
         }
@@ -5214,7 +5425,7 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep >= 9)
+        if (this.mode === "tutorial" && this.tutorialStep >= 10)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
@@ -8151,126 +8362,17 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("SETTINGS", w / 2, compactSettings ? 24 : 40);
 
-    const crosshairNames = [
-      "Red Dot",
-      "Green Cross",
-      "ACOG Scope",
-      "Circle",
-      "Minimal",
-      "None",
-    ];
-    const difficultyNames = ["Easy", "Normal", "Hard", "Nightmare"];
-    const difficultyColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
-    const colorblindNames = ["Off", "Deuteranopia", "Protanopia", "Tritanopia"];
-    const items = [
-      {
-        label: "Difficulty",
-        value: difficultyNames[this.settings.difficulty],
-        color: difficultyColors[this.settings.difficulty],
-      },
-      { label: "Crosshair", value: crosshairNames[this.settings.crosshair] },
-      { label: "Minimap Size", value: `${this.settings.minimapSize}px` },
-      {
-        label: "Music Volume",
-        value:
-          this.settings.musicVolume === 0
-            ? "MUTED"
-            : `${this.settings.musicVolume}%`,
-      },
-      {
-        label: "SFX Volume",
-        value:
-          this.settings.sfxVolume === 0
-            ? "MUTED"
-            : `${this.settings.sfxVolume}%`,
-      },
-      {
-        label: "Sensitivity",
-        value: `${this.settings.sensitivity.toFixed(1)}x`,
-      },
-      {
-        label: "FOV",
-        value: `${this.settings.fov}°`,
-      },
-      {
-        label: "View Mode",
-        value: this.settings.viewMode === 0 ? "First Person" : "Third Person",
-        color: this.settings.viewMode === 0 ? "#00ccff" : "#ff88cc",
-      },
-      {
-        label: "Invert X Axis",
-        value: this.settings.invertX ? "ON" : "OFF",
-        color: this.settings.invertX ? "#ff8844" : "#888888",
-      },
-      {
-        label: "Font Scale",
-        value: `${this.settings.fontScale}%`,
-      },
-      {
-        label: "Colorblind Mode",
-        value: colorblindNames[this.settings.colorblind],
-        color: this.settings.colorblind > 0 ? "#ffcc00" : "#888888",
-      },
-      {
-        label: "HUD Scale",
-        value: `${this.settings.hudScale}%`,
-      },
-      {
-        label: "Stamina Bar Size",
-        value: `${this.settings.staminaBarSize}%`,
-      },
-      {
-        label: "Show Portrait",
-        value: this.settings.showPortrait ? "ON" : "OFF",
-        color: this.settings.showPortrait ? "#00ccff" : "#888888",
-      },
-      {
-        label: "Show Weapons",
-        value: this.settings.showWeapons ? "ON" : "OFF",
-        color: this.settings.showWeapons ? "#00ccff" : "#888888",
-      },
-      {
-        label: "Show Kills",
-        value: this.settings.showKills ? "ON" : "OFF",
-        color: this.settings.showKills ? "#00ccff" : "#888888",
-      },
-      {
-        label: "Show Score",
-        value: this.settings.showScore ? "ON" : "OFF",
-        color: this.settings.showScore ? "#00ccff" : "#888888",
-      },
-      {
-        label: "Touch Sensitivity",
-        value: `${this.settings.touchSensitivity.toFixed(1)}x`,
-      },
-      {
-        label: "Haptic Feedback",
-        value: this.settings.haptics ? "ON" : "OFF",
-        color: this.settings.haptics ? "#00ffcc" : "#888888",
-      },
-      {
-        label: "Auto-Fire (Twin Stick)",
-        value: this.settings.autoFire ? "ON" : "OFF",
-        color: this.settings.autoFire ? "#ffaa00" : "#888888",
-      },
-      {
-        label: "Swipe to Swap Weapons",
-        value: this.settings.swipeWeapons ? "ON" : "OFF",
-        color: this.settings.swipeWeapons ? "#00ccff" : "#888888",
-      },
-    ];
+    // Derive visible settings from registry (same filter as input handler)
+    const visibleDefs = getVisibleSettings(this.isTouchDevice);
+    const items = visibleDefs.map(def => settingDisplayItem(def, this.settings));
+    const itemHeights = visibleDefs.map(def =>
+      compactSettings ? def.height.compact : def.height.normal
+    );
 
     const barW = compactSettings ? 140 : 200;
     const barH = compactSettings ? 4 : 6;
     const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
     const panelX = w / 2 - panelW / 2;
-    const itemHeights = compactSettings
-      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42, 30, 30, 30]
-      : [
-        44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
-        60, 44, 44, 44,
-      ]; // difficulty, crosshair, minimap, music, sfx, sensitivity, fov, viewMode, invertX, fontScale, colorblind, hudScale, staminaBarSize, showPortrait, showWeapons, showKills, showScore, touchSensitivity, hapticFeedback, autoFire, swipeWeapons
-    // TODO: Remove growing list of settings
 
     // Scroll the settings panel so the selected item stays visible
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
@@ -8289,6 +8391,8 @@ export class Game {
     }
 
     for (let i = 0; i < items.length; i++) {
+      const def = visibleDefs[i];
+      const item = items[i];
       const selected = this.settingsSelection === i;
       const itemH = itemHeights[i];
       const y = startY;
@@ -8307,24 +8411,23 @@ export class Game {
       ctx.font = `bold ${labelSize}px monospace`;
       ctx.textAlign = "left";
       ctx.fillText(
-        items[i].label,
+        item.label,
         panelX + (compactSettings ? 8 : 16),
         y + (compactSettings ? 14 : 18),
       );
 
       // Value
       ctx.textAlign = "right";
-      ctx.fillStyle = items[i].color || (selected ? "#ffffff" : "#aaaacc");
+      ctx.fillStyle = item.color || (selected ? "#ffffff" : "#aaaacc");
       ctx.font = `bold ${labelSize}px monospace`;
       ctx.fillText(
-        `< ${items[i].value} >`,
+        `< ${item.value} >`,
         panelX + panelW - (compactSettings ? 8 : 16),
         y + (compactSettings ? 14 : 18),
       );
 
-      // Sub-widgets under their setting
-      if (i === 1) {
-        // Crosshair preview
+      // Sub-widgets — driven by registry metadata, not hardcoded indices
+      if (def.widget === "crosshairPreview") {
         const prevX = w / 2;
         const prevY = y + 46;
         ctx.fillStyle = "rgba(30,30,50,0.8)";
@@ -8339,83 +8442,14 @@ export class Game {
           ctx.textAlign = "center";
           ctx.fillText("(none)", prevX, prevY + 4);
         }
-      } else if (i === 2) {
-        // Minimap size bar
+      } else if (def.type === "slider" && def.barColor) {
+        // Generic slider bar — percentage computed from min/max
         const sliderY = y + 32;
-        const pct = (this.settings.minimapSize - 100) / 200;
+        const val = this.settings[def.key];
+        const pct = (val - def.min) / (def.max - def.min);
         ctx.fillStyle = "rgba(255,255,255,0.08)";
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#00ccff";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 3) {
-        // Music volume bar
-        const sliderY = y + 32;
-        const volPct = this.settings.musicVolume / 100;
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = this.settings.musicVolume === 0 ? "#ff4444" : "#00ff88";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 4) {
-        // SFX volume bar
-        const sliderY = y + 32;
-        const volPct = this.settings.sfxVolume / 100;
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = this.settings.sfxVolume === 0 ? "#ff4444" : "#88aaff";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * volPct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 5) {
-        // Sensitivity bar
-        const sliderY = y + 32;
-        const sensPct = (this.settings.sensitivity - 0.5) / 1.5;
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#ffcc00";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * sensPct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 6) {
-        // FOV bar
-        const sliderY = y + 32;
-        const fovPct = (this.settings.fov - 50) / 70; // range 50-120
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#cc88ff";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * fovPct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 11) {
-        // HUD Scale bar
-        const sliderY = y + 32;
-        const pct = (this.settings.hudScale - 75) / 50; // range 75-125
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#44ffaa";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 12) {
-        // Stamina Bar Size bar
-        const sliderY = y + 32;
-        const pct = (this.settings.staminaBarSize - 75) / 75; // range 75-150
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#00ccff";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
-      } else if (i === 17) {
-        // Touch Sensitivity bar
-        const sliderY = y + 32;
-        const pct = (this.settings.touchSensitivity - 0.5) / 2.5; // range 0.5-3.0
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
-        ctx.fillStyle = "#ff88cc";
+        ctx.fillStyle = def.barColor(val);
         ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
         ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);

@@ -461,6 +461,7 @@ export class TouchControls {
         if (p.weapons.length > 1) {
           p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
           g.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+          if (g.mode === "tutorial") g.tutorialWeaponSwapped = true;
           if (g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
         }
       } else if (zone === "fullscreen") {
@@ -560,6 +561,7 @@ export class TouchControls {
                  p.currentWeapon = (p.currentWeapon - 1 + p.weapons.length) % p.weapons.length;
                }
                this.game.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+               if (this.game.mode === "tutorial") this.game.tutorialWeaponSwapped = true;
                if (this.game.settings.haptics && navigator.vibrate) navigator.vibrate(25);
              }
            }
