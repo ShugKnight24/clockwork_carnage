@@ -670,7 +670,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 11) {
+      if (this.mode === "tutorial" && this.tutorialStep === 12) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -684,7 +684,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 11) {
+      if (this.mode === "tutorial" && this.tutorialStep < 12) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -2247,7 +2247,7 @@ export class Game {
 
     // Spawn tutorial pickups
     for (const p of TUTORIAL_MAP.pickups) {
-      this.entities.push(new Pickup(p.x, p.y, p.type, {}));
+      this.entities.push(new Pickup(p.x, p.y, p.type, p));
     }
 
     this.killedEnemies = 0;
@@ -2264,6 +2264,7 @@ export class Game {
     this.tutorialStartY = this.player.y;
     this.tutorialSprintTime = 0;
     this.tutorialPickedUp = false;
+    this.tutorialWeaponPickedUp = false;
     this.tutorialDoorOpened = false;
     this.tutorialEnemySpawned = false;
     this.tutorialEnemyKilled = false;
@@ -2291,6 +2292,14 @@ export class Game {
     const p = this.player;
     const now = performance.now();
     const elapsed = (now - this.tutorialStepTime) / 1000;
+
+    // Respawn collected pickups after delay
+    for (const e of this.entities) {
+      if (!e.active && e._respawnAt && now >= e._respawnAt) {
+        e.active = true;
+        e._respawnAt = 0;
+      }
+    }
 
     switch (this.tutorialStep) {
       case 0: // Narrative intro - auto advance
@@ -2342,15 +2351,19 @@ export class Game {
         if (this.tutorialChronoUsed) this.advanceTutorialStep();
         break;
 
-      case 7: // Open a door with E
+      case 7: // Pick up weapon crate
+        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
+        break;
+
+      case 8: // Open a door with E
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 8: // Pick up items (health & ammo behind the door)
+      case 9: // Pick up items (health & ammo behind the door)
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 9: // Combat
+      case 10: // Combat
         if (!this.tutorialEnemySpawned) {
           const enemy = new Enemy(12.5, 12.5, "drone");
           enemy.health = 15;
@@ -2364,7 +2377,7 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 10: // Training complete → show completion menu
+      case 11: // Training complete → show completion menu
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2377,7 +2390,7 @@ export class Game {
         }
         break;
 
-      case 11: {
+      case 12: {
         // Sandbox — spawn training dummies, let player practice
         if (!this.tutorialSandboxInit) {
           this.tutorialSandboxInit = true;
@@ -2534,6 +2547,13 @@ export class Game {
         color: "#8844ff",
       },
       {
+        title: "WEAPON ACQUISITION",
+        hint: isMobile
+          ? "Walk over the weapon crate to equip the Temporal Shotgun"
+          : "Walk over the weapon crate — new weapons are added to your loadout",
+        color: "#ff6600",
+      },
+      {
         title: "OPEN THE ARMORY DOOR",
         hint: isMobile
           ? "Face the door and tap USE to interact"
@@ -2612,8 +2632,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 10) {
-      ctx.fillText(`${this.tutorialStep}/9`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 11) {
+      ctx.fillText(`${this.tutorialStep}/10`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2628,7 +2648,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 11) {
+    if (this.tutorialStep === 12) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -5165,8 +5185,8 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
-      // In tutorial, block pickups until step 7 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 8) {
+      // In tutorial, block pickups until step 9 ("Grab Supplies")
+      if (this.mode === "tutorial" && this.tutorialStep < 9) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -5179,15 +5199,17 @@ export class Game {
           e.active = false;
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep >= 8)
+          if (this.mode === "tutorial" && this.tutorialStep >= 9)
             this.tutorialPickedUp = true;
+          if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
         }
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep >= 8)
+        if (this.mode === "tutorial" && this.tutorialStep >= 9)
           this.tutorialPickedUp = true;
+        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
         if (!this.player.weapons.includes(e.weaponId)) {
           this.player.weapons.push(e.weaponId);
@@ -5197,6 +5219,10 @@ export class Game {
         }
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
+        if (this.mode === "tutorial") {
+          this.tutorialWeaponPickedUp = true;
+          e._respawnAt = performance.now() + 8000;
+        }
       }
     }
   }

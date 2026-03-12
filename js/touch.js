@@ -425,13 +425,29 @@ export class TouchControls {
         if (hasDir) {
           const cos = Math.cos(g.player.angle);
           const sin = Math.sin(g.player.angle);
-          let dX = 0, dY = 0;
-          if (fwd)   { dX += cos;  dY += sin; }
-          if (back)  { dX -= cos;  dY -= sin; }
-          if (left)  { dX += sin;  dY -= cos; }
-          if (right) { dX -= sin;  dY += cos; }
+          let dX = 0,
+            dY = 0;
+          if (fwd) {
+            dX += cos;
+            dY += sin;
+          }
+          if (back) {
+            dX -= cos;
+            dY -= sin;
+          }
+          if (left) {
+            dX += sin;
+            dY -= cos;
+          }
+          if (right) {
+            dX -= sin;
+            dY += cos;
+          }
           const len = Math.sqrt(dX * dX + dY * dY);
-          if (len > 0) { dX /= len; dY /= len; }
+          if (len > 0) {
+            dX /= len;
+            dY /= len;
+          }
           g.triggerDash(null, dX, dY);
         } else {
           g.triggerDash(g.keybinds.moveForward);
