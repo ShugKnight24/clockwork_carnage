@@ -138,6 +138,9 @@ export class TouchControls {
     // Compact phone detection: landscape phone with short viewport
     const isCompactPhone = h < 420;
 
+    // Keep joystick radius in sync with viewport
+    this.joyRadius = isCompactPhone ? 45 : 60;
+
     // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
     // stays ≥ 44px (Apple HIG) thanks to this floor
     // On compact phones, slightly smaller buttons to avoid crowding
@@ -698,8 +701,11 @@ export class TouchControls {
       if (len > 0) {
         dX /= len;
         dY /= len;
+        g.triggerDash(null, dX, dY);
+      } else {
+        // Opposing keys cancel out — fall back to dashing forward
+        g.triggerDash(g.keybinds.moveForward);
       }
-      g.triggerDash(null, dX, dY);
     } else if (defaultForward) {
       g.triggerDash(g.keybinds.moveForward);
     }
@@ -823,7 +829,7 @@ export class TouchControls {
     for (let i = 0; i < upgradeKeys.length; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : w / 2 + 12;
+      const baseX = col === 0 ? leftX : w / 2 + (compactUpg ? 6 : 12);
       const uy = startY + row * (cardH + cardGap);
       if (x >= baseX && x <= baseX + colW && y >= uy && y <= uy + cardH) {
         g.upgradeSelection = i;
@@ -1052,7 +1058,7 @@ export class TouchControls {
       z.pauseBtn.y,
       z.pauseBtn.r,
       "II",
-      this.activeButtons.has("pause") ? "#ffffff" : "rgba(200,200,200,0.5)",
+      this.activeButtons.has("pause") ? "#ffdd44" : "rgba(200,200,200,0.5)",
     );
 
     // ── Fullscreen button (top-right, next to pause) — hidden when API unavailable ──
