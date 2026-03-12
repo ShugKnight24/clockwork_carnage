@@ -9,7 +9,8 @@
  * Only activates on touch-capable devices.
  */
 
-import { UPGRADES } from "./data.js";
+import { UPGRADES, WEAPONS } from "./data.js";
+import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./game.js";
 
 export class TouchControls {
   static init(game) {
@@ -29,11 +30,14 @@ export class TouchControls {
     this.joyOrigin = { x: 0, y: 0 };
     this.joyPos = { x: 0, y: 0 };
     this.joyActive = false;
-    this.joyRadius = 60;
+    this.joyRadius = window.innerHeight < COMPACT_PHONE_HEIGHT ? 45 : 60;
 
     // Look state
     this.lookTouch = null;
+    this.lookOrigin = { x: 0, y: 0 };
     this.lookLast = { x: 0, y: 0 };
+    this.lookActive = false;
+    this.lookTapTime = 0; // for swipe detection
 
     // Fire state
     this.fireTouch = null;
@@ -60,6 +64,10 @@ export class TouchControls {
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
     this.cutsceneHoldStart = 0;
+
+    // Double-tap dash state
+    this.lastTapTime = 0;
+    this.lastTapZone = null;
 
     // Mobile tutorial overlay state
     let tutorialDone = false;
@@ -128,52 +136,84 @@ export class TouchControls {
     this._updateSafeArea();
     const sa = this.safeArea;
 
+    // Compact phone detection: landscape phone with short viewport
+    const isCompactPhone = h < COMPACT_PHONE_HEIGHT;
+
+    // Keep joystick radius in sync with viewport
+    this.joyRadius = isCompactPhone ? 45 : 60;
+
     // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
     // stays ≥ 44px (Apple HIG) thanks to this floor
-    const btnSize = Math.max(44, Math.min(56, w * 0.09));
-    const pad = 14 + sa.right;
-    const bottomPad = 14 + sa.bottom;
+    // On compact phones, slightly smaller buttons to avoid crowding
+    const btnSize = isCompactPhone
+      ? Math.max(40, Math.min(46, w * 0.07))
+      : Math.max(44, Math.min(56, w * 0.09));
+    const pad = (isCompactPhone ? 10 : 14) + sa.right;
+    const bottomPad = (isCompactPhone ? 8 : 14) + sa.bottom;
 
     // Default joystick hint center (shown when no thumb is on left zone)
-    const joyHintX = Math.max(100, 80 + sa.left);
-    const joyHintY = h - 140 - sa.bottom;
+    const joyHintX = Math.max(80, 60 + sa.left);
+    const joyHintY = isCompactPhone ? h - 90 - sa.bottom : h - 140 - sa.bottom;
 
     this.zones = {
       w,
       h,
       btnSize,
+      isCompactPhone,
       // Hint position for joystick (shown when not touching)
       joyCenter: { x: joyHintX, y: joyHintY },
       // Right side buttons — fire is large and accessible, others spaced around it
       fireBtn: {
         x: w - pad - btnSize * 1.6,
-        y: h - bottomPad - btnSize * 1.3,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 1.0
+          : h - bottomPad - btnSize * 1.3,
         r: btnSize,
       },
       dashBtn: {
         x: w - pad - btnSize * 0.5,
-        y: h - bottomPad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 2.5
+          : h - bottomPad - btnSize * 3.2,
         r: btnSize * 0.65,
       },
       interactBtn: {
         x: w - pad - btnSize * 2.9,
-        y: h - bottomPad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 2.5
+          : h - bottomPad - btnSize * 3.2,
         r: btnSize * 0.65,
       },
       // Sprint toggle — left side above joystick
       sprintBtn: {
-        x: Math.max(70, 50 + sa.left),
-        y: h - 260 - sa.bottom,
+        x: Math.max(60, 42 + sa.left),
+        y: isCompactPhone ? h - 170 - sa.bottom : h - 260 - sa.bottom,
         r: btnSize * 0.55,
       },
       // Chrono Shift (time slow) — left side above sprint
       chronoBtn: {
-        x: Math.max(70, 50 + sa.left),
-        y: h - 350 - sa.bottom,
+        x: Math.max(60, 42 + sa.left),
+        y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
         r: btnSize * 0.6,
       },
-      pauseBtn: { x: w - 50 - sa.right, y: 40 + sa.top, r: 26 },
-      fullscreenBtn: { x: w - 110 - sa.right, y: 40 + sa.top, r: 26 },
+      // Weapon cycle — left of fire, easily reachable by right thumb
+      weaponBtn: {
+        x: w - pad - btnSize * 3.2,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 1.0
+          : h - bottomPad - btnSize * 1.3,
+        r: btnSize * 0.55,
+      },
+      pauseBtn: {
+        x: w - 50 - sa.right,
+        y: (isCompactPhone ? 28 : 40) + sa.top,
+        r: isCompactPhone ? 22 : 26,
+      },
+      fullscreenBtn: {
+        x: w - 110 - sa.right,
+        y: (isCompactPhone ? 28 : 40) + sa.top,
+        r: isCompactPhone ? 22 : 26,
+      },
       // Divider: left quarter = movement, rest = look
       midX: w * 0.28,
     };
@@ -219,6 +259,11 @@ export class TouchControls {
       z.sprintBtn.r * hitShrink
     )
       return "sprint";
+    if (
+      this.dist(x, y, z.weaponBtn.x, z.weaponBtn.y) <
+      z.weaponBtn.r * hitShrink
+    )
+      return "weapon";
     if (this.dist(x, y, z.pauseBtn.x, z.pauseBtn.y) < z.pauseBtn.r * hitShrink)
       return "pause";
     if (
@@ -372,17 +417,37 @@ export class TouchControls {
         this.joyOrigin = { x, y };
         this.joyPos = { x, y };
         this.joyActive = true;
+
+        // Double-tap to dash
+        const now = performance.now();
+        if (this.lastTapZone === "joy" && now - this.lastTapTime < 250) {
+          this.activeButtons.add("dash");
+
+          // If double tapped, but they haven't moved the joystick out of the deadzone
+          // we still want to dash. We use true for default to forward.
+          setTimeout(() => {
+            this.triggerDirectionalDash(g, true);
+          }, 0);
+
+          this.lastTapTime = 0;
+        } else {
+          this.lastTapTime = now;
+          this.lastTapZone = "joy";
+        }
       } else if (zone === "look" && this.lookTouch === null) {
         this.lookTouch = touch.identifier;
+        this.lookOrigin = { x, y };
         this.lookLast = { x, y };
+        this.lookActive = true;
+        this.lookTapTime = performance.now();
       } else if (zone === "fire" && this.fireTouch === null) {
         this.fireTouch = touch.identifier;
         g.player.isFiring = true;
         this.activeButtons.add("fire");
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
       } else if (zone === "dash") {
-        // Trigger dash forward
         this.activeButtons.add("dash");
-        g.triggerDash(g.keybinds.moveForward);
+        this.triggerDirectionalDash(g, true);
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         g.interact();
@@ -394,6 +459,15 @@ export class TouchControls {
         this.sprintToggleActive = !this.sprintToggleActive;
         this.activeButtons.add("sprint");
         g.keys[g.keybinds.sprint] = this.sprintToggleActive;
+      } else if (zone === "weapon") {
+        this.activeButtons.add("weapon");
+        const p = g.player;
+        if (p.weapons.length > 1) {
+          p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
+          g.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+          if (g.mode === "tutorial") g.tutorialWeaponSwapped = true;
+          if (g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
+        }
       } else if (zone === "fullscreen") {
         this.toggleFullscreen();
       } else if (zone === "pause") {
@@ -411,18 +485,50 @@ export class TouchControls {
 
     for (const touch of e.changedTouches) {
       if (touch.identifier === this.joyTouch) {
-        this.joyPos = { x: touch.clientX, y: touch.clientY };
+        this.joyPos.x = touch.clientX;
+        this.joyPos.y = touch.clientY;
         this.updateJoystickKeys();
       } else if (touch.identifier === this.lookTouch) {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
-        // Feed into mouse look system (scaled for touch sensitivity from settings)
-        let rawSens = Number(this.game.settings.touchSensitivity);
-        if (!Number.isFinite(rawSens)) rawSens = 1.5;
-        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
-        this.game.mouse.dx += dx * touchSens;
-        this.game.mouse.dy += dy * touchSens;
-        this.lookLast = { x: touch.clientX, y: touch.clientY };
+
+        // Twin-stick auto-fire handling
+        if (this.game.settings.autoFire) {
+          const originDx = touch.clientX - this.lookOrigin.x;
+          const originDy = touch.clientY - this.lookOrigin.y;
+          const dist = Math.sqrt(originDx * originDx + originDy * originDy);
+          const deadzone = 20;
+
+          if (dist > deadzone) {
+            // Treat the look gesture as a joystick pushing out
+            // Calculate angle directly rather than passing through mouse.dx/dy
+            this.game.player.angle = Math.atan2(originDy, originDx);
+
+            // Auto fire
+            if (!this.game.player.isFiring) {
+              this.game.player.isFiring = true;
+              this.activeButtons.add("fire");
+              if (this.game.settings.haptics && navigator.vibrate)
+                navigator.vibrate(10);
+            }
+          } else {
+            // Inside deadzone, stop firing
+            if (this.game.player.isFiring && this.fireTouch === null) {
+              this.game.player.isFiring = false;
+              this.activeButtons.delete("fire");
+            }
+          }
+        } else {
+          // Standard swipe-to-look (scaled for touch sensitivity from settings)
+          let rawSens = Number(this.game.settings.touchSensitivity);
+          if (!Number.isFinite(rawSens)) rawSens = 1.5;
+          const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+          this.game.mouse.dx += dx * touchSens;
+          this.game.mouse.dy += dy * touchSens;
+        }
+
+        this.lookLast.x = touch.clientX;
+        this.lookLast.y = touch.clientY;
       }
     }
   }
@@ -446,7 +552,46 @@ export class TouchControls {
         this.joyActive = false;
         this.clearMovementKeys();
       } else if (touch.identifier === this.lookTouch) {
+        // Swipe to swap weapons check
+        if (this.game.settings.swipeWeapons) {
+          const timeDelta = performance.now() - this.lookTapTime;
+          const dx = touch.clientX - this.lookOrigin.x;
+          const dy = touch.clientY - this.lookOrigin.y;
+
+          // If it's a fast motion mostly horizontally
+          if (
+            timeDelta < 300 &&
+            Math.abs(dx) > 50 &&
+            Math.abs(dx) > Math.abs(dy) * 1.5
+          ) {
+            const p = this.game.player;
+            if (p.weapons.length > 1) {
+              if (dx > 0) {
+                p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
+              } else {
+                p.currentWeapon =
+                  (p.currentWeapon - 1 + p.weapons.length) % p.weapons.length;
+              }
+              this.game.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+              if (this.game.mode === "tutorial")
+                this.game.tutorialWeaponSwapped = true;
+              if (this.game.settings.haptics && navigator.vibrate)
+                navigator.vibrate(25);
+            }
+          }
+        }
+
+        if (
+          this.game.settings.autoFire &&
+          this.game.player.isFiring &&
+          this.fireTouch === null
+        ) {
+          this.game.player.isFiring = false;
+          this.activeButtons.delete("fire");
+        }
+
         this.lookTouch = null;
+        this.lookActive = false;
       } else if (touch.identifier === this.fireTouch) {
         this.fireTouch = null;
         this.game.player.isFiring = false;
@@ -462,6 +607,7 @@ export class TouchControls {
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
     this.activeButtons.delete("sprint");
+    this.activeButtons.delete("weapon");
   }
 
   updateJoystickKeys() {
@@ -491,19 +637,39 @@ export class TouchControls {
     this.game.keys[kb.sprint] = this.sprintToggleActive;
   }
 
-  handlePauseTap(touch) {
+  /** Shared pause menu button layout — used by both tap handler and renderer */
+  _pauseButtonLayout() {
     const w = this.zones.w;
     const h = this.zones.h;
-    const x = touch.clientX;
-    const y = touch.clientY;
-    // Pause menu touch buttons are rendered in a row at h/2 + 130
-    const btnY = h / 2 + 115;
-    const btnH = 50;
-    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
-    const gap = 10;
+    const isCompact = this.zones.isCompactPhone;
+    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
+    const btnH = isCompact ? 40 : 50;
+    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
+    const gap = isCompact ? 6 : 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
+    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;
     const startX = (w - totalW) / 2;
+    return {
+      w,
+      h,
+      isCompact,
+      btnY,
+      btnH,
+      btnW,
+      gap,
+      labels,
+      colors,
+      totalW,
+      startX,
+    };
+  }
+
+  handlePauseTap(touch) {
+    const { w, h, btnY, btnH, btnW, gap, labels, startX } =
+      this._pauseButtonLayout();
+    const x = touch.clientX;
+    const y = touch.clientY;
 
     if (y >= btnY && y <= btnY + btnH) {
       for (let i = 0; i < labels.length; i++) {
@@ -533,6 +699,49 @@ export class TouchControls {
       ) {
         this.game.handleKeyPress("KeyF");
       }
+    }
+  }
+
+  triggerDirectionalDash(g, defaultForward = false) {
+    const kb = g.keybinds;
+    const fwd = g.keys[kb.moveForward];
+    const back = g.keys[kb.moveBack];
+    const left = g.keys[kb.moveLeft];
+    const right = g.keys[kb.moveRight];
+    const hasDir = fwd || back || left || right;
+
+    if (hasDir) {
+      const cos = Math.cos(g.player.angle);
+      const sin = Math.sin(g.player.angle);
+      let dX = 0,
+        dY = 0;
+      if (fwd) {
+        dX += cos;
+        dY += sin;
+      }
+      if (back) {
+        dX -= cos;
+        dY -= sin;
+      }
+      if (left) {
+        dX += sin;
+        dY -= cos;
+      }
+      if (right) {
+        dX -= sin;
+        dY += cos;
+      }
+      const len = Math.sqrt(dX * dX + dY * dY);
+      if (len > 0) {
+        dX /= len;
+        dY /= len;
+        g.triggerDash(null, dX, dY);
+      } else {
+        // Opposing keys cancel out — fall back to dashing forward
+        g.triggerDash(g.keybinds.moveForward);
+      }
+    } else if (defaultForward) {
+      g.triggerDash(g.keybinds.moveForward);
     }
   }
 
@@ -569,20 +778,23 @@ export class TouchControls {
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
-    const panelX = w / 2 - 220;
-    const panelW = 440;
-    const itemHeights = [
-      44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44, 60,
-    ];
+    const compactSettings = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
+    const panelX = w / 2 - panelW / 2;
+    const visibleDefs = getVisibleSettings(this.game.isTouchDevice);
+    const itemHeights = visibleDefs.map((def) =>
+      compactSettings ? def.height.compact : def.height.normal,
+    );
 
     // Scroll-aware startY — must match renderSettingsScreen in game.js
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - 120;
-    const titleAreaY = 50;
-    let startY = titleAreaY + 40;
+    const visibleH = h - (compactSettings ? 60 : 120);
+    const titleAreaY = compactSettings ? 28 : 50;
+    let startY = titleAreaY + (compactSettings ? 20 : 40);
     if (totalH > visibleH) {
       let selTop = 0;
-      for (let si = 0; si < this.game.settingsSelection; si++) selTop += itemHeights[si];
+      for (let si = 0; si < this.game.settingsSelection; si++)
+        selTop += itemHeights[si];
       const selCenter = selTop + itemHeights[this.game.settingsSelection] / 2;
       const idealOffset = visibleH / 2 - selCenter;
       const maxOffset = 0;
@@ -620,6 +832,7 @@ export class TouchControls {
     const scaleX = hud.width / window.innerWidth;
     const scaleY = hud.height / window.innerHeight;
     const w = hud.width;
+    const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 
@@ -627,12 +840,13 @@ export class TouchControls {
     const upgradeKeys = Object.keys(UPGRADES);
     const cols = 2;
     // Must match renderUpgradeScreen in game.js
-    const headerY = 40;
-    const startY = headerY + 90; // 130
-    const cardH = 64;
-    const cardGap = 6;
-    const colW = 320;
-    const leftX = w / 2 - colW - 12;
+    const compactUpg = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const headerY = compactUpg ? 14 : 40;
+    const startY = headerY + (compactUpg ? 30 : 90);
+    const cardH = compactUpg ? 40 : 64;
+    const cardGap = compactUpg ? 3 : 6;
+    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
+    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
     const totalRows = Math.ceil(upgradeKeys.length / cols);
     const contY = startY + totalRows * (cardH + cardGap) + 20;
 
@@ -647,14 +861,9 @@ export class TouchControls {
     for (let i = 0; i < upgradeKeys.length; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : w / 2 + 12;
+      const baseX = col === 0 ? leftX : w / 2 + (compactUpg ? 6 : 12);
       const uy = startY + row * (cardH + cardGap);
-      if (
-        x >= baseX &&
-        x <= baseX + colW &&
-        y >= uy &&
-        y <= uy + cardH
-      ) {
+      if (x >= baseX && x <= baseX + colW && y >= uy && y <= uy + cardH) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -857,16 +1066,32 @@ export class TouchControls {
       this.sprintToggleActive ? "#ffaa00" : "#887744",
     );
 
-    // ── Pause button (top-right) ──
-    ctx.beginPath();
-    ctx.arc(z.pauseBtn.x, z.pauseBtn.y, z.pauseBtn.r, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("II", z.pauseBtn.x, z.pauseBtn.y);
+    // ── Weapon cycle button ──
+    {
+      const p = this.game.player;
+      if (p) {
+        const wDef = WEAPONS[p.weapons[p.currentWeapon]];
+        const wName = wDef ? wDef.name.split(" ")[0].toUpperCase() : "W1";
+        this.drawButton(
+          ctx,
+          z.weaponBtn.x,
+          z.weaponBtn.y,
+          z.weaponBtn.r,
+          wName,
+          this.activeButtons.has("weapon") ? "#ffdd44" : "#aa8833",
+        );
+      }
+    }
+
+    // ── Pause / Menu button (top-right) ──
+    this.drawButton(
+      ctx,
+      z.pauseBtn.x,
+      z.pauseBtn.y,
+      z.pauseBtn.r,
+      "II",
+      this.activeButtons.has("pause") ? "#ffdd44" : "rgba(200,200,200,0.5)",
+    );
 
     // ── Fullscreen button (top-right, next to pause) — hidden when API unavailable ──
     if (this.canFullscreen && !this.isStandalone) {
@@ -894,6 +1119,7 @@ export class TouchControls {
   renderTouchTutorial(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
+    const isCompact = this.zones.isCompactPhone;
 
     // Semi-transparent overlay
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
@@ -904,49 +1130,59 @@ export class TouchControls {
 
     // Title
     ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 24px monospace";
-    ctx.fillText("TOUCH CONTROLS", w / 2, 50);
+    ctx.font = `bold ${isCompact ? 18 : 24}px monospace`;
+    ctx.fillText("TOUCH CONTROLS", w / 2, isCompact ? 24 : 50);
+
+    const zoneTop = isCompact ? 42 : 80;
+    const zoneH = isCompact ? h - 80 : h - 160;
 
     // Left side: joystick
     ctx.fillStyle = "rgba(0, 200, 255, 0.2)";
-    ctx.fillRect(0, 80, w * 0.4, h - 160);
+    ctx.fillRect(0, zoneTop, w * 0.4, zoneH);
     ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("MOVE", w * 0.2, h / 2 - 40);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("MOVE", w * 0.2, h / 2 - (isCompact ? 24 : 40));
     ctx.fillStyle = "#aabbcc";
-    ctx.font = "14px monospace";
-    ctx.fillText("Touch to place stick", w * 0.2, h / 2 - 15);
-    ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
+    ctx.font = `${isCompact ? 11 : 14}px monospace`;
+    ctx.fillText("Touch to place stick", w * 0.2, h / 2 - (isCompact ? 8 : 15));
+    if (!isCompact) ctx.fillText("Push far to sprint", w * 0.2, h / 2 + 5);
 
     // Right side: look
     ctx.fillStyle = "rgba(0, 200, 255, 0.1)";
-    ctx.fillRect(w * 0.4, 80, w * 0.6, h - 160);
+    ctx.fillRect(w * 0.4, zoneTop, w * 0.6, zoneH);
     ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("LOOK", w * 0.7, h / 2 - 40);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("LOOK", w * 0.7, h / 2 - (isCompact ? 24 : 40));
     ctx.fillStyle = "#aabbcc";
-    ctx.font = "14px monospace";
-    ctx.fillText("Drag to aim", w * 0.7, h / 2 - 15);
+    ctx.font = `${isCompact ? 11 : 14}px monospace`;
+    ctx.fillText("Drag to aim", w * 0.7, h / 2 - (isCompact ? 8 : 15));
 
     // Button hints
+    const hintFont = isCompact ? 11 : 14;
+    const hintGap = isCompact ? 16 : 25;
+    const hintBase = isCompact ? h - 80 : h - 145;
     const hints = [
-      { label: "FIRE", desc: "Big button", color: "#ff6644", y: h - 145 },
-      { label: "DASH", desc: "Top-right", color: "#00cccc", y: h - 120 },
-      { label: "USE", desc: "Top-left", color: "#00cc44", y: h - 95 },
-      { label: "SLOW", desc: "Time slow", color: "#9944ff", y: h - 70 },
-      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00", y: h - 45 },
+      { label: "FIRE", desc: "Big button", color: "#ff6644" },
+      { label: "DASH", desc: "Top-right", color: "#00cccc" },
+      { label: "USE", desc: "Top-left", color: "#00cc44" },
+      { label: "SLOW", desc: "Time slow", color: "#9944ff" },
+      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00" },
     ];
-    for (const hint of hints) {
-      ctx.fillStyle = hint.color;
-      ctx.font = "bold 14px monospace";
-      ctx.fillText(`${hint.label} — ${hint.desc}`, w / 2, hint.y);
+    for (let i = 0; i < hints.length; i++) {
+      ctx.fillStyle = hints[i].color;
+      ctx.font = `bold ${hintFont}px monospace`;
+      ctx.fillText(
+        `${hints[i].label} — ${hints[i].desc}`,
+        w / 2,
+        hintBase + i * hintGap,
+      );
     }
 
     // Dismiss prompt
     const pulse = 0.5 + 0.3 * Math.sin(performance.now() / 400);
     ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
-    ctx.font = "bold 16px monospace";
-    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - 30);
+    ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
+    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - (isCompact ? 12 : 30));
   }
 
   renderCreatorOverlay(ctx) {
@@ -1018,16 +1254,8 @@ export class TouchControls {
   }
 
   renderPauseButtons(ctx) {
-    const w = this.zones.w;
-    const h = this.zones.h;
-    const btnY = h / 2 + 115;
-    const btnH = 50;
-    const btnW = Math.max(44, Math.min(90, (w - 60) / 4 - 10));
-    const gap = 10;
-    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
-    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
-    const totalW = labels.length * btnW + (labels.length - 1) * gap;
-    const startX = (w - totalW) / 2;
+    const { w, h, btnY, btnH, btnW, gap, labels, colors, startX } =
+      this._pauseButtonLayout();
 
     ctx.globalAlpha = 0.7;
     for (let i = 0; i < labels.length; i++) {
