@@ -1716,7 +1716,7 @@ export class Game {
     const baseBoxH = 54;
     const boxH = baseBoxH + Math.max(0, msgLines.length - 1) * lineH;
     const bx = isCompactMobile ? (w - boxW) / 2 + slideX : 16 + slideX;
-    const by = isCompactMobile ? h - boxH - 70 : h - boxH - 70;
+    const by = h - boxH - 70;
 
     // Background
     ctx.fillStyle = "rgba(0, 10, 20, 0.92)";
