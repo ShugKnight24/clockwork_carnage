@@ -108,21 +108,24 @@ export class TouchControls {
     document.body.appendChild(this.touchLayer);
 
     this.resize();
-    window.addEventListener("resize", () => this.resize());
+    this._onResize = () => this.resize();
+    this._onTouchStart = (e) => this.onTouchStart(e);
+    this._onTouchMove = (e) => this.onTouchMove(e);
+    this._onTouchEnd = (e) => this.onTouchEnd(e);
+
+    window.addEventListener("resize", this._onResize);
 
     // Touch events on the touch layer
-    this.touchLayer.addEventListener(
-      "touchstart",
-      (e) => this.onTouchStart(e),
-      { passive: false },
-    );
-    this.touchLayer.addEventListener("touchmove", (e) => this.onTouchMove(e), {
+    this.touchLayer.addEventListener("touchstart", this._onTouchStart, {
       passive: false,
     });
-    this.touchLayer.addEventListener("touchend", (e) => this.onTouchEnd(e), {
+    this.touchLayer.addEventListener("touchmove", this._onTouchMove, {
       passive: false,
     });
-    this.touchLayer.addEventListener("touchcancel", (e) => this.onTouchEnd(e), {
+    this.touchLayer.addEventListener("touchend", this._onTouchEnd, {
+      passive: false,
+    });
+    this.touchLayer.addEventListener("touchcancel", this._onTouchEnd, {
       passive: false,
     });
 
@@ -131,6 +134,16 @@ export class TouchControls {
 
     // Hide cursor on mobile
     document.body.style.cursor = "none";
+  }
+
+  destroy() {
+    window.removeEventListener("resize", this._onResize);
+    this.touchLayer.removeEventListener("touchstart", this._onTouchStart);
+    this.touchLayer.removeEventListener("touchmove", this._onTouchMove);
+    this.touchLayer.removeEventListener("touchend", this._onTouchEnd);
+    this.touchLayer.removeEventListener("touchcancel", this._onTouchEnd);
+    this.canvas.remove();
+    this.touchLayer.remove();
   }
 
   resize() {
@@ -431,9 +444,7 @@ export class TouchControls {
 
           // If double tapped, but they haven't moved the joystick out of the deadzone
           // we still want to dash. We use true for default to forward.
-          setTimeout(() => {
-            this.triggerDirectionalDash(g, true);
-          }, 0);
+          this.triggerDirectionalDash(g, true);
 
           this.lastTapTime = 0;
         } else {
