@@ -10,6 +10,7 @@
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
+import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./game.js";
 
 export class TouchControls {
   static init(game) {
@@ -29,7 +30,7 @@ export class TouchControls {
     this.joyOrigin = { x: 0, y: 0 };
     this.joyPos = { x: 0, y: 0 };
     this.joyActive = false;
-    this.joyRadius = window.innerHeight < 420 ? 45 : 60;
+    this.joyRadius = window.innerHeight < COMPACT_PHONE_HEIGHT ? 45 : 60;
 
     // Look state
     this.lookTouch = null;
@@ -136,7 +137,7 @@ export class TouchControls {
     const sa = this.safeArea;
 
     // Compact phone detection: landscape phone with short viewport
-    const isCompactPhone = h < 420;
+    const isCompactPhone = h < COMPACT_PHONE_HEIGHT;
 
     // Keep joystick radius in sync with viewport
     this.joyRadius = isCompactPhone ? 45 : 60;
@@ -416,22 +417,22 @@ export class TouchControls {
         this.joyOrigin = { x, y };
         this.joyPos = { x, y };
         this.joyActive = true;
-        
+
         // Double-tap to dash
         const now = performance.now();
         if (this.lastTapZone === "joy" && now - this.lastTapTime < 250) {
-           this.activeButtons.add("dash");
-           
-           // If double tapped, but they haven't moved the joystick out of the deadzone
-           // we still want to dash. We use true for default to forward.
-           setTimeout(() => {
-             this.triggerDirectionalDash(g, true);
-           }, 0);
-           
-           this.lastTapTime = 0;
+          this.activeButtons.add("dash");
+
+          // If double tapped, but they haven't moved the joystick out of the deadzone
+          // we still want to dash. We use true for default to forward.
+          setTimeout(() => {
+            this.triggerDirectionalDash(g, true);
+          }, 0);
+
+          this.lastTapTime = 0;
         } else {
-           this.lastTapTime = now;
-           this.lastTapZone = "joy";
+          this.lastTapTime = now;
+          this.lastTapZone = "joy";
         }
       } else if (zone === "look" && this.lookTouch === null) {
         this.lookTouch = touch.identifier;
@@ -484,12 +485,13 @@ export class TouchControls {
 
     for (const touch of e.changedTouches) {
       if (touch.identifier === this.joyTouch) {
-        this.joyPos = { x: touch.clientX, y: touch.clientY };
+        this.joyPos.x = touch.clientX;
+        this.joyPos.y = touch.clientY;
         this.updateJoystickKeys();
       } else if (touch.identifier === this.lookTouch) {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
-        
+
         // Twin-stick auto-fire handling
         if (this.game.settings.autoFire) {
           const originDx = touch.clientX - this.lookOrigin.x;
@@ -501,12 +503,13 @@ export class TouchControls {
             // Treat the look gesture as a joystick pushing out
             // Calculate angle directly rather than passing through mouse.dx/dy
             this.game.player.angle = Math.atan2(originDy, originDx);
-            
+
             // Auto fire
             if (!this.game.player.isFiring) {
               this.game.player.isFiring = true;
               this.activeButtons.add("fire");
-              if (this.game.settings.haptics && navigator.vibrate) navigator.vibrate(10);
+              if (this.game.settings.haptics && navigator.vibrate)
+                navigator.vibrate(10);
             }
           } else {
             // Inside deadzone, stop firing
@@ -523,8 +526,9 @@ export class TouchControls {
           this.game.mouse.dx += dx * touchSens;
           this.game.mouse.dy += dy * touchSens;
         }
-        
-        this.lookLast = { x: touch.clientX, y: touch.clientY };
+
+        this.lookLast.x = touch.clientX;
+        this.lookLast.y = touch.clientY;
       }
     }
   }
@@ -550,31 +554,42 @@ export class TouchControls {
       } else if (touch.identifier === this.lookTouch) {
         // Swipe to swap weapons check
         if (this.game.settings.swipeWeapons) {
-           const timeDelta = performance.now() - this.lookTapTime;
-           const dx = touch.clientX - this.lookOrigin.x;
-           const dy = touch.clientY - this.lookOrigin.y;
-           
-           // If it's a fast motion mostly horizontally
-           if (timeDelta < 300 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-             const p = this.game.player;
-             if (p.weapons.length > 1) {
-               if (dx > 0) {
-                 p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
-               } else {
-                 p.currentWeapon = (p.currentWeapon - 1 + p.weapons.length) % p.weapons.length;
-               }
-               this.game.triggerAriaOnce("weaponSwitch", "weaponSwitch");
-               if (this.game.mode === "tutorial") this.game.tutorialWeaponSwapped = true;
-               if (this.game.settings.haptics && navigator.vibrate) navigator.vibrate(25);
-             }
-           }
+          const timeDelta = performance.now() - this.lookTapTime;
+          const dx = touch.clientX - this.lookOrigin.x;
+          const dy = touch.clientY - this.lookOrigin.y;
+
+          // If it's a fast motion mostly horizontally
+          if (
+            timeDelta < 300 &&
+            Math.abs(dx) > 50 &&
+            Math.abs(dx) > Math.abs(dy) * 1.5
+          ) {
+            const p = this.game.player;
+            if (p.weapons.length > 1) {
+              if (dx > 0) {
+                p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
+              } else {
+                p.currentWeapon =
+                  (p.currentWeapon - 1 + p.weapons.length) % p.weapons.length;
+              }
+              this.game.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+              if (this.game.mode === "tutorial")
+                this.game.tutorialWeaponSwapped = true;
+              if (this.game.settings.haptics && navigator.vibrate)
+                navigator.vibrate(25);
+            }
+          }
         }
-        
-        if (this.game.settings.autoFire && this.game.player.isFiring && this.fireTouch === null) {
+
+        if (
+          this.game.settings.autoFire &&
+          this.game.player.isFiring &&
+          this.fireTouch === null
+        ) {
           this.game.player.isFiring = false;
           this.activeButtons.delete("fire");
         }
-      
+
         this.lookTouch = null;
         this.lookActive = false;
       } else if (touch.identifier === this.fireTouch) {
@@ -622,20 +637,39 @@ export class TouchControls {
     this.game.keys[kb.sprint] = this.sprintToggleActive;
   }
 
-  handlePauseTap(touch) {
+  /** Shared pause menu button layout — used by both tap handler and renderer */
+  _pauseButtonLayout() {
     const w = this.zones.w;
     const h = this.zones.h;
     const isCompact = this.zones.isCompactPhone;
-    const x = touch.clientX;
-    const y = touch.clientY;
-    // Pause menu touch buttons are rendered in a row
     const btnY = isCompact ? h * 0.55 : h / 2 + 115;
     const btnH = isCompact ? 40 : 50;
     const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
     const gap = isCompact ? 6 : 10;
     const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
+    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
     const totalW = labels.length * btnW + (labels.length - 1) * gap;
     const startX = (w - totalW) / 2;
+    return {
+      w,
+      h,
+      isCompact,
+      btnY,
+      btnH,
+      btnW,
+      gap,
+      labels,
+      colors,
+      totalW,
+      startX,
+    };
+  }
+
+  handlePauseTap(touch) {
+    const { w, h, btnY, btnH, btnW, gap, labels, startX } =
+      this._pauseButtonLayout();
+    const x = touch.clientX;
+    const y = touch.clientY;
 
     if (y >= btnY && y <= btnY + btnH) {
       for (let i = 0; i < labels.length; i++) {
@@ -675,7 +709,7 @@ export class TouchControls {
     const left = g.keys[kb.moveLeft];
     const right = g.keys[kb.moveRight];
     const hasDir = fwd || back || left || right;
-    
+
     if (hasDir) {
       const cos = Math.cos(g.player.angle);
       const sin = Math.sin(g.player.angle);
@@ -744,15 +778,13 @@ export class TouchControls {
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
-    const compactSettings = this.game.isTouchDevice && h < 420;
+    const compactSettings = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
     const panelX = w / 2 - panelW / 2;
-    const itemHeights = compactSettings
-      ? [30, 50, 42, 42, 42, 42, 42, 30, 30, 30, 30, 42, 42, 30, 30, 30, 30, 42]
-      : [
-          44, 70, 60, 60, 60, 60, 60, 44, 44, 44, 44, 60, 60, 44, 44, 44, 44,
-          60,
-        ];
+    const visibleDefs = getVisibleSettings(this.game.isTouchDevice);
+    const itemHeights = visibleDefs.map((def) =>
+      compactSettings ? def.height.compact : def.height.normal,
+    );
 
     // Scroll-aware startY — must match renderSettingsScreen in game.js
     const totalH = itemHeights.reduce((a, b) => a + b, 0);
@@ -808,7 +840,7 @@ export class TouchControls {
     const upgradeKeys = Object.keys(UPGRADES);
     const cols = 2;
     // Must match renderUpgradeScreen in game.js
-    const compactUpg = this.game.isTouchDevice && h < 420;
+    const compactUpg = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     const headerY = compactUpg ? 14 : 40;
     const startY = headerY + (compactUpg ? 30 : 90);
     const cardH = compactUpg ? 40 : 64;
@@ -1222,17 +1254,8 @@ export class TouchControls {
   }
 
   renderPauseButtons(ctx) {
-    const w = this.zones.w;
-    const h = this.zones.h;
-    const isCompact = this.zones.isCompactPhone;
-    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
-    const btnH = isCompact ? 40 : 50;
-    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
-    const gap = isCompact ? 6 : 10;
-    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
-    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
-    const totalW = labels.length * btnW + (labels.length - 1) * gap;
-    const startX = (w - totalW) / 2;
+    const { w, h, btnY, btnH, btnW, gap, labels, colors, startX } =
+      this._pauseButtonLayout();
 
     ctx.globalAlpha = 0.7;
     for (let i = 0; i < labels.length; i++) {
