@@ -25,6 +25,9 @@ import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.7.7";
 
+/** Viewport height threshold for compact mobile layout (landscape phones) */
+export const COMPACT_PHONE_HEIGHT = 420;
+
 export const GameState = {
   TITLE: "title",
   MODE_SELECT: "modeSelect",
@@ -73,79 +76,120 @@ export const GameState = {
 export const SETTINGS_REGISTRY = [
   // ─── Gameplay ───
   {
-    key: "difficulty", label: "Difficulty",
+    key: "difficulty",
+    label: "Difficulty",
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
     colors: ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"],
-    min: 0, max: 3, step: 1, wrap: true,
+    min: 0,
+    max: 3,
+    step: 1,
+    wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "crosshair", label: "Crosshair",
+    key: "crosshair",
+    label: "Crosshair",
     type: "enum",
-    values: ["Red Dot", "Green Cross", "ACOG Scope", "Circle", "Minimal", "None"],
-    min: 0, max: 5, step: 1, wrap: true,
+    values: [
+      "Red Dot",
+      "Green Cross",
+      "ACOG Scope",
+      "Circle",
+      "Minimal",
+      "None",
+    ],
+    min: 0,
+    max: 5,
+    step: 1,
+    wrap: true,
     platform: "all",
     height: { compact: 50, normal: 70 },
     widget: "crosshairPreview",
   },
   // ─── Display ───
   {
-    key: "minimapSize", label: "Minimap Size",
-    type: "slider", min: 100, max: 300, step: 20,
-    format: v => `${v}px`,
+    key: "minimapSize",
+    label: "Minimap Size",
+    type: "slider",
+    min: 100,
+    max: 300,
+    step: 20,
+    format: (v) => `${v}px`,
     barColor: () => "#00ccff",
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   // ─── Audio ───
   {
-    key: "musicVolume", label: "Music Volume",
-    type: "slider", min: 0, max: 100, step: 10,
-    format: v => v === 0 ? "MUTED" : `${v}%`,
-    barColor: v => v === 0 ? "#ff4444" : "#00ff88",
+    key: "musicVolume",
+    label: "Music Volume",
+    type: "slider",
+    min: 0,
+    max: 100,
+    step: 10,
+    format: (v) => (v === 0 ? "MUTED" : `${v}%`),
+    barColor: (v) => (v === 0 ? "#ff4444" : "#00ff88"),
     onChange: (g) => g.audio.setMusicVolume(g.settings.musicVolume / 100),
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "sfxVolume", label: "SFX Volume",
-    type: "slider", min: 0, max: 100, step: 10,
-    format: v => v === 0 ? "MUTED" : `${v}%`,
-    barColor: v => v === 0 ? "#ff4444" : "#88aaff",
+    key: "sfxVolume",
+    label: "SFX Volume",
+    type: "slider",
+    min: 0,
+    max: 100,
+    step: 10,
+    format: (v) => (v === 0 ? "MUTED" : `${v}%`),
+    barColor: (v) => (v === 0 ? "#ff4444" : "#88aaff"),
     onChange: (g) => g.audio.setSfxVolume(g.settings.sfxVolume / 100),
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   // ─── Controls ───
   {
-    key: "sensitivity", label: "Mouse Sensitivity",
-    type: "slider", min: 0.5, max: 2.0, step: 0.1, round: 1,
-    format: v => `${v.toFixed(1)}x`,
+    key: "sensitivity",
+    label: "Mouse Sensitivity",
+    type: "slider",
+    min: 0.5,
+    max: 2.0,
+    step: 0.1,
+    round: 1,
+    format: (v) => `${v.toFixed(1)}x`,
     barColor: () => "#ffcc00",
     platform: "desktop",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "fov", label: "FOV",
-    type: "slider", min: 50, max: 120, step: 5,
-    format: v => `${v}°`,
+    key: "fov",
+    label: "FOV",
+    type: "slider",
+    min: 50,
+    max: 120,
+    step: 5,
+    format: (v) => `${v}°`,
     barColor: () => "#cc88ff",
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "viewMode", label: "View Mode",
+    key: "viewMode",
+    label: "View Mode",
     type: "enum",
     values: ["First Person", "Third Person"],
     colors: ["#00ccff", "#ff88cc"],
-    min: 0, max: 1, step: 1, wrap: true,
+    min: 0,
+    max: 1,
+    step: 1,
+    wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "invertX", label: "Invert X Axis",
+    key: "invertX",
+    label: "Invert X Axis",
     type: "toggle",
     onColor: "#ff8844",
     platform: "desktop",
@@ -153,87 +197,122 @@ export const SETTINGS_REGISTRY = [
   },
   // ─── Accessibility ───
   {
-    key: "fontScale", label: "Font Scale",
-    type: "slider", min: 100, max: 150, step: 25,
-    format: v => `${v}%`,
+    key: "fontScale",
+    label: "Font Scale",
+    type: "slider",
+    min: 100,
+    max: 150,
+    step: 25,
+    format: (v) => `${v}%`,
     barColor: () => "#aaaacc",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "colorblind", label: "Colorblind Mode",
+    key: "colorblind",
+    label: "Colorblind Mode",
     type: "enum",
     values: ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
     colors: ["#888888", "#ffcc00", "#ffcc00", "#ffcc00"],
-    min: 0, max: 3, step: 1, wrap: true,
+    min: 0,
+    max: 3,
+    step: 1,
+    wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   // ─── HUD ───
   {
-    key: "hudScale", label: "HUD Scale",
-    type: "slider", min: 75, max: 125, step: 25,
-    format: v => `${v}%`,
+    key: "hudScale",
+    label: "HUD Scale",
+    type: "slider",
+    min: 75,
+    max: 125,
+    step: 25,
+    format: (v) => `${v}%`,
     barColor: () => "#44ffaa",
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "staminaBarSize", label: "Stamina Bar Size",
-    type: "slider", min: 75, max: 150, step: 25,
-    format: v => `${v}%`,
+    key: "staminaBarSize",
+    label: "Stamina Bar Size",
+    type: "slider",
+    min: 75,
+    max: 150,
+    step: 25,
+    format: (v) => `${v}%`,
     barColor: () => "#00ccff",
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "showPortrait", label: "Show Portrait",
-    type: "toggle", onColor: "#00ccff",
+    key: "showPortrait",
+    label: "Show Portrait",
+    type: "toggle",
+    onColor: "#00ccff",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "showWeapons", label: "Show Weapons",
-    type: "toggle", onColor: "#00ccff",
+    key: "showWeapons",
+    label: "Show Weapons",
+    type: "toggle",
+    onColor: "#00ccff",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "showKills", label: "Show Kills",
-    type: "toggle", onColor: "#00ccff",
+    key: "showKills",
+    label: "Show Kills",
+    type: "toggle",
+    onColor: "#00ccff",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "showScore", label: "Show Score",
-    type: "toggle", onColor: "#00ccff",
+    key: "showScore",
+    label: "Show Score",
+    type: "toggle",
+    onColor: "#00ccff",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   // ─── Touch / Mobile ───
   {
-    key: "touchSensitivity", label: "Touch Sensitivity",
-    type: "slider", min: 0.5, max: 3.0, step: 0.1, round: 1,
-    format: v => `${v.toFixed(1)}x`,
+    key: "touchSensitivity",
+    label: "Touch Sensitivity",
+    type: "slider",
+    min: 0.5,
+    max: 3.0,
+    step: 0.1,
+    round: 1,
+    format: (v) => `${v.toFixed(1)}x`,
     barColor: () => "#ff88cc",
     platform: "mobile",
     height: { compact: 42, normal: 60 },
   },
   {
-    key: "haptics", label: "Haptic Feedback",
-    type: "toggle", onColor: "#00ffcc",
+    key: "haptics",
+    label: "Haptic Feedback",
+    type: "toggle",
+    onColor: "#00ffcc",
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "autoFire", label: "Auto-Fire (Twin Stick)",
-    type: "toggle", onColor: "#ffaa00",
+    key: "autoFire",
+    label: "Auto-Fire (Twin Stick)",
+    type: "toggle",
+    onColor: "#ffaa00",
     platform: "mobile",
     height: { compact: 30, normal: 44 },
   },
   {
-    key: "swipeWeapons", label: "Swipe to Swap Weapons",
-    type: "toggle", onColor: "#00ccff",
+    key: "swipeWeapons",
+    label: "Swipe to Swap Weapons",
+    type: "toggle",
+    onColor: "#00ccff",
     platform: "mobile",
     height: { compact: 30, normal: 44 },
   },
@@ -241,10 +320,11 @@ export const SETTINGS_REGISTRY = [
 
 // Helper: filter registry by platform
 export function getVisibleSettings(isTouchDevice) {
-  return SETTINGS_REGISTRY.filter(s =>
-    s.platform === "all" ||
-    (s.platform === "mobile" && isTouchDevice) ||
-    (s.platform === "desktop" && !isTouchDevice)
+  return SETTINGS_REGISTRY.filter(
+    (s) =>
+      s.platform === "all" ||
+      (s.platform === "mobile" && isTouchDevice) ||
+      (s.platform === "desktop" && !isTouchDevice),
   );
 }
 
@@ -256,7 +336,7 @@ export function settingDisplayItem(def, settings) {
       return {
         label: def.label,
         value: v ? "ON" : "OFF",
-        color: v ? (def.onColor || "#00ccff") : "#888888",
+        color: v ? def.onColor || "#00ccff" : "#888888",
       };
     case "enum":
       return {
@@ -1097,6 +1177,7 @@ export class Game {
             weapon3: "Digit3",
             weapon4: "Digit4",
             toggleFPS: "KeyF",
+            chronoShift: "KeyQ",
           };
           this.saveSettings();
           this.audio.menuConfirm();
@@ -1252,7 +1333,7 @@ export class Game {
     try {
       localStorage.setItem("cc_settings", JSON.stringify(this.settings));
       localStorage.setItem("cc_keybinds", JSON.stringify(this.keybinds));
-    } catch (_) { }
+    } catch (_) {}
   }
 
   loadSettings() {
@@ -1269,7 +1350,7 @@ export class Game {
           }
         }
       }
-    } catch (_) { }
+    } catch (_) {}
     try {
       const raw = localStorage.getItem("cc_keybinds");
       if (raw) {
@@ -1283,7 +1364,7 @@ export class Game {
           }
         }
       }
-    } catch (_) { }
+    } catch (_) {}
   }
 
   // One-time migration for existing mobile users who had desktop-tuned defaults
@@ -1313,7 +1394,7 @@ export class Game {
         }
         localStorage.setItem("cc_mobile_v3", "1");
       }
-    } catch (_) { }
+    } catch (_) {}
   }
 
   // Dev feature flags
@@ -1321,13 +1402,13 @@ export class Game {
     try {
       this.alwaysShowTutorial =
         localStorage.getItem("cc_dev_always_tutorial") === "1";
-    } catch (_) { }
+    } catch (_) {}
   }
 
   saveCharacter() {
     try {
       localStorage.setItem("cc_character", JSON.stringify(this.character));
-    } catch (_) { }
+    } catch (_) {}
   }
 
   loadCharacter() {
@@ -1354,7 +1435,7 @@ export class Game {
           }
         }
       }
-    } catch (_) { }
+    } catch (_) {}
   }
 
   setAlwaysTutorial(on) {
@@ -1365,7 +1446,7 @@ export class Game {
       } else {
         localStorage.removeItem("cc_dev_always_tutorial");
       }
-    } catch (_) { }
+    } catch (_) {}
   }
 
   // Achievement persistence
@@ -1378,7 +1459,7 @@ export class Game {
           stats: this.achievementStats,
         }),
       );
-    } catch (_) { }
+    } catch (_) {}
   }
 
   loadAchievements() {
@@ -1404,7 +1485,7 @@ export class Game {
           }
         }
       }
-    } catch (_) { }
+    } catch (_) {}
   }
 
   unlockAchievement(id) {
@@ -1694,7 +1775,7 @@ export class Game {
       /\{AGENT\}/g,
       this.character.name || "Agent",
     );
-    const isCompactMobile = this.isTouchDevice && h < 420;
+    const isCompactMobile = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     const boxW = isCompactMobile ? Math.min(340, w - 32) : 340;
     const textAreaX = 54; // offset from box left to text start
     const maxTextW = boxW - textAreaX - 12;
@@ -1938,7 +2019,7 @@ export class Game {
         difficulty: this.settings.difficulty,
       };
       localStorage.setItem("cc_arena_save", JSON.stringify(data));
-    } catch (_) { }
+    } catch (_) {}
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
@@ -1967,7 +2048,7 @@ export class Game {
   clearArenaSave() {
     try {
       localStorage.removeItem("cc_arena_save");
-    } catch (_) { }
+    } catch (_) {}
   }
 
   saveCampaign() {
@@ -1999,7 +2080,7 @@ export class Game {
         killedEnemies: this.killedEnemies,
       };
       localStorage.setItem("cc_campaign_save", JSON.stringify(data));
-    } catch (_) { }
+    } catch (_) {}
   }
 
   loadCampaignSave() {
@@ -2063,7 +2144,7 @@ export class Game {
   clearCampaignSave() {
     try {
       localStorage.removeItem("cc_campaign_save");
-    } catch (_) { }
+    } catch (_) {}
   }
 
   hasSave() {
@@ -2083,7 +2164,7 @@ export class Game {
         const d = JSON.parse(campaign);
         info.push({ mode: "campaign", level: d.level + 1, score: d.score });
       }
-    } catch (_) { }
+    } catch (_) {}
     return info;
   }
 
@@ -3185,11 +3266,11 @@ export class Game {
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
-        30,
-        Math.floor(
-          (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-        ),
-      )
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
       : 90;
     const tabH = 28;
     const totalTabW =
@@ -3282,8 +3363,8 @@ export class Game {
       const prevCX = w / 2;
       const prevCY = isMobile
         ? nameBoxY +
-        nameBoxH +
-        Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
+          nameBoxH +
+          Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
         : nameBoxY + nameBoxH + 160;
       const prevScale = isMobile ? 1.0 : 1.5;
       this._renderCharacterPreview(
@@ -3593,11 +3674,11 @@ export class Game {
     const tabGap = isMobile ? 4 : 8;
     const tabW = isMobile
       ? Math.max(
-        30,
-        Math.floor(
-          (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-        ),
-      )
+          30,
+          Math.floor(
+            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
+          ),
+        )
       : 90;
     const tabH = 28;
     const totalTabW =
@@ -4348,7 +4429,7 @@ export class Game {
     if (
       !wep ||
       now - this.player.lastFireTime <
-      wep.fireRate / (this.player.fireRateMultiplier || 1)
+        wep.fireRate / (this.player.fireRateMultiplier || 1)
     )
       return;
     if (this.player.ammo < wep.ammoPerShot && wep.id !== 0) return;
@@ -4926,8 +5007,8 @@ export class Game {
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
 
     // TODO: Find a better solution here
-    // Clean up dead entities (arena only — campaign uses index-based system)
-    if (this.mode === "arena" && this.entities.length > 30) {
+    // Clean up dead entities (keep recently-dead for death animation)
+    if (this.entities.length > 30) {
       this.entities = this.entities.filter(
         (e) =>
           e.active || (e.deathTime != null && this.time - e.deathTime < 2000),
@@ -6249,7 +6330,7 @@ export class Game {
     }
 
     const hudFactor = this.settings.hudScale / 100;
-    const isCompactMobile = this.isTouchDevice && h < 420;
+    const isCompactMobile = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     const barH = isCompactMobile
       ? Math.round(60 * hudFactor)
       : Math.round(160 * hudFactor);
@@ -8237,7 +8318,7 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
-    const compact = this.isTouchDevice && h < 420;
+    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, w, h);
 
@@ -8261,7 +8342,7 @@ export class Game {
     if (!this.isTouchDevice) {
       ctx.fillText(
         "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  L ARIA log  |  Q quit" +
-        saveHint,
+          saveHint,
         w / 2,
         h / 2 + 110,
       );
@@ -8354,7 +8435,7 @@ export class Game {
   }
 
   renderSettingsScreen(ctx, w, h) {
-    const compactSettings = this.isTouchDevice && h < 420;
+    const compactSettings = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     ctx.fillStyle = "rgba(0,0,0,0.85)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#00ffcc";
@@ -8364,9 +8445,11 @@ export class Game {
 
     // Derive visible settings from registry (same filter as input handler)
     const visibleDefs = getVisibleSettings(this.isTouchDevice);
-    const items = visibleDefs.map(def => settingDisplayItem(def, this.settings));
-    const itemHeights = visibleDefs.map(def =>
-      compactSettings ? def.height.compact : def.height.normal
+    const items = visibleDefs.map((def) =>
+      settingDisplayItem(def, this.settings),
+    );
+    const itemHeights = visibleDefs.map((def) =>
+      compactSettings ? def.height.compact : def.height.normal,
     );
 
     const barW = compactSettings ? 140 : 200;
@@ -8640,7 +8723,7 @@ export class Game {
     const maxScroll = Math.max(
       0,
       Math.ceil(entries.length / cols) -
-      Math.floor((h - startY - 50) / (cardH + gap)),
+        Math.floor((h - startY - 50) / (cardH + gap)),
     );
     this.achievementsScroll = Math.min(this.achievementsScroll || 0, maxScroll);
     const scroll = this.achievementsScroll || 0;
@@ -8786,7 +8869,7 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
 
     // ── Header section ──
-    const compactUpg = this.isTouchDevice && h < 420;
+    const compactUpg = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     const headerY = compactUpg ? 14 : 40;
     // Horizontal accent line
     if (!compactUpg) {
@@ -9041,7 +9124,7 @@ export class Game {
   }
 
   renderGameOver(ctx, w, h) {
-    const compact = this.isTouchDevice && h < 420;
+    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     // Animated red-tinged background
     ctx.fillStyle = "rgba(30,0,0,0.94)";
     ctx.fillRect(0, 0, w, h);
@@ -9134,7 +9217,7 @@ export class Game {
   }
 
   renderVictory(ctx, w, h) {
-    const compact = this.isTouchDevice && h < 420;
+    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     ctx.fillStyle = "rgba(0,6,20,0.95)";
     ctx.fillRect(0, 0, w, h);
     // Animated aurora glow
@@ -9235,7 +9318,7 @@ export class Game {
   }
 
   renderLevelComplete(ctx, w, h) {
-    const compact = this.isTouchDevice && h < 420;
+    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
     ctx.fillStyle = "rgba(0,4,18,0.94)";
     ctx.fillRect(0, 0, w, h);
     // Subtle cyan glow
@@ -9315,7 +9398,8 @@ export class Game {
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor) {
-    const compact = this.isTouchDevice && this.hudCanvas.height < 420;
+    const compact =
+      this.isTouchDevice && this.hudCanvas.height < COMPACT_PHONE_HEIGHT;
     const accuracy =
       this.shotsFired > 0
         ? Math.round((this.shotsHit / this.shotsFired) * 100)

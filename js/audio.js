@@ -50,6 +50,11 @@ export class AudioManager {
     source.connect(filter);
     filter.connect(g);
     g.connect(this.sfxGain);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      g.disconnect();
+    };
     source.start();
   }
 
@@ -64,6 +69,10 @@ export class AudioManager {
     g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
     osc.connect(g);
     g.connect(this.sfxGain);
+    osc.onended = () => {
+      osc.disconnect();
+      g.disconnect();
+    };
     osc.start();
     osc.stop(this.ctx.currentTime + duration);
   }
@@ -86,6 +95,10 @@ export class AudioManager {
     g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
     osc1.connect(g1);
     g1.connect(this.sfxGain);
+    osc1.onended = () => {
+      osc1.disconnect();
+      g1.disconnect();
+    };
     osc1.start(t);
     osc1.stop(t + 0.1);
 
@@ -101,6 +114,10 @@ export class AudioManager {
     // Connect and play
     osc2.connect(g2);
     g2.connect(this.sfxGain);
+    osc2.onended = () => {
+      osc2.disconnect();
+      g2.disconnect();
+    };
     osc2.start(t);
     osc2.stop(t + 0.1);
     this.playTone(120, 0.07, "sine", 0.6);
@@ -123,6 +140,10 @@ export class AudioManager {
     bg.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
     bass.connect(bg);
     bg.connect(this.sfxGain);
+    bass.onended = () => {
+      bass.disconnect();
+      bg.disconnect();
+    };
     bass.start(t);
     bass.stop(t + 0.45);
 
@@ -136,6 +157,10 @@ export class AudioManager {
     tg.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
     tear.connect(tg);
     tg.connect(this.sfxGain);
+    tear.onended = () => {
+      tear.disconnect();
+      tg.disconnect();
+    };
     tear.start(t);
     tear.stop(t + 0.28);
 
@@ -162,6 +187,10 @@ export class AudioManager {
 
     osc1.connect(g1);
     g1.connect(this.sfxGain);
+    osc1.onended = () => {
+      osc1.disconnect();
+      g1.disconnect();
+    };
     osc1.start(t);
     osc1.stop(t + 0.12);
 
@@ -176,6 +205,10 @@ export class AudioManager {
 
     osc2.connect(g2);
     g2.connect(this.sfxGain);
+    osc2.onended = () => {
+      osc2.disconnect();
+      g2.disconnect();
+    };
     osc2.start(t);
     osc2.stop(t + 0.14);
 
@@ -190,6 +223,10 @@ export class AudioManager {
 
     osc3.connect(g3);
     g3.connect(this.sfxGain);
+    osc3.onended = () => {
+      osc3.disconnect();
+      g3.disconnect();
+    };
     osc3.start(t);
     osc3.stop(t + 0.14);
     this.playNoise(0.06, 0.6, 3000, "bandpass");
@@ -213,6 +250,10 @@ export class AudioManager {
 
     bass.connect(bg);
     bg.connect(this.sfxGain);
+    bass.onended = () => {
+      bass.disconnect();
+      bg.disconnect();
+    };
     bass.start(t);
     bass.stop(t + 0.8);
 
@@ -228,6 +269,10 @@ export class AudioManager {
 
     tear1.connect(tg1);
     tg1.connect(this.sfxGain);
+    tear1.onended = () => {
+      tear1.disconnect();
+      tg1.disconnect();
+    };
     tear1.start(t);
     tear1.stop(t + 0.55);
 
@@ -244,6 +289,10 @@ export class AudioManager {
 
     tear2.connect(tg2);
     tg2.connect(this.sfxGain);
+    tear2.onended = () => {
+      tear2.disconnect();
+      tg2.disconnect();
+    };
     tear2.start(t);
     tear2.stop(t + 0.6);
 
@@ -341,6 +390,10 @@ export class AudioManager {
       );
       osc.connect(g);
       g.connect(this.musicGain);
+      osc.onended = () => {
+        osc.disconnect();
+        g.disconnect();
+      };
       osc.start();
       osc.stop(this.ctx.currentTime + beatDur * 0.8);
 
@@ -364,6 +417,11 @@ export class AudioManager {
         src.connect(hf);
         hf.connect(hg);
         hg.connect(this.musicGain);
+        src.onended = () => {
+          src.disconnect();
+          hf.disconnect();
+          hg.disconnect();
+        };
         src.start();
       }
 
@@ -384,6 +442,10 @@ export class AudioManager {
         );
         kick.connect(kg);
         kg.connect(this.musicGain);
+        kick.onended = () => {
+          kick.disconnect();
+          kg.disconnect();
+        };
         kick.start();
         kick.stop(this.ctx.currentTime + 0.15);
       }
