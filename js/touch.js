@@ -33,7 +33,10 @@ export class TouchControls {
 
     // Look state
     this.lookTouch = null;
+    this.lookOrigin = { x: 0, y: 0 };
     this.lookLast = { x: 0, y: 0 };
+    this.lookActive = false;
+    this.lookTapTime = 0; // for swipe detection
 
     // Fire state
     this.fireTouch = null;
@@ -60,6 +63,10 @@ export class TouchControls {
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
     this.cutsceneHoldStart = 0;
+
+    // Double-tap dash state
+    this.lastTapTime = 0;
+    this.lastTapZone = null;
 
     // Mobile tutorial overlay state
     let tutorialDone = false;
@@ -406,52 +413,37 @@ export class TouchControls {
         this.joyOrigin = { x, y };
         this.joyPos = { x, y };
         this.joyActive = true;
+        
+        // Double-tap to dash
+        const now = performance.now();
+        if (this.lastTapZone === "joy" && now - this.lastTapTime < 250) {
+           this.activeButtons.add("dash");
+           
+           // If double tapped, but they haven't moved the joystick out of the deadzone
+           // we still want to dash. We use true for default to forward.
+           setTimeout(() => {
+             this.triggerDirectionalDash(g, true);
+           }, 0);
+           
+           this.lastTapTime = 0;
+        } else {
+           this.lastTapTime = now;
+           this.lastTapZone = "joy";
+        }
       } else if (zone === "look" && this.lookTouch === null) {
         this.lookTouch = touch.identifier;
+        this.lookOrigin = { x, y };
         this.lookLast = { x, y };
+        this.lookActive = true;
+        this.lookTapTime = performance.now();
       } else if (zone === "fire" && this.fireTouch === null) {
         this.fireTouch = touch.identifier;
         g.player.isFiring = true;
         this.activeButtons.add("fire");
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
       } else if (zone === "dash") {
         this.activeButtons.add("dash");
-        // Dash in current movement direction (from joystick or keys)
-        const kb = g.keybinds;
-        const fwd = g.keys[kb.moveForward];
-        const back = g.keys[kb.moveBack];
-        const left = g.keys[kb.moveLeft];
-        const right = g.keys[kb.moveRight];
-        const hasDir = fwd || back || left || right;
-        if (hasDir) {
-          const cos = Math.cos(g.player.angle);
-          const sin = Math.sin(g.player.angle);
-          let dX = 0,
-            dY = 0;
-          if (fwd) {
-            dX += cos;
-            dY += sin;
-          }
-          if (back) {
-            dX -= cos;
-            dY -= sin;
-          }
-          if (left) {
-            dX += sin;
-            dY -= cos;
-          }
-          if (right) {
-            dX -= sin;
-            dY += cos;
-          }
-          const len = Math.sqrt(dX * dX + dY * dY);
-          if (len > 0) {
-            dX /= len;
-            dY /= len;
-          }
-          g.triggerDash(null, dX, dY);
-        } else {
-          g.triggerDash(g.keybinds.moveForward);
-        }
+        this.triggerDirectionalDash(g, true);
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         g.interact();
@@ -469,6 +461,7 @@ export class TouchControls {
         if (p.weapons.length > 1) {
           p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
           g.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+          if (g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
         }
       } else if (zone === "fullscreen") {
         this.toggleFullscreen();
@@ -492,12 +485,41 @@ export class TouchControls {
       } else if (touch.identifier === this.lookTouch) {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
-        // Feed into mouse look system (scaled for touch sensitivity from settings)
-        let rawSens = Number(this.game.settings.touchSensitivity);
-        if (!Number.isFinite(rawSens)) rawSens = 1.5;
-        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
-        this.game.mouse.dx += dx * touchSens;
-        this.game.mouse.dy += dy * touchSens;
+        
+        // Twin-stick auto-fire handling
+        if (this.game.settings.autoFire) {
+          const originDx = touch.clientX - this.lookOrigin.x;
+          const originDy = touch.clientY - this.lookOrigin.y;
+          const dist = Math.sqrt(originDx * originDx + originDy * originDy);
+          const deadzone = 20;
+
+          if (dist > deadzone) {
+            // Treat the look gesture as a joystick pushing out
+            // Calculate angle directly rather than passing through mouse.dx/dy
+            this.game.player.angle = Math.atan2(originDy, originDx);
+            
+            // Auto fire
+            if (!this.game.player.isFiring) {
+              this.game.player.isFiring = true;
+              this.activeButtons.add("fire");
+              if (this.game.settings.haptics && navigator.vibrate) navigator.vibrate(10);
+            }
+          } else {
+            // Inside deadzone, stop firing
+            if (this.game.player.isFiring && this.fireTouch === null) {
+              this.game.player.isFiring = false;
+              this.activeButtons.delete("fire");
+            }
+          }
+        } else {
+          // Standard swipe-to-look (scaled for touch sensitivity from settings)
+          let rawSens = Number(this.game.settings.touchSensitivity);
+          if (!Number.isFinite(rawSens)) rawSens = 1.5;
+          const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+          this.game.mouse.dx += dx * touchSens;
+          this.game.mouse.dy += dy * touchSens;
+        }
+        
         this.lookLast = { x: touch.clientX, y: touch.clientY };
       }
     }
@@ -522,7 +544,34 @@ export class TouchControls {
         this.joyActive = false;
         this.clearMovementKeys();
       } else if (touch.identifier === this.lookTouch) {
+        // Swipe to swap weapons check
+        if (this.game.settings.swipeWeapons) {
+           const timeDelta = performance.now() - this.lookTapTime;
+           const dx = touch.clientX - this.lookOrigin.x;
+           const dy = touch.clientY - this.lookOrigin.y;
+           
+           // If it's a fast motion mostly horizontally
+           if (timeDelta < 300 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+             const p = this.game.player;
+             if (p.weapons.length > 1) {
+               if (dx > 0) {
+                 p.currentWeapon = (p.currentWeapon + 1) % p.weapons.length;
+               } else {
+                 p.currentWeapon = (p.currentWeapon - 1 + p.weapons.length) % p.weapons.length;
+               }
+               this.game.triggerAriaOnce("weaponSwitch", "weaponSwitch");
+               if (this.game.settings.haptics && navigator.vibrate) navigator.vibrate(25);
+             }
+           }
+        }
+        
+        if (this.game.settings.autoFire && this.game.player.isFiring && this.fireTouch === null) {
+          this.game.player.isFiring = false;
+          this.activeButtons.delete("fire");
+        }
+      
         this.lookTouch = null;
+        this.lookActive = false;
       } else if (touch.identifier === this.fireTouch) {
         this.fireTouch = null;
         this.game.player.isFiring = false;
@@ -611,6 +660,46 @@ export class TouchControls {
       ) {
         this.game.handleKeyPress("KeyF");
       }
+    }
+  }
+
+  triggerDirectionalDash(g, defaultForward = false) {
+    const kb = g.keybinds;
+    const fwd = g.keys[kb.moveForward];
+    const back = g.keys[kb.moveBack];
+    const left = g.keys[kb.moveLeft];
+    const right = g.keys[kb.moveRight];
+    const hasDir = fwd || back || left || right;
+    
+    if (hasDir) {
+      const cos = Math.cos(g.player.angle);
+      const sin = Math.sin(g.player.angle);
+      let dX = 0,
+        dY = 0;
+      if (fwd) {
+        dX += cos;
+        dY += sin;
+      }
+      if (back) {
+        dX -= cos;
+        dY -= sin;
+      }
+      if (left) {
+        dX += sin;
+        dY -= cos;
+      }
+      if (right) {
+        dX -= sin;
+        dY += cos;
+      }
+      const len = Math.sqrt(dX * dX + dY * dY);
+      if (len > 0) {
+        dX /= len;
+        dY /= len;
+      }
+      g.triggerDash(null, dX, dY);
+    } else if (defaultForward) {
+      g.triggerDash(g.keybinds.moveForward);
     }
   }
 
