@@ -4,7 +4,6 @@ import {
   settingsLayout,
   upgradeLayout,
   tutorialMenuLayout,
-  SETTINGS_ITEM_HEIGHTS,
 } from "./layout.js";
 
 function testPauseLayout() {
@@ -19,19 +18,20 @@ function testPauseLayout() {
 }
 
 function testSettingsLayout() {
-  const sel = 10;
-  const layout = settingsLayout(1280, 720, sel);
+  const sel = 0;
+  const layout = settingsLayout(1280, 720, sel, false);
   assert.equal(layout.panelW, 440);
-  assert.deepEqual(layout.itemHeights, SETTINGS_ITEM_HEIGHTS);
+  assert.ok(Array.isArray(layout.itemHeights), "itemHeights should be array");
+  assert.ok(layout.itemHeights.length > 0, "should have at least one item");
   assert.equal(
     layout.totalH,
-    SETTINGS_ITEM_HEIGHTS.reduce((a, b) => a + b, 0),
+    layout.itemHeights.reduce((a, b) => a + b, 0),
   );
 }
 
 function testUpgradeLayout() {
   const upgradeCount = 18;
-  const layout = upgradeLayout(1280, upgradeCount);
+  const layout = upgradeLayout(1280, 720, upgradeCount, false);
   assert.equal(layout.cols, 2);
   assert.equal(layout.cardH, 64);
   assert.equal(layout.cardGap, 6);

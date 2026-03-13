@@ -5,7 +5,7 @@
  * Compact phone support: adapts layout for landscape phones (h < COMPACT_PHONE_HEIGHT).
  */
 
-import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./game.js";
+import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./settings-registry.js";
 
 export function isCompactPhone(h) {
   return h < COMPACT_PHONE_HEIGHT;

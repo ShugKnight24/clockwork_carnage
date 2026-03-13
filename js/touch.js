@@ -10,7 +10,7 @@
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
-import { COMPACT_PHONE_HEIGHT } from "./game.js";
+import { COMPACT_PHONE_HEIGHT } from "./settings-registry.js";
 import {
   pauseLayout,
   settingsLayout,
@@ -751,31 +751,6 @@ export class TouchControls {
       }
     } else if (defaultForward) {
       g.triggerDash(g.keybinds.moveForward);
-    }
-  }
-
-  handleTutorialCompleteTap(touch) {
-    const g = this.game;
-    const w = this.zones.w;
-    const h = this.zones.h;
-    const x = touch.clientX;
-    const y = touch.clientY;
-
-    // Menu layout must match renderTutorialCompletionMenu in game.js
-    const menuW = Math.min(360, w - 40);
-    const itemH = 52;
-    const menuItems = 4;
-    const mx = (w - menuW) / 2;
-    const my = h * 0.35;
-
-    for (let i = 0; i < menuItems; i++) {
-      const iy = my + 8 + i * itemH;
-      if (x >= mx && x <= mx + menuW && y >= iy && y <= iy + itemH - 6) {
-        g.tutorialMenuSelection = i;
-        g.audio.menuConfirm();
-        g.executeTutorialCompletionChoice(i);
-        return;
-      }
     }
   }
 
