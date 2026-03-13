@@ -604,16 +604,18 @@ export class Renderer {
     const cx = camX != null ? camX : player.x;
     const cy = camY != null ? camY : player.y;
 
-    // Sort entities by distance from camera
-    const sorted = entities
-      .filter((e) => e.active !== false)
-      .map((e) => ({
-        ...e,
-        dist: (cx - e.x) ** 2 + (cy - e.y) ** 2,
-      }))
-      .sort((a, b) => b.dist - a.dist);
+    // Sort entities by distance from camera (index sort — avoids per-frame object copies)
+    const spriteDist = [];
+    const spriteOrder = [];
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i].active === false) continue;
+      spriteOrder.push(i);
+      spriteDist[i] = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
+    }
+    spriteOrder.sort((a, b) => spriteDist[b] - spriteDist[a]);
 
-    for (const entity of sorted) {
+    for (let si = 0; si < spriteOrder.length; si++) {
+      const entity = entities[spriteOrder[si]];
       const spriteX = entity.x - cx;
       const spriteY = entity.y - cy;
 

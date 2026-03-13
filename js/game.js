@@ -24,7 +24,12 @@ import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
 import { trackEvent } from "./analytics.js";
-import { settingsLayout, upgradeLayout, tutorialMenuLayout } from "./layout.js";
+import {
+  settingsLayout,
+  upgradeLayout,
+  tutorialMenuLayout,
+  isCompactPhone,
+} from "./layout.js";
 
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.8.0";
@@ -212,6 +217,10 @@ export class Game {
     this._vignetteCanvas = null;
     this._vignetteW = 0;
     this._vignetteH = 0;
+
+    // Cached scanline patterns (avoids 180+ fillRect calls per overlay)
+    this._scanlinePattern = null; // rgba(0,0,0,0.03) every 4px
+    this._scanlinePatternDense = null; // rgba(0,0,0,0.04) every 3px
 
     // Achievement system
     this.unlockedAchievements = {};
@@ -1508,7 +1517,7 @@ export class Game {
       /\{AGENT\}/g,
       this.character.name || "Agent",
     );
-    const isCompactMobile = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const isCompactMobile = this.isTouchDevice && isCompactPhone(h);
     const boxW = isCompactMobile ? Math.min(340, w - 32) : 340;
     const textAreaX = 54; // offset from box left to text start
     const maxTextW = boxW - textAreaX - 12;
@@ -2875,11 +2884,33 @@ export class Game {
     ctx.fillText("W/S to navigate  \u00B7  ENTER to select", w / 2, h - 30);
 
     // Scanline overlay
-    ctx.fillStyle = "rgba(0,0,0,0.03)";
-    for (let sy = 0; sy < h; sy += 4) {
-      ctx.fillRect(0, sy, w, 1);
-    }
+    this._drawScanlines(ctx, w, h);
     ctx.textAlign = "left";
+  }
+
+  _makeScanlinePattern(ctx, alpha, step) {
+    const tile = document.createElement("canvas");
+    tile.width = 1;
+    tile.height = step;
+    const tc = tile.getContext("2d");
+    tc.fillStyle = `rgba(0,0,0,${alpha})`;
+    tc.fillRect(0, 0, 1, 1);
+    return ctx.createPattern(tile, "repeat");
+  }
+
+  _drawScanlines(ctx, w, h, dense) {
+    if (dense) {
+      if (!this._scanlinePatternDense) {
+        this._scanlinePatternDense = this._makeScanlinePattern(ctx, 0.04, 3);
+      }
+      ctx.fillStyle = this._scanlinePatternDense;
+    } else {
+      if (!this._scanlinePattern) {
+        this._scanlinePattern = this._makeScanlinePattern(ctx, 0.03, 4);
+      }
+      ctx.fillStyle = this._scanlinePattern;
+    }
+    ctx.fillRect(0, 0, w, h);
   }
 
   applyLoadoutBonuses() {
@@ -6289,7 +6320,7 @@ export class Game {
     }
 
     const hudFactor = this.settings.hudScale / 100;
-    const isCompactMobile = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const isCompactMobile = this.isTouchDevice && isCompactPhone(h);
     const barH = isCompactMobile
       ? Math.round(60 * hudFactor)
       : Math.round(160 * hudFactor);
@@ -8332,7 +8363,7 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
-    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(0, 0, w, h);
 
@@ -8449,7 +8480,7 @@ export class Game {
   }
 
   renderSettingsScreen(ctx, w, h) {
-    const compactSettings = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compactSettings = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,0,0,0.85)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#00ffcc";
@@ -8871,7 +8902,7 @@ export class Game {
     ctx.fillRect(0, 0, w, h);
 
     // ── Header section ──
-    const compactUpg = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compactUpg = this.isTouchDevice && isCompactPhone(h);
     const headerY = compactUpg ? 14 : 40;
     // Horizontal accent line
     if (!compactUpg) {
@@ -9118,16 +9149,13 @@ export class Game {
     }
 
     // ── Top scanline overlay ──
-    ctx.fillStyle = "rgba(0,0,0,0.03)";
-    for (let sy = 0; sy < h; sy += 4) {
-      ctx.fillRect(0, sy, w, 1);
-    }
+    this._drawScanlines(ctx, w, h);
 
     ctx.textAlign = "left";
   }
 
   renderGameOver(ctx, w, h) {
-    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compact = this.isTouchDevice && isCompactPhone(h);
     // Animated red-tinged background
     ctx.fillStyle = "rgba(30,0,0,0.94)";
     ctx.fillRect(0, 0, w, h);
@@ -9213,14 +9241,11 @@ export class Game {
     ctx.textAlign = "left";
 
     // Scanline overlay
-    ctx.fillStyle = "rgba(0,0,0,0.04)";
-    for (let sy = 0; sy < h; sy += 3) {
-      ctx.fillRect(0, sy, w, 1);
-    }
+    this._drawScanlines(ctx, w, h, true);
   }
 
   renderVictory(ctx, w, h) {
-    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,6,20,0.95)";
     ctx.fillRect(0, 0, w, h);
     // Animated aurora glow
@@ -9314,14 +9339,11 @@ export class Game {
     ctx.textAlign = "left";
 
     // Scanline overlay
-    ctx.fillStyle = "rgba(0,0,0,0.03)";
-    for (let sy = 0; sy < h; sy += 4) {
-      ctx.fillRect(0, sy, w, 1);
-    }
+    this._drawScanlines(ctx, w, h);
   }
 
   renderLevelComplete(ctx, w, h) {
-    const compact = this.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
+    const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,4,18,0.94)";
     ctx.fillRect(0, 0, w, h);
     // Subtle cyan glow
@@ -9394,15 +9416,12 @@ export class Game {
     ctx.textAlign = "left";
 
     // Scanline overlay
-    ctx.fillStyle = "rgba(0,0,0,0.03)";
-    for (let sy = 0; sy < h; sy += 4) {
-      ctx.fillRect(0, sy, w, 1);
-    }
+    this._drawScanlines(ctx, w, h);
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor) {
     const compact =
-      this.isTouchDevice && this.hudCanvas.height < COMPACT_PHONE_HEIGHT;
+      this.isTouchDevice && isCompactPhone(this.hudCanvas.height);
     const accuracy =
       this.shotsFired > 0
         ? Math.round((this.shotsHit / this.shotsFired) * 100)
