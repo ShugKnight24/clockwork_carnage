@@ -3611,7 +3611,7 @@ export const TUTORIAL_MAP = {
 
 export const ARENA_MAPS = [
   {
-    name: "Temporal Arena",
+    name: "Neon Abyss",
     width: 24,
     height: 24,
     grid: [
@@ -3668,7 +3668,7 @@ export const ARENA_MAPS = [
     ],
   },
   {
-    name: "Rift Corridor",
+    name: "Quantum Rift Corridor",
     width: 20,
     height: 20,
     grid: [
@@ -3721,7 +3721,7 @@ export const ARENA_MAPS = [
     ],
   },
   {
-    name: "Chrono Foundry",
+    name: "The Chrono Foundry",
     width: 24,
     height: 24,
     grid: [
@@ -4002,6 +4002,9 @@ export const CAMPAIGN_LEVELS = [
       { x: 20.5, y: 20.5, type: "enemy", enemyType: "drone" },
       { x: 12.5, y: 7.5, type: "health" },
       { x: 11.5, y: 21.5, type: "ammo" },
+      { x: 20.5, y: 2.5, type: "health" },
+      { x: 2.5, y: 16.5, type: "ammo" },
+      { x: 20.5, y: 16.5, type: "weapon", weaponId: 1 },
     ],
     exit: { x: 21.5, y: 21.5 },
     secrets: [{ wallX: 11, wallY: 10, description: "Security locker" }],
@@ -4129,6 +4132,9 @@ export const CAMPAIGN_LEVELS = [
       { x: 14.5, y: 11.5, type: "health" },
       { x: 2.5, y: 21.5, type: "ammo" },
       { x: 25.5, y: 21.5, type: "weapon", weaponId: 1 },
+      { x: 2.5, y: 8.5, type: "health" },
+      { x: 25.5, y: 12.5, type: "ammo" },
+      { x: 8.5, y: 21.5, type: "health" },
     ],
     exit: { x: 25.5, y: 1.5 },
     secrets: [
