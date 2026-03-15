@@ -770,21 +770,20 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "dark",
       art: "hero_armed",
-      flash: "#ffcc00",
-      shake: 2,
-      scanner: true,
+      flash: "#ff0000",
+      shake: 3,
       lines: [
         {
-          text: "The scanner maxes out. The display flickers:",
+          text: "The scanner maxes out.",
           delay: 0,
           color: "#aabbcc",
           size: 15,
         },
         {
-          text: '"IT\'S OVER 9,000!!!"',
+          text: "ERROR: TEMPORAL OVERFLOW",
           delay: 1800,
           color: "#ff4444",
-          size: 26,
+          size: 22,
         },
         {
           text: "...that can't be right.",
@@ -973,20 +972,14 @@ export const CUTSCENE_SCRIPTS = {
           size: 14,
         },
         {
-          text: '"Wait — you\'re wearing a CAPE? Heroes stopped wearing capes."',
-          delay: 2200,
-          color: "#ffcc88",
-          size: 14,
-        },
-        {
-          text: '"Who does this guy think he is? Dr. Strange? FFS!"',
-          delay: 4400,
+          text: '"...I\'m aware of how this looks. Carry on."',
+          delay: 2500,
           color: "#ffcc88",
           size: 14,
         },
       ],
       particles: "embers",
-      duration: 7500,
+      duration: 5500,
     },
     {
       bg: "boss_lair",
@@ -3557,6 +3550,43 @@ export const ARIA_COMMS = {
     "Hidden cache found. Nice instincts.",
     "You found something they tried to hide. Interesting...",
     "Secret area. Someone didn't want this found.",
+  ],
+
+  // ── Squad voice lines ─────────────────────────────────────────────
+  // Kael — The Vanguard. Tactical. Protective. Lost his squad once. Won't again.
+  kaelComms: [
+    "Watch your left flank — I've got the right.",
+    "No one falls today. Keep moving.",
+    "I've been in tighter spots. Key word: been.",
+    "Stay tight. We don't split, we don't get picked off.",
+    "You've got the point. I've got your back. That's how this works.",
+  ],
+
+  // Nova — The Striker. Fastest thing alive. Sarcastic, relentless, secretly loyal.
+  novaComms: [
+    "Already cleared the far corridor. You're welcome.",
+    "Slow down? That's not in my vocabulary.",
+    "They're flanking left — I know because I was just there.",
+    "You're fast for a new recruit. Don't let it go to your head.",
+    "I'll race you to the exit. Spoiler: I win.",
+  ],
+
+  // Rook — The Engineer. Builds anything. Trusts nothing. Learned to trust YOU.
+  rookComms: [
+    "Structural integrity on those walls is... questionable. Watch the ceiling.",
+    "My turrets are up. Try not to walk into their line of fire.",
+    "I ran the numbers. Survival probability: improving.",
+    "Don't touch anything I've rigged. That's not a suggestion.",
+    "Systems nominal. Mostly. The 'mostly' is doing a lot of work there.",
+  ],
+
+  // Lyra — Senior Agent. Cryptic. Drops timeline lore. Knows more than she says.
+  lyraComms: [
+    "I've seen this moment before. Different choices. Different outcomes.",
+    "The Paradox Lord isn't the real threat. He's a symptom.",
+    "There are seventeen ways this ends. You're in one of the good ones.",
+    "Trust your instincts. They've been calibrated by more timelines than you know.",
+    "When this is over — and it will be over — we need to talk about what you are.",
   ],
 };
 
