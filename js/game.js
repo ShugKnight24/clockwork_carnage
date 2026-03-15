@@ -123,6 +123,7 @@ export class Game {
     this.menuSelection = 0;
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
+    this._builderOnboardingDismissed = false;
     this.transitioning = false;
     this.transitionAlpha = 0;
     this.screenShake = 0;
@@ -347,6 +348,10 @@ export class Game {
     document.addEventListener("keydown", (e) => {
       // Builder delegates input to its own handler
       if (this.state === GameState.BUILDER) {
+        if (!this._builderOnboardingDismissed) {
+          this._builderOnboardingDismissed = true;
+          return;
+        }
         if (this.builder.handleKeyDown(e)) return;
       }
       // Rebinding mode — capture the next key
@@ -435,6 +440,10 @@ export class Game {
         return;
       }
       if (this.state === GameState.BUILDER) {
+        if (!this._builderOnboardingDismissed) {
+          this._builderOnboardingDismissed = true;
+          return;
+        }
         if (!this.mouse.locked && !this.builder.overhead) {
           this.lockPointer();
           return;
@@ -1038,6 +1047,9 @@ export class Game {
         this.audio.menuConfirm();
         if (this.mode === "arena") this.startArena();
         else if (this.mode === "campaign") this.startCampaign();
+      }
+      if (code === "KeyS") {
+        this._shareScore();
       }
       return;
     }
@@ -2064,6 +2076,13 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
     this.audio.startMusic(140 + this.arenaRound * 5);
+
+    // Arena milestone ARIA callouts
+    if (this.arenaRound === 5)
+      this.triggerAriaOnce("arenaRound5_comm", "arenaRound5");
+    else if (this.arenaRound === 10)
+      this.triggerAriaOnce("arenaRound10_comm", "arenaRound10");
+
     this.lockPointer();
   }
 
@@ -5543,6 +5562,9 @@ export class Game {
     if (this.state === GameState.BUILDER) {
       this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
       this.builder.render(ctx, w, h, this.time);
+      if (!this._builderOnboardingDismissed) {
+        this._renderBuilderOnboarding(ctx, w, h);
+      }
       return;
     }
 
@@ -9237,11 +9259,122 @@ export class Game {
     ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
     if (!this.isTouchDevice) {
       ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
+      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
+      ctx.fillText("Press S to share score", w / 2, compact ? h * 0.93 : h / 2 + 175);
     }
     ctx.textAlign = "left";
 
+    this._renderShareToast(ctx, w, h);
     // Scanline overlay
     this._drawScanlines(ctx, w, h, true);
+  }
+
+  _shareScore() {
+    const score = this.player.score;
+    const mode = this.mode || "arena";
+    const round = this.arenaRound - 1;
+    const name = encodeURIComponent(this.character?.name || "Agent");
+    const base = window.location.href.split("?")[0].split("#")[0];
+    const url = `${base}?score=${score}&mode=${mode}&round=${round}&name=${name}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        this._shareToast = { text: "Score link copied!", life: 2.5 };
+        trackEvent("share_score", { score, mode, round });
+      })
+      .catch(() => {
+        this._shareToast = { text: url, life: 4.0 };
+      });
+  }
+
+  _renderShareToast(ctx, w, h) {
+    if (!this._shareToast) return;
+    this._shareToast.life -= this.deltaTime / 1000;
+    if (this._shareToast.life <= 0) {
+      this._shareToast = null;
+      return;
+    }
+    const alpha = Math.min(1, this._shareToast.life * 2);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(0,20,40,0.9)";
+    ctx.strokeStyle = "rgba(0,200,255,0.6)";
+    ctx.lineWidth = 1;
+    const tw = Math.min(420, w * 0.8);
+    const th = 32;
+    const tx = w / 2 - tw / 2;
+    const ty = h * 0.07;
+    ctx.beginPath();
+    ctx.roundRect(tx, ty, tw, th, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(this._shareToast.text, w / 2, ty + 20);
+    ctx.restore();
+  }
+
+  _renderBuilderOnboarding(ctx, w, h) {
+    const pulse = 0.85 + Math.sin(this.time * 0.004) * 0.1;
+    ctx.fillStyle = `rgba(0,0,0,${0.72 * pulse})`;
+    ctx.fillRect(0, 0, w, h);
+
+    const bw = Math.min(520, w * 0.88);
+    const bh = 280;
+    const bx = w / 2 - bw / 2;
+    const by = h / 2 - bh / 2;
+
+    ctx.fillStyle = "rgba(0,10,20,0.96)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,200,255,0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#00ccff";
+    ctx.shadowColor = "#00ccff";
+    ctx.shadowBlur = 10;
+    ctx.font = "bold 18px monospace";
+    ctx.fillText("MAP BUILDER", w / 2, by + 36);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(0,200,255,0.3)";
+    ctx.fillRect(bx + 20, by + 46, bw - 40, 1);
+
+    const lines = [
+      { key: "WASD / Arrow Keys", action: "Move camera" },
+      { key: "Left Click", action: "Place tile" },
+      { key: "Right Click", action: "Erase tile" },
+      { key: "1 – 9", action: "Select tile type" },
+      { key: "E", action: "Place / move player start" },
+      { key: "P", action: "Play-test your map" },
+      { key: "Ctrl+S", action: "Save map" },
+    ];
+    ctx.font = "12px monospace";
+    const lineH = 24;
+    const startY = by + 68;
+    lines.forEach((l, i) => {
+      const y = startY + i * lineH;
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#00ccff";
+      ctx.fillText(l.key, w / 2 - 12, y);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#aabbcc";
+      ctx.fillText(l.action, w / 2 + 12, y);
+    });
+
+    const promptA = 0.5 + Math.sin(this.time * 0.006) * 0.4;
+    ctx.textAlign = "center";
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+    ctx.font = "12px monospace";
+    ctx.fillText(
+      this.isTouchDevice ? "Tap anywhere to start" : "Press any key to start",
+      w / 2,
+      by + bh - 18,
+    );
   }
 
   renderVictory(ctx, w, h) {
@@ -9336,8 +9469,14 @@ export class Game {
       ? "Tap to return to title"
       : "Press ENTER to return to title";
     ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
+    if (!this.isTouchDevice) {
+      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
+      ctx.font = `${compact ? 11 : 13}px monospace`;
+      ctx.fillText("Press S to share score", w / 2, compact ? h * 0.94 : h / 2 + 235);
+    }
     ctx.textAlign = "left";
 
+    this._renderShareToast(ctx, w, h);
     // Scanline overlay
     this._drawScanlines(ctx, w, h);
   }
