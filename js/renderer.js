@@ -12,8 +12,18 @@ export class Renderer {
     this.height = canvas.height;
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
+    this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this.generateTextures();
     this._generateFloorCeilTextures();
+    this._floorCeilBuffer = null;
+  }
+
+  /** Called by settings onChange — 0 = Clockwork, 1 = Brutal */
+  applyVisualStyle(styleIndex) {
+    const idx = styleIndex ?? 0;
+    if (this._visualStyle === idx) return;
+    this._visualStyle = idx;
+    this._generateFloorCeilTextures(); // regenerate floor/ceiling for new palette
     this._floorCeilBuffer = null;
   }
 
@@ -146,45 +156,56 @@ export class Renderer {
 
   _generateFloorCeilTextures() {
     const size = 64;
+    const brutal = this._visualStyle === 1;
 
-    // Floor: dark metallic grating with grid lines and rivets
+    // Floor texture
+    // Clockwork: warm teal-tinted tiles with cyan glow accents
+    // Brutal:    dark metallic grating (original look)
+    const floorBase = brutal
+      ? { r: 22, g: 25, b: 32 }
+      : { r: 28, g: 42, b: 48 };
+    const floorGrid = brutal
+      ? { r: 12, g: 15, b: 20 }
+      : { r: 15, g: 28, b: 35 };
+    const floorGlow = brutal ? { r: 8, g: 18, b: 30 } : { r: 5, g: 40, b: 60 };
+
     const floorImg = new ImageData(size, size);
     const fd = floorImg.data;
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const i = (y * size + x) * 4;
-        let r = 22,
-          g = 25,
-          b = 32;
+        let r = floorBase.r,
+          g = floorBase.g,
+          b = floorBase.b;
         const noise = (Math.random() * 8 - 4) | 0;
         // Grid lines every 16px
         if (x % 16 === 0 || y % 16 === 0) {
-          r += 12;
-          g += 15;
-          b += 20;
+          r += floorGrid.r;
+          g += floorGrid.g;
+          b += floorGrid.b;
         }
         // Heavier seam every 32px
         if (x % 32 < 2 || y % 32 < 2) {
           r += 8;
-          g += 10;
-          b += 14;
+          g += brutal ? 10 : 14;
+          b += brutal ? 14 : 18;
         }
         // Rivets at intersections
         const rx = x % 32,
           ry = y % 32;
         if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) {
-          r += 20;
-          g += 22;
-          b += 28;
+          r += brutal ? 20 : 10;
+          g += brutal ? 22 : 30;
+          b += brutal ? 28 : 45;
         }
-        // Subtle glow spots (embedded floor lights)
+        // Glow spots (embedded floor lights)
         const cx = (x % 32) - 16,
           cy = (y % 32) - 16;
         const d = Math.sqrt(cx * cx + cy * cy);
         if (d < 2.5) {
-          r += 8;
-          g += 18;
-          b += 30;
+          r += floorGlow.r;
+          g += floorGlow.g;
+          b += floorGlow.b;
         }
         fd[i] = Math.max(0, Math.min(255, r + noise));
         fd[i + 1] = Math.max(0, Math.min(255, g + noise));
@@ -194,15 +215,22 @@ export class Renderer {
     }
     this._floorTexPixels = fd;
 
-    // Ceiling: dark panels with recessed lights and structural beams
+    // Ceiling texture
+    // Clockwork: sky-toned panels with warm amber light accents
+    // Brutal:    dark panels with cold recessed lights (original look)
+    const ceilBase = brutal ? { r: 10, g: 10, b: 20 } : { r: 18, g: 22, b: 38 };
+    const ceilLight = brutal
+      ? { r: 15, g: 20, b: 35 }
+      : { r: 40, g: 35, b: 18 };
+
     const ceilImg = new ImageData(size, size);
     const cd = ceilImg.data;
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const i = (y * size + x) * 4;
-        let r = 10,
-          g = 10,
-          b = 20;
+        let r = ceilBase.r,
+          g = ceilBase.g,
+          b = ceilBase.b;
         const noise = (Math.random() * 6 - 3) | 0;
         // Panel edges
         if (x % 32 === 0 || y % 32 === 0) {
@@ -212,18 +240,18 @@ export class Renderer {
         }
         // Structural beam strips every 32px (horizontal)
         if (y % 32 < 3) {
-          r += 6;
-          g += 6;
-          b += 8;
+          r += brutal ? 6 : 10;
+          g += brutal ? 6 : 8;
+          b += brutal ? 8 : 6;
         }
         // Recessed light in panel center
         const px = (x % 32) - 16,
           py = (y % 32) - 16;
         const dl = Math.sqrt(px * px + py * py);
         if (dl < 2) {
-          r += 15;
-          g += 20;
-          b += 35;
+          r += ceilLight.r;
+          g += ceilLight.g;
+          b += ceilLight.b;
         }
         cd[i] = Math.max(0, Math.min(255, r + noise));
         cd[i + 1] = Math.max(0, Math.min(255, g + noise));
@@ -255,9 +283,10 @@ export class Renderer {
     const rayDirX1 = dirX + planeX;
     const rayDirY1 = dirY + planeY;
 
-    const fogR = 8,
-      fogG = 8,
-      fogB = 20;
+    const fogR = this._visualStyle === 1 ? 8 : 12;
+    const fogG = this._visualStyle === 1 ? 8 : 22;
+    const fogB = this._visualStyle === 1 ? 20 : 38;
+    const fogMaxOpacity = this._visualStyle === 1 ? 0.92 : 0.7;
 
     const loopEnd = h % 2 === 0 ? h : h - 1;
     for (let y = halfH + 1; y < loopEnd; y += 2) {
@@ -268,7 +297,7 @@ export class Renderer {
       let fx = camX + rowDist * rayDirX0;
       let fy = camY + rowDist * rayDirY0;
 
-      const fog = Math.min(0.92, rowDist / 12);
+      const fog = Math.min(fogMaxOpacity, rowDist / 12);
       const invFog = 1 - fog;
       const fR = fogR * fog,
         fG = fogG * fog,
@@ -579,9 +608,12 @@ export class Renderer {
         }
 
         // Distance fog
-        const fogAmount = Math.min(0.85, perpWallDist / 20);
+        const wallFogMax = this._visualStyle === 1 ? 0.85 : 0.6;
+        const fogAmount = Math.min(wallFogMax, perpWallDist / 20);
         if (fogAmount > 0) {
-          ctx.fillStyle = `rgba(8,8,20,${fogAmount})`;
+          const [wfR, wfG, wfB] =
+            this._visualStyle === 1 ? [8, 8, 20] : [10, 18, 32];
+          ctx.fillStyle = `rgba(${wfR},${wfG},${wfB},${fogAmount})`;
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
         }
       }
@@ -685,7 +717,8 @@ export class Renderer {
     const centerY = Math.floor(h / 2);
 
     // Distance fog factor
-    const fogFactor = Math.max(0, 1 - dist / 20);
+    const fogDist = this._visualStyle === 1 ? 20 : 30;
+    const fogFactor = Math.max(0, 1 - dist / fogDist);
 
     if (entity.type === "enemy") {
       this.drawEnemy(

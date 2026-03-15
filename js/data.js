@@ -5371,12 +5371,12 @@ export const UPGRADES = {
   },
   regen: {
     name: "Temporal Regeneration",
-    description: "Regenerate 1 HP/sec",
+    description: "Regenerate 0.5 HP/sec",
     baseCost: 400,
     costScale: 2.2,
     maxLevel: 5,
     apply: (player) => {
-      player.regenRate = (player.regenRate || 0) + 1;
+      player.regenRate = (player.regenRate || 0) + 0.5;
     },
   },
   armor: {
@@ -5401,12 +5401,12 @@ export const UPGRADES = {
   },
   lifeSteal: {
     name: "Temporal Drain",
-    description: "Heal 5% of damage dealt",
-    baseCost: 500,
-    costScale: 2.2,
+    description: "Heal 3% of damage dealt",
+    baseCost: 600,
+    costScale: 2.4,
     maxLevel: 5,
     apply: (player) => {
-      player.lifeSteal = (player.lifeSteal || 0) + 0.05;
+      player.lifeSteal = (player.lifeSteal || 0) + 0.03;
     },
   },
   explosiveRounds: {
