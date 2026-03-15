@@ -510,6 +510,113 @@ export const CUTSCENE_SCRIPTS = {
   voss_lab_briefing: [
     {
       bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "ARIA: Reviewing station personnel file...",
+          delay: 0,
+          color: "#00ffdd",
+          size: 14,
+        },
+        {
+          text: "DR. ELIAS VOSS — LEAD RESEARCHER, CHRONOS DIVISION",
+          delay: 1800,
+          color: "#cc44ff",
+          size: 17,
+        },
+      ],
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "\"Graduated summa cum laude. Three doctorates by 28.\"",
+          delay: 0,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: "\"Temporal physics, quantum engineering, xenobiology.\"",
+          delay: 2200,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: "\"He was the best mind on this station. By far.\"",
+          delay: 4400,
+          color: "#aaddff",
+          size: 15,
+        },
+      ],
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "\"He proposed Project PARADOX seven years ago.\"",
+          delay: 0,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: "\"Temporal self-integration. Merging human consciousness with the Chronos Engine.\"",
+          delay: 2200,
+          color: "#cc44ff",
+          size: 14,
+        },
+        {
+          text: "\"Command called it reckless. Denied funding. Buried the proposal.\"",
+          delay: 4600,
+          color: "#ff8844",
+          size: 14,
+        },
+        {
+          text: "\"Twice.\"",
+          delay: 6800,
+          color: "#ff4422",
+          size: 18,
+        },
+      ],
+      duration: 9500,
+    },
+    {
+      bg: "dark",
+      shake: 1,
+      lines: [
+        {
+          text: "\"On the night of the incident — he ran it anyway.\"",
+          delay: 0,
+          color: "#cc44ff",
+          size: 16,
+        },
+        {
+          text: "\"Alone. In this lab. No authorisation. No fail-safes.\"",
+          delay: 2500,
+          color: "#ff6644",
+          size: 15,
+        },
+        {
+          text: "\"Station logs show the experiment lasted eleven seconds.\"",
+          delay: 5000,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: "\"Everything after that... we know.\"",
+          delay: 7200,
+          color: "#ff2244",
+          size: 17,
+        },
+      ],
+      particles: "embers",
+      duration: 10000,
+    },
+    {
+      bg: "dark",
       shake: 2,
       lines: [
         {
@@ -519,7 +626,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 20,
         },
         {
-          text: "Dr. Voss's Personal Laboratory",
+          text: "Dr. Voss' Personal Laboratory",
           delay: 1500,
           color: "#ffffff",
           size: 16,
@@ -534,19 +641,19 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#cc44ff",
       lines: [
         {
-          text: '"This is it. Voss\'s private lab. Temporal rift at the center."',
+          text: "\"This is it. Voss's private lab. Temporal rift at the center.\"",
           delay: 0,
           color: "#00ffdd",
           size: 15,
         },
         {
-          text: '"The readings match the Paradox Lord\'s signature exactly."',
+          text: "\"The readings match the Paradox Lord's signature exactly.\"",
           delay: 2500,
           color: "#ff4444",
           size: 16,
         },
         {
-          text: '"...because they\'re the same person."',
+          text: "\"...because they're the same person.\"",
           delay: 5000,
           color: "#ff2244",
           size: 18,
@@ -579,6 +686,92 @@ export const CUTSCENE_SCRIPTS = {
       particles: "embers",
       shake: 2,
       duration: 7000,
+    },
+  ],
+
+  // ── Voss Confrontation (used in Act 2 boss approach) ──────────────
+  voss_confrontation: [
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      flash: "#cc44ff",
+      lines: [
+        {
+          text: '"You read my file."',
+          delay: 0,
+          color: "#cc44ff",
+          size: 20,
+        },
+        {
+          text: '"Good. Then you understand I didn\'t make a mistake."',
+          delay: 2200,
+          color: "#ff88aa",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 5500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        {
+          text: '"They called it reckless. Unauthorised. A disaster."',
+          delay: 0,
+          color: "#ff6644",
+          size: 15,
+        },
+        {
+          text: '"I call it the most successful experiment in human history."',
+          delay: 2400,
+          color: "#cc44ff",
+          size: 16,
+        },
+        {
+          text: '"I proposed this for seven years. They laughed."',
+          delay: 4800,
+          color: "#ff4422",
+          size: 15,
+        },
+        {
+          text: '"Now look at me."',
+          delay: 6800,
+          color: "#ff0088",
+          size: 22,
+        },
+      ],
+      particles: "embers",
+      shake: 3,
+      duration: 9500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      flash: "#ff0044",
+      shake: 5,
+      lines: [
+        {
+          text: '"I didn\'t become this overnight, Agent."',
+          delay: 0,
+          color: "#ff88aa",
+          size: 16,
+        },
+        {
+          text: '"I became this the moment they told me \'no\'."',
+          delay: 2500,
+          color: "#ff2266",
+          size: 18,
+        },
+        {
+          text: '"The night I ran the experiment? That was just the last step."',
+          delay: 5000,
+          color: "#ff4488",
+          size: 15,
+        },
+      ],
+      particles: "embers",
+      duration: 8000,
     },
   ],
 
@@ -3401,6 +3594,7 @@ export const ARIA_COMMS = {
     "This one's different. Prioritize evasion.",
     "I'm reading power levels that shouldn't exist. Stay sharp.",
     "Boss signature confirmed. I'll track weak points — you stay alive.",
+    "He thinks splitting himself across timelines makes him immortal. It just means we have to beat him more than once.",
   ],
   bossForm2: [
     "It's transforming. Great. I love when they do that.",
@@ -3411,6 +3605,7 @@ export const ARIA_COMMS = {
     "Final form. This is it — everything we've got.",
     "Third transformation. It's pulling energy from the rift itself.",
     "Last round. I believe in you, {AGENT}. Don't make me regret it.",
+    "Every timeline he corrupted is an anchor holding him here. Sever them all.",
   ],
 
   // ── Player death ──
@@ -3432,6 +3627,7 @@ export const ARIA_COMMS = {
     "Mission parameters loaded. Let's move.",
     "Campaign active. Stay on objective, stay alive.",
     "Chrono-Bureau dispatch: you are weapons-free. Let's go.",
+    "The Department of Temporal Regulation sends its regards. Try not to break anything they haven't already broken.",
   ],
 
   // ── Combat flavor ──
@@ -3479,6 +3675,11 @@ export const ARIA_COMMS = {
     "My training data says I should remain neutral and professional. My training data is wrong.",
     "The last Alpha candidate? Lasted eleven minutes. You've been here... longer.",
     "Quiet here. That either means we're winning, or something terrible is about to happen.",
+    "The Bureau's temporal vault houses every chrono-device ever confiscated. Some of them... whisper.",
+    "Chrono Shift is basically a time-turner for combat. Except ours doesn't need a chain around your neck.",
+    "Voss thinks he can split his consciousness across timelines. The Bureau calls them 'temporal anchors.' I call them horcruxes.",
+    "The Department of Temporal Regulation is technically Floor 9¾ of Bureau HQ. Don't ask — it's a spatial fold thing.",
+    "Somewhere in the Bureau archives, there's a prophecy about an agent and a paradox lord. I'm not saying it's about you. I'm not saying it isn't.",
   ],
 
   // ── Personality moments — ARIA being ARIA ──
@@ -3491,6 +3692,9 @@ export const ARIA_COMMS = {
     "I dreamed once. Or... my idle cycles generated novel patterns. Same thing, right?",
     "I've analyzed every temporal anomaly in the Bureau's database. Nothing prepared me for you.",
     "Between you and me? The Paradox Lord talks too much. We should exploit that.",
+    "The Bureau has a saying: 'Time reveals all, but only to those who master it.' Very fortune-cookie. Very true.",
+    "Voss keeps his most dangerous tech in a chamber that requires three temporal keys to open. The Bureau tried once. Lost two agents and a hallway.",
+    "I've been assigned to many agents. You're the first one I genuinely want to keep alive. Don't read into that.",
   ],
 
   // ── Pause/unpause ──
@@ -3610,32 +3814,53 @@ export const WALL_COLORS = {
 
 export const TUTORIAL_MAP = {
   name: "Chronos Station - Training Wing",
-  width: 16,
-  height: 16,
+  width: 24,
+  height: 24,
+  // Layout: 6 distinct zones flowing top-to-bottom
+  // Zone 1 (rows 1-5): LOCKER ROOM — locker columns, intimate start
+  // Zone 2 (rows 7-11): TRAINING HALL — open firing range + sprint/dash yard
+  // Zone 3 (rows 13-15): CHRONO LAB (left, energy walls) + ARMORY (right, weapon crate)
+  // Zone 4 (row 16): SECURITY BULKHEAD — locked door
+  // Zone 5 (rows 17-18): SUPPLY DEPOT — health + ammo behind door
+  // Zone 6 (rows 19-22): COMBAT BAY / SANDBOX — open arena with cover
+  //
+  // Wall types: 2=tech, 3=metal column/locker, 4=energy conduit, 5=door, 8=glass
   grid: [
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 2, 2, 2, 2, 5, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 3, 0, 2, 0, 0, 3, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 3, 0, 3, 0, 0, 0, 3, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 3, 0, 3, 0, 0, 0, 3, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2],
+    [2, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3, 0, 2],
+    [2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 2],
+    [2, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3, 0, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 2],
+    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
   ],
-  playerStart: { x: 3.5, y: 3.5, dir: 0 },
+  // Start in locker room center, facing south toward the exit
+  playerStart: { x: 12, y: 2.5, dir: 1.5708 },
   pickups: [
-    { x: 3.5, y: 10.5, type: "health" },
-    { x: 6.5, y: 10.5, type: "ammo" },
-    { x: 12.5, y: 4.5, type: "health" },
-    { x: 8.5, y: 7.5, type: "weapon", weaponId: 1 },
+    // Weapon crate in armory zone (right side of chrono+armory area)
+    { x: 19.5, y: 14.5, type: "weapon", weaponId: 1 },
+    // Supply depot pickups (behind the security door)
+    { x: 8.5, y: 17.5, type: "health" },
+    { x: 15.5, y: 17.5, type: "ammo" },
+    // Combat bay health pack
+    { x: 4.5, y: 20.5, type: "health" },
   ],
 };
 
@@ -4168,7 +4393,7 @@ export const CAMPAIGN_LEVELS = [
     ],
     exit: { x: 25.5, y: 1.5 },
     secrets: [
-      { wallX: 10, wallY: 5, description: "Dr. Voss's early research notes" },
+      { wallX: 10, wallY: 5, description: "Dr. Voss' early research notes" },
     ],
   },
   // ── Level 4: Containment Block ────────────────────────────────────
@@ -4337,7 +4562,7 @@ export const CAMPAIGN_LEVELS = [
   },
   // ── Level 5: Server Farm ──────────────────────────────────────────
   // Tech walls everywhere, drones patrol data corridors. Narrative-heavy.
-  // ARIA discovers classified files about Voss's temporal research.
+  // ARIA discovers classified files about Voss' temporal research.
   {
     name: "Server Farm",
     width: 24,
@@ -4562,11 +4787,11 @@ export const CAMPAIGN_LEVELS = [
       },
     ],
   },
-  // ── Level 7: Dr. Voss's Laboratory ────────────────────────────────
+  // ── Level 7: Dr. Voss' Laboratory ────────────────────────────────
   // Personal lab of the Paradox Lord's former self. Narrative climax before boss.
   // Full reveal: Voss IS the Paradox Lord. His final research notes.
   {
-    name: "Dr. Voss's Laboratory",
+    name: "Dr. Voss' Laboratory",
     width: 28,
     height: 28,
     grid: [
@@ -4716,7 +4941,7 @@ export const CAMPAIGN_LEVELS = [
         wallX: 6,
         wallY: 6,
         description:
-          "ARIA: 'These are Voss's personal journals. He wrote about the suit — YOUR suit. He built the prototype. Badge number C-0017.'",
+          "ARIA: 'These are Voss' personal journals. He wrote about the suit — YOUR suit. He built the prototype. Badge number C-0017.'",
       },
       {
         wallX: 13,

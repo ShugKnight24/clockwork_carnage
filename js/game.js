@@ -20,16 +20,12 @@ import {
 import { Renderer } from "./renderer.js";
 import { AudioManager } from "./audio.js";
 import { BuilderMode } from "./builder.js";
+import { MeltdownMode } from "./meltdown.js";
 import { CutsceneEngine } from "./cutscene.js";
 import { Player, Enemy, Pickup, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
 import { trackEvent } from "./analytics.js";
-import {
-  settingsLayout,
-  upgradeLayout,
-  tutorialMenuLayout,
-  isCompactPhone,
-} from "./layout.js";
+import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
 
 const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.8.0";
@@ -38,6 +34,8 @@ import {
   COMPACT_PHONE_HEIGHT,
   SETTINGS_REGISTRY,
   getVisibleSettings,
+  getSettingsForCategory,
+  getVisibleCategories,
 } from "./settings-registry.js";
 export { COMPACT_PHONE_HEIGHT, SETTINGS_REGISTRY, getVisibleSettings };
 
@@ -112,7 +110,8 @@ export class Game {
     this._chronoBombs = [];
     this.map = null;
     this._stateManager = new StateManager(GameState.TITLE);
-    this.mode = null; // 'arena' or 'campaign'
+    this.mode = null; // 'arena', 'campaign', or 'meltdown'
+    this.meltdown = new MeltdownMode();
     this.time = 0;
     this.deltaTime = 0;
     this.lastFrameTime = 0;
@@ -181,6 +180,7 @@ export class Game {
       swipeWeapons: true,
     };
     this.settingsSelection = 0;
+    this.settingsCategory = "Gameplay"; // active sidebar category
     this.lastEscTime = 0;
     // Double-tap dash tracking
     this.lastTapKey = null;
@@ -781,7 +781,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 13) {
+      if (this.mode === "tutorial" && this.tutorialStep === 14) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -795,7 +795,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 13) {
+      if (this.mode === "tutorial" && this.tutorialStep < 14) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -889,9 +889,29 @@ export class Game {
     }
 
     if (this.state === GameState.SETTINGS) {
-      // Use the declarative registry, filtered by platform
-      const settingsDef = getVisibleSettings(this.isTouchDevice);
+      // Category-aware navigation: Q/E (or Tab) cycles categories; W/S scrolls items within
+      const cats = getVisibleCategories(this.isTouchDevice);
+      const catIdx = cats.indexOf(this.settingsCategory);
+      const settingsDef = getSettingsForCategory(
+        this.isTouchDevice,
+        this.settingsCategory,
+      );
       const settingsCount = settingsDef.length;
+
+      // Switch category with Tab / Q / E
+      if (code === "Tab" || code === "KeyQ") {
+        const next = (catIdx - 1 + cats.length) % cats.length;
+        this.settingsCategory = cats[next];
+        this.settingsSelection = 0;
+        this.audio.menuSelect();
+      }
+      if (code === "KeyE") {
+        const next = (catIdx + 1) % cats.length;
+        this.settingsCategory = cats[next];
+        this.settingsSelection = 0;
+        this.audio.menuSelect();
+      }
+
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
@@ -908,25 +928,29 @@ export class Game {
         code === "ArrowLeft"
       ) {
         const def = settingsDef[this.settingsSelection];
-        const dir = code === "ArrowLeft" ? -1 : 1;
-        if (def.type === "toggle") {
-          this.settings[def.key] = !this.settings[def.key];
-        } else if (def.wrap) {
-          const range = def.max - def.min + 1;
-          this.settings[def.key] =
-            def.min +
-            ((this.settings[def.key] - def.min + dir + range) % range);
+        if (!def) {
+          /* no-op if category is empty */
         } else {
-          let val = this.settings[def.key] + def.step * dir;
-          val = Math.max(def.min, Math.min(def.max, val));
-          if (def.round != null)
-            val =
-              Math.round(val * Math.pow(10, def.round)) /
-              Math.pow(10, def.round);
-          this.settings[def.key] = val;
+          const dir = code === "ArrowLeft" ? -1 : 1;
+          if (def.type === "toggle") {
+            this.settings[def.key] = !this.settings[def.key];
+          } else if (def.wrap) {
+            const range = def.max - def.min + 1;
+            this.settings[def.key] =
+              def.min +
+              ((this.settings[def.key] - def.min + dir + range) % range);
+          } else {
+            let val = this.settings[def.key] + def.step * dir;
+            val = Math.max(def.min, Math.min(def.max, val));
+            if (def.round != null)
+              val =
+                Math.round(val * Math.pow(10, def.round)) /
+                Math.pow(10, def.round);
+            this.settings[def.key] = val;
+          }
+          if (def.onChange) def.onChange(this);
+          this.audio.menuConfirm();
         }
-        if (def.onChange) def.onChange(this);
-        this.audio.menuConfirm();
       }
       if (code === "Escape") {
         const now = performance.now();
@@ -1090,6 +1114,7 @@ export class Game {
       if (code === "KeyR" && this.state === GameState.GAME_OVER) {
         this.audio.menuConfirm();
         if (this.mode === "arena") this.startArena();
+        else if (this.mode === "meltdown") this.startMeltdown();
         else if (this.mode === "campaign") this.startCampaign();
       }
       if (code === "KeyS") {
@@ -1594,7 +1619,7 @@ export class Game {
     const lineH = 15;
     const baseBoxH = 54;
     const boxH = baseBoxH + Math.max(0, msgLines.length - 1) * lineH;
-    const bx = isCompactMobile ? (w - boxW) / 2 + slideX : 16 + slideX;
+    const bx = (w - boxW) / 2 + slideX;
     const by = h - boxH - 70;
 
     // Background
@@ -2024,6 +2049,59 @@ export class Game {
     this.startArenaRound();
   }
 
+  startMeltdown() {
+    this.mode = "meltdown";
+    this.player.reset();
+    this.applyLoadoutBonuses();
+    this.ariaEnabled = true;
+    this.ariaTriggered = {};
+
+    // Generate the meltdown corridor
+    const mMap = this.meltdown.start();
+    this.map = mMap;
+
+    // Place player at start
+    this.player.x = mMap.playerStart.x;
+    this.player.y = mMap.playerStart.y;
+    this.player.angle = mMap.playerStart.dir;
+    this.player.alive = true;
+
+    // Lock player rotation — they always face forward (north / -PI/2)
+    this.meltdownLockAngle = true;
+
+    // Spawn entities
+    this.entities = [];
+    this.projectiles = [];
+    this._chronoBombs = [];
+    const diff = this.getDifficultyMultipliers();
+
+    for (const es of mMap.enemySpawns) {
+      const et = ENEMY_TYPES[es.type] || ENEMY_TYPES.drone;
+      const e = new Enemy(es.x, es.y, es.type);
+      e.health = et.health * diff.healthMul;
+      e.maxHealth = e.health;
+      e.speed = et.speed * diff.speedMul;
+      e.damage = (et.damage || 10) * diff.damageMul;
+      e.aiType = et.aiType || "patrol";
+      e.baseColor = et.baseColor || "#ff0000";
+      e.darkColor = et.darkColor || "#880000";
+      this.entities.push(e);
+    }
+
+    // Spawn pickups
+    for (const pk of mMap.pickupSpawns) {
+      const p = new Pickup(pk.x, pk.y, pk.type);
+      this.entities.push(p);
+    }
+
+    this.totalEnemies = mMap.enemySpawns.length;
+    this.killedEnemies = 0;
+    this.roundStartTime = performance.now();
+
+    this.state = GameState.PLAYING;
+    this.lockPointer();
+  }
+
   startArenaRound() {
     // TODO: Refactor as we don't properly clean the Arena between rounds, we just reset the player and spawn new enemies on top. Deep cloning will cause performance issues on later levels. Clear entities properly after levels
     // Rotate maps each round
@@ -2439,7 +2517,11 @@ export class Game {
         if (this.tutorialDashed) this.advanceTutorialStep();
         break;
 
-      case 6: // Chrono Shift — reset flag so pre-step usage doesn't skip
+      case 6: // Temporal Anomaly — dramatic auto-advance
+        if (elapsed > 4) this.advanceTutorialStep();
+        break;
+
+      case 7: // Chrono Shift — reset flag so pre-step usage doesn't skip
         if (elapsed < 0.05) {
           this.tutorialChronoUsed = false;
           break;
@@ -2447,11 +2529,11 @@ export class Game {
         if (this.tutorialChronoUsed) this.advanceTutorialStep();
         break;
 
-      case 7: // Pick up weapon crate
+      case 8: // Pick up weapon crate
         if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
         break;
 
-      case 8: // Swap weapons
+      case 9: // Swap weapons
         if (elapsed < 0.05) {
           this.tutorialWeaponSwapped = false;
           break;
@@ -2459,17 +2541,17 @@ export class Game {
         if (this.tutorialWeaponSwapped) this.advanceTutorialStep();
         break;
 
-      case 9: // Open a door with E
+      case 10: // Open a door with E
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 10: // Pick up items (health & ammo behind the door)
+      case 11: // Pick up items (health & ammo behind the door)
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 11: // Combat
+      case 12: // Combat
         if (!this.tutorialEnemySpawned) {
-          const enemy = new Enemy(12.5, 12.5, "drone");
+          const enemy = new Enemy(12.5, 20.5, "drone");
           enemy.health = 15;
           enemy.maxHealth = 15;
           enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
@@ -2481,7 +2563,7 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 12: // Training complete → show completion menu
+      case 13: // Training complete → show completion menu
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2494,7 +2576,7 @@ export class Game {
         }
         break;
 
-      case 13: {
+      case 14: {
         // Sandbox — spawn training dummies, let player practice
         if (!this.tutorialSandboxInit) {
           this.tutorialSandboxInit = true;
@@ -2519,9 +2601,9 @@ export class Game {
     );
     // Spawn 3 dummies at fixed positions
     const dummyPositions = [
-      { x: 8.5, y: 8.5 },
-      { x: 12.5, y: 10.5 },
-      { x: 5.5, y: 12.5 },
+      { x: 8.5, y: 19.5 },
+      { x: 15.5, y: 20.5 },
+      { x: 12.5, y: 22.5 },
     ];
     for (const pos of dummyPositions) {
       const dummy = new Enemy(pos.x, pos.y, "drone");
@@ -2604,93 +2686,98 @@ export class Game {
 
     const steps = [
       {
-        title: "ARRIVING AT CHRONOS STATION...",
-        hint: "Armor calibration in progress...",
+        title: "REPORTING FOR DUTY — CHRONOS STATION",
+        hint: 'ARIA: "Welcome, Agent. This is your first day. Suit handoff in progress... stand by."',
         color: "#00ffcc",
       },
       {
-        title: "SERVO CALIBRATION — VISUAL TRACKING",
+        title: "HELMET CALIBRATION — HEAD TRACKING",
         hint: isMobile
-          ? "Drag the right side of the screen to look around"
-          : "Move your mouse to look around — the armor tracks your head movement",
+          ? 'ARIA: "Visual sensors initialising. Move your head to calibrate the targeting array."'
+          : 'ARIA: "Visual sensors initialising. Move your mouse to calibrate the targeting array."',
         color: "#00ccff",
       },
       {
-        title: "LOCOMOTION SYNC",
+        title: "LOCOMOTION SYNC — MOVEMENT SERVOS",
         hint: isMobile
-          ? "Use the joystick on the left to move"
-          : "W A S D  to move — the armor amplifies each step precisely",
+          ? 'ARIA: "Leg servos online. Take a few steps — I need to map your gait."'
+          : 'ARIA: "Leg servos online. Use W A S D — I need to map your gait before we proceed."',
         color: "#00ccff",
       },
       {
-        title: "WEAPONS INTEGRATION",
+        title: "WEAPONS INTEGRATION — TARGETING HOT",
         hint: isMobile
-          ? "Tap the FIRE button to shoot — the rifle syncs to your HUD"
-          : "Click to fire — the rifle syncs to your armor's targeting HUD",
+          ? 'ARIA: "Rifle sync complete. Tap FIRE to confirm your targeting solution."'
+          : 'ARIA: "Rifle sync complete. CLICK to confirm your targeting solution. Blank rounds only — for now."',
         color: "#ff8844",
       },
       {
-        title: "SPRINT BURST CALIBRATION",
+        title: "SPRINT BURST — SERVO AMPLIFICATION",
         hint: isMobile
-          ? "Tap RUN/WALK to toggle sprint — the servos amplify your speed"
-          : "Hold  SHIFT  to sprint — the servos let you move faster and longer",
+          ? 'ARIA: "Your suit can exceed standard movement limits. Tap RUN to engage burst mode."'
+          : 'ARIA: "Your suit can exceed standard movement limits. Hold SHIFT to engage burst mode."',
         color: "#ffcc00",
       },
       {
-        title: "EVASIVE DASH PROTOCOL",
+        title: "EVASIVE DASH — EMERGENCY PROTOCOL",
         hint: isMobile
-          ? "Tap the DASH button to dash forward"
-          : "Double-tap a movement key to dash — each step must be precise",
+          ? 'ARIA: "In critical situations, the suit can phase-dash. Tap DASH to initiate."'
+          : 'ARIA: "In critical situations, the suit can phase-dash. Double-tap a direction key to initiate."',
         color: "#ff44ff",
       },
       {
-        title: "CHRONO SHIFT — TIME CONTROL",
-        hint: isMobile
-          ? "Hold the SLOW button to bend time — release to resume"
-          : "Press  Q  to slow time — the Paradox Lord won't see you coming",
-        color: "#8844ff",
-      },
-      {
-        title: "WEAPON ACQUISITION",
-        hint: isMobile
-          ? "Walk over the weapon crate to equip the Temporal Shotgun"
-          : "Walk over the weapon crate — new weapons are added to your loadout",
-        color: "#ff6600",
-      },
-      {
-        title: "WEAPON SYSTEMS — SWITCH LOADOUT",
-        hint: isMobile
-          ? "Tap the WEAPON button or swipe right to switch weapons"
-          : "Press  1  or  2  (or scroll wheel) to switch weapons",
-        color: "#ffcc00",
-      },
-      {
-        title: "OPEN THE ARMORY DOOR",
-        hint: isMobile
-          ? "Face the door and tap USE to interact"
-          : "Face the door and press  E  to interact",
-        color: "#ff8844",
-      },
-      {
-        title: "GRAB SUPPLIES",
-        hint: "Walk over health packs & ammo — the armor carries more than standard kit",
-        color: "#44ff88",
-      },
-      {
-        title: "HOSTILE DETECTED!",
-        hint: "Engage the threat — take it down!",
+        title: "⚠ TEMPORAL ANOMALY DETECTED ⚠",
+        hint: 'ARIA: "That\'s not on the schedule. Something hit the Chronos Engine. This calibration just became real."',
         color: "#ff2244",
       },
       {
-        title: "TRAINING COMPLETE",
-        hint: "Alpha program passed. You're the last one standing.",
+        title: "CHRONO SHIFT — TEMPORAL CONTROL",
+        hint: isMobile
+          ? 'ARIA: "You have access to a time-dilation module. Use it. Hold SLOW to bend time around you."'
+          : 'ARIA: "You have access to a time-dilation module. Use it. Press Q to slow time — enemies won\'t see it coming."',
+        color: "#8844ff",
+      },
+      {
+        title: "WEAPON ACQUISITION — EQUIP FOUND GEAR",
+        hint: isMobile
+          ? 'ARIA: "There\'s a weapon crate ahead. Walk over it — the suit auto-integrates on contact."'
+          : 'ARIA: "There\'s a weapon crate ahead. Walk over it — the suit auto-integrates on contact."',
+        color: "#ff6600",
+      },
+      {
+        title: "LOADOUT SWITCH — WEAPON MANAGEMENT",
+        hint: isMobile
+          ? 'ARIA: "You\'re carrying two weapons. Swap between them — know your options before the fight."'
+          : 'ARIA: "You\'re carrying two weapons. Press 1 or 2 (or scroll wheel) — know your options before the fight."',
+        color: "#ffcc00",
+      },
+      {
+        title: "BREACH — OPEN THE SECURE DOOR",
+        hint: isMobile
+          ? 'ARIA: "The door ahead is magnetically sealed. Face it and tap USE to override."'
+          : 'ARIA: "The door ahead is magnetically sealed. Face it and press E to override the lock."',
+        color: "#ff8844",
+      },
+      {
+        title: "FIELD RESUPPLY — GRAB WHAT YOU CAN",
+        hint: 'ARIA: "Health packs and ammo behind the door. Take everything — the station is in lockdown."',
+        color: "#44ff88",
+      },
+      {
+        title: "HOSTILE CONTACT — STATION BREACH",
+        hint: 'ARIA: "One of Voss\'s drones. Put it down. This is no longer a drill."',
+        color: "#ff2244",
+      },
+      {
+        title: "CALIBRATION COMPLETE — YOU'RE ONLINE",
+        hint: "ARIA: \"Suit fully integrated. You're the only one who made it to this station. Don't waste it.\"",
         color: "#00ffcc",
       },
       {
-        title: "TRAINING GROUND",
+        title: "TRAINING GROUND — FREE PRACTICE",
         hint: isMobile
-          ? "Free practice — tap PAUSE to quit or start the campaign"
-          : "Free practice — Q to quit · C to start the campaign",
+          ? 'ARIA: "Sandbox mode. Practice until you\'re ready — tap PAUSE to quit or start the campaign."'
+          : 'ARIA: "Sandbox mode. Practice until you\'re ready — Q to quit · C to start the campaign."',
         color: "#00ffcc",
       },
     ];
@@ -2743,8 +2830,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 12) {
-      ctx.fillText(`${this.tutorialStep}/11`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 13) {
+      ctx.fillText(`${this.tutorialStep}/12`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2759,7 +2846,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 13) {
+    if (this.tutorialStep === 14) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -4172,11 +4259,17 @@ export class Game {
       this.loadCampaignLevel(this.campaignLevel); // triggers VICTORY via bounds check
       return;
     }
-    // Keep player stats but heal a bit
-    this.player.health = Math.min(
-      this.player.health + 30,
-      this.player.maxHealth,
-    );
+    // Keep player stats — heal amount depends on difficulty
+    const diffHeal = { easy: 999, normal: 30, hard: 10, nightmare: 0 };
+    const healAmt = diffHeal[this.settings.difficulty] ?? 30;
+    if (healAmt >= 999) {
+      this.player.health = this.player.maxHealth;
+    } else {
+      this.player.health = Math.min(
+        this.player.health + healAmt,
+        this.player.maxHealth,
+      );
+    }
     this.player.ammo = Math.min(this.player.ammo + 20, 999);
 
     // Act-aware level briefing cutscenes
@@ -4542,14 +4635,16 @@ export class Game {
         });
 
         if (this.campaignAct === 1) {
-          // Act 1 complete — false victory subversion, then end game for now
+          // Act 1 complete — false victory subversion, then Act 2 begins
           this.audio.stopMusic();
           this.startCutscene("false_victory", () => {
-            this.startCutscene("coming_soon", () => {
-              this.state = GameState.TITLE;
-              this.mode = null;
-              this.clearCampaignSave();
-              this.unlockPointer();
+            this.campaignAct = 2;
+            this.campaignLevel = 0;
+            this.player.health = this.player.maxHealth;
+            this.player.ammo = Math.min(this.player.ammo + 50, 999);
+            this.startCutscene("act2_intro", () => {
+              this.loadCampaignLevel(0);
+              this.saveCampaign();
             });
           });
         } else if (this.campaignAct === 2) {
@@ -4883,6 +4978,88 @@ export class Game {
     // Player movement
     const _tPlr0 = performance.now();
     this.updatePlayer(dt);
+
+    // ── Meltdown auto-forward ──
+    if (this.mode === "meltdown" && this.meltdown.alive) {
+      // Allow limited horizontal look: ±60° from forward (+Y / PI/2)
+      const fwd = Math.PI / 2;
+      const maxTurn = Math.PI / 3;
+      let a = this.player.angle;
+      // Normalize angle to [fwd - PI, fwd + PI]
+      while (a - fwd > Math.PI) a -= Math.PI * 2;
+      while (a - fwd < -Math.PI) a += Math.PI * 2;
+      if (a > fwd + maxTurn) a = fwd + maxTurn;
+      if (a < fwd - maxTurn) a = fwd - maxTurn;
+      this.player.angle = a;
+
+      const mResult = this.meltdown.update(dt, this.player.x, this.player.y);
+
+      // Apply auto-forward movement (+Y direction) with collision
+      const margin = 0.2;
+      const newY = this.player.y + mResult.moveY;
+      if (
+        this.isPassable(Math.floor(this.player.x), Math.floor(newY + margin))
+      ) {
+        this.player.y = newY;
+      } else {
+        // Can't move forward — take damage from impact
+        this.player.health -= 5 * dt;
+      }
+
+      // Extend map when approaching the end
+      for (const ev of mResult.events) {
+        if (ev.type === "extend") {
+          const { enemySpawns, pickupSpawns } = this.meltdown.extend(25);
+          const diff = this.getDifficultyMultipliers();
+          for (const es of enemySpawns) {
+            const et = ENEMY_TYPES[es.type] || ENEMY_TYPES.drone;
+            const e = new Enemy(es.x, es.y, es.type);
+            e.health = et.health * diff.healthMul;
+            e.maxHealth = e.health;
+            e.speed = et.speed * diff.speedMul;
+            e.damage = (et.damage || 10) * diff.damageMul;
+            e.aiType = et.aiType || "patrol";
+            e.baseColor = et.baseColor || "#ff0000";
+            e.darkColor = et.darkColor || "#880000";
+            this.entities.push(e);
+          }
+          for (const pk of pickupSpawns) {
+            this.entities.push(new Pickup(pk.x, pk.y, pk.type));
+          }
+          this.map.height = this.meltdown.map.height;
+        }
+      }
+
+      // Despawn entities far behind the player to avoid accumulation
+      const despawnY = this.player.y - 40;
+      this.entities = this.entities.filter(
+        (e) => e.y > despawnY || e.y > this.player.y,
+      );
+
+      // Hazard damage
+      if (mResult.hazardDmg > 0) {
+        this.player.health -= mResult.hazardDmg;
+        if (this.screenShake < 2) this.screenShake = 2;
+      }
+
+      // ARIA messages
+      if (mResult.ariaMsg) {
+        this._meltdownAriaText = mResult.ariaMsg;
+        this._meltdownAriaTimer = 4;
+      }
+      if (this._meltdownAriaTimer > 0) {
+        this._meltdownAriaTimer -= dt;
+        if (this._meltdownAriaTimer <= 0) this._meltdownAriaText = null;
+      }
+
+      // Death check
+      if (this.player.health <= 0) {
+        this.player.health = 0;
+        this.player.alive = false;
+        this.meltdown.onDeath();
+        this.deathTimer = 1.5;
+      }
+    }
 
     // Firing
     if (this.player.isFiring) {
@@ -5523,8 +5700,8 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
-      // In tutorial, block pickups until step 9 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 10) {
+      // In tutorial, block pickups until step 11 ("Grab Supplies")
+      if (this.mode === "tutorial" && this.tutorialStep < 11) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -5537,7 +5714,7 @@ export class Game {
           e.active = false;
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep >= 10)
+          if (this.mode === "tutorial" && this.tutorialStep >= 11)
             this.tutorialPickedUp = true;
           if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
         }
@@ -5545,7 +5722,7 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep >= 10)
+        if (this.mode === "tutorial" && this.tutorialStep >= 11)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
@@ -6517,6 +6694,89 @@ export class Game {
         ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 45, 24);
       }
 
+      // ── Meltdown HUD ──
+      if (this.mode === "meltdown") {
+        const mHud = this.meltdown.getHUD();
+        const heatPct = mHud.heat / 100;
+
+        // Distance & Score (top-left)
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(10, 10, 140, 55);
+        ctx.strokeStyle = `rgba(255,${Math.floor(170 - heatPct * 170)},0,0.5)`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(10, 10, 140, 55);
+
+        ctx.font = "bold 10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffaa00";
+        ctx.fillText("DISTANCE", 80, 22);
+        ctx.font = "bold 22px monospace";
+        ctx.fillText(`${mHud.distance}m`, 80, 44);
+        ctx.font = "9px monospace";
+        ctx.fillStyle = "rgba(200,200,200,0.6)";
+        ctx.fillText(`SCORE: ${mHud.score}`, 80, 58);
+
+        // Heat meter (top-right)
+        const heatW = 120;
+        const heatH = 16;
+        const heatX = w - heatW - 15;
+        const heatY = 15;
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(heatX - 5, heatY - 5, heatW + 10, heatH + 24);
+        ctx.strokeStyle = "rgba(255,68,0,0.3)";
+        ctx.strokeRect(heatX - 5, heatY - 5, heatW + 10, heatH + 24);
+
+        // Heat bar background
+        ctx.fillStyle = "rgba(60,20,0,0.6)";
+        ctx.fillRect(heatX, heatY, heatW, heatH);
+
+        // Heat bar fill
+        const heatColor =
+          heatPct < 0.5
+            ? `rgb(255, ${Math.floor(200 - heatPct * 300)}, 0)`
+            : `rgb(255, ${Math.floor(100 - (heatPct - 0.5) * 200)}, 0)`;
+        ctx.fillStyle = heatColor;
+        ctx.fillRect(heatX, heatY, heatW * heatPct, heatH);
+
+        // Heat label
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "center";
+        ctx.fillStyle = heatPct > 0.7 ? "#ff4400" : "#ffaa66";
+        ctx.fillText(
+          `REACTOR: ${mHud.heat}%`,
+          heatX + heatW / 2,
+          heatY + heatH + 12,
+        );
+
+        // Speed indicator
+        ctx.font = "8px monospace";
+        ctx.fillStyle = "rgba(150,200,255,0.5)";
+        ctx.textAlign = "right";
+        ctx.fillText(`${mHud.speed} m/s`, w - 15, heatY + heatH + 28);
+
+        // Heat overlay on world
+        const overlay = this.meltdown.getHeatOverlay();
+        if (overlay) {
+          ctx.fillStyle = overlay;
+          ctx.fillRect(0, 0, w, h - barH);
+        }
+
+        // ARIA text (center screen)
+        if (this._meltdownAriaText) {
+          const ariaAlpha = Math.min(1, this._meltdownAriaTimer / 0.5);
+          ctx.save();
+          ctx.globalAlpha = ariaAlpha;
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          const tw = ctx.measureText(this._meltdownAriaText).width + 40;
+          ctx.fillRect(w / 2 - tw / 2, h * 0.2 - 15, tw, 30);
+          ctx.font = "bold 13px monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#00ccff";
+          ctx.fillText(this._meltdownAriaText, w / 2, h * 0.2 + 3);
+          ctx.restore();
+        }
+      }
+
       ctx.textAlign = "left";
 
       // Stage cleared notification
@@ -7065,6 +7325,14 @@ export class Game {
       ctx.fillText("ROUND", locCx, topY + 4);
       ctx.font = "bold 44px monospace";
       ctx.fillText(`${this.arenaRound}`, locCx, midY + 12);
+    } else if (this.mode === "meltdown") {
+      const mHud = this.meltdown.getHUD();
+      ctx.fillStyle = "#ffaa00";
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("REACTOR RUN", locCx, topY + 4);
+      ctx.font = "bold 28px monospace";
+      ctx.fillText(`${mHud.distance}m`, locCx, midY + 8);
     } else if (this.mode === "campaign") {
       const levelName = this.map.name || `Level ${this.campaignLevel + 1}`;
       // Truncate long level names to fit - Wrap or display differently?
@@ -8546,56 +8814,122 @@ export class Game {
   }
 
   renderSettingsScreen(ctx, w, h) {
-    const compactSettings = this.isTouchDevice && isCompactPhone(h);
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    const compact = this.isTouchDevice && isCompactPhone(h);
+    ctx.fillStyle = "rgba(0,0,0,0.88)";
     ctx.fillRect(0, 0, w, h);
+
+    // ── Layout constants ─────────────────────────────────────────────
+    const headerH = compact ? 36 : 52;
+    const sideW = compact ? 90 : 160;
+    const panelX = sideW + 1;
+    const panelW = w - panelX - 12;
+    const contentTop = headerH + 8;
+    const barW = Math.min(panelW * 0.55, 240);
+    const barH = 6;
+
+    // ── Header ───────────────────────────────────────────────────────
     ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${compactSettings ? 20 : 30}px monospace`;
+    ctx.font = `bold ${compact ? 18 : 28}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("SETTINGS", w / 2, compactSettings ? 24 : 40);
+    ctx.fillText("SETTINGS", w / 2, compact ? 24 : 38);
+    ctx.textAlign = "left";
 
-    // Derive visible settings from registry (same filter as input handler)
-    const visibleDefs = getVisibleSettings(this.isTouchDevice);
-    const items = visibleDefs.map((def) =>
-      settingDisplayItem(def, this.settings),
-    );
-    const itemHeights = visibleDefs.map((def) =>
-      compactSettings ? def.height.compact : def.height.normal,
-    );
+    // Divider below header
+    ctx.strokeStyle = "rgba(0,255,200,0.15)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, headerH);
+    ctx.lineTo(w, headerH);
+    ctx.stroke();
 
-    const layout = settingsLayout(
-      w,
-      h,
-      this.settingsSelection,
+    // Sidebar background
+    ctx.fillStyle = "rgba(0,10,24,0.7)";
+    ctx.fillRect(0, headerH, sideW, h - headerH);
+
+    // Sidebar border (right edge)
+    ctx.strokeStyle = "rgba(0,160,120,0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sideW, headerH);
+    ctx.lineTo(sideW, h);
+    ctx.stroke();
+
+    // ── Category sidebar ─────────────────────────────────────────────
+    const cats = getVisibleCategories(this.isTouchDevice);
+    const catItemH = compact ? 28 : 38;
+    const catColors = {
+      Gameplay: "#00ffcc",
+      Display: "#00ccff",
+      Audio: "#00ff88",
+      Controls: "#ffcc00",
+      Accessibility: "#aaaacc",
+      HUD: "#44ffaa",
+      Mobile: "#ff88cc",
+    };
+    for (let ci = 0; ci < cats.length; ci++) {
+      const cat = cats[ci];
+      const isActive = cat === this.settingsCategory;
+      const cy = contentTop + ci * catItemH;
+
+      if (isActive) {
+        // Active background: slightly brighter
+        ctx.fillStyle = "rgba(0,220,170,0.15)";
+        ctx.fillRect(0, cy - 2, sideW, catItemH);
+        // Active left accent bar
+        ctx.fillStyle = catColors[cat] || "#00ffcc";
+        ctx.fillRect(0, cy - 2, 3, catItemH);
+      }
+
+      ctx.fillStyle = isActive ? catColors[cat] || "#00ffcc" : "#445566";
+      ctx.font = `bold ${compact ? 11 : 15}px monospace`;
+      ctx.textAlign = "center";
+      ctx.fillText(cat.toUpperCase(), sideW / 2, cy + (compact ? 16 : 22));
+    }
+    ctx.textAlign = "left";
+
+    // ── Right panel — settings for active category ───────────────────
+    const defs = getSettingsForCategory(
       this.isTouchDevice,
+      this.settingsCategory,
     );
-    const { panelX, panelW, barW, barH } = layout;
-    let startY = layout.startY;
+    const items = defs.map((def) => settingDisplayItem(def, this.settings));
 
+    let startY = contentTop;
     for (let i = 0; i < items.length; i++) {
-      const def = visibleDefs[i];
+      const def = defs[i];
       const item = items[i];
       const selected = this.settingsSelection === i;
-      const itemH = itemHeights[i];
+      const itemH = compact ? def.height.compact : def.height.normal;
       const y = startY;
+      const labelSize = compact ? 12 : 16;
 
       // Selection highlight
       if (selected) {
-        ctx.fillStyle = "rgba(0,200,255,0.12)";
-        ctx.fillRect(panelX, y - 4, panelW, itemH);
-        ctx.strokeStyle = "rgba(0,200,255,0.25)";
-        ctx.strokeRect(panelX, y - 4, panelW, itemH);
+        ctx.fillStyle = "rgba(0,200,255,0.10)";
+        ctx.fillRect(panelX, y - 2, panelW, itemH);
+        ctx.strokeStyle = "rgba(0,200,255,0.22)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(panelX, y - 2, panelW, itemH);
+      }
+
+      // Row separator
+      if (i > 0) {
+        ctx.strokeStyle = "rgba(255,255,255,0.04)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(panelX + 8, y - 2);
+        ctx.lineTo(panelX + panelW - 8, y - 2);
+        ctx.stroke();
       }
 
       // Label
-      const labelSize = compactSettings ? 12 : 16;
       ctx.fillStyle = selected ? "#00ffcc" : "#8888aa";
       ctx.font = `bold ${labelSize}px monospace`;
       ctx.textAlign = "left";
       ctx.fillText(
         item.label,
-        panelX + (compactSettings ? 8 : 16),
-        y + (compactSettings ? 14 : 18),
+        panelX + (compact ? 8 : 14),
+        y + (compact ? 13 : 18),
       );
 
       // Value
@@ -8604,14 +8938,14 @@ export class Game {
       ctx.font = `bold ${labelSize}px monospace`;
       ctx.fillText(
         `< ${item.value} >`,
-        panelX + panelW - (compactSettings ? 8 : 16),
-        y + (compactSettings ? 14 : 18),
+        panelX + panelW - (compact ? 8 : 14),
+        y + (compact ? 13 : 18),
       );
 
-      // Sub-widgets — driven by registry metadata, not hardcoded indices
+      // Sub-widgets
       if (def.widget === "crosshairPreview") {
-        const prevX = w / 2;
-        const prevY = y + 46;
+        const prevX = panelX + panelW / 2;
+        const prevY = y + 44;
         ctx.fillStyle = "rgba(30,30,50,0.8)";
         ctx.fillRect(prevX - 40, prevY - 18, 80, 36);
         ctx.strokeStyle = "rgba(0,200,255,0.2)";
@@ -8623,31 +8957,35 @@ export class Game {
           ctx.font = "10px monospace";
           ctx.textAlign = "center";
           ctx.fillText("(none)", prevX, prevY + 4);
+          ctx.textAlign = "left";
         }
       } else if (def.type === "slider" && def.barColor) {
-        // Generic slider bar — percentage computed from min/max
-        const sliderY = y + 32;
+        const sliderY = y + (compact ? 20 : 28);
         const val = this.settings[def.key];
         const pct = (val - def.min) / (def.max - def.min);
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW, barH);
+        const sliderX = panelX + (compact ? 8 : 14);
+        const sliderW = Math.min(panelW - (compact ? 16 : 28), barW);
+        ctx.fillStyle = "rgba(255,255,255,0.07)";
+        ctx.fillRect(sliderX, sliderY, sliderW, barH);
         ctx.fillStyle = def.barColor(val);
-        ctx.fillRect(w / 2 - barW / 2, sliderY, barW * pct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(w / 2 - barW / 2, sliderY, barW, barH);
+        ctx.fillRect(sliderX, sliderY, sliderW * pct, barH);
+        ctx.strokeStyle = "rgba(0,200,255,0.18)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sliderX, sliderY, sliderW, barH);
       }
 
       startY += itemH;
     }
 
-    ctx.fillStyle = "#556677";
-    ctx.font = "12px monospace";
+    // ── Footer hint text ─────────────────────────────────────────────
+    ctx.fillStyle = "#334455";
+    ctx.font = `${compact ? 10 : 13}px monospace`;
     ctx.textAlign = "center";
     if (!this.isTouchDevice) {
       ctx.fillText(
-        "W/S to navigate, LEFT/RIGHT to change, ESC to go back",
+        "Q/E or TAB — switch category   W/S — navigate   ◄ ► — change   ESC — back",
         w / 2,
-        startY + 20,
+        h - (compact ? 6 : 10),
       );
     }
     ctx.textAlign = "left";
@@ -9291,6 +9629,41 @@ export class Game {
         w / 2,
         compact ? h * 0.78 : h / 2 + 100,
       );
+    }
+    if (this.mode === "meltdown") {
+      const mHud = this.meltdown.getHUD();
+      const mY = compact ? h * 0.7 : h / 2 + 80;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffaa00";
+      ctx.font = `bold ${compact ? 16 : 22}px monospace`;
+      ctx.fillText(`DISTANCE: ${mHud.distance}m`, w / 2, mY);
+      ctx.fillStyle = "#ff8866";
+      ctx.font = `bold ${compact ? 12 : 16}px monospace`;
+      ctx.fillText(`SCORE: ${mHud.score}`, w / 2, mY + 25);
+      ctx.fillStyle = "rgba(200,200,200,0.6)";
+      ctx.font = `${compact ? 10 : 12}px monospace`;
+      ctx.fillText(
+        `Time: ${mHud.time}s | Speed: ${mHud.speed} m/s`,
+        w / 2,
+        mY + 45,
+      );
+
+      // High scores
+      if (this.meltdown.highScores.length > 0) {
+        ctx.fillStyle = "#00ccff";
+        ctx.font = `bold ${compact ? 10 : 12}px monospace`;
+        ctx.fillText("── HIGH SCORES ──", w / 2, mY + 70);
+        ctx.fillStyle = "rgba(200,220,255,0.7)";
+        ctx.font = `${compact ? 9 : 11}px monospace`;
+        const top3 = this.meltdown.highScores.slice(0, 3);
+        top3.forEach((hs, i) => {
+          ctx.fillText(
+            `${i + 1}. ${hs.score} pts (${hs.distance}m)`,
+            w / 2,
+            mY + 88 + i * 16,
+          );
+        });
+      }
     }
     // Prompt with pulsing alpha
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;

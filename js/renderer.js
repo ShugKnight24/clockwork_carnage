@@ -3764,6 +3764,791 @@ export class Renderer {
       ctx.globalAlpha = alpha;
 
       // No legs - it floats/glitches
+    } else if (enemy.enemyType === "shieldCommander") {
+      // ── Shield Commander ───────────────────────────────────────
+      // Tactical riot commander — energy shield, command visor, armored pauldrons
+      const scW = bodyWidth * 0.85;
+      const scTop = centerY - halfH * 0.45;
+      const scBot = centerY + halfH * 0.45;
+      const scMid = (scTop + scBot) / 2;
+      const breathe = Math.sin(time * 0.003) * halfH * 0.01;
+
+      // ── Shield (front-facing energy barrier) ──
+      const shW = scW * 1.6;
+      const shH = (scBot - scTop) * 1.15;
+      const shX = screenX - shW * 0.5;
+      const shY = scTop - halfH * 0.08;
+      const shPulse = 0.5 + Math.sin(time * 0.005) * 0.2;
+
+      // Shield outer glow
+      ctx.fillStyle = "#4488dd";
+      ctx.globalAlpha = alpha * 0.12 * shPulse;
+      ctx.beginPath();
+      ctx.ellipse(screenX, scMid, shW * 0.65, shH * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Shield body (translucent energy wall)
+      ctx.fillStyle = "#4488dd";
+      ctx.globalAlpha = alpha * 0.25;
+      ctx.beginPath();
+      ctx.roundRect(shX, shY, shW, shH, scW * 0.15);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Shield grid lines
+      ctx.strokeStyle = "#66aaff";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = alpha * 0.35;
+      for (let sg = 0; sg < 4; sg++) {
+        const sgY = shY + (sg + 1) * (shH / 5);
+        ctx.beginPath();
+        ctx.moveTo(shX + scW * 0.1, sgY);
+        ctx.lineTo(shX + shW - scW * 0.1, sgY);
+        ctx.stroke();
+      }
+      for (let sg = 0; sg < 3; sg++) {
+        const sgX = shX + (sg + 1) * (shW / 4);
+        ctx.beginPath();
+        ctx.moveTo(sgX, shY + halfH * 0.06);
+        ctx.lineTo(sgX, shY + shH - halfH * 0.06);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = alpha;
+
+      // Shield edge highlight
+      ctx.strokeStyle = "#88ccff";
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha * 0.6 * shPulse;
+      ctx.beginPath();
+      ctx.roundRect(shX, shY, shW, shH, scW * 0.15);
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+
+      // ── Body (behind shield) ──
+      // Armored torso
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.roundRect(
+        screenX - scW,
+        scTop + breathe,
+        scW * 2,
+        scBot - scTop,
+        scW * 0.12,
+      );
+      ctx.fill();
+
+      // Inner armor panel
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.roundRect(
+        screenX - scW * 0.75,
+        scTop + halfH * 0.06 + breathe,
+        scW * 1.5,
+        (scBot - scTop) * 0.85,
+        scW * 0.08,
+      );
+      ctx.fill();
+
+      // Pauldrons (shoulder armor)
+      const pauldW = scW * 0.55;
+      const pauldH = halfH * 0.18;
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX - scW * 0.9,
+        scTop + halfH * 0.05 + breathe,
+        pauldW * 0.5,
+        pauldH * 0.5,
+        -0.2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX + scW * 0.9,
+        scTop + halfH * 0.05 + breathe,
+        pauldW * 0.5,
+        pauldH * 0.5,
+        0.2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Pauldron rivets
+      ctx.fillStyle = "#5599cc";
+      for (const sx of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(
+          screenX + sx * scW * 0.9,
+          scTop + halfH * 0.05 + breathe,
+          scW * 0.06,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      }
+
+      // Commander chevrons on chest
+      ctx.strokeStyle = "#ffcc00";
+      ctx.lineWidth = 1.5;
+      for (let ch = 0; ch < 3; ch++) {
+        const chY = scMid - halfH * 0.05 + ch * halfH * 0.05 + breathe;
+        ctx.beginPath();
+        ctx.moveTo(screenX - scW * 0.2, chY);
+        ctx.lineTo(screenX, chY - halfH * 0.025);
+        ctx.lineTo(screenX + scW * 0.2, chY);
+        ctx.stroke();
+      }
+
+      // ── Helmet / Visor ──
+      const headR = scW * 0.45;
+      const headY = scTop - headR * 0.4 + breathe;
+
+      // Helmet shell
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.arc(screenX, headY, headR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Visor (wide horizontal slit, glowing blue)
+      ctx.fillStyle = "#4488ff";
+      ctx.globalAlpha = alpha * (0.7 + Math.sin(time * 0.006) * 0.15);
+      const visorW = headR * 1.5;
+      const visorH = headR * 0.3;
+      ctx.beginPath();
+      ctx.roundRect(
+        screenX - visorW * 0.5,
+        headY - visorH * 0.3,
+        visorW,
+        visorH,
+        visorH * 0.4,
+      );
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Visor reflection line
+      ctx.fillStyle = "#aaddff";
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.fillRect(
+        screenX - visorW * 0.35,
+        headY - visorH * 0.15,
+        visorW * 0.7,
+        1,
+      );
+      ctx.globalAlpha = alpha;
+
+      // ── Legs ──
+      const legW = scW * 0.35;
+      const legH = halfH * 0.3;
+      ctx.fillStyle = darkColor;
+      ctx.fillRect(screenX - scW * 0.55, scBot + breathe, legW, legH);
+      ctx.fillRect(screenX + scW * 0.2, scBot + breathe, legW, legH);
+
+      // Knee guards
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(
+        screenX - scW * 0.55,
+        scBot + legH * 0.3 + breathe,
+        legW,
+        legH * 0.25,
+      );
+      ctx.fillRect(
+        screenX + scW * 0.2,
+        scBot + legH * 0.3 + breathe,
+        legW,
+        legH * 0.25,
+      );
+
+      // Boots
+      ctx.fillStyle = "#112233";
+      ctx.fillRect(
+        screenX - scW * 0.6,
+        scBot + legH * 0.85 + breathe,
+        legW * 1.2,
+        legH * 0.2,
+      );
+      ctx.fillRect(
+        screenX + scW * 0.15,
+        scBot + legH * 0.85 + breathe,
+        legW * 1.2,
+        legH * 0.2,
+      );
+    } else if (enemy.enemyType === "temporalSummoner") {
+      // ── Temporal Summoner ──────────────────────────────────────
+      // Robed rift mage — floating sigils, summoning portal, hood with glowing eyes
+      const tsW = bodyWidth * 0.8;
+      const tsTop = centerY - halfH * 0.5;
+      const tsBot = centerY + halfH * 0.55;
+      const hover = Math.sin(time * 0.003) * halfH * 0.025;
+
+      // ── Summoning portal (rotating beneath) ──
+      const portalRadius = tsW * 1.2;
+      ctx.strokeStyle = "#cc44ff";
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha * 0.25;
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        tsBot + halfH * 0.1,
+        portalRadius,
+        portalRadius * 0.25,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.globalAlpha = alpha * 0.1;
+      ctx.fillStyle = "#8800cc";
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        tsBot + halfH * 0.1,
+        portalRadius * 0.8,
+        portalRadius * 0.2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // ── Robe (flowing, tapered at top, wide at bottom) ──
+      // Outer robe
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.moveTo(screenX - tsW * 0.5, tsTop + halfH * 0.15 + hover);
+      ctx.lineTo(screenX + tsW * 0.5, tsTop + halfH * 0.15 + hover);
+      ctx.lineTo(screenX + tsW * 1.1, tsBot + hover);
+      ctx.lineTo(screenX - tsW * 1.1, tsBot + hover);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner robe trim
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.moveTo(screenX - tsW * 0.35, tsTop + halfH * 0.2 + hover);
+      ctx.lineTo(screenX + tsW * 0.35, tsTop + halfH * 0.2 + hover);
+      ctx.lineTo(screenX + tsW * 0.8, tsBot - halfH * 0.03 + hover);
+      ctx.lineTo(screenX - tsW * 0.8, tsBot - halfH * 0.03 + hover);
+      ctx.closePath();
+      ctx.fill();
+
+      // Rune patterns on robe
+      ctx.strokeStyle = "#dd66ff";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = alpha * 0.3;
+      for (let r = 0; r < 5; r++) {
+        const rY = tsTop + halfH * 0.3 + r * halfH * 0.1 + hover;
+        const rW = tsW * (0.35 + r * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(screenX - rW, rY);
+        ctx.bezierCurveTo(
+          screenX - rW * 0.3,
+          rY - halfH * 0.02,
+          screenX + rW * 0.3,
+          rY + halfH * 0.02,
+          screenX + rW,
+          rY,
+        );
+        ctx.stroke();
+      }
+      ctx.globalAlpha = alpha;
+
+      // Center seam with rune glow
+      ctx.fillStyle = "#cc44ff";
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.fillRect(
+        screenX - 1,
+        tsTop + halfH * 0.2 + hover,
+        2,
+        (tsBot - tsTop) * 0.78,
+      );
+      ctx.globalAlpha = alpha;
+
+      // ── Hood ──
+      const hoodW = tsW * 0.7;
+      const hoodH = halfH * 0.35;
+      const hoodY = tsTop - hoodH * 0.3 + hover;
+
+      // Hood shell
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.moveTo(screenX, hoodY - hoodH * 0.2);
+      ctx.bezierCurveTo(
+        screenX - hoodW,
+        hoodY,
+        screenX - hoodW * 0.9,
+        hoodY + hoodH,
+        screenX,
+        hoodY + hoodH * 0.7,
+      );
+      ctx.bezierCurveTo(
+        screenX + hoodW * 0.9,
+        hoodY + hoodH,
+        screenX + hoodW,
+        hoodY,
+        screenX,
+        hoodY - hoodH * 0.2,
+      );
+      ctx.fill();
+
+      // Hood interior darkness
+      ctx.fillStyle = "#110022";
+      ctx.beginPath();
+      ctx.ellipse(
+        screenX,
+        hoodY + hoodH * 0.35,
+        hoodW * 0.5,
+        hoodH * 0.35,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Glowing eyes within hood
+      const eyeGlow = 0.6 + Math.sin(time * 0.008) * 0.35;
+      ctx.fillStyle = "#cc44ff";
+      ctx.globalAlpha = alpha * eyeGlow;
+      const eyeS = hoodW * 0.14;
+      ctx.beginPath();
+      ctx.arc(
+        screenX - hoodW * 0.22,
+        hoodY + hoodH * 0.3,
+        eyeS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        screenX + hoodW * 0.22,
+        hoodY + hoodH * 0.3,
+        eyeS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // ── Floating sigils (orbiting glyphs) ──
+      ctx.strokeStyle = "#dd66ff";
+      ctx.lineWidth = 1.5;
+      for (let s = 0; s < 4; s++) {
+        const sAngle = time * 0.003 + s * (Math.PI / 2);
+        const sRadius = tsW * 1.4;
+        const sx = screenX + Math.cos(sAngle) * sRadius;
+        const sy = centerY + Math.sin(sAngle) * halfH * 0.25 + hover;
+        const sigSize = tsW * 0.12;
+
+        ctx.globalAlpha = alpha * (0.3 + Math.sin(time * 0.006 + s) * 0.2);
+        ctx.strokeStyle = "#dd66ff";
+        // Draw a small diamond glyph
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - sigSize);
+        ctx.lineTo(sx + sigSize, sy);
+        ctx.lineTo(sx, sy + sigSize);
+        ctx.lineTo(sx - sigSize, sy);
+        ctx.closePath();
+        ctx.stroke();
+        // Center dot
+        ctx.fillStyle = "#ee88ff";
+        ctx.beginPath();
+        ctx.arc(sx, sy, sigSize * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = alpha;
+
+      // ── Raised hands (casting pose) ──
+      const handY = tsTop + halfH * 0.25 + hover;
+      ctx.fillStyle = "#9933cc";
+      // Left hand
+      ctx.beginPath();
+      ctx.arc(screenX - tsW * 1.05, handY, tsW * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      // Right hand
+      ctx.beginPath();
+      ctx.arc(screenX + tsW * 1.05, handY, tsW * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Energy tendrils from hands
+      ctx.strokeStyle = "#cc44ff";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = alpha * 0.35;
+      for (const dir of [-1, 1]) {
+        const hx = screenX + dir * tsW * 1.05;
+        for (let t = 0; t < 3; t++) {
+          const tAngle = time * 0.005 + t * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(hx, handY);
+          ctx.lineTo(
+            hx + Math.cos(tAngle) * tsW * 0.5 * dir,
+            handY + Math.sin(tAngle) * halfH * 0.15,
+          );
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = alpha;
+
+      // No legs — the robe touches the ground / it floats
+    } else if (enemy.enemyType === "henchman") {
+      // ── Voss's Henchman ────────────────────────────────────────
+      // Fast flanker — lean build, tactical vest, dual energy blades, speed lines
+      const hmW = bodyWidth * 0.6;
+      const hmTop = centerY - halfH * 0.4;
+      const hmBot = centerY + halfH * 0.4;
+      const lean = Math.sin(time * 0.006 + enemy.x * 3) * hmW * 0.05;
+
+      // ── Speed lines (afterimage trail) ──
+      ctx.globalAlpha = alpha * 0.08;
+      ctx.fillStyle = "#ff6600";
+      for (let sl = 1; sl <= 3; sl++) {
+        const slOff = sl * hmW * 0.3;
+        ctx.fillRect(
+          screenX - hmW * 0.4 - slOff,
+          hmTop + halfH * 0.05,
+          hmW * 0.12,
+          hmBot - hmTop - halfH * 0.1,
+        );
+      }
+      ctx.globalAlpha = alpha;
+
+      // ── Torso (lean, angular) ──
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.moveTo(screenX - hmW * 0.7 + lean, hmTop);
+      ctx.lineTo(screenX + hmW * 0.7 + lean, hmTop);
+      ctx.lineTo(screenX + hmW * 0.55 + lean, hmBot);
+      ctx.lineTo(screenX - hmW * 0.55 + lean, hmBot);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tactical vest
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.moveTo(screenX - hmW * 0.5 + lean, hmTop + halfH * 0.04);
+      ctx.lineTo(screenX + hmW * 0.5 + lean, hmTop + halfH * 0.04);
+      ctx.lineTo(screenX + hmW * 0.4 + lean, hmBot - halfH * 0.06);
+      ctx.lineTo(screenX - hmW * 0.4 + lean, hmBot - halfH * 0.06);
+      ctx.closePath();
+      ctx.fill();
+
+      // Vest pouches
+      ctx.fillStyle = "#884422";
+      for (let p = 0; p < 3; p++) {
+        const px = screenX - hmW * 0.3 + p * hmW * 0.3 + lean;
+        const py = hmBot - halfH * 0.12;
+        ctx.fillRect(px - hmW * 0.08, py, hmW * 0.16, halfH * 0.04);
+      }
+
+      // ── Voss insignia (V) ──
+      ctx.strokeStyle = "#ff4400";
+      ctx.lineWidth = 1.5;
+      const insY = (hmTop + hmBot) / 2 - halfH * 0.02;
+      ctx.beginPath();
+      ctx.moveTo(screenX - hmW * 0.15 + lean, insY - halfH * 0.04);
+      ctx.lineTo(screenX + lean, insY + halfH * 0.04);
+      ctx.lineTo(screenX + hmW * 0.15 + lean, insY - halfH * 0.04);
+      ctx.stroke();
+
+      // ── Head (sleek helmet) ──
+      const headR2 = hmW * 0.4;
+      const headY2 = hmTop - headR2 * 0.6 + lean * 0.3;
+
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.arc(screenX + lean, headY2, headR2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Visor — narrow, orange
+      ctx.fillStyle = "#ff6600";
+      ctx.globalAlpha = alpha * 0.85;
+      const vis2W = headR2 * 1.4;
+      const vis2H = headR2 * 0.22;
+      ctx.fillRect(
+        screenX - vis2W * 0.5 + lean,
+        headY2 - vis2H * 0.5,
+        vis2W,
+        vis2H,
+      );
+      ctx.globalAlpha = alpha;
+
+      // ── Energy blades (one per side) ──
+      const bladeLen = halfH * 0.35;
+      const bladeW2 = hmW * 0.08;
+      const bladeFlicker = 0.7 + Math.sin(time * 0.01) * 0.3;
+
+      for (const dir of [-1, 1]) {
+        const bx = screenX + dir * hmW * 0.85 + lean;
+        const by = hmTop + halfH * 0.15;
+
+        // Blade glow
+        ctx.fillStyle = "#ff6600";
+        ctx.globalAlpha = alpha * 0.15 * bladeFlicker;
+        ctx.fillRect(bx - bladeW2 * 2, by - bladeLen, bladeW2 * 4, bladeLen);
+        ctx.globalAlpha = alpha;
+
+        // Blade core
+        ctx.fillStyle = "#ffaa44";
+        ctx.globalAlpha = alpha * bladeFlicker;
+        ctx.fillRect(bx - bladeW2 * 0.5, by - bladeLen, bladeW2, bladeLen);
+        ctx.globalAlpha = alpha;
+
+        // Blade tip
+        ctx.fillStyle = "#ffffff";
+        ctx.globalAlpha = alpha * 0.6 * bladeFlicker;
+        ctx.beginPath();
+        ctx.moveTo(bx, by - bladeLen - halfH * 0.04);
+        ctx.lineTo(bx - bladeW2, by - bladeLen);
+        ctx.lineTo(bx + bladeW2, by - bladeLen);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = alpha;
+
+        // Hilt
+        ctx.fillStyle = "#663300";
+        ctx.fillRect(bx - bladeW2 * 1.2, by, bladeW2 * 2.4, halfH * 0.04);
+      }
+
+      // ── Legs (athletic, dynamic pose) ──
+      const legH2 = halfH * 0.28;
+      ctx.fillStyle = darkColor;
+      // Staggered stance
+      ctx.fillRect(screenX - hmW * 0.45 + lean, hmBot, hmW * 0.28, legH2);
+      ctx.fillRect(
+        screenX + hmW * 0.15 + lean,
+        hmBot - halfH * 0.03,
+        hmW * 0.28,
+        legH2 + halfH * 0.03,
+      );
+
+      // Boot accents
+      ctx.fillStyle = "#442200";
+      ctx.fillRect(
+        screenX - hmW * 0.48 + lean,
+        hmBot + legH2 * 0.8,
+        hmW * 0.34,
+        legH2 * 0.25,
+      );
+      ctx.fillRect(
+        screenX + hmW * 0.12 + lean,
+        hmBot + legH2 * 0.77,
+        hmW * 0.34,
+        legH2 * 0.25,
+      );
+    } else if (enemy.enemyType === "chronoBomber") {
+      // ── Chrono-Bomber ──────────────────────────────────────────
+      // Heavy demolitions — bomb pack on back, glowing charges, hazard markings
+      const cbW = bodyWidth * 0.85;
+      const cbTop = centerY - halfH * 0.4;
+      const cbBot = centerY + halfH * 0.45;
+      const tick = Math.sin(time * 0.008);
+
+      // ── Hazard warning aura ──
+      ctx.fillStyle = "#ffaa00";
+      ctx.globalAlpha = alpha * 0.06 * (0.5 + tick * 0.5);
+      ctx.beginPath();
+      ctx.arc(screenX, centerY, cbW * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // ── Bomb pack (visible on back/shoulders) ──
+      const packW = cbW * 0.7;
+      const packH = (cbBot - cbTop) * 0.5;
+      const packY = cbTop + halfH * 0.05;
+
+      // Pack body
+      ctx.fillStyle = "#554422";
+      ctx.beginPath();
+      ctx.roundRect(screenX - packW * 0.5, packY, packW, packH, cbW * 0.06);
+      ctx.fill();
+
+      // Pack straps
+      ctx.fillStyle = "#443311";
+      ctx.fillRect(screenX - cbW * 0.55, packY, cbW * 0.08, packH * 1.2);
+      ctx.fillRect(screenX + cbW * 0.47, packY, cbW * 0.08, packH * 1.2);
+
+      // Bomb charges (3 glowing cylinders on pack)
+      for (let b = 0; b < 3; b++) {
+        const bx = screenX - packW * 0.25 + b * packW * 0.25;
+        const by = packY + packH * 0.15;
+        const bPulse = 0.5 + Math.sin(time * 0.01 + b * 1.5) * 0.5;
+
+        // Cylinder
+        ctx.fillStyle = "#887744";
+        ctx.beginPath();
+        ctx.roundRect(bx - cbW * 0.06, by, cbW * 0.12, packH * 0.6, 3);
+        ctx.fill();
+
+        // Glowing tip
+        ctx.fillStyle = "#ffaa00";
+        ctx.globalAlpha = alpha * bPulse;
+        ctx.beginPath();
+        ctx.arc(bx, by, cbW * 0.07, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha;
+      }
+
+      // ── Body (stocky, armored) ──
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.roundRect(screenX - cbW, cbTop, cbW * 2, cbBot - cbTop, cbW * 0.1);
+      ctx.fill();
+
+      // Inner armor
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.roundRect(
+        screenX - cbW * 0.75,
+        cbTop + halfH * 0.05,
+        cbW * 1.5,
+        (cbBot - cbTop) * 0.85,
+        cbW * 0.06,
+      );
+      ctx.fill();
+
+      // Hazard stripes on torso
+      ctx.fillStyle = "#ffaa00";
+      ctx.globalAlpha = alpha * 0.35;
+      for (let hz = 0; hz < 4; hz++) {
+        const hzY = cbTop + halfH * 0.1 + hz * halfH * 0.08;
+        const hzSkew = hz * cbW * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(screenX - cbW * 0.6 + hzSkew, hzY);
+        ctx.lineTo(screenX - cbW * 0.6 + hzSkew + cbW * 0.25, hzY);
+        ctx.lineTo(
+          screenX - cbW * 0.6 + hzSkew + cbW * 0.15,
+          hzY + halfH * 0.03,
+        );
+        ctx.lineTo(
+          screenX - cbW * 0.6 + hzSkew - cbW * 0.1,
+          hzY + halfH * 0.03,
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = alpha;
+
+      // Radioactive/hazard symbol on chest
+      ctx.strokeStyle = "#ffaa00";
+      ctx.lineWidth = 1.5;
+      const symY = (cbTop + cbBot) / 2;
+
+      // Trefoil (simplified)
+      for (let t = 0; t < 3; t++) {
+        const tAngle = t * ((Math.PI * 2) / 3) - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(
+          screenX + Math.cos(tAngle) * cbW * 0.12,
+          symY + Math.sin(tAngle) * cbW * 0.12,
+          cbW * 0.08,
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+      }
+      // Center dot
+      ctx.fillStyle = "#ffaa00";
+      ctx.beginPath();
+      ctx.arc(screenX, symY, cbW * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ── Head (heavy helmet with blast visor) ──
+      const headR3 = cbW * 0.45;
+      const headY3 = cbTop - headR3 * 0.35;
+
+      // Helmet
+      ctx.fillStyle = darkColor;
+      ctx.beginPath();
+      ctx.arc(screenX, headY3, headR3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Blast visor (gold-tinted)
+      ctx.fillStyle = "#ffcc44";
+      ctx.globalAlpha = alpha * 0.7;
+      const bVisW = headR3 * 1.5;
+      const bVisH = headR3 * 0.45;
+      ctx.beginPath();
+      ctx.roundRect(
+        screenX - bVisW * 0.5,
+        headY3 - bVisH * 0.3,
+        bVisW,
+        bVisH,
+        bVisH * 0.4,
+      );
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+
+      // Visor reflection
+      ctx.fillStyle = "#ffeebb";
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.fillRect(screenX - bVisW * 0.3, headY3 - bVisH * 0.1, bVisW * 0.6, 1);
+      ctx.globalAlpha = alpha;
+
+      // Chin guard
+      ctx.fillStyle = darkColor;
+      ctx.fillRect(
+        screenX - headR3 * 0.6,
+        headY3 + headR3 * 0.5,
+        headR3 * 1.2,
+        headR3 * 0.3,
+      );
+
+      // ── Timer display on wrist ──
+      const timerX = screenX + cbW * 0.9;
+      const timerY = cbTop + halfH * 0.25;
+      ctx.fillStyle = "#111100";
+      ctx.fillRect(timerX - cbW * 0.12, timerY, cbW * 0.24, halfH * 0.06);
+      // Blinking countdown
+      ctx.fillStyle = "#ff0000";
+      ctx.globalAlpha = alpha * (0.5 + tick * 0.5);
+      ctx.font = `${Math.max(6, cbW * 0.12)}px monospace`;
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "00:" + String(Math.floor((time * 0.01) % 60)).padStart(2, "0"),
+        timerX,
+        timerY + halfH * 0.05,
+      );
+      ctx.globalAlpha = alpha;
+
+      // ── Legs (heavy, planted) ──
+      const legH3 = halfH * 0.3;
+      ctx.fillStyle = darkColor;
+      ctx.fillRect(screenX - cbW * 0.6, cbBot, cbW * 0.4, legH3);
+      ctx.fillRect(screenX + cbW * 0.2, cbBot, cbW * 0.4, legH3);
+
+      // Armored shin guards
+      ctx.fillStyle = "#887744";
+      ctx.fillRect(
+        screenX - cbW * 0.55,
+        cbBot + legH3 * 0.3,
+        cbW * 0.3,
+        legH3 * 0.4,
+      );
+      ctx.fillRect(
+        screenX + cbW * 0.25,
+        cbBot + legH3 * 0.3,
+        cbW * 0.3,
+        legH3 * 0.4,
+      );
+
+      // Heavy boots
+      ctx.fillStyle = "#332200";
+      ctx.fillRect(
+        screenX - cbW * 0.65,
+        cbBot + legH3 * 0.85,
+        cbW * 0.5,
+        legH3 * 0.2,
+      );
+      ctx.fillRect(
+        screenX + cbW * 0.15,
+        cbBot + legH3 * 0.85,
+        cbW * 0.5,
+        legH3 * 0.2,
+      );
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
@@ -4089,58 +4874,113 @@ export class Renderer {
     if (fog <= 0) return;
     const size = Math.max(8, sprWidth * 0.5);
     const t = time * 0.003;
-    const pulse = 0.7 + Math.sin(t * 1.7) * 0.3;
+    const pulse = 0.7 + Math.sin(t * 1.4) * 0.3;
 
     ctx.save();
     ctx.translate(screenX, centerY);
 
-    // Outer radial glow
-    ctx.globalAlpha = fog * pulse * 0.25;
-    const grd = ctx.createRadialGradient(0, 0, size * 0.3, 0, 0, size * 2.2);
+    // ── Airlock door frame ──────────────────────────────────────────
+    const dW = size * 1.4; // door half-width
+    const dH = size * 2.0; // door half-height
+    const frameThick = Math.max(2, size * 0.12);
+
+    // Ambient glow behind door
+    ctx.globalAlpha = fog * pulse * 0.18;
+    const grd = ctx.createRadialGradient(0, 0, size * 0.2, 0, 0, size * 2.4);
     grd.addColorStop(0, "#00ffaa");
-    grd.addColorStop(0.5, "#00aa66");
     grd.addColorStop(1, "transparent");
     ctx.fillStyle = grd;
-    ctx.fillRect(-size * 2.2, -size * 2.2, size * 4.4, size * 4.4);
+    ctx.fillRect(-size * 2.4, -size * 2.4, size * 4.8, size * 4.8);
 
-    // Swirling ring
-    ctx.globalAlpha = fog * pulse * 0.6;
-    ctx.strokeStyle = "#00ff88";
-    ctx.lineWidth = Math.max(2, size * 0.15);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, size * 1.1, size * 1.6, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    // Door panel (dark interior)
+    ctx.globalAlpha = fog * 0.7;
+    ctx.fillStyle = "#0a1a12";
+    ctx.fillRect(-dW, -dH, dW * 2, dH * 2);
 
-    // Inner ring
-    ctx.globalAlpha = fog * pulse * 0.9;
-    ctx.strokeStyle = "#aaffdd";
-    ctx.lineWidth = Math.max(1, size * 0.08);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, size * 0.7, size * 1.1, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    // Scan-line shimmer inside door
+    ctx.globalAlpha = fog * 0.08;
+    ctx.fillStyle = "#00ff88";
+    const scanOff = (time * 0.04) % (dH * 2);
+    ctx.fillRect(-dW, -dH + scanOff, dW * 2, 2);
 
-    // Rotating energy arcs
-    for (let i = 0; i < 4; i++) {
-      const a = t * 2 + (i * Math.PI) / 2;
-      const rx = Math.cos(a) * size * 0.9;
-      const ry = Math.sin(a) * size * 1.3;
-      ctx.globalAlpha = fog * 0.6;
-      ctx.fillStyle = i % 2 === 0 ? "#00ffcc" : "#88ffdd";
+    // Outer frame
+    ctx.globalAlpha = fog * pulse * 0.85;
+    ctx.strokeStyle = "#00cc88";
+    ctx.lineWidth = frameThick;
+    ctx.strokeRect(-dW, -dH, dW * 2, dH * 2);
+
+    // Inner frame bevel
+    ctx.globalAlpha = fog * 0.4;
+    ctx.strokeStyle = "#005533";
+    ctx.lineWidth = frameThick * 0.5;
+    ctx.strokeRect(
+      -dW + frameThick,
+      -dH + frameThick,
+      (dW - frameThick) * 2,
+      (dH - frameThick) * 2,
+    );
+
+    // Hazard stripes — top bar
+    ctx.globalAlpha = fog * 0.55;
+    const stripeH = Math.max(3, size * 0.18);
+    const stripeCount = 6;
+    const stripeW = (dW * 2) / stripeCount;
+    for (let s = 0; s < stripeCount; s++) {
+      ctx.fillStyle = s % 2 === 0 ? "#ffcc00" : "#111111";
+      ctx.fillRect(-dW + s * stripeW, -dH, stripeW, stripeH);
+      ctx.fillRect(-dW + s * stripeW, dH - stripeH, stripeW, stripeH);
+    }
+
+    // Status indicator lights (left frame)
+    const lightR = Math.max(2, size * 0.1);
+    const lightSpacing = dH * 0.4;
+    const greenPulse = 0.8 + Math.sin(t * 2.2) * 0.2;
+    for (let li = 0; li < 3; li++) {
+      const ly = -dH * 0.35 + li * lightSpacing;
+      // Glow
+      ctx.globalAlpha = fog * greenPulse * 0.4;
+      ctx.fillStyle = "#00ff88";
       ctx.beginPath();
-      ctx.arc(rx, ry, Math.max(2, size * 0.12), 0, Math.PI * 2);
+      ctx.arc(-dW - lightR * 0.5, ly, lightR * 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Core
+      ctx.globalAlpha = fog * greenPulse;
+      ctx.fillStyle = "#00ff88";
+      ctx.beginPath();
+      ctx.arc(-dW - lightR * 0.5, ly, lightR, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Central bright core
-    ctx.globalAlpha = fog * pulse;
-    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.5);
-    core.addColorStop(0, "#ffffff");
-    core.addColorStop(0.3, "#aaffee");
-    core.addColorStop(1, "transparent");
-    ctx.fillStyle = core;
-    ctx.fillRect(-size * 0.5, -size * 0.5, size, size);
+    // Door centre seam (vertical split line)
+    ctx.globalAlpha = fog * pulse * 0.5;
+    ctx.strokeStyle = "#00ffaa";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -dH + stripeH);
+    ctx.lineTo(0, dH - stripeH);
+    ctx.stroke();
+
+    // Horizontal locking bolt indicator (recessed)
+    ctx.globalAlpha = fog * 0.3;
+    ctx.fillStyle = "#004422";
+    ctx.fillRect(-dW * 0.6, -size * 0.08, dW * 1.2, size * 0.16);
+    ctx.globalAlpha = fog * pulse * 0.7;
+    ctx.strokeStyle = "#00cc88";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-dW * 0.6, -size * 0.08, dW * 1.2, size * 0.16);
+
+    // "AIRLOCK" label above door
+    if (size > 14) {
+      const fontSize = Math.max(7, size * 0.22);
+      ctx.globalAlpha = fog * pulse * 0.75;
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = `bold ${fontSize}px monospace`;
+      ctx.textAlign = "center";
+      ctx.fillText("AIRLOCK", 0, -dH - fontSize * 0.3);
+    }
 
     ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
     ctx.restore();
   }
 

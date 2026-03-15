@@ -28,11 +28,23 @@ export const COMPACT_PHONE_HEIGHT = 420;
 //   --- shared ---
 //   onChange(game) – callback after value changes
 //   widget         – special sub-widget key ("crosshairPreview")
+/** Ordered list of setting categories shown in the sidebar */
+export const SETTING_CATEGORIES = [
+  "Gameplay",
+  "Display",
+  "Audio",
+  "Controls",
+  "Accessibility",
+  "HUD",
+  "Mobile",
+];
+
 export const SETTINGS_REGISTRY = [
   // ─── Gameplay ───
   {
     key: "difficulty",
     label: "Difficulty",
+    category: "Gameplay",
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
     colors: ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"],
@@ -46,6 +58,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "crosshair",
     label: "Crosshair",
+    category: "Gameplay",
     type: "enum",
     values: [
       "Red Dot",
@@ -67,6 +80,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "minimapSize",
     label: "Minimap Size",
+    category: "Display",
     type: "slider",
     min: 100,
     max: 300,
@@ -76,10 +90,28 @@ export const SETTINGS_REGISTRY = [
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
+  {
+    key: "visualStyle",
+    label: "Visual Style",
+    category: "Display",
+    type: "enum",
+    values: ["Clockwork", "Brutal"],
+    colors: ["#00ccff", "#ff4422"],
+    min: 0,
+    max: 1,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => {
+      if (g.renderer) g.renderer.applyVisualStyle(g.settings.visualStyle);
+    },
+  },
   // ─── Audio ───
   {
     key: "musicVolume",
     label: "Music Volume",
+    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -93,6 +125,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "sfxVolume",
     label: "SFX Volume",
+    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -107,6 +140,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "sensitivity",
     label: "Mouse Sensitivity",
+    category: "Controls",
     type: "slider",
     min: 0.5,
     max: 2.0,
@@ -120,6 +154,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fov",
     label: "FOV",
+    category: "Controls",
     type: "slider",
     min: 50,
     max: 120,
@@ -132,6 +167,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "viewMode",
     label: "View Mode",
+    category: "Controls",
     type: "enum",
     values: ["First Person", "Third Person"],
     colors: ["#00ccff", "#ff88cc"],
@@ -145,6 +181,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "invertX",
     label: "Invert X Axis",
+    category: "Controls",
     type: "toggle",
     onColor: "#ff8844",
     platform: "desktop",
@@ -154,6 +191,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fontScale",
     label: "Font Scale",
+    category: "Accessibility",
     type: "slider",
     min: 100,
     max: 150,
@@ -166,6 +204,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "colorblind",
     label: "Colorblind Mode",
+    category: "Accessibility",
     type: "enum",
     values: ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
     colors: ["#888888", "#ffcc00", "#ffcc00", "#ffcc00"],
@@ -176,26 +215,11 @@ export const SETTINGS_REGISTRY = [
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
-  {
-    key: "visualStyle",
-    label: "Visual Style",
-    type: "enum",
-    values: ["Clockwork", "Brutal"],
-    colors: ["#00ccff", "#ff4422"],
-    min: 0,
-    max: 1,
-    step: 1,
-    wrap: true,
-    platform: "all",
-    height: { compact: 30, normal: 44 },
-    onChange: (g) => {
-      if (g.renderer) g.renderer.applyVisualStyle(g.settings.visualStyle);
-    },
-  },
   // ─── HUD ───
   {
     key: "hudScale",
     label: "HUD Scale",
+    category: "HUD",
     type: "slider",
     min: 75,
     max: 125,
@@ -208,6 +232,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "staminaBarSize",
     label: "Stamina Bar Size",
+    category: "HUD",
     type: "slider",
     min: 75,
     max: 150,
@@ -220,6 +245,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showPortrait",
     label: "Show Portrait",
+    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -228,6 +254,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showWeapons",
     label: "Show Weapons",
+    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -236,6 +263,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showKills",
     label: "Show Kills",
+    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -244,6 +272,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showScore",
     label: "Show Score",
+    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -253,6 +282,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "touchSensitivity",
     label: "Touch Sensitivity",
+    category: "Mobile",
     type: "slider",
     min: 0.5,
     max: 3.0,
@@ -266,6 +296,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "haptics",
     label: "Haptic Feedback",
+    category: "Mobile",
     type: "toggle",
     onColor: "#00ffcc",
     platform: "all",
@@ -274,6 +305,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "autoFire",
     label: "Auto-Fire (Twin Stick)",
+    category: "Mobile",
     type: "toggle",
     onColor: "#ffaa00",
     platform: "mobile",
@@ -282,6 +314,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "swipeWeapons",
     label: "Swipe to Swap Weapons",
+    category: "Mobile",
     type: "toggle",
     onColor: "#00ccff",
     platform: "mobile",
@@ -296,5 +329,20 @@ export function getVisibleSettings(isTouchDevice) {
       s.platform === "all" ||
       (s.platform === "mobile" && isTouchDevice) ||
       (s.platform === "desktop" && !isTouchDevice),
+  );
+}
+
+/** Filter registry by platform AND category */
+export function getSettingsForCategory(isTouchDevice, category) {
+  return getVisibleSettings(isTouchDevice).filter(
+    (s) => s.category === category,
+  );
+}
+
+/** Return ordered list of categories that have at least one visible setting */
+export function getVisibleCategories(isTouchDevice) {
+  const visible = getVisibleSettings(isTouchDevice);
+  return SETTING_CATEGORIES.filter((cat) =>
+    visible.some((s) => s.category === cat),
   );
 }
