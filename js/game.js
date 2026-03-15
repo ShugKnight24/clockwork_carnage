@@ -41,6 +41,8 @@ import {
 } from "./settings-registry.js";
 export { COMPACT_PHONE_HEIGHT, SETTINGS_REGISTRY, getVisibleSettings };
 
+import { StateManager } from "./state-manager.js";
+
 export const GameState = {
   TITLE: "title",
   MODE_SELECT: "modeSelect",
@@ -109,7 +111,7 @@ export class Game {
     this.projectiles = [];
     this._chronoBombs = [];
     this.map = null;
-    this.state = GameState.TITLE;
+    this._stateManager = new StateManager(GameState.TITLE);
     this.mode = null; // 'arena' or 'campaign'
     this.time = 0;
     this.deltaTime = 0;
@@ -166,6 +168,7 @@ export class Game {
       invertX: false,
       fontScale: 100, // 100, 125, 150 percent
       colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
+      visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
       hudScale: 100, // 75, 100, 125 percent
       staminaBarSize: 100, // 75, 100, 125, 150 percent
       showPortrait: true,
@@ -282,6 +285,53 @@ export class Game {
     this.loadDevFlags();
     this.loadAchievements();
     this.loadCharacter();
+    this.renderer.applyVisualStyle(this.settings.visualStyle);
+  }
+
+  // ─── State management (delegates to StateManager) ──────────────────────────
+
+  /**
+   * `this.state` getter/setter — all existing reads and direct assignments
+   * continue to work unchanged.  Internally everything goes through
+   * StateManager so transitions are observable and pause logic is centralised.
+   */
+  get state() {
+    return this._stateManager.current;
+  }
+
+  set state(v) {
+    this._stateManager.transition(v);
+  }
+
+  /**
+   * Backward-compat shim for `this.pausedFromState`.
+   * Prefer using `pauseGame(from)` / `resumeGame()` for new code.
+   */
+  get pausedFromState() {
+    return this._stateManager.pausedFrom;
+  }
+
+  set pausedFromState(v) {
+    // Allow legacy direct assignment — routes through StateManager internals.
+    this._stateManager._pausedFrom = v;
+  }
+
+  /**
+   * Pause the game.  Always sets pausedFrom so resume() can find its way back.
+   * Unifies the 5+ scattered `this.state = GameState.PAUSED` calls.
+   * @param {string} [from] - state to return to on resume (defaults to current)
+   */
+  pauseGame(from) {
+    this._stateManager.pause(from ?? this.state);
+    this.unlockPointer();
+  }
+
+  /**
+   * Resume after a pause.  Returns to the state captured by pauseGame().
+   */
+  resumeGame() {
+    this._stateManager.resume();
+    this.lockPointer();
   }
 
   // TODO: Abstract out InputManager
@@ -350,7 +400,8 @@ export class Game {
       if (this.state === GameState.BUILDER) {
         if (!this._builderOnboardingDismissed) {
           this._builderOnboardingDismissed = true;
-          return;
+          // Dismiss on any key EXCEPT Escape — let Escape fall through to pause.
+          if (e.code !== "Escape") return;
         }
         if (this.builder.handleKeyDown(e)) return;
       }
@@ -473,7 +524,7 @@ export class Game {
       if (wasLocked && !this.mouse.locked && this.state === GameState.PLAYING) {
         const now = performance.now();
         if (now - this.lastEscTime > 200) {
-          this.state = GameState.PAUSED;
+          this.pauseGame(GameState.PLAYING);
         }
       }
     });
@@ -498,9 +549,7 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
-        this.pausedFromState = GameState.BUILDER;
-        this.state = GameState.PAUSED;
-        this.unlockPointer();
+        this.pauseGame(GameState.BUILDER);
       }
       return;
     }
@@ -751,9 +800,7 @@ export class Game {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
           this.lastEscTime = now;
-          this.pausedFromState = GameState.PLAYING;
-          this.state = GameState.PAUSED;
-          this.unlockPointer();
+          this.pauseGame(GameState.PLAYING);
           return;
         }
       }
@@ -778,9 +825,7 @@ export class Game {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
-        this.pausedFromState = GameState.PLAYING;
-        this.state = GameState.PAUSED;
-        this.unlockPointer();
+        this.pauseGame(GameState.PLAYING);
       }
       if (code === this.keybinds.toggleFPS) this.showFPS = !this.showFPS;
       return;
@@ -792,8 +837,7 @@ export class Game {
         if (now - this.lastEscTime < 200) return;
         this.lastEscTime = now;
         this.showAriaLog = false;
-        this.state = this.pausedFromState || GameState.PLAYING;
-        this.lockPointer();
+        this.resumeGame();
         this.triggerAriaOnce("pauseResume", "pauseResume");
       }
       if (code === "KeyQ") {
@@ -9260,7 +9304,11 @@ export class Game {
     if (!this.isTouchDevice) {
       ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
       ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-      ctx.fillText("Press S to share score", w / 2, compact ? h * 0.93 : h / 2 + 175);
+      ctx.fillText(
+        "Press S to share score",
+        w / 2,
+        compact ? h * 0.93 : h / 2 + 175,
+      );
     }
     ctx.textAlign = "left";
 
@@ -9472,7 +9520,11 @@ export class Game {
     if (!this.isTouchDevice) {
       ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
       ctx.font = `${compact ? 11 : 13}px monospace`;
-      ctx.fillText("Press S to share score", w / 2, compact ? h * 0.94 : h / 2 + 235);
+      ctx.fillText(
+        "Press S to share score",
+        w / 2,
+        compact ? h * 0.94 : h / 2 + 235,
+      );
     }
     ctx.textAlign = "left";
 
@@ -9559,8 +9611,7 @@ export class Game {
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor) {
-    const compact =
-      this.isTouchDevice && isCompactPhone(this.hudCanvas.height);
+    const compact = this.isTouchDevice && isCompactPhone(this.hudCanvas.height);
     const accuracy =
       this.shotsFired > 0
         ? Math.round((this.shotsHit / this.shotsFired) * 100)

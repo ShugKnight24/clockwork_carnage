@@ -176,6 +176,22 @@ export const SETTINGS_REGISTRY = [
     platform: "all",
     height: { compact: 30, normal: 44 },
   },
+  {
+    key: "visualStyle",
+    label: "Visual Style",
+    type: "enum",
+    values: ["Clockwork", "Brutal"],
+    colors: ["#00ccff", "#ff4422"],
+    min: 0,
+    max: 1,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => {
+      if (g.renderer) g.renderer.applyVisualStyle(g.settings.visualStyle);
+    },
+  },
   // ─── HUD ───
   {
     key: "hudScale",
