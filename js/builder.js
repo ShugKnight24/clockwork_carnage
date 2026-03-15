@@ -33,7 +33,7 @@ const NUM_LAYERS = 5;
 const MAX_RAYCAST_DIST = 10;
 const MOVE_SPEED = 8.0;
 const RISE_SPEED = 4.0;
-const PITCH_LIMIT = 1.05;
+const PITCH_LIMIT = 0.85;
 const COLLISION_MARGIN = 0.3;
 
 /**
@@ -799,7 +799,9 @@ export class BuilderMode {
       }
     }
     this.map.grid[y][x] = tile;
-    this.map.heightMap[y][x] = count;
+    // Any placed block renders as a full-height wall.
+    // Multi-layer partial walls are a future feature.
+    this.map.heightMap[y][x] = tile > 0 ? NUM_LAYERS : 0;
   }
 
   // ─── Save / Load ─────────────────────────────────────────
@@ -1030,11 +1032,18 @@ export class BuilderMode {
       return;
     }
     // Vertical shift from pitch and layer height — passed to renderer
-    const pitchOffset = this.pitch * h * 0.5;
+    // Scale clamp by FOV: low FOV compresses walls, so yShift must be tighter
+    // FOV-aware pitch shift: ensures walls stay visible at any FOV/pitch combo
+    const fovFactor = Math.max(
+      0.4,
+      Math.min(1, (this.settings.fov || 70) / 100),
+    );
+    const maxShift = h * 0.4 * fovFactor;
+    const pitchOffset = this.pitch * h * 0.45 * fovFactor;
     const heightOffset = this.height * h * 0.15;
     const yShift = Math.max(
-      -h * 0.4,
-      Math.min(h * 0.4, pitchOffset + heightOffset),
+      -maxShift,
+      Math.min(maxShift, pitchOffset + heightOffset),
     );
     this.renderer.renderScene(
       this.player,

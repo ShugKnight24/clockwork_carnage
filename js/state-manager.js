@@ -72,7 +72,7 @@ export class StateManager {
    */
   pause(from) {
     this._pausedFrom = from ?? this._state;
-    this.transition('paused');
+    this.transition("paused");
   }
 
   /**
@@ -80,7 +80,7 @@ export class StateManager {
    * Falls back to 'playing' if pause() was never called (defensive).
    */
   resume() {
-    const returnTo = this._pausedFrom ?? 'playing';
+    const returnTo = this._pausedFrom ?? "playing";
     this._pausedFrom = null;
     this.transition(returnTo);
   }

@@ -117,6 +117,14 @@ document.getElementById("btnBuilder").addEventListener("click", () => {
   game.startBuilder();
 });
 
+document.getElementById("btnMeltdown").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  trackEvent("mode_start", { mode: "meltdown" });
+  game.startMeltdown();
+});
+
 document.getElementById("btnCustomize").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
@@ -290,6 +298,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnBuilder").click();
     } else if (e.code === "Digit5") {
       document.getElementById("btnCustomize").click();
+    } else if (e.code === "Digit6") {
+      document.getElementById("btnMeltdown").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
