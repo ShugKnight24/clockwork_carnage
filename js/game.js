@@ -1,6 +1,8 @@
+import { AssetEditor } from "./editor.js";
 import {
   WEAPONS,
   ENEMY_TYPES,
+  CUTSCENE_SCRIPTS,
   ARENA_MAP,
   ARENA_MAPS,
   CAMPAIGN_LEVELS,
@@ -110,6 +112,7 @@ export class Game {
     this._chronoBombs = [];
     this.map = null;
     this._stateManager = new StateManager(GameState.TITLE);
+    this.assetEditor = new AssetEditor(this);
     this.mode = null; // 'arena', 'campaign', or 'meltdown'
     this.meltdown = new MeltdownMode();
     this.time = 0;
@@ -201,7 +204,10 @@ export class Game {
       weapon4: "Digit4",
       toggleFPS: "KeyF",
       chronoShift: "KeyQ",
+      crouch: "ControlLeft",
     };
+    // Previous-frame key state tracking for edge-detection (crouch start)
+    this._prevCrouchKey = false;
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
@@ -781,7 +787,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 14) {
+      if (this.mode === "tutorial" && this.tutorialStep === 16) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -795,7 +801,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 14) {
+      if (this.mode === "tutorial" && this.tutorialStep < 16) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -889,7 +895,7 @@ export class Game {
     }
 
     if (this.state === GameState.SETTINGS) {
-      // Category-aware navigation: Q/E (or Tab) cycles categories; W/S scrolls items within
+      // Category-aware navigation: Q/E/E, Tab, ArrowLeft/Right, W/S, ArrowUp/Down
       const cats = getVisibleCategories(this.isTouchDevice);
       const catIdx = cats.indexOf(this.settingsCategory);
       const settingsDef = getSettingsForCategory(
@@ -898,40 +904,50 @@ export class Game {
       );
       const settingsCount = settingsDef.length;
 
-      // Switch category with Tab / Q / E
-      if (code === "Tab" || code === "KeyQ") {
+      // Switch category with Tab / Q / E / ArrowLeft / ArrowRight / W / S
+      if (
+        code === "Tab" ||
+        code === "KeyQ" ||
+        code === "ArrowLeft" ||
+        code === "KeyA"
+      ) {
+        // Previous category
         const next = (catIdx - 1 + cats.length) % cats.length;
         this.settingsCategory = cats[next];
         this.settingsSelection = 0;
         this.audio.menuSelect();
+        return;
       }
-      if (code === "KeyE") {
+      if (code === "KeyE" || code === "ArrowRight" || code === "KeyD") {
+        // Next category
         const next = (catIdx + 1) % cats.length;
         this.settingsCategory = cats[next];
         this.settingsSelection = 0;
         this.audio.menuSelect();
+        return;
       }
 
+      // Move selection within category
       if (code === "ArrowUp" || code === "KeyW") {
         this.settingsSelection =
           (this.settingsSelection - 1 + settingsCount) % settingsCount;
         this.audio.menuSelect();
+        return;
       }
       if (code === "ArrowDown" || code === "KeyS") {
         this.settingsSelection = (this.settingsSelection + 1) % settingsCount;
         this.audio.menuSelect();
+        return;
       }
-      if (
-        code === "Enter" ||
-        code === "Space" ||
-        code === "ArrowRight" ||
-        code === "ArrowLeft"
-      ) {
+
+      // Change setting value
+      if (code === "Enter" || code === "Space") {
         const def = settingsDef[this.settingsSelection];
         if (!def) {
           /* no-op if category is empty */
         } else {
-          const dir = code === "ArrowLeft" ? -1 : 1;
+          // Default: increment value
+          const dir = 1;
           if (def.type === "toggle") {
             this.settings[def.key] = !this.settings[def.key];
           } else if (def.wrap) {
@@ -951,6 +967,7 @@ export class Game {
           if (def.onChange) def.onChange(this);
           this.audio.menuConfirm();
         }
+        return;
       }
       if (code === "Escape") {
         const now = performance.now();
@@ -1991,6 +2008,32 @@ export class Game {
     return info;
   }
 
+  // --- Asset Editor Hooks ---
+  getAssetMetadata(category) {
+    if (category === "enemies") return ENEMY_TYPES;
+    if (category === "weapons") {
+      const map = {};
+      WEAPONS.forEach((w) => (map[w.name] = w));
+      return map;
+    }
+    return {};
+  }
+
+  getAssetConfig(category, id) {
+    if (category === "enemies") return ENEMY_TYPES[id];
+    if (category === "weapons") return WEAPONS.find((w) => w.name === id);
+    return null;
+  }
+
+  updateAssetLive(category, id, key, val) {
+    const asset = this.getAssetConfig(category, id);
+    if (asset) {
+      asset[key] = val;
+      // If it's a weapon, we might need to update the player's current weapon def reference
+      // However, most entities read from these objects dynamically or at spawn.
+    }
+  }
+
   getDifficultyMultipliers() {
     switch (this.settings.difficulty) {
       case 0:
@@ -2216,19 +2259,45 @@ export class Game {
     this.player.reset();
     this.applyLoadoutBonuses();
     // Play origin story cutscene, then campaign intro
-    if (this.cutsceneEngine.hasScript("clocking_in")) {
-      this.startCutscene("clocking_in", () => {
-        this.ariaEnabled = true;
-        this.queueAriaMessage("campaignStart");
-        this.startCutscene("intro", () => {
-          this.loadCampaignLevel(0);
+    const playIntroAndMaybeMemory = () => {
+      // After intro cutscene, play the memory fragment once per user
+      const seenKey = "cc_seen_intro_memory_01";
+      const playMemory = () => {
+        try {
+          const seen = localStorage.getItem(seenKey);
+          if (!seen) {
+            // Mark as seen and play the short memory fragment
+            localStorage.setItem(seenKey, "1");
+            this.startCutscene("intro_memory_01", () => {
+              this.loadCampaignLevel(0);
+            });
+          } else {
+            this.loadCampaignLevel(0);
+          }
+        } catch (e) {
+          // If localStorage unavailable, still play memory to be safe
+          this.startCutscene("intro_memory_01", () => {
+            this.loadCampaignLevel(0);
+          });
+        }
+      };
+
+      if (this.cutsceneEngine.hasScript("clocking_in")) {
+        this.startCutscene("clocking_in", () => {
+          this.ariaEnabled = true;
+          this.queueAriaMessage("campaignStart");
+          this.startCutscene("intro", () => {
+            playMemory();
+          });
         });
-      });
-    } else {
-      this.startCutscene("intro", () => {
-        this.loadCampaignLevel(0);
-      });
-    }
+      } else {
+        this.startCutscene("intro", () => {
+          playMemory();
+        });
+      }
+    };
+
+    playIntroAndMaybeMemory();
   }
 
   showCampaignPrompt() {
@@ -2415,6 +2484,8 @@ export class Game {
     this.player.y = TUTORIAL_MAP.playerStart.y;
     this.player.angle = TUTORIAL_MAP.playerStart.dir;
     this.player.alive = true;
+    this.player.weapons = []; // Start fully unarmed
+    this.player.currentWeapon = -1;
     this.entities = [];
     this.projectiles = [];
 
@@ -2443,6 +2514,8 @@ export class Game {
     this.tutorialEnemySpawned = false;
     this.tutorialEnemyKilled = false;
     this.tutorialDashed = false;
+    this.tutorialCrouched = false;
+    this.tutorialSlid = false;
     this.tutorialFired = false;
     this.tutorialChronoUsed = false;
     this.tutorialSandboxInit = false;
@@ -2460,6 +2533,18 @@ export class Game {
     this.tutorialStep++;
     this.tutorialStepTime = performance.now();
     this.audio.menuConfirm();
+
+    // Reset interaction flags for the next step to prevent skipping
+    this.tutorialSprintTime = 0;
+    this.tutorialDashed = false;
+    this.tutorialCrouched = false;
+    this.tutorialSlid = false;
+    this.tutorialFired = false;
+    this.tutorialWeaponSwapped = false;
+    this.tutorialDoorOpened = false;
+    this.tutorialChronoUsed = false;
+    this.tutorialPickedUp = false;
+    // Note: tutorialWeaponPickedUp remains true once done
   }
 
   updateTutorial(dt) {
@@ -2475,6 +2560,9 @@ export class Game {
       }
     }
 
+    // Clear waypoint by default, define per-step
+    this.objectiveWaypoint = null;
+
     switch (this.tutorialStep) {
       case 0: // Narrative intro - auto advance
         if (elapsed > 3.5) this.advanceTutorialStep();
@@ -2483,7 +2571,6 @@ export class Game {
       case 1: {
         // Look around
         const angleDiff = Math.abs(p.angle - this.tutorialPrevAngle);
-        // Handle angle wrapping
         const wrapped =
           angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
         this.tutorialCumulativeAngle += wrapped;
@@ -2492,66 +2579,79 @@ export class Game {
         break;
       }
 
-      case 2: {
-        // Move with WASD
+      case 2: // Move with WASD
+        this.objectiveWaypoint = { x: 12, y: 5.5 }; // Point to first door
         const dx = p.x - this.tutorialStartX;
         const dy = p.y - this.tutorialStartY;
         if (Math.sqrt(dx * dx + dy * dy) > 3) this.advanceTutorialStep();
         break;
-      }
 
-      case 3: // Shoot — reset flag so pre-step firing doesn't skip
-        if (elapsed < 0.05) {
-          this.tutorialFired = false;
-          break;
-        }
-        if (this.tutorialFired) this.advanceTutorialStep();
+      case 3: // Breach - Door 1 (Exit Locker Room)
+        this.objectiveWaypoint = { x: 12, y: 5.5 };
+        if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 4: // Sprint
+      case 4: // Weapon Pickup
+        this.objectiveWaypoint = { x: 12, y: 7.5 };
+        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
+        break;
+
+      case 5: // Shooting
+        this.objectiveWaypoint = { x: 12, y: 9.5 }; // Point towards next door
+        if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
+        break;
+
+      case 6: // Weapon Swap
+        this.objectiveWaypoint = { x: 12, y: 9.5 };
+        if (elapsed > 0.1 && this.tutorialWeaponSwapped)
+          this.advanceTutorialStep();
+        break;
+
+      case 7: // Breach - Door 2 (Exit Armory)
+        this.objectiveWaypoint = { x: 12, y: 9.5 };
+        if (this.tutorialDoorOpened) this.advanceTutorialStep();
+        break;
+
+      case 8: // Sprint
+        this.objectiveWaypoint = { x: 12, y: 16.5 }; // Point to end of yard
         if (p.isSprinting) this.tutorialSprintTime += dt;
         if (this.tutorialSprintTime > 0.5) this.advanceTutorialStep();
         break;
 
-      case 5: // Dash
+      case 9: // Dash
+        this.objectiveWaypoint = { x: 12, y: 16.5 };
         if (this.tutorialDashed) this.advanceTutorialStep();
         break;
 
-      case 6: // Temporal Anomaly — dramatic auto-advance
+      case 10: // Crouch
+        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        if (this.tutorialCrouched) this.advanceTutorialStep();
+        break;
+
+      case 11: // Slide
+        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        if (this.tutorialSlid) this.advanceTutorialStep();
+        break;
+
+      case 12: // Anomaly
+        this.objectiveWaypoint = { x: 12, y: 16.5 };
         if (elapsed > 4) this.advanceTutorialStep();
         break;
 
-      case 7: // Chrono Shift — reset flag so pre-step usage doesn't skip
-        if (elapsed < 0.05) {
-          this.tutorialChronoUsed = false;
-          break;
-        }
-        if (this.tutorialChronoUsed) this.advanceTutorialStep();
+      case 13: // Chrono Shift
+        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        if (elapsed > 0.1 && this.tutorialChronoUsed)
+          this.advanceTutorialStep();
         break;
 
-      case 8: // Pick up weapon crate
-        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
-        break;
-
-      case 9: // Swap weapons
-        if (elapsed < 0.05) {
-          this.tutorialWeaponSwapped = false;
-          break;
-        }
-        if (this.tutorialWeaponSwapped) this.advanceTutorialStep();
-        break;
-
-      case 10: // Open a door with E
-        if (this.tutorialDoorOpened) this.advanceTutorialStep();
-        break;
-
-      case 11: // Pick up items (health & ammo behind the door)
+      case 14: // Pickups (Health/Ammo)
+        this.objectiveWaypoint = { x: 12, y: 17.5 };
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 12: // Combat
+      case 15: // Combat
         if (!this.tutorialEnemySpawned) {
-          const enemy = new Enemy(12.5, 20.5, "drone");
+          const enemy = new Enemy(12, 19.5, "drone");
           enemy.health = 15;
           enemy.maxHealth = 15;
           enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
@@ -2563,34 +2663,37 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 13: // Training complete → show completion menu
+      case 16: // Calibration Complete -> Transfer to Character Creator
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
           this.tutorialOriginPlayed = true;
-          this.tutorialMenuSelection = 0;
-          this.tutorialShowCompletionMenu = true;
           this.audio.stopMusic();
-          this.state = GameState.TUTORIAL_COMPLETE;
+
+          // Immediately enter Character Creator
+          this.creatorReturnState = GameState.TUTORIAL_COMPLETE;
+          this.state = GameState.CHARACTER_CREATE;
           this.unlockPointer();
         }
         break;
 
-      case 14: {
-        // Sandbox — spawn training dummies, let player practice
-        if (!this.tutorialSandboxInit) {
-          this.tutorialSandboxInit = true;
-          this.spawnTrainingDummies();
-        }
-        // Respawn dummies when all killed
-        const dummies = this.entities.filter(
-          (e) => e.type === "enemy" && e.active && e.state !== "dead",
-        );
-        if (dummies.length === 0 && this.tutorialSandboxInit) {
-          this.spawnTrainingDummies();
+      case 17: // Post-Creator Sandbox (Optional if they come back from creator)
+        {
+          if (!this.tutorialSandboxInit) {
+            this.tutorialSandboxInit = true;
+            this.spawnTrainingDummies();
+            this.tutorialShowCompletionMenu = true; // Show menu for navigation
+            this.state = GameState.TUTORIAL_COMPLETE;
+            this.unlockPointer();
+          }
+          const dummies = this.entities.filter(
+            (e) => e.type === "enemy" && e.active && e.state !== "dead",
+          );
+          if (dummies.length === 0 && this.tutorialSandboxInit) {
+            this.spawnTrainingDummies();
+          }
         }
         break;
-      }
     }
   }
 
@@ -2599,11 +2702,11 @@ export class Game {
     this.entities = this.entities.filter(
       (e) => e.type !== "enemy" || (e.active && e.state !== "dead"),
     );
-    // Spawn 3 dummies at fixed positions
+    // Spawn 3 dummies at fixed positions in the combat sim area
     const dummyPositions = [
       { x: 8.5, y: 19.5 },
-      { x: 15.5, y: 20.5 },
-      { x: 12.5, y: 22.5 },
+      { x: 15.5, y: 19.5 },
+      { x: 12, y: 21.5 },
     ];
     for (const pos of dummyPositions) {
       const dummy = new Enemy(pos.x, pos.y, "drone");
@@ -2705,10 +2808,38 @@ export class Game {
         color: "#00ccff",
       },
       {
+        title: "BREACH — EXIT THE LOCKER ROOM",
+        hint: isMobile
+          ? 'ARIA: "The door is magnetically sealed. Face it and tap USE to override."'
+          : 'ARIA: "The door is magnetically sealed. Face it and press E to override the lock."',
+        color: "#ff8844",
+      },
+      {
+        title: "WEAPON ACQUISITION — EQUIP FOUND GEAR",
+        hint: isMobile
+          ? 'ARIA: "There\'s a weapon crate in the corridor. Walk over it to integrate it."'
+          : 'ARIA: "There\'s a weapon crate in the corridor. Walk over it to integrate it."',
+        color: "#ff6600",
+      },
+      {
         title: "WEAPONS INTEGRATION — TARGETING HOT",
         hint: isMobile
           ? 'ARIA: "Rifle sync complete. Tap FIRE to confirm your targeting solution."'
-          : 'ARIA: "Rifle sync complete. CLICK to confirm your targeting solution. Blank rounds only — for now."',
+          : 'ARIA: "Rifle sync complete. CLICK to confirm your targeting solution. Blank rounds only."',
+        color: "#ff8844",
+      },
+      {
+        title: "LOADOUT SWITCH — WEAPON MANAGEMENT",
+        hint: isMobile
+          ? 'ARIA: "You\'re carrying two weapons now. Swap between them — learn your kit."'
+          : 'ARIA: "You\'re carrying two weapons now. Press 1 or 2 (or scroll wheel) to swap."',
+        color: "#ffcc00",
+      },
+      {
+        title: "BREACH — OPEN THE ARMORY DOOR",
+        hint: isMobile
+          ? 'ARIA: "Another seal. Face the door and tap USE to enter the training yard."'
+          : 'ARIA: "Another seal. Face the door and press E to enter the training yard."',
         color: "#ff8844",
       },
       {
@@ -2726,6 +2857,20 @@ export class Game {
         color: "#ff44ff",
       },
       {
+        title: "LOW PROFILE — CROUCH",
+        hint: isMobile
+          ? 'ARIA: "Drop to low profile to avoid fire and fit under obstacles. Hold CROUCH to crouch."'
+          : 'ARIA: "Drop to low profile to avoid fire and fit under obstacles. Hold Control to crouch."',
+        color: "#88cc88",
+      },
+      {
+        title: "SLIDE — MOMENTUM BREACH",
+        hint: isMobile
+          ? 'ARIA: "Crouch while sprinting or dashing to perform a slide. Useful for evasion."'
+          : 'ARIA: "Crouch while sprinting or dashing to perform a slide. Useful for quick evasion."',
+        color: "#ffaa55",
+      },
+      {
         title: "⚠ TEMPORAL ANOMALY DETECTED ⚠",
         hint: 'ARIA: "That\'s not on the schedule. Something hit the Chronos Engine. This calibration just became real."',
         color: "#ff2244",
@@ -2734,33 +2879,12 @@ export class Game {
         title: "CHRONO SHIFT — TEMPORAL CONTROL",
         hint: isMobile
           ? 'ARIA: "You have access to a time-dilation module. Use it. Hold SLOW to bend time around you."'
-          : 'ARIA: "You have access to a time-dilation module. Use it. Press Q to slow time — enemies won\'t see it coming."',
+          : 'ARIA: "You have access to a time-dilation module. Use it. Press Q to slow time."',
         color: "#8844ff",
       },
       {
-        title: "WEAPON ACQUISITION — EQUIP FOUND GEAR",
-        hint: isMobile
-          ? 'ARIA: "There\'s a weapon crate ahead. Walk over it — the suit auto-integrates on contact."'
-          : 'ARIA: "There\'s a weapon crate ahead. Walk over it — the suit auto-integrates on contact."',
-        color: "#ff6600",
-      },
-      {
-        title: "LOADOUT SWITCH — WEAPON MANAGEMENT",
-        hint: isMobile
-          ? 'ARIA: "You\'re carrying two weapons. Swap between them — know your options before the fight."'
-          : 'ARIA: "You\'re carrying two weapons. Press 1 or 2 (or scroll wheel) — know your options before the fight."',
-        color: "#ffcc00",
-      },
-      {
-        title: "BREACH — OPEN THE SECURE DOOR",
-        hint: isMobile
-          ? 'ARIA: "The door ahead is magnetically sealed. Face it and tap USE to override."'
-          : 'ARIA: "The door ahead is magnetically sealed. Face it and press E to override the lock."',
-        color: "#ff8844",
-      },
-      {
         title: "FIELD RESUPPLY — GRAB WHAT YOU CAN",
-        hint: 'ARIA: "Health packs and ammo behind the door. Take everything — the station is in lockdown."',
+        hint: 'ARIA: "Health packs and ammo ahead. Take everything — the station is in lockdown."',
         color: "#44ff88",
       },
       {
@@ -2770,14 +2894,7 @@ export class Game {
       },
       {
         title: "CALIBRATION COMPLETE — YOU'RE ONLINE",
-        hint: "ARIA: \"Suit fully integrated. You're the only one who made it to this station. Don't waste it.\"",
-        color: "#00ffcc",
-      },
-      {
-        title: "TRAINING GROUND — FREE PRACTICE",
-        hint: isMobile
-          ? 'ARIA: "Sandbox mode. Practice until you\'re ready — tap PAUSE to quit or start the campaign."'
-          : 'ARIA: "Sandbox mode. Practice until you\'re ready — Q to quit · C to start the campaign."',
+        hint: 'ARIA: "Suit fully integrated. Proceeding to custom agent deployment array."',
         color: "#00ffcc",
       },
     ];
@@ -2830,8 +2947,8 @@ export class Game {
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 13) {
-      ctx.fillText(`${this.tutorialStep}/12`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 15) {
+      ctx.fillText(`${this.tutorialStep}/14`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2846,7 +2963,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 14) {
+    if (this.tutorialStep === 16) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -4236,6 +4353,7 @@ export class Game {
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
     this.audio.startMusic(130);
+    this.saveCampaign(); // Save checkpoint at level start
     this.lockPointer();
   }
 
@@ -4413,6 +4531,8 @@ export class Game {
           12,
           "player",
         );
+        proj.weaponId = wep.id;
+        if (wep.id === 7) proj.emp = true; // EMP Launcher rounds
         proj.color = this.getCharacterColor().accent || wep.color;
         this.projectiles.push(proj);
         this.entities.push(proj);
@@ -4470,6 +4590,30 @@ export class Game {
 
     // ARIA first kill callout
     this.triggerAriaOnce("firstKill", "firstKill");
+
+    // Echo clone on death (small clone spawns)
+    if (
+      enemy &&
+      enemy.def &&
+      enemy.def.echoCloneOnDeath &&
+      enemy.def.cloneCount
+    ) {
+      const clones = enemy.def.cloneCount || 1;
+      for (let i = 0; i < clones; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const sx = enemy.x + Math.cos(angle) * 0.8;
+        const sy = enemy.y + Math.sin(angle) * 0.8;
+        if (this.isPassable(Math.floor(sx), Math.floor(sy))) {
+          const clone = new Enemy(sx, sy, "glitchling");
+          clone._isClone = true;
+          // make clones low health and aggressive
+          clone.health = Math.max(6, Math.floor(clone.health * 0.5));
+          clone.maxHealth = clone.health;
+          this.entities.push(clone);
+          this.totalEnemies++;
+        }
+      }
+    }
 
     // Slow-mo last kill — triggers when all enemies dead
     if (
@@ -4542,11 +4686,29 @@ export class Game {
       this.queueAriaMessage("subBossEncounter");
     }
 
+    // Enemy shield (temporary system for shielded enemies)
+    if (enemy._shield && enemy._shield > 0) {
+      const shieldAbsorb = Math.min(enemy._shield, finalDamage);
+      enemy._shield -= shieldAbsorb;
+      finalDamage -= shieldAbsorb;
+      if (shieldAbsorb > 0) {
+        // small spark effect
+        this.glitchEffect = Math.max(this.glitchEffect, 0.08);
+      }
+    }
+
     enemy.health -= finalDamage;
     enemy.hitTime = this.time;
     enemy.state = "pain";
     enemy.painTimer = isCrit ? 250 : 150;
-    this.audio.enemyHit();
+    const pan = this.audio.calculatePan(
+      enemy.x,
+      enemy.y,
+      this.player.x,
+      this.player.y,
+      this.player.angle,
+    );
+    this.audio.enemyHit(pan);
 
     // Hit marker
     this.hitMarker = 0.15;
@@ -4595,7 +4757,15 @@ export class Game {
             this.player.kills++;
             this.killedEnemies++;
             this.achievementStats.totalKills++;
-            this.audio.enemyDeath();
+            const pan2 = this.audio.calculatePan(
+              e2.x,
+              e2.y,
+              this.player.x,
+              this.player.y,
+              this.player.angle,
+            );
+            this.audio.enemyDeath(pan2);
+            this.spawnDeathParticles(e2.x, e2.y, e2.def.color1, e2.def.color2);
             this.glitchEffect = 0.3;
             this._onEnemyKill(e2);
             splashKills++;
@@ -4614,7 +4784,20 @@ export class Game {
       this.player.kills++;
       this.killedEnemies++;
       this.achievementStats.totalKills++;
-      this.audio.enemyDeath();
+      const panDeath = this.audio.calculatePan(
+        enemy.x,
+        enemy.y,
+        this.player.x,
+        this.player.y,
+        this.player.angle,
+      );
+      this.audio.enemyDeath(panDeath);
+      this.spawnDeathParticles(
+        enemy.x,
+        enemy.y,
+        enemy.def.color1,
+        enemy.def.color2,
+      );
       this.glitchEffect = 0.3;
       this._onEnemyKill(enemy);
 
@@ -4725,7 +4908,20 @@ export class Game {
         this.killedEnemies++;
         this.player.score += attacker.def.score;
         this.player.kills++;
-        this.audio.enemyDeath();
+        const panThorns = this.audio.calculatePan(
+          attacker.x,
+          attacker.y,
+          this.player.x,
+          this.player.y,
+          this.player.angle,
+        );
+        this.audio.enemyDeath(panThorns);
+        this.spawnDeathParticles(
+          attacker.x,
+          attacker.y,
+          attacker.def.color1,
+          attacker.def.color2,
+        );
         this.glitchEffect = 0.3;
         this._onEnemyKill(attacker);
       }
@@ -4794,6 +4990,13 @@ export class Game {
     }
     if (this.state !== GameState.PLAYING) return;
 
+    // Shift + E toggle for Asset Editor
+    if (this.keys["ShiftLeft"] && this.keys["KeyE"]) {
+      this.keys["KeyE"] = false; // debounce
+      this.assetEditor.toggle();
+    }
+    if (this.assetEditor.active) return; // Pause game logic but keep rendering
+
     // Death transition timer
     if (!this.player.alive) {
       if (this.deathTimer > 0) {
@@ -4803,6 +5006,7 @@ export class Game {
             this.exitBuilderPlayTest();
             return;
           }
+          this.checkAchievements(); // Sync final score/stats before game over
           this.state = GameState.GAME_OVER;
           this.audio.stopMusic();
           trackEvent("player_death", {
@@ -4814,7 +5018,7 @@ export class Game {
             ),
           });
           if (this.mode === "arena") this.clearArenaSave();
-          else this.clearCampaignSave();
+          // No longer clearing campaign save on death to allow per-level checkpoints
           this.unlockPointer();
         }
       }
@@ -5120,9 +5324,12 @@ export class Game {
       }
     }
 
-    // Screen shake decay
+    // screen shake decay
     this.screenShake *= 0.9;
     if (this.screenShake < 0.1) this.screenShake = 0;
+
+    // Update VFX particles
+    this.updateParticles(dt);
 
     // Glitch effect decay
     this.glitchEffect *= 0.95;
@@ -5281,7 +5488,85 @@ export class Game {
       }
     }
 
-    const speed = p.isSprinting ? p.moveSpeed * 1.6 : p.moveSpeed;
+    // Crouch & Slide handling
+    const crouchHeld = !!this.keys[this.keybinds.crouch];
+    const crouchJustPressed = crouchHeld && !this._prevCrouchKey;
+    // If sliding, remain crouched; otherwise crouch when holding key
+    p.isCrouching = crouchHeld && !p.isSliding;
+
+    // Start slide if player crouches while sprinting/dashing
+    if (
+      crouchJustPressed &&
+      (p.isSprinting || p.isDashing) &&
+      !p.isSliding &&
+      p.slideCooldown <= 0 &&
+      p.stamina >= p.slideStaminaCost
+    ) {
+      p.isSliding = true;
+      p.slideTime = p.slideDuration;
+      // Slide direction: use facing direction
+      p.slideDirX = Math.cos(p.angle);
+      p.slideDirY = Math.sin(p.angle);
+      p.stamina = Math.max(0, p.stamina - p.slideStaminaCost);
+      p.slideCooldown = 0.8;
+      p.staminaRegenDelay = 0.5;
+      // Tutorial flag
+      if (this.mode === "tutorial") this.tutorialSlid = true;
+    }
+
+    // Slide cooldown timer
+    if (p.slideCooldown > 0) p.slideCooldown -= dt;
+
+    // If sliding, override movement with slide momentum
+    if (p.isSliding) {
+      p.slideTime -= dt;
+      if (p.slideTime <= 0) {
+        p.isSliding = false;
+      } else {
+        const tFrac = p.slideTime / p.slideDuration;
+        const slideSpeed = p.moveSpeed * p.slideSpeedMult * (0.6 + 0.4 * tFrac);
+        moveX = p.slideDirX * slideSpeed * dt;
+        moveY = p.slideDirY * slideSpeed * dt;
+
+        // Collision detection and movement (slide)
+        const margin = 0.2;
+        const newX = p.x + moveX;
+        const newY = p.y + moveY;
+        if (
+          this.isPassable(
+            Math.floor(newX + margin * Math.sign(moveX)),
+            Math.floor(p.y),
+          )
+        ) {
+          p.x = newX;
+        }
+        if (
+          this.isPassable(
+            Math.floor(p.x),
+            Math.floor(newY + margin * Math.sign(moveY)),
+          )
+        ) {
+          p.y = newY;
+        }
+
+        p.weaponBob += dt * 18;
+        // Stamina regen paused during slide
+        p.staminaRegenDelay = 0.5;
+        // Tutorial crouch flag (player used crouch)
+        if (this.mode === "tutorial") this.tutorialCrouched = true;
+        // Update prev crouch key and return early (we already moved)
+        this._prevCrouchKey = crouchHeld;
+        return;
+      }
+    }
+
+    let speed = p.isSprinting ? p.moveSpeed * 1.6 : p.moveSpeed;
+    // Reduce speed when crouching (not sliding)
+    if (p.isCrouching) {
+      speed *= 0.5;
+      // Mark tutorial crouch used
+      if (this.mode === "tutorial") this.tutorialCrouched = true;
+    }
 
     // WASD movement
     if (this.keys[kb.moveForward] || this.keys["ArrowUp"]) {
@@ -5355,6 +5640,8 @@ export class Game {
     ) {
       p.y = newY;
     }
+    // Track crouch key for next frame (edge detection)
+    this._prevCrouchKey = !!this.keys[this.keybinds.crouch];
   }
 
   isPassable(mx, my) {
@@ -5364,6 +5651,64 @@ export class Game {
   }
 
   // TODO: Improve Enemy AI
+  // ─── VFX / Particles ──────────────────────────────────────────────────────
+
+  spawnDeathParticles(x, y, c1, c2) {
+    if (!this.player.particles) this.player.particles = [];
+    const count = 12;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.0 + Math.random() * 2;
+      const c = Math.random() > 0.5 ? c1 : c2;
+      // Simple hex to rgb
+      const r = parseInt(c.slice(1, 3), 16) || 255;
+      const g = parseInt(c.slice(3, 5), 16) || 255;
+      const b = parseInt(c.slice(5, 7), 16) || 255;
+
+      this.player.particles.push({
+        x: x,
+        y: y,
+        z: -0.1 - Math.random() * 0.3, // mid-body
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.7) * 4, // initial burst up
+        r,
+        g,
+        b,
+        life: 0.8 + Math.random() * 0.4,
+        size: 0.05 + Math.random() * 0.08,
+      });
+    }
+  }
+
+  updateParticles(dt) {
+    const pList = this.player.particles;
+    if (!pList || pList.length === 0) return;
+
+    for (let i = pList.length - 1; i >= 0; i--) {
+      const p = pList[i];
+      // Apply "timeScale" to particles for Chrono Shift coolness
+      const ts = this.timeScale;
+      p.x += p.vx * dt * ts;
+      p.y += p.vy * dt * ts;
+      p.z += p.vz * dt * ts;
+      p.vz += 15 * dt * ts; // gravity
+      p.life -= dt * ts;
+
+      // Floor bounce
+      if (p.z > 0.48) {
+        p.z = 0.48;
+        p.vz *= -0.3;
+        p.vx *= 0.6;
+        p.vy *= 0.6;
+      }
+
+      if (p.life <= 0) {
+        pList.splice(i, 1);
+      }
+    }
+  }
+
   updateEnemies(dt) {
     for (const e of this.entities) {
       if (e.type !== "enemy" || !e.active) continue;
@@ -5379,6 +5724,12 @@ export class Game {
         if (e.painTimer <= 0) {
           e.state = "chase";
         }
+        continue;
+      }
+
+      // EMP-disabled: skip AI while disabled
+      if (e._empDisabledUntil && this.time < e._empDisabledUntil) {
+        // keep a faint stun effect, skip movement/attacks
         continue;
       }
 
@@ -5533,6 +5884,75 @@ export class Game {
           });
         }
       }
+
+      // Teleport / leap AI (phase stalkers, rift leapers)
+      if (e.state !== "dead") {
+        // Initialize teleport timer
+        if (e.def.teleportCooldown || e.def.leapDistance) {
+          e._teleportTimer = e._teleportTimer || 0;
+          e._teleportTimer += dt * 1000;
+          const cooldown = e.def.teleportCooldown || 3000;
+          if (e._teleportTimer >= cooldown) {
+            e._teleportTimer = 0;
+            // Only teleport if player is at medium distance
+            if (dist > (e.def.attackRange || 2) * 0.8 && dist < 30) {
+              const angleToPlayer = Math.atan2(
+                this.player.y - e.y,
+                this.player.x - e.x,
+              );
+              const leapDist =
+                e.def.leapDistance || Math.max(1.5, e.def.attackRange || 3);
+              // Place slightly beyond the player so they leap in
+              const tx =
+                this.player.x -
+                Math.cos(angleToPlayer) * Math.min(1.5, leapDist);
+              const ty =
+                this.player.y -
+                Math.sin(angleToPlayer) * Math.min(1.5, leapDist);
+              if (this.isPassable(Math.floor(tx), Math.floor(ty))) {
+                e.x = tx;
+                e.y = ty;
+                e.state = "attack";
+                e.stateTime = 0;
+                e.lastAttackTime = this.time;
+                this.screenShake = Math.max(this.screenShake, 2);
+                const panSupport = this.audio.calculatePan(
+                  e.x,
+                  e.y,
+                  this.player.x,
+                  this.player.y,
+                  this.player.angle,
+                );
+                this.audio.enemyHit(panSupport);
+              }
+            }
+          }
+        }
+
+        // Shield regen (for tanky enemies like Time Warden)
+        if (e.def.shieldRegen) {
+          if (e._shieldMax == null) {
+            e._shieldMax =
+              e.def.shieldMax || Math.max(20, Math.floor(e.def.health * 0.25));
+            e._shield = e._shieldMax;
+          }
+          const rate = e.def.shieldRegenRate || 2;
+          e._shield = Math.min(e._shieldMax, (e._shield || 0) + rate * dt);
+        }
+
+        // Support enemy: disable HUD temporarily
+        if (e.def.disablesHUD) {
+          e._supportTimer = (e._supportTimer || 0) + dt * 1000;
+          const interval = e.def.supportInterval || 8500;
+          if (e._supportTimer >= interval) {
+            e._supportTimer = 0;
+            // Disable HUD for players for a short duration
+            this._hudDisabledUntil =
+              this.time + (e.def.disableDuration || 3000);
+            this.queueAriaMessage("hudDisrupted");
+          }
+        }
+      }
     }
 
     // Update chrono-bombs (area denial)
@@ -5645,6 +6065,43 @@ export class Game {
             const edx = p.x - e.x;
             const edy = p.y - e.y;
             if (edx * edx + edy * edy < e.def.radius * e.def.radius) {
+              // EMP rounds: disable shields and stun ranged/drones briefly
+              if (p.emp) {
+                // remove enemy shield if present
+                if (e._shield) e._shield = 0;
+                // mark EMP-disabled timestamp
+                e._empDisabledUntil = this.time + 3000; // 3s disable
+                // brief pain/stun
+                e.state = "pain";
+                e.painTimer = 500;
+                const panEmp = this.audio.calculatePan(
+                  e.x,
+                  e.y,
+                  this.player.x,
+                  this.player.y,
+                  this.player.angle,
+                );
+                this.audio.enemyHit(panEmp);
+                // Disable nearby ranged/drones
+                for (const e2 of this.entities) {
+                  if (e2.type !== "enemy" || !e2.active || e2.state === "dead")
+                    continue;
+                  const ddx = e2.x - p.x;
+                  const ddy = e2.y - p.y;
+                  if (ddx * ddx + ddy * ddy < 9) {
+                    if (
+                      e2.def &&
+                      (e2.def.attackType === "ranged" ||
+                        e2.enemyType === "drone")
+                    ) {
+                      e2._empDisabledUntil = this.time + 3000;
+                      e2.state = "pain";
+                      e2.painTimer = 500;
+                    }
+                  }
+                }
+              }
+              // Apply normal damage regardless
               this.damageEnemy(e, p.damage);
               p.active = false;
               // Splash damage for cannon
@@ -5700,8 +6157,8 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
-      // In tutorial, block pickups until step 11 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 11) {
+      // In tutorial, block pickups until step 14 ("Grab Supplies")
+      if (this.mode === "tutorial" && this.tutorialStep < 14) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -5714,7 +6171,7 @@ export class Game {
           e.active = false;
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep >= 11)
+          if (this.mode === "tutorial" && this.tutorialStep === 14)
             this.tutorialPickedUp = true;
           if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
         }
@@ -5722,7 +6179,7 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep >= 11)
+        if (this.mode === "tutorial" && this.tutorialStep === 14)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
@@ -5824,6 +6281,9 @@ export class Game {
 
     // Render 3D scene — timed: raycast phase
     const _tRay0 = performance.now();
+    // Camera vertical shift for crouch/slide
+    const p = this.player;
+    const yShift = p.isSliding ? 40 : p.isCrouching ? 28 : 0;
     this.renderer.renderScene(
       this.player,
       this.map,
@@ -5831,6 +6291,8 @@ export class Game {
       this.time,
       this.settings.fov,
       this.settings.viewMode,
+      false,
+      yShift,
     );
 
     ctx.restore();
@@ -6042,35 +6504,34 @@ export class Game {
       ctx.rotate(-0.01);
     }
 
-    // Muzzle flash
+    // Muzzle flash (Enhanced 'Sharp' version)
     if (this.weaponAnimFrame === 1) {
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.arc(0, -40, 24, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.arc(0, -40, 8, 0, Math.PI * 2);
-      ctx.fill();
+      this.renderer.drawGlow(ctx, 0, -42, 32, energyColor, 0.4);
+      this.renderer.drawGlow(ctx, 0, -42, 12, "#ffffff", 0.8);
+
       // Flash spikes
       ctx.strokeStyle = energyColor;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.5;
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + this.time * 0.02;
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + this.time * 0.05;
+        const len = 15 + Math.random() * 20;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * 10, -40 + Math.sin(a) * 10);
-        ctx.lineTo(Math.cos(a) * 22, -40 + Math.sin(a) * 22);
+        ctx.moveTo(Math.cos(a) * 8, -42 + Math.sin(a) * 8);
+        ctx.lineTo(Math.cos(a) * len, -42 + Math.sin(a) * len);
         ctx.stroke();
       }
-      ctx.globalAlpha = 1;
     }
+
+    // --- Procedural Weapon Body Enhancements ---
+    // Core Energy Cell (Sharp Glow)
+    const corePulse = Math.sin(this.time * 0.01) * 0.2 + 0.8;
+    this.renderer.drawGlow(ctx, 0, -5, 12, energyColor, 0.3 * corePulse);
+
+    // Tech Seams (Recursive lines)
+    this.renderer.drawTechLines(ctx, -15, -25, 30, 40, energyColor);
 
     // Shell casing ejection (frame 2)
     if (this.weaponAnimFrame === 2 && wep.id !== 2) {
-      // not plasma
       ctx.fillStyle = "#ddaa44";
       ctx.globalAlpha = 0.8;
       ctx.fillRect(7, -18, 3, 2);
@@ -6543,6 +7004,22 @@ export class Game {
 
     if (this.state !== GameState.PLAYING && this.state !== GameState.PAUSED)
       return;
+
+    // HUD disruption effect (disabled by enemy support abilities)
+    if (this._hudDisabledUntil && this.time < this._hudDisabledUntil) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#ff6666";
+      ctx.font = "bold 20px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("SYSTEMS DISRUPTED", w / 2, h / 2 - 12);
+      ctx.font = "12px monospace";
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillText("HUD offline — temporary interference.", w / 2, h / 2 + 10);
+      ctx.restore();
+      return;
+    }
 
     // Playtest mode banner
     if (this.mode === "playtest") {
@@ -7167,15 +7644,21 @@ export class Game {
     ctx.textAlign = "center";
     ctx.fillText("HEALTH", healthX + hbW / 2, topY + 4);
 
+    // Adaptive sizing: scale health number and positions with `hudFactor`
+    const bigHealthSize = Math.max(20, Math.round(46 * hudFactor));
+    const smallHealthSize = Math.max(11, Math.round(14 * hudFactor));
+    const hbY = midY + Math.max(12, Math.round(16 * hudFactor));
+    const bigNumY = Math.floor(
+      topY + (hbY - topY) / 2 + Math.round(4 * hudFactor),
+    );
+
     ctx.fillStyle = "#ffffff";
-    ctx.font = this.scaledFont(46, "bold");
+    ctx.font = this.scaledFont(bigHealthSize, "bold");
     ctx.fillText(
       `${Math.ceil(this.player.health)}`,
       healthX + hbW / 2,
-      midY + 8,
+      bigNumY,
     );
-
-    const hbY = midY + 16;
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(healthX, hbY, hbW, hbH);
     ctx.fillStyle = healthColor;
@@ -7184,11 +7667,11 @@ export class Game {
     ctx.lineWidth = 1;
     ctx.strokeRect(healthX, hbY, hbW, hbH);
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 16px monospace";
+    ctx.font = this.scaledFont(smallHealthSize, "bold");
     ctx.fillText(
       `${Math.ceil(this.player.health)} / ${this.player.maxHealth}`,
       healthX + hbW / 2,
-      hbY + 22,
+      hbY + Math.max(14, Math.round(12 * hudFactor)),
     );
 
     // Shield bar (below health bar, only when player has shield upgrade)
@@ -8649,6 +9132,24 @@ export class Game {
         ctx.fill();
       }
     }
+
+    // Objective Waypoint
+    if (this.objectiveWaypoint) {
+      const bx = ox + this.objectiveWaypoint.x * scale;
+      const by = oy + this.objectiveWaypoint.y * scale;
+      const now = performance.now();
+      const progress = (now % 1000) / 1000;
+      const pulse = 0.5 + 0.5 * Math.sin((now / 800) * Math.PI * 2);
+      ctx.fillStyle = `rgba(0,255,200,${0.3 + pulse * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(bx, by, 2 + pulse * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(0,255,200,${1 - progress})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(bx, by, 3 + progress * 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   drawControlsOverlay(ctx, w, h, alpha) {
@@ -8885,6 +9386,15 @@ export class Game {
       ctx.textAlign = "center";
       ctx.fillText(cat.toUpperCase(), sideW / 2, cy + (compact ? 16 : 22));
     }
+    // Help prompt for navigation keys
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = "#b0e0ff";
+    ctx.font = compact ? "10px monospace" : "12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("←/→ or Q/E: Change category", sideW / 2, h - 54);
+    ctx.fillText("↑/↓ or W/S: Move setting", sideW / 2, h - 36);
+    ctx.restore();
     ctx.textAlign = "left";
 
     // ── Right panel — settings for active category ───────────────────
@@ -9628,6 +10138,13 @@ export class Game {
         `Rounds Survived: ${this.arenaRound - 1}`,
         w / 2,
         compact ? h * 0.78 : h / 2 + 100,
+      );
+      ctx.fillStyle = "rgba(255,136,102,0.6)";
+      ctx.font = `${compact ? 10 : 12}px monospace`;
+      ctx.fillText(
+        `Personal Best: Round ${this.achievementStats.highestArenaRound} (Score: ${this.achievementStats.highestScore})`,
+        w / 2,
+        compact ? h * 0.82 : h / 2 + 125,
       );
     }
     if (this.mode === "meltdown") {

@@ -243,6 +243,173 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
+  // ── Memory Fragment: Quick team intro when player wakes ─────────────
+  intro_memory_01: [
+    {
+      bg: "dark",
+      flash: "#001122",
+      lines: [
+        {
+          text: "SYSTEMS: Rebooting...",
+          delay: 0,
+          color: "#8899aa",
+          size: 14,
+        },
+      ],
+      particles: "glow",
+      duration: 1400,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "ARIA: You're back online. Welcome back.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 18,
+        },
+        {
+          text: "I patched what I could. Vital signs are stable.",
+          delay: 1600,
+          color: "#88ccff",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 3200,
+    },
+    {
+      bg: "station",
+      art: "portrait_voss",
+      lines: [
+        {
+          text: "VOSS: Tactician — sharp tongue, sharper plans.",
+          delay: 0,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 1400,
+    },
+    {
+      bg: "station",
+      art: "portrait_miri",
+      lines: [
+        {
+          text: "MIRI: Medic — keeps us breathing. Don't test her patience.",
+          delay: 0,
+          color: "#aaffcc",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 1400,
+    },
+    {
+      bg: "station",
+      art: "portrait_kai",
+      lines: [
+        {
+          text: "KAI: Engineer — if it's broken, he made it. Then he swore.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 1400,
+    },
+    {
+      bg: "dark",
+      lines: [
+        {
+          text: "ARIA: You don't remember everything. That's expected.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: "Press ENTER to continue — or any key to skip.",
+          delay: 1800,
+          color: "#8899aa",
+          size: 14,
+        },
+      ],
+      particles: "stars",
+      duration: 0,
+    },
+  ],
+
+  // Extended memory fragment (longer bios + ARIA diagnostic)
+  intro_memory_01_extended: [
+    {
+      bg: "dark",
+      flash: "#001122",
+      lines: [
+        { text: "SYSTEMS: Rebooting...", delay: 0, color: "#8899aa", size: 14 },
+      ],
+      particles: "glow",
+      duration: 1200,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: Welcome back. I've stabilised your vitals.", delay: 0, color: "#00ffdd", size: 18 },
+        { text: "There's a lot to catch up on. I'll be concise.", delay: 1600, color: "#88ccff", size: 15 },
+      ],
+      particles: "glow",
+      duration: 3200,
+    },
+    {
+      bg: "station",
+      art: "portrait_voss",
+      lines: [
+        { text: "VOSS — Tactician: Keeps us two steps ahead and three steps sarcastic.", delay: 0, color: "#00ccff", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 1600,
+    },
+    {
+      bg: "station",
+      art: "portrait_miri",
+      lines: [
+        { text: "MIRI — Medic: She'll heal you and tell you off in the same breath.", delay: 0, color: "#aaffcc", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 1600,
+    },
+    {
+      bg: "station",
+      art: "portrait_kai",
+      lines: [
+        { text: "KAI — Engineer: Makes guns sing and clocks behave. Mostly.", delay: 0, color: "#ffcc88", size: 16 },
+      ],
+      particles: "sparks",
+      duration: 1600,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: HUD diagnostics: HEALTH 85% — CHRONO 42% — SHIELD offline.", delay: 0, color: "#00ffdd", size: 14 },
+        { text: "Press ENTER to continue, or ESC to skip onboarding.", delay: 1600, color: "#8899aa", size: 14 },
+      ],
+      particles: "stars",
+      duration: 0,
+    },
+  ],
+
+  // Spanish localized variant (short)
+  intro_memory_01_es: [
+    { bg: "dark", flash: "#001122", lines: [ { text: "SISTEMA: Reiniciando...", delay: 0, color: "#8899aa", size: 14 } ], particles: "glow", duration: 1200 },
+    { bg: "dark", art: "aria", lines: [ { text: "ARIA: Estás de vuelta. Bienvenido de nuevo.", delay: 0, color: "#00ffdd", size: 18 } ], particles: "glow", duration: 2200 },
+    { bg: "station", art: "portrait_miri", lines: [ { text: "MIRI: Médica — te mantendré respirando.", delay: 0, color: "#aaffcc", size: 16 } ], particles: "sparks", duration: 1400 },
+    { bg: "dark", lines: [ { text: "ARIA: Pulsa ENTER para continuar o cualquier tecla para omitir.", delay: 0, color: "#8899aa", size: 14 } ], particles: "stars", duration: 0 }
+  ],
+
   // ── New Level Transition Briefings (Dr. Voss narrative) ──────────
 
   security_briefing: [
@@ -1432,19 +1599,53 @@ export const CUTSCENE_SCRIPTS = {
           size: 18,
         },
         {
-          text: '"I\'m rerouting emergency power. Stay with me."',
+          text: '"CRITICAL DAMAGE DETECTED. OVERRIDING SAFEGUARDS."',
           delay: 4000,
-          color: "#00ffdd",
-          size: 15,
-        },
-        {
-          text: '"...please."',
-          delay: 6000,
-          color: "#00aabb",
+          color: "#ff0000",
           size: 16,
         },
+        {
+          text: '"INITIATING CHRONO SHIFT. BRACE YOURSELF!"',
+          delay: 6000,
+          color: "#00ccff",
+          size: 20,
+        },
       ],
-      duration: 8000,
+      duration: 8500,
+      particles: "sparks",
+    },
+    {
+      bg: "boss_lair",
+      flash: "#ffffff",
+      shake: 10,
+      lines: [
+        {
+          text: "Time grinds to a halt.",
+          delay: 0,
+          color: "#00ccff",
+          size: 24,
+        },
+        {
+          text: "The Paradox Lord's killing blow freezes inches from your visor.",
+          delay: 2000,
+          color: "#00aaff",
+          size: 16,
+        },
+        {
+          text: "The suit pulse-vents raw temporal energy, throwing you clear.",
+          delay: 4000,
+          color: "#00aaff",
+          size: 16,
+        },
+        {
+          text: "You survive. Barely.",
+          delay: 7000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      duration: 10000,
+      particles: "glow",
     },
     {
       bg: "dark",
@@ -1456,9 +1657,9 @@ export const CUTSCENE_SCRIPTS = {
           size: 28,
         },
         {
-          text: "— THE FALL —",
+          text: "— THE SHIFT —",
           delay: 1500,
-          color: "#556677",
+          color: "#00ccff",
           size: 18,
         },
       ],
@@ -3816,51 +4017,41 @@ export const TUTORIAL_MAP = {
   name: "Chronos Station - Training Wing",
   width: 24,
   height: 24,
-  // Layout: 6 distinct zones flowing top-to-bottom
-  // Zone 1 (rows 1-5): LOCKER ROOM — locker columns, intimate start
-  // Zone 2 (rows 7-11): TRAINING HALL — open firing range + sprint/dash yard
-  // Zone 3 (rows 13-15): CHRONO LAB (left, energy walls) + ARMORY (right, weapon crate)
-  // Zone 4 (row 16): SECURITY BULKHEAD — locked door
-  // Zone 5 (rows 17-18): SUPPLY DEPOT — health + ammo behind door
-  // Zone 6 (rows 19-22): COMBAT BAY / SANDBOX — open arena with cover
-  //
-  // Wall types: 2=tech, 3=metal column/locker, 4=energy conduit, 5=door, 8=glass
   grid: [
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 3, 0, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 3, 0, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
     [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 0, 3, 0, 3, 0, 0, 0, 3, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2],
     [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 0, 3, 0, 3, 0, 0, 0, 3, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 2, 2, 2, 2, 2, 2],
     [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2, 2, 0, 0, 2, 2, 2, 2],
-    [2, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3, 0, 2],
-    [2, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 2],
-    [2, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 3, 0, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 2],
-    [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 3, 0, 0, 3, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
+    [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
     [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
   ],
-  // Start in locker room center, facing south toward the exit
-  playerStart: { x: 12, y: 2.5, dir: 1.5708 },
+  playerStart: { x: 12, y: 2.5, dir: 1.5708 }, // Facing south in locker room
   pickups: [
-    // Weapon crate in armory zone (right side of chrono+armory area)
-    { x: 19.5, y: 14.5, type: "weapon", weaponId: 1 },
-    // Supply depot pickups (behind the security door)
-    { x: 8.5, y: 17.5, type: "health" },
-    { x: 15.5, y: 17.5, type: "ammo" },
-    // Combat bay health pack
-    { x: 4.5, y: 20.5, type: "health" },
+    // Weapon crate in Armory Corridor
+    { x: 12, y: 7.5, type: "weapon", weaponId: 0 }, // starts with pistol acquisition
+    // Add a second weapon pickup near the shooting waypoint so the player can swap
+    { x: 12, y: 9.5, type: "weapon", weaponId: 1 }, // Temporal Shotgun for swap tutorial
+    // Supply depot drops behind training yard door into the combat bay
+    { x: 10, y: 17.5, type: "health" },
+    { x: 14, y: 17.5, type: "ammo" },
   ],
 };
 
@@ -4622,6 +4813,8 @@ export const CAMPAIGN_LEVELS = [
       { x: 11.5, y: 18.5, type: "ammo" },
       { x: 2.5, y: 25.5, type: "health" },
       { x: 21.5, y: 25.5, type: "weapon", weaponId: 2 },
+      // Act 2: additional weapon pickup (Experimental Rail)
+      { x: 6.5, y: 22.5, type: "weapon", weaponId: 4 },
     ],
     exit: { x: 21.5, y: 1.5 },
     secrets: [
@@ -4770,6 +4963,8 @@ export const CAMPAIGN_LEVELS = [
       { x: 2.5, y: 21.5, type: "ammo" },
       { x: 25.5, y: 21.5, type: "health" },
       { x: 14.5, y: 21.5, type: "ammo" },
+      // Act 2: EMP Launcher placed in Reactor Access as a strategic pickup
+      { x: 14.5, y: 17.5, type: "weapon", weaponId: 7 },
     ],
     exit: { x: 25.5, y: 21.5 },
     secrets: [
@@ -5325,6 +5520,59 @@ export const WEAPONS = [
     color: "#ff0044",
     description: "Devastating quantum payload",
   },
+  {
+    id: 4,
+    name: "Phase Scattergun",
+    damage: 10,
+    pellets: 10,
+    fireRate: 700,
+    ammoPerShot: 1,
+    maxAmmo: 60,
+    spread: 0.12,
+    range: 14,
+    type: "hitscan",
+    color: "#ff66cc",
+    description: "Wide cone, great for close quarters — phases through shields",
+  },
+  {
+    id: 5,
+    name: "Temporal Sniper",
+    damage: 140,
+    fireRate: 1200,
+    ammoPerShot: 1,
+    maxAmmo: 20,
+    spread: 0.0,
+    range: 300,
+    type: "hitscan",
+    color: "#66ccff",
+    description: "High-damage, long-range bolt that destabilizes time on hit.",
+  },
+  {
+    id: 6,
+    name: "Ricochet Pistol",
+    damage: 12,
+    fireRate: 250,
+    ammoPerShot: 1,
+    maxAmmo: 200,
+    spread: 0.02,
+    range: 60,
+    type: "projectile",
+    color: "#ffee66",
+    description: "Rounds ricochet off surfaces — great for angled shots.",
+  },
+  {
+    id: 7,
+    name: "EMP Launcher",
+    damage: 40,
+    fireRate: 1400,
+    ammoPerShot: 2,
+    maxAmmo: 24,
+    spread: 0.0,
+    range: 40,
+    type: "projectile",
+    color: "#88ffff",
+    description: "Explosive EMP rounds that briefly disable shields and drones.",
+  },
 ];
 
 // Enemy definitions
@@ -5548,6 +5796,96 @@ export const ENEMY_TYPES = {
     dropsBombs: true,
     bombDamage: 25,
     bombRadius: 2.0,
+  },
+  // New Act 2 / Act 3 enemy archetypes
+  phaseStalker: {
+    name: "Phase Stalker",
+    health: 80,
+    speed: 2.6,
+    damage: 22,
+    attackRate: 700,
+    attackRange: 2.5,
+    sightRange: 18,
+    radius: 0.28,
+    score: 450,
+    color1: "#66ffdd",
+    color2: "#006644",
+    xp: 60,
+    attackType: "melee",
+    ai: "teleport_strike",
+    teleportCooldown: 3500,
+  },
+  timeWarden: {
+    name: "Time Warden",
+    health: 240,
+    speed: 0.9,
+    damage: 28,
+    attackRate: 1400,
+    attackRange: 10,
+    sightRange: 20,
+    radius: 0.5,
+    score: 1200,
+    color1: "#4488ff",
+    color2: "#223377",
+    xp: 160,
+    attackType: "ranged",
+    ai: "guard",
+    shieldRegen: true,
+    shieldRegenRate: 5, // per 5s
+    frontShield: true,
+  },
+  echoDrone: {
+    name: "Echo Drone",
+    health: 40,
+    speed: 2.2,
+    damage: 10,
+    attackRate: 600,
+    attackRange: 9,
+    sightRange: 18,
+    radius: 0.25,
+    score: 180,
+    color1: "#aaffff",
+    color2: "#114444",
+    xp: 28,
+    attackType: "ranged",
+    ai: "swarm",
+    echoCloneOnDeath: true,
+    cloneCount: 1,
+  },
+  riftLeaper: {
+    name: "Rift Leaper",
+    health: 100,
+    speed: 2.8,
+    damage: 30,
+    attackRate: 1000,
+    attackRange: 2,
+    sightRange: 16,
+    radius: 0.4,
+    score: 600,
+    color1: "#ff66ff",
+    color2: "#662266",
+    xp: 80,
+    attackType: "melee",
+    ai: "teleport_melee",
+    leapDistance: 6,
+  },
+  temporalEngineer: {
+    name: "Temporal Engineer",
+    health: 160,
+    speed: 1.0,
+    damage: 12,
+    attackRate: 1600,
+    attackRange: 12,
+    sightRange: 22,
+    radius: 0.45,
+    score: 900,
+    color1: "#ffd36b",
+    color2: "#664411",
+    xp: 120,
+    attackType: "ranged",
+    ai: "support",
+    disablesHUD: true,
+    disableDuration: 3000,
   },
 };
 

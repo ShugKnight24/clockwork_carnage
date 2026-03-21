@@ -41,6 +41,16 @@ export class Player {
     this.maxStamina = 100;
     this.isSprinting = false;
     this.isDashing = false;
+    // Crouch & Slide
+    this.isCrouching = false;
+    this.isSliding = false;
+    this.slideTime = 0;
+    this.slideDirX = 0;
+    this.slideDirY = 0;
+    this.slideCooldown = 0;
+    this.slideDuration = 0.6; // seconds
+    this.slideSpeedMult = 3.0; // multiplier of base moveSpeed at start
+    this.slideStaminaCost = 18;
     this.dashTime = 0;
     this.dashDirX = 0;
     this.dashDirY = 0;
@@ -55,6 +65,7 @@ export class Player {
     this.chronoEnergy = 50; // 0–100, starts half-charged
     this.maxChronoEnergy = 100;
     this.chronoActive = false;
+    this.particles = [];
   }
   getWeaponDef() {
     return WEAPONS[this.weapons[this.currentWeapon]];
