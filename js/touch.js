@@ -66,6 +66,8 @@ export class TouchControls {
 
     // Chrono shift touch tracking
     this.chronoTouch = null;
+    // Crouch touch tracking
+    this.crouchTouch = null;
 
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
@@ -215,6 +217,12 @@ export class TouchControls {
         y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
         r: btnSize * 0.6,
       },
+      // Crouch button (small, above sprint)
+      crouchBtn: {
+        x: Math.max(60, 42 + sa.left) + btnSize * 0.9,
+        y: isCompactPhone ? h - 200 - sa.bottom : h - 290 - sa.bottom,
+        r: btnSize * 0.45,
+      },
       // Weapon cycle — left of fire, easily reachable by right thumb
       weaponBtn: {
         x: w - pad - btnSize * 3.2,
@@ -278,6 +286,11 @@ export class TouchControls {
       z.sprintBtn.r * hitShrink
     )
       return "sprint";
+    if (
+      this.dist(x, y, z.crouchBtn.x, z.crouchBtn.y) <
+      z.crouchBtn.r * hitShrink
+    )
+      return "crouch";
     if (
       this.dist(x, y, z.weaponBtn.x, z.weaponBtn.y) <
       z.weaponBtn.r * hitShrink
@@ -472,6 +485,11 @@ export class TouchControls {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;
         g.keys[g.keybinds.chronoShift] = true;
+      } else if (zone === "crouch" && this.crouchTouch === null) {
+        this.activeButtons.add("crouch");
+        this.crouchTouch = touch.identifier;
+        g.keys[g.keybinds.crouch] = true;
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "sprint") {
         this.sprintToggleActive = !this.sprintToggleActive;
         this.activeButtons.add("sprint");
@@ -617,6 +635,10 @@ export class TouchControls {
         this.chronoTouch = null;
         this.game.keys[this.game.keybinds.chronoShift] = false;
         this.activeButtons.delete("chrono");
+      } else if (touch.identifier === this.crouchTouch) {
+        this.crouchTouch = null;
+        this.game.keys[this.game.keybinds.crouch] = false;
+        this.activeButtons.delete("crouch");
       }
     }
     // Clear transient buttons
@@ -1021,6 +1043,16 @@ export class TouchControls {
         : this.activeButtons.has("chrono")
           ? "#aa44dd"
           : "#9944ff",
+    );
+
+    // ── Crouch button (small) ──
+    this.drawButton(
+      ctx,
+      z.crouchBtn.x,
+      z.crouchBtn.y,
+      z.crouchBtn.r,
+      "CROUCH",
+      this.activeButtons.has("crouch") ? "#66dd66" : "#558855",
     );
 
     // ── Sprint toggle button (left side) ──

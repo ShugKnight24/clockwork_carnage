@@ -31,50 +31,84 @@ export class AudioManager {
     }
   }
 
-  playNoise(duration, gain, filterFreq, filterType = "lowpass") {
+  playNoise(duration, gain, filterFreq, filterType = "lowpass", pan = 0) {
     if (!this.ctx || !this.enabled) return;
     const bufferSize = this.ctx.sampleRate * duration;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
+        data[i] = Math.random() * 2 - 1;
     }
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
+
     const filter = this.ctx.createBiquadFilter();
     filter.type = filterType;
     filter.frequency.value = filterFreq;
+
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, this.ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+
     source.connect(filter);
     filter.connect(g);
-    g.connect(this.sfxGain);
+    g.connect(panner);
+    panner.connect(this.sfxGain);
+
     source.onended = () => {
-      source.disconnect();
-      filter.disconnect();
-      g.disconnect();
+        source.disconnect();
+        filter.disconnect();
+        g.disconnect();
+        panner.disconnect();
     };
     source.start();
   }
 
-  playTone(freq, duration, type = "square", gain = 0.3, detune = 0) {
+  playTone(freq, duration, type = "square", gain = 0.3, detune = 0, pan = 0) {
     if (!this.ctx || !this.enabled) return;
     const osc = this.ctx.createOscillator();
     osc.type = type;
     osc.frequency.value = freq;
     osc.detune.value = detune;
+
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, this.ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+
     osc.connect(g);
-    g.connect(this.sfxGain);
+    g.connect(panner);
+    panner.connect(this.sfxGain);
+
     osc.onended = () => {
-      osc.disconnect();
-      g.disconnect();
+        osc.disconnect();
+        g.disconnect();
+        panner.disconnect();
     };
     osc.start();
     osc.stop(this.ctx.currentTime + duration);
+  }
+
+  // Helper to calculate stereo pan (-1 to 1) from relative world position
+  calculatePan(sourceX, sourceY, playerX, playerY, playerAngle) {
+    const dx = sourceX - playerX;
+    const dy = sourceY - playerY;
+    const angleToSource = Math.atan2(dy, dx);
+    let relAngle = angleToSource - playerAngle;
+    while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+    while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+    return Math.sin(relAngle);
+  }
+
+  // Generic wrapper for spatial sounds (passed as a function that accepts 'pan')
+  playSpatial(sourceX, sourceY, player, sfxFn) {
+    const pan = this.calculatePan(sourceX, sourceY, player.x, player.y, player.angle);
+    sfxFn(pan);
   }
 
   // Sound effects
@@ -302,15 +336,15 @@ export class AudioManager {
     this.playTone(40, 0.5, "sine", 0.7);
   }
 
-  enemyHit() {
-    this.playTone(300, 0.08, "square", 0.3);
-    this.playTone(200, 0.06, "square", 0.2);
+  enemyHit(pan = 0) {
+    this.playTone(300, 0.08, "square", 0.3, 0, pan);
+    this.playTone(200, 0.06, "square", 0.2, 0, pan);
   }
 
-  enemyDeath() {
-    this.playTone(400, 0.1, "square", 0.3);
-    this.playTone(200, 0.15, "sawtooth", 0.3);
-    this.playTone(100, 0.2, "sawtooth", 0.2);
+  enemyDeath(pan = 0) {
+    this.playTone(400, 0.1, "square", 0.3, 0, pan);
+    this.playTone(200, 0.15, "sawtooth", 0.3, 0, pan);
+    this.playTone(100, 0.2, "sawtooth", 0.2, 0, pan);
   }
 
   playerHit() {

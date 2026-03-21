@@ -621,8 +621,94 @@ export class Renderer {
 
     // Render sprites
     this.renderSprites(player, entities, time, planeMul, camX, camY);
+
+    // Render particles
+    if (player.particles) {
+      this.renderParticles(player, player.particles, time, planeMul, camX, camY);
+    }
   }
 
+  renderParticles(player, particles, time, planeMul = 0.66, camX, camY) {
+    if (!particles || particles.length === 0) return;
+    const ctx = this.ctx;
+    const w = this.width;
+    const h = this.height;
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
+    const cx = camX != null ? camX : player.x;
+    const cy = camY != null ? camY : player.y;
+    const halfH = h / 2;
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const spriteX = p.x - cx;
+      const spriteY = p.y - cy;
+
+      const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+      const transformX = invDet * (dirY * spriteX - dirX * spriteY);
+      const transformY = invDet * (-planeY * spriteX + planeX * spriteY);
+
+      if (transformY <= 0.1) continue;
+
+      const screenX = Math.floor((w / 2) * (1 + transformX / transformY));
+
+      // Basic occlusion check
+      if (
+        screenX < 0 ||
+        screenX >= w ||
+        transformY > this.zBuffer[screenX] + 0.1
+      )
+        continue;
+
+      const size = Math.abs(Math.floor((h / transformY) * (p.size || 0.05)));
+      // p.z is height offset (0 = floor level, negative = up)
+      const screenY = Math.floor(halfH + (p.z || 0) * (h / transformY));
+
+      const r = p.r ?? 255;
+      const g = p.g ?? 255;
+      const b = p.b ?? 255;
+      const a = p.life ?? 1;
+
+      ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+      ctx.fillRect(
+        Math.floor(screenX - size / 2),
+        Math.floor(screenY - size / 2),
+        Math.max(1, size),
+        Math.max(1, size),
+      );
+    }
+  }
+
+  // --- Procedural Visual Utilities ---
+  drawGlow(ctx, x, y, radius, color, strength = 0.5) {
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, "transparent");
+    ctx.globalAlpha = strength;
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+  }
+
+  drawTechLines(ctx, x, y, width, height, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.3;
+    const spacing = 4;
+    for (let i = 0; i < width; i += spacing) {
+      ctx.beginPath();
+      ctx.moveTo(x + i, y);
+      ctx.lineTo(x + i, y + height);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  // --- Entity Rendering ---
   renderSprites(player, entities, time, planeMul = 0.66, camX, camY) {
     const ctx = this.ctx;
     const w = this.width;
@@ -852,11 +938,13 @@ export class Renderer {
       const dronePulse = Math.sin(time * 0.004 + enemy.x * 3);
       const hover = Math.sin(time * 0.005 + enemy.y * 2) * halfH * 0.01;
 
-      // Outer energy field
-      ctx.fillStyle = `rgba(0,255,170,${0.04 + dronePulse * 0.02})`;
-      ctx.beginPath();
-      ctx.arc(screenX, sphereCY + hover, sphereR * 1.2, 0, Math.PI * 2);
-      ctx.fill();
+      // Outer energy field (Procedural Glow)
+      const gStr = def.glowStrength || 0.15;
+      this.drawGlow(ctx, screenX, sphereCY + hover, sphereR * 1.5, baseColor, gStr + dronePulse * 0.05);
+
+      // Tech Grid Overlay (Procedural sharpness)
+      const tOpac = def.techLineOpacity || 0.3;
+      this.drawTechLines(ctx, screenX - sphereR, sphereCY + hover - sphereR, sphereR * 2, sphereR * 2, baseColor, tOpac);
 
       // Main sphere body
       ctx.fillStyle = darkColor;
@@ -940,6 +1028,18 @@ export class Renderer {
 
       // Eye housing (recessed ring)
       ctx.strokeStyle = "rgba(0,0,0,0.3)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(screenX, sphereCY + hover, sphereR * 0.45, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Core "Sharp" Eye
+      const eyeColor = hitFlash ? "#ffffff" : "#ff0044";
+      this.drawGlow(ctx, screenX, sphereCY + hover, sphereR * 0.35, eyeColor, 0.6);
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.rect(screenX - 1, sphereCY + hover - sphereR * 0.1, 2, sphereR * 0.2);
+      ctx.fill();
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(screenX, sphereCY + hover, sphereR * 0.32, 0, Math.PI * 2);
@@ -1085,9 +1185,12 @@ export class Renderer {
       const drift = Math.sin(time * 0.002 + enemy.x * 3) * halfH * 0.01;
       const phantomPulse = (Math.sin(time * 0.004 + enemy.y * 2) + 1) * 0.5;
 
-      // Outer ethereal aura
-      ctx.fillStyle = "rgba(150,50,255,0.04)";
-      ctx.globalAlpha = alpha * 0.6;
+      // Outer ethereal aura (Procedural Glow)
+      this.drawGlow(ctx, screenX + phaseOff, centerY + drift, bodyWidth * 1.5, baseColor, 0.2 * phantomPulse);
+      
+      // Secondary aura
+      this.drawGlow(ctx, screenX - phaseOff, centerY - drift, bodyWidth * 1.2, "#ffffff", 0.05);
+
       ctx.beginPath();
       ctx.ellipse(
         screenX + phaseOff,
@@ -1146,6 +1249,9 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = alpha;
 
+      const tsW = bodyWidth * 0.82;
+      const tsTop = centerY - halfH * 0.52;
+
       // Rotating glyph overlay (adds mystical motion)
       ctx.save();
       ctx.translate(screenX, tsTop + halfH * 0.02);
@@ -1158,7 +1264,15 @@ export class Renderer {
         const rx = Math.cos(ra) * tsW * 0.85;
         const ry = Math.sin(ra) * tsW * 0.42;
         ctx.beginPath();
-        ctx.ellipse(rx, ry, tsW * 0.06, tsW * 0.02, ra + time * 0.0012, 0, Math.PI * 2);
+        ctx.ellipse(
+          rx,
+          ry,
+          tsW * 0.06,
+          tsW * 0.02,
+          ra + time * 0.0012,
+          0,
+          Math.PI * 2,
+        );
         ctx.stroke();
       }
       ctx.restore();
@@ -1356,19 +1470,8 @@ export class Renderer {
       const bellyY = centerY + halfH * 0.18;
       const rumpY = centerY - halfH * 0.08 + breathe;
 
-      // Ground shadow
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX,
-        bellyY + halfH * 0.28,
-        bW * 0.9,
-        halfH * 0.04,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
+      // Ground shadow (Procedural Glow as shadow)
+      this.drawGlow(ctx, screenX, bellyY + halfH * 0.28, bW * 0.9, "rgba(0,0,0,0.4)", 0.6);
 
       // Torso
       ctx.fillStyle = darkColor;
@@ -1484,7 +1587,9 @@ export class Renderer {
       ctx.stroke();
       ctx.strokeStyle = baseColor;
       ctx.lineWidth = 1.5;
-      // Ribcage lines
+      // Ribcage lines (Enhanced with procedural tech-lines)
+      this.drawTechLines(ctx, screenX - bW * 0.1, backY, bW * 0.45, bellyY - backY, baseColor);
+      
       for (let r = 0; r < 3; r++) {
         const rx = screenX - bW * 0.1 + r * bW * 0.15;
         ctx.beginPath();
@@ -2102,35 +2207,37 @@ export class Renderer {
     ) {
       // ─── Paradox Lord (all forms) ───
       const bossForm = enemy.def.form || 1;
-      const formScale = 1 + (bossForm - 1) * 0.08;
-      const bW = bodyWidth * 1.15 * formScale;
-      const bTop = bodyTop - halfH * 0.12;
-      const bBot = bodyBottom + halfH * 0.05;
+      const formScale = 1 + (bossForm - 1) * 0.1;
+      const bW = bodyWidth * 1.3 * formScale;
+      const bTop = bodyTop - halfH * 0.15;
+      const bBot = bodyBottom + halfH * 0.1;
       const torsoH = bBot - bTop;
-      const breathe = Math.sin(time * 0.002) * halfH * 0.015;
+      const breathe = Math.sin(time * 0.002) * halfH * 0.02;
       const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
 
-      // Form-dependent brighter colors (original c1/c2 are too dark)
-      const formBaseColors = ["#ff3399", "#ff2277", "#ff1155"];
-      const formDarkColors = ["#881144", "#771144", "#991133"];
-      const formAccents = ["#ff66bb", "#ff44aa", "#ff2299"];
-      const bossBaseColor = hitFlash ? "#ffffff" : formBaseColors[bossForm - 1];
-      const bossDarkColor = hitFlash ? "#ffaaaa" : formDarkColors[bossForm - 1];
-      const bossAccent = hitFlash ? "#ffcccc" : formAccents[bossForm - 1];
+      // Industrial Color Palette (Brass, Copper, Steel)
+      const brass = "#b58e3d";
+      const darkBrass = "#7a5c1d";
+      const copper = "#b87333";
+      const steel = "#71797e";
+      const glowColor = "rgba(0, 255, 255, "; // Cyan energy
 
-      // Dark aura — intensifies with form
+      const bossBaseColor = hitFlash ? "#ffffff" : brass;
+      const bossDarkColor = hitFlash ? "#ffaaaa" : darkBrass;
+      const bossAccent = hitFlash ? "#ffcccc" : copper;
+
+      // Dark aura — industrial soot/smoke
       ctx.save();
-      const auraR = bW * (1.8 + (bossForm - 1) * 0.3) + pulse * bW * 0.3;
+      const auraR = bW * (2.0 + (bossForm - 1) * 0.4) + pulse * bW * 0.2;
       const auraGrad = ctx.createRadialGradient(
         screenX,
         centerY,
-        bW * 0.3,
+        bW * 0.2,
         screenX,
         centerY,
         auraR,
       );
-      auraGrad.addColorStop(0, `rgba(120,0,50,${0.18 + bossForm * 0.04})`);
-      auraGrad.addColorStop(0.6, `rgba(60,0,25,${0.08 + bossForm * 0.02})`);
+      auraGrad.addColorStop(0, `rgba(40, 30, 20, ${0.3 + bossForm * 0.1})`);
       auraGrad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = auraGrad;
       ctx.beginPath();
@@ -2138,8 +2245,8 @@ export class Renderer {
       ctx.fill();
       ctx.restore();
 
-      // Shadow/cape mass behind body
-      ctx.fillStyle = "#1a0010";
+      // Shadow/backpack mass behind body
+      ctx.fillStyle = "#1a1008";
       ctx.beginPath();
       ctx.moveTo(screenX - bW * 1.1, bTop + torsoH * 0.1);
       ctx.quadraticCurveTo(
@@ -2157,12 +2264,18 @@ export class Renderer {
       );
       ctx.closePath();
       ctx.fill();
-      // Cape rim glow
-      ctx.strokeStyle = `rgba(255,0,100,${0.12 + pulse * 0.08})`;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      // Steam pipes
+      ctx.strokeStyle = steel;
+      ctx.lineWidth = 4;
+      for (let p = 0; p < 2; p++) {
+        const px = screenX + (p === 0 ? -bW : bW) * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(px, bTop + breathe);
+        ctx.lineTo(px + (p === 0 ? -20 : 20), bTop - halfH * 0.2 + breathe);
+        ctx.stroke();
+      }
 
-      // Main body
+      // Main body (Heavy Plated Torso)
       ctx.fillStyle = bossDarkColor;
       ctx.beginPath();
       ctx.moveTo(screenX - bW * 0.85, bTop + breathe);
@@ -2178,425 +2291,142 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Chest armor plate
-      ctx.fillStyle = bossBaseColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.7, bTop + torsoH * 0.08 + breathe);
-      ctx.lineTo(screenX - bW * 0.8, bTop + torsoH * 0.2 + breathe);
-      ctx.lineTo(screenX - bW * 0.75, bBot - torsoH * 0.15);
-      ctx.lineTo(screenX, bBot - torsoH * 0.1);
-      ctx.lineTo(screenX + bW * 0.75, bBot - torsoH * 0.15);
-      ctx.lineTo(screenX + bW * 0.8, bTop + torsoH * 0.2 + breathe);
-      ctx.lineTo(screenX + bW * 0.7, bTop + torsoH * 0.08 + breathe);
-      ctx.closePath();
-      ctx.fill();
-      // Armor ribbing
-      ctx.strokeStyle = hitFlash ? "#ff8888" : bossAccent;
-      ctx.lineWidth = 1;
-      for (let r = 0; r < 5; r++) {
-        const ry = bTop + torsoH * (0.2 + r * 0.12) + breathe;
-        ctx.beginPath();
-        ctx.moveTo(screenX - bW * 0.7, ry);
-        ctx.lineTo(screenX + bW * 0.7, ry);
-        ctx.stroke();
-      }
-      // Center chest seam
-      ctx.strokeStyle = hitFlash ? "#ff8888" : formAccents[bossForm - 1];
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(screenX, bTop + torsoH * 0.08 + breathe);
-      ctx.lineTo(screenX, bBot - torsoH * 0.1);
-      ctx.stroke();
-
-      // Chest energy core (layered glow, no shadowBlur for performance)
-      const coreY = bTop + torsoH * 0.3 + breathe;
-      const coreR = bW * 0.12 + pulse * bW * 0.04;
-      ctx.fillStyle = `rgba(255,0,68,${0.12 + pulse * 0.12})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.3 + pulse * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,136,${0.5 + pulse * 0.3})`;
+      // Chest Grill / Porthole
+      const coreY = bTop + torsoH * 0.4 + breathe;
+      const coreR = bW * 0.2;
+      ctx.fillStyle = "#222";
       ctx.beginPath();
       ctx.arc(screenX, coreY, coreR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = `rgba(255,136,187,${0.6 + pulse * 0.2})`;
+      // Glowing Core
+      const coreGlow = ctx.createRadialGradient(screenX, coreY, 0, screenX, coreY, coreR);
+      coreGlow.addColorStop(0, glowColor + "0.8)");
+      coreGlow.addColorStop(1, glowColor + "0.1)");
+      ctx.fillStyle = coreGlow;
       ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 0.4, 0, Math.PI * 2);
+      ctx.arc(screenX, coreY, coreR, 0, Math.PI * 2);
       ctx.fill();
-
-      // Shoulder pauldrons with spikes
-      const drawPauldron = (side) => {
-        const sx = screenX + side * bW * 0.85;
-        const sy = bTop + torsoH * 0.05 + breathe;
-        const pW = bW * 0.4;
-        const pH = torsoH * 0.25;
-        // Base plate
-        ctx.fillStyle = bossDarkColor;
+      // Grill bars
+      ctx.strokeStyle = steel; ctx.lineWidth = 3;
+      for (let g = 0; g < 4; g++) {
+        const gx = screenX - coreR + (g / 3) * coreR * 2;
         ctx.beginPath();
-        ctx.arc(sx + side * pW * 0.2, sy + pH * 0.4, pW * 0.55, 0, Math.PI * 2);
-        ctx.fill();
-        // Outer armor shell
+        ctx.moveTo(gx, coreY - coreR);
+        ctx.lineTo(gx, coreY + coreR);
+        ctx.stroke();
+      }
+
+
+      // Pauldrons (Fallout Style)
+      const drawPauldron = (side) => {
+        const px = screenX + side * bW * 0.9;
+        const py = bTop + breathe;
+        const pSize = bW * 0.45;
         ctx.fillStyle = bossBaseColor;
         ctx.beginPath();
-        ctx.ellipse(
-          sx + side * pW * 0.15,
-          sy + pH * 0.35,
-          pW * 0.45,
-          pH * 0.4,
-          side * 0.2,
-          0,
-          Math.PI * 2,
-        );
+        if (side < 0) {
+          ctx.moveTo(px, py);
+          ctx.arc(px, py, pSize, Math.PI, Math.PI * 2);
+        } else {
+          ctx.moveTo(px, py);
+          ctx.arc(px, py, pSize, Math.PI * 2, Math.PI);
+        }
+        ctx.closePath();
         ctx.fill();
-        // Edge highlight
-        ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.ellipse(
-          sx + side * pW * 0.15,
-          sy + pH * 0.35,
-          pW * 0.45,
-          pH * 0.4,
-          side * 0.2,
-          -Math.PI * 0.8,
-          Math.PI * 0.3,
-        );
-        ctx.stroke();
-        // Spikes
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
-        // Main spike
-        ctx.beginPath();
-        ctx.moveTo(sx + side * pW * 0.2, sy + pH * 0.1);
-        ctx.lineTo(sx + side * pW * 0.9, sy - pH * 0.6);
-        ctx.lineTo(sx + side * pW * 0.35, sy + pH * 0.25);
-        ctx.fill();
-        // Secondary spike
-        ctx.beginPath();
-        ctx.moveTo(sx + side * pW * 0.45, sy + pH * 0.15);
-        ctx.lineTo(sx + side * pW * 1.1, sy - pH * 0.2);
-        ctx.lineTo(sx + side * pW * 0.55, sy + pH * 0.35);
-        ctx.fill();
-        // Back spike
-        ctx.beginPath();
-        ctx.moveTo(sx - side * pW * 0.05, sy + pH * 0.05);
-        ctx.lineTo(sx + side * pW * 0.3, sy - pH * 0.8);
-        ctx.lineTo(sx + side * pW * 0.1, sy + pH * 0.2);
-        ctx.fill();
+        // Pauldron detail (Rivets)
+        ctx.fillStyle = "#333";
+        for (let r = 0; r < 3; r++) {
+          const rang = Math.PI + r * 0.5;
+          ctx.beginPath();
+          ctx.arc(
+            px + Math.cos(rang) * pSize * 0.8,
+            py + Math.sin(rang) * pSize * 0.8,
+            4,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
       };
       drawPauldron(-1);
       drawPauldron(1);
 
-      // Head
-      const headW = bW * 0.55;
-      const headH = torsoH * 0.3;
-      const headTop = bTop - headH * 0.65 + breathe;
-      const headCX = screenX;
-      const headCY = headTop + headH * 0.5;
-      // Neck
-      ctx.fillStyle = bossDarkColor;
-      ctx.fillRect(
-        screenX - bW * 0.2,
-        headTop + headH * 0.7,
-        bW * 0.4,
-        torsoH * 0.15,
-      );
-      // Skull shape
-      ctx.fillStyle = bossDarkColor;
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.8, headCY + headH * 0.15);
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.85,
-        headCY - headH * 0.2,
-        headCX - headW * 0.5,
-        headCY - headH * 0.5,
-      );
-      ctx.quadraticCurveTo(
-        headCX,
-        headCY - headH * 0.65,
-        headCX + headW * 0.5,
-        headCY - headH * 0.5,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.85,
-        headCY - headH * 0.2,
-        headCX + headW * 0.8,
-        headCY + headH * 0.15,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.6,
-        headCY + headH * 0.55,
-        headCX,
-        headCY + headH * 0.6,
-      );
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.6,
-        headCY + headH * 0.55,
-        headCX - headW * 0.8,
-        headCY + headH * 0.15,
-      );
-      ctx.fill();
-      // Helmet plate
+
+      // Diving Helmet (Big Daddy Style)
+      const hW = bW * 0.65;
+      const hH = bW * 0.65;
+      const hX = screenX;
+      const hY = bTop - hH * 0.45 + breathe;
+      
+      // Helmet Base (Riveted Brass Dome)
       ctx.fillStyle = bossBaseColor;
       ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.65, headCY - headH * 0.1);
-      ctx.quadraticCurveTo(
-        headCX,
-        headCY - headH * 0.55,
-        headCX + headW * 0.65,
-        headCY - headH * 0.1,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.5,
-        headCY + headH * 0.1,
-        headCX,
-        headCY + headH * 0.15,
-      );
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.5,
-        headCY + headH * 0.1,
-        headCX - headW * 0.65,
-        headCY - headH * 0.1,
-      );
+      ctx.arc(hX, hY, hW * 0.5, 0, Math.PI * 2);
       ctx.fill();
-      // Center ridge
-      ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
+      ctx.strokeStyle = "#333";
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(headCX, headCY - headH * 0.5);
-      ctx.lineTo(headCX, headCY + headH * 0.15);
       ctx.stroke();
-
-      // Horns
-      const drawHorn = (side, length, curve, thickness) => {
-        const hx = headCX + side * headW * 0.5;
-        const hy = headCY - headH * 0.35;
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#773344";
+      
+      // Portholes (Glowing Eyes)
+      const drawPorthole = (px, py, r) => {
+        ctx.fillStyle = "#111";
         ctx.beginPath();
-        ctx.moveTo(hx - thickness, hy);
-        ctx.quadraticCurveTo(
-          hx + side * headW * curve,
-          hy - length * 0.6,
-          hx + side * headW * curve * 0.8,
-          hy - length,
-        );
-        ctx.lineTo(hx + side * headW * curve * 0.8 + side * 1, hy - length + 2);
-        ctx.quadraticCurveTo(
-          hx + side * headW * curve * 0.5,
-          hy - length * 0.5,
-          hx + thickness,
-          hy,
-        );
+        ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
-        // Horn ridges
-        ctx.strokeStyle = hitFlash ? "#ff8888" : "#553322";
-        ctx.lineWidth = 0.8;
-        for (let rr = 0; rr < 3; rr++) {
-          const t = 0.2 + rr * 0.25;
-          const rx = hx + side * headW * curve * t * 0.8;
-          const ry = hy - length * t * 0.7;
-          ctx.beginPath();
-          ctx.moveTo(rx - thickness * (1 - t * 0.5), ry);
-          ctx.lineTo(rx + thickness * (1 - t * 0.5), ry);
-          ctx.stroke();
-        }
-        // Glowing tip (layered glow, no shadowBlur)
-        ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
-        ctx.beginPath();
-        ctx.arc(
-          hx + side * headW * curve * 0.8,
-          hy - length + 1,
-          5 + pulse * 2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,68,${0.4 + pulse * 0.4})`;
-        ctx.beginPath();
-        ctx.arc(
-          hx + side * headW * curve * 0.8,
-          hy - length + 1,
-          2 + pulse,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      };
-      drawHorn(-1, halfH * 0.35, 0.7, 3);
-      drawHorn(1, halfH * 0.35, 0.7, 3);
-      // Center horn (taller)
-      const chx = headCX;
-      const chy = headCY - headH * 0.45;
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#883344";
-      ctx.beginPath();
-      ctx.moveTo(chx - 3.5, chy);
-      ctx.quadraticCurveTo(
-        chx - 2,
-        chy - halfH * 0.25,
-        chx,
-        chy - halfH * 0.45,
-      );
-      ctx.quadraticCurveTo(chx + 2, chy - halfH * 0.25, chx + 3.5, chy);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
-      ctx.beginPath();
-      ctx.arc(chx, chy - halfH * 0.45, 6 + pulse * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.5 + pulse * 0.4})`;
-      ctx.beginPath();
-      ctx.arc(chx, chy - halfH * 0.45, 2.5 + pulse * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Three eyes
-      const eyeY = headCY - headH * 0.05;
-      const drawEye = (ex, ey, size, isCenter) => {
-        const sw = size * (isCenter ? 1.4 : 1.0);
-        const sh = size * (isCenter ? 0.8 : 0.6);
-        // Eye socket shadow
-        ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Eye glow (layered fills, no shadowBlur for performance)
-        ctx.fillStyle = `rgba(255,0,0,${0.12 + pulse * 0.1})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.8, sh * 1.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,0,${0.3 + pulse * 0.15})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,0,${0.7 + pulse * 0.3})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw, sh, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Bright iris
-        ctx.fillStyle = `rgba(255,${80 + pulse * 50},${80 + pulse * 50},0.9)`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 0.55, sh * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Slit pupil
-        ctx.fillStyle = "#000000";
-        const pupilTrack = Math.sin(time * 0.0015 + enemy.x) * sw * 0.15;
-        ctx.beginPath();
-        ctx.ellipse(
-          ex + pupilTrack,
-          ey,
-          sw * 0.12,
-          sh * 0.8,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Specular highlight
-        ctx.fillStyle = "rgba(255,200,200,0.5)";
-        ctx.beginPath();
-        ctx.arc(ex - sw * 0.25, ey - sh * 0.3, sw * 0.15, 0, Math.PI * 2);
-        ctx.fill();
-      };
-      const eSize = bW * 0.09;
-      drawEye(headCX - headW * 0.35, eyeY, eSize, false);
-      drawEye(headCX, eyeY - headH * 0.05, eSize, true);
-      drawEye(headCX + headW * 0.35, eyeY, eSize, false);
-      // Form 2+: extra eyes
-      if (bossForm >= 2) {
-        drawEye(headCX - headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
-        drawEye(headCX + headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
-      }
-      // Form 3: even more eyes
-      if (bossForm >= 3) {
-        drawEye(
-          headCX - headW * 0.15,
-          eyeY + headH * 0.18,
-          eSize * 0.55,
-          false,
-        );
-        drawEye(
-          headCX + headW * 0.15,
-          eyeY + headH * 0.18,
-          eSize * 0.55,
-          false,
-        );
-      }
-
-      // Jaw / mouth
-      const jawY = headCY + headH * 0.2;
-      const jawOpen = 1.5 + Math.sin(time * 0.003) * 1.5;
-      // Upper jaw
-      ctx.fillStyle = bossDarkColor;
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.5, jawY);
-      ctx.lineTo(headCX - headW * 0.55, jawY + headH * 0.15);
-      ctx.lineTo(headCX + headW * 0.55, jawY + headH * 0.15);
-      ctx.lineTo(headCX + headW * 0.5, jawY);
-      ctx.fill();
-      // Lower jaw
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#441122";
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.45, jawY + headH * 0.15 + jawOpen);
-      ctx.quadraticCurveTo(
-        headCX,
-        jawY + headH * 0.35 + jawOpen * 1.5,
-        headCX + headW * 0.45,
-        jawY + headH * 0.15 + jawOpen,
-      );
-      ctx.lineTo(headCX + headW * 0.5, jawY + headH * 0.12);
-      ctx.lineTo(headCX - headW * 0.5, jawY + headH * 0.12);
-      ctx.fill();
-      // Mouth interior
-      ctx.fillStyle = "#1a0005";
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.4, jawY + headH * 0.12);
-      ctx.lineTo(headCX + headW * 0.4, jawY + headH * 0.12);
-      ctx.quadraticCurveTo(
-        headCX,
-        jawY + headH * 0.28 + jawOpen,
-        headCX - headW * 0.4,
-        jawY + headH * 0.12,
-      );
-      ctx.fill();
-      // Upper fangs
-      ctx.fillStyle = "#eeddcc";
-      const fangH = headH * 0.2 + jawOpen * 0.5;
-      for (let f = 0; f < 6; f++) {
-        const fx = headCX - headW * 0.35 + f * headW * 0.14;
-        const big = f === 0 || f === 5 ? 1.6 : f === 1 || f === 4 ? 1.2 : 0.7;
-        ctx.beginPath();
-        ctx.moveTo(fx - 1.5 * big, jawY + headH * 0.12);
-        ctx.lineTo(fx, jawY + headH * 0.12 + fangH * big);
-        ctx.lineTo(fx + 1.5 * big, jawY + headH * 0.12);
-        ctx.fill();
-      }
-      // Lower fangs
-      for (let f = 0; f < 4; f++) {
-        const fx = headCX - headW * 0.25 + f * headW * 0.17;
-        const big = f === 0 || f === 3 ? 1.3 : 0.6;
-        const fy = jawY + headH * 0.15 + jawOpen * 0.7;
-        ctx.beginPath();
-        ctx.moveTo(fx - 1.2 * big, fy);
-        ctx.lineTo(fx, fy - fangH * big * 0.6);
-        ctx.lineTo(fx + 1.2 * big, fy);
-        ctx.fill();
-      }
-      // Drool
-      ctx.strokeStyle = "rgba(180,0,40,0.5)";
-      ctx.lineWidth = 1;
-      for (let d = 0; d < 3; d++) {
-        const dx = headCX - headW * 0.2 + d * headW * 0.2;
-        const dLen =
-          halfH * 0.04 + Math.sin(time * 0.007 + d * 2) * halfH * 0.025;
-        ctx.beginPath();
-        ctx.moveTo(dx, jawY + headH * 0.12 + fangH * 0.8);
-        ctx.lineTo(
-          dx + Math.sin(time * 0.003 + d) * 2,
-          jawY + headH * 0.12 + fangH * 0.8 + dLen,
-        );
+        ctx.strokeStyle = copper;
+        ctx.lineWidth = 3;
         ctx.stroke();
+        // Glow
+        if (pulse > 0.2) {
+          ctx.fillStyle = glowColor + (0.3 + pulse * 0.5) + ")";
+          ctx.beginPath(); ctx.arc(px, py, r * 0.7, 0, Math.PI * 2); ctx.fill();
+        }
+      };
+      
+      const pR = hW * 0.09;
+      // Main 3 portholes in a triangular pattern
+      drawPorthole(hX, hY, pR * 1.5);
+      drawPorthole(hX - hW * 0.22, hY - hH * 0.15, pR);
+      drawPorthole(hX + hW * 0.22, hY - hH * 0.15, pR);
+      
+      // Evolved form detail: Extra sensors/horns
+      if (bossForm >= 2) {
+        ctx.fillStyle = steel;
+        // Antenna
+        ctx.fillRect(hX - 2, hY - hH * 0.5, 4, -halfH * 0.2);
+        ctx.beginPath();
+        ctx.arc(hX, hY - hH * 0.5 - halfH * 0.2, 6, 0, Math.PI * 2);
+        ctx.fill();
       }
+
+      // Mechanical "Chin" guard
+      ctx.fillStyle = steel;
+      ctx.beginPath();
+      ctx.moveTo(hX - hW * 0.25, hY + hH * 0.3);
+      ctx.lineTo(hX + hW * 0.25, hY + hH * 0.3);
+      ctx.lineTo(hX, hY + hH * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+
+      // Lower Jaw (Mechanical Clamps)
+      const jawY = hY + hH * 0.3;
+      const jawOpen = 5 + Math.sin(time * 0.003) * 10 * bossForm;
+      ctx.fillStyle = bossDarkColor;
+      // Right clamp
+      ctx.beginPath();
+      ctx.moveTo(hX + 10, jawY);
+      ctx.lineTo(hX + 40, jawY + jawOpen);
+      ctx.lineTo(hX + 30, jawY + jawOpen + 15);
+      ctx.lineTo(hX, jawY + 10);
+      ctx.fill();
+      // Left clamp
+      ctx.beginPath();
+      ctx.moveTo(hX - 10, jawY);
+      ctx.lineTo(hX - 40, jawY + jawOpen);
+      ctx.lineTo(hX - 30, jawY + jawOpen + 15);
+      ctx.lineTo(hX, jawY + 10);
+      ctx.fill();
 
       // Arms
       const drawArm = (side) => {
@@ -2843,7 +2673,7 @@ export class Renderer {
           screenX - copW * 0.35 + p * copW * 0.28,
           bodyTop + torsoH * 0.15,
           copW * 0.22,
-          torsoH * 0.12,
+          torsoH * 0.12
         );
       }
       // Shoulder pads
@@ -3762,10 +3592,20 @@ export class Renderer {
       const chromAlpha = 0.18;
       ctx.globalAlpha = alpha * chromAlpha;
       ctx.fillStyle = "rgba(0,255,180,1)";
-      ctx.fillRect(screenX - eyeSize2 / 2 + glitchOff - 1.6, centerY - eyeSize2 / 2, eyeSize2, eyeSize2);
+      ctx.fillRect(
+        screenX - eyeSize2 / 2 + glitchOff - 1.6,
+        centerY - eyeSize2 / 2,
+        eyeSize2,
+        eyeSize2,
+      );
       ctx.fillStyle = "rgba(255,0,200,1)";
       ctx.globalAlpha = alpha * 0.12;
-      ctx.fillRect(screenX - eyeSize2 / 2 + glitchOff + 1.6, centerY - eyeSize2 / 2, eyeSize2, eyeSize2);
+      ctx.fillRect(
+        screenX - eyeSize2 / 2 + glitchOff + 1.6,
+        centerY - eyeSize2 / 2,
+        eyeSize2,
+        eyeSize2,
+      );
       ctx.globalAlpha = alpha;
 
       // Glitch static lines (more varied)
@@ -3862,13 +3702,25 @@ export class Renderer {
       // Body (beveled armor)
       ctx.fillStyle = darkColor;
       ctx.beginPath();
-      ctx.roundRect(screenX - scW, scTop + breathe, scW * 2, scBot - scTop, scW * 0.12);
+      ctx.roundRect(
+        screenX - scW,
+        scTop + breathe,
+        scW * 2,
+        scBot - scTop,
+        scW * 0.12,
+      );
       ctx.fill();
 
       // Inner beveled plate
       ctx.fillStyle = baseColor;
       ctx.beginPath();
-      ctx.roundRect(screenX - scW * 0.74, scTop + halfH * 0.06 + breathe, scW * 1.48, (scBot - scTop) * 0.82, scW * 0.06);
+      ctx.roundRect(
+        screenX - scW * 0.74,
+        scTop + halfH * 0.06 + breathe,
+        scW * 1.48,
+        (scBot - scTop) * 0.82,
+        scW * 0.06,
+      );
       ctx.fill();
 
       // Pauldrons with edge highlights
@@ -3876,20 +3728,52 @@ export class Renderer {
       const pauldH = halfH * 0.18;
       ctx.fillStyle = darkColor;
       ctx.beginPath();
-      ctx.ellipse(screenX - scW * 0.92, scTop + halfH * 0.06 + breathe, pauldW * 0.52, pauldH * 0.5, -0.18, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX - scW * 0.92,
+        scTop + halfH * 0.06 + breathe,
+        pauldW * 0.52,
+        pauldH * 0.5,
+        -0.18,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(screenX + scW * 0.92, scTop + halfH * 0.06 + breathe, pauldW * 0.52, pauldH * 0.5, 0.18, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX + scW * 0.92,
+        scTop + halfH * 0.06 + breathe,
+        pauldW * 0.52,
+        pauldH * 0.5,
+        0.18,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       // Pauldron edge
       ctx.strokeStyle = "#66aacc";
       ctx.lineWidth = 1;
       ctx.globalAlpha = alpha * 0.6;
       ctx.beginPath();
-      ctx.ellipse(screenX - scW * 0.92, scTop + halfH * 0.06 + breathe, pauldW * 0.52, pauldH * 0.5, -0.18, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX - scW * 0.92,
+        scTop + halfH * 0.06 + breathe,
+        pauldW * 0.52,
+        pauldH * 0.5,
+        -0.18,
+        0,
+        Math.PI * 2,
+      );
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(screenX + scW * 0.92, scTop + halfH * 0.06 + breathe, pauldW * 0.52, pauldH * 0.5, 0.18, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX + scW * 0.92,
+        scTop + halfH * 0.06 + breathe,
+        pauldW * 0.52,
+        pauldH * 0.5,
+        0.18,
+        0,
+        Math.PI * 2,
+      );
       ctx.stroke();
       ctx.globalAlpha = alpha;
 
@@ -3919,12 +3803,23 @@ export class Renderer {
       ctx.fillStyle = "#4ca0ff";
       ctx.globalAlpha = alpha * (0.75 + Math.sin(time * 0.006) * 0.12);
       ctx.beginPath();
-      ctx.roundRect(screenX - visorW * 0.5, headY - visorH * 0.28, visorW, visorH, visorH * 0.45);
+      ctx.roundRect(
+        screenX - visorW * 0.5,
+        headY - visorH * 0.28,
+        visorW,
+        visorH,
+        visorH * 0.45,
+      );
       ctx.fill();
       // Thin highlight
       ctx.fillStyle = "rgba(255,255,255,0.22)";
       ctx.globalAlpha = alpha * 0.36;
-      ctx.fillRect(screenX - visorW * 0.32, headY - visorH * 0.12, visorW * 0.64, 1);
+      ctx.fillRect(
+        screenX - visorW * 0.32,
+        headY - visorH * 0.12,
+        visorW * 0.64,
+        1,
+      );
       ctx.globalAlpha = alpha;
 
       // Legs: tightened silhouette
@@ -3935,14 +3830,30 @@ export class Renderer {
       ctx.fillRect(screenX + scW * 0.23, scBot + breathe, legW, legH);
       // Boots
       ctx.fillStyle = "#0f2430";
-      ctx.fillRect(screenX - scW * 0.58, scBot + legH * 0.82 + breathe, legW * 1.12, legH * 0.2);
-      ctx.fillRect(screenX + scW * 0.21, scBot + legH * 0.82 + breathe, legW * 1.12, legH * 0.2);
+      ctx.fillRect(
+        screenX - scW * 0.58,
+        scBot + legH * 0.82 + breathe,
+        legW * 1.12,
+        legH * 0.2,
+      );
+      ctx.fillRect(
+        screenX + scW * 0.21,
+        scBot + legH * 0.82 + breathe,
+        legW * 1.12,
+        legH * 0.2,
+      );
       // subtle scuff lines on boots
       ctx.globalAlpha = alpha * 0.18;
       ctx.strokeStyle = "rgba(255,255,255,0.06)";
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(screenX - scW * 0.56, scBot + legH * 0.9); ctx.lineTo(screenX - scW * 0.38, scBot + legH * 0.92); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(screenX + scW * 0.18, scBot + legH * 0.9); ctx.lineTo(screenX + scW * 0.36, scBot + legH * 0.92); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(screenX - scW * 0.56, scBot + legH * 0.9);
+      ctx.lineTo(screenX - scW * 0.38, scBot + legH * 0.92);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(screenX + scW * 0.18, scBot + legH * 0.9);
+      ctx.lineTo(screenX + scW * 0.36, scBot + legH * 0.92);
+      ctx.stroke();
       ctx.globalAlpha = alpha;
     } else if (enemy.enemyType === "temporalSummoner") {
       // ── Temporal Summoner (polished) ──────────────────────────
@@ -3959,13 +3870,29 @@ export class Renderer {
       ctx.strokeStyle = "#b04cff";
       ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.ellipse(screenX, tsBot + halfH * 0.12, portalRadius, portalRadius * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX,
+        tsBot + halfH * 0.12,
+        portalRadius,
+        portalRadius * 0.28,
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.stroke();
       // Inner rotating swirl
       ctx.globalAlpha = alpha * 0.14;
       ctx.fillStyle = "#5a007a";
       ctx.beginPath();
-      ctx.ellipse(screenX, tsBot + halfH * 0.12, portalRadius * 0.78, portalRadius * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(
+        screenX,
+        tsBot + halfH * 0.12,
+        portalRadius * 0.78,
+        portalRadius * 0.18,
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       // Light streaks
       ctx.globalAlpha = alpha * 0.22;
@@ -3973,8 +3900,14 @@ export class Renderer {
       for (let s = 0; s < 6; s++) {
         const a = time * 0.004 + s * 1.04;
         ctx.beginPath();
-        ctx.moveTo(screenX + Math.cos(a) * portalRadius * 0.4, tsBot + halfH * 0.12 + Math.sin(a) * portalRadius * 0.06);
-        ctx.lineTo(screenX + Math.cos(a) * portalRadius * 0.9, tsBot + halfH * 0.12 + Math.sin(a) * portalRadius * 0.22);
+        ctx.moveTo(
+          screenX + Math.cos(a) * portalRadius * 0.4,
+          tsBot + halfH * 0.12 + Math.sin(a) * portalRadius * 0.06,
+        );
+        ctx.lineTo(
+          screenX + Math.cos(a) * portalRadius * 0.9,
+          tsBot + halfH * 0.12 + Math.sin(a) * portalRadius * 0.22,
+        );
         ctx.stroke();
       }
       ctx.globalAlpha = alpha;
@@ -3983,7 +3916,12 @@ export class Renderer {
       ctx.fillStyle = darkColor;
       ctx.beginPath();
       ctx.moveTo(screenX - tsW * 0.52, tsTop + halfH * 0.14 + hover);
-      ctx.quadraticCurveTo(screenX, tsTop + halfH * 0.05 + hover, screenX + tsW * 0.52, tsTop + halfH * 0.14 + hover);
+      ctx.quadraticCurveTo(
+        screenX,
+        tsTop + halfH * 0.05 + hover,
+        screenX + tsW * 0.52,
+        tsTop + halfH * 0.14 + hover,
+      );
       ctx.lineTo(screenX + tsW * 1.05, tsBot + hover);
       ctx.lineTo(screenX - tsW * 1.05, tsBot + hover);
       ctx.closePath();
@@ -3994,7 +3932,12 @@ export class Renderer {
       ctx.globalAlpha = alpha * 0.9;
       ctx.beginPath();
       ctx.moveTo(screenX - tsW * 0.34, tsTop + halfH * 0.22 + hover);
-      ctx.quadraticCurveTo(screenX, tsTop + halfH * 0.12 + hover, screenX + tsW * 0.34, tsTop + halfH * 0.22 + hover);
+      ctx.quadraticCurveTo(
+        screenX,
+        tsTop + halfH * 0.12 + hover,
+        screenX + tsW * 0.34,
+        tsTop + halfH * 0.22 + hover,
+      );
       ctx.lineTo(screenX + tsW * 0.78, tsBot - halfH * 0.02 + hover);
       ctx.lineTo(screenX - tsW * 0.78, tsBot - halfH * 0.02 + hover);
       ctx.closePath();
@@ -4006,11 +3949,23 @@ export class Renderer {
       ctx.lineWidth = 1.2;
       ctx.globalAlpha = alpha * 0.45;
       for (let r = 0; r < 5; r++) {
-        const rY = tsTop + halfH * 0.32 + r * halfH * 0.11 + hover + Math.sin(time * 0.006 + r) * 0.6;
+        const rY =
+          tsTop +
+          halfH * 0.32 +
+          r * halfH * 0.11 +
+          hover +
+          Math.sin(time * 0.006 + r) * 0.6;
         const rW = tsW * (0.36 + r * 0.09);
         ctx.beginPath();
         ctx.moveTo(screenX - rW, rY);
-        ctx.bezierCurveTo(screenX - rW * 0.28, rY - halfH * 0.02, screenX + rW * 0.28, rY + halfH * 0.02, screenX + rW, rY);
+        ctx.bezierCurveTo(
+          screenX - rW * 0.28,
+          rY - halfH * 0.02,
+          screenX + rW * 0.28,
+          rY + halfH * 0.02,
+          screenX + rW,
+          rY,
+        );
         ctx.stroke();
       }
       ctx.globalAlpha = alpha;
@@ -4022,8 +3977,22 @@ export class Renderer {
       ctx.fillStyle = darkColor;
       ctx.beginPath();
       ctx.moveTo(screenX, hoodY - hoodH * 0.2);
-      ctx.bezierCurveTo(screenX - hoodW, hoodY, screenX - hoodW * 0.88, hoodY + hoodH, screenX, hoodY + hoodH * 0.7);
-      ctx.bezierCurveTo(screenX + hoodW * 0.88, hoodY + hoodH, screenX + hoodW, hoodY, screenX, hoodY - hoodH * 0.2);
+      ctx.bezierCurveTo(
+        screenX - hoodW,
+        hoodY,
+        screenX - hoodW * 0.88,
+        hoodY + hoodH,
+        screenX,
+        hoodY + hoodH * 0.7,
+      );
+      ctx.bezierCurveTo(
+        screenX + hoodW * 0.88,
+        hoodY + hoodH,
+        screenX + hoodW,
+        hoodY,
+        screenX,
+        hoodY - hoodH * 0.2,
+      );
       ctx.fill();
 
       // Eyes
@@ -4031,8 +4000,24 @@ export class Renderer {
       ctx.fillStyle = "#d96bff";
       ctx.globalAlpha = alpha * eyeGlow;
       const eyeS = hoodW * 0.15;
-      ctx.beginPath(); ctx.arc(screenX - hoodW * 0.22, hoodY + hoodH * 0.32, eyeS, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(screenX + hoodW * 0.22, hoodY + hoodH * 0.32, eyeS, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        screenX - hoodW * 0.22,
+        hoodY + hoodH * 0.32,
+        eyeS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        screenX + hoodW * 0.22,
+        hoodY + hoodH * 0.32,
+        eyeS,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
       ctx.globalAlpha = alpha;
 
       // Floating sigils — give more variety and subtle rotation
@@ -4053,15 +4038,21 @@ export class Renderer {
         ctx.closePath();
         ctx.stroke();
         ctx.fillStyle = "#ffd9ff";
-        ctx.beginPath(); ctx.arc(sx, sy, sigSize * 0.22, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(sx, sy, sigSize * 0.22, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = alpha;
 
       // Casting hands with brighter tendrils
       const handY = tsTop + halfH * 0.26 + hover;
       ctx.fillStyle = "#bf3bff";
-      ctx.beginPath(); ctx.arc(screenX - tsW * 1.02, handY, tsW * 0.13, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(screenX + tsW * 1.02, handY, tsW * 0.13, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(screenX - tsW * 1.02, handY, tsW * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(screenX + tsW * 1.02, handY, tsW * 0.13, 0, Math.PI * 2);
+      ctx.fill();
       ctx.strokeStyle = "#d76bff";
       ctx.lineWidth = 1.1;
       ctx.globalAlpha = alpha * 0.5;
@@ -4071,7 +4062,10 @@ export class Renderer {
           const tAngle = time * 0.005 + t * 0.7 + dir * 0.2;
           ctx.beginPath();
           ctx.moveTo(hx, handY);
-          ctx.lineTo(hx + Math.cos(tAngle) * tsW * 0.58 * dir, handY + Math.sin(tAngle) * halfH * 0.16);
+          ctx.lineTo(
+            hx + Math.cos(tAngle) * tsW * 0.58 * dir,
+            handY + Math.sin(tAngle) * halfH * 0.16,
+          );
           ctx.stroke();
         }
       }
