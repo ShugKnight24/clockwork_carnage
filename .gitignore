@@ -5,6 +5,8 @@ REVIEW.md
 ROADMAP.md
 TESTING.md
 
+.github/
+
 archive/
 
 # Generated changelog reports
@@ -41,3 +43,11 @@ js/editor/
 
 # Untracked game prototypes (experimental, not part of Clockwork Carnage)
 prototypes/
+
+# Local dev tools and temporary files
+tools/
+tmp_grid.txt
+
+# Documentation artifact (should be untracked)
+docs/WEAPONS_ENEMIES.md
+weapons_enemies.md

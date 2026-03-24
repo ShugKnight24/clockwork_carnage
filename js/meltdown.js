@@ -205,6 +205,84 @@ const SEGMENTS = [
   },
 ];
 
+// ── Additional corridor segments for variety ─────────────────────
+// 10: Cross junction
+SEGMENTS.push({
+  rows: [
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+  ],
+  enemies: [
+    { x: 2, y: 2, type: "drone" },
+    { x: 12, y: 4, type: "drone" },
+  ],
+  pickups: [{ x: 7, y: 3, type: "health" }],
+});
+
+// 11: Zigzag corridor
+SEGMENTS.push({
+  rows: [
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+    [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+  ],
+  enemies: [{ x: 7, y: 3, type: "phantom" }],
+  pickups: [],
+});
+
+// 12: Darkness corridor (no hazards, many enemies)
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  ],
+  enemies: [
+    { x: 3, y: 1, type: "glitchling" },
+    { x: 11, y: 1, type: "glitchling" },
+    { x: 7, y: 3, type: "phantom" },
+    { x: 4, y: 5, type: "drone" },
+    { x: 10, y: 5, type: "drone" },
+  ],
+  pickups: [{ x: 7, y: 6, type: "ammo" }],
+});
+
+// 13: Boss segment (wide arena with pillars)
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  ],
+  enemies: [
+    { x: 7, y: 1, type: "shieldCommander" },
+    { x: 4, y: 4, type: "henchman" },
+    { x: 10, y: 4, type: "henchman" },
+  ],
+  pickups: [
+    { x: 3, y: 6, type: "health" },
+    { x: 11, y: 6, type: "ammo" },
+  ],
+});
+
 // ── Enemy type escalation by distance ────────────────────────────
 const THREAT_TABLE = [
   { dist: 0, types: ["drone"] },
@@ -222,11 +300,123 @@ const THREAT_TABLE = [
   },
 ];
 
+// ── Hero Definitions ─────────────────────────────────────────────
+export const MELTDOWN_HEROES = {
+  agent: {
+    name: "Agent",
+    description: "Balanced all-rounder. Standard loadout.",
+    baseSpeed: 3.5,
+    maxSpeed: 12.0,
+    baseDamage: 1.0,
+    baseHealth: 100,
+    ability: null,
+    abilityCooldown: 0,
+    color: "#00e5ff",
+  },
+  blitz: {
+    name: "Blitz",
+    description: "Speed demon. Faster base speed, dash ability every 8s.",
+    baseSpeed: 4.2,
+    maxSpeed: 14.0,
+    baseDamage: 0.85,
+    baseHealth: 80,
+    ability: "dash",
+    abilityCooldown: 8,
+    color: "#ffcc00",
+  },
+  tank: {
+    name: "Tank",
+    description: "Armored up. More HP, damage reduction, slower speed.",
+    baseSpeed: 2.8,
+    maxSpeed: 9.0,
+    baseDamage: 1.2,
+    baseHealth: 150,
+    ability: "shield",
+    abilityCooldown: 12,
+    color: "#ff4444",
+  },
+  ghost: {
+    name: "Ghost",
+    description: "Phase through obstacles briefly. Fragile but elusive.",
+    baseSpeed: 3.5,
+    maxSpeed: 11.0,
+    baseDamage: 0.9,
+    baseHealth: 70,
+    ability: "phase",
+    abilityCooldown: 10,
+    color: "#aa44ff",
+  },
+};
+
+// ── Upgrade / Power-Up Pool ──────────────────────────────────────
+const MELTDOWN_UPGRADES = [
+  {
+    id: "speedBoost",
+    name: "Overclock Servos",
+    description: "+15% movement speed",
+    icon: "⚡",
+    apply: (mode) => { mode.speed *= 1.15; mode.maxSpeed *= 1.05; },
+  },
+  {
+    id: "heatResist",
+    name: "Thermal Dampeners",
+    description: "-25% heat buildup rate",
+    icon: "🧊",
+    apply: (mode) => { mode.heatRate *= 0.75; },
+  },
+  {
+    id: "shieldBurst",
+    name: "Emergency Shield",
+    description: "Absorb the next 30 damage",
+    icon: "🛡",
+    apply: (mode) => { mode.shieldHP = (mode.shieldHP || 0) + 30; },
+  },
+  {
+    id: "doubleDamage",
+    name: "Overcharged Rounds",
+    description: "+40% weapon damage",
+    icon: "💥",
+    apply: (mode) => { mode.damageMultiplier = (mode.damageMultiplier || 1) * 1.4; },
+  },
+  {
+    id: "healPulse",
+    name: "Nano-Repair Pulse",
+    description: "Restore 25 HP instantly",
+    icon: "💚",
+    apply: (mode) => { mode._healPending = (mode._healPending || 0) + 25; },
+  },
+  {
+    id: "hazardImmunity",
+    name: "Mag-Lev Boots",
+    description: "Immune to floor hazards for 60m",
+    icon: "🥾",
+    apply: (mode) => { mode.hazardImmuneUntil = mode.distance + 60; },
+  },
+  {
+    id: "extraLife",
+    name: "Temporal Anchor",
+    description: "Survive one fatal hit (1 HP)",
+    icon: "⏳",
+    apply: (mode) => { mode.extraLives = (mode.extraLives || 0) + 1; },
+  },
+  {
+    id: "scoreMultiplier",
+    name: "Risk Amplifier",
+    description: "+50% score multiplier",
+    icon: "🎯",
+    apply: (mode) => { mode.scoreMultiplier = (mode.scoreMultiplier || 1) * 1.5; },
+  },
+];
+
 // ── ARIA Meltdown Comms ──────────────────────────────────────────
 const MELTDOWN_ARIA = {
   start: [
     "REACTOR CONTAINMENT FAILURE. All personnel evacuate toward docking bay.",
     "Meltdown imminent. I'm plotting the fastest route. DO NOT STOP MOVING.",
+  ],
+  startIronman: [
+    "Ironman protocol engaged. No pickups. No second chances. Just you and speed.",
+    "We're doing this the hard way. No supplies. No safety net. RUN.",
   ],
   heat25: [
     "Core temperature at 25%. Structural integrity declining.",
@@ -257,10 +447,20 @@ const MELTDOWN_ARIA = {
     "Signal lost. Reactor detonation in 3... 2...",
     "Agent down. ... The station didn't make it either.",
   ],
+  extraLife: [
+    "Temporal anchor activated! You should be dead. You're not. MOVE!",
+    "The anchor pulled you back. That was your last one. Don't waste it.",
+  ],
+  upgrade: [
+    "Upgrade systems online. Choose wisely — no time to deliberate.",
+    "Emergency upgrade cache. Pick one and keep moving.",
+  ],
   milestone100: ["100 meters. You're past the reactor wing."],
   milestone250: ["250 meters. Engineering section cleared."],
   milestone500: ["500 meters. We're in the residential ring. Almost there."],
+  milestone750: ["750 meters. Agent, you're setting records."],
   milestone1000: ["One kilometer. I... didn't think we'd make it this far."],
+  milestone2000: ["Two kilometers. You're a legend. The station won't be."],
 };
 
 // ── Shared segment-stitching helper ──────────────────────────────
@@ -385,6 +585,26 @@ export class MeltdownMode {
     this.runTime = 0;
     this.hazardDamageRate = 15; // hp/sec on hazard tiles
 
+    // ── New systems ──
+    this.heroKey = "agent";
+    this.hero = MELTDOWN_HEROES.agent;
+    this.ironman = false;
+    this.upgrades = [];            // applied upgrades this run
+    this.upgradesPending = null;   // { choices: [...] } when upgrade screen is showing
+    this.nextUpgradeAt = 100;      // distance for next upgrade milestone
+    this.damageMultiplier = 1.0;
+    this.scoreMultiplier = 1.0;
+    this.shieldHP = 0;
+    this.extraLives = 0;
+    this.hazardImmuneUntil = 0;
+    this._healPending = 0;
+    this.killCount = 0;
+
+    // Hero ability
+    this.abilityCooldown = 0;
+    this.abilityActive = false;
+    this.abilityTimer = 0;
+
     // ARIA state
     this.ariaQueue = [];
     this.ariaActive = null;
@@ -395,13 +615,23 @@ export class MeltdownMode {
     this.highScores = this._loadScores();
   }
 
-  /** Initialize a new run */
-  start() {
+  /**
+   * Initialize a new run.
+   * @param {string} heroKey — key from MELTDOWN_HEROES (default: "agent")
+   * @param {boolean} ironman — if true, no pickups spawn (pure skill run)
+   */
+  start(heroKey = "agent", ironman = false) {
+    this.heroKey = heroKey;
+    this.hero = MELTDOWN_HEROES[heroKey] || MELTDOWN_HEROES.agent;
+    this.ironman = ironman;
+
     this.map = generateMeltdownMap(50);
     this.distance = 0;
     this.maxDistance = 0;
-    this.speed = 3.5;
+    this.speed = this.hero.baseSpeed;
+    this.maxSpeed = this.hero.maxSpeed;
     this.heat = 0;
+    this.heatRate = 0.8;
     this.alive = true;
     this.score = 0;
     this.startTime = performance.now();
@@ -411,27 +641,56 @@ export class MeltdownMode {
     this.ariaActive = null;
     this.ariaTimer = 0;
 
+    // Reset new systems
+    this.upgrades = [];
+    this.upgradesPending = null;
+    this.nextUpgradeAt = 100;
+    this.damageMultiplier = this.hero.baseDamage;
+    this.scoreMultiplier = 1.0;
+    this.shieldHP = 0;
+    this.extraLives = 0;
+    this.hazardImmuneUntil = 0;
+    this._healPending = 0;
+    this.killCount = 0;
+    this.abilityCooldown = 0;
+    this.abilityActive = false;
+    this.abilityTimer = 0;
+
     // Queue start dialogue
-    this._queueAria("start");
+    this._queueAria(ironman ? "startIronman" : "start");
 
     return this.map;
   }
 
   /**
    * Per-frame update. Called from game's update loop.
-   * Returns { moveY, hazardDmg, ariaMsg, events[] }
+   * Returns { moveY, hazardDmg, ariaMsg, events[], healAmount }
    */
   update(dt, playerX, playerY) {
     if (!this.alive)
-      return { moveY: 0, hazardDmg: 0, ariaMsg: null, events: [] };
+      return { moveY: 0, hazardDmg: 0, ariaMsg: null, events: [], healAmount: 0 };
+
+    // If upgrade screen is pending, pause the run
+    if (this.upgradesPending) {
+      return { moveY: 0, hazardDmg: 0, ariaMsg: null, events: [{ type: "upgradeScreen", choices: this.upgradesPending.choices }], healAmount: 0 };
+    }
 
     const events = [];
+
+    // ── Hero ability cooldown ──
+    if (this.abilityCooldown > 0) this.abilityCooldown -= dt;
+    if (this.abilityActive) {
+      this.abilityTimer -= dt;
+      if (this.abilityTimer <= 0) {
+        this.abilityActive = false;
+        events.push({ type: "abilityEnd", ability: this.hero.ability });
+      }
+    }
 
     // ── Speed acceleration ──
     this.speed = Math.min(this.maxSpeed, this.speed + 0.12 * dt);
 
     // ── Forward motion (auto-run) ──
-    // Player moves in +Y direction (toward higher rows / deeper into the station)
     const moveY = this.speed * dt;
 
     // ── Distance tracking ──
@@ -439,14 +698,12 @@ export class MeltdownMode {
     this.maxDistance = Math.max(this.maxDistance, this.distance);
     this.runTime = (performance.now() - this.startTime) / 1000;
 
-    // Score = distance × speed multiplier
-    this.score = Math.floor(this.distance * 10);
+    // Score = distance × speed multiplier × score multiplier
+    this.score = Math.floor(this.distance * 10 * this.scoreMultiplier);
 
     // ── Heat buildup ──
     const prevHeat = this.heat;
     this.heat = Math.min(100, this.heat + this.heatRate * dt);
-
-    // Heat rate increases over time
     this.heatRate = 0.8 + this.distance * 0.002;
 
     // ── ARIA triggers ──
@@ -457,11 +714,7 @@ export class MeltdownMode {
       { key: "heat90", val: 90 },
     ];
     for (const t of heatThresholds) {
-      if (
-        this.heat >= t.val &&
-        prevHeat < t.val &&
-        !this.ariaMilestones[t.key]
-      ) {
+      if (this.heat >= t.val && prevHeat < t.val && !this.ariaMilestones[t.key]) {
         this.ariaMilestones[t.key] = true;
         this._queueAria(t.key);
         events.push({ type: "heatWarning", level: t.val });
@@ -473,7 +726,9 @@ export class MeltdownMode {
       { key: "milestone100", val: 100 },
       { key: "milestone250", val: 250 },
       { key: "milestone500", val: 500 },
+      { key: "milestone750", val: 750 },
       { key: "milestone1000", val: 1000 },
+      { key: "milestone2000", val: 2000 },
     ];
     for (const m of distMilestones) {
       if (this.distance >= m.val && !this.ariaMilestones[m.key]) {
@@ -483,22 +738,51 @@ export class MeltdownMode {
       }
     }
 
+    // ── Upgrade milestone check (every 100m, not in ironman) ──
+    if (!this.ironman && this.distance >= this.nextUpgradeAt) {
+      const choices = this._rollUpgradeChoices(3);
+      if (choices.length > 0) {
+        this.upgradesPending = { choices };
+        this.nextUpgradeAt += 100 + this.upgrades.length * 25; // Increasing intervals
+        this._queueAria("upgrade");
+        events.push({ type: "upgradeAvailable" });
+      }
+    }
+
     // ── Check if map needs extending ──
     if (this.map && playerY > this.map.height - 40) {
       events.push({ type: "extend" });
     }
 
-    // ── Hazard check (tile under player) ──
+    // ── Hazard check (with immunity support) ──
     let hazardDmg = 0;
-    const py = Math.floor(playerY);
-    const px = Math.floor(playerX);
-    if (this.map.hazardSet) {
-      for (let cx = px - 1; cx <= px + 1; cx++) {
-        if (this.map.hazardSet.has(`${cx},${py}`)) {
-          hazardDmg = this.hazardDamageRate * dt;
-          break;
+    if (this.distance < this.hazardImmuneUntil) {
+      // Immune — no hazard damage
+    } else {
+      const py = Math.floor(playerY);
+      const px = Math.floor(playerX);
+      if (this.map.hazardSet) {
+        for (let cx = px - 1; cx <= px + 1; cx++) {
+          if (this.map.hazardSet.has(`${cx},${py}`)) {
+            hazardDmg = this.hazardDamageRate * dt;
+            break;
+          }
         }
       }
+    }
+
+    // ── Shield absorption ──
+    if (hazardDmg > 0 && this.shieldHP > 0) {
+      const absorbed = Math.min(this.shieldHP, hazardDmg);
+      this.shieldHP -= absorbed;
+      hazardDmg -= absorbed;
+    }
+
+    // ── Heal pending ──
+    let healAmount = 0;
+    if (this._healPending > 0) {
+      healAmount = this._healPending;
+      this._healPending = 0;
     }
 
     // ── ARIA message processing ──
@@ -513,7 +797,65 @@ export class MeltdownMode {
       ariaMsg = this.ariaActive;
     }
 
-    return { moveY, hazardDmg, ariaMsg, events };
+    return { moveY, hazardDmg, ariaMsg, events, healAmount };
+  }
+
+  /**
+   * Use the hero's special ability.
+   * Returns { type, duration } if activated, or null if on cooldown.
+   */
+  useAbility() {
+    if (!this.hero.ability || this.abilityCooldown > 0 || !this.alive) return null;
+
+    this.abilityCooldown = this.hero.abilityCooldown;
+    this.abilityActive = true;
+
+    switch (this.hero.ability) {
+      case "dash":
+        this.abilityTimer = 0.3;
+        return { type: "dash", duration: 0.3, speedBoost: 3.0 };
+      case "shield":
+        this.abilityTimer = 4.0;
+        this.shieldHP += 50;
+        return { type: "shield", duration: 4.0, shieldHP: 50 };
+      case "phase":
+        this.abilityTimer = 2.0;
+        return { type: "phase", duration: 2.0 };
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Select an upgrade from the pending choices.
+   * @param {number} index — 0, 1, or 2
+   */
+  selectUpgrade(index) {
+    if (!this.upgradesPending) return;
+    const choice = this.upgradesPending.choices[index];
+    if (choice) {
+      choice.apply(this);
+      this.upgrades.push(choice.id);
+    }
+    this.upgradesPending = null;
+  }
+
+  /** Record a kill (for scoring) */
+  onKill() {
+    this.killCount++;
+    this.score += Math.floor(50 * this.scoreMultiplier);
+  }
+
+  /**
+   * Handle fatal damage. Returns true if extra life saved the player.
+   */
+  onFatalHit() {
+    if (this.extraLives > 0) {
+      this.extraLives--;
+      this._queueAria("extraLife");
+      return true; // Survived — set HP to 1 in game.js
+    }
+    return false; // Actually dead
   }
 
   /**
@@ -540,6 +882,11 @@ export class MeltdownMode {
     }
     this.map._segCount += count;
 
+    // Remove pickups in ironman mode
+    if (this.ironman) {
+      newPickups.length = 0;
+    }
+
     // Re-add bottom wall cap
     this.map.grid.push(new Array(SEG_W).fill(1));
     this.map.height = this.map.grid.length;
@@ -565,6 +912,17 @@ export class MeltdownMode {
       score: this.score,
       time: this.runTime.toFixed(1),
       ariaText: this.ariaActive,
+      // New fields
+      heroName: this.hero.name,
+      heroColor: this.hero.color,
+      ironman: this.ironman,
+      shieldHP: Math.floor(this.shieldHP),
+      extraLives: this.extraLives,
+      upgradeCount: this.upgrades.length,
+      killCount: this.killCount,
+      abilityCooldown: Math.max(0, this.abilityCooldown),
+      abilityReady: this.hero.ability && this.abilityCooldown <= 0,
+      abilityName: this.hero.ability,
     };
   }
 
@@ -577,7 +935,25 @@ export class MeltdownMode {
     return `rgba(255, ${Math.floor(60 - this.heat * 0.5)}, 0, ${(intensity * pulse).toFixed(3)})`;
   }
 
+  /** Get leaderboard formatted for display */
+  getLeaderboard(filterHero = null, filterIronman = null) {
+    let scores = [...this.highScores];
+    if (filterHero) scores = scores.filter(s => s.hero === filterHero);
+    if (filterIronman !== null) scores = scores.filter(s => !!s.ironman === filterIronman);
+    return scores.slice(0, 10);
+  }
+
   // ── Internal helpers ──
+
+  _rollUpgradeChoices(count) {
+    const pool = [...MELTDOWN_UPGRADES];
+    const choices = [];
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      choices.push(pool.splice(idx, 1)[0]);
+    }
+    return choices;
+  }
 
   _queueAria(key) {
     const msgs = MELTDOWN_ARIA[key];
@@ -600,9 +976,13 @@ export class MeltdownMode {
       distance: Math.floor(dist),
       time: Math.floor(time),
       date: Date.now(),
+      hero: this.heroKey,
+      ironman: this.ironman,
+      kills: this.killCount,
+      upgrades: this.upgrades.length,
     });
     this.highScores.sort((a, b) => b.score - a.score);
-    this.highScores = this.highScores.slice(0, 10);
+    this.highScores = this.highScores.slice(0, 25); // expanded from 10 to 25
     try {
       localStorage.setItem(
         "cc_meltdown_scores",

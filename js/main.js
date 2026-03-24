@@ -268,10 +268,16 @@ btnContinueArena.addEventListener("click", () => {
 titleScreen.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
-  titleScreen.classList.add("hidden");
-  modeSelect.classList.remove("hidden");
-  updateContinueButtons();
-  game.state = GameState.MODE_SELECT;
+  if (game.shouldShowTutorial()) {
+    showGameCanvases();
+    trackEvent("mode_start", { mode: "tutorial" });
+    game.startTutorial();
+  } else {
+    titleScreen.classList.add("hidden");
+    modeSelect.classList.remove("hidden");
+    updateContinueButtons();
+    game.state = GameState.MODE_SELECT;
+  }
 });
 
 document.addEventListener("keydown", (e) => {
@@ -281,6 +287,12 @@ document.addEventListener("keydown", (e) => {
   ) {
     initAudio();
     game.audio.menuConfirm();
+    if (game.shouldShowTutorial()) {
+      showGameCanvases();
+      trackEvent("mode_start", { mode: "tutorial" });
+      game.startTutorial();
+      return;
+    }
     titleScreen.classList.add("hidden");
     modeSelect.classList.remove("hidden");
     updateContinueButtons();
