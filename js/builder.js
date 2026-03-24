@@ -167,8 +167,13 @@ export class BuilderMode {
   handleKeyDown(e) {
     const code = e.code;
 
-    // Ctrl+S / Cmd+S → save
+    // Ctrl+S / Cmd+S → save, Ctrl+Shift+S → share URL
     if (code === "KeyS" && (e.ctrlKey || e.metaKey)) {
+      if (e.shiftKey) {
+        e.preventDefault();
+        if (this.onShareMap) this.onShareMap();
+        return true;
+      }
       e.preventDefault();
       this.saveMap();
       return true;
@@ -755,6 +760,65 @@ export class BuilderMode {
     input.click();
   }
 
+  importMapData(data) {
+    if (!data || !Array.isArray(data.grid)) return false;
+    const width = Number.isInteger(data.width) ? data.width : data.grid[0]?.length;
+    const height = Number.isInteger(data.height) ? data.height : data.grid.length;
+    if (!Number.isInteger(width) || !Number.isInteger(height)) return false;
+    if (width <= 0 || height <= 0 || width > 128 || height > 128) return false;
+    if (data.grid.length !== height) return false;
+    for (let y = 0; y < height; y++) {
+      const row = data.grid[y];
+      if (!Array.isArray(row) || row.length !== width) return false;
+      for (let x = 0; x < width; x++) {
+        if (typeof row[x] !== "number" || !Number.isFinite(row[x])) return false;
+      }
+    }
+
+    this.map = {
+      name: data.name || "Imported",
+      width,
+      height,
+      grid: data.grid.map((row) =>
+        row.map((cell) => Math.max(0, Math.min(9, Math.floor(cell)))),
+      ),
+      layers: data.layers || null,
+      playerStart: data.playerStart || {
+        x: width / 2 + 0.5,
+        y: height / 2 + 0.5,
+        dir: 0,
+      },
+      enemySpawns: Array.isArray(data.enemySpawns)
+        ? data.enemySpawns.filter(
+            (s) =>
+              s &&
+              typeof s === "object" &&
+              Number.isFinite(s.x) &&
+              Number.isFinite(s.y) &&
+              (typeof s.enemy === "string" || s.enemy === undefined),
+          )
+        : [],
+      entities: [],
+      exit: null,
+    };
+    this._ensureLayers();
+    this.syncGrid();
+    this.player.x = this.map.playerStart.x;
+    this.player.y = this.map.playerStart.y;
+    this.player.angle = this.map.playerStart.dir;
+    this.history = [];
+    this.historyIndex = -1;
+
+    const id = this._nextId();
+    this.mapIndex.push({ id, name: this.map.name });
+    this.currentSlot = id;
+    this._saveIndex();
+    this._saveCurrentMap();
+    this.saveFlash = 2;
+    this.audio.menuConfirm();
+    return true;
+  }
+
   // ─── Map data ────────────────────────────────────────────
 
   /**
@@ -1163,6 +1227,7 @@ export class BuilderMode {
         "N \u2014 Noclip",
         "Tab \u2014 Overhead",
         "Ctrl+S \u2014 Save",
+        "Ctrl+Shift+S \u2014 Share URL",
         "Ctrl+N \u2014 New Map",
         "Ctrl+D \u2014 Delete Map",
         "Ctrl+Z \u2014 Undo",
