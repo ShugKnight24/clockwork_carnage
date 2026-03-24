@@ -4269,17 +4269,7 @@ export class Renderer {
         cbW * 0.5,
         legH3 * 0.2,
       );
-    } else {
-      // Fallback: generic rectangle
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - bodyWidth,
-        bodyTop,
-        bodyWidth * 2,
-        bodyBottom - bodyTop,
-      );
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(
+
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
@@ -4675,8 +4665,13 @@ export class Renderer {
       ctx.arc(-dW - lightR * 0.5, ly, lightR * 2, 0, Math.PI * 2);
       ctx.fill();
       // Core
-      ctx.globalAlpha = fog * greenPulse;
+      ctx.globalAlpha = fog * greenPulse * 0.9;
       ctx.fillStyle = "#00ff88";
+      ctx.beginPath();
+      ctx.arc(-dW - lightR * 0.5, ly, lightR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
     // Rotating energy arcs
     for (let i = 0; i < 4; i++) {
       const a = t * 2 + (i * Math.PI) / 2;
@@ -4685,7 +4680,6 @@ export class Renderer {
       ctx.globalAlpha = fog * 0.6;
       ctx.fillStyle = i % 2 === 0 ? "#00ffcc" : "#88ffdd";
       ctx.beginPath();
-      ctx.arc(-dW - lightR * 0.5, ly, lightR, 0, Math.PI * 2);
       ctx.arc(rx, ry, Math.max(2, size * 0.12), 0, Math.PI * 2);
       ctx.fill();
     }
