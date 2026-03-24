@@ -30,7 +30,7 @@ import { trackEvent } from "./analytics.js";
 import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
 
 const SAVE_VERSION = 1;
-export const GAME_VERSION = "0.8.0";
+export const GAME_VERSION = "0.8.1";
 
 import {
   COMPACT_PHONE_HEIGHT,
@@ -2589,78 +2589,78 @@ export class Game {
       }
 
       case 2: // Move with WASD
-        this.objectiveWaypoint = { x: 12, y: 5.5 }; // Point to first door
+        this.objectiveWaypoint = { x: 11.5, y: 5.5 }; // Point to first door
         const dx = p.x - this.tutorialStartX;
         const dy = p.y - this.tutorialStartY;
         if (Math.sqrt(dx * dx + dy * dy) > 3) this.advanceTutorialStep();
         break;
 
       case 3: // Breach - Door 1 (Exit Locker Room)
-        this.objectiveWaypoint = { x: 12, y: 5.5 };
+        this.objectiveWaypoint = { x: 11.5, y: 5.5 };
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
       case 4: // Weapon Pickup
-        this.objectiveWaypoint = { x: 12, y: 7.5 };
+        this.objectiveWaypoint = { x: 11.5, y: 8.0 };
         if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
         break;
 
       case 5: // Shooting
-        this.objectiveWaypoint = { x: 12, y: 9.5 }; // Point towards next door
+        this.objectiveWaypoint = { x: 6.5, y: 10.5 }; // Point towards next door
         if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
         break;
 
       case 6: // Weapon Swap
-        this.objectiveWaypoint = { x: 12, y: 9.5 };
+        this.objectiveWaypoint = { x: 4.5, y: 13.0 }; // Point to Shotgun
         if (elapsed > 0.1 && this.tutorialWeaponSwapped)
           this.advanceTutorialStep();
         break;
 
       case 7: // Breach - Door 2 (Exit Armory)
-        this.objectiveWaypoint = { x: 12, y: 9.5 };
+        this.objectiveWaypoint = { x: 6.5, y: 10.5 };
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
       case 8: // Sprint
-        this.objectiveWaypoint = { x: 12, y: 16.5 }; // Point to end of yard
+        this.objectiveWaypoint = { x: 3.5, y: 15.5 }; // Point to next door
         if (p.isSprinting) this.tutorialSprintTime += dt;
         if (this.tutorialSprintTime > 0.5) this.advanceTutorialStep();
         break;
 
       case 9: // Dash
-        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
         if (this.tutorialDashed) this.advanceTutorialStep();
         break;
 
       case 10: // Crouch
-        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
         if (this.tutorialCrouched) this.advanceTutorialStep();
         break;
 
       case 11: // Slide
-        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
         if (this.tutorialSlid) this.advanceTutorialStep();
         break;
 
       case 12: // Anomaly
-        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        this.objectiveWaypoint = { x: 10.0, y: 19.0 }; // Point to yard
         if (elapsed > 4) this.advanceTutorialStep();
         break;
 
       case 13: // Chrono Shift
-        this.objectiveWaypoint = { x: 12, y: 16.5 };
+        this.objectiveWaypoint = { x: 10.0, y: 19.0 };
         if (elapsed > 0.1 && this.tutorialChronoUsed)
           this.advanceTutorialStep();
         break;
 
       case 14: // Pickups (Health/Ammo)
-        this.objectiveWaypoint = { x: 12, y: 17.5 };
+        this.objectiveWaypoint = { x: 6.0, y: 19.0 };
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
       case 15: // Combat
         if (!this.tutorialEnemySpawned) {
-          const enemy = new Enemy(12, 19.5, "drone");
+          const enemy = new Enemy(10, 21.0, "drone");
           enemy.health = 15;
           enemy.maxHealth = 15;
           enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
@@ -2713,9 +2713,9 @@ export class Game {
     );
     // Spawn 3 dummies at fixed positions in the combat sim area
     const dummyPositions = [
-      { x: 8.5, y: 19.5 },
-      { x: 15.5, y: 19.5 },
-      { x: 12, y: 21.5 },
+      { x: 6.5, y: 21.0 },
+      { x: 13.5, y: 21.0 },
+      { x: 10, y: 18.5 },
     ];
     for (const pos of dummyPositions) {
       const dummy = new Enemy(pos.x, pos.y, "drone");
@@ -4999,9 +4999,9 @@ export class Game {
     }
     if (this.state !== GameState.PLAYING) return;
 
-    // Shift + E toggle for Asset Editor
-    if (this.keys["ShiftLeft"] && this.keys["KeyE"]) {
-      this.keys["KeyE"] = false; // debounce
+    // Shift + U toggle for Asset Editor
+    if (this.keys["ShiftLeft"] && this.keys["KeyU"]) {
+      this.keys["KeyU"] = false; // debounce
       this.assetEditor.toggle();
     }
     if (this.assetEditor.active) return; // Pause game logic but keep rendering
@@ -8109,7 +8109,8 @@ export class Game {
 
     // FPS / profiler overlay is drawn by main.js gameLoop after render()
 
-    // Controls hint (only first round, not during cutscenes/tutorial)
+    // Controls hint (retired in v0.8.1 - only visible via pause menu)
+    /*
     if (this.mode !== "tutorial") {
       const elapsed = (this.time - this.roundStartTime) / 1000;
       if (elapsed < 6) {
@@ -8117,6 +8118,7 @@ export class Game {
         this.drawControlsOverlay(ctx, w, h, alpha);
       }
     }
+    */
 
     // Achievement toast (above minimap area)
     this.renderAchievementToast(ctx, w, h);
