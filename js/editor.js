@@ -1,6 +1,6 @@
 /**
  * AssetEditor - A developer tool for real-time visual tweaking.
- * Access via Shift + E in-game.
+ * Access via Shift + U in-game.
  */
 export class AssetEditor {
     constructor(game) {
@@ -66,7 +66,7 @@ export class AssetEditor {
                 <button id="editor-export" style="background: #00f2ff; color: #000; border: none; padding: 8px; width: 100%; cursor: pointer; font-weight: bold;">EXPORT CONFIG</button>
             </div>
             
-            <p style="font-size: 10px; color: #666; margin-top: 10px;">[Shift + E] to toggle. Changes apply in real-time.</p>
+            <p style="font-size: 10px; color: #666; margin-top: 10px;">[Shift + U] to toggle. Changes apply in real-time.</p>
         `;
 
         document.body.appendChild(this.container);
