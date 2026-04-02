@@ -511,6 +511,17 @@ function _appendSegment(
     pickupSpawns.push({ x: p.x + 0.5, y: baseY + p.y + 0.5, type: p.type });
   }
 
+  // Weapon pickups — spawn occasionally in later segments (every ~5 segs, 30% chance)
+  if (segNum >= 8 && segNum % 5 === 0 && Math.random() < 0.3) {
+    const wx = 3 + Math.floor(Math.random() * 9);
+    const wy = baseY + 4;
+    if (grid[wy] && grid[wy][wx] === 0) {
+      // Weapons 1-7 (skip 0=pistol which player always has)
+      const weaponId = 1 + Math.floor(Math.random() * 7);
+      pickupSpawns.push({ x: wx + 0.5, y: wy + 0.5, type: "weapon", weaponId });
+    }
+  }
+
   if (segNum > 5 && Math.random() < 0.4) {
     const ex = 2 + Math.floor(Math.random() * 11);
     const ey = baseY + 3;

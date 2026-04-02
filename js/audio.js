@@ -526,6 +526,13 @@ export class AudioManager {
 
   // ─── Combat SFX ─────────────────────────────────────────────────────
 
+  enemyShoot(pan = 0) {
+    // Distinct zap sound for enemy ranged attacks — higher pitch, short burst
+    this.playTone(600, 0.06, "sawtooth", 0.2, 0, pan);
+    this.playTone(450, 0.04, "square", 0.15, 0, pan);
+    this.playNoise(0.05, 0.1, 2000, "highpass", pan);
+  }
+
   enemyHit(pan = 0) {
     this.playTone(300, 0.08, "square", 0.3, 0, pan);
     this.playTone(200, 0.06, "square", 0.2, 0, pan);

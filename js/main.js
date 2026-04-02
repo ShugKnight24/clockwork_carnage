@@ -311,15 +311,15 @@ document.addEventListener("keydown", (e) => {
     if (e.code === "Digit1") {
       document.getElementById("btnCampaign").click();
     } else if (e.code === "Digit2") {
-      document.getElementById("btnArena").click();
-    } else if (e.code === "Digit3") {
-      document.getElementById("btnTutorial").click();
-    } else if (e.code === "Digit4") {
-      document.getElementById("btnBuilder").click();
-    } else if (e.code === "Digit5") {
-      document.getElementById("btnCustomize").click();
-    } else if (e.code === "Digit6") {
       document.getElementById("btnMeltdown").click();
+    } else if (e.code === "Digit3") {
+      document.getElementById("btnArena").click();
+    } else if (e.code === "Digit4") {
+      document.getElementById("btnTutorial").click();
+    } else if (e.code === "Digit5") {
+      document.getElementById("btnBuilder").click();
+    } else if (e.code === "Digit6") {
+      document.getElementById("btnCustomize").click();
     } else if (e.code === "Digit7") {
       document.getElementById("btnStats").click();
     } else if (e.code === "Escape") {

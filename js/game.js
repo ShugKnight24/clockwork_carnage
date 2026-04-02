@@ -1,9 +1,15 @@
 import { AssetEditor } from "./editor.js";
+import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
+import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
+import { drawStatsScreen } from "./stats-screen.js";
+import {
+  spawnPickupBurst as _spawnPickupBurst,
+  updateParticles as _updateParticles,
+} from "./particle-system.js";
 import {
   WEAPONS,
   ENEMY_TYPES,
   CUTSCENE_SCRIPTS,
-  ARENA_MAP,
   ARENA_MAPS,
   CAMPAIGN_LEVELS,
   UPGRADES,
@@ -64,7 +70,7 @@ export const GameState = {
   STATS: "stats",
 };
 
-// TODO: Restructure this entire file, but especially this class... it's a mess. It handles too much. 3k lines for a class is normal right? Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
+// TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
 
 // Helper: compute a display item { label, value, color } from a registry entry
 export function settingDisplayItem(def, settings) {
@@ -123,8 +129,6 @@ export class Game {
     this.arenaTimer = 60;
     this.arenaRound = 1;
     this.campaignLevel = 0;
-    this.keys = {};
-    this.mouse = { dx: 0, dy: 0, locked: false };
     this.isTouchDevice = "ontouchstart" in window;
     this.menuSelection = 0;
     this.upgradeSelection = 0;
@@ -191,27 +195,31 @@ export class Game {
     // Share URL handling
     window.addEventListener("hashchange", () => this._handleHashChange());
     this._handleHashChange();
-    // Double-tap dash tracking
-    this.lastTapKey = null;
-    this.lastTapTime = 0;
 
-    // Key remapping
-    this.keybinds = {
-      moveForward: "KeyW",
-      moveBack: "KeyS",
-      moveLeft: "KeyA",
-      moveRight: "KeyD",
-      sprint: "ShiftLeft",
-      interact: "KeyE",
-      pause: "Escape",
-      weapon1: "Digit1",
-      weapon2: "Digit2",
-      weapon3: "Digit3",
-      weapon4: "Digit4",
-      toggleFPS: "KeyF",
-      chronoShift: "KeyQ",
-      crouch: "ControlLeft",
-    };
+    // InputManager owns keys, mouse, keybinds and all DOM event wiring.
+    // setupInput() below finishes wiring it after the game is fully constructed.
+    this.input = new InputManager({
+      canvas: this.canvas,
+      onKeyDown: (code, e) => this._inputKeyDown(code, e),
+      onKeyUp: (code) => {
+        /* state machine reacts to held keys each frame */ void code;
+      },
+      onDashTrigger: (code) => this.triggerDash(code),
+      onMouseDown: (e) => this._inputMouseDown(e),
+      onMouseUp: (e) => {
+        if (e.button === 0) this.player.isFiring = false;
+      },
+      onLockChange: (locked, wasLocked) =>
+        this._inputLockChange(locked, wasLocked),
+      getState: () => this.state,
+      playingState: GameState.PLAYING,
+    });
+    // Convenience aliases so all existing `this.keys`, `this.mouse`, `this.keybinds` references
+    // continue to work without a sweeping rename.
+    this.keys = this.input.keys;
+    this.mouse = this.input.mouse;
+    this.keybinds = this.input.keybinds;
+
     // Previous-frame key state tracking for edge-detection (crouch start)
     this._prevCrouchKey = false;
     this.controlsSelection = 0;
@@ -355,7 +363,7 @@ export class Game {
     this.lockPointer();
   }
 
-  // TODO: Abstract out InputManager
+  // Pointer lock helpers — kept here because they need the isTouchDevice guard.
 
   lockPointer() {
     if (!this.isTouchDevice) {
@@ -416,143 +424,103 @@ export class Game {
   }
 
   setupInput() {
-    document.addEventListener("keydown", (e) => {
-      // Builder delegates input to its own handler
-      if (this.state === GameState.BUILDER) {
-        if (!this._builderOnboardingDismissed) {
-          this._builderOnboardingDismissed = true;
-          // Dismiss on any key EXCEPT Escape — let Escape fall through to pause.
-          if (e.code !== "Escape") return;
-        }
-        if (this.builder.handleKeyDown(e)) return;
-      }
-      // Rebinding mode — capture the next key
-      if (this.state === GameState.CONTROLS && this.rebindingKey) {
-        e.preventDefault();
-        if (e.code !== "Escape") {
-          const oldCode = this.keybinds[this.rebindingKey];
-          // Swap with any action already using this key
-          let swappedAction = null;
-          for (const action of Object.keys(this.keybinds)) {
-            if (
-              action !== this.rebindingKey &&
-              this.keybinds[action] === e.code
-            ) {
-              this.keybinds[action] = oldCode;
-              swappedAction = action;
-              break;
-            }
-          }
-          this.keybinds[this.rebindingKey] = e.code;
-          if (swappedAction) {
-            this._keybindSwapFlash = {
-              action: swappedAction,
-              time: performance.now(),
-            };
-          }
-          this.saveSettings();
-        }
-        this.rebindingKey = null;
-        return;
-      }
+    // InputManager was created in the constructor and registered all DOM
+    // listeners. This method now just loads saved keybinds from localStorage.
+    this.input.loadKeybinds();
+  }
 
-      // Double-tap dash detection for movement keys
-      const dashKeys = [
-        this.keybinds.moveForward,
-        this.keybinds.moveLeft,
-        this.keybinds.moveBack,
-        this.keybinds.moveRight,
-      ];
-      if (
-        dashKeys.includes(e.code) &&
-        !e.repeat &&
-        this.state === GameState.PLAYING
-      ) {
-        const now = performance.now();
-        if (this.lastTapKey === e.code && now - this.lastTapTime < 250) {
-          this.triggerDash(e.code);
-          this.lastTapKey = null;
-        } else {
-          this.lastTapKey = e.code;
-          this.lastTapTime = now;
+  /** Handles the keydown part that needs full game state context. */
+  _inputKeyDown(code, e) {
+    // Builder delegates input to its own handler
+    if (this.state === GameState.BUILDER) {
+      if (!this._builderOnboardingDismissed) {
+        this._builderOnboardingDismissed = true;
+        // Dismiss on any key EXCEPT Escape — let Escape fall through to pause.
+        if (e.code !== "Escape") return;
+      }
+      if (this.builder.handleKeyDown(e)) return;
+    }
+    // Rebinding mode — capture the next key
+    if (this.state === GameState.CONTROLS && this.rebindingKey) {
+      e.preventDefault();
+      if (e.code !== "Escape") {
+        const { swappedAction } = this.input.rebind(this.rebindingKey, e.code);
+        if (swappedAction) {
+          this._keybindSwapFlash = {
+            action: swappedAction,
+            time: performance.now(),
+          };
         }
+        this.saveSettings();
       }
-      this.keys[e.code] = true;
-      // Prevent Tab from shifting DOM focus in menus
-      if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
-        e.preventDefault();
+      this.rebindingKey = null;
+      return;
+    }
+    // Prevent Tab from shifting DOM focus in menus
+    if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
+      e.preventDefault();
+    }
+    this.handleKeyPress(e.code, e);
+    // Prevent ESC from leaking to main.js when CHARACTER_CREATE changes state
+    if (
+      e.code === "Escape" &&
+      (this.state === GameState.MODE_SELECT ||
+        this.state === GameState.TUTORIAL_COMPLETE)
+    ) {
+      const now = performance.now();
+      if (now - (this._creatorExitTime || 0) < 100) {
+        e.stopImmediatePropagation();
       }
-      this.handleKeyPress(e.code, e);
-      // Prevent ESC from leaking to main.js when CHARACTER_CREATE changes state
-      if (
-        e.code === "Escape" &&
-        (this.state === GameState.MODE_SELECT ||
-          this.state === GameState.TUTORIAL_COMPLETE)
-      ) {
-        // State just changed via handleKeyPress — suppress further listeners
-        const now = performance.now();
-        if (now - (this._creatorExitTime || 0) < 100) {
-          e.stopImmediatePropagation();
-        }
-      }
-    });
-    document.addEventListener("keyup", (e) => {
-      this.keys[e.code] = false;
-    });
-    document.addEventListener("mousemove", (e) => {
-      if (this.mouse.locked) {
-        this.mouse.dx += e.movementX;
-        this.mouse.dy += e.movementY;
-      }
-    });
-    this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-    this.canvas.addEventListener("mousedown", (e) => {
-      if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
-        this._handleCreatorClick(e);
+    }
+  }
+
+  /** Handles all mousedown events with full game state context. */
+  _inputMouseDown(e) {
+    // Cutscene: click to advance frame (manual advance)
+    if (this.state === GameState.CUTSCENE && e.button === 0) {
+      this.advanceCutsceneFrame();
+      return;
+    }
+    if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
+      this._handleCreatorClick(e);
+      return;
+    }
+    if (this.state === GameState.GAME_OVER && e.button === 0) {
+      this._handleGameOverClick(e);
+      return;
+    }
+    if (this.state === GameState.BUILDER) {
+      if (!this._builderOnboardingDismissed) {
+        this._builderOnboardingDismissed = true;
         return;
       }
-      if (this.state === GameState.GAME_OVER && e.button === 0) {
-        this._handleGameOverClick(e);
+      if (!this.mouse.locked && !this.builder.overhead) {
+        this.lockPointer();
         return;
       }
-      if (this.state === GameState.BUILDER) {
-        if (!this._builderOnboardingDismissed) {
-          this._builderOnboardingDismissed = true;
-          return;
-        }
-        if (!this.mouse.locked && !this.builder.overhead) {
-          this.lockPointer();
-          return;
-        }
-        this.builder.handleMouseDown(e.button);
-        return;
+      this.builder.handleMouseDown(e.button);
+      return;
+    }
+    if (e.button === 0) {
+      if (this.state === GameState.PLAYING) {
+        this.player.isFiring = true;
       }
-      if (e.button === 0) {
-        if (this.state === GameState.PLAYING) {
-          this.player.isFiring = true;
-        }
-        if (!this.mouse.locked && this.state === GameState.PLAYING) {
-          this.lockPointer();
-        }
+      if (!this.mouse.locked && this.state === GameState.PLAYING) {
+        this.lockPointer();
       }
-    });
-    this.canvas.addEventListener("mouseup", (e) => {
-      if (e.button === 0) {
-        this.player.isFiring = false;
+    }
+  }
+
+  /** Reacts to pointer lock acquire/release. */
+  _inputLockChange(locked, wasLocked) {
+    if (this.isTouchDevice) return; // touch controls manage their own state
+    // Only auto-pause if we lost lock without ESC (e.g. alt-tab)
+    if (wasLocked && !locked && this.state === GameState.PLAYING) {
+      const now = performance.now();
+      if (now - this.lastEscTime > 200) {
+        this.pauseGame(GameState.PLAYING);
       }
-    });
-    document.addEventListener("pointerlockchange", () => {
-      if (this.isTouchDevice) return; // touch controls manage their own state
-      const wasLocked = this.mouse.locked;
-      this.mouse.locked = document.pointerLockElement === this.canvas;
-      // Only auto-pause if we lost pointer lock without ESC (e.g. alt-tab)
-      if (wasLocked && !this.mouse.locked && this.state === GameState.PLAYING) {
-        const now = performance.now();
-        if (now - this.lastEscTime > 200) {
-          this.pauseGame(GameState.PLAYING);
-        }
-      }
-    });
+    }
   }
 
   handleKeyPress(code, e) {
@@ -806,7 +774,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 13) {
+      if (this.mode === "tutorial" && this.tutorialStep === 15) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -820,7 +788,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 13) {
+      if (this.mode === "tutorial" && this.tutorialStep < 15) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -970,17 +938,16 @@ export class Game {
         if (!def) {
           /* no-op if category is empty */
         } else {
-          // Default: increment value
-          const dir = 1;
+          // Enter/Space always increments; ArrowLeft/Right handle decrement in the settings arrow handler below.
           if (def.type === "toggle") {
             this.settings[def.key] = !this.settings[def.key];
           } else if (def.wrap) {
             const range = def.max - def.min + 1;
             this.settings[def.key] =
               def.min +
-              ((this.settings[def.key] - def.min + dir + range) % range);
+              ((this.settings[def.key] - def.min + 1 + range) % range);
           } else {
-            let val = this.settings[def.key] + def.step * dir;
+            let val = this.settings[def.key] + def.step;
             val = Math.max(def.min, Math.min(def.max, val));
             if (def.round != null)
               val =
@@ -1022,22 +989,8 @@ export class Game {
           this.rebindingKey = bindKeys[this.controlsSelection];
           this.audio.menuConfirm();
         } else {
-          // Reset defaults
-          this.keybinds = {
-            moveForward: "KeyW",
-            moveBack: "KeyS",
-            moveLeft: "KeyA",
-            moveRight: "KeyD",
-            sprint: "ShiftLeft",
-            interact: "KeyE",
-            pause: "Escape",
-            weapon1: "Digit1",
-            weapon2: "Digit2",
-            weapon3: "Digit3",
-            weapon4: "Digit4",
-            toggleFPS: "KeyF",
-            chronoShift: "KeyQ",
-          };
+          // Reset to defaults (mutate in place so the InputManager alias stays valid)
+          Object.assign(this.keybinds, DEFAULT_KEYBINDS);
           this.saveSettings();
           this.audio.menuConfirm();
         }
@@ -1212,8 +1165,8 @@ export class Game {
   saveSettings() {
     try {
       localStorage.setItem("cc_settings", JSON.stringify(this.settings));
-      localStorage.setItem("cc_keybinds", JSON.stringify(this.keybinds));
     } catch (_) {}
+    this.input.saveKeybinds();
   }
 
   loadSettings() {
@@ -1231,20 +1184,7 @@ export class Game {
         }
       }
     } catch (_) {}
-    try {
-      const raw = localStorage.getItem("cc_keybinds");
-      if (raw) {
-        const saved = JSON.parse(raw);
-        for (const key of Object.keys(this.keybinds)) {
-          if (Object.prototype.hasOwnProperty.call(saved, key)) {
-            const val = saved[key];
-            if (typeof val === "string") {
-              this.keybinds[key] = val;
-            }
-          }
-        }
-      }
-    } catch (_) {}
+    // Keybinds are loaded by InputManager.loadKeybinds(), called from setupInput()
   }
 
   // One-time migration for existing mobile users who had desktop-tuned defaults
@@ -2184,7 +2124,7 @@ export class Game {
 
     // Spawn pickups
     for (const pk of mMap.pickupSpawns) {
-      const p = new Pickup(pk.x, pk.y, pk.type);
+      const p = new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId });
       this.entities.push(p);
     }
 
@@ -2555,7 +2495,7 @@ export class Game {
     this.totalEnemies = 0;
     this.exitEntity = null;
 
-    // Tutorial step tracking
+    // Tutorial step tracking — 16 steps (0-15)
     this.tutorialStep = 0;
     this.tutorialStepTime = performance.now();
     this.tutorialStartAngle = this.player.angle;
@@ -2564,17 +2504,19 @@ export class Game {
     this.tutorialStartX = this.player.x;
     this.tutorialStartY = this.player.y;
     this.tutorialSprintTime = 0;
+    this.tutorialSprintDone = false;
     this.tutorialPickedUp = false;
     this.tutorialWeaponPickedUp = false;
     this.tutorialWeaponSwapped = false;
+    this.tutorialSecondWeaponPickedUp = false;
     this.tutorialDoorOpened = false;
-    this.tutorialEnemySpawned = false;
-    this.tutorialEnemyKilled = false;
     this.tutorialDashed = false;
     this.tutorialCrouched = false;
     this.tutorialSlid = false;
     this.tutorialFired = false;
     this.tutorialChronoUsed = false;
+    this.tutorialWave1Spawned = false;
+    this.tutorialWave2Spawned = false;
     this.tutorialSandboxInit = false;
     this.tutorialMenuSelection = 0;
     this.tutorialOriginPlayed = false;
@@ -2593,6 +2535,20 @@ export class Game {
     this.tutorialStepTime = performance.now();
     this.audio.menuConfirm();
 
+    // Auto-open doors for later zones (player learned doors at step 3)
+    const doorMap = TUTORIAL_MAP.doors;
+    const autoOpenDoors = {
+      7: doorMap.door2, // Step 7 (Sprint) → open door to Fitness Center
+      9: doorMap.door3, // Step 9 (Chrono) → open door to Supervisor Office
+      11: doorMap.door4, // Step 11 (Alert) → open door to Combat Arena
+    };
+    const doorsToOpen = autoOpenDoors[this.tutorialStep];
+    if (doorsToOpen) {
+      for (const d of doorsToOpen) {
+        this.map.grid[d.y][d.x] = 0;
+      }
+    }
+
     // Reset interaction flags for the next step to prevent skipping
     this.tutorialSprintTime = 0;
     this.tutorialSprintDone = false;
@@ -2604,7 +2560,7 @@ export class Game {
     this.tutorialDoorOpened = false;
     this.tutorialChronoUsed = false;
     this.tutorialPickedUp = false;
-    // Note: tutorialWeaponPickedUp remains true once done
+    // Note: tutorialWeaponPickedUp and tutorialSecondWeaponPickedUp remain true once done
   }
 
   updateTutorial(dt) {
@@ -2639,8 +2595,8 @@ export class Game {
         }
         break;
 
-      case 2: // MOVE — walk > 2.5 units from start
-        this.objectiveWaypoint = { x: 11.5, y: 5.5 };
+      case 2: // MOVE — walk > 2.5 units from start, waypoint to door 1
+        this.objectiveWaypoint = { x: 11.5, y: 5.0 };
         {
           const dx = p.x - this.tutorialStartX;
           const dy = p.y - this.tutorialStartY;
@@ -2648,7 +2604,50 @@ export class Game {
         }
         break;
 
-      case 3: // ALERT — alarm klaxon + screen shake, auto 2.5s
+      case 3: // BREACH DOOR — open Door 1 (press E)
+        this.objectiveWaypoint = { x: 11.5, y: 5.0 };
+        if (this.tutorialDoorOpened) this.advanceTutorialStep();
+        break;
+
+      case 4: // ARM YOURSELF — pick up Chrono Pistol in Zone 2
+        this.objectiveWaypoint = { x: 11.5, y: 7.5 };
+        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
+        break;
+
+      case 5: // CONFIRM TARGETING — fire weapon
+        this.objectiveWaypoint = { x: 11.5, y: 9.0 };
+        if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
+        break;
+
+      case 6: // WEAPON SWITCH — pick up Temporal Shotgun + switch weapons
+        this.objectiveWaypoint = { x: 15.5, y: 7.5 };
+        if (this.tutorialSecondWeaponPickedUp && this.tutorialWeaponSwapped)
+          this.advanceTutorialStep();
+        break;
+
+      case 7: // SPRINT — hold Shift > 0.5s (door 2 auto-opened on advance)
+        this.objectiveWaypoint = { x: 11.0, y: 14.0 };
+        if (p.isSprinting) this.tutorialSprintTime += dt;
+        if (this.tutorialSprintTime > 0.5) this.advanceTutorialStep();
+        break;
+
+      case 8: // PHASE DASH — double-tap direction
+        this.objectiveWaypoint = { x: 11.0, y: 16.0 };
+        if (this.tutorialDashed) this.advanceTutorialStep();
+        break;
+
+      case 9: // CHRONO SHIFT — press Q (door 3 auto-opened on advance)
+        this.objectiveWaypoint = { x: 11.0, y: 20.5 };
+        if (elapsed > 0.1 && this.tutorialChronoUsed)
+          this.advanceTutorialStep();
+        break;
+
+      case 10: // RESUPPLY — pick up health + ammo
+        this.objectiveWaypoint = { x: 10.5, y: 20.5 };
+        if (this.tutorialPickedUp) this.advanceTutorialStep();
+        break;
+
+      case 11: // ALERT — alarm + screen shake, auto 2.5s (door 4 auto-opened on advance)
         if (!this.tutorialAlarmPlayed) {
           this.tutorialAlarmPlayed = true;
           this.audio.alarmKlaxon();
@@ -2657,64 +2656,69 @@ export class Game {
         if (elapsed > 2.5) this.advanceTutorialStep();
         break;
 
-      case 4: // BREACH DOOR — open Door 1
-        this.objectiveWaypoint = { x: 10.5, y: 6.0 };
-        if (this.tutorialDoorOpened) this.advanceTutorialStep();
-        break;
-
-      case 5: // ARM YOURSELF — weapon pickup
-        this.objectiveWaypoint = { x: 11.5, y: 8.5 };
-        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
-        break;
-
-      case 6: // CONFIRM TARGETING — fire weapon
-        this.objectiveWaypoint = { x: 11.5, y: 10.0 };
-        if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
-        break;
-
-      case 7: // SPRINT AND DASH
-        this.objectiveWaypoint = { x: 11.0, y: 14.0 };
-        if (p.isSprinting) this.tutorialSprintTime += dt;
-        if (this.tutorialSprintTime > 0.4 && !this.tutorialSprintDone) {
-          this.tutorialSprintDone = true;
-        }
-        if (this.tutorialSprintDone && this.tutorialDashed)
-          this.advanceTutorialStep();
-        break;
-
-      case 8: // TEMPORAL ANOMALY — screen shake, auto 2.5s
-        if (elapsed < 0.1) {
-          this.screenShake = 3;
-        }
-        if (elapsed > 2.5) this.advanceTutorialStep();
-        break;
-
-      case 9: // CHRONO SHIFT
-        this.objectiveWaypoint = { x: 11.0, y: 19.0 };
-        if (elapsed > 0.1 && this.tutorialChronoUsed)
-          this.advanceTutorialStep();
-        break;
-
-      case 10: // RESUPPLY
-        this.objectiveWaypoint = { x: 6.5, y: 19.5 };
-        if (this.tutorialPickedUp) this.advanceTutorialStep();
-        break;
-
-      case 11: // HOSTILE CONTACT — spawn drone, kill 1
-        if (!this.tutorialEnemySpawned) {
-          const enemy = new Enemy(11, 21.0, "drone");
-          enemy.health = 15;
-          enemy.maxHealth = 15;
-          enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
-          this.entities.push(enemy);
-          this.tutorialEnemySpawned = true;
-          this.totalEnemies = 1;
+      case 12: // WAVE 1 — kill 3 drones
+        if (!this.tutorialWave1Spawned) {
+          this.tutorialWave1Spawned = true;
+          const dronePositions = [
+            { x: 8.5, y: 26.0 },
+            { x: 14.5, y: 26.0 },
+            { x: 11.5, y: 27.5 },
+          ];
+          for (const pos of dronePositions) {
+            const enemy = new Enemy(pos.x, pos.y, "drone");
+            enemy.health = 15;
+            enemy.maxHealth = 15;
+            enemy.def = {
+              ...enemy.def,
+              damage: 3,
+              speed: enemy.def.speed * 0.5,
+            };
+            this.entities.push(enemy);
+          }
+          this.totalEnemies = 3;
           this.killedEnemies = 0;
         }
-        if (this.killedEnemies >= 1) this.advanceTutorialStep();
+        this.objectiveWaypoint = { x: 11.5, y: 26.0 };
+        if (this.killedEnemies >= 3) this.advanceTutorialStep();
         break;
 
-      case 12: // CALIBRATION COMPLETE → Character Creator
+      case 13: // WAVE 2 — kill 2 henchmen + 1 drone
+        if (!this.tutorialWave2Spawned) {
+          this.tutorialWave2Spawned = true;
+          const wavePositions = [
+            { x: 7.5, y: 25.5, type: "henchman" },
+            { x: 15.5, y: 25.5, type: "henchman" },
+            { x: 11.5, y: 27.0, type: "drone" },
+          ];
+          for (const pos of wavePositions) {
+            const enemy = new Enemy(pos.x, pos.y, pos.type);
+            if (pos.type === "henchman") {
+              enemy.health = 25;
+              enemy.maxHealth = 25;
+              enemy.def = {
+                ...enemy.def,
+                damage: 5,
+                speed: enemy.def.speed * 0.6,
+              };
+            } else {
+              enemy.health = 15;
+              enemy.maxHealth = 15;
+              enemy.def = {
+                ...enemy.def,
+                damage: 3,
+                speed: enemy.def.speed * 0.5,
+              };
+            }
+            this.entities.push(enemy);
+          }
+          this.totalEnemies = 3;
+          this.killedEnemies = 0;
+        }
+        this.objectiveWaypoint = { x: 11.5, y: 26.0 };
+        if (this.killedEnemies >= 3) this.advanceTutorialStep();
+        break;
+
+      case 14: // CALIBRATION COMPLETE → Character Creator
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2728,7 +2732,7 @@ export class Game {
         }
         break;
 
-      case 13: // Post-Creator Sandbox (Optional)
+      case 15: // Post-Creator Sandbox (Optional)
         {
           if (!this.tutorialSandboxInit) {
             this.tutorialSandboxInit = true;
@@ -2753,11 +2757,11 @@ export class Game {
     this.entities = this.entities.filter(
       (e) => e.type !== "enemy" || (e.active && e.state !== "dead"),
     );
-    // Spawn 3 dummies at fixed positions in the combat sim area
+    // Spawn 3 dummies at fixed positions in the combat arena (Zone 5, rows 24-28)
     const dummyPositions = [
-      { x: 6.5, y: 21.0 },
-      { x: 13.5, y: 21.0 },
-      { x: 10, y: 18.5 },
+      { x: 7.5, y: 26.0 },
+      { x: 15.5, y: 26.0 },
+      { x: 11.5, y: 27.5 },
     ];
     for (const pos of dummyPositions) {
       const dummy = new Enemy(pos.x, pos.y, "drone");
@@ -2799,7 +2803,7 @@ export class Game {
   executeTutorialCompletionChoice(choice) {
     this.tutorialShowCompletionMenu = false;
     switch (choice) {
-      case 0: // Continue Training (go to sandbox step 13)
+      case 0: // Continue Training (go to sandbox step 15)
         this.state = GameState.PLAYING;
         this.advanceTutorialStep();
         this.audio.startTrack("campaign", 130);
@@ -2875,7 +2879,8 @@ export class Game {
         const l = lines[i];
         if (elapsed < l.delay) continue;
         const lineAlpha = Math.min(1, (elapsed - l.delay) / 0.3);
-        const flicker = elapsed - l.delay < 0.15 ? 0.4 + Math.random() * 0.6 : 1;
+        const flicker =
+          elapsed - l.delay < 0.15 ? 0.4 + Math.random() * 0.6 : 1;
         ctx.globalAlpha = fadeIn * lineAlpha * flicker;
         ctx.fillStyle = "#00ffcc";
         ctx.fillText(l.text, w / 2, baseY + i * 30);
@@ -2885,7 +2890,7 @@ export class Game {
       return;
     }
 
-    // ── Steps 1-12: ARIA Dialogue Boxes ──────────────────────────────
+    // ── Steps 1-14: ARIA Dialogue Boxes ─────────────────────────────
     const steps = [
       null, // step 0 handled above
       {
@@ -2898,14 +2903,9 @@ export class Game {
       {
         title: "MOVE — TEST THE SUIT",
         hint: isMobile
-          ? 'ARIA: "That alarm isn\'t on the schedule. Use the stick to walk — get a feel for the suit."'
-          : 'ARIA: "That alarm isn\'t on the schedule. W A S D — walk it off, get a feel for the suit."',
+          ? 'ARIA: "Good. Use the stick to walk — head toward the door ahead."'
+          : 'ARIA: "Good. W A S D — walk it off, head toward the bulkhead ahead."',
         color: "#00ccff",
-      },
-      {
-        title: "⚡ ALERT — INTRUSION DETECTED",
-        hint: 'ARIA: "Active intrusion, multiple sectors compromised. No time for pleasantries — we need to move."',
-        color: "#ff2244",
       },
       {
         title: "BREACH — OPEN THE DOOR",
@@ -2927,16 +2927,25 @@ export class Game {
         color: "#ff8844",
       },
       {
-        title: "SPRINT AND DASH",
+        title: "WEAPON SWITCH — GRAB THE SHOTGUN",
         hint: isMobile
-          ? 'ARIA: "RUN to sprint. Double-tap a direction to phase-dash. You\'ll need both."'
-          : 'ARIA: "SHIFT to sprint. Double-tap a direction to phase-dash. You\'ll need both."',
+          ? 'ARIA: "Second weapon on the range. Pick it up, then swipe to switch weapons."'
+          : 'ARIA: "Second weapon on the range. Pick it up, then scroll or press 1/2 to switch."',
+        color: "#ff6600",
+      },
+      {
+        title: "SPRINT — MOVE FAST",
+        hint: isMobile
+          ? 'ARIA: "Fitness center ahead. Tap RUN to sprint — cover ground fast."'
+          : 'ARIA: "Fitness center ahead. Hold SHIFT to sprint — cover ground fast."',
         color: "#ff44ff",
       },
       {
-        title: "⚠ TEMPORAL ANOMALY — CHRONOS ENGINE HIT",
-        hint: 'ARIA: "The Chronos Engine is destabilizing. Brace yourself."',
-        color: "#ff2244",
+        title: "PHASE DASH — BLINK FORWARD",
+        hint: isMobile
+          ? 'ARIA: "Double-tap a direction to phase-dash. Covers distance instantly."'
+          : 'ARIA: "Double-tap a movement key to phase-dash. Covers distance instantly."',
+        color: "#ff44ff",
       },
       {
         title: "CHRONO SHIFT — BEND TIME",
@@ -2947,12 +2956,22 @@ export class Game {
       },
       {
         title: "RESUPPLY — TAKE EVERYTHING",
-        hint: 'ARIA: "Health and ammo on the ground. Grab everything — the station is in lockdown."',
+        hint: 'ARIA: "Health and ammo on the ground. Grab everything — you\'ll need it."',
         color: "#44ff88",
       },
       {
-        title: "HOSTILE CONTACT — TAKE IT DOWN",
-        hint: 'ARIA: "Hostile drone. This is live. Put it down."',
+        title: "⚡ ALERT — INTRUSION DETECTED",
+        hint: 'ARIA: "Active intrusion, multiple sectors compromised. Get to the combat arena — NOW."',
+        color: "#ff2244",
+      },
+      {
+        title: "WAVE 1 — DRONES INBOUND",
+        hint: 'ARIA: "Three hostile drones. Put them down — this is live."',
+        color: "#ff2244",
+      },
+      {
+        title: "WAVE 2 — REINFORCEMENTS",
+        hint: 'ARIA: "More contacts. Two henchmen and a drone. Stay sharp."',
         color: "#ff2244",
       },
       {
@@ -3003,12 +3022,12 @@ export class Game {
 
     ctx.globalAlpha = fadeIn;
 
-    // Step counter (steps 1-11 shown as X/11)
+    // Step counter (steps 1-13 shown as X/13)
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 12) {
-      ctx.fillText(`${this.tutorialStep}/11`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 14) {
+      ctx.fillText(`${this.tutorialStep}/13`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -3023,7 +3042,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 13) {
+    if (this.tutorialStep === 15) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -4439,15 +4458,60 @@ export class Game {
     // Act rosters — enemies that belong naturally to each act
     const ACT_ROSTERS = {
       1: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
-      2: ["corruptCop", "henchman", "beast", "phaseStalker", "chronoBomber", "temporalEngineer", "shieldCommander"],
-      3: ["beast", "riftLeaper", "timeWarden", "temporalSummoner", "echoDrone", "sentinel", "phaseStalker"],
+      2: [
+        "corruptCop",
+        "henchman",
+        "beast",
+        "phaseStalker",
+        "chronoBomber",
+        "temporalEngineer",
+        "shieldCommander",
+      ],
+      3: [
+        "beast",
+        "riftLeaper",
+        "timeWarden",
+        "temporalSummoner",
+        "echoDrone",
+        "sentinel",
+        "phaseStalker",
+      ],
     };
     // Substitution map: if an enemy type is not in the current act's roster,
     // swap it for the closest equivalent in that act.
     const SUBSTITUTES = {
-      1: { henchman: "corruptCop", beast: "sentinel", phaseStalker: "phantom", chronoBomber: "phantom", temporalEngineer: "phantom", shieldCommander: "sentinel", riftLeaper: "phantom", timeWarden: "sentinel", temporalSummoner: "phantom", echoDrone: "drone" },
-      2: { drone: "corruptCop", glitchling: "phaseStalker", phantom: "henchman", sentinel: "shieldCommander", riftLeaper: "phaseStalker", timeWarden: "shieldCommander", temporalSummoner: "temporalEngineer", echoDrone: "chronoBomber" },
-      3: { drone: "echoDrone", glitchling: "phaseStalker", corruptCop: "sentinel", phantom: "riftLeaper", henchman: "riftLeaper", chronoBomber: "temporalSummoner", temporalEngineer: "temporalSummoner", shieldCommander: "timeWarden" },
+      1: {
+        henchman: "corruptCop",
+        beast: "sentinel",
+        phaseStalker: "phantom",
+        chronoBomber: "phantom",
+        temporalEngineer: "phantom",
+        shieldCommander: "sentinel",
+        riftLeaper: "phantom",
+        timeWarden: "sentinel",
+        temporalSummoner: "phantom",
+        echoDrone: "drone",
+      },
+      2: {
+        drone: "corruptCop",
+        glitchling: "phaseStalker",
+        phantom: "henchman",
+        sentinel: "shieldCommander",
+        riftLeaper: "phaseStalker",
+        timeWarden: "shieldCommander",
+        temporalSummoner: "temporalEngineer",
+        echoDrone: "chronoBomber",
+      },
+      3: {
+        drone: "echoDrone",
+        glitchling: "phaseStalker",
+        corruptCop: "sentinel",
+        phantom: "riftLeaper",
+        henchman: "riftLeaper",
+        chronoBomber: "temporalSummoner",
+        temporalEngineer: "temporalSummoner",
+        shieldCommander: "timeWarden",
+      },
     };
     const roster = ACT_ROSTERS[act] || ACT_ROSTERS[1];
     const subs = SUBSTITUTES[act] || {};
@@ -4864,39 +4928,44 @@ export class Game {
       const splashRadius = 2.5;
       const splashDmg = finalDamage * this.player.splashDamage;
       let splashKills = 0;
-      for (const e2 of this.entities) {
+      for (const splashTarget of this.entities) {
         if (
-          e2 === enemy ||
-          e2.type !== "enemy" ||
-          !e2.active ||
-          e2.state === "dead"
+          splashTarget === enemy ||
+          splashTarget.type !== "enemy" ||
+          !splashTarget.active ||
+          splashTarget.state === "dead"
         )
           continue;
-        const sdx = e2.x - enemy.x;
-        const sdy = e2.y - enemy.y;
+        const sdx = splashTarget.x - enemy.x;
+        const sdy = splashTarget.y - enemy.y;
         if (sdx * sdx + sdy * sdy < splashRadius * splashRadius) {
-          e2.health -= splashDmg;
-          e2.hitTime = this.time;
-          if (e2.health <= 0) {
-            e2.state = "dead";
-            e2.dissolving = true;
-            e2.dissolveTimer = 0.5;
-            e2.deathTime = this.time;
-            this.player.score += e2.def.score;
+          splashTarget.health -= splashDmg;
+          splashTarget.hitTime = this.time;
+          if (splashTarget.health <= 0) {
+            splashTarget.state = "dead";
+            splashTarget.dissolving = true;
+            splashTarget.dissolveTimer = 0.5;
+            splashTarget.deathTime = this.time;
+            this.player.score += splashTarget.def.score;
             this.player.kills++;
             this.killedEnemies++;
             this.achievementStats.totalKills++;
             const pan2 = this.audio.calculatePan(
-              e2.x,
-              e2.y,
+              splashTarget.x,
+              splashTarget.y,
               this.player.x,
               this.player.y,
               this.player.angle,
             );
             this.audio.enemyDeath(pan2);
-            this.spawnDeathParticles(e2.x, e2.y, e2.def.color1, e2.def.color2);
+            this.spawnDeathParticles(
+              splashTarget.x,
+              splashTarget.y,
+              splashTarget.def.color1,
+              splashTarget.def.color2,
+            );
             this.glitchEffect = 0.3;
-            this._onEnemyKill(e2);
+            this._onEnemyKill(splashTarget);
             splashKills++;
           }
         }
@@ -5322,7 +5391,7 @@ export class Game {
     }
 
     // Player movement
-    const _tPlr0 = performance.now();
+    const _profilePlayerStart = performance.now();
     this.updatePlayer(dt);
 
     // ── Meltdown auto-forward ──
@@ -5375,7 +5444,9 @@ export class Game {
             this.entities.push(e);
           }
           for (const pk of pickupSpawns) {
-            this.entities.push(new Pickup(pk.x, pk.y, pk.type));
+            this.entities.push(
+              new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId }),
+            );
           }
           this.map.height = this.meltdown.map.height;
         }
@@ -5430,7 +5501,8 @@ export class Game {
     // Weapon kick recovery
     this.player.weaponKick *= 0.85;
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    this.profiler.currentPhases.player = performance.now() - _tPlr0;
+    this.profiler.currentPhases.player =
+      performance.now() - _profilePlayerStart;
 
     // TODO: Find a better solution here
     // Clean up dead entities (keep recently-dead for death animation)
@@ -5442,19 +5514,22 @@ export class Game {
     }
 
     // Update enemies
-    const _tEnt0 = performance.now();
+    const _profileEnemiesStart = performance.now();
     this.updateEnemies(dt);
-    this.profiler.currentPhases.enemies = performance.now() - _tEnt0;
+    this.profiler.currentPhases.enemies =
+      performance.now() - _profileEnemiesStart;
 
     // Update projectiles
-    const _tPrj0 = performance.now();
+    const _profileProjectilesStart = performance.now();
     this.updateProjectiles(dt);
-    this.profiler.currentPhases.projectiles = performance.now() - _tPrj0;
+    this.profiler.currentPhases.projectiles =
+      performance.now() - _profileProjectilesStart;
 
     // Check pickups
-    const _tPkp0 = performance.now();
+    const _profilePickupsStart = performance.now();
     this.checkPickups();
-    this.profiler.currentPhases.pickups = performance.now() - _tPkp0;
+    this.profiler.currentPhases.pickups =
+      performance.now() - _profilePickupsStart;
 
     // Misc: exit check, decay, achievements
     const _tMisc0 = performance.now();
@@ -5630,7 +5705,10 @@ export class Game {
 
     // Footstep audio
     this.audio.setFootstepCadence(p.isSprinting ? 1.6 : 1.0);
-    this.audio.updateFootsteps(isMoving && !p.isDashing && !p.isSliding, performance.now());
+    this.audio.updateFootsteps(
+      isMoving && !p.isDashing && !p.isSliding,
+      performance.now(),
+    );
 
     // Stamina management
     if (p.isSprinting) {
@@ -5732,11 +5810,13 @@ export class Game {
     }
 
     // WASD movement
-    if (this.keys[kb.moveForward] || this.keys["ArrowUp"]) {
+    // In meltdown, forward/back is auto-run only — restrict to lateral strafing
+    const meltdownMode = this.mode === "meltdown";
+    if (!meltdownMode && (this.keys[kb.moveForward] || this.keys["ArrowUp"])) {
       moveX += cos;
       moveY += sin;
     }
-    if (this.keys[kb.moveBack] || this.keys["ArrowDown"]) {
+    if (!meltdownMode && (this.keys[kb.moveBack] || this.keys["ArrowDown"])) {
       moveX -= cos;
       moveY -= sin;
     }
@@ -5873,115 +5953,17 @@ export class Game {
 
   spawnPickupBurst(x, y, pickupType) {
     if (!this.player.particles) this.player.particles = [];
-    // Color by type: health = green, ammo = yellow, weapon = cyan
-    let r1, g1, b1;
-    if (pickupType === "health") {
-      r1 = 50; g1 = 255; b1 = 80;
-    } else if (pickupType === "ammo") {
-      r1 = 255; g1 = 220; b1 = 50;
-    } else {
-      r1 = 50; g1 = 200; b1 = 255;
-    }
-    const count = 10;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const speed = 1.0 + Math.random() * 1.5;
-      this.player.particles.push({
-        x: x,
-        y: y,
-        z: -0.3 - Math.random() * 0.2, // floor level rising
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        vz: -(2 + Math.random() * 2), // burst upward
-        r: r1 + Math.floor(Math.random() * 30),
-        g: g1,
-        b: b1,
-        life: 0.4 + Math.random() * 0.3,
-        size: 0.04 + Math.random() * 0.04,
-      });
-    }
+    _spawnPickupBurst(this.player.particles, x, y, pickupType);
   }
 
   updateParticles(dt) {
-    const pList = this.player.particles;
-    if (pList && pList.length > 0) {
-      for (let i = pList.length - 1; i >= 0; i--) {
-        const p = pList[i];
-        // Apply "timeScale" to particles for Chrono Shift coolness
-        const ts = this.timeScale;
-        p.x += p.vx * dt * ts;
-        p.y += p.vy * dt * ts;
-        p.z += p.vz * dt * ts;
-        p.vz += 15 * dt * ts; // gravity
-        p.life -= dt * ts;
-
-        // Floor bounce
-        if (p.z > 0.48) {
-          p.z = 0.48;
-          p.vz *= -0.3;
-          p.vx *= 0.6;
-          p.vy *= 0.6;
-        }
-
-        if (p.life <= 0) {
-          pList.splice(i, 1);
-        }
-      }
-    }
-
-    // Atmospheric dust motes
-    this.updateDustMotes(dt);
-  }
-
-  updateDustMotes(dt) {
-    if (!this.map) return;
-    // Lazy-init: spawn dust motes scattered around the player area
-    if (!this.dustMotes) {
-      this.dustMotes = [];
-      const count = 35;
-      for (let i = 0; i < count; i++) {
-        this.dustMotes.push({
-          x: this.player.x + (Math.random() - 0.5) * 16,
-          y: this.player.y + (Math.random() - 0.5) * 16,
-          z: -0.1 - Math.random() * 0.8, // scattered heights (floor to ceiling)
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: (Math.random() - 0.5) * 0.3,
-          vz: (Math.random() - 0.5) * 0.15,
-          r: 180 + Math.floor(Math.random() * 50),
-          g: 170 + Math.floor(Math.random() * 50),
-          b: 150 + Math.floor(Math.random() * 40),
-          life: 0.3 + Math.random() * 0.3, // used as alpha
-          size: 0.015 + Math.random() * 0.015,
-        });
-      }
-    }
-
-    for (const m of this.dustMotes) {
-      m.x += m.vx * dt;
-      m.y += m.vy * dt;
-      m.z += m.vz * dt;
-
-      // Gently vary drift
-      m.vx += (Math.random() - 0.5) * 0.1 * dt;
-      m.vy += (Math.random() - 0.5) * 0.1 * dt;
-      m.vz += (Math.random() - 0.5) * 0.05 * dt;
-      // Clamp drift speed
-      m.vx = Math.max(-0.4, Math.min(0.4, m.vx));
-      m.vy = Math.max(-0.4, Math.min(0.4, m.vy));
-      m.vz = Math.max(-0.15, Math.min(0.15, m.vz));
-
-      // Clamp z height
-      if (m.z > 0.45) { m.z = 0.45; m.vz *= -1; }
-      if (m.z < -0.9) { m.z = -0.9; m.vz *= -1; }
-
-      // Wrap around player — keep motes in a 16-unit box around the player
-      const dx = m.x - this.player.x;
-      const dy = m.y - this.player.y;
-      if (dx > 8) m.x -= 16;
-      if (dx < -8) m.x += 16;
-      if (dy > 8) m.y -= 16;
-      if (dy < -8) m.y += 16;
-    }
+    this.dustMotes = _updateParticles(
+      this.player.particles,
+      dt,
+      this.timeScale,
+      this.dustMotes,
+      this.player,
+    );
   }
 
   updateEnemies(dt) {
@@ -6096,7 +6078,12 @@ export class Game {
         }
 
         // Attack if in range
-        const scaledAttackRate = (e.def.attackRate / this.timeScale) / chronoMult;
+        // Only apply chronoMult to attack rate during Chrono Shift;
+        // otherwise chronoMultiplier=0 enemies (drones) divide by zero → Infinity → never fire
+        const chronoAttackScale =
+          this.player.chronoActive && chronoMult > 0 ? chronoMult : 1;
+        const scaledAttackRate =
+          e.def.attackRate / this.timeScale / chronoAttackScale;
         if (
           dist < e.def.attackRange &&
           this.time - e.lastAttackTime > scaledAttackRate
@@ -6127,6 +6114,15 @@ export class Game {
             proj.color = e.def.color1;
             this.projectiles.push(proj);
             this.entities.push(proj);
+            // Audio feedback — spatial enemy shot sound
+            const panShot = this.audio.calculatePan(
+              e.x,
+              e.y,
+              this.player.x,
+              this.player.y,
+              this.player.angle,
+            );
+            this.audio.enemyShoot(panShot);
           } else {
             // Melee: direct damage
             this.damagePlayer(e.def.damage, e);
@@ -6380,20 +6376,24 @@ export class Game {
                 );
                 this.audio.enemyHit(panEmp);
                 // Disable nearby ranged/drones
-                for (const e2 of this.entities) {
-                  if (e2.type !== "enemy" || !e2.active || e2.state === "dead")
+                for (const empTarget of this.entities) {
+                  if (
+                    empTarget.type !== "enemy" ||
+                    !empTarget.active ||
+                    empTarget.state === "dead"
+                  )
                     continue;
-                  const ddx = e2.x - p.x;
-                  const ddy = e2.y - p.y;
+                  const ddx = empTarget.x - p.x;
+                  const ddy = empTarget.y - p.y;
                   if (ddx * ddx + ddy * ddy < 9) {
                     if (
-                      e2.def &&
-                      (e2.def.attackType === "ranged" ||
-                        e2.enemyType === "drone")
+                      empTarget.def &&
+                      (empTarget.def.attackType === "ranged" ||
+                        empTarget.enemyType === "drone")
                     ) {
-                      e2._empDisabledUntil = this.time + 3000;
-                      e2.state = "pain";
-                      e2.painTimer = 500;
+                      empTarget._empDisabledUntil = this.time + 3000;
+                      empTarget.state = "pain";
+                      empTarget.painTimer = 500;
                     }
                   }
                 }
@@ -6403,12 +6403,17 @@ export class Game {
               p.active = false;
               // Splash damage for cannon
               if (p.damage > 50) {
-                for (const e2 of this.entities) {
-                  if (e2 === e || e2.type !== "enemy" || !e2.active) continue;
-                  const sdx = p.x - e2.x;
-                  const sdy = p.y - e2.y;
+                for (const splashTarget of this.entities) {
+                  if (
+                    splashTarget === e ||
+                    splashTarget.type !== "enemy" ||
+                    !splashTarget.active
+                  )
+                    continue;
+                  const sdx = p.x - splashTarget.x;
+                  const sdy = p.y - splashTarget.y;
                   if (sdx * sdx + sdy * sdy < 4) {
-                    this.damageEnemy(e2, p.damage * 0.5);
+                    this.damageEnemy(splashTarget, p.damage * 0.5);
                   }
                 }
               }
@@ -6492,6 +6497,9 @@ export class Game {
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon");
         if (this.mode === "tutorial") {
+          if (this.tutorialWeaponPickedUp) {
+            this.tutorialSecondWeaponPickedUp = true;
+          }
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
         }
@@ -6723,8 +6731,7 @@ export class Game {
       this.renderControlsScreen(hctx, hw, hh);
     if (this.state === GameState.ACHIEVEMENTS)
       this.renderAchievementsScreen(hctx, hw, hh);
-    if (this.state === GameState.STATS)
-      this.renderStatsScreen(hctx, hw, hh);
+    if (this.state === GameState.STATS) this.renderStatsScreen(hctx, hw, hh);
     if (this.state === GameState.UPGRADE)
       this.renderUpgradeScreen(hctx, hw, hh);
     if (this.state === GameState.GAME_OVER) this.renderGameOver(hctx, hw, hh);
@@ -6803,529 +6810,21 @@ export class Game {
 
   // TODO: Improve weapon art and animations / Reloading / Idle / Skins / Upgraded versions with visual changes?
   drawWeapon(ctx, w, h) {
-    const wep = this.player.getWeaponDef();
-    if (!wep) return;
-
-    // Apply character energy color to weapon
     const charColor = CHARACTER_COLORS[this.character.colorIndex];
-    const energyColor = charColor ? charColor.accent : wep.color;
-
-    const isSprinting = this.player.isSprinting;
-    const isDashing = this.player.isDashing;
-    const bobMulX = isDashing ? 18 : isSprinting ? 14 : 8;
-    const bobMulY = isDashing ? 12 : isSprinting ? 10 : 5;
-    const bobX = Math.sin(this.player.weaponBob) * bobMulX;
-    const bobY = Math.abs(Math.cos(this.player.weaponBob)) * bobMulY;
-    const kickY = this.player.weaponKick * 40;
-    // Tilt weapon when sprinting (held at slight angle)
-    const tiltAngle = isSprinting ? Math.sin(this.player.weaponBob) * 0.06 : 0;
-
-    // weapon scale (larger to stay visible above HUD) - increase assets size instead of scaling up as much in the future by default?
-    // On touch devices, scale the weapon linearly with viewport height so the view
-    // stays clear. The factor is clamped between 0.55 and 1.0 (h/720, with a 0.55 minimum)
-    // to keep the weapon visible but not dominate the screen on small displays.
-    const viewportFactor = this.isTouchDevice
-      ? Math.max(0.55, Math.min(1, h / 720))
-      : 1;
-    const sc = 4.8 * viewportFactor;
-    const cx = w / 2 + bobX;
-    const cy = h - 170 * viewportFactor + bobY + kickY;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    if (tiltAngle !== 0) ctx.rotate(tiltAngle);
-    ctx.scale(sc, sc);
-    // All coordinates now relative to (0, 0) at weapon center
-
-    // Recoil animation for frames 2 & 3
-    if (this.weaponAnimFrame === 2) {
-      ctx.translate(0, -3); // barrel rise
-      ctx.rotate(-0.03); // slight kick angle
-    } else if (this.weaponAnimFrame === 3) {
-      ctx.translate(0, -1); // settling back
-      ctx.rotate(-0.01);
-    }
-
-    // Muzzle flash (Enhanced 'Sharp' version)
-    if (this.weaponAnimFrame === 1) {
-      this.renderer.drawGlow(ctx, 0, -42, 32, energyColor, 0.4);
-      this.renderer.drawGlow(ctx, 0, -42, 12, "#ffffff", 0.8);
-
-      // Flash spikes
-      ctx.strokeStyle = energyColor;
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + this.time * 0.05;
-        const len = 15 + Math.random() * 20;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * 8, -42 + Math.sin(a) * 8);
-        ctx.lineTo(Math.cos(a) * len, -42 + Math.sin(a) * len);
-        ctx.stroke();
-      }
-    }
-
-    // --- Procedural Weapon Body Enhancements ---
-    // Core Energy Cell (Sharp Glow)
-    const corePulse = Math.sin(this.time * 0.01) * 0.2 + 0.8;
-    this.renderer.drawGlow(ctx, 0, -5, 12, energyColor, 0.3 * corePulse);
-
-    // Tech Seams (Recursive lines)
-    this.renderer.drawTechLines(ctx, -15, -25, 30, 40, energyColor);
-
-    // Shell casing ejection (frame 2)
-    if (this.weaponAnimFrame === 2 && wep.id !== 2) {
-      ctx.fillStyle = "#ddaa44";
-      ctx.globalAlpha = 0.8;
-      ctx.fillRect(7, -18, 3, 2);
-      ctx.globalAlpha = 1;
-    }
-
-    // Smoke wisp (frame 3)
-    if (this.weaponAnimFrame === 3) {
-      ctx.fillStyle = "rgba(180,180,180,0.15)";
-      ctx.beginPath();
-      ctx.arc(1, -42, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (wep.id === 0) {
-      // Chrono Pistol
-      // Barrel
-      ctx.fillStyle = "#445566";
-      ctx.fillRect(-6, -35, 12, 15);
-      ctx.fillStyle = "#556677";
-      ctx.fillRect(-4, -32, 8, 10);
-      // Barrel bore
-      ctx.fillStyle = "#222233";
-      ctx.beginPath();
-      ctx.arc(0, -35, 3, 0, Math.PI * 2);
-      ctx.fill();
-      // Barrel tip glow
-      ctx.fillStyle = energyColor;
-      ctx.fillRect(-3, -35, 6, 3);
-      // Barrel highlight
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      ctx.fillRect(-5, -34, 2, 12);
-      // Main body/slide
-      ctx.fillStyle = "#334455";
-      ctx.fillRect(-9, -20, 18, 35);
-      ctx.fillStyle = "#3d4f60";
-      ctx.fillRect(-7, -18, 14, 30);
-      // Slide serrations
-      ctx.fillStyle = "#2a3a4a";
-      for (let i = 0; i < 5; i++) {
-        ctx.fillRect(-8, -18 + i * 3, 16, 1);
-      }
-      // Ejection port
-      ctx.fillStyle = "#222233";
-      ctx.fillRect(5, -16, 3, 6);
-      // Chrono energy line
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.6 + Math.sin(this.time * 0.008) * 0.3;
-      ctx.fillRect(-2, -18, 4, 25);
-      // Energy dots along line
-      for (let i = 0; i < 4; i++) {
-        const dotY = -16 + i * 6 + Math.sin(this.time * 0.01 + i) * 2;
-        ctx.beginPath();
-        ctx.arc(0, dotY, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      // Trigger guard
-      ctx.strokeStyle = "#445566";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 12, 6, 0, Math.PI);
-      ctx.stroke();
-      // Trigger
-      ctx.fillStyle = "#334455";
-      ctx.fillRect(-1, 8, 2, 6);
-      // Grip
-      ctx.fillStyle = "#223344";
-      ctx.fillRect(-7, 15, 16, 25);
-      ctx.fillStyle = "#2a3a4a";
-      ctx.fillRect(-5, 17, 12, 20);
-      // Grip texture lines
-      ctx.fillStyle = "#1a2a3a";
-      for (let i = 0; i < 4; i++) {
-        ctx.fillRect(-5, 19 + i * 5, 12, 1);
-      }
-      // Grip bottom cap
-      ctx.fillStyle = "#445566";
-      ctx.fillRect(-6, 38, 14, 3);
-      // Rear sight
-      ctx.fillStyle = "#2a3a4a";
-      ctx.fillRect(-5, -20, 3, 3);
-      ctx.fillRect(2, -20, 3, 3);
-      // Front sight
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.7;
-      ctx.fillRect(-1, -36, 2, 2);
-      ctx.globalAlpha = 1;
-      // Screws/rivets
-      ctx.fillStyle = "#667788";
-      ctx.beginPath();
-      ctx.arc(-6, -5, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(6, -5, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-6, 8, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(6, 8, 1, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (wep.id === 1) {
-      // Temporal Shotgun
-      // Barrels
-      ctx.fillStyle = "#333333";
-      ctx.fillRect(-10, -48, 8, 12);
-      ctx.fillRect(2, -48, 8, 12);
-      ctx.fillStyle = "#444444";
-      ctx.fillRect(-8, -46, 4, 8);
-      ctx.fillRect(4, -46, 4, 8);
-      // Barrel bores
-      ctx.fillStyle = "#1a1a1a";
-      ctx.beginPath();
-      ctx.arc(-6, -48, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(6, -48, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      // Barrel tips glow
-      ctx.fillStyle = energyColor;
-      ctx.fillRect(-8, -48, 3, 2);
-      ctx.fillRect(5, -48, 3, 2);
-      // Barrel clamp
-      ctx.fillStyle = "#555555";
-      ctx.fillRect(-10, -40, 20, 2);
-      // Metal highlight on barrels
-      ctx.fillStyle = "rgba(255,255,255,0.1)";
-      ctx.fillRect(-9, -47, 1.5, 10);
-      ctx.fillRect(3, -47, 1.5, 10);
-      // Main body/receiver
-      ctx.fillStyle = "#554433";
-      ctx.fillRect(-14, -36, 28, 50);
-      ctx.fillStyle = "#665544";
-      ctx.fillRect(-11, -33, 22, 44);
-      // Receiver detail — loading port
-      ctx.fillStyle = "#443322";
-      ctx.fillRect(-5, -34, 10, 6);
-      // Shell-shaped detail
-      ctx.fillStyle = "#887766";
-      ctx.beginPath();
-      ctx.arc(0, -31, 3, 0, Math.PI * 2);
-      ctx.fill();
-      // Pump grip
-      ctx.fillStyle = "#776655";
-      ctx.fillRect(-12, -10, 24, 12);
-      ctx.fillStyle = "#887766";
-      ctx.fillRect(-10, -8, 20, 8);
-      // Pump grip ridges
-      ctx.fillStyle = "#665544";
-      for (let i = 0; i < 4; i++) {
-        ctx.fillRect(-11, -9 + i * 3, 22, 1);
-      }
-      // Shell ejection port
-      ctx.fillStyle = "#222222";
-      ctx.fillRect(8, -30, 5, 8);
-      // Visible shell brass
-      ctx.fillStyle = "#ccaa44";
-      ctx.fillRect(9, -28, 3, 4);
-      // Stock
-      ctx.fillStyle = "#443322";
-      ctx.fillRect(-11, 14, 24, 30);
-      ctx.fillStyle = "#554433";
-      ctx.fillRect(-9, 16, 20, 26);
-      // Stock checkering
-      ctx.fillStyle = "#3a2a1a";
-      for (let i = 0; i < 5; i++) {
-        ctx.fillRect(-8, 18 + i * 5, 18, 1);
-      }
-      // Stock butt plate
-      ctx.fillStyle = "#332211";
-      ctx.fillRect(-10, 42, 22, 3);
-      // Temporal coils
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.4 + Math.sin(this.time * 0.006) * 0.2;
-      ctx.fillRect(-12, -25, 2, 20);
-      ctx.fillRect(10, -25, 2, 20);
-      // Coil energy dots
-      for (let i = 0; i < 3; i++) {
-        const dotY = -23 + i * 7 + Math.sin(this.time * 0.008 + i * 1.5) * 2;
-        ctx.beginPath();
-        ctx.arc(-11, dotY, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(11, dotY, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      // Screws
-      ctx.fillStyle = "#998877";
-      ctx.beginPath();
-      ctx.arc(-10, -15, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(10, -15, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-10, 5, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(10, 5, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (wep.id === 2) {
-      // Plasma Rifle
-      // Barrel shroud
-      ctx.fillStyle = "#2a2a44";
-      ctx.fillRect(-5, -58, 10, 30);
-      ctx.fillStyle = "#3a3a55";
-      ctx.fillRect(-3, -55, 6, 25);
-      // Barrel bore
-      ctx.fillStyle = "#1a1a33";
-      ctx.beginPath();
-      ctx.arc(0, -58, 3, 0, Math.PI * 2);
-      ctx.fill();
-      // Barrel tip
-      ctx.fillStyle = energyColor;
-      ctx.fillRect(-4, -60, 8, 3);
-      // Cooling vents on barrel
-      ctx.fillStyle = "#222244";
-      for (let i = 0; i < 3; i++) {
-        ctx.fillRect(-4, -52 + i * 7, 2, 4);
-        ctx.fillRect(2, -52 + i * 7, 2, 4);
-      }
-      // Barrel highlight
-      ctx.fillStyle = "rgba(255,255,255,0.08)";
-      ctx.fillRect(-4, -57, 1.5, 28);
-      // Body/receiver
-      ctx.fillStyle = "#2a2a44";
-      ctx.fillRect(-10, -28, 20, 48);
-      ctx.fillStyle = "#3a3a55";
-      ctx.fillRect(-8, -25, 16, 42);
-      // Panel lines
-      ctx.strokeStyle = "#222244";
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-8, -10);
-      ctx.lineTo(8, -10);
-      ctx.moveTo(-8, 5);
-      ctx.lineTo(8, 5);
-      ctx.stroke();
-      // Side panels
-      ctx.fillStyle = "#252545";
-      ctx.fillRect(-9, -22, 3, 15);
-      ctx.fillRect(6, -22, 3, 15);
-      // Energy rings (animated)
-      ctx.fillStyle = energyColor;
-      for (let i = 0; i < 5; i++) {
-        const ringA = 0.3 + Math.sin(this.time * 0.01 + i * 1.2) * 0.3;
-        ctx.globalAlpha = ringA;
-        ctx.fillRect(-6, -50 + i * 8, 12, 2);
-        // Small side indicator dots
-        ctx.beginPath();
-        ctx.arc(-7, -49 + i * 8, 1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(7, -49 + i * 8, 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      // Plasma core chamber (visible through body)
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.15 + Math.sin(this.time * 0.008) * 0.1;
-      ctx.fillRect(-5, -20, 10, 12);
-      ctx.globalAlpha = 1;
-      // Scope
-      ctx.fillStyle = "#222244";
-      ctx.fillRect(-3, -55, 6, 8);
-      ctx.fillStyle = "#1a1a33";
-      ctx.beginPath();
-      ctx.arc(0, -59, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath();
-      ctx.arc(0, -59, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      // Scope cross-hair
-      ctx.strokeStyle = energyColor;
-      ctx.lineWidth = 0.5;
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.moveTo(-2, -59);
-      ctx.lineTo(2, -59);
-      ctx.moveTo(0, -61);
-      ctx.lineTo(0, -57);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // Magazine/power cell
-      ctx.fillStyle = "#1a1a33";
-      ctx.fillRect(-4, 8, 10, 14);
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.3;
-      ctx.fillRect(-2, 10, 6, 10);
-      ctx.globalAlpha = 1;
-      // Stock
-      ctx.fillStyle = "#1a1a33";
-      ctx.fillRect(-7, 20, 16, 25);
-      ctx.fillStyle = "#252545";
-      ctx.fillRect(-5, 22, 12, 20);
-      // Stock padding
-      ctx.fillStyle = "#1a1a33";
-      ctx.fillRect(-6, 43, 14, 3);
-      // Rivets
-      ctx.fillStyle = "#5555aa";
-      ctx.beginPath();
-      ctx.arc(-8, -8, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(8, -8, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-8, 10, 1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(8, 10, 1, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (wep.id === 3) {
-      // Quantum Cannon
-      // Barrel housing
-      ctx.fillStyle = "#331111";
-      ctx.fillRect(-12, -55, 24, 20);
-      ctx.fillStyle = "#441122";
-      ctx.fillRect(-10, -52, 20, 15);
-      // Barrel bore
-      ctx.fillStyle = "#110008";
-      ctx.beginPath();
-      ctx.arc(0, -55, 5, 0, Math.PI * 2);
-      ctx.fill();
-      // Barrel rim glow
-      ctx.strokeStyle = energyColor;
-      ctx.lineWidth = 1.5;
-      const pulse = 0.4 + Math.sin(this.time * 0.01) * 0.4;
-      ctx.globalAlpha = pulse;
-      ctx.beginPath();
-      ctx.arc(0, -55, 6, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // Barrel glow core
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = pulse;
-      ctx.beginPath();
-      ctx.arc(0, -48, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = pulse * 0.3;
-      ctx.beginPath();
-      ctx.arc(0, -48, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      // Barrel highlight
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
-      ctx.fillRect(-11, -54, 2, 18);
-      // Main body
-      ctx.fillStyle = "#441122";
-      ctx.fillRect(-18, -35, 36, 55);
-      ctx.fillStyle = "#552233";
-      ctx.fillRect(-15, -32, 30, 48);
-      // Body panel lines
-      ctx.strokeStyle = "#331122";
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(-15, -15);
-      ctx.lineTo(15, -15);
-      ctx.moveTo(-15, 0);
-      ctx.lineTo(15, 0);
-      ctx.stroke();
-      // Warning stripe
-      ctx.fillStyle = "#ff3333";
-      ctx.globalAlpha = 0.15;
-      ctx.fillRect(-15, -35, 30, 3);
-      ctx.globalAlpha = 1;
-      // Quantum energy core
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = pulse * 0.8;
-      ctx.fillRect(-8, -25, 16, 16);
-      ctx.globalAlpha = pulse * 0.4;
-      ctx.fillRect(-12, -28, 24, 22);
-      ctx.globalAlpha = 1;
-      // Core crosshair
-      ctx.strokeStyle = energyColor;
-      ctx.lineWidth = 0.5;
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.moveTo(-4, -17);
-      ctx.lineTo(4, -17);
-      ctx.moveTo(0, -21);
-      ctx.lineTo(0, -13);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // Energy conduits on sides
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = 0.5;
-      ctx.fillRect(-17, -28, 3, 35);
-      ctx.fillRect(14, -28, 3, 35);
-      ctx.globalAlpha = 1;
-      // Conduit energy dots
-      for (let i = 0; i < 4; i++) {
-        const dotA = 0.3 + Math.sin(this.time * 0.012 + i * 1.5) * 0.3;
-        ctx.fillStyle = energyColor;
-        ctx.globalAlpha = dotA;
-        ctx.beginPath();
-        ctx.arc(-15.5, -22 + i * 8, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(15.5, -22 + i * 8, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      // Ventilation slits
-      ctx.fillStyle = "#220011";
-      for (let i = 0; i < 3; i++) {
-        ctx.fillRect(-14, -5 + i * 6, 10, 2);
-        ctx.fillRect(4, -5 + i * 6, 10, 2);
-      }
-      // Heat glow in vents
-      ctx.fillStyle = energyColor;
-      ctx.globalAlpha = pulse * 0.2;
-      for (let i = 0; i < 3; i++) {
-        ctx.fillRect(-13, -4 + i * 6, 8, 1);
-        ctx.fillRect(5, -4 + i * 6, 8, 1);
-      }
-      ctx.globalAlpha = 1;
-      // Grip
-      ctx.fillStyle = "#330011";
-      ctx.fillRect(-12, 20, 26, 28);
-      ctx.fillStyle = "#440022";
-      ctx.fillRect(-10, 22, 22, 24);
-      // Grip texture ridges
-      ctx.fillStyle = "#2a000e";
-      for (let i = 0; i < 4; i++) {
-        ctx.fillRect(-9, 24 + i * 5, 20, 1.5);
-      }
-      // Grip cap
-      ctx.fillStyle = "#330011";
-      ctx.fillRect(-11, 46, 24, 3);
-      // Rivets
-      ctx.fillStyle = "#aa3355";
-      ctx.beginPath();
-      ctx.arc(-16, -30, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(16, -30, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-16, 10, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(16, 10, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
+    const wep = this.player.getWeaponDef();
+    renderWeapon(ctx, w, h, {
+      wep,
+      energyColor: charColor ? charColor.accent : wep?.color,
+      isSprinting: this.player.isSprinting,
+      isDashing: this.player.isDashing,
+      weaponBob: this.player.weaponBob,
+      weaponKick: this.player.weaponKick,
+      weaponAnimFrame: this.weaponAnimFrame,
+      time: this.time,
+      isTouchDevice: this.isTouchDevice,
+      drawGlow: (c, x, y, r, color, alpha) =>
+        this.renderer.drawGlow(c, x, y, r, color, alpha),
+    });
   }
 
   drawGlitch(ctx, w, h) {
@@ -8432,17 +7931,6 @@ export class Game {
     }
 
     // FPS / profiler overlay is drawn by main.js gameLoop after render()
-
-    // Controls hint (retired in v0.8.1 - only visible via pause menu)
-    /*
-    if (this.mode !== "tutorial") {
-      const elapsed = (this.time - this.roundStartTime) / 1000;
-      if (elapsed < 6) {
-        const alpha = elapsed < 4 ? 0.85 : 0.85 * (1 - (elapsed - 4) / 2);
-        this.drawControlsOverlay(ctx, w, h, alpha);
-      }
-    }
-    */
 
     // Achievement toast (above minimap area)
     this.renderAchievementToast(ctx, w, h);
@@ -10110,92 +9598,7 @@ export class Game {
   }
 
   renderStatsScreen(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,0,0,0.92)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Title
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 28px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("LIFETIME STATS", w / 2, 50);
-
-    const s = this.achievementStats;
-
-    // Format time played
-    const totalSec = Math.floor(s.totalTimePlayed || 0);
-    const hours = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    const timeStr = hours > 0
-      ? `${hours}h ${mins}m ${secs}s`
-      : `${mins}m ${secs}s`;
-
-    // Accuracy
-    const accuracy = s.totalShotsFired > 0
-      ? ((s.totalShotsHit / s.totalShotsFired) * 100).toFixed(1) + "%"
-      : "N/A";
-
-    // K/D ratio
-    const kd = s.totalDeaths > 0
-      ? (s.totalKills / s.totalDeaths).toFixed(2)
-      : s.totalKills > 0 ? "Perfect" : "N/A";
-
-    const stats = [
-      { label: "TOTAL KILLS", value: (s.totalKills || 0).toLocaleString(), color: "#ff4444" },
-      { label: "TOTAL DEATHS", value: (s.totalDeaths || 0).toLocaleString(), color: "#ff6666" },
-      { label: "K/D RATIO", value: kd, color: "#ffcc00" },
-      { label: "TIME PLAYED", value: timeStr, color: "#00ccff" },
-      { label: "SHOTS FIRED", value: (s.totalShotsFired || 0).toLocaleString(), color: "#aaddff" },
-      { label: "ACCURACY", value: accuracy, color: "#44ff88" },
-      { label: "SECRETS FOUND", value: (s.totalSecretsFound || 0).toLocaleString(), color: "#ffaa00" },
-      { label: "CAMPAIGN LEVELS", value: (s.totalCampaignLevels || 0).toLocaleString(), color: "#cc88ff" },
-      { label: "GAMES PLAYED", value: (s.totalGamesPlayed || 0).toLocaleString(), color: "#88ccff" },
-      { label: "HIGHEST ARENA", value: "Round " + (s.highestArenaRound || 0), color: "#ff88cc" },
-      { label: "HIGHEST SCORE", value: (s.highestScore || 0).toLocaleString(), color: "#ffcc44" },
-      { label: "TOTAL DASHES", value: (s.totalDashes || 0).toLocaleString(), color: "#88ffcc" },
-      { label: "UPGRADES BOUGHT", value: (s.upgradesBought || 0).toLocaleString(), color: "#ccccff" },
-      { label: "FLAWLESS ROUNDS", value: (s.flawlessRounds || 0).toLocaleString(), color: "#44ffff" },
-    ];
-
-    const cols = 2;
-    const rowH = 42;
-    const colW = 260;
-    const totalW = cols * colW;
-    const startX = w / 2 - totalW / 2;
-    const startY = 80;
-
-    for (let i = 0; i < stats.length; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const x = startX + col * colW;
-      const y = startY + row * rowH;
-
-      // Label
-      ctx.fillStyle = "rgba(180,190,200,0.6)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(stats[i].label, x + 10, y + 14);
-
-      // Value
-      ctx.fillStyle = stats[i].color;
-      ctx.font = "bold 18px monospace";
-      ctx.fillText(stats[i].value, x + 10, y + 34);
-    }
-
-    // Campaign complete badge
-    if (s.campaignComplete) {
-      ctx.fillStyle = "#ffcc00";
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("★ CAMPAIGN COMPLETED ★", w / 2, startY + Math.ceil(stats.length / cols) * rowH + 20);
-    }
-
-    // Footer
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("ESC to go back", w / 2, h - 20);
-    ctx.textAlign = "left";
+    drawStatsScreen(ctx, w, h, this.achievementStats);
   }
 
   renderUpgradeScreen(ctx, w, h) {
@@ -10581,22 +9984,35 @@ export class Game {
       );
     }
 
-    // [ SHARE RESULT ] Button
-    const btnW = 120;
+    // ── Bottom action buttons: RESTART | QUIT | SHARE ──
+    const btnW = 110;
     const btnH = 34;
-    const btnX = w / 2 - btnW / 2;
+    const btnGap = 12;
+    const totalBtnW = btnW * 3 + btnGap * 2;
+    const btnBaseX = w / 2 - totalBtnW / 2;
     const btnY = h - 70;
-    
-    ctx.fillStyle = "rgba(255, 34, 0, 0.15)";
-    ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.strokeStyle = "#ff2200";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(btnX, btnY, btnW, btnH);
-    
-    ctx.fillStyle = "#ff2200";
-    ctx.font = "bold 13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("SHARE RESULT", w / 2, btnY + 22);
+
+    // Store layout for click handler
+    this._gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
+
+    const btnDefs = [
+      { label: "RESTART", color: "#ff8844", bg: "rgba(255,136,68,0.15)" },
+      { label: "QUIT", color: "#aaaaaa", bg: "rgba(170,170,170,0.1)" },
+      { label: "SHARE", color: "#00ccff", bg: "rgba(0,204,255,0.12)" },
+    ];
+    for (let i = 0; i < btnDefs.length; i++) {
+      const bx = btnBaseX + i * (btnW + btnGap);
+      ctx.fillStyle = btnDefs[i].bg;
+      ctx.fillRect(bx, btnY, btnW, btnH);
+      ctx.strokeStyle = btnDefs[i].color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(bx, btnY, btnW, btnH);
+      ctx.fillStyle = btnDefs[i].color;
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(btnDefs[i].label, bx + btnW / 2, btnY + 22);
+    }
+
     if (this.mode === "meltdown") {
       const mHud = this.meltdown.getHUD();
       const mY = compact ? h * 0.7 : h / 2 + 80;
@@ -11101,7 +10517,9 @@ export class Game {
     // Spawn pickups from builder-placed entities
     if (this.map.entities && this.map.entities.length > 0) {
       for (const e of this.map.entities) {
-        this.entities.push(new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }));
+        this.entities.push(
+          new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }),
+        );
       }
     }
 
@@ -11191,7 +10609,12 @@ export class Game {
   }
 
   _loadSharedMap(mapGrid) {
-    if (!Array.isArray(mapGrid) || mapGrid.length === 0 || !Array.isArray(mapGrid[0])) return;
+    if (
+      !Array.isArray(mapGrid) ||
+      mapGrid.length === 0 ||
+      !Array.isArray(mapGrid[0])
+    )
+      return;
     this.startBuilder();
     this.builder.importMapData({
       name: "Shared Map",
@@ -11206,22 +10629,50 @@ export class Game {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
 
-    const btnW = 120;
-    const btnH = 34;
-    const btnX = w / 2 - btnW / 2;
-    const btnY = h - 70;
+    const b = this._gameOverBtns;
+    if (!b) return;
+    const { btnBaseX, btnY, btnW, btnH, btnGap } = b;
 
-    if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
-      this._shareCurrentResult();
+    if (y >= btnY && y <= btnY + btnH) {
+      for (let i = 0; i < 3; i++) {
+        const bx = btnBaseX + i * (btnW + btnGap);
+        if (x >= bx && x <= bx + btnW) {
+          if (i === 0) {
+            // RESTART
+            this.audio.menuConfirm();
+            if (this.mode === "arena") this.startArena();
+            else if (this.mode === "meltdown") this.startMeltdown();
+            else if (this.mode === "campaign") this.startCampaign();
+          } else if (i === 1) {
+            // QUIT — return to title
+            this.audio.menuConfirm();
+            this.state = GameState.TITLE;
+            this.audio.stopMusic();
+            this.audio.startTrack("menu");
+            this.audio.startAmbient("menu");
+          } else if (i === 2) {
+            // SHARE
+            this._shareCurrentResult();
+          }
+          return;
+        }
+      }
     }
   }
 
   _shareCurrentResult() {
     let shareData = null;
-    if (this.mode === "arena" || this.state === GameState.GAME_OVER) {
+    if (this.mode === "meltdown") {
+      shareData = {
+        mode: "meltdown",
+        distance: Math.floor(this.meltdown.distance || 0),
+        score: Math.floor(this.meltdown.score || 0),
+        heat: Math.floor(this.meltdown.heat || 0),
+        hero: this.meltdown.hero?.id || "default",
+        kills: this.killedEnemies || 0,
+      };
+    } else if (this.mode === "arena" || this.state === GameState.GAME_OVER) {
       shareData = {
         mode: "arena",
         score: this.player.score,
@@ -11247,13 +10698,17 @@ export class Game {
             text:
               shareData.mode === "builder"
                 ? "Map link copied!"
-                : "Score link copied!",
+                : shareData.mode === "meltdown"
+                  ? `Meltdown score copied! (${shareData.distance}m)`
+                  : "Score link copied!",
             life: 2.5,
           };
-          if (shareData.mode === "arena") {
+          if (shareData.mode === "arena" || shareData.mode === "meltdown") {
             trackEvent("share_score", {
+              mode: shareData.mode,
               score: shareData.score,
               round: shareData.round,
+              distance: shareData.distance,
             });
           }
         })

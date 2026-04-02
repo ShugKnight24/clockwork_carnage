@@ -44,11 +44,23 @@ export class CutsceneEngine {
 
   advance() {
     if (!this.cutscene) return;
-    this.cutscene.frame++;
-    this.cutscene.frameStart = performance.now();
-    this.cutscene.particles = [];
+    const cs = this.cutscene;
+
+    // If text is still typing, first click/Enter instantly reveals it
+    if (!cs.readyToAdvance) {
+      // Fast-forward: set frameStart far enough back that all text is visible
+      cs.frameStart = performance.now() - 60000;
+      cs.readyToAdvance = true;
+      return;
+    }
+
+    // Ready — move to next frame
+    cs.frame++;
+    cs.frameStart = performance.now();
+    cs.particles = [];
+    cs.readyToAdvance = false;
     this.audio.menuSelect();
-    if (this.cutscene.frame >= this.cutscene.script.length) {
+    if (cs.frame >= cs.script.length) {
       this.end();
     }
   }
@@ -82,10 +94,20 @@ export class CutsceneEngine {
       cs.skipHeldStart = 0;
     }
 
-    // Auto-advance
-    if (frame.duration > 0 && elapsed > frame.duration) {
-      this.advance();
-      return;
+    // Auto-advance removed — manual advance via Enter/click is default.
+    // Mark frame as "ready" once all text has finished typing (or duration elapsed).
+    // The advance() method is called externally from input handling.
+    if (frame.lines) {
+      // Check if all lines have finished typing
+      const lastLine = frame.lines[frame.lines.length - 1];
+      const lastDelay = lastLine ? lastLine.delay : 0;
+      const resolvedLen = lastLine ? (lastLine.text || "").replace(/\{AGENT\}/g, "Agent").length : 0;
+      const charsPerSec = 25; // matches render speed
+      const typingDoneAt = lastDelay + (resolvedLen / charsPerSec) * 1000;
+      cs.readyToAdvance = elapsed >= typingDoneAt + 300; // 300ms grace after typing
+    } else {
+      // No text lines — ready after minimum display time
+      cs.readyToAdvance = elapsed >= Math.min(frame.duration || 2000, 2000);
     }
 
     // Spawn particles
@@ -254,8 +276,8 @@ export class CutsceneEngine {
           this.getPlayerName(),
         );
 
-        // Typewriter
-        const charsPerSec = 40;
+        // Typewriter — slower for readability
+        const charsPerSec = 25;
         const visibleChars = Math.min(
           resolvedText.length,
           Math.floor((lineElapsed / 1000) * charsPerSec),
@@ -449,8 +471,12 @@ export class CutsceneEngine {
     }
 
     // === Skip prompt ===
-    const skipAlpha = 0.3 + 0.15 * Math.sin(elapsed / 500);
-    ctx.fillStyle = `rgba(255,255,255,${skipAlpha})`;
+    // Brighter, pulsing prompt when ready to advance
+    const readyPulse = cs.readyToAdvance ? 0.6 + 0.35 * Math.sin(elapsed / 300) : 0;
+    const skipAlpha = cs.readyToAdvance ? readyPulse : 0.3 + 0.15 * Math.sin(elapsed / 500);
+    ctx.fillStyle = cs.readyToAdvance
+      ? `rgba(0,255,204,${skipAlpha})`
+      : `rgba(255,255,255,${skipAlpha})`;
     ctx.font = `${Math.round(12 * s)}px monospace`;
     ctx.textAlign = "right";
     ctx.fillText(
