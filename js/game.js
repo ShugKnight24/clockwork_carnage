@@ -61,6 +61,7 @@ export const GameState = {
   TUTORIAL_COMPLETE: "tutorialComplete",
   CHARACTER_CREATE: "characterCreate",
   ACHIEVEMENTS: "achievements",
+  STATS: "stats",
 };
 
 // TODO: Restructure this entire file, but especially this class... it's a mess. It handles too much. 3k lines for a class is normal right? Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
@@ -108,6 +109,7 @@ export class Game {
     });
     this.player = new Player();
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
     this.map = null;
@@ -261,6 +263,14 @@ export class Game {
       tutorialComplete: false,
       upgradesBought: 0,
       flawlessRounds: 0,
+      // Lifetime stats
+      totalDeaths: 0,
+      totalTimePlayed: 0, // seconds
+      totalShotsFired: 0,
+      totalShotsHit: 0,
+      totalSecretsFound: 0,
+      totalCampaignLevels: 0,
+      totalGamesPlayed: 0,
     };
     // Track damage taken per round for flawless detection
     this.roundDamageTaken = 0;
@@ -796,7 +806,7 @@ export class Game {
 
     if (this.state === GameState.PLAYING) {
       // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-      if (this.mode === "tutorial" && this.tutorialStep === 16) {
+      if (this.mode === "tutorial" && this.tutorialStep === 13) {
         if (code === "Escape" || code === "KeyQ") {
           this.audio.menuConfirm();
           this.executeTutorialMenuChoice(3); // Main menu
@@ -810,7 +820,7 @@ export class Game {
       }
 
       // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-      if (this.mode === "tutorial" && this.tutorialStep < 16) {
+      if (this.mode === "tutorial" && this.tutorialStep < 13) {
         if (code === "Escape") {
           const now = performance.now();
           if (now - this.lastEscTime < 200) return;
@@ -866,6 +876,8 @@ export class Game {
         }
         this.state = GameState.TITLE;
         this.audio.stopMusic();
+        this.audio.startTrack("menu");
+        this.audio.startAmbient("menu");
       }
       if (code === "KeyS" || code === "Tab") {
         this.settingsSelection = 0;
@@ -879,6 +891,9 @@ export class Game {
       if (code === "KeyA") {
         this.achievementsScroll = 0;
         this.state = GameState.ACHIEVEMENTS;
+      }
+      if (code === "KeyT") {
+        this.state = GameState.STATS;
       }
       if (code === "KeyL") {
         this.showAriaLog = !this.showAriaLog;
@@ -1056,6 +1071,21 @@ export class Game {
       return;
     }
 
+    if (this.state === GameState.STATS) {
+      if (code === "Escape") {
+        const now = performance.now();
+        if (now - this.lastEscTime < 200) return;
+        this.lastEscTime = now;
+        if (this._statsReturnToMenu) {
+          this._statsReturnToMenu = false;
+          this.state = GameState.MODE_SELECT;
+        } else {
+          this.state = GameState.PAUSED;
+        }
+      }
+      return;
+    }
+
     if (this.state === GameState.UPGRADE) {
       const upgradeKeys = Object.keys(UPGRADES);
       const cols = 2;
@@ -1136,6 +1166,8 @@ export class Game {
         this.audio.menuConfirm();
         this.state = GameState.TITLE;
         this.audio.stopMusic();
+        this.audio.startTrack("menu");
+        this.audio.startAmbient("menu");
       }
       if (code === "KeyR" && this.state === GameState.GAME_OVER) {
         this.audio.menuConfirm();
@@ -1357,6 +1389,13 @@ export class Game {
       if (ach.check(this.achievementStats)) {
         this.unlockAchievement(id);
       }
+    }
+
+    // Periodic save of lifetime stats (every 30s)
+    const now = performance.now();
+    if (!this._lastStatsSave || now - this._lastStatsSave > 30000) {
+      this._lastStatsSave = now;
+      this.saveAchievements();
     }
   }
 
@@ -2091,6 +2130,7 @@ export class Game {
   startArena() {
     this.mode = "arena";
     this.arenaRound = 1;
+    this.achievementStats.totalGamesPlayed++;
     this.player.reset();
     this.applyLoadoutBonuses();
     this.upgradeLevels = {};
@@ -2103,6 +2143,7 @@ export class Game {
 
   startMeltdown() {
     this.mode = "meltdown";
+    this.achievementStats.totalGamesPlayed++;
     this.player.reset();
     this.applyLoadoutBonuses();
     this.ariaEnabled = true;
@@ -2123,6 +2164,7 @@ export class Game {
 
     // Spawn entities
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
     const diff = this.getDifficultyMultipliers();
@@ -2151,6 +2193,8 @@ export class Game {
     this.roundStartTime = performance.now();
 
     this.state = GameState.PLAYING;
+    this.audio.startTrack("meltdown");
+    this.audio.startAmbient("meltdown");
     this.lockPointer();
   }
 
@@ -2166,6 +2210,7 @@ export class Game {
     this.arenaTimer = 60;
     this.arenaClearTimer = null;
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
 
@@ -2249,7 +2294,8 @@ export class Game {
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
-    this.audio.startMusic(140 + this.arenaRound * 5);
+    this.audio.startTrack("arena", 140 + this.arenaRound * 5);
+    this.audio.startAmbient("arena");
 
     // Arena milestone ARIA callouts
     if (this.arenaRound === 5)
@@ -2264,6 +2310,7 @@ export class Game {
     this.mode = "campaign";
     this.campaignLevel = 0;
     this.campaignAct = 1;
+    this.achievementStats.totalGamesPlayed++;
     this.campaignMissedWeapons = []; // weapon IDs skipped in previous levels
     this.player.reset();
     this.applyLoadoutBonuses();
@@ -2496,6 +2543,7 @@ export class Game {
     this.player.weapons = []; // Start fully unarmed
     this.player.currentWeapon = -1;
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
 
     // Spawn tutorial pickups
@@ -2531,10 +2579,12 @@ export class Game {
     this.tutorialMenuSelection = 0;
     this.tutorialOriginPlayed = false;
     this.tutorialShowCompletionMenu = false;
+    this.tutorialAlarmPlayed = false;
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now() + 99999; // suppress controls overlay
-    this.audio.startMusic(130);
+    this.audio.startTrack("campaign", 130);
+    this.audio.startAmbient("industrial");
     this.lockPointer();
   }
 
@@ -2545,6 +2595,7 @@ export class Game {
 
     // Reset interaction flags for the next step to prevent skipping
     this.tutorialSprintTime = 0;
+    this.tutorialSprintDone = false;
     this.tutorialDashed = false;
     this.tutorialCrouched = false;
     this.tutorialSlid = false;
@@ -2573,94 +2624,85 @@ export class Game {
     this.objectiveWaypoint = null;
 
     switch (this.tutorialStep) {
-      case 0: // Narrative intro - auto advance
-        if (elapsed > 3.5) this.advanceTutorialStep();
+      case 0: // HUD CALIBRATION — auto 2s
+        if (elapsed > 2) this.advanceTutorialStep();
         break;
 
-      case 1: {
-        // Look around
-        const angleDiff = Math.abs(p.angle - this.tutorialPrevAngle);
-        const wrapped =
-          angleDiff > Math.PI ? 2 * Math.PI - angleDiff : angleDiff;
-        this.tutorialCumulativeAngle += wrapped;
-        this.tutorialPrevAngle = p.angle;
-        if (this.tutorialCumulativeAngle > 3) this.advanceTutorialStep();
-        break;
-      }
-
-      case 2: // Move with WASD
-        this.objectiveWaypoint = { x: 11.5, y: 5.5 }; // Point to first door
-        const dx = p.x - this.tutorialStartX;
-        const dy = p.y - this.tutorialStartY;
-        if (Math.sqrt(dx * dx + dy * dy) > 3) this.advanceTutorialStep();
+      case 1: // SYSTEMS ONLINE — look around (cumulative angle > 2 rad)
+        {
+          let delta = p.angle - this.tutorialPrevAngle;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          this.tutorialCumulativeAngle += Math.abs(delta);
+          this.tutorialPrevAngle = p.angle;
+          if (this.tutorialCumulativeAngle > 2) this.advanceTutorialStep();
+        }
         break;
 
-      case 3: // Breach - Door 1 (Exit Locker Room)
+      case 2: // MOVE — walk > 2.5 units from start
         this.objectiveWaypoint = { x: 11.5, y: 5.5 };
+        {
+          const dx = p.x - this.tutorialStartX;
+          const dy = p.y - this.tutorialStartY;
+          if (Math.sqrt(dx * dx + dy * dy) > 2.5) this.advanceTutorialStep();
+        }
+        break;
+
+      case 3: // ALERT — alarm klaxon + screen shake, auto 2.5s
+        if (!this.tutorialAlarmPlayed) {
+          this.tutorialAlarmPlayed = true;
+          this.audio.alarmKlaxon();
+          this.screenShake = 3;
+        }
+        if (elapsed > 2.5) this.advanceTutorialStep();
+        break;
+
+      case 4: // BREACH DOOR — open Door 1
+        this.objectiveWaypoint = { x: 10.5, y: 6.0 };
         if (this.tutorialDoorOpened) this.advanceTutorialStep();
         break;
 
-      case 4: // Weapon Pickup
-        this.objectiveWaypoint = { x: 11.5, y: 8.0 };
+      case 5: // ARM YOURSELF — weapon pickup
+        this.objectiveWaypoint = { x: 11.5, y: 8.5 };
         if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
         break;
 
-      case 5: // Shooting
-        this.objectiveWaypoint = { x: 6.5, y: 10.5 }; // Point towards next door
+      case 6: // CONFIRM TARGETING — fire weapon
+        this.objectiveWaypoint = { x: 11.5, y: 10.0 };
         if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
         break;
 
-      case 6: // Weapon Swap
-        this.objectiveWaypoint = { x: 4.5, y: 13.0 }; // Point to Shotgun
-        if (elapsed > 0.1 && this.tutorialWeaponSwapped)
+      case 7: // SPRINT AND DASH
+        this.objectiveWaypoint = { x: 11.0, y: 14.0 };
+        if (p.isSprinting) this.tutorialSprintTime += dt;
+        if (this.tutorialSprintTime > 0.4 && !this.tutorialSprintDone) {
+          this.tutorialSprintDone = true;
+        }
+        if (this.tutorialSprintDone && this.tutorialDashed)
           this.advanceTutorialStep();
         break;
 
-      case 7: // Breach - Door 2 (Exit Armory)
-        this.objectiveWaypoint = { x: 6.5, y: 10.5 };
-        if (this.tutorialDoorOpened) this.advanceTutorialStep();
+      case 8: // TEMPORAL ANOMALY — screen shake, auto 2.5s
+        if (elapsed < 0.1) {
+          this.screenShake = 3;
+        }
+        if (elapsed > 2.5) this.advanceTutorialStep();
         break;
 
-      case 8: // Sprint
-        this.objectiveWaypoint = { x: 3.5, y: 15.5 }; // Point to next door
-        if (p.isSprinting) this.tutorialSprintTime += dt;
-        if (this.tutorialSprintTime > 0.5) this.advanceTutorialStep();
-        break;
-
-      case 9: // Dash
-        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
-        if (this.tutorialDashed) this.advanceTutorialStep();
-        break;
-
-      case 10: // Crouch
-        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
-        if (this.tutorialCrouched) this.advanceTutorialStep();
-        break;
-
-      case 11: // Slide
-        this.objectiveWaypoint = { x: 3.5, y: 15.5 };
-        if (this.tutorialSlid) this.advanceTutorialStep();
-        break;
-
-      case 12: // Anomaly
-        this.objectiveWaypoint = { x: 10.0, y: 19.0 }; // Point to yard
-        if (elapsed > 4) this.advanceTutorialStep();
-        break;
-
-      case 13: // Chrono Shift
-        this.objectiveWaypoint = { x: 10.0, y: 19.0 };
+      case 9: // CHRONO SHIFT
+        this.objectiveWaypoint = { x: 11.0, y: 19.0 };
         if (elapsed > 0.1 && this.tutorialChronoUsed)
           this.advanceTutorialStep();
         break;
 
-      case 14: // Pickups (Health/Ammo)
-        this.objectiveWaypoint = { x: 6.0, y: 19.0 };
+      case 10: // RESUPPLY
+        this.objectiveWaypoint = { x: 6.5, y: 19.5 };
         if (this.tutorialPickedUp) this.advanceTutorialStep();
         break;
 
-      case 15: // Combat
+      case 11: // HOSTILE CONTACT — spawn drone, kill 1
         if (!this.tutorialEnemySpawned) {
-          const enemy = new Enemy(10, 21.0, "drone");
+          const enemy = new Enemy(11, 21.0, "drone");
           enemy.health = 15;
           enemy.maxHealth = 15;
           enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
@@ -2672,7 +2714,7 @@ export class Game {
         if (this.killedEnemies >= 1) this.advanceTutorialStep();
         break;
 
-      case 16: // Calibration Complete -> Transfer to Character Creator
+      case 12: // CALIBRATION COMPLETE → Character Creator
         if (elapsed > 2 && !this.tutorialOriginPlayed) {
           this.achievementStats.tutorialComplete = true;
           this.checkAchievements();
@@ -2686,12 +2728,12 @@ export class Game {
         }
         break;
 
-      case 17: // Post-Creator Sandbox (Optional if they come back from creator)
+      case 13: // Post-Creator Sandbox (Optional)
         {
           if (!this.tutorialSandboxInit) {
             this.tutorialSandboxInit = true;
             this.spawnTrainingDummies();
-            this.tutorialShowCompletionMenu = true; // Show menu for navigation
+            this.tutorialShowCompletionMenu = true;
             this.state = GameState.TUTORIAL_COMPLETE;
             this.unlockPointer();
           }
@@ -2747,6 +2789,9 @@ export class Game {
       case 3: // Main menu
       default:
         this.state = GameState.TITLE;
+        this.audio.stopMusic();
+        this.audio.startTrack("menu");
+        this.audio.startAmbient("menu");
         break;
     }
   }
@@ -2754,10 +2799,11 @@ export class Game {
   executeTutorialCompletionChoice(choice) {
     this.tutorialShowCompletionMenu = false;
     switch (choice) {
-      case 0: // Continue Training (go to sandbox step 9)
+      case 0: // Continue Training (go to sandbox step 13)
         this.state = GameState.PLAYING;
         this.advanceTutorialStep();
-        this.audio.startMusic(130);
+        this.audio.startTrack("campaign", 130);
+        this.audio.startAmbient("industrial");
         this.lockPointer();
         break;
       case 1: // Begin Campaign (skip clocking_in — already seen before tutorial)
@@ -2782,6 +2828,9 @@ export class Game {
         this.unlockPointer();
         this.mode = null;
         this.state = GameState.TITLE;
+        this.audio.stopMusic();
+        this.audio.startTrack("menu");
+        this.audio.startAmbient("menu");
         break;
     }
   }
@@ -2795,124 +2844,126 @@ export class Game {
     if (this.mode !== "tutorial") return;
 
     const isMobile = this.isTouchDevice;
+    const now = performance.now();
+    const elapsed = (now - this.tutorialStepTime) / 1000;
 
+    // ── Step 0: HUD Boot Animation (no text box) ─────────────────────
+    if (this.tutorialStep === 0) {
+      const fadeIn = Math.min(1, elapsed / 0.5);
+      ctx.save();
+      ctx.globalAlpha = fadeIn;
+
+      // Scan line sweep
+      const scanY = (elapsed / 2) * h;
+      const scanGrad = ctx.createLinearGradient(0, scanY - 40, 0, scanY + 40);
+      scanGrad.addColorStop(0, "rgba(0,255,200,0)");
+      scanGrad.addColorStop(0.5, "rgba(0,255,200,0.08)");
+      scanGrad.addColorStop(1, "rgba(0,255,200,0)");
+      ctx.fillStyle = scanGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Boot readouts
+      const lines = [
+        { text: "NEURAL LINK.......... OK", delay: 0.3 },
+        { text: "BIOMETRICS........... NOMINAL", delay: 0.8 },
+        { text: "CHRONO MODULE........ STANDBY", delay: 1.3 },
+      ];
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "center";
+      const baseY = h / 2 - 40;
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (elapsed < l.delay) continue;
+        const lineAlpha = Math.min(1, (elapsed - l.delay) / 0.3);
+        const flicker = elapsed - l.delay < 0.15 ? 0.4 + Math.random() * 0.6 : 1;
+        ctx.globalAlpha = fadeIn * lineAlpha * flicker;
+        ctx.fillStyle = "#00ffcc";
+        ctx.fillText(l.text, w / 2, baseY + i * 30);
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    // ── Steps 1-12: ARIA Dialogue Boxes ──────────────────────────────
     const steps = [
+      null, // step 0 handled above
       {
-        title: "REPORTING FOR DUTY — CHRONOS STATION",
-        hint: 'ARIA: "Welcome, Agent. This is your first day. Suit handoff in progress... stand by."',
-        color: "#00ffcc",
-      },
-      {
-        title: "HELMET CALIBRATION — HEAD TRACKING",
+        title: "SYSTEMS ONLINE — LOOK AROUND",
         hint: isMobile
-          ? 'ARIA: "Visual sensors initialising. Move your head to calibrate the targeting array."'
-          : 'ARIA: "Visual sensors initialising. Move your mouse to calibrate the targeting array."',
+          ? 'ARIA: "Neural link active. Drag to look around — get used to the augmented feed."'
+          : 'ARIA: "Neural link active. Move the mouse — get used to the augmented feed."',
         color: "#00ccff",
       },
       {
-        title: "LOCOMOTION SYNC — MOVEMENT SERVOS",
+        title: "MOVE — TEST THE SUIT",
         hint: isMobile
-          ? 'ARIA: "Leg servos online. Take a few steps — I need to map your gait."'
-          : 'ARIA: "Leg servos online. Use W A S D — I need to map your gait before we proceed."',
+          ? 'ARIA: "That alarm isn\'t on the schedule. Use the stick to walk — get a feel for the suit."'
+          : 'ARIA: "That alarm isn\'t on the schedule. W A S D — walk it off, get a feel for the suit."',
         color: "#00ccff",
       },
       {
-        title: "BREACH — EXIT THE LOCKER ROOM",
+        title: "⚡ ALERT — INTRUSION DETECTED",
+        hint: 'ARIA: "Active intrusion, multiple sectors compromised. No time for pleasantries — we need to move."',
+        color: "#ff2244",
+      },
+      {
+        title: "BREACH — OPEN THE DOOR",
         hint: isMobile
-          ? 'ARIA: "The door is magnetically sealed. Face it and tap USE to override."'
-          : 'ARIA: "The door is magnetically sealed. Face it and press E to override the lock."',
+          ? 'ARIA: "Sealed bulkhead. Face it and tap USE — override the lock."'
+          : 'ARIA: "Sealed bulkhead. Face it and press E — override the magnetic lock."',
         color: "#ff8844",
       },
       {
-        title: "WEAPON ACQUISITION — EQUIP FOUND GEAR",
-        hint: isMobile
-          ? 'ARIA: "There\'s a weapon crate in the corridor. Walk over it to integrate it."'
-          : 'ARIA: "There\'s a weapon crate in the corridor. Walk over it to integrate it."',
+        title: "ARM YOURSELF",
+        hint: 'ARIA: "Weapon crate ahead. Walk over it — this is no longer a drill."',
         color: "#ff6600",
       },
       {
-        title: "WEAPONS INTEGRATION — TARGETING HOT",
+        title: "CONFIRM TARGETING",
         hint: isMobile
-          ? 'ARIA: "Rifle sync complete. Tap FIRE to confirm your targeting solution."'
-          : 'ARIA: "Rifle sync complete. CLICK to confirm your targeting solution. Blank rounds only."',
+          ? 'ARIA: "Tap FIRE. Confirm your targeting solution is live."'
+          : 'ARIA: "CLICK to fire. Confirm your targeting system is live."',
         color: "#ff8844",
       },
       {
-        title: "LOADOUT SWITCH — WEAPON MANAGEMENT",
+        title: "SPRINT AND DASH",
         hint: isMobile
-          ? 'ARIA: "You\'re carrying two weapons now. Swap between them — learn your kit."'
-          : 'ARIA: "You\'re carrying two weapons now. Press 1 or 2 (or scroll wheel) to swap."',
-        color: "#ffcc00",
-      },
-      {
-        title: "BREACH — OPEN THE ARMORY DOOR",
-        hint: isMobile
-          ? 'ARIA: "Another seal. Face the door and tap USE to enter the training yard."'
-          : 'ARIA: "Another seal. Face the door and press E to enter the training yard."',
-        color: "#ff8844",
-      },
-      {
-        title: "SPRINT BURST — SERVO AMPLIFICATION",
-        hint: isMobile
-          ? 'ARIA: "Your suit can exceed standard movement limits. Tap RUN to engage burst mode."'
-          : 'ARIA: "Your suit can exceed standard movement limits. Hold SHIFT to engage burst mode."',
-        color: "#ffcc00",
-      },
-      {
-        title: "EVASIVE DASH — EMERGENCY PROTOCOL",
-        hint: isMobile
-          ? 'ARIA: "In critical situations, the suit can phase-dash. Tap DASH to initiate."'
-          : 'ARIA: "In critical situations, the suit can phase-dash. Double-tap a direction key to initiate."',
+          ? 'ARIA: "RUN to sprint. Double-tap a direction to phase-dash. You\'ll need both."'
+          : 'ARIA: "SHIFT to sprint. Double-tap a direction to phase-dash. You\'ll need both."',
         color: "#ff44ff",
       },
       {
-        title: "LOW PROFILE — CROUCH",
-        hint: isMobile
-          ? 'ARIA: "Drop to low profile to avoid fire and fit under obstacles. Hold CROUCH to crouch."'
-          : 'ARIA: "Drop to low profile to avoid fire and fit under obstacles. Hold Control to crouch."',
-        color: "#88cc88",
-      },
-      {
-        title: "SLIDE — MOMENTUM BREACH",
-        hint: isMobile
-          ? 'ARIA: "Crouch while sprinting or dashing to perform a slide. Useful for evasion."'
-          : 'ARIA: "Crouch while sprinting or dashing to perform a slide. Useful for quick evasion."',
-        color: "#ffaa55",
-      },
-      {
-        title: "⚠ TEMPORAL ANOMALY DETECTED ⚠",
-        hint: 'ARIA: "That\'s not on the schedule. Something hit the Chronos Engine. This calibration just became real."',
+        title: "⚠ TEMPORAL ANOMALY — CHRONOS ENGINE HIT",
+        hint: 'ARIA: "The Chronos Engine is destabilizing. Brace yourself."',
         color: "#ff2244",
       },
       {
-        title: "CHRONO SHIFT — TEMPORAL CONTROL",
+        title: "CHRONO SHIFT — BEND TIME",
         hint: isMobile
-          ? 'ARIA: "You have access to a time-dilation module. Use it. Hold SLOW to bend time around you."'
-          : 'ARIA: "You have access to a time-dilation module. Use it. Press Q to slow time."',
+          ? 'ARIA: "Time-dilation module is active. Hold SLOW. The next few seconds matter."'
+          : 'ARIA: "Time-dilation module is active. Press Q. The next few seconds matter."',
         color: "#8844ff",
       },
       {
-        title: "FIELD RESUPPLY — GRAB WHAT YOU CAN",
-        hint: 'ARIA: "Health packs and ammo ahead. Take everything — the station is in lockdown."',
+        title: "RESUPPLY — TAKE EVERYTHING",
+        hint: 'ARIA: "Health and ammo on the ground. Grab everything — the station is in lockdown."',
         color: "#44ff88",
       },
       {
-        title: "HOSTILE CONTACT — STATION BREACH",
-        hint: 'ARIA: "One of Voss\'s drones. Put it down. This is no longer a drill."',
+        title: "HOSTILE CONTACT — TAKE IT DOWN",
+        hint: 'ARIA: "Hostile drone. This is live. Put it down."',
         color: "#ff2244",
       },
       {
-        title: "CALIBRATION COMPLETE — YOU'RE ONLINE",
-        hint: 'ARIA: "Suit fully integrated. Proceeding to custom agent deployment array."',
+        title: "SYSTEMS ONLINE — CALIBRATION COMPLETE",
+        hint: 'ARIA: "Suit fully integrated. Proceeding to agent deployment array."',
         color: "#00ffcc",
       },
     ];
 
     const step = steps[this.tutorialStep];
     if (!step) return;
-
-    const now = performance.now();
-    const elapsed = (now - this.tutorialStepTime) / 1000;
 
     // Fade in
     const fadeIn = Math.min(1, elapsed / 0.4);
@@ -2952,12 +3003,12 @@ export class Game {
 
     ctx.globalAlpha = fadeIn;
 
-    // Step counter
+    // Step counter (steps 1-11 shown as X/11)
     ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 15) {
-      ctx.fillText(`${this.tutorialStep}/14`, dynamicBx + 14, by + 18);
+    if (this.tutorialStep > 0 && this.tutorialStep < 12) {
+      ctx.fillText(`${this.tutorialStep}/11`, dynamicBx + 14, by + 18);
     }
 
     // Title
@@ -2972,7 +3023,7 @@ export class Game {
     ctx.fillText(step.hint, w / 2, by + 58);
 
     // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 16) {
+    if (this.tutorialStep === 13) {
       // No menu — sandbox is pure practice mode
     }
 
@@ -4242,6 +4293,8 @@ export class Game {
       // Cutscene ended without a callback setting state — shouldn't normally
       // happen, but guard against it
       this.state = GameState.TITLE;
+      this.audio.startTrack("menu");
+      this.audio.startAmbient("menu");
     }
   }
 
@@ -4265,6 +4318,7 @@ export class Game {
     this.player.angle = level.playerStart.dir;
     this.player.alive = true;
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
 
@@ -4344,6 +4398,9 @@ export class Game {
     this.timeScale = 1;
     this.ariaCombatTimer = 0;
 
+    // Apply act-appropriate enemy roster before boss detection
+    this._applyActEnemyRoster();
+
     // ARIA boss encounter callout
     const hasBoss = this.entities.some(
       (e) =>
@@ -4361,9 +4418,58 @@ export class Game {
 
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
-    this.audio.startMusic(130);
+    this.renderer.applyActPalette(this.campaignAct);
+    if (hasBoss) {
+      this.audio.startTrack("boss");
+    } else {
+      this.audio.startTrack("campaign", 130);
+    }
+    this.audio.startAmbient("industrial");
     this.saveCampaign(); // Save checkpoint at level start
     this.lockPointer();
+  }
+
+  /**
+   * Remap enemy types to the appropriate act roster.
+   * Enemies out-of-roster for the current act are swapped for the
+   * nearest thematic equivalent so each act feels distinct.
+   */
+  _applyActEnemyRoster() {
+    const act = this.campaignAct || 1;
+    // Act rosters — enemies that belong naturally to each act
+    const ACT_ROSTERS = {
+      1: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
+      2: ["corruptCop", "henchman", "beast", "phaseStalker", "chronoBomber", "temporalEngineer", "shieldCommander"],
+      3: ["beast", "riftLeaper", "timeWarden", "temporalSummoner", "echoDrone", "sentinel", "phaseStalker"],
+    };
+    // Substitution map: if an enemy type is not in the current act's roster,
+    // swap it for the closest equivalent in that act.
+    const SUBSTITUTES = {
+      1: { henchman: "corruptCop", beast: "sentinel", phaseStalker: "phantom", chronoBomber: "phantom", temporalEngineer: "phantom", shieldCommander: "sentinel", riftLeaper: "phantom", timeWarden: "sentinel", temporalSummoner: "phantom", echoDrone: "drone" },
+      2: { drone: "corruptCop", glitchling: "phaseStalker", phantom: "henchman", sentinel: "shieldCommander", riftLeaper: "phaseStalker", timeWarden: "shieldCommander", temporalSummoner: "temporalEngineer", echoDrone: "chronoBomber" },
+      3: { drone: "echoDrone", glitchling: "phaseStalker", corruptCop: "sentinel", phantom: "riftLeaper", henchman: "riftLeaper", chronoBomber: "temporalSummoner", temporalEngineer: "temporalSummoner", shieldCommander: "timeWarden" },
+    };
+    const roster = ACT_ROSTERS[act] || ACT_ROSTERS[1];
+    const subs = SUBSTITUTES[act] || {};
+    for (const e of this.entities) {
+      if (e.type !== "enemy") continue;
+      // Never remap boss types
+      if (e.enemyType && e.enemyType.startsWith("boss")) continue;
+      if (e.enemyType && !roster.includes(e.enemyType)) {
+        const replacement = subs[e.enemyType];
+        if (replacement && ENEMY_TYPES[replacement]) {
+          const def = ENEMY_TYPES[replacement];
+          e.enemyType = replacement;
+          const diff = this.getDifficultyMultipliers();
+          e.health = def.health * diff.healthMul;
+          e.maxHealth = e.health;
+          e.speed = def.speed * diff.speedMul;
+          e.damage = (def.damage || 10) * diff.damageMul;
+          e.baseColor = def.color1 || "#ff0000";
+          e.darkColor = def.color2 || "#880000";
+        }
+      }
+    }
   }
 
   nextCampaignLevel() {
@@ -4382,6 +4488,8 @@ export class Game {
     );
 
     this.campaignLevel++;
+    this.achievementStats.totalCampaignLevels++;
+    this.saveAchievements();
     if (this.campaignLevel >= CAMPAIGN_LEVELS.length) {
       this.loadCampaignLevel(this.campaignLevel); // triggers VICTORY via bounds check
       return;
@@ -4460,6 +4568,7 @@ export class Game {
         // Secret wall
         this.map.grid[checkY][checkX] = 0;
         this.player.secretsFound++;
+        this.achievementStats.totalSecretsFound++;
         this.player.score += 500;
         this.audio.secretFound();
         this.queueAriaMessage("secretFound");
@@ -4504,6 +4613,7 @@ export class Game {
     this.weaponAnimFrame = 1;
     this.weaponAnimTime = now;
     this.shotsFired++;
+    this.achievementStats.totalShotsFired++;
     if (this.mode === "tutorial") this.tutorialFired = true;
 
     // Sound
@@ -4511,6 +4621,10 @@ export class Game {
     else if (wep.id === 1) this.audio.shootShotgun();
     else if (wep.id === 2) this.audio.shootPlasma();
     else if (wep.id === 3) this.audio.shootCannon();
+    else if (wep.id === 4) this.audio.shootScattergun();
+    else if (wep.id === 5) this.audio.shootSniper();
+    else if (wep.id === 6) this.audio.shootRicochet();
+    else if (wep.id === 7) this.audio.shootEMP();
 
     const damage = wep.damage * this.player.damageMultiplier;
 
@@ -4651,7 +4765,11 @@ export class Game {
       const my = Math.floor(y);
       if (mx < 0 || my < 0 || mx >= this.map.width || my >= this.map.height)
         break;
-      if (this.map.grid[my][mx] > 0) break;
+      if (this.map.grid[my][mx] > 0) {
+        // Wall impact sparks
+        this.spawnWallSparks(x, y);
+        break;
+      }
 
       // Enemy check
       for (const e of this.entities) {
@@ -4668,6 +4786,7 @@ export class Game {
 
   damageEnemy(enemy, damage) {
     this.shotsHit++;
+    this.achievementStats.totalShotsHit++;
     // Critical hit check
     let finalDamage = damage;
     let isCrit = false;
@@ -4760,7 +4879,8 @@ export class Game {
           e2.hitTime = this.time;
           if (e2.health <= 0) {
             e2.state = "dead";
-            e2.active = false;
+            e2.dissolving = true;
+            e2.dissolveTimer = 0.5;
             e2.deathTime = this.time;
             this.player.score += e2.def.score;
             this.player.kills++;
@@ -4787,7 +4907,8 @@ export class Game {
 
     if (enemy.health <= 0) {
       enemy.state = "dead";
-      enemy.active = false;
+      enemy.dissolving = true;
+      enemy.dissolveTimer = 0.5;
       enemy.deathTime = this.time;
       this.player.score += enemy.def.score;
       this.player.kills++;
@@ -4889,6 +5010,13 @@ export class Game {
 
     this.player.health -= actualDamage;
     this.player.hurtTime = this.time;
+    // Track damage direction for directional indicator
+    if (attacker && typeof attacker.x === "number") {
+      this.player.lastDamageAngle = Math.atan2(
+        attacker.y - this.player.y,
+        attacker.x - this.player.x,
+      );
+    }
     this.screenShake = Math.max(this.screenShake, 4);
     this.audio.playerHit();
     if (this.settings.haptics && navigator.vibrate) navigator.vibrate(50);
@@ -4912,7 +5040,8 @@ export class Game {
       attacker.health -= amount * this.player.thorns;
       if (attacker.health <= 0) {
         attacker.state = "dead";
-        attacker.active = false;
+        attacker.dissolving = true;
+        attacker.dissolveTimer = 0.5;
         attacker.deathTime = this.time;
         this.killedEnemies++;
         this.player.score += attacker.def.score;
@@ -4940,6 +5069,8 @@ export class Game {
       this.player.health = 0;
       this.player.alive = false;
       this.deathTimer = 1.5;
+      this.achievementStats.totalDeaths++;
+      this.saveAchievements();
       this.audio.playerDeath();
       this.queueAriaMessage("playerDeath");
       if (this.mode === "arena") {
@@ -4953,6 +5084,8 @@ export class Game {
 
   update(timestamp) {
     this.deltaTime = Math.min(0.05, (timestamp - this.lastFrameTime) / 1000);
+    // Accumulate lifetime play time (real seconds, not game time)
+    this.achievementStats.totalTimePlayed += this.deltaTime;
     this.lastFrameTime = timestamp;
     this.time = timestamp;
 
@@ -5221,6 +5354,11 @@ export class Game {
 
       // Extend map when approaching the end
       for (const ev of mResult.events) {
+        // Meltdown event audio
+        if (ev.type === "heatWarning") this.audio.meltdownSpeedUp();
+        else if (ev.type === "milestone") this.audio.meltdownCollect();
+        else if (ev.type === "abilityEnd") this.audio.meltdownHit();
+
         if (ev.type === "extend") {
           const { enemySpawns, pickupSpawns } = this.meltdown.extend(25);
           const diff = this.getDifficultyMultipliers();
@@ -5269,6 +5407,7 @@ export class Game {
       if (this.player.health <= 0) {
         this.player.health = 0;
         this.player.alive = false;
+        this.audio.meltdownDeath();
         this.meltdown.onDeath();
         this.deathTimer = 1.5;
       }
@@ -5330,6 +5469,17 @@ export class Game {
         this.audio.roundComplete();
         this.unlockPointer();
         this.queueAriaMessage("levelComplete");
+      }
+    }
+
+    // Check exit (playtest) — reaching exit ends the playtest
+    if (this.mode === "playtest" && this.exitEntity && this.exitEntity.active) {
+      const dx = this.player.x - this.exitEntity.x;
+      const dy = this.player.y - this.exitEntity.y;
+      if (dx * dx + dy * dy < 1.0) {
+        if (!this._playtestEndTimer) {
+          this._playtestEndTimer = 1.5;
+        }
       }
     }
 
@@ -5477,6 +5627,10 @@ export class Game {
       this.keys["ArrowDown"];
     p.isSprinting = this.keys[kb.sprint] || this.keys["ShiftRight"];
     p.isSprinting = p.isSprinting && isMoving && p.stamina > 0;
+
+    // Footstep audio
+    this.audio.setFootstepCadence(p.isSprinting ? 1.6 : 1.0);
+    this.audio.updateFootsteps(isMoving && !p.isDashing && !p.isSliding, performance.now());
 
     // Stamina management
     if (p.isSprinting) {
@@ -5690,37 +5844,161 @@ export class Game {
     }
   }
 
+  spawnWallSparks(x, y) {
+    if (!this.player.particles) this.player.particles = [];
+    const count = 5 + Math.floor(Math.random() * 4); // 5-8 sparks
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 2.5;
+      // Orange/yellow spark colors
+      const r = 255;
+      const g = 140 + Math.floor(Math.random() * 115); // 140-255
+      const b = Math.floor(Math.random() * 40); // 0-40
+
+      this.player.particles.push({
+        x: x,
+        y: y,
+        z: -0.2 - Math.random() * 0.3, // wall mid-height
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.5) * 3,
+        r,
+        g,
+        b,
+        life: 0.15 + Math.random() * 0.2, // short-lived sparks
+        size: 0.02 + Math.random() * 0.03, // small sparks
+      });
+    }
+  }
+
+  spawnPickupBurst(x, y, pickupType) {
+    if (!this.player.particles) this.player.particles = [];
+    // Color by type: health = green, ammo = yellow, weapon = cyan
+    let r1, g1, b1;
+    if (pickupType === "health") {
+      r1 = 50; g1 = 255; b1 = 80;
+    } else if (pickupType === "ammo") {
+      r1 = 255; g1 = 220; b1 = 50;
+    } else {
+      r1 = 50; g1 = 200; b1 = 255;
+    }
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const speed = 1.0 + Math.random() * 1.5;
+      this.player.particles.push({
+        x: x,
+        y: y,
+        z: -0.3 - Math.random() * 0.2, // floor level rising
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: -(2 + Math.random() * 2), // burst upward
+        r: r1 + Math.floor(Math.random() * 30),
+        g: g1,
+        b: b1,
+        life: 0.4 + Math.random() * 0.3,
+        size: 0.04 + Math.random() * 0.04,
+      });
+    }
+  }
+
   updateParticles(dt) {
     const pList = this.player.particles;
-    if (!pList || pList.length === 0) return;
+    if (pList && pList.length > 0) {
+      for (let i = pList.length - 1; i >= 0; i--) {
+        const p = pList[i];
+        // Apply "timeScale" to particles for Chrono Shift coolness
+        const ts = this.timeScale;
+        p.x += p.vx * dt * ts;
+        p.y += p.vy * dt * ts;
+        p.z += p.vz * dt * ts;
+        p.vz += 15 * dt * ts; // gravity
+        p.life -= dt * ts;
 
-    for (let i = pList.length - 1; i >= 0; i--) {
-      const p = pList[i];
-      // Apply "timeScale" to particles for Chrono Shift coolness
-      const ts = this.timeScale;
-      p.x += p.vx * dt * ts;
-      p.y += p.vy * dt * ts;
-      p.z += p.vz * dt * ts;
-      p.vz += 15 * dt * ts; // gravity
-      p.life -= dt * ts;
+        // Floor bounce
+        if (p.z > 0.48) {
+          p.z = 0.48;
+          p.vz *= -0.3;
+          p.vx *= 0.6;
+          p.vy *= 0.6;
+        }
 
-      // Floor bounce
-      if (p.z > 0.48) {
-        p.z = 0.48;
-        p.vz *= -0.3;
-        p.vx *= 0.6;
-        p.vy *= 0.6;
+        if (p.life <= 0) {
+          pList.splice(i, 1);
+        }
       }
+    }
 
-      if (p.life <= 0) {
-        pList.splice(i, 1);
+    // Atmospheric dust motes
+    this.updateDustMotes(dt);
+  }
+
+  updateDustMotes(dt) {
+    if (!this.map) return;
+    // Lazy-init: spawn dust motes scattered around the player area
+    if (!this.dustMotes) {
+      this.dustMotes = [];
+      const count = 35;
+      for (let i = 0; i < count; i++) {
+        this.dustMotes.push({
+          x: this.player.x + (Math.random() - 0.5) * 16,
+          y: this.player.y + (Math.random() - 0.5) * 16,
+          z: -0.1 - Math.random() * 0.8, // scattered heights (floor to ceiling)
+          vx: (Math.random() - 0.5) * 0.3,
+          vy: (Math.random() - 0.5) * 0.3,
+          vz: (Math.random() - 0.5) * 0.15,
+          r: 180 + Math.floor(Math.random() * 50),
+          g: 170 + Math.floor(Math.random() * 50),
+          b: 150 + Math.floor(Math.random() * 40),
+          life: 0.3 + Math.random() * 0.3, // used as alpha
+          size: 0.015 + Math.random() * 0.015,
+        });
       }
+    }
+
+    for (const m of this.dustMotes) {
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.z += m.vz * dt;
+
+      // Gently vary drift
+      m.vx += (Math.random() - 0.5) * 0.1 * dt;
+      m.vy += (Math.random() - 0.5) * 0.1 * dt;
+      m.vz += (Math.random() - 0.5) * 0.05 * dt;
+      // Clamp drift speed
+      m.vx = Math.max(-0.4, Math.min(0.4, m.vx));
+      m.vy = Math.max(-0.4, Math.min(0.4, m.vy));
+      m.vz = Math.max(-0.15, Math.min(0.15, m.vz));
+
+      // Clamp z height
+      if (m.z > 0.45) { m.z = 0.45; m.vz *= -1; }
+      if (m.z < -0.9) { m.z = -0.9; m.vz *= -1; }
+
+      // Wrap around player — keep motes in a 16-unit box around the player
+      const dx = m.x - this.player.x;
+      const dy = m.y - this.player.y;
+      if (dx > 8) m.x -= 16;
+      if (dx < -8) m.x += 16;
+      if (dy > 8) m.y -= 16;
+      if (dy < -8) m.y += 16;
     }
   }
 
   updateEnemies(dt) {
+    // Tick dissolve timers for dying enemies
+    for (let i = this.entities.length - 1; i >= 0; i--) {
+      const e = this.entities[i];
+      if (e.dissolving) {
+        e.dissolveTimer -= dt;
+        if (e.dissolveTimer <= 0) {
+          e.dissolving = false;
+          e.active = false;
+        }
+      }
+    }
+
     for (const e of this.entities) {
-      if (e.type !== "enemy" || !e.active) continue;
+      if (e.type !== "enemy" || !e.active || e.dissolving) continue;
 
       // Enemy-specific time scale for Chrono Shift (v0.8.0 reaction system)
       const chronoMult = Number.isFinite(e.chronoMultiplier)
@@ -6072,6 +6350,7 @@ export class Game {
           break;
         }
         if (this.map.grid[my][mx] > 0) {
+          this.spawnWallSparks(p.x, p.y);
           p.active = false;
           break;
         }
@@ -6175,8 +6454,8 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
-      // In tutorial, block pickups until step 14 ("Grab Supplies")
-      if (this.mode === "tutorial" && this.tutorialStep < 14) {
+      // In tutorial, block pickups until step 10 ("Resupply")
+      if (this.mode === "tutorial" && this.tutorialStep < 10) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -6187,17 +6466,19 @@ export class Game {
             this.player.health + 25,
           );
           e.active = false;
+          this.spawnPickupBurst(e.x, e.y, "health");
           this.audio.pickup();
           this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep === 14)
+          if (this.mode === "tutorial" && this.tutorialStep === 10)
             this.tutorialPickedUp = true;
           if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
         }
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
+        this.spawnPickupBurst(e.x, e.y, "ammo");
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep === 14)
+        if (this.mode === "tutorial" && this.tutorialStep === 10)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
@@ -6209,6 +6490,7 @@ export class Game {
         }
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
+        this.spawnPickupBurst(e.x, e.y, "weapon");
         if (this.mode === "tutorial") {
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
@@ -6252,6 +6534,12 @@ export class Game {
     if (this.state === GameState.CHARACTER_CREATE) {
       this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
       this.renderCharacterCreator(ctx, w, h);
+      return;
+    }
+
+    if (this.state === GameState.STATS && this._statsReturnToMenu) {
+      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.renderStatsScreen(ctx, w, h);
       return;
     }
 
@@ -6313,6 +6601,11 @@ export class Game {
       yShift,
     );
 
+    // Render atmospheric dust motes
+    if (this.dustMotes && this.dustMotes.length > 0) {
+      this.renderer.renderParticles(this.player, this.dustMotes, this.time);
+    }
+
     ctx.restore();
     this.profiler.currentPhases.raycast = performance.now() - _tRay0;
 
@@ -6367,6 +6660,35 @@ export class Game {
       ctx.fillRect(0, 0, w, h);
     }
 
+    // Damage direction indicator — red arc on screen edge
+    if (
+      this.player.hurtTime &&
+      this.time - this.player.hurtTime < 500 &&
+      this.player.lastDamageAngle != null
+    ) {
+      const elapsed = (this.time - this.player.hurtTime) / 500;
+      const dirAlpha = 0.6 * (1 - elapsed);
+      // Relative angle from player's facing direction
+      let relAngle = this.player.lastDamageAngle - this.player.angle;
+      // Normalize to -PI..PI
+      while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+      while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+      const cx = w / 2;
+      const cy = h / 2;
+      const outerR = Math.min(w, h) * 0.48;
+      const innerR = outerR * 0.85;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(relAngle);
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR, -0.35, 0.35);
+      ctx.arc(0, 0, innerR, 0.35, -0.35, true);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255,20,0,${dirAlpha})`;
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Glitch effect
     if (this.glitchEffect > 0.01) {
       this.drawGlitch(ctx, w, h);
@@ -6401,6 +6723,8 @@ export class Game {
       this.renderControlsScreen(hctx, hw, hh);
     if (this.state === GameState.ACHIEVEMENTS)
       this.renderAchievementsScreen(hctx, hw, hh);
+    if (this.state === GameState.STATS)
+      this.renderStatsScreen(hctx, hw, hh);
     if (this.state === GameState.UPGRADE)
       this.renderUpgradeScreen(hctx, hw, hh);
     if (this.state === GameState.GAME_OVER) this.renderGameOver(hctx, hw, hh);
@@ -9241,7 +9565,7 @@ export class Game {
     const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
     if (!this.isTouchDevice) {
       ctx.fillText(
-        "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  L ARIA log  |  Q quit" +
+        "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  T stats  |  L ARIA log  |  Q quit" +
           saveHint,
         w / 2,
         h / 2 + 110,
@@ -9782,6 +10106,95 @@ export class Game {
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText("W/S to scroll  ·  ESC to go back", w / 2, h - 20);
+    ctx.textAlign = "left";
+  }
+
+  renderStatsScreen(ctx, w, h) {
+    ctx.fillStyle = "rgba(0,0,0,0.92)";
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = "#00ffcc";
+    ctx.font = "bold 28px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("LIFETIME STATS", w / 2, 50);
+
+    const s = this.achievementStats;
+
+    // Format time played
+    const totalSec = Math.floor(s.totalTimePlayed || 0);
+    const hours = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    const timeStr = hours > 0
+      ? `${hours}h ${mins}m ${secs}s`
+      : `${mins}m ${secs}s`;
+
+    // Accuracy
+    const accuracy = s.totalShotsFired > 0
+      ? ((s.totalShotsHit / s.totalShotsFired) * 100).toFixed(1) + "%"
+      : "N/A";
+
+    // K/D ratio
+    const kd = s.totalDeaths > 0
+      ? (s.totalKills / s.totalDeaths).toFixed(2)
+      : s.totalKills > 0 ? "Perfect" : "N/A";
+
+    const stats = [
+      { label: "TOTAL KILLS", value: (s.totalKills || 0).toLocaleString(), color: "#ff4444" },
+      { label: "TOTAL DEATHS", value: (s.totalDeaths || 0).toLocaleString(), color: "#ff6666" },
+      { label: "K/D RATIO", value: kd, color: "#ffcc00" },
+      { label: "TIME PLAYED", value: timeStr, color: "#00ccff" },
+      { label: "SHOTS FIRED", value: (s.totalShotsFired || 0).toLocaleString(), color: "#aaddff" },
+      { label: "ACCURACY", value: accuracy, color: "#44ff88" },
+      { label: "SECRETS FOUND", value: (s.totalSecretsFound || 0).toLocaleString(), color: "#ffaa00" },
+      { label: "CAMPAIGN LEVELS", value: (s.totalCampaignLevels || 0).toLocaleString(), color: "#cc88ff" },
+      { label: "GAMES PLAYED", value: (s.totalGamesPlayed || 0).toLocaleString(), color: "#88ccff" },
+      { label: "HIGHEST ARENA", value: "Round " + (s.highestArenaRound || 0), color: "#ff88cc" },
+      { label: "HIGHEST SCORE", value: (s.highestScore || 0).toLocaleString(), color: "#ffcc44" },
+      { label: "TOTAL DASHES", value: (s.totalDashes || 0).toLocaleString(), color: "#88ffcc" },
+      { label: "UPGRADES BOUGHT", value: (s.upgradesBought || 0).toLocaleString(), color: "#ccccff" },
+      { label: "FLAWLESS ROUNDS", value: (s.flawlessRounds || 0).toLocaleString(), color: "#44ffff" },
+    ];
+
+    const cols = 2;
+    const rowH = 42;
+    const colW = 260;
+    const totalW = cols * colW;
+    const startX = w / 2 - totalW / 2;
+    const startY = 80;
+
+    for (let i = 0; i < stats.length; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = startX + col * colW;
+      const y = startY + row * rowH;
+
+      // Label
+      ctx.fillStyle = "rgba(180,190,200,0.6)";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(stats[i].label, x + 10, y + 14);
+
+      // Value
+      ctx.fillStyle = stats[i].color;
+      ctx.font = "bold 18px monospace";
+      ctx.fillText(stats[i].value, x + 10, y + 34);
+    }
+
+    // Campaign complete badge
+    if (s.campaignComplete) {
+      ctx.fillStyle = "#ffcc00";
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("★ CAMPAIGN COMPLETED ★", w / 2, startY + Math.ceil(stats.length / cols) * rowH + 20);
+    }
+
+    // Footer
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("ESC to go back", w / 2, h - 20);
     ctx.textAlign = "left";
   }
 
@@ -10620,6 +11033,7 @@ export class Game {
     this.builder.onPlayTest = () => this.startBuilderPlayTest();
     this.map = this.builder.map;
     this.entities = [];
+    this.dustMotes = null;
     this.state = GameState.BUILDER;
   }
 
@@ -10634,6 +11048,7 @@ export class Game {
     // Use the builder's map as the gameplay map
     this.map = this.builder.map;
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
 
     // Find a spawn point — center of map or player position
@@ -10683,6 +11098,26 @@ export class Game {
       }
     }
 
+    // Spawn pickups from builder-placed entities
+    if (this.map.entities && this.map.entities.length > 0) {
+      for (const e of this.map.entities) {
+        this.entities.push(new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }));
+      }
+    }
+
+    // Spawn exit marker from builder
+    if (this.map.exit) {
+      this.exitEntity = {
+        x: this.map.exit.x,
+        y: this.map.exit.y,
+        type: "exit",
+        active: true,
+      };
+      this.entities.push(this.exitEntity);
+    } else {
+      this.exitEntity = null;
+    }
+
     this.killedEnemies = 0;
     this.totalEnemies = spawned;
     this.killStreak = 0;
@@ -10697,7 +11132,8 @@ export class Game {
     this.mode = "playtest";
     this.state = GameState.PLAYING;
     this.roundStartTime = performance.now();
-    this.audio.startMusic(140);
+    this.audio.startTrack("campaign", 140);
+    this.audio.startAmbient("industrial");
     this.lockPointer();
   }
 
@@ -10708,6 +11144,7 @@ export class Game {
     this.mode = "builder";
     this.map = this.builder.map;
     this.entities = [];
+    this.dustMotes = null;
     this.projectiles = [];
     // Clear stale gameplay HUD
     this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);

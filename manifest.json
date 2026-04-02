@@ -1,0 +1,19 @@
+{
+  "name": "Clockwork Carnage: Glitch Protocol",
+  "short_name": "Clockwork Carnage",
+  "description": "A fast-paced retro-future raycaster with time-bending combat and deep customization.",
+  "start_url": "/clockwork_carnage/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#0a0e14",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

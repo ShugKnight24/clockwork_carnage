@@ -722,3 +722,74 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── Landing / Marketing Features ─────────────────────────────────────── */
+
+.landing-features {
+  margin-top: 32px;
+  text-align: center;
+  max-width: 700px;
+  width: 90vw;
+}
+
+.landing-tagline {
+  font-size: 14px;
+  color: #8899aa;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.feature-card {
+  background: rgba(0, 255, 200, 0.04);
+  border: 1px solid rgba(0, 255, 200, 0.12);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  transition: border-color 0.3s, background 0.3s;
+}
+
+.feature-card:hover {
+  border-color: rgba(0, 255, 200, 0.35);
+  background: rgba(0, 255, 200, 0.08);
+}
+
+.feature-icon {
+  font-size: 28px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 200, 0.3));
+}
+
+.feature-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #00ffcc;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.feature-desc {
+  font-size: 11px;
+  color: rgba(170, 180, 190, 0.7);
+  line-height: 1.4;
+}
+
+@media (max-width: 500px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .landing-tagline {
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .feature-card {
+    padding: 10px 8px;
+  }
+}

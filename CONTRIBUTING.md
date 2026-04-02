@@ -21,12 +21,14 @@ Clockwork Carnage is an **AI-assisted solo developer project**. Development move
 Bug reports are **incredibly valuable**. The more information you provide, the faster I can fix it. A great bug report includes:
 
 ### Required Information
+
 - **Device & OS** — e.g., iPhone 14 / iOS 17.2, Samsung Galaxy S23 / Android 14, Windows 11 PC
 - **Browser & Version** — e.g., Chrome 124, Safari 17.4, Firefox 125
 - **Screen Resolution** — e.g., 1920×1080, 390×844 (mobile)
 - **Game Mode** — Campaign (which act/level?), Arena (which round?), Builder, Meltdown
 
 ### Highly Appreciated (The More The Better)
+
 - **Steps to reproduce** — Exact sequence of actions that trigger the bug
 - **Stack traces** — Open browser DevTools (F12) → Console tab → copy any red error messages
 - **Screenshots** — What does it look like when it breaks?
@@ -48,21 +50,24 @@ Feature requests are welcome as GitHub Issues. Please include:
 - **Evidence** — Links to similar features in other games, user feedback, benchmarks, etc.
 - **Scope** — Is this a small tweak or a major system? Be honest about the effort involved.
 
-I have a detailed roadmap (see `ROADMAP.md`) and a large backlog. Your suggestion may already be planned, deferred, or intentionally excluded. I'll do my best to respond, but no guarantees on timeline.
+I have a detailed roadmap and a large backlog. Check the [GitHub Issues](../../issues) and project board for current priorities. Your suggestion may already be planned, deferred, or intentionally excluded. I'll do my best to respond, but no guarantees on timeline.
 
 ---
 
 ## 🔧 Development Setup
 
 ### Playing the Game
+
 ```
 Open index.html in a modern browser. That's it. No build step required.
 ```
 
 ### Running Tests (Optional — For Contributors)
+
 The test infrastructure uses Playwright and is intentionally **not part of the public game**. All testing files (`tests/`, `package.json`, `node_modules/`, `playwright.config.js`, etc.) are gitignored.
 
 If you're contributing code and want to run tests locally:
+
 ```bash
 npm install
 npx playwright install
@@ -70,6 +75,7 @@ npx playwright test
 ```
 
 ### Project Structure
+
 ```
 index.html          — Entry point (open in browser)
 style.css           — All UI styling

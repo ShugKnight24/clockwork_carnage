@@ -12,11 +12,11 @@
     <meta property="og:description" content="A fast-paced retro-future raycaster with time-bending combat and deep customization." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://shugmishumunov.github.io/clockwork_carnage/" />
-    <meta property="og:image" content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.png" />
+    <meta property="og:image" content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Clockwork Carnage" />
     <meta name="twitter:description" content="A fast-paced retro-future raycaster with time-bending combat and deep customization." />
-    <meta name="twitter:image" content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.png" />
+    <meta name="twitter:image" content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.svg" />
 
     <!-- PWA: open in standalone (fullscreen-like) when added to home screen -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -25,9 +25,10 @@
     <meta name="theme-color" content="#0a0e14" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; font-src 'self'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="style.css" />
     <!-- Analytics loader (consent-first) -->
     <script type="module">
@@ -48,6 +49,33 @@
 
       <div class="subtitle">Glitch Protocol</div>
       <div class="start-prompt">[ CLICK OR PRESS ENTER TO START ]</div>
+
+      <div class="landing-features">
+        <div class="landing-tagline">A retro-future FPS with time-bending combat</div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">&#9876;</div>
+            <div class="feature-title">3-ACT CAMPAIGN</div>
+            <div class="feature-desc">Fight through temporal anomalies. Defeat the Paradox Lord.</div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#9201;</div>
+            <div class="feature-title">CHRONO SHIFT</div>
+            <div class="feature-desc">Slow time, dash through bullets, and bend reality to survive.</div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#9881;</div>
+            <div class="feature-title">BUILD + SHARE</div>
+            <div class="feature-desc">Create custom arenas with the Temporal Forge level editor.</div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#9889;</div>
+            <div class="feature-title">ZERO INSTALL</div>
+            <div class="feature-desc">Runs in any browser. No downloads. Keyboard, touch, or gamepad.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="version-label" id="versionLabel"></div>
     </div>
 
@@ -340,6 +368,16 @@
             can you get?
           </div>
           <span class="key-hint">[6]</span>
+        </button>
+        <button class="mode-btn" id="btnStats" style="border-color: rgba(0, 255, 200, 0.3)">
+          <svg class="btn-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="14" width="4" height="8" rx="1" fill="currentColor" opacity="0.5"/>
+            <rect x="10" y="8" width="4" height="14" rx="1" fill="currentColor" opacity="0.7"/>
+            <rect x="17" y="2" width="4" height="20" rx="1" fill="currentColor" opacity="0.9"/>
+          </svg>
+          LIFETIME STATS
+          <div class="mode-desc">Kills, deaths, accuracy, time played, and more.</div>
+          <span class="key-hint">[7]</span>
         </button>
       </div>
       <div class="coming-soon">

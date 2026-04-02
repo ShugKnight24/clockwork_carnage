@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0a0a2e"/>
+      <stop offset="100%" stop-color="#000"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Grid lines -->
+  <g stroke="rgba(0,255,200,0.06)" stroke-width="1">
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+  </g>
+  <!-- Glow -->
+  <circle cx="600" cy="280" r="180" fill="rgba(0,255,200,0.04)"/>
+  <!-- Title -->
+  <text x="600" y="250" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="72" fill="#00ffcc" style="filter:drop-shadow(0 0 20px rgba(0,255,200,0.5))">CLOCKWORK</text>
+  <text x="600" y="330" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="72" fill="#00ffcc" style="filter:drop-shadow(0 0 20px rgba(0,255,200,0.5))">CARNAGE</text>
+  <!-- Subtitle -->
+  <text x="600" y="390" text-anchor="middle" font-family="monospace" font-size="22" fill="#8866aa" letter-spacing="6">GLITCH PROTOCOL</text>
+  <!-- Tagline -->
+  <text x="600" y="460" text-anchor="middle" font-family="monospace" font-size="16" fill="#8899aa">A retro-future FPS with time-bending combat</text>
+  <!-- Crosshair -->
+  <g stroke="#00ffcc" stroke-width="2" opacity="0.3">
+    <circle cx="600" cy="280" r="40" fill="none"/>
+    <line x1="600" y1="230" x2="600" y2="260"/>
+    <line x1="600" y1="300" x2="600" y2="330"/>
+    <line x1="550" y1="280" x2="580" y2="280"/>
+    <line x1="620" y1="280" x2="650" y2="280"/>
+  </g>
+  <!-- URL -->
+  <text x="600" y="580" text-anchor="middle" font-family="monospace" font-size="14" fill="rgba(136,153,170,0.5)">PLAY FREE IN YOUR BROWSER</text>
+</svg>

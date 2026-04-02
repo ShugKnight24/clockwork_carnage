@@ -134,6 +134,14 @@ document.getElementById("btnCustomize").addEventListener("click", () => {
   game.state = GameState.CHARACTER_CREATE;
 });
 
+document.getElementById("btnStats").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.state = GameState.STATS;
+  game._statsReturnToMenu = true;
+});
+
 // Expose dev flag toggle on window for console access
 window.ccDevTutorial = (on) => {
   game.setAlwaysTutorial(on !== false);
@@ -312,6 +320,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnCustomize").click();
     } else if (e.code === "Digit6") {
       document.getElementById("btnMeltdown").click();
+    } else if (e.code === "Digit7") {
+      document.getElementById("btnStats").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (

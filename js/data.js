@@ -672,6 +672,31 @@ export const CUTSCENE_SCRIPTS = {
       ],
       duration: 7500,
     },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "[Encrypted channel — source unknown]",
+          delay: 0,
+          color: "#556677",
+          size: 13,
+        },
+        {
+          text: '"Agent. Don\'t touch anything in that reactor. I\'ve seen this before."',
+          delay: 2000,
+          color: "#4488ff",
+          size: 15,
+        },
+        {
+          text: '"Whoever you are — keep moving. I\'ll find you when this is done."',
+          delay: 4500,
+          color: "#4488ff",
+          size: 15,
+        },
+      ],
+      duration: 7000,
+    },
   ],
 
   voss_lab_briefing: [
@@ -853,6 +878,37 @@ export const CUTSCENE_SCRIPTS = {
       particles: "embers",
       shake: 2,
       duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "[Station Archive — flagged by analyst L.M.]",
+          delay: 0,
+          color: "#556677",
+          size: 13,
+        },
+        {
+          text: '"I filed three reports about Voss. Three. They were deleted."',
+          delay: 2000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"If you\'re reading this — you\'re closer to the truth than anyone."',
+          delay: 4500,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: '"Come find me. I have the data you need."',
+          delay: 7000,
+          color: "#ffaa44",
+          size: 16,
+        },
+      ],
+      duration: 10000,
     },
   ],
 
@@ -1769,38 +1825,20 @@ export const CUTSCENE_SCRIPTS = {
       art: "party",
       lines: [
         {
-          text: "KAEL — The Vanguard. Lost his whole squad. Swore he'd never lose anyone again.",
+          text: "KAEL — The Vanguard. Lost his squad. Swore he'd never lose anyone again.",
           delay: 0,
           color: "#4488ff",
           size: 15,
         },
         {
-          text: "LYRA — The Chrono-Analyst. Saw the truth in the data. Nobody listened... until you.",
-          delay: 2500,
-          color: "#ffaa44",
-          size: 15,
-        },
-        {
-          text: "NOVA — The Striker. Fastest thing alive. Running from a past she won't talk about.",
-          delay: 5000,
-          color: "#ff4488",
-          size: 15,
-        },
-        {
-          text: "ROOK — The Engineer. Builds anything. Trusts no one. Learned to trust YOU.",
-          delay: 7500,
-          color: "#44ff88",
-          size: 15,
-        },
-        {
-          text: "And you. The Temporal Agent. The one who came back for ALL of them.",
-          delay: 10000,
+          text: "And you. The Temporal Agent. The one who came back.",
+          delay: 3000,
           color: "#00ffcc",
           size: 16,
         },
       ],
       particles: "glow",
-      duration: 13000,
+      duration: 6000,
     },
     {
       bg: "station",
@@ -1816,18 +1854,6 @@ export const CUTSCENE_SCRIPTS = {
           text: "Kael teaches you to hold the line. You teach him to let people in.",
           delay: 2500,
           color: "#4488ff",
-          size: 15,
-        },
-        {
-          text: "Nova shows you speed. You show her it's okay to stand still.",
-          delay: 5000,
-          color: "#ff4488",
-          size: 15,
-        },
-        {
-          text: "Rook builds the weapons. You give him something worth fighting for.",
-          delay: 7500,
-          color: "#44ff88",
           size: 15,
         },
       ],
@@ -1890,7 +1916,7 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
-  act2_level2: [
+   act2_level2: [
     {
       bg: "station",
       lines: [
@@ -1909,32 +1935,66 @@ export const CUTSCENE_SCRIPTS = {
       art: "party",
       lines: [
         {
-          text: "You train together. Eat together. Bleed together.",
+          text: "NOVA — The Striker. Fastest thing alive.",
           delay: 0,
-          color: "#8899aa",
+          color: "#ff4488",
           size: 16,
         },
         {
-          text: "Kael guards everyone's back. Nova makes them laugh. Rook fixes what breaks.",
+          text: '"Running from a past she won\'t talk about. Not this time though."',
           delay: 2500,
-          color: "#aabbcc",
+          color: "#ff4488",
           size: 15,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: "ROOK — The Engineer. Builds anything.",
+          delay: 0,
+          color: "#44ff88",
+          size: 16,
+        },
+        {
+          text: '"Trusts no one. But he\'s been watching you work. That counts for something."',
+          delay: 2500,
+          color: "#44ff88",
+          size: 15,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: "You train together. You eat together. You bleed together.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 16,
         },
         {
           text: "Late one night, Nova finally tells you about the people she lost.",
-          delay: 5000,
+          delay: 3000,
           color: "#ff4488",
           size: 15,
         },
         {
           text: '"I ran. I always ran. Not this time."',
-          delay: 7500,
+          delay: 5500,
           color: "#ff4488",
           size: 17,
         },
       ],
       particles: "embers",
-      duration: 10000,
+      duration: 8500,
     },
   ],
 
@@ -4014,44 +4074,53 @@ export const WALL_COLORS = {
 // TODO: Add additional variety to Arena map... procedurally generate or randomize, otherwise it gets repetitive
 
 export const TUTORIAL_MAP = {
-  name: "Chronos Station - Training Wing",
+  name: "Chronos Station - Locker Wing",
   width: 24,
   height: 24,
+  // Linear layout: 4 rooms connected by centered door-pairs on cols 10-11
+  // Room A  "Locker Room"     rows 1-5,   cols 8-14  (spawn, look around, move)
+  // Door 1                    row  6,     cols 10-11 (breach door)
+  // Room B  "Armory"          rows 7-10,  cols 7-15  (pistol pickup, fire)
+  // Door 2                    row  11,    cols 10-11
+  // Room C  "Training Hall"   rows 12-15, cols 4-18  (sprint/dash, shotgun)
+  // Door 3                    row  16,    cols 10-11
+  // Room D  "Combat Yard"     rows 17-21, cols 2-20  (chrono, resupply, combat)
   grid: [
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 0, 0, 3, 0, 0, 0, 3, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 3, 0, 3, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    //       0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23
+    /* 0 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 1 */ [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 2 */ [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 3 */ [2, 2, 2, 2, 2, 2, 2, 2, 0, 3, 0, 0, 0, 3, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 4 */ [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 5 */ [2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 6 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 7 */ [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 8 */ [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    /* 9 */ [2, 2, 2, 2, 2, 2, 2, 0, 0, 3, 0, 0, 0, 3, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    /*10 */ [2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2],
+    /*11 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /*12 */ [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2],
+    /*13 */ [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2],
+    /*14 */ [2, 2, 2, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 2, 2, 2, 2],
+    /*15 */ [2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2],
+    /*16 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /*17 */ [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2],
+    /*18 */ [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2],
+    /*19 */ [2, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 2, 2],
+    /*20 */ [2, 2, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 2, 2, 2],
+    /*21 */ [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2],
+    /*22 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    /*23 */ [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
   ],
-  playerStart: { x: 11.5, y: 2.5, dir: 1.5708 }, // Facing south in locker room
+  playerStart: { x: 11.5, y: 3.5, dir: 1.5708 }, // Facing south in locker room
   pickups: [
-    // Weapon room 1: Pistol
-    { x: 11.5, y: 8, type: "weapon", weaponId: 0 },
-    // Weapon room 2: Shotgun
-    { x: 4.5, y: 13, type: "weapon", weaponId: 1 },
-    // Combat yard pickups
-    { x: 6, y: 19, type: "health" },
-    { x: 13, y: 19, type: "ammo" },
+    // Armory (Room B): Pistol — centered
+    { x: 11.5, y: 8.5, type: "weapon", weaponId: 0 },
+    // Training Hall (Room C): Shotgun — off to the side
+    { x: 6.5, y: 13.5, type: "weapon", weaponId: 1 },
+    // Combat Yard (Room D): Health and Ammo
+    { x: 6.5, y: 19.5, type: "health" },
+    { x: 15.5, y: 19.5, type: "ammo" },
   ],
 };
 

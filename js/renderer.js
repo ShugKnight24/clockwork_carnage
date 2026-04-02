@@ -13,7 +13,17 @@ export class Renderer {
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
+    this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this.generateTextures();
+    this._generateFloorCeilTextures();
+    this._floorCeilBuffer = null;
+  }
+
+  /** Called by game.js when the campaign act changes */
+  applyActPalette(act) {
+    const a = act ?? 1;
+    if (this._actPalette === a) return;
+    this._actPalette = a;
     this._generateFloorCeilTextures();
     this._floorCeilBuffer = null;
   }
@@ -157,18 +167,47 @@ export class Renderer {
   _generateFloorCeilTextures() {
     const size = 64;
     const brutal = this._visualStyle === 1;
+    const act = this._actPalette || 1;
+
+    // Act-based floor/ceiling palettes
+    // Act 1: Cold teal — Chronos Station corridors
+    // Act 2: Amber/rust — industrial power plant tunnels
+    // Act 3: Crimson/purple — enemy fortress & boss chambers
+    const ACT_PALETTES = {
+      1: {
+        floorBase: brutal ? { r: 22, g: 25, b: 32 } : { r: 28, g: 42, b: 48 },
+        floorGrid: brutal ? { r: 12, g: 15, b: 20 } : { r: 15, g: 28, b: 35 },
+        floorGlow: brutal ? { r: 8, g: 18, b: 30 } : { r: 5, g: 40, b: 60 },
+        ceilBase: brutal ? { r: 10, g: 10, b: 20 } : { r: 18, g: 22, b: 38 },
+        ceilLight: brutal ? { r: 15, g: 20, b: 35 } : { r: 40, g: 35, b: 18 },
+        seamG: brutal ? 10 : 14, seamB: brutal ? 14 : 18,
+        rivetG: brutal ? 22 : 30, rivetB: brutal ? 28 : 45,
+      },
+      2: {
+        // Amber/rust — warm industrial
+        floorBase: brutal ? { r: 35, g: 22, b: 8 } : { r: 48, g: 34, b: 14 },
+        floorGrid: brutal ? { r: 20, g: 12, b: 4 } : { r: 28, g: 18, b: 6 },
+        floorGlow: brutal ? { r: 50, g: 28, b: 4 } : { r: 60, g: 40, b: 5 },
+        ceilBase: brutal ? { r: 20, g: 12, b: 4 } : { r: 30, g: 18, b: 8 },
+        ceilLight: brutal ? { r: 45, g: 28, b: 6 } : { r: 55, g: 38, b: 8 },
+        seamG: brutal ? 8 : 12, seamB: brutal ? 4 : 6,
+        rivetG: brutal ? 20 : 28, rivetB: brutal ? 6 : 10,
+      },
+      3: {
+        // Crimson/purple — hostile fortress
+        floorBase: brutal ? { r: 30, g: 8, b: 14 } : { r: 40, g: 10, b: 20 },
+        floorGrid: brutal ? { r: 18, g: 4, b: 8 } : { r: 24, g: 6, b: 14 },
+        floorGlow: brutal ? { r: 45, g: 4, b: 30 } : { r: 55, g: 5, b: 40 },
+        ceilBase: brutal ? { r: 14, g: 4, b: 20 } : { r: 20, g: 6, b: 30 },
+        ceilLight: brutal ? { r: 35, g: 6, b: 40 } : { r: 44, g: 8, b: 50 },
+        seamG: brutal ? 4 : 6, seamB: brutal ? 12 : 18,
+        rivetG: brutal ? 8 : 14, rivetB: brutal ? 30 : 45,
+      },
+    };
+    const pal = ACT_PALETTES[act] || ACT_PALETTES[1];
+    const { floorBase, floorGrid, floorGlow, ceilBase, ceilLight } = pal;
 
     // Floor texture
-    // Clockwork: warm teal-tinted tiles with cyan glow accents
-    // Brutal:    dark metallic grating (original look)
-    const floorBase = brutal
-      ? { r: 22, g: 25, b: 32 }
-      : { r: 28, g: 42, b: 48 };
-    const floorGrid = brutal
-      ? { r: 12, g: 15, b: 20 }
-      : { r: 15, g: 28, b: 35 };
-    const floorGlow = brutal ? { r: 8, g: 18, b: 30 } : { r: 5, g: 40, b: 60 };
-
     const floorImg = new ImageData(size, size);
     const fd = floorImg.data;
     for (let y = 0; y < size; y++) {
@@ -187,16 +226,16 @@ export class Renderer {
         // Heavier seam every 32px
         if (x % 32 < 2 || y % 32 < 2) {
           r += 8;
-          g += brutal ? 10 : 14;
-          b += brutal ? 14 : 18;
+          g += pal.seamG;
+          b += pal.seamB;
         }
         // Rivets at intersections
         const rx = x % 32,
           ry = y % 32;
         if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) {
           r += brutal ? 20 : 10;
-          g += brutal ? 22 : 30;
-          b += brutal ? 28 : 45;
+          g += pal.rivetG;
+          b += pal.rivetB;
         }
         // Glow spots (embedded floor lights)
         const cx = (x % 32) - 16,
@@ -216,13 +255,6 @@ export class Renderer {
     this._floorTexPixels = fd;
 
     // Ceiling texture
-    // Clockwork: sky-toned panels with warm amber light accents
-    // Brutal:    dark panels with cold recessed lights (original look)
-    const ceilBase = brutal ? { r: 10, g: 10, b: 20 } : { r: 18, g: 22, b: 38 };
-    const ceilLight = brutal
-      ? { r: 15, g: 20, b: 35 }
-      : { r: 40, g: 35, b: 18 };
-
     const ceilImg = new ImageData(size, size);
     const cd = ceilImg.data;
     for (let y = 0; y < size; y++) {
@@ -283,10 +315,18 @@ export class Renderer {
     const rayDirX1 = dirX + planeX;
     const rayDirY1 = dirY + planeY;
 
-    const fogR = this._visualStyle === 1 ? 8 : 12;
-    const fogG = this._visualStyle === 1 ? 8 : 22;
-    const fogB = this._visualStyle === 1 ? 20 : 38;
-    const fogMaxOpacity = this._visualStyle === 1 ? 0.92 : 0.7;
+    // Act-tinted fog: Act1=teal, Act2=amber, Act3=crimson
+    const act = this._actPalette || 1;
+    const actFog = act === 2
+      ? { r: 20, g: 10, b: 4 }
+      : act === 3
+        ? { r: 22, g: 4, b: 8 }
+        : { r: 8, g: 18, b: 30 }; // Act 1 default teal
+    const brutal = this._visualStyle === 1;
+    const fogR = brutal ? actFog.r : actFog.r + 4;
+    const fogG = brutal ? actFog.g : actFog.g + 4;
+    const fogB = brutal ? actFog.b : actFog.b + 8;
+    const fogMaxOpacity = brutal ? 0.92 : 0.7;
 
     const loopEnd = h % 2 === 0 ? h : h - 1;
     for (let y = halfH + 1; y < loopEnd; y += 2) {
@@ -726,7 +766,7 @@ export class Renderer {
     const spriteDist = [];
     const spriteOrder = [];
     for (let i = 0; i < entities.length; i++) {
-      if (entities[i].active === false) continue;
+      if (entities[i].active === false && !entities[i].dissolving) continue;
       spriteOrder.push(i);
       spriteDist[i] = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
     }
@@ -767,6 +807,20 @@ export class Renderer {
         }
       }
       if (!visible) continue;
+
+      // Ground shadow — dark ellipse at entity's feet
+      if (entity.type === "enemy" && !entity.dissolving) {
+        const shadowW = spriteWidth * 0.6;
+        const shadowH = spriteHeight * 0.12;
+        const shadowY = Math.floor(spriteHeight / 2 + h / 2) - shadowH * 0.5;
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.35, 2.0 / transformY); // fade with distance
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(spriteScreenX, shadowY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
       // Draw the entity
       this.drawEntity(
@@ -930,6 +984,17 @@ export class Renderer {
     const darkColor = hitFlash ? "#ffaaaa" : c2;
 
     ctx.globalAlpha = alpha;
+
+    // Death dissolve effect — fade out + scanline noise
+    let dissolveAlpha = 1;
+    if (enemy.dissolving && enemy.dissolveTimer != null) {
+      dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
+      ctx.globalAlpha = alpha * dissolveAlpha;
+      // Shift hue toward white during dissolve
+      if (dissolveAlpha < 0.5) {
+        ctx.globalCompositeOperation = "lighter";
+      }
+    }
 
     if (enemy.enemyType === "drone") {
       // Drone (Enhanced hovering combat sphere)

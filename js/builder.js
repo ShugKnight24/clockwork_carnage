@@ -1,4 +1,21 @@
 import { trackEvent } from "./analytics.js";
+import { ENEMY_TYPES } from "./data.js";
+
+// All placeable enemy type keys (exclude boss forms — they're phase variants)
+const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
+  (k) => k !== "boss_form2" && k !== "boss_form3",
+);
+
+// Friendly short names for HUD display
+const ENEMY_SHORT_NAMES = {};
+for (const k of ENEMY_KEYS) {
+  ENEMY_SHORT_NAMES[k] = ENEMY_TYPES[k].name;
+}
+
+// Pickup types the builder can place
+const PICKUP_TYPES = ["health", "ammo", "weapon"];
+const PICKUP_LABELS = { health: "Health", ammo: "Ammo", weapon: "Weapon" };
+const PICKUP_COLORS = { health: "#44ff44", ammo: "#ffcc00", weapon: "#00ccff" };
 
 const TILE_NAMES = [
   "",
@@ -77,8 +94,14 @@ export class BuilderMode {
     this.history = [];
     this.historyIndex = -1;
 
-    // Tool mode: 'block' (default) or 'spawn'
+    // Tool mode: 'block' (default), 'spawn', 'pickup', or 'exit'
     this.toolMode = "block";
+
+    // Enemy type picker — index into ENEMY_KEYS
+    this.selectedEnemy = 0;
+
+    // Pickup type picker — index into PICKUP_TYPES
+    this.selectedPickup = 0;
 
     // Multi-map management
     this.currentSlot = 0;
@@ -224,10 +247,36 @@ export class BuilderMode {
       this.switchMap(1);
       return true;
     }
-    // T → toggle tool mode (block / spawn)
+    // T → cycle tool mode (block → spawn → pickup → exit)
     if (code === "KeyT") {
-      this.toolMode = this.toolMode === "block" ? "spawn" : "block";
+      const modes = ["block", "spawn", "pickup", "exit"];
+      const idx = modes.indexOf(this.toolMode);
+      this.toolMode = modes[(idx + 1) % modes.length];
       this.audio.menuSelect();
+      return true;
+    }
+    // G → cycle sub-type within current tool (enemy type for spawn, pickup type for pickup)
+    if (code === "KeyG") {
+      if (this.toolMode === "spawn") {
+        this.selectedEnemy = (this.selectedEnemy + 1) % ENEMY_KEYS.length;
+        this.audio.menuSelect();
+        return true;
+      }
+      if (this.toolMode === "pickup") {
+        this.selectedPickup = (this.selectedPickup + 1) % PICKUP_TYPES.length;
+        this.audio.menuSelect();
+        return true;
+      }
+      return false;
+    }
+    // Shift+G → cycle sub-type backwards
+    if (code === "KeyG" && e.shiftKey) {
+      // handled above already; unreachable but kept for clarity
+      return false;
+    }
+    // F → rename map
+    if (code === "KeyF") {
+      this.renameMap();
       return true;
     }
     // Tab → toggle overhead
@@ -289,10 +338,19 @@ export class BuilderMode {
   }
 
   handleMouseDown(button) {
-    if (this.overhead) return;
     if (this.toolMode === "spawn") {
       if (button === 0) this.placeSpawn();
       if (button === 2) this.removeSpawn();
+      return;
+    }
+    if (this.toolMode === "pickup") {
+      if (button === 0) this.placePickup();
+      if (button === 2) this.removePickup();
+      return;
+    }
+    if (this.toolMode === "exit") {
+      if (button === 0) this.placeExit();
+      if (button === 2) this.removeExit();
       return;
     }
     if (button === 0) this.placeBlock();
@@ -464,6 +522,16 @@ export class BuilderMode {
         y: action.y,
         enemy: action.enemy,
       });
+    } else if (action.type === "addPickup") {
+      if (!this.map.entities) this.map.entities = [];
+      this.map.entities = this.map.entities.filter(
+        (e) => !(Math.floor(e.x) === action.x && Math.floor(e.y) === action.y && e.type === action.entity.type),
+      );
+    } else if (action.type === "removePickup") {
+      if (!this.map.entities) this.map.entities = [];
+      this.map.entities.push({ ...action.entity });
+    } else if (action.type === "setExit") {
+      this.map.exit = action.oldExit ? { ...action.oldExit } : null;
     }
     this.audio.menuSelect();
   }
@@ -494,12 +562,21 @@ export class BuilderMode {
       this.map.enemySpawns = this.map.enemySpawns.filter(
         (s) => !(s.x === action.x && s.y === action.y),
       );
+    } else if (action.type === "addPickup") {
+      if (!this.map.entities) this.map.entities = [];
+      this.map.entities.push({ ...action.entity });
+    } else if (action.type === "removePickup") {
+      if (!this.map.entities) this.map.entities = [];
+      this.map.entities = this.map.entities.filter(
+        (e) => !(Math.floor(e.x) === action.x && Math.floor(e.y) === action.y && e.type === action.entity.type),
+      );
+    } else if (action.type === "setExit") {
+      this.map.exit = action.newExit ? { ...action.newExit } : null;
     }
     this.audio.menuSelect();
   }
 
   placeBlock() {
-    if (this.overhead) return;
     const layer = this.map.layers ? this.map.layers[this.layer] : null;
     const target = this.target;
 
@@ -548,7 +625,6 @@ export class BuilderMode {
   }
 
   removeBlock() {
-    if (this.overhead) return;
     const target = this.target;
     if (!target) return;
     const { hitX, hitY } = target;
@@ -593,7 +669,6 @@ export class BuilderMode {
   // ─── Enemy spawn placement ──────────────────────────────
 
   placeSpawn() {
-    if (this.overhead) return;
     const target = this.target;
     let sx, sy;
     if (target) {
@@ -609,8 +684,7 @@ export class BuilderMode {
     // Don't stack spawns on the same cell
     if (!this.map.enemySpawns) this.map.enemySpawns = [];
     if (this.map.enemySpawns.some((s) => s.x === sx && s.y === sy)) return;
-    const types = ["drone", "phantom", "beast"];
-    const enemy = types[this.map.enemySpawns.length % types.length];
+    const enemy = ENEMY_KEYS[this.selectedEnemy] || "drone";
     this._recordAction({
       type: "addSpawn",
       x: sx,
@@ -622,7 +696,6 @@ export class BuilderMode {
   }
 
   removeSpawn() {
-    if (this.overhead) return;
     const target = this.target;
     if (!target) return;
     if (!this.map.enemySpawns || this.map.enemySpawns.length === 0) return;
@@ -657,6 +730,116 @@ export class BuilderMode {
     this.audio.menuSelect();
   }
 
+  // ─── Pickup placement ──────────────────────────────────
+
+  placePickup() {
+    const target = this.target;
+    let px, py;
+    if (target) {
+      px = target.placeX;
+      py = target.placeY;
+    } else {
+      const d = 3;
+      px = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      py = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
+    }
+    if (!this._inBounds(px, py)) return;
+    if (this.map.grid[py][px] !== 0) return;
+    if (!this.map.entities) this.map.entities = [];
+    // Don't stack pickups on the same cell
+    if (this.map.entities.some((e) => Math.floor(e.x) === px && Math.floor(e.y) === py)) return;
+    const pickupType = PICKUP_TYPES[this.selectedPickup];
+    const entity = { x: px + 0.5, y: py + 0.5, type: pickupType };
+    if (pickupType === "weapon") {
+      entity.weaponId = 1; // default to shotgun — user can cycle later
+    }
+    this._recordAction({
+      type: "addPickup",
+      x: px,
+      y: py,
+      entity: { ...entity },
+    });
+    this.map.entities.push(entity);
+    this.audio.menuConfirm();
+  }
+
+  removePickup() {
+    const target = this.target;
+    if (!target) return;
+    if (!this.map.entities || this.map.entities.length === 0) return;
+    // Try hitX/hitY first, then placeX/placeY
+    for (const coords of [
+      { cx: target.hitX, cy: target.hitY },
+      { cx: target.placeX, cy: target.placeY },
+    ]) {
+      const idx = this.map.entities.findIndex(
+        (e) => e.type !== "exit" && Math.floor(e.x) === coords.cx && Math.floor(e.y) === coords.cy,
+      );
+      if (idx >= 0) {
+        const removed = this.map.entities.splice(idx, 1)[0];
+        this._recordAction({
+          type: "removePickup",
+          x: Math.floor(removed.x),
+          y: Math.floor(removed.y),
+          entity: { ...removed },
+        });
+        this.audio.menuSelect();
+        return;
+      }
+    }
+  }
+
+  // ─── Exit placement ────────────────────────────────────
+
+  placeExit() {
+    const target = this.target;
+    let ex, ey;
+    if (target) {
+      ex = target.placeX;
+      ey = target.placeY;
+    } else {
+      const d = 3;
+      ex = Math.floor(this.player.x + Math.cos(this.player.angle) * d);
+      ey = Math.floor(this.player.y + Math.sin(this.player.angle) * d);
+    }
+    if (!this._inBounds(ex, ey)) return;
+    if (this.map.grid[ey][ex] !== 0) return;
+    const oldExit = this.map.exit ? { ...this.map.exit } : null;
+    this.map.exit = { x: ex + 0.5, y: ey + 0.5 };
+    this._recordAction({
+      type: "setExit",
+      oldExit,
+      newExit: { ...this.map.exit },
+    });
+    this.audio.menuConfirm();
+  }
+
+  removeExit() {
+    if (!this.map.exit) return;
+    const oldExit = { ...this.map.exit };
+    this.map.exit = null;
+    this._recordAction({
+      type: "setExit",
+      oldExit,
+      newExit: null,
+    });
+    this.audio.menuSelect();
+  }
+
+  // ─── Map rename ────────────────────────────────────────
+
+  renameMap() {
+    const current = this.map.name || "My Creation";
+    const newName = prompt("Rename map:", current);
+    if (newName && newName.trim().length > 0) {
+      this.map.name = newName.trim().substring(0, 40);
+      const entry = this.mapIndex.find((e) => e.id === this.currentSlot);
+      if (entry) entry.name = this.map.name;
+      this._saveIndex();
+      this.saveFlash = 1.5;
+    }
+  }
+
   // ─── Export / Import ─────────────────────────────────────
 
   exportMap() {
@@ -672,6 +855,8 @@ export class BuilderMode {
         dir: this.player.angle,
       },
       enemySpawns: this.map.enemySpawns || [],
+      entities: this.map.entities || [],
+      exit: this.map.exit || null,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
@@ -733,8 +918,14 @@ export class BuilderMode {
                     (typeof s.enemy === "string" || s.enemy === undefined),
                 )
               : [],
-            entities: [],
-            exit: null,
+            entities: Array.isArray(data.entities)
+              ? data.entities.filter(
+                  (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+                )
+              : [],
+            exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
+              ? { x: data.exit.x, y: data.exit.y }
+              : null,
           };
           this._ensureLayers();
           this.syncGrid();
@@ -798,8 +989,14 @@ export class BuilderMode {
               (typeof s.enemy === "string" || s.enemy === undefined),
           )
         : [],
-      entities: [],
-      exit: null,
+      entities: Array.isArray(data.entities)
+        ? data.entities.filter(
+            (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+          )
+        : [],
+      exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
+        ? { x: data.exit.x, y: data.exit.y }
+        : null,
     };
     this._ensureLayers();
     this.syncGrid();
@@ -887,7 +1084,7 @@ export class BuilderMode {
   _saveCurrentMap() {
     try {
       const data = {
-        version: 2,
+        version: 3,
         name: this.map.name,
         width: this.map.width,
         height: this.map.height,
@@ -899,6 +1096,8 @@ export class BuilderMode {
           dir: this.player.angle,
         },
         enemySpawns: this.map.enemySpawns || [],
+        entities: this.map.entities || [],
+        exit: this.map.exit || null,
       };
       localStorage.setItem(
         this._slotKey(this.currentSlot),
@@ -950,8 +1149,14 @@ export class BuilderMode {
                 (typeof s.enemy === "string" || s.enemy === undefined),
             )
           : [],
-        entities: [],
-        exit: null,
+        entities: Array.isArray(data.entities)
+          ? data.entities.filter(
+              (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+            )
+          : [],
+        exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
+          ? { x: data.exit.x, y: data.exit.y }
+          : null,
       };
     } catch (_) {
       return null;
@@ -1196,12 +1401,34 @@ export class BuilderMode {
     ctx.textAlign = "left";
 
     // Tool mode indicator
-    const modeLabel = this.toolMode === "spawn" ? "SPAWN" : "BLOCK";
-    const modeColor = this.toolMode === "spawn" ? "#ff6644" : "#00ffcc";
+    const modeLabels = { block: "BLOCK", spawn: "SPAWN", pickup: "PICKUP", exit: "EXIT" };
+    const modeColors = { block: "#00ffcc", spawn: "#ff6644", pickup: "#ffcc00", exit: "#cc44ff" };
+    const modeLabel = modeLabels[this.toolMode] || "BLOCK";
+    const modeColor = modeColors[this.toolMode] || "#00ffcc";
     ctx.fillStyle = modeColor;
     ctx.font = "bold 13px monospace";
     ctx.textAlign = "center";
     ctx.fillText(`TOOL: ${modeLabel}`, w / 2, palY - 28);
+
+    // Sub-type label for spawn and pickup modes
+    if (this.toolMode === "spawn") {
+      const enemyKey = ENEMY_KEYS[this.selectedEnemy] || "drone";
+      const enemyName = ENEMY_SHORT_NAMES[enemyKey] || enemyKey;
+      ctx.fillStyle = ENEMY_TYPES[enemyKey]?.color1 || "#ff6644";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`[G] ${enemyName} (${this.selectedEnemy + 1}/${ENEMY_KEYS.length})`, w / 2, palY - 44);
+    } else if (this.toolMode === "pickup") {
+      const pickupKey = PICKUP_TYPES[this.selectedPickup];
+      const pickupName = PICKUP_LABELS[pickupKey] || pickupKey;
+      ctx.fillStyle = PICKUP_COLORS[pickupKey] || "#ffcc00";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`[G] ${pickupName} (${this.selectedPickup + 1}/${PICKUP_TYPES.length})`, w / 2, palY - 44);
+    } else if (this.toolMode === "exit") {
+      const hasExit = !!this.map.exit;
+      ctx.fillStyle = hasExit ? "#cc44ff" : "rgba(200,100,255,0.5)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(hasExit ? "EXIT PLACED \u2014 R-click to remove" : "L-click to place exit", w / 2, palY - 44);
+    }
     ctx.textAlign = "left";
 
     // Ghost preview (block placement preview)
@@ -1218,13 +1445,15 @@ export class BuilderMode {
         "RClick \u2014 Remove",
         "1-9 \u2014 Block Type",
         "Q/E \u2014 Layer Down/Up",
-        "T \u2014 Tool (Block/Spawn)",
+        "T \u2014 Tool (Block/Spawn/Pickup/Exit)",
+        "G \u2014 Cycle Sub-type",
         "[ / ] \u2014 FOV -/+",
         ", / . \u2014 Prev/Next Map",
         "Space \u2014 Jump (Fly in Noclip)",
         "Ctrl \u2014 Lower (Noclip)",
         "R \u2014 Reset Pitch",
         "N \u2014 Noclip",
+        "F \u2014 Rename Map",
         "Tab \u2014 Overhead",
         "Ctrl+S \u2014 Save",
         "Ctrl+Shift+S \u2014 Share URL",
@@ -1272,10 +1501,25 @@ export class BuilderMode {
       ctx.fillText(`U:${undoCount} R:${redoCount}`, w - 14, h - 122);
     }
     // Spawn count
+    let statusY = h - 138;
     if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
       ctx.fillStyle = "rgba(255,100,68,0.7)";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(`SPAWNS: ${this.map.enemySpawns.length}`, w - 14, h - 138);
+      ctx.fillText(`SPAWNS: ${this.map.enemySpawns.length}`, w - 14, statusY);
+      statusY -= 16;
+    }
+    // Pickup count
+    if (this.map.entities && this.map.entities.length > 0) {
+      ctx.fillStyle = "rgba(255,204,0,0.7)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`PICKUPS: ${this.map.entities.length}`, w - 14, statusY);
+      statusY -= 16;
+    }
+    // Exit indicator
+    if (this.map.exit) {
+      ctx.fillStyle = "rgba(200,68,255,0.7)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`EXIT: ${Math.floor(this.map.exit.x)},${Math.floor(this.map.exit.y)}`, w - 14, statusY);
     }
     ctx.textAlign = "left";
 
@@ -1348,6 +1592,30 @@ export class BuilderMode {
         );
         ctx.fill();
       }
+    }
+
+    // Pickup markers on minimap
+    if (this.map.entities) {
+      for (const e of this.map.entities) {
+        const color = PICKUP_COLORS[e.type] || "#ffcc00";
+        ctx.fillStyle = color;
+        const ex = mx + (e.x - 0.5) * cs + cs / 2;
+        const ey = my + (e.y - 0.5) * cs + cs / 2;
+        ctx.fillRect(ex - cs * 0.25, ey - cs * 0.25, cs * 0.5, cs * 0.5);
+      }
+    }
+
+    // Exit marker on minimap
+    if (this.map.exit) {
+      const exitX = mx + (this.map.exit.x - 0.5) * cs + cs / 2;
+      const exitY = my + (this.map.exit.y - 0.5) * cs + cs / 2;
+      ctx.strokeStyle = "#cc44ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(exitX, exitY, cs * 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(200,68,255,0.5)";
+      ctx.fill();
     }
 
     // Player
@@ -1461,6 +1729,51 @@ export class BuilderMode {
           ctx.textAlign = "left";
           ctx.textBaseline = "alphabetic";
         }
+      }
+    }
+
+    // Pickup markers in overhead
+    if (this.map.entities) {
+      for (const e of this.map.entities) {
+        const ex = ox + (e.x - 0.5) * cs + cs / 2;
+        const ey = oy + (e.y - 0.5) * cs + cs / 2;
+        const color = PICKUP_COLORS[e.type] || "#ffcc00";
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(ox + (e.x - 0.5) * cs + cs * 0.15, oy + (e.y - 0.5) * cs + cs * 0.15, cs * 0.7, cs * 0.7);
+        ctx.globalAlpha = 1;
+        if (cs >= 14) {
+          ctx.fillStyle = "#000";
+          ctx.font = `bold ${Math.max(7, cs * 0.3) | 0}px monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const label = e.type === "health" ? "H" : e.type === "ammo" ? "A" : "W";
+          ctx.fillText(label, ex, ey);
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
+        }
+      }
+    }
+
+    // Exit marker in overhead
+    if (this.map.exit) {
+      const ex = ox + (this.map.exit.x - 0.5) * cs + cs / 2;
+      const ey = oy + (this.map.exit.y - 0.5) * cs + cs / 2;
+      ctx.strokeStyle = "#cc44ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ex, ey, cs * 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(200,68,255,0.4)";
+      ctx.fill();
+      if (cs >= 14) {
+        ctx.fillStyle = "#fff";
+        ctx.font = `bold ${Math.max(7, cs * 0.3) | 0}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("X", ex, ey);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
       }
     }
 
