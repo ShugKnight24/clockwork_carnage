@@ -3199,6 +3199,825 @@ export class CutsceneEngine {
         break;
       }
 
+      case "portrait_voss": {
+        // VOSS — Tactician: sharp features, military bearing, cyan/blue palette
+        const fadeIn = Math.min(1, t / 0.9);
+        ctx.globalAlpha = fadeIn;
+
+        // Tactical holographic backdrop
+        const vossGlow = ctx.createRadialGradient(0, -20, 5, 0, -20, 70);
+        vossGlow.addColorStop(0, "rgba(0,180,255,0.10)");
+        vossGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = vossGlow;
+        ctx.fillRect(-80, -90, 160, 140);
+
+        // Floating tactical grid behind him
+        ctx.save();
+        ctx.translate(-48, -30);
+        ctx.rotate(-0.08 + Math.sin(t * 0.6) * 0.02);
+        const gridAlpha = 0.12 + Math.sin(t * 1.5) * 0.05;
+        ctx.strokeStyle = `rgba(0,180,255,${gridAlpha})`;
+        ctx.lineWidth = 0.4;
+        for (let gx = 0; gx < 5; gx++) {
+          ctx.beginPath();
+          ctx.moveTo(gx * 6, 0);
+          ctx.lineTo(gx * 6, 30);
+          ctx.stroke();
+        }
+        for (let gy = 0; gy < 6; gy++) {
+          ctx.beginPath();
+          ctx.moveTo(0, gy * 6);
+          ctx.lineTo(24, gy * 6);
+          ctx.stroke();
+        }
+        // Blinking dot on grid (target)
+        ctx.fillStyle = `rgba(255,100,80,${0.5 + Math.sin(t * 4) * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(12, 12, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Hair — short, swept back, silver-grey
+        ctx.fillStyle = "#8090a0";
+        ctx.beginPath();
+        ctx.moveTo(-9, -62);
+        ctx.quadraticCurveTo(-12, -70, -7, -74);
+        ctx.quadraticCurveTo(0, -77, 8, -73);
+        ctx.quadraticCurveTo(13, -68, 10, -62);
+        ctx.closePath();
+        ctx.fill();
+        // Lighter streak
+        ctx.strokeStyle = "rgba(200,210,220,0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-2, -73);
+        ctx.quadraticCurveTo(4, -72, 8, -68);
+        ctx.stroke();
+
+        // Face — angular, weathered
+        ctx.fillStyle = "#b89070";
+        ctx.beginPath();
+        ctx.moveTo(-7, -48);
+        ctx.quadraticCurveTo(-9, -56, -7, -63);
+        ctx.quadraticCurveTo(0, -66, 7, -63);
+        ctx.quadraticCurveTo(9, -56, 7, -48);
+        ctx.quadraticCurveTo(0, -44, -7, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Jaw line (angular, strong)
+        ctx.strokeStyle = "rgba(160,120,90,0.3)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-7, -50);
+        ctx.quadraticCurveTo(-8, -46, 0, -44);
+        ctx.quadraticCurveTo(8, -46, 7, -50);
+        ctx.stroke();
+
+        // Scar across left cheek
+        ctx.strokeStyle = "rgba(200,160,140,0.5)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-7, -54);
+        ctx.lineTo(-3, -50);
+        ctx.stroke();
+
+        // Eyes — sharp, focused, pale blue
+        ctx.fillStyle = "#e0e8f0";
+        ctx.fillRect(-5, -58, 4, 2.5);
+        ctx.fillRect(1, -58, 4, 2.5);
+        ctx.fillStyle = "#5090cc";
+        ctx.fillRect(-4, -57.5, 2, 2);
+        ctx.fillRect(2, -57.5, 2, 2);
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(-3.5, -57, 1, 1);
+        ctx.fillRect(2.5, -57, 1, 1);
+
+        // Eyebrows — thick, angular (stern)
+        ctx.strokeStyle = "#5a6a7a";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-6, -60);
+        ctx.lineTo(-1, -61.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(1, -61.5);
+        ctx.lineTo(6, -60);
+        ctx.stroke();
+
+        // Nose (aquiline)
+        ctx.strokeStyle = "rgba(160,120,90,0.3)";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, -55);
+        ctx.lineTo(1, -50);
+        ctx.lineTo(-0.5, -49.5);
+        ctx.stroke();
+
+        // Mouth — thin, stern line
+        ctx.strokeStyle = "#8a6a55";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-3, -47);
+        ctx.lineTo(3, -47);
+        ctx.stroke();
+
+        // Neck
+        ctx.fillStyle = "#b89070";
+        ctx.fillRect(-4, -47, 8, 7);
+
+        // Tactical jacket — dark navy, high collar, officer-grade
+        ctx.fillStyle = "#1a2030";
+        ctx.beginPath();
+        ctx.moveTo(-13, -40);
+        ctx.lineTo(-15, 18);
+        ctx.lineTo(15, 18);
+        ctx.lineTo(13, -40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Raised officer collar
+        ctx.fillStyle = "#222838";
+        ctx.beginPath();
+        ctx.moveTo(-9, -42);
+        ctx.lineTo(-7, -46);
+        ctx.lineTo(7, -46);
+        ctx.lineTo(9, -42);
+        ctx.lineTo(9, -38);
+        ctx.lineTo(-9, -38);
+        ctx.closePath();
+        ctx.fill();
+        // Collar trim
+        ctx.strokeStyle = `rgba(0,180,255,${0.3 + Math.sin(t * 2) * 0.1})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-7, -46);
+        ctx.lineTo(7, -46);
+        ctx.stroke();
+
+        // Rank insignia — triple chevrons on right chest
+        ctx.strokeStyle = "#00aadd";
+        ctx.lineWidth = 0.8;
+        for (let ch = 0; ch < 3; ch++) {
+          const chY = -34 + ch * 3;
+          ctx.beginPath();
+          ctx.moveTo(3, chY);
+          ctx.lineTo(6, chY - 1.5);
+          ctx.lineTo(9, chY);
+          ctx.stroke();
+        }
+
+        // Shoulder pads (angular, tactical)
+        ctx.fillStyle = "#2a3444";
+        ctx.fillRect(-17, -40, 6, 8);
+        ctx.fillRect(11, -40, 6, 8);
+        ctx.strokeStyle = "#3a4a5a";
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(-17, -40, 6, 8);
+        ctx.strokeRect(11, -40, 6, 8);
+
+        // Belt
+        ctx.fillStyle = "#111820";
+        ctx.fillRect(-14, 6, 28, 3);
+        ctx.fillStyle = "#00aadd";
+        ctx.fillRect(-2, 6.5, 4, 2);
+
+        // Arms
+        ctx.fillStyle = "#1a2030";
+        ctx.beginPath();
+        ctx.moveTo(-13, -36);
+        ctx.quadraticCurveTo(-17, -20, -15, 0);
+        ctx.lineTo(-11, 0);
+        ctx.quadraticCurveTo(-10, -18, -9, -36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(13, -36);
+        ctx.quadraticCurveTo(17, -20, 15, 0);
+        ctx.lineTo(11, 0);
+        ctx.quadraticCurveTo(10, -18, 9, -36);
+        ctx.closePath();
+        ctx.fill();
+        // Gloved hands
+        ctx.fillStyle = "#1a1a22";
+        ctx.beginPath();
+        ctx.arc(-13, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(13, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs
+        ctx.fillStyle = "#151c28";
+        ctx.fillRect(-7, 10, 6, 24);
+        ctx.fillRect(1, 10, 6, 24);
+        // Knee guards
+        ctx.fillStyle = "#2a3444";
+        ctx.fillRect(-6, 22, 4, 4);
+        ctx.fillRect(2, 22, 4, 4);
+
+        // Boots — military, dark
+        ctx.fillStyle = "#0d1018";
+        ctx.fillRect(-8, 32, 7, 6);
+        ctx.fillRect(1, 32, 7, 6);
+        ctx.fillStyle = "#00aadd";
+        ctx.fillRect(-8, 32, 7, 0.8);
+        ctx.fillRect(1, 32, 7, 0.8);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "portrait_miri": {
+        // MIRI — Medic: warm face, green/teal palette, med-pack, healer vibes
+        const fadeIn = Math.min(1, t / 0.9);
+        ctx.globalAlpha = fadeIn;
+
+        // Soft healing glow backdrop
+        const miriGlow = ctx.createRadialGradient(0, -20, 5, 0, -20, 70);
+        miriGlow.addColorStop(0, "rgba(100,255,180,0.10)");
+        miriGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = miriGlow;
+        ctx.fillRect(-80, -90, 160, 140);
+
+        // Floating medical readout (left side)
+        ctx.save();
+        ctx.translate(-50, -20);
+        ctx.rotate(-0.1 + Math.sin(t * 0.8) * 0.02);
+        const readAlpha = 0.14 + Math.sin(t * 1.8) * 0.06;
+        ctx.fillStyle = `rgba(100,255,180,${readAlpha})`;
+        ctx.fillRect(0, 0, 24, 32);
+        ctx.strokeStyle = `rgba(100,255,180,${readAlpha + 0.12})`;
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(0, 0, 24, 32);
+        // Heartbeat line
+        ctx.strokeStyle = `rgba(100,255,160,${readAlpha + 0.15})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(2, 10);
+        ctx.lineTo(6, 10);
+        ctx.lineTo(8, 4);
+        ctx.lineTo(10, 16);
+        ctx.lineTo(12, 8);
+        ctx.lineTo(14, 10);
+        ctx.lineTo(22, 10);
+        ctx.stroke();
+        // Vitals text lines
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = `rgba(100,255,160,${readAlpha * 0.6})`;
+          ctx.fillRect(2, 20 + i * 4, 8 + Math.sin(t + i) * 3, 1.2);
+        }
+        ctx.restore();
+
+        // Hair — tied back in a practical bun, dark brown with warm highlights
+        ctx.fillStyle = "#2a1a10";
+        // Left side framing face
+        ctx.beginPath();
+        ctx.moveTo(-9, -62);
+        ctx.quadraticCurveTo(-13, -56, -11, -46);
+        ctx.lineTo(-7, -46);
+        ctx.quadraticCurveTo(-8, -54, -7, -60);
+        ctx.closePath();
+        ctx.fill();
+        // Right side
+        ctx.beginPath();
+        ctx.moveTo(9, -62);
+        ctx.quadraticCurveTo(13, -56, 11, -46);
+        ctx.lineTo(7, -46);
+        ctx.quadraticCurveTo(8, -54, 7, -60);
+        ctx.closePath();
+        ctx.fill();
+        // Top
+        ctx.beginPath();
+        ctx.moveTo(-8, -63);
+        ctx.quadraticCurveTo(0, -72, 8, -63);
+        ctx.closePath();
+        ctx.fill();
+        // Bun at back (offset to right-top)
+        ctx.fillStyle = "#2a1a10";
+        ctx.beginPath();
+        ctx.arc(4, -70, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(60,40,20,0.5)";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.arc(4, -70, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        // Warm highlight strand
+        ctx.strokeStyle = "rgba(180,120,60,0.3)";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-3, -68);
+        ctx.quadraticCurveTo(2, -72, 6, -68);
+        ctx.stroke();
+
+        // Face — warm, kind features
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.moveTo(-8, -48);
+        ctx.quadraticCurveTo(-10, -56, -8, -62);
+        ctx.quadraticCurveTo(0, -66, 8, -62);
+        ctx.quadraticCurveTo(10, -56, 8, -48);
+        ctx.quadraticCurveTo(0, -44, -8, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Eyes — warm brown, expressive
+        ctx.fillStyle = "#f0e8e0";
+        ctx.beginPath();
+        ctx.ellipse(-3.5, -55.5, 2.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(3.5, -55.5, 2.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Iris — warm hazel-green
+        ctx.fillStyle = "#5a8a50";
+        ctx.beginPath();
+        ctx.arc(-3.5, -55.5, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(3.5, -55.5, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        // Pupils
+        ctx.fillStyle = "#1a1a1a";
+        ctx.beginPath();
+        ctx.arc(-3.5, -55.5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(3.5, -55.5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Eye highlights
+        ctx.fillStyle = "rgba(255,255,240,0.5)";
+        ctx.beginPath();
+        ctx.arc(-4.2, -56.2, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(2.8, -56.2, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyebrows — soft, arched
+        ctx.strokeStyle = "#3a2a18";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-6, -59);
+        ctx.quadraticCurveTo(-3, -61, -0.5, -59.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0.5, -59.5);
+        ctx.quadraticCurveTo(3, -61, 6, -59);
+        ctx.stroke();
+
+        // Nose
+        ctx.strokeStyle = "rgba(170,120,80,0.3)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -54);
+        ctx.lineTo(-0.3, -50);
+        ctx.stroke();
+
+        // Smile — warm, reassuring
+        ctx.fillStyle = "#b06850";
+        ctx.beginPath();
+        ctx.moveTo(-3, -48);
+        ctx.quadraticCurveTo(0, -46, 3, -48);
+        ctx.quadraticCurveTo(0, -46.5, -3, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Neck
+        ctx.fillStyle = "#c8956c";
+        ctx.fillRect(-3, -47, 6, 6);
+
+        // Medic uniform — teal/white with red cross emblem
+        ctx.fillStyle = "#1a3a3a";
+        ctx.beginPath();
+        ctx.moveTo(-12, -41);
+        ctx.lineTo(-14, 18);
+        ctx.lineTo(14, 18);
+        ctx.lineTo(12, -41);
+        ctx.closePath();
+        ctx.fill();
+        // White front panel
+        ctx.fillStyle = "#d8d8d0";
+        ctx.beginPath();
+        ctx.moveTo(-5, -39);
+        ctx.lineTo(-5, 10);
+        ctx.lineTo(5, 10);
+        ctx.lineTo(5, -39);
+        ctx.closePath();
+        ctx.fill();
+
+        // Red cross on chest
+        ctx.fillStyle = "#cc3333";
+        ctx.fillRect(-1.5, -34, 3, 8);
+        ctx.fillRect(-4, -31.5, 8, 3);
+
+        // Collar — V-neck with teal trim
+        ctx.strokeStyle = "#4ac0a0";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-8, -41);
+        ctx.lineTo(-3, -35);
+        ctx.lineTo(3, -35);
+        ctx.lineTo(8, -41);
+        ctx.stroke();
+
+        // Shoulder patches (medic insignia)
+        ctx.fillStyle = "#2a4a4a";
+        ctx.fillRect(-16, -40, 5, 6);
+        ctx.fillRect(11, -40, 5, 6);
+        // Mini crosses on patches
+        ctx.fillStyle = "#4ac0a0";
+        ctx.fillRect(-14.5, -38.5, 2, 0.8);
+        ctx.fillRect(-14, -39, 0.8, 2);
+        ctx.fillRect(12.5, -38.5, 2, 0.8);
+        ctx.fillRect(13, -39, 0.8, 2);
+
+        // Utility belt with med pouches
+        ctx.fillStyle = "#1a2a2a";
+        ctx.fillRect(-13, 6, 26, 3);
+        // Med pouches
+        ctx.fillStyle = "#2a4040";
+        ctx.fillRect(-10, 4, 5, 5);
+        ctx.fillRect(5, 4, 5, 5);
+        // Pouch crosses
+        ctx.fillStyle = "#4ac0a0";
+        ctx.fillRect(-8.5, 5.5, 2, 0.6);
+        ctx.fillRect(-8, 5, 0.6, 2);
+        ctx.fillRect(6.5, 5.5, 2, 0.6);
+        ctx.fillRect(7, 5, 0.6, 2);
+
+        // Arms
+        ctx.fillStyle = "#1a3a3a";
+        // Left arm (holding scanner)
+        ctx.beginPath();
+        ctx.moveTo(-12, -38);
+        ctx.quadraticCurveTo(-16, -26, -14, -8);
+        ctx.lineTo(-10, -8);
+        ctx.quadraticCurveTo(-10, -24, -8, -38);
+        ctx.closePath();
+        ctx.fill();
+        // Right arm (at side)
+        ctx.beginPath();
+        ctx.moveTo(12, -38);
+        ctx.quadraticCurveTo(16, -22, 14, 0);
+        ctx.lineTo(10, 0);
+        ctx.quadraticCurveTo(10, -20, 8, -38);
+        ctx.closePath();
+        ctx.fill();
+        // Hands
+        ctx.fillStyle = "#c8956c";
+        ctx.beginPath();
+        ctx.arc(-12, -6, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(12, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Med-scanner in left hand (glowing device)
+        ctx.fillStyle = "#2a3a3a";
+        ctx.fillRect(-16, -14, 8, 4);
+        ctx.fillStyle = `rgba(100,255,180,${0.5 + Math.sin(t * 3) * 0.3})`;
+        ctx.fillRect(-15, -13, 6, 2);
+        // Scanner beam
+        ctx.strokeStyle = `rgba(100,255,180,${0.2 + Math.sin(t * 4) * 0.1})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-12, -10);
+        ctx.lineTo(-18, 4);
+        ctx.lineTo(-6, 4);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Legs
+        ctx.fillStyle = "#152a2a";
+        ctx.fillRect(-6, 10, 5, 24);
+        ctx.fillRect(1, 10, 5, 24);
+
+        // Boots — practical, teal-trimmed
+        ctx.fillStyle = "#0d1818";
+        ctx.fillRect(-7, 32, 6, 6);
+        ctx.fillRect(1, 32, 6, 6);
+        ctx.fillStyle = "#4ac0a0";
+        ctx.fillRect(-7, 32, 6, 0.8);
+        ctx.fillRect(1, 32, 6, 0.8);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case "portrait_kai": {
+        // KAI — Engineer: stocky build, amber/orange palette, goggles, tools
+        const fadeIn = Math.min(1, t / 0.9);
+        ctx.globalAlpha = fadeIn;
+
+        // Warm workshop glow backdrop
+        const kaiGlow = ctx.createRadialGradient(0, -20, 5, 0, -20, 70);
+        kaiGlow.addColorStop(0, "rgba(255,180,80,0.10)");
+        kaiGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = kaiGlow;
+        ctx.fillRect(-80, -90, 160, 140);
+
+        // Floating schematic (right side)
+        ctx.save();
+        ctx.translate(30, -28);
+        ctx.rotate(0.1 + Math.sin(t * 0.7) * 0.03);
+        const schAlpha = 0.12 + Math.sin(t * 1.6) * 0.05;
+        ctx.strokeStyle = `rgba(255,180,80,${schAlpha + 0.1})`;
+        ctx.lineWidth = 0.5;
+        // Blueprint rectangle
+        ctx.strokeRect(0, 0, 22, 28);
+        // Gear schematic inside
+        ctx.beginPath();
+        ctx.arc(11, 12, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(11, 12, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        // Gear teeth
+        for (let gt = 0; gt < 8; gt++) {
+          const ga = (gt / 8) * Math.PI * 2 + t * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(11 + Math.cos(ga) * 5.5, 12 + Math.sin(ga) * 5.5);
+          ctx.lineTo(11 + Math.cos(ga) * 7.5, 12 + Math.sin(ga) * 7.5);
+          ctx.stroke();
+        }
+        // Dimension lines
+        ctx.fillStyle = `rgba(255,180,80,${schAlpha * 0.6})`;
+        ctx.fillRect(2, 22, 10, 1);
+        ctx.fillRect(2, 25, 14, 1);
+        ctx.restore();
+
+        // Hair — messy, dark with soot streaks, pushed up by goggles
+        ctx.fillStyle = "#1a1408";
+        ctx.beginPath();
+        ctx.moveTo(-9, -60);
+        ctx.quadraticCurveTo(-12, -68, -6, -74);
+        ctx.quadraticCurveTo(2, -78, 10, -72);
+        ctx.quadraticCurveTo(14, -66, 9, -60);
+        ctx.closePath();
+        ctx.fill();
+        // Messy tufts sticking up
+        ctx.beginPath();
+        ctx.moveTo(-4, -73);
+        ctx.quadraticCurveTo(-5, -79, -2, -80);
+        ctx.quadraticCurveTo(0, -78, -1, -74);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(3, -72);
+        ctx.quadraticCurveTo(4, -78, 7, -78);
+        ctx.quadraticCurveTo(8, -76, 6, -72);
+        ctx.closePath();
+        ctx.fill();
+        // Soot streak
+        ctx.strokeStyle = "rgba(60,50,30,0.4)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-6, -70);
+        ctx.quadraticCurveTo(-2, -72, 2, -70);
+        ctx.stroke();
+
+        // Face — broad, friendly, a bit rough
+        ctx.fillStyle = "#d4a070";
+        ctx.beginPath();
+        ctx.moveTo(-8, -48);
+        ctx.quadraticCurveTo(-10, -56, -8, -62);
+        ctx.quadraticCurveTo(0, -66, 8, -62);
+        ctx.quadraticCurveTo(10, -56, 8, -48);
+        ctx.quadraticCurveTo(0, -43, -8, -48);
+        ctx.closePath();
+        ctx.fill();
+
+        // Stubble (dotted texture on jaw)
+        ctx.fillStyle = "rgba(80,60,40,0.15)";
+        for (let sx = -5; sx <= 5; sx += 2) {
+          for (let sy = -48; sy <= -45; sy += 1.5) {
+            ctx.fillRect(sx, sy, 0.8, 0.8);
+          }
+        }
+
+        // Goggles pushed up on forehead
+        ctx.fillStyle = "#3a2a1a";
+        ctx.beginPath();
+        ctx.moveTo(-9, -64);
+        ctx.quadraticCurveTo(0, -66, 9, -64);
+        ctx.lineTo(9, -60);
+        ctx.quadraticCurveTo(0, -62, -9, -60);
+        ctx.closePath();
+        ctx.fill();
+        // Goggle lenses
+        ctx.fillStyle = "#ffaa44";
+        ctx.shadowColor = "#ffaa44";
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.ellipse(-4, -62, 3.5, 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(4, -62, 3.5, 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Goggle rims
+        ctx.strokeStyle = "#2a1a0a";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.ellipse(-4, -62, 3.5, 2.2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(4, -62, 3.5, 2.2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Bridge between lenses
+        ctx.strokeStyle = "#3a2a1a";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-0.5, -62);
+        ctx.lineTo(0.5, -62);
+        ctx.stroke();
+
+        // Eyes — brown, lively
+        ctx.fillStyle = "#f0e8e0";
+        ctx.fillRect(-5, -57, 4, 2.5);
+        ctx.fillRect(1, -57, 4, 2.5);
+        ctx.fillStyle = "#8a5a30";
+        ctx.fillRect(-4, -56.5, 2, 2);
+        ctx.fillRect(2, -56.5, 2, 2);
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(-3.5, -56, 1, 1);
+        ctx.fillRect(2.5, -56, 1, 1);
+
+        // Eyebrows — expressive, slightly raised
+        ctx.strokeStyle = "#2a1a08";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-6, -59.5);
+        ctx.quadraticCurveTo(-3, -61, -0.5, -59.5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0.5, -59.5);
+        ctx.quadraticCurveTo(3, -61, 6, -59.5);
+        ctx.stroke();
+
+        // Nose — slightly broad
+        ctx.strokeStyle = "rgba(180,130,70,0.3)";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(0, -54);
+        ctx.lineTo(0, -50);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-1.5, -49.5);
+        ctx.quadraticCurveTo(0, -49, 1.5, -49.5);
+        ctx.stroke();
+
+        // Grin — lopsided, confident
+        ctx.strokeStyle = "#8a6050";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-3, -47);
+        ctx.quadraticCurveTo(0, -45, 4, -46.5);
+        ctx.stroke();
+
+        // Neck (slightly thicker — stocky build)
+        ctx.fillStyle = "#d4a070";
+        ctx.fillRect(-4.5, -47, 9, 7);
+
+        // Engineer jumpsuit — burnt orange with utility pockets
+        ctx.fillStyle = "#8a4a1a";
+        ctx.beginPath();
+        ctx.moveTo(-14, -40);
+        ctx.lineTo(-16, 18);
+        ctx.lineTo(16, 18);
+        ctx.lineTo(14, -40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Collar — open, casual
+        ctx.fillStyle = "#6a3a12";
+        ctx.beginPath();
+        ctx.moveTo(-7, -40);
+        ctx.lineTo(-4, -36);
+        ctx.lineTo(4, -36);
+        ctx.lineTo(7, -40);
+        ctx.closePath();
+        ctx.fill();
+        // Undershirt visible
+        ctx.fillStyle = "#3a3a3a";
+        ctx.beginPath();
+        ctx.moveTo(-4, -40);
+        ctx.lineTo(-3, -36);
+        ctx.lineTo(3, -36);
+        ctx.lineTo(4, -40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Chest pockets
+        ctx.fillStyle = "#7a4218";
+        ctx.fillRect(-10, -32, 7, 5);
+        ctx.fillRect(3, -32, 7, 5);
+        ctx.strokeStyle = "#6a3a12";
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(-10, -32, 7, 5);
+        ctx.strokeRect(3, -32, 7, 5);
+        // Wrench/pen sticking out of pocket
+        ctx.fillStyle = "#888";
+        ctx.fillRect(-8, -34, 1.2, 6);
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillRect(-8, -34, 1.2, 1.5);
+
+        // Name patch on left chest
+        ctx.fillStyle = "#ddd";
+        ctx.fillRect(-10, -25, 7, 3);
+        ctx.fillStyle = "#333";
+        ctx.font = "2px monospace";
+
+        // Shoulder pads (bulkier — engineer kit)
+        ctx.fillStyle = "#7a4218";
+        ctx.fillRect(-18, -40, 6, 8);
+        ctx.fillRect(12, -40, 6, 8);
+        // Gear badge on right shoulder
+        ctx.strokeStyle = "#ffaa44";
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.arc(15, -36, 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner gear
+        for (let gt = 0; gt < 6; gt++) {
+          const ga = (gt / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(15 + Math.cos(ga) * 2, -36 + Math.sin(ga) * 2);
+          ctx.lineTo(15 + Math.cos(ga) * 3.2, -36 + Math.sin(ga) * 3.2);
+          ctx.stroke();
+        }
+
+        // Heavy tool belt
+        ctx.fillStyle = "#3a2a1a";
+        ctx.fillRect(-15, 5, 30, 4);
+        // Tools hanging from belt
+        // Wrench
+        ctx.fillStyle = "#666";
+        ctx.fillRect(-11, 9, 2, 7);
+        ctx.fillStyle = "#888";
+        ctx.fillRect(-12, 14, 4, 2);
+        // Hammer
+        ctx.fillStyle = "#5a3a1a";
+        ctx.fillRect(8, 9, 1.5, 6);
+        ctx.fillStyle = "#888";
+        ctx.fillRect(6, 9, 5, 3);
+        // Buckle
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillRect(-2, 5.5, 4, 3);
+
+        // Arms (slightly thicker — strong build)
+        ctx.fillStyle = "#8a4a1a";
+        ctx.beginPath();
+        ctx.moveTo(-14, -36);
+        ctx.quadraticCurveTo(-20, -20, -18, 2);
+        ctx.lineTo(-12, 2);
+        ctx.quadraticCurveTo(-11, -18, -10, -36);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(14, -36);
+        ctx.quadraticCurveTo(20, -20, 18, 2);
+        ctx.lineTo(12, 2);
+        ctx.quadraticCurveTo(11, -18, 10, -36);
+        ctx.closePath();
+        ctx.fill();
+        // Rolled-up sleeves showing forearms
+        ctx.fillStyle = "#d4a070";
+        ctx.fillRect(-18, -4, 6, 8);
+        ctx.fillRect(12, -4, 6, 8);
+        // Work gloves
+        ctx.fillStyle = "#5a4a2a";
+        ctx.beginPath();
+        ctx.arc(-15, 6, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(15, 6, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs (stocky)
+        ctx.fillStyle = "#6a3a12";
+        ctx.fillRect(-7, 10, 6, 24);
+        ctx.fillRect(1, 10, 6, 24);
+        // Knee pads
+        ctx.fillStyle = "#4a3018";
+        ctx.fillRect(-6, 22, 4, 5);
+        ctx.fillRect(2, 22, 4, 5);
+
+        // Heavy boots — steel-toed, scuffed
+        ctx.fillStyle = "#2a1a0a";
+        ctx.fillRect(-8, 32, 7, 7);
+        ctx.fillRect(1, 32, 7, 7);
+        // Steel toe caps
+        ctx.fillStyle = "#666";
+        ctx.fillRect(-8, 35, 3, 4);
+        ctx.fillRect(5, 35, 3, 4);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
       case "station": {
         // Chronos Station exterior silhouette
         ctx.globalAlpha = Math.min(1, t / 1.5);

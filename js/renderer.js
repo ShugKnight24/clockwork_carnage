@@ -2326,12 +2326,30 @@ export class Renderer {
       const breathe = Math.sin(time * 0.002) * halfH * 0.02;
       const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
 
-      // Industrial Color Palette (Brass, Copper, Steel)
-      const brass = "#b58e3d";
-      const darkBrass = "#7a5c1d";
-      const copper = "#b87333";
-      const steel = "#71797e";
-      const glowColor = "rgba(0, 255, 255, "; // Cyan energy
+      // Industrial Color Palette — distinct per boss form
+      let brass, darkBrass, copper, steel, glowColor;
+      if (bossForm === 3) {
+        // Form 3: Void black / blood red / silver — reality-rending
+        brass = "#1a1a2e";
+        darkBrass = "#0d0d1a";
+        copper = "#cc0033";
+        steel = "#aaaacc";
+        glowColor = "rgba(255, 60, 60, ";
+      } else if (bossForm === 2) {
+        // Form 2: Crimson obsidian / ember — volcanic upgrade
+        brass = "#5c1a1a";
+        darkBrass = "#3a0d0d";
+        copper = "#e04800";
+        steel = "#8a6a8a";
+        glowColor = "rgba(180, 0, 255, ";
+      } else {
+        // Form 1: Classic brass / copper / steel — industrial Big Daddy
+        brass = "#b58e3d";
+        darkBrass = "#7a5c1d";
+        copper = "#b87333";
+        steel = "#71797e";
+        glowColor = "rgba(0, 255, 255, ";
+      }
 
       const bossBaseColor = hitFlash ? "#ffffff" : brass;
       const bossDarkColor = hitFlash ? "#ffaaaa" : darkBrass;
@@ -2348,7 +2366,14 @@ export class Renderer {
         centerY,
         auraR,
       );
-      auraGrad.addColorStop(0, `rgba(40, 30, 20, ${0.3 + bossForm * 0.1})`);
+      auraGrad.addColorStop(
+        0,
+        bossForm === 3
+          ? `rgba(60, 0, 0, ${0.3 + bossForm * 0.1})`
+          : bossForm === 2
+            ? `rgba(50, 10, 30, ${0.3 + bossForm * 0.1})`
+            : `rgba(40, 30, 20, ${0.3 + bossForm * 0.1})`,
+      );
       auraGrad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = auraGrad;
       ctx.beginPath();
@@ -2508,6 +2533,50 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(hX, hY - hH * 0.5 - halfH * 0.2, 6, 0, Math.PI * 2);
         ctx.fill();
+        // Form 2+: Ember vents on shoulders (animated glow)
+        const ventGlow = 0.3 + pulse * 0.4;
+        const ventColor =
+          bossForm === 3
+            ? `rgba(255, 40, 40, ${ventGlow})`
+            : `rgba(220, 80, 0, ${ventGlow})`;
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = ventColor;
+          ctx.beginPath();
+          ctx.arc(
+            screenX + side * bW * 0.7,
+            bTop + torsoH * 0.05 + breathe,
+            bW * 0.12,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
+      }
+      // Form 3: Crown of void spikes on helmet
+      if (bossForm === 3) {
+        const crownY = hY - hH * 0.45;
+        const spikeCount = 5;
+        for (let i = 0; i < spikeCount; i++) {
+          const angle =
+            -Math.PI * 0.7 + (Math.PI * 1.4 * i) / (spikeCount - 1);
+          const spikeBase = hW * 0.5;
+          const spikeTip = hW * 0.75 + Math.sin(time * 0.005 + i) * 4;
+          const bx = hX + Math.cos(angle) * spikeBase;
+          const by = crownY + Math.sin(angle) * spikeBase * 0.5;
+          const tx = hX + Math.cos(angle) * spikeTip;
+          const ty = crownY + Math.sin(angle) * spikeTip * 0.5;
+          ctx.strokeStyle = `rgba(255, 40, 40, ${0.5 + pulse * 0.3})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          // Spike tip glow
+          ctx.fillStyle = `rgba(255, 100, 100, ${0.4 + pulse * 0.3})`;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Mechanical "Chin" guard

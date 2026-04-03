@@ -2083,6 +2083,299 @@ export const CUTSCENE_SCRIPTS = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════
+  // ACT II BRIEFINGS — Levels 3-8 (team deepening, Lord's fortress)
+  // ═══════════════════════════════════════════════════════════════════
+  act2_level4: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CONTAINMENT BREACH", delay: 0, color: "#ff8844", size: 20 },
+        {
+          text: "The cells are open. Something got out.",
+          delay: 1500,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        {
+          text: '"The Lord breached containment remotely. Test subjects are loose."',
+          delay: 0,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: '"Rook is rigging blast doors. Nova is clearing the east wing."',
+          delay: 2500,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: '"You take the west. Don\'t let anything reach the civilians."',
+          delay: 5000,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 7500,
+    },
+  ],
+
+  act2_level5: [
+    {
+      bg: "station",
+      lines: [
+        { text: "SERVER FARM SIEGE", delay: 0, color: "#00ccff", size: 20 },
+        {
+          text: "The Lord's data fortress. He keeps his secrets here.",
+          delay: 1500,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: "Rook cracks his knuckles.",
+          delay: 0,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: '"Every server we take down, he loses another century of stolen timelines."',
+          delay: 2000,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: "Nova grins. \"Then let's bankrupt him.\"",
+          delay: 4500,
+          color: "#ff4488",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 7000,
+    },
+  ],
+
+  act2_level6: [
+    {
+      bg: "station",
+      lines: [
+        { text: "REACTOR OVERLOAD", delay: 0, color: "#ffaa00", size: 20 },
+        {
+          text: "He's destabilizing the core. Trying to burn us out.",
+          delay: 1500,
+          color: "#cc8844",
+          size: 16,
+        },
+      ],
+      shake: 2,
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        {
+          text: '"Reactor temperature climbing. He\'s feeding it temporal energy."',
+          delay: 0,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: '"If it blows, this entire sector folds into a time loop. Forever."',
+          delay: 2500,
+          color: "#ff4444",
+          size: 15,
+        },
+        {
+          text: '"Kael is holding the blast doors. You need to reach the coolant valves."',
+          delay: 5000,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 7500,
+    },
+  ],
+
+  act2_level7: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE LORD'S LABORATORY", delay: 0, color: "#ff2244", size: 20 },
+        {
+          text: "Where he made himself. Where he'll try to unmake you.",
+          delay: 1500,
+          color: "#cc4466",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 3500,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain",
+      lines: [
+        {
+          text: "Logs scattered everywhere. Failed experiments. Dead timelines.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "Hundreds of versions of himself. All failures.",
+          delay: 2500,
+          color: "#ff6688",
+          size: 15,
+        },
+        {
+          text: "Except one.",
+          delay: 5000,
+          color: "#ff2244",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      duration: 7000,
+    },
+  ],
+
+  act2_level8: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "TEMPORAL NEXUS", delay: 0, color: "#9944ff", size: 20 },
+        {
+          text: "The crossroads of every stolen timeline.",
+          delay: 1500,
+          color: "#bb88ff",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 3500,
+    },
+    {
+      bg: "boss_lair",
+      art: "party",
+      lines: [
+        {
+          text: "You see echoes of yourselves. Past attempts. Past failures.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "Nova stops. One of the echoes is her — running. Always running.",
+          delay: 2500,
+          color: "#ff4488",
+          size: 15,
+        },
+        {
+          text: "She watches it vanish. Then turns forward.",
+          delay: 5000,
+          color: "#ff4488",
+          size: 15,
+        },
+        {
+          text: '"Not this time."',
+          delay: 7000,
+          color: "#ff4488",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 9000,
+    },
+  ],
+
+  act2_level9: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE PARADOX CORE", delay: 0, color: "#ff0066", size: 22 },
+        {
+          text: "His throne room. The heart of stolen time.",
+          delay: 1500,
+          color: "#ff4488",
+          size: 16,
+        },
+      ],
+      shake: 3,
+      particles: "embers",
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        {
+          text: '"You brought friends this time. How sentimental."',
+          delay: 0,
+          color: "#ff4466",
+          size: 16,
+        },
+        {
+          text: '"Do they know you\'ve already lost? I\'ve seen every outcome."',
+          delay: 2500,
+          color: "#ff6688",
+          size: 15,
+        },
+        {
+          text: '"There is no timeline where you win."',
+          delay: 5000,
+          color: "#ff2244",
+          size: 18,
+        },
+      ],
+      particles: "embers",
+      shake: 4,
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      art: "party",
+      lines: [
+        {
+          text: "Kael raises his shield. \"Then we'll make a new one.\"",
+          delay: 0,
+          color: "#44aaff",
+          size: 16,
+        },
+        {
+          text: "Everyone draws their weapons.",
+          delay: 2500,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "Together.",
+          delay: 4000,
+          color: "#ffffff",
+          size: 20,
+        },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
   // ACT II VICTORY — Beat Form 2, bonds tested, the Lord transforms
   // ═══════════════════════════════════════════════════════════════════
   act2_victory: [
@@ -2721,6 +3014,316 @@ export const CUTSCENE_SCRIPTS = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════
+  // ACT III BRIEFINGS — Levels 3-8 (sacrifice, last stand, final push)
+  // ═══════════════════════════════════════════════════════════════════
+  act3_level4: [
+    {
+      bg: "station",
+      lines: [
+        { text: "CONTAINMENT — LAST STAND", delay: 0, color: "#ff4444", size: 20 },
+        {
+          text: "The walls are bleeding temporal energy.",
+          delay: 1500,
+          color: "#cc6666",
+          size: 16,
+        },
+      ],
+      shake: 3,
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        {
+          text: '"The Lord is collapsing dimensions into this sector. Reality is thinning."',
+          delay: 0,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: '"Kael volunteered to hold the rear. He knows what that means."',
+          delay: 3000,
+          color: "#44aaff",
+          size: 15,
+        },
+        {
+          text: '"Make his sacrifice count, {AGENT}."',
+          delay: 5500,
+          color: "#00ccff",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 8000,
+    },
+  ],
+
+  act3_level5: [
+    {
+      bg: "station",
+      lines: [
+        { text: "SERVER FARM — SCORCHED EARTH", delay: 0, color: "#ff6600", size: 20 },
+        {
+          text: "He's deleting everything. Every timeline. Every memory.",
+          delay: 1500,
+          color: "#cc8844",
+          size: 16,
+        },
+      ],
+      shake: 2,
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        {
+          text: "Rook is wiring charges to the mainframe.",
+          delay: 0,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: '"If I can overload his data cores, he loses his precognition."',
+          delay: 2000,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: '"He won\'t see us coming. For the first time ever."',
+          delay: 4500,
+          color: "#44ff88",
+          size: 16,
+        },
+        {
+          text: '"Cover me. This is going to be loud."',
+          delay: 6500,
+          color: "#44ff88",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 8500,
+    },
+  ],
+
+  act3_level6: [
+    {
+      bg: "station",
+      lines: [
+        { text: "REACTOR — CRITICAL", delay: 0, color: "#ff2200", size: 22 },
+        {
+          text: "The heart of the station is failing.",
+          delay: 1500,
+          color: "#ff6644",
+          size: 16,
+        },
+      ],
+      shake: 5,
+      particles: "embers",
+      duration: 3500,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "Lyra's hands are shaking over the console.",
+          delay: 0,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"The reactor can be weaponized. One shot. Enough to crack his armor."',
+          delay: 2500,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"But someone has to stay behind to fire it."',
+          delay: 5000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "She looks at you. You both know who it has to be.",
+          delay: 7000,
+          color: "#aabbcc",
+          size: 16,
+        },
+      ],
+      particles: "embers",
+      duration: 9500,
+    },
+  ],
+
+  act3_level7: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE LABORATORY — ORIGINS", delay: 0, color: "#9944ff", size: 20 },
+        {
+          text: "Before he was the Lord, he was just a man who lost everything.",
+          delay: 1500,
+          color: "#bb88ff",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      lines: [
+        {
+          text: "In his personal logs, you find the truth.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "He didn't steal time to rule. He stole it to bring someone back.",
+          delay: 2500,
+          color: "#ff88aa",
+          size: 15,
+        },
+        {
+          text: "And when he couldn't... he decided nobody deserved time at all.",
+          delay: 5000,
+          color: "#ff4466",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      duration: 7500,
+    },
+  ],
+
+  act3_level8: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "TEMPORAL NEXUS — THE BLIND SPOT", delay: 0, color: "#ff44ff", size: 20 },
+        {
+          text: "Lyra found his weakness. This is the moment he can't predict.",
+          delay: 1500,
+          color: "#dd88ff",
+          size: 16,
+        },
+      ],
+      particles: "glow",
+      shake: 2,
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "party",
+      lines: [
+        {
+          text: "Nova takes point. No hesitation. No running.",
+          delay: 0,
+          color: "#ff4488",
+          size: 15,
+        },
+        {
+          text: "Rook's last turret locks and loads.",
+          delay: 2000,
+          color: "#44ff88",
+          size: 15,
+        },
+        {
+          text: "Lyra whispers coordinates into your ear.",
+          delay: 4000,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"Now. Before he sees us."',
+          delay: 6000,
+          color: "#ffffff",
+          size: 18,
+        },
+      ],
+      particles: "sparks",
+      duration: 8000,
+    },
+  ],
+
+  act3_level9: [
+    {
+      bg: "boss_lair",
+      lines: [
+        { text: "THE PARADOX CORE — ENDGAME", delay: 0, color: "#ff0044", size: 24 },
+        {
+          text: "Everything ends here.",
+          delay: 1500,
+          color: "#ff4466",
+          size: 18,
+        },
+      ],
+      shake: 6,
+      flash: "#ff0044",
+      particles: "embers",
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_final",
+      lines: [
+        {
+          text: '"You cannot kill time, Agent. I AM time."',
+          delay: 0,
+          color: "#ff2244",
+          size: 16,
+        },
+        {
+          text: '"Every second you\'ve ever lived belongs to me."',
+          delay: 2500,
+          color: "#ff4466",
+          size: 15,
+        },
+        {
+          text: '"And I will take them all back."',
+          delay: 5000,
+          color: "#ff0044",
+          size: 18,
+        },
+      ],
+      shake: 8,
+      particles: "embers",
+      duration: 7500,
+    },
+    {
+      bg: "boss_lair",
+      art: "hero_armed",
+      lines: [
+        {
+          text: "You raise your weapon. Behind you, your team raises theirs.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "You don't need to see the future.",
+          delay: 2500,
+          color: "#ffffff",
+          size: 16,
+        },
+        {
+          text: "You just need to fight for the present.",
+          delay: 4500,
+          color: "#00ffcc",
+          size: 18,
+        },
+      ],
+      particles: "glow",
+      duration: 7000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
   // TRUE VICTORY — Sacrifice, redemption, the hero gets the girl
   // ═══════════════════════════════════════════════════════════════════
   true_victory: [
@@ -2989,6 +3592,243 @@ export const CUTSCENE_SCRIPTS = {
         { text: "— FIN —", delay: 2000, color: "#ffffff", size: 22 },
       ],
       duration: 5000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // NEW GAME PLUS — Timeline loop cutscenes
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** Generic NG+ intro (fallback if cycle-specific script missing) */
+  ng_plus_intro: [
+    {
+      bg: "dark",
+      art: "rift",
+      flash: "#4400ff",
+      shake: 8,
+      lines: [
+        { text: "The rift tears open again.", delay: 0, color: "#cc88ff", size: 20 },
+        { text: "Time is not done with you.", delay: 2200, color: "#aaddff", size: 16 },
+      ],
+      particles: "embers",
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: Temporal signature detected. It's... recursive.", delay: 0, color: "#00ffdd", size: 16 },
+        { text: "You've done this before. The echoes remember.", delay: 2000, color: "#88ccff", size: 15 },
+        { text: "But the enemies are stronger now. They've learned.", delay: 4000, color: "#ff8866", size: 15 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "hero_armed",
+      lines: [
+        { text: "You grip your weapon. Muscle memory from a life you've already lived.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "Again. You'll do it again.", delay: 2500, color: "#00ffcc", size: 18 },
+      ],
+      particles: "sparks",
+      duration: 5000,
+    },
+  ],
+
+  /** NG+ Cycle 1 — "The Echo" */
+  ng_plus_cycle_1: [
+    {
+      bg: "dark",
+      art: "rift",
+      flash: "#4400ff",
+      shake: 8,
+      lines: [
+        { text: "The timeline fractures.", delay: 0, color: "#cc88ff", size: 22 },
+        { text: "You thought it was over.", delay: 2000, color: "#ff8866", size: 18 },
+      ],
+      particles: "embers",
+      duration: 4500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: Paradox residue detected in your neural pattern.", delay: 0, color: "#00ffdd", size: 15 },
+        { text: "The Paradox Lord's death created a temporal echo.", delay: 2000, color: "#88ccff", size: 15 },
+        { text: "Everything resets. Everything EXCEPT you.", delay: 4000, color: "#ffcc00", size: 16 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "hero_armed",
+      lines: [
+        { text: "You remember everything. The fights. The faces. The cost.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "This time, you're stronger. But so are they.", delay: 2500, color: "#ff4444", size: 16 },
+        { text: "TIMELINE LOOP 1: THE ECHO", delay: 5000, color: "#cc88ff", size: 22 },
+      ],
+      particles: "sparks",
+      duration: 7500,
+    },
+  ],
+
+  /** NG+ Cycle 2 — "The Recursion" */
+  ng_plus_cycle_2: [
+    {
+      bg: "dark",
+      flash: "#ff0044",
+      shake: 10,
+      lines: [
+        { text: "Not again.", delay: 0, color: "#ff4466", size: 24 },
+        { text: "The rift. The loop. The beginning.", delay: 2000, color: "#ff8888", size: 16 },
+      ],
+      particles: "embers",
+      duration: 4500,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        { text: "LYRA: The data's clear. This isn't a glitch.", delay: 0, color: "#ffaa44", size: 15 },
+        { text: "Someone — or something — is forcing the loop.", delay: 2000, color: "#ffcc88", size: 15 },
+        { text: "Each iteration, reality degrades. The enemies evolve.", delay: 4000, color: "#ff6644", size: 15 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "hero_armed",
+      lines: [
+        { text: "Your hands shake. Déjà vu is too gentle a word for this.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "But somewhere in this recursion lies an answer.", delay: 2500, color: "#00ffcc", size: 16 },
+        { text: "TIMELINE LOOP 2: THE RECURSION", delay: 5000, color: "#ff4466", size: 22 },
+      ],
+      particles: "sparks",
+      duration: 7500,
+    },
+  ],
+
+  /** NG+ Cycle 3 — "The Convergence" */
+  ng_plus_cycle_3: [
+    {
+      bg: "dark",
+      flash: "#ffffff",
+      shake: 14,
+      lines: [
+        { text: "The loop tightens.", delay: 0, color: "#ffffff", size: 28 },
+        { text: "This is the last time.", delay: 2000, color: "#ff4444", size: 20 },
+      ],
+      particles: "embers",
+      duration: 4500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: All timelines are converging on THIS iteration.", delay: 0, color: "#00ffdd", size: 15 },
+        { text: "If you fail now, the loop becomes permanent.", delay: 2000, color: "#ff4444", size: 16 },
+        { text: "No more chances. No more echoes.", delay: 4000, color: "#ff8866", size: 15 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        { text: "LYRA: I've calculated it three hundred times.", delay: 0, color: "#ffaa44", size: 15 },
+        { text: "The odds are terrible.", delay: 1800, color: "#ffcc88", size: 15 },
+        { text: "But you've never cared about odds.", delay: 3500, color: "#ffaa44", size: 16 },
+      ],
+      particles: "glow",
+      duration: 5500,
+    },
+    {
+      bg: "station",
+      art: "hero_armed",
+      lines: [
+        { text: "Every scar. Every memory. Every life you've saved and lost.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "They all lead here.", delay: 2500, color: "#ffffff", size: 18 },
+        { text: "FINAL TIMELINE: THE CONVERGENCE", delay: 5000, color: "#ffcc00", size: 22 },
+      ],
+      particles: "sparks",
+      duration: 7500,
+    },
+  ],
+
+  /** True Ending — plays after completing NG+ cycle 3 */
+  ng_plus_true_ending: [
+    {
+      bg: "dark",
+      flash: "#ffffff",
+      shake: 12,
+      lines: [
+        { text: "The Paradox Lord falls for the last time.", delay: 0, color: "#ffffff", size: 22 },
+        { text: "But this time... no rift.", delay: 2500, color: "#aaddff", size: 18 },
+        { text: "No echo. No loop.", delay: 4500, color: "#00ffcc", size: 18 },
+      ],
+      particles: "glow",
+      duration: 7000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "ARIA: Temporal signature... zero. Clean.", delay: 0, color: "#00ffdd", size: 16 },
+        { text: "No paradox residue. No recursive patterns.", delay: 2000, color: "#88ccff", size: 15 },
+        { text: "You broke the loop. You actually broke it.", delay: 4000, color: "#00ffcc", size: 18 },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "Lyra runs to you. No words this time.", delay: 0, color: "#ffcc88", size: 16 },
+        { text: "Just arms around you, tight, refusing to let go.", delay: 2000, color: "#ffaa44", size: 16 },
+        { text: '"You remember all of them? All the loops?"', delay: 4500, color: "#ffaa44", size: 15 },
+        { text: '"Every single one."', delay: 6500, color: "#00ffcc", size: 16 },
+        { text: '"...Then you remember every time I said I love you."', delay: 8500, color: "#ffaa44", size: 16 },
+      ],
+      particles: "glow",
+      duration: 11000,
+    },
+    {
+      bg: "station",
+      art: "party",
+      lines: [
+        { text: "The team gathers. Not to fight. Not to plan.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "Just to be together. In a timeline that finally holds.", delay: 2000, color: "#aaddff", size: 16 },
+        { text: "Voss raises a glass. \"To the agent who lived four lifetimes.\"", delay: 4500, color: "#00ccff", size: 15 },
+        { text: "Miri rolls her eyes. \"To the idiot I had to patch up four times.\"", delay: 6500, color: "#aaffcc", size: 15 },
+        { text: "Kai grins. \"To the legend.\"", delay: 8500, color: "#ffcc88", size: 16 },
+      ],
+      particles: "glow",
+      duration: 11000,
+    },
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "Four timelines. Three acts each. One agent.", delay: 0, color: "#aaddff", size: 16 },
+        { text: "You've seen every version of this story.", delay: 2500, color: "#00ccff", size: 16 },
+        { text: "And in every one, you chose to fight.", delay: 5000, color: "#00ffcc", size: 18 },
+        { text: "That's not a loop. That's who you are.", delay: 7500, color: "#ffffff", size: 20 },
+      ],
+      particles: "stars",
+      duration: 10500,
+    },
+    {
+      bg: "dark",
+      lines: [
+        { text: "THE LOOP IS BROKEN", delay: 0, color: "#ffcc00", size: 28 },
+        { text: "TRUE ENDING", delay: 2000, color: "#00ffcc", size: 24 },
+        { text: "Thank you for playing.", delay: 4500, color: "#ffffff", size: 18 },
+      ],
+      duration: 7000,
     },
   ],
 

@@ -129,13 +129,21 @@ export class Game {
     this.arenaTimer = 60;
     this.arenaRound = 1;
     this.campaignLevel = 0;
+    this.ngPlusCycle = 0; // 0 = first playthrough, 1-3 = NG+ cycles
+    this.ngPlusPrompt = false; // true when showing NG+ choice on victory
+    this.ngPlusPromptSel = 0; // 0 = enter rift (NG+), 1 = rest (end)
     this.isTouchDevice = "ontouchstart" in window;
     this.menuSelection = 0;
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
+    this._meltdownUpgradeChoices = null; // Array of 3 upgrade objects or null
+    this._meltdownUpgradeSel = 0;       // Currently highlighted choice (0-2)
     this._builderOnboardingDismissed = false;
     this.transitioning = false;
     this.transitionAlpha = 0;
+    this._transitionCallback = null;
+    this._transitionDir = 0;    // 1 = fading out, -1 = fading in
+    this._transitionSpeed = 2.5; // full fade in 0.4s
     this.screenShake = 0;
     this.killedEnemies = 0;
     this.totalEnemies = 0;
@@ -209,6 +217,7 @@ export class Game {
       onMouseUp: (e) => {
         if (e.button === 0) this.player.isFiring = false;
       },
+      onWheel: (deltaY) => this._inputWheel(deltaY),
       onLockChange: (locked, wasLocked) =>
         this._inputLockChange(locked, wasLocked),
       getState: () => this.state,
@@ -489,6 +498,16 @@ export class Game {
       this._handleGameOverClick(e);
       return;
     }
+    if (this.state === GameState.VICTORY && e.button === 0) {
+      this._handleVictoryClick(e);
+      return;
+    }
+    if (this.state === GameState.LEVEL_COMPLETE && e.button === 0) {
+      if (this.transitioning) return;
+      this.audio.menuConfirm();
+      this.fadeTransition(() => this.nextCampaignLevel());
+      return;
+    }
     if (this.state === GameState.BUILDER) {
       if (!this._builderOnboardingDismissed) {
         this._builderOnboardingDismissed = true;
@@ -509,6 +528,16 @@ export class Game {
         this.lockPointer();
       }
     }
+  }
+
+  /** Mouse-wheel weapon cycling: scroll down = next, scroll up = previous. */
+  _inputWheel(deltaY) {
+    if (this.state !== GameState.PLAYING) return;
+    const count = this.player.weapons.length;
+    if (count <= 1) return;
+    const dir = deltaY > 0 ? 1 : -1;
+    this.player.currentWeapon =
+      (this.player.currentWeapon + dir + count) % count;
   }
 
   /** Reacts to pointer lock acquire/release. */
@@ -798,16 +827,58 @@ export class Game {
         }
       }
 
-      // Weapon switching
+      // Meltdown upgrade selection overlay — intercept keys before weapon switching
+      if (this._meltdownUpgradeChoices) {
+        const choices = this._meltdownUpgradeChoices;
+        if (code === "Digit1" && choices.length > 0) {
+          this.meltdown.selectUpgrade(0);
+          this._meltdownUpgradeChoices = null;
+          this.audio.menuConfirm();
+          return;
+        }
+        if (code === "Digit2" && choices.length > 1) {
+          this.meltdown.selectUpgrade(1);
+          this._meltdownUpgradeChoices = null;
+          this.audio.menuConfirm();
+          return;
+        }
+        if (code === "Digit3" && choices.length > 2) {
+          this.meltdown.selectUpgrade(2);
+          this._meltdownUpgradeChoices = null;
+          this.audio.menuConfirm();
+          return;
+        }
+        // Arrow keys + Enter navigation
+        if (code === "ArrowLeft" || code === "ArrowUp") {
+          this._meltdownUpgradeSel = Math.max(0, this._meltdownUpgradeSel - 1);
+          this.audio.menuNav();
+          return;
+        }
+        if (code === "ArrowRight" || code === "ArrowDown") {
+          this._meltdownUpgradeSel = Math.min(choices.length - 1, this._meltdownUpgradeSel + 1);
+          this.audio.menuNav();
+          return;
+        }
+        if (code === "Enter" || code === "Space") {
+          this.meltdown.selectUpgrade(this._meltdownUpgradeSel);
+          this._meltdownUpgradeChoices = null;
+          this.audio.menuConfirm();
+          return;
+        }
+        return; // Block all other input while upgrade overlay is shown
+      }
+
+      // Weapon switching (slots 1-8)
       const prevWeapon = this.player.currentWeapon;
-      if (code === this.keybinds.weapon1 && this.player.weapons.length >= 1)
-        this.player.currentWeapon = 0;
-      if (code === this.keybinds.weapon2 && this.player.weapons.length >= 2)
-        this.player.currentWeapon = 1;
-      if (code === this.keybinds.weapon3 && this.player.weapons.length >= 3)
-        this.player.currentWeapon = 2;
-      if (code === this.keybinds.weapon4 && this.player.weapons.length >= 4)
-        this.player.currentWeapon = 3;
+      const weaponSlots = [
+        this.keybinds.weapon1, this.keybinds.weapon2,
+        this.keybinds.weapon3, this.keybinds.weapon4,
+        this.keybinds.weapon5, this.keybinds.weapon6,
+        this.keybinds.weapon7, this.keybinds.weapon8,
+      ];
+      const slotIdx = weaponSlots.indexOf(code);
+      if (slotIdx !== -1 && this.player.weapons.length > slotIdx)
+        this.player.currentWeapon = slotIdx;
       if (this.player.currentWeapon !== prevWeapon) {
         this.triggerAriaOnce("weaponSwitch", "weaponSwitch");
         if (this.mode === "tutorial") this.tutorialWeaponSwapped = true;
@@ -1115,18 +1186,53 @@ export class Game {
       this.state === GameState.GAME_OVER ||
       this.state === GameState.VICTORY
     ) {
+      // NG+ prompt handling on victory screen
+      if (this.state === GameState.VICTORY && this.ngPlusPrompt) {
+        if (code === "ArrowLeft" || code === "ArrowUp") {
+          this.ngPlusPromptSel = 0;
+          this.audio.menuNav();
+        } else if (code === "ArrowRight" || code === "ArrowDown") {
+          this.ngPlusPromptSel = 1;
+          this.audio.menuNav();
+        } else if (code === "Enter" || code === "Space") {
+          if (this.transitioning) return;
+          this.audio.menuConfirm();
+          if (this.ngPlusPromptSel === 0) {
+            this.fadeTransition(() => this.startNgPlus());
+          } else {
+            this.fadeTransition(() => {
+              this.ngPlusPrompt = false;
+              this.clearCampaignSave();
+              this.state = GameState.TITLE;
+              this.audio.stopMusic();
+              this.audio.startTrack("menu");
+              this.audio.startAmbient("menu");
+            });
+          }
+        }
+        if (code === "KeyS") {
+          this._shareCurrentResult();
+        }
+        return;
+      }
       if (code === "Enter" || code === "Space") {
+        if (this.transitioning) return;
         this.audio.menuConfirm();
-        this.state = GameState.TITLE;
-        this.audio.stopMusic();
-        this.audio.startTrack("menu");
-        this.audio.startAmbient("menu");
+        this.fadeTransition(() => {
+          this.state = GameState.TITLE;
+          this.audio.stopMusic();
+          this.audio.startTrack("menu");
+          this.audio.startAmbient("menu");
+        });
       }
       if (code === "KeyR" && this.state === GameState.GAME_OVER) {
+        if (this.transitioning) return;
         this.audio.menuConfirm();
-        if (this.mode === "arena") this.startArena();
-        else if (this.mode === "meltdown") this.startMeltdown();
-        else if (this.mode === "campaign") this.startCampaign();
+        this.fadeTransition(() => {
+          if (this.mode === "arena") this.startArena();
+          else if (this.mode === "meltdown") this.startMeltdown();
+          else if (this.mode === "campaign") this.startCampaign();
+        });
       }
       if (code === "KeyS") {
         this._shareCurrentResult();
@@ -1136,8 +1242,9 @@ export class Game {
 
     if (this.state === GameState.LEVEL_COMPLETE) {
       if (code === "Enter" || code === "Space") {
+        if (this.transitioning) return;
         this.audio.menuConfirm();
-        this.nextCampaignLevel();
+        this.fadeTransition(() => this.nextCampaignLevel());
       }
       return;
     }
@@ -1898,6 +2005,7 @@ export class Game {
         version: SAVE_VERSION,
         level: this.campaignLevel,
         act: this.campaignAct || 1,
+        ngPlusCycle: this.ngPlusCycle || 0,
         playerX: this.player.x,
         playerY: this.player.y,
         playerAngle: this.player.angle,
@@ -1923,6 +2031,7 @@ export class Game {
       this.mode = "campaign";
       this.campaignLevel = data.level;
       this.campaignAct = data.act || 1;
+      this.ngPlusCycle = data.ngPlusCycle || 0;
       this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
       this.player.reset();
       this.loadCampaignLevel(this.campaignLevel);
@@ -1975,6 +2084,34 @@ export class Game {
     } catch (_) {}
   }
 
+  /** Enter New Game Plus — keep weapons & score, reset to Act 1, bump cycle */
+  startNgPlus() {
+    this.ngPlusCycle++;
+    this.ngPlusPrompt = false;
+    this.campaignAct = 1;
+    this.campaignLevel = 0;
+    this.campaignMissedWeapons = [];
+    // Keep weapons, score, and upgrades — heal to full
+    this.player.health = this.player.maxHealth;
+    this.player.shield = this.player.maxShield || 0;
+    this.player.ammo = Math.min(this.player.ammo + 100, 999);
+    this.player.alive = true;
+    // Play NG+ intro cutscene, then load level
+    const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
+    const hasCycleCutscene = this.cutsceneEngine.hasScript(cutsceneKey);
+    const afterCutscene = () => {
+      this.loadCampaignLevel(0);
+      this.saveCampaign();
+      this.lockPointer();
+    };
+    this.audio.stopMusic();
+    if (hasCycleCutscene) {
+      this.startCutscene(cutsceneKey, afterCutscene);
+    } else {
+      this.startCutscene("ng_plus_intro", afterCutscene);
+    }
+  }
+
   hasSave() {
     return this.getSaveInfo().length > 0;
   }
@@ -1990,7 +2127,12 @@ export class Game {
       const campaign = localStorage.getItem("cc_campaign_save");
       if (campaign) {
         const d = JSON.parse(campaign);
-        info.push({ mode: "campaign", level: d.level + 1, score: d.score });
+        info.push({
+          mode: "campaign",
+          level: d.level + 1,
+          score: d.score,
+          ngPlusCycle: d.ngPlusCycle || 0,
+        });
       }
     } catch (_) {}
     return info;
@@ -2092,6 +2234,8 @@ export class Game {
     // Generate the meltdown corridor
     const mMap = this.meltdown.start();
     this.map = mMap;
+    this._meltdownUpgradeChoices = null;
+    this._meltdownUpgradeSel = 0;
 
     // Place player at start
     this.player.x = mMap.playerStart.x;
@@ -2250,6 +2394,8 @@ export class Game {
     this.mode = "campaign";
     this.campaignLevel = 0;
     this.campaignAct = 1;
+    this.ngPlusCycle = 0;
+    this.ngPlusPrompt = false;
     this.achievementStats.totalGamesPlayed++;
     this.campaignMissedWeapons = []; // weapon IDs skipped in previous levels
     this.player.reset();
@@ -4304,6 +4450,48 @@ export class Game {
     this.cutsceneEngine.end();
   }
 
+  // ── Fade Transition System ──────────────────────────────────────────
+  /**
+   * Start a fade-to-black transition.  The screen fades out over ~0.4s,
+   * then `callback` is invoked (state changes / level loads go here),
+   * then the screen fades back in over ~0.4s.
+   */
+  fadeTransition(callback) {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.transitionAlpha = 0;
+    this._transitionDir = 1;          // fading out
+    this._transitionCallback = callback;
+  }
+
+  /** Tick the transition each frame (called before state-specific update). */
+  _tickTransition(dt) {
+    if (!this.transitioning) return;
+    this.transitionAlpha += this._transitionDir * this._transitionSpeed * dt;
+
+    if (this._transitionDir === 1 && this.transitionAlpha >= 1) {
+      // Peak black — fire callback
+      this.transitionAlpha = 1;
+      if (this._transitionCallback) {
+        this._transitionCallback();
+        this._transitionCallback = null;
+      }
+      this._transitionDir = -1; // fade back in
+    } else if (this._transitionDir === -1 && this.transitionAlpha <= 0) {
+      // Fade-in complete
+      this.transitionAlpha = 0;
+      this.transitioning = false;
+      this._transitionDir = 0;
+    }
+  }
+
+  /** Draw the transition overlay on top of everything. */
+  _renderTransitionOverlay(ctx, w, h) {
+    if (!this.transitioning || this.transitionAlpha <= 0) return;
+    ctx.fillStyle = `rgba(0,0,0,${this.transitionAlpha})`;
+    ctx.fillRect(0, 0, w, h);
+  }
+
   updateCutscene() {
     this.cutsceneEngine.update();
     // If cutscene ended during update (skip/complete), state was already
@@ -4342,6 +4530,8 @@ export class Game {
     this._chronoBombs = [];
 
     const diff = this.getDifficultyMultipliers();
+    // NG+ compounding multiplier: +30% per cycle
+    const ngScale = 1 + (this.ngPlusCycle || 0) * 0.3;
 
     // Spawn entities from level data
     for (const e of level.entities) {
@@ -4357,12 +4547,12 @@ export class Game {
         const actScale = enemyType.startsWith("boss")
           ? 1
           : 1 + (this.campaignAct - 1) * 0.4;
-        enemy.health = Math.floor(enemy.health * diff.healthMul * actScale);
+        enemy.health = Math.floor(enemy.health * diff.healthMul * actScale * ngScale);
         enemy.maxHealth = enemy.health;
         enemy.def = {
           ...enemy.def,
-          damage: Math.floor(enemy.def.damage * diff.damageMul * actScale),
-          speed: enemy.def.speed * diff.speedMul,
+          damage: Math.floor(enemy.def.damage * diff.damageMul * actScale * ngScale),
+          speed: enemy.def.speed * diff.speedMul * (1 + (this.ngPlusCycle || 0) * 0.1),
         };
         this.entities.push(enemy);
       } else {
@@ -4583,8 +4773,26 @@ export class Game {
         7: "nexus_briefing",
         8: "paradox_core_briefing",
       },
-      2: { 1: "act2_level2", 2: "act2_level3" },
-      3: { 1: "act3_level2", 2: "act3_boss" },
+      2: {
+        1: "act2_level2",
+        2: "act2_level3",
+        3: "act2_level4",
+        4: "act2_level5",
+        5: "act2_level6",
+        6: "voss_confrontation",
+        7: "act2_level8",
+        8: "act2_level9",
+      },
+      3: {
+        1: "act3_level2",
+        2: "act3_boss",
+        3: "act3_level4",
+        4: "act3_level5",
+        5: "act3_level6",
+        6: "origin_panels",
+        7: "act3_level8",
+        8: "act3_level9",
+      },
     };
     const briefingKey = actBriefings[this.campaignAct]?.[this.campaignLevel];
     if (briefingKey && this.cutsceneEngine.hasScript(briefingKey)) {
@@ -4680,6 +4888,9 @@ export class Game {
     this.achievementStats.totalShotsFired++;
     if (this.mode === "tutorial") this.tutorialFired = true;
 
+    // Muzzle flash particles — small bright burst at gun barrel
+    this._spawnMuzzleFlash(wep);
+
     // Sound
     if (wep.id === 0) this.audio.shootPistol();
     else if (wep.id === 1) this.audio.shootShotgun();
@@ -4769,6 +4980,10 @@ export class Game {
       };
       this.screenShake = Math.max(this.screenShake, 4 + tier * 2);
       this.audio.roundComplete(); // big pop for streak
+      // Glitch + flash for high streaks (4+ kills)
+      if (tier >= 3) {
+        this.glitchEffect = Math.max(this.glitchEffect, 0.15 + tier * 0.05);
+      }
       // ARIA streak callouts
       if (this.killStreak === 3) this.queueAriaMessage("killStreak3");
       else if (this.killStreak === 5) this.queueAriaMessage("killStreak5");
@@ -4904,6 +5119,9 @@ export class Game {
 
     // Hit marker
     this.hitMarker = 0.15;
+
+    // Hit-impact particles at enemy position
+    this._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit);
 
     // Floating damage number
     this.damageNumbers.push({
@@ -5045,16 +5263,39 @@ export class Game {
             });
           });
         } else {
-          // Act 3 — True victory. The timeline is truly restored.
+          // Act 3 — Victory. Timeline restored (or looped).
           this.achievementStats.campaignComplete = true;
           this.checkAchievements();
           this.audio.stopMusic();
-          this.startCutscene("true_victory", () => {
-            this.state = GameState.VICTORY;
-            this.audio.roundComplete();
-            this.clearCampaignSave();
-            this.unlockPointer();
-          });
+
+          // Track best NG+ cycle
+          try {
+            const best = parseInt(localStorage.getItem("cc_ng_plus_best") || "0", 10);
+            if (this.ngPlusCycle > best) {
+              localStorage.setItem("cc_ng_plus_best", String(this.ngPlusCycle));
+            }
+          } catch (_) {}
+
+          if (this.ngPlusCycle >= 3) {
+            // Cycle 3 complete — play the TRUE ending, then final victory
+            this.startCutscene("true_victory", () => {
+              this.startCutscene("ng_plus_true_ending", () => {
+                this.state = GameState.VICTORY;
+                this.audio.roundComplete();
+                this.clearCampaignSave();
+                this.unlockPointer();
+              });
+            });
+          } else {
+            // Cycles 0-2: play true_victory, then offer NG+ choice
+            this.startCutscene("true_victory", () => {
+              this.state = GameState.VICTORY;
+              this.ngPlusPrompt = true;
+              this.ngPlusPromptSel = 0;
+              this.audio.roundComplete();
+              this.unlockPointer();
+            });
+          }
         }
       }
     }
@@ -5186,6 +5427,9 @@ export class Game {
       this.frameCount = 0;
       this.fpsTime = timestamp;
     }
+
+    // Fade transition tick (runs in any state)
+    this._tickTransition(this.deltaTime);
 
     if (this.state === GameState.CUTSCENE) {
       this.updateCutscene();
@@ -5410,8 +5654,24 @@ export class Game {
       const mResult = this.meltdown.update(dt, this.player.x, this.player.y);
 
       // Apply auto-forward movement (+Y direction) with collision
+      // Braking: holding back key slows to 50% but costs stamina
+      const kb = this.keybinds;
+      const brakingHeld = this.keys[kb.moveBack] || this.keys["ArrowDown"];
+      let effectiveMoveY = mResult.moveY;
+      if (brakingHeld && effectiveMoveY > 0) {
+        const brakeCost = 15 * dt; // stamina per second when braking
+        if (this.player.stamina > 0) {
+          this.player.stamina = Math.max(0, this.player.stamina - brakeCost);
+          effectiveMoveY *= 0.5;
+          this.player._meltdownBraking = true;
+        } else {
+          this.player._meltdownBraking = false;
+        }
+      } else {
+        this.player._meltdownBraking = false;
+      }
       const margin = 0.2;
-      const newY = this.player.y + mResult.moveY;
+      const newY = this.player.y + effectiveMoveY;
       if (
         this.isPassable(Math.floor(this.player.x), Math.floor(newY + margin))
       ) {
@@ -5427,6 +5687,13 @@ export class Game {
         if (ev.type === "heatWarning") this.audio.meltdownSpeedUp();
         else if (ev.type === "milestone") this.audio.meltdownCollect();
         else if (ev.type === "abilityEnd") this.audio.meltdownHit();
+
+        // Meltdown upgrade screen — pause run and show choices
+        if (ev.type === "upgradeScreen") {
+          this._meltdownUpgradeChoices = ev.choices;
+          this._meltdownUpgradeSel = 0;
+          this.audio.meltdownCollect();
+        }
 
         if (ev.type === "extend") {
           const { enemySpawns, pickupSpawns } = this.meltdown.extend(25);
@@ -5540,6 +5807,7 @@ export class Game {
       const dy = this.player.y - this.exitEntity.y;
       if (dx * dx + dy * dy < 1.0) {
         this.state = GameState.LEVEL_COMPLETE;
+        this._levelCompleteTime = performance.now();
         this.audio.stopMusic();
         this.audio.roundComplete();
         this.unlockPointer();
@@ -5896,6 +6164,86 @@ export class Game {
   // TODO: Improve Enemy AI
   // ─── VFX / Particles ──────────────────────────────────────────────────────
 
+  /** Spawn hit-impact particles at the point of bullet impact on an enemy. */
+  _spawnHitImpact(x, y, enemyColor, isCrit) {
+    if (!this.player.particles) this.player.particles = [];
+    // Parse enemy color to RGB
+    let r = 200, g = 60, b = 60; // default blood-red
+    if (enemyColor) {
+      r = parseInt(enemyColor.slice(1, 3), 16) || r;
+      g = parseInt(enemyColor.slice(3, 5), 16) || g;
+      b = parseInt(enemyColor.slice(5, 7), 16) || b;
+    }
+    // Mix with blood red for organic feel
+    r = Math.min(255, Math.floor(r * 0.5 + 200 * 0.5));
+    g = Math.min(255, Math.floor(g * 0.3 + 30 * 0.7));
+    b = Math.min(255, Math.floor(b * 0.3 + 30 * 0.7));
+
+    const count = isCrit ? 10 : 6;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3;
+      this.player.particles.push({
+        x,
+        y,
+        z: -0.15 - Math.random() * 0.3,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.6) * 3,
+        r: r + Math.floor((Math.random() - 0.5) * 40),
+        g: Math.max(0, g + Math.floor((Math.random() - 0.5) * 20)),
+        b: Math.max(0, b + Math.floor((Math.random() - 0.5) * 20)),
+        life: 0.2 + Math.random() * 0.25,
+        size: isCrit ? 0.04 + Math.random() * 0.05 : 0.03 + Math.random() * 0.03,
+      });
+    }
+  }
+
+  /** Spawn muzzle flash particles at the gun barrel position. */
+  _spawnMuzzleFlash(wep) {
+    if (!this.player.particles) this.player.particles = [];
+    const p = this.player;
+    const barrelDist = 0.6;
+    const bx = p.x + Math.cos(p.angle) * barrelDist;
+    const by = p.y + Math.sin(p.angle) * barrelDist;
+
+    // Weapon-specific color palette
+    let r1, g1, b1;
+    if (wep.id === 2 || wep.id === 7) {
+      // Plasma / EMP — cyan-blue
+      r1 = 80; g1 = 220; b1 = 255;
+    } else if (wep.id === 3) {
+      // Cannon — orange-red
+      r1 = 255; g1 = 160; b1 = 40;
+    } else if (wep.id === 6) {
+      // Ricochet — green
+      r1 = 100; g1 = 255; b1 = 120;
+    } else {
+      // Default — orange-yellow muzzle flash
+      r1 = 255; g1 = 200; b1 = 60;
+    }
+
+    const count = wep.id === 1 || wep.id === 4 ? 8 : 5; // shotgun/scatter = more
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * 0.8;
+      const flashAngle = p.angle + spread;
+      const speed = 3 + Math.random() * 4;
+      this.player.particles.push({
+        x: bx,
+        y: by,
+        z: -0.15 - Math.random() * 0.1,
+        vx: Math.cos(flashAngle) * speed,
+        vy: Math.sin(flashAngle) * speed,
+        vz: (Math.random() - 0.5) * 2,
+        r: r1 + Math.floor(Math.random() * 30),
+        g: g1,
+        b: b1,
+        life: 0.06 + Math.random() * 0.08,
+        size: 0.03 + Math.random() * 0.03,
+      });
+    }
+  }
+
   spawnDeathParticles(x, y, c1, c2) {
     if (!this.player.particles) this.player.particles = [];
     const count = 12;
@@ -6242,6 +6590,134 @@ export class Game {
             this._hudDisabledUntil =
               this.time + (e.def.disableDuration || 3000);
             this.queueAriaMessage("hudDisrupted");
+          }
+        }
+
+        // ── BOSS SPECIAL ABILITIES ──
+        const isBossEntity =
+          e.enemyType === "boss" ||
+          e.enemyType === "boss_form2" ||
+          e.enemyType === "boss_form3";
+        if (isBossEntity && e.state === "chase") {
+          const bossForm = e.def.form || 1;
+          e._bossChargeCD = e._bossChargeCD || 0;
+          e._bossStompCD = e._bossStompCD || 0;
+          e._bossMissileCD = e._bossMissileCD || 0;
+          e._bossTeleportCD = e._bossTeleportCD || 0;
+          e._bossChargeCD -= dt * 1000;
+          e._bossStompCD -= dt * 1000;
+          e._bossMissileCD -= dt * 1000;
+          e._bossTeleportCD -= dt * 1000;
+
+          const angleToPlayer = Math.atan2(
+            this.player.y - e.y,
+            this.player.x - e.x,
+          );
+
+          // Form 1+: Charge attack — dash toward player at 3x speed
+          if (bossForm >= 1 && e._bossChargeCD <= 0 && dist > 4 && dist < 20) {
+            e._bossChargeCD = 6000; // 6s cooldown
+            e._bossCharging = true;
+            e._bossChargeTimer = 0;
+            e._bossChargeDuration = 1.0; // 1 second of charge
+            e._bossChargeAngle = angleToPlayer;
+          }
+          if (e._bossCharging) {
+            e._bossChargeTimer += dt;
+            const chargeSpeed = e.speed * 3.5 * dt;
+            const cx = e.x + Math.cos(e._bossChargeAngle) * chargeSpeed;
+            const cy = e.y + Math.sin(e._bossChargeAngle) * chargeSpeed;
+            if (this.isPassable(Math.floor(cx), Math.floor(cy))) {
+              e.x = cx;
+              e.y = cy;
+            }
+            // Hit player during charge
+            const cdx = this.player.x - e.x;
+            const cdy = this.player.y - e.y;
+            if (cdx * cdx + cdy * cdy < 1.5 * 1.5) {
+              this.damagePlayer(e.def.damage * 1.5, e);
+              this.screenShake = Math.max(this.screenShake, 8);
+              e._bossCharging = false;
+            }
+            if (e._bossChargeTimer >= e._bossChargeDuration) {
+              e._bossCharging = false;
+              this.screenShake = Math.max(this.screenShake, 3);
+            }
+          }
+
+          // Form 2+: Ground stomp — AoE damage when close
+          if (bossForm >= 2 && e._bossStompCD <= 0 && dist < 5) {
+            e._bossStompCD = 5000; // 5s cooldown
+            // AoE damage in radius 4
+            const stompRadius = 4;
+            if (dist < stompRadius) {
+              const stompDmg = e.def.damage * 0.8;
+              this.damagePlayer(stompDmg, e);
+              this.screenShake = Math.max(this.screenShake, 12);
+            }
+            // Visual: push a damage number at boss position
+            this.damageNumbers.push({
+              x: e.x,
+              y: e.y,
+              value: "STOMP!",
+              crit: true,
+              life: 1.2,
+            });
+          }
+
+          // Form 2+: Missile spread (3 projectiles in a fan)
+          if (
+            bossForm >= 2 &&
+            e._bossMissileCD <= 0 &&
+            dist > 3 &&
+            dist < e.def.attackRange * 1.2
+          ) {
+            e._bossMissileCD = 4000; // 4s cooldown
+            const spreadAngle = 0.3; // ~17 degrees
+            for (let m = -1; m <= 1; m++) {
+              const mAngle = angleToPlayer + m * spreadAngle;
+              const proj = new Projectile(
+                e.x + Math.cos(mAngle) * 0.5,
+                e.y + Math.sin(mAngle) * 0.5,
+                Math.cos(mAngle),
+                Math.sin(mAngle),
+                e.def.damage * 0.6,
+                7,
+                "enemy",
+              );
+              proj.color = bossForm === 3 ? "#ff2244" : "#e04800";
+              this.projectiles.push(proj);
+              this.entities.push(proj);
+            }
+            this.audio.enemyShoot(
+              this.audio.calculatePan(
+                e.x,
+                e.y,
+                this.player.x,
+                this.player.y,
+                this.player.angle,
+              ),
+            );
+          }
+
+          // Form 3: Teleport behind player
+          if (bossForm >= 3 && e._bossTeleportCD <= 0 && dist > 8) {
+            e._bossTeleportCD = 8000; // 8s cooldown
+            const behindAngle = this.player.angle + Math.PI;
+            const tx = this.player.x + Math.cos(behindAngle) * 3;
+            const ty = this.player.y + Math.sin(behindAngle) * 3;
+            if (this.isPassable(Math.floor(tx), Math.floor(ty))) {
+              e.x = tx;
+              e.y = ty;
+              this.screenShake = Math.max(this.screenShake, 5);
+              this.damageNumbers.push({
+                x: e.x,
+                y: e.y,
+                value: "WARP!",
+                crit: true,
+                life: 1.0,
+              });
+            }
           }
         }
       }
@@ -6702,6 +7178,9 @@ export class Game {
       this.drawGlitch(ctx, w, h);
     }
 
+    // Chromatic aberration — intensifies with glitch/hurt
+    this._drawChromaticAberration(ctx, w, h);
+
     // Death fade
     if (!this.player.alive) {
       ctx.fillStyle = "rgba(80,0,0,0.5)";
@@ -6837,6 +7316,33 @@ export class Game {
     }
   }
 
+  /**
+   * Chromatic aberration — subtle RGB channel split that intensifies
+   * during damage and glitch effects. Uses canvas self-draw with color
+   * tint overlays at slight offsets for a retro CRT feel.
+   */
+  _drawChromaticAberration(ctx, w, h) {
+    // Compute aberration intensity from hurt + glitch
+    let intensity = this.glitchEffect * 0.5;
+    if (this.player.hurtTime) {
+      const elapsed = this.time - this.player.hurtTime;
+      if (elapsed < 300) intensity += 0.3 * (1 - elapsed / 300);
+    }
+    // Always keep a subtle base aberration (retro CRT look)
+    intensity = Math.max(0.03, Math.min(1, intensity));
+    const offset = Math.ceil(intensity * 3); // 1-3px shift
+    if (offset < 1) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    // Red channel — shift left
+    ctx.globalAlpha = intensity * 0.12;
+    ctx.drawImage(this.canvas, -offset, 0);
+    // Blue channel — shift right
+    ctx.drawImage(this.canvas, offset, 0);
+    ctx.restore();
+  }
+
   renderHUD() {
     const ctx = this.hudCtx;
     const w = this.hudCanvas.width;
@@ -6884,7 +7390,7 @@ export class Game {
     const isCompactMobile = this.isTouchDevice && isCompactPhone(h);
     const barH = isCompactMobile
       ? Math.round(60 * hudFactor)
-      : Math.round(160 * hudFactor);
+      : 0;
 
     // On compact mobile, render a slim HUD and skip the full layout
     if (isCompactMobile) {
@@ -7150,292 +7656,10 @@ export class Game {
       return;
     }
 
-    // ─── Stamina + Chrono bars (responsive: side-by-side desktop, stacked mobile) ───
-    const staminaFactor = this.settings.staminaBarSize / 100;
-    const staminaPct = this.player.stamina / this.player.maxStamina;
-    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
-    const showChrono = chronoPct > 0.005 || this.player.chronoActive;
-    const isActive = this.player.isSprinting || this.player.isDashing;
-    const chronoIsActive = this.player.chronoActive;
-    const isMobile = this.isTouchDevice;
-    const gap = 10;
-
-    let staminaBarX, staminaBarY, staminaBarW, staminaBarH;
-    let chronoBarX, chronoBarY, chronoBarW, chronoBarH;
-
-    if (isMobile) {
-      // Mobile: vertically stacked, full-width-ish
-      staminaBarH = Math.round(20 * staminaFactor);
-      staminaBarW = Math.round(Math.min(380, w * 0.75) * staminaFactor);
-      staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
-      staminaBarY = h - barH - staminaBarH - 8;
-
-      chronoBarH = Math.round(16 * staminaFactor);
-      chronoBarW = staminaBarW;
-      chronoBarX = staminaBarX;
-      chronoBarY = staminaBarY - chronoBarH - gap;
-    } else {
-      // Desktop: side-by-side, larger bars
-      staminaBarH = Math.round(24 * staminaFactor);
-      const totalW = Math.round(520 * staminaFactor);
-      if (showChrono) {
-        staminaBarW = Math.round(totalW * 0.55);
-        chronoBarW = totalW - staminaBarW - gap;
-        staminaBarX = Math.floor(w / 2 - totalW / 2);
-        chronoBarX = staminaBarX + staminaBarW + gap;
-      } else {
-        staminaBarW = totalW;
-        staminaBarX = Math.floor(w / 2 - staminaBarW / 2);
-      }
-      staminaBarY = h - barH - staminaBarH - 8;
-
-      chronoBarH = staminaBarH;
-      chronoBarY = staminaBarY;
-    }
-
-    // ─── Stamina bar ───
-
-    // Glow when sprinting or dashing (no shadowBlur for performance)
-    if (isActive) {
-      const glowColor = this.player.isDashing
-        ? "rgba(0,255,255,0.15)"
-        : "rgba(255,170,0,0.12)";
-      ctx.fillStyle = glowColor;
-      ctx.beginPath();
-      ctx.roundRect(
-        staminaBarX - 6,
-        staminaBarY - 6,
-        staminaBarW + 12,
-        staminaBarH + 12,
-        8,
-      );
-      ctx.fill();
-      const innerGlow = this.player.isDashing
-        ? "rgba(0,255,255,0.25)"
-        : "rgba(255,170,0,0.2)";
-      ctx.fillStyle = innerGlow;
-      ctx.beginPath();
-      ctx.roundRect(
-        staminaBarX - 4,
-        staminaBarY - 4,
-        staminaBarW + 8,
-        staminaBarH + 8,
-        6,
-      );
-      ctx.fill();
-    }
-
-    // Background
-    ctx.fillStyle = "rgba(5,5,15,0.8)";
-    ctx.beginPath();
-    ctx.roundRect(
-      staminaBarX - 2,
-      staminaBarY - 2,
-      staminaBarW + 4,
-      staminaBarH + 4,
-      5,
-    );
-    ctx.fill();
-
-    // Bar fill
-    const staminaColor = this.player.isDashing
-      ? "#00ffff"
-      : this.player.isSprinting
-        ? "#ffaa00"
-        : staminaPct > 0.3
-          ? "#00ccff"
-          : "#ff4400";
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    ctx.beginPath();
-    ctx.roundRect(staminaBarX, staminaBarY, staminaBarW, staminaBarH, 4);
-    ctx.fill();
-
-    // Filled portion
-    if (staminaPct > 0.005) {
-      ctx.fillStyle = staminaColor;
-      ctx.beginPath();
-      ctx.roundRect(
-        staminaBarX,
-        staminaBarY,
-        staminaBarW * staminaPct,
-        staminaBarH,
-        4,
-      );
-      ctx.fill();
-
-      // Inner shine
-      const shineGrad = ctx.createLinearGradient(
-        staminaBarX,
-        staminaBarY,
-        staminaBarX,
-        staminaBarY + staminaBarH,
-      );
-      shineGrad.addColorStop(0, "rgba(255,255,255,0.25)");
-      shineGrad.addColorStop(0.5, "rgba(255,255,255,0)");
-      shineGrad.addColorStop(1, "rgba(0,0,0,0.15)");
-      ctx.fillStyle = shineGrad;
-      ctx.beginPath();
-      ctx.roundRect(
-        staminaBarX,
-        staminaBarY,
-        staminaBarW * staminaPct,
-        staminaBarH,
-        4,
-      );
-      ctx.fill();
-    }
-
-    // Border
-    ctx.strokeStyle = isActive ? staminaColor : "rgba(255,255,255,0.2)";
-    ctx.lineWidth = isActive ? 1.5 : 1;
-    ctx.beginPath();
-    ctx.roundRect(staminaBarX, staminaBarY, staminaBarW, staminaBarH, 4);
-    ctx.stroke();
-
-    // Label
-    if (staminaPct < 0.99 || isActive) {
-      const label = this.player.isDashing
-        ? "DASH"
-        : this.player.isSprinting
-          ? "SPRINT"
-          : "STAMINA";
-      ctx.fillStyle = isActive ? staminaColor : "rgba(255,255,255,0.6)";
-      ctx.font = "bold 13px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        label,
-        staminaBarX + staminaBarW * 0.25,
-        staminaBarY + staminaBarH / 2 + 5,
-      );
-      // Percentage
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "bold 13px monospace";
-      ctx.fillText(
-        `${Math.floor(staminaPct * 100)}%`,
-        staminaBarX + staminaBarW * 0.75,
-        staminaBarY + staminaBarH / 2 + 5,
-      );
-    }
-
-    // ─── Chrono Shift bar (side-by-side on desktop, stacked on mobile) ───
-    if (showChrono) {
-      // Glow when active
-      if (chronoIsActive) {
-        ctx.fillStyle = "rgba(180,0,255,0.15)";
-        ctx.beginPath();
-        ctx.roundRect(
-          chronoBarX - 4,
-          chronoBarY - 4,
-          chronoBarW + 8,
-          chronoBarH + 8,
-          6,
-        );
-        ctx.fill();
-      }
-
-      // Background
-      ctx.fillStyle = "rgba(5,5,15,0.7)";
-      ctx.beginPath();
-      ctx.roundRect(
-        chronoBarX - 1,
-        chronoBarY - 1,
-        chronoBarW + 2,
-        chronoBarH + 2,
-        4,
-      );
-      ctx.fill();
-
-      // Empty track
-      ctx.fillStyle = "rgba(255,255,255,0.04)";
-      ctx.beginPath();
-      ctx.roundRect(chronoBarX, chronoBarY, chronoBarW, chronoBarH, 3);
-      ctx.fill();
-
-      // Filled portion
-      if (chronoPct > 0.005) {
-        const chronoColor = chronoIsActive
-          ? "#cc44ff"
-          : chronoPct >= 0.15
-            ? "#9944ff"
-            : "#664488";
-        ctx.fillStyle = chronoColor;
-        ctx.beginPath();
-        ctx.roundRect(
-          chronoBarX,
-          chronoBarY,
-          chronoBarW * chronoPct,
-          chronoBarH,
-          3,
-        );
-        ctx.fill();
-
-        // Shine
-        const cShine = ctx.createLinearGradient(
-          chronoBarX,
-          chronoBarY,
-          chronoBarX,
-          chronoBarY + chronoBarH,
-        );
-        cShine.addColorStop(0, "rgba(255,255,255,0.2)");
-        cShine.addColorStop(0.5, "rgba(255,255,255,0)");
-        cShine.addColorStop(1, "rgba(0,0,0,0.1)");
-        ctx.fillStyle = cShine;
-        ctx.beginPath();
-        ctx.roundRect(
-          chronoBarX,
-          chronoBarY,
-          chronoBarW * chronoPct,
-          chronoBarH,
-          3,
-        );
-        ctx.fill();
-      }
-
-      // Border
-      ctx.strokeStyle = chronoIsActive ? "#cc44ff" : "rgba(150,100,200,0.3)";
-      ctx.lineWidth = chronoIsActive ? 1.5 : 1;
-      ctx.beginPath();
-      ctx.roundRect(chronoBarX, chronoBarY, chronoBarW, chronoBarH, 3);
-      ctx.stroke();
-
-      // Label
-      const chronoLabel = chronoIsActive ? "CHRONO SHIFT" : "CHRONO";
-      ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.6)";
-      ctx.font = "bold 11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        chronoLabel,
-        chronoBarX + chronoBarW * 0.3,
-        chronoBarY + chronoBarH / 2 + 4,
-      );
-      ctx.fillStyle = "rgba(180,140,220,0.5)";
-      ctx.font = "bold 11px monospace";
-      ctx.fillText(
-        `${Math.floor(chronoPct * 100)}%`,
-        chronoBarX + chronoBarW * 0.75,
-        chronoBarY + chronoBarH / 2 + 4,
-      );
-      // Key hint (desktop only)
-      if (!isMobile) {
-        ctx.fillStyle = "rgba(150,120,200,0.3)";
-        ctx.font = "bold 9px monospace";
-        ctx.fillText(
-          "[HOLD Q]",
-          chronoBarX + chronoBarW - 15,
-          chronoBarY + chronoBarH / 2 + 4,
-        );
-      }
-    }
-
-    // Bottom Bar
-    ctx.fillStyle = "rgba(5,5,15,0.92)";
-    ctx.fillRect(0, h - barH, w, barH);
-    ctx.strokeStyle = "rgba(0,200,255,0.3)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, h - barH);
-    ctx.lineTo(w, h - barH);
-    ctx.stroke();
+    // ═══════════════════════════════════════════════════════════════════════
+    // MINIMALIST TRANSPARENT OVERLAY HUD (desktop)
+    // No bottom bar — all info floats at screen edges
+    // ═══════════════════════════════════════════════════════════════════════
 
     const wep = this.player.getWeaponDef();
     const healthPct = this.player.health / this.player.maxHealth;
@@ -7446,369 +7670,547 @@ export class Game {
           ? this.cbColor("#ffaa00")
           : this.cbColor("#ff2200");
 
-    // TODO: Allow users to customize based off what they find useful for different modes?
-    // TODO: Can still be improved - too much empty space
-    // ─── Layout: AMMO | HEALTH | PORTRAIT | WEAPONS(2x2) | KILLS | SCORE | ROUND/LOC ───
-    const pad = 14;
-    const portraitW = Math.round(180 * hudFactor);
-    const portraitH = Math.round(160 * hudFactor);
-    const portraitX = Math.floor(w / 2 - portraitW / 2);
-    const portraitY = h - barH;
-
-    const leftZone = portraitX - pad;
-    const rightZone = w - (portraitX + portraitW + pad);
-    const ammoSecW = Math.floor(leftZone * 0.35);
-    const healthSecW = Math.floor(leftZone * 0.65);
-    const rsecW = Math.floor(rightZone / 4);
-
-    const topY = h - barH + 10;
-    const midY = h - barH + Math.floor(barH / 2);
-    const botY = h - barH + barH - 12;
-
-    // Ammo
-    const ammoX = pad;
-    ctx.fillStyle = "rgba(255,204,0,0.6)";
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("AMMO", ammoX + ammoSecW / 2, topY + 4);
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = this.scaledFont(46, "bold");
-    ctx.fillText(`${this.player.ammo}`, ammoX + ammoSecW / 2, midY + 14);
-
-    // Health
-    const healthX = ammoX + ammoSecW + pad;
-    const hbW = healthSecW - pad * 2;
-    const hbH = 30;
-
-    ctx.fillStyle = healthColor;
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("HEALTH", healthX + hbW / 2, topY + 4);
-
-    // Adaptive sizing: scale health number and positions with `hudFactor`
-    const bigHealthSize = Math.max(20, Math.round(46 * hudFactor));
-    const smallHealthSize = Math.max(11, Math.round(14 * hudFactor));
-    const hbY = midY + Math.max(12, Math.round(16 * hudFactor));
-    const bigNumY = Math.floor(
-      topY + (hbY - topY) / 2 + Math.round(4 * hudFactor),
-    );
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = this.scaledFont(bigHealthSize, "bold");
-    ctx.fillText(
-      `${Math.ceil(this.player.health)}`,
-      healthX + hbW / 2,
-      bigNumY,
-    );
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fillRect(healthX, hbY, hbW, hbH);
-    ctx.fillStyle = healthColor;
-    ctx.fillRect(healthX, hbY, hbW * healthPct, hbH);
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(healthX, hbY, hbW, hbH);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = this.scaledFont(smallHealthSize, "bold");
-    ctx.fillText(
-      `${Math.ceil(this.player.health)} / ${this.player.maxHealth}`,
-      healthX + hbW / 2,
-      hbY + Math.max(14, Math.round(12 * hudFactor)),
-    );
-
-    // Shield bar (below health bar, only when player has shield upgrade)
-    if (this.player.maxShield > 0) {
-      const sbH = 12;
-      const sbY = hbY + hbH + 4;
-      const shieldPct = this.player.shield / this.player.maxShield;
-      const shieldRegenning = this.player.shield < this.player.maxShield;
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
-      ctx.fillRect(healthX, sbY, hbW, sbH);
-      const shieldColor = shieldRegenning ? "#4488ff" : "#66aaff";
-      ctx.fillStyle = shieldColor;
-      ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
-      // Pulse effect when regenerating
-      if (shieldRegenning) {
-        const pulse = 0.1 + Math.sin(this.time * 0.006) * 0.06;
-        ctx.fillStyle = `rgba(100,160,255,${pulse})`;
-        ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
-      }
-      ctx.strokeStyle = "rgba(100,160,255,0.4)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(healthX, sbY, hbW, sbH);
-      ctx.fillStyle = "#88bbff";
-      ctx.font = "bold 10px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        `SHIELD ${Math.ceil(this.player.shield)} / ${this.player.maxShield}`,
-        healthX + hbW / 2,
-        sbY + 10,
-      );
-    }
-
-    // Portrait
-    if (this.settings.showPortrait) {
-      this.drawPortrait(ctx, portraitX, portraitY, portraitW, portraitH);
-      ctx.strokeStyle = "rgba(0,200,255,0.5)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        portraitX - 1,
-        portraitY - 1,
-        portraitW + 2,
-        portraitH + 2,
-      );
-      const accentL = 12;
-      ctx.strokeStyle = "#00ddff";
-      ctx.lineWidth = 2;
+    // ─── Helper: rounded-rect pill background ───
+    const drawPill = (x, y, pw, ph, alpha = 0.55) => {
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
       ctx.beginPath();
-      ctx.moveTo(portraitX - 1, portraitY + accentL);
-      ctx.lineTo(portraitX - 1, portraitY - 1);
-      ctx.lineTo(portraitX + accentL, portraitY - 1);
-      ctx.moveTo(portraitX + portraitW + 1 - accentL, portraitY - 1);
-      ctx.lineTo(portraitX + portraitW + 1, portraitY - 1);
-      ctx.lineTo(portraitX + portraitW + 1, portraitY + accentL);
-      ctx.stroke();
-    }
+      ctx.roundRect(x, y, pw, ph, 6);
+      ctx.fill();
+    };
 
-    // Weapons
-    if (this.settings.showWeapons) {
-      const wpnX = portraitX + portraitW + pad;
-      ctx.fillStyle = "rgba(0,200,255,0.6)";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("WEAPONS", wpnX + rsecW / 2, topY + 4);
+    // ─── TOP-LEFT: Score / Timer / Difficulty / Meltdown info ───
+    {
+      let tlY = 12;
+      const tlX = 12;
+      const pillH = 28;
+      const pillGap = 6;
 
-      const slotW = 42;
-      const slotH = 38;
-      const slotGap = 6;
-      const gridW = slotW * 2 + slotGap;
-      const gridH = slotH * 2 + slotGap;
-      const gridStartX = wpnX + rsecW / 2 - gridW / 2;
-      const gridStartY = topY + 16;
-      ctx.font = "bold 16px monospace";
-      for (let i = 0; i < this.player.weapons.length; i++) {
-        const active = i === this.player.currentWeapon;
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const sx = gridStartX + col * (slotW + slotGap);
-        const sy = gridStartY + row * (slotH + slotGap);
-        ctx.fillStyle = active
-          ? "rgba(0,200,255,0.4)"
-          : "rgba(255,255,255,0.06)";
-        ctx.fillRect(sx, sy, slotW, slotH);
-        ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.15)";
-        ctx.lineWidth = active ? 2 : 1;
-        ctx.strokeRect(sx, sy, slotW, slotH);
-        ctx.fillStyle = active ? "#ffffff" : "#666666";
-        ctx.textAlign = "center";
-        ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
+      // Score pill
+      if (this.settings.showScore) {
+        const scoreText = `SCORE  ${this.player.score}`;
+        ctx.font = "bold 14px monospace";
+        const tw = ctx.measureText(scoreText).width;
+        const pw = tw + 20;
+        drawPill(tlX, tlY, pw, pillH, 0.55);
+        ctx.fillStyle = "#00ddff";
+        ctx.textAlign = "left";
+        ctx.fillText(scoreText, tlX + 10, tlY + 19);
+        tlY += pillH + pillGap;
       }
-      // Current weapon name below grid
-      if (wep) {
-        ctx.fillStyle = wep.color;
-        ctx.font = "bold 16px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(wep.name, wpnX + rsecW / 2, gridStartY + gridH + 14);
+
+      // Arena timer
+      if (this.mode === "arena") {
+        const secs = Math.ceil(this.arenaTimer);
+        const warning = secs <= 10;
+        const cleared = this.arenaClearTimer != null;
+        const timerLabel = cleared ? "CLEARED" : `ROUND ${this.arenaRound}`;
+        const timerVal = `${secs}s`;
+        const timerColor = cleared
+          ? "#00ff66"
+          : warning
+            ? Math.floor(this.time / 250) % 2
+              ? "#ff2200"
+              : "#ffaa00"
+            : "#00ffcc";
+
+        ctx.font = "bold 14px monospace";
+        const labelW = ctx.measureText(timerLabel).width;
+        ctx.font = "bold 26px monospace";
+        const valW = ctx.measureText(timerVal).width;
+        const pw = Math.max(labelW, valW) + 24;
+        const ph = 58;
+        drawPill(tlX, tlY, pw, ph, 0.6);
+
+        ctx.fillStyle = cleared ? "rgba(0,255,100,0.7)" : "rgba(255,255,255,0.5)";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(timerLabel, tlX + 10, tlY + 16);
+
+        ctx.fillStyle = timerColor;
+        ctx.font = "bold 26px monospace";
+        ctx.fillText(timerVal, tlX + 10, tlY + 46);
+
+        // Elapsed sub-line
+        if (this.roundStartTime) {
+          const elapsedSec = Math.floor(
+            (performance.now() - this.roundStartTime) / 1000,
+          );
+          const mins = Math.floor(elapsedSec / 60);
+          const secs2 = elapsedSec % 60;
+          ctx.fillStyle = "rgba(255,255,255,0.3)";
+          ctx.font = "10px monospace";
+          ctx.fillText(
+            `${mins}:${secs2.toString().padStart(2, "0")} elapsed`,
+            tlX + pw - 78,
+            tlY + 16,
+          );
+        }
+        tlY += ph + pillGap;
       }
-    }
 
-    // Kills
-    if (this.settings.showKills) {
-      const killsX = portraitX + portraitW + rsecW + pad * 2;
-      ctx.fillStyle = "rgba(255,136,102,0.6)";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("KILLS", killsX + rsecW / 2, topY + 4);
-      ctx.fillStyle = "#ff8866";
-      ctx.font = this.scaledFont(42, "bold");
-      ctx.fillText(`${this.killedEnemies}`, killsX + rsecW / 2, midY + 12);
-      ctx.fillStyle = "rgba(255,136,102,0.6)";
-      ctx.font = "bold 18px monospace";
-      ctx.fillText(`/ ${this.totalEnemies}`, killsX + rsecW / 2, midY + 34);
-    }
-
-    // Score
-    if (this.settings.showScore) {
-      const scoreX = portraitX + portraitW + rsecW * 2 + pad * 3;
-      ctx.fillStyle = "rgba(0,221,255,0.6)";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("SCORE", scoreX + rsecW / 2, topY + 4);
-      ctx.fillStyle = "#00ddff";
-      ctx.font = this.scaledFont(40, "bold");
-      ctx.fillText(`${this.player.score}`, scoreX + rsecW / 2, midY + 14);
-    }
-
-    // Location
-    const locX = portraitX + portraitW + rsecW * 3 + pad * 4;
-    const locCx = Math.min(locX + rsecW / 2, w - 50);
-
-    if (this.mode === "arena") {
-      ctx.fillStyle = "#ffaa00";
-      ctx.font = "bold 22px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("ROUND", locCx, topY + 4);
-      ctx.font = "bold 44px monospace";
-      ctx.fillText(`${this.arenaRound}`, locCx, midY + 12);
-    } else if (this.mode === "meltdown") {
-      const mHud = this.meltdown.getHUD();
-      ctx.fillStyle = "#ffaa00";
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("REACTOR RUN", locCx, topY + 4);
-      ctx.font = "bold 28px monospace";
-      ctx.fillText(`${mHud.distance}m`, locCx, midY + 8);
-    } else if (this.mode === "campaign") {
-      const levelName = this.map.name || `Level ${this.campaignLevel + 1}`;
-      // Truncate long level names to fit - Wrap or display differently?
-      const maxLocW = w - locX - pad;
-      ctx.font = "bold 14px monospace";
-      let displayName = levelName;
-      while (
-        ctx.measureText(displayName).width > maxLocW &&
-        displayName.length > 4
-      ) {
-        displayName = displayName.slice(0, -1);
-      }
-      if (displayName !== levelName) displayName += "…";
-      ctx.fillStyle = "#aaddff";
-      ctx.textAlign = "center";
-      ctx.fillText(displayName, locCx, midY + 4);
-    }
-
-    // Difficulty indicator
-    const diffNames = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
-    const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
-    ctx.fillStyle = diffColors[this.settings.difficulty];
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(diffNames[this.settings.difficulty], locCx, botY);
-
-    // Vertical Dividers
-    ctx.strokeStyle = "rgba(0,200,255,0.2)";
-    ctx.lineWidth = 1;
-    const divTop = h - barH + 4;
-    const divBot = h - 4;
-    // Between Ammo and Health
-    const div1X = ammoX + ammoSecW + pad / 2;
-    ctx.beginPath();
-    ctx.moveTo(div1X, divTop);
-    ctx.lineTo(div1X, divBot);
-    ctx.stroke();
-    // Left of portrait
-    ctx.beginPath();
-    ctx.moveTo(portraitX - pad / 2, divTop);
-    ctx.lineTo(portraitX - pad / 2, divBot);
-    ctx.stroke();
-    // Right of portrait
-    ctx.beginPath();
-    ctx.moveTo(portraitX + portraitW + pad / 2, divTop);
-    ctx.lineTo(portraitX + portraitW + pad / 2, divBot);
-    ctx.stroke();
-    // Between right-side sections
-    for (let s = 1; s <= 3; s++) {
-      const dx = portraitX + portraitW + rsecW * s + pad * s + pad / 2;
-      ctx.beginPath();
-      ctx.moveTo(dx, divTop);
-      ctx.lineTo(dx, divBot);
-      ctx.stroke();
-    }
-
-    // Arena Timer in the Top Left Corner
-    if (this.mode === "arena") {
-      const secs = Math.ceil(this.arenaTimer);
-      const warning = secs <= 10;
-      const cleared = this.arenaClearTimer != null;
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(10, 10, 160, 90);
-      ctx.strokeStyle = warning
-        ? "rgba(255,34,0,0.6)"
-        : cleared
-          ? "rgba(0,255,100,0.5)"
-          : "rgba(0,200,255,0.3)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(10, 10, 160, 90);
-
-      ctx.fillStyle = cleared
-        ? "#00ff66"
-        : warning
-          ? Math.floor(this.time / 250) % 2
-            ? "#ff2200"
-            : "#ffaa00"
-          : "#00ffcc";
-      ctx.font = "bold 44px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(`${secs}s`, 90, 62);
-      ctx.fillStyle = cleared ? "rgba(0,255,100,0.7)" : "rgba(255,255,255,0.5)";
-      ctx.font = "bold 14px monospace";
-      ctx.fillText(cleared ? "CLEARED!" : "TIME", 90, 28);
-
-      // Elapsed time
-      if (this.roundStartTime) {
+      // Campaign elapsed timer
+      if (this.mode === "campaign" && this.roundStartTime) {
         const elapsedSec = Math.floor(
           (performance.now() - this.roundStartTime) / 1000,
         );
         const mins = Math.floor(elapsedSec / 60);
-        const secs2 = elapsedSec % 60;
-        ctx.fillStyle = "rgba(255,255,255,0.3)";
-        ctx.font = "12px monospace";
-        ctx.fillText(
-          `${mins}:${secs2.toString().padStart(2, "0")} elapsed`,
-          90,
-          82,
-        );
-      }
-
-      // Stage Cleared Notification
-      if (cleared) {
-        const countSecs = Math.ceil(this.arenaClearTimer);
-        const pulse = 0.7 + Math.sin(this.time * 0.005) * 0.3;
-        ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
-        ctx.fillRect(0, (h - barH) / 2 - 60, w, 120);
-        ctx.fillStyle = `rgba(0,255,100,${pulse})`;
-        ctx.font = "bold 48px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("STAGE CLEARED!", w / 2, (h - barH) / 2 - 8);
-        ctx.fillStyle = "rgba(200,230,255,0.8)";
-        ctx.font = "bold 22px monospace";
-        ctx.fillText(
-          `Next round in ${countSecs}s...`,
-          w / 2,
-          (h - barH) / 2 + 30,
-        );
+        const secs = elapsedSec % 60;
+        const timeStr = `${mins}:${secs.toString().padStart(2, "0")}`;
+        ctx.font = "bold 14px monospace";
+        const tw = ctx.measureText(timeStr).width;
+        drawPill(tlX, tlY, tw + 20, pillH, 0.45);
+        ctx.fillStyle = "rgba(200,220,255,0.6)";
         ctx.textAlign = "left";
+        ctx.fillText(timeStr, tlX + 10, tlY + 19);
+        tlY += pillH + pillGap;
+      }
+
+      // Campaign level name
+      if (this.mode === "campaign") {
+        const levelName = this.map.name || `Level ${this.campaignLevel + 1}`;
+        ctx.font = "bold 12px monospace";
+        const tw = ctx.measureText(levelName).width;
+        drawPill(tlX, tlY, tw + 20, pillH - 2, 0.4);
+        ctx.fillStyle = "#aaddff";
+        ctx.textAlign = "left";
+        ctx.fillText(levelName, tlX + 10, tlY + 18);
+        tlY += pillH + pillGap;
+      }
+
+      // Difficulty badge
+      const diffNames = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
+      const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
+      const diffText = diffNames[this.settings.difficulty];
+      ctx.font = "bold 11px monospace";
+      const diffTW = ctx.measureText(diffText).width;
+      drawPill(tlX, tlY, diffTW + 16, 22, 0.4);
+      ctx.fillStyle = diffColors[this.settings.difficulty];
+      ctx.textAlign = "left";
+      ctx.fillText(diffText, tlX + 8, tlY + 15);
+      tlY += 22 + pillGap;
+
+      // NG+ cycle badge (campaign only)
+      if (this.mode === "campaign" && this.ngPlusCycle > 0) {
+        const ngLabel = this.ngPlusCycle >= 3 ? "NG+3 FINAL" : `NG+${this.ngPlusCycle}`;
+        const ngColor = this.ngPlusCycle >= 3 ? "#ffcc00" : "#cc88ff";
+        ctx.font = "bold 11px monospace";
+        const ngTW = ctx.measureText(ngLabel).width;
+        drawPill(tlX, tlY, ngTW + 16, 22, 0.4);
+        ctx.fillStyle = ngColor;
+        ctx.textAlign = "left";
+        ctx.fillText(ngLabel, tlX + 8, tlY + 15);
+        tlY += 22 + pillGap;
+      }
+
+      // Meltdown info
+      if (this.mode === "meltdown") {
+        const mHud = this.meltdown.getHUD();
+        const mText = `${mHud.distance}m`;
+        const braking = this.player._meltdownBraking;
+        ctx.font = "bold 22px monospace";
+        const mw = ctx.measureText(mText).width;
+        const pillW = Math.max(mw + 24, 140);
+        drawPill(tlX, tlY, pillW, braking ? 52 : 36, 0.55);
+        ctx.fillStyle = "#ffaa00";
+        ctx.font = "bold 11px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("REACTOR RUN", tlX + 10, tlY + 13);
+        ctx.fillStyle = "#ffcc44";
+        ctx.font = "bold 22px monospace";
+        ctx.fillText(mText, tlX + 10, tlY + 32);
+        if (braking) {
+          ctx.fillStyle = "#ff6644";
+          ctx.font = "bold 11px monospace";
+          ctx.fillText("▼ BRAKING", tlX + 10, tlY + 47);
+        }
+        tlY += (braking ? 52 : 36) + pillGap;
+
+        // Heat indicator
+        const heatText = `HEAT ${mHud.heat}%`;
+        ctx.font = "bold 12px monospace";
+        const htw = ctx.measureText(heatText).width;
+        drawPill(tlX, tlY, htw + 20, 24, 0.45);
+        ctx.fillStyle = mHud.heat > 75 ? "#ff2200" : mHud.heat > 50 ? "#ffaa00" : "#ff8844";
+        ctx.textAlign = "left";
+        ctx.fillText(heatText, tlX + 10, tlY + 16);
+        tlY += 24 + pillGap;
       }
     }
 
-    // Campaign elapsed timer (top-left)
-    if (this.mode === "campaign" && this.roundStartTime) {
-      const elapsedSec = Math.floor(
-        (performance.now() - this.roundStartTime) / 1000,
+    // ─── TOP-RIGHT: Kills counter ───
+    if (this.settings.showKills) {
+      const killText = `KILLS  ${this.killedEnemies} / ${this.totalEnemies}`;
+      ctx.font = "bold 14px monospace";
+      const tw = ctx.measureText(killText).width;
+      const pw = tw + 20;
+      const kx = w - pw - 12;
+      // Push minimap Y down if kills pill is shown
+      const ky = 12;
+      drawPill(kx, ky, pw, 28, 0.55);
+      ctx.fillStyle = "#ff8866";
+      ctx.textAlign = "left";
+      ctx.fillText(killText, kx + 10, ky + 19);
+    }
+
+    // ─── BOSS HEALTH BAR (top-center, only when boss is alive) ───
+    {
+      const bossEntity = this.entities.find(
+        (e) =>
+          e.type === "enemy" &&
+          e.active &&
+          e.health > 0 &&
+          (e.enemyType === "boss" ||
+            e.enemyType === "boss_form2" ||
+            e.enemyType === "boss_form3"),
       );
-      const mins = Math.floor(elapsedSec / 60);
-      const secs = elapsedSec % 60;
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(10, 10, 90, 24);
-      ctx.fillStyle = "rgba(200,220,255,0.5)";
-      ctx.font = "12px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 55, 27);
+      if (bossEntity) {
+        const bossBarW = Math.min(400, w * 0.4);
+        const bossBarH = 14;
+        const bossBarX = Math.floor(w / 2 - bossBarW / 2);
+        const bossBarY = 14;
+        const bossPct = Math.max(0, bossEntity.health / bossEntity.maxHealth);
+        const bossForm = bossEntity.def.form || 1;
+        const bossName = bossEntity.def.name || "BOSS";
+        const bossColor =
+          bossForm === 3
+            ? "#ff0044"
+            : bossForm === 2
+              ? "#ff0066"
+              : "#ff0088";
+
+        // Background pill
+        drawPill(bossBarX - 8, bossBarY - 18, bossBarW + 16, bossBarH + 28, 0.65);
+
+        // Name
+        ctx.fillStyle = bossColor;
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(bossName, w / 2, bossBarY - 4);
+
+        // Bar track
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.beginPath();
+        ctx.roundRect(bossBarX, bossBarY, bossBarW, bossBarH, 3);
+        ctx.fill();
+
+        // Bar fill
+        ctx.fillStyle = bossColor;
+        ctx.beginPath();
+        ctx.roundRect(bossBarX, bossBarY, bossBarW * bossPct, bossBarH, 3);
+        ctx.fill();
+
+        // Shine
+        const bShine = ctx.createLinearGradient(
+          bossBarX,
+          bossBarY,
+          bossBarX,
+          bossBarY + bossBarH,
+        );
+        bShine.addColorStop(0, "rgba(255,255,255,0.2)");
+        bShine.addColorStop(0.5, "rgba(255,255,255,0)");
+        bShine.addColorStop(1, "rgba(0,0,0,0.1)");
+        ctx.fillStyle = bShine;
+        ctx.beginPath();
+        ctx.roundRect(bossBarX, bossBarY, bossBarW * bossPct, bossBarH, 3);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = bossColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(bossBarX, bossBarY, bossBarW, bossBarH, 3);
+        ctx.stroke();
+
+        // HP text
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${Math.max(9, bossBarH - 3)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `${Math.ceil(bossEntity.health)} / ${bossEntity.maxHealth}`,
+          w / 2,
+          bossBarY + bossBarH - 2,
+        );
+      }
     }
 
-    ctx.textAlign = "left";
+    // ─── BOTTOM-CENTER: Health bar + Shield bar + Weapon strip ───
+    {
+      const stripSlotW = Math.round(32 * hudFactor);
+      const stripSlotH = Math.round(30 * hudFactor);
+      const stripGap = 4;
+      const weaponCount = this.player.weapons.length;
+      const stripTotalW =
+        weaponCount * stripSlotW + (weaponCount - 1) * stripGap;
+      const stripX = Math.floor(w / 2 - stripTotalW / 2);
+      const stripY = h - stripSlotH - 14;
 
-    // Minimap - Top Right Corner (capped on mobile so it doesn't dominate)
-    let mmSize = this.settings.minimapSize;
-    if (this.isTouchDevice && w < 700) {
-      mmSize = Math.min(mmSize, Math.round(w * 0.28));
+      // Health bar (thin, above weapon strip)
+      const hBarW = Math.max(stripTotalW, 260);
+      const hBarH = Math.round(8 * hudFactor);
+      const hBarX = Math.floor(w / 2 - hBarW / 2);
+      const hBarY = stripY - hBarH - 8;
+
+      // Shield bar (thin, above health bar)
+      const sBarH = Math.round(5 * hudFactor);
+      const sBarY = hBarY - sBarH - 3;
+
+      // Stamina + Chrono bars (thin 6px, above shield/health)
+      const staminaPct = this.player.stamina / this.player.maxStamina;
+      const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
+      const showChrono = chronoPct > 0.005 || this.player.chronoActive;
+      const isActive = this.player.isSprinting || this.player.isDashing;
+      const chronoIsActive = this.player.chronoActive;
+      const thinH = Math.round(6 * hudFactor);
+      const thinGap = 3;
+      const resourceBarW = hBarW;
+      const resourceBarX = hBarX;
+      const resourceBaseY =
+        this.player.maxShield > 0 ? sBarY - thinH - 6 : hBarY - thinH - 6;
+
+      // ── Stamina bar (thin) ──
+      {
+        const sby = showChrono ? resourceBaseY - thinH - thinGap : resourceBaseY;
+        const staminaColor = this.player.isDashing
+          ? "#00ffff"
+          : this.player.isSprinting
+            ? "#ffaa00"
+            : staminaPct > 0.3
+              ? "#00ccff"
+              : "#ff4400";
+        // background
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.roundRect(resourceBarX, sby, resourceBarW, thinH, 3);
+        ctx.fill();
+        // fill
+        if (staminaPct > 0.005) {
+          ctx.fillStyle = staminaColor;
+          ctx.beginPath();
+          ctx.roundRect(
+            resourceBarX,
+            sby,
+            resourceBarW * staminaPct,
+            thinH,
+            3,
+          );
+          ctx.fill();
+        }
+        // border when active
+        if (isActive) {
+          ctx.strokeStyle = staminaColor;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(resourceBarX, sby, resourceBarW, thinH, 3);
+          ctx.stroke();
+        }
+        // label (only when below full or active)
+        if (staminaPct < 0.99 || isActive) {
+          const label = this.player.isDashing
+            ? "DASH"
+            : this.player.isSprinting
+              ? "SPRINT"
+              : "STAM";
+          ctx.fillStyle = isActive
+            ? staminaColor
+            : "rgba(255,255,255,0.45)";
+          ctx.font = "bold 9px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText(label, resourceBarX + 4, sby + thinH - 1);
+          ctx.textAlign = "right";
+          ctx.fillStyle = "rgba(255,255,255,0.4)";
+          ctx.fillText(
+            `${Math.floor(staminaPct * 100)}%`,
+            resourceBarX + resourceBarW - 4,
+            sby + thinH - 1,
+          );
+        }
+      }
+
+      // ── Chrono bar (thin) ──
+      if (showChrono) {
+        const cby = resourceBaseY;
+        const chronoColor = chronoIsActive
+          ? "#cc44ff"
+          : chronoPct >= 0.15
+            ? "#9944ff"
+            : "#664488";
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.beginPath();
+        ctx.roundRect(resourceBarX, cby, resourceBarW, thinH, 3);
+        ctx.fill();
+        if (chronoPct > 0.005) {
+          ctx.fillStyle = chronoColor;
+          ctx.beginPath();
+          ctx.roundRect(
+            resourceBarX,
+            cby,
+            resourceBarW * chronoPct,
+            thinH,
+            3,
+          );
+          ctx.fill();
+        }
+        if (chronoIsActive) {
+          ctx.strokeStyle = "#cc44ff";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(resourceBarX, cby, resourceBarW, thinH, 3);
+          ctx.stroke();
+        }
+        ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.5)";
+        ctx.font = "bold 9px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("CHRONO", resourceBarX + 4, cby + thinH - 1);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "rgba(180,140,220,0.4)";
+        ctx.fillText(
+          `${Math.floor(chronoPct * 100)}%`,
+          resourceBarX + resourceBarW - 4,
+          cby + thinH - 1,
+        );
+      }
+
+      // ── Shield bar (thin, only when player has shield) ──
+      if (this.player.maxShield > 0) {
+        const shieldPct = this.player.shield / this.player.maxShield;
+        const shieldRegenning = this.player.shield < this.player.maxShield;
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.roundRect(hBarX, sBarY, hBarW, sBarH, 2);
+        ctx.fill();
+        const shieldColor = shieldRegenning ? "#4488ff" : "#66aaff";
+        ctx.fillStyle = shieldColor;
+        ctx.beginPath();
+        ctx.roundRect(hBarX, sBarY, hBarW * shieldPct, sBarH, 2);
+        ctx.fill();
+        if (shieldRegenning) {
+          const pulse = 0.08 + Math.sin(this.time * 0.006) * 0.04;
+          ctx.fillStyle = `rgba(100,160,255,${pulse})`;
+          ctx.beginPath();
+          ctx.roundRect(hBarX, sBarY, hBarW * shieldPct, sBarH, 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = "rgba(100,160,255,0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(hBarX, sBarY, hBarW, sBarH, 2);
+        ctx.stroke();
+        // label
+        ctx.fillStyle = "#88bbff";
+        ctx.font = "bold 8px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `SHIELD ${Math.ceil(this.player.shield)}`,
+          hBarX + hBarW / 2,
+          sBarY + sBarH - 0,
+        );
+      }
+
+      // ── Health bar (thin) ──
+      {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.beginPath();
+        ctx.roundRect(hBarX, hBarY, hBarW, hBarH, 3);
+        ctx.fill();
+        ctx.fillStyle = healthColor;
+        ctx.beginPath();
+        ctx.roundRect(hBarX, hBarY, hBarW * healthPct, hBarH, 3);
+        ctx.fill();
+        // shine
+        const shineGrad = ctx.createLinearGradient(
+          hBarX,
+          hBarY,
+          hBarX,
+          hBarY + hBarH,
+        );
+        shineGrad.addColorStop(0, "rgba(255,255,255,0.18)");
+        shineGrad.addColorStop(0.5, "rgba(255,255,255,0)");
+        shineGrad.addColorStop(1, "rgba(0,0,0,0.1)");
+        ctx.fillStyle = shineGrad;
+        ctx.beginPath();
+        ctx.roundRect(hBarX, hBarY, hBarW * healthPct, hBarH, 3);
+        ctx.fill();
+        // border
+        ctx.strokeStyle =
+          healthPct < 0.25
+            ? "rgba(255,34,0,0.6)"
+            : "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(hBarX, hBarY, hBarW, hBarH, 3);
+        ctx.stroke();
+        // HP text (centered on bar)
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${Math.max(9, hBarH - 1)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `${Math.ceil(this.player.health)} / ${this.player.maxHealth}`,
+          hBarX + hBarW / 2,
+          hBarY + hBarH - 1,
+        );
+      }
+
+      // ── Weapon strip (horizontal row) ──
+      if (this.settings.showWeapons) {
+        ctx.font = `bold ${Math.max(12, stripSlotH - 14)}px monospace`;
+        for (let i = 0; i < weaponCount; i++) {
+          const active = i === this.player.currentWeapon;
+          const sx = stripX + i * (stripSlotW + stripGap);
+          ctx.fillStyle = active
+            ? "rgba(0,200,255,0.35)"
+            : "rgba(0,0,0,0.4)";
+          ctx.beginPath();
+          ctx.roundRect(sx, stripY, stripSlotW, stripSlotH, 4);
+          ctx.fill();
+          ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.12)";
+          ctx.lineWidth = active ? 2 : 1;
+          ctx.beginPath();
+          ctx.roundRect(sx, stripY, stripSlotW, stripSlotH, 4);
+          ctx.stroke();
+          ctx.fillStyle = active ? "#ffffff" : "#555555";
+          ctx.textAlign = "center";
+          ctx.fillText(
+            `${i + 1}`,
+            sx + stripSlotW / 2,
+            stripY + stripSlotH / 2 + 5,
+          );
+        }
+      }
     }
-    this.drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize);
 
-    // Crosshair
+    // ─── BOTTOM-RIGHT: Ammo count + weapon name ───
+    {
+      const brX = w - 12;
+      const brY = h - 14;
+      // Ammo (large number, right-aligned)
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffcc00";
+      ctx.font = this.scaledFont(38, "bold");
+      ctx.fillText(`${this.player.ammo}`, brX, brY - 18);
+      // Weapon name (below ammo)
+      if (wep) {
+        ctx.fillStyle = wep.color;
+        ctx.font = "bold 13px monospace";
+        ctx.fillText(wep.name, brX, brY);
+      }
+    }
+
+    // ─── MINIMAP (top-right, pushed down if kills pill is shown) ───
+    {
+      let mmSize = this.settings.minimapSize;
+      if (this.isTouchDevice && w < 700) {
+        mmSize = Math.min(mmSize, Math.round(w * 0.28));
+      }
+      const mmY = this.settings.showKills ? 48 : 10;
+      this.drawMinimap(ctx, w - mmSize - 10, mmY, mmSize, mmSize);
+    }
+
+    // ─── CROSSHAIR (center of full screen, barH is 0) ───
     const chx = w / 2;
-    const chy = (h - barH) / 2;
+    const chy = h / 2;
     this.drawCrosshairAt(ctx, chx, chy);
 
-    // Hit marker
+    // ─── HIT MARKER ───
     if (this.hitMarker > 0) {
       const a = Math.min(1, this.hitMarker / 0.08);
       ctx.save();
@@ -7826,7 +8228,7 @@ export class Game {
       ctx.restore();
     }
 
-    // Floating damage numbers
+    // ─── FLOATING DAMAGE NUMBERS ───
     for (const dn of this.damageNumbers) {
       const dx = dn.x - this.player.x;
       const dy = dn.y - this.player.y;
@@ -7839,7 +8241,7 @@ export class Game {
       if (dist < 0.1) continue;
       const screenX = w / 2 + (angle / (fov / 2)) * (w / 2);
       const rise = (0.8 - dn.life) * 60;
-      const screenY = (h - barH) / 2 - rise;
+      const screenY = h / 2 - rise;
       const alpha = Math.min(1, dn.life / 0.3);
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -7866,7 +8268,7 @@ export class Game {
       ctx.restore();
     }
 
-    // Kill streak announcement
+    // ─── KILL STREAK ANNOUNCEMENT ───
     if (this.killStreakDisplay) {
       const ksd = this.killStreakDisplay;
       const alpha =
@@ -7875,7 +8277,7 @@ export class Game {
           : Math.min(1, ksd.life / 0.5);
       const scale = ksd.life > 1.8 ? 1.2 + (2.0 - ksd.life) * 3 : 1.0;
       const fontSize = Math.round(ksd.size * scale);
-      const ky = (h - barH) * 0.3;
+      const ky = h * 0.3;
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -7883,25 +8285,21 @@ export class Game {
       ctx.textBaseline = "middle";
       ctx.font = `bold ${fontSize}px monospace`;
 
-      // Background plate
       const textW = ctx.measureText(ksd.text).width;
       const plateW = textW + 60;
       const plateH = fontSize + 20;
       ctx.fillStyle = "rgba(0,0,0,0.5)";
       ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, plateH);
-      // Accent lines
       ctx.fillStyle = ksd.color;
       ctx.globalAlpha = alpha * 0.6;
       ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, 2);
       ctx.fillRect(w / 2 - plateW / 2, ky + plateH / 2 - 2, plateW, 2);
       ctx.globalAlpha = alpha;
 
-      // Glow text
       ctx.shadowColor = ksd.color;
       ctx.shadowBlur = 20;
       ctx.fillStyle = ksd.color;
       ctx.fillText(ksd.text, w / 2, ky);
-      // White outline pass
       ctx.shadowBlur = 0;
       ctx.strokeStyle = "rgba(255,255,255,0.4)";
       ctx.lineWidth = 1.5;
@@ -7909,34 +8307,140 @@ export class Game {
       ctx.restore();
     }
 
-    // Slow-mo vignette overlay with temporal blue tint
+    // ─── STAGE CLEARED (arena only) ───
+    if (this.mode === "arena" && this.arenaClearTimer != null) {
+      const countSecs = Math.ceil(this.arenaClearTimer);
+      const pulse = 0.7 + Math.sin(this.time * 0.005) * 0.3;
+      ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
+      ctx.fillRect(0, h / 2 - 60, w, 120);
+      ctx.fillStyle = `rgba(0,255,100,${pulse})`;
+      ctx.font = "bold 48px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("STAGE CLEARED!", w / 2, h / 2 - 8);
+      ctx.fillStyle = "rgba(200,230,255,0.8)";
+      ctx.font = "bold 22px monospace";
+      ctx.fillText(
+        `Next round in ${countSecs}s...`,
+        w / 2,
+        h / 2 + 30,
+      );
+      ctx.textAlign = "left";
+    }
+
+    // ─── SLOW-MO VIGNETTE ───
     if (this.slowMoTimer > 0) {
       const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
-      // Blue tint overlay
       ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
-      ctx.fillRect(0, 0, w, h - barH);
-      // Edge vignette
+      ctx.fillRect(0, 0, w, h);
       const gradient = ctx.createRadialGradient(
         w / 2,
-        (h - barH) / 2,
+        h / 2,
         w * 0.25,
         w / 2,
-        (h - barH) / 2,
+        h / 2,
         w * 0.7,
       );
       gradient.addColorStop(0, "rgba(0,0,0,0)");
       gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, w, h - barH);
+      ctx.fillRect(0, 0, w, h);
     }
-
-    // FPS / profiler overlay is drawn by main.js gameLoop after render()
 
     // Achievement toast (above minimap area)
     this.renderAchievementToast(ctx, w, h);
 
+    // Meltdown upgrade selection overlay
+    if (this._meltdownUpgradeChoices) {
+      this._renderMeltdownUpgradeOverlay(ctx, w, h);
+    }
+
     // ARIA comms overlay (bottom-left)
     this.renderAriaComms(ctx, w, h);
+  }
+
+  /** Meltdown upgrade selection overlay — 3 choices side by side */
+  _renderMeltdownUpgradeOverlay(ctx, w, h) {
+    const choices = this._meltdownUpgradeChoices;
+    if (!choices || choices.length === 0) return;
+
+    // Dim background
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = "#ffaa00";
+    ctx.font = "bold 28px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("SYSTEM UPGRADE", w / 2, h * 0.22);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.font = "14px monospace";
+    ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
+
+    // Cards
+    const cardW = Math.min(200, (w - 80) / 3);
+    const cardH = 160;
+    const gap = 16;
+    const totalW = choices.length * cardW + (choices.length - 1) * gap;
+    const startX = Math.floor(w / 2 - totalW / 2);
+    const startY = Math.floor(h / 2 - cardH / 2);
+
+    for (let i = 0; i < choices.length; i++) {
+      const c = choices[i];
+      const cx = startX + i * (cardW + gap);
+      const selected = i === this._meltdownUpgradeSel;
+
+      // Card background
+      ctx.fillStyle = selected ? "rgba(0,200,255,0.2)" : "rgba(10,10,30,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(cx, startY, cardW, cardH, 8);
+      ctx.fill();
+
+      // Border
+      ctx.strokeStyle = selected ? "#00ccff" : "rgba(255,255,255,0.2)";
+      ctx.lineWidth = selected ? 2.5 : 1;
+      ctx.beginPath();
+      ctx.roundRect(cx, startY, cardW, cardH, 8);
+      ctx.stroke();
+
+      // Key number
+      ctx.fillStyle = selected ? "#00ccff" : "rgba(255,255,255,0.4)";
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
+
+      // Icon
+      ctx.font = "32px serif";
+      ctx.textAlign = "center";
+      ctx.fillText(c.icon || "⚙", cx + cardW / 2, startY + 52);
+
+      // Name
+      ctx.fillStyle = selected ? "#ffffff" : "rgba(255,255,255,0.8)";
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(c.name, cx + cardW / 2, startY + 80);
+
+      // Description (wrap if needed)
+      ctx.fillStyle = "rgba(200,220,255,0.6)";
+      ctx.font = "12px monospace";
+      const desc = c.description || "";
+      const maxTextW = cardW - 16;
+      const words = desc.split(" ");
+      let line = "";
+      let lineY = startY + 100;
+      for (const word of words) {
+        const testLine = line ? line + " " + word : word;
+        if (ctx.measureText(testLine).width > maxTextW) {
+          ctx.fillText(line, cx + cardW / 2, lineY);
+          line = word;
+          lineY += 15;
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) ctx.fillText(line, cx + cardW / 2, lineY);
+    }
+
+    ctx.textAlign = "left";
   }
 
   /** Compact mobile HUD: slim bar with health, ammo, and key info only */
@@ -9015,16 +9519,17 @@ export class Game {
     ctx.fillText(`${fwd}/${lt}/${bk}/${rt} - Move`, lx, by + 48);
     ctx.fillText("Mouse - Look", lx, by + 66);
     ctx.fillText("Click - Shoot", lx, by + 84);
-    ctx.fillText(`${fk("weapon1")}-${fk("weapon4")}   - Weapons`, lx, by + 102);
-    ctx.fillText(`${fk("interact")}     - Interact/Open`, lx, by + 120);
+    ctx.fillText(`${fk("weapon1")}-${fk("weapon8")}   - Weapons`, lx, by + 102);
+    ctx.fillText("Scroll      - Cycle Weapons", lx, by + 120);
+    ctx.fillText(`${fk("interact")}     - Interact/Open`, lx, by + 138);
     ctx.fillStyle = "#88ddff";
-    ctx.fillText(`${fk("sprint")} - Sprint`, lx, by + 138);
-    ctx.fillText(`${fwd}×2   - Dash (double-tap)`, lx, by + 156);
+    ctx.fillText(`${fk("sprint")} - Sprint`, lx, by + 156);
+    ctx.fillText(`${fwd}×2   - Dash (double-tap)`, lx, by + 174);
     ctx.fillStyle = "#aabbcc";
-    ctx.fillText(`${fk("pause")}/P - Pause`, lx, by + 174);
+    ctx.fillText(`${fk("pause")}/P - Pause`, lx, by + 192);
     if (saveMessage) {
       ctx.fillStyle = "#aaccaa";
-      ctx.fillText(saveMessage, lx, by + 192);
+      ctx.fillText(saveMessage, lx, by + 210);
     }
     ctx.restore();
   }
@@ -9354,6 +9859,10 @@ export class Game {
       weapon2: "Weapon 2",
       weapon3: "Weapon 3",
       weapon4: "Weapon 4",
+      weapon5: "Weapon 5",
+      weapon6: "Weapon 6",
+      weapon7: "Weapon 7",
+      weapon8: "Weapon 8",
       toggleFPS: "Toggle FPS",
       chronoShift: "Chrono Shift (Slow Time)",
     };
@@ -10214,16 +10723,22 @@ export class Game {
     // Title with teal glow
     ctx.shadowColor = "#00ffcc";
     ctx.shadowBlur = compact ? 12 : 25;
-    ctx.fillStyle = "#00ffcc";
+    ctx.fillStyle = this.ngPlusCycle >= 3 ? "#ffcc00" : "#00ffcc";
     ctx.font = `bold ${titleSize}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText("TIMELINE RESTORED", w / 2, titleY);
+    const victoryTitle = this.ngPlusCycle >= 3
+      ? "THE LOOP IS BROKEN"
+      : "TIMELINE RESTORED";
+    ctx.fillText(victoryTitle, w / 2, titleY);
     ctx.shadowBlur = 0;
     // Subtitles
     ctx.fillStyle = "#ffcc00";
     ctx.font = `bold ${compact ? 12 : 18}px monospace`;
+    const victorySubtitle = this.ngPlusCycle >= 3
+      ? "Every timeline. Every loop. You broke them all."
+      : "The Paradox Lord has been destroyed — for good.";
     ctx.fillText(
-      "The Paradox Lord has been destroyed — for good.",
+      victorySubtitle,
       w / 2,
       compact ? titleY + 22 : h / 2 - 35,
     );
@@ -10244,6 +10759,17 @@ export class Game {
       ctx.stroke();
     }
 
+    // NG+ cycle indicator (if on NG+)
+    if (this.ngPlusCycle > 0) {
+      ctx.fillStyle = "#cc88ff";
+      ctx.font = `bold ${compact ? 10 : 14}px monospace`;
+      ctx.textAlign = "center";
+      const cycleLabel = this.ngPlusCycle >= 3
+        ? "FINAL TIMELINE — THE LOOP IS BROKEN"
+        : `TIMELINE LOOP ${this.ngPlusCycle}`;
+      ctx.fillText(cycleLabel, w / 2, compact ? titleY - 10 : titleY - 20);
+    }
+
     this._renderStatsCard(
       ctx,
       w,
@@ -10253,21 +10779,70 @@ export class Game {
     );
 
     const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 12 : 14}px monospace`;
-    ctx.textAlign = "center";
-    const victoryPrompt = this.isTouchDevice
-      ? "Tap to return to title"
-      : "Press ENTER to return to title";
-    ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
-    if (!this.isTouchDevice) {
-      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-      ctx.font = `${compact ? 11 : 13}px monospace`;
-      ctx.fillText(
-        "Press S to share score",
-        w / 2,
-        compact ? h * 0.94 : h / 2 + 235,
-      );
+
+    // NG+ prompt: two-option choice overlay
+    if (this.ngPlusPrompt && this.mode === "campaign") {
+      const promptY = compact ? h * 0.78 : h / 2 + 170;
+      const nextCycle = this.ngPlusCycle + 1;
+      const opts = [
+        { label: `ENTER THE RIFT (NG+${nextCycle})`, desc: "Enemies grow stronger. You keep everything.", color: "#cc88ff" },
+        { label: "REST", desc: "The timeline is safe. Return to title.", color: "#aaddff" },
+      ];
+      const optW = compact ? 140 : 220;
+      const optH = compact ? 44 : 56;
+      const gap = compact ? 12 : 20;
+      const totalW = opts.length * optW + (opts.length - 1) * gap;
+      const startX = w / 2 - totalW / 2;
+
+      for (let i = 0; i < opts.length; i++) {
+        const ox = startX + i * (optW + gap);
+        const oy = promptY;
+        const sel = this.ngPlusPromptSel === i;
+        // Card background
+        ctx.fillStyle = sel ? "rgba(100,60,180,0.35)" : "rgba(30,30,50,0.5)";
+        ctx.strokeStyle = sel ? opts[i].color : "rgba(100,100,140,0.3)";
+        ctx.lineWidth = sel ? 2 : 1;
+        ctx.beginPath();
+        ctx.roundRect(ox, oy, optW, optH, 6);
+        ctx.fill();
+        ctx.stroke();
+        // Label
+        ctx.fillStyle = sel ? opts[i].color : "rgba(170,170,190,0.8)";
+        ctx.font = `bold ${compact ? 10 : 13}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(opts[i].label, ox + optW / 2, oy + (compact ? 16 : 22));
+        // Description
+        ctx.fillStyle = sel ? "rgba(200,200,220,0.7)" : "rgba(140,140,160,0.5)";
+        ctx.font = `${compact ? 8 : 10}px monospace`;
+        ctx.fillText(opts[i].desc, ox + optW / 2, oy + (compact ? 32 : 40));
+      }
+
+      // Prompt text
+      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+      ctx.font = `${compact ? 10 : 12}px monospace`;
+      ctx.textAlign = "center";
+      const ngPromptText = this.isTouchDevice
+        ? "Tap a choice"
+        : "Arrow keys to choose, ENTER to confirm";
+      ctx.fillText(ngPromptText, w / 2, promptY + optH + (compact ? 14 : 22));
+    } else {
+      // Standard victory prompts (no NG+ available or cycle 3+ done)
+      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+      ctx.font = `${compact ? 12 : 14}px monospace`;
+      ctx.textAlign = "center";
+      const victoryPrompt = this.isTouchDevice
+        ? "Tap to return to title"
+        : "Press ENTER to return to title";
+      ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
+      if (!this.isTouchDevice) {
+        ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
+        ctx.font = `${compact ? 11 : 13}px monospace`;
+        ctx.fillText(
+          "Press S to share score",
+          w / 2,
+          compact ? h * 0.94 : h / 2 + 235,
+        );
+      }
     }
     ctx.textAlign = "left";
 
@@ -10278,83 +10853,124 @@ export class Game {
 
   renderLevelComplete(ctx, w, h) {
     const compact = this.isTouchDevice && isCompactPhone(h);
+    const t = Math.max(0, (performance.now() - (this._levelCompleteTime || 0)) / 1000);
+
     ctx.fillStyle = "rgba(0,4,18,0.94)";
     ctx.fillRect(0, 0, w, h);
+
     // Subtle cyan glow
     const pulse = 0.6 + Math.sin(this.time * 0.004) * 0.3;
-    const glow = ctx.createRadialGradient(
-      w / 2,
-      h * 0.35,
-      0,
-      w / 2,
-      h * 0.35,
-      h * 0.5,
-    );
+    const glow = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.5);
     glow.addColorStop(0, `rgba(0,255,200,${pulse * 0.06})`);
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
 
-    const titleY = compact ? h * 0.12 : h / 2 - 100;
+    // Celebration particle streaks (rising)
+    ctx.globalAlpha = Math.min(0.2, t * 0.15);
+    for (let i = 0; i < (compact ? 12 : 24); i++) {
+      const px = w * (0.05 + (i / 24) * 0.9);
+      const py = h - ((this.time * 0.05 + i * 61) % h);
+      const pLen = 6 + Math.sin(i * 3) * 4;
+      ctx.fillStyle = i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#00aaff" : "#aaffdd";
+      ctx.fillRect(px, py, 1.5, pLen);
+    }
+    ctx.globalAlpha = 1;
 
-    if (!compact) {
+    // Entrance animation helpers
+    const ease = (v) => v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v); // smoothstep
+    const titleT = ease(t / 0.4);
+    const statsT = ease((t - 0.3) / 0.4);
+    const secretsT = ease((t - 0.6) / 0.3);
+    const promptT = ease((t - 1.0) / 0.3);
+    const countUp = Math.min(1, (t - 0.3) / 0.8); // stat values ramp over 0.8s
+
+    const titleY = compact ? h * 0.12 : h / 2 - 100;
+    const titleOffset = (1 - titleT) * -30;
+
+    if (!compact && titleT > 0) {
       // Decorative top line
+      ctx.globalAlpha = titleT;
       ctx.strokeStyle = "rgba(0,255,200,0.2)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(w * 0.2, h / 2 - 130);
-      ctx.lineTo(w * 0.8, h / 2 - 130);
+      ctx.moveTo(w * 0.2, h / 2 - 130 + titleOffset);
+      ctx.lineTo(w * 0.8, h / 2 - 130 + titleOffset);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
-    // Title with glow
-    ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = compact ? 8 : 15;
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${compact ? 22 : 36}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText("LEVEL COMPLETE", w / 2, titleY);
-    ctx.shadowBlur = 0;
 
-    if (!compact) {
-      // Divider
+    // Title with glow — slides down
+    if (titleT > 0) {
+      ctx.globalAlpha = titleT;
+      ctx.shadowColor = "#00ffcc";
+      ctx.shadowBlur = compact ? 8 : 15;
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = `bold ${compact ? 22 : 36}px monospace`;
+      ctx.textAlign = "center";
+      ctx.fillText("LEVEL COMPLETE", w / 2, titleY + titleOffset);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    if (!compact && titleT > 0) {
+      ctx.globalAlpha = titleT;
       ctx.strokeStyle = "rgba(0,255,200,0.15)";
       ctx.beginPath();
-      ctx.moveTo(w * 0.25, h / 2 - 75);
-      ctx.lineTo(w * 0.75, h / 2 - 75);
+      ctx.moveTo(w * 0.25, h / 2 - 75 + titleOffset);
+      ctx.lineTo(w * 0.75, h / 2 - 75 + titleOffset);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
-    this._renderStatsCard(
-      ctx,
-      w,
-      compact ? titleY + 18 : h / 2 - 55,
-      "#00ffcc",
-      "#aaddff",
-    );
+    // Stats card — fades in with count-up
+    if (statsT > 0) {
+      ctx.globalAlpha = statsT;
+      this._renderStatsCard(
+        ctx,
+        w,
+        compact ? titleY + 18 : h / 2 - 55,
+        "#00ffcc",
+        "#aaddff",
+        countUp, // pass count-up progress
+      );
+      ctx.globalAlpha = 1;
+    }
 
-    ctx.fillStyle = "#aaddff";
-    ctx.font = `${compact ? 12 : 16}px monospace`;
-    ctx.fillText(
-      `Secrets: ${this.player.secretsFound || 0}`,
-      w / 2,
-      compact ? h * 0.75 : h / 2 + 80,
-    );
+    // Secrets — fades in
+    if (secretsT > 0) {
+      ctx.globalAlpha = secretsT;
+      ctx.fillStyle = "#aaddff";
+      ctx.font = `${compact ? 12 : 16}px monospace`;
+      ctx.textAlign = "center";
+      const secretVal = Math.round((this.player.secretsFound || 0) * Math.min(1, countUp));
+      ctx.fillText(
+        `Secrets: ${secretVal}`,
+        w / 2,
+        compact ? h * 0.75 : h / 2 + 80,
+      );
+      ctx.globalAlpha = 1;
+    }
 
-    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 12 : 14}px monospace`;
-    const lcPrompt = this.isTouchDevice
-      ? "Tap to continue"
-      : "Press ENTER to continue";
-    ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
+    // Continue prompt — fades in last
+    if (promptT > 0) {
+      const promptA = promptT * (0.4 + Math.sin(this.time * 0.004) * 0.3);
+      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+      ctx.font = `${compact ? 12 : 14}px monospace`;
+      ctx.textAlign = "center";
+      const lcPrompt = this.isTouchDevice
+        ? "Tap to continue"
+        : "Press ENTER to continue";
+      ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
+    }
     ctx.textAlign = "left";
 
-    // Scanline overlay
     this._drawScanlines(ctx, w, h);
   }
 
-  _renderStatsCard(ctx, w, startY, accentColor, textColor) {
+  _renderStatsCard(ctx, w, startY, accentColor, textColor, countUp) {
     const compact = this.isTouchDevice && isCompactPhone(this.hudCanvas.height);
+    const cu = typeof countUp === "number" ? Math.min(1, Math.max(0, countUp)) : 1;
     const accuracy =
       this.shotsFired > 0
         ? Math.round((this.shotsHit / this.shotsFired) * 100)
@@ -10365,6 +10981,11 @@ export class Game {
     const mins = Math.floor(elapsed / 60);
     const secs = elapsed % 60;
     const timeStr = `${mins}:${String(secs).padStart(2, "0")}`;
+
+    // Count-up animated values
+    const dispKills = Math.round(this.killedEnemies * cu);
+    const dispAccuracy = Math.round(accuracy * cu);
+    const dispStreak = Math.round(this.bestStreak * cu);
 
     // Card background with inner glow
     const cardW = compact ? Math.min(300, w - 40) : 380;
@@ -10406,10 +11027,10 @@ export class Game {
 
     // Stats in 2x2 grid
     const stats = [
-      { label: "KILLS", value: `${this.killedEnemies}/${this.totalEnemies}` },
+      { label: "KILLS", value: `${dispKills}/${this.totalEnemies}` },
       { label: "TIME", value: timeStr },
-      { label: "ACCURACY", value: `${accuracy}%` },
-      { label: "BEST STREAK", value: `${this.bestStreak}x` },
+      { label: "ACCURACY", value: `${dispAccuracy}%` },
+      { label: "BEST STREAK", value: `${dispStreak}x` },
     ];
 
     const colW = cardW / 2;
@@ -10625,7 +11246,60 @@ export class Game {
     this.map = this.builder.map;
   }
 
+  _handleVictoryClick(e) {
+    if (this.transitioning) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const compact = this.isTouchDevice && isCompactPhone(h);
+
+    if (this.ngPlusPrompt && this.mode === "campaign") {
+      const promptY = compact ? h * 0.78 : h / 2 + 170;
+      const optW = compact ? 140 : 220;
+      const optH = compact ? 44 : 56;
+      const gap = compact ? 12 : 20;
+      const totalW = 2 * optW + gap;
+      const startX = w / 2 - totalW / 2;
+
+      // Check if tap is within the card row
+      if (y >= promptY && y <= promptY + optH) {
+        for (let i = 0; i < 2; i++) {
+          const ox = startX + i * (optW + gap);
+          if (x >= ox && x <= ox + optW) {
+            this.audio.menuConfirm();
+            if (i === 0) {
+              this.fadeTransition(() => this.startNgPlus());
+            } else {
+              this.fadeTransition(() => {
+                this.ngPlusPrompt = false;
+                this.clearCampaignSave();
+                this.state = GameState.TITLE;
+                this.audio.stopMusic();
+                this.audio.startTrack("menu");
+                this.audio.startAmbient("menu");
+              });
+            }
+            return;
+          }
+        }
+      }
+      return; // don't fall through to title-return when prompt is active
+    }
+
+    // No NG+ prompt — tap anywhere to return to title
+    this.audio.menuConfirm();
+    this.fadeTransition(() => {
+      this.state = GameState.TITLE;
+      this.audio.stopMusic();
+      this.audio.startTrack("menu");
+      this.audio.startAmbient("menu");
+    });
+  }
+
   _handleGameOverClick(e) {
+    if (this.transitioning) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -10641,16 +11315,20 @@ export class Game {
           if (i === 0) {
             // RESTART
             this.audio.menuConfirm();
-            if (this.mode === "arena") this.startArena();
-            else if (this.mode === "meltdown") this.startMeltdown();
-            else if (this.mode === "campaign") this.startCampaign();
+            this.fadeTransition(() => {
+              if (this.mode === "arena") this.startArena();
+              else if (this.mode === "meltdown") this.startMeltdown();
+              else if (this.mode === "campaign") this.startCampaign();
+            });
           } else if (i === 1) {
             // QUIT — return to title
             this.audio.menuConfirm();
-            this.state = GameState.TITLE;
-            this.audio.stopMusic();
-            this.audio.startTrack("menu");
-            this.audio.startAmbient("menu");
+            this.fadeTransition(() => {
+              this.state = GameState.TITLE;
+              this.audio.stopMusic();
+              this.audio.startTrack("menu");
+              this.audio.startAmbient("menu");
+            });
           } else if (i === 2) {
             // SHARE
             this._shareCurrentResult();
@@ -10663,13 +11341,28 @@ export class Game {
 
   _shareCurrentResult() {
     let shareData = null;
-    if (this.mode === "meltdown") {
+    if (this.mode === "campaign" && this.state === GameState.VICTORY) {
+      shareData = {
+        mode: "campaign",
+        act: this.campaignAct || 3,
+        score: this.player.score,
+        kills: this.killedEnemies || 0,
+      };
+    } else if (this.mode === "meltdown") {
       shareData = {
         mode: "meltdown",
         distance: Math.floor(this.meltdown.distance || 0),
         score: Math.floor(this.meltdown.score || 0),
         heat: Math.floor(this.meltdown.heat || 0),
         hero: this.meltdown.hero?.id || "default",
+        kills: this.killedEnemies || 0,
+      };
+    } else if (this.mode === "campaign" && this.state === GameState.GAME_OVER) {
+      shareData = {
+        mode: "campaign",
+        act: this.campaignAct || 1,
+        level: this.campaignLevel || 0,
+        score: this.player.score,
         kills: this.killedEnemies || 0,
       };
     } else if (this.mode === "arena" || this.state === GameState.GAME_OVER) {
@@ -10700,10 +11393,12 @@ export class Game {
                 ? "Map link copied!"
                 : shareData.mode === "meltdown"
                   ? `Meltdown score copied! (${shareData.distance}m)`
-                  : "Score link copied!",
+                  : shareData.mode === "campaign"
+                    ? `Campaign victory copied! (${shareData.kills} kills)`
+                    : "Score link copied!",
             life: 2.5,
           };
-          if (shareData.mode === "arena" || shareData.mode === "meltdown") {
+          if (shareData.mode === "arena" || shareData.mode === "meltdown" || shareData.mode === "campaign") {
             trackEvent("share_score", {
               mode: shareData.mode,
               score: shareData.score,

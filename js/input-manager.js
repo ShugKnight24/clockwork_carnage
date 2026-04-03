@@ -25,6 +25,10 @@ export const DEFAULT_KEYBINDS = {
   weapon2: "Digit2",
   weapon3: "Digit3",
   weapon4: "Digit4",
+  weapon5: "Digit5",
+  weapon6: "Digit6",
+  weapon7: "Digit7",
+  weapon8: "Digit8",
   toggleFPS: "KeyF",
   chronoShift: "KeyQ",
   crouch: "ControlLeft",
@@ -42,6 +46,7 @@ export class InputManager {
    * @param {Function}     opts.onDashTrigger   - (code) => void   (double-tap)
    * @param {Function}     opts.onMouseDown     - (event) => void
    * @param {Function}     opts.onMouseUp       - (event) => void
+   * @param {Function}     opts.onWheel         - (deltaY: number) => void
    * @param {Function}     opts.onLockChange    - (isLocked: boolean) => void
    * @param {Function}     opts.getState        - () => current GameState string
    * @param {string}       opts.playingState    - GameState.PLAYING value
@@ -53,6 +58,7 @@ export class InputManager {
     onDashTrigger = () => {},
     onMouseDown = () => {},
     onMouseUp = () => {},
+    onWheel = () => {},
     onLockChange = () => {},
     getState = () => null,
     playingState = "PLAYING",
@@ -74,6 +80,7 @@ export class InputManager {
     this._onDashTrigger = onDashTrigger;
     this._onMouseDown = onMouseDown;
     this._onMouseUp = onMouseUp;
+    this._onWheel = onWheel;
     this._onLockChange = onLockChange;
     this._getState = getState;
     this._playingState = playingState;
@@ -162,6 +169,7 @@ export class InputManager {
     this.canvas.removeEventListener("contextmenu", this._bound.contextmenu);
     this.canvas.removeEventListener("mousedown", this._bound.mousedown);
     this.canvas.removeEventListener("mouseup", this._bound.mouseup);
+    this.canvas.removeEventListener("wheel", this._bound.wheel);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -180,6 +188,7 @@ export class InputManager {
     b.contextmenu = (e) => e.preventDefault();
     b.mousedown = (e) => this._onMouseDown(e);
     b.mouseup   = (e) => this._onMouseUp(e);
+    b.wheel     = (e) => { e.preventDefault(); this._onWheel(e.deltaY); };
     b.lockchange = () => {
       const locked = document.pointerLockElement === this.canvas;
       const prev = this.mouse.locked;
@@ -194,6 +203,7 @@ export class InputManager {
     this.canvas.addEventListener("contextmenu",   b.contextmenu);
     this.canvas.addEventListener("mousedown",     b.mousedown);
     this.canvas.addEventListener("mouseup",       b.mouseup);
+    this.canvas.addEventListener("wheel",         b.wheel, { passive: false });
   }
 
   _handleKeyDown(e) {

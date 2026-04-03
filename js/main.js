@@ -396,6 +396,17 @@ function gameLoop(timestamp) {
     const _tRnd0 = performance.now();
     game.render();
     renderMs = performance.now() - _tRnd0;
+
+    // Draw fade transition overlay on top of everything
+    if (game.transitioning && game.transitionAlpha > 0) {
+      const hctx = game.hudCtx;
+      const hw = hudCanvas.width;
+      const hh = hudCanvas.height;
+      game._renderTransitionOverlay(hctx, hw, hh);
+      // Also cover the game canvas for cutscene / builder screens
+      const gctx = game.renderer.ctx;
+      game._renderTransitionOverlay(gctx, gameCanvas.width, gameCanvas.height);
+    }
   }
 
   // Feed profiler
