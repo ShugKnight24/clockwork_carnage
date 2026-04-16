@@ -13,6 +13,15 @@
  * exclusively through this manager.
  */
 
+import {
+  STORAGE_KEY_KEYBINDS,
+  DOUBLE_TAP_WINDOW_MS,
+} from "../src/constants.js";
+
+/**
+ * Default keybind mappings for game actions.
+ * Maps action names to KeyboardEvent.code values.
+ */
 export const DEFAULT_KEYBINDS = {
   moveForward: "KeyW",
   moveBack: "KeyS",
@@ -34,9 +43,10 @@ export const DEFAULT_KEYBINDS = {
   crouch: "ControlLeft",
 };
 
-const STORAGE_KEY = "cc_keybinds";
-const DOUBLE_TAP_MS = 250;
-
+/**
+ * InputManager handles all keyboard and mouse input for the game.
+ * Manages keybinds, pointer lock, and double-tap dash detection.
+ */
 export class InputManager {
   /**
    * @param {object} opts
@@ -95,10 +105,13 @@ export class InputManager {
 
   // ─── Public API ────────────────────────────────────────────────────────────
 
-  /** Load saved keybinds from localStorage (call after constructing). */
+  /**
+   * Load saved keybinds from localStorage.
+   * Should be called after constructing the InputManager.
+   */
   loadKeybinds() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY_KEYBINDS);
       if (!raw) return;
       const saved = JSON.parse(raw);
       for (const action of Object.keys(this.keybinds)) {
@@ -112,10 +125,12 @@ export class InputManager {
     } catch (_) {}
   }
 
-  /** Persist current keybinds to localStorage. */
+  /**
+   * Persist current keybinds to localStorage.
+   */
   saveKeybinds() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.keybinds));
+      localStorage.setItem(STORAGE_KEY_KEYBINDS, JSON.stringify(this.keybinds));
     } catch (_) {}
   }
 
@@ -142,7 +157,11 @@ export class InputManager {
     return { swappedAction };
   }
 
-  /** Consume and zero out accumulated mouse deltas (call once per frame). */
+  /**
+   * Consume and zero out accumulated mouse deltas.
+   * Should be called once per frame.
+   * @returns {{dx: number, dy: number}} Mouse movement delta
+   */
   consumeMouseDelta() {
     const { dx, dy } = this.mouse;
     this.mouse.dx = 0;
@@ -150,17 +169,26 @@ export class InputManager {
     return { dx, dy };
   }
 
-  /** Request pointer lock on the canvas. */
+  /**
+   * Request pointer lock on the canvas.
+   * Hides cursor and captures mouse movement.
+   */
   lockPointer() {
     this.canvas.requestPointerLock();
   }
 
-  /** Release pointer lock. */
+  /**
+   * Release pointer lock.
+   * Shows cursor and stops capturing mouse movement.
+   */
   unlockPointer() {
     document.exitPointerLock();
   }
 
-  /** Remove all event listeners (cleanup). */
+  /**
+   * Remove all event listeners and clean up.
+   * Should be called when disposing of the InputManager.
+   */
   destroy() {
     document.removeEventListener("keydown", this._bound.keydown);
     document.removeEventListener("keyup", this._bound.keyup);
@@ -217,7 +245,7 @@ export class InputManager {
       ];
       if (dashKeys.includes(e.code)) {
         const now = performance.now();
-        if (this._lastTapKey === e.code && now - this._lastTapTime < DOUBLE_TAP_MS) {
+        if (this._lastTapKey === e.code && now - this._lastTapTime < DOUBLE_TAP_WINDOW_MS) {
           this._onDashTrigger(e.code);
           this._lastTapKey = null;
         } else {

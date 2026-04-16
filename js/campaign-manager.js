@@ -1,0 +1,379 @@
+/**
+ * CampaignManager — owns all campaign state and progression logic.
+ * Extracted from game.js via strangler fig pattern.
+ *
+ * Receives a `game` reference for accessing shared state
+ * (player, entities, audio, renderer, etc).
+ */
+import * as Save from "../src/core/save-system.js";
+import { CAMPAIGN_LEVELS } from "./data.js";
+import {
+  createCampaignEntities,
+  createMissedWeaponPickups,
+  applyActEnemyRoster,
+} from "../src/systems/spawner.js";
+import { isBossEnemy } from "../src/systems/combat.js";
+import { trackEvent } from "./analytics.js";
+import { GameState } from "./game.js";
+
+export class CampaignManager {
+  constructor(game) {
+    this.game = game;
+    this.level = 0;
+    this.act = 1;
+    this.missedWeapons = [];
+    this.ngPlusCycle = 0;
+    this.ngPlusPrompt = false;
+    this.ngPlusPromptSel = 0;
+    this.promptSelection = 0;
+  }
+
+  // ── persistence ──
+
+  save() {
+    const g = this.game;
+    Save.saveCampaign(
+      this.level, this.act, this.ngPlusCycle,
+      g.player, g.settings.difficulty, g.map.grid,
+      g.entities, g.killedEnemies,
+    );
+  }
+
+  load() {
+    const g = this.game;
+    const data = Save.loadCampaignData();
+    if (!data) return false;
+
+    g.mode = "campaign";
+    this.level = data.level;
+    this.act = data.act || 1;
+    this.ngPlusCycle = data.ngPlusCycle || 0;
+    g.settings.difficulty = data.difficulty ?? g.settings.difficulty;
+    g.player.reset();
+    this.loadLevel(this.level);
+    g.player.deserialize(data);
+    if (data.playerX !== undefined) {
+      g.player.x = data.playerX;
+      g.player.y = data.playerY;
+      g.player.angle = data.playerAngle;
+    }
+    if (data.mapGrid) g.map.grid = data.mapGrid;
+    if (data.entityStates && data.entityStates.length === g.entities.length) {
+      for (let i = 0; i < data.entityStates.length; i++) {
+        const saved = data.entityStates[i];
+        const ent = g.entities[i];
+        if (saved.type !== ent.type) continue;
+        ent.active = saved.active;
+        if (saved.type === "enemy" && ent.type === "enemy") {
+          ent.health = saved.health;
+          ent.x = saved.x;
+          ent.y = saved.y;
+          ent.state = saved.state;
+        }
+      }
+      g.killedEnemies = data.killedEnemies ?? 0;
+    }
+    return true;
+  }
+
+  clearSave() {
+    Save.clearCampaignSave();
+  }
+
+  // ── lifecycle ──
+
+  start() {
+    const g = this.game;
+    g.mode = "campaign";
+    this.level = 0;
+    this.act = 1;
+    this.ngPlusCycle = 0;
+    this.ngPlusPrompt = false;
+    g.achievementStats.totalGamesPlayed++;
+    this.missedWeapons = [];
+    g.player.reset();
+    g.applyLoadoutBonuses();
+
+    const playIntroAndMaybeMemory = () => {
+      const seenKey = "cc_seen_intro_memory_01";
+      const playMemory = () => {
+        if (!Save.hasSeenIntroMemory(seenKey)) {
+          Save.markIntroMemorySeen(seenKey);
+          g.startCutscene("intro_memory_01", () => {
+            this.loadLevel(0);
+          });
+        } else {
+          this.loadLevel(0);
+        }
+      };
+      if (g.cutsceneEngine.hasScript("clocking_in")) {
+        g.startCutscene("clocking_in", () => {
+          g.ariaEnabled = true;
+          g.queueAriaMessage("campaignStart");
+          g.startCutscene("intro", () => {
+            playMemory();
+          });
+        });
+      } else {
+        g.startCutscene("intro", () => {
+          playMemory();
+        });
+      }
+    };
+    playIntroAndMaybeMemory();
+  }
+
+  loadLevel(index) {
+    const g = this.game;
+    if (index >= CAMPAIGN_LEVELS.length) {
+      g.state = GameState.VICTORY;
+      g.audio.stopMusic();
+      g.audio.roundComplete();
+      this.clearSave();
+      g.unlockPointer();
+      return;
+    }
+    const level = CAMPAIGN_LEVELS[index];
+    g.map = structuredClone(level);
+    g.player.x = level.playerStart.x;
+    g.player.y = level.playerStart.y;
+    g.player.angle = level.playerStart.dir;
+    g.player.alive = true;
+    g.entities = [];
+    g.dustMotes = null;
+    g.projectiles = [];
+    g._chronoBombs = [];
+
+    const diff = g.getDifficultyMultipliers();
+    const { entities: spawned, exitEntity } = createCampaignEntities(
+      level, this.act, this.ngPlusCycle, diff,
+    );
+    g.entities.push(...spawned);
+    g.exitEntity = exitEntity || null;
+
+    if (this.missedWeapons && this.missedWeapons.length > 0) {
+      g.entities.push(
+        ...createMissedWeaponPickups(
+          this.missedWeapons, g.player.weapons,
+          level.playerStart.x, level.playerStart.y,
+        ),
+      );
+    }
+
+    g.killedEnemies = 0;
+    g.totalEnemies = g.entities.filter((e) => e.type === "enemy").length;
+    g.killStreakSystem.reset();
+    g.shotsFired = 0;
+    g.shotsHit = 0;
+    g.slowMoTimer = 0;
+    g.timeScale = 1;
+    g.ariaCombatTimer = 0;
+
+    this._applyActEnemyRoster();
+
+    const hasBoss = g.entities.some(
+      (e) => e.type === "enemy" &&
+        (e.enemyType === "boss" || e.enemyType === "boss_form2" || e.enemyType === "boss_form3"),
+    );
+    if (hasBoss) {
+      const form = this.act;
+      if (form === 2) g.queueAriaMessage("bossForm2");
+      else if (form === 3) g.queueAriaMessage("bossForm3");
+      else g.queueAriaMessage("bossEncounter");
+    }
+
+    g.state = GameState.PLAYING;
+    g.roundStartTime = performance.now();
+    g.renderer.applyActPalette(this.act);
+    if (hasBoss) {
+      g.audio.startTrack("boss");
+    } else {
+      g.audio.startTrack("campaign", 130);
+    }
+    g.audio.startAmbient("industrial");
+    this.save();
+    g.lockPointer();
+  }
+
+  nextLevel() {
+    const g = this.game;
+    if (this.missedWeapons == null) this.missedWeapons = [];
+
+    // Track missed weapon pickups
+    for (const e of g.entities) {
+      if (e.type === "weapon" && e.active && e.weaponId != null) {
+        if (!this.missedWeapons.includes(e.weaponId)) {
+          this.missedWeapons.push(e.weaponId);
+        }
+      }
+    }
+    this.missedWeapons = this.missedWeapons.filter(
+      (id) => !g.player.weapons.includes(id),
+    );
+
+    this.level++;
+    g.achievementStats.totalCampaignLevels++;
+    g.saveAchievements();
+
+    if (this.level >= CAMPAIGN_LEVELS.length) {
+      this.loadLevel(this.level); // triggers VICTORY via bounds check
+      return;
+    }
+
+    // Difficulty-based healing between levels
+    const diffHeal = { easy: 999, normal: 30, hard: 10, nightmare: 0 };
+    const healAmt = diffHeal[g.settings.difficulty] ?? 30;
+    if (healAmt >= 999) {
+      g.player.health = g.player.maxHealth;
+    } else {
+      g.player.health = Math.min(g.player.health + healAmt, g.player.maxHealth);
+    }
+    g.player.ammo = Math.min(g.player.ammo + 20, 999);
+
+    // Act-based briefing cutscenes
+    const actBriefings = {
+      1: {
+        1: "security_briefing", 2: "research_briefing",
+        3: "containment_briefing", 4: "server_briefing",
+        5: "reactor_briefing", 6: "voss_lab_briefing",
+        7: "nexus_briefing", 8: "paradox_core_briefing",
+      },
+      2: {
+        1: "act2_level2", 2: "act2_level3", 3: "act2_level4",
+        4: "act2_level5", 5: "act2_level6", 6: "voss_confrontation",
+        7: "act2_level8", 8: "act2_level9",
+      },
+      3: {
+        1: "act3_level2", 2: "act3_boss", 3: "act3_level4",
+        4: "act3_level5", 5: "act3_level6", 6: "origin_panels",
+        7: "act3_level8", 8: "act3_level9",
+      },
+    };
+    const briefingKey = actBriefings[this.act]?.[this.level];
+    if (briefingKey && g.cutsceneEngine.hasScript(briefingKey)) {
+      g.startCutscene(briefingKey, () => {
+        this.loadLevel(this.level);
+        this.save();
+      });
+    } else {
+      this.loadLevel(this.level);
+      this.save();
+    }
+  }
+
+  handleBossKill() {
+    const g = this.game;
+    g.achievementStats.bossKilled = true;
+    g.checkAchievements();
+    trackEvent("boss_kill", {
+      mode: "campaign",
+      form: this.act,
+      time_seconds: Math.floor((performance.now() - g.roundStartTime) / 1000),
+    });
+
+    if (this.act === 1) {
+      g.audio.stopMusic();
+      g.startCutscene("false_victory", () => {
+        this.act = 2;
+        this.level = 0;
+        g.player.health = g.player.maxHealth;
+        g.player.ammo = Math.min(g.player.ammo + 50, 999);
+        g.startCutscene("act2_intro", () => {
+          this.loadLevel(0);
+          this.save();
+        });
+      });
+    } else if (this.act === 2) {
+      g.audio.stopMusic();
+      g.startCutscene("act2_victory", () => {
+        this.act = 3;
+        this.level = 0;
+        g.player.health = g.player.maxHealth;
+        g.player.ammo = Math.min(g.player.ammo + 50, 999);
+        g.startCutscene("lyra_reveal", () => {
+          g.startCutscene("act3_intro", () => {
+            this.loadLevel(0);
+            this.save();
+          });
+        });
+      });
+    } else {
+      // Act 3 — game complete
+      g.achievementStats.campaignComplete = true;
+      g.checkAchievements();
+      g.audio.stopMusic();
+      Save.updateNgPlusBest(this.ngPlusCycle);
+
+      if (this.ngPlusCycle >= 3) {
+        g.startCutscene("true_victory", () => {
+          g.startCutscene("ng_plus_true_ending", () => {
+            g.state = GameState.VICTORY;
+            g.audio.roundComplete();
+            this.clearSave();
+            g.unlockPointer();
+          });
+        });
+      } else {
+        g.startCutscene("true_victory", () => {
+          g.state = GameState.VICTORY;
+          this.ngPlusPrompt = true;
+          this.ngPlusPromptSel = 0;
+          g.audio.roundComplete();
+          g.unlockPointer();
+        });
+      }
+    }
+  }
+
+  startNgPlus() {
+    const g = this.game;
+    this.ngPlusCycle++;
+    this.ngPlusPrompt = false;
+    this.act = 1;
+    this.level = 0;
+    this.missedWeapons = [];
+    g.player.health = g.player.maxHealth;
+    g.player.shield = g.player.maxShield || 0;
+    g.player.ammo = Math.min(g.player.ammo + 100, 999);
+    g.player.alive = true;
+
+    const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
+    const hasCycleCutscene = g.cutsceneEngine.hasScript(cutsceneKey);
+    const afterCutscene = () => {
+      this.loadLevel(0);
+      this.save();
+      g.lockPointer();
+    };
+    g.audio.stopMusic();
+    if (hasCycleCutscene) {
+      g.startCutscene(cutsceneKey, afterCutscene);
+    } else {
+      g.startCutscene("ng_plus_intro", afterCutscene);
+    }
+  }
+
+  // ── internal ──
+
+  _applyActEnemyRoster() {
+    applyActEnemyRoster(this.game.entities, this.act, this.game.getDifficultyMultipliers());
+  }
+
+  showPrompt() {
+    this.game.state = GameState.CAMPAIGN_PROMPT;
+    this.promptSelection = 0;
+  }
+
+  executePromptChoice(choice) {
+    const g = this.game;
+    const afterCreator = () => {
+      if (choice === 0) {
+        g.startTutorial();
+      } else {
+        this.start();
+      }
+    };
+    g.creatorCategory = 0;
+    g._creatorSaveCallback = () => afterCreator();
+    g.state = GameState.CHARACTER_CREATE;
+  }
+}

@@ -5,10 +5,20 @@
  * parameters as arguments and return updated state. No game class references.
  *
  * Usage in game.js:
- *   import { spawnPickupBurst, updateParticles, updateDustMotes } from "./particle-system.js";
+ *   import { spawnPickupBurst, spawnSmoke, spawnEnergyBurst, spawnDebris,
+ *            updateParticles, updateDustMotes } from "./particle-system.js";
  *
  *   // Spawn a burst when a pickup is collected:
  *   spawnPickupBurst(this.player.particles, x, y, "health");
+ *
+ *   // Smoke cloud after explosion:
+ *   spawnSmoke(this.player.particles, x, y);
+ *
+ *   // Energy burst for power-up activation / energy weapon:
+ *   spawnEnergyBurst(this.player.particles, x, y, { r: 0, g: 200, b: 255 });
+ *
+ *   // Debris chunks for wall impacts / enemy deaths:
+ *   spawnDebris(this.player.particles, x, y);
  *
  *   // Tick particles each frame (also ticks dust motes):
  *   this.dustMotes = updateParticles(this.player.particles, dt, this.timeScale, this.dustMotes, this.player);
@@ -53,6 +63,114 @@ export function spawnPickupBurst(particles, x, y, pickupType) {
 }
 
 /**
+ * Spawn a rising smoke cloud — slow drift up, expanding, fading.
+ * Used after explosions, muzzle flashes, enemy deaths.
+ *
+ * @param {object[]} particles  The particles array (mutated)
+ * @param {number}   x          World X
+ * @param {number}   y          World Y
+ * @param {object}   [opts]     Optional overrides { count, r, g, b, speed, life }
+ */
+export function spawnSmoke(particles, x, y, opts = {}) {
+  const count = opts.count ?? 8;
+  const baseR = opts.r ?? 120;
+  const baseG = opts.g ?? 115;
+  const baseB = opts.b ?? 110;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (opts.speed ?? 0.4) + Math.random() * 0.6;
+    particles.push({
+      x: x + (Math.random() - 0.5) * 0.3,
+      y: y + (Math.random() - 0.5) * 0.3,
+      z: -0.2 - Math.random() * 0.15,
+      vx: Math.cos(angle) * speed * 0.5,
+      vy: Math.sin(angle) * speed * 0.5,
+      vz: -(0.8 + Math.random() * 0.6),  // drifts up slowly
+      r: baseR + Math.floor(Math.random() * 40 - 20),
+      g: baseG + Math.floor(Math.random() * 40 - 20),
+      b: baseB + Math.floor(Math.random() * 40 - 20),
+      life: (opts.life ?? 0.6) + Math.random() * 0.4,
+      size: 0.06 + Math.random() * 0.05,
+      _type: "smoke",
+    });
+  }
+}
+
+/**
+ * Spawn fast energy particles — bright, quick, directional.
+ * Used for energy weapons, shield breaks, power-up activations.
+ *
+ * @param {object[]} particles  The particles array (mutated)
+ * @param {number}   x          World X
+ * @param {number}   y          World Y
+ * @param {object}   [opts]     Optional overrides { count, r, g, b, speed, life, angle }
+ */
+export function spawnEnergyBurst(particles, x, y, opts = {}) {
+  const count = opts.count ?? 12;
+  const baseR = opts.r ?? 0;
+  const baseG = opts.g ?? 200;
+  const baseB = opts.b ?? 255;
+  const dirAngle = opts.angle; // if set, concentrate burst in this direction
+
+  for (let i = 0; i < count; i++) {
+    const angle = dirAngle != null
+      ? dirAngle + (Math.random() - 0.5) * 1.2  // focused cone
+      : (i / count) * Math.PI * 2;               // radial
+    const speed = (opts.speed ?? 3) + Math.random() * 3;
+    particles.push({
+      x,
+      y,
+      z: -0.25 - Math.random() * 0.15,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      vz: -(1 + Math.random() * 2),
+      r: Math.min(255, baseR + Math.floor(Math.random() * 80)),
+      g: Math.min(255, baseG + Math.floor(Math.random() * 55)),
+      b: Math.min(255, baseB + Math.floor(Math.random() * 30)),
+      life: (opts.life ?? 0.2) + Math.random() * 0.2,
+      size: 0.03 + Math.random() * 0.03,
+      _type: "energy",
+    });
+  }
+}
+
+/**
+ * Spawn heavy debris chunks — fast initial velocity, strong gravity, bouncy.
+ * Used for wall impacts, mechanical enemy deaths, destructibles.
+ *
+ * @param {object[]} particles  The particles array (mutated)
+ * @param {number}   x          World X
+ * @param {number}   y          World Y
+ * @param {object}   [opts]     Optional overrides { count, r, g, b, speed, life }
+ */
+export function spawnDebris(particles, x, y, opts = {}) {
+  const count = opts.count ?? 6;
+  const baseR = opts.r ?? 80;
+  const baseG = opts.g ?? 75;
+  const baseB = opts.b ?? 70;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (opts.speed ?? 2) + Math.random() * 3;
+    particles.push({
+      x: x + (Math.random() - 0.5) * 0.2,
+      y: y + (Math.random() - 0.5) * 0.2,
+      z: -0.15 - Math.random() * 0.2,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      vz: -(3 + Math.random() * 4),  // flung upward hard
+      r: baseR + Math.floor(Math.random() * 50),
+      g: baseG + Math.floor(Math.random() * 40),
+      b: baseB + Math.floor(Math.random() * 30),
+      life: (opts.life ?? 0.5) + Math.random() * 0.5,
+      size: 0.03 + Math.random() * 0.04,
+      _type: "debris",
+    });
+  }
+}
+
+/**
  * Advance pickup-burst particles by one frame.
  * Applies timeScale (Chrono Shift support), gravity, floor bounce, and culls dead particles.
  * Also advances the atmospheric dust motes (delegating to updateDustMotes).
@@ -72,18 +190,36 @@ export function updateParticles(particles, dt, timeScale, dustMotes, player) {
       p.x  += p.vx * dt * ts;
       p.y  += p.vy * dt * ts;
       p.z  += p.vz * dt * ts;
-      p.vz += 15 * dt * ts;   // gravity
       p.life -= dt * ts;
+
+      // Type-specific physics
+      if (p._type === "smoke") {
+        p.vz += 2 * dt * ts;       // very weak gravity — smoke rises
+        p.vx *= 1 - 1.5 * dt;      // air drag
+        p.vy *= 1 - 1.5 * dt;
+        p.size += 0.08 * dt * ts;   // expand as it rises
+      } else if (p._type === "debris") {
+        p.vz += 25 * dt * ts;      // heavy gravity — chunks fall fast
+      } else if (p._type === "energy") {
+        p.vz += 5 * dt * ts;       // light gravity
+        p.size *= 1 - 2 * dt;      // shrink quickly
+      } else {
+        p.vz += 15 * dt * ts;      // default gravity (pickup burst)
+      }
 
       // Floor bounce
       if (p.z > 0.48) {
         p.z   = 0.48;
-        p.vz *= -0.3;
+        const bounce = p._type === "debris" ? -0.45 : -0.3;
+        p.vz *= bounce;
         p.vx *= 0.6;
         p.vy *= 0.6;
       }
 
-      if (p.life <= 0) particles.splice(i, 1);
+      if (p.life <= 0) {
+        particles[i] = particles[particles.length - 1];
+        particles.pop();
+      }
     }
   }
 

@@ -10,7 +10,10 @@
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
-import { COMPACT_PHONE_HEIGHT } from "./settings-registry.js";
+import {
+  COMPACT_PHONE_HEIGHT,
+  getVisibleCategories,
+} from "./settings-registry.js";
 import {
   pauseLayout,
   settingsLayout,
@@ -777,27 +780,39 @@ export class TouchControls {
   }
 
   handleSettingsTap(touch) {
-    const hud = this.game.hudCanvas;
+    const g = this.game;
+    const hud = g.hudCanvas;
     const scaleX = hud.width / window.innerWidth;
     const scaleY = hud.height / window.innerHeight;
     const w = hud.width;
     const h = hud.height;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
+
     const layout = settingsLayout(
       w,
       h,
-      this.game.settingsSelection,
-      this.game.isTouchDevice,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
     );
-    const { panelX, panelW, itemHeights, totalH } = layout;
-    let cursorY = layout.startY;
+    const { headerH, sideW, panelX, panelW, contentTop, catItemH, itemHeights } =
+      layout;
 
-    if (y > layout.startY + totalH) {
-      this.game.handleKeyPress("Escape");
+    // ── Sidebar tap: switch category ──
+    if (x < sideW && y > headerH) {
+      const cats = getVisibleCategories(g.isTouchDevice);
+      const ci = Math.floor((y - contentTop) / catItemH);
+      if (ci >= 0 && ci < cats.length) {
+        g.settingsCategory = cats[ci];
+        g.settingsSelection = 0;
+        g.audio.menuSelect();
+      }
       return;
     }
 
+    // ── Right panel tap: change setting value ──
+    let cursorY = contentTop;
     for (let i = 0; i < itemHeights.length; i++) {
       if (
         y >= cursorY &&
@@ -805,16 +820,21 @@ export class TouchControls {
         x >= panelX &&
         x <= panelX + panelW
       ) {
-        this.game.settingsSelection = i;
+        g.settingsSelection = i;
         // Left half = decrease, right half = increase
-        if (x < w / 2) {
-          this.game.handleKeyPress("ArrowLeft");
+        if (x < panelX + panelW / 2) {
+          g.handleKeyPress("ArrowLeft");
         } else {
-          this.game.handleKeyPress("ArrowRight");
+          g.handleKeyPress("ArrowRight");
         }
         return;
       }
       cursorY += itemHeights[i];
+    }
+
+    // Tap below all items → back
+    if (y > cursorY) {
+      g.handleKeyPress("Escape");
     }
   }
 

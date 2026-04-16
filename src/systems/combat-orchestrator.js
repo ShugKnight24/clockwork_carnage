@@ -1,0 +1,294 @@
+/**
+ * CombatOrchestrator — weapon firing, hitscan, damage application, kill flow.
+ * Extracted from game.js via strangler fig pattern.
+ *
+ * All functions take `game` reference for state access (same pattern as CampaignManager).
+ * Pure damage math lives in combat.js — this module orchestrates side effects.
+ */
+import {
+  calculateEnemyDamage,
+  applySplashDamage,
+  markEnemyDead,
+  calculatePlayerDamage,
+  isBossEnemy,
+} from "./combat.js";
+import { Projectile, Enemy, Pickup } from "../../js/entities.js";
+
+export function fireWeapon(game) {
+  const now = game.time;
+  const wep = game.player.getWeaponDef();
+  if (
+    !wep ||
+    now - game.player.lastFireTime <
+      wep.fireRate / (game.player.fireRateMultiplier || 1)
+  )
+    return;
+  if (game.player.ammo < wep.ammoPerShot && wep.id !== 0) return;
+
+  game.player.lastFireTime = now;
+  if (wep.id !== 0) game.player.ammo -= wep.ammoPerShot;
+  game.player.weaponKick = 1;
+  game.weaponAnimFrame = 1;
+  game.weaponAnimTime = now;
+  game.shotsFired++;
+  game.achievementStats.totalShotsFired++;
+  if (game.mode === "tutorial") game.tutorialFired = true;
+
+  game._spawnMuzzleFlash(wep);
+
+  // Screen-wide muzzle flash
+  game._muzzleFlashTime = now;
+  const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
+  game._muzzleFlashColor = MUZZLE_COLORS[wep.id] || "255,200,60";
+
+  // Sound
+  const WEAPON_SOUNDS = ["shootPistol", "shootShotgun", "shootPlasma", "shootCannon", "shootScattergun", "shootSniper", "shootRicochet", "shootEMP"];
+  const soundMethod = WEAPON_SOUNDS[wep.id];
+  if (soundMethod) game.audio[soundMethod]();
+
+  const damage = wep.damage * game.player.damageMultiplier;
+  const aimAngle = game.player.angle;
+
+  if (wep.type === "hitscan") {
+    const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
+    for (let p = 0; p < pellets; p++) {
+      const spread = (Math.random() - 0.5) * wep.spread * 2;
+      hitscan(game, aimAngle + spread, damage, wep.range);
+    }
+  } else {
+    const shots = game.player.multiShot || 1;
+    for (let ms = 0; ms < shots; ms++) {
+      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 : 0;
+      const shotAngle = aimAngle + spreadAngle;
+      const dirX = Math.cos(shotAngle);
+      const dirY = Math.sin(shotAngle);
+      const proj = new Projectile(
+        game.player.x + dirX * 0.5,
+        game.player.y + dirY * 0.5,
+        dirX, dirY, damage, 12, "player",
+      );
+      proj.weaponId = wep.id;
+      if (wep.id === 7) proj.emp = true;
+      proj.color = game.getCharacterColor().accent || wep.color;
+      game.projectiles.push(proj);
+      game.entities.push(proj);
+    }
+  }
+
+  game.screenShake = Math.max(
+    game.screenShake,
+    wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
+  );
+}
+
+export function hitscan(game, angle, damage, range) {
+  const dirX = Math.cos(angle);
+  const dirY = Math.sin(angle);
+  const step = 0.1;
+  let x = game.player.x;
+  let y = game.player.y;
+
+  for (let d = 0; d < range; d += step) {
+    x += dirX * step;
+    y += dirY * step;
+
+    const mx = Math.floor(x);
+    const my = Math.floor(y);
+    if (mx < 0 || my < 0 || mx >= game.map.width || my >= game.map.height) break;
+    if (game.map.grid[my][mx] > 0) {
+      game.spawnWallSparks(x, y);
+      break;
+    }
+
+    const hitCandidates = game.entityGrid.query(x, y, 1.5);
+    for (const e of hitCandidates) {
+      if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
+      const dx = x - e.x;
+      const dy = y - e.y;
+      if (dx * dx + dy * dy < e.def.radius * e.def.radius) {
+        damageEnemy(game, e, damage);
+        return;
+      }
+    }
+  }
+}
+
+export function damageEnemy(game, enemy, damage) {
+  game.shotsHit++;
+  game.achievementStats.totalShotsHit++;
+
+  const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
+    damage, enemy, game.player.critChance, game.player,
+  );
+  if (shieldSpark) game.glitchEffect = Math.max(game.glitchEffect, 0.08);
+
+  // Sub-boss ARIA callout
+  if (enemy.def.subBoss && !enemy._ariaTriggered) {
+    enemy._ariaTriggered = true;
+    game.queueAriaMessage("subBossEncounter");
+  }
+
+  enemy.health -= finalDamage;
+  enemy.hitTime = game.time;
+  enemy.state = "pain";
+  enemy.painTimer = isCrit ? 250 : 150;
+
+  const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
+  game.audio.enemyHit(pan);
+
+  game.hitMarker = 0.15;
+  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit);
+  game.damageNumbers.push({
+    x: enemy.x, y: enemy.y,
+    value: Math.round(finalDamage), crit: isCrit, life: 0.8,
+  });
+
+  // Life steal
+  if (game.player.lifeSteal && game.player.alive) {
+    const heal = finalDamage * game.player.lifeSteal;
+    game.player.health = Math.min(game.player.health + heal, game.player.maxHealth);
+  }
+
+  // Splash damage
+  if (game.player.splashDamage && finalDamage > 0) {
+    const killed = applySplashDamage(
+      game.entities, enemy, finalDamage, game.player.splashDamage, game.time,
+    );
+    for (const target of killed) {
+      game.player.score += target.def.score;
+      game.player.kills++;
+      game.killedEnemies++;
+      game.achievementStats.totalKills++;
+      const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
+      game.audio.enemyDeath(pan2);
+      game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2);
+      game.glitchEffect = 0.3;
+      onEnemyKill(game, target);
+    }
+    if (killed.length >= 2) game.triggerAriaOnce("multiKillSplash", "multiKillSplash");
+  }
+
+  // Primary kill
+  if (enemy.health <= 0) {
+    markEnemyDead(enemy, game.time);
+    game.player.score += enemy.def.score;
+    game.player.kills++;
+    game.killedEnemies++;
+    game.achievementStats.totalKills++;
+    const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
+    game.audio.enemyDeath(panDeath);
+    game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2);
+    game.glitchEffect = 0.3;
+    onEnemyKill(game, enemy);
+
+    if (isBossEnemy(enemy) && game.mode === "campaign") {
+      game.campaign.handleBossKill();
+    }
+  }
+}
+
+export function onEnemyKill(game, enemy) {
+  const fx = game.killStreakSystem.onKill();
+
+  // Campaign ammo drops
+  if (enemy && game.mode === "campaign" && Math.random() < 0.18) {
+    game.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
+  }
+
+  game.player.chronoEnergy = Math.min(
+    game.player.maxChronoEnergy,
+    game.player.chronoEnergy + fx.chronoBonus,
+  );
+
+  if (fx.screenShake) game.screenShake = Math.max(game.screenShake, fx.screenShake);
+  if (fx.playAudio) game.audio.roundComplete();
+  if (fx.glitchEffect) game.glitchEffect = Math.max(game.glitchEffect, fx.glitchEffect);
+  if (fx.ariaCategory) game.queueAriaMessage(fx.ariaCategory);
+
+  game.triggerAriaOnce("firstKill", "firstKill");
+
+  // Echo clone spawning
+  if (enemy?.def?.echoCloneOnDeath && enemy.def.cloneCount) {
+    const clones = enemy.def.cloneCount || 1;
+    for (let i = 0; i < clones; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const sx = enemy.x + Math.cos(angle) * 0.8;
+      const sy = enemy.y + Math.sin(angle) * 0.8;
+      if (game.isPassable(Math.floor(sx), Math.floor(sy))) {
+        const clone = new Enemy(sx, sy, "glitchling");
+        clone._isClone = true;
+        clone.health = Math.max(6, Math.floor(clone.health * 0.5));
+        clone.maxHealth = clone.health;
+        game.entities.push(clone);
+        game.totalEnemies++;
+      }
+    }
+  }
+
+  // Slow-mo last kill
+  if (
+    game.totalEnemies > 0 &&
+    game.killedEnemies >= game.totalEnemies &&
+    game.mode !== "tutorial"
+  ) {
+    game.slowMoTimer = 1.5;
+    game.timeScale = 0.25;
+  }
+}
+
+export function damagePlayer(game, amount, attacker) {
+  if (!game.player.alive) return;
+
+  const { actualDamage, dodged } = calculatePlayerDamage(amount, game.player);
+  if (dodged || actualDamage <= 0) return;
+
+  game.player.health -= actualDamage;
+  game.player.hurtTime = game.time;
+  if (attacker && typeof attacker.x === "number") {
+    game.player.lastDamageAngle = Math.atan2(attacker.y - game.player.y, attacker.x - game.player.x);
+  }
+  game.screenShake = Math.max(game.screenShake, 4);
+  game.audio.playerHit();
+  if (game.settings.haptics && navigator.vibrate) navigator.vibrate(50);
+  game.roundDamageTaken += actualDamage;
+
+  // ARIA low health warnings
+  const hpPct = game.player.health / game.player.maxHealth;
+  if (hpPct <= 0.1 && hpPct > 0) {
+    game.triggerAriaOnce("critical", "criticalHealth");
+  } else if (hpPct <= 0.3 && hpPct > 0.1) {
+    game.triggerAriaOnce("lowHp", "lowHealth");
+  }
+
+  // Thorns
+  if (game.player.thorns > 0 && attacker && attacker.active && attacker.state !== "dead") {
+    attacker.health -= amount * game.player.thorns;
+    if (attacker.health <= 0) {
+      markEnemyDead(attacker, game.time);
+      game.killedEnemies++;
+      game.player.score += attacker.def.score;
+      game.player.kills++;
+      const panThorns = game.audio.calculatePan(attacker.x, attacker.y, game.player.x, game.player.y, game.player.angle);
+      game.audio.enemyDeath(panThorns);
+      game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2);
+      game.glitchEffect = 0.3;
+      onEnemyKill(game, attacker);
+    }
+  }
+
+  if (game.player.health <= 0) {
+    game.player.health = 0;
+    game.player.alive = false;
+    game.deathTimer = 1.5;
+    game.achievementStats.totalDeaths++;
+    game.saveAchievements();
+    game.audio.playerDeath();
+    game.queueAriaMessage("playerDeath");
+    if (game.mode === "arena") {
+      game.queueAriaMessage("arenaDefeat");
+      if (game.arenaRound > game.achievementStats.highestArenaRound) {
+        game.queueAriaMessage("arenaNewBest");
+      }
+    }
+  }
+}

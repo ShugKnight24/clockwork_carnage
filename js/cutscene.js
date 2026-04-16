@@ -2034,385 +2034,659 @@ export class CutsceneEngine {
       }
 
       case "villain": {
+        // ── THE BEHEMOTH — Industrial diving-suit titan ──
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.02;
-        ctx.scale(breathe * 1.5, breathe * 1.5); // Bulkier scale
+        const pulse = (Math.sin(t * 3) + 1) * 0.5;
+        ctx.scale(breathe * 1.5, breathe * 1.5);
         ctx.globalAlpha = fadeIn;
 
-        // Dark aura (larger)
-        const auraGrad = ctx.createRadialGradient(0, 0, 25, 0, 0, 120);
-        auraGrad.addColorStop(0, "rgba(200,30,60,0.2)");
-        auraGrad.addColorStop(0.5, "rgba(150,0,40,0.1)");
-        auraGrad.addColorStop(1, "rgba(100,0,30,0)");
+        // Industrial smoke aura
+        const auraGrad = ctx.createRadialGradient(0, 0, 20, 0, 0, 110);
+        auraGrad.addColorStop(0, "rgba(40,30,15,0.3)");
+        auraGrad.addColorStop(0.6, "rgba(20,15,8,0.12)");
+        auraGrad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = auraGrad;
-        ctx.fillRect(-140, -140, 280, 280);
+        ctx.fillRect(-130, -130, 260, 260);
 
-        // Ambient energy wisps
+        // Cyan energy wisps
         for (let i = 0; i < 3; i++) {
           const angle = t * (1.5 + i * 0.4) + (i * Math.PI * 2) / 3;
-          ctx.strokeStyle = `rgba(255,34,68,${0.15 + Math.sin(t * 3 + i) * 0.1})`;
+          ctx.strokeStyle = `rgba(0,255,255,${0.1 + Math.sin(t * 3 + i) * 0.08})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(0, -10, 60 + i * 12, angle, angle + 0.6);
+          ctx.arc(0, -10, 55 + i * 12, angle, angle + 0.6);
           ctx.stroke();
         }
 
-        // Robes (wider, heavier)
-        ctx.fillStyle = "#1a0520";
+        // Backpack / reactor housing
+        ctx.fillStyle = "#1a1008";
         ctx.beginPath();
-        ctx.moveTo(-25, -15);
-        ctx.quadraticCurveTo(-38, 20, -35 + Math.sin(t * 1.6) * 3, 65);
-        ctx.lineTo(35 + Math.sin(t * 1.9) * 3, 65);
-        ctx.quadraticCurveTo(38, 20, 25, -15);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(-28, -30); ctx.quadraticCurveTo(-34, 10, -30, 55);
+        ctx.lineTo(30, 55); ctx.quadraticCurveTo(34, 10, 28, -30);
+        ctx.closePath(); ctx.fill();
 
-        // Armored torso (wider, plated)
-        ctx.fillStyle = "#2a1030";
-        ctx.beginPath();
-        ctx.moveTo(-16, -32);
-        ctx.lineTo(-18, 0);
-        ctx.lineTo(18, 0);
-        ctx.lineTo(16, -32);
-        ctx.closePath();
-        ctx.fill();
+        // Exhaust stacks
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#333";
+          ctx.fillRect(side * 18 - 2, -55, 4, 18);
+          ctx.fillStyle = "#71797e";
+          ctx.fillRect(side * 18 - 3, -56, 6, 3);
+          // Steam puffs
+          ctx.fillStyle = `rgba(180,180,160,${0.12 + pulse * 0.08})`;
+          for (let p = 0; p < 2; p++) {
+            ctx.beginPath();
+            ctx.arc(side * 18 + Math.sin(t * 2 + p) * 2, -58 - p * 5, 2 + p * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
-        // Chest plate detail
-        ctx.fillStyle = "#3a1545";
+        // Heavy plated torso
+        ctx.fillStyle = "#7a5c1d";
         ctx.beginPath();
-        ctx.moveTo(-10, -28);
-        ctx.quadraticCurveTo(0, -24, 10, -28);
-        ctx.lineTo(8, -12);
-        ctx.quadraticCurveTo(0, -10, -8, -12);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(-22, -30); ctx.lineTo(-25, -24); ctx.lineTo(-24, 10);
+        ctx.lineTo(24, 10); ctx.lineTo(25, -24); ctx.lineTo(22, -30);
+        ctx.closePath(); ctx.fill();
 
-        // Chest core (pulsing)
-        const corePulse = 0.4 + Math.sin(t * 2.5) * 0.4;
-        ctx.fillStyle = `rgba(255,34,68,${corePulse * 0.5})`;
-        ctx.shadowColor = "#ff2244";
-        ctx.shadowBlur = 12;
+        // Chest plate overlay
+        ctx.fillStyle = "#b58e3d";
         ctx.beginPath();
-        ctx.arc(0, -20, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.moveTo(-16, -27); ctx.lineTo(16, -27);
+        ctx.lineTo(15, -5); ctx.lineTo(-15, -5);
+        ctx.closePath(); ctx.fill();
 
-        // Massive pauldrons (spiked)
-        ctx.fillStyle = "#3a1040";
-        ctx.beginPath();
-        ctx.moveTo(-24, -32);
-        ctx.quadraticCurveTo(-28, -42, -20, -38);
-        ctx.lineTo(-10, -28);
-        ctx.closePath();
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(24, -32);
-        ctx.quadraticCurveTo(28, -42, 20, -38);
-        ctx.lineTo(10, -28);
-        ctx.closePath();
-        ctx.fill();
-        // Pauldron edge glow
-        ctx.strokeStyle = "#ff224440";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-24, -32);
-        ctx.quadraticCurveTo(-28, -42, -20, -38);
+        // Chest rivets
+        ctx.fillStyle = "#444";
+        for (let r = 0; r < 4; r++) {
+          ctx.beginPath();
+          ctx.arc(-12 + r * 8, -25, 1.5, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Reactor core porthole
+        const coreY = -16;
+        ctx.fillStyle = "#111";
+        ctx.beginPath(); ctx.arc(0, coreY, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(24, -32);
-        ctx.quadraticCurveTo(28, -42, 20, -38);
-        ctx.stroke();
+        // Cyan glow
+        const coreGlow = ctx.createRadialGradient(0, coreY, 0, 0, coreY, 6);
+        coreGlow.addColorStop(0, `rgba(0,255,255,${0.7 + pulse * 0.3})`);
+        coreGlow.addColorStop(0.6, "rgba(0,255,255,0.2)");
+        coreGlow.addColorStop(1, "rgba(0,255,255,0)");
+        ctx.fillStyle = coreGlow;
+        ctx.beginPath(); ctx.arc(0, coreY, 6, 0, Math.PI * 2); ctx.fill();
+        // Grill bars
+        ctx.strokeStyle = "#71797e"; ctx.lineWidth = 1.5;
+        for (let g = 0; g < 3; g++) {
+          const gx = -4 + g * 4;
+          ctx.beginPath(); ctx.moveTo(gx, coreY - 5); ctx.lineTo(gx, coreY + 5); ctx.stroke();
+        }
 
-        // Arms (thick, armored)
-        ctx.fillStyle = "#1a0520";
-        ctx.fillRect(-26, -26, 8, 24);
-        ctx.fillRect(18, -26, 8, 24);
-        // Arm armor bands
-        ctx.fillStyle = "#3a1040";
-        ctx.fillRect(-25, -20, 6, 4);
-        ctx.fillRect(19, -20, 6, 4);
-        ctx.fillRect(-25, -10, 6, 4);
-        ctx.fillRect(19, -10, 6, 4);
+        // Massive pauldrons
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#b58e3d";
+          ctx.beginPath();
+          ctx.ellipse(side * 24, -28, 12, 6, side * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#7a5c1d"; ctx.lineWidth = 1.5; ctx.stroke();
+          // Pauldron spikes
+          ctx.fillStyle = "#b87333";
+          ctx.beginPath();
+          ctx.moveTo(side * 28, -30); ctx.lineTo(side * 36, -28); ctx.lineTo(side * 28, -26);
+          ctx.fill();
+        }
 
-        // Fists (gauntlets)
-        ctx.fillStyle = "#2a0830";
-        ctx.beginPath();
-        ctx.arc(-22, 1, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(22, 1, 4, 0, Math.PI * 2);
-        ctx.fill();
+        // Diving helmet — brass dome
+        ctx.fillStyle = "#b58e3d";
+        ctx.beginPath(); ctx.arc(0, -42, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2; ctx.stroke();
+        // Helmet seam
+        ctx.strokeStyle = "#7a5c1d"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, -56); ctx.lineTo(0, -28); ctx.stroke();
 
-        // Head/Hood (larger, more imposing)
-        ctx.fillStyle = "#0d0315";
-        ctx.beginPath();
-        ctx.moveTo(-12, -34);
-        ctx.quadraticCurveTo(-14, -48, -10, -52);
-        ctx.quadraticCurveTo(0, -56, 10, -52);
-        ctx.quadraticCurveTo(14, -48, 12, -34);
-        ctx.quadraticCurveTo(0, -30, -12, -34);
-        ctx.closePath();
-        ctx.fill();
+        // Main porthole (single glowing eye)
+        ctx.fillStyle = "#0a1a1a";
+        ctx.beginPath(); ctx.arc(0, -41, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2; ctx.stroke();
+        const eyeGrad = ctx.createRadialGradient(0, -41, 0, 0, -41, 4.5);
+        eyeGrad.addColorStop(0, `rgba(0,255,255,${0.6 + pulse * 0.4})`);
+        eyeGrad.addColorStop(0.6, "rgba(0,255,255,0.15)");
+        eyeGrad.addColorStop(1, "rgba(0,255,255,0)");
+        ctx.fillStyle = eyeGrad;
+        ctx.beginPath(); ctx.arc(0, -41, 4.5, 0, Math.PI * 2); ctx.fill();
 
-        // Hood ridges
-        ctx.strokeStyle = "#1a0828";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-10, -50);
-        ctx.quadraticCurveTo(0, -55, 10, -50);
-        ctx.stroke();
+        // Side portholes
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#111";
+          ctx.beginPath(); ctx.arc(side * 8, -44, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(0,255,255,${0.2 + pulse * 0.1})`;
+          ctx.beginPath(); ctx.arc(side * 8, -44, 1.5, 0, Math.PI * 2); ctx.fill();
+        }
 
-        // Three eyes (pulsing, brighter)
-        const eyeGlow = 0.7 + Math.sin(t * 3) * 0.3;
-        ctx.fillStyle = `rgba(255,34,68,${eyeGlow})`;
-        ctx.shadowColor = "#ff2244";
-        ctx.shadowBlur = 14;
+        // Chin guard
+        ctx.fillStyle = "#71797e";
         ctx.beginPath();
-        ctx.arc(-6, -42, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(6, -42, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(0, -47, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.moveTo(-6, -34); ctx.lineTo(6, -34); ctx.lineTo(3, -30); ctx.lineTo(-3, -30);
+        ctx.closePath(); ctx.fill();
 
-        // Legs (visible under robes)
-        ctx.fillStyle = "#150418";
-        ctx.fillRect(-10, 0, 8, 20);
-        ctx.fillRect(2, 0, 8, 20);
+        // Arms — thick with drill/clamp
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#7a5c1d";
+          ctx.fillRect(side * 24 - 4, -24, 8, 22);
+          ctx.fillStyle = "#b58e3d";
+          ctx.fillRect(side * 24 - 3, -18, 6, 4);
+          ctx.fillRect(side * 24 - 3, -8, 6, 4);
+          // Hand
+          if (side > 0) {
+            // Drill
+            ctx.fillStyle = "#aaa";
+            ctx.beginPath();
+            ctx.moveTo(24, -1); ctx.lineTo(38, 2); ctx.lineTo(24, 5);
+            ctx.closePath(); ctx.fill();
+          } else {
+            // Clamp
+            ctx.fillStyle = "#999";
+            const jaw = 2 + Math.sin(t * 4) * 2;
+            ctx.beginPath(); ctx.moveTo(-24, 0 - jaw); ctx.lineTo(-36, -2); ctx.lineTo(-36, 0 - jaw + 2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-24, 0 + jaw); ctx.lineTo(-36, 4); ctx.lineTo(-36, 0 + jaw - 2); ctx.fill();
+          }
+        }
+
+        // Legs
+        ctx.fillStyle = "#7a5c1d";
+        ctx.fillRect(-10, 10, 8, 20);
+        ctx.fillRect(2, 10, 8, 20);
+        // Knee plates
+        ctx.fillStyle = "#b58e3d";
+        ctx.fillRect(-9, 18, 6, 4);
+        ctx.fillRect(3, 18, 6, 4);
+        // Boots
+        ctx.fillStyle = "#0a0004";
+        ctx.fillRect(-11, 28, 10, 5);
+        ctx.fillRect(1, 28, 10, 5);
 
         ctx.globalAlpha = 1;
         break;
       }
 
       case "villain_form2": {
-        // Paradox Lord — Evolved Form: larger, more defined, crackling energy
+        // ── THE VOLCANIC TITAN — Cracked armor, exposed ember muscle ──
         const fadeIn = Math.min(1, t / 1.2);
         const breathe = 1 + Math.sin(t * 2) * 0.03;
+        const pulse = (Math.sin(t * 4) + 1) * 0.5;
+        const heavePulse = (Math.sin(t * 2.5) + 1) * 0.5;
         ctx.scale(breathe * 1.7, breathe * 1.7);
         ctx.globalAlpha = fadeIn;
 
-        // Intense aura
-        const auraGrad = ctx.createRadialGradient(0, 0, 25, 0, 0, 120);
-        auraGrad.addColorStop(0, "rgba(255,0,100,0.2)");
-        auraGrad.addColorStop(0.6, "rgba(200,0,60,0.1)");
-        auraGrad.addColorStop(1, "rgba(100,0,30,0)");
+        // Heat shimmer aura
+        const auraGrad = ctx.createRadialGradient(0, -5, 15, 0, -5, 110);
+        auraGrad.addColorStop(0, "rgba(80,20,0,0.35)");
+        auraGrad.addColorStop(0.4, "rgba(40,8,0,0.15)");
+        auraGrad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = auraGrad;
-        ctx.fillRect(-140, -140, 280, 280);
+        ctx.fillRect(-130, -130, 260, 260);
 
-        // Energy crackling arcs
+        // Rising heat particles
+        for (let h = 0; h < 5; h++) {
+          const hx = Math.sin(h * 1.7 + t * 2) * 22;
+          const hy = -50 - ((t * 30 + h * 25) % 40);
+          ctx.fillStyle = `rgba(255,120,20,${0.08 + Math.sin(h + t * 3) * 0.04})`;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 2 + Math.sin(h * 2) * 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Ember corona arcs
         for (let i = 0; i < 4; i++) {
           const angle = t * (2 + i * 0.5) + (i * Math.PI) / 2;
-          ctx.strokeStyle = `rgba(255,0,100,${0.3 + Math.sin(t * 4 + i) * 0.2})`;
+          ctx.strokeStyle = `rgba(255,100,0,${0.2 + Math.sin(t * 4 + i) * 0.15})`;
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(0, -10, 55 + i * 10, angle, angle + 0.8);
+          ctx.arc(0, -8, 50 + i * 10, angle, angle + 0.7);
           ctx.stroke();
         }
 
-        // Robes (larger, more flowing)
-        ctx.fillStyle = "#200830";
+        // Massive muscle torso — dark red/brown flesh
+        ctx.fillStyle = "#3a1515";
         ctx.beginPath();
-        ctx.moveTo(-25, -15);
-        ctx.quadraticCurveTo(-35, 20, -32 + Math.sin(t * 1.8) * 3, 65);
-        ctx.lineTo(32 + Math.sin(t * 2.1) * 3, 65);
-        ctx.quadraticCurveTo(35, 20, 25, -15);
+        ctx.moveTo(-26, -28);
+        ctx.quadraticCurveTo(-30, 10, -27, 55);
+        ctx.lineTo(27, 55);
+        ctx.quadraticCurveTo(30, 10, 26, -28);
         ctx.closePath();
         ctx.fill();
 
-        // Armored torso (evolved plates)
-        ctx.fillStyle = "#3a1045";
-        ctx.fillRect(-15, -32, 30, 34);
-        // Chest core (pulsing brighter)
-        const corePulse = 0.5 + Math.sin(t * 3) * 0.5;
-        ctx.fillStyle = `rgba(255,0,100,${corePulse * 0.6})`;
-        ctx.shadowColor = "#ff0066";
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(0, -18, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        // Pectoral muscle definition
+        for (const side of [-1, 1]) {
+          const pecGrad = ctx.createRadialGradient(side * 8, -18, 2, side * 8, -18, 10);
+          pecGrad.addColorStop(0, "#4a2020");
+          pecGrad.addColorStop(1, "#3a1515");
+          ctx.fillStyle = pecGrad;
+          ctx.beginPath();
+          ctx.ellipse(side * 8, -18, 10, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
-        // Larger pauldrons with spikes
-        ctx.fillStyle = "#4a1555";
-        ctx.beginPath();
-        ctx.arc(-20, -28, 10, Math.PI, 0);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(20, -28, 10, Math.PI, 0);
-        ctx.fill();
-        // Spikes
-        ctx.fillStyle = "#660038";
-        ctx.beginPath();
-        ctx.moveTo(-20, -38);
-        ctx.lineTo(-24, -52);
-        ctx.lineTo(-16, -38);
-        ctx.closePath();
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(20, -38);
-        ctx.lineTo(24, -52);
-        ctx.lineTo(16, -38);
-        ctx.closePath();
-        ctx.fill();
+        // Abs visible
+        ctx.fillStyle = "#4a1818";
+        for (let row = 0; row < 3; row++) {
+          for (const side of [-0.5, 0.5]) {
+            ctx.beginPath();
+            ctx.ellipse(side * 5, -4 + row * 7, 3.5, 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
-        // Head/Hood (horned)
-        ctx.fillStyle = "#0d0315";
+        // Cracked armor fragments — obsidian plates clinging to body
+        ctx.fillStyle = "#2a0a0a";
+        // Left chest fragment
         ctx.beginPath();
-        ctx.arc(0, -42, 13, 0, Math.PI * 2);
-        ctx.fill();
-        // Horns
-        ctx.fillStyle = "#440022";
+        ctx.moveTo(-18, -26); ctx.lineTo(-4, -24);
+        ctx.lineTo(-6, -12); ctx.lineTo(-20, -15);
+        ctx.closePath(); ctx.fill();
+        // Right chest fragment — smaller
         ctx.beginPath();
-        ctx.moveTo(-10, -50);
-        ctx.lineTo(-16, -68);
-        ctx.lineTo(-6, -52);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(5, -23); ctx.lineTo(16, -25);
+        ctx.lineTo(14, -14);
+        ctx.closePath(); ctx.fill();
+        // Lower plate
         ctx.beginPath();
-        ctx.moveTo(10, -50);
-        ctx.lineTo(16, -68);
-        ctx.lineTo(6, -52);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(-10, 8); ctx.lineTo(8, 6);
+        ctx.lineTo(9, 16); ctx.lineTo(-11, 18);
+        ctx.closePath(); ctx.fill();
 
-        // Four eyes (evolved)
-        const eye2Glow = 0.6 + Math.sin(t * 4) * 0.4;
-        ctx.fillStyle = `rgba(255,0,68,${eye2Glow})`;
-        ctx.shadowColor = "#ff0044";
-        ctx.shadowBlur = 12;
+        // Ember vein cracks glowing through
+        ctx.lineWidth = 1.5;
+        const crackAlpha = 0.5 + pulse * 0.3;
+        const crackPaths = [
+          [[-4, -24], [-1, -14], [3, -4]],
+          [[14, -14], [10, -4], [9, 8]],
+          [[-18, -15], [-14, -5], [-15, 8]],
+          [[-5, 6], [0, 12], [4, 18]],
+        ];
+        for (const path of crackPaths) {
+          // Glow bloom
+          ctx.strokeStyle = `rgba(255,100,0,${crackAlpha * 0.3})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(path[0][0], path[0][1]);
+          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
+          ctx.stroke();
+          // Bright core
+          ctx.strokeStyle = `rgba(255,100,0,${crackAlpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(path[0][0], path[0][1]);
+          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
+          ctx.stroke();
+        }
+
+        // Molten core — exposed through shattered chest
+        const mCoreGrad = ctx.createRadialGradient(0, -15, 0, 0, -15, 8 + heavePulse * 2);
+        mCoreGrad.addColorStop(0, `rgba(255,200,50,0.9)`);
+        mCoreGrad.addColorStop(0.4, `rgba(255,100,0,0.6)`);
+        mCoreGrad.addColorStop(1, `rgba(200,40,0,0)`);
+        ctx.fillStyle = mCoreGrad;
+        ctx.beginPath(); ctx.arc(0, -15, 8 + heavePulse * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,200,${0.5 + pulse * 0.3})`;
+        ctx.beginPath(); ctx.arc(0, -15, 2.5, 0, Math.PI * 2); ctx.fill();
+
+        // Massive shoulders — bulging muscle with armor fragments
+        for (const side of [-1, 1]) {
+          // Trap muscle bulge
+          ctx.fillStyle = "#3a1515";
+          ctx.beginPath();
+          ctx.ellipse(side * 18, -28, 12, 5, side * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+          // Remaining pauldron fragment
+          ctx.fillStyle = "#2a0a0a";
+          ctx.beginPath();
+          ctx.ellipse(side * 22, -30, 6, 3, side * 0.3, 0, Math.PI);
+          ctx.fill();
+          // Shoulder ember vein
+          ctx.strokeStyle = `rgba(255,100,0,${0.3 + pulse * 0.15})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(side * 8, -27);
+          ctx.quadraticCurveTo(side * 15, -32, side * 22, -28);
+          ctx.stroke();
+        }
+
+        // Head — partially destroyed helmet, face visible
+        // Thick neck
+        ctx.fillStyle = "#3a1515";
+        ctx.fillRect(-5, -32, 10, 6);
+        // Neck veins
+        ctx.strokeStyle = "rgba(255,100,0,0.25)";
+        ctx.lineWidth = 1;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(side * 2, -28);
+          ctx.quadraticCurveTo(side * 4, -34, side * 3, -38);
+          ctx.stroke();
+        }
+        // Remaining helmet — cracked on one side
+        ctx.fillStyle = "#2a0a0a";
         ctx.beginPath();
-        ctx.arc(-6, -44, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(6, -44, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(-3, -48, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(3, -48, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.arc(0, -42, 11, -Math.PI * 0.8, Math.PI * 0.3);
+        ctx.closePath(); ctx.fill();
+        // Exposed face
+        ctx.fillStyle = "#4a1a1a";
+        ctx.beginPath(); ctx.arc(2, -42, 9, 0, Math.PI * 2); ctx.fill();
+        // Blazing eyes
+        for (const side of [-1, 1]) {
+          const eyeX = side * 4 + 1;
+          ctx.fillStyle = "#1a0505";
+          ctx.beginPath(); ctx.ellipse(eyeX, -43, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+          const eyeGrad = ctx.createRadialGradient(eyeX, -43, 0, eyeX, -43, 2.5);
+          eyeGrad.addColorStop(0, `rgba(255,220,100,${0.8 + pulse * 0.2})`);
+          eyeGrad.addColorStop(0.6, "rgba(255,80,0,0.4)");
+          eyeGrad.addColorStop(1, "rgba(200,30,0,0)");
+          ctx.fillStyle = eyeGrad;
+          ctx.beginPath(); ctx.ellipse(eyeX, -43, 2.5, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        // Broken porthole on helmet remains
+        ctx.fillStyle = "#111";
+        ctx.beginPath(); ctx.arc(-5, -40, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,80,0,${0.2 + pulse * 0.15})`;
+        ctx.beginPath(); ctx.arc(-5, -40, 2, 0, Math.PI * 2); ctx.fill();
+
+        // Arms — massive exposed muscle
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#3a1515";
+          ctx.fillRect(side * 24 - 5, -24, 10, 26);
+          // Bicep highlight
+          ctx.fillStyle = "#4a2020";
+          ctx.beginPath();
+          ctx.ellipse(side * 24 + side * 2, -14, 4, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Arm veins
+          ctx.strokeStyle = `rgba(255,100,0,${0.25 + pulse * 0.1})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(side * 24 + side, -22);
+          ctx.lineTo(side * 24 + side * 2, -8);
+          ctx.stroke();
+          // Fist — ember knuckles
+          ctx.fillStyle = "#3a1515";
+          ctx.beginPath(); ctx.arc(side * 24, 4, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,100,0,${0.2 + pulse * 0.15})`;
+          ctx.beginPath(); ctx.arc(side * 24 + side * 2, 2, 3, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Legs — tree-trunk muscle
+        ctx.fillStyle = "#3a1515";
+        ctx.fillRect(-12, 10, 10, 22);
+        ctx.fillRect(2, 10, 10, 22);
+        // Remaining shin armor
+        ctx.fillStyle = "#2a0a0a";
+        ctx.fillRect(-10, 18, 6, 8);
+        ctx.fillRect(4, 18, 6, 8);
+        // Boots
+        ctx.fillStyle = "#1a0505";
+        ctx.fillRect(-13, 30, 12, 5);
+        ctx.fillRect(1, 30, 12, 5);
+
+        // Molten drip particles
+        for (let d = 0; d < 3; d++) {
+          const dx = Math.sin(d * 2.1) * 15;
+          const dy = 35 + ((t * 25 + d * 20) % 20);
+          const dAlpha = 0.25 - (dy - 35) / 20 * 0.25;
+          if (dAlpha > 0) {
+            ctx.fillStyle = `rgba(255,120,0,${dAlpha})`;
+            ctx.beginPath(); ctx.ellipse(dx, dy, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+          }
+        }
 
         ctx.globalAlpha = 1;
         break;
       }
 
       case "villain_final": {
-        // Paradox Lord — FINAL FORM: terrifying, cosmic, reality-bending
+        // ── THE COSMIC ENTITY — Void body, starfield, dimensional tears ──
         const fadeIn = Math.min(1, t / 1.5);
-        const breathe = 1 + Math.sin(t * 1.5) * 0.04;
+        const breathe = 1 + Math.sin(t * 1.5) * 0.03;
+        const pulse = (Math.sin(t * 5) + 1) * 0.5;
+        const cosmicPulse = (Math.sin(t * 2) + 1) * 0.5;
         ctx.scale(breathe * 2.0, breathe * 2.0);
         ctx.globalAlpha = fadeIn;
 
-        // Reality distortion rings
-        for (let ring = 0; ring < 3; ring++) {
-          const r = 70 + ring * 20;
-          const ringAlpha = 0.12 + Math.sin(t * 2 + ring) * 0.06;
-          ctx.strokeStyle = `rgba(255,0,68,${ringAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(
-            0,
-            -10,
-            r,
-            t * (0.5 + ring * 0.2),
-            t * (0.5 + ring * 0.2) + Math.PI,
-          );
-          ctx.stroke();
-        }
-
-        // Cosmic aura
-        const cosmicGrad = ctx.createRadialGradient(0, -10, 15, 0, -10, 100);
-        cosmicGrad.addColorStop(0, "rgba(255,0,50,0.25)");
-        cosmicGrad.addColorStop(0.4, "rgba(180,0,60,0.12)");
-        cosmicGrad.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = cosmicGrad;
+        // Reality distortion field
+        const distGrad = ctx.createRadialGradient(0, -10, 10, 0, -10, 100);
+        distGrad.addColorStop(0, "rgba(40,0,80,0.3)");
+        distGrad.addColorStop(0.3, "rgba(20,0,60,0.12)");
+        distGrad.addColorStop(0.6, "rgba(10,0,40,0.06)");
+        distGrad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = distGrad;
         ctx.fillRect(-120, -120, 240, 240);
 
-        // Temporal body (no longer robes — pure energy form)
-        ctx.fillStyle = "#1a0520";
-        ctx.beginPath();
-        ctx.moveTo(-22, -20);
-        ctx.quadraticCurveTo(-30, 15, -25 + Math.sin(t * 2) * 4, 55);
-        ctx.lineTo(25 + Math.sin(t * 2.3) * 4, 55);
-        ctx.quadraticCurveTo(30, 15, 22, -20);
-        ctx.closePath();
-        ctx.fill();
-        // Energy veins
-        ctx.strokeStyle = `rgba(255,0,100,${0.3 + Math.sin(t * 3) * 0.2})`;
-        ctx.lineWidth = 1;
-        for (let v = 0; v < 5; v++) {
-          const vx = -15 + v * 7;
+        // Dimensional rift tears
+        for (let r = 0; r < 3; r++) {
+          const rAng = t * 1 + r * Math.PI * 0.67;
+          const rDist = 55 + Math.sin(t * 3 + r) * 10;
+          const rx = Math.cos(rAng) * rDist;
+          const ry = -10 + Math.sin(rAng) * rDist * 0.4;
+          const rLen = 10 + Math.sin(t * 4 + r * 2) * 4;
+          ctx.save();
+          ctx.translate(rx, ry);
+          ctx.rotate(t * 2 + r);
+          ctx.strokeStyle = `rgba(120,40,200,${0.12 + pulse * 0.08})`;
+          ctx.lineWidth = 5;
           ctx.beginPath();
-          ctx.moveTo(vx, -18);
-          ctx.quadraticCurveTo(vx + Math.sin(t * 2 + v) * 3, 15, vx, 50);
+          ctx.moveTo(-rLen, 0); ctx.lineTo(-rLen * 0.3, -2);
+          ctx.lineTo(rLen * 0.3, 2); ctx.lineTo(rLen, 0);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(200,200,255,${0.3 + pulse * 0.2})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-rLen, 0); ctx.lineTo(-rLen * 0.3, -2);
+          ctx.lineTo(rLen * 0.3, 2); ctx.lineTo(rLen, 0);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Orbiting reality rings
+        for (let ring = 0; ring < 3; ring++) {
+          const ringR = 45 + ring * 12 + Math.sin(t * 2 + ring) * 3;
+          const ringRot = t * (ring % 2 === 0 ? 1 : -1) + ring * 0.8;
+          ctx.strokeStyle = ring % 2 === 0
+            ? `rgba(120,60,200,${0.12 + cosmicPulse * 0.08})`
+            : `rgba(60,140,255,${0.1 + cosmicPulse * 0.06})`;
+          ctx.lineWidth = 1 + ring * 0.2;
+          ctx.beginPath();
+          ctx.ellipse(0, -10, ringR, ringR * 0.2, ringRot, 0, Math.PI * 2);
           ctx.stroke();
         }
 
-        // Core (massive, aggressive)
-        const finalCorePulse = 0.4 + Math.sin(t * 4) * 0.6;
-        ctx.fillStyle = `rgba(255,0,50,${finalCorePulse * 0.5})`;
-        ctx.shadowColor = "#ff0033";
-        ctx.shadowBlur = 25;
+        // Void body — humanoid silhouette
+        ctx.save();
         ctx.beginPath();
-        ctx.arc(0, -10, 12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,100,150,${finalCorePulse * 0.8})`;
-        ctx.beginPath();
-        ctx.arc(0, -10, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        // Crown of temporal shards
-        ctx.fillStyle = "#880044";
-        for (let s = 0; s < 7; s++) {
-          const sAngle = -Math.PI / 2 + (s - 3) * 0.35;
-          const sLen = 18 + Math.sin(t * 3 + s * 1.5) * 4;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(sAngle) * 12, -42 + Math.sin(sAngle) * 12);
-          ctx.lineTo(Math.cos(sAngle) * sLen, -42 + Math.sin(sAngle) * sLen);
-          ctx.lineTo(
-            Math.cos(sAngle + 0.1) * 10,
-            -42 + Math.sin(sAngle + 0.1) * 10,
-          );
-          ctx.closePath();
-          ctx.fill();
-        }
-
-        // Head (angular, crown-like)
-        ctx.fillStyle = "#0d0315";
-        ctx.beginPath();
-        ctx.moveTo(-12, -35);
-        ctx.lineTo(-14, -50);
-        ctx.lineTo(0, -55);
-        ctx.lineTo(14, -50);
-        ctx.lineTo(12, -35);
+        // Head
+        ctx.arc(0, -42, 11, 0, Math.PI * 2);
+        // Torso
+        ctx.moveTo(-18, -28);
+        ctx.quadraticCurveTo(-22, 5, -19, 45);
+        ctx.lineTo(19, 45);
+        ctx.quadraticCurveTo(22, 5, 18, -28);
         ctx.closePath();
-        ctx.fill();
+        // Arms
+        for (const side of [-1, 1]) {
+          ctx.moveTo(side * 18, -25);
+          ctx.quadraticCurveTo(side * 32, 0, side * 24, 30);
+          ctx.lineTo(side * 20, 30);
+          ctx.quadraticCurveTo(side * 28, 2, side * 15, -22);
+        }
+        ctx.clip();
 
-        // Six eyes (final form — the all-seeing)
-        const eyeFGlow = 0.5 + Math.sin(t * 5) * 0.5;
-        ctx.fillStyle = `rgba(255,0,40,${eyeFGlow})`;
-        ctx.shadowColor = "#ff0022";
-        ctx.shadowBlur = 15;
-        const eyePositions = [
-          [-7, -44, 2],
-          [-2, -48, 1.5],
-          [2, -48, 1.5],
-          [7, -44, 2],
-          [-4, -41, 1.3],
-          [4, -41, 1.3],
-        ];
-        for (const [ex, ey, er] of eyePositions) {
+        // Fill with deep void
+        ctx.fillStyle = "#0a0010";
+        ctx.fillRect(-40, -60, 80, 110);
+
+        // Starfield inside body
+        for (let s = 0; s < 35; s++) {
+          const sx = Math.sin(s * 127.1 + 42) * 22;
+          const sy = -50 + Math.sin(s * 311.7 + 42) * 30 + 35;
+          const sBright = 0.25 + Math.sin(t * 3 + s * 0.7) * 0.25;
+          const sSize = 0.8 + Math.sin(s * 73.1) * 0.4;
+          ctx.fillStyle = s % 5 === 0
+            ? `rgba(180,140,255,${sBright})`
+            : s % 3 === 0
+              ? `rgba(100,180,255,${sBright})`
+              : `rgba(220,220,255,${sBright})`;
           ctx.beginPath();
-          ctx.arc(ex, ey, er, 0, Math.PI * 2);
+          ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.shadowBlur = 0;
+
+        // Swirling nebula
+        for (let n = 0; n < 2; n++) {
+          const nx = Math.sin(t * 0.8 + n * 2) * 8;
+          const ny = -10 + Math.cos(t * 0.6 + n * 3) * 10;
+          const nR = 12 + n * 4;
+          const nebGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, nR);
+          nebGrad.addColorStop(0, n === 0 ? "rgba(100,30,160,0.12)" : "rgba(30,80,160,0.1)");
+          nebGrad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = nebGrad;
+          ctx.beginPath();
+          ctx.arc(nx, ny, nR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore(); // end body clip
+
+        // Body edge glow
+        ctx.strokeStyle = `rgba(120,40,200,${0.2 + pulse * 0.1})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-18, -28);
+        ctx.quadraticCurveTo(-22, 5, -19, 45);
+        ctx.lineTo(19, 45);
+        ctx.quadraticCurveTo(22, 5, 18, -28);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Cosmic crown / halo
+        ctx.strokeStyle = `rgba(200,200,255,${0.15 + cosmicPulse * 0.12})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, -55, 18, 4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(200,160,255,${0.25 + cosmicPulse * 0.15})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, -55, 15, 3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crown spikes — cosmic geometry
+        for (let sp = 0; sp < 7; sp++) {
+          const spAng = -Math.PI * 0.8 + (Math.PI * 1.6 * sp) / 6;
+          const spBase = 11;
+          const spTip = 20 + Math.sin(t * 4 + sp) * 2;
+          const bx = Math.cos(spAng) * spBase;
+          const by = -55 + Math.sin(spAng) * spBase * 0.3;
+          const tx = Math.cos(spAng) * spTip;
+          const ty = -55 + Math.sin(spAng) * spTip * 0.3;
+          // Spike glow
+          ctx.strokeStyle = `rgba(120,40,200,${0.12 + pulse * 0.08})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+          // Spike core
+          ctx.strokeStyle = `rgba(200,200,255,${0.35 + pulse * 0.2})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+          // Tip orb
+          ctx.fillStyle = `rgba(200,200,255,${0.4 + pulse * 0.2})`;
+          ctx.beginPath(); ctx.arc(tx, ty, 1.5, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Eyes — cosmic void with bright pupils
+        for (const side of [-1, 1]) {
+          const eyeX = side * 4;
+          const eyeGrad = ctx.createRadialGradient(eyeX, -43, 0, eyeX, -43, 4);
+          eyeGrad.addColorStop(0, `rgba(255,255,255,${0.7 + pulse * 0.3})`);
+          eyeGrad.addColorStop(0.4, "rgba(120,40,200,0.5)");
+          eyeGrad.addColorStop(1, "rgba(120,40,200,0)");
+          ctx.fillStyle = eyeGrad;
+          ctx.beginPath();
+          ctx.ellipse(eyeX, -43, 4, 2.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Third eye — center forehead
+        const teGrad = ctx.createRadialGradient(0, -48, 0, 0, -48, 3);
+        teGrad.addColorStop(0, `rgba(255,200,255,0.8)`);
+        teGrad.addColorStop(0.5, "rgba(120,40,200,0.4)");
+        teGrad.addColorStop(1, "rgba(120,40,200,0)");
+        ctx.fillStyle = teGrad;
+        ctx.beginPath();
+        ctx.arc(0, -48, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Floating armor fragments
+        for (let f = 0; f < 6; f++) {
+          const fAng = t * 1.5 + f * Math.PI * 0.33;
+          const fDist = 35 + Math.sin(f * 1.3) * 5 + Math.sin(t * 2 + f) * 3;
+          const fx = Math.cos(fAng) * fDist;
+          const fy = -10 + Math.sin(fAng) * fDist * 0.4;
+          const fSize = 3 + Math.sin(f * 2.7) * 1;
+          ctx.save();
+          ctx.translate(fx, fy);
+          ctx.rotate(t * 3 + f * 1.5);
+          ctx.fillStyle = `rgba(30,10,50,${0.4 + Math.sin(t * 4 + f) * 0.15})`;
+          ctx.fillRect(-fSize, -fSize * 0.5, fSize * 2, fSize);
+          ctx.strokeStyle = `rgba(120,40,200,${0.2 + pulse * 0.1})`;
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(-fSize, -fSize * 0.5, fSize * 2, fSize);
+          ctx.restore();
+        }
+
+        // Energy tendrils from hands
+        for (const side of [-1, 1]) {
+          const handX = side * 24;
+          const handY = 30;
+          for (let tr = 0; tr < 2; tr++) {
+            const tAng = side * (0.4 + tr * 0.5) + Math.sin(t * 3 + tr) * 0.2;
+            const tLen = 10 + tr * 5 + Math.sin(t * 4 + tr * 2) * 3;
+            const tx = handX + Math.cos(tAng) * tLen;
+            const ty = handY + Math.sin(tAng) * tLen * 0.6;
+            ctx.strokeStyle = `rgba(120,40,200,${0.08 + pulse * 0.06})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(handX, handY);
+            ctx.quadraticCurveTo((handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4, (handY + ty) * 0.5, tx, ty);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(200,200,255,${0.2 + pulse * 0.15})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.moveTo(handX, handY);
+            ctx.quadraticCurveTo((handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4, (handY + ty) * 0.5, tx, ty);
+            ctx.stroke();
+          }
+        }
+
+        // Void singularity at center
+        const singGrad = ctx.createRadialGradient(0, -10, 0, 0, -10, 10);
+        singGrad.addColorStop(0, "rgba(0,0,0,0.8)");
+        singGrad.addColorStop(0.3, "rgba(40,0,80,0.4)");
+        singGrad.addColorStop(0.7, "rgba(120,40,200,0.15)");
+        singGrad.addColorStop(1, "rgba(120,40,200,0)");
+        ctx.fillStyle = singGrad;
+        ctx.beginPath(); ctx.arc(0, -10, 10, 0, Math.PI * 2); ctx.fill();
+        // Accretion disk
+        ctx.strokeStyle = `rgba(200,160,255,${0.2 + pulse * 0.15})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(0, -10, 12, 2.5, t * 1, 0, Math.PI * 2); ctx.stroke();
+
+        // Cosmic particles
+        for (let p = 0; p < 8; p++) {
+          const pAng = t * 1 + p * Math.PI * 0.25;
+          const pDist = 50 + Math.sin(t * 3 + p * 1.5) * 10;
+          const px = Math.cos(pAng) * pDist;
+          const py = -10 + Math.sin(pAng) * pDist * 0.5;
+          const pBright = 0.15 + Math.sin(t * 5 + p) * 0.1;
+          ctx.fillStyle = p % 3 === 0
+            ? `rgba(120,40,200,${pBright})`
+            : p % 3 === 1
+              ? `rgba(60,140,255,${pBright})`
+              : `rgba(200,200,255,${pBright})`;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.5 + Math.sin(p * 4.1) * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.globalAlpha = 1;
         break;
@@ -4013,6 +4287,95 @@ export class CutsceneEngine {
         ctx.fillStyle = "#666";
         ctx.fillRect(-8, 35, 3, 4);
         ctx.fillRect(5, 35, 3, 4);
+
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      // ── Fragmented memory portraits — corrupted silhouettes ──
+      case "fragment_blue":
+      case "fragment_green":
+      case "fragment_amber": {
+        const palettes = {
+          fragment_blue:  { base: "#0066aa", glow: "rgba(0,140,255,0.12)", scan: "#00aaff", static: "#003366" },
+          fragment_green: { base: "#008855", glow: "rgba(80,255,160,0.12)", scan: "#44ffaa", static: "#003322" },
+          fragment_amber: { base: "#885500", glow: "rgba(255,170,60,0.12)", scan: "#ffaa33", static: "#442200" },
+        };
+        const pal = palettes[art];
+        const fadeIn = Math.min(1, t / 0.6);
+        const glitch = Math.sin(t * 11) * 0.15; // rapid jitter
+
+        ctx.globalAlpha = fadeIn * 0.7;
+
+        // Corrupted glow backdrop
+        const fragGlow = ctx.createRadialGradient(0, -20, 5, 0, -20, 80);
+        fragGlow.addColorStop(0, pal.glow);
+        fragGlow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = fragGlow;
+        ctx.fillRect(-90, -100, 180, 160);
+
+        // Humanoid silhouette — intentionally vague
+        ctx.save();
+        ctx.translate(glitch * 8, 0);
+
+        // Head (oval, blurred edges)
+        ctx.fillStyle = pal.static;
+        ctx.beginPath();
+        ctx.ellipse(0, -60, 11, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shoulders + torso
+        ctx.fillStyle = pal.static;
+        ctx.beginPath();
+        ctx.moveTo(-18, -44);
+        ctx.quadraticCurveTo(-22, -30, -20, 10);
+        ctx.lineTo(20, 10);
+        ctx.quadraticCurveTo(22, -30, 18, -44);
+        ctx.closePath();
+        ctx.fill();
+
+        // Horizontal corruption lines (tear through the figure)
+        ctx.globalAlpha = fadeIn * 0.5;
+        for (let i = 0; i < 8; i++) {
+          const ly = -70 + i * 15 + Math.sin(t * 7 + i * 3) * 3;
+          const lw = 30 + Math.sin(t * 5 + i) * 15;
+          const lx = Math.sin(t * 9 + i * 2) * 6;
+          ctx.fillStyle = pal.scan;
+          ctx.fillRect(lx - lw / 2, ly, lw, 1.5);
+        }
+
+        // Static noise blocks
+        ctx.globalAlpha = fadeIn * 0.3;
+        for (let i = 0; i < 12; i++) {
+          const nx = (Math.sin(t * 13 + i * 7.7) * 30);
+          const ny = -80 + (Math.sin(t * 11 + i * 5.3) * 50 + 50);
+          const ns = 3 + Math.sin(t * 19 + i) * 2;
+          ctx.fillStyle = i % 3 === 0 ? pal.scan : pal.static;
+          ctx.fillRect(nx, ny, ns, ns);
+        }
+
+        // Glitch offset duplicate (color-shifted)
+        ctx.globalAlpha = fadeIn * 0.15;
+        ctx.fillStyle = pal.base;
+        ctx.translate(3 + glitch * 12, -2);
+        ctx.beginPath();
+        ctx.ellipse(0, -60, 11, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-18, -44);
+        ctx.quadraticCurveTo(-22, -30, -20, 10);
+        ctx.lineTo(20, 10);
+        ctx.quadraticCurveTo(22, -30, 18, -44);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+
+        // Scan line sweep
+        ctx.globalAlpha = fadeIn * 0.08;
+        ctx.fillStyle = pal.scan;
+        const scanPos = ((t * 80) % 200) - 100;
+        ctx.fillRect(-80, scanPos, 160, 3);
 
         ctx.globalAlpha = 1;
         break;

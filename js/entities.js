@@ -1,15 +1,39 @@
 import { WEAPONS, ENEMY_TYPES } from "./data.js";
+import {
+  PLAYER_SPAWN_X,
+  PLAYER_SPAWN_Y,
+  PLAYER_SPAWN_ANGLE,
+  PLAYER_MAX_HP,
+  TWO_PI,
+} from "../src/constants.js";
 
+/**
+ * Player entity representing the player character.
+ * Manages player state, stats, weapons, and abilities.
+ */
 export class Player {
-  constructor(x = 2, y = 2, angle = 0) {
+  /**
+   * Creates a new Player instance.
+   * @param {number} x - Initial X position (default: PLAYER_SPAWN_X)
+   * @param {number} y - Initial Y position (default: PLAYER_SPAWN_Y)
+   * @param {number} angle - Initial facing angle in radians (default: PLAYER_SPAWN_ANGLE)
+   */
+  constructor(x = PLAYER_SPAWN_X, y = PLAYER_SPAWN_Y, angle = PLAYER_SPAWN_ANGLE) {
     this.reset(x, y, angle);
   }
-  reset(x = 2, y = 2, angle = 0) {
+
+  /**
+   * Resets player to initial state.
+   * @param {number} x - Reset X position
+   * @param {number} y - Reset Y position
+   * @param {number} angle - Reset facing angle
+   */
+  reset(x = PLAYER_SPAWN_X, y = PLAYER_SPAWN_Y, angle = PLAYER_SPAWN_ANGLE) {
     this.x = x;
     this.y = y;
     this.angle = angle;
-    this.health = 100;
-    this.maxHealth = 100;
+    this.health = PLAYER_MAX_HP;
+    this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;
     this.ammo = 50;
     this.moveSpeed = 3.5;
@@ -37,8 +61,8 @@ export class Player {
     this.hurtTime = 0;
     this.alive = true;
     // Sprint & Dash
-    this.stamina = 100;
-    this.maxStamina = 100;
+    this.stamina = PLAYER_MAX_HP;
+    this.maxStamina = PLAYER_MAX_HP;
     this.isSprinting = false;
     this.isDashing = false;
     // Crouch & Slide
@@ -62,16 +86,23 @@ export class Player {
     this.dashStaminaCost = 20; // stamina cost per dash
     this.sprintDrainMult = 1; // multiplier for sprint drain rate
     // Chrono Shift (player-activated time slow)
-    this.chronoEnergy = 50; // 0–100, starts half-charged
-    this.maxChronoEnergy = 100;
+    this.chronoEnergy = PLAYER_MAX_HP / 2; // 0–100, starts half-charged
+    this.maxChronoEnergy = PLAYER_MAX_HP;
     this.chronoActive = false;
     this.particles = [];
   }
+  /**
+   * Gets the weapon definition for the currently equipped weapon.
+   * @returns {Object} Weapon definition from WEAPONS data
+   */
   getWeaponDef() {
     return WEAPONS[this.weapons[this.currentWeapon]];
   }
 
-  /** Serializable player stats for save/load */
+  /**
+   * Serializable player stats for save/load.
+   * List of property names that should be persisted.
+   */
   static SAVE_FIELDS = [
     "health",
     "maxHealth",
@@ -102,12 +133,20 @@ export class Player {
     "maxChronoEnergy",
   ];
 
+  /**
+   * Serializes player state to a plain object for saving.
+   * @returns {Object} Serialized player data
+   */
   serialize() {
     const data = {};
     for (const key of Player.SAVE_FIELDS) data[key] = this[key];
     return data;
   }
 
+  /**
+   * Deserializes player state from a saved object.
+   * @param {Object} data - Saved player data
+   */
   deserialize(data) {
     for (const key of Player.SAVE_FIELDS) {
       if (key in data) this[key] = data[key];
@@ -115,7 +154,17 @@ export class Player {
   }
 }
 
+/**
+ * Enemy entity representing hostile NPCs.
+ * Behavior and stats are defined by enemy type.
+ */
 export class Enemy {
+  /**
+   * Creates a new Enemy instance.
+   * @param {number} x - Spawn X position
+   * @param {number} y - Spawn Y position
+   * @param {string} type - Enemy type key from ENEMY_TYPES
+   */
   constructor(x, y, type) {
     const def = ENEMY_TYPES[type];
     this.x = x;
@@ -131,7 +180,7 @@ export class Enemy {
     this.hitTime = 0;
     this.stateTime = 0;
     this.type = "enemy";
-    this.angle = Math.random() * Math.PI * 2;
+    this.angle = Math.random() * TWO_PI;
     this.painTimer = 0;
     this.alertRange = def.sightRange;
     // Per-type chrono reaction multiplier (used when Chrono Shift is active).
@@ -141,7 +190,17 @@ export class Enemy {
   }
 }
 
+/**
+ * Pickup entity representing collectible items (health, ammo, weapons).
+ */
 export class Pickup {
+  /**
+   * Creates a new Pickup instance.
+   * @param {number} x - Spawn X position
+   * @param {number} y - Spawn Y position
+   * @param {string} type - Pickup type ("health", "ammo", "weapon")
+   * @param {Object} extra - Additional properties (e.g., weaponId for weapon pickups)
+   */
   constructor(x, y, type, extra = {}) {
     this.x = x;
     this.y = y;
@@ -151,7 +210,33 @@ export class Pickup {
   }
 }
 
+/**
+ * Environmental prop — non-interactive billboard decoration.
+ */
+export class Prop {
+  constructor(x, y, propType) {
+    this.x = x;
+    this.y = y;
+    this.type = "prop";
+    this.propType = propType;
+    this.active = true;
+  }
+}
+
+/**
+ * Projectile entity representing bullets and other fired projectiles.
+ */
 export class Projectile {
+  /**
+   * Creates a new Projectile instance.
+   * @param {number} x - Initial X position
+   * @param {number} y - Initial Y position
+   * @param {number} dirX - X direction component (normalized)
+   * @param {number} dirY - Y direction component (normalized)
+   * @param {number} damage - Damage dealt on hit
+   * @param {number} speed - Movement speed in units per second
+   * @param {string} owner - Owner identifier ("player" or enemy ID)
+   */
   constructor(x, y, dirX, dirY, damage, speed, owner) {
     this.x = x;
     this.y = y;

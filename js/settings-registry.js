@@ -217,6 +217,20 @@ export const SETTINGS_REGISTRY = [
   },
   // ─── HUD ───
   {
+    key: "hudStyle",
+    label: "HUD Style",
+    category: "HUD",
+    type: "enum",
+    values: ["Minimal", "Classic"],
+    colors: ["#00ccff", "#ffaa00"],
+    min: 0,
+    max: 1,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
     key: "hudScale",
     label: "HUD Scale",
     category: "HUD",
@@ -345,4 +359,54 @@ export function getVisibleCategories(isTouchDevice) {
   return SETTING_CATEGORIES.filter((cat) =>
     visible.some((s) => s.category === cat),
   );
+}
+
+/**
+ * Apply a +1 or -1 step to a setting value in-place.
+ * Handles toggle, wrap-around enum, and clamped slider types.
+ * Returns true if the value changed.
+ */
+export function applySettingStep(settings, def, direction) {
+  const old = settings[def.key];
+  if (def.type === "toggle") {
+    settings[def.key] = !settings[def.key];
+  } else if (def.wrap) {
+    const range = def.max - def.min + 1;
+    settings[def.key] =
+      def.min + ((settings[def.key] - def.min + direction + range) % range);
+  } else {
+    let val = settings[def.key] + direction * def.step;
+    val = Math.max(def.min, Math.min(def.max, val));
+    if (def.round != null)
+      val = Math.round(val * Math.pow(10, def.round)) / Math.pow(10, def.round);
+    settings[def.key] = val;
+  }
+  return settings[def.key] !== old;
+}
+
+/** Format a setting definition + current value into display-ready { label, value, color } */
+export function settingDisplayItem(def, settings) {
+  const v = settings[def.key];
+  switch (def.type) {
+    case "toggle":
+      return {
+        label: def.label,
+        value: v ? "ON" : "OFF",
+        color: v ? def.onColor || "#00ccff" : "#888888",
+      };
+    case "enum":
+      return {
+        label: def.label,
+        value: def.values[v] || String(v),
+        color: def.colors ? def.colors[v] : undefined,
+      };
+    case "slider":
+      return {
+        label: def.label,
+        value: def.format ? def.format(v) : String(v),
+        color: undefined,
+      };
+    default:
+      return { label: def.label, value: String(v) };
+  }
 }

@@ -7,6 +7,7 @@
 
 import {
   getVisibleSettings,
+  getSettingsForCategory,
   COMPACT_PHONE_HEIGHT,
 } from "./settings-registry.js";
 
@@ -48,41 +49,38 @@ export function pauseLayout(w, h, mode) {
   return { btnY, btnH, btnW, gap, buttons, saveBtn, compact };
 }
 
-export function settingsLayout(w, h, settingsSelection, isTouchDevice) {
+export function settingsLayout(w, h, settingsSelection, isTouchDevice, category) {
   const compact = isTouchDevice && isCompactPhone(h);
-  const panelW = compact ? Math.min(w - 20, 380) : 440;
-  const panelX = w / 2 - panelW / 2;
-  const barW = compact ? 140 : 200;
-  const barH = compact ? 4 : 6;
 
-  const visibleDefs = getVisibleSettings(isTouchDevice);
+  // Must match renderSettingsScreen geometry in game.js
+  const headerH = compact ? 36 : 52;
+  const sideW = compact ? 90 : 160;
+  const panelX = sideW + 1;
+  const panelW = w - panelX - 12;
+  const contentTop = headerH + 8;
+  const barW = Math.min(panelW * 0.55, 240);
+  const barH = 6;
+  const catItemH = compact ? 28 : 38;
+
+  const visibleDefs = category
+    ? getSettingsForCategory(isTouchDevice, category)
+    : getVisibleSettings(isTouchDevice);
   const itemHeights = visibleDefs.map((def) =>
     compact ? def.height.compact : def.height.normal,
   );
   const totalH = itemHeights.reduce((a, b) => a + b, 0);
-  const visibleH = h - (compact ? 60 : 120);
-  const titleAreaY = compact ? 28 : 50;
-  let startY = titleAreaY + (compact ? 20 : 40);
-
-  if (totalH > visibleH) {
-    let selTop = 0;
-    for (let i = 0; i < settingsSelection; i++) selTop += itemHeights[i];
-    const selCenter = selTop + itemHeights[settingsSelection] / 2;
-    const idealOffset = visibleH / 2 - selCenter;
-    const maxOffset = 0;
-    const minOffset = visibleH - totalH;
-    startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
-  }
 
   return {
+    headerH,
+    sideW,
     panelX,
     panelW,
     barW,
     barH,
+    contentTop,
+    catItemH,
     itemHeights,
     totalH,
-    visibleH,
-    startY,
     compact,
     visibleDefs,
   };

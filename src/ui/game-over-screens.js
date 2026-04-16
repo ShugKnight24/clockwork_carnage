@@ -1,0 +1,503 @@
+import { renderStatsCard } from './stats-card.js';
+import { drawScanlines } from './scanlines.js';
+import { isCompactPhone } from '../../js/layout.js';
+
+/**
+ * Share-toast overlay — renders and mutates toast.life in place.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w
+ * @param {number} h
+ * @param {{ text: string, life: number } | null} toast
+ * @param {number} deltaTime  in seconds
+ * @returns {{ expired: boolean }} true when toast should be nulled
+ */
+export function renderShareToast(ctx, w, h, toast, deltaTime) {
+  if (!toast) return { expired: false };
+  toast.life -= deltaTime;
+  if (toast.life <= 0) return { expired: true };
+  const alpha = Math.min(1, toast.life * 2);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(0,20,40,0.9)';
+  ctx.strokeStyle = 'rgba(0,200,255,0.6)';
+  ctx.lineWidth = 1;
+  const tw = Math.min(420, w * 0.8), th = 32;
+  const tx = w / 2 - tw / 2, ty = h * 0.07;
+  ctx.beginPath();
+  ctx.roundRect(tx, ty, tw, th, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#00ccff';
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(toast.text, w / 2, ty + 20);
+  ctx.restore();
+  return { expired: false };
+}
+
+// ── renderGameOver ──────────────────────────────────────────────────
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w
+ * @param {number} h
+ * @param {object} state
+ * @returns {{ gameOverBtns: object }} layout for click handler
+ */
+export function renderGameOver(ctx, w, h, state) {
+  const {
+    time, isTouchDevice, mode, arenaRound, achievementStats,
+    meltdown, deltaTime, shareToast, statsCardData,
+  } = state;
+
+  const compact = isTouchDevice && isCompactPhone(h);
+
+  // Animated red-tinged background
+  ctx.fillStyle = 'rgba(30,0,0,0.94)';
+  ctx.fillRect(0, 0, w, h);
+  // Pulsing red vignette
+  const pulse = 0.5 + Math.sin(time * 0.003) * 0.2;
+  const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.15, w / 2, h / 2, h * 0.7);
+  vig.addColorStop(0, 'rgba(80,0,0,0)');
+  vig.addColorStop(0.5, `rgba(60,0,0,${pulse * 0.15})`);
+  vig.addColorStop(1, `rgba(40,0,0,${0.4 + pulse * 0.15})`);
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, w, h);
+  // Floating static debris
+  ctx.fillStyle = 'rgba(255,30,0,0.06)';
+  for (let i = 0; i < 12; i++) {
+    const sx = w * (0.1 + (Math.sin(time * 0.0005 + i * 1.7) + 1) * 0.4);
+    const sy = h * (0.05 + (Math.cos(time * 0.0007 + i * 2.3) + 1) * 0.45);
+    const sz = 20 + Math.sin(i * 3) * 15;
+    ctx.fillRect(sx - sz / 2, sy - 1, sz, 2);
+  }
+
+  const titleSize = compact ? 24 : 42;
+  const titleY = compact ? h * 0.15 : h / 2 - 110;
+  const subY = compact ? titleY + 22 : h / 2 - 75;
+  const statsY = compact ? titleY + 36 : h / 2 - 50;
+
+  // Horizontal divider lines
+  if (!compact) {
+    const divY1 = h / 2 - 135, divY2 = h / 2 - 40;
+    ctx.strokeStyle = 'rgba(255,34,0,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.2, divY1); ctx.lineTo(w * 0.8, divY1);
+    ctx.moveTo(w * 0.25, divY2); ctx.lineTo(w * 0.75, divY2);
+    ctx.stroke();
+  }
+  // Title with glow
+  ctx.shadowColor = '#ff2200';
+  ctx.shadowBlur = compact ? 10 : 20;
+  ctx.fillStyle = '#ff2200';
+  ctx.font = `bold ${titleSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('TIMELINE COLLAPSED', w / 2, titleY);
+  ctx.shadowBlur = 0;
+  // Subtitle
+  ctx.fillStyle = 'rgba(255,100,70,0.7)';
+  ctx.font = `${compact ? 11 : 14}px monospace`;
+  ctx.fillText('Temporal integrity failed — reality unraveled', w / 2, subY);
+
+  renderStatsCard(ctx, w, statsY, '#ff2200', '#ff6644', undefined, statsCardData);
+
+  if (mode === 'arena') {
+    ctx.fillStyle = '#ff8866';
+    ctx.font = `bold ${compact ? 14 : 18}px monospace`;
+    ctx.fillText(`Rounds Survived: ${arenaRound - 1}`, w / 2, compact ? h * 0.78 : h / 2 + 100);
+    ctx.fillStyle = 'rgba(255,136,102,0.6)';
+    ctx.font = `${compact ? 10 : 12}px monospace`;
+    ctx.fillText(
+      `Personal Best: Round ${achievementStats.highestArenaRound} (Score: ${achievementStats.highestScore})`,
+      w / 2, compact ? h * 0.82 : h / 2 + 125,
+    );
+  }
+
+  // ── Bottom action buttons: RESTART | QUIT | SHARE ──
+  const btnW = 110, btnH = 34, btnGap = 12;
+  const totalBtnW = btnW * 3 + btnGap * 2;
+  const btnBaseX = w / 2 - totalBtnW / 2;
+  const btnY = h - 70;
+  const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
+
+  const btnDefs = [
+    { label: 'RESTART', color: '#ff8844', bg: 'rgba(255,136,68,0.15)' },
+    { label: 'QUIT', color: '#aaaaaa', bg: 'rgba(170,170,170,0.1)' },
+    { label: 'SHARE', color: '#00ccff', bg: 'rgba(0,204,255,0.12)' },
+  ];
+  for (let i = 0; i < btnDefs.length; i++) {
+    const bx = btnBaseX + i * (btnW + btnGap);
+    ctx.fillStyle = btnDefs[i].bg;
+    ctx.fillRect(bx, btnY, btnW, btnH);
+    ctx.strokeStyle = btnDefs[i].color;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, btnY, btnW, btnH);
+    ctx.fillStyle = btnDefs[i].color;
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(btnDefs[i].label, bx + btnW / 2, btnY + 22);
+  }
+
+  if (mode === 'meltdown' && meltdown) {
+    const mHud = meltdown.getHUD();
+    const mY = compact ? h * 0.7 : h / 2 + 80;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffaa00';
+    ctx.font = `bold ${compact ? 16 : 22}px monospace`;
+    ctx.fillText(`DISTANCE: ${mHud.distance}m`, w / 2, mY);
+    ctx.fillStyle = '#ff8866';
+    ctx.font = `bold ${compact ? 12 : 16}px monospace`;
+    ctx.fillText(`SCORE: ${mHud.score}`, w / 2, mY + 25);
+    ctx.fillStyle = 'rgba(200,200,200,0.6)';
+    ctx.font = `${compact ? 10 : 12}px monospace`;
+    ctx.fillText(`Time: ${mHud.time}s | Speed: ${mHud.speed} m/s`, w / 2, mY + 45);
+
+    // High scores
+    if (meltdown.highScores.length > 0) {
+      ctx.fillStyle = '#00ccff';
+      ctx.font = `bold ${compact ? 10 : 12}px monospace`;
+      ctx.fillText('── HIGH SCORES ──', w / 2, mY + 70);
+      ctx.fillStyle = 'rgba(200,220,255,0.7)';
+      ctx.font = `${compact ? 9 : 11}px monospace`;
+      const top3 = meltdown.highScores.slice(0, 3);
+      top3.forEach((hs, i) => {
+        ctx.fillText(`${i + 1}. ${hs.score} pts (${hs.distance}m)`, w / 2, mY + 88 + i * 16);
+      });
+    }
+  }
+  // Prompt with pulsing alpha
+  const promptA = 0.4 + Math.sin(time * 0.004) * 0.3;
+  ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+  ctx.font = `${compact ? 12 : 14}px monospace`;
+  const promptText = isTouchDevice ? 'Tap to return to title' : 'Press ENTER to return to title';
+  ctx.fillText(promptText, w / 2, compact ? h * 0.88 : h / 2 + 130);
+  ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
+  if (!isTouchDevice) {
+    ctx.fillText('Press R to restart', w / 2, h / 2 + 155);
+    ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
+    ctx.fillText('Press S to share score', w / 2, compact ? h * 0.93 : h / 2 + 175);
+  }
+  ctx.textAlign = 'left';
+
+  const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
+  drawScanlines(ctx, w, h, true);
+
+  return { gameOverBtns, toastExpired: toastResult.expired };
+}
+
+// ── renderVictory ───────────────────────────────────────────────────
+export function renderVictory(ctx, w, h, state) {
+  const {
+    time, isTouchDevice, ngPlusCycle, mode,
+    ngPlusPrompt, ngPlusPromptSel, deltaTime, shareToast, statsCardData,
+  } = state;
+
+  const compact = isTouchDevice && isCompactPhone(h);
+  ctx.fillStyle = 'rgba(0,6,20,0.95)';
+  ctx.fillRect(0, 0, w, h);
+  // Animated aurora glow
+  const pulse = 0.7 + Math.sin(time * 0.003) * 0.3;
+  const auroraGrad = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.6);
+  auroraGrad.addColorStop(0, `rgba(0,255,200,${pulse * 0.08})`);
+  auroraGrad.addColorStop(0.4, `rgba(0,180,255,${pulse * 0.04})`);
+  auroraGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = auroraGrad;
+  ctx.fillRect(0, 0, w, h);
+  // Rising particle streaks
+  ctx.globalAlpha = 0.15;
+  for (let i = 0; i < (compact ? 10 : 20); i++) {
+    const px = w * (0.1 + (i / 20) * 0.8);
+    const py = h - ((time * 0.04 + i * 73) % h);
+    const pLen = 8 + Math.sin(i * 2) * 5;
+    ctx.fillStyle = i % 3 === 0 ? '#00ffcc' : i % 3 === 1 ? '#ffcc00' : '#aaddff';
+    ctx.fillRect(px, py, 1.5, pLen);
+  }
+  ctx.globalAlpha = 1;
+
+  const titleSize = compact ? 24 : 42;
+  const titleY = compact ? h * 0.12 : h / 2 - 75;
+
+  if (!compact) {
+    ctx.strokeStyle = 'rgba(0,255,200,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.15, h / 2 - 100);
+    ctx.lineTo(w * 0.85, h / 2 - 100);
+    ctx.stroke();
+  }
+  // Title with teal glow
+  ctx.shadowColor = '#00ffcc';
+  ctx.shadowBlur = compact ? 12 : 25;
+  ctx.fillStyle = ngPlusCycle >= 3 ? '#ffcc00' : '#00ffcc';
+  ctx.font = `bold ${titleSize}px monospace`;
+  ctx.textAlign = 'center';
+  const victoryTitle = ngPlusCycle >= 3 ? 'THE LOOP IS BROKEN' : 'TIMELINE RESTORED';
+  ctx.fillText(victoryTitle, w / 2, titleY);
+  ctx.shadowBlur = 0;
+  // Subtitles
+  ctx.fillStyle = '#ffcc00';
+  ctx.font = `bold ${compact ? 12 : 18}px monospace`;
+  const victorySubtitle = ngPlusCycle >= 3
+    ? 'Every timeline. Every loop. You broke them all.'
+    : 'The Paradox Lord has been destroyed — for good.';
+  ctx.fillText(victorySubtitle, w / 2, compact ? titleY + 22 : h / 2 - 35);
+  if (!compact) {
+    ctx.fillStyle = 'rgba(170,220,255,0.7)';
+    ctx.font = '16px monospace';
+    ctx.fillText('Three forms. Three acts. One team.', w / 2, h / 2 - 8);
+    ctx.fillText('The quantum continuum is stable once more.', w / 2, h / 2 + 14);
+    ctx.strokeStyle = 'rgba(255,204,0,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.25, h / 2 + 28);
+    ctx.lineTo(w * 0.75, h / 2 + 28);
+    ctx.stroke();
+  }
+
+  // NG+ cycle indicator
+  if (ngPlusCycle > 0) {
+    ctx.fillStyle = '#cc88ff';
+    ctx.font = `bold ${compact ? 10 : 14}px monospace`;
+    ctx.textAlign = 'center';
+    const cycleLabel = ngPlusCycle >= 3
+      ? 'FINAL TIMELINE — THE LOOP IS BROKEN'
+      : `TIMELINE LOOP ${ngPlusCycle}`;
+    ctx.fillText(cycleLabel, w / 2, compact ? titleY - 10 : titleY - 20);
+  }
+
+  renderStatsCard(ctx, w, compact ? titleY + 38 : h / 2 + 40, '#ffcc00', '#aaddff', undefined, statsCardData);
+
+  const promptA = 0.4 + Math.sin(time * 0.004) * 0.3;
+
+  // NG+ prompt
+  if (ngPlusPrompt && mode === 'campaign') {
+    const promptY = compact ? h * 0.78 : h / 2 + 170;
+    const nextCycle = ngPlusCycle + 1;
+    const opts = [
+      { label: `ENTER THE RIFT (NG+${nextCycle})`, desc: 'Enemies grow stronger. You keep everything.', color: '#cc88ff' },
+      { label: 'REST', desc: 'The timeline is safe. Return to title.', color: '#aaddff' },
+    ];
+    const optW = compact ? 140 : 220;
+    const optH = compact ? 44 : 56;
+    const gap = compact ? 12 : 20;
+    const totalW = opts.length * optW + (opts.length - 1) * gap;
+    const startX = w / 2 - totalW / 2;
+
+    for (let i = 0; i < opts.length; i++) {
+      const ox = startX + i * (optW + gap);
+      const oy = promptY;
+      const sel = ngPlusPromptSel === i;
+      ctx.fillStyle = sel ? 'rgba(100,60,180,0.35)' : 'rgba(30,30,50,0.5)';
+      ctx.strokeStyle = sel ? opts[i].color : 'rgba(100,100,140,0.3)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.beginPath();
+      ctx.roundRect(ox, oy, optW, optH, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = sel ? opts[i].color : 'rgba(170,170,190,0.8)';
+      ctx.font = `bold ${compact ? 10 : 13}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(opts[i].label, ox + optW / 2, oy + (compact ? 16 : 22));
+      ctx.fillStyle = sel ? 'rgba(200,200,220,0.7)' : 'rgba(140,140,160,0.5)';
+      ctx.font = `${compact ? 8 : 10}px monospace`;
+      ctx.fillText(opts[i].desc, ox + optW / 2, oy + (compact ? 32 : 40));
+    }
+
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+    ctx.font = `${compact ? 10 : 12}px monospace`;
+    ctx.textAlign = 'center';
+    const ngPromptText = isTouchDevice ? 'Tap a choice' : 'Arrow keys to choose, ENTER to confirm';
+    ctx.fillText(ngPromptText, w / 2, promptY + optH + (compact ? 14 : 22));
+  } else {
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+    ctx.font = `${compact ? 12 : 14}px monospace`;
+    ctx.textAlign = 'center';
+    const victoryPrompt = isTouchDevice ? 'Tap to return to title' : 'Press ENTER to return to title';
+    ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
+    if (!isTouchDevice) {
+      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
+      ctx.font = `${compact ? 11 : 13}px monospace`;
+      ctx.fillText('Press S to share score', w / 2, compact ? h * 0.94 : h / 2 + 235);
+    }
+  }
+  ctx.textAlign = 'left';
+
+  const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
+  drawScanlines(ctx, w, h);
+
+  return { toastExpired: toastResult.expired };
+}
+
+// ── renderLevelComplete ─────────────────────────────────────────────
+export function renderLevelComplete(ctx, w, h, state) {
+  const {
+    time, isTouchDevice, levelCompleteTime,
+    playerSecretsFound, statsCardData,
+  } = state;
+
+  const compact = isTouchDevice && isCompactPhone(h);
+  const t = Math.max(0, (performance.now() - (levelCompleteTime || 0)) / 1000);
+
+  ctx.fillStyle = 'rgba(0,4,18,0.94)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle cyan glow
+  const pulse = 0.6 + Math.sin(time * 0.004) * 0.3;
+  const glow = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.5);
+  glow.addColorStop(0, `rgba(0,255,200,${pulse * 0.06})`);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, h);
+
+  // Celebration particle streaks
+  ctx.globalAlpha = Math.min(0.2, t * 0.15);
+  for (let i = 0; i < (compact ? 12 : 24); i++) {
+    const px = w * (0.05 + (i / 24) * 0.9);
+    const py = h - ((time * 0.05 + i * 61) % h);
+    const pLen = 6 + Math.sin(i * 3) * 4;
+    ctx.fillStyle = i % 3 === 0 ? '#00ffcc' : i % 3 === 1 ? '#00aaff' : '#aaffdd';
+    ctx.fillRect(px, py, 1.5, pLen);
+  }
+  ctx.globalAlpha = 1;
+
+  // Entrance animation helpers
+  const ease = v => v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v);
+  const titleT = ease(t / 0.4);
+  const statsT = ease((t - 0.3) / 0.4);
+  const secretsT = ease((t - 0.6) / 0.3);
+  const promptT = ease((t - 1.0) / 0.3);
+  const countUp = Math.min(1, (t - 0.3) / 0.8);
+
+  const titleY = compact ? h * 0.12 : h / 2 - 100;
+  const titleOffset = (1 - titleT) * -30;
+
+  if (!compact && titleT > 0) {
+    ctx.globalAlpha = titleT;
+    ctx.strokeStyle = 'rgba(0,255,200,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.2, h / 2 - 130 + titleOffset);
+    ctx.lineTo(w * 0.8, h / 2 - 130 + titleOffset);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Title — slides down
+  if (titleT > 0) {
+    ctx.globalAlpha = titleT;
+    ctx.shadowColor = '#00ffcc';
+    ctx.shadowBlur = compact ? 8 : 15;
+    ctx.fillStyle = '#00ffcc';
+    ctx.font = `bold ${compact ? 22 : 36}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('LEVEL COMPLETE', w / 2, titleY + titleOffset);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  if (!compact && titleT > 0) {
+    ctx.globalAlpha = titleT;
+    ctx.strokeStyle = 'rgba(0,255,200,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.25, h / 2 - 75 + titleOffset);
+    ctx.lineTo(w * 0.75, h / 2 - 75 + titleOffset);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Stats card — fades in with count-up
+  if (statsT > 0) {
+    ctx.globalAlpha = statsT;
+    renderStatsCard(
+      ctx, w, compact ? titleY + 18 : h / 2 - 55,
+      '#00ffcc', '#aaddff', countUp, statsCardData,
+    );
+    ctx.globalAlpha = 1;
+  }
+
+  // Secrets — fades in
+  if (secretsT > 0) {
+    ctx.globalAlpha = secretsT;
+    ctx.fillStyle = '#aaddff';
+    ctx.font = `${compact ? 12 : 16}px monospace`;
+    ctx.textAlign = 'center';
+    const secretVal = Math.round((playerSecretsFound || 0) * Math.min(1, countUp));
+    ctx.fillText(`Secrets: ${secretVal}`, w / 2, compact ? h * 0.75 : h / 2 + 80);
+    ctx.globalAlpha = 1;
+  }
+
+  // Continue prompt — fades in last
+  if (promptT > 0) {
+    const promptA = promptT * (0.4 + Math.sin(time * 0.004) * 0.3);
+    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+    ctx.font = `${compact ? 12 : 14}px monospace`;
+    ctx.textAlign = 'center';
+    const lcPrompt = isTouchDevice ? 'Tap to continue' : 'Press ENTER to continue';
+    ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
+  }
+  ctx.textAlign = 'left';
+
+  drawScanlines(ctx, w, h);
+}
+
+// ── renderBuilderOnboarding ─────────────────────────────────────────
+export function renderBuilderOnboarding(ctx, w, h, state) {
+  const { time, isTouchDevice } = state;
+
+  const pulse = 0.85 + Math.sin(time * 0.004) * 0.1;
+  ctx.fillStyle = `rgba(0,0,0,${0.72 * pulse})`;
+  ctx.fillRect(0, 0, w, h);
+
+  const bw = Math.min(520, w * 0.88), bh = 280;
+  const bx = w / 2 - bw / 2, by = h / 2 - bh / 2;
+
+  ctx.fillStyle = 'rgba(0,10,20,0.96)';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,200,255,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#00ccff';
+  ctx.shadowColor = '#00ccff';
+  ctx.shadowBlur = 10;
+  ctx.font = 'bold 18px monospace';
+  ctx.fillText('MAP BUILDER', w / 2, by + 36);
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = 'rgba(0,200,255,0.3)';
+  ctx.fillRect(bx + 20, by + 46, bw - 40, 1);
+
+  const lines = [
+    { key: 'WASD / Arrow Keys', action: 'Move camera' },
+    { key: 'Left Click', action: 'Place tile' },
+    { key: 'Right Click', action: 'Erase tile' },
+    { key: '1 – 9', action: 'Select tile type' },
+    { key: 'E', action: 'Place / move player start' },
+    { key: 'P', action: 'Play-test your map' },
+    { key: 'Ctrl+S', action: 'Save map' },
+    { key: 'Ctrl+Shift+S', action: 'Share map URL' },
+  ];
+  ctx.font = '12px monospace';
+  const lineH = 24;
+  const startY = by + 68;
+  lines.forEach((l, i) => {
+    const y = startY + i * lineH;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#00ccff';
+    ctx.fillText(l.key, w / 2 - 12, y);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aabbcc';
+    ctx.fillText(l.action, w / 2 + 12, y);
+  });
+
+  const promptA = 0.5 + Math.sin(time * 0.006) * 0.4;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(170,170,170,${promptA})`;
+  ctx.font = '12px monospace';
+  ctx.fillText(
+    isTouchDevice ? 'Tap anywhere to start' : 'Press any key to start',
+    w / 2, by + bh - 18,
+  );
+}

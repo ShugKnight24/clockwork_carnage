@@ -1,22 +1,25 @@
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
-import { drawStatsScreen } from "./stats-screen.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
+  spawnEnergyBurst as _spawnEnergyBurst,
   updateParticles as _updateParticles,
 } from "./particle-system.js";
+import {
+  spawnHitImpact as _spawnHitImpact,
+  spawnMuzzleFlash as _spawnMuzzleFlash,
+  spawnDeathParticles as _spawnDeathParticles,
+  spawnWallSparks as _spawnWallSparks,
+} from "./vfx.js";
 import {
   WEAPONS,
   ENEMY_TYPES,
   CUTSCENE_SCRIPTS,
   ARENA_MAPS,
-  CAMPAIGN_LEVELS,
   UPGRADES,
   WALL_COLORS,
   TUTORIAL_MAP,
-  ACHIEVEMENTS,
-  ACHIEVEMENT_ICON_SVGS,
   ARIA_COMMS,
   CHARACTER_COLORS,
   ARMOR_STYLES,
@@ -26,16 +29,77 @@ import {
   DEFAULT_CHARACTER,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
+import { renderPostFX as _renderPostFX } from "../src/rendering/postfx.js";
+import { drawGlow as _drawGlow } from "../src/rendering/draw-utils.js";
 import { AudioManager } from "./audio.js";
 import { BuilderMode } from "./builder.js";
 import { MeltdownMode } from "./meltdown.js";
 import { CutsceneEngine } from "./cutscene.js";
-import { Player, Enemy, Pickup, Projectile } from "./entities.js";
+import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
 import { trackEvent } from "./analytics.js";
 import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
+import { KillStreakSystem } from "../src/systems/kill-streak.js";
+import { AriaCommsSystem } from "../src/systems/aria-comms.js";
+import * as Save from "../src/core/save-system.js";
+import { AchievementSystem } from "../src/systems/achievement-system.js";
+import {
+  isPassable as _isPassable,
+  hasLineOfSight as _hasLineOfSight,
+  moveWithCollision,
+} from "../src/systems/physics.js";
+import { PlayerUpdateSystem } from "../src/systems/player-update.js";
+import { AISystem } from "../src/systems/ai.js";
+import {
+  getDifficultyMultipliers as _getDifficultyMultipliers,
+  filterArenaSpawns,
+  createArenaEnemies,
+  createArenaPickups,
+  createMeltdownEnemies,
+  createMeltdownPickups,
+} from "../src/systems/spawner.js";
+import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
+import {
+  fireWeapon as _fireWeapon,
+  hitscan as _hitscan,
+  damageEnemy as _damageEnemy,
+  onEnemyKill as _onEnemyKill,
+  damagePlayer as _damagePlayer,
+} from "../src/systems/combat-orchestrator.js";
+import { drawCrosshair } from "../src/ui/crosshair.js";
+import { drawScanlines } from "../src/ui/scanlines.js";
+import { drawPortrait as _drawPortrait } from "../src/ui/portrait.js";
+import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
+import { renderStatsCard } from "../src/ui/stats-card.js";
+import { renderHUD as _renderHUD } from "../src/ui/hud.js";
+import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaign-prompt.js";
+import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
+import {
+  renderTutorialOverlay as _renderTutorialOverlay,
+  renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
+  renderTutorialMenu as _renderTutorialMenu,
+} from "../src/ui/tutorial-ui.js";
+import { renderSettingsScreen as _renderSettingsScreen } from "../src/ui/settings-screen.js";
+import {
+  renderControlsScreen as _renderControlsScreen,
+  drawControlsOverlay as _drawControlsOverlay,
+  formatKeyCode as _formatKeyCode,
+} from "../src/ui/controls-screen.js";
+import {
+  renderGameOver as _renderGameOver,
+  renderVictory as _renderVictory,
+  renderLevelComplete as _renderLevelComplete,
+  renderShareToast,
+  renderBuilderOnboarding as _renderBuilderOnboarding,
+} from "../src/ui/game-over-screens.js";
+import {
+  renderCharacterCreator as _renderCharacterCreator,
+  renderCharacterPreview as _renderCharacterPreview,
+  CREATOR_CATEGORIES,
+  getCreatorLayout,
+} from "../src/ui/character-creator.js";
+import { SpatialGrid } from "../src/utils/spatial-grid.js";
 
-const SAVE_VERSION = 1;
 export const GAME_VERSION = "0.8.1";
 
 import {
@@ -44,10 +108,14 @@ import {
   getVisibleSettings,
   getSettingsForCategory,
   getVisibleCategories,
+  settingDisplayItem,
+  applySettingStep,
 } from "./settings-registry.js";
-export { COMPACT_PHONE_HEIGHT, SETTINGS_REGISTRY, getVisibleSettings };
+export { COMPACT_PHONE_HEIGHT, SETTINGS_REGISTRY, getVisibleSettings, settingDisplayItem, applySettingStep };
 
 import { StateManager } from "./state-manager.js";
+import { CampaignManager } from "./campaign-manager.js";
+import { TutorialSystem } from "./tutorial-system.js";
 
 export const GameState = {
   TITLE: "title",
@@ -72,33 +140,6 @@ export const GameState = {
 
 // TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
 
-// Helper: compute a display item { label, value, color } from a registry entry
-export function settingDisplayItem(def, settings) {
-  const v = settings[def.key];
-  switch (def.type) {
-    case "toggle":
-      return {
-        label: def.label,
-        value: v ? "ON" : "OFF",
-        color: v ? def.onColor || "#00ccff" : "#888888",
-      };
-    case "enum":
-      return {
-        label: def.label,
-        value: def.values[v] || String(v),
-        color: def.colors ? def.colors[v] : undefined,
-      };
-    case "slider":
-      return {
-        label: def.label,
-        value: def.format ? def.format(v) : String(v),
-        color: undefined,
-      };
-    default:
-      return { label: def.label, value: String(v) };
-  }
-}
-
 export class Game {
   constructor(canvas, hudCanvas) {
     this.canvas = canvas;
@@ -115,6 +156,7 @@ export class Game {
     });
     this.player = new Player();
     this.entities = [];
+    this.entityGrid = new SpatialGrid(2);
     this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
@@ -128,10 +170,8 @@ export class Game {
     this.lastFrameTime = 0;
     this.arenaTimer = 60;
     this.arenaRound = 1;
-    this.campaignLevel = 0;
-    this.ngPlusCycle = 0; // 0 = first playthrough, 1-3 = NG+ cycles
-    this.ngPlusPrompt = false; // true when showing NG+ choice on victory
-    this.ngPlusPromptSel = 0; // 0 = enter rift (NG+), 1 = rest (end)
+    this.campaign = new CampaignManager(this);
+    this.tutorial = new TutorialSystem(this);
     this.isTouchDevice = "ontouchstart" in window;
     this.menuSelection = 0;
     this.upgradeSelection = 0;
@@ -155,11 +195,27 @@ export class Game {
     this.glitchEffect = 0;
     this.hitMarker = 0;
     this.damageNumbers = [];
-    // Kill streak system
-    this.killStreak = 0;
-    this.killStreakTimer = 0; // time since last kill, resets streak if > 3s
-    this.killStreakDisplay = null; // { text, color, size, life }
-    this.bestStreak = 0;
+    // Kill streak system (delegated to KillStreakSystem)
+    this.killStreakSystem = new KillStreakSystem();
+    // Forwarding properties for backward compat during migration
+    Object.defineProperties(this, {
+      killStreak: {
+        get() { return this.killStreakSystem.streak; },
+        set(v) { this.killStreakSystem.streak = v; },
+      },
+      killStreakTimer: {
+        get() { return this.killStreakSystem.timer; },
+        set(v) { this.killStreakSystem.timer = v; },
+      },
+      killStreakDisplay: {
+        get() { return this.killStreakSystem.display; },
+        set(v) { this.killStreakSystem.display = v; },
+      },
+      bestStreak: {
+        get() { return this.killStreakSystem.best; },
+        set(v) { this.killStreakSystem.best = v; },
+      },
+    });
     // Slow-motion last kill
     this.timeScale = 1;
     this.slowMoTimer = 0;
@@ -185,6 +241,7 @@ export class Game {
       fontScale: 100, // 100, 125, 150 percent
       colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
       visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
+      hudStyle: 0, // 0=Minimal (transparent pills), 1=Classic (bottom bar + portrait)
       hudScale: 100, // 75, 100, 125 percent
       staminaBarSize: 100, // 75, 100, 125, 150 percent
       showPortrait: true,
@@ -199,6 +256,27 @@ export class Game {
     this.settingsSelection = 0;
     this.settingsCategory = "Gameplay"; // active sidebar category
     this.lastEscTime = 0;
+    // Mouse hover tracking for settings UI
+    this._settingsMouseX = -1;
+    this._settingsMouseY = -1;
+    document.addEventListener("mousemove", (e) => {
+      if (this.state !== GameState.SETTINGS) {
+        if (this.canvas.style.cursor === "pointer") this.canvas.style.cursor = "";
+        return;
+      }
+      const rect = this.canvas.getBoundingClientRect();
+      const sx = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+      const sy = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+      this._settingsMouseX = sx;
+      this._settingsMouseY = sy;
+      // Set pointer cursor when hovering interactive areas
+      const cph = this.isTouchDevice && isCompactPhone(this.canvas.height);
+      const hdrH = cph ? 36 : 52;
+      const sdW = cph ? 90 : 160;
+      const inSidebar = sx < sdW && sy > hdrH;
+      const inPanel = sx >= sdW + 1 && sy > hdrH + 8;
+      this.canvas.style.cursor = (inSidebar || inPanel) ? "pointer" : "";
+    });
 
     // Share URL handling
     window.addEventListener("hashchange", () => this._handleHashChange());
@@ -230,7 +308,10 @@ export class Game {
     this.keybinds = this.input.keybinds;
 
     // Previous-frame key state tracking for edge-detection (crouch start)
+    // Owned by PlayerUpdateSystem — kept here for backward compat only
     this._prevCrouchKey = false;
+    this.playerUpdateSystem = new PlayerUpdateSystem();
+    this.aiSystem = new AISystem();
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
@@ -256,53 +337,85 @@ export class Game {
     this._scanlinePattern = null; // rgba(0,0,0,0.03) every 4px
     this._scanlinePatternDense = null; // rgba(0,0,0,0.04) every 3px
 
-    // Achievement system
-    this.unlockedAchievements = {};
-    this.achievementQueue = []; // toast notification queue
-    this.achievementToast = null; // currently displaying toast
+    // Achievement system (delegated to AchievementSystem)
+    this.achievementSystem = new AchievementSystem();
+    // Forwarding properties for backward compat during migration
+    Object.defineProperties(this, {
+      unlockedAchievements: {
+        get() { return this.achievementSystem.unlockedAchievements; },
+        set(v) { this.achievementSystem.unlockedAchievements = v; },
+      },
+      achievementQueue: {
+        get() { return this.achievementSystem.achievementQueue; },
+        set(v) { this.achievementSystem.achievementQueue = v; },
+      },
+      achievementToast: {
+        get() { return this.achievementSystem.achievementToast; },
+        set(v) { this.achievementSystem.achievementToast = v; },
+      },
+      achievementIcons: {
+        get() { return this.achievementSystem.achievementIcons; },
+        set(v) { this.achievementSystem.achievementIcons = v; },
+      },
+      achievementStats: {
+        get() { return this.achievementSystem.achievementStats; },
+        set(v) { this.achievementSystem.achievementStats = v; },
+      },
+      roundDamageTaken: {
+        get() { return this.achievementSystem.roundDamageTaken; },
+        set(v) { this.achievementSystem.roundDamageTaken = v; },
+      },
+      achievementsScroll: {
+        get() { return this.achievementSystem.achievementsScroll; },
+        set(v) { this.achievementSystem.achievementsScroll = v; },
+      },
+    });
 
-    // Preload achievement SVG icons into Image objects
-    this.achievementIcons = {};
-    for (const [key, svgStr] of Object.entries(ACHIEVEMENT_ICON_SVGS)) {
-      const img = new Image();
-      img.src =
-        "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr);
-      this.achievementIcons[key] = img;
-    }
-
-    this.achievementStats = {
-      totalKills: 0,
-      totalDashes: 0,
-      highestArenaRound: 0,
-      highestScore: 0,
-      campaignComplete: false,
-      bossKilled: false,
-      tutorialComplete: false,
-      upgradesBought: 0,
-      flawlessRounds: 0,
-      // Lifetime stats
-      totalDeaths: 0,
-      totalTimePlayed: 0, // seconds
-      totalShotsFired: 0,
-      totalShotsHit: 0,
-      totalSecretsFound: 0,
-      totalCampaignLevels: 0,
-      totalGamesPlayed: 0,
-    };
-    // Track damage taken per round for flawless detection
-    this.roundDamageTaken = 0;
-
-    // ARIA in-game comms system
-    this.ariaQueue = []; // queued messages
-    this.ariaMessage = null; // { text, color, life, duration }
-    this.ariaTriggered = {}; // tracks one-shot triggers per level
-    this.ariaEnabled = false; // enabled after clocking_in cutscene
-    this.ariaIdleTimer = 0; // seconds since last ARIA message
-    this.ariaIdleThreshold = 30; // seconds of silence before idle chatter
-    this.ariaCombatTimer = 0; // track time in combat for longSurvival
-    this.ariaMessageLog = []; // all ARIA messages for review
-    this.showAriaLog = false; // toggle ARIA message log overlay
-    this.ariaLogScroll = 0; // scroll position in log
+    // ARIA in-game comms system (delegated to AriaCommsSystem)
+    this.ariaComms = new AriaCommsSystem();
+    // Forwarding properties for backward compat during migration
+    Object.defineProperties(this, {
+      ariaQueue: {
+        get() { return this.ariaComms.queue; },
+        set(v) { this.ariaComms.queue = v; },
+      },
+      ariaMessage: {
+        get() { return this.ariaComms.message; },
+        set(v) { this.ariaComms.message = v; },
+      },
+      ariaTriggered: {
+        get() { return this.ariaComms.triggered; },
+        set(v) { this.ariaComms.triggered = v; },
+      },
+      ariaEnabled: {
+        get() { return this.ariaComms.enabled; },
+        set(v) { this.ariaComms.enabled = v; },
+      },
+      ariaIdleTimer: {
+        get() { return this.ariaComms.idleTimer; },
+        set(v) { this.ariaComms.idleTimer = v; },
+      },
+      ariaIdleThreshold: {
+        get() { return this.ariaComms.idleThreshold; },
+        set(v) { this.ariaComms.idleThreshold = v; },
+      },
+      ariaCombatTimer: {
+        get() { return this.ariaComms.combatTimer; },
+        set(v) { this.ariaComms.combatTimer = v; },
+      },
+      ariaMessageLog: {
+        get() { return this.ariaComms.messageLog; },
+        set(v) { this.ariaComms.messageLog = v; },
+      },
+      showAriaLog: {
+        get() { return this.ariaComms.showLog; },
+        set(v) { this.ariaComms.showLog = v; },
+      },
+      ariaLogScroll: {
+        get() { return this.ariaComms.logScroll; },
+        set(v) { this.ariaComms.logScroll = v; },
+      },
+    });
 
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
@@ -348,6 +461,52 @@ export class Game {
   get pausedFromState() {
     return this._stateManager.pausedFrom;
   }
+
+  // ── Campaign state bridges (delegates to CampaignManager) ──
+  get campaignLevel() { return this.campaign.level; }
+  set campaignLevel(v) { this.campaign.level = v; }
+  get campaignAct() { return this.campaign.act; }
+  set campaignAct(v) { this.campaign.act = v; }
+  get ngPlusCycle() { return this.campaign.ngPlusCycle; }
+  set ngPlusCycle(v) { this.campaign.ngPlusCycle = v; }
+  get ngPlusPrompt() { return this.campaign.ngPlusPrompt; }
+  set ngPlusPrompt(v) { this.campaign.ngPlusPrompt = v; }
+  get ngPlusPromptSel() { return this.campaign.ngPlusPromptSel; }
+  set ngPlusPromptSel(v) { this.campaign.ngPlusPromptSel = v; }
+  get campaignMissedWeapons() { return this.campaign.missedWeapons; }
+  set campaignMissedWeapons(v) { this.campaign.missedWeapons = v; }
+  get campaignPromptSelection() { return this.campaign.promptSelection; }
+  set campaignPromptSelection(v) { this.campaign.promptSelection = v; }
+
+  // ── Tutorial state bridges (delegates to TutorialSystem) ──
+  get tutorialStep() { return this.tutorial.step; }
+  set tutorialStep(v) { this.tutorial.step = v; }
+  get tutorialStepTime() { return this.tutorial.stepTime; }
+  set tutorialStepTime(v) { this.tutorial.stepTime = v; }
+  get tutorialMenuSelection() { return this.tutorial.menuSelection; }
+  set tutorialMenuSelection(v) { this.tutorial.menuSelection = v; }
+  get tutorialShowCompletionMenu() { return this.tutorial.showCompletionMenu; }
+  set tutorialShowCompletionMenu(v) { this.tutorial.showCompletionMenu = v; }
+  get tutorialPickedUp() { return this.tutorial.pickedUp; }
+  set tutorialPickedUp(v) { this.tutorial.pickedUp = v; }
+  get tutorialWeaponPickedUp() { return this.tutorial.weaponPickedUp; }
+  set tutorialWeaponPickedUp(v) { this.tutorial.weaponPickedUp = v; }
+  get tutorialWeaponSwapped() { return this.tutorial.weaponSwapped; }
+  set tutorialWeaponSwapped(v) { this.tutorial.weaponSwapped = v; }
+  get tutorialSecondWeaponPickedUp() { return this.tutorial.secondWeaponPickedUp; }
+  set tutorialSecondWeaponPickedUp(v) { this.tutorial.secondWeaponPickedUp = v; }
+  get tutorialDoorOpened() { return this.tutorial.doorOpened; }
+  set tutorialDoorOpened(v) { this.tutorial.doorOpened = v; }
+  get tutorialDashed() { return this.tutorial.dashed; }
+  set tutorialDashed(v) { this.tutorial.dashed = v; }
+  get tutorialCrouched() { return this.tutorial.crouched; }
+  set tutorialCrouched(v) { this.tutorial.crouched = v; }
+  get tutorialSlid() { return this.tutorial.slid; }
+  set tutorialSlid(v) { this.tutorial.slid = v; }
+  get tutorialFired() { return this.tutorial.fired; }
+  set tutorialFired(v) { this.tutorial.fired = v; }
+  get tutorialChronoUsed() { return this.tutorial.chronoUsed; }
+  set tutorialChronoUsed(v) { this.tutorial.chronoUsed = v; }
 
   set pausedFromState(v) {
     // Allow legacy direct assignment — routes through StateManager internals.
@@ -490,6 +649,10 @@ export class Game {
       this.advanceCutsceneFrame();
       return;
     }
+    if (this.state === GameState.SETTINGS && e.button === 0) {
+      this._handleSettingsClick(e);
+      return;
+    }
     if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
       this._handleCreatorClick(e);
       return;
@@ -530,8 +693,16 @@ export class Game {
     }
   }
 
-  /** Mouse-wheel weapon cycling: scroll down = next, scroll up = previous. */
+  /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
   _inputWheel(deltaY) {
+    if (this.state === GameState.SETTINGS) {
+      const defs = getSettingsForCategory(this.isTouchDevice, this.settingsCategory);
+      if (!defs.length) return;
+      const dir = deltaY > 0 ? 1 : -1;
+      this.settingsSelection = (this.settingsSelection + dir + defs.length) % defs.length;
+      this.audio.menuSelect();
+      return;
+    }
     if (this.state !== GameState.PLAYING) return;
     const count = this.player.weapons.length;
     if (count <= 1) return;
@@ -658,23 +829,7 @@ export class Game {
 
     // Character creator — full-screen customization
     if (this.state === GameState.CHARACTER_CREATE) {
-      const categories = [
-        null, // NAME tab — handled specially
-        CHARACTER_COLORS,
-        ARMOR_STYLES,
-        BADGES,
-        WEAPON_SKINS,
-        LOADOUT_CLASSES,
-      ];
-      const catKeys = [
-        null, // NAME
-        "colorIndex",
-        "armorIndex",
-        "badgeIndex",
-        "weaponSkinIndex",
-        "loadoutIndex",
-      ];
-      const catLen = categories.length;
+      const catLen = CREATOR_CATEGORIES.length;
 
       // NAME tab (0) — typed text input
       if (this.creatorCategory === 0) {
@@ -727,7 +882,8 @@ export class Game {
         return;
       }
 
-      const itemLen = categories[this.creatorCategory].length;
+      const curCat = CREATOR_CATEGORIES[this.creatorCategory];
+      const itemLen = curCat.data.length;
 
       // Switch category
       if (code === "Tab") {
@@ -753,30 +909,28 @@ export class Game {
 
       // Navigate items within category
       if (code === "ArrowUp" || code === "KeyW") {
-        const key = catKeys[this.creatorCategory];
-        let next = (this.character[key] - 1 + itemLen) % itemLen;
+        let next = (this.character[curCat.key] - 1 + itemLen) % itemLen;
         // Skip locked loadouts
         if (this.creatorCategory === 5) {
           for (let tries = 0; tries < itemLen; tries++) {
-            if (categories[5][next].unlocked !== false) break;
+            if (curCat.data[next].unlocked !== false) break;
             next = (next - 1 + itemLen) % itemLen;
           }
         }
-        this.character[key] = next;
+        this.character[curCat.key] = next;
         this.audio.menuSelect();
         return;
       }
       if (code === "ArrowDown" || code === "KeyS") {
-        const key = catKeys[this.creatorCategory];
-        let next = (this.character[key] + 1) % itemLen;
+        let next = (this.character[curCat.key] + 1) % itemLen;
         // Skip locked loadouts
         if (this.creatorCategory === 5) {
           for (let tries = 0; tries < itemLen; tries++) {
-            if (categories[5][next].unlocked !== false) break;
+            if (curCat.data[next].unlocked !== false) break;
             next = (next + 1) % itemLen;
           }
         }
-        this.character[key] = next;
+        this.character[curCat.key] = next;
         this.audio.menuSelect();
         return;
       }
@@ -958,7 +1112,7 @@ export class Game {
     }
 
     if (this.state === GameState.SETTINGS) {
-      // Category-aware navigation: Q/E/E, Tab, ArrowLeft/Right, W/S, ArrowUp/Down
+      // Category-aware navigation: Q/E = category, W/S/↑/↓ = navigate, A/D/←/→ = value, Enter/Space = cycle
       const cats = getVisibleCategories(this.isTouchDevice);
       const catIdx = cats.indexOf(this.settingsCategory);
       const settingsDef = getSettingsForCategory(
@@ -967,22 +1121,15 @@ export class Game {
       );
       const settingsCount = settingsDef.length;
 
-      // Switch category with Tab / Q / E / ArrowLeft / ArrowRight / W / S
-      if (
-        code === "Tab" ||
-        code === "KeyQ" ||
-        code === "ArrowLeft" ||
-        code === "KeyA"
-      ) {
-        // Previous category
+      // Switch category: Q = prev, E = next
+      if (code === "KeyQ") {
         const next = (catIdx - 1 + cats.length) % cats.length;
         this.settingsCategory = cats[next];
         this.settingsSelection = 0;
         this.audio.menuSelect();
         return;
       }
-      if (code === "KeyE" || code === "ArrowRight" || code === "KeyD") {
-        // Next category
+      if (code === "KeyE") {
         const next = (catIdx + 1) % cats.length;
         this.settingsCategory = cats[next];
         this.settingsSelection = 0;
@@ -1003,34 +1150,20 @@ export class Game {
         return;
       }
 
-      // Change setting value
-      if (code === "Enter" || code === "Space") {
+      // Change setting value — Enter/Space cycle forward, Left/A decrement, Right/D increment
+      const stepDir =
+        code === "ArrowLeft" || code === "KeyA" ? -1 :
+        code === "ArrowRight" || code === "KeyD" || code === "Enter" || code === "Space" ? 1 : 0;
+      if (stepDir !== 0) {
         const def = settingsDef[this.settingsSelection];
-        if (!def) {
-          /* no-op if category is empty */
-        } else {
-          // Enter/Space always increments; ArrowLeft/Right handle decrement in the settings arrow handler below.
-          if (def.type === "toggle") {
-            this.settings[def.key] = !this.settings[def.key];
-          } else if (def.wrap) {
-            const range = def.max - def.min + 1;
-            this.settings[def.key] =
-              def.min +
-              ((this.settings[def.key] - def.min + 1 + range) % range);
-          } else {
-            let val = this.settings[def.key] + def.step;
-            val = Math.max(def.min, Math.min(def.max, val));
-            if (def.round != null)
-              val =
-                Math.round(val * Math.pow(10, def.round)) /
-                Math.pow(10, def.round);
-            this.settings[def.key] = val;
-          }
+        if (def) {
+          applySettingStep(this.settings, def, stepDir);
           if (def.onChange) def.onChange(this);
           this.audio.menuConfirm();
         }
         return;
       }
+
       if (code === "Escape") {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
@@ -1269,874 +1402,97 @@ export class Game {
   }
 
   // Save / Load
+  // ── Save/Load (delegated to SaveSystem) ──────────────────
   saveSettings() {
-    try {
-      localStorage.setItem("cc_settings", JSON.stringify(this.settings));
-    } catch (_) {}
+    Save.saveSettings(this.settings);
     this.input.saveKeybinds();
   }
 
   loadSettings() {
-    try {
-      const raw = localStorage.getItem("cc_settings");
-      if (raw) {
-        const saved = JSON.parse(raw);
-        // Whitelist known keys to avoid prototype pollution
-        for (const key of Object.keys(this.settings)) {
-          if (Object.prototype.hasOwnProperty.call(saved, key)) {
-            const val = saved[key];
-            if (typeof val !== typeof this.settings[key]) continue;
-            this.settings[key] = val;
-          }
-        }
-      }
-    } catch (_) {}
-    // Keybinds are loaded by InputManager.loadKeybinds(), called from setupInput()
+    Save.loadSettings(this.settings);
   }
 
-  // One-time migration for existing mobile users who had desktop-tuned defaults
   _applyMobileMigration() {
-    if (!this.isTouchDevice) return;
-    try {
-      // v2 migration: widen FOV to 100, shrink HUD to 65
-      if (!localStorage.getItem("cc_mobile_v2")) {
-        const hasExisting = localStorage.getItem("cc_settings") !== null;
-        // Only override if user still has old v1 defaults or desktop defaults
-        const usesOldDefaults =
-          (this.settings.fov === 90 && this.settings.hudScale === 75) ||
-          (this.settings.fov === 70 && this.settings.hudScale === 100);
-        if (!hasExisting || usesOldDefaults) {
-          this.settings.fov = 100;
-          this.settings.hudScale = 65;
-          this.saveSettings();
-        }
-        localStorage.setItem("cc_mobile_v2", "1");
-        localStorage.setItem("cc_mobile_v1", "1");
-      }
-      // v3 migration: bump touch sensitivity from 1.5 to 2.0
-      if (!localStorage.getItem("cc_mobile_v3")) {
-        if (this.settings.touchSensitivity === 1.5) {
-          this.settings.touchSensitivity = 2.0;
-          this.saveSettings();
-        }
-        localStorage.setItem("cc_mobile_v3", "1");
-      }
-    } catch (_) {}
+    Save.applyMobileMigration(this.isTouchDevice, this.settings, () => this.saveSettings());
   }
 
-  // Dev feature flags
   loadDevFlags() {
-    try {
-      this.alwaysShowTutorial =
-        localStorage.getItem("cc_dev_always_tutorial") === "1";
-    } catch (_) {}
+    this.alwaysShowTutorial = Save.loadDevFlags();
   }
 
   saveCharacter() {
-    try {
-      localStorage.setItem("cc_character", JSON.stringify(this.character));
-    } catch (_) {}
+    Save.saveCharacter(this.character);
   }
 
   loadCharacter() {
-    try {
-      const raw = localStorage.getItem("cc_character");
-      if (raw) {
-        const saved = JSON.parse(raw);
-        const maxIndices = {
-          colorIndex: CHARACTER_COLORS.length - 1,
-          armorIndex: ARMOR_STYLES.length - 1,
-          badgeIndex: BADGES.length - 1,
-          weaponSkinIndex: WEAPON_SKINS.length - 1,
-          loadoutIndex: LOADOUT_CLASSES.length - 1,
-        };
-        for (const key of Object.keys(DEFAULT_CHARACTER)) {
-          if (Object.prototype.hasOwnProperty.call(saved, key)) {
-            let val = saved[key];
-            if (typeof val !== typeof DEFAULT_CHARACTER[key]) continue;
-            // Clamp indices to valid range
-            if (key in maxIndices) {
-              val = Math.max(0, Math.min(val, maxIndices[key]));
-            }
-            this.character[key] = val;
-          }
-        }
-      }
-    } catch (_) {}
+    Save.loadCharacter(this.character);
   }
 
   setAlwaysTutorial(on) {
     this.alwaysShowTutorial = on;
-    try {
-      if (on) {
-        localStorage.setItem("cc_dev_always_tutorial", "1");
-      } else {
-        localStorage.removeItem("cc_dev_always_tutorial");
-      }
-    } catch (_) {}
+    Save.setAlwaysTutorial(on);
   }
 
-  // Achievement persistence
-  saveAchievements() {
-    try {
-      localStorage.setItem(
-        "cc_achievements",
-        JSON.stringify({
-          unlocked: this.unlockedAchievements,
-          stats: this.achievementStats,
-        }),
-      );
-    } catch (_) {}
-  }
-
-  loadAchievements() {
-    try {
-      const raw = localStorage.getItem("cc_achievements");
-      if (raw) {
-        const data = JSON.parse(raw);
-        if (data.unlocked && typeof data.unlocked === "object") {
-          for (const key of Object.keys(data.unlocked)) {
-            if (Object.prototype.hasOwnProperty.call(ACHIEVEMENTS, key)) {
-              this.unlockedAchievements[key] = true;
-            }
-          }
-        }
-        if (data.stats && typeof data.stats === "object") {
-          for (const key of Object.keys(this.achievementStats)) {
-            if (Object.prototype.hasOwnProperty.call(data.stats, key)) {
-              const val = data.stats[key];
-              if (typeof val === typeof this.achievementStats[key]) {
-                this.achievementStats[key] = val;
-              }
-            }
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  unlockAchievement(id) {
-    if (this.unlockedAchievements[id]) return;
-    if (!ACHIEVEMENTS[id] || id.startsWith("_")) return;
-    this.unlockedAchievements[id] = true;
-    this.achievementQueue.push(id);
-    this.saveAchievements();
-  }
-
-  checkAchievements() {
-    // Update rolling stats
-    this.achievementStats.highestScore = Math.max(
-      this.achievementStats.highestScore,
-      this.player.score,
-    );
-
-    for (const [id, ach] of Object.entries(ACHIEVEMENTS)) {
-      if (id.startsWith("_")) continue;
-      if (this.unlockedAchievements[id]) continue;
-      if (ach.check(this.achievementStats)) {
-        this.unlockAchievement(id);
-      }
-    }
-
-    // Periodic save of lifetime stats (every 30s)
-    const now = performance.now();
-    if (!this._lastStatsSave || now - this._lastStatsSave > 30000) {
-      this._lastStatsSave = now;
-      this.saveAchievements();
-    }
-  }
+  saveAchievements() { this.achievementSystem.save(); }
+  loadAchievements() { this.achievementSystem.load(); }
+  unlockAchievement(id) { this.achievementSystem.unlockAchievement(id); }
+  checkAchievements() { this.achievementSystem.checkAchievements(this.player.score); }
 
   updateAchievementToast(dt) {
-    // Process toast queue
-    if (!this.achievementToast && this.achievementQueue.length > 0) {
-      const id = this.achievementQueue.shift();
-      const ach = ACHIEVEMENTS[id];
-      if (ach) {
-        this.achievementToast = {
-          id,
-          name: ach.name,
-          description: ach.description,
-          icon: ach.icon,
-          time: 0,
-          duration: 3.5, // seconds to display
-        };
-        this.audio.pickup();
-      }
-    }
-    if (this.achievementToast) {
-      this.achievementToast.time += dt;
-      if (this.achievementToast.time >= this.achievementToast.duration) {
-        this.achievementToast = null;
-      }
-    }
+    const fx = this.achievementSystem.updateToast(dt);
+    if (fx.playSound) this.audio.pickup();
   }
 
-  renderAchievementToast(ctx, w, h) {
-    const toast = this.achievementToast;
-    if (!toast) return;
+  renderAchievementToast(ctx, w, h) { this.achievementSystem.renderToast(ctx, w, h); }
 
-    const t = toast.time;
-    const dur = toast.duration;
-    // Slide in from right (0-0.4s), hold, slide out (last 0.4s)
-    let slideX = 0;
-    if (t < 0.4) {
-      slideX = (1 - t / 0.4) * 350;
-    } else if (t > dur - 0.4) {
-      slideX = ((t - (dur - 0.4)) / 0.4) * 350;
-    }
-
-    const boxW = 320;
-    const boxH = 70;
-    const bx = w - boxW - 20 + slideX;
-    const by = 20;
-
-    ctx.save();
-
-    // Background
-    ctx.fillStyle = "rgba(10, 10, 30, 0.92)";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 8);
-    ctx.fill();
-
-    // Gold border
-    ctx.strokeStyle = "#ffcc00";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 8);
-    ctx.stroke();
-
-    // Gold accent line on left
-    ctx.fillStyle = "#ffcc00";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, 4, boxH, [8, 0, 0, 8]);
-    ctx.fill();
-
-    // Icon — draw SVG image or fall back to text
-    const iconImg = this.achievementIcons[toast.icon];
-    if (iconImg && iconImg.complete && iconImg.naturalWidth > 0) {
-      const iconSize = 32;
-      ctx.drawImage(iconImg, bx + 14, by + 19, iconSize, iconSize);
-    } else {
-      ctx.font = "28px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(toast.icon, bx + 30, by + 44);
-    }
-
-    // "ACHIEVEMENT UNLOCKED"
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 11px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("ACHIEVEMENT UNLOCKED", bx + 55, by + 22);
-
-    // Name
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 16px monospace";
-    ctx.fillText(toast.name, bx + 55, by + 42);
-
-    // Description
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = "12px monospace";
-    ctx.fillText(toast.description, bx + 55, by + 58);
-
-    ctx.restore();
-  }
-
-  // ── ARIA in-game comms ──────────────────────────────────
+  // ── ARIA in-game comms (delegated to AriaCommsSystem) ──
   queueAriaMessage(category) {
-    if (!this.ariaEnabled) return;
-    const pool = ARIA_COMMS[category];
-    if (!pool || pool.length === 0) return;
-    let text = pool[Math.floor(Math.random() * pool.length)];
-    text = text.replace("{ROUNDS}", String(this.arenaRound || 0));
-    // Only idle chatter and personality moments use the subtle bottom-left style
-    const prominent = !["idle", "ariaPersonality"].includes(category);
-    this.ariaQueue.push({
-      text,
-      color: "#00ffdd",
-      duration: prominent ? 4.5 : 3.5,
-      prominent,
-    });
+    this.ariaComms.queueMessage(category, this.arenaRound);
   }
 
   triggerAriaOnce(key, category) {
-    if (this.ariaTriggered[key]) return;
-    this.ariaTriggered[key] = true;
-    this.queueAriaMessage(category);
+    this.ariaComms.triggerOnce(key, category, this.arenaRound);
   }
 
   updateAriaComms(dt) {
-    if (!this.ariaEnabled) return;
-    // Drain queue into active message
-    if (!this.ariaMessage && this.ariaQueue.length > 0) {
-      const msg = this.ariaQueue.shift();
-      this.ariaMessage = { ...msg, life: 0 };
-      this.ariaIdleTimer = 0; // reset idle clock when speaking
-      // Log the message for review
-      this.ariaMessageLog.push(msg.text);
-    }
-    if (this.ariaMessage) {
-      this.ariaMessage.life += dt;
-      if (this.ariaMessage.life >= this.ariaMessage.duration) {
-        this.ariaMessage = null;
-      }
-    }
-
-    // Track combat time for longSurvival trigger
-    if (this.state === GameState.PLAYING) {
-      this.ariaCombatTimer += dt;
-      // Long survival callout at 120s
-      if (this.ariaCombatTimer > 120) {
-        this.triggerAriaOnce("longSurvival", "longSurvival");
-      }
-
-      // Idle chatter — ARIA talks when nothing's been said for a while
-      this.ariaIdleTimer += dt;
-      if (
-        this.ariaIdleTimer >= this.ariaIdleThreshold &&
-        !this.ariaMessage &&
-        this.ariaQueue.length === 0
-      ) {
-        // 50% chance idle, 50% chance personality moment
-        const pool = Math.random() < 0.5 ? "idle" : "ariaPersonality";
-        this.queueAriaMessage(pool);
-        // Randomize next idle between 25-50s
-        this.ariaIdleThreshold = 25 + Math.random() * 25;
-        this.ariaIdleTimer = 0;
-      }
-    }
+    this.ariaComms.update(dt, this.state === GameState.PLAYING);
   }
 
   renderAriaComms(ctx, w, h) {
-    const msg = this.ariaMessage;
-    if (!msg) return;
-
-    const t = msg.life;
-    const dur = msg.duration;
-
-    // ── Prominent (centered) messages ──
-    if (msg.prominent) {
-      let alpha = 1;
-      const fadeIn = 0.4;
-      const fadeOut = 0.5;
-      if (t < fadeIn) alpha = t / fadeIn;
-      else if (t > dur - fadeOut) alpha = 1 - (t - (dur - fadeOut)) / fadeOut;
-
-      // Slide down from top
-      let slideY = 0;
-      if (t < fadeIn) slideY = (1 - t / fadeIn) * -40;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      const pBoxW = 460;
-      const pBx = (w - pBoxW) / 2;
-      const pBy = h * 0.28 + slideY;
-
-      // Pre-compute wrapped text lines to size the box
-      const ariaText = msg.text.replace(
-        /\{AGENT\}/g,
-        this.character.name || "Agent",
-      );
-      ctx.font = "14px monospace";
-      const maxTextW = pBoxW - 32;
-      const words = ariaText.split(" ");
-      const lines = [];
-      let currentLine = "";
-      for (const word of words) {
-        const testLine = currentLine ? currentLine + " " + word : word;
-        if (ctx.measureText(testLine).width > maxTextW && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = testLine;
-        }
-      }
-      if (currentLine) lines.push(currentLine);
-      const lineH = 17;
-      const pBoxH = 64 + Math.max(0, lines.length - 1) * lineH;
-
-      // Background with stronger presence
-      ctx.fillStyle = "rgba(0, 8, 16, 0.95)";
-      ctx.beginPath();
-      ctx.roundRect(pBx, pBy, pBoxW, pBoxH, 8);
-      ctx.fill();
-
-      // Glowing border
-      ctx.shadowColor = "#00ccff";
-      ctx.shadowBlur = 12;
-      ctx.strokeStyle = "rgba(0, 200, 255, 0.6)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(pBx, pBy, pBoxW, pBoxH, 8);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // ARIA label centered
-      ctx.fillStyle = "#00ccff";
-      ctx.font = "bold 11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("ARIA", w / 2, pBy + 18);
-
-      // Message text centered
-      ctx.fillStyle = msg.color;
-      ctx.font = "14px monospace";
-      const textStartY = lines.length > 1 ? pBy + 36 : pBy + 44;
-      for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], w / 2, textStartY + i * lineH);
-      }
-
-      ctx.textAlign = "left";
-      ctx.restore();
-      return;
-    }
-
-    // Slide in from left (0-0.3s), hold, slide out (last 0.4s)
-    let slideX = 0;
-    if (t < 0.3) {
-      slideX = (1 - t / 0.3) * -360;
-    } else if (t > dur - 0.4) {
-      slideX = ((t - (dur - 0.4)) / 0.4) * -360;
-    }
-    // Fade
-    let alpha = 1;
-    if (t < 0.3) alpha = t / 0.3;
-    else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
-    // Pre-compute wrapped text for dynamic box sizing
-    const ariaText = msg.text.replace(
-      /\{AGENT\}/g,
-      this.character.name || "Agent",
-    );
-    const isCompactMobile = this.isTouchDevice && isCompactPhone(h);
-    const boxW = isCompactMobile ? Math.min(340, w - 32) : 340;
-    const textAreaX = 54; // offset from box left to text start
-    const maxTextW = boxW - textAreaX - 12;
-    ctx.font = "13px monospace";
-    const words = ariaText.split(" ");
-    const msgLines = [];
-    let curLine = "";
-    for (const word of words) {
-      const test = curLine ? curLine + " " + word : word;
-      if (ctx.measureText(test).width > maxTextW && curLine) {
-        msgLines.push(curLine);
-        curLine = word;
-      } else {
-        curLine = test;
-      }
-    }
-    if (curLine) msgLines.push(curLine);
-    const lineH = 15;
-    const baseBoxH = 54;
-    const boxH = baseBoxH + Math.max(0, msgLines.length - 1) * lineH;
-    const bx = (w - boxW) / 2 + slideX;
-    const by = h - boxH - 70;
-
-    // Background
-    ctx.fillStyle = "rgba(0, 10, 20, 0.92)";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 6);
-    ctx.fill();
-
-    // Cyan border (subtle)
-    ctx.strokeStyle = "rgba(0,200,255,0.35)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 6);
-    ctx.stroke();
-
-    // --- ARIA Mini Portrait ---
-    const px = bx + 7;
-    const py = by + 5;
-    const pw = 40;
-    const ph = 44;
-
-    // Portrait background
-    ctx.fillStyle = "rgba(0, 30, 50, 0.9)";
-    ctx.beginPath();
-    ctx.roundRect(px, py, pw, ph, 4);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,200,255,0.5)";
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.roundRect(px, py, pw, ph, 4);
-    ctx.stroke();
-
-    const cx = px + pw / 2;
-    const cy = py + ph / 2 - 1;
-    const breathe = Math.sin(t * 2) * 0.5;
-
-    // Neck
-    ctx.fillStyle = "rgba(180, 220, 240, 0.7)";
-    ctx.fillRect(cx - 3, cy + 8, 6, 7);
-
-    // High-collar suit top
-    ctx.fillStyle = "rgba(20, 50, 70, 0.95)";
-    ctx.beginPath();
-    ctx.moveTo(cx - 14, cy + 14 + breathe);
-    ctx.lineTo(cx - 6, cy + 9);
-    ctx.lineTo(cx - 3, cy + 13);
-    ctx.lineTo(cx + 3, cy + 13);
-    ctx.lineTo(cx + 6, cy + 9);
-    ctx.lineTo(cx + 14, cy + 14 + breathe);
-    ctx.lineTo(cx + 14, cy + 22);
-    ctx.lineTo(cx - 14, cy + 22);
-    ctx.closePath();
-    ctx.fill();
-    // Suit collar cyan trim
-    ctx.strokeStyle = "#00ddff";
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(cx - 6, cy + 9);
-    ctx.lineTo(cx - 14, cy + 14 + breathe);
-    ctx.moveTo(cx + 6, cy + 9);
-    ctx.lineTo(cx + 14, cy + 14 + breathe);
-    ctx.stroke();
-    // Suit center line
-    ctx.strokeStyle = "rgba(0,200,255,0.4)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy + 13);
-    ctx.lineTo(cx, cy + 22);
-    ctx.stroke();
-
-    // Face (slightly oval)
-    ctx.fillStyle = "rgba(190, 225, 245, 0.8)";
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 2, 9, 11, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Holographic grid overlay on face
-    ctx.strokeStyle = "rgba(0,200,255,0.12)";
-    ctx.lineWidth = 0.3;
-    for (let gy = cy - 12; gy < cy + 9; gy += 3) {
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, gy);
-      ctx.lineTo(cx + 9, gy);
-      ctx.stroke();
-    }
-
-    // Hair — asymmetric bob
-    ctx.fillStyle = "rgba(40, 50, 70, 0.9)";
-    // Left side (longer)
-    ctx.beginPath();
-    ctx.moveTo(cx - 3, cy - 14);
-    ctx.quadraticCurveTo(cx - 13, cy - 10, cx - 12, cy + 3);
-    ctx.lineTo(cx - 9, cy + 2);
-    ctx.quadraticCurveTo(cx - 10, cy - 8, cx - 3, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    // Right side (shorter)
-    ctx.beginPath();
-    ctx.moveTo(cx + 3, cy - 14);
-    ctx.quadraticCurveTo(cx + 12, cy - 10, cx + 10, cy - 1);
-    ctx.lineTo(cx + 8, cy - 2);
-    ctx.quadraticCurveTo(cx + 9, cy - 8, cx + 3, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    // Top hair
-    ctx.beginPath();
-    ctx.moveTo(cx - 5, cy - 13);
-    ctx.quadraticCurveTo(cx, cy - 16, cx + 5, cy - 13);
-    ctx.quadraticCurveTo(cx, cy - 11, cx - 5, cy - 13);
-    ctx.fill();
-
-    // Cyan highlight streak (left side)
-    ctx.strokeStyle = "#00eeff";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(cx - 5, cy - 13);
-    ctx.quadraticCurveTo(cx - 12, cy - 7, cx - 11, cy + 1);
-    ctx.stroke();
-
-    // Eyes — glowing cyan
-    const eyeGlow = 0.7 + Math.sin(t * 3) * 0.3;
-    ctx.fillStyle = `rgba(0, 230, 255, ${eyeGlow})`;
-    ctx.beginPath();
-    ctx.ellipse(cx - 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Eye glow bloom
-    ctx.fillStyle = `rgba(0, 200, 255, ${eyeGlow * 0.15})`;
-    ctx.beginPath();
-    ctx.ellipse(cx - 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Slight smile
-    ctx.strokeStyle = "rgba(100, 160, 200, 0.5)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy + 1, 3, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-
-    // Tech headset with boom mic
-    ctx.strokeStyle = "rgba(80, 100, 120, 0.9)";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(cx, cy - 3, 11, -0.65 * Math.PI, -0.15 * Math.PI);
-    ctx.stroke();
-    // Earpiece
-    ctx.fillStyle = "rgba(30, 50, 70, 0.9)";
-    ctx.beginPath();
-    ctx.ellipse(cx + 10, cy - 1, 2.5, 4, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-    // Boom mic arm
-    ctx.strokeStyle = "rgba(80, 100, 120, 0.7)";
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(cx + 9, cy + 2);
-    ctx.quadraticCurveTo(cx + 8, cy + 6, cx + 3, cy + 7);
-    ctx.stroke();
-    // Mic tip
-    ctx.fillStyle = "#00ddff";
-    ctx.beginPath();
-    ctx.arc(cx + 3, cy + 7, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Holographic scanlines over portrait
-    ctx.fillStyle = `rgba(0, 200, 255, ${0.03 + Math.sin(t * 8) * 0.02})`;
-    for (let sy = 0; sy < ph; sy += 2) {
-      ctx.fillRect(px, py + sy, pw, 1);
-    }
-
-    // --- Text area ---
-    const tx = bx + 54;
-
-    // "ARIA" label
-    ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 10px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("ARIA", tx, by + 17);
-
-    // Pulsing indicator dot
-    const dotAlpha = 0.5 + Math.sin(t * 6) * 0.4;
-    ctx.fillStyle = `rgba(0,255,200,${dotAlpha})`;
-    ctx.beginPath();
-    ctx.arc(tx + 32, by + 14, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Waveform visualizer (animated while speaking)
-    ctx.strokeStyle = `rgba(0, 200, 255, ${0.3 + Math.sin(t * 4) * 0.15})`;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    for (let i = 0; i < 20; i++) {
-      const wx = tx + 42 + i * 3;
-      const wh = Math.sin(t * 10 + i * 0.7) * (3 + Math.sin(t * 3 + i) * 2);
-      ctx.moveTo(wx, by + 14 - wh);
-      ctx.lineTo(wx, by + 14 + wh);
-    }
-    ctx.stroke();
-
-    // Message text (word-wrapped)
-    ctx.fillStyle = msg.color;
-    ctx.font = "13px monospace";
-    for (let i = 0; i < msgLines.length; i++) {
-      ctx.fillText(msgLines[i], tx, by + 38 + i * lineH);
-    }
-
-    ctx.restore();
+    this.ariaComms.renderMessage(ctx, w, h, this.character.name, this.isTouchDevice);
   }
 
   saveArena() {
-    try {
-      const data = {
-        version: SAVE_VERSION,
-        round: this.arenaRound,
-        ...this.player.serialize(),
-        upgradeLevels: this.upgradeLevels,
-        difficulty: this.settings.difficulty,
-      };
-      localStorage.setItem("cc_arena_save", JSON.stringify(data));
-    } catch (_) {}
+    Save.saveArena(this.arenaRound, this.player, this.upgradeLevels, this.settings.difficulty);
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
   loadArena() {
-    try {
-      const raw = localStorage.getItem("cc_arena_save");
-      if (!raw) return false;
-      const data = JSON.parse(raw);
-      if (data.version !== SAVE_VERSION) {
-        this.clearArenaSave();
-        return false;
-      }
-      this.mode = "arena";
-      this.arenaRound = data.round;
-      this.player.reset();
-      this.player.deserialize(data);
-      this.upgradeLevels = data.upgradeLevels || {};
-      this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
-      this.startArenaRound();
-      return true;
-    } catch (_) {
-      return false;
-    }
+    const data = Save.loadArenaData();
+    if (!data) return false;
+    this.mode = "arena";
+    this.arenaRound = data.round;
+    this.player.reset();
+    this.player.deserialize(data);
+    this.upgradeLevels = data.upgradeLevels || {};
+    this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
+    this.startArenaRound();
+    return true;
   }
 
-  clearArenaSave() {
-    try {
-      localStorage.removeItem("cc_arena_save");
-    } catch (_) {}
-  }
+  clearArenaSave() { Save.clearArenaSave(); }
 
-  saveCampaign() {
-    try {
-      const entityStates = this.entities.map((e) => {
-        if (e.type === "enemy") {
-          return {
-            type: "enemy",
-            active: e.active,
-            health: e.health,
-            x: e.x,
-            y: e.y,
-            state: e.state,
-          };
-        }
-        return { type: e.type, active: e.active };
-      });
-      const data = {
-        version: SAVE_VERSION,
-        level: this.campaignLevel,
-        act: this.campaignAct || 1,
-        ngPlusCycle: this.ngPlusCycle || 0,
-        playerX: this.player.x,
-        playerY: this.player.y,
-        playerAngle: this.player.angle,
-        ...this.player.serialize(),
-        difficulty: this.settings.difficulty,
-        mapGrid: this.map.grid,
-        entityStates,
-        killedEnemies: this.killedEnemies,
-      };
-      localStorage.setItem("cc_campaign_save", JSON.stringify(data));
-    } catch (_) {}
-  }
+  saveCampaign() { this.campaign.save(); }
 
-  loadCampaignSave() {
-    try {
-      const raw = localStorage.getItem("cc_campaign_save");
-      if (!raw) return false;
-      const data = JSON.parse(raw);
-      if (data.version !== SAVE_VERSION) {
-        this.clearCampaignSave();
-        return false;
-      }
-      this.mode = "campaign";
-      this.campaignLevel = data.level;
-      this.campaignAct = data.act || 1;
-      this.ngPlusCycle = data.ngPlusCycle || 0;
-      this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
-      this.player.reset();
-      this.loadCampaignLevel(this.campaignLevel);
+  loadCampaignSave() { return this.campaign.load(); }
 
-      // Restore player stats
-      this.player.deserialize(data);
-
-      // Restore exact position if save has it
-      if (data.playerX !== undefined) {
-        this.player.x = data.playerX;
-        this.player.y = data.playerY;
-        this.player.angle = data.playerAngle;
-      }
-
-      // Restore map grid (opened doors/secrets)
-      if (data.mapGrid) {
-        this.map.grid = data.mapGrid;
-      }
-
-      // Restore entity states (dead enemies, collected pickups)
-      if (
-        data.entityStates &&
-        data.entityStates.length === this.entities.length
-      ) {
-        for (let i = 0; i < data.entityStates.length; i++) {
-          const saved = data.entityStates[i];
-          const ent = this.entities[i];
-          // Validate type match before restoring to prevent index-order corruption
-          if (saved.type !== ent.type) continue;
-          ent.active = saved.active;
-          if (saved.type === "enemy" && ent.type === "enemy") {
-            ent.health = saved.health;
-            ent.x = saved.x;
-            ent.y = saved.y;
-            ent.state = saved.state;
-          }
-        }
-        this.killedEnemies = data.killedEnemies ?? 0;
-      }
-
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  clearCampaignSave() {
-    try {
-      localStorage.removeItem("cc_campaign_save");
-    } catch (_) {}
-  }
+  clearCampaignSave() { this.campaign.clearSave(); }
 
   /** Enter New Game Plus — keep weapons & score, reset to Act 1, bump cycle */
-  startNgPlus() {
-    this.ngPlusCycle++;
-    this.ngPlusPrompt = false;
-    this.campaignAct = 1;
-    this.campaignLevel = 0;
-    this.campaignMissedWeapons = [];
-    // Keep weapons, score, and upgrades — heal to full
-    this.player.health = this.player.maxHealth;
-    this.player.shield = this.player.maxShield || 0;
-    this.player.ammo = Math.min(this.player.ammo + 100, 999);
-    this.player.alive = true;
-    // Play NG+ intro cutscene, then load level
-    const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
-    const hasCycleCutscene = this.cutsceneEngine.hasScript(cutsceneKey);
-    const afterCutscene = () => {
-      this.loadCampaignLevel(0);
-      this.saveCampaign();
-      this.lockPointer();
-    };
-    this.audio.stopMusic();
-    if (hasCycleCutscene) {
-      this.startCutscene(cutsceneKey, afterCutscene);
-    } else {
-      this.startCutscene("ng_plus_intro", afterCutscene);
-    }
-  }
+  startNgPlus() { this.campaign.startNgPlus(); }
 
-  hasSave() {
-    return this.getSaveInfo().length > 0;
-  }
-
-  getSaveInfo() {
-    const info = [];
-    try {
-      const arena = localStorage.getItem("cc_arena_save");
-      if (arena) {
-        const d = JSON.parse(arena);
-        info.push({ mode: "arena", round: d.round, score: d.score });
-      }
-      const campaign = localStorage.getItem("cc_campaign_save");
-      if (campaign) {
-        const d = JSON.parse(campaign);
-        info.push({
-          mode: "campaign",
-          level: d.level + 1,
-          score: d.score,
-          ngPlusCycle: d.ngPlusCycle || 0,
-        });
-      }
-    } catch (_) {}
-    return info;
-  }
+  hasSave() { return Save.hasSave(); }
+  getSaveInfo() { return Save.getSaveInfo(); }
 
   // --- Asset Editor Hooks ---
   getAssetMetadata(category) {
@@ -2165,48 +1521,7 @@ export class Game {
   }
 
   getDifficultyMultipliers() {
-    switch (this.settings.difficulty) {
-      case 0:
-        return {
-          healthMul: 0.6,
-          damageMul: 0.5,
-          speedMul: 0.8,
-          spawnMul: 0.7,
-          timerBonus: 20,
-        };
-      case 1:
-        return {
-          healthMul: 1.0,
-          damageMul: 1.0,
-          speedMul: 1.0,
-          spawnMul: 1.0,
-          timerBonus: 0,
-        };
-      case 2:
-        return {
-          healthMul: 1.4,
-          damageMul: 1.4,
-          speedMul: 1.15,
-          spawnMul: 1.3,
-          timerBonus: -10,
-        };
-      case 3:
-        return {
-          healthMul: 2.0,
-          damageMul: 1.8,
-          speedMul: 1.3,
-          spawnMul: 1.6,
-          timerBonus: -20,
-        };
-      default:
-        return {
-          healthMul: 1.0,
-          damageMul: 1.0,
-          speedMul: 1.0,
-          spawnMul: 1.0,
-          timerBonus: 0,
-        };
-    }
+    return _getDifficultyMultipliers(this.settings.difficulty);
   }
 
   startArena() {
@@ -2253,24 +1568,8 @@ export class Game {
     this._chronoBombs = [];
     const diff = this.getDifficultyMultipliers();
 
-    for (const es of mMap.enemySpawns) {
-      const et = ENEMY_TYPES[es.type] || ENEMY_TYPES.drone;
-      const e = new Enemy(es.x, es.y, es.type);
-      e.health = et.health * diff.healthMul;
-      e.maxHealth = e.health;
-      e.speed = et.speed * diff.speedMul;
-      e.damage = (et.damage || 10) * diff.damageMul;
-      e.aiType = et.aiType || "patrol";
-      e.baseColor = et.baseColor || "#ff0000";
-      e.darkColor = et.darkColor || "#880000";
-      this.entities.push(e);
-    }
-
-    // Spawn pickups
-    for (const pk of mMap.pickupSpawns) {
-      const p = new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId });
-      this.entities.push(p);
-    }
+    this.entities.push(...createMeltdownEnemies(mMap.enemySpawns, diff));
+    this.entities.push(...createMeltdownPickups(mMap.pickupSpawns));
 
     this.totalEnemies = mMap.enemySpawns.length;
     this.killedEnemies = 0;
@@ -2301,75 +1600,17 @@ export class Game {
     const diff = this.getDifficultyMultipliers();
     this.arenaTimer = Math.max(30, 60 + diff.timerBonus);
 
-    // Spawn enemies based on round
-    const count = Math.min(
-      this.map.enemySpawns.length,
-      Math.floor((4 + this.arenaRound * 3) * diff.spawnMul),
+    // Spawn enemies — filter spawns, create scaled enemies, create pickups
+    const validSpawns = filterArenaSpawns(
+      this.map.enemySpawns, this.player.x, this.player.y, this.map.grid,
     );
-    const types = ["drone", "glitchling"];
-    if (this.arenaRound >= 2) types.push("phantom", "corruptCop");
-    if (this.arenaRound >= 4) types.push("beast", "sentinel");
-    if (this.arenaRound >= 6) types.push("henchman", "chronoBomber");
-    if (this.arenaRound >= 8) types.push("shieldCommander");
-    if (this.arenaRound >= 10) types.push("temporalSummoner");
-
-    // TODO: Reconsider this for later levels... this gets brutally difficult
-    // Filter spawns to minimum distance 5 from player AND on empty tiles, then shuffle
-    const px = this.player.x;
-    const py = this.player.y;
-    const grid = this.map.grid;
-    const validSpawns = this.map.enemySpawns
-      .filter((s) => {
-        const dx = s.x - px;
-        const dy = s.y - py;
-        if (Math.sqrt(dx * dx + dy * dy) < 5) return false;
-        const gx = Math.floor(s.x);
-        const gy = Math.floor(s.y);
-        if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[0].length)
-          return false;
-        return grid[gy][gx] === 0;
-      })
-      .sort(() => Math.random() - 0.5);
-
-    for (let i = 0; i < count; i++) {
-      const spawn = validSpawns[i % validSpawns.length];
-      const type = types[Math.floor(Math.random() * types.length)];
-      const e = new Enemy(spawn.x, spawn.y, type);
-      // Scale health with rounds and difficulty
-      e.health = Math.floor(
-        e.health * (1 + (this.arenaRound - 1) * 0.15) * diff.healthMul,
-      );
-      e.maxHealth = e.health;
-      e.def = {
-        ...e.def,
-        damage: Math.floor(e.def.damage * diff.damageMul),
-        speed: e.def.speed * diff.speedMul,
-      };
-      this.entities.push(e);
-    }
-
-    // Spawn pickups
-    for (const p of this.map.pickups) {
-      this.entities.push(
-        new Pickup(p.x + 0.5, p.y + 0.5, p.type, { weaponId: p.weaponId }),
-      );
-    }
-
-    // Spawn one extra weapon pickup at milestone rounds (placed near top-right)
-    if (this.arenaRound >= 3) {
-      const mx = this.map.width - 4.5;
-      const my = 4.5;
-      const weaponId = this.arenaRound >= 5 ? 3 : 2;
-      this.entities.push(new Pickup(mx, my, "weapon", { weaponId }));
-    }
+    this.entities.push(...createArenaEnemies(this.arenaRound, validSpawns, diff));
+    this.entities.push(...createArenaPickups(this.map.pickups, this.arenaRound, this.map));
 
     this.killedEnemies = 0;
     this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
     this.roundDamageTaken = 0;
-    this.killStreak = 0;
-    this.killStreakTimer = 0;
-    this.killStreakDisplay = null;
-    this.bestStreak = 0;
+    this.killStreakSystem.reset();
     this.shotsFired = 0;
     this.shotsHit = 0;
     this.slowMoTimer = 0;
@@ -2390,1019 +1631,50 @@ export class Game {
     this.lockPointer();
   }
 
-  startCampaign() {
-    this.mode = "campaign";
-    this.campaignLevel = 0;
-    this.campaignAct = 1;
-    this.ngPlusCycle = 0;
-    this.ngPlusPrompt = false;
-    this.achievementStats.totalGamesPlayed++;
-    this.campaignMissedWeapons = []; // weapon IDs skipped in previous levels
-    this.player.reset();
-    this.applyLoadoutBonuses();
-    // Play origin story cutscene, then campaign intro
-    const playIntroAndMaybeMemory = () => {
-      // After intro cutscene, play the memory fragment once per user
-      const seenKey = "cc_seen_intro_memory_01";
-      const playMemory = () => {
-        try {
-          const seen = localStorage.getItem(seenKey);
-          if (!seen) {
-            // Mark as seen and play the short memory fragment
-            localStorage.setItem(seenKey, "1");
-            this.startCutscene("intro_memory_01", () => {
-              this.loadCampaignLevel(0);
-            });
-          } else {
-            this.loadCampaignLevel(0);
-          }
-        } catch (e) {
-          // If localStorage unavailable, still play memory to be safe
-          this.startCutscene("intro_memory_01", () => {
-            this.loadCampaignLevel(0);
-          });
-        }
-      };
+  startCampaign() { this.campaign.start(); }
 
-      if (this.cutsceneEngine.hasScript("clocking_in")) {
-        this.startCutscene("clocking_in", () => {
-          this.ariaEnabled = true;
-          this.queueAriaMessage("campaignStart");
-          this.startCutscene("intro", () => {
-            playMemory();
-          });
-        });
-      } else {
-        this.startCutscene("intro", () => {
-          playMemory();
-        });
-      }
-    };
+  showCampaignPrompt() { this.campaign.showPrompt(); }
 
-    playIntroAndMaybeMemory();
-  }
-
-  showCampaignPrompt() {
-    this.state = GameState.CAMPAIGN_PROMPT;
-    this.campaignPromptSelection = 0;
-  }
-
-  executeCampaignPromptChoice(choice) {
-    const afterCreator = () => {
-      if (choice === 0) {
-        this.startTutorial();
-      } else {
-        this.startCampaign();
-      }
-    };
-    this.creatorCategory = 0;
-    this._creatorSaveCallback = () => afterCreator();
-    this.state = GameState.CHARACTER_CREATE;
-  }
+  executeCampaignPromptChoice(choice) { this.campaign.executePromptChoice(choice); }
 
   renderCampaignPrompt(ctx, w, h) {
-    const now = performance.now();
-    const sel = this.campaignPromptSelection || 0;
-
-    // Background
-    const grad = ctx.createRadialGradient(
-      w / 2,
-      h / 2,
-      0,
-      w / 2,
-      h / 2,
-      w * 0.7,
-    );
-    grad.addColorStop(0, "#0a0a2a");
-    grad.addColorStop(0.5, "#050515");
-    grad.addColorStop(1, "#000005");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Animated ring
-    const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
-    ctx.save();
-    ctx.translate(w / 2, h * 0.25);
-    ctx.strokeStyle = `rgba(0, 200, 255, ${0.06 + ringPulse * 0.05})`;
-    ctx.lineWidth = 2;
-    for (let ring = 0; ring < 3; ring++) {
-      const radius = 40 + ring * 18 + Math.sin(now * 0.001 + ring) * 4;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Title
-    const titleY = h * 0.2;
-    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
-    ctx.save();
-    ctx.shadowColor = "#00ccff";
-    ctx.shadowBlur = 16 * titlePulse;
-    ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 32px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("START CAMPAIGN", w / 2, titleY);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-
-    ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-    ctx.font = "14px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "Would you like to run through training first?",
-      w / 2,
-      titleY + 28,
-    );
-
-    // Menu
-    const menuItems = [
-      {
-        label: "WITH TUTORIAL",
-        key: "[1]",
-        color: "#00ffcc",
-        desc: "Run station training before deploying",
-      },
-      {
-        label: "SKIP TO CAMPAIGN",
-        key: "[2]",
-        color: "#ff8844",
-        desc: "Deploy directly to the mission",
-      },
-    ];
-
-    const menuW = 380;
-    const itemH = 56;
-    const menuH = menuItems.length * itemH + 16;
-    const mx = (w - menuW) / 2;
-    const my = h * 0.38;
-
-    ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0, 200, 255, 0.12)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.stroke();
-
-    for (let i = 0; i < menuItems.length; i++) {
-      const item = menuItems[i];
-      const iy = my + 8 + i * itemH;
-      const isSelected = i === sel;
-
-      if (isSelected) {
-        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-        ctx.fillStyle = `rgba(0, 200, 255, ${0.06 * sPulse})`;
-        ctx.beginPath();
-        ctx.roundRect(mx, iy, menuW, itemH - 6, 6);
-        ctx.fill();
-        ctx.fillStyle = item.color;
-        ctx.fillRect(mx, iy + 4, 3, itemH - 14);
-        ctx.fillStyle = "#00ccff";
-        ctx.font = "bold 16px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText("\u25B8", mx + 12, iy + 26);
-      }
-
-      ctx.fillStyle = isSelected ? item.color : "rgba(255,255,255,0.45)";
-      ctx.font = `${isSelected ? "bold " : ""}16px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(item.label, mx + 32, iy + 26);
-
-      if (item.desc && isSelected) {
-        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-        ctx.font = "11px monospace";
-        ctx.fillText(item.desc, mx + 32, iy + 42);
-      }
-
-      ctx.fillStyle = isSelected
-        ? "rgba(255,255,255,0.5)"
-        : "rgba(255,255,255,0.2)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(item.key, mx + menuW - 8, iy + 26);
-    }
-    ctx.textAlign = "left";
-
-    // Letterbox bars
-    const barHeight = h * 0.06;
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, w, barHeight);
-    ctx.fillRect(0, h - barHeight, w, barHeight);
-
-    // Bottom hint
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back",
-      w / 2,
-      h - barHeight / 2 + 4,
-    );
-    ctx.textAlign = "left";
+    _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0);
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
-  startTutorial() {
-    // Play the clocking_in cutscene first to set the scene,
-    // then initialize the tutorial level
-    this.mode = "tutorial";
-    this.player.reset();
-    if (this.cutsceneEngine.hasScript("clocking_in")) {
-      this.startCutscene("clocking_in", () => {
-        this.ariaEnabled = true;
-        this.initTutorialLevel();
-      });
-    } else {
-      this.initTutorialLevel();
-    }
-  }
+  startTutorial() { this.tutorial.start(); }
 
-  initTutorialLevel() {
-    this.map = structuredClone(TUTORIAL_MAP);
-    this.player.x = TUTORIAL_MAP.playerStart.x;
-    this.player.y = TUTORIAL_MAP.playerStart.y;
-    this.player.angle = TUTORIAL_MAP.playerStart.dir;
-    this.player.alive = true;
-    this.player.weapons = []; // Start fully unarmed
-    this.player.currentWeapon = -1;
-    this.entities = [];
-    this.dustMotes = null;
-    this.projectiles = [];
+  initTutorialLevel() { this.tutorial.initLevel(); }
 
-    // Spawn tutorial pickups
-    for (const p of TUTORIAL_MAP.pickups) {
-      this.entities.push(new Pickup(p.x, p.y, p.type, p));
-    }
+  advanceTutorialStep() { this.tutorial.advanceStep(); }
 
-    this.killedEnemies = 0;
-    this.totalEnemies = 0;
-    this.exitEntity = null;
+  updateTutorial(dt) { this.tutorial.update(dt); }
 
-    // Tutorial step tracking — 16 steps (0-15)
-    this.tutorialStep = 0;
-    this.tutorialStepTime = performance.now();
-    this.tutorialStartAngle = this.player.angle;
-    this.tutorialCumulativeAngle = 0;
-    this.tutorialPrevAngle = this.player.angle;
-    this.tutorialStartX = this.player.x;
-    this.tutorialStartY = this.player.y;
-    this.tutorialSprintTime = 0;
-    this.tutorialSprintDone = false;
-    this.tutorialPickedUp = false;
-    this.tutorialWeaponPickedUp = false;
-    this.tutorialWeaponSwapped = false;
-    this.tutorialSecondWeaponPickedUp = false;
-    this.tutorialDoorOpened = false;
-    this.tutorialDashed = false;
-    this.tutorialCrouched = false;
-    this.tutorialSlid = false;
-    this.tutorialFired = false;
-    this.tutorialChronoUsed = false;
-    this.tutorialWave1Spawned = false;
-    this.tutorialWave2Spawned = false;
-    this.tutorialSandboxInit = false;
-    this.tutorialMenuSelection = 0;
-    this.tutorialOriginPlayed = false;
-    this.tutorialShowCompletionMenu = false;
-    this.tutorialAlarmPlayed = false;
+  spawnTrainingDummies() { this.tutorial.spawnDummies(); }
 
-    this.state = GameState.PLAYING;
-    this.roundStartTime = performance.now() + 99999; // suppress controls overlay
-    this.audio.startTrack("campaign", 130);
-    this.audio.startAmbient("industrial");
-    this.lockPointer();
-  }
+  executeTutorialMenuChoice(choice) { this.tutorial.executeMenuChoice(choice); }
 
-  advanceTutorialStep() {
-    this.tutorialStep++;
-    this.tutorialStepTime = performance.now();
-    this.audio.menuConfirm();
+  executeTutorialCompletionChoice(choice) { this.tutorial.executeCompletionChoice(choice); }
 
-    // Auto-open doors for later zones (player learned doors at step 3)
-    const doorMap = TUTORIAL_MAP.doors;
-    const autoOpenDoors = {
-      7: doorMap.door2, // Step 7 (Sprint) → open door to Fitness Center
-      9: doorMap.door3, // Step 9 (Chrono) → open door to Supervisor Office
-      11: doorMap.door4, // Step 11 (Alert) → open door to Combat Arena
-    };
-    const doorsToOpen = autoOpenDoors[this.tutorialStep];
-    if (doorsToOpen) {
-      for (const d of doorsToOpen) {
-        this.map.grid[d.y][d.x] = 0;
-      }
-    }
-
-    // Reset interaction flags for the next step to prevent skipping
-    this.tutorialSprintTime = 0;
-    this.tutorialSprintDone = false;
-    this.tutorialDashed = false;
-    this.tutorialCrouched = false;
-    this.tutorialSlid = false;
-    this.tutorialFired = false;
-    this.tutorialWeaponSwapped = false;
-    this.tutorialDoorOpened = false;
-    this.tutorialChronoUsed = false;
-    this.tutorialPickedUp = false;
-    // Note: tutorialWeaponPickedUp and tutorialSecondWeaponPickedUp remain true once done
-  }
-
-  updateTutorial(dt) {
-    const p = this.player;
-    const now = performance.now();
-    const elapsed = (now - this.tutorialStepTime) / 1000;
-
-    // Respawn collected pickups after delay
-    for (const e of this.entities) {
-      if (!e.active && e._respawnAt && now >= e._respawnAt) {
-        e.active = true;
-        e._respawnAt = 0;
-      }
-    }
-
-    // Clear waypoint by default, define per-step
-    this.objectiveWaypoint = null;
-
-    switch (this.tutorialStep) {
-      case 0: // HUD CALIBRATION — auto 2s
-        if (elapsed > 2) this.advanceTutorialStep();
-        break;
-
-      case 1: // SYSTEMS ONLINE — look around (cumulative angle > 2 rad)
-        {
-          let delta = p.angle - this.tutorialPrevAngle;
-          while (delta > Math.PI) delta -= Math.PI * 2;
-          while (delta < -Math.PI) delta += Math.PI * 2;
-          this.tutorialCumulativeAngle += Math.abs(delta);
-          this.tutorialPrevAngle = p.angle;
-          if (this.tutorialCumulativeAngle > 2) this.advanceTutorialStep();
-        }
-        break;
-
-      case 2: // MOVE — walk > 2.5 units from start, waypoint to door 1
-        this.objectiveWaypoint = { x: 11.5, y: 5.0 };
-        {
-          const dx = p.x - this.tutorialStartX;
-          const dy = p.y - this.tutorialStartY;
-          if (Math.sqrt(dx * dx + dy * dy) > 2.5) this.advanceTutorialStep();
-        }
-        break;
-
-      case 3: // BREACH DOOR — open Door 1 (press E)
-        this.objectiveWaypoint = { x: 11.5, y: 5.0 };
-        if (this.tutorialDoorOpened) this.advanceTutorialStep();
-        break;
-
-      case 4: // ARM YOURSELF — pick up Chrono Pistol in Zone 2
-        this.objectiveWaypoint = { x: 11.5, y: 7.5 };
-        if (this.tutorialWeaponPickedUp) this.advanceTutorialStep();
-        break;
-
-      case 5: // CONFIRM TARGETING — fire weapon
-        this.objectiveWaypoint = { x: 11.5, y: 9.0 };
-        if (elapsed > 0.1 && this.tutorialFired) this.advanceTutorialStep();
-        break;
-
-      case 6: // WEAPON SWITCH — pick up Temporal Shotgun + switch weapons
-        this.objectiveWaypoint = { x: 15.5, y: 7.5 };
-        if (this.tutorialSecondWeaponPickedUp && this.tutorialWeaponSwapped)
-          this.advanceTutorialStep();
-        break;
-
-      case 7: // SPRINT — hold Shift > 0.5s (door 2 auto-opened on advance)
-        this.objectiveWaypoint = { x: 11.0, y: 14.0 };
-        if (p.isSprinting) this.tutorialSprintTime += dt;
-        if (this.tutorialSprintTime > 0.5) this.advanceTutorialStep();
-        break;
-
-      case 8: // PHASE DASH — double-tap direction
-        this.objectiveWaypoint = { x: 11.0, y: 16.0 };
-        if (this.tutorialDashed) this.advanceTutorialStep();
-        break;
-
-      case 9: // CHRONO SHIFT — press Q (door 3 auto-opened on advance)
-        this.objectiveWaypoint = { x: 11.0, y: 20.5 };
-        if (elapsed > 0.1 && this.tutorialChronoUsed)
-          this.advanceTutorialStep();
-        break;
-
-      case 10: // RESUPPLY — pick up health + ammo
-        this.objectiveWaypoint = { x: 10.5, y: 20.5 };
-        if (this.tutorialPickedUp) this.advanceTutorialStep();
-        break;
-
-      case 11: // ALERT — alarm + screen shake, auto 2.5s (door 4 auto-opened on advance)
-        if (!this.tutorialAlarmPlayed) {
-          this.tutorialAlarmPlayed = true;
-          this.audio.alarmKlaxon();
-          this.screenShake = 3;
-        }
-        if (elapsed > 2.5) this.advanceTutorialStep();
-        break;
-
-      case 12: // WAVE 1 — kill 3 drones
-        if (!this.tutorialWave1Spawned) {
-          this.tutorialWave1Spawned = true;
-          const dronePositions = [
-            { x: 8.5, y: 26.0 },
-            { x: 14.5, y: 26.0 },
-            { x: 11.5, y: 27.5 },
-          ];
-          for (const pos of dronePositions) {
-            const enemy = new Enemy(pos.x, pos.y, "drone");
-            enemy.health = 15;
-            enemy.maxHealth = 15;
-            enemy.def = {
-              ...enemy.def,
-              damage: 3,
-              speed: enemy.def.speed * 0.5,
-            };
-            this.entities.push(enemy);
-          }
-          this.totalEnemies = 3;
-          this.killedEnemies = 0;
-        }
-        this.objectiveWaypoint = { x: 11.5, y: 26.0 };
-        if (this.killedEnemies >= 3) this.advanceTutorialStep();
-        break;
-
-      case 13: // WAVE 2 — kill 2 henchmen + 1 drone
-        if (!this.tutorialWave2Spawned) {
-          this.tutorialWave2Spawned = true;
-          const wavePositions = [
-            { x: 7.5, y: 25.5, type: "henchman" },
-            { x: 15.5, y: 25.5, type: "henchman" },
-            { x: 11.5, y: 27.0, type: "drone" },
-          ];
-          for (const pos of wavePositions) {
-            const enemy = new Enemy(pos.x, pos.y, pos.type);
-            if (pos.type === "henchman") {
-              enemy.health = 25;
-              enemy.maxHealth = 25;
-              enemy.def = {
-                ...enemy.def,
-                damage: 5,
-                speed: enemy.def.speed * 0.6,
-              };
-            } else {
-              enemy.health = 15;
-              enemy.maxHealth = 15;
-              enemy.def = {
-                ...enemy.def,
-                damage: 3,
-                speed: enemy.def.speed * 0.5,
-              };
-            }
-            this.entities.push(enemy);
-          }
-          this.totalEnemies = 3;
-          this.killedEnemies = 0;
-        }
-        this.objectiveWaypoint = { x: 11.5, y: 26.0 };
-        if (this.killedEnemies >= 3) this.advanceTutorialStep();
-        break;
-
-      case 14: // CALIBRATION COMPLETE → Character Creator
-        if (elapsed > 2 && !this.tutorialOriginPlayed) {
-          this.achievementStats.tutorialComplete = true;
-          this.checkAchievements();
-          this.tutorialOriginPlayed = true;
-          this.audio.stopMusic();
-
-          // Immediately enter Character Creator
-          this.creatorReturnState = GameState.TUTORIAL_COMPLETE;
-          this.state = GameState.CHARACTER_CREATE;
-          this.unlockPointer();
-        }
-        break;
-
-      case 15: // Post-Creator Sandbox (Optional)
-        {
-          if (!this.tutorialSandboxInit) {
-            this.tutorialSandboxInit = true;
-            this.spawnTrainingDummies();
-            this.tutorialShowCompletionMenu = true;
-            this.state = GameState.TUTORIAL_COMPLETE;
-            this.unlockPointer();
-          }
-          const dummies = this.entities.filter(
-            (e) => e.type === "enemy" && e.active && e.state !== "dead",
-          );
-          if (dummies.length === 0 && this.tutorialSandboxInit) {
-            this.spawnTrainingDummies();
-          }
-        }
-        break;
-    }
-  }
-
-  spawnTrainingDummies() {
-    // Clear dead entities
-    this.entities = this.entities.filter(
-      (e) => e.type !== "enemy" || (e.active && e.state !== "dead"),
-    );
-    // Spawn 3 dummies at fixed positions in the combat arena (Zone 5, rows 24-28)
-    const dummyPositions = [
-      { x: 7.5, y: 26.0 },
-      { x: 15.5, y: 26.0 },
-      { x: 11.5, y: 27.5 },
-    ];
-    for (const pos of dummyPositions) {
-      const dummy = new Enemy(pos.x, pos.y, "drone");
-      dummy.health = 20;
-      dummy.maxHealth = 20;
-      dummy.speed = 0; // Stationary
-      dummy.def = { ...dummy.def, damage: 0, speed: 0, sightRange: 0 };
-      dummy.state = "idle";
-      this.entities.push(dummy);
-    }
-    this.totalEnemies = 3;
-    this.killedEnemies = 0;
-  }
-
-  executeTutorialMenuChoice(choice) {
-    this.unlockPointer();
-    this.audio.stopMusic();
-    this.mode = null;
-    switch (choice) {
-      case 0: // Campaign
-        this.startCampaign();
-        break;
-      case 1: // Arena
-        this.startArena();
-        break;
-      case 2: // Restart tutorial
-        this.startTutorial();
-        break;
-      case 3: // Main menu
-      default:
-        this.state = GameState.TITLE;
-        this.audio.stopMusic();
-        this.audio.startTrack("menu");
-        this.audio.startAmbient("menu");
-        break;
-    }
-  }
-
-  executeTutorialCompletionChoice(choice) {
-    this.tutorialShowCompletionMenu = false;
-    switch (choice) {
-      case 0: // Continue Training (go to sandbox step 15)
-        this.state = GameState.PLAYING;
-        this.advanceTutorialStep();
-        this.audio.startTrack("campaign", 130);
-        this.audio.startAmbient("industrial");
-        this.lockPointer();
-        break;
-      case 1: // Begin Campaign (skip clocking_in — already seen before tutorial)
-        this.unlockPointer();
-        this.mode = "campaign";
-        this.campaignLevel = 0;
-        this.campaignAct = 1;
-        this.player.reset();
-        this.applyLoadoutBonuses();
-        this.startCutscene("the_hunt_begins", () => {
-          this.startCutscene("intro", () => {
-            this.loadCampaignLevel(0);
-          });
-        });
-        break;
-      case 2: // Customize Agent
-        this.creatorReturnState = GameState.TUTORIAL_COMPLETE;
-        this.state = GameState.CHARACTER_CREATE;
-        break;
-      case 3: // Main Menu
-      default:
-        this.unlockPointer();
-        this.mode = null;
-        this.state = GameState.TITLE;
-        this.audio.stopMusic();
-        this.audio.startTrack("menu");
-        this.audio.startAmbient("menu");
-        break;
-    }
-  }
-
-  shouldShowTutorial() {
-    if (this.alwaysShowTutorial) return true;
-    return !this.achievementStats.tutorialComplete;
-  }
+  shouldShowTutorial() { return this.tutorial.shouldShow(); }
 
   renderTutorialOverlay(ctx, w, h) {
-    if (this.mode !== "tutorial") return;
-
-    const isMobile = this.isTouchDevice;
-    const now = performance.now();
-    const elapsed = (now - this.tutorialStepTime) / 1000;
-
-    // ── Step 0: HUD Boot Animation (no text box) ─────────────────────
-    if (this.tutorialStep === 0) {
-      const fadeIn = Math.min(1, elapsed / 0.5);
-      ctx.save();
-      ctx.globalAlpha = fadeIn;
-
-      // Scan line sweep
-      const scanY = (elapsed / 2) * h;
-      const scanGrad = ctx.createLinearGradient(0, scanY - 40, 0, scanY + 40);
-      scanGrad.addColorStop(0, "rgba(0,255,200,0)");
-      scanGrad.addColorStop(0.5, "rgba(0,255,200,0.08)");
-      scanGrad.addColorStop(1, "rgba(0,255,200,0)");
-      ctx.fillStyle = scanGrad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Boot readouts
-      const lines = [
-        { text: "NEURAL LINK.......... OK", delay: 0.3 },
-        { text: "BIOMETRICS........... NOMINAL", delay: 0.8 },
-        { text: "CHRONO MODULE........ STANDBY", delay: 1.3 },
-      ];
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      const baseY = h / 2 - 40;
-      for (let i = 0; i < lines.length; i++) {
-        const l = lines[i];
-        if (elapsed < l.delay) continue;
-        const lineAlpha = Math.min(1, (elapsed - l.delay) / 0.3);
-        const flicker =
-          elapsed - l.delay < 0.15 ? 0.4 + Math.random() * 0.6 : 1;
-        ctx.globalAlpha = fadeIn * lineAlpha * flicker;
-        ctx.fillStyle = "#00ffcc";
-        ctx.fillText(l.text, w / 2, baseY + i * 30);
-      }
-
-      ctx.restore();
-      return;
-    }
-
-    // ── Steps 1-14: ARIA Dialogue Boxes ─────────────────────────────
-    const steps = [
-      null, // step 0 handled above
-      {
-        title: "SYSTEMS ONLINE — LOOK AROUND",
-        hint: isMobile
-          ? 'ARIA: "Neural link active. Drag to look around — get used to the augmented feed."'
-          : 'ARIA: "Neural link active. Move the mouse — get used to the augmented feed."',
-        color: "#00ccff",
-      },
-      {
-        title: "MOVE — TEST THE SUIT",
-        hint: isMobile
-          ? 'ARIA: "Good. Use the stick to walk — head toward the door ahead."'
-          : 'ARIA: "Good. W A S D — walk it off, head toward the bulkhead ahead."',
-        color: "#00ccff",
-      },
-      {
-        title: "BREACH — OPEN THE DOOR",
-        hint: isMobile
-          ? 'ARIA: "Sealed bulkhead. Face it and tap USE — override the lock."'
-          : 'ARIA: "Sealed bulkhead. Face it and press E — override the magnetic lock."',
-        color: "#ff8844",
-      },
-      {
-        title: "ARM YOURSELF",
-        hint: 'ARIA: "Weapon crate ahead. Walk over it — this is no longer a drill."',
-        color: "#ff6600",
-      },
-      {
-        title: "CONFIRM TARGETING",
-        hint: isMobile
-          ? 'ARIA: "Tap FIRE. Confirm your targeting solution is live."'
-          : 'ARIA: "CLICK to fire. Confirm your targeting system is live."',
-        color: "#ff8844",
-      },
-      {
-        title: "WEAPON SWITCH — GRAB THE SHOTGUN",
-        hint: isMobile
-          ? 'ARIA: "Second weapon on the range. Pick it up, then swipe to switch weapons."'
-          : 'ARIA: "Second weapon on the range. Pick it up, then scroll or press 1/2 to switch."',
-        color: "#ff6600",
-      },
-      {
-        title: "SPRINT — MOVE FAST",
-        hint: isMobile
-          ? 'ARIA: "Fitness center ahead. Tap RUN to sprint — cover ground fast."'
-          : 'ARIA: "Fitness center ahead. Hold SHIFT to sprint — cover ground fast."',
-        color: "#ff44ff",
-      },
-      {
-        title: "PHASE DASH — BLINK FORWARD",
-        hint: isMobile
-          ? 'ARIA: "Double-tap a direction to phase-dash. Covers distance instantly."'
-          : 'ARIA: "Double-tap a movement key to phase-dash. Covers distance instantly."',
-        color: "#ff44ff",
-      },
-      {
-        title: "CHRONO SHIFT — BEND TIME",
-        hint: isMobile
-          ? 'ARIA: "Time-dilation module is active. Hold SLOW. The next few seconds matter."'
-          : 'ARIA: "Time-dilation module is active. Press Q. The next few seconds matter."',
-        color: "#8844ff",
-      },
-      {
-        title: "RESUPPLY — TAKE EVERYTHING",
-        hint: 'ARIA: "Health and ammo on the ground. Grab everything — you\'ll need it."',
-        color: "#44ff88",
-      },
-      {
-        title: "⚡ ALERT — INTRUSION DETECTED",
-        hint: 'ARIA: "Active intrusion, multiple sectors compromised. Get to the combat arena — NOW."',
-        color: "#ff2244",
-      },
-      {
-        title: "WAVE 1 — DRONES INBOUND",
-        hint: 'ARIA: "Three hostile drones. Put them down — this is live."',
-        color: "#ff2244",
-      },
-      {
-        title: "WAVE 2 — REINFORCEMENTS",
-        hint: 'ARIA: "More contacts. Two henchmen and a drone. Stay sharp."',
-        color: "#ff2244",
-      },
-      {
-        title: "SYSTEMS ONLINE — CALIBRATION COMPLETE",
-        hint: 'ARIA: "Suit fully integrated. Proceeding to agent deployment array."',
-        color: "#00ffcc",
-      },
-    ];
-
-    const step = steps[this.tutorialStep];
-    if (!step) return;
-
-    // Fade in
-    const fadeIn = Math.min(1, elapsed / 0.4);
-    // Pulse for emphasis
-    const pulse = 0.85 + 0.15 * Math.sin(now / 300);
-
-    const boxW = 500;
-    const boxH = 80;
-    const bx = (w - boxW) / 2;
-    const by = 60;
-
-    // Measure text to auto-size the box
-    ctx.font = "bold 20px monospace";
-    const titleW = ctx.measureText(step.title).width;
-    ctx.font = "14px monospace";
-    const hintW = ctx.measureText(step.hint).width;
-    const textMaxW = Math.max(titleW, hintW);
-    const dynamicW = Math.max(boxW, textMaxW + 60);
-    const dynamicBx = (w - dynamicW) / 2;
-
-    ctx.save();
-    ctx.globalAlpha = fadeIn * 0.9;
-
-    // Background
-    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-    ctx.beginPath();
-    ctx.roundRect(dynamicBx, by, dynamicW, boxH, 8);
-    ctx.fill();
-
-    // Border
-    ctx.strokeStyle = step.color;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = fadeIn * pulse * 0.8;
-    ctx.beginPath();
-    ctx.roundRect(dynamicBx, by, dynamicW, boxH, 8);
-    ctx.stroke();
-
-    ctx.globalAlpha = fadeIn;
-
-    // Step counter (steps 1-13 shown as X/13)
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.font = "bold 11px monospace";
-    ctx.textAlign = "left";
-    if (this.tutorialStep > 0 && this.tutorialStep < 14) {
-      ctx.fillText(`${this.tutorialStep}/13`, dynamicBx + 14, by + 18);
-    }
-
-    // Title
-    ctx.fillStyle = step.color;
-    ctx.font = "bold 20px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(step.title, w / 2, by + 34);
-
-    // Hint
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    ctx.font = "14px monospace";
-    ctx.fillText(step.hint, w / 2, by + 58);
-
-    // Sandbox - no overlay menu, just the step indicator
-    if (this.tutorialStep === 15) {
-      // No menu — sandbox is pure practice mode
-    }
-
-    ctx.restore();
+    _renderTutorialOverlay(ctx, w, h, {
+      mode: this.mode,
+      isTouchDevice: this.isTouchDevice,
+      tutorialStepTime: this.tutorialStepTime,
+      tutorialStep: this.tutorialStep,
+    });
   }
 
   renderTutorialCompletionMenu(ctx, w, h) {
-    const now = performance.now();
-    const sel = this.tutorialMenuSelection || 0;
-
-    // Full-screen cinematic backdrop
-    ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle animated grid
-    ctx.strokeStyle = "rgba(0,200,255,0.02)";
-    ctx.lineWidth = 1;
-    const gridSz = 48;
-    const gridOff = (now * 0.008) % gridSz;
-    for (let gx = -gridOff; gx < w; gx += gridSz) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, h);
-      ctx.stroke();
-    }
-    for (let gy = -gridOff; gy < h; gy += gridSz) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(w, gy);
-      ctx.stroke();
-    }
-
-    // Ambient particles
-    ctx.fillStyle = "rgba(0,255,200,0.1)";
-    for (let i = 0; i < 20; i++) {
-      const px = w * 0.5 + Math.sin(now * 0.00025 + i * 2.3) * w * 0.42;
-      const py = h * 0.5 + Math.cos(now * 0.0003 + i * 1.9) * h * 0.42;
-      const ps = 1 + Math.sin(now * 0.002 + i) * 0.5;
-      ctx.beginPath();
-      ctx.arc(px, py, ps, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Radial vignette
-    const vig = ctx.createRadialGradient(
-      w / 2,
-      h / 2,
-      h * 0.2,
-      w / 2,
-      h / 2,
-      h * 0.8,
-    );
-    vig.addColorStop(0, "rgba(0,0,0,0)");
-    vig.addColorStop(1, "rgba(0,0,10,0.5)");
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
-
-    // Animated energy ring
-    const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
-    ctx.save();
-    ctx.translate(w / 2, h * 0.2);
-    ctx.strokeStyle = `rgba(0, 255, 200, ${0.08 + ringPulse * 0.06})`;
-    ctx.lineWidth = 2;
-    for (let ring = 0; ring < 3; ring++) {
-      const radius = 50 + ring * 20 + Math.sin(now * 0.001 + ring) * 4;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Title
-    const titleY = h * 0.14;
-    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
-    ctx.save();
-    ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = 20 * titlePulse;
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 36px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("TRAINING COMPLETE", w / 2, titleY);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-
-    ctx.fillStyle = "rgba(170, 200, 220, 0.6)";
-    ctx.font = "13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "All systems nominal. What's your next move, agent?",
-      w / 2,
-      titleY + 24,
-    );
-
-    // Decorative line
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - 100, titleY + 36);
-    ctx.lineTo(w / 2 + 100, titleY + 36);
-    ctx.stroke();
-
-    // Menu items
-    const menuItems = [
-      {
-        label: "CONTINUE TRAINING",
-        key: "[1]",
-        color: "#ffcc00",
-        desc: "Stay in the sandbox",
-      },
-      {
-        label: "BEGIN CAMPAIGN",
-        key: "[2]",
-        color: "#00ccff",
-        desc: "Face the Paradox Lord",
-      },
-      {
-        label: "CUSTOMIZE AGENT",
-        key: "[3]",
-        color: "#aa44ff",
-        desc: "Armor, colors, badges, loadout",
-      },
-      {
-        label: "MAIN MENU",
-        key: "[ESC]",
-        color: "#666666",
-        desc: "Return to title screen",
-      },
-    ];
-
-    const layout = tutorialMenuLayout(w, h, menuItems.length);
-    const { menuW, itemH, menuH, mx, my } = layout;
-
-    ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.12)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.stroke();
-
-    for (let i = 0; i < menuItems.length; i++) {
-      const item = menuItems[i];
-      const iy = my + 8 + i * itemH;
-      const isSelected = i === sel;
-
-      if (isSelected) {
-        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-        ctx.fillStyle = `rgba(0, 255, 200, ${0.06 * sPulse})`;
-        ctx.beginPath();
-        ctx.roundRect(mx, iy, menuW, itemH - 6, 6);
-        ctx.fill();
-        ctx.fillStyle = item.color;
-        ctx.fillRect(mx, iy + 4, 3, itemH - 14);
-        ctx.fillStyle = "#00ffcc";
-        ctx.font = "bold 16px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText("\u25B8", mx + 12, iy + 24);
-      }
-
-      ctx.fillStyle = isSelected ? item.color : "rgba(255,255,255,0.45)";
-      ctx.font = `${isSelected ? "bold " : ""}16px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(item.label, mx + 32, iy + 24);
-
-      if (item.desc && isSelected) {
-        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-        ctx.font = "11px monospace";
-        ctx.fillText(item.desc, mx + 32, iy + 40);
-      }
-
-      ctx.fillStyle = isSelected
-        ? "rgba(255,255,255,0.5)"
-        : "rgba(255,255,255,0.2)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(item.key, mx + menuW - 8, iy + 24);
-    }
-    ctx.textAlign = "left";
-
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("W/S to navigate  \u00B7  ENTER to select", w / 2, h - 30);
-
-    // Scanline overlay
-    this._drawScanlines(ctx, w, h);
-    ctx.textAlign = "left";
+    _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0);
   }
 
-  _makeScanlinePattern(ctx, alpha, step) {
-    const tile = document.createElement("canvas");
-    tile.width = 1;
-    tile.height = step;
-    const tc = tile.getContext("2d");
-    tc.fillStyle = `rgba(0,0,0,${alpha})`;
-    tc.fillRect(0, 0, 1, 1);
-    return ctx.createPattern(tile, "repeat");
-  }
+  _makeScanlinePattern(ctx, alpha, step) { /* forwarded to src/ui/scanlines.js */ }
 
   _drawScanlines(ctx, w, h, dense) {
-    if (dense) {
-      if (!this._scanlinePatternDense) {
-        this._scanlinePatternDense = this._makeScanlinePattern(ctx, 0.04, 3);
-      }
-      ctx.fillStyle = this._scanlinePatternDense;
-    } else {
-      if (!this._scanlinePattern) {
-        this._scanlinePattern = this._makeScanlinePattern(ctx, 0.03, 4);
-      }
-      ctx.fillStyle = this._scanlinePattern;
-    }
-    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h, dense);
   }
 
   applyLoadoutBonuses() {
@@ -3442,442 +1714,7 @@ export class Game {
   }
 
   renderCharacterCreator(ctx, w, h) {
-    const now = performance.now();
-    const cat = this.creatorCategory;
-    const char = this.character;
-    const palette = CHARACTER_COLORS[char.colorIndex];
-    const armor = ARMOR_STYLES[char.armorIndex];
-    const badge = BADGES[char.badgeIndex];
-    const skin = WEAPON_SKINS[char.weaponSkinIndex];
-    const loadout = LOADOUT_CLASSES[char.loadoutIndex];
-
-    const categories = [
-      { name: "NAME", shortLabel: "NAME", data: null, key: null },
-      {
-        name: "COLOR",
-        shortLabel: "CLR",
-        data: CHARACTER_COLORS,
-        key: "colorIndex",
-      },
-      {
-        name: "ARMOR",
-        shortLabel: "ARMR",
-        data: ARMOR_STYLES,
-        key: "armorIndex",
-      },
-      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
-      {
-        name: "SKIN",
-        shortLabel: "SKIN",
-        data: WEAPON_SKINS,
-        key: "weaponSkinIndex",
-      },
-      {
-        name: "LOADOUT",
-        shortLabel: "LOAD",
-        data: LOADOUT_CLASSES,
-        key: "loadoutIndex",
-      },
-    ];
-
-    // Full-screen dark backdrop
-    ctx.fillStyle = "#000a14";
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle grid background
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.03)";
-    ctx.lineWidth = 1;
-    for (let gx = 0; gx < w; gx += 40) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, h);
-      ctx.stroke();
-    }
-    for (let gy = 0; gy < h; gy += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(w, gy);
-      ctx.stroke();
-    }
-
-    const isMobile = this.isTouchDevice && w < 700;
-
-    // Title
-    const titleY = isMobile ? 34 : 44;
-    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
-    ctx.save();
-    ctx.shadowColor = palette.accent;
-    ctx.shadowBlur = 16 * titlePulse;
-    ctx.fillStyle = palette.accent;
-    ctx.font = `bold ${isMobile ? 20 : 28}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText("AGENT CUSTOMIZATION", w / 2, titleY);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-
-    // Decorative line under title
-    ctx.strokeStyle = `${palette.primary}55`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - 120, titleY + 10);
-    ctx.lineTo(w / 2 + 120, titleY + 10);
-    ctx.stroke();
-
-    // ─── Category tabs (responsive) ───
-    const tabGap = isMobile ? 4 : 8;
-    const tabW = isMobile
-      ? Math.max(
-          30,
-          Math.floor(
-            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-          ),
-        )
-      : 90;
-    const tabH = 28;
-    const totalTabW =
-      categories.length * tabW + (categories.length - 1) * tabGap;
-    const tabX0 = (w - totalTabW) / 2;
-    const tabY = titleY + 22;
-    const tabLabels = isMobile
-      ? categories.map((c) => c.shortLabel)
-      : categories.map((c) => c.name);
-
-    for (let i = 0; i < categories.length; i++) {
-      const tx = tabX0 + i * (tabW + tabGap);
-      const selected = i === cat;
-
-      ctx.fillStyle = selected
-        ? `${palette.primary}44`
-        : "rgba(255,255,255,0.04)";
-      ctx.beginPath();
-      ctx.roundRect(tx, tabY, tabW, tabH, 4);
-      ctx.fill();
-
-      if (selected) {
-        ctx.strokeStyle = palette.accent;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(tx, tabY, tabW, tabH, 4);
-        ctx.stroke();
-      }
-
-      ctx.fillStyle = selected ? palette.accent : "rgba(255,255,255,0.35)";
-      ctx.font = `${selected ? "bold " : ""}${isMobile ? 9 : 11}px monospace`;
-      ctx.textAlign = "center";
-      ctx.fillText(tabLabels[i], tx + tabW / 2, tabY + 18);
-    }
-
-    // ─── Layout: responsive (3-col desktop, 2-col mobile) ───
-    const contentY = tabY + tabH + (isMobile ? 12 : 20);
-    const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
-    const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
-    const infoW = isMobile ? 0 : 200;
-    const contentGap = isMobile ? 8 : 20;
-    const totalContentW =
-      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
-    const contentX = (w - totalContentW) / 2;
-
-    // ─── NAME tab — special rendering ───
-    if (cat === 0) {
-      const nameBoxW = isMobile ? Math.min(320, w - 40) : 320;
-      const nameBoxH = isMobile ? 44 : 50;
-      const nameBoxX = w / 2 - nameBoxW / 2;
-      const nameBoxY = contentY + (isMobile ? 20 : 40);
-
-      // Label
-      ctx.fillStyle = palette.accent;
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("AGENT CALLSIGN", w / 2, nameBoxY - 12);
-
-      // Input box
-      ctx.fillStyle = "rgba(0, 5, 15, 0.8)";
-      ctx.beginPath();
-      ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 6);
-      ctx.fill();
-
-      const blink = Math.sin(now * 0.005) > 0;
-      ctx.strokeStyle = blink ? palette.accent : `${palette.accent}88`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(nameBoxX, nameBoxY, nameBoxW, nameBoxH, 6);
-      ctx.stroke();
-
-      // Name text
-      const displayName = char.name || "";
-      const cursor = blink ? "▌" : "";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 22px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(displayName + cursor, w / 2, nameBoxY + 33);
-
-      // Hint
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.font = "11px monospace";
-      ctx.fillText(
-        "Type your name (max 16 chars) · Backspace to delete",
-        w / 2,
-        nameBoxY + nameBoxH + 20,
-      );
-
-      // Still show character preview below
-      const prevCX = w / 2;
-      const prevCY = isMobile
-        ? nameBoxY +
-          nameBoxH +
-          Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
-        : nameBoxY + nameBoxH + 160;
-      const prevScale = isMobile ? 1.0 : 1.5;
-      this._renderCharacterPreview(
-        ctx,
-        prevCX,
-        prevCY,
-        palette,
-        armor,
-        badge,
-        skin,
-        now,
-        loadout,
-        prevScale,
-      );
-
-      // Agent name under preview
-      ctx.fillStyle = palette.accent;
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        char.name || "Agent",
-        prevCX,
-        prevCY + (isMobile ? 70 : 100),
-      );
-
-      // Footer controls
-      if (!isMobile) {
-        ctx.fillStyle = "rgba(255,255,255,0.2)";
-        ctx.font = "11px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(
-          "Click or TAB/\u2190/\u2192 = category  \u00B7  ENTER = save  \u00B7  ESC = cancel",
-          w / 2,
-          h - 20,
-        );
-        ctx.textAlign = "left";
-      }
-      return;
-    }
-
-    // ─── Item list (left panel) ───
-    const curCat = categories[cat];
-    const items = curCat.data;
-    const selIdx = char[curCat.key];
-    const listX = contentX;
-    const itemH = isMobile ? 32 : 36;
-    // On mobile, cap visible items to fit: leave 80px for save/cancel buttons
-    const availH = isMobile ? h - contentY - 80 : 999;
-    const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
-    const maxVisible = Math.min(items.length, isMobile ? maxBySpace : 8);
-    const listH = maxVisible * itemH + 16;
-
-    ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
-    ctx.beginPath();
-    ctx.roundRect(listX, contentY, listW, listH, 8);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(listX, contentY, listW, listH, 8);
-    ctx.stroke();
-
-    // Scroll offset to keep selection visible
-    let scrollOff = 0;
-    if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
-
-    for (let vi = 0; vi < maxVisible; vi++) {
-      const i = vi + scrollOff;
-      if (i >= items.length) break;
-      const item = items[i];
-      const iy = contentY + 8 + vi * itemH;
-      const isSelected = i === selIdx;
-
-      if (isSelected) {
-        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-        ctx.fillStyle = `${palette.primary}${Math.round(15 * sPulse)
-          .toString(16)
-          .padStart(2, "0")}`;
-        ctx.beginPath();
-        ctx.roundRect(listX + 4, iy, listW - 8, itemH - 4, 4);
-        ctx.fill();
-        ctx.fillStyle = palette.accent;
-        ctx.fillRect(listX + 4, iy + 6, 3, itemH - 16);
-      }
-
-      // Color swatch for color category
-      if (cat === 1 && item.primary) {
-        ctx.fillStyle = item.primary;
-        ctx.beginPath();
-        ctx.roundRect(listX + 14, iy + 8, 18, 18, 3);
-        ctx.fill();
-        ctx.fillStyle = item.accent;
-        ctx.beginPath();
-        ctx.roundRect(listX + 18, iy + 12, 10, 10, 2);
-        ctx.fill();
-      }
-
-      const labelX = cat === 1 ? listX + 40 : listX + 16;
-      ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.45)";
-      ctx.font = `${isSelected ? "bold " : ""}12px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(item.name, labelX, iy + 22);
-
-      // Lock icon for locked loadouts
-      if (cat === 5 && item.unlocked === false) {
-        ctx.fillStyle = "rgba(255,100,100,0.6)";
-        ctx.font = "10px monospace";
-        ctx.fillText("\uD83D\uDD12", listX + listW - 28, iy + 22);
-      }
-    }
-
-    // ─── Character preview (center panel) ───
-    const prevX = contentX + listW + contentGap;
-    const prevCX = prevX + previewW / 2;
-    const prevH = listH;
-
-    ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
-    ctx.beginPath();
-    ctx.roundRect(prevX, contentY, previewW, prevH, 8);
-    ctx.fill();
-    ctx.strokeStyle = `${palette.primary}33`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(prevX, contentY, previewW, prevH, 8);
-    ctx.stroke();
-
-    // Draw character preview
-    this._renderCharacterPreview(
-      ctx,
-      prevCX,
-      contentY + prevH / 2,
-      palette,
-      armor,
-      badge,
-      skin,
-      now,
-      loadout,
-      1.3,
-    );
-
-    // ─── Info panel (right) — hidden on mobile ───
-    const infoX = prevX + previewW + contentGap;
-    const selectedItem = items[selIdx];
-
-    if (!isMobile) {
-      ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
-      ctx.beginPath();
-      ctx.roundRect(infoX, contentY, infoW, prevH, 8);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0, 255, 200, 0.08)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(infoX, contentY, infoW, prevH, 8);
-      ctx.stroke();
-
-      // Info title
-      ctx.fillStyle = palette.accent;
-      ctx.font = "bold 13px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(selectedItem.name, infoX + 12, contentY + 28);
-
-      // Description
-      if (selectedItem.desc) {
-        ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
-        ctx.font = "11px monospace";
-        const words = selectedItem.desc.split(" ");
-        let line = "";
-        let lineY = contentY + 50;
-        for (const word of words) {
-          const test = line + (line ? " " : "") + word;
-          if (ctx.measureText(test).width > infoW - 24) {
-            ctx.fillText(line, infoX + 12, lineY);
-            line = word;
-            lineY += 16;
-          } else {
-            line = test;
-          }
-        }
-        if (line) ctx.fillText(line, infoX + 12, lineY);
-      }
-
-      // Loadout bonuses
-      if (cat === 5 && loadout.bonuses) {
-        let by = contentY + 90;
-        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-        ctx.font = "11px monospace";
-        const b = loadout.bonuses;
-        if (b.fireRateMultiplier != null) {
-          ctx.fillText(`Fire Rate: ${b.fireRateMultiplier}x`, infoX + 12, by);
-          by += 16;
-        }
-        if (b.maxHealth != null) {
-          ctx.fillText(`Max Health: ${b.maxHealth}`, infoX + 12, by);
-          by += 16;
-        }
-        if (b.moveSpeed != null) {
-          const sign = b.moveSpeed > 0 ? "+" : "";
-          ctx.fillText(`Move Speed: ${sign}${b.moveSpeed}`, infoX + 12, by);
-          by += 16;
-        }
-        if (b.maxStamina != null) {
-          ctx.fillText(`Max Stamina: ${b.maxStamina}`, infoX + 12, by);
-          by += 16;
-        }
-        if (loadout.unlocked === false) {
-          ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
-          ctx.font = "bold 12px monospace";
-          ctx.fillText("LOCKED", infoX + 12, by + 10);
-        }
-      }
-
-      // Color swatches in info panel
-      if (cat === 1) {
-        let sy = contentY + 80;
-        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-        ctx.font = "10px monospace";
-        ctx.fillText("PRIMARY", infoX + 12, sy);
-        ctx.fillStyle = palette.primary;
-        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
-        sy += 30;
-        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-        ctx.font = "10px monospace";
-        ctx.fillText("ACCENT", infoX + 12, sy);
-        ctx.fillStyle = palette.accent;
-        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
-        sy += 30;
-        ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
-        ctx.font = "10px monospace";
-        ctx.fillText("DARK", infoX + 12, sy);
-        ctx.fillStyle = palette.dark;
-        ctx.fillRect(infoX + 12, sy + 4, 40, 16);
-      }
-    }
-
-    // Agent name at bottom of preview
-    ctx.fillStyle = palette.accent;
-    ctx.font = "bold 12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(char.name || "Agent", prevCX, contentY + prevH - 12);
-
-    // ─── Footer controls ───
-    if (!isMobile) {
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
-        w / 2,
-        h - 20,
-      );
-      ctx.textAlign = "left";
-    }
+    _renderCharacterCreator(ctx, w, h, this.creatorCategory, this.character, this.isTouchDevice);
   }
 
   _exitCreator(saved) {
@@ -3906,56 +1743,14 @@ export class Game {
     const w = this.canvas.width;
     const h = this.canvas.height;
     const isMobile = this.isTouchDevice && w < 700;
-    const categories = [
-      { name: "NAME", shortLabel: "NAME", data: null, key: null },
-      {
-        name: "COLOR",
-        shortLabel: "CLR",
-        data: CHARACTER_COLORS,
-        key: "colorIndex",
-      },
-      {
-        name: "ARMOR",
-        shortLabel: "ARMR",
-        data: ARMOR_STYLES,
-        key: "armorIndex",
-      },
-      { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
-      {
-        name: "SKIN",
-        shortLabel: "SKIN",
-        data: WEAPON_SKINS,
-        key: "weaponSkinIndex",
-      },
-      {
-        name: "LOADOUT",
-        shortLabel: "LOAD",
-        data: LOADOUT_CLASSES,
-        key: "loadoutIndex",
-      },
-    ];
-
-    const titleY = isMobile ? 34 : 44;
-    const tabGap = isMobile ? 4 : 8;
-    const tabW = isMobile
-      ? Math.max(
-          30,
-          Math.floor(
-            (w - 50 - (categories.length - 1) * tabGap) / categories.length,
-          ),
-        )
-      : 90;
-    const tabH = 28;
-    const totalTabW =
-      categories.length * tabW + (categories.length - 1) * tabGap;
-    const tabX0 = (w - totalTabW) / 2;
-    const tabY = titleY + 22;
+    const categories = CREATOR_CATEGORIES;
+    const L = getCreatorLayout(w, h, isMobile);
 
     // Tab click detection
-    if (my >= tabY && my <= tabY + tabH) {
+    if (my >= L.tabY && my <= L.tabY + L.tabH) {
       for (let i = 0; i < categories.length; i++) {
-        const tx = tabX0 + i * (tabW + tabGap);
-        if (mx >= tx && mx <= tx + tabW) {
+        const tx = L.tabX0 + i * (L.tabW + L.tabGap);
+        if (mx >= tx && mx <= tx + L.tabW) {
           this.creatorCategory = i;
           this.audio.menuSelect();
           return;
@@ -3971,30 +1766,17 @@ export class Game {
     const items = curCat.data;
     if (!items) return;
 
-    const contentY = tabY + tabH + (isMobile ? 12 : 20);
-    const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
-    const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
-    const infoW = isMobile ? 0 : 200;
-    const contentGap = isMobile ? 8 : 20;
-    const totalContentW =
-      listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
-    const contentX = (w - totalContentW) / 2;
-    const listX = contentX;
-    const itemH = isMobile ? 32 : 36;
-    const availH = isMobile ? h - contentY - 80 : 999;
-    const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
-    const maxVisible = Math.min(items.length, isMobile ? maxBySpace : 8);
-
+    const maxVisible = Math.min(items.length, isMobile ? L.maxBySpace : 8);
     const selIdx = this.character[curCat.key];
     let scrollOff = 0;
     if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
 
-    if (mx >= listX && mx <= listX + listW) {
+    if (mx >= L.contentX && mx <= L.contentX + L.listW) {
       for (let vi = 0; vi < maxVisible; vi++) {
         const idx = vi + scrollOff;
         if (idx >= items.length) break;
-        const iy = contentY + 8 + vi * itemH;
-        if (my >= iy && my <= iy + itemH) {
+        const iy = L.contentY + 8 + vi * L.itemH;
+        if (my >= iy && my <= iy + L.itemH) {
           this.character[curCat.key] = idx;
           return;
         }
@@ -4002,437 +1784,12 @@ export class Game {
     }
   }
 
-  _renderCharacterPreview(
-    ctx,
-    cx,
-    cy,
-    palette,
-    armor,
-    badge,
-    skin,
-    now,
-    loadout,
-    scale,
-  ) {
-    const s = scale || 1;
-    const rotAngle = now * 0.001;
-    const breathe = Math.sin(now * 0.002) * 2;
-
-    ctx.save();
-    ctx.translate(cx, cy + breathe);
-    ctx.scale(s, s);
-
-    // ── Armor body ──
-    const armorW = 52;
-    const armorH = 70;
-
-    // Shadow underneath
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
-    ctx.beginPath();
-    ctx.ellipse(0, armorH / 2 + 20, 30, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Legs
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-14, armorH / 2 - 5, 10, 25);
-    ctx.fillRect(4, armorH / 2 - 5, 10, 25);
-    // Boots
-    ctx.fillStyle = palette.primary;
-    ctx.beginPath();
-    ctx.roundRect(-16, armorH / 2 + 16, 14, 8, 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.roundRect(2, armorH / 2 + 16, 14, 8, 2);
-    ctx.fill();
-    // Boot sole accent
-    ctx.fillStyle = palette.accent + "44";
-    ctx.fillRect(-15, armorH / 2 + 22, 12, 2);
-    ctx.fillRect(3, armorH / 2 + 22, 12, 2);
-
-    // Knee pads
-    ctx.fillStyle = palette.primary + "88";
-    ctx.beginPath();
-    ctx.ellipse(-9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Main torso
-    ctx.fillStyle = palette.primary;
-    ctx.beginPath();
-    ctx.roundRect(-armorW / 2, -armorH / 2, armorW, armorH, 6);
-    ctx.fill();
-
-    // Armor style details
-    if (armor.id === "recon") {
-      // Light diagonal stripes
-      ctx.strokeStyle = palette.accent + "44";
-      ctx.lineWidth = 1;
-      for (let i = -3; i < 5; i++) {
-        ctx.beginPath();
-        ctx.moveTo(-armorW / 2 + i * 12, -armorH / 2);
-        ctx.lineTo(-armorW / 2 + i * 12 + armorH, armorH / 2);
-        ctx.stroke();
-      }
-    } else if (armor.id === "heavy") {
-      // Thick shoulder plates
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-armorW / 2 - 6, -armorH / 2 - 2, armorW + 12, 14);
-      ctx.fillRect(-armorW / 2 - 4, -armorH / 2 + 10, 12, 8);
-      ctx.fillRect(armorW / 2 - 8, -armorH / 2 + 10, 12, 8);
-    } else if (armor.id === "stealth") {
-      // Dark overlay with seam lines
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
-      ctx.fillRect(-armorW / 2 + 3, -armorH / 2 + 3, armorW - 6, armorH - 6);
-      ctx.strokeStyle = palette.accent + "33";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(0, -armorH / 2);
-      ctx.lineTo(0, armorH / 2);
-      ctx.stroke();
-    } else if (armor.id === "tech") {
-      // Utility pouches / tech panels
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-armorW / 2 + 4, 8, 14, 10);
-      ctx.fillRect(armorW / 2 - 18, 8, 14, 10);
-      ctx.fillStyle = palette.accent + "66";
-      ctx.fillRect(-armorW / 2 + 6, 10, 4, 6);
-      ctx.fillRect(armorW / 2 - 10, 10, 4, 6);
-    }
-
-    // Center accent stripe
-    ctx.fillStyle = palette.accent;
-    ctx.globalAlpha = 0.35 + 0.15 * Math.sin(now * 0.004);
-    ctx.fillRect(-2, -armorH / 2 + 8, 4, armorH - 16);
-    ctx.globalAlpha = 1;
-
-    // Belt
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-armorW / 2 + 2, armorH / 2 - 10, armorW - 4, 6);
-    ctx.fillStyle = palette.accent + "88";
-    ctx.beginPath();
-    ctx.arc(0, armorH / 2 - 7, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Chest emblem glow
-    ctx.save();
-    ctx.globalAlpha = 0.15 + 0.1 * Math.sin(now * 0.005);
-    ctx.fillStyle = palette.accent;
-    ctx.beginPath();
-    ctx.arc(0, -10, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Collar / neck
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-10, -armorH / 2 - 6, 20, 8);
-
-    // Helmet
-    const helmY = -armorH / 2 - 28;
-    ctx.fillStyle = palette.primary;
-    ctx.beginPath();
-    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
-    ctx.fill();
-    // Visor
-    ctx.fillStyle = palette.accent;
-    ctx.globalAlpha = 0.6 + 0.2 * Math.sin(now * 0.003);
-    ctx.beginPath();
-    ctx.ellipse(0, helmY + 2, 14, 7, 0, 0, Math.PI);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // Visor glint
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.ellipse(-5, helmY - 1, 4, 2, -0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Arms
-    ctx.fillStyle = palette.primary;
-    ctx.fillRect(-armorW / 2 - 10, -armorH / 2 + 8, 10, 40);
-    ctx.fillRect(armorW / 2, -armorH / 2 + 8, 10, 40);
-    // Hands
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-armorW / 2 - 8, -armorH / 2 + 46, 8, 8);
-    ctx.fillRect(armorW / 2 + 2, -armorH / 2 + 46, 8, 8);
-
-    // ── Badge ──
-    if (badge.icon) {
-      const bx = -8;
-      const by = -armorH / 2 + 16;
-      const icons = {
-        shield: "\u25C6",
-        skull: "\u2620",
-        clock: "\u23F0",
-        star: "\u2605",
-        bolt: "\u26A1",
-        eye: "\u25C9",
-        rift: "\u00D7",
-      };
-      // Badge backing circle with glow
-      const badgePulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-      ctx.fillStyle = `${palette.dark}cc`;
-      ctx.beginPath();
-      ctx.arc(bx, by - 4, 12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = palette.accent;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = badgePulse;
-      ctx.beginPath();
-      ctx.arc(bx, by - 4, 12, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // Badge icon
-      ctx.fillStyle = palette.accent;
-      ctx.font = "bold 18px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(icons[badge.icon] || "\u2726", bx, by + 2);
-      ctx.textAlign = "left";
-    }
-
-    // ── Weapon (right hand) ──
-    const wpnX = armorW / 2 + 6;
-    const wpnY = -armorH / 2 + 30;
-    // Weapon body
-    const skinColors = {
-      default: "#556677",
-      carbon: "#222222",
-      chrome: "#aabbcc",
-      ember: "#aa4400",
-      frost: "#4488bb",
-      toxic: "#339933",
-    };
-    ctx.fillStyle = skinColors[skin.id] || "#556677";
-    ctx.fillRect(wpnX, wpnY, 6, 30);
-    // Barrel tip energy
-    ctx.fillStyle = palette.accent;
-    ctx.globalAlpha = 0.6 + 0.3 * Math.sin(now * 0.006);
-    ctx.fillRect(wpnX + 1, wpnY - 4, 4, 6);
-    ctx.globalAlpha = 1;
-
-    // ── Class-specific visual traits ──
-    if (loadout) {
-      if (loadout.id === "gunslinger") {
-        // Dual weapon holsters on hips
-        ctx.fillStyle = "#664422";
-        ctx.fillRect(-armorW / 2 - 4, 4, 6, 14);
-        ctx.fillRect(armorW / 2 - 2, 4, 6, 14);
-        // Speed lines
-        ctx.strokeStyle = palette.accent + "44";
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 3; i++) {
-          const ly = -armorH / 2 + 20 + i * 18;
-          ctx.beginPath();
-          ctx.moveTo(armorW / 2 + 18, ly);
-          ctx.lineTo(armorW / 2 + 28 + i * 4, ly);
-          ctx.stroke();
-        }
-      } else if (loadout.id === "enforcer") {
-        // Heavy shoulder pads
-        ctx.fillStyle = palette.dark;
-        ctx.fillRect(-armorW / 2 - 14, -armorH / 2 + 4, 14, 12);
-        ctx.fillRect(armorW / 2, -armorH / 2 + 4, 14, 12);
-        // Thick border
-        ctx.strokeStyle = palette.primary;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.roundRect(
-          -armorW / 2 - 2,
-          -armorH / 2 - 2,
-          armorW + 4,
-          armorH + 4,
-          8,
-        );
-        ctx.stroke();
-      } else if (loadout.id === "phantom") {
-        // Ghost after-image
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = palette.accent;
-        const ghostOff = 8 + Math.sin(now * 0.003) * 3;
-        ctx.beginPath();
-        ctx.roundRect(-armorW / 2 + ghostOff, -armorH / 2, armorW, armorH, 6);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Dash trail particles
-        for (let i = 0; i < 4; i++) {
-          const px = armorW / 2 + 14 + i * 8;
-          const py = Math.sin(now * 0.004 + i) * 10;
-          ctx.fillStyle = palette.accent;
-          ctx.globalAlpha = 0.3 - i * 0.06;
-          ctx.beginPath();
-          ctx.arc(px, py, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // ── Rotating energy ring (behind character) ──
-    ctx.strokeStyle = palette.accent + "22";
-    ctx.lineWidth = 1;
-    for (let r = 0; r < 2; r++) {
-      ctx.beginPath();
-      ctx.arc(0, 0, 60 + r * 12, rotAngle + r, rotAngle + r + Math.PI * 1.2);
-      ctx.stroke();
-    }
-
-    ctx.restore();
+  _renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now, loadout, scale) {
+    _renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now, loadout, scale);
   }
 
   renderTutorialMenu(ctx, w, h) {
-    const now = performance.now();
-    const sel = this.tutorialMenuSelection || 0;
-
-    // === Full-screen cinematic backdrop ===
-    // Darken and add atmosphere
-    ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Animated energy ring behind title
-    const ringPulse = 0.5 + 0.5 * Math.sin(now * 0.002);
-    ctx.save();
-    ctx.translate(w / 2, h * 0.22);
-    ctx.strokeStyle = `rgba(0, 255, 200, ${0.08 + ringPulse * 0.06})`;
-    ctx.lineWidth = 2;
-    for (let ring = 0; ring < 3; ring++) {
-      const radius = 60 + ring * 25 + Math.sin(now * 0.001 + ring) * 5;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // === "AGENT READY" title ===
-    const titleY = h * 0.15;
-    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
-
-    // Glow underneath
-    ctx.save();
-    ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = 20 * titlePulse;
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 36px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("AGENT READY", w / 2, titleY);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-
-    // Subtitle
-    ctx.fillStyle = "rgba(170, 200, 220, 0.6)";
-    ctx.font = "13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "Temporal calibration complete. All systems nominal.",
-      w / 2,
-      titleY + 24,
-    );
-
-    // Decorative line
-    const lineW = 200;
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2 - lineW / 2, titleY + 36);
-    ctx.lineTo(w / 2 + lineW / 2, titleY + 36);
-    ctx.stroke();
-
-    // === Menu ===
-    const menuItems = [
-      {
-        label: "BEGIN CAMPAIGN",
-        key: "[1]",
-        color: "#00ccff",
-        desc: "Face the Paradox Lord",
-      },
-      {
-        label: "ENTER ARENA",
-        key: "[2]",
-        color: "#ff8844",
-        desc: "Endless combat simulation",
-      },
-      {
-        label: "RECALIBRATE",
-        key: "[R]",
-        color: "#ffcc00",
-        desc: "Restart tutorial",
-      },
-      { label: "MAIN MENU", key: "[ESC]", color: "#666666", desc: "" },
-    ];
-
-    const layout = tutorialMenuLayout(w, h, menuItems.length);
-    const { menuW, itemH, menuH, mx, my } = layout;
-
-    // Menu container
-    ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(0, 255, 200, 0.12)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(mx - 10, my - 10, menuW + 20, menuH + 20, 12);
-    ctx.stroke();
-
-    for (let i = 0; i < menuItems.length; i++) {
-      const item = menuItems[i];
-      const iy = my + 8 + i * itemH;
-      const isSelected = i === sel;
-
-      if (isSelected) {
-        // Highlight background
-        const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-        ctx.fillStyle = `rgba(0, 255, 200, ${0.06 * sPulse})`;
-        ctx.beginPath();
-        ctx.roundRect(mx, iy, menuW, itemH - 6, 6);
-        ctx.fill();
-
-        // Left accent bar
-        ctx.fillStyle = item.color;
-        ctx.fillRect(mx, iy + 4, 3, itemH - 14);
-
-        // Selection arrow
-        ctx.fillStyle = "#00ffcc";
-        ctx.font = "bold 16px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText("▸", mx + 12, iy + 24);
-      }
-
-      // Label
-      ctx.fillStyle = isSelected ? item.color : "rgba(255,255,255,0.45)";
-      ctx.font = `${isSelected ? "bold " : ""}16px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(item.label, mx + 32, iy + 24);
-
-      // Description
-      if (item.desc && isSelected) {
-        ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
-        ctx.font = "11px monospace";
-        ctx.fillText(item.desc, mx + 32, iy + 40);
-      }
-
-      // Keybind
-      ctx.fillStyle = isSelected
-        ? "rgba(255,255,255,0.5)"
-        : "rgba(255,255,255,0.2)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(item.key, mx + menuW - 8, iy + 24);
-    }
-    ctx.textAlign = "left";
-
-    // === Bottom hints ===
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      "Practice on dummies while you decide  ·  W/S to navigate  ·  ENTER to select",
-      w / 2,
-      h - 30,
-    );
-    ctx.textAlign = "left";
+    _renderTutorialMenu(ctx, w, h, this.tutorialMenuSelection || 0);
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
@@ -4509,302 +1866,11 @@ export class Game {
     this.cutsceneEngine.render(ctx, w, h);
   }
 
-  loadCampaignLevel(index) {
-    if (index >= CAMPAIGN_LEVELS.length) {
-      this.state = GameState.VICTORY;
-      this.audio.stopMusic();
-      this.audio.roundComplete();
-      this.clearCampaignSave();
-      this.unlockPointer();
-      return;
-    }
-    const level = CAMPAIGN_LEVELS[index];
-    this.map = structuredClone(level);
-    this.player.x = level.playerStart.x;
-    this.player.y = level.playerStart.y;
-    this.player.angle = level.playerStart.dir;
-    this.player.alive = true;
-    this.entities = [];
-    this.dustMotes = null;
-    this.projectiles = [];
-    this._chronoBombs = [];
+  loadCampaignLevel(index) { this.campaign.loadLevel(index); }
 
-    const diff = this.getDifficultyMultipliers();
-    // NG+ compounding multiplier: +30% per cycle
-    const ngScale = 1 + (this.ngPlusCycle || 0) * 0.3;
+  _applyActEnemyRoster() { this.campaign._applyActEnemyRoster(); }
 
-    // Spawn entities from level data
-    for (const e of level.entities) {
-      if (e.type === "enemy") {
-        let enemyType = e.enemyType;
-        // Swap boss form based on current act
-        if (enemyType === "boss") {
-          if (this.campaignAct === 2) enemyType = "boss_form2";
-          else if (this.campaignAct === 3) enemyType = "boss_form3";
-        }
-        const enemy = new Enemy(e.x, e.y, enemyType);
-        // Act-based scaling for non-boss enemies
-        const actScale = enemyType.startsWith("boss")
-          ? 1
-          : 1 + (this.campaignAct - 1) * 0.4;
-        enemy.health = Math.floor(enemy.health * diff.healthMul * actScale * ngScale);
-        enemy.maxHealth = enemy.health;
-        enemy.def = {
-          ...enemy.def,
-          damage: Math.floor(enemy.def.damage * diff.damageMul * actScale * ngScale),
-          speed: enemy.def.speed * diff.speedMul * (1 + (this.ngPlusCycle || 0) * 0.1),
-        };
-        this.entities.push(enemy);
-      } else {
-        this.entities.push(
-          new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }),
-        );
-      }
-    }
-
-    // Add exit marker
-    if (level.exit) {
-      this.exitEntity = {
-        x: level.exit.x,
-        y: level.exit.y,
-        type: "exit",
-        active: true,
-      };
-      this.entities.push(this.exitEntity);
-    } else {
-      this.exitEntity = null;
-    }
-
-    // Spawn missed weapons from previous levels near the player start
-    if (this.campaignMissedWeapons && this.campaignMissedWeapons.length > 0) {
-      const sx = level.playerStart.x;
-      const sy = level.playerStart.y;
-      for (let i = 0; i < this.campaignMissedWeapons.length; i++) {
-        const wid = this.campaignMissedWeapons[i];
-        if (!this.player.weapons.includes(wid)) {
-          const angle = (i / this.campaignMissedWeapons.length) * Math.PI * 2;
-          this.entities.push(
-            new Pickup(
-              sx + Math.cos(angle) * 1.5,
-              sy + Math.sin(angle) * 1.5,
-              "weapon",
-              { weaponId: wid },
-            ),
-          );
-        }
-      }
-    }
-
-    this.killedEnemies = 0;
-    this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
-    this.killStreak = 0;
-    this.killStreakTimer = 0;
-    this.killStreakDisplay = null;
-    this.bestStreak = 0;
-    this.shotsFired = 0;
-    this.shotsHit = 0;
-    this.slowMoTimer = 0;
-    this.timeScale = 1;
-    this.ariaCombatTimer = 0;
-
-    // Apply act-appropriate enemy roster before boss detection
-    this._applyActEnemyRoster();
-
-    // ARIA boss encounter callout
-    const hasBoss = this.entities.some(
-      (e) =>
-        e.type === "enemy" &&
-        (e.enemyType === "boss" ||
-          e.enemyType === "boss_form2" ||
-          e.enemyType === "boss_form3"),
-    );
-    if (hasBoss) {
-      const form = this.campaignAct;
-      if (form === 2) this.queueAriaMessage("bossForm2");
-      else if (form === 3) this.queueAriaMessage("bossForm3");
-      else this.queueAriaMessage("bossEncounter");
-    }
-
-    this.state = GameState.PLAYING;
-    this.roundStartTime = performance.now();
-    this.renderer.applyActPalette(this.campaignAct);
-    if (hasBoss) {
-      this.audio.startTrack("boss");
-    } else {
-      this.audio.startTrack("campaign", 130);
-    }
-    this.audio.startAmbient("industrial");
-    this.saveCampaign(); // Save checkpoint at level start
-    this.lockPointer();
-  }
-
-  /**
-   * Remap enemy types to the appropriate act roster.
-   * Enemies out-of-roster for the current act are swapped for the
-   * nearest thematic equivalent so each act feels distinct.
-   */
-  _applyActEnemyRoster() {
-    const act = this.campaignAct || 1;
-    // Act rosters — enemies that belong naturally to each act
-    const ACT_ROSTERS = {
-      1: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
-      2: [
-        "corruptCop",
-        "henchman",
-        "beast",
-        "phaseStalker",
-        "chronoBomber",
-        "temporalEngineer",
-        "shieldCommander",
-      ],
-      3: [
-        "beast",
-        "riftLeaper",
-        "timeWarden",
-        "temporalSummoner",
-        "echoDrone",
-        "sentinel",
-        "phaseStalker",
-      ],
-    };
-    // Substitution map: if an enemy type is not in the current act's roster,
-    // swap it for the closest equivalent in that act.
-    const SUBSTITUTES = {
-      1: {
-        henchman: "corruptCop",
-        beast: "sentinel",
-        phaseStalker: "phantom",
-        chronoBomber: "phantom",
-        temporalEngineer: "phantom",
-        shieldCommander: "sentinel",
-        riftLeaper: "phantom",
-        timeWarden: "sentinel",
-        temporalSummoner: "phantom",
-        echoDrone: "drone",
-      },
-      2: {
-        drone: "corruptCop",
-        glitchling: "phaseStalker",
-        phantom: "henchman",
-        sentinel: "shieldCommander",
-        riftLeaper: "phaseStalker",
-        timeWarden: "shieldCommander",
-        temporalSummoner: "temporalEngineer",
-        echoDrone: "chronoBomber",
-      },
-      3: {
-        drone: "echoDrone",
-        glitchling: "phaseStalker",
-        corruptCop: "sentinel",
-        phantom: "riftLeaper",
-        henchman: "riftLeaper",
-        chronoBomber: "temporalSummoner",
-        temporalEngineer: "temporalSummoner",
-        shieldCommander: "timeWarden",
-      },
-    };
-    const roster = ACT_ROSTERS[act] || ACT_ROSTERS[1];
-    const subs = SUBSTITUTES[act] || {};
-    for (const e of this.entities) {
-      if (e.type !== "enemy") continue;
-      // Never remap boss types
-      if (e.enemyType && e.enemyType.startsWith("boss")) continue;
-      if (e.enemyType && !roster.includes(e.enemyType)) {
-        const replacement = subs[e.enemyType];
-        if (replacement && ENEMY_TYPES[replacement]) {
-          const def = ENEMY_TYPES[replacement];
-          e.enemyType = replacement;
-          const diff = this.getDifficultyMultipliers();
-          e.health = def.health * diff.healthMul;
-          e.maxHealth = e.health;
-          e.speed = def.speed * diff.speedMul;
-          e.damage = (def.damage || 10) * diff.damageMul;
-          e.baseColor = def.color1 || "#ff0000";
-          e.darkColor = def.color2 || "#880000";
-        }
-      }
-    }
-  }
-
-  nextCampaignLevel() {
-    // Track uncollected weapons from the level we just finished
-    if (this.campaignMissedWeapons == null) this.campaignMissedWeapons = [];
-    for (const e of this.entities) {
-      if (e.type === "weapon" && e.active && e.weaponId != null) {
-        if (!this.campaignMissedWeapons.includes(e.weaponId)) {
-          this.campaignMissedWeapons.push(e.weaponId);
-        }
-      }
-    }
-    // Remove any missed weapons the player has since acquired
-    this.campaignMissedWeapons = this.campaignMissedWeapons.filter(
-      (id) => !this.player.weapons.includes(id),
-    );
-
-    this.campaignLevel++;
-    this.achievementStats.totalCampaignLevels++;
-    this.saveAchievements();
-    if (this.campaignLevel >= CAMPAIGN_LEVELS.length) {
-      this.loadCampaignLevel(this.campaignLevel); // triggers VICTORY via bounds check
-      return;
-    }
-    // Keep player stats — heal amount depends on difficulty
-    const diffHeal = { easy: 999, normal: 30, hard: 10, nightmare: 0 };
-    const healAmt = diffHeal[this.settings.difficulty] ?? 30;
-    if (healAmt >= 999) {
-      this.player.health = this.player.maxHealth;
-    } else {
-      this.player.health = Math.min(
-        this.player.health + healAmt,
-        this.player.maxHealth,
-      );
-    }
-    this.player.ammo = Math.min(this.player.ammo + 20, 999);
-
-    // Act-aware level briefing cutscenes
-    const actBriefings = {
-      1: {
-        1: "security_briefing",
-        2: "research_briefing",
-        3: "containment_briefing",
-        4: "server_briefing",
-        5: "reactor_briefing",
-        6: "voss_lab_briefing",
-        7: "nexus_briefing",
-        8: "paradox_core_briefing",
-      },
-      2: {
-        1: "act2_level2",
-        2: "act2_level3",
-        3: "act2_level4",
-        4: "act2_level5",
-        5: "act2_level6",
-        6: "voss_confrontation",
-        7: "act2_level8",
-        8: "act2_level9",
-      },
-      3: {
-        1: "act3_level2",
-        2: "act3_boss",
-        3: "act3_level4",
-        4: "act3_level5",
-        5: "act3_level6",
-        6: "origin_panels",
-        7: "act3_level8",
-        8: "act3_level9",
-      },
-    };
-    const briefingKey = actBriefings[this.campaignAct]?.[this.campaignLevel];
-    if (briefingKey && this.cutsceneEngine.hasScript(briefingKey)) {
-      this.startCutscene(briefingKey, () => {
-        this.loadCampaignLevel(this.campaignLevel);
-        this.saveCampaign();
-      });
-    } else {
-      this.loadCampaignLevel(this.campaignLevel);
-      this.saveCampaign();
-    }
-  }
+  nextCampaignLevel() { this.campaign.nextLevel(); }
 
   interact() {
     // Check for doors/secrets at multiple distances in front of player
@@ -4868,529 +1934,15 @@ export class Game {
 
   // Combat
 
-  fireWeapon() {
-    const now = this.time;
-    const wep = this.player.getWeaponDef();
-    if (
-      !wep ||
-      now - this.player.lastFireTime <
-        wep.fireRate / (this.player.fireRateMultiplier || 1)
-    )
-      return;
-    if (this.player.ammo < wep.ammoPerShot && wep.id !== 0) return;
+  fireWeapon() { _fireWeapon(this); }
 
-    this.player.lastFireTime = now;
-    if (wep.id !== 0) this.player.ammo -= wep.ammoPerShot;
-    this.player.weaponKick = 1;
-    this.weaponAnimFrame = 1;
-    this.weaponAnimTime = now;
-    this.shotsFired++;
-    this.achievementStats.totalShotsFired++;
-    if (this.mode === "tutorial") this.tutorialFired = true;
+  _onEnemyKill(enemy) { _onEnemyKill(this, enemy); }
 
-    // Muzzle flash particles — small bright burst at gun barrel
-    this._spawnMuzzleFlash(wep);
+  hitscan(angle, damage, range) { _hitscan(this, angle, damage, range); }
 
-    // Sound
-    if (wep.id === 0) this.audio.shootPistol();
-    else if (wep.id === 1) this.audio.shootShotgun();
-    else if (wep.id === 2) this.audio.shootPlasma();
-    else if (wep.id === 3) this.audio.shootCannon();
-    else if (wep.id === 4) this.audio.shootScattergun();
-    else if (wep.id === 5) this.audio.shootSniper();
-    else if (wep.id === 6) this.audio.shootRicochet();
-    else if (wep.id === 7) this.audio.shootEMP();
+  damageEnemy(enemy, damage) { _damageEnemy(this, enemy, damage); }
 
-    const damage = wep.damage * this.player.damageMultiplier;
-
-    let aimAngle = this.player.angle;
-
-    if (wep.type === "hitscan") {
-      const pellets = (wep.pellets || 1) * (this.player.multiShot || 1);
-      for (let p = 0; p < pellets; p++) {
-        const spread = (Math.random() - 0.5) * wep.spread * 2;
-        const rayAngle = aimAngle + spread;
-        this.hitscan(rayAngle, damage, wep.range);
-      }
-    } else {
-      // Projectile - fire extra projectiles with spread for multiShot
-      const shots = this.player.multiShot || 1;
-      for (let ms = 0; ms < shots; ms++) {
-        const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 : 0;
-        const shotAngle = aimAngle + spreadAngle;
-        const dirX = Math.cos(shotAngle);
-        const dirY = Math.sin(shotAngle);
-        const proj = new Projectile(
-          this.player.x + dirX * 0.5,
-          this.player.y + dirY * 0.5,
-          dirX,
-          dirY,
-          damage,
-          12,
-          "player",
-        );
-        proj.weaponId = wep.id;
-        if (wep.id === 7) proj.emp = true; // EMP Launcher rounds
-        proj.color = this.getCharacterColor().accent || wep.color;
-        this.projectiles.push(proj);
-        this.entities.push(proj);
-      }
-    }
-
-    this.screenShake = Math.max(
-      this.screenShake,
-      wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
-    );
-  }
-
-  _onEnemyKill(enemy) {
-    this.killStreak++;
-    this.killStreakTimer = 0;
-    if (this.killStreak > this.bestStreak) this.bestStreak = this.killStreak;
-
-    // Campaign ammo drops — 18% chance to drop ammo on kill
-    if (enemy && this.mode === "campaign" && Math.random() < 0.18) {
-      this.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
-    }
-
-    // Chrono energy on kill (+20, bonus on streaks)
-    const chronoGain = this.killStreak >= 3 ? 30 : 20;
-    this.player.chronoEnergy = Math.min(
-      this.player.maxChronoEnergy,
-      this.player.chronoEnergy + chronoGain,
-    );
-
-    const STREAK_TIERS = [
-      null, // 1 kill — no announcement
-      { text: "DOUBLE KILL", color: "#ffcc00", size: 32 }, // 2
-      { text: "TRIPLE KILL", color: "#ff8800", size: 36 }, // 3
-      { text: "OVERKILL", color: "#ff4400", size: 40 }, // 4
-      { text: "RAMPAGE", color: "#ff0044", size: 44 }, // 5
-      { text: "UNSTOPPABLE", color: "#ff00ff", size: 48 }, // 6
-      { text: "GODLIKE", color: "#aa00ff", size: 52 }, // 7+
-    ];
-    const tier = Math.min(this.killStreak, STREAK_TIERS.length) - 1;
-    if (tier >= 1) {
-      const t = STREAK_TIERS[tier];
-      this.killStreakDisplay = {
-        text: t.text,
-        color: t.color,
-        size: t.size,
-        life: 2.0,
-      };
-      this.screenShake = Math.max(this.screenShake, 4 + tier * 2);
-      this.audio.roundComplete(); // big pop for streak
-      // Glitch + flash for high streaks (4+ kills)
-      if (tier >= 3) {
-        this.glitchEffect = Math.max(this.glitchEffect, 0.15 + tier * 0.05);
-      }
-      // ARIA streak callouts
-      if (this.killStreak === 3) this.queueAriaMessage("killStreak3");
-      else if (this.killStreak === 5) this.queueAriaMessage("killStreak5");
-      else if (this.killStreak === 7) this.queueAriaMessage("killStreak7");
-    }
-
-    // ARIA first kill callout
-    this.triggerAriaOnce("firstKill", "firstKill");
-
-    // Echo clone on death (small clone spawns)
-    if (
-      enemy &&
-      enemy.def &&
-      enemy.def.echoCloneOnDeath &&
-      enemy.def.cloneCount
-    ) {
-      const clones = enemy.def.cloneCount || 1;
-      for (let i = 0; i < clones; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const sx = enemy.x + Math.cos(angle) * 0.8;
-        const sy = enemy.y + Math.sin(angle) * 0.8;
-        if (this.isPassable(Math.floor(sx), Math.floor(sy))) {
-          const clone = new Enemy(sx, sy, "glitchling");
-          clone._isClone = true;
-          // make clones low health and aggressive
-          clone.health = Math.max(6, Math.floor(clone.health * 0.5));
-          clone.maxHealth = clone.health;
-          this.entities.push(clone);
-          this.totalEnemies++;
-        }
-      }
-    }
-
-    // Slow-mo last kill — triggers when all enemies dead
-    if (
-      this.totalEnemies > 0 &&
-      this.killedEnemies >= this.totalEnemies &&
-      this.mode !== "tutorial"
-    ) {
-      this.slowMoTimer = 1.5;
-      this.timeScale = 0.25;
-    }
-  }
-
-  hitscan(angle, damage, range) {
-    const dirX = Math.cos(angle);
-    const dirY = Math.sin(angle);
-    const step = 0.1;
-    let x = this.player.x;
-    let y = this.player.y;
-
-    for (let d = 0; d < range; d += step) {
-      x += dirX * step;
-      y += dirY * step;
-
-      // Wall check
-      const mx = Math.floor(x);
-      const my = Math.floor(y);
-      if (mx < 0 || my < 0 || mx >= this.map.width || my >= this.map.height)
-        break;
-      if (this.map.grid[my][mx] > 0) {
-        // Wall impact sparks
-        this.spawnWallSparks(x, y);
-        break;
-      }
-
-      // Enemy check
-      for (const e of this.entities) {
-        if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
-        const dx = x - e.x;
-        const dy = y - e.y;
-        if (dx * dx + dy * dy < e.def.radius * e.def.radius) {
-          this.damageEnemy(e, damage);
-          return;
-        }
-      }
-    }
-  }
-
-  damageEnemy(enemy, damage) {
-    this.shotsHit++;
-    this.achievementStats.totalShotsHit++;
-    // Critical hit check
-    let finalDamage = damage;
-    let isCrit = false;
-    if (this.player.critChance && Math.random() < this.player.critChance) {
-      finalDamage *= 2;
-      isCrit = true;
-    }
-
-    // Front shield — shield commanders take 80% less damage from the front
-    if (enemy.def.frontShield) {
-      const dx = this.player.x - enemy.x;
-      const dy = this.player.y - enemy.y;
-      const angleToPlayer = Math.atan2(dy, dx);
-      const facingAngle = enemy.angle || 0;
-      let angleDiff = Math.abs(angleToPlayer - facingAngle);
-      if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
-      if (angleDiff < Math.PI / 3) {
-        finalDamage *= 0.2;
-      }
-    }
-
-    // Sub-boss encounter ARIA callout
-    if (enemy.def.subBoss && !enemy._ariaTriggered) {
-      enemy._ariaTriggered = true;
-      this.queueAriaMessage("subBossEncounter");
-    }
-
-    // Enemy shield (temporary system for shielded enemies)
-    if (enemy._shield && enemy._shield > 0) {
-      const shieldAbsorb = Math.min(enemy._shield, finalDamage);
-      enemy._shield -= shieldAbsorb;
-      finalDamage -= shieldAbsorb;
-      if (shieldAbsorb > 0) {
-        // small spark effect
-        this.glitchEffect = Math.max(this.glitchEffect, 0.08);
-      }
-    }
-
-    enemy.health -= finalDamage;
-    enemy.hitTime = this.time;
-    enemy.state = "pain";
-    enemy.painTimer = isCrit ? 250 : 150;
-    const pan = this.audio.calculatePan(
-      enemy.x,
-      enemy.y,
-      this.player.x,
-      this.player.y,
-      this.player.angle,
-    );
-    this.audio.enemyHit(pan);
-
-    // Hit marker
-    this.hitMarker = 0.15;
-
-    // Hit-impact particles at enemy position
-    this._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit);
-
-    // Floating damage number
-    this.damageNumbers.push({
-      x: enemy.x,
-      y: enemy.y,
-      value: Math.round(finalDamage),
-      crit: isCrit,
-      life: 0.8,
-    });
-
-    // Life steal
-    if (this.player.lifeSteal && this.player.alive) {
-      const heal = finalDamage * this.player.lifeSteal;
-      this.player.health = Math.min(
-        this.player.health + heal,
-        this.player.maxHealth,
-      );
-    }
-
-    // Splash damage to nearby enemies
-    if (this.player.splashDamage && finalDamage > 0) {
-      const splashRadius = 2.5;
-      const splashDmg = finalDamage * this.player.splashDamage;
-      let splashKills = 0;
-      for (const splashTarget of this.entities) {
-        if (
-          splashTarget === enemy ||
-          splashTarget.type !== "enemy" ||
-          !splashTarget.active ||
-          splashTarget.state === "dead"
-        )
-          continue;
-        const sdx = splashTarget.x - enemy.x;
-        const sdy = splashTarget.y - enemy.y;
-        if (sdx * sdx + sdy * sdy < splashRadius * splashRadius) {
-          splashTarget.health -= splashDmg;
-          splashTarget.hitTime = this.time;
-          if (splashTarget.health <= 0) {
-            splashTarget.state = "dead";
-            splashTarget.dissolving = true;
-            splashTarget.dissolveTimer = 0.5;
-            splashTarget.deathTime = this.time;
-            this.player.score += splashTarget.def.score;
-            this.player.kills++;
-            this.killedEnemies++;
-            this.achievementStats.totalKills++;
-            const pan2 = this.audio.calculatePan(
-              splashTarget.x,
-              splashTarget.y,
-              this.player.x,
-              this.player.y,
-              this.player.angle,
-            );
-            this.audio.enemyDeath(pan2);
-            this.spawnDeathParticles(
-              splashTarget.x,
-              splashTarget.y,
-              splashTarget.def.color1,
-              splashTarget.def.color2,
-            );
-            this.glitchEffect = 0.3;
-            this._onEnemyKill(splashTarget);
-            splashKills++;
-          }
-        }
-      }
-      if (splashKills >= 2)
-        this.triggerAriaOnce("multiKillSplash", "multiKillSplash");
-    }
-
-    if (enemy.health <= 0) {
-      enemy.state = "dead";
-      enemy.dissolving = true;
-      enemy.dissolveTimer = 0.5;
-      enemy.deathTime = this.time;
-      this.player.score += enemy.def.score;
-      this.player.kills++;
-      this.killedEnemies++;
-      this.achievementStats.totalKills++;
-      const panDeath = this.audio.calculatePan(
-        enemy.x,
-        enemy.y,
-        this.player.x,
-        this.player.y,
-        this.player.angle,
-      );
-      this.audio.enemyDeath(panDeath);
-      this.spawnDeathParticles(
-        enemy.x,
-        enemy.y,
-        enemy.def.color1,
-        enemy.def.color2,
-      );
-      this.glitchEffect = 0.3;
-      this._onEnemyKill(enemy);
-
-      // Check if boss killed in campaign
-      const isBoss =
-        enemy.enemyType === "boss" ||
-        enemy.enemyType === "boss_form2" ||
-        enemy.enemyType === "boss_form3";
-      if (isBoss && this.mode === "campaign") {
-        this.achievementStats.bossKilled = true;
-        this.checkAchievements();
-        trackEvent("boss_kill", {
-          mode: "campaign",
-          form: this.campaignAct,
-          time_seconds: Math.floor(
-            (performance.now() - this.roundStartTime) / 1000,
-          ),
-        });
-
-        if (this.campaignAct === 1) {
-          // Act 1 complete — false victory subversion, then Act 2 begins
-          this.audio.stopMusic();
-          this.startCutscene("false_victory", () => {
-            this.campaignAct = 2;
-            this.campaignLevel = 0;
-            this.player.health = this.player.maxHealth;
-            this.player.ammo = Math.min(this.player.ammo + 50, 999);
-            this.startCutscene("act2_intro", () => {
-              this.loadCampaignLevel(0);
-              this.saveCampaign();
-            });
-          });
-        } else if (this.campaignAct === 2) {
-          // Act 2 complete — the team regroups for the final stand
-          this.audio.stopMusic();
-          this.startCutscene("act2_victory", () => {
-            this.campaignAct = 3;
-            this.campaignLevel = 0;
-            this.player.health = this.player.maxHealth;
-            this.player.ammo = Math.min(this.player.ammo + 50, 999);
-            this.startCutscene("lyra_reveal", () => {
-              this.startCutscene("act3_intro", () => {
-                this.loadCampaignLevel(0);
-                this.saveCampaign();
-              });
-            });
-          });
-        } else {
-          // Act 3 — Victory. Timeline restored (or looped).
-          this.achievementStats.campaignComplete = true;
-          this.checkAchievements();
-          this.audio.stopMusic();
-
-          // Track best NG+ cycle
-          try {
-            const best = parseInt(localStorage.getItem("cc_ng_plus_best") || "0", 10);
-            if (this.ngPlusCycle > best) {
-              localStorage.setItem("cc_ng_plus_best", String(this.ngPlusCycle));
-            }
-          } catch (_) {}
-
-          if (this.ngPlusCycle >= 3) {
-            // Cycle 3 complete — play the TRUE ending, then final victory
-            this.startCutscene("true_victory", () => {
-              this.startCutscene("ng_plus_true_ending", () => {
-                this.state = GameState.VICTORY;
-                this.audio.roundComplete();
-                this.clearCampaignSave();
-                this.unlockPointer();
-              });
-            });
-          } else {
-            // Cycles 0-2: play true_victory, then offer NG+ choice
-            this.startCutscene("true_victory", () => {
-              this.state = GameState.VICTORY;
-              this.ngPlusPrompt = true;
-              this.ngPlusPromptSel = 0;
-              this.audio.roundComplete();
-              this.unlockPointer();
-            });
-          }
-        }
-      }
-    }
-  }
-
-  damagePlayer(amount, attacker) {
-    if (!this.player.alive) return;
-
-    // Dodge chance
-    if (this.player.dodgeChance > 0 && Math.random() < this.player.dodgeChance)
-      return;
-
-    let actualDamage = Math.max(1, amount - this.player.armor * 0.3);
-
-    // Shield absorbs damage first
-    if (this.player.shield > 0) {
-      const shieldAbsorb = Math.min(this.player.shield, actualDamage);
-      this.player.shield -= shieldAbsorb;
-      actualDamage -= shieldAbsorb;
-      if (actualDamage <= 0) return;
-    }
-
-    this.player.health -= actualDamage;
-    this.player.hurtTime = this.time;
-    // Track damage direction for directional indicator
-    if (attacker && typeof attacker.x === "number") {
-      this.player.lastDamageAngle = Math.atan2(
-        attacker.y - this.player.y,
-        attacker.x - this.player.x,
-      );
-    }
-    this.screenShake = Math.max(this.screenShake, 4);
-    this.audio.playerHit();
-    if (this.settings.haptics && navigator.vibrate) navigator.vibrate(50);
-    this.roundDamageTaken += actualDamage;
-
-    // ARIA low health warnings
-    const hpPct = this.player.health / this.player.maxHealth;
-    if (hpPct <= 0.1 && hpPct > 0) {
-      this.triggerAriaOnce("critical", "criticalHealth");
-    } else if (hpPct <= 0.3 && hpPct > 0.1) {
-      this.triggerAriaOnce("lowHp", "lowHealth");
-    }
-
-    // Thorns: reflect damage back to attacker
-    if (
-      this.player.thorns > 0 &&
-      attacker &&
-      attacker.active &&
-      attacker.state !== "dead"
-    ) {
-      attacker.health -= amount * this.player.thorns;
-      if (attacker.health <= 0) {
-        attacker.state = "dead";
-        attacker.dissolving = true;
-        attacker.dissolveTimer = 0.5;
-        attacker.deathTime = this.time;
-        this.killedEnemies++;
-        this.player.score += attacker.def.score;
-        this.player.kills++;
-        const panThorns = this.audio.calculatePan(
-          attacker.x,
-          attacker.y,
-          this.player.x,
-          this.player.y,
-          this.player.angle,
-        );
-        this.audio.enemyDeath(panThorns);
-        this.spawnDeathParticles(
-          attacker.x,
-          attacker.y,
-          attacker.def.color1,
-          attacker.def.color2,
-        );
-        this.glitchEffect = 0.3;
-        this._onEnemyKill(attacker);
-      }
-    }
-
-    if (this.player.health <= 0) {
-      this.player.health = 0;
-      this.player.alive = false;
-      this.deathTimer = 1.5;
-      this.achievementStats.totalDeaths++;
-      this.saveAchievements();
-      this.audio.playerDeath();
-      this.queueAriaMessage("playerDeath");
-      if (this.mode === "arena") {
-        this.queueAriaMessage("arenaDefeat");
-        if (this.arenaRound > this.achievementStats.highestArenaRound) {
-          this.queueAriaMessage("arenaNewBest");
-        }
-      }
-    }
-  }
+  damagePlayer(amount, attacker) { _damagePlayer(this, amount, attacker); }
 
   update(timestamp) {
     this.deltaTime = Math.min(0.05, (timestamp - this.lastFrameTime) / 1000);
@@ -5508,19 +2060,8 @@ export class Game {
       );
     }
 
-    // Kill streak timer decay
-    if (this.killStreak > 0) {
-      this.killStreakTimer += this.deltaTime;
-      if (this.killStreakTimer > 3) {
-        this.killStreak = 0;
-        this.killStreakTimer = 0;
-      }
-    }
-    // Kill streak display decay
-    if (this.killStreakDisplay) {
-      this.killStreakDisplay.life -= this.deltaTime;
-      if (this.killStreakDisplay.life <= 0) this.killStreakDisplay = null;
-    }
+    // Kill streak update (timer decay + display fade)
+    this.killStreakSystem.update(this.deltaTime);
 
     // Arena timer
     if (this.mode === "arena") {
@@ -5771,14 +2312,22 @@ export class Game {
     this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
 
-    // TODO: Find a better solution here
     // Clean up dead entities (keep recently-dead for death animation)
+    // In-place compaction avoids creating a new array every frame
     if (this.entities.length > 30) {
-      this.entities = this.entities.filter(
-        (e) =>
-          e.active || (e.deathTime != null && this.time - e.deathTime < 2000),
-      );
+      let write = 0;
+      for (let i = 0; i < this.entities.length; i++) {
+        const e = this.entities[i];
+        if (e.active || (e.deathTime != null && this.time - e.deathTime < 2000)) {
+          this.entities[write++] = e;
+        }
+      }
+      this.entities.length = write;
     }
+
+    // Populate spatial grid for O(1) proximity queries
+    this.entityGrid.clear();
+    this.entityGrid.insertAll(this.entities);
 
     // Update enemies
     const _profileEnemiesStart = performance.now();
@@ -5846,7 +2395,10 @@ export class Game {
     // Damage numbers decay
     for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
       this.damageNumbers[i].life -= dt;
-      if (this.damageNumbers[i].life <= 0) this.damageNumbers.splice(i, 1);
+      if (this.damageNumbers[i].life <= 0) {
+        this.damageNumbers[i] = this.damageNumbers[this.damageNumbers.length - 1];
+        this.damageNumbers.pop();
+      }
     }
 
     // Achievement checks (periodic, not every frame)
@@ -5857,446 +2409,60 @@ export class Game {
   }
 
   triggerDash(code, rawDirX, rawDirY) {
-    const p = this.player;
-    const cost = Math.max(0, p.dashStaminaCost);
-    if (p.dashCooldown > 0 || p.stamina < cost || p.isDashing) return;
-
-    let dirX = 0,
-      dirY = 0;
-
-    if (rawDirX !== undefined && rawDirY !== undefined) {
-      // Direct world-space direction (from joystick)
-      dirX = rawDirX;
-      dirY = rawDirY;
-    } else {
-      const cos = Math.cos(p.angle);
-      const sin = Math.sin(p.angle);
-      if (code === this.keybinds.moveForward) {
-        dirX = cos;
-        dirY = sin;
-      } else if (code === this.keybinds.moveBack) {
-        dirX = -cos;
-        dirY = -sin;
-      } else if (code === this.keybinds.moveLeft) {
-        dirX = sin;
-        dirY = -cos;
-      } else if (code === this.keybinds.moveRight) {
-        dirX = -sin;
-        dirY = cos;
-      }
+    const triggered = this.playerUpdateSystem.triggerDash(
+      { player: this.player, keybinds: this.keybinds },
+      code, rawDirX, rawDirY,
+    );
+    if (triggered) {
+      if (this.mode === "tutorial") this.tutorialDashed = true;
+      this.achievementStats.totalDashes++;
+      this.triggerAriaOnce("dash", "dashUsed");
     }
-
-    p.isDashing = true;
-    p.dashTime = 0.15; // 150ms dash duration
-    p.dashDirX = dirX;
-    p.dashDirY = dirY;
-    p.dashCooldown = 0.4; // 400ms cooldown
-    p.stamina -= cost;
-    p.staminaRegenDelay = 0.5;
-    if (this.mode === "tutorial") this.tutorialDashed = true;
-    this.achievementStats.totalDashes++;
-    this.triggerAriaOnce("dash", "dashUsed");
   }
 
   updatePlayer(dt) {
-    const p = this.player;
-    let moveX = 0,
-      moveY = 0;
-    const cos = Math.cos(p.angle);
-    const sin = Math.sin(p.angle);
-
-    // Dash cooldown
-    if (p.dashCooldown > 0) p.dashCooldown -= dt;
-
-    // Active dash movement
-    if (p.isDashing) {
-      p.dashTime -= dt;
-      if (p.dashTime <= 0) {
-        p.isDashing = false;
-      } else {
-        const dashSpeed = p.moveSpeed * 3.5 * p.dashDistMult;
-        moveX = p.dashDirX * dashSpeed * dt;
-        moveY = p.dashDirY * dashSpeed * dt;
-
-        // Collision detection and movement (dash)
-        const margin = 0.2;
-        const newX = p.x + moveX;
-        const newY = p.y + moveY;
-        if (
-          this.isPassable(
-            Math.floor(newX + margin * Math.sign(moveX)),
-            Math.floor(p.y),
-          )
-        ) {
-          p.x = newX;
-        }
-        if (
-          this.isPassable(
-            Math.floor(p.x),
-            Math.floor(newY + margin * Math.sign(moveY)),
-          )
-        ) {
-          p.y = newY;
-        }
-
-        // Mouse look still works during dash
-        if (this.mouse.dx !== 0) {
-          const invertMul = this.settings.invertX ? -1 : 1;
-          p.angle +=
-            this.mouse.dx *
-            0.002 *
-            p.rotSpeed *
-            this.settings.sensitivity *
-            invertMul;
-          this.mouse.dx = 0;
-        }
-        if (this.keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
-        if (this.keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
-
-        // Stamina regen paused during dash
-        p.staminaRegenDelay = 0.5;
-        return;
-      }
+    const flags = this.playerUpdateSystem.update({
+      player: this.player,
+      keys: this.keys,
+      keybinds: this.keybinds,
+      mouse: this.mouse,
+      settings: this.settings,
+      mode: this.mode,
+      map: this.map,
+      audio: this.audio,
+      noclip: !!this._noclip,
+    }, dt);
+    if (flags) {
+      if (flags.tutorialSlid) this.tutorialSlid = true;
+      if (flags.tutorialCrouched) this.tutorialCrouched = true;
     }
-
-    // Sprint check: Shift held + moving + has stamina
-    const kb = this.keybinds;
-    const isMoving =
-      this.keys[kb.moveForward] ||
-      this.keys[kb.moveBack] ||
-      this.keys[kb.moveLeft] ||
-      this.keys[kb.moveRight] ||
-      this.keys["ArrowUp"] ||
-      this.keys["ArrowDown"];
-    p.isSprinting = this.keys[kb.sprint] || this.keys["ShiftRight"];
-    p.isSprinting = p.isSprinting && isMoving && p.stamina > 0;
-
-    // Footstep audio
-    this.audio.setFootstepCadence(p.isSprinting ? 1.6 : 1.0);
-    this.audio.updateFootsteps(
-      isMoving && !p.isDashing && !p.isSliding,
-      performance.now(),
-    );
-
-    // Stamina management
-    if (p.isSprinting) {
-      p.stamina = Math.max(
-        0,
-        p.stamina - 25 * Math.max(0, p.sprintDrainMult) * dt,
-      );
-      p.staminaRegenDelay = 0.5;
-      if (p.stamina <= 0) p.isSprinting = false;
-    } else {
-      if (p.staminaRegenDelay > 0) {
-        p.staminaRegenDelay -= dt;
-      } else {
-        p.stamina = Math.min(
-          p.maxStamina,
-          p.stamina + 15 * p.staminaRegenRate * dt,
-        );
-      }
-    }
-
-    // Crouch & Slide handling
-    const crouchHeld = !!this.keys[this.keybinds.crouch];
-    const crouchJustPressed = crouchHeld && !this._prevCrouchKey;
-    // If sliding, remain crouched; otherwise crouch when holding key
-    p.isCrouching = crouchHeld && !p.isSliding;
-
-    // Start slide if player crouches while sprinting/dashing
-    if (
-      crouchJustPressed &&
-      (p.isSprinting || p.isDashing) &&
-      !p.isSliding &&
-      p.slideCooldown <= 0 &&
-      p.stamina >= p.slideStaminaCost
-    ) {
-      p.isSliding = true;
-      p.slideTime = p.slideDuration;
-      // Slide direction: use facing direction
-      p.slideDirX = Math.cos(p.angle);
-      p.slideDirY = Math.sin(p.angle);
-      p.stamina = Math.max(0, p.stamina - p.slideStaminaCost);
-      p.slideCooldown = 0.8;
-      p.staminaRegenDelay = 0.5;
-      // Tutorial flag
-      if (this.mode === "tutorial") this.tutorialSlid = true;
-    }
-
-    // Slide cooldown timer
-    if (p.slideCooldown > 0) p.slideCooldown -= dt;
-
-    // If sliding, override movement with slide momentum
-    if (p.isSliding) {
-      p.slideTime -= dt;
-      if (p.slideTime <= 0) {
-        p.isSliding = false;
-      } else {
-        const tFrac = p.slideTime / p.slideDuration;
-        const slideSpeed = p.moveSpeed * p.slideSpeedMult * (0.6 + 0.4 * tFrac);
-        moveX = p.slideDirX * slideSpeed * dt;
-        moveY = p.slideDirY * slideSpeed * dt;
-
-        // Collision detection and movement (slide)
-        const margin = 0.2;
-        const newX = p.x + moveX;
-        const newY = p.y + moveY;
-        if (
-          this.isPassable(
-            Math.floor(newX + margin * Math.sign(moveX)),
-            Math.floor(p.y),
-          )
-        ) {
-          p.x = newX;
-        }
-        if (
-          this.isPassable(
-            Math.floor(p.x),
-            Math.floor(newY + margin * Math.sign(moveY)),
-          )
-        ) {
-          p.y = newY;
-        }
-
-        p.weaponBob += dt * 18;
-        // Stamina regen paused during slide
-        p.staminaRegenDelay = 0.5;
-        // Tutorial crouch flag (player used crouch)
-        if (this.mode === "tutorial") this.tutorialCrouched = true;
-        // Update prev crouch key and return early (we already moved)
-        this._prevCrouchKey = crouchHeld;
-        return;
-      }
-    }
-
-    let speed = p.isSprinting ? p.moveSpeed * 1.6 : p.moveSpeed;
-    // Reduce speed when crouching (not sliding)
-    if (p.isCrouching) {
-      speed *= 0.5;
-      // Mark tutorial crouch used
-      if (this.mode === "tutorial") this.tutorialCrouched = true;
-    }
-
-    // WASD movement
-    // In meltdown, forward/back is auto-run only — restrict to lateral strafing
-    const meltdownMode = this.mode === "meltdown";
-    if (!meltdownMode && (this.keys[kb.moveForward] || this.keys["ArrowUp"])) {
-      moveX += cos;
-      moveY += sin;
-    }
-    if (!meltdownMode && (this.keys[kb.moveBack] || this.keys["ArrowDown"])) {
-      moveX -= cos;
-      moveY -= sin;
-    }
-    if (this.keys[kb.moveLeft]) {
-      moveX += sin;
-      moveY -= cos;
-    }
-    if (this.keys[kb.moveRight]) {
-      moveX -= sin;
-      moveY += cos;
-    }
-
-    // Normalize
-    const len = Math.sqrt(moveX * moveX + moveY * moveY);
-    if (len > 0) {
-      moveX = (moveX / len) * speed * dt;
-      moveY = (moveY / len) * speed * dt;
-    }
-
-    // Walking bob (faster + harder when sprinting, intense during dash)
-    if (p.isDashing) {
-      p.weaponBob += dt * 22;
-    } else if (len > 0) {
-      p.weaponBob += dt * (p.isSprinting ? 15 : 8);
-    } else {
-      p.weaponBob *= 0.9;
-    }
-
-    // Mouse look w/ Sensitivity
-    if (this.mouse.dx !== 0) {
-      const invertMul = this.settings.invertX ? -1 : 1;
-      p.angle +=
-        this.mouse.dx *
-        0.002 *
-        p.rotSpeed *
-        this.settings.sensitivity *
-        invertMul;
-      this.mouse.dx = 0;
-    }
-    this.mouse.dy = 0;
-
-    // Keyboard rotation
-    if (this.keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
-    if (this.keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
-
-    // Collision detection and movement
-    const margin = 0.2;
-    const newX = p.x + moveX;
-    const newY = p.y + moveY;
-
-    if (
-      this.isPassable(
-        Math.floor(newX + margin * Math.sign(moveX)),
-        Math.floor(p.y),
-      )
-    ) {
-      p.x = newX;
-    }
-    if (
-      this.isPassable(
-        Math.floor(p.x),
-        Math.floor(newY + margin * Math.sign(moveY)),
-      )
-    ) {
-      p.y = newY;
-    }
-    // Track crouch key for next frame (edge detection)
-    this._prevCrouchKey = !!this.keys[this.keybinds.crouch];
   }
 
   isPassable(mx, my) {
-    if (mx < 0 || my < 0 || mx >= this.map.width || my >= this.map.height)
-      return false;
-    return this.map.grid[my][mx] === 0;
+    return _isPassable(this.map, mx, my);
   }
 
   // TODO: Improve Enemy AI
   // ─── VFX / Particles ──────────────────────────────────────────────────────
 
-  /** Spawn hit-impact particles at the point of bullet impact on an enemy. */
   _spawnHitImpact(x, y, enemyColor, isCrit) {
     if (!this.player.particles) this.player.particles = [];
-    // Parse enemy color to RGB
-    let r = 200, g = 60, b = 60; // default blood-red
-    if (enemyColor) {
-      r = parseInt(enemyColor.slice(1, 3), 16) || r;
-      g = parseInt(enemyColor.slice(3, 5), 16) || g;
-      b = parseInt(enemyColor.slice(5, 7), 16) || b;
-    }
-    // Mix with blood red for organic feel
-    r = Math.min(255, Math.floor(r * 0.5 + 200 * 0.5));
-    g = Math.min(255, Math.floor(g * 0.3 + 30 * 0.7));
-    b = Math.min(255, Math.floor(b * 0.3 + 30 * 0.7));
-
-    const count = isCrit ? 10 : 6;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 1.5 + Math.random() * 3;
-      this.player.particles.push({
-        x,
-        y,
-        z: -0.15 - Math.random() * 0.3,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        vz: (Math.random() - 0.6) * 3,
-        r: r + Math.floor((Math.random() - 0.5) * 40),
-        g: Math.max(0, g + Math.floor((Math.random() - 0.5) * 20)),
-        b: Math.max(0, b + Math.floor((Math.random() - 0.5) * 20)),
-        life: 0.2 + Math.random() * 0.25,
-        size: isCrit ? 0.04 + Math.random() * 0.05 : 0.03 + Math.random() * 0.03,
-      });
-    }
+    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit);
   }
 
-  /** Spawn muzzle flash particles at the gun barrel position. */
   _spawnMuzzleFlash(wep) {
     if (!this.player.particles) this.player.particles = [];
-    const p = this.player;
-    const barrelDist = 0.6;
-    const bx = p.x + Math.cos(p.angle) * barrelDist;
-    const by = p.y + Math.sin(p.angle) * barrelDist;
-
-    // Weapon-specific color palette
-    let r1, g1, b1;
-    if (wep.id === 2 || wep.id === 7) {
-      // Plasma / EMP — cyan-blue
-      r1 = 80; g1 = 220; b1 = 255;
-    } else if (wep.id === 3) {
-      // Cannon — orange-red
-      r1 = 255; g1 = 160; b1 = 40;
-    } else if (wep.id === 6) {
-      // Ricochet — green
-      r1 = 100; g1 = 255; b1 = 120;
-    } else {
-      // Default — orange-yellow muzzle flash
-      r1 = 255; g1 = 200; b1 = 60;
-    }
-
-    const count = wep.id === 1 || wep.id === 4 ? 8 : 5; // shotgun/scatter = more
-    for (let i = 0; i < count; i++) {
-      const spread = (Math.random() - 0.5) * 0.8;
-      const flashAngle = p.angle + spread;
-      const speed = 3 + Math.random() * 4;
-      this.player.particles.push({
-        x: bx,
-        y: by,
-        z: -0.15 - Math.random() * 0.1,
-        vx: Math.cos(flashAngle) * speed,
-        vy: Math.sin(flashAngle) * speed,
-        vz: (Math.random() - 0.5) * 2,
-        r: r1 + Math.floor(Math.random() * 30),
-        g: g1,
-        b: b1,
-        life: 0.06 + Math.random() * 0.08,
-        size: 0.03 + Math.random() * 0.03,
-      });
-    }
+    _spawnMuzzleFlash(this.player.particles, this.player, wep);
   }
 
   spawnDeathParticles(x, y, c1, c2) {
     if (!this.player.particles) this.player.particles = [];
-    const count = 12;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 1.0 + Math.random() * 2;
-      const c = Math.random() > 0.5 ? c1 : c2;
-      // Simple hex to rgb
-      const r = parseInt(c.slice(1, 3), 16) || 255;
-      const g = parseInt(c.slice(3, 5), 16) || 255;
-      const b = parseInt(c.slice(5, 7), 16) || 255;
-
-      this.player.particles.push({
-        x: x,
-        y: y,
-        z: -0.1 - Math.random() * 0.3, // mid-body
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        vz: (Math.random() - 0.7) * 4, // initial burst up
-        r,
-        g,
-        b,
-        life: 0.8 + Math.random() * 0.4,
-        size: 0.05 + Math.random() * 0.08,
-      });
-    }
+    _spawnDeathParticles(this.player.particles, x, y, c1, c2);
   }
 
   spawnWallSparks(x, y) {
     if (!this.player.particles) this.player.particles = [];
-    const count = 5 + Math.floor(Math.random() * 4); // 5-8 sparks
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 1.5 + Math.random() * 2.5;
-      // Orange/yellow spark colors
-      const r = 255;
-      const g = 140 + Math.floor(Math.random() * 115); // 140-255
-      const b = Math.floor(Math.random() * 40); // 0-40
-
-      this.player.particles.push({
-        x: x,
-        y: y,
-        z: -0.2 - Math.random() * 0.3, // wall mid-height
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        vz: (Math.random() - 0.5) * 3,
-        r,
-        g,
-        b,
-        life: 0.15 + Math.random() * 0.2, // short-lived sparks
-        size: 0.02 + Math.random() * 0.03, // small sparks
-      });
-    }
+    _spawnWallSparks(this.player.particles, x, y);
   }
 
   spawnPickupBurst(x, y, pickupType) {
@@ -6315,615 +2481,50 @@ export class Game {
   }
 
   updateEnemies(dt) {
-    // Tick dissolve timers for dying enemies
-    for (let i = this.entities.length - 1; i >= 0; i--) {
-      const e = this.entities[i];
-      if (e.dissolving) {
-        e.dissolveTimer -= dt;
-        if (e.dissolveTimer <= 0) {
-          e.dissolving = false;
-          e.active = false;
-        }
-      }
-    }
-
-    for (const e of this.entities) {
-      if (e.type !== "enemy" || !e.active || e.dissolving) continue;
-
-      // Enemy-specific time scale for Chrono Shift (v0.8.0 reaction system)
-      const chronoMult = Number.isFinite(e.chronoMultiplier)
-        ? e.chronoMultiplier
-        : Number.isFinite(e.def?.chronoMultiplier)
-          ? e.def.chronoMultiplier
-          : 0.15;
-      const enemyDt = this.player.chronoActive ? dt * chronoMult : dt;
-
-      const dx = this.player.x - e.x;
-      const dy = this.player.y - e.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const ai = e.def.ai || "chase";
-
-      // Pain state
-      if (e.painTimer > 0) {
-        e.painTimer -= enemyDt * 1000;
-        if (e.painTimer <= 0) {
-          e.state = "chase";
-        }
-        continue;
-      }
-
-      // EMP-disabled: skip AI while disabled
-      if (e._empDisabledUntil && this.time < e._empDisabledUntil) {
-        // keep a faint stun effect, skip movement/attacks
-        continue;
-      }
-
-      // Track time in current state
-      e.stateTime += enemyDt;
-
-      // State machine
-      if (e.state === "idle") {
-        // Patrol AI: wander randomly while idle
-        if (ai === "patrol") {
-          this._aiPatrolWander(e, enemyDt);
-        }
-        // Ambush AI: stay completely still until the player is close
-        // (default idle does nothing, which is correct for ambush)
-
-        if (dist < e.alertRange) {
-          if (this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y)) {
-            e.state = "chase";
-            e.stateTime = 0;
-          }
-        }
-      }
-
-      if (e.state === "chase") {
-        const angle = Math.atan2(dy, dx);
-        e.angle = angle;
-
-        if (dist > e.def.attackRange * 0.8) {
-          let moveAngle = angle;
-          let moveSpeed = e.speed;
-
-          // AI archetype movement overrides
-          if (ai === "flanker") {
-            // Circle-strafe: offset approach angle by ±60° and close in
-            const strafeDir = Math.floor(e.x * 7 + e.y * 13) % 2 ? 1 : -1;
-            const strafeFactor = Math.min(1, dist / (e.def.attackRange * 1.5));
-            moveAngle = angle + strafeDir * strafeFactor * 1.05; // ~60°
-            moveSpeed *= 1.1;
-          } else if (ai === "ambush") {
-            // Rush: burst speed for first 2s after spotting player
-            if (e.stateTime < 2) {
-              moveSpeed *= 1.8;
-            }
-          }
-          // patrol and default: move straight toward player (unchanged)
-
-          const speed = moveSpeed * enemyDt;
-          const newX = e.x + Math.cos(moveAngle) * speed;
-          const newY = e.y + Math.sin(moveAngle) * speed;
-
-          // Collision with wall margin to prevent clipping
-          const margin = 0.3;
-          const mx = Math.cos(moveAngle) >= 0 ? margin : -margin;
-          const my = Math.sin(moveAngle) >= 0 ? margin : -margin;
-          if (
-            this.isPassable(Math.floor(newX + mx), Math.floor(e.y)) &&
-            this.isPassable(Math.floor(newX + mx), Math.floor(e.y + margin)) &&
-            this.isPassable(Math.floor(newX + mx), Math.floor(e.y - margin))
-          ) {
-            e.x = newX;
-          }
-          if (
-            this.isPassable(Math.floor(e.x), Math.floor(newY + my)) &&
-            this.isPassable(Math.floor(e.x + margin), Math.floor(newY + my)) &&
-            this.isPassable(Math.floor(e.x - margin), Math.floor(newY + my))
-          ) {
-            e.y = newY;
-          }
-        }
-
-        // Attack if in range
-        // Only apply chronoMult to attack rate during Chrono Shift;
-        // otherwise chronoMultiplier=0 enemies (drones) divide by zero → Infinity → never fire
-        const chronoAttackScale =
-          this.player.chronoActive && chronoMult > 0 ? chronoMult : 1;
-        const scaledAttackRate =
-          e.def.attackRate / this.timeScale / chronoAttackScale;
-        if (
-          dist < e.def.attackRange &&
-          this.time - e.lastAttackTime > scaledAttackRate
-        ) {
-          if (this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y)) {
-            e.state = "attack";
-            e.stateTime = 0;
-            e.lastAttackTime = this.time;
-          }
-        }
-      }
-
-      if (e.state === "attack") {
-        // Re-check line of sight before dealing damage
-        if (this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y)) {
-          if (e.def.attackType === "ranged") {
-            // Fire a projectile toward the player
-            const angle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-            const proj = new Projectile(
-              e.x + Math.cos(angle) * 0.4,
-              e.y + Math.sin(angle) * 0.4,
-              Math.cos(angle),
-              Math.sin(angle),
-              e.def.damage,
-              6,
-              "enemy",
-            );
-            proj.color = e.def.color1;
-            this.projectiles.push(proj);
-            this.entities.push(proj);
-            // Audio feedback — spatial enemy shot sound
-            const panShot = this.audio.calculatePan(
-              e.x,
-              e.y,
-              this.player.x,
-              this.player.y,
-              this.player.angle,
-            );
-            this.audio.enemyShoot(panShot);
-          } else {
-            // Melee: direct damage
-            this.damagePlayer(e.def.damage, e);
-          }
-        }
-        e.state = "chase";
-        e.stateTime = 0;
-      }
-
-      // ── Sub-boss special abilities ──────────────────────────────
-      // Temporal Summoner: periodically spawn drones
-      if (e.def.summonType && e.state !== "dead") {
-        e._summonTimer = (e._summonTimer || 0) + dt * 1000;
-        if (e._summonTimer >= e.def.summonInterval) {
-          e._summonTimer = 0;
-          const summonCount = this.entities.filter(
-            (s) =>
-              s.type === "enemy" &&
-              s.active &&
-              s._summoned &&
-              s.state !== "dead",
-          ).length;
-          if (summonCount < (e.def.summonMax || 3)) {
-            const angle = Math.random() * Math.PI * 2;
-            const sx = e.x + Math.cos(angle) * 1.5;
-            const sy = e.y + Math.sin(angle) * 1.5;
-            if (this.isPassable(Math.floor(sx), Math.floor(sy))) {
-              const summon = new Enemy(sx, sy, e.def.summonType);
-              summon._summoned = true;
-              this.entities.push(summon);
-              this.totalEnemies++;
-            }
-          }
-        }
-      }
-
-      // Chrono-Bomber: drop area-denial bombs while chasing
-      if (e.def.dropsBombs && e.state === "chase") {
-        e._bombTimer = (e._bombTimer || 0) + dt * 1000;
-        if (e._bombTimer >= 4000) {
-          e._bombTimer = 0;
-          this._chronoBombs = this._chronoBombs || [];
-          this._chronoBombs.push({
-            x: e.x,
-            y: e.y,
-            radius: e.def.bombRadius || 2.0,
-            damage: e.def.bombDamage || 25,
-            fuseLife: 0,
-            fuseDuration: 1.5,
-            active: true,
-          });
-        }
-      }
-
-      // Teleport / leap AI (phase stalkers, rift leapers)
-      if (e.state !== "dead") {
-        // Initialize teleport timer
-        if (e.def.teleportCooldown || e.def.leapDistance) {
-          e._teleportTimer = e._teleportTimer || 0;
-          e._teleportTimer += dt * 1000;
-          const cooldown = e.def.teleportCooldown || 3000;
-          if (e._teleportTimer >= cooldown) {
-            e._teleportTimer = 0;
-            // Only teleport if player is at medium distance
-            if (dist > (e.def.attackRange || 2) * 0.8 && dist < 30) {
-              const angleToPlayer = Math.atan2(
-                this.player.y - e.y,
-                this.player.x - e.x,
-              );
-              const leapDist =
-                e.def.leapDistance || Math.max(1.5, e.def.attackRange || 3);
-              // Place slightly beyond the player so they leap in
-              const tx =
-                this.player.x -
-                Math.cos(angleToPlayer) * Math.min(1.5, leapDist);
-              const ty =
-                this.player.y -
-                Math.sin(angleToPlayer) * Math.min(1.5, leapDist);
-              if (this.isPassable(Math.floor(tx), Math.floor(ty))) {
-                e.x = tx;
-                e.y = ty;
-                e.state = "attack";
-                e.stateTime = 0;
-                e.lastAttackTime = this.time;
-                this.screenShake = Math.max(this.screenShake, 2);
-                const panSupport = this.audio.calculatePan(
-                  e.x,
-                  e.y,
-                  this.player.x,
-                  this.player.y,
-                  this.player.angle,
-                );
-                this.audio.enemyHit(panSupport);
-              }
-            }
-          }
-        }
-
-        // Shield regen (for tanky enemies like Time Warden)
-        if (e.def.shieldRegen) {
-          if (e._shieldMax == null) {
-            e._shieldMax =
-              e.def.shieldMax || Math.max(20, Math.floor(e.def.health * 0.25));
-            e._shield = e._shieldMax;
-          }
-          const rate = e.def.shieldRegenRate || 2;
-          e._shield = Math.min(e._shieldMax, (e._shield || 0) + rate * dt);
-        }
-
-        // Support enemy: disable HUD temporarily
-        if (e.def.disablesHUD) {
-          e._supportTimer = (e._supportTimer || 0) + dt * 1000;
-          const interval = e.def.supportInterval || 8500;
-          if (e._supportTimer >= interval) {
-            e._supportTimer = 0;
-            // Disable HUD for players for a short duration
-            this._hudDisabledUntil =
-              this.time + (e.def.disableDuration || 3000);
-            this.queueAriaMessage("hudDisrupted");
-          }
-        }
-
-        // ── BOSS SPECIAL ABILITIES ──
-        const isBossEntity =
-          e.enemyType === "boss" ||
-          e.enemyType === "boss_form2" ||
-          e.enemyType === "boss_form3";
-        if (isBossEntity && e.state === "chase") {
-          const bossForm = e.def.form || 1;
-          e._bossChargeCD = e._bossChargeCD || 0;
-          e._bossStompCD = e._bossStompCD || 0;
-          e._bossMissileCD = e._bossMissileCD || 0;
-          e._bossTeleportCD = e._bossTeleportCD || 0;
-          e._bossChargeCD -= dt * 1000;
-          e._bossStompCD -= dt * 1000;
-          e._bossMissileCD -= dt * 1000;
-          e._bossTeleportCD -= dt * 1000;
-
-          const angleToPlayer = Math.atan2(
-            this.player.y - e.y,
-            this.player.x - e.x,
-          );
-
-          // Form 1+: Charge attack — dash toward player at 3x speed
-          if (bossForm >= 1 && e._bossChargeCD <= 0 && dist > 4 && dist < 20) {
-            e._bossChargeCD = 6000; // 6s cooldown
-            e._bossCharging = true;
-            e._bossChargeTimer = 0;
-            e._bossChargeDuration = 1.0; // 1 second of charge
-            e._bossChargeAngle = angleToPlayer;
-          }
-          if (e._bossCharging) {
-            e._bossChargeTimer += dt;
-            const chargeSpeed = e.speed * 3.5 * dt;
-            const cx = e.x + Math.cos(e._bossChargeAngle) * chargeSpeed;
-            const cy = e.y + Math.sin(e._bossChargeAngle) * chargeSpeed;
-            if (this.isPassable(Math.floor(cx), Math.floor(cy))) {
-              e.x = cx;
-              e.y = cy;
-            }
-            // Hit player during charge
-            const cdx = this.player.x - e.x;
-            const cdy = this.player.y - e.y;
-            if (cdx * cdx + cdy * cdy < 1.5 * 1.5) {
-              this.damagePlayer(e.def.damage * 1.5, e);
-              this.screenShake = Math.max(this.screenShake, 8);
-              e._bossCharging = false;
-            }
-            if (e._bossChargeTimer >= e._bossChargeDuration) {
-              e._bossCharging = false;
-              this.screenShake = Math.max(this.screenShake, 3);
-            }
-          }
-
-          // Form 2+: Ground stomp — AoE damage when close
-          if (bossForm >= 2 && e._bossStompCD <= 0 && dist < 5) {
-            e._bossStompCD = 5000; // 5s cooldown
-            // AoE damage in radius 4
-            const stompRadius = 4;
-            if (dist < stompRadius) {
-              const stompDmg = e.def.damage * 0.8;
-              this.damagePlayer(stompDmg, e);
-              this.screenShake = Math.max(this.screenShake, 12);
-            }
-            // Visual: push a damage number at boss position
-            this.damageNumbers.push({
-              x: e.x,
-              y: e.y,
-              value: "STOMP!",
-              crit: true,
-              life: 1.2,
-            });
-          }
-
-          // Form 2+: Missile spread (3 projectiles in a fan)
-          if (
-            bossForm >= 2 &&
-            e._bossMissileCD <= 0 &&
-            dist > 3 &&
-            dist < e.def.attackRange * 1.2
-          ) {
-            e._bossMissileCD = 4000; // 4s cooldown
-            const spreadAngle = 0.3; // ~17 degrees
-            for (let m = -1; m <= 1; m++) {
-              const mAngle = angleToPlayer + m * spreadAngle;
-              const proj = new Projectile(
-                e.x + Math.cos(mAngle) * 0.5,
-                e.y + Math.sin(mAngle) * 0.5,
-                Math.cos(mAngle),
-                Math.sin(mAngle),
-                e.def.damage * 0.6,
-                7,
-                "enemy",
-              );
-              proj.color = bossForm === 3 ? "#ff2244" : "#e04800";
-              this.projectiles.push(proj);
-              this.entities.push(proj);
-            }
-            this.audio.enemyShoot(
-              this.audio.calculatePan(
-                e.x,
-                e.y,
-                this.player.x,
-                this.player.y,
-                this.player.angle,
-              ),
-            );
-          }
-
-          // Form 3: Teleport behind player
-          if (bossForm >= 3 && e._bossTeleportCD <= 0 && dist > 8) {
-            e._bossTeleportCD = 8000; // 8s cooldown
-            const behindAngle = this.player.angle + Math.PI;
-            const tx = this.player.x + Math.cos(behindAngle) * 3;
-            const ty = this.player.y + Math.sin(behindAngle) * 3;
-            if (this.isPassable(Math.floor(tx), Math.floor(ty))) {
-              e.x = tx;
-              e.y = ty;
-              this.screenShake = Math.max(this.screenShake, 5);
-              this.damageNumbers.push({
-                x: e.x,
-                y: e.y,
-                value: "WARP!",
-                crit: true,
-                life: 1.0,
-              });
-            }
-          }
-        }
-      }
-    }
-
-    // Update chrono-bombs (area denial)
-    if (this._chronoBombs) {
-      for (const bomb of this._chronoBombs) {
-        if (!bomb.active) continue;
-        bomb.fuseLife += dt;
-        if (bomb.fuseLife >= bomb.fuseDuration) {
-          // Detonate — damage player if in radius
-          const bdx = this.player.x - bomb.x;
-          const bdy = this.player.y - bomb.y;
-          if (bdx * bdx + bdy * bdy < bomb.radius * bomb.radius) {
-            this.damagePlayer(bomb.damage);
-          }
-          bomb.active = false;
-        }
-      }
-      this._chronoBombs = this._chronoBombs.filter((b) => b.active);
-    }
-  }
-
-  /** Patrol wander: pick a random direction and drift slowly */
-  _aiPatrolWander(e, dt) {
-    // Initialize wander state on first call
-    if (e._wanderAngle == null) {
-      e._wanderAngle = e.angle;
-      e._wanderTimer = 0;
-    }
-    e._wanderTimer -= dt;
-    if (e._wanderTimer <= 0) {
-      e._wanderAngle += (Math.random() - 0.5) * Math.PI;
-      e._wanderTimer = 1.5 + Math.random() * 2;
-    }
-    const speed = e.speed * 0.35 * dt;
-    const newX = e.x + Math.cos(e._wanderAngle) * speed;
-    const newY = e.y + Math.sin(e._wanderAngle) * speed;
-    const margin = 0.3;
-    const mx = Math.cos(e._wanderAngle) >= 0 ? margin : -margin;
-    const my = Math.sin(e._wanderAngle) >= 0 ? margin : -margin;
-    if (
-      this.isPassable(Math.floor(newX + mx), Math.floor(e.y)) &&
-      this.isPassable(Math.floor(newX + mx), Math.floor(e.y + margin)) &&
-      this.isPassable(Math.floor(newX + mx), Math.floor(e.y - margin))
-    ) {
-      e.x = newX;
-    } else {
-      e._wanderAngle += Math.PI; // bounce off walls
-    }
-    if (
-      this.isPassable(Math.floor(e.x), Math.floor(newY + my)) &&
-      this.isPassable(Math.floor(e.x + margin), Math.floor(newY + my)) &&
-      this.isPassable(Math.floor(e.x - margin), Math.floor(newY + my))
-    ) {
-      e.y = newY;
-    } else {
-      e._wanderAngle += Math.PI;
-    }
-    e.angle = e._wanderAngle;
+    const fx = this.aiSystem.update({
+      entities: this.entities,
+      player: this.player,
+      map: this.map,
+      time: this.time,
+      timeScale: this.timeScale,
+      projectiles: this.projectiles,
+      chronoBombs: this._chronoBombs,
+      damageNumbers: this.damageNumbers,
+      audio: this.audio,
+    }, dt);
+    // Apply side effects
+    for (const call of fx.damagePlayerCalls) this.damagePlayer(call.damage, call.attacker);
+    this.screenShake = Math.max(this.screenShake, fx.screenShake);
+    if (fx.hudDisabledUntil != null) this._hudDisabledUntil = fx.hudDisabledUntil;
+    for (const msg of fx.ariaMessages) this.queueAriaMessage(msg);
+    this.totalEnemies += fx.totalEnemiesAdded;
+    // Filter detonated chrono-bombs
+    this._chronoBombs = this._chronoBombs.filter(b => b.active);
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const steps = Math.ceil(dist / 0.2);
-    const stepX = dx / steps;
-    const stepY = dy / steps;
-
-    for (let i = 1; i < steps; i++) {
-      const cx = Math.floor(x1 + stepX * i);
-      const cy = Math.floor(y1 + stepY * i);
-      if (cx < 0 || cy < 0 || cx >= this.map.width || cy >= this.map.height)
-        return false;
-      if (this.map.grid[cy][cx] > 0) return false;
-    }
-    return true;
+    return _hasLineOfSight(this.map, x1, y1, x2, y2);
   }
 
   updateProjectiles(dt) {
-    for (const p of this.projectiles) {
-      if (!p.active) continue;
-
-      // To prevent wall clipping
-      const totalDist = p.speed * dt;
-      const stepSize = 0.3; // max distance per sub-step (less than wall thickness)
-      const steps = Math.max(1, Math.ceil(totalDist / stepSize));
-      const stepDt = dt / steps;
-
-      for (let s = 0; s < steps; s++) {
-        if (!p.active) break;
-
-        p.x += p.dirX * p.speed * stepDt;
-        p.y += p.dirY * p.speed * stepDt;
-
-        const mx = Math.floor(p.x);
-        const my = Math.floor(p.y);
-        if (mx < 0 || my < 0 || mx >= this.map.width || my >= this.map.height) {
-          p.active = false;
-          break;
-        }
-        if (this.map.grid[my][mx] > 0) {
-          this.spawnWallSparks(p.x, p.y);
-          p.active = false;
-          break;
-        }
-
-        // Hit enemies
-        if (p.owner === "player") {
-          for (const e of this.entities) {
-            if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
-            const edx = p.x - e.x;
-            const edy = p.y - e.y;
-            if (edx * edx + edy * edy < e.def.radius * e.def.radius) {
-              // EMP rounds: disable shields and stun ranged/drones briefly
-              if (p.emp) {
-                // remove enemy shield if present
-                if (e._shield) e._shield = 0;
-                // mark EMP-disabled timestamp
-                e._empDisabledUntil = this.time + 3000; // 3s disable
-                // brief pain/stun
-                e.state = "pain";
-                e.painTimer = 500;
-                const panEmp = this.audio.calculatePan(
-                  e.x,
-                  e.y,
-                  this.player.x,
-                  this.player.y,
-                  this.player.angle,
-                );
-                this.audio.enemyHit(panEmp);
-                // Disable nearby ranged/drones
-                for (const empTarget of this.entities) {
-                  if (
-                    empTarget.type !== "enemy" ||
-                    !empTarget.active ||
-                    empTarget.state === "dead"
-                  )
-                    continue;
-                  const ddx = empTarget.x - p.x;
-                  const ddy = empTarget.y - p.y;
-                  if (ddx * ddx + ddy * ddy < 9) {
-                    if (
-                      empTarget.def &&
-                      (empTarget.def.attackType === "ranged" ||
-                        empTarget.enemyType === "drone")
-                    ) {
-                      empTarget._empDisabledUntil = this.time + 3000;
-                      empTarget.state = "pain";
-                      empTarget.painTimer = 500;
-                    }
-                  }
-                }
-              }
-              // Apply normal damage regardless
-              this.damageEnemy(e, p.damage);
-              p.active = false;
-              // Splash damage for cannon
-              if (p.damage > 50) {
-                for (const splashTarget of this.entities) {
-                  if (
-                    splashTarget === e ||
-                    splashTarget.type !== "enemy" ||
-                    !splashTarget.active
-                  )
-                    continue;
-                  const sdx = p.x - splashTarget.x;
-                  const sdy = p.y - splashTarget.y;
-                  if (sdx * sdx + sdy * sdy < 4) {
-                    this.damageEnemy(splashTarget, p.damage * 0.5);
-                  }
-                }
-              }
-              break;
-            }
-          }
-        }
-
-        // Hit player (enemy projectiles)
-        if (p.owner === "enemy" && p.active) {
-          const pdx = p.x - this.player.x;
-          const pdy = p.y - this.player.y;
-          if (pdx * pdx + pdy * pdy < 0.25) {
-            this.damagePlayer(p.damage);
-            p.active = false;
-          }
-        }
-      }
-
-      p.life -= dt;
-      if (p.life <= 0) {
-        p.active = false;
-      }
-    }
-
-    // Clean up dead projectiles
-    this.projectiles = this.projectiles.filter((p) => p.active);
-    this.entities = this.entities.filter(
-      (e) => e.type !== "projectile" || e.active,
-    );
+    _updateProjectiles({
+      projectiles: this.projectiles,
+      entities: this.entities,
+      entityGrid: this.entityGrid,
+      map: this.map,
+      player: this.player,
+      time: this.time,
+      audio: this.audio,
+      spawnWallSparks: (x, y) => this.spawnWallSparks(x, y),
+      damageEnemy: (e, d) => this.damageEnemy(e, d),
+      damagePlayer: (d) => this.damagePlayer(d),
+    }, dt);
   }
 
   checkPickups() {
-    for (const e of this.entities) {
+    // Spatial grid query — only check entities within pickup range (1.0 unit)
+    const nearby = this.entityGrid.query(this.player.x, this.player.y, 1.0);
+    for (const e of nearby) {
       if (
         e.type === "enemy" ||
         e.type === "exit" ||
@@ -6941,19 +2542,18 @@ export class Game {
       }
 
       if (e.type === "health") {
-        if (this.player.health < this.player.maxHealth) {
-          this.player.health = Math.min(
-            this.player.maxHealth,
-            this.player.health + 25,
-          );
-          e.active = false;
-          this.spawnPickupBurst(e.x, e.y, "health");
-          this.audio.pickup();
-          this.triggerAriaOnce("healthPickup", "healthPickup");
-          if (this.mode === "tutorial" && this.tutorialStep === 10)
-            this.tutorialPickedUp = true;
-          if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
-        }
+        if (this.player.health >= this.player.maxHealth) continue;
+        this.player.health = Math.min(
+          this.player.maxHealth,
+          this.player.health + 25,
+        );
+        e.active = false;
+        this.spawnPickupBurst(e.x, e.y, "health");
+        this.audio.pickup();
+        this.triggerAriaOnce("healthPickup", "healthPickup");
+        if (this.mode === "tutorial" && this.tutorialStep === 10)
+          this.tutorialPickedUp = true;
+        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
@@ -6972,6 +2572,7 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon");
+        _spawnEnergyBurst(this.player.particles, e.x, e.y, { count: 8, r: 50, g: 200, b: 255 });
         if (this.mode === "tutorial") {
           if (this.tutorialWeaponPickedUp) {
             this.tutorialSecondWeaponPickedUp = true;
@@ -7094,12 +2695,15 @@ export class Game {
     this.profiler.currentPhases.raycast = performance.now() - _tRay0;
 
     // Subtle ambient vignette (cached offscreen for performance)
+    // Skipped when adaptive quality disables it
     const _tVig0 = performance.now();
-    if (
-      !this._vignetteCanvas ||
-      this._vignetteW !== w ||
-      this._vignetteH !== h
-    ) {
+    const _qVignette = !this.quality || this.quality.enableVignette;
+    if (_qVignette) {
+      if (
+        !this._vignetteCanvas ||
+        this._vignetteW !== w ||
+        this._vignetteH !== h
+      ) {
       this._vignetteCanvas = document.createElement("canvas");
       this._vignetteCanvas.width = w;
       this._vignetteCanvas.height = h;
@@ -7119,7 +2723,8 @@ export class Game {
       this._vignetteW = w;
       this._vignetteH = h;
     }
-    ctx.drawImage(this._vignetteCanvas, 0, 0);
+      ctx.drawImage(this._vignetteCanvas, 0, 0);
+    }
     this.profiler.currentPhases.vignette = performance.now() - _tVig0;
 
     // Draw weapon (hidden in third person)
@@ -7134,58 +2739,16 @@ export class Game {
     }
     this.profiler.currentPhases.weapon = performance.now() - _tWpn0;
 
-    // Effects: hurt flash, glitch, death fade
+    // Effects: muzzle flash lighting, hurt flash, glitch, death fade
     const _tFx0 = performance.now();
-
-    // Hurt flash
-    if (this.player.hurtTime && this.time - this.player.hurtTime < 200) {
-      const alpha = 0.3 * (1 - (this.time - this.player.hurtTime) / 200);
-      ctx.fillStyle = `rgba(255,0,0,${alpha})`;
-      ctx.fillRect(0, 0, w, h);
-    }
-
-    // Damage direction indicator — red arc on screen edge
-    if (
-      this.player.hurtTime &&
-      this.time - this.player.hurtTime < 500 &&
-      this.player.lastDamageAngle != null
-    ) {
-      const elapsed = (this.time - this.player.hurtTime) / 500;
-      const dirAlpha = 0.6 * (1 - elapsed);
-      // Relative angle from player's facing direction
-      let relAngle = this.player.lastDamageAngle - this.player.angle;
-      // Normalize to -PI..PI
-      while (relAngle > Math.PI) relAngle -= Math.PI * 2;
-      while (relAngle < -Math.PI) relAngle += Math.PI * 2;
-      const cx = w / 2;
-      const cy = h / 2;
-      const outerR = Math.min(w, h) * 0.48;
-      const innerR = outerR * 0.85;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(relAngle);
-      ctx.beginPath();
-      ctx.arc(0, 0, outerR, -0.35, 0.35);
-      ctx.arc(0, 0, innerR, 0.35, -0.35, true);
-      ctx.closePath();
-      ctx.fillStyle = `rgba(255,20,0,${dirAlpha})`;
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Glitch effect
-    if (this.glitchEffect > 0.01) {
-      this.drawGlitch(ctx, w, h);
-    }
-
-    // Chromatic aberration — intensifies with glitch/hurt
-    this._drawChromaticAberration(ctx, w, h);
-
-    // Death fade
-    if (!this.player.alive) {
-      ctx.fillStyle = "rgba(80,0,0,0.5)";
-      ctx.fillRect(0, 0, w, h);
-    }
+    _renderPostFX(ctx, w, h, {
+      time: this.time,
+      muzzleFlashTime: this._muzzleFlashTime,
+      muzzleFlashColor: this._muzzleFlashColor,
+      player: this.player,
+      glitchEffect: this.glitchEffect,
+      canvas: this.canvas,
+    });
     this.profiler.currentPhases.effects = performance.now() - _tFx0;
 
     // Render HUD on overlay canvas
@@ -7301,2237 +2864,40 @@ export class Game {
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
       isTouchDevice: this.isTouchDevice,
-      drawGlow: (c, x, y, r, color, alpha) =>
-        this.renderer.drawGlow(c, x, y, r, color, alpha),
+      drawGlow: _drawGlow,
     });
   }
 
-  drawGlitch(ctx, w, h) {
-    const intensity = this.glitchEffect;
-    for (let i = 0; i < 3; i++) {
-      const y = Math.random() * h;
-      const sliceH = 2 + Math.random() * 10;
-      const offset = (Math.random() - 0.5) * 30 * intensity;
-      ctx.drawImage(this.canvas, 0, y, w, sliceH, offset, y, w, sliceH);
-    }
-  }
 
-  /**
-   * Chromatic aberration — subtle RGB channel split that intensifies
-   * during damage and glitch effects. Uses canvas self-draw with color
-   * tint overlays at slight offsets for a retro CRT feel.
-   */
-  _drawChromaticAberration(ctx, w, h) {
-    // Compute aberration intensity from hurt + glitch
-    let intensity = this.glitchEffect * 0.5;
-    if (this.player.hurtTime) {
-      const elapsed = this.time - this.player.hurtTime;
-      if (elapsed < 300) intensity += 0.3 * (1 - elapsed / 300);
-    }
-    // Always keep a subtle base aberration (retro CRT look)
-    intensity = Math.max(0.03, Math.min(1, intensity));
-    const offset = Math.ceil(intensity * 3); // 1-3px shift
-    if (offset < 1) return;
+  // HUD rendering — forwarded to src/ui/hud.js
+  renderHUD() { _renderHUD(this); }
 
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    // Red channel — shift left
-    ctx.globalAlpha = intensity * 0.12;
-    ctx.drawImage(this.canvas, -offset, 0);
-    // Blue channel — shift right
-    ctx.drawImage(this.canvas, offset, 0);
-    ctx.restore();
-  }
-
-  renderHUD() {
-    const ctx = this.hudCtx;
-    const w = this.hudCanvas.width;
-    const h = this.hudCanvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    if (this.state !== GameState.PLAYING && this.state !== GameState.PAUSED)
-      return;
-
-    // HUD disruption effect (disabled by enemy support abilities)
-    if (this._hudDisabledUntil && this.time < this._hudDisabledUntil) {
-      ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "#ff6666";
-      ctx.font = "bold 20px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("SYSTEMS DISRUPTED", w / 2, h / 2 - 12);
-      ctx.font = "12px monospace";
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillText("HUD offline — temporary interference.", w / 2, h / 2 + 10);
-      ctx.restore();
-      return;
-    }
-
-    // Playtest mode banner
-    if (this.mode === "playtest") {
-      ctx.save();
-      ctx.fillStyle = "rgba(0, 200, 255, 0.15)";
-      ctx.fillRect(0, 0, w, 32);
-      ctx.fillStyle = "#00ccff";
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const allDead =
-        this.killedEnemies >= this.totalEnemies && this.totalEnemies > 0;
-      const label = allDead
-        ? "PLAY TEST COMPLETE — Returning to builder..."
-        : `PLAY TEST — ${this.killedEnemies}/${this.totalEnemies} killed — ESC to return`;
-      ctx.fillText(label, w / 2, 16);
-      ctx.restore();
-    }
-
-    const hudFactor = this.settings.hudScale / 100;
-    const isCompactMobile = this.isTouchDevice && isCompactPhone(h);
-    const barH = isCompactMobile
-      ? Math.round(60 * hudFactor)
-      : 0;
-
-    // On compact mobile, render a slim HUD and skip the full layout
-    if (isCompactMobile) {
-      this._renderCompactMobileHUD(ctx, w, h, barH, hudFactor);
-
-      // Minimap (smaller on compact mobile)
-      let mmSize = Math.min(this.settings.minimapSize, Math.round(w * 0.18));
-      this.drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize);
-
-      // Crosshair
-      const chx = w / 2;
-      const chy = (h - barH) / 2;
-      this.drawCrosshairAt(ctx, chx, chy);
-
-      // Hit marker
-      if (this.hitMarker > 0) {
-        const a = Math.min(1, this.hitMarker / 0.08);
-        ctx.save();
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = "#ff3333";
-        ctx.lineWidth = 2;
-        ctx.translate(chx, chy);
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath();
-        ctx.moveTo(-8, 0);
-        ctx.lineTo(8, 0);
-        ctx.moveTo(0, -8);
-        ctx.lineTo(0, 8);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // Floating damage numbers
-      for (const dn of this.damageNumbers) {
-        const ddx = dn.x - this.player.x;
-        const ddy = dn.y - this.player.y;
-        let dAngle = Math.atan2(ddy, ddx) - this.player.angle;
-        while (dAngle < -Math.PI) dAngle += Math.PI * 2;
-        while (dAngle > Math.PI) dAngle -= Math.PI * 2;
-        const fov = ((this.settings.fov || 70) * Math.PI) / 180;
-        if (Math.abs(dAngle) > fov / 2) continue;
-        const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (ddist < 0.1) continue;
-        const dsX = w / 2 + (dAngle / (fov / 2)) * (w / 2);
-        const dsRise = (0.8 - dn.life) * 60;
-        const dsY = (h - barH) / 2 - dsRise;
-        const dAlpha = Math.min(1, dn.life / 0.3);
-        ctx.save();
-        ctx.globalAlpha = dAlpha;
-        ctx.textAlign = "center";
-        if (dn.crit) {
-          ctx.font = "bold 16px monospace";
-          ctx.shadowColor = "#ffcc00";
-          ctx.shadowBlur = 6;
-          ctx.fillStyle = "#ffcc00";
-          ctx.fillText(dn.value, dsX, dsY);
-          ctx.shadowBlur = 0;
-        } else {
-          ctx.font = "bold 12px monospace";
-          ctx.strokeStyle = "rgba(0,0,0,0.6)";
-          ctx.lineWidth = 2;
-          ctx.strokeText(dn.value, dsX, dsY);
-          ctx.fillStyle = "#ffffff";
-          ctx.fillText(dn.value, dsX, dsY);
-        }
-        ctx.restore();
-      }
-
-      // Kill streak
-      if (this.killStreakDisplay) {
-        const ksd = this.killStreakDisplay;
-        const kAlpha =
-          ksd.life > 1.5
-            ? Math.min(1, (2.0 - ksd.life) * 4)
-            : Math.min(1, ksd.life / 0.5);
-        ctx.save();
-        ctx.globalAlpha = kAlpha;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = `bold ${Math.round(ksd.size * 0.8)}px monospace`;
-        ctx.fillStyle = ksd.color;
-        ctx.fillText(ksd.text, w / 2, (h - barH) * 0.3);
-        ctx.restore();
-      }
-
-      // Achievement toast
-      this.renderAchievementToast(ctx, w, h);
-
-      // Arena timer (compact)
-      if (this.mode === "arena") {
-        const secs = Math.ceil(this.arenaTimer);
-        const warning = secs <= 10;
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(10, 10, 100, 50);
-        ctx.strokeStyle = warning
-          ? "rgba(255,34,0,0.6)"
-          : "rgba(0,200,255,0.3)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(10, 10, 100, 50);
-        ctx.fillStyle = warning
-          ? Math.floor(this.time / 250) % 2
-            ? "#ff2200"
-            : "#ffaa00"
-          : "#00ffcc";
-        ctx.font = "bold 28px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(`${secs}s`, 60, 44);
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
-        ctx.font = "bold 10px monospace";
-        ctx.fillText("TIME", 60, 22);
-      }
-
-      // Campaign timer
-      if (this.mode === "campaign" && this.roundStartTime) {
-        const elSec = Math.floor(
-          (performance.now() - this.roundStartTime) / 1000,
-        );
-        const mins = Math.floor(elSec / 60);
-        const secs = elSec % 60;
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(10, 10, 70, 20);
-        ctx.fillStyle = "rgba(200,220,255,0.5)";
-        ctx.font = "11px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 45, 24);
-      }
-
-      // ── Meltdown HUD ──
-      if (this.mode === "meltdown") {
-        const mHud = this.meltdown.getHUD();
-        const heatPct = mHud.heat / 100;
-
-        // Distance & Score (top-left)
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(10, 10, 140, 55);
-        ctx.strokeStyle = `rgba(255,${Math.floor(170 - heatPct * 170)},0,0.5)`;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(10, 10, 140, 55);
-
-        ctx.font = "bold 10px monospace";
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#ffaa00";
-        ctx.fillText("DISTANCE", 80, 22);
-        ctx.font = "bold 22px monospace";
-        ctx.fillText(`${mHud.distance}m`, 80, 44);
-        ctx.font = "9px monospace";
-        ctx.fillStyle = "rgba(200,200,200,0.6)";
-        ctx.fillText(`SCORE: ${mHud.score}`, 80, 58);
-
-        // Heat meter (top-right)
-        const heatW = 120;
-        const heatH = 16;
-        const heatX = w - heatW - 15;
-        const heatY = 15;
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(heatX - 5, heatY - 5, heatW + 10, heatH + 24);
-        ctx.strokeStyle = "rgba(255,68,0,0.3)";
-        ctx.strokeRect(heatX - 5, heatY - 5, heatW + 10, heatH + 24);
-
-        // Heat bar background
-        ctx.fillStyle = "rgba(60,20,0,0.6)";
-        ctx.fillRect(heatX, heatY, heatW, heatH);
-
-        // Heat bar fill
-        const heatColor =
-          heatPct < 0.5
-            ? `rgb(255, ${Math.floor(200 - heatPct * 300)}, 0)`
-            : `rgb(255, ${Math.floor(100 - (heatPct - 0.5) * 200)}, 0)`;
-        ctx.fillStyle = heatColor;
-        ctx.fillRect(heatX, heatY, heatW * heatPct, heatH);
-
-        // Heat label
-        ctx.font = "bold 9px monospace";
-        ctx.textAlign = "center";
-        ctx.fillStyle = heatPct > 0.7 ? "#ff4400" : "#ffaa66";
-        ctx.fillText(
-          `REACTOR: ${mHud.heat}%`,
-          heatX + heatW / 2,
-          heatY + heatH + 12,
-        );
-
-        // Speed indicator
-        ctx.font = "8px monospace";
-        ctx.fillStyle = "rgba(150,200,255,0.5)";
-        ctx.textAlign = "right";
-        ctx.fillText(`${mHud.speed} m/s`, w - 15, heatY + heatH + 28);
-
-        // Heat overlay on world
-        const overlay = this.meltdown.getHeatOverlay();
-        if (overlay) {
-          ctx.fillStyle = overlay;
-          ctx.fillRect(0, 0, w, h - barH);
-        }
-
-        // ARIA text (center screen)
-        if (this._meltdownAriaText) {
-          const ariaAlpha = Math.min(1, this._meltdownAriaTimer / 0.5);
-          ctx.save();
-          ctx.globalAlpha = ariaAlpha;
-          ctx.fillStyle = "rgba(0,0,0,0.6)";
-          const tw = ctx.measureText(this._meltdownAriaText).width + 40;
-          ctx.fillRect(w / 2 - tw / 2, h * 0.2 - 15, tw, 30);
-          ctx.font = "bold 13px monospace";
-          ctx.textAlign = "center";
-          ctx.fillStyle = "#00ccff";
-          ctx.fillText(this._meltdownAriaText, w / 2, h * 0.2 + 3);
-          ctx.restore();
-        }
-      }
-
-      ctx.textAlign = "left";
-
-      // Stage cleared notification
-      if (this.mode === "arena" && this.arenaClearTimer != null) {
-        const countSecs = Math.ceil(this.arenaClearTimer);
-        const pulse = 0.7 + Math.sin(this.time * 0.005) * 0.3;
-        ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
-        ctx.fillRect(0, (h - barH) / 2 - 36, w, 72);
-        ctx.fillStyle = `rgba(0,255,100,${pulse})`;
-        ctx.font = "bold 28px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("STAGE CLEARED!", w / 2, (h - barH) / 2 - 6);
-        ctx.fillStyle = "rgba(200,230,255,0.8)";
-        ctx.font = "bold 14px monospace";
-        ctx.fillText(
-          `Next round in ${countSecs}s...`,
-          w / 2,
-          (h - barH) / 2 + 18,
-        );
-        ctx.textAlign = "left";
-      }
-
-      // Slow-mo vignette overlay
-      if (this.slowMoTimer > 0) {
-        const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
-        ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
-        ctx.fillRect(0, 0, w, h - barH);
-        const gradient = ctx.createRadialGradient(
-          w / 2,
-          (h - barH) / 2,
-          w * 0.25,
-          w / 2,
-          (h - barH) / 2,
-          w * 0.7,
-        );
-        gradient.addColorStop(0, "rgba(0,0,0,0)");
-        gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, w, h - barH);
-      }
-
-      // FPS counter
-      if (this.showFPS) {
-        ctx.fillStyle = "#ffcc00";
-        ctx.font = "bold 12px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText(`FPS: ${this.fps}`, 10, h - barH - 8);
-      }
-
-      // ARIA comms overlay
-      this.renderAriaComms(ctx, w, h);
-
-      return;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // MINIMALIST TRANSPARENT OVERLAY HUD (desktop)
-    // No bottom bar — all info floats at screen edges
-    // ═══════════════════════════════════════════════════════════════════════
-
-    const wep = this.player.getWeaponDef();
-    const healthPct = this.player.health / this.player.maxHealth;
-    const healthColor =
-      healthPct > 0.6
-        ? this.cbColor("#00ff66")
-        : healthPct > 0.3
-          ? this.cbColor("#ffaa00")
-          : this.cbColor("#ff2200");
-
-    // ─── Helper: rounded-rect pill background ───
-    const drawPill = (x, y, pw, ph, alpha = 0.55) => {
-      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-      ctx.beginPath();
-      ctx.roundRect(x, y, pw, ph, 6);
-      ctx.fill();
-    };
-
-    // ─── TOP-LEFT: Score / Timer / Difficulty / Meltdown info ───
-    {
-      let tlY = 12;
-      const tlX = 12;
-      const pillH = 28;
-      const pillGap = 6;
-
-      // Score pill
-      if (this.settings.showScore) {
-        const scoreText = `SCORE  ${this.player.score}`;
-        ctx.font = "bold 14px monospace";
-        const tw = ctx.measureText(scoreText).width;
-        const pw = tw + 20;
-        drawPill(tlX, tlY, pw, pillH, 0.55);
-        ctx.fillStyle = "#00ddff";
-        ctx.textAlign = "left";
-        ctx.fillText(scoreText, tlX + 10, tlY + 19);
-        tlY += pillH + pillGap;
-      }
-
-      // Arena timer
-      if (this.mode === "arena") {
-        const secs = Math.ceil(this.arenaTimer);
-        const warning = secs <= 10;
-        const cleared = this.arenaClearTimer != null;
-        const timerLabel = cleared ? "CLEARED" : `ROUND ${this.arenaRound}`;
-        const timerVal = `${secs}s`;
-        const timerColor = cleared
-          ? "#00ff66"
-          : warning
-            ? Math.floor(this.time / 250) % 2
-              ? "#ff2200"
-              : "#ffaa00"
-            : "#00ffcc";
-
-        ctx.font = "bold 14px monospace";
-        const labelW = ctx.measureText(timerLabel).width;
-        ctx.font = "bold 26px monospace";
-        const valW = ctx.measureText(timerVal).width;
-        const pw = Math.max(labelW, valW) + 24;
-        const ph = 58;
-        drawPill(tlX, tlY, pw, ph, 0.6);
-
-        ctx.fillStyle = cleared ? "rgba(0,255,100,0.7)" : "rgba(255,255,255,0.5)";
-        ctx.font = "bold 12px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText(timerLabel, tlX + 10, tlY + 16);
-
-        ctx.fillStyle = timerColor;
-        ctx.font = "bold 26px monospace";
-        ctx.fillText(timerVal, tlX + 10, tlY + 46);
-
-        // Elapsed sub-line
-        if (this.roundStartTime) {
-          const elapsedSec = Math.floor(
-            (performance.now() - this.roundStartTime) / 1000,
-          );
-          const mins = Math.floor(elapsedSec / 60);
-          const secs2 = elapsedSec % 60;
-          ctx.fillStyle = "rgba(255,255,255,0.3)";
-          ctx.font = "10px monospace";
-          ctx.fillText(
-            `${mins}:${secs2.toString().padStart(2, "0")} elapsed`,
-            tlX + pw - 78,
-            tlY + 16,
-          );
-        }
-        tlY += ph + pillGap;
-      }
-
-      // Campaign elapsed timer
-      if (this.mode === "campaign" && this.roundStartTime) {
-        const elapsedSec = Math.floor(
-          (performance.now() - this.roundStartTime) / 1000,
-        );
-        const mins = Math.floor(elapsedSec / 60);
-        const secs = elapsedSec % 60;
-        const timeStr = `${mins}:${secs.toString().padStart(2, "0")}`;
-        ctx.font = "bold 14px monospace";
-        const tw = ctx.measureText(timeStr).width;
-        drawPill(tlX, tlY, tw + 20, pillH, 0.45);
-        ctx.fillStyle = "rgba(200,220,255,0.6)";
-        ctx.textAlign = "left";
-        ctx.fillText(timeStr, tlX + 10, tlY + 19);
-        tlY += pillH + pillGap;
-      }
-
-      // Campaign level name
-      if (this.mode === "campaign") {
-        const levelName = this.map.name || `Level ${this.campaignLevel + 1}`;
-        ctx.font = "bold 12px monospace";
-        const tw = ctx.measureText(levelName).width;
-        drawPill(tlX, tlY, tw + 20, pillH - 2, 0.4);
-        ctx.fillStyle = "#aaddff";
-        ctx.textAlign = "left";
-        ctx.fillText(levelName, tlX + 10, tlY + 18);
-        tlY += pillH + pillGap;
-      }
-
-      // Difficulty badge
-      const diffNames = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
-      const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
-      const diffText = diffNames[this.settings.difficulty];
-      ctx.font = "bold 11px monospace";
-      const diffTW = ctx.measureText(diffText).width;
-      drawPill(tlX, tlY, diffTW + 16, 22, 0.4);
-      ctx.fillStyle = diffColors[this.settings.difficulty];
-      ctx.textAlign = "left";
-      ctx.fillText(diffText, tlX + 8, tlY + 15);
-      tlY += 22 + pillGap;
-
-      // NG+ cycle badge (campaign only)
-      if (this.mode === "campaign" && this.ngPlusCycle > 0) {
-        const ngLabel = this.ngPlusCycle >= 3 ? "NG+3 FINAL" : `NG+${this.ngPlusCycle}`;
-        const ngColor = this.ngPlusCycle >= 3 ? "#ffcc00" : "#cc88ff";
-        ctx.font = "bold 11px monospace";
-        const ngTW = ctx.measureText(ngLabel).width;
-        drawPill(tlX, tlY, ngTW + 16, 22, 0.4);
-        ctx.fillStyle = ngColor;
-        ctx.textAlign = "left";
-        ctx.fillText(ngLabel, tlX + 8, tlY + 15);
-        tlY += 22 + pillGap;
-      }
-
-      // Meltdown info
-      if (this.mode === "meltdown") {
-        const mHud = this.meltdown.getHUD();
-        const mText = `${mHud.distance}m`;
-        const braking = this.player._meltdownBraking;
-        ctx.font = "bold 22px monospace";
-        const mw = ctx.measureText(mText).width;
-        const pillW = Math.max(mw + 24, 140);
-        drawPill(tlX, tlY, pillW, braking ? 52 : 36, 0.55);
-        ctx.fillStyle = "#ffaa00";
-        ctx.font = "bold 11px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText("REACTOR RUN", tlX + 10, tlY + 13);
-        ctx.fillStyle = "#ffcc44";
-        ctx.font = "bold 22px monospace";
-        ctx.fillText(mText, tlX + 10, tlY + 32);
-        if (braking) {
-          ctx.fillStyle = "#ff6644";
-          ctx.font = "bold 11px monospace";
-          ctx.fillText("▼ BRAKING", tlX + 10, tlY + 47);
-        }
-        tlY += (braking ? 52 : 36) + pillGap;
-
-        // Heat indicator
-        const heatText = `HEAT ${mHud.heat}%`;
-        ctx.font = "bold 12px monospace";
-        const htw = ctx.measureText(heatText).width;
-        drawPill(tlX, tlY, htw + 20, 24, 0.45);
-        ctx.fillStyle = mHud.heat > 75 ? "#ff2200" : mHud.heat > 50 ? "#ffaa00" : "#ff8844";
-        ctx.textAlign = "left";
-        ctx.fillText(heatText, tlX + 10, tlY + 16);
-        tlY += 24 + pillGap;
-      }
-    }
-
-    // ─── TOP-RIGHT: Kills counter ───
-    if (this.settings.showKills) {
-      const killText = `KILLS  ${this.killedEnemies} / ${this.totalEnemies}`;
-      ctx.font = "bold 14px monospace";
-      const tw = ctx.measureText(killText).width;
-      const pw = tw + 20;
-      const kx = w - pw - 12;
-      // Push minimap Y down if kills pill is shown
-      const ky = 12;
-      drawPill(kx, ky, pw, 28, 0.55);
-      ctx.fillStyle = "#ff8866";
-      ctx.textAlign = "left";
-      ctx.fillText(killText, kx + 10, ky + 19);
-    }
-
-    // ─── BOSS HEALTH BAR (top-center, only when boss is alive) ───
-    {
-      const bossEntity = this.entities.find(
-        (e) =>
-          e.type === "enemy" &&
-          e.active &&
-          e.health > 0 &&
-          (e.enemyType === "boss" ||
-            e.enemyType === "boss_form2" ||
-            e.enemyType === "boss_form3"),
-      );
-      if (bossEntity) {
-        const bossBarW = Math.min(400, w * 0.4);
-        const bossBarH = 14;
-        const bossBarX = Math.floor(w / 2 - bossBarW / 2);
-        const bossBarY = 14;
-        const bossPct = Math.max(0, bossEntity.health / bossEntity.maxHealth);
-        const bossForm = bossEntity.def.form || 1;
-        const bossName = bossEntity.def.name || "BOSS";
-        const bossColor =
-          bossForm === 3
-            ? "#ff0044"
-            : bossForm === 2
-              ? "#ff0066"
-              : "#ff0088";
-
-        // Background pill
-        drawPill(bossBarX - 8, bossBarY - 18, bossBarW + 16, bossBarH + 28, 0.65);
-
-        // Name
-        ctx.fillStyle = bossColor;
-        ctx.font = "bold 12px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(bossName, w / 2, bossBarY - 4);
-
-        // Bar track
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.beginPath();
-        ctx.roundRect(bossBarX, bossBarY, bossBarW, bossBarH, 3);
-        ctx.fill();
-
-        // Bar fill
-        ctx.fillStyle = bossColor;
-        ctx.beginPath();
-        ctx.roundRect(bossBarX, bossBarY, bossBarW * bossPct, bossBarH, 3);
-        ctx.fill();
-
-        // Shine
-        const bShine = ctx.createLinearGradient(
-          bossBarX,
-          bossBarY,
-          bossBarX,
-          bossBarY + bossBarH,
-        );
-        bShine.addColorStop(0, "rgba(255,255,255,0.2)");
-        bShine.addColorStop(0.5, "rgba(255,255,255,0)");
-        bShine.addColorStop(1, "rgba(0,0,0,0.1)");
-        ctx.fillStyle = bShine;
-        ctx.beginPath();
-        ctx.roundRect(bossBarX, bossBarY, bossBarW * bossPct, bossBarH, 3);
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = bossColor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(bossBarX, bossBarY, bossBarW, bossBarH, 3);
-        ctx.stroke();
-
-        // HP text
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `bold ${Math.max(9, bossBarH - 3)}px monospace`;
-        ctx.textAlign = "center";
-        ctx.fillText(
-          `${Math.ceil(bossEntity.health)} / ${bossEntity.maxHealth}`,
-          w / 2,
-          bossBarY + bossBarH - 2,
-        );
-      }
-    }
-
-    // ─── BOTTOM-CENTER: Health bar + Shield bar + Weapon strip ───
-    {
-      const stripSlotW = Math.round(32 * hudFactor);
-      const stripSlotH = Math.round(30 * hudFactor);
-      const stripGap = 4;
-      const weaponCount = this.player.weapons.length;
-      const stripTotalW =
-        weaponCount * stripSlotW + (weaponCount - 1) * stripGap;
-      const stripX = Math.floor(w / 2 - stripTotalW / 2);
-      const stripY = h - stripSlotH - 14;
-
-      // Health bar (thin, above weapon strip)
-      const hBarW = Math.max(stripTotalW, 260);
-      const hBarH = Math.round(8 * hudFactor);
-      const hBarX = Math.floor(w / 2 - hBarW / 2);
-      const hBarY = stripY - hBarH - 8;
-
-      // Shield bar (thin, above health bar)
-      const sBarH = Math.round(5 * hudFactor);
-      const sBarY = hBarY - sBarH - 3;
-
-      // Stamina + Chrono bars (thin 6px, above shield/health)
-      const staminaPct = this.player.stamina / this.player.maxStamina;
-      const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
-      const showChrono = chronoPct > 0.005 || this.player.chronoActive;
-      const isActive = this.player.isSprinting || this.player.isDashing;
-      const chronoIsActive = this.player.chronoActive;
-      const thinH = Math.round(6 * hudFactor);
-      const thinGap = 3;
-      const resourceBarW = hBarW;
-      const resourceBarX = hBarX;
-      const resourceBaseY =
-        this.player.maxShield > 0 ? sBarY - thinH - 6 : hBarY - thinH - 6;
-
-      // ── Stamina bar (thin) ──
-      {
-        const sby = showChrono ? resourceBaseY - thinH - thinGap : resourceBaseY;
-        const staminaColor = this.player.isDashing
-          ? "#00ffff"
-          : this.player.isSprinting
-            ? "#ffaa00"
-            : staminaPct > 0.3
-              ? "#00ccff"
-              : "#ff4400";
-        // background
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
-        ctx.beginPath();
-        ctx.roundRect(resourceBarX, sby, resourceBarW, thinH, 3);
-        ctx.fill();
-        // fill
-        if (staminaPct > 0.005) {
-          ctx.fillStyle = staminaColor;
-          ctx.beginPath();
-          ctx.roundRect(
-            resourceBarX,
-            sby,
-            resourceBarW * staminaPct,
-            thinH,
-            3,
-          );
-          ctx.fill();
-        }
-        // border when active
-        if (isActive) {
-          ctx.strokeStyle = staminaColor;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.roundRect(resourceBarX, sby, resourceBarW, thinH, 3);
-          ctx.stroke();
-        }
-        // label (only when below full or active)
-        if (staminaPct < 0.99 || isActive) {
-          const label = this.player.isDashing
-            ? "DASH"
-            : this.player.isSprinting
-              ? "SPRINT"
-              : "STAM";
-          ctx.fillStyle = isActive
-            ? staminaColor
-            : "rgba(255,255,255,0.45)";
-          ctx.font = "bold 9px monospace";
-          ctx.textAlign = "left";
-          ctx.fillText(label, resourceBarX + 4, sby + thinH - 1);
-          ctx.textAlign = "right";
-          ctx.fillStyle = "rgba(255,255,255,0.4)";
-          ctx.fillText(
-            `${Math.floor(staminaPct * 100)}%`,
-            resourceBarX + resourceBarW - 4,
-            sby + thinH - 1,
-          );
-        }
-      }
-
-      // ── Chrono bar (thin) ──
-      if (showChrono) {
-        const cby = resourceBaseY;
-        const chronoColor = chronoIsActive
-          ? "#cc44ff"
-          : chronoPct >= 0.15
-            ? "#9944ff"
-            : "#664488";
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        ctx.beginPath();
-        ctx.roundRect(resourceBarX, cby, resourceBarW, thinH, 3);
-        ctx.fill();
-        if (chronoPct > 0.005) {
-          ctx.fillStyle = chronoColor;
-          ctx.beginPath();
-          ctx.roundRect(
-            resourceBarX,
-            cby,
-            resourceBarW * chronoPct,
-            thinH,
-            3,
-          );
-          ctx.fill();
-        }
-        if (chronoIsActive) {
-          ctx.strokeStyle = "#cc44ff";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.roundRect(resourceBarX, cby, resourceBarW, thinH, 3);
-          ctx.stroke();
-        }
-        ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.5)";
-        ctx.font = "bold 9px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText("CHRONO", resourceBarX + 4, cby + thinH - 1);
-        ctx.textAlign = "right";
-        ctx.fillStyle = "rgba(180,140,220,0.4)";
-        ctx.fillText(
-          `${Math.floor(chronoPct * 100)}%`,
-          resourceBarX + resourceBarW - 4,
-          cby + thinH - 1,
-        );
-      }
-
-      // ── Shield bar (thin, only when player has shield) ──
-      if (this.player.maxShield > 0) {
-        const shieldPct = this.player.shield / this.player.maxShield;
-        const shieldRegenning = this.player.shield < this.player.maxShield;
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
-        ctx.beginPath();
-        ctx.roundRect(hBarX, sBarY, hBarW, sBarH, 2);
-        ctx.fill();
-        const shieldColor = shieldRegenning ? "#4488ff" : "#66aaff";
-        ctx.fillStyle = shieldColor;
-        ctx.beginPath();
-        ctx.roundRect(hBarX, sBarY, hBarW * shieldPct, sBarH, 2);
-        ctx.fill();
-        if (shieldRegenning) {
-          const pulse = 0.08 + Math.sin(this.time * 0.006) * 0.04;
-          ctx.fillStyle = `rgba(100,160,255,${pulse})`;
-          ctx.beginPath();
-          ctx.roundRect(hBarX, sBarY, hBarW * shieldPct, sBarH, 2);
-          ctx.fill();
-        }
-        ctx.strokeStyle = "rgba(100,160,255,0.35)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(hBarX, sBarY, hBarW, sBarH, 2);
-        ctx.stroke();
-        // label
-        ctx.fillStyle = "#88bbff";
-        ctx.font = "bold 8px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(
-          `SHIELD ${Math.ceil(this.player.shield)}`,
-          hBarX + hBarW / 2,
-          sBarY + sBarH - 0,
-        );
-      }
-
-      // ── Health bar (thin) ──
-      {
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.beginPath();
-        ctx.roundRect(hBarX, hBarY, hBarW, hBarH, 3);
-        ctx.fill();
-        ctx.fillStyle = healthColor;
-        ctx.beginPath();
-        ctx.roundRect(hBarX, hBarY, hBarW * healthPct, hBarH, 3);
-        ctx.fill();
-        // shine
-        const shineGrad = ctx.createLinearGradient(
-          hBarX,
-          hBarY,
-          hBarX,
-          hBarY + hBarH,
-        );
-        shineGrad.addColorStop(0, "rgba(255,255,255,0.18)");
-        shineGrad.addColorStop(0.5, "rgba(255,255,255,0)");
-        shineGrad.addColorStop(1, "rgba(0,0,0,0.1)");
-        ctx.fillStyle = shineGrad;
-        ctx.beginPath();
-        ctx.roundRect(hBarX, hBarY, hBarW * healthPct, hBarH, 3);
-        ctx.fill();
-        // border
-        ctx.strokeStyle =
-          healthPct < 0.25
-            ? "rgba(255,34,0,0.6)"
-            : "rgba(255,255,255,0.15)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(hBarX, hBarY, hBarW, hBarH, 3);
-        ctx.stroke();
-        // HP text (centered on bar)
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `bold ${Math.max(9, hBarH - 1)}px monospace`;
-        ctx.textAlign = "center";
-        ctx.fillText(
-          `${Math.ceil(this.player.health)} / ${this.player.maxHealth}`,
-          hBarX + hBarW / 2,
-          hBarY + hBarH - 1,
-        );
-      }
-
-      // ── Weapon strip (horizontal row) ──
-      if (this.settings.showWeapons) {
-        ctx.font = `bold ${Math.max(12, stripSlotH - 14)}px monospace`;
-        for (let i = 0; i < weaponCount; i++) {
-          const active = i === this.player.currentWeapon;
-          const sx = stripX + i * (stripSlotW + stripGap);
-          ctx.fillStyle = active
-            ? "rgba(0,200,255,0.35)"
-            : "rgba(0,0,0,0.4)";
-          ctx.beginPath();
-          ctx.roundRect(sx, stripY, stripSlotW, stripSlotH, 4);
-          ctx.fill();
-          ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.12)";
-          ctx.lineWidth = active ? 2 : 1;
-          ctx.beginPath();
-          ctx.roundRect(sx, stripY, stripSlotW, stripSlotH, 4);
-          ctx.stroke();
-          ctx.fillStyle = active ? "#ffffff" : "#555555";
-          ctx.textAlign = "center";
-          ctx.fillText(
-            `${i + 1}`,
-            sx + stripSlotW / 2,
-            stripY + stripSlotH / 2 + 5,
-          );
-        }
-      }
-    }
-
-    // ─── BOTTOM-RIGHT: Ammo count + weapon name ───
-    {
-      const brX = w - 12;
-      const brY = h - 14;
-      // Ammo (large number, right-aligned)
-      ctx.textAlign = "right";
-      ctx.fillStyle = "#ffcc00";
-      ctx.font = this.scaledFont(38, "bold");
-      ctx.fillText(`${this.player.ammo}`, brX, brY - 18);
-      // Weapon name (below ammo)
-      if (wep) {
-        ctx.fillStyle = wep.color;
-        ctx.font = "bold 13px monospace";
-        ctx.fillText(wep.name, brX, brY);
-      }
-    }
-
-    // ─── MINIMAP (top-right, pushed down if kills pill is shown) ───
-    {
-      let mmSize = this.settings.minimapSize;
-      if (this.isTouchDevice && w < 700) {
-        mmSize = Math.min(mmSize, Math.round(w * 0.28));
-      }
-      const mmY = this.settings.showKills ? 48 : 10;
-      this.drawMinimap(ctx, w - mmSize - 10, mmY, mmSize, mmSize);
-    }
-
-    // ─── CROSSHAIR (center of full screen, barH is 0) ───
-    const chx = w / 2;
-    const chy = h / 2;
-    this.drawCrosshairAt(ctx, chx, chy);
-
-    // ─── HIT MARKER ───
-    if (this.hitMarker > 0) {
-      const a = Math.min(1, this.hitMarker / 0.08);
-      ctx.save();
-      ctx.globalAlpha = a;
-      ctx.strokeStyle = "#ff3333";
-      ctx.lineWidth = 2;
-      ctx.translate(chx, chy);
-      ctx.rotate(Math.PI / 4);
-      ctx.beginPath();
-      ctx.moveTo(-8, 0);
-      ctx.lineTo(8, 0);
-      ctx.moveTo(0, -8);
-      ctx.lineTo(0, 8);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // ─── FLOATING DAMAGE NUMBERS ───
-    for (const dn of this.damageNumbers) {
-      const dx = dn.x - this.player.x;
-      const dy = dn.y - this.player.y;
-      let angle = Math.atan2(dy, dx) - this.player.angle;
-      while (angle < -Math.PI) angle += Math.PI * 2;
-      while (angle > Math.PI) angle -= Math.PI * 2;
-      const fov = ((this.settings.fov || 70) * Math.PI) / 180;
-      if (Math.abs(angle) > fov / 2) continue;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.1) continue;
-      const screenX = w / 2 + (angle / (fov / 2)) * (w / 2);
-      const rise = (0.8 - dn.life) * 60;
-      const screenY = h / 2 - rise;
-      const alpha = Math.min(1, dn.life / 0.3);
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.textAlign = "center";
-      if (dn.crit) {
-        ctx.font = "bold 18px monospace";
-        ctx.shadowColor = "#ffcc00";
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = "#ffcc00";
-        ctx.fillText(dn.value, screenX, screenY);
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(0,0,0,0.5)";
-        ctx.lineWidth = 2;
-        ctx.strokeText(dn.value, screenX, screenY);
-        ctx.fillText(dn.value, screenX, screenY);
-      } else {
-        ctx.font = "bold 14px monospace";
-        ctx.strokeStyle = "rgba(0,0,0,0.6)";
-        ctx.lineWidth = 2;
-        ctx.strokeText(dn.value, screenX, screenY);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(dn.value, screenX, screenY);
-      }
-      ctx.restore();
-    }
-
-    // ─── KILL STREAK ANNOUNCEMENT ───
-    if (this.killStreakDisplay) {
-      const ksd = this.killStreakDisplay;
-      const alpha =
-        ksd.life > 1.5
-          ? Math.min(1, (2.0 - ksd.life) * 4)
-          : Math.min(1, ksd.life / 0.5);
-      const scale = ksd.life > 1.8 ? 1.2 + (2.0 - ksd.life) * 3 : 1.0;
-      const fontSize = Math.round(ksd.size * scale);
-      const ky = h * 0.3;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = `bold ${fontSize}px monospace`;
-
-      const textW = ctx.measureText(ksd.text).width;
-      const plateW = textW + 60;
-      const plateH = fontSize + 20;
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, plateH);
-      ctx.fillStyle = ksd.color;
-      ctx.globalAlpha = alpha * 0.6;
-      ctx.fillRect(w / 2 - plateW / 2, ky - plateH / 2, plateW, 2);
-      ctx.fillRect(w / 2 - plateW / 2, ky + plateH / 2 - 2, plateW, 2);
-      ctx.globalAlpha = alpha;
-
-      ctx.shadowColor = ksd.color;
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = ksd.color;
-      ctx.fillText(ksd.text, w / 2, ky);
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = "rgba(255,255,255,0.4)";
-      ctx.lineWidth = 1.5;
-      ctx.strokeText(ksd.text, w / 2, ky);
-      ctx.restore();
-    }
-
-    // ─── STAGE CLEARED (arena only) ───
-    if (this.mode === "arena" && this.arenaClearTimer != null) {
-      const countSecs = Math.ceil(this.arenaClearTimer);
-      const pulse = 0.7 + Math.sin(this.time * 0.005) * 0.3;
-      ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
-      ctx.fillRect(0, h / 2 - 60, w, 120);
-      ctx.fillStyle = `rgba(0,255,100,${pulse})`;
-      ctx.font = "bold 48px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("STAGE CLEARED!", w / 2, h / 2 - 8);
-      ctx.fillStyle = "rgba(200,230,255,0.8)";
-      ctx.font = "bold 22px monospace";
-      ctx.fillText(
-        `Next round in ${countSecs}s...`,
-        w / 2,
-        h / 2 + 30,
-      );
-      ctx.textAlign = "left";
-    }
-
-    // ─── SLOW-MO VIGNETTE ───
-    if (this.slowMoTimer > 0) {
-      const smAlpha = Math.min(0.35, (this.slowMoTimer / 1.5) * 0.35);
-      ctx.fillStyle = `rgba(0,20,60,${smAlpha * 0.4})`;
-      ctx.fillRect(0, 0, w, h);
-      const gradient = ctx.createRadialGradient(
-        w / 2,
-        h / 2,
-        w * 0.25,
-        w / 2,
-        h / 2,
-        w * 0.7,
-      );
-      gradient.addColorStop(0, "rgba(0,0,0,0)");
-      gradient.addColorStop(1, `rgba(0,0,0,${smAlpha})`);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, w, h);
-    }
-
-    // Achievement toast (above minimap area)
-    this.renderAchievementToast(ctx, w, h);
-
-    // Meltdown upgrade selection overlay
-    if (this._meltdownUpgradeChoices) {
-      this._renderMeltdownUpgradeOverlay(ctx, w, h);
-    }
-
-    // ARIA comms overlay (bottom-left)
-    this.renderAriaComms(ctx, w, h);
-  }
-
-  /** Meltdown upgrade selection overlay — 3 choices side by side */
-  _renderMeltdownUpgradeOverlay(ctx, w, h) {
-    const choices = this._meltdownUpgradeChoices;
-    if (!choices || choices.length === 0) return;
-
-    // Dim background
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Title
-    ctx.fillStyle = "#ffaa00";
-    ctx.font = "bold 28px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("SYSTEM UPGRADE", w / 2, h * 0.22);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.font = "14px monospace";
-    ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
-
-    // Cards
-    const cardW = Math.min(200, (w - 80) / 3);
-    const cardH = 160;
-    const gap = 16;
-    const totalW = choices.length * cardW + (choices.length - 1) * gap;
-    const startX = Math.floor(w / 2 - totalW / 2);
-    const startY = Math.floor(h / 2 - cardH / 2);
-
-    for (let i = 0; i < choices.length; i++) {
-      const c = choices[i];
-      const cx = startX + i * (cardW + gap);
-      const selected = i === this._meltdownUpgradeSel;
-
-      // Card background
-      ctx.fillStyle = selected ? "rgba(0,200,255,0.2)" : "rgba(10,10,30,0.85)";
-      ctx.beginPath();
-      ctx.roundRect(cx, startY, cardW, cardH, 8);
-      ctx.fill();
-
-      // Border
-      ctx.strokeStyle = selected ? "#00ccff" : "rgba(255,255,255,0.2)";
-      ctx.lineWidth = selected ? 2.5 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, startY, cardW, cardH, 8);
-      ctx.stroke();
-
-      // Key number
-      ctx.fillStyle = selected ? "#00ccff" : "rgba(255,255,255,0.4)";
-      ctx.font = "bold 12px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
-
-      // Icon
-      ctx.font = "32px serif";
-      ctx.textAlign = "center";
-      ctx.fillText(c.icon || "⚙", cx + cardW / 2, startY + 52);
-
-      // Name
-      ctx.fillStyle = selected ? "#ffffff" : "rgba(255,255,255,0.8)";
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(c.name, cx + cardW / 2, startY + 80);
-
-      // Description (wrap if needed)
-      ctx.fillStyle = "rgba(200,220,255,0.6)";
-      ctx.font = "12px monospace";
-      const desc = c.description || "";
-      const maxTextW = cardW - 16;
-      const words = desc.split(" ");
-      let line = "";
-      let lineY = startY + 100;
-      for (const word of words) {
-        const testLine = line ? line + " " + word : word;
-        if (ctx.measureText(testLine).width > maxTextW) {
-          ctx.fillText(line, cx + cardW / 2, lineY);
-          line = word;
-          lineY += 15;
-        } else {
-          line = testLine;
-        }
-      }
-      if (line) ctx.fillText(line, cx + cardW / 2, lineY);
-    }
-
-    ctx.textAlign = "left";
-  }
-
-  /** Compact mobile HUD: slim bar with health, ammo, and key info only */
-  _renderCompactMobileHUD(ctx, w, h, barH, hudFactor) {
-    const wep = this.player.getWeaponDef();
-    const healthPct = this.player.health / this.player.maxHealth;
-    const healthColor =
-      healthPct > 0.6
-        ? this.cbColor("#00ff66")
-        : healthPct > 0.3
-          ? this.cbColor("#ffaa00")
-          : this.cbColor("#ff2200");
-
-    // Stamina bar (slim, above the bar)
-    const staminaPct = this.player.stamina / this.player.maxStamina;
-    const stBarH = Math.round(8 * hudFactor);
-    const stBarW = Math.round(220 * hudFactor);
-    const stBarX = Math.floor(w / 2 - stBarW / 2);
-    const stBarY = h - barH - stBarH - 4;
-    const isActive = this.player.isSprinting || this.player.isDashing;
-
-    ctx.fillStyle = "rgba(5,5,15,0.7)";
-    ctx.fillRect(stBarX - 1, stBarY - 1, stBarW + 2, stBarH + 2);
-    if (staminaPct > 0.005) {
-      const stColor = this.player.isDashing
-        ? "#00ffff"
-        : this.player.isSprinting
-          ? "#ffaa00"
-          : staminaPct > 0.3
-            ? "#00ccff"
-            : "#ff4400";
-      ctx.fillStyle = stColor;
-      ctx.fillRect(stBarX, stBarY, stBarW * staminaPct, stBarH);
-    }
-    ctx.strokeStyle = isActive ? "#ffaa00" : "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(stBarX, stBarY, stBarW, stBarH);
-
-    // Chrono bar (smaller, above stamina)
-    const chronoPct = this.player.chronoEnergy / this.player.maxChronoEnergy;
-    if (chronoPct > 0.005 || this.player.chronoActive) {
-      const cBarH = Math.round(5 * hudFactor);
-      const cBarW = Math.round(140 * hudFactor);
-      const cBarX = Math.floor(w / 2 - cBarW / 2);
-      const cBarY = stBarY - cBarH - 3;
-      ctx.fillStyle = "rgba(5,5,15,0.6)";
-      ctx.fillRect(cBarX - 1, cBarY - 1, cBarW + 2, cBarH + 2);
-      if (chronoPct > 0.005) {
-        ctx.fillStyle = this.player.chronoActive ? "#cc44ff" : "#9944ff";
-        ctx.fillRect(cBarX, cBarY, cBarW * chronoPct, cBarH);
-      }
-      ctx.strokeStyle = this.player.chronoActive
-        ? "#cc44ff"
-        : "rgba(150,100,200,0.25)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cBarX, cBarY, cBarW, cBarH);
-    }
-
-    // Bottom bar background
-    ctx.fillStyle = "rgba(5,5,15,0.88)";
-    ctx.fillRect(0, h - barH, w, barH);
-    ctx.strokeStyle = "rgba(0,200,255,0.25)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, h - barH);
-    ctx.lineTo(w, h - barH);
-    ctx.stroke();
-
-    const pad = 8;
-    const midY = h - barH / 2;
-
-    // Left: HEALTH number + bar
-    const hpW = Math.round(w * 0.22);
-    ctx.fillStyle = healthColor;
-    ctx.font = "bold 22px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText(`${Math.ceil(this.player.health)}`, pad, midY + 3);
-    // Health bar below number
-    const hbW = hpW - pad;
-    const hbH = 6;
-    const hbY = midY + 10;
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fillRect(pad, hbY, hbW, hbH);
-    ctx.fillStyle = healthColor;
-    ctx.fillRect(pad, hbY, hbW * healthPct, hbH);
-
-    // Shield (if any)
-    if (this.player.maxShield > 0) {
-      const shieldPct = this.player.shield / this.player.maxShield;
-      const sbY = hbY + hbH + 2;
-      ctx.fillStyle = "rgba(255,255,255,0.05)";
-      ctx.fillRect(pad, sbY, hbW, 4);
-      ctx.fillStyle = "#4488ff";
-      ctx.fillRect(pad, sbY, hbW * shieldPct, 4);
-    }
-
-    // Center-left: AMMO
-    const ammoX = hpW + pad * 2;
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 22px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(`${this.player.ammo}`, ammoX + 30, midY + 3);
-    ctx.fillStyle = "rgba(255,204,0,0.5)";
-    ctx.font = "bold 8px monospace";
-    ctx.fillText("AMMO", ammoX + 30, midY - 12);
-
-    // Center: Weapon name
-    if (wep) {
-      ctx.fillStyle = wep.color;
-      ctx.font = "bold 10px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(wep.name, w / 2, midY + 14);
-    }
-
-    // Weapon number
-    ctx.fillStyle = "rgba(0,200,255,0.5)";
-    ctx.font = "bold 9px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(`W${this.player.currentWeapon + 1}`, w / 2, midY - 12);
-
-    // Right: Kills + Score
-    if (this.settings.showKills) {
-      const kx = w - pad - 110;
-      ctx.fillStyle = "#ff8866";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(`${this.killedEnemies}/${this.totalEnemies}`, kx, midY + 2);
-      ctx.fillStyle = "rgba(255,136,102,0.5)";
-      ctx.font = "bold 8px monospace";
-      ctx.fillText("KILLS", kx, midY - 10);
-    }
-
-    if (this.settings.showScore) {
-      const sx = w - pad;
-      ctx.fillStyle = "#00ddff";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(`${this.player.score}`, sx, midY + 2);
-      ctx.fillStyle = "rgba(0,221,255,0.5)";
-      ctx.font = "bold 8px monospace";
-      ctx.fillText("SCORE", sx, midY - 10);
-    }
-
-    // Round indicator (arena)
-    if (this.mode === "arena") {
-      ctx.fillStyle = "#ffaa00";
-      ctx.font = "bold 9px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(`R${this.arenaRound}`, w - pad, midY + 14);
-    }
-
-    // Difficulty
-    const diffNames = ["EASY", "NORM", "HARD", "NITE"];
-    const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
-    ctx.fillStyle = diffColors[this.settings.difficulty];
-    ctx.font = "bold 8px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText(diffNames[this.settings.difficulty], pad, midY - 12);
-  }
-
-  // Multistage portrait drawing based on health and alive status - can be improved with better art and more stages / smoother transitions between stages
+  // Multistage portrait — forwarded to src/ui/portrait.js
   drawPortrait(ctx, x, y, w, h) {
-    const healthPct = this.player.health / this.player.maxHealth;
-    const isDead = !this.player.alive || this.player.health <= 0;
-    // Use modular time to prevent floating-point precision loss after hours of play
-    const animTime = this.time % 25132; // ~4*PI*2000, covers all portrait sin periods
-
-    ctx.fillStyle = "#0a0a18";
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = isDead ? "rgba(255,0,0,0.6)" : "rgba(0,200,255,0.5)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, w, h);
-
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    const s = w / 90; // scale factor relative to 90px base
-
-    // Head/neck base
-    if (isDead || healthPct <= 0.9) {
-      const skinColor = isDead
-        ? "#778877"
-        : healthPct > 0.7
-          ? "#cc9966"
-          : healthPct > 0.5
-            ? "#bb8855"
-            : healthPct > 0.3
-              ? "#aa7744"
-              : "#8a5544";
-      ctx.fillStyle = skinColor;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 * s, 18 * s, 22 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (isDead || healthPct <= 0.1) {
-      // Stage 10
-      ctx.fillStyle = isDead ? "#667766" : "#6a4444";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 * s, 18 * s, 22 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = isDead ? "#445544" : "#553333";
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 2 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 2 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = isDead ? "#334433" : "#442222";
-      ctx.lineWidth = 2 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 12 * s, cy - 2 * s);
-      ctx.lineTo(cx - 4 * s, cy - 2 * s);
-      ctx.moveTo(cx + 4 * s, cy - 2 * s);
-      ctx.lineTo(cx + 12 * s, cy - 2 * s);
-      ctx.stroke();
-
-      ctx.fillStyle = "#2a2222";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 12 * s, 7 * s, 5 * s, 0, 0, Math.PI);
-      ctx.fill();
-      ctx.fillStyle = "#660000";
-      ctx.fillRect(cx + 5 * s, cy + 13 * s, 2 * s, 6 * s);
-
-      ctx.fillStyle = isDead ? "#556655" : "#553333";
-      ctx.fillRect(cx - 13 * s, cy - 7 * s, 26 * s, 2 * s);
-
-      ctx.fillStyle = isDead ? "#778877" : "#6a4444";
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 1 * s);
-      ctx.lineTo(cx + 2 * s, cy + 5 * s);
-      ctx.lineTo(cx - 2 * s, cy + 5 * s);
-      ctx.fill();
-
-      ctx.strokeStyle = "#553333";
-      ctx.lineWidth = 1 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 3 * s, cy - 5 * s);
-      ctx.lineTo(cx + 10 * s, cy - 1 * s);
-      ctx.stroke();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 17 * s, cy - 10 * s, 6 * s, 3 * s);
-      ctx.fillRect(cx + 11 * s, cy - 9 * s, 5 * s, 3 * s);
-    }
-
-    // Helmet
-    if (!isDead && healthPct > 0.5) {
-      ctx.fillStyle = "#1a2a3a";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 2 * s, 20 * s, 24 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#334466";
-      ctx.lineWidth = 2 * s;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 6 * s, 18 * s, Math.PI + 0.3, -0.3);
-      ctx.stroke();
-    }
-
-    if (!isDead && healthPct > 0.9) {
-      // Stage 1 (>90%)
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-
-      ctx.fillStyle = "#00ddff";
-      ctx.globalAlpha = 0.8 + Math.sin(animTime / 400) * 0.15;
-      ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.15)";
-      for (let sl = 0; sl < 5; sl++) {
-        ctx.fillRect(cx - 16 * s, cy - 6 * s + sl * 2 * s, 32 * s, 1 * s);
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.35)";
-      ctx.fillRect(cx - 12 * s, cy - 4 * s, 10 * s, 3 * s);
-
-      ctx.fillStyle = "#66ffff";
-      ctx.globalAlpha = 0.4 + Math.sin(animTime / 200) * 0.2;
-      ctx.fillRect(cx + 8 * s, cy - 4 * s, 2 * s, 2 * s);
-      ctx.fillRect(cx + 12 * s, cy - 3 * s, 2 * s, 2 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-      ctx.fillStyle = "#112233";
-      ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-      ctx.fillStyle = "#0a1520";
-      for (let v = 0; v < 3; v++) {
-        ctx.fillRect(cx - 5 * s + v * 4 * s, cy + 10 * s, 2 * s, 4 * s);
-      }
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-      ctx.fillStyle = "#0f1f2f";
-      ctx.fillRect(cx - 12 * s, cy + 20 * s, 24 * s, 3 * s);
-
-      ctx.strokeStyle = "rgba(0,200,255,0.3)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-    } else if (healthPct > 0.8) {
-      // Stage 2 (80-90%)
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-
-      ctx.fillStyle = "#00ddff";
-      ctx.globalAlpha = 0.75 + Math.sin(animTime / 400) * 0.12;
-      ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.15)";
-      for (let sl = 0; sl < 5; sl++) {
-        ctx.fillRect(cx - 16 * s, cy - 6 * s + sl * 2 * s, 32 * s, 1 * s);
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.fillRect(cx - 12 * s, cy - 4 * s, 10 * s, 3 * s);
-
-      // Scorch mark
-      ctx.fillStyle = "rgba(40,20,10,0.45)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 13 * s, cy - 14 * s, 4 * s, 3 * s, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Small dent
-      ctx.strokeStyle = "#223344";
-      ctx.lineWidth = 1 * s;
-      ctx.beginPath();
-      ctx.arc(cx - 10 * s, cy - 16 * s, 3 * s, 0.5, 2.5);
-      ctx.stroke();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-      ctx.fillStyle = "#112233";
-      ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-      ctx.fillStyle = "#0a1520";
-      for (let v = 0; v < 3; v++) {
-        ctx.fillRect(cx - 5 * s + v * 4 * s, cy + 10 * s, 2 * s, 4 * s);
-      }
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    } else if (healthPct > 0.7) {
-      // Stage 3 (70-80%)
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-
-      ctx.fillStyle = "#00ccee";
-      ctx.globalAlpha = 0.65 + Math.sin(animTime / 350) * 0.1;
-      ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      for (let sl = 0; sl < 5; sl++) {
-        ctx.fillRect(cx - 16 * s, cy - 6 * s + sl * 2 * s, 32 * s, 1 * s);
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.22)";
-      ctx.fillRect(cx - 12 * s, cy - 4 * s, 8 * s, 3 * s);
-
-      // Single crack
-      ctx.strokeStyle = "#ff4466";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 4 * s, cy - 6 * s);
-      ctx.lineTo(cx + 6 * s, cy - 2 * s);
-      ctx.lineTo(cx + 10 * s, cy + 2 * s);
-      ctx.stroke();
-
-      // Blood spot
-      ctx.fillStyle = "#880000";
-      ctx.beginPath();
-      ctx.arc(cx + 5 * s, cy - 6 * s, 1.5 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Scorch marks
-      ctx.fillStyle = "rgba(40,20,10,0.45)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 12 * s, cy - 14 * s, 4 * s, 3 * s, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-      ctx.fillStyle = "#112233";
-      ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    } else if (healthPct > 0.6) {
-      // Stage 4 (60-70%)
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-
-      ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.55 + Math.sin(animTime / 250) * 0.12;
-      ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.2)";
-      for (let sl = 0; sl < 5; sl++) {
-        ctx.fillRect(cx - 16 * s, cy - 6 * s + sl * 2 * s, 32 * s, 1 * s);
-      }
-
-      // Spider cracks
-      ctx.strokeStyle = "#ff4466";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 2 * s, cy - 6 * s);
-      ctx.lineTo(cx + 5 * s, cy - 1 * s);
-      ctx.lineTo(cx + 9 * s, cy + 3 * s);
-      ctx.moveTo(cx + 4 * s, cy - 3 * s);
-      ctx.lineTo(cx + 10 * s, cy);
-      ctx.lineTo(cx + 14 * s, cy + 1 * s);
-      ctx.stroke();
-
-      // Eye peeking
-      ctx.fillStyle = "#ffffff";
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 1 * s, 3 * s, 2 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx + 8 * s, cy - 1 * s, 1.5 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // Blood drip
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx + 5 * s, cy + 1 * s, 2 * s, 6 * s);
-
-      // Scorch marks
-      ctx.fillStyle = "rgba(40,20,10,0.45)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 12 * s, cy - 13 * s, 4 * s, 3 * s, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 15 * s, 3 * s, 2 * s, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-      ctx.fillStyle = "#112233";
-      ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    } else if (healthPct > 0.5) {
-      // Stage 5 (50-60%)
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
-
-      ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.5 + Math.sin(animTime / 300) * 0.1;
-      ctx.fillRect(cx - 16 * s, cy - 6 * s, 14 * s, 10 * s);
-      ctx.globalAlpha = 0.2;
-      ctx.fillRect(cx + 2 * s, cy - 6 * s, 14 * s, 10 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.15)";
-      for (let sl = 0; sl < 3; sl++) {
-        ctx.fillRect(cx - 16 * s, cy - 6 * s + sl * 3 * s, 14 * s, 1 * s);
-      }
-
-      ctx.strokeStyle = "#ff4466";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 2 * s, cy - 6 * s);
-      ctx.lineTo(cx + 2 * s, cy);
-      ctx.lineTo(cx + 6 * s, cy + 4 * s);
-      ctx.moveTo(cx, cy - 4 * s);
-      ctx.lineTo(cx + 8 * s, cy);
-      ctx.lineTo(cx + 12 * s, cy + 2 * s);
-      ctx.moveTo(cx + 3 * s, cy - 6 * s);
-      ctx.lineTo(cx + 5 * s, cy - 2 * s);
-      ctx.stroke();
-
-      // Eye
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.ellipse(cx + 7 * s, cy - 1 * s, 4 * s, 3 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx + 7 * s, cy - 1 * s, 2 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx + 7 * s, cy - 1 * s, 1 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-      ctx.fillStyle = "#112233";
-      ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx + 3 * s, cy + 2 * s, 2 * s, 8 * s);
-
-      ctx.fillStyle = "rgba(40,20,10,0.5)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 12 * s, cy - 12 * s, 5 * s, 4 * s, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    } else if (healthPct > 0.4) {
-      // Stage 6 (40-50%)
-      ctx.fillStyle = "#1a2a3a";
-      ctx.beginPath();
-      ctx.ellipse(
-        cx - 2 * s,
-        cy - 2 * s,
-        19 * s,
-        23 * s,
-        0,
-        Math.PI * 0.6,
-        Math.PI * 2.1,
-      );
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "#334466";
-      ctx.lineWidth = 2 * s;
-      ctx.beginPath();
-      ctx.arc(cx - 2 * s, cy - 6 * s, 17 * s, Math.PI + 0.3, -0.4);
-      ctx.stroke();
-
-      ctx.fillStyle = "#0a1520";
-      ctx.fillRect(cx - 17 * s, cy - 7 * s, 17 * s, 18 * s);
-
-      ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.3 + Math.sin(animTime / 200) * 0.1;
-      ctx.fillRect(cx - 15 * s, cy - 5 * s, 14 * s, 7 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "rgba(0,0,0,0.2)";
-      for (let sl = 0; sl < 3; sl++) {
-        ctx.fillRect(cx - 15 * s, cy - 5 * s + sl * 3 * s, 14 * s, 1 * s);
-      }
-
-      ctx.strokeStyle = "#ff4466";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 4 * s, cy - 5 * s);
-      ctx.lineTo(cx + 1 * s, cy + 2 * s);
-      ctx.moveTo(cx - 8 * s, cy - 3 * s);
-      ctx.lineTo(cx - 3 * s, cy + 3 * s);
-      ctx.moveTo(cx - 12 * s, cy);
-      ctx.lineTo(cx - 7 * s, cy + 4 * s);
-      ctx.stroke();
-
-      // Left eye
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 1 * s, 4 * s, 3 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 1 * s, 2 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 1 * s, 1 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Right eye
-      ctx.fillStyle = "#887055";
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 2 * s, 5 * s, 3.5 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 1.5 * s, 3 * s, 2 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx + 8 * s, cy - 1.5 * s, 1.5 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx + 8 * s, cy - 1.5 * s, 0.7 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Nose
-      ctx.fillStyle = "#aa7744";
-      ctx.beginPath();
-      ctx.moveTo(cx + 2 * s, cy + 2 * s);
-      ctx.lineTo(cx + 4 * s, cy + 6 * s);
-      ctx.lineTo(cx + 1 * s, cy + 6 * s);
-      ctx.fill();
-
-      // Break edge
-      ctx.strokeStyle = "#2a3a4a";
-      ctx.lineWidth = 2 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 1 * s, cy - 20 * s);
-      ctx.lineTo(cx + 3 * s, cy - 10 * s);
-      ctx.lineTo(cx + 1 * s, cy - 2 * s);
-      ctx.lineTo(cx + 3 * s, cy + 8 * s);
-      ctx.stroke();
-
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx + 2 * s, cy + 2 * s, 2 * s, 8 * s);
-
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 14 * s, cy + 8 * s, 16 * s, 10 * s);
-      ctx.fillStyle = "#1a2a3a";
-      ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    } else if (healthPct > 0.3) {
-      // Stage 7 (30-40%)
-      ctx.fillStyle = "#1a2a3a";
-      ctx.beginPath();
-      ctx.moveTo(cx - 18 * s, cy - 18 * s);
-      ctx.lineTo(cx - 8 * s, cy - 20 * s);
-      ctx.lineTo(cx - 6 * s, cy - 12 * s);
-      ctx.lineTo(cx - 16 * s, cy - 10 * s);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = "#00aacc";
-      ctx.globalAlpha = 0.15 + Math.sin(animTime / 100) * 0.1;
-      ctx.fillRect(cx - 16 * s, cy - 16 * s, 6 * s, 3 * s);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = "#885533";
-      ctx.fillRect(cx - 14 * s, cy - 8 * s, 28 * s, 3 * s);
-
-      // Left eye
-      ctx.fillStyle = "#ffddcc";
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 2 * s, 5 * s, 3.5 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#cc3333";
-      ctx.lineWidth = 0.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 12 * s, cy - 3 * s);
-      ctx.lineTo(cx - 9 * s, cy - 2 * s);
-      ctx.moveTo(cx - 12 * s, cy - 1 * s);
-      ctx.lineTo(cx - 10 * s, cy - 1.5 * s);
-      ctx.stroke();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 2 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 1 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Right eye
-      ctx.fillStyle = "#774455";
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 2 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffddcc";
-      ctx.fillRect(cx + 5 * s, cy - 2.5 * s, 6 * s, 1.5 * s);
-      ctx.fillStyle = "#224488";
-      ctx.fillRect(cx + 7 * s, cy - 2 * s, 2 * s, 1 * s);
-
-      // Broken nose
-      ctx.fillStyle = "#aa6633";
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 1 * s);
-      ctx.lineTo(cx + 3 * s, cy + 6 * s);
-      ctx.lineTo(cx - 2 * s, cy + 6 * s);
-      ctx.fill();
-      ctx.fillStyle = "#990000";
-      ctx.fillRect(cx, cy + 6 * s, 2 * s, 3 * s);
-
-      // Snarl
-      ctx.fillStyle = "#331111";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 12 * s, 8 * s, 3.5 * s, 0, 0, Math.PI);
-      ctx.fill();
-      ctx.fillStyle = "#ddccbb";
-      for (let t = 0; t < 6; t++) {
-        ctx.fillRect(cx - 6 * s + t * 2 * s, cy + 10.5 * s, 1.5 * s, 2 * s);
-      }
-      ctx.fillStyle = "#331111";
-      ctx.fillRect(cx + 2 * s, cy + 10.5 * s, 2 * s, 2 * s);
-
-      ctx.fillStyle = "rgba(60,40,30,0.3)";
-      ctx.fillRect(cx - 12 * s, cy + 8 * s, 24 * s, 10 * s);
-
-      ctx.fillStyle = "#990000";
-      ctx.fillRect(cx - 14 * s, cy - 6 * s, 2 * s, 10 * s);
-      ctx.fillRect(cx + 10 * s, cy - 4 * s, 2 * s, 12 * s);
-
-      ctx.strokeStyle = "#990000";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 4 * s, cy - 6 * s);
-      ctx.lineTo(cx + 12 * s, cy - 2 * s);
-      ctx.stroke();
-    } else if (healthPct > 0.2) {
-      // Stage 8 (20-30%)
-      ctx.fillStyle = "#774422";
-      ctx.fillRect(cx - 14 * s, cy - 8 * s, 28 * s, 3.5 * s);
-
-      // Left eye
-      ctx.fillStyle = "#ffccbb";
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 2 * s, 4.5 * s, 3 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#cc2222";
-      ctx.lineWidth = 0.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 11 * s, cy - 3 * s);
-      ctx.lineTo(cx - 9 * s, cy - 2 * s);
-      ctx.moveTo(cx - 11 * s, cy - 1 * s);
-      ctx.lineTo(cx - 9 * s, cy - 1.5 * s);
-      ctx.stroke();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 1.8 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 0.8 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Right eye
-      ctx.fillStyle = "#664455";
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 2 * s, 6 * s, 4.5 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffddcc";
-      ctx.fillRect(cx + 5 * s, cy - 2.5 * s, 6 * s, 1 * s);
-
-      // Broken nose
-      ctx.fillStyle = "#995533";
-      ctx.beginPath();
-      ctx.moveTo(cx + 1 * s, cy + 1 * s);
-      ctx.lineTo(cx + 4 * s, cy + 5 * s);
-      ctx.lineTo(cx - 1 * s, cy + 6 * s);
-      ctx.fill();
-      ctx.fillStyle = "#990000";
-      ctx.fillRect(cx + 1 * s, cy + 5 * s, 2 * s, 4 * s);
-
-      // Grimace
-      ctx.fillStyle = "#2a1111";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 12 * s, 7 * s, 3.5 * s, 0, 0, Math.PI);
-      ctx.fill();
-      ctx.fillStyle = "#ccbbaa";
-      for (let t = 0; t < 5; t++) {
-        ctx.fillRect(cx - 5 * s + t * 2.5 * s, cy + 10.5 * s, 1.5 * s, 2 * s);
-      }
-
-      // Heavy bruising
-      ctx.fillStyle = "rgba(80,30,50,0.35)";
-      ctx.beginPath();
-      ctx.ellipse(cx - 5 * s, cy - 3 * s, 7 * s, 5 * s, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(60,20,40,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 7 * s, cy + 1 * s, 6 * s, 4 * s, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Stubble/grime
-      ctx.fillStyle = "rgba(50,30,25,0.3)";
-      ctx.fillRect(cx - 12 * s, cy + 7 * s, 24 * s, 11 * s);
-
-      // Blood
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx - 14 * s, cy - 6 * s, 2 * s, 12 * s);
-      ctx.fillRect(cx + 10 * s, cy - 5 * s, 2 * s, 14 * s);
-      ctx.fillRect(cx - 3 * s, cy + 5 * s, 6 * s, 2 * s);
-
-      // Deep cut
-      ctx.strokeStyle = "#880000";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 3 * s, cy - 7 * s);
-      ctx.lineTo(cx + 12 * s, cy - 2 * s);
-      ctx.stroke();
-    } else if (healthPct > 0.1) {
-      // Stage 9 (10-20%)
-      ctx.fillStyle = "#8a5544";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 * s, 18 * s, 22 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Heavy bruising
-      ctx.fillStyle = "rgba(80,30,50,0.4)";
-      ctx.beginPath();
-      ctx.ellipse(cx - 6 * s, cy - 4 * s, 8 * s, 6 * s, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(60,20,40,0.3)";
-      ctx.beginPath();
-      ctx.ellipse(cx + 6 * s, cy, 7 * s, 5 * s, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#774422";
-      ctx.fillRect(cx - 14 * s, cy - 8 * s, 28 * s, 3.5 * s);
-
-      // Left eye
-      ctx.fillStyle = "#ffccbb";
-      ctx.beginPath();
-      ctx.ellipse(cx - 8 * s, cy - 2 * s, 4 * s, 2 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#cc2222";
-      ctx.lineWidth = 0.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx - 11 * s, cy - 2.5 * s);
-      ctx.lineTo(cx - 9 * s, cy - 2 * s);
-      ctx.moveTo(cx - 11 * s, cy - 1 * s);
-      ctx.lineTo(cx - 9 * s, cy - 1.5 * s);
-      ctx.stroke();
-      ctx.fillStyle = "#224488";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 1.5 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(cx - 8 * s, cy - 2 * s, 0.7 * s, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Right eye
-      ctx.fillStyle = "#664455";
-      ctx.beginPath();
-      ctx.ellipse(cx + 8 * s, cy - 2 * s, 6 * s, 4.5 * s, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#553344";
-      ctx.lineWidth = 1.5 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 4 * s, cy - 2 * s);
-      ctx.lineTo(cx + 12 * s, cy - 2 * s);
-      ctx.stroke();
-
-      // Nose
-      ctx.fillStyle = "#995533";
-      ctx.beginPath();
-      ctx.moveTo(cx + 1 * s, cy + 1 * s);
-      ctx.lineTo(cx + 4 * s, cy + 5 * s);
-      ctx.lineTo(cx - 1 * s, cy + 6 * s);
-      ctx.fill();
-      ctx.fillStyle = "#990000";
-      ctx.fillRect(cx + 1 * s, cy + 5 * s, 2 * s, 5 * s);
-
-      // Mouth
-      ctx.fillStyle = "#2a1111";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 12 * s, 7 * s, 4 * s, 0, 0, Math.PI);
-      ctx.fill();
-      ctx.fillStyle = "#ccbbaa";
-      ctx.fillRect(cx - 4 * s, cy + 10.5 * s, 1.5 * s, 2 * s);
-      ctx.fillRect(cx - 1 * s, cy + 10.5 * s, 1.5 * s, 2 * s);
-      ctx.fillRect(cx + 3 * s, cy + 10.5 * s, 1.5 * s, 2 * s);
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx + 5 * s, cy + 13 * s, 2 * s, 5 * s);
-      ctx.fillRect(cx - 3 * s, cy + 14 * s, 2 * s, 3 * s);
-
-      // Heavy blood
-      ctx.fillStyle = "#880000";
-      ctx.fillRect(cx - 15 * s, cy - 6 * s, 2 * s, 14 * s);
-      ctx.fillRect(cx + 11 * s, cy - 8 * s, 2 * s, 16 * s);
-      ctx.fillRect(cx - 4 * s, cy + 5 * s, 8 * s, 2 * s);
-
-      // Deep cuts
-      ctx.strokeStyle = "#880000";
-      ctx.lineWidth = 2 * s;
-      ctx.beginPath();
-      ctx.moveTo(cx + 3 * s, cy - 8 * s);
-      ctx.lineTo(cx + 13 * s, cy - 1 * s);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - 10 * s, cy + 3 * s);
-      ctx.lineTo(cx - 4 * s, cy + 8 * s);
-      ctx.stroke();
-
-      // Stubble/grime
-      ctx.fillStyle = "rgba(40,25,20,0.35)";
-      ctx.fillRect(cx - 13 * s, cy + 6 * s, 26 * s, 12 * s);
-    }
-
-    // Temporal badge
-    ctx.fillStyle = "#ffaa00";
-    ctx.globalAlpha = 0.5 + Math.sin(this.time / 500) * 0.2;
-    ctx.beginPath();
-    ctx.arc(x + 8 * s, y + h - 10 * s, 4 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffcc44";
-    ctx.beginPath();
-    ctx.arc(x + 8 * s, y + h - 10 * s, 2 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    _drawPortrait(ctx, x, y, w, h, {
+      health: this.player.health,
+      maxHealth: this.player.maxHealth,
+      alive: this.player.alive,
+      time: this.time,
+    });
   }
 
   drawCrosshairAt(ctx, cx, cy) {
-    const type = this.settings.crosshair;
-    if (type === 0) {
-      // Red Dot
-      ctx.fillStyle = "rgba(255,50,50,0.9)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,150,150,0.5)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 1) {
-      // Green Cross
-      ctx.strokeStyle = "rgba(0,255,200,0.7)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy);
-      ctx.lineTo(cx - 4, cy);
-      ctx.moveTo(cx + 4, cy);
-      ctx.lineTo(cx + 10, cy);
-      ctx.moveTo(cx, cy - 10);
-      ctx.lineTo(cx, cy - 4);
-      ctx.moveTo(cx, cy + 4);
-      ctx.lineTo(cx, cy + 10);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(0,255,200,0.9)";
-      ctx.fillRect(cx - 1, cy - 1, 2, 2);
-    } else if (type === 2) {
-      // ACOG Scope
-      ctx.strokeStyle = "rgba(255,100,100,0.6)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 18, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - 18, cy);
-      ctx.lineTo(cx - 5, cy);
-      ctx.moveTo(cx + 5, cy);
-      ctx.lineTo(cx + 18, cy);
-      ctx.moveTo(cx, cy - 18);
-      ctx.lineTo(cx, cy - 5);
-      ctx.moveTo(cx, cy + 5);
-      ctx.lineTo(cx, cy + 18);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,80,80,0.8)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 3) {
-      // Circle
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.fillRect(cx - 1, cy - 1, 2, 2);
-    } else if (type === 4) {
-      // Minimal
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.fillRect(cx - 1, cy - 1, 3, 3);
-    } else if (type === 5) {
-      // None — very subtle center reference
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      ctx.fillRect(cx, cy, 1, 1);
-    }
+    drawCrosshair(ctx, cx, cy, this.settings.crosshair);
   }
 
   drawMinimap(ctx, x, y, w, h) {
-    if (!this.map) return;
-
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "rgba(0,200,255,0.3)";
-    ctx.strokeRect(x, y, w, h);
-
-    const scale = Math.min(w / this.map.width, h / this.map.height);
-    const ox = x + (w - this.map.width * scale) / 2;
-    const oy = y + (h - this.map.height * scale) / 2;
-
-    // Draw walls
-    for (let my = 0; my < this.map.height; my++) {
-      for (let mx = 0; mx < this.map.width; mx++) {
-        const tile = this.map.grid[my][mx];
-        if (tile > 0) {
-          const color = WALL_COLORS[tile];
-          if (color) {
-            ctx.fillStyle = `rgb(${color.r},${color.g},${color.b})`;
-          } else {
-            ctx.fillStyle = "#444466";
-          }
-          ctx.fillRect(ox + mx * scale, oy + my * scale, scale, scale);
-        }
-      }
-    }
-
-    // Draw entities
-    for (const e of this.entities) {
-      if (!e.active) continue;
-      if (e.type === "enemy") {
-        ctx.fillStyle = e.def.color1;
-        ctx.fillRect(ox + e.x * scale - 1.5, oy + e.y * scale - 1.5, 3, 3);
-      } else if (e.type === "exit") {
-        ctx.fillStyle = "#00ff88";
-        ctx.fillRect(ox + e.x * scale - 2, oy + e.y * scale - 2, 4, 4);
-      } else if (e.type !== "projectile") {
-        ctx.fillStyle = e.type === "health" ? "#00ff44" : "#ffaa00";
-        ctx.fillRect(ox + e.x * scale - 1, oy + e.y * scale - 1, 2, 2);
-      }
-    }
-
-    // Player
-    const px = ox + this.player.x * scale;
-    const py = oy + this.player.y * scale;
-    ctx.fillStyle = "#00ffcc";
-    ctx.fillRect(px - 2, py - 2, 4, 4);
-
-    // Player direction
-    ctx.strokeStyle = "#00ffcc";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(
-      px + Math.cos(this.player.angle) * 8,
-      py + Math.sin(this.player.angle) * 8,
-    );
-    ctx.stroke();
-
-    // Chrono-bombs (pulsing orange circles)
-    if (this._chronoBombs) {
-      for (const bomb of this._chronoBombs) {
-        if (!bomb.active) continue;
-        const bx = ox + bomb.x * scale;
-        const by = oy + bomb.y * scale;
-        const progress = bomb.fuseLife / bomb.fuseDuration;
-        const pulse = 0.5 + 0.5 * Math.sin(progress * Math.PI * 6);
-        const alpha = 0.4 + 0.6 * pulse;
-        ctx.fillStyle = `rgba(255,170,0,${alpha})`;
-        ctx.beginPath();
-        ctx.arc(bx, by, bomb.radius * scale * progress, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Objective Waypoint
-    if (this.objectiveWaypoint) {
-      const bx = ox + this.objectiveWaypoint.x * scale;
-      const by = oy + this.objectiveWaypoint.y * scale;
-      const now = performance.now();
-      const progress = (now % 1000) / 1000;
-      const pulse = 0.5 + 0.5 * Math.sin((now / 800) * Math.PI * 2);
-      ctx.fillStyle = `rgba(0,255,200,${0.3 + pulse * 0.7})`;
-      ctx.beginPath();
-      ctx.arc(bx, by, 2 + pulse * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = `rgba(0,255,200,${1 - progress})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(bx, by, 3 + progress * 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    _drawMinimap(ctx, x, y, w, h, {
+      map: this.map,
+      entities: this.entities,
+      player: this.player,
+      chronoBombs: this._chronoBombs,
+      objectiveWaypoint: this.objectiveWaypoint,
+    });
   }
 
   drawControlsOverlay(ctx, w, h, alpha) {
-    const fk = (action) => this.formatKeyCode(this.keybinds[action]);
-    const saveMessage =
-      this.mode === "campaign"
-        ? `${fk("toggleFPS").replace("F", "F")}     - Save Game`
-        : "";
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    const boxW = 280;
-    const boxH = 220;
-    const bx = (w - boxW) / 2;
-    const by = (h - boxH) / 2;
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(bx, by, boxW, boxH);
-    ctx.strokeStyle = "rgba(0,200,255,0.3)";
-    ctx.strokeRect(bx, by, boxW, boxH);
-    ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("CONTROLS", w / 2, by + 24);
-    ctx.fillStyle = "#aabbcc";
-    ctx.font = "13px monospace";
-    ctx.textAlign = "left";
-    const lx = bx + 30;
-    const fwd = fk("moveForward");
-    const bk = fk("moveBack");
-    const lt = fk("moveLeft");
-    const rt = fk("moveRight");
-    ctx.fillText(`${fwd}/${lt}/${bk}/${rt} - Move`, lx, by + 48);
-    ctx.fillText("Mouse - Look", lx, by + 66);
-    ctx.fillText("Click - Shoot", lx, by + 84);
-    ctx.fillText(`${fk("weapon1")}-${fk("weapon8")}   - Weapons`, lx, by + 102);
-    ctx.fillText("Scroll      - Cycle Weapons", lx, by + 120);
-    ctx.fillText(`${fk("interact")}     - Interact/Open`, lx, by + 138);
-    ctx.fillStyle = "#88ddff";
-    ctx.fillText(`${fk("sprint")} - Sprint`, lx, by + 156);
-    ctx.fillText(`${fwd}×2   - Dash (double-tap)`, lx, by + 174);
-    ctx.fillStyle = "#aabbcc";
-    ctx.fillText(`${fk("pause")}/P - Pause`, lx, by + 192);
-    if (saveMessage) {
-      ctx.fillStyle = "#aaccaa";
-      ctx.fillText(saveMessage, lx, by + 210);
-    }
-    ctx.restore();
+    _drawControlsOverlay(ctx, w, h, alpha, { keybinds: this.keybinds, mode: this.mode });
   }
 
   renderPauseScreen(ctx, w, h) {
@@ -9574,1012 +2940,55 @@ export class Game {
   }
 
   renderAriaLog(ctx, w, h) {
-    const panelW = Math.min(520, w - 40);
-    const panelH = Math.min(400, h - 80);
-    const panelX = (w - panelW) / 2;
-    const panelY = (h - panelH) / 2;
-
-    // Panel background
-    ctx.fillStyle = "rgba(0, 8, 16, 0.96)";
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 10);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0, 200, 255, 0.4)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 10);
-    ctx.stroke();
-
-    // Title
-    ctx.fillStyle = "#00ccff";
-    ctx.font = "bold 18px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("ARIA COMMS LOG", w / 2, panelY + 28);
-
-    // Messages
-    const log = this.ariaMessageLog;
-    const lineH = 22;
-    const maxLines = Math.floor((panelH - 70) / lineH);
-    const startIdx = Math.max(0, log.length - maxLines - this.ariaLogScroll);
-    const endIdx = Math.min(log.length, startIdx + maxLines);
-
-    ctx.font = "13px monospace";
-    ctx.textAlign = "left";
-    const textX = panelX + 16;
-    const textMaxW = panelW - 32;
-
-    if (log.length === 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.textAlign = "center";
-      ctx.fillText("No messages yet", w / 2, panelY + panelH / 2);
-    } else {
-      for (let i = startIdx; i < endIdx; i++) {
-        const y = panelY + 50 + (i - startIdx) * lineH;
-        const msgNum = i + 1;
-        ctx.fillStyle = "rgba(0, 200, 255, 0.4)";
-        ctx.fillText(`${String(msgNum).padStart(2, " ")}.`, textX, y);
-        const text = log[i].replace(
-          /\{AGENT\}/g,
-          this.character.name || "Agent",
-        );
-        ctx.fillStyle = "#00ffdd";
-        // Truncate if too long for panel
-        let display = text;
-        while (
-          ctx.measureText(display).width > textMaxW - 30 &&
-          display.length > 3
-        ) {
-          display = display.slice(0, -4) + "...";
-        }
-        ctx.fillText(display, textX + 30, y);
-      }
-    }
-
-    // Scroll hint
-    if (log.length > maxLines) {
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("W/S to scroll", w / 2, panelY + panelH - 10);
-    }
-
-    // Footer
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("L to close  |  ESC to resume", w / 2, panelY + panelH + 20);
-    ctx.textAlign = "left";
+    this.ariaComms.renderLog(ctx, w, h, this.character.name);
   }
 
   renderSettingsScreen(ctx, w, h) {
-    const compact = this.isTouchDevice && isCompactPhone(h);
-    ctx.fillStyle = "rgba(0,0,0,0.88)";
-    ctx.fillRect(0, 0, w, h);
-
-    // ── Layout constants ─────────────────────────────────────────────
-    const headerH = compact ? 36 : 52;
-    const sideW = compact ? 90 : 160;
-    const panelX = sideW + 1;
-    const panelW = w - panelX - 12;
-    const contentTop = headerH + 8;
-    const barW = Math.min(panelW * 0.55, 240);
-    const barH = 6;
-
-    // ── Header ───────────────────────────────────────────────────────
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${compact ? 18 : 28}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText("SETTINGS", w / 2, compact ? 24 : 38);
-    ctx.textAlign = "left";
-
-    // Divider below header
-    ctx.strokeStyle = "rgba(0,255,200,0.15)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, headerH);
-    ctx.lineTo(w, headerH);
-    ctx.stroke();
-
-    // Sidebar background
-    ctx.fillStyle = "rgba(0,10,24,0.7)";
-    ctx.fillRect(0, headerH, sideW, h - headerH);
-
-    // Sidebar border (right edge)
-    ctx.strokeStyle = "rgba(0,160,120,0.25)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(sideW, headerH);
-    ctx.lineTo(sideW, h);
-    ctx.stroke();
-
-    // ── Category sidebar ─────────────────────────────────────────────
-    const cats = getVisibleCategories(this.isTouchDevice);
-    const catItemH = compact ? 28 : 38;
-    const catColors = {
-      Gameplay: "#00ffcc",
-      Display: "#00ccff",
-      Audio: "#00ff88",
-      Controls: "#ffcc00",
-      Accessibility: "#aaaacc",
-      HUD: "#44ffaa",
-      Mobile: "#ff88cc",
-    };
-    for (let ci = 0; ci < cats.length; ci++) {
-      const cat = cats[ci];
-      const isActive = cat === this.settingsCategory;
-      const cy = contentTop + ci * catItemH;
-
-      if (isActive) {
-        // Active background: slightly brighter
-        ctx.fillStyle = "rgba(0,220,170,0.15)";
-        ctx.fillRect(0, cy - 2, sideW, catItemH);
-        // Active left accent bar
-        ctx.fillStyle = catColors[cat] || "#00ffcc";
-        ctx.fillRect(0, cy - 2, 3, catItemH);
-      }
-
-      ctx.fillStyle = isActive ? catColors[cat] || "#00ffcc" : "#445566";
-      ctx.font = `bold ${compact ? 11 : 15}px monospace`;
-      ctx.textAlign = "center";
-      ctx.fillText(cat.toUpperCase(), sideW / 2, cy + (compact ? 16 : 22));
-    }
-    // Help prompt for navigation keys
-    ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = "#b0e0ff";
-    ctx.font = compact ? "10px monospace" : "12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("←/→ or Q/E: Change category", sideW / 2, h - 54);
-    ctx.fillText("↑/↓ or W/S: Move setting", sideW / 2, h - 36);
-    ctx.restore();
-    ctx.textAlign = "left";
-
-    // ── Right panel — settings for active category ───────────────────
-    const defs = getSettingsForCategory(
-      this.isTouchDevice,
-      this.settingsCategory,
-    );
-    const items = defs.map((def) => settingDisplayItem(def, this.settings));
-
-    let startY = contentTop;
-    for (let i = 0; i < items.length; i++) {
-      const def = defs[i];
-      const item = items[i];
-      const selected = this.settingsSelection === i;
-      const itemH = compact ? def.height.compact : def.height.normal;
-      const y = startY;
-      const labelSize = compact ? 12 : 16;
-
-      // Selection highlight
-      if (selected) {
-        ctx.fillStyle = "rgba(0,200,255,0.10)";
-        ctx.fillRect(panelX, y - 2, panelW, itemH);
-        ctx.strokeStyle = "rgba(0,200,255,0.22)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(panelX, y - 2, panelW, itemH);
-      }
-
-      // Row separator
-      if (i > 0) {
-        ctx.strokeStyle = "rgba(255,255,255,0.04)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(panelX + 8, y - 2);
-        ctx.lineTo(panelX + panelW - 8, y - 2);
-        ctx.stroke();
-      }
-
-      // Label
-      ctx.fillStyle = selected ? "#00ffcc" : "#8888aa";
-      ctx.font = `bold ${labelSize}px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(
-        item.label,
-        panelX + (compact ? 8 : 14),
-        y + (compact ? 13 : 18),
-      );
-
-      // Value
-      ctx.textAlign = "right";
-      ctx.fillStyle = item.color || (selected ? "#ffffff" : "#aaaacc");
-      ctx.font = `bold ${labelSize}px monospace`;
-      ctx.fillText(
-        `< ${item.value} >`,
-        panelX + panelW - (compact ? 8 : 14),
-        y + (compact ? 13 : 18),
-      );
-
-      // Sub-widgets
-      if (def.widget === "crosshairPreview") {
-        const prevX = panelX + panelW / 2;
-        const prevY = y + 44;
-        ctx.fillStyle = "rgba(30,30,50,0.8)";
-        ctx.fillRect(prevX - 40, prevY - 18, 80, 36);
-        ctx.strokeStyle = "rgba(0,200,255,0.2)";
-        ctx.strokeRect(prevX - 40, prevY - 18, 80, 36);
-        if (this.settings.crosshair < 5) {
-          this.drawCrosshairAt(ctx, prevX, prevY);
-        } else {
-          ctx.fillStyle = "rgba(255,255,255,0.3)";
-          ctx.font = "10px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText("(none)", prevX, prevY + 4);
-          ctx.textAlign = "left";
-        }
-      } else if (def.type === "slider" && def.barColor) {
-        const sliderY = y + (compact ? 20 : 28);
-        const val = this.settings[def.key];
-        const pct = (val - def.min) / (def.max - def.min);
-        const sliderX = panelX + (compact ? 8 : 14);
-        const sliderW = Math.min(panelW - (compact ? 16 : 28), barW);
-        ctx.fillStyle = "rgba(255,255,255,0.07)";
-        ctx.fillRect(sliderX, sliderY, sliderW, barH);
-        ctx.fillStyle = def.barColor(val);
-        ctx.fillRect(sliderX, sliderY, sliderW * pct, barH);
-        ctx.strokeStyle = "rgba(0,200,255,0.18)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderX, sliderY, sliderW, barH);
-      }
-
-      startY += itemH;
-    }
-
-    // ── Footer hint text ─────────────────────────────────────────────
-    ctx.fillStyle = "#334455";
-    ctx.font = `${compact ? 10 : 13}px monospace`;
-    ctx.textAlign = "center";
-    if (!this.isTouchDevice) {
-      ctx.fillText(
-        "Q/E or TAB — switch category   W/S — navigate   ◄ ► — change   ESC — back",
-        w / 2,
-        h - (compact ? 6 : 10),
-      );
-    }
-    ctx.textAlign = "left";
+    _renderSettingsScreen(ctx, w, h, {
+      isTouchDevice: this.isTouchDevice,
+      settingsCategory: this.settingsCategory,
+      settingsSelection: this.settingsSelection,
+      settings: this.settings,
+      mouseX: this._settingsMouseX,
+      mouseY: this._settingsMouseY,
+    });
   }
 
   renderControlsScreen(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,0,0,0.88)";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = "bold 30px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("KEY BINDINGS", w / 2, 60);
-
-    const bindKeys = Object.keys(this.keybinds);
-    const labels = {
-      moveForward: "Move Forward",
-      moveBack: "Move Back",
-      moveLeft: "Strafe Left",
-      moveRight: "Strafe Right",
-      sprint: "Sprint",
-      interact: "Interact",
-      pause: "Pause",
-      weapon1: "Weapon 1",
-      weapon2: "Weapon 2",
-      weapon3: "Weapon 3",
-      weapon4: "Weapon 4",
-      weapon5: "Weapon 5",
-      weapon6: "Weapon 6",
-      weapon7: "Weapon 7",
-      weapon8: "Weapon 8",
-      toggleFPS: "Toggle FPS",
-      chronoShift: "Chrono Shift (Slow Time)",
-    };
-
-    const panelX = w / 2 - 240;
-    const panelW = 480;
-    const itemH = 36;
-    const startY = 100;
-
-    for (let i = 0; i < bindKeys.length; i++) {
-      const key = bindKeys[i];
-      const selected = this.controlsSelection === i;
-      const isRebinding = this.rebindingKey === key;
-      const y = startY + i * itemH;
-
-      // Selection highlight
-      const isSwapFlashed =
-        this._keybindSwapFlash &&
-        this._keybindSwapFlash.action === key &&
-        performance.now() - this._keybindSwapFlash.time < 1500;
-      if (isSwapFlashed) {
-        const flashAlpha =
-          0.3 * (1 - (performance.now() - this._keybindSwapFlash.time) / 1500);
-        ctx.fillStyle = `rgba(255,170,0,${flashAlpha})`;
-        ctx.fillRect(panelX, y - 2, panelW, itemH - 4);
-        ctx.strokeStyle = `rgba(255,170,0,${flashAlpha + 0.1})`;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(panelX, y - 2, panelW, itemH - 4);
-      } else if (selected) {
-        ctx.fillStyle = "rgba(0,200,255,0.12)";
-        ctx.fillRect(panelX, y - 2, panelW, itemH - 4);
-        ctx.strokeStyle = "rgba(0,200,255,0.25)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(panelX, y - 2, panelW, itemH - 4);
-      }
-
-      // Label
-      ctx.fillStyle = selected ? "#00ffcc" : "#8888aa";
-      ctx.font = "bold 15px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(labels[key] || key, panelX + 16, y + 20);
-
-      // Key value or "Press a key..." prompt
-      ctx.textAlign = "right";
-      if (isRebinding) {
-        const blink = Math.floor(performance.now() / 400) % 2;
-        ctx.fillStyle = blink ? "#ffcc00" : "#ff8800";
-        ctx.font = "bold 15px monospace";
-        ctx.fillText("[ Press a key... ]", panelX + panelW - 16, y + 20);
-      } else {
-        ctx.fillStyle = isSwapFlashed
-          ? "#ffaa00"
-          : selected
-            ? "#ffffff"
-            : "#aaaacc";
-        ctx.font = "15px monospace";
-        ctx.fillText(
-          this.formatKeyCode(this.keybinds[key]),
-          panelX + panelW - 16,
-          y + 20,
-        );
-      }
-    }
-
-    // Reset Defaults button
-    const resetY = startY + bindKeys.length * itemH + 10;
-    const resetSelected = this.controlsSelection === bindKeys.length;
-    if (resetSelected) {
-      ctx.fillStyle = "rgba(200,100,0,0.15)";
-      ctx.fillRect(panelX, resetY - 2, panelW, itemH - 4);
-      ctx.strokeStyle = "rgba(255,170,0,0.3)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(panelX, resetY - 2, panelW, itemH - 4);
-    }
-    ctx.fillStyle = resetSelected ? "#ffaa00" : "#886644";
-    ctx.font = "bold 15px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("[ RESET TO DEFAULTS ]", w / 2, resetY + 20);
-
-    // Help text
-    ctx.fillStyle = "#556677";
-    ctx.font = "12px monospace";
-    ctx.fillText(
-      "W/S to navigate, ENTER to rebind, ESC to go back",
-      w / 2,
-      resetY + itemH + 20,
-    );
-    ctx.textAlign = "left";
+    _renderControlsScreen(ctx, w, h, {
+      keybinds: this.keybinds,
+      controlsSelection: this.controlsSelection,
+      rebindingKey: this.rebindingKey,
+      keybindSwapFlash: this._keybindSwapFlash,
+    });
   }
 
-  formatKeyCode(code) {
-    // Human-readable key names
-    const map = {
-      KeyW: "W",
-      KeyA: "A",
-      KeyS: "S",
-      KeyD: "D",
-      KeyE: "E",
-      KeyF: "F",
-      KeyQ: "Q",
-      KeyR: "R",
-      KeyP: "P",
-      KeyC: "C",
-      Digit1: "1",
-      Digit2: "2",
-      Digit3: "3",
-      Digit4: "4",
-      Digit5: "5",
-      ShiftLeft: "L-Shift",
-      ShiftRight: "R-Shift",
-      ControlLeft: "L-Ctrl",
-      ControlRight: "R-Ctrl",
-      AltLeft: "L-Alt",
-      AltRight: "R-Alt",
-      Space: "Space",
-      Enter: "Enter",
-      Escape: "Escape",
-      Tab: "Tab",
-      ArrowUp: "Up",
-      ArrowDown: "Down",
-      ArrowLeft: "Left",
-      ArrowRight: "Right",
-      Backspace: "Backspace",
-    };
-    return map[code] || code.replace("Key", "").replace("Digit", "");
-  }
+  formatKeyCode(code) { return _formatKeyCode(code); }
 
-  renderAchievementsScreen(ctx, w, h) {
-    ctx.fillStyle = "rgba(0,0,0,0.92)";
-    ctx.fillRect(0, 0, w, h);
+  renderAchievementsScreen(ctx, w, h) { this.achievementSystem.renderScreen(ctx, w, h); }
 
-    // Title
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = "bold 28px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("ACHIEVEMENTS", w / 2, 50);
-
-    const entries = Object.entries(ACHIEVEMENTS);
-    const cols = 2;
-    const cardW = 260;
-    const cardH = 72;
-    const gap = 12;
-    const totalW = cols * cardW + (cols - 1) * gap;
-    const startX = w / 2 - totalW / 2;
-    const startY = 80;
-    const maxScroll = Math.max(
-      0,
-      Math.ceil(entries.length / cols) -
-        Math.floor((h - startY - 50) / (cardH + gap)),
-    );
-    this.achievementsScroll = Math.min(this.achievementsScroll || 0, maxScroll);
-    const scroll = this.achievementsScroll || 0;
-
-    let unlocked = 0;
-    for (const [id] of entries) {
-      if (this.unlockedAchievements[id]) unlocked++;
-    }
-
-    // Progress bar
-    const progW = 300;
-    const progH = 10;
-    const progX = w / 2 - progW / 2;
-    const progY = 58;
-    const progPct = entries.length > 0 ? unlocked / entries.length : 0;
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    ctx.beginPath();
-    ctx.roundRect(progX, progY, progW, progH, 4);
-    ctx.fill();
-    if (progPct > 0) {
-      ctx.fillStyle = "#ffcc00";
-      ctx.beginPath();
-      ctx.roundRect(progX, progY, progW * progPct, progH, 4);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "10px monospace";
-    ctx.fillText(`${unlocked} / ${entries.length}`, w / 2, progY + progH + 12);
-
-    const visibleRows = Math.floor((h - startY - 50) / (cardH + gap));
-
-    for (let idx = 0; idx < entries.length; idx++) {
-      const [id, ach] = entries[idx];
-      const row = Math.floor(idx / cols) - scroll;
-      const col = idx % cols;
-      if (row < 0 || row >= visibleRows) continue;
-
-      const cx = startX + col * (cardW + gap);
-      const cy = startY + row * (cardH + gap);
-      const isUnlocked = !!this.unlockedAchievements[id];
-
-      // Card bg
-      ctx.fillStyle = isUnlocked ? "rgba(40,40,10,0.7)" : "rgba(10,10,20,0.6)";
-      ctx.beginPath();
-      ctx.roundRect(cx, cy, cardW, cardH, 6);
-      ctx.fill();
-      ctx.strokeStyle = isUnlocked
-        ? "rgba(255,204,0,0.4)"
-        : "rgba(100,100,120,0.2)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, cy, cardW, cardH, 6);
-      ctx.stroke();
-
-      // Icon
-      const iconKey = ach.icon;
-      const iconImg = this.achievementIcons[iconKey];
-      if (iconImg && iconImg.complete) {
-        ctx.globalAlpha = isUnlocked ? 1 : 0.25;
-        ctx.drawImage(iconImg, cx + 8, cy + 10, 48, 48);
-        ctx.globalAlpha = 1;
-      }
-
-      // Name
-      ctx.fillStyle = isUnlocked ? "#ffcc00" : "#555566";
-      ctx.font = "bold 13px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(ach.name, cx + 64, cy + 24);
-
-      // Description
-      ctx.fillStyle = isUnlocked
-        ? "rgba(200,210,220,0.7)"
-        : "rgba(100,100,120,0.5)";
-      ctx.font = "11px monospace";
-      ctx.fillText(ach.description, cx + 64, cy + 42);
-
-      // Status
-      if (isUnlocked) {
-        ctx.fillStyle = "rgba(0,255,100,0.6)";
-        ctx.font = "bold 10px monospace";
-        ctx.textAlign = "right";
-        ctx.fillText("UNLOCKED", cx + cardW - 8, cy + 60);
-        ctx.textAlign = "left";
-      }
-    }
-
-    // Footer
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("W/S to scroll  ·  ESC to go back", w / 2, h - 20);
-    ctx.textAlign = "left";
-  }
-
-  renderStatsScreen(ctx, w, h) {
-    drawStatsScreen(ctx, w, h, this.achievementStats);
-  }
+  renderStatsScreen(ctx, w, h) { this.achievementSystem.renderStats(ctx, w, h); }
 
   renderUpgradeScreen(ctx, w, h) {
-    const now = performance.now();
-
-    // ── Deep space backdrop ──
-    ctx.fillStyle = "#020510";
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle animated grid
-    ctx.strokeStyle = "rgba(0,200,255,0.03)";
-    ctx.lineWidth = 1;
-    const gridSize = 40;
-    const gridOff = (now * 0.01) % gridSize;
-    for (let gx = -gridOff; gx < w; gx += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, h);
-      ctx.stroke();
-    }
-    for (let gy = -gridOff; gy < h; gy += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(w, gy);
-      ctx.stroke();
-    }
-
-    // Ambient particle field
-    ctx.fillStyle = "rgba(0,255,200,0.12)";
-    for (let i = 0; i < 30; i++) {
-      const px = w * 0.5 + Math.sin(now * 0.0003 + i * 2.1) * w * 0.45;
-      const py = h * 0.5 + Math.cos(now * 0.0004 + i * 1.7) * h * 0.45;
-      const ps = 1 + Math.sin(now * 0.002 + i) * 0.5;
-      ctx.beginPath();
-      ctx.arc(px, py, ps, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Radial vignette
-    const vig = ctx.createRadialGradient(
-      w / 2,
-      h / 2,
-      h * 0.2,
-      w / 2,
-      h / 2,
-      h * 0.8,
-    );
-    vig.addColorStop(0, "rgba(0,0,0,0)");
-    vig.addColorStop(1, "rgba(0,0,10,0.6)");
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
-
-    // ── Header section ──
-    const compactUpg = this.isTouchDevice && isCompactPhone(h);
-    const headerY = compactUpg ? 14 : 40;
-    // Horizontal accent line
-    if (!compactUpg) {
-      const lineW = 200;
-      ctx.strokeStyle = "rgba(0,255,200,0.3)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(w / 2 - lineW, headerY + 14);
-      ctx.lineTo(w / 2 + lineW, headerY + 14);
-      ctx.stroke();
-    }
-
-    // Round complete title
-    const titlePulse = 0.85 + 0.15 * Math.sin(now * 0.003);
-    ctx.save();
-    ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = 18 * titlePulse;
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${compactUpg ? 18 : 32}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText(`ROUND ${this.arenaRound - 1} COMPLETE`, w / 2, headerY);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-
-    // Score with animated counter feel
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = `bold ${compactUpg ? 13 : 18}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText(
-      `\u2605  SCORE: ${this.player.score}  \u2605`,
-      w / 2,
-      headerY + (compactUpg ? 20 : 34),
-    );
-
-    if (!compactUpg) {
-      // Section divider
-      ctx.strokeStyle = "rgba(0,200,255,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(w * 0.15, headerY + 52);
-      ctx.lineTo(w * 0.85, headerY + 52);
-      ctx.stroke();
-
-      // UPGRADES subtitle
-      ctx.fillStyle = "rgba(170,200,255,0.6)";
-      ctx.font = "bold 14px monospace";
-      ctx.fillText("\u25C6  UPGRADES  \u25C6", w / 2, headerY + 70);
-    }
-
-    // ── Upgrade cards ──
-    const upgradeKeys = Object.keys(UPGRADES);
-    const layout = upgradeLayout(w, h, upgradeKeys.length, this.isTouchDevice);
-    const startY = layout.startY;
-    const cardH = layout.cardH;
-    const cardGap = layout.cardGap;
-    const colW = layout.colW;
-    const cols = layout.cols;
-    const leftX = layout.leftX;
-    const rightX = layout.rightX;
-
-    for (let i = 0; i < upgradeKeys.length; i++) {
-      const key = upgradeKeys[i];
-      const upg = UPGRADES[key];
-      const level = this.upgradeLevels[key] || 0;
-      const cost = Math.floor(upg.baseCost * Math.pow(upg.costScale, level));
-      const maxed = level >= upg.maxLevel;
-      const selected = this.upgradeSelection === i;
-      const affordable = this.player.score >= cost;
-
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : rightX;
-      const y = startY + row * (cardH + cardGap);
-
-      // Card background
-      ctx.fillStyle = selected ? "rgba(0,200,255,0.08)" : "rgba(10,15,30,0.6)";
-      ctx.beginPath();
-      ctx.roundRect(baseX, y, colW, cardH, 6);
-      ctx.fill();
-
-      // Card border
-      if (selected) {
-        const borderPulse = 0.5 + 0.5 * Math.sin(now * 0.005);
-        ctx.strokeStyle = `rgba(0,255,200,${0.3 + borderPulse * 0.3})`;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(baseX, y, colW, cardH, 6);
-        ctx.stroke();
-        // Left accent bar
-        ctx.fillStyle = maxed ? "#44ff44" : "#00ffcc";
-        ctx.beginPath();
-        ctx.roundRect(baseX, y, 3, cardH, [3, 0, 0, 3]);
-        ctx.fill();
-      } else {
-        ctx.strokeStyle = "rgba(50,60,80,0.4)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(baseX, y, colW, cardH, 6);
-        ctx.stroke();
-      }
-
-      // Upgrade name
-      ctx.fillStyle = selected ? "#ffffff" : "#8888aa";
-      ctx.font = `${selected ? "bold " : ""}${compactUpg ? 11 : 15}px monospace`;
-      ctx.textAlign = "left";
-      ctx.fillText(
-        upg.name,
-        baseX + (compactUpg ? 8 : 14),
-        y + (compactUpg ? 14 : 20),
-      );
-
-      // Description (skip on compact mobile)
-      if (!compactUpg) {
-        ctx.fillStyle = selected
-          ? "rgba(170,200,220,0.7)"
-          : "rgba(100,110,130,0.6)";
-        ctx.font = "11px monospace";
-        ctx.fillText(upg.description, baseX + 14, y + 36);
-      }
-
-      // Cost or MAX badge
-      ctx.textAlign = "right";
-      if (maxed) {
-        // MAX badge
-        ctx.fillStyle = "rgba(0,255,100,0.15)";
-        const badgeW = compactUpg ? 30 : 40;
-        const badgeH = compactUpg ? 14 : 20;
-        ctx.beginPath();
-        ctx.roundRect(
-          baseX + colW - badgeW - 12,
-          y + (compactUpg ? 4 : 8),
-          badgeW,
-          badgeH,
-          4,
-        );
-        ctx.fill();
-        ctx.fillStyle = "#44ff44";
-        ctx.font = `bold ${compactUpg ? 9 : 12}px monospace`;
-        ctx.fillText(
-          "MAX",
-          baseX + colW - (compactUpg ? 8 : 16),
-          y + (compactUpg ? 14 : 22),
-        );
-      } else {
-        ctx.fillStyle = affordable ? "#ffcc00" : "#ff4455";
-        ctx.font = `bold ${compactUpg ? 11 : 14}px monospace`;
-        ctx.fillText(
-          `${cost}`,
-          baseX + colW - (compactUpg ? 6 : 12),
-          y + (compactUpg ? 14 : 22),
-        );
-        if (!compactUpg) {
-          // Cost label
-          ctx.fillStyle = "rgba(255,255,255,0.2)";
-          ctx.font = "9px monospace";
-          ctx.fillText("COST", baseX + colW - 12, y + 12);
-        }
-      }
-
-      // Level pips — progress bar style
-      const maxPips = Math.min(upg.maxLevel, 10);
-      const pipBarW = colW - (compactUpg ? 16 : 28);
-      const pipH = compactUpg ? 2 : 3;
-      const pipY = y + cardH - (compactUpg ? 6 : 12);
-      // Track
-      ctx.fillStyle = "rgba(30,40,60,0.8)";
-      ctx.beginPath();
-      ctx.roundRect(baseX + (compactUpg ? 8 : 14), pipY, pipBarW, pipH, 2);
-      ctx.fill();
-      // Filled
-      if (level > 0) {
-        const fillW = (pipBarW * level) / maxPips;
-        const pipGrad = ctx.createLinearGradient(
-          baseX + (compactUpg ? 8 : 14),
-          0,
-          baseX + (compactUpg ? 8 : 14) + fillW,
-          0,
-        );
-        pipGrad.addColorStop(0, maxed ? "#44ff44" : "#00ffcc");
-        pipGrad.addColorStop(1, maxed ? "#22cc22" : "#0088aa");
-        ctx.fillStyle = pipGrad;
-        ctx.beginPath();
-        ctx.roundRect(baseX + (compactUpg ? 8 : 14), pipY, fillW, pipH, 2);
-        ctx.fill();
-      }
-
-      // Level text (right side)
-      ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(150,170,190,0.4)";
-      ctx.font = `${compactUpg ? 7 : 9}px monospace`;
-      ctx.fillText(
-        `LV ${level}/${upg.maxLevel}`,
-        baseX + colW - (compactUpg ? 6 : 12),
-        pipY + 3,
-      );
-
-      ctx.textAlign = "left";
-    }
-
-    // ── Continue button ──
-    const totalRows = layout.totalRows;
-    const contY = layout.contY;
-    const contSelected = this.upgradeSelection === upgradeKeys.length;
-
-    const contBtnW = compactUpg ? 260 : 360;
-    const contBtnH = compactUpg ? 28 : 36;
-    if (contSelected) {
-      const btnPulse = 0.5 + 0.5 * Math.sin(now * 0.004);
-      ctx.fillStyle = `rgba(0,255,200,${0.06 + btnPulse * 0.04})`;
-      ctx.beginPath();
-      ctx.roundRect(
-        w / 2 - contBtnW / 2,
-        contY - contBtnH / 2,
-        contBtnW,
-        contBtnH,
-        8,
-      );
-      ctx.fill();
-      ctx.strokeStyle = `rgba(0,255,200,${0.3 + btnPulse * 0.3})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(
-        w / 2 - contBtnW / 2,
-        contY - contBtnH / 2,
-        contBtnW,
-        contBtnH,
-        8,
-      );
-      ctx.stroke();
-    }
-    ctx.fillStyle = contSelected ? "#00ffcc" : "#556677";
-    ctx.font = `bold ${compactUpg ? 13 : 18}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText(
-      contSelected ? "\u25B6  CONTINUE  \u25B6" : "CONTINUE",
-      w / 2,
-      contY + (compactUpg ? 3 : 5),
-    );
-
-    // ── Footer hint ──
-    if (!compactUpg) {
-      ctx.fillStyle = "rgba(100,120,140,0.4)";
-      ctx.font = "11px monospace";
-      ctx.fillText("W/S/A/D navigate  \u00B7  ENTER select", w / 2, contY + 34);
-    }
-
-    // ── Top scanline overlay ──
-    this._drawScanlines(ctx, w, h);
-
-    ctx.textAlign = "left";
+    _renderUpgradeScreen(ctx, w, h, {
+      isTouchDevice: this.isTouchDevice,
+      arenaRound: this.arenaRound,
+      playerScore: this.player.score,
+      upgradeLevels: this.upgradeLevels,
+      upgradeSelection: this.upgradeSelection,
+    });
   }
 
   renderGameOver(ctx, w, h) {
-    const compact = this.isTouchDevice && isCompactPhone(h);
-    // Animated red-tinged background
-    ctx.fillStyle = "rgba(30,0,0,0.94)";
-    ctx.fillRect(0, 0, w, h);
-    // Pulsing red vignette
-    const pulse = 0.5 + Math.sin(this.time * 0.003) * 0.2;
-    const vig = ctx.createRadialGradient(
-      w / 2,
-      h / 2,
-      h * 0.15,
-      w / 2,
-      h / 2,
-      h * 0.7,
-    );
-    vig.addColorStop(0, "rgba(80,0,0,0)");
-    vig.addColorStop(0.5, `rgba(60,0,0,${pulse * 0.15})`);
-    vig.addColorStop(1, `rgba(40,0,0,${0.4 + pulse * 0.15})`);
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, w, h);
-    // Floating static debris
-    ctx.fillStyle = "rgba(255,30,0,0.06)";
-    for (let i = 0; i < 12; i++) {
-      const sx = w * (0.1 + (Math.sin(this.time * 0.0005 + i * 1.7) + 1) * 0.4);
-      const sy =
-        h * (0.05 + (Math.cos(this.time * 0.0007 + i * 2.3) + 1) * 0.45);
-      const sz = 20 + Math.sin(i * 3) * 15;
-      ctx.fillRect(sx - sz / 2, sy - 1, sz, 2);
-    }
-
-    const titleSize = compact ? 24 : 42;
-    const titleY = compact ? h * 0.15 : h / 2 - 110;
-    const subY = compact ? titleY + 22 : h / 2 - 75;
-    const statsY = compact ? titleY + 36 : h / 2 - 50;
-
-    // Horizontal divider lines
-    if (!compact) {
-      const divY1 = h / 2 - 135;
-      const divY2 = h / 2 - 40;
-      ctx.strokeStyle = "rgba(255,34,0,0.2)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(w * 0.2, divY1);
-      ctx.lineTo(w * 0.8, divY1);
-      ctx.moveTo(w * 0.25, divY2);
-      ctx.lineTo(w * 0.75, divY2);
-      ctx.stroke();
-    }
-    // Title with glow
-    ctx.shadowColor = "#ff2200";
-    ctx.shadowBlur = compact ? 10 : 20;
-    ctx.fillStyle = "#ff2200";
-    ctx.font = `bold ${titleSize}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText("TIMELINE COLLAPSED", w / 2, titleY);
-    ctx.shadowBlur = 0;
-    // Subtitle
-    ctx.fillStyle = "rgba(255,100,70,0.7)";
-    ctx.font = `${compact ? 11 : 14}px monospace`;
-    ctx.fillText("Temporal integrity failed — reality unraveled", w / 2, subY);
-
-    this._renderStatsCard(ctx, w, statsY, "#ff2200", "#ff6644");
-
-    if (this.mode === "arena") {
-      ctx.fillStyle = "#ff8866";
-      ctx.font = `bold ${compact ? 14 : 18}px monospace`;
-      ctx.fillText(
-        `Rounds Survived: ${this.arenaRound - 1}`,
-        w / 2,
-        compact ? h * 0.78 : h / 2 + 100,
-      );
-      ctx.fillStyle = "rgba(255,136,102,0.6)";
-      ctx.font = `${compact ? 10 : 12}px monospace`;
-      ctx.fillText(
-        `Personal Best: Round ${this.achievementStats.highestArenaRound} (Score: ${this.achievementStats.highestScore})`,
-        w / 2,
-        compact ? h * 0.82 : h / 2 + 125,
-      );
-    }
-
-    // ── Bottom action buttons: RESTART | QUIT | SHARE ──
-    const btnW = 110;
-    const btnH = 34;
-    const btnGap = 12;
-    const totalBtnW = btnW * 3 + btnGap * 2;
-    const btnBaseX = w / 2 - totalBtnW / 2;
-    const btnY = h - 70;
-
-    // Store layout for click handler
-    this._gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
-
-    const btnDefs = [
-      { label: "RESTART", color: "#ff8844", bg: "rgba(255,136,68,0.15)" },
-      { label: "QUIT", color: "#aaaaaa", bg: "rgba(170,170,170,0.1)" },
-      { label: "SHARE", color: "#00ccff", bg: "rgba(0,204,255,0.12)" },
-    ];
-    for (let i = 0; i < btnDefs.length; i++) {
-      const bx = btnBaseX + i * (btnW + btnGap);
-      ctx.fillStyle = btnDefs[i].bg;
-      ctx.fillRect(bx, btnY, btnW, btnH);
-      ctx.strokeStyle = btnDefs[i].color;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(bx, btnY, btnW, btnH);
-      ctx.fillStyle = btnDefs[i].color;
-      ctx.font = "bold 13px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(btnDefs[i].label, bx + btnW / 2, btnY + 22);
-    }
-
-    if (this.mode === "meltdown") {
-      const mHud = this.meltdown.getHUD();
-      const mY = compact ? h * 0.7 : h / 2 + 80;
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#ffaa00";
-      ctx.font = `bold ${compact ? 16 : 22}px monospace`;
-      ctx.fillText(`DISTANCE: ${mHud.distance}m`, w / 2, mY);
-      ctx.fillStyle = "#ff8866";
-      ctx.font = `bold ${compact ? 12 : 16}px monospace`;
-      ctx.fillText(`SCORE: ${mHud.score}`, w / 2, mY + 25);
-      ctx.fillStyle = "rgba(200,200,200,0.6)";
-      ctx.font = `${compact ? 10 : 12}px monospace`;
-      ctx.fillText(
-        `Time: ${mHud.time}s | Speed: ${mHud.speed} m/s`,
-        w / 2,
-        mY + 45,
-      );
-
-      // High scores
-      if (this.meltdown.highScores.length > 0) {
-        ctx.fillStyle = "#00ccff";
-        ctx.font = `bold ${compact ? 10 : 12}px monospace`;
-        ctx.fillText("── HIGH SCORES ──", w / 2, mY + 70);
-        ctx.fillStyle = "rgba(200,220,255,0.7)";
-        ctx.font = `${compact ? 9 : 11}px monospace`;
-        const top3 = this.meltdown.highScores.slice(0, 3);
-        top3.forEach((hs, i) => {
-          ctx.fillText(
-            `${i + 1}. ${hs.score} pts (${hs.distance}m)`,
-            w / 2,
-            mY + 88 + i * 16,
-          );
-        });
-      }
-    }
-    // Prompt with pulsing alpha
-    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 12 : 14}px monospace`;
-    const promptText = this.isTouchDevice
-      ? "Tap to return to title"
-      : "Press ENTER to return to title";
-    ctx.fillText(promptText, w / 2, compact ? h * 0.88 : h / 2 + 130);
-    ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
-    if (!this.isTouchDevice) {
-      ctx.fillText("Press R to restart", w / 2, h / 2 + 155);
-      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-      ctx.fillText(
-        "Press S to share score",
-        w / 2,
-        compact ? h * 0.93 : h / 2 + 175,
-      );
-    }
-    ctx.textAlign = "left";
-
-    this._renderShareToast(ctx, w, h);
-    // Scanline overlay
-    this._drawScanlines(ctx, w, h, true);
+    const result = _renderGameOver(ctx, w, h, {
+      time: this.time, isTouchDevice: this.isTouchDevice,
+      mode: this.mode, arenaRound: this.arenaRound,
+      achievementStats: this.achievementStats,
+      meltdown: this.meltdown, deltaTime: this.deltaTime / 1000,
+      shareToast: this._shareToast, statsCardData: this._statsCardData(),
+    });
+    this._gameOverBtns = result.gameOverBtns;
+    if (result.toastExpired) this._shareToast = null;
   }
 
   _shareScore() {
@@ -10587,480 +2996,50 @@ export class Game {
   }
 
   _renderShareToast(ctx, w, h) {
-    if (!this._shareToast) return;
-    this._shareToast.life -= this.deltaTime / 1000;
-    if (this._shareToast.life <= 0) {
-      this._shareToast = null;
-      return;
-    }
-    const alpha = Math.min(1, this._shareToast.life * 2);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = "rgba(0,20,40,0.9)";
-    ctx.strokeStyle = "rgba(0,200,255,0.6)";
-    ctx.lineWidth = 1;
-    const tw = Math.min(420, w * 0.8);
-    const th = 32;
-    const tx = w / 2 - tw / 2;
-    const ty = h * 0.07;
-    ctx.beginPath();
-    ctx.roundRect(tx, ty, tw, th, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#00ccff";
-    ctx.font = "12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(this._shareToast.text, w / 2, ty + 20);
-    ctx.restore();
+    const result = renderShareToast(ctx, w, h, this._shareToast, this.deltaTime / 1000);
+    if (result.expired) this._shareToast = null;
   }
 
   _renderBuilderOnboarding(ctx, w, h) {
-    const pulse = 0.85 + Math.sin(this.time * 0.004) * 0.1;
-    ctx.fillStyle = `rgba(0,0,0,${0.72 * pulse})`;
-    ctx.fillRect(0, 0, w, h);
-
-    const bw = Math.min(520, w * 0.88);
-    const bh = 280;
-    const bx = w / 2 - bw / 2;
-    const by = h / 2 - bh / 2;
-
-    ctx.fillStyle = "rgba(0,10,20,0.96)";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, bw, bh, 8);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,200,255,0.4)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#00ccff";
-    ctx.shadowColor = "#00ccff";
-    ctx.shadowBlur = 10;
-    ctx.font = "bold 18px monospace";
-    ctx.fillText("MAP BUILDER", w / 2, by + 36);
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = "rgba(0,200,255,0.3)";
-    ctx.fillRect(bx + 20, by + 46, bw - 40, 1);
-
-    const lines = [
-      { key: "WASD / Arrow Keys", action: "Move camera" },
-      { key: "Left Click", action: "Place tile" },
-      { key: "Right Click", action: "Erase tile" },
-      { key: "1 – 9", action: "Select tile type" },
-      { key: "E", action: "Place / move player start" },
-      { key: "P", action: "Play-test your map" },
-      { key: "Ctrl+S", action: "Save map" },
-      { key: "Ctrl+Shift+S", action: "Share map URL" },
-    ];
-    ctx.font = "12px monospace";
-    const lineH = 24;
-    const startY = by + 68;
-    lines.forEach((l, i) => {
-      const y = startY + i * lineH;
-      ctx.textAlign = "right";
-      ctx.fillStyle = "#00ccff";
-      ctx.fillText(l.key, w / 2 - 12, y);
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#aabbcc";
-      ctx.fillText(l.action, w / 2 + 12, y);
-    });
-
-    const promptA = 0.5 + Math.sin(this.time * 0.006) * 0.4;
-    ctx.textAlign = "center";
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = "12px monospace";
-    ctx.fillText(
-      this.isTouchDevice ? "Tap anywhere to start" : "Press any key to start",
-      w / 2,
-      by + bh - 18,
-    );
+    _renderBuilderOnboarding(ctx, w, h, { time: this.time, isTouchDevice: this.isTouchDevice });
   }
 
   renderVictory(ctx, w, h) {
-    const compact = this.isTouchDevice && isCompactPhone(h);
-    ctx.fillStyle = "rgba(0,6,20,0.95)";
-    ctx.fillRect(0, 0, w, h);
-    // Animated aurora glow
-    const pulse = 0.7 + Math.sin(this.time * 0.003) * 0.3;
-    const auroraGrad = ctx.createRadialGradient(
-      w / 2,
-      h * 0.35,
-      0,
-      w / 2,
-      h * 0.35,
-      h * 0.6,
-    );
-    auroraGrad.addColorStop(0, `rgba(0,255,200,${pulse * 0.08})`);
-    auroraGrad.addColorStop(0.4, `rgba(0,180,255,${pulse * 0.04})`);
-    auroraGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = auroraGrad;
-    ctx.fillRect(0, 0, w, h);
-    // Rising particle streaks
-    ctx.globalAlpha = 0.15;
-    for (let i = 0; i < (compact ? 10 : 20); i++) {
-      const px = w * (0.1 + (i / 20) * 0.8);
-      const py = h - ((this.time * 0.04 + i * 73) % h);
-      const pLen = 8 + Math.sin(i * 2) * 5;
-      ctx.fillStyle =
-        i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#ffcc00" : "#aaddff";
-      ctx.fillRect(px, py, 1.5, pLen);
-    }
-    ctx.globalAlpha = 1;
-
-    const titleSize = compact ? 24 : 42;
-    const titleY = compact ? h * 0.12 : h / 2 - 75;
-
-    if (!compact) {
-      // Decorative dividers
-      ctx.strokeStyle = "rgba(0,255,200,0.2)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(w * 0.15, h / 2 - 100);
-      ctx.lineTo(w * 0.85, h / 2 - 100);
-      ctx.stroke();
-    }
-    // Title with teal glow
-    ctx.shadowColor = "#00ffcc";
-    ctx.shadowBlur = compact ? 12 : 25;
-    ctx.fillStyle = this.ngPlusCycle >= 3 ? "#ffcc00" : "#00ffcc";
-    ctx.font = `bold ${titleSize}px monospace`;
-    ctx.textAlign = "center";
-    const victoryTitle = this.ngPlusCycle >= 3
-      ? "THE LOOP IS BROKEN"
-      : "TIMELINE RESTORED";
-    ctx.fillText(victoryTitle, w / 2, titleY);
-    ctx.shadowBlur = 0;
-    // Subtitles
-    ctx.fillStyle = "#ffcc00";
-    ctx.font = `bold ${compact ? 12 : 18}px monospace`;
-    const victorySubtitle = this.ngPlusCycle >= 3
-      ? "Every timeline. Every loop. You broke them all."
-      : "The Paradox Lord has been destroyed — for good.";
-    ctx.fillText(
-      victorySubtitle,
-      w / 2,
-      compact ? titleY + 22 : h / 2 - 35,
-    );
-    if (!compact) {
-      ctx.fillStyle = "rgba(170,220,255,0.7)";
-      ctx.font = "16px monospace";
-      ctx.fillText("Three forms. Three acts. One team.", w / 2, h / 2 - 8);
-      ctx.fillText(
-        "The quantum continuum is stable once more.",
-        w / 2,
-        h / 2 + 14,
-      );
-      // Divider below text
-      ctx.strokeStyle = "rgba(255,204,0,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(w * 0.25, h / 2 + 28);
-      ctx.lineTo(w * 0.75, h / 2 + 28);
-      ctx.stroke();
-    }
-
-    // NG+ cycle indicator (if on NG+)
-    if (this.ngPlusCycle > 0) {
-      ctx.fillStyle = "#cc88ff";
-      ctx.font = `bold ${compact ? 10 : 14}px monospace`;
-      ctx.textAlign = "center";
-      const cycleLabel = this.ngPlusCycle >= 3
-        ? "FINAL TIMELINE — THE LOOP IS BROKEN"
-        : `TIMELINE LOOP ${this.ngPlusCycle}`;
-      ctx.fillText(cycleLabel, w / 2, compact ? titleY - 10 : titleY - 20);
-    }
-
-    this._renderStatsCard(
-      ctx,
-      w,
-      compact ? titleY + 38 : h / 2 + 40,
-      "#ffcc00",
-      "#aaddff",
-    );
-
-    const promptA = 0.4 + Math.sin(this.time * 0.004) * 0.3;
-
-    // NG+ prompt: two-option choice overlay
-    if (this.ngPlusPrompt && this.mode === "campaign") {
-      const promptY = compact ? h * 0.78 : h / 2 + 170;
-      const nextCycle = this.ngPlusCycle + 1;
-      const opts = [
-        { label: `ENTER THE RIFT (NG+${nextCycle})`, desc: "Enemies grow stronger. You keep everything.", color: "#cc88ff" },
-        { label: "REST", desc: "The timeline is safe. Return to title.", color: "#aaddff" },
-      ];
-      const optW = compact ? 140 : 220;
-      const optH = compact ? 44 : 56;
-      const gap = compact ? 12 : 20;
-      const totalW = opts.length * optW + (opts.length - 1) * gap;
-      const startX = w / 2 - totalW / 2;
-
-      for (let i = 0; i < opts.length; i++) {
-        const ox = startX + i * (optW + gap);
-        const oy = promptY;
-        const sel = this.ngPlusPromptSel === i;
-        // Card background
-        ctx.fillStyle = sel ? "rgba(100,60,180,0.35)" : "rgba(30,30,50,0.5)";
-        ctx.strokeStyle = sel ? opts[i].color : "rgba(100,100,140,0.3)";
-        ctx.lineWidth = sel ? 2 : 1;
-        ctx.beginPath();
-        ctx.roundRect(ox, oy, optW, optH, 6);
-        ctx.fill();
-        ctx.stroke();
-        // Label
-        ctx.fillStyle = sel ? opts[i].color : "rgba(170,170,190,0.8)";
-        ctx.font = `bold ${compact ? 10 : 13}px monospace`;
-        ctx.textAlign = "center";
-        ctx.fillText(opts[i].label, ox + optW / 2, oy + (compact ? 16 : 22));
-        // Description
-        ctx.fillStyle = sel ? "rgba(200,200,220,0.7)" : "rgba(140,140,160,0.5)";
-        ctx.font = `${compact ? 8 : 10}px monospace`;
-        ctx.fillText(opts[i].desc, ox + optW / 2, oy + (compact ? 32 : 40));
-      }
-
-      // Prompt text
-      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-      ctx.font = `${compact ? 10 : 12}px monospace`;
-      ctx.textAlign = "center";
-      const ngPromptText = this.isTouchDevice
-        ? "Tap a choice"
-        : "Arrow keys to choose, ENTER to confirm";
-      ctx.fillText(ngPromptText, w / 2, promptY + optH + (compact ? 14 : 22));
-    } else {
-      // Standard victory prompts (no NG+ available or cycle 3+ done)
-      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-      ctx.font = `${compact ? 12 : 14}px monospace`;
-      ctx.textAlign = "center";
-      const victoryPrompt = this.isTouchDevice
-        ? "Tap to return to title"
-        : "Press ENTER to return to title";
-      ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
-      if (!this.isTouchDevice) {
-        ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-        ctx.font = `${compact ? 11 : 13}px monospace`;
-        ctx.fillText(
-          "Press S to share score",
-          w / 2,
-          compact ? h * 0.94 : h / 2 + 235,
-        );
-      }
-    }
-    ctx.textAlign = "left";
-
-    this._renderShareToast(ctx, w, h);
-    // Scanline overlay
-    this._drawScanlines(ctx, w, h);
+    const result = _renderVictory(ctx, w, h, {
+      time: this.time, isTouchDevice: this.isTouchDevice,
+      ngPlusCycle: this.ngPlusCycle, mode: this.mode,
+      ngPlusPrompt: this.ngPlusPrompt, ngPlusPromptSel: this.ngPlusPromptSel,
+      deltaTime: this.deltaTime / 1000, shareToast: this._shareToast,
+      statsCardData: this._statsCardData(),
+    });
+    if (result.toastExpired) this._shareToast = null;
   }
 
   renderLevelComplete(ctx, w, h) {
-    const compact = this.isTouchDevice && isCompactPhone(h);
-    const t = Math.max(0, (performance.now() - (this._levelCompleteTime || 0)) / 1000);
-
-    ctx.fillStyle = "rgba(0,4,18,0.94)";
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle cyan glow
-    const pulse = 0.6 + Math.sin(this.time * 0.004) * 0.3;
-    const glow = ctx.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, h * 0.5);
-    glow.addColorStop(0, `rgba(0,255,200,${pulse * 0.06})`);
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
-
-    // Celebration particle streaks (rising)
-    ctx.globalAlpha = Math.min(0.2, t * 0.15);
-    for (let i = 0; i < (compact ? 12 : 24); i++) {
-      const px = w * (0.05 + (i / 24) * 0.9);
-      const py = h - ((this.time * 0.05 + i * 61) % h);
-      const pLen = 6 + Math.sin(i * 3) * 4;
-      ctx.fillStyle = i % 3 === 0 ? "#00ffcc" : i % 3 === 1 ? "#00aaff" : "#aaffdd";
-      ctx.fillRect(px, py, 1.5, pLen);
-    }
-    ctx.globalAlpha = 1;
-
-    // Entrance animation helpers
-    const ease = (v) => v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v); // smoothstep
-    const titleT = ease(t / 0.4);
-    const statsT = ease((t - 0.3) / 0.4);
-    const secretsT = ease((t - 0.6) / 0.3);
-    const promptT = ease((t - 1.0) / 0.3);
-    const countUp = Math.min(1, (t - 0.3) / 0.8); // stat values ramp over 0.8s
-
-    const titleY = compact ? h * 0.12 : h / 2 - 100;
-    const titleOffset = (1 - titleT) * -30;
-
-    if (!compact && titleT > 0) {
-      // Decorative top line
-      ctx.globalAlpha = titleT;
-      ctx.strokeStyle = "rgba(0,255,200,0.2)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(w * 0.2, h / 2 - 130 + titleOffset);
-      ctx.lineTo(w * 0.8, h / 2 - 130 + titleOffset);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    // Title with glow — slides down
-    if (titleT > 0) {
-      ctx.globalAlpha = titleT;
-      ctx.shadowColor = "#00ffcc";
-      ctx.shadowBlur = compact ? 8 : 15;
-      ctx.fillStyle = "#00ffcc";
-      ctx.font = `bold ${compact ? 22 : 36}px monospace`;
-      ctx.textAlign = "center";
-      ctx.fillText("LEVEL COMPLETE", w / 2, titleY + titleOffset);
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-    }
-
-    if (!compact && titleT > 0) {
-      ctx.globalAlpha = titleT;
-      ctx.strokeStyle = "rgba(0,255,200,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(w * 0.25, h / 2 - 75 + titleOffset);
-      ctx.lineTo(w * 0.75, h / 2 - 75 + titleOffset);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    // Stats card — fades in with count-up
-    if (statsT > 0) {
-      ctx.globalAlpha = statsT;
-      this._renderStatsCard(
-        ctx,
-        w,
-        compact ? titleY + 18 : h / 2 - 55,
-        "#00ffcc",
-        "#aaddff",
-        countUp, // pass count-up progress
-      );
-      ctx.globalAlpha = 1;
-    }
-
-    // Secrets — fades in
-    if (secretsT > 0) {
-      ctx.globalAlpha = secretsT;
-      ctx.fillStyle = "#aaddff";
-      ctx.font = `${compact ? 12 : 16}px monospace`;
-      ctx.textAlign = "center";
-      const secretVal = Math.round((this.player.secretsFound || 0) * Math.min(1, countUp));
-      ctx.fillText(
-        `Secrets: ${secretVal}`,
-        w / 2,
-        compact ? h * 0.75 : h / 2 + 80,
-      );
-      ctx.globalAlpha = 1;
-    }
-
-    // Continue prompt — fades in last
-    if (promptT > 0) {
-      const promptA = promptT * (0.4 + Math.sin(this.time * 0.004) * 0.3);
-      ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-      ctx.font = `${compact ? 12 : 14}px monospace`;
-      ctx.textAlign = "center";
-      const lcPrompt = this.isTouchDevice
-        ? "Tap to continue"
-        : "Press ENTER to continue";
-      ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
-    }
-    ctx.textAlign = "left";
-
-    this._drawScanlines(ctx, w, h);
+    _renderLevelComplete(ctx, w, h, {
+      time: this.time, isTouchDevice: this.isTouchDevice,
+      levelCompleteTime: this._levelCompleteTime,
+      playerSecretsFound: this.player.secretsFound,
+      statsCardData: this._statsCardData(),
+    });
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor, countUp) {
-    const compact = this.isTouchDevice && isCompactPhone(this.hudCanvas.height);
-    const cu = typeof countUp === "number" ? Math.min(1, Math.max(0, countUp)) : 1;
-    const accuracy =
-      this.shotsFired > 0
-        ? Math.round((this.shotsHit / this.shotsFired) * 100)
-        : 0;
-    const elapsed = Math.round(
-      (performance.now() - this.roundStartTime) / 1000,
-    );
-    const mins = Math.floor(elapsed / 60);
-    const secs = elapsed % 60;
-    const timeStr = `${mins}:${String(secs).padStart(2, "0")}`;
+    renderStatsCard(ctx, w, startY, accentColor, textColor, countUp, this._statsCardData());
+  }
 
-    // Count-up animated values
-    const dispKills = Math.round(this.killedEnemies * cu);
-    const dispAccuracy = Math.round(accuracy * cu);
-    const dispStreak = Math.round(this.bestStreak * cu);
-
-    // Card background with inner glow
-    const cardW = compact ? Math.min(300, w - 40) : 380;
-    const cardH = compact ? 80 : 130;
-    const cx = w / 2 - cardW / 2;
-    // Outer glow
-    ctx.shadowColor = accentColor;
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.beginPath();
-    ctx.roundRect(cx, startY, cardW, cardH, 8);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // Border
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(cx, startY, cardW, cardH, 8);
-    ctx.stroke();
-    // Inner accent line at top of card
-    ctx.fillStyle = accentColor;
-    ctx.globalAlpha = 0.15;
-    ctx.beginPath();
-    ctx.roundRect(cx + 1, startY + 1, cardW - 2, 3, [7, 7, 0, 0]);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // Vertical divider
-    ctx.strokeStyle = `${accentColor}33`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w / 2, startY + 12);
-    ctx.lineTo(w / 2, startY + cardH - 12);
-    ctx.stroke();
-    // Horizontal divider
-    ctx.beginPath();
-    ctx.moveTo(cx + 16, startY + cardH / 2);
-    ctx.lineTo(cx + cardW - 16, startY + cardH / 2);
-    ctx.stroke();
-
-    // Stats in 2x2 grid
-    const stats = [
-      { label: "KILLS", value: `${dispKills}/${this.totalEnemies}` },
-      { label: "TIME", value: timeStr },
-      { label: "ACCURACY", value: `${dispAccuracy}%` },
-      { label: "BEST STREAK", value: `${dispStreak}x` },
-    ];
-
-    const colW = cardW / 2;
-    const rowH = cardH / 2;
-    ctx.textAlign = "center";
-    for (let i = 0; i < stats.length; i++) {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const sx = cx + col * colW + colW / 2;
-      const sy = startY + row * rowH + 18;
-
-      ctx.fillStyle = textColor;
-      ctx.globalAlpha = 0.6;
-      ctx.font = `bold ${compact ? 8 : 10}px monospace`;
-      ctx.fillText(stats[i].label, sx, sy);
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = accentColor;
-      ctx.font = `bold ${compact ? 16 : 24}px monospace`;
-      ctx.fillText(stats[i].value, sx, sy + (compact ? 18 : 26));
-    }
-
-    // Score bar at bottom of card
-    ctx.fillStyle = accentColor;
-    ctx.font = `bold ${compact ? 12 : 14}px monospace`;
-    ctx.fillText(
-      `SCORE: ${this.player.score}`,
-      w / 2,
-      startY + cardH + (compact ? 14 : 20),
-    );
+  _statsCardData() {
+    return {
+      isTouchDevice: this.isTouchDevice,
+      canvasHeight: this.hudCanvas.height,
+      shotsFired: this.shotsFired,
+      shotsHit: this.shotsHit,
+      roundStartTime: this.roundStartTime,
+      killedEnemies: this.killedEnemies,
+      totalEnemies: this.totalEnemies,
+      bestStreak: this.bestStreak,
+      score: this.player.score,
+    };
   }
 
   // ── Builder Mode (delegated to BuilderMode) ────────────────────
@@ -11159,10 +3138,7 @@ export class Game {
 
     this.killedEnemies = 0;
     this.totalEnemies = spawned;
-    this.killStreak = 0;
-    this.killStreakTimer = 0;
-    this.killStreakDisplay = null;
-    this.bestStreak = 0;
+    this.killStreakSystem.reset();
     this.shotsFired = 0;
     this.shotsHit = 0;
     this.slowMoTimer = 0;
@@ -11296,6 +3272,92 @@ export class Game {
       this.audio.startTrack("menu");
       this.audio.startAmbient("menu");
     });
+  }
+
+  _handleSettingsClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const compact = this.isTouchDevice && isCompactPhone(h);
+
+    const headerH = compact ? 36 : 52;
+    const sideW = compact ? 90 : 160;
+    const panelX = sideW + 1;
+    const panelW = w - panelX - 12;
+    const contentTop = headerH + 8;
+    const catItemH = compact ? 28 : 38;
+    const barW = Math.min(panelW * 0.55, 240);
+    const barH = 6;
+
+    const cats = getVisibleCategories(this.isTouchDevice);
+    const defs = getSettingsForCategory(this.isTouchDevice, this.settingsCategory);
+
+    // ── Sidebar click: switch category or back ──
+    if (x < sideW && y > headerH) {
+      // Back button at bottom of sidebar
+      const backY = h - 32;
+      if (y >= backY - 14 && y < backY + 10) {
+        this.handleKeyPress("Escape");
+        return;
+      }
+      const ci = Math.floor((y - contentTop) / catItemH);
+      if (ci >= 0 && ci < cats.length) {
+        this.settingsCategory = cats[ci];
+        this.settingsSelection = 0;
+        this.audio.menuSelect();
+      }
+      return;
+    }
+
+    // ── Right panel: click on setting row ──
+    if (x >= panelX && x <= panelX + panelW && y >= contentTop) {
+      let rowY = contentTop;
+      for (let i = 0; i < defs.length; i++) {
+        const def = defs[i];
+        const itemH = compact ? def.height.compact : def.height.normal;
+        if (y >= rowY && y < rowY + itemH) {
+          this.settingsSelection = i;
+
+          // Slider: click-to-set on bar region
+          if (def.type === "slider" && def.barColor) {
+            const sliderY = rowY + (compact ? 20 : 28);
+            const sliderX = panelX + (compact ? 8 : 14);
+            const sliderW = Math.min(panelW - (compact ? 16 : 28), barW);
+            if (y >= sliderY - 4 && y <= sliderY + barH + 4 &&
+                x >= sliderX && x <= sliderX + sliderW) {
+              const pct = Math.max(0, Math.min(1, (x - sliderX) / sliderW));
+              let val = def.min + pct * (def.max - def.min);
+              // Snap to step
+              val = Math.round(val / def.step) * def.step;
+              val = Math.max(def.min, Math.min(def.max, val));
+              if (def.round != null)
+                val = Math.round(val * Math.pow(10, def.round)) / Math.pow(10, def.round);
+              this.settings[def.key] = val;
+              if (def.onChange) def.onChange(this);
+              this.audio.menuConfirm();
+              return;
+            }
+          }
+
+          // Left half: decrement, right half: increment
+          const midX = panelX + panelW / 2;
+          if (x < midX) {
+            this.handleKeyPress("ArrowLeft");
+          } else {
+            this.handleKeyPress("ArrowRight");
+          }
+          return;
+        }
+        rowY += itemH;
+      }
+
+      // Clicked below all rows — back
+      if (y > rowY) {
+        this.handleKeyPress("Escape");
+      }
+    }
   }
 
   _handleGameOverClick(e) {

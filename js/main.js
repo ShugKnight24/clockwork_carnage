@@ -1,6 +1,7 @@
 import { Game, GameState, GAME_VERSION } from "./game.js";
 import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
+import { AdaptiveQuality } from "../src/utils/perf.js";
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -12,6 +13,12 @@ const btnContinueArena = document.getElementById("btnContinueArena");
 const continueArenaDesc = document.getElementById("continueArenaDesc");
 
 const game = new Game(gameCanvas, hudCanvas);
+const quality = new AdaptiveQuality({
+  targetFPS: 55,
+  minScale: game.isTouchDevice ? 0.35 : 0.5,
+  maxScale: 1.0,
+});
+game.quality = quality;
 
 // initialize analytics (will prompt consent if needed)
 initAnalytics();
@@ -26,6 +33,9 @@ if ("ontouchstart" in window) {
   if (startPrompt) startPrompt.textContent = "[ TAP TO START ]";
 }
 
+// Track native (CSS) dimensions for adaptive resolution
+let nativeW = 0, nativeH = 0;
+
 function resizeCanvases() {
   let w = window.innerWidth;
   let h = window.innerHeight;
@@ -38,12 +48,21 @@ function resizeCanvases() {
       h = Math.round(h * scale);
     }
   }
-  gameCanvas.width = w;
-  gameCanvas.height = h;
+  nativeW = w;
+  nativeH = h;
+
+  // HUD always renders at native res for crisp text
   hudCanvas.width = w;
   hudCanvas.height = h;
+
+  // Game canvas renders at scaled res (adaptive quality)
+  const s = quality.renderScale;
+  const gw = Math.round(w * s);
+  const gh = Math.round(h * s);
+  gameCanvas.width = gw;
+  gameCanvas.height = gh;
   if (game.renderer) {
-    game.renderer.resize(w, h);
+    game.renderer.resize(gw, gh);
   }
 }
 
@@ -364,64 +383,91 @@ document.addEventListener("keydown", (e) => {
 });
 
 let prevState = null;
+let _errCount = 0;
 
 function gameLoop(timestamp) {
-  const _tUpd0 = performance.now();
-  game.update(timestamp);
-  const updateMs = performance.now() - _tUpd0;
+  try {
+    const _tUpd0 = performance.now();
+    game.update(timestamp);
+    const updateMs = performance.now() - _tUpd0;
 
-  if (game.state !== prevState) {
-    prevState = game.state;
-    if (game.state === GameState.TITLE) {
-      titleScreen.classList.remove("hidden");
-      modeSelect.classList.add("hidden");
-      gameCanvas.style.display = "none";
-      hudCanvas.style.display = "none";
-    } else if (game.state === GameState.MODE_SELECT) {
-      titleScreen.classList.add("hidden");
-      modeSelect.classList.remove("hidden");
-      updateContinueButtons();
-      gameCanvas.style.display = "none";
-      hudCanvas.style.display = "none";
-    } else {
-      titleScreen.classList.add("hidden");
-      modeSelect.classList.add("hidden");
-      gameCanvas.style.display = "block";
-      hudCanvas.style.display = "block";
+    if (game.state !== prevState) {
+      prevState = game.state;
+      if (game.state === GameState.TITLE) {
+        titleScreen.classList.remove("hidden");
+        modeSelect.classList.add("hidden");
+        gameCanvas.style.display = "none";
+        hudCanvas.style.display = "none";
+      } else if (game.state === GameState.MODE_SELECT) {
+        titleScreen.classList.add("hidden");
+        modeSelect.classList.remove("hidden");
+        updateContinueButtons();
+        gameCanvas.style.display = "none";
+        hudCanvas.style.display = "none";
+      } else {
+        titleScreen.classList.add("hidden");
+        modeSelect.classList.add("hidden");
+        gameCanvas.style.display = "block";
+        hudCanvas.style.display = "block";
+      }
+    }
+
+    let renderMs = 0;
+    if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
+      const _tRnd0 = performance.now();
+      game.render();
+      renderMs = performance.now() - _tRnd0;
+
+      // Draw fade transition overlay on top of everything
+      if (game.transitioning && game.transitionAlpha > 0) {
+        const hctx = game.hudCtx;
+        const hw = hudCanvas.width;
+        const hh = hudCanvas.height;
+        game._renderTransitionOverlay(hctx, hw, hh);
+        // Also cover the game canvas for cutscene / builder screens
+        const gctx = game.renderer.ctx;
+        game._renderTransitionOverlay(gctx, gameCanvas.width, gameCanvas.height);
+      }
+    }
+
+    // Feed profiler
+    game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
+
+    // Adaptive quality — feed FPS, adjust render scale
+    quality.recordFPS(game.fps);
+    if (quality.adjust(timestamp)) {
+      const s = quality.renderScale;
+      const gw = Math.round(nativeW * s);
+      const gh = Math.round(nativeH * s);
+      gameCanvas.width = gw;
+      gameCanvas.height = gh;
+      if (game.renderer) game.renderer.resize(gw, gh);
+      // Invalidate cached vignette (it's sized to gameCanvas)
+      game._vignetteCanvas = null;
+    }
+
+    // Draw profiler overlay when showFPS is active
+    if (game.showFPS) {
+      const ctx = game.hudCtx;
+      const pw = 220;
+      const ph = 280;
+      game.profiler.render(ctx, 4, 4, pw, ph);
+    }
+
+    // Render touch controls overlay (merged into main rAF)
+    if (touch) touch.render();
+
+    // Clear error counter on successful frame
+    _errCount = 0;
+  } catch (err) {
+    _errCount++;
+    console.error(`[Clockwork Carnage] Frame error (${_errCount}):`, err);
+    // If errors persist for 60+ consecutive frames, stop the loop
+    if (_errCount >= 60) {
+      console.error('[Clockwork Carnage] Too many consecutive errors, halting game loop.');
+      return;
     }
   }
-
-  let renderMs = 0;
-  if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
-    const _tRnd0 = performance.now();
-    game.render();
-    renderMs = performance.now() - _tRnd0;
-
-    // Draw fade transition overlay on top of everything
-    if (game.transitioning && game.transitionAlpha > 0) {
-      const hctx = game.hudCtx;
-      const hw = hudCanvas.width;
-      const hh = hudCanvas.height;
-      game._renderTransitionOverlay(hctx, hw, hh);
-      // Also cover the game canvas for cutscene / builder screens
-      const gctx = game.renderer.ctx;
-      game._renderTransitionOverlay(gctx, gameCanvas.width, gameCanvas.height);
-    }
-  }
-
-  // Feed profiler
-  game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
-
-  // Draw profiler overlay when showFPS is active
-  if (game.showFPS) {
-    const ctx = game.hudCtx;
-    const pw = 220;
-    const ph = 280;
-    game.profiler.render(ctx, 4, 4, pw, ph);
-  }
-
-  // Render touch controls overlay (merged into main rAF)
-  if (touch) touch.render();
 
   requestAnimationFrame(gameLoop);
 }
