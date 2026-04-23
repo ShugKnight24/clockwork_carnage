@@ -696,8 +696,10 @@ function _appendSegment(
     pickupSpawns.push({ x: p.x + 0.5, y: baseY + p.y + 0.5, type: p.type });
   }
 
-  // Weapon pickups — spawn occasionally in later segments (every ~5 segs, 30% chance)
-  if (segNum >= 8 && segNum % 5 === 0 && Math.random() < 0.3) {
+  // Weapon pickups — spawn occasionally in later segments.
+  // Chance ramps with distance: 30% at seg 8 → 55% at seg 50+.
+  const weaponChance = Math.min(0.55, 0.3 + Math.max(0, segNum - 8) * 0.006);
+  if (segNum >= 8 && segNum % 5 === 0 && Math.random() < weaponChance) {
     const wx = 3 + Math.floor(Math.random() * 9);
     const wy = baseY + 4;
     if (grid[wy] && grid[wy][wx] === 0) {
@@ -707,9 +709,23 @@ function _appendSegment(
     }
   }
 
-  if (segNum > 5 && Math.random() < 0.4) {
+  // Bonus ambush enemy — density ramp.
+  // Primary bonus: starts 40% at seg 6, climbs to 75% by seg 60 (~dist 420).
+  // Secondary bonus (ambush #2): unlocks at seg 15 (dist 105), 20%→45% by seg 60.
+  const primaryChance = Math.min(0.75, 0.4 + Math.max(0, segNum - 6) * 0.0065);
+  if (segNum > 5 && Math.random() < primaryChance) {
     const ex = 2 + Math.floor(Math.random() * 11);
     const ey = baseY + 3;
+    if (grid[ey] && grid[ey][ex] === 0) {
+      const type = availTypes[Math.floor(Math.random() * availTypes.length)];
+      enemySpawns.push({ x: ex + 0.5, y: ey + 0.5, type });
+    }
+  }
+
+  const secondaryChance = Math.min(0.45, 0.2 + Math.max(0, segNum - 15) * 0.0055);
+  if (segNum > 15 && Math.random() < secondaryChance) {
+    const ex = 2 + Math.floor(Math.random() * 11);
+    const ey = baseY + 5;
     if (grid[ey] && grid[ey][ex] === 0) {
       const type = availTypes[Math.floor(Math.random() * availTypes.length)];
       enemySpawns.push({ x: ex + 0.5, y: ey + 0.5, type });
