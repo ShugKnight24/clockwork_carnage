@@ -8,6 +8,7 @@
 import { TUTORIAL_MAP } from "./data.js";
 import { Enemy, Pickup, Prop } from "./entities.js";
 import { GameState } from "./game.js";
+import { validatePropPosition } from "../src/systems/spawner.js";
 
 export class TutorialSystem {
   constructor(game) {
@@ -48,7 +49,7 @@ export class TutorialSystem {
 
     // Post-combat
     this.sandboxInit = false;
-    this.menuSelection = 0;
+    this.menuSelection = 1; // Default to "Begin Campaign" for better funnel
     this.originPlayed = false;
     this.showCompletionMenu = false;
     this.alarmPlayed = false;
@@ -85,10 +86,11 @@ export class TutorialSystem {
     for (const p of TUTORIAL_MAP.pickups) {
       g.entities.push(new Pickup(p.x, p.y, p.type, p));
     }
-    // Spawn environmental props
+    // Spawn environmental props (with wall-intersection validation)
     if (TUTORIAL_MAP.props) {
       for (const p of TUTORIAL_MAP.props) {
-        g.entities.push(new Prop(p.x + 0.5, p.y + 0.5, p.type));
+        const pos = validatePropPosition(p.x, p.y, TUTORIAL_MAP.grid, TUTORIAL_MAP.width, TUTORIAL_MAP.height);
+        if (pos) g.entities.push(new Prop(pos.x + 0.5, pos.y + 0.5, p.type));
       }
     }
 
@@ -119,7 +121,7 @@ export class TutorialSystem {
     this.wave1Spawned = false;
     this.wave2Spawned = false;
     this.sandboxInit = false;
-    this.menuSelection = 0;
+    this.menuSelection = 1; // Default to "Begin Campaign" for better funnel
     this.originPlayed = false;
     this.showCompletionMenu = false;
     this.alarmPlayed = false;

@@ -275,4 +275,69 @@ export const ARIA_COMMS = {
     "Trust your instincts. They've been calibrated by more timelines than you know.",
     "When this is over — and it will be over — we need to talk about what you are.",
   ],
+
+  // ── Act 2 ARIA gameplay lines (Sprint E 4.8) ──
+  act2Ambient: [
+    "Rift energy is saturating this sector. Your suit is drawing power from it — that can't be coincidence.",
+    "The Lord's been rewriting this wing for weeks. I'm seeing architecture that shouldn't exist.",
+    "Voss's old research notes reference this place. 'Containment' — but I'm not sure what was being contained.",
+    "Squad's chatter is thinner here. Nova's holding three corridors. Rook's rigged two more. We're stretched.",
+    "Whatever the Lord is, the closer we get, the more your temporal signature stabilizes. You're the anchor.",
+    "I keep replaying that Voss recording. 'Three steps ahead.' The Lord said it too. Same cadence. Same voice.",
+  ],
+
+  // ── Act 3 ARIA gameplay lines (Sprint E 4.8) ──
+  act3Ambient: [
+    "Reality is bleeding in here. I'm running parallel renders just to track what's real.",
+    "We're inside Voss's lab now. Or — what he left behind. Or what he's still becoming.",
+    "Temporal signature match at 94%. He IS Voss, {AGENT}. I need you to be ready for that.",
+    "The Dead Squad echoes are louder. Like they're trying to warn us. Or welcome us.",
+    "Every rift we close pulls the Lord tighter to this timeline. He can't run anymore.",
+    "Lyra was right. Seventeen endings. We're in one of the good ones — if we hold.",
+  ],
+
+  // ── 4.3: Encrypted channel voice payoff ──
+  encryptedChannelReveal: [
+    "That encrypted channel we kept picking up? I finally triangulated the source. It's Lyra — a future Lyra. She's been feeding us intel from a timeline that hasn't happened yet.",
+    "Future-Lyra logged off. Last transmission was a single word: 'run.' Or maybe 'won.' The signal degraded.",
+  ],
+
+  // ── 4.4: Analyst L.M. recognition ──
+  analystLMReveal: [
+    "Analyst L.M. — Lyra Marsden. She's been the one forwarding every classified breadcrumb. I should have connected it sooner.",
+    "Lyra was the leak. Not to the Lord — to US. She's been steering this investigation from inside Chrono-Bureau ops the whole time.",
+  ],
+
+  // ── 4.6: NG+ Dead Squad foreshadowing ──
+  ngPlusDeadSquad: [
+    "The Dead Squad memory fragments are... denser this cycle. They're not just echoes anymore, {AGENT}. They're somewhere between memory and matter.",
+    "I'm picking up biological signatures on the fragments. That shouldn't be possible. Unless the loop itself is reviving them.",
+    "Kael, Nova, Rook — their patterns are reassembling. If we complete this cycle, they might come with us. Permanently.",
+  ],
+
+  // ── 4.10: Boss-phase squad reactions ──
+  bossPhase1Squad: [
+    "Kael: Front line's mine. You take the shot when he lowers his guard.",
+    "Nova: Drones incoming — I'll thin them. Focus on the Lord.",
+    "Rook: Turret locked on his summon circle. Every minion he calls, we answer.",
+  ],
+  bossPhase2Squad: [
+    "Kael: Floor's cracking. Stay off the red tiles. I mean it.",
+    "Nova: Telegraphed AoE — two seconds. MOVE, {AGENT}.",
+    "Lyra: He's drawing on the rift. The hazards are part of him now. Break the pattern.",
+  ],
+  bossPhase3Squad: [
+    "Kael: This is it. Whatever he throws — we take it together.",
+    "Nova: I've never run out of one-liners. I'm saving the good one for when he drops.",
+    "Rook: Numbers say we win. Numbers have been wrong before. But not today.",
+    "Lyra: He's desperate. That makes him dangerous. Don't get cocky.",
+  ],
+
+  // ── 4.11: NG+ ARIA loop awareness ──
+  ngPlusAriaLoop: [
+    "This feels... familiar. Like we've done this before. I don't have the logs for it, but the pattern is there.",
+    "Déjà vu isn't supposed to affect AIs. And yet here I am. Running diagnostics. Finding nothing. Feeling everything.",
+    "I think we're in a loop, {AGENT}. I think we've always been. But this cycle — something's different. You're different.",
+    "If this IS a loop, then somewhere, a version of us won. A version of us lost. This is the one we get.",
+  ],
 };

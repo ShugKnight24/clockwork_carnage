@@ -33,9 +33,14 @@ export class CampaignManager {
   save() {
     const g = this.game;
     Save.saveCampaign(
-      this.level, this.act, this.ngPlusCycle,
-      g.player, g.settings.difficulty, g.map.grid,
-      g.entities, g.killedEnemies,
+      this.level,
+      this.act,
+      this.ngPlusCycle,
+      g.player,
+      g.settings.difficulty,
+      g.map.grid,
+      g.entities,
+      g.killedEnemies,
     );
   }
 
@@ -146,7 +151,10 @@ export class CampaignManager {
 
     const diff = g.getDifficultyMultipliers();
     const { entities: spawned, exitEntity } = createCampaignEntities(
-      level, this.act, this.ngPlusCycle, diff,
+      level,
+      this.act,
+      this.ngPlusCycle,
+      diff,
     );
     g.entities.push(...spawned);
     g.exitEntity = exitEntity || null;
@@ -154,8 +162,10 @@ export class CampaignManager {
     if (this.missedWeapons && this.missedWeapons.length > 0) {
       g.entities.push(
         ...createMissedWeaponPickups(
-          this.missedWeapons, g.player.weapons,
-          level.playerStart.x, level.playerStart.y,
+          this.missedWeapons,
+          g.player.weapons,
+          level.playerStart.x,
+          level.playerStart.y,
         ),
       );
     }
@@ -169,17 +179,52 @@ export class CampaignManager {
     g.timeScale = 1;
     g.ariaCombatTimer = 0;
 
+    // Update squad comms narrative context
+    if (g.squadComms) {
+      g.squadComms.setContext(this.act, this.level);
+    }
+    // Update ARIA idle-pool narrative context (Sprint E 4.8/4.11)
+    if (g.ariaComms && typeof g.ariaComms.setNarrativeContext === "function") {
+      g.ariaComms.setNarrativeContext({
+        act: this.act,
+        ngPlusCycle: this.ngPlusCycle || 0,
+      });
+    }
+
     this._applyActEnemyRoster();
 
     const hasBoss = g.entities.some(
-      (e) => e.type === "enemy" &&
-        (e.enemyType === "boss" || e.enemyType === "boss_form2" || e.enemyType === "boss_form3"),
+      (e) =>
+        e.type === "enemy" &&
+        (e.enemyType === "boss" ||
+          e.enemyType === "boss_form2" ||
+          e.enemyType === "boss_form3"),
     );
     if (hasBoss) {
       const form = this.act;
       if (form === 2) g.queueAriaMessage("bossForm2");
       else if (form === 3) g.queueAriaMessage("bossForm3");
       else g.queueAriaMessage("bossEncounter");
+      // Sprint E 4.10: Squad ensemble chatter per boss phase
+      if (g.squadComms && typeof g.squadComms.onBossPhase === "function") {
+        setTimeout(() => g.squadComms.onBossPhase(form), 2000);
+      }
+    } else if (g.squadComms && this.act >= 2) {
+      // Squad chimes in at non-boss level starts (act 2+ only)
+      setTimeout(() => g.squadComms.onCombatStart(), 1500);
+    }
+
+    // Sprint E 4.3/4.4: one-shot Act 3 lore reveals
+    if (this.act === 3) {
+      if (this.level === 0 && g.queueAriaMessage) {
+        setTimeout(() => g.queueAriaMessage("encryptedChannelReveal"), 3000);
+      } else if (this.level === 1 && g.queueAriaMessage) {
+        setTimeout(() => g.queueAriaMessage("analystLMReveal"), 3000);
+      }
+    }
+    // Sprint E 4.6: NG+ Dead Squad foreshadowing (cycles 1+)
+    if (this.ngPlusCycle >= 1 && this.level === 0 && g.queueAriaMessage) {
+      setTimeout(() => g.queueAriaMessage("ngPlusDeadSquad"), 5000);
     }
 
     g.state = GameState.PLAYING;
@@ -233,20 +278,34 @@ export class CampaignManager {
     // Act-based briefing cutscenes
     const actBriefings = {
       1: {
-        1: "security_briefing", 2: "research_briefing",
-        3: "containment_briefing", 4: "server_briefing",
-        5: "reactor_briefing", 6: "voss_lab_briefing",
-        7: "nexus_briefing", 8: "paradox_core_briefing",
+        1: "security_briefing",
+        2: "research_briefing",
+        3: "containment_briefing",
+        4: "server_briefing",
+        5: "reactor_briefing",
+        6: "voss_lab_briefing",
+        7: "nexus_briefing",
+        8: "paradox_core_briefing",
       },
       2: {
-        1: "act2_level2", 2: "act2_level3", 3: "act2_level4",
-        4: "act2_level5", 5: "act2_level6", 6: "voss_confrontation",
-        7: "act2_level8", 8: "act2_level9",
+        1: "act2_level2",
+        2: "act2_level3",
+        3: "act2_level4",
+        4: "act2_level5",
+        5: "act2_level6",
+        6: "voss_confrontation",
+        7: "act2_level8",
+        8: "act2_level9",
       },
       3: {
-        1: "act3_level2", 2: "act3_boss", 3: "act3_level4",
-        4: "act3_level5", 5: "act3_level6", 6: "origin_panels",
-        7: "act3_level8", 8: "act3_level9",
+        1: "act3_level2",
+        2: "act3_boss",
+        3: "act3_level4",
+        4: "act3_level5",
+        5: "act3_level6",
+        6: "origin_panels",
+        7: "act3_level8",
+        8: "act3_level9",
       },
     };
     const briefingKey = actBriefings[this.act]?.[this.level];
@@ -355,7 +414,11 @@ export class CampaignManager {
   // ── internal ──
 
   _applyActEnemyRoster() {
-    applyActEnemyRoster(this.game.entities, this.act, this.game.getDifficultyMultipliers());
+    applyActEnemyRoster(
+      this.game.entities,
+      this.act,
+      this.game.getDifficultyMultipliers(),
+    );
   }
 
   showPrompt() {

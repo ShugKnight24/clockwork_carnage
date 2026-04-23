@@ -525,7 +525,12 @@ export class BuilderMode {
     } else if (action.type === "addPickup") {
       if (!this.map.entities) this.map.entities = [];
       this.map.entities = this.map.entities.filter(
-        (e) => !(Math.floor(e.x) === action.x && Math.floor(e.y) === action.y && e.type === action.entity.type),
+        (e) =>
+          !(
+            Math.floor(e.x) === action.x &&
+            Math.floor(e.y) === action.y &&
+            e.type === action.entity.type
+          ),
       );
     } else if (action.type === "removePickup") {
       if (!this.map.entities) this.map.entities = [];
@@ -568,7 +573,12 @@ export class BuilderMode {
     } else if (action.type === "removePickup") {
       if (!this.map.entities) this.map.entities = [];
       this.map.entities = this.map.entities.filter(
-        (e) => !(Math.floor(e.x) === action.x && Math.floor(e.y) === action.y && e.type === action.entity.type),
+        (e) =>
+          !(
+            Math.floor(e.x) === action.x &&
+            Math.floor(e.y) === action.y &&
+            e.type === action.entity.type
+          ),
       );
     } else if (action.type === "setExit") {
       this.map.exit = action.newExit ? { ...action.newExit } : null;
@@ -747,7 +757,12 @@ export class BuilderMode {
     if (this.map.grid[py][px] !== 0) return;
     if (!this.map.entities) this.map.entities = [];
     // Don't stack pickups on the same cell
-    if (this.map.entities.some((e) => Math.floor(e.x) === px && Math.floor(e.y) === py)) return;
+    if (
+      this.map.entities.some(
+        (e) => Math.floor(e.x) === px && Math.floor(e.y) === py,
+      )
+    )
+      return;
     const pickupType = PICKUP_TYPES[this.selectedPickup];
     const entity = { x: px + 0.5, y: py + 0.5, type: pickupType };
     if (pickupType === "weapon") {
@@ -773,7 +788,10 @@ export class BuilderMode {
       { cx: target.placeX, cy: target.placeY },
     ]) {
       const idx = this.map.entities.findIndex(
-        (e) => e.type !== "exit" && Math.floor(e.x) === coords.cx && Math.floor(e.y) === coords.cy,
+        (e) =>
+          e.type !== "exit" &&
+          Math.floor(e.x) === coords.cx &&
+          Math.floor(e.y) === coords.cy,
       );
       if (idx >= 0) {
         const removed = this.map.entities.splice(idx, 1)[0];
@@ -920,12 +938,19 @@ export class BuilderMode {
               : [],
             entities: Array.isArray(data.entities)
               ? data.entities.filter(
-                  (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+                  (e) =>
+                    e &&
+                    typeof e === "object" &&
+                    Number.isFinite(e.x) &&
+                    Number.isFinite(e.y),
                 )
               : [],
-            exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
-              ? { x: data.exit.x, y: data.exit.y }
-              : null,
+            exit:
+              data.exit &&
+              Number.isFinite(data.exit.x) &&
+              Number.isFinite(data.exit.y)
+                ? { x: data.exit.x, y: data.exit.y }
+                : null,
           };
           this._ensureLayers();
           this.syncGrid();
@@ -953,8 +978,12 @@ export class BuilderMode {
 
   importMapData(data) {
     if (!data || !Array.isArray(data.grid)) return false;
-    const width = Number.isInteger(data.width) ? data.width : data.grid[0]?.length;
-    const height = Number.isInteger(data.height) ? data.height : data.grid.length;
+    const width = Number.isInteger(data.width)
+      ? data.width
+      : data.grid[0]?.length;
+    const height = Number.isInteger(data.height)
+      ? data.height
+      : data.grid.length;
     if (!Number.isInteger(width) || !Number.isInteger(height)) return false;
     if (width <= 0 || height <= 0 || width > 128 || height > 128) return false;
     if (data.grid.length !== height) return false;
@@ -962,7 +991,8 @@ export class BuilderMode {
       const row = data.grid[y];
       if (!Array.isArray(row) || row.length !== width) return false;
       for (let x = 0; x < width; x++) {
-        if (typeof row[x] !== "number" || !Number.isFinite(row[x])) return false;
+        if (typeof row[x] !== "number" || !Number.isFinite(row[x]))
+          return false;
       }
     }
 
@@ -991,12 +1021,19 @@ export class BuilderMode {
         : [],
       entities: Array.isArray(data.entities)
         ? data.entities.filter(
-            (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+            (e) =>
+              e &&
+              typeof e === "object" &&
+              Number.isFinite(e.x) &&
+              Number.isFinite(e.y),
           )
         : [],
-      exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
-        ? { x: data.exit.x, y: data.exit.y }
-        : null,
+      exit:
+        data.exit &&
+        Number.isFinite(data.exit.x) &&
+        Number.isFinite(data.exit.y)
+          ? { x: data.exit.x, y: data.exit.y }
+          : null,
     };
     this._ensureLayers();
     this.syncGrid();
@@ -1151,12 +1188,19 @@ export class BuilderMode {
           : [],
         entities: Array.isArray(data.entities)
           ? data.entities.filter(
-              (e) => e && typeof e === "object" && Number.isFinite(e.x) && Number.isFinite(e.y),
+              (e) =>
+                e &&
+                typeof e === "object" &&
+                Number.isFinite(e.x) &&
+                Number.isFinite(e.y),
             )
           : [],
-        exit: data.exit && Number.isFinite(data.exit.x) && Number.isFinite(data.exit.y)
-          ? { x: data.exit.x, y: data.exit.y }
-          : null,
+        exit:
+          data.exit &&
+          Number.isFinite(data.exit.x) &&
+          Number.isFinite(data.exit.y)
+            ? { x: data.exit.x, y: data.exit.y }
+            : null,
       };
     } catch (_) {
       return null;
@@ -1321,7 +1365,7 @@ export class BuilderMode {
       time,
       this.settings.fov,
       0,
-      true,
+      false,
       yShift,
     );
     this._renderHUD(ctx, w, h);
@@ -1401,8 +1445,18 @@ export class BuilderMode {
     ctx.textAlign = "left";
 
     // Tool mode indicator
-    const modeLabels = { block: "BLOCK", spawn: "SPAWN", pickup: "PICKUP", exit: "EXIT" };
-    const modeColors = { block: "#00ffcc", spawn: "#ff6644", pickup: "#ffcc00", exit: "#cc44ff" };
+    const modeLabels = {
+      block: "BLOCK",
+      spawn: "SPAWN",
+      pickup: "PICKUP",
+      exit: "EXIT",
+    };
+    const modeColors = {
+      block: "#00ffcc",
+      spawn: "#ff6644",
+      pickup: "#ffcc00",
+      exit: "#cc44ff",
+    };
     const modeLabel = modeLabels[this.toolMode] || "BLOCK";
     const modeColor = modeColors[this.toolMode] || "#00ffcc";
     ctx.fillStyle = modeColor;
@@ -1416,18 +1470,32 @@ export class BuilderMode {
       const enemyName = ENEMY_SHORT_NAMES[enemyKey] || enemyKey;
       ctx.fillStyle = ENEMY_TYPES[enemyKey]?.color1 || "#ff6644";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(`[G] ${enemyName} (${this.selectedEnemy + 1}/${ENEMY_KEYS.length})`, w / 2, palY - 44);
+      ctx.fillText(
+        `[G] ${enemyName} (${this.selectedEnemy + 1}/${ENEMY_KEYS.length})`,
+        w / 2,
+        palY - 44,
+      );
     } else if (this.toolMode === "pickup") {
       const pickupKey = PICKUP_TYPES[this.selectedPickup];
       const pickupName = PICKUP_LABELS[pickupKey] || pickupKey;
       ctx.fillStyle = PICKUP_COLORS[pickupKey] || "#ffcc00";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(`[G] ${pickupName} (${this.selectedPickup + 1}/${PICKUP_TYPES.length})`, w / 2, palY - 44);
+      ctx.fillText(
+        `[G] ${pickupName} (${this.selectedPickup + 1}/${PICKUP_TYPES.length})`,
+        w / 2,
+        palY - 44,
+      );
     } else if (this.toolMode === "exit") {
       const hasExit = !!this.map.exit;
       ctx.fillStyle = hasExit ? "#cc44ff" : "rgba(200,100,255,0.5)";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(hasExit ? "EXIT PLACED \u2014 R-click to remove" : "L-click to place exit", w / 2, palY - 44);
+      ctx.fillText(
+        hasExit
+          ? "EXIT PLACED \u2014 R-click to remove"
+          : "L-click to place exit",
+        w / 2,
+        palY - 44,
+      );
     }
     ctx.textAlign = "left";
 
@@ -1492,6 +1560,32 @@ export class BuilderMode {
     ctx.textAlign = "right";
     ctx.fillText(`LAYER ${this.layer}`, w - 14, h - 90);
     ctx.fillText(`FOV ${this.settings.fov}`, w - 14, h - 106);
+
+    // Sprint G 7.5: side-view layer stack (top-right, above LAYER text)
+    {
+      const stackX = w - 30;
+      const stackTopY = h - 90 - 18 - NUM_LAYERS * 10 - 4;
+      const cellH = 10;
+      const cellW = 18;
+      ctx.save();
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      // draw from top (highest layer) to bottom (layer 0)
+      for (let i = NUM_LAYERS - 1; i >= 0; i--) {
+        const y = stackTopY + (NUM_LAYERS - 1 - i) * cellH;
+        const active = i === this.layer;
+        ctx.fillStyle = active ? "rgba(0,255,200,0.85)" : "rgba(40,60,80,0.5)";
+        ctx.fillRect(stackX, y, cellW, cellH - 1);
+        ctx.strokeStyle = active
+          ? "rgba(0,255,200,1)"
+          : "rgba(100,120,140,0.5)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(stackX + 0.5, y + 0.5, cellW - 1, cellH - 2);
+        ctx.fillStyle = active ? "#001015" : "rgba(180,200,220,0.7)";
+        ctx.fillText(String(i), stackX - 2, y + 8);
+      }
+      ctx.restore();
+    }
     // Undo depth
     const undoCount = this.historyIndex + 1;
     const redoCount = this.history.length - this.historyIndex - 1;
@@ -1519,7 +1613,11 @@ export class BuilderMode {
     if (this.map.exit) {
       ctx.fillStyle = "rgba(200,68,255,0.7)";
       ctx.font = "bold 11px monospace";
-      ctx.fillText(`EXIT: ${Math.floor(this.map.exit.x)},${Math.floor(this.map.exit.y)}`, w - 14, statusY);
+      ctx.fillText(
+        `EXIT: ${Math.floor(this.map.exit.x)},${Math.floor(this.map.exit.y)}`,
+        w - 14,
+        statusY,
+      );
     }
     ctx.textAlign = "left";
 
@@ -1740,14 +1838,20 @@ export class BuilderMode {
         const color = PICKUP_COLORS[e.type] || "#ffcc00";
         ctx.fillStyle = color;
         ctx.globalAlpha = 0.85;
-        ctx.fillRect(ox + (e.x - 0.5) * cs + cs * 0.15, oy + (e.y - 0.5) * cs + cs * 0.15, cs * 0.7, cs * 0.7);
+        ctx.fillRect(
+          ox + (e.x - 0.5) * cs + cs * 0.15,
+          oy + (e.y - 0.5) * cs + cs * 0.15,
+          cs * 0.7,
+          cs * 0.7,
+        );
         ctx.globalAlpha = 1;
         if (cs >= 14) {
           ctx.fillStyle = "#000";
           ctx.font = `bold ${Math.max(7, cs * 0.3) | 0}px monospace`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          const label = e.type === "health" ? "H" : e.type === "ammo" ? "A" : "W";
+          const label =
+            e.type === "health" ? "H" : e.type === "ammo" ? "A" : "W";
           ctx.fillText(label, ex, ey);
           ctx.textAlign = "left";
           ctx.textBaseline = "alphabetic";

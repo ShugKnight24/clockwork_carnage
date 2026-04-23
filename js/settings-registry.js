@@ -56,6 +56,15 @@ export const SETTINGS_REGISTRY = [
     height: { compact: 30, normal: 44 },
   },
   {
+    key: "cutsceneAutoAdvance",
+    label: "Cutscene Auto-Advance",
+    category: "Gameplay",
+    type: "toggle",
+    onColor: "#ffaa00",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
     key: "crosshair",
     label: "Crosshair",
     category: "Gameplay",

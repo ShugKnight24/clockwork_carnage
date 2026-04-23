@@ -18,11 +18,17 @@ export class AriaCommsSystem {
     this.logScroll = 0;
   }
 
-  enable() { this.enabled = true; }
+  enable() {
+    this.enabled = true;
+  }
 
-  resetTriggered() { this.triggered = {}; }
+  resetTriggered() {
+    this.triggered = {};
+  }
 
-  resetCombatTimer() { this.combatTimer = 0; }
+  resetCombatTimer() {
+    this.combatTimer = 0;
+  }
 
   resetAll() {
     this.queue = [];
@@ -44,7 +50,34 @@ export class AriaCommsSystem {
     let text = pool[Math.floor(Math.random() * pool.length)];
     text = text.replace("{ROUNDS}", String(arenaRound || 0));
     const prominent = !["idle", "ariaPersonality"].includes(category);
-    this.queue.push({ text, color: "#00ffdd", duration: prominent ? 4.5 : 3.5, prominent });
+    this.queue.push({
+      text,
+      color: "#00ffdd",
+      duration: prominent ? 4.5 : 3.5,
+      prominent,
+      speaker: "ARIA",
+    });
+  }
+
+  /**
+   * Queue a squad-member voice line (Kael/Nova/Rook/Lyra).
+   * Uses the same ARIA_COMMS pool (kaelComms/novaComms/etc.) but renders with speaker label + tinted color.
+   * @param {string} speaker - display label (e.g. "KAEL")
+   * @param {string} category - ARIA_COMMS pool key (e.g. "kaelComms")
+   * @param {string} [color] - hex color for text tint
+   */
+  queueSquadMessage(speaker, category, color) {
+    if (!this.enabled) return;
+    const pool = ARIA_COMMS[category];
+    if (!pool || pool.length === 0) return;
+    const text = pool[Math.floor(Math.random() * pool.length)];
+    this.queue.push({
+      text,
+      color: color || "#ffcc66",
+      duration: 3.5,
+      prominent: false,
+      speaker: speaker || "SQUAD",
+    });
   }
 
   triggerOnce(key, category, arenaRound) {
@@ -72,15 +105,38 @@ export class AriaCommsSystem {
 
     // Combat timer -> longSurvival trigger
     this.combatTimer += dt;
-    if (this.combatTimer > 120) this.triggerOnce("longSurvival", "longSurvival");
+    if (this.combatTimer > 120)
+      this.triggerOnce("longSurvival", "longSurvival");
 
-    // Idle chatter
+    // Idle chatter — act-aware (Sprint E 4.8)
     this.idleTimer += dt;
-    if (this.idleTimer >= this.idleThreshold && !this.message && this.queue.length === 0) {
-      this.queueMessage(Math.random() < 0.5 ? "idle" : "ariaPersonality");
+    if (
+      this.idleTimer >= this.idleThreshold &&
+      !this.message &&
+      this.queue.length === 0
+    ) {
+      const pool = this._pickIdlePool();
+      this.queueMessage(pool);
       this.idleThreshold = 25 + Math.random() * 25;
       this.idleTimer = 0;
     }
+  }
+
+  /** Narrative context for idle-pool selection. */
+  setNarrativeContext({ act = 1, ngPlusCycle = 0 } = {}) {
+    this.narrativeAct = act | 0;
+    this.ngPlusCycle = ngPlusCycle | 0;
+  }
+
+  _pickIdlePool() {
+    const act = this.narrativeAct || 1;
+    const ngPlus = this.ngPlusCycle || 0;
+    const r = Math.random();
+    // NG+ cycles: chance of loop-awareness lines
+    if (ngPlus >= 1 && r < 0.25) return "ngPlusAriaLoop";
+    if (act === 3 && r < 0.35) return "act3Ambient";
+    if (act === 2 && r < 0.35) return "act2Ambient";
+    return r < 0.5 ? "idle" : "ariaPersonality";
   }
 
   /** Render active ARIA message (prominent or subtle). */
@@ -147,7 +203,10 @@ export class AriaCommsSystem {
         const text = log[i].replace(/\{AGENT\}/g, characterName || "Agent");
         ctx.fillStyle = "#00ffdd";
         let display = text;
-        while (ctx.measureText(display).width > textMaxW - 30 && display.length > 3) {
+        while (
+          ctx.measureText(display).width > textMaxW - 30 &&
+          display.length > 3
+        ) {
           display = display.slice(0, -4) + "...";
         }
         ctx.fillText(display, textX + 30, y);
@@ -211,10 +270,13 @@ export class AriaCommsSystem {
     ctx.shadowBlur = 0;
 
     // ARIA label centered
-    ctx.fillStyle = "#00ccff";
+    ctx.fillStyle =
+      msg.speaker && msg.speaker !== "ARIA"
+        ? msg.color || "#ffcc66"
+        : "#00ccff";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("ARIA", w / 2, pBy + 18);
+    ctx.fillText(msg.speaker || "ARIA", w / 2, pBy + 18);
 
     // Message text centered
     ctx.fillStyle = msg.color;
@@ -271,10 +333,13 @@ export class AriaCommsSystem {
     const tx = bx + 54;
 
     // "ARIA" label
-    ctx.fillStyle = "#00ccff";
+    ctx.fillStyle =
+      msg.speaker && msg.speaker !== "ARIA"
+        ? msg.color || "#ffcc66"
+        : "#00ccff";
     ctx.font = "bold 10px monospace";
     ctx.textAlign = "left";
-    ctx.fillText("ARIA", tx, by + 17);
+    ctx.fillText(msg.speaker || "ARIA", tx, by + 17);
 
     // Pulsing indicator dot
     ctx.fillStyle = `rgba(0,255,200,${0.5 + Math.sin(t * 6) * 0.4})`;

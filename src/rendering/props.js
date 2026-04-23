@@ -1,6 +1,21 @@
 // Environmental prop renderers — procedural Canvas2D billboards
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
-// Ground convention: floor plane = cy + sh * 0.45. Anchor bottom edge there.
+// Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
+
+/** Floor plane Y coordinate — single source of truth for all ground-anchored props */
+export const groundY = (cy, sh) => cy + sh * 0.45;
+
+/**
+ * FOV-aware minimum size scale.
+ * At default FOV (70), fovScale = 1. Wider FOV → smaller floor, narrower → larger.
+ * Set by renderer before sprite pass; read by individual prop renderers via propMinSize().
+ */
+let _fovScale = 1;
+export function setFovScale(fov) { _fovScale = 70 / Math.max(50, fov); }
+
+/** FOV-scaled minimum pixel size for prop details */
+const propMinSize = (base, sw, mul) =>
+  Math.max(base * _fovScale, sw * mul);
 
 // ── Lookup table ────────────────────────────────────────────────
 const PROP_RENDERERS = {
@@ -31,9 +46,9 @@ export function drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dis
 // ── Individual renderers ────────────────────────────────────────
 
 function renderLocker(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 0.7, h = s * 1.6;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Body
   ctx.globalAlpha = fog * 0.9;
@@ -79,9 +94,9 @@ function renderLocker(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderBench(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 1.4, h = s * 0.3;
-  const y = cy + sh * 0.45 - h * 2.5;
+  const y = groundY(cy, sh) - h * 2.5;
 
   // Seat
   ctx.globalAlpha = fog * 0.85;
@@ -103,9 +118,9 @@ function renderBench(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderTarget(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(8, sw * 0.4);
+  const s = propMinSize(8, sw, 0.4);
   const bob = Math.sin(t * 0.002) * s * 0.05;
-  const y = cy + sh * 0.45 - s * 1.3 + bob;
+  const y = groundY(cy, sh) - s * 1.3 + bob;
 
   // Post
   ctx.globalAlpha = fog * 0.7;
@@ -137,9 +152,9 @@ function renderTarget(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderAmmoCrate(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 1.0, h = s * 0.7;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Body
   ctx.globalAlpha = fog * 0.9;
@@ -181,9 +196,9 @@ function renderAmmoCrate(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderWeightRack(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 0.8, h = s * 1.4;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Frame uprights
   ctx.globalAlpha = fog * 0.8;
@@ -210,8 +225,8 @@ function renderWeightRack(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderDumbbell(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.3);
-  const y = cy + sh * 0.45 - s * 0.18;
+  const s = propMinSize(6, sw, 0.3);
+  const y = groundY(cy, sh) - s * 0.18;
 
   // Handle bar
   ctx.globalAlpha = fog * 0.85;
@@ -232,7 +247,7 @@ function renderDumbbell(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderPunchingBag(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(8, sw * 0.4);
+  const s = propMinSize(8, sw, 0.4);
   const sway = Math.sin(t * 0.0015) * s * 0.06;
   const y = cy - s * 0.1;
 
@@ -272,9 +287,9 @@ function renderPunchingBag(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderDesk(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 1.3, h = s * 0.35;
-  const y = cy + sh * 0.45 - h * 3.2;
+  const y = groundY(cy, sh) - h * 3.2;
 
   // Desktop surface
   ctx.globalAlpha = fog * 0.9;
@@ -307,9 +322,9 @@ function renderDesk(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderFilingCabinet(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 0.65, h = s * 1.3;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Body
   ctx.globalAlpha = fog * 0.85;
@@ -349,9 +364,9 @@ function renderFilingCabinet(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderMonitorBank(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(8, sw * 0.4);
+  const s = propMinSize(8, sw, 0.4);
   const mw = s * 0.45, mh = s * 0.35;
-  const y = cy + sh * 0.45 - mh / 2 - s * 0.16;
+  const y = groundY(cy, sh) - mh / 2 - s * 0.16;
 
   // Two monitors side by side
   for (let i = -1; i <= 1; i += 2) {
@@ -393,9 +408,9 @@ function renderMonitorBank(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderTable(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 1.1, h = s * 0.2;
-  const y = cy + sh * 0.45 - h - s * 0.5;
+  const y = groundY(cy, sh) - h - s * 0.5;
 
   // Tabletop
   ctx.globalAlpha = fog * 0.85;
@@ -417,8 +432,8 @@ function renderTable(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderChair(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.3);
-  const y = cy + sh * 0.45 - s * 0.55;
+  const s = propMinSize(6, sw, 0.3);
+  const y = groundY(cy, sh) - s * 0.55;
 
   // Seat
   ctx.globalAlpha = fog * 0.8;
@@ -444,9 +459,9 @@ function renderChair(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderVendingMachine(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(8, sw * 0.4);
+  const s = propMinSize(8, sw, 0.4);
   const w = s * 0.8, h = s * 1.5;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Body
   ctx.globalAlpha = fog * 0.9;
@@ -502,7 +517,7 @@ function renderVendingMachine(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderWeaponRack(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.35);
+  const s = propMinSize(6, sw, 0.35);
   const w = s * 0.9, h = s * 1.2;
   const y = cy - h * 0.1;
 
@@ -535,8 +550,8 @@ function renderWeaponRack(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderPottedPlant(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(6, sw * 0.3);
-  const y = cy + sh * 0.45 - s * 0.4;
+  const s = propMinSize(6, sw, 0.3);
+  const y = groundY(cy, sh) - s * 0.4;
 
   // Pot
   ctx.globalAlpha = fog * 0.85;
@@ -594,9 +609,9 @@ function renderPottedPlant(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 
 function renderBarrier(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const s = Math.max(8, sw * 0.4);
+  const s = propMinSize(8, sw, 0.4);
   const w = s * 1.2, h = s * 0.8;
-  const y = cy + sh * 0.45 - h / 2;
+  const y = groundY(cy, sh) - h / 2;
 
   // Concrete jersey barrier body
   ctx.globalAlpha = fog * 0.85;

@@ -41,6 +41,7 @@ import { trackEvent } from "./analytics.js";
 import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
+import { SquadCommsController } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import {
@@ -99,6 +100,7 @@ import {
   getCreatorLayout,
 } from "../src/ui/character-creator.js";
 import { SpatialGrid } from "../src/utils/spatial-grid.js";
+import { decay } from "../src/utils/math.js";
 
 export const GAME_VERSION = "0.8.1";
 
@@ -111,7 +113,13 @@ import {
   settingDisplayItem,
   applySettingStep,
 } from "./settings-registry.js";
-export { COMPACT_PHONE_HEIGHT, SETTINGS_REGISTRY, getVisibleSettings, settingDisplayItem, applySettingStep };
+export {
+  COMPACT_PHONE_HEIGHT,
+  SETTINGS_REGISTRY,
+  getVisibleSettings,
+  settingDisplayItem,
+  applySettingStep,
+};
 
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
@@ -145,6 +153,10 @@ export class Game {
     this.canvas = canvas;
     this.hudCanvas = hudCanvas;
     this.hudCtx = hudCanvas.getContext("2d");
+    // DPR-aware HUD dimensions (CSS pixels). Set by resizeCanvases in main.js.
+    this.dpr = 1;
+    this.hudW = hudCanvas.width;
+    this.hudH = hudCanvas.height;
     this.renderer = new Renderer(canvas);
     this.audio = new AudioManager();
     this.cutsceneEngine = new CutsceneEngine({
@@ -153,6 +165,7 @@ export class Game {
       getTouchControls: () => this.touchControls,
       isTouchDevice: "ontouchstart" in window,
       getPlayerName: () => this.character.name || "Agent",
+      getSettings: () => this.settings,
     });
     this.player = new Player();
     this.entities = [];
@@ -177,12 +190,12 @@ export class Game {
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
     this._meltdownUpgradeChoices = null; // Array of 3 upgrade objects or null
-    this._meltdownUpgradeSel = 0;       // Currently highlighted choice (0-2)
+    this._meltdownUpgradeSel = 0; // Currently highlighted choice (0-2)
     this._builderOnboardingDismissed = false;
     this.transitioning = false;
     this.transitionAlpha = 0;
     this._transitionCallback = null;
-    this._transitionDir = 0;    // 1 = fading out, -1 = fading in
+    this._transitionDir = 0; // 1 = fading out, -1 = fading in
     this._transitionSpeed = 2.5; // full fade in 0.4s
     this.screenShake = 0;
     this.killedEnemies = 0;
@@ -200,20 +213,36 @@ export class Game {
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       killStreak: {
-        get() { return this.killStreakSystem.streak; },
-        set(v) { this.killStreakSystem.streak = v; },
+        get() {
+          return this.killStreakSystem.streak;
+        },
+        set(v) {
+          this.killStreakSystem.streak = v;
+        },
       },
       killStreakTimer: {
-        get() { return this.killStreakSystem.timer; },
-        set(v) { this.killStreakSystem.timer = v; },
+        get() {
+          return this.killStreakSystem.timer;
+        },
+        set(v) {
+          this.killStreakSystem.timer = v;
+        },
       },
       killStreakDisplay: {
-        get() { return this.killStreakSystem.display; },
-        set(v) { this.killStreakSystem.display = v; },
+        get() {
+          return this.killStreakSystem.display;
+        },
+        set(v) {
+          this.killStreakSystem.display = v;
+        },
       },
       bestStreak: {
-        get() { return this.killStreakSystem.best; },
-        set(v) { this.killStreakSystem.best = v; },
+        get() {
+          return this.killStreakSystem.best;
+        },
+        set(v) {
+          this.killStreakSystem.best = v;
+        },
       },
     });
     // Slow-motion last kill
@@ -231,6 +260,7 @@ export class Game {
     this.settings = {
       crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
       difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
+      cutsceneAutoAdvance: false, // manual advance by default
       minimapSize: 200,
       musicVolume: 80, // 0..100
       sfxVolume: 80, // 0..100
@@ -261,7 +291,8 @@ export class Game {
     this._settingsMouseY = -1;
     document.addEventListener("mousemove", (e) => {
       if (this.state !== GameState.SETTINGS) {
-        if (this.canvas.style.cursor === "pointer") this.canvas.style.cursor = "";
+        if (this.canvas.style.cursor === "pointer")
+          this.canvas.style.cursor = "";
         return;
       }
       const rect = this.canvas.getBoundingClientRect();
@@ -275,7 +306,7 @@ export class Game {
       const sdW = cph ? 90 : 160;
       const inSidebar = sx < sdW && sy > hdrH;
       const inPanel = sx >= sdW + 1 && sy > hdrH + 8;
-      this.canvas.style.cursor = (inSidebar || inPanel) ? "pointer" : "";
+      this.canvas.style.cursor = inSidebar || inPanel ? "pointer" : "";
     });
 
     // Share URL handling
@@ -342,78 +373,148 @@ export class Game {
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       unlockedAchievements: {
-        get() { return this.achievementSystem.unlockedAchievements; },
-        set(v) { this.achievementSystem.unlockedAchievements = v; },
+        get() {
+          return this.achievementSystem.unlockedAchievements;
+        },
+        set(v) {
+          this.achievementSystem.unlockedAchievements = v;
+        },
       },
       achievementQueue: {
-        get() { return this.achievementSystem.achievementQueue; },
-        set(v) { this.achievementSystem.achievementQueue = v; },
+        get() {
+          return this.achievementSystem.achievementQueue;
+        },
+        set(v) {
+          this.achievementSystem.achievementQueue = v;
+        },
       },
       achievementToast: {
-        get() { return this.achievementSystem.achievementToast; },
-        set(v) { this.achievementSystem.achievementToast = v; },
+        get() {
+          return this.achievementSystem.achievementToast;
+        },
+        set(v) {
+          this.achievementSystem.achievementToast = v;
+        },
       },
       achievementIcons: {
-        get() { return this.achievementSystem.achievementIcons; },
-        set(v) { this.achievementSystem.achievementIcons = v; },
+        get() {
+          return this.achievementSystem.achievementIcons;
+        },
+        set(v) {
+          this.achievementSystem.achievementIcons = v;
+        },
       },
       achievementStats: {
-        get() { return this.achievementSystem.achievementStats; },
-        set(v) { this.achievementSystem.achievementStats = v; },
+        get() {
+          return this.achievementSystem.achievementStats;
+        },
+        set(v) {
+          this.achievementSystem.achievementStats = v;
+        },
       },
       roundDamageTaken: {
-        get() { return this.achievementSystem.roundDamageTaken; },
-        set(v) { this.achievementSystem.roundDamageTaken = v; },
+        get() {
+          return this.achievementSystem.roundDamageTaken;
+        },
+        set(v) {
+          this.achievementSystem.roundDamageTaken = v;
+        },
       },
       achievementsScroll: {
-        get() { return this.achievementSystem.achievementsScroll; },
-        set(v) { this.achievementSystem.achievementsScroll = v; },
+        get() {
+          return this.achievementSystem.achievementsScroll;
+        },
+        set(v) {
+          this.achievementSystem.achievementsScroll = v;
+        },
       },
     });
 
     // ARIA in-game comms system (delegated to AriaCommsSystem)
     this.ariaComms = new AriaCommsSystem();
+    // Squad voice lines (Kael/Nova/Rook/Lyra) — act 2+ only
+    this.squadComms = new SquadCommsController(this.ariaComms);
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       ariaQueue: {
-        get() { return this.ariaComms.queue; },
-        set(v) { this.ariaComms.queue = v; },
+        get() {
+          return this.ariaComms.queue;
+        },
+        set(v) {
+          this.ariaComms.queue = v;
+        },
       },
       ariaMessage: {
-        get() { return this.ariaComms.message; },
-        set(v) { this.ariaComms.message = v; },
+        get() {
+          return this.ariaComms.message;
+        },
+        set(v) {
+          this.ariaComms.message = v;
+        },
       },
       ariaTriggered: {
-        get() { return this.ariaComms.triggered; },
-        set(v) { this.ariaComms.triggered = v; },
+        get() {
+          return this.ariaComms.triggered;
+        },
+        set(v) {
+          this.ariaComms.triggered = v;
+        },
       },
       ariaEnabled: {
-        get() { return this.ariaComms.enabled; },
-        set(v) { this.ariaComms.enabled = v; },
+        get() {
+          return this.ariaComms.enabled;
+        },
+        set(v) {
+          this.ariaComms.enabled = v;
+        },
       },
       ariaIdleTimer: {
-        get() { return this.ariaComms.idleTimer; },
-        set(v) { this.ariaComms.idleTimer = v; },
+        get() {
+          return this.ariaComms.idleTimer;
+        },
+        set(v) {
+          this.ariaComms.idleTimer = v;
+        },
       },
       ariaIdleThreshold: {
-        get() { return this.ariaComms.idleThreshold; },
-        set(v) { this.ariaComms.idleThreshold = v; },
+        get() {
+          return this.ariaComms.idleThreshold;
+        },
+        set(v) {
+          this.ariaComms.idleThreshold = v;
+        },
       },
       ariaCombatTimer: {
-        get() { return this.ariaComms.combatTimer; },
-        set(v) { this.ariaComms.combatTimer = v; },
+        get() {
+          return this.ariaComms.combatTimer;
+        },
+        set(v) {
+          this.ariaComms.combatTimer = v;
+        },
       },
       ariaMessageLog: {
-        get() { return this.ariaComms.messageLog; },
-        set(v) { this.ariaComms.messageLog = v; },
+        get() {
+          return this.ariaComms.messageLog;
+        },
+        set(v) {
+          this.ariaComms.messageLog = v;
+        },
       },
       showAriaLog: {
-        get() { return this.ariaComms.showLog; },
-        set(v) { this.ariaComms.showLog = v; },
+        get() {
+          return this.ariaComms.showLog;
+        },
+        set(v) {
+          this.ariaComms.showLog = v;
+        },
       },
       ariaLogScroll: {
-        get() { return this.ariaComms.logScroll; },
-        set(v) { this.ariaComms.logScroll = v; },
+        get() {
+          return this.ariaComms.logScroll;
+        },
+        set(v) {
+          this.ariaComms.logScroll = v;
+        },
       },
     });
 
@@ -463,50 +564,134 @@ export class Game {
   }
 
   // ── Campaign state bridges (delegates to CampaignManager) ──
-  get campaignLevel() { return this.campaign.level; }
-  set campaignLevel(v) { this.campaign.level = v; }
-  get campaignAct() { return this.campaign.act; }
-  set campaignAct(v) { this.campaign.act = v; }
-  get ngPlusCycle() { return this.campaign.ngPlusCycle; }
-  set ngPlusCycle(v) { this.campaign.ngPlusCycle = v; }
-  get ngPlusPrompt() { return this.campaign.ngPlusPrompt; }
-  set ngPlusPrompt(v) { this.campaign.ngPlusPrompt = v; }
-  get ngPlusPromptSel() { return this.campaign.ngPlusPromptSel; }
-  set ngPlusPromptSel(v) { this.campaign.ngPlusPromptSel = v; }
-  get campaignMissedWeapons() { return this.campaign.missedWeapons; }
-  set campaignMissedWeapons(v) { this.campaign.missedWeapons = v; }
-  get campaignPromptSelection() { return this.campaign.promptSelection; }
-  set campaignPromptSelection(v) { this.campaign.promptSelection = v; }
+  get campaignLevel() {
+    return this.campaign.level;
+  }
+  set campaignLevel(v) {
+    this.campaign.level = v;
+  }
+  get campaignAct() {
+    return this.campaign.act;
+  }
+  set campaignAct(v) {
+    this.campaign.act = v;
+  }
+  get ngPlusCycle() {
+    return this.campaign.ngPlusCycle;
+  }
+  set ngPlusCycle(v) {
+    this.campaign.ngPlusCycle = v;
+  }
+  get ngPlusPrompt() {
+    return this.campaign.ngPlusPrompt;
+  }
+  set ngPlusPrompt(v) {
+    this.campaign.ngPlusPrompt = v;
+  }
+  get ngPlusPromptSel() {
+    return this.campaign.ngPlusPromptSel;
+  }
+  set ngPlusPromptSel(v) {
+    this.campaign.ngPlusPromptSel = v;
+  }
+  get campaignMissedWeapons() {
+    return this.campaign.missedWeapons;
+  }
+  set campaignMissedWeapons(v) {
+    this.campaign.missedWeapons = v;
+  }
+  get campaignPromptSelection() {
+    return this.campaign.promptSelection;
+  }
+  set campaignPromptSelection(v) {
+    this.campaign.promptSelection = v;
+  }
 
   // ── Tutorial state bridges (delegates to TutorialSystem) ──
-  get tutorialStep() { return this.tutorial.step; }
-  set tutorialStep(v) { this.tutorial.step = v; }
-  get tutorialStepTime() { return this.tutorial.stepTime; }
-  set tutorialStepTime(v) { this.tutorial.stepTime = v; }
-  get tutorialMenuSelection() { return this.tutorial.menuSelection; }
-  set tutorialMenuSelection(v) { this.tutorial.menuSelection = v; }
-  get tutorialShowCompletionMenu() { return this.tutorial.showCompletionMenu; }
-  set tutorialShowCompletionMenu(v) { this.tutorial.showCompletionMenu = v; }
-  get tutorialPickedUp() { return this.tutorial.pickedUp; }
-  set tutorialPickedUp(v) { this.tutorial.pickedUp = v; }
-  get tutorialWeaponPickedUp() { return this.tutorial.weaponPickedUp; }
-  set tutorialWeaponPickedUp(v) { this.tutorial.weaponPickedUp = v; }
-  get tutorialWeaponSwapped() { return this.tutorial.weaponSwapped; }
-  set tutorialWeaponSwapped(v) { this.tutorial.weaponSwapped = v; }
-  get tutorialSecondWeaponPickedUp() { return this.tutorial.secondWeaponPickedUp; }
-  set tutorialSecondWeaponPickedUp(v) { this.tutorial.secondWeaponPickedUp = v; }
-  get tutorialDoorOpened() { return this.tutorial.doorOpened; }
-  set tutorialDoorOpened(v) { this.tutorial.doorOpened = v; }
-  get tutorialDashed() { return this.tutorial.dashed; }
-  set tutorialDashed(v) { this.tutorial.dashed = v; }
-  get tutorialCrouched() { return this.tutorial.crouched; }
-  set tutorialCrouched(v) { this.tutorial.crouched = v; }
-  get tutorialSlid() { return this.tutorial.slid; }
-  set tutorialSlid(v) { this.tutorial.slid = v; }
-  get tutorialFired() { return this.tutorial.fired; }
-  set tutorialFired(v) { this.tutorial.fired = v; }
-  get tutorialChronoUsed() { return this.tutorial.chronoUsed; }
-  set tutorialChronoUsed(v) { this.tutorial.chronoUsed = v; }
+  get tutorialStep() {
+    return this.tutorial.step;
+  }
+  set tutorialStep(v) {
+    this.tutorial.step = v;
+  }
+  get tutorialStepTime() {
+    return this.tutorial.stepTime;
+  }
+  set tutorialStepTime(v) {
+    this.tutorial.stepTime = v;
+  }
+  get tutorialMenuSelection() {
+    return this.tutorial.menuSelection;
+  }
+  set tutorialMenuSelection(v) {
+    this.tutorial.menuSelection = v;
+  }
+  get tutorialShowCompletionMenu() {
+    return this.tutorial.showCompletionMenu;
+  }
+  set tutorialShowCompletionMenu(v) {
+    this.tutorial.showCompletionMenu = v;
+  }
+  get tutorialPickedUp() {
+    return this.tutorial.pickedUp;
+  }
+  set tutorialPickedUp(v) {
+    this.tutorial.pickedUp = v;
+  }
+  get tutorialWeaponPickedUp() {
+    return this.tutorial.weaponPickedUp;
+  }
+  set tutorialWeaponPickedUp(v) {
+    this.tutorial.weaponPickedUp = v;
+  }
+  get tutorialWeaponSwapped() {
+    return this.tutorial.weaponSwapped;
+  }
+  set tutorialWeaponSwapped(v) {
+    this.tutorial.weaponSwapped = v;
+  }
+  get tutorialSecondWeaponPickedUp() {
+    return this.tutorial.secondWeaponPickedUp;
+  }
+  set tutorialSecondWeaponPickedUp(v) {
+    this.tutorial.secondWeaponPickedUp = v;
+  }
+  get tutorialDoorOpened() {
+    return this.tutorial.doorOpened;
+  }
+  set tutorialDoorOpened(v) {
+    this.tutorial.doorOpened = v;
+  }
+  get tutorialDashed() {
+    return this.tutorial.dashed;
+  }
+  set tutorialDashed(v) {
+    this.tutorial.dashed = v;
+  }
+  get tutorialCrouched() {
+    return this.tutorial.crouched;
+  }
+  set tutorialCrouched(v) {
+    this.tutorial.crouched = v;
+  }
+  get tutorialSlid() {
+    return this.tutorial.slid;
+  }
+  set tutorialSlid(v) {
+    this.tutorial.slid = v;
+  }
+  get tutorialFired() {
+    return this.tutorial.fired;
+  }
+  set tutorialFired(v) {
+    this.tutorial.fired = v;
+  }
+  get tutorialChronoUsed() {
+    return this.tutorial.chronoUsed;
+  }
+  set tutorialChronoUsed(v) {
+    this.tutorial.chronoUsed = v;
+  }
 
   set pausedFromState(v) {
     // Allow legacy direct assignment — routes through StateManager internals.
@@ -696,10 +881,14 @@ export class Game {
   /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
   _inputWheel(deltaY) {
     if (this.state === GameState.SETTINGS) {
-      const defs = getSettingsForCategory(this.isTouchDevice, this.settingsCategory);
+      const defs = getSettingsForCategory(
+        this.isTouchDevice,
+        this.settingsCategory,
+      );
       if (!defs.length) return;
       const dir = deltaY > 0 ? 1 : -1;
-      this.settingsSelection = (this.settingsSelection + dir + defs.length) % defs.length;
+      this.settingsSelection =
+        (this.settingsSelection + dir + defs.length) % defs.length;
       this.audio.menuSelect();
       return;
     }
@@ -1009,7 +1198,10 @@ export class Game {
           return;
         }
         if (code === "ArrowRight" || code === "ArrowDown") {
-          this._meltdownUpgradeSel = Math.min(choices.length - 1, this._meltdownUpgradeSel + 1);
+          this._meltdownUpgradeSel = Math.min(
+            choices.length - 1,
+            this._meltdownUpgradeSel + 1,
+          );
           this.audio.menuNav();
           return;
         }
@@ -1025,10 +1217,14 @@ export class Game {
       // Weapon switching (slots 1-8)
       const prevWeapon = this.player.currentWeapon;
       const weaponSlots = [
-        this.keybinds.weapon1, this.keybinds.weapon2,
-        this.keybinds.weapon3, this.keybinds.weapon4,
-        this.keybinds.weapon5, this.keybinds.weapon6,
-        this.keybinds.weapon7, this.keybinds.weapon8,
+        this.keybinds.weapon1,
+        this.keybinds.weapon2,
+        this.keybinds.weapon3,
+        this.keybinds.weapon4,
+        this.keybinds.weapon5,
+        this.keybinds.weapon6,
+        this.keybinds.weapon7,
+        this.keybinds.weapon8,
       ];
       const slotIdx = weaponSlots.indexOf(code);
       if (slotIdx !== -1 && this.player.weapons.length > slotIdx)
@@ -1039,6 +1235,15 @@ export class Game {
       }
 
       if (code === this.keybinds.interact) this.interact();
+      // Meltdown hero ability (Q key)
+      if (code === "KeyQ" && this.mode === "meltdown" && this.meltdown.alive) {
+        const abilityResult = this.meltdown.useAbility();
+        if (abilityResult) {
+          if (abilityResult.type === "dash")
+            this.meltdown.speed += abilityResult.speedBoost;
+          this.audio.menuConfirm();
+        }
+      }
       if (code === this.keybinds.pause || code === "KeyP") {
         const now = performance.now();
         if (now - this.lastEscTime < 200) return;
@@ -1152,8 +1357,14 @@ export class Game {
 
       // Change setting value — Enter/Space cycle forward, Left/A decrement, Right/D increment
       const stepDir =
-        code === "ArrowLeft" || code === "KeyA" ? -1 :
-        code === "ArrowRight" || code === "KeyD" || code === "Enter" || code === "Space" ? 1 : 0;
+        code === "ArrowLeft" || code === "KeyA"
+          ? -1
+          : code === "ArrowRight" ||
+              code === "KeyD" ||
+              code === "Enter" ||
+              code === "Space"
+            ? 1
+            : 0;
       if (stepDir !== 0) {
         const def = settingsDef[this.settingsSelection];
         if (def) {
@@ -1413,7 +1624,9 @@ export class Game {
   }
 
   _applyMobileMigration() {
-    Save.applyMobileMigration(this.isTouchDevice, this.settings, () => this.saveSettings());
+    Save.applyMobileMigration(this.isTouchDevice, this.settings, () =>
+      this.saveSettings(),
+    );
   }
 
   loadDevFlags() {
@@ -1433,17 +1646,27 @@ export class Game {
     Save.setAlwaysTutorial(on);
   }
 
-  saveAchievements() { this.achievementSystem.save(); }
-  loadAchievements() { this.achievementSystem.load(); }
-  unlockAchievement(id) { this.achievementSystem.unlockAchievement(id); }
-  checkAchievements() { this.achievementSystem.checkAchievements(this.player.score); }
+  saveAchievements() {
+    this.achievementSystem.save();
+  }
+  loadAchievements() {
+    this.achievementSystem.load();
+  }
+  unlockAchievement(id) {
+    this.achievementSystem.unlockAchievement(id);
+  }
+  checkAchievements() {
+    this.achievementSystem.checkAchievements(this.player.score);
+  }
 
   updateAchievementToast(dt) {
     const fx = this.achievementSystem.updateToast(dt);
     if (fx.playSound) this.audio.pickup();
   }
 
-  renderAchievementToast(ctx, w, h) { this.achievementSystem.renderToast(ctx, w, h); }
+  renderAchievementToast(ctx, w, h) {
+    this.achievementSystem.renderToast(ctx, w, h);
+  }
 
   // ── ARIA in-game comms (delegated to AriaCommsSystem) ──
   queueAriaMessage(category) {
@@ -1456,14 +1679,26 @@ export class Game {
 
   updateAriaComms(dt) {
     this.ariaComms.update(dt, this.state === GameState.PLAYING);
+    this.squadComms.update(dt);
   }
 
   renderAriaComms(ctx, w, h) {
-    this.ariaComms.renderMessage(ctx, w, h, this.character.name, this.isTouchDevice);
+    this.ariaComms.renderMessage(
+      ctx,
+      w,
+      h,
+      this.character.name,
+      this.isTouchDevice,
+    );
   }
 
   saveArena() {
-    Save.saveArena(this.arenaRound, this.player, this.upgradeLevels, this.settings.difficulty);
+    Save.saveArena(
+      this.arenaRound,
+      this.player,
+      this.upgradeLevels,
+      this.settings.difficulty,
+    );
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
@@ -1480,19 +1715,33 @@ export class Game {
     return true;
   }
 
-  clearArenaSave() { Save.clearArenaSave(); }
+  clearArenaSave() {
+    Save.clearArenaSave();
+  }
 
-  saveCampaign() { this.campaign.save(); }
+  saveCampaign() {
+    this.campaign.save();
+  }
 
-  loadCampaignSave() { return this.campaign.load(); }
+  loadCampaignSave() {
+    return this.campaign.load();
+  }
 
-  clearCampaignSave() { this.campaign.clearSave(); }
+  clearCampaignSave() {
+    this.campaign.clearSave();
+  }
 
   /** Enter New Game Plus — keep weapons & score, reset to Act 1, bump cycle */
-  startNgPlus() { this.campaign.startNgPlus(); }
+  startNgPlus() {
+    this.campaign.startNgPlus();
+  }
 
-  hasSave() { return Save.hasSave(); }
-  getSaveInfo() { return Save.getSaveInfo(); }
+  hasSave() {
+    return Save.hasSave();
+  }
+  getSaveInfo() {
+    return Save.getSaveInfo();
+  }
 
   // --- Asset Editor Hooks ---
   getAssetMetadata(category) {
@@ -1538,7 +1787,7 @@ export class Game {
     this.startArenaRound();
   }
 
-  startMeltdown() {
+  startMeltdown(heroKey = "agent", ironman = false) {
     this.mode = "meltdown";
     this.achievementStats.totalGamesPlayed++;
     this.player.reset();
@@ -1547,7 +1796,7 @@ export class Game {
     this.ariaTriggered = {};
 
     // Generate the meltdown corridor
-    const mMap = this.meltdown.start();
+    const mMap = this.meltdown.start(heroKey, ironman);
     this.map = mMap;
     this._meltdownUpgradeChoices = null;
     this._meltdownUpgradeSel = 0;
@@ -1602,10 +1851,17 @@ export class Game {
 
     // Spawn enemies — filter spawns, create scaled enemies, create pickups
     const validSpawns = filterArenaSpawns(
-      this.map.enemySpawns, this.player.x, this.player.y, this.map.grid,
+      this.map.enemySpawns,
+      this.player.x,
+      this.player.y,
+      this.map.grid,
     );
-    this.entities.push(...createArenaEnemies(this.arenaRound, validSpawns, diff));
-    this.entities.push(...createArenaPickups(this.map.pickups, this.arenaRound, this.map));
+    this.entities.push(
+      ...createArenaEnemies(this.arenaRound, validSpawns, diff),
+    );
+    this.entities.push(
+      ...createArenaPickups(this.map.pickups, this.arenaRound, this.map),
+    );
 
     this.killedEnemies = 0;
     this.totalEnemies = this.entities.filter((e) => e.type === "enemy").length;
@@ -1631,32 +1887,54 @@ export class Game {
     this.lockPointer();
   }
 
-  startCampaign() { this.campaign.start(); }
+  startCampaign() {
+    this.campaign.start();
+  }
 
-  showCampaignPrompt() { this.campaign.showPrompt(); }
+  showCampaignPrompt() {
+    this.campaign.showPrompt();
+  }
 
-  executeCampaignPromptChoice(choice) { this.campaign.executePromptChoice(choice); }
+  executeCampaignPromptChoice(choice) {
+    this.campaign.executePromptChoice(choice);
+  }
 
   renderCampaignPrompt(ctx, w, h) {
     _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0);
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
-  startTutorial() { this.tutorial.start(); }
+  startTutorial() {
+    this.tutorial.start();
+  }
 
-  initTutorialLevel() { this.tutorial.initLevel(); }
+  initTutorialLevel() {
+    this.tutorial.initLevel();
+  }
 
-  advanceTutorialStep() { this.tutorial.advanceStep(); }
+  advanceTutorialStep() {
+    this.tutorial.advanceStep();
+  }
 
-  updateTutorial(dt) { this.tutorial.update(dt); }
+  updateTutorial(dt) {
+    this.tutorial.update(dt);
+  }
 
-  spawnTrainingDummies() { this.tutorial.spawnDummies(); }
+  spawnTrainingDummies() {
+    this.tutorial.spawnDummies();
+  }
 
-  executeTutorialMenuChoice(choice) { this.tutorial.executeMenuChoice(choice); }
+  executeTutorialMenuChoice(choice) {
+    this.tutorial.executeMenuChoice(choice);
+  }
 
-  executeTutorialCompletionChoice(choice) { this.tutorial.executeCompletionChoice(choice); }
+  executeTutorialCompletionChoice(choice) {
+    this.tutorial.executeCompletionChoice(choice);
+  }
 
-  shouldShowTutorial() { return this.tutorial.shouldShow(); }
+  shouldShowTutorial() {
+    return this.tutorial.shouldShow();
+  }
 
   renderTutorialOverlay(ctx, w, h) {
     _renderTutorialOverlay(ctx, w, h, {
@@ -1671,7 +1949,9 @@ export class Game {
     _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0);
   }
 
-  _makeScanlinePattern(ctx, alpha, step) { /* forwarded to src/ui/scanlines.js */ }
+  _makeScanlinePattern(ctx, alpha, step) {
+    /* forwarded to src/ui/scanlines.js */
+  }
 
   _drawScanlines(ctx, w, h, dense) {
     drawScanlines(ctx, w, h, dense);
@@ -1714,7 +1994,14 @@ export class Game {
   }
 
   renderCharacterCreator(ctx, w, h) {
-    _renderCharacterCreator(ctx, w, h, this.creatorCategory, this.character, this.isTouchDevice);
+    _renderCharacterCreator(
+      ctx,
+      w,
+      h,
+      this.creatorCategory,
+      this.character,
+      this.isTouchDevice,
+    );
   }
 
   _exitCreator(saved) {
@@ -1784,8 +2071,30 @@ export class Game {
     }
   }
 
-  _renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now, loadout, scale) {
-    _renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now, loadout, scale);
+  _renderCharacterPreview(
+    ctx,
+    cx,
+    cy,
+    palette,
+    armor,
+    badge,
+    skin,
+    now,
+    loadout,
+    scale,
+  ) {
+    _renderCharacterPreview(
+      ctx,
+      cx,
+      cy,
+      palette,
+      armor,
+      badge,
+      skin,
+      now,
+      loadout,
+      scale,
+    );
   }
 
   renderTutorialMenu(ctx, w, h) {
@@ -1817,7 +2126,7 @@ export class Game {
     if (this.transitioning) return;
     this.transitioning = true;
     this.transitionAlpha = 0;
-    this._transitionDir = 1;          // fading out
+    this._transitionDir = 1; // fading out
     this._transitionCallback = callback;
   }
 
@@ -1866,11 +2175,17 @@ export class Game {
     this.cutsceneEngine.render(ctx, w, h);
   }
 
-  loadCampaignLevel(index) { this.campaign.loadLevel(index); }
+  loadCampaignLevel(index) {
+    this.campaign.loadLevel(index);
+  }
 
-  _applyActEnemyRoster() { this.campaign._applyActEnemyRoster(); }
+  _applyActEnemyRoster() {
+    this.campaign._applyActEnemyRoster();
+  }
 
-  nextCampaignLevel() { this.campaign.nextLevel(); }
+  nextCampaignLevel() {
+    this.campaign.nextLevel();
+  }
 
   interact() {
     // Check for doors/secrets at multiple distances in front of player
@@ -1934,22 +2249,44 @@ export class Game {
 
   // Combat
 
-  fireWeapon() { _fireWeapon(this); }
+  fireWeapon() {
+    _fireWeapon(this);
+  }
 
-  _onEnemyKill(enemy) { _onEnemyKill(this, enemy); }
+  _onEnemyKill(enemy) {
+    _onEnemyKill(this, enemy);
+  }
 
-  hitscan(angle, damage, range) { _hitscan(this, angle, damage, range); }
+  hitscan(angle, damage, range) {
+    _hitscan(this, angle, damage, range);
+  }
 
-  damageEnemy(enemy, damage) { _damageEnemy(this, enemy, damage); }
+  damageEnemy(enemy, damage) {
+    _damageEnemy(this, enemy, damage);
+  }
 
-  damagePlayer(amount, attacker) { _damagePlayer(this, amount, attacker); }
+  damagePlayer(amount, attacker) {
+    const prevHp = this.player.health;
+    _damagePlayer(this, amount, attacker);
+    // Squad low-HP reaction: fires once per level when crossing 30% threshold
+    if (this.squadComms && this.player.alive && this.player.maxHealth > 0) {
+      const prevRatio = prevHp / this.player.maxHealth;
+      const curRatio = this.player.health / this.player.maxHealth;
+      if (prevRatio > 0.3 && curRatio <= 0.3) this.squadComms.onLowHealth();
+    }
+  }
 
   update(timestamp) {
-    this.deltaTime = Math.min(0.05, (timestamp - this.lastFrameTime) / 1000);
-    // Accumulate lifetime play time (real seconds, not game time)
-    this.achievementStats.totalTimePlayed += this.deltaTime;
+    const realDt = (timestamp - this.lastFrameTime) / 1000;
+    this.deltaTime = Math.min(0.033, realDt); // 30fps floor — prevents physics explosion
+    // Accumulate lifetime play time using unclamped real time
+    this.achievementStats.totalTimePlayed += realDt;
     this.lastFrameTime = timestamp;
-    this.time = timestamp;
+    // Sim-time advances by clamped dt so all gameplay systems (enemy cooldowns,
+    // attack timers, EMP disable) stay in sync with movement on slow machines.
+    // Visual-only code (Math.sin animations) can use this.wallTime instead.
+    this.time = (this.time || 0) + this.deltaTime * 1000;
+    this.wallTime = timestamp;
 
     // Slow-motion time scale (last-kill effect takes priority)
     if (this.slowMoTimer > 0) {
@@ -2194,6 +2531,9 @@ export class Game {
 
       const mResult = this.meltdown.update(dt, this.player.x, this.player.y);
 
+      // Sync meltdown damage multiplier to player (for weapon system)
+      this.player.damageMultiplier = this.meltdown.damageMultiplier;
+
       // Apply auto-forward movement (+Y direction) with collision
       // Braking: holding back key slows to 50% but costs stamina
       const kb = this.keybinds;
@@ -2213,7 +2553,10 @@ export class Game {
       }
       const margin = 0.2;
       const newY = this.player.y + effectiveMoveY;
+      const phasing =
+        this.meltdown.abilityActive && this.meltdown.hero.ability === "phase";
       if (
+        phasing ||
         this.isPassable(Math.floor(this.player.x), Math.floor(newY + margin))
       ) {
         this.player.y = newY;
@@ -2282,13 +2625,26 @@ export class Game {
         if (this._meltdownAriaTimer <= 0) this._meltdownAriaText = null;
       }
 
-      // Death check
+      // Heal from upgrades (Nano-Repair Pulse)
+      if (mResult.healAmount > 0) {
+        this.player.health = Math.min(
+          this.player.maxHealth,
+          this.player.health + mResult.healAmount,
+        );
+      }
+
+      // Death check — temporal anchor can save once
       if (this.player.health <= 0) {
-        this.player.health = 0;
-        this.player.alive = false;
-        this.audio.meltdownDeath();
-        this.meltdown.onDeath();
-        this.deathTimer = 1.5;
+        if (this.meltdown.onFatalHit()) {
+          this.player.health = 1;
+          this.screenShake = Math.max(this.screenShake, 10);
+        } else {
+          this.player.health = 0;
+          this.player.alive = false;
+          this.audio.meltdownDeath();
+          this.meltdown.onDeath();
+          this.deathTimer = 1.5;
+        }
       }
     }
 
@@ -2306,8 +2662,8 @@ export class Game {
       }
     }
 
-    // Weapon kick recovery
-    this.player.weaponKick *= 0.85;
+    // Weapon kick recovery (framerate-invariant)
+    this.player.weaponKick *= decay(0.85, this.deltaTime);
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
     this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
@@ -2318,7 +2674,10 @@ export class Game {
       let write = 0;
       for (let i = 0; i < this.entities.length; i++) {
         const e = this.entities[i];
-        if (e.active || (e.deathTime != null && this.time - e.deathTime < 2000)) {
+        if (
+          e.active ||
+          (e.deathTime != null && this.time - e.deathTime < 2000)
+        ) {
           this.entities[write++] = e;
         }
       }
@@ -2375,15 +2734,15 @@ export class Game {
       }
     }
 
-    // screen shake decay
-    this.screenShake *= 0.9;
+    // screen shake decay (framerate-invariant)
+    this.screenShake *= decay(0.9, this.deltaTime);
     if (this.screenShake < 0.1) this.screenShake = 0;
 
     // Update VFX particles
     this.updateParticles(dt);
 
-    // Glitch effect decay
-    this.glitchEffect *= 0.95;
+    // Glitch effect decay (framerate-invariant)
+    this.glitchEffect *= decay(0.95, this.deltaTime);
     if (this.glitchEffect < 0.01) this.glitchEffect = 0;
 
     // Hit marker decay
@@ -2396,7 +2755,8 @@ export class Game {
     for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
       this.damageNumbers[i].life -= dt;
       if (this.damageNumbers[i].life <= 0) {
-        this.damageNumbers[i] = this.damageNumbers[this.damageNumbers.length - 1];
+        this.damageNumbers[i] =
+          this.damageNumbers[this.damageNumbers.length - 1];
         this.damageNumbers.pop();
       }
     }
@@ -2411,7 +2771,9 @@ export class Game {
   triggerDash(code, rawDirX, rawDirY) {
     const triggered = this.playerUpdateSystem.triggerDash(
       { player: this.player, keybinds: this.keybinds },
-      code, rawDirX, rawDirY,
+      code,
+      rawDirX,
+      rawDirY,
     );
     if (triggered) {
       if (this.mode === "tutorial") this.tutorialDashed = true;
@@ -2421,17 +2783,20 @@ export class Game {
   }
 
   updatePlayer(dt) {
-    const flags = this.playerUpdateSystem.update({
-      player: this.player,
-      keys: this.keys,
-      keybinds: this.keybinds,
-      mouse: this.mouse,
-      settings: this.settings,
-      mode: this.mode,
-      map: this.map,
-      audio: this.audio,
-      noclip: !!this._noclip,
-    }, dt);
+    const flags = this.playerUpdateSystem.update(
+      {
+        player: this.player,
+        keys: this.keys,
+        keybinds: this.keybinds,
+        mouse: this.mouse,
+        settings: this.settings,
+        mode: this.mode,
+        map: this.map,
+        audio: this.audio,
+        noclip: !!this._noclip,
+      },
+      dt,
+    );
     if (flags) {
       if (flags.tutorialSlid) this.tutorialSlid = true;
       if (flags.tutorialCrouched) this.tutorialCrouched = true;
@@ -2481,25 +2846,30 @@ export class Game {
   }
 
   updateEnemies(dt) {
-    const fx = this.aiSystem.update({
-      entities: this.entities,
-      player: this.player,
-      map: this.map,
-      time: this.time,
-      timeScale: this.timeScale,
-      projectiles: this.projectiles,
-      chronoBombs: this._chronoBombs,
-      damageNumbers: this.damageNumbers,
-      audio: this.audio,
-    }, dt);
+    const fx = this.aiSystem.update(
+      {
+        entities: this.entities,
+        player: this.player,
+        map: this.map,
+        time: this.time,
+        timeScale: this.timeScale,
+        projectiles: this.projectiles,
+        chronoBombs: this._chronoBombs,
+        damageNumbers: this.damageNumbers,
+        audio: this.audio,
+      },
+      dt,
+    );
     // Apply side effects
-    for (const call of fx.damagePlayerCalls) this.damagePlayer(call.damage, call.attacker);
+    for (const call of fx.damagePlayerCalls)
+      this.damagePlayer(call.damage, call.attacker);
     this.screenShake = Math.max(this.screenShake, fx.screenShake);
-    if (fx.hudDisabledUntil != null) this._hudDisabledUntil = fx.hudDisabledUntil;
+    if (fx.hudDisabledUntil != null)
+      this._hudDisabledUntil = fx.hudDisabledUntil;
     for (const msg of fx.ariaMessages) this.queueAriaMessage(msg);
     this.totalEnemies += fx.totalEnemiesAdded;
     // Filter detonated chrono-bombs
-    this._chronoBombs = this._chronoBombs.filter(b => b.active);
+    this._chronoBombs = this._chronoBombs.filter((b) => b.active);
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
@@ -2507,18 +2877,21 @@ export class Game {
   }
 
   updateProjectiles(dt) {
-    _updateProjectiles({
-      projectiles: this.projectiles,
-      entities: this.entities,
-      entityGrid: this.entityGrid,
-      map: this.map,
-      player: this.player,
-      time: this.time,
-      audio: this.audio,
-      spawnWallSparks: (x, y) => this.spawnWallSparks(x, y),
-      damageEnemy: (e, d) => this.damageEnemy(e, d),
-      damagePlayer: (d) => this.damagePlayer(d),
-    }, dt);
+    _updateProjectiles(
+      {
+        projectiles: this.projectiles,
+        entities: this.entities,
+        entityGrid: this.entityGrid,
+        map: this.map,
+        player: this.player,
+        time: this.time,
+        audio: this.audio,
+        spawnWallSparks: (x, y) => this.spawnWallSparks(x, y),
+        damageEnemy: (e, d) => this.damageEnemy(e, d),
+        damagePlayer: (d) => this.damagePlayer(d),
+      },
+      dt,
+    );
   }
 
   checkPickups() {
@@ -2572,7 +2945,12 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon");
-        _spawnEnergyBurst(this.player.particles, e.x, e.y, { count: 8, r: 50, g: 200, b: 255 });
+        _spawnEnergyBurst(this.player.particles, e.x, e.y, {
+          count: 8,
+          r: 50,
+          g: 200,
+          b: 255,
+        });
         if (this.mode === "tutorial") {
           if (this.tutorialWeaponPickedUp) {
             this.tutorialSecondWeaponPickedUp = true;
@@ -2599,37 +2977,37 @@ export class Game {
 
     if (this.state === GameState.CUTSCENE) {
       // Clear HUD canvas so it doesn't overlay the cutscene
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.renderCutscene(ctx, w, h);
       return;
     }
 
     if (this.state === GameState.CAMPAIGN_PROMPT) {
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.renderCampaignPrompt(ctx, w, h);
       return;
     }
 
     if (this.state === GameState.TUTORIAL_COMPLETE) {
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.renderTutorialCompletionMenu(ctx, w, h);
       return;
     }
 
     if (this.state === GameState.CHARACTER_CREATE) {
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.renderCharacterCreator(ctx, w, h);
       return;
     }
 
     if (this.state === GameState.STATS && this._statsReturnToMenu) {
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.renderStatsScreen(ctx, w, h);
       return;
     }
 
     if (this.state === GameState.BUILDER) {
-      this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+      this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
       this.builder.render(ctx, w, h, this.time);
       if (!this._builderOnboardingDismissed) {
         this._renderBuilderOnboarding(ctx, w, h);
@@ -2644,8 +3022,8 @@ export class Game {
     ) {
       this.builder.render(ctx, w, h, this.time);
       const hctx = this.hudCtx;
-      const hw = this.hudCanvas.width;
-      const hh = this.hudCanvas.height;
+      const hw = this.hudW;
+      const hh = this.hudH;
       hctx.clearRect(0, 0, hw, hh);
       this.renderPauseScreen(hctx, hw, hh);
       return;
@@ -2704,25 +3082,25 @@ export class Game {
         this._vignetteW !== w ||
         this._vignetteH !== h
       ) {
-      this._vignetteCanvas = document.createElement("canvas");
-      this._vignetteCanvas.width = w;
-      this._vignetteCanvas.height = h;
-      const vCtx = this._vignetteCanvas.getContext("2d");
-      const vigGrad = vCtx.createRadialGradient(
-        w / 2,
-        h / 2,
-        h * 0.35,
-        w / 2,
-        h / 2,
-        h * 0.9,
-      );
-      vigGrad.addColorStop(0, "transparent");
-      vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
-      vCtx.fillStyle = vigGrad;
-      vCtx.fillRect(0, 0, w, h);
-      this._vignetteW = w;
-      this._vignetteH = h;
-    }
+        this._vignetteCanvas = document.createElement("canvas");
+        this._vignetteCanvas.width = w;
+        this._vignetteCanvas.height = h;
+        const vCtx = this._vignetteCanvas.getContext("2d");
+        const vigGrad = vCtx.createRadialGradient(
+          w / 2,
+          h / 2,
+          h * 0.35,
+          w / 2,
+          h / 2,
+          h * 0.9,
+        );
+        vigGrad.addColorStop(0, "transparent");
+        vigGrad.addColorStop(1, "rgba(0,0,10,0.35)");
+        vCtx.fillStyle = vigGrad;
+        vCtx.fillRect(0, 0, w, h);
+        this._vignetteW = w;
+        this._vignetteH = h;
+      }
       ctx.drawImage(this._vignetteCanvas, 0, 0);
     }
     this.profiler.currentPhases.vignette = performance.now() - _tVig0;
@@ -2764,8 +3142,8 @@ export class Game {
     // Render overlay screens on HUD canvas (it's on top via z-index)
     const _tOvr0 = performance.now();
     const hctx = this.hudCtx;
-    const hw = this.hudCanvas.width;
-    const hh = this.hudCanvas.height;
+    const hw = this.hudW;
+    const hh = this.hudH;
     if (this.state === GameState.PAUSED) this.renderPauseScreen(hctx, hw, hh);
     if (this.state === GameState.SETTINGS)
       this.renderSettingsScreen(hctx, hw, hh);
@@ -2868,9 +3246,10 @@ export class Game {
     });
   }
 
-
   // HUD rendering — forwarded to src/ui/hud.js
-  renderHUD() { _renderHUD(this); }
+  renderHUD() {
+    _renderHUD(this);
+  }
 
   // Multistage portrait — forwarded to src/ui/portrait.js
   drawPortrait(ctx, x, y, w, h) {
@@ -2897,7 +3276,10 @@ export class Game {
   }
 
   drawControlsOverlay(ctx, w, h, alpha) {
-    _drawControlsOverlay(ctx, w, h, alpha, { keybinds: this.keybinds, mode: this.mode });
+    _drawControlsOverlay(ctx, w, h, alpha, {
+      keybinds: this.keybinds,
+      mode: this.mode,
+    });
   }
 
   renderPauseScreen(ctx, w, h) {
@@ -2963,11 +3345,17 @@ export class Game {
     });
   }
 
-  formatKeyCode(code) { return _formatKeyCode(code); }
+  formatKeyCode(code) {
+    return _formatKeyCode(code);
+  }
 
-  renderAchievementsScreen(ctx, w, h) { this.achievementSystem.renderScreen(ctx, w, h); }
+  renderAchievementsScreen(ctx, w, h) {
+    this.achievementSystem.renderScreen(ctx, w, h);
+  }
 
-  renderStatsScreen(ctx, w, h) { this.achievementSystem.renderStats(ctx, w, h); }
+  renderStatsScreen(ctx, w, h) {
+    this.achievementSystem.renderStats(ctx, w, h);
+  }
 
   renderUpgradeScreen(ctx, w, h) {
     _renderUpgradeScreen(ctx, w, h, {
@@ -2981,11 +3369,15 @@ export class Game {
 
   renderGameOver(ctx, w, h) {
     const result = _renderGameOver(ctx, w, h, {
-      time: this.time, isTouchDevice: this.isTouchDevice,
-      mode: this.mode, arenaRound: this.arenaRound,
+      time: this.time,
+      isTouchDevice: this.isTouchDevice,
+      mode: this.mode,
+      arenaRound: this.arenaRound,
       achievementStats: this.achievementStats,
-      meltdown: this.meltdown, deltaTime: this.deltaTime / 1000,
-      shareToast: this._shareToast, statsCardData: this._statsCardData(),
+      meltdown: this.meltdown,
+      deltaTime: this.deltaTime,
+      shareToast: this._shareToast,
+      statsCardData: this._statsCardData(),
     });
     this._gameOverBtns = result.gameOverBtns;
     if (result.toastExpired) this._shareToast = null;
@@ -2996,20 +3388,33 @@ export class Game {
   }
 
   _renderShareToast(ctx, w, h) {
-    const result = renderShareToast(ctx, w, h, this._shareToast, this.deltaTime / 1000);
+    const result = renderShareToast(
+      ctx,
+      w,
+      h,
+      this._shareToast,
+      this.deltaTime,
+    );
     if (result.expired) this._shareToast = null;
   }
 
   _renderBuilderOnboarding(ctx, w, h) {
-    _renderBuilderOnboarding(ctx, w, h, { time: this.time, isTouchDevice: this.isTouchDevice });
+    _renderBuilderOnboarding(ctx, w, h, {
+      time: this.time,
+      isTouchDevice: this.isTouchDevice,
+    });
   }
 
   renderVictory(ctx, w, h) {
     const result = _renderVictory(ctx, w, h, {
-      time: this.time, isTouchDevice: this.isTouchDevice,
-      ngPlusCycle: this.ngPlusCycle, mode: this.mode,
-      ngPlusPrompt: this.ngPlusPrompt, ngPlusPromptSel: this.ngPlusPromptSel,
-      deltaTime: this.deltaTime / 1000, shareToast: this._shareToast,
+      time: this.time,
+      isTouchDevice: this.isTouchDevice,
+      ngPlusCycle: this.ngPlusCycle,
+      mode: this.mode,
+      ngPlusPrompt: this.ngPlusPrompt,
+      ngPlusPromptSel: this.ngPlusPromptSel,
+      deltaTime: this.deltaTime,
+      shareToast: this._shareToast,
       statsCardData: this._statsCardData(),
     });
     if (result.toastExpired) this._shareToast = null;
@@ -3017,7 +3422,8 @@ export class Game {
 
   renderLevelComplete(ctx, w, h) {
     _renderLevelComplete(ctx, w, h, {
-      time: this.time, isTouchDevice: this.isTouchDevice,
+      time: this.time,
+      isTouchDevice: this.isTouchDevice,
       levelCompleteTime: this._levelCompleteTime,
       playerSecretsFound: this.player.secretsFound,
       statsCardData: this._statsCardData(),
@@ -3025,13 +3431,21 @@ export class Game {
   }
 
   _renderStatsCard(ctx, w, startY, accentColor, textColor, countUp) {
-    renderStatsCard(ctx, w, startY, accentColor, textColor, countUp, this._statsCardData());
+    renderStatsCard(
+      ctx,
+      w,
+      startY,
+      accentColor,
+      textColor,
+      countUp,
+      this._statsCardData(),
+    );
   }
 
   _statsCardData() {
     return {
       isTouchDevice: this.isTouchDevice,
-      canvasHeight: this.hudCanvas.height,
+      canvasHeight: this.hudH,
       shotsFired: this.shotsFired,
       shotsHit: this.shotsHit,
       roundStartTime: this.roundStartTime,
@@ -3162,7 +3576,7 @@ export class Game {
     this.dustMotes = null;
     this.projectiles = [];
     // Clear stale gameplay HUD
-    this.hudCtx.clearRect(0, 0, this.hudCanvas.width, this.hudCanvas.height);
+    this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
     if (this._builderSnapshot) {
       this.builder.player.x = this._builderSnapshot.playerX;
       this.builder.player.y = this._builderSnapshot.playerY;
@@ -3292,7 +3706,10 @@ export class Game {
     const barH = 6;
 
     const cats = getVisibleCategories(this.isTouchDevice);
-    const defs = getSettingsForCategory(this.isTouchDevice, this.settingsCategory);
+    const defs = getSettingsForCategory(
+      this.isTouchDevice,
+      this.settingsCategory,
+    );
 
     // ── Sidebar click: switch category or back ──
     if (x < sideW && y > headerH) {
@@ -3325,15 +3742,21 @@ export class Game {
             const sliderY = rowY + (compact ? 20 : 28);
             const sliderX = panelX + (compact ? 8 : 14);
             const sliderW = Math.min(panelW - (compact ? 16 : 28), barW);
-            if (y >= sliderY - 4 && y <= sliderY + barH + 4 &&
-                x >= sliderX && x <= sliderX + sliderW) {
+            if (
+              y >= sliderY - 4 &&
+              y <= sliderY + barH + 4 &&
+              x >= sliderX &&
+              x <= sliderX + sliderW
+            ) {
               const pct = Math.max(0, Math.min(1, (x - sliderX) / sliderW));
               let val = def.min + pct * (def.max - def.min);
               // Snap to step
               val = Math.round(val / def.step) * def.step;
               val = Math.max(def.min, Math.min(def.max, val));
               if (def.round != null)
-                val = Math.round(val * Math.pow(10, def.round)) / Math.pow(10, def.round);
+                val =
+                  Math.round(val * Math.pow(10, def.round)) /
+                  Math.pow(10, def.round);
               this.settings[def.key] = val;
               if (def.onChange) def.onChange(this);
               this.audio.menuConfirm();
@@ -3460,7 +3883,11 @@ export class Game {
                     : "Score link copied!",
             life: 2.5,
           };
-          if (shareData.mode === "arena" || shareData.mode === "meltdown" || shareData.mode === "campaign") {
+          if (
+            shareData.mode === "arena" ||
+            shareData.mode === "meltdown" ||
+            shareData.mode === "campaign"
+          ) {
             trackEvent("share_score", {
               mode: shareData.mode,
               score: shareData.score,

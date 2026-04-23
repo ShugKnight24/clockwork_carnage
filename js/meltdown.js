@@ -283,6 +283,147 @@ SEGMENTS.push({
   ],
 });
 
+// 14: Serpentine corridor (Sprint F 6.1)
+SEGMENTS.push({
+  rows: [
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1],
+  ],
+  enemies: [
+    { x: 4, y: 3, type: "drone" },
+    { x: 11, y: 4, type: "drone" },
+  ],
+  pickups: [{ x: 8, y: 2, type: "ammo" }],
+});
+
+// 15: Collapsing floor hazards (pressure lane)
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  ],
+  hazards: [
+    { x: 4, y: 1 },
+    { x: 5, y: 1 },
+    { x: 9, y: 1 },
+    { x: 10, y: 1 },
+    { x: 4, y: 3 },
+    { x: 5, y: 3 },
+    { x: 9, y: 3 },
+    { x: 10, y: 3 },
+    { x: 7, y: 5 },
+    { x: 8, y: 5 },
+  ],
+  enemies: [{ x: 7, y: 0, type: "drone" }],
+  pickups: [{ x: 1, y: 2, type: "ammo" }],
+});
+
+// 16: Chokepoint ambush
+SEGMENTS.push({
+  rows: [
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+  ],
+  enemies: [
+    { x: 3, y: 3, type: "henchman" },
+    { x: 11, y: 3, type: "henchman" },
+    { x: 7, y: 5, type: "glitchling" },
+  ],
+  pickups: [{ x: 7, y: 2, type: "health" }],
+});
+
+// 17: Branching T-junction
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+  ],
+  enemies: [
+    { x: 5, y: 0, type: "drone" },
+    { x: 9, y: 0, type: "drone" },
+  ],
+  pickups: [{ x: 7, y: 4, type: "ammo" }],
+});
+
+// 18: Glitch zone (rift hazard, no enemies)
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  ],
+  hazards: [
+    { x: 7, y: 1 },
+    { x: 7, y: 2 },
+    { x: 7, y: 3 },
+    { x: 3, y: 2 },
+    { x: 11, y: 2 },
+  ],
+  enemies: [],
+  pickups: [
+    { x: 2, y: 2, type: "health" },
+    { x: 12, y: 2, type: "ammo" },
+  ],
+});
+
+// 19: Tight squeeze (narrow single-file)
+SEGMENTS.push({
+  rows: [
+    [1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+  ],
+  enemies: [{ x: 7, y: 1, type: "phantom" }],
+  pickups: [],
+});
+
+// 20: Mini-boss arena (inserted via Sprint F 6.4 every 10 segs)
+const MINI_BOSS_SEG_IDX = SEGMENTS.length;
+SEGMENTS.push({
+  rows: [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  ],
+  enemies: [
+    { x: 7, y: 1, type: "shieldCommander" },
+    { x: 3, y: 4, type: "beast" },
+    { x: 11, y: 4, type: "beast" },
+  ],
+  pickups: [
+    { x: 1, y: 6, type: "health" },
+    { x: 13, y: 6, type: "ammo" },
+  ],
+});
+
 // ── Enemy type escalation by distance ────────────────────────────
 const THREAT_TABLE = [
   { dist: 0, types: ["drone"] },
@@ -355,56 +496,73 @@ const MELTDOWN_UPGRADES = [
     name: "Overclock Servos",
     description: "+15% movement speed",
     icon: "⚡",
-    apply: (mode) => { mode.speed *= 1.15; mode.maxSpeed *= 1.05; },
+    apply: (mode) => {
+      mode.speed *= 1.15;
+      mode.maxSpeed *= 1.05;
+    },
   },
   {
     id: "heatResist",
     name: "Thermal Dampeners",
     description: "-25% heat buildup rate",
     icon: "🧊",
-    apply: (mode) => { mode.heatRate *= 0.75; },
+    apply: (mode) => {
+      mode.heatRate *= 0.75;
+    },
   },
   {
     id: "shieldBurst",
     name: "Emergency Shield",
     description: "Absorb the next 30 damage",
     icon: "🛡",
-    apply: (mode) => { mode.shieldHP = (mode.shieldHP || 0) + 30; },
+    apply: (mode) => {
+      mode.shieldHP = (mode.shieldHP || 0) + 30;
+    },
   },
   {
     id: "doubleDamage",
     name: "Overcharged Rounds",
     description: "+40% weapon damage",
     icon: "💥",
-    apply: (mode) => { mode.damageMultiplier = (mode.damageMultiplier || 1) * 1.4; },
+    apply: (mode) => {
+      mode.damageMultiplier = (mode.damageMultiplier || 1) * 1.4;
+    },
   },
   {
     id: "healPulse",
     name: "Nano-Repair Pulse",
     description: "Restore 25 HP instantly",
     icon: "💚",
-    apply: (mode) => { mode._healPending = (mode._healPending || 0) + 25; },
+    apply: (mode) => {
+      mode._healPending = (mode._healPending || 0) + 25;
+    },
   },
   {
     id: "hazardImmunity",
     name: "Mag-Lev Boots",
     description: "Immune to floor hazards for 60m",
     icon: "🥾",
-    apply: (mode) => { mode.hazardImmuneUntil = mode.distance + 60; },
+    apply: (mode) => {
+      mode.hazardImmuneUntil = mode.distance + 60;
+    },
   },
   {
     id: "extraLife",
     name: "Temporal Anchor",
     description: "Survive one fatal hit (1 HP)",
     icon: "⏳",
-    apply: (mode) => { mode.extraLives = (mode.extraLives || 0) + 1; },
+    apply: (mode) => {
+      mode.extraLives = (mode.extraLives || 0) + 1;
+    },
   },
   {
     id: "scoreMultiplier",
     name: "Risk Amplifier",
     description: "+50% score multiplier",
     icon: "🎯",
-    apply: (mode) => { mode.scoreMultiplier = (mode.scoreMultiplier || 1) * 1.5; },
+    apply: (mode) => {
+      mode.scoreMultiplier = (mode.scoreMultiplier || 1) * 1.5;
+    },
   },
 ];
 
@@ -461,6 +619,30 @@ const MELTDOWN_ARIA = {
   milestone750: ["750 meters. Agent, you're setting records."],
   milestone1000: ["One kilometer. I... didn't think we'd make it this far."],
   milestone2000: ["Two kilometers. You're a legend. The station won't be."],
+  // Sprint F 6.7: additional commentary
+  closeCall: [
+    "That was close. Too close. Breathe.",
+    "Single-digit HP. Don't you dare die on me, Agent.",
+    "Your pulse just jumped. Mine would too, if I had one.",
+  ],
+  newRecord: [
+    "That's a new personal best. I'm logging it. Again.",
+    "Record broken. You keep raising the bar.",
+    "Somewhere, a leaderboard just flinched. Keep going.",
+  ],
+  miniBoss: [
+    "Mini-boss ahead. Don't stop moving — take the shot on the run.",
+    "Elite contact. Strip the shield, then commit.",
+    "Heavy incoming. This is where runs end — or get legendary.",
+  ],
+  killStreak5: [
+    "Five-kill streak. The corridor fears you.",
+    "Five confirmed. The suit is singing.",
+  ],
+  killStreak10: [
+    "TEN. I'm officially impressed. Don't let it slip.",
+    "Ten in a row. You're in the zone — stay there.",
+  ],
 };
 
 // ── Shared segment-stitching helper ──────────────────────────────
@@ -482,10 +664,13 @@ function _appendSegment(
   let segIdx;
   if (segNum < 3) {
     segIdx = [0, 2, 5][segNum % 3];
+  } else if (segNum > 0 && segNum % 10 === 0) {
+    // Sprint F 6.4: mini-boss segment every 10
+    segIdx = MINI_BOSS_SEG_IDX;
   } else {
     do {
       segIdx = Math.floor(Math.random() * SEGMENTS.length);
-    } while (segIdx === lastIdx);
+    } while (segIdx === lastIdx || segIdx === MINI_BOSS_SEG_IDX);
   }
 
   const seg = SEGMENTS[segIdx];
@@ -600,9 +785,9 @@ export class MeltdownMode {
     this.heroKey = "agent";
     this.hero = MELTDOWN_HEROES.agent;
     this.ironman = false;
-    this.upgrades = [];            // applied upgrades this run
-    this.upgradesPending = null;   // { choices: [...] } when upgrade screen is showing
-    this.nextUpgradeAt = 100;      // distance for next upgrade milestone
+    this.upgrades = []; // applied upgrades this run
+    this.upgradesPending = null; // { choices: [...] } when upgrade screen is showing
+    this.nextUpgradeAt = 100; // distance for next upgrade milestone
     this.damageMultiplier = 1.0;
     this.scoreMultiplier = 1.0;
     this.shieldHP = 0;
@@ -667,6 +852,11 @@ export class MeltdownMode {
     this.abilityActive = false;
     this.abilityTimer = 0;
 
+    // Sprint F 6.5/6.7: streak + close-call state
+    this.killStreak = 0;
+    this._lastKillTime = 0;
+    this._closeCallCooldown = 0;
+
     // Queue start dialogue
     this._queueAria(ironman ? "startIronman" : "start");
 
@@ -679,11 +869,25 @@ export class MeltdownMode {
    */
   update(dt, playerX, playerY) {
     if (!this.alive)
-      return { moveY: 0, hazardDmg: 0, ariaMsg: null, events: [], healAmount: 0 };
+      return {
+        moveY: 0,
+        hazardDmg: 0,
+        ariaMsg: null,
+        events: [],
+        healAmount: 0,
+      };
 
     // If upgrade screen is pending, pause the run
     if (this.upgradesPending) {
-      return { moveY: 0, hazardDmg: 0, ariaMsg: null, events: [{ type: "upgradeScreen", choices: this.upgradesPending.choices }], healAmount: 0 };
+      return {
+        moveY: 0,
+        hazardDmg: 0,
+        ariaMsg: null,
+        events: [
+          { type: "upgradeScreen", choices: this.upgradesPending.choices },
+        ],
+        healAmount: 0,
+      };
     }
 
     const events = [];
@@ -725,7 +929,11 @@ export class MeltdownMode {
       { key: "heat90", val: 90 },
     ];
     for (const t of heatThresholds) {
-      if (this.heat >= t.val && prevHeat < t.val && !this.ariaMilestones[t.key]) {
+      if (
+        this.heat >= t.val &&
+        prevHeat < t.val &&
+        !this.ariaMilestones[t.key]
+      ) {
         this.ariaMilestones[t.key] = true;
         this._queueAria(t.key);
         events.push({ type: "heatWarning", level: t.val });
@@ -816,7 +1024,8 @@ export class MeltdownMode {
    * Returns { type, duration } if activated, or null if on cooldown.
    */
   useAbility() {
-    if (!this.hero.ability || this.abilityCooldown > 0 || !this.alive) return null;
+    if (!this.hero.ability || this.abilityCooldown > 0 || !this.alive)
+      return null;
 
     this.abilityCooldown = this.hero.abilityCooldown;
     this.abilityActive = true;
@@ -854,7 +1063,29 @@ export class MeltdownMode {
   /** Record a kill (for scoring) */
   onKill() {
     this.killCount++;
-    this.score += Math.floor(50 * this.scoreMultiplier);
+    // Sprint F 6.5: kill streak tracking + bonus scoring
+    const now = performance.now();
+    if (!this._lastKillTime || now - this._lastKillTime > 4000) {
+      this.killStreak = 1;
+    } else {
+      this.killStreak = (this.killStreak || 1) + 1;
+    }
+    this._lastKillTime = now;
+    const streakBonus = Math.min(5, this.killStreak) * 10;
+    this.score += Math.floor((50 + streakBonus) * this.scoreMultiplier);
+    if (this.killStreak === 5) this._queueAria("killStreak5");
+    else if (this.killStreak === 10) this._queueAria("killStreak10");
+  }
+
+  /** Sprint F 6.7: called externally when player HP drops into critical band */
+  onCloseCall() {
+    if (
+      !this._closeCallCooldown ||
+      performance.now() - this._closeCallCooldown > 15000
+    ) {
+      this._closeCallCooldown = performance.now();
+      this._queueAria("closeCall");
+    }
   }
 
   /**
@@ -908,7 +1139,10 @@ export class MeltdownMode {
   /** Player died */
   onDeath() {
     this.alive = false;
-    this._queueAria("death");
+    // Sprint F 6.7: detect new personal best before saving
+    const prevBest = this.highScores[0] ? this.highScores[0].score : 0;
+    if (this.score > prevBest && this.score > 0) this._queueAria("newRecord");
+    else this._queueAria("death");
 
     // Save high score
     this._saveScore(this.score, this.distance, this.runTime);
@@ -946,11 +1180,27 @@ export class MeltdownMode {
     return `rgba(255, ${Math.floor(60 - this.heat * 0.5)}, 0, ${(intensity * pulse).toFixed(3)})`;
   }
 
+  /**
+   * Sprint F 6.8: visual escalation — shift corridor tint based on distance run.
+   * Returns { r, g, b } 0-255 for renderer floor/ceiling tint modulation, or null.
+   */
+  getEscalationTint() {
+    const d = this.distance;
+    if (d < 100) return null;
+    // Cool-blue (100m) → purple (400m) → deep red (800m+)
+    const t = Math.min(1, (d - 100) / 700);
+    const r = Math.floor(40 + t * 200);
+    const g = Math.floor(40 - t * 30);
+    const b = Math.floor(120 - t * 100);
+    return { r, g, b, alpha: 0.18 + t * 0.22 };
+  }
+
   /** Get leaderboard formatted for display */
   getLeaderboard(filterHero = null, filterIronman = null) {
     let scores = [...this.highScores];
-    if (filterHero) scores = scores.filter(s => s.hero === filterHero);
-    if (filterIronman !== null) scores = scores.filter(s => !!s.ironman === filterIronman);
+    if (filterHero) scores = scores.filter((s) => s.hero === filterHero);
+    if (filterIronman !== null)
+      scores = scores.filter((s) => !!s.ironman === filterIronman);
     return scores.slice(0, 10);
   }
 

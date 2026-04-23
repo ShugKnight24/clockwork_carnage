@@ -2,7 +2,7 @@
 // Pure entity-creation functions for arena / campaign / meltdown.
 // No game state mutation — returns entity arrays for the caller to place.
 // ────────────────────────────────────────────────────────────────────────────
-import { Enemy, Pickup } from "../../js/entities.js";
+import { Enemy, Pickup, Prop } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../js/data.js";
 
 /**
@@ -12,10 +12,38 @@ import { ENEMY_TYPES } from "../../js/data.js";
  */
 export function getDifficultyMultipliers(difficulty) {
   switch (difficulty) {
-    case 0: return { healthMul: 0.6, damageMul: 0.5, speedMul: 0.8, spawnMul: 0.7, timerBonus: 20 };
-    case 2: return { healthMul: 1.4, damageMul: 1.4, speedMul: 1.15, spawnMul: 1.3, timerBonus: -10 };
-    case 3: return { healthMul: 2.0, damageMul: 1.8, speedMul: 1.3, spawnMul: 1.6, timerBonus: -20 };
-    default: return { healthMul: 1.0, damageMul: 1.0, speedMul: 1.0, spawnMul: 1.0, timerBonus: 0 };
+    case 0:
+      return {
+        healthMul: 0.6,
+        damageMul: 0.5,
+        speedMul: 0.8,
+        spawnMul: 0.7,
+        timerBonus: 20,
+      };
+    case 2:
+      return {
+        healthMul: 1.4,
+        damageMul: 1.4,
+        speedMul: 1.15,
+        spawnMul: 1.3,
+        timerBonus: -10,
+      };
+    case 3:
+      return {
+        healthMul: 2.0,
+        damageMul: 1.8,
+        speedMul: 1.3,
+        spawnMul: 1.6,
+        timerBonus: -20,
+      };
+    default:
+      return {
+        healthMul: 1.0,
+        damageMul: 1.0,
+        speedMul: 1.0,
+        spawnMul: 1.0,
+        timerBonus: 0,
+      };
   }
 }
 
@@ -43,7 +71,10 @@ export function getArenaEnemyTypes(round) {
  */
 export function createArenaEnemies(round, validSpawns, diff) {
   const types = getArenaEnemyTypes(round);
-  const count = Math.min(validSpawns.length, Math.floor((4 + round * 3) * diff.spawnMul));
+  const count = Math.min(
+    validSpawns.length,
+    Math.floor((4 + round * 3) * diff.spawnMul),
+  );
   const enemies = [];
   for (let i = 0; i < count; i++) {
     const spawn = validSpawns[i % validSpawns.length];
@@ -71,7 +102,9 @@ export function createArenaEnemies(round, validSpawns, diff) {
 export function createArenaPickups(mapPickups, round, map) {
   const pickups = [];
   for (const p of mapPickups) {
-    pickups.push(new Pickup(p.x + 0.5, p.y + 0.5, p.type, { weaponId: p.weaponId }));
+    pickups.push(
+      new Pickup(p.x + 0.5, p.y + 0.5, p.type, { weaponId: p.weaponId }),
+    );
   }
   // Extra weapon at milestone rounds
   if (round >= 3) {
@@ -93,13 +126,14 @@ export function createArenaPickups(mapPickups, round, map) {
  */
 export function filterArenaSpawns(spawns, px, py, grid) {
   return spawns
-    .filter(s => {
+    .filter((s) => {
       const dx = s.x - px;
       const dy = s.y - py;
       if (Math.sqrt(dx * dx + dy * dy) < 5) return false;
       const gx = Math.floor(s.x);
       const gy = Math.floor(s.y);
-      if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[0].length) return false;
+      if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[0].length)
+        return false;
       return grid[gy][gx] === 0;
     })
     .sort(() => Math.random() - 0.5);
@@ -116,33 +150,63 @@ export function filterArenaSpawns(spawns, px, py, grid) {
 export function createCampaignEntities(level, act, ngPlusCycle, diff) {
   const ngScale = 1 + (ngPlusCycle || 0) * 0.3;
   const result = [];
+  const gW = level.width ?? level.grid?.[0]?.length ?? 0;
+  const gH = level.height ?? level.grid?.length ?? 0;
+  const nudge = (x, y) => {
+    if (!level.grid) return { x, y };
+    const gx = x | 0,
+      gy = y | 0;
+    const pos = validatePropPosition(gx, gy, level.grid, gW, gH);
+    return pos ? { x: pos.x + 0.5, y: pos.y + 0.5 } : { x, y };
+  };
 
   for (const e of level.entities) {
+    const safe = nudge(e.x, e.y);
     if (e.type === "enemy") {
       let enemyType = e.enemyType;
       if (enemyType === "boss") {
         if (act === 2) enemyType = "boss_form2";
         else if (act === 3) enemyType = "boss_form3";
       }
-      const enemy = new Enemy(e.x, e.y, enemyType);
+      const enemy = new Enemy(safe.x, safe.y, enemyType);
       const actScale = enemyType.startsWith("boss") ? 1 : 1 + (act - 1) * 0.4;
-      enemy.health = Math.floor(enemy.health * diff.healthMul * actScale * ngScale);
+      enemy.health = Math.floor(
+        enemy.health * diff.healthMul * actScale * ngScale,
+      );
       enemy.maxHealth = enemy.health;
       enemy.def = {
         ...enemy.def,
-        damage: Math.floor(enemy.def.damage * diff.damageMul * actScale * ngScale),
+        damage: Math.floor(
+          enemy.def.damage * diff.damageMul * actScale * ngScale,
+        ),
         speed: enemy.def.speed * diff.speedMul * (1 + (ngPlusCycle || 0) * 0.1),
       };
       result.push(enemy);
     } else {
-      result.push(new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }));
+      result.push(new Pickup(safe.x, safe.y, e.type, { weaponId: e.weaponId }));
     }
   }
 
   let exitEntity = null;
   if (level.exit) {
-    exitEntity = { x: level.exit.x, y: level.exit.y, type: "exit", active: true };
+    const safeExit = nudge(level.exit.x, level.exit.y);
+    exitEntity = {
+      x: safeExit.x,
+      y: safeExit.y,
+      type: "exit",
+      active: true,
+    };
     result.push(exitEntity);
+  }
+
+  // Environmental props (non-interactive decoration, wall-validated)
+  if (Array.isArray(level.props) && level.grid) {
+    const w = level.width ?? level.grid[0]?.length ?? 0;
+    const h = level.height ?? level.grid.length ?? 0;
+    for (const p of level.props) {
+      const pos = validatePropPosition(p.x | 0, p.y | 0, level.grid, w, h);
+      if (pos) result.push(new Prop(pos.x + 0.5, pos.y + 0.5, p.type));
+    }
   }
 
   return { entities: result, exitEntity };
@@ -156,13 +220,25 @@ export function createCampaignEntities(level, act, ngPlusCycle, diff) {
  * @param {number} sy - player start y
  * @returns {Pickup[]}
  */
-export function createMissedWeaponPickups(missedWeapons, playerWeapons, sx, sy) {
+export function createMissedWeaponPickups(
+  missedWeapons,
+  playerWeapons,
+  sx,
+  sy,
+) {
   const pickups = [];
   for (let i = 0; i < missedWeapons.length; i++) {
     const wid = missedWeapons[i];
     if (!playerWeapons.includes(wid)) {
       const angle = (i / missedWeapons.length) * Math.PI * 2;
-      pickups.push(new Pickup(sx + Math.cos(angle) * 1.5, sy + Math.sin(angle) * 1.5, "weapon", { weaponId: wid }));
+      pickups.push(
+        new Pickup(
+          sx + Math.cos(angle) * 1.5,
+          sy + Math.sin(angle) * 1.5,
+          "weapon",
+          { weaponId: wid },
+        ),
+      );
     }
   }
   return pickups;
@@ -197,7 +273,9 @@ export function createMeltdownEnemies(enemySpawns, diff) {
  * @returns {Pickup[]}
  */
 export function createMeltdownPickups(pickupSpawns) {
-  return pickupSpawns.map(pk => new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId }));
+  return pickupSpawns.map(
+    (pk) => new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId }),
+  );
 }
 
 // ── Act-aware enemy roster ──────────────────────────────────────────────────
@@ -205,26 +283,59 @@ export function createMeltdownPickups(pickupSpawns) {
 /** @type {Record<number, string[]>} */
 const ACT_ROSTERS = {
   1: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
-  2: ["corruptCop", "henchman", "beast", "phaseStalker", "chronoBomber", "temporalEngineer", "shieldCommander"],
-  3: ["beast", "riftLeaper", "timeWarden", "temporalSummoner", "echoDrone", "sentinel", "phaseStalker"],
+  2: [
+    "corruptCop",
+    "henchman",
+    "beast",
+    "phaseStalker",
+    "chronoBomber",
+    "temporalEngineer",
+    "shieldCommander",
+  ],
+  3: [
+    "beast",
+    "riftLeaper",
+    "timeWarden",
+    "temporalSummoner",
+    "echoDrone",
+    "sentinel",
+    "phaseStalker",
+  ],
 };
 
 /** @type {Record<number, Record<string, string>>} */
 const ACT_SUBSTITUTES = {
   1: {
-    henchman: "corruptCop", beast: "sentinel", phaseStalker: "phantom",
-    chronoBomber: "phantom", temporalEngineer: "phantom", shieldCommander: "sentinel",
-    riftLeaper: "phantom", timeWarden: "sentinel", temporalSummoner: "phantom", echoDrone: "drone",
+    henchman: "corruptCop",
+    beast: "sentinel",
+    phaseStalker: "phantom",
+    chronoBomber: "phantom",
+    temporalEngineer: "phantom",
+    shieldCommander: "sentinel",
+    riftLeaper: "phantom",
+    timeWarden: "sentinel",
+    temporalSummoner: "phantom",
+    echoDrone: "drone",
   },
   2: {
-    drone: "corruptCop", glitchling: "phaseStalker", phantom: "henchman",
-    sentinel: "shieldCommander", riftLeaper: "phaseStalker", timeWarden: "shieldCommander",
-    temporalSummoner: "temporalEngineer", echoDrone: "chronoBomber",
+    drone: "corruptCop",
+    glitchling: "phaseStalker",
+    phantom: "henchman",
+    sentinel: "shieldCommander",
+    riftLeaper: "phaseStalker",
+    timeWarden: "shieldCommander",
+    temporalSummoner: "temporalEngineer",
+    echoDrone: "chronoBomber",
   },
   3: {
-    drone: "echoDrone", glitchling: "phaseStalker", corruptCop: "sentinel",
-    phantom: "riftLeaper", henchman: "riftLeaper", chronoBomber: "temporalSummoner",
-    temporalEngineer: "temporalSummoner", shieldCommander: "timeWarden",
+    drone: "echoDrone",
+    glitchling: "phaseStalker",
+    corruptCop: "sentinel",
+    phantom: "riftLeaper",
+    henchman: "riftLeaper",
+    chronoBomber: "temporalSummoner",
+    temporalEngineer: "temporalSummoner",
+    shieldCommander: "timeWarden",
   },
 };
 
@@ -254,4 +365,42 @@ export function applyActEnemyRoster(entities, act, diff) {
       }
     }
   }
+}
+
+/**
+ * Validate a prop's grid position isn't inside a wall.
+ * If it is, BFS-nudge to the nearest open cell (max 5 tiles).
+ * @param {number} x - grid column (integer)
+ * @param {number} y - grid row (integer)
+ * @param {number[][]} grid - map grid (0 = open, >0 = wall/door)
+ * @param {number} w - map width
+ * @param {number} h - map height
+ * @returns {{ x: number, y: number } | null} valid position or null
+ */
+export function validatePropPosition(x, y, grid, w, h) {
+  if (x >= 0 && y >= 0 && x < w && y < h && grid[y][x] === 0) return { x, y };
+  // BFS nearest open cell
+  const queue = [[x, y, 0]];
+  const seen = new Set([`${x},${y}`]);
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+  for (let i = 0; i < queue.length; i++) {
+    const [cx, cy, d] = queue[i];
+    if (d > 5) break;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx,
+        ny = cy + dy;
+      const k = `${nx},${ny}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (nx >= 0 && ny >= 0 && nx < w && ny < h && grid[ny][nx] === 0)
+        return { x: nx, y: ny };
+      queue.push([nx, ny, d + 1]);
+    }
+  }
+  return null;
 }

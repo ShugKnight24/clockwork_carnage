@@ -76,25 +76,45 @@ export function generateWallTextures() {
             b += 60;
           }
         } else if (wid === 5) {
-          // Sci-fi airlock door
-          const isLeftPanel = x < 64;
-          const isRightPanel = x >= 64;
-          const inFrame = x < 8 || x > 119 || y < 8 || y > 119;
+          // Sci-fi airlock door with prominent frame
+          const inFrame = x < 14 || x > 113 || y < 14 || y > 113;
+          const inJamb = !inFrame && (x < 20 || x > 107 || y < 20 || y > 107);
           if (inFrame) {
+            // Outer frame — dark heavy steel
             r -= 40; g -= 30; b -= 10;
+            // Teal accent strip on inner edge of frame
+            if ((x === 13 || x === 114) && y >= 14 && y <= 113) {
+              r -= 20; g += 60; b += 40;
+            }
+            if ((y === 13 || y === 114) && x >= 14 && x <= 113) {
+              r -= 20; g += 60; b += 40;
+            }
+            // Corner brackets — bright teal corners
+            const isCorner = (x < 20 && y < 20) || (x < 20 && y > 107) ||
+                             (x > 107 && y < 20) || (x > 107 && y > 107);
+            if (isCorner && ((x + y) % 3 === 0)) {
+              r -= 10; g += 40; b += 30;
+            }
+          } else if (inJamb) {
+            // Inner jamb — slightly brighter transition zone
+            r += 5; g += 15; b += 10;
           } else {
+            // Door panels
             r += 15; g += 8;
+            // Center seam (bright)
             if (x === 63 || x === 64) {
               r += 60; g += 50; b += 20;
             }
-            if ((y - 8) % 32 === 0 && y > 8 && y < 120) {
+            // Horizontal rivet lines
+            if ((y - 20) % 32 === 0 && y > 20 && y < 108) {
               r -= 25; g -= 20; b -= 10;
             }
+            // Bolt positions
             const boltPositions = [
-              { bx: 20, by: 20 }, { bx: 20, by: 108 },
-              { bx: 52, by: 20 }, { bx: 52, by: 108 },
-              { bx: 74, by: 20 }, { bx: 74, by: 108 },
-              { bx: 106, by: 20 }, { bx: 106, by: 108 },
+              { bx: 30, by: 30 }, { bx: 30, by: 98 },
+              { bx: 52, by: 30 }, { bx: 52, by: 98 },
+              { bx: 74, by: 30 }, { bx: 74, by: 98 },
+              { bx: 96, by: 30 }, { bx: 96, by: 98 },
             ];
             for (const { bx, by } of boltPositions) {
               const dx = x - bx, dy = y - by;
@@ -102,7 +122,8 @@ export function generateWallTextures() {
                 r += 80; g += 70; b += 30;
               }
             }
-            if (y >= 100 && y < 120) {
+            // Hazard stripes at bottom
+            if (y >= 96 && y < 108) {
               const stripePhase = (x + y) % 20;
               if (stripePhase < 10) {
                 r += 80; g += 40; b -= 20;
@@ -110,12 +131,22 @@ export function generateWallTextures() {
                 r -= 30; g -= 30; b -= 30;
               }
             }
+            // Center lock indicator (red circle)
             const hx = x - 63, hy = y - 64;
             if (hx * hx + hy * hy <= 36) {
               r += 100; g += 20; b -= 20;
             }
-            if (isLeftPanel && x === 62) { r -= 20; g -= 15; }
-            if (isRightPanel && x === 65) { r -= 20; g -= 15; }
+            // Panel edge shadows
+            if (x === 62) { r -= 20; g -= 15; }
+            if (x === 65) { r -= 20; g -= 15; }
+          }
+          // Status indicator dots at top corners of frame
+          const dotPositions = [{ dx: 7, dy: 7 }, { dx: 120, dy: 7 }];
+          for (const { dx, dy } of dotPositions) {
+            const ddx = x - dx, ddy = y - dy;
+            if (ddx * ddx + ddy * ddy <= 9) {
+              r = 0; g = 200; b = 120; // bright teal status light
+            }
           }
         } else if (wid === 6) {
           // Secret - same as stone with subtle difference

@@ -10,7 +10,7 @@ import {
   drawExit,
   drawProjectile,
 } from "../src/rendering/pickups.js";
-import { drawProp } from "../src/rendering/props.js";
+import { drawProp, setFovScale } from "../src/rendering/props.js";
 
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
@@ -64,10 +64,13 @@ export class Renderer {
     this._ceilTexPixels = ceilPixels;
   }
 
-  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY) {
+  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0) {
     const w = this.width;
     const h = this.height;
-    const halfH = h >> 1;
+    const halfH = (h >> 1) + Math.round(yShift);
+
+    // Projection height for distance calc (unshifted for correct perspective)
+    const projH = h >> 1;
 
     if (
       !this._floorCeilBuffer ||
@@ -98,10 +101,17 @@ export class Renderer {
     const fogB = brutal ? actFog.b : actFog.b + 8;
     const fogMaxOpacity = brutal ? 0.92 : 0.7;
 
+    // Fill entire buffer with fog first (handles exposed rows from pitch shift)
+    for (let i = 0; i < buf.length; i += 4) {
+      buf[i] = fogR; buf[i + 1] = fogG; buf[i + 2] = fogB; buf[i + 3] = 255;
+    }
+
+    const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
-    for (let y = halfH + 1; y < loopEnd; y += 2) {
+    for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
-      const rowDist = halfH / p;
+      if (p <= 0) continue;
+      const rowDist = projH / p;
       const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
       const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
       let fx = camX + rowDist * rayDirX0;
@@ -119,74 +129,62 @@ export class Renderer {
         const ti = (ty * 128 + tx) * 4;
 
         // Floor pixel
-        const fi = (y * w + x) * 4;
-        const fr = floorTex[ti] * invFog + fR;
-        const fg = floorTex[ti + 1] * invFog + fG;
-        const fb = floorTex[ti + 2] * invFog + fB;
-        buf[fi] = fr;
-        buf[fi + 1] = fg;
-        buf[fi + 2] = fb;
-        buf[fi + 3] = 255;
-        // Copy to skipped row
-        const fi2 = ((y - 1) * w + x) * 4;
-        buf[fi2] = fr;
-        buf[fi2 + 1] = fg;
-        buf[fi2 + 2] = fb;
-        buf[fi2 + 3] = 255;
+        if (y < h) {
+          const fi = (y * w + x) * 4;
+          const fr = floorTex[ti] * invFog + fR;
+          const fg = floorTex[ti + 1] * invFog + fG;
+          const fb = floorTex[ti + 2] * invFog + fB;
+          buf[fi] = fr;
+          buf[fi + 1] = fg;
+          buf[fi + 2] = fb;
+          buf[fi + 3] = 255;
+          // Copy to skipped row
+          if (y - 1 >= 0) {
+            const fi2 = ((y - 1) * w + x) * 4;
+            buf[fi2] = fr;
+            buf[fi2 + 1] = fg;
+            buf[fi2 + 2] = fb;
+            buf[fi2 + 3] = 255;
+          }
+        }
 
-        // Ceiling pixel (mirrored)
-        const cy = h - 1 - y;
-        const ci = (cy * w + x) * 4;
-        const cr = ceilTex[ti] * invFog + fR;
-        const cg = ceilTex[ti + 1] * invFog + fG;
-        const cb = ceilTex[ti + 2] * invFog + fB;
-        buf[ci] = cr;
-        buf[ci + 1] = cg;
-        buf[ci + 2] = cb;
-        buf[ci + 3] = 255;
-        // Copy ceiling skipped row
-        const ci2 = ((cy + 1) * w + x) * 4;
-        buf[ci2] = cr;
-        buf[ci2 + 1] = cg;
-        buf[ci2 + 2] = cb;
-        buf[ci2 + 3] = 255;
+        // Ceiling pixel (mirrored around shifted horizon)
+        const cy = 2 * halfH - 1 - y;
+        if (cy >= 0 && cy < h) {
+          const ci = (cy * w + x) * 4;
+          const cr = ceilTex[ti] * invFog + fR;
+          const cg = ceilTex[ti + 1] * invFog + fG;
+          const cb = ceilTex[ti + 2] * invFog + fB;
+          buf[ci] = cr;
+          buf[ci + 1] = cg;
+          buf[ci + 2] = cb;
+          buf[ci + 3] = 255;
+          // Copy ceiling skipped row
+          const cy2 = cy + 1;
+          if (cy2 >= 0 && cy2 < h) {
+            const ci2 = (cy2 * w + x) * 4;
+            buf[ci2] = cr;
+            buf[ci2 + 1] = cg;
+            buf[ci2 + 2] = cb;
+            buf[ci2 + 3] = 255;
+          }
+        }
 
         fx += stepX;
         fy += stepY;
       }
     }
 
-    // Fill leftover row when height is odd
-    if (h % 2 !== 0 && h > halfH + 1) {
-      const lastY = h - 1;
-      const prevY = lastY - 1;
+    // Horizon line (at shifted position, if visible)
+    if (halfH >= 0 && halfH < h) {
+      const hi = halfH * w * 4;
       for (let x = 0; x < w; x++) {
-        const src = (prevY * w + x) * 4;
-        const dst = (lastY * w + x) * 4;
-        buf[dst] = buf[src];
-        buf[dst + 1] = buf[src + 1];
-        buf[dst + 2] = buf[src + 2];
-        buf[dst + 3] = 255;
-        // Mirror for ceiling top row
-        const cSrc = ((h - 1 - prevY) * w + x) * 4;
-        const cDst = ((h - 1 - lastY) * w + x) * 4;
-        if (cDst >= 0) {
-          buf[cDst] = buf[cSrc] || fogR;
-          buf[cDst + 1] = buf[cSrc + 1] || fogG;
-          buf[cDst + 2] = buf[cSrc + 2] || fogB;
-          buf[cDst + 3] = 255;
-        }
+        const idx = hi + x * 4;
+        buf[idx] = fogR;
+        buf[idx + 1] = fogG;
+        buf[idx + 2] = fogB;
+        buf[idx + 3] = 255;
       }
-    }
-
-    // Horizon line
-    const hi = halfH * w * 4;
-    for (let x = 0; x < w; x++) {
-      const idx = hi + x * 4;
-      buf[idx] = fogR;
-      buf[idx + 1] = fogG;
-      buf[idx + 2] = fogB;
-      buf[idx + 3] = 255;
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
@@ -242,7 +240,7 @@ export class Renderer {
       camY = tryY;
     }
 
-    // Draw textured floor and ceiling (or gradient fallback for builder)
+    // Draw textured floor and ceiling (with yShift for pitch support)
     if (!skipFloorCeil) {
       this._renderFloorCeiling(
         camX,
@@ -251,6 +249,7 @@ export class Renderer {
         dirY,
         -dirY * planeMul,
         dirX * planeMul,
+        yShift,
       );
     } else {
       // Gradient fallback for builder mode (uses yShift for vertical offset)
@@ -426,8 +425,34 @@ export class Renderer {
           ctx.fillStyle = `rgba(${wfR},${wfG},${wfB},${fogAmount})`;
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
         }
+
+        // Door frame overlay — teal accent on walls adjacent to door tiles
+        if (wallType !== 5 && wallType > 0 && perpWallDist < 15) {
+          let hasDoorNeighbor = false;
+          if (side === 0) {
+            // Vertical face — check tiles above/below for doors
+            if ((wallX < 0.12 && mapY > 0 && map.grid[mapY - 1][mapX] === 5) ||
+                (wallX > 0.88 && mapY < map.height - 1 && map.grid[mapY + 1][mapX] === 5)) {
+              hasDoorNeighbor = true;
+            }
+          } else {
+            // Horizontal face — check tiles left/right for doors
+            if ((wallX < 0.12 && mapX > 0 && map.grid[mapY][mapX - 1] === 5) ||
+                (wallX > 0.88 && mapX < map.width - 1 && map.grid[mapY][mapX + 1] === 5)) {
+              hasDoorNeighbor = true;
+            }
+          }
+          if (hasDoorNeighbor) {
+            const frameAlpha = Math.max(0, (1 - fogAmount) * 0.5);
+            ctx.fillStyle = `rgba(0,180,120,${frameAlpha})`;
+            ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+          }
+        }
       }
     }
+
+    // Set FOV scale for prop minimum-size floors
+    setFovScale(fov);
 
     // Render sprites
     this.renderSprites(player, entities, time, planeMul, camX, camY);
@@ -674,7 +699,17 @@ export class Renderer {
         fogFactor,
       );
     } else if (entity.type === "prop") {
+      // Z-buffer clipping — same pattern as enemies so props behind walls don't bleed through
+      ctx.save();
+      ctx.beginPath();
+      for (let x = startX; x <= endX; x++) {
+        if (dist < this.zBuffer[x]) {
+          ctx.rect(x, startY, 1, endY - startY);
+        }
+      }
+      ctx.clip();
       drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      ctx.restore();
     }
   }
 

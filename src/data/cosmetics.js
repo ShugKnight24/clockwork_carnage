@@ -64,11 +64,22 @@ export const ARMOR_STYLES = [
     id: "standard",
     name: "Standard Issue",
     desc: "Regulation Chrono-Corp armor",
+    tier: 1,
   },
-  { id: "recon", name: "Recon", desc: "Lightweight scout plating" },
-  { id: "heavy", name: "Juggernaut", desc: "Reinforced temporal shielding" },
-  { id: "stealth", name: "Ghost", desc: "Low-profile shadow plating" },
-  { id: "tech", name: "Engineer", desc: "Utility-integrated hardsuit" },
+  { id: "recon", name: "Recon", desc: "Lightweight scout plating", tier: 2 },
+  {
+    id: "heavy",
+    name: "Juggernaut",
+    desc: "Reinforced temporal shielding",
+    tier: 3,
+  },
+  { id: "stealth", name: "Ghost", desc: "Low-profile shadow plating", tier: 2 },
+  {
+    id: "tech",
+    name: "Engineer",
+    desc: "Utility-integrated hardsuit",
+    tier: 3,
+  },
 ];
 
 export const BADGES = [

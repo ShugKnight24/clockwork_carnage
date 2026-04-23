@@ -7,12 +7,14 @@ export class CutsceneEngine {
     getTouchControls,
     isTouchDevice,
     getPlayerName,
+    getSettings,
   }) {
     this.audio = audio;
     this.getKeys = getKeys;
     this.getTouchControls = getTouchControls;
     this.isTouchDevice = isTouchDevice;
     this.getPlayerName = getPlayerName || (() => "Agent");
+    this.getSettings = getSettings || (() => ({ cutsceneAutoAdvance: false }));
     this.cutscene = null;
   }
 
@@ -94,20 +96,38 @@ export class CutsceneEngine {
       cs.skipHeldStart = 0;
     }
 
-    // Auto-advance removed — manual advance via Enter/click is default.
+    // Auto-advance is optional (default: manual advance via Enter/click)
     // Mark frame as "ready" once all text has finished typing (or duration elapsed).
-    // The advance() method is called externally from input handling.
+    const charsPerSec = 18; // 30% slower than original 25 for better readability
+
     if (frame.lines) {
       // Check if all lines have finished typing
       const lastLine = frame.lines[frame.lines.length - 1];
       const lastDelay = lastLine ? lastLine.delay : 0;
-      const resolvedLen = lastLine ? (lastLine.text || "").replace(/\{AGENT\}/g, "Agent").length : 0;
-      const charsPerSec = 25; // matches render speed
+      const resolvedLen = lastLine
+        ? (lastLine.text || "").replace(/\{AGENT\}/g, "Agent").length
+        : 0;
       const typingDoneAt = lastDelay + (resolvedLen / charsPerSec) * 1000;
       cs.readyToAdvance = elapsed >= typingDoneAt + 300; // 300ms grace after typing
+
+      // Auto-advance if enabled in settings
+      if (this.getSettings().cutsceneAutoAdvance && cs.readyToAdvance) {
+        const autoAdvanceDelay = 1500; // 1.5s after text finishes
+        if (elapsed >= typingDoneAt + autoAdvanceDelay) {
+          this.advance();
+          return;
+        }
+      }
     } else {
       // No text lines — ready after minimum display time
-      cs.readyToAdvance = elapsed >= Math.min(frame.duration || 2000, 2000);
+      const minDisplay = Math.min(frame.duration || 2000, 2000);
+      cs.readyToAdvance = elapsed >= minDisplay;
+
+      // Auto-advance if enabled
+      if (this.getSettings().cutsceneAutoAdvance && cs.readyToAdvance) {
+        this.advance();
+        return;
+      }
     }
 
     // Spawn particles
@@ -276,8 +296,8 @@ export class CutsceneEngine {
           this.getPlayerName(),
         );
 
-        // Typewriter — slower for readability
-        const charsPerSec = 25;
+        // Typewriter — 30% slower than original for better readability
+        const charsPerSec = 18;
         const visibleChars = Math.min(
           resolvedText.length,
           Math.floor((lineElapsed / 1000) * charsPerSec),
@@ -472,8 +492,12 @@ export class CutsceneEngine {
 
     // === Skip prompt ===
     // Brighter, pulsing prompt when ready to advance
-    const readyPulse = cs.readyToAdvance ? 0.6 + 0.35 * Math.sin(elapsed / 300) : 0;
-    const skipAlpha = cs.readyToAdvance ? readyPulse : 0.3 + 0.15 * Math.sin(elapsed / 500);
+    const readyPulse = cs.readyToAdvance
+      ? 0.6 + 0.35 * Math.sin(elapsed / 300)
+      : 0;
+    const skipAlpha = cs.readyToAdvance
+      ? readyPulse
+      : 0.3 + 0.15 * Math.sin(elapsed / 500);
     ctx.fillStyle = cs.readyToAdvance
       ? `rgba(0,255,204,${skipAlpha})`
       : `rgba(255,255,255,${skipAlpha})`;
@@ -1249,7 +1273,9 @@ export class CutsceneEngine {
 
     // Base scale: proportional to screen — characters fill the scene
     const rawBaseScale = 2.0 * (h / 900);
-    const baseScale = this.isTouchDevice ? Math.max(1.64, rawBaseScale) : rawBaseScale;
+    const baseScale = this.isTouchDevice
+      ? Math.max(1.64, rawBaseScale)
+      : rawBaseScale;
     ctx.scale(baseScale, baseScale);
 
     switch (art) {
@@ -2062,9 +2088,12 @@ export class CutsceneEngine {
         // Backpack / reactor housing
         ctx.fillStyle = "#1a1008";
         ctx.beginPath();
-        ctx.moveTo(-28, -30); ctx.quadraticCurveTo(-34, 10, -30, 55);
-        ctx.lineTo(30, 55); ctx.quadraticCurveTo(34, 10, 28, -30);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-28, -30);
+        ctx.quadraticCurveTo(-34, 10, -30, 55);
+        ctx.lineTo(30, 55);
+        ctx.quadraticCurveTo(34, 10, 28, -30);
+        ctx.closePath();
+        ctx.fill();
 
         // Exhaust stacks
         for (const side of [-1, 1]) {
@@ -2076,7 +2105,13 @@ export class CutsceneEngine {
           ctx.fillStyle = `rgba(180,180,160,${0.12 + pulse * 0.08})`;
           for (let p = 0; p < 2; p++) {
             ctx.beginPath();
-            ctx.arc(side * 18 + Math.sin(t * 2 + p) * 2, -58 - p * 5, 2 + p * 1.5, 0, Math.PI * 2);
+            ctx.arc(
+              side * 18 + Math.sin(t * 2 + p) * 2,
+              -58 - p * 5,
+              2 + p * 1.5,
+              0,
+              Math.PI * 2,
+            );
             ctx.fill();
           }
         }
@@ -2084,29 +2119,41 @@ export class CutsceneEngine {
         // Heavy plated torso
         ctx.fillStyle = "#7a5c1d";
         ctx.beginPath();
-        ctx.moveTo(-22, -30); ctx.lineTo(-25, -24); ctx.lineTo(-24, 10);
-        ctx.lineTo(24, 10); ctx.lineTo(25, -24); ctx.lineTo(22, -30);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-22, -30);
+        ctx.lineTo(-25, -24);
+        ctx.lineTo(-24, 10);
+        ctx.lineTo(24, 10);
+        ctx.lineTo(25, -24);
+        ctx.lineTo(22, -30);
+        ctx.closePath();
+        ctx.fill();
 
         // Chest plate overlay
         ctx.fillStyle = "#b58e3d";
         ctx.beginPath();
-        ctx.moveTo(-16, -27); ctx.lineTo(16, -27);
-        ctx.lineTo(15, -5); ctx.lineTo(-15, -5);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-16, -27);
+        ctx.lineTo(16, -27);
+        ctx.lineTo(15, -5);
+        ctx.lineTo(-15, -5);
+        ctx.closePath();
+        ctx.fill();
 
         // Chest rivets
         ctx.fillStyle = "#444";
         for (let r = 0; r < 4; r++) {
           ctx.beginPath();
-          ctx.arc(-12 + r * 8, -25, 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.arc(-12 + r * 8, -25, 1.5, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         // Reactor core porthole
         const coreY = -16;
         ctx.fillStyle = "#111";
-        ctx.beginPath(); ctx.arc(0, coreY, 7, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, coreY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#b87333";
+        ctx.lineWidth = 2;
         ctx.stroke();
         // Cyan glow
         const coreGlow = ctx.createRadialGradient(0, coreY, 0, 0, coreY, 6);
@@ -2114,12 +2161,18 @@ export class CutsceneEngine {
         coreGlow.addColorStop(0.6, "rgba(0,255,255,0.2)");
         coreGlow.addColorStop(1, "rgba(0,255,255,0)");
         ctx.fillStyle = coreGlow;
-        ctx.beginPath(); ctx.arc(0, coreY, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, coreY, 6, 0, Math.PI * 2);
+        ctx.fill();
         // Grill bars
-        ctx.strokeStyle = "#71797e"; ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "#71797e";
+        ctx.lineWidth = 1.5;
         for (let g = 0; g < 3; g++) {
           const gx = -4 + g * 4;
-          ctx.beginPath(); ctx.moveTo(gx, coreY - 5); ctx.lineTo(gx, coreY + 5); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(gx, coreY - 5);
+          ctx.lineTo(gx, coreY + 5);
+          ctx.stroke();
         }
 
         // Massive pauldrons
@@ -2128,46 +2181,72 @@ export class CutsceneEngine {
           ctx.beginPath();
           ctx.ellipse(side * 24, -28, 12, 6, side * 0.15, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = "#7a5c1d"; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.strokeStyle = "#7a5c1d";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
           // Pauldron spikes
           ctx.fillStyle = "#b87333";
           ctx.beginPath();
-          ctx.moveTo(side * 28, -30); ctx.lineTo(side * 36, -28); ctx.lineTo(side * 28, -26);
+          ctx.moveTo(side * 28, -30);
+          ctx.lineTo(side * 36, -28);
+          ctx.lineTo(side * 28, -26);
           ctx.fill();
         }
 
         // Diving helmet — brass dome
         ctx.fillStyle = "#b58e3d";
-        ctx.beginPath(); ctx.arc(0, -42, 14, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -42, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#b87333";
+        ctx.lineWidth = 2;
+        ctx.stroke();
         // Helmet seam
-        ctx.strokeStyle = "#7a5c1d"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(0, -56); ctx.lineTo(0, -28); ctx.stroke();
+        ctx.strokeStyle = "#7a5c1d";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -56);
+        ctx.lineTo(0, -28);
+        ctx.stroke();
 
         // Main porthole (single glowing eye)
         ctx.fillStyle = "#0a1a1a";
-        ctx.beginPath(); ctx.arc(0, -41, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "#b87333"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -41, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#b87333";
+        ctx.lineWidth = 2;
+        ctx.stroke();
         const eyeGrad = ctx.createRadialGradient(0, -41, 0, 0, -41, 4.5);
         eyeGrad.addColorStop(0, `rgba(0,255,255,${0.6 + pulse * 0.4})`);
         eyeGrad.addColorStop(0.6, "rgba(0,255,255,0.15)");
         eyeGrad.addColorStop(1, "rgba(0,255,255,0)");
         ctx.fillStyle = eyeGrad;
-        ctx.beginPath(); ctx.arc(0, -41, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -41, 4.5, 0, Math.PI * 2);
+        ctx.fill();
 
         // Side portholes
         for (const side of [-1, 1]) {
           ctx.fillStyle = "#111";
-          ctx.beginPath(); ctx.arc(side * 8, -44, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(side * 8, -44, 2.5, 0, Math.PI * 2);
+          ctx.fill();
           ctx.fillStyle = `rgba(0,255,255,${0.2 + pulse * 0.1})`;
-          ctx.beginPath(); ctx.arc(side * 8, -44, 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(side * 8, -44, 1.5, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         // Chin guard
         ctx.fillStyle = "#71797e";
         ctx.beginPath();
-        ctx.moveTo(-6, -34); ctx.lineTo(6, -34); ctx.lineTo(3, -30); ctx.lineTo(-3, -30);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-6, -34);
+        ctx.lineTo(6, -34);
+        ctx.lineTo(3, -30);
+        ctx.lineTo(-3, -30);
+        ctx.closePath();
+        ctx.fill();
 
         // Arms — thick with drill/clamp
         for (const side of [-1, 1]) {
@@ -2181,14 +2260,25 @@ export class CutsceneEngine {
             // Drill
             ctx.fillStyle = "#aaa";
             ctx.beginPath();
-            ctx.moveTo(24, -1); ctx.lineTo(38, 2); ctx.lineTo(24, 5);
-            ctx.closePath(); ctx.fill();
+            ctx.moveTo(24, -1);
+            ctx.lineTo(38, 2);
+            ctx.lineTo(24, 5);
+            ctx.closePath();
+            ctx.fill();
           } else {
             // Clamp
             ctx.fillStyle = "#999";
             const jaw = 2 + Math.sin(t * 4) * 2;
-            ctx.beginPath(); ctx.moveTo(-24, 0 - jaw); ctx.lineTo(-36, -2); ctx.lineTo(-36, 0 - jaw + 2); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(-24, 0 + jaw); ctx.lineTo(-36, 4); ctx.lineTo(-36, 0 + jaw - 2); ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-24, 0 - jaw);
+            ctx.lineTo(-36, -2);
+            ctx.lineTo(-36, 0 - jaw + 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-24, 0 + jaw);
+            ctx.lineTo(-36, 4);
+            ctx.lineTo(-36, 0 + jaw - 2);
+            ctx.fill();
           }
         }
 
@@ -2258,7 +2348,14 @@ export class CutsceneEngine {
 
         // Pectoral muscle definition
         for (const side of [-1, 1]) {
-          const pecGrad = ctx.createRadialGradient(side * 8, -18, 2, side * 8, -18, 10);
+          const pecGrad = ctx.createRadialGradient(
+            side * 8,
+            -18,
+            2,
+            side * 8,
+            -18,
+            10,
+          );
           pecGrad.addColorStop(0, "#4a2020");
           pecGrad.addColorStop(1, "#3a1515");
           ctx.fillStyle = pecGrad;
@@ -2281,53 +2378,92 @@ export class CutsceneEngine {
         ctx.fillStyle = "#2a0a0a";
         // Left chest fragment
         ctx.beginPath();
-        ctx.moveTo(-18, -26); ctx.lineTo(-4, -24);
-        ctx.lineTo(-6, -12); ctx.lineTo(-20, -15);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-18, -26);
+        ctx.lineTo(-4, -24);
+        ctx.lineTo(-6, -12);
+        ctx.lineTo(-20, -15);
+        ctx.closePath();
+        ctx.fill();
         // Right chest fragment — smaller
         ctx.beginPath();
-        ctx.moveTo(5, -23); ctx.lineTo(16, -25);
+        ctx.moveTo(5, -23);
+        ctx.lineTo(16, -25);
         ctx.lineTo(14, -14);
-        ctx.closePath(); ctx.fill();
+        ctx.closePath();
+        ctx.fill();
         // Lower plate
         ctx.beginPath();
-        ctx.moveTo(-10, 8); ctx.lineTo(8, 6);
-        ctx.lineTo(9, 16); ctx.lineTo(-11, 18);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(-10, 8);
+        ctx.lineTo(8, 6);
+        ctx.lineTo(9, 16);
+        ctx.lineTo(-11, 18);
+        ctx.closePath();
+        ctx.fill();
 
         // Ember vein cracks glowing through
         ctx.lineWidth = 1.5;
         const crackAlpha = 0.5 + pulse * 0.3;
         const crackPaths = [
-          [[-4, -24], [-1, -14], [3, -4]],
-          [[14, -14], [10, -4], [9, 8]],
-          [[-18, -15], [-14, -5], [-15, 8]],
-          [[-5, 6], [0, 12], [4, 18]],
+          [
+            [-4, -24],
+            [-1, -14],
+            [3, -4],
+          ],
+          [
+            [14, -14],
+            [10, -4],
+            [9, 8],
+          ],
+          [
+            [-18, -15],
+            [-14, -5],
+            [-15, 8],
+          ],
+          [
+            [-5, 6],
+            [0, 12],
+            [4, 18],
+          ],
         ];
         for (const path of crackPaths) {
           // Glow bloom
           ctx.strokeStyle = `rgba(255,100,0,${crackAlpha * 0.3})`;
           ctx.lineWidth = 4;
-          ctx.beginPath(); ctx.moveTo(path[0][0], path[0][1]);
-          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
+          ctx.beginPath();
+          ctx.moveTo(path[0][0], path[0][1]);
+          for (let i = 1; i < path.length; i++)
+            ctx.lineTo(path[i][0], path[i][1]);
           ctx.stroke();
           // Bright core
           ctx.strokeStyle = `rgba(255,100,0,${crackAlpha})`;
           ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(path[0][0], path[0][1]);
-          for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
+          ctx.beginPath();
+          ctx.moveTo(path[0][0], path[0][1]);
+          for (let i = 1; i < path.length; i++)
+            ctx.lineTo(path[i][0], path[i][1]);
           ctx.stroke();
         }
 
         // Molten core — exposed through shattered chest
-        const mCoreGrad = ctx.createRadialGradient(0, -15, 0, 0, -15, 8 + heavePulse * 2);
+        const mCoreGrad = ctx.createRadialGradient(
+          0,
+          -15,
+          0,
+          0,
+          -15,
+          8 + heavePulse * 2,
+        );
         mCoreGrad.addColorStop(0, `rgba(255,200,50,0.9)`);
         mCoreGrad.addColorStop(0.4, `rgba(255,100,0,0.6)`);
         mCoreGrad.addColorStop(1, `rgba(200,40,0,0)`);
         ctx.fillStyle = mCoreGrad;
-        ctx.beginPath(); ctx.arc(0, -15, 8 + heavePulse * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -15, 8 + heavePulse * 2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = `rgba(255,240,200,${0.5 + pulse * 0.3})`;
-        ctx.beginPath(); ctx.arc(0, -15, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -15, 2.5, 0, Math.PI * 2);
+        ctx.fill();
 
         // Massive shoulders — bulging muscle with armor fragments
         for (const side of [-1, 1]) {
@@ -2367,27 +2503,45 @@ export class CutsceneEngine {
         ctx.fillStyle = "#2a0a0a";
         ctx.beginPath();
         ctx.arc(0, -42, 11, -Math.PI * 0.8, Math.PI * 0.3);
-        ctx.closePath(); ctx.fill();
+        ctx.closePath();
+        ctx.fill();
         // Exposed face
         ctx.fillStyle = "#4a1a1a";
-        ctx.beginPath(); ctx.arc(2, -42, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(2, -42, 9, 0, Math.PI * 2);
+        ctx.fill();
         // Blazing eyes
         for (const side of [-1, 1]) {
           const eyeX = side * 4 + 1;
           ctx.fillStyle = "#1a0505";
-          ctx.beginPath(); ctx.ellipse(eyeX, -43, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
-          const eyeGrad = ctx.createRadialGradient(eyeX, -43, 0, eyeX, -43, 2.5);
+          ctx.beginPath();
+          ctx.ellipse(eyeX, -43, 3, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          const eyeGrad = ctx.createRadialGradient(
+            eyeX,
+            -43,
+            0,
+            eyeX,
+            -43,
+            2.5,
+          );
           eyeGrad.addColorStop(0, `rgba(255,220,100,${0.8 + pulse * 0.2})`);
           eyeGrad.addColorStop(0.6, "rgba(255,80,0,0.4)");
           eyeGrad.addColorStop(1, "rgba(200,30,0,0)");
           ctx.fillStyle = eyeGrad;
-          ctx.beginPath(); ctx.ellipse(eyeX, -43, 2.5, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(eyeX, -43, 2.5, 1.8, 0, 0, Math.PI * 2);
+          ctx.fill();
         }
         // Broken porthole on helmet remains
         ctx.fillStyle = "#111";
-        ctx.beginPath(); ctx.arc(-5, -40, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(-5, -40, 3, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = `rgba(255,80,0,${0.2 + pulse * 0.15})`;
-        ctx.beginPath(); ctx.arc(-5, -40, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(-5, -40, 2, 0, Math.PI * 2);
+        ctx.fill();
 
         // Arms — massive exposed muscle
         for (const side of [-1, 1]) {
@@ -2407,9 +2561,13 @@ export class CutsceneEngine {
           ctx.stroke();
           // Fist — ember knuckles
           ctx.fillStyle = "#3a1515";
-          ctx.beginPath(); ctx.arc(side * 24, 4, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(side * 24, 4, 5, 0, Math.PI * 2);
+          ctx.fill();
           ctx.fillStyle = `rgba(255,100,0,${0.2 + pulse * 0.15})`;
-          ctx.beginPath(); ctx.arc(side * 24 + side * 2, 2, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(side * 24 + side * 2, 2, 3, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         // Legs — tree-trunk muscle
@@ -2429,10 +2587,12 @@ export class CutsceneEngine {
         for (let d = 0; d < 3; d++) {
           const dx = Math.sin(d * 2.1) * 15;
           const dy = 35 + ((t * 25 + d * 20) % 20);
-          const dAlpha = 0.25 - (dy - 35) / 20 * 0.25;
+          const dAlpha = 0.25 - ((dy - 35) / 20) * 0.25;
           if (dAlpha > 0) {
             ctx.fillStyle = `rgba(255,120,0,${dAlpha})`;
-            ctx.beginPath(); ctx.ellipse(dx, dy, 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(dx, dy, 1.5, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
 
@@ -2471,14 +2631,18 @@ export class CutsceneEngine {
           ctx.strokeStyle = `rgba(120,40,200,${0.12 + pulse * 0.08})`;
           ctx.lineWidth = 5;
           ctx.beginPath();
-          ctx.moveTo(-rLen, 0); ctx.lineTo(-rLen * 0.3, -2);
-          ctx.lineTo(rLen * 0.3, 2); ctx.lineTo(rLen, 0);
+          ctx.moveTo(-rLen, 0);
+          ctx.lineTo(-rLen * 0.3, -2);
+          ctx.lineTo(rLen * 0.3, 2);
+          ctx.lineTo(rLen, 0);
           ctx.stroke();
           ctx.strokeStyle = `rgba(200,200,255,${0.3 + pulse * 0.2})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.moveTo(-rLen, 0); ctx.lineTo(-rLen * 0.3, -2);
-          ctx.lineTo(rLen * 0.3, 2); ctx.lineTo(rLen, 0);
+          ctx.moveTo(-rLen, 0);
+          ctx.lineTo(-rLen * 0.3, -2);
+          ctx.lineTo(rLen * 0.3, 2);
+          ctx.lineTo(rLen, 0);
           ctx.stroke();
           ctx.restore();
         }
@@ -2487,9 +2651,10 @@ export class CutsceneEngine {
         for (let ring = 0; ring < 3; ring++) {
           const ringR = 45 + ring * 12 + Math.sin(t * 2 + ring) * 3;
           const ringRot = t * (ring % 2 === 0 ? 1 : -1) + ring * 0.8;
-          ctx.strokeStyle = ring % 2 === 0
-            ? `rgba(120,60,200,${0.12 + cosmicPulse * 0.08})`
-            : `rgba(60,140,255,${0.1 + cosmicPulse * 0.06})`;
+          ctx.strokeStyle =
+            ring % 2 === 0
+              ? `rgba(120,60,200,${0.12 + cosmicPulse * 0.08})`
+              : `rgba(60,140,255,${0.1 + cosmicPulse * 0.06})`;
           ctx.lineWidth = 1 + ring * 0.2;
           ctx.beginPath();
           ctx.ellipse(0, -10, ringR, ringR * 0.2, ringRot, 0, Math.PI * 2);
@@ -2526,11 +2691,12 @@ export class CutsceneEngine {
           const sy = -50 + Math.sin(s * 311.7 + 42) * 30 + 35;
           const sBright = 0.25 + Math.sin(t * 3 + s * 0.7) * 0.25;
           const sSize = 0.8 + Math.sin(s * 73.1) * 0.4;
-          ctx.fillStyle = s % 5 === 0
-            ? `rgba(180,140,255,${sBright})`
-            : s % 3 === 0
-              ? `rgba(100,180,255,${sBright})`
-              : `rgba(220,220,255,${sBright})`;
+          ctx.fillStyle =
+            s % 5 === 0
+              ? `rgba(180,140,255,${sBright})`
+              : s % 3 === 0
+                ? `rgba(100,180,255,${sBright})`
+                : `rgba(220,220,255,${sBright})`;
           ctx.beginPath();
           ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
           ctx.fill();
@@ -2542,7 +2708,10 @@ export class CutsceneEngine {
           const ny = -10 + Math.cos(t * 0.6 + n * 3) * 10;
           const nR = 12 + n * 4;
           const nebGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, nR);
-          nebGrad.addColorStop(0, n === 0 ? "rgba(100,30,160,0.12)" : "rgba(30,80,160,0.1)");
+          nebGrad.addColorStop(
+            0,
+            n === 0 ? "rgba(100,30,160,0.12)" : "rgba(30,80,160,0.1)",
+          );
           nebGrad.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = nebGrad;
           ctx.beginPath();
@@ -2586,14 +2755,22 @@ export class CutsceneEngine {
           // Spike glow
           ctx.strokeStyle = `rgba(120,40,200,${0.12 + pulse * 0.08})`;
           ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
           // Spike core
           ctx.strokeStyle = `rgba(200,200,255,${0.35 + pulse * 0.2})`;
           ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
           // Tip orb
           ctx.fillStyle = `rgba(200,200,255,${0.4 + pulse * 0.2})`;
-          ctx.beginPath(); ctx.arc(tx, ty, 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(tx, ty, 1.5, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         // Eyes — cosmic void with bright pupils
@@ -2647,13 +2824,25 @@ export class CutsceneEngine {
             const ty = handY + Math.sin(tAng) * tLen * 0.6;
             ctx.strokeStyle = `rgba(120,40,200,${0.08 + pulse * 0.06})`;
             ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(handX, handY);
-            ctx.quadraticCurveTo((handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4, (handY + ty) * 0.5, tx, ty);
+            ctx.beginPath();
+            ctx.moveTo(handX, handY);
+            ctx.quadraticCurveTo(
+              (handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4,
+              (handY + ty) * 0.5,
+              tx,
+              ty,
+            );
             ctx.stroke();
             ctx.strokeStyle = `rgba(200,200,255,${0.2 + pulse * 0.15})`;
             ctx.lineWidth = 0.8;
-            ctx.beginPath(); ctx.moveTo(handX, handY);
-            ctx.quadraticCurveTo((handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4, (handY + ty) * 0.5, tx, ty);
+            ctx.beginPath();
+            ctx.moveTo(handX, handY);
+            ctx.quadraticCurveTo(
+              (handX + tx) * 0.5 + Math.sin(t * 5 + tr) * 4,
+              (handY + ty) * 0.5,
+              tx,
+              ty,
+            );
             ctx.stroke();
           }
         }
@@ -2665,11 +2854,15 @@ export class CutsceneEngine {
         singGrad.addColorStop(0.7, "rgba(120,40,200,0.15)");
         singGrad.addColorStop(1, "rgba(120,40,200,0)");
         ctx.fillStyle = singGrad;
-        ctx.beginPath(); ctx.arc(0, -10, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -10, 10, 0, Math.PI * 2);
+        ctx.fill();
         // Accretion disk
         ctx.strokeStyle = `rgba(200,160,255,${0.2 + pulse * 0.15})`;
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.ellipse(0, -10, 12, 2.5, t * 1, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(0, -10, 12, 2.5, t * 1, 0, Math.PI * 2);
+        ctx.stroke();
 
         // Cosmic particles
         for (let p = 0; p < 8; p++) {
@@ -2678,11 +2871,12 @@ export class CutsceneEngine {
           const px = Math.cos(pAng) * pDist;
           const py = -10 + Math.sin(pAng) * pDist * 0.5;
           const pBright = 0.15 + Math.sin(t * 5 + p) * 0.1;
-          ctx.fillStyle = p % 3 === 0
-            ? `rgba(120,40,200,${pBright})`
-            : p % 3 === 1
-              ? `rgba(60,140,255,${pBright})`
-              : `rgba(200,200,255,${pBright})`;
+          ctx.fillStyle =
+            p % 3 === 0
+              ? `rgba(120,40,200,${pBright})`
+              : p % 3 === 1
+                ? `rgba(60,140,255,${pBright})`
+                : `rgba(200,200,255,${pBright})`;
           ctx.beginPath();
           ctx.arc(px, py, 1.5 + Math.sin(p * 4.1) * 0.8, 0, Math.PI * 2);
           ctx.fill();
@@ -4297,9 +4491,24 @@ export class CutsceneEngine {
       case "fragment_green":
       case "fragment_amber": {
         const palettes = {
-          fragment_blue:  { base: "#0066aa", glow: "rgba(0,140,255,0.12)", scan: "#00aaff", static: "#003366" },
-          fragment_green: { base: "#008855", glow: "rgba(80,255,160,0.12)", scan: "#44ffaa", static: "#003322" },
-          fragment_amber: { base: "#885500", glow: "rgba(255,170,60,0.12)", scan: "#ffaa33", static: "#442200" },
+          fragment_blue: {
+            base: "#0066aa",
+            glow: "rgba(0,140,255,0.12)",
+            scan: "#00aaff",
+            static: "#003366",
+          },
+          fragment_green: {
+            base: "#008855",
+            glow: "rgba(80,255,160,0.12)",
+            scan: "#44ffaa",
+            static: "#003322",
+          },
+          fragment_amber: {
+            base: "#885500",
+            glow: "rgba(255,170,60,0.12)",
+            scan: "#ffaa33",
+            static: "#442200",
+          },
         };
         const pal = palettes[art];
         const fadeIn = Math.min(1, t / 0.6);
@@ -4347,7 +4556,7 @@ export class CutsceneEngine {
         // Static noise blocks
         ctx.globalAlpha = fadeIn * 0.3;
         for (let i = 0; i < 12; i++) {
-          const nx = (Math.sin(t * 13 + i * 7.7) * 30);
+          const nx = Math.sin(t * 13 + i * 7.7) * 30;
           const ny = -80 + (Math.sin(t * 11 + i * 5.3) * 50 + 50);
           const ns = 3 + Math.sin(t * 19 + i) * 2;
           ctx.fillStyle = i % 3 === 0 ? pal.scan : pal.static;
@@ -4384,6 +4593,18 @@ export class CutsceneEngine {
       case "station": {
         // Chronos Station exterior silhouette
         ctx.globalAlpha = Math.min(1, t / 1.5);
+
+        // Sprint H 9.2: Chronos Station glow — subtle pulsing aura
+        const glowPulse = 0.5 + 0.5 * Math.sin(t * 1.8);
+        ctx.save();
+        const grad = ctx.createRadialGradient(0, -20, 20, 0, -20, 120);
+        grad.addColorStop(0, `rgba(0, 220, 255, ${0.22 + 0.1 * glowPulse})`);
+        grad.addColorStop(0.5, `rgba(0, 150, 220, ${0.08 + 0.04 * glowPulse})`);
+        grad.addColorStop(1, "rgba(0, 100, 180, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(-140, -120, 280, 200);
+        ctx.restore();
+
         ctx.fillStyle = "#0d1828";
 
         // Main structure
@@ -4400,7 +4621,7 @@ export class CutsceneEngine {
         // Beacon
         ctx.fillStyle = "#00ffcc";
         ctx.shadowColor = "#00ffcc";
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 8 + 4 * glowPulse;
         ctx.beginPath();
         ctx.arc(0, -68, 3, 0, Math.PI * 2);
         ctx.fill();

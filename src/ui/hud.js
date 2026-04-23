@@ -35,8 +35,8 @@ function _portraitState(game) {
  */
 export function renderHUD(game) {
 const ctx = game.hudCtx;
-const w = game.hudCanvas.width;
-const h = game.hudCanvas.height;
+const w = game.hudW;
+const h = game.hudH;
 ctx.clearRect(0, 0, w, h);
 
 if (game.state !== "playing" && game.state !== "paused")

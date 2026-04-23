@@ -16,7 +16,7 @@ export const ENEMY_TYPES = {
     color2: "#004466",
     xp: 10,
     attackType: "ranged",
-    ai: "patrol",
+    ai: "strafe_fire", // Orbits player while firing
     chronoMultiplier: 0.0, // Drones fully freeze during Chrono Shift
   },
   phantom: {
@@ -34,6 +34,7 @@ export const ENEMY_TYPES = {
     xp: 25,
     attackType: "ranged",
     ai: "flanker",
+    teleportCooldown: 4000, // Blink/teleport to reposition
     chronoMultiplier: 0.5, // Phantoms resist slowdown and keep moving
   },
   beast: {
@@ -51,6 +52,11 @@ export const ENEMY_TYPES = {
     xp: 50,
     attackType: "melee",
     ai: "ambush",
+    chargeCooldown: 5000, // ms between charges
+    chargeWindup: 0.6, // seconds to telegraph before sprint
+    chargeDuration: 0.9, // seconds of sprint
+    chargeSpeedMul: 3.0, // speed multiplier during charge
+    chargeDamageMul: 1.5, // damage multiplier on charge impact
     chronoMultiplier: 1.5, // Beasts accelerate when time warps
   },
   boss: {
@@ -61,7 +67,7 @@ export const ENEMY_TYPES = {
     attackRate: 600,
     attackRange: 15,
     sightRange: 30,
-    radius: 0.6,
+    radius: 0.5,
     score: 5000,
     color1: "#ff0088",
     color2: "#440022",
@@ -77,7 +83,7 @@ export const ENEMY_TYPES = {
     attackRate: 450,
     attackRange: 18,
     sightRange: 30,
-    radius: 0.65,
+    radius: 0.5,
     score: 10000,
     color1: "#ff0066",
     color2: "#660033",
@@ -93,7 +99,7 @@ export const ENEMY_TYPES = {
     attackRate: 350,
     attackRange: 20,
     sightRange: 30,
-    radius: 0.7,
+    radius: 0.55,
     score: 25000,
     color1: "#ff0044",
     color2: "#880022",
@@ -131,7 +137,10 @@ export const ENEMY_TYPES = {
     color2: "#334466",
     xp: 60,
     attackType: "melee",
-    ai: "patrol",
+    ai: "guard",
+    frontShield: true,
+    shieldRegen: true,
+    shieldRegenRate: 3,
   },
   glitchling: {
     name: "Glitchling",
@@ -147,7 +156,7 @@ export const ENEMY_TYPES = {
     color2: "#004411",
     xp: 8,
     attackType: "melee",
-    ai: "ambush",
+    ai: "erratic",
   },
   // ── Sub-bosses & Henchmen (v0.8.0) ──
   shieldCommander: {

@@ -290,7 +290,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "fragment_blue",
       lines: [
         {
-          text: "V̷O̶—̵: \"...coordinates are wrong. We're walking into a—\"",
+          text: 'V̷O̶—̵: "...coordinates are wrong. We\'re walking into a—"',
           delay: 0,
           color: "#4488cc",
           size: 15,
@@ -310,7 +310,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "fragment_green",
       lines: [
         {
-          text: "M̶—̵I: \"...bleeding too fast. Hold still, damn it—\"",
+          text: 'M̶—̵I: "...bleeding too fast. Hold still, damn it—"',
           delay: 0,
           color: "#66ccaa",
           size: 15,
@@ -330,7 +330,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "fragment_amber",
       lines: [
         {
-          text: "K̵—̶: \"...reactor's going critical. We have maybe thirty—\"",
+          text: 'K̵—̶: "...reactor\'s going critical. We have maybe thirty—"',
           delay: 0,
           color: "#ccaa66",
           size: 15,
@@ -380,7 +380,12 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#001122",
       lines: [
         { text: "SYSTEMS: Rebooting...", delay: 0, color: "#8899aa", size: 14 },
-        { text: "WARNING: Memory banks corrupted — 88% data loss", delay: 800, color: "#ff4444", size: 12 },
+        {
+          text: "WARNING: Memory banks corrupted — 88% data loss",
+          delay: 800,
+          color: "#ff4444",
+          size: 12,
+        },
       ],
       particles: "glow",
       duration: 1800,
@@ -389,8 +394,18 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: Welcome back. I've stabilised your vitals.", delay: 0, color: "#00ffdd", size: 18 },
-        { text: "Your memory core took heavy damage. I'm recovering what I can.", delay: 1600, color: "#88ccff", size: 15 },
+        {
+          text: "ARIA: Welcome back. I've stabilised your vitals.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 18,
+        },
+        {
+          text: "Your memory core took heavy damage. I'm recovering what I can.",
+          delay: 1600,
+          color: "#88ccff",
+          size: 15,
+        },
       ],
       particles: "glow",
       duration: 3200,
@@ -399,9 +414,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "fragment_blue",
       lines: [
-        { text: "V̷O̶—̵: \"The ambush point is here. If we miss the window—\"", delay: 0, color: "#4488cc", size: 15 },
-        { text: "\"—everyone dies. So don't miss.\"", delay: 1200, color: "#3366aa", size: 14 },
-        { text: "[IDENTITY RECONSTRUCTION: 8% — INSUFFICIENT]", delay: 2000, color: "#334466", size: 12 },
+        {
+          text: 'V̷O̶—̵: "The ambush point is here. If we miss the window—"',
+          delay: 0,
+          color: "#4488cc",
+          size: 15,
+        },
+        {
+          text: '"—everyone dies. So don\'t miss."',
+          delay: 1200,
+          color: "#3366aa",
+          size: 14,
+        },
+        {
+          text: "[IDENTITY RECONSTRUCTION: 8% — INSUFFICIENT]",
+          delay: 2000,
+          color: "#334466",
+          size: 12,
+        },
       ],
       particles: "sparks",
       duration: 2800,
@@ -410,9 +440,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "fragment_green",
       lines: [
-        { text: "M̶—̵I: \"I said HOLD STILL. You're losing blood faster than I can—\"", delay: 0, color: "#66ccaa", size: 15 },
-        { text: "\"—just trust me. I haven't lost one yet.\"", delay: 1200, color: "#44aa88", size: 14 },
-        { text: "[IDENTITY RECONSTRUCTION: 11% — INSUFFICIENT]", delay: 2000, color: "#336644", size: 12 },
+        {
+          text: 'M̶—̵I: "I said HOLD STILL. You\'re losing blood faster than I can—"',
+          delay: 0,
+          color: "#66ccaa",
+          size: 15,
+        },
+        {
+          text: '"—just trust me. I haven\'t lost one yet."',
+          delay: 1200,
+          color: "#44aa88",
+          size: 14,
+        },
+        {
+          text: "[IDENTITY RECONSTRUCTION: 11% — INSUFFICIENT]",
+          delay: 2000,
+          color: "#336644",
+          size: 12,
+        },
       ],
       particles: "sparks",
       duration: 2800,
@@ -421,9 +466,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "fragment_amber",
       lines: [
-        { text: "K̵—̶: \"This reactor design is insane. Whoever built this was either—\"", delay: 0, color: "#ccaa66", size: 15 },
-        { text: "\"—brilliant or suicidal. Possibly both.\"", delay: 1200, color: "#aa8844", size: 14 },
-        { text: "[IDENTITY RECONSTRUCTION: 14% — INSUFFICIENT]", delay: 2000, color: "#664422", size: 12 },
+        {
+          text: 'K̵—̶: "This reactor design is insane. Whoever built this was either—"',
+          delay: 0,
+          color: "#ccaa66",
+          size: 15,
+        },
+        {
+          text: '"—brilliant or suicidal. Possibly both."',
+          delay: 1200,
+          color: "#aa8844",
+          size: 14,
+        },
+        {
+          text: "[IDENTITY RECONSTRUCTION: 14% — INSUFFICIENT]",
+          delay: 2000,
+          color: "#664422",
+          size: 12,
+        },
       ],
       particles: "sparks",
       duration: 2800,
@@ -432,9 +492,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: HUD diagnostics: HEALTH 85% — CHRONO 42% — MEMORY 12%", delay: 0, color: "#00ffdd", size: 14 },
-        { text: "Three faces. Three voices. You knew them once. You will again.", delay: 1600, color: "#88ccff", size: 15 },
-        { text: "Press ENTER to continue, or ESC to skip.", delay: 3000, color: "#8899aa", size: 14 },
+        {
+          text: "ARIA: HUD diagnostics: HEALTH 85% — CHRONO 42% — MEMORY 12%",
+          delay: 0,
+          color: "#00ffdd",
+          size: 14,
+        },
+        {
+          text: "Three faces. Three voices. You knew them once. You will again.",
+          delay: 1600,
+          color: "#88ccff",
+          size: 15,
+        },
+        {
+          text: "Press ENTER to continue, or ESC to skip.",
+          delay: 3000,
+          color: "#8899aa",
+          size: 14,
+        },
       ],
       particles: "stars",
       duration: 0,
@@ -443,10 +518,86 @@ export const CUTSCENE_SCRIPTS = {
 
   // Spanish localized variant (fragmented)
   intro_memory_01_es: [
-    { bg: "dark", flash: "#001122", lines: [ { text: "SISTEMA: Reiniciando...", delay: 0, color: "#8899aa", size: 14 }, { text: "AVISO: Bancos de memoria corruptos", delay: 800, color: "#ff4444", size: 12 } ], particles: "glow", duration: 1800 },
-    { bg: "dark", art: "aria", lines: [ { text: "ARIA: Estás de vuelta. Apenas.", delay: 0, color: "#00ffdd", size: 18 }, { text: "Tu memoria está fragmentada. Recuperaré lo que pueda.", delay: 1600, color: "#88ccff", size: 15 } ], particles: "glow", duration: 3200 },
-    { bg: "dark", art: "fragment_green", lines: [ { text: "M̶—̵I: \"¡Quédate quieto! Estás perdiendo sangre—\"", delay: 0, color: "#66ccaa", size: 15 }, { text: "[MEMORIA CORRUPTA — IDENTIDAD NO RESUELTA]", delay: 900, color: "#336644", size: 12 } ], particles: "sparks", duration: 2000 },
-    { bg: "dark", art: "aria", lines: [ { text: "ARIA: Reconstrucción de memoria al 12%. Fragmentos inestables.", delay: 0, color: "#00ffdd", size: 16 }, { text: "Pulsa ENTER para continuar o cualquier tecla para omitir.", delay: 1800, color: "#8899aa", size: 14 } ], particles: "stars", duration: 0 }
+    {
+      bg: "dark",
+      flash: "#001122",
+      lines: [
+        {
+          text: "SISTEMA: Reiniciando...",
+          delay: 0,
+          color: "#8899aa",
+          size: 14,
+        },
+        {
+          text: "AVISO: Bancos de memoria corruptos",
+          delay: 800,
+          color: "#ff4444",
+          size: 12,
+        },
+      ],
+      particles: "glow",
+      duration: 1800,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "ARIA: Estás de vuelta. Apenas.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 18,
+        },
+        {
+          text: "Tu memoria está fragmentada. Recuperaré lo que pueda.",
+          delay: 1600,
+          color: "#88ccff",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 3200,
+    },
+    {
+      bg: "dark",
+      art: "fragment_green",
+      lines: [
+        {
+          text: 'M̶—̵I: "¡Quédate quieto! Estás perdiendo sangre—"',
+          delay: 0,
+          color: "#66ccaa",
+          size: 15,
+        },
+        {
+          text: "[MEMORIA CORRUPTA — IDENTIDAD NO RESUELTA]",
+          delay: 900,
+          color: "#336644",
+          size: 12,
+        },
+      ],
+      particles: "sparks",
+      duration: 2000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "ARIA: Reconstrucción de memoria al 12%. Fragmentos inestables.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: "Pulsa ENTER para continuar o cualquier tecla para omitir.",
+          delay: 1800,
+          color: "#8899aa",
+          size: 14,
+        },
+      ],
+      particles: "stars",
+      duration: 0,
+    },
   ],
 
   // ── New Level Transition Briefings (Dr. Voss narrative) ──────────
@@ -537,6 +688,36 @@ export const CUTSCENE_SCRIPTS = {
       particles: "sparks",
       duration: 7000,
     },
+    {
+      bg: "station",
+      lines: [
+        {
+          text: "A recorded log flickers on a cracked monitor. A familiar voice.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 14,
+        },
+        {
+          text: 'Dr. Voss: "Always plan three steps ahead. The timeline punishes improvisation."',
+          delay: 2200,
+          color: "#4488cc",
+          size: 15,
+        },
+        {
+          text: "ARIA: \"That's… your squadmate's voice. Same cadence. Same phrase.\"",
+          delay: 5200,
+          color: "#00ffdd",
+          size: 14,
+        },
+        {
+          text: 'ARIA: "File it. We\'ll circle back."',
+          delay: 7800,
+          color: "#00ffdd",
+          size: 13,
+        },
+      ],
+      duration: 10500,
+    },
   ],
 
   containment_briefing: [
@@ -593,8 +774,14 @@ export const CUTSCENE_SCRIPTS = {
           color: "#00ffdd",
           size: 14,
         },
+        {
+          text: '"Wait. Voss? That name is flagged in your squad records. Coincidence?"',
+          delay: 7000,
+          color: "#ffcc00",
+          size: 14,
+        },
       ],
-      duration: 7500,
+      duration: 9500,
     },
   ],
 
@@ -722,7 +909,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 13,
         },
         {
-          text: '"Agent. Don\'t touch anything in that reactor. I\'ve seen this before."',
+          text: "\"Agent. Don't touch anything in that reactor. I've seen this before.\"",
           delay: 2000,
           color: "#4488ff",
           size: 15,
@@ -763,19 +950,19 @@ export const CUTSCENE_SCRIPTS = {
       art: "aria",
       lines: [
         {
-          text: "\"Graduated summa cum laude. Three doctorates by 28.\"",
+          text: '"Graduated summa cum laude. Three doctorates by 28."',
           delay: 0,
           color: "#8899aa",
           size: 14,
         },
         {
-          text: "\"Temporal physics, quantum engineering, xenobiology.\"",
+          text: '"Temporal physics, quantum engineering, xenobiology."',
           delay: 2200,
           color: "#8899aa",
           size: 14,
         },
         {
-          text: "\"He was the best mind on this station. By far.\"",
+          text: '"He was the best mind on this station. By far."',
           delay: 4400,
           color: "#aaddff",
           size: 15,
@@ -788,25 +975,25 @@ export const CUTSCENE_SCRIPTS = {
       art: "aria",
       lines: [
         {
-          text: "\"He proposed Project PARADOX seven years ago.\"",
+          text: '"He proposed Project PARADOX seven years ago."',
           delay: 0,
           color: "#8899aa",
           size: 14,
         },
         {
-          text: "\"Temporal self-integration. Merging human consciousness with the Chronos Engine.\"",
+          text: '"Temporal self-integration. Merging human consciousness with the Chronos Engine."',
           delay: 2200,
           color: "#cc44ff",
           size: 14,
         },
         {
-          text: "\"Command called it reckless. Denied funding. Buried the proposal.\"",
+          text: '"Command called it reckless. Denied funding. Buried the proposal."',
           delay: 4600,
           color: "#ff8844",
           size: 14,
         },
         {
-          text: "\"Twice.\"",
+          text: '"Twice."',
           delay: 6800,
           color: "#ff4422",
           size: 18,
@@ -819,25 +1006,25 @@ export const CUTSCENE_SCRIPTS = {
       shake: 1,
       lines: [
         {
-          text: "\"On the night of the incident — he ran it anyway.\"",
+          text: '"On the night of the incident — he ran it anyway."',
           delay: 0,
           color: "#cc44ff",
           size: 16,
         },
         {
-          text: "\"Alone. In this lab. No authorisation. No fail-safes.\"",
+          text: '"Alone. In this lab. No authorisation. No fail-safes."',
           delay: 2500,
           color: "#ff6644",
           size: 15,
         },
         {
-          text: "\"Station logs show the experiment lasted eleven seconds.\"",
+          text: '"Station logs show the experiment lasted eleven seconds."',
           delay: 5000,
           color: "#8899aa",
           size: 14,
         },
         {
-          text: "\"Everything after that... we know.\"",
+          text: '"Everything after that... we know."',
           delay: 7200,
           color: "#ff2244",
           size: 17,
@@ -872,19 +1059,19 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#cc44ff",
       lines: [
         {
-          text: "\"This is it. Voss's private lab. Temporal rift at the center.\"",
+          text: '"This is it. Voss\'s private lab. Temporal rift at the center."',
           delay: 0,
           color: "#00ffdd",
           size: 15,
         },
         {
-          text: "\"The readings match the Paradox Lord's signature exactly.\"",
+          text: '"The readings match the Paradox Lord\'s signature exactly."',
           delay: 2500,
           color: "#ff4444",
           size: 16,
         },
         {
-          text: "\"...because they're the same person.\"",
+          text: '"...because they\'re the same person."',
           delay: 5000,
           color: "#ff2244",
           size: 18,
@@ -935,7 +1122,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: '"If you\'re reading this — you\'re closer to the truth than anyone."',
+          text: "\"If you're reading this — you're closer to the truth than anyone.\"",
           delay: 4500,
           color: "#ffcc88",
           size: 15,
@@ -997,15 +1184,21 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
+          text: '"But I was always three steps ahead."',
+          delay: 6500,
+          color: "#cc88ff",
+          size: 16,
+        },
+        {
           text: '"Now look at me."',
-          delay: 6800,
+          delay: 8200,
           color: "#ff0088",
           size: 22,
         },
       ],
       particles: "embers",
       shake: 3,
-      duration: 9500,
+      duration: 10500,
     },
     {
       bg: "boss_lair",
@@ -1020,7 +1213,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: '"I became this the moment they told me \'no\'."',
+          text: "\"I became this the moment they told me 'no'.\"",
           delay: 2500,
           color: "#ff2266",
           size: 18,
@@ -1955,7 +2148,7 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
-   act2_level2: [
+  act2_level2: [
     {
       bg: "station",
       lines: [
@@ -1986,7 +2179,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: '"I don\'t do introductions. If you can\'t keep up, I\'ll know."',
+          text: "\"I don't do introductions. If you can't keep up, I'll know.\"",
           delay: 4500,
           color: "#ff4488",
           size: 15,
@@ -2068,9 +2261,15 @@ export const CUTSCENE_SCRIPTS = {
           color: "#88aacc",
           size: 15,
         },
+        {
+          text: 'ARIA flickers: "Temporal signature... partial match to the Paradox Lord. 67%."',
+          delay: 5500,
+          color: "#00ffdd",
+          size: 13,
+        },
       ],
       particles: "sparks",
-      duration: 6000,
+      duration: 8000,
     },
     {
       bg: "boss_lair",
@@ -2189,7 +2388,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: '"Don\'t thank me. I\'m not doing this for you."',
+          text: "\"Don't thank me. I'm not doing this for you.\"",
           delay: 4500,
           color: "#44ff88",
           size: 15,
@@ -2299,7 +2498,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Nova grins. \"Then let's bankrupt him.\"",
+          text: 'Nova grins. "Then let\'s bankrupt him."',
           delay: 4500,
           color: "#ff4488",
           size: 16,
@@ -2451,7 +2650,7 @@ export const CUTSCENE_SCRIPTS = {
         },
       ],
       particles: "glow",
-      duration: 3500,
+      duration: 10500,
     },
     {
       bg: "boss_lair",
@@ -2514,7 +2713,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: '"Do they know you\'ve already lost? I\'ve seen every outcome."',
+          text: "\"Do they know you've already lost? I've seen every outcome.\"",
           delay: 2500,
           color: "#ff6688",
           size: 15,
@@ -2535,7 +2734,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "party",
       lines: [
         {
-          text: "Kael raises his shield. \"Then we'll make a new one.\"",
+          text: 'Kael raises his shield. "Then we\'ll make a new one."',
           delay: 0,
           color: "#44aaff",
           size: 16,
@@ -2817,6 +3016,64 @@ export const CUTSCENE_SCRIPTS = {
       ],
       particles: "glow",
       duration: 10500,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        {
+          text: "\"You're not temporal. You're not anti-temporal.\"",
+          delay: 0,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: "\"You're a fixed point. A constant. Time flows around you but it can't change you.\"",
+          delay: 2500,
+          color: "#ffcc44",
+          size: 16,
+        },
+        {
+          text: "\"That's why the loop doesn't erase your memories. That's why the suit bonded to YOU.\"",
+          delay: 5500,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"Voss designed it for a fixed point. He just couldn\'t find one... until you."',
+          delay: 8500,
+          color: "#cc88ff",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 11500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: '"CONFIRMED. Your neural patterns show zero temporal drift across all recorded loops."',
+          delay: 0,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: '"You are, statistically speaking, impossible."',
+          delay: 2800,
+          color: "#00ccff",
+          size: 16,
+        },
+        {
+          text: '"The Paradox Lord can rewrite anyone. Anything. Except you."',
+          delay: 5200,
+          color: "#ffffff",
+          size: 17,
+        },
+      ],
+      particles: "sparks",
+      duration: 8000,
     },
     {
       bg: "dark",
@@ -3203,7 +3460,12 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "station",
       lines: [
-        { text: "CONTAINMENT — LAST STAND", delay: 0, color: "#ff4444", size: 20 },
+        {
+          text: "CONTAINMENT — LAST STAND",
+          delay: 0,
+          color: "#ff4444",
+          size: 20,
+        },
         {
           text: "The walls are bleeding temporal energy.",
           delay: 1500,
@@ -3225,32 +3487,50 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
+          text: "A temporal shockwave hits. The shield shatters — fragments scatter across the floor.",
+          delay: 2200,
+          color: "#ff6644",
+          size: 15,
+        },
+        {
+          text: "He stares at the pieces. Then kicks them aside.",
+          delay: 4200,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: '"I don\'t need it anymore."',
+          delay: 6000,
+          color: "#4488ff",
+          size: 18,
+        },
+        {
           text: '"I\'m staying at the blast doors."',
-          delay: 2500,
+          delay: 8000,
           color: "#4488ff",
           size: 16,
         },
         {
           text: "You start to argue. He puts a hand on your shoulder.",
-          delay: 4500,
+          delay: 10000,
           color: "#aabbcc",
           size: 15,
         },
         {
           text: '"You taught me what a badge means. Let me show you I learned."',
-          delay: 6500,
+          delay: 12000,
           color: "#4488ff",
           size: 17,
         },
         {
           text: "He smiles. It's the first real one you've seen from him.",
-          delay: 9000,
+          delay: 14500,
           color: "#aabbcc",
           size: 15,
         },
       ],
       particles: "glow",
-      duration: 11500,
+      duration: 17000,
     },
     {
       bg: "station",
@@ -3284,7 +3564,12 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "station",
       lines: [
-        { text: "SERVER FARM — SCORCHED EARTH", delay: 0, color: "#ff6600", size: 20 },
+        {
+          text: "SERVER FARM — SCORCHED EARTH",
+          delay: 0,
+          color: "#ff6600",
+          size: 20,
+        },
         {
           text: "He's deleting everything. Every timeline. Every memory.",
           delay: 1500,
@@ -3383,7 +3668,12 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "boss_lair",
       lines: [
-        { text: "THE LABORATORY — ORIGINS", delay: 0, color: "#9944ff", size: 20 },
+        {
+          text: "THE LABORATORY — ORIGINS",
+          delay: 0,
+          color: "#9944ff",
+          size: 20,
+        },
         {
           text: "Before he was the Lord, he was just a man who lost everything.",
           delay: 1500,
@@ -3431,26 +3721,32 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
+          text: "A lab recording glitches on screen — Voss's voice. Your Voss. Same cadence as the Lord.",
+          delay: 2200,
+          color: "#cc88ff",
+          size: 14,
+        },
+        {
           text: "You could have become him. Rage. Grief. The same fuel.",
-          delay: 2500,
+          delay: 4500,
           color: "#ff88aa",
           size: 15,
         },
         {
           text: "But you chose to build a new family. He chose to burn everything down.",
-          delay: 5000,
+          delay: 7000,
           color: "#ffffff",
           size: 16,
         },
         {
           text: "That's the difference. That was always the difference.",
-          delay: 7500,
+          delay: 9500,
           color: "#00ffcc",
           size: 17,
         },
       ],
       particles: "glow",
-      duration: 10000,
+      duration: 12000,
     },
   ],
 
@@ -3458,7 +3754,12 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "boss_lair",
       lines: [
-        { text: "TEMPORAL NEXUS — THE BLIND SPOT", delay: 0, color: "#ff44ff", size: 20 },
+        {
+          text: "TEMPORAL NEXUS — THE BLIND SPOT",
+          delay: 0,
+          color: "#ff44ff",
+          size: 20,
+        },
         {
           text: "Lyra found his weakness. This is the moment he can't predict.",
           delay: 1500,
@@ -3508,7 +3809,12 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "boss_lair",
       lines: [
-        { text: "THE PARADOX CORE — ENDGAME", delay: 0, color: "#ff0044", size: 24 },
+        {
+          text: "THE PARADOX CORE — ENDGAME",
+          delay: 0,
+          color: "#ff0044",
+          size: 24,
+        },
         {
           text: "Everything ends here.",
           delay: 1500,
@@ -3559,38 +3865,44 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Voss taught you to plan. You hear his voice: \"Three steps ahead.\"",
+          text: 'Voss taught you to plan. You hear his voice: "Three steps ahead."',
           delay: 2200,
           color: "#4488cc",
           size: 15,
         },
         {
+          text: "The same voice the Paradox Lord uses. Three timelines. Same man. Same grief.",
+          delay: 4000,
+          color: "#cc88ff",
+          size: 14,
+        },
+        {
           text: "Miri taught you to endure. Her hands kept you alive.",
-          delay: 4400,
+          delay: 6200,
           color: "#44cc88",
           size: 15,
         },
         {
           text: "Kai taught you to hold the line. The door is still open.",
-          delay: 6600,
+          delay: 8400,
           color: "#ccaa44",
           size: 15,
         },
         {
           text: "You don't need to see the future.",
-          delay: 8800,
+          delay: 10600,
           color: "#ffffff",
           size: 16,
         },
         {
           text: "You fight for everyone who believed you could.",
-          delay: 10800,
+          delay: 12600,
           color: "#00ffcc",
           size: 18,
         },
       ],
       particles: "glow",
-      duration: 13500,
+      duration: 15500,
     },
   ],
 
@@ -3743,26 +4055,38 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "Kael is trying not to cry. Failing.",
+          text: "Kael is in the next bed. Bandaged head to toe. His shield in pieces on the floor.",
           delay: 3800,
+          color: "#4488ff",
+          size: 14,
+        },
+        {
+          text: "Nova dragged him from the blast doors. Barely. Shield shattered, spine cracked, but breathing.",
+          delay: 6000,
+          color: "#ff4488",
+          size: 14,
+        },
+        {
+          text: "He's trying not to cry. Failing.",
+          delay: 8500,
           color: "#4488ff",
           size: 15,
         },
         {
           text: "Nova is laughing through tears. Rook just nods. That's enough from him.",
-          delay: 5500,
+          delay: 10500,
           color: "#ff4488",
           size: 15,
         },
         {
           text: "And Lyra... hasn't let go of your hand.",
-          delay: 7500,
+          delay: 12500,
           color: "#ffaa44",
           size: 17,
         },
       ],
       particles: "glow",
-      duration: 10000,
+      duration: 15000,
     },
     {
       bg: "deep_space",
@@ -3915,8 +4239,18 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#4400ff",
       shake: 8,
       lines: [
-        { text: "The rift tears open again.", delay: 0, color: "#cc88ff", size: 20 },
-        { text: "Time is not done with you.", delay: 2200, color: "#aaddff", size: 16 },
+        {
+          text: "The rift tears open again.",
+          delay: 0,
+          color: "#cc88ff",
+          size: 20,
+        },
+        {
+          text: "Time is not done with you.",
+          delay: 2200,
+          color: "#aaddff",
+          size: 16,
+        },
       ],
       particles: "embers",
       duration: 5000,
@@ -3925,9 +4259,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: Temporal signature detected. It's... recursive.", delay: 0, color: "#00ffdd", size: 16 },
-        { text: "You've done this before. The echoes remember.", delay: 2000, color: "#88ccff", size: 15 },
-        { text: "But the enemies are stronger now. They've learned.", delay: 4000, color: "#ff8866", size: 15 },
+        {
+          text: "ARIA: Temporal signature detected. It's... recursive.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: "You've done this before. The echoes remember.",
+          delay: 2000,
+          color: "#88ccff",
+          size: 15,
+        },
+        {
+          text: "But the enemies are stronger now. They've learned.",
+          delay: 4000,
+          color: "#ff8866",
+          size: 15,
+        },
       ],
       particles: "glow",
       duration: 6500,
@@ -3936,8 +4285,18 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "hero_armed",
       lines: [
-        { text: "You grip your weapon. Muscle memory from a life you've already lived.", delay: 0, color: "#aabbcc", size: 15 },
-        { text: "Again. You'll do it again.", delay: 2500, color: "#00ffcc", size: 18 },
+        {
+          text: "You grip your weapon. Muscle memory from a life you've already lived.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "Again. You'll do it again.",
+          delay: 2500,
+          color: "#00ffcc",
+          size: 18,
+        },
       ],
       particles: "sparks",
       duration: 5000,
@@ -3952,8 +4311,18 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#4400ff",
       shake: 8,
       lines: [
-        { text: "The timeline fractures.", delay: 0, color: "#cc88ff", size: 22 },
-        { text: "You thought it was over.", delay: 2000, color: "#ff8866", size: 18 },
+        {
+          text: "The timeline fractures.",
+          delay: 0,
+          color: "#cc88ff",
+          size: 22,
+        },
+        {
+          text: "You thought it was over.",
+          delay: 2000,
+          color: "#ff8866",
+          size: 18,
+        },
       ],
       particles: "embers",
       duration: 4500,
@@ -3962,9 +4331,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: Paradox residue detected in your neural pattern.", delay: 0, color: "#00ffdd", size: 15 },
-        { text: "The Paradox Lord's death created a temporal echo.", delay: 2000, color: "#88ccff", size: 15 },
-        { text: "Everything resets. Everything EXCEPT you.", delay: 4000, color: "#ffcc00", size: 16 },
+        {
+          text: "ARIA: Paradox residue detected in your neural pattern.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: "The Paradox Lord's death created a temporal echo.",
+          delay: 2000,
+          color: "#88ccff",
+          size: 15,
+        },
+        {
+          text: "Everything resets. Everything EXCEPT you.",
+          delay: 4000,
+          color: "#ffcc00",
+          size: 16,
+        },
       ],
       particles: "glow",
       duration: 6500,
@@ -3973,9 +4357,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "hero_armed",
       lines: [
-        { text: "You remember everything. The fights. The faces. The cost.", delay: 0, color: "#aabbcc", size: 15 },
-        { text: "This time, you're stronger. But so are they.", delay: 2500, color: "#ff4444", size: 16 },
-        { text: "TIMELINE LOOP 1: THE ECHO", delay: 5000, color: "#cc88ff", size: 22 },
+        {
+          text: "You remember everything. The fights. The faces. The cost.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "This time, you're stronger. But so are they.",
+          delay: 2500,
+          color: "#ff4444",
+          size: 16,
+        },
+        {
+          text: "TIMELINE LOOP 1: THE ECHO",
+          delay: 5000,
+          color: "#cc88ff",
+          size: 22,
+        },
       ],
       particles: "sparks",
       duration: 7500,
@@ -3990,7 +4389,12 @@ export const CUTSCENE_SCRIPTS = {
       shake: 10,
       lines: [
         { text: "Not again.", delay: 0, color: "#ff4466", size: 24 },
-        { text: "The rift. The loop. The beginning.", delay: 2000, color: "#ff8888", size: 16 },
+        {
+          text: "The rift. The loop. The beginning.",
+          delay: 2000,
+          color: "#ff8888",
+          size: 16,
+        },
       ],
       particles: "embers",
       duration: 4500,
@@ -3999,9 +4403,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "lyra",
       lines: [
-        { text: "LYRA: The data's clear. This isn't a glitch.", delay: 0, color: "#ffaa44", size: 15 },
-        { text: "Someone — or something — is forcing the loop.", delay: 2000, color: "#ffcc88", size: 15 },
-        { text: "Each iteration, reality degrades. The enemies evolve.", delay: 4000, color: "#ff6644", size: 15 },
+        {
+          text: "LYRA: The data's clear. This isn't a glitch.",
+          delay: 0,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "Someone — or something — is forcing the loop.",
+          delay: 2000,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: "Each iteration, reality degrades. The enemies evolve.",
+          delay: 4000,
+          color: "#ff6644",
+          size: 15,
+        },
       ],
       particles: "glow",
       duration: 6500,
@@ -4010,9 +4429,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "hero_armed",
       lines: [
-        { text: "Your hands shake. Déjà vu is too gentle a word for this.", delay: 0, color: "#aabbcc", size: 15 },
-        { text: "But somewhere in this recursion lies an answer.", delay: 2500, color: "#00ffcc", size: 16 },
-        { text: "TIMELINE LOOP 2: THE RECURSION", delay: 5000, color: "#ff4466", size: 22 },
+        {
+          text: "Your hands shake. Déjà vu is too gentle a word for this.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "But somewhere in this recursion lies an answer.",
+          delay: 2500,
+          color: "#00ffcc",
+          size: 16,
+        },
+        {
+          text: "TIMELINE LOOP 2: THE RECURSION",
+          delay: 5000,
+          color: "#ff4466",
+          size: 22,
+        },
       ],
       particles: "sparks",
       duration: 7500,
@@ -4027,7 +4461,12 @@ export const CUTSCENE_SCRIPTS = {
       shake: 14,
       lines: [
         { text: "The loop tightens.", delay: 0, color: "#ffffff", size: 28 },
-        { text: "This is the last time.", delay: 2000, color: "#ff4444", size: 20 },
+        {
+          text: "This is the last time.",
+          delay: 2000,
+          color: "#ff4444",
+          size: 20,
+        },
       ],
       particles: "embers",
       duration: 4500,
@@ -4036,9 +4475,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: All timelines are converging on THIS iteration.", delay: 0, color: "#00ffdd", size: 15 },
-        { text: "If you fail now, the loop becomes permanent.", delay: 2000, color: "#ff4444", size: 16 },
-        { text: "No more chances. No more echoes.", delay: 4000, color: "#ff8866", size: 15 },
+        {
+          text: "ARIA: All timelines are converging on THIS iteration.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: "If you fail now, the loop becomes permanent.",
+          delay: 2000,
+          color: "#ff4444",
+          size: 16,
+        },
+        {
+          text: "No more chances. No more echoes.",
+          delay: 4000,
+          color: "#ff8866",
+          size: 15,
+        },
       ],
       particles: "glow",
       duration: 6500,
@@ -4047,9 +4501,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "lyra",
       lines: [
-        { text: "LYRA: I've calculated it three hundred times.", delay: 0, color: "#ffaa44", size: 15 },
-        { text: "The odds are terrible.", delay: 1800, color: "#ffcc88", size: 15 },
-        { text: "But you've never cared about odds.", delay: 3500, color: "#ffaa44", size: 16 },
+        {
+          text: "LYRA: I've calculated it three hundred times.",
+          delay: 0,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: "The odds are terrible.",
+          delay: 1800,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: "But you've never cared about odds.",
+          delay: 3500,
+          color: "#ffaa44",
+          size: 16,
+        },
       ],
       particles: "glow",
       duration: 5500,
@@ -4058,9 +4527,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "hero_armed",
       lines: [
-        { text: "Every scar. Every memory. Every life you've saved and lost.", delay: 0, color: "#aabbcc", size: 15 },
-        { text: "They all lead here.", delay: 2500, color: "#ffffff", size: 18 },
-        { text: "FINAL TIMELINE: THE CONVERGENCE", delay: 5000, color: "#ffcc00", size: 22 },
+        {
+          text: "Every scar. Every memory. Every life you've saved and lost.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "They all lead here.",
+          delay: 2500,
+          color: "#ffffff",
+          size: 18,
+        },
+        {
+          text: "FINAL TIMELINE: THE CONVERGENCE",
+          delay: 5000,
+          color: "#ffcc00",
+          size: 22,
+        },
       ],
       particles: "sparks",
       duration: 7500,
@@ -4074,8 +4558,18 @@ export const CUTSCENE_SCRIPTS = {
       flash: "#ffffff",
       shake: 12,
       lines: [
-        { text: "The Paradox Lord falls for the last time.", delay: 0, color: "#ffffff", size: 22 },
-        { text: "But this time... no rift.", delay: 2500, color: "#aaddff", size: 18 },
+        {
+          text: "The Paradox Lord falls for the last time.",
+          delay: 0,
+          color: "#ffffff",
+          size: 22,
+        },
+        {
+          text: "But this time... no rift.",
+          delay: 2500,
+          color: "#aaddff",
+          size: 18,
+        },
         { text: "No echo. No loop.", delay: 4500, color: "#00ffcc", size: 18 },
       ],
       particles: "glow",
@@ -4085,9 +4579,24 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: Temporal signature... zero. Clean.", delay: 0, color: "#00ffdd", size: 16 },
-        { text: "No paradox residue. No recursive patterns.", delay: 2000, color: "#88ccff", size: 15 },
-        { text: "You broke the loop. You actually broke it.", delay: 4000, color: "#00ffcc", size: 18 },
+        {
+          text: "ARIA: Temporal signature... zero. Clean.",
+          delay: 0,
+          color: "#00ffdd",
+          size: 16,
+        },
+        {
+          text: "No paradox residue. No recursive patterns.",
+          delay: 2000,
+          color: "#88ccff",
+          size: 15,
+        },
+        {
+          text: "You broke the loop. You actually broke it.",
+          delay: 4000,
+          color: "#00ffcc",
+          size: 18,
+        },
       ],
       particles: "glow",
       duration: 6500,
@@ -4096,11 +4605,36 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "lyra",
       lines: [
-        { text: "Lyra runs to you. No words this time.", delay: 0, color: "#ffcc88", size: 16 },
-        { text: "Just arms around you, tight, refusing to let go.", delay: 2000, color: "#ffaa44", size: 16 },
-        { text: '"You remember all of them? All the loops?"', delay: 4500, color: "#ffaa44", size: 15 },
-        { text: '"Every single one."', delay: 6500, color: "#00ffcc", size: 16 },
-        { text: '"...Then you remember every time I said I love you."', delay: 8500, color: "#ffaa44", size: 16 },
+        {
+          text: "Lyra runs to you. No words this time.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 16,
+        },
+        {
+          text: "Just arms around you, tight, refusing to let go.",
+          delay: 2000,
+          color: "#ffaa44",
+          size: 16,
+        },
+        {
+          text: '"You remember all of them? All the loops?"',
+          delay: 4500,
+          color: "#ffaa44",
+          size: 15,
+        },
+        {
+          text: '"Every single one."',
+          delay: 6500,
+          color: "#00ffcc",
+          size: 16,
+        },
+        {
+          text: '"...Then you remember every time I said I love you."',
+          delay: 8500,
+          color: "#ffaa44",
+          size: 16,
+        },
       ],
       particles: "glow",
       duration: 11000,
@@ -4109,11 +4643,36 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "party",
       lines: [
-        { text: "The team gathers. Not to fight. Not to plan.", delay: 0, color: "#aabbcc", size: 15 },
-        { text: "Just to be together. In a timeline that finally holds.", delay: 2000, color: "#aaddff", size: 16 },
-        { text: "Voss raises a glass. \"To the agent who lived four lifetimes.\"", delay: 4500, color: "#00ccff", size: 15 },
-        { text: "Miri rolls her eyes. \"To the idiot I had to patch up four times.\"", delay: 6500, color: "#aaffcc", size: 15 },
-        { text: "Kai grins. \"To the legend.\"", delay: 8500, color: "#ffcc88", size: 16 },
+        {
+          text: "The team gathers. Not to fight. Not to plan.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "Just to be together. In a timeline that finally holds.",
+          delay: 2000,
+          color: "#aaddff",
+          size: 16,
+        },
+        {
+          text: 'Voss raises a glass. "To the agent who lived four lifetimes."',
+          delay: 4500,
+          color: "#00ccff",
+          size: 15,
+        },
+        {
+          text: 'Miri rolls her eyes. "To the idiot I had to patch up four times."',
+          delay: 6500,
+          color: "#aaffcc",
+          size: 15,
+        },
+        {
+          text: 'Kai grins. "To the legend."',
+          delay: 8500,
+          color: "#ffcc88",
+          size: 16,
+        },
       ],
       particles: "glow",
       duration: 11000,
@@ -4121,10 +4680,30 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "deep_space",
       lines: [
-        { text: "Four timelines. Three acts each. One agent.", delay: 0, color: "#aaddff", size: 16 },
-        { text: "You've seen every version of this story.", delay: 2500, color: "#00ccff", size: 16 },
-        { text: "And in every one, you chose to fight.", delay: 5000, color: "#00ffcc", size: 18 },
-        { text: "That's not a loop. That's who you are.", delay: 7500, color: "#ffffff", size: 20 },
+        {
+          text: "Four timelines. Three acts each. One agent.",
+          delay: 0,
+          color: "#aaddff",
+          size: 16,
+        },
+        {
+          text: "You've seen every version of this story.",
+          delay: 2500,
+          color: "#00ccff",
+          size: 16,
+        },
+        {
+          text: "And in every one, you chose to fight.",
+          delay: 5000,
+          color: "#00ffcc",
+          size: 18,
+        },
+        {
+          text: "That's not a loop. That's who you are.",
+          delay: 7500,
+          color: "#ffffff",
+          size: 20,
+        },
       ],
       particles: "stars",
       duration: 10500,
@@ -4134,7 +4713,12 @@ export const CUTSCENE_SCRIPTS = {
       lines: [
         { text: "THE LOOP IS BROKEN", delay: 0, color: "#ffcc00", size: 28 },
         { text: "TRUE ENDING", delay: 2000, color: "#00ffcc", size: 24 },
-        { text: "Thank you for playing.", delay: 4500, color: "#ffffff", size: 18 },
+        {
+          text: "Thank you for playing.",
+          delay: 4500,
+          color: "#ffffff",
+          size: 18,
+        },
       ],
       duration: 7000,
     },

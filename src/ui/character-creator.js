@@ -10,11 +10,26 @@ import {
 
 export const CREATOR_CATEGORIES = [
   { name: "NAME", shortLabel: "NAME", data: null, key: null },
-  { name: "COLOR", shortLabel: "CLR", data: CHARACTER_COLORS, key: "colorIndex" },
+  {
+    name: "COLOR",
+    shortLabel: "CLR",
+    data: CHARACTER_COLORS,
+    key: "colorIndex",
+  },
   { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
   { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
-  { name: "SKIN", shortLabel: "SKIN", data: WEAPON_SKINS, key: "weaponSkinIndex" },
-  { name: "LOADOUT", shortLabel: "LOAD", data: LOADOUT_CLASSES, key: "loadoutIndex" },
+  {
+    name: "SKIN",
+    shortLabel: "SKIN",
+    data: WEAPON_SKINS,
+    key: "weaponSkinIndex",
+  },
+  {
+    name: "LOADOUT",
+    shortLabel: "LOAD",
+    data: LOADOUT_CLASSES,
+    key: "loadoutIndex",
+  },
 ];
 
 // ── Layout calculator (shared between render + click detection) ──
@@ -36,22 +51,48 @@ export function getCreatorLayout(w, h, isMobile) {
   const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
   const infoW = isMobile ? 0 : 200;
   const contentGap = isMobile ? 8 : 20;
-  const totalContentW = listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
+  const totalContentW =
+    listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
   const contentX = (w - totalContentW) / 2;
   const itemH = isMobile ? 32 : 36;
   const availH = isMobile ? h - contentY - 80 : 999;
   const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
 
   return {
-    titleY, tabGap, tabW, tabH, totalTabW, tabX0, tabY,
-    contentY, listW, previewW, infoW, contentGap, totalContentW, contentX,
-    itemH, availH, maxBySpace,
+    titleY,
+    tabGap,
+    tabW,
+    tabH,
+    totalTabW,
+    tabX0,
+    tabY,
+    contentY,
+    listW,
+    previewW,
+    infoW,
+    contentGap,
+    totalContentW,
+    contentX,
+    itemH,
+    availH,
+    maxBySpace,
   };
 }
 
 // ── Character preview (fully parameterized — no game state) ──
 
-export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin, now, loadout, scale) {
+export function renderCharacterPreview(
+  ctx,
+  cx,
+  cy,
+  palette,
+  armor,
+  badge,
+  skin,
+  now,
+  loadout,
+  scale,
+) {
   const s = scale || 1;
   const rotAngle = now * 0.001;
   const breathe = Math.sin(now * 0.002) * 2;
@@ -92,8 +133,8 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
     const gOff = gi * 10;
     const gW = Math.sqrt(Math.max(0, 38 * 38 - gOff * gOff));
     ctx.beginPath();
-    ctx.moveTo(gOff, platY - gW * 10 / 38);
-    ctx.lineTo(gOff, platY + gW * 10 / 38);
+    ctx.moveTo(gOff, platY - (gW * 10) / 38);
+    ctx.lineTo(gOff, platY + (gW * 10) / 38);
     ctx.stroke();
   }
   ctx.restore();
@@ -103,7 +144,7 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
   ctx.strokeStyle = palette.accent;
   ctx.lineWidth = 1.5;
   for (let ti = 0; ti < 8; ti++) {
-    const ta = rotAngle + ti * Math.PI / 4;
+    const ta = rotAngle + (ti * Math.PI) / 4;
     const tx1 = Math.cos(ta) * 36;
     const ty1 = platY + Math.sin(ta) * 9.5;
     const tx2 = Math.cos(ta) * 42;
@@ -254,8 +295,13 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
     const by = -armorH / 2 + 16;
     const br = 12;
     const icons = {
-      shield: "\u25C6", skull: "\u2620", clock: "\u23F0",
-      star: "\u2605", bolt: "\u26A1", eye: "\u25C9", rift: "\u00D7",
+      shield: "\u25C6",
+      skull: "\u2620",
+      clock: "\u23F0",
+      star: "\u2605",
+      bolt: "\u26A1",
+      eye: "\u25C9",
+      rift: "\u00D7",
     };
     const badgePulse = 0.6 + 0.4 * Math.sin(now * 0.004);
 
@@ -311,8 +357,12 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
   const wpnX = armorW / 2 + 6;
   const wpnY = -armorH / 2 + 30;
   const skinColors = {
-    default: "#556677", carbon: "#222222", chrome: "#aabbcc",
-    ember: "#aa4400", frost: "#4488bb", toxic: "#339933",
+    default: "#556677",
+    carbon: "#222222",
+    chrome: "#aabbcc",
+    ember: "#aa4400",
+    frost: "#4488bb",
+    toxic: "#339933",
   };
   ctx.fillStyle = skinColors[skin.id] || "#556677";
   ctx.fillRect(wpnX, wpnY, 6, 30);
@@ -343,7 +393,13 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
       ctx.strokeStyle = palette.primary;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(-armorW / 2 - 2, -armorH / 2 - 2, armorW + 4, armorH + 4, 8);
+      ctx.roundRect(
+        -armorW / 2 - 2,
+        -armorH / 2 - 2,
+        armorW + 4,
+        armorH + 4,
+        8,
+      );
       ctx.stroke();
     } else if (loadout.id === "phantom") {
       ctx.globalAlpha = 0.12;
@@ -380,7 +436,14 @@ export function renderCharacterPreview(ctx, cx, cy, palette, armor, badge, skin,
 
 // ── Main character creator screen ──
 
-export function renderCharacterCreator(ctx, w, h, creatorCategory, character, isTouchDevice) {
+export function renderCharacterCreator(
+  ctx,
+  w,
+  h,
+  creatorCategory,
+  character,
+  isTouchDevice,
+) {
   const now = performance.now();
   const cat = creatorCategory;
   const char = character;
@@ -419,8 +482,8 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
   ctx.save();
   for (let pi = 0; pi < particleCount; pi++) {
     const seed = pi * 137.508; // golden angle spread
-    const px = ((seed * 7.3 + now * 0.008 * (0.3 + (pi % 3) * 0.2)) % w);
-    const py = ((seed * 13.7 + now * 0.006 * (0.2 + (pi % 4) * 0.15)) % h);
+    const px = (seed * 7.3 + now * 0.008 * (0.3 + (pi % 3) * 0.2)) % w;
+    const py = (seed * 13.7 + now * 0.006 * (0.2 + (pi % 4) * 0.15)) % h;
     const pSize = 1 + (pi % 3);
     const pAlpha = 0.06 + 0.04 * Math.sin(now * 0.002 + pi);
     ctx.globalAlpha = pAlpha;
@@ -460,7 +523,9 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
     const tx = L.tabX0 + i * (L.tabW + L.tabGap);
     const selected = i === cat;
 
-    ctx.fillStyle = selected ? `${palette.primary}44` : "rgba(255,255,255,0.04)";
+    ctx.fillStyle = selected
+      ? `${palette.primary}44`
+      : "rgba(255,255,255,0.04)";
     ctx.beginPath();
     ctx.roundRect(tx, L.tabY, L.tabW, L.tabH, 4);
     ctx.fill();
@@ -524,7 +589,18 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
       ? nameBoxY + nameBoxH + Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
       : nameBoxY + nameBoxH + 160;
     const prevScale = isMobile ? 1.0 : 1.5;
-    renderCharacterPreview(ctx, prevCX, prevCY, palette, armor, badge, skin, now, loadout, prevScale);
+    renderCharacterPreview(
+      ctx,
+      prevCX,
+      prevCY,
+      palette,
+      armor,
+      badge,
+      skin,
+      now,
+      loadout,
+      prevScale,
+    );
 
     // Styled nameplate (name step)
     const npText = char.name || "Agent";
@@ -594,7 +670,9 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
 
     if (isSelected) {
       const sPulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-      ctx.fillStyle = `${palette.primary}${Math.round(15 * sPulse).toString(16).padStart(2, "0")}`;
+      ctx.fillStyle = `${palette.primary}${Math.round(15 * sPulse)
+        .toString(16)
+        .padStart(2, "0")}`;
       ctx.beginPath();
       ctx.roundRect(listX + 4, iy, L.listW - 8, L.itemH - 4, 4);
       ctx.fill();
@@ -643,7 +721,18 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
   ctx.roundRect(prevX, L.contentY, L.previewW, prevH, 8);
   ctx.stroke();
 
-  renderCharacterPreview(ctx, prevCX, L.contentY + prevH / 2, palette, armor, badge, skin, now, loadout, 1.3);
+  renderCharacterPreview(
+    ctx,
+    prevCX,
+    L.contentY + prevH / 2,
+    palette,
+    armor,
+    badge,
+    skin,
+    now,
+    loadout,
+    1.3,
+  );
 
   // ── Scan-line overlay ──
   ctx.save();
@@ -679,6 +768,27 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
     ctx.font = "bold 13px monospace";
     ctx.textAlign = "left";
     ctx.fillText(selectedItem.name, infoX + 12, L.contentY + 28);
+
+    // Armor tier pips (Sprint H 8.2: starter → mid → elite visual)
+    if (cat === 2 && selectedItem.tier) {
+      const pipX = infoX + 12;
+      const pipY = L.contentY + 38;
+      const tierColors = ["#6a8cff", "#ffcc44", "#ff4488"];
+      const tierLabels = ["STARTER", "MID", "ELITE"];
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle =
+          i < selectedItem.tier
+            ? tierColors[selectedItem.tier - 1]
+            : "rgba(80,90,110,0.4)";
+        ctx.beginPath();
+        ctx.arc(pipX + 4 + i * 12, pipY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = tierColors[selectedItem.tier - 1];
+      ctx.font = "bold 9px monospace";
+      ctx.fillText(tierLabels[selectedItem.tier - 1], pipX + 44, pipY + 3);
+      ctx.font = "bold 13px monospace";
+    }
 
     // Description
     if (selectedItem.desc) {
@@ -734,7 +844,12 @@ export function renderCharacterCreator(ctx, w, h, creatorCategory, character, is
       };
 
       if (b.fireRateMultiplier != null) {
-        drawStatBar("FIRE RATE", b.fireRateMultiplier * 100, 120, palette.accent);
+        drawStatBar(
+          "FIRE RATE",
+          b.fireRateMultiplier * 100,
+          120,
+          palette.accent,
+        );
       }
       if (b.maxHealth != null) {
         drawStatBar("MAX HEALTH", b.maxHealth, 150, "#44cc88");
