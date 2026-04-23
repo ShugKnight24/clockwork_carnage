@@ -3,6 +3,11 @@ import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
 import { isCompactPhone } from "../../js/layout.js";
+import {
+  CHARACTER_COLORS,
+  HELMET_STYLES,
+  VISOR_STYLES,
+} from "../../js/data.js";
 
 /**
  * HUD rendering — extracted from game.js.
@@ -22,11 +27,15 @@ function _minimapState(game) {
 
 /** Build portrait state from game instance */
 function _portraitState(game) {
+  const c = game.character || {};
   return {
     health: game.player.health,
     maxHealth: game.player.maxHealth,
     alive: game.player.alive,
     time: game.time,
+    palette: CHARACTER_COLORS[c.colorIndex || 0],
+    helmet: HELMET_STYLES[c.helmetIndex || 0],
+    visor: VISOR_STYLES[c.visorIndex || 0],
   };
 }
 

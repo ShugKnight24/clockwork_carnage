@@ -6,9 +6,26 @@
  * @param {number} y
  * @param {number} w
  * @param {number} h
- * @param {{ health: number, maxHealth: number, alive: boolean, time: number }} state
+ * @param {{ health: number, maxHealth: number, alive: boolean, time: number,
+ *   palette?: { primary: string, accent: string, dark: string },
+ *   helmet?: { id: string },
+ *   visor?: { id: string } }} state
  */
-export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }) {
+export function drawPortrait(ctx, x, y, w, h, state) {
+  const { health, maxHealth, alive, time, palette, helmet, visor } = state;
+  // Palette-driven tokens (fallback to legacy hex if no character data)
+  const HELMET_SHELL = palette ? palette.dark : "#1a2a3a";
+  const HELMET_RIM = palette ? _mix(palette.dark, "#ffffff", 0.25) : "#334466";
+  const HELMET_INNER = palette ? _mix(palette.dark, "#000000", 0.6) : "#0a1520";
+  const HELMET_DEEP = palette ? _mix(palette.dark, "#000000", 0.4) : "#112233";
+  const HELMET_DARK2 = palette ? _mix(palette.dark, "#000000", 0.5) : "#0f1f2f";
+  const HELMET_LIGHT = palette ? _mix(palette.dark, "#ffffff", 0.12) : "#2a3a4a";
+  const HELMET_MID = palette ? _mix(palette.dark, "#ffffff", 0.06) : "#223344";
+  const VISOR_MAIN = palette ? palette.accent : "#00ddff";
+  const VISOR_BRIGHT = palette ? _mix(palette.accent, "#ffffff", 0.35) : "#66ffff";
+  const VISOR_DIM = palette ? _mix(palette.accent, "#000000", 0.2) : "#00ccee";
+  const VISOR_DEEP = palette ? _mix(palette.accent, "#000000", 0.35) : "#00aacc";
+
   const healthPct = health / maxHealth;
   const isDead = !alive || health <= 0;
   // Use modular time to prevent floating-point precision loss after hours of play
@@ -89,18 +106,18 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.lineTo(cx + 10 * s, cy - 1 * s);
     ctx.stroke();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 17 * s, cy - 10 * s, 6 * s, 3 * s);
     ctx.fillRect(cx + 11 * s, cy - 9 * s, 5 * s, 3 * s);
   }
 
   // Helmet
   if (!isDead && healthPct > 0.5) {
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.beginPath();
     ctx.ellipse(cx, cy - 2 * s, 20 * s, 24 * s, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#334466";
+    ctx.strokeStyle = HELMET_RIM;
     ctx.lineWidth = 2 * s;
     ctx.beginPath();
     ctx.arc(cx, cy - 6 * s, 18 * s, Math.PI + 0.3, -0.3);
@@ -109,10 +126,10 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
 
   if (!isDead && healthPct > 0.9) {
     // Stage 1 (>90%)
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
-    ctx.fillStyle = "#00ddff";
+    ctx.fillStyle = VISOR_MAIN;
     ctx.globalAlpha = 0.8 + Math.sin(animTime / 400) * 0.15;
     ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
     ctx.globalAlpha = 1;
@@ -124,23 +141,23 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.fillStyle = "rgba(255,255,255,0.35)";
     ctx.fillRect(cx - 12 * s, cy - 4 * s, 10 * s, 3 * s);
 
-    ctx.fillStyle = "#66ffff";
+    ctx.fillStyle = VISOR_BRIGHT;
     ctx.globalAlpha = 0.4 + Math.sin(animTime / 200) * 0.2;
     ctx.fillRect(cx + 8 * s, cy - 4 * s, 2 * s, 2 * s);
     ctx.fillRect(cx + 12 * s, cy - 3 * s, 2 * s, 2 * s);
     ctx.globalAlpha = 1;
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-    ctx.fillStyle = "#112233";
+    ctx.fillStyle = HELMET_DEEP;
     ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     for (let v = 0; v < 3; v++) {
       ctx.fillRect(cx - 5 * s + v * 4 * s, cy + 10 * s, 2 * s, 4 * s);
     }
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
-    ctx.fillStyle = "#0f1f2f";
+    ctx.fillStyle = HELMET_DARK2;
     ctx.fillRect(cx - 12 * s, cy + 20 * s, 24 * s, 3 * s);
 
     ctx.strokeStyle = "rgba(0,200,255,0.3)";
@@ -148,10 +165,10 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.strokeRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
   } else if (healthPct > 0.8) {
     // Stage 2 (80-90%)
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
-    ctx.fillStyle = "#00ddff";
+    ctx.fillStyle = VISOR_MAIN;
     ctx.globalAlpha = 0.75 + Math.sin(animTime / 400) * 0.12;
     ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
     ctx.globalAlpha = 1;
@@ -170,28 +187,28 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.fill();
 
     // Small dent
-    ctx.strokeStyle = "#223344";
+    ctx.strokeStyle = HELMET_MID;
     ctx.lineWidth = 1 * s;
     ctx.beginPath();
     ctx.arc(cx - 10 * s, cy - 16 * s, 3 * s, 0.5, 2.5);
     ctx.stroke();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-    ctx.fillStyle = "#112233";
+    ctx.fillStyle = HELMET_DEEP;
     ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     for (let v = 0; v < 3; v++) {
       ctx.fillRect(cx - 5 * s + v * 4 * s, cy + 10 * s, 2 * s, 4 * s);
     }
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
   } else if (healthPct > 0.7) {
     // Stage 3 (70-80%)
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
-    ctx.fillStyle = "#00ccee";
+    ctx.fillStyle = VISOR_DIM;
     ctx.globalAlpha = 0.65 + Math.sin(animTime / 350) * 0.1;
     ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
     ctx.globalAlpha = 1;
@@ -224,18 +241,18 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.ellipse(cx + 12 * s, cy - 14 * s, 4 * s, 3 * s, 0.3, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-    ctx.fillStyle = "#112233";
+    ctx.fillStyle = HELMET_DEEP;
     ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
   } else if (healthPct > 0.6) {
     // Stage 4 (60-70%)
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
-    ctx.fillStyle = "#00aacc";
+    ctx.fillStyle = VISOR_DEEP;
     ctx.globalAlpha = 0.55 + Math.sin(animTime / 250) * 0.12;
     ctx.fillRect(cx - 16 * s, cy - 6 * s, 32 * s, 10 * s);
     ctx.globalAlpha = 1;
@@ -282,18 +299,18 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.ellipse(cx - 8 * s, cy - 15 * s, 3 * s, 2 * s, -0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-    ctx.fillStyle = "#112233";
+    ctx.fillStyle = HELMET_DEEP;
     ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
   } else if (healthPct > 0.5) {
     // Stage 5 (50-60%)
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 18 * s, cy - 8 * s, 36 * s, 22 * s);
 
-    ctx.fillStyle = "#00aacc";
+    ctx.fillStyle = VISOR_DEEP;
     ctx.globalAlpha = 0.5 + Math.sin(animTime / 300) * 0.1;
     ctx.fillRect(cx - 16 * s, cy - 6 * s, 14 * s, 10 * s);
     ctx.globalAlpha = 0.2;
@@ -332,9 +349,9 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.arc(cx + 7 * s, cy - 1 * s, 1 * s, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 28 * s, 10 * s);
-    ctx.fillStyle = "#112233";
+    ctx.fillStyle = HELMET_DEEP;
     ctx.fillRect(cx - 8 * s, cy + 10 * s, 16 * s, 4 * s);
 
     ctx.fillStyle = "#880000";
@@ -345,11 +362,11 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.ellipse(cx + 12 * s, cy - 12 * s, 5 * s, 4 * s, 0.3, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
   } else if (healthPct > 0.4) {
     // Stage 6 (40-50%)
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.beginPath();
     ctx.ellipse(
       cx - 2 * s,
@@ -362,16 +379,16 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     );
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "#334466";
+    ctx.strokeStyle = HELMET_RIM;
     ctx.lineWidth = 2 * s;
     ctx.beginPath();
     ctx.arc(cx - 2 * s, cy - 6 * s, 17 * s, Math.PI + 0.3, -0.4);
     ctx.stroke();
 
-    ctx.fillStyle = "#0a1520";
+    ctx.fillStyle = HELMET_INNER;
     ctx.fillRect(cx - 17 * s, cy - 7 * s, 17 * s, 18 * s);
 
-    ctx.fillStyle = "#00aacc";
+    ctx.fillStyle = VISOR_DEEP;
     ctx.globalAlpha = 0.3 + Math.sin(animTime / 200) * 0.1;
     ctx.fillRect(cx - 15 * s, cy - 5 * s, 14 * s, 7 * s);
     ctx.globalAlpha = 1;
@@ -433,7 +450,7 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.fill();
 
     // Break edge
-    ctx.strokeStyle = "#2a3a4a";
+    ctx.strokeStyle = HELMET_LIGHT;
     ctx.lineWidth = 2 * s;
     ctx.beginPath();
     ctx.moveTo(cx + 1 * s, cy - 20 * s);
@@ -445,13 +462,13 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.fillStyle = "#880000";
     ctx.fillRect(cx + 2 * s, cy + 2 * s, 2 * s, 8 * s);
 
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 14 * s, cy + 8 * s, 16 * s, 10 * s);
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.fillRect(cx - 16 * s, cy + 18 * s, 32 * s, 6 * s);
   } else if (healthPct > 0.3) {
     // Stage 7 (30-40%)
-    ctx.fillStyle = "#1a2a3a";
+    ctx.fillStyle = HELMET_SHELL;
     ctx.beginPath();
     ctx.moveTo(cx - 18 * s, cy - 18 * s);
     ctx.lineTo(cx - 8 * s, cy - 20 * s);
@@ -460,7 +477,7 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = "#00aacc";
+    ctx.fillStyle = VISOR_DEEP;
     ctx.globalAlpha = 0.15 + Math.sin(animTime / 100) * 0.1;
     ctx.fillRect(cx - 16 * s, cy - 16 * s, 6 * s, 3 * s);
     ctx.globalAlpha = 1;
@@ -728,4 +745,18 @@ export function drawPortrait(ctx, x, y, w, h, { health, maxHealth, alive, time }
   ctx.arc(x + 8 * s, y + h - 10 * s, 2 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
+}
+
+/** Linear blend two #rrggbb hex colors. t=0 returns a, t=1 returns b. */
+function _mix(a, b, t) {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
 }
