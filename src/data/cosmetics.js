@@ -82,6 +82,30 @@ export const ARMOR_STYLES = [
   },
 ];
 
+export const HELMET_STYLES = [
+  { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
+  { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2 },
+  { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2 },
+  { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3 },
+  { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3 },
+];
+
+export const VISOR_STYLES = [
+  { id: "standard", name: "Wide Visor", desc: "Full lower-arc optics", tier: 1 },
+  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2 },
+  { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3 },
+  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2 },
+  { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3 },
+];
+
+export const SHOULDER_STYLES = [
+  { id: "none", name: "Bare", desc: "No additional plating", tier: 1 },
+  { id: "pads", name: "Combat Pads", desc: "Standard oval shoulder pads", tier: 1 },
+  { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2 },
+  { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3 },
+  { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3 },
+];
+
 export const BADGES = [
   { id: "none", name: "None", icon: null },
   { id: "shield", name: "Temporal Shield", icon: "shield" },
@@ -141,6 +165,9 @@ export const DEFAULT_CHARACTER = {
   name: "Agent",
   colorIndex: 0,
   armorIndex: 0,
+  helmetIndex: 0,
+  visorIndex: 0,
+  shoulderIndex: 0,
   badgeIndex: 0,
   weaponSkinIndex: 0,
   loadoutIndex: 0,

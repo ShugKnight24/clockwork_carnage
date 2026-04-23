@@ -1,6 +1,9 @@
 import {
   CHARACTER_COLORS,
   ARMOR_STYLES,
+  HELMET_STYLES,
+  VISOR_STYLES,
+  SHOULDER_STYLES,
   BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
@@ -17,6 +20,9 @@ export const CREATOR_CATEGORIES = [
     key: "colorIndex",
   },
   { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
+  { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmetIndex" },
+  { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visorIndex" },
+  { name: "SHOULDER", shortLabel: "SHLD", data: SHOULDER_STYLES, key: "shoulderIndex" },
   { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
   {
     name: "SKIN",
@@ -92,8 +98,14 @@ export function renderCharacterPreview(
   now,
   loadout,
   scale,
+  helmet,
+  visor,
+  shoulder,
 ) {
   const s = scale || 1;
+  const helmetStyle = helmet || HELMET_STYLES[0];
+  const visorStyle = visor || VISOR_STYLES[0];
+  const shoulderStyle = shoulder || SHOULDER_STYLES[0];
   const rotAngle = now * 0.001;
   const breathe = Math.sin(now * 0.002) * 2;
 
@@ -259,26 +271,108 @@ export function renderCharacterPreview(
   ctx.fillStyle = palette.dark;
   ctx.fillRect(-10, -armorH / 2 - 6, 20, 8);
 
-  // Helmet
+  // Helmet (shape varies by helmetStyle)
   const helmY = -armorH / 2 - 28;
   ctx.fillStyle = palette.primary;
-  ctx.beginPath();
-  ctx.arc(0, helmY, 18, 0, Math.PI * 2);
-  ctx.fill();
-  // Visor
+  if (helmetStyle.id === "wide") {
+    ctx.beginPath();
+    ctx.ellipse(0, helmY, 22, 17, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (helmetStyle.id === "angular") {
+    ctx.beginPath();
+    ctx.moveTo(-18, helmY + 10);
+    ctx.lineTo(-14, helmY - 14);
+    ctx.lineTo(14, helmY - 14);
+    ctx.lineTo(18, helmY + 10);
+    ctx.lineTo(10, helmY + 16);
+    ctx.lineTo(-10, helmY + 16);
+    ctx.closePath();
+    ctx.fill();
+  } else if (helmetStyle.id === "mohawk") {
+    ctx.beginPath();
+    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
+    ctx.fill();
+    // Crest ridge
+    ctx.fillStyle = palette.dark;
+    ctx.beginPath();
+    ctx.moveTo(-2, helmY - 18);
+    ctx.lineTo(2, helmY - 22);
+    ctx.lineTo(2, helmY + 2);
+    ctx.lineTo(-2, helmY + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = palette.accent + "aa";
+    ctx.fillRect(-1, helmY - 20, 2, 20);
+  } else if (helmetStyle.id === "crested") {
+    ctx.beginPath();
+    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
+    ctx.fill();
+    // Forward fin
+    ctx.fillStyle = palette.accent;
+    ctx.beginPath();
+    ctx.moveTo(0, helmY - 18);
+    ctx.lineTo(20, helmY - 4);
+    ctx.lineTo(16, helmY + 2);
+    ctx.lineTo(0, helmY - 4);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // standard dome
+    ctx.beginPath();
+    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Visor (shape varies by visorStyle)
   ctx.fillStyle = palette.accent;
-  ctx.globalAlpha = 0.6 + 0.2 * Math.sin(now * 0.003);
-  ctx.beginPath();
-  ctx.ellipse(0, helmY + 2, 14, 7, 0, 0, Math.PI);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  // Visor glint
-  ctx.fillStyle = "#ffffff";
-  ctx.globalAlpha = 0.4;
-  ctx.beginPath();
-  ctx.ellipse(-5, helmY - 1, 4, 2, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  if (visorStyle.id === "slit") {
+    ctx.globalAlpha = 0.75 + 0.2 * Math.sin(now * 0.003);
+    ctx.fillRect(-12, helmY - 1, 24, 3);
+    ctx.globalAlpha = 1;
+  } else if (visorStyle.id === "fullface") {
+    ctx.globalAlpha = 0.7 + 0.15 * Math.sin(now * 0.003);
+    ctx.beginPath();
+    ctx.ellipse(0, helmY, 15, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Reflective sheen
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.ellipse(-6, helmY - 5, 4, 2, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  } else if (visorStyle.id === "split") {
+    ctx.globalAlpha = 0.7 + 0.2 * Math.sin(now * 0.003);
+    ctx.beginPath();
+    ctx.ellipse(-7, helmY + 2, 5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(7, helmY + 2, 5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  } else if (visorStyle.id === "glow") {
+    const glowPulse = 0.5 + 0.5 * Math.sin(now * 0.006);
+    ctx.shadowColor = palette.accent;
+    ctx.shadowBlur = 8 + 4 * glowPulse;
+    ctx.globalAlpha = 0.85 + 0.15 * glowPulse;
+    ctx.fillRect(-13, helmY, 26, 4);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  } else {
+    // standard wide visor
+    ctx.globalAlpha = 0.6 + 0.2 * Math.sin(now * 0.003);
+    ctx.beginPath();
+    ctx.ellipse(0, helmY + 2, 14, 7, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Visor glint
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.ellipse(-5, helmY - 1, 4, 2, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   // Arms
   ctx.fillStyle = palette.primary;
@@ -288,6 +382,82 @@ export function renderCharacterPreview(
   ctx.fillStyle = palette.dark;
   ctx.fillRect(-armorW / 2 - 8, -armorH / 2 + 46, 8, 8);
   ctx.fillRect(armorW / 2 + 2, -armorH / 2 + 46, 8, 8);
+
+  // Shoulder pads / guards (varies by shoulderStyle)
+  const shY = -armorH / 2 + 4;
+  const shLX = -armorW / 2 - 5;
+  const shRX = armorW / 2 + 5;
+  if (shoulderStyle.id === "pads") {
+    ctx.fillStyle = palette.primary;
+    ctx.beginPath();
+    ctx.ellipse(shLX, shY, 10, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(shRX, shY, 10, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = palette.accent + "66";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(shLX, shY, 10, 7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(shRX, shY, 10, 7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (shoulderStyle.id === "spikes") {
+    ctx.fillStyle = palette.dark;
+    // Left spikes
+    ctx.beginPath();
+    ctx.moveTo(shLX - 10, shY + 4);
+    ctx.lineTo(shLX - 12, shY - 8);
+    ctx.lineTo(shLX - 4, shY - 2);
+    ctx.lineTo(shLX - 6, shY - 10);
+    ctx.lineTo(shLX + 2, shY - 4);
+    ctx.lineTo(shLX + 4, shY + 4);
+    ctx.closePath();
+    ctx.fill();
+    // Right spikes (mirror)
+    ctx.beginPath();
+    ctx.moveTo(shRX + 10, shY + 4);
+    ctx.lineTo(shRX + 12, shY - 8);
+    ctx.lineTo(shRX + 4, shY - 2);
+    ctx.lineTo(shRX + 6, shY - 10);
+    ctx.lineTo(shRX - 2, shY - 4);
+    ctx.lineTo(shRX - 4, shY + 4);
+    ctx.closePath();
+    ctx.fill();
+  } else if (shoulderStyle.id === "pauldrons") {
+    ctx.fillStyle = palette.dark;
+    // Trapezoidal plates
+    ctx.beginPath();
+    ctx.moveTo(shLX - 12, shY - 8);
+    ctx.lineTo(shLX + 4, shY - 6);
+    ctx.lineTo(shLX + 6, shY + 10);
+    ctx.lineTo(shLX - 10, shY + 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(shRX + 12, shY - 8);
+    ctx.lineTo(shRX - 4, shY - 6);
+    ctx.lineTo(shRX - 6, shY + 10);
+    ctx.lineTo(shRX + 10, shY + 10);
+    ctx.closePath();
+    ctx.fill();
+    // Accent trim
+    ctx.fillStyle = palette.accent + "aa";
+    ctx.fillRect(shLX - 10, shY - 6, 14, 2);
+    ctx.fillRect(shRX - 4, shY - 6, 14, 2);
+  } else if (shoulderStyle.id === "armored") {
+    ctx.fillStyle = palette.primary;
+    ctx.fillRect(shLX - 11, shY - 6, 14, 14);
+    ctx.fillRect(shRX - 3, shY - 6, 14, 14);
+    ctx.fillStyle = palette.dark;
+    ctx.fillRect(shLX - 11, shY - 6, 14, 3);
+    ctx.fillRect(shRX - 3, shY - 6, 14, 3);
+    ctx.fillStyle = palette.accent + "88";
+    ctx.fillRect(shLX - 9, shY - 2, 2, 8);
+    ctx.fillRect(shRX + 7, shY - 2, 2, 8);
+  }
+  // "none" draws nothing.
 
   // ── Badge ──
   if (badge.icon) {
@@ -452,6 +622,9 @@ export function renderCharacterCreator(
   const badge = BADGES[char.badgeIndex];
   const skin = WEAPON_SKINS[char.weaponSkinIndex];
   const loadout = LOADOUT_CLASSES[char.loadoutIndex];
+  const helmet = HELMET_STYLES[char.helmetIndex || 0];
+  const visor = VISOR_STYLES[char.visorIndex || 0];
+  const shoulder = SHOULDER_STYLES[char.shoulderIndex || 0];
   const categories = CREATOR_CATEGORIES;
 
   // Full-screen dark backdrop
@@ -600,6 +773,9 @@ export function renderCharacterCreator(
       now,
       loadout,
       prevScale,
+      helmet,
+      visor,
+      shoulder,
     );
 
     // Styled nameplate (name step)
@@ -732,6 +908,9 @@ export function renderCharacterCreator(
     now,
     loadout,
     1.3,
+    helmet,
+    visor,
+    shoulder,
   );
 
   // ── Scan-line overlay ──

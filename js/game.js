@@ -528,8 +528,9 @@ export class Game {
 
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
-    this.creatorCategory = 0; // 0=name, 1=color, 2=armor, 3=badge, 4=weaponSkin, 5=loadout
-    this.creatorCategoryCount = 6;
+    this.creatorCategory = 0;
+    // Kept in sync with CREATOR_CATEGORIES.length (touch.js reads this).
+    this.creatorCategoryCount = CREATOR_CATEGORIES.length;
     this.creatorReturnState = null; // state to return to after saving
     this._creatorSaveCallback = null; // optional callback after creator save
 
