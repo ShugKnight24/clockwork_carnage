@@ -1308,15 +1308,22 @@ export class MeltdownMode {
   }
 
   _saveScore(score, dist, time) {
+    const id = Date.now();
+    const prevBest = this.highScores.length > 0
+      ? this.highScores[0].score
+      : 0;
+    this._lastRunId = id;
+    this._lastRunWasNewRecord = score > prevBest && score > 0;
     this.highScores.push({
       score,
       distance: Math.floor(dist),
       time: Math.floor(time),
-      date: Date.now(),
+      date: id,
       hero: this.heroKey,
       ironman: this.ironman,
       kills: this.killCount,
       upgrades: this.upgrades.length,
+      _runId: id,
     });
     this.highScores.sort((a, b) => b.score - a.score);
     this.highScores = this.highScores.slice(0, 25); // expanded from 10 to 25

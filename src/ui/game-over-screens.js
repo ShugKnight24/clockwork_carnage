@@ -152,16 +152,45 @@ export function renderGameOver(ctx, w, h, state) {
     ctx.font = `${compact ? 10 : 12}px monospace`;
     ctx.fillText(`Time: ${mHud.time}s | Speed: ${mHud.speed} m/s`, w / 2, mY + 45);
 
-    // High scores
+    // High scores — top 5, with new-run highlight, NEW RECORD badge, ironman tag.
     if (meltdown.highScores.length > 0) {
+      const rowGap = compact ? 13 : 16;
+      const headerY = mY + (compact ? 62 : 70);
+
+      // NEW RECORD badge (pulsing, above header)
+      if (meltdown._lastRunWasNewRecord) {
+        const recPulse = 0.7 + Math.sin(time * 0.01) * 0.3;
+        ctx.fillStyle = `rgba(255,220,60,${recPulse})`;
+        ctx.font = `bold ${compact ? 11 : 14}px monospace`;
+        ctx.fillText('★ NEW RECORD ★', w / 2, headerY - rowGap);
+      }
+
       ctx.fillStyle = '#00ccff';
       ctx.font = `bold ${compact ? 10 : 12}px monospace`;
-      ctx.fillText('── HIGH SCORES ──', w / 2, mY + 70);
-      ctx.fillStyle = 'rgba(200,220,255,0.7)';
+      ctx.fillText('── HIGH SCORES ──', w / 2, headerY);
+
+      const rows = meltdown.highScores.slice(0, 5);
       ctx.font = `${compact ? 9 : 11}px monospace`;
-      const top3 = meltdown.highScores.slice(0, 3);
-      top3.forEach((hs, i) => {
-        ctx.fillText(`${i + 1}. ${hs.score} pts (${hs.distance}m)`, w / 2, mY + 88 + i * 16);
+      rows.forEach((hs, i) => {
+        const isMine = meltdown._lastRunId && hs._runId === meltdown._lastRunId;
+        const rowY = headerY + 18 + i * rowGap;
+        // Background strip for the player's row
+        if (isMine) {
+          ctx.fillStyle = 'rgba(255,200,80,0.15)';
+          ctx.fillRect(w / 2 - (compact ? 140 : 180), rowY - 10, compact ? 280 : 360, rowGap);
+        }
+        ctx.fillStyle = isMine
+          ? 'rgba(255,220,120,1)'
+          : 'rgba(200,220,255,0.7)';
+        const scoreStr = hs.score.toLocaleString();
+        const distStr = hs.distance.toLocaleString();
+        const tag = hs.ironman ? ' ⚙' : '';
+        const marker = isMine ? ' ◀' : '';
+        ctx.fillText(
+          `${i + 1}. ${scoreStr} pts (${distStr}m)${tag}${marker}`,
+          w / 2,
+          rowY,
+        );
       });
     }
   }
