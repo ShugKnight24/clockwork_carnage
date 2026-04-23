@@ -460,3 +460,85 @@ export function drawProjectile(ctx, screenX, centerY, sprWidth, dist, entity, ti
 
   ctx.globalAlpha = 1;
 }
+
+/**
+ * Exotic meltdown pickup — shared base sprite. Style differs by `variant`:
+ *   "damage2x": red/orange, "×2" glyph, damage motif
+ *   "invuln":   gold/white, star glyph, shield motif
+ */
+export function drawExoticPickup(
+  ctx,
+  screenX,
+  centerY,
+  sprWidth,
+  sprHeight,
+  dist,
+  time,
+  fog,
+  variant,
+) {
+  if (fog <= 0) return;
+  const size = Math.max(7, sprWidth * 0.4);
+  const bob = Math.sin(time * 0.005) * size * 0.25;
+  const y = centerY + sprHeight * 0.1 + bob;
+  const pulse = 0.7 + Math.sin(time * 0.008) * 0.3;
+  const spin = (time * 0.003) % (Math.PI * 2);
+
+  const isDmg = variant === "damage2x";
+  const colorCore = isDmg ? "#ff3322" : "#ffdd44";
+  const colorGlow = isDmg ? "#ff6644" : "#ffee88";
+  const colorDark = isDmg ? "#661100" : "#886600";
+
+  // Outer pulsing halo
+  ctx.globalAlpha = fog * 0.25 * pulse;
+  ctx.fillStyle = colorGlow;
+  ctx.beginPath();
+  ctx.arc(screenX, y, size * 2.0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mid glow
+  ctx.globalAlpha = fog * 0.45;
+  ctx.fillStyle = colorCore;
+  ctx.beginPath();
+  ctx.arc(screenX, y, size * 1.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rotating diamond core
+  ctx.save();
+  ctx.translate(screenX, y);
+  ctx.rotate(spin);
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = colorCore;
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.9);
+  ctx.lineTo(size * 0.9, 0);
+  ctx.lineTo(0, size * 0.9);
+  ctx.lineTo(-size * 0.9, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = colorDark;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Inner highlight
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.5);
+  ctx.lineTo(size * 0.25, -size * 0.25);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Glyph overlay (no rotate — always upright, legible)
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `bold ${Math.max(9, Math.floor(size * 0.95))}px monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(isDmg ? "2x" : "+", screenX, y);
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+
+  ctx.globalAlpha = 1;
+}

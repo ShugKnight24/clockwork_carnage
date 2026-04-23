@@ -1536,6 +1536,8 @@ export class Game {
   }
 
   damagePlayer(amount, attacker) {
+    // Meltdown exotic pickup: temporary full invulnerability
+    if (this.mode === "meltdown" && this.meltdown.isInvulnerable()) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
@@ -1802,7 +1804,7 @@ export class Game {
       const mResult = this.meltdown.update(dt, this.player.x, this.player.y);
 
       // Sync meltdown damage multiplier to player (for weapon system)
-      this.player.damageMultiplier = this.meltdown.damageMultiplier;
+      this.player.damageMultiplier = this.meltdown.effectiveDamage();
 
       // Apply auto-forward movement (+Y direction) with collision
       // Braking: holding back key slows to 50% but costs stamina
@@ -2228,6 +2230,25 @@ export class Game {
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
         }
+      } else if (
+        (e.type === "damage2x" || e.type === "invuln") &&
+        this.mode === "meltdown"
+      ) {
+        // Exotic meltdown pickups — distance-based buff windows
+        this.meltdown.onExoticPickup(e.type);
+        e.active = false;
+        this.spawnPickupBurst(
+          e.x,
+          e.y,
+          e.type === "damage2x" ? "weapon" : "health",
+        );
+        this.audio.pickup();
+        _spawnEnergyBurst(this.player.particles, e.x, e.y, {
+          count: 14,
+          r: e.type === "damage2x" ? 255 : 255,
+          g: e.type === "damage2x" ? 80 : 220,
+          b: e.type === "damage2x" ? 40 : 120,
+        });
       }
     }
   }

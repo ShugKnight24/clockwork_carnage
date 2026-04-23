@@ -9,6 +9,7 @@ import {
   drawWeaponPickup,
   drawExit,
   drawProjectile,
+  drawExoticPickup,
 } from "../src/rendering/pickups.js";
 import { drawProp, setFovScale } from "../src/rendering/props.js";
 
@@ -675,6 +676,18 @@ export class Renderer {
         dist,
         time,
         fogFactor,
+      );
+    } else if (entity.type === "damage2x" || entity.type === "invuln") {
+      drawExoticPickup(
+        ctx,
+        screenX,
+        centerY,
+        sprWidth,
+        sprHeight,
+        dist,
+        time,
+        fogFactor,
+        entity.type,
       );
     } else if (entity.type === "exit") {
       drawExit(

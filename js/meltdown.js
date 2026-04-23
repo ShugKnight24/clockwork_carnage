@@ -643,6 +643,14 @@ const MELTDOWN_ARIA = {
     "TEN. I'm officially impressed. Don't let it slip.",
     "Ten in a row. You're in the zone — stay there.",
   ],
+  damage2x: [
+    "Damage amp online. Forty metres of overkill — make them count.",
+    "Output doubled. Punch through everything in your way.",
+  ],
+  invuln: [
+    "Temporal ward up. You're untouchable — for the next forty metres.",
+    "Phase shield engaged. Run through fire. Actually run through it.",
+  ],
 };
 
 // ── Shared segment-stitching helper ──────────────────────────────
@@ -732,6 +740,17 @@ function _appendSegment(
     }
   }
 
+  // Exotic pickups — rare rewards in mid/late segments.
+  // 6% chance per segment after seg 12; type 50/50.
+  if (segNum > 12 && Math.random() < 0.06) {
+    const xx = 3 + Math.floor(Math.random() * 9);
+    const yy = baseY + 4;
+    if (grid[yy] && grid[yy][xx] === 0) {
+      const type = Math.random() < 0.5 ? "damage2x" : "invuln";
+      pickupSpawns.push({ x: xx + 0.5, y: yy + 0.5, type });
+    }
+  }
+
   return segIdx;
 }
 
@@ -809,6 +828,9 @@ export class MeltdownMode {
     this.shieldHP = 0;
     this.extraLives = 0;
     this.hazardImmuneUntil = 0;
+    // Exotic pickup timers (distance-based, like hazardImmuneUntil)
+    this.damage2xUntil = 0;
+    this.invulnUntil = 0;
     this._healPending = 0;
     this.killCount = 0;
 
@@ -862,6 +884,8 @@ export class MeltdownMode {
     this.shieldHP = 0;
     this.extraLives = 0;
     this.hazardImmuneUntil = 0;
+    this.damage2xUntil = 0;
+    this.invulnUntil = 0;
     this._healPending = 0;
     this.killCount = 0;
     this.abilityCooldown = 0;
@@ -991,7 +1015,10 @@ export class MeltdownMode {
 
     // ── Hazard check (with immunity support) ──
     let hazardDmg = 0;
-    if (this.distance < this.hazardImmuneUntil) {
+    if (
+      this.distance < this.hazardImmuneUntil ||
+      this.distance < this.invulnUntil
+    ) {
       // Immune — no hazard damage
     } else {
       const py = Math.floor(playerY);
@@ -1114,6 +1141,39 @@ export class MeltdownMode {
       return true; // Survived — set HP to 1 in game.js
     }
     return false; // Actually dead
+  }
+
+  /**
+   * Exotic pickup consume. Extends distance-based buff windows.
+   * Stacks additively: picking up a 2nd damage2x during an active window adds 40 more metres.
+   * Returns a tag for audio/particle flavour in game.js.
+   */
+  onExoticPickup(type) {
+    const DURATION_M = 40; // metres of effect per pickup
+    if (type === "damage2x") {
+      const base = Math.max(this.distance, this.damage2xUntil);
+      this.damage2xUntil = base + DURATION_M;
+      this._queueAria("damage2x");
+      return "damage2x";
+    }
+    if (type === "invuln") {
+      const base = Math.max(this.distance, this.invulnUntil);
+      this.invulnUntil = base + DURATION_M;
+      this._queueAria("invuln");
+      return "invuln";
+    }
+    return null;
+  }
+
+  /** Effective damage scale: base damageMultiplier doubled during damage2x window. */
+  effectiveDamage() {
+    const bonus = this.distance < this.damage2xUntil ? 2.0 : 1.0;
+    return this.damageMultiplier * bonus;
+  }
+
+  /** True while temporary invulnerability is active (blocks all damage incl. hazards). */
+  isInvulnerable() {
+    return this.distance < this.invulnUntil;
   }
 
   /**
