@@ -37,7 +37,8 @@ export function renderTutorialOverlay(ctx, w, h, state) {
     const lines = [
       { text: "NEURAL LINK.......... OK", delay: 0.3 },
       { text: "BIOMETRICS........... NOMINAL", delay: 0.8 },
-      { text: "CHRONO MODULE........ STANDBY", delay: 1.3 },
+      { text: "CADET ID: CONFIRMED", delay: 1.2 },
+      { text: "CHRONO MODULE........ STANDBY", delay: 1.6 },
     ];
     ctx.font = "bold 16px monospace";
     ctx.textAlign = "center";
@@ -62,8 +63,8 @@ export function renderTutorialOverlay(ctx, w, h, state) {
     {
       title: "SYSTEMS ONLINE — LOOK AROUND",
       hint: isMobile
-        ? 'ARIA: "Neural link active. Drag to look around — get used to the augmented feed."'
-        : 'ARIA: "Neural link active. Move the mouse — get used to the augmented feed."',
+        ? 'ARIA: "Welcome to the Bureau, Cadet. Drag to look — get used to the augmented feed."'
+        : 'ARIA: "Welcome to the Bureau, Cadet. Move the mouse — get used to the augmented feed."',
       color: "#00ccff",
     },
     {
@@ -121,18 +122,18 @@ export function renderTutorialOverlay(ctx, w, h, state) {
       color: "#8844ff",
     },
     {
-      title: "RESUPPLY — TAKE EVERYTHING",
-      hint: 'ARIA: "Health and ammo on the ground. Grab everything — you\'ll need it."',
+      title: "RESUPPLY — THE SUPERVISOR'S OFFICE",
+      hint: 'SUPERVISOR (radio): "Cadet, grab what\'s on the desk. Health. Ammo. Take everything — the Bureau just went hot."',
       color: "#44ff88",
     },
     {
       title: "\u26A1 ALERT — INTRUSION DETECTED",
-      hint: 'ARIA: "Active intrusion, multiple sectors compromised. Get to the combat arena — NOW."',
+      hint: 'SUPERVISOR: "Multiple sectors — breach — they\'re inside —" [STATIC] ARIA: "Signal lost. Combat arena, NOW."',
       color: "#ff2244",
     },
     {
-      title: "WAVE 1 — DRONES INBOUND",
-      hint: 'ARIA: "Three hostile drones. Put them down — this is live."',
+      title: "WAVE 1 — FIRST CONTACT",
+      hint: 'ARIA: "Three drones in the arena. Cadet — this isn\'t a sim. Put them down."',
       color: "#ff2244",
     },
     {

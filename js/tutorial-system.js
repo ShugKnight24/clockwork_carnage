@@ -186,8 +186,8 @@ export class TutorialSystem {
     g.objectiveWaypoint = null;
 
     switch (this.step) {
-      case 0: // HUD CALIBRATION — auto 2s
-        if (elapsed > 2) this.advanceStep();
+      case 0: // HUD CALIBRATION — auto 2.4s (cadet ID readout legibility)
+        if (elapsed > 2.4) this.advanceStep();
         break;
 
       case 1: // SYSTEMS ONLINE — look around (cumulative angle > 2 rad)
