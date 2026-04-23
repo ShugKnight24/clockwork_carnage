@@ -3,6 +3,7 @@
 // Owns _prevCrouchKey state for edge detection.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
+import { decay } from "../utils/math.js";
 
 export class PlayerUpdateSystem {
   _prevCrouchKey = false;
@@ -151,7 +152,7 @@ export class PlayerUpdateSystem {
     } else if (len > 0) {
       p.weaponBob += dt * (p.isSprinting ? 15 : 8);
     } else {
-      p.weaponBob *= 0.9;
+      p.weaponBob *= decay(0.9, dt);
     }
 
     // Mouse look

@@ -152,10 +152,14 @@ export class TouchControls {
   }
 
   resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.canvas.width = w;
-    this.canvas.height = h;
+    this.canvas.style.width = w + "px";
+    this.canvas.style.height = h + "px";
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this._updateSafeArea();
     const sa = this.safeArea;
@@ -839,11 +843,10 @@ export class TouchControls {
   }
 
   handleUpgradeTap(touch) {
-    const hud = this.game.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
-    const h = hud.height;
+    const w = this.game.hudW;
+    const h = this.game.hudH;
+    const scaleX = w / window.innerWidth;
+    const scaleY = h / window.innerHeight;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 
@@ -881,10 +884,9 @@ export class TouchControls {
   }
 
   handleControlsTap(touch) {
-    const hud = this.game.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
+    const w = this.game.hudW;
+    const scaleX = w / window.innerWidth;
+    const scaleY = this.game.hudH / window.innerHeight;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 

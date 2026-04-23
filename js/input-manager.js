@@ -99,6 +99,11 @@ export class InputManager {
     this._lastTapKey = null;
     this._lastTapTime = 0;
 
+    // Weapon switching debounce (prevents ghost-cycling with trackpads)
+    this._lastWeaponSwitch = 0;
+    this._WEAPON_SWITCH_COOLDOWN = 200; // ms between switches
+    this._WHEEL_THRESHOLD = 50; // ignore small trackpad movements
+
     this._bound = {}; // holds bound handler refs for later removeEventListener
     this._register();
   }
@@ -216,7 +221,18 @@ export class InputManager {
     b.contextmenu = (e) => e.preventDefault();
     b.mousedown = (e) => this._onMouseDown(e);
     b.mouseup   = (e) => this._onMouseUp(e);
-    b.wheel     = (e) => { e.preventDefault(); this._onWheel(e.deltaY); };
+    b.wheel     = (e) => {
+      e.preventDefault();
+      const now = Date.now();
+      const timeSinceLastSwitch = now - this._lastWeaponSwitch;
+      
+      // Ignore if in cooldown or below threshold (prevents trackpad ghost-switching)
+      if (timeSinceLastSwitch < this._WEAPON_SWITCH_COOLDOWN) return;
+      if (Math.abs(e.deltaY) < this._WHEEL_THRESHOLD) return;
+      
+      this._lastWeaponSwitch = now;
+      this._onWheel(e.deltaY);
+    };
     b.lockchange = () => {
       const locked = document.pointerLockElement === this.canvas;
       const prev = this.mouse.locked;

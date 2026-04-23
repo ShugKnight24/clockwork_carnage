@@ -54,3 +54,11 @@ export const randFloat = (min, max) =>
 /** Pick random element from array. */
 export const randPick = (arr) =>
   arr[Math.floor(Math.random() * arr.length)];
+
+/**
+ * Framerate-invariant exponential decay.
+ * `rate60` is the per-frame multiplier originally tuned at 60 fps
+ * (e.g. 0.9 means "lose 10% per frame at 60 Hz").
+ * Returns the equivalent multiplier for arbitrary `dt` (seconds).
+ */
+export const decay = (rate60, dt) => Math.pow(rate60, dt * 60);

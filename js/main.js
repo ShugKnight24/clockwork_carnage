@@ -37,6 +37,7 @@ if ("ontouchstart" in window) {
 let nativeW = 0, nativeH = 0;
 
 function resizeCanvases() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2× for perf
   let w = window.innerWidth;
   let h = window.innerHeight;
   // Cap render resolution on mobile to maintain playable FPS
@@ -51,12 +52,22 @@ function resizeCanvases() {
   nativeW = w;
   nativeH = h;
 
-  // HUD always renders at native res for crisp text
-  hudCanvas.width = w;
-  hudCanvas.height = h;
+  // Store DPR + CSS-pixel dimensions on game for layout code
+  game.dpr = dpr;
+  game.hudW = w;
+  game.hudH = h;
 
-  // Game canvas renders at scaled res (adaptive quality)
+  // HUD at full DPR for crisp text
+  hudCanvas.style.width = w + "px";
+  hudCanvas.style.height = h + "px";
+  hudCanvas.width = Math.round(w * dpr);
+  hudCanvas.height = Math.round(h * dpr);
+  game.hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Game canvas renders at quality-scaled res (no DPR — adaptive quality handles it)
   const s = quality.renderScale;
+  gameCanvas.style.width = w + "px";
+  gameCanvas.style.height = h + "px";
   const gw = Math.round(w * s);
   const gh = Math.round(h * s);
   gameCanvas.width = gw;
@@ -421,9 +432,7 @@ function gameLoop(timestamp) {
       // Draw fade transition overlay on top of everything
       if (game.transitioning && game.transitionAlpha > 0) {
         const hctx = game.hudCtx;
-        const hw = hudCanvas.width;
-        const hh = hudCanvas.height;
-        game._renderTransitionOverlay(hctx, hw, hh);
+        game._renderTransitionOverlay(hctx, game.hudW, game.hudH);
         // Also cover the game canvas for cutscene / builder screens
         const gctx = game.renderer.ctx;
         game._renderTransitionOverlay(gctx, gameCanvas.width, gameCanvas.height);
