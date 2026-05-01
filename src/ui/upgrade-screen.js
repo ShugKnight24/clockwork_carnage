@@ -3,6 +3,7 @@
 import { UPGRADES } from "../../js/data.js";
 import { upgradeLayout, isCompactPhone } from "../../js/layout.js";
 import { drawScanlines } from "./scanlines.js";
+import { getUpgradeSprite } from "../assets/loader.js";
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -147,17 +148,33 @@ export function renderUpgradeScreen(ctx, w, h, state) {
       ctx.stroke();
     }
 
+    // Sprite icon — left edge of the card. Reserved gutter is 28px on
+    // wide layout, 18px on compact. Falls through silently if the
+    // image hasn't decoded yet (procedural-art fallback was the prior
+    // baseline, so missing sprites just look like the old version).
+    const iconSize = compactUpg ? 16 : 26;
+    const iconX = baseX + (compactUpg ? 6 : 10);
+    const iconY = y + (compactUpg ? 2 : 6);
+    const sprite = getUpgradeSprite(key);
+    if (sprite) {
+      ctx.save();
+      ctx.globalAlpha = selected ? 1 : 0.75;
+      ctx.drawImage(sprite, iconX, iconY, iconSize, iconSize);
+      ctx.restore();
+    }
+    const textInset = (compactUpg ? 8 : 14) + iconSize + (compactUpg ? 4 : 8);
+
     // Upgrade name
     ctx.fillStyle = selected ? "#ffffff" : "#8888aa";
     ctx.font = `${selected ? "bold " : ""}${compactUpg ? 11 : 15}px monospace`;
     ctx.textAlign = "left";
-    ctx.fillText(upg.name, baseX + (compactUpg ? 8 : 14), y + (compactUpg ? 14 : 20));
+    ctx.fillText(upg.name, baseX + textInset, y + (compactUpg ? 14 : 20));
 
     // Description (skip on compact)
     if (!compactUpg) {
       ctx.fillStyle = selected ? "rgba(170,200,220,0.7)" : "rgba(100,110,130,0.6)";
       ctx.font = "11px monospace";
-      ctx.fillText(upg.description, baseX + 14, y + 36);
+      ctx.fillText(upg.description, baseX + textInset, y + 36);
     }
 
     // Cost or MAX badge

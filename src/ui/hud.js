@@ -9,6 +9,16 @@ import {
   HELMET_STYLES,
   VISOR_STYLES,
 } from "../../js/data.js";
+import { getWeaponSprite } from "../assets/loader.js";
+
+/**
+ * Weapon name → asset slug. Mirrors the slugifier in
+ * scripts/generate-sprites.mjs so HUD-side lookup never drifts. Kept
+ * inline rather than importing from the generator (which is untracked
+ * dev-only tooling).
+ */
+const weaponSlug = (name) =>
+  (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 /**
  * Hit-marker reticle overlay. Pops in fast, eases out, with crit (yellow,
@@ -1051,13 +1061,31 @@ if (game.settings.showKills) {
       ctx.beginPath();
       ctx.roundRect(sx, stripY, stripSlotW, stripSlotH, 4);
       ctx.stroke();
-      ctx.fillStyle = active ? "#ffffff" : "#555555";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        `${i + 1}`,
-        sx + stripSlotW / 2,
-        stripY + stripSlotH / 2 + 5,
-      );
+      // Sprite (if available) takes the slot; otherwise digit. Same
+      // pattern as the bottom HUD grid above for consistency.
+      const wp = game.player.weapons[i];
+      const sprite = wp ? getWeaponSprite(weaponSlug(wp.name)) : null;
+      if (sprite) {
+        const inset = 3;
+        ctx.save();
+        ctx.globalAlpha = active ? 1 : 0.55;
+        ctx.drawImage(sprite, sx + inset, stripY + inset, stripSlotW - inset * 2, stripSlotH - inset * 2);
+        ctx.restore();
+        ctx.fillStyle = active ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.4)";
+        ctx.fillRect(sx + 2, stripY + 2, 11, 10);
+        ctx.fillStyle = active ? "#00eaff" : "rgba(255,255,255,0.5)";
+        ctx.font = "bold 8px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${i + 1}`, sx + 7, stripY + 10);
+      } else {
+        ctx.fillStyle = active ? "#ffffff" : "#555555";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `${i + 1}`,
+          sx + stripSlotW / 2,
+          stripY + stripSlotH / 2 + 5,
+        );
+      }
     }
   }
 }
@@ -1453,9 +1481,29 @@ if (game.settings.showWeapons) {
     ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.15)";
     ctx.lineWidth = active ? 2 : 1;
     ctx.strokeRect(sx, sy, slotW, slotH);
-    ctx.fillStyle = active ? "#ffffff" : "#666666";
+    // Weapon sprite — fills the slot minus a small inset. Falls back
+    // to the slot number digit if the SVG hasn't decoded yet.
+    const wp = game.player.weapons[i];
+    const sprite = wp ? getWeaponSprite(weaponSlug(wp.name)) : null;
+    if (sprite) {
+      const inset = 4;
+      ctx.save();
+      ctx.globalAlpha = active ? 1 : 0.6;
+      ctx.drawImage(sprite, sx + inset, sy + inset, slotW - inset * 2, slotH - inset * 2);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = active ? "#ffffff" : "#666666";
+      ctx.textAlign = "center";
+      ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
+    }
+    // Tiny slot number badge in upper-left so quick-swap keys are
+    // still discoverable even with the icon present.
+    ctx.fillStyle = active ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.4)";
+    ctx.fillRect(sx + 2, sy + 2, 12, 11);
+    ctx.fillStyle = active ? "#00eaff" : "rgba(255,255,255,0.5)";
+    ctx.font = "bold 9px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
+    ctx.fillText(`${i + 1}`, sx + 8, sy + 11);
   }
   if (wep) {
     ctx.fillStyle = wep.color;
