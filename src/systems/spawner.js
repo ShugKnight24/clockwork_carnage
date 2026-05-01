@@ -6,6 +6,68 @@ import { Enemy, Pickup, Prop } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../js/data.js";
 
 /**
+ * Per-instance palette jitter — shift HSL hue ±8° and lightness ±6% so
+ * sibling enemies of the same type don't look mass-produced. Bosses and
+ * shielded variants are intentionally not jittered (they're recognisable
+ * landmarks, not background noise).
+ *
+ * Returns [baseHex, darkHex]. Pure; safe to call at spawn or replacement.
+ */
+export function jitterPalette(baseHex, darkHex, kind) {
+  if (!baseHex || kind === "boss" || kind === "boss_form2" || kind === "boss_form3") {
+    return [baseHex, darkHex];
+  }
+  const dh = (Math.random() - 0.5) * 16;        // ±8°
+  const dl = (Math.random() - 0.5) * 0.12;       // ±6%
+  return [shiftHsl(baseHex, dh, dl), shiftHsl(darkHex, dh, dl * 0.6)];
+}
+
+function shiftHsl(hex, dHue, dLight) {
+  if (!hex || hex.length < 7) return hex;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  h = (h * 360 + dHue + 360) % 360 / 360;
+  const nl = Math.max(0, Math.min(1, l + dLight));
+  return hslToHex(h, s, nl);
+}
+
+function hslToHex(h, s, l) {
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toHex = (v) => Math.round(v * 255).toString(16).padStart(2, "0");
+  return "#" + toHex(r) + toHex(g) + toHex(b);
+}
+
+/**
  * Difficulty multipliers from a settings.difficulty value (0-3).
  * @param {number} difficulty
  * @returns {{ healthMul: number, damageMul: number, speedMul: number, spawnMul: number, timerBonus: number }}
@@ -260,8 +322,9 @@ export function createMeltdownEnemies(enemySpawns, diff) {
     e.speed = et.speed * diff.speedMul;
     e.damage = (et.damage || 10) * diff.damageMul;
     e.aiType = et.aiType || "patrol";
-    e.baseColor = et.baseColor || "#ff0000";
-    e.darkColor = et.darkColor || "#880000";
+    const [bc, dc] = jitterPalette(et.baseColor || "#ff0000", et.darkColor || "#880000", e.enemyType);
+    e.baseColor = bc;
+    e.darkColor = dc;
     enemies.push(e);
   }
   return enemies;
@@ -360,8 +423,9 @@ export function applyActEnemyRoster(entities, act, diff) {
         e.maxHealth = e.health;
         e.speed = def.speed * diff.speedMul;
         e.damage = (def.damage || 10) * diff.damageMul;
-        e.baseColor = def.color1 || "#ff0000";
-        e.darkColor = def.color2 || "#880000";
+        const [bc2, dc2] = jitterPalette(def.color1 || "#ff0000", def.color2 || "#880000", e.enemyType);
+        e.baseColor = bc2;
+        e.darkColor = dc2;
       }
     }
   }

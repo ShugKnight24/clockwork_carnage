@@ -133,6 +133,72 @@ function drawDamageNumber(ctx, dn, x, y, large) {
   }
 }
 
+/**
+ * Boss name card overlay — appears on boss spawn for ~3.5s. Three-stage
+ * animation: scan-in (alpha+stretch), hold (full opacity), scan-out.
+ * Driven by game.bossNameCard `{title, subtitle, time, duration}`.
+ * Draws a centered banner roughly 35% down the screen so it doesn't
+ * stomp the boss silhouette in the middle of the viewport.
+ */
+function drawBossNameCard(ctx, game, w, h) {
+  const card = game.bossNameCard;
+  if (!card) return;
+  const elapsed = game.time - card.time;
+  if (elapsed >= card.duration) {
+    game.bossNameCard = null;
+    return;
+  }
+  const t = elapsed / card.duration; // 0..1
+  // 0–0.18 scan-in, 0.18–0.78 hold, 0.78–1 scan-out
+  let alpha = 1;
+  let stretch = 1;
+  if (t < 0.18) {
+    alpha = t / 0.18;
+    stretch = 0.4 + 0.6 * alpha;
+  } else if (t > 0.78) {
+    const k = (t - 0.78) / 0.22;
+    alpha = 1 - k;
+    stretch = 1 + k * 0.5;
+  }
+  const cy = h * 0.35;
+  const cx = w / 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  // Banner backdrop — wide red gradient bar
+  const bw = Math.min(w * 0.7, 720) * stretch;
+  const bh = 88;
+  const grad = ctx.createLinearGradient(cx - bw / 2, 0, cx + bw / 2, 0);
+  grad.addColorStop(0, "rgba(60,0,0,0)");
+  grad.addColorStop(0.5, "rgba(180,20,20,0.55)");
+  grad.addColorStop(1, "rgba(60,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx - bw / 2, cy - bh / 2, bw, bh);
+  // Glitch jitter on title — a few horizontal slices offset by a couple px
+  const titleY = cy - 6;
+  const jitter = (Math.sin(elapsed * 0.04) * 2) | 0;
+  ctx.font = "bold 44px monospace";
+  ctx.shadowColor = "#ff3a3a";
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = "#ffe4e4";
+  ctx.fillText(card.title, cx + jitter, titleY);
+  ctx.shadowBlur = 0;
+  // Subtitle
+  ctx.font = "bold 16px monospace";
+  ctx.fillStyle = "#ff8080";
+  ctx.fillText(card.subtitle, cx, titleY + 28);
+  // Top/bottom hairlines
+  ctx.strokeStyle = `rgba(255,60,60,${alpha})`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - bw / 2, cy - bh / 2);
+  ctx.lineTo(cx + bw / 2, cy - bh / 2);
+  ctx.moveTo(cx - bw / 2, cy + bh / 2);
+  ctx.lineTo(cx + bw / 2, cy + bh / 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawAdsReticle(ctx, game, cx, cy) {
   if (!game.player?.isAiming) return;
   const t = game.time * 0.006;
@@ -286,6 +352,7 @@ if (isCompactMobile) {
 
   // Kill streak
   game.killStreakSystem.renderFirstPerson(ctx, w, h, barH);
+  drawBossNameCard(ctx, game, w, h);
 
   // Achievement toast
   game.renderAchievementToast(ctx, w, h);
@@ -1054,6 +1121,7 @@ for (const dn of game.damageNumbers) {
 
 // ─── KILL STREAK ANNOUNCEMENT ───
 game.killStreakSystem.renderThirdPerson(ctx, w, h);
+drawBossNameCard(ctx, game, w, h);
 
 // ─── STAGE CLEARED (arena only) ───
 if (game.mode === "arena" && game.arenaClearTimer != null) {
@@ -1663,6 +1731,7 @@ for (const dn of game.damageNumbers) {
 
 // ─── Kill streak ───
 game.killStreakSystem.renderFirstPerson(ctx, w, h, barH);
+drawBossNameCard(ctx, game, w, h);
 
 // ─── Stage cleared (arena only) ───
 if (game.mode === "arena" && game.arenaClearTimer != null) {

@@ -61,6 +61,8 @@ export class CampaignManager {
       g.player.x = data.playerX;
       g.player.y = data.playerY;
       g.player.angle = data.playerAngle;
+      g.player.aimOffsetX = data.aimOffsetX || 0;
+      g.player.aimOffsetY = data.aimOffsetY ?? data.playerPitch ?? 0;
     }
     if (data.mapGrid) g.map.grid = data.mapGrid;
     if (data.entityStates && data.entityStates.length === g.entities.length) {
@@ -101,6 +103,7 @@ export class CampaignManager {
 
     const playIntroAndMaybeMemory = () => {
       const seenKey = "cc_seen_intro_memory_01";
+      const flipbookKey = "cc_seen_intro_flipbook";
       const playMemory = () => {
         if (!Save.hasSeenIntroMemory(seenKey)) {
           Save.markIntroMemorySeen(seenKey);
@@ -111,18 +114,33 @@ export class CampaignManager {
           this.loadLevel(0);
         }
       };
-      if (g.cutsceneEngine.hasScript("clocking_in")) {
-        g.startCutscene("clocking_in", () => {
-          g.ariaEnabled = true;
-          g.queueAriaMessage("campaignStart");
+      const afterFlipbook = () => {
+        if (g.cutsceneEngine.hasScript("clocking_in")) {
+          g.startCutscene("clocking_in", () => {
+            g.ariaEnabled = true;
+            g.queueAriaMessage("campaignStart");
+            g.startCutscene("intro", () => {
+              playMemory();
+            });
+          });
+        } else {
           g.startCutscene("intro", () => {
             playMemory();
           });
+        }
+      };
+      // First-play: show Marvel-style flipbook intro before the rest.
+      // Mark-seen fires inside the cutscene's onComplete so an aborted intro replays.
+      if (
+        !Save.hasSeenIntroMemory(flipbookKey) &&
+        g.cutsceneEngine.hasScript("intro_flipbook")
+      ) {
+        g.startCutscene("intro_flipbook", () => {
+          Save.markIntroMemorySeen(flipbookKey);
+          afterFlipbook();
         });
       } else {
-        g.startCutscene("intro", () => {
-          playMemory();
-        });
+        afterFlipbook();
       }
     };
     playIntroAndMaybeMemory();
@@ -209,6 +227,22 @@ export class CampaignManager {
       if (g.squadComms && typeof g.squadComms.onBossPhase === "function") {
         setTimeout(() => g.squadComms.onBossPhase(form), 2000);
       }
+      // Boss intro flourish — 2.5s slow-mo + glitch spike + name card.
+      // Drives drama on first encounter without depending on a cutscene
+      // pipeline. HUD reads bossNameCard to render the overlay.
+      g.slowMoTimer = 2.5;
+      g.timeScale = 0.4;
+      g.glitchEffect = Math.max(g.glitchEffect, 0.8);
+      const BOSS_NAMES = {
+        1: { title: "PARADOX LORD", subtitle: "FIRST INCURSION" },
+        2: { title: "PARADOX LORD", subtitle: "SECOND INCURSION" },
+        3: { title: "PARADOX LORD", subtitle: "FINAL INCURSION" },
+      };
+      g.bossNameCard = {
+        ...(BOSS_NAMES[form] || BOSS_NAMES[1]),
+        time: g.time,
+        duration: 3500,
+      };
     } else if (g.squadComms && this.act >= 2) {
       // Squad chimes in at non-boss level starts (act 2+ only)
       setTimeout(() => g.squadComms.onCombatStart(), 1500);

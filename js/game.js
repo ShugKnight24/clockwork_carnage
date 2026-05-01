@@ -63,6 +63,7 @@ import {
   createArenaPickups,
   createMeltdownEnemies,
   createMeltdownPickups,
+  jitterPalette,
 } from "../src/systems/spawner.js";
 import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
 import {
@@ -2037,8 +2038,9 @@ export class Game {
             e.speed = et.speed * diff.speedMul;
             e.damage = (et.damage || 10) * diff.damageMul;
             e.aiType = et.aiType || "patrol";
-            e.baseColor = et.baseColor || "#ff0000";
-            e.darkColor = et.darkColor || "#880000";
+            const [bcG, dcG] = jitterPalette(et.baseColor || "#ff0000", et.darkColor || "#880000", e.enemyType);
+            e.baseColor = bcG;
+            e.darkColor = dcG;
             this.entities.push(e);
           }
           for (const pk of pickupSpawns) {

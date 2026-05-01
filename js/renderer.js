@@ -849,8 +849,11 @@ export class Renderer {
     const def = enemy.def;
     if (!def) return;
 
-    const c1 = def.color1;
-    const c2 = def.color2;
+    // Prefer per-instance palette (set at spawn with slight HSL jitter so
+    // a horde of drones doesn't read as 30 identical sprites). Falls back
+    // to the def palette if spawner didn't seed an override.
+    const c1 = enemy.baseColor || def.color1;
+    const c2 = enemy.darkColor || def.color2;
 
     // Only draw columns not occluded by walls
     ctx.save();
