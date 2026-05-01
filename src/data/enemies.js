@@ -1,6 +1,41 @@
 // Enemy definitions
 // TODO: Add more enemy types with unique behaviors (e.g. teleporting, summoning minions, etc.)
 // TODO: Add different variants of the same enemy type with different stats /colors unique designs for later levels?
+//
+// hitZones schema: optional per-enemy table of weak/tough spots. Each zone:
+//   { name, top, bottom, mult, tight?: bool, frontOnly?: bool, rearOnly?: bool }
+//   - top/bottom: world-units relative to enemy feet (0 = ground), so a 1u-tall
+//     enemy with `head` at top: 0.95 / bottom: 0.75 covers the head region.
+//   - mult: damage multiplier (e.g. 2.5 = headshot, 0.7 = legs, 0.4 = armor).
+//   - tight: zone uses HEADSHOT_PRECISION_PAD instead of body angular pad (less
+//     forgiving). Default false.
+//   - frontOnly/rearOnly: zone only applies when bullet hits from that arc
+//     relative to enemy.angle. Used for armor plates / weak backs.
+//
+// First zone matched (top→bottom order) wins. Fallback = "body" with mult 1.
+//
+// Defaults provided for ranged-class enemies (head + body); melee/swarm use a
+// looser body-only profile so headshots aren't over-rewarded vs glass cannons.
+const HUMANOID_ZONES = [
+  { name: "head", top: 1.05, bottom: 0.85, mult: 2.5, tight: true },
+  { name: "legs", top: 0.45, bottom: 0.0,  mult: 0.7 },
+];
+const ROBOT_ZONES = [
+  { name: "head", top: 1.05, bottom: 0.85, mult: 2.5, tight: true },
+  { name: "core", top: 0.75, bottom: 0.55, mult: 2.5 },
+  { name: "legs", top: 0.40, bottom: 0.0,  mult: 0.7 },
+];
+const SHIELDED_FRONT_ZONES = [
+  { name: "head",  top: 1.05, bottom: 0.85, mult: 2.5, tight: true },
+  { name: "armor", top: 0.85, bottom: 0.30, mult: 0.4, frontOnly: true },
+  { name: "legs",  top: 0.30, bottom: 0.0,  mult: 0.9 },
+];
+const BOSS_ZONES = [
+  { name: "head", top: 1.20, bottom: 0.95, mult: 2.5, tight: true },
+  { name: "core", top: 0.90, bottom: 0.55, mult: 2.5 },
+  { name: "legs", top: 0.40, bottom: 0.0,  mult: 0.7 },
+];
+
 export const ENEMY_TYPES = {
   drone: {
     name: "Glitched Drone",
@@ -18,6 +53,7 @@ export const ENEMY_TYPES = {
     attackType: "ranged",
     ai: "strafe_fire", // Orbits player while firing
     chronoMultiplier: 0.0, // Drones fully freeze during Chrono Shift
+    hitZones: ROBOT_ZONES,
   },
   phantom: {
     name: "Time Phantom",
@@ -36,6 +72,7 @@ export const ENEMY_TYPES = {
     ai: "flanker",
     teleportCooldown: 4000, // Blink/teleport to reposition
     chronoMultiplier: 0.5, // Phantoms resist slowdown and keep moving
+    hitZones: HUMANOID_ZONES,
   },
   beast: {
     name: "Chrono Beast",
@@ -58,6 +95,11 @@ export const ENEMY_TYPES = {
     chargeSpeedMul: 3.0, // speed multiplier during charge
     chargeDamageMul: 1.5, // damage multiplier on charge impact
     chronoMultiplier: 1.5, // Beasts accelerate when time warps
+    // Beasts are quadrupedal — head is forward/low, no separate leg zone.
+    hitZones: [
+      { name: "head", top: 0.85, bottom: 0.65, mult: 2.5, tight: true },
+      { name: "core", top: 0.65, bottom: 0.30, mult: 1.4 },
+    ],
   },
   boss: {
     name: "Paradox Lord",
@@ -74,6 +116,7 @@ export const ENEMY_TYPES = {
     xp: 200,
     attackType: "ranged",
     form: 1,
+    hitZones: BOSS_ZONES,
   },
   boss_form2: {
     name: "Paradox Lord — Evolved",
@@ -90,6 +133,7 @@ export const ENEMY_TYPES = {
     xp: 400,
     attackType: "ranged",
     form: 2,
+    hitZones: BOSS_ZONES,
   },
   boss_form3: {
     name: "Paradox Lord — Final Form",
@@ -106,6 +150,7 @@ export const ENEMY_TYPES = {
     xp: 1000,
     attackType: "ranged",
     form: 3,
+    hitZones: BOSS_ZONES,
   },
   corruptCop: {
     name: "Corrupt SWAT Officer",
@@ -122,6 +167,7 @@ export const ENEMY_TYPES = {
     xp: 20,
     attackType: "ranged",
     ai: "patrol",
+    hitZones: HUMANOID_ZONES,
   },
   sentinel: {
     name: "Chrono Sentinel",
@@ -141,6 +187,7 @@ export const ENEMY_TYPES = {
     frontShield: true,
     shieldRegen: true,
     shieldRegenRate: 3,
+    hitZones: SHIELDED_FRONT_ZONES,
   },
   glitchling: {
     name: "Glitchling",
@@ -176,6 +223,7 @@ export const ENEMY_TYPES = {
     ai: "patrol",
     subBoss: true,
     frontShield: true,
+    hitZones: SHIELDED_FRONT_ZONES,
   },
   temporalSummoner: {
     name: "Temporal Summoner",
@@ -196,6 +244,7 @@ export const ENEMY_TYPES = {
     summonType: "drone",
     summonInterval: 8000,
     summonMax: 3,
+    hitZones: HUMANOID_ZONES,
   },
   henchman: {
     name: "Voss's Henchman",
@@ -212,6 +261,7 @@ export const ENEMY_TYPES = {
     xp: 40,
     attackType: "ranged",
     ai: "flanker",
+    hitZones: HUMANOID_ZONES,
   },
   chronoBomber: {
     name: "Chrono-Bomber",
@@ -231,6 +281,7 @@ export const ENEMY_TYPES = {
     dropsBombs: true,
     bombDamage: 25,
     bombRadius: 2.0,
+    hitZones: ROBOT_ZONES,
   },
   // New Act 2 / Act 3 enemy archetypes
   phaseStalker: {
@@ -249,6 +300,7 @@ export const ENEMY_TYPES = {
     attackType: "melee",
     ai: "teleport_strike",
     teleportCooldown: 3500,
+    hitZones: HUMANOID_ZONES,
   },
   timeWarden: {
     name: "Time Warden",
@@ -268,6 +320,7 @@ export const ENEMY_TYPES = {
     shieldRegen: true,
     shieldRegenRate: 5, // per 5s
     frontShield: true,
+    hitZones: SHIELDED_FRONT_ZONES,
   },
   echoDrone: {
     name: "Echo Drone",
@@ -286,6 +339,7 @@ export const ENEMY_TYPES = {
     ai: "swarm",
     echoCloneOnDeath: true,
     cloneCount: 1,
+    hitZones: ROBOT_ZONES,
   },
   riftLeaper: {
     name: "Rift Leaper",
@@ -303,6 +357,7 @@ export const ENEMY_TYPES = {
     attackType: "melee",
     ai: "teleport_melee",
     leapDistance: 6,
+    hitZones: HUMANOID_ZONES,
   },
   temporalEngineer: {
     name: "Temporal Engineer",
@@ -321,5 +376,6 @@ export const ENEMY_TYPES = {
     ai: "support",
     disablesHUD: true,
     disableDuration: 3000,
+    hitZones: HUMANOID_ZONES,
   },
 };

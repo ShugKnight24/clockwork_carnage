@@ -9,6 +9,8 @@ import {
   ENEMY_HIT_RADIUS_MIN,
   ENEMY_HIT_RADIUS_PAD,
   ENEMY_HIT_VERTICAL_ANGLE_MIN,
+  HEADSHOT_PRECISION_PAD,
+  ZONE_RADIUS_PAD,
 } from "../constants.js";
 
 /**
@@ -179,11 +181,36 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy) {
   const along = ex * dirX + ey * dirY;
   if (along <= 0 || along > range) return null;
 
+  const aimHeight = Math.tan(pitch || 0) * along;
+
+  // Resolve which zone the bullet would land in (head/core/legs/armor/body).
+  // Tight zones (heads) get a smaller angular pad so headshots reward precision.
+  const zone = resolveHitZone(enemy, aimHeight, dirX, dirY);
+  const angleScale = zone.tight ? HEADSHOT_PRECISION_PAD : 1;
+
   const lateralX = ex - dirX * along;
   const lateralY = ey - dirY * along;
-  const radius = Math.max(enemyHitRadius(enemy), along * ENEMY_HIT_ANGLE_MIN);
-  if (lateralX * lateralX + lateralY * lateralY > radius * radius) return null;
-  const aimHeight = Math.tan(pitch || 0) * along;
+  const radius = Math.max(
+    enemyHitRadius(enemy) - (zone.tight ? ZONE_RADIUS_PAD : 0),
+    along * ENEMY_HIT_ANGLE_MIN * angleScale,
+  );
+  if (lateralX * lateralX + lateralY * lateralY > radius * radius) {
+    // Lateral miss inside a tight zone — try again as the surrounding "body"
+    // zone so a near-headshot still counts as a body hit instead of a whiff.
+    if (zone.tight) {
+      const bodyRadius = Math.max(enemyHitRadius(enemy), along * ENEMY_HIT_ANGLE_MIN);
+      if (lateralX * lateralX + lateralY * lateralY > bodyRadius * bodyRadius) return null;
+      // Demote zone to body for damage purposes.
+      const center = (enemy.def?.hitCenter ?? 0.35) + (enemy.z || 0);
+      const halfHeight = Math.max(
+        (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD,
+        along * ENEMY_HIT_VERTICAL_ANGLE_MIN,
+      );
+      if (Math.abs(aimHeight - center) > halfHeight) return null;
+      return { enemy, dist: along, zone: { name: "body", mult: 1, tight: false } };
+    }
+    return null;
+  }
   const center = (enemy.def?.hitCenter ?? 0.35) + (enemy.z || 0);
   const halfHeight = Math.max(
     (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD,
@@ -191,7 +218,53 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy) {
   );
   if (Math.abs(aimHeight - center) > halfHeight) return null;
 
-  return { enemy, dist: along };
+  return { enemy, dist: along, zone };
+}
+
+/**
+ * Resolve which hit zone a bullet lands in given enemy + ray vertical height.
+ *
+ * Zone schema (per-enemy `def.hitZones[]`):
+ *   { name, top, bottom, mult, tight?, frontOnly?, rearOnly? }
+ * top/bottom are in enemy-local Y (0 = feet of hitbox, 2*hitHeight = top).
+ *
+ * Returns { name, mult, tight }. Falls back to { body, 1, false } when no
+ * zones defined or no zone matches the ray.
+ *
+ * Front/rear gating: bullet's travel direction (`dirX/dirY`) is compared
+ * against `enemy.angle`. Front = bullet hits enemy from the side it's
+ * facing (within ±60°). Used for armor plates / rear weak points.
+ */
+export function resolveHitZone(enemy, aimHeight, dirX, dirY) {
+  const zones = enemy.def?.hitZones;
+  if (!zones || !zones.length) return { name: "body", mult: 1, tight: false };
+
+  const hitCenter = enemy.def?.hitCenter ?? 0.35;
+  const hitHeight = enemy.def?.hitHeight ?? 0.55;
+  const z = enemy.z || 0;
+  // Local Y = aim height relative to feet of hitbox.
+  const localY = aimHeight - (z + hitCenter - hitHeight);
+
+  for (const zone of zones) {
+    if (localY > zone.top || localY < zone.bottom) continue;
+    if (zone.frontOnly || zone.rearOnly) {
+      const facing = enemy.angle || 0;
+      const bulletDir = Math.atan2(dirY, dirX);
+      // Bullet is "from the front" when its travel vector points roughly
+      // opposite to the enemy's facing — i.e. the bullet flies into the
+      // enemy's face. atan2 of (-dirX, -dirY) gives the bullet's incoming
+      // direction; compare to enemy.angle.
+      const incoming = bulletDir + Math.PI;
+      let diff = incoming - facing;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      const front = Math.abs(diff) < Math.PI / 3;
+      if (zone.frontOnly && !front) continue;
+      if (zone.rearOnly && front) continue;
+    }
+    return { name: zone.name, mult: zone.mult, tight: !!zone.tight };
+  }
+  return { name: "body", mult: 1, tight: false };
 }
 
 export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map) {

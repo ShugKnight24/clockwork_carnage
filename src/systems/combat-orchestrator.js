@@ -96,7 +96,7 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   let endDist;
   if (hit) {
     endDist = hit.dist;
-    damageEnemy(game, hit.enemy, damage);
+    damageEnemy(game, hit.enemy, damage, hit.zone);
   } else {
     const wallDist = distanceToWall(game.player, dirX, dirY, game.map, range);
     endDist = wallDist;
@@ -118,12 +118,19 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   }
 }
 
-export function damageEnemy(game, enemy, damage) {
+export function damageEnemy(game, enemy, damage, zone = null) {
   game.shotsHit++;
   game.achievementStats.totalShotsHit++;
 
+  // Apply zone multiplier before crit/shield. Crit + zone stack multiplicatively
+  // (a headshot crit does HEADSHOT_MULT * 2 = 5x base damage).
+  const zoneName = zone?.name || "body";
+  const zoneMult = zone?.mult ?? 1;
+  const zoneDamage = damage * zoneMult;
+  const isHead = zoneName === "head";
+
   const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
-    damage, enemy, game.player.critChance, game.player,
+    zoneDamage, enemy, game.player.critChance, game.player,
   );
   if (shieldSpark) game.glitchEffect = Math.max(game.glitchEffect, 0.08);
 
@@ -136,18 +143,24 @@ export function damageEnemy(game, enemy, damage) {
   enemy.health -= finalDamage;
   enemy.hitTime = game.time;
   enemy.state = "pain";
-  enemy.painTimer = isCrit ? 250 : 150;
+  enemy.painTimer = (isCrit || isHead) ? 250 : 150;
 
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
   game.audio.enemyHit(pan);
+  if (isHead) game.audio.enemyHit?.(pan); // double-tap for headshot ping
 
-  game.hitMarker = isCrit ? 0.22 : 0.15;
+  game.hitMarker = (isCrit || isHead) ? 0.22 : 0.15;
   game.hitMarkerCrit = isCrit;
+  game.hitMarkerHead = isHead;
   game.hitMarkerKill = enemy.health <= 0;
-  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit);
+  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead);
   game.damageNumbers.push({
     x: enemy.x, y: enemy.y,
-    value: Math.round(finalDamage), crit: isCrit, life: 0.8,
+    value: Math.round(finalDamage),
+    crit: isCrit,
+    zone: zoneName,
+    head: isHead,
+    life: 0.8,
   });
 
   // Life steal

@@ -67,7 +67,7 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
     applyEmpBurst(p, e, ctx.time, ctx.audio, ctx.player, ctx.entityGrid);
   }
 
-  ctx.damageEnemy(e, p.damage);
+  ctx.damageEnemy(e, p.damage, best.zone);
   p.active = false;
   if (p.damage > HEAVY_SPLASH_THRESHOLD) applySplash(p, e, ctx);
   return true;

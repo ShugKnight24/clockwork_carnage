@@ -21,7 +21,7 @@ import {
 function drawHitMarker(ctx, game, cx, cy) {
   const t = game.hitMarker;
   if (t <= 0) return;
-  const total = game.hitMarkerCrit ? 0.22 : 0.15;
+  const total = (game.hitMarkerCrit || game.hitMarkerHead) ? 0.22 : 0.15;
   const age = Math.max(0, total - t);            // 0 → total
   const popIn = Math.min(1, age / 0.04);          // first 40 ms scale-up
   const fade = Math.min(1, t / 0.10);             // last 100 ms fade
@@ -30,10 +30,20 @@ function drawHitMarker(ctx, game, cx, cy) {
 
   const kill = game.hitMarkerKill;
   const crit = game.hitMarkerCrit;
-  const color = kill ? "#ffffff" : crit ? "#ffe14a" : "#ff3a3a";
-  const len = (crit ? 11 : 8) * scale;
-  const gap = (crit ? 4 : 3) * scale;
-  const lw = crit ? 2.6 : 2;
+  const head = game.hitMarkerHead;
+  // Headshots get the warmest highlight (orange→red), crit stays gold,
+  // normal hits red, kill flash is white. Headshot+crit stacks visually
+  // toward orange-gold so player can read both at a glance.
+  const color = kill
+    ? "#ffffff"
+    : head && crit ? "#ff9a1f"
+    : head ? "#ff6a1f"
+    : crit ? "#ffe14a"
+    : "#ff3a3a";
+  const isAccent = crit || head;
+  const len = (isAccent ? 11 : 8) * scale;
+  const gap = (isAccent ? 4 : 3) * scale;
+  const lw = isAccent ? 2.6 : 2;
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -41,7 +51,7 @@ function drawHitMarker(ctx, game, cx, cy) {
   ctx.rotate(Math.PI / 4);
   ctx.lineCap = "round";
   ctx.shadowColor = color;
-  ctx.shadowBlur = crit ? 8 : 4;
+  ctx.shadowBlur = isAccent ? 8 : 4;
   ctx.strokeStyle = color;
   ctx.lineWidth = lw;
 
@@ -53,8 +63,8 @@ function drawHitMarker(ctx, game, cx, cy) {
   }
   ctx.stroke();
 
-  // Crit gets a second outer ring of dashes
-  if (crit) {
+  // Crit/head get a second outer ring of dashes
+  if (isAccent) {
     ctx.globalAlpha = alpha * 0.6;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -76,6 +86,51 @@ function drawHitMarker(ctx, game, cx, cy) {
   }
 
   ctx.restore();
+}
+
+/**
+ * Floating damage number sprite. Style varies with hit category:
+ *   crit  → gold, bold, with stroke shadow
+ *   head  → orange, bold, with "HEAD!" tag above
+ *   else  → white outlined number
+ *
+ * Caller controls font scale via `large` flag (true = HUD/builder paths,
+ * false = compact in-bar HUD).
+ */
+function drawDamageNumber(ctx, dn, x, y, large) {
+  const f = large ? 18 : 16;
+  const fSmall = large ? 14 : 12;
+  if (dn.crit) {
+    ctx.font = `bold ${f}px monospace`;
+    ctx.shadowColor = "#ffcc00";
+    ctx.shadowBlur = large ? 8 : 6;
+    ctx.fillStyle = "#ffcc00";
+    ctx.fillText(dn.value, x, y);
+    ctx.shadowBlur = 0;
+    if (large) {
+      ctx.strokeStyle = "rgba(0,0,0,0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeText(dn.value, x, y);
+      ctx.fillText(dn.value, x, y);
+    }
+  } else if (dn.head) {
+    ctx.font = `bold ${f}px monospace`;
+    ctx.shadowColor = "#ff7a1f";
+    ctx.shadowBlur = large ? 8 : 6;
+    ctx.fillStyle = "#ff7a1f";
+    ctx.fillText(dn.value, x, y);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${large ? 10 : 9}px monospace`;
+    ctx.fillStyle = "#ffaa44";
+    ctx.fillText("HEAD!", x, y - (large ? 16 : 13));
+  } else {
+    ctx.font = `bold ${fSmall}px monospace`;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 2;
+    ctx.strokeText(dn.value, x, y);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(dn.value, x, y);
+  }
 }
 
 function drawAdsReticle(ctx, game, cx, cy) {
@@ -225,21 +280,7 @@ if (isCompactMobile) {
     ctx.save();
     ctx.globalAlpha = dAlpha;
     ctx.textAlign = "center";
-    if (dn.crit) {
-      ctx.font = "bold 16px monospace";
-      ctx.shadowColor = "#ffcc00";
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = "#ffcc00";
-      ctx.fillText(dn.value, dsX, dsY);
-      ctx.shadowBlur = 0;
-    } else {
-      ctx.font = "bold 12px monospace";
-      ctx.strokeStyle = "rgba(0,0,0,0.6)";
-      ctx.lineWidth = 2;
-      ctx.strokeText(dn.value, dsX, dsY);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(dn.value, dsX, dsY);
-    }
+    drawDamageNumber(ctx, dn, dsX, dsY, false);
     ctx.restore();
   }
 
@@ -1007,25 +1048,7 @@ for (const dn of game.damageNumbers) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
-  if (dn.crit) {
-    ctx.font = "bold 18px monospace";
-    ctx.shadowColor = "#ffcc00";
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = "#ffcc00";
-    ctx.fillText(dn.value, screenX, screenY);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(0,0,0,0.5)";
-    ctx.lineWidth = 2;
-    ctx.strokeText(dn.value, screenX, screenY);
-    ctx.fillText(dn.value, screenX, screenY);
-  } else {
-    ctx.font = "bold 14px monospace";
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.lineWidth = 2;
-    ctx.strokeText(dn.value, screenX, screenY);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(dn.value, screenX, screenY);
-  }
+  drawDamageNumber(ctx, dn, screenX, screenY, true);
   ctx.restore();
 }
 
@@ -1634,25 +1657,7 @@ for (const dn of game.damageNumbers) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
-  if (dn.crit) {
-    ctx.font = "bold 18px monospace";
-    ctx.shadowColor = "#ffcc00";
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = "#ffcc00";
-    ctx.fillText(dn.value, screenX, screenY);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(0,0,0,0.5)";
-    ctx.lineWidth = 2;
-    ctx.strokeText(dn.value, screenX, screenY);
-    ctx.fillText(dn.value, screenX, screenY);
-  } else {
-    ctx.font = "bold 14px monospace";
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.lineWidth = 2;
-    ctx.strokeText(dn.value, screenX, screenY);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(dn.value, screenX, screenY);
-  }
+  drawDamageNumber(ctx, dn, screenX, screenY, true);
   ctx.restore();
 }
 
