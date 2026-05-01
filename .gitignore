@@ -31,9 +31,6 @@ node_modules/
 package.json
 package-lock.json
 
-# Build tooling (Vite)
-vite.config.*
-
 # Telemetry & simulation data
 telemetry/
 simulations/
