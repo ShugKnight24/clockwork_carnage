@@ -41,6 +41,18 @@ function applySplash(p, primary, ctx) {
       ctx.damageEnemy(e, p.damage * SPLASH_DAMAGE_FACTOR);
     }
   }
+  // Bright orange explosion light, ~250ms — bleeds onto floor + nearby walls.
+  if (ctx.lights) {
+    ctx.lights.push({
+      x: p.x, y: p.y,
+      color: [255, 140, 50],
+      radius: 6,
+      baseIntensity: 2.2,
+      intensity: 2.2,
+      life: 0.25,
+      maxLife: 0.25,
+    });
+  }
 }
 
 /** Test if projectile p hits any enemy candidate; mutates state on hit. */

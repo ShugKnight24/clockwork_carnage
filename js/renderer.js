@@ -427,6 +427,42 @@ export class Renderer {
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
         }
 
+        // Dynamic lights — additive radial bleed at the wall hit point.
+        // Each active light is sampled by squared distance for cheap falloff.
+        // Skipped entirely when no lights are present (zero overhead common case).
+        if (this.lights && this.lights.length > 0) {
+          const hitWX = camX + perpWallDist * rayDirX;
+          const hitWY = camY + perpWallDist * rayDirY;
+          let lr = 0, lg = 0, lb = 0;
+          for (let li = 0; li < this.lights.length; li++) {
+            const L = this.lights[li];
+            const ldx = L.x - hitWX;
+            const ldy = L.y - hitWY;
+            const d2 = ldx * ldx + ldy * ldy;
+            const r2 = L.radius * L.radius;
+            if (d2 >= r2) continue;
+            // Quadratic falloff (1 - d/r)^2 reads better than linear.
+            const fall = 1 - Math.sqrt(d2) / L.radius;
+            const k = fall * fall * L.intensity;
+            lr += L.color[0] * k;
+            lg += L.color[1] * k;
+            lb += L.color[2] * k;
+          }
+          if (lr + lg + lb > 1) {
+            // Cap alpha so big stacks don't blow out the column.
+            const peak = Math.max(lr, lg, lb);
+            const a = Math.min(0.85, peak / 255);
+            const nr = Math.min(255, Math.floor(lr));
+            const ng = Math.min(255, Math.floor(lg));
+            const nb = Math.min(255, Math.floor(lb));
+            const prev = ctx.globalCompositeOperation;
+            ctx.globalCompositeOperation = "lighter";
+            ctx.fillStyle = `rgba(${nr},${ng},${nb},${a})`;
+            ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+            ctx.globalCompositeOperation = prev;
+          }
+        }
+
         // Door frame overlay — teal accent on walls adjacent to door tiles
         if (wallType !== 5 && wallType > 0 && perpWallDist < 15) {
           let hasDoorNeighbor = false;
@@ -456,7 +492,7 @@ export class Renderer {
     setFovScale(fov);
 
     // Render sprites
-    this.renderSprites(player, entities, time, planeMul, camX, camY);
+    this.renderSprites(player, entities, time, planeMul, camX, camY, player._drawDistance);
 
     // Render particles
     if (player.particles) {
@@ -517,8 +553,70 @@ export class Renderer {
     }
   }
 
+  /** Project a world position into screen space using the same camera math as
+   * sprite/particle passes. Returns null if behind the near plane. */
+  _projectWorld(player, x, y, planeMul, camX, camY, zHeight = 0) {
+    const w = this.width;
+    const h = this.height;
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
+    const cx = camX != null ? camX : player.x;
+    const cy = camY != null ? camY : player.y;
+    const sx = x - cx;
+    const sy = y - cy;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    const tx = invDet * (dirY * sx - dirX * sy);
+    const ty = invDet * (-planeY * sx + planeX * sy);
+    if (ty <= 0.1) return null;
+    const screenX = (w / 2) * (1 + tx / ty);
+    const screenY = h / 2 + zHeight * (h / ty);
+    return { x: screenX, y: screenY, depth: ty };
+  }
+
+  /** Hitscan tracers — short fading streaks from barrel to impact. */
+  renderTracers(player, tracers, planeMul = 0.66, camX, camY) {
+    if (!tracers || tracers.length === 0) return;
+    const ctx = this.ctx;
+    const w = this.width;
+    for (const tr of tracers) {
+      const t = Math.max(0, tr.life / tr.maxLife);
+      if (t <= 0) continue;
+      // Slight elevation so tracer reads as gun-height, not floor-height
+      const startZ = -0.05;
+      const endZ = -0.05 + Math.tan(tr.pitch || 0) * 0.0; // pitched aim already encoded in (x2,y2)
+      const a = this._projectWorld(player, tr.x1, tr.y1, planeMul, camX, camY, startZ);
+      const b = this._projectWorld(player, tr.x2, tr.y2, planeMul, camX, camY, endZ);
+      if (!a || !b) continue;
+      // Z-buffer occlusion at endpoint (if hidden behind wall, skip)
+      const xb = Math.max(0, Math.min(w - 1, Math.floor(b.x)));
+      if (b.depth > this.zBuffer[xb] + 0.1) continue;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      // Outer glow
+      ctx.globalAlpha = 0.35 * t;
+      ctx.strokeStyle = `rgba(${tr.color},1)`;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      // Hot core
+      ctx.globalAlpha = t;
+      ctx.strokeStyle = `rgba(255,255,240,1)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   // --- Entity Rendering ---
-  renderSprites(player, entities, time, planeMul = 0.66, camX, camY) {
+  renderSprites(player, entities, time, planeMul = 0.66, camX, camY, drawDistance) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -530,14 +628,17 @@ export class Renderer {
     // Use camera position for sprite rendering (defaults to player pos)
     const cx = camX != null ? camX : player.x;
     const cy = camY != null ? camY : player.y;
+    const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
     // Sort entities by distance from camera (index sort — avoids per-frame object copies)
     const spriteDist = [];
     const spriteOrder = [];
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].active === false && !entities[i].dissolving) continue;
+      const distSq = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
+      if (distSq > maxDistSq && entities[i].type !== "exit") continue;
       spriteOrder.push(i);
-      spriteDist[i] = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
+      spriteDist[i] = distSq;
     }
     spriteOrder.sort((a, b) => spriteDist[b] - spriteDist[a]);
 

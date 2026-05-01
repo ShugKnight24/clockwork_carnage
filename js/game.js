@@ -1,5 +1,6 @@
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
+import { GamepadManager } from "./gamepad.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
@@ -11,6 +12,7 @@ import {
   spawnMuzzleFlash as _spawnMuzzleFlash,
   spawnDeathParticles as _spawnDeathParticles,
   spawnWallSparks as _spawnWallSparks,
+  spawnPointLight as _spawnPointLight,
 } from "./vfx.js";
 import {
   WEAPONS,
@@ -26,11 +28,14 @@ import {
   BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
+  BACKSTORIES,
+  VOICE_PROFILES,
   DEFAULT_CHARACTER,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
 import { renderPostFX as _renderPostFX } from "../src/rendering/postfx.js";
 import { drawGlow as _drawGlow } from "../src/rendering/draw-utils.js";
+import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { AudioManager } from "./audio.js";
 import { BuilderMode } from "./builder.js";
 import { MeltdownMode } from "./meltdown.js";
@@ -78,7 +83,6 @@ import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-s
 import {
   renderTutorialOverlay as _renderTutorialOverlay,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
-  renderTutorialMenu as _renderTutorialMenu,
 } from "../src/ui/tutorial-ui.js";
 import { renderSettingsScreen as _renderSettingsScreen } from "../src/ui/settings-screen.js";
 import {
@@ -113,6 +117,7 @@ import {
   settingDisplayItem,
   applySettingStep,
 } from "./settings-registry.js";
+import { isPrimaryTouchDevice } from "../src/utils/device.js";
 export {
   COMPACT_PHONE_HEIGHT,
   SETTINGS_REGISTRY,
@@ -171,7 +176,7 @@ export class Game {
       audio: this.audio,
       getKeys: () => this.keys,
       getTouchControls: () => this.touchControls,
-      isTouchDevice: "ontouchstart" in window,
+      isTouchDevice: isPrimaryTouchDevice(),
       getPlayerName: () => this.character.name || "Agent",
       getSettings: () => this.settings,
     });
@@ -193,7 +198,7 @@ export class Game {
     this.arenaRound = 1;
     this.campaign = new CampaignManager(this);
     this.tutorial = new TutorialSystem(this);
-    this.isTouchDevice = "ontouchstart" in window;
+    this.isTouchDevice = isPrimaryTouchDevice();
     this.menuSelection = 0;
     this.upgradeSelection = 0;
     this.upgradeLevels = {};
@@ -216,6 +221,10 @@ export class Game {
     this.glitchEffect = 0;
     this.hitMarker = 0;
     this.damageNumbers = [];
+    this.tracers = []; // hitscan visual tracers — short-lived line segments
+    // Dynamic point lights (muzzle flash, explosions, plasma) bleed onto
+    // walls/floor in the column draw. Each: {x,y,color:[r,g,b],radius,intensity,life,maxLife}.
+    this.lights = [];
     // Kill streak system (delegated to KillStreakSystem)
     this.killStreakSystem = new KillStreakSystem();
     // Forwarding properties for backward compat during migration
@@ -276,6 +285,7 @@ export class Game {
       fov: 70, // 50..120 degrees
       viewMode: 0, // 0=first-person, 1=third-person
       invertX: false,
+      invertY: false,
       fontScale: 100, // 100, 125, 150 percent
       colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
       visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
@@ -290,6 +300,20 @@ export class Game {
       haptics: true,
       autoFire: false,
       swipeWeapons: true,
+      graphicsPreset: 0,
+      frameTarget: 0,
+      batterySaver: false,
+      renderScale: 100,
+      effectsQuality: 2,
+      postProcessing: true,
+      floorTexture: true,
+      screenShake: true,
+      weaponBob: true,
+      showPerformanceOverlay: false,
+      gamepadEnabled: true,
+      gamepadLookSensitivity: 2.5,
+      gamepadDeadzone: 0.15,
+      gamepadRumble: true,
     };
     this.settingsSelection = 0;
     this.settingsCategory = "Gameplay"; // active sidebar category
@@ -333,6 +357,7 @@ export class Game {
       onMouseDown: (e) => this._inputMouseDown(e),
       onMouseUp: (e) => {
         if (e.button === 0) this.player.isFiring = false;
+        if (e.button === 2) this.player.isAiming = false;
       },
       onWheel: (deltaY) => this._inputWheel(deltaY),
       onLockChange: (locked, wasLocked) =>
@@ -345,6 +370,10 @@ export class Game {
     this.keys = this.input.keys;
     this.mouse = this.input.mouse;
     this.keybinds = this.input.keybinds;
+    this.gamepad = new GamepadManager();
+    this._gamepadPrevKeys = new Set();
+    this._lastGamepadMove = { x: 0, y: 0 };
+    this.applyGamepadSettings();
 
     // Previous-frame key state tracking for edge-detection (crouch start)
     // Owned by PlayerUpdateSystem — kept here for backward compat only
@@ -539,11 +568,14 @@ export class Game {
     // Wide FOV + compact HUD keeps the game playable on small screens.
     if (this.isTouchDevice) {
       this.settings.fov = 100;
-      this.settings.hudScale = 65;
+      this.settings.hudScale = 75;
     }
     this.loadSettings();
     this._applyMobileMigration();
+    this.applyGamepadSettings();
+    this.applyPerformanceSettings();
     this.loadDevFlags();
+    this.showFPS = !!this.settings.showPerformanceOverlay;
     this.loadAchievements();
     this.loadCharacter();
     this.renderer.applyVisualStyle(this.settings.visualStyle);
@@ -713,6 +745,8 @@ export class Game {
    * @param {string} [from] - state to return to on resume (defaults to current)
    */
   pauseGame(from) {
+    this.player.isAiming = false;
+    this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
     this.unlockPointer();
   }
@@ -729,22 +763,12 @@ export class Game {
 
   lockPointer() {
     if (!this.isTouchDevice) {
-      try {
-        this.canvas.requestPointerLock();
-      } catch (e) {
-        /* requires gesture */
-      }
+      requestPointerLockSafe(this.canvas);
     }
   }
 
   unlockPointer() {
-    if (!this.isTouchDevice && document.pointerLockElement) {
-      try {
-        document.exitPointerLock();
-      } catch (e) {
-        /* already unlocked */
-      }
-    }
+    if (!this.isTouchDevice) exitPointerLockSafe();
   }
 
   // Returns a font string with the size scaled by the fontScale setting
@@ -884,6 +908,9 @@ export class Game {
       if (!this.mouse.locked && this.state === GameState.PLAYING) {
         this.lockPointer();
       }
+    } else if (e.button === 2 && this.state === GameState.PLAYING) {
+      this.player.isAiming = true;
+      if (!this.mouse.locked) this.lockPointer();
     }
   }
 
@@ -914,6 +941,8 @@ export class Game {
     if (this.isTouchDevice) return; // touch controls manage their own state
     // Only auto-pause if we lost lock without ESC (e.g. alt-tab)
     if (wasLocked && !locked && this.state === GameState.PLAYING) {
+      this.player.isAiming = false;
+      this.player.isFiring = false;
       const now = performance.now();
       if (now - this.lastEscTime > 200) {
         this.pauseGame(GameState.PLAYING);
@@ -923,6 +952,82 @@ export class Game {
 
   handleKeyPress(code, e) {
     dispatchKeyPress(this, code, e);
+  }
+
+  _setGamepadKey(code, on, nextHeld) {
+    if (on) {
+      nextHeld.add(code);
+      if (!this._gamepadPrevKeys.has(code)) this.handleKeyPress(code, { code, key: code });
+    }
+    this.keys[code] = !!on;
+  }
+
+  _updateGamepadInput(dt) {
+    if (!this.gamepad || !this.settings.gamepadEnabled) return;
+    const gp = this.gamepad.poll();
+    if (!gp.connected) return;
+
+    const nextHeld = new Set();
+    const moveX = gp.moveX;
+    const moveY = gp.moveY;
+    const moveActive = Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05;
+    this._lastGamepadMove = moveActive ? { x: moveX, y: moveY } : this._lastGamepadMove;
+
+    this._setGamepadKey(this.keybinds.moveForward, moveY < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveBack, moveY > 0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveLeft, moveX < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveRight, moveX > 0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.sprint, gp.sprint, nextHeld);
+    this._setGamepadKey(this.keybinds.crouch, gp.reload, nextHeld);
+    this._setGamepadKey(this.keybinds.chronoShift, gp.chronoShift, nextHeld);
+
+    if (this.state === GameState.TITLE && gp.justPressed.interact) {
+      document.dispatchEvent(new KeyboardEvent("keydown", { code: "GamepadStart", bubbles: true }));
+    }
+    if (this.state === GameState.MODE_SELECT) {
+      if (gp.justPressed.dpadUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
+      if (gp.justPressed.dpadDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
+      if (gp.justPressed.interact) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
+      if (gp.justPressed.pause || gp.justPressed.dash) document.getElementById("btnBack")?.click();
+    }
+    if (this.state === GameState.PLAYING) {
+      this.player.isFiring = gp.shoot;
+      this.player.isAiming = gp.aim;
+      if (gp.aim || gp.shoot || gp.lookX || gp.lookY) this.lastInputWasGamepad = true;
+      if (gp.lookX || gp.lookY) {
+        const aimScale = 420 * dt;
+        this.mouse.dx += gp.lookX * aimScale;
+        this.mouse.dy += gp.lookY * aimScale;
+      }
+      if (gp.justPressed.dash) {
+        const cos = Math.cos(this.player.angle);
+        const sin = Math.sin(this.player.angle);
+        const lx = this._lastGamepadMove.x || 0;
+        const ly = this._lastGamepadMove.y || -1;
+        const rawX = cos * -ly + sin * lx;
+        const rawY = sin * -ly - cos * lx;
+        this.triggerDash(this.keybinds.moveForward, rawX, rawY);
+        this.gamepad.vibrateLight();
+      }
+      if (gp.justPressed.interact) this.interact();
+      if (gp.justPressed.weaponNext || gp.justPressed.dpadRight) this._inputWheel(1);
+      if (gp.justPressed.weaponPrev || gp.justPressed.dpadLeft) this._inputWheel(-1);
+      if (gp.justPressed.pause) this.handleKeyPress(this.keybinds.pause);
+    } else {
+      if (gp.justPressed.dpadUp) this.handleKeyPress("ArrowUp");
+      if (gp.justPressed.dpadDown) this.handleKeyPress("ArrowDown");
+      if (gp.justPressed.dpadLeft) this.handleKeyPress("ArrowLeft");
+      if (gp.justPressed.dpadRight) this.handleKeyPress("ArrowRight");
+      if (gp.justPressed.interact) this.handleKeyPress("Enter");
+      if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
+      if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
+      if (gp.justPressed.weaponNext) this.handleKeyPress("KeyE");
+    }
+
+    for (const code of this._gamepadPrevKeys) {
+      if (!nextHeld.has(code)) this.keys[code] = false;
+    }
+    this._gamepadPrevKeys = nextHeld;
   }
 
   applyAudioSettings() {
@@ -939,6 +1044,61 @@ export class Game {
 
   loadSettings() {
     Save.loadSettings(this.settings);
+  }
+
+  applyGamepadSettings() {
+    if (!this.gamepad) return;
+    this.gamepad.updateSettings({
+      enabled: this.settings.gamepadEnabled,
+      deadzone: this.settings.gamepadDeadzone,
+      lookSensitivity: this.settings.gamepadLookSensitivity,
+      vibrationEnabled: this.settings.gamepadRumble,
+      invertLookY: this.settings.invertY,
+    });
+  }
+
+  applyPerformanceSettings() {
+    if (!this.quality) return;
+    const prevScale = this.quality.renderScale;
+    const presets = ["auto", "low", "medium", "high", "ultra", "custom"];
+    const preset = presets[this.settings.graphicsPreset] || "auto";
+    const presetParticles = { low: 0.3, medium: 0.5, high: 0.8, ultra: 1 };
+    const targets = [55, 30, 60, 90, 120];
+    this.quality.targetFPS = this.settings.batterySaver ? 30 : targets[this.settings.frameTarget] || 55;
+    this.quality.maxScale = this.settings.batterySaver ? Math.min(this.quality.maxScale, 0.7) : 1.0;
+    if (preset === "auto") {
+      this.quality.useAuto();
+      if (this.settings.batterySaver && this.quality.renderScale > this.quality.maxScale) {
+        this.quality.renderScale = this.quality.stableScale = this.quality.maxScale;
+      }
+    } else if (preset !== "custom") {
+      this.quality.applyPreset(preset);
+    }
+    const effectMul = [0.3, 0.6, 1][this.settings.effectsQuality] ?? 1;
+    if (preset === "auto") {
+      const scale = this.quality.renderScale;
+      const low = scale < 0.6;
+      const med = scale < 0.8;
+      this.quality.particleMultiplier = (low ? 0.3 : med ? 0.5 : 1) * effectMul * (this.settings.batterySaver ? 0.6 : 1);
+      this.quality.drawDistance = low ? 10 : med ? 14 : 20;
+      this.quality.enableScanlines = this.settings.postProcessing && !med;
+      this.quality.enableVignette = this.settings.postProcessing && !low;
+      this.quality.enableFloorTexture = this.settings.floorTexture && !low;
+    } else {
+      const isCustom = preset === "custom";
+      const customParticles = preset === "custom" ? 1 : (presetParticles[preset] ?? 1);
+      this.quality.applyCustom({
+        renderScale: Math.min(isCustom ? this.settings.renderScale / 100 : this.quality.renderScale, this.quality.maxScale),
+        particleMultiplier: customParticles * effectMul * (this.settings.batterySaver ? 0.6 : 1),
+        enableVignette: this.settings.postProcessing && !this.settings.batterySaver,
+        enableScanlines: this.settings.postProcessing && !this.settings.batterySaver,
+        enableFloorTexture: this.settings.floorTexture,
+      });
+    }
+    this.quality.stableScale = this.quality.renderScale;
+    if (Math.abs(prevScale - this.quality.renderScale) > 0.001) {
+      window.dispatchEvent(new CustomEvent("cc-quality-change"));
+    }
   }
 
   _applyMobileMigration() {
@@ -1267,6 +1427,8 @@ export class Game {
     _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0);
   }
 
+  // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
+
   _makeScanlinePattern(ctx, alpha, step) {
     /* forwarded to src/ui/scanlines.js */
   }
@@ -1301,6 +1463,16 @@ export class Game {
     } else if (cls.id === "gunslinger") {
       this.player.maxChronoEnergy = 100;
     }
+
+    const origin = BACKSTORIES[this.character.backstoryIndex || 0];
+    const ob = origin?.bonuses || {};
+    if (ob.maxHealthAdd) {
+      this.player.maxHealth += ob.maxHealthAdd;
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + ob.maxHealthAdd);
+    }
+    if (ob.maxChronoEnergyAdd) this.player.maxChronoEnergy += ob.maxChronoEnergyAdd;
+    if (ob.dashCostAdd) this.player.dashStaminaCost = Math.max(8, this.player.dashStaminaCost + ob.dashCostAdd);
+    if (ob.armorAdd) this.player.armor = Math.max(this.player.armor, ob.armorAdd);
   }
 
   getCharacterColor() {
@@ -1309,6 +1481,10 @@ export class Game {
 
   getWeaponSkin() {
     return WEAPON_SKINS[this.character.weaponSkinIndex] || WEAPON_SKINS[0];
+  }
+
+  getVoiceProfile() {
+    return VOICE_PROFILES[this.character.voiceIndex || 0] || VOICE_PROFILES[0];
   }
 
   renderCharacterCreator(ctx, w, h) {
@@ -1366,10 +1542,6 @@ export class Game {
       loadout,
       scale,
     );
-  }
-
-  renderTutorialMenu(ctx, w, h) {
-    _renderTutorialMenu(ctx, w, h, this.tutorialMenuSelection || 0);
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
@@ -1532,8 +1704,8 @@ export class Game {
     _hitscan(this, angle, damage, range);
   }
 
-  damageEnemy(enemy, damage) {
-    _damageEnemy(this, enemy, damage);
+  damageEnemy(enemy, damage, zone) {
+    _damageEnemy(this, enemy, damage, zone);
   }
 
   damagePlayer(amount, attacker) {
@@ -1560,6 +1732,8 @@ export class Game {
     // Visual-only code (Math.sin animations) can use this.wallTime instead.
     this.time = (this.time || 0) + this.deltaTime * 1000;
     this.wallTime = timestamp;
+
+    this._updateGamepadInput(this.deltaTime);
 
     // Slow-motion time scale (last-kill effect takes priority)
     if (this.slowMoTimer > 0) {
@@ -1786,7 +1960,7 @@ export class Game {
     }
 
     // Player movement
-    const _profilePlayerStart = performance.now();
+    const _profilePlayerStart = this.showFPS ? performance.now() : 0;
     this.updatePlayer(dt);
 
     // ── Meltdown auto-forward ──
@@ -1938,7 +2112,7 @@ export class Game {
     // Weapon kick recovery (framerate-invariant)
     this.player.weaponKick *= decay(0.85, this.deltaTime);
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    this.profiler.currentPhases.player =
+    if (_profilePlayerStart) this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
 
     // Clean up dead entities (keep recently-dead for death animation)
@@ -1962,25 +2136,25 @@ export class Game {
     this.entityGrid.insertAll(this.entities);
 
     // Update enemies
-    const _profileEnemiesStart = performance.now();
+    const _profileEnemiesStart = this.showFPS ? performance.now() : 0;
     this.updateEnemies(dt);
-    this.profiler.currentPhases.enemies =
+    if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
 
     // Update projectiles
-    const _profileProjectilesStart = performance.now();
+    const _profileProjectilesStart = this.showFPS ? performance.now() : 0;
     this.updateProjectiles(dt);
-    this.profiler.currentPhases.projectiles =
+    if (_profileProjectilesStart) this.profiler.currentPhases.projectiles =
       performance.now() - _profileProjectilesStart;
 
     // Check pickups
-    const _profilePickupsStart = performance.now();
+    const _profilePickupsStart = this.showFPS ? performance.now() : 0;
     this.checkPickups();
-    this.profiler.currentPhases.pickups =
+    if (_profilePickupsStart) this.profiler.currentPhases.pickups =
       performance.now() - _profilePickupsStart;
 
     // Misc: exit check, decay, achievements
-    const _tMisc0 = performance.now();
+    const _tMisc0 = this.showFPS ? performance.now() : 0;
 
     // Check exit (campaign)
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
@@ -2034,14 +2208,43 @@ export class Game {
       }
     }
 
+    // Hitscan tracers decay (short-lived bullet streaks)
+    for (let i = this.tracers.length - 1; i >= 0; i--) {
+      this.tracers[i].life -= dt;
+      if (this.tracers[i].life <= 0) {
+        this.tracers[i] = this.tracers[this.tracers.length - 1];
+        this.tracers.pop();
+      }
+    }
+
+    // Dynamic point lights — decay and prune. Intensity follows life ratio
+    // so flashes fade smoothly into the wall/floor shading.
+    for (let i = this.lights.length - 1; i >= 0; i--) {
+      const L = this.lights[i];
+      L.life -= dt;
+      if (L.life <= 0) {
+        this.lights[i] = this.lights[this.lights.length - 1];
+        this.lights.pop();
+      } else {
+        L.intensity = L.baseIntensity * (L.life / L.maxLife);
+      }
+    }
+
     // Achievement checks (periodic, not every frame)
     this.checkAchievements();
     this.updateAchievementToast(dt);
     this.updateAriaComms(dt);
-    this.profiler.currentPhases.misc = performance.now() - _tMisc0;
+    if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
   }
 
   triggerDash(code, rawDirX, rawDirY) {
+    if (rawDirX !== undefined && rawDirY !== undefined) {
+      const len = Math.hypot(rawDirX, rawDirY);
+      if (len > 1e-6) {
+        rawDirX /= len;
+        rawDirY /= len;
+      }
+    }
     const triggered = this.playerUpdateSystem.triggerDash(
       { player: this.player, keybinds: this.keybinds },
       code,
@@ -2056,6 +2259,7 @@ export class Game {
   }
 
   updatePlayer(dt) {
+    this.player._drawDistance = this.quality?.drawDistance;
     const flags = this.playerUpdateSystem.update(
       {
         player: this.player,
@@ -2066,6 +2270,7 @@ export class Game {
         mode: this.mode,
         map: this.map,
         audio: this.audio,
+        voiceProfile: this.getVoiceProfile(),
         noclip: !!this._noclip,
       },
       dt,
@@ -2085,27 +2290,38 @@ export class Game {
 
   _spawnHitImpact(x, y, enemyColor, isCrit) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit);
+    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit, this.quality?.particleMultiplier ?? 1);
   }
 
   _spawnMuzzleFlash(wep) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnMuzzleFlash(this.player.particles, this.player, wep);
+    _spawnMuzzleFlash(this.player.particles, this.player, wep, this.quality?.particleMultiplier ?? 1);
+    // Brief light bleed at the barrel — falls off in ~80 ms so it reads
+    // as a flash, not a flare. Color follows weapon family.
+    const FLASH_LIGHT = {
+      2: [80, 220, 255], 7: [80, 220, 255], // plasma / EMP
+      3: [255, 160, 40],                     // cannon
+      6: [100, 255, 120],                    // ricochet
+    };
+    const color = FLASH_LIGHT[wep.id] || [255, 200, 90];
+    const bx = this.player.x + Math.cos(this.player.angle) * 0.6;
+    const by = this.player.y + Math.sin(this.player.angle) * 0.6;
+    _spawnPointLight(this.lights, bx, by, color, 4.5, 1.4, 0.08);
   }
 
   spawnDeathParticles(x, y, c1, c2) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnDeathParticles(this.player.particles, x, y, c1, c2);
+    _spawnDeathParticles(this.player.particles, x, y, c1, c2, this.quality?.particleMultiplier ?? 1);
   }
 
   spawnWallSparks(x, y) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnWallSparks(this.player.particles, x, y);
+    _spawnWallSparks(this.player.particles, x, y, this.quality?.particleMultiplier ?? 1);
   }
 
   spawnPickupBurst(x, y, pickupType) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnPickupBurst(this.player.particles, x, y, pickupType);
+    _spawnPickupBurst(this.player.particles, x, y, pickupType, this.quality?.particleMultiplier ?? 1);
   }
 
   updateParticles(dt) {
@@ -2115,6 +2331,7 @@ export class Game {
       this.timeScale,
       this.dustMotes,
       this.player,
+      { enableDust: (this.quality?.particleMultiplier ?? 1) >= 0.5 },
     );
   }
 
@@ -2160,8 +2377,9 @@ export class Game {
         time: this.time,
         audio: this.audio,
         spawnWallSparks: (x, y) => this.spawnWallSparks(x, y),
-        damageEnemy: (e, d) => this.damageEnemy(e, d),
+        damageEnemy: (e, d, z) => this.damageEnemy(e, d, z),
         damagePlayer: (d) => this.damagePlayer(d),
+        lights: this.lights,
       },
       dt,
     );
@@ -2182,8 +2400,8 @@ export class Game {
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
 
-      // In tutorial, block pickups until step 10 ("Resupply")
-      if (this.mode === "tutorial" && this.tutorialStep < 10) {
+      // In tutorial, block pickups until step 13 ("Resupply")
+      if (this.mode === "tutorial" && this.tutorialStep < 13) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -2197,7 +2415,7 @@ export class Game {
         this.spawnPickupBurst(e.x, e.y, "health");
         this.audio.pickup();
         this.triggerAriaOnce("healthPickup", "healthPickup");
-        if (this.mode === "tutorial" && this.tutorialStep === 10)
+        if (this.mode === "tutorial" && this.tutorialStep === 13)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "ammo") {
@@ -2205,7 +2423,7 @@ export class Game {
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "ammo");
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep === 10)
+        if (this.mode === "tutorial" && this.tutorialStep === 13)
           this.tutorialPickedUp = true;
         if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
       } else if (e.type === "weapon") {
@@ -2332,9 +2550,10 @@ export class Game {
     renderWeapon(ctx, w, h, {
       wep,
       energyColor: charColor ? charColor.accent : wep?.color,
+      isAiming: this.player.isAiming,
       isSprinting: this.player.isSprinting,
       isDashing: this.player.isDashing,
-      weaponBob: this.player.weaponBob,
+      weaponBob: this.settings.weaponBob ? this.player.weaponBob : 0,
       weaponKick: this.player.weaponKick,
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
@@ -2394,16 +2613,13 @@ export class Game {
     ctx.font = `bold ${compact ? 24 : 36}px monospace`;
     ctx.textAlign = "center";
     ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
-    if (!compact) {
-      this.drawControlsOverlay(ctx, w, h, 0.9);
-    }
     ctx.font = `${compact ? 11 : 14}px monospace`;
     ctx.fillStyle = "#aaaacc";
     ctx.textAlign = "center";
     const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
     if (!this.isTouchDevice) {
       ctx.fillText(
-        "ESC / P to resume  |  S settings  |  C controls  |  A achievements  |  T stats  |  L ARIA log  |  Q quit" +
+        "ESC / P to resume  |  S settings  |  A achievements  |  T stats  |  L ARIA log  |  Q quit" +
           saveHint,
         w / 2,
         h / 2 + 110,

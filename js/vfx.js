@@ -17,15 +17,43 @@ function hexRGB(hex, fallback = [128, 128, 128]) {
   ];
 }
 
+const scaledCount = (count, quality = 1) => Math.max(0, Math.round(count * quality));
+
+/**
+ * Push a dynamic point light onto the lights array. Sampled by the
+ * raycaster's wall and floor passes to add a radial brightness bleed
+ * around the source. Cheap: lights with zero remaining life prune
+ * themselves on the next tick.
+ *
+ * @param {Array} lights      game.lights array
+ * @param {number} x,y        world position
+ * @param {[number,number,number]} color  RGB 0-255
+ * @param {number} radius     world units of effective falloff
+ * @param {number} intensity  peak brightness multiplier (0.5 = mild, 2 = intense)
+ * @param {number} life       seconds until the light fully fades out
+ */
+export function spawnPointLight(lights, x, y, color, radius, intensity, life) {
+  if (!lights) return;
+  lights.push({
+    x, y,
+    color,
+    radius,
+    baseIntensity: intensity,
+    intensity,
+    life,
+    maxLife: life,
+  });
+}
+
 /** Hit-impact particles at bullet impact point on an enemy. */
-export function spawnHitImpact(particles, x, y, enemyColor, isCrit) {
+export function spawnHitImpact(particles, x, y, enemyColor, isCrit, quality = 1) {
   let [r, g, b] = hexRGB(enemyColor, [200, 60, 60]);
   // Mix with blood red for organic feel
   r = Math.min(255, Math.floor(r * 0.5 + 200 * 0.5));
   g = Math.min(255, Math.floor(g * 0.3 + 30 * 0.7));
   b = Math.min(255, Math.floor(b * 0.3 + 30 * 0.7));
 
-  const count = isCrit ? 10 : 6;
+  const count = scaledCount(isCrit ? 10 : 6, quality);
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 1.5 + Math.random() * 3;
@@ -45,7 +73,7 @@ export function spawnHitImpact(particles, x, y, enemyColor, isCrit) {
 }
 
 /** Muzzle flash particles at the gun barrel. */
-export function spawnMuzzleFlash(particles, player, wep) {
+export function spawnMuzzleFlash(particles, player, wep, quality = 1) {
   const barrelDist = 0.6;
   const bx = player.x + Math.cos(player.angle) * barrelDist;
   const by = player.y + Math.sin(player.angle) * barrelDist;
@@ -56,7 +84,7 @@ export function spawnMuzzleFlash(particles, player, wep) {
     6: [100, 255, 120],                      // Ricochet — green
   };
   const [r1, g1, b1] = FLASH_COLORS[wep.id] || [255, 200, 60];
-  const count = wep.id === 1 || wep.id === 4 ? 8 : 5;
+  const count = scaledCount(wep.id === 1 || wep.id === 4 ? 8 : 5, quality);
 
   for (let i = 0; i < count; i++) {
     const spread = (Math.random() - 0.5) * 0.8;
@@ -77,8 +105,8 @@ export function spawnMuzzleFlash(particles, player, wep) {
 }
 
 /** Death explosion particles + smoke + metallic debris. */
-export function spawnDeathParticles(particles, x, y, c1, c2) {
-  const count = 12;
+export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1) {
+  const count = scaledCount(12, quality);
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 1.0 + Math.random() * 2;
@@ -95,14 +123,14 @@ export function spawnDeathParticles(particles, x, y, c1, c2) {
       size: 0.05 + Math.random() * 0.08,
     });
   }
-  spawnSmoke(particles, x, y, { count: 5 });
+  spawnSmoke(particles, x, y, { count: scaledCount(5, quality) });
   const [dr, dg, db] = hexRGB(c2 || "#808080", [80, 75, 70]);
-  spawnDebris(particles, x, y, { count: 4, r: dr, g: dg, b: db });
+  spawnDebris(particles, x, y, { count: scaledCount(4, quality), r: dr, g: dg, b: db });
 }
 
 /** Wall-impact sparks + debris chips. */
-export function spawnWallSparks(particles, x, y) {
-  const count = 5 + Math.floor(Math.random() * 4);
+export function spawnWallSparks(particles, x, y, quality = 1) {
+  const count = scaledCount(5 + Math.floor(Math.random() * 4), quality);
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 1.5 + Math.random() * 2.5;
@@ -119,5 +147,5 @@ export function spawnWallSparks(particles, x, y) {
       size: 0.02 + Math.random() * 0.03,
     });
   }
-  spawnDebris(particles, x, y, { count: 3, speed: 1, life: 0.3 });
+  spawnDebris(particles, x, y, { count: scaledCount(3, quality), speed: 1, life: 0.3 });
 }

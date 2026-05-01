@@ -6,6 +6,7 @@
 
 import { renderPostFX as _renderPostFX } from "./postfx.js";
 import { GameState } from "../types.js";
+import { effectiveAimFov } from "../systems/aim.js";
 
 export function renderFrame(game) {
   const ctx = game.renderer.ctx;
@@ -77,13 +78,13 @@ export function renderFrame(game) {
   // Screen shake offset
   let shakeX = 0,
     shakeY = 0;
-  if (game.screenShake > 0.5) {
+  if (game.settings.screenShake && game.screenShake > 0.5) {
     shakeX = (Math.random() - 0.5) * game.screenShake;
     shakeY = (Math.random() - 0.5) * game.screenShake;
   }
 
   // View bob when sprinting/dashing (whole screen sway)
-  if (game.player.isSprinting || game.player.isDashing) {
+  if (game.settings.weaponBob && (game.player.isSprinting || game.player.isDashing)) {
     const bobIntensity = game.player.isDashing ? 6 : 3;
     shakeX += Math.sin(game.player.weaponBob * 1.1) * bobIntensity;
     shakeY +=
@@ -94,32 +95,50 @@ export function renderFrame(game) {
   ctx.translate(shakeX, shakeY);
 
   // Render 3D scene — timed: raycast phase
-  const _tRay0 = performance.now();
-  // Camera vertical shift for crouch/slide
+  const profiling = !!game.showFPS;
+  const _tRay0 = profiling ? performance.now() : 0;
+  // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;
   const yShift = p.isSliding ? 40 : p.isCrouching ? 28 : 0;
-  game.renderer.renderScene(
-    game.player,
-    game.map,
-    game.entities,
-    game.time,
-    game.settings.fov,
-    game.settings.viewMode,
-    false,
-    yShift,
-  );
+  const renderFov = effectiveAimFov(p, game.settings);
+  const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
+  const skipFloorCeil = game.quality && !game.quality.enableFloorTexture;
+  if (game.map?.grid) {
+    // Hand the renderer this frame's dynamic light list so wall/floor
+    // shading can sample radial brightness. Cleared each frame implicitly
+    // because the array is replaced by reference.
+    game.renderer.lights = game.lights || null;
+    game.renderer.renderScene(
+      game.player,
+      game.map,
+      game.entities,
+      game.time,
+      renderFov,
+      game.settings.viewMode,
+      skipFloorCeil,
+      yShift,
+    );
+  } else {
+    ctx.fillStyle = "#020610";
+    ctx.fillRect(0, 0, w, h);
+  }
 
   // Render atmospheric dust motes
-  if (game.dustMotes && game.dustMotes.length > 0) {
-    game.renderer.renderParticles(game.player, game.dustMotes, game.time);
+  if ((game.quality?.particleMultiplier ?? 1) >= 0.5 && game.dustMotes && game.dustMotes.length > 0) {
+    game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul);
+  }
+
+  // Hitscan tracers — drawn after sprites so they read on top, before vignette
+  if (game.tracers && game.tracers.length > 0) {
+    game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul);
   }
 
   ctx.restore();
-  game.profiler.currentPhases.raycast = performance.now() - _tRay0;
+  if (profiling) game.profiler.currentPhases.raycast = performance.now() - _tRay0;
 
   // Subtle ambient vignette (cached offscreen for performance)
   // Skipped when adaptive quality disables it
-  const _tVig0 = performance.now();
+  const _tVig0 = profiling ? performance.now() : 0;
   const _qVignette = !game.quality || game.quality.enableVignette;
   if (_qVignette) {
     if (
@@ -148,10 +167,10 @@ export function renderFrame(game) {
     }
     ctx.drawImage(game._vignetteCanvas, 0, 0);
   }
-  game.profiler.currentPhases.vignette = performance.now() - _tVig0;
+  if (profiling) game.profiler.currentPhases.vignette = performance.now() - _tVig0;
 
   // Draw weapon (hidden in third person)
-  const _tWpn0 = performance.now();
+  const _tWpn0 = profiling ? performance.now() : 0;
   if (game.settings.viewMode === 0) {
     game.drawWeapon(ctx, w, h);
   }
@@ -160,10 +179,10 @@ export function renderFrame(game) {
   if (game.settings.viewMode === 1) {
     game.drawThirdPersonModel(ctx, w, h);
   }
-  game.profiler.currentPhases.weapon = performance.now() - _tWpn0;
+  if (profiling) game.profiler.currentPhases.weapon = performance.now() - _tWpn0;
 
   // Effects: muzzle flash lighting, hurt flash, glitch, death fade
-  const _tFx0 = performance.now();
+  const _tFx0 = profiling ? performance.now() : 0;
   _renderPostFX(ctx, w, h, {
     time: game.time,
     muzzleFlashTime: game._muzzleFlashTime,
@@ -171,21 +190,22 @@ export function renderFrame(game) {
     player: game.player,
     glitchEffect: game.glitchEffect,
     canvas: game.canvas,
+    postProcessing: game.settings.postProcessing,
   });
-  game.profiler.currentPhases.effects = performance.now() - _tFx0;
+  if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
 
   // Render HUD on overlay canvas
-  const _tHud0 = performance.now();
+  const _tHud0 = profiling ? performance.now() : 0;
   game.renderHUD();
 
   // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
   if (game.mode === "tutorial") {
     game.renderTutorialOverlay(ctx, w, h);
   }
-  game.profiler.currentPhases.hud = performance.now() - _tHud0;
+  if (profiling) game.profiler.currentPhases.hud = performance.now() - _tHud0;
 
   // Render overlay screens on HUD canvas (it's on top via z-index)
-  const _tOvr0 = performance.now();
+  const _tOvr0 = profiling ? performance.now() : 0;
   const hctx = game.hudCtx;
   const hw = game.hudW;
   const hh = game.hudH;
@@ -203,5 +223,5 @@ export function renderFrame(game) {
   if (game.state === GameState.VICTORY) game.renderVictory(hctx, hw, hh);
   if (game.state === GameState.LEVEL_COMPLETE)
     game.renderLevelComplete(hctx, hw, hh);
-  game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
+  if (profiling) game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
 }

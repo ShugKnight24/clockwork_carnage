@@ -14,6 +14,7 @@
  */
 export function renderPostFX(ctx, w, h, state) {
   const { time, player, canvas } = state;
+  const postProcessing = state.postProcessing !== false;
 
   // Muzzle flash screen lighting — additive overlay, fades over 100ms
   if (state.muzzleFlashTime && time - state.muzzleFlashTime < 100) {
@@ -27,30 +28,70 @@ export function renderPostFX(ctx, w, h, state) {
   }
 
   // Hurt flash — red overlay
-  if (player.hurtTime && time - player.hurtTime < 200) {
+  if (postProcessing && player.hurtTime && time - player.hurtTime < 200) {
     const alpha = 0.3 * (1 - (time - player.hurtTime) / 200);
     ctx.fillStyle = `rgba(255,0,0,${alpha})`;
     ctx.fillRect(0, 0, w, h);
   }
 
   // Damage direction indicator — red arc on screen edge
-  if (player.hurtTime && time - player.hurtTime < 500 && player.lastDamageAngle != null) {
+  if (postProcessing && player.hurtTime && time - player.hurtTime < 500 && player.lastDamageAngle != null) {
     drawDamageDirection(ctx, w, h, time, player);
   }
 
   // Glitch slice effect
-  if (state.glitchEffect > 0.01) {
+  if (postProcessing && state.glitchEffect > 0.01) {
     drawGlitch(ctx, w, h, canvas, state.glitchEffect);
   }
 
   // Chromatic aberration — RGB channel split
-  drawChromaticAberration(ctx, w, h, canvas, time, player, state.glitchEffect);
+  if (postProcessing) drawChromaticAberration(ctx, w, h, canvas, time, player, state.glitchEffect);
+
+  // Film grain — subtle animated noise. Sells the "old broadcast" mood
+  // without bleeding contrast. Uses a cached noise tile to avoid drawing
+  // thousands of pixels every frame.
+  if (postProcessing) drawFilmGrain(ctx, w, h, time);
 
   // Death fade
   if (!player.alive) {
     ctx.fillStyle = "rgba(80,0,0,0.5)";
     ctx.fillRect(0, 0, w, h);
   }
+}
+
+let _grainTile = null;
+let _grainTileSize = 128;
+function getGrainTile() {
+  if (_grainTile) return _grainTile;
+  const c = (typeof OffscreenCanvas !== "undefined")
+    ? new OffscreenCanvas(_grainTileSize, _grainTileSize)
+    : Object.assign(document.createElement("canvas"), { width: _grainTileSize, height: _grainTileSize });
+  const tctx = c.getContext("2d");
+  const img = tctx.createImageData(_grainTileSize, _grainTileSize);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = (Math.random() * 255) | 0;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  tctx.putImageData(img, 0, 0);
+  _grainTile = c;
+  return c;
+}
+
+function drawFilmGrain(ctx, w, h, time) {
+  const tile = getGrainTile();
+  // Animate by jittering the tile origin every frame.
+  const ox = (time * 0.13) % _grainTileSize;
+  const oy = (time * 0.17) % _grainTileSize;
+  ctx.save();
+  ctx.globalAlpha = 0.045;
+  ctx.globalCompositeOperation = "overlay";
+  for (let yy = -oy; yy < h; yy += _grainTileSize) {
+    for (let xx = -ox; xx < w; xx += _grainTileSize) {
+      ctx.drawImage(tile, xx, yy);
+    }
+  }
+  ctx.restore();
 }
 
 function drawDamageDirection(ctx, w, h, time, player) {
@@ -90,7 +131,7 @@ export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchE
     const elapsed = time - player.hurtTime;
     if (elapsed < 300) intensity += 0.3 * (1 - elapsed / 300);
   }
-  intensity = Math.max(0.03, Math.min(1, intensity));
+  intensity = Math.max(0, Math.min(1, intensity));
   const offset = Math.ceil(intensity * 3);
   if (offset < 1) return;
 
