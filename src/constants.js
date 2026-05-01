@@ -59,6 +59,24 @@ export const PLAYER_SPAWN_ANGLE = 0;
 /** Player movement speed in units per second */
 export const PLAYER_MOVE_SPEED = 5;
 
+/** Reticle free-aim limits in screen fraction from center */
+export const PLAYER_AIM_LIMIT_X = 0.18;
+export const PLAYER_AIM_LIMIT_Y = 0.30;
+
+/** Mouse-look: every pixel of mouse motion drives the reticle; overflow
+ *  past the deadzone edge then turns the camera. One scalar drives both. */
+export const PLAYER_AIM_SENSITIVITY = 0.0017;
+export const PLAYER_MOUSE_TURN_RATE = 0.002;
+
+/** @deprecated kept for backward compat; no longer used in player-update.js */
+export const PLAYER_AIM_MOUSE_SHARE = 1.0;
+export const PLAYER_CAMERA_MOUSE_SHARE = 0.0;
+
+/** Reticle decay rate when player is walking (per second). Gentle: bullets
+ *  always land exactly where the crosshair was painted; recenter just
+ *  smooths the reticle back as the player runs forward. */
+export const PLAYER_AIM_RECENTER = 0.6;
+
 /** Builder mode movement speed */
 export const BUILDER_MOVE_SPEED = 8.0;
 
@@ -95,6 +113,30 @@ export const BULLET_LIFETIME_SEC = 2;
 
 /** Hit detection radius */
 export const HIT_DETECTION_RADIUS = 0.5;
+
+/** Enemy hit capsules are matched to rendered sprite width, not tiny AI body
+ * radius. Most enemies render as ~1 world-unit wide billboards, so 0.5 means
+ * shots landing on the visible body edge still count. */
+export const ENEMY_HIT_RADIUS_MIN = 0.5;
+export const ENEMY_HIT_RADIUS_PAD = 0.04;
+export const ENEMY_HIT_HEIGHT_PAD = 0.16;
+export const ENEMY_HIT_ANGLE_MIN = 0.012;
+export const ENEMY_HIT_VERTICAL_ANGLE_MIN = 0.016;
+
+/** Hit-zone damage multipliers and forgiveness pads.
+ *  Headshots use tighter angular pad (less forgiving than body) so precision
+ *  is rewarded. Crit and headshot stack multiplicatively. */
+export const HEADSHOT_MULT = 2.5;
+export const LEG_DAMAGE_MULT = 0.7;
+export const CORE_DAMAGE_MULT = 2.5;
+export const ARMOR_DAMAGE_MULT = 0.4;
+export const HEADSHOT_PRECISION_PAD = 0.4; // multiplier on body angular pad
+export const ZONE_RADIUS_PAD = 0.02;
+
+/** Aim-down-sights: same effective FOV must drive both rendering and bullets. */
+export const PLAYER_ADS_FOV_MULT = 0.72;
+export const PLAYER_ADS_MOVE_MULT = 0.75;
+export const PLAYER_ADS_SPREAD_MULT = 0.45;
 
 /** Hit flash duration in milliseconds */
 export const HIT_FLASH_DURATION_MS = 100;

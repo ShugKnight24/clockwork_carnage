@@ -3,6 +3,14 @@
  * No game state, no audio, no particles — just numbers in, numbers out.
  */
 
+import {
+  ENEMY_HIT_HEIGHT_PAD,
+  ENEMY_HIT_ANGLE_MIN,
+  ENEMY_HIT_RADIUS_MIN,
+  ENEMY_HIT_RADIUS_PAD,
+  ENEMY_HIT_VERTICAL_ANGLE_MIN,
+} from "../constants.js";
+
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
  * Mutates enemy._shield if present (absorbs damage).
@@ -116,4 +124,138 @@ export function isBossEnemy(enemy) {
   return enemy.enemyType === "boss" ||
     enemy.enemyType === "boss_form2" ||
     enemy.enemyType === "boss_form3";
+}
+
+export function aimHitsTargetHeight(aimHeight, enemy) {
+  const center = enemy.def?.hitCenter ?? 0.35;
+  const halfHeight = (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD;
+  return Math.abs(aimHeight - center - (enemy.z || 0)) <= halfHeight;
+}
+
+export function enemyHitRadius(enemy) {
+  return Math.max(ENEMY_HIT_RADIUS_MIN, (enemy.def?.radius || 0) + ENEMY_HIT_RADIUS_PAD);
+}
+
+export function distanceToWall(player, dirX, dirY, map, range) {
+  let mapX = Math.floor(player.x);
+  let mapY = Math.floor(player.y);
+  const deltaDistX = Math.abs(1 / (Math.abs(dirX) < 1e-9 ? 1e-9 : dirX));
+  const deltaDistY = Math.abs(1 / (Math.abs(dirY) < 1e-9 ? 1e-9 : dirY));
+  const stepX = dirX < 0 ? -1 : 1;
+  const stepY = dirY < 0 ? -1 : 1;
+  let sideDistX = dirX < 0
+    ? (player.x - mapX) * deltaDistX
+    : (mapX + 1 - player.x) * deltaDistX;
+  let sideDistY = dirY < 0
+    ? (player.y - mapY) * deltaDistY
+    : (mapY + 1 - player.y) * deltaDistY;
+  let side = 0;
+
+  while (true) {
+    if (sideDistX < sideDistY) {
+      sideDistX += deltaDistX;
+      mapX += stepX;
+      side = 0;
+    } else {
+      sideDistY += deltaDistY;
+      mapY += stepY;
+      side = 1;
+    }
+
+    if (mapX < 0 || mapY < 0 || mapX >= map.width || mapY >= map.height) return range;
+    const dist = side === 0
+      ? (mapX - player.x + (1 - stepX) / 2) / dirX
+      : (mapY - player.y + (1 - stepY) / 2) / dirY;
+    if (dist > range) return range;
+    if (map.grid[mapY][mapX] > 0) return Math.max(0, dist);
+  }
+}
+
+export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy) {
+  if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
+
+  const ex = enemy.x - player.x;
+  const ey = enemy.y - player.y;
+  const along = ex * dirX + ey * dirY;
+  if (along <= 0 || along > range) return null;
+
+  const lateralX = ex - dirX * along;
+  const lateralY = ey - dirY * along;
+  const radius = Math.max(enemyHitRadius(enemy), along * ENEMY_HIT_ANGLE_MIN);
+  if (lateralX * lateralX + lateralY * lateralY > radius * radius) return null;
+  const aimHeight = Math.tan(pitch || 0) * along;
+  const center = (enemy.def?.hitCenter ?? 0.35) + (enemy.z || 0);
+  const halfHeight = Math.max(
+    (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD,
+    along * ENEMY_HIT_VERTICAL_ANGLE_MIN,
+  );
+  if (Math.abs(aimHeight - center) > halfHeight) return null;
+
+  return { enemy, dist: along };
+}
+
+export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map) {
+  const maxDist = map ? distanceToWall(player, dirX, dirY, map, range) : range;
+  let best = null;
+  for (const enemy of entities) {
+    const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy);
+    if (hit && (!best || hit.dist < best.dist)) best = hit;
+  }
+  return best;
+}
+
+/**
+ * Projectile↔enemy hit test (swept-segment).
+ *
+ * Single source of truth for moving-projectile collision. Tests whether the
+ * line segment from `(prevX, prevY)` to `(p.x, p.y)` intersects the enemy's
+ * hit cylinder, with the same angular forgiveness as hitscan so projectiles
+ * and hitscan feel equally responsive.
+ *
+ * Pre-conditions: projectile has `originX`, `originY`, `dirX`, `dirY`,
+ * optional `pitch`. Caller passes `prevX/prevY` (position before this step).
+ *
+ * @returns {{ enemy, dist } | null} hit info (dist = travel along ray from origin)
+ */
+export function projectileHitsEnemy(p, enemy, prevX, prevY) {
+  if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
+
+  // Reuse hitscan's swept-ray logic for symmetry. Use the projectile's full
+  // travel ray (origin → current pos) so the angular pad scales with distance
+  // identically to hitscan. Range = current travelled distance + small step
+  // padding (ray must reach at least to current frame).
+  const ox = p.originX ?? prevX ?? p.x;
+  const oy = p.originY ?? prevY ?? p.y;
+  const travelDist = Math.hypot(p.x - ox, p.y - oy);
+  if (travelDist <= 0) {
+    // First-frame edge case: bullet spawned on top of enemy.
+    const dx = p.x - enemy.x, dy = p.y - enemy.y;
+    const r = enemyHitRadius(enemy);
+    return dx * dx + dy * dy <= r * r ? { enemy, dist: 0 } : null;
+  }
+
+  const dirX = (p.x - ox) / travelDist;
+  const dirY = (p.y - oy) / travelDist;
+
+  // Cast from origin out to current position. rayEnemyHit's angular pads
+  // (ENEMY_HIT_ANGLE_MIN / VERTICAL_ANGLE_MIN) provide the same forgiveness
+  // that hitscan weapons enjoy.
+  const hit = rayEnemyHit(
+    { x: ox, y: oy },
+    dirX, dirY,
+    travelDist,
+    p.pitch || 0,
+    enemy,
+  );
+  if (!hit) return null;
+
+  // Also constrain: the intersection must lie on the segment we just stepped
+  // through, not earlier travel (otherwise a bullet that *passed* an enemy
+  // would re-hit it). Allow a small slop (one step length) for the spawn frame.
+  const prevDist = prevX != null && prevY != null
+    ? Math.hypot(prevX - ox, prevY - oy)
+    : 0;
+  if (hit.dist + 0.05 < prevDist) return null;
+
+  return hit;
 }

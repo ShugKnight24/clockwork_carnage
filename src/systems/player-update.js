@@ -4,6 +4,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
 import { decay } from "../utils/math.js";
+import { applyAimDelta, recenterAim } from "./aim.js";
+import { PLAYER_ADS_MOVE_MULT, PLAYER_MOUSE_TURN_RATE } from "../constants.js";
+
+/**
+ * Halo-style hybrid aim: mouse moves the reticle freely; on clamp, the
+ * leftover input pushes the camera. One sensitivity value drives both the
+ * reticle and the camera so the visual crosshair is always the source of
+ * truth for shooting.
+ */
+function applyMouseAim(p, mouse, settings) {
+  if (mouse.dx === 0 && mouse.dy === 0) return false;
+  const sens = settings.sensitivity || 1;
+  const invX = settings.invertX ? -1 : 1;
+
+  const { overflowX } = applyAimDelta(p, mouse.dx, mouse.dy, settings);
+  if (overflowX !== 0) {
+    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX;
+  }
+  mouse.dx = 0;
+  mouse.dy = 0;
+  return true;
+}
 
 export class PlayerUpdateSystem {
   _prevCrouchKey = false;
@@ -14,7 +36,7 @@ export class PlayerUpdateSystem {
    * @returns {{ tutorialSlid?: boolean, tutorialCrouched?: boolean } | null}
    */
   update(ctx, dt) {
-    const { player: p, keys, keybinds: kb, mouse, settings, mode, map, audio, noclip } = ctx;
+    const { player: p, keys, keybinds: kb, mouse, settings, mode, map, audio, noclip, voiceProfile } = ctx;
     let moveX = 0, moveY = 0;
     const cos = Math.cos(p.angle);
     const sin = Math.sin(p.angle);
@@ -40,12 +62,8 @@ export class PlayerUpdateSystem {
         if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
         if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
 
-        // Mouse look during dash
-        if (mouse.dx !== 0) {
-          const invertMul = settings.invertX ? -1 : 1;
-          p.angle += mouse.dx * 0.002 * p.rotSpeed * settings.sensitivity * invertMul;
-          mouse.dx = 0;
-        }
+        // Mouse free-aim during dash; edge overflow still turns camera.
+        applyMouseAim(p, mouse, settings);
         if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
         if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
 
@@ -95,6 +113,7 @@ export class PlayerUpdateSystem {
       p.stamina = Math.max(0, p.stamina - p.slideStaminaCost);
       p.slideCooldown = 0.8;
       p.staminaRegenDelay = 0.5;
+      audio.playerGrunt?.(voiceProfile, "slide");
       if (mode === "tutorial") { flags = flags || {}; flags.tutorialSlid = true; }
     }
 
@@ -131,6 +150,7 @@ export class PlayerUpdateSystem {
       speed *= 0.5;
       if (mode === "tutorial") { flags = flags || {}; flags.tutorialCrouched = true; }
     }
+    if (p.isAiming) speed *= PLAYER_ADS_MOVE_MULT;
 
     // WASD movement (meltdown restricts forward/back)
     const meltdownMode = mode === "meltdown";
@@ -155,13 +175,11 @@ export class PlayerUpdateSystem {
       p.weaponBob *= decay(0.9, dt);
     }
 
-    // Mouse look
-    if (mouse.dx !== 0) {
-      const invertMul = settings.invertX ? -1 : 1;
-      p.angle += mouse.dx * 0.002 * p.rotSpeed * settings.sensitivity * invertMul;
-      mouse.dx = 0;
-    }
-    mouse.dy = 0;
+    const aimed = applyMouseAim(p, mouse, settings);
+    // Recenter only while the player is moving (walking/strafing) and not
+    // touching the mouse. Holding still + aiming keeps the reticle parked
+    // exactly where the player put it — bullets fly there.
+    if (!aimed && len > 0 && !p.isFiring) recenterAim(p, dt);
 
     // Keyboard rotation
     if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;

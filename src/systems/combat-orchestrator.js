@@ -11,8 +11,12 @@ import {
   markEnemyDead,
   calculatePlayerDamage,
   isBossEnemy,
+  distanceToWall,
+  pickHitscanTarget,
 } from "./combat.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
+import { aimAnglesForGame } from "./aim.js";
+import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
 
 export function fireWeapon(game) {
   const now = game.time;
@@ -47,26 +51,28 @@ export function fireWeapon(game) {
   if (soundMethod) game.audio[soundMethod]();
 
   const damage = wep.damage * game.player.damageMultiplier;
-  const aimAngle = game.player.angle;
+  const { yaw: aimAngle, pitch: aimPitch } = aimAnglesForGame(game);
+  const spreadMul = game.player.isAiming ? PLAYER_ADS_SPREAD_MULT : 1;
 
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
     for (let p = 0; p < pellets; p++) {
-      const spread = (Math.random() - 0.5) * wep.spread * 2;
-      hitscan(game, aimAngle + spread, damage, wep.range);
+      const spread = pellets > 1 ? (Math.random() - 0.5) * wep.spread * 2 * spreadMul : 0;
+      hitscan(game, aimAngle + spread, damage, wep.range, aimPitch);
     }
   } else {
     const shots = game.player.multiShot || 1;
     for (let ms = 0; ms < shots; ms++) {
-      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 : 0;
+      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 * spreadMul : 0;
       const shotAngle = aimAngle + spreadAngle;
       const dirX = Math.cos(shotAngle);
       const dirY = Math.sin(shotAngle);
       const proj = new Projectile(
-        game.player.x + dirX * 0.5,
-        game.player.y + dirY * 0.5,
+        game.player.x,
+        game.player.y,
         dirX, dirY, damage, 12, "player",
       );
+      proj.pitch = aimPitch;
       proj.weaponId = wep.id;
       if (wep.id === 7) proj.emp = true;
       proj.color = game.getCharacterColor().accent || wep.color;
@@ -81,35 +87,34 @@ export function fireWeapon(game) {
   );
 }
 
-export function hitscan(game, angle, damage, range) {
+export function hitscan(game, angle, damage, range, pitch = 0) {
   const dirX = Math.cos(angle);
   const dirY = Math.sin(angle);
-  const step = 0.1;
-  let x = game.player.x;
-  let y = game.player.y;
-
-  for (let d = 0; d < range; d += step) {
-    x += dirX * step;
-    y += dirY * step;
-
-    const mx = Math.floor(x);
-    const my = Math.floor(y);
-    if (mx < 0 || my < 0 || mx >= game.map.width || my >= game.map.height) break;
-    if (game.map.grid[my][mx] > 0) {
-      game.spawnWallSparks(x, y);
-      break;
-    }
-
-    const hitCandidates = game.entityGrid.query(x, y, 1.5);
-    for (const e of hitCandidates) {
-      if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
-      const dx = x - e.x;
-      const dy = y - e.y;
-      if (dx * dx + dy * dy < e.def.radius * e.def.radius) {
-        damageEnemy(game, e, damage);
-        return;
-      }
-    }
+  const hit = pickHitscanTarget(game.player, dirX, dirY, pitch, range, game.entities, game.map);
+  // Tracer end = hit point, wall, or max range. Always spawn a tracer so the
+  // player sees where the bullet went (closes the muzzle-flash → impact gap).
+  let endDist;
+  if (hit) {
+    endDist = hit.dist;
+    damageEnemy(game, hit.enemy, damage);
+  } else {
+    const wallDist = distanceToWall(game.player, dirX, dirY, game.map, range);
+    endDist = wallDist;
+    if (wallDist < range) game.spawnWallSparks(game.player.x + dirX * wallDist, game.player.y + dirY * wallDist);
+  }
+  if (game.tracers) {
+    const wep = game.player.getWeaponDef?.();
+    const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
+    game.tracers.push({
+      x1: game.player.x,
+      y1: game.player.y,
+      x2: game.player.x + dirX * endDist,
+      y2: game.player.y + dirY * endDist,
+      pitch,
+      life: 0.06,
+      maxLife: 0.06,
+      color: TRACER_COLORS[wep?.id] || "255,220,120",
+    });
   }
 }
 
@@ -136,7 +141,9 @@ export function damageEnemy(game, enemy, damage) {
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
   game.audio.enemyHit(pan);
 
-  game.hitMarker = 0.15;
+  game.hitMarker = isCrit ? 0.22 : 0.15;
+  game.hitMarkerCrit = isCrit;
+  game.hitMarkerKill = enemy.health <= 0;
   game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit);
   game.damageNumbers.push({
     x: enemy.x, y: enemy.y,
@@ -249,6 +256,7 @@ export function damagePlayer(game, amount, attacker) {
   }
   game.screenShake = Math.max(game.screenShake, 4);
   game.audio.playerHit();
+  game.audio.playerGrunt?.(game.getVoiceProfile?.(), "hurt");
   if (game.settings.haptics && navigator.vibrate) navigator.vibrate(50);
   game.roundDamageTaken += actualDamage;
 
@@ -282,6 +290,7 @@ export function damagePlayer(game, amount, attacker) {
     game.deathTimer = 1.5;
     game.achievementStats.totalDeaths++;
     game.saveAchievements();
+    game.audio.playerGrunt?.(game.getVoiceProfile?.(), "death");
     game.audio.playerDeath();
     game.queueAriaMessage("playerDeath");
     if (game.mode === "arena") {

@@ -2,12 +2,110 @@ import { drawCrosshair } from "./crosshair.js";
 import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
+import { effectiveAimFov, reticlePoint } from "../systems/aim.js";
 import { isCompactPhone } from "../../js/layout.js";
 import {
   CHARACTER_COLORS,
   HELMET_STYLES,
   VISOR_STYLES,
 } from "../../js/data.js";
+
+/**
+ * Hit-marker reticle overlay. Pops in fast, eases out, with crit (yellow,
+ * larger, double ring) and kill (white flash + outward burst) variants.
+ * Single source of truth — replaces three copies that previously diverged.
+ *
+ * Reads: game.hitMarker (seconds remaining), game.hitMarkerCrit, game.hitMarkerKill.
+ * Lifetime budget: 0.22s crit, 0.15s normal — driver decides at write site.
+ */
+function drawHitMarker(ctx, game, cx, cy) {
+  const t = game.hitMarker;
+  if (t <= 0) return;
+  const total = game.hitMarkerCrit ? 0.22 : 0.15;
+  const age = Math.max(0, total - t);            // 0 → total
+  const popIn = Math.min(1, age / 0.04);          // first 40 ms scale-up
+  const fade = Math.min(1, t / 0.10);             // last 100 ms fade
+  const alpha = popIn * fade;
+  const scale = 0.6 + 0.5 * (1 - Math.pow(1 - popIn, 3)); // ease-out cubic to 1.1
+
+  const kill = game.hitMarkerKill;
+  const crit = game.hitMarkerCrit;
+  const color = kill ? "#ffffff" : crit ? "#ffe14a" : "#ff3a3a";
+  const len = (crit ? 11 : 8) * scale;
+  const gap = (crit ? 4 : 3) * scale;
+  const lw = crit ? 2.6 : 2;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(cx, cy);
+  ctx.rotate(Math.PI / 4);
+  ctx.lineCap = "round";
+  ctx.shadowColor = color;
+  ctx.shadowBlur = crit ? 8 : 4;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+
+  // Four spokes with center gap (more readable than a solid X)
+  ctx.beginPath();
+  for (const [sx, sy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    ctx.moveTo(sx * gap, sy * gap);
+    ctx.lineTo(sx * len, sy * len);
+  }
+  ctx.stroke();
+
+  // Crit gets a second outer ring of dashes
+  if (crit) {
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, len + 4, 0, Math.PI * 2);
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Kill flash: outward expanding ring
+  if (kill) {
+    const k = age / total; // 0 → 1
+    ctx.globalAlpha = alpha * (1 - k);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 6 + k * 18, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawAdsReticle(ctx, game, cx, cy) {
+  if (!game.player?.isAiming) return;
+  const t = game.time * 0.006;
+  const r = 22 + Math.sin(t) * 1.5;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = "rgba(120,220,255,0.75)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(cx - r - 7, cy);
+  ctx.lineTo(cx - r + 6, cy);
+  ctx.moveTo(cx + r - 6, cy);
+  ctx.lineTo(cx + r + 7, cy);
+  ctx.moveTo(cx, cy - r - 7);
+  ctx.lineTo(cx, cy - r + 6);
+  ctx.moveTo(cx, cy + r - 6);
+  ctx.lineTo(cx, cy + r + 7);
+  ctx.stroke();
+  ctx.font = "bold 10px monospace";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(120,220,255,0.75)";
+  ctx.fillText("ADS", cx, cy + r + 20);
+  ctx.restore();
+}
 
 /**
  * HUD rendering — extracted from game.js.
@@ -102,27 +200,12 @@ if (isCompactMobile) {
   drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
 
   // Crosshair
-  const chx = w / 2;
-  const chy = (h - barH) / 2;
+  const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
   drawCrosshair(ctx, chx, chy, game.settings.crosshair);
+  drawAdsReticle(ctx, game, chx, chy);
 
   // Hit marker
-  if (game.hitMarker > 0) {
-    const a = Math.min(1, game.hitMarker / 0.08);
-    ctx.save();
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = "#ff3333";
-    ctx.lineWidth = 2;
-    ctx.translate(chx, chy);
-    ctx.rotate(Math.PI / 4);
-    ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(8, 0);
-    ctx.moveTo(0, -8);
-    ctx.lineTo(0, 8);
-    ctx.stroke();
-    ctx.restore();
-  }
+  drawHitMarker(ctx, game, chx, chy);
 
   // Floating damage numbers
   for (const dn of game.damageNumbers) {
@@ -131,7 +214,7 @@ if (isCompactMobile) {
     let dAngle = Math.atan2(ddy, ddx) - game.player.angle;
     while (dAngle < -Math.PI) dAngle += Math.PI * 2;
     while (dAngle > Math.PI) dAngle -= Math.PI * 2;
-    const fov = ((game.settings.fov || 70) * Math.PI) / 180;
+    const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
     if (Math.abs(dAngle) > fov / 2) continue;
     const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
     if (ddist < 0.1) continue;
@@ -899,27 +982,12 @@ if (game.settings.showKills) {
 }
 
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
-const chx = w / 2;
-const chy = h / 2;
+const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
 drawCrosshair(ctx, chx, chy, game.settings.crosshair);
+drawAdsReticle(ctx, game, chx, chy);
 
 // ─── HIT MARKER ───
-if (game.hitMarker > 0) {
-  const a = Math.min(1, game.hitMarker / 0.08);
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.strokeStyle = "#ff3333";
-  ctx.lineWidth = 2;
-  ctx.translate(chx, chy);
-  ctx.rotate(Math.PI / 4);
-  ctx.beginPath();
-  ctx.moveTo(-8, 0);
-  ctx.lineTo(8, 0);
-  ctx.moveTo(0, -8);
-  ctx.lineTo(0, 8);
-  ctx.stroke();
-  ctx.restore();
-}
+drawHitMarker(ctx, game, chx, chy);
 
 // ─── FLOATING DAMAGE NUMBERS ───
 for (const dn of game.damageNumbers) {
@@ -928,7 +996,7 @@ for (const dn of game.damageNumbers) {
   let angle = Math.atan2(dy, dx) - game.player.angle;
   while (angle < -Math.PI) angle += Math.PI * 2;
   while (angle > Math.PI) angle -= Math.PI * 2;
-  const fov = ((game.settings.fov || 70) * Math.PI) / 180;
+  const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
   if (Math.abs(angle) > fov / 2) continue;
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (dist < 0.1) continue;
@@ -1541,25 +1609,12 @@ let mmSize = game.settings.minimapSize;
 drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
 
 // ─── Crosshair (centered in viewport above bar) ───
-const chx = w / 2;
-const chy = (h - barH) / 2;
+const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
 drawCrosshair(ctx, chx, chy, game.settings.crosshair);
+drawAdsReticle(ctx, game, chx, chy);
 
 // ─── Hit marker ───
-if (game.hitMarker > 0) {
-  const a = Math.min(1, game.hitMarker / 0.08);
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.strokeStyle = "#ff3333";
-  ctx.lineWidth = 2;
-  ctx.translate(chx, chy);
-  ctx.rotate(Math.PI / 4);
-  ctx.beginPath();
-  ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
-  ctx.moveTo(0, -8); ctx.lineTo(0, 8);
-  ctx.stroke();
-  ctx.restore();
-}
+drawHitMarker(ctx, game, chx, chy);
 
 // ─── Floating damage numbers ───
 for (const dn of game.damageNumbers) {
@@ -1568,7 +1623,7 @@ for (const dn of game.damageNumbers) {
   let angle = Math.atan2(dy, dx) - game.player.angle;
   while (angle < -Math.PI) angle += Math.PI * 2;
   while (angle > Math.PI) angle -= Math.PI * 2;
-  const fov = ((game.settings.fov || 70) * Math.PI) / 180;
+  const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
   if (Math.abs(angle) > fov / 2) continue;
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (dist < 0.1) continue;
@@ -1896,4 +1951,3 @@ ctx.font = "bold 8px monospace";
 ctx.textAlign = "left";
 ctx.fillText(diffNames[game.settings.difficulty], pad, midY - 12);
 }
-
