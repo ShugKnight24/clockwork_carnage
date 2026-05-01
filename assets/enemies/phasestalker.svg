@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="geometricPrecision">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%">
+      <stop offset="0" stop-color="#66ffdd" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#66ffdd"/>
+      <stop offset="1" stop-color="#006644"/>
+    </linearGradient>
+    <filter id="eyeGlow"><feGaussianBlur stdDeviation="1"/></filter>
+  </defs>
+  <rect width="64" height="64" fill="url(#bg)"/>
+      <path d="M16 50 L16 28 a16 16 0 0 1 32 0 L48 50 L42 46 L36 50 L32 46 L28 50 L22 46 Z" fill="url(#body)" opacity="0.85"/>
+      <circle cx="26" cy="30" r="3" fill="#fff" filter="url(#eyeGlow)"/>
+      <circle cx="38" cy="30" r="3" fill="#fff" filter="url(#eyeGlow)"/>
+    
+</svg>

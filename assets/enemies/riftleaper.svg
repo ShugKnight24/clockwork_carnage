@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="geometricPrecision">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%">
+      <stop offset="0" stop-color="#ff66ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff66ff"/>
+      <stop offset="1" stop-color="#662266"/>
+    </linearGradient>
+    <filter id="eyeGlow"><feGaussianBlur stdDeviation="1"/></filter>
+  </defs>
+  <rect width="64" height="64" fill="url(#bg)"/>
+      <ellipse cx="32" cy="40" rx="22" ry="14" fill="url(#body)"/>
+      <polygon points="14,30 22,18 26,28" fill="url(#body)"/>
+      <polygon points="50,30 42,18 38,28" fill="url(#body)"/>
+      <circle cx="26" cy="38" r="2.2" fill="#ff66ff" filter="url(#eyeGlow)"/>
+      <circle cx="38" cy="38" r="2.2" fill="#ff66ff" filter="url(#eyeGlow)"/>
+      <path d="M26 46 L30 50 L34 46 L38 50" stroke="#fff" stroke-width="1.5" fill="none"/>
+    
+</svg>

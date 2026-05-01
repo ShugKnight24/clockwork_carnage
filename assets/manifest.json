@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-01T03:52:54.519Z",
+  "sets": {
+    "ui": [
+      {
+        "id": "upgrade-ammo",
+        "src": "assets/ui/upgrade-ammo.svg"
+      },
+      {
+        "id": "upgrade-armor",
+        "src": "assets/ui/upgrade-armor.svg"
+      },
+      {
+        "id": "upgrade-critchance",
+        "src": "assets/ui/upgrade-critchance.svg"
+      },
+      {
+        "id": "upgrade-damage",
+        "src": "assets/ui/upgrade-damage.svg"
+      },
+      {
+        "id": "upgrade-dashpower",
+        "src": "assets/ui/upgrade-dashpower.svg"
+      },
+      {
+        "id": "upgrade-dodgechance",
+        "src": "assets/ui/upgrade-dodgechance.svg"
+      },
+      {
+        "id": "upgrade-explosiverounds",
+        "src": "assets/ui/upgrade-explosiverounds.svg"
+      },
+      {
+        "id": "upgrade-firerate",
+        "src": "assets/ui/upgrade-firerate.svg"
+      },
+      {
+        "id": "upgrade-lifesteal",
+        "src": "assets/ui/upgrade-lifesteal.svg"
+      },
+      {
+        "id": "upgrade-maxhealth",
+        "src": "assets/ui/upgrade-maxhealth.svg"
+      },
+      {
+        "id": "upgrade-maxstamina",
+        "src": "assets/ui/upgrade-maxstamina.svg"
+      },
+      {
+        "id": "upgrade-multishot",
+        "src": "assets/ui/upgrade-multishot.svg"
+      },
+      {
+        "id": "upgrade-regen",
+        "src": "assets/ui/upgrade-regen.svg"
+      },
+      {
+        "id": "upgrade-shield",
+        "src": "assets/ui/upgrade-shield.svg"
+      },
+      {
+        "id": "upgrade-speed",
+        "src": "assets/ui/upgrade-speed.svg"
+      },
+      {
+        "id": "upgrade-sprintefficiency",
+        "src": "assets/ui/upgrade-sprintefficiency.svg"
+      },
+      {
+        "id": "upgrade-staminaregen",
+        "src": "assets/ui/upgrade-staminaregen.svg"
+      },
+      {
+        "id": "upgrade-thorns",
+        "src": "assets/ui/upgrade-thorns.svg"
+      }
+    ],
+    "weapons": [
+      {
+        "id": "chrono-pistol",
+        "src": "assets/weapons/chrono-pistol.svg"
+      },
+      {
+        "id": "emp-launcher",
+        "src": "assets/weapons/emp-launcher.svg"
+      },
+      {
+        "id": "phase-rifle",
+        "src": "assets/weapons/phase-rifle.svg"
+      },
+      {
+        "id": "phase-scattergun",
+        "src": "assets/weapons/phase-scattergun.svg"
+      },
+      {
+        "id": "quantum-cannon",
+        "src": "assets/weapons/quantum-cannon.svg"
+      },
+      {
+        "id": "ricochet-pistol",
+        "src": "assets/weapons/ricochet-pistol.svg"
+      },
+      {
+        "id": "temporal-shotgun",
+        "src": "assets/weapons/temporal-shotgun.svg"
+      },
+      {
+        "id": "temporal-sniper",
+        "src": "assets/weapons/temporal-sniper.svg"
+      }
+    ],
+    "enemies": [
+      {
+        "id": "beast",
+        "src": "assets/enemies/beast.svg"
+      },
+      {
+        "id": "boss-form2",
+        "src": "assets/enemies/boss-form2.svg"
+      },
+      {
+        "id": "boss-form3",
+        "src": "assets/enemies/boss-form3.svg"
+      },
+      {
+        "id": "boss",
+        "src": "assets/enemies/boss.svg"
+      },
+      {
+        "id": "chronobomber",
+        "src": "assets/enemies/chronobomber.svg"
+      },
+      {
+        "id": "corruptcop",
+        "src": "assets/enemies/corruptcop.svg"
+      },
+      {
+        "id": "drone",
+        "src": "assets/enemies/drone.svg"
+      },
+      {
+        "id": "echodrone",
+        "src": "assets/enemies/echodrone.svg"
+      },
+      {
+        "id": "glitchling",
+        "src": "assets/enemies/glitchling.svg"
+      },
+      {
+        "id": "henchman",
+        "src": "assets/enemies/henchman.svg"
+      },
+      {
+        "id": "phantom",
+        "src": "assets/enemies/phantom.svg"
+      },
+      {
+        "id": "phasestalker",
+        "src": "assets/enemies/phasestalker.svg"
+      },
+      {
+        "id": "riftleaper",
+        "src": "assets/enemies/riftleaper.svg"
+      },
+      {
+        "id": "sentinel",
+        "src": "assets/enemies/sentinel.svg"
+      },
+      {
+        "id": "shieldcommander",
+        "src": "assets/enemies/shieldcommander.svg"
+      },
+      {
+        "id": "temporalengineer",
+        "src": "assets/enemies/temporalengineer.svg"
+      },
+      {
+        "id": "temporalsummoner",
+        "src": "assets/enemies/temporalsummoner.svg"
+      },
+      {
+        "id": "timewarden",
+        "src": "assets/enemies/timewarden.svg"
+      }
+    ],
+    "props": [],
+    "backdrops": []
+  }
+}

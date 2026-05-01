@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" shape-rendering="geometricPrecision">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="hsl(346.528 80% 60%)"/>
+      <stop offset="1" stop-color="hsl(346.528 60% 30%)"/>
+    </linearGradient>
+    <filter id="glyphGlow"><feGaussianBlur stdDeviation="0.8"/></filter>
+  </defs>
+  <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="url(#shield)" stroke="hsl(346.528 80% 60%)" stroke-width="1.4"/><g filter="url(#glyphGlow)"><polygon points="32,16 36,30 50,30 38,38 42,52 32,44 22,52 26,38 14,30 28,30" fill="#fff"/></g>
+</svg>
