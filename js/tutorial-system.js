@@ -73,7 +73,7 @@ export class TutorialSystem {
 
   _begin() {
     const g = this.game;
-    if (g.cutsceneEngine.hasScript("clocking_in")) {
+    if (g.hasCutsceneScript("clocking_in")) {
       g.startCutscene("clocking_in", () => {
         g.ariaEnabled = true;
         this.initLevel();

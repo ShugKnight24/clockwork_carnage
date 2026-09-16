@@ -1605,6 +1605,16 @@ export class Game {
     }
   }
 
+  /**
+   * Whether a cutscene script exists. Reads the script table directly, so it
+   * answers without forcing the lazily-split cutscene chunk to load — callers
+   * ask this to decide *whether* to play a cutscene at all.
+   */
+  hasCutsceneScript(key) {
+    const s = CUTSCENE_SCRIPTS[key];
+    return Boolean(s && s.length > 0);
+  }
+
   /** @see startMeltdown — same sync-when-warm contract. */
   startCutscene(scriptKey, onComplete) {
     if (!this.cutsceneEngine) {

@@ -115,7 +115,7 @@ export class CampaignManager {
         }
       };
       const afterFlipbook = () => {
-        if (g.cutsceneEngine.hasScript("clocking_in")) {
+        if (g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
             g.ariaEnabled = true;
             g.queueAriaMessage("campaignStart");
@@ -133,7 +133,7 @@ export class CampaignManager {
       // Mark-seen fires inside the cutscene's onComplete so an aborted intro replays.
       if (
         !Save.hasSeenIntroMemory(flipbookKey) &&
-        g.cutsceneEngine.hasScript("intro_flipbook")
+        g.hasCutsceneScript("intro_flipbook")
       ) {
         g.startCutscene("intro_flipbook", () => {
           Save.markIntroMemorySeen(flipbookKey);
@@ -343,7 +343,7 @@ export class CampaignManager {
       },
     };
     const briefingKey = actBriefings[this.act]?.[this.level];
-    if (briefingKey && g.cutsceneEngine.hasScript(briefingKey)) {
+    if (briefingKey && g.hasCutsceneScript(briefingKey)) {
       g.startCutscene(briefingKey, () => {
         this.loadLevel(this.level);
         this.save();
@@ -377,7 +377,7 @@ export class CampaignManager {
             this.save();
           });
         };
-        if (g.cutsceneEngine.hasScript("act2_transition_fb")) {
+        if (g.hasCutsceneScript("act2_transition_fb")) {
           g.startCutscene("act2_transition_fb", afterAct2Fb);
         } else {
           afterAct2Fb();
@@ -398,7 +398,7 @@ export class CampaignManager {
             });
           });
         };
-        if (g.cutsceneEngine.hasScript("act3_transition_fb")) {
+        if (g.hasCutsceneScript("act3_transition_fb")) {
           g.startCutscene("act3_transition_fb", afterAct3Fb);
         } else {
           afterAct3Fb();
@@ -445,7 +445,7 @@ export class CampaignManager {
     g.player.alive = true;
 
     const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
-    const hasCycleCutscene = g.cutsceneEngine.hasScript(cutsceneKey);
+    const hasCycleCutscene = g.hasCutsceneScript(cutsceneKey);
     const afterCutscene = () => {
       this.loadLevel(0);
       this.save();
