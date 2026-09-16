@@ -83,7 +83,9 @@ export function renderPostFX(ctx, w, h, state) {
   if (postProcessing && state.enableFilmGrain !== false) drawFilmGrain(ctx, w, h, time);
 
   // Per-act color grade tint
-  if (postProcessing) drawColorGrade(ctx, w, h, act);
+  // Callers that grade on the GPU pass enableColorGrade: false, or the tint
+  // lands twice.
+  if (postProcessing && state.enableColorGrade !== false) drawColorGrade(ctx, w, h, act);
 
   // Death fade
   if (!player.alive) {

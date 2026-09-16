@@ -85,6 +85,11 @@ export class AdaptiveQuality {
     this.enableScanlines = true;
     this.enableVignette = true;
     this.enableFloorTexture = true;
+    // Post-FX ceilings set by the preset. The player's settings toggles still
+    // apply on top: an effect renders only when both allow it.
+    this.enableBloom = true;
+    this.enableChromaticAberration = true;
+    this.enableFilmGrain = true;
     this.auto = true;
   }
 
@@ -170,6 +175,11 @@ export class AdaptiveQuality {
     this.enableScanlines = p.enableScanlines;
     this.enableVignette = p.enableVignette;
     this.enableFloorTexture = p.enableFloorTexture;
+    // Presets defined these but they were never copied, so "low" still paid
+    // for bloom, chromatic aberration and film grain.
+    this.enableBloom = p.enableBloom;
+    this.enableChromaticAberration = p.enableChromaticAberration;
+    this.enableFilmGrain = p.enableFilmGrain;
   }
 
   applyCustom({ renderScale, particleMultiplier, drawDistance, enableScanlines, enableVignette, enableFloorTexture }) {
@@ -184,5 +194,10 @@ export class AdaptiveQuality {
 
   useAuto() {
     this.auto = true;
+    // Auto mode scales resolution rather than gating post-FX; restore the
+    // ceilings in case a lighter preset lowered them earlier.
+    this.enableBloom = true;
+    this.enableChromaticAberration = true;
+    this.enableFilmGrain = true;
   }
 }

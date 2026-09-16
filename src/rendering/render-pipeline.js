@@ -246,6 +246,14 @@ export function renderFrame(game) {
   // Effects: muzzle flash lighting, hurt flash, glitch, death fade
   const _tFx0 = profiling ? performance.now() : 0;
 
+  // Each post-FX effect needs both the player's toggle and the quality preset
+  // to allow it. Only the settings toggles were consulted before, so the
+  // preset's post-FX choices had no effect.
+  const _q = game.quality;
+  const _fxBloom = game.settings.enableBloom !== false && _q?.enableBloom !== false;
+  const _fxCA = game.settings.enableChromaticAberration !== false && _q?.enableChromaticAberration !== false;
+  const _fxGrain = game.settings.enableFilmGrain !== false && _q?.enableFilmGrain !== false;
+
   // GPU post-FX path — use WebGL shader when GL renderer is available
   const _glr = game.renderer.glRenderer;
   const _pp = game.settings.postProcessing !== false;
@@ -269,10 +277,12 @@ export function renderFrame(game) {
       canvas: game.canvas,
       postProcessing: game.settings.postProcessing,
       audio: game.audio,
-      // Disable bloom/CA/grain/color-grade in Canvas path — GPU handles them
+      // Disable bloom/CA/grain/color-grade in Canvas path — GPU handles them.
+      // Color grade had no flag, so it was applied here and again in the shader.
       enableBloom: false,
       enableChromaticAberration: false,
       enableFilmGrain: false,
+      enableColorGrade: false,
       act: _act,
     });
 
@@ -281,9 +291,9 @@ export function renderFrame(game) {
       _glr.renderPostFXFromCanvas(
         game.canvas,
         game.time,
-        game.settings.enableBloom !== false,
-        game.settings.enableChromaticAberration !== false,
-        game.settings.enableFilmGrain !== false,
+        _fxBloom,
+        _fxCA,
+        _fxGrain,
         _gc,
       );
       // Draw GL result back to main Canvas2D
@@ -302,9 +312,9 @@ export function renderFrame(game) {
       canvas: game.canvas,
       postProcessing: game.settings.postProcessing,
       audio: game.audio,
-      enableBloom: game.settings.enableBloom,
-      enableChromaticAberration: game.settings.enableChromaticAberration,
-      enableFilmGrain: game.settings.enableFilmGrain,
+      enableBloom: _fxBloom,
+      enableChromaticAberration: _fxCA,
+      enableFilmGrain: _fxGrain,
       act: _act,
     });
   }
