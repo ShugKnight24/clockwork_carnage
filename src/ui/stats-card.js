@@ -11,6 +11,15 @@ import { isCompactPhone } from "../../js/layout.js";
  * @param {number|undefined} countUp - animation progress 0..1
  * @param {{ isTouchDevice: boolean, canvasHeight: number, shotsFired: number, shotsHit: number, roundStartTime: number, killedEnemies: number, totalEnemies: number, bestStreak: number, score: number }} stats
  */
+/**
+ * Total vertical space the card occupies from startY, including the SCORE
+ * footer line. Callers flow subsequent content from startY + this.
+ */
+export function statsCardHeight(stats) {
+  const compact = stats.isTouchDevice && isCompactPhone(stats.canvasHeight);
+  return (compact ? 80 : 130) + (compact ? 14 : 20);
+}
+
 export function renderStatsCard(ctx, w, startY, accentColor, textColor, countUp, stats) {
   const compact = stats.isTouchDevice && isCompactPhone(stats.canvasHeight);
   const cu = typeof countUp === "number" ? Math.min(1, Math.max(0, countUp)) : 1;

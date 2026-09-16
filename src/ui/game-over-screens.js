@@ -1,4 +1,4 @@
-import { renderStatsCard } from './stats-card.js';
+import { renderStatsCard, statsCardHeight } from './stats-card.js';
 import { drawScanlines } from './scanlines.js';
 import { isCompactPhone } from '../../js/layout.js';
 
@@ -101,15 +101,20 @@ export function renderGameOver(ctx, w, h, state) {
 
   renderStatsCard(ctx, w, statsY, '#ff2200', '#ff6644', undefined, statsCardData);
 
+  // Flow mode-specific lines beneath the card's own SCORE footer. The old
+  // fixed h/2+100 was exactly where renderStatsCard draws SCORE, so
+  // "Rounds Survived" and "SCORE" were printed on top of each other.
+  const cardBottom = statsY + statsCardHeight(statsCardData);
+
   if (mode === 'arena') {
     ctx.fillStyle = '#ff8866';
     ctx.font = `bold ${compact ? 14 : 18}px monospace`;
-    ctx.fillText(`Rounds Survived: ${arenaRound - 1}`, w / 2, compact ? h * 0.78 : h / 2 + 100);
+    ctx.fillText(`Rounds Survived: ${arenaRound - 1}`, w / 2, cardBottom + (compact ? 20 : 28));
     ctx.fillStyle = 'rgba(255,136,102,0.6)';
     ctx.font = `${compact ? 10 : 12}px monospace`;
     ctx.fillText(
       `Personal Best: Round ${achievementStats.highestArenaRound} (Score: ${achievementStats.highestScore})`,
-      w / 2, compact ? h * 0.82 : h / 2 + 125,
+      w / 2, cardBottom + (compact ? 36 : 50),
     );
   }
 
@@ -140,7 +145,7 @@ export function renderGameOver(ctx, w, h, state) {
 
   if (mode === 'meltdown' && meltdown) {
     const mHud = meltdown.getHUD();
-    const mY = compact ? h * 0.7 : h / 2 + 80;
+    const mY = compact ? cardBottom + 18 : cardBottom + 26;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffaa00';
     ctx.font = `bold ${compact ? 16 : 22}px monospace`;
@@ -194,18 +199,23 @@ export function renderGameOver(ctx, w, h, state) {
       });
     }
   }
-  // Prompt with pulsing alpha
+  // ── Key hint ─────────────────────────────────────────────────────────────
+  // Anchored just above the button row rather than at a fixed h/2 offset. The
+  // old fixed offsets (h/2+130/155/175) landed inside the arena "Personal
+  // Best" line and straight through the meltdown high-score table.
+  // Collapsed to one line because RESTART/QUIT/SHARE buttons sit right below
+  // and already carry the same three actions.
   const promptA = 0.4 + Math.sin(time * 0.004) * 0.3;
+  ctx.textAlign = 'center';
+  ctx.font = `${compact ? 10 : 12}px monospace`;
   ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-  ctx.font = `${compact ? 12 : 14}px monospace`;
-  const promptText = isTouchDevice ? 'Tap to return to title' : 'Press ENTER to return to title';
-  ctx.fillText(promptText, w / 2, compact ? h * 0.88 : h / 2 + 130);
-  ctx.fillStyle = `rgba(255,136,100,${promptA * 0.8})`;
-  if (!isTouchDevice) {
-    ctx.fillText('Press R to restart', w / 2, h / 2 + 155);
-    ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-    ctx.fillText('Press S to share score', w / 2, compact ? h * 0.93 : h / 2 + 175);
-  }
+  ctx.fillText(
+    isTouchDevice
+      ? 'Tap to return to title'
+      : 'ENTER  return to title   ·   R  restart   ·   S  share score',
+    w / 2,
+    btnY - 16,
+  );
   ctx.textAlign = 'left';
 
   const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
@@ -293,13 +303,16 @@ export function renderVictory(ctx, w, h, state) {
     ctx.fillText(cycleLabel, w / 2, compact ? titleY - 10 : titleY - 20);
   }
 
-  renderStatsCard(ctx, w, compact ? titleY + 38 : h / 2 + 40, '#ffcc00', '#aaddff', undefined, statsCardData);
+  const vCardY = compact ? titleY + 38 : h / 2 + 40;
+  renderStatsCard(ctx, w, vCardY, '#ffcc00', '#aaddff', undefined, statsCardData);
+  const vCardBottom = vCardY + statsCardHeight(statsCardData);
 
   const promptA = 0.4 + Math.sin(time * 0.004) * 0.3;
 
   // NG+ prompt
   if (ngPlusPrompt && mode === 'campaign') {
-    const promptY = compact ? h * 0.78 : h / 2 + 170;
+    // Was h/2+170, which put the option boxes over the card's SCORE footer.
+    const promptY = vCardBottom + (compact ? 14 : 20);
     const nextCycle = ngPlusCycle + 1;
     const opts = [
       { label: `ENTER THE RIFT (NG+${nextCycle})`, desc: 'Enemies grow stronger. You keep everything.', color: '#cc88ff' },
@@ -341,11 +354,11 @@ export function renderVictory(ctx, w, h, state) {
     ctx.font = `${compact ? 12 : 14}px monospace`;
     ctx.textAlign = 'center';
     const victoryPrompt = isTouchDevice ? 'Tap to return to title' : 'Press ENTER to return to title';
-    ctx.fillText(victoryPrompt, w / 2, compact ? h * 0.9 : h / 2 + 215);
+    ctx.fillText(victoryPrompt, w / 2, vCardBottom + (compact ? 20 : 25));
     if (!isTouchDevice) {
       ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
       ctx.font = `${compact ? 11 : 13}px monospace`;
-      ctx.fillText('Press S to share score', w / 2, compact ? h * 0.94 : h / 2 + 235);
+      ctx.fillText('Press S to share score', w / 2, vCardBottom + (compact ? 38 : 45));
     }
   }
   ctx.textAlign = 'left';
@@ -434,10 +447,12 @@ export function renderLevelComplete(ctx, w, h, state) {
   }
 
   // Stats card — fades in with count-up
+  const lcCardY = compact ? titleY + 18 : h / 2 - 55;
+  const lcCardBottom = lcCardY + statsCardHeight(statsCardData);
   if (statsT > 0) {
     ctx.globalAlpha = statsT;
     renderStatsCard(
-      ctx, w, compact ? titleY + 18 : h / 2 - 55,
+      ctx, w, lcCardY,
       '#00ffcc', '#aaddff', countUp, statsCardData,
     );
     ctx.globalAlpha = 1;
@@ -450,7 +465,7 @@ export function renderLevelComplete(ctx, w, h, state) {
     ctx.font = `${compact ? 12 : 16}px monospace`;
     ctx.textAlign = 'center';
     const secretVal = Math.round((playerSecretsFound || 0) * Math.min(1, countUp));
-    ctx.fillText(`Secrets: ${secretVal}`, w / 2, compact ? h * 0.75 : h / 2 + 80);
+    ctx.fillText(`Secrets: ${secretVal}`, w / 2, lcCardBottom + (compact ? 18 : 24));
     ctx.globalAlpha = 1;
   }
 
@@ -461,7 +476,7 @@ export function renderLevelComplete(ctx, w, h, state) {
     ctx.font = `${compact ? 12 : 14}px monospace`;
     ctx.textAlign = 'center';
     const lcPrompt = isTouchDevice ? 'Tap to continue' : 'Press ENTER to continue';
-    ctx.fillText(lcPrompt, w / 2, compact ? h * 0.88 : h / 2 + 110);
+    ctx.fillText(lcPrompt, w / 2, lcCardBottom + (compact ? 40 : 52));
   }
   ctx.textAlign = 'left';
 
