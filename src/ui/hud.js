@@ -20,6 +20,56 @@ import { getWeaponSprite } from "../assets/loader.js";
 const weaponSlug = (name) =>
   (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+let _hudOffscreen = null;
+let _hudOffscreenCtx = null;
+let _hudLastW = 0;
+let _hudLastH = 0;
+
+let _dirty = true;
+let _lastHealth = -1;
+let _lastMaxHealth = -1;
+let _lastAmmo = -1;
+let _lastMaxAmmo = -1;
+let _lastWeaponId = -1;
+let _lastKills = -1;
+let _lastScore = -1;
+let _lastRound = -1;
+let _lastHudScale = -1;
+let _lastHudStyle = -1;
+
+function _checkDirty(game) {
+  const player = game.player;
+  const weapon = game.weapons?.[player?.weaponIndex];
+  if (
+    player.health !== _lastHealth ||
+    player.maxHealth !== _lastMaxHealth ||
+    (weapon?.ammo ?? -1) !== _lastAmmo ||
+    (weapon?.maxAmmo ?? -1) !== _lastMaxAmmo ||
+    (weapon?.id ?? -1) !== _lastWeaponId ||
+    player.kills !== _lastKills ||
+    player.score !== _lastScore ||
+    game.arenaRound !== _lastRound ||
+    game.settings.hudScale !== _lastHudScale ||
+    game.settings.hudStyle !== _lastHudStyle
+  ) {
+    _lastHealth = player.health;
+    _lastMaxHealth = player.maxHealth;
+    _lastAmmo = weapon?.ammo ?? -1;
+    _lastMaxAmmo = weapon?.maxAmmo ?? -1;
+    _lastWeaponId = weapon?.id ?? -1;
+    _lastKills = player.kills;
+    _lastScore = player.score;
+    _lastRound = game.arenaRound;
+    _lastHudScale = game.settings.hudScale;
+    _lastHudStyle = game.settings.hudStyle;
+    _dirty = true;
+  }
+}
+
+export function invalidateHUD() {
+  _dirty = true;
+}
+
 /**
  * Hit-marker reticle overlay. Pops in fast, eases out, with crit (yellow,
  * larger, double ring) and kill (white flash + outward burst) variants.
@@ -280,6 +330,8 @@ ctx.clearRect(0, 0, w, h);
 if (game.state !== "playing" && game.state !== "paused")
   return;
 
+_checkDirty(game);
+
 // HUD disruption effect (disabled by enemy support abilities)
 if (game._hudDisabledUntil && game.time < game._hudDisabledUntil) {
   ctx.save();
@@ -349,8 +401,9 @@ if (isCompactMobile) {
     if (Math.abs(dAngle) > fov / 2) continue;
     const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
     if (ddist < 0.1) continue;
-    const dsX = w / 2 + (dAngle / (fov / 2)) * (w / 2);
-    const dsRise = (0.8 - dn.life) * 60;
+    const dnAge = 0.8 - dn.life;
+    const dsX = w / 2 + (dAngle / (fov / 2)) * (w / 2) + (dn.vx || 0) * dnAge;
+    const dsRise = dnAge * 90 - dnAge * dnAge * 60;
     const dsY = (h - barH) / 2 - dsRise;
     const dAlpha = Math.min(1, dn.life / 0.3);
     ctx.save();
@@ -541,12 +594,25 @@ if (isCompactMobile) {
   // ARIA comms overlay
   game.renderAriaComms(ctx, w, h);
 
+  _dirty = false;
   return;
 }
 
 // Classic HUD — opaque bottom bar with portrait, weapons, stats
 if (game.settings.hudStyle === 1) {
   _renderClassicDesktopHUD(game, ctx, w, h, barH, hudFactor);
+  return;
+}
+
+// Tactical HUD — sleek modern floating layout
+if (game.settings.hudStyle === 2) {
+  _renderTacticalDesktopHUD(game, ctx, w, h, barH, hudFactor);
+  return;
+}
+
+// Custom HUD — JSON layout driven
+if (game.settings.hudStyle === 3) {
+  _renderCustomDesktopHUD(game, ctx, w, h, barH, hudFactor);
   return;
 }
 
@@ -1352,255 +1418,150 @@ if (showChrono) {
   ctx.fillText("[HOLD Q]", chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
 }
 
-// ─── Bottom Bar ───
-ctx.fillStyle = "rgba(5,5,15,0.92)";
+// ─── DOOM-Style Bottom Bar ───
+// Base panel
+ctx.fillStyle = "#333333";
 ctx.fillRect(0, h - barH, w, barH);
-ctx.strokeStyle = "rgba(0,200,255,0.3)";
-ctx.lineWidth = 2;
-ctx.beginPath();
-ctx.moveTo(0, h - barH);
-ctx.lineTo(w, h - barH);
-ctx.stroke();
+ctx.fillStyle = "#1a1a1a";
+ctx.fillRect(4, h - barH + 4, w - 8, barH - 8);
 
-// ─── Layout: AMMO | HEALTH | PORTRAIT | WEAPONS(2x2) | KILLS | SCORE | ROUND/LOC ───
+// Layout constants
 const pad = 14;
 const portraitW = Math.round(180 * hudFactor);
 const portraitH = Math.round(160 * hudFactor);
 const portraitX = Math.floor(w / 2 - portraitW / 2);
 const portraitY = h - barH;
 
-const leftZone = portraitX - pad;
-const rightZone = w - (portraitX + portraitW + pad);
-const ammoSecW = Math.floor(leftZone * 0.35);
-const healthSecW = Math.floor(leftZone * 0.65);
-const rsecW = Math.floor(rightZone / 4);
+// Panel beveling helper
+const drawPanel = (px, py, pw, ph) => {
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = "#555555";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px, py, pw, ph);
+  ctx.fillStyle = "#0a0a0a";
+  ctx.fillRect(px + 4, py + 4, pw - 8, ph - 8);
+};
 
-const topY = h - barH + 10;
-const midY = h - barH + Math.floor(barH / 2);
-const botY = h - barH + barH - 12;
-
-// Ammo
-const ammoX = pad;
-ctx.fillStyle = "rgba(255,204,0,0.6)";
-ctx.font = "bold 14px monospace";
-ctx.textAlign = "center";
-ctx.fillText("AMMO", ammoX + ammoSecW / 2, topY + 4);
+// ─── AMMO (Far Left) ───
+const ammoPanelW = Math.floor(portraitX * 0.4);
+const panelY = h - barH + 12;
+const panelH = barH - 24;
+drawPanel(pad, panelY, ammoPanelW, panelH);
 ctx.fillStyle = "#ffcc00";
-ctx.font = game.scaledFont(46, "bold");
-ctx.fillText(`${game.player.ammo}`, ammoX + ammoSecW / 2, midY + 14);
+ctx.font = "bold 16px monospace";
+ctx.textAlign = "center";
+ctx.fillText("AMMO", pad + ammoPanelW / 2, panelY + 22);
+ctx.fillStyle = "#ffaa00";
+ctx.font = game.scaledFont(64, "bold");
+ctx.fillText(`${game.player.ammo}`, pad + ammoPanelW / 2, panelY + panelH - 24);
 
-// Health
-const healthX = ammoX + ammoSecW + pad;
-const hbW = healthSecW - pad * 2;
-const hbH = 30;
+// ─── HEALTH (Left Center) ───
+const healthPanelW = portraitX - ammoPanelW - pad * 2.5;
+const healthX = pad + ammoPanelW + pad / 2;
+drawPanel(healthX, panelY, healthPanelW, panelH);
 ctx.fillStyle = healthColor;
 ctx.font = "bold 16px monospace";
 ctx.textAlign = "center";
-ctx.fillText("HEALTH", healthX + hbW / 2, topY + 4);
-const bigHealthSize = Math.max(20, Math.round(46 * hudFactor));
-const smallHealthSize = Math.max(11, Math.round(14 * hudFactor));
-const hbY = midY + Math.max(12, Math.round(16 * hudFactor));
-const bigNumY = Math.floor(topY + (hbY - topY) / 2 + Math.round(4 * hudFactor));
+ctx.fillText("HEALTH", healthX + healthPanelW / 2, panelY + 22);
 ctx.fillStyle = "#ffffff";
-ctx.font = game.scaledFont(bigHealthSize, "bold");
-ctx.fillText(`${Math.ceil(game.player.health)}`, healthX + hbW / 2, bigNumY);
-ctx.fillStyle = "rgba(255,255,255,0.08)";
-ctx.fillRect(healthX, hbY, hbW, hbH);
-ctx.fillStyle = healthColor;
-ctx.fillRect(healthX, hbY, hbW * healthPct, hbH);
-ctx.strokeStyle = "rgba(255,255,255,0.3)";
-ctx.lineWidth = 1;
-ctx.strokeRect(healthX, hbY, hbW, hbH);
-ctx.fillStyle = "#ffffff";
-ctx.font = game.scaledFont(smallHealthSize, "bold");
-ctx.fillText(`${Math.ceil(game.player.health)} / ${game.player.maxHealth}`, healthX + hbW / 2, hbY + Math.max(14, Math.round(12 * hudFactor)));
+ctx.font = game.scaledFont(64, "bold");
+ctx.fillText(`${Math.ceil(game.player.health)}%`, healthX + healthPanelW / 2, panelY + panelH - 24);
 
-// Shield bar (below health, only when player has shield)
-if (game.player.maxShield > 0) {
-  const sbH = 12;
-  const sbY = hbY + hbH + 4;
-  const shieldPct = game.player.shield / game.player.maxShield;
-  const shieldRegenning = game.player.shield < game.player.maxShield;
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(healthX, sbY, hbW, sbH);
-  ctx.fillStyle = shieldRegenning ? "#4488ff" : "#66aaff";
-  ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
-  if (shieldRegenning) {
-    const pulse = 0.1 + Math.sin(game.time * 0.006) * 0.06;
-    ctx.fillStyle = `rgba(100,160,255,${pulse})`;
-    ctx.fillRect(healthX, sbY, hbW * shieldPct, sbH);
-  }
-  ctx.strokeStyle = "rgba(100,160,255,0.4)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(healthX, sbY, hbW, sbH);
-  ctx.fillStyle = "#88bbff";
-  ctx.font = "bold 10px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(`SHIELD ${Math.ceil(game.player.shield)} / ${game.player.maxShield}`, healthX + hbW / 2, sbY + 10);
-}
-
-// Portrait
+// ─── PORTRAIT (Center) ───
 if (game.settings.showPortrait) {
   drawPortrait(ctx, portraitX, portraitY, portraitW, portraitH, _portraitState(game));
-  ctx.strokeStyle = "rgba(0,200,255,0.5)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(portraitX - 1, portraitY - 1, portraitW + 2, portraitH + 2);
-  const accentL = 12;
-  ctx.strokeStyle = "#00ddff";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(portraitX - 1, portraitY + accentL);
-  ctx.lineTo(portraitX - 1, portraitY - 1);
-  ctx.lineTo(portraitX + accentL, portraitY - 1);
-  ctx.moveTo(portraitX + portraitW + 1 - accentL, portraitY - 1);
-  ctx.lineTo(portraitX + portraitW + 1, portraitY - 1);
-  ctx.lineTo(portraitX + portraitW + 1, portraitY + accentL);
-  ctx.stroke();
+  
+  // Heavy DOOM border for portrait
+  ctx.strokeStyle = "#444444";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(portraitX - 4, portraitY - 4, portraitW + 8, portraitH + 8);
+  ctx.strokeStyle = "#111111";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(portraitX - 2, portraitY - 2, portraitW + 4, portraitH + 4);
 }
 
-// Weapons (2x2 grid)
-if (game.settings.showWeapons) {
-  const wpnX = portraitX + portraitW + pad;
-  ctx.fillStyle = "rgba(0,200,255,0.6)";
+// ─── SHIELD / ARMOR (Right Center) ───
+const rightZoneW = w - (portraitX + portraitW);
+const shieldPanelW = Math.floor(rightZoneW * 0.4) - pad * 1.5;
+const shieldX = portraitX + portraitW + pad;
+if (game.player.maxShield > 0) {
+  drawPanel(shieldX, panelY, shieldPanelW, panelH);
+  ctx.fillStyle = "#00ccff";
   ctx.font = "bold 16px monospace";
   ctx.textAlign = "center";
-  ctx.fillText("WEAPONS", wpnX + rsecW / 2, topY + 4);
-  const slotW = 42, slotH = 38, slotGap = 6;
-  const gridW = slotW * 2 + slotGap;
-  const gridH = slotH * 2 + slotGap;
-  const gridStartX = wpnX + rsecW / 2 - gridW / 2;
-  const gridStartY = topY + 16;
-  ctx.font = "bold 16px monospace";
-  for (let i = 0; i < game.player.weapons.length; i++) {
-    const active = i === game.player.currentWeapon;
-    const col = i % 2, row = Math.floor(i / 2);
-    const sx = gridStartX + col * (slotW + slotGap);
-    const sy = gridStartY + row * (slotH + slotGap);
-    ctx.fillStyle = active ? "rgba(0,200,255,0.4)" : "rgba(255,255,255,0.06)";
-    ctx.fillRect(sx, sy, slotW, slotH);
-    ctx.strokeStyle = active ? "#00ccff" : "rgba(255,255,255,0.15)";
-    ctx.lineWidth = active ? 2 : 1;
-    ctx.strokeRect(sx, sy, slotW, slotH);
-    // Weapon sprite — fills the slot minus a small inset. Falls back
-    // to the slot number digit if the SVG hasn't decoded yet.
+  ctx.fillText("SHIELD", shieldX + shieldPanelW / 2, panelY + 22);
+  const shieldPct = Math.ceil((game.player.shield / game.player.maxShield) * 100);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = game.scaledFont(64, "bold");
+  ctx.fillText(`${shieldPct}%`, shieldX + shieldPanelW / 2, panelY + panelH - 24);
+}
+
+// ─── ARMS / WEAPONS (Far Right) ───
+// We will show 8 slots as a grid
+const armsX = shieldX + shieldPanelW + pad / 2;
+const armsW = rightZoneW - shieldPanelW - pad * 2.5;
+drawPanel(armsX, panelY, armsW, panelH);
+
+ctx.fillStyle = "#ff5500";
+ctx.font = "bold 16px monospace";
+ctx.textAlign = "center";
+ctx.fillText("ARMS", armsX + armsW / 2, panelY + 22);
+
+const cols = 4;
+const rows = 2;
+const cellW = (armsW - 16) / cols;
+const cellH = (panelH - 40) / rows;
+const startX = armsX + 8;
+const startY = panelY + 30;
+
+for (let i = 0; i < 8; i++) {
+  const col = i % cols;
+  const row = Math.floor(i / cols);
+  const cx = startX + col * cellW;
+  const cy = startY + row * cellH;
+  
+  const hasWeapon = game.player.weapons[i] !== undefined;
+  const isActive = i === game.player.currentWeapon;
+  
+  // Cell bg
+  if (isActive) {
+    ctx.fillStyle = "rgba(255,170,0,0.3)";
+    ctx.fillRect(cx + 2, cy + 2, cellW - 4, cellH - 4);
+  }
+  
+  if (hasWeapon) {
     const wp = game.player.weapons[i];
-    const sprite = wp ? getWeaponSprite(weaponSlug(wp.name)) : null;
+    const sprite = getWeaponSprite(weaponSlug(wp.name));
     if (sprite) {
       const inset = 4;
       ctx.save();
-      ctx.globalAlpha = active ? 1 : 0.6;
-      ctx.drawImage(sprite, sx + inset, sy + inset, slotW - inset * 2, slotH - inset * 2);
+      ctx.globalAlpha = isActive ? 1.0 : 0.4;
+      ctx.drawImage(sprite, cx + inset, cy + inset, cellW - inset * 2, cellH - inset * 2);
       ctx.restore();
-    } else {
-      ctx.fillStyle = active ? "#ffffff" : "#666666";
-      ctx.textAlign = "center";
-      ctx.fillText(`${i + 1}`, sx + slotW / 2, sy + slotH / 2 + 6);
     }
-    // Tiny slot number badge in upper-left so quick-swap keys are
-    // still discoverable even with the icon present.
-    ctx.fillStyle = active ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.4)";
-    ctx.fillRect(sx + 2, sy + 2, 12, 11);
-    ctx.fillStyle = active ? "#00eaff" : "rgba(255,255,255,0.5)";
-    ctx.font = "bold 9px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(`${i + 1}`, sx + 8, sy + 11);
   }
-  if (wep) {
-    ctx.fillStyle = wep.color;
-    ctx.font = "bold 16px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(wep.name, wpnX + rsecW / 2, gridStartY + gridH + 14);
-  }
-}
-
-// Kills
-if (game.settings.showKills) {
-  const killsX = portraitX + portraitW + rsecW + pad * 2;
-  ctx.fillStyle = "rgba(255,136,102,0.6)";
-  ctx.font = "bold 16px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("KILLS", killsX + rsecW / 2, topY + 4);
-  ctx.fillStyle = "#ff8866";
-  ctx.font = game.scaledFont(42, "bold");
-  ctx.fillText(`${game.killedEnemies}`, killsX + rsecW / 2, midY + 12);
-  ctx.fillStyle = "rgba(255,136,102,0.6)";
-  ctx.font = "bold 18px monospace";
-  ctx.fillText(`/ ${game.totalEnemies}`, killsX + rsecW / 2, midY + 34);
-}
-
-// Score
-if (game.settings.showScore) {
-  const scoreX = portraitX + portraitW + rsecW * 2 + pad * 3;
-  ctx.fillStyle = "rgba(0,221,255,0.6)";
-  ctx.font = "bold 16px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("SCORE", scoreX + rsecW / 2, topY + 4);
-  ctx.fillStyle = "#00ddff";
-  ctx.font = game.scaledFont(40, "bold");
-  ctx.fillText(`${game.player.score}`, scoreX + rsecW / 2, midY + 14);
-}
-
-// Location / Round
-const locX = portraitX + portraitW + rsecW * 3 + pad * 4;
-const locCx = Math.min(locX + rsecW / 2, w - 50);
-if (game.mode === "arena") {
-  ctx.fillStyle = "#ffaa00";
-  ctx.font = "bold 22px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("ROUND", locCx, topY + 4);
-  ctx.font = "bold 44px monospace";
-  ctx.fillText(`${game.arenaRound}`, locCx, midY + 12);
-} else if (game.mode === "meltdown") {
-  const mHud = game.meltdown.getHUD();
-  ctx.fillStyle = "#ffaa00";
-  ctx.font = "bold 14px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText("REACTOR RUN", locCx, topY + 4);
-  ctx.font = "bold 28px monospace";
-  ctx.fillText(`${mHud.distance}m`, locCx, midY + 8);
-} else if (game.mode === "campaign") {
-  const levelName = game.map.name || `Level ${game.campaignLevel + 1}`;
-  const maxLocW = w - locX - pad;
-  ctx.font = "bold 14px monospace";
-  let displayName = levelName;
-  while (ctx.measureText(displayName).width > maxLocW && displayName.length > 4) {
-    displayName = displayName.slice(0, -1);
-  }
-  if (displayName !== levelName) displayName += "…";
-  ctx.fillStyle = "#aaddff";
-  ctx.textAlign = "center";
-  ctx.fillText(displayName, locCx, midY + 4);
-}
-
-// NG+ badge (campaign)
-if (game.mode === "campaign" && game.ngPlusCycle > 0) {
-  const ngLabel = game.ngPlusCycle >= 3 ? "NG+3 FINAL" : `NG+${game.ngPlusCycle}`;
-  const ngColor = game.ngPlusCycle >= 3 ? "#ffcc00" : "#cc88ff";
-  ctx.fillStyle = ngColor;
+  
+  // Number overlay
+  ctx.fillStyle = isActive ? "#ffffff" : hasWeapon ? "#ffaa00" : "#444444";
   ctx.font = "bold 12px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(ngLabel, locCx, botY - 16);
+  ctx.textAlign = "left";
+  ctx.fillText(`${i + 1}`, cx + 4, cy + 14);
 }
 
-// Difficulty
-const diffNames = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
-const diffColors = ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"];
-ctx.fillStyle = diffColors[game.settings.difficulty];
-ctx.font = "bold 14px monospace";
-ctx.textAlign = "center";
-ctx.fillText(diffNames[game.settings.difficulty], locCx, botY);
-
-// Vertical dividers
-ctx.strokeStyle = "rgba(0,200,255,0.2)";
-ctx.lineWidth = 1;
-const divTop = h - barH + 4, divBot = h - 4;
-const div1X = ammoX + ammoSecW + pad / 2;
-ctx.beginPath(); ctx.moveTo(div1X, divTop); ctx.lineTo(div1X, divBot); ctx.stroke();
-ctx.beginPath(); ctx.moveTo(portraitX - pad / 2, divTop); ctx.lineTo(portraitX - pad / 2, divBot); ctx.stroke();
-ctx.beginPath(); ctx.moveTo(portraitX + portraitW + pad / 2, divTop); ctx.lineTo(portraitX + portraitW + pad / 2, divBot); ctx.stroke();
-for (let s = 1; s <= 3; s++) {
-  const dx = portraitX + portraitW + rsecW * s + pad * s + pad / 2;
-  ctx.beginPath(); ctx.moveTo(dx, divTop); ctx.lineTo(dx, divBot); ctx.stroke();
+// ─── KILLS / SCORE (Small, top corners of HUD bar) ───
+// Only show if setting is enabled, tuck them in unobtrusively
+if (game.settings.showKills) {
+  ctx.fillStyle = "#ff8866";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(`KILLS: ${game.killedEnemies}`, pad, h - barH - 8);
+}
+if (game.settings.showScore) {
+  ctx.fillStyle = "#00ddff";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`SCORE: ${game.player.score}`, w - pad, h - barH - 8);
 }
 
 // ─── Arena Timer (top-left, larger box) ───
@@ -1766,8 +1727,9 @@ for (const dn of game.damageNumbers) {
   if (Math.abs(angle) > fov / 2) continue;
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (dist < 0.1) continue;
-  const screenX = w / 2 + (angle / (fov / 2)) * (w / 2);
-  const rise = (0.8 - dn.life) * 60;
+  const dnAge = 0.8 - dn.life;
+  const screenX = w / 2 + (angle / (fov / 2)) * (w / 2) + (dn.vx || 0) * dnAge;
+  const rise = dnAge * 90 - dnAge * dnAge * 60;
   const screenY = (h - barH) / 2 - rise;
   const alpha = Math.min(1, dn.life / 0.3);
   ctx.save();
@@ -2072,4 +2034,144 @@ ctx.fillStyle = diffColors[game.settings.difficulty];
 ctx.font = "bold 8px monospace";
 ctx.textAlign = "left";
 ctx.fillText(diffNames[game.settings.difficulty], pad, midY - 12);
+
+_dirty = false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TACTICAL HUD (Sleek, modern floating layout)
+// ═══════════════════════════════════════════════════════════════════════
+
+function _renderTacticalDesktopHUD(game, ctx, w, h, barH, hudFactor) {
+  const wep = game.player.getWeaponDef();
+  const healthPct = game.player.health / game.player.maxHealth;
+  const healthColor = healthPct > 0.6 ? game.cbColor("#00ff66") : healthPct > 0.3 ? game.cbColor("#ffaa00") : game.cbColor("#ff2200");
+
+  const cx = w / 2;
+  const cy = h - 60;
+  
+  // Tactical curve arc
+  ctx.strokeStyle = "rgba(0,255,200,0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 180, Math.PI + 0.3, Math.PI * 2 - 0.3);
+  ctx.stroke();
+
+  // Left side: Health & Shield
+  ctx.fillStyle = "rgba(0,10,20,0.6)";
+  ctx.beginPath();
+  ctx.moveTo(cx - 200, cy);
+  ctx.lineTo(cx - 300, cy);
+  ctx.lineTo(cx - 320, cy + 40);
+  ctx.lineTo(cx - 200, cy + 40);
+  ctx.fill();
+  
+  ctx.fillStyle = healthColor;
+  ctx.font = "bold 24px monospace";
+  ctx.textAlign = "right";
+  ctx.fillText(`HP ${Math.ceil(game.player.health)}`, cx - 210, cy + 28);
+  
+  // Right side: Ammo
+  ctx.fillStyle = "rgba(0,10,20,0.6)";
+  ctx.beginPath();
+  ctx.moveTo(cx + 200, cy);
+  ctx.lineTo(cx + 300, cy);
+  ctx.lineTo(cx + 320, cy + 40);
+  ctx.lineTo(cx + 200, cy + 40);
+  ctx.fill();
+  
+  ctx.fillStyle = "#ffcc00";
+  ctx.textAlign = "left";
+  ctx.fillText(`AMMO ${game.player.ammo}`, cx + 210, cy + 28);
+  
+  // Center weapon icon
+  if (wep) {
+    ctx.fillStyle = wep.color;
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(wep.name.toUpperCase(), cx, cy - 20);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CUSTOM HUD (JSON layout driven)
+// ═══════════════════════════════════════════════════════════════════════
+
+function _renderCustomDesktopHUD(game, ctx, w, h, barH, hudFactor) {
+  // If no custom layout exists, draw a placeholder warning
+  if (!game.settings.customHudLayout) {
+    ctx.fillStyle = "rgba(0,0,0,0.8)";
+    ctx.fillRect(w / 2 - 200, h / 2 - 50, 400, 100);
+    ctx.fillStyle = "#ff4400";
+    ctx.font = "bold 18px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("NO CUSTOM HUD CONFIGURED", w / 2, h / 2 - 10);
+    ctx.fillStyle = "#aaaaaa";
+    ctx.font = "14px monospace";
+    ctx.fillText("Go to Settings > Edit Custom HUD", w / 2, h / 2 + 20);
+    return;
+  }
+  
+  const layout = game.settings.customHudLayout;
+  
+  // Health
+  if (layout.health) {
+    const px = layout.health.x * w;
+    const py = layout.health.y * h;
+    const healthPct = game.player.health / game.player.maxHealth;
+    ctx.fillStyle = healthPct > 0.6 ? "#00ff66" : healthPct > 0.3 ? "#ffaa00" : "#ff2200";
+    ctx.font = "bold 32px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`${Math.ceil(game.player.health)}`, px, py);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "12px monospace";
+    ctx.fillText("HEALTH", px, py + 16);
+  }
+  
+  // Ammo
+  if (layout.ammo) {
+    const px = layout.ammo.x * w;
+    const py = layout.ammo.y * h;
+    ctx.fillStyle = "#ffcc00";
+    ctx.font = "bold 32px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`${game.player.ammo}`, px, py);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "12px monospace";
+    ctx.fillText("AMMO", px, py + 16);
+  }
+  
+  // Shield
+  if (layout.shield && game.player.maxShield > 0) {
+    const px = layout.shield.x * w;
+    const py = layout.shield.y * h;
+    const shieldPct = Math.ceil((game.player.shield / game.player.maxShield) * 100);
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 32px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`${shieldPct}%`, px, py);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "12px monospace";
+    ctx.fillText("SHIELD", px, py + 16);
+  }
+  
+  // Portrait
+  if (layout.portrait && game.settings.showPortrait) {
+    const px = layout.portrait.x * w;
+    const py = layout.portrait.y * h;
+    drawPortrait(ctx, px - 60, py - 60, 120, 120, _portraitState(game));
+  }
+  
+  // Weapons (simplified active weapon view for now)
+  if (layout.weapons && game.settings.showWeapons) {
+    const px = layout.weapons.x * w;
+    const py = layout.weapons.y * h;
+    const wep = game.player.getWeaponDef();
+    if (wep) {
+      ctx.fillStyle = wep.color;
+      ctx.font = "bold 16px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(wep.name.toUpperCase(), px, py);
+    }
+  }
 }

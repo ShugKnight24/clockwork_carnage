@@ -1,5 +1,8 @@
 import {
   CHARACTER_COLORS,
+  SKIN_TONES,
+  HAIR_STYLES,
+  EYE_COLORS,
   ARMOR_STYLES,
   HELMET_STYLES,
   VISOR_STYLES,
@@ -7,6 +10,8 @@ import {
   BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
+  BACKSTORIES,
+  VOICE_PROFILES,
 } from "../../js/data.js";
 
 // ── Shared category definitions (used by render + click handler) ──
@@ -19,6 +24,9 @@ export const CREATOR_CATEGORIES = [
     data: CHARACTER_COLORS,
     key: "colorIndex",
   },
+  { name: "FACE", shortLabel: "FACE", data: SKIN_TONES, key: "skinToneIndex" },
+  { name: "HAIR", shortLabel: "HAIR", data: HAIR_STYLES, key: "hairIndex" },
+  { name: "EYES", shortLabel: "EYES", data: EYE_COLORS, key: "eyeIndex" },
   { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
   { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmetIndex" },
   { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visorIndex" },
@@ -36,6 +44,8 @@ export const CREATOR_CATEGORIES = [
     data: LOADOUT_CLASSES,
     key: "loadoutIndex",
   },
+  { name: "ORIGIN", shortLabel: "ORGN", data: BACKSTORIES, key: "backstoryIndex" },
+  { name: "VOICE", shortLabel: "VOX", data: VOICE_PROFILES, key: "voiceIndex" },
 ];
 
 // ── Layout calculator (shared between render + click detection) ──
@@ -44,9 +54,10 @@ export function getCreatorLayout(w, h, isMobile) {
   const titleY = isMobile ? 34 : 44;
   const tabGap = isMobile ? 4 : 8;
   const n = CREATOR_CATEGORIES.length;
-  const tabW = isMobile
-    ? Math.max(30, Math.floor((w - 50 - (n - 1) * tabGap) / n))
-    : 90;
+  const tabW = Math.max(
+    isMobile ? 28 : 42,
+    Math.min(isMobile ? 46 : 86, Math.floor((w - 50 - (n - 1) * tabGap) / n)),
+  );
   const tabH = 28;
   const totalTabW = n * tabW + (n - 1) * tabGap;
   const tabX0 = (w - totalTabW) / 2;
@@ -101,13 +112,20 @@ export function renderCharacterPreview(
   helmet,
   visor,
   shoulder,
+  skinTone,
+  hairStyle,
+  eyeColor,
 ) {
   const s = scale || 1;
   const helmetStyle = helmet || HELMET_STYLES[0];
   const visorStyle = visor || VISOR_STYLES[0];
   const shoulderStyle = shoulder || SHOULDER_STYLES[0];
+  const faceTone = skinTone || SKIN_TONES[0];
+  const hair = hairStyle || HAIR_STYLES[0];
+  const eyes = eyeColor || EYE_COLORS[0];
   const rotAngle = now * 0.001;
   const breathe = Math.sin(now * 0.002) * 2;
+  const stance = Math.sin(now * 0.0012) * 2.5;
 
   ctx.save();
   ctx.translate(cx, cy + breathe);
@@ -323,6 +341,48 @@ export function renderCharacterPreview(
     ctx.fill();
   }
   // Visor (shape varies by visorStyle)
+  // Face/hair are visible through open/slit visors; full-face visor covers them.
+  if (visorStyle.id !== "fullface") {
+    ctx.fillStyle = faceTone.color;
+    ctx.beginPath();
+    ctx.ellipse(0, helmY + 3, 12, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = faceTone.shadow;
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.ellipse(0, helmY + 8, 10, 5, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    if (hair.id !== "none") {
+      ctx.fillStyle = hair.color;
+      if (hair.id === "coil") {
+        for (let i = -2; i <= 2; i++) {
+          ctx.beginPath();
+          ctx.arc(i * 5, helmY - 8 + (i % 2) * 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (hair.id === "braid") {
+        ctx.beginPath();
+        ctx.ellipse(-8, helmY - 5, 7, 4, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(-14, helmY + 8, 3, 12, -0.25, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.ellipse(0, helmY - 8, hair.id === "buzz" ? 10 : 13, hair.id === "white" ? 5 : 7, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = eyes.color;
+    ctx.shadowColor = eyes.color;
+    ctx.shadowBlur = 5;
+    ctx.fillRect(-6, helmY + 1, 3, 2);
+    ctx.fillRect(3, helmY + 1, 3, 2);
+    ctx.shadowBlur = 0;
+  }
+
   ctx.fillStyle = palette.accent;
   if (visorStyle.id === "slit") {
     ctx.globalAlpha = 0.75 + 0.2 * Math.sin(now * 0.003);
@@ -379,7 +439,7 @@ export function renderCharacterPreview(
   ctx.fillRect(-armorW / 2 - 10, -armorH / 2 + 8, 10, 40);
   ctx.fillRect(armorW / 2, -armorH / 2 + 8, 10, 40);
   // Hands
-  ctx.fillStyle = palette.dark;
+  ctx.fillStyle = faceTone.color;
   ctx.fillRect(-armorW / 2 - 8, -armorH / 2 + 46, 8, 8);
   ctx.fillRect(armorW / 2 + 2, -armorH / 2 + 46, 8, 8);
 
@@ -525,7 +585,7 @@ export function renderCharacterPreview(
 
   // ── Weapon (right hand) ──
   const wpnX = armorW / 2 + 6;
-  const wpnY = -armorH / 2 + 30;
+  const wpnY = -armorH / 2 + 30 + stance * 0.25;
   const skinColors = {
     default: "#556677",
     carbon: "#222222",
@@ -618,10 +678,15 @@ export function renderCharacterCreator(
   const cat = creatorCategory;
   const char = character;
   const palette = CHARACTER_COLORS[char.colorIndex];
+  const skinTone = SKIN_TONES[char.skinToneIndex || 0];
+  const hairStyle = HAIR_STYLES[char.hairIndex || 0];
+  const eyeColor = EYE_COLORS[char.eyeIndex || 0];
   const armor = ARMOR_STYLES[char.armorIndex];
   const badge = BADGES[char.badgeIndex];
   const skin = WEAPON_SKINS[char.weaponSkinIndex];
   const loadout = LOADOUT_CLASSES[char.loadoutIndex];
+  const origin = BACKSTORIES[char.backstoryIndex || 0];
+  const voice = VOICE_PROFILES[char.voiceIndex || 0];
   const helmet = HELMET_STYLES[char.helmetIndex || 0];
   const visor = VISOR_STYLES[char.visorIndex || 0];
   const shoulder = SHOULDER_STYLES[char.shoulderIndex || 0];
@@ -704,11 +769,15 @@ export function renderCharacterCreator(
     ctx.fill();
 
     if (selected) {
+      ctx.save();
+      ctx.shadowColor = palette.accent;
+      ctx.shadowBlur = 8;
       ctx.strokeStyle = palette.accent;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.roundRect(tx, L.tabY, L.tabW, L.tabH, 4);
       ctx.stroke();
+      ctx.restore();
     }
 
     ctx.fillStyle = selected ? palette.accent : "rgba(255,255,255,0.35)";
@@ -776,6 +845,9 @@ export function renderCharacterCreator(
       helmet,
       visor,
       shoulder,
+      skinTone,
+      hairStyle,
+      eyeColor,
     );
 
     // Styled nameplate (name step)
@@ -803,7 +875,7 @@ export function renderCharacterCreator(
     ctx.fillText(npText, prevCX, npY);
 
     if (!isMobile) {
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillStyle = "rgba(180,200,220,0.45)";
       ctx.font = "11px monospace";
       ctx.textAlign = "center";
       ctx.fillText(
@@ -856,26 +928,30 @@ export function renderCharacterCreator(
       ctx.fillRect(listX + 4, iy + 6, 3, L.itemH - 16);
     }
 
-    // Color swatch for color category
-    if (cat === 1 && item.primary) {
-      ctx.fillStyle = item.primary;
+    // Color swatches for visual categories
+    const swatch = item.primary || item.color;
+    if ((curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex") && swatch) {
+      ctx.fillStyle = swatch;
       ctx.beginPath();
       ctx.roundRect(listX + 14, iy + 8, 18, 18, 3);
       ctx.fill();
-      ctx.fillStyle = item.accent;
-      ctx.beginPath();
-      ctx.roundRect(listX + 18, iy + 12, 10, 10, 2);
-      ctx.fill();
+      if (item.accent || item.shadow) {
+        ctx.fillStyle = item.accent || item.shadow;
+        ctx.beginPath();
+        ctx.roundRect(listX + 18, iy + 12, 10, 10, 2);
+        ctx.fill();
+      }
     }
 
-    const labelX = cat === 1 ? listX + 40 : listX + 16;
+    const hasSwatch = curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex";
+    const labelX = hasSwatch ? listX + 40 : listX + 16;
     ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.45)";
     ctx.font = `${isSelected ? "bold " : ""}12px monospace`;
     ctx.textAlign = "left";
     ctx.fillText(item.name, labelX, iy + 22);
 
-    // Lock icon for locked loadouts
-    if (cat === 5 && item.unlocked === false) {
+    // Lock icon for locked loadouts (LOADOUT category only)
+    if (curCat.key === "loadoutIndex" && item.unlocked === false) {
       ctx.fillStyle = "rgba(255,100,100,0.6)";
       ctx.font = "10px monospace";
       ctx.fillText("\uD83D\uDD12", listX + L.listW - 28, iy + 22);
@@ -911,6 +987,9 @@ export function renderCharacterCreator(
     helmet,
     visor,
     shoulder,
+    skinTone,
+    hairStyle,
+    eyeColor,
   );
 
   // ── Scan-line overlay ──
@@ -949,7 +1028,7 @@ export function renderCharacterCreator(
     ctx.fillText(selectedItem.name, infoX + 12, L.contentY + 28);
 
     // Armor tier pips (Sprint H 8.2: starter → mid → elite visual)
-    if (cat === 2 && selectedItem.tier) {
+    if (curCat.key === "armorIndex" && selectedItem.tier) {
       const pipX = infoX + 12;
       const pipY = L.contentY + 38;
       const tierColors = ["#6a8cff", "#ffcc44", "#ff4488"];
@@ -989,8 +1068,38 @@ export function renderCharacterCreator(
       if (line) ctx.fillText(line, infoX + 12, lineY);
     }
 
-    // Loadout bonuses — visual stat bars
-    if (cat === 5 && loadout.bonuses) {
+    if (curCat.key === "backstoryIndex" && selectedItem.perk) {
+      ctx.fillStyle = "rgba(0,255,200,0.18)";
+      ctx.beginPath();
+      ctx.roundRect(infoX + 12, L.contentY + 116, L.infoW - 24, 34, 6);
+      ctx.fill();
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 10px monospace";
+      ctx.fillText("ORIGIN PERK", infoX + 20, L.contentY + 130);
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = "11px monospace";
+      ctx.fillText(selectedItem.perk, infoX + 20, L.contentY + 145);
+    }
+
+    if (curCat.key === "voiceIndex") {
+      const waveY = L.contentY + 120;
+      ctx.strokeStyle = palette.accent + "88";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < L.infoW - 28; i++) {
+        const x = infoX + 14 + i;
+        const y = waveY + Math.sin(i * 0.18 + now * 0.012) * (6 + selectedItem.pitch * 3);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "10px monospace";
+      ctx.fillText("VOICE PRINT", infoX + 12, waveY + 24);
+    }
+
+    // Loadout bonuses — visual stat bars (LOADOUT category only)
+    if (curCat.key === "loadoutIndex" && loadout.bonuses) {
       let by = L.contentY + 90;
       const b = loadout.bonuses;
       const barW = L.infoW - 24;
@@ -1048,7 +1157,7 @@ export function renderCharacterCreator(
     }
 
     // Color swatches in info panel
-    if (cat === 1) {
+    if (curCat.key === "colorIndex") {
       let sy = L.contentY + 80;
       ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
       ctx.font = "10px monospace";
@@ -1096,7 +1205,7 @@ export function renderCharacterCreator(
 
   // ─── Footer controls ───
   if (!isMobile) {
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.fillStyle = "rgba(180,200,220,0.45)";
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(
