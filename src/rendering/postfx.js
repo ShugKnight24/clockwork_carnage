@@ -15,6 +15,7 @@
 export function renderPostFX(ctx, w, h, state) {
   const { time, player, canvas } = state;
   const postProcessing = state.postProcessing !== false;
+  const act = state.act || 1;
 
   // Muzzle flash screen lighting — additive overlay, fades over 100ms
   if (state.muzzleFlashTime && time - state.muzzleFlashTime < 100) {
@@ -39,18 +40,50 @@ export function renderPostFX(ctx, w, h, state) {
     drawDamageDirection(ctx, w, h, time, player);
   }
 
+  // Low-health warning pulse — red vignette + heartbeat audio
+  const hpRatio = player.health / player.maxHealth;
+  if (player.alive && hpRatio < 0.25 && hpRatio > 0) {
+    const severity = 1 - (hpRatio / 0.25); // 0 at 25%, 1 at 0%
+    const pulse = 0.5 + 0.5 * Math.sin(time * 0.006 * (1 + severity)); // faster at lower health
+    const alpha = severity * pulse * 0.35;
+
+    const grd = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
+    grd.addColorStop(0, "rgba(180,0,0,0)");
+    grd.addColorStop(1, `rgba(180,0,0,${alpha})`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+
+    // Critical health (< 10%) — slight desaturation overlay
+    if (hpRatio < 0.1) {
+      const desatAlpha = (1 - hpRatio / 0.1) * 0.12;
+      ctx.fillStyle = `rgba(128,128,128,${desatAlpha})`;
+      ctx.globalCompositeOperation = "saturation";
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // Heartbeat audio — driven from the same place as the visual pulse
+    state.audio?.heartbeat?.(severity);
+  }
+
   // Glitch slice effect
   if (postProcessing && state.glitchEffect > 0.01) {
     drawGlitch(ctx, w, h, canvas, state.glitchEffect);
   }
 
   // Chromatic aberration — RGB channel split
-  if (postProcessing) drawChromaticAberration(ctx, w, h, canvas, time, player, state.glitchEffect);
+  if (postProcessing && state.enableChromaticAberration !== false) drawChromaticAberration(ctx, w, h, canvas, time, player, state.glitchEffect);
+
+  // Bloom — soft glow from bright areas
+  if (postProcessing && state.enableBloom !== false) drawBloom(ctx, w, h, canvas);
 
   // Film grain — subtle animated noise. Sells the "old broadcast" mood
   // without bleeding contrast. Uses a cached noise tile to avoid drawing
   // thousands of pixels every frame.
-  if (postProcessing) drawFilmGrain(ctx, w, h, time);
+  if (postProcessing && state.enableFilmGrain !== false) drawFilmGrain(ctx, w, h, time);
+
+  // Per-act color grade tint
+  if (postProcessing) drawColorGrade(ctx, w, h, act);
 
   // Death fade
   if (!player.alive) {
@@ -60,7 +93,7 @@ export function renderPostFX(ctx, w, h, state) {
 }
 
 let _grainTile = null;
-let _grainTileSize = 128;
+let _grainTileSize = 256;
 function getGrainTile() {
   if (_grainTile) return _grainTile;
   const c = (typeof OffscreenCanvas !== "undefined")
@@ -80,17 +113,20 @@ function getGrainTile() {
 
 function drawFilmGrain(ctx, w, h, time) {
   const tile = getGrainTile();
-  // Animate by jittering the tile origin every frame.
-  const ox = (time * 0.13) % _grainTileSize;
-  const oy = (time * 0.17) % _grainTileSize;
+  const rotation = time * 0.0001;
   ctx.save();
   ctx.globalAlpha = 0.045;
   ctx.globalCompositeOperation = "overlay";
-  for (let yy = -oy; yy < h; yy += _grainTileSize) {
-    for (let xx = -ox; xx < w; xx += _grainTileSize) {
-      ctx.drawImage(tile, xx, yy);
-    }
-  }
+  // Single draw with rotated transform covers the screen (tile is large enough)
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = Math.max(w, h) / _grainTileSize * 1.5;
+  ctx.setTransform(
+    Math.cos(rotation) * scale, Math.sin(rotation) * scale,
+    -Math.sin(rotation) * scale, Math.cos(rotation) * scale,
+    cx, cy
+  );
+  ctx.drawImage(tile, -_grainTileSize / 2, -_grainTileSize / 2);
   ctx.restore();
 }
 
@@ -138,7 +174,56 @@ export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchE
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.globalAlpha = intensity * 0.12;
+  // Horizontal shift
   ctx.drawImage(canvas, -offset, 0);
   ctx.drawImage(canvas, offset, 0);
+  // Radial vertical shift — stronger at edges
+  const vOffset = Math.ceil(offset * 0.5);
+  if (vOffset >= 1) {
+    ctx.globalAlpha = intensity * 0.06;
+    ctx.drawImage(canvas, 0, -vOffset);
+    ctx.drawImage(canvas, 0, vOffset);
+  }
   ctx.restore();
+}
+
+/** Bloom — downsample to small buffer, draw back at full size with additive blend. */
+let _bloomCanvas = null;
+let _bloomCtx = null;
+let _bloomW = 0;
+let _bloomH = 0;
+
+export function drawBloom(ctx, w, h, canvas) {
+  const bw = (w >> 2) || 1;
+  const bh = (h >> 2) || 1;
+  if (!_bloomCanvas || _bloomW !== bw || _bloomH !== bh) {
+    _bloomCanvas = (typeof OffscreenCanvas !== "undefined")
+      ? new OffscreenCanvas(bw, bh)
+      : Object.assign(document.createElement("canvas"), { width: bw, height: bh });
+    _bloomCtx = _bloomCanvas.getContext("2d");
+    _bloomW = bw;
+    _bloomH = bh;
+  }
+  _bloomCtx.drawImage(canvas, 0, 0, bw, bh);
+  // Brightness threshold — boost contrast so only bright areas survive
+  _bloomCtx.globalCompositeOperation = "multiply";
+  _bloomCtx.fillStyle = "rgb(180,180,180)";
+  _bloomCtx.fillRect(0, 0, bw, bh);
+  _bloomCtx.globalCompositeOperation = "source-over";
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = 0.18;
+  ctx.drawImage(_bloomCanvas, 0, 0, w, h);
+  ctx.restore();
+}
+
+/** Color grade — per-act tint overlay. */
+export function drawColorGrade(ctx, w, h, act) {
+  const tints = {
+    1: "rgba(0,40,60,0.06)",   // subtle teal
+    2: "rgba(40,25,0,0.06)",   // warm amber
+    3: "rgba(40,0,10,0.06)",   // hot crimson
+  };
+  ctx.fillStyle = tints[act] || tints[1];
+  ctx.fillRect(0, 0, w, h);
 }

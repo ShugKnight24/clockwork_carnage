@@ -5,8 +5,9 @@
 // Caller: game.render() → renderFrame(game).
 
 import { renderPostFX as _renderPostFX } from "./postfx.js";
+import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
-import { effectiveAimFov } from "../systems/aim.js";
+import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
 
 export function renderFrame(game) {
   const ctx = game.renderer.ctx;
@@ -79,27 +80,41 @@ export function renderFrame(game) {
   let shakeX = 0,
     shakeY = 0;
   if (game.settings.screenShake && game.screenShake > 0.5) {
-    shakeX = (Math.random() - 0.5) * game.screenShake;
-    shakeY = (Math.random() - 0.5) * game.screenShake;
+    const shakeDecay = Math.min(1, game.screenShake / 8);
+    // Recoil-biased: mostly upward with random scatter
+    shakeX = (Math.random() - 0.5) * game.screenShake * 0.6;
+    shakeY = -Math.abs(Math.random()) * game.screenShake * 0.8 * shakeDecay
+           + (Math.random() - 0.5) * game.screenShake * 0.3;
   }
 
   // View bob when sprinting/dashing (whole screen sway)
   if (game.settings.weaponBob && (game.player.isSprinting || game.player.isDashing)) {
     const bobIntensity = game.player.isDashing ? 6 : 3;
-    shakeX += Math.sin(game.player.weaponBob * 1.1) * bobIntensity;
-    shakeY +=
-      Math.abs(Math.cos(game.player.weaponBob * 1.1)) * bobIntensity * 0.6;
+    const bobT = game.player.weaponBob * 1.1;
+    shakeX += Math.sin(bobT) * bobIntensity;
+    shakeY += Math.sin(bobT * 2) * bobIntensity * 0.4;
   }
 
   ctx.save();
   ctx.translate(shakeX, shakeY);
+
+  // Camera tilt (slide lean)
+  const tilt = game.player.cameraTilt || 0;
+  if (Math.abs(tilt) > 0.001) {
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(tilt);
+    ctx.translate(-w / 2, -h / 2);
+  }
 
   // Render 3D scene — timed: raycast phase
   const profiling = !!game.showFPS;
   const _tRay0 = profiling ? performance.now() : 0;
   // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;
-  const yShift = p.isSliding ? 40 : p.isCrouching ? 28 : 0;
+  // Camera punch converts to vertical pixel offset (negative = kick upward)
+  const punchPx = (p.cameraPunch || 0) * -h * 0.12;
+  const yShift = (p.isSliding ? 40 : p.isCrouching ? 28 : 0) + punchPx;
+  updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
   const skipFloorCeil = game.quality && !game.quality.enableFloorTexture;
@@ -135,6 +150,23 @@ export function renderFrame(game) {
 
   ctx.restore();
   if (profiling) game.profiler.currentPhases.raycast = performance.now() - _tRay0;
+
+  // Subtle atmospheric horizon gradient (per-act fog tint)
+  const _act = game.campaign?.act || 1;
+  if (game.map?.grid) {
+    const horizonY = (h >> 1) + yShift;
+    const bandH = 40;
+    const hy0 = horizonY - bandH / 2;
+    const actHorizon = _act === 2
+      ? "20,10,4" : _act === 3
+        ? "22,4,8" : "8,18,30";
+    const hGrad = ctx.createLinearGradient(0, hy0, 0, hy0 + bandH);
+    hGrad.addColorStop(0, "transparent");
+    hGrad.addColorStop(0.5, `rgba(${actHorizon},0.12)`);
+    hGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = hGrad;
+    ctx.fillRect(0, hy0, w, bandH);
+  }
 
   // Subtle ambient vignette (cached offscreen for performance)
   // Skipped when adaptive quality disables it
@@ -181,17 +213,76 @@ export function renderFrame(game) {
   }
   if (profiling) game.profiler.currentPhases.weapon = performance.now() - _tWpn0;
 
+  // Per-act atmospheric weather particles (before post-FX)
+  if ((game.quality?.particleMultiplier ?? 1) >= 0.3) {
+    renderWeather(ctx, w, h, game);
+  }
+
   // Effects: muzzle flash lighting, hurt flash, glitch, death fade
   const _tFx0 = profiling ? performance.now() : 0;
-  _renderPostFX(ctx, w, h, {
-    time: game.time,
-    muzzleFlashTime: game._muzzleFlashTime,
-    muzzleFlashColor: game._muzzleFlashColor,
-    player: game.player,
-    glitchEffect: game.glitchEffect,
-    canvas: game.canvas,
-    postProcessing: game.settings.postProcessing,
-  });
+
+  // GPU post-FX path — use WebGL shader when GL renderer is available
+  const _glr = game.renderer.glRenderer;
+  const _pp = game.settings.postProcessing !== false;
+  if (_glr && _pp && game.renderer.useWebGL) {
+    // Per-act grade color in 0-1 range for the GL shader
+    const _gradeColors = {
+      1: [0, 0.157, 0.235],  // teal
+      2: [0.157, 0.098, 0],  // warm amber
+      3: [0.157, 0, 0.039],  // hot crimson
+    };
+    const _gc = _gradeColors[_act] || _gradeColors[1];
+
+    // Run muzzle flash / hurt flash / glitch / death via Canvas 2D first
+    // (these are per-event overlays not suited for the static GL shader)
+    _renderPostFX(ctx, w, h, {
+      time: game.time,
+      muzzleFlashTime: game._muzzleFlashTime,
+      muzzleFlashColor: game._muzzleFlashColor,
+      player: game.player,
+      glitchEffect: game.glitchEffect,
+      canvas: game.canvas,
+      postProcessing: game.settings.postProcessing,
+      audio: game.audio,
+      // Disable bloom/CA/grain/color-grade in Canvas path — GPU handles them
+      enableBloom: false,
+      enableChromaticAberration: false,
+      enableFilmGrain: false,
+      act: _act,
+    });
+
+    // GPU post-FX pass: bloom, chromatic aberration, film grain, color grade
+    try {
+      _glr.renderPostFXFromCanvas(
+        game.canvas,
+        game.time,
+        game.settings.enableBloom !== false,
+        game.settings.enableChromaticAberration !== false,
+        game.settings.enableFilmGrain !== false,
+        _gc,
+      );
+      // Draw GL result back to main Canvas2D
+      ctx.drawImage(_glr.canvas, 0, 0);
+    } catch (_e) {
+      // Shader failure — fall through silently, Canvas 2D already applied overlays
+    }
+  } else {
+    // Canvas 2D post-FX fallback
+    _renderPostFX(ctx, w, h, {
+      time: game.time,
+      muzzleFlashTime: game._muzzleFlashTime,
+      muzzleFlashColor: game._muzzleFlashColor,
+      player: game.player,
+      glitchEffect: game.glitchEffect,
+      canvas: game.canvas,
+      postProcessing: game.settings.postProcessing,
+      audio: game.audio,
+      enableBloom: game.settings.enableBloom,
+      enableChromaticAberration: game.settings.enableChromaticAberration,
+      enableFilmGrain: game.settings.enableFilmGrain,
+      act: _act,
+    });
+  }
   if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
 
   // Render HUD on overlay canvas
@@ -212,6 +303,8 @@ export function renderFrame(game) {
   if (game.state === GameState.PAUSED) game.renderPauseScreen(hctx, hw, hh);
   if (game.state === GameState.SETTINGS)
     game.renderSettingsScreen(hctx, hw, hh);
+  if (game.state === GameState.HUD_EDITOR)
+    game.hudEditor.render(hctx, hw, hh);
   if (game.state === GameState.CONTROLS)
     game.renderControlsScreen(hctx, hw, hh);
   if (game.state === GameState.ACHIEVEMENTS)
