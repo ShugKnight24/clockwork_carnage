@@ -90,11 +90,18 @@ function buildVossLab() {
   // ── CROSS CORRIDOR (rows 32-33, cols 11-48) ──
   carve(g, 32, 11, 33, 21);
   carve(g, 32, 38, 33, 48);
+  // The chamber's side walls (cols 22 and 37) cut the corridor into two sealed
+  // segments; open it through them.
+  door(g, 32, 22);
+  door(g, 33, 22);
+  door(g, 32, 37);
+  door(g, 33, 37);
 
   // ── NW LAB (rows 18-30, cols 4-18) — Voss personal journals ──
   room(g, 18, 4, 30, 18, 2);
   door(g, 24, 18);
   carve(g, 24, 19, 24, 22);
+  door(g, 25, 22); // stub ended on the chamber's corner; step down into it
   door(g, 18, 10); // connect to north approach
   tile(g, 21, 7, 2);
   tile(g, 21, 11, 2);
@@ -106,6 +113,7 @@ function buildVossLab() {
   room(g, 18, 41, 30, 55, 2);
   door(g, 24, 41);
   carve(g, 24, 37, 24, 40);
+  door(g, 25, 37);
   door(g, 18, 50); // connect to north approach
   tile(g, 21, 44, 2);
   tile(g, 21, 48, 2);
@@ -115,6 +123,10 @@ function buildVossLab() {
 
   // ── NORTH APPROACH (rows 12-17, cols 5-54) ──
   carve(g, 12, 5, 17, 54);
+  // Link the rift chamber's north doors (row 24) up to the approach. Rows 18-23
+  // were never carved, so the doors opened onto solid wall and the whole upper
+  // half of the level — the study, both labs, both supply rooms — was sealed.
+  carve(g, 18, 29, 23, 30);
 
   // ── VOSS' PRIVATE STUDY (rows 3-11, cols 20-39) ──
   carve(g, 3, 20, 11, 39);
@@ -142,10 +154,12 @@ function buildVossLab() {
   carve(g, 11, 49, 12, 51);
 
   // ── SECRETS ──
-  carve(g, 21, 1, 23, 2);
-  g[22][3] = 6; // Voss journal
-  carve(g, 33, 57, 35, 58);
-  g[34][56] = 6; // Final entry
+  // Both secrets sat one tile outside their room's wall, so no floor was ever
+  // adjacent to them. Put each on the wall itself and extend its alcove to meet.
+  carve(g, 21, 1, 23, 3);
+  g[22][4] = 6; // Voss journal — on the NW lab's west wall
+  carve(g, 33, 56, 35, 58);
+  g[35][55] = 6; // Final entry — on the SE wing's east wall
   carve(g, 7, 57, 8, 58);
   g[7][56] = 6; // ARIA reveal
 
@@ -164,17 +178,19 @@ function buildVossLab() {
     playerStart: { x: 6.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // SW lab wing
-      { x: 7.5, y: 37.5, type: "enemy", enemyType: "henchman" },
+      { x: 8.5, y: 37.5, type: "enemy", enemyType: "henchman" },
       { x: 14.5, y: 41.5, type: "enemy", enemyType: "chronoBomber" },
       // SE lab wing
-      { x: 52.5, y: 37.5, type: "enemy", enemyType: "henchman" },
+      { x: 51.5, y: 37.5, type: "enemy", enemyType: "henchman" },
       { x: 45.5, y: 41.5, type: "enemy", enemyType: "chronoBomber" },
       // Central rift chamber — TEMPORAL SUMMONER centerpiece
-      { x: 29.5, y: 33.5, type: "enemy", enemyType: "temporalSummoner" },
-      { x: 26.5, y: 29.5, type: "enemy", enemyType: "phantom" },
-      { x: 33.5, y: 29.5, type: "enemy", enemyType: "phantom" },
-      { x: 26.5, y: 38.5, type: "enemy", enemyType: "phantom" },
-      { x: 33.5, y: 38.5, type: "enemy", enemyType: "phantom" },
+      // Summoner in front of the altar and phantoms beside the rift clusters —
+      // all five were placed on the altar and rift tiles themselves.
+      { x: 29.5, y: 35.5, type: "enemy", enemyType: "temporalSummoner" },
+      { x: 25.5, y: 29.5, type: "enemy", enemyType: "phantom" },
+      { x: 34.5, y: 29.5, type: "enemy", enemyType: "phantom" },
+      { x: 25.5, y: 38.5, type: "enemy", enemyType: "phantom" },
+      { x: 34.5, y: 38.5, type: "enemy", enemyType: "phantom" },
       // Cross corridor
       { x: 15.5, y: 32.5, type: "enemy", enemyType: "drone" },
       { x: 44.5, y: 32.5, type: "enemy", enemyType: "drone" },
@@ -183,14 +199,14 @@ function buildVossLab() {
       { x: 14.5, y: 27.5, type: "enemy", enemyType: "henchman" },
       // NE lab — suit prototype
       { x: 48.5, y: 24.5, type: "enemy", enemyType: "sentinel" },
-      { x: 44.5, y: 27.5, type: "enemy", enemyType: "henchman" },
+      { x: 45.5, y: 27.5, type: "enemy", enemyType: "henchman" }, // mirrors x 14.5 beside its table
       // North approach
       { x: 10.5, y: 15.5, type: "enemy", enemyType: "drone" },
       { x: 49.5, y: 15.5, type: "enemy", enemyType: "drone" },
       // Voss' private study
       { x: 25.5, y: 7.5, type: "enemy", enemyType: "phantom" },
       { x: 34.5, y: 7.5, type: "enemy", enemyType: "phantom" },
-      { x: 29.5, y: 5.5, type: "enemy", enemyType: "sentinel" },
+      { x: 29.5, y: 6.5, type: "enemy", enemyType: "sentinel" }, // guarding the desk, not standing on it
       // ── Pickups ──
       { x: 11.5, y: 40.5, type: "health" },
       { x: 48.5, y: 40.5, type: "ammo" },
@@ -208,14 +224,14 @@ function buildVossLab() {
     exit: { x: 55.5, y: 53.5 },
     secrets: [
       {
-        wallX: 3,
+        wallX: 4,
         wallY: 22,
         description:
           "ARIA: 'Voss' journals. He built YOUR suit. Badge C-0017. You're wearing the prototype.'",
       },
       {
-        wallX: 56,
-        wallY: 34,
+        wallX: 55,
+        wallY: 35,
         description:
           "Voss final entry: 'The Paradox Engine responds to consciousness. I didn't break it. I became it.'",
       },
@@ -372,7 +388,7 @@ function buildNexus() {
       { x: 7.5, y: 7.5, type: "ammo" },
       { x: 52.5, y: 7.5, type: "health" },
     ],
-    exit: { x: 29.5, y: 3.5 },
+    exit: { x: 29.5, y: 4.5 },
     secrets: [],
     props: [
       { x: 29, y: 48, type: "crate" },
@@ -470,8 +486,9 @@ function buildParadoxCore() {
     grid: g,
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
-      // THE BOSS — center
-      { x: 29.5, y: 22.5, type: "enemy", enemyType: "boss" },
+      // THE BOSS — in front of the rift pedestal, facing the arena entrance.
+      // It was placed on the 2x2 pedestal tiles themselves.
+      { x: 29.5, y: 24.5, type: "enemy", enemyType: "boss" },
       // Antechamber guards
       { x: 15.5, y: 48.5, type: "enemy", enemyType: "drone" },
       { x: 43.5, y: 48.5, type: "enemy", enemyType: "drone" },
@@ -487,9 +504,9 @@ function buildParadoxCore() {
       { x: 6.5, y: 38.5, type: "enemy", enemyType: "glitchling" },
       { x: 53.5, y: 38.5, type: "enemy", enemyType: "glitchling" },
       // Arena support (spawns around boss)
-      { x: 16.5, y: 18.5, type: "enemy", enemyType: "phantom" },
+      { x: 17.5, y: 18.5, type: "enemy", enemyType: "phantom" }, // mirrors x 42.5 beside the col 43 pillar
       { x: 42.5, y: 18.5, type: "enemy", enemyType: "phantom" },
-      { x: 16.5, y: 27.5, type: "enemy", enemyType: "sentinel" },
+      { x: 17.5, y: 27.5, type: "enemy", enemyType: "sentinel" },
       { x: 42.5, y: 27.5, type: "enemy", enemyType: "sentinel" },
       // North observation
       { x: 25.5, y: 7.5, type: "enemy", enemyType: "beast" },

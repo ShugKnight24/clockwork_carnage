@@ -49,6 +49,7 @@ function buildEntry() {
 
   // ── WEST CREW QUARTERS (rows 33-44, cols 3-16) ──
   carve(g, 34, 4, 38, 14); // upper bunk room
+  door(g, 39, 9); // upper bunk had no way in — open onto the south cross corridor
   carve(g, 42, 4, 44, 14); // lower bunk room
   door(g, 40, 14);
   door(g, 41, 14);
@@ -67,6 +68,10 @@ function buildEntry() {
   carve(g, 42, 45, 44, 55);
   hWall(g, 34, 45, 55, 2);
   hWall(g, 38, 45, 55, 2);
+  // The south hWall closed the upper comms room off entirely; give it a door
+  // down to the cross corridor through the wall row beneath.
+  door(g, 38, 50);
+  carve(g, 39, 50, 39, 50);
   door(g, 40, 45);
   door(g, 41, 45);
   tile(g, 36, 48, 2);
@@ -77,8 +82,11 @@ function buildEntry() {
   carve(g, 18, 5, 19, 54);
 
   // ── CENTRAL ATRIUM (rows 22-38, cols 17-42) ──
-  carve(g, 22, 17, 38, 25);
-  carve(g, 22, 34, 38, 42);
+  // The two halves meet the main corridor (cols 27-32). They previously
+  // stopped at col 25 / started at col 34, leaving 1-tile walls at 26 and 33
+  // that sealed the atrium, both office wings and both secrets.
+  carve(g, 22, 17, 38, 26);
+  carve(g, 22, 33, 38, 42);
   // Tactical cover pillars
   tile(g, 25, 20);
   tile(g, 25, 39);
@@ -186,7 +194,7 @@ function buildEntry() {
       { x: 20.5, y: 48.5, type: "health" },
       { x: 39.5, y: 48.5, type: "ammo" },
       { x: 8.5, y: 38.5, type: "ammo" },
-      { x: 50.5, y: 38.5, type: "health" },
+      { x: 50.5, y: 37.5, type: "health" },
       { x: 22.5, y: 22.5, type: "health" },
       { x: 37.5, y: 35.5, type: "ammo" },
       { x: 30.5, y: 9.5, type: "ammo" },
@@ -275,13 +283,20 @@ function buildCheckpoint() {
 
   // ── WEST HOLDING CELLS (rows 27-44, cols 3-16) ── 4 cells stacked
   room(g, 27, 3, 31, 12, 3);
-  door(g, 31, 7);
   room(g, 31, 3, 35, 12, 3);
-  door(g, 35, 7);
   room(g, 35, 3, 39, 12, 3);
-  door(g, 39, 7);
   room(g, 39, 3, 43, 12, 3);
-  door(g, 43, 7);
+  // Stacked cells share their boundary rows, and each room() call re-walls the
+  // shared row — so a door placed before the next room() was silently erased.
+  // Place the cell-to-cell doors after every room is built. (The old chain also
+  // ended in a door at row 43 that opened onto solid rock; it is dropped.)
+  door(g, 31, 7);
+  door(g, 35, 7);
+  door(g, 39, 7);
+  // The E-W corridor (rows 33-34) runs through the middle cell, but room()
+  // re-walls col 12 after it is carved. Reopen the corridor through the wall.
+  door(g, 33, 12);
+  door(g, 34, 12);
   // Corridor outside cells
   carve(g, 27, 13, 43, 15);
   door(g, 33, 15);
@@ -294,13 +309,15 @@ function buildCheckpoint() {
 
   // ── EAST HOLDING CELLS (rows 27-44, cols 47-56) ── 4 cells
   room(g, 27, 47, 31, 56, 3);
-  door(g, 31, 51);
   room(g, 31, 47, 35, 56, 3);
-  door(g, 35, 51);
   room(g, 35, 47, 39, 56, 3);
-  door(g, 39, 51);
   room(g, 39, 47, 43, 56, 3);
-  door(g, 43, 51);
+  // Same shared-wall ordering as the west block.
+  door(g, 31, 51);
+  door(g, 35, 51);
+  door(g, 39, 51);
+  door(g, 33, 47);
+  door(g, 34, 47);
   carve(g, 27, 44, 43, 46);
   door(g, 33, 44);
   door(g, 34, 44);
@@ -330,11 +347,13 @@ function buildCheckpoint() {
   door(g, 22, 16);
   // Connect to security office approach
   carve(g, 22, 17, 22, 19);
+  door(g, 22, 20); // the approach stopped at the office's west wall
 
   // ── ARMORY VAULT (rows 19-24, cols 43-56) — metal walls ──
   room(g, 19, 43, 24, 56, 3);
   door(g, 22, 43);
   carve(g, 22, 40, 22, 42);
+  door(g, 22, 39); // the approach stopped at the office's east wall
   // Weapon racks
   tile(g, 21, 47, 3);
   tile(g, 21, 50, 3);
@@ -408,21 +427,21 @@ function buildCheckpoint() {
       { x: 29.5, y: 22.5, type: "enemy", enemyType: "sentinel" },
       { x: 33.5, y: 23.5, type: "enemy", enemyType: "corruptCop" },
       // North patrol
-      { x: 15.5, y: 15.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 16.5, y: 15.5, type: "enemy", enemyType: "corruptCop" },
       { x: 30.5, y: 16.5, type: "enemy", enemyType: "drone" },
-      { x: 44.5, y: 15.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 45.5, y: 15.5, type: "enemy", enemyType: "corruptCop" },
       // North rooms
       { x: 10.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
       { x: 48.5, y: 7.5, type: "enemy", enemyType: "phantom" },
       { x: 29.5, y: 7.5, type: "enemy", enemyType: "corruptCop" },
       // ── Pickups ──
-      { x: 22.5, y: 49.5, type: "health" },
-      { x: 37.5, y: 49.5, type: "ammo" },
+      { x: 23.5, y: 49.5, type: "health" },
+      { x: 38.5, y: 49.5, type: "ammo" },
       { x: 14.5, y: 35.5, type: "ammo" },
       { x: 45.5, y: 35.5, type: "health" },
       { x: 9.5, y: 22.5, type: "health" }, // observation deck
       { x: 49.5, y: 22.5, type: "ammo" }, // armory vault
-      { x: 50.5, y: 21.5, type: "weapon", weaponId: 1 },
+      { x: 50.5, y: 22.5, type: "weapon", weaponId: 1 }, // in front of the rack, not on it
       { x: 29.5, y: 16.5, type: "health" },
       // Secret
       { x: 1.5, y: 21.5, type: "health" },
@@ -486,9 +505,13 @@ function buildResearchWing() {
 
   // ── WEST BIO-LAB (rows 34-46, cols 3-24) ──
   carve(g, 35, 4, 45, 23);
-  // Glass dividers creating lab sections
-  vWall(g, 35, 45, 10, 8);
-  vWall(g, 35, 45, 17, 8);
+  // Glass dividers creating lab sections. Each leaves a 2-tile passage at
+  // rows 39-40: full-height dividers sealed the two outer sections, along with
+  // the enemies and pickups placed inside them.
+  vWall(g, 35, 38, 10, 8);
+  vWall(g, 41, 45, 10, 8);
+  vWall(g, 35, 38, 17, 8);
+  vWall(g, 41, 45, 17, 8);
   // Work benches
   tile(g, 38, 7);
   tile(g, 38, 13);
@@ -505,9 +528,12 @@ function buildResearchWing() {
 
   // ── EAST PHYSICS LAB (rows 34-46, cols 35-56) ──
   carve(g, 35, 36, 45, 55);
-  // Energy-walled containment sections
-  vWall(g, 35, 45, 42, 4);
-  vWall(g, 35, 45, 49, 4);
+  // Energy-walled containment sections, with the same rows 39-40 passages as
+  // the west lab so the outer sections can be entered.
+  vWall(g, 35, 38, 42, 4);
+  vWall(g, 41, 45, 42, 4);
+  vWall(g, 35, 38, 49, 4);
+  vWall(g, 41, 45, 49, 4);
   // Equipment pillars
   tile(g, 38, 39, 4);
   tile(g, 38, 45, 4);
@@ -623,11 +649,11 @@ function buildResearchWing() {
       // West bio-lab
       { x: 8.5, y: 38.5, type: "enemy", enemyType: "phantom" },
       { x: 14.5, y: 42.5, type: "enemy", enemyType: "glitchling" },
-      { x: 20.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 21.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
       // East physics lab
       { x: 40.5, y: 38.5, type: "enemy", enemyType: "phantom" },
       { x: 46.5, y: 42.5, type: "enemy", enemyType: "phantom" },
-      { x: 52.5, y: 38.5, type: "enemy", enemyType: "drone" },
+      { x: 53.5, y: 38.5, type: "enemy", enemyType: "drone" },
       // Central hallway
       { x: 29.5, y: 35.5, type: "enemy", enemyType: "phantom" },
       { x: 29.5, y: 25.5, type: "enemy", enemyType: "glitchling" },
@@ -641,7 +667,9 @@ function buildResearchWing() {
       // Server room
       { x: 10.5, y: 9.5, type: "enemy", enemyType: "drone" },
       // Experiment chamber
-      { x: 48.5, y: 9.5, type: "enemy", enemyType: "glitchling" },
+      // Was on the energy core inside the sealed glass platform, where it could
+      // never be reached or shot but still counted toward the kill total.
+      { x: 48.5, y: 12.5, type: "enemy", enemyType: "glitchling" },
       // Central office
       { x: 29.5, y: 7.5, type: "enemy", enemyType: "corruptCop" },
       { x: 33.5, y: 11.5, type: "enemy", enemyType: "phantom" },
@@ -649,11 +677,11 @@ function buildResearchWing() {
       { x: 29.5, y: 53.5, type: "health" },
       { x: 16.5, y: 47.5, type: "ammo" },
       { x: 43.5, y: 47.5, type: "ammo" },
-      { x: 13.5, y: 38.5, type: "health" },
+      { x: 14.5, y: 38.5, type: "health" },
       { x: 46.5, y: 38.5, type: "health" },
       { x: 8.5, y: 25.5, type: "ammo" },
       { x: 50.5, y: 25.5, type: "health" },
-      { x: 29.5, y: 18.5, type: "ammo" },
+      { x: 30.5, y: 18.5, type: "ammo" },
       { x: 10.5, y: 7.5, type: "weapon", weaponId: 1 },
       // Secrets
       { x: 1.5, y: 25.5, type: "health" },

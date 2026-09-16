@@ -40,13 +40,18 @@ function buildContainment() {
 
   // ── WEST CELL BANK (cols 3-14, rows 28-48) — 4 cells ──
   room(g, 28, 3, 32, 12, 3);
-  door(g, 32, 7);
   room(g, 32, 3, 36, 12, 3);
-  door(g, 36, 7);
   room(g, 36, 3, 40, 12, 3);
-  door(g, 40, 7);
   room(g, 40, 3, 44, 12, 3);
-  door(g, 44, 7);
+  // Cells share boundary rows and room() re-walls them, so doors placed between
+  // room() calls were erased. Place the chain doors after every room exists.
+  door(g, 32, 7);
+  door(g, 36, 7);
+  door(g, 40, 7);
+  // The bank had no entrance at all: col 12 was solid and the only surviving
+  // door (row 44) opened onto rock. Enter the bottom cell from the walkway,
+  // next to where the walkway meets the spine.
+  door(g, 42, 12);
   // Cell-block corridor
   carve(g, 28, 13, 48, 16);
   // Connect to spine
@@ -59,13 +64,14 @@ function buildContainment() {
 
   // ── EAST CELL BANK (cols 45-56, rows 28-48) — 4 cells ──
   room(g, 28, 47, 32, 56, 3);
-  door(g, 32, 51);
   room(g, 32, 47, 36, 56, 3);
-  door(g, 36, 51);
   room(g, 36, 47, 40, 56, 3);
-  door(g, 40, 51);
   room(g, 40, 47, 44, 56, 3);
-  door(g, 44, 51);
+  // Same shared-wall ordering and missing entrance as the west bank.
+  door(g, 32, 51);
+  door(g, 36, 51);
+  door(g, 40, 51);
+  door(g, 42, 47);
   carve(g, 28, 43, 48, 46);
   carve(g, 46, 32, 46, 43);
   tile(g, 30, 53);
@@ -170,7 +176,7 @@ function buildContainment() {
       { x: 29.5, y: 15.5, type: "ammo" },
       { x: 7.5, y: 7.5, type: "weapon", weaponId: 5 }, // Temporal Sniper
       { x: 51.5, y: 7.5, type: "weapon", weaponId: 1 },
-      { x: 29.5, y: 7.5, type: "ammo" },
+      { x: 29.5, y: 8.5, type: "ammo" }, // in front of the centre column, not on it
       // Secrets
       { x: 1.5, y: 37.5, type: "health" },
       { x: 57.5, y: 6.5, type: "ammo" },
@@ -232,7 +238,8 @@ function buildServerFarm() {
   // ── SERVER POD A (rows 34-43, cols 4-16) — tech walls ──
   room(g, 34, 4, 43, 16, 2);
   door(g, 43, 9);
-  carve(g, 44, 8, 44, 10);
+  // Stub has to reach the main hall at col 15; it used to stop at col 10.
+  carve(g, 44, 8, 44, 14);
   // Server racks (grid of tech pillars)
   for (let r = 36; r <= 41; r += 2)
     for (let c = 6; c <= 14; c += 2) tile(g, r, c, 2);
@@ -241,7 +248,7 @@ function buildServerFarm() {
   // ── SERVER POD B (rows 34-43, cols 43-55) ──
   room(g, 34, 43, 43, 55, 2);
   door(g, 43, 50);
-  carve(g, 44, 49, 44, 51);
+  carve(g, 44, 45, 44, 51); // reach the main hall at col 44
   for (let r = 36; r <= 41; r += 2)
     for (let c = 45; c <= 53; c += 2) tile(g, r, c, 2);
   carve(g, 37, 46, 40, 52);
@@ -304,6 +311,13 @@ function buildServerFarm() {
   g[27][3] = 6; // W sub-archive
   carve(g, 26, 57, 28, 58);
   g[27][56] = 6; // E recovered audio log
+  // No room was ever built beside either secret, so neither could be reached.
+  // Run a corridor out of the mainframe chamber's side walls to each one; a
+  // dead end is the cue that the wall at the end is worth checking.
+  door(g, 27, 20);
+  carve(g, 27, 4, 27, 19);
+  door(g, 27, 39);
+  carve(g, 27, 40, 27, 55);
 
   return {
     name: "Server Farm",
@@ -313,8 +327,8 @@ function buildServerFarm() {
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // Main hall drones
-      { x: 22.5, y: 47.5, type: "enemy", enemyType: "drone" },
-      { x: 37.5, y: 47.5, type: "enemy", enemyType: "drone" },
+      { x: 21.5, y: 47.5, type: "enemy", enemyType: "drone" }, // beside the pillar, not on it
+      { x: 38.5, y: 47.5, type: "enemy", enemyType: "drone" },
       { x: 29.5, y: 49.5, type: "enemy", enemyType: "henchman" },
       // Server pod A
       { x: 7.5, y: 37.5, type: "enemy", enemyType: "drone" },
@@ -353,7 +367,7 @@ function buildServerFarm() {
       { x: 1.5, y: 27.5, type: "health" },
       { x: 58.5, y: 27.5, type: "ammo" },
     ],
-    exit: { x: 29.5, y: 3.5 },
+    exit: { x: 29.5, y: 4.5 },
     secrets: [
       {
         wallX: 3,
@@ -497,8 +511,8 @@ function buildReactor() {
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // Outer ring — chrono bombers near conduits
-      { x: 12.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" },
-      { x: 47.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" },
+      { x: 13.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" }, // beside the pillar, not on it
+      { x: 46.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" },
       { x: 22.5, y: 48.5, type: "enemy", enemyType: "drone" },
       { x: 37.5, y: 48.5, type: "enemy", enemyType: "drone" },
       // West conduit — beasts
@@ -519,8 +533,8 @@ function buildReactor() {
       { x: 49.5, y: 16.5, type: "enemy", enemyType: "henchman" },
       { x: 29.5, y: 15.5, type: "enemy", enemyType: "chronoBomber" },
       // Control room
-      { x: 22.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
-      { x: 37.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
+      { x: 22.5, y: 8.5, type: "enemy", enemyType: "sentinel" }, // guard in front of the pillar
+      { x: 37.5, y: 8.5, type: "enemy", enemyType: "sentinel" },
       { x: 29.5, y: 5.5, type: "enemy", enemyType: "phantom" },
       // ── Pickups ──
       { x: 29.5, y: 48.5, type: "health" },
@@ -535,7 +549,7 @@ function buildReactor() {
       { x: 1.5, y: 27.5, type: "ammo" },
       { x: 58.5, y: 27.5, type: "health" },
     ],
-    exit: { x: 29.5, y: 3.5 },
+    exit: { x: 29.5, y: 4.5 },
     secrets: [
       {
         wallX: 3,
