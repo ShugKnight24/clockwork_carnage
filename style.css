@@ -80,10 +80,30 @@ body {
 
 #titleScreen .title-svg-container {
   position: relative;
-  width: 700px;
-  max-width: 90vw;
-  height: 400px;
-  margin-bottom: 30px;
+  /* The art's viewBox is 700x400. Sizing the box to that ratio stops the SVG
+     from letterboxing itself inside a shorter container, which is what drew
+     the hard black band around the scene. Clamping on vh as well as vw keeps
+     the whole title column inside short viewports without flex-shrink
+     collapsing the art (it was being squeezed from 400px to ~143px). */
+  width: min(700px, 90vw, 77vh);
+  aspect-ratio: 7 / 4;
+  height: auto;
+  flex: 0 0 auto;
+  margin-bottom: 14px;
+  /* Feather the art into the page. Without this the scene reads as an opaque
+     rectangle pasted onto the background. */
+  -webkit-mask-image: radial-gradient(
+    ellipse 72% 78% at 50% 48%,
+    #000 58%,
+    rgba(0, 0, 0, 0.55) 80%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 72% 78% at 50% 48%,
+    #000 58%,
+    rgba(0, 0, 0, 0.55) 80%,
+    transparent 100%
+  );
 }
 
 #titleScreen .title-svg-container svg {
@@ -105,10 +125,10 @@ body {
 }
 
 #titleScreen .subtitle {
-  font-size: 16px;
+  font-size: 15px;
   color: #8866aa;
   letter-spacing: 8px;
-  margin-bottom: 40px;
+  margin-bottom: 18px;
   text-transform: uppercase;
 }
 
@@ -726,64 +746,72 @@ body {
 /* ─── Landing / Marketing Features ─────────────────────────────────────── */
 
 .landing-features {
-  margin-top: 32px;
+  margin-top: 20px;
   text-align: center;
-  max-width: 700px;
-  width: 90vw;
+  max-width: 860px;
+  width: 92vw;
+  flex: 0 0 auto;
 }
 
 .landing-tagline {
-  font-size: 14px;
+  font-size: 13px;
   color: #8899aa;
   letter-spacing: 3px;
   text-transform: uppercase;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
+/* One compact row of capability marks. The old 2x2 card grid read like a
+   marketing landing page and crowded the hero art off the screen. */
 .features-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  flex-wrap: wrap;
 }
 
 .feature-card {
-  background: rgba(0, 255, 200, 0.04);
-  border: 1px solid rgba(0, 255, 200, 0.12);
-  border-radius: 8px;
-  padding: 16px 12px;
-  text-align: center;
-  transition: border-color 0.3s, background 0.3s;
-}
-
-.feature-card:hover {
-  border-color: rgba(0, 255, 200, 0.35);
-  background: rgba(0, 255, 200, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
 }
 
 .feature-icon {
-  font-size: 28px;
-  margin-bottom: 6px;
-  filter: drop-shadow(0 0 6px rgba(0, 255, 200, 0.3));
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #00ffcc;
+  opacity: 0.75;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 200, 0.35));
+}
+
+.feature-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .feature-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
-  color: #00ffcc;
+  color: rgba(0, 255, 204, 0.85);
   letter-spacing: 2px;
-  margin-bottom: 4px;
+  white-space: nowrap;
 }
 
+/* Descriptions are dead weight in a single row; the titles carry it. */
 .feature-desc {
-  font-size: 11px;
-  color: rgba(170, 180, 190, 0.7);
-  line-height: 1.4;
+  display: none;
 }
 
 @media (max-width: 500px) {
   .features-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 14px;
   }
   .landing-tagline {
     font-size: 11px;
