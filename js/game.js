@@ -1764,11 +1764,12 @@ export class Game {
         this.audio.secretFound();
         // Hidden memory fragments are what secret walls actually conceal, so
         // the fragment reaction replaces the generic line when one is found.
+        // Fragment data numbers levels 1-9; campaign.level is a 0-based index.
         const frag =
           this.mode === "campaign"
             ? this.archive.collectHiddenFragmentFor(
                 this.campaign.act,
-                this.campaign.level,
+                this.campaign.level + 1,
               )
             : null;
         if (frag) this.queueAriaMessage("memoryFragment");
@@ -2296,7 +2297,7 @@ export class Game {
         // Visible fragments land with the debrief rather than mid-fight.
         this.archive.collectAutoFragmentsFor(
           this.campaign.act,
-          this.campaign.level,
+          this.campaign.level + 1, // fragment data is 1-based
         );
         this.queueAriaMessage("levelComplete");
       }
