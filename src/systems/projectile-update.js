@@ -75,7 +75,8 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
     e.state = "pain";
     e.painTimer = EMP_PAIN_MS;
     const pan = ctx.audio.calculatePan(e.x, e.y, ctx.player.x, ctx.player.y, ctx.player.angle);
-    ctx.audio.enemyHit(pan);
+    const dist = Math.hypot(e.x - ctx.player.x, e.y - ctx.player.y);
+    ctx.audio.enemyHit(pan, dist);
     applyEmpBurst(p, e, ctx.time, ctx.audio, ctx.player, ctx.entityGrid);
   }
 

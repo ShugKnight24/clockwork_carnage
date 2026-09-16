@@ -60,6 +60,7 @@ export function handleCreatorClick(game, e) {
       if (idx >= items.length) break;
       const iy = L.contentY + 8 + vi * L.itemH;
       if (my >= iy && my <= iy + L.itemH) {
+        if (curCat.name === "LOADOUT" && items[idx].unlocked === false) return;
         game.character[curCat.key] = idx;
         return;
       }
@@ -136,10 +137,11 @@ export function handleSettingsClick(game, e) {
   const barW = Math.min(panelW * 0.55, 240);
   const barH = 6;
 
-  const cats = getVisibleCategories(game.isTouchDevice);
+  const cats = getVisibleCategories(game.isTouchDevice, game.settings);
   const defs = getSettingsForCategory(
     game.isTouchDevice,
     game.settingsCategory,
+    game.settings
   );
 
   // ── Sidebar click: switch category or back ──
@@ -190,9 +192,19 @@ export function handleSettingsClick(game, e) {
                 Math.pow(10, def.round);
             game.settings[def.key] = val;
             if (def.onChange) def.onChange(game);
+            game.saveSettings();
             game.audio.menuConfirm();
             return;
           }
+        }
+        
+        // Action buttons
+        if (def.type === "action") {
+          if (def.onClick) {
+            def.onClick(game);
+            game.audio.menuConfirm();
+          }
+          return;
         }
 
         // Left half: decrement, right half: increment

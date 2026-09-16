@@ -30,6 +30,13 @@ import {
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
+/** Smooth ADS FOV interpolant: 0 = hip-fire, 1 = full ADS. */
+let _adsFovLerp = 0;
+
+/** Smooth sprint/dash/slide FOV boost (degrees to add). */
+let _sprintFovLerp = 0;
+let _sprintFovTarget = 0;
+
 /**
  * Apply mouse delta to player's reticle offset. Returns overflow in raw
  * input units (mouse pixels) for the caller to feed into camera turn.
@@ -94,8 +101,25 @@ export function aimHeightAtDistance(player, dist, fovDeg = 70, opts) {
 }
 
 export function effectiveAimFov(player, settings = {}) {
-  const fov = settings.fov || 70;
-  return player?.isAiming ? fov * PLAYER_ADS_FOV_MULT : fov;
+  const baseFov = (settings.fov || 70) + _sprintFovLerp;
+  return baseFov * (1 - _adsFovLerp * (1 - PLAYER_ADS_FOV_MULT));
+}
+
+/** Drive the smooth ADS FOV transition. Call once per frame. */
+export function updateAdsFov(player, dt) {
+  const target = player?.isAiming ? 1 : 0;
+  _adsFovLerp += (target - _adsFovLerp) * Math.min(1, 8 * dt);
+}
+
+/** Drive the smooth sprint/dash/slide FOV boost. Call once per frame. */
+export function updateSprintFov(player, dt) {
+  _sprintFovTarget = player.isDashing ? 12 : player.isSliding ? 10 : player.isSprinting ? 8 : 0;
+  _sprintFovLerp += (_sprintFovTarget - _sprintFovLerp) * Math.min(1, 6 * dt);
+}
+
+/** Snap ADS lerp back to hip-fire (call on death/respawn). */
+export function resetAdsFov() {
+  _adsFovLerp = 0;
 }
 
 /**

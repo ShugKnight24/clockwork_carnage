@@ -198,8 +198,9 @@ export function dispatchKeyPress(game, code, e) {
     // Navigate items within category
     if (code === "ArrowUp" || code === "KeyW") {
       let next = (game.character[curCat.key] - 1 + itemLen) % itemLen;
-      // Skip locked loadouts
-      if (game.creatorCategory === 5) {
+      // Skip locked loadouts (LOADOUT category — index lookup is brittle to
+      // CREATOR_CATEGORIES reorders, so name-check instead).
+      if (curCat.name === "LOADOUT") {
         for (let tries = 0; tries < itemLen; tries++) {
           if (curCat.data[next].unlocked !== false) break;
           next = (next - 1 + itemLen) % itemLen;
@@ -212,7 +213,7 @@ export function dispatchKeyPress(game, code, e) {
     if (code === "ArrowDown" || code === "KeyS") {
       let next = (game.character[curCat.key] + 1) % itemLen;
       // Skip locked loadouts
-      if (game.creatorCategory === 5) {
+      if (curCat.name === "LOADOUT") {
         for (let tries = 0; tries < itemLen; tries++) {
           if (curCat.data[next].unlocked !== false) break;
           next = (next + 1) % itemLen;
@@ -245,7 +246,7 @@ export function dispatchKeyPress(game, code, e) {
 
   if (game.state === GameState.PLAYING) {
     // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-    if (game.mode === "tutorial" && game.tutorialStep === 15) {
+    if (game.mode === "tutorial" && game.tutorialStep === 18) {
       if (code === "Escape" || code === "KeyQ") {
         game.audio.menuConfirm();
         game.executeTutorialMenuChoice(3); // Main menu
@@ -259,7 +260,7 @@ export function dispatchKeyPress(game, code, e) {
     }
 
     // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-    if (game.mode === "tutorial" && game.tutorialStep < 15) {
+    if (game.mode === "tutorial" && game.tutorialStep < 18) {
       if (code === "Escape") {
         const now = performance.now();
         if (now - game.lastEscTime < 200) return;
@@ -349,7 +350,11 @@ export function dispatchKeyPress(game, code, e) {
       game.lastEscTime = now;
       game.pauseGame(GameState.PLAYING);
     }
-    if (code === game.keybinds.toggleFPS) game.showFPS = !game.showFPS;
+    if (code === game.keybinds.toggleFPS) {
+      game.showFPS = !game.showFPS;
+      game.settings.showPerformanceOverlay = game.showFPS;
+      game.saveSettings();
+    }
     return;
   }
 
@@ -371,6 +376,12 @@ export function dispatchKeyPress(game, code, e) {
         game.builder.saveMap();
         game.builder.stop();
       }
+      if (game.pausedFromState === GameState.BUILDER) {
+        game.mode = null;
+        game.exitEntity = null;
+        game.entities = [];
+        game.projectiles = [];
+      }
       game.state = GameState.TITLE;
       game.audio.stopMusic();
       game.audio.startTrack("menu");
@@ -382,7 +393,6 @@ export function dispatchKeyPress(game, code, e) {
     }
     if (code === "KeyC") {
       game.controlsSelection = 0;
-      game.rebindingKey = null;
       game.state = GameState.CONTROLS;
     }
     if (code === "KeyA") {
@@ -467,9 +477,11 @@ export function dispatchKeyPress(game, code, e) {
     if (stepDir !== 0) {
       const def = settingsDef[game.settingsSelection];
       if (def) {
-        applySettingStep(game.settings, def, stepDir);
-        if (def.onChange) def.onChange(game);
-        game.audio.menuConfirm();
+        if (applySettingStep(game.settings, def, stepDir)) {
+          if (def.onChange) def.onChange(game);
+          game.saveSettings();
+          game.audio.menuConfirm();
+        }
       }
       return;
     }

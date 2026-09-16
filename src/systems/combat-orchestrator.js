@@ -85,6 +85,16 @@ export function fireWeapon(game) {
     game.screenShake,
     wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
   );
+  // Camera punch — per-weapon vertical recoil (radians)
+  // Heavier weapons kick harder. ADS halves it.
+  const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
+  const punchMul = game.player.isAiming ? 0.5 : 1;
+  game.player.cameraPunch = Math.max(
+    game.player.cameraPunch,
+    (CAMERA_PUNCH[wep.id] || 0.015) * punchMul,
+  );
+  // Gamepad haptics — weapon fire
+  game.gamepad?.vibrateLight?.();
 }
 
 export function hitscan(game, angle, damage, range, pitch = 0) {
@@ -146,13 +156,16 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   enemy.painTimer = (isCrit || isHead) ? 250 : 150;
 
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
-  game.audio.enemyHit(pan);
-  if (isHead) game.audio.enemyHit?.(pan); // double-tap for headshot ping
+  const dist = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
+  game.audio.enemyHit(pan, dist);
+  game.audio.hitConfirm?.(pan); // Distinct metallic ding for hit feedback
+  if (isHead) game.audio.enemyHit?.(pan, dist); // double-tap for headshot ping
 
   game.hitMarker = (isCrit || isHead) ? 0.22 : 0.15;
   game.hitMarkerCrit = isCrit;
   game.hitMarkerHead = isHead;
   game.hitMarkerKill = enemy.health <= 0;
+  game._lastHitWasCrit = isCrit || isHead;
   game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead);
   game.damageNumbers.push({
     x: enemy.x, y: enemy.y,
@@ -161,6 +174,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     zone: zoneName,
     head: isHead,
     life: 0.8,
+    vx: (Math.random() - 0.5) * 30,
   });
 
   // Life steal
@@ -180,7 +194,8 @@ export function damageEnemy(game, enemy, damage, zone = null) {
       game.killedEnemies++;
       game.achievementStats.totalKills++;
       const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
-      game.audio.enemyDeath(pan2);
+      const dist2 = Math.hypot(target.x - game.player.x, target.y - game.player.y);
+      game.audio.enemyDeath(pan2, dist2);
       game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2);
       game.glitchEffect = 0.3;
       onEnemyKill(game, target);
@@ -196,10 +211,15 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     game.killedEnemies++;
     game.achievementStats.totalKills++;
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
-    game.audio.enemyDeath(panDeath);
+    const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
+    game.audio.enemyDeath(panDeath, distDeath);
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2);
     game.glitchEffect = 0.3;
     onEnemyKill(game, enemy);
+    // Hit-stop — freeze gameplay for a beat on kills (DOOM-like impact)
+    game.hitStopFrames = Math.max(game.hitStopFrames || 0, (isCrit || isHead) ? 5 : 3);
+    // Gamepad haptics — kill
+    game.gamepad?.vibrateMedium?.();
 
     if (isBossEnemy(enemy) && game.mode === "campaign") {
       game.campaign.handleBossKill();
@@ -271,6 +291,8 @@ export function damagePlayer(game, amount, attacker) {
   game.audio.playerHit();
   game.audio.playerGrunt?.(game.getVoiceProfile?.(), "hurt");
   if (game.settings.haptics && navigator.vibrate) navigator.vibrate(50);
+  // Gamepad haptics — player hit
+  game.gamepad?.vibrateMedium?.();
   game.roundDamageTaken += actualDamage;
 
   // ARIA low health warnings
@@ -290,7 +312,8 @@ export function damagePlayer(game, amount, attacker) {
       game.player.score += attacker.def.score;
       game.player.kills++;
       const panThorns = game.audio.calculatePan(attacker.x, attacker.y, game.player.x, game.player.y, game.player.angle);
-      game.audio.enemyDeath(panThorns);
+      const distThorns = Math.hypot(attacker.x - game.player.x, attacker.y - game.player.y);
+      game.audio.enemyDeath(panThorns, distThorns);
       game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2);
       game.glitchEffect = 0.3;
       onEnemyKill(game, attacker);

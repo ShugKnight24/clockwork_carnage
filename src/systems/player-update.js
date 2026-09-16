@@ -137,12 +137,21 @@ export class PlayerUpdateSystem {
         if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
         if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
 
+        // Camera tilt during slide — lean into the turn
+        p.cameraTilt = (p.cameraTilt || 0) + (0.08 - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
+
         p.weaponBob += dt * 18;
         p.staminaRegenDelay = 0.5;
         if (mode === "tutorial") { flags = flags || {}; flags.tutorialCrouched = true; }
         this._prevCrouchKey = crouchHeld;
         return flags;
       }
+    }
+
+    // Camera tilt recovery — ease back to 0 when not sliding
+    if (p.cameraTilt) {
+      p.cameraTilt += (0 - p.cameraTilt) * Math.min(1, 8 * dt);
+      if (Math.abs(p.cameraTilt) < 0.001) p.cameraTilt = 0;
     }
 
     let speed = p.isSprinting ? p.moveSpeed * 1.6 : p.moveSpeed;

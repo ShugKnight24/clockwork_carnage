@@ -347,6 +347,7 @@ export class AISystem {
                     player.y,
                     player.angle,
                   ),
+                  Math.hypot(e.x - player.x, e.y - player.y),
                 );
               }
             }
@@ -483,6 +484,7 @@ export class AISystem {
         value: "STOMP!",
         crit: true,
         life: 1.2,
+        vx: (Math.random() - 0.5) * 20,
       });
     }
 
@@ -530,6 +532,7 @@ export class AISystem {
           value: "WARP!",
           crit: true,
           life: 1.0,
+          vx: (Math.random() - 0.5) * 20,
         });
       }
     }

@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 import { Enemy, Pickup, Prop } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../js/data.js";
+import { SeededRNG } from "../utils/seeded-rng.js";
 
 /**
  * Per-instance palette jitter — shift HSL hue ±8° and lightness ±6% so
@@ -129,9 +130,10 @@ export function getArenaEnemyTypes(round) {
  * @param {number} round
  * @param {{ x: number, y: number }[]} validSpawns - pre-filtered spawn points
  * @param {ReturnType<getDifficultyMultipliers>} diff
+ * @param {SeededRNG} [rng] - optional seeded RNG for reproducible spawns
  * @returns {Enemy[]}
  */
-export function createArenaEnemies(round, validSpawns, diff) {
+export function createArenaEnemies(round, validSpawns, diff, rng) {
   const types = getArenaEnemyTypes(round);
   const count = Math.min(
     validSpawns.length,
@@ -140,7 +142,7 @@ export function createArenaEnemies(round, validSpawns, diff) {
   const enemies = [];
   for (let i = 0; i < count; i++) {
     const spawn = validSpawns[i % validSpawns.length];
-    const type = types[Math.floor(Math.random() * types.length)];
+    const type = rng ? rng.pick(types) : types[Math.floor(Math.random() * types.length)];
     const e = new Enemy(spawn.x, spawn.y, type);
     e.health = Math.floor(e.health * (1 + (round - 1) * 0.15) * diff.healthMul);
     e.maxHealth = e.health;
@@ -184,10 +186,11 @@ export function createArenaPickups(mapPickups, round, map) {
  * @param {number} px - player x
  * @param {number} py - player y
  * @param {number[][]} grid
+ * @param {SeededRNG} [rng] - optional seeded RNG for reproducible shuffle
  * @returns {{ x: number, y: number }[]}
  */
-export function filterArenaSpawns(spawns, px, py, grid) {
-  return spawns
+export function filterArenaSpawns(spawns, px, py, grid, rng) {
+  const filtered = spawns
     .filter((s) => {
       const dx = s.x - px;
       const dy = s.y - py;
@@ -197,8 +200,8 @@ export function filterArenaSpawns(spawns, px, py, grid) {
       if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[0].length)
         return false;
       return grid[gy][gx] === 0;
-    })
-    .sort(() => Math.random() - 0.5);
+    });
+  return rng ? rng.shuffle(filtered) : filtered.sort(() => Math.random() - 0.5);
 }
 
 /**
