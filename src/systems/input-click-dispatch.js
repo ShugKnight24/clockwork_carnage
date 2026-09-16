@@ -49,7 +49,8 @@ export function handleCreatorClick(game, e) {
   const items = curCat.data;
   if (!items) return;
 
-  const maxVisible = Math.min(items.length, isMobile ? L.maxBySpace : 8);
+  // Same window the renderer uses — L.maxBySpace is derived from panel height.
+  const maxVisible = Math.min(items.length, L.maxBySpace);
   const selIdx = game.character[curCat.key];
   let scrollOff = 0;
   if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;

@@ -7,7 +7,7 @@ const ACCENT = '#00ffcc';
 const ACCENT_DIM = 'rgba(0,255,200,0.15)';
 const ACCENT_FAINT = 'rgba(0,255,200,0.05)';
 const SIDEBAR_BG = 'rgba(0,10,24,0.7)';
-const PANEL_BG_OVERLAY = 'rgba(0,0,0,0.88)';
+const PANEL_BG_OVERLAY = 'rgba(0,0,0,0.92)';
 const ROW_SELECT_BG = 'rgba(0,200,255,0.12)';
 const ROW_SELECT_BORDER = 'rgba(0,220,255,0.45)';
 const ROW_HOVER_BG = 'rgba(0,200,255,0.05)';
@@ -258,6 +258,12 @@ export function renderSettingsScreen(ctx, w, h, state) {
   const contentTop = headerH + 8;
   const barW = Math.min(panelW * 0.55, 240);
   const barH = 6;
+
+  // Content surface behind the rows. Without it the settings sat directly on
+  // the dimmed gameplay frame, so a short category (Gameplay has three rows)
+  // read as a broken panel with the live arena showing through the gap.
+  ctx.fillStyle = 'rgba(6,12,20,0.82)';
+  ctx.fillRect(sideW + 1, headerH, w - sideW - 1, h - headerH);
 
   drawHeader(ctx, w, headerH, compact);
 

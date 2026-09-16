@@ -64,16 +64,20 @@ export function getCreatorLayout(w, h, isMobile) {
   const tabY = titleY + 22;
 
   const contentY = tabY + tabH + (isMobile ? 12 : 20);
-  const listW = isMobile ? Math.min(w * 0.45, 180) : 200;
-  const previewW = isMobile ? Math.min(w * 0.4, 140) : 200;
-  const infoW = isMobile ? 0 : 200;
+  const listW = isMobile ? Math.min(w * 0.45, 180) : 230;
+  const previewW = isMobile ? Math.min(w * 0.4, 140) : 300;
+  const infoW = isMobile ? 0 : 240;
   const contentGap = isMobile ? 8 : 20;
   const totalContentW =
     listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
   const contentX = (w - totalContentW) / 2;
   const itemH = isMobile ? 32 : 36;
-  const availH = isMobile ? h - contentY - 80 : 999;
-  const maxBySpace = Math.max(3, Math.floor((availH - 16) / itemH));
+  // Desktop used to leave availH unbounded, so each panel sized itself to its
+  // item count. A 5-entry category produced a ~200px block pinned to the top
+  // with most of the screen empty, and the panel height jumped between tabs.
+  const availH = h - contentY - (isMobile ? 80 : 70);
+  const panelH = Math.max(itemH * 3 + 16, availH);
+  const maxBySpace = Math.max(3, Math.floor((panelH - 16) / itemH));
 
   return {
     titleY,
@@ -92,6 +96,7 @@ export function getCreatorLayout(w, h, isMobile) {
     contentX,
     itemH,
     availH,
+    panelH,
     maxBySpace,
   };
 }
@@ -825,12 +830,18 @@ export function renderCharacterCreator(
       nameBoxY + nameBoxH + 20,
     );
 
-    // Character preview below name input
+    // Character preview below name input. Centred in the space that is
+    // actually left and scaled to fill it — a fixed 1.5 left the lower third
+    // of the screen empty while the figure stayed small.
     const prevCX = w / 2;
+    const prevTop = nameBoxY + nameBoxH + 36;
+    const prevBottom = h - (isMobile ? 80 : 84);
     const prevCY = isMobile
       ? nameBoxY + nameBoxH + Math.min(100, (h - nameBoxY - nameBoxH - 80) / 2)
-      : nameBoxY + nameBoxH + 160;
-    const prevScale = isMobile ? 1.0 : 1.5;
+      : (prevTop + prevBottom) / 2 - 10;
+    const prevScale = isMobile
+      ? 1.0
+      : Math.max(1.2, Math.min(2.4, (prevBottom - prevTop - 70) / 150));
     renderCharacterPreview(
       ctx,
       prevCX,
@@ -853,7 +864,7 @@ export function renderCharacterCreator(
     // Styled nameplate (name step)
     const npText = char.name || "Agent";
     ctx.font = "bold 14px monospace";
-    const npY = prevCY + (isMobile ? 70 : 100);
+    const npY = prevCY + (isMobile ? 70 : Math.round(80 * prevScale));
     const npW = ctx.measureText(npText).width + 24;
     const npH = 22;
     const npX = prevCX - npW / 2;
@@ -893,8 +904,8 @@ export function renderCharacterCreator(
   const items = curCat.data;
   const selIdx = char[curCat.key];
   const listX = L.contentX;
-  const maxVisible = Math.min(items.length, isMobile ? L.maxBySpace : 8);
-  const listH = maxVisible * L.itemH + 16;
+  const maxVisible = Math.min(items.length, L.maxBySpace);
+  const listH = L.panelH;
 
   ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
   ctx.beginPath();
@@ -973,17 +984,24 @@ export function renderCharacterCreator(
   ctx.roundRect(prevX, L.contentY, L.previewW, prevH, 8);
   ctx.stroke();
 
+  // Scale the figure to the panel rather than a fixed 1.3. The preview is the
+  // thing being customised, so it should own the space the panel now has.
+  // The base figure is roughly 120x150 units; leave a margin for the nameplate.
+  const prevScale = Math.max(
+    1.0,
+    Math.min((L.previewW - 48) / 120, (prevH - 96) / 150),
+  );
   renderCharacterPreview(
     ctx,
     prevCX,
-    L.contentY + prevH / 2,
+    L.contentY + prevH / 2 - 10,
     palette,
     armor,
     badge,
     skin,
     now,
     loadout,
-    1.3,
+    prevScale,
     helmet,
     visor,
     shoulder,
