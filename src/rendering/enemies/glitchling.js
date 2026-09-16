@@ -27,6 +27,30 @@ export function renderGlitchling(ctx, screenX, centerY, halfW, halfH, bodyTop, b
       ctx.closePath();
       ctx.fill();
 
+      // Rim light (right edge highlight)
+      const rimGrad = ctx.createLinearGradient(screenX + gW * 0.4, 0, screenX + gW, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(100,255,150,${hitFlash ? 0.5 : 0.2})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX + glitchOff, gTop - halfH * 0.1);
+      ctx.lineTo(screenX - gW + glitchOff2, gBot);
+      ctx.lineTo(screenX + gW + glitchOff2, gBot);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shadow gradient (left edge)
+      const shdGrad = ctx.createLinearGradient(screenX - gW, 0, screenX - gW * 0.3, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX + glitchOff, gTop - halfH * 0.1);
+      ctx.lineTo(screenX - gW + glitchOff2, gBot);
+      ctx.lineTo(screenX + gW + glitchOff2, gBot);
+      ctx.closePath();
+      ctx.fill();
+
       // Inner triangle
       ctx.fillStyle = baseColor;
       ctx.beginPath();

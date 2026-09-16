@@ -46,6 +46,32 @@ export function renderPhantom(ctx, screenX, centerY, halfW, halfH, bodyTop, body
       ctx.closePath();
       ctx.fill();
 
+      // Rim light (right edge highlight for pseudo-3D depth)
+      const rimGrad = ctx.createLinearGradient(screenX + bodyWidth * 0.4 + phaseOff, 0, screenX + bodyWidth * 1.0 + phaseOff, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(180,200,255,${hitFlash ? 0.5 : 0.18})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, bodyTop + drift);
+      ctx.quadraticCurveTo(screenX - bodyWidth * 1.0 + phaseOff, centerY + drift, screenX - bodyWidth * 0.6, bodyBottom + drift);
+      ctx.lineTo(screenX + bodyWidth * 0.6, bodyBottom + drift);
+      ctx.quadraticCurveTo(screenX + bodyWidth * 1.0 + phaseOff, centerY + drift, screenX + bodyWidth * 0.3 + phaseOff, bodyTop + drift);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shadow gradient (left edge)
+      const shdGrad = ctx.createLinearGradient(screenX - bodyWidth * 1.0 + phaseOff, 0, screenX - bodyWidth * 0.3 + phaseOff, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, bodyTop + drift);
+      ctx.quadraticCurveTo(screenX - bodyWidth * 1.0 + phaseOff, centerY + drift, screenX - bodyWidth * 0.6, bodyBottom + drift);
+      ctx.lineTo(screenX + bodyWidth * 0.6, bodyBottom + drift);
+      ctx.quadraticCurveTo(screenX + bodyWidth * 1.0 + phaseOff, centerY + drift, screenX + bodyWidth * 0.3 + phaseOff, bodyTop + drift);
+      ctx.closePath();
+      ctx.fill();
+
       // Secondary body layer (depth)
       ctx.fillStyle = darkColor;
       ctx.globalAlpha = alpha * 0.2;

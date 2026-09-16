@@ -44,6 +44,24 @@ export function renderHenchman(ctx, screenX, centerY, halfW, halfH, bodyTop, bod
   ctx.roundRect(screenX - w2, top + walk + breathe, w2 * 2, torsoH, 4);
   ctx.fill();
 
+  // Rim light (right edge highlight for pseudo-3D depth)
+  const rimGrad = ctx.createLinearGradient(screenX + w2 * 0.5, 0, screenX + w2, 0);
+  rimGrad.addColorStop(0, 'transparent');
+  rimGrad.addColorStop(1, `rgba(255,200,150,${hitFlash ? 0.5 : 0.18})`);
+  ctx.fillStyle = rimGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w2, top + walk + breathe, w2 * 2, torsoH, 4);
+  ctx.fill();
+
+  // Shadow gradient (left edge for depth)
+  const shdGrad = ctx.createLinearGradient(screenX - w2, 0, screenX - w2 * 0.3, 0);
+  shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  shdGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shdGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w2, top + walk + breathe, w2 * 2, torsoH, 4);
+  ctx.fill();
+
   // Chest plate (lighter center)
   ctx.fillStyle = baseColor;
   ctx.beginPath();
@@ -136,11 +154,21 @@ export function renderHenchman(ctx, screenX, centerY, halfW, halfH, bodyTop, bod
   ctx.beginPath();
   ctx.roundRect(screenX - headR * 0.7, headY + headR * 0.5, headR * 1.4, headR * 0.25, 2);
   ctx.fill();
-  // Visor (orange glow slit)
+  // Visor (orange glow slit) — layered fills instead of shadowBlur for perf
   const visorColor = hitFlash ? "#ffffff" : baseColor;
+  // Outer glow layer
   ctx.fillStyle = visorColor;
-  ctx.shadowColor = baseColor;
-  ctx.shadowBlur = 8;
+  ctx.globalAlpha = alpha * 0.2;
+  ctx.beginPath();
+  ctx.roundRect(screenX - headR * 0.82, headY + headR * 0.14, headR * 1.64, headR * 0.34, 4);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.beginPath();
+  ctx.roundRect(screenX - headR * 0.77, headY + headR * 0.17, headR * 1.54, headR * 0.28, 3);
+  ctx.fill();
+  // Core visor
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = visorColor;
   ctx.beginPath();
   ctx.roundRect(screenX - headR * 0.72, headY + headR * 0.2, headR * 1.44, headR * 0.22, 2);
   ctx.fill();
@@ -151,7 +179,6 @@ export function renderHenchman(ctx, screenX, centerY, halfW, halfH, bodyTop, bod
   ctx.roundRect(screenX - headR * 0.5, headY + headR * 0.22, headR * 0.4, headR * 0.06, 1);
   ctx.fill();
   ctx.globalAlpha = alpha;
-  ctx.shadowBlur = 0;
   // Helmet ridge
   ctx.strokeStyle = baseColor;
   ctx.lineWidth = 1.5;

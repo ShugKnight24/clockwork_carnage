@@ -63,6 +63,40 @@ export function renderBeast(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBo
       ctx.closePath();
       ctx.fill();
 
+      // Rim light (right edge for pseudo-3D depth)
+      const rimGrad = ctx.createLinearGradient(screenX + bW * 0.3, 0, screenX + bW * 0.75, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(255,180,120,${hitFlash ? 0.5 : 0.15})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bW * 0.85, bellyY + halfH * 0.05);
+      ctx.quadraticCurveTo(screenX - bW * 0.7, rumpY - halfH * 0.06, screenX - bW * 0.4, backY);
+      ctx.quadraticCurveTo(screenX, backY - halfH * 0.08, screenX + bW * 0.3, chestY);
+      ctx.quadraticCurveTo(screenX + bW * 0.55, chestY - halfH * 0.02, screenX + bW * 0.65, chestY + halfH * 0.03);
+      ctx.quadraticCurveTo(screenX + bW * 0.72, chestY + halfH * 0.12, screenX + bW * 0.68, bellyY - halfH * 0.02);
+      ctx.quadraticCurveTo(screenX + bW * 0.65, bellyY + halfH * 0.06, screenX + bW * 0.55, bellyY + halfH * 0.08);
+      ctx.quadraticCurveTo(screenX + bW * 0.2, bellyY + halfH * 0.12, screenX - bW * 0.3, bellyY + halfH * 0.08);
+      ctx.quadraticCurveTo(screenX - bW * 0.6, bellyY + halfH * 0.06, screenX - bW * 0.85, bellyY + halfH * 0.05);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shadow gradient (left edge)
+      const shdGrad = ctx.createLinearGradient(screenX - bW * 0.9, 0, screenX - bW * 0.2, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.3)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - bW * 0.85, bellyY + halfH * 0.05);
+      ctx.quadraticCurveTo(screenX - bW * 0.7, rumpY - halfH * 0.06, screenX - bW * 0.4, backY);
+      ctx.quadraticCurveTo(screenX, backY - halfH * 0.08, screenX + bW * 0.3, chestY);
+      ctx.quadraticCurveTo(screenX + bW * 0.55, chestY - halfH * 0.02, screenX + bW * 0.65, chestY + halfH * 0.03);
+      ctx.quadraticCurveTo(screenX + bW * 0.72, chestY + halfH * 0.12, screenX + bW * 0.68, bellyY - halfH * 0.02);
+      ctx.quadraticCurveTo(screenX + bW * 0.65, bellyY + halfH * 0.06, screenX + bW * 0.55, bellyY + halfH * 0.08);
+      ctx.quadraticCurveTo(screenX + bW * 0.2, bellyY + halfH * 0.12, screenX - bW * 0.3, bellyY + halfH * 0.08);
+      ctx.quadraticCurveTo(screenX - bW * 0.6, bellyY + halfH * 0.06, screenX - bW * 0.85, bellyY + halfH * 0.05);
+      ctx.closePath();
+      ctx.fill();
+
       // Belly underside highlight
       ctx.strokeStyle = hitFlash ? "#ffcccc" : "rgba(255,255,255,0.06)";
       ctx.lineWidth = 2;

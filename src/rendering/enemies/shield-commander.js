@@ -78,6 +78,24 @@ export function renderShieldCommander(ctx, screenX, centerY, halfW, halfH, bodyT
       ctx.roundRect(screenX - scW * 0.74, scTop + halfH * 0.06 + breathe, scW * 1.48, (scBot - scTop) * 0.82, scW * 0.06);
       ctx.fill();
 
+      // Rim light (right edge highlight)
+      const rimGrad = ctx.createLinearGradient(screenX + scW * 0.3, 0, screenX + scW, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(255,200,150,${hitFlash ? 0.5 : 0.18})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.roundRect(screenX - scW, scTop + breathe, scW * 2, scBot - scTop, scW * 0.12);
+      ctx.fill();
+
+      // Shadow gradient (left edge)
+      const shdGrad = ctx.createLinearGradient(screenX - scW, 0, screenX - scW * 0.3, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.roundRect(screenX - scW, scTop + breathe, scW * 2, scBot - scTop, scW * 0.12);
+      ctx.fill();
+
       // Pauldrons with edge highlights
       const pauldW = scW * 0.56;
       const pauldH = halfH * 0.18;

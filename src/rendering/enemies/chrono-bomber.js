@@ -58,6 +58,24 @@ export function renderChronoBomber(ctx, screenX, centerY, halfW, halfH, bodyTop,
       ctx.roundRect(screenX - cbW, cbTop, cbW * 2, cbBot - cbTop, cbW * 0.1);
       ctx.fill();
 
+      // Rim light (right edge highlight for pseudo-3D depth)
+      const rimGrad = ctx.createLinearGradient(screenX + cbW * 0.4, 0, screenX + cbW, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(255,200,150,${hitFlash ? 0.5 : 0.18})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.roundRect(screenX - cbW, cbTop, cbW * 2, cbBot - cbTop, cbW * 0.1);
+      ctx.fill();
+
+      // Shadow gradient (left edge)
+      const shdGrad = ctx.createLinearGradient(screenX - cbW, 0, screenX - cbW * 0.3, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.roundRect(screenX - cbW, cbTop, cbW * 2, cbBot - cbTop, cbW * 0.1);
+      ctx.fill();
+
       // Inner armor
       ctx.fillStyle = baseColor;
       ctx.beginPath();

@@ -6,6 +6,21 @@ export function renderCorruptCop(ctx, screenX, centerY, halfW, halfH, bodyTop, b
       // Body
       ctx.fillStyle = "#cc8800";
       ctx.fillRect(screenX - copW, bodyTop, copW * 2, torsoH);
+
+      // Rim light (right edge highlight for pseudo-3D depth)
+      const rimGrad = ctx.createLinearGradient(screenX + copW * 0.4, 0, screenX + copW, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(255,220,160,${hitFlash ? 0.5 : 0.2})`);
+      ctx.fillStyle = rimGrad;
+      ctx.fillRect(screenX - copW, bodyTop, copW * 2, torsoH);
+
+      // Shadow gradient (left edge for depth)
+      const shdGrad = ctx.createLinearGradient(screenX - copW, 0, screenX - copW * 0.2, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.28)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.fillRect(screenX - copW, bodyTop, copW * 2, torsoH);
+
       // Armor panels
       ctx.fillStyle = "#aa6600";
       ctx.fillRect(

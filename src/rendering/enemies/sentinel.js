@@ -16,6 +16,34 @@ export function renderSentinel(ctx, screenX, centerY, halfW, halfH, bodyTop, bod
       ctx.lineTo(screenX - sentW * 0.9, sentBot);
       ctx.closePath();
       ctx.fill();
+      // Rim light (right edge highlight for pseudo-3D depth)
+      const rimGrad = ctx.createLinearGradient(screenX + sentW * 0.4, 0, screenX + sentW * 0.95, 0);
+      rimGrad.addColorStop(0, 'transparent');
+      rimGrad.addColorStop(1, `rgba(255,200,150,${hitFlash ? 0.5 : 0.18})`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - sentW, sentTop + sentH * 0.08);
+      ctx.lineTo(screenX - sentW * 0.5, sentTop);
+      ctx.lineTo(screenX + sentW * 0.5, sentTop);
+      ctx.lineTo(screenX + sentW, sentTop + sentH * 0.08);
+      ctx.lineTo(screenX + sentW * 0.9, sentBot);
+      ctx.lineTo(screenX - sentW * 0.9, sentBot);
+      ctx.closePath();
+      ctx.fill();
+      // Shadow gradient (left edge for depth)
+      const shdGrad = ctx.createLinearGradient(screenX - sentW * 0.95, 0, screenX - sentW * 0.3, 0);
+      shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+      shdGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = shdGrad;
+      ctx.beginPath();
+      ctx.moveTo(screenX - sentW, sentTop + sentH * 0.08);
+      ctx.lineTo(screenX - sentW * 0.5, sentTop);
+      ctx.lineTo(screenX + sentW * 0.5, sentTop);
+      ctx.lineTo(screenX + sentW, sentTop + sentH * 0.08);
+      ctx.lineTo(screenX + sentW * 0.9, sentBot);
+      ctx.lineTo(screenX - sentW * 0.9, sentBot);
+      ctx.closePath();
+      ctx.fill();
       // Chest plate
       ctx.fillStyle = baseColor;
       ctx.fillRect(

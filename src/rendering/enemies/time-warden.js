@@ -72,6 +72,25 @@ export function renderTimeWarden(ctx, screenX, centerY, halfW, halfH, bodyTop, b
   ctx.beginPath();
   ctx.roundRect(screenX - w, top + breathe, w * 2, torsoH, 5);
   ctx.fill();
+
+  // Rim light (right edge highlight for pseudo-3D depth)
+  const rimGrad = ctx.createLinearGradient(screenX + w * 0.4, 0, screenX + w, 0);
+  rimGrad.addColorStop(0, 'transparent');
+  rimGrad.addColorStop(1, `rgba(255,220,150,${hitFlash ? 0.5 : 0.18})`);
+  ctx.fillStyle = rimGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w, top + breathe, w * 2, torsoH, 5);
+  ctx.fill();
+
+  // Shadow gradient (left edge)
+  const shdGrad = ctx.createLinearGradient(screenX - w, 0, screenX - w * 0.3, 0);
+  shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  shdGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shdGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w, top + breathe, w * 2, torsoH, 5);
+  ctx.fill();
+
   // Armor plates
   ctx.fillStyle = baseColor;
   ctx.beginPath();

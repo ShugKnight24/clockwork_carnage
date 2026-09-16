@@ -44,6 +44,44 @@ export function renderTemporalSummoner(ctx, screenX, centerY, halfW, halfH, body
       ctx.closePath();
       ctx.fill();
 
+      // Rim lighting — right edge (mystical purple tint)
+      const rimGrad = ctx.createLinearGradient(
+        screenX + tsW * 0.4, tsTop + hover,
+        screenX + tsW * 1.05, tsBot + hover
+      );
+      rimGrad.addColorStop(0, "rgba(180,150,255,0)");
+      rimGrad.addColorStop(0.5, "rgba(180,150,255,0.10)");
+      rimGrad.addColorStop(0.85, "rgba(200,170,255,0.18)");
+      rimGrad.addColorStop(1, "rgba(220,190,255,0.08)");
+      ctx.fillStyle = rimGrad;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.moveTo(screenX - tsW * 0.52, tsTop + halfH * 0.14 + hover);
+      ctx.quadraticCurveTo(screenX, tsTop + halfH * 0.05 + hover, screenX + tsW * 0.52, tsTop + halfH * 0.14 + hover);
+      ctx.lineTo(screenX + tsW * 1.05, tsBot + hover);
+      ctx.lineTo(screenX - tsW * 1.05, tsBot + hover);
+      ctx.closePath();
+      ctx.fill();
+
+      // Shadow gradient — left edge (deep darkness)
+      const shadowGrad = ctx.createLinearGradient(
+        screenX - tsW * 1.05, tsBot + hover,
+        screenX - tsW * 0.2, tsTop + hover
+      );
+      shadowGrad.addColorStop(0, "rgba(15,5,30,0.22)");
+      shadowGrad.addColorStop(0.4, "rgba(25,10,50,0.14)");
+      shadowGrad.addColorStop(0.75, "rgba(40,15,60,0.06)");
+      shadowGrad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = shadowGrad;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.moveTo(screenX - tsW * 0.52, tsTop + halfH * 0.14 + hover);
+      ctx.quadraticCurveTo(screenX, tsTop + halfH * 0.05 + hover, screenX + tsW * 0.52, tsTop + halfH * 0.14 + hover);
+      ctx.lineTo(screenX + tsW * 1.05, tsBot + hover);
+      ctx.lineTo(screenX - tsW * 1.05, tsBot + hover);
+      ctx.closePath();
+      ctx.fill();
+
       // Inner trim with stronger glow
       ctx.fillStyle = baseColor;
       ctx.globalAlpha = alpha * 0.9;

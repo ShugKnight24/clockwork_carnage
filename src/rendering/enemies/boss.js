@@ -95,6 +95,36 @@ function renderBehemoth(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom
   ctx.closePath();
   ctx.fill();
 
+  // Rim light (right edge highlight)
+  const rimGrad = ctx.createLinearGradient(screenX + bW * 0.4, 0, screenX + bW, 0);
+  rimGrad.addColorStop(0, 'transparent');
+  rimGrad.addColorStop(1, `rgba(255,100,80,${hitFlash ? 0.5 : 0.2})`);
+  ctx.fillStyle = rimGrad;
+  ctx.beginPath();
+  ctx.moveTo(screenX - bW * 0.9, bTop + breathe);
+  ctx.lineTo(screenX - bW * 1.05, bTop + torsoH * 0.12 + breathe);
+  ctx.lineTo(screenX - bW, bBot);
+  ctx.lineTo(screenX + bW, bBot);
+  ctx.lineTo(screenX + bW * 1.05, bTop + torsoH * 0.12 + breathe);
+  ctx.lineTo(screenX + bW * 0.9, bTop + breathe);
+  ctx.closePath();
+  ctx.fill();
+
+  // Shadow gradient (left edge)
+  const shdGrad = ctx.createLinearGradient(screenX - bW * 1.05, 0, screenX - bW * 0.3, 0);
+  shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  shdGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shdGrad;
+  ctx.beginPath();
+  ctx.moveTo(screenX - bW * 0.9, bTop + breathe);
+  ctx.lineTo(screenX - bW * 1.05, bTop + torsoH * 0.12 + breathe);
+  ctx.lineTo(screenX - bW, bBot);
+  ctx.lineTo(screenX + bW, bBot);
+  ctx.lineTo(screenX + bW * 1.05, bTop + torsoH * 0.12 + breathe);
+  ctx.lineTo(screenX + bW * 0.9, bTop + breathe);
+  ctx.closePath();
+  ctx.fill();
+
   // Chest plate overlay — central armor
   ctx.fillStyle = brass;
   ctx.beginPath();

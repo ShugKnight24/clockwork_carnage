@@ -42,6 +42,24 @@ export function renderTemporalEngineer(ctx, screenX, centerY, halfW, halfH, body
   ctx.roundRect(screenX - w, top, w * 2, h, 4);
   ctx.fill();
 
+  // Rim light (right edge highlight)
+  const rimGrad = ctx.createLinearGradient(screenX + w * 0.4, 0, screenX + w, 0);
+  rimGrad.addColorStop(0, 'transparent');
+  rimGrad.addColorStop(1, `rgba(150,200,255,${hitFlash ? 0.5 : 0.18})`);
+  ctx.fillStyle = rimGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w, top, w * 2, h, 4);
+  ctx.fill();
+
+  // Shadow gradient (left edge)
+  const shdGrad = ctx.createLinearGradient(screenX - w, 0, screenX - w * 0.3, 0);
+  shdGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
+  shdGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shdGrad;
+  ctx.beginPath();
+  ctx.roundRect(screenX - w, top, w * 2, h, 4);
+  ctx.fill();
+
   // ── Hex armor plating ──
   ctx.strokeStyle = baseColor;
   ctx.lineWidth = 0.8;
