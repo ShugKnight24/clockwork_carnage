@@ -55,11 +55,24 @@ export class TutorialSystem {
     this.alarmPlayed = false;
   }
 
-  async start() {
+  /**
+   * Sync-when-warm: the opening cutscene lives in a lazily-split chunk, so this
+   * only awaits on the very first entry. Callers that cannot await (menu click,
+   * playtest harness) see tutorial state applied in the same tick thereafter.
+   */
+  start() {
     const g = this.game;
     g.mode = "tutorial";
     g.player.reset();
-    await g._ensureCutsceneEngine();
+    if (!g.cutsceneEngine) {
+      return g._ensureCutsceneEngine().then(() => this._begin());
+    }
+    this._begin();
+    return Promise.resolve();
+  }
+
+  _begin() {
+    const g = this.game;
     if (g.cutsceneEngine.hasScript("clocking_in")) {
       g.startCutscene("clocking_in", () => {
         g.ariaEnabled = true;

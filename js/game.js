@@ -1288,8 +1288,20 @@ export class Game {
     }
   }
 
-  async startMeltdown(heroKey = "agent", ironman = false) {
-    await this._ensureMeltdown();
+  /**
+   * Enters meltdown. Runs synchronously once the chunk is warm, so callers that
+   * cannot await (menu click handlers, the playtest harness) still observe the
+   * new state in the same tick. Always returns a promise for callers that can.
+   */
+  startMeltdown(heroKey = "agent", ironman = false) {
+    if (!this.meltdown) {
+      return this._ensureMeltdown().then(() => this._enterMeltdown(heroKey, ironman));
+    }
+    this._enterMeltdown(heroKey, ironman);
+    return Promise.resolve();
+  }
+
+  _enterMeltdown(heroKey, ironman) {
     this.mode = "meltdown";
     this.achievementStats.totalGamesPlayed++;
     this.player.reset();
@@ -1413,7 +1425,7 @@ export class Game {
 
   // ── Tutorial system ──────────────────────────────────────────────
   startTutorial() {
-    this.tutorial.start();
+    return this.tutorial.start();
   }
 
   initTutorialLevel() {
@@ -1592,11 +1604,31 @@ export class Game {
     }
   }
 
-  async startCutscene(scriptKey, onComplete) {
-    await this._ensureCutsceneEngine();
+  /** @see startMeltdown — same sync-when-warm contract. */
+  startCutscene(scriptKey, onComplete) {
+    if (!this.cutsceneEngine) {
+      return this._ensureCutsceneEngine().then(() => this._enterCutscene(scriptKey, onComplete));
+    }
+    this._enterCutscene(scriptKey, onComplete);
+    return Promise.resolve();
+  }
+
+  _enterCutscene(scriptKey, onComplete) {
     if (this.cutsceneEngine.start(scriptKey, onComplete)) {
       this.state = GameState.CUTSCENE;
     }
+  }
+
+  /**
+   * Warms every lazily-split chunk so later mode entry is synchronous.
+   * Used by the playtest harness; safe to call from the game at idle.
+   */
+  preloadLazyModes() {
+    return Promise.all([
+      this._ensureMeltdown(),
+      this._ensureBuilder(),
+      this._ensureCutsceneEngine(),
+    ]);
   }
 
   advanceCutsceneFrame() {
@@ -2858,8 +2890,16 @@ export class Game {
     }
   }
 
-  async startBuilder() {
-    await this._ensureBuilder();
+  /** @see startMeltdown — same sync-when-warm contract. */
+  startBuilder() {
+    if (!this.builder) {
+      return this._ensureBuilder().then(() => this._enterBuilder());
+    }
+    this._enterBuilder();
+    return Promise.resolve();
+  }
+
+  _enterBuilder() {
     this.mode = "builder";
     this.builder.start();
     this.builder.onPlayTest = () => this.startBuilderPlayTest();
