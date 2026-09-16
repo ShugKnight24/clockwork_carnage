@@ -40,7 +40,7 @@ import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointe
 import { AudioManager } from "./audio.js";
 
 import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
-import { Profiler } from "./editor/debug/profiler.js";
+import { Profiler } from "../src/utils/profiler.js";
 import { trackEvent } from "./analytics.js";
 import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
