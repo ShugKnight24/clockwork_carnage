@@ -104,8 +104,15 @@ export function renderUpgradeScreen(ctx, w, h, state) {
 
   // ── Upgrade cards ──
   const upgradeKeys = Object.keys(UPGRADES);
-  const layout = upgradeLayout(w, h, upgradeKeys.length, isTouchDevice);
+  const layout = upgradeLayout(w, h, upgradeKeys.length, isTouchDevice, upgradeSelection);
   const { startY, cardH, cardGap, colW, cols, leftX, rightX } = layout;
+
+  // Clip the card list to its window so scrolled-out rows cannot bleed into
+  // the header or the continue button.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, layout.listTop - 4, w, layout.visibleH + 8);
+  ctx.clip();
 
   for (let i = 0; i < upgradeKeys.length; i++) {
     const key = upgradeKeys[i];
@@ -231,6 +238,37 @@ export function renderUpgradeScreen(ctx, w, h, state) {
     ctx.font = `${compactUpg ? 7 : 9}px monospace`;
     ctx.fillText(`LV ${level}/${upg.maxLevel}`, baseX + colW - (compactUpg ? 6 : 12), pipY + 3);
 
+    ctx.textAlign = "left";
+  }
+
+  ctx.restore();
+
+  // ── Scroll indicators ──
+  if (layout.maxScrollRow > 0) {
+    ctx.textAlign = "center";
+    ctx.font = `${compactUpg ? 9 : 11}px monospace`;
+    if (layout.scrollRow > 0) {
+      ctx.fillStyle = "rgba(0,255,200,0.45)";
+      ctx.fillText("\u25B2", w / 2, layout.listTop - 8);
+    }
+    if (layout.scrollRow < layout.maxScrollRow) {
+      ctx.fillStyle = "rgba(0,255,200,0.45)";
+      ctx.fillText("\u25BC", w / 2, layout.listBottom + 14);
+    }
+    // Position readout so the player knows how much list is left.
+    ctx.fillStyle = "rgba(100,120,140,0.5)";
+    ctx.font = `${compactUpg ? 8 : 10}px monospace`;
+    ctx.textAlign = "right";
+    const firstShown = layout.scrollRow * layout.cols + 1;
+    const lastShown = Math.min(
+      upgradeKeys.length,
+      (layout.scrollRow + layout.maxVisibleRows) * layout.cols,
+    );
+    ctx.fillText(
+      `${firstShown}-${lastShown} of ${upgradeKeys.length}`,
+      layout.rightX + layout.colW,
+      layout.listTop - 8,
+    );
     ctx.textAlign = "left";
   }
 

@@ -875,6 +875,7 @@ export class TouchControls {
       h,
       upgradeKeys.length,
       this.game.isTouchDevice,
+      g.upgradeSelection,
     );
 
     if (y >= layout.contY - 18 && y <= layout.contY + 18) {
@@ -888,6 +889,9 @@ export class TouchControls {
       const row = Math.floor(i / layout.cols);
       const baseX = col === 0 ? layout.leftX : layout.rightX;
       const uy = layout.startY + row * (layout.cardH + layout.cardGap);
+      // Ignore rows scrolled outside the visible window — they are clipped
+      // on screen, so a tap there must not select them.
+      if (uy + layout.cardH < layout.listTop || uy > layout.listBottom) continue;
       if (
         x >= baseX &&
         x <= baseX + layout.colW &&

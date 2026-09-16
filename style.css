@@ -183,6 +183,11 @@ body {
   align-items: center;
   justify-content: center;
   justify-content: safe center;
+  /* 7 modes are visible normally and 9 with both saves present, which
+     overflowed 720p and clipped the last entries with no way to reach them. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 0;
   background: radial-gradient(
     ellipse at center,
     #0a0a2e 0%,
@@ -206,8 +211,9 @@ body {
 #modeSelect .mode-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 30px;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex: 0 0 auto;
 }
 
 #modeSelect .mode-btn {
@@ -216,7 +222,7 @@ body {
   color: #aaddff;
   font-size: 20px;
   font-family: "Courier New", monospace;
-  padding: 18px 50px;
+  padding: 13px 50px;
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -820,4 +826,17 @@ body {
   .feature-card {
     padding: 10px 8px;
   }
+}
+
+#modeSelect::-webkit-scrollbar {
+  width: 8px;
+}
+
+#modeSelect::-webkit-scrollbar-thumb {
+  background: rgba(0, 200, 255, 0.25);
+  border-radius: 4px;
+}
+
+#modeSelect::-webkit-scrollbar-track {
+  background: transparent;
 }

@@ -86,23 +86,60 @@ export function settingsLayout(w, h, settingsSelection, isTouchDevice, category)
   };
 }
 
-export function upgradeLayout(w, h, upgradeCount, isTouchDevice) {
+/**
+ * @param {number} selectedIndex - currently highlighted upgrade, used to keep
+ *   the selection inside the scroll window. Pass -1 when nothing is selected.
+ */
+export function upgradeLayout(w, h, upgradeCount, isTouchDevice, selectedIndex = -1) {
   const compact = isTouchDevice && isCompactPhone(h);
   const cols = 2;
   const headerY = compact ? 14 : 40;
-  const startY = headerY + (compact ? 30 : 90);
+  const listTop = headerY + (compact ? 30 : 90);
   const cardH = compact ? 40 : 64;
   const cardGap = compact ? 3 : 6;
   const colW = compact ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
   const leftX = w / 2 - colW - (compact ? 6 : 12);
   const rightX = w / 2 + (compact ? 6 : 12);
   const totalRows = Math.ceil(upgradeCount / cols);
-  const contY = startY + totalRows * (cardH + cardGap) + 20;
+  const rowPitch = cardH + cardGap;
+
+  // The continue prompt is pinned above the bottom edge; the list scrolls in
+  // the space above it. Previously every row was drawn unconditionally from
+  // listTop, so with 18 upgrades the last rows and the prompt itself fell off
+  // the bottom of the screen with no way to reach them.
+  const contY = h - (compact ? 34 : 58);
+  const listBottom = contY - (compact ? 14 : 26);
+  const listH = Math.max(rowPitch, listBottom - listTop);
+  const maxVisibleRows = Math.max(1, Math.floor((listH + cardGap) / rowPitch));
+  const maxScrollRow = Math.max(0, totalRows - maxVisibleRows);
+
+  // Keep the selected row inside the window.
+  let scrollRow = 0;
+  if (selectedIndex >= 0 && selectedIndex < upgradeCount && maxScrollRow > 0) {
+    const selRow = Math.floor(selectedIndex / cols);
+    scrollRow = Math.min(
+      maxScrollRow,
+      Math.max(0, selRow - Math.floor((maxVisibleRows - 1) / 2)),
+    );
+  }
+
+  // Show whole rows only — a row sliced through the middle reads as a
+  // rendering fault rather than as scrollable content.
+  const visibleH = maxVisibleRows * rowPitch - cardGap;
 
   return {
     cols,
     headerY,
-    startY,
+    // startY carries the scroll offset so renderer and hit-testing agree.
+    startY: listTop - scrollRow * rowPitch,
+    listTop,
+    visibleH,
+    listBottom: listTop + visibleH,
+    listH,
+    rowPitch,
+    maxVisibleRows,
+    scrollRow,
+    maxScrollRow,
     cardH,
     cardGap,
     colW,
