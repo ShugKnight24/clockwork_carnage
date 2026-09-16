@@ -76,15 +76,23 @@ export function renderFrame(game) {
     return;
   }
 
-  // Screen shake offset
+  // ── Screen shake ─────────────────────────────────────────────────────────
+  // Driven by sampled sine at incommensurate frequencies rather than a fresh
+  // Math.random() per frame. Per-frame random reads as static buzz; a sampled
+  // waveform reads as a physical camera knock. Amplitude is quadratic in
+  // trauma, so light hits barely register and heavy ones punch.
   let shakeX = 0,
     shakeY = 0;
   if (game.settings.screenShake && game.screenShake > 0.5) {
-    const shakeDecay = Math.min(1, game.screenShake / 8);
-    // Recoil-biased: mostly upward with random scatter
-    shakeX = (Math.random() - 0.5) * game.screenShake * 0.6;
-    shakeY = -Math.abs(Math.random()) * game.screenShake * 0.8 * shakeDecay
-           + (Math.random() - 0.5) * game.screenShake * 0.3;
+    const trauma = Math.min(1, game.screenShake / 14);
+    const amp = trauma * trauma * 14;
+    const st = game.time * 0.001;
+    shakeX = Math.sin(st * 47.3) * amp * 0.85;
+    // Recoil-biased: the vertical component keeps an upward push.
+    shakeY = Math.sin(st * 61.7) * amp * 0.5 - trauma * amp * 0.45;
+    game._shakeRoll = Math.sin(st * 38.1) * trauma * trauma * 0.012;
+  } else {
+    game._shakeRoll = 0;
   }
 
   // View bob when sprinting/dashing (whole screen sway)
@@ -97,6 +105,12 @@ export function renderFrame(game) {
 
   ctx.save();
   ctx.translate(shakeX, shakeY);
+  // A touch of roll sells the knock as a camera, not a sliding image.
+  if (game._shakeRoll) {
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(game._shakeRoll);
+    ctx.translate(-w / 2, -h / 2);
+  }
 
   // Camera tilt (slide lean)
   const tilt = game.player.cameraTilt || 0;
