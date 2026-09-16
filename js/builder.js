@@ -1,5 +1,6 @@
 import { trackEvent } from "./analytics.js";
 import { ENEMY_TYPES } from "./data.js";
+import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -173,7 +174,7 @@ export class BuilderMode {
     this.history = [];
     this.historyIndex = -1;
 
-    this.canvas.requestPointerLock();
+    requestPointerLockSafe(this.canvas);
   }
 
   stop() {
@@ -283,8 +284,8 @@ export class BuilderMode {
     if (code === "Tab") {
       e.preventDefault();
       this.overhead = !this.overhead;
-      if (this.overhead) document.exitPointerLock();
-      else this.canvas.requestPointerLock();
+      if (this.overhead) exitPointerLockSafe();
+      else requestPointerLockSafe(this.canvas);
       return true;
     }
     // Tile selection 1-9

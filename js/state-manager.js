@@ -18,6 +18,35 @@
  *   sm.pause('playing');               // saves "from", goes to 'paused'
  *   sm.resume();                       // returns to saved "from"
  */
+
+// ─── Transition Validation ────────────────────────────────────────
+
+/**
+ * Map of allowed state transitions.  Any transition not listed here
+ * will log a warning in development but still proceed — we want
+ * observability, not enforcement.
+ */
+const ALLOWED_TRANSITIONS = {
+  title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats'],
+  modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings'],
+  playing: ['paused', 'settings', 'controls', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
+  paused: ['playing', 'settings', 'controls', 'title', 'modeSelect'],
+  settings: ['paused', 'playing', 'title', 'modeSelect', 'controls'],
+  controls: ['settings', 'paused', 'playing', 'title'],
+  upgrade: ['playing'],
+  gameOver: ['title', 'modeSelect', 'playing', 'cutscene', 'characterCreate'],
+  builder: ['title', 'modeSelect', 'playing', 'settings', 'paused'],
+  victory: ['title', 'modeSelect', 'playing', 'cutscene', 'levelComplete', 'characterCreate'],
+  levelComplete: ['playing', 'title', 'modeSelect', 'cutscene', 'upgrade', 'campaignPrompt', 'victory'],
+  tutorial: ['playing', 'paused', 'settings', 'tutorialComplete', 'title'],
+  cutscene: ['playing', 'title', 'modeSelect', 'gameOver', 'victory', 'campaignPrompt', 'tutorial', 'characterCreate'],
+  campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene'],
+  tutorialComplete: ['title', 'modeSelect', 'playing'],
+  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory'],
+  achievements: ['title', 'modeSelect'],
+  stats: ['title', 'modeSelect'],
+};
+
 export class StateManager {
   /**
    * @param {string} initial - starting state string (e.g. GameState.TITLE)
@@ -58,6 +87,9 @@ export class StateManager {
    */
   transition(to) {
     if (this._state === to) return;
+    if (!ALLOWED_TRANSITIONS[this._state]?.includes(to)) {
+      console.warn('[StateManager] Unexpected transition:', this._state, '→', to);
+    }
     this._prev = this._state;
     this._state = to;
     if (this._onChange) this._onChange(to, this._prev);
@@ -115,5 +147,19 @@ export class StateManager {
    */
   onChange(fn) {
     this._onChange = fn;
+  }
+
+  // ─── Static Utilities ───────────────────────────────────────────
+
+  /**
+   * Check whether a transition from → to is listed in the allowed
+   * transition table.  Useful for external code that wants to
+   * validate before triggering a state change.
+   * @param {string} from
+   * @param {string} to
+   * @returns {boolean}
+   */
+  static isValidTransition(from, to) {
+    return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
   }
 }

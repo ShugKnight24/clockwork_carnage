@@ -89,14 +89,12 @@ export class GamepadManager {
       this.activeIndex = gp.index;
       this.controllerName = gp.id;
       this.controllerType = this._detectType(gp.id);
-      console.log(`[Gamepad] Connected: ${gp.id} (${this.controllerType})`);
       if (this.onConnect) this.onConnect(this.controllerName, this.controllerType);
     }
   }
 
   _handleDisconnect(e) {
     if (e.gamepad.index === this.activeIndex) {
-      console.log(`[Gamepad] Disconnected: ${this.controllerName}`);
       if (this.onDisconnect) this.onDisconnect(this.controllerName);
       this.activeIndex = -1;
       this.activeGamepad = null;

@@ -10,12 +10,14 @@
  * @param {object} opts
  * @param {object} opts.wep           - weapon definition (from player.getWeaponDef())
  * @param {string} opts.energyColor   - hex color for energy accents (from character)
+ * @param {boolean} opts.isAiming
  * @param {boolean} opts.isSprinting
  * @param {boolean} opts.isDashing
  * @param {number} opts.weaponBob     - player.weaponBob angle
  * @param {number} opts.weaponKick    - player.weaponKick scalar
  * @param {number} opts.weaponAnimFrame - 0..3 fire animation frame
  * @param {number} opts.time          - game time (ms), used for animated glows
+ * @param {number} opts.lastFireTime   - timestamp of last weapon fire (ms), for barrel shimmer
  * @param {boolean} opts.isTouchDevice
  * @param {Function} opts.drawGlow    - renderer.drawGlow(ctx, x, y, r, color, alpha)
  */
@@ -23,31 +25,40 @@ export function drawWeapon(ctx, w, h, opts) {
   const {
     wep,
     energyColor,
+    isAiming,
     isSprinting,
     isDashing,
     weaponBob,
     weaponKick,
     weaponAnimFrame,
     time,
+    lastFireTime,
     isTouchDevice,
     drawGlow,
   } = opts;
 
   if (!wep) return;
 
-  const bobMulX = isDashing ? 18 : isSprinting ? 14 : 8;
-  const bobMulY = isDashing ? 12 : isSprinting ? 10 : 5;
+  const bobMulX = isAiming ? 2 : isDashing ? 18 : isSprinting ? 14 : 8;
+  const bobMulY = isAiming ? 1.5 : isDashing ? 12 : isSprinting ? 10 : 5;
   const bobX = Math.sin(weaponBob) * bobMulX;
   const bobY = Math.abs(Math.cos(weaponBob)) * bobMulY;
   const kickY = weaponKick * 40;
   const tiltAngle = isSprinting ? Math.sin(weaponBob) * 0.06 : 0;
 
-  const viewportFactor = isTouchDevice
-    ? Math.max(0.55, Math.min(1, h / 720))
-    : 1;
-  const sc = 4.8 * viewportFactor;
-  const cx = w / 2 + bobX;
-  const cy = h - 170 * viewportFactor + bobY + kickY;
+  const viewportFactor = h / 720;
+  const sc = 4.8 * viewportFactor * (isAiming ? 0.92 : 1);
+  // ADS weapon centering — smoothly slide toward screen centre when aiming
+  let adsOffsetX = 0;
+  if (isAiming) {
+    // Lerp weapon X 30% toward dead centre each frame (bobX already small when aiming)
+    adsOffsetX = -bobX * 0.3;
+  }
+  const cx = w / 2 + bobX + adsOffsetX;
+  
+  // If we have a big HUD bar at the bottom, push the weapon up so it isn't hidden
+  const hudOffset = opts.hudStyle === 1 ? (160 * viewportFactor) : 0;
+  const cy = h - hudOffset - (isAiming ? 245 : 170) * viewportFactor + bobY + kickY * (isAiming ? 0.45 : 1);
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -95,6 +106,25 @@ export function drawWeapon(ctx, w, h, opts) {
     ctx.beginPath();
     ctx.arc(1, -42, 5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // ── Barrel heat shimmer — wavy distortion line above barrel after firing ──
+  const timeSinceFire = time - (lastFireTime || 0);
+  if (lastFireTime && timeSinceFire >= 0 && timeSinceFire < 500) {
+    const shimmerAlpha = 0.18 * (1 - timeSinceFire / 500);
+    ctx.save();
+    ctx.globalAlpha = shimmerAlpha;
+    ctx.strokeStyle = "rgba(255,200,150,0.7)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = -10; i <= 10; i++) {
+      const sx = i;
+      const sy = -50 + Math.sin(i * 0.8 + time * 0.03) * 1.8;
+      if (i === -10) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   if (wep.id === 0) {
@@ -951,6 +981,32 @@ export function drawWeapon(ctx, w, h, opts) {
     for (const [rx, ry] of [[-14, -24], [14, -24], [-14, 10], [14, 10]]) {
       ctx.beginPath(); ctx.arc(rx, ry, 1.2, 0, Math.PI * 2); ctx.fill();
     }
+  }
+
+  // ── Specular highlight strip — thin bright gradient along weapon top edge ──
+  {
+    // Determine weapon bounds based on type for the highlight strip
+    const hx = wep.id === 3 ? -18 : wep.id === 4 ? -16 : wep.id === 7 ? -16 : -10;
+    const hw = wep.id === 3 ? 36 : wep.id === 4 ? 32 : wep.id === 7 ? 32 : 20;
+    const hy = wep.id === 5 ? -68 : wep.id === 1 ? -48 : wep.id === 3 ? -55 : wep.id === 7 ? -50 : -38;
+    const specGrad = ctx.createLinearGradient(hx, hy, hx + hw, hy);
+    specGrad.addColorStop(0, "transparent");
+    specGrad.addColorStop(0.5, "rgba(255,255,255,0.15)");
+    specGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = specGrad;
+    ctx.fillRect(hx, hy, hw, 2);
+  }
+
+  // ── Rim lighting — subtle right-edge cool metallic glow ──
+  {
+    const rimX = wep.id === 3 ? 14 : wep.id === 4 ? 12 : wep.id === 7 ? 13 : 7;
+    const rimTop = wep.id === 5 ? -65 : wep.id === 1 ? -46 : wep.id === 3 ? -52 : wep.id === 7 ? -48 : -35;
+    const rimH = wep.id === 5 ? 75 : wep.id === 3 ? 68 : wep.id === 7 ? 65 : 50;
+    const rimGrad = ctx.createLinearGradient(rimX, rimTop, rimX + 3, rimTop);
+    rimGrad.addColorStop(0, "rgba(200,220,255,0.12)");
+    rimGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = rimGrad;
+    ctx.fillRect(rimX, rimTop, 3, rimH);
   }
 
   ctx.restore();

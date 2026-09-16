@@ -37,9 +37,7 @@ import { renderPostFX as _renderPostFX } from "../src/rendering/postfx.js";
 import { drawGlow as _drawGlow } from "../src/rendering/draw-utils.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { AudioManager } from "./audio.js";
-import { BuilderMode } from "./builder.js";
-import { MeltdownMode } from "./meltdown.js";
-import { CutsceneEngine } from "./cutscene.js";
+
 import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
 import { Profiler } from "./editor/debug/profiler.js";
 import { trackEvent } from "./analytics.js";
@@ -55,6 +53,7 @@ import {
   moveWithCollision,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
+import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
 import {
   getDifficultyMultipliers as _getDifficultyMultipliers,
@@ -65,6 +64,7 @@ import {
   createMeltdownPickups,
   jitterPalette,
 } from "../src/systems/spawner.js";
+import { SeededRNG } from "../src/utils/seeded-rng.js";
 import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
 import {
   fireWeapon as _fireWeapon,
@@ -138,27 +138,31 @@ import {
   handleSettingsClick,
   handleGameOverClick,
 } from "../src/systems/input-click-dispatch.js";
+import { GameState } from "../src/types.js";
+import { HudEditor } from "../src/ui/hud-editor.js";
+import * as Persistence from "../src/core/persistence.js";
+export { GameState };
 
-export const GameState = {
-  TITLE: "title",
-  MODE_SELECT: "modeSelect",
-  PLAYING: "playing",
-  PAUSED: "paused",
-  SETTINGS: "settings",
-  CONTROLS: "controls",
-  UPGRADE: "upgrade",
-  GAME_OVER: "gameOver",
-  BUILDER: "builder",
-  VICTORY: "victory",
-  LEVEL_COMPLETE: "levelComplete",
-  TUTORIAL: "tutorial",
-  CUTSCENE: "cutscene",
-  CAMPAIGN_PROMPT: "campaignPrompt",
-  TUTORIAL_COMPLETE: "tutorialComplete",
-  CHARACTER_CREATE: "characterCreate",
-  ACHIEVEMENTS: "achievements",
-  STATS: "stats",
-};
+// Lazy-loaded heavy modules — populated on first use via dynamic import()
+let _CutsceneEngine = null;
+let _BuilderMode = null;
+let _MeltdownMode = null;
+
+const _DEV = import.meta.env?.DEV ?? false;
+const _systemErrors = new Map(); // throttle: system name → last error time
+
+function _safeCall(name, fn) {
+  try {
+    fn();
+  } catch (err) {
+    const now = performance.now();
+    const last = _systemErrors.get(name) || 0;
+    if (_DEV && now - last > 3000) {
+      _systemErrors.set(name, now);
+      console.warn(`[${name}] error (non-fatal):`, err.message || err);
+    }
+  }
+}
 
 // TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
 
@@ -171,16 +175,9 @@ export class Game {
     this.dpr = 1;
     this.hudW = hudCanvas.width;
     this.hudH = hudCanvas.height;
-    this.renderer = new Renderer(canvas);
+    this.renderer = new Renderer(canvas, 0); // renderMode applied after settings load
     this.audio = new AudioManager();
-    this.cutsceneEngine = new CutsceneEngine({
-      audio: this.audio,
-      getKeys: () => this.keys,
-      getTouchControls: () => this.touchControls,
-      isTouchDevice: isPrimaryTouchDevice(),
-      getPlayerName: () => this.character.name || "Agent",
-      getSettings: () => this.settings,
-    });
+    this.cutsceneEngine = null; // Lazy-loaded on first cutscene
     this.player = new Player();
     this.entities = [];
     this.entityGrid = new SpatialGrid(2);
@@ -191,14 +188,20 @@ export class Game {
     this._stateManager = new StateManager(GameState.TITLE);
     this.assetEditor = new AssetEditor(this);
     this.mode = null; // 'arena', 'campaign', or 'meltdown'
-    this.meltdown = new MeltdownMode();
+    this.meltdown = null; // Lazy-loaded on first meltdown
     this.time = 0;
     this.deltaTime = 0;
     this.lastFrameTime = 0;
     this.arenaTimer = 60;
     this.arenaRound = 1;
-    this.campaign = new CampaignManager(this);
+    this.particleSystem = null; // initialized in startGame
+    this.killStreakSystem = new KillStreakSystem(this);
+    this.ariaComms = new AriaCommsSystem(this);
+    this.squadComms = new SquadCommsController(this);
+    this.achievementSystem = new AchievementSystem(this);
     this.tutorial = new TutorialSystem(this);
+    this.campaign = new CampaignManager(this);
+    this.hudEditor = new HudEditor(this);
     this.isTouchDevice = isPrimaryTouchDevice();
     this.menuSelection = 0;
     this.upgradeSelection = 0;
@@ -212,6 +215,7 @@ export class Game {
     this._transitionDir = 0; // 1 = fading out, -1 = fading in
     this._transitionSpeed = 2.5; // full fade in 0.4s
     this.screenShake = 0;
+    this.hitStopFrames = 0; // Hit-stop: freeze gameplay for N frames on kills
     this.killedEnemies = 0;
     this.totalEnemies = 0;
     this.fps = 0;
@@ -226,8 +230,6 @@ export class Game {
     // Dynamic point lights (muzzle flash, explosions, plasma) bleed onto
     // walls/floor in the column draw. Each: {x,y,color:[r,g,b],radius,intensity,life,maxLife}.
     this.lights = [];
-    // Kill streak system (delegated to KillStreakSystem)
-    this.killStreakSystem = new KillStreakSystem();
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       killStreak: {
@@ -311,6 +313,12 @@ export class Game {
       screenShake: true,
       weaponBob: true,
       showPerformanceOverlay: false,
+      enableBloom: true,
+      enableChromaticAberration: true,
+      enableFilmGrain: true,
+      shadowQuality: 2, // 0=off, 1=low, 2=high
+      lightingQuality: 2, // 0=low, 1=medium, 2=high
+      renderMode: 0, // 0=auto, 1=2D (Canvas), 2=3D (WebGL)
       gamepadEnabled: true,
       gamepadLookSensitivity: 2.5,
       gamepadDeadzone: 0.15,
@@ -385,14 +393,14 @@ export class Game {
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
     // Builder mode (extracted)
-    this.builder = new BuilderMode({
+    this.builder = null; // Lazy-loaded on builder entry
+    this._builderOpts = {
       renderer: this.renderer,
       audio: this.audio,
       settings: this.settings,
       keybinds: this.keybinds,
       canvas: this.canvas,
-    });
-    this.builder.onShareMap = () => this._shareBuilderMap();
+    };
 
     // Dev flags
     this.alwaysShowTutorial = false;
@@ -406,8 +414,6 @@ export class Game {
     this._scanlinePattern = null; // rgba(0,0,0,0.03) every 4px
     this._scanlinePatternDense = null; // rgba(0,0,0,0.04) every 3px
 
-    // Achievement system (delegated to AchievementSystem)
-    this.achievementSystem = new AchievementSystem();
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       unlockedAchievements: {
@@ -468,10 +474,6 @@ export class Game {
       },
     });
 
-    // ARIA in-game comms system (delegated to AriaCommsSystem)
-    this.ariaComms = new AriaCommsSystem();
-    // Squad voice lines (Kael/Nova/Rook/Lyra) — act 2+ only
-    this.squadComms = new SquadCommsController(this.ariaComms);
     // Forwarding properties for backward compat during migration
     Object.defineProperties(this, {
       ariaQueue: {
@@ -582,7 +584,7 @@ export class Game {
     this.renderer.applyVisualStyle(this.settings.visualStyle);
   }
 
-  // ─── State management (delegates to StateManager) ──────────────────────────
+  // ── State management (delegates to StateManager) ──────────────────────────
 
   /**
    * `this.state` getter/setter — all existing reads and direct assignments
@@ -825,7 +827,7 @@ export class Game {
         // Dismiss on any key EXCEPT Escape — let Escape fall through to pause.
         if (e.code !== "Escape") return;
       }
-      if (this.builder.handleKeyDown(e)) return;
+      if (this.builder && this.builder.handleKeyDown(e)) return;
     }
     // Rebinding mode — capture the next key
     if (this.state === GameState.CONTROLS && this.rebindingKey) {
@@ -843,11 +845,18 @@ export class Game {
       this.rebindingKey = null;
       return;
     }
-    // Prevent Tab from shifting DOM focus in menus
+    // Character creator open/close
     if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
       e.preventDefault();
+      this.closeCharacterCreator();
     }
-    this.handleKeyPress(e.code, e);
+    
+    // Exit HUD editor
+    if (e.code === "Escape" && this.state === GameState.HUD_EDITOR) {
+      e.preventDefault();
+      this.hudEditor.stop();
+      return;
+    }
     // Prevent ESC from leaking to main.js when CHARACTER_CREATE changes state
     if (
       e.code === "Escape" &&
@@ -859,6 +868,7 @@ export class Game {
         e.stopImmediatePropagation();
       }
     }
+    this.handleKeyPress(e.code, e);
   }
 
   /** Handles all mousedown events with full game state context. */
@@ -868,8 +878,20 @@ export class Game {
       this.advanceCutsceneFrame();
       return;
     }
-    if (this.state === GameState.SETTINGS && e.button === 0) {
-      this._handleSettingsClick(e);
+    // Settings
+    if (this.state === GameState.SETTINGS) {
+      // Handled via InputManager clicks, but could do background updates if needed
+      return;
+    }
+    
+    // HUD Editor
+    if (this.state === GameState.HUD_EDITOR) {
+      // Get logical mouse coords if needed
+      const rect = this.canvas.getBoundingClientRect();
+      const s = (this.settings.quality?.stableScale || this.settings.quality?.renderScale) || 1;
+      const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
+      const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
+      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
       return;
     }
     if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
@@ -895,11 +917,11 @@ export class Game {
         this._builderOnboardingDismissed = true;
         return;
       }
-      if (!this.mouse.locked && !this.builder.overhead) {
+      if (this.builder && !this.mouse.locked && !this.builder.overhead) {
         this.lockPointer();
         return;
       }
-      this.builder.handleMouseDown(e.button);
+      this.builder?.handleMouseDown(e.button);
       return;
     }
     if (e.button === 0) {
@@ -921,6 +943,7 @@ export class Game {
       const defs = getSettingsForCategory(
         this.isTouchDevice,
         this.settingsCategory,
+        this.settings
       );
       if (!defs.length) return;
       const dir = deltaY > 0 ? 1 : -1;
@@ -1039,12 +1062,11 @@ export class Game {
   // Save / Load
   // ── Save/Load (delegated to SaveSystem) ──────────────────
   saveSettings() {
-    Save.saveSettings(this.settings);
-    this.input.saveKeybinds();
+    Persistence.saveSettings(this);
   }
 
   loadSettings() {
-    Save.loadSettings(this.settings);
+    Persistence.loadSettings(this);
   }
 
   applyGamepadSettings() {
@@ -1061,9 +1083,9 @@ export class Game {
   applyPerformanceSettings() {
     if (!this.quality) return;
     const prevScale = this.quality.renderScale;
-    const presets = ["auto", "low", "medium", "high", "ultra", "custom"];
+    const presets = ["auto", "ultra-low", "low", "medium", "high", "ultra", "custom"];
     const preset = presets[this.settings.graphicsPreset] || "auto";
-    const presetParticles = { low: 0.3, medium: 0.5, high: 0.8, ultra: 1 };
+    const presetParticles = { "ultra-low": 0.15, low: 0.3, medium: 0.5, high: 0.8, ultra: 1 };
     const targets = [55, 30, 60, 90, 120];
     this.quality.targetFPS = this.settings.batterySaver ? 30 : targets[this.settings.frameTarget] || 55;
     this.quality.maxScale = this.settings.batterySaver ? Math.min(this.quality.maxScale, 0.7) : 1.0;
@@ -1096,6 +1118,11 @@ export class Game {
         enableFloorTexture: this.settings.floorTexture,
       });
     }
+    // Battery saver: also disable bloom & CA for max power savings
+    if (this.settings.batterySaver) {
+      this.settings.enableBloom = false;
+      this.settings.enableChromaticAberration = false;
+    }
     this.quality.stableScale = this.quality.renderScale;
     if (Math.abs(prevScale - this.quality.renderScale) > 0.001) {
       window.dispatchEvent(new CustomEvent("cc-quality-change"));
@@ -1103,33 +1130,33 @@ export class Game {
   }
 
   _applyMobileMigration() {
-    Save.applyMobileMigration(this.isTouchDevice, this.settings, () =>
+    Persistence.applyMobileMigration(this.isTouchDevice, this.settings, () =>
       this.saveSettings(),
     );
   }
 
   loadDevFlags() {
-    this.alwaysShowTutorial = Save.loadDevFlags();
+    this.alwaysShowTutorial = Persistence.loadDevFlags();
   }
 
   saveCharacter() {
-    Save.saveCharacter(this.character);
+    Persistence.saveCharacter(this);
   }
 
   loadCharacter() {
-    Save.loadCharacter(this.character);
+    Persistence.loadCharacter(this);
   }
 
   setAlwaysTutorial(on) {
     this.alwaysShowTutorial = on;
-    Save.setAlwaysTutorial(on);
+    Persistence.setAlwaysTutorial(on);
   }
 
   saveAchievements() {
-    this.achievementSystem.save();
+    Persistence.saveAchievements(this);
   }
   loadAchievements() {
-    this.achievementSystem.load();
+    Persistence.loadAchievements(this);
   }
   unlockAchievement(id) {
     this.achievementSystem.unlockAchievement(id);
@@ -1172,54 +1199,40 @@ export class Game {
   }
 
   saveArena() {
-    Save.saveArena(
-      this.arenaRound,
-      this.player,
-      this.upgradeLevels,
-      this.settings.difficulty,
-    );
+    Persistence.saveArena(this);
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
   loadArena() {
-    const data = Save.loadArenaData();
-    if (!data) return false;
-    this.mode = "arena";
-    this.arenaRound = data.round;
-    this.player.reset();
-    this.player.deserialize(data);
-    this.upgradeLevels = data.upgradeLevels || {};
-    this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
-    this.startArenaRound();
-    return true;
+    return Persistence.loadArena(this);
   }
 
   clearArenaSave() {
-    Save.clearArenaSave();
+    Persistence.clearArenaSave(this);
   }
 
   saveCampaign() {
-    this.campaign.save();
+    Persistence.saveCampaign(this);
   }
 
   loadCampaignSave() {
-    return this.campaign.load();
+    return Persistence.loadCampaignSave(this);
   }
 
   clearCampaignSave() {
-    this.campaign.clearSave();
+    Persistence.clearCampaignSave(this);
   }
 
   /** Enter New Game Plus — keep weapons & score, reset to Act 1, bump cycle */
   startNgPlus() {
-    this.campaign.startNgPlus();
+    Persistence.startNgPlus(this);
   }
 
   hasSave() {
-    return Save.hasSave();
+    return Persistence.hasSave();
   }
   getSaveInfo() {
-    return Save.getSaveInfo();
+    return Persistence.getSaveInfo();
   }
 
   // --- Asset Editor Hooks ---
@@ -1266,7 +1279,17 @@ export class Game {
     this.startArenaRound();
   }
 
-  startMeltdown(heroKey = "agent", ironman = false) {
+  async _ensureMeltdown() {
+    if (!this.meltdown) {
+      if (!_MeltdownMode) {
+        _MeltdownMode = (await import("./meltdown.js")).MeltdownMode;
+      }
+      this.meltdown = new _MeltdownMode();
+    }
+  }
+
+  async startMeltdown(heroKey = "agent", ironman = false) {
+    await this._ensureMeltdown();
     this.mode = "meltdown";
     this.achievementStats.totalGamesPlayed++;
     this.player.reset();
@@ -1285,6 +1308,7 @@ export class Game {
     this.player.y = mMap.playerStart.y;
     this.player.angle = mMap.playerStart.dir;
     this.player.alive = true;
+    resetAdsFov();
 
     // Lock player rotation — they always face forward (north / -PI/2)
     this.meltdownLockAngle = true;
@@ -1318,6 +1342,7 @@ export class Game {
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
     this.player.alive = true;
+    resetAdsFov();
     this.arenaTimer = 60;
     this.arenaClearTimer = null;
     this.entities = [];
@@ -1328,15 +1353,19 @@ export class Game {
     const diff = this.getDifficultyMultipliers();
     this.arenaTimer = Math.max(30, 60 + diff.timerBonus);
 
+    // Seeded RNG for reproducible arena spawns (BUG-027)
+    const rng = new SeededRNG(SeededRNG.arenaSeed(this.arenaRound, this.settings.difficulty));
+
     // Spawn enemies — filter spawns, create scaled enemies, create pickups
     const validSpawns = filterArenaSpawns(
       this.map.enemySpawns,
       this.player.x,
       this.player.y,
       this.map.grid,
+      rng,
     );
     this.entities.push(
-      ...createArenaEnemies(this.arenaRound, validSpawns, diff),
+      ...createArenaEnemies(this.arenaRound, validSpawns, diff, rng),
     );
     this.entities.push(
       ...createArenaPickups(this.map.pickups, this.arenaRound, this.map),
@@ -1546,18 +1575,36 @@ export class Game {
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
-  startCutscene(scriptKey, onComplete) {
+
+  async _ensureCutsceneEngine() {
+    if (!this.cutsceneEngine) {
+      if (!_CutsceneEngine) {
+        _CutsceneEngine = (await import("./cutscene.js")).CutsceneEngine;
+      }
+      this.cutsceneEngine = new _CutsceneEngine({
+        audio: this.audio,
+        getKeys: () => this.keys,
+        getTouchControls: () => this.touchControls,
+        isTouchDevice: isPrimaryTouchDevice(),
+        getPlayerName: () => this.character.name || "Agent",
+        getSettings: () => this.settings,
+      });
+    }
+  }
+
+  async startCutscene(scriptKey, onComplete) {
+    await this._ensureCutsceneEngine();
     if (this.cutsceneEngine.start(scriptKey, onComplete)) {
       this.state = GameState.CUTSCENE;
     }
   }
 
   advanceCutsceneFrame() {
-    this.cutsceneEngine.advance();
+    this.cutsceneEngine?.advance();
   }
 
   endCutscene() {
-    this.cutsceneEngine.end();
+    this.cutsceneEngine?.end();
   }
 
   // ── Fade Transition System ──────────────────────────────────────────
@@ -1603,10 +1650,10 @@ export class Game {
   }
 
   updateCutscene() {
-    this.cutsceneEngine.update();
+    this.cutsceneEngine?.update();
     // If cutscene ended during update (skip/complete), state was already
     // changed by the onComplete callback or we need to handle it here
-    if (!this.cutsceneEngine.isActive && this.state === GameState.CUTSCENE) {
+    if (!this.cutsceneEngine?.isActive && this.state === GameState.CUTSCENE) {
       // Cutscene ended without a callback setting state — shouldn't normally
       // happen, but guard against it
       this.state = GameState.TITLE;
@@ -1616,7 +1663,7 @@ export class Game {
   }
 
   renderCutscene(ctx, w, h) {
-    this.cutsceneEngine.render(ctx, w, h);
+    this.cutsceneEngine?.render(ctx, w, h);
   }
 
   loadCampaignLevel(index) {
@@ -1711,7 +1758,7 @@ export class Game {
 
   damagePlayer(amount, attacker) {
     // Meltdown exotic pickup: temporary full invulnerability
-    if (this.mode === "meltdown" && this.meltdown.isInvulnerable()) return;
+    if (this.mode === "meltdown" && this.meltdown?.isInvulnerable()) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
@@ -1757,6 +1804,10 @@ export class Game {
       this.timeScale = 1;
     }
 
+    // Sync audio with time scale (chrono shift pitch-down + ducking)
+    this.audio.setTimeScale?.(this.timeScale);
+    this.audio.updateDucking?.(this.deltaTime);
+
     // FPS counter
     this.frameCount++;
     if (timestamp - this.fpsTime > 1000) {
@@ -1780,7 +1831,21 @@ export class Game {
       this.builder.update(this.deltaTime);
       return;
     }
+    if (this.state === GameState.HUD_EDITOR) {
+      const rect = this.canvas.getBoundingClientRect();
+      const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
+      const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
+      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
+      return;
+    }
     if (this.state !== GameState.PLAYING) return;
+
+    // Hit-stop freeze — skip gameplay update but keep rendering.
+    // Gives DOOM-like impact on kills: the world freezes for a beat.
+    if (this.hitStopFrames > 0) {
+      this.hitStopFrames--;
+      return;
+    }
 
     // Shift + U toggle for Asset Editor
     if (this.keys["ShiftLeft"] && this.keys["KeyU"]) {
@@ -1846,7 +1911,7 @@ export class Game {
     }
 
     // Kill streak update (timer decay + display fade)
-    this.killStreakSystem.update(this.deltaTime);
+    _safeCall("KillStreak", () => this.killStreakSystem.update(this.deltaTime));
 
     // Arena timer
     if (this.mode === "arena") {
@@ -2114,6 +2179,9 @@ export class Game {
     // Weapon kick recovery (framerate-invariant)
     this.player.weaponKick *= decay(0.85, this.deltaTime);
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+    // Camera punch recovery (faster than weapon kick — camera snaps back)
+    this.player.cameraPunch *= decay(0.78, this.deltaTime);
+    if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
     if (_profilePlayerStart) this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
 
@@ -2139,13 +2207,13 @@ export class Game {
 
     // Update enemies
     const _profileEnemiesStart = this.showFPS ? performance.now() : 0;
-    this.updateEnemies(dt);
+    _safeCall("AI", () => this.updateEnemies(dt));
     if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
 
     // Update projectiles
     const _profileProjectilesStart = this.showFPS ? performance.now() : 0;
-    this.updateProjectiles(dt);
+    _safeCall("Projectiles", () => this.updateProjectiles(dt));
     if (_profileProjectilesStart) this.profiler.currentPhases.projectiles =
       performance.now() - _profileProjectilesStart;
 
@@ -2188,7 +2256,7 @@ export class Game {
     if (this.screenShake < 0.1) this.screenShake = 0;
 
     // Update VFX particles
-    this.updateParticles(dt);
+    _safeCall("Particles", () => this.updateParticles(dt));
 
     // Glitch effect decay (framerate-invariant)
     this.glitchEffect *= decay(0.95, this.deltaTime);
@@ -2233,8 +2301,10 @@ export class Game {
     }
 
     // Achievement checks (periodic, not every frame)
-    this.checkAchievements();
-    this.updateAchievementToast(dt);
+    _safeCall("Achievements", () => {
+      this.checkAchievements();
+      this.updateAchievementToast(dt);
+    });
     this.updateAriaComms(dt);
     if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
   }
@@ -2257,6 +2327,7 @@ export class Game {
       if (this.mode === "tutorial") this.tutorialDashed = true;
       this.achievementStats.totalDashes++;
       this.triggerAriaOnce("dash", "dashUsed");
+      this.audio.dashSound?.();
     }
   }
 
@@ -2281,6 +2352,8 @@ export class Game {
       if (flags.tutorialSlid) this.tutorialSlid = true;
       if (flags.tutorialCrouched) this.tutorialCrouched = true;
     }
+    // Smooth ADS FOV transition — must run every frame
+    updateAdsFov(this.player, dt);
   }
 
   isPassable(mx, my) {
@@ -2408,7 +2481,7 @@ export class Game {
       }
 
       if (e.type === "health") {
-        if (this.player.health >= this.player.maxHealth) continue;
+        if (this.player.health >= this.player.maxHealth && this.mode !== "tutorial") continue;
         this.player.health = Math.min(
           this.player.maxHealth,
           this.player.health + 25,
@@ -2559,7 +2632,9 @@ export class Game {
       weaponKick: this.player.weaponKick,
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
+      lastFireTime: this.player.lastFireTime || 0,
       isTouchDevice: this.isTouchDevice,
+      hudStyle: this.settings.hudStyle,
       drawGlow: _drawGlow,
     });
   }
@@ -2773,7 +2848,19 @@ export class Game {
 
   // ── Builder Mode (delegated to BuilderMode) ────────────────────
 
-  startBuilder() {
+  async _ensureBuilder() {
+    if (!this.builder) {
+      if (!_BuilderMode) {
+        _BuilderMode = (await import("./builder.js")).BuilderMode;
+      }
+      this.builder = new _BuilderMode(this._builderOpts);
+      this.builder.onShareMap = () => this._shareBuilderMap();
+    }
+  }
+
+  async startBuilder() {
+    await this._ensureBuilder();
+    this.mode = "builder";
     this.builder.start();
     this.builder.onPlayTest = () => this.startBuilderPlayTest();
     this.map = this.builder.map;
@@ -2790,8 +2877,13 @@ export class Game {
       playerAngle: this.builder.player.angle,
     };
 
-    // Use the builder's map as the gameplay map
+    // Use the builder's map as the gameplay map.
+    // BUG-034: Ensure heightMap is valid — older saves may lack it,
+    // causing the renderer's heightFrac to NaN/clip walls to zero.
     this.map = this.builder.map;
+    if (!this.map.heightMap || this.map.heightMap.length !== this.map.height) {
+      this.builder.syncGrid(); // Rebuilds heightMap from layers
+    }
     this.entities = [];
     this.dustMotes = null;
     this.projectiles = [];
@@ -2934,14 +3026,14 @@ export class Game {
     this._sharedScoreView = true;
   }
 
-  _loadSharedMap(mapGrid) {
+  async _loadSharedMap(mapGrid) {
     if (
       !Array.isArray(mapGrid) ||
       mapGrid.length === 0 ||
       !Array.isArray(mapGrid[0])
     )
       return;
-    this.startBuilder();
+    await this.startBuilder();
     this.builder.importMapData({
       name: "Shared Map",
       width: mapGrid[0].length,

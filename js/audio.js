@@ -24,6 +24,14 @@ export class AudioManager {
     this._lastFootstepTime = 0;
     this._footstepCadence = 350; // ms between footsteps
     this._footstepSide = 0;
+
+    // Audio ducking system (lowers music during gunfire)
+    this._duckLevel = 0; // 0 = no duck, 1 = full duck
+    this._duckTarget = 0;
+    this._musicBaseGain = 0.15;
+
+    // Chrono shift (slow-mo) time scale
+    this._timeScale = 1;
   }
 
   init() {
@@ -39,6 +47,7 @@ export class AudioManager {
 
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = 0.15;
+    this._musicBaseGain = 0.15;
     this.musicGain.connect(this.masterGain);
 
     this.ambientGain = this.ctx.createGain();
@@ -189,7 +198,112 @@ export class AudioManager {
     sfxFn(pan);
   }
 
+  playerGrunt(profile = {}, kind = "hurt") {
+    if (!this.ctx || !this.enabled) return;
+    const pitch = Math.max(0.6, Math.min(1.8, profile.pitch || 1));
+    const base = kind === "death" ? 150 : kind === "slide" ? 210 : 190;
+    const dur = kind === "death" ? 0.28 : 0.12;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const g = this.ctx.createGain();
+    osc.type = profile.id === "synthetic" ? "sawtooth" : "triangle";
+    osc.frequency.setValueAtTime(base * pitch, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, base * pitch * 0.55), t + dur);
+    filter.type = "bandpass";
+    filter.frequency.value = profile.id === "synthetic" ? 900 : 420;
+    g.gain.setValueAtTime(kind === "death" ? 0.22 : 0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(this.sfxGain);
+    osc.onended = () => { osc.disconnect(); filter.disconnect(); g.disconnect(); };
+    osc.start(t);
+    osc.stop(t + dur);
+  }
+
   // ─── Weapon sounds ───────────────────────────────────────────────────
+
+  /** Return a random detune value between -50 and +50 cents for shot variation */
+  _randomDetune() {
+    const base = (Math.random() - 0.5) * 100; // ±50 cents
+    // During slow-mo, detune downward for dramatic pitch drop
+    const chronoShift = this._timeScale < 0.8 ? -600 * (1 - this._timeScale) : 0;
+    return base + chronoShift;
+  }
+
+  // ─── Audio ducking ────────────────────────────────────────────────────
+
+  /** Trigger music duck — call from any weapon fire method */
+  _duckMusic() {
+    if (!this.ctx || !this.musicGain) return;
+    this._duckTarget = 1;
+  }
+
+  /** Call once per frame from game loop to smoothly update music ducking */
+  updateDucking(dt) {
+    if (!this.ctx || !this.musicGain) return;
+    // Lerp toward target
+    this._duckLevel += (this._duckTarget - this._duckLevel) * Math.min(1, 8 * dt);
+    // Always decay target toward 0 (music recovers)
+    this._duckTarget *= Math.max(0, 1 - 2 * dt);
+    // Apply: duck to 30% at full duck
+    const gain = this._musicBaseGain * (1 - this._duckLevel * 0.7);
+    this.musicGain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.05);
+  }
+
+  // ─── Spatial audio filtering ──────────────────────────────────────────
+
+  /**
+   * Create a gain node with distance-based low-pass filtering and panning.
+   * @param {number} distance - World units from player to sound source (0-20)
+   * @param {number} pan - Stereo pan (-1 to 1)
+   * @returns {{ gain: GainNode, connect: (dest: AudioNode) => void }}
+   */
+  _spatialNode(distance = 0, pan = 0) {
+    if (!this.ctx) return { gain: null, connect: () => {} };
+    const gain = this.ctx.createGain();
+    // Volume falloff: inverse distance, clamped
+    const distNorm = Math.min(1, distance / 18);
+    gain.gain.value = Math.max(0.1, 1 - distNorm * 0.7);
+
+    // Low-pass filter: closer = brighter, farther = duller
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 8000 - distNorm * 6000; // 8kHz close, 2kHz far
+    filter.Q.value = 0.7;
+
+    // Panner
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+
+    gain.connect(filter);
+    filter.connect(panner);
+
+    return {
+      gain,
+      connect: (dest) => panner.connect(dest),
+    };
+  }
+
+  // ─── Chrono shift (slow-mo) ───────────────────────────────────────────
+
+  /**
+   * Apply time-dilation audio effect. Call with timeScale < 1 for slow-mo.
+   * @param {number} timeScale - 1.0 = normal, 0.5 = half speed, etc.
+   */
+  setTimeScale(timeScale = 1) {
+    if (!this.ctx || !this.sfxGain) return;
+    // Smoothly interpolate to avoid clicks
+    const t = this.ctx.currentTime;
+    this._timeScale = Math.max(0.25, Math.min(2, timeScale));
+    // Duck the master slightly during slow-mo for dramatic effect
+    if (timeScale < 0.8) {
+      this.masterGain.gain.setTargetAtTime(0.6, t, 0.1);
+    } else {
+      this.masterGain.gain.setTargetAtTime(0.8, t, 0.1);
+    }
+  }
 
   // Chrono Pistol (id: 0)
   shootPistol() {
@@ -199,6 +313,7 @@ export class AudioManager {
 
     const osc1 = this.ctx.createOscillator();
     osc1.type = "sawtooth";
+    osc1.detune.value = this._randomDetune();
     osc1.frequency.setValueAtTime(700, t);
     osc1.frequency.exponentialRampToValueAtTime(200, t + 0.08);
     const g1 = this.ctx.createGain();
@@ -225,6 +340,7 @@ export class AudioManager {
 
     this.playTone(120, 0.07, "sine", 0.6);
     this.playNoise(0.04, 0.5, 4000, "bandpass");
+    this._duckMusic();
   }
 
   // Temporal Shotgun (id: 1)
@@ -235,6 +351,7 @@ export class AudioManager {
 
     const bass = this.ctx.createOscillator();
     bass.type = "sawtooth";
+    bass.detune.value = this._randomDetune();
     bass.frequency.setValueAtTime(140, t);
     bass.frequency.exponentialRampToValueAtTime(20, t + 0.4);
     const bg = this.ctx.createGain();
@@ -264,6 +381,7 @@ export class AudioManager {
     this.playNoise(0.08, 0.7, 5000, "highpass");
     this.playTone(25, 0.4, "sine", 0.9);
     this.playTone(55, 0.3, "sine", 0.7);
+    this._duckMusic();
   }
 
   // Phase Rifle (id: 2)
@@ -274,6 +392,7 @@ export class AudioManager {
 
     const osc1 = this.ctx.createOscillator();
     osc1.type = "sawtooth";
+    osc1.detune.value = this._randomDetune();
     osc1.frequency.setValueAtTime(500, t);
     osc1.frequency.exponentialRampToValueAtTime(150, t + 0.1);
     const g1 = this.ctx.createGain();
@@ -313,6 +432,7 @@ export class AudioManager {
 
     this.playNoise(0.06, 0.6, 3000, "bandpass");
     this.playTone(80, 0.08, "sine", 0.6);
+    this._duckMusic();
   }
 
   // Quantum Cannon (id: 3)
@@ -323,6 +443,7 @@ export class AudioManager {
 
     const bass = this.ctx.createOscillator();
     bass.type = "sawtooth";
+    bass.detune.value = this._randomDetune();
     bass.frequency.setValueAtTime(100, t);
     bass.frequency.exponentialRampToValueAtTime(12, t + 0.7);
     const bg = this.ctx.createGain();
@@ -367,6 +488,7 @@ export class AudioManager {
     this.playNoise(0.35, 0.6, 7000, "highpass");
     this.playTone(18, 0.7, "sine", 0.9);
     this.playTone(40, 0.5, "sine", 0.7);
+    this._duckMusic();
   }
 
   // Phase Scattergun (id: 4) — wide phase burst, two detuned oscillators
@@ -378,6 +500,7 @@ export class AudioManager {
 
     const osc1 = this.ctx.createOscillator();
     osc1.type = "sawtooth";
+    osc1.detune.value = this._randomDetune();
     osc1.frequency.setValueAtTime(400, t);
     osc1.frequency.exponentialRampToValueAtTime(80, t + 0.18);
     const g1 = this.ctx.createGain();
@@ -405,6 +528,7 @@ export class AudioManager {
 
     this.playNoise(0.04, 0.5, 6000, "highpass");
     this.playTone(60, 0.15, "sine", 0.5);
+    this._duckMusic();
   }
 
   // Temporal Sniper (id: 5) — high-energy crack with temporal destabilization tail
@@ -415,6 +539,7 @@ export class AudioManager {
 
     const whip = this.ctx.createOscillator();
     whip.type = "sawtooth";
+    whip.detune.value = this._randomDetune();
     whip.frequency.setValueAtTime(3000, t);
     whip.frequency.exponentialRampToValueAtTime(200, t + 0.06);
     const wg = this.ctx.createGain();
@@ -444,6 +569,7 @@ export class AudioManager {
 
     this.playTone(35, 0.25, "sine", 0.8);
     this.playNoise(0.2, 0.3, 2000, "bandpass");
+    this._duckMusic();
   }
 
   // Ricochet Pistol (id: 6) — metallic ping with bounce character
@@ -454,6 +580,7 @@ export class AudioManager {
 
     const ping = this.ctx.createOscillator();
     ping.type = "square";
+    ping.detune.value = this._randomDetune();
     ping.frequency.setValueAtTime(1200, t);
     ping.frequency.exponentialRampToValueAtTime(600, t + 0.06);
     const pg = this.ctx.createGain();
@@ -481,6 +608,7 @@ export class AudioManager {
     ric.stop(t + 0.15);
 
     this.playTone(150, 0.06, "sine", 0.5);
+    this._duckMusic();
   }
 
   // EMP Launcher (id: 7) — electrical discharge with shield-disruption buzz
@@ -491,6 +619,7 @@ export class AudioManager {
 
     const bass = this.ctx.createOscillator();
     bass.type = "sine";
+    bass.detune.value = this._randomDetune();
     bass.frequency.setValueAtTime(80, t);
     bass.frequency.exponentialRampToValueAtTime(20, t + 0.3);
     const bg = this.ctx.createGain();
@@ -522,6 +651,7 @@ export class AudioManager {
     this.playNoise(0.15, 0.5, 7000, "highpass");
     this.playTone(440, 0.12, "sine", 0.3);
     this.playTone(445, 0.12, "sine", 0.25); // slight beat frequency
+    this._duckMusic();
   }
 
   // ─── Combat SFX ─────────────────────────────────────────────────────
@@ -533,15 +663,148 @@ export class AudioManager {
     this.playNoise(0.05, 0.1, 2000, "highpass", pan);
   }
 
-  enemyHit(pan = 0) {
-    this.playTone(300, 0.08, "square", 0.3, 0, pan);
-    this.playTone(200, 0.06, "square", 0.2, 0, pan);
+  enemyHit(pan = 0, distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    if (distance > 0) {
+      const spatial = this._spatialNode(distance, pan);
+      const t = this.ctx.currentTime;
+      // Tone 1: 300Hz square
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = "square";
+      osc1.frequency.setValueAtTime(300, t);
+      const g1 = this.ctx.createGain();
+      g1.gain.setValueAtTime(0.3, t);
+      g1.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc1.connect(g1);
+      g1.connect(spatial.gain);
+      spatial.connect(this.sfxGain);
+      osc1.onended = () => { osc1.disconnect(); g1.disconnect(); };
+      osc1.start(t);
+      osc1.stop(t + 0.08);
+      // Tone 2: 200Hz square
+      const osc2 = this.ctx.createOscillator();
+      osc2.type = "square";
+      osc2.frequency.setValueAtTime(200, t);
+      const g2 = this.ctx.createGain();
+      g2.gain.setValueAtTime(0.2, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc2.connect(g2);
+      g2.connect(spatial.gain);
+      osc2.onended = () => { osc2.disconnect(); g2.disconnect(); };
+      osc2.start(t);
+      osc2.stop(t + 0.06);
+    } else {
+      this.playTone(300, 0.08, "square", 0.3, 0, pan);
+      this.playTone(200, 0.06, "square", 0.2, 0, pan);
+    }
   }
 
-  enemyDeath(pan = 0) {
-    this.playTone(400, 0.1, "square", 0.3, 0, pan);
-    this.playTone(200, 0.15, "sawtooth", 0.3, 0, pan);
-    this.playTone(100, 0.2, "sawtooth", 0.2, 0, pan);
+  hitConfirm(pan = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+
+    // Metallic ding — triangle wave at 1800Hz with fast decay
+    const ding = this.ctx.createOscillator();
+    ding.type = "triangle";
+    ding.frequency.setValueAtTime(1800, t);
+    const dg = this.ctx.createGain();
+    dg.gain.setValueAtTime(0.12, t);
+    dg.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    const dp = this.ctx.createStereoPanner();
+    dp.pan.value = Math.max(-1, Math.min(1, pan));
+    ding.connect(dg);
+    dg.connect(dp);
+    dp.connect(this.sfxGain);
+    ding.onended = () => { ding.disconnect(); dg.disconnect(); dp.disconnect(); };
+    ding.start(t);
+    ding.stop(t + 0.08);
+
+    // Harmonic layer — quiet sine at 3600Hz
+    const harm = this.ctx.createOscillator();
+    harm.type = "sine";
+    harm.frequency.setValueAtTime(3600, t);
+    const hg = this.ctx.createGain();
+    hg.gain.setValueAtTime(0.04, t);
+    hg.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    const hp = this.ctx.createStereoPanner();
+    hp.pan.value = Math.max(-1, Math.min(1, pan));
+    harm.connect(hg);
+    hg.connect(hp);
+    hp.connect(this.sfxGain);
+    harm.onended = () => { harm.disconnect(); hg.disconnect(); hp.disconnect(); };
+    harm.start(t);
+    harm.stop(t + 0.04);
+  }
+
+  enemyDeath(pan = 0, distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    if (distance > 0) {
+      const spatial = this._spatialNode(distance, pan);
+      const t = this.ctx.currentTime;
+      // Tone 1: 400Hz square
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = "square";
+      osc1.frequency.setValueAtTime(400, t);
+      const g1 = this.ctx.createGain();
+      g1.gain.setValueAtTime(0.3, t);
+      g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      osc1.connect(g1);
+      g1.connect(spatial.gain);
+      spatial.connect(this.sfxGain);
+      osc1.onended = () => { osc1.disconnect(); g1.disconnect(); };
+      osc1.start(t);
+      osc1.stop(t + 0.1);
+      // Tone 2: 200Hz sawtooth
+      const osc2 = this.ctx.createOscillator();
+      osc2.type = "sawtooth";
+      osc2.frequency.setValueAtTime(200, t);
+      const g2 = this.ctx.createGain();
+      g2.gain.setValueAtTime(0.3, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc2.connect(g2);
+      g2.connect(spatial.gain);
+      osc2.onended = () => { osc2.disconnect(); g2.disconnect(); };
+      osc2.start(t);
+      osc2.stop(t + 0.15);
+      // Tone 3: 100Hz sawtooth
+      const osc3 = this.ctx.createOscillator();
+      osc3.type = "sawtooth";
+      osc3.frequency.setValueAtTime(100, t);
+      const g3 = this.ctx.createGain();
+      g3.gain.setValueAtTime(0.2, t);
+      g3.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc3.connect(g3);
+      g3.connect(spatial.gain);
+      osc3.onended = () => { osc3.disconnect(); g3.disconnect(); };
+      osc3.start(t);
+      osc3.stop(t + 0.2);
+    } else {
+      this.playTone(400, 0.1, "square", 0.3, 0, pan);
+      this.playTone(200, 0.15, "sawtooth", 0.3, 0, pan);
+      this.playTone(100, 0.2, "sawtooth", 0.2, 0, pan);
+    }
+  }
+
+  dashSound() {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+
+    // Whoosh — sawtooth sweep from 800Hz down to 200Hz
+    const sweep = this.ctx.createOscillator();
+    sweep.type = "sawtooth";
+    sweep.frequency.setValueAtTime(800, t);
+    sweep.frequency.exponentialRampToValueAtTime(200, t + 0.1);
+    const sg = this.ctx.createGain();
+    sg.gain.setValueAtTime(0.22, t);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    sweep.connect(sg);
+    sg.connect(this.sfxGain);
+    sweep.onended = () => { sweep.disconnect(); sg.disconnect(); };
+    sweep.start(t);
+    sweep.stop(t + 0.1);
+
+    // Air burst — short noise layer
+    this.playNoise(0.05, 0.2, 3000, "bandpass");
   }
 
   playerHit() {
@@ -595,6 +858,10 @@ export class AudioManager {
     setTimeout(() => this.playTone(1000, 0.08, "square", 0.2), 60);
   }
 
+  menuNav() {
+    this.playTone(500, 0.04, "square", 0.15);
+  }
+
   // ─── Footstep system ─────────────────────────────────────────────────
 
   /**
@@ -617,6 +884,55 @@ export class AudioManager {
   /** Adjust footstep cadence based on player speed multiplier */
   setFootstepCadence(speedMultiplier) {
     this._footstepCadence = Math.max(150, 350 / Math.max(0.5, speedMultiplier));
+  }
+
+  // ─── Low-health heartbeat ─────────────────────────────────────────────
+
+  /**
+   * Heartbeat audio cue — "lub-dub" low-frequency pulse.
+   * Call every frame; self-throttles to the correct interval.
+   * @param {number} severity - 0 (25% HP) to 1 (near 0% HP)
+   */
+  heartbeat(severity = 0.5) {
+    if (!this.ctx || !this.enabled) return;
+    const now = this.ctx.currentTime;
+    const interval = 0.8 - severity * 0.4; // 0.8s at low severity, 0.4s at high
+    if (this._lastHeartbeat && now - this._lastHeartbeat < interval) return;
+    this._lastHeartbeat = now;
+
+    const vol = 0.08 + severity * 0.15; // louder as more critical
+    const t = now;
+
+    // First beat ("lub") — 60Hz sine, fast attack, 100ms sustain
+    const lub = this.ctx.createOscillator();
+    lub.type = "sine";
+    lub.frequency.setValueAtTime(60, t);
+    lub.frequency.exponentialRampToValueAtTime(45, t + 0.1);
+    const lubG = this.ctx.createGain();
+    lubG.gain.setValueAtTime(0.001, t);
+    lubG.gain.linearRampToValueAtTime(vol, t + 0.01);
+    lubG.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    lub.connect(lubG);
+    lubG.connect(this.sfxGain);
+    lub.onended = () => { lub.disconnect(); lubG.disconnect(); };
+    lub.start(t);
+    lub.stop(t + 0.1);
+
+    // Second beat ("dub") — 120ms later, slightly quieter
+    const dubStart = t + 0.12;
+    const dub = this.ctx.createOscillator();
+    dub.type = "sine";
+    dub.frequency.setValueAtTime(55, dubStart);
+    dub.frequency.exponentialRampToValueAtTime(40, dubStart + 0.08);
+    const dubG = this.ctx.createGain();
+    dubG.gain.setValueAtTime(0.001, dubStart);
+    dubG.gain.linearRampToValueAtTime(vol * 0.7, dubStart + 0.01);
+    dubG.gain.exponentialRampToValueAtTime(0.001, dubStart + 0.08);
+    dub.connect(dubG);
+    dubG.connect(this.sfxGain);
+    dub.onended = () => { dub.disconnect(); dubG.disconnect(); };
+    dub.start(dubStart);
+    dub.stop(dubStart + 0.08);
   }
 
   // ─── Meltdown SFX ────────────────────────────────────────────────────
@@ -1185,7 +1501,9 @@ export class AudioManager {
 
   setMusicVolume(v) {
     if (this.musicGain) {
-      this.musicGain.gain.value = Math.max(0, Math.min(1, v * 0.15));
+      const vol = Math.max(0, Math.min(1, v * 0.15));
+      this.musicGain.gain.value = vol;
+      this._musicBaseGain = vol;
     }
   }
 

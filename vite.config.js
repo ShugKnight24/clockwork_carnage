@@ -24,8 +24,6 @@ export default defineConfig({
         // independently — editing a chunk module doesn't invalidate the
         // main bundle for returning visitors.
         manualChunks(id) {
-          if (id.endsWith("/js/cutscene.js")) return "cutscene";
-          if (id.endsWith("/js/builder.js")) return "builder";
           if (id.includes("/src/rendering/enemies/") && !id.endsWith("/index.js")) {
             return "enemy-renderers";
           }

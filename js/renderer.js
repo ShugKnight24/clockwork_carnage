@@ -12,24 +12,70 @@ import {
   drawExoticPickup,
 } from "../src/rendering/pickups.js";
 import { drawProp, setFovScale } from "../src/rendering/props.js";
+import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
+
+// --- Performance: Pre-computed fog rgba string LUT ---
+// Quantize fog alpha to 64 discrete steps to avoid per-column string creation
+const FOG_CACHE_STEPS = 64;
+const _fogCache = new Map(); // key: "r,g,b" -> Array[FOG_CACHE_STEPS+1] of rgba strings
+
+function _getFogString(r, g, b, alpha) {
+  const step = Math.min(FOG_CACHE_STEPS, (alpha * FOG_CACHE_STEPS + 0.5) | 0);
+  const key = `${r},${g},${b}`;
+  let lut = _fogCache.get(key);
+  if (!lut) {
+    lut = new Array(FOG_CACHE_STEPS + 1);
+    for (let i = 0; i <= FOG_CACHE_STEPS; i++) {
+      const a = (i / FOG_CACHE_STEPS).toFixed(4);
+      lut[i] = `rgba(${r},${g},${b},${a})`;
+    }
+    _fogCache.set(key, lut);
+  }
+  return lut[step];
+}
+
+// --- Performance: Pre-allocated sprite sort arrays ---
+// Reused each frame to avoid per-frame allocation + GC pressure.
+let _spriteDistBuf = new Float64Array(256);
+let _spriteOrderBuf = new Int32Array(256);
+let _spriteOrderCount = 0;
 
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
 // TODO: Asset Pipeline for the above or is this overkill
 // TODO: Refine assets and improve variety
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, renderMode = 0) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.width = canvas.width;
     this.height = canvas.height;
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
+    // BUG-030: Store wall-top screen Y per column so sprites behind short
+    // walls can render their upper portion above the wall.
+    // -1 means full-height wall (no sprite pass-through).
+    this.wallTopY = new Float64Array(this.width);
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this.textures = generateWallTextures();
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
+
+    // WebGL hybrid renderer (renderMode: 0=auto, 1=2D only, 2=3D/WebGL)
+    this.glRenderer = null;
+    this.useWebGL = false;
+    if (renderMode !== 1) {
+      // Try to initialize WebGL (auto or explicit 3D)
+      this.glRenderer = GLRenderer.create(this.width, this.height);
+      if (this.glRenderer) {
+        this.useWebGL = true;
+        this._uploadFloorCeilToGL();
+        console.log('[Renderer] WebGL2 hybrid renderer active');
+      } else if (renderMode === 2) {
+        console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
+      }
+    }
   }
 
   /** Called by game.js when the campaign act changes */
@@ -39,6 +85,7 @@ export class Renderer {
     this._actPalette = a;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
+    if (this.useWebGL) this._uploadFloorCeilToGL();
   }
 
   /** Called by settings onChange — 0 = Clockwork, 1 = Brutal */
@@ -56,7 +103,29 @@ export class Renderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.zBuffer = new Float64Array(w);
+    this.wallTopY = new Float64Array(w);
     this._floorCeilBuffer = null;
+    if (this.glRenderer) this.glRenderer.resize(w, h);
+  }
+
+  /** Upload floor/ceiling pixel data to WebGL textures */
+  _uploadFloorCeilToGL() {
+    if (!this.glRenderer) return;
+    // Convert raw pixel arrays to RGBA Uint8ClampedArray for GL upload
+    const floorRGBA = new Uint8ClampedArray(256 * 256 * 4);
+    const ceilRGBA = new Uint8ClampedArray(256 * 256 * 4);
+    for (let i = 0; i < 256 * 256; i++) {
+      const si = i * 4;
+      floorRGBA[si] = this._floorTexPixels[si];
+      floorRGBA[si + 1] = this._floorTexPixels[si + 1];
+      floorRGBA[si + 2] = this._floorTexPixels[si + 2];
+      floorRGBA[si + 3] = 255;
+      ceilRGBA[si] = this._ceilTexPixels[si];
+      ceilRGBA[si + 1] = this._ceilTexPixels[si + 1];
+      ceilRGBA[si + 2] = this._ceilTexPixels[si + 2];
+      ceilRGBA[si + 3] = 255;
+    }
+    this.glRenderer.uploadFloorCeilTextures(floorRGBA, ceilRGBA);
   }
 
   _regenerateFloorCeil() {
@@ -81,6 +150,8 @@ export class Renderer {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
     }
     const buf = this._floorCeilBuffer.data;
+    // Uint32Array view for single 32-bit pixel writes (4× fewer stores)
+    const buf32 = new Uint32Array(buf.buffer);
     const floorTex = this._floorTexPixels;
     const ceilTex = this._ceilTexPixels;
 
@@ -102,13 +173,15 @@ export class Renderer {
     const fogB = brutal ? actFog.b : actFog.b + 8;
     const fogMaxOpacity = brutal ? 0.92 : 0.7;
 
-    // Fill entire buffer with fog first (handles exposed rows from pitch shift)
-    for (let i = 0; i < buf.length; i += 4) {
-      buf[i] = fogR; buf[i + 1] = fogG; buf[i + 2] = fogB; buf[i + 3] = 255;
-    }
+    // Pre-pack fog as 32-bit ABGR (little-endian) for fast fill
+    const fogPacked = (255 << 24) | (fogB << 16) | (fogG << 8) | fogR;
+    // Fill entire buffer with fog (single 32-bit writes)
+    buf32.fill(fogPacked);
 
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
+
+    // Pre-compute per-row fog LUT to avoid redundant math per-pixel
     for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
       if (p <= 0) continue;
@@ -124,51 +197,36 @@ export class Renderer {
         fG = fogG * fog,
         fB = fogB * fog;
 
-      for (let x = 0; x < w; x++) {
-        const tx = ((fx * 128) | 0) & 127;
-        const ty = ((fy * 128) | 0) & 127;
-        const ti = (ty * 128 + tx) * 4;
+      const rowOff = y * w;
+      const rowOff1 = (y - 1) * w;
 
-        // Floor pixel
+      for (let x = 0; x < w; x++) {
+        const tx = ((fx * 256) | 0) & 255;
+        const ty = ((fy * 256) | 0) & 255;
+        const ti = (ty * 256 + tx) * 4;
+
+        // Floor pixel — single 32-bit write
         if (y < h) {
-          const fi = (y * w + x) * 4;
-          const fr = floorTex[ti] * invFog + fR;
-          const fg = floorTex[ti + 1] * invFog + fG;
-          const fb = floorTex[ti + 2] * invFog + fB;
-          buf[fi] = fr;
-          buf[fi + 1] = fg;
-          buf[fi + 2] = fb;
-          buf[fi + 3] = 255;
+          const fr = (floorTex[ti] * invFog + fR) | 0;
+          const fg = (floorTex[ti + 1] * invFog + fG) | 0;
+          const fb = (floorTex[ti + 2] * invFog + fB) | 0;
+          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+          buf32[rowOff + x] = packed;
           // Copy to skipped row
-          if (y - 1 >= 0) {
-            const fi2 = ((y - 1) * w + x) * 4;
-            buf[fi2] = fr;
-            buf[fi2 + 1] = fg;
-            buf[fi2 + 2] = fb;
-            buf[fi2 + 3] = 255;
-          }
+          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
         }
 
         // Ceiling pixel (mirrored around shifted horizon)
         const cy = 2 * halfH - 1 - y;
         if (cy >= 0 && cy < h) {
-          const ci = (cy * w + x) * 4;
-          const cr = ceilTex[ti] * invFog + fR;
-          const cg = ceilTex[ti + 1] * invFog + fG;
-          const cb = ceilTex[ti + 2] * invFog + fB;
-          buf[ci] = cr;
-          buf[ci + 1] = cg;
-          buf[ci + 2] = cb;
-          buf[ci + 3] = 255;
+          const cr = (ceilTex[ti] * invFog + fR) | 0;
+          const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
+          const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
+          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+          buf32[cy * w + x] = cPacked;
           // Copy ceiling skipped row
           const cy2 = cy + 1;
-          if (cy2 >= 0 && cy2 < h) {
-            const ci2 = (cy2 * w + x) * 4;
-            buf[ci2] = cr;
-            buf[ci2 + 1] = cg;
-            buf[ci2 + 2] = cb;
-            buf[ci2 + 3] = 255;
-          }
+          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
         }
 
         fx += stepX;
@@ -178,14 +236,8 @@ export class Renderer {
 
     // Horizon line (at shifted position, if visible)
     if (halfH >= 0 && halfH < h) {
-      const hi = halfH * w * 4;
-      for (let x = 0; x < w; x++) {
-        const idx = hi + x * 4;
-        buf[idx] = fogR;
-        buf[idx + 1] = fogG;
-        buf[idx + 2] = fogB;
-        buf[idx + 3] = 255;
-      }
+      const hi = halfH * w;
+      for (let x = 0; x < w; x++) buf32[hi + x] = fogPacked;
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
@@ -207,6 +259,7 @@ export class Renderer {
 
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
+    this.wallTopY.fill(-1); // -1 = full-height wall (no pass-through)
 
     // Convert FOV degrees to camera plane multiplier
     const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
@@ -243,15 +296,36 @@ export class Renderer {
 
     // Draw textured floor and ceiling (with yShift for pitch support)
     if (!skipFloorCeil) {
-      this._renderFloorCeiling(
-        camX,
-        camY,
-        dirX,
-        dirY,
-        -dirY * planeMul,
-        dirX * planeMul,
-        yShift,
-      );
+      if (this.useWebGL && this.glRenderer) {
+        // GPU-accelerated floor/ceiling with dynamic lighting
+        const act = this._actPalette || 1;
+        const brutal = this._visualStyle === 1;
+        const actFog = act === 2
+          ? [24 / 255, 14 / 255, 12 / 255]
+          : act === 3
+            ? [26 / 255, 8 / 255, 16 / 255]
+            : [12 / 255, 22 / 255, 38 / 255];
+        const fogMax = brutal ? 0.92 : 0.7;
+        this.glRenderer.renderFloorCeiling(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          Math.round(yShift),
+          actFog, fogMax,
+          this.lights || [],
+        );
+        // Composite WebGL result onto Canvas2D
+        ctx.drawImage(this.glRenderer.canvas, 0, 0);
+      } else {
+        this._renderFloorCeiling(
+          camX,
+          camY,
+          dirX,
+          dirY,
+          -dirY * planeMul,
+          dirX * planeMul,
+          yShift,
+        );
+      }
     } else {
       // Gradient fallback for builder mode (uses yShift for vertical offset)
       const centerY = (h >> 1) + yShift;
@@ -276,8 +350,8 @@ export class Renderer {
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      let mapX = Math.floor(camX);
-      let mapY = Math.floor(camY);
+      let mapX = camX | 0;
+      let mapY = camY | 0;
 
       const deltaDistX = Math.abs(1 / rayDirX);
       const deltaDistY = Math.abs(1 / rayDirY);
@@ -334,14 +408,12 @@ export class Renderer {
 
       if (perpWallDist < 0.01) perpWallDist = 0.01;
 
-      // TODO: For short walls (heightFrac < 1), store wall-top Y per column
-      // so renderSprites() can show sprites above short walls instead of
-      // fully occluding them based on distance alone.
+      // BUG-030: Store wall-top Y so sprite pass can draw above short walls.
       this.zBuffer[x] = perpWallDist;
 
-      const lineHeight = Math.floor(h / perpWallDist);
-      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2 + yShift);
-      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2 + yShift);
+      const lineHeight = (h / perpWallDist) | 0;
+      const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
+      const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
 
       // Variable height: heightMap determines how tall the wall renders
       // 5 layers = full wall, 1 layer = 20% wall (from ground up)
@@ -353,7 +425,7 @@ export class Renderer {
         mapX < map.width &&
         mapY < map.height
       ) {
-        const hCount = map.heightMap[mapY][mapX];
+        const hCount = map.heightMap[mapY]?.[mapX] ?? 5;
         if (hCount > 0 && hCount < 5) {
           heightFrac = hCount / 5;
         }
@@ -364,10 +436,13 @@ export class Renderer {
         // Short wall: grows upward from floor level
         drawEnd = fullDrawEnd;
         const wallPx = fullDrawEnd - fullDrawStart;
-        drawStart = Math.floor(drawEnd - wallPx * heightFrac);
+        drawStart = (drawEnd - wallPx * heightFrac) | 0;
+        // BUG-030: Record wall-top screen Y for short walls
+        this.wallTopY[x] = drawStart;
       } else {
         drawStart = fullDrawStart;
         drawEnd = fullDrawEnd;
+        this.wallTopY[x] = -1; // Full-height wall — fully occluding
       }
 
       if (drawStart < 0) drawStart = 0;
@@ -384,19 +459,19 @@ export class Renderer {
 
       const tex = this.textures[wallType];
       if (tex) {
-        let texX = Math.floor(wallX * 128);
+        let texX = (wallX * 256) | 0;
         if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-          texX = 127 - texX;
+          texX = 255 - texX;
         }
 
         // Draw textured wall strip
-        const texHeight = 128;
+        const texHeight = 256;
         const step = texHeight / lineHeight;
         let texPos = (drawStart - h / 2 + lineHeight / 2) * step;
 
         // Use drawImage for textured columns
         const srcY = Math.max(0, texPos);
-        const srcH = Math.min(128, (drawEnd - drawStart) * step);
+        const srcH = Math.min(256, (drawEnd - drawStart) * step);
         if (srcH > 0 && drawEnd > drawStart) {
           ctx.drawImage(
             tex,
@@ -417,13 +492,13 @@ export class Renderer {
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
         }
 
-        // Distance fog
+        // Distance fog (cached rgba strings to avoid per-column string creation)
         const wallFogMax = this._visualStyle === 1 ? 0.85 : 0.6;
         const fogAmount = Math.min(wallFogMax, perpWallDist / 20);
         if (fogAmount > 0) {
           const [wfR, wfG, wfB] =
             this._visualStyle === 1 ? [8, 8, 20] : [10, 18, 32];
-          ctx.fillStyle = `rgba(${wfR},${wfG},${wfB},${fogAmount})`;
+          ctx.fillStyle = _getFogString(wfR, wfG, wfB, fogAmount);
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
         }
 
@@ -452,12 +527,12 @@ export class Renderer {
             // Cap alpha so big stacks don't blow out the column.
             const peak = Math.max(lr, lg, lb);
             const a = Math.min(0.85, peak / 255);
-            const nr = Math.min(255, Math.floor(lr));
-            const ng = Math.min(255, Math.floor(lg));
-            const nb = Math.min(255, Math.floor(lb));
+            const nr = Math.min(255, lr | 0);
+            const ng = Math.min(255, lg | 0);
+            const nb = Math.min(255, lb | 0);
             const prev = ctx.globalCompositeOperation;
             ctx.globalCompositeOperation = "lighter";
-            ctx.fillStyle = `rgba(${nr},${ng},${nb},${a})`;
+            ctx.fillStyle = _getFogString(nr, ng, nb, a);
             ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
             ctx.globalCompositeOperation = prev;
           }
@@ -481,7 +556,7 @@ export class Renderer {
           }
           if (hasDoorNeighbor) {
             const frameAlpha = Math.max(0, (1 - fogAmount) * 0.5);
-            ctx.fillStyle = `rgba(0,180,120,${frameAlpha})`;
+            ctx.fillStyle = _getFogString(0, 180, 120, frameAlpha);
             ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
           }
         }
@@ -524,7 +599,7 @@ export class Renderer {
 
       if (transformY <= 0.1) continue;
 
-      const screenX = Math.floor((w / 2) * (1 + transformX / transformY));
+      const screenX = ((w / 2) * (1 + transformX / transformY)) | 0;
 
       // Basic occlusion check
       if (
@@ -534,19 +609,19 @@ export class Renderer {
       )
         continue;
 
-      const size = Math.abs(Math.floor((h / transformY) * (p.size || 0.05)));
+      const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
-      const screenY = Math.floor(halfH + (p.z || 0) * (h / transformY));
+      const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
 
       const r = p.r ?? 255;
       const g = p.g ?? 255;
       const b = p.b ?? 255;
       const a = p.life ?? 1;
 
-      ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+      ctx.fillStyle = _getFogString(r, g, b, a);
       ctx.fillRect(
-        Math.floor(screenX - size / 2),
-        Math.floor(screenY - size / 2),
+        (screenX - size / 2) | 0,
+        (screenY - size / 2) | 0,
         Math.max(1, size),
         Math.max(1, size),
       );
@@ -630,17 +705,23 @@ export class Renderer {
     const cy = camY != null ? camY : player.y;
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
-    // Sort entities by distance from camera (index sort — avoids per-frame object copies)
-    const spriteDist = [];
-    const spriteOrder = [];
+    // Sort entities by distance from camera (pre-allocated arrays to avoid per-frame GC)
+    // Grow backing buffers if entity count exceeds capacity
+    if (entities.length > _spriteDistBuf.length) {
+      _spriteDistBuf = new Float64Array(entities.length * 2);
+      _spriteOrderBuf = new Int32Array(entities.length * 2);
+    }
+    _spriteOrderCount = 0;
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].active === false && !entities[i].dissolving) continue;
       const distSq = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
       if (distSq > maxDistSq && entities[i].type !== "exit") continue;
-      spriteOrder.push(i);
-      spriteDist[i] = distSq;
+      _spriteOrderBuf[_spriteOrderCount++] = i;
+      _spriteDistBuf[i] = distSq;
     }
-    spriteOrder.sort((a, b) => spriteDist[b] - spriteDist[a]);
+    // Sort the active portion of the order buffer
+    const spriteOrder = Array.prototype.slice.call(_spriteOrderBuf, 0, _spriteOrderCount);
+    spriteOrder.sort((a, b) => _spriteDistBuf[b] - _spriteDistBuf[a]);
 
     for (let si = 0; si < spriteOrder.length; si++) {
       const entity = entities[spriteOrder[si]];
@@ -653,25 +734,31 @@ export class Renderer {
 
       if (transformY <= 0.1) continue;
 
-      const spriteScreenX = Math.floor((w / 2) * (1 + transformX / transformY));
-      const spriteHeight = Math.abs(Math.floor(h / transformY));
-      const spriteWidth = Math.abs(Math.floor(h / transformY));
+      const spriteScreenX = ((w / 2) * (1 + transformX / transformY)) | 0;
+      const spriteHeight = (Math.abs(h / transformY)) | 0;
+      const spriteWidth = spriteHeight;
 
-      const drawStartY = Math.max(0, Math.floor(-spriteHeight / 2 + h / 2));
-      const drawEndY = Math.min(h - 1, Math.floor(spriteHeight / 2 + h / 2));
+      const drawStartY = Math.max(0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min(h - 1, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
-        Math.floor(-spriteWidth / 2 + spriteScreenX),
+        (-spriteWidth / 2 + spriteScreenX) | 0,
       );
       const drawEndX = Math.min(
         w - 1,
-        Math.floor(spriteWidth / 2 + spriteScreenX),
+        (spriteWidth / 2 + spriteScreenX) | 0,
       );
 
-      // Check if any column is visible
+      // Check if any column is visible (BUG-030: account for short walls)
       let visible = false;
       for (let x = drawStartX; x <= drawEndX; x++) {
         if (transformY < this.zBuffer[x]) {
+          visible = true;
+          break;
+        }
+        // Sprite is behind wall, but if it's a short wall and the sprite
+        // extends above the wall-top, it's still partially visible.
+        if (this.wallTopY[x] >= 0 && drawStartY < this.wallTopY[x]) {
           visible = true;
           break;
         }
@@ -724,7 +811,7 @@ export class Renderer {
   ) {
     const w = this.width;
     const h = this.height;
-    const centerY = Math.floor(h / 2);
+    const centerY = (h / 2) | 0;
 
     // Distance fog factor
     const fogDist = this._visualStyle === 1 ? 20 : 30;
@@ -842,7 +929,7 @@ export class Renderer {
     fog,
   ) {
     const h = this.height;
-    const centerY = Math.floor(h / 2);
+    const centerY = (h / 2) | 0;
     const halfW = sprWidth / 2;
     const halfH = sprHeight / 2;
 

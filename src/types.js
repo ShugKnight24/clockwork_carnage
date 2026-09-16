@@ -24,4 +24,5 @@ export const GameState = {
   CHARACTER_CREATE: "characterCreate",
   ACHIEVEMENTS: "achievements",
   STATS: "stats",
+  HUD_EDITOR: "hudEditor",
 };

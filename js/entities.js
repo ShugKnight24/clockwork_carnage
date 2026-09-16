@@ -32,6 +32,8 @@ export class Player {
     this.x = x;
     this.y = y;
     this.angle = angle;
+    this.aimOffsetX = 0;
+    this.aimOffsetY = 0;
     this.health = PLAYER_MAX_HP;
     this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;
@@ -56,8 +58,10 @@ export class Player {
     this.secretsFound = 0;
     this.lastFireTime = 0;
     this.isFiring = false;
+    this.isAiming = false;
     this.weaponBob = 0;
     this.weaponKick = 0;
+    this.cameraPunch = 0; // Vertical camera recoil (radians); decays each frame
     this.hurtTime = 0;
     this.alive = true;
     // Sprint & Dash
@@ -131,6 +135,8 @@ export class Player {
     "sprintDrainMult",
     "chronoEnergy",
     "maxChronoEnergy",
+    "aimOffsetX",
+    "aimOffsetY",
   ];
 
   /**
@@ -242,12 +248,15 @@ export class Projectile {
     this.y = y;
     this.dirX = dirX;
     this.dirY = dirY;
+    this.originX = x;
+    this.originY = y;
     this.damage = damage;
     this.speed = speed;
     this.owner = owner;
     this.type = "projectile";
     this.active = true;
     this.color = "#ff0044";
+    this.pitch = 0;
     this.life = 3; // seconds
   }
 }

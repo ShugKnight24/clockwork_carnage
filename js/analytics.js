@@ -6,11 +6,21 @@ const GA_ID = "G-M2ETG779YT";
 const CONSENT_KEY = "cc_analytics_consent";
 const SESSION_KEY = "cc_session_id";
 
-let sessionId = localStorage.getItem(SESSION_KEY);
-if (!sessionId) {
-  sessionId = Math.random().toString(36).substr(2, 9);
-  localStorage.setItem(SESSION_KEY, sessionId);
+function storageGet(key) {
+  try { return localStorage.getItem(key); } catch (_) { return null; }
 }
+
+function storageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (_) {}
+}
+
+let sessionId = storageGet(SESSION_KEY);
+if (!sessionId) {
+  sessionId = Math.random().toString(36).slice(2, 11);
+  storageSet(SESSION_KEY, sessionId);
+}
+
+let initialized = false;
 
 // Track which modes the player visits this page-session.
 const modesPlayed = new Set();
@@ -30,64 +40,69 @@ function loadGtag() {
   gtag("config", GA_ID, { anonymize_ip: true });
 }
 
-// ── Consent modal ──────────────────────────────────────────────
+// ── Consent banner ─────────────────────────────────────────────
 function createConsentModal() {
   if (document.getElementById("cc-analytics-modal")) return;
 
   const overlay = document.createElement("div");
   overlay.id = "cc-analytics-modal";
+  overlay.setAttribute("role", "region");
+  overlay.setAttribute("aria-label", "Analytics consent");
   Object.assign(overlay.style, {
     position: "fixed",
-    top: "0",
-    left: "0",
-    width: "100%",
-    height: "100%",
-    background: "rgba(0,0,0,0.75)",
+    right: "16px",
+    bottom: "16px",
+    width: "min(400px, calc(100% - 32px))",
+    background: "rgba(0,0,0,0.88)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    border: "1px solid rgba(0,255,200,0.25)",
+    borderRadius: "10px",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.45)",
     zIndex: "9999",
   });
 
   const box = document.createElement("div");
   Object.assign(box.style, {
-    background: "#111",
     color: "#fff",
-    padding: "24px",
-    maxWidth: "400px",
-    borderRadius: "8px",
-    textAlign: "center",
+    padding: "14px",
+    width: "100%",
     fontFamily: "inherit",
   });
   box.innerHTML =
-    "<p style='margin:0 0 16px'>Help us improve Clockwork Carnage?<br>We track anonymous play patterns only.</p>" +
-    '<button id="cc-analytics-accept" style="margin:0 8px;padding:8px 16px;cursor:pointer">Accept</button>' +
-    '<button id="cc-analytics-decline" style="margin:0 8px;padding:8px 16px;cursor:pointer">Decline</button>';
+    "<p style='margin:0 0 10px;font-size:13px;line-height:1.35'>Help improve Clockwork Carnage? Anonymous play patterns only.</p>" +
+    '<div style="display:flex;gap:8px;justify-content:flex-end"><button id="cc-analytics-decline" style="padding:7px 12px;cursor:pointer">No thanks</button>' +
+    '<button id="cc-analytics-accept" style="padding:7px 12px;cursor:pointer">Allow</button></div>';
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
   document
     .getElementById("cc-analytics-accept")
     .addEventListener("click", () => {
-      localStorage.setItem(CONSENT_KEY, "accepted");
+      storageSet(CONSENT_KEY, "accepted");
       loadGtag();
       overlay.remove();
     });
   document
     .getElementById("cc-analytics-decline")
     .addEventListener("click", () => {
-      localStorage.setItem(CONSENT_KEY, "declined");
+      storageSet(CONSENT_KEY, "declined");
       overlay.remove();
     });
 }
 
 // ── Public API ─────────────────────────────────────────────────
 function initAnalytics() {
-  const consent = localStorage.getItem(CONSENT_KEY);
+  if (initialized) return;
+  initialized = true;
+  const consent = storageGet(CONSENT_KEY);
   if (consent === "accepted") {
     loadGtag();
   } else if (consent === null) {
-    createConsentModal();
+    window.addEventListener("cc:first-interaction", createConsentModal, {
+      once: true,
+    });
   }
   // Fire session_end on unload
   window.addEventListener("beforeunload", () => {
@@ -99,7 +114,7 @@ function initAnalytics() {
 }
 
 function trackEvent(name, params = {}) {
-  if (localStorage.getItem(CONSENT_KEY) !== "accepted") return;
+  if (storageGet(CONSENT_KEY) !== "accepted") return;
   if (params.mode) modesPlayed.add(params.mode);
   if (window.gtag) {
     window.gtag(

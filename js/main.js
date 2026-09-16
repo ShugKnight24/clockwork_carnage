@@ -2,6 +2,12 @@ import { Game, GameState, GAME_VERSION } from "./game.js";
 import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
+import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { invalidateHUD } from "../src/ui/hud.js";
+
+const primaryTouch = isPrimaryTouchDevice();
+const debugParam = new URLSearchParams(window.location.search).has("debug");
+const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam;
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -19,8 +25,9 @@ const quality = new AdaptiveQuality({
   maxScale: 1.0,
 });
 game.quality = quality;
+game.applyPerformanceSettings();
 
-// initialize analytics (will prompt consent if needed)
+// initialize analytics (consent UI waits until first user interaction)
 initAnalytics();
 
 // Set version label on title screen
@@ -28,7 +35,7 @@ const versionLabel = document.getElementById("versionLabel");
 if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
 
 // Update start prompt for touch devices
-if ("ontouchstart" in window) {
+if (primaryTouch) {
   const startPrompt = titleScreen.querySelector(".start-prompt");
   if (startPrompt) startPrompt.textContent = "[ TAP TO START ]";
 }
@@ -38,46 +45,50 @@ let nativeW = 0, nativeH = 0;
 
 function resizeCanvases() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2× for perf
-  let w = window.innerWidth;
-  let h = window.innerHeight;
+  const cssW = window.innerWidth;
+  const cssH = window.innerHeight;
+  let renderW = cssW;
+  let renderH = cssH;
   // Cap render resolution on mobile to maintain playable FPS
   if (game.isTouchDevice) {
     const maxDim = 1280;
-    if (w > maxDim || h > maxDim) {
-      const scale = maxDim / Math.max(w, h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
+    if (renderW > maxDim || renderH > maxDim) {
+      const scale = maxDim / Math.max(renderW, renderH);
+      renderW = Math.round(renderW * scale);
+      renderH = Math.round(renderH * scale);
     }
   }
-  nativeW = w;
-  nativeH = h;
+  nativeW = renderW;
+  nativeH = renderH;
 
   // Store DPR + CSS-pixel dimensions on game for layout code
   game.dpr = dpr;
-  game.hudW = w;
-  game.hudH = h;
+  game.hudW = cssW;
+  game.hudH = cssH;
 
   // HUD at full DPR for crisp text
-  hudCanvas.style.width = w + "px";
-  hudCanvas.style.height = h + "px";
-  hudCanvas.width = Math.round(w * dpr);
-  hudCanvas.height = Math.round(h * dpr);
+  hudCanvas.style.width = cssW + "px";
+  hudCanvas.style.height = cssH + "px";
+  hudCanvas.width = Math.round(cssW * dpr);
+  hudCanvas.height = Math.round(cssH * dpr);
   game.hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Game canvas renders at quality-scaled res (no DPR — adaptive quality handles it)
-  const s = quality.renderScale;
-  gameCanvas.style.width = w + "px";
-  gameCanvas.style.height = h + "px";
-  const gw = Math.round(w * s);
-  const gh = Math.round(h * s);
+  const s = quality.stableScale ?? quality.renderScale;
+  gameCanvas.style.width = cssW + "px";
+  gameCanvas.style.height = cssH + "px";
+  const gw = Math.round(renderW * s);
+  const gh = Math.round(renderH * s);
   gameCanvas.width = gw;
   gameCanvas.height = gh;
   if (game.renderer) {
     game.renderer.resize(gw, gh);
   }
+  invalidateHUD();
 }
 
 window.addEventListener("resize", resizeCanvases);
+window.addEventListener("cc-quality-change", resizeCanvases);
 resizeCanvases();
 
 function showGameCanvases() {
@@ -105,6 +116,15 @@ function updateContinueButtons() {
   }
 }
 
+function enterModeSelect() {
+  titleScreen.classList.add("hidden");
+  modeSelect.classList.remove("hidden");
+  updateContinueButtons();
+  game.state = GameState.MODE_SELECT;
+  window.dispatchEvent(new Event("cc:first-interaction"));
+  requestAnimationFrame(() => document.getElementById("btnCampaign")?.focus());
+}
+
 function initAudio() {
   game.audio.init();
   game.audio.resume();
@@ -119,16 +139,56 @@ document.getElementById("btnArena").addEventListener("click", () => {
   game.startArena();
 });
 
+// Plays the Marvel-style flipbook intro on first campaign boot, then runs cb.
+// Mark-seen fires inside onComplete so an aborted intro replays next time.
+async function playIntroFlipbookThen(cb) {
+  const FLIPBOOK_KEY = "cc_seen_intro_flipbook";
+  const seen = game.save?.hasSeenIntroMemory?.(FLIPBOOK_KEY)
+    ?? (() => { try { return localStorage.getItem(FLIPBOOK_KEY) === "1"; } catch (_) { return false; } })();
+  if (seen) return cb();
+  showGameCanvases();
+  await game.startCutscene("intro_flipbook", () => {
+    try { localStorage.setItem(FLIPBOOK_KEY, "1"); } catch (_) {}
+    cb();
+  });
+}
+
+// First-time campaign onboarding: route through character creator before
+// any narrative content so the player's chosen name + appearance is locked
+// in before the flipbook references {AGENT}. Mark-seen fires only after a
+// successful save (not discard), so quitting the creator replays it.
+function playCreatorThen(cb) {
+  const CREATOR_KEY = "cc_seen_creator_intro";
+  let seen = false;
+  try { seen = localStorage.getItem(CREATOR_KEY) === "1"; } catch (_) {}
+  if (seen) return cb();
+  showGameCanvases();
+  game.creatorCategory = 0;
+  game._creatorSaveCallback = (saved) => {
+    if (saved) {
+      try { localStorage.setItem(CREATOR_KEY, "1"); } catch (_) {}
+    }
+    cb();
+  };
+  game.state = GameState.CHARACTER_CREATE;
+}
+
 document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  if (game.shouldShowTutorial()) {
-    game.startTutorial();
-  } else {
-    game.showCampaignPrompt();
-  }
+  // Order: Creator → Flipbook → Tutorial prompt (or straight to campaign) → Level 1
+  playCreatorThen(() => {
+    playIntroFlipbookThen(() => {
+      if (game.shouldShowTutorial()) {
+        // First-time: offer tutorial vs skip choice
+        game.showCampaignPrompt();
+      } else {
+        game.startCampaign();
+      }
+    });
+  });
 });
 
 document.getElementById("btnTutorial").addEventListener("click", () => {
@@ -202,7 +262,7 @@ if (btnFullscreen) {
     if (isStandalone) {
       btnFullscreen.style.display = "none"; // Already fullscreen via home screen
     } else if (
-      "ontouchstart" in window &&
+      primaryTouch &&
       /iP(hone|ad|od)/.test(navigator.userAgent)
     ) {
       // iOS device without Fullscreen API — offer PWA install via home screen
@@ -306,35 +366,17 @@ btnContinueArena.addEventListener("click", () => {
 titleScreen.addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
-  if (game.shouldShowTutorial()) {
-    showGameCanvases();
-    trackEvent("mode_start", { mode: "tutorial" });
-    game.startTutorial();
-  } else {
-    titleScreen.classList.add("hidden");
-    modeSelect.classList.remove("hidden");
-    updateContinueButtons();
-    game.state = GameState.MODE_SELECT;
-  }
+  enterModeSelect();
 });
 
 document.addEventListener("keydown", (e) => {
   if (
     game.state === GameState.TITLE &&
-    (e.code === "Enter" || e.code === "Space")
+    (e.code === "Enter" || e.code === "Space" || e.code === "GamepadStart")
   ) {
     initAudio();
     game.audio.menuConfirm();
-    if (game.shouldShowTutorial()) {
-      showGameCanvases();
-      trackEvent("mode_start", { mode: "tutorial" });
-      game.startTutorial();
-      return;
-    }
-    titleScreen.classList.add("hidden");
-    modeSelect.classList.remove("hidden");
-    updateContinueButtons();
-    game.state = GameState.MODE_SELECT;
+    enterModeSelect();
     return;
   }
   if (game.state === GameState.MODE_SELECT) {
@@ -395,12 +437,23 @@ document.addEventListener("keydown", (e) => {
 
 let prevState = null;
 let _errCount = 0;
+let _lastQualityTimestamp = 0;
+let _lastRenderedTimestamp = 0;
 
 function gameLoop(timestamp) {
   try {
-    const _tUpd0 = performance.now();
+    const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
     game.update(timestamp);
-    const updateMs = performance.now() - _tUpd0;
+    const frameTargets = [0, 30, 60, 90, 120];
+    const target = game.settings.batterySaver ? 30 : frameTargets[game.settings.frameTarget] || 0;
+    const shouldRender = !target || !_lastRenderedTimestamp || timestamp - _lastRenderedTimestamp >= 1000 / target;
+    if (!shouldRender) {
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+    _lastRenderedTimestamp = timestamp;
+
+    const updateMs = updateStart ? performance.now() - updateStart : game.deltaTime * 1000;
 
     if (game.state !== prevState) {
       prevState = game.state;
@@ -425,9 +478,9 @@ function gameLoop(timestamp) {
 
     let renderMs = 0;
     if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
-      const _tRnd0 = performance.now();
+      const _tRnd0 = devToolsEnabled || game.showFPS ? performance.now() : 0;
       game.render();
-      renderMs = performance.now() - _tRnd0;
+      renderMs = _tRnd0 ? performance.now() - _tRnd0 : 0;
 
       // Draw fade transition overlay on top of everything
       if (game.transitioning && game.transitionAlpha > 0) {
@@ -439,20 +492,19 @@ function gameLoop(timestamp) {
       }
     }
 
-    // Feed profiler
-    game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
+    if (devToolsEnabled || game.showFPS) {
+      game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
+    }
 
-    // Adaptive quality — feed FPS, adjust render scale
-    quality.recordFPS(game.fps);
+    // Adaptive quality needs per-frame FPS; game.fps is a 1s HUD counter.
+    const frameMs = _lastQualityTimestamp ? timestamp - _lastQualityTimestamp : 1000 / 60;
+    _lastQualityTimestamp = timestamp;
+    quality.recordFPS(1000 / Math.max(frameMs, 1));
     if (quality.adjust(timestamp)) {
+      game.applyPerformanceSettings();
       const s = quality.renderScale;
-      const gw = Math.round(nativeW * s);
-      const gh = Math.round(nativeH * s);
-      gameCanvas.width = gw;
-      gameCanvas.height = gh;
-      if (game.renderer) game.renderer.resize(gw, gh);
-      // Invalidate cached vignette (it's sized to gameCanvas)
-      game._vignetteCanvas = null;
+      quality.stableScale = s;
+      resizeCanvases();
     }
 
     // Draw profiler overlay when showFPS is active
@@ -495,34 +547,40 @@ window.__ccBeforeUnloadRegistered = true;
 // Expose profiler snapshot for test harness / telemetry
 window.ccProfiler = () => game.profiler.getSnapshot();
 
-// Expose test runner on window for console access (dynamic import so
-// production works even when js/testing/ is not deployed)
-import("./testing/harness.js")
-  .then((mod) => {
-    window.ccTest = mod.createTestRunner(game);
-  })
-  .catch(() => {
-    /* harness not available — skip */
-  });
+if (devToolsEnabled) {
+  // Expose test runner on window for console access.
+  const testingRoot = `${location.origin}${import.meta.env?.BASE_URL ?? "/"}js/testing/`;
+  const debugPath = `${testingRoot}harness.js`;
+  const bridgePath = `${testingRoot}debug-bridge.js`;
+  const telemetryPath = `${testingRoot}telemetry.js`;
 
-// Expose debug bridge for Playwright / external automation
-import("./testing/debug-bridge.js")
-  .then((mod) => {
-    window.ccDebug = mod.createDebugBridge(game);
-  })
-  .catch(() => {
-    /* debug bridge not available — skip */
-  });
+  import(/* @vite-ignore */ debugPath)
+    .then((mod) => {
+      window.ccTest = mod.createTestRunner(game);
+    })
+    .catch(() => {
+      /* harness not available — skip */
+    });
 
-// Expose telemetry collector for session data capture
-import("./testing/telemetry.js")
-  .then((mod) => {
-    window._ccTelemetryModule = mod;
-    window.ccTelemetry = mod.createTelemetry(game);
-  })
-  .catch(() => {
-    /* telemetry not available — skip */
-  });
+  // Expose debug bridge for Playwright / external automation.
+  import(/* @vite-ignore */ bridgePath)
+    .then((mod) => {
+      window.ccDebug = mod.createDebugBridge(game);
+    })
+    .catch(() => {
+      /* debug bridge not available — skip */
+    });
+
+  // Expose telemetry collector for session data capture.
+  import(/* @vite-ignore */ telemetryPath)
+    .then((mod) => {
+      window._ccTelemetryModule = mod;
+      window.ccTelemetry = mod.createTelemetry(game);
+    })
+    .catch(() => {
+      /* telemetry not available — skip */
+    });
+}
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);

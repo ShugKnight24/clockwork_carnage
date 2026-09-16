@@ -371,10 +371,17 @@ export class CampaignManager {
         this.level = 0;
         g.player.health = g.player.maxHealth;
         g.player.ammo = Math.min(g.player.ammo + 50, 999);
-        g.startCutscene("act2_intro", () => {
-          this.loadLevel(0);
-          this.save();
-        });
+        const afterAct2Fb = () => {
+          g.startCutscene("act2_intro", () => {
+            this.loadLevel(0);
+            this.save();
+          });
+        };
+        if (g.cutsceneEngine.hasScript("act2_transition_fb")) {
+          g.startCutscene("act2_transition_fb", afterAct2Fb);
+        } else {
+          afterAct2Fb();
+        }
       });
     } else if (this.act === 2) {
       g.audio.stopMusic();
@@ -383,12 +390,19 @@ export class CampaignManager {
         this.level = 0;
         g.player.health = g.player.maxHealth;
         g.player.ammo = Math.min(g.player.ammo + 50, 999);
-        g.startCutscene("lyra_reveal", () => {
-          g.startCutscene("act3_intro", () => {
-            this.loadLevel(0);
-            this.save();
+        const afterAct3Fb = () => {
+          g.startCutscene("lyra_reveal", () => {
+            g.startCutscene("act3_intro", () => {
+              this.loadLevel(0);
+              this.save();
+            });
           });
-        });
+        };
+        if (g.cutsceneEngine.hasScript("act3_transition_fb")) {
+          g.startCutscene("act3_transition_fb", afterAct3Fb);
+        } else {
+          afterAct3Fb();
+        }
       });
     } else {
       // Act 3 — game complete
@@ -469,6 +483,12 @@ export class CampaignManager {
         this.start();
       }
     };
+    let seenCreator = false;
+    try { seenCreator = localStorage.getItem("cc_seen_creator_intro") === "1"; } catch (_) {}
+    if (seenCreator) {
+      afterCreator();
+      return;
+    }
     g.creatorCategory = 0;
     g._creatorSaveCallback = () => afterCreator();
     g.state = GameState.CHARACTER_CREATE;

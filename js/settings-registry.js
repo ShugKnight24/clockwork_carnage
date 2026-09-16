@@ -32,8 +32,10 @@ export const COMPACT_PHONE_HEIGHT = 420;
 export const SETTING_CATEGORIES = [
   "Gameplay",
   "Display",
+  "Performance",
   "Audio",
   "Controls",
+  "Gamepad",
   "Accessibility",
   "HUD",
   "Mobile",
@@ -116,6 +118,194 @@ export const SETTINGS_REGISTRY = [
       if (g.renderer) g.renderer.applyVisualStyle(g.settings.visualStyle);
     },
   },
+  // ─── Performance ───
+  {
+    key: "graphicsPreset",
+    label: "Graphics Preset",
+    category: "Performance",
+    type: "enum",
+    values: ["Auto", "Ultra-Low", "Low", "Medium", "High", "Ultra", "Custom"],
+    colors: ["#00ffcc", "#666688", "#88aacc", "#00ccff", "#44ffaa", "#ffaa00", "#cc88ff"],
+    min: 0,
+    max: 6,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "frameTarget",
+    label: "Frame Target",
+    category: "Performance",
+    type: "enum",
+    values: ["Auto", "30 FPS", "60 FPS", "90 FPS", "120 FPS"],
+    colors: ["#00ffcc", "#88aacc", "#00ccff", "#44ffaa", "#ffaa00"],
+    min: 0,
+    max: 4,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "batterySaver",
+    label: "Battery Saver",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#44ffaa",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "renderScale",
+    label: "Render Scale",
+    category: "Performance",
+    type: "slider",
+    min: 50,
+    max: 100,
+    step: 10,
+    format: (v) => `${v}%`,
+    barColor: () => "#00ccff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "effectsQuality",
+    label: "Effects Quality",
+    category: "Performance",
+    type: "enum",
+    values: ["Low", "Medium", "High"],
+    colors: ["#88aacc", "#00ccff", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "postProcessing",
+    label: "Post Processing",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "floorTexture",
+    label: "Floor Detail",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#ffaa00",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "screenShake",
+    label: "Screen Shake",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#ff8844",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "weaponBob",
+    label: "Weapon Bob",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#44ffaa",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "showPerformanceOverlay",
+    label: "Performance Overlay",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#ffcc00",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => { g.showFPS = !!g.settings.showPerformanceOverlay; },
+  },
+  {
+    key: "enableBloom",
+    label: "Bloom",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "enableChromaticAberration",
+    label: "Chromatic Aberration",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "enableFilmGrain",
+    label: "Film Grain",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "shadowQuality",
+    label: "Shadow Quality",
+    category: "Performance",
+    type: "enum",
+    values: ["Off", "Low", "High"],
+    colors: ["#888888", "#88aacc", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "lightingQuality",
+    label: "Lighting Quality",
+    category: "Performance",
+    type: "enum",
+    values: ["Low", "Medium", "High"],
+    colors: ["#88aacc", "#00ccff", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "renderMode",
+    label: "Render Mode",
+    category: "Display",
+    type: "enum",
+    values: ["Auto", "2D (Canvas)", "3D (WebGL)"],
+    colors: ["#00ffcc", "#00ccff", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
   // ─── Audio ───
   {
     key: "musicVolume",
@@ -196,6 +386,66 @@ export const SETTINGS_REGISTRY = [
     platform: "desktop",
     height: { compact: 30, normal: 44 },
   },
+  {
+    key: "invertY",
+    label: "Invert Y Axis",
+    category: "Controls",
+    type: "toggle",
+    onColor: "#ff8844",
+    platform: "desktop",
+    height: { compact: 30, normal: 44 },
+  },
+  // ─── Gamepad ───
+  {
+    key: "gamepadEnabled",
+    label: "Controller Support",
+    category: "Gamepad",
+    type: "toggle",
+    onColor: "#00ffcc",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyGamepadSettings?.(),
+  },
+  {
+    key: "gamepadLookSensitivity",
+    label: "Look Sensitivity",
+    category: "Gamepad",
+    type: "slider",
+    min: 0.5,
+    max: 4.0,
+    step: 0.25,
+    round: 2,
+    format: (v) => `${v.toFixed(2)}x`,
+    barColor: () => "#cc88ff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+    onChange: (g) => g.applyGamepadSettings?.(),
+  },
+  {
+    key: "gamepadDeadzone",
+    label: "Stick Deadzone",
+    category: "Gamepad",
+    type: "slider",
+    min: 0.05,
+    max: 0.35,
+    step: 0.05,
+    round: 2,
+    format: (v) => `${Math.round(v * 100)}%`,
+    barColor: () => "#00ccff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+    onChange: (g) => g.applyGamepadSettings?.(),
+  },
+  {
+    key: "gamepadRumble",
+    label: "Controller Rumble",
+    category: "Gamepad",
+    type: "toggle",
+    onColor: "#ffaa00",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyGamepadSettings?.(),
+  },
   // ─── Accessibility ───
   {
     key: "fontScale",
@@ -230,14 +480,25 @@ export const SETTINGS_REGISTRY = [
     label: "HUD Style",
     category: "HUD",
     type: "enum",
-    values: ["Minimal", "Classic"],
-    colors: ["#00ccff", "#ffaa00"],
+    values: ["Minimal", "Classic DOOM", "Tactical", "Custom"],
+    colors: ["#00ccff", "#ff2200", "#44ffaa", "#cc88ff"],
     min: 0,
-    max: 1,
+    max: 3,
     step: 1,
     wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "editCustomHud",
+    label: "Edit Custom HUD",
+    category: "HUD",
+    type: "action",
+    buttonLabel: "EDIT LAYOUT",
+    color: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: (game) => game.hudEditor.start(),
   },
   {
     key: "hudScale",
@@ -346,25 +607,27 @@ export const SETTINGS_REGISTRY = [
 ];
 
 /** Filter registry by platform */
-export function getVisibleSettings(isTouchDevice) {
-  return SETTINGS_REGISTRY.filter(
-    (s) =>
+export function getVisibleSettings(isTouchDevice, settings) {
+  return SETTINGS_REGISTRY.filter((s) => {
+    if (s.isVisible && settings && !s.isVisible(settings)) return false;
+    return (
       s.platform === "all" ||
       (s.platform === "mobile" && isTouchDevice) ||
-      (s.platform === "desktop" && !isTouchDevice),
-  );
+      (s.platform === "desktop" && !isTouchDevice)
+    );
+  });
 }
 
 /** Filter registry by platform AND category */
-export function getSettingsForCategory(isTouchDevice, category) {
-  return getVisibleSettings(isTouchDevice).filter(
+export function getSettingsForCategory(isTouchDevice, category, settings) {
+  return getVisibleSettings(isTouchDevice, settings).filter(
     (s) => s.category === category,
   );
 }
 
 /** Return ordered list of categories that have at least one visible setting */
-export function getVisibleCategories(isTouchDevice) {
-  const visible = getVisibleSettings(isTouchDevice);
+export function getVisibleCategories(isTouchDevice, settings) {
+  const visible = getVisibleSettings(isTouchDevice, settings);
   return SETTING_CATEGORIES.filter((cat) =>
     visible.some((s) => s.category === cat),
   );
@@ -414,6 +677,12 @@ export function settingDisplayItem(def, settings) {
         label: def.label,
         value: def.format ? def.format(v) : String(v),
         color: undefined,
+      };
+    case "action":
+      return {
+        label: def.label,
+        value: def.buttonLabel || "ACT",
+        color: def.color || "#ffffff",
       };
     default:
       return { label: def.label, value: String(v) };

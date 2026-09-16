@@ -23,6 +23,7 @@
  *   // Tick particles each frame (also ticks dust motes):
  *   this.dustMotes = updateParticles(this.player.particles, dt, this.timeScale, this.dustMotes, this.player);
  */
+import { particlePool } from "../src/utils/particle-pool.js";
 
 /**
  * Spawn a radial burst of particles around a world-space pickup position.
@@ -32,7 +33,7 @@
  * @param {number}   y          World Y of the pickup
  * @param {"health"|"ammo"|"weapon"} pickupType  Controls the colour of the burst
  */
-export function spawnPickupBurst(particles, x, y, pickupType) {
+export function spawnPickupBurst(particles, x, y, pickupType, quality = 1) {
   let r1, g1, b1;
   if (pickupType === "health") {
     r1 = 50;  g1 = 255; b1 = 80;
@@ -42,23 +43,22 @@ export function spawnPickupBurst(particles, x, y, pickupType) {
     r1 = 50;  g1 = 200; b1 = 255;
   }
 
-  const count = 10;
+  const count = Math.max(0, Math.round(10 * quality));
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
     const speed = 1.0 + Math.random() * 1.5;
-    particles.push({
-      x,
-      y,
-      z: -0.3 - Math.random() * 0.2,   // floor level rising
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      vz: -(2 + Math.random() * 2),     // burst upward
-      r: r1 + Math.floor(Math.random() * 30),
-      g: g1,
-      b: b1,
-      life: 0.4 + Math.random() * 0.3,
-      size: 0.04 + Math.random() * 0.04,
-    });
+    const p = particlePool.acquire();
+    p.x = x; p.y = y;
+    p.z = -0.3 - Math.random() * 0.2;
+    p.vx = Math.cos(angle) * speed;
+    p.vy = Math.sin(angle) * speed;
+    p.vz = -(2 + Math.random() * 2);
+    p.r = r1 + Math.floor(Math.random() * 30);
+    p.g = g1; p.b = b1;
+    p.life = 0.4 + Math.random() * 0.3;
+    p.size = 0.04 + Math.random() * 0.04;
+    p._type = "";
+    particles.push(p);
   }
 }
 
@@ -80,20 +80,20 @@ export function spawnSmoke(particles, x, y, opts = {}) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = (opts.speed ?? 0.4) + Math.random() * 0.6;
-    particles.push({
-      x: x + (Math.random() - 0.5) * 0.3,
-      y: y + (Math.random() - 0.5) * 0.3,
-      z: -0.2 - Math.random() * 0.15,
-      vx: Math.cos(angle) * speed * 0.5,
-      vy: Math.sin(angle) * speed * 0.5,
-      vz: -(0.8 + Math.random() * 0.6),  // drifts up slowly
-      r: baseR + Math.floor(Math.random() * 40 - 20),
-      g: baseG + Math.floor(Math.random() * 40 - 20),
-      b: baseB + Math.floor(Math.random() * 40 - 20),
-      life: (opts.life ?? 0.6) + Math.random() * 0.4,
-      size: 0.06 + Math.random() * 0.05,
-      _type: "smoke",
-    });
+    const p = particlePool.acquire();
+    p.x = x + (Math.random() - 0.5) * 0.3;
+    p.y = y + (Math.random() - 0.5) * 0.3;
+    p.z = -0.2 - Math.random() * 0.15;
+    p.vx = Math.cos(angle) * speed * 0.5;
+    p.vy = Math.sin(angle) * speed * 0.5;
+    p.vz = -(0.8 + Math.random() * 0.6);
+    p.r = baseR + Math.floor(Math.random() * 40 - 20);
+    p.g = baseG + Math.floor(Math.random() * 40 - 20);
+    p.b = baseB + Math.floor(Math.random() * 40 - 20);
+    p.life = (opts.life ?? 0.6) + Math.random() * 0.4;
+    p.size = 0.06 + Math.random() * 0.05;
+    p._type = "smoke";
+    particles.push(p);
   }
 }
 
@@ -118,20 +118,20 @@ export function spawnEnergyBurst(particles, x, y, opts = {}) {
       ? dirAngle + (Math.random() - 0.5) * 1.2  // focused cone
       : (i / count) * Math.PI * 2;               // radial
     const speed = (opts.speed ?? 3) + Math.random() * 3;
-    particles.push({
-      x,
-      y,
-      z: -0.25 - Math.random() * 0.15,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      vz: -(1 + Math.random() * 2),
-      r: Math.min(255, baseR + Math.floor(Math.random() * 80)),
-      g: Math.min(255, baseG + Math.floor(Math.random() * 55)),
-      b: Math.min(255, baseB + Math.floor(Math.random() * 30)),
-      life: (opts.life ?? 0.2) + Math.random() * 0.2,
-      size: 0.03 + Math.random() * 0.03,
-      _type: "energy",
-    });
+    const p = particlePool.acquire();
+    p.x = x;
+    p.y = y;
+    p.z = -0.25 - Math.random() * 0.15;
+    p.vx = Math.cos(angle) * speed;
+    p.vy = Math.sin(angle) * speed;
+    p.vz = -(1 + Math.random() * 2);
+    p.r = Math.min(255, baseR + Math.floor(Math.random() * 80));
+    p.g = Math.min(255, baseG + Math.floor(Math.random() * 55));
+    p.b = Math.min(255, baseB + Math.floor(Math.random() * 30));
+    p.life = (opts.life ?? 0.2) + Math.random() * 0.2;
+    p.size = 0.03 + Math.random() * 0.03;
+    p._type = "energy";
+    particles.push(p);
   }
 }
 
@@ -153,20 +153,20 @@ export function spawnDebris(particles, x, y, opts = {}) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = (opts.speed ?? 2) + Math.random() * 3;
-    particles.push({
-      x: x + (Math.random() - 0.5) * 0.2,
-      y: y + (Math.random() - 0.5) * 0.2,
-      z: -0.15 - Math.random() * 0.2,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      vz: -(3 + Math.random() * 4),  // flung upward hard
-      r: baseR + Math.floor(Math.random() * 50),
-      g: baseG + Math.floor(Math.random() * 40),
-      b: baseB + Math.floor(Math.random() * 30),
-      life: (opts.life ?? 0.5) + Math.random() * 0.5,
-      size: 0.03 + Math.random() * 0.04,
-      _type: "debris",
-    });
+    const p = particlePool.acquire();
+    p.x = x + (Math.random() - 0.5) * 0.2;
+    p.y = y + (Math.random() - 0.5) * 0.2;
+    p.z = -0.15 - Math.random() * 0.2;
+    p.vx = Math.cos(angle) * speed;
+    p.vy = Math.sin(angle) * speed;
+    p.vz = -(3 + Math.random() * 4);
+    p.r = baseR + Math.floor(Math.random() * 50);
+    p.g = baseG + Math.floor(Math.random() * 40);
+    p.b = baseB + Math.floor(Math.random() * 30);
+    p.life = (opts.life ?? 0.5) + Math.random() * 0.5;
+    p.size = 0.03 + Math.random() * 0.04;
+    p._type = "debris";
+    particles.push(p);
   }
 }
 
@@ -182,7 +182,7 @@ export function spawnDebris(particles, x, y, opts = {}) {
  * @param {object}        player     Player object ({ x, y }) for dust mote wrapping
  * @returns {object[]}               Updated (or newly initialised) dustMotes array
  */
-export function updateParticles(particles, dt, timeScale, dustMotes, player) {
+export function updateParticles(particles, dt, timeScale, dustMotes, player, opts = {}) {
   if (particles && particles.length > 0) {
     const ts = timeScale;
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -217,13 +217,14 @@ export function updateParticles(particles, dt, timeScale, dustMotes, player) {
       }
 
       if (p.life <= 0) {
+        particlePool.release(p);
         particles[i] = particles[particles.length - 1];
         particles.pop();
       }
     }
   }
 
-  return updateDustMotes(dustMotes, dt, player);
+  return opts.enableDust === false ? null : updateDustMotes(dustMotes, dt, player);
 }
 
 /**

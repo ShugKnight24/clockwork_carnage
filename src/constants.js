@@ -146,7 +146,7 @@ export const HIT_FLASH_DURATION_MS = 100;
 // ============================================================================
 
 /** Wall texture resolution */
-export const WALL_TEXTURE_SIZE = 128;
+export const WALL_TEXTURE_SIZE = 256;
 
 /** Legacy wall texture resolution (pre-upgrade) */
 export const LEGACY_TEXTURE_SIZE = 64;
@@ -158,7 +158,7 @@ export const MAX_RAYCAST_DIST = 10;
 export const MAX_RAYCAST_ITERATIONS = 80;
 
 /** Floor/ceiling texture size */
-export const FLOOR_CEIL_TEXTURE_SIZE = 128;
+export const FLOOR_CEIL_TEXTURE_SIZE = 256;
 
 /** Viewport height threshold for compact mobile layout */
 export const COMPACT_PHONE_HEIGHT = 420;

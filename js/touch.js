@@ -3,7 +3,7 @@
  *
  * Left side: Virtual joystick for movement (feeds game.keys)
  * Right side: Touch-drag area for look (feeds game.mouse.dx/dy)
- * Buttons: Fire, Dash, Interact, Chrono Shift, Sprint toggle, Pause
+ * Buttons: Fire, Aim, Dash, Interact, Chrono Shift, Sprint toggle, Pause
  *
  * Self-contained — call TouchControls.init(game) after game is created.
  * Only activates on touch-capable devices.
@@ -20,11 +20,12 @@ import {
   upgradeLayout,
   tutorialMenuLayout,
 } from "./layout.js";
+import { isPrimaryTouchDevice } from "../src/utils/device.js";
 
 export class TouchControls {
   static init(game) {
     // Only activate on touch devices
-    if (!("ontouchstart" in window)) return null;
+    if (!isPrimaryTouchDevice()) return null;
 
     const tc = new TouchControls(game);
     tc.setup();
@@ -50,6 +51,7 @@ export class TouchControls {
 
     // Fire state
     this.fireTouch = null;
+    this.aimTouch = null;
 
     // Layout zones (set on resize)
     this.zones = {};
@@ -198,6 +200,13 @@ export class TouchControls {
           : h - bottomPad - btnSize * 1.3,
         r: btnSize,
       },
+      aimBtn: {
+        x: w - pad - btnSize * 1.6,
+        y: isCompactPhone
+          ? h - bottomPad - btnSize * 2.65
+          : h - bottomPad - btnSize * 2.95,
+        r: btnSize * 0.55,
+      },
       dashBtn: {
         x: w - pad - btnSize * 0.5,
         y: isCompactPhone
@@ -276,6 +285,8 @@ export class TouchControls {
     const hitShrink = 0.85;
     if (this.dist(x, y, z.fireBtn.x, z.fireBtn.y) < z.fireBtn.r * hitShrink)
       return "fire";
+    if (this.dist(x, y, z.aimBtn.x, z.aimBtn.y) < z.aimBtn.r * hitShrink)
+      return "aim";
     if (this.dist(x, y, z.dashBtn.x, z.dashBtn.y) < z.dashBtn.r * hitShrink)
       return "dash";
     if (
@@ -482,6 +493,11 @@ export class TouchControls {
         g.player.isFiring = true;
         this.activeButtons.add("fire");
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
+      } else if (zone === "aim" && this.aimTouch === null) {
+        this.aimTouch = touch.identifier;
+        g.player.isAiming = true;
+        this.activeButtons.add("aim");
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "dash") {
         this.activeButtons.add("dash");
         this.triggerDirectionalDash(g, true);
@@ -534,6 +550,14 @@ export class TouchControls {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
 
+        // Touch look uses the same reticle path as mouse so visual crosshair
+        // and bullet trajectory stay aligned. Auto-fire only gates firing.
+        let rawSens = Number(this.game.settings.touchSensitivity);
+        if (!Number.isFinite(rawSens)) rawSens = 1.5;
+        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+        this.game.mouse.dx += dx * touchSens;
+        this.game.mouse.dy += dy * touchSens;
+
         // Twin-stick auto-fire handling
         if (this.game.settings.autoFire) {
           const originDx = touch.clientX - this.lookOrigin.x;
@@ -542,10 +566,6 @@ export class TouchControls {
           const deadzone = 20;
 
           if (dist > deadzone) {
-            // Treat the look gesture as a joystick pushing out
-            // Calculate angle directly rather than passing through mouse.dx/dy
-            this.game.player.angle = Math.atan2(originDy, originDx);
-
             // Auto fire
             if (!this.game.player.isFiring) {
               this.game.player.isFiring = true;
@@ -560,13 +580,6 @@ export class TouchControls {
               this.activeButtons.delete("fire");
             }
           }
-        } else {
-          // Standard swipe-to-look (scaled for touch sensitivity from settings)
-          let rawSens = Number(this.game.settings.touchSensitivity);
-          if (!Number.isFinite(rawSens)) rawSens = 1.5;
-          const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
-          this.game.mouse.dx += dx * touchSens;
-          this.game.mouse.dy += dy * touchSens;
         }
 
         this.lookLast.x = touch.clientX;
@@ -638,6 +651,10 @@ export class TouchControls {
         this.fireTouch = null;
         this.game.player.isFiring = false;
         this.activeButtons.delete("fire");
+      } else if (touch.identifier === this.aimTouch) {
+        this.aimTouch = null;
+        this.game.player.isAiming = false;
+        this.activeButtons.delete("aim");
       } else if (touch.identifier === this.chronoTouch) {
         this.chronoTouch = null;
         this.game.keys[this.game.keybinds.chronoShift] = false;
@@ -654,6 +671,7 @@ export class TouchControls {
     this.activeButtons.delete("pause");
     this.activeButtons.delete("sprint");
     this.activeButtons.delete("weapon");
+
   }
 
   updateJoystickKeys() {
@@ -1030,6 +1048,16 @@ export class TouchControls {
       z.fireBtn.r,
       "FIRE",
       this.activeButtons.has("fire") ? "#ff4444" : "#ff6644",
+    );
+
+    // ── Aim-down-sights button ──
+    this.drawButton(
+      ctx,
+      z.aimBtn.x,
+      z.aimBtn.y,
+      z.aimBtn.r,
+      "AIM",
+      this.game.player?.isAiming ? "#66eeff" : "#337799",
     );
 
     // ── Dash button ──

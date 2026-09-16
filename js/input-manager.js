@@ -17,6 +17,7 @@ import {
   STORAGE_KEY_KEYBINDS,
   DOUBLE_TAP_WINDOW_MS,
 } from "../src/constants.js";
+import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 
 /**
  * Default keybind mappings for game actions.
@@ -179,7 +180,7 @@ export class InputManager {
    * Hides cursor and captures mouse movement.
    */
   lockPointer() {
-    this.canvas.requestPointerLock();
+    requestPointerLockSafe(this.canvas);
   }
 
   /**
@@ -187,7 +188,7 @@ export class InputManager {
    * Shows cursor and stops capturing mouse movement.
    */
   unlockPointer() {
-    document.exitPointerLock();
+    exitPointerLockSafe();
   }
 
   /**

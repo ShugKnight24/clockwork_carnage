@@ -40,6 +40,16 @@ template.innerHTML = `
     <pattern id="circuitGrid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M40 0 L0 0 0 40" fill="none" stroke="rgba(0,200,255,0.03)" stroke-width="0.5"/>
     </pattern>
+    <linearGradient id="stationMetal" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#182b38" />
+      <stop offset="0.45" stop-color="#071018" />
+      <stop offset="1" stop-color="#02050a" />
+    </linearGradient>
+    <linearGradient id="cyanRail" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#00ffd5" stop-opacity="0" />
+      <stop offset="0.5" stop-color="#00ffd5" stop-opacity="0.85" />
+      <stop offset="1" stop-color="#00ffd5" stop-opacity="0" />
+    </linearGradient>
   </defs>
 
   <!-- Deep space background -->
@@ -53,6 +63,24 @@ template.innerHTML = `
 
   <!-- Central temporal rift glow -->
   <rect width="700" height="400" fill="url(#riftGlow)" />
+
+  <!-- Chronos Station silhouette: layered hangar plates and orbital gantry -->
+  <g opacity="0.92">
+    <path d="M40 330 C130 285 250 270 350 276 C470 284 590 286 668 330 L668 400 L40 400 Z" fill="url(#stationMetal)" />
+    <path d="M72 344 C170 318 270 306 355 310 C456 314 555 318 630 346" fill="none" stroke="#25495a" stroke-width="18" opacity="0.55" />
+    <path d="M92 340 C186 322 270 316 350 318 C445 320 535 324 612 342" fill="none" stroke="url(#cyanRail)" stroke-width="2.5" filter="url(#glow)" />
+    <g opacity="0.45" stroke="#77ddff" stroke-width="0.8">
+      <path d="M130 336 L170 304 L228 318 L272 296 L344 318 L424 298 L480 320 L548 304 L604 336" fill="none" />
+      <path d="M168 345 L168 390 M250 326 L250 398 M350 318 L350 400 M452 326 L452 398 M548 344 L548 390" />
+    </g>
+    <g filter="url(#glow)" opacity="0.7">
+      <rect x="124" y="350" width="32" height="3" fill="#00ffcc" />
+      <rect x="222" y="336" width="46" height="3" fill="#00ccff" />
+      <rect x="320" y="326" width="58" height="3" fill="#b366ff" />
+      <rect x="444" y="338" width="42" height="3" fill="#00ffcc" />
+      <rect x="542" y="354" width="34" height="3" fill="#ff44aa" />
+    </g>
+  </g>
 
   <!-- Temporal rift rings -->
   <g filter="url(#glow)" opacity="0.55">

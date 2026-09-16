@@ -16,6 +16,20 @@ export class CutsceneEngine {
     this.getPlayerName = getPlayerName || (() => "Agent");
     this.getSettings = getSettings || (() => ({ cutsceneAutoAdvance: false }));
     this.cutscene = null;
+    // Lazy-loaded image cache for flipbook panels (panel.image: "url"). Images
+    // are async — drawn only after .complete is true; until then the panel
+    // falls back to the procedural panel.art beneath.
+    this._imageCache = new Map();
+  }
+
+  _getImage(src) {
+    let img = this._imageCache.get(src);
+    if (!img) {
+      img = new Image();
+      img.src = src;
+      this._imageCache.set(src, img);
+    }
+    return img;
   }
 
   get isActive() {
@@ -47,9 +61,16 @@ export class CutsceneEngine {
   advance() {
     if (!this.cutscene) return;
     const cs = this.cutscene;
+    const frame = cs.script[cs.frame];
 
     // If text is still typing, first click/Enter instantly reveals it
     if (!cs.readyToAdvance) {
+      if (frame?.flipbook?.requireAction) {
+        const timing = this._flipbookTiming(frame.flipbook);
+        cs.frameStart = performance.now() - timing.finalStart;
+        cs.readyToAdvance = true;
+        return;
+      }
       // Fast-forward: set frameStart far enough back that all text is visible
       cs.frameStart = performance.now() - 60000;
       cs.readyToAdvance = true;
@@ -65,6 +86,17 @@ export class CutsceneEngine {
     if (cs.frame >= cs.script.length) {
       this.end();
     }
+  }
+
+  _flipbookTiming(fb) {
+    let total = 0;
+    let finalStart = 0;
+    for (let i = 0; i < fb.pages.length; i++) {
+      if (i === fb.pages.length - 1) finalStart = total;
+      const pg = fb.pages[i];
+      total += (pg.hold ?? 1400) + (i < fb.pages.length - 1 ? (pg.flipMs ?? 600) : 0);
+    }
+    return { total, finalStart };
   }
 
   end() {
@@ -117,6 +149,22 @@ export class CutsceneEngine {
           this.advance();
           return;
         }
+      }
+    } else if (frame.flipbook?.pages?.length) {
+      // Flipbook frames have their own page-based timing; readyToAdvance
+      // (and auto-advance) must wait until ALL pages have played, not the
+      // generic 2s minimum. Sum hold + flipMs across pages.
+      const timing = this._flipbookTiming(frame.flipbook);
+      if (frame.flipbook.requireAction) {
+        // Story preview ends on an action-gated page. No auto-advance: player
+        // must press/click/tap to begin tutorial once prompt appears.
+        cs.readyToAdvance = elapsed >= timing.finalStart;
+        return;
+      }
+      cs.readyToAdvance = elapsed >= 1200;
+      if (this.getSettings().cutsceneAutoAdvance && elapsed >= timing.total + 400) {
+        this.advance();
+        return;
       }
     } else {
       // No text lines — ready after minimum display time
@@ -207,6 +255,12 @@ export class CutsceneEngine {
     const rawScale = h / 900;
     const s = this.isTouchDevice ? Math.max(0.82, rawScale) : rawScale;
 
+    // === Flipbook (Marvel-style page-turn intro) ===
+    if (frame.flipbook) {
+      this.renderFlipbook(ctx, w, h, frame, elapsed, t);
+      return;
+    }
+
     // === Comic panel layout ===
     if (frame.panels) {
       this.renderComicPanels(ctx, w, h, frame, elapsed, t);
@@ -258,6 +312,70 @@ export class CutsceneEngine {
       this.drawScannerEffect(ctx, w, h, t);
     }
 
+    // === Cinematic grade over scene art ===
+    if (frame.art) {
+      const bloom = ctx.createRadialGradient(
+        w / 2,
+        h * 0.38,
+        h * 0.08,
+        w / 2,
+        h * 0.38,
+        h * 0.52,
+      );
+      bloom.addColorStop(0, "rgba(170,220,255,0.16)");
+      bloom.addColorStop(0.45, "rgba(60,130,200,0.08)");
+      bloom.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, w, h);
+
+      const sweep = Math.sin(t * 0.55) * 0.5 + 0.5;
+      const beam = ctx.createLinearGradient(0, 0, w, h);
+      beam.addColorStop(Math.max(0, sweep - 0.22), "rgba(0,0,0,0)");
+      beam.addColorStop(sweep, "rgba(120,200,255,0.08)");
+      beam.addColorStop(Math.min(1, sweep + 0.22), "rgba(0,0,0,0)");
+      ctx.fillStyle = beam;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    if (frame.title) {
+      const titleY = Math.round((frame.art ? h * 0.11 : h * 0.18) + Math.sin(t * 1.1) * 2 * s);
+      const titleSize = Math.round(18 * s);
+      const titlePadX = Math.round(22 * s);
+      const titlePadY = Math.round(10 * s);
+      ctx.save();
+      ctx.font = `bold ${titleSize}px monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      const titleW = Math.min(w * 0.88, ctx.measureText(frame.title).width + titlePadX * 2);
+      const titleX = (w - titleW) / 2;
+      const plate = ctx.createLinearGradient(titleX, titleY - titleSize, titleX + titleW, titleY + titleSize);
+      plate.addColorStop(0, "rgba(0,255,220,0.04)");
+      plate.addColorStop(0.5, "rgba(0,12,22,0.72)");
+      plate.addColorStop(1, "rgba(255,64,140,0.05)");
+      ctx.fillStyle = plate;
+      ctx.beginPath();
+      ctx.roundRect(titleX, titleY - titleSize - titlePadY, titleW, titleSize + titlePadY * 2, Math.max(5, 9 * s));
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,230,255,0.35)";
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      ctx.stroke();
+      // Chromatic aberration title — cyan/magenta offsets for comic-book feel
+      ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = "#ff3a8a";
+      ctx.fillText(frame.title, w / 2 - 1.2 * s, titleY);
+      ctx.fillStyle = "#3affff";
+      ctx.fillText(frame.title, w / 2 + 1.2 * s, titleY);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = "#00e5ff";
+      ctx.shadowBlur = 10 * s;
+      ctx.fillStyle = "#dffbff";
+      ctx.fillText(frame.title, w / 2, titleY);
+      ctx.restore();
+    }
+
     // === Text (typewriter reveal with glow) ===
     if (frame.lines) {
       const centerY = frame.art ? h * 0.72 : h * 0.4;
@@ -265,7 +383,7 @@ export class CutsceneEngine {
       const textPad = Math.round(30 * s);
       const textLineH = Math.round(36 * s);
 
-      // Text backdrop gradient
+      // Frosted glass text backdrop
       if (frame.art) {
         const tbg = ctx.createLinearGradient(
           0,
@@ -274,8 +392,8 @@ export class CutsceneEngine {
           centerY + frame.lines.length * textLineH,
         );
         tbg.addColorStop(0, "rgba(0,0,10,0)");
-        tbg.addColorStop(0.15, "rgba(0,0,10,0.65)");
-        tbg.addColorStop(0.85, "rgba(0,0,10,0.65)");
+        tbg.addColorStop(0.12, "rgba(0,0,10,0.85)");
+        tbg.addColorStop(0.88, "rgba(0,0,10,0.85)");
         tbg.addColorStop(1, "rgba(0,0,10,0)");
         ctx.fillStyle = tbg;
         ctx.fillRect(
@@ -284,6 +402,54 @@ export class CutsceneEngine {
           w,
           frame.lines.length * textLineH + textPad,
         );
+
+        const boxX = Math.round(w * 0.05);
+        const boxW = Math.round(w * 0.9);
+        const boxY = Math.round(centerY - textPad + 3 * s);
+        const boxH = Math.round(frame.lines.length * textLineH + textPad - 4 * s);
+        const boxR = Math.max(4, Math.round(10 * s));
+
+        // Main frosted fill — deep center with edge glow
+        const frost = ctx.createRadialGradient(
+          boxX + boxW / 2, boxY + boxH / 2, boxH * 0.15,
+          boxX + boxW / 2, boxY + boxH / 2, boxW * 0.6,
+        );
+        frost.addColorStop(0, "rgba(2,6,18,0.75)");
+        frost.addColorStop(0.7, "rgba(2,6,18,0.75)");
+        frost.addColorStop(1, "rgba(0,180,255,0.06)");
+        ctx.fillStyle = frost;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
+        ctx.fill();
+
+        // Outer border
+        ctx.strokeStyle = "rgba(0,200,255,0.12)";
+        ctx.lineWidth = Math.max(1, 1.5 * s);
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
+        ctx.stroke();
+
+        // Inner subtle border
+        ctx.strokeStyle = "rgba(255,255,255,0.04)";
+        ctx.lineWidth = Math.max(1, 1 * s);
+        ctx.beginPath();
+        ctx.roundRect(
+          boxX + 2, boxY + 2,
+          Math.max(0, boxW - 4), Math.max(0, boxH - 4),
+          Math.max(3, boxR - 1),
+        );
+        ctx.stroke();
+
+        // Horizontal light sweep
+        const sweepPos = Math.sin(t * 0.4) * 0.5 + 0.5;
+        const sweep = ctx.createLinearGradient(boxX, 0, boxX + boxW, 0);
+        sweep.addColorStop(Math.max(0, sweepPos - 0.15), "rgba(255,255,255,0)");
+        sweep.addColorStop(sweepPos, "rgba(180,220,255,0.045)");
+        sweep.addColorStop(Math.min(1, sweepPos + 0.15), "rgba(255,255,255,0)");
+        ctx.fillStyle = sweep;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
+        ctx.fill();
       }
 
       for (const line of frame.lines) {
@@ -305,77 +471,124 @@ export class CutsceneEngine {
         const displayText = resolvedText.substring(0, visibleChars);
         const typing = visibleChars < resolvedText.length;
 
-        // Fade in
+        // Fade in + slide up
         const fadeIn = Math.min(1, lineElapsed / 400);
+        const slideOffset = 4 * s * Math.max(0, 1 - lineElapsed / 500);
         const sz = Math.round((line.size || 16) * s);
 
+        // Impact text scale-in for large lines
+        const isImpact = (line.size || 16) >= 22;
+        const scaleT = isImpact ? Math.min(1, lineElapsed / 600) : 1;
+        const impactScale = isImpact ? 0.88 + 0.12 * scaleT : 1;
+        const impactBlur = isImpact ? (20 - 12 * scaleT) * s : 0;
+
+        lineY -= slideOffset;
         ctx.globalAlpha = fadeIn;
         ctx.font = `bold ${sz}px monospace`;
         ctx.textAlign = "center";
+
+        if (isImpact && scaleT < 1) {
+          ctx.save();
+          ctx.translate(w / 2, lineY);
+          ctx.scale(impactScale, impactScale);
+          ctx.translate(-w / 2, -lineY);
+        }
 
         // Detect speaker lines ("NAME:" pattern)
         const speakerMatch = displayText.match(/^([A-Z\s]+):(.*)/);
 
         if (speakerMatch) {
-          // Speaker name with accent color
-          const speakerName = speakerMatch[1] + ":";
-          const restText = speakerMatch[2];
+          // Speaker name as styled badge
+          const speakerName = speakerMatch[1];
+          const restText = speakerMatch[2].trimStart();
+          const lc = line.color || "#00ffcc";
           const nameW = ctx.measureText(speakerName).width;
+          const badgePadX = Math.round(8 * s);
+          const badgePadY = Math.round(4 * s);
+          const badgeGap = Math.round(8 * s);
           const restW = ctx.measureText(restText).width;
-          const totalW = nameW + restW;
+          const totalW = nameW + badgePadX * 2 + badgeGap + restW;
+          const badgeX = w / 2 - totalW / 2;
 
+          // Badge pill background
           ctx.save();
-          ctx.shadowColor = line.color || "#00ffcc";
+          const pillY = lineY - sz + badgePadY;
+          const pillH = sz + badgePadY;
+          const pillW = nameW + badgePadX * 2;
+          ctx.fillStyle = lc + '33'; // ~20% opacity
+          ctx.beginPath();
+          ctx.roundRect(badgeX, pillY, pillW, pillH, Math.max(3, Math.round(5 * s)));
+          ctx.fill();
+          ctx.strokeStyle = lc + '59'; // ~35% opacity
+          ctx.lineWidth = Math.max(1, 1 * s);
+          ctx.stroke();
+
+          // Speaker name text (bold, line color)
+          ctx.shadowColor = lc;
           ctx.shadowBlur = 6 * s;
-          // Text outline for readability
-          ctx.strokeStyle = "rgba(0,0,0,0.6)";
-          ctx.lineWidth = Math.max(1, 2.5 * s);
-          ctx.strokeText(speakerName, w / 2 - totalW / 2 + nameW / 2, lineY);
-          ctx.fillStyle = line.color || "#00ffcc";
-          ctx.fillText(speakerName, w / 2 - totalW / 2 + nameW / 2, lineY);
+          ctx.strokeStyle = "rgba(0,0,0,0.82)";
+          ctx.lineWidth = Math.max(1.5, 3 * s);
+          ctx.strokeText(speakerName, badgeX + pillW / 2, lineY);
+          ctx.fillStyle = lc;
+          ctx.fillText(speakerName, badgeX + pillW / 2, lineY);
           ctx.shadowBlur = 0;
           ctx.restore();
 
-          ctx.strokeStyle = "rgba(0,0,0,0.5)";
-          ctx.lineWidth = Math.max(1, 2 * s);
-          ctx.strokeText(
-            restText,
-            w / 2 - totalW / 2 + nameW + restW / 2,
-            lineY,
-          );
-          ctx.fillStyle = "#dde4f0";
-          ctx.fillText(restText, w / 2 - totalW / 2 + nameW + restW / 2, lineY);
+          // Dialogue text (offset right, white)
+          const dialogueX = badgeX + pillW + badgeGap + restW / 2;
+          ctx.strokeStyle = "rgba(0,0,0,0.78)";
+          ctx.lineWidth = Math.max(1.5, 2.6 * s);
+          ctx.strokeText(restText, dialogueX, lineY);
+          ctx.fillStyle = "#f2f6ff";
+          ctx.fillText(restText, dialogueX, lineY);
         } else {
-          // Normal text with subtle glow
+          // Normal text with subtle glow + impact shadow boost
           ctx.save();
           ctx.shadowColor = line.color || "#88bbff";
-          ctx.shadowBlur = (typing ? 10 : 4) * s;
+          ctx.shadowBlur = (isImpact && scaleT < 1 ? impactBlur : (typing ? 12 : 5) * s);
           // Text outline for readability
-          ctx.strokeStyle = "rgba(0,0,0,0.5)";
-          ctx.lineWidth = Math.max(1, 2 * s);
+          ctx.strokeStyle = "rgba(0,0,0,0.76)";
+          ctx.lineWidth = Math.max(1.5, 2.6 * s);
           ctx.strokeText(displayText, w / 2, lineY);
-          ctx.fillStyle = line.color || "#ffffff";
+          ctx.fillStyle = line.color || "#f7fbff";
           ctx.fillText(displayText, w / 2, lineY);
           ctx.shadowBlur = 0;
           ctx.restore();
         }
 
-        // Cursor blink while typing — thin beam
+        // Close impact scale transform
+        if (isImpact && scaleT < 1) {
+          ctx.restore();
+        }
+
+        // Enhanced cursor — beam with glow trail
         if (typing) {
-          const cursorPhase = (Math.sin(elapsed * 0.008) + 1) / 2;
-          ctx.globalAlpha = 0.3 + cursorPhase * 0.6;
+          const cursorPhase = (Math.sin(elapsed * 0.01) + 1) / 2;
+          const cursorAlpha = 0.3 + cursorPhase * 0.65;
           const textW = ctx.measureText(displayText).width;
-          ctx.fillStyle = line.color || "#00ffcc";
-          ctx.fillRect(
-            w / 2 + textW / 2 + 3 * s,
-            lineY - sz + 4 * s,
-            Math.max(1, 2 * s),
-            sz,
-          );
+          const cursorColor = line.color || "#00ffcc";
+          const cursorX = w / 2 + textW / 2 + 3 * s;
+          const cursorY = lineY - sz + 4 * s;
+          const cursorW = Math.max(1, 2 * s);
+          const cursorH = sz;
+
+          // Glow trail
+          ctx.save();
+          ctx.globalAlpha = cursorAlpha * 0.5;
+          ctx.shadowColor = cursorColor;
+          ctx.shadowBlur = 8 * s;
+          ctx.fillStyle = cursorColor;
+          ctx.fillRect(cursorX, cursorY, cursorW, cursorH);
+          ctx.restore();
+
+          // Main beam
+          ctx.globalAlpha = cursorAlpha;
+          ctx.fillStyle = cursorColor;
+          ctx.fillRect(cursorX, cursorY, cursorW, cursorH);
         }
 
         ctx.globalAlpha = 1;
-        lineY += sz + Math.round(14 * s);
+        lineY += slideOffset + sz + Math.round(14 * s);
       }
     }
 
@@ -537,6 +750,328 @@ export class CutsceneEngine {
     }
 
     ctx.textAlign = "left";
+  }
+
+  // ── Flipbook (Marvel-style page-turn intro) ─────────────────────
+  /**
+   * Renders a sequence of full-bleed pages that flip horizontally
+   * like a comic book / Marvel intro card. Each page is one panel
+   * (re-using the existing panel art/bg pipeline).
+   *
+   * frame.flipbook = {
+   *   pages: [{ panel: {bg, art, caption, captionColor, captionSize, sfx, sfxColor, sfxSize, halftone, action},
+   *             hold: 1400, flipMs: 650 }, ...],
+   *   paperTint: "#0a0814",       // page background tint
+   *   spineSide: "right" | "left", // which edge stays anchored during flip
+   * }
+   */
+  renderFlipbook(ctx, w, h, frame, elapsed /* ms */, t /* sec */) {
+    const fb = frame.flipbook;
+    if (!fb || !fb.pages || !fb.pages.length) return;
+
+    const rawS = h / 900;
+    const s = this.isTouchDevice ? Math.max(0.82, rawS) : rawS;
+
+    // Page geometry
+    const pageWPct = this.isTouchDevice ? 0.94 : 0.86;
+    const pageHPct = this.isTouchDevice ? 0.92 : 0.88;
+    const pw = w * pageWPct;
+    const ph = h * pageHPct;
+    const px = (w - pw) / 2;
+    const py = (h - ph) / 2;
+
+    // Backdrop — deep velvet
+    const backdrop = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.7);
+    backdrop.addColorStop(0, "#0a0814");
+    backdrop.addColorStop(1, "#020108");
+    ctx.fillStyle = backdrop;
+    ctx.fillRect(0, 0, w, h);
+
+    // Determine current page index + flip progress
+    let acc = 0;
+    let idx = 0;
+    let flipT = 0; // 0 = settled, 0..1 = mid-flip
+    for (let i = 0; i < fb.pages.length; i++) {
+      const pg = fb.pages[i];
+      const hold = pg.hold ?? 1400;
+      const flipMs = pg.flipMs ?? 600;
+      const total = hold + (i < fb.pages.length - 1 ? flipMs : 0);
+      if (elapsed < acc + hold) { idx = i; flipT = 0; break; }
+      if (elapsed < acc + total) { idx = i; flipT = (elapsed - acc - hold) / flipMs; break; }
+      acc += total;
+      idx = i;
+      flipT = 0;
+    }
+    if (idx >= fb.pages.length) idx = fb.pages.length - 1;
+    const curPage = fb.pages[idx];
+    const nextPage = fb.pages[idx + 1];
+
+    const spineRight = (fb.spineSide ?? "right") === "right";
+    const paperTint = fb.paperTint ?? "#0a0814";
+
+    // Draw the next page underneath (revealed as current page flips away)
+    if (nextPage && flipT > 0) {
+      this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1);
+    } else {
+      // Static settled page — just current page
+    }
+
+    // Draw current page with horizontal page-flip transform
+    if (flipT === 0) {
+      this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+    } else {
+      // Ease in-out for natural flip motion
+      const eased = flipT < 0.5
+        ? 2 * flipT * flipT
+        : 1 - Math.pow(-2 * flipT + 2, 2) / 2;
+      // Horizontal "page lifting" — scaleX from 1 → 0 over the spine
+      const sx = Math.max(0.001, 1 - eased);
+      // Slight perspective skew to suggest 3D
+      const skewY = (spineRight ? -1 : 1) * eased * 0.18;
+
+      ctx.save();
+      // Pivot at spine edge
+      const spineX = spineRight ? px + pw : px;
+      ctx.translate(spineX, py + ph / 2);
+      ctx.transform(sx, skewY * sx, 0, 1, 0, 0);
+      ctx.translate(-spineX, -(py + ph / 2));
+      this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+      ctx.restore();
+
+      // Shadow cast by the lifting page on the next page
+      ctx.save();
+      const shadow = ctx.createLinearGradient(
+        spineRight ? px + pw - pw * (1 - eased) : px,
+        0,
+        spineRight ? px + pw : px + pw * (1 - eased),
+        0,
+      );
+      shadow.addColorStop(0, "rgba(0,0,0,0)");
+      shadow.addColorStop(1, `rgba(0,0,0,${0.45 * eased})`);
+      ctx.fillStyle = shadow;
+      ctx.fillRect(px, py, pw, ph);
+      ctx.restore();
+    }
+
+    // Page binding shadow (spine)
+    ctx.save();
+    const spineGrad = ctx.createLinearGradient(
+      spineRight ? px + pw - 30 * s : px,
+      0,
+      spineRight ? px + pw : px + 30 * s,
+      0,
+    );
+    spineGrad.addColorStop(0, "rgba(0,0,0,0)");
+    spineGrad.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = spineGrad;
+    ctx.fillRect(spineRight ? px + pw - 30 * s : px, py, 30 * s, ph);
+    ctx.restore();
+
+    // Vignette over whole composition
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+
+    // Page indicator (subtle, bottom-right)
+    ctx.save();
+    ctx.font = `${Math.round(11 * s)}px monospace`;
+    ctx.fillStyle = "rgba(180,200,220,0.45)";
+    ctx.textAlign = "right";
+    ctx.fillText(`${idx + 1} / ${fb.pages.length}`, px + pw - 8 * s, py + ph - 8 * s);
+    ctx.restore();
+  }
+
+  /** Render a single flipbook page (panel) into the given rect. */
+  _drawFlipbookPage(ctx, px, py, pw, ph, panel, t, s, paperTint, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Clip to page bounds (slightly rounded)
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, Math.max(2, 6 * s));
+    ctx.clip();
+
+    // Paper / panel background
+    ctx.translate(px, py);
+    if (panel.bg) {
+      this.drawCutsceneBg(ctx, pw, ph, panel.bg, t);
+    } else {
+      ctx.fillStyle = paperTint;
+      ctx.fillRect(0, 0, pw, ph);
+    }
+
+    // Art
+    if (panel.art) {
+      ctx.save();
+      const artScale = Math.min(pw, ph) / 200;
+      const artCx = pw / 2;
+      const artCy = ph * 0.42;
+      ctx.translate(artCx, artCy);
+      ctx.scale(artScale, artScale);
+      ctx.translate(-artCx / artScale, -artCy / artScale);
+      this.drawCutsceneArt(ctx, pw / artScale, ph / artScale, panel.art, t);
+      ctx.restore();
+    }
+
+    // Photo / illustration overlay (panel.image). Drawn over panel.art so
+    // pre-rendered art beats procedural until image is ready, then overrides.
+    // Cover-fit centered, with optional opacity for blend-with-art moments.
+    if (panel.image) {
+      const img = this._getImage(panel.image);
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.save();
+        ctx.globalAlpha = (panel.imageAlpha ?? 1) * alpha;
+        const ar = img.naturalWidth / img.naturalHeight;
+        const panelAR = pw / ph;
+        let dw, dh;
+        if (ar > panelAR) {
+          dh = ph;
+          dw = ph * ar;
+        } else {
+          dw = pw;
+          dh = pw / ar;
+        }
+        ctx.drawImage(img, (pw - dw) / 2, (ph - dh) / 2, dw, dh);
+        ctx.restore();
+      }
+    }
+
+    // Halftone overlay (Marvel print feel)
+    if (panel.halftone) {
+      const dot = 4 * s;
+      ctx.globalAlpha = panel.halftone * alpha;
+      ctx.fillStyle = "#000";
+      for (let yy = 0; yy < ph; yy += dot * 2) {
+        for (let xx = 0; xx < pw; xx += dot * 2) {
+          ctx.beginPath();
+          ctx.arc(xx, yy, dot * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = alpha;
+    }
+
+    // Paper grain texture (subtle, scanline-based)
+    ctx.fillStyle = 'rgba(200,190,170,0.04)';
+    for (let gy = 0; gy < ph; gy += 4) {
+      ctx.globalAlpha = (0.02 + 0.02 * Math.sin(gy * 0.7)) * alpha;
+      ctx.fillRect(0, gy, pw, 1);
+    }
+    ctx.globalAlpha = alpha;
+
+    // SFX (KRAKOOM!)
+    if (panel.sfx) {
+      ctx.save();
+      const sx = (panel.sfxX ?? 0.5) * pw;
+      const sy = (panel.sfxY ?? 0.4) * ph;
+      const sz = (panel.sfxSize ?? 28) * s;
+      ctx.translate(sx, sy);
+      ctx.rotate(((panel.sfxRot ?? -8) * Math.PI) / 180);
+      ctx.font = `900 italic ${sz}px Impact, "Arial Black", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = Math.max(2, 4 * s);
+      ctx.strokeStyle = "#000";
+      ctx.strokeText(panel.sfx, 0, 0);
+      ctx.fillStyle = panel.sfxColor || "#ffcc00";
+      ctx.fillText(panel.sfx, 0, 0);
+      ctx.restore();
+    }
+
+    // Caption box
+    if (panel.caption) {
+      const pos = panel.captionPos || "bottom";
+      const fontSize = Math.round((panel.captionSize ?? 13) * s);
+      const padX = Math.round(14 * s);
+      const padY = Math.round(8 * s);
+      ctx.font = `bold ${fontSize}px monospace`;
+      ctx.textAlign = "center";
+      const text = panel.caption.replace(/\{AGENT\}/g, this.getPlayerName());
+      // Wrap to width
+      const maxW = pw - padX * 4;
+      const words = text.split(" ");
+      const lines = [];
+      let cur = "";
+      for (const word of words) {
+        const test = cur ? `${cur} ${word}` : word;
+        if (ctx.measureText(test).width > maxW && cur) {
+          lines.push(cur);
+          cur = word;
+        } else {
+          cur = test;
+        }
+      }
+      if (cur) lines.push(cur);
+
+      const boxH = lines.length * (fontSize + 4 * s) + padY * 2;
+      const boxW = Math.min(
+        pw - padX * 2,
+        Math.max(...lines.map(l => ctx.measureText(l).width)) + padX * 2,
+      );
+      const boxX = (pw - boxW) / 2;
+      let boxY;
+      if (pos === "top") boxY = padY * 1.5;
+      else if (pos === "center") boxY = (ph - boxH) / 2;
+      else boxY = ph - boxH - padY * 1.5;
+
+      // Caption plate (vintage off-white)
+      ctx.fillStyle = panel.captionBg || "rgba(248,238,210,0.96)";
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, Math.max(2, 4 * s));
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      ctx.stroke();
+
+      ctx.fillStyle = panel.captionColor || "#1a1208";
+      lines.forEach((ln, i) => {
+        ctx.fillText(
+          ln,
+          boxX + boxW / 2,
+          boxY + padY + fontSize + i * (fontSize + 4 * s) - 2,
+        );
+      });
+    }
+
+    if (panel.prompt) {
+      const pulse = 0.65 + 0.35 * Math.sin(t * 5);
+      const prompt = panel.prompt.replace(//g, "");
+      const py2 = ph * (panel.promptY ?? 0.78);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.textAlign = "center";
+      ctx.font = `900 ${Math.round((panel.promptSize ?? 20) * s)}px monospace`;
+      ctx.shadowColor = panel.promptColor || "#00ffcc";
+      ctx.shadowBlur = 12 + pulse * 16;
+      ctx.strokeStyle = "rgba(0,0,0,0.8)";
+      ctx.lineWidth = Math.max(2, 4 * s);
+      ctx.strokeText(prompt, pw / 2, py2);
+      ctx.fillStyle = panel.promptColor || "#00ffcc";
+      ctx.globalAlpha = 0.7 + pulse * 0.3;
+      ctx.fillText(prompt, pw / 2, py2);
+      ctx.restore();
+    }
+
+    // Action speed-lines
+    if (panel.action) {
+      ctx.strokeStyle = `rgba(0,0,0,${0.18 + 0.06 * Math.sin(t * 4)})`;
+      ctx.lineWidth = Math.max(1, 1 * s);
+      const cx = pw / 2;
+      const cy = ph * 0.45;
+      for (let l = 0; l < 14; l++) {
+        const ang = (l / 14) * Math.PI * 2 + t * 0.3;
+        const r1 = pw * 0.18;
+        const r2 = pw * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
   }
 
   // ── Comic Book Panel Renderer ───────────────────────────────────
@@ -1156,6 +1691,47 @@ export class CutsceneEngine {
         nebula2.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = nebula2;
         ctx.fillRect(0, 0, w, h);
+
+        // === Shooting stars ===
+        for (let i = 0; i < 3; i++) {
+          const seed = i * 43.7;
+          const cycle = Math.sin(t * 0.4 + seed);
+          if (cycle > 0.7) {
+            const life = (cycle - 0.7) / 0.3;
+            const sx0 = (Math.sin(seed * 3.1) * 0.5 + 0.5) * w;
+            const sy0 = (Math.cos(seed * 2.3) * 0.3 + 0.1) * h;
+            const len = 40 + life * 60;
+            ctx.strokeStyle = `rgba(220,240,255,${(1 - life) * 0.6})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(sx0, sy0);
+            ctx.lineTo(sx0 + len * 0.7, sy0 + len * 0.3);
+            ctx.stroke();
+          }
+        }
+
+        // === Star clusters ===
+        const clusterCenters = [
+          [w * 0.15, h * 0.25],
+          [w * 0.8, h * 0.65],
+        ];
+        for (const [ccx, ccy] of clusterCenters) {
+          for (let i = 0; i < 10; i++) {
+            const seed = i * 17.9 + ccx * 0.01;
+            const ox = Math.sin(seed) * 20;
+            const oy = Math.cos(seed * 1.7) * 15;
+            const ta = 0.15 + 0.15 * Math.abs(Math.sin(t * 0.8 + seed));
+            ctx.fillStyle = `rgba(180,200,255,${ta})`;
+            ctx.beginPath();
+            ctx.arc(ccx + ox, ccy + oy, 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // === Parallax drift on nebulae ===
+        ctx.globalAlpha = 0.04;
+        ctx.drawImage(ctx.canvas, t * 0.02, 0, w, h, 0, 0, w, h);
+        ctx.globalAlpha = 1;
         break;
       }
       case "station": {
@@ -1201,6 +1777,47 @@ export class CutsceneEngine {
         haze.addColorStop(1, "rgba(0,40,80,0.12)");
         ctx.fillStyle = haze;
         ctx.fillRect(0, 0, w, h);
+
+        // === Pipe silhouettes ===
+        const pipeXs = [w * 0.12, w * 0.55, w * 0.88];
+        for (const px of pipeXs) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(px - 6, 0, 12, h);
+          ctx.fillStyle = "rgba(80,160,220,0.06)";
+          ctx.fillRect(px + 4, 0, 2, h);
+        }
+
+        // === Scrolling data strip ===
+        const stripY = h * 0.15;
+        ctx.fillStyle = "rgba(0,60,120,0.08)";
+        ctx.fillRect(0, stripY - 4, w, 8);
+        for (let i = 0; i < 20; i++) {
+          const dx = ((i * 50 + t * 60) % (w + 40)) - 20;
+          const da = 0.15 + 0.1 * Math.sin(i * 2.3);
+          ctx.fillStyle = `rgba(0,180,255,${da})`;
+          ctx.fillRect(dx, stripY - 2, 14 + (i % 3) * 6, 4);
+        }
+
+        // === Emergency rotation light ===
+        const rlx = w * 0.5 + Math.cos(t * 2.5) * 18;
+        const rly = h * 0.08 + Math.sin(t * 2.5) * 18;
+        for (let trail = 4; trail >= 0; trail--) {
+          const tAngle = t * 2.5 - trail * 0.15;
+          const tx = w * 0.5 + Math.cos(tAngle) * 18;
+          const ty = h * 0.08 + Math.sin(tAngle) * 18;
+          const ta = (1 - trail / 4) * 0.4;
+          ctx.fillStyle = `rgba(255,40,40,${ta})`;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 3 - trail * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowColor = "#ff2020";
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = "rgba(255,60,60,0.7)";
+        ctx.beginPath();
+        ctx.arc(rlx, rly, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
         break;
       }
       case "boss_lair": {
@@ -1256,6 +1873,356 @@ export class CutsceneEngine {
         fog.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = fog;
         ctx.fillRect(0, 0, w, h);
+
+        // === Clock face ===
+        const clkR = Math.min(w, h) * 0.12;
+        ctx.strokeStyle = "rgba(200,30,60,0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2, clkR, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+          ctx.strokeStyle = "rgba(200,30,60,0.18)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(w / 2 + Math.cos(a) * (clkR - 6), h / 2 + Math.sin(a) * (clkR - 6));
+          ctx.lineTo(w / 2 + Math.cos(a) * clkR, h / 2 + Math.sin(a) * clkR);
+          ctx.stroke();
+        }
+        // Minute hand
+        const handAngle = t * 0.5 - Math.PI / 2;
+        ctx.strokeStyle = "rgba(255,60,80,0.25)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, h / 2);
+        ctx.lineTo(w / 2 + Math.cos(handAngle) * (clkR * 0.85), h / 2 + Math.sin(handAngle) * (clkR * 0.85));
+        ctx.stroke();
+
+        // === More aggressive veins (additional 4 → total 16) ===
+        ctx.strokeStyle = `rgba(200,30,60,${0.08 + 0.05 * Math.sin(t * 2.5)})`;
+        ctx.lineWidth = 3;
+        for (let i = 12; i < 16; i++) {
+          const angle = (i / 16) * Math.PI * 2 + t * 0.3;
+          ctx.beginPath();
+          ctx.moveTo(w / 2, h / 2);
+          ctx.quadraticCurveTo(
+            w / 2 + Math.cos(angle + 0.3) * w * 0.35,
+            h / 2 + Math.sin(angle + 0.3) * h * 0.35,
+            w / 2 + Math.cos(angle) * w * 0.75,
+            h / 2 + Math.sin(angle) * h * 0.75,
+          );
+          ctx.stroke();
+        }
+
+        // === Ground fog ===
+        const gfY = h * 0.85;
+        const gf = ctx.createLinearGradient(0, gfY, 0, h);
+        gf.addColorStop(0, "rgba(60,0,20,0)");
+        gf.addColorStop(0.4, `rgba(60,0,20,${0.08 + 0.04 * Math.sin(t * 1.2)})`);
+        gf.addColorStop(1, `rgba(40,0,10,${0.15 + 0.05 * Math.sin(t * 0.9)})`);
+        ctx.fillStyle = gf;
+        ctx.fillRect(0, gfY, w, h - gfY);
+        break;
+      }
+      case "reactor": {
+        // Act 2 industrial reactor background
+        const rGrad = ctx.createLinearGradient(0, 0, 0, h);
+        rGrad.addColorStop(0, "#1a0a00");
+        rGrad.addColorStop(0.5, "#2a1400");
+        rGrad.addColorStop(1, "#0a0400");
+        ctx.fillStyle = rGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Central pulsing reactor core
+        const coreR = (0.08 + 0.025 * Math.sin(t * 1.5)) * Math.min(w, h);
+        const core = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, coreR);
+        core.addColorStop(0, "rgba(255,200,80,0.5)");
+        core.addColorStop(0.4, "rgba(255,140,20,0.25)");
+        core.addColorStop(0.7, "rgba(200,80,0,0.1)");
+        core.addColorStop(1, "rgba(100,40,0,0)");
+        ctx.fillStyle = core;
+        ctx.fillRect(0, 0, w, h);
+
+        // Pipe silhouettes (7 pipes)
+        const rpXs = [0.08, 0.2, 0.35, 0.5, 0.65, 0.8, 0.92];
+        for (const frac of rpXs) {
+          const px = w * frac;
+          ctx.fillStyle = "rgba(10,5,0,0.5)";
+          ctx.fillRect(px - 5, 0, 10, h);
+          ctx.fillStyle = "rgba(255,160,60,0.04)";
+          ctx.fillRect(px + 3, 0, 2, h);
+        }
+
+        // Heat shimmer
+        ctx.strokeStyle = "rgba(255,180,80,0.06)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const shimY = h * 0.5;
+        for (let x = 0; x < w; x += 3) {
+          const sy = shimY + Math.sin(x * 0.05 + t * 3) * 4;
+          x === 0 ? ctx.moveTo(x, sy) : ctx.lineTo(x, sy);
+        }
+        ctx.stroke();
+
+        // Floating embers
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 53.7;
+          const ex = (Math.sin(seed) * 0.5 + 0.5) * w;
+          const ey = ((Math.cos(seed * 1.3) * 0.5 + 0.5) * h - t * (20 + i * 5)) % h;
+          const ea = 0.3 + 0.3 * Math.abs(Math.sin(t * 2 + seed));
+          ctx.fillStyle = `rgba(255,${140 + (i % 4) * 30},20,${ea})`;
+          ctx.beginPath();
+          ctx.arc(ex, (ey + h) % h, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Steam vents
+        const ventXs = [rpXs[1], rpXs[3], rpXs[5]];
+        for (let v = 0; v < ventXs.length; v++) {
+          const vx = w * ventXs[v];
+          const vy = h * (0.3 + v * 0.15);
+          const va = 0.06 + 0.04 * Math.sin(t * 3 + v * 2.1);
+          const steam = ctx.createRadialGradient(vx, vy, 0, vx, vy, 25);
+          steam.addColorStop(0, `rgba(255,255,255,${va})`);
+          steam.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = steam;
+          ctx.fillRect(vx - 25, vy - 25, 50, 50);
+        }
+        break;
+      }
+      case "temporal_rift": {
+        // Reality fracture background
+        const trGrad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.7);
+        trGrad.addColorStop(0, "#0a001a");
+        trGrad.addColorStop(0.5, "#14002a");
+        trGrad.addColorStop(1, "#050010");
+        ctx.fillStyle = trGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Color shift via radial gradients
+        const hueShift = t * 0.3;
+        const csGrad = ctx.createRadialGradient(w * 0.3, h * 0.4, 0, w * 0.3, h * 0.4, w * 0.4);
+        csGrad.addColorStop(0, `rgba(${80 + 40 * Math.sin(hueShift)},0,${120 + 40 * Math.cos(hueShift)},0.05)`);
+        csGrad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = csGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Central tear — jagged vertical line
+        const tearX = w / 2;
+        const tearTop = h * 0.3;
+        const tearBot = h * 0.7;
+        ctx.save();
+        ctx.shadowColor = "rgba(200,30,80,0.6)";
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = "rgba(220,40,100,0.5)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(tearX, tearTop);
+        for (let y = tearTop; y < tearBot; y += 12) {
+          const jag = Math.sin(y * 0.15 + t * 2) * 8 + Math.sin(y * 0.3 + t) * 4;
+          ctx.lineTo(tearX + jag, y);
+        }
+        ctx.lineTo(tearX, tearBot);
+        ctx.stroke();
+        // Glow layer
+        ctx.strokeStyle = "rgba(160,20,200,0.2)";
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(tearX, tearTop);
+        for (let y = tearTop; y < tearBot; y += 12) {
+          const jag = Math.sin(y * 0.15 + t * 2) * 8 + Math.sin(y * 0.3 + t) * 4;
+          ctx.lineTo(tearX + jag, y);
+        }
+        ctx.lineTo(tearX, tearBot);
+        ctx.stroke();
+        ctx.restore();
+
+        // Reality fragments — small rotated rectangles orbiting the tear
+        const tearCy = (tearTop + tearBot) / 2;
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 37.1;
+          const orbitR = 40 + Math.sin(seed) * 25;
+          const orbitA = (i / 10) * Math.PI * 2 + t * (0.2 + i * 0.03);
+          const fx = tearX + Math.cos(orbitA) * orbitR;
+          const fy = tearCy + Math.sin(orbitA) * orbitR * 0.6;
+          const fa = 0.15 + 0.1 * Math.sin(t + seed);
+          ctx.save();
+          ctx.translate(fx, fy);
+          ctx.rotate(orbitA * 2 + t * 0.5);
+          ctx.fillStyle = `rgba(180,60,220,${fa})`;
+          ctx.fillRect(-4, -3, 8, 6);
+          ctx.restore();
+        }
+
+        // Lightning arcs from tear to edges
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 19.3;
+          const flicker = Math.sin(t * 8 + seed * 5);
+          if (flicker > 0.2) {
+            const la = (flicker - 0.2) * 0.4;
+            const srcY = tearTop + (tearBot - tearTop) * (0.2 + i * 0.2);
+            const destX = i < 2 ? w * (0.05 + i * 0.1) : w * (0.85 + (i - 2) * 0.1);
+            const destY = h * (0.2 + Math.sin(seed) * 0.3);
+            ctx.strokeStyle = `rgba(180,100,255,${la})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(tearX, srcY);
+            const midX = (tearX + destX) / 2 + Math.sin(t * 5 + seed) * 30;
+            const midY = (srcY + destY) / 2 + Math.cos(t * 4 + seed) * 20;
+            ctx.quadraticCurveTo(midX, midY, destX, destY);
+            ctx.stroke();
+          }
+        }
+
+        // Time distortion rings
+        for (let r = 0; r < 2; r++) {
+          const ringR = 60 + r * 35;
+          const ringA = t * (0.3 + r * 0.15);
+          ctx.save();
+          ctx.translate(tearX, tearCy);
+          ctx.rotate(ringA);
+          ctx.strokeStyle = `rgba(140,60,200,${0.08 + 0.04 * Math.sin(t + r)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ringR, ringR * 0.4, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        break;
+      }
+      case "command_center": {
+        // Tactical briefing background
+        const ccGrad = ctx.createLinearGradient(0, 0, 0, h);
+        ccGrad.addColorStop(0, "#000a14");
+        ccGrad.addColorStop(0.5, "#001020");
+        ccGrad.addColorStop(1, "#000810");
+        ctx.fillStyle = ccGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Holographic grid floor (perspective)
+        const vpX = w / 2;
+        const vpY = h * 0.45;
+        const gridBottom = h * 0.95;
+        ctx.strokeStyle = "rgba(0,200,255,0.06)";
+        ctx.lineWidth = 1;
+        // Converging vertical lines
+        for (let i = -8; i <= 8; i++) {
+          const bx = vpX + i * (w * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(vpX + i * 2, vpY);
+          ctx.lineTo(bx, gridBottom);
+          ctx.stroke();
+        }
+        // Horizontal lines
+        for (let j = 0; j < 8; j++) {
+          const frac = j / 8;
+          const gy = vpY + (gridBottom - vpY) * (frac * frac);
+          const spread = frac * w * 0.65;
+          ctx.beginPath();
+          ctx.moveTo(vpX - spread, gy);
+          ctx.lineTo(vpX + spread, gy);
+          ctx.stroke();
+        }
+
+        // Data columns — scrolling rectangles
+        const colXs = [0.18, 0.35, 0.65, 0.82, 0.5];
+        for (let c = 0; c < colXs.length; c++) {
+          const cx = w * colXs[c];
+          ctx.fillStyle = "rgba(0,180,255,0.03)";
+          ctx.fillRect(cx - 8, h * 0.2, 16, h * 0.55);
+          for (let j = 0; j < 12; j++) {
+            const dy = ((j * 30 + t * (40 + c * 15)) % (h * 0.55)) + h * 0.2;
+            const da = 0.08 + 0.06 * Math.sin(j * 1.7 + c);
+            ctx.fillStyle = `rgba(0,200,255,${da})`;
+            ctx.fillRect(cx - 5, dy, 10, 3 + (j % 3) * 2);
+          }
+        }
+
+        // Status indicators — colored dots at top
+        const statusColors = [
+          [0, 220, 80], [0, 220, 80], [255, 180, 0],
+          [0, 220, 80], [255, 60, 40], [0, 220, 80],
+          [255, 180, 0], [0, 220, 80],
+        ];
+        for (let i = 0; i < statusColors.length; i++) {
+          const sx = w * (0.2 + i * 0.085);
+          const sy = h * 0.06;
+          const [sr, sg, sb] = statusColors[i];
+          const blink = i === 4 || i === 6 ? Math.sin(t * (3 + i) + i) > 0 : true;
+          if (blink) {
+            ctx.fillStyle = `rgba(${sr},${sg},${sb},0.6)`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Radar sweep
+        const radarCx = w / 2;
+        const radarCy = h * 0.45;
+        const radarR = Math.min(w, h) * 0.12;
+        const sweepAngle = t * 1.2;
+        ctx.strokeStyle = "rgba(0,220,255,0.1)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(radarCx, radarCy, radarR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(0,220,255,0.25)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(radarCx, radarCy);
+        ctx.lineTo(
+          radarCx + Math.cos(sweepAngle) * radarR,
+          radarCy + Math.sin(sweepAngle) * radarR,
+        );
+        ctx.stroke();
+        // Sweep trail
+        for (let s = 1; s <= 6; s++) {
+          const trailA = sweepAngle - s * 0.08;
+          ctx.strokeStyle = `rgba(0,220,255,${0.15 - s * 0.02})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(radarCx, radarCy);
+          ctx.lineTo(
+            radarCx + Math.cos(trailA) * radarR,
+            radarCy + Math.sin(trailA) * radarR,
+          );
+          ctx.stroke();
+        }
+
+        // Tactical display border with corner brackets
+        const bPad = 20;
+        const bLen = 30;
+        ctx.strokeStyle = "rgba(0,200,255,0.15)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bPad, bPad, w - bPad * 2, h - bPad * 2);
+        ctx.strokeStyle = "rgba(0,220,255,0.35)";
+        ctx.lineWidth = 2;
+        // Top-left
+        ctx.beginPath();
+        ctx.moveTo(bPad, bPad + bLen);
+        ctx.lineTo(bPad, bPad);
+        ctx.lineTo(bPad + bLen, bPad);
+        ctx.stroke();
+        // Top-right
+        ctx.beginPath();
+        ctx.moveTo(w - bPad - bLen, bPad);
+        ctx.lineTo(w - bPad, bPad);
+        ctx.lineTo(w - bPad, bPad + bLen);
+        ctx.stroke();
+        // Bottom-left
+        ctx.beginPath();
+        ctx.moveTo(bPad, h - bPad - bLen);
+        ctx.lineTo(bPad, h - bPad);
+        ctx.lineTo(bPad + bLen, h - bPad);
+        ctx.stroke();
+        // Bottom-right
+        ctx.beginPath();
+        ctx.moveTo(w - bPad - bLen, h - bPad);
+        ctx.lineTo(w - bPad, h - bPad);
+        ctx.lineTo(w - bPad, h - bPad - bLen);
+        ctx.stroke();
         break;
       }
       default: {
@@ -1279,6 +2246,13 @@ export class CutsceneEngine {
     ctx.scale(baseScale, baseScale);
 
     switch (art) {
+      case "villain":
+      case "villain_form2":
+      case "villain_final": {
+        const phase = art === "villain_final" ? 3 : art === "villain_form2" ? 2 : 1;
+        this.drawParadoxAbomination(ctx, t, phase);
+        break;
+      }
       case "hero": {
         // Armored temporal agent — adult proportions (tall torso, long legs)
         const fadeIn = Math.min(1, t / 1.2);
@@ -2059,7 +3033,7 @@ export class CutsceneEngine {
         break;
       }
 
-      case "villain": {
+      case "villain_legacy": {
         // ── THE BEHEMOTH — Industrial diving-suit titan ──
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.02;
@@ -2299,7 +3273,7 @@ export class CutsceneEngine {
         break;
       }
 
-      case "villain_form2": {
+      case "villain_form2_legacy": {
         // ── THE VOLCANIC TITAN — Cracked armor, exposed ember muscle ──
         const fadeIn = Math.min(1, t / 1.2);
         const breathe = 1 + Math.sin(t * 2) * 0.03;
@@ -2600,7 +3574,7 @@ export class CutsceneEngine {
         break;
       }
 
-      case "villain_final": {
+      case "villain_final_legacy": {
         // ── THE COSMIC ENTITY — Void body, starfield, dimensional tears ──
         const fadeIn = Math.min(1, t / 1.5);
         const breathe = 1 + Math.sin(t * 1.5) * 0.03;
@@ -4632,6 +5606,237 @@ export class CutsceneEngine {
       }
     }
 
+    ctx.restore();
+  }
+
+  drawParadoxAbomination(ctx, t, phase = 1) {
+    const fadeIn = Math.min(1, t / 1.1);
+    const pulse = (Math.sin(t * 4.2) + 1) * 0.5;
+    const breath = 1 + Math.sin(t * 1.4) * 0.025;
+    const scale = phase === 3 ? 2.32 : phase === 2 ? 2.1 : 1.92;
+    const flesh = phase === 3 ? "#1a0630" : phase === 2 ? "#2b0818" : "#241020";
+    const fleshHi = phase === 3 ? "#32125d" : phase === 2 ? "#64142a" : "#3c1838";
+    const glow = phase === 3 ? "140,80,255" : phase === 2 ? "255,48,120" : "0,220,255";
+    const horn = phase === 3 ? "#d7ccff" : phase === 2 ? "#ffc0a0" : "#9ff8ff";
+
+    ctx.save();
+    ctx.scale(scale * breath, scale * breath);
+    ctx.globalAlpha = fadeIn;
+
+    const aura = ctx.createRadialGradient(0, -10, 10, 0, -10, 130);
+    aura.addColorStop(0, `rgba(${glow},0.28)`);
+    aura.addColorStop(0.45, `rgba(${glow},0.11)`);
+    aura.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = aura;
+    ctx.fillRect(-150, -150, 300, 300);
+
+    for (let i = 0; i < 5 + phase; i++) {
+      const a = t * (0.7 + i * 0.08) + i * 1.35;
+      const rx = Math.cos(a) * (55 + i * 7);
+      const ry = -18 + Math.sin(a) * (28 + i * 2);
+      ctx.strokeStyle = `rgba(${glow},${0.09 + pulse * 0.07})`;
+      ctx.lineWidth = 2 + phase * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(rx * 0.45, ry * 0.4);
+      ctx.quadraticCurveTo(rx * 0.75, ry - 22, rx, ry);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.beginPath();
+    ctx.moveTo(-48, -42);
+    ctx.quadraticCurveTo(-82, -10, -54, 50);
+    ctx.lineTo(54, 50);
+    ctx.quadraticCurveTo(82, -10, 48, -42);
+    ctx.closePath();
+    ctx.fill();
+
+    for (let i = -3; i <= 3; i++) {
+      const spineH = 18 + (3 - Math.abs(i)) * 8 + phase * 4;
+      ctx.fillStyle = `rgba(${glow},${0.13 + pulse * 0.08})`;
+      ctx.beginPath();
+      ctx.moveTo(i * 9 - 3, -31);
+      ctx.lineTo(i * 9, -31 - spineH);
+      ctx.lineTo(i * 9 + 3, -31);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    const bodyGrad = ctx.createLinearGradient(0, -55, 0, 58);
+    bodyGrad.addColorStop(0, fleshHi);
+    bodyGrad.addColorStop(0.42, flesh);
+    bodyGrad.addColorStop(1, "#09030a");
+
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(-30, -38);
+    ctx.quadraticCurveTo(-50, -22, -45, 0);
+    ctx.quadraticCurveTo(-40, 22, -20, 54);
+    ctx.lineTo(20, 54);
+    ctx.quadraticCurveTo(40, 22, 45, 0);
+    ctx.quadraticCurveTo(50, -22, 30, -38);
+    ctx.closePath();
+    ctx.fill();
+
+    for (const side of [-1, 1]) {
+      const pec = ctx.createRadialGradient(side * 14, -24, 2, side * 14, -24, 17);
+      pec.addColorStop(0, fleshHi);
+      pec.addColorStop(1, flesh);
+      ctx.fillStyle = pec;
+      ctx.beginPath();
+      ctx.ellipse(side * 14, -24, 18, 10, side * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (let row = 0; row < 4; row++) {
+      const y = -7 + row * 9;
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = row % 2 ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.16)";
+        ctx.beginPath();
+        ctx.ellipse(side * 7, y, 6, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const core = ctx.createRadialGradient(0, -22, 0, 0, -22, 16 + phase * 2);
+    core.addColorStop(0, `rgba(255,255,255,${0.72 + pulse * 0.24})`);
+    core.addColorStop(0.22, `rgba(${glow},0.8)`);
+    core.addColorStop(1, `rgba(${glow},0)`);
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, -22, 16 + phase * 2 + pulse * 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${glow},${0.45 + pulse * 0.3})`;
+    ctx.lineWidth = 1.4;
+    for (let r = 0; r < 3; r++) {
+      ctx.beginPath();
+      ctx.ellipse(0, -22, 13 + r * 5, 4 + r * 1.5, t * (r % 2 ? -1 : 1), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.moveTo(side * 37, -31);
+      ctx.quadraticCurveTo(side * 70, -18, side * 64, 18);
+      ctx.quadraticCurveTo(side * 61, 42, side * 45, 50);
+      ctx.quadraticCurveTo(side * 34, 36, side * 40, 12);
+      ctx.quadraticCurveTo(side * 42, -10, side * 28, -28);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = fleshHi;
+      ctx.beginPath();
+      ctx.ellipse(side * 52, -6, 13, 24, side * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#0a0308";
+      ctx.beginPath();
+      ctx.ellipse(side * 48, 52, 15, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (let c = 0; c < 4; c++) {
+        const cx = side * (39 + c * 5);
+        ctx.fillStyle = horn;
+        ctx.beginPath();
+        ctx.moveTo(cx, 55);
+        ctx.lineTo(cx + side * 8, 62 + Math.sin(t * 4 + c) * 2);
+        ctx.lineTo(cx + side, 49);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = flesh;
+      ctx.beginPath();
+      ctx.moveTo(side * 8, 43);
+      ctx.lineTo(side * 26, 43);
+      ctx.lineTo(side * 24, 75);
+      ctx.lineTo(side * 6, 75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#070307";
+      ctx.fillRect(side < 0 ? -28 : 7, 72, 22, 6);
+    }
+
+    ctx.fillStyle = fleshHi;
+    ctx.beginPath();
+    ctx.moveTo(-17, -53);
+    ctx.quadraticCurveTo(-19, -36, -9, -26);
+    ctx.lineTo(9, -26);
+    ctx.quadraticCurveTo(19, -36, 17, -53);
+    ctx.quadraticCurveTo(8, -66, 0, -64);
+    ctx.quadraticCurveTo(-8, -66, -17, -53);
+    ctx.closePath();
+    ctx.fill();
+
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = horn;
+      ctx.beginPath();
+      ctx.moveTo(side * 10, -60);
+      ctx.quadraticCurveTo(side * 32, -76, side * 38, -48);
+      ctx.quadraticCurveTo(side * 24, -58, side * 13, -49);
+      ctx.closePath();
+      ctx.fill();
+      if (phase >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(side * 4, -63);
+        ctx.quadraticCurveTo(side * 15, -88, side * 24, -69);
+        ctx.lineTo(side * 11, -56);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    for (const y of [-49, -42]) {
+      for (const side of [-1, 1]) {
+        const eyeX = side * (y === -49 ? 6 : 10);
+        const eye = ctx.createRadialGradient(eyeX, y, 0, eyeX, y, 4);
+        eye.addColorStop(0, "rgba(255,255,255,0.92)");
+        eye.addColorStop(0.35, `rgba(${glow},0.75)`);
+        eye.addColorStop(1, `rgba(${glow},0)`);
+        ctx.fillStyle = eye;
+        ctx.beginPath();
+        ctx.ellipse(eyeX, y, 4.5, 2.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.strokeStyle = "rgba(0,0,0,0.65)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-8, -34);
+    ctx.quadraticCurveTo(0, -29 + pulse * 2, 8, -34);
+    ctx.stroke();
+
+    const veins = [
+      [[-20, -32], [-12, -20], [-17, -5], [-8, 10]],
+      [[18, -31], [11, -18], [16, -1], [7, 18]],
+      [[-4, -15], [2, -4], [-2, 9], [5, 24]],
+      [[-35, -4], [-48, 8], [-44, 31]],
+      [[35, -4], [48, 8], [44, 31]],
+    ];
+    ctx.strokeStyle = `rgba(${glow},${0.34 + pulse * 0.2})`;
+    ctx.lineWidth = 1.4;
+    for (const vein of veins) {
+      ctx.beginPath();
+      ctx.moveTo(vein[0][0], vein[0][1]);
+      for (let i = 1; i < vein.length; i++) ctx.lineTo(vein[i][0], vein[i][1]);
+      ctx.stroke();
+    }
+
+    if (phase === 3) {
+      for (let i = 0; i < 10; i++) {
+        const a = t * 1.3 + i * 0.63;
+        const r = 60 + Math.sin(t * 2 + i) * 12;
+        ctx.fillStyle = `rgba(${glow},${0.16 + Math.sin(t * 5 + i) * 0.08})`;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * r, -10 + Math.sin(a) * r * 0.55, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 }

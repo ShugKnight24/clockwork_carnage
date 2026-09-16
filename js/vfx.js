@@ -1,11 +1,15 @@
 /**
  * VFX spawners — game-specific particle effects.
  * Extracted from game.js. Pure functions that push into a particles array.
+ *
+ * Uses shared particlePool (src/utils/particle-pool.js) to recycle particle
+ * objects instead of allocating via push({...}), reducing GC pressure.
  */
 import {
   spawnSmoke,
   spawnDebris,
 } from "./particle-system.js";
+import { particlePool } from "../src/utils/particle-pool.js";
 
 /** Parse hex color to [r, g, b]. */
 function hexRGB(hex, fallback = [128, 128, 128]) {
@@ -57,7 +61,8 @@ export function spawnHitImpact(particles, x, y, enemyColor, isCrit, quality = 1)
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 1.5 + Math.random() * 3;
-    particles.push({
+    const p = particlePool.acquire();
+    Object.assign(p, {
       x, y,
       z: -0.15 - Math.random() * 0.3,
       vx: Math.cos(angle) * speed,
@@ -68,7 +73,9 @@ export function spawnHitImpact(particles, x, y, enemyColor, isCrit, quality = 1)
       b: Math.max(0, b + Math.floor((Math.random() - 0.5) * 20)),
       life: 0.2 + Math.random() * 0.25,
       size: isCrit ? 0.04 + Math.random() * 0.05 : 0.03 + Math.random() * 0.03,
+      _type: "",
     });
+    particles.push(p);
   }
 }
 
@@ -90,7 +97,8 @@ export function spawnMuzzleFlash(particles, player, wep, quality = 1) {
     const spread = (Math.random() - 0.5) * 0.8;
     const flashAngle = player.angle + spread;
     const speed = 3 + Math.random() * 4;
-    particles.push({
+    const p = particlePool.acquire();
+    Object.assign(p, {
       x: bx, y: by,
       z: -0.15 - Math.random() * 0.1,
       vx: Math.cos(flashAngle) * speed,
@@ -100,7 +108,9 @@ export function spawnMuzzleFlash(particles, player, wep, quality = 1) {
       g: g1, b: b1,
       life: 0.06 + Math.random() * 0.08,
       size: 0.03 + Math.random() * 0.03,
+      _type: "",
     });
+    particles.push(p);
   }
 }
 
@@ -112,7 +122,8 @@ export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1) {
     const speed = 1.0 + Math.random() * 2;
     const c = Math.random() > 0.5 ? c1 : c2;
     const [r, g, b] = hexRGB(c, [255, 255, 255]);
-    particles.push({
+    const p = particlePool.acquire();
+    Object.assign(p, {
       x, y,
       z: -0.1 - Math.random() * 0.3,
       vx: Math.cos(angle) * speed,
@@ -121,7 +132,9 @@ export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1) {
       r, g, b,
       life: 0.8 + Math.random() * 0.4,
       size: 0.05 + Math.random() * 0.08,
+      _type: "",
     });
+    particles.push(p);
   }
   spawnSmoke(particles, x, y, { count: scaledCount(5, quality) });
   const [dr, dg, db] = hexRGB(c2 || "#808080", [80, 75, 70]);
@@ -134,7 +147,8 @@ export function spawnWallSparks(particles, x, y, quality = 1) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 1.5 + Math.random() * 2.5;
-    particles.push({
+    const p = particlePool.acquire();
+    Object.assign(p, {
       x, y,
       z: -0.2 - Math.random() * 0.3,
       vx: Math.cos(angle) * speed,
@@ -145,7 +159,9 @@ export function spawnWallSparks(particles, x, y, quality = 1) {
       b: Math.floor(Math.random() * 40),
       life: 0.15 + Math.random() * 0.2,
       size: 0.02 + Math.random() * 0.03,
+      _type: "",
     });
+    particles.push(p);
   }
   spawnDebris(particles, x, y, { count: scaledCount(3, quality), speed: 1, life: 0.3 });
 }
