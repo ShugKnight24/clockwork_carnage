@@ -340,4 +340,49 @@ export const ARIA_COMMS = {
     "I think we're in a loop, {AGENT}. I think we've always been. But this cycle — something's different. You're different.",
     "If this IS a loop, then somewhere, a version of us won. A version of us lost. This is the one we get.",
   ],
+
+  // ── Meltdown mode ──
+  meltdownStart: [
+    "Reactor meltdown detected. Temporal containment failing. Move FAST, {AGENT}.",
+    "Meltdown protocol active. The station is coming apart — take them down before it takes us.",
+    "Core breach imminent. Every second counts. Literally.",
+    "Meltdown. Clock's ticking. I'll skip the pep talk — just shoot.",
+  ],
+  meltdownComplete: [
+    "Meltdown contained. Reactor stabilizing. You're still here — I'm impressed.",
+    "Core sealed. That was... uncomfortably close to a real explosion.",
+    "Meltdown averted. I'd applaud, but — no hands. Consider this my standing ovation.",
+    "Containment restored. My threat projections did NOT account for you pulling that off.",
+  ],
+
+  // ── Arena high rounds (15+) ──
+  arenaHighRound: [
+    "Round fifteen-plus. At this point you're not surviving — you're showing off.",
+    "Deep rounds. The temporal signature is maxed. They're throwing everything they have.",
+    "Still standing at fifteen. I've archived your combat data — it's textbook material now.",
+  ],
+
+  // ── Tutorial encouragement ──
+  tutorialEncouragement: [
+    "Good. You found the trigger. Now find everything else — quickly.",
+    "That's it, rookie. Suit's syncing to your reflexes. Keep moving.",
+    "Textbook execution. The Bureau picked well. Don't prove me wrong.",
+    "Nice work. Most recruits take twice as long to figure that out.",
+    "You're learning fast. I like that. The things trying to kill you won't.",
+  ],
+
+  // ── Chrono Shift activation ──
+  chronoShiftActivated: [
+    "Chrono Shift engaged. Time is yours — make it count.",
+    "Temporal dilation active. Everything slows but you. Beautiful, isn't it?",
+    "Shift online. Clock's bending. Show them what a second really costs.",
+  ],
+
+  // ── Act 1 ambient chatter ──
+  act1Ambient: [
+    "First deployment on a temporal crisis. The Bureau really knows how to welcome rookies.",
+    "These corridors were full of researchers six hours ago. Now it's just us and whatever Voss left behind.",
+    "I'm picking up faint comms chatter — station personnel, maybe. Too degraded to resolve. We might not be alone.",
+    "Your suit is prototype-grade, {AGENT}. Cutting edge. Also: untested. Try not to think about that.",
+  ],
 };

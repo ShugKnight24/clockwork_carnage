@@ -234,8 +234,8 @@ export const TUTORIAL_MAP = {
     // Armory — extra weapon
     { x: 36.5, y: 32.5, type: "weapon", weaponId: 2 },
     // Zone 4 — Supervisor Office: Health + Ammo
-    { x: 45.5, y: 21.5, type: "health" },
-    { x: 47.5, y: 21.5, type: "ammo" },
+    { x: 44.5, y: 21.5, type: "health" },
+    { x: 48.5, y: 21.5, type: "ammo" },
     // Break room bonus
     { x: 22.5, y: 32.5, type: "health" },
     // Combat arena resupply

@@ -21,30 +21,33 @@ export const CUTSCENE_SCRIPTS = {
   intro: [
     {
       bg: "deep_space",
+      title: "CHRONOS EVENT / T-00:00:11",
       lines: [
-        { text: "THE YEAR IS 2181.", delay: 0, color: "#556677", size: 14 },
-        { text: "Time is broken.", delay: 1200, color: "#00ccff", size: 22 },
+        { text: "THE YEAR IS 2181.", delay: 0, color: "#99aacc", size: 14 },
+        { text: "Time is broken.", delay: 900, color: "#00e5ff", size: 24 },
+        { text: "Every second is now evidence.", delay: 2200, color: "#ffffff", size: 15 },
       ],
       particles: "stars",
       duration: 4000,
     },
     {
       bg: "deep_space",
+      title: "PROJECT PARADOX",
       lines: [
         {
-          text: "The Paradox Lord seized the Chronos Engine —",
+          text: "Dr. Elias Voss activated the Chronos Engine without clearance.",
           delay: 0,
           color: "#aabbcc",
           size: 16,
         },
         {
-          text: "a device that bends the fabric of reality itself.",
+          text: "The experiment lasted eleven seconds.",
           delay: 1500,
-          color: "#aabbcc",
+          color: "#ffcc88",
           size: 16,
         },
         {
-          text: "Past, present, and future collapsed into one.",
+          text: "Then past, present, and future collapsed into one wound.",
           delay: 3200,
           color: "#ff6644",
           size: 18,
@@ -56,6 +59,7 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "station",
+      title: "LAST ANCHOR",
       lines: [
         {
           text: "Chronos Station — humanity's last anchor in time.",
@@ -70,9 +74,9 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "Drones, phantoms, beasts — all glitched into existence.",
+          text: "Security, research, containment — each wing tells part of Voss's confession.",
           delay: 3600,
-          color: "#ff4444",
+          color: "#ffcc88",
           size: 16,
         },
       ],
@@ -83,18 +87,19 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "dark",
       art: "hero",
+      title: "TEMPORAL AGENT C-0017",
       lines: [
         {
-          text: "You are {AGENT} — the last Temporal Agent.",
+          text: "You are {AGENT} — wearing the first Chronos prototype suit.",
           delay: 0,
           color: "#00ffcc",
           size: 20,
         },
         {
-          text: "Armed. Alone. Out of time.",
+          text: "Built by Voss. Hunted by what Voss became.",
           delay: 1800,
           color: "#ffffff",
-          size: 24,
+          size: 22,
         },
       ],
       particles: "glow",
@@ -103,15 +108,16 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "dark",
       art: "hero_armed",
+      title: "MISSION: RESTORE THE CLOCK",
       lines: [
-        { text: "Fix the timeline.", delay: 0, color: "#00ffcc", size: 18 },
+        { text: "Recover the evidence.", delay: 0, color: "#00ffcc", size: 18 },
         {
-          text: "Kill the Paradox Lord.",
+          text: "Reach the Paradox Core.",
           delay: 1200,
-          color: "#ff2244",
+          color: "#ffcc00",
           size: 22,
         },
-        { text: "Or die trying.", delay: 2400, color: "#ffffff", size: 26 },
+        { text: "Stop Dr. Voss.", delay: 2400, color: "#ff2244", size: 26 },
       ],
       flash: "#00ccff",
       duration: 5000,
@@ -5367,6 +5373,189 @@ export const CUTSCENE_SCRIPTS = {
         },
       ],
       duration: 8000,
+    },
+  ],
+
+  // Marvel-style flipbook intro — full-bleed page-turn pacing.
+  // Each entry is one frame whose `flipbook.pages` array drives auto-paging.
+  intro_flipbook: [
+    {
+      bg: "dark",
+      flipbook: {
+        spineSide: "right",
+        paperTint: "#0a0814",
+        requireAction: true,
+        pages: [
+          // Rapid teaser burst — reads like a mini trailer before story settles.
+          { hold: 70, flipMs: 75, panel: { bg: "deep_space", art: "rift", caption: "01: THE SKY", captionPos: "top", captionSize: 11, captionColor: "#00ccff", halftone: 0.1, action: true } },
+          { hold: 70, flipMs: 75, panel: { bg: "station", caption: "CHRONOS BREACH", captionPos: "bottom", captionSize: 11, captionColor: "#1a1208", halftone: 0.16 } },
+          { hold: 75, flipMs: 75, panel: { bg: "boss_lair", art: "villain", caption: "A CROWN OF CLOCKS", captionPos: "top", captionSize: 11, captionColor: "#a01010", action: true } },
+          { hold: 65, flipMs: 70, panel: { bg: "dark", sfx: "RUN", sfxColor: "#00ffcc", sfxSize: 44, sfxX: 0.42, sfxY: 0.45, sfxRot: -8, action: true, halftone: 0.18 } },
+          { hold: 75, flipMs: 75, panel: { bg: "station", art: "hero_at_desk", image: "flipbook-page1.png", caption: "BADGE 11235", captionPos: "bottom", captionSize: 11, captionColor: "#1a1208" } },
+          { hold: 70, flipMs: 75, panel: { bg: "deep_space", art: "rift", sfx: "RIFT", sfxColor: "#ffcc00", sfxSize: 38, sfxX: 0.62, sfxY: 0.38, sfxRot: 8, action: true } },
+          { hold: 65, flipMs: 70, panel: { bg: "boss_lair", art: "villain_form2", caption: "PHASE TWO", captionPos: "top", captionSize: 11, captionColor: "#a01010", action: true } },
+          { hold: 70, flipMs: 75, panel: { bg: "dark", art: "hero_armed", caption: "LOAD. BREATHE.", captionPos: "center", captionSize: 12, captionColor: "#1a1208", halftone: 0.14 } },
+          { hold: 65, flipMs: 70, panel: { bg: "station", sfx: "DASH", sfxColor: "#66eeff", sfxSize: 42, sfxX: 0.5, sfxY: 0.5, sfxRot: -6, action: true } },
+          { hold: 75, flipMs: 75, panel: { bg: "deep_space", art: "villain_final", caption: "FINAL FORM", captionPos: "bottom", captionSize: 11, captionColor: "#a01010", halftone: 0.16 } },
+          { hold: 70, flipMs: 75, panel: { bg: "station", art: "hero_human", image: "flipbook-page3.png", caption: "HOURS UNRAVEL", captionPos: "center", captionSize: 11, captionColor: "#1a1208" } },
+          { hold: 65, flipMs: 70, panel: { bg: "dark", sfx: "AIM", sfxColor: "#66eeff", sfxSize: 46, sfxX: 0.5, sfxY: 0.45, sfxRot: 0, action: true } },
+          { hold: 70, flipMs: 75, panel: { bg: "boss_lair", art: "villain", caption: "TIME HUNGERS", captionPos: "top", captionSize: 11, captionColor: "#a01010", action: true } },
+          { hold: 75, flipMs: 85, panel: { bg: "deep_space", art: "rift", sfx: "CLOCK IN", sfxColor: "#00ffcc", sfxSize: 36, sfxX: 0.5, sfxY: 0.5, sfxRot: -4, action: true, halftone: 0.12 } },
+          {
+            hold: 1600,
+            flipMs: 650,
+            panel: {
+              bg: "station",
+              caption: "CHRONOS STATION — 06:47",
+              captionPos: "top",
+              captionColor: "#1a1208",
+              captionSize: 14,
+              halftone: 0.18,
+            },
+          },
+          {
+            hold: 1600,
+            flipMs: 650,
+            panel: {
+              bg: "dark",
+              art: "hero_at_desk",
+              image: "flipbook-page1.png",
+              caption: "Badge 11235. Beat cop. Nobody special.",
+              captionPos: "bottom",
+              captionColor: "#1a1208",
+              captionSize: 13,
+            },
+          },
+          {
+            hold: 1500,
+            flipMs: 650,
+            panel: {
+              bg: "deep_space",
+              art: "rift",
+              caption: "Then the sky broke.",
+              captionPos: "top",
+              captionColor: "#a01010",
+              captionSize: 16,
+              sfx: "KRAA-KOOM",
+              sfxColor: "#ffcc00",
+              sfxSize: 36,
+              sfxX: 0.7,
+              sfxY: 0.45,
+              sfxRot: -10,
+              action: true,
+              halftone: 0.12,
+            },
+          },
+          {
+            hold: 1500,
+            flipMs: 650,
+            panel: {
+              bg: "boss_lair",
+              art: "villain",
+              caption: "Something came through.",
+              captionPos: "bottom",
+              captionColor: "#1a1208",
+              captionSize: 14,
+              action: true,
+            },
+          },
+          {
+            hold: 1700,
+            flipMs: 650,
+            panel: {
+              bg: "deep_space",
+              art: "villain_final",
+              caption: "The Paradox Lord. Older than time. Hungrier than gods.",
+              captionPos: "top",
+              captionColor: "#a01010",
+              captionSize: 13,
+              halftone: 0.18,
+            },
+          },
+          {
+            hold: 1700,
+            flipMs: 650,
+            panel: {
+              bg: "station",
+              art: "hero_human",
+              image: "flipbook-page3.png",
+              caption: "Cities fell. Hours unraveled. The clock kept ticking.",
+              captionPos: "center",
+              captionColor: "#1a1208",
+              captionSize: 13,
+              halftone: 0.12,
+            },
+          },
+          {
+            hold: 2000,
+            flipMs: 0,
+            panel: {
+              bg: "dark",
+              art: "hero_armed",
+              caption: "{AGENT} — clock in. The world's ending.",
+              captionPos: "center",
+              captionColor: "#1a1208",
+              captionSize: 16,
+              prompt: "PRESS SPACE / CLICK TO BEGIN TRAINING",
+              promptColor: "#00ffcc",
+              promptSize: 18,
+              promptY: 0.78,
+              halftone: 0.15,
+            },
+          },
+        ],
+      },
+      title: "ISSUE #1",
+      duration: 12200,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT II TRANSITION — Entering the Reactor Core
+  // Flipbook page-turn bridging Acts I → II
+  // ═══════════════════════════════════════════════════════════════════
+  act2_transition_fb: [
+    {
+      bg: "dark",
+      flipbook: {
+        spineSide: "left",
+        paperTint: "#0a0800",
+        pages: [
+          { hold: 1400, flipMs: 600, panel: { bg: "station", caption: "Security protocols failing. Sector 7 breached.", captionPos: "top", captionColor: "#ff8844", captionSize: 13, halftone: 0.12 } },
+          { hold: 1200, flipMs: 500, panel: { bg: "reactor", art: "rift", caption: "The reactor's chronal shielding is destabilizing.", captionPos: "bottom", captionColor: "#ffaa00", captionSize: 13, sfx: "BREACH", sfxColor: "#ff6622", sfxSize: 32, sfxX: 0.7, sfxY: 0.35, sfxRot: -8, action: true } },
+          { hold: 1300, flipMs: 550, panel: { bg: "reactor", caption: "ARIA: \"Temporal readings are off the charts. Whatever's down there — it's awake.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
+          { hold: 1100, flipMs: 500, panel: { bg: "boss_lair", art: "villain", caption: "His voice again. Closer now.", captionPos: "bottom", captionColor: "#a01010", captionSize: 13, action: true, halftone: 0.16 } },
+          { hold: 1400, flipMs: 550, panel: { bg: "reactor", art: "hero_armed", caption: "Deeper into the station. Deeper into the fracture.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
+          { hold: 1800, flipMs: 0, panel: { bg: "reactor", caption: "ACT II — THE REACTOR", captionPos: "center", captionColor: "#ff8844", captionSize: 20 } },
+        ],
+      },
+      title: "ACT II",
+      duration: 9400,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACT III TRANSITION — The Final Fracture
+  // Flipbook page-turn bridging Acts II → III
+  // ═══════════════════════════════════════════════════════════════════
+  act3_transition_fb: [
+    {
+      bg: "dark",
+      flipbook: {
+        spineSide: "right",
+        paperTint: "#0a0010",
+        pages: [
+          { hold: 1500, flipMs: 650, panel: { bg: "temporal_rift", art: "rift", caption: "Reality is coming apart at the seams.", captionPos: "top", captionColor: "#ff2244", captionSize: 14, action: true, halftone: 0.14 } },
+          { hold: 1200, flipMs: 550, panel: { bg: "deep_space", caption: "The loop is tightening. Every timeline converging.", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
+          { hold: 1300, flipMs: 600, panel: { bg: "boss_lair", art: "villain_form2", sfx: "CRACK", sfxColor: "#ff0066", sfxSize: 36, sfxX: 0.65, sfxY: 0.4, sfxRot: -10, caption: "The Paradox Lord sheds his skin.", captionPos: "bottom", captionColor: "#a01010", captionSize: 13, action: true } },
+          { hold: 1400, flipMs: 550, panel: { bg: "temporal_rift", caption: "ARIA: \"His temporal signature... it matches Voss. 94 percent.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
+          { hold: 1100, flipMs: 500, panel: { bg: "deep_space", art: "villain_final", caption: "Not a monster. A mirror.", captionPos: "top", captionColor: "#ff4466", captionSize: 14, halftone: 0.18, action: true } },
+          { hold: 1500, flipMs: 600, panel: { bg: "temporal_rift", art: "hero_armed", caption: "One shot. One timeline. No second chances.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
+          { hold: 2000, flipMs: 0, panel: { bg: "boss_lair", caption: "ACT III — THE PARADOX CORE", captionPos: "center", captionColor: "#ff2244", captionSize: 20, halftone: 0.12 } },
+        ],
+      },
+      title: "ACT III",
+      duration: 11800,
     },
   ],
 };

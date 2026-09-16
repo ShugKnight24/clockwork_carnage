@@ -1,0 +1,101 @@
+/**
+ * Memory Fragments — collectible story pieces from the Dead Squad.
+ * 3 fragments per member (Voss, Miri, Kai), one per act.
+ */
+export const MEMORY_FRAGMENTS = [
+  // ─── VOSS (Tactician) ─────────────────────────────────────────────
+  {
+    id: 'voss_1',
+    member: 'Voss',
+    title: 'The Last Briefing',
+    text: 'Voss stands at the holotable, drawing routes through enemy lines with steady hands. "We don\'t need to win every fight — we just need to win the right ones." He taps a blinking node on the map, already knowing it\'s a one-way trip.',
+    ariaReaction: 'I remember this briefing. He looked at me differently that day — like he was memorizing my face.',
+    act: 1,
+    level: 3,
+    hidden: false,
+  },
+  {
+    id: 'voss_2',
+    member: 'Voss',
+    title: 'Echoes in the Signal',
+    text: 'A corrupted recording, half-static: Voss arguing with someone off-screen about temporal readings. "The signature is mine — or close enough to be. If the Paradox Lord is using my pattern, then I\'m the key to stopping it." The feed cuts to snow.',
+    ariaReaction: 'He knew. He knew what he was before any of us did, and he said nothing.',
+    act: 2,
+    level: 5,
+    hidden: true,
+  },
+  {
+    id: 'voss_3',
+    member: 'Voss',
+    title: 'Ninety-Four Percent',
+    text: 'The final scan results are undeniable: Voss\'s temporal signature and the Paradox Lord\'s overlap at 94%. Voss bought the team time not by fighting, but by feeding himself into the paradox — becoming the anchor that holds the Lord in place. His sacrifice wasn\'t just brave. It was the equation balancing itself.',
+    ariaReaction: 'He didn\'t die buying us time. He died becoming the cage. And whatever\'s left of him is still in there, holding the door shut from the inside.',
+    act: 3,
+    level: 7,
+    hidden: false,
+  },
+
+  // ─── MIRI (Medic) ─────────────────────────────────────────────────
+  {
+    id: 'miri_1',
+    member: 'Miri',
+    title: 'Field Sutures',
+    text: 'Miri hums an old lullaby while stitching a wound by flashlight, her hands impossibly steady despite the shelling overhead. "Hold still — I didn\'t drag you out of that crater to lose you to an infection." She ties off the last knot and smiles like the world isn\'t ending.',
+    ariaReaction: 'She always hummed that song. I never learned the words. I wish I had.',
+    act: 1,
+    level: 4,
+    hidden: true,
+  },
+  {
+    id: 'miri_2',
+    member: 'Miri',
+    title: 'The Promise',
+    text: 'Miri sits across from the player in a bombed-out chapel, sharing the last ration bar. "When this is over, I\'m opening a clinic somewhere green. No guns, no clocks, no time loops. You\'re my first patient — mandatory checkup, no excuses." She breaks the bar perfectly in half.',
+    ariaReaction: 'She meant it. Every word. That\'s what makes it unbearable.',
+    act: 2,
+    level: 4,
+    hidden: false,
+  },
+  {
+    id: 'miri_3',
+    member: 'Miri',
+    title: 'Last Breath, Longest Reach',
+    text: 'Miri injects her entire reserve of temporal stabilizer into the player\'s arm, knowing there\'s nothing left for herself. The chrono-decay starts immediately — her edges blur, her voice echoes. "You survive this. That\'s an order from your medic." She dissolves into light, still reaching forward.',
+    ariaReaction: 'She spent everything keeping us alive. And in the end, she spent herself. I carry her work in every heartbeat.',
+    act: 3,
+    level: 6,
+    hidden: false,
+  },
+
+  // ─── KAI (Engineer) ────────────────────────────────────────────────
+  {
+    id: 'kai_1',
+    member: 'Kai',
+    title: 'Impossible Machines',
+    text: 'Kai crouches in a pile of scrap, welding together a device that shouldn\'t work from parts that don\'t fit. "Physics is just a suggestion when you\'re desperate enough." The contraption hums to life, and for a moment, Kai\'s grin outshines the sparks.',
+    ariaReaction: 'Kai could build a star out of garbage. I never understood half of what they made — only that it always worked when it mattered.',
+    act: 1,
+    level: 2,
+    hidden: false,
+  },
+  {
+    id: 'kai_2',
+    member: 'Kai',
+    title: 'Blueprint for Tomorrow',
+    text: 'A crumpled schematic found wedged behind a wall panel — Kai\'s handwriting, rushed but precise. It\'s a design for a temporal anchor, something that could stabilize a rift permanently. In the margins: "If I don\'t make it, someone finish this. The math is right. I checked it twice."',
+    ariaReaction: 'They left us the answer. Folded it up and hid it like a letter, hoping the right person would find it.',
+    act: 2,
+    level: 6,
+    hidden: true,
+  },
+  {
+    id: 'kai_3',
+    member: 'Kai',
+    title: 'The Door Holds',
+    text: 'Kai welds the blast door shut from the wrong side, one arm already crushed under fallen scaffolding. The horde hammers against the steel. "Go — this door holds as long as I do." The welding torch flickers, and Kai doesn\'t look back. The door holds.',
+    ariaReaction: 'I heard the torch go out through the comm channel. Then silence. Then nothing. That door never opened again, and neither did anything behind it.',
+    act: 3,
+    level: 8,
+    hidden: false,
+  },
+];

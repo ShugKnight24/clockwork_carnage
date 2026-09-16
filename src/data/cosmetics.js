@@ -59,6 +59,33 @@ export const CHARACTER_COLORS = [
   },
 ];
 
+export const SKIN_TONES = [
+  { id: "warm_light", name: "Warm Light", color: "#d8a06f", shadow: "#8f5b3c" },
+  { id: "golden", name: "Golden", color: "#b98252", shadow: "#70432c" },
+  { id: "deep_brown", name: "Deep Brown", color: "#6b3d2e", shadow: "#321b17" },
+  { id: "cool_fair", name: "Cool Fair", color: "#e2bda3", shadow: "#9b735f" },
+  { id: "olive", name: "Olive", color: "#a97952", shadow: "#5b3e2f" },
+  { id: "synthetic", name: "Synthetic Chrome", color: "#9fa8b8", shadow: "#4a5260" },
+];
+
+export const HAIR_STYLES = [
+  { id: "buzz", name: "Buzz Cut", desc: "Regulation close crop", color: "#1b1512" },
+  { id: "short", name: "Short Sweep", desc: "Field-ready sweep", color: "#3b2418" },
+  { id: "coil", name: "Coils", desc: "Compact tactical coils", color: "#120d0b" },
+  { id: "braid", name: "Side Braid", desc: "Tucked under the comm band", color: "#2a1710" },
+  { id: "white", name: "White Shock", desc: "Temporal stress streak", color: "#d9e8ff" },
+  { id: "none", name: "Clean Shave", desc: "Helmet-seal smooth", color: "#111111" },
+];
+
+export const EYE_COLORS = [
+  { id: "amber", name: "Amber", color: "#ffcc66" },
+  { id: "blue", name: "Blue", color: "#66bbff" },
+  { id: "green", name: "Green", color: "#77ff99" },
+  { id: "violet", name: "Violet", color: "#bb88ff" },
+  { id: "red", name: "Chrono Red", color: "#ff5566" },
+  { id: "silver", name: "Silver", color: "#ddeeff" },
+];
+
 export const ARMOR_STYLES = [
   {
     id: "standard",
@@ -161,9 +188,50 @@ export const LOADOUT_CLASSES = [
   },
 ];
 
+export const BACKSTORIES = [
+  {
+    id: "beat_cop",
+    name: "Beat Cop",
+    desc: "Street instincts, steady hands, first one through the door.",
+    perk: "+5 max health",
+    bonuses: { maxHealthAdd: 5 },
+  },
+  {
+    id: "rift_scientist",
+    name: "Rift Scientist",
+    desc: "You helped build the chrono tech. Now you get to survive it.",
+    perk: "+10 chrono energy",
+    bonuses: { maxChronoEnergyAdd: 10 },
+  },
+  {
+    id: "arena_runner",
+    name: "Arena Runner",
+    desc: "Courier reflexes, illegal footwork, impossible escapes.",
+    perk: "Dash costs -3 stamina",
+    bonuses: { dashCostAdd: -3 },
+  },
+  {
+    id: "ex_enforcer",
+    name: "Ex-Enforcer",
+    desc: "Armor discipline from a timeline that no longer exists.",
+    perk: "+8 armor on deployment",
+    bonuses: { armorAdd: 8 },
+  },
+];
+
+export const VOICE_PROFILES = [
+  { id: "rookie", name: "Rookie", desc: "Young, sharp, nervous under fire", pitch: 1.25 },
+  { id: "veteran", name: "Veteran", desc: "Low, controlled, exhausted", pitch: 0.82 },
+  { id: "calm", name: "Calm", desc: "Measured breaths, no panic", pitch: 1.0 },
+  { id: "synthetic", name: "Synthetic", desc: "Vocoder edge, chrono-modulated", pitch: 1.45 },
+];
+
 export const DEFAULT_CHARACTER = {
   name: "Agent",
   colorIndex: 0,
+  skinToneIndex: 0,
+  hairIndex: 0,
+  eyeIndex: 0,
   armorIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
@@ -171,4 +239,6 @@ export const DEFAULT_CHARACTER = {
   badgeIndex: 0,
   weaponSkinIndex: 0,
   loadoutIndex: 0,
+  backstoryIndex: 0,
+  voiceIndex: 0,
 };
