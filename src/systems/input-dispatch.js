@@ -8,6 +8,7 @@ import { GameState } from "../types.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES } from "../ui/character-creator.js";
+import { archiveLayout, archiveEntries } from "../ui/archive-screen.js";
 import {
   getSettingsForCategory,
   getVisibleCategories,
@@ -402,6 +403,12 @@ export function dispatchKeyPress(game, code, e) {
     if (code === "KeyT") {
       game.state = GameState.STATS;
     }
+    if (code === "KeyB") {
+      game.archiveTab = 0;
+      game.archiveSelection = 0;
+      game.archiveScroll = 0;
+      game.state = GameState.ARCHIVE;
+    }
     if (code === "KeyL") {
       game.showAriaLog = !game.showAriaLog;
       game.ariaLogScroll = 0;
@@ -547,6 +554,50 @@ export function dispatchKeyPress(game, code, e) {
     if (code === "ArrowDown" || code === "KeyS") {
       game.achievementsScroll = (game.achievementsScroll || 0) + 1;
     }
+    return;
+  }
+
+  if (game.state === GameState.ARCHIVE) {
+    if (code === "Escape" || code === "KeyB") {
+      const now = performance.now();
+      if (now - game.lastEscTime < 200) return;
+      game.lastEscTime = now;
+      game.state = game._archiveReturnToMenu
+        ? GameState.MODE_SELECT
+        : GameState.PAUSED;
+      game._archiveReturnToMenu = false;
+      return;
+    }
+    const L = archiveLayout(game.hudW, game.hudH);
+    const entries = archiveEntries(game.archiveTab || 0, game.archive);
+    if (code === "KeyA" || code === "ArrowLeft") {
+      game.archiveTab = (game.archiveTab || 0) === 0 ? 1 : 0;
+      game.archiveSelection = 0;
+      game.archiveScroll = 0;
+    }
+    if (code === "KeyD" || code === "ArrowRight") {
+      game.archiveTab = (game.archiveTab || 0) === 1 ? 0 : 1;
+      game.archiveSelection = 0;
+      game.archiveScroll = 0;
+    }
+    if (code === "KeyW" || code === "ArrowUp") {
+      game.archiveSelection = Math.max(0, (game.archiveSelection || 0) - 1);
+    }
+    if (code === "KeyS" || code === "ArrowDown") {
+      game.archiveSelection = Math.min(
+        entries.length - 1,
+        (game.archiveSelection || 0) + 1,
+      );
+    }
+    // Keep the selection inside the visible window.
+    const sel = game.archiveSelection || 0;
+    let scroll = game.archiveScroll || 0;
+    if (sel < scroll) scroll = sel;
+    if (sel >= scroll + L.visibleRows) scroll = sel - L.visibleRows + 1;
+    game.archiveScroll = Math.max(
+      0,
+      Math.min(scroll, Math.max(0, entries.length - L.visibleRows)),
+    );
     return;
   }
 

@@ -23,6 +23,7 @@ export const GameState = {
   TUTORIAL_COMPLETE: "tutorialComplete",
   CHARACTER_CREATE: "characterCreate",
   ACHIEVEMENTS: "achievements",
+  ARCHIVE: "archive",
   STATS: "stats",
   HUD_EDITOR: "hudEditor",
 };

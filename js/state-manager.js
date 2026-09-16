@@ -30,7 +30,7 @@ const ALLOWED_TRANSITIONS = {
   title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats'],
   modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings'],
   playing: ['paused', 'settings', 'controls', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
-  paused: ['playing', 'settings', 'controls', 'title', 'modeSelect'],
+  paused: ['playing', 'settings', 'controls', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
   settings: ['paused', 'playing', 'title', 'modeSelect', 'controls'],
   controls: ['settings', 'paused', 'playing', 'title'],
   upgrade: ['playing'],
@@ -43,8 +43,9 @@ const ALLOWED_TRANSITIONS = {
   campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene'],
   tutorialComplete: ['title', 'modeSelect', 'playing'],
   characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory'],
-  achievements: ['title', 'modeSelect'],
-  stats: ['title', 'modeSelect'],
+  achievements: ['title', 'modeSelect', 'paused'],
+  stats: ['title', 'modeSelect', 'paused'],
+  archive: ['title', 'modeSelect', 'paused'],
 };
 
 export class StateManager {

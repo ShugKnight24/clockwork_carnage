@@ -49,6 +49,7 @@ import { SquadCommsController } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
+import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
 import {
   isPassable as _isPassable,
   hasLineOfSight as _hasLineOfSight,
@@ -2757,6 +2758,7 @@ export class Game {
       { key: "ESC / P", label: "Resume" },
       { key: "S", label: "Settings" },
       { key: "A", label: "Achievements" },
+      { key: "B", label: "Archive" },
       { key: "T", label: "Stats" },
       { key: "L", label: "ARIA log" },
     ];
@@ -2853,6 +2855,15 @@ export class Game {
 
   renderStatsScreen(ctx, w, h) {
     this.achievementSystem.renderStats(ctx, w, h);
+  }
+
+  renderArchiveScreen(ctx, w, h) {
+    _renderArchiveScreen(ctx, w, h, {
+      tab: this.archiveTab || 0,
+      selection: this.archiveSelection || 0,
+      scroll: this.archiveScroll || 0,
+      archive: this.archive,
+    });
   }
 
   renderUpgradeScreen(ctx, w, h) {

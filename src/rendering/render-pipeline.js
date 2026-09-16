@@ -53,6 +53,12 @@ export function renderFrame(game) {
     return;
   }
 
+  if (game.state === GameState.ARCHIVE) {
+    game.hudCtx.clearRect(0, 0, game.hudW, game.hudH);
+    game.renderArchiveScreen(ctx, w, h);
+    return;
+  }
+
   if (game.state === GameState.BUILDER) {
     game.hudCtx.clearRect(0, 0, game.hudW, game.hudH);
     // The onboarding modal already lists the core bindings. Showing the

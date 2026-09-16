@@ -840,3 +840,34 @@ body {
 #modeSelect::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ── Mode select: two columns on roomy desktop viewports ──────────────────
+   Eight modes in one column overflow 720p (940px of content), pushing the
+   last entries below the fold. Two columns fit the whole board at once.
+   The featured campaign entry spans both so it still reads as the primary
+   action. Below these breakpoints the single-column list is kept. */
+@media (min-width: 900px) and (min-height: 620px) {
+  #modeSelect {
+    padding: 14px 0;
+  }
+
+  #modeSelect h2 {
+    margin-bottom: 22px;
+  }
+
+  #modeSelect .mode-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 14px;
+    row-gap: 10px;
+    width: min(880px, 92vw);
+  }
+
+  #modeSelect .mode-btn {
+    min-width: 0;
+  }
+
+  #modeSelect .mode-btn.featured {
+    grid-column: 1 / -1;
+  }
+}
