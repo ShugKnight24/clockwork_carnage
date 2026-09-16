@@ -2,10 +2,11 @@
  * Memory Fragments — collectible story pieces from the Dead Squad.
  * 3 fragments per member (Voss, Miri, Kai), one per act.
  *
- * `level` is the 1-based campaign level number (1-9), and must fall inside
- * `act` (levels 1-3, 4-6, 7-9). Hidden fragments are found behind a secret wall
- * on that level; visible ones are awarded when the level is completed, so they
- * cannot sit on level 9, which ends on the boss kill rather than an exit.
+ * `act` is the campaign loop (1-3): the nine maps are replayed three times with
+ * escalating rosters. `level` is the 1-based map number (1-9) within a loop, so
+ * any act can use any map. Hidden fragments are found behind a secret wall on
+ * that map; visible ones are awarded when the map is completed, so they cannot
+ * sit on map 9, which ends on the boss kill rather than an exit.
  */
 export const MEMORY_FRAGMENTS = [
   // ─── VOSS (Tactician) ─────────────────────────────────────────────
@@ -48,7 +49,7 @@ export const MEMORY_FRAGMENTS = [
     text: 'Miri hums an old lullaby while stitching a wound by flashlight, her hands impossibly steady despite the shelling overhead. "Hold still — I didn\'t drag you out of that crater to lose you to an infection." She ties off the last knot and smiles like the world isn\'t ending.',
     ariaReaction: 'She always hummed that song. I never learned the words. I wish I had.',
     act: 1,
-    level: 1,
+    level: 4,
     hidden: true,
   },
   {
@@ -68,7 +69,7 @@ export const MEMORY_FRAGMENTS = [
     text: 'Miri injects her entire reserve of temporal stabilizer into the player\'s arm, knowing there\'s nothing left for herself. The chrono-decay starts immediately — her edges blur, her voice echoes. "You survive this. That\'s an order from your medic." She dissolves into light, still reaching forward.',
     ariaReaction: 'She spent everything keeping us alive. And in the end, she spent herself. I carry her work in every heartbeat.',
     act: 3,
-    level: 8,
+    level: 6,
     hidden: false,
   },
 
