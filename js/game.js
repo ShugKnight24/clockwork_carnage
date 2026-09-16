@@ -48,6 +48,7 @@ import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
+import { ArchiveSystem } from "../src/systems/archive.js";
 import {
   isPassable as _isPassable,
   hasLineOfSight as _hasLineOfSight,
@@ -200,6 +201,7 @@ export class Game {
     this.ariaComms = new AriaCommsSystem(this);
     this.squadComms = new SquadCommsController(this);
     this.achievementSystem = new AchievementSystem(this);
+    this.archive = new ArchiveSystem(this);
     this.tutorial = new TutorialSystem(this);
     this.campaign = new CampaignManager(this);
     this.hudEditor = new HudEditor(this);
@@ -581,6 +583,7 @@ export class Game {
     this.loadDevFlags();
     this.showFPS = !!this.settings.showPerformanceOverlay;
     this.loadAchievements();
+    this.archive.load();
     this.loadCharacter();
     this.renderer.applyVisualStyle(this.settings.visualStyle);
   }
@@ -1758,7 +1761,17 @@ export class Game {
         this.achievementStats.totalSecretsFound++;
         this.player.score += 500;
         this.audio.secretFound();
-        this.queueAriaMessage("secretFound");
+        // Hidden memory fragments are what secret walls actually conceal, so
+        // the fragment reaction replaces the generic line when one is found.
+        const frag =
+          this.mode === "campaign"
+            ? this.archive.collectHiddenFragmentFor(
+                this.campaign.act,
+                this.campaign.level,
+              )
+            : null;
+        if (frag) this.queueAriaMessage("memoryFragment");
+        else this.queueAriaMessage("secretFound");
         return;
       }
     }
@@ -2279,6 +2292,11 @@ export class Game {
         this.audio.stopMusic();
         this.audio.roundComplete();
         this.unlockPointer();
+        // Visible fragments land with the debrief rather than mid-fight.
+        this.archive.collectAutoFragmentsFor(
+          this.campaign.act,
+          this.campaign.level,
+        );
         this.queueAriaMessage("levelComplete");
       }
     }

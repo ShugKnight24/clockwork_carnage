@@ -230,6 +230,12 @@ export function damageEnemy(game, enemy, damage, zone = null) {
 export function onEnemyKill(game, enemy) {
   const fx = game.killStreakSystem.onKill();
 
+  // Bestiary: a kill is what reveals an enemy's dossier. Covers every kill
+  // path — direct, splash and thorns all funnel through here.
+  if (enemy?.enemyType && game.archive?.recordKill(enemy.enemyType)) {
+    game.queueAriaMessage?.("bestiaryUnlocked");
+  }
+
   // Campaign ammo drops
   if (enemy && game.mode === "campaign" && Math.random() < 0.18) {
     game.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));

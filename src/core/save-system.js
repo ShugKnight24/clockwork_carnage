@@ -130,6 +130,42 @@ export function loadCharacter(character) {
   } catch (_) {}
 }
 
+// ── Archive (bestiary + memory fragments) ────────────────
+
+const ARCHIVE_KEY = "cc_archive";
+
+/**
+ * @param {Record<string, boolean>} seenEnemies - enemy type ids encountered
+ * @param {Record<string, boolean>} fragments   - memory fragment ids collected
+ */
+export function saveArchive(seenEnemies, fragments) {
+  try {
+    localStorage.setItem(
+      ARCHIVE_KEY,
+      JSON.stringify({ seenEnemies, fragments }),
+    );
+  } catch (_) {}
+}
+
+/** Merges stored archive state into the supplied objects, in place. */
+export function loadArchive(seenEnemies, fragments) {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.seenEnemies && typeof data.seenEnemies === "object") {
+      for (const key of Object.keys(data.seenEnemies)) {
+        if (data.seenEnemies[key] === true) seenEnemies[key] = true;
+      }
+    }
+    if (data.fragments && typeof data.fragments === "object") {
+      for (const key of Object.keys(data.fragments)) {
+        if (data.fragments[key] === true) fragments[key] = true;
+      }
+    }
+  } catch (_) {}
+}
+
 // ── Achievements ─────────────────────────────────────────
 
 export function saveAchievements(unlocked, stats) {

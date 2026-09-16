@@ -239,6 +239,22 @@ export const ARIA_COMMS = {
     "Secret area. Someone didn't want this found.",
   ],
 
+  // Fired when a secret wall conceals an uncollected memory fragment, in place
+  // of the generic secretFound line.
+  memoryFragment: [
+    "That's... a memory. One of theirs. It's intact enough to read.",
+    "Fragment recovered. I'd forgotten this one existed.",
+    "Careful with that. It's a piece of someone who isn't here anymore.",
+    "Archive updated. Read it when you're somewhere safer.",
+  ],
+
+  // Fired on the first kill of an enemy type, when its dossier unlocks.
+  bestiaryUnlocked: [
+    "New contact logged. Dossier's in the archive now.",
+    "First of its kind you've put down. I've written it up.",
+    "Threat profile updated. Read it before the next one finds you.",
+  ],
+
   // ── Squad voice lines ─────────────────────────────────────────────
   // Kael — The Vanguard. Tactical. Protective. Lost his squad once. Won't again.
   kaelComms: [
