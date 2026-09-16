@@ -1505,8 +1505,9 @@ export class BuilderMode {
       this._renderGhostPreview(ctx, w, h);
     }
 
-    // Help panel
-    if (this.showHelp) {
+    // Help panel — hidden while the onboarding modal is up so the two help
+    // surfaces do not overlap.
+    if (this.showHelp && !this.suppressHelp) {
       const hints = [
         "WASD \u2014 Move",
         "Mouse \u2014 Look (+ vertical)",

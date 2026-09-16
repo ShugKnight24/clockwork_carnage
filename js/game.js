@@ -2713,7 +2713,7 @@ export class Game {
 
   renderPauseScreen(ctx, w, h) {
     const compact = this.isTouchDevice && isCompactPhone(h);
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillStyle = "rgba(0,0,0,0.82)";
     ctx.fillRect(0, 0, w, h);
 
     // ARIA log overlay
@@ -2722,27 +2722,71 @@ export class Game {
       return;
     }
 
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${compact ? 24 : 36}px monospace`;
+    // Menu entries laid out as a panel. The old version floated a title and a
+    // single pipe-separated hint line over a lightly dimmed frame, 210px
+    // apart, which read as unfinished next to the other screens.
+    const entries = [
+      { key: "ESC / P", label: "Resume" },
+      { key: "S", label: "Settings" },
+      { key: "A", label: "Achievements" },
+      { key: "T", label: "Stats" },
+      { key: "L", label: "ARIA log" },
+    ];
+    if (this.mode === "campaign") entries.push({ key: "F", label: "Save game" });
+    entries.push({ key: "Q", label: "Quit to title" });
+
     ctx.textAlign = "center";
-    ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
-    ctx.font = `${compact ? 11 : 14}px monospace`;
-    ctx.fillStyle = "#aaaacc";
-    ctx.textAlign = "center";
-    const saveHint = this.mode === "campaign" ? "  |  F to save" : "";
-    if (!this.isTouchDevice) {
-      ctx.fillText(
-        "ESC / P to resume  |  S settings  |  A achievements  |  T stats  |  L ARIA log  |  Q quit" +
-          saveHint,
-        w / 2,
-        h / 2 + 110,
-      );
+
+    if (this.isTouchDevice) {
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = `bold ${compact ? 24 : 36}px monospace`;
+      ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
+    } else {
+      const rowH = 30;
+      const panelW = 330;
+      const panelH = 78 + entries.length * rowH + 18;
+      const panelX = w / 2 - panelW / 2;
+      const panelY = h / 2 - panelH / 2;
+
+      ctx.fillStyle = "rgba(4,10,18,0.9)";
+      ctx.beginPath();
+      ctx.roundRect(panelX, panelY, panelW, panelH, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,255,204,0.28)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(panelX, panelY, panelW, panelH, 10);
+      ctx.stroke();
+
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = "bold 30px monospace";
+      ctx.fillText("PAUSED", w / 2, panelY + 48);
+
+      ctx.strokeStyle = "rgba(0,255,204,0.18)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 28, panelY + 66);
+      ctx.lineTo(panelX + panelW - 28, panelY + 66);
+      ctx.stroke();
+
+      ctx.font = "14px monospace";
+      for (let i = 0; i < entries.length; i++) {
+        const ey = panelY + 92 + i * rowH;
+        ctx.textAlign = "right";
+        ctx.fillStyle = "rgba(0,255,204,0.75)";
+        ctx.fillText(entries[i].key, w / 2 - 18, ey);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#aab4c8";
+        ctx.fillText(entries[i].label, w / 2 + 2, ey);
+      }
+      ctx.textAlign = "center";
     }
+
     if (this.pauseSaveFlash && performance.now() - this.pauseSaveFlash < 1500) {
       const alpha = 1 - (performance.now() - this.pauseSaveFlash) / 1500;
       ctx.fillStyle = `rgba(0, 255, 100, ${alpha.toFixed(2)})`;
       ctx.font = `bold ${compact ? 13 : 16}px monospace`;
-      ctx.fillText("GAME SAVED", w / 2, compact ? h * 0.7 : h / 2 + 140);
+      ctx.fillText("GAME SAVED", w / 2, compact ? h * 0.7 : h / 2 + 150);
     }
     ctx.textAlign = "left";
   }

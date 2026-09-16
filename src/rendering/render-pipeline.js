@@ -55,8 +55,13 @@ export function renderFrame(game) {
 
   if (game.state === GameState.BUILDER) {
     game.hudCtx.clearRect(0, 0, game.hudW, game.hudH);
+    // The onboarding modal already lists the core bindings. Showing the
+    // persistent help panel underneath it duplicated half of them and left two
+    // competing help surfaces on screen at once.
+    const onboarding = !game._builderOnboardingDismissed;
+    game.builder.suppressHelp = onboarding;
     game.builder.render(ctx, w, h, game.time);
-    if (!game._builderOnboardingDismissed) {
+    if (onboarding) {
       game._renderBuilderOnboarding(ctx, w, h);
     }
     return;
