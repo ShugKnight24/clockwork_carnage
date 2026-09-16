@@ -4,12 +4,28 @@
 // Game-level side effects (startArenaRound, loadCampaignLevel, etc.) stay in Game.
 
 import {
-  CHARACTER_COLORS, ARMOR_STYLES, BADGES,
-  WEAPON_SKINS, LOADOUT_CLASSES, DEFAULT_CHARACTER,
+  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS,
+  ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
+  BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
+  DEFAULT_CHARACTER,
   ACHIEVEMENTS,
 } from "../data/index.js";
+import { SETTINGS_REGISTRY } from "../../js/settings-registry.js";
 
 const SAVE_VERSION = 1;
+
+function clampSetting(key, val) {
+  const def = SETTINGS_REGISTRY.find((s) => s.key === key);
+  if (!def) return val;
+  if ((def.type === "slider" || def.type === "enum") && typeof val === "number") {
+    let next = Math.max(def.min, Math.min(def.max, val));
+    if (def.type === "slider" && def.step) next = Math.round(next / def.step) * def.step;
+    if (def.type === "enum") next = Math.round(next);
+    if (def.round != null) next = Math.round(next * 10 ** def.round) / 10 ** def.round;
+    return Math.max(def.min, Math.min(def.max, next));
+  }
+  return val;
+}
 
 // ── Settings ─────────────────────────────────────────────
 
@@ -27,7 +43,7 @@ export function loadSettings(defaults) {
       if (Object.prototype.hasOwnProperty.call(saved, key)) {
         const val = saved[key];
         if (typeof val !== typeof defaults[key]) continue;
-        defaults[key] = val;
+        defaults[key] = clampSetting(key, val);
       }
     }
   } catch (_) {}
@@ -43,7 +59,7 @@ export function applyMobileMigration(isTouchDevice, settings, saveFn) {
         (settings.fov === 70 && settings.hudScale === 100);
       if (!hasExisting || usesOldDefaults) {
         settings.fov = 100;
-        settings.hudScale = 65;
+        settings.hudScale = 75;
         saveFn();
       }
       localStorage.setItem("cc_mobile_v2", "1");
@@ -90,10 +106,18 @@ export function loadCharacter(character) {
     const saved = JSON.parse(raw);
     const maxIndices = {
       colorIndex: CHARACTER_COLORS.length - 1,
+      skinToneIndex: SKIN_TONES.length - 1,
+      hairIndex: HAIR_STYLES.length - 1,
+      eyeIndex: EYE_COLORS.length - 1,
       armorIndex: ARMOR_STYLES.length - 1,
+      helmetIndex: HELMET_STYLES.length - 1,
+      visorIndex: VISOR_STYLES.length - 1,
+      shoulderIndex: SHOULDER_STYLES.length - 1,
       badgeIndex: BADGES.length - 1,
       weaponSkinIndex: WEAPON_SKINS.length - 1,
       loadoutIndex: LOADOUT_CLASSES.length - 1,
+      backstoryIndex: BACKSTORIES.length - 1,
+      voiceIndex: VOICE_PROFILES.length - 1,
     };
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
       if (Object.prototype.hasOwnProperty.call(saved, key)) {
@@ -191,6 +215,8 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
       playerX: player.x,
       playerY: player.y,
       playerAngle: player.angle,
+      aimOffsetX: player.aimOffsetX || 0,
+      aimOffsetY: player.aimOffsetY || 0,
       ...player.serialize(),
       difficulty,
       mapGrid,
