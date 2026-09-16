@@ -47,23 +47,52 @@ export function drawWeapon(ctx, w, h, opts) {
   const tiltAngle = isSprinting ? Math.sin(weaponBob) * 0.06 : 0;
 
   const viewportFactor = h / 720;
-  const sc = 4.8 * viewportFactor * (isAiming ? 0.92 : 1);
-  // ADS weapon centering — smoothly slide toward screen centre when aiming
-  let adsOffsetX = 0;
-  if (isAiming) {
-    // Lerp weapon X 30% toward dead centre each frame (bobX already small when aiming)
-    adsOffsetX = -bobX * 0.3;
-  }
-  const cx = w / 2 + bobX + adsOffsetX;
-  
+
+  // ── Viewmodel pose ───────────────────────────────────────────────────────
+  // Hip-fire sits the weapon low and to the right and cants it inward, the way
+  // a right-handed shooter actually holds it. ADS interpolates that pose to
+  // dead centre and upright so the sights line up with the reticle.
+  // `ads` is 0 at the hip, 1 fully aimed.
+  const ads = isAiming ? 1 : 0;
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
+  const restCant = lerp(-0.11, 0, ads);          // inward cant, upright on ADS
+  const sc = lerp(4.5, 4.35, ads) * viewportFactor;
+
+  // Sway is cosmetic lag from look/strafe input; it shrinks hard when aiming.
+  const swayX = (opts.weaponSwayX || 0) * lerp(1, 0.22, ads) * viewportFactor;
+  const swayY = (opts.weaponSwayY || 0) * lerp(1, 0.22, ads) * viewportFactor;
+
+  const cx = w / 2 + restOffsetX + bobX + swayX;
+
   // If we have a big HUD bar at the bottom, push the weapon up so it isn't hidden
   const hudOffset = opts.hudStyle === 1 ? (160 * viewportFactor) : 0;
-  const cy = h - hudOffset - (isAiming ? 245 : 170) * viewportFactor + bobY + kickY * (isAiming ? 0.45 : 1);
+  const cy = h - hudOffset - lerp(196, 250, ads) * viewportFactor + bobY + swayY + kickY * lerp(1, 0.45, ads);
+
+  // Contact shadow — the viewmodel is the nearest object in the scene, so it
+  // occludes ambient light behind itself. Without this the gun floats.
+  {
+    const shR = 260 * viewportFactor;
+    const occ = ctx.createRadialGradient(cx, cy + 90 * viewportFactor, 0, cx, cy + 90 * viewportFactor, shR);
+    occ.addColorStop(0, "rgba(0,0,0,0.38)");
+    occ.addColorStop(0.6, "rgba(0,0,0,0.16)");
+    occ.addColorStop(1, "transparent");
+    ctx.fillStyle = occ;
+    ctx.fillRect(cx - shR, cy - shR + 90 * viewportFactor, shR * 2, shR * 2);
+  }
 
   ctx.save();
   ctx.translate(cx, cy);
-  if (tiltAngle !== 0) ctx.rotate(tiltAngle);
-  ctx.scale(sc, sc);
+
+  // Sway also tips the weapon slightly — a pure slide reads as a floating decal.
+  const swayTilt = (opts.weaponSwayX || 0) * -0.0022 * lerp(1, 0.2, ads);
+  const poseAngle = restCant + tiltAngle + swayTilt;
+  if (poseAngle !== 0) ctx.rotate(poseAngle);
+
+  // Mild vertical foreshortening sells that the weapon is angled away from the
+  // eye rather than pasted flat against the screen.
+  ctx.scale(sc, sc * lerp(0.94, 0.99, ads));
   // All coordinates now relative to (0, 0) at weapon centre
 
   // Recoil animation for frames 2 & 3
@@ -1008,6 +1037,95 @@ export function drawWeapon(ctx, w, h, opts) {
     ctx.fillStyle = rimGrad;
     ctx.fillRect(rimX, rimTop, 3, rimH);
   }
+
+  // ── Hands ────────────────────────────────────────────────────────────────
+  // Drawn last so they wrap over the weapon. Gloves pick up the character
+  // accent so the viewmodel matches the chosen loadout palette.
+  drawHands(ctx, wep, energyColor, opts.skinTone || "#c9956a", ads);
+
+  ctx.restore();
+}
+
+/**
+ * Procedural gloved hands gripping the weapon. Weapons all share the same local
+ * space — grip around y≈22, receiver around y≈-5 — so one pair of hands reads
+ * correctly across the whole arsenal, with a per-weapon support-hand reach.
+ */
+function drawHands(ctx, wep, accent, skin, ads) {
+  const glove = "#1b212b";
+  const gloveLit = "#2a323f";
+  const gloveDark = "#0e1218";
+
+  // Support hand reach — long guns get a forward grip, sidearms a cup grip.
+  const twoHandedForward = wep.id === 1 || wep.id === 3 || wep.id === 4 || wep.id === 5 || wep.id === 7;
+  const supX = twoHandedForward ? -13 : -9;
+  const supY = twoHandedForward ? -14 : 16;
+
+  ctx.save();
+
+  // ── Support hand + forearm (enters from lower left) ──
+  ctx.fillStyle = glove;
+  ctx.beginPath();
+  ctx.moveTo(supX - 3, supY - 5);
+  ctx.lineTo(supX + 9, supY - 2);
+  ctx.lineTo(supX + 9, supY + 8);
+  ctx.lineTo(supX - 6, supY + 12);
+  ctx.lineTo(-13, 58);
+  ctx.lineTo(-25, 58);
+  ctx.closePath();
+  ctx.fill();
+  // Forearm shading along the underside
+  ctx.fillStyle = gloveDark;
+  ctx.beginPath();
+  ctx.moveTo(supX - 6, supY + 12);
+  ctx.lineTo(-13, 58);
+  ctx.lineTo(-20, 58);
+  ctx.lineTo(supX - 8, supY + 10);
+  ctx.closePath();
+  ctx.fill();
+  // Knuckles over the foregrip
+  ctx.fillStyle = gloveLit;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.roundRect(supX - 1 + i * 2.6, supY - 4 + i * 0.5, 2.4, 7, 1.2);
+    ctx.fill();
+  }
+
+
+  // ── Trigger hand + forearm (enters from lower right) ──
+  const gx = 1, gy = 22;
+  ctx.fillStyle = glove;
+  ctx.beginPath();
+  ctx.moveTo(gx - 7, gy - 4);
+  ctx.lineTo(gx + 9, gy - 6);
+  ctx.lineTo(gx + 14, gy + 10);
+  ctx.lineTo(gx + 26, 60);
+  ctx.lineTo(gx + 8, 60);
+  ctx.lineTo(gx - 7, gy + 14);
+  ctx.closePath();
+  ctx.fill();
+  // Forearm top highlight
+  ctx.fillStyle = gloveLit;
+  ctx.beginPath();
+  ctx.moveTo(gx + 9, gy - 6);
+  ctx.lineTo(gx + 14, gy + 10);
+  ctx.lineTo(gx + 19, gy + 22);
+  ctx.lineTo(gx + 13, gy - 4);
+  ctx.closePath();
+  ctx.fill();
+  // Fingers curling around the grip front
+  ctx.fillStyle = gloveLit;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.roundRect(gx - 8, gy - 3 + i * 4.4, 8.5, 3.8, 1.6);
+    ctx.fill();
+  }
+  // Thumb wrapping over the top of the grip
+  ctx.fillStyle = glove;
+  ctx.beginPath();
+  ctx.roundRect(gx - 2, gy - 8, 9, 4.2, 2);
+  ctx.fill();
+
 
   ctx.restore();
 }

@@ -3,7 +3,7 @@
 // Owns _prevCrouchKey state for edge detection.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
-import { decay } from "../utils/math.js";
+import { clamp, decay } from "../utils/math.js";
 import { applyAimDelta, recenterAim } from "./aim.js";
 import { PLAYER_ADS_MOVE_MULT, PLAYER_MOUSE_TURN_RATE } from "../constants.js";
 
@@ -183,6 +183,24 @@ export class PlayerUpdateSystem {
     } else {
       p.weaponBob *= decay(0.9, dt);
     }
+
+    // Viewmodel sway — sample look delta before applyMouseAim consumes it.
+    const lookDX = mouse?.dx || 0;
+    const lookDY = mouse?.dy || 0;
+    const swayScale = p.isAiming ? 0.25 : 1;
+    // Strafe pushes the gun opposite the movement, look delta drags it behind.
+    const strafe = (keys[kb.moveRight] ? 1 : 0) - (keys[kb.moveLeft] ? 1 : 0);
+    p.weaponSwayTargetX = clamp(
+      (p.weaponSwayTargetX - lookDX * 0.45 - strafe * 2.2) * decay(0.80, dt),
+      -22, 22,
+    );
+    p.weaponSwayTargetY = clamp(
+      (p.weaponSwayTargetY + lookDY * 0.35) * decay(0.80, dt),
+      -16, 16,
+    );
+    const swaySpring = Math.min(1, 11 * dt);
+    p.weaponSwayX += (p.weaponSwayTargetX * swayScale - p.weaponSwayX) * swaySpring;
+    p.weaponSwayY += (p.weaponSwayTargetY * swayScale - p.weaponSwayY) * swaySpring;
 
     const aimed = applyMouseAim(p, mouse, settings);
     // Recenter only while the player is moving (walking/strafing) and not

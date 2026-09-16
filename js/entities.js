@@ -61,6 +61,12 @@ export class Player {
     this.isAiming = false;
     this.weaponBob = 0;
     this.weaponKick = 0;
+    // Viewmodel sway — the gun lags behind look/strafe input then springs back.
+    // Purely cosmetic: never read by aim or collision.
+    this.weaponSwayX = 0;
+    this.weaponSwayY = 0;
+    this.weaponSwayTargetX = 0;
+    this.weaponSwayTargetY = 0;
     this.cameraPunch = 0; // Vertical camera recoil (radians); decays each frame
     this.hurtTime = 0;
     this.alive = true;
