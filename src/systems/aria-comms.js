@@ -243,7 +243,9 @@ export class AriaCommsSystem {
 
     const pBoxW = 460;
     const pBx = (w - pBoxW) / 2;
-    const pBy = h * 0.28 + slideY;
+    // Sits high enough to clear the reticle and the horizon where enemies
+    // appear. At 0.28 it parked directly in the firing sightline.
+    const pBy = h * 0.135 + slideY;
 
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);

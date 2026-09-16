@@ -673,11 +673,27 @@ const drawPill = (x, y, pw, ph, alpha = 0.55) => {
           : "#ffaa00"
         : "#00ffcc";
 
-    ctx.font = "bold 14px monospace";
+    // Elapsed is a right-aligned sub-line sharing the label row, so the pill has
+    // to be measured against label + gap + elapsed, not the label alone.
+    let elapsedStr = "";
+    let elapsedW = 0;
+    if (game.roundStartTime) {
+      const elapsedSec = Math.floor(
+        (performance.now() - game.roundStartTime) / 1000,
+      );
+      const mins = Math.floor(elapsedSec / 60);
+      const secs2 = elapsedSec % 60;
+      elapsedStr = `${mins}:${secs2.toString().padStart(2, "0")} elapsed`;
+      ctx.font = "10px monospace";
+      elapsedW = ctx.measureText(elapsedStr).width;
+    }
+
+    ctx.font = "bold 12px monospace";
     const labelW = ctx.measureText(timerLabel).width;
     ctx.font = "bold 26px monospace";
     const valW = ctx.measureText(timerVal).width;
-    const pw = Math.max(labelW, valW) + 24;
+    const labelRowW = labelW + (elapsedW ? 12 + elapsedW : 0);
+    const pw = Math.max(labelRowW, valW) + 24;
     const ph = 58;
     drawPill(tlX, tlY, pw, ph, 0.6);
 
@@ -686,25 +702,18 @@ const drawPill = (x, y, pw, ph, alpha = 0.55) => {
     ctx.textAlign = "left";
     ctx.fillText(timerLabel, tlX + 10, tlY + 16);
 
+    if (elapsedStr) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(elapsedStr, tlX + pw - 10, tlY + 16);
+      ctx.textAlign = "left";
+    }
+
     ctx.fillStyle = timerColor;
     ctx.font = "bold 26px monospace";
     ctx.fillText(timerVal, tlX + 10, tlY + 46);
 
-    // Elapsed sub-line
-    if (game.roundStartTime) {
-      const elapsedSec = Math.floor(
-        (performance.now() - game.roundStartTime) / 1000,
-      );
-      const mins = Math.floor(elapsedSec / 60);
-      const secs2 = elapsedSec % 60;
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.font = "10px monospace";
-      ctx.fillText(
-        `${mins}:${secs2.toString().padStart(2, "0")} elapsed`,
-        tlX + pw - 78,
-        tlY + 16,
-      );
-    }
     tlY += ph + pillGap;
   }
 
@@ -970,18 +979,19 @@ if (game.settings.showKills) {
         : game.player.isSprinting
           ? "SPRINT"
           : "STAM";
-      ctx.fillStyle = isActive
-        ? staminaColor
-        : "rgba(255,255,255,0.45)";
+      // Labels sit outside the bar: a 9px glyph does not fit inside a 6px bar
+      // and drawing it there collided with the fill.
+      const ty = sby + thinH - 1;
       ctx.font = "bold 9px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(label, resourceBarX + 4, sby + thinH - 1);
+      ctx.fillStyle = isActive ? staminaColor : "rgba(255,255,255,0.45)";
       ctx.textAlign = "right";
+      ctx.fillText(label, resourceBarX - 7, ty);
+      ctx.textAlign = "left";
       ctx.fillStyle = "rgba(255,255,255,0.4)";
       ctx.fillText(
         `${Math.floor(staminaPct * 100)}%`,
-        resourceBarX + resourceBarW - 4,
-        sby + thinH - 1,
+        resourceBarX + resourceBarW + 7,
+        ty,
       );
     }
   }
@@ -1017,16 +1027,17 @@ if (game.settings.showKills) {
       ctx.roundRect(resourceBarX, cby, resourceBarW, thinH, 3);
       ctx.stroke();
     }
-    ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.5)";
+    const cty = cby + thinH - 1;
     ctx.font = "bold 9px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("CHRONO", resourceBarX + 4, cby + thinH - 1);
+    ctx.fillStyle = chronoIsActive ? "#cc44ff" : "rgba(180,140,220,0.55)";
     ctx.textAlign = "right";
-    ctx.fillStyle = "rgba(180,140,220,0.4)";
+    ctx.fillText("CHRONO", resourceBarX - 7, cty);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(180,140,220,0.45)";
     ctx.fillText(
       `${Math.floor(chronoPct * 100)}%`,
-      resourceBarX + resourceBarW - 4,
-      cby + thinH - 1,
+      resourceBarX + resourceBarW + 7,
+      cty,
     );
   }
 
@@ -1099,14 +1110,19 @@ if (game.settings.showKills) {
     ctx.beginPath();
     ctx.roundRect(hBarX, hBarY, hBarW, hBarH, 3);
     ctx.stroke();
-    // HP text (centered on bar)
+    // HP reads beside the bar rather than stamped across the fill, where the
+    // white text disappeared into the green at full health.
+    const hty = hBarY + hBarH - 1;
+    ctx.font = "bold 10px monospace";
+    ctx.fillStyle = healthPct < 0.25 ? "#ff6644" : "rgba(255,255,255,0.55)";
+    ctx.textAlign = "right";
+    ctx.fillText("HP", hBarX - 7, hty);
+    ctx.textAlign = "left";
     ctx.fillStyle = "#ffffff";
-    ctx.font = `bold ${Math.max(9, hBarH - 1)}px monospace`;
-    ctx.textAlign = "center";
     ctx.fillText(
       `${Math.ceil(game.player.health)} / ${game.player.maxHealth}`,
-      hBarX + hBarW / 2,
-      hBarY + hBarH - 1,
+      hBarX + hBarW + 7,
+      hty,
     );
   }
 
