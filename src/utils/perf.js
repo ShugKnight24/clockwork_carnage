@@ -16,6 +16,9 @@ const QUALITY_PRESETS = {
     enableScanlines: true,
     enableVignette: true,
     enableFloorTexture: true,
+    enableBloom: true,
+    enableChromaticAberration: true,
+    enableFilmGrain: true,
   },
   high: {
     renderScale: 0.85,
@@ -24,6 +27,9 @@ const QUALITY_PRESETS = {
     enableScanlines: true,
     enableVignette: true,
     enableFloorTexture: true,
+    enableBloom: true,
+    enableChromaticAberration: true,
+    enableFilmGrain: true,
   },
   medium: {
     renderScale: 0.7,
@@ -32,6 +38,9 @@ const QUALITY_PRESETS = {
     enableScanlines: false,
     enableVignette: true,
     enableFloorTexture: true,
+    enableBloom: false,
+    enableChromaticAberration: false,
+    enableFilmGrain: true,
   },
   low: {
     renderScale: 0.5,
@@ -40,6 +49,20 @@ const QUALITY_PRESETS = {
     enableScanlines: false,
     enableVignette: false,
     enableFloorTexture: false,
+    enableBloom: false,
+    enableChromaticAberration: false,
+    enableFilmGrain: false,
+  },
+  "ultra-low": {
+    renderScale: 0.35,
+    particleMultiplier: 0.15,
+    drawDistance: 8,
+    enableScanlines: false,
+    enableVignette: false,
+    enableFloorTexture: false,
+    enableBloom: false,
+    enableChromaticAberration: false,
+    enableFilmGrain: false,
   },
 };
 
@@ -49,10 +72,12 @@ export class AdaptiveQuality {
     this.minScale = opts?.minScale ?? 0.35;
     this.maxScale = opts?.maxScale ?? 1.0;
     this.renderScale = this.maxScale;
+    this.stableScale = this.renderScale;
     this.history = [];
-    this.historySize = 30; // ~0.5s of frames at 60fps
-    this.adjustInterval = 500; // ms between adjustments
+    this.historySize = 90; // ~1.5s at 60fps; avoids cold-start scale flicker
+    this.adjustInterval = 1500; // ms between adjustments
     this.lastAdjust = 0;
+    this.lastResize = 0;
 
     // Quality switches
     this.particleMultiplier = 1.0;
@@ -60,6 +85,7 @@ export class AdaptiveQuality {
     this.enableScanlines = true;
     this.enableVignette = true;
     this.enableFloorTexture = true;
+    this.auto = true;
   }
 
   /** Record a frame's FPS. Call every frame. */
@@ -82,6 +108,7 @@ export class AdaptiveQuality {
    * Returns true if renderScale changed.
    */
   adjust(now) {
+    if (!this.auto) return false;
     if (now - this.lastAdjust < this.adjustInterval) return false;
     this.lastAdjust = now;
 
@@ -91,15 +118,15 @@ export class AdaptiveQuality {
     const avg = this.averageFPS;
     const prevScale = this.renderScale;
 
-    if (avg < this.targetFPS - 8) {
+    if (avg < this.targetFPS - 10) {
       // Significant drop — scale down aggressively
-      this.renderScale *= 0.9;
-    } else if (avg < this.targetFPS - 3) {
+      this.renderScale *= 0.93;
+    } else if (avg < this.targetFPS - 5) {
       // Moderate drop — scale down gently
-      this.renderScale *= 0.97;
-    } else if (avg > this.targetFPS + 2 && this.renderScale < this.maxScale) {
+      this.renderScale *= 0.98;
+    } else if (avg > this.targetFPS + 5 && this.renderScale < this.maxScale) {
       // Headroom — scale up slowly
-      this.renderScale *= 1.02;
+      this.renderScale *= 1.01;
     }
 
     this.renderScale = clamp(this.renderScale, this.minScale, this.maxScale);
@@ -125,18 +152,37 @@ export class AdaptiveQuality {
       this.enableFloorTexture = true;
     }
 
-    return Math.abs(this.renderScale - prevScale) > 0.005;
+    if (Math.abs(this.renderScale - prevScale) <= 0.04) return false;
+    if (now - this.lastResize < 2000) return false;
+    this.lastResize = now;
+    return true;
   }
 
   /** Apply a named preset directly. */
   applyPreset(name) {
     const p = QUALITY_PRESETS[name];
     if (!p) return;
+    this.auto = false;
     this.renderScale = p.renderScale;
+    this.stableScale = p.renderScale;
     this.particleMultiplier = p.particleMultiplier;
     this.drawDistance = p.drawDistance;
     this.enableScanlines = p.enableScanlines;
     this.enableVignette = p.enableVignette;
     this.enableFloorTexture = p.enableFloorTexture;
+  }
+
+  applyCustom({ renderScale, particleMultiplier, drawDistance, enableScanlines, enableVignette, enableFloorTexture }) {
+    this.auto = false;
+    if (renderScale != null) this.renderScale = this.stableScale = clamp(renderScale, this.minScale, this.maxScale);
+    if (particleMultiplier != null) this.particleMultiplier = clamp(particleMultiplier, 0, 1);
+    if (drawDistance != null) this.drawDistance = drawDistance;
+    if (enableScanlines != null) this.enableScanlines = !!enableScanlines;
+    if (enableVignette != null) this.enableVignette = !!enableVignette;
+    if (enableFloorTexture != null) this.enableFloorTexture = !!enableFloorTexture;
+  }
+
+  useAuto() {
+    this.auto = true;
   }
 }
