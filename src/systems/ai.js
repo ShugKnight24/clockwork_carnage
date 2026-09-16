@@ -1,5 +1,7 @@
 // ─── AI System ──────────────────────────────────────────────────────────────
-// Enemy state machine: idle/patrol → chase → attack.
+// Enemy state machine: idle/patrol → chase → windup → attack.
+// The windup is the attack telegraph: the enemy plants, faces the player and
+// renders a warning before the hit resolves (see renderer drawEnemy).
 // Sub-boss abilities: summon, chrono-bomb, teleport/leap, shield regen, HUD disrupt.
 // Boss special abilities: charge, stomp, missile spread, warp.
 // Chrono-bomb fuse + detonation.
@@ -10,12 +12,38 @@
 // • `time` (ms): Sim-time in milliseconds (game.time). Used for cooldown
 //   comparisons: `time - e.lastAttackTime > scaledAttackRate`.
 // • Enemy internal timers (`painTimer`, `_summonTimer`, `_bombTimer`,
-//   `_teleportTimer`, `_supportTimer`): All in MILLISECONDS. They tick
+//   `_teleportTimer`, `_supportTimer`, `_windupLeftMs`): All in MILLISECONDS. They tick
 //   via `+= dt * 1000` or `-= enemyDt * 1000` to stay in ms.
 // • `attackRate` in enemy defs: MILLISECONDS (e.g. 1000 = 1s between shots).
 // ────────────────────────────────────────────────────────────────────────────
 import { isPassable, hasLineOfSight } from "./physics.js";
 import { Enemy, Projectile } from "../../js/entities.js";
+import {
+  ENEMY_MELEE_WINDUP_MS,
+  ENEMY_RANGED_WINDUP_MS,
+  ENEMY_MELEE_WHIFF_SLACK,
+} from "../constants.js";
+
+/** Telegraph length for an enemy def, in ms. */
+export function attackWindupMs(def) {
+  if (Number.isFinite(def?.attackWindupMs)) return def.attackWindupMs;
+  return def?.attackType === "ranged"
+    ? ENEMY_RANGED_WINDUP_MS
+    : ENEMY_MELEE_WINDUP_MS;
+}
+
+/**
+ * Enter the telegraph. The attack cooldown starts here, so the windup sits
+ * inside the existing attackRate and overall damage output is unchanged.
+ */
+function beginWindup(e, time) {
+  const ms = attackWindupMs(e.def);
+  e.state = "windup";
+  e.stateTime = 0;
+  e._windupTotalMs = ms;
+  e._windupLeftMs = ms;
+  e.lastAttackTime = time;
+}
 
 /**
  * @typedef {{
@@ -88,10 +116,20 @@ export class AISystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const ai = e.def.ai || "chase";
 
-      // Pain state
+      // Pain state. Ordinary hits pause a telegraphed attack; a crit, headshot
+      // or EMP (which set _staggered) cancels it. Without that distinction any
+      // weapon firing faster than the windup would stun-lock melee enemies.
       if (e.painTimer > 0) {
         e.painTimer -= enemyDt * 1000;
-        if (e.painTimer <= 0) e.state = "chase";
+        if (e.painTimer <= 0) {
+          if (!e._staggered && e._windupLeftMs > 0) {
+            e.state = "windup";
+          } else {
+            e._windupLeftMs = 0;
+            e.state = "chase";
+          }
+          e._staggered = false;
+        }
         continue;
       }
 
@@ -238,10 +276,20 @@ export class AISystem {
           time - e.lastAttackTime > scaledAttackRate
         ) {
           if (hasLineOfSight(map, e.x, e.y, player.x, player.y)) {
-            e.state = "attack";
-            e.stateTime = 0;
-            e.lastAttackTime = time;
+            beginWindup(e, time);
           }
+        }
+      }
+
+      // ── Windup (telegraph) ──
+      if (e.state === "windup") {
+        e.angle = Math.atan2(dy, dx); // keep tracking the player while winding up
+        // `|| 0` guards a windup restored from a save without its timer.
+        e._windupLeftMs = (e._windupLeftMs || 0) - enemyDt * 1000;
+        if (e._windupLeftMs <= 0) {
+          e._windupLeftMs = 0;
+          e.state = "attack";
+          e.stateTime = 0;
         }
       }
 
@@ -265,9 +313,10 @@ export class AISystem {
             audio.enemyShoot(
               audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
             );
-          } else {
+          } else if (dist <= e.def.attackRange * ENEMY_MELEE_WHIFF_SLACK) {
             fx.damagePlayerCalls.push({ damage: e.def.damage, attacker: e });
           }
+          // else: the player stepped out during the telegraph — the swing whiffs.
         }
         e.state = "chase";
         e.stateTime = 0;
@@ -335,9 +384,9 @@ export class AISystem {
               if (isPassable(map, Math.floor(tx), Math.floor(ty))) {
                 e.x = tx;
                 e.y = ty;
-                e.state = "attack";
-                e.stateTime = 0;
-                e.lastAttackTime = time;
+                // Land into a telegraph. Striking the tick after teleporting
+                // gave the player no window to react to a 22-30 damage hit.
+                beginWindup(e, time);
                 fx.screenShake = Math.max(fx.screenShake, 2);
                 audio.enemyHit(
                   audio.calculatePan(

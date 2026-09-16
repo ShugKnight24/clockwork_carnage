@@ -154,6 +154,9 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   enemy.hitTime = game.time;
   enemy.state = "pain";
   enemy.painTimer = (isCrit || isHead) ? 250 : 150;
+  // A crit or headshot interrupts a telegraphed attack outright; ordinary hits
+  // only pause it (see the pain branch in ai.js).
+  if (isCrit || isHead) enemy._staggered = true;
 
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
   const dist = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);

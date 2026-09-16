@@ -186,7 +186,7 @@ export class Enemy {
     this.health = def.health;
     this.maxHealth = def.health;
     this.speed = def.speed;
-    this.state = "idle"; // idle, chase, attack, pain, dead
+    this.state = "idle"; // idle, chase, windup, attack, pain, dead
     this.active = true;
     this.lastAttackTime = 0;
     this.hitTime = 0;

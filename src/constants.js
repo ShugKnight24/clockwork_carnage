@@ -138,6 +138,17 @@ export const PLAYER_ADS_FOV_MULT = 0.72;
 export const PLAYER_ADS_MOVE_MULT = 0.75;
 export const PLAYER_ADS_SPREAD_MULT = 0.45;
 
+/**
+ * Enemy attack telegraph. Every attack now passes through a windup state so the
+ * player can see it coming. Melee gets longer because it cannot be dodged once
+ * it lands; ranged is shorter because the projectile still has to travel.
+ * Per-type `attackWindupMs` in ENEMY_TYPES overrides these.
+ */
+export const ENEMY_MELEE_WINDUP_MS = 400;
+export const ENEMY_RANGED_WINDUP_MS = 220;
+/** Melee resolves against current distance; this much slack past attackRange still connects. */
+export const ENEMY_MELEE_WHIFF_SLACK = 1.15;
+
 /** Hit flash duration in milliseconds */
 export const HIT_FLASH_DURATION_MS = 100;
 

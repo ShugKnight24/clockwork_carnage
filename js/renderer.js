@@ -1000,6 +1000,79 @@ export class Renderer {
 
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    if (enemy.state === "windup" && enemy._windupTotalMs > 0 && !enemy.dissolving) {
+      this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
+    }
+  }
+
+  /**
+   * Attack telegraph, drawn from shared AI state so every enemy renderer gets
+   * it without per-type code. A ring closes onto the body as the windup runs
+   * out and the body brightens, so the timing reads at a glance. Red for melee
+   * (get out of reach), amber for ranged (a projectile is coming).
+   * Uses its own column clip rather than the sprite's: the sprite clip is only
+   * as tall as the sprite, which sliced the ring flat at top and bottom. This
+   * clip spans the ring's full extent and still skips columns where a wall is
+   * nearer than the enemy, so walls continue to occlude it.
+   */
+  _drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist) {
+    const t = 1 - Math.max(0, enemy._windupLeftMs) / enemy._windupTotalMs; // 0..1
+    const melee = enemy.def.attackType !== "ranged";
+    const rgb = melee ? "255,64,40" : "255,196,48";
+    const cy = (bodyTop + bodyBottom) / 2;
+    const reach = Math.max(bodyWidth * 1.1, halfH * 0.45);
+    const extent = reach * 2.1 * 1.25 + 4; // widest ring incl. the flicker ring
+
+    const x0 = Math.max(0, Math.floor(screenX - extent));
+    const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + extent));
+    if (x1 < x0) return;
+
+    ctx.save();
+    ctx.beginPath();
+    let any = false;
+    for (let x = x0; x <= x1; x++) {
+      if (dist < this.zBuffer[x]) {
+        ctx.rect(x, cy - extent, 1, extent * 2);
+        any = true;
+      }
+    }
+    if (!any) {
+      ctx.restore();
+      return;
+    }
+    ctx.clip();
+
+    ctx.globalCompositeOperation = "lighter";
+
+    // Body wash, brightening toward release.
+    const wash = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, reach * 1.3);
+    wash.addColorStop(0, `rgba(${rgb},${0.1 + 0.4 * t})`);
+    wash.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = wash;
+    ctx.fillRect(screenX - reach * 1.3, cy - reach * 1.3, reach * 2.6, reach * 2.6);
+
+    // Contracting ring: wide at the start, tight on the body at the moment of
+    // release, so its size is the countdown.
+    const r = reach * (2.1 - 1.1 * t);
+    ctx.globalAlpha = alpha * (0.35 + 0.6 * t);
+    ctx.strokeStyle = `rgb(${rgb})`;
+    ctx.lineWidth = Math.max(1.5, reach * (0.05 + 0.07 * t));
+    ctx.beginPath();
+    ctx.arc(screenX, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Final flicker in the last 20% — the "now" beat.
+    if (t > 0.8 && Math.floor(time / 45) % 2 === 0) {
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.lineWidth = Math.max(1, reach * 0.04);
+      ctx.beginPath();
+      ctx.arc(screenX, cy, r * 1.25, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
 }

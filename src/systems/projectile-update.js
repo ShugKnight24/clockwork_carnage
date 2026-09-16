@@ -28,6 +28,7 @@ function applyEmpBurst(p, hitTargets, time, audio, player, entityGrid) {
     e._empDisabledUntil = time + EMP_DURATION_MS;
     e.state = "pain";
     e.painTimer = EMP_PAIN_MS;
+    e._staggered = true; // EMP cancels a telegraphed attack
   }
 }
 
@@ -74,6 +75,7 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
     e._empDisabledUntil = ctx.time + EMP_DURATION_MS;
     e.state = "pain";
     e.painTimer = EMP_PAIN_MS;
+    e._staggered = true; // EMP cancels a telegraphed attack
     const pan = ctx.audio.calculatePan(e.x, e.y, ctx.player.x, ctx.player.y, ctx.player.angle);
     const dist = Math.hypot(e.x - ctx.player.x, e.y - ctx.player.y);
     ctx.audio.enemyHit(pan, dist);
