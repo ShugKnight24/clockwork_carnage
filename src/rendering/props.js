@@ -2,6 +2,10 @@
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
+import { getLayerImage, scaleBucket } from "./svg-art/raster.js";
+import { isModernArt } from "./art-style.js";
+import { DEFS as PROP_DEFS, PROP_SPRITES } from "./svg-art/sprites/props.js";
+
 /** Floor plane Y coordinate — single source of truth for all ground-anchored props */
 export const groundY = (cy, sh) => cy + sh * 0.45;
 
@@ -39,8 +43,186 @@ const PROP_RENDERERS = {
 
 export function drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
   if (fog <= 0) return;
+  if (isModernArt() && drawModernProp(ctx, entity.propType, screenX, centerY, sprWidth, sprHeight, time, fog)) return;
   const fn = PROP_RENDERERS[entity.propType];
   if (fn) fn(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog);
+}
+
+// ── Modern (SVG sprite) path ────────────────────────────────────
+
+// Prop sprites are authored in centimetres. A wall is one sprHeight tall and
+// the eye sits at 0.45·sh above groundY, so 1 m ≈ 0.3·sh puts eye height at
+// ~1.5 m and a locker at ~2 m.
+const SH_PER_METRE = 0.3;
+const MAX_BITMAP_PX = 384;
+// Wall fog tint (renderer's Clockwork style) for distance shading.
+const FOG_FILTER =
+  `<filter id="fogSil" x="-.1" y="-.1" width="1.2" height="1.2">` +
+  `<feColorMatrix type="matrix" values="0 0 0 0 .04 0 0 0 0 .07 0 0 0 0 .125 0 0 0 1 0"/></filter>`;
+
+/**
+ * Pick a raster scale for a layer: the half-octave bucket the draw needs,
+ * stepped down until the bitmap's longest side fits MAX_BITMAP_PX.
+ */
+function rasterScale(pxPerUnit, box) {
+  const longest = Math.max(box[2], box[3]);
+  let b = scaleBucket(pxPerUnit);
+  while (b * longest > MAX_BITMAP_PX && b > 0.26) b /= Math.SQRT2;
+  // Nudge below the bucket edge so raster.js snaps to this exact bucket.
+  return b * 0.999;
+}
+
+/** Cached bitmap lookup: skip the string-keyed cache while the bucket is steady. */
+function layerBitmap(slot, id, box, defs, markup, scale) {
+  if (slot.scale === scale && slot.img) return slot.img;
+  const img = getLayerImage(id, box, defs, markup, scale);
+  if (img) {
+    const k = scaleBucket(scale);
+    const exact = img.naturalWidth === Math.max(1, Math.round(box[2] * k));
+    slot.img = exact ? img : null;
+    slot.scale = exact ? scale : 0;
+  }
+  return img;
+}
+
+function animate(ctx, anim, t) {
+  const time = t + (anim.phase || 0);
+  const sp = anim.speed ?? 1;
+  switch (anim.type) {
+    case "sway":
+    case "spin": {
+      const px = anim.pivot ? anim.pivot[0] : 0;
+      const py = anim.pivot ? anim.pivot[1] : 0;
+      ctx.translate(px, py);
+      ctx.rotate(anim.type === "spin" ? time * sp : Math.sin(time * sp) * (anim.amp ?? 0.03));
+      ctx.translate(-px, -py);
+      return 1;
+    }
+    case "float":
+      ctx.translate(0, Math.sin(time * sp) * (anim.amp ?? 2));
+      return 1;
+    case "pulse": {
+      const k = 0.5 + 0.5 * Math.sin(time * sp);
+      return (anim.min ?? 0.5) + ((anim.max ?? 1) - (anim.min ?? 0.5)) * k;
+    }
+    case "flicker": {
+      const n = Math.sin(time * sp * 7.3) * Math.sin(time * sp * 3.1 + 1.7);
+      const k = n > 0.85 ? 0 : 0.5 + 0.5 * Math.sin(time * sp);
+      return (anim.min ?? 0.6) + ((anim.max ?? 1) - (anim.min ?? 0.6)) * k;
+    }
+    case "blink":
+      return Math.sin(time * sp) > 0 ? (anim.max ?? 1) : (anim.min ?? 0.3);
+    default:
+      return 1;
+  }
+}
+
+/** Precompute per-layer ids and silhouette markup once per sprite. */
+function prepareSprite(key, sprite, defs) {
+  sprite._ready = true;
+  sprite._defs = defs + FOG_FILTER;
+  sprite.layers.forEach((layer, i) => {
+    layer._id = `sprite:${key}:${i}`;
+    layer._box = layer.box || sprite.box;
+    layer._slot = { scale: 0, img: null };
+    if (layer.shade !== false && !layer.blend) {
+      layer._silId = `sprite:${key}:${i}:fog`;
+      layer._silMarkup = `<g filter="url(#fogSil)">${layer.markup}</g>`;
+      layer._silSlot = { scale: 0, img: null };
+    }
+  });
+}
+
+/**
+ * Blit a layered SVG sprite with its origin at (x, y), `ppu` screen pixels per
+ * art unit. `fogShade` (0..1) darkens non-emissive layers toward the wall fog
+ * colour. Returns false while the base layer is still decoding.
+ */
+export function drawSvgSprite(ctx, key, sprite, defs, x, y, ppu, t, alpha, fogShade = 0) {
+  if (typeof Image === "undefined") return false; // headless unit tests
+  if (!sprite._ready) prepareSprite(key, sprite, defs);
+  const m = ctx.getTransform ? ctx.getTransform() : null;
+  const devPpu = ppu * (m ? Math.hypot(m.a, m.b) || 1 : 1);
+  const layers = sprite.layers;
+  const base = layers[sprite.base || 0];
+  if (!layerBitmap(base._slot, base._id, base._box, sprite._defs, base.markup, rasterScale(devPpu * (base.res || 1), base._box))) {
+    return false;
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(ppu, ppu);
+  const prevAlpha = ctx.globalAlpha;
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
+    const box = layer._box;
+    const scale = rasterScale(devPpu * (layer.res || 1), box);
+    const img = layerBitmap(layer._slot, layer._id, box, sprite._defs, layer.markup, scale);
+    if (!img) continue;
+    ctx.save();
+    const a = layer.anim ? animate(ctx, layer.anim, t) : 1;
+    const la = alpha * a * (layer.opacity ?? 1);
+    if (la > 0.004) {
+      ctx.globalAlpha = prevAlpha * la;
+      if (layer.blend) ctx.globalCompositeOperation = layer.blend;
+      ctx.drawImage(img, box[0], box[1], box[2], box[3]);
+      if (layer.scan) drawScan(ctx, layer.scan, t, prevAlpha * la);
+      if (fogShade > 0.02 && layer._silId) {
+        const sil = layerBitmap(layer._silSlot, layer._silId, box, sprite._defs, layer._silMarkup, scale);
+        if (sil) {
+          ctx.globalAlpha = prevAlpha * alpha * fogShade;
+          ctx.drawImage(sil, box[0], box[1], box[2], box[3]);
+        }
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  return true;
+}
+
+/** Scanline sweeping down emissive screens (art-unit rects). */
+function drawScan(ctx, scan, t, alpha) {
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = scan.color;
+  ctx.globalAlpha = alpha * scan.alpha;
+  for (let i = 0; i < scan.rects.length; i++) {
+    const r = scan.rects[i];
+    ctx.fillRect(r[0], r[1] + ((t * scan.speed + i * 11) % r[3]), r[2], 1.2);
+  }
+}
+
+/**
+ * Start decoding every sprite's layers at one scale so the first sighting of
+ * each type is already vector art rather than a legacy frame.
+ */
+export function warmSvgSprites(sprites, defs, ppu) {
+  if (typeof Image === "undefined") return;
+  for (const key in sprites) {
+    const sprite = sprites[key];
+    if (!sprite._ready) prepareSprite(key, sprite, defs);
+    for (const layer of sprite.layers) {
+      const scale = rasterScale(ppu * (layer.res || 1), layer._box);
+      getLayerImage(layer._id, layer._box, sprite._defs, layer.markup, scale);
+      if (layer._silId) getLayerImage(layer._silId, layer._box, sprite._defs, layer._silMarkup, scale);
+    }
+  }
+}
+
+let _propsWarmed = false;
+
+function drawModernProp(ctx, type, sx, cy, sw, sh, time, fog) {
+  const sprite = PROP_SPRITES[type];
+  if (!sprite) return false;
+  const metre = Math.max(sw * SH_PER_METRE, 8 * _fovScale);
+  const ppu = metre / 100;
+  if (!_propsWarmed) {
+    _propsWarmed = true;
+    warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
+  }
+  const alpha = Math.min(1, fog * 4);
+  const shade = Math.min(0.6, (1 - fog) * 1.5);
+  return drawSvgSprite(ctx, type, sprite, PROP_DEFS, sx, groundY(cy, sh), ppu, time / 1000, alpha, shade);
 }
 
 // ── Individual renderers ────────────────────────────────────────

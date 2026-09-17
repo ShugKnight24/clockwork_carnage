@@ -1,5 +1,21 @@
 // Pickup, exit, and projectile rendering — extracted from Renderer class
 
+import { isModernArt } from "./art-style.js";
+import { drawSvgSprite, warmSvgSprites } from "./props.js";
+import { DEFS as PICKUP_DEFS, PICKUP_SPRITES } from "./svg-art/sprites/pickups.js";
+
+let _pickupsWarmed = false;
+
+/** Modern art: blit the SVG pickup at the legacy bob position; false = draw legacy. */
+function drawModernPickup(ctx, key, x, y, size, time, fog) {
+  if (!isModernArt()) return false;
+  if (!_pickupsWarmed) {
+    _pickupsWarmed = true;
+    warmSvgSprites(PICKUP_SPRITES, PICKUP_DEFS, size / 100);
+  }
+  return drawSvgSprite(ctx, key, PICKUP_SPRITES[key], PICKUP_DEFS, x, y, size / 100, time / 1000, fog);
+}
+
 export function drawPickup(
   ctx,
   screenX,
@@ -88,6 +104,7 @@ export function drawHealthPickup(
   const size = Math.max(6, sprWidth * 0.35);
   const bob = Math.sin(time * 0.004) * size * 0.2;
   const y = centerY + sprHeight * 0.15 + bob;
+  if (drawModernPickup(ctx, "health", screenX, y, size, time, fog)) return;
   const pulse = 0.8 + Math.sin(time * 0.006) * 0.2;
 
   // Outer radial glow
@@ -168,6 +185,7 @@ export function drawAmmoPickup(ctx, screenX, centerY, sprWidth, sprHeight, dist,
   const size = Math.max(6, sprWidth * 0.35);
   const bob = Math.sin(time * 0.004 + 1) * size * 0.2;
   const y = centerY + sprHeight * 0.15 + bob;
+  if (drawModernPickup(ctx, "ammo", screenX, y, size, time, fog)) return;
   // Soft glow
   ctx.globalAlpha = fog * 0.3;
   ctx.fillStyle = "#ffaa00";
@@ -228,6 +246,7 @@ export function drawWeaponPickup(
   const size = Math.max(6, sprWidth * 0.35);
   const bob = Math.sin(time * 0.004 + 2) * size * 0.2;
   const y = centerY + sprHeight * 0.15 + bob;
+  if (drawModernPickup(ctx, "weapon", screenX, y, size, time, fog)) return;
   // Soft glow
   ctx.globalAlpha = fog * 0.3;
   ctx.fillStyle = "#00ccff";
@@ -481,6 +500,7 @@ export function drawExoticPickup(
   const size = Math.max(7, sprWidth * 0.4);
   const bob = Math.sin(time * 0.005) * size * 0.25;
   const y = centerY + sprHeight * 0.1 + bob;
+  if (drawModernPickup(ctx, variant === "damage2x" ? "damage2x" : "invuln", screenX, y, size, time, fog)) return;
   const pulse = 0.7 + Math.sin(time * 0.008) * 0.3;
   const spin = (time * 0.003) % (Math.PI * 2);
 
