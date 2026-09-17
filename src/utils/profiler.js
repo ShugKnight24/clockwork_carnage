@@ -35,6 +35,8 @@ const UPDATE_PHASES = [
   { key: "misc", label: "msc", color: "rgba(0,80,20,0.3)" },
 ];
 
+const ALL_PHASES = [...RENDER_PHASES, ...UPDATE_PHASES];
+
 const HISTORY_SIZE = 120; // ~2 seconds at 60fps
 
 export class Profiler {
@@ -49,7 +51,7 @@ export class Profiler {
 
     /** Per-phase rolling histories */
     this.phaseHistory = {};
-    for (const p of [...RENDER_PHASES, ...UPDATE_PHASES]) {
+    for (const p of ALL_PHASES) {
       this.phaseHistory[p.key] = new Float64Array(HISTORY_SIZE);
     }
 
@@ -58,7 +60,7 @@ export class Profiler {
     this.avgUpdate = 0;
     this.avgRender = 0;
     this.avgPhases = {};
-    for (const p of [...RENDER_PHASES, ...UPDATE_PHASES]) {
+    for (const p of ALL_PHASES) {
       this.avgPhases[p.key] = 0;
     }
 
@@ -96,7 +98,7 @@ export class Profiler {
     this.entityHistory[idx] = entityCount;
 
     // Store per-phase timings
-    for (const p of [...RENDER_PHASES, ...UPDATE_PHASES]) {
+    for (const p of ALL_PHASES) {
       const val = this.currentPhases[p.key] || 0;
       this.phaseHistory[p.key][idx] = val;
       this.avgPhases[p.key] = this.avgPhases[p.key] * 0.9 + val * 0.1;
@@ -125,7 +127,7 @@ export class Profiler {
   /** Get a snapshot of current averages (for harness/telemetry) */
   getSnapshot() {
     const phases = {};
-    for (const p of [...RENDER_PHASES, ...UPDATE_PHASES]) {
+    for (const p of ALL_PHASES) {
       phases[p.key] = +this.avgPhases[p.key].toFixed(2);
     }
     return {

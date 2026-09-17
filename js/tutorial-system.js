@@ -7,7 +7,7 @@
  */
 import { TUTORIAL_MAP } from "./data.js";
 import { Enemy, Pickup, Prop } from "./entities.js";
-import { GameState } from "./game.js";
+import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 
 export class TutorialSystem {

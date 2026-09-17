@@ -4,8 +4,60 @@
  * without pulling in the entire game module tree.
  */
 
-/** Viewport height threshold for compact mobile layout (landscape phones) */
-export const COMPACT_PHONE_HEIGHT = 420;
+// Re-exported for existing importers; the value lives in src/constants.js.
+export { COMPACT_PHONE_HEIGHT } from "../src/constants.js";
+
+/**
+ * Values a fresh profile starts with. Game copies this, then touch-device
+ * overrides and saved settings are applied on top.
+ */
+export const DEFAULT_SETTINGS = Object.freeze({
+  crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
+  difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
+  cutsceneAutoAdvance: false, // manual advance by default
+  minimapSize: 200,
+  musicVolume: 80, // 0..100
+  sfxVolume: 80, // 0..100
+  sensitivity: 1.0, // 0.5..2.0
+  fov: 70, // 50..120 degrees
+  viewMode: 0, // 0=first-person, 1=third-person
+  invertX: false,
+  invertY: false,
+  fontScale: 100, // 100, 125, 150 percent
+  colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
+  visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
+  hudStyle: 0, // 0=Minimal (transparent pills), 1=Classic (bottom bar + portrait)
+  hudScale: 100, // 75, 100, 125 percent
+  staminaBarSize: 100, // 75, 100, 125, 150 percent
+  showPortrait: true,
+  showWeapons: true,
+  showKills: true,
+  showScore: true,
+  touchSensitivity: 2.0,
+  haptics: true,
+  autoFire: false,
+  swipeWeapons: true,
+  graphicsPreset: 0,
+  frameTarget: 0,
+  batterySaver: false,
+  renderScale: 100,
+  effectsQuality: 2,
+  postProcessing: true,
+  floorTexture: true,
+  screenShake: true,
+  weaponBob: true,
+  showPerformanceOverlay: false,
+  enableBloom: true,
+  enableChromaticAberration: true,
+  enableFilmGrain: true,
+  shadowQuality: 2, // 0=off, 1=low, 2=high
+  lightingQuality: 2, // 0=low, 1=medium, 2=high
+  renderMode: 0, // 0=auto, 1=2D (Canvas), 2=3D (WebGL)
+  gamepadEnabled: true,
+  gamepadLookSensitivity: 2.5,
+  gamepadDeadzone: 0.15,
+  gamepadRumble: true,
+});
 
 // ── Settings Registry ──────────────────────────────────
 // Single source of truth for all settings. Adding a new setting = adding one object here.

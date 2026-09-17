@@ -17,7 +17,6 @@ import {
 import {
   WEAPONS,
   ENEMY_TYPES,
-  CUTSCENE_SCRIPTS,
   ARENA_MAPS,
   UPGRADES,
   WALL_COLORS,
@@ -65,8 +64,8 @@ import {
   createArenaPickups,
   createMeltdownEnemies,
   createMeltdownPickups,
-  jitterPalette,
 } from "../src/systems/spawner.js";
+import { updateMeltdownRun } from "../src/systems/meltdown-run.js";
 import { SeededRNG } from "../src/utils/seeded-rng.js";
 import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
 import {
@@ -110,10 +109,11 @@ import {
 import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
 
-export const GAME_VERSION = "0.8.1";
+export { GAME_VERSION } from "../src/constants.js";
 
 import {
   COMPACT_PHONE_HEIGHT,
+  DEFAULT_SETTINGS,
   SETTINGS_REGISTRY,
   getVisibleSettings,
   getSettingsForCategory,
@@ -142,6 +142,8 @@ import {
   handleGameOverClick,
 } from "../src/systems/input-click-dispatch.js";
 import { GameState } from "../src/types.js";
+import { forwardProps } from "../src/utils/forward-props.js";
+import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
 export { GameState };
@@ -153,6 +155,17 @@ let _MeltdownMode = null;
 
 const _DEV = import.meta.env?.DEV ?? false;
 const _systemErrors = new Map(); // throttle: system name → last error time
+
+/** Swap-pop removal of entries whose `life` runs out. Order is not preserved. */
+function expireByLife(list, dt) {
+  for (let i = list.length - 1; i >= 0; i--) {
+    list[i].life -= dt;
+    if (list[i].life <= 0) {
+      list[i] = list[list.length - 1];
+      list.pop();
+    }
+  }
+}
 
 function _safeCall(name, fn) {
   try {
@@ -234,40 +247,12 @@ export class Game {
     // Dynamic point lights (muzzle flash, explosions, plasma) bleed onto
     // walls/floor in the column draw. Each: {x,y,color:[r,g,b],radius,intensity,life,maxLife}.
     this.lights = [];
-    // Forwarding properties for backward compat during migration
-    Object.defineProperties(this, {
-      killStreak: {
-        get() {
-          return this.killStreakSystem.streak;
-        },
-        set(v) {
-          this.killStreakSystem.streak = v;
-        },
-      },
-      killStreakTimer: {
-        get() {
-          return this.killStreakSystem.timer;
-        },
-        set(v) {
-          this.killStreakSystem.timer = v;
-        },
-      },
-      killStreakDisplay: {
-        get() {
-          return this.killStreakSystem.display;
-        },
-        set(v) {
-          this.killStreakSystem.display = v;
-        },
-      },
-      bestStreak: {
-        get() {
-          return this.killStreakSystem.best;
-        },
-        set(v) {
-          this.killStreakSystem.best = v;
-        },
-      },
+    // Legacy aliases kept for callers that predate the system extraction.
+    forwardProps(this, "killStreakSystem", {
+      killStreak: "streak",
+      killStreakTimer: "timer",
+      killStreakDisplay: "display",
+      bestStreak: "best",
     });
     // Slow-motion last kill
     this.timeScale = 1;
@@ -281,53 +266,7 @@ export class Game {
     this.roundStartTime = 0;
     this.deathTimer = 0;
     this.pauseSaveFlash = 0;
-    this.settings = {
-      crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
-      difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
-      cutsceneAutoAdvance: false, // manual advance by default
-      minimapSize: 200,
-      musicVolume: 80, // 0..100
-      sfxVolume: 80, // 0..100
-      sensitivity: 1.0, // 0.5..2.0
-      fov: 70, // 50..120 degrees
-      viewMode: 0, // 0=first-person, 1=third-person
-      invertX: false,
-      invertY: false,
-      fontScale: 100, // 100, 125, 150 percent
-      colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
-      visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
-      hudStyle: 0, // 0=Minimal (transparent pills), 1=Classic (bottom bar + portrait)
-      hudScale: 100, // 75, 100, 125 percent
-      staminaBarSize: 100, // 75, 100, 125, 150 percent
-      showPortrait: true,
-      showWeapons: true,
-      showKills: true,
-      showScore: true,
-      touchSensitivity: 2.0,
-      haptics: true,
-      autoFire: false,
-      swipeWeapons: true,
-      graphicsPreset: 0,
-      frameTarget: 0,
-      batterySaver: false,
-      renderScale: 100,
-      effectsQuality: 2,
-      postProcessing: true,
-      floorTexture: true,
-      screenShake: true,
-      weaponBob: true,
-      showPerformanceOverlay: false,
-      enableBloom: true,
-      enableChromaticAberration: true,
-      enableFilmGrain: true,
-      shadowQuality: 2, // 0=off, 1=low, 2=high
-      lightingQuality: 2, // 0=low, 1=medium, 2=high
-      renderMode: 0, // 0=auto, 1=2D (Canvas), 2=3D (WebGL)
-      gamepadEnabled: true,
-      gamepadLookSensitivity: 2.5,
-      gamepadDeadzone: 0.15,
-      gamepadRumble: true,
-    };
+    this.settings = { ...DEFAULT_SETTINGS };
     this.settingsSelection = 0;
     this.settingsCategory = "Gameplay"; // active sidebar category
     this.lastEscTime = 0;
@@ -385,6 +324,7 @@ export class Game {
     this.keybinds = this.input.keybinds;
     this.gamepad = new GamepadManager();
     this._gamepadPrevKeys = new Set();
+    this._gamepadNextKeys = new Set();
     this._lastGamepadMove = { x: 0, y: 0 };
     this.applyGamepadSettings();
 
@@ -418,148 +358,29 @@ export class Game {
     this._scanlinePattern = null; // rgba(0,0,0,0.03) every 4px
     this._scanlinePatternDense = null; // rgba(0,0,0,0.04) every 3px
 
-    // Forwarding properties for backward compat during migration
-    Object.defineProperties(this, {
-      unlockedAchievements: {
-        get() {
-          return this.achievementSystem.unlockedAchievements;
-        },
-        set(v) {
-          this.achievementSystem.unlockedAchievements = v;
-        },
-      },
-      achievementQueue: {
-        get() {
-          return this.achievementSystem.achievementQueue;
-        },
-        set(v) {
-          this.achievementSystem.achievementQueue = v;
-        },
-      },
-      achievementToast: {
-        get() {
-          return this.achievementSystem.achievementToast;
-        },
-        set(v) {
-          this.achievementSystem.achievementToast = v;
-        },
-      },
-      achievementIcons: {
-        get() {
-          return this.achievementSystem.achievementIcons;
-        },
-        set(v) {
-          this.achievementSystem.achievementIcons = v;
-        },
-      },
-      achievementStats: {
-        get() {
-          return this.achievementSystem.achievementStats;
-        },
-        set(v) {
-          this.achievementSystem.achievementStats = v;
-        },
-      },
-      roundDamageTaken: {
-        get() {
-          return this.achievementSystem.roundDamageTaken;
-        },
-        set(v) {
-          this.achievementSystem.roundDamageTaken = v;
-        },
-      },
-      achievementsScroll: {
-        get() {
-          return this.achievementSystem.achievementsScroll;
-        },
-        set(v) {
-          this.achievementSystem.achievementsScroll = v;
-        },
-      },
+    // Legacy aliases kept for callers that predate the system extraction.
+    forwardProps(this, "achievementSystem", {
+      unlockedAchievements: "unlockedAchievements",
+      achievementQueue: "achievementQueue",
+      achievementToast: "achievementToast",
+      achievementIcons: "achievementIcons",
+      achievementStats: "achievementStats",
+      roundDamageTaken: "roundDamageTaken",
+      achievementsScroll: "achievementsScroll",
     });
 
-    // Forwarding properties for backward compat during migration
-    Object.defineProperties(this, {
-      ariaQueue: {
-        get() {
-          return this.ariaComms.queue;
-        },
-        set(v) {
-          this.ariaComms.queue = v;
-        },
-      },
-      ariaMessage: {
-        get() {
-          return this.ariaComms.message;
-        },
-        set(v) {
-          this.ariaComms.message = v;
-        },
-      },
-      ariaTriggered: {
-        get() {
-          return this.ariaComms.triggered;
-        },
-        set(v) {
-          this.ariaComms.triggered = v;
-        },
-      },
-      ariaEnabled: {
-        get() {
-          return this.ariaComms.enabled;
-        },
-        set(v) {
-          this.ariaComms.enabled = v;
-        },
-      },
-      ariaIdleTimer: {
-        get() {
-          return this.ariaComms.idleTimer;
-        },
-        set(v) {
-          this.ariaComms.idleTimer = v;
-        },
-      },
-      ariaIdleThreshold: {
-        get() {
-          return this.ariaComms.idleThreshold;
-        },
-        set(v) {
-          this.ariaComms.idleThreshold = v;
-        },
-      },
-      ariaCombatTimer: {
-        get() {
-          return this.ariaComms.combatTimer;
-        },
-        set(v) {
-          this.ariaComms.combatTimer = v;
-        },
-      },
-      ariaMessageLog: {
-        get() {
-          return this.ariaComms.messageLog;
-        },
-        set(v) {
-          this.ariaComms.messageLog = v;
-        },
-      },
-      showAriaLog: {
-        get() {
-          return this.ariaComms.showLog;
-        },
-        set(v) {
-          this.ariaComms.showLog = v;
-        },
-      },
-      ariaLogScroll: {
-        get() {
-          return this.ariaComms.logScroll;
-        },
-        set(v) {
-          this.ariaComms.logScroll = v;
-        },
-      },
+    // Legacy aliases kept for callers that predate the system extraction.
+    forwardProps(this, "ariaComms", {
+      ariaQueue: "queue",
+      ariaMessage: "message",
+      ariaTriggered: "triggered",
+      ariaEnabled: "enabled",
+      ariaIdleTimer: "idleTimer",
+      ariaIdleThreshold: "idleThreshold",
+      ariaCombatTimer: "combatTimer",
+      ariaMessageLog: "messageLog",
+      showAriaLog: "showLog",
+      ariaLogScroll: "logScroll",
     });
 
     // Character creator state
@@ -612,135 +433,7 @@ export class Game {
     return this._stateManager.pausedFrom;
   }
 
-  // ── Campaign state bridges (delegates to CampaignManager) ──
-  get campaignLevel() {
-    return this.campaign.level;
-  }
-  set campaignLevel(v) {
-    this.campaign.level = v;
-  }
-  get campaignAct() {
-    return this.campaign.act;
-  }
-  set campaignAct(v) {
-    this.campaign.act = v;
-  }
-  get ngPlusCycle() {
-    return this.campaign.ngPlusCycle;
-  }
-  set ngPlusCycle(v) {
-    this.campaign.ngPlusCycle = v;
-  }
-  get ngPlusPrompt() {
-    return this.campaign.ngPlusPrompt;
-  }
-  set ngPlusPrompt(v) {
-    this.campaign.ngPlusPrompt = v;
-  }
-  get ngPlusPromptSel() {
-    return this.campaign.ngPlusPromptSel;
-  }
-  set ngPlusPromptSel(v) {
-    this.campaign.ngPlusPromptSel = v;
-  }
-  get campaignMissedWeapons() {
-    return this.campaign.missedWeapons;
-  }
-  set campaignMissedWeapons(v) {
-    this.campaign.missedWeapons = v;
-  }
-  get campaignPromptSelection() {
-    return this.campaign.promptSelection;
-  }
-  set campaignPromptSelection(v) {
-    this.campaign.promptSelection = v;
-  }
 
-  // ── Tutorial state bridges (delegates to TutorialSystem) ──
-  get tutorialStep() {
-    return this.tutorial.step;
-  }
-  set tutorialStep(v) {
-    this.tutorial.step = v;
-  }
-  get tutorialStepTime() {
-    return this.tutorial.stepTime;
-  }
-  set tutorialStepTime(v) {
-    this.tutorial.stepTime = v;
-  }
-  get tutorialMenuSelection() {
-    return this.tutorial.menuSelection;
-  }
-  set tutorialMenuSelection(v) {
-    this.tutorial.menuSelection = v;
-  }
-  get tutorialShowCompletionMenu() {
-    return this.tutorial.showCompletionMenu;
-  }
-  set tutorialShowCompletionMenu(v) {
-    this.tutorial.showCompletionMenu = v;
-  }
-  get tutorialPickedUp() {
-    return this.tutorial.pickedUp;
-  }
-  set tutorialPickedUp(v) {
-    this.tutorial.pickedUp = v;
-  }
-  get tutorialWeaponPickedUp() {
-    return this.tutorial.weaponPickedUp;
-  }
-  set tutorialWeaponPickedUp(v) {
-    this.tutorial.weaponPickedUp = v;
-  }
-  get tutorialWeaponSwapped() {
-    return this.tutorial.weaponSwapped;
-  }
-  set tutorialWeaponSwapped(v) {
-    this.tutorial.weaponSwapped = v;
-  }
-  get tutorialSecondWeaponPickedUp() {
-    return this.tutorial.secondWeaponPickedUp;
-  }
-  set tutorialSecondWeaponPickedUp(v) {
-    this.tutorial.secondWeaponPickedUp = v;
-  }
-  get tutorialDoorOpened() {
-    return this.tutorial.doorOpened;
-  }
-  set tutorialDoorOpened(v) {
-    this.tutorial.doorOpened = v;
-  }
-  get tutorialDashed() {
-    return this.tutorial.dashed;
-  }
-  set tutorialDashed(v) {
-    this.tutorial.dashed = v;
-  }
-  get tutorialCrouched() {
-    return this.tutorial.crouched;
-  }
-  set tutorialCrouched(v) {
-    this.tutorial.crouched = v;
-  }
-  get tutorialSlid() {
-    return this.tutorial.slid;
-  }
-  set tutorialSlid(v) {
-    this.tutorial.slid = v;
-  }
-  get tutorialFired() {
-    return this.tutorial.fired;
-  }
-  set tutorialFired(v) {
-    this.tutorial.fired = v;
-  }
-  get tutorialChronoUsed() {
-    return this.tutorial.chronoUsed;
-  }
-  set tutorialChronoUsed(v) {
-    this.tutorial.chronoUsed = v;
-  }
 
   set pausedFromState(v) {
     // Allow legacy direct assignment — routes through StateManager internals.
@@ -984,11 +677,10 @@ export class Game {
   }
 
   _setGamepadKey(code, on, nextHeld) {
-    if (on) {
-      nextHeld.add(code);
-      if (!this._gamepadPrevKeys.has(code)) this.handleKeyPress(code, { code, key: code });
-    }
-    this.keys[code] = !!on;
+    if (!on) return; // release is handled in _updateGamepadInput so keyboard holds survive
+    nextHeld.add(code);
+    if (!this._gamepadPrevKeys.has(code)) this.handleKeyPress(code, { code, key: code });
+    this.keys[code] = true;
   }
 
   _updateGamepadInput(dt) {
@@ -996,11 +688,15 @@ export class Game {
     const gp = this.gamepad.poll();
     if (!gp.connected) return;
 
-    const nextHeld = new Set();
+    // Two sets swapped each frame, so polling allocates nothing.
+    const nextHeld = this._gamepadNextKeys;
+    nextHeld.clear();
     const moveX = gp.moveX;
     const moveY = gp.moveY;
-    const moveActive = Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05;
-    this._lastGamepadMove = moveActive ? { x: moveX, y: moveY } : this._lastGamepadMove;
+    if (Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) {
+      this._lastGamepadMove.x = moveX;
+      this._lastGamepadMove.y = moveY;
+    }
 
     this._setGamepadKey(this.keybinds.moveForward, moveY < -0.25, nextHeld);
     this._setGamepadKey(this.keybinds.moveBack, moveY > 0.25, nextHeld);
@@ -1610,13 +1306,12 @@ export class Game {
   }
 
   /**
-   * Whether a cutscene script exists. Reads the script table directly, so it
-   * answers without forcing the lazily-split cutscene chunk to load — callers
-   * ask this to decide *whether* to play a cutscene at all.
+   * Whether a cutscene script exists. Reads the key index, so it answers
+   * without forcing the lazily-split cutscene chunk to load — callers ask
+   * this to decide *whether* to play a cutscene at all.
    */
   hasCutsceneScript(key) {
-    const s = CUTSCENE_SCRIPTS[key];
-    return Boolean(s && s.length > 0);
+    return CUTSCENE_KEYS.has(key);
   }
 
   /** @see startMeltdown — same sync-when-warm contract. */
@@ -1841,26 +1536,7 @@ export class Game {
 
     this._updateGamepadInput(this.deltaTime);
 
-    // Slow-motion time scale (last-kill effect takes priority)
-    if (this.slowMoTimer > 0) {
-      this.slowMoTimer -= this.deltaTime;
-      this.timeScale = 0.25;
-      if (this.slowMoTimer <= 0) {
-        this.slowMoTimer = 0;
-        this.timeScale = this.player.chronoActive ? 0.3 : 1;
-      }
-    } else if (this.player.chronoActive) {
-      // Chrono Shift — player-activated time slow
-      this.player.chronoEnergy -= 33 * this.deltaTime; // ~3s at full
-      this.timeScale = 0.3;
-      if (this.player.chronoEnergy <= 0) {
-        this.player.chronoEnergy = 0;
-        this.player.chronoActive = false;
-        this.timeScale = 1;
-      }
-    } else if (this.timeScale !== 1 && this.slowMoTimer <= 0) {
-      this.timeScale = 1;
-    }
+    this._updateTimeScale();
 
     // Sync audio with time scale (chrono shift pitch-down + ducking)
     this.audio.setTimeScale?.(this.timeScale);
@@ -1912,312 +1588,35 @@ export class Game {
     }
     if (this.assetEditor.active) return; // Pause game logic but keep rendering
 
-    // Death transition timer
     if (!this.player.alive) {
-      if (this.deathTimer > 0) {
-        this.deathTimer -= this.deltaTime;
-        if (this.deathTimer <= 0) {
-          if (this.mode === "playtest") {
-            this.exitBuilderPlayTest();
-            return;
-          }
-          this.checkAchievements(); // Sync final score/stats before game over
-          this.state = GameState.GAME_OVER;
-          this.audio.stopMusic();
-          trackEvent("player_death", {
-            mode: this.mode,
-            round: this.arenaRound,
-            cause: "health",
-            time_seconds: Math.floor(
-              (performance.now() - this.roundStartTime) / 1000,
-            ),
-          });
-          if (this.mode === "arena") this.clearArenaSave();
-          // No longer clearing campaign save on death to allow per-level checkpoints
-          this.unlockPointer();
-        }
-      }
+      this._updateDeathTimer();
       return;
     }
 
     const dt = this.deltaTime * this.timeScale;
 
-    // Chrono Shift activation (hold-to-activate, like sprint)
-    // Need 15 energy to engage; once active, stays on until key released or energy depleted
-    const chronoKeyHeld = !!this.keys[this.keybinds.chronoShift];
-    if (
-      chronoKeyHeld &&
-      !this.player.chronoActive &&
-      this.player.chronoEnergy >= 15
-    ) {
-      this.player.chronoActive = true;
-      if (this.mode === "tutorial") this.tutorialChronoUsed = true;
-    } else if (this.player.chronoActive && !chronoKeyHeld) {
-      this.player.chronoActive = false;
-      this.timeScale = 1;
-    }
-
-    // Passive chrono energy regen (+5/sec)
-    if (
-      !this.player.chronoActive &&
-      this.player.chronoEnergy < this.player.maxChronoEnergy
-    ) {
-      this.player.chronoEnergy = Math.min(
-        this.player.maxChronoEnergy,
-        this.player.chronoEnergy + 5 * this.deltaTime,
-      );
-    }
+    this._updateChronoEnergy();
 
     // Kill streak update (timer decay + display fade)
     _safeCall("KillStreak", () => this.killStreakSystem.update(this.deltaTime));
 
-    // Arena timer
-    if (this.mode === "arena") {
-      const prevTimer = this.arenaTimer;
-      this.arenaTimer -= dt;
+    if (this.mode === "arena" && this._updateArenaTimer(dt)) return;
 
-      // Timer warning beep once per second when under 10s
-      if (this.arenaTimer <= 10 && this.arenaTimer > 0) {
-        if (Math.floor(prevTimer) !== Math.floor(this.arenaTimer)) {
-          this.audio.timerWarning();
-        }
-      }
-
-      // Auto-end round when all enemies killed
-      if (
-        this.totalEnemies > 0 &&
-        this.killedEnemies >= this.totalEnemies &&
-        !this.arenaClearTimer
-      ) {
-        this.arenaClearTimer = 5.0;
-      }
-      if (this.arenaClearTimer) {
-        this.arenaClearTimer -= dt;
-        if (this.arenaClearTimer <= 0) {
-          this.arenaClearTimer = null;
-          this.arenaTimer = 0;
-        }
-      }
-
-      if (this.arenaTimer <= 0) {
-        this.arenaTimer = 0;
-        // Round complete
-        this.arenaRound++;
-        this.player.score += 1000 + this.killedEnemies * 50;
-        trackEvent("round_complete", {
-          mode: "arena",
-          round: this.arenaRound - 1,
-          kills: this.killedEnemies,
-          time_seconds: 60,
-        });
-        this.achievementStats.highestArenaRound = Math.max(
-          this.achievementStats.highestArenaRound,
-          this.arenaRound - 1,
-        );
-        if (this.roundDamageTaken === 0) {
-          this.achievementStats.flawlessRounds++;
-          this.queueAriaMessage("noHitRound");
-        }
-        this.checkAchievements();
-        this.audio.stopMusic();
-        this.audio.roundComplete();
-        this.state = GameState.UPGRADE;
-        this.upgradeSelection = 0;
-        this.arenaClearTimer = null;
-        this.saveArena();
-        this.unlockPointer();
-        const accuracy =
-          this.shotsFired > 0 ? (this.shotsHit / this.shotsFired) * 100 : 0;
-        if (accuracy >= 75 && this.shotsFired >= 10)
-          this.queueAriaMessage("highAccuracy");
-        this.queueAriaMessage("roundComplete");
-        // Arena milestone callouts
-        if (this.arenaRound - 1 === 5) this.queueAriaMessage("arenaRound5");
-        if (this.arenaRound - 1 === 10) this.queueAriaMessage("arenaRound10");
-        this.ariaTriggered = {}; // reset one-shot triggers per round
-        return;
-      }
-    }
-
-    // Playtest — return to builder when all enemies killed (after slow-mo)
-    if (this.mode === "playtest") {
-      if (
-        this.totalEnemies > 0 &&
-        this.killedEnemies >= this.totalEnemies &&
-        this.slowMoTimer <= 0
-      ) {
-        if (!this._playtestEndTimer) {
-          this._playtestEndTimer = 2.0; // 2-second victory pause
-        }
-        this._playtestEndTimer -= this.deltaTime;
-        if (this._playtestEndTimer <= 0) {
-          this._playtestEndTimer = null;
-          this.exitBuilderPlayTest();
-          return;
-        }
-      }
-    }
+    if (this.mode === "playtest" && this._updatePlaytestVictory()) return;
 
     // Tutorial step progression
     if (this.mode === "tutorial") {
       this.updateTutorial(dt);
     }
 
-    // TODO: Reconsider or increase cost as this becomes OP - Same for Shield
-    // Player HP Regen
-    if (this.player.regenRate > 0) {
-      this.player.health = Math.min(
-        this.player.maxHealth,
-        this.player.health + this.player.regenRate * dt,
-      );
-    }
-
-    // Shield Regen (2 per second)
-    if (
-      this.player.maxShield > 0 &&
-      this.player.shield < this.player.maxShield
-    ) {
-      this.player.shield = Math.min(
-        this.player.maxShield,
-        this.player.shield + 2 * dt,
-      );
-    }
+    this._regenPlayer(dt);
 
     // Player movement
     const _profilePlayerStart = this.showFPS ? performance.now() : 0;
     this.updatePlayer(dt);
 
-    // ── Meltdown auto-forward ──
     if (this.mode === "meltdown" && this.meltdown.alive) {
-      // Allow limited horizontal look: ±60° from forward (+Y / PI/2)
-      const fwd = Math.PI / 2;
-      const maxTurn = Math.PI / 3;
-      let a = this.player.angle;
-      // Normalize angle to [fwd - PI, fwd + PI]
-      while (a - fwd > Math.PI) a -= Math.PI * 2;
-      while (a - fwd < -Math.PI) a += Math.PI * 2;
-      if (a > fwd + maxTurn) a = fwd + maxTurn;
-      if (a < fwd - maxTurn) a = fwd - maxTurn;
-      this.player.angle = a;
-
-      const mResult = this.meltdown.update(dt, this.player.x, this.player.y);
-
-      // Sync meltdown damage multiplier to player (for weapon system)
-      this.player.damageMultiplier = this.meltdown.effectiveDamage();
-
-      // Apply auto-forward movement (+Y direction) with collision
-      // Braking: holding back key slows to 50% but costs stamina
-      const kb = this.keybinds;
-      const brakingHeld = this.keys[kb.moveBack] || this.keys["ArrowDown"];
-      let effectiveMoveY = mResult.moveY;
-      if (brakingHeld && effectiveMoveY > 0) {
-        const brakeCost = 15 * dt; // stamina per second when braking
-        if (this.player.stamina > 0) {
-          this.player.stamina = Math.max(0, this.player.stamina - brakeCost);
-          effectiveMoveY *= 0.5;
-          this.player._meltdownBraking = true;
-        } else {
-          this.player._meltdownBraking = false;
-        }
-      } else {
-        this.player._meltdownBraking = false;
-      }
-      const margin = 0.2;
-      const newY = this.player.y + effectiveMoveY;
-      const phasing =
-        this.meltdown.abilityActive && this.meltdown.hero.ability === "phase";
-      if (
-        phasing ||
-        this.isPassable(Math.floor(this.player.x), Math.floor(newY + margin))
-      ) {
-        this.player.y = newY;
-      } else {
-        // Can't move forward — take damage from impact
-        this.player.health -= 5 * dt;
-      }
-
-      // Extend map when approaching the end
-      for (const ev of mResult.events) {
-        // Meltdown event audio
-        if (ev.type === "heatWarning") this.audio.meltdownSpeedUp();
-        else if (ev.type === "milestone") this.audio.meltdownCollect();
-        else if (ev.type === "abilityEnd") this.audio.meltdownHit();
-
-        // Meltdown upgrade screen — pause run and show choices
-        if (ev.type === "upgradeScreen") {
-          this._meltdownUpgradeChoices = ev.choices;
-          this._meltdownUpgradeSel = 0;
-          this.audio.meltdownCollect();
-        }
-
-        if (ev.type === "extend") {
-          const { enemySpawns, pickupSpawns } = this.meltdown.extend(25);
-          const diff = this.getDifficultyMultipliers();
-          for (const es of enemySpawns) {
-            const et = ENEMY_TYPES[es.type] || ENEMY_TYPES.drone;
-            const e = new Enemy(es.x, es.y, es.type);
-            e.health = et.health * diff.healthMul;
-            e.maxHealth = e.health;
-            e.speed = et.speed * diff.speedMul;
-            e.damage = (et.damage || 10) * diff.damageMul;
-            e.aiType = et.aiType || "patrol";
-            const [bcG, dcG] = jitterPalette(et.baseColor || "#ff0000", et.darkColor || "#880000", e.enemyType);
-            e.baseColor = bcG;
-            e.darkColor = dcG;
-            this.entities.push(e);
-          }
-          for (const pk of pickupSpawns) {
-            this.entities.push(
-              new Pickup(pk.x, pk.y, pk.type, { weaponId: pk.weaponId }),
-            );
-          }
-          this.map.height = this.meltdown.map.height;
-        }
-      }
-
-      // Despawn entities far behind the player to avoid accumulation
-      const despawnY = this.player.y - 40;
-      this.entities = this.entities.filter(
-        (e) => e.y > despawnY || e.y > this.player.y,
-      );
-
-      // Hazard damage
-      if (mResult.hazardDmg > 0) {
-        this.player.health -= mResult.hazardDmg;
-        if (this.screenShake < 2) this.screenShake = 2;
-      }
-
-      // ARIA messages
-      if (mResult.ariaMsg) {
-        this._meltdownAriaText = mResult.ariaMsg;
-        this._meltdownAriaTimer = 4;
-      }
-      if (this._meltdownAriaTimer > 0) {
-        this._meltdownAriaTimer -= dt;
-        if (this._meltdownAriaTimer <= 0) this._meltdownAriaText = null;
-      }
-
-      // Heal from upgrades (Nano-Repair Pulse)
-      if (mResult.healAmount > 0) {
-        this.player.health = Math.min(
-          this.player.maxHealth,
-          this.player.health + mResult.healAmount,
-        );
-      }
-
-      // Death check — temporal anchor can save once
-      if (this.player.health <= 0) {
-        if (this.meltdown.onFatalHit()) {
-          this.player.health = 1;
-          this.screenShake = Math.max(this.screenShake, 10);
-        } else {
-          this.player.health = 0;
-          this.player.alive = false;
-          this.audio.meltdownDeath();
-          this.meltdown.onDeath();
-          this.deathTimer = 1.5;
-        }
-      }
+      updateMeltdownRun(this, dt);
     }
 
     // Firing
@@ -2284,6 +1683,218 @@ export class Game {
     // Misc: exit check, decay, achievements
     const _tMisc0 = this.showFPS ? performance.now() : 0;
 
+    this._checkExitReached();
+
+    // screen shake decay (framerate-invariant)
+    this.screenShake *= decay(0.9, this.deltaTime);
+    if (this.screenShake < 0.1) this.screenShake = 0;
+
+    // Update VFX particles
+    _safeCall("Particles", () => this.updateParticles(dt));
+
+    this._decayEffects(dt);
+
+    // Achievement checks (periodic, not every frame)
+    _safeCall("Achievements", () => {
+      this.checkAchievements();
+      this.updateAchievementToast(dt);
+    });
+    this.updateAriaComms(dt);
+    if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
+  }
+
+  /** Slow-mo (last kill) outranks Chrono Shift; both drain here. */
+  _updateTimeScale() {
+    // Slow-motion time scale (last-kill effect takes priority)
+    if (this.slowMoTimer > 0) {
+      this.slowMoTimer -= this.deltaTime;
+      this.timeScale = 0.25;
+      if (this.slowMoTimer <= 0) {
+        this.slowMoTimer = 0;
+        this.timeScale = this.player.chronoActive ? 0.3 : 1;
+      }
+    } else if (this.player.chronoActive) {
+      // Chrono Shift — player-activated time slow
+      this.player.chronoEnergy -= 33 * this.deltaTime; // ~3s at full
+      this.timeScale = 0.3;
+      if (this.player.chronoEnergy <= 0) {
+        this.player.chronoEnergy = 0;
+        this.player.chronoActive = false;
+        this.timeScale = 1;
+      }
+    } else if (this.timeScale !== 1 && this.slowMoTimer <= 0) {
+      this.timeScale = 1;
+    }
+  }
+
+  /** Counts down the death beat, then routes to game over or back to the builder. */
+  _updateDeathTimer() {
+    if (this.deathTimer > 0) {
+      this.deathTimer -= this.deltaTime;
+      if (this.deathTimer <= 0) {
+        if (this.mode === "playtest") {
+          this.exitBuilderPlayTest();
+          return;
+        }
+        this.checkAchievements(); // Sync final score/stats before game over
+        this.state = GameState.GAME_OVER;
+        this.audio.stopMusic();
+        trackEvent("player_death", {
+          mode: this.mode,
+          round: this.arenaRound,
+          cause: "health",
+          time_seconds: Math.floor(
+            (performance.now() - this.roundStartTime) / 1000,
+          ),
+        });
+        if (this.mode === "arena") this.clearArenaSave();
+        // No longer clearing campaign save on death to allow per-level checkpoints
+        this.unlockPointer();
+      }
+    }
+  }
+
+  _updateChronoEnergy() {
+    // Chrono Shift activation (hold-to-activate, like sprint)
+    // Need 15 energy to engage; once active, stays on until key released or energy depleted
+    const chronoKeyHeld = !!this.keys[this.keybinds.chronoShift];
+    if (
+      chronoKeyHeld &&
+      !this.player.chronoActive &&
+      this.player.chronoEnergy >= 15
+    ) {
+      this.player.chronoActive = true;
+      if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+    } else if (this.player.chronoActive && !chronoKeyHeld) {
+      this.player.chronoActive = false;
+      this.timeScale = 1;
+    }
+
+    // Passive chrono energy regen (+5/sec)
+    if (
+      !this.player.chronoActive &&
+      this.player.chronoEnergy < this.player.maxChronoEnergy
+    ) {
+      this.player.chronoEnergy = Math.min(
+        this.player.maxChronoEnergy,
+        this.player.chronoEnergy + 5 * this.deltaTime,
+      );
+    }
+  }
+
+  /** Arena round clock. Returns true when the round just ended (state is now UPGRADE). */
+  _updateArenaTimer(dt) {
+    const prevTimer = this.arenaTimer;
+    this.arenaTimer -= dt;
+
+    // Timer warning beep once per second when under 10s
+    if (this.arenaTimer <= 10 && this.arenaTimer > 0) {
+      if (Math.floor(prevTimer) !== Math.floor(this.arenaTimer)) {
+        this.audio.timerWarning();
+      }
+    }
+
+    // Auto-end round when all enemies killed
+    if (
+      this.totalEnemies > 0 &&
+      this.killedEnemies >= this.totalEnemies &&
+      !this.arenaClearTimer
+    ) {
+      this.arenaClearTimer = 5.0;
+    }
+    if (this.arenaClearTimer) {
+      this.arenaClearTimer -= dt;
+      if (this.arenaClearTimer <= 0) {
+        this.arenaClearTimer = null;
+        this.arenaTimer = 0;
+      }
+    }
+
+    if (this.arenaTimer <= 0) {
+      this.arenaTimer = 0;
+      // Round complete
+      this.arenaRound++;
+      this.player.score += 1000 + this.killedEnemies * 50;
+      trackEvent("round_complete", {
+        mode: "arena",
+        round: this.arenaRound - 1,
+        kills: this.killedEnemies,
+        time_seconds: 60,
+      });
+      this.achievementStats.highestArenaRound = Math.max(
+        this.achievementStats.highestArenaRound,
+        this.arenaRound - 1,
+      );
+      if (this.roundDamageTaken === 0) {
+        this.achievementStats.flawlessRounds++;
+        this.queueAriaMessage("noHitRound");
+      }
+      this.checkAchievements();
+      this.audio.stopMusic();
+      this.audio.roundComplete();
+      this.state = GameState.UPGRADE;
+      this.upgradeSelection = 0;
+      this.arenaClearTimer = null;
+      this.saveArena();
+      this.unlockPointer();
+      const accuracy =
+        this.shotsFired > 0 ? (this.shotsHit / this.shotsFired) * 100 : 0;
+      if (accuracy >= 75 && this.shotsFired >= 10)
+        this.queueAriaMessage("highAccuracy");
+      this.queueAriaMessage("roundComplete");
+      // Arena milestone callouts
+      if (this.arenaRound - 1 === 5) this.queueAriaMessage("arenaRound5");
+      if (this.arenaRound - 1 === 10) this.queueAriaMessage("arenaRound10");
+      this.ariaTriggered = {}; // reset one-shot triggers per round
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Playtest ends after a short pause once every enemy is down, or once the
+   * exit armed the timer (see _checkExitReached). Returns true on exit.
+   */
+  _updatePlaytestVictory() {
+    const allDown =
+      this.totalEnemies > 0 &&
+      this.killedEnemies >= this.totalEnemies &&
+      this.slowMoTimer <= 0;
+    if (allDown && !this._playtestEndTimer) {
+      this._playtestEndTimer = 2.0; // 2-second victory pause
+    }
+    if (!this._playtestEndTimer) return false;
+    this._playtestEndTimer -= this.deltaTime;
+    if (this._playtestEndTimer > 0) return false;
+    this._playtestEndTimer = null;
+    this.exitBuilderPlayTest();
+    return true;
+  }
+
+  _regenPlayer(dt) {
+    // TODO: Reconsider or increase cost as this becomes OP - Same for Shield
+    // Player HP Regen
+    if (this.player.regenRate > 0) {
+      this.player.health = Math.min(
+        this.player.maxHealth,
+        this.player.health + this.player.regenRate * dt,
+      );
+    }
+
+    // Shield Regen (2 per second)
+    if (
+      this.player.maxShield > 0 &&
+      this.player.shield < this.player.maxShield
+    ) {
+      this.player.shield = Math.min(
+        this.player.maxShield,
+        this.player.shield + 2 * dt,
+      );
+    }
+  }
+
+  /** Campaign exit completes the level; playtest exit arms the end timer. */
+  _checkExitReached() {
     // Check exit (campaign)
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
@@ -2313,14 +1924,10 @@ export class Game {
         }
       }
     }
+  }
 
-    // screen shake decay (framerate-invariant)
-    this.screenShake *= decay(0.9, this.deltaTime);
-    if (this.screenShake < 0.1) this.screenShake = 0;
-
-    // Update VFX particles
-    _safeCall("Particles", () => this.updateParticles(dt));
-
+  /** Glitch, hit marker, damage numbers, tracers and point lights fade out. */
+  _decayEffects(dt) {
     // Glitch effect decay (framerate-invariant)
     this.glitchEffect *= decay(0.95, this.deltaTime);
     if (this.glitchEffect < 0.01) this.glitchEffect = 0;
@@ -2331,24 +1938,9 @@ export class Game {
       if (this.hitMarker < 0) this.hitMarker = 0;
     }
 
-    // Damage numbers decay
-    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
-      this.damageNumbers[i].life -= dt;
-      if (this.damageNumbers[i].life <= 0) {
-        this.damageNumbers[i] =
-          this.damageNumbers[this.damageNumbers.length - 1];
-        this.damageNumbers.pop();
-      }
-    }
-
-    // Hitscan tracers decay (short-lived bullet streaks)
-    for (let i = this.tracers.length - 1; i >= 0; i--) {
-      this.tracers[i].life -= dt;
-      if (this.tracers[i].life <= 0) {
-        this.tracers[i] = this.tracers[this.tracers.length - 1];
-        this.tracers.pop();
-      }
-    }
+    // Damage numbers and hitscan tracers (short-lived bullet streaks)
+    expireByLife(this.damageNumbers, dt);
+    expireByLife(this.tracers, dt);
 
     // Dynamic point lights — decay and prune. Intensity follows life ratio
     // so flashes fade smoothly into the wall/floor shading.
@@ -2362,14 +1954,6 @@ export class Game {
         L.intensity = L.baseIntensity * (L.life / L.maxLife);
       }
     }
-
-    // Achievement checks (periodic, not every frame)
-    _safeCall("Achievements", () => {
-      this.checkAchievements();
-      this.updateAchievementToast(dt);
-    });
-    this.updateAriaComms(dt);
-    if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
   }
 
   triggerDash(code, rawDirX, rawDirY) {
@@ -3282,3 +2866,30 @@ export class Game {
       });
   }
 }
+
+// Campaign and tutorial state bridges (legacy aliases on the prototype).
+forwardProps(Game.prototype, "campaign", {
+  campaignLevel: "level",
+  campaignAct: "act",
+  ngPlusCycle: "ngPlusCycle",
+  ngPlusPrompt: "ngPlusPrompt",
+  ngPlusPromptSel: "ngPlusPromptSel",
+  campaignMissedWeapons: "missedWeapons",
+  campaignPromptSelection: "promptSelection",
+});
+forwardProps(Game.prototype, "tutorial", {
+  tutorialStep: "step",
+  tutorialStepTime: "stepTime",
+  tutorialMenuSelection: "menuSelection",
+  tutorialShowCompletionMenu: "showCompletionMenu",
+  tutorialPickedUp: "pickedUp",
+  tutorialWeaponPickedUp: "weaponPickedUp",
+  tutorialWeaponSwapped: "weaponSwapped",
+  tutorialSecondWeaponPickedUp: "secondWeaponPickedUp",
+  tutorialDoorOpened: "doorOpened",
+  tutorialDashed: "dashed",
+  tutorialCrouched: "crouched",
+  tutorialSlid: "slid",
+  tutorialFired: "fired",
+  tutorialChronoUsed: "chronoUsed",
+});

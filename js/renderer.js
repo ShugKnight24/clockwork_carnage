@@ -39,6 +39,7 @@ function _getFogString(r, g, b, alpha) {
 let _spriteDistBuf = new Float64Array(256);
 let _spriteOrderBuf = new Int32Array(256);
 let _spriteOrderCount = 0;
+const _byDistanceDesc = (a, b) => _spriteDistBuf[b] - _spriteDistBuf[a];
 
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
@@ -720,8 +721,8 @@ export class Renderer {
       _spriteDistBuf[i] = distSq;
     }
     // Sort the active portion of the order buffer
-    const spriteOrder = Array.prototype.slice.call(_spriteOrderBuf, 0, _spriteOrderCount);
-    spriteOrder.sort((a, b) => _spriteDistBuf[b] - _spriteDistBuf[a]);
+    // subarray() is a view, so the sort runs in place without copying.
+    const spriteOrder = _spriteOrderBuf.subarray(0, _spriteOrderCount).sort(_byDistanceDesc);
 
     for (let si = 0; si < spriteOrder.length; si++) {
       const entity = entities[spriteOrder[si]];

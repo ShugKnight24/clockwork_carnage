@@ -18,6 +18,13 @@ import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame } from "./aim.js";
 import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
 
+// Per-weapon lookup tables, indexed by weapon id.
+const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
+const WEAPON_SOUNDS = ["shootPistol", "shootShotgun", "shootPlasma", "shootCannon", "shootScattergun", "shootSniper", "shootRicochet", "shootEMP"];
+/** Vertical recoil in radians. */
+const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
+const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
+
 export function fireWeapon(game) {
   const now = game.time;
   const wep = game.player.getWeaponDef();
@@ -42,11 +49,9 @@ export function fireWeapon(game) {
 
   // Screen-wide muzzle flash
   game._muzzleFlashTime = now;
-  const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
   game._muzzleFlashColor = MUZZLE_COLORS[wep.id] || "255,200,60";
 
   // Sound
-  const WEAPON_SOUNDS = ["shootPistol", "shootShotgun", "shootPlasma", "shootCannon", "shootScattergun", "shootSniper", "shootRicochet", "shootEMP"];
   const soundMethod = WEAPON_SOUNDS[wep.id];
   if (soundMethod) game.audio[soundMethod]();
 
@@ -85,9 +90,7 @@ export function fireWeapon(game) {
     game.screenShake,
     wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
   );
-  // Camera punch — per-weapon vertical recoil (radians)
-  // Heavier weapons kick harder. ADS halves it.
-  const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
+  // Camera punch — heavier weapons kick harder. ADS halves it.
   const punchMul = game.player.isAiming ? 0.5 : 1;
   game.player.cameraPunch = Math.max(
     game.player.cameraPunch,
@@ -114,7 +117,6 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   }
   if (game.tracers) {
     const wep = game.player.getWeaponDef?.();
-    const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
     game.tracers.push({
       x1: game.player.x,
       y1: game.player.y,

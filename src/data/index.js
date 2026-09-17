@@ -1,4 +1,6 @@
-export { CUTSCENE_SCRIPTS } from './cutscene-scripts.js';
+// CUTSCENE_SCRIPTS is deliberately not re-exported: importing it from here would
+// pull ~130 KB of script data into the boot bundle. Import it from
+// ./cutscene-scripts.js inside lazily loaded code only.
 export {
   CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS,
   ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,

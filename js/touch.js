@@ -106,6 +106,8 @@ export class TouchControls {
     this.canvas.style.cssText =
       "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:20;pointer-events:none;";
     document.body.appendChild(this.canvas);
+    // resize() applies the DPR transform, so the context must exist first.
+    this.ctx = this.canvas.getContext("2d");
 
     // Create touch-event catcher (above hudCanvas z-index:10, below touch canvas z-index:20)
     this.touchLayer = document.createElement("div");
@@ -954,7 +956,7 @@ export class TouchControls {
   }
 
   render() {
-    const ctx = this.ctx || (this.ctx = this.canvas.getContext("2d"));
+    const ctx = this.ctx;
     const z = this.zones;
     ctx.clearRect(0, 0, z.w, z.h);
 

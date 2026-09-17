@@ -14,7 +14,7 @@ import {
 } from "../src/systems/spawner.js";
 import { isBossEnemy } from "../src/systems/combat.js";
 import { trackEvent } from "./analytics.js";
-import { GameState } from "./game.js";
+import { GameState } from "../src/types.js";
 
 export class CampaignManager {
   constructor(game) {
@@ -26,6 +26,22 @@ export class CampaignManager {
     this.ngPlusPrompt = false;
     this.ngPlusPromptSel = 0;
     this.promptSelection = 0;
+    // Delayed level-start callouts. Cleared on the next loadLevel so a
+    // quick restart or level skip cannot fire the previous level's lines.
+    this._levelTimers = new Set();
+  }
+
+  _afterLevelStart(ms, fn) {
+    const id = setTimeout(() => {
+      this._levelTimers.delete(id);
+      fn();
+    }, ms);
+    this._levelTimers.add(id);
+  }
+
+  _clearLevelTimers() {
+    for (const id of this._levelTimers) clearTimeout(id);
+    this._levelTimers.clear();
   }
 
   // ── persistence ──
@@ -148,6 +164,7 @@ export class CampaignManager {
 
   loadLevel(index) {
     const g = this.game;
+    this._clearLevelTimers();
     if (index >= CAMPAIGN_LEVELS.length) {
       g.state = GameState.VICTORY;
       g.audio.stopMusic();
@@ -225,7 +242,7 @@ export class CampaignManager {
       else g.queueAriaMessage("bossEncounter");
       // Sprint E 4.10: Squad ensemble chatter per boss phase
       if (g.squadComms && typeof g.squadComms.onBossPhase === "function") {
-        setTimeout(() => g.squadComms.onBossPhase(form), 2000);
+        this._afterLevelStart(2000, () => g.squadComms.onBossPhase(form));
       }
       // Boss intro flourish — 2.5s slow-mo + glitch spike + name card.
       // Drives drama on first encounter without depending on a cutscene
@@ -245,20 +262,20 @@ export class CampaignManager {
       };
     } else if (g.squadComms && this.act >= 2) {
       // Squad chimes in at non-boss level starts (act 2+ only)
-      setTimeout(() => g.squadComms.onCombatStart(), 1500);
+      this._afterLevelStart(1500, () => g.squadComms.onCombatStart());
     }
 
     // Sprint E 4.3/4.4: one-shot Act 3 lore reveals
     if (this.act === 3) {
       if (this.level === 0 && g.queueAriaMessage) {
-        setTimeout(() => g.queueAriaMessage("encryptedChannelReveal"), 3000);
+        this._afterLevelStart(3000, () => g.queueAriaMessage("encryptedChannelReveal"));
       } else if (this.level === 1 && g.queueAriaMessage) {
-        setTimeout(() => g.queueAriaMessage("analystLMReveal"), 3000);
+        this._afterLevelStart(3000, () => g.queueAriaMessage("analystLMReveal"));
       }
     }
     // Sprint E 4.6: NG+ Dead Squad foreshadowing (cycles 1+)
     if (this.ngPlusCycle >= 1 && this.level === 0 && g.queueAriaMessage) {
-      setTimeout(() => g.queueAriaMessage("ngPlusDeadSquad"), 5000);
+      this._afterLevelStart(5000, () => g.queueAriaMessage("ngPlusDeadSquad"));
     }
 
     g.state = GameState.PLAYING;
