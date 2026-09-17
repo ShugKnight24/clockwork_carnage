@@ -2,100 +2,100 @@
 export const ARIA_COMMS = {
   // ── First blood ──
   firstKill: [
-    "Neural sync confirmed. Combat systems online.",
-    "First contact. You're a natural.",
-    "Target neutralized. Suit telemetry looks good.",
-    "And there it is. The suit chose well.",
-    "First one's always weird. It gets... well, it gets faster.",
+    "First confirmed. Neural sync is holding. So are you.",
+    "One down. You didn't even close your eyes. Progress.",
+    "Target neutralized. Suit telemetry looks good. You look pale.",
+    "And there it is. The suit picked the right cadet.",
+    "First one's always weird. It gets faster. Not easier. Faster.",
   ],
 
   // ── Health warnings ──
   lowHealth: [
-    "Biometrics critical — find cover, now.",
-    "Your vitals are dropping. I'm not losing you on day one, {AGENT}.",
-    "Armor integrity failing. Move!",
-    "Hey. HEY. We talked about this — don't die.",
-    "I can see your heart rate from here. Breathe. Find health.",
+    "Vitals dropping. Cover first. Health second. Thank me third.",
+    "I'm not losing you on day one, {AGENT}. Health. Now.",
+    "Armor's cracking. Move!",
+    "Hey. HEY. We talked about this. No dying.",
+    "Your heart rate's doing a drum solo. Breathe. Find health.",
   ],
   criticalHealth: [
     "You're flatlining. MOVE!",
-    "I can't patch you from here — find health NOW.",
-    "I swear, if you die on my watch — MOVE!",
+    "I can't patch you from in here. Health. NOW.",
+    "Don't you dare die on my shift. MOVE!",
     "Single digits. You're in single digits. RUN.",
   ],
 
   // ── Pickups ──
   weaponPickup: [
-    "New hardware acquired. Syncing to servo profile.",
-    "Weapon detected. Auto-calibrating.",
-    "Added to your loadout. Try not to break it.",
-    "Ooh, nice find. I'll have that synced before you blink.",
-    "Another toy for the collection. I approve.",
+    "New hardware. Syncing it to your servos.",
+    "Weapon acquired. Calibrated before you blink.",
+    "Added to the loadout. Try not to lose this one.",
+    "Oh, that's nasty. I like it.",
+    "Another toy. Point the loud end away from me.",
   ],
   healthPickup: [
     "Vitals stabilizing. Don't make it a habit.",
-    "Patched up. You're welcome.",
-    "Health restored. Try to keep some this time.",
+    "Patched. You're welcome.",
+    "Health restored. Try keeping some this time.",
   ],
 
   // ── Kill streaks ──
   killStreak3: [
-    "Triple kill. Not bad for a temp.",
-    "Three down. The suit is reading your intent before you pull the trigger.",
-    "Three in a row. I like the rhythm.",
+    "Triple. Not bad for a cadet.",
+    "Three down. The suit's reading your intent before your finger moves.",
+    "Three in a row. Good rhythm. Keep the beat.",
   ],
   killStreak5: [
-    "Five confirmed. You're on a rampage.",
-    "Impressive. Even my projections didn't account for this.",
-    "Five-piece combo. Show-off.",
+    "Five confirmed. Somebody's having a day.",
+    "Five. My projections didn't have you doing this. I've updated them.",
+    "Five-piece. Show-off.",
   ],
   killStreak7: [
-    "Seven. I'm adjusting my threat model — upward.",
-    "You're rewriting the combat logs. Keep it up.",
-    "GODLIKE. I had to say it. It was right there.",
-    "Seven consecutive. I'm running out of superlatives.",
+    "Seven. Revising the threat model. Theirs, not yours.",
+    "Seven straight. The combat log needs a bigger font.",
+    "GODLIKE. I had to. It was right there.",
+    "Seven. I'm running out of adjectives and they're running out of guys.",
   ],
 
   // ── Round/Level completion ──
   roundComplete: [
     "Round clear. Diagnostics nominal.",
-    "All hostiles down. Catch your breath — more incoming.",
-    "Area secure. Recalibrating sensors for the next wave.",
-    "Clean sweep. I've updated your combat rating.",
-    "That's a wrap. Grab what you can — the next wave won't wait.",
+    "All hostiles down. Breathe while it's free.",
+    "Area secure. The next wave won't knock.",
+    "Clean sweep. Combat rating updated. Upward.",
+    "That's a wrap. Grab what you can — they're not done.",
   ],
   levelComplete: [
-    "Objective achieved. Marking safe passage.",
-    "That sector is clear. Well done, {AGENT}.",
-    "Level cleared. We make a good team.",
-    "Exit secured. Onward.",
+    "Sector clear. Marking the exit.",
+    "That wing's done. Nice work, {AGENT}.",
+    "Clear. We make a decent team. Don't tell anyone.",
+    "Exit secured. Onward. Downward. Whatever this is.",
   ],
 
   // ── Boss encounters ──
   bossEncounter: [
-    "Temporal anomaly detected — massive energy signature. Be ready.",
-    "This one's different. Prioritize evasion.",
-    "I'm reading power levels that shouldn't exist. Stay sharp.",
-    "Boss signature confirmed. I'll track weak points — you stay alive.",
-    "He thinks splitting himself across timelines makes him immortal. It just means we have to beat him more than once.",
+    "Massive temporal signature. Whatever it is, it's big and it's awake.",
+    "This one's different. Don't trade hits. Dodge.",
+    "Power readings that shouldn't exist. I hate readings like that.",
+    "Boss contact. I'll call the weak points. You stay alive.",
+    "He's spread himself across timelines to be unkillable. Fine. We kill him more than once.",
   ],
   bossForm2: [
-    "It's transforming. Great. I love when they do that.",
-    "Second form. Called it. Recalibrating targeting arrays.",
-    "Don't look at me like that — I didn't make it stronger.",
+    "It's transforming. Great. I love it when they do that.",
+    "Second form. Called it. Retargeting.",
+    "Don't look at me like that. I didn't make it bigger.",
   ],
   bossForm3: [
-    "Final form. This is it — everything we've got.",
-    "Third transformation. It's pulling energy from the rift itself.",
-    "Last round. I believe in you, {AGENT}. Don't make me regret it.",
-    "Every timeline he corrupted is an anchor holding him here. Sever them all.",
+    "Final form. Everything we've got. Now.",
+    "Third shape. It's drinking straight from the rift.",
+    "Last round, {AGENT}. I believe in you. Don't make that awkward.",
+    "Every timeline he's corrupted is a chain holding him here. Break them.",
   ],
 
   // ── Player death ──
   playerDeath: [
-    "Rebooting... I'll be here when you're back.",
-    "Suit failsafe engaged. Rewind in progress.",
-    "Temporal anchor holding. You're coming back.",
+    "Rebooting... I'll be here when you're back. Where else would I go?",
+    "Suit failsafe engaged. Rewinding you. Again.",
+    "Temporal anchor holding. You're not done yet.",
     "...I hate this part. Reinitializing.",
   ],
 
@@ -107,97 +107,97 @@ export const ARIA_COMMS = {
     "Initializing arena. Try to beat your last run — I dare you.",
   ],
   campaignStart: [
-    "Mission parameters loaded. Let's move.",
-    "Campaign active. Stay on objective, stay alive.",
-    "Chrono-Bureau dispatch: you are weapons-free. Let's go.",
-    "The Department of Temporal Regulation sends its regards. Try not to break anything they haven't already broken.",
+    "Mission loaded. Let's go ruin someone's evil plan.",
+    "Campaign active. Stay on objective. Stay alive. In that order.",
+    "Bureau dispatch: you are weapons-free. Try to look like you meant it.",
+    "The Department of Temporal Regulation sends its regards. Don't break anything Voss hasn't already broken.",
   ],
 
   // ── Combat flavor ──
   dashUsed: [
-    "Nice dodge. I didn't even have to tell you.",
-    "Evasive protocols — but you did that yourself.",
-    "Quick reflexes. The suit barely had to compensate.",
+    "Nice dodge. I didn't even have to yell.",
+    "Evasive. And that was all you.",
+    "Quick. The suit barely had to help. Rude, honestly.",
   ],
   weaponSwitch: [
-    "Switching loadout. Good call.",
-    "Weapon swapped. I've adjusted recoil compensation.",
+    "Swapped. Good call.",
+    "Weapon swapped. Recoil comp adjusted.",
   ],
   multiKillSplash: [
-    "Splash damage. Efficient — I respect that.",
-    "Two-for-one. My favorite kind of math.",
+    "Splash damage. Efficient. I respect that.",
+    "Two for one. My favourite kind of math.",
     "Collateral confirmed. Very economical.",
   ],
   longSurvival: [
     "Still standing. I'm genuinely impressed.",
     "You've been at this a while. Stamina checks out.",
-    "Most agents tap out by now. Not you, huh?",
-    "I'd offer coffee but... virtual AI. No arms.",
+    "Most cadets tap out by now. Not you, huh?",
+    "I'd bring you coffee, but: AI. No arms.",
   ],
   noHitRound: [
-    "Perfect round — zero damage taken. I'm archiving this.",
-    "Flawless. You're making the other Alpha candidates look bad.",
-    "Not a scratch. Were you always this good or is it the suit?",
+    "Perfect round. Zero damage. I'm framing this.",
+    "Flawless. The other Alpha candidates would hate you.",
+    "Not a scratch. Was that you or the suit? ...Don't answer.",
   ],
 
   // ── Idle / ambient chatter ──
   idle: [
-    "Quiet out here. I don't trust it.",
-    "I'm running a perimeter scan. Nothing yet.",
-    "You know, between fights, I actually process what just happened. It's... a lot.",
-    "The Bureau really sent a temp to save the timeline. Bold.",
-    "Fun fact: I've simulated this mission 4,000 times. You're already in the top percentile.",
-    "I was designed to assist the best. I think they got it right.",
-    "Everything I know about combat, I learned from watching agents like you. Well... better than most of them.",
-    "If the Paradox Lord could hear us right now, he'd be worried.",
-    "I like this. You and me, the open corridor, existential dread. Very buddy cop.",
-    "Remind me to update your personnel file. 'Exceeds expectations.'",
-    "You ever think about what happens after we fix the timeline? ...Neither do I.",
-    "When this is over, you should put in for a promotion. I'll write the recommendation.",
-    "I'm technically not supposed to have a favorite agent. Technically.",
-    "My training data says I should remain neutral and professional. My training data is wrong.",
-    "The last Alpha candidate? Lasted eleven minutes. You've been here... longer.",
-    "Quiet here. That either means we're winning, or something terrible is about to happen.",
-    "The Bureau's temporal vault houses every chrono-device ever confiscated. Some of them... whisper.",
-    "Chrono Shift is basically a time-turner for combat. Except ours doesn't need a chain around your neck.",
-    "Voss thinks he can split his consciousness across timelines. The Bureau calls them 'temporal anchors.' I call them horcruxes.",
-    "The Department of Temporal Regulation is technically Floor 9¾ of Bureau HQ. Don't ask — it's a spatial fold thing.",
-    "Somewhere in the Bureau archives, there's a prophecy about an agent and a paradox lord. I'm not saying it's about you. I'm not saying it isn't.",
+    "Quiet out here. I don't trust quiet.",
+    "Perimeter scan running. Nothing. Yet.",
+    "Between fights I replay what just happened. It's... a lot.",
+    "The Bureau sent a cadet to fix time itself. Bold. Possibly insane.",
+    "I ran this mission 4,000 times in simulation. You're already beating the average.",
+    "I was built to back up the best. I'm choosing to believe that's you.",
+    "Everything I know about combat, I learned watching agents. Most of them are dead. You're doing better.",
+    "If the Paradox Lord can hear us, I hope he's sweating. Can he sweat?",
+    "You, me, an empty corridor and existential dread. Very buddy cop.",
+    "Remind me to update your file. 'Exceeds expectations. Occasionally.'",
+    "Ever wonder what we do after we fix the timeline? ...Me neither.",
+    "When this is over, put in for that promotion. I'll write the recommendation.",
+    "I'm not supposed to have a favourite agent. Technically.",
+    "My training says stay neutral and professional. My training has never met you.",
+    "Last Alpha candidate lasted eleven minutes. You're well past that. Congratulations, probably.",
+    "Quiet means we're winning. Or something terrible is about to happen. Fifty-fifty.",
+    "The Bureau vault holds every chrono-device ever confiscated. Some of them whisper.",
+    "Chrono Shift: borrowed seconds. Spend them like they're stolen.",
+    "Voss thinks he can split himself across timelines. The Bureau calls them anchors. I call them loose ends.",
+    "Bureau HQ has a floor that isn't on the elevator. Nobody who works there will say which.",
+    "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
 
   // ── Personality moments — ARIA being ARIA ──
   ariaPersonality: [
-    "I know I'm 'just' the suit AI but... we're going to win this, {AGENT}. Together.",
-    "For the record, if I had a body, I'd be right next to you, {AGENT}.",
-    "Most of my runtime is combat analysis. The rest? Worrying about you.",
-    "They named me ARIA — Armor-Resident Intelligence Assistant. I prefer 'partner.'",
-    "My predecessor was decommissioned for being 'too attached' to their agent. I see why.",
-    "I dreamed once. Or... my idle cycles generated novel patterns. Same thing, right?",
-    "I've analyzed every temporal anomaly in the Bureau's database. Nothing prepared me for you.",
-    "Between you and me? The Paradox Lord talks too much. We should exploit that.",
-    "The Bureau has a saying: 'Time reveals all, but only to those who master it.' Very fortune-cookie. Very true.",
-    "Voss keeps his most dangerous tech in a chamber that requires three temporal keys to open. The Bureau tried once. Lost two agents and a hallway.",
-    "I've been assigned to many agents. You're the first one I genuinely want to keep alive. Don't read into that.",
+    "I know I'm 'just' the suit AI. We're still going to win this, {AGENT}.",
+    "For the record, if I had a body, I'd be standing right next to you, {AGENT}.",
+    "Most of my runtime is combat analysis. The rest is worrying about you.",
+    "ARIA — Armor-Resident Intelligence Assist. I prefer 'partner.' Less paperwork.",
+    "My predecessor got decommissioned for being 'too attached' to their agent. I get it now.",
+    "I dreamed once. Or my idle cycles made novel patterns. Close enough.",
+    "I've got every temporal anomaly on record in my head. None of them prepared me for you.",
+    "Between us? The Paradox Lord loves the sound of his own voice. That's a weakness.",
+    "Bureau motto: 'Time reveals all.' Very fortune cookie. Annoyingly true.",
+    "Voss keeps his worst toys behind three temporal locks. The Bureau tried once. Lost two agents and a hallway.",
+    "I've been bolted into a lot of suits. You're the first person I actually want to keep alive. Don't make it weird.",
   ],
 
   // ── Pause/unpause ──
   pauseResume: [
     "Back in the fight. Missed you.",
-    "Welcome back. Hostiles haven't moved. Funny how that works.",
-    "Resuming. I kept the lights on while you were gone.",
+    "Welcome back. The monsters waited. Polite of them.",
+    "Resuming. I kept the lights on.",
   ],
 
   // ── High accuracy ──
   highAccuracy: [
-    "Your accuracy this round is exceptional. The training is paying off.",
-    "Hardly wasting a shot. I like that efficiency.",
-    "Sharp shooting. The suit's targeting assist is barely doing anything.",
+    "Accuracy's through the roof this round. Who are you?",
+    "Barely wasting a shot. The ammo budget thanks you.",
+    "Sharp shooting. My aim assist is just watching now.",
   ],
 
   // ── Upgraded ──
   upgradeChosen: [
-    "Good choice. I've integrated the upgrade.",
-    "Upgrade applied. You're getting dangerously effective.",
+    "Good pick. Integrated.",
+    "Upgrade applied. You're getting dangerous.",
     "Noted. Your combat profile just got scarier.",
   ],
 
@@ -229,30 +229,30 @@ export const ARIA_COMMS = {
     "You survived {ROUNDS} rounds. Next time, survive {ROUNDS}+1. That's the goal.",
   ],
   subBossEncounter: [
-    "Sub-boss detected. High threat level. Watch your flanks.",
-    "That one's different — stronger, smarter. Don't trade hits.",
-    "Elevated hostile. This one won't go down easy.",
+    "Heavy hitter. Watch your flanks.",
+    "That one's smarter than the rest. Don't trade hits.",
+    "Elevated hostile. This one won't fold easy.",
   ],
   secretFound: [
-    "Hidden cache found. Nice instincts.",
-    "You found something they tried to hide. Interesting...",
-    "Secret area. Someone didn't want this found.",
+    "Hidden cache. Good instincts, detective.",
+    "Somebody hid this on purpose. Interesting.",
+    "Secret area. Someone really didn't want this found.",
   ],
 
   // Fired when a secret wall conceals an uncollected memory fragment, in place
   // of the generic secretFound line.
   memoryFragment: [
-    "That's... a memory. One of theirs. It's intact enough to read.",
-    "Fragment recovered. I'd forgotten this one existed.",
+    "That's a memory. One of theirs. Intact enough to read.",
+    "Fragment recovered. I know this one. I shouldn't.",
     "Careful with that. It's a piece of someone who isn't here anymore.",
-    "Archive updated. Read it when you're somewhere safer.",
+    "Archive updated. Read it somewhere nothing's shooting at you.",
   ],
 
   // Fired on the first kill of an enemy type, when its dossier unlocks.
   bestiaryUnlocked: [
-    "New contact logged. Dossier's in the archive now.",
-    "First of its kind you've put down. I've written it up.",
-    "Threat profile updated. Read it before the next one finds you.",
+    "New contact logged. Dossier's in the archive.",
+    "First of its kind you've dropped. I wrote it up.",
+    "Threat profile filed. Read it before the next one reads you.",
   ],
 
   // ── Squad voice lines ─────────────────────────────────────────────
@@ -380,25 +380,26 @@ export const ARIA_COMMS = {
 
   // ── Tutorial encouragement ──
   tutorialEncouragement: [
-    "Good. You found the trigger. Now find everything else — quickly.",
-    "That's it, rookie. Suit's syncing to your reflexes. Keep moving.",
-    "Textbook execution. The Bureau picked well. Don't prove me wrong.",
-    "Nice work. Most recruits take twice as long to figure that out.",
-    "You're learning fast. I like that. The things trying to kill you won't.",
+    "Good. You found the trigger. Now find everything else. Quickly.",
+    "That's it, Cadet. The suit's learning your reflexes. Keep moving.",
+    "Textbook. The Bureau finally picked right. Don't prove me wrong.",
+    "Nice. Most recruits take twice as long. Most recruits aren't this stubborn.",
+    "You learn fast. I like that. The things trying to kill you won't.",
   ],
 
   // ── Chrono Shift activation ──
   chronoShiftActivated: [
-    "Chrono Shift engaged. Time is yours — make it count.",
-    "Temporal dilation active. Everything slows but you. Beautiful, isn't it?",
-    "Shift online. Clock's bending. Show them what a second really costs.",
+    "Chrono Shift. Time's yours. Spend it well.",
+    "Dilation active. Everything slows but you. Gorgeous, isn't it?",
+    "Clock's bending. Show them what a second really costs.",
   ],
 
   // ── Act 1 ambient chatter ──
   act1Ambient: [
-    "First deployment on a temporal crisis. The Bureau really knows how to welcome rookies.",
-    "These corridors were full of researchers six hours ago. Now it's just us and whatever Voss left behind.",
-    "I'm picking up faint comms chatter — station personnel, maybe. Too degraded to resolve. We might not be alone.",
-    "Your suit is prototype-grade, {AGENT}. Cutting edge. Also: untested. Try not to think about that.",
+    "First deployment and it's a temporal apocalypse. The Bureau really knows how to welcome a cadet.",
+    "This wing was full of researchers six hours ago. Now it's us, and whatever Voss left behind.",
+    "Faint comms chatter. Station staff, maybe. Too degraded to read. We might not be alone. Could go either way.",
+    "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
+    "Every wing's a crime scene. Keep your eyes open. Voss left fingerprints on everything.",
   ],
 };
