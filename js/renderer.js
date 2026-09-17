@@ -13,6 +13,8 @@ import {
 } from "../src/rendering/pickups.js";
 import { drawProp, setFovScale } from "../src/rendering/props.js";
 import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
+import { isModernArt } from "../src/rendering/art-style.js";
+import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -714,6 +716,9 @@ export class Renderer {
     // Use camera position for sprite rendering (defaults to player pos)
     const cx = camX != null ? camX : player.x;
     const cy = camY != null ? camY : player.y;
+    // Camera right vector, so side-on enemy sprites can face their heading.
+    this._camRightX = -dirY;
+    this._camRightY = dirX;
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
     // Sort entities by distance from camera (pre-allocated arrays to avoid per-frame GC)
@@ -951,6 +956,16 @@ export class Renderer {
     const def = enemy.def;
     if (!def) return;
 
+    // Modern art: SVG pose sprites. Falls through to the procedural sprite
+    // until the type's bitmaps have decoded.
+    if (isModernArt()) {
+      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY);
+      if (frame) {
+        this._drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog);
+        return;
+      }
+    }
+
     // Prefer per-instance palette (set at spawn with slight HSL jitter so
     // a horde of drones doesn't read as 30 identical sprites). Falls back
     // to the def palette if spawner didn't seed an override.
@@ -1017,6 +1032,53 @@ export class Renderer {
     ctx.restore();
 
     if (enemy.state === "windup" && enemy._windupTotalMs > 0 && !enemy.dissolving) {
+      this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
+    }
+  }
+
+  /**
+   * Modern enemy sprite. Occlusion uses the same per-column test as the
+   * procedural path (a column draws only where the enemy is nearer than the
+   * wall), but spans the sprite's own extent so wide or tall art is not
+   * cropped to the square sprite column. Adjacent visible columns are merged
+   * into one clip rect.
+   */
+  _drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog) {
+    const alpha = fog;
+    if (alpha <= 0) return;
+    const x0 = Math.max(0, Math.floor(screenX + frame.x0));
+    const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + frame.x1));
+    const top = centerY + frame.y0;
+    const height = frame.y1 - frame.y0;
+
+    ctx.save();
+    ctx.beginPath();
+    let any = false;
+    let runStart = -1;
+    for (let x = x0; x <= x1 + 1; x++) {
+      const open = x <= x1 && dist < this.zBuffer[x];
+      if (open && runStart < 0) runStart = x;
+      else if (!open && runStart >= 0) {
+        ctx.rect(runStart, top, x - runStart, height);
+        runStart = -1;
+        any = true;
+      }
+    }
+    if (any) {
+      ctx.clip();
+      const hitFlash = !!enemy.hitTime && time - enemy.hitTime < 100;
+      const dissolve = enemy.dissolving && enemy.dissolveTimer != null ? Math.max(0, enemy.dissolveTimer / 0.5) : 1;
+      const windupT = enemy.state === "windup" && enemy._windupTotalMs > 0
+        ? 1 - Math.max(0, enemy._windupLeftMs) / enemy._windupTotalMs
+        : 0;
+      drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
+    }
+    ctx.restore();
+
+    if (enemy.state === "windup" && enemy._windupTotalMs > 0 && !enemy.dissolving) {
+      const bodyTop = centerY - halfH * 0.4;
+      const bodyBottom = centerY + halfH * 0.5;
+      const bodyWidth = halfW * 0.6;
       this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
     }
   }
