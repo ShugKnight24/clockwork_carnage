@@ -8,11 +8,43 @@ import { renderPostFX as _renderPostFX } from "./postfx.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
 import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
+import { isModernArt } from "./art-style.js";
+
+let showroomLoad = "idle"; // idle | loading | ready | failed
+
+/**
+ * Modern mode replaces the canvas creator with the <agent-showroom> overlay.
+ * Loaded lazily (it is DOM-only) and synced every frame so it opens/closes with
+ * GameState.CHARACTER_CREATE and swaps cleanly when the art style changes.
+ * Returns true while the overlay owns the creator.
+ */
+function syncShowroom(game) {
+  const inCreator = game.state === GameState.CHARACTER_CREATE;
+  const modern = isModernArt();
+  if (game.showroom) {
+    game.showroom.sync(inCreator, modern);
+    return inCreator && modern;
+  }
+  if (modern && showroomLoad === "idle") {
+    showroomLoad = "loading";
+    import("../../js/components/agent-showroom.js")
+      .then((m) => {
+        game.showroom = m.mountShowroom(game);
+        showroomLoad = "ready";
+      })
+      .catch((err) => {
+        showroomLoad = "failed";
+        console.warn("[showroom] failed to load, using the canvas creator", err);
+      });
+  }
+  return inCreator && modern && showroomLoad === "loading";
+}
 
 export function renderFrame(game) {
   const ctx = game.renderer.ctx;
   const w = game.renderer.width;
   const h = game.renderer.height;
+  const showroom = syncShowroom(game);
 
   if (
     game.state === GameState.TITLE ||
@@ -43,6 +75,11 @@ export function renderFrame(game) {
 
   if (game.state === GameState.CHARACTER_CREATE) {
     game.hudCtx.clearRect(0, 0, game.hudW, game.hudH);
+    if (showroom) {
+      ctx.fillStyle = "#03050a";
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
     game.renderCharacterCreator(ctx, w, h);
     return;
   }

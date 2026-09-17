@@ -10,6 +10,7 @@
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
+import { isModernArt } from "../src/rendering/art-style.js";
 import {
   COMPACT_PHONE_HEIGHT,
   getVisibleCategories,
@@ -411,6 +412,8 @@ export class TouchControls {
 
     // Character creator: forward taps for tab/item clicks + nav
     if (g.state === "characterCreate") {
+      // Modern mode: the <agent-showroom> overlay takes its own touches.
+      if (isModernArt()) return;
       if (e.changedTouches.length > 0) {
         const t = e.changedTouches[0];
         const w = this.zones.w;

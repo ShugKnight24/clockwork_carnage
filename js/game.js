@@ -553,10 +553,10 @@ export class Game {
       this.rebindingKey = null;
       return;
     }
-    // Character creator open/close
-    if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE) {
+    // Tab cycles creator categories (input-dispatch); only stop the browser
+    // moving focus off the canvas. It used to call a method that never existed.
+    if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE && !isModernArt()) {
       e.preventDefault();
-      this.closeCharacterCreator();
     }
     
     // Exit HUD editor
@@ -596,14 +596,14 @@ export class Game {
     if (this.state === GameState.HUD_EDITOR) {
       // Get logical mouse coords if needed
       const rect = this.canvas.getBoundingClientRect();
-      const s = (this.settings.quality?.stableScale || this.settings.quality?.renderScale) || 1;
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
       this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
       return;
     }
     if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
-      this._handleCreatorClick(e);
+      // Modern mode edits through the <agent-showroom> overlay instead.
+      if (!isModernArt()) this._handleCreatorClick(e);
       return;
     }
     if (this.state === GameState.GAME_OVER && e.button === 0) {
@@ -757,11 +757,17 @@ export class Game {
       if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
       if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
       if (gp.justPressed.weaponNext) this.handleKeyPress("KeyE");
+      // Showroom face buttons: X randomize, Y save & deploy.
+      if (this.state === GameState.CHARACTER_CREATE && isModernArt()) {
+        if (gp.justPressed.reload) this.handleKeyPress("GamepadX");
+        if (gp.justPressed.chronoShift) this.handleKeyPress("GamepadY");
+      }
     }
 
     for (const code of this._gamepadPrevKeys) {
       if (!nextHeld.has(code)) this.keys[code] = false;
     }
+    this._gamepadNextKeys = this._gamepadPrevKeys;
     this._gamepadPrevKeys = nextHeld;
   }
 

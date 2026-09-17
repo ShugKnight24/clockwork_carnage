@@ -5,6 +5,7 @@
 // Callers: game._inputKeyDown() → game.handleKeyPress() → dispatchKeyPress(game, code, e).
 
 import { GameState } from "../types.js";
+import { isModernArt } from "../rendering/art-style.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES } from "../ui/character-creator.js";
@@ -118,6 +119,11 @@ export function dispatchKeyPress(game, code, e) {
 
   // Character creator — full-screen customization
   if (game.state === GameState.CHARACTER_CREATE) {
+    // Modern mode: the showroom overlay owns every key while it is open.
+    if (isModernArt() && game.showroom?.isOpen) {
+      game.showroom.handleKey(code, e);
+      return;
+    }
     const catLen = CREATOR_CATEGORIES.length;
 
     // NAME tab (0) — typed text input
