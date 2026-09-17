@@ -15,6 +15,7 @@ import { getLayerImage, scaleBucket } from "./raster.js";
 import { createScene } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
 import { WEAPON_MODELS } from "./viewmodel/weapons.js";
+import { smoothDamp } from "../../systems/aim.js";
 
 const DEFS =
   `<filter id="vmBloom" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3"/></filter>` +
@@ -27,9 +28,9 @@ const DEFS =
 // sleeve trim bloom goes on top.
 const LAYERS = ["body", "glow", "handL", "handR", "handGlow"];
 // Viewmodel units are 4 px at 720p with the origin at screen centre; clip
-// sleeves that run past the screen edge (plus bob/kick margin).
+// sleeves past the screen edge plus bob/kick and reticle-follow margin.
 const UNIT = 4;
-const LIMIT = { x0: -180, x1: 180, y0: -100, y1: 106 };
+const LIMIT = { x0: -240, x1: 240, y0: -100, y1: 170 };
 const MAX_SIDE_PX = 1100;
 
 const built = new Map(); // `${id}|${accent}|${pose}` -> viewmodel
@@ -53,7 +54,7 @@ function build(id, accent, pose) {
     if (x1 - x0 < 1 || y1 - y0 < 1) continue; // entirely off screen
     layers.push({ name, id: `vm:${key}:${name}`, box: [x0, y0, x1 - x0, y1 - y0], markup: L.svg, bloom: name === "glow" || name === "handGlow" });
   }
-  vm = { layers, muzzle: sc.P(info.muzzle), eject: sc.P(info.eject), pivot: sc.P(info.pivot), muzzleK: sc.k(info.muzzle) };
+  vm = { layers, muzzle: sc.P(info.muzzle), eject: sc.P(info.eject), pivot: sc.P(info.pivot), sight: sc.P(info.sight), muzzleK: sc.k(info.muzzle), gripK: sc.k(info.pivot) };
   built.set(key, vm);
   return vm;
 }
@@ -92,66 +93,157 @@ function contactShadow(ctx) {
   return g;
 }
 
+// Screen-space rig smoothing shared across frames: sway and reticle follow.
+const rig = { t: 0, sx: 0, sy: 0, ox: 0, oy: 0, vsx: 0, vsy: 0, vox: 0, voy: 0 };
+// The hip pose sits this many units below its authored framing to clear the reticle.
+const HIP_DROP = 12;
+// Blend at which the hip rig has swung onto the ADS anchors; the rest cross-fades art.
+const MORPH_END = 0.55;
+
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const smoothstep = (t) => t * t * (3 - 2 * t);
+const lerp = (a, b, t) => a + (b - a) * t;
+
 /**
- * Draw the modern viewmodel with its own pose (same animation inputs as the
- * procedural one).
+ * Swing the hip art toward the ADS pose, applied by fraction s: the grip
+ * travels to the ADS grip, the art shrinks by the real depth ratio of the two
+ * cameras, and the barrel turns part of the way toward its ADS direction
+ * (a full turn would spin the foreshortened hip art unnaturally). Returns a
+ * point mapper and applies the same transform to ctx when given.
+ */
+function morph(hip, aim, s, ctx) {
+  const [ax, ay] = hip.pivot;
+  const [bx, by] = aim.pivot;
+  const dirA = Math.atan2(hip.muzzle[1] - ay, hip.muzzle[0] - ax);
+  const dirB = Math.atan2(aim.muzzle[1] - by, aim.muzzle[0] - bx);
+  let rot = dirB - dirA;
+  rot = Math.atan2(Math.sin(rot), Math.cos(rot)) * 0.6 * s;
+  const sc = Math.pow(aim.gripK / hip.gripK, s);
+  const tx = ax + (bx - ax) * s;
+  const ty = ay + (by - ay) * s;
+  const cos = Math.cos(rot) * sc;
+  const sin = Math.sin(rot) * sc;
+  if (ctx && s > 0) {
+    ctx.translate(tx, ty);
+    ctx.rotate(rot);
+    ctx.scale(sc, sc);
+    ctx.translate(-ax, -ay);
+  }
+  return ([x, y]) => [tx + (x - ax) * cos - (y - ay) * sin, ty + (x - ax) * sin + (y - ay) * cos];
+}
+
+function drawLayers(ctx, vm, imgs, alpha, glowAlpha) {
+  vm.layers.forEach((L, i) => {
+    const [bx, by, bw, bh] = L.box;
+    ctx.save();
+    if (L.bloom) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = alpha * (L.name === "glow" ? glowAlpha : 0.8);
+    } else {
+      ctx.globalAlpha = alpha;
+    }
+    ctx.drawImage(imgs[i], bx, by, bw, bh);
+    ctx.restore();
+  });
+}
+
+/**
+ * Draw the modern viewmodel with its own pose, driven by the same bob / sway /
+ * kick / recoil inputs as the procedural one plus the eased aim blend.
+ * Hip → ADS is one continuous motion: the hip rig swings toward the ADS grip,
+ * shrinking and turning up, then cross-fades to the ADS art over the last 45%.
+ *
+ * @param {number} alpha   viewmodel visibility (fades out off-gameplay screens)
+ * @param {number} blend   aim-down-sights blend, 0 hip … 1 aimed
  * @returns {boolean} false while bitmaps decode or without a DOM (caller draws procedural art)
  */
-export function drawViewmodel(ctx, w, h, o) {
+export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 0) {
   // Headless/mock contexts (unit tests, no DOM) keep the procedural model.
   if (typeof Image === "undefined" || typeof ctx.getTransform !== "function") return false;
-  const { wep, energyColor: accent, isAiming, isSprinting, isDashing, weaponBob, weaponKick, weaponAnimFrame: frame, time, lastFireTime, drawGlow } = o;
-  const pose = isAiming ? "ads" : "hip";
-  const vm = build(wep.id, accent, pose);
-  if (!vm) return false;
+  const { wep, energyColor: accent, isSprinting, isDashing, weaponBob, weaponKick, weaponAnimFrame: frame, time, lastFireTime, drawGlow } = o;
+  const hip = build(wep.id, accent, "hip");
+  const aim = build(wep.id, accent, "ads");
+  if (!hip || !aim) return false;
 
   const vf = h / 720;
   const m = ctx.getTransform();
   const px = Math.hypot(m.a, m.b) * UNIT * vf || UNIT;
-  const imgs = request(vm, px);
-  // Keep the other pose of this weapon decoded so toggling ADS never falls back.
-  request(build(wep.id, accent, isAiming ? "hip" : "ads"), px);
+  // Both poses stay decoded so the blend never has to fall back mid-motion.
+  const hipImgs = request(hip, px);
+  const aimImgs = request(aim, px);
   warmStep(accent, px);
-  if (imgs.some((img) => !img)) return false;
+  const b = clamp01(blend);
+  const s = smoothstep(clamp01(b / MORPH_END));
+  const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
+  if ((u < 1 && hipImgs.some((img) => !img)) || (u > 0 && aimImgs.some((img) => !img))) return false;
 
-  // Same bob / sway / kick inputs as the procedural pose, in 720p pixels.
-  const ads = isAiming ? 1 : 0;
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const bobMulX = isAiming ? 2 : isDashing ? 18 : isSprinting ? 14 : 8;
-  const bobMulY = isAiming ? 1.5 : isDashing ? 12 : isSprinting ? 10 : 5;
-  const swayK = lerp(1, 0.22, ads);
-  const cx = w / 2 + Math.sin(weaponBob) * bobMulX * vf + (o.weaponSwayX || 0) * swayK * vf;
-  // Classic HUD: the hip pose lifts clear of the 160px console like the procedural
-  // viewmodel; at ADS the sight follows the reticle, which centres in the view above it.
-  const hudOffset = o.hudStyle === 1 ? (ads ? 80 : 160) * vf : 0;
-  const cy = h / 2 - hudOffset + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + (o.weaponSwayY || 0) * swayK * vf +
-    weaponKick * 40 * lerp(1, 0.45, ads) * vf;
-  const tilt = (isSprinting ? Math.sin(weaponBob) * 0.06 : 0) + (o.weaponSwayX || 0) * -0.0022 * lerp(1, 0.2, ads);
+  // Critically damped follow on sway and reticle offset: absorbs uneven
+  // per-frame mouse deltas without overshoot; tighter when aimed so the sight
+  // stays on the reticle.
+  // Game time: the same clock (and dt) that drives the aim blend and FOV, so
+  // the rig never beats against them; it also holds still while paused.
+  const now = time || 0;
+  const dt = rig.t && now > rig.t ? Math.min(0.05, (now - rig.t) / 1000) : 0;
+  rig.t = now;
+  const followTime = lerp(0.09, 0.045, b);
+  [rig.sx, rig.vsx] = smoothDamp(rig.sx, o.weaponSwayX || 0, rig.vsx, 0.07, dt);
+  [rig.sy, rig.vsy] = smoothDamp(rig.sy, o.weaponSwayY || 0, rig.vsy, 0.07, dt);
+  [rig.ox, rig.vox] = smoothDamp(rig.ox, o.aimOffsetX || 0, rig.vox, followTime, dt);
+  [rig.oy, rig.voy] = smoothDamp(rig.oy, o.aimOffsetY || 0, rig.voy, followTime, dt);
+
+  // Pose: hip sits low right; aimed, the sight tracks the (offset) reticle.
+  const bobMulX = lerp(isDashing ? 18 : isSprinting ? 14 : 8, 2, b);
+  const bobMulY = lerp(isDashing ? 12 : isSprinting ? 10 : 5, 1.5, b);
+  const swayK = lerp(1, 0.22, b);
+  const classic = o.hudStyle === 1;
+  const viewH = h - (classic ? 160 * ((o.hudScale || 100) / 100) * vf : 0);
+  const hipCy = h / 2 - (classic ? 160 * vf : 0) + HIP_DROP * UNIT * vf;
+  const follow = lerp(0.85, 1, b);
+  const breath = (time || 0) * 0.001;
+  const calm = 1 - 0.85 * b;
+  const cx = w / 2 + Math.sin(weaponBob) * bobMulX * vf + rig.sx * swayK * vf + rig.ox * w * follow +
+    Math.sin(breath * 1.1) * 1.6 * vf * calm;
+  const cy = lerp(hipCy, viewH / 2, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
+    weaponKick * 40 * lerp(1, 0.45, b) * vf + rig.oy * viewH * follow + Math.sin(breath * 1.7) * 2.2 * vf * calm;
+  const tilt = (isSprinting ? Math.sin(weaponBob) * 0.06 * (1 - b) : 0) + rig.sx * -0.0022 * lerp(1, 0.2, b) +
+    rig.ox * 0.5 * (1 - b) + Math.sin(breath * 0.9) * 0.006 * calm;
+
+  const map = morph(hip, aim, s);
+  const dom = u < 0.5 ? hip : aim;
+  const place = (p) => (dom === hip ? map(p) : p);
+  const [mx, my] = place(dom.muzzle);
+  const [pvx, pvy] = map(hip.pivot); // lands on the ADS grip once the swing completes
+
+  // Debug/perf tooling: record the rig pose when a trace array is installed.
+  const trace = globalThis.__ccViewmodelTrace;
+  if (trace) {
+    const [ax, ay] = map(hip.pivot); // continuous through the swap: lands on the ADS grip
+    trace.push({ t: now, x: cx, y: cy, tilt, blend: b, pose: dom === hip ? "hip" : "ads", mx: cx + ax * UNIT * vf, my: cy + ay * UNIT * vf });
+  }
 
   ctx.save();
+  ctx.globalAlpha *= alpha;
+  const base = ctx.globalAlpha;
   ctx.translate(cx, cy);
   ctx.scale(UNIT * vf, UNIT * vf);
-  const [pvx, pvy] = vm.pivot;
-  if (!ads) {
+  if (b < 1) {
+    ctx.globalAlpha = base * (1 - b);
     ctx.fillStyle = contactShadow(ctx);
     ctx.save();
     ctx.translate(pvx, pvy + 30);
     ctx.scale(1.4, 1);
     ctx.fillRect(-80, -80, 160, 160);
     ctx.restore();
+    ctx.globalAlpha = base;
   }
-  // Tilt and recoil pivot on the grip, not the screen centre.
+  // Tilt and recoil pivot on the grip, not the screen centre; the rise halves when aimed.
   const recoil = frame === 2 ? -0.03 : frame === 3 ? -0.01 : 0;
-  // Recoil rise is halved at ADS so the body never climbs over the reticle.
-  const rise = (frame === 2 ? -3 : frame === 3 ? -1 : 0) * lerp(1, 0.5, ads);
+  const rise = (frame === 2 ? -3 : frame === 3 ? -1 : 0) * lerp(1, 0.5, b);
   ctx.translate(pvx, pvy + rise);
   if (tilt + recoil) ctx.rotate(tilt + recoil);
   ctx.translate(-pvx, -pvy);
 
-  const [mx, my] = vm.muzzle;
-  // Down the sights the muzzle sits on the reticle; a full-size flash would
-  // blind the player to what they just shot at.
-  const fk = Math.min(1, Math.max(0.45, vm.muzzleK * 4)) * lerp(1, 0.4, ads);
+  const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4));
   // Muzzle flash sits behind the barrel so the crown occludes its base.
   if (frame === 1) {
     drawGlow(ctx, mx, my - 2, 32 * fk, accent, 0.4);
@@ -171,26 +263,22 @@ export function drawViewmodel(ctx, w, h, o) {
   const since = time - (lastFireTime || 0);
   const pulse = 0.62 + 0.38 * Math.sin(time * 0.008);
   const fired = lastFireTime && since >= 0 && since < 220 ? 1 - since / 220 : 0;
-  vm.layers.forEach((L, i) => {
-    const [bx, by, bw, bh] = L.box;
-    if (L.bloom) {
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = L.name === "glow" ? Math.min(1, pulse + fired * 0.6) : 0.8;
-      ctx.drawImage(imgs[i], bx, by, bw, bh);
-      ctx.restore();
-    } else {
-      ctx.drawImage(imgs[i], bx, by, bw, bh);
-    }
-  });
+  const glowA = Math.min(1, pulse + fired * 0.6);
+  if (u < 1) {
+    ctx.save();
+    morph(hip, aim, s, ctx);
+    drawLayers(ctx, hip, hipImgs, base * (1 - u), glowA);
+    ctx.restore();
+  }
+  if (u > 0) drawLayers(ctx, aim, aimImgs, base * Math.min(1, u * 1.4), glowA);
 
   // Spent casing flicks out of the ejection port.
   if (frame === 2 && wep.id !== 2) {
-    const [ex, ey] = vm.eject;
+    const [ex, ey] = place(dom.eject);
     ctx.fillStyle = "#ddaa44";
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = base * 0.85;
     ctx.fillRect(ex + 4, ey - 5, 3, 2);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = base;
   }
   if (frame === 3) {
     ctx.fillStyle = "rgba(180,180,180,0.15)";
@@ -201,7 +289,7 @@ export function drawViewmodel(ctx, w, h, o) {
   // Barrel heat shimmer after firing.
   if (lastFireTime && since >= 0 && since < 500) {
     ctx.save();
-    ctx.globalAlpha = 0.18 * (1 - since / 500);
+    ctx.globalAlpha = base * 0.18 * (1 - since / 500);
     ctx.strokeStyle = "rgba(255,200,150,0.7)";
     ctx.lineWidth = 1;
     ctx.beginPath();

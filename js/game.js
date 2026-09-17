@@ -2303,6 +2303,12 @@ export class Game {
       lastFireTime: this.player.lastFireTime || 0,
       isTouchDevice: this.isTouchDevice,
       hudStyle: this.settings.hudStyle,
+      hudScale: this.settings.hudScale,
+      aimOffsetX: this.player.aimOffsetX || 0,
+      aimOffsetY: this.player.aimOffsetY || 0,
+      state: this.state,
+      pausedFromState: this.pausedFromState,
+      alive: this.player.alive,
       drawGlow: _drawGlow,
     });
   }

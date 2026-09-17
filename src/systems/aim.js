@@ -30,12 +30,51 @@ import {
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
-/** Smooth ADS FOV interpolant: 0 = hip-fire, 1 = full ADS. */
-let _adsFovLerp = 0;
+/**
+ * Aim-down-sights blend: 0 = hip-fire, 1 = fully aimed. One eased value drives
+ * FOV, reticle sensitivity and the viewmodel pose together, so the zoom, the
+ * cursor speed and the gun move as one motion. Progress runs linearly in time
+ * toward the target and is shaped by smootherstep, so the motion starts and
+ * stops with zero velocity and acceleration; releasing mid-way reverses from
+ * where it is.
+ */
+let _adsProgress = 0;
+let _adsBlend = 0;
+/** Seconds for a full hip ↔ ADS transition. */
+const ADS_TRANSITION = 0.2;
 
 /** Smooth sprint/dash/slide FOV boost (degrees to add). */
 let _sprintFovLerp = 0;
+let _sprintFovVel = 0;
 let _sprintFovTarget = 0;
+const SPRINT_FOV_SMOOTH_TIME = 0.12;
+
+/**
+ * Critically damped spring step (Game Programming Gems 4 "SmoothDamp").
+ * Framerate independent, starts and ends with zero velocity, never overshoots.
+ * @returns {[number, number]} [value, velocity]
+ */
+export function smoothDamp(current, target, velocity, smoothTime, dt) {
+  if (!(dt > 0)) return [current, velocity];
+  const omega = 2 / Math.max(1e-4, smoothTime);
+  const x = omega * dt;
+  const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = current - target;
+  const temp = (velocity + omega * change) * dt;
+  let v = (velocity - omega * temp) * decay;
+  let out = target + (change + temp) * decay;
+  if (target - current > 0 === out > target) {
+    out = target;
+    v = 0;
+  }
+  return [out, v];
+}
+
+/** Current aim-down-sights blend (0 hip … 1 aimed). */
+export const getAimBlend = () => _adsBlend;
+
+/** Reticle / look speed multiplier at the current blend: slows with the ADS zoom. */
+export const aimSensitivityScale = () => 1 - _adsBlend * (1 - PLAYER_ADS_FOV_MULT);
 
 /**
  * Apply mouse delta to player's reticle offset. Returns overflow in raw
@@ -44,7 +83,7 @@ let _sprintFovTarget = 0;
  * @returns {{ overflowX: number, overflowY: number }}
  */
 export function applyAimDelta(player, dx, dy, settings = {}) {
-  const sens = PLAYER_AIM_SENSITIVITY * (settings.sensitivity || 1);
+  const sens = PLAYER_AIM_SENSITIVITY * (settings.sensitivity || 1) * aimSensitivityScale();
   const invX = settings.invertX ? -1 : 1;
   const invY = settings.invertY ? -1 : 1;
 
@@ -102,24 +141,27 @@ export function aimHeightAtDistance(player, dist, fovDeg = 70, opts) {
 
 export function effectiveAimFov(player, settings = {}) {
   const baseFov = (settings.fov || 70) + _sprintFovLerp;
-  return baseFov * (1 - _adsFovLerp * (1 - PLAYER_ADS_FOV_MULT));
+  return baseFov * (1 - _adsBlend * (1 - PLAYER_ADS_FOV_MULT));
 }
 
-/** Drive the smooth ADS FOV transition. Call once per frame. */
+/** Drive the ADS blend (FOV, sensitivity, viewmodel). Call once per frame. */
 export function updateAdsFov(player, dt) {
-  const target = player?.isAiming ? 1 : 0;
-  _adsFovLerp += (target - _adsFovLerp) * Math.min(1, 8 * dt);
+  const step = Math.min(dt, 0.1) / ADS_TRANSITION;
+  _adsProgress = clamp(_adsProgress + (player?.isAiming ? step : -step), 0, 1);
+  const t = _adsProgress;
+  _adsBlend = t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /** Drive the smooth sprint/dash/slide FOV boost. Call once per frame. */
 export function updateSprintFov(player, dt) {
   _sprintFovTarget = player.isDashing ? 12 : player.isSliding ? 10 : player.isSprinting ? 8 : 0;
-  _sprintFovLerp += (_sprintFovTarget - _sprintFovLerp) * Math.min(1, 6 * dt);
+  [_sprintFovLerp, _sprintFovVel] = smoothDamp(_sprintFovLerp, _sprintFovTarget, _sprintFovVel, SPRINT_FOV_SMOOTH_TIME, Math.min(dt, 0.1));
 }
 
-/** Snap ADS lerp back to hip-fire (call on death/respawn). */
+/** Snap the ADS blend back to hip-fire (call on death/respawn). */
 export function resetAdsFov() {
-  _adsFovLerp = 0;
+  _adsProgress = 0;
+  _adsBlend = 0;
 }
 
 /**

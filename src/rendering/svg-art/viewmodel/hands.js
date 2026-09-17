@@ -17,9 +17,10 @@ import { INK, f, mix, lerp3 } from "./geom.js";
 
 const pt = ([x, y]) => `${f(x)},${f(y)}`;
 const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-// Screen extent the sleeves must reach (viewmodel units from centre, with bob/kick margin).
-const EDGE_Y = 104;
-const EDGE_X = 176;
+// How far past the screen edge sleeves run (viewmodel units from centre): covers
+// bob/kick plus the rig following the free-aim reticle to its limits.
+const EDGE_Y = 168;
+const EDGE_X = 236;
 
 export const HAND_DEFS = `
 <linearGradient id="vmGlove" x1="0" y1="0" x2="1" y2="1">

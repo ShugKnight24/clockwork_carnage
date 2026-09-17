@@ -6,7 +6,8 @@
  * the weapon into the "body" layer back-to-front (occluded parts first), then
  * the gloves via the poses in hands.js. Emissive parts write their bloom into
  * the "glow" layer automatically. Dimensions are millimetres; build returns
- * the muzzle, ejection port and a recoil pivot in gun space.
+ * the muzzle, ejection port, a recoil pivot and the sight anchor in gun space
+ * (hip and ADS anchors are matched to morph one pose into the other).
  */
 
 import { INK, rrect, circle } from "./geom.js";
@@ -177,7 +178,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sc.disc([0, 25, 171.5], 1.6, "z", 10), { inner: false });
 
       sidearmGrip(A, g, pose === "ads");
-      return { muzzle: [0, 11, 198], eject: [15, 16, 92], pivot: [0, -12, 20] };
+      return { muzzle: [0, 11, 198], eject: [15, 16, 92], pivot: [0, -12, 20], sight: [0, 28, 8] };
     },
   },
 
@@ -215,7 +216,7 @@ export const WEAPON_MODELS = {
       if (pose === "ads") ghostRing(sc, 30, 30.5, 20, 530, 85);
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 16, 570], eject: [20, 20, 110], pivot: [0, -10, 60] };
+      return { muzzle: [0, 16, 570], eject: [20, 20, 110], pivot: [0, -10, 60], sight: pose === "ads" ? [0, 85, 20] : [0, 34, 10] };
     },
   },
 
@@ -253,7 +254,7 @@ export const WEAPON_MODELS = {
 
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 12, 660], eject: [20, 22, 120], pivot: [0, -14, 70] };
+      return { muzzle: [0, 12, 660], eject: [20, 22, 120], pivot: [0, -14, 70], sight: [0, ringY, 110] };
     },
   },
 
@@ -304,7 +305,7 @@ export const WEAPON_MODELS = {
       }
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 10, 505], eject: [40, 20, 100], pivot: [0, -28, 70] };
+      return { muzzle: [0, 10, 505], eject: [40, 20, 100], pivot: [0, -28, 70], sight: pose === "ads" ? [-58, 100, 20] : [0, 54, 20] };
     },
   },
 
@@ -343,7 +344,7 @@ export const WEAPON_MODELS = {
       if (pose === "ads") ghostRing(sc, 34, 32, 20, 500, 89);
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 18, 530], eject: [30, 20, 110], pivot: [0, -12, 65] };
+      return { muzzle: [0, 18, 530], eject: [30, 20, 110], pivot: [0, -12, 65], sight: pose === "ads" ? [0, 89, 20] : [0, 38, 10] };
     },
   },
 
@@ -385,7 +386,7 @@ export const WEAPON_MODELS = {
 
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 12, 915], eject: [19, 20, 90], pivot: [0, -12, 65] };
+      return { muzzle: [0, 12, 915], eject: [19, 20, 90], pivot: [0, -12, 65], sight: [0, ringY, 110] };
     },
   },
 
@@ -416,7 +417,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sc.disc([0, 24.5, 159.5], 1.5, "z", 6), { inner: false });
 
       sidearmGrip(A, g, pose === "ads");
-      return { muzzle: [0, 11, 188], eject: [15, 14, 90], pivot: [0, -12, 20] };
+      return { muzzle: [0, 11, 188], eject: [15, 14, 90], pivot: [0, -12, 20], sight: [0, 29, 8] };
     },
   },
 
@@ -462,7 +463,7 @@ export const WEAPON_MODELS = {
       }
       firingHand(A, g, pose === "ads");
       if (pose !== "ads") clampHand(A, hg);
-      return { muzzle: [0, 16, 480], eject: [38, 30, 120], pivot: [0, -24, 70] };
+      return { muzzle: [0, 16, 480], eject: [38, 30, 120], pivot: [0, -24, 70], sight: pose === "ads" ? [-56, 102, 20] : [0, 56, 20] };
     },
   },
 };

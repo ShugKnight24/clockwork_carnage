@@ -1,5 +1,7 @@
 import { isModernArt } from "../src/rendering/art-style.js";
 import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
+import { getAimBlend } from "../src/systems/aim.js";
+import { GameState } from "../src/types.js";
 
 /**
  * WeaponRenderer — draws all 8 procedural weapon models onto a Canvas context.
@@ -23,8 +25,69 @@ import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
  * @param {number} opts.lastFireTime   - timestamp of last weapon fire (ms), for barrel shimmer
  * @param {boolean} opts.isTouchDevice
  * @param {Function} opts.drawGlow    - renderer.drawGlow(ctx, x, y, r, color, alpha)
+ * @param {number} [opts.aimOffsetX]   - free-aim reticle offset (fraction of width); the modern rig follows it
+ * @param {number} [opts.aimOffsetY]   - free-aim reticle offset (fraction of view height)
+ * @param {string} [opts.state]        - game state; the viewmodel only shows during live first-person play
+ * @param {string} [opts.pausedFromState]
+ * @param {boolean} [opts.alive]
  */
 export function drawWeapon(ctx, w, h, opts) {
+  if (!opts.wep) return;
+  const alpha = viewmodelFade(opts);
+  if (alpha <= 0) return;
+  // In-game callers pass `state` and get the eased aim blend; tools and tests use isAiming directly.
+  const blend = opts.state === undefined ? (opts.isAiming ? 1 : 0) : getAimBlend();
+  if (isModernArt() && drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+  if (alpha >= 1) {
+    drawProceduralWeapon(ctx, w, h, opts);
+    return;
+  }
+  // Fading out/in: the procedural model resets globalAlpha as it draws, so
+  // render it offscreen and blit that at the fade alpha.
+  const off = fadeLayer(ctx.canvas.width, ctx.canvas.height);
+  const octx = off.getContext("2d");
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.clearRect(0, 0, off.width, off.height);
+  octx.setTransform(ctx.getTransform());
+  drawProceduralWeapon(octx, w, h, opts);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(off, 0, 0);
+  ctx.restore();
+}
+
+// States where the first-person view is live, and overlays that freeze it in place.
+const OVERLAY_STATES = new Set([GameState.PAUSED, GameState.SETTINGS, GameState.CONTROLS, GameState.HUD_EDITOR]);
+const FADE_SECONDS = 0.18;
+let fade = 1;
+let fadeClock = 0;
+let fadeCanvas = null;
+
+/** 0…1 viewmodel visibility: eases out on score / game-over / upgrade screens and on death. */
+function viewmodelFade(opts) {
+  if (opts.state === undefined) return 1;
+  const live =
+    opts.alive !== false &&
+    (opts.state === GameState.PLAYING || (OVERLAY_STATES.has(opts.state) && opts.pausedFromState === GameState.PLAYING));
+  const now = performance.now();
+  const dt = fadeClock ? Math.min(0.1, (now - fadeClock) / 1000) : 1;
+  fadeClock = now;
+  fade = live ? Math.min(1, fade + dt / FADE_SECONDS) : Math.max(0, fade - dt / FADE_SECONDS);
+  return fade;
+}
+
+function fadeLayer(cw, ch) {
+  if (!fadeCanvas) fadeCanvas = document.createElement("canvas");
+  if (fadeCanvas.width !== cw || fadeCanvas.height !== ch) {
+    fadeCanvas.width = cw;
+    fadeCanvas.height = ch;
+  }
+  return fadeCanvas;
+}
+
+/** The original procedural viewmodel (Legacy art, and Modern while SVG bitmaps decode). */
+function drawProceduralWeapon(ctx, w, h, opts) {
   const {
     wep,
     energyColor,
@@ -41,11 +104,6 @@ export function drawWeapon(ctx, w, h, opts) {
   } = opts;
 
   if (!wep) return;
-
-  // Modern art: rasterised SVG weapon and gloves with their own hip/ADS pose,
-  // driven by the same bob/sway/kick/recoil inputs. Falls through to the
-  // procedural model while bitmaps decode.
-  if (isModernArt() && drawViewmodel(ctx, w, h, opts)) return;
 
   const bobMulX = isAiming ? 2 : isDashing ? 18 : isSprinting ? 14 : 8;
   const bobMulY = isAiming ? 1.5 : isDashing ? 12 : isSprinting ? 10 : 5;
