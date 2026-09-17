@@ -6,6 +6,9 @@
 
 // Re-exported for existing importers; the value lives in src/constants.js.
 export { COMPACT_PHONE_HEIGHT } from "../src/constants.js";
+// art-style.js guards its localStorage/document access, so tests can still
+// import this registry without a browser.
+import { setArtStyle } from "../src/rendering/art-style.js";
 
 /**
  * Values a fresh profile starts with. Game copies this, then touch-device
@@ -26,6 +29,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fontScale: 100, // 100, 125, 150 percent
   colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
   visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
+  artStyle: 1, // 0=Legacy (procedural canvas art), 1=Modern (vector SVG art)
   hudStyle: 0, // 0=Minimal (transparent pills), 1=Classic (bottom bar + portrait)
   hudScale: 100, // 75, 100, 125 percent
   staminaBarSize: 100, // 75, 100, 125, 150 percent
@@ -152,6 +156,22 @@ export const SETTINGS_REGISTRY = [
     barColor: () => "#00ccff",
     platform: "all",
     height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "artStyle",
+    label: "Art Style",
+    category: "Display",
+    type: "enum",
+    values: ["Legacy", "Modern"],
+    colors: ["#aa8866", "#00ffcc"],
+    min: 0,
+    max: 1,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    // Applied synchronously so input and rendering switch on the same frame.
+    onChange: (g) => setArtStyle(g.settings.artStyle),
   },
   {
     key: "visualStyle",

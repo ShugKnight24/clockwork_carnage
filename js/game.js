@@ -1,3 +1,4 @@
+import { setArtStyle, onArtStyleChange } from "../src/rendering/art-style.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
@@ -408,6 +409,14 @@ export class Game {
     this.archive.load();
     this.loadCharacter();
     this.renderer.applyVisualStyle(this.settings.visualStyle);
+    setArtStyle(this.settings.artStyle);
+    // The title-screen toggle flips the style outside the settings menu; keep
+    // the saved setting in step so the choice persists.
+    onArtStyleChange((style) => {
+      if (this.settings.artStyle === style) return;
+      this.settings.artStyle = style;
+      this.saveSettings();
+    });
   }
 
   // ── State management (delegates to StateManager) ──────────────────────────
