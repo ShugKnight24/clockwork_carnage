@@ -1,5 +1,29 @@
 import { CUTSCENE_SCRIPTS } from "../src/data/cutscene-scripts.js";
 import { drawCutsceneArt } from "../src/rendering/cutscene-art.js";
+import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
+import { isModernArt } from "../src/rendering/art-style.js";
+
+// Art keys that only exist as vector models. In Legacy they map to the closest
+// procedural key, or to none so the frame uses the text-only layout instead of
+// leaving an empty stage above the text box.
+const LEGACY_ART_FALLBACK = {
+  armor_crate: "hero_human",
+  voss_recording: "portrait_voss",
+  redacted_file: null,
+  portrait_supervisor: null,
+};
+const _legacyFrames = new WeakMap();
+
+function legacyFrame(frame) {
+  if (!frame || isModernArt() || !(frame.art in LEGACY_ART_FALLBACK)) return frame;
+  let f = _legacyFrames.get(frame);
+  if (!f) {
+    f = { ...frame, art: LEGACY_ART_FALLBACK[frame.art] || undefined };
+    _legacyFrames.set(frame, f);
+  }
+  return f;
+}
+
 
 export class CutsceneEngine {
   constructor({
@@ -247,8 +271,25 @@ export class CutsceneEngine {
   render(ctx, w, h) {
     if (!this.cutscene) return;
     const cs = this.cutscene;
-    const frame = cs.script[cs.frame];
+    const frame = legacyFrame(cs.script[cs.frame]);
     if (!frame) return;
+
+    if (!cs.svgWarmed) {
+      cs.svgWarmed = true;
+      const arts = new Set();
+      const bgs = new Set();
+      const collect = (f) => {
+        if (f.art) arts.add(f.art);
+        if (f.bg) bgs.add(f.bg);
+      };
+      for (const f of cs.script) {
+        collect(f);
+        f.panels?.forEach(collect);
+        f.flipbook?.pages?.forEach((p) => p.panel && collect(p.panel));
+        if (f.flipbook?.cover) collect(this._flipbookCover(f.flipbook));
+      }
+      warmSvgArt(arts, bgs, ctx, w, h);
+    }
 
     const elapsed = performance.now() - cs.frameStart;
     const t = elapsed / 1000; // seconds
@@ -383,6 +424,20 @@ export class CutsceneEngine {
       let lineY = centerY;
       const textPad = Math.round(30 * s);
       const textLineH = Math.round(36 * s);
+
+      // Scene-only frames centre their text over the full background; a soft
+      // band keeps it readable over the lit vector environments.
+      if (!frame.art && frame.bg && frame.bg !== "dark") {
+        const bandTop = centerY - textPad * 2;
+        const bandH = frame.lines.length * textLineH + textPad * 3;
+        const band = ctx.createLinearGradient(0, bandTop, 0, bandTop + bandH);
+        band.addColorStop(0, "rgba(0,2,10,0)");
+        band.addColorStop(0.25, "rgba(0,2,10,0.74)");
+        band.addColorStop(0.75, "rgba(0,2,10,0.74)");
+        band.addColorStop(1, "rgba(0,2,10,0)");
+        ctx.fillStyle = band;
+        ctx.fillRect(0, bandTop, w, bandH);
+      }
 
       // Frosted glass text backdrop
       if (frame.art) {
@@ -1627,6 +1682,7 @@ export class CutsceneEngine {
   }
 
   drawCutsceneBg(ctx, w, h, bg, t) {
+    if (drawSvgBg(ctx, w, h, bg, t)) return;
     switch (bg) {
       case "deep_space": {
         const grad = ctx.createRadialGradient(

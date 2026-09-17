@@ -4,6 +4,8 @@
  * Split out of js/cutscene.js, which keeps timing, text and panel layout.
  */
 
+import { drawSvgArt } from "./svg-art/index.js";
+
 export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
   const cx = w / 2;
   const cy = h * 0.38;
@@ -16,6 +18,13 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
     ? Math.max(1.64, rawBaseScale)
     : rawBaseScale;
   ctx.scale(baseScale, baseScale);
+
+  // Vector models win when one exists and has decoded; procedural art below
+  // stays as the fallback for the first frames and for keys without a model.
+  if (drawSvgArt(ctx, art, t)) {
+    ctx.restore();
+    return;
+  }
 
   switch (art) {
     case "villain":
