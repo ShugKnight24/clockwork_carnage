@@ -567,6 +567,14 @@ export class Renderer {
     // Set FOV scale for prop minimum-size floors
     setFovScale(fov);
 
+    // Sprites project around h/2; shift them with the walls and floor so props
+    // and enemies stay planted on the ground while crouching or sliding.
+    const spriteShift = yShift | 0;
+    if (spriteShift) {
+      ctx.save();
+      ctx.translate(0, spriteShift);
+    }
+
     // Render sprites
     this.renderSprites(player, entities, time, planeMul, camX, camY, player._drawDistance);
 
@@ -574,6 +582,8 @@ export class Renderer {
     if (player.particles) {
       this.renderParticles(player, player.particles, time, planeMul, camX, camY);
     }
+
+    if (spriteShift) ctx.restore();
   }
 
   renderParticles(player, particles, time, planeMul = 0.66, camX, camY) {
@@ -890,6 +900,10 @@ export class Renderer {
         fogFactor,
       );
     } else if (entity.type === "projectile") {
+      // The player's own shots spawn inches from the camera, where the billboard
+      // is screen-sized and would white out the reticle; fade them in as they
+      // leave the muzzle.
+      const nearFade = entity.owner === "player" ? Math.min(1, Math.max(0, (dist - 0.5) / 0.75)) : 1;
       drawProjectile(
         ctx,
         screenX,
@@ -898,7 +912,7 @@ export class Renderer {
         dist,
         entity,
         time,
-        fogFactor,
+        fogFactor * nearFade,
       );
     } else if (entity.type === "prop") {
       // Z-buffer clipping — same pattern as enemies so props behind walls don't bleed through

@@ -476,9 +476,14 @@ export class GLRenderer {
     const w = this.width;
     const h = this.height;
 
-    // Upload the Canvas2D content as the scene texture
+    // Upload the Canvas2D content as the scene texture. Canvas rows run
+    // top-down but the shader samples with gl_FragCoord (bottom-up), so the
+    // upload must flip or the whole frame renders upside down. Reset after so
+    // the floor/ceiling pixel uploads keep their own orientation.
     gl.bindTexture(gl.TEXTURE_2D, this.sceneFBO.texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
     // Render post-FX to the GL canvas (default framebuffer)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
