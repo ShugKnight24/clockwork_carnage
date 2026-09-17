@@ -494,22 +494,9 @@ export class CampaignManager {
   }
 
   executePromptChoice(choice) {
-    const g = this.game;
-    const afterCreator = () => {
-      if (choice === 0) {
-        g.startTutorial();
-      } else {
-        this.start();
-      }
-    };
-    let seenCreator = false;
-    try { seenCreator = localStorage.getItem("cc_seen_creator_intro") === "1"; } catch (_) {}
-    if (seenCreator) {
-      afterCreator();
-      return;
-    }
-    g.creatorCategory = 0;
-    g._creatorSaveCallback = () => afterCreator();
-    g.state = GameState.CHARACTER_CREATE;
+    // The customizer already ran at the start of this campaign (main.js
+    // playCreatorThen), so the prompt goes straight to the chosen start.
+    if (choice === 0) this.game.startTutorial();
+    else this.start();
   }
 }

@@ -916,6 +916,8 @@ body {
    untouched. Sizes, paddings and letter-spacing are left to the responsive
    rules above (these selectors out-rank them), except where a modern-specific
    media block re-declares them. */
+/* First-paint copy of src/ui/design-tokens.js (the source; it injects the full
+   token set at boot). tests/unit/design-tokens.test.js fails if these drift. */
 :root[data-art-style="modern"] {
   --cc-ink: #04060b;
   --cc-cyan: #22e6ff;

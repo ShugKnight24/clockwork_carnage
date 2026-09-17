@@ -13,10 +13,30 @@ import { isModernArt } from "./art-style.js";
 let showroomLoad = "idle"; // idle | loading | ready | failed
 
 /**
- * Modern mode replaces the canvas creator with the <agent-showroom> overlay.
- * Loaded lazily (it is DOM-only) and synced every frame so it opens/closes with
- * GameState.CHARACTER_CREATE and swaps cleanly when the art style changes.
- * Returns true while the overlay owns the creator.
+ * Fetch and mount the Modern <agent-showroom> overlay. main.js calls this on
+ * boot (and when Modern is switched on) so the chunk is ready before the first
+ * CHARACTER_CREATE frame; renderFrame calls it as a fallback.
+ */
+export function preloadShowroom(game) {
+  if (game.showroom || showroomLoad !== "idle" || !isModernArt()) return;
+  showroomLoad = "loading";
+  import("../../js/components/agent-showroom.js")
+    .then((m) => {
+      game.showroom = m.mountShowroom(game);
+      showroomLoad = "ready";
+    })
+    .catch((err) => {
+      showroomLoad = "failed";
+      console.warn("[showroom] failed to load, using the canvas creator", err);
+    });
+}
+
+/**
+ * Modern mode replaces the canvas creator with the showroom overlay, synced
+ * every frame so it opens/closes with GameState.CHARACTER_CREATE and swaps
+ * cleanly when the art style changes. Returns true while the overlay owns the
+ * creator (including the frames while its chunk is still loading, so the
+ * canvas creator never flashes in Modern).
  */
 function syncShowroom(game) {
   const inCreator = game.state === GameState.CHARACTER_CREATE;
@@ -25,18 +45,7 @@ function syncShowroom(game) {
     game.showroom.sync(inCreator, modern);
     return inCreator && modern;
   }
-  if (modern && showroomLoad === "idle") {
-    showroomLoad = "loading";
-    import("../../js/components/agent-showroom.js")
-      .then((m) => {
-        game.showroom = m.mountShowroom(game);
-        showroomLoad = "ready";
-      })
-      .catch((err) => {
-        showroomLoad = "failed";
-        console.warn("[showroom] failed to load, using the canvas creator", err);
-      });
-  }
+  preloadShowroom(game);
   return inCreator && modern && showroomLoad === "loading";
 }
 

@@ -4,6 +4,9 @@ import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
+import { preloadShowroom } from "../src/rendering/render-pipeline.js";
+import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
+import { injectDesignTokens } from "../src/ui/design-tokens.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
@@ -26,6 +29,14 @@ const quality = new AdaptiveQuality({
 });
 game.quality = quality;
 game.applyPerformanceSettings();
+
+// Modern UI tokens on :root, and the agent showroom chunk warmed while the
+// title is up so a campaign never opens on a blank (or Legacy) creator frame.
+injectDesignTokens();
+preloadShowroom(game);
+onArtStyleChange(() => {
+  if (isModernArt()) preloadShowroom(game);
+});
 
 // initialize analytics (consent UI waits until first user interaction)
 initAnalytics();
@@ -152,20 +163,17 @@ async function playIntroFlipbookThen(cb) {
   });
 }
 
-// First-time campaign onboarding: route through character creator before
-// any narrative content so the player's chosen name + appearance is locked
-// in before the flipbook references {AGENT}. Mark-seen fires only after a
-// successful save (not discard), so quitting the creator replays it.
+// Every new campaign opens on the agent customizer, pre-filled with the saved
+// agent, so the name and look the flipbook references ({AGENT}) are confirmed
+// first. Returning players deploy with one keypress; saving or backing out both
+// continue the campaign. The seen flag is still written on save for anything
+// that reads it.
 function playCreatorThen(cb) {
-  const CREATOR_KEY = "cc_seen_creator_intro";
-  let seen = false;
-  try { seen = localStorage.getItem(CREATOR_KEY) === "1"; } catch (_) {}
-  if (seen) return cb();
   showGameCanvases();
   game.creatorCategory = 0;
   game._creatorSaveCallback = (saved) => {
     if (saved) {
-      try { localStorage.setItem(CREATOR_KEY, "1"); } catch (_) {}
+      try { localStorage.setItem("cc_seen_creator_intro", "1"); } catch (_) {}
     }
     cb();
   };
