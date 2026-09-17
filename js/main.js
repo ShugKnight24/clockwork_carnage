@@ -178,16 +178,11 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  // Order: Creator → Flipbook → Tutorial prompt (or straight to campaign) → Level 1
+  // Order: Creator → Flipbook → Prologue prompt (locker room or skip) → Level 1
   playCreatorThen(() => {
-    playIntroFlipbookThen(() => {
-      if (game.shouldShowTutorial()) {
-        // First-time: offer tutorial vs skip choice
-        game.showCampaignPrompt();
-      } else {
-        game.startCampaign();
-      }
-    });
+    // Every new campaign offers the locker-room prologue (default choice) so
+    // the station training and its narrative stay reachable after the first run.
+    playIntroFlipbookThen(() => game.showCampaignPrompt());
   });
 });
 

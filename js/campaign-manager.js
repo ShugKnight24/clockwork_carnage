@@ -107,6 +107,8 @@ export class CampaignManager {
 
   start() {
     const g = this.game;
+    // The locker-room prologue already played "clocking_in"; don't repeat it.
+    const fromTutorial = g.mode === "tutorial";
     g.mode = "campaign";
     this.level = 0;
     this.act = 1;
@@ -131,7 +133,7 @@ export class CampaignManager {
         }
       };
       const afterFlipbook = () => {
-        if (g.hasCutsceneScript("clocking_in")) {
+        if (!fromTutorial && g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
             g.ariaEnabled = true;
             g.queueAriaMessage("campaignStart");
