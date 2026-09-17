@@ -193,7 +193,7 @@ function buildContainment() {
         wallX: 56,
         wallY: 6,
         description:
-          "Classified memo: Project PARADOX approval — signed by Dr. Elias Voss.",
+          "Classified memo: Project PARADOX approval — signed 'the Doctor'. Full signature redacted.",
       },
     ],
     props: [

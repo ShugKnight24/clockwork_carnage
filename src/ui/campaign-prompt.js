@@ -5,7 +5,7 @@ import { UI, drawBackdrop, drawTitle, drawCaption } from "./modern-ui-kit.js";
 import { drawModernMenu, drawModernKeyHints } from "./tutorial-ui.js";
 
 const PROMPT_TITLE = "START CAMPAIGN";
-const PROMPT_SUBTITLE = "Clock in like everyone else, or skip to the end of the world?";
+const PROMPT_SUBTITLE = "Start in the locker room, or deploy straight into Act 1?";
 const PROMPT_FOOTER = "W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back";
 const PROMPT_ITEMS = [
   { label: "PROLOGUE: LOCKER ROOM", key: "[1]", color: "#00ffcc", desc: "Suit up, learn the controls, answer the alarm" },

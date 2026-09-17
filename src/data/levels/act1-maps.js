@@ -693,7 +693,7 @@ function buildResearchWing() {
         wallX: 3,
         wallY: 25,
         description:
-          "Dr. Voss' early research notes — 'The suit responds to the subject's temporal frequency. Fascinating.'",
+          "Unsigned research notes — 'The suit responds to the subject's temporal frequency. Fascinating.'",
       },
       {
         wallX: 56,

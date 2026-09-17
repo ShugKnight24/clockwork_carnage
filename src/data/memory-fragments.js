@@ -12,9 +12,9 @@ export const MEMORY_FRAGMENTS = [
   // ─── VOSS (Tactician) ─────────────────────────────────────────────
   {
     id: 'voss_1',
-    member: 'Voss',
+    member: 'V. [REDACTED]',
     title: 'The Last Briefing',
-    text: 'Voss at the holotable, carving routes through enemy lines with one steady finger. "We don\'t win every fight. We win the right ones." He taps a blinking node on the map. Everyone at the table knows it\'s a one-way trip. Nobody says it.',
+    text: 'V. at the holotable — the rest of the name burned out of the memory — carving routes through enemy lines with one steady finger. "We don\'t win every fight. We win the right ones." He taps a blinking node on the map. Everyone at the table knows it\'s a one-way trip. Nobody says it.',
     ariaReaction: 'I remember this briefing. I shouldn\'t — I came online this morning. He kept looking at me like he was memorizing my face.',
     act: 1,
     level: 3,

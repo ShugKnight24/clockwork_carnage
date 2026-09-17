@@ -9,6 +9,7 @@ import { isModernArt } from "../src/rendering/art-style.js";
 const LEGACY_ART_FALLBACK = {
   armor_crate: "hero_human",
   voss_recording: "portrait_voss",
+  unknown_recording: null,
   redacted_file: null,
   portrait_supervisor: null,
 };

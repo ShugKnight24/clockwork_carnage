@@ -110,7 +110,7 @@ export const ARIA_COMMS = {
     "Mission loaded. Let's go ruin someone's evil plan.",
     "Campaign active. Stay on objective. Stay alive. In that order.",
     "Bureau dispatch: you are weapons-free. Try to look like you meant it.",
-    "The Department of Temporal Regulation sends its regards. Don't break anything Voss hasn't already broken.",
+    "The Department of Temporal Regulation sends its regards. Don't break anything that isn't already broken.",
   ],
 
   // ── Combat flavor ──
@@ -159,8 +159,8 @@ export const ARIA_COMMS = {
     "Last Alpha candidate lasted eleven minutes. You're well past that. Congratulations, probably.",
     "Quiet means we're winning. Or something terrible is about to happen. Fifty-fifty.",
     "The Bureau vault holds every chrono-device ever confiscated. Some of them whisper.",
-    "Chrono Shift: borrowed seconds. Spend them like they're stolen.",
-    "Voss thinks he can split himself across timelines. The Bureau calls them anchors. I call them loose ends.",
+    "Somebody wiped the station logs before we got here. You don't wipe logs by accident.",
+    "Whoever's behind this is spreading himself across timelines. The Bureau calls them anchors. I call them loose ends.",
     "Bureau HQ has a floor that isn't on the elevator. Nobody who works there will say which.",
     "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
@@ -176,7 +176,7 @@ export const ARIA_COMMS = {
     "I've got every temporal anomaly on record in my head. None of them prepared me for you.",
     "Between us? The Paradox Lord loves the sound of his own voice. That's a weakness.",
     "Bureau motto: 'Time reveals all.' Very fortune cookie. Annoyingly true.",
-    "Voss keeps his worst toys behind three temporal locks. The Bureau tried once. Lost two agents and a hallway.",
+    "Whoever built this place kept his worst toys behind three temporal locks. The Bureau tried once. Lost two agents and a hallway.",
     "I've been bolted into a lot of suits. You're the first person I actually want to keep alive. Don't make it weird.",
   ],
 
@@ -389,17 +389,17 @@ export const ARIA_COMMS = {
 
   // ── Chrono Shift activation ──
   chronoShiftActivated: [
-    "Chrono Shift. Time's yours. Spend it well.",
+    "Chrono Shift engaged. Make it count.",
     "Dilation active. Everything slows but you. Gorgeous, isn't it?",
-    "Clock's bending. Show them what a second really costs.",
+    "Shift online. They're slow. You're not.",
   ],
 
   // ── Act 1 ambient chatter ──
   act1Ambient: [
     "First deployment and it's a temporal apocalypse. The Bureau really knows how to welcome a cadet.",
-    "This wing was full of researchers six hours ago. Now it's us, and whatever Voss left behind.",
+    "This wing was full of researchers six hours ago. Now it's us, and whatever did this.",
     "Faint comms chatter. Station staff, maybe. Too degraded to read. We might not be alone. Could go either way.",
     "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
-    "Every wing's a crime scene. Keep your eyes open. Voss left fingerprints on everything.",
+    "Every wing's a crime scene. Somebody scrubbed his name off every one of them.",
   ],
 };

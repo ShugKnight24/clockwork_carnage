@@ -114,10 +114,10 @@ export const BESTIARY = {
   },
 
   henchman: {
-    name: 'Voss\'s Henchman',
+    name: 'Syndicate Henchman',
     threat: 'Moderate',
     description:
-      'Hand-picked agents loyal to Voss from before the collapse. Unlike the mind-controlled officers, these soldiers chose their side. Fast, aggressive flankers who work in pairs to cut off escape routes and punish stationary targets.',
+      'Hand-picked agents loyal to whoever ran the Chronos Engine, recruited before the collapse. Unlike the mind-controlled officers, these soldiers chose their side. Fast, aggressive flankers who work in pairs to cut off escape routes and punish stationary targets.',
     tacticalNote:
       'They flank aggressively — keep your back to a wall and eliminate the closest one before the pincer closes.',
     ariaQuote:

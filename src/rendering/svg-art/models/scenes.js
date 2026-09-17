@@ -1050,20 +1050,24 @@ function vossOnScreen() {
   return s;
 }
 
-/** A cracked wall monitor looping Voss's corrupted recording. */
-function vossRecordingModel() {
-  const SX0 = -94;
-  const SX1 = 94;
-  const SY0 = -77;
-  const SY1 = 19;
+// Screen rectangle shared by the wall-monitor recordings (art units).
+const REC_X0 = -94;
+const REC_X1 = 94;
+const REC_Y0 = -77;
+const REC_Y1 = 19;
+
+/**
+ * A cracked wall monitor with a sparking bezel, playing `footage` behind
+ * scanlines and chroma glitch bands. `hud` sits above the vignette, `defs` adds
+ * footage gradients and `extra` layers go straight after the screen.
+ */
+function monitorRecordingModel({ defs: footageDefs = "", footage, hud = "", extra = [] }) {
+  const [SX0, SX1, SY0, SY1] = [REC_X0, REC_X1, REC_Y0, REC_Y1];
   const rand = rng(29);
   const defs =
     linGrad("vrScreen", [[0, "#06223a"], [0.55, "#041626"], [1, "#020a14"]]) +
     `<radialGradient id="vrVig" cx="0.45" cy="0.45" r="0.7"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.75"/></radialGradient>` +
-    linGrad("vrSkin", [[0, "#bfefff"], [0.45, "#5ab4e6"], [1, "#1a5286"]], 1, 0.4) +
-    linGrad("vrHair", [[0, "#f0fbff"], [0.5, "#9ad4f4"], [1, "#3a78a8"]], 1, 1) +
-    linGrad("vrNeck", [[0, "#1a5286"], [1, "#2a6ea4"]], 1, 0) +
-    linGrad("vrCoat", [[0, "#1c4a74"], [0.5, "#0c2640"], [1, "#040e1a"]], 1, 0.3) +
+    footageDefs +
     linGrad("vrBezel", [[0, "#5a6e82"], [0.2, "#2e3c4c"], [0.7, "#161e28"], [1, "#0a0e14"]], 1, 1) +
     linGrad("vrBand", [[0, "#9fe4ff", 0], [0.5, "#9fe4ff", 0.35], [1, "#9fe4ff", 0]]) +
     fadeGrad("vrSpill", "#2a9aff", 0.3, 0.4) +
@@ -1072,7 +1076,6 @@ function vossRecordingModel() {
     `<clipPath id="vrClip"><rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="${SY1 - SY0}"/></clipPath>` +
     glowFilter("vrGlow", 1.4) +
     glowFilter("vrSoft", 3);
-  const figure = vossOnScreen();
 
   let back = `<rect x="-116" y="-96" width="236" height="140" rx="10" fill="url(#vrWall)"/>`;
   back += `<rect x="-5" y="-156" width="10" height="68" fill="url(#vrBezel)" ${ink(0.8)}/><rect x="-10" y="-96" width="20" height="8" fill="#141c26" ${ink(0.8)}/>`;
@@ -1084,13 +1087,10 @@ function vossRecordingModel() {
   screen += `<g stroke="#2a8acc" stroke-width="0.3" opacity="0.25">`;
   for (let x = -84; x < 94; x += 14) screen += `<path d="M${x},${SY0} L${x},${SY1}"/>`;
   screen += `</g>`;
-  screen += figure;
+  screen += footage;
   for (let y = SY0; y < SY1; y += 1.8) screen += `<rect x="${SX0}" y="${n1(y)}" width="${SX1 - SX0}" height="0.8" fill="#000" opacity="0.32"/>`;
   screen += `<rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="${SY1 - SY0}" fill="url(#vrVig)"/>`;
-  screen += `<rect x="-86" y="-70" width="4" height="4" rx="2" fill="#ff3344"/>`;
-  screen += `<rect x="-79" y="-69.4" width="14" height="2.8" fill="#9fd8ff" opacity="0.6"/>`;
-  screen += `<rect x="54" y="-69.4" width="30" height="2.8" fill="#9fd8ff" opacity="0.5"/>`;
-  screen += `<rect x="-86" y="10" width="172" height="1.2" fill="#9fd8ff" opacity="0.3"/><rect x="-86" y="10" width="61" height="1.2" fill="#9fd8ff" opacity="0.8"/>`;
+  screen += hud;
   screen += `</g>`;
 
   // Glitch: displaced chroma copies of the footage inside thin bands, plus dead blocks.
@@ -1099,7 +1099,7 @@ function vossRecordingModel() {
   bands.forEach(([y, h], i) => (glitch += `<clipPath id="vrB${i}"><rect x="${SX0}" y="${y}" width="${SX1 - SX0}" height="${h}"/></clipPath>`));
   glitch += `</defs><g clip-path="url(#vrClip)">`;
   bands.forEach(([, , dx], i) => {
-    glitch += `<g clip-path="url(#vrB${i})"><g transform="translate(${dx} 0)" opacity="0.8">${figure}</g>`;
+    glitch += `<g clip-path="url(#vrB${i})"><g transform="translate(${dx} 0)" opacity="0.8">${footage}</g>`;
     glitch += `<rect x="${SX0}" y="-80" width="${SX1 - SX0}" height="110" fill="${i % 2 ? "#ff2a4a" : "#22e6ff"}" opacity="0.28"/></g>`;
   });
   for (let i = 0; i < 16; i++) {
@@ -1189,6 +1189,7 @@ function vossRecordingModel() {
       { markup: back },
       { markup: spill, anim: { type: "flicker", min: 0.5, max: 1, speed: 1.4 }, blend: "lighter" },
       { markup: screen, anim: { type: "flicker", min: 0.82, max: 1, speed: 2.2 } },
+      ...extra,
       { markup: roll, anim: { type: "float", amp: 34, speed: 0.9 }, blend: "lighter" },
       { markup: glitch, anim: { type: "flicker", min: 0, max: 1, speed: 3.4 }, blend: "lighter" },
       { markup: crack },
@@ -1197,6 +1198,181 @@ function vossRecordingModel() {
       { markup: sparks, anim: { type: "flicker", min: 0, max: 1, speed: 5 }, blend: "lighter" },
     ],
   };
+}
+
+/** A cracked wall monitor looping Voss's corrupted recording. */
+function vossRecordingModel() {
+  const defs =
+    linGrad("vrSkin", [[0, "#bfefff"], [0.45, "#5ab4e6"], [1, "#1a5286"]], 1, 0.4) +
+    linGrad("vrHair", [[0, "#f0fbff"], [0.5, "#9ad4f4"], [1, "#3a78a8"]], 1, 1) +
+    linGrad("vrNeck", [[0, "#1a5286"], [1, "#2a6ea4"]], 1, 0) +
+    linGrad("vrCoat", [[0, "#1c4a74"], [0.5, "#0c2640"], [1, "#040e1a"]], 1, 0.3);
+  let hud = `<rect x="-86" y="-70" width="4" height="4" rx="2" fill="#ff3344"/>`;
+  hud += `<rect x="-79" y="-69.4" width="14" height="2.8" fill="#9fd8ff" opacity="0.6"/>`;
+  hud += `<rect x="54" y="-69.4" width="30" height="2.8" fill="#9fd8ff" opacity="0.5"/>`;
+  hud += `<rect x="-86" y="10" width="172" height="1.2" fill="#9fd8ff" opacity="0.3"/><rect x="-86" y="10" width="61" height="1.2" fill="#9fd8ff" opacity="0.8"/>`;
+  return monitorRecordingModel({ defs, footage: vossOnScreen(), hud });
+}
+
+// 5×5 pixel glyphs for on-screen captions (rows top to bottom, "1" = lit).
+const PIXEL_GLYPHS = {
+  U: ["10001", "10001", "10001", "10001", "01110"],
+  N: ["10001", "11001", "10101", "10011", "10001"],
+  K: ["10001", "10010", "11100", "10010", "10001"],
+  O: ["01110", "10001", "10001", "10001", "01110"],
+  W: ["10001", "10001", "10101", "10101", "01010"],
+};
+
+/** A word as one path of merged pixel runs, top-left at (x, y), `px` units per pixel. */
+function pixelWord(word, x, y, px, attrs) {
+  let d = "";
+  [...word].forEach((ch, i) => {
+    PIXEL_GLYPHS[ch].forEach((row, r) => {
+      for (const m of row.matchAll(/1+/g)) {
+        d += `M${n1(x + (i * 6 + m.index) * px)},${n1(y + r * px)}h${n1(m[0].length * px)}v${px}h${n1(-m[0].length * px)}Z`;
+      }
+    });
+  });
+  return path(d, attrs);
+}
+
+/** A tile of TV static: random grey cells, one path per grey level. */
+function staticPattern(id, seed, cell = 1.2, size = 20) {
+  const rand = rng(seed);
+  const levels = ["#56687a", "#9fb4c4", "#e8f4ff"];
+  const ds = levels.map(() => "");
+  for (let r = 0; r < size; r++) {
+    const streak = rand() < 0.12 ? 1 : 0;
+    for (let c = 0; c < size; c++) {
+      const v = rand() + streak * 0.35;
+      if (v < 0.38) continue;
+      const lv = v < 0.66 ? 0 : v < 0.88 ? 1 : 2;
+      ds[lv] += `M${n1(c * cell)},${n1(r * cell)}h${cell}v${cell}h-${cell}Z`;
+    }
+  }
+  const w = n1(size * cell);
+  return (
+    `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${w}" height="${w}">` +
+    `<rect width="${w}" height="${w}" fill="#0a121a"/>` +
+    ds.map((d, i) => path(d, `fill="${levels[i]}"`)).join("") +
+    `</pattern>`
+  );
+}
+
+/** Screen-space rows the static face block occupies, ragged at the edges. */
+function staticFaceRows() {
+  const rand = rng(71);
+  const rows = [];
+  for (let y = -66; y < -24; y += 2.4) {
+    const k = (y + 1.2 + 45) / 22;
+    const half = 17 * Math.sqrt(Math.max(0, 1 - k * k)) + 3 + rand() * 3;
+    const tear = rand() < 0.16 ? 5 + rand() * 9 : 0;
+    const x = -34 - half - rand() * 2 - tear;
+    rows.push([x, y, -34 + half + rand() * 2 + tear * rand() - x, 2.4]);
+  }
+  return rows;
+}
+
+/** One frame of the static face: `patternId` fill, dark tear lines and scanlines over it. */
+function staticFace(patternId, seed, shift) {
+  const rand = rng(seed);
+  let s = `<g clip-path="url(#urFace)"><rect x="-70" y="-70" width="70" height="50" fill="url(#${patternId})" transform="translate(${shift[0]} ${shift[1]})"/>`;
+  for (let i = 0; i < 3; i++) {
+    const y = -64 + rand() * 38;
+    s += `<rect x="-70" y="${n1(y)}" width="70" height="${n1(0.6 + rand() * 1.2)}" fill="${rand() > 0.5 ? "#000" : "#dff4ff"}" opacity="${n1(0.35 + rand() * 0.4)}"/>`;
+  }
+  for (let y = -66; y < -22; y += 1.8) s += `<rect x="-70" y="${n1(y)}" width="70" height="0.8" fill="#000" opacity="0.3"/>`;
+  s += `</g>`;
+  return s;
+}
+
+/** Faceless figure on archive footage: a plain-suited silhouette, head replaced by a static block. */
+function unknownOnScreen() {
+  let s = `<ellipse cx="-34" cy="-30" rx="58" ry="46" fill="url(#urBack)"/>`;
+  s += path(
+    "M-88,19 C-86,2 -76,-10 -60,-15 L-43,-21 C-42,-25 -42,-28 -42.4,-31 L-25.6,-31 C-26,-28 -26,-25 -25,-21 L-8,-15 C8,-10 18,2 20,19Z",
+    `fill="url(#urBody)" stroke="#03080f" stroke-width="0.6"`,
+  );
+  s += path("M-43,-21 L-34,-6 L-25,-21", `fill="none" stroke="#020810" stroke-width="0.8" opacity="0.8"`);
+  s += path("M-50,-17 L-40,6 L-34,-6 M-18,-17 L-28,6 L-34,-6", `fill="none" stroke="#1e4a6e" stroke-width="0.5" opacity="0.7"`);
+  s += path("M-25,-21 L-8,-15 C8,-10 18,2 20,19", `fill="none" stroke="#8ae4ff" stroke-width="1" opacity="0.6"`);
+  s += path("M-43,-21 L-60,-15 C-76,-10 -86,2 -88,19", `fill="none" stroke="#5ab4e6" stroke-width="0.7" opacity="0.35"`);
+  s += `<ellipse cx="-34" cy="-45" rx="14" ry="17" fill="#030a14"/>`;
+  return s;
+}
+
+/** A cracked wall monitor looping a recording of a man whose face is pure static, captioned UNKNOWN. */
+function unknownRecordingModel() {
+  const rand = rng(83);
+  const rows = staticFaceRows();
+  const defs =
+    linGrad("urBody", [[0, "#050e18"], [0.6, "#030a12"], [1, "#010408"]], 1, 0.4) +
+    fadeGrad("urBack", "#4ab8ff", 0.55, 0.45) +
+    linGrad("urPlate", [[0, "#ff4458"], [0.5, "#d41c32"], [1, "#7a0c18"]]) +
+    fadeGrad("urRed", "#ff2a4a", 0.55, 0.35) +
+    `<clipPath id="urFace">${rows.map(([x, y, w, h]) => `<rect x="${n1(x)}" y="${n1(y)}" width="${n1(w)}" height="${h}"/>`).join("")}</clipPath>` +
+    staticPattern("urN0", 11);
+  const figure = unknownOnScreen();
+  const face0 = staticFace("urN0", 5, [0, 0]);
+  const footage = figure + face0;
+
+  // Lower-third caption plate and a file panel whose author field has been wiped.
+  let hud = `<rect x="-86" y="-70" width="4" height="4" rx="2" fill="#ff3344"/>`;
+  hud += `<rect x="-79" y="-69.4" width="14" height="2.8" fill="#9fd8ff" opacity="0.6"/>`;
+  hud += `<rect x="-86" y="12" width="172" height="1.2" fill="#9fd8ff" opacity="0.3"/><rect x="-86" y="12" width="104" height="1.2" fill="#9fd8ff" opacity="0.8"/>`;
+  hud += `<rect x="-78" y="-8" width="68" height="13" fill="#000" opacity="0.45"/>`;
+  hud += `<rect x="-80" y="-10" width="68" height="13" fill="url(#urPlate)" stroke="#2a0208" stroke-width="0.6"/>`;
+  hud += `<rect x="-80" y="-10" width="9" height="13" fill="#3a0610"/>`;
+  hud += poly([[-75.5, -7.2], [-72.4, -1.4], [-78.6, -1.4]], `fill="none" stroke="#ff5a6a" stroke-width="0.7" stroke-linejoin="round"`);
+  hud += `<rect x="-75.8" y="-5.6" width="0.6" height="2.2" fill="#ff5a6a"/><rect x="-75.8" y="-2.8" width="0.6" height="0.6" fill="#ff5a6a"/>`;
+  hud += seg([-71, -9.4], [-12.6, -9.4], `stroke="#ffb0b8" stroke-width="0.5" opacity="0.7"`);
+  hud += pixelWord("UNKNOWN", -67.4, -6.6, 1.2, `fill="#fff0f2"`);
+
+  const fields = [[-60, 0.7], [-50, 0.55], [-17, 0.5], [-8, 0.4]];
+  for (const [y, a] of fields) {
+    hud += `<rect x="14" y="${y}" width="${n1(8 + rand() * 10)}" height="2.2" fill="#9fd8ff" opacity="${a * 0.7}"/>`;
+    let x = 40;
+    while (x < 80) {
+      const w = 3 + rand() * 9;
+      hud += `<rect x="${n1(x)}" y="${y}" width="${n1(Math.min(w, 84 - x))}" height="2.2" fill="#bfe8ff" opacity="${a}"/>`;
+      x += w + 1.6;
+    }
+  }
+  hud += `<rect x="14" y="-68" width="46" height="3" fill="#9fd8ff" opacity="0.5"/><rect x="62" y="-68" width="22" height="3" fill="#ff3344" opacity="0.6"/>`;
+  const AY = -34;
+  hud += `<rect x="14" y="${AY + 3}" width="18" height="2.4" fill="#9fd8ff" opacity="0.7"/>`;
+  hud += `<rect x="38" y="${AY}" width="48" height="8.4" fill="#020609" stroke="#9fd8ff" stroke-width="0.4" stroke-opacity="0.7"/>`;
+  hud += `<g clip-path="url(#urField)"><defs><clipPath id="urField"><rect x="38.4" y="${AY + 0.4}" width="47.2" height="7.6"/></clipPath></defs>`;
+  let hatch = "";
+  for (let x = 30; x < 90; x += 2.2) hatch += `M${x},${AY + 8} L${n1(x + 7.6)},${AY + 0.4} `;
+  hud += path(hatch, `fill="none" stroke="#4a6a84" stroke-width="0.5" opacity="0.8"`);
+  for (let i = 0; i < 14; i++) {
+    const x = 40 + rand() * 10 + i * 1.1;
+    hud += `<rect x="${n1(x)}" y="${n1(AY + 2 + rand() * 4)}" width="${n1(0.6 + (1 - i / 14) * 2)}" height="1.4" fill="#dff4ff" opacity="${n1(0.9 - i * 0.05)}"/>`;
+  }
+  hud += `<rect x="38.4" y="${AY + 3.4}" width="47.2" height="1.4" fill="#ff3344" opacity="0.75"/>`;
+  hud += `</g>`;
+
+  const face1 = `<defs>${staticPattern("urN1", 23)}</defs>` + staticFace("urN1", 17, [0.6, 0.4]);
+  const face2 = `<defs>${staticPattern("urN2", 41)}</defs>` + staticFace("urN2", 29, [-0.4, 0.8]);
+  const faceRoll =
+    `<g clip-path="url(#urFace)"><rect x="-70" y="-49" width="70" height="3" fill="#e8f8ff" opacity="0.5"/>` +
+    `<rect x="-70" y="-46" width="70" height="7" fill="#9fe4ff" opacity="0.12"/></g>`;
+  const glow =
+    bloom(-46, -3.5, 44, 14, "urRed", 0.8) +
+    `<rect x="38.4" y="${AY + 3.2}" width="47.2" height="1.8" fill="#ff5a6a" opacity="0.6" filter="url(#vrGlow)"/>`;
+
+  return monitorRecordingModel({
+    defs,
+    footage,
+    hud,
+    extra: [
+      { markup: face1, anim: { type: "flicker", min: 0, max: 1, speed: 9 } },
+      { markup: face2, anim: { type: "flicker", min: 0, max: 1, speed: 13, phase: 0.4 } },
+      { markup: faceRoll, anim: { type: "float", amp: 20, speed: 2.4 }, blend: "lighter" },
+      { markup: glow, anim: { type: "flicker", min: 0.45, max: 1, speed: 2 }, blend: "lighter" },
+    ],
+  });
 }
 
 /** A Bureau personnel file: redacted pages, clipped mystery photo, encrypted signal, CLASSIFIED stamp. */
@@ -1336,6 +1512,8 @@ export const MODELS = {
   armor_crate: armorCrateModel(),
   /** Cracked wall monitor looping Voss's corrupted recording: scanlines, glitch bands, sparking bezel. */
   voss_recording: vossRecordingModel(),
+  /** Same cracked monitor, but the recorded man is a silhouette with a TV-static face, captioned UNKNOWN; author field wiped. */
+  unknown_recording: unknownRecordingModel(),
   /** Bureau personnel file: redaction bars, clipped question-mark photo, glowing encrypted signal, CLASSIFIED stamp. */
   redacted_file: redactedFileModel(),
 };

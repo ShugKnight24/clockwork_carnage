@@ -253,7 +253,7 @@ export const ENEMY_TYPES = {
     hitZones: HUMANOID_ZONES,
   },
   henchman: {
-    name: "Voss's Henchman",
+    name: "Syndicate Henchman",
     health: 90,
     speed: 1.6,
     damage: 18,

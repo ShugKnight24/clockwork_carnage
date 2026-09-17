@@ -50,6 +50,7 @@ const DISPLAY_SCALE = {
   fragment_amber: 1.2,
   armor_crate: 1.25,
   voss_recording: 1.25,
+  unknown_recording: 1.25,
   redacted_file: 1.25,
 };
 

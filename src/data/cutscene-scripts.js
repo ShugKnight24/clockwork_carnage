@@ -32,15 +32,15 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "deep_space",
-      title: "PROJECT PARADOX",
+      title: "ELEVEN SECONDS",
       lines: [
         {
-          text: "Dr. Elias Voss fired up the Chronos Engine. No clearance.",
+          text: "Someone fired up the Chronos Engine. No clearance. No name.",
           delay: 0,
           color: "#aabbcc",
           size: 16,
         },
-        { text: "The experiment ran for eleven seconds.", delay: 2500, color: "#ffcc88", size: 16 },
+        { text: "The experiment ran for eleven seconds.", delay: 2600, color: "#ffcc88", size: 16 },
         {
           text: "Then past, present and future hit the same wall.",
           delay: 4300,
@@ -85,12 +85,12 @@ export const CUTSCENE_SCRIPTS = {
       title: "BADGE 11235 / SUIT C-0017",
       lines: [
         {
-          text: "You: {AGENT}. Cadet. Wearing Voss's first prototype.",
+          text: "You: {AGENT}. Cadet. Wearing a prototype nobody signed for.",
           delay: 0,
           color: "#00ffcc",
           size: 20,
         },
-        { text: "He built it. He'll want it back.", delay: 2400, color: "#ffffff", size: 22 },
+        { text: "Whoever built it knows you have it.", delay: 2700, color: "#ffffff", size: 22 },
       ],
       particles: "glow",
       duration: 6000,
@@ -98,11 +98,11 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "dark",
       art: "hero_armed",
-      title: "MISSION: RESTORE THE CLOCK",
+      title: "MISSION ORDERS",
       lines: [
         { text: "Work the scene.", delay: 0, color: "#00ffcc", size: 18 },
         { text: "Reach the Paradox Core.", delay: 900, color: "#ffcc00", size: 22 },
-        { text: "Bring Voss in. Or bring him down.", delay: 2100, color: "#ff2244", size: 26 },
+        { text: "Find out who did this.", delay: 2100, color: "#ff2244", size: 26 },
       ],
       flash: "#00ccff",
       duration: 5500,
@@ -256,7 +256,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "fragment_blue",
       lines: [
         {
-          text: "V̷O̶—̵: \"Stay three steps ahead. The timeline punishes—\"",
+          text: "V̷—̵: \"Stay three steps ahead. The timeline punishes—\"",
           delay: 0,
           color: "#4488cc",
           size: 15,
@@ -387,7 +387,7 @@ export const CUTSCENE_SCRIPTS = {
       art: "fragment_blue",
       lines: [
         {
-          text: "V̷O̶—̵: \"Ambush point is here. Miss the window and—\"",
+          text: "V̷—̵: \"Ambush point is here. Miss the window and—\"",
           delay: 0,
           color: "#4488cc",
           size: 15,
@@ -632,24 +632,29 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "station",
-      art: "voss_recording",
+      art: "unknown_recording",
       lines: [
-        { text: "A cracked monitor loops a recording.", delay: 0, color: "#aabbcc", size: 14 },
         {
-          text: "VOSS: \"Stay three steps ahead. The timeline punishes improvisation.\"",
-          delay: 1700,
+          text: "A cracked monitor loops a recording. The face is pure static.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 14,
+        },
+        {
+          text: "UNKNOWN: \"Stay three steps ahead. The timeline punishes improvisation.\"",
+          delay: 2700,
           color: "#4488cc",
           size: 15,
         },
         {
-          text: "ARIA: \"That phrase. Your memory fragment. Same cadence.\"",
-          delay: 4600,
+          text: "ARIA: \"That phrase. Your memory fragment. Same voice.\"",
+          delay: 5600,
           color: "#00ffdd",
           size: 14,
         },
         {
-          text: "ARIA: \"Could be nothing. It's never nothing. File it.\"",
-          delay: 7100,
+          text: "ARIA: \"Author field's wiped. Someone's cleaning up after him.\"",
+          delay: 7900,
           color: "#00ffdd",
           size: 13,
         },
@@ -697,13 +702,13 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "\"The prisoner logs keep naming one man. Dr. Voss.\"",
+          text: "\"Prisoner logs keep mentioning 'the Doctor.' Never a name.\"",
           delay: 4800,
           color: "#00ffdd",
           size: 14,
         },
         {
-          text: "\"Same name's flagged in your record. The redacted part.\"",
+          text: "\"Your sealed record has one redacted name. Same clearance code.\"",
           delay: 7000,
           color: "#ffcc00",
           size: 14,
@@ -724,7 +729,7 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "station",
-      art: "aria",
+      art: "redacted_file",
       lines: [
         {
           text: "\"Mainframe access. Give me a second to commit a few felonies.\"",
@@ -733,25 +738,41 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "\"Dr. Elias Voss. Lead temporal physicist. Omega clearance.\"",
+          text: "\"Running the voice from that recording against personnel.\"",
           delay: 2700,
+          color: "#00ffdd",
+          size: 14,
+        },
+        {
+          text: "\"Every file on him is redacted. Every file but one.\"",
+          delay: 5400,
           color: "#ffcc00",
-          size: 16,
+          size: 15,
+        },
+      ],
+      duration: 9500,
+    },
+    {
+      bg: "dark",
+      art: "portrait_voss",
+      flash: "#cc44ff",
+      lines: [
+        { text: "DR. ELIAS VOSS", delay: 0, color: "#cc44ff", size: 24 },
+        {
+          text: "\"The voice on the tape. 'The Doctor.' The name blacked out of your file.\"",
+          delay: 1300,
+          color: "#ffcc00",
+          size: 15,
         },
         {
           text: "\"Official status: DECEASED. Three years ago.\"",
-          delay: 5300,
+          delay: 4600,
           color: "#ff4444",
           size: 16,
         },
-        {
-          text: "\"Somebody forgot to tell his temporal signature.\"",
-          delay: 7400,
-          color: "#ff8844",
-          size: 14,
-        },
+        { text: "\"Somebody forgot to tell him.\"", delay: 6800, color: "#ff8844", size: 16 },
       ],
-      duration: 12000,
+      duration: 10500,
     },
   ],
 
@@ -838,9 +859,9 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "portrait_voss",
       lines: [
-        { text: "ARIA: Pulling his personnel file...", delay: 0, color: "#00ffdd", size: 14 },
+        { text: "ARIA: Decrypting the rest of Voss's file...", delay: 0, color: "#00ffdd", size: 14 },
         {
-          text: "DR. ELIAS VOSS — LEAD RESEARCHER, CHRONOS DIVISION",
+          text: "DR. ELIAS VOSS — PROJECT LEAD, CHRONOS DIVISION",
           delay: 1700,
           color: "#cc44ff",
           size: 17,
@@ -1201,7 +1222,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "\"Come in, little clock. Let's see how long you run.\"",
+          text: "\"Come in, Cadet. Let's see what my suit sees in you.\"",
           delay: 4000,
           color: "#ff2244",
           size: 18,
@@ -1337,7 +1358,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "\"He could catch a falling second mid-air.\"",
+          text: "\"He could stop a fall halfway down.\"",
           delay: 2200,
           color: "#cc88aa",
           size: 14,
@@ -1369,7 +1390,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "\"He could save anyone from the clock. Except himself.\"",
+          text: "\"He could save anyone. Except himself.\"",
           delay: 1900,
           color: "#ff4466",
           size: 16,
@@ -4416,7 +4437,7 @@ export const CUTSCENE_SCRIPTS = {
           h: 0.5,
           bg: "station",
           art: "station",
-          caption: "Chronos Station. 06:47. Nothing ever happens.",
+          caption: "Chronos Station. 06:47. A routine shift.",
           captionPos: "top",
           captionColor: "#8899aa",
           captionSize: 11,
@@ -4452,7 +4473,7 @@ export const CUTSCENE_SCRIPTS = {
           h: 0.5,
           bg: "station",
           art: "hero",
-          caption: "Clock in. Do the job. Go home. Repeat until retirement.",
+          caption: "Show up. Do the job. Go home. Repeat until retirement.",
           captionPos: "bottom",
           captionColor: "#aabbcc",
           captionSize: 12,
@@ -4636,7 +4657,7 @@ export const CUTSCENE_SCRIPTS = {
           y: 0.75,
           w: 1.0,
           h: 0.25,
-          caption: "\"CLOCK'S TICKING. SO AM I.\"",
+          caption: "\"NOT TODAY.\"",
           captionPos: "center",
           captionColor: "#ffcc00",
           captionBg: "rgba(0,0,0,0.95)",
@@ -4753,7 +4774,7 @@ export const CUTSCENE_SCRIPTS = {
         { text: "06:47. Chronos Station.", delay: 0, color: "#556677", size: 14 },
         { text: "Coffee's burnt. Lift's busted.", delay: 1200, color: "#8899aa", size: 16 },
         {
-          text: "Nothing ever happens on the morning shift.",
+          text: "The night-shift log has a page torn out.",
           delay: 2700,
           color: "#aabbcc",
           size: 16,
@@ -4827,7 +4848,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 18,
         },
         {
-          text: "Supervisor's note: \"You're up. Don't scratch the paint.\"",
+          text: "Supervisor's note: \"You're up. Don't ask who built it.\"",
           delay: 3900,
           color: "#ccaa77",
           size: 16,
@@ -4968,7 +4989,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Time to find out what this thing can do.",
+          text: "Let's see what this thing can do.",
           delay: 7400,
           color: "#00ffcc",
           size: 18,
@@ -4993,7 +5014,7 @@ export const CUTSCENE_SCRIPTS = {
           art: "hero_armed",
           title: "CLOCKWORK CARNAGE",
           issue: "#1",
-          tagline: "EVERY SECOND IS EVIDENCE",
+          tagline: "ONE CADET. NO BACKUP.",
         },
         pages: [
           {
@@ -5001,7 +5022,7 @@ export const CUTSCENE_SCRIPTS = {
             flipMs: 650,
             panel: {
               bg: "station",
-              caption: "CHRONOS STATION — 06:47. A quiet morning. The last one.",
+              caption: "CHRONOS STATION — 06:47. One lab light never went off.",
               captionPos: "top",
               captionColor: "#1a1208",
               captionSize: 14,
@@ -5047,7 +5068,7 @@ export const CUTSCENE_SCRIPTS = {
             panel: {
               bg: "boss_lair",
               art: "villain",
-              caption: "Something came through. It took its time.",
+              caption: "Something came through. The alarms stopped first.",
               captionPos: "bottom",
               captionColor: "#1a1208",
               captionSize: 14,
@@ -5060,7 +5081,7 @@ export const CUTSCENE_SCRIPTS = {
             panel: {
               bg: "deep_space",
               art: "villain_final",
-              caption: "The Paradox Lord. Older than clocks. Never late.",
+              caption: "They called it the Paradox Lord. Survivors stopped talking.",
               captionPos: "top",
               captionColor: "#a01010",
               captionSize: 13,
@@ -5087,7 +5108,7 @@ export const CUTSCENE_SCRIPTS = {
             panel: {
               bg: "dark",
               art: "hero_armed",
-              caption: "{AGENT}. Suit up. The world ends on your shift.",
+              caption: "{AGENT}. Suit up. Nobody else is coming.",
               captionPos: "center",
               captionColor: "#1a1208",
               captionSize: 16,
