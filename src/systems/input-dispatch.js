@@ -756,7 +756,8 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.CUTSCENE) {
-    if (code === "Enter" || code === "Space") {
+    // Ignore key repeat: holding Space to skip must not riffle through pages.
+    if ((code === "Enter" || code === "Space") && !e?.repeat) {
       game.advanceCutsceneFrame();
     }
     if (code === "Escape") {

@@ -24,6 +24,9 @@ function legacyFrame(frame) {
   return f;
 }
 
+// Flipbook cover: closed idle before it swings open on its own, then the swing.
+const FB_COVER_IDLE_MS = 1200;
+const FB_COVER_OPEN_MS = 1100;
 
 export class CutsceneEngine {
   constructor({
@@ -88,15 +91,29 @@ export class CutsceneEngine {
     const cs = this.cutscene;
     const frame = cs.script[cs.frame];
 
-    // If text is still typing, first click/Enter instantly reveals it
-    if (!cs.readyToAdvance) {
-      if (frame?.flipbook?.requireAction) {
-        const timing = this._flipbookTiming(frame.flipbook);
-        cs.frameStart = performance.now() - timing.finalStart;
-        cs.readyToAdvance = true;
+    // Flipbooks take input page by page: open the cover, finish a flip in
+    // progress, or turn the settled page. Only the settled last page falls
+    // through to end the frame.
+    const fb = frame?.flipbook;
+    if (fb?.pages?.length) {
+      this._flipbookState(cs, fb);
+      const now = performance.now();
+      if (cs.fbPhase === "cover") {
+        if (!cs.fbOpenStart) cs.fbOpenStart = now;
+        else this._settleFlipbookPage(cs, 0, now);
         return;
       }
-      // Fast-forward: set frameStart far enough back that all text is visible
+      if (cs.fbFlipStart) {
+        this._settleFlipbookPage(cs, cs.fbPage + 1, now);
+        return;
+      }
+      if (cs.fbPage < fb.pages.length - 1) {
+        cs.fbFlipStart = now;
+        return;
+      }
+    } else if (!cs.readyToAdvance) {
+      // Text still typing: first click/Enter reveals it. Set frameStart far
+      // enough back that all text is visible.
       cs.frameStart = performance.now() - 60000;
       cs.readyToAdvance = true;
       return;
@@ -107,21 +124,64 @@ export class CutsceneEngine {
     cs.frameStart = performance.now();
     cs.particles = [];
     cs.readyToAdvance = false;
+    cs.fbPhase = null;
     this.audio.menuSelect();
     if (cs.frame >= cs.script.length) {
       this.end();
     }
   }
 
-  _flipbookTiming(fb) {
-    let total = 0;
-    let finalStart = 0;
-    for (let i = 0; i < fb.pages.length; i++) {
-      if (i === fb.pages.length - 1) finalStart = total;
-      const pg = fb.pages[i];
-      total += (pg.hold ?? 1400) + (i < fb.pages.length - 1 ? (pg.flipMs ?? 600) : 0);
+  /**
+   * Flipbook progress is explicit state on the cutscene rather than derived
+   * from elapsed time, so the auto-flip clock and player input always agree
+   * on which page is showing.
+   *   fbPhase      "cover" (closed / swinging open) | "pages"
+   *   fbOpenStart  when the cover began to swing (0 = still closed)
+   *   fbPage       index of the page on top
+   *   fbPageStart  when that page settled (its hold counts from here)
+   *   fbFlipStart  when it began turning toward fbPage + 1 (0 = settled)
+   */
+  _flipbookState(cs, fb) {
+    if (cs.fbPhase) return;
+    const now = performance.now();
+    cs.fbPhase = fb.cover ? "cover" : "pages";
+    cs.fbCoverStart = now;
+    cs.fbOpenStart = 0;
+    cs.fbPage = 0;
+    cs.fbPageStart = now;
+    cs.fbFlipStart = 0;
+  }
+
+  _settleFlipbookPage(cs, page, now) {
+    cs.fbPhase = "pages";
+    cs.fbPage = page;
+    cs.fbPageStart = now;
+    cs.fbFlipStart = 0;
+  }
+
+  /** Advance the flipbook clock: cover idle → swing → page holds → flips. */
+  _stepFlipbook(cs, fb, now) {
+    this._flipbookState(cs, fb);
+    if (cs.fbPhase === "cover") {
+      if (!cs.fbOpenStart && now - cs.fbCoverStart >= FB_COVER_IDLE_MS) {
+        cs.fbOpenStart = now;
+      }
+      if (cs.fbOpenStart && now - cs.fbOpenStart >= FB_COVER_OPEN_MS) {
+        this._settleFlipbookPage(cs, 0, now);
+      }
+      return;
     }
-    return { total, finalStart };
+    const pg = fb.pages[cs.fbPage];
+    if (cs.fbFlipStart) {
+      if (now - cs.fbFlipStart >= (pg.flipMs ?? 600)) {
+        this._settleFlipbookPage(cs, cs.fbPage + 1, now);
+      }
+    } else if (
+      cs.fbPage < fb.pages.length - 1 &&
+      now - cs.fbPageStart >= (pg.hold ?? 1400)
+    ) {
+      cs.fbFlipStart = now;
+    }
   }
 
   end() {
@@ -176,21 +236,26 @@ export class CutsceneEngine {
         }
       }
     } else if (frame.flipbook?.pages?.length) {
-      // Flipbook frames have their own page-based timing; readyToAdvance
-      // (and auto-advance) must wait until ALL pages have played, not the
-      // generic 2s minimum. Sum hold + flipMs across pages.
-      const timing = this._flipbookTiming(frame.flipbook);
-      if (frame.flipbook.requireAction) {
-        // Story preview ends on an action-gated page. No auto-advance: player
-        // must press/click/tap to begin tutorial once prompt appears.
-        cs.readyToAdvance = elapsed >= timing.finalStart;
-        return;
-      }
-      cs.readyToAdvance = elapsed >= 1200;
-      if (this.getSettings().cutsceneAutoAdvance && elapsed >= timing.total + 400) {
+      // Flipbook frames page themselves; the frame is ready only once the
+      // last page has settled.
+      const fb = frame.flipbook;
+      const now = performance.now();
+      this._stepFlipbook(cs, fb, now);
+      const onLast =
+        cs.fbPhase === "pages" &&
+        cs.fbPage === fb.pages.length - 1 &&
+        !cs.fbFlipStart;
+      cs.readyToAdvance = onLast;
+      // requireAction books wait on the last page for press/click/tap.
+      if (
+        onLast &&
+        !fb.requireAction &&
+        this.getSettings().cutsceneAutoAdvance &&
+        now - cs.fbPageStart >= (fb.pages[cs.fbPage].hold ?? 1400) + 400
+      ) {
         this.advance();
-        return;
       }
+      return;
     } else {
       // No text lines — ready after minimum display time
       const minDisplay = Math.min(frame.duration || 2000, 2000);
@@ -819,11 +884,27 @@ export class CutsceneEngine {
    *             hold: 1400, flipMs: 650 }, ...],
    *   paperTint: "#0a0814",       // page background tint
    *   spineSide: "right" | "left", // which edge stays anchored during flip
+   *   requireAction: true,        // last page waits for press/click/tap
+   *   cover: { bg, art, title, issue, tagline, price } | true,
    * }
+   *
+   * Cover: only books that define `cover` open on one (`true` = all
+   * defaults, missing fields fall back to defaults). The closed book floats
+   * on the backdrop for FB_COVER_IDLE_MS, then the cover swings open around
+   * the left spine onto page 1. Books without `cover` (the act transitions)
+   * open straight onto page 1. The cover is never counted as a page.
+   *
+   * Paging (state in _flipbookState): each page holds for `hold` ms, then
+   * auto-flips over `flipMs`. Enter/click/tap opens the cover, completes a
+   * flip in progress, or turns a settled page now; on the settled last page
+   * it ends the frame.
    */
   renderFlipbook(ctx, w, h, frame, elapsed /* ms */, t /* sec */) {
     const fb = frame.flipbook;
     if (!fb || !fb.pages || !fb.pages.length) return;
+    const cs = this.cutscene;
+    this._flipbookState(cs, fb);
+    const now = performance.now();
 
     const rawS = h / 900;
     const s = this.isTouchDevice ? Math.max(0.82, rawS) : rawS;
@@ -843,85 +924,65 @@ export class CutsceneEngine {
     ctx.fillStyle = backdrop;
     ctx.fillRect(0, 0, w, h);
 
-    // Determine current page index + flip progress
-    let acc = 0;
-    let idx = 0;
-    let flipT = 0; // 0 = settled, 0..1 = mid-flip
-    for (let i = 0; i < fb.pages.length; i++) {
-      const pg = fb.pages[i];
-      const hold = pg.hold ?? 1400;
-      const flipMs = pg.flipMs ?? 600;
-      const total = hold + (i < fb.pages.length - 1 ? flipMs : 0);
-      if (elapsed < acc + hold) { idx = i; flipT = 0; break; }
-      if (elapsed < acc + total) { idx = i; flipT = (elapsed - acc - hold) / flipMs; break; }
-      acc += total;
-      idx = i;
-      flipT = 0;
-    }
-    if (idx >= fb.pages.length) idx = fb.pages.length - 1;
-    const curPage = fb.pages[idx];
-    const nextPage = fb.pages[idx + 1];
-
     const spineRight = (fb.spineSide ?? "right") === "right";
     const paperTint = fb.paperTint ?? "#0a0814";
 
-    // Draw the next page underneath (revealed as current page flips away)
-    if (nextPage && flipT > 0) {
-      this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1);
+    if (cs.fbPhase === "cover") {
+      this._renderFlipbookCover(ctx, w, h, px, py, pw, ph, fb, cs, now, t, s, paperTint, spineRight);
     } else {
-      // Static settled page — just current page
+      const idx = cs.fbPage;
+      const curPage = fb.pages[idx];
+      const nextPage = fb.pages[idx + 1];
+      const flipMs = curPage.flipMs ?? 600;
+      // Render can run a beat past the flip's end before update() settles it.
+      const flipT = cs.fbFlipStart && nextPage
+        ? (flipMs > 0 ? Math.min(1, (now - cs.fbFlipStart) / flipMs) : 1)
+        : 0;
+
+      // Draw the next page underneath (revealed as current page flips away)
+      if (nextPage && flipT > 0) {
+        this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1);
+      }
+
+      // Draw current page with horizontal page-flip transform
+      if (flipT === 0) {
+        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+      } else {
+        // Ease in-out for natural flip motion
+        const eased = flipT < 0.5
+          ? 2 * flipT * flipT
+          : 1 - Math.pow(-2 * flipT + 2, 2) / 2;
+        // Horizontal "page lifting" — scaleX from 1 → 0 over the spine
+        const sx = Math.max(0.001, 1 - eased);
+        // Slight perspective skew to suggest 3D
+        const skewY = (spineRight ? -1 : 1) * eased * 0.18;
+
+        ctx.save();
+        // Pivot at spine edge
+        const spineX = spineRight ? px + pw : px;
+        ctx.translate(spineX, py + ph / 2);
+        ctx.transform(sx, skewY * sx, 0, 1, 0, 0);
+        ctx.translate(-spineX, -(py + ph / 2));
+        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+        ctx.restore();
+
+        // Shadow cast by the lifting page on the next page
+        ctx.save();
+        const shadow = ctx.createLinearGradient(
+          spineRight ? px + pw - pw * (1 - eased) : px,
+          0,
+          spineRight ? px + pw : px + pw * (1 - eased),
+          0,
+        );
+        shadow.addColorStop(0, "rgba(0,0,0,0)");
+        shadow.addColorStop(1, `rgba(0,0,0,${0.45 * eased})`);
+        ctx.fillStyle = shadow;
+        ctx.fillRect(px, py, pw, ph);
+        ctx.restore();
+      }
+
+      this._drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, 1);
     }
-
-    // Draw current page with horizontal page-flip transform
-    if (flipT === 0) {
-      this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
-    } else {
-      // Ease in-out for natural flip motion
-      const eased = flipT < 0.5
-        ? 2 * flipT * flipT
-        : 1 - Math.pow(-2 * flipT + 2, 2) / 2;
-      // Horizontal "page lifting" — scaleX from 1 → 0 over the spine
-      const sx = Math.max(0.001, 1 - eased);
-      // Slight perspective skew to suggest 3D
-      const skewY = (spineRight ? -1 : 1) * eased * 0.18;
-
-      ctx.save();
-      // Pivot at spine edge
-      const spineX = spineRight ? px + pw : px;
-      ctx.translate(spineX, py + ph / 2);
-      ctx.transform(sx, skewY * sx, 0, 1, 0, 0);
-      ctx.translate(-spineX, -(py + ph / 2));
-      this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
-      ctx.restore();
-
-      // Shadow cast by the lifting page on the next page
-      ctx.save();
-      const shadow = ctx.createLinearGradient(
-        spineRight ? px + pw - pw * (1 - eased) : px,
-        0,
-        spineRight ? px + pw : px + pw * (1 - eased),
-        0,
-      );
-      shadow.addColorStop(0, "rgba(0,0,0,0)");
-      shadow.addColorStop(1, `rgba(0,0,0,${0.45 * eased})`);
-      ctx.fillStyle = shadow;
-      ctx.fillRect(px, py, pw, ph);
-      ctx.restore();
-    }
-
-    // Page binding shadow (spine)
-    ctx.save();
-    const spineGrad = ctx.createLinearGradient(
-      spineRight ? px + pw - 30 * s : px,
-      0,
-      spineRight ? px + pw : px + 30 * s,
-      0,
-    );
-    spineGrad.addColorStop(0, "rgba(0,0,0,0)");
-    spineGrad.addColorStop(1, "rgba(0,0,0,0.55)");
-    ctx.fillStyle = spineGrad;
-    ctx.fillRect(spineRight ? px + pw - 30 * s : px, py, 30 * s, ph);
-    ctx.restore();
 
     // Vignette over whole composition
     const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
@@ -930,13 +991,419 @@ export class CutsceneEngine {
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    // Page indicator (subtle, bottom-right)
+    // Page indicator (subtle, bottom-right). The cover is not a page.
+    if (cs.fbPhase === "pages") {
+      ctx.save();
+      ctx.font = `${Math.round(11 * s)}px monospace`;
+      ctx.fillStyle = "rgba(180,200,220,0.45)";
+      ctx.textAlign = "right";
+      ctx.fillText(`${cs.fbPage + 1} / ${fb.pages.length}`, px + pw - 8 * s, py + ph - 8 * s);
+      ctx.restore();
+    }
+  }
+
+  /** Page binding shadow along the spine edge. */
+  _drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, alpha) {
     ctx.save();
-    ctx.font = `${Math.round(11 * s)}px monospace`;
-    ctx.fillStyle = "rgba(180,200,220,0.45)";
-    ctx.textAlign = "right";
-    ctx.fillText(`${idx + 1} / ${fb.pages.length}`, px + pw - 8 * s, py + ph - 8 * s);
+    const spineGrad = ctx.createLinearGradient(
+      spineRight ? px + pw - 30 * s : px + 30 * s,
+      0,
+      spineRight ? px + pw : px,
+      0,
+    );
+    spineGrad.addColorStop(0, "rgba(0,0,0,0)");
+    spineGrad.addColorStop(1, `rgba(0,0,0,${0.55 * alpha})`);
+    ctx.fillStyle = spineGrad;
+    ctx.fillRect(spineRight ? px + pw - 30 * s : px, py, 30 * s, ph);
     ctx.restore();
+  }
+
+  /** Cover config with defaults filled in (`cover: true` = all defaults). */
+  _flipbookCover(fb) {
+    const c = typeof fb.cover === "object" && fb.cover ? fb.cover : {};
+    return {
+      bg: c.bg ?? "boss_lair",
+      art: c.art ?? "hero_armed",
+      title: c.title ?? "CLOCKWORK CARNAGE",
+      issue: c.issue ?? "#1",
+      tagline: c.tagline ?? "",
+      price: c.price ?? "$3.99",
+    };
+  }
+
+  /**
+   * Closed comic floating on the backdrop, then the cover swinging open
+   * around the left spine onto page 1. The swing is a real rotation about
+   * the spine projected with perspective: the face is rendered offscreen and
+   * blitted in vertical strips so the free edge grows as it lifts toward the
+   * viewer, clipped to the exact projected quad.
+   */
+  _renderFlipbookCover(ctx, w, h, px, py, pw, ph, fb, cs, now, t, s, paperTint, spineRight) {
+    const open = cs.fbOpenStart
+      ? Math.min(1, (now - cs.fbOpenStart) / FB_COVER_OPEN_MS)
+      : 0;
+    // Swing: a slow deliberate lift that speeds up once past vertical and
+    // flops open, so most of the time is spent where the face is visible.
+    const e = Math.pow(open, 1.7);
+    const closed = 1 - Math.min(1, open * 1.6);
+
+    // Closed book sits smaller and floats; it grows to page size as it opens
+    // so the hand-off to the pages phase is seamless.
+    const bookScale = 0.8 + 0.2 * (1 - closed);
+    const floatY = Math.sin(t * 1.9) * 7 * s * closed;
+    const tilt = Math.sin(t * 1.3) * 0.008 * closed;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Ground shadow: tighter and darker when the book dips toward the floor
+    if (closed > 0) {
+      const lift = 0.5 + 0.5 * Math.sin(t * 1.9);
+      ctx.save();
+      ctx.globalAlpha = closed * (0.75 - 0.25 * lift);
+      ctx.translate(cx, cy + (ph * bookScale) / 2 + 26 * s);
+      ctx.scale(1, 0.09);
+      const rx = (pw * bookScale) / 2 * (1.02 - 0.06 * lift);
+      const ground = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+      ground.addColorStop(0, "rgba(0,0,0,0.9)");
+      ground.addColorStop(0.6, "rgba(0,0,0,0.45)");
+      ground.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = ground;
+      ctx.beginPath();
+      ctx.arc(0, 0, rx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.translate(cx, cy + floatY);
+    ctx.rotate(tilt);
+    ctx.scale(bookScale, bookScale);
+    ctx.translate(-cx, -cy);
+
+    // Book block: back board + page edges peeking out right and bottom
+    if (closed > 0) {
+      ctx.save();
+      ctx.globalAlpha = closed;
+      ctx.shadowColor = "rgba(0,0,0,0.7)";
+      ctx.shadowBlur = 36 * s;
+      ctx.shadowOffsetY = 18 * s;
+      const layers = 6;
+      const step = 1.7 * s;
+      ctx.fillStyle = "#15101c";
+      ctx.fillRect(px + (layers + 1) * step, py + (layers + 1) * step, pw, ph);
+      ctx.shadowColor = "transparent";
+      for (let i = layers; i >= 1; i--) {
+        ctx.fillStyle = i % 2 ? "#d9ceb4" : "#b8aa8c";
+        ctx.fillRect(px + i * step, py + i * step, pw, ph);
+      }
+      ctx.restore();
+    }
+
+    // Page 1 waits under the cover
+    if (open > 0) {
+      this._drawFlipbookPage(ctx, px, py, pw, ph, fb.pages[0].panel, t, s, paperTint, 1);
+      this._drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, e);
+    }
+
+    // Project the cover's free edge after rotating `theta` about the spine.
+    const theta = e * Math.PI;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    const camD = pw * 4;
+    const project = (u) => {
+      const f = camD / (camD - u * pw * sin);
+      return { x: cx + (px + u * pw * cos - cx) * f, f };
+    };
+    const edge = project(1);
+    const spineX = px;
+    const top = (f) => cy + (py - cy) * f;
+    const bot = (f) => cy + (py + ph - cy) * f;
+
+    // Shadow the lifting cover throws across page 1
+    if (open > 0 && sin > 0.001) {
+      const reach = Math.max(spineX + pw * 0.14 * sin, edge.x + pw * 0.16 * sin);
+      const sh = ctx.createLinearGradient(spineX, 0, reach, 0);
+      sh.addColorStop(0, `rgba(0,0,0,${0.7 * sin})`);
+      sh.addColorStop(0.75, `rgba(0,0,0,${0.35 * sin})`);
+      sh.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = sh;
+      ctx.fillRect(px, py, Math.min(pw, reach - px), ph);
+    }
+
+    const quad = () => {
+      ctx.beginPath();
+      ctx.moveTo(spineX, py);
+      ctx.lineTo(edge.x, top(edge.f));
+      ctx.lineTo(edge.x, bot(edge.f));
+      ctx.lineTo(spineX, py + ph);
+      ctx.closePath();
+    };
+
+    if (cos > 0.002) {
+      // Front face
+      const face = this._renderCoverFace(ctx, pw, ph, fb, t, s, paperTint);
+      if (open === 0) {
+        ctx.drawImage(face, px, py, pw, ph);
+      } else {
+        ctx.save();
+        quad();
+        ctx.clip();
+        const strips = 48;
+        for (let i = 0; i < strips; i++) {
+          const a = project(i / strips);
+          const b = project((i + 1) / strips);
+          const f = Math.max(a.f, b.f);
+          ctx.drawImage(
+            face,
+            (i / strips) * face.width, 0, face.width / strips + 1, face.height,
+            a.x, top(f), b.x - a.x + 1, bot(f) - top(f),
+          );
+        }
+        // Turning away from the light darkens the face toward the free edge
+        const shade = ctx.createLinearGradient(spineX, 0, edge.x, 0);
+        shade.addColorStop(0, `rgba(0,0,0,${0.15 * (1 - cos)})`);
+        shade.addColorStop(1, `rgba(0,0,0,${0.75 * (1 - cos)})`);
+        ctx.fillStyle = shade;
+        ctx.fill();
+        // Gloss sweep catches the light early in the lift
+        const glint = Math.sin(Math.min(1, open * 2.2) * Math.PI);
+        if (glint > 0.01) {
+          const gx = spineX + (edge.x - spineX) * (0.2 + 0.6 * open * 2.2);
+          const gloss = ctx.createLinearGradient(gx - pw * 0.12, 0, gx + pw * 0.12, 0);
+          gloss.addColorStop(0, "rgba(255,255,255,0)");
+          gloss.addColorStop(0.5, `rgba(255,248,225,${0.28 * glint})`);
+          gloss.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = gloss;
+          ctx.fill();
+        }
+        ctx.restore();
+        // Board edge catches a rim of light
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,240,210,${0.35 * sin})`;
+        ctx.lineWidth = Math.max(1, 2 * s * edge.f);
+        ctx.beginPath();
+        ctx.moveTo(edge.x, top(edge.f));
+        ctx.lineTo(edge.x, bot(edge.f));
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (cos < -0.002) {
+      // Inside cover: plain newsprint, brightening as it lies flat, fading
+      // out before the pages phase takes over.
+      const fade = 1 - Math.max(0, (open - 0.8) / 0.2);
+      ctx.save();
+      ctx.globalAlpha = fade;
+      quad();
+      const inside = ctx.createLinearGradient(spineX, 0, edge.x, 0);
+      const lit = -cos;
+      inside.addColorStop(0, `rgb(${Math.round(90 + 110 * lit)},${Math.round(82 + 100 * lit)},${Math.round(70 + 84 * lit)})`);
+      inside.addColorStop(1, `rgb(${Math.round(60 + 150 * lit)},${Math.round(54 + 140 * lit)},${Math.round(46 + 120 * lit)})`);
+      ctx.fillStyle = inside;
+      ctx.fill();
+      // Crease shadow where the board meets the spine
+      const crease = ctx.createLinearGradient(spineX, 0, spineX - pw * 0.08 * lit - 4 * s, 0);
+      crease.addColorStop(0, "rgba(0,0,0,0.5)");
+      crease.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = crease;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw the comic's front cover into a reusable offscreen canvas at device
+   * resolution so the swing can resample it with perspective.
+   */
+  _renderCoverFace(ctx, pw, ph, fb, t, s, paperTint) {
+    const m = ctx.getTransform();
+    const dpr = Math.max(1, Math.hypot(m.a, m.b));
+    const cw = Math.max(1, Math.ceil(pw * dpr));
+    const chh = Math.max(1, Math.ceil(ph * dpr));
+    let cv = this._coverCanvas;
+    if (!cv) cv = this._coverCanvas = document.createElement("canvas");
+    if (cv.width !== cw || cv.height !== chh) {
+      cv.width = cw;
+      cv.height = chh;
+    }
+    const c = cv.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, pw, ph);
+
+    const cover = this._flipbookCover(fb);
+    const r = Math.max(2, 6 * s);
+    c.save();
+    c.beginPath();
+    c.roundRect(0, 0, pw, ph, [r, r, r, r]);
+    c.clip();
+
+    // Cover art through the panel pipeline, hero set low under the masthead
+    this.drawCutsceneBg(c, pw, ph, cover.bg, t);
+    if (cover.art) {
+      c.save();
+      // Art sizes itself to the rect it is given, so zoom the context to
+      // make the cover star larger than on a story page.
+      const zoom = 1.5;
+      c.translate(pw * 0.52, ph * 0.76);
+      c.scale(zoom, zoom);
+      c.translate(-pw / 2, -ph / 2);
+      // Offset past the art's 1.2s entrance fade: cover ink is already printed.
+      this.drawCutsceneArt(c, pw, ph, cover.art, t + 2);
+      c.restore();
+    }
+
+    // Print feel: halftone dots + a warm ink wash rising from the bottom
+    const dot = 5 * s;
+    c.fillStyle = "rgba(0,0,0,0.12)";
+    for (let yy = 0; yy < ph; yy += dot * 2) {
+      for (let xx = (yy / (dot * 2)) % 2 ? dot : 0; xx < pw; xx += dot * 2) {
+        c.beginPath();
+        c.arc(xx, yy, dot * 0.42, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+    const wash = c.createLinearGradient(0, ph, 0, ph * 0.72);
+    wash.addColorStop(0, "rgba(150,20,10,0.45)");
+    wash.addColorStop(1, "rgba(150,20,10,0)");
+    c.fillStyle = wash;
+    c.fillRect(0, 0, pw, ph);
+
+    // Masthead band keeps the title readable over any art
+    const mh = ph * 0.24;
+    const band = c.createLinearGradient(0, 0, 0, mh * 1.25);
+    band.addColorStop(0, "rgba(8,4,14,0.92)");
+    band.addColorStop(0.75, "rgba(8,4,14,0.6)");
+    band.addColorStop(1, "rgba(8,4,14,0)");
+    c.fillStyle = band;
+    c.fillRect(0, 0, pw, mh * 1.25);
+
+    const pad = 16 * s;
+    const spineW = 22 * s;
+
+    // Issue corner box (top-left)
+    const boxW = mh * 0.78;
+    const boxH = mh - pad * 1.2;
+    const boxX = spineW + pad * 0.6;
+    const boxY = pad;
+    c.fillStyle = "#f4ead2";
+    c.fillRect(boxX, boxY, boxW, boxH);
+    c.lineWidth = Math.max(2, 3 * s);
+    c.strokeStyle = "#0b0b0b";
+    c.strokeRect(boxX, boxY, boxW, boxH);
+    c.fillStyle = "#c8141e";
+    c.fillRect(boxX, boxY, boxW, boxH * 0.28);
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillStyle = "#f4ead2";
+    c.font = `900 ${Math.round(boxH * 0.17)}px Impact, "Arial Black", sans-serif`;
+    c.fillText("ISSUE", boxX + boxW / 2, boxY + boxH * 0.145);
+    c.fillStyle = "#0b0b0b";
+    c.font = `900 ${Math.round(boxH * 0.52)}px Impact, "Arial Black", sans-serif`;
+    c.fillText(cover.issue, boxX + boxW / 2, boxY + boxH * 0.64);
+
+    // Title: fit to the band, yellow over a red extrude, heavy ink outline
+    const titleX = boxX + boxW + pad;
+    const titleW = pw - titleX - pad;
+    let size = mh * 0.62;
+    c.font = `900 italic ${Math.round(size)}px Impact, "Arial Black", sans-serif`;
+    const measured = c.measureText(cover.title).width;
+    if (measured > titleW) size *= titleW / measured;
+    c.font = `900 italic ${Math.round(size)}px Impact, "Arial Black", sans-serif`;
+    c.textAlign = "left";
+    c.textBaseline = "alphabetic";
+    const ty = boxY + boxH / 2 + size * 0.36;
+    const depth = Math.max(3, Math.round(size * 0.07));
+    c.lineJoin = "round";
+    c.lineWidth = Math.max(4, size * 0.14);
+    c.strokeStyle = "#050305";
+    for (let d = depth; d >= 1; d--) c.strokeText(cover.title, titleX + d, ty + d);
+    c.fillStyle = "#b3121b";
+    for (let d = depth; d >= 1; d--) c.fillText(cover.title, titleX + d, ty + d);
+    c.strokeText(cover.title, titleX, ty);
+    const ink = c.createLinearGradient(0, ty - size * 0.8, 0, ty);
+    ink.addColorStop(0, "#fff27a");
+    ink.addColorStop(0.55, "#ffd21a");
+    ink.addColorStop(1, "#ff9a0a");
+    c.fillStyle = ink;
+    c.fillText(cover.title, titleX, ty);
+
+    // Price + barcode block (bottom-left), drawn as shapes
+    const bcW = pw * 0.15;
+    const bcH = ph * 0.2;
+    const bcX = spineW + pad * 0.6;
+    const bcY = ph - bcH - pad;
+    c.fillStyle = "#f7f2e6";
+    c.fillRect(bcX, bcY, bcW, bcH);
+    c.lineWidth = Math.max(1, 1.5 * s);
+    c.strokeStyle = "#0b0b0b";
+    c.strokeRect(bcX, bcY, bcW, bcH);
+    c.fillStyle = "#0b0b0b";
+    c.font = `900 ${Math.round(bcH * 0.16)}px Impact, "Arial Black", sans-serif`;
+    c.textAlign = "left";
+    c.textBaseline = "top";
+    c.fillText(cover.price, bcX + bcW * 0.08, bcY + bcH * 0.06);
+    c.textAlign = "right";
+    c.fillText(cover.issue, bcX + bcW * 0.92, bcY + bcH * 0.06);
+    const barTop = bcY + bcH * 0.3;
+    const barH = bcH * 0.5;
+    const barL = bcX + bcW * 0.08;
+    const barR = bcX + bcW * 0.92;
+    // Fixed pseudo-random widths so the code is stable frame to frame
+    let bx = barL;
+    for (let i = 0; bx < barR; i++) {
+      const bw = (1 + ((i * 7 + 3) % 3)) * Math.max(0.8, bcW / 110);
+      const gap = (1 + ((i * 5 + 1) % 2)) * Math.max(0.8, bcW / 110);
+      const guard = i < 2 || bx > barR - bcW * 0.05;
+      c.fillRect(bx, barTop, Math.min(bw, barR - bx), barH + (guard ? bcH * 0.06 : 0));
+      bx += bw + gap;
+    }
+    c.textAlign = "center";
+    c.font = `${Math.round(bcH * 0.1)}px monospace`;
+    c.fillText("0 11235 06470 1", bcX + bcW / 2, barTop + barH + bcH * 0.08);
+
+    // Tagline strip (bottom-right)
+    if (cover.tagline) {
+      const fs = Math.round(ph * 0.042);
+      c.font = `900 italic ${fs}px Impact, "Arial Black", sans-serif`;
+      const tw = c.measureText(cover.tagline).width + fs * 1.4;
+      const tx = pw - pad - tw;
+      const tY = ph - pad - fs * 1.9;
+      c.save();
+      c.translate(tx + tw / 2, tY + fs * 0.95);
+      c.rotate(-0.035);
+      c.fillStyle = "#ffd21a";
+      c.fillRect(-tw / 2, -fs * 0.95, tw, fs * 1.9);
+      c.lineWidth = Math.max(2, 3 * s);
+      c.strokeStyle = "#0b0b0b";
+      c.strokeRect(-tw / 2, -fs * 0.95, tw, fs * 1.9);
+      c.fillStyle = "#0b0b0b";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(cover.tagline, 0, fs * 0.05);
+      c.restore();
+    }
+
+    // Spine: board crease and binding shadow on the hinge edge
+    const spine = c.createLinearGradient(0, 0, spineW * 1.6, 0);
+    spine.addColorStop(0, "rgba(0,0,0,0.75)");
+    spine.addColorStop(0.35, "rgba(0,0,0,0.35)");
+    spine.addColorStop(0.5, "rgba(255,240,210,0.16)");
+    spine.addColorStop(0.62, "rgba(0,0,0,0.22)");
+    spine.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = spine;
+    c.fillRect(0, 0, spineW * 1.6, ph);
+
+    // Glossy stock: faint diagonal sheen
+    const sheen = c.createLinearGradient(0, 0, pw, ph);
+    sheen.addColorStop(0.3, "rgba(255,255,255,0)");
+    sheen.addColorStop(0.45, "rgba(255,255,255,0.07)");
+    sheen.addColorStop(0.6, "rgba(255,255,255,0)");
+    c.fillStyle = sheen;
+    c.fillRect(0, 0, pw, ph);
+
+    c.restore();
+    return cv;
   }
 
   /** Render a single flipbook page (panel) into the given rect. */

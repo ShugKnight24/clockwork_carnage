@@ -139,13 +139,12 @@ document.getElementById("btnArena").addEventListener("click", () => {
   game.startArena();
 });
 
-// Plays the Marvel-style flipbook intro on first campaign boot, then runs cb.
-// Mark-seen fires inside onComplete so an aborted intro replays next time.
+// Plays the comic-book flipbook intro on every new campaign (Esc skips it),
+// then runs cb. It used to play once per browser, so returning players never
+// saw it again. The seen flag is still written: campaign-manager checks it to
+// avoid replaying the flipbook a second time when the campaign itself starts.
 async function playIntroFlipbookThen(cb) {
   const FLIPBOOK_KEY = "cc_seen_intro_flipbook";
-  const seen = game.save?.hasSeenIntroMemory?.(FLIPBOOK_KEY)
-    ?? (() => { try { return localStorage.getItem(FLIPBOOK_KEY) === "1"; } catch (_) { return false; } })();
-  if (seen) return cb();
   showGameCanvases();
   await game.startCutscene("intro_flipbook", () => {
     try { localStorage.setItem(FLIPBOOK_KEY, "1"); } catch (_) {}
