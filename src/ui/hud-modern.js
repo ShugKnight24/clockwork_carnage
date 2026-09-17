@@ -22,6 +22,7 @@ import {
 import { drawPortrait } from "./portrait.js";
 import { getWeaponSprite } from "../assets/loader.js";
 import { WEAPONS } from "../../js/data.js";
+import { hudMotion as M, since, easeOut } from "./hud-motion.js";
 
 const weaponSlug = (name) =>
   (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -32,7 +33,7 @@ const DIFF_SCHEMES = ["steel", "cyan", "amber", "crimson"];
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
 /** Legacy health thresholds → modern tones, keeping colour-blind remaps. */
-function healthTone(game, pct) {
+export function healthTone(game, pct) {
   const legacy = pct > 0.6 ? "#00ff66" : pct > 0.3 ? "#ffaa00" : "#ff2200";
   const mapped = game.cbColor(legacy);
   if (mapped !== legacy) return mapped;
@@ -65,7 +66,7 @@ function pulse(game, speed = 0.008) {
 let _ghostPct = 1;
 let _ghostHoldUntil = 0;
 let _ghostLast = 0;
-function ghostFor(pct) {
+export function ghostFor(pct) {
   const now = performance.now();
   const dt = _ghostLast ? Math.min(0.1, (now - _ghostLast) / 1000) : 0;
   _ghostLast = now;
@@ -77,10 +78,55 @@ function ghostFor(pct) {
   return _ghostPct;
 }
 /** Call when health drops so the ghost holds before draining. */
-function noteHealth(pct) {
+export function noteHealth(pct) {
   if (pct < _ghostPct - 0.001 && performance.now() > _ghostHoldUntil) {
     _ghostHoldUntil = performance.now() + 380;
   }
+}
+
+/** Bright sweep across a horizontal bar from the pre-heal value to the new one. */
+function healSweep(ctx, x, y, w, h) {
+  const k = since(M.healAt, 700);
+  if (k < 0) return;
+  const head = M.healFrom + (M.healTo - M.healFrom) * easeOut(Math.min(1, k * 1.8));
+  if (head <= M.healFrom) return;
+  ctx.fillStyle = `rgba(240,255,246,${(0.9 * (1 - k)).toFixed(3)})`;
+  ctx.fillRect(x + w * M.healFrom, y, w * (head - M.healFrom), h);
+  ctx.fillStyle = `rgba(255,255,255,${(1 - k).toFixed(3)})`;
+  ctx.fillRect(x + w * head - 1.5, y - 2, 3, h + 4);
+}
+
+/** Shield bar shatter: shards burst off the bar and fall away. */
+function shieldShards(ctx, x, y, w) {
+  const k = since(M.shieldBreakAt, 650);
+  if (k < 0 || !M.shards) return;
+  const e = easeOut(k);
+  ctx.fillStyle = `rgba(150,200,255,${(1 - k).toFixed(3)})`;
+  for (const sh of M.shards) {
+    const sx = x + w * sh.t + (sh.t - 0.5) * sh.v * e;
+    const sy = y - sh.v * 0.35 * e + 40 * k * k;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(sh.spin * k);
+    ctx.fillRect(-sh.size / 2, -sh.size / 4, sh.size, sh.size / 2);
+    ctx.restore();
+  }
+}
+
+/** Number that kicks (scale + white flash) right after a shot. */
+function kickNumber(ctx, str, x, y, size, color, align) {
+  const k = since(M.shotAt, 160);
+  if (k < 0) {
+    number(ctx, str, x, y, size, color, align);
+    return;
+  }
+  const kick = 1 - k;
+  ctx.save();
+  ctx.translate(x, y);
+  const sc = 1 + 0.1 * kick * kick;
+  ctx.scale(sc, sc);
+  number(ctx, str, 0, -kick * 1.5, size, kick > 0.55 ? "#ffffff" : color, align);
+  ctx.restore();
 }
 
 function elapsedStr(game) {
@@ -103,7 +149,7 @@ export function renderModernMinimalPanels(game, ctx, w, h, hudFactor) {
   drawAmmo(game, ctx, w, h, hudFactor, fs);
 }
 
-function drawTopLeftStack(game, ctx, fs) {
+export function drawTopLeftStack(game, ctx, fs) {
   const x = 12;
   let y = 12;
   const gap = 6;
@@ -119,7 +165,7 @@ function drawTopLeftStack(game, ctx, fs) {
   if (showScore || showClock) {
     const valSize = Math.round(20 * fs);
     const lblSize = Math.round(9 * fs);
-    const scoreStr = `${game.player.score}`;
+    const scoreStr = `${M.ready ? Math.round(M.scoreShown) : game.player.score}`;
     const clock = showClock ? elapsedStr(game) : "";
     ctx.font = uiFont(valSize, 800);
     const scoreW = showScore ? ctx.measureText(scoreStr).width : 0;
@@ -210,9 +256,15 @@ function drawKillsPill(game, ctx, w, fs) {
   const ky = 12;
   const done = game.totalEnemies > 0 && game.killedEnemies >= game.totalEnemies;
   drawPanel(ctx, kx, ky, pw, ph, { accent: done ? UI.green : UI.crimson, chamfer: 7 });
+  const pop = since(M.killAt, 320);
+  if (pop >= 0) {
+    ctx.globalAlpha = 1 - pop;
+    drawBrackets(ctx, kx - 3 - pop * 4, ky - 3 - pop * 4, pw + 6 + pop * 8, ph + 6 + pop * 8, done ? UI.green : UI.crimson, 8, 2);
+    ctx.globalAlpha = 1;
+  }
   ctx.textBaseline = "middle";
   label(ctx, "KILLS", kx + 12, ky + ph / 2 + 1, Math.round(9 * fs), done ? UI.green : "#ff8a96");
-  number(ctx, valStr, kx + pw - 12, ky + ph / 2 + 1, valSize, UI.text, "right");
+  number(ctx, valStr, kx + pw - 12, ky + ph / 2 + 1, valSize, pop >= 0 && pop < 0.5 ? "#ffffff" : UI.text, "right");
   ctx.textBaseline = "alphabetic";
 }
 
@@ -226,13 +278,12 @@ function findBoss(game) {
   return null;
 }
 
-function drawBossBar(game, ctx, w, fs) {
+export function drawBossBar(game, ctx, w, fs, py = 18) {
   const boss = findBoss(game);
   if (!boss) return;
   const barW = Math.round(Math.min(420, w * 0.4));
   const barH = 12;
   const px = Math.round(w / 2 - barW / 2 - 14);
-  const py = 18;
   const pw = barW + 28;
   const ph = 40;
   const pct = Math.max(0, boss.health / boss.maxHealth);
@@ -279,8 +330,9 @@ function drawVitals(game, ctx, w, h, f, fs) {
   // HP number block.
   const nx = plateX + 14;
   label(ctx, "HP", nx, plateY + 10 + Math.round(8 * fs), Math.round(8 * fs), low ? "#ff8a96" : UI.textDim);
-  number(ctx, `${Math.ceil(p.health)}`, nx, plateY + plateH - 9, Math.round(22 * fs),
-    low ? (pulse(game, 0.012) > 0.5 ? UI.crimson : "#ffd0d6") : UI.text);
+  const hit = since(M.hitAt, 180);
+  number(ctx, `${Math.ceil(p.health)}`, nx + (hit >= 0 ? Math.sin(hit * Math.PI * 3) * (1 - hit) * 3 : 0), plateY + plateH - 9, Math.round(24 * fs),
+    hit >= 0 && hit < 0.5 ? "#ffffff" : low ? (pulse(game, 0.012) > 0.5 ? UI.crimson : "#ffd0d6") : UI.text);
 
   // Bars column.
   const bx = plateX + 14 + numBlockW;
@@ -289,6 +341,7 @@ function drawVitals(game, ctx, w, h, f, fs) {
   if (hasShield) {
     const sp = p.shield / p.maxShield;
     drawBar(ctx, bx, by, bw, thinH, sp, p.shield < p.maxShield ? "#4f8dff" : "#7fb6ff", { segments: 0, edge: sp < 1 });
+    shieldShards(ctx, bx, by, bw);
     by += thinH + 3;
   }
   drawBar(ctx, bx, by, bw, hpBarH, hpPct, tone, {
@@ -296,6 +349,7 @@ function drawVitals(game, ctx, w, h, f, fs) {
     ghost,
     glow: low ? 0.35 + 0.45 * pulse(game, 0.012) : 0.22,
   });
+  healSweep(ctx, bx, by, bw, hpBarH);
   by += hpBarH + 6;
 
   const staminaPct = p.stamina / p.maxStamina;
@@ -353,12 +407,14 @@ function drawWeaponSlots(game, ctx, x0, y, slotW, slotH, gap, fs) {
     } else {
       number(ctx, `${i + 1}`, sx + slotW / 2, y + slotH / 2 + 5, Math.round(14 * fs), active ? "#ffffff" : UI.textFaint, "center");
     }
-    if (active) {
-      ctx.fillStyle = UI.cyan;
-      ctx.fillRect(sx + 6, y + slotH + 2, slotW - 12, 2);
-    }
   }
+  // The active-slot underline glides to a newly selected weapon.
+  const target = x0 + p.currentWeapon * (slotW + gap);
+  _slotLineX = _slotLineX < 0 || Math.abs(target - _slotLineX) > 400 ? target : _slotLineX + (target - _slotLineX) * 0.3;
+  ctx.fillStyle = UI.cyan;
+  ctx.fillRect(Math.round(_slotLineX) + 6, y + slotH + 2, slotW - 12, 2);
 }
+let _slotLineX = -1;
 
 // player.weapons holds WEAPONS indices (getWeaponDef only covers the current one).
 const WEAPON_LOOKUP = (idx) => (typeof idx === "number" ? WEAPONS[idx] : idx) || null;
@@ -380,7 +436,7 @@ function drawAmmo(game, ctx, w, h, f, fs) {
   }
   label(ctx, low ? "LOW" : "AMMO", px + 12, py + ph - 10, Math.round(9 * fs),
     low ? (pulse(game, 0.01) > 0.5 ? UI.crimson : "#ff8a96") : UI.textDim);
-  number(ctx, `${ammo}`, px + pw - 12, py + ph - 8, numSize, low ? "#ff5a6e" : "#ffe3a3", "right");
+  kickNumber(ctx, `${ammo}`, px + pw - 12, py + ph - 8, numSize, low ? "#ff5a6e" : "#ffe3a3", "right");
 }
 
 // ─── Combat cues (all layouts) ──────────────────────────────────────────────
@@ -612,7 +668,7 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
 
   // Ammo.
   const lowAmmo = p.ammo <= 10;
-  number(ctx, `${p.ammo}`, pad + ammoW / 2, numY, numSize, lowAmmo ? "#ff5a6e" : "#ffd48a", "center");
+  kickNumber(ctx, `${p.ammo}`, pad + ammoW / 2, numY, numSize, lowAmmo ? "#ff5a6e" : "#ffd48a", "center");
   const wep = p.getWeaponDef();
   if (wep) label(ctx, wep.name.toUpperCase(), pad + ammoW / 2, panelY + panelH - 9, Math.round(9 * fs), wep.color, "center");
 
@@ -626,6 +682,7 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
   drawBar(ctx, healthX + 16, panelY + panelH - 20, healthW - 32, Math.round(9 * hudFactor), hpPct, tone, {
     segments: 10, ghost: ghostFor(hpPct), glow: low ? 0.35 + 0.45 * pulse(game, 0.012) : 0.25,
   });
+  healSweep(ctx, healthX + 16, panelY + panelH - 20, healthW - 32, Math.round(9 * hudFactor));
   if (low) {
     ctx.globalAlpha = 0.45 + 0.55 * pulse(game, 0.012);
     drawBrackets(ctx, healthX - 4, panelY - 4, healthW + 8, panelH + 8, UI.crimson, 16, 2);

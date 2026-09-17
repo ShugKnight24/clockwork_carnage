@@ -1,3 +1,6 @@
+import { isModernArt } from "../rendering/art-style.js";
+import { drawPortraitModern } from "./portrait-modern.js";
+
 /**
  * Player portrait — 10-stage damage visualization.
  * Pure rendering, zero game state dependency.
@@ -12,6 +15,8 @@
  *   visor?: { id: string } }} state
  */
 export function drawPortrait(ctx, x, y, w, h, state) {
+  // Modern: customised agent bust; falls back here while its bitmap decodes.
+  if (isModernArt() && drawPortraitModern(ctx, x, y, w, h, state)) return;
   const { health, maxHealth, alive, time, palette, helmet, visor } = state;
   // Palette-driven tokens (fallback to legacy hex if no character data)
   const HELMET_SHELL = palette ? palette.dark : "#1a2a3a";

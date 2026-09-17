@@ -89,6 +89,19 @@ function blit(ctx, c, x, y, w, h, pad) {
   ctx.drawImage(c, x - pad, y - pad, w + pad * 2, h + pad * 2);
 }
 
+/**
+ * Public access to the sprite cache for layout-specific static art (gauge
+ * bezels, tapes). `paint(g, w, h)` runs once per key/size/DPR; draw the result
+ * with blitSprite at the same w/h/pad.
+ */
+export function cachedSprite(ctx, key, w, h, pad, paint) {
+  return sprite(key, Math.round(w), Math.round(h), pad, pixelRatio(ctx), paint);
+}
+
+export function blitSprite(ctx, c, x, y, w, h, pad = 0) {
+  blit(ctx, c, Math.round(x), Math.round(y), Math.round(w), Math.round(h), pad);
+}
+
 /** Chamfered rectangle: top-left and bottom-right corners cut at 45°. */
 export function chamferPath(g, x, y, w, h, c) {
   const k = Math.max(0, Math.min(c, w / 2, h / 2));

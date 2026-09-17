@@ -21,6 +21,8 @@ import {
   drawModernStageCleared,
   drawModernTimerPill,
 } from "./hud-modern.js";
+import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
+import { updateHudMotion } from "./hud-motion.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -334,6 +336,8 @@ function _portraitState(game) {
     palette: CHARACTER_COLORS[c.colorIndex || 0],
     helmet: HELMET_STYLES[c.helmetIndex || 0],
     visor: VISOR_STYLES[c.visorIndex || 0],
+    shield: game.player.shield || 0,
+    character: game.character,
   };
 }
 
@@ -386,6 +390,9 @@ if (game.mode === "playtest") {
 }
 
 const hudFactor = game.settings.hudScale / 100;
+// Vanguard (hudStyle 4) is Modern-only; Legacy draws it as Minimal.
+const vanguard = game.settings.hudStyle === 4 && isModernArt();
+if (isModernArt()) updateHudMotion(game);
 const isCompactMobile = game.isTouchDevice && isCompactPhone(h);
 const barH = isCompactMobile
   ? Math.round(60 * hudFactor)
@@ -395,13 +402,15 @@ const barH = isCompactMobile
 
 // On compact mobile, render a slim HUD and skip the full layout
 if (isCompactMobile) {
-  _renderCompactMobileHUD(game, ctx, w, h, barH, hudFactor);
+  if (vanguard) renderVanguardCompact(game, ctx, w, h, barH, hudFactor, _portraitState(game));
+  else _renderCompactMobileHUD(game, ctx, w, h, barH, hudFactor);
 
   // Minimap (smaller on compact mobile)
   let mmSize = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
   drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
 
   if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
+  if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH);
 
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
@@ -442,7 +451,9 @@ if (isCompactMobile) {
   game.renderAchievementToast(ctx, w, h);
 
   // Arena timer (compact)
-  if (game.mode === "arena" && isModernArt()) {
+  if (vanguard) {
+    // Vanguard shows the round clock beside its vitals gauge.
+  } else if (game.mode === "arena" && isModernArt()) {
     const secs = Math.ceil(game.arenaTimer);
     const warning = secs <= 10;
     drawModernTimerPill(ctx, 10, 10, "TIME", `${secs}s`, warning ? "#ff2a4a" : "#22e6ff",
@@ -471,7 +482,9 @@ if (isCompactMobile) {
   }
 
   // Campaign timer
-  if (game.mode === "campaign" && game.roundStartTime && isModernArt()) {
+  if (vanguard) {
+    // Clock lives under the Vanguard vitals readout.
+  } else if (game.mode === "campaign" && game.roundStartTime && isModernArt()) {
     const elSec = Math.floor((performance.now() - game.roundStartTime) / 1000);
     drawModernTimerPill(ctx, 10, 10, "TIME", `${Math.floor(elSec / 60)}:${(elSec % 60).toString().padStart(2, "0")}`, "#22e6ff");
   } else if (game.mode === "campaign" && game.roundStartTime) {
@@ -670,7 +683,8 @@ const drawPill = (x, y, pw, ph, alpha = 0.55) => {
 };
 
 if (isModernArt()) {
-  renderModernMinimalPanels(game, ctx, w, h, hudFactor);
+  if (vanguard) renderVanguardPanels(game, ctx, w, h, hudFactor, _portraitState(game), _minimapState(game));
+  else renderModernMinimalPanels(game, ctx, w, h, hudFactor);
 } else {
 // ─── TOP-LEFT: Score / Timer / Difficulty / Meltdown info ───
 {
@@ -1225,7 +1239,7 @@ if (game.settings.showKills) {
 } // end legacy minimal panels
 
 // ─── MINIMAP (top-right, pushed down if kills pill is shown) ───
-{
+if (!vanguard) {
   let mmSize = game.settings.minimapSize;
   if (game.isTouchDevice && w < 700) {
     mmSize = Math.min(mmSize, Math.round(w * 0.28));
@@ -1235,6 +1249,7 @@ if (game.settings.showKills) {
 }
 
 if (isModernArt()) drawModernCombatCues(game, ctx, w, h, 0);
+if (vanguard) drawVanguardThreatRing(game, ctx, w, h, 0);
 
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
