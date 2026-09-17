@@ -1,3 +1,5 @@
+import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+
 const template = document.createElement("template");
 template.innerHTML = `
   <style>
@@ -1554,11 +1556,26 @@ template.innerHTML = `
   </svg>
 `;
 
+// Modern art: the armored agent from the cutscene models (hero_armed), feet on
+// the deck where the legacy figure stood.
+const HERO_PLACEMENT = { x: 138, y: 214, scale: 2.1 };
+
 export class TitleHero extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
+  }
+
+  connectedCallback() {
+    this._unsubscribe ??= attachArtSwitch(this, template, async () => {
+      const { MODELS } = await import("../../src/rendering/svg-art/models/hero.js");
+      return modelHtml("hero", MODELS.hero_armed, HERO_PLACEMENT);
+    });
+  }
+
+  disconnectedCallback() {
+    this._unsubscribe?.();
+    this._unsubscribe = null;
   }
 }
 

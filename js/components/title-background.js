@@ -1,3 +1,5 @@
+import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+
 const template = document.createElement("template");
 template.innerHTML = `
 <style>
@@ -201,11 +203,309 @@ template.innerHTML = `
 </svg>
 `;
 
+// ---------------------------------------------------------------------------
+// Modern art: nebula sky over the Chronos Station skyline, with the duel deck in
+// front — cyan light on the hero's side, crimson on the Paradox Lord's.
+// ---------------------------------------------------------------------------
+
+const INK = "#04060b";
+const DECK = { cx: 350, cy: 334, rx: 346, ry: 56 };
+const HORIZON = 292;
+const f = (n) => Math.round(n * 10) / 10;
+
+/** Deterministic PRNG so stars and windows never shift between loads. */
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+const blur = (id, sd) =>
+  `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${sd}"/></filter>`;
+
+const BG_DEFS = `
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#020309"/><stop offset=".45" stop-color="#070b1c"/>
+  <stop offset=".72" stop-color="#0d1128"/><stop offset="1" stop-color="#03040a"/></linearGradient>
+<linearGradient id="tower" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0" stop-color="#1a2536"/><stop offset=".35" stop-color="#0d1422"/>
+  <stop offset="1" stop-color="#05080f"/></linearGradient>
+<linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#141a3a" stop-opacity="0"/><stop offset="1" stop-color="#1b1840" stop-opacity=".85"/></linearGradient>
+<linearGradient id="deckTop" x1="0" y1="0" x2="1" y2=".3">
+  <stop offset="0" stop-color="#2c3b4d"/><stop offset=".3" stop-color="#1a2433"/>
+  <stop offset=".7" stop-color="#101723"/><stop offset="1" stop-color="#080b12"/></linearGradient>
+<linearGradient id="deckSide" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#101824"/><stop offset="1" stop-color="#020306"/></linearGradient>
+<linearGradient id="duel" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0" stop-color="#22e6ff"/><stop offset=".42" stop-color="#22e6ff" stop-opacity=".15"/>
+  <stop offset=".58" stop-color="#ff2a4a" stop-opacity=".15"/><stop offset="1" stop-color="#ff2a4a"/></linearGradient>
+<radialGradient id="deckShade" cx=".5" cy=".42" r=".6">
+  <stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".7" stop-color="#000" stop-opacity=".25"/>
+  <stop offset="1" stop-color="#000" stop-opacity=".7"/></radialGradient>
+<radialGradient id="riftSpill"><stop offset="0" stop-color="#bafcff" stop-opacity=".55"/>
+  <stop offset=".35" stop-color="#5a7dff" stop-opacity=".3"/><stop offset="1" stop-color="#8b4dff" stop-opacity="0"/></radialGradient>
+<radialGradient id="cyanSpill"><stop offset="0" stop-color="#22e6ff" stop-opacity=".5"/>
+  <stop offset="1" stop-color="#22e6ff" stop-opacity="0"/></radialGradient>
+<radialGradient id="redSpill"><stop offset="0" stop-color="#ff2a4a" stop-opacity=".5"/>
+  <stop offset="1" stop-color="#ff2a4a" stop-opacity="0"/></radialGradient>
+<radialGradient id="star"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#cfe8ff" stop-opacity=".6"/>
+  <stop offset="1" stop-color="#cfe8ff" stop-opacity="0"/></radialGradient>
+<radialGradient id="edgeFade" cx=".5" cy=".47" r=".56">
+  <stop offset=".55" stop-color="#fff"/><stop offset=".85" stop-color="#fff" stop-opacity=".45"/>
+  <stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<mask id="edge" maskContentUnits="userSpaceOnUse" x="0" y="0" width="700" height="400" maskUnits="userSpaceOnUse">
+  <rect width="700" height="400" fill="url(#edgeFade)"/></mask>
+${blur("b1", 1)}${blur("b3", 3)}${blur("b8", 8)}${blur("b18", 18)}`;
+
+/** Point on the deck's top ellipse, scaled by k, at angle a (radians). */
+const onDeck = (k, a) => [DECK.cx + Math.cos(a) * DECK.rx * k, DECK.cy + Math.sin(a) * DECK.ry * k];
+
+function nebula() {
+  return (
+    `<g filter="url(#b18)">` +
+    `<ellipse cx="150" cy="150" rx="190" ry="78" transform="rotate(-20 150 150)" fill="#0b5e78" opacity=".42"/>` +
+    `<ellipse cx="110" cy="120" rx="90" ry="34" transform="rotate(-24 110 120)" fill="#1fb6d6" opacity=".22"/>` +
+    `<ellipse cx="570" cy="128" rx="190" ry="84" transform="rotate(16 570 128)" fill="#7a1030" opacity=".46"/>` +
+    `<ellipse cx="610" cy="96" rx="84" ry="32" transform="rotate(20 610 96)" fill="#e0305a" opacity=".2"/>` +
+    `<ellipse cx="350" cy="96" rx="170" ry="58" fill="#3d1a7a" opacity=".38"/>` +
+    `</g>` +
+    `<g filter="url(#b8)" fill="#020309">` +
+    `<path d="M-10 214 C90 180 170 196 260 168 C300 156 320 170 330 182 C250 206 150 206 -10 240 Z" opacity=".55"/>` +
+    `<path d="M710 196 C620 176 530 194 450 164 C420 154 396 164 384 176 C460 204 560 214 710 226 Z" opacity=".55"/>` +
+    `</g>`
+  );
+}
+
+function starfield(rnd, n) {
+  let s = "";
+  for (let i = 0; i < n; i++) {
+    const x = rnd() * 700;
+    const y = rnd() * (HORIZON - 20);
+    const r = 0.25 + rnd() ** 3 * 0.9;
+    const c = ["#ffffff", "#c8d8ff", "#ffd8e0", "#c8f4ff"][Math.floor(rnd() * 4)];
+    s += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${c}" opacity="${f(0.3 + rnd() * 0.6)}"/>`;
+  }
+  return s;
+}
+
+function glints(rnd, n) {
+  let s = "";
+  for (let i = 0; i < n; i++) {
+    const x = f(rnd() * 700);
+    const y = f(8 + rnd() * 220);
+    const k = f(0.6 + rnd() * 0.9);
+    s +=
+      `<g transform="translate(${x} ${y}) scale(${k})">` +
+      `<circle r="5" fill="url(#star)"/>` +
+      `<path d="M0 -7 L.5 0 L0 7 L-.5 0 Z M-7 0 L0 .5 L7 0 L0 -.5 Z" fill="#eaf6ff" opacity=".85"/></g>`;
+  }
+  return s;
+}
+
+/** Station skyline: towers get a rim light in the colour of their side of the duel. */
+function skyline(rnd) {
+  let towers = "";
+  let lights = "";
+  let x = -6;
+  while (x < 706) {
+    const w = 12 + rnd() * 26;
+    const edge = Math.min(1, Math.abs(x + w / 2 - 350) / 300);
+    const h = 16 + rnd() * 30 + edge ** 1.6 * (60 + rnd() * 70);
+    const top = HORIZON - h;
+    const left = x + w / 2 < 350;
+    const rim = left ? "#22e6ff" : "#ff2a4a";
+    const cap = rnd();
+    let d;
+    if (cap < 0.3) {
+      d = `M${f(x)} ${HORIZON} L${f(x)} ${f(top + 6)} L${f(x + w / 2)} ${f(top)} L${f(x + w)} ${f(top + 6)} L${f(x + w)} ${HORIZON} Z`;
+    } else if (cap < 0.55) {
+      d = `M${f(x)} ${HORIZON} L${f(x)} ${f(top + 8)} L${f(x + 4)} ${f(top + 8)} L${f(x + 4)} ${f(top)} L${f(x + w - 4)} ${f(top)} L${f(x + w - 4)} ${f(top + 8)} L${f(x + w)} ${f(top + 8)} L${f(x + w)} ${HORIZON} Z`;
+    } else {
+      d = `M${f(x)} ${HORIZON} L${f(x)} ${f(top)} L${f(x + w)} ${f(top)} L${f(x + w)} ${HORIZON} Z`;
+    }
+    towers += `<path d="${d}" fill="url(#tower)" stroke="${INK}" stroke-width="1" stroke-linejoin="round"/>`;
+    // Rim light along the lit side, facing the portal.
+    const rx = left ? x + w - 0.8 : x + 0.8;
+    towers += `<path d="M${f(rx)} ${f(top + (cap < 0.55 ? 8 : 1))} L${f(rx)} ${f(top + h * 0.55)}" stroke="${rim}" stroke-width=".7" opacity=".55"/>`;
+    // Floor seams
+    for (let yy = top + 12; yy < HORIZON - 4; yy += 9 + Math.floor(rnd() * 6)) {
+      towers += `<path d="M${f(x + 1.5)} ${f(yy)} L${f(x + w - 1.5)} ${f(yy)}" stroke="${INK}" stroke-width=".5" opacity=".6"/>`;
+      if (rnd() < 0.55) {
+        const wx = x + 2.5 + rnd() * (w - 7);
+        const c = rnd() < 0.18 ? "#ffae3a" : left ? "#7fe8ff" : "#ff7a8a";
+        lights += `<rect x="${f(wx)}" y="${f(yy + 2.5)}" width="${f(2 + rnd() * 3)}" height="1.6" fill="${c}" opacity="${f(0.45 + rnd() * 0.5)}"/>`;
+      }
+    }
+    if (h > 90 && rnd() < 0.7) {
+      const ax = x + w / 2;
+      towers += `<path d="M${f(ax)} ${f(top)} L${f(ax)} ${f(top - 14)}" stroke="${INK}" stroke-width="1.4"/><path d="M${f(ax)} ${f(top)} L${f(ax)} ${f(top - 14)}" stroke="#3a4d61" stroke-width=".5"/>`;
+      lights += `<circle cx="${f(ax)}" cy="${f(top - 15)}" r="3.2" fill="#ff2a4a" filter="url(#b1)"/><circle cx="${f(ax)}" cy="${f(top - 15)}" r="1" fill="#ffd0d6"/>`;
+    }
+    x += w + (rnd() < 0.25 ? 4 + rnd() * 10 : 0);
+  }
+  return { towers, lights };
+}
+
+function deck() {
+  const { cx, cy, rx, ry } = DECK;
+  const side =
+    `M${cx - rx} ${cy} A${rx} ${ry} 0 0 0 ${cx + rx} ${cy} L${cx + rx} ${cy + 16} A${rx} ${ry} 0 0 1 ${cx - rx} ${cy + 16} Z`;
+  let rings = "";
+  [0.26, 0.5, 0.74].forEach((k) => {
+    rings +=
+      `<ellipse cx="${cx}" cy="${f(cy + 1)}" rx="${f(rx * k)}" ry="${f(ry * k)}" fill="none" stroke="#4d6378" stroke-width=".6" opacity=".45"/>` +
+      `<ellipse cx="${cx}" cy="${cy}" rx="${f(rx * k)}" ry="${f(ry * k)}" fill="none" stroke="${INK}" stroke-width="1" opacity=".85"/>`;
+  });
+  let seams = "";
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2 + 0.08;
+    const [x0, y0] = onDeck(0.26, a);
+    const [x1, y1] = onDeck(0.985, a);
+    seams += `M${f(x0)} ${f(y0)}L${f(x1)} ${f(y1)}`;
+  }
+  let studs = "";
+  for (let i = 0; i < 36; i++) {
+    const [x, y] = onDeck(0.88, (i / 36) * Math.PI * 2);
+    studs += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="1.6" ry=".6" fill="#6f8aa3" opacity=".5"/>`;
+  }
+  let vents = "";
+  for (let i = 0; i < 8; i++) {
+    const [x, y] = onDeck(0.62, 0.35 + (i / 8) * Math.PI * 2);
+    vents += `<path d="M${f(x - 7)} ${f(y - 1)} L${f(x + 7)} ${f(y - 1)} M${f(x - 6)} ${f(y + 1)} L${f(x + 6)} ${f(y + 1)}" stroke="${INK}" stroke-width=".9" opacity=".8"/>`;
+  }
+  return (
+    `<ellipse cx="${cx}" cy="${cy + 22}" rx="${rx + 10}" ry="${ry + 10}" fill="#000" opacity=".6" filter="url(#b8)"/>` +
+    `<path d="${side}" fill="url(#deckSide)" stroke="${INK}" stroke-width="1.2"/>` +
+    `<path d="M${cx - rx + 8} ${cy + 22} A${rx} ${ry} 0 0 0 ${cx + rx - 8} ${cy + 22}" fill="none" stroke="url(#duel)" stroke-width="1.2" opacity=".55"/>` +
+    `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#deckTop)" stroke="${INK}" stroke-width="1.4"/>` +
+    `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#deckShade)"/>` +
+    `<path d="${seams}" stroke="${INK}" stroke-width=".7" opacity=".55"/>` +
+    rings +
+    vents +
+    studs +
+    `<ellipse cx="${cx}" cy="${cy}" rx="${f(rx * 0.26 - 4)}" ry="${f(ry * 0.26 - 1)}" fill="#070a12" stroke="#4d6378" stroke-width=".5" opacity=".9"/>` +
+    // lit rim on the far edge (key light) and duel-coloured front lip
+    `<path d="M${cx - rx + 30} ${cy - 22} A${rx} ${ry} 0 0 1 ${cx - 40} ${cy - ry + 0.6}" fill="none" stroke="#dfe9f4" stroke-width=".9" opacity=".35"/>` +
+    `<path d="M${cx - rx + 1} ${cy + 1} A${rx - 1} ${ry - 1} 0 0 0 ${cx + rx - 1} ${cy + 1}" fill="none" stroke="url(#duel)" stroke-width="1.1" opacity=".9"/>`
+  );
+}
+
+function floorLight() {
+  const { cx, cy, rx, ry } = DECK;
+  const inlay = `<ellipse cx="${cx}" cy="${cy}" rx="${f(rx * 0.5)}" ry="${f(ry * 0.5)}" fill="none" stroke="url(#duel)" stroke-width="1.4"/>`;
+  return (
+    `<ellipse cx="${cx}" cy="${cy - 4}" rx="190" ry="40" fill="url(#riftSpill)"/>` +
+    `<ellipse cx="138" cy="${cy + 2}" rx="120" ry="24" fill="url(#cyanSpill)" opacity=".7"/>` +
+    `<ellipse cx="566" cy="${cy + 2}" rx="130" ry="26" fill="url(#redSpill)" opacity=".75"/>` +
+    `<g filter="url(#b3)">${inlay}</g>${inlay}` +
+    `<ellipse cx="350" cy="${HORIZON - 6}" rx="300" ry="26" fill="#6a3cff" opacity=".22" filter="url(#b18)"/>`
+  );
+}
+
+function fog() {
+  return (
+    `<g filter="url(#b18)">` +
+    `<ellipse cx="170" cy="${HORIZON + 4}" rx="220" ry="14" fill="#23305a" opacity=".55"/>` +
+    `<ellipse cx="540" cy="${HORIZON + 8}" rx="230" ry="16" fill="#3a1d4a" opacity=".55"/>` +
+    `<ellipse cx="350" cy="372" rx="360" ry="18" fill="#0d1328" opacity=".7"/>` +
+    `</g>`
+  );
+}
+
+function motes(rnd, n) {
+  let m = "";
+  for (let i = 0; i < n; i++) {
+    const x = rnd() * 700;
+    const y = 120 + rnd() * 250;
+    const c = x < 300 ? "#7fe8ff" : x > 400 ? "#ff7a8a" : "#c9b0ff";
+    m += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(0.5 + rnd() * 1.1)}" fill="${c}" opacity="${f(0.4 + rnd() * 0.6)}"/>`;
+  }
+  return `<g filter="url(#b1)">${m}</g>${m}`;
+}
+
+/** Faint horology ring turning behind the whole scene. */
+function skyDial() {
+  let ticks = "";
+  for (let i = 0; i < 120; i++) {
+    const a = (i / 120) * Math.PI * 2;
+    const r0 = i % 10 === 0 ? 176 : 184;
+    ticks += `M${f(Math.cos(a) * r0)} ${f(Math.sin(a) * r0)}L${f(Math.cos(a) * 190)} ${f(Math.sin(a) * 190)}`;
+  }
+  return {
+    box: [-200, -200, 400, 400],
+    defs: "",
+    layers: [
+      {
+        markup:
+          `<g fill="none" stroke="#8fb4d8">` +
+          `<circle r="192" stroke-width=".8" opacity=".35"/><circle r="170" stroke-width="2.4" opacity=".12" stroke-dasharray="120 20 8 20"/>` +
+          `<path d="${ticks}" stroke-width=".8" opacity=".3"/></g>`,
+        anim: { type: "spin", speed: 0.025 },
+        opacity: 0.6,
+      },
+    ],
+  };
+}
+
+/** Sky and skyline (behind the sky dial) and the deck with its light and haze (in front). */
+function modernBackground() {
+  const rnd = rng(2718);
+  const city = skyline(rnd);
+  const box = [0, 0, 700, 400];
+  const sky = {
+    box,
+    defs: BG_DEFS,
+    layers: [
+      {
+        // Feathered to transparent so the sky melts into the page gradient.
+        markup:
+          `<g mask="url(#edge)"><rect width="700" height="400" fill="url(#sky)"/>` +
+          nebula() +
+          starfield(rnd, 170) +
+          `<rect y="232" width="700" height="${HORIZON - 232}" fill="url(#haze)"/>` +
+          city.towers +
+          `</g>`,
+      },
+      { markup: glints(rnd, 16), anim: { type: "pulse", min: 0.35, max: 1, speed: 1.1 }, blend: "lighter" },
+      { markup: city.lights, anim: { type: "flicker", min: 0.55, max: 1, speed: 0.7 }, blend: "lighter" },
+    ],
+  };
+  const ground = {
+    box,
+    defs: BG_DEFS,
+    layers: [
+      { markup: `<g mask="url(#edge)"><rect y="${HORIZON - 1}" width="700" height="${400 - HORIZON + 1}" fill="#05060d"/></g>` + deck() },
+      { markup: floorLight(), anim: { type: "pulse", min: 0.7, max: 1, speed: 1.4 }, blend: "lighter" },
+      { markup: fog(), anim: { type: "drift", amp: 16, speed: 0.22 } },
+      { markup: motes(rnd, 46), anim: { type: "float", amp: 7, speed: 0.45 }, blend: "lighter" },
+    ],
+  };
+  return { sky, ground };
+}
+
 export class TitleBackground extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
+  }
+
+  connectedCallback() {
+    this._unsubscribe ??= attachArtSwitch(this, template, async () => {
+      const { sky, ground } = modernBackground();
+      return (
+        modelHtml("title-sky", sky) +
+        modelHtml("title-dial", skyDial(), { x: 350, y: 195 }) +
+        modelHtml("title-ground", ground)
+      );
+    });
+  }
+
+  disconnectedCallback() {
+    this._unsubscribe?.();
+    this._unsubscribe = null;
   }
 }
 
