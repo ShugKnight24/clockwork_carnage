@@ -1,3 +1,6 @@
+import { isModernArt } from "../src/rendering/art-style.js";
+import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
+
 /**
  * WeaponRenderer — draws all 8 procedural weapon models onto a Canvas context.
  *
@@ -38,6 +41,11 @@ export function drawWeapon(ctx, w, h, opts) {
   } = opts;
 
   if (!wep) return;
+
+  // Modern art: rasterised SVG weapon and gloves with their own hip/ADS pose,
+  // driven by the same bob/sway/kick/recoil inputs. Falls through to the
+  // procedural model while bitmaps decode.
+  if (isModernArt() && drawViewmodel(ctx, w, h, opts)) return;
 
   const bobMulX = isAiming ? 2 : isDashing ? 18 : isSprinting ? 14 : 8;
   const bobMulY = isAiming ? 1.5 : isDashing ? 12 : isSprinting ? 10 : 5;
@@ -1048,84 +1056,215 @@ export function drawWeapon(ctx, w, h, opts) {
 
 /**
  * Procedural gloved hands gripping the weapon. Weapons all share the same local
- * space — grip around y≈22, receiver around y≈-5 — so one pair of hands reads
- * correctly across the whole arsenal, with a per-weapon support-hand reach.
+ * space — grip around y≈22, receiver around y≈-5 — so one firing hand reads
+ * across the whole arsenal, with a per-weapon support-hand grip:
+ * sidearms get a cupping hand under the grip, long guns clamp the pump /
+ * handguard, heavy weapons grab the left flank.
  */
-function drawHands(ctx, wep, accent, skin, ads) {
-  const glove = "#1b212b";
-  const gloveLit = "#2a323f";
-  const gloveDark = "#0e1218";
+const SUPPORT_GRIPS = {
+  0: { cup: true },
+  6: { cup: true },
+  1: { x0: -13, x1: 12, y: -8, rows: 3, gap: 3.8 },
+  4: { x0: -13, x1: 12, y: -1, rows: 3, gap: 3.4 },
+  2: { x0: -11, x1: 10, y: -24, rows: 3, gap: 3.8 },
+  5: { x0: -9, x1: 8, y: -22, rows: 3, gap: 3.8 },
+  3: { x0: -25, x1: -11, y: -9, rows: 4, gap: 3.8 },
+  7: { x0: -23, x1: -9, y: -7, rows: 4, gap: 3.8 },
+};
 
-  // Support hand reach — long guns get a forward grip, sidearms a cup grip.
-  const twoHandedForward = wep.id === 1 || wep.id === 3 || wep.id === 4 || wep.id === 5 || wep.id === 7;
-  const supX = twoHandedForward ? -13 : -9;
-  const supY = twoHandedForward ? -14 : 16;
+const HAND_INK = "#04060b";
+// Gradients live in the weapon's local space, so one per context serves every frame.
+const handPaints = new WeakMap();
+function getHandPaints(ctx) {
+  let p = handPaints.get(ctx);
+  if (p) return p;
+  const glove = ctx.createLinearGradient(-24, -30, 30, 60);
+  glove.addColorStop(0, "#4a5462");
+  glove.addColorStop(0.4, "#2a313c");
+  glove.addColorStop(1, "#10141a");
+  const sleeve = ctx.createLinearGradient(-40, 30, 40, 70);
+  sleeve.addColorStop(0, "#34465c");
+  sleeve.addColorStop(0.5, "#1c2a3a");
+  sleeve.addColorStop(1, "#0b111a");
+  p = { glove, sleeve };
+  handPaints.set(ctx, p);
+  return p;
+}
+
+/** Tapered capsule from (ax, ay) to (bx, by), filled with the current fillStyle and inked. */
+function handSeg(ctx, ax, ay, bx, by, wa, wb) {
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const nx = -(by - ay) / len;
+  const ny = (bx - ax) / len;
+  const ang = Math.atan2(by - ay, bx - ax);
+  ctx.beginPath();
+  ctx.moveTo(ax + nx * wa / 2, ay + ny * wa / 2);
+  ctx.lineTo(bx + nx * wb / 2, by + ny * wb / 2);
+  ctx.arc(bx, by, wb / 2, ang + Math.PI / 2, ang - Math.PI / 2, true);
+  ctx.lineTo(ax - nx * wa / 2, ay - ny * wa / 2);
+  ctx.arc(ax, ay, wa / 2, ang - Math.PI / 2, ang + Math.PI / 2, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+/** Finger through joints [x, y, ...] with widths per joint; lit edge + knuckle crease. */
+function handFinger(ctx, pts, widths) {
+  for (let i = 0; i < pts.length / 2 - 1; i++) {
+    handSeg(ctx, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3], widths[i], widths[i + 1]);
+  }
+  // Soft highlight along the upper edge of the first two segments.
+  ctx.save();
+  ctx.strokeStyle = "rgba(200,215,230,0.22)";
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(pts[0], pts[1] - widths[0] * 0.28);
+  ctx.lineTo(pts[2], pts[3] - widths[1] * 0.28);
+  ctx.lineTo(pts[4], pts[5] - widths[2] * 0.28);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Sleeve from the screen edge to the wrist, glove cuff and accent trim. */
+function handForearm(ctx, paints, accent, x0, x1, bottom, wx0, wy0, wx1, wy1) {
+  ctx.fillStyle = paints.sleeve;
+  ctx.beginPath();
+  ctx.moveTo(x0, bottom);
+  ctx.lineTo(wx0, wy0);
+  ctx.lineTo(wx1, wy1);
+  ctx.lineTo(x1, bottom);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  const at = (t) => [wx0 + (x0 - wx0) * t, wy0 + (bottom - wy0) * t, wx1 + (x1 - wx1) * t, wy1 + (bottom - wy1) * t];
+  // Accent trim band.
+  const [a0, b0, a1, b1] = at(0.24);
+  const [c0, d0, c1, d1] = at(0.3);
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.moveTo(a0, b0);
+  ctx.lineTo(a1, b1);
+  ctx.lineTo(c1, d1);
+  ctx.lineTo(c0, d0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // Fold line.
+  const [e0, f0, e1, f1] = at(0.55);
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(e0 + (e1 - e0) * 0.15, f0 + (f1 - f0) * 0.15);
+  ctx.lineTo(e0 + (e1 - e0) * 0.6, f0 + (f1 - f0) * 0.6 - 1.2);
+  ctx.stroke();
+  ctx.restore();
+  // Glove cuff over the wrist.
+  const [g0, h0, g1, h1] = at(0.14);
+  ctx.fillStyle = "#171c24";
+  ctx.beginPath();
+  ctx.moveTo(wx0 - (x0 - wx0) * 0.04, wy0 - (bottom - wy0) * 0.04);
+  ctx.lineTo(wx1 - (x1 - wx1) * 0.04, wy1 - (bottom - wy1) * 0.04);
+  ctx.lineTo(g1, h1);
+  ctx.lineTo(g0, h0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawHands(ctx, wep, accent, skin, ads) {
+  const paints = getHandPaints(ctx);
+  const grip = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
+  const gx = 1;
+  const gy = 22;
 
   ctx.save();
+  ctx.strokeStyle = HAND_INK;
+  ctx.lineWidth = 0.55;
+  ctx.lineJoin = "round";
 
-  // ── Support hand + forearm (enters from lower left) ──
-  ctx.fillStyle = glove;
-  ctx.beginPath();
-  ctx.moveTo(supX - 3, supY - 5);
-  ctx.lineTo(supX + 9, supY - 2);
-  ctx.lineTo(supX + 9, supY + 8);
-  ctx.lineTo(supX - 6, supY + 12);
-  ctx.lineTo(-13, 58);
-  ctx.lineTo(-25, 58);
-  ctx.closePath();
-  ctx.fill();
-  // Forearm shading along the underside
-  ctx.fillStyle = gloveDark;
-  ctx.beginPath();
-  ctx.moveTo(supX - 6, supY + 12);
-  ctx.lineTo(-13, 58);
-  ctx.lineTo(-20, 58);
-  ctx.lineTo(supX - 8, supY + 10);
-  ctx.closePath();
-  ctx.fill();
-  // Knuckles over the foregrip
-  ctx.fillStyle = gloveLit;
-  for (let i = 0; i < 4; i++) {
+  // ── Support hand: forearm and palm (fingers come after the firing hand) ──
+  if (grip.cup) {
+    handForearm(ctx, paints, accent, -34, -16, 64, -15, 32, -5, 38);
+    ctx.fillStyle = paints.glove;
     ctx.beginPath();
-    ctx.roundRect(supX - 1 + i * 2.6, supY - 4 + i * 0.5, 2.4, 7, 1.2);
+    ctx.moveTo(-10, 18);
+    ctx.quadraticCurveTo(-4, 26, -3, 38);
+    ctx.lineTo(-6, 41);
+    ctx.quadraticCurveTo(-14, 40, -16, 33);
+    ctx.quadraticCurveTo(-15, 24, -10, 18);
+    ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+    // Support thumb along the left of the frame.
+    handFinger(ctx, [-10, 24, -10.5, 16, -9.5, 9], [4.4, 3.9, 3.4]);
+  } else {
+    const { x0, y, rows, gap } = grip;
+    const yb = y + rows * gap;
+    handForearm(ctx, paints, accent, x0 - 26, x0 - 8, 64, x0 - 9, yb + 4, x0 + 1, yb + 8);
+    ctx.fillStyle = paints.glove;
+    ctx.beginPath();
+    ctx.moveTo(x0 - 3.5, y - 3);
+    ctx.quadraticCurveTo(x0 + 3, y - 2, x0 + 3.5, yb);
+    ctx.quadraticCurveTo(x0 + 2, yb + 7, x0 - 3, yb + 8);
+    ctx.quadraticCurveTo(x0 - 9, yb + 5, x0 - 8, yb - 2);
+    ctx.quadraticCurveTo(x0 - 7, y, x0 - 3.5, y - 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Thumb up the near edge.
+    handFinger(ctx, [x0 - 5, yb, x0 - 4.5, y + 1, x0 - 3, y - 5], [4.4, 3.9, 3.4]);
   }
 
-
-  // ── Trigger hand + forearm (enters from lower right) ──
-  const gx = 1, gy = 22;
-  ctx.fillStyle = glove;
+  // ── Firing hand (enters from lower right) ──
+  handForearm(ctx, paints, accent, gx + 10, gx + 30, 64, gx + 5, gy + 18, gx + 16, gy + 12);
+  ctx.fillStyle = paints.glove;
+  // Back of the hand on the right flank of the grip.
   ctx.beginPath();
-  ctx.moveTo(gx - 7, gy - 4);
-  ctx.lineTo(gx + 9, gy - 6);
-  ctx.lineTo(gx + 14, gy + 10);
-  ctx.lineTo(gx + 26, 60);
-  ctx.lineTo(gx + 8, 60);
-  ctx.lineTo(gx - 7, gy + 14);
+  ctx.moveTo(gx + 2, gy - 9);
+  ctx.quadraticCurveTo(gx + 10, gy - 10, gx + 12, gy - 2);
+  ctx.quadraticCurveTo(gx + 16, gy + 8, gx + 16, gy + 13);
+  ctx.lineTo(gx + 5, gy + 19);
+  ctx.quadraticCurveTo(gx + 3, gy + 8, gx + 2, gy - 9);
   ctx.closePath();
   ctx.fill();
-  // Forearm top highlight
-  ctx.fillStyle = gloveLit;
-  ctx.beginPath();
-  ctx.moveTo(gx + 9, gy - 6);
-  ctx.lineTo(gx + 14, gy + 10);
-  ctx.lineTo(gx + 19, gy + 22);
-  ctx.lineTo(gx + 13, gy - 4);
-  ctx.closePath();
-  ctx.fill();
-  // Fingers curling around the grip front
-  ctx.fillStyle = gloveLit;
-  for (let i = 0; i < 4; i++) {
-    ctx.beginPath();
-    ctx.roundRect(gx - 8, gy - 3 + i * 4.4, 8.5, 3.8, 1.6);
-    ctx.fill();
+  ctx.stroke();
+  // Fingers wrapping the front strap: index at the trigger, then middle/ring/pinky.
+  const rows = [gy - 10, gy - 4.5, gy, gy + 4.4];
+  const fw = [3.9, 3.9, 3.7, 3.3];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const y = rows[i];
+    const reach = i === 0 ? 1.5 : 0;
+    handFinger(ctx, [gx + 9.5, y + 0.6, gx + 2.5 + reach, y - 0.2, gx - 3.5 + reach, y + 0.4, gx - 6 + reach, y + 2.2], [fw[i], fw[i] * 0.95, fw[i] * 0.88, fw[i] * 0.78]);
   }
-  // Thumb wrapping over the top of the grip
-  ctx.fillStyle = glove;
-  ctx.beginPath();
-  ctx.roundRect(gx - 2, gy - 8, 9, 4.2, 2);
-  ctx.fill();
+  // Knuckle plates across the back of the fingers.
+  ctx.fillStyle = "#5d7185";
+  for (let i = 0; i < rows.length; i++) {
+    ctx.beginPath();
+    ctx.ellipse(gx + 9.3, rows[i] + 0.4, 1.5, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(230,240,250,0.35)";
+  for (let i = 0; i < rows.length; i++) ctx.fillRect(gx + 8.6, rows[i] - 0.4, 1.1, 0.5);
+  // Thumb over the top of the grip.
+  ctx.fillStyle = paints.glove;
+  handFinger(ctx, [gx + 7, gy - 8, gx + 1, gy - 12, gx - 5, gy - 13], [4.8, 4.2, 3.6]);
 
+  // ── Support fingers ──
+  if (grip.cup) {
+    // Wrapped round the front below the firing hand's pinky.
+    for (const [y, w] of [[31.5, 3.8], [35.8, 3.6], [39.8, 3.2]]) {
+      handFinger(ctx, [-9, y + 1, -2, y - 0.4, 5, y, 8.5, y + 1.8], [w, w * 0.95, w * 0.88, w * 0.78]);
+    }
+  } else {
+    const { x0, x1, y, rows: n, gap } = grip;
+    for (let i = n - 1; i >= 0; i--) {
+      const fy = y + i * gap;
+      const w = 3.7 - i * 0.12;
+      handFinger(ctx, [x0 + 1, fy + 0.4, x0 + (x1 - x0) * 0.45, fy - 0.4, x1 - 2, fy, x1 + 0.5, fy + 1.6], [w, w * 0.95, w * 0.88, w * 0.78]);
+    }
+  }
 
   ctx.restore();
 }
