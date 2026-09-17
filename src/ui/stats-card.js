@@ -1,4 +1,6 @@
 import { isCompactPhone } from "../../js/layout.js";
+import { isModernArt } from "../rendering/art-style.js";
+import { UI, uiFont, drawPanel, drawCaption } from "./modern-ui-kit.js";
 
 /**
  * Stats card — 2x2 grid showing kills/time/accuracy/streak + score.
@@ -38,6 +40,16 @@ export function renderStatsCard(ctx, w, startY, accentColor, textColor, countUp,
   const dispKills = Math.round(stats.killedEnemies * cu);
   const dispAccuracy = Math.round(accuracy * cu);
   const dispStreak = Math.round(stats.bestStreak * cu);
+
+  if (isModernArt()) {
+    renderStatsCardModern(ctx, w, startY, accentColor, compact, stats, [
+      { label: "KILLS", value: `${dispKills}/${stats.totalEnemies}` },
+      { label: "TIME", value: timeStr },
+      { label: "ACCURACY", value: `${dispAccuracy}%` },
+      { label: "BEST STREAK", value: `${dispStreak}x` },
+    ]);
+    return;
+  }
 
   // Card background with inner glow
   const cardW = compact ? Math.min(300, w - 40) : 380;
@@ -113,4 +125,41 @@ export function renderStatsCard(ctx, w, startY, accentColor, textColor, countUp,
     w / 2,
     startY + cardH + (compact ? 14 : 20),
   );
+}
+
+/** Modern art style: steel dossier card, same footprint as the legacy card. */
+function renderStatsCardModern(ctx, w, startY, accentColor, compact, stats, statItems) {
+  const cardW = compact ? Math.min(300, w - 40) : 380;
+  const cardH = compact ? 80 : 130;
+  const cx = Math.round(w / 2 - cardW / 2);
+  drawPanel(ctx, cx, startY, cardW, cardH, { variant: "menu", accent: accentColor, chamfer: compact ? 10 : 16 });
+
+  ctx.fillStyle = "rgba(130,160,188,0.18)";
+  ctx.fillRect(Math.round(w / 2), startY + 12, 1, cardH - 24);
+  ctx.fillRect(cx + 16, Math.round(startY + cardH / 2), cardW - 32, 1);
+
+  const colW = cardW / 2;
+  const rowH = cardH / 2;
+  ctx.textAlign = "center";
+  for (let i = 0; i < statItems.length; i++) {
+    const sx = cx + (i % 2) * colW + colW / 2;
+    const sy = startY + Math.floor(i / 2) * rowH + (compact ? 14 : 20);
+    ctx.font = uiFont(compact ? 8 : 10, 700);
+    ctx.letterSpacing = "1.5px";
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText(statItems[i].label, sx, sy);
+    ctx.letterSpacing = "0px";
+    ctx.font = uiFont(compact ? 18 : 28, 800);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(statItems[i].value, sx, sy + (compact ? 19 : 30));
+  }
+
+  const size = compact ? 11 : 13;
+  drawCaption(ctx, w / 2, startY + cardH + (compact ? 14 : 20) - Math.round(size * 1.2), `Score ${stats.score}`, {
+    size,
+    scheme: "cream",
+    align: "center",
+  });
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(Math.round(w / 2 - cardW * 0.2), startY + cardH - 3, Math.round(cardW * 0.4), 2);
 }

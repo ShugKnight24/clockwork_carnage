@@ -6,6 +6,11 @@
  *   - renderControlsScreen : full key-bindings screen with rebind affordance
  */
 
+import { isModernArt } from '../rendering/art-style.js';
+import {
+  UI, uiFont, drawBackdrop, drawPanel, drawTitle, drawKeycap, drawButton,
+} from './modern-ui-kit.js';
+
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const ACCENT = '#00ffcc';
 const ACCENT_BLUE = '#00ccff';
@@ -195,6 +200,10 @@ function drawBindValue(ctx, args) {
 
 export function renderControlsScreen(ctx, w, h, state) {
   const { keybinds, controlsSelection, rebindingKey, keybindSwapFlash } = state;
+  if (isModernArt()) {
+    renderControlsScreenModern(ctx, w, h, state);
+    return;
+  }
 
   ctx.fillStyle = 'rgba(0,0,0,0.88)';
   ctx.fillRect(0, 0, w, h);
@@ -266,5 +275,81 @@ export function renderControlsScreen(ctx, w, h, state) {
     ? 'Press the new key… ESC to cancel · keys already in use will be swapped'
     : 'W/S to navigate · ENTER to rebind · ESC to go back';
   ctx.fillText(help, w / 2, resetY + itemH + 20);
+  ctx.textAlign = 'left';
+}
+
+// ─── Modern art style ───────────────────────────────────────────────────────
+// Same row geometry as the legacy screen; steel rows and keycap legends.
+
+function renderControlsScreenModern(ctx, w, h, state) {
+  const { keybinds, controlsSelection, rebindingKey, keybindSwapFlash } = state;
+  drawBackdrop(ctx, w, h, 'steel', 0.95);
+  drawTitle(ctx, 'KEY BINDINGS', w / 2, 58, 30, UI.cyan);
+
+  const bindKeys = Object.keys(keybinds);
+  const panelX = w / 2 - 240;
+  const panelW = 480;
+  const itemH = 36;
+  const startY = 100;
+  const now = performance.now();
+
+  drawPanel(ctx, panelX - 18, startY - 14, panelW + 36, (bindKeys.length + 1) * itemH + 34, {
+    variant: 'menu', accent: UI.cyan, chamfer: 18,
+  });
+
+  for (let i = 0; i < bindKeys.length; i++) {
+    const key = bindKeys[i];
+    const selected = controlsSelection === i;
+    const isRebinding = rebindingKey === key;
+    const y = startY + i * itemH;
+    const swapAge = keybindSwapFlash && keybindSwapFlash.action === key
+      ? now - keybindSwapFlash.time : Infinity;
+    const isSwapFlashed = swapAge < 1500;
+
+    if (isRebinding) {
+      drawPanel(ctx, panelX, y - 2, panelW, itemH - 4, { variant: 'raised', accent: UI.amber, bar: true, glow: true, chamfer: 9 });
+    } else if (selected) {
+      drawPanel(ctx, panelX, y - 2, panelW, itemH - 4, { variant: 'raised', accent: UI.cyan, bar: true, chamfer: 9 });
+    } else if (i > 0) {
+      ctx.fillStyle = 'rgba(130,160,188,0.1)';
+      ctx.fillRect(panelX + 12, y - 3, panelW - 24, 1);
+    }
+    if (isSwapFlashed && !isRebinding) {
+      ctx.fillStyle = `rgba(255,174,58,${(0.25 * (1 - swapAge / 1500)).toFixed(3)})`;
+      ctx.fillRect(panelX + 2, y - 1, panelW - 4, itemH - 6);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.font = uiFont(15, selected ? 700 : 600);
+    ctx.fillStyle = selected || isRebinding ? '#ffffff' : '#b3c2d0';
+    ctx.fillText(BIND_LABELS[key] || key, panelX + 18, y + 20);
+
+    if (isRebinding) {
+      const blink = Math.floor(now / 380) % 2;
+      ctx.textAlign = 'right';
+      ctx.font = uiFont(14, 800);
+      ctx.fillStyle = blink ? UI.gold : UI.amber;
+      ctx.fillText('PRESS A KEY…  (ESC CANCELS)', panelX + panelW - 16, y + 20);
+    } else {
+      drawKeycap(ctx, panelX + panelW - 14, y + 4, formatKeyCode(keybinds[key]), {
+        size: 11, align: 'right', accent: isSwapFlashed ? UI.amber : selected ? UI.cyan : null,
+      });
+    }
+  }
+
+  const resetY = startY + bindKeys.length * itemH + 10;
+  const resetSelected = controlsSelection === bindKeys.length;
+  drawButton(ctx, w / 2 - 130, resetY - 2, 260, itemH - 4, 'Reset to defaults', resetSelected ? 'focus' : 'idle', UI.amber,
+    { idleColor: '#b58a4e', size: 14 });
+
+  ctx.fillStyle = UI.textFaint;
+  ctx.font = uiFont(12, 600);
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '1px';
+  const help = rebindingKey
+    ? 'PRESS THE NEW KEY · ESC TO CANCEL · KEYS IN USE WILL BE SWAPPED'
+    : 'W/S NAVIGATE · ENTER REBIND · ESC BACK';
+  ctx.fillText(help, w / 2, resetY + itemH + 20);
+  ctx.letterSpacing = '0px';
   ctx.textAlign = 'left';
 }

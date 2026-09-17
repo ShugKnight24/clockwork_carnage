@@ -1,6 +1,10 @@
 import { renderStatsCard, statsCardHeight } from './stats-card.js';
 import { drawScanlines } from './scanlines.js';
 import { isCompactPhone } from '../../js/layout.js';
+import { isModernArt } from '../rendering/art-style.js';
+import {
+  UI, uiFont, drawBackdrop, drawPanel, drawTitle, drawCaption, drawButton,
+} from './modern-ui-kit.js';
 
 /**
  * Share-toast overlay — renders and mutates toast.life in place.
@@ -16,6 +20,18 @@ export function renderShareToast(ctx, w, h, toast, deltaTime) {
   toast.life -= deltaTime;
   if (toast.life <= 0) return { expired: true };
   const alpha = Math.min(1, toast.life * 2);
+  if (isModernArt()) {
+    const tw = Math.min(420, w * 0.8), th = 34;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawPanel(ctx, w / 2 - tw / 2, h * 0.07, tw, th, { variant: 'menu', accent: UI.cyan, chamfer: 9 });
+    ctx.fillStyle = '#bff4ff';
+    ctx.font = uiFont(13, 700);
+    ctx.textAlign = 'center';
+    ctx.fillText(toast.text, w / 2, h * 0.07 + 22);
+    ctx.restore();
+    return { expired: false };
+  }
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(0,20,40,0.9)';
@@ -50,6 +66,7 @@ export function renderGameOver(ctx, w, h, state) {
   } = state;
 
   const compact = isTouchDevice && isCompactPhone(h);
+  if (isModernArt()) return renderGameOverModern(ctx, w, h, state, compact);
 
   // Animated red-tinged background
   ctx.fillStyle = 'rgba(30,0,0,0.94)';
@@ -232,6 +249,7 @@ export function renderVictory(ctx, w, h, state) {
   } = state;
 
   const compact = isTouchDevice && isCompactPhone(h);
+  if (isModernArt()) return renderVictoryModern(ctx, w, h, state, compact);
   ctx.fillStyle = 'rgba(0,6,20,0.95)';
   ctx.fillRect(0, 0, w, h);
   // Animated aurora glow
@@ -378,6 +396,10 @@ export function renderLevelComplete(ctx, w, h, state) {
 
   const compact = isTouchDevice && isCompactPhone(h);
   const t = Math.max(0, (performance.now() - (levelCompleteTime || 0)) / 1000);
+  if (isModernArt()) {
+    renderLevelCompleteModern(ctx, w, h, state, compact, t);
+    return;
+  }
 
   ctx.fillStyle = 'rgba(0,4,18,0.94)';
   ctx.fillRect(0, 0, w, h);
@@ -544,4 +566,251 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
     isTouchDevice ? 'Tap anywhere to start' : 'Press any key to start',
     w / 2, by + bh - 18,
   );
+}
+
+// ─── Modern art style ───────────────────────────────────────────────────────
+// Same anchors as the legacy screens (gameOverBtns and the NG+ option boxes
+// are hit-tested), redrawn as inked titles, caption plates and steel panels.
+
+function hint(ctx, text, x, y, size, alpha) {
+  ctx.font = uiFont(size, 600);
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '1px';
+  ctx.fillStyle = `rgba(185,200,214,${alpha.toFixed(3)})`;
+  ctx.fillText(text.toUpperCase(), x, y);
+  ctx.letterSpacing = '0px';
+}
+
+function renderGameOverModern(ctx, w, h, state, compact) {
+  const {
+    time, isTouchDevice, mode, arenaRound, achievementStats,
+    meltdown, deltaTime, shareToast, statsCardData,
+  } = state;
+
+  drawBackdrop(ctx, w, h, 'crimson', 0.97);
+  // Slow crimson pulse on the letterbox rules.
+  const pulse = 0.5 + Math.sin(time * 0.003) * 0.3;
+  ctx.fillStyle = `rgba(255,42,74,${(0.25 + pulse * 0.25).toFixed(3)})`;
+  ctx.fillRect(0, 3, w, 1);
+  ctx.fillRect(0, h - 4, w, 1);
+
+  const titleY = compact ? h * 0.15 : h / 2 - 110;
+  const subY = compact ? titleY + 22 : h / 2 - 75;
+  const statsY = compact ? titleY + 36 : h / 2 - 50;
+
+  drawTitle(ctx, 'Timeline collapsed', w / 2, titleY, compact ? 26 : 50, UI.crimson, { fillTop: '#fff3f4', fillBottom: '#ff9aa8' });
+  if (!compact) {
+    drawCaption(ctx, w / 2, subY - 16, 'Temporal integrity failed — reality unraveled', { size: 12, align: 'center' });
+  }
+
+  renderStatsCard(ctx, w, statsY, UI.crimson, '#ff9aa8', undefined, statsCardData);
+  const cardBottom = statsY + statsCardHeight(statsCardData);
+
+  if (mode === 'arena') {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd0d6';
+    ctx.font = uiFont(compact ? 15 : 20, 800);
+    ctx.fillText(`ROUNDS SURVIVED: ${arenaRound - 1}`, w / 2, cardBottom + (compact ? 20 : 30));
+    ctx.fillStyle = '#b98a92';
+    ctx.font = uiFont(compact ? 10 : 13, 600);
+    ctx.fillText(
+      `Personal best: round ${achievementStats.highestArenaRound} (score ${achievementStats.highestScore})`,
+      w / 2, cardBottom + (compact ? 36 : 52),
+    );
+  }
+
+  const btnW = 110, btnH = 34, btnGap = 12;
+  const totalBtnW = btnW * 3 + btnGap * 2;
+  const btnBaseX = w / 2 - totalBtnW / 2;
+  const btnY = h - 70;
+  const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
+  const btnDefs = [
+    { label: 'Restart', color: UI.amber, focus: true },
+    { label: 'Quit', color: UI.textDim },
+    { label: 'Share', color: UI.cyan },
+  ];
+  for (let i = 0; i < btnDefs.length; i++) {
+    const d = btnDefs[i];
+    drawButton(ctx, btnBaseX + i * (btnW + btnGap), btnY, btnW, btnH, d.label, 'idle', d.color, {
+      idleAccent: d.color, idleColor: d.color, size: 14,
+    });
+  }
+
+  if (mode === 'meltdown' && meltdown) {
+    const mHud = meltdown.getHUD();
+    const mY = compact ? cardBottom + 18 : cardBottom + 26;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = UI.amber;
+    ctx.font = uiFont(compact ? 17 : 24, 800);
+    ctx.fillText(`DISTANCE ${mHud.distance}m`, w / 2, mY);
+    ctx.fillStyle = '#ffd0d6';
+    ctx.font = uiFont(compact ? 12 : 16, 700);
+    ctx.fillText(`SCORE ${mHud.score}`, w / 2, mY + 25);
+    ctx.fillStyle = UI.textDim;
+    ctx.font = uiFont(compact ? 10 : 12, 600);
+    ctx.fillText(`Time ${mHud.time}s  ·  Speed ${mHud.speed} m/s`, w / 2, mY + 45);
+
+    if (meltdown.highScores.length > 0) {
+      const rowGap = compact ? 13 : 17;
+      const headerY = mY + (compact ? 62 : 70);
+      if (meltdown._lastRunWasNewRecord) {
+        const recPulse = 0.7 + Math.sin(time * 0.01) * 0.3;
+        ctx.globalAlpha = recPulse;
+        drawCaption(ctx, w / 2, headerY - rowGap - 14, 'New record', { size: compact ? 10 : 12, scheme: 'amber', align: 'center' });
+        ctx.globalAlpha = 1;
+      }
+      ctx.font = uiFont(compact ? 10 : 12, 800);
+      ctx.letterSpacing = '2px';
+      ctx.fillStyle = UI.cyan;
+      ctx.textAlign = 'center';
+      ctx.fillText('HIGH SCORES', w / 2, headerY);
+      ctx.letterSpacing = '0px';
+      ctx.font = uiFont(compact ? 10 : 12, 600, true);
+      meltdown.highScores.slice(0, 5).forEach((hs, i) => {
+        const isMine = meltdown._lastRunId && hs._runId === meltdown._lastRunId;
+        const rowY = headerY + 18 + i * rowGap;
+        if (isMine) {
+          ctx.fillStyle = 'rgba(255,174,58,0.16)';
+          ctx.fillRect(w / 2 - (compact ? 140 : 180), rowY - 11, compact ? 280 : 360, rowGap);
+        }
+        ctx.fillStyle = isMine ? '#ffdca0' : '#c3d1de';
+        const tag = hs.ironman ? ' ⚙' : '';
+        const marker = isMine ? ' ◀' : '';
+        ctx.fillText(`${i + 1}. ${hs.score.toLocaleString()} pts (${hs.distance.toLocaleString()}m)${tag}${marker}`, w / 2, rowY);
+      });
+    }
+  }
+
+  const promptA = 0.55 + Math.sin(time * 0.004) * 0.3;
+  hint(ctx, isTouchDevice ? 'Tap to return to title' : 'Enter  return to title   ·   R  restart   ·   S  share score',
+    w / 2, btnY - 16, compact ? 10 : 12, promptA);
+  ctx.textAlign = 'left';
+
+  const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
+  return { gameOverBtns, toastExpired: toastResult.expired };
+}
+
+function renderVictoryModern(ctx, w, h, state, compact) {
+  const {
+    time, isTouchDevice, ngPlusCycle, mode,
+    ngPlusPrompt, ngPlusPromptSel, deltaTime, shareToast, statsCardData,
+  } = state;
+  const final = ngPlusCycle >= 3;
+  drawBackdrop(ctx, w, h, 'gold', 0.97);
+
+  // Rising embers, cheap rects.
+  ctx.globalAlpha = 0.18;
+  for (let i = 0; i < (compact ? 10 : 20); i++) {
+    const px = w * (0.1 + (i / 20) * 0.8);
+    const py = h - ((time * 0.04 + i * 73) % h);
+    ctx.fillStyle = i % 3 === 0 ? UI.cyan : i % 3 === 1 ? UI.gold : '#dfe9f3';
+    ctx.fillRect(px, py, 1.5, 8 + Math.sin(i * 2) * 5);
+  }
+  ctx.globalAlpha = 1;
+
+  const titleY = compact ? h * 0.12 : h / 2 - 75;
+  if (ngPlusCycle > 0) {
+    drawCaption(ctx, w / 2, (compact ? titleY - 10 : titleY - 20) - (compact ? 22 : 44),
+      final ? 'Final timeline — the loop is broken' : `Timeline loop ${ngPlusCycle}`,
+      { size: compact ? 9 : 12, scheme: 'violet', align: 'center' });
+  }
+  drawTitle(ctx, final ? 'The loop is broken' : 'Timeline restored', w / 2, titleY, compact ? 26 : 50,
+    final ? UI.gold : UI.cyan, final ? { fillTop: '#fffaf0', fillBottom: '#ffd27a' } : {});
+  const subtitle = final
+    ? 'Every timeline. Every loop. You broke them all.'
+    : 'The Paradox Lord has been destroyed — for good.';
+  drawCaption(ctx, w / 2, (compact ? titleY + 22 : h / 2 - 35) - (compact ? 12 : 17), subtitle, { size: compact ? 10 : 13, align: 'center' });
+  if (!compact) {
+    ctx.textAlign = 'center';
+    ctx.font = uiFont(16, 500);
+    ctx.fillStyle = '#b9cfe0';
+    ctx.fillText('Three forms. Three acts. One team.', w / 2, h / 2 + 2);
+    ctx.fillText('The quantum continuum is stable once more.', w / 2, h / 2 + 24);
+  }
+
+  const vCardY = compact ? titleY + 38 : h / 2 + 40;
+  renderStatsCard(ctx, w, vCardY, UI.gold, '#dfe9f3', undefined, statsCardData);
+  const vCardBottom = vCardY + statsCardHeight(statsCardData);
+  const promptA = 0.55 + Math.sin(time * 0.004) * 0.3;
+
+  if (ngPlusPrompt && mode === 'campaign') {
+    const promptY = vCardBottom + (compact ? 14 : 20);
+    const opts = [
+      { label: `Enter the rift (NG+${ngPlusCycle + 1})`, desc: 'Enemies grow stronger. You keep everything.', color: UI.violet },
+      { label: 'Rest', desc: 'The timeline is safe. Return to title.', color: UI.cyan },
+    ];
+    const optW = compact ? 140 : 220;
+    const optH = compact ? 44 : 56;
+    const gap = compact ? 12 : 20;
+    const startX = w / 2 - (opts.length * optW + (opts.length - 1) * gap) / 2;
+    for (let i = 0; i < opts.length; i++) {
+      const ox = startX + i * (optW + gap);
+      const sel = ngPlusPromptSel === i;
+      drawPanel(ctx, ox, promptY, optW, optH, {
+        variant: sel ? 'raised' : 'menu', accent: sel ? opts[i].color : null, bar: sel, glow: sel, chamfer: 10,
+      });
+      ctx.textAlign = 'center';
+      ctx.font = uiFont(compact ? 11 : 14, 800);
+      ctx.fillStyle = sel ? '#ffffff' : UI.textDim;
+      ctx.fillText(opts[i].label.toUpperCase(), ox + optW / 2, promptY + (compact ? 17 : 23));
+      ctx.font = uiFont(compact ? 8 : 11, 500);
+      ctx.fillStyle = sel ? '#c9d6e2' : UI.textFaint;
+      ctx.fillText(opts[i].desc, ox + optW / 2, promptY + (compact ? 32 : 41));
+    }
+    hint(ctx, isTouchDevice ? 'Tap a choice' : 'Arrow keys to choose, Enter to confirm',
+      w / 2, promptY + optH + (compact ? 14 : 22), compact ? 10 : 12, promptA);
+  } else {
+    hint(ctx, isTouchDevice ? 'Tap to return to title' : 'Press Enter to return to title',
+      w / 2, vCardBottom + (compact ? 20 : 26), compact ? 11 : 13, promptA);
+    if (!isTouchDevice) {
+      ctx.globalAlpha = promptA;
+      ctx.font = uiFont(compact ? 11 : 12, 700);
+      ctx.fillStyle = UI.cyan;
+      ctx.textAlign = 'center';
+      ctx.fillText('S  SHARE SCORE', w / 2, vCardBottom + (compact ? 38 : 46));
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.textAlign = 'left';
+  const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
+  return { toastExpired: toastResult.expired };
+}
+
+function renderLevelCompleteModern(ctx, w, h, state, compact, t) {
+  const { time, isTouchDevice, playerSecretsFound, statsCardData } = state;
+  drawBackdrop(ctx, w, h, 'cyan', 0.96);
+
+  const ease = (v) => (v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v));
+  const titleT = ease(t / 0.4);
+  const statsT = ease((t - 0.3) / 0.4);
+  const secretsT = ease((t - 0.6) / 0.3);
+  const promptT = ease((t - 1.0) / 0.3);
+  const countUp = Math.min(1, (t - 0.3) / 0.8);
+
+  const titleY = compact ? h * 0.12 : h / 2 - 100;
+  const titleOffset = (1 - titleT) * -30;
+  if (titleT > 0) {
+    ctx.globalAlpha = titleT;
+    drawTitle(ctx, 'Level complete', w / 2, titleY + titleOffset, compact ? 24 : 44, UI.energy);
+    ctx.globalAlpha = 1;
+  }
+
+  const lcCardY = compact ? titleY + 18 : h / 2 - 55;
+  const lcCardBottom = lcCardY + statsCardHeight(statsCardData);
+  if (statsT > 0) {
+    ctx.globalAlpha = statsT;
+    renderStatsCard(ctx, w, lcCardY, UI.energy, '#dfe9f3', countUp, statsCardData);
+    ctx.globalAlpha = 1;
+  }
+  if (secretsT > 0) {
+    ctx.globalAlpha = secretsT;
+    const secretVal = Math.round((playerSecretsFound || 0) * Math.min(1, countUp));
+    drawCaption(ctx, w / 2, lcCardBottom + (compact ? 6 : 10), `Secrets found: ${secretVal}`, { size: compact ? 10 : 12, scheme: 'steel', align: 'center' });
+    ctx.globalAlpha = 1;
+  }
+  if (promptT > 0) {
+    hint(ctx, isTouchDevice ? 'Tap to continue' : 'Press Enter to continue', w / 2, lcCardBottom + (compact ? 40 : 56),
+      compact ? 11 : 13, promptT * (0.55 + Math.sin(time * 0.004) * 0.3));
+  }
+  ctx.textAlign = 'left';
 }

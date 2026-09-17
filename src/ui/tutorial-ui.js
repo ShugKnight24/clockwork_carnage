@@ -5,6 +5,18 @@
 
 import { tutorialMenuLayout } from "../../js/layout.js";
 import { drawScanlines } from "./scanlines.js";
+import { isModernArt } from "../rendering/art-style.js";
+import {
+  UI,
+  uiFont,
+  drawPanel,
+  drawBrackets,
+  drawCaption,
+  drawKeycap,
+  drawTitle,
+  drawBackdrop,
+  inkText,
+} from "./modern-ui-kit.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -181,108 +193,108 @@ function tutorialStepCopy(isMobile) {
     {
       title: "SYSTEMS ONLINE — LOOK AROUND",
       hint: isMobile
-        ? 'ARIA: "Welcome to the Bureau, Cadet. Drag to look — get used to the augmented feed."'
-        : 'ARIA: "Welcome to the Bureau, Cadet. Move the mouse — get used to the augmented feed."',
+        ? 'ARIA: "Morning, Cadet. Drag to look around. Get used to seeing the world through a weapon."'
+        : 'ARIA: "Morning, Cadet. Move the mouse to look around. Get used to seeing the world through a weapon."',
       color: "#00ccff",
     },
     {
       title: "MOVE — TEST THE SUIT",
       hint: isMobile
-        ? 'ARIA: "Good. Use the stick to walk — head toward the door ahead."'
-        : 'ARIA: "Good. W A S D — walk it off, head toward the bulkhead ahead."',
+        ? 'ARIA: "Use the stick to walk. Head for the door ahead. Try not to hit the frame."'
+        : 'ARIA: "W A S D to walk. Head for the bulkhead ahead. Try not to hit the frame."',
       color: "#00ccff",
     },
     {
       title: "BREACH — OPEN THE DOOR",
       hint: isMobile
-        ? 'ARIA: "Sealed bulkhead. Face it and tap USE — override the lock."'
-        : 'ARIA: "Sealed bulkhead. Face it and press E — override the magnetic lock."',
+        ? 'ARIA: "Sealed bulkhead. Face it and tap USE. I\'ll crack the lock — you look confident."'
+        : 'ARIA: "Sealed bulkhead. Face it and press E. I\'ll crack the lock — you look confident."',
       color: "#ff8844",
     },
     {
       title: "ARM YOURSELF",
-      hint: 'ARIA: "Weapon crate ahead. Walk over it — this is no longer a drill."',
+      hint: 'ARIA: "Weapon crate ahead. Walk over it to pick it up. From here on, nothing\'s a drill."',
       color: "#ff6600",
     },
     {
       title: "CONFIRM TARGETING",
       hint: isMobile
-        ? 'ARIA: "Tap FIRE. Confirm your targeting solution is live."'
-        : 'ARIA: "CLICK to fire. Confirm your targeting system is live."',
+        ? 'ARIA: "Tap FIRE. Let\'s confirm the dangerous end works."'
+        : 'ARIA: "CLICK to fire. Let\'s confirm the dangerous end works."',
       color: "#ff8844",
     },
     {
       title: "AIM DOWN SIGHTS — FOCUS FIRE",
       hint: isMobile
-        ? 'ARIA: "Hold AIM to tighten the sight picture. Same reticle, cleaner shot."'
-        : 'ARIA: "Hold RIGHT MOUSE to aim down sights. Same reticle, cleaner shot."',
+        ? 'ARIA: "Hold AIM to aim down sights. Slower feet, tighter shots."'
+        : 'ARIA: "Hold RIGHT MOUSE to aim down sights. Slower feet, tighter shots."',
       color: "#66eeff",
     },
     {
       title: "WEAPON SWITCH — GRAB THE SHOTGUN",
       hint: isMobile
-        ? 'ARIA: "Second weapon on the range. Pick it up, then swipe to switch weapons."'
-        : 'ARIA: "Second weapon on the range. Pick it up, then scroll or press 1/2 to switch."',
+        ? 'ARIA: "Shotgun on the range. Pick it up, then swipe to switch weapons. Right tool, right problem."'
+        : 'ARIA: "Shotgun on the range. Pick it up, then scroll or press 1/2 to switch. Right tool, right problem."',
       color: "#ff6600",
     },
     {
       title: "SPRINT — MOVE FAST",
       hint: isMobile
-        ? 'ARIA: "Fitness center ahead. Tap RUN to sprint — cover ground fast."'
-        : 'ARIA: "Fitness center ahead. Hold SHIFT to sprint — cover ground fast."',
+        ? 'ARIA: "Fitness center. Tap RUN to sprint. Yes, the Bureau has a gym. No, you\'ve never used it."'
+        : 'ARIA: "Fitness center. Hold SHIFT to sprint. Yes, the Bureau has a gym. No, you\'ve never used it."',
       color: "#ff44ff",
     },
     {
       title: "CROUCH — LOWER YOUR PROFILE",
       hint: isMobile
-        ? 'ARIA: "Hold CROUCH. Smaller target, quieter movement."'
-        : 'ARIA: "Hold CTRL to crouch. Smaller target, quieter movement."',
+        ? 'ARIA: "Hold CROUCH. Smaller target, quieter feet."'
+        : 'ARIA: "Hold CTRL to crouch. Smaller target, quieter feet."',
       color: "#66dd66",
     },
     {
       title: "SLIDE — STAY MOVING",
       hint: isMobile
-        ? 'ARIA: "While running, tap CROUCH to slide through danger."'
-        : 'ARIA: "While sprinting, tap CTRL to slide through danger."',
+        ? 'ARIA: "While running, tap CROUCH to slide. Momentum is armor."'
+        : 'ARIA: "While sprinting, tap CTRL to slide. Momentum is armor."',
       color: "#66ff99",
     },
     {
       title: "PHASE DASH — BLINK FORWARD",
       hint: isMobile
-        ? 'ARIA: "Double-tap a direction to phase-dash. Covers distance instantly."'
-        : 'ARIA: "Double-tap a movement key to phase-dash. Covers distance instantly."',
+        ? 'ARIA: "Double-tap a direction to phase-dash. Blink, and you\'re somewhere else."'
+        : 'ARIA: "Double-tap a movement key to phase-dash. Blink, and you\'re somewhere else."',
       color: "#ff44ff",
     },
     {
       title: "CHRONO SHIFT — BEND TIME",
       hint: isMobile
-        ? 'ARIA: "Time-dilation module is active. Hold SLOW. The next few seconds matter."'
-        : 'ARIA: "Time-dilation module is active. Hold Q. Keep holding while you fire."',
+        ? 'ARIA: "Time-dilation module online. Hold SLOW. The world crawls. You don\'t."'
+        : 'ARIA: "Time-dilation module online. Hold Q and keep firing. The world crawls. You don\'t."',
       color: "#8844ff",
     },
     {
       title: "RESUPPLY — THE SUPERVISOR'S OFFICE",
-      hint: 'SUPERVISOR (radio): "Cadet, grab what\'s on the desk. Health. Ammo. Take everything — the Bureau just went hot."',
+      hint: 'SUPERVISOR (radio): "Cadet. My desk. Health, ammo — take all of it. Leave the coffee. Something\'s wrong upstairs."',
       color: "#44ff88",
     },
     {
       title: "\u26A1 ALERT — INTRUSION DETECTED",
-      hint: 'SUPERVISOR: "Multiple sectors — breach — they\'re inside —" [STATIC] ARIA: "Signal lost. Combat arena, NOW."',
+      hint: 'SUPERVISOR: "Breach — every sector — they\'re already insi—" [STATIC] ARIA: "Lost him. Combat arena. Move."',
       color: "#ff2244",
     },
     {
       title: "WAVE 1 — FIRST CONTACT",
-      hint: 'ARIA: "Three drones in the arena. Cadet — this isn\'t a sim. Put them down."',
+      hint: 'ARIA: "Three drones in the arena. This isn\'t a sim, Cadet. Put them down."',
       color: "#ff2244",
     },
     {
       title: "WAVE 2 — REINFORCEMENTS",
-      hint: 'ARIA: "More contacts. Two henchmen and a drone. Stay sharp."',
+      hint: 'ARIA: "Two henchmen and a drone. These ones shoot back. Shoot first."',
       color: "#ff2244",
     },
     {
       title: "SYSTEMS ONLINE — CALIBRATION COMPLETE",
-      hint: 'ARIA: "Suit fully integrated. Proceeding to agent deployment array."',
+      hint: 'ARIA: "Suit synced. You\'re officially dangerous. Proceeding to deployment."',
       color: "#00ffcc",
     },
   ];
@@ -306,8 +318,8 @@ function renderHudBoot(ctx, w, h, elapsed) {
 
   const lines = [
     { text: "NEURAL LINK.......... OK",        delay: 0.3 },
-    { text: "BIOMETRICS........... NOMINAL",   delay: 0.8 },
-    { text: "CADET ID: CONFIRMED",             delay: 1.2 },
+    { text: "BIOMETRICS........... NERVOUS",   delay: 0.8 },
+    { text: "BADGE 11235.......... CONFIRMED", delay: 1.2 },
     { text: "CHRONO MODULE........ STANDBY",   delay: 1.6 },
   ];
   ctx.font = "bold 16px monospace";
@@ -405,6 +417,7 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps) {
   }
 
   ctx.restore();
+  return by + boxH;
 }
 
 /** Greedy word-wrapper for canvas text. Returns an array of lines. */
@@ -434,30 +447,41 @@ function wrapText(ctx, text, maxWidth) {
  * @param {number} h
  * @param {{ mode: string, isTouchDevice: boolean, tutorialStepTime: number, tutorialStep: number }} state
  */
+/** Returns the bottom edge of the step card in px, or 0 when none is drawn. */
 export function renderTutorialOverlay(ctx, w, h, state) {
   const { mode, isTouchDevice, tutorialStepTime, tutorialStep } = state;
-  if (mode !== "tutorial") return;
+  if (mode !== "tutorial") return 0;
 
   const now = performance.now();
   const elapsed = (now - tutorialStepTime) / 1000;
 
+  const modern = isModernArt();
+
   if (tutorialStep === 0) {
-    renderHudBoot(ctx, w, h, elapsed);
-    return;
+    if (modern) renderModernHudBoot(ctx, w, h, elapsed);
+    else renderHudBoot(ctx, w, h, elapsed);
+    return 0;
   }
 
   const copy = tutorialStepCopy(isTouchDevice);
   const step = copy[tutorialStep];
-  if (!step) return; // sandbox/completion menu has no overlay
+  if (!step) return 0; // sandbox/completion menu has no overlay
 
   const fadeIn = Math.min(1, elapsed / 0.4);
   const pulse = 0.85 + 0.15 * Math.sin(now / 300);
-  renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
+  if (modern) {
+    return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
+  }
+  return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
 }
 
 /** Full-screen tutorial completion menu (4 choices after training). */
 export function renderTutorialCompletionMenu(ctx, w, h, selection = 0) {
   const now = performance.now();
+  if (isModernArt()) {
+    renderModernCompletionMenu(ctx, w, h, selection, now);
+    return;
+  }
 
   drawCinematicBackdrop(ctx, w, h, h * 0.2, now);
   drawCinematicTitle(
@@ -467,15 +491,417 @@ export function renderTutorialCompletionMenu(ctx, w, h, selection = 0) {
     now,
   );
 
-  const items = [
-    { label: "CONTINUE TRAINING", key: "[1]",   color: "#ffcc00", desc: "Stay in the sandbox" },
-    { label: "BEGIN CAMPAIGN",    key: "[2]",   color: "#00ccff", desc: "Face the Paradox Lord" },
-    { label: "CUSTOMIZE AGENT",   key: "[3]",   color: "#aa44ff", desc: "Armor, colors, badges, loadout" },
-    { label: "MAIN MENU",         key: "[ESC]", color: "#666666", desc: "Return to title screen" },
-  ];
-  drawCinematicMenu(ctx, w, h, items, selection, now);
+  drawCinematicMenu(ctx, w, h, COMPLETION_ITEMS, selection, now);
   drawFooterHint(ctx, w, h, "W/S to navigate  \u00B7  ENTER to select");
 
   drawScanlines(ctx, w, h);
+  ctx.textAlign = "left";
+}
+
+// ─── Modern (graphic-novel) rendering ───────────────────────────────────────
+// Kit panels, inked type and keycap glyphs for key names. Same anchors as the
+// legacy layouts (touch hit-tests and the ARIA box's minTop depend on them).
+
+/** Completion menu entries (shared by the legacy and Modern renderers). */
+const COMPLETION_ITEMS = [
+  { label: "CONTINUE TRAINING", key: "[1]",   color: "#ffcc00", desc: "Stay in the sandbox" },
+  { label: "BEGIN CAMPAIGN",    key: "[2]",   color: "#00ccff", desc: "Face the Paradox Lord" },
+  { label: "CUSTOMIZE AGENT",   key: "[3]",   color: "#aa44ff", desc: "Armor, colors, badges, loadout" },
+  { label: "MAIN MENU",         key: "[ESC]", color: "#666666", desc: "Return to title screen" },
+];
+
+let _mctx = null;
+function measureSpaced(font, text, spacing = 0) {
+  if (!_mctx) _mctx = document.createElement("canvas").getContext("2d");
+  _mctx.font = font;
+  _mctx.letterSpacing = `${spacing}px`;
+  const tw = _mctx.measureText(text).width;
+  _mctx.letterSpacing = "0px";
+  return tw;
+}
+
+/** Width drawKeycap will take for a legend. */
+function keycapW(text, size) {
+  const tw = Math.ceil(measureSpaced(uiFont(size, 700), String(text), 0.5));
+  return Math.max(Math.round(size * 1.9), tw + Math.round(size * 1.1));
+}
+
+// Words in hint copy that name an input get drawn as keycaps.
+const KEY_WORDS = new Set([
+  "CLICK", "E", "Q", "SHIFT", "CTRL", "ENTER", "ESC", "TAB", "SPACE",
+  "USE", "FIRE", "AIM", "RUN", "CROUCH", "SLOW", "DASH",
+]);
+const SPEAKER_SCHEMES = { ARIA: "cyan", SUPERVISOR: "amber" };
+
+/**
+ * Break hint copy into atoms: plain words, keycap groups and speaker tabs.
+ * The text itself is untouched; only how each token is drawn changes.
+ */
+function tokenizeHint(text) {
+  const words = text.split(" ").filter(Boolean);
+  const atoms = [];
+  for (let i = 0; i < words.length; i++) {
+    const wd = words[i];
+    if (wd === "SUPERVISOR" && /^\(radio\):$/.test(words[i + 1] || "")) {
+      atoms.push({ kind: "speaker", text: "SUPERVISOR (radio)", scheme: "amber" });
+      i++;
+      continue;
+    }
+    const sp = /^([A-Z]+):$/.exec(wd);
+    if (sp && SPEAKER_SCHEMES[sp[1]]) {
+      atoms.push({ kind: "speaker", text: sp[1], scheme: SPEAKER_SCHEMES[sp[1]] });
+      continue;
+    }
+    const wasd = /^(\W*)W$/.exec(wd);
+    if (wasd && words[i + 1] === "A" && words[i + 2] === "S" && /^D\W*$/.test(words[i + 3] || "")) {
+      const tail = words[i + 3].slice(1);
+      atoms.push({ kind: "keys", keys: ["W", "A", "S", "D"], pre: wasd[1], post: tail });
+      i += 3;
+      continue;
+    }
+    if (wd === "RIGHT" && /^MOUSE\W*$/.test(words[i + 1] || "")) {
+      atoms.push({ kind: "keys", keys: ["RIGHT MOUSE"], pre: "", post: words[i + 1].slice(5) });
+      i++;
+      continue;
+    }
+    if (/^\[[A-Z]+\]$/.test(wd)) {
+      atoms.push({ kind: "tag", text: wd.slice(1, -1) });
+      continue;
+    }
+    const m = /^(\W*)([A-Z0-9/]+?)(\W*)$/.exec(wd);
+    if (m) {
+      if (KEY_WORDS.has(m[2])) {
+        atoms.push({ kind: "keys", keys: [m[2]], pre: m[1], post: m[3] });
+        continue;
+      }
+      if (/^\d(\/\d)+$/.test(m[2])) {
+        atoms.push({ kind: "keys", keys: m[2].split("/"), sep: "/", pre: m[1], post: m[3] });
+        continue;
+      }
+    }
+    atoms.push({ kind: "word", text: wd });
+  }
+  return atoms;
+}
+
+const KEY_SIZE = 11;
+const _richCache = new Map();
+
+/** Wrap atoms into centred lines; cached per text/width/font. */
+function layoutRich(text, maxW, font) {
+  const cacheKey = `${font}|${maxW}|${text}`;
+  let lay = _richCache.get(cacheKey);
+  if (lay) return lay;
+  const space = measureSpaced(font, " ");
+  const sepW = measureSpaced(font, "/") + 4;
+  const atoms = tokenizeHint(text).map((a) => {
+    if (a.kind === "word") return { ...a, w: measureSpaced(font, a.text) };
+    if (a.kind === "speaker" || a.kind === "tag") {
+      const size = 10;
+      const label = a.text.toUpperCase();
+      const w = Math.ceil(measureSpaced(uiFont(size, 700), label, Math.max(0.5, size * 0.08))) + Math.round(size * 0.7) * 2;
+      return { ...a, w };
+    }
+    const preW = a.pre ? measureSpaced(font, a.pre) + 1 : 0;
+    const postW = a.post ? measureSpaced(font, a.post) + 1 : 0;
+    let kw = 0;
+    for (let k = 0; k < a.keys.length; k++) {
+      kw += keycapW(a.keys[k], KEY_SIZE) + (k ? (a.sep ? sepW : 3) : 0);
+    }
+    return { ...a, preW, postW, w: preW + kw + postW };
+  });
+  const lines = [];
+  let cur = [];
+  let curW = 0;
+  for (const a of atoms) {
+    const add = (cur.length ? space : 0) + a.w;
+    if (cur.length && curW + add > maxW) {
+      lines.push({ atoms: cur, w: curW });
+      cur = [a];
+      curW = a.w;
+    } else {
+      cur.push(a);
+      curW += add;
+    }
+  }
+  if (cur.length) lines.push({ atoms: cur, w: curW });
+  lay = { lines, space, sepW, w: lines.reduce((m, l) => Math.max(m, l.w), 0) };
+  if (_richCache.size > 80) _richCache.clear();
+  _richCache.set(cacheKey, lay);
+  return lay;
+}
+
+function drawRichLine(ctx, line, lay, x, midY, font, color) {
+  let cx = x;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  for (let i = 0; i < line.atoms.length; i++) {
+    const a = line.atoms[i];
+    if (i) cx += lay.space;
+    if (a.kind === "word") {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.fillText(a.text, cx, midY + 1);
+    } else if (a.kind === "speaker") {
+      drawCaption(ctx, cx, Math.round(midY - 8), a.text, { size: 10, scheme: a.scheme });
+    } else if (a.kind === "tag") {
+      drawCaption(ctx, cx, Math.round(midY - 8), a.text, { size: 10, scheme: "crimson" });
+    } else {
+      let kx = cx;
+      ctx.font = font;
+      ctx.fillStyle = color;
+      if (a.pre) {
+        ctx.fillText(a.pre, kx, midY + 1);
+        kx += a.preW;
+      }
+      for (let k = 0; k < a.keys.length; k++) {
+        if (k) {
+          if (a.sep) {
+            ctx.font = font;
+            ctx.fillStyle = color;
+            ctx.fillText(a.sep, kx + 2, midY + 1);
+            kx += lay.sepW;
+          } else {
+            kx += 3;
+          }
+        }
+        kx += drawKeycap(ctx, kx, Math.round(midY - KEY_SIZE * 0.95), a.keys[k], { size: KEY_SIZE });
+      }
+      if (a.post) {
+        ctx.font = font;
+        ctx.fillStyle = color;
+        ctx.fillText(a.post, kx + 1, midY + 1);
+      }
+    }
+    cx += a.w;
+  }
+  ctx.textBaseline = "alphabetic";
+}
+
+function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps) {
+  const TITLE_SIZE = 20;
+  const titleFont = uiFont(TITLE_SIZE, 800);
+  const hintFont = uiFont(15, 600);
+  const PAD_X = 30;
+  const PAD_Y = 14;
+  const MAX_W = Math.min(720, w - 80);
+  const TITLE_H = 24;
+  const GAP = 8;
+  const LINE_H = 25;
+
+  const titleW = measureSpaced(titleFont, step.title, 1);
+  const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont);
+  const contentW = Math.max(titleW, lay.w);
+  const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2));
+  const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PAD_Y - 4;
+  const bx = Math.round((w - boxW) / 2);
+  const by = 60;
+
+  ctx.save();
+  ctx.globalAlpha = fadeIn;
+  drawPanel(ctx, bx, by, boxW, boxH, { variant: "menu", accent: step.color, bar: true, chamfer: 12 });
+  // Pulsing live brackets outside the plate (the legacy border pulse).
+  ctx.globalAlpha = fadeIn * (0.35 + (pulse - 0.7) * 2);
+  drawBrackets(ctx, bx - 5, by - 5, boxW + 10, boxH + 10, step.color, 12, 2);
+  ctx.globalAlpha = fadeIn;
+
+  if (stepNum > 0 && stepNum <= totalSteps) {
+    drawCaption(ctx, bx + 16, by - 9, `${stepNum}/${totalSteps}`, { size: 9, scheme: "steel" });
+  }
+
+  ctx.font = titleFont;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.letterSpacing = "1px";
+  inkText(ctx, step.title, w / 2, by + PAD_Y + 18, step.color, 4);
+  ctx.letterSpacing = "0px";
+
+  let midY = by + PAD_Y + TITLE_H + GAP + LINE_H / 2 - 1;
+  for (const line of lay.lines) {
+    drawRichLine(ctx, line, lay, Math.round(w / 2 - line.w / 2), midY, hintFont, UI.text);
+    midY += LINE_H;
+  }
+  ctx.restore();
+  ctx.textAlign = "left";
+  return by + boxH;
+}
+
+const BOOT_STATUS_SCHEME = { OK: "cyan", CONFIRMED: "cyan", NERVOUS: "amber", STANDBY: "steel" };
+
+function renderModernHudBoot(ctx, w, h, elapsed) {
+  const fadeIn = Math.min(1, elapsed / 0.5);
+  ctx.save();
+  ctx.globalAlpha = fadeIn;
+
+  // Sweeping scan line: a hairline and a faint band, no per-frame gradient.
+  const scanY = Math.round((elapsed / 2) * h);
+  ctx.fillStyle = "rgba(34,230,255,0.05)";
+  ctx.fillRect(0, scanY - 24, w, 48);
+  ctx.fillStyle = "rgba(34,230,255,0.35)";
+  ctx.fillRect(0, scanY, w, 1);
+
+  const lines = [
+    { text: "NEURAL LINK.......... OK",        delay: 0.3 },
+    { text: "BIOMETRICS........... NERVOUS",   delay: 0.8 },
+    { text: "BADGE 11235.......... CONFIRMED", delay: 1.2 },
+    { text: "CHRONO MODULE........ STANDBY",   delay: 1.6 },
+  ];
+  const baseY = h / 2 - 40;
+  const pw = Math.min(440, w - 40);
+  const px = Math.round(w / 2 - pw / 2);
+  const py = Math.round(baseY - 36);
+  const ph = 30 * lines.length + 26;
+  drawPanel(ctx, px, py, pw, ph, { variant: "hud", accent: UI.energy, chamfer: 12 });
+
+  const labelFont = uiFont(15, 700);
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (elapsed < l.delay) continue;
+    const lineAlpha = Math.min(1, (elapsed - l.delay) / 0.3);
+    const flicker = elapsed - l.delay < 0.15 ? 0.4 + Math.random() * 0.6 : 1;
+    ctx.globalAlpha = fadeIn * lineAlpha * flicker;
+    const m = /^(.*?)\.{2,}\s*(.*)$/.exec(l.text);
+    const label = m ? m[1] : l.text;
+    const status = m ? m[2] : "";
+    const ly = baseY + i * 30 - 5;
+    ctx.font = labelFont;
+    ctx.letterSpacing = "1.5px";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = UI.text;
+    ctx.fillText(label, px + 22, ly);
+    const lw = ctx.measureText(label).width;
+    ctx.letterSpacing = "0px";
+    if (status) {
+      const cap = drawCaption(ctx, px + pw - 22, ly - 9, status, {
+        size: 10, scheme: BOOT_STATUS_SCHEME[status] || "steel", align: "right",
+      });
+      // Dotted leader between label and status chip.
+      ctx.strokeStyle = UI.textFaint;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([1.5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(px + 30 + lw, ly + 3);
+      ctx.lineTo(cap.x - 8, ly + 3);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  ctx.restore();
+}
+
+/**
+ * Menu list over a steel plate: raised glowing row for the selection, keycap
+ * legends on the right. Shared with the campaign prompt. `labelDy`/`descDy`
+ * are the legacy text baselines within a row.
+ */
+export function drawModernMenu(ctx, items, selection, now, layout, labelDy = 24, descDy = 40) {
+  const { menuW, itemH, menuH, mx, my } = layout;
+  drawPanel(ctx, mx - 10, my - 10, menuW + 20, menuH + 20, { variant: "menu", accent: UI.cyan, chamfer: 16 });
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const iy = my + 8 + i * itemH;
+    const rowH = itemH - 6;
+    const isSelected = i === selection;
+    const accent = item.color === "#666666" ? UI.steelHi : item.color;
+
+    if (isSelected) {
+      drawPanel(ctx, mx, iy, menuW, rowH, { variant: "raised", accent, bar: true, glow: true, chamfer: 9 });
+      // Chevron nudges forward in time with the legacy selection pulse.
+      const nudge = Math.round(Math.sin(now * 0.004) * 1.5);
+      const cy = iy + labelDy - 6;
+      ctx.beginPath();
+      ctx.moveTo(mx + 13 + nudge, cy - 6);
+      ctx.lineTo(mx + 22 + nudge, cy);
+      ctx.lineTo(mx + 13 + nudge, cy + 6);
+      ctx.closePath();
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "miter";
+      ctx.strokeStyle = UI.ink;
+      ctx.stroke();
+      ctx.fillStyle = accent;
+      ctx.fill();
+    } else if (i > 0 && i - 1 !== selection) {
+      ctx.fillStyle = "rgba(130,160,188,0.1)";
+      ctx.fillRect(mx + 14, iy - 3, menuW - 28, 1);
+    }
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = uiFont(16, isSelected ? 800 : 600);
+    ctx.letterSpacing = "1.5px";
+    ctx.fillStyle = isSelected ? "#ffffff" : "#9fb1c2";
+    ctx.fillText(item.label, mx + 32, iy + labelDy);
+    ctx.letterSpacing = "0px";
+
+    if (item.desc && isSelected) {
+      ctx.font = uiFont(12, 600);
+      ctx.fillStyle = UI.textDim;
+      ctx.fillText(item.desc, mx + 32, iy + descDy);
+    }
+
+    const legend = item.key.replace(/^\[|\]$/g, "");
+    drawKeycap(ctx, mx + menuW - 10, Math.round(iy + rowH / 2 - 10), legend, {
+      size: 10, align: "right", accent: isSelected ? accent : null,
+    });
+  }
+  ctx.textAlign = "left";
+}
+
+/**
+ * Footer hint like "W/S to navigate · ENTER to select": each segment's first
+ * word becomes keycaps, the rest a dim label. Centred on cx, vertically on midY.
+ */
+export function drawModernKeyHints(ctx, cx, midY, text, size = 10) {
+  const labelFont = uiFont(Math.max(9, size), 700);
+  const segs = text.split("·").map((sgm) => sgm.trim()).filter(Boolean).map((sgm) => {
+    const [first, ...rest] = sgm.split(/\s+/);
+    const keys = first.split("/");
+    const label = rest.join(" ").toUpperCase();
+    const kw = keys.reduce((n, k) => n + keycapW(k, size), 0) + (keys.length - 1) * 3;
+    const lw = label ? measureSpaced(labelFont, label, 1) : 0;
+    return { keys, label, kw, lw, w: kw + (label ? 7 + lw : 0) };
+  });
+  const gap = Math.round(size * 2.4);
+  const total = segs.reduce((n, sg) => n + sg.w, 0) + gap * (segs.length - 1);
+  let x = Math.round(cx - total / 2);
+  const capY = Math.round(midY - size * 0.95);
+  for (const sg of segs) {
+    for (let k = 0; k < sg.keys.length; k++) {
+      x += drawKeycap(ctx, x, capY, sg.keys[k], { size }) + (k < sg.keys.length - 1 ? 3 : 0);
+    }
+    if (sg.label) {
+      ctx.font = labelFont;
+      ctx.letterSpacing = "1px";
+      ctx.fillStyle = UI.textDim;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(sg.label, x + 7, midY);
+      ctx.letterSpacing = "0px";
+      ctx.textBaseline = "alphabetic";
+      x += 7 + sg.lw;
+    }
+    x += gap;
+  }
+  ctx.textAlign = "left";
+}
+
+function renderModernCompletionMenu(ctx, w, h, selection, now) {
+  drawBackdrop(ctx, w, h, "cyan");
+  const compact = h < 500;
+  const titleY = h * 0.14;
+  drawTitle(ctx, "TRAINING COMPLETE", w / 2, titleY + (compact ? 6 : 8), compact ? 30 : 40, UI.energy, {
+    fillTop: "#f2fffb", fillBottom: "#8fe8d4",
+  });
+  drawCaption(ctx, w / 2, titleY + (compact ? 22 : 30), "All systems nominal. What's your next move, agent?", {
+    size: compact ? 10 : 11, scheme: "steel", align: "center",
+  });
+
+  const layout = tutorialMenuLayout(w, h, COMPLETION_ITEMS.length);
+  drawModernMenu(ctx, COMPLETION_ITEMS, selection, now, layout);
+  // On short screens the menu reaches the bottom, so the hints hug the edge.
+  drawModernKeyHints(ctx, w / 2, compact ? h - 9 : h - 30, "W/S to navigate  ·  ENTER to select", compact ? 8 : 10);
   ctx.textAlign = "left";
 }

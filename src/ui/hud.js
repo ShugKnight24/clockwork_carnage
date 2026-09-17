@@ -10,6 +10,17 @@ import {
   VISOR_STYLES,
 } from "../../js/data.js";
 import { getWeaponSprite } from "../assets/loader.js";
+import { isModernArt } from "../rendering/art-style.js";
+import {
+  renderModernMinimalPanels,
+  renderModernClassic,
+  renderModernCompact,
+  drawModernCombatCues,
+  drawModernDamageNumber,
+  drawModernBossNameCard,
+  drawModernStageCleared,
+  drawModernTimerPill,
+} from "./hud-modern.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -158,6 +169,10 @@ function drawHitMarker(ctx, game, cx, cy) {
  * false = compact in-bar HUD).
  */
 function drawDamageNumber(ctx, dn, x, y, large) {
+  if (isModernArt()) {
+    drawModernDamageNumber(ctx, dn, x, y, large);
+    return;
+  }
   const f = large ? 18 : 16;
   const fSmall = large ? 14 : 12;
   if (dn.crit) {
@@ -206,6 +221,10 @@ function drawBossNameCard(ctx, game, w, h) {
   const elapsed = game.time - card.time;
   if (elapsed >= card.duration) {
     game.bossNameCard = null;
+    return;
+  }
+  if (isModernArt()) {
+    drawModernBossNameCard(ctx, card, elapsed, w, h);
     return;
   }
   const t = elapsed / card.duration; // 0..1
@@ -382,6 +401,8 @@ if (isCompactMobile) {
   let mmSize = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
   drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
 
+  if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
+
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
   drawCrosshair(ctx, chx, chy, game.settings.crosshair);
@@ -421,7 +442,12 @@ if (isCompactMobile) {
   game.renderAchievementToast(ctx, w, h);
 
   // Arena timer (compact)
-  if (game.mode === "arena") {
+  if (game.mode === "arena" && isModernArt()) {
+    const secs = Math.ceil(game.arenaTimer);
+    const warning = secs <= 10;
+    drawModernTimerPill(ctx, 10, 10, "TIME", `${secs}s`, warning ? "#ff2a4a" : "#22e6ff",
+      warning ? (Math.floor(game.time / 250) % 2 ? "#ff2a4a" : "#ffae3a") : "#e4edf5");
+  } else if (game.mode === "arena") {
     const secs = Math.ceil(game.arenaTimer);
     const warning = secs <= 10;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -445,7 +471,10 @@ if (isCompactMobile) {
   }
 
   // Campaign timer
-  if (game.mode === "campaign" && game.roundStartTime) {
+  if (game.mode === "campaign" && game.roundStartTime && isModernArt()) {
+    const elSec = Math.floor((performance.now() - game.roundStartTime) / 1000);
+    drawModernTimerPill(ctx, 10, 10, "TIME", `${Math.floor(elSec / 60)}:${(elSec % 60).toString().padStart(2, "0")}`, "#22e6ff");
+  } else if (game.mode === "campaign" && game.roundStartTime) {
     const elSec = Math.floor(
       (performance.now() - game.roundStartTime) / 1000,
     );
@@ -545,7 +574,9 @@ if (isCompactMobile) {
   ctx.textAlign = "left";
 
   // Stage cleared notification
-  if (game.mode === "arena" && game.arenaClearTimer != null) {
+  if (game.mode === "arena" && game.arenaClearTimer != null && isModernArt()) {
+    drawModernStageCleared(game, ctx, w, (h - barH) / 2, false);
+  } else if (game.mode === "arena" && game.arenaClearTimer != null) {
     const countSecs = Math.ceil(game.arenaClearTimer);
     const pulse = 0.7 + Math.sin(game.time * 0.005) * 0.3;
     ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
@@ -638,6 +669,9 @@ const drawPill = (x, y, pw, ph, alpha = 0.55) => {
   ctx.fill();
 };
 
+if (isModernArt()) {
+  renderModernMinimalPanels(game, ctx, w, h, hudFactor);
+} else {
 // ─── TOP-LEFT: Score / Timer / Difficulty / Meltdown info ───
 {
   let tlY = 12;
@@ -1188,6 +1222,7 @@ if (game.settings.showKills) {
     ctx.fillText(wep.name, brX, brY);
   }
 }
+} // end legacy minimal panels
 
 // ─── MINIMAP (top-right, pushed down if kills pill is shown) ───
 {
@@ -1198,6 +1233,8 @@ if (game.settings.showKills) {
   const mmY = game.settings.showKills ? 48 : 10;
   drawMinimap(ctx, w - mmSize - 10, mmY, mmSize, mmSize, _minimapState(game));
 }
+
+if (isModernArt()) drawModernCombatCues(game, ctx, w, h, 0);
 
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
@@ -1234,7 +1271,9 @@ game.killStreakSystem.renderThirdPerson(ctx, w, h);
 drawBossNameCard(ctx, game, w, h);
 
 // ─── STAGE CLEARED (arena only) ───
-if (game.mode === "arena" && game.arenaClearTimer != null) {
+if (game.mode === "arena" && game.arenaClearTimer != null && isModernArt()) {
+  drawModernStageCleared(game, ctx, w, h / 2, true);
+} else if (game.mode === "arena" && game.arenaClearTimer != null) {
   const countSecs = Math.ceil(game.arenaClearTimer);
   const pulse = 0.7 + Math.sin(game.time * 0.005) * 0.3;
   ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
@@ -1299,6 +1338,9 @@ const healthColor =
       ? game.cbColor("#ffaa00")
       : game.cbColor("#ff2200");
 
+if (isModernArt()) {
+  renderModernClassic(game, ctx, w, h, barH, hudFactor, _portraitState(game));
+} else {
 // ─── Stamina + Chrono bars (side-by-side above bottom bar) ───
 const staminaFactor = game.settings.staminaBarSize / 100;
 const staminaPct = game.player.stamina / game.player.maxStamina;
@@ -1619,6 +1661,7 @@ if (game.mode === "campaign" && game.roundStartTime) {
   ctx.textAlign = "center";
   ctx.fillText(`${mins}:${secs.toString().padStart(2, "0")}`, 55, 27);
 }
+} // end legacy classic console
 
 // ─── Meltdown HUD (heat meter top-right, overlay, ARIA text) ───
 if (game.mode === "meltdown") {
@@ -1669,7 +1712,7 @@ if (game.mode === "meltdown") {
 }
 
 // ─── Boss Health Bar (top-center) ───
-{
+if (!isModernArt()) {
   const bossEntity = game.entities.find(
     (e) => e.type === "enemy" && e.active && e.health > 0 &&
       (e.enemyType === "boss" || e.enemyType === "boss_form2" || e.enemyType === "boss_form3"),
@@ -1724,6 +1767,8 @@ ctx.textAlign = "left";
 let mmSize = game.settings.minimapSize;
 drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
 
+if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
+
 // ─── Crosshair (centered in viewport above bar) ───
 const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
 drawCrosshair(ctx, chx, chy, game.settings.crosshair);
@@ -1760,7 +1805,9 @@ game.killStreakSystem.renderFirstPerson(ctx, w, h, barH);
 drawBossNameCard(ctx, game, w, h);
 
 // ─── Stage cleared (arena only) ───
-if (game.mode === "arena" && game.arenaClearTimer != null) {
+if (game.mode === "arena" && game.arenaClearTimer != null && isModernArt()) {
+  drawModernStageCleared(game, ctx, w, (h - barH) / 2, true);
+} else if (game.mode === "arena" && game.arenaClearTimer != null) {
   const countSecs = Math.ceil(game.arenaClearTimer);
   const pulse = 0.7 + Math.sin(game.time * 0.005) * 0.3;
   ctx.fillStyle = `rgba(0,10,5,${0.5 * pulse})`;
@@ -1896,6 +1943,11 @@ ctx.textAlign = "left";
 /** Compact mobile HUD: slim bar with health, ammo, and key info only */
 
 function _renderCompactMobileHUD(game, ctx, w, h, barH, hudFactor) {
+if (isModernArt()) {
+  renderModernCompact(game, ctx, w, h, barH, hudFactor);
+  _dirty = false;
+  return;
+}
 const wep = game.player.getWeaponDef();
 const healthPct = game.player.health / game.player.maxHealth;
 const healthColor =

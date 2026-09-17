@@ -5,6 +5,8 @@
  * Pure rendering functions — no game state mutation.
  */
 
+import { isModernArt } from "./art-style.js";
+
 /**
  * Render all post-processing effects in order.
  * @param {CanvasRenderingContext2D} ctx
@@ -35,8 +37,12 @@ export function renderPostFX(ctx, w, h, state) {
     ctx.fillRect(0, 0, w, h);
   }
 
+  // Modern HUD draws its own inked damage chevron and low-HP corner frames
+  // (hud-modern.js drawModernCombatCues); the arc would double that read.
+  const modern = isModernArt();
+
   // Damage direction indicator — red arc on screen edge
-  if (postProcessing && player.hurtTime && time - player.hurtTime < 500 && player.lastDamageAngle != null) {
+  if (!modern && postProcessing && player.hurtTime && time - player.hurtTime < 500 && player.lastDamageAngle != null) {
     drawDamageDirection(ctx, w, h, time, player);
   }
 
@@ -47,11 +53,16 @@ export function renderPostFX(ctx, w, h, state) {
     const pulse = 0.5 + 0.5 * Math.sin(time * 0.006 * (1 + severity)); // faster at lower health
     const alpha = severity * pulse * 0.35;
 
-    const grd = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
-    grd.addColorStop(0, "rgba(180,0,0,0)");
-    grd.addColorStop(1, `rgba(180,0,0,${alpha})`);
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
+    if (modern) {
+      // Same pulse as the HUD's crimson corner frames so they breathe together.
+      drawModernLowHealthVignette(ctx, w, h, severity, pulse);
+    } else {
+      const grd = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
+      grd.addColorStop(0, "rgba(180,0,0,0)");
+      grd.addColorStop(1, `rgba(180,0,0,${alpha})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, w, h);
+    }
 
     // Critical health (< 10%) — slight desaturation overlay
     if (hpRatio < 0.1) {
@@ -130,6 +141,41 @@ function drawFilmGrain(ctx, w, h, time) {
   );
   ctx.drawImage(tile, -_grainTileSize / 2, -_grainTileSize / 2);
   ctx.restore();
+}
+
+/**
+ * Modern low-health vignette: ink-dark edges with a crimson band just inside,
+ * like an inked panel border closing in. Baked once into a small canvas and
+ * stretched (a radial ramp survives the upscale), so no per-frame gradient.
+ */
+let _lowHpVignette = null;
+function getLowHpVignette() {
+  if (_lowHpVignette) return _lowHpVignette;
+  const vw = 256;
+  const vh = 160;
+  const c = (typeof OffscreenCanvas !== "undefined")
+    ? new OffscreenCanvas(vw, vh)
+    : Object.assign(document.createElement("canvas"), { width: vw, height: vh });
+  const g = c.getContext("2d");
+  // Draw a circle and stretch it so the falloff follows the screen aspect.
+  g.setTransform(vw / vh, 0, 0, 1, 0, 0);
+  const r = vh * 0.62;
+  const grd = g.createRadialGradient(vh / 2, vh / 2, r * 0.42, vh / 2, vh / 2, r);
+  grd.addColorStop(0, "rgba(120,0,20,0)");
+  grd.addColorStop(0.55, "rgba(150,6,30,0.28)");
+  grd.addColorStop(0.82, "rgba(90,2,16,0.72)");
+  grd.addColorStop(1, "rgba(4,6,11,0.95)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, vh, vh);
+  _lowHpVignette = c;
+  return c;
+}
+
+function drawModernLowHealthVignette(ctx, w, h, severity, pulse) {
+  const prev = ctx.globalAlpha;
+  ctx.globalAlpha = Math.min(1, 0.25 + severity * (0.45 + 0.55 * pulse) * 0.75);
+  ctx.drawImage(getLowHpVignette(), 0, 0, w, h);
+  ctx.globalAlpha = prev;
 }
 
 function drawDamageDirection(ctx, w, h, time, player) {

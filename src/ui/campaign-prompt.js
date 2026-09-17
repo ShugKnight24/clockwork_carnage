@@ -1,8 +1,24 @@
 // Campaign prompt screen — "Start with tutorial?" before campaign begins
 
+import { isModernArt } from "../rendering/art-style.js";
+import { UI, drawBackdrop, drawTitle, drawCaption } from "./modern-ui-kit.js";
+import { drawModernMenu, drawModernKeyHints } from "./tutorial-ui.js";
+
+const PROMPT_TITLE = "START CAMPAIGN";
+const PROMPT_SUBTITLE = "Clock in like everyone else, or skip to the end of the world?";
+const PROMPT_FOOTER = "W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back";
+const PROMPT_ITEMS = [
+  { label: "PROLOGUE: LOCKER ROOM", key: "[1]", color: "#00ffcc", desc: "Suit up, learn the controls, answer the alarm" },
+  { label: "SKIP TO ACT 1", key: "[2]", color: "#ff8844", desc: "Straight into the fire. No training wheels." },
+];
+
 export function renderCampaignPrompt(ctx, w, h, selection = 0) {
   const now = performance.now();
   const sel = selection;
+  if (isModernArt()) {
+    renderModernCampaignPrompt(ctx, w, h, sel, now);
+    return;
+  }
 
   // Background
   const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.7);
@@ -35,20 +51,17 @@ export function renderCampaignPrompt(ctx, w, h, selection = 0) {
   ctx.fillStyle = "#00ccff";
   ctx.font = "bold 32px monospace";
   ctx.textAlign = "center";
-  ctx.fillText("START CAMPAIGN", w / 2, titleY);
+  ctx.fillText(PROMPT_TITLE, w / 2, titleY);
   ctx.shadowBlur = 0;
   ctx.restore();
 
   ctx.fillStyle = "rgba(170, 200, 220, 0.5)";
   ctx.font = "14px monospace";
   ctx.textAlign = "center";
-  ctx.fillText("Would you like to run through training first?", w / 2, titleY + 28);
+  ctx.fillText(PROMPT_SUBTITLE, w / 2, titleY + 28);
 
   // Menu items
-  const menuItems = [
-    { label: "WITH TUTORIAL", key: "[1]", color: "#00ffcc", desc: "Run station training before deploying" },
-    { label: "SKIP TO CAMPAIGN", key: "[2]", color: "#ff8844", desc: "Deploy directly to the mission" },
-  ];
+  const menuItems = PROMPT_ITEMS;
 
   const menuW = 380;
   const itemH = 56;
@@ -113,6 +126,40 @@ export function renderCampaignPrompt(ctx, w, h, selection = 0) {
   ctx.fillStyle = "rgba(255,255,255,0.2)";
   ctx.font = "11px monospace";
   ctx.textAlign = "center";
-  ctx.fillText("W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back", w / 2, h - barHeight / 2 + 4);
+  ctx.fillText(PROMPT_FOOTER, w / 2, h - barHeight / 2 + 4);
+  ctx.textAlign = "left";
+}
+
+/** Modern layout: same menu geometry as legacy, kit plates and keycaps. */
+function renderModernCampaignPrompt(ctx, w, h, sel, now) {
+  drawBackdrop(ctx, w, h, "steel");
+  const compact = h < 500;
+
+  // Cinematic letterbox, inked.
+  const barHeight = h * 0.06;
+  ctx.fillStyle = UI.ink;
+  ctx.fillRect(0, 0, w, barHeight);
+  ctx.fillRect(0, h - barHeight, w, barHeight);
+  ctx.fillStyle = "rgba(34,230,255,0.25)";
+  ctx.fillRect(0, Math.round(barHeight), w, 1);
+  ctx.fillRect(0, Math.round(h - barHeight) - 1, w, 1);
+
+  const titleY = h * 0.2;
+  drawTitle(ctx, PROMPT_TITLE, w / 2, titleY, compact ? 28 : 38, UI.cyan);
+  drawCaption(ctx, w / 2, titleY + (compact ? 14 : 20), PROMPT_SUBTITLE, {
+    size: compact ? 10 : 11, scheme: "steel", align: "center",
+  });
+
+  const menuW = 380;
+  const itemH = 56;
+  const layout = {
+    menuW,
+    itemH,
+    menuH: PROMPT_ITEMS.length * itemH + 16,
+    mx: (w - menuW) / 2,
+    my: h * 0.38,
+  };
+  drawModernMenu(ctx, PROMPT_ITEMS, sel, now, layout, 26, 42);
+  drawModernKeyHints(ctx, w / 2, h - barHeight / 2, PROMPT_FOOTER, compact ? 8 : 10);
   ctx.textAlign = "left";
 }

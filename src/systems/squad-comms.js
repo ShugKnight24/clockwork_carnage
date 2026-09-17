@@ -19,6 +19,18 @@ const SQUAD_CONFIG = {
 };
 
 /**
+ * Speaker tab colours for the Modern comms plates (aria-comms.js). Legacy keeps
+ * the per-member text tints in SQUAD_CONFIG above.
+ */
+export const SQUAD_TAB_COLORS = {
+  KAEL: "#4f9dff",
+  LYRA: "#ffae3a",
+  NOVA: "#ff5fb4",
+  ROOK: "#3dff8a",
+  SQUAD: "#ffd24a",
+};
+
+/**
  * @param {number} act - campaign act (1-3)
  * @param {number} level - level index within act (0-based)
  * @returns {SquadMember[]} members narratively present for lines
@@ -39,12 +51,23 @@ export class SquadCommsController {
    * @param {{ queueSquadMessage: (speaker: string, category: string, color?: string) => void }} ariaComms
    */
   constructor(ariaComms) {
-    this.ariaComms = ariaComms;
+    // Game passes itself; the queue lives on game.ariaComms. Resolve lazily
+    // because the controller can be built before (or alongside) that system.
+    this._commsHost = ariaComms;
     this.cooldown = 0; // seconds until next line allowed
     this.minCooldown = 8; // min spacing between squad lines
     this.maxCooldown = 18; // max spacing (randomized after each line)
     this.triggered = new Set(); // one-shot keys (e.g. "lowHp:lvl2")
     this.context = { act: 1, level: 0 };
+  }
+
+  /** The object that owns queueSquadMessage (the ARIA comms system). */
+  get ariaComms() {
+    const host = this._commsHost;
+    if (host && typeof host.queueSquadMessage !== "function" && host.ariaComms) {
+      return host.ariaComms;
+    }
+    return host;
   }
 
   /** Call when level loads to update narrative context + reset triggers. */

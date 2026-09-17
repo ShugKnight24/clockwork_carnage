@@ -1,4 +1,5 @@
-import { setArtStyle, onArtStyleChange } from "../src/rendering/art-style.js";
+import { setArtStyle, onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
+import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
@@ -905,6 +906,7 @@ export class Game {
       h,
       this.character.name,
       this.isTouchDevice,
+      this.mode === "tutorial" ? this._tutorialCardBottom || 0 : 0,
     );
   }
 
@@ -1167,7 +1169,8 @@ export class Game {
   }
 
   renderTutorialOverlay(ctx, w, h) {
-    _renderTutorialOverlay(ctx, w, h, {
+    // Remembered so ARIA's toast can sit below the step card instead of over it.
+    this._tutorialCardBottom = _renderTutorialOverlay(ctx, w, h, {
       mode: this.mode,
       isTouchDevice: this.isTouchDevice,
       tutorialStepTime: this.tutorialStepTime,
@@ -2335,6 +2338,10 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
+    if (isModernArt()) {
+      renderModernPauseScreen(this, ctx, w, h);
+      return;
+    }
     const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,0,0,0.82)";
     ctx.fillRect(0, 0, w, h);

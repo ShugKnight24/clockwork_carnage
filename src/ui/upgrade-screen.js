@@ -4,6 +4,17 @@ import { UPGRADES } from "../../js/data.js";
 import { upgradeLayout, isCompactPhone } from "../../js/layout.js";
 import { drawScanlines } from "./scanlines.js";
 import { getUpgradeSprite } from "../assets/loader.js";
+import { isModernArt } from "../rendering/art-style.js";
+import {
+  UI,
+  uiFont,
+  drawBackdrop,
+  drawPanel,
+  drawTitle,
+  drawCaption,
+  drawBar,
+  drawButton,
+} from "./modern-ui-kit.js";
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -12,6 +23,10 @@ import { getUpgradeSprite } from "../assets/loader.js";
  * @param {{ isTouchDevice: boolean, arenaRound: number, playerScore: number, upgradeLevels: Object, upgradeSelection: number }} state
  */
 export function renderUpgradeScreen(ctx, w, h, state) {
+  if (isModernArt()) {
+    renderUpgradeScreenModern(ctx, w, h, state);
+    return;
+  }
   const { isTouchDevice, arenaRound, playerScore, upgradeLevels, upgradeSelection } = state;
   const now = performance.now();
 
@@ -305,5 +320,145 @@ export function renderUpgradeScreen(ctx, w, h, state) {
   // ── Scanline overlay ──
   drawScanlines(ctx, w, h);
 
+  ctx.textAlign = "left";
+}
+
+// ─── Modern art style ───────────────────────────────────────────────────────
+// Same upgradeLayout geometry (touch hit-testing depends on it); cards are
+// machined steel with a segmented level gauge.
+
+function renderUpgradeScreenModern(ctx, w, h, state) {
+  const { isTouchDevice, arenaRound, playerScore, upgradeLevels, upgradeSelection } = state;
+  const compact = isTouchDevice && isCompactPhone(h);
+  const headerY = compact ? 14 : 40;
+
+  drawBackdrop(ctx, w, h, "cyan", 1);
+  const title = drawTitle(ctx, `Round ${arenaRound - 1} complete`, w / 2, headerY + (compact ? 4 : 0), compact ? 18 : 30, UI.energy);
+  if (compact) {
+    drawCaption(ctx, w / 2 + title.w / 2 + 18, headerY - 9, `Score ${playerScore}`, { size: 10, scheme: "amber" });
+  } else {
+    drawCaption(ctx, w / 2, headerY + 22, `Score ${playerScore}`, { size: 13, scheme: "amber", align: "center" });
+    ctx.font = uiFont(12, 700);
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "3px";
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText("UPGRADES", w / 2, headerY + 72);
+    ctx.letterSpacing = "0px";
+    ctx.fillStyle = "rgba(130,160,188,0.25)";
+    ctx.fillRect(w / 2 - 260, headerY + 68, 190, 1);
+    ctx.fillRect(w / 2 + 70, headerY + 68, 190, 1);
+  }
+
+  const upgradeKeys = Object.keys(UPGRADES);
+  const layout = upgradeLayout(w, h, upgradeKeys.length, isTouchDevice, upgradeSelection);
+  const { startY, cardH, cardGap, colW, cols, leftX, rightX } = layout;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, layout.listTop - 4, w, layout.visibleH + 8);
+  ctx.clip();
+  for (let i = 0; i < upgradeKeys.length; i++) {
+    const key = upgradeKeys[i];
+    const upg = UPGRADES[key];
+    const level = upgradeLevels[key] || 0;
+    const cost = Math.floor(upg.baseCost * Math.pow(upg.costScale, level));
+    const maxed = level >= upg.maxLevel;
+    const selected = upgradeSelection === i;
+    const affordable = playerScore >= cost;
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const baseX = col === 0 ? leftX : rightX;
+    const y = startY + row * (cardH + cardGap);
+    if (y > layout.listTop + layout.visibleH + 4 || y + cardH < layout.listTop - 4) continue;
+
+    const accent = maxed ? UI.green : selected ? UI.cyan : null;
+    drawPanel(ctx, baseX, y, colW, cardH, {
+      variant: selected ? "raised" : "menu",
+      accent,
+      bar: selected,
+      chamfer: compact ? 7 : 12,
+    });
+
+    const iconSize = compact ? 16 : 30;
+    const iconX = baseX + (compact ? 7 : 12);
+    const iconY = y + (compact ? 3 : 7);
+    if (!compact) drawPanel(ctx, iconX - 3, iconY - 3, iconSize + 6, iconSize + 6, { variant: "well", chamfer: 5 });
+    const sprite = getUpgradeSprite(key);
+    if (sprite) {
+      ctx.globalAlpha = selected ? 1 : 0.8;
+      ctx.drawImage(sprite, iconX, iconY, iconSize, iconSize);
+      ctx.globalAlpha = 1;
+    }
+    const textX = iconX + iconSize + (compact ? 6 : 12);
+
+    ctx.textAlign = "left";
+    ctx.font = uiFont(compact ? 11 : 15, 700);
+    ctx.fillStyle = selected ? "#ffffff" : "#c3d1de";
+    ctx.fillText(upg.name.toUpperCase(), textX, y + (compact ? 14 : 22));
+    if (!compact) {
+      ctx.font = uiFont(12, 500);
+      ctx.fillStyle = selected ? "#a9c3d6" : UI.textDim;
+      ctx.fillText(upg.description, textX, y + 38);
+    }
+
+    const right = baseX + colW - (compact ? 7 : 12);
+    if (maxed) {
+      drawCaption(ctx, right, y + (compact ? 3 : 8), "Max", { size: compact ? 8 : 10, scheme: "cyan", align: "right" });
+    } else {
+      if (!compact) {
+        ctx.textAlign = "right";
+        ctx.font = uiFont(9, 700);
+        ctx.fillStyle = UI.textFaint;
+        ctx.fillText("COST", right, y + 13);
+      }
+      ctx.textAlign = "right";
+      ctx.font = uiFont(compact ? 12 : 16, 800);
+      ctx.fillStyle = affordable ? UI.gold : "#ff6a7e";
+      ctx.fillText(`${cost}`, right, y + (compact ? 14 : 30));
+    }
+
+    const maxPips = Math.min(upg.maxLevel, 10);
+    const gaugeX = compact ? textX : textX;
+    const gaugeW = right - gaugeX - (compact ? 34 : 52);
+    const gaugeY = y + cardH - (compact ? 9 : 15);
+    drawBar(ctx, gaugeX, gaugeY, gaugeW, compact ? 3 : 5, Math.min(1, level / maxPips), maxed ? UI.green : UI.energy, {
+      segments: maxPips, edge: false,
+    });
+    ctx.textAlign = "right";
+    ctx.font = uiFont(compact ? 8 : 10, 700);
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText(`LV ${level}/${upg.maxLevel}`, right, gaugeY + (compact ? 4 : 6));
+  }
+  ctx.restore();
+
+  if (layout.maxScrollRow > 0) {
+    ctx.textAlign = "center";
+    ctx.font = uiFont(compact ? 9 : 11, 700);
+    ctx.fillStyle = UI.cyan;
+    if (layout.scrollRow > 0) ctx.fillText("▲", w / 2, layout.listTop - 8);
+    if (layout.scrollRow < layout.maxScrollRow) ctx.fillText("▼", w / 2, layout.listBottom + 14);
+    ctx.fillStyle = UI.textFaint;
+    ctx.font = uiFont(compact ? 8 : 10, 600);
+    ctx.textAlign = "right";
+    const firstShown = layout.scrollRow * layout.cols + 1;
+    const lastShown = Math.min(upgradeKeys.length, (layout.scrollRow + layout.maxVisibleRows) * layout.cols);
+    ctx.fillText(`${firstShown}-${lastShown} OF ${upgradeKeys.length}`, layout.rightX + layout.colW, layout.listTop - 8);
+  }
+
+  const contY = layout.contY;
+  const contSelected = upgradeSelection === upgradeKeys.length;
+  const contBtnW = compact ? 260 : 360;
+  const contBtnH = compact ? 28 : 36;
+  drawButton(ctx, w / 2 - contBtnW / 2, contY - contBtnH / 2, contBtnW, contBtnH,
+    contSelected ? "Continue  ▶" : "Continue", contSelected ? "focus" : "idle", UI.energy, { size: compact ? 13 : 16 });
+
+  if (!compact) {
+    ctx.fillStyle = UI.textFaint;
+    ctx.font = uiFont(11, 600);
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "1px";
+    ctx.fillText("W/S/A/D NAVIGATE  ·  ENTER SELECT", w / 2, contY + 36);
+    ctx.letterSpacing = "0px";
+  }
   ctx.textAlign = "left";
 }

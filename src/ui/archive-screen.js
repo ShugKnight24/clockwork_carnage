@@ -9,6 +9,16 @@
 import { BESTIARY } from "../data/bestiary.js";
 import { MEMORY_FRAGMENTS } from "../data/memory-fragments.js";
 import { drawScanlines } from "./scanlines.js";
+import { isModernArt } from "../rendering/art-style.js";
+import {
+  UI,
+  uiFont,
+  drawBackdrop,
+  drawPanel,
+  drawTitle,
+  drawCaption,
+  drawSectionHeader,
+} from "./modern-ui-kit.js";
 
 export const ARCHIVE_TABS = ["BESTIARY", "MEMORIES"];
 
@@ -85,6 +95,10 @@ function wrapText(ctx, text, maxW) {
  * @param {{ tab:number, selection:number, scroll:number, archive:object }} state
  */
 export function renderArchiveScreen(ctx, w, h, state) {
+  if (isModernArt()) {
+    renderArchiveScreenModern(ctx, w, h, state);
+    return;
+  }
   const { tab, selection, archive } = state;
   const L = archiveLayout(w, h);
   const entries = archiveEntries(tab, archive);
@@ -294,5 +308,156 @@ export function renderArchiveScreen(ctx, w, h, state) {
   );
 
   drawScanlines(ctx, w, h);
+  ctx.textAlign = "left";
+}
+
+// ─── Modern art style ───────────────────────────────────────────────────────
+// Same archiveLayout geometry (click hit-testing reads it); dossier styling.
+
+function paragraph(ctx, text, x, y, maxW, lineH) {
+  for (const line of wrapText(ctx, text, maxW)) {
+    ctx.fillText(line, x, y);
+    y += lineH;
+  }
+  return y;
+}
+
+function renderArchiveScreenModern(ctx, w, h, state) {
+  const { tab, selection, archive } = state;
+  const L = archiveLayout(w, h);
+  const entries = archiveEntries(tab, archive);
+
+  drawBackdrop(ctx, w, h, "steel", 1);
+  drawTitle(ctx, "ARCHIVE", w / 2, 40, 28, UI.cyan);
+
+  for (let i = 0; i < ARCHIVE_TABS.length; i++) {
+    const tx = L.tabX0 + i * (L.tabW + 10);
+    const active = i === tab;
+    drawPanel(ctx, tx, L.tabY, L.tabW, L.tabH, {
+      variant: active ? "raised" : "menu",
+      accent: active ? UI.cyan : null,
+      bar: active,
+      chamfer: 8,
+    });
+    const prog = i === 0 ? archive.bestiaryProgress() : archive.fragmentProgress();
+    ctx.font = uiFont(12, active ? 800 : 600);
+    ctx.textAlign = "center";
+    ctx.letterSpacing = "1.5px";
+    ctx.fillStyle = active ? "#ffffff" : UI.textDim;
+    ctx.fillText(`${ARCHIVE_TABS[i]}  ${prog.found}/${prog.total}`, tx + L.tabW / 2, L.tabY + 20);
+    ctx.letterSpacing = "0px";
+  }
+
+  // ── Entry list ──
+  const scroll = state.scroll || 0;
+  drawPanel(ctx, L.listX, L.contentY, L.listW, L.contentH, { variant: "menu", accent: UI.cyan, chamfer: 14 });
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(L.listX, L.contentY + 2, L.listW, L.contentH - 4);
+  ctx.clip();
+  for (let vi = 0; vi < L.visibleRows; vi++) {
+    const idx = vi + scroll;
+    if (idx >= entries.length) break;
+    const e = entries[idx];
+    const ry = L.contentY + 8 + vi * L.rowH;
+    const selected = idx === selection;
+    if (selected) {
+      drawPanel(ctx, L.listX + 6, ry, L.listW - 12, L.rowH - 4, { variant: "raised", accent: UI.cyan, bar: true, chamfer: 7 });
+    }
+    ctx.textAlign = "left";
+    ctx.font = uiFont(13, selected ? 700 : 600);
+    if (e.unlocked) {
+      ctx.fillStyle = selected ? "#ffffff" : "#c3d1de";
+      ctx.fillText(e.label, L.listX + 18, ry + 18);
+    } else {
+      // Redaction bar, like a blacked-out line in a dossier.
+      const bw = Math.min(L.listW - 60, 12 + e.label.length * 6);
+      ctx.fillStyle = UI.ink;
+      ctx.fillRect(L.listX + 18, ry + 8, bw, 11);
+      ctx.fillStyle = "rgba(111,138,163,0.22)";
+      ctx.fillRect(L.listX + 18, ry + 8, bw, 1);
+    }
+  }
+  ctx.restore();
+
+  if (entries.length > L.visibleRows) {
+    ctx.textAlign = "center";
+    ctx.font = uiFont(10, 700);
+    ctx.fillStyle = UI.cyan;
+    if (scroll > 0) ctx.fillText("▲", L.listX + L.listW / 2, L.contentY - 4);
+    if (scroll + L.visibleRows < entries.length) {
+      ctx.fillText("▼", L.listX + L.listW / 2, L.contentY + L.contentH + 13);
+    }
+  }
+
+  // ── Detail pane ──
+  drawPanel(ctx, L.detailX, L.contentY, L.detailW, L.contentH, { variant: "menu", accent: UI.cyan, chamfer: 18 });
+  const sel = entries[selection];
+  const dx = L.detailX + 24;
+  const maxW = L.detailW - 48;
+  let dy = L.contentY + 26;
+
+  if (sel && !sel.unlocked) {
+    drawCaption(ctx, dx, dy - 4, "Record sealed", { size: 12, scheme: "steel" });
+    dy += 38;
+    ctx.textAlign = "left";
+    ctx.font = uiFont(13, 500);
+    ctx.fillStyle = UI.textDim;
+    paragraph(ctx, tab === 0
+      ? "Defeat this enemy to unlock its dossier."
+      : "Recover this fragment in the field to read it.", dx, dy, maxW, 19);
+  } else if (sel && tab === 0) {
+    const b = BESTIARY[sel.key];
+    drawCaption(ctx, dx, dy - 6, b.name, { size: 16 });
+    dy += 38;
+    const threat = THREAT_COLORS[b.threat] || UI.amber;
+    ctx.fillStyle = threat;
+    ctx.fillRect(dx, dy - 10, 4, 12);
+    ctx.textAlign = "left";
+    ctx.font = uiFont(12, 800);
+    ctx.letterSpacing = "1.5px";
+    ctx.fillText(`THREAT: ${String(b.threat).toUpperCase()}`, dx + 10, dy);
+    ctx.letterSpacing = "0px";
+    dy += 24;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#d3dee8";
+    dy = paragraph(ctx, b.description, dx, dy, maxW, 20) + 12;
+    drawSectionHeader(ctx, dx, dy - 12, maxW, "Tactical note", UI.amber, 11);
+    dy += 14;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#ffe0ae";
+    dy = paragraph(ctx, b.tacticalNote, dx, dy, maxW, 20) + 12;
+    drawSectionHeader(ctx, dx, dy - 12, maxW, "ARIA", UI.cyan, 11);
+    dy += 14;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#8feeff";
+    paragraph(ctx, `“${b.ariaQuote}”`, dx, dy, maxW, 20);
+  } else if (sel) {
+    const f = MEMORY_FRAGMENTS.find((m) => m.id === sel.key);
+    drawCaption(ctx, dx, dy - 6, f.title, { size: 16 });
+    dy += 38;
+    ctx.textAlign = "left";
+    ctx.font = uiFont(12, 800);
+    ctx.letterSpacing = "1.5px";
+    ctx.fillStyle = "#c9a8ff";
+    ctx.fillText(`${f.member.toUpperCase()}  ·  ACT ${f.act}`, dx, dy);
+    ctx.letterSpacing = "0px";
+    dy += 24;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#d3dee8";
+    dy = paragraph(ctx, f.text, dx, dy, maxW, 20) + 12;
+    drawSectionHeader(ctx, dx, dy - 12, maxW, "ARIA", UI.cyan, 11);
+    dy += 14;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#8feeff";
+    paragraph(ctx, `“${f.ariaReaction}”`, dx, dy, maxW, 20);
+  }
+
+  ctx.textAlign = "center";
+  ctx.font = uiFont(11, 600);
+  ctx.letterSpacing = "1px";
+  ctx.fillStyle = UI.textFaint;
+  ctx.fillText("W/S SELECT  ·  A/D TAB  ·  ESC BACK", w / 2, h - 16);
+  ctx.letterSpacing = "0px";
   ctx.textAlign = "left";
 }

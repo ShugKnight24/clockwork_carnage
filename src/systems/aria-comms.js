@@ -3,9 +3,23 @@
 
 import { ARIA_COMMS } from "../data/dialogue.js";
 import { isCompactPhone } from "../../js/layout.js";
+import { isModernArt } from "../rendering/art-style.js";
+import { SQUAD_TAB_COLORS } from "./squad-comms.js";
+import {
+  UI,
+  uiFont,
+  drawPanel,
+  drawTitle,
+  drawCaption,
+  drawKeycap,
+  pixelRatio,
+} from "../ui/modern-ui-kit.js";
 
 export class AriaCommsSystem {
-  constructor() {
+  constructor(game = null) {
+    // Only read for Modern layout (HUD style / scale decide where the subtle
+    // plate can sit without covering the vitals).
+    this.game = game;
     this.queue = [];
     this.message = null; // { text, color, life, duration, prominent }
     this.triggered = {}; // one-shot triggers per level/round
@@ -139,8 +153,11 @@ export class AriaCommsSystem {
     return r < 0.5 ? "idle" : "ariaPersonality";
   }
 
-  /** Render active ARIA message (prominent or subtle). */
-  renderMessage(ctx, w, h, characterName, isTouchDevice) {
+  /**
+   * Render active ARIA message (prominent or subtle).
+   * @param {number} [minTop] - keep the prominent box below this y (tutorial step card)
+   */
+  renderMessage(ctx, w, h, characterName, isTouchDevice, minTop = 0) {
     const msg = this.message;
     if (!msg) return;
 
@@ -148,8 +165,14 @@ export class AriaCommsSystem {
     const dur = msg.duration;
     const agentName = characterName || "Agent";
 
+    if (isModernArt()) {
+      if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      else this._renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
+      return;
+    }
+
     if (msg.prominent) {
-      this._renderProminent(ctx, w, h, msg, t, dur, agentName);
+      this._renderProminent(ctx, w, h, msg, t, dur, agentName, minTop);
     } else {
       this._renderSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
     }
@@ -157,6 +180,10 @@ export class AriaCommsSystem {
 
   /** Render ARIA comms log overlay. */
   renderLog(ctx, w, h, characterName) {
+    if (isModernArt()) {
+      this._renderModernLog(ctx, w, h, characterName);
+      return;
+    }
     const panelW = Math.min(520, w - 40);
     const panelH = Math.min(400, h - 80);
     const panelX = (w - panelW) / 2;
@@ -231,7 +258,7 @@ export class AriaCommsSystem {
 
   // ── Private rendering helpers ──
 
-  _renderProminent(ctx, w, h, msg, t, dur, agentName) {
+  _renderProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
     let alpha = 1;
     if (t < 0.4) alpha = t / 0.4;
     else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
@@ -245,7 +272,7 @@ export class AriaCommsSystem {
     const pBx = (w - pBoxW) / 2;
     // Sits high enough to clear the reticle and the horizon where enemies
     // appear. At 0.28 it parked directly in the firing sightline.
-    const pBy = h * 0.135 + slideY;
+    const pBy = Math.max(h * 0.135, minTop ? minTop + 12 : 0) + slideY;
 
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);
@@ -520,6 +547,269 @@ export class AriaCommsSystem {
     }
   }
 
+  // ── Modern (graphic-novel) rendering ──
+
+  /**
+   * Wrapped lines for the active message, cached on the message so the
+   * typewriter reveal never re-measures (and never reflows) per frame.
+   */
+  _modernLines(ctx, msg, agentName, font, maxW) {
+    const key = `${font}|${maxW}|${agentName}`;
+    if (msg._wrapKey !== key) {
+      ctx.font = font;
+      msg._wrapKey = key;
+      msg._wrap = this._wordWrap(ctx, msg.text.replace(/\{AGENT\}/g, agentName), maxW);
+      msg._chars = msg._wrap.reduce((n, l) => n + l.length, 0);
+    }
+    return msg._wrap;
+  }
+
+  /** Typewriter text: lines revealed at TYPE_RATE chars/s with an ink caret. */
+  _drawTyped(ctx, msg, lines, x, y, lineH, t, color, caretColor) {
+    const shown = Math.max(0, Math.floor((t - 0.12) * TYPE_RATE));
+    let left = shown;
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const ly = y + i * lineH;
+      if (left >= line.length) {
+        ctx.fillText(line, x, ly);
+        left -= line.length;
+        continue;
+      }
+      const part = line.slice(0, left);
+      if (part) ctx.fillText(part, x, ly);
+      // Caret only while typing; blinks at ~6Hz.
+      if ((t * 6) % 2 < 1.4) {
+        const cx = x + (part ? ctx.measureText(part).width : 0) + 1;
+        ctx.fillStyle = caretColor;
+        ctx.fillRect(Math.round(cx), Math.round(ly - lineH * 0.62), 2, Math.round(lineH * 0.72));
+      }
+      return;
+    }
+  }
+
+  _speaking(msg, t) {
+    return (t - 0.12) * TYPE_RATE < (msg._chars || 0);
+  }
+
+  /** Where the subtle plate's bottom edge sits so it clears the Modern vitals. */
+  _modernSubtleBottom(h, compact) {
+    const s = this.game?.settings || {};
+    const f = (s.hudScale || 100) / 100;
+    const fs = (s.fontScale || 100) / 100;
+    if (compact) return h - Math.round(60 * f) - Math.round(7 * f) - 26;
+    if (s.hudStyle === 1) return h - Math.round(160 * f) - 56;
+    if (s.hudStyle === 0 || s.hudStyle == null) {
+      // Minimal: weapon strip + vitals plate + CRITICAL caption above it.
+      const plateH = Math.max(10 * f + 6 + 4 * f + 4 + 8 * fs, 30 * fs) + 18 + 7;
+      const strip = s.showWeapons === false ? 12 : 12 + 30 * f + 8;
+      return h - Math.round(strip + plateH + 36 * fs);
+    }
+    return h - 150;
+  }
+
+  _renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+    let alpha = 1;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
+    // Short drop-in with a touch of overshoot, like a panel slapped on a page.
+    const k = Math.min(1, t / 0.3);
+    const slideY = t < 0.3 ? -18 * (1 - k) * (1 - k) + Math.sin(k * Math.PI) * 3 : 0;
+
+    const boxW = Math.min(460, w - 24);
+    const x = Math.round((w - boxW) / 2);
+    // Same anchor as legacy; the speaker tab pokes ~10px above the plate, so
+    // clear the tutorial card by that much more.
+    const y = Math.round(Math.max(h * 0.135, minTop ? minTop + 22 : 0) + slideY);
+
+    const speaker = msg.speaker || "ARIA";
+    const color = speakerTone(speaker);
+    const port = 50;
+    const tx = x + 14 + port + 14;
+    const font = uiFont(15, 600);
+    const lineH = 19;
+    const lines = this._modernLines(ctx, msg, agentName, font, x + boxW - 18 - tx);
+    const boxH = Math.max(port + 22, 26 + lines.length * lineH + 10);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const dpr = pixelRatio(ctx);
+    const card = captionCardSprite(boxW, boxH, color, dpr);
+    ctx.drawImage(card, x - CARD_PAD, y - CARD_PAD, boxW + CARD_PAD * 2, boxH + CARD_PAD * 2);
+
+    const py = y + Math.round((boxH - port) / 2);
+    ctx.drawImage(portraitSprite(speaker, color, port, dpr), x + 14 - 2, py - 2, port + 4, port + 4);
+    this._drawPortraitLive(ctx, speaker, x + 14, py, port, t);
+
+    const tab = speakerTabSprite(speaker, color, 11, dpr);
+    ctx.drawImage(tab.c, tx - 3, y - 11 - 3, tab.w + 6, tab.h + 6);
+    drawVoiceBars(ctx, tx + tab.w + 8, y - 11 + tab.h / 2, t, color, this._speaking(msg, t) ? 1 : 0.15);
+
+    ctx.font = font;
+    const textY = y + Math.round((boxH - lines.length * lineH) / 2 + lineH * 0.74) + 1;
+    this._drawTyped(ctx, msg, lines, tx, textY, lineH, t, UI.captionInk, UI.ink);
+    ctx.restore();
+  }
+
+  _renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
+    let slideX = 0;
+    if (t < 0.3) slideX = (1 - t / 0.3) * -360;
+    else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * -360;
+    let alpha = 1;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
+
+    const compact = isTouchDevice && isCompactPhone(h);
+    const boxW = compact ? Math.min(360, w - 32) : 360;
+    const port = 40;
+    const tx = 12 + port + 12;
+    const font = uiFont(13, 600);
+    const lineH = 16;
+    const lines = this._modernLines(ctx, msg, agentName, font, boxW - tx - 14);
+    const boxH = Math.max(port + 18, 22 + lines.length * lineH + 8);
+    const bx = Math.round((w - boxW) / 2 + slideX);
+    const by = this._modernSubtleBottom(h, compact) - boxH;
+
+    const speaker = msg.speaker || "ARIA";
+    const color = speakerTone(speaker);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawPanel(ctx, bx, by, boxW, boxH, { variant: "hud", accent: color, bar: true, chamfer: 10 });
+    const dpr = pixelRatio(ctx);
+    const py = by + Math.round((boxH - port) / 2);
+    ctx.drawImage(portraitSprite(speaker, color, port, dpr), bx + 12 - 2, py - 2, port + 4, port + 4);
+    this._drawPortraitLive(ctx, speaker, bx + 12, py, port, t);
+
+    const tab = speakerTabSprite(speaker, color, 10, dpr);
+    ctx.drawImage(tab.c, bx + tx - 3, by - 9 - 3, tab.w + 6, tab.h + 6);
+    drawVoiceBars(ctx, bx + tx + tab.w + 7, by - 9 + tab.h / 2, t, color, this._speaking(msg, t) ? 0.8 : 0.15);
+
+    ctx.font = font;
+    const textY = by + Math.round((boxH - lines.length * lineH) / 2 + lineH * 0.74) + 3;
+    this._drawTyped(ctx, msg, lines, bx + tx, textY, lineH, t, UI.text, color);
+    ctx.restore();
+  }
+
+  /** Per-frame life on the cached portrait: ARIA's eyes pulse. */
+  _drawPortraitLive(ctx, speaker, px, py, size, t) {
+    if (speaker !== "ARIA") return;
+    const u = size / 40;
+    const cx = px + size / 2;
+    const cy = py + size * 0.47;
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin(t * 3));
+    ctx.fillStyle = "#b8fbff";
+    ctx.fillRect(cx - 5.4 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
+    ctx.fillRect(cx + 2.2 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
+    ctx.globalAlpha = a;
+  }
+
+  _renderModernLog(ctx, w, h, characterName) {
+    const panelW = Math.min(580, w - 32);
+    const panelH = Math.min(430, h - 40);
+    const panelX = Math.round((w - panelW) / 2);
+    const panelY = Math.round((h - panelH) / 2);
+    const compact = panelH < 340;
+
+    drawPanel(ctx, panelX, panelY, panelW, panelH, { variant: "menu", accent: UI.cyan, chamfer: 18 });
+    const titleSize = compact ? 20 : 26;
+    const titleBase = panelY + (compact ? 34 : 44);
+    drawTitle(ctx, "ARIA COMMS LOG", w / 2, titleBase, titleSize, UI.cyan);
+
+    const footH = compact ? 30 : 38;
+    const listX = panelX + 16;
+    const listY = titleBase + (compact ? 16 : 22);
+    const listW = panelW - 32;
+    const listH = panelY + panelH - footH - listY;
+    drawPanel(ctx, listX, listY, listW, listH, { variant: "well", chamfer: 8 });
+
+    const log = this.messageLog;
+    const lineH = compact ? 22 : 25;
+    const maxLines = Math.max(1, Math.floor((listH - 12) / lineH));
+    const startIdx = Math.max(0, log.length - maxLines - this.logScroll);
+    const endIdx = Math.min(log.length, startIdx + maxLines);
+    const scrollable = log.length > maxLines;
+
+    if (log.length === 0) {
+      drawCaption(ctx, w / 2, listY + listH / 2 - 10, "No messages yet", { size: 11, scheme: "steel", align: "center" });
+    } else {
+      const agent = characterName || "Agent";
+      const textX = listX + 48;
+      const textMaxW = listW - 48 - (scrollable ? 22 : 12);
+      const font = uiFont(13, 600);
+      ctx.textBaseline = "middle";
+      for (let i = startIdx; i < endIdx; i++) {
+        const row = i - startIdx;
+        const ry = listY + 6 + row * lineH;
+        const mid = ry + lineH / 2;
+        if (row % 2 === 1) {
+          ctx.fillStyle = "rgba(130,160,188,0.05)";
+          ctx.fillRect(listX + 4, ry, listW - 8, lineH);
+        }
+        const newest = i === log.length - 1;
+        if (newest) {
+          ctx.fillStyle = UI.cyan;
+          ctx.fillRect(listX + 5, ry + 4, 3, lineH - 8);
+        }
+        ctx.font = uiFont(11, 700, true);
+        ctx.textAlign = "right";
+        ctx.fillStyle = newest ? UI.cyan : UI.textFaint;
+        ctx.fillText(String(i + 1).padStart(2, "0"), listX + 36, mid + 1);
+        ctx.font = font;
+        ctx.textAlign = "left";
+        ctx.fillStyle = newest ? "#ffffff" : "#c3d2df";
+        ctx.fillText(truncateTo(ctx, font, log[i].replace(/\{AGENT\}/g, agent), textMaxW), textX, mid + 1);
+      }
+      ctx.textBaseline = "alphabetic";
+    }
+
+    if (scrollable) {
+      const trackX = listX + listW - 12;
+      const trackY = listY + 8;
+      const trackH = listH - 16;
+      ctx.fillStyle = "rgba(4,6,11,0.9)";
+      ctx.fillRect(trackX, trackY, 4, trackH);
+      const thumbH = Math.max(18, (trackH * maxLines) / log.length);
+      const range = log.length - maxLines;
+      const pos = range > 0 ? 1 - Math.min(this.logScroll, range) / range : 1;
+      ctx.fillStyle = UI.cyan;
+      ctx.fillRect(trackX, Math.round(trackY + (trackH - thumbH) * pos), 4, Math.round(thumbH));
+    }
+
+    // Footer key hints inside the plate.
+    const fy = panelY + panelH - footH / 2 - 10;
+    const hints = [["L", "to close"], ["ESC", "to resume"]];
+    if (scrollable) hints.push(["W/S", "to scroll"]);
+    ctx.font = uiFont(11, 700);
+    let total = 0;
+    const parts = hints.map(([key, text]) => {
+      const keys = key.split("/");
+      const kw = keys.reduce((n, k) => n + keycapWidth(k, 10), 0) + (keys.length - 1) * 4;
+      const tw = ctx.measureText(text.toUpperCase()).width + 1;
+      total += kw + 6 + tw;
+      return { keys, kw, text: text.toUpperCase(), tw };
+    });
+    total += (parts.length - 1) * 22;
+    let hx = Math.round(w / 2 - total / 2);
+    for (const p of parts) {
+      for (let i = 0; i < p.keys.length; i++) {
+        hx += drawKeycap(ctx, hx, fy, p.keys[i], { size: 10 }) + (i < p.keys.length - 1 ? 4 : 0);
+      }
+      ctx.fillStyle = UI.textDim;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.letterSpacing = "1px";
+      ctx.fillText(p.text, hx + 6, fy + 9);
+      ctx.letterSpacing = "0px";
+      ctx.textBaseline = "alphabetic";
+      hx += 6 + p.tw + 22;
+    }
+    ctx.textAlign = "left";
+  }
+
   _wordWrap(ctx, text, maxW) {
     const words = text.split(" ");
     const lines = [];
@@ -536,4 +826,414 @@ export class AriaCommsSystem {
     if (cur) lines.push(cur);
     return lines;
   }
+}
+
+// ─── Modern comms art (cached sprites; per frame only blits + text) ─────────
+
+const TYPE_RATE = 60; // typewriter chars per second
+const CARD_PAD = 6;
+
+/** Speaker tab colour: ARIA cyan, squad members per SQUAD_TAB_COLORS. */
+function speakerTone(speaker) {
+  if (!speaker || speaker === "ARIA") return UI.cyan;
+  return SQUAD_TAB_COLORS[speaker] || UI.cream;
+}
+
+const _commsSprites = new Map();
+const MAX_COMMS_SPRITES = 64;
+
+function commsSprite(key, w, h, pad, dpr, paint) {
+  const k = `${key}|${w}|${h}|${dpr}`;
+  let c = _commsSprites.get(k);
+  if (c) return c;
+  c = document.createElement("canvas");
+  c.width = Math.max(1, Math.ceil((w + pad * 2) * dpr));
+  c.height = Math.max(1, Math.ceil((h + pad * 2) * dpr));
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  g.translate(pad, pad);
+  paint(g, w, h);
+  if (_commsSprites.size >= MAX_COMMS_SPRITES) _commsSprites.delete(_commsSprites.keys().next().value);
+  _commsSprites.set(k, c);
+  return c;
+}
+
+function cutPath(g, x, y, w, h, k) {
+  g.beginPath();
+  g.moveTo(x + k, y);
+  g.lineTo(x + w, y);
+  g.lineTo(x + w, y + h - k);
+  g.lineTo(x + w - k, y + h);
+  g.lineTo(x, y + h);
+  g.lineTo(x, y + k);
+  g.closePath();
+}
+
+/** Off-white comic caption card with ink outline, hard shadow and halftone. */
+function captionCardSprite(w, h, color, dpr) {
+  return commsSprite(`card:${color}`, w, h, CARD_PAD, dpr, (g, sw, sh) => {
+    const k = 12;
+    g.fillStyle = "rgba(4,6,11,0.82)";
+    cutPath(g, 4, 4, sw, sh, k);
+    g.fill();
+    g.fillStyle = UI.ink;
+    cutPath(g, -1.5, -1.5, sw + 3, sh + 3, k + 1);
+    g.fill();
+    g.save();
+    cutPath(g, 0.5, 0.5, sw - 1, sh - 1, k - 0.5);
+    g.clip();
+    const grad = g.createLinearGradient(0, 0, 0, sh);
+    grad.addColorStop(0, "#f8f0da");
+    grad.addColorStop(1, "#e0d0a6");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, sw, sh);
+    // Halftone shading toward the lower right (key light is upper-left).
+    const step = 5;
+    for (let yy = 2; yy < sh; yy += step) {
+      for (let xx = sw * 0.45; xx < sw; xx += step) {
+        const f = ((xx - sw * 0.45) / (sw * 0.55)) * (yy / sh);
+        if (f < 0.12) continue;
+        g.fillStyle = `rgba(60,40,16,${(0.13 * f).toFixed(3)})`;
+        g.beginPath();
+        g.arc(xx + ((yy / step) % 2) * 2.5, yy, 1.35 * f, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = "rgba(255,255,255,0.6)";
+    g.fillRect(k, 1.5, sw, 1);
+    // Speaker-colour underline flourish along the bottom edge.
+    g.fillStyle = UI.ink;
+    g.fillRect(sw * 0.58 - 2, sh - 6, sw * 0.42 - 12, 5);
+    g.fillStyle = color;
+    g.fillRect(sw * 0.58, sh - 5, sw * 0.42 - 16, 3);
+    g.restore();
+    // Ink drop behind the portrait well.
+    const port = 50;
+    const py = Math.round((sh - port) / 2);
+    g.fillStyle = "rgba(4,6,11,0.55)";
+    g.fillRect(14 + 3, py + 3, port, port);
+  });
+}
+
+function measureLabel(font, text, spacing) {
+  const m = _measureCtx();
+  m.font = font;
+  if ("letterSpacing" in m) m.letterSpacing = `${spacing}px`;
+  const tw = m.measureText(text).width;
+  if ("letterSpacing" in m) m.letterSpacing = "0px";
+  return tw;
+}
+
+let _mctx = null;
+function _measureCtx() {
+  if (!_mctx) _mctx = document.createElement("canvas").getContext("2d");
+  return _mctx;
+}
+
+/** Slanted speaker tab ("ARIA", "KAEL" …) in the speaker's colour. */
+function speakerTabSprite(label, color, size, dpr) {
+  const font = uiFont(size, 800);
+  const spacing = Math.round(size * 0.14 * 10) / 10;
+  const text = String(label).toUpperCase();
+  const slant = Math.round(size * 0.7);
+  const w = Math.ceil(measureLabel(font, text, spacing)) + Math.round(size * 1.1) + slant;
+  const h = Math.round(size * 1.75);
+  const c = commsSprite(`tab:${text}:${color}:${size}`, w, h, 3, dpr, (g, sw, sh) => {
+    const path = (ox, oy, grow) => {
+      g.beginPath();
+      g.moveTo(ox - grow, oy - grow);
+      g.lineTo(ox + sw + grow, oy - grow);
+      g.lineTo(ox + sw - slant + grow, oy + sh + grow);
+      g.lineTo(ox - grow, oy + sh + grow);
+      g.closePath();
+    };
+    g.fillStyle = "rgba(4,6,11,0.85)";
+    path(2, 2, 0);
+    g.fill();
+    g.fillStyle = UI.ink;
+    path(0, 0, 1.25);
+    g.fill();
+    g.fillStyle = color;
+    path(0, 0, -0.25);
+    g.fill();
+    const shade = g.createLinearGradient(0, 0, 0, sh);
+    shade.addColorStop(0, "rgba(255,255,255,0.38)");
+    shade.addColorStop(0.5, "rgba(255,255,255,0)");
+    shade.addColorStop(1, "rgba(0,0,0,0.28)");
+    g.fillStyle = shade;
+    path(0, 0, -0.25);
+    g.fill();
+    g.font = font;
+    if ("letterSpacing" in g) g.letterSpacing = `${spacing}px`;
+    g.fillStyle = UI.ink;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillText(text, Math.round(size * 0.55), sh / 2 + size * 0.06);
+  });
+  return { c, w, h };
+}
+
+/** Tiny live "voice" meter beside the speaker tab. */
+function drawVoiceBars(ctx, x, midY, t, color, amp) {
+  for (let i = 0; i < 5; i++) {
+    const v = amp * Math.abs(Math.sin(t * 9 + i * 1.7) * Math.cos(t * 4.3 + i));
+    const bh = Math.round(2 + v * 8);
+    const bx = Math.round(x + i * 4);
+    const by = Math.round(midY - bh / 2);
+    ctx.fillStyle = UI.ink;
+    ctx.fillRect(bx - 1, by - 1, 4, bh + 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, by, 2, bh);
+  }
+}
+
+/**
+ * Inked portrait glyph: ARIA (bob, headset, cyan eyes) or a squad helmet with
+ * a visor in the member's colour. 3-tone shading, key light upper-left, rim
+ * light in the speaker colour on the right. Drawn in a 40-unit box.
+ */
+function portraitSprite(speaker, color, size, dpr) {
+  const isAria = speaker === "ARIA";
+  return commsSprite(`port:${isAria ? "ARIA" : "SQUAD"}:${color}`, size, size, 2, dpr, (g, s) => {
+    const u = s / 40;
+    const k = 6 * u;
+    g.fillStyle = UI.ink;
+    cutPath(g, -1.5, -1.5, s + 3, s + 3, k + 1);
+    g.fill();
+    g.save();
+    cutPath(g, 0, 0, s, s, k);
+    g.clip();
+    const bg = g.createLinearGradient(0, 0, 0, s);
+    bg.addColorStop(0, "#1a2c40");
+    bg.addColorStop(1, "#060a11");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, s, s);
+    const glow = g.createRadialGradient(s * 0.62, s * 0.4, 0, s * 0.62, s * 0.4, s * 0.62);
+    glow.addColorStop(0, hexA(color, 0.32));
+    glow.addColorStop(1, hexA(color, 0));
+    g.fillStyle = glow;
+    g.fillRect(0, 0, s, s);
+
+    g.scale(u, u);
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    const ink = () => {
+      g.lineWidth = 1.1;
+      g.strokeStyle = UI.ink;
+      g.stroke();
+    };
+
+    // Shoulders / suit.
+    g.beginPath();
+    g.moveTo(3, 41);
+    g.lineTo(6, 33);
+    g.quadraticCurveTo(9, 29.5, 15, 28.5);
+    g.lineTo(25, 28.5);
+    g.quadraticCurveTo(31, 29.5, 34, 33);
+    g.lineTo(37, 41);
+    g.closePath();
+    const suit = g.createLinearGradient(6, 28, 30, 41);
+    suit.addColorStop(0, "#4a6680");
+    suit.addColorStop(0.45, "#26394b");
+    suit.addColorStop(1, "#0e1722");
+    g.fillStyle = suit;
+    g.fill();
+    ink();
+
+    if (isAria) {
+      // Neck.
+      g.beginPath();
+      g.moveTo(16.5, 22);
+      g.lineTo(23.5, 22);
+      g.lineTo(23, 29);
+      g.lineTo(17, 29);
+      g.closePath();
+      g.fillStyle = "#8fa9ba";
+      g.fill();
+      ink();
+      // High collar V in the speaker colour.
+      g.beginPath();
+      g.moveTo(13.5, 29);
+      g.lineTo(20, 34.5);
+      g.lineTo(26.5, 29);
+      g.strokeStyle = UI.ink;
+      g.lineWidth = 2.4;
+      g.stroke();
+      g.strokeStyle = color;
+      g.lineWidth = 1.1;
+      g.stroke();
+      // Face: base, shadow side, AO under the jaw.
+      g.beginPath();
+      g.ellipse(20, 16.5, 7.4, 9, 0, 0, Math.PI * 2);
+      g.fillStyle = "#dcebf3";
+      g.fill();
+      g.save();
+      g.clip();
+      g.fillStyle = "#a8c1d0";
+      g.beginPath();
+      g.ellipse(24.5, 18.5, 6, 10, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#7f9aab";
+      g.fillRect(12, 23.2, 16, 3);
+      g.restore();
+      g.beginPath();
+      g.ellipse(20, 16.5, 7.4, 9, 0, 0, Math.PI * 2);
+      ink();
+      // Eye sockets (live glow drawn on top per frame) + mouth.
+      g.fillStyle = "#2a3a4a";
+      g.fillRect(14.3, 14.9, 3.8, 2.1);
+      g.fillRect(21.9, 14.9, 3.8, 2.1);
+      g.strokeStyle = "rgba(60,80,96,0.8)";
+      g.lineWidth = 0.7;
+      g.beginPath();
+      g.moveTo(18.2, 21.3);
+      g.quadraticCurveTo(20, 22.2, 21.8, 21.2);
+      g.stroke();
+      // Asymmetric bob with a sweeping fringe.
+      g.beginPath();
+      g.moveTo(11.2, 23.5);
+      g.quadraticCurveTo(9.2, 12, 13.5, 8.2);
+      g.quadraticCurveTo(20, 4.2, 26.5, 8);
+      g.quadraticCurveTo(29.6, 11.5, 28.4, 18.5);
+      g.lineTo(26.6, 13.2);
+      g.quadraticCurveTo(21, 12.4, 16.5, 10.8);
+      g.quadraticCurveTo(13.8, 14.5, 13.8, 23.5);
+      g.closePath();
+      const hair = g.createLinearGradient(10, 5, 28, 22);
+      hair.addColorStop(0, "#3a4a63");
+      hair.addColorStop(0.5, "#1b2435");
+      hair.addColorStop(1, "#0b111b");
+      g.fillStyle = hair;
+      g.fill();
+      ink();
+      g.beginPath();
+      g.moveTo(15.2, 8.6);
+      g.quadraticCurveTo(11.4, 13, 12, 21.5);
+      g.strokeStyle = color;
+      g.lineWidth = 1.2;
+      g.stroke();
+      // Headset band, earpiece and boom mic.
+      g.beginPath();
+      g.arc(20, 16, 10.2, -1.9, -0.25);
+      g.strokeStyle = UI.ink;
+      g.lineWidth = 2.2;
+      g.stroke();
+      g.strokeStyle = "#6f8aa3";
+      g.lineWidth = 1;
+      g.stroke();
+      g.beginPath();
+      g.ellipse(28.6, 17.5, 2.2, 3.6, 0.15, 0, Math.PI * 2);
+      g.fillStyle = "#2e4255";
+      g.fill();
+      ink();
+      g.beginPath();
+      g.moveTo(28, 20.5);
+      g.quadraticCurveTo(27, 24.5, 22.8, 24.6);
+      g.strokeStyle = "#6f8aa3";
+      g.lineWidth = 0.9;
+      g.stroke();
+      g.beginPath();
+      g.arc(22.6, 24.6, 1.1, 0, Math.PI * 2);
+      g.fillStyle = color;
+      g.fill();
+    } else {
+      // Pauldrons.
+      for (const sx of [1, -1]) {
+        g.beginPath();
+        g.ellipse(20 + sx * 12, 31.5, 6.5, 3.8, sx * 0.35, 0, Math.PI * 2);
+        g.fillStyle = sx > 0 ? "#1d2b39" : "#3b5268";
+        g.fill();
+        ink();
+      }
+      // Helmet dome.
+      g.beginPath();
+      g.moveTo(11, 21);
+      g.quadraticCurveTo(10, 6.5, 20, 6);
+      g.quadraticCurveTo(30, 6.5, 29, 21);
+      g.lineTo(26.5, 27.5);
+      g.lineTo(13.5, 27.5);
+      g.closePath();
+      const helm = g.createLinearGradient(11, 6, 29, 27);
+      helm.addColorStop(0, "#7d97ad");
+      helm.addColorStop(0.45, "#3e556a");
+      helm.addColorStop(1, "#16212c");
+      g.fillStyle = helm;
+      g.fill();
+      ink();
+      // Crest stripe.
+      g.fillStyle = color;
+      g.fillRect(19, 6.8, 2, 5.5);
+      // Visor.
+      g.beginPath();
+      g.moveTo(12.2, 14);
+      g.lineTo(27.8, 14);
+      g.lineTo(26.8, 19.6);
+      g.lineTo(20, 21.2);
+      g.lineTo(13.2, 19.6);
+      g.closePath();
+      g.fillStyle = color;
+      g.fill();
+      const vis = g.createLinearGradient(0, 14, 0, 21);
+      vis.addColorStop(0, "rgba(255,255,255,0.55)");
+      vis.addColorStop(0.35, "rgba(255,255,255,0)");
+      vis.addColorStop(1, "rgba(0,0,0,0.35)");
+      g.fillStyle = vis;
+      g.fill();
+      ink();
+      // Chin guard vents.
+      g.strokeStyle = "rgba(4,6,11,0.8)";
+      g.lineWidth = 0.8;
+      for (const vx of [17.5, 20, 22.5]) {
+        g.beginPath();
+        g.moveTo(vx, 23);
+        g.lineTo(vx, 26);
+        g.stroke();
+      }
+    }
+
+    // Rim light on the right, in the speaker colour.
+    g.beginPath();
+    g.arc(20, 16.5, isAria ? 9.6 : 10.6, -0.9, 0.7);
+    g.strokeStyle = hexA(color, 0.75);
+    g.lineWidth = 0.9;
+    g.stroke();
+
+    g.setTransform(dpr, 0, 0, dpr, 2 * dpr, 2 * dpr);
+    // Faint scanlines + inner hairline.
+    g.fillStyle = "rgba(0,0,0,0.12)";
+    for (let yy = 0; yy < s; yy += 2) g.fillRect(0, yy, s, 1);
+    g.restore();
+    g.strokeStyle = hexA(color, 0.55);
+    g.lineWidth = 1;
+    cutPath(g, 1.5, 1.5, s - 3, s - 3, k - 1);
+    g.stroke();
+  });
+}
+
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+const _truncCache = new Map();
+/** Ellipsised text that fits maxW, cached (log rows repeat every frame). */
+function truncateTo(ctx, font, text, maxW) {
+  const key = `${font}|${maxW}|${text}`;
+  let out = _truncCache.get(key);
+  if (out !== undefined) return out;
+  ctx.font = font;
+  out = text;
+  if (ctx.measureText(out).width > maxW) {
+    while (out.length > 3 && ctx.measureText(out + "...").width > maxW) out = out.slice(0, -1);
+    out = out.trimEnd() + "...";
+  }
+  if (_truncCache.size > 200) _truncCache.clear();
+  _truncCache.set(key, out);
+  return out;
+}
+
+/** Width drawKeycap will use for a legend (for centring rows of hints). */
+function keycapWidth(text, size) {
+  const tw = Math.ceil(measureLabel(uiFont(size, 700), String(text), 0.5));
+  return Math.max(Math.round(size * 1.9), tw + Math.round(size * 1.1));
 }
