@@ -719,6 +719,10 @@ export class Game {
     if (this.state === GameState.TITLE && gp.justPressed.interact) {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "GamepadStart", bubbles: true }));
     }
+    // X / Select flips the title-screen art style (the DOM toggle has no pad focus).
+    if (this.state === GameState.TITLE && (gp.justPressed.reload || gp.justPressed.minimap)) {
+      setArtStyle(isModernArt() ? 0 : 1);
+    }
     if (this.state === GameState.MODE_SELECT) {
       if (gp.justPressed.dpadUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
       if (gp.justPressed.dpadDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
