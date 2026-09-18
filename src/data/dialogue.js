@@ -258,103 +258,105 @@ export const ARIA_COMMS = {
   // ── Squad voice lines ─────────────────────────────────────────────
   // Kael — The Vanguard. Tactical. Protective. Lost his squad once. Won't again.
   kaelComms: [
-    "Watch your left flank — I've got the right.",
-    "No one falls today. Keep moving.",
+    "Left flank's yours. Right's mine. Nobody wanders.",
+    "Nobody falls today. That's not a hope. That's an order.",
     "I've been in tighter spots. Key word: been.",
-    "Stay tight. We don't split, we don't get picked off.",
-    "You've got the point. I've got your back. That's how this works.",
+    "Stay tight. We split up, they pick us off.",
+    "You take point. I've got your back. That's the deal.",
   ],
 
   // Nova — The Striker. Fastest thing alive. Sarcastic, relentless, secretly loyal.
   novaComms: [
-    "Already cleared the far corridor. You're welcome.",
-    "Slow down? That's not in my vocabulary.",
-    "They're flanking left — I know because I was just there.",
-    "You're fast for a new recruit. Don't let it go to your head.",
-    "I'll race you to the exit. Spoiler: I win.",
+    "Far corridor's clear. You're welcome.",
+    "Slow down? Never heard of her.",
+    "They're flanking left. I know because I just lapped them.",
+    "Not bad for a cadet. Don't let it go to your head.",
+    "Race you to the exit. Spoiler: I already won.",
   ],
 
   // Rook — The Engineer. Builds anything. Trusts nothing. Learned to trust YOU.
   rookComms: [
-    "Structural integrity on those walls is... questionable. Watch the ceiling.",
-    "My turrets are up. Try not to walk into their line of fire.",
-    "I ran the numbers. Survival probability: improving.",
-    "Don't touch anything I've rigged. That's not a suggestion.",
-    "Systems nominal. Mostly. The 'mostly' is doing a lot of work there.",
+    "Ceiling's load rating is 'optimistic.' Watch your head.",
+    "Turrets are up. Don't walk into their line of fire. They won't apologise.",
+    "Ran the numbers. Survival odds: improving. Slightly.",
+    "Don't touch anything I've wired. That's not a suggestion.",
+    "Systems nominal. Mostly. 'Mostly' is doing a lot of work there.",
   ],
 
   // Lyra — Senior Agent. Cryptic. Drops timeline lore. Knows more than she says.
   lyraComms: [
-    "I've seen this moment before. Different choices. Different outcomes.",
-    "The Paradox Lord isn't the real threat. He's a symptom.",
-    "There are seventeen ways this ends. You're in one of the good ones.",
-    "Trust your instincts. They've been calibrated by more timelines than you know.",
-    "When this is over — and it will be over — we need to talk about what you are.",
+    "I've seen this room before. Different choices. Worse outcome.",
+    "He isn't the disease. He's a symptom.",
+    "Seventeen ways this ends. We're in one of the good ones. Keep it that way.",
+    "Trust your gut. It's been calibrated by more timelines than you know.",
+    "When this is over, we talk about what you are. Not now.",
   ],
 
   // ── Act 2 ARIA gameplay lines (Sprint E 4.8) ──
   act2Ambient: [
-    "Rift energy is saturating this sector. Your suit is drawing power from it — that can't be coincidence.",
-    "The Lord's been rewriting this wing for weeks. I'm seeing architecture that shouldn't exist.",
-    "Voss's old research notes reference this place. 'Containment' — but I'm not sure what was being contained.",
-    "Squad's chatter is thinner here. Nova's holding three corridors. Rook's rigged two more. We're stretched.",
-    "Whatever the Lord is, the closer we get, the more your temporal signature stabilizes. You're the anchor.",
-    "I keep replaying that Voss recording. 'Three steps ahead.' The Lord said it too. Same cadence. Same voice.",
+    "Rift energy's soaking this sector and your suit is drinking it. I don't love that.",
+    "He's been rewriting this wing for weeks. There's architecture in here nobody built.",
+    "Voss's old notes call this station 'containment.' They never say what was being contained.",
+    "Squad's stretched thin. Nova's covering three corridors. Rook's rigged two more.",
+    "The closer we get to him, the steadier your signature gets. You're the anchor, {AGENT}.",
+    "I keep replaying the Research Wing tape. 'Three steps ahead.' Your Voss said it. So does the Lord.",
   ],
 
   // ── Act 3 ARIA gameplay lines (Sprint E 4.8) ──
   act3Ambient: [
-    "Reality is bleeding in here. I'm running parallel renders just to track what's real.",
-    "We're inside Voss's lab now. Or — what he left behind. Or what he's still becoming.",
-    "Temporal signature match at 94%. He IS Voss, {AGENT}. I need you to be ready for that.",
-    "The Dead Squad echoes are louder. Like they're trying to warn us. Or welcome us.",
-    "Every rift we close pulls the Lord tighter to this timeline. He can't run anymore.",
-    "Lyra was right. Seventeen endings. We're in one of the good ones — if we hold.",
+    "Reality's bleeding through the walls. I'm running parallel renders just to know what's real.",
+    "Every wing we clear, I find more of his rewind logs. Same eleven seconds. Thousands of takes.",
+    "Signature match between your Voss and the Lord: 94%. Same man. One of them ran the experiment.",
+    "The squad memories are louder now. Voss, Miri, Kai. Like they're warning us. Or waiting.",
+    "Every rift we close pins him tighter to this timeline. He's running out of exits.",
+    "Lyra said seventeen endings. We're still in a good one. Let's not get creative.",
   ],
 
   // ── 4.3: Encrypted channel voice payoff ──
   encryptedChannelReveal: [
-    "That encrypted channel we kept picking up? I finally triangulated the source. It's Lyra — a future Lyra. She's been feeding us intel from a timeline that hasn't happened yet.",
-    "Future-Lyra logged off. Last transmission was a single word: 'run.' Or maybe 'won.' The signal degraded.",
+    "That encrypted channel from the reactor? I finally traced it. It's Lyra. A later Lyra, transmitting from a timeline that hasn't happened yet.",
+    "Future-Lyra's last transmission was one word: 'run.' Or 'won.' The signal degraded. I'm choosing 'won.'",
   ],
 
   // ── 4.4: Analyst L.M. recognition ──
   analystLMReveal: [
-    "Analyst L.M. — Lyra Marsden. She's been the one forwarding every classified breadcrumb. I should have connected it sooner.",
-    "Lyra was the leak. Not to the Lord — to US. She's been steering this investigation from inside Chrono-Bureau ops the whole time.",
+    "Analyst L.M. — Lyra Marsden. She's the one who flagged Voss three times. The clearance code was right there. I should've matched it.",
+    "Lyra wasn't leaking to the Lord. She was leaking to us. She's been steering this case from inside Bureau ops since day one.",
   ],
 
   // ── 4.6: NG+ Dead Squad foreshadowing ──
+  // The Dead Squad (Voss, Miri, Kai) is the player's squad from an erased
+  // timeline. The living squad (Kael, Nova, Rook, Lyra) never meets them.
   ngPlusDeadSquad: [
-    "The Dead Squad memory fragments are... denser this cycle. They're not just echoes anymore, {AGENT}. They're somewhere between memory and matter.",
-    "I'm picking up biological signatures on the fragments. That shouldn't be possible. Unless the loop itself is reviving them.",
-    "Kael, Nova, Rook — their patterns are reassembling. If we complete this cycle, they might come with us. Permanently.",
+    "The squad fragments are denser this pass. Voss, Miri, Kai. They're not just echoes anymore, {AGENT}.",
+    "I'm reading biological signatures on the memory fragments. That's not possible. Unless the loop is rebuilding them.",
+    "Voss, Miri, Kai — their patterns are reassembling. Finish this loop clean and they might walk out with us.",
   ],
 
   // ── 4.10: Boss-phase squad reactions ──
   bossPhase1Squad: [
-    "Kael: Front line's mine. You take the shot when he lowers his guard.",
-    "Nova: Drones incoming — I'll thin them. Focus on the Lord.",
-    "Rook: Turret locked on his summon circle. Every minion he calls, we answer.",
+    "Kael: Front line's mine. Take the shot when he drops his guard.",
+    "Nova: Drones incoming. I'll thin them. You focus the Lord.",
+    "Rook: Turret's locked on his summon circle. He calls, we answer.",
   ],
   bossPhase2Squad: [
-    "Kael: Floor's cracking. Stay off the red tiles. I mean it.",
-    "Nova: Telegraphed AoE — two seconds. MOVE, {AGENT}.",
-    "Lyra: He's drawing on the rift. The hazards are part of him now. Break the pattern.",
+    "Kael: Floor's cracking. Stay off the red. I mean it.",
+    "Nova: Big hit telegraphed. Two seconds. MOVE, {AGENT}.",
+    "Lyra: He's drawing on the rift. The hazards are him now. Break the pattern.",
   ],
   bossPhase3Squad: [
-    "Kael: This is it. Whatever he throws — we take it together.",
-    "Nova: I've never run out of one-liners. I'm saving the good one for when he drops.",
-    "Rook: Numbers say we win. Numbers have been wrong before. But not today.",
+    "Kael: Whatever he throws, we take it together.",
+    "Nova: Saving my best one-liner for when he drops. Hurry up.",
+    "Rook: Numbers say we win. Numbers have lied before. Not today.",
     "Lyra: He's desperate. That makes him dangerous. Don't get cocky.",
   ],
 
   // ── 4.11: NG+ ARIA loop awareness ──
   ngPlusAriaLoop: [
-    "This feels... familiar. Like we've done this before. I don't have the logs for it, but the pattern is there.",
-    "Déjà vu isn't supposed to affect AIs. And yet here I am. Running diagnostics. Finding nothing. Feeling everything.",
-    "I think we're in a loop, {AGENT}. I think we've always been. But this cycle — something's different. You're different.",
-    "If this IS a loop, then somewhere, a version of us won. A version of us lost. This is the one we get.",
+    "This feels familiar. I don't have logs for it. The pattern's there anyway.",
+    "Déjà vu isn't supposed to affect AIs. Running diagnostics. Finding nothing. Feeling everything.",
+    "I think we're in a loop, {AGENT}. I think we always have been. This pass feels different. You feel different.",
+    "If this is a loop, somewhere a version of us won and a version of us lost. We get this one.",
   ],
 
   // ── Meltdown mode ──
