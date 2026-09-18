@@ -51,3 +51,9 @@ tmp_grid.txt
 # Documentation artifact (should be untracked)
 docs/WEAPONS_ENEMIES.md
 weapons_enemies.md
+
+# Playwright MCP session data
+.playwright-mcp/
+
+# Loose capture PNGs dropped at the repo root by manual test runs
+/*.png
