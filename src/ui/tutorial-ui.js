@@ -901,7 +901,18 @@ function renderModernCompletionMenu(ctx, w, h, selection, now) {
 
   const layout = tutorialMenuLayout(w, h, COMPLETION_ITEMS.length);
   drawModernMenu(ctx, COMPLETION_ITEMS, selection, now, layout);
-  // On short screens the menu reaches the bottom, so the hints hug the edge.
-  drawModernKeyHints(ctx, w / 2, compact ? h - 9 : h - 30, "W/S to navigate  ·  ENTER to select", compact ? 8 : 10);
+  if (!compact) {
+    drawModernKeyHints(ctx, w / 2, h - 30, "W/S to navigate  ·  ENTER to select", 10);
+  } else {
+    // Short screens: the menu panel runs to the bottom edge, so the hints stack
+    // in the gutter beside it instead of overlapping its lower rim.
+    const gutterX = layout.mx + layout.menuW + 10;
+    if (w - gutterX >= 140) {
+      const gx = Math.round((gutterX + w) / 2);
+      const midY = layout.my + layout.menuH / 2;
+      drawModernKeyHints(ctx, gx, midY - 12, "W/S to navigate", 9);
+      drawModernKeyHints(ctx, gx, midY + 12, "ENTER to select", 9);
+    }
+  }
   ctx.textAlign = "left";
 }

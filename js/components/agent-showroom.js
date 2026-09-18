@@ -538,7 +538,11 @@ button:focus-visible { outline: none; }
   .presets { left: auto; right: calc(var(--panel-w) + 16px); top: 60px; transform: none; gap: 6px; }
   :host([sheet="collapsed"]) .presets { right: 10px; }
   .preset .pthumb { width: 40px; height: 40px; }
-  .stage-tools { bottom: 8px; left: 64px; transform: none; gap: 6px; }
+  /* The vertical toolbar ends well above this row, so the old 64px inset only
+     cost width — on a 640px-wide phone it pushed "Helmet off" off the stage. */
+  .stage-tools { bottom: 8px; left: 8px; right: calc(var(--panel-w) + 12px); transform: none; gap: 6px; flex-wrap: wrap;
+    pointer-events: none; }
+  .stage-tools .seg { pointer-events: auto; }
   .seg button { height: 38px; padding: 0 8px; font-size: var(--cc-type-micro); letter-spacing: 0.5px; }
   .figure-wrap { bottom: 16%; height: 66%; }
   .pedestal { bottom: 12%; width: 70%; }

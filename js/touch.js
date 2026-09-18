@@ -23,6 +23,7 @@ import {
 } from "./layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
+import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
 
 export class TouchControls {
   static init(game) {
@@ -168,102 +169,10 @@ export class TouchControls {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this._updateSafeArea();
-    const sa = this.safeArea;
 
-    // Compact phone detection: landscape phone with short viewport
-    const isCompactPhone = h < COMPACT_PHONE_HEIGHT;
-
-    // Keep joystick radius in sync with viewport
-    this.joyRadius = isCompactPhone ? 45 : 60;
-
-    // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
-    // stays ≥ 44px (Apple HIG) thanks to this floor
-    // On compact phones, slightly smaller buttons to avoid crowding
-    const btnSize = isCompactPhone
-      ? Math.max(40, Math.min(46, w * 0.07))
-      : Math.max(44, Math.min(56, w * 0.09));
-    const pad = (isCompactPhone ? 10 : 14) + sa.right;
-    const bottomPad = (isCompactPhone ? 8 : 14) + sa.bottom;
-
-    // Default joystick hint center (shown when no thumb is on left zone)
-    const joyHintX = Math.max(80, 60 + sa.left);
-    const joyHintY = isCompactPhone ? h - 90 - sa.bottom : h - 140 - sa.bottom;
-
-    this.zones = {
-      w,
-      h,
-      btnSize,
-      isCompactPhone,
-      // Hint position for joystick (shown when not touching)
-      joyCenter: { x: joyHintX, y: joyHintY },
-      // Right side buttons — fire is large and accessible, others spaced around it
-      fireBtn: {
-        x: w - pad - btnSize * 1.6,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 1.0
-          : h - bottomPad - btnSize * 1.3,
-        r: btnSize,
-      },
-      aimBtn: {
-        x: w - pad - btnSize * 1.6,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 2.65
-          : h - bottomPad - btnSize * 2.95,
-        r: btnSize * 0.55,
-      },
-      dashBtn: {
-        x: w - pad - btnSize * 0.5,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 2.5
-          : h - bottomPad - btnSize * 3.2,
-        r: btnSize * 0.65,
-      },
-      interactBtn: {
-        x: w - pad - btnSize * 2.9,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 2.5
-          : h - bottomPad - btnSize * 3.2,
-        r: btnSize * 0.65,
-      },
-      // Sprint toggle — left side above joystick
-      sprintBtn: {
-        x: Math.max(60, 42 + sa.left),
-        y: isCompactPhone ? h - 170 - sa.bottom : h - 260 - sa.bottom,
-        r: btnSize * 0.55,
-      },
-      // Chrono Shift (time slow) — left side above sprint
-      chronoBtn: {
-        x: Math.max(60, 42 + sa.left),
-        y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
-        r: btnSize * 0.6,
-      },
-      // Crouch button (small, above sprint)
-      crouchBtn: {
-        x: Math.max(60, 42 + sa.left) + btnSize * 0.9,
-        y: isCompactPhone ? h - 200 - sa.bottom : h - 290 - sa.bottom,
-        r: btnSize * 0.45,
-      },
-      // Weapon cycle — left of fire, easily reachable by right thumb
-      weaponBtn: {
-        x: w - pad - btnSize * 3.2,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 1.0
-          : h - bottomPad - btnSize * 1.3,
-        r: btnSize * 0.55,
-      },
-      pauseBtn: {
-        x: w - 50 - sa.right,
-        y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 22 : 26,
-      },
-      fullscreenBtn: {
-        x: w - 110 - sa.right,
-        y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 22 : 26,
-      },
-      // Divider: left quarter = movement, rest = look
-      midX: w * 0.28,
-    };
+    this.zones = touchZones({ w, h, safeArea: this.safeArea });
+    // Keep the joystick radius in sync with the viewport.
+    this.joyRadius = this.zones.isCompactPhone ? 45 : 60;
   }
 
   /** Read CSS custom property safe area insets (iPhone X+ notch, Dynamic Island) */
@@ -284,9 +193,10 @@ export class TouchControls {
 
   hitTest(x, y) {
     const z = this.zones;
-    // Use tighter hit radii than visual radii for buttons
-    // so dragging to look doesn't accidentally trigger buttons
-    const hitShrink = 0.85;
+    // Tighter hit radii than the drawn ones so dragging to look does not
+    // trigger a button. touch-layout floors each radius so the shrunk circle
+    // still clears the 44px minimum target.
+    const hitShrink = HIT_SHRINK;
     if (this.dist(x, y, z.fireBtn.x, z.fireBtn.y) < z.fireBtn.r * hitShrink)
       return "fire";
     if (this.dist(x, y, z.aimBtn.x, z.aimBtn.y) < z.aimBtn.r * hitShrink)
@@ -1222,10 +1132,11 @@ export class TouchControls {
     ctx.font = `${isCompact ? 11 : 14}px monospace`;
     ctx.fillText("Drag to aim", w * 0.7, h / 2 - (isCompact ? 8 : 15));
 
-    // Button hints
+    // Button hints. Stacked upward from the dismiss prompt so the last line
+    // cannot land on it — a fixed base ran the list off a 360px-tall phone.
     const hintFont = isCompact ? 11 : 14;
-    const hintGap = isCompact ? 16 : 25;
-    const hintBase = isCompact ? h - 80 : h - 145;
+    const hintGap = isCompact ? 15 : 25;
+    const dismissY = h - this.safeArea.bottom - (isCompact ? 14 : 30);
     const hints = [
       { label: "FIRE", desc: "Big button", color: "#ff6644" },
       { label: "DASH", desc: "Top-right", color: "#00cccc" },
@@ -1233,6 +1144,8 @@ export class TouchControls {
       { label: "SLOW", desc: "Time slow", color: "#9944ff" },
       { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00" },
     ];
+    const hintBase =
+      dismissY - (isCompact ? 20 : 28) - (hints.length - 1) * hintGap;
     for (let i = 0; i < hints.length; i++) {
       ctx.fillStyle = hints[i].color;
       ctx.font = `bold ${hintFont}px monospace`;
@@ -1247,7 +1160,7 @@ export class TouchControls {
     const pulse = 0.5 + 0.3 * Math.sin(performance.now() / 400);
     ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
     ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
-    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - (isCompact ? 12 : 30));
+    ctx.fillText("TAP ANYWHERE TO START", w / 2, dismissY);
   }
 
   renderCreatorOverlay(ctx) {
