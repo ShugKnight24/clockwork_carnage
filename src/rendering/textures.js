@@ -4,6 +4,9 @@
  * Upgraded to 256x256 resolution for sharper visuals.
  */
 import { WALL_COLORS } from "../../js/data.js";
+import { buildWallSet } from "./env/wall-art.js";
+import { buildDeckSet } from "./env/deck-art.js";
+import { getEnvPalette, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
@@ -402,4 +405,74 @@ export function generateFloorCeilTextures(act, visualStyle) {
   }
 
   return { floorPixels: fd, ceilPixels: cd };
+}
+
+/**
+ * Modern art style: the whole environment bundle for one act — 512px wall
+ * faces (mip-chained), deck/ceiling tiles, the shared fog ramp and the
+ * per-column colour LUTs the raycaster needs. Built once per act at level
+ * load; nothing here runs per frame.
+ *
+ * @param {number} act          1-3
+ * @param {boolean} brutal      visualStyle 1 (Brutal) — thicker, darker air
+ * @returns {object} env bundle consumed by Renderer + GLRenderer
+ */
+export function generateModernEnv(act, brutal) {
+  const a = act || 1;
+  const p = getEnvPalette(a);
+  const walls = buildWallSet(a);
+  const deck = buildDeckSet(a, brutal);
+  const fogMax = brutal ? 0.94 : 0.86;
+  const fogDensity = brutal ? FOG_DENSITY * 1.3 : FOG_DENSITY;
+  const [n0, n1, n2] = p.fogNear;
+  const [f0, f1, f2] = p.fogFar;
+
+  // 65-step fog LUT: colour lifts toward the hazy far air as it thickens
+  // (atmospheric perspective), so one fillRect per column does both.
+  const fogLUT = new Array(65);
+  for (let i = 0; i <= 64; i++) {
+    const t = i / 64;
+    const r = (n0 + (f0 - n0) * t) | 0;
+    const g = (n1 + (f1 - n1) * t) | 0;
+    const b = (n2 + (f2 - n2) * t) | 0;
+    fogLUT[i] = `rgba(${r},${g},${b},${(t * fogMax).toFixed(3)})`;
+  }
+
+  // Key light sits up and to the world's -x/-y; faces turned away fall to ink.
+  const faceShade = [
+    "rgba(4,6,11,0)",     // 0: normal -x (lit)
+    "rgba(4,6,11,0.36)",  // 1: normal +x
+    "rgba(4,6,11,0.16)",  // 2: normal -y
+    "rgba(4,6,11,0.44)",  // 3: normal +y
+  ];
+
+  const glow = glowColors(a);
+  const glowGL = new Float32Array(24);
+  for (let i = 0; i < glow.length && i < 8; i++) {
+    const s = GLOW_STRENGTH[i] || 0;
+    glowGL[i * 3] = (glow[i][0] / 255) * s;
+    glowGL[i * 3 + 1] = (glow[i][1] / 255) * s;
+    glowGL[i * 3 + 2] = (glow[i][2] / 255) * s;
+  }
+  // Canvas path uses 0-255 values pre-multiplied by strength.
+  const glowRGB = glow.map((c, i) => [c[0] * (GLOW_STRENGTH[i] || 0), c[1] * (GLOW_STRENGTH[i] || 0), c[2] * (GLOW_STRENGTH[i] || 0)]);
+
+  return {
+    act: a,
+    brutal: !!brutal,
+    palette: p,
+    walls,
+    deck,
+    fogLUT,
+    fogMax,
+    fogDensity,
+    fogNear: p.fogNear,
+    fogFar: p.fogFar,
+    fogNearGL: new Float32Array(p.fogNear.map((v) => v / 255)),
+    fogFarGL: new Float32Array(p.fogFar.map((v) => v / 255)),
+    faceShade,
+    glowRGB,
+    glowGL,
+    accentRGB: p.accentRGB,
+  };
 }

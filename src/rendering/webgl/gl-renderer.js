@@ -14,6 +14,8 @@
  * uses the Canvas2D software renderer (Uint32Array path).
  */
 
+import { isModernArt } from "../art-style.js";
+
 // ── Shader sources (inlined for zero-fetch boot) ──────────────────
 
 const FLOOR_VERT = `#version 300 es
@@ -118,6 +120,122 @@ void main() {
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }`;
 
+// Modern art style: mipmapped 512px deck/ceiling art sampled with world
+// coordinates (REPEAT wrap, so derivatives stay continuous across cells),
+// contact AO + emissive wall spill from a per-cell map texture, act fog with
+// atmospheric perspective, correctly coloured/radius point lights and a glossy
+// light streak on the deck. All samples happen before any branch so the
+// implicit derivatives stay valid.
+const FLOOR_FRAG_MODERN = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2 u_resolution;
+uniform vec2 u_camPos;
+uniform vec2 u_dir;
+uniform vec2 u_plane;
+uniform float u_yShift;
+uniform sampler2D u_floorTex;
+uniform sampler2D u_ceilTex;
+uniform sampler2D u_envMap;    // RGBA8 per cell: R wall bits, G glow bits, B glow index
+uniform ivec2 u_mapSize;
+uniform vec3 u_fogNear;
+uniform vec3 u_fogFar;
+uniform float u_fogMax;
+uniform float u_fogDensity;
+uniform int u_numLights;
+uniform vec4 u_lights[16];     // x, y, radius, intensity
+uniform vec3 u_lightColors[16];
+uniform vec3 u_glowColors[8];
+
+out vec4 fragColor;
+
+const float AO_R = 0.3;
+const float AO_FLOOR = 0.36;
+const float GLOW_R = 0.85;
+
+float aoSide(float d) {
+  float t = clamp(d / AO_R, 0.0, 1.0);
+  return AO_FLOOR + (1.0 - AO_FLOOR) * t * t * (3.0 - 2.0 * t);
+}
+float glowSide(float d) {
+  float t = 1.0 - clamp(d / GLOW_R, 0.0, 1.0);
+  return t * t;
+}
+
+void main() {
+  float w = u_resolution.x;
+  float h = u_resolution.y;
+  float halfH = floor(h * 0.5) + u_yShift;
+  float projH = floor(h * 0.5);
+  float screenY = h - 1.0 - gl_FragCoord.y;
+  bool isFloor = screenY > halfH;
+  float p = max(abs(screenY - halfH), 0.5);
+  float rowDist = projH / p;
+
+  float cameraX = (2.0 * gl_FragCoord.x / w) - 1.0;
+  vec2 ray = u_dir + u_plane * cameraX;
+  vec2 wp = u_camPos + rowDist * ray;
+
+  vec3 floorC = texture(u_floorTex, wp).rgb;
+  vec3 ceilC = texture(u_ceilTex, wp).rgb;
+  vec3 color = isFloor ? floorC : ceilC;
+
+  float ao = 1.0;
+  vec3 glow = vec3(0.0);
+  ivec2 cell = ivec2(floor(wp));
+  if (cell.x >= 0 && cell.y >= 0 && cell.x < u_mapSize.x && cell.y < u_mapSize.y) {
+    vec4 m = texelFetch(u_envMap, cell, 0);
+    int mask = int(m.r * 255.0 + 0.5);
+    int gbits = int(m.g * 255.0 + 0.5);
+    int gi = int(m.b * 255.0 + 0.5);
+    vec2 f = wp - vec2(cell);
+    if (mask != 0) {
+      if ((mask & 1) != 0) ao = min(ao, aoSide(f.x));
+      if ((mask & 2) != 0) ao = min(ao, aoSide(1.0 - f.x));
+      if ((mask & 4) != 0) ao = min(ao, aoSide(f.y));
+      if ((mask & 8) != 0) ao = min(ao, aoSide(1.0 - f.y));
+      if ((mask & 16) != 0) ao = min(ao, aoSide(length(f)));
+      if ((mask & 32) != 0) ao = min(ao, aoSide(length(vec2(1.0 - f.x, f.y))));
+      if ((mask & 64) != 0) ao = min(ao, aoSide(length(vec2(f.x, 1.0 - f.y))));
+      if ((mask & 128) != 0) ao = min(ao, aoSide(length(1.0 - f)));
+    }
+    if (gbits != 0) {
+      float g = 0.0;
+      if ((gbits & 1) != 0) g = max(g, glowSide(f.x));
+      if ((gbits & 2) != 0) g = max(g, glowSide(1.0 - f.x));
+      if ((gbits & 4) != 0) g = max(g, glowSide(f.y));
+      if ((gbits & 8) != 0) g = max(g, glowSide(1.0 - f.y));
+      glow = u_glowColors[gi] * g;
+    }
+  }
+  color = color * ao + glow * (isFloor ? 1.0 : 0.45);
+
+  vec2 toCam = normalize(u_camPos - wp);
+  for (int i = 0; i < 16; i++) {
+    if (i >= u_numLights) break;
+    vec4 L = u_lights[i];
+    vec2 dl = L.xy - wp;
+    float d = length(dl);
+    float reach = isFloor ? L.z * 1.8 : L.z;
+    if (d < reach) {
+      vec3 lc = u_lightColors[i] * L.w;
+      float a = max(0.0, 1.0 - d / L.z);
+      color += lc * a * a * (isFloor ? 0.55 : 0.4);
+      if (isFloor && d > 0.001) {
+        // Wet-steel sheen: the light smeared toward the viewer.
+        float s = max(0.0, dot(dl / d, -toCam));
+        float fall = 1.0 - d / reach;
+        color += lc * pow(s, 10.0) * fall * fall * 0.35;
+      }
+    }
+  }
+
+  float fog = u_fogMax * (1.0 - exp(-rowDist * u_fogDensity));
+  color = mix(color, mix(u_fogNear, u_fogFar, fog), fog);
+  fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+}`;
+
 const POSTFX_VERT = FLOOR_VERT; // same fullscreen quad
 
 const POSTFX_FRAG = `#version 300 es
@@ -130,6 +248,7 @@ uniform bool u_enableBloom;
 uniform bool u_enableCA;
 uniform bool u_enableGrain;
 uniform vec3 u_gradeColor;     // per-act color grade tint
+uniform bool u_modern;         // Modern art style grade + vignette
 
 out vec4 fragColor;
 
@@ -177,8 +296,21 @@ void main() {
     color += grain;
   }
 
-  // Color grading (per-act tint)
-  color = mix(color, u_gradeColor, 0.03);
+  if (u_modern) {
+    // Modern grade: ink-dark vignette matching the HUD frame, act colour
+    // lifted into the shadows only, and a gentle S-curve for inked contrast.
+    vec2 q = uv - 0.5;
+    q.x *= u_resolution.x / u_resolution.y;
+    float vig = smoothstep(0.42, 1.0, length(q));
+    color = mix(color, vec3(0.016, 0.024, 0.043), vig * 0.4);
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color += u_gradeColor * 0.12 * (1.0 - smoothstep(0.0, 0.3, lum));
+    vec3 c = clamp(color, 0.0, 1.0);
+    color = mix(c, c * c * (3.0 - 2.0 * c), 0.12);
+  } else {
+    // Color grading (per-act tint)
+    color = mix(color, u_gradeColor, 0.03);
+  }
 
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }`;
@@ -316,6 +448,7 @@ export class GLRenderer {
       enableCA: gl.getUniformLocation(pp, 'u_enableCA'),
       enableGrain: gl.getUniformLocation(pp, 'u_enableGrain'),
       gradeColor: gl.getUniformLocation(pp, 'u_gradeColor'),
+      modern: gl.getUniformLocation(pp, 'u_modern'),
     };
   }
 
@@ -427,6 +560,141 @@ export class GLRenderer {
   }
 
   /**
+   * Compile the Modern floor program on first use so Legacy boots exactly as
+   * before. Returns false if it can't compile (caller uses the Canvas2D path).
+   */
+  _ensureModernFloor() {
+    if (this._modernFloor !== undefined) return !!this._modernFloor;
+    const gl = this.gl;
+    const prog = createProgram(gl, FLOOR_VERT, FLOOR_FRAG_MODERN);
+    this._modernFloor = prog;
+    if (!prog) return false;
+    const u = (n) => gl.getUniformLocation(prog, n);
+    this.u_modern = {
+      resolution: u('u_resolution'), camPos: u('u_camPos'), dir: u('u_dir'), plane: u('u_plane'),
+      yShift: u('u_yShift'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
+      mapSize: u('u_mapSize'), fogNear: u('u_fogNear'), fogFar: u('u_fogFar'), fogMax: u('u_fogMax'),
+      fogDensity: u('u_fogDensity'), numLights: u('u_numLights'), lights: u('u_lights'),
+      lightColors: u('u_lightColors'), glowColors: u('u_glowColors'),
+    };
+    this._lightBuf = new Float32Array(64);
+    this._lightColorBuf = new Float32Array(48);
+    this._aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+    // Both programs share the quad VAO; a_pos must resolve to the same slot.
+    const posLoc = gl.getAttribLocation(prog, 'a_pos');
+    if (posLoc !== gl.getAttribLocation(this.floorProgram, 'a_pos')) {
+      gl.bindVertexArray(this.quadVAO);
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+    }
+    return true;
+  }
+
+  /** Upload the Modern 512px deck/ceiling canvases as trilinear+anisotropic mipmapped textures. */
+  uploadModernDeck(floorCanvas, ceilCanvas) {
+    if (!this._ensureModernFloor()) return;
+    const gl = this.gl;
+    const make = (src) => {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      if (this._aniso) {
+        const max = gl.getParameter(this._aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1;
+        gl.texParameterf(gl.TEXTURE_2D, this._aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
+      }
+      return tex;
+    };
+    if (this.modernFloorTex) gl.deleteTexture(this.modernFloorTex);
+    if (this.modernCeilTex) gl.deleteTexture(this.modernCeilTex);
+    this.modernFloorTex = make(floorCanvas);
+    this.modernCeilTex = make(ceilCanvas);
+  }
+
+  /** Upload the per-cell AO/glow bytes (see src/rendering/env/env-map.js). */
+  uploadEnvMap(rgba, w, h) {
+    if (!this._ensureModernFloor()) return;
+    const gl = this.gl;
+    if (!this.envMapTex) {
+      this.envMapTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.envMapTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, this.envMapTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    this._envMapW = w;
+    this._envMapH = h;
+  }
+
+  /**
+   * Modern floor/ceiling pass. `env` is the act bundle from
+   * generateModernEnv(); lights are game.lights ({x, y, color 0-255, radius,
+   * intensity}). Returns false when the Modern program/textures aren't ready.
+   */
+  renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, lights) {
+    if (!this._ensureModernFloor() || !this.modernFloorTex || !this.envMapTex) return false;
+    const gl = this.gl;
+    const u = this.u_modern;
+    gl.viewport(0, 0, this.width, this.height);
+    gl.useProgram(this._modernFloor);
+    gl.bindVertexArray(this.quadVAO);
+    gl.uniform2f(u.resolution, this.width, this.height);
+    gl.uniform2f(u.camPos, camX, camY);
+    gl.uniform2f(u.dir, dirX, dirY);
+    gl.uniform2f(u.plane, planeX, planeY);
+    gl.uniform1f(u.yShift, yShift);
+    gl.uniform3fv(u.fogNear, env.fogNearGL);
+    gl.uniform3fv(u.fogFar, env.fogFarGL);
+    gl.uniform1f(u.fogMax, env.fogMax);
+    gl.uniform1f(u.fogDensity, env.fogDensity);
+    gl.uniform3fv(u.glowColors, env.glowGL);
+    gl.uniform2i(u.mapSize, this._envMapW, this._envMapH);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.modernFloorTex);
+    gl.uniform1i(u.floorTex, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.modernCeilTex);
+    gl.uniform1i(u.ceilTex, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.envMapTex);
+    gl.uniform1i(u.envMap, 2);
+    gl.activeTexture(gl.TEXTURE0);
+
+    const n = Math.min(lights ? lights.length : 0, 16);
+    const lb = this._lightBuf;
+    const cb = this._lightColorBuf;
+    for (let i = 0; i < n; i++) {
+      const l = lights[i];
+      const c = l.color || [255, 200, 150];
+      lb[i * 4] = l.x;
+      lb[i * 4 + 1] = l.y;
+      lb[i * 4 + 2] = l.radius ?? 3;
+      lb[i * 4 + 3] = l.intensity ?? 1;
+      cb[i * 3] = c[0] / 255;
+      cb[i * 3 + 1] = c[1] / 255;
+      cb[i * 3 + 2] = c[2] / 255;
+    }
+    gl.uniform1i(u.numLights, n);
+    gl.uniform4fv(u.lights, lb);
+    gl.uniform3fv(u.lightColors, cb);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+    return true;
+  }
+
+  /**
    * Run post-FX shader on the current canvas content.
    * Reads from sceneFBO texture, writes to screen.
    */
@@ -455,6 +723,7 @@ export class GLRenderer {
     gl.uniform1i(this.u_postfx.enableCA, enableCA ? 1 : 0);
     gl.uniform1i(this.u_postfx.enableGrain, enableGrain ? 1 : 0);
     gl.uniform3f(this.u_postfx.gradeColor, gradeColor[0], gradeColor[1], gradeColor[2]);
+    gl.uniform1i(this.u_postfx.modern, isModernArt() ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -502,6 +771,7 @@ export class GLRenderer {
     gl.uniform1i(this.u_postfx.enableCA, enableCA ? 1 : 0);
     gl.uniform1i(this.u_postfx.enableGrain, enableGrain ? 1 : 0);
     gl.uniform3f(this.u_postfx.gradeColor, gradeColor[0], gradeColor[1], gradeColor[2]);
+    gl.uniform1i(this.u_postfx.modern, isModernArt() ? 1 : 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -514,6 +784,10 @@ export class GLRenderer {
     gl.deleteProgram(this.postfxProgram);
     if (this.floorTex) gl.deleteTexture(this.floorTex);
     if (this.ceilTex) gl.deleteTexture(this.ceilTex);
+    if (this._modernFloor) gl.deleteProgram(this._modernFloor);
+    if (this.modernFloorTex) gl.deleteTexture(this.modernFloorTex);
+    if (this.modernCeilTex) gl.deleteTexture(this.modernCeilTex);
+    if (this.envMapTex) gl.deleteTexture(this.envMapTex);
     gl.deleteFramebuffer(this.sceneFBO.fbo);
     gl.deleteTexture(this.sceneFBO.texture);
   }

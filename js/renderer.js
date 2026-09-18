@@ -1,6 +1,23 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv } from "../src/rendering/textures.js";
+import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
+
+/** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
+ *  floor/ceiling loop: both only read module constants, so rebuilding the
+ *  closures on every frame cost an allocation and bought nothing. */
+const aoAt = (d) => {
+  if (d >= AO_RADIUS) return 1;
+  const t = d / AO_RADIUS;
+  return AO_FLOOR + (1 - AO_FLOOR) * t * t * (3 - 2 * t);
+};
+
+/** Emissive falloff away from a glowing cell. */
+const glowAt = (d) => {
+  if (d >= GLOW_RADIUS) return 0;
+  const t = 1 - d / GLOW_RADIUS;
+  return t * t;
+};
 import { ENEMY_RENDERERS } from "../src/rendering/enemies/index.js";
 import {
   drawPickup,
@@ -64,6 +81,12 @@ export class Renderer {
     this.textures = generateWallTextures();
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
+    // Modern art style environment: 512px wall/deck art per act, built lazily
+    // so Legacy never pays for it. `_envMap` carries per-cell contact-AO and
+    // emissive-spill bytes for the deck shading.
+    this._modernEnv = null;
+    this._envMap = new EnvMap();
+    this._envMapGLVersion = -1;
 
     // WebGL hybrid renderer (renderMode: 0=auto, 1=2D only, 2=3D/WebGL)
     this.glRenderer = null;
@@ -86,6 +109,7 @@ export class Renderer {
     const a = act ?? 1;
     if (this._actPalette === a) return;
     this._actPalette = a;
+    this._modernEnv = null;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
     if (this.useWebGL) this._uploadFloorCeilToGL();
@@ -96,6 +120,7 @@ export class Renderer {
     const idx = styleIndex ?? 0;
     if (this._visualStyle === idx) return;
     this._visualStyle = idx;
+    this._modernEnv = null;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
   }
@@ -107,6 +132,7 @@ export class Renderer {
     this.canvas.height = h;
     this.zBuffer = new Float64Array(w);
     this.wallTopY = new Float64Array(w);
+    this._colKey = null;
     this._floorCeilBuffer = null;
     if (this.glRenderer) this.glRenderer.resize(w, h);
   }
@@ -131,6 +157,221 @@ export class Renderer {
     this.glRenderer.uploadFloorCeilTextures(floorRGBA, ceilRGBA);
   }
 
+  /** Build (or reuse) the Modern environment bundle for the current act. */
+  _getModernEnv() {
+    const act = this._actPalette || 1;
+    const brutal = this._visualStyle === 1;
+    if (!this._modernEnv || this._modernEnv.act !== act || this._modernEnv.brutal !== brutal) {
+      this._modernEnv = generateModernEnv(act, brutal);
+      this._envMapGLVersion = -1;
+      if (this.glRenderer) {
+        this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);
+      }
+    }
+    return this._modernEnv;
+  }
+
+  _ensureColBufs(w) {
+    if (this._colKey && this._colKey.length === w) return;
+    this._colKey = new Int32Array(w);
+    this._colTop = new Int32Array(w);
+    this._colBot = new Int32Array(w);
+  }
+
+  /**
+   * Modern Canvas2D floor/ceiling (no-WebGL fallback). Same mip-filtered deck
+   * art, contact AO and emissive spill as the shader, at half vertical
+   * resolution like the legacy loop.
+   */
+  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env) {
+    const w = this.width;
+    const h = this.height;
+    const halfH = (h >> 1) + Math.round(yShift);
+    const projH = h >> 1;
+
+    if (
+      !this._floorCeilBuffer ||
+      this._floorCeilBuffer.width !== w ||
+      this._floorCeilBuffer.height !== h
+    ) {
+      this._floorCeilBuffer = this.ctx.createImageData(w, h);
+      this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
+    }
+    const buf32 = this._floorCeilBuf32;
+
+    const rayDirX0 = dirX - planeX;
+    const rayDirY0 = dirY - planeY;
+    const rayDirX1 = dirX + planeX;
+    const rayDirY1 = dirY + planeY;
+
+    const [fn0, fn1, fn2] = env.fogNear;
+    const [ff0, ff1, ff2] = env.fogFar;
+    const fogMax = env.fogMax;
+    const fogDensity = env.fogDensity;
+    const floorMips = env.deck.floorMips;
+    const ceilMips = env.deck.ceilMips;
+    const maxLvl = floorMips.length - 1;
+    const glow = env.glowRGB;
+
+    // Horizon = the thickest air.
+    const hr = (fn0 + (ff0 - fn0) * fogMax) | 0;
+    const hg = (fn1 + (ff1 - fn1) * fogMax) | 0;
+    const hb = (fn2 + (ff2 - fn2) * fogMax) | 0;
+    buf32.fill((255 << 24) | (hb << 16) | (hg << 8) | hr);
+
+    const em = this._envMap;
+    const cells = em.rgba;
+    const mw = em.w;
+    const mh = em.h;
+    const planeLen = Math.hypot(planeX, planeY) * 2;
+    const floorStart = Math.max(1, halfH + 1);
+    const loopEnd = h % 2 === 0 ? h : h - 1;
+
+    for (let y = floorStart; y < loopEnd; y += 2) {
+      const p = y - halfH;
+      if (p <= 0) continue;
+      const rowDist = projH / p;
+      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
+      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
+      let fx = camX + rowDist * rayDirX0;
+      let fy = camY + rowDist * rayDirY0;
+
+      const fog = fogMax * (1 - Math.exp(-rowDist * fogDensity));
+      const invFog = 1 - fog;
+      const fR = (fn0 + (ff0 - fn0) * fog) * fog;
+      const fG = (fn1 + (ff1 - fn1) * fog) * fog;
+      const fB = (fn2 + (ff2 - fn2) * fog) * fog;
+
+      // Pick the mip whose texels are about screen-pixel sized: kills the
+      // shimmer the 256px nearest-sampled deck had at distance.
+      const foot = Math.max((512 * rowDist * planeLen) / w, (512 * rowDist * rowDist) / projH);
+      let lvl = 0;
+      while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
+      const floorTex = floorMips[lvl];
+      const ceilTex = ceilMips[lvl];
+      const size = 512 >> lvl;
+      const mask = size - 1;
+
+      const rowOff = y * w;
+      const rowOff1 = (y - 1) * w;
+      const cy = 2 * halfH - 1 - y;
+      const cy2 = cy + 1;
+      const ceilVisible = cy >= 0 && cy < h;
+
+      for (let x = 0; x < w; x++) {
+        const tx = ((fx * size) | 0) & mask;
+        const ty = ((fy * size) | 0) & mask;
+        const ti = (ty * size + tx) * 4;
+
+        let ao = 1;
+        let gr = 0, gg = 0, gb = 0;
+        if (cells && fx >= 0 && fy >= 0) {
+          const cxI = fx | 0;
+          const cyI = fy | 0;
+          if (cxI < mw && cyI < mh) {
+            const o = (cyI * mw + cxI) * 4;
+            const m = cells[o];
+            const gbits = cells[o + 1];
+            if (m !== 0) {
+              const dx = fx - cxI;
+              const dy = fy - cyI;
+              if (m & 1) ao = Math.min(ao, aoAt(dx));
+              if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
+              if (m & 4) ao = Math.min(ao, aoAt(dy));
+              if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
+              if (m & 240) {
+                if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
+                if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
+                if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
+                if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
+              }
+            }
+            if (gbits !== 0) {
+              const dx = fx - cxI;
+              const dy = fy - cyI;
+              let g = 0;
+              if (gbits & 1) g = Math.max(g, glowAt(dx));
+              if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
+              if (gbits & 4) g = Math.max(g, glowAt(dy));
+              if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
+              const c = glow[cells[o + 2]];
+              if (c) {
+                gr = c[0] * g;
+                gg = c[1] * g;
+                gb = c[2] * g;
+              }
+            }
+          }
+        }
+
+        if (y < h) {
+          let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
+          let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
+          let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
+          if (fr > 255) fr = 255;
+          if (fg > 255) fg = 255;
+          if (fb > 255) fb = 255;
+          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+          buf32[rowOff + x] = packed;
+          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+        }
+
+        if (ceilVisible) {
+          let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
+          let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
+          let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
+          if (cr > 255) cr = 255;
+          if (cg > 255) cg = 255;
+          if (cb > 255) cb = 255;
+          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+          buf32[cy * w + x] = cPacked;
+          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
+        }
+
+        fx += stepX;
+        fy += stepY;
+      }
+    }
+
+    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * Modern silhouette pass: one ink line per column run where the wall plane
+   * changes (block corners and occlusion edges) plus the batched top/bottom
+   * contact lines recorded during the wall loop. Only a few dozen fills.
+   */
+  _drawModernInk(w, h) {
+    const ctx = this.ctx;
+    const key = this._colKey;
+    const top = this._colTop;
+    const bot = this._colBot;
+    const zb = this.zBuffer;
+    ctx.fillStyle = "rgba(4,6,11,0.9)";
+    ctx.fill(); // top/bottom contact lines accumulated as rects in the loop
+    for (let x = 1; x < w; x++) {
+      const k = key[x];
+      const kp = key[x - 1];
+      if (k === kp || k < 0 || kp < 0) continue;
+      const z0 = zb[x - 1];
+      const z1 = zb[x];
+      const nearX = z1 < z0 ? x : x - 1;
+      const nearZ = z1 < z0 ? z1 : z0;
+      const lh = h / nearZ;
+      const lw = lh > 900 ? 3 : lh > 260 ? 2 : 1;
+      let t, b;
+      if (Math.abs(z1 - z0) < 0.05 * nearZ + 0.02) {
+        t = Math.min(top[x], top[x - 1]);
+        b = Math.max(bot[x], bot[x - 1]);
+      } else {
+        t = top[nearX];
+        b = bot[nearX];
+      }
+      if (b <= t) continue;
+      ctx.fillRect(nearX === x ? x : x - lw + 1, t, lw, b - t);
+    }
+  }
+
   _regenerateFloorCeil() {
     const { floorPixels, ceilPixels } = generateFloorCeilTextures(this._actPalette, this._visualStyle);
     this._floorTexPixels = floorPixels;
@@ -151,10 +392,11 @@ export class Renderer {
       this._floorCeilBuffer.height !== h
     ) {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
+      this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
     }
     const buf = this._floorCeilBuffer.data;
     // Uint32Array view for single 32-bit pixel writes (4× fewer stores)
-    const buf32 = new Uint32Array(buf.buffer);
+    const buf32 = this._floorCeilBuf32;
     const floorTex = this._floorTexPixels;
     const ceilTex = this._ceilTexPixels;
 
@@ -264,6 +506,15 @@ export class Renderer {
     this.zBuffer.fill(Infinity);
     this.wallTopY.fill(-1); // -1 = full-height wall (no pass-through)
 
+    // Modern art style environment. Gated off for Legacy and for the low
+    // presets that already drop floor textures — those keep the old look.
+    const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
+    if (menv) {
+      this._ensureColBufs(w);
+      this._colKey.fill(-1);
+      if (this._envMap.sync(map)) this._envMapGLVersion = -1;
+    }
+
     // Convert FOV degrees to camera plane multiplier
     const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
 
@@ -298,7 +549,31 @@ export class Renderer {
     }
 
     // Draw textured floor and ceiling (with yShift for pitch support)
-    if (!skipFloorCeil) {
+    if (menv) {
+      let drawn = false;
+      if (this.useWebGL && this.glRenderer) {
+        if (this._envMapGLVersion !== this._envMap.version) {
+          this.glRenderer.uploadEnvMap(this._envMap.rgba, this._envMap.w, this._envMap.h);
+          this._envMapGLVersion = this._envMap.version;
+        }
+        drawn = this.glRenderer.renderFloorCeilingModern(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          Math.round(yShift),
+          menv,
+          this.lights || [],
+        );
+        if (drawn) ctx.drawImage(this.glRenderer.canvas, 0, 0);
+      }
+      if (!drawn) {
+        this._renderFloorCeilingModern(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          yShift,
+          menv,
+        );
+      }
+    } else if (!skipFloorCeil) {
       if (this.useWebGL && this.glRenderer) {
         // GPU-accelerated floor/ceiling with dynamic lighting
         const act = this._actPalette || 1;
@@ -347,6 +622,8 @@ export class Renderer {
     // Raycasting
     const planeX = -dirY * planeMul;
     const planeY = dirX * planeMul;
+
+    if (menv) ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
       const cameraX = (2 * x) / w - 1;
@@ -460,8 +737,119 @@ export class Renderer {
       }
       wallX -= Math.floor(wallX);
 
-      const tex = this.textures[wallType];
-      if (tex) {
+      const mmips = menv ? menv.walls[wallType] : null;
+      if (mmips) {
+        // Mip level ≈ one texel per screen pixel, so distant walls sample
+        // pre-filtered art instead of aliasing across the 512px face.
+        const lvl =
+          lineHeight >= 384 ? 0 :
+            lineHeight >= 192 ? 1 :
+              lineHeight >= 96 ? 2 :
+                lineHeight >= 48 ? 3 :
+                  lineHeight >= 24 ? 4 : 5;
+        const mtex = mmips[lvl];
+        const S = mtex.width;
+        let texX = (wallX * S) | 0;
+        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+          texX = S - 1 - texX;
+        }
+        const mstep = S / lineHeight;
+        const srcY = (drawStart - fullDrawStart) * mstep;
+        const colH = drawEnd - drawStart;
+        const srcH = Math.min(S - srcY, colH * mstep);
+        if (srcH > 0 && colH > 0) {
+          ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
+        }
+
+        // Directional key light: faces turned away from it fall toward ink.
+        const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
+        if (face !== 0) {
+          ctx.fillStyle = menv.faceShade[face];
+          ctx.fillRect(x, drawStart, 1, colH);
+        }
+
+        // Act fog with atmospheric perspective (colour and density from the
+        // same ramp the deck shader uses, so wall and floor air agree).
+        const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
+        const fogAmount = fogK;
+        const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
+        if (fi > 0) {
+          ctx.fillStyle = menv.fogLUT[fi];
+          ctx.fillRect(x, drawStart, 1, colH);
+        }
+
+        // Dynamic lights, with a hot rim where they catch an exposed corner.
+        if (this.lights && this.lights.length > 0) {
+          const hitWX = camX + perpWallDist * rayDirX;
+          const hitWY = camY + perpWallDist * rayDirY;
+          let lr = 0, lg = 0, lb = 0;
+          for (let li = 0; li < this.lights.length; li++) {
+            const L = this.lights[li];
+            const ldx = L.x - hitWX;
+            const ldy = L.y - hitWY;
+            const d2 = ldx * ldx + ldy * ldy;
+            const r2 = L.radius * L.radius;
+            if (d2 >= r2) continue;
+            const fall = 1 - Math.sqrt(d2) / L.radius;
+            const k = fall * fall * L.intensity;
+            lr += L.color[0] * k;
+            lg += L.color[1] * k;
+            lb += L.color[2] * k;
+          }
+          if (lr + lg + lb > 1) {
+            if (wallX < 0.07 || wallX > 0.93) {
+              // Only a real block corner gets the rim; a continuous wall
+              // plane shouldn't light up every cell seam.
+              const nx = side === 0 ? mapX : mapX + (wallX < 0.07 ? -1 : 1);
+              const ny = side === 0 ? mapY + (wallX < 0.07 ? -1 : 1) : mapY;
+              const open =
+                nx >= 0 && ny >= 0 && nx < map.width && ny < map.height &&
+                map.grid[ny][nx] === 0;
+              if (open) {
+                lr *= 2.4;
+                lg *= 2.4;
+                lb *= 2.4;
+              }
+            }
+            const peak = Math.max(lr, lg, lb);
+            const a = Math.min(0.9, peak / 255);
+            const prev = ctx.globalCompositeOperation;
+            ctx.globalCompositeOperation = "lighter";
+            ctx.fillStyle = _getFogString(
+              Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
+            );
+            ctx.fillRect(x, drawStart, 1, colH);
+            ctx.globalCompositeOperation = prev;
+          }
+        }
+
+        // Door-frame spill onto the walls flanking a door tile.
+        if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
+          const low = wallX < 0.1;
+          const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
+          const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
+          if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
+            const ac = menv.accentRGB;
+            const prev = ctx.globalCompositeOperation;
+            ctx.globalCompositeOperation = "lighter";
+            ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
+            ctx.fillRect(x, drawStart, 1, colH);
+            ctx.globalCompositeOperation = prev;
+          }
+        }
+
+        // Inked contact lines at the ceiling and deck joints, batched into one
+        // path that the silhouette pass fills after the loop.
+        const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
+        if (colH > inkT * 2) {
+          if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
+          if (drawEnd < h - 1) ctx.rect(x, drawEnd - inkT, 1, inkT);
+        }
+        this._colKey[x] = side === 0 ? mapX << 1 : (mapY << 1) | 1;
+        this._colTop[x] = drawStart;
+        this._colBot[x] = drawEnd;
+      } else if (this.textures[wallType]) {
+        const tex = this.textures[wallType];
         let texX = (wallX * 256) | 0;
         if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
           texX = 255 - texX;
@@ -565,6 +953,8 @@ export class Renderer {
         }
       }
     }
+
+    if (menv) this._drawModernInk(w, h);
 
     // Set FOV scale for prop minimum-size floors
     setFovScale(fov);
