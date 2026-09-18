@@ -35,13 +35,14 @@ const MAX_SIDE_PX = 1100;
 
 const built = new Map(); // `${id}|${accent}|${pose}` -> viewmodel
 
-function build(id, accent, pose) {
-  const key = `${id}|${accent}|${pose}`;
+function build(id, accent, pose, tier = "hi") {
+  const key = `${id}|${accent}|${pose}|${tier}`;
   let vm = built.get(key);
   if (vm) return vm;
   const model = WEAPON_MODELS[id];
   if (!model) return null;
   const sc = createScene(model.cams[pose], accent);
+  sc.detailPx = tier === "lo" ? 2 : 4;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
   for (const name of LAYERS) {
@@ -54,7 +55,7 @@ function build(id, accent, pose) {
     if (x1 - x0 < 1 || y1 - y0 < 1) continue; // entirely off screen
     layers.push({ name, id: `vm:${key}:${name}`, box: [x0, y0, x1 - x0, y1 - y0], markup: L.svg, bloom: name === "glow" || name === "handGlow" });
   }
-  vm = { layers, muzzle: sc.P(info.muzzle), eject: sc.P(info.eject), pivot: sc.P(info.pivot), sight: sc.P(info.sight), muzzleK: sc.k(info.muzzle), gripK: sc.k(info.pivot) };
+  vm = { layers, muzzle: sc.P(info.muzzle), eject: sc.P(info.eject), pivot: sc.P(info.pivot), sight: sc.P(info.sight), muzzleK: sc.k(info.muzzle), gripK: sc.k(info.pivot), sleeves: sc.sleeveEnds || [] };
   built.set(key, vm);
   return vm;
 }
@@ -71,11 +72,11 @@ const request = (vm, px) => vm.layers.map((L) => getLayerImage(L.id, L.box, DEFS
 
 let warmQueue = null;
 /** Decode the other weapons one per frame so switching never shows procedural art. */
-function warmStep(accent, px) {
+function warmStep(accent, px, tier) {
   if (!warmQueue) warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
   const next = warmQueue.shift();
   if (!next) return;
-  const vm = build(next[0], accent, next[1]);
+  const vm = build(next[0], accent, next[1], tier);
   if (vm) request(vm, px);
 }
 
@@ -132,6 +133,42 @@ function morph(hip, aim, s, ctx) {
   return ([x, y]) => [tx + (x - ax) * cos - (y - ay) * sin, ty + (x - ax) * sin + (y - ay) * cos];
 }
 
+/**
+ * While the hip art swings and shrinks toward the ADS pose its sleeves can end
+ * above the screen edge; continue each sleeve past its baked end so the hands
+ * never float. Cheap: two quads, only during the transition.
+ */
+function sleeveExtensions(ctx, vm, alpha) {
+  if (!vm.sleeves.length) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#0a1018";
+  ctx.strokeStyle = "#04060b";
+  ctx.lineWidth = 0.6;
+  for (const { ea, eb, dir, half } of vm.sleeves) {
+    const L = 170;
+    const fa = [ea[0] + dir[0] * L - half[0] * 0.5, ea[1] + dir[1] * L - half[1] * 0.5];
+    const fb = [eb[0] + dir[0] * L + half[0] * 0.5, eb[1] + dir[1] * L + half[1] * 0.5];
+    // Overlap the baked end slightly so no seam shows.
+    const oa = [ea[0] - dir[0] * 2, ea[1] - dir[1] * 2];
+    const ob = [eb[0] - dir[0] * 2, eb[1] - dir[1] * 2];
+    ctx.beginPath();
+    ctx.moveTo(oa[0], oa[1]);
+    ctx.lineTo(fa[0], fa[1]);
+    ctx.lineTo(fb[0], fb[1]);
+    ctx.lineTo(ob[0], ob[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(ea[0], ea[1]);
+    ctx.lineTo(fa[0], fa[1]);
+    ctx.moveTo(eb[0], eb[1]);
+    ctx.lineTo(fb[0], fb[1]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawLayers(ctx, vm, imgs, alpha, glowAlpha) {
   vm.layers.forEach((L, i) => {
     const [bx, by, bw, bh] = L.box;
@@ -161,17 +198,18 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   // Headless/mock contexts (unit tests, no DOM) keep the procedural model.
   if (typeof Image === "undefined" || typeof ctx.getTransform !== "function") return false;
   const { wep, energyColor: accent, isSprinting, isDashing, weaponBob, weaponKick, weaponAnimFrame: frame, time, lastFireTime, drawGlow } = o;
-  const hip = build(wep.id, accent, "hip");
-  const aim = build(wep.id, accent, "ads");
-  if (!hip || !aim) return false;
-
   const vf = h / 720;
   const m = ctx.getTransform();
   const px = Math.hypot(m.a, m.b) * UNIT * vf || UNIT;
+  // Detail tier: small renders (phones, low render scale) get a simplified glove.
+  const tier = px >= 3 ? "hi" : "lo";
+  const hip = build(wep.id, accent, "hip", tier);
+  const aim = build(wep.id, accent, "ads", tier);
+  if (!hip || !aim) return false;
   // Both poses stay decoded so the blend never has to fall back mid-motion.
   const hipImgs = request(hip, px);
   const aimImgs = request(aim, px);
-  warmStep(accent, px);
+  warmStep(accent, px, tier);
   const b = clamp01(blend);
   const s = smoothstep(clamp01(b / MORPH_END));
   const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
@@ -197,7 +235,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const swayK = lerp(1, 0.22, b);
   const classic = o.hudStyle === 1;
   const viewH = h - (classic ? 160 * ((o.hudScale || 100) / 100) * vf : 0);
-  const hipCy = h / 2 - (classic ? 160 * vf : 0) + HIP_DROP * UNIT * vf;
+  const hipCy = h / 2 - (classic ? 160 * vf : 0) + (WEAPON_MODELS[wep.id].hipDrop ?? HIP_DROP) * UNIT * vf;
   const follow = lerp(0.85, 1, b);
   const breath = (time || 0) * 0.001;
   const calm = 1 - 0.85 * b;
@@ -267,6 +305,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   if (u < 1) {
     ctx.save();
     morph(hip, aim, s, ctx);
+    if (s > 0) sleeveExtensions(ctx, hip, base * (1 - u));
     drawLayers(ctx, hip, hipImgs, base * (1 - u), glowA);
     ctx.restore();
   }
@@ -306,7 +345,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
 }
 
 /** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose. */
-export function viewmodelLayers(id, accent, pose = "hip") {
-  const vm = build(id, accent, pose);
+export function viewmodelLayers(id, accent, pose = "hip", tier = "hi") {
+  const vm = build(id, accent, pose, tier);
   return vm && { defs: DEFS, layers: vm.layers, muzzle: vm.muzzle };
 }

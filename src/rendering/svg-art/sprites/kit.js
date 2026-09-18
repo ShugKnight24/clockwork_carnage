@@ -107,6 +107,7 @@ export function baseDefs(box) {
     `<filter id="blk" ${R}><feColorMatrix type="matrix" values="0 0 0 0 0.016 0 0 0 0 0.024 0 0 0 0 0.043 0 0 0 1 0"/></filter>` +
     `<filter id="gb" ${R}><feGaussianBlur stdDeviation="2.4"/></filter>` +
     `<filter id="gb2" ${R}><feGaussianBlur stdDeviation="6"/></filter>` +
+    `<filter id="ao" ${R}><feGaussianBlur stdDeviation="1.6"/></filter>` +
     `<linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="${f(x + w * 0.2)}" y1="${f(y)}" x2="${f(x + w * 0.8)}" y2="${f(y + h)}">` +
     `<stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/>` +
     `<stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>`
@@ -155,4 +156,41 @@ export function flash(x, y, r, color, core = "#ffffff") {
     pts.push([x + Math.cos(a) * r * k, y + Math.sin(a) * r * k]);
   }
   return `<path d="${poly(pts)}" fill="${color}"/>` + circ(x, y, r * 0.34, core, 0);
+}
+
+/** Soft ambient-occlusion blot where parts meet (neck, armpits, belt, knees). */
+export const ao = (x, y, rx, ry, op = 0.45) =>
+  `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="#000" opacity="${op}" filter="url(#ao)"/>`;
+
+/** Specular strip along a lit edge. */
+export const spec = (d, op = 0.55, w = 1.1) => ln(d, "#ffffff", w, op);
+
+/** Hanging cable from a to b with sag, inked with a thin highlight. */
+export function cable(a, b, sag = 6, color = "#1c2027", w = 2) {
+  const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + sag];
+  const d = `M${P(a[0], a[1])}Q${P(m[0], m[1])} ${P(b[0], b[1])}`;
+  const dh = `M${P(a[0] - 0.4, a[1] - 0.6)}Q${P(m[0] - 0.4, m[1] - 0.6)} ${P(b[0] - 0.4, b[1] - 0.6)}`;
+  return ln(d, INK, w + 1.6) + ln(d, color, w) + ln(dh, "#9aa6b4", 0.6, 0.45);
+}
+
+/** Polygon plate with a specular strip on its first (upper-left) edge. */
+export function plate(pts, fill, w = 1.3, hi = 0.5) {
+  const [a, b] = pts;
+  const inset = (p, q) => [p[0] + (q[0] - p[0]) * 0.12, p[1] + (q[1] - p[1]) * 0.12 + 1.2];
+  const s0 = inset(a, b);
+  const s1 = inset(b, a);
+  return sh(poly(pts), fill, w) + (hi ? spec(`M${P(s0[0], s0[1])}L${P(s1[0], s1[1])}`, hi) : "");
+}
+
+/** Ring of `n` glyph ticks (runes, dial marks) around (x, y). */
+export function glyphRing(x, y, r, n, color, w = 1.2, len = 3) {
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    d += `M${P(x + c * r, y + s * r)}L${P(x + c * (r + len), y + s * (r + len))}`;
+    if (i % 3 === 0) d += `M${P(x + c * (r + len + 1.5) - s * 1.5, y + s * (r + len + 1.5) + c * 1.5)}l${f(s * 3)} ${f(-c * 3)}`;
+  }
+  return ln(d, color, w);
 }

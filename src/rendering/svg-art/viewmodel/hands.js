@@ -41,6 +41,24 @@ export const HAND_DEFS = `
 <radialGradient id="vmAO"><stop offset="0" stop-color="#000" stop-opacity=".55"/>
   <stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>`;
 
+/** Convex hull (monotone chain) of 2D points. */
+function hull2(points) {
+  const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [];
+  for (const q of p) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop();
+    lo.push(q);
+  }
+  const up = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p[i]) <= 0) up.pop();
+    up.push(p[i]);
+  }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
 /** Closed Catmull-Rom spline through 2D points. */
 function blobPath(p) {
   let d = `M${pt(p[0])}`;
@@ -72,6 +90,10 @@ function spline(p) {
 /** Hand drawing kit bound to a scene (see geom.createScene). */
 export function createHandArt(sc) {
   const { accent, P, k } = sc;
+  // Nominal device px per unit for this build's detail tier: fine lines are
+  // dropped once they would render too small to read (LOD).
+  const PX = sc.detailPx || 4;
+  if (!sc.sleeveEnds) sc.sleeveEnds = [];
   let layer = "body";
   const use = (name) => {
     layer = name;
@@ -118,27 +140,70 @@ export function createHandArt(sc) {
     const avg = ns.reduce((a, q) => [a[0] + q[0], a[1] + q[1]], [0, 0]);
     const lit = avg[0] * -0.6 + avg[1] * -0.8 >= 0 ? 1 : -1;
     let out = `<path d="${d}" fill="url(#vmGlove)" stroke="${INK}" stroke-width=".45" stroke-linejoin="round"/>`;
-    const ridge = j.map((_, i) => off(i, lit * 0.5));
-    out += `<path d="M${pt(ridge[0])}${spline(ridge)}" fill="none" stroke="#cfdce8" stroke-opacity=".28" stroke-width="${f(Math.max(0.35, r[1] * 0.26))}" stroke-linecap="round"/>`;
-    const rimLine = j.map((_, i) => off(i, -lit * 0.84));
-    out += `<path d="M${pt(rimLine[0])}${spline(rimLine)}" fill="none" stroke="${accent}" stroke-opacity=".35" stroke-width=".35" stroke-linecap="round"/>`;
-    if (gap) {
+    const rPx = r[1] * PX;
+    if (rPx >= 8) {
+      const ridge = j.map((_, i) => off(i, lit * 0.5));
+      out += `<path d="M${pt(ridge[0])}${spline(ridge)}" fill="none" stroke="#cfdce8" stroke-opacity=".28" stroke-width="${f(Math.max(0.35, r[1] * 0.26))}" stroke-linecap="round"/>`;
+    }
+    if (rPx >= 16) {
+      const rimLine = j.map((_, i) => off(i, -lit * 0.84));
+      out += `<path d="M${pt(rimLine[0])}${spline(rimLine)}" fill="none" stroke="${accent}" stroke-opacity=".35" stroke-width=".35" stroke-linecap="round"/>`;
+    }
+    if (gap && r[0] * PX >= 11) {
       const g = j.slice(0, last).map((_, i) => off(i, gap * 0.8));
       out += `<path d="M${pt(g[0])}${spline(g)}" fill="none" stroke="${INK}" stroke-opacity=".55" stroke-width="${f(Math.max(0.45, r[0] * 0.22))}" stroke-linecap="round"/>`;
     }
     emit(out);
-    for (let i = 1; i < last; i++) {
+    for (let i = 1; i < last && r[i] * PX >= 17; i++) {
       // Fabric crease across the joint, bowed toward the tip.
       const u = [ns[i][1], -ns[i][0]];
       const c = j[i];
       const rr = r[i];
       curve([c[0] + ns[i][0] * rr * 0.7, c[1] + ns[i][1] * rr * 0.7], [c[0] + u[0] * rr * 0.4, c[1] + u[1] * rr * 0.4], [c[0] - ns[i][0] * rr * 0.7, c[1] - ns[i][1] * rr * 0.7], INK, Math.max(0.3, rr * 0.12), 0.5);
     }
-    if (nail) {
+    if (nail && r[last] * PX >= 14) {
       const c = lerp(j[last - 1], j[last], 0.8);
       emit(`<ellipse cx="${f(c[0])}" cy="${f(c[1])}" rx="${f(r[last] * 0.5)}" ry="${f(r[last] * 0.34)}" fill="#0b0e13" fill-opacity=".4"/>`);
     }
     return { j, r };
+  }
+
+  /**
+   * Several curled fingers seen edge-on (foreshortened side by side) as one
+   * padded glove shape with grooves between them: individually outlined they
+   * read as a stack of thin slivers.
+   */
+  function fingerGroup(fingers) {
+    const cols = fingers.map(([j3, wmm]) => {
+      const j = j3.map(P);
+      const r = j3.map((p, i) => (wmm[i] / 2) * k(p));
+      return { j, r };
+    });
+    const pts = [];
+    for (const { j, r } of cols) {
+      for (let i = 0; i < j.length; i++) {
+        const a = j[Math.max(0, i - 1)];
+        const b = j[Math.min(j.length - 1, i + 1)];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const n = [-(b[1] - a[1]) / l, (b[0] - a[0]) / l];
+        pts.push([j[i][0] + n[0] * r[i], j[i][1] + n[1] * r[i]], [j[i][0] - n[0] * r[i], j[i][1] - n[1] * r[i]]);
+      }
+      const e = j.length - 1;
+      const l = Math.hypot(j[e][0] - j[e - 1][0], j[e][1] - j[e - 1][1]) || 1;
+      pts.push([j[e][0] + ((j[e][0] - j[e - 1][0]) / l) * r[e] * 0.8, j[e][1] + ((j[e][1] - j[e - 1][1]) / l) * r[e] * 0.8]);
+    }
+    const outline = hull2(pts);
+    outline.forEach((q) => grow(q));
+    emit(`<path d="${blobPath(outline)}" fill="url(#vmGlove)" stroke="${INK}" stroke-width=".45" stroke-linejoin="round"/>`);
+    for (let c = 0; c < cols.length - 1; c++) {
+      const a = cols[c];
+      const b = cols[c + 1];
+      const groove = a.j.slice(0, -1).map((q, i) => lerp(q, b.j[i], 0.5));
+      emit(`<path d="M${pt(groove[0])}${spline(groove)}" fill="none" stroke="${INK}" stroke-opacity=".6" stroke-width="${f(Math.max(0.4, a.r[1] * 0.18))}" stroke-linecap="round"/>`);
+    }
+    // Knuckle sheen along the leading finger.
+    const lead = cols[cols.length - 1];
+    if (lead.r[1] * PX >= 8) emit(`<path d="M${pt(lead.j[1])}${spline(lead.j.slice(1, -1))}" fill="none" stroke="#cfdce8" stroke-opacity=".25" stroke-width="${f(Math.max(0.35, lead.r[1] * 0.3))}" stroke-linecap="round"/>`);
   }
 
   /** Padded glove mass (back of hand, palm) through 3D outline points. */
@@ -147,7 +212,8 @@ export function createHandArt(sc) {
     const p = pts3.map(P);
     p.forEach((q) => grow(q));
     let m = `<path d="${blobPath(p)}" fill="${fill}" stroke="${INK}" stroke-width=".5" stroke-linejoin="round"/>`;
-    if (panel) {
+    const span = Math.max(...p.map((q) => q[0])) - Math.min(...p.map((q) => q[0]));
+    if (panel && span * PX >= 110) {
       const c = p.reduce((a, q) => [a[0] + q[0] / p.length, a[1] + q[1] / p.length], [0, 0]);
       m += `<path d="${blobPath(p.map((q) => lerp(c, q, panel)))}" fill="#7a8696" fill-opacity=".12" stroke="${INK}" stroke-opacity=".38" stroke-width=".28" stroke-dasharray=".9 .6"/>`;
     }
@@ -161,6 +227,12 @@ export function createHandArt(sc) {
    * knuckle on the arc, aligned with its finger, with a lit bevel.
    */
   function guard(mcps3, tips3, wmm) {
+    if ((wmm / 2) * k(mcps3[1]) * PX < 18) {
+      // Too small for readable plates: just catch the light along the knuckle arc.
+      const p = mcps3.map(P);
+      emit(`<path d="M${pt(p[0])}${spline(p)}" fill="none" stroke="#b8c8d8" stroke-opacity=".4" stroke-width="${f(Math.max(0.5, (wmm / 2) * k(mcps3[1]) * 0.3))}" stroke-linecap="round"/>`);
+      return;
+    }
     mcps3.forEach((m3, i) => {
       const c = P(m3);
       const t = P(tips3[i]);
@@ -203,10 +275,11 @@ export function createHandArt(sc) {
     const bowA = [lerp(wa, ea, 0.5)[0] - half[0] * 0.12, lerp(wa, ea, 0.5)[1] - half[1] * 0.12];
     const bowB = [lerp(wb, eb, 0.5)[0] + half[0] * 0.12, lerp(wb, eb, 0.5)[1] + half[1] * 0.12];
     [wa, wb, ea, eb, bowA, bowB].forEach((q) => grow(q));
+    if (layer !== "body") sc.sleeveEnds.push({ ea, eb, dir, half });
     emit(`<path d="M${pt(wa)}Q${pt(bowA)} ${pt(ea)}L${pt(eb)}Q${pt(bowB)} ${pt(wb)}Z" fill="url(#vmSleeve)" stroke="${INK}" stroke-width=".6" stroke-linejoin="round"/>`);
     const at = (s) => [lerp(wa, ea, s), lerp(wb, eb, s)];
     // Fabric folds bunching near the cuff.
-    for (const s of [trimAt + 0.16, trimAt + 0.3, trimAt + 0.48]) {
+    for (const s of PX >= 3 ? [trimAt + 0.16, trimAt + 0.3, trimAt + 0.48] : [trimAt + 0.3]) {
       const [a, b] = at(s);
       curve(lerp(a, b, 0.12), [lerp(a, b, 0.35)[0] - dir[0] * 3, lerp(a, b, 0.35)[1] - dir[1] * 3], lerp(a, b, 0.62), INK, 0.5, 0.38);
     }
@@ -244,7 +317,7 @@ export function createHandArt(sc) {
     emit(`<ellipse cx="${f(c[0])}" cy="${f(c[1])}" rx="${f(r)}" ry="${f(r * sy)}" fill="url(#vmAO)"/>`);
   }
 
-  return { use, P, k, finger, mass, guard, sleeve, ao, stroke, curve };
+  return { use, P, k, finger, fingerGroup, mass, guard, sleeve, ao, stroke, curve, detailPx: PX };
 }
 
 // ---------------------------------------------------------------------------
@@ -383,7 +456,13 @@ export function clampHand(A, hg, layer = "handL", ads = false) {
   ], { panel: 0.45 });
   A.ao([hw + 4, y0 + 6, zc + 4], 30, 0.8);
   // Fingers curl round the far lower edge; only the middle and tip segments show.
-  [[zc - 21, 16], [zc - 4, 18], [zc + 14, 19], [zc + 32, 18.5]].forEach(([z, w], i) => {
-    A.finger([[hw * 0.2, y0 - 13, z], [hw + 11, y0 - 5, z - 1], [hw + 12, y0 + (mid - y0) * 0.9, z - 2], [hw + 6, mid + 6, z - 3]], [w, w * 0.86, w * 0.75, w * 0.66], { gap: i < 3 ? -1 : 0 });
-  });
+  // Foreshortened along the barrel they overlap, so they draw as one gloved
+  // group with grooves (three at small sizes, little finger tucked).
+  const rows = A.k([0, y0, zc]) * 9 * A.detailPx >= 18
+    ? [[zc - 21, 16], [zc - 4, 18], [zc + 14, 19], [zc + 32, 18.5]]
+    : [[zc - 14, 18.5], [zc + 7, 19.5], [zc + 28, 19]];
+  A.fingerGroup(rows.map(([z, w]) => [
+    [[hw * 0.2, y0 - 13, z], [hw + 11, y0 - 5, z - 1], [hw + 12, y0 + (mid - y0) * 0.9, z - 2], [hw + 6, mid + 6, z - 3]],
+    [w, w * 0.86, w * 0.75, w * 0.66],
+  ]));
 }

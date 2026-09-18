@@ -149,6 +149,8 @@ export const WEAPON_MODELS = {
   // ── Chrono Pistol ───────────────────────────────────────────────────────────
   // Compact steel slide over a polymer frame, chrono channel inlaid along the top.
   0: {
+    // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
+    hipDrop: 3,
     cams: { hip: hipCam({ top: 22, oz: 320, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
     build(sc, A, pose) {
       sc.cylZ(0, 11, 7, 186, 196, GUNMETAL, { n: 16 });
@@ -393,6 +395,8 @@ export const WEAPON_MODELS = {
   // ── Ricochet Pistol ─────────────────────────────────────────────────────────
   // Angular brass slide with deflector fins and a zig-zag ricochet channel.
   6: {
+    // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
+    hipDrop: 3,
     cams: { hip: hipCam({ top: 22, oz: 310, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
     build(sc, A, pose) {
       sc.cylZ(0, 11, 6.5, 168, 184, GUNMETAL, { n: 6, rot: Math.PI / 6 });

@@ -485,23 +485,6 @@ export function standingCape() {
   );
 }
 
-/** Cape spread flat on the floor under the fallen agent (rig coordinates). */
-function fallenCape() {
-  const d =
-    "M-14,-66 C-26,-71 -40,-63 -46.6,-49 C-52.6,-35 -56.6,-17 -54.6,-1 C-53.4,11 -50,22 -44,32 L-38.4,26.6 L-34.4,38.6 " +
-    "L-26.6,31 L-20.6,40.6 C-15,34 -11,26 -9,17.6 L-3,9.4 C3,13.6 11.4,16.4 19.6,12.4 L25.6,16.8 L29.6,6 " +
-    "C35.6,-6 40,-24 38,-40 C36,-54 28,-64.6 14,-66 Z";
-  const hem = "M-44,32 L-38.4,26.6 L-34.4,38.6 L-26.6,31 L-20.6,40.6 C-15,34 -11,26 -9,17.6";
-  return (
-    shape(d, "url(#cape)") +
-    shape("M-44,32 L-38.4,26.6 L-34.4,38.6 L-26.6,31 L-20.6,40.6 C-24,36 -30,33 -36,32.4 C-40,32 -42.6,32.6 -44,32 Z", "url(#capeIn)", 0.6) +
-    line(hem, "#140202", 1.3, 0.8) +
-    line("M-30,-54 C-40,-34 -44,-10 -38,16 M-22,-34 C-28,-14 -30,4 -26,24 M-40,-46 C-47,-28 -49,-8 -46,12", "#2a0606", 0.9, 0.65) +
-    line("M28,-52 C34,-36 34,-16 26,4 M-34,-50 C-42,-30 -45,-8 -42,10", "#c43a3a", 0.6, 0.35) +
-    line("M29.6,6 C35.6,-6 40,-24 38,-40", RIM, 0.5, 0.35)
-  );
-}
-
 /**
  * Armored agent in rig coordinates (standing: head top -95, soles +58).
  * @returns {{ cape: string, body: string, glow: string, helmGlow: string }}
@@ -668,51 +651,119 @@ function standingModel({ armed }) {
   };
 }
 
-// Fallen pose: sprawled on the back, seen from above; one arm reaching out.
+// Fallen pose, rig coordinates. The figure is laid on its right side with rig +x
+// pointing at the floor, so "down" for gravity is +x here: knees drawn up, the right
+// arm pinned along the floor under the body, the left arm slumped down in front of
+// the chest, helmet rolled onto the floor.
 const FALLEN = {
-  helmRot: 16,
   arms: [
-    { sh: [-19, -60], el: [-31, -43], wr: [-34, -23] },
-    { sh: [19, -60], el: [33, -70], wr: [45, -82], hand: "open" },
+    { sh: [-20, -59], el: [3, -68], wr: [25, -62], hand: "open" },
+    { sh: [20, -59], el: [30, -38], wr: [31, -15] },
   ],
   legs: [
-    { hip: [-7.5, -19], kn: [-20, 9], an: [-14, 40] },
-    { hip: [7.5, -19], kn: [14.4, 17], an: [23, 47] },
+    { hip: [-7.5, -19], kn: [17, 3], an: [21, 33] },
+    { hip: [7.5, -19], kn: [30, -3], an: [31, 28] },
   ],
 };
 
-const FALLEN_TF = `transform="translate(-10,24) scale(1,.88) rotate(86)"`;
+const FALLEN_TF = `transform="translate(-10,20) scale(1,.92) rotate(88)"`;
+
+/** Edge of the cape spread on the floor behind the body (rig coordinates). */
+function fallenCape() {
+  const pool =
+    "M-12,-66 C-22,-70 -30,-64 -32,-52 C-34,-36 -34,-14 -32,4 C-31,16 -28,26 -24,34 L-20,30 L-17,38 L-12,32 L-8,40 " +
+    "C-4,34 0,28 2,20 L10,-40 C6,-56 0,-64 -12,-66 Z";
+  return (
+    shape(pool, "url(#capeIn)") +
+    line("M-24,-56 C-28,-36 -29,-10 -26,14 M-18,-44 C-21,-24 -22,0 -19,22", "#4a0c0c", 0.9, 0.7) +
+    line("M-24,34 L-20,30 L-17,38 L-12,32 L-8,40", "#140202", 1.1, 0.8)
+  );
+}
+
+/** Cape slumped over the hip, hanging down the front of the waist to the floor (rig coordinates). */
+function capeFlap() {
+  const d =
+    "M-17,-38 C-19,-28 -18,-18 -15,-10 C-8,-6 4,-4 14,-3 C20,-2 25,0 29,-1 L26,-7 L31,-12 L27,-19 L31,-25 L26,-31 L29,-38 " +
+    "C20,-42 8,-46 -3,-46 C-10,-46 -15,-43 -17,-38 Z";
+  return (
+    shape(d, "url(#cape)", 1) +
+    shape("M26,-31 L31,-25 L27,-19 L31,-12 L26,-7 L29,-1 C27,-1 25,-2 24,-3 L25,-34 Z", "url(#capeIn)", 0.6) +
+    // folds hang toward the floor
+    line("M-6,-44 C4,-42 14,-38 26,-36 M-12,-30 C0,-30 12,-26 26,-22 M-12,-16 C0,-14 12,-12 25,-8", "#2a0606", 0.9, 0.7) +
+    line("M-14,-36 C-2,-36 10,-33 24,-30 M-13,-22 C-1,-21 11,-18 24,-15", "#d04444", 0.55, 0.45) +
+    line("M-17,-38 C-19,-28 -18,-18 -15,-10", "#e05050", 0.6, 0.5)
+  );
+}
 
 function fallenDamage() {
   return (
     `<ellipse cx="6" cy="-48" rx="7" ry="5" fill="url(#scorch)"/>` +
     `<ellipse cx="-11" cy="-30" rx="5" ry="3.4" fill="url(#scorch)"/>` +
-    `<ellipse cx="-22" cy="-60" rx="5" ry="4" fill="url(#scorch)"/>` +
     line("M2,-62 L5.2,-55.6 L3.6,-51.6 L8,-46 L7,-41.6", "#020306", 1, 0.95) +
     line("M5.2,-55.6 L10.6,-54 M3.6,-51.6 L-1.4,-49", "#020306", 0.7, 0.9) +
     line("M2.6,-61.4 L5.8,-55.8 L4.3,-51.8 L8.6,-46.2", "#9fb4c8", 0.35, 0.6) +
-    line("M-24,-66 L-21.4,-61.6 L-23.4,-58 M-21.4,-61.6 L-17.6,-60.6", "#020306", 0.7, 0.9) +
-    line("M-10.6,-25.4 L-6.6,-24.4 L-4.6,-25.8", "#020306", 0.6, 0.85) +
-    line("M13,4 L15.4,9 L13.6,12", "#020306", 0.6, 0.8)
+    line("M-10.6,-25.4 L-6.6,-24.4 L-4.6,-25.8", "#020306", 0.6, 0.85)
+  );
+}
+
+/** Broken plating, bolts and floor cracks around the body (world coordinates). */
+function debris() {
+  const shard = (x, y, rot, d, fill = "url(#steel)") =>
+    `<g transform="translate(${x},${y}) rotate(${rot})">${shape(d, fill, 0.8)}${line("M-2,-1.2 L2.4,-1.6", "#eaf4ff", 0.4, 0.5)}</g>`;
+  return (
+    // cracks radiating from the impact under the shoulders
+    line("M34,40 L46,44 L52,52 M46,44 L58,42 L70,46 M34,40 L28,50 L30,60 M40,42 L42,34 L50,30", "#020306", 0.9, 0.8) +
+    line("M34.6,39.4 L46.4,43.4 L52.4,51.4 M46.4,43.4 L58.2,41.4", "#3a4656", 0.35, 0.6) +
+    line("M-40,58 L-30,54 L-22,58 M-30,54 L-28,46", "#020306", 0.7, 0.7) +
+    // shed armor fragments
+    shard(62, 28, 24, "M-4,-3 L4.6,-2.4 L3,3 L-3.4,2.4 Z") +
+    shard(-62, 50, -18, "M-5,-2 L3.6,-3.4 L5,1.6 L-2,3.4 Z", "url(#steelDk)") +
+    shard(20, 66, 40, "M-3,-2.4 L3,-2 L2,2.6 L-2.6,2 Z") +
+    shard(-80, 20, 70, "M-2.4,-2 L2.8,-1.6 L2,2.2 L-2,2 Z", "url(#steelDk)") +
+    // a pauldron lame knocked loose
+    `<g transform="translate(78,50) rotate(-14)">` +
+    shape("M-8,-2.6 C-3,-4 3,-4 8,-2.6 L7.4,2.6 C3,1.4 -3,1.4 -7.4,2.6 Z", "url(#steel)", 0.9) +
+    line("M-6.4,-1.8 C-2,-2.8 2,-2.8 6.2,-1.8", "#f4faff", 0.5, 0.6) +
+    `</g>` +
+    `<g fill="#1c2733" stroke="${INK}" stroke-width=".4"><circle cx="-50" cy="62" r="1"/><circle cx="56" cy="62" r=".9"/><circle cx="-88" cy="40" r=".8"/><circle cx="88" cy="30" r=".9"/></g>`
   );
 }
 
 function fallenModel() {
-  const rig = armorRig(FALLEN, { cape: fallenCape(), damaged: true, front: "" });
+  const helm = helmet({ rot: 24, damaged: true });
+  const headTf = `transform="translate(8,2)"`;
+  const [upperArm, trappedArm] = [armoredArm(FALLEN.arms[0], -1, true), armoredArm(FALLEN.arms[1], 1, false)];
+  const [upperLeg, lowerLeg] = [armoredLeg(FALLEN.legs[0], -1), armoredLeg(FALLEN.legs[1], 1)];
+  const body =
+    trappedArm.body +
+    lowerLeg.body +
+    upperLeg.body +
+    torso() +
+    fallenDamage() +
+    pauldron(1, -4) +
+    gorget() +
+    `<g ${headTf}>${helm.body}</g>` +
+    capeFlap() +
+    upperArm.body +
+    pauldron(-1, 14);
+  const glow = lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow;
   const sparks =
-    `<g filter="url(#glow)" fill="#00e5ff"><circle cx="-4" cy="18" r="2.2"/><circle cx="58" cy="30" r="1.8"/></g>` +
-    line("M-6,14 L-2,10 M-3,17 L3,15.6 M-5,20 L-7.6,24", "#bffcff", 0.5, 0.9) +
-    line("M58,26 L61,22.4 M60,30 L64,31", "#bffcff", 0.45, 0.8) +
+    `<g filter="url(#glow)" fill="#00e5ff"><circle cx="-2" cy="12" r="2.2"/><circle cx="60" cy="30" r="1.8"/></g>` +
+    line("M-4,8 L0,4 M-1,11 L5,9.6 M-3,14 L-5.6,18", "#bffcff", 0.5, 0.9) +
+    line("M60,26 L63,22.4 M62,30 L66,31", "#bffcff", 0.45, 0.8) +
     `<g fill="#8af6ff"><circle cx="-18" cy="-6" r=".7"/><circle cx="24" cy="-10" r=".6"/><circle cx="40" cy="58" r=".7"/>` +
     `<circle cx="-44" cy="52" r=".6"/><circle cx="74" cy="4" r=".6"/></g>`;
   return {
-    box: [-104, -26, 208, 102],
+    box: [-104, -30, 208, 106],
     defs: ARMOR_DEFS,
     layers: [
-      { markup: `<ellipse cx="-4" cy="30" rx="100" ry="40" fill="url(#shade)"/>` },
-      { markup: `<g ${FALLEN_TF}>${rig.cape}${rig.body}${fallenDamage()}</g>`, anim: { type: "breathe", amp: 0.012, speed: 1.1, pivot: [0, 30] } },
-      { markup: `<g ${FALLEN_TF}>${rig.glow}</g>`, anim: { type: "flicker", min: 0.15, max: 0.7, speed: 1.4 }, blend: "lighter" },
-      { markup: `<g ${FALLEN_TF}>${rig.helmGlow}</g>`, anim: { type: "flicker", min: 0.2, max: 0.65, speed: 2.2 }, blend: "lighter" },
+      { markup: `<ellipse cx="-4" cy="50" rx="96" ry="14" fill="url(#shade)"/>${debris()}` },
+      {
+        markup: `<g ${FALLEN_TF}>${fallenCape()}${body}</g>`,
+        anim: { type: "breathe", amp: 0.01, speed: 1.1, pivot: [0, 40] },
+      },
+      { markup: `<g ${FALLEN_TF}>${glow}</g>`, anim: { type: "flicker", min: 0.15, max: 0.7, speed: 1.4 }, blend: "lighter" },
+      { markup: `<g ${FALLEN_TF}><g ${headTf}>${helm.glow}</g></g>`, anim: { type: "flicker", min: 0.2, max: 0.65, speed: 2.2 }, blend: "lighter" },
       { markup: sparks, anim: { type: "flicker", min: 0, max: 1, speed: 3.1 }, blend: "lighter" },
     ],
   };

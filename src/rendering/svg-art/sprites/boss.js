@@ -2,10 +2,10 @@
  * In-world Paradox Lord sprites, cut from the cutscene villain models so the
  * boss the player fights is the same figure the story shows.
  *
- * The cutscene model has a dozen animated layers; in-world that is regrouped
- * into six bitmaps — aura, back, left arm, right arm, front body, emissive — so
- * the arms can be posed (raised for a windup, slammed for an attack) with plain
- * canvas rotations.
+ * The cutscene model's layers are regrouped into an ordered part list: runs of
+ * static layers merge into one bitmap, while the arms (posed per attack state),
+ * the turning halo and core gear, the pendulum and the emissive layers stay
+ * separate so they keep their motion in-world.
  */
 
 import { MODELS as VILLAIN } from "../models/villain.js";
@@ -25,45 +25,42 @@ function scopeIds(markup, tag) {
 }
 
 function regroup(model) {
-  const parts = { aura: "", back: "", armL: "", armR: "", front: "", glow: "" };
-  const pivots = {};
-  let seenArm = false;
+  const parts = [];
+  let run = null;
   model.layers.forEach((layer, i) => {
     const m = scopeIds(layer.markup, i);
     const a = layer.anim;
-    const blend = layer.blend;
-    if (i === 0 && blend) {
-      parts.aura += m;
-    } else if (blend === "lighter") {
-      // Rays sit behind the body with the aura; the eye/core glow and motes go on top.
-      if (a?.type === "spin") parts.aura += m;
-      else parts.glow += m;
-    } else if (a?.type === "sway" && a.pivot && Math.abs(a.pivot[0]) > 50) {
-      const key = a.pivot[0] < 0 ? "armL" : "armR";
-      parts[key] += m;
-      pivots[key] = a.pivot;
-      seenArm = true;
-    } else {
-      parts[seenArm ? "front" : "back"] += m;
+    let role = null;
+    if (i === 0 && layer.blend) role = "aura";
+    else if (layer.blend) role = "glow";
+    else if (a?.type === "sway" && a.pivot && Math.abs(a.pivot[0]) > 50) role = a.pivot[0] < 0 ? "armL" : "armR";
+    else if (a && (a.type === "spin" || a.type === "float" || (a.type === "sway" && (a.amp ?? 0) >= 0.05))) role = "anim";
+    if (!role) {
+      if (!run) {
+        run = { role: "static", markup: "" };
+        parts.push(run);
+      }
+      run.markup += m;
+      return;
     }
+    run = null;
+    parts.push({ role, markup: m, anim: a || null, blend: layer.blend ? "lighter" : null, opacity: layer.opacity ?? 1 });
   });
-  return { parts, pivots };
+  return parts;
 }
 
 function bossModel(key, scale) {
   const model = VILLAIN[key];
-  const { parts, pivots } = regroup(model);
   const k = key === "villain_final" ? 1.1 : key === "villain_form2" ? 1.06 : 1;
   return {
     boss: true,
     box: model.box,
     defs: model.defs,
-    // Feet of the villain rig sit at y = 152 (phase-1 units, scaled by k).
+    // Feet of the villain rig sit at y ≈ 150 (phase-1 units, scaled by k).
     anchor: 150 * k,
     pivot: 150 * k,
     scale,
-    parts,
-    pivots,
+    parts: regroup(model),
   };
 }
 

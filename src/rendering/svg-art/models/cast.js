@@ -155,18 +155,13 @@ function trooperArm(c, s, arm) {
   const sh = [s * (c.S + 0.4), -59.6];
   const { el, wr, up, fo } = armJoints({ ...arm, sh }, s);
   const sleeve = capsule(polar(sh, up, -3), el, 10.8, 8.2, 1).d + capsule(el, wr, 8.2, 6.2, 0.6).d;
-  const plate = (a, b, wa, wb, bulge) => {
-    const g = capsule(a, b, wa, wb, bulge);
-    return (
-      `<path d="${g.d}" fill="url(#st)" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/>` +
-      `<path d="${g.edge(1, wa * 0.2)}" fill="none" stroke="#d6e6f4" stroke-width="0.8" opacity="${s < 0 ? 0.7 : 0.4}" stroke-linecap="round"/>` +
-      `<path d="${g.edge(-1, 0.5, 0.1, 0.9)}" fill="none" stroke="${c.rim}" stroke-width="0.7" opacity="0.7" stroke-linecap="round"/>`
-    );
-  };
   const band = lerp(el, wr, 0.3);
   let body = limbAO(sleeve, s) + merged(sleeve, "url(#su)", 1.4);
-  body += plate(polar(sh, up, 1.5), lerp(sh, el, 0.8), 11.8, 9, 1.2);
-  body += plate(lerp(el, wr, 0.12), lerp(el, wr, 0.9), 9.8, 7, 0.8);
+  // fabric shows at the inner elbow and the wrist between the plates
+  body += ribs(polar(el, up, -5), up, 7.4, 2);
+  body += ribs(polar(wr, fo, -3.6), fo, 6, 2, 1.2);
+  body += kitPlate(c, polar(sh, up, 1.5), lerp(sh, el, 0.76), c.kit === "heavy" ? 12.4 : 11.4, s);
+  body += kitPlate(c, lerp(el, wr, 0.14), lerp(el, wr, 0.78), c.kit === "heavy" ? 10.2 : 9.4, s);
   body += `<path d="M${P(polar(band, fo + 90, 4.6))} L${P(polar(band, fo - 90, 4.6))}" stroke="${c.color}" stroke-width="0.9" opacity="0.9"/>`;
   body +=
     `<g transform="${frame(el, (up + fo) / 2)}">` +
@@ -364,7 +359,8 @@ function face(p, o) {
   }
   s += mouth(o);
   if (o.rim) {
-    s += `<path d="M${r1(w - 1.8)},-8.2 C${r1(w + 0.1)},-5.6 ${r1(w + 0.2)},-1 ${r1(w - 0.2)},2.4 C${r1(jx + 0.6)},4.8 ${jx},6.6 ${r1(jx - 1.2)},8" fill="none" stroke="${o.rim}" stroke-width="0.45" stroke-linecap="round" opacity="0.85"/>`;
+    // clipped to the head so the light never spills past the jaw onto the neck
+    s += `<path d="M${r1(w - 1.8)},-8.2 C${r1(w + 0.1)},-5.6 ${r1(w + 0.2)},-1 ${r1(w - 0.2)},2.4 C${r1(jx + 0.7)},4.4 ${r1(jx + 0.4)},5.6 ${r1(jx - 0.2)},6.8" fill="none" stroke="${o.rim}" stroke-width="0.8" stroke-linecap="round" opacity="0.85" clip-path="url(#${p}hc)"/>`;
   }
   s += o.front ?? "";
   s += o.over ?? "";
@@ -532,49 +528,144 @@ function lyraModel() {
 
 // ── Squad ─────────────────────────────────────────────────────────────────
 
+/** Ribbed under-suit fabric across a limb at p: short folds perpendicular to heading `dir`. */
+function ribs(p, dir, w, n = 3, gap = 1.4) {
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const c = polar(p, dir, (i - (n - 1) / 2) * gap);
+    d += `M${P(polar(c, dir + 90, w / 2))}Q${P(polar(c, dir, 0.7))} ${P(polar(c, dir - 90, w / 2))}`;
+  }
+  return (
+    `<path d="${d}" fill="none" stroke="#020409" stroke-width="0.55" opacity="0.85" stroke-linecap="round"/>` +
+    `<path d="${d}" fill="none" stroke="#4a5c70" stroke-width="0.3" opacity="0.55" stroke-linecap="round" transform="translate(-0.3 -0.5)"/>`
+  );
+}
+
+/**
+ * Armor plate strapped along a limb from a to b, shaped by the member's kit:
+ * heavy = broad faceted slab with a ridge, light = slim strip on the outer side,
+ * utility = chamfered box with bolts and a strap, hero = rounded shell.
+ */
+function kitPlate(c, a, b, w, s, fill = "url(#st)") {
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const h = w / 2;
+  let d;
+  let detail = "";
+  let x0 = -h;
+  let x1 = h;
+  switch (c.kit) {
+    case "heavy":
+      d = `M${r1(-h)},0 L${r1(h)},0 L${r1(h * 1.05)},${r1(L * 0.6)} L${r1(h * 0.7)},${r1(L)} L${r1(-h * 0.7)},${r1(L)} L${r1(-h * 1.05)},${r1(L * 0.6)}Z`;
+      detail = `<path d="M0,${r1(L * 0.08)} L0,${r1(L * 0.94)} M${r1(-h * 0.9)},${r1(L * 0.6)} L${r1(h * 0.9)},${r1(L * 0.6)}" fill="none" stroke="${INK}" stroke-width="0.6" opacity="0.55"/>`;
+      break;
+    case "light": {
+      const o = s * h * 0.35;
+      x0 = o - h * 0.55;
+      x1 = o + h * 0.55;
+      d = `M${r1(x0)},${r1(L * 0.08)} L${r1(x1)},0 L${r1(o + h * 0.42)},${r1(L * 0.92)} L${r1(o - h * 0.42)},${r1(L)}Z`;
+      break;
+    }
+    case "utility":
+      d = `M${r1(-h + 1.2)},0 L${r1(h - 1.2)},0 L${r1(h)},1.2 L${r1(h - 0.4)},${r1(L - 1.4)} L${r1(h - 1.8)},${r1(L)} L${r1(-h + 1.8)},${r1(L)} L${r1(-h + 0.4)},${r1(L - 1.4)} L${r1(-h)},1.2Z`;
+      detail =
+        [[-1, 2], [1, 2], [-1, L - 2.2], [1, L - 2.2]].map(([k, y]) => `<circle cx="${r1(k * (h - 1.6))}" cy="${r1(y)}" r="0.55" fill="#0a0f16"/>`).join("") +
+        `<path d="M${r1(-h - 0.4)},${r1(L * 0.46)} L${r1(h + 0.4)},${r1(L * 0.46)}" stroke="#141a22" stroke-width="1.6"/>` +
+        `<path d="M${r1(-h - 0.4)},${r1(L * 0.46 - 0.6)} L${r1(h + 0.4)},${r1(L * 0.46 - 0.6)}" stroke="#56687c" stroke-width="0.35" opacity="0.7"/>`;
+      break;
+    default:
+      d = capsule([0, 0], [0, L], w, w * 0.8, 0.9).d;
+      detail = `<path d="M${r1(-h * 0.2)},${r1(L * 0.15)} L${r1(-h * 0.15)},${r1(L * 0.8)}" fill="none" stroke="#0a0f16" stroke-width="0.5" opacity="0.5"/>`;
+  }
+  return (
+    `<g transform="${frame(a, heading(a, b))}">` +
+    `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="1.1" stroke-linejoin="round"/>` +
+    detail +
+    `<path d="M${r1(x0 + 1.1)},${r1(L * 0.14)} L${r1(x0 * 0.8 + 1)},${r1(L * 0.8)}" stroke="#d6e6f4" stroke-width="0.7" opacity="${s < 0 ? 0.65 : 0.35}" stroke-linecap="round"/>` +
+    `<path d="M${r1(x1 - 0.4)},${r1(L * 0.12)} L${r1(x1 * 0.8 - 0.3)},${r1(L * 0.88)}" stroke="${c.rim}" stroke-width="0.6" opacity="0.6" stroke-linecap="round"/>` +
+    `</g>`
+  );
+}
+
+/** Squad leg: merged under-suit, kit thigh plate and greave, knee cop, ribbed fabric at the joints, boot. */
+function trooperLeg(c, s, { hip, kn, an }) {
+  const lw = c.legW ?? 0;
+  const up = heading(hip, kn);
+  const lo = heading(kn, an);
+  const tube = capsule(hip, kn, 11 + lw, 8.6 + lw, 0.8).d + capsule(kn, an, 8.8 + lw, 6.4 + lw, 0.7).d;
+  const light = c.kit === "light";
+  let body = merged(tube, "url(#su)", 1.4);
+  body += ribs(polar(kn, up, -6.6), up, 8 + lw, light ? 4 : 3);
+  body += ribs(polar(an, lo, -6.2), lo, 6.6 + lw, 2);
+  body += kitPlate(c, lerp(hip, kn, 0.16), lerp(hip, kn, 0.78), 10 + lw, s, "url(#st2)");
+  body += kitPlate(c, lerp(kn, an, 0.14), lerp(kn, an, 0.76), 8.4 + lw, s);
+  const kr = light ? 3.4 : 4.4 + lw / 3;
+  body +=
+    `<g transform="${frame(kn, lo)}">` +
+    (c.kit === "utility"
+      ? `<path d="M${r1(-kr)},${r1(-kr + 0.6)} L${r1(kr)},${r1(-kr + 0.6)} L${r1(kr)},${r1(kr - 1)} L0,${r1(kr + 0.8)} L${r1(-kr)},${r1(kr - 1)}Z" fill="url(#st)" stroke="${INK}" stroke-width="1.1" stroke-linejoin="round"/>`
+      : `<path d="M0,${r1(-kr)} C${r1(kr * 0.8)},${r1(-kr)} ${r1(kr)},${r1(-kr * 0.4)} ${r1(kr)},0.4 C${r1(kr)},${r1(kr * 0.7)} ${r1(kr * 0.5)},${r1(kr + (c.kit === "heavy" ? 1.6 : 0.4))} 0,${r1(kr + (c.kit === "heavy" ? 1.6 : 0.4))} C${r1(-kr * 0.5)},${r1(kr + (c.kit === "heavy" ? 1.6 : 0.4))} ${r1(-kr)},${r1(kr * 0.7)} ${r1(-kr)},0.4 C${r1(-kr)},${r1(-kr * 0.4)} ${r1(-kr * 0.8)},${r1(-kr)} 0,${r1(-kr)}Z" fill="url(#st)" stroke="${INK}" stroke-width="1.1"/>`) +
+    `<path d="M${r1(-kr * 0.7)},${r1(-kr * 0.3)} C${r1(-kr * 0.3)},${r1(-kr * 0.8)} ${r1(kr * 0.3)},${r1(-kr * 0.8)} ${r1(kr * 0.7)},${r1(-kr * 0.3)}" fill="none" stroke="#d6e6f4" stroke-width="0.6" opacity="0.6"/>` +
+    `</g>`;
+  const [ax] = an;
+  const bw = 3.9 + lw / 2;
+  const toe = s * 1.2;
+  body +=
+    `<path d="M${r1(ax - bw)},${r1(an[1] - 4.6)} L${r1(ax + bw)},${r1(an[1] - 4.6)} L${r1(ax + bw + 0.5)},54 L${r1(ax + bw + 0.8 + Math.max(0, toe))},58.6 L${r1(ax - bw - 0.8 + Math.min(0, toe))},58.6 L${r1(ax - bw - 0.5)},53Z" fill="url(#bt)" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<path d="M${r1(ax - bw + 0.6)},${r1(an[1] - 3.4)} L${r1(ax + bw - 0.6)},${r1(an[1] - 3.4)}" stroke="${c.color}" stroke-width="0.6" opacity="0.7"/>`;
+  return body;
+}
+
 /** An armoured squad member in the standard frame; returns back/body/glow markup. */
 function trooper(c) {
   const S = c.S;
   const st = c.stance ?? 0;
   const col = c.color;
   const P = c.pad ?? 0;
-  const lw = c.legW ?? 0;
+  const w = c.weight ?? -1;
+  const tilt = c.tilt ?? 1.5;
   const ink = `stroke="${INK}" stroke-width="1.5" stroke-linejoin="round"`;
   const fine = `stroke="${INK}" stroke-width="0.7" stroke-linejoin="round"`;
   let back = c.back ?? "";
+  let lower = "";
   let body = "";
   let glow = "";
 
+  // Weight on one leg: that hip rides up and the leg stays straight under the body;
+  // the free leg relaxes with a soft knee and the foot turned out.
+  const legs = {
+    [w]: { hip: [w * 6.6, -27.4], kn: [w * (6.8 + st * 0.3), 19], an: [w * (6 + st * 0.4), 50] },
+    [-w]: { hip: [-w * 6.6, -24.8], kn: [-w * (6.2 + st * 0.3), 20.4], an: [-w * (9.6 + st), 50.4] },
+  };
+  lower += trooperLeg(c, w, legs[w]);
+  lower += trooperLeg(c, -w, legs[-w]);
+  // Pelvis, tassets, belt, tilted with the hips.
+  let pelvis = `<path d="M-13,-35 L13,-35 L13.6,-24 C6,-20.6 -6,-20.6 -13.6,-24Z" fill="url(#su)" ${ink}/>`;
   for (const sx of [-1, 1]) {
     const X = (x) => r1(sx * x);
-    const tx = 6.6;
-    const kx = 7.4 + st * 0.6;
-    const ax = 7.2 + st;
-    body += `<path d="${limb([[X(tx), -28, 11 + lw], [X(7.2 + st * 0.3), -4, 10 + lw], [X(kx), 20, 8.4 + lw], [X(7.4 + st * 0.8), 36, 7.6 + lw], [X(ax), 50, 6.6 + lw]])}" fill="url(#su)" ${ink}/>`;
-    body += `<path d="M${X(tx - 4.6)},-23 L${X(tx + 4.8 + lw / 2)},-23 L${X(tx + 4.2 + lw / 2)},4 L${X(tx - 3.6)},6Z" fill="url(#st2)" ${fine}/>`;
-    body += `<path d="M${X(kx - 4)},22 L${X(kx + 4.2 + lw / 2)},22 L${X(ax + 3.6 + lw / 2)},47 L${X(ax - 3.2)},47Z" fill="url(#st)" ${fine}/>`;
-    body += `<path d="M${X(kx - 4.6 - lw / 2)},15.4 L${X(kx + 4.6 + lw / 2)},15.4 L${X(kx + 3.8 + lw / 2)},23.4 L${X(kx)},26 L${X(kx - 3.8 - lw / 2)},23.4Z" fill="url(#st)" ${fine}/>`;
-    body += `<path d="M${X(ax - 3.9 - lw / 2)},45.5 L${X(ax + 3.9 + lw / 2)},45.5 L${X(ax + 4.4 + lw / 2)},54 L${X(ax + 5.6 + lw / 2)},58.6 L${X(ax - 4.8 - lw / 2)},58.6 L${X(ax - 4.4 - lw / 2)},53Z" fill="url(#bt)" ${ink}/>`;
-    body += `<path d="M${X(kx - 3.4)},16.8 L${X(kx + 3.2)},16.8" fill="none" stroke="#c4d6e6" stroke-width="0.6" opacity="0.6"/>`;
+    pelvis +=
+      c.kit === "light"
+        ? `<path d="M${X(13.6)},-28.6 L${X(8)},-28.6 L${X(9)},-21 L${X(14.2)},-22.4Z" fill="url(#st2)" ${fine}/>`
+        : c.kit === "heavy"
+          ? `<path d="M${X(15.4)},-28.6 L${X(5)},-28.6 L${X(5.6)},-14.4 L${X(10.4)},-12.6 L${X(16.4)},-16.4Z" fill="url(#st2)" ${fine}/>`
+          : `<path d="M${X(14.4)},-28.6 L${X(5.6)},-28.6 L${X(6.6)},-17 L${X(15)},-19Z" fill="url(#st2)" ${fine}/>`;
   }
-  // Pelvis, tassets, belt.
-  body += `<path d="M-13,-35 L13,-35 L13.6,-24 C6,-20.6 -6,-20.6 -13.6,-24Z" fill="url(#su)" ${ink}/>`;
-  for (const sx of [-1, 1]) {
-    const X = (x) => r1(sx * x);
-    body += `<path d="M${X(14.4)},-28.6 L${X(5.6)},-28.6 L${X(6.6)},-17 L${X(15)},-19Z" fill="url(#st2)" ${fine}/>`;
-  }
-  body += `<path d="M-14,-32.4 L14,-32.4 L14,-27.6 L-14,-27.6Z" fill="#161e28" ${fine}/>`;
-  body += `<rect x="-2.6" y="-31.8" width="5.2" height="3.6" rx="0.6" fill="#0a0f16" stroke="${col}" stroke-width="0.6"/>`;
-  body += c.belt ?? "";
+  pelvis += `<path d="M-14,-32.4 L14,-32.4 L14,-27.6 L-14,-27.6Z" fill="#161e28" ${fine}/>`;
+  pelvis += `<rect x="-2.6" y="-31.8" width="5.2" height="3.6" rx="0.6" fill="#0a0f16" stroke="${col}" stroke-width="0.6"/>`;
+  pelvis += c.belt ?? "";
+  lower += `<g transform="rotate(${r1(-w * tilt)} 0 -28)">${pelvis}</g>`;
 
+  // Ribbed under-suit abdomen between the chest plate and the belt.
+  const ab = r1(S * 0.62 + 0.4);
+  body += `<path d="M${-ab},-41 L${ab},-41 L${r1(ab + 0.6)},-30.4 L${r1(-ab - 0.6)},-30.4Z" fill="url(#su)" ${ink}/>`;
+  body += ribs([0, -35.6], 0, S * 1.1, 3, 1.8);
   // Chest plate.
   const chest =
-    `M${-(S - 3)},-65 C-7,-68.6 7,-68.6 ${S - 3},-65 L${r1(S - 1.4)},-52 C${r1(S - 2.4)},-44 ${r1(S * 0.64)},-38 ${r1(S * 0.62)},-32 ` +
-    `L${r1(-S * 0.62)},-32 C${r1(-S * 0.64)},-38 ${r1(-(S - 2.4))},-44 ${r1(-(S - 1.4))},-52Z`;
+    `M${-(S - 3)},-65 C-7,-68.6 7,-68.6 ${S - 3},-65 L${r1(S - 1.4)},-52 C${r1(S - 2.4)},-45 ${r1(S * 0.66)},-41.4 ${r1(S * 0.62)},-37.6 ` +
+    `L${r1(-S * 0.62)},-37.6 C${r1(-S * 0.66)},-41.4 ${r1(-(S - 2.4))},-45 ${r1(-(S - 1.4))},-52Z`;
   body += `<path d="${chest}" fill="url(#st)" ${ink}/>`;
-  body += `<path d="M0,-67 L0,-46 M${-(S - 5)},-54 C-8,-49.6 -3,-49.6 0,-51.6 C3,-49.6 8,-49.6 ${S - 5},-54 M-7,-44.6 L7,-44.6 M-6.4,-38.6 L6.4,-38.6" fill="none" stroke="${INK}" stroke-width="0.6" opacity="0.55"/>`;
+  body += `<path d="M0,-67 L0,-46 M${-(S - 5)},-54 C-8,-49.6 -3,-49.6 0,-51.6 C3,-49.6 8,-49.6 ${S - 5},-54 M-7,-44.6 L7,-44.6" fill="none" stroke="${INK}" stroke-width="0.6" opacity="0.55"/>`;
   body += `<path d="M${-(S - 5)},-63 C-9,-65.6 -4.6,-66 -1.6,-65.8" fill="none" stroke="#d6e6f4" stroke-width="0.9" opacity="0.7" stroke-linecap="round"/>`;
-  body += `<path d="M${r1(S - 1.6)},-53 C${r1(S - 2.4)},-45 ${r1(S * 0.66)},-38.6 ${r1(S * 0.64)},-33" fill="none" stroke="${c.rim}" stroke-width="0.8" opacity="0.7"/>`;
+  body += `<path d="M${r1(S - 1.6)},-53 C${r1(S - 2.4)},-46 ${r1(S * 0.68)},-42 ${r1(S * 0.64)},-38.4" fill="none" stroke="${c.rim}" stroke-width="0.8" opacity="0.7"/>`;
   body += `<path d="M-2.4,-58.6 L2.4,-58.6 L0,-54.4Z" fill="${col}" stroke="${INK}" stroke-width="0.4"/>`;
   body += c.chest ?? "";
   // Arms over the chest edge, props in hand, then pauldrons capping the shoulders.
@@ -584,7 +675,6 @@ function trooper(c) {
   body += prop.under ?? "";
   body += arms[-1].body + arms[1].body;
   body += prop.over ?? "";
-  glow += prop.glow ?? "";
   // Pauldrons.
   for (const sx of c.pads ?? [-1, 1]) {
     const X = (x) => r1(sx * x);
@@ -592,9 +682,11 @@ function trooper(c) {
     body += `<path d="M${X(S + 5.3 + P)},-57 C${X(S + 4.8 + P)},${-53.6 + P / 3} ${X(S + 2)},${-52.4 + P / 2} ${X(S - 2)},-54.4" fill="none" stroke="${col}" stroke-width="1" opacity="0.95"/>`;
     body += `<path d="M${X(S - 4.6)},-66.4 C${X(S + 0.4)},-67.6 ${X(S + 3.4)},-65 ${X(S + 4)},-61" fill="none" stroke="#d6e6f4" stroke-width="0.7" opacity="${sx < 0 ? 0.75 : 0.35}"/>`;
   }
-  // Neck and helmet.
+  // Neck and helmet, head cocked a little.
   body += `<rect x="-3.8" y="-72" width="7.6" height="7" fill="url(#su)" ${fine}/>`;
+  body += ribs([0, -68.4], 0, 6.8, 2, 1.6);
   const hs = c.helm ?? 1;
+  const headTf = `rotate(${c.head ?? 0} 0 -70) translate(0 -81) scale(${hs}) translate(0 81)`;
   let helm = "";
   helm += `<path d="M-8.6,-80 C-9,-90 -5,-94.2 0,-94.2 C5,-94.2 9,-90 8.6,-80 C8.6,-74.4 6.5,-70.4 3.6,-68.8 L-3.6,-68.8 C-6.5,-70.4 -8.6,-74.4 -8.6,-80Z" fill="url(#hm)" ${ink}/>`;
   helm += `<path d="M-7.9,-85 C-3,-86.6 3,-86.6 7.9,-85 L7.3,-79.4 C3,-77.8 -3,-77.8 -7.3,-79.4Z" fill="#03070c" ${fine}/>`;
@@ -603,16 +695,21 @@ function trooper(c) {
   helm += `<path d="M-6,-89.6 C-3.4,-92.4 1.4,-93 4,-92.2" fill="none" stroke="#e2eef8" stroke-width="0.8" opacity="0.75" stroke-linecap="round"/>`;
   helm += `<path d="M8,-86 C8.9,-82 8.6,-77 6.4,-72.4" fill="none" stroke="${c.rim}" stroke-width="0.8" opacity="0.7"/>`;
   helm += c.helmet ?? "";
-  body += `<g transform="translate(0 -81) scale(${hs}) translate(0 81)">${helm}</g>`;
+  body += `<g transform="${headTf}">${helm}</g>`;
   body += c.front ?? "";
   body += prop.front ?? "";
 
-  glow += `<g transform="translate(0 -81) scale(${hs}) translate(0 81)"><path d="M-6.8,-83.6 C-3,-84.8 3,-84.8 6.8,-83.6 L6.5,-81.4 C3,-80.4 -3,-80.4 -6.5,-81.4Z" fill="${col}" filter="url(#gl)"/>` +
+  // Shoulders counter-tilt against the hips.
+  const upperTf = `rotate(${r1(w * tilt * 0.8)} 0 -30)`;
+  let upGlow = `<g transform="${headTf}"><path d="M-6.8,-83.6 C-3,-84.8 3,-84.8 6.8,-83.6 L6.5,-81.4 C3,-80.4 -3,-80.4 -6.5,-81.4Z" fill="${col}" filter="url(#gl)"/>` +
     `<path d="M-5.4,-83 C-2,-83.8 2,-83.8 5.4,-83" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.8"/></g>`;
-  glow += `<path d="M-2.4,-58.6 L2.4,-58.6 L0,-54.4Z" fill="${col}" filter="url(#gl)"/>`;
-  glow += `<rect x="-1.6" y="-31" width="3.2" height="2" fill="${col}" filter="url(#gl)"/>`;
-  glow += c.glow ?? "";
-  return { back, body, glow };
+  upGlow += `<path d="M-2.4,-58.6 L2.4,-58.6 L0,-54.4Z" fill="${col}" filter="url(#gl)"/>`;
+  upGlow += prop.glow ?? "";
+  upGlow += c.glow ?? "";
+  glow += `<g transform="rotate(${r1(-w * tilt)} 0 -28)"><rect x="-1.6" y="-31" width="3.2" height="2" fill="${col}" filter="url(#gl)"/></g>`;
+  glow += `<g transform="${upperTf}">${upGlow}</g>`;
+  back = `<g transform="${upperTf}">${back}</g>`;
+  return { back, body: lower + `<g transform="${upperTf}">${body}</g>`, glow };
 }
 
 function squadMembers() {
@@ -621,6 +718,10 @@ function squadMembers() {
     pad: 3,
     legW: 2,
     stance: 1.5,
+    kit: "heavy",
+    weight: -1,
+    tilt: 1.2,
+    head: 3,
     helm: 1.08,
     color: "#4488ff",
     rim: "#6aa8ff",
@@ -643,6 +744,10 @@ function squadMembers() {
   const nova = trooper({
     S: 16.5,
     stance: 3,
+    kit: "light",
+    weight: 1,
+    tilt: 3.2,
+    head: -5,
     color: "#ff4488",
     rim: "#ff6aa0",
     pads: [-1],
@@ -673,6 +778,10 @@ function squadMembers() {
   const rook = trooper({
     S: 19,
     stance: 1,
+    kit: "utility",
+    weight: 1,
+    tilt: 2.4,
+    head: 6,
     color: "#44ff88",
     rim: "#6affa4",
     back:
@@ -707,6 +816,10 @@ function squadMembers() {
   const you = trooper({
     S: 18.5,
     stance: 1.2,
+    kit: "hero",
+    weight: -1,
+    tilt: 1.4,
+    head: -2,
     color: "#00ffcc",
     rim: "#22e6ff",
     back:
@@ -1159,6 +1272,14 @@ function ariaModel() {
     `<circle cx="-12" cy="-51.2" r="1.1" fill="#8ffcff" filter="url(#agl2)"/><circle cx="-3.9" cy="-39.4" r="0.9" fill="#b4ffff" filter="url(#agl2)"/>` +
     `<circle cx="0" cy="-8" r="2" fill="#7ff6ff" filter="url(#agl2)"/>`;
   const float = { type: "float", amp: 1.2, speed: 1.1 };
+  // A smoked-glass plate behind the projection keeps it legible over bright sets.
+  const backing =
+    `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="url(#abk)" filter="url(#agl)"/>` +
+    `<path d="M-54,-86 L-67,-34 L-54,20 L54,20 L67,-34 L54,-86Z" fill="#02070c" opacity="0.55"/>` +
+    `<path d="M-23,41 L23,41 L27.4,50 L-27.4,50Z" fill="#000" opacity="0.5" filter="url(#agl)"/>`;
+  const outline =
+    `<g mask="url(#afm)" fill="none" stroke="#5ff0ff" stroke-width="2.2" stroke-linejoin="round" filter="url(#agl2)">${silhouette}</g>` +
+    `<g mask="url(#afm)" fill="none" stroke="#c8ffff" stroke-width="0.6" stroke-linejoin="round" opacity="0.9">${silhouette}</g>`;
 
   return {
     box: [-76, -96, 152, 148],
@@ -1170,6 +1291,7 @@ function ariaModel() {
       lin("ast", [[0, "#6f8aa3"], [0.4, "#3a4d61"], [1, "#141c26"]], 0, 0, 1, 0.5) +
       lin("acn", [[0, "#22e6ff", 0], [0.6, "#22e6ff", 0.07], [1, "#22e6ff", 0.26]]) +
       rad("abg", [[0, "#22e6ff", 0.16], [1, "#22e6ff", 0]]) +
+      rad("abk", [[0, "#01060b", 0.82], [0.75, "#01060b", 0.7], [1, "#01060b", 0.35]]) +
       `<linearGradient id="afg" gradientUnits="userSpaceOnUse" x1="0" y1="-2" x2="0" y2="28"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
       `<mask id="afm" maskUnits="userSpaceOnUse" x="-100" y="-120" width="200" height="200"><rect x="-100" y="-120" width="200" height="200" fill="url(#afg)"/>` +
       `<rect x="-100" y="8" width="200" height="0.8" fill="#000"/><rect x="-100" y="13" width="200" height="1.4" fill="#000"/><rect x="-100" y="18.4" width="200" height="0.8" fill="#000"/><rect x="-100" y="-26" width="200" height="0.5" fill="#000"/></mask>` +
@@ -1179,12 +1301,14 @@ function ariaModel() {
       blur("agl", 2) +
       blur("agl2", 1.2),
     layers: [
+      { markup: backing },
       { markup: `<ellipse cx="0" cy="-40" rx="76" ry="82" fill="url(#abg)"/>`, anim: { type: "pulse", min: 0.6, max: 1, speed: 1.3 } },
       { markup: cone, anim: { type: "pulse", min: 0.55, max: 1, speed: 2.1 }, blend: "lighter" },
       { markup: ring, anim: { type: "spin", speed: 0.25, pivot: [0, -52] }, blend: "lighter" },
       { markup: frame, anim: { type: "flicker", min: 0.5, max: 0.9, speed: 0.7 }, blend: "lighter" },
-      { markup: `<g mask="url(#afm)" fill="#01080e">${silhouette}</g>`, anim: float, opacity: 0.5 },
+      { markup: `<g mask="url(#afm)" fill="#01080e">${silhouette}</g>`, anim: float, opacity: 0.8 },
       { markup: figure, anim: float, blend: "lighter", opacity: 0.92 },
+      { markup: outline, anim: float, blend: "lighter", opacity: 0.85 },
       { markup: shimmer, anim: { type: "flicker", min: 0, max: 0.8, speed: 1.6 }, blend: "lighter" },
       { markup: scan, anim: { type: "drift", amp: 0.6, speed: 5 }, blend: "lighter", opacity: 0.6 },
       { markup: eyes, anim: float, blend: "lighter" },
