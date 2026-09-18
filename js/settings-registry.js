@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
   visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
   artStyle: 1, // 0=Legacy (procedural canvas art), 1=Modern (vector SVG art)
-  hudStyle: 0, // 0=Minimal (transparent pills), 1=Classic (bottom bar + portrait)
+  hudStyle: 4, // 0=Minimal, 1=Classic (bottom bar + portrait), 2=Tactical, 3=Custom, 4=Vanguard (Modern flagship; Legacy draws it as Minimal)
   hudScale: 100, // 75, 100, 125 percent
   staminaBarSize: 100, // 75, 100, 125, 150 percent
   showPortrait: true,

@@ -22,6 +22,7 @@ import {
   tutorialMenuLayout,
 } from "./layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 
 export class TouchControls {
   static init(game) {
@@ -707,6 +708,12 @@ export class TouchControls {
   }
 
   handlePauseTap(touch) {
+    // The ARIA log covers the menu: any tap closes it instead of hitting a
+    // button hidden underneath.
+    if (this.game.showAriaLog) {
+      this.game.handleKeyPress("KeyL");
+      return;
+    }
     const w = this.zones.w;
     const h = this.zones.h;
     const x = touch.clientX;
@@ -1314,7 +1321,34 @@ export class TouchControls {
   renderPauseButtons(ctx) {
     const w = this.zones.w;
     const h = this.zones.h;
+    // Buttons would draw over the ARIA log panel; offer a close hint instead.
+    if (this.game.showAriaLog) {
+      if (isModernArt()) {
+        drawButton(ctx, w / 2 - 70, h - 46, 140, 36, "Close log", "focus", UI.cyan, { size: 13 });
+      } else {
+        ctx.fillStyle = "rgba(170,200,220,0.8)";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("TAP TO CLOSE LOG", w / 2, h - 18);
+      }
+      return;
+    }
     const layout = pauseLayout(w, h, this.game.mode);
+    if (isModernArt()) {
+      for (const btn of layout.buttons) {
+        const accent = btn.index === 0 ? UI.cyan : btn.index === 3 ? UI.crimson : UI.steelHi;
+        drawButton(ctx, btn.x, btn.y, btn.w, btn.h, btn.label, btn.index === 0 ? "focus" : "idle", accent, {
+          idleAccent: btn.index === 3 ? UI.crimson : null,
+          idleColor: btn.index === 3 ? "#ff8a96" : UI.text,
+          size: layout.compact ? 11 : 13,
+        });
+      }
+      if (layout.saveBtn) {
+        const sv = layout.saveBtn;
+        drawButton(ctx, sv.x, sv.y, sv.w, sv.h, "Save", "idle", UI.green, { idleAccent: UI.green, idleColor: UI.green, size: 12 });
+      }
+      return;
+    }
 
     ctx.globalAlpha = 0.7;
     for (const btn of layout.buttons) {

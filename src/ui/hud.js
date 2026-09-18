@@ -20,6 +20,8 @@ import {
   drawModernBossNameCard,
   drawModernStageCleared,
   drawModernTimerPill,
+  renderModernTacticalPanels,
+  renderModernCustomPanels,
 } from "./hud-modern.js";
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
@@ -649,13 +651,13 @@ if (game.settings.hudStyle === 1) {
 }
 
 // Tactical HUD — sleek modern floating layout
-if (game.settings.hudStyle === 2) {
+if (game.settings.hudStyle === 2 && !isModernArt()) {
   _renderTacticalDesktopHUD(game, ctx, w, h, barH, hudFactor);
   return;
 }
 
 // Custom HUD — JSON layout driven
-if (game.settings.hudStyle === 3) {
+if (game.settings.hudStyle === 3 && !isModernArt()) {
   _renderCustomDesktopHUD(game, ctx, w, h, barH, hudFactor);
   return;
 }
@@ -683,7 +685,10 @@ const drawPill = (x, y, pw, ph, alpha = 0.55) => {
 };
 
 if (isModernArt()) {
+  // Modern Tactical/Custom share the overlay pass below (reticle, minimap, toasts).
   if (vanguard) renderVanguardPanels(game, ctx, w, h, hudFactor, _portraitState(game), _minimapState(game));
+  else if (game.settings.hudStyle === 2) renderModernTacticalPanels(game, ctx, w, h, hudFactor);
+  else if (game.settings.hudStyle === 3) renderModernCustomPanels(game, ctx, w, h, hudFactor, _portraitState(game));
   else renderModernMinimalPanels(game, ctx, w, h, hudFactor);
 } else {
 // ─── TOP-LEFT: Score / Timer / Difficulty / Meltdown info ───

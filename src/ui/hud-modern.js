@@ -856,3 +856,164 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
   }
   ctx.textAlign = "left";
 }
+
+// ─── Tactical (hudStyle 2) ──────────────────────────────────────────────────
+
+/**
+ * Floating tactical console: two angled steel wings either side of a thin
+ * arc under the reticle — vitals left, ammo right, weapon name on the arc.
+ * The shared overlays (minimap, reticle, toasts, comms) come from hud.js.
+ */
+export function renderModernTacticalPanels(game, ctx, w, h, f) {
+  const p = game.player;
+  const fs = (game.settings.fontScale || 100) / 100;
+  const cx = w / 2;
+  const cy = h - Math.round(58 * f);
+  const R = Math.round(190 * f);
+
+  drawTopLeftStack(game, ctx, fs);
+  if (game.settings.showKills) drawKillsPill(game, ctx, w, fs);
+  drawBossBar(game, ctx, w, fs);
+
+  // Tactical arc with ticks.
+  ctx.lineCap = "butt";
+  ctx.beginPath();
+  ctx.arc(cx, cy + R * 0.25, R, Math.PI * 1.2, Math.PI * 1.8);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = UI.ink;
+  ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(34,230,255,0.45)";
+  ctx.stroke();
+  for (let i = 0; i <= 12; i++) {
+    const a = Math.PI * (1.2 + (0.6 * i) / 12);
+    const r2 = R + (i % 3 === 0 ? 8 : 4);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * R, cy + R * 0.25 + Math.sin(a) * R);
+    ctx.lineTo(cx + Math.cos(a) * r2, cy + R * 0.25 + Math.sin(a) * r2);
+    ctx.strokeStyle = i % 3 === 0 ? "rgba(185,210,232,0.6)" : "rgba(143,164,184,0.35)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  const wingW = Math.round(230 * f);
+  const wingH = Math.round(50 * f);
+  const gap = Math.round(170 * f);
+  const wy = cy - wingH / 2 + 4;
+  const hpPct = Math.max(0, p.health / p.maxHealth);
+  const low = p.alive && hpPct < 0.25;
+  noteHealth(hpPct);
+
+  // Left wing: vitals.
+  const lx = Math.round(cx - gap - wingW);
+  ctx.save();
+  ctx.translate(lx + wingW, wy);
+  ctx.transform(1, 0, 0.35, 1, 0, 0);
+  drawPanel(ctx, -wingW, 0, wingW, wingH, { accent: low ? UI.crimson : UI.cyan, chamfer: 10 });
+  ctx.restore();
+  label(ctx, low ? "CRITICAL" : "VITALS", lx + 16, wy + 16, Math.round(9 * fs), low ? UI.crimson : UI.textDim);
+  number(ctx, `${Math.ceil(p.health)}`, lx + wingW - 18, wy + wingH - 12, Math.round(30 * fs), low ? "#ff5a6e" : UI.text, "right");
+  drawBar(ctx, lx + 16, wy + 24, wingW - 100, Math.round(8 * f), hpPct, healthTone(game, hpPct), {
+    segments: 10, ghost: ghostFor(hpPct), glow: low ? 0.6 : 0.2,
+  });
+  healSweep(ctx, lx + 16, wy + 24, wingW - 100, Math.round(8 * f));
+  if (p.maxShield > 0) {
+    drawBar(ctx, lx + 16, wy + 36, wingW - 100, 3, p.shield / p.maxShield, "#4f8dff", { edge: false });
+    shieldShards(ctx, lx + 16, wy + 36, wingW - 100);
+  }
+
+  // Right wing: ammo.
+  const rx = Math.round(cx + gap);
+  const wep = p.getWeaponDef();
+  const lowAmmo = p.ammo <= 10;
+  ctx.save();
+  ctx.translate(rx, wy);
+  ctx.transform(1, 0, -0.35, 1, 0, 0);
+  drawPanel(ctx, 0, 0, wingW, wingH, { accent: lowAmmo ? UI.crimson : UI.amber, chamfer: 10 });
+  ctx.restore();
+  label(ctx, lowAmmo ? "LOW AMMO" : "AMMO", rx + wingW - 16, wy + 16, Math.round(9 * fs),
+    lowAmmo ? (pulse(game, 0.01) > 0.5 ? UI.crimson : "#ff8a96") : UI.textDim, "right");
+  kickNumber(ctx, `${p.ammo}`, rx + 18, wy + wingH - 12, Math.round(30 * fs), lowAmmo ? "#ff5a6e" : "#ffe3a3", "left");
+  if (wep) {
+    ctx.fillStyle = wep.color;
+    ctx.fillRect(rx + wingW - 18, wy + 26, 3, 12);
+    label(ctx, wep.name.toUpperCase(), rx + wingW - 26, wy + 37, Math.round(10 * fs), UI.text, "right");
+  }
+
+  // Stamina / chrono under the arc.
+  const staminaPct = p.stamina / p.maxStamina;
+  const active = p.isSprinting || p.isDashing;
+  drawBar(ctx, cx - 70 * f, cy + 10, 140 * f, 4, staminaPct,
+    p.isDashing ? "#7ff6ff" : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson, { glow: active ? 0.5 : 0, edge: false });
+  const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
+  if (chronoPct > 0.005 || p.chronoActive) {
+    drawBar(ctx, cx - 50 * f, cy + 20, 100 * f, 3, chronoPct, p.chronoActive ? "#c77dff" : UI.violet, { glow: p.chronoActive ? 0.6 : 0, edge: false });
+  }
+  if (low) {
+    ctx.globalAlpha = 0.45 + 0.55 * pulse(game, 0.012);
+    drawBrackets(ctx, lx - 6, wy - 6, wingW + 12, wingH + 12, UI.crimson, 12, 2);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ─── Custom (hudStyle 3) ────────────────────────────────────────────────────
+
+function customReadout(ctx, x, y, labelText, value, accent, fs, extra) {
+  const size = Math.round(30 * fs);
+  ctx.font = uiFont(size, 800);
+  const vw = ctx.measureText(value).width;
+  const pw = Math.max(96, Math.ceil(vw + 34));
+  const ph = size + 28;
+  drawPanel(ctx, x - pw / 2, y - ph / 2, pw, ph, { accent, chamfer: 10 });
+  label(ctx, labelText, x, y - ph / 2 + 15, Math.round(9 * fs), UI.textDim, "center");
+  number(ctx, value, x, y + ph / 2 - 10, size, extra || UI.text, "center");
+  return { pw, ph };
+}
+
+/** HUD-editor layout, each element as a steel readout at its saved anchor. */
+export function renderModernCustomPanels(game, ctx, w, h, f, portraitState) {
+  const fs = (game.settings.fontScale || 100) / 100;
+  const layout = game.settings.customHudLayout;
+  const p = game.player;
+  if (!layout) {
+    const pw = Math.min(440, w - 40);
+    drawPanel(ctx, w / 2 - pw / 2, h / 2 - 50, pw, 100, { variant: "menu", accent: UI.amber, chamfer: 14 });
+    drawCaption(ctx, w / 2, h / 2 - 34, "No custom HUD configured", { size: 13, scheme: "amber", align: "center" });
+    label(ctx, "SETTINGS  ›  HUD  ›  EDIT CUSTOM HUD", w / 2, h / 2 + 22, 12, UI.textDim, "center");
+    return;
+  }
+  drawTopLeftStack(game, ctx, fs);
+  if (layout.health) {
+    const pct = Math.max(0, p.health / p.maxHealth);
+    const x = layout.health.x * w;
+    const y = layout.health.y * h;
+    const { pw, ph } = customReadout(ctx, x, y, "HEALTH", `${Math.ceil(p.health)}`, pct < 0.25 ? UI.crimson : UI.cyan, fs,
+      pct < 0.25 ? "#ff5a6e" : UI.text);
+    drawBar(ctx, x - pw / 2 + 10, y + ph / 2 + 4, pw - 20, 5, pct, healthTone(game, pct), { segments: 5, ghost: ghostFor(pct), edge: false });
+  }
+  if (layout.ammo) {
+    const x = layout.ammo.x * w;
+    const y = layout.ammo.y * h;
+    customReadout(ctx, x, y, "AMMO", `${p.ammo}`, p.ammo <= 10 ? UI.crimson : UI.amber, fs, p.ammo <= 10 ? "#ff5a6e" : "#ffe3a3");
+  }
+  if (layout.shield && p.maxShield > 0) {
+    customReadout(ctx, layout.shield.x * w, layout.shield.y * h, "SHIELD",
+      `${Math.ceil((p.shield / p.maxShield) * 100)}%`, "#4f8dff", fs, "#bfe9ff");
+  }
+  if (layout.portrait && game.settings.showPortrait) {
+    const x = layout.portrait.x * w;
+    const y = layout.portrait.y * h;
+    drawPanel(ctx, x - 66, y - 66, 132, 132, { variant: "well", accent: UI.cyan, chamfer: 12 });
+    drawPortrait(ctx, x - 60, y - 60, 120, 120, portraitState);
+  }
+  if (layout.weapons && game.settings.showWeapons) {
+    const wep = p.getWeaponDef();
+    if (wep) {
+      const x = layout.weapons.x * w;
+      const y = layout.weapons.y * h;
+      drawCaption(ctx, x, y - 10, wep.name, { size: Math.round(12 * fs), scheme: "steel", align: "center" });
+      ctx.fillStyle = wep.color;
+      ctx.fillRect(x - 20, y + 14, 40, 2);
+    }
+  }
+}

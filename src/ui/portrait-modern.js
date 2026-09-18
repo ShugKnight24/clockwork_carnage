@@ -15,8 +15,9 @@
 import { buildAgentParts } from "../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { CHARACTER_COLORS, HELMET_STYLES } from "../data/cosmetics.js";
+import { COLOR } from "./design-tokens.js";
 
-const INK = "#04060b";
+const INK = COLOR.ink;
 const BOX = [-24, -104.5, 48, 48];
 const OPEN = new Set(["wide", "mohawk"]);
 
@@ -96,7 +97,7 @@ const VISOR_STAGES = [
   `<path d="M4,-82.6 L7.2,-83.5 L7.9,-80.2 L5.7,-78.7 L3.6,-80.4 Z" fill="#020304" stroke="${INK}" stroke-width=".4"/>` +
     crack("M4,-82.6 L7.2,-83.5 L7.9,-80.2 L5.7,-78.7 L3.6,-80.4 Z", 0.3),
   crack("M-2.6,-82.4 L-1.6,-85 M1.2,-80.6 L2.6,-77.4 M-9.4,-81.8 L-10.4,-79.4 M7.9,-80.2 L10.4,-81.6", 0.32),
-  `<circle cx="5.7" cy="-81" r="1.9" fill="#ff2a4a" filter="url(#soft)" opacity=".95"/><circle cx="5.7" cy="-81" r=".6" fill="#ffd0d6"/>`,
+  `<circle cx="5.7" cy="-81" r="1.9" fill="${COLOR.crimson}" filter="url(#soft)" opacity=".95"/><circle cx="5.7" cy="-81" r=".6" fill="#ffd0d6"/>`,
 ];
 
 const SHELL_STAGES = [

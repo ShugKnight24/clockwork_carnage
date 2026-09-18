@@ -29,8 +29,8 @@ import { hudMotion as M, since, easeOut } from "./hud-motion.js";
 import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar } from "./hud-modern.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
-import { getWeaponSprite } from "../assets/loader.js";
-import { WEAPONS } from "../../js/data.js";
+import { silhouetteLayers, SILHOUETTE_BOX } from "./weapon-silhouettes.js";
+import { reticlePoint } from "../systems/aim.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -38,9 +38,6 @@ const SPAN = Math.PI * 1.5;
 const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
 const DIFF_SCHEMES = ["steel", "cyan", "amber", "crimson"];
 const CARDINALS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-
-const weaponSlug = (name) =>
-  (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 function text(ctx, str, x, y, size, color, align = "left", weight = 700, spacing = 0, mono = false) {
   ctx.font = uiFont(size, weight, mono);
@@ -274,6 +271,13 @@ function drawGauge(game, ctx, cx, cy, R, tw, portraitState, compact) {
     }
   }
 
+  if (p.chronoActive) {
+    const a = (now * 0.0035) % TAU;
+    arc(ctx, cx, cy, R + 15, 0, TAU, 2, "rgba(155,92,255,0.35)");
+    arc(ctx, cx, cy, R + 15, a, a + 1.1, 3.5, "#c77dff");
+    arc(ctx, cx, cy, R + 15, a + Math.PI, a + Math.PI + 0.5, 2.5, "rgba(199,125,255,0.6)");
+  }
+
   blitSprite(ctx, cachedSprite(ctx, `vg-gaps:${R}:${tw}`, S, S, 0, (g) => paintGaugeGaps(g, S, R, tw, compact ? 10 : 20)), bx + jolt, by, S, S);
 
   if (low) {
@@ -295,12 +299,13 @@ function drawVitalsReadout(game, ctx, x, cy, f, fs, low, compact) {
   const labelSize = Math.round((compact ? 8 : 10) * fs);
   const numY = cy + (compact ? 2 : 4);
   const flash = hk >= 0 && hk < 0.5;
-  text(ctx, low ? "CRITICAL" : "VITALS", x, numY - size - 2, labelSize,
-    low ? (Math.sin(M.now * 0.012) > 0 ? UI.crimson : "#ff8a96") : UI.textDim, "left", 700, 2);
+  const head = low ? "CRITICAL" : p.chronoActive ? "CHRONO SHIFT" : "VITALS";
+  text(ctx, head, x, numY - size - 2, labelSize,
+    low ? (Math.sin(M.now * 0.012) > 0 ? UI.crimson : "#ff8a96") : p.chronoActive ? "#d9a8ff" : UI.textDim, "left", 800, 2);
   if (p.maxShield > 0 && !compact) {
     ctx.font = uiFont(labelSize, 700);
     ctx.letterSpacing = "2px";
-    const lw = ctx.measureText(low ? "CRITICAL" : "VITALS").width;
+    const lw = ctx.measureText(head).width;
     ctx.letterSpacing = "0px";
     text(ctx, `SHIELD ${Math.ceil(p.shield)}`, x + lw + 14, numY - size - 2, labelSize, "#8cc4ff", "left", 700, 1);
   }
@@ -342,125 +347,92 @@ function drawVitalsReadout(game, ctx, x, cy, f, fs, low, compact) {
 
 // ─── Weapon block ───────────────────────────────────────────────────────────
 
-const _trim = new WeakMap();
-/** Opaque bounds of a sprite, measured once (sprites carry wide padding). */
-function trimBox(img) {
-  let b = _trim.get(img);
-  if (b) return b;
-  // Measured at 4x: the icons are 64px vectors with a faint backdrop shape.
-  const sc = 4;
-  const w = img.naturalWidth * sc;
-  const h = img.naturalHeight * sc;
-  b = [0, 0, img.naturalWidth, img.naturalHeight];
-  try {
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    const t = c.getContext("2d", { willReadFrequently: true });
-    t.drawImage(img, 0, 0, w, h);
-    const d = t.getImageData(0, 0, w, h).data;
-    let x0 = w, y0 = h, x1 = -1, y1 = -1;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (d[(y * w + x) * 4 + 3] > 90) {
-          if (x < x0) x0 = x;
-          if (x > x1) x1 = x;
-          if (y < y0) y0 = y;
-          if (y > y1) y1 = y;
-        }
-      }
-    }
-    if (x1 >= x0) b = [x0 / sc, y0 / sc, (x1 - x0 + 1) / sc, (y1 - y0 + 1) / sc];
-  } catch (_) {
-    // Tainted or undecodable: fall back to the full image.
-  }
-  _trim.set(img, b);
-  return b;
-}
-
-function paintSilhouette(g, W, H, img) {
-  const [sx, sy, sw, sh] = trimBox(img);
-  const k = Math.min((W - 6) / sw, (H - 6) / sh);
-  const iw = sw * k;
-  const ih = sh * k;
-  const ix = W - iw - 3; // right-aligned toward the ammo column
-  const iy = (H - ih) / 2;
-  const make = () => {
-    const c = document.createElement("canvas");
-    c.width = g.canvas.width;
-    c.height = g.canvas.height;
-    const t = c.getContext("2d", { willReadFrequently: true });
-    t.setTransform(g.getTransform());
-    return t;
-  };
-  // Clean copy: drop the icon's faint backdrop shape so only the gun remains.
-  // One-off pixel pass at cache time, never per frame.
-  const clean = make();
-  clean.drawImage(img, sx, sy, sw, sh, ix, iy, iw, ih);
-  try {
-    const px = clean.getImageData(0, 0, clean.canvas.width, clean.canvas.height);
-    const d = px.data;
-    for (let i = 3; i < d.length; i += 4) if (d[i] < 90) d[i] = 0;
-    clean.putImageData(px, 0, 0);
-  } catch (_) {
-    // Tainted canvas: keep the raw icon.
-  }
-  const src = clean.canvas;
-  const stamp = (t, dx, dy) => {
-    t.save();
-    t.setTransform(1, 0, 0, 1, 0, 0);
-    t.drawImage(src, dx, dy);
-    t.restore();
-  };
-  const dpr = g.getTransform().a || 1;
-  // Ink outline: the gun stamped around itself, flooded with ink.
-  const ink = make();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * TAU;
-    stamp(ink, Math.cos(a) * 1.8 * dpr, Math.sin(a) * 1.8 * dpr);
-  }
-  ink.globalCompositeOperation = "source-in";
-  ink.fillStyle = UI.ink;
-  ink.fillRect(-4, -4, W + 8, H + 8);
-  // Body: washed toward brushed steel, keeping a trace of the icon's detail.
-  const body = make();
-  stamp(body, 0, 0);
-  body.globalCompositeOperation = "source-atop";
-  const grad = body.createLinearGradient(0, iy, 0, iy + ih);
-  grad.addColorStop(0, "rgba(236,244,250,0.8)");
-  grad.addColorStop(0.5, "rgba(160,184,204,0.8)");
-  grad.addColorStop(1, "rgba(92,116,138,0.85)");
-  body.fillStyle = grad;
-  body.fillRect(-4, -4, W + 8, H + 8);
-  // Cyan rim light along the top edge (graphic-novel rim from behind-right).
-  body.globalCompositeOperation = "source-atop";
-  body.fillStyle = "rgba(34,230,255,0.35)";
-  body.fillRect(ix, iy, iw, Math.max(1.5, ih * 0.12));
-  g.save();
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.drawImage(ink.canvas, 0, 0);
-  g.drawImage(body.canvas, 0, 0);
-  g.restore();
-}
+// Weapons with a fire interval this long show a charge/pump meter between shots.
+const CYCLE_MIN_MS = 500;
+const CYCLE_LABEL = { 1: "PUMP", 3: "CHARGING", 4: "PUMP", 5: "BOLT", 7: "CHARGING" };
 
 let _slotX = -1;
+
+function drawWeaponSilhouette(ctx, wep, x, y, W, H, alpha, heat) {
+  if (!wep) return;
+  const dpr = ctx.getTransform().a || 1;
+  const k = (W / SILHOUETTE_BOX[2]) * dpr;
+  const layers = silhouetteLayers(wep.id, wep.color, k);
+  if (!layers) return;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(layers.body, x, y, W, H);
+  if (layers.glow) {
+    ctx.globalAlpha = alpha * (0.75 + 0.25 * Math.sin(M.now * 0.004));
+    ctx.drawImage(layers.glow, x, y, W, H);
+  }
+  // Sustained fire: the emissive channels run hot orange.
+  if (heat > 0.35) {
+    const hot = silhouetteLayers(wep.id, "#ff7a2a", k);
+    if (hot?.glow) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = alpha * Math.min(1, (heat - 0.35) / 0.5);
+      ctx.drawImage(hot.glow, x, y, W, H);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Thin labelled meter, right-aligned at `right`. */
+function statusMeter(ctx, right, y, labelText, pct, color, fs, flash) {
+  const bw = 64;
+  ctx.fillStyle = UI.ink;
+  ctx.fillRect(right - bw - 1, y - 5, bw + 2, 6);
+  ctx.fillStyle = "rgba(24,34,46,0.95)";
+  ctx.fillRect(right - bw, y - 4, bw, 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(right - bw, y - 4, bw * Math.max(0, Math.min(1, pct)), 4);
+  text(ctx, labelText, right - bw - 8, y, Math.round(9 * fs), flash ? "#ffffff" : color, "right", 800, 1.5);
+}
+
+function drawPickupToasts(ctx, right, bottom, fs, alignRight = true) {
+  let y = bottom;
+  const size = Math.round(11 * fs);
+  for (const t of M.toasts) {
+    const age = M.now - t.at;
+    const inK = Math.min(1, age / 200);
+    const outK = age > 2100 ? (age - 2100) / 500 : 0;
+    const h = Math.round(size * 1.65);
+    y -= h + 5;
+    ctx.globalAlpha = Math.max(0, inK * (1 - outK));
+    const dx = (1 - easeOut(inK)) * 36;
+    drawCaption(ctx, right + dx, y, t.text, { size, scheme: t.scheme, align: alignRight ? "right" : "center" });
+  }
+  ctx.globalAlpha = 1;
+  return y;
+}
 
 function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   const p = game.player;
   const wep = p.getWeaponDef();
   const ammo = p.ammo;
-  const low = ammo <= 10;
-  const numSize = Math.round((compact ? 30 : 54) * fs);
+  const sidearm = wep && wep.id === 0; // the pistol never spends ammo
+  const empty = !!wep && !sidearm && ammo < (wep.ammoPerShot || 1);
+  const low = !sidearm && ammo <= 10;
+  const numSize = Math.round((compact ? 30 : 56) * fs);
+  const blink = Math.sin(M.now * 0.012) > 0;
 
-  // Ammo count with a kick on every shot.
+  // Ammo count: kick on every shot, slow pulse when running low.
   const shot = since(M.shotAt, 160);
   const kick = shot >= 0 ? 1 - shot : 0;
+  const lowPulse = low ? 0.5 + 0.5 * Math.sin(M.now * 0.009) : 0;
   const numStr = `${ammo}`;
   ctx.font = uiFont(numSize, 800);
   const nw = ctx.measureText(numStr).width;
+  if (low && !compact) {
+    ctx.globalAlpha = 0.25 + 0.5 * lowPulse;
+    ctx.fillStyle = UI.crimson;
+    ctx.fillRect(right - nw - 6, bottom + 4, nw + 6, 2);
+    ctx.globalAlpha = 1;
+  }
   ctx.save();
   ctx.translate(right, bottom);
-  const sc = 1 + 0.12 * kick * kick;
+  const sc = 1 + 0.12 * kick * kick + 0.04 * lowPulse;
   ctx.scale(sc, sc);
   ctx.translate(0, -kick * 2);
   ctx.textAlign = "right";
@@ -468,26 +440,30 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   ctx.lineWidth = 4;
   ctx.strokeStyle = UI.ink;
   ctx.strokeText(numStr, 0, 0);
-  ctx.fillStyle = kick > 0.55 ? "#ffffff" : low ? "#ff5a6e" : "#ffe3a3";
+  ctx.fillStyle = kick > 0.55 ? "#ffffff" : empty ? UI.crimson : low ? (lowPulse > 0.5 ? "#ff5a6e" : "#ffb3be") : "#ffe3a3";
   ctx.fillText(numStr, 0, 0);
   ctx.restore();
-  if (!compact) text(ctx, low ? "LOW" : "AMMO", right - nw - 10, bottom - 2, Math.round((compact ? 8 : 10) * fs),
-    low ? (Math.sin(M.now * 0.01) > 0 ? UI.crimson : "#ff8a96") : UI.textDim, "right", 700, 2);
+
+  if (!compact) {
+    const tag = empty ? "EMPTY" : low ? "LOW AMMO" : sidearm ? "SIDEARM ∞" : "AMMO";
+    text(ctx, tag, right - nw - 12, bottom - 3, Math.round(10 * fs),
+      empty || low ? (blink ? UI.crimson : "#ff8a96") : UI.textDim, "right", 800, 2);
+  }
 
   // Round pips (last 30) with the spent round dropping out.
   if (!compact) {
     const pips = Math.min(ammo, 30);
     const pw = 3;
     const gap = 2;
-    const py = bottom + 8;
+    const py = bottom + 10;
     ctx.fillStyle = UI.ink;
     ctx.fillRect(right - 30 * (pw + gap) - 1, py - 1, 30 * (pw + gap) + 1, 9);
+    const pipColor = low ? `rgba(255,42,74,${(0.55 + 0.45 * lowPulse).toFixed(3)})` : "#ffd48a";
     for (let i = 0; i < 30; i++) {
-      const x = right - (i + 1) * (pw + gap);
-      ctx.fillStyle = i < pips ? (low ? UI.crimson : "#ffd48a") : "rgba(111,138,163,0.18)";
-      ctx.fillRect(x, py, pw, 7);
+      ctx.fillStyle = i < pips ? pipColor : "rgba(111,138,163,0.18)";
+      ctx.fillRect(right - (i + 1) * (pw + gap), py, pw, 7);
     }
-    if (shot >= 0 && ammo < 30) {
+    if (shot >= 0 && ammo < 30 && !sidearm) {
       const x = right - (pips + 1) * (pw + gap);
       ctx.globalAlpha = 1 - shot;
       ctx.fillStyle = "#fff1c8";
@@ -500,30 +476,45 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
     }
   }
 
-  // Weapon silhouette + name, sliding in after a switch.
+  // Weapon profile + name, sliding in after a switch.
   const sw = since(M.switchAt, 240);
   const slide = sw >= 0 ? easeOut(sw) : 1;
-  const W = Math.round((compact ? 78 : 150) * f);
-  const H = Math.round((compact ? 28 : 54) * f);
-  const nameSize = Math.round((compact ? 9 : 11) * fs);
-  const nameY = bottom - numSize - (compact ? 4 : 8);
-  let topY = nameY - nameSize - 4;
+  const W = Math.round((compact ? 84 : 168) * f);
+  const H = Math.round(W * (SILHOUETTE_BOX[3] / SILHOUETTE_BOX[2]));
+  const nameSize = Math.round((compact ? 9 : 12) * fs);
+  const alpha = slide * (empty ? 0.55 : 1);
   if (compact) {
-    // Phone: silhouette sits left of the count to stay out of the thumbs.
-    const sx = right - nw - 12 - Math.round(W * 0.95);
-    drawWeaponSilhouette(ctx, wep, sx + (1 - slide) * 18, bottom - H + 2, W, H, slide);
-    if (wep) text(ctx, wep.name.toUpperCase(), right, nameY + 2, nameSize, UI.text, "right", 700, 1);
+    // Phone: profile sits left of the count to stay out of the thumbs.
+    const sx = right - nw - 10 - W;
+    drawWeaponSilhouette(ctx, wep, sx + (1 - slide) * 18, bottom - H + 4, W, H, alpha, M.heat);
+    if (wep) text(ctx, wep.name.toUpperCase(), right, bottom - numSize - 2, nameSize, empty ? UI.crimson : UI.text, "right", 700, 1);
+    drawPickupToasts(ctx, right, bottom - numSize - nameSize - 8, fs * 0.85);
     return;
   }
+
+  // Status row: charge/pump meter between slow shots, else barrel heat.
+  let y = bottom - numSize - 10;
+  const fireRate = wep ? wep.fireRate / (p.fireRateMultiplier || 1) : 0;
+  const cycle = wep ? (game.time - (p.lastFireTime || 0)) / fireRate : 1;
+  if (wep && fireRate >= CYCLE_MIN_MS && cycle >= 0 && cycle < 1) {
+    statusMeter(ctx, right, y, CYCLE_LABEL[wep.id] || "CYCLE", cycle, UI.cyan, fs, false);
+    y -= 14;
+  } else if (M.heat > 0.08) {
+    const hot = M.heat > 0.7;
+    statusMeter(ctx, right, y, hot ? "HOT" : "HEAT", M.heat, hot ? UI.crimson : UI.amber, fs, hot && blink);
+    y -= 14;
+  }
+
   if (wep) {
     ctx.globalAlpha = slide;
     ctx.fillStyle = wep.color;
-    ctx.fillRect(right - 3, nameY - nameSize + 1, 3, nameSize);
-    text(ctx, wep.name.toUpperCase(), right - 10 + (1 - slide) * 18, nameY, nameSize, UI.text, "right", 700, 1.5);
+    ctx.fillRect(right - 3, y - nameSize + 1, 3, nameSize);
+    text(ctx, wep.name.toUpperCase(), right - 10 + (1 - slide) * 18, y, nameSize, empty ? "#ff8a96" : UI.text, "right", 800, 1.5);
     ctx.globalAlpha = 1;
   }
-  drawWeaponSilhouette(ctx, wep, right - W + (1 - slide) * 24, topY - H, W, H, slide);
-  topY -= H + 8;
+  y -= nameSize + 6;
+  drawWeaponSilhouette(ctx, wep, right - W + (1 - slide) * 24, y - H, W, H, alpha, M.heat);
+  y -= H + 8;
 
   // Slot chips.
   if (game.settings.showWeapons && p.weapons.length > 1) {
@@ -536,24 +527,16 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
       const x = x0 + i * (cw + 3);
       const on = i === p.currentWeapon;
       ctx.fillStyle = UI.ink;
-      ctx.fillRect(x - 1, topY - 15, cw + 2, 16);
+      ctx.fillRect(x - 1, y - 15, cw + 2, 16);
       ctx.fillStyle = on ? "rgba(34,230,255,0.22)" : "rgba(24,34,46,0.85)";
-      ctx.fillRect(x, topY - 14, cw, 14);
-      text(ctx, `${i + 1}`, x + cw / 2, topY - 3, 10, on ? "#ffffff" : UI.textDim, "center", 700);
+      ctx.fillRect(x, y - 14, cw, 14);
+      text(ctx, `${i + 1}`, x + cw / 2, y - 3, 10, on ? "#ffffff" : UI.textDim, "center", 700);
     }
     ctx.fillStyle = UI.cyan;
-    ctx.fillRect(Math.round(_slotX), topY + 2, cw, 2);
+    ctx.fillRect(Math.round(_slotX), y + 2, cw, 2);
+    y -= 22;
   }
-}
-
-function drawWeaponSilhouette(ctx, wep, x, y, W, H, alpha) {
-  if (!wep) return;
-  const img = getWeaponSprite(weaponSlug(wep.name));
-  if (!img || !img.naturalWidth) return;
-  const spr = cachedSprite(ctx, `vg-wpn:${wep.name}`, W, H, 0, (g) => paintSilhouette(g, W, H, img));
-  ctx.globalAlpha = alpha;
-  blitSprite(ctx, spr, x, y, W, H, 0);
-  ctx.globalAlpha = 1;
+  drawPickupToasts(ctx, right, y, fs);
 }
 
 // ─── Compass ────────────────────────────────────────────────────────────────
@@ -594,6 +577,18 @@ function paintTape(g, W, H) {
   g.fill();
 }
 
+let _exitMap = null;
+let _exit = null;
+/** The level exit, looked up once per map (compass fallback objective). */
+function findExit(game) {
+  if (game.mode !== "campaign") return null;
+  if (_exitMap !== game.map || (_exit && !game.entities.includes(_exit))) {
+    _exitMap = game.map;
+    _exit = game.entities.find((e) => e.type === "exit") || null;
+  }
+  return _exit;
+}
+
 function drawCompass(game, ctx, cx, y, W, compact) {
   const H = compact ? 20 : 24;
   const x0 = Math.round(cx - W / 2);
@@ -620,7 +615,7 @@ function drawCompass(game, ctx, cx, y, W, compact) {
         name === "N" ? UI.cyan : UI.text, "center", 800);
     } else {
       ctx.globalAlpha = Math.max(0, edge) ** 0.6 * 0.8;
-      ctx.fillStyle = "#8fa4b8";
+      ctx.fillStyle = UI.textDim;
       const tall = dd % 15 === 0;
       ctx.fillRect(Math.round(x), y + (tall ? 5 : 8), 1, tall ? H - 10 : H - 16);
     }
@@ -663,8 +658,11 @@ function drawCompass(game, ctx, cx, y, W, compact) {
   ctx.globalAlpha = 1;
 
   // Objective marker (clamped to the tape ends when behind).
-  const wp = game.objectiveWaypoint;
+  const exit = game.objectiveWaypoint ? null : findExit(game);
+  const wp = game.objectiveWaypoint || exit;
   if (wp) {
+    // The exit reads dim until the level is cleared, then lights up.
+    const cleared = !exit || (game.totalEnemies > 0 && game.killedEnemies >= game.totalEnemies);
     const rel = bearingTo(wp.x, wp.y);
     const clamped = Math.max(-RANGE, Math.min(RANGE, rel));
     const x = cx + clamped * ppd;
@@ -673,14 +671,17 @@ function drawCompass(game, ctx, cx, y, W, compact) {
     ctx.beginPath();
     ctx.moveTo(x, mid - r - 2); ctx.lineTo(x + r + 2, mid); ctx.lineTo(x, mid + r + 2); ctx.lineTo(x - r - 2, mid);
     ctx.fill();
-    const pulse = 0.7 + 0.3 * Math.sin(M.now * 0.008);
+    const pulse = cleared ? 0.7 + 0.3 * Math.sin(M.now * 0.008) : 0.35;
     ctx.fillStyle = `rgba(0,255,204,${pulse.toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(x, mid - r); ctx.lineTo(x + r, mid); ctx.lineTo(x, mid + r); ctx.lineTo(x - r, mid);
     ctx.fill();
     if (!compact) {
       const dist = Math.round(Math.hypot(wp.x - p.x, wp.y - p.y) * 2);
-      text(ctx, Math.abs(rel) > RANGE ? (rel < 0 ? `◀ ${dist}m` : `${dist}m ▶`) : `${dist}m`, x, y + H + 18, 10, UI.energy, "center", 700, 1);
+      const tag = exit ? `EXIT ${dist}m` : `${dist}m`;
+      ctx.globalAlpha = cleared ? 1 : 0.55;
+      text(ctx, Math.abs(rel) > RANGE ? (rel < 0 ? `◀ ${tag}` : `${tag} ▶`) : tag, x, y + H + 18, 10, UI.energy, "center", 700, 1);
+      ctx.globalAlpha = 1;
     }
   }
   if (!compact) {
@@ -696,10 +697,48 @@ function drawCompass(game, ctx, cx, y, W, compact) {
 /** Arcs around the reticle toward close hostiles that are off to the side. */
 export function drawVanguardThreatRing(game, ctx, w, h, barH = 0) {
   const p = game.player;
-  const cx = w / 2;
-  const cy = (h - barH) / 2;
+  const { x: cx, y: cy } = reticlePoint(w, h, barH, p);
   const r = Math.min(w, h - barH) * 0.16;
   ctx.lineCap = "butt";
+
+  // Chrono shift: a faint violet ring with a sweeping hand.
+  if (p.chronoActive) {
+    const a = (M.now * 0.004) % TAU;
+    ctx.globalAlpha = 0.18;
+    arc(ctx, cx, cy, r, 0, TAU, 1.5, UI.violet);
+    ctx.globalAlpha = 0.7;
+    arc(ctx, cx, cy, r, a, a + 0.9, 3, "#c77dff");
+    ctx.globalAlpha = 1;
+  }
+
+  // Hit marker: four short ticks flash on the ring; a kill snaps them in and
+  // closes a crimson ring.
+  const hit = since(M.hitMarkerAt, 220);
+  if (hit >= 0) {
+    const kill = since(M.killConfirmAt, 420);
+    const rr = r * (0.34 - 0.06 * easeOut(hit));
+    ctx.globalAlpha = 1 - hit;
+    const col = M.hitCrit ? UI.gold : "#ffffff";
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + (i * Math.PI) / 2;
+      arc(ctx, cx, cy, rr, a - 0.2, a + 0.2, 4, UI.ink);
+      arc(ctx, cx, cy, rr, a - 0.18, a + 0.18, 2, col);
+    }
+    ctx.globalAlpha = 1;
+    if (kill >= 0) {
+      ctx.globalAlpha = 1 - kill;
+      arc(ctx, cx, cy, rr + 6 * easeOut(kill), 0, TAU, 4, UI.ink);
+      arc(ctx, cx, cy, rr + 6 * easeOut(kill), 0, TAU, 2, UI.crimson);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    const kill = since(M.killConfirmAt, 420);
+    if (kill >= 0) {
+      ctx.globalAlpha = 1 - kill;
+      arc(ctx, cx, cy, r * 0.28 + 8 * easeOut(kill), 0, TAU, 2, UI.crimson);
+      ctx.globalAlpha = 1;
+    }
+  }
   for (const e of game.entities) {
     if (e.type !== "enemy" || !e.active || e.health <= 0 || e.dissolving) continue;
     const dx = e.x - p.x;

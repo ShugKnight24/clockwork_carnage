@@ -12,33 +12,14 @@
  * transform) so they stay crisp on the DPR-scaled HUD canvas.
  */
 
-export const UI = {
-  ink: "#04060b",
-  void: "#05060c",
-  navy: "#0b1422",
-  steel: "#2a3a4a",
-  steelHi: "#6f8aa3",
-  text: "#e4edf5",
-  textDim: "#8fa4b8",
-  textFaint: "#5d7185",
-  cyan: "#22e6ff",
-  energy: "#00ffcc",
-  crimson: "#ff2a4a",
-  danger: "#ff3344",
-  amber: "#ffae3a",
-  gold: "#ffd24a",
-  violet: "#9b5cff",
-  green: "#3dff8a",
-  cream: "#f3e9cf",
-  captionInk: "#1a1208",
-};
+import { COLOR, FONT, PANEL, CAPTION, KEYCAP, TITLE } from "./design-tokens.js";
 
-// System font stacks only (no web fonts ship with the game): a condensed
-// display face for labels/numbers and a tabular mono for timers.
-export const FONT_DISPLAY =
-  'Bahnschrift, "Avenir Next Condensed", "DIN Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", sans-serif';
-export const FONT_MONO =
-  '"SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace';
+/** Palette (shared with the DOM menus through design-tokens.js). */
+export const UI = COLOR;
+
+// System font stacks only (no web fonts ship with the game).
+export const FONT_DISPLAY = FONT.display;
+export const FONT_MONO = FONT.mono;
 
 const _fontCache = new Map();
 /** Cached font string, e.g. uiFont(14) → `700 14px Bahnschrift, …`. */
@@ -117,14 +98,7 @@ export function chamferPath(g, x, y, w, h, c) {
 
 // ─── Panels ─────────────────────────────────────────────────────────────────
 
-const PANEL_FILLS = {
-  // [top, mid, bottom] steel tones; alpha lets the scene read through on HUD.
-  hud: ["rgba(44,60,77,0.86)", "rgba(22,32,43,0.84)", "rgba(10,16,24,0.86)"],
-  menu: ["rgba(40,55,71,0.97)", "rgba(20,29,39,0.97)", "rgba(9,14,21,0.97)"],
-  raised: ["rgba(66,88,111,0.97)", "rgba(31,44,58,0.97)", "rgba(15,23,32,0.97)"],
-  well: ["rgba(4,7,11,0.92)", "rgba(9,14,20,0.9)", "rgba(20,29,39,0.9)"],
-  glass: ["rgba(8,14,22,0.72)", "rgba(6,10,16,0.7)", "rgba(10,16,24,0.74)"],
-};
+const PANEL_FILLS = PANEL;
 
 function paintPanel(g, w, h, variant, accent, chamfer, brackets, bar, glow) {
   const fills = PANEL_FILLS[variant] || PANEL_FILLS.hud;
@@ -342,14 +316,7 @@ export function drawBar(ctx, x, y, w, h, pct, color, opts = {}) {
 
 // ─── Text plates ────────────────────────────────────────────────────────────
 
-const CAPTION_SCHEMES = {
-  cream: { top: "#f7eed6", bottom: "#ddcca2", text: UI.captionInk },
-  crimson: { top: "#ff5068", bottom: "#b3142c", text: "#fff4f4" },
-  cyan: { top: "#7df2ff", bottom: "#12a9c6", text: "#021219" },
-  amber: { top: "#ffd48a", bottom: "#d58414", text: "#1d1004" },
-  steel: { top: "#3b4f63", bottom: "#18222e", text: UI.text },
-  violet: { top: "#c09bff", bottom: "#6a38c9", text: "#fbf7ff" },
-};
+const CAPTION_SCHEMES = CAPTION;
 
 function measureWith(font, text, spacing) {
   const m = _measureCtx();
@@ -428,8 +395,8 @@ export function drawTitle(ctx, text, cx, baselineY, size, accent = UI.cyan, opts
   const w = tw + ink * 2 + 8;
   const h = Math.round(px * 1.45);
   const pad = 12;
-  const fillTop = opts.fillTop || "#ffffff";
-  const fillBottom = opts.fillBottom || "#9fb4c7";
+  const fillTop = opts.fillTop || TITLE.fillTop;
+  const fillBottom = opts.fillBottom || TITLE.fillBottom;
   const dpr = pixelRatio(ctx);
   const c = sprite(`title:${label}:${px}:${accent}:${fillTop}:${fillBottom}`, w, h, pad, dpr, (g, sw, sh) => {
     g.font = font;
@@ -454,8 +421,8 @@ export function drawTitle(ctx, text, cx, baselineY, size, accent = UI.cyan, opts
     g.strokeText(label, bx, by);
     const grad = g.createLinearGradient(0, by - px * 0.8, 0, by);
     grad.addColorStop(0, fillTop);
-    grad.addColorStop(0.55, fillTop);
-    grad.addColorStop(0.56, fillBottom);
+    grad.addColorStop(TITLE.split, fillTop);
+    grad.addColorStop(TITLE.split + 0.01, fillBottom);
     grad.addColorStop(1, fillBottom);
     g.fillStyle = grad;
     g.fillText(label, bx, by);
@@ -487,10 +454,7 @@ export function drawKeycap(ctx, x, y, text, opts = {}) {
     g.roundRect(-1, -1, sw + 2, sh + 2, 4);
     g.fill();
     const grad = g.createLinearGradient(0, 0, 0, sh);
-    grad.addColorStop(0, "#56708a");
-    grad.addColorStop(0.12, "#34475b");
-    grad.addColorStop(0.8, "#1c2835");
-    grad.addColorStop(1, "#0d141c");
+    for (const [o, col] of KEYCAP) grad.addColorStop(o, col);
     g.fillStyle = grad;
     g.beginPath();
     g.roundRect(0.5, 0.5, sw - 1, sh - 1, 3);
