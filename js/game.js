@@ -235,7 +235,7 @@ export class Game {
     this._transitionDir = 0; // 1 = fading out, -1 = fading in
     this._transitionSpeed = 2.5; // full fade in 0.4s
     this.screenShake = 0;
-    this.hitStopFrames = 0; // Hit-stop: freeze gameplay for N frames on kills
+    this.hitStopMs = 0; // Hit-stop: freeze gameplay for N ms on kills
     this.killedEnemies = 0;
     this.totalEnemies = 0;
     this.fps = 0;
@@ -1548,7 +1548,10 @@ export class Game {
 
   update(timestamp) {
     const realDt = (timestamp - this.lastFrameTime) / 1000;
-    this.deltaTime = Math.min(0.033, realDt); // 30fps floor — prevents physics explosion
+    // 30fps floor prevents a physics explosion after a stall; the lower clamp
+    // keeps a backwards timestamp from running timers (hit-stop, cooldowns)
+    // *up* instead of down.
+    this.deltaTime = Math.min(0.033, Math.max(0, realDt));
     // Accumulate lifetime play time using unclamped real time
     this.achievementStats.totalTimePlayed += realDt;
     this.lastFrameTime = timestamp;
@@ -1600,8 +1603,10 @@ export class Game {
 
     // Hit-stop freeze — skip gameplay update but keep rendering.
     // Gives DOOM-like impact on kills: the world freezes for a beat.
-    if (this.hitStopFrames > 0) {
-      this.hitStopFrames--;
+    // Counted in ms, not frames, so the beat is the same length on a 30 fps
+    // cap and on a 144 Hz panel.
+    if (this.hitStopMs > 0) {
+      this.hitStopMs -= this.deltaTime * 1000;
       return;
     }
 

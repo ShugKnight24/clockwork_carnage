@@ -8,6 +8,11 @@ import { preloadShowroom } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
 import { initUnlockToasts } from "../src/ui/unlock-toast.js";
+import {
+  FramePacer,
+  frameCapFor,
+  qualityTargetFPS,
+} from "../src/systems/frame-pacer.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
@@ -454,21 +459,29 @@ document.addEventListener("keydown", (e) => {
 
 let prevState = null;
 let _errCount = 0;
+let _loopRecoveries = 0;
 let _lastQualityTimestamp = 0;
-let _lastRenderedTimestamp = 0;
+const pacer = new FramePacer();
+
+// rAF stops while the tab is hidden. Drop the timing history on the way back in
+// so the first frame is neither skipped by the pacer nor read as a stall.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    pacer.reset();
+    _lastQualityTimestamp = 0;
+  }
+});
 
 function gameLoop(timestamp) {
   try {
     const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
     game.update(timestamp);
-    const frameTargets = [0, 30, 60, 90, 120];
-    const target = game.settings.batterySaver ? 30 : frameTargets[game.settings.frameTarget] || 0;
-    const shouldRender = !target || !_lastRenderedTimestamp || timestamp - _lastRenderedTimestamp >= 1000 / target;
-    if (!shouldRender) {
+    const cap = frameCapFor(game.settings);
+    if (!pacer.shouldRender(timestamp, cap)) {
+      _errCount = 0;
       requestAnimationFrame(gameLoop);
       return;
     }
-    _lastRenderedTimestamp = timestamp;
 
     const updateMs = updateStart ? performance.now() - updateStart : game.deltaTime * 1000;
 
@@ -514,6 +527,10 @@ function gameLoop(timestamp) {
     }
 
     // Adaptive quality needs per-frame FPS; game.fps is a 1s HUD counter.
+    // A frame cap lowers that rate on purpose, so the target moves with the cap
+    // — otherwise Battery Saver reads as a slow machine and the render scale
+    // spirals down to the floor.
+    quality.targetFPS = qualityTargetFPS(cap, pacer.displayHz);
     const frameMs = _lastQualityTimestamp ? timestamp - _lastQualityTimestamp : 1000 / 60;
     _lastQualityTimestamp = timestamp;
     quality.recordFPS(1000 / Math.max(frameMs, 1));
@@ -539,11 +556,29 @@ function gameLoop(timestamp) {
     _errCount = 0;
   } catch (err) {
     _errCount++;
-    console.error(`[Clockwork Carnage] Frame error (${_errCount}):`, err);
-    // If errors persist for 60+ consecutive frames, stop the loop
+    // One line per burst, not one per frame — 60 identical traces a second
+    // buries whatever threw first.
+    if (_errCount === 1) console.error("[Clockwork Carnage] Frame error:", err);
+    // A second of solid failures means the current screen cannot draw itself.
+    // Bail out to the menu rather than killing the loop: a frozen canvas with a
+    // live pointer lock is unrecoverable for the player.
     if (_errCount >= 60) {
-      console.error('[Clockwork Carnage] Too many consecutive errors, halting game loop.');
-      return;
+      _errCount = 0;
+      _loopRecoveries++;
+      if (_loopRecoveries > 3) {
+        console.error("[Clockwork Carnage] Frame errors persist after recovery, halting game loop.");
+        return;
+      }
+      console.error(
+        `[Clockwork Carnage] Recovering from persistent frame errors (attempt ${_loopRecoveries}) — returning to the menu.`,
+      );
+      try {
+        document.exitPointerLock?.();
+        game.state = GameState.MODE_SELECT;
+        pacer.reset();
+      } catch (recoveryErr) {
+        console.error("[Clockwork Carnage] Recovery failed:", recoveryErr);
+      }
     }
   }
 

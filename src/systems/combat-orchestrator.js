@@ -222,7 +222,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     game.glitchEffect = 0.3;
     onEnemyKill(game, enemy);
     // Hit-stop — freeze gameplay for a beat on kills (DOOM-like impact)
-    game.hitStopFrames = Math.max(game.hitStopFrames || 0, (isCrit || isHead) ? 5 : 3);
+    game.hitStopMs = Math.max(game.hitStopMs || 0, (isCrit || isHead) ? 84 : 50);
     // Gamepad haptics — kill
     game.gamepad?.vibrateMedium?.();
 
