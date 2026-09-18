@@ -108,6 +108,17 @@ export const MAX_RAYCAST_DIST = 10;
 export const COMPACT_PHONE_HEIGHT = 420;
 
 // ============================================================================
+// TUTORIAL
+// ============================================================================
+
+/**
+ * Step index of the post-training sandbox. It is one past the last step that
+ * has a card in `tutorialStepCopy`, so the overlay draws nothing there and the
+ * completion menu takes over.
+ */
+export const TUTORIAL_SANDBOX_STEP = 18;
+
+// ============================================================================
 // BUILDER MODE
 // ============================================================================
 

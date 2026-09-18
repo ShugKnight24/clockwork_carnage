@@ -5,6 +5,7 @@
 // Callers: game._inputKeyDown() → game.handleKeyPress() → dispatchKeyPress(game, code, e).
 
 import { GameState } from "../types.js";
+import { TUTORIAL_SANDBOX_STEP } from "../constants.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
@@ -250,7 +251,7 @@ export function dispatchKeyPress(game, code, e) {
 
   if (game.state === GameState.PLAYING) {
     // Tutorial sandbox — ESC/Q returns to title, C starts campaign
-    if (game.mode === "tutorial" && game.tutorialStep === 18) {
+    if (game.mode === "tutorial" && game.tutorialStep === TUTORIAL_SANDBOX_STEP) {
       if (code === "Escape" || code === "KeyQ") {
         game.audio.menuConfirm();
         game.executeTutorialMenuChoice(3); // Main menu
@@ -264,7 +265,7 @@ export function dispatchKeyPress(game, code, e) {
     }
 
     // Tutorial (non-sandbox steps): ESC pauses (same as normal gameplay)
-    if (game.mode === "tutorial" && game.tutorialStep < 18) {
+    if (game.mode === "tutorial" && game.tutorialStep < TUTORIAL_SANDBOX_STEP) {
       if (code === "Escape") {
         const now = performance.now();
         if (now - game.lastEscTime < 200) return;

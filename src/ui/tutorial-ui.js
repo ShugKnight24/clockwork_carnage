@@ -187,7 +187,7 @@ function drawFooterHint(ctx, w, h, text) {
  * Copy chosen to feel like a movie: ARIA narrates, sometimes the supervisor
  * cuts in. Mobile alternatives respect touch verbs.
  */
-function tutorialStepCopy(isMobile) {
+export function tutorialStepCopy(isMobile) {
   return [
     null, // step 0 handled separately (HUD boot)
     {

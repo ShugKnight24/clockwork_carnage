@@ -9,6 +9,7 @@ import { TUTORIAL_MAP } from "./data.js";
 import { Enemy, Pickup, Prop } from "./entities.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
+import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 
 export class TutorialSystem {
   constructor(game) {
@@ -347,11 +348,11 @@ export class TutorialSystem {
           g.checkAchievements();
           this.originPlayed = true;
           g.audio.stopMusic();
-          this.advanceStep(); // → step 18 (sandbox + completion menu)
+          this.advanceStep(); // into the sandbox + completion menu
         }
         break;
 
-      case 18: // Post-Creator Sandbox
+      case TUTORIAL_SANDBOX_STEP: // Post-Creator Sandbox
         {
           if (!this.sandboxInit) {
             this.sandboxInit = true;
@@ -417,8 +418,8 @@ export class TutorialSystem {
     const g = this.game;
     this.showCompletionMenu = false;
     switch (choice) {
-      case 0: // Continue Training (sandbox step 18)
-        this.step = 18;
+      case 0: // Continue Training — back into the sandbox step
+        this.step = TUTORIAL_SANDBOX_STEP;
         this.stepTime = performance.now();
         this.sandboxInit = false;
         g.state = GameState.PLAYING;
