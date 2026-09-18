@@ -6,6 +6,7 @@
 
 import { GameState } from "../types.js";
 import { isModernArt } from "../rendering/art-style.js";
+import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES } from "../ui/character-creator.js";
@@ -205,13 +206,11 @@ export function dispatchKeyPress(game, code, e) {
     // Navigate items within category
     if (code === "ArrowUp" || code === "KeyW") {
       let next = (game.character[curCat.key] - 1 + itemLen) % itemLen;
-      // Skip locked loadouts (LOADOUT category — index lookup is brittle to
-      // CREATOR_CATEGORIES reorders, so name-check instead).
-      if (curCat.name === "LOADOUT") {
-        for (let tries = 0; tries < itemLen; tries++) {
-          if (curCat.data[next].unlocked !== false) break;
-          next = (next - 1 + itemLen) % itemLen;
-        }
+      // Skip options that are still locked (classes, tiered gear).
+      const unlockCtx = gameUnlockContext(game);
+      for (let tries = 0; tries < itemLen; tries++) {
+        if (isUnlocked(curCat.key, next, unlockCtx)) break;
+        next = (next - 1 + itemLen) % itemLen;
       }
       game.character[curCat.key] = next;
       game.audio.menuSelect();
@@ -219,12 +218,10 @@ export function dispatchKeyPress(game, code, e) {
     }
     if (code === "ArrowDown" || code === "KeyS") {
       let next = (game.character[curCat.key] + 1) % itemLen;
-      // Skip locked loadouts
-      if (curCat.name === "LOADOUT") {
-        for (let tries = 0; tries < itemLen; tries++) {
-          if (curCat.data[next].unlocked !== false) break;
-          next = (next + 1) % itemLen;
-        }
+      const unlockCtx = gameUnlockContext(game);
+      for (let tries = 0; tries < itemLen; tries++) {
+        if (isUnlocked(curCat.key, next, unlockCtx)) break;
+        next = (next + 1) % itemLen;
       }
       game.character[curCat.key] = next;
       game.audio.menuSelect();

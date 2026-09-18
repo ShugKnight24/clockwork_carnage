@@ -311,6 +311,7 @@ export class CampaignManager {
 
     this.level++;
     g.achievementStats.totalCampaignLevels++;
+    g.achievementStats.campaignLevelsCleared = Math.max(g.achievementStats.campaignLevelsCleared || 0, this.level);
     g.saveAchievements();
 
     if (this.level >= CAMPAIGN_LEVELS.length) {

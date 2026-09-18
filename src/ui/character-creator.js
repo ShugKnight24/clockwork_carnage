@@ -13,6 +13,7 @@ import {
   BACKSTORIES,
   VOICE_PROFILES,
 } from "../../js/data.js";
+import { unlockState } from "../systems/unlocks.js";
 
 // ── Shared category definitions (used by render + click handler) ──
 
@@ -678,6 +679,7 @@ export function renderCharacterCreator(
   creatorCategory,
   character,
   isTouchDevice,
+  unlockCtx = null,
 ) {
   const now = performance.now();
   const cat = creatorCategory;
@@ -961,8 +963,8 @@ export function renderCharacterCreator(
     ctx.textAlign = "left";
     ctx.fillText(item.name, labelX, iy + 22);
 
-    // Lock icon for locked loadouts (LOADOUT category only)
-    if (curCat.key === "loadoutIndex" && item.unlocked === false) {
+    // Lock icon for anything still locked (loadouts, tiered gear)
+    if (unlockCtx && !unlockState(curCat.key, i, unlockCtx).unlocked) {
       ctx.fillStyle = "rgba(255,100,100,0.6)";
       ctx.font = "10px monospace";
       ctx.fillText("\uD83D\uDD12", listX + L.listW - 28, iy + 22);
@@ -1167,7 +1169,7 @@ export function renderCharacterCreator(
       if (b.maxStamina != null) {
         drawStatBar("MAX STAMINA", b.maxStamina, 150, "#4488ff");
       }
-      if (loadout.unlocked === false) {
+      if (unlockCtx && !unlockState("loadoutIndex", char.loadoutIndex, unlockCtx).unlocked) {
         ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
         ctx.font = "bold 12px monospace";
         ctx.fillText("LOCKED", infoX + 12, by + 10);
@@ -1194,6 +1196,27 @@ export function renderCharacterCreator(
       ctx.fillText("DARK", infoX + 12, sy);
       ctx.fillStyle = palette.dark;
       ctx.fillRect(infoX + 12, sy + 4, 40, 16);
+    }
+  }
+
+  // Locked options in this category, with how to earn them
+  if (!isMobile && unlockCtx && curCat.key) {
+    const infoX = L.contentX + L.listW + L.contentGap + L.previewW + L.contentGap;
+    const locked = items
+      .map((it, i) => ({ it, st: unlockState(curCat.key, i, unlockCtx) }))
+      .filter((e) => !e.st.unlocked);
+    let ly = L.contentY + listH - 14 - (locked.length - 1) * 30;
+    ctx.textAlign = "left";
+    for (const { it, st } of locked) {
+      ctx.fillStyle = "rgba(255,100,100,0.7)";
+      ctx.font = "bold 10px monospace";
+      ctx.fillText(`\uD83D\uDD12 ${it.name}`, infoX + 12, ly - 12);
+      ctx.fillStyle = "rgba(180,200,220,0.55)";
+      ctx.font = "9px monospace";
+      let hint = st.hint;
+      while (hint.length > 4 && ctx.measureText(hint).width > L.infoW - 24) hint = hint.slice(0, -2);
+      ctx.fillText(hint === st.hint ? hint : `${hint}\u2026`, infoX + 12, ly);
+      ly += 30;
     }
   }
 

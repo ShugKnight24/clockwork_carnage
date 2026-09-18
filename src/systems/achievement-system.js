@@ -42,13 +42,26 @@ export class AchievementSystem {
       totalSecretsFound: 0,
       totalCampaignLevels: 0,
       totalGamesPlayed: 0,
+      // Unlock progression (src/systems/unlocks.js)
+      weaponKills: {}, // weapon id → kills
+      campaignLevelsCleared: 0, // campaign levels cleared in order (high-water mark)
     };
+    this._lastProgressEmit = 0;
   }
 
   // ── Persistence ────────────────────────────────────────
 
   save() {
     Save.saveAchievements(this.unlockedAchievements, this.achievementStats);
+    this.emitProgress();
+  }
+
+  /** Tell listeners (unlock toast) that progression may have changed. */
+  emitProgress() {
+    this._lastProgressEmit = typeof performance !== "undefined" ? performance.now() : 0;
+    if (typeof window !== "undefined" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("cc:progress"));
+    }
   }
 
   load() {
@@ -76,6 +89,9 @@ export class AchievementSystem {
       if (ach.check(this.achievementStats)) this.unlockAchievement(id);
     }
     const now = performance.now();
+    // Kills and dashes change stats every frame without saving; a cheap
+    // once-a-second nudge lets unlocks be announced as they are earned.
+    if (now - this._lastProgressEmit > 1000) this.emitProgress();
     if (!this._lastStatsSave || now - this._lastStatsSave > 30000) {
       this._lastStatsSave = now;
       this.save();

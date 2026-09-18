@@ -7,6 +7,7 @@ import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
+import { initUnlockToasts } from "../src/ui/unlock-toast.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
@@ -34,6 +35,7 @@ game.applyPerformanceSettings();
 // title is up so a campaign never opens on a blank (or Legacy) creator frame.
 injectDesignTokens();
 preloadShowroom(game);
+initUnlockToasts(game);
 onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });

@@ -11,6 +11,7 @@ import {
   getCreatorLayout,
 } from "../ui/character-creator.js";
 import { isCompactPhone } from "../../js/layout.js";
+import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import {
   getSettingsForCategory,
   getVisibleCategories,
@@ -61,7 +62,7 @@ export function handleCreatorClick(game, e) {
       if (idx >= items.length) break;
       const iy = L.contentY + 8 + vi * L.itemH;
       if (my >= iy && my <= iy + L.itemH) {
-        if (curCat.name === "LOADOUT" && items[idx].unlocked === false) return;
+        if (!isUnlocked(curCat.key, idx, gameUnlockContext(game))) return;
         game.character[curCat.key] = idx;
         return;
       }

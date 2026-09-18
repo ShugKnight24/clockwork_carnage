@@ -133,6 +133,22 @@ export const SHOULDER_STYLES = [
   { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3 },
 ];
 
+/**
+ * Unlock rules for tiered gear (armor, helmet, visor, shoulders). Tier 1 is
+ * standard issue. Rule shapes are evaluated in src/systems/unlocks.js.
+ */
+export const TIER_UNLOCKS = {
+  2: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
+  3: {
+    type: "anyOf",
+    label: "Clear Act 1 or survive arena round 5",
+    rules: [
+      { type: "campaignLevels", count: 3, label: "Clear Act 1", unit: "levels" },
+      { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
+    ],
+  },
+};
+
 export const BADGES = [
   { id: "none", name: "None", icon: null },
   { id: "shield", name: "Temporal Shield", icon: "shield" },
@@ -158,7 +174,6 @@ export const LOADOUT_CLASSES = [
     id: "recruit",
     name: "Recruit",
     desc: "Balanced starter",
-    unlocked: true,
     startWeapons: [0],
     bonuses: {},
   },
@@ -166,7 +181,8 @@ export const LOADOUT_CLASSES = [
     id: "gunslinger",
     name: "Gunslinger",
     desc: "Fast hands, light feet",
-    unlocked: false,
+    // Earned with the sidearms every agent starts with.
+    unlock: { type: "weaponKills", weapons: [0, 6], count: 40, label: "Score 40 pistol kills", unit: "kills" },
     startWeapons: [0, 1],
     bonuses: { fireRateMultiplier: 0.9 },
   },
@@ -174,7 +190,7 @@ export const LOADOUT_CLASSES = [
     id: "enforcer",
     name: "Enforcer",
     desc: "Heavy armor, heavy hits",
-    unlocked: false,
+    unlock: { type: "campaignLevels", count: 3, label: "Clear Act 1 of the campaign", unit: "levels" },
     startWeapons: [0],
     bonuses: { maxHealth: 125, moveSpeed: -0.3 },
   },
@@ -182,7 +198,7 @@ export const LOADOUT_CLASSES = [
     id: "phantom",
     name: "Phantom",
     desc: "Speed demon",
-    unlocked: false,
+    unlock: { type: "dashes", count: 50, label: "Dash 50 times", unit: "dashes" },
     startWeapons: [0],
     bonuses: { moveSpeed: 0.5, maxStamina: 130 },
   },

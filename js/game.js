@@ -148,6 +148,7 @@ import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
+import { gameUnlockContext } from "../src/systems/unlocks.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -1260,6 +1261,7 @@ export class Game {
       this.creatorCategory,
       this.character,
       this.isTouchDevice,
+      gameUnlockContext(this),
     );
   }
 

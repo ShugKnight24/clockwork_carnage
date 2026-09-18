@@ -5,6 +5,7 @@ import {
   buildRifleSvg,
 } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
+import { gameUnlockContext, unlockState, LOCKABLE } from "../../src/systems/unlocks.js";
 import {
   ARMOR_STYLES,
   BACKSTORIES,
@@ -50,13 +51,6 @@ const FIELDS = Object.keys(DEFAULT_CHARACTER);
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const OPEN_HELMETS = new Set(["wide", "mohawk"]);
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
-
-// No unlock progression exists for classes yet; the hint says how they are gated.
-const LOCK_HINTS = {
-  gunslinger: "Requires Bureau marksman clearance",
-  enforcer: "Requires Enforcer division transfer",
-  phantom: "Requires Rift-runner certification",
-};
 
 const PRESETS = [
   { name: "Regulation", ch: { colorIndex: 0, skinToneIndex: 0, hairIndex: 1, eyeIndex: 1, armorIndex: 0, helmetIndex: 0, visorIndex: 0, shoulderIndex: 1, badgeIndex: 3, weaponSkinIndex: 0 } },
@@ -431,6 +425,19 @@ svg { display: block; }
 .lock { font-size: var(--cc-type-micro); padding: 2px 6px 1px; gap: 4px; letter-spacing: 0.5px; box-shadow: 2px 2px 0 var(--cc-ink); }
 .lock svg { width: 12px; height: 12px; flex: none; }
 .opt.locked { cursor: not-allowed; }
+.lockbadge { position: absolute; top: 3px; right: 3px; z-index: 3; display: grid; place-items: center; width: 17px; height: 17px; color: var(--cc-caption-amber-text);
+  background: var(--cc-caption-amber); border: 1px solid var(--cc-ink); box-shadow: 1px 1px 0 var(--cc-ink); }
+.lockbadge svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+/* Unlock requirements under a section: lock, requirement, progress. */
+.lockinfo { display: grid; gap: 6px; margin-top: 8px; }
+.lockrow { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; font: 600 var(--cc-type-label)/1.25 var(--cc-font); color: var(--cc-text-dim); }
+.lockrow .lock { grid-row: span 2; align-self: start; }
+.lockrow .bar { height: 5px; }
+.lockrow .bar i { background: var(--cc-amber); }
+.card .lockprog { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-top: 4px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-amber); text-transform: uppercase; }
+.card .lockprog .bar i { background: var(--cc-amber); }
+.preset.locked .pthumb svg { filter: saturate(0.2) brightness(0.6); }
+.preset .lockbadge { top: auto; bottom: 2px; right: 2px; }
 .opt.shake { animation: shake 0.36s; }
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 .rifle-hero { margin: 0 0 10px; height: 92px; perspective: 700px; display: grid; place-items: center;
@@ -725,6 +732,7 @@ class AgentShowroom extends HTMLElement {
   }
 
   open() {
+    this._unlockCtx = null;
     this.isOpen = true;
     this.setAttribute("open", "");
     requestAnimationFrame(() => this.setAttribute("shown", ""));
@@ -1054,11 +1062,12 @@ class AgentShowroom extends HTMLElement {
     const sec = this.sectionFor(key);
     const item = sec?.data?.[idx];
     if (!item) return;
-    if (item.unlocked === false) {
+    const st = unlockState(key, idx, this.unlockCtx());
+    if (!st.unlocked) {
       el?.classList.remove("shake");
       void el?.offsetWidth;
       el?.classList.add("shake");
-      this.toast(`${item.name} locked · ${LOCK_HINTS[item.id] || "Classified"}`);
+      this.toast(`${item.name} locked · ${st.hint}`);
       this.sfx("menuNav");
       return;
     }
@@ -1125,17 +1134,39 @@ class AgentShowroom extends HTMLElement {
       if (Math.random() < 0.6) next.weaponSkinIndex = 1;
     }
     if (SKIN_TONES[next.skinToneIndex].id === "synthetic" && Math.random() < 0.7) next.eyeIndex = Math.random() < 0.5 ? 5 : 1;
-    const unlocked = LOADOUT_CLASSES.map((c, i) => (c.unlocked === false ? -1 : i)).filter((i) => i >= 0);
-    if (unlocked.length > 1) next.loadoutIndex = unlocked[r(unlocked.length)];
+    // Only what the agent has earned: re-roll locked picks from the unlocked set.
+    const ctx = this.unlockCtx();
+    for (const key of Object.keys(LOCKABLE)) {
+      const open = LOCKABLE[key].table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
+      if (key === "loadoutIndex") next.loadoutIndex = open[r(open.length)] ?? this.character.loadoutIndex;
+      else if (!open.includes(next[key])) next[key] = open[r(open.length)] ?? 0;
+    }
     this.commit(next);
     this.sfx("menuConfirm");
     this.flashStage();
     this.announce("Randomized appearance");
   }
 
+  /** First locked piece of a preset, or null when the agent can wear all of it. */
+  presetLock(i) {
+    const ctx = this.unlockCtx();
+    for (const [key, idx] of Object.entries(PRESETS[i].ch)) {
+      if (!LOCKABLE[key]) continue;
+      const st = unlockState(key, idx, ctx);
+      if (!st.unlocked) return st;
+    }
+    return null;
+  }
+
   applyPreset(i) {
     const p = PRESETS[i];
     if (!p) return;
+    const lock = this.presetLock(i);
+    if (lock) {
+      this.toast(`${p.name} locked · ${lock.hint}`);
+      this.sfx("menuNav");
+      return;
+    }
     this.commit({ ...p.ch });
     this.sfx("menuConfirm");
     this.flashStage();
@@ -1447,12 +1478,26 @@ class AgentShowroom extends HTMLElement {
   }
 
   renderPresets() {
-    if (this._presetsBuilt) return;
-    this._presetsBuilt = true;
     this.el.presets.querySelectorAll(".preset").forEach((btn, i) => {
-      const ch = { ...DEFAULT_CHARACTER, ...PRESETS[i].ch };
-      btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat" });
+      if (!this._presetsBuilt) {
+        const ch = { ...DEFAULT_CHARACTER, ...PRESETS[i].ch };
+        btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat" });
+      }
+      const lock = this.presetLock(i);
+      btn.classList.toggle("locked", !!lock);
+      btn.setAttribute("aria-label", `Apply ${PRESETS[i].name} preset${lock ? `. Locked: ${lock.hint}` : ""}`);
+      btn.title = lock ? lock.hint : "";
+      const thumb = btn.querySelector(".pthumb");
+      thumb.querySelector(".lockbadge")?.remove();
+      if (lock) thumb.insertAdjacentHTML("beforeend", `<span class="lockbadge" aria-hidden="true">${I.lock}</span>`);
     });
+    this._presetsBuilt = true;
+  }
+
+  /** Unlock context, refreshed each time the showroom opens. */
+  unlockCtx() {
+    if (!this._unlockCtx) this._unlockCtx = gameUnlockContext(this.game, { fresh: true });
+    return this._unlockCtx;
   }
 
   renderPreviewLabels() {
@@ -1492,13 +1537,33 @@ class AgentShowroom extends HTMLElement {
     }
     const items = s.data.map((item, i) => this.optionHtml(s, item, i)).join("");
     const extra = s.kind === "rifle" ? `<div class="rifle-hero" aria-hidden="true"><div class="spin"></div></div>` : "";
-    return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}<div class="grid ${s.kind}" role="radiogroup" aria-label="${s.title}">${items}</div></div>`;
+    return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}<div class="grid ${s.kind}" role="radiogroup" aria-label="${s.title}">${items}</div>${this.lockInfoHtml(s)}</div>`;
+  }
+
+  /** Requirement rows for locked tiles (cards carry their own). One row per distinct rule. */
+  lockInfoHtml(s) {
+    if (!LOCKABLE[s.key] || s.kind === "class") return "";
+    const ctx = this.unlockCtx();
+    const rows = new Map();
+    s.data.forEach((item, i) => {
+      const st = unlockState(s.key, i, ctx);
+      if (st.unlocked) return;
+      const row = rows.get(st.hint) || { st, names: [] };
+      row.names.push(item.name);
+      rows.set(st.hint, row);
+    });
+    if (!rows.size) return "";
+    const html = [...rows.values()]
+      .map(({ st, names }) => `<div class="lockrow"><span class="lock caption amber">${I.lock}${esc(names.join(", "))}</span><span>${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></div>`)
+      .join("");
+    return `<div class="lockinfo">${html}</div>`;
   }
 
   optionHtml(s, item, i) {
-    const locked = item.unlocked === false;
+    const st = LOCKABLE[s.key] ? unlockState(s.key, i, this.unlockCtx()) : null;
+    const locked = !!st && !st.unlocked;
     const attrs = `class="opt plate${s.kind === "origin" || s.kind === "voice" || s.kind === "class" ? " card" : ""}${locked ? " locked" : ""}" role="radio" aria-checked="false" data-key="${s.key}" data-idx="${i}" tabindex="-1"`;
-    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${LOCK_HINTS[item.id] || "classified"}` : ""}`;
+    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
     const tick = `<span class="tick" aria-hidden="true">${I.check}</span>`;
     const tier = item.tier ? `<span class="tier" aria-hidden="true">${[1, 2, 3].map((t) => `<i class="${t <= item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
     switch (s.kind) {
@@ -1524,13 +1589,16 @@ class AgentShowroom extends HTMLElement {
             return `<span>${st.label}</span><span class="bar"><i style="--w:${pct(st.value)}"></i></span><b class="${cls}">${fmt(st.value)}</b>`;
           })
           .join("");
-        const lock = locked ? `<span class="lock caption amber">${I.lock}${esc(LOCK_HINTS[item.id] || "Classified")}</span>` : "";
-        return `<button ${attrs} aria-label="${esc(label)}" aria-disabled="${locked}">${tick}<span class="row"><span class="oname">${esc(item.name)}</span>${lock}</span><span class="desc">${esc(item.desc)}</span><span class="stats" aria-hidden="true">${stats}</span></button>`;
+        const lock = locked ? `<span class="lock caption amber">${I.lock}Locked</span>` : "";
+        const prog = locked
+          ? `<span class="lockprog"><span>${esc(st.hint)}</span><span class="bar" style="width:70px" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></span>`
+          : "";
+        return `<button ${attrs} aria-label="${esc(label)}" aria-disabled="${locked}">${tick}<span class="row"><span class="oname">${esc(item.name)}</span>${lock}</span><span class="desc">${esc(item.desc)}</span>${prog}<span class="stats" aria-hidden="true">${stats}</span></button>`;
       }
       case "rifle":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="thumb" data-thumb="rifle"></span><span class="oname">${esc(item.name)}</span></button>`;
       default:
-        return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}</button>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : ""}>${tick}${locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : ""}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}</button>`;
     }
   }
 

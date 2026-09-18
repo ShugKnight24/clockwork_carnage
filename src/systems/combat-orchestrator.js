@@ -258,6 +258,14 @@ export function onEnemyKill(game, enemy) {
 
   game.triggerAriaOnce("firstKill", "firstKill");
 
+  // Per-weapon kills feed class unlocks (e.g. Gunslinger: pistol kills).
+  const weaponId = game.player.weapons?.[game.player.currentWeapon];
+  const stats = game.achievementStats;
+  if (weaponId != null && stats) {
+    if (!stats.weaponKills || typeof stats.weaponKills !== "object") stats.weaponKills = {};
+    stats.weaponKills[weaponId] = (stats.weaponKills[weaponId] || 0) + 1;
+  }
+
   // Echo clone spawning
   if (enemy?.def?.echoCloneOnDeath && enemy.def.cloneCount) {
     const clones = enemy.def.cloneCount || 1;
