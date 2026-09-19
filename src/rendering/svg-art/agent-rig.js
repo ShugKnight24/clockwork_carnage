@@ -1066,6 +1066,91 @@ function gear(c, pose) {
       });
       break;
     }
+    case "breacher": {
+      // Ram slung on the back and a shield plate on the off arm. Both sit
+      // outboard of the torso, where the Enforcer's pack reads, or the
+      // pauldrons swallow them.
+      back +=
+        line("M-30.6,-63 L-19.4,-8", INK, 5.4) +
+        line("M-30.6,-63 L-19.4,-8", "#4a5058", 3.4) +
+        shape("M-33.8,-66.4 L-25.6,-68.2 L-23.2,-56.6 L-31.4,-54.8 Z", "url(#steelDk)", 1.1) +
+        line("M-32.2,-63.6 L-26,-65", AMBER, 0.9, 0.9) +
+        line("M-31.4,-59.6 L-25.2,-61", AMBER, 0.9, 0.7);
+      // Charges across the chest rig, bigger and evenly spaced.
+      front +=
+        [-11.4, -2.9, 5.6].map((x) =>
+          shape(`M${f(x)},-40 L${f(x + 5.8)},-40 L${f(x + 5)},-29.6 L${f(x + 0.8)},-29.6 Z`, "url(#steelDk)", 0.8) +
+          line(`M${f(x + 1.2)},-37.2 L${f(x + 4.6)},-37.2`, AMBER, 0.8, 0.95),
+        ).join("") +
+        // Forearm shield plate.
+        shape("M-28.4,-46.6 L-18.6,-49 L-16.2,-29.6 L-26,-27.2 Z", "url(#steel)", 1) +
+        line("M-26.6,-44.4 L-19.6,-46.2", "#f0f5ff", 0.6, 0.75) +
+        line("M-25.4,-38 L-18.4,-39.8", INK, 0.6, 0.6);
+      glow += glowOf(`<circle cx="-8.8" cy="-34.4" r=".6"/><circle cx="-0.3" cy="-34.4" r=".6"/><circle cx="8.2" cy="-34.4" r=".6"/>`, AMBER, "#ffe2b0");
+      break;
+    }
+    case "marksman": {
+      // Long rifle case slung diagonally across the back, and a spotting
+      // scope on a stalk above the shoulder line where nothing occludes it.
+      back +=
+        shape("M-36.4,-70.6 L-25.6,-74.4 L-9.4,-14.6 L-20.2,-10.8 Z", "url(#steelDk)", 1.2) +
+        shape("M-34.2,-67.4 L-27.4,-69.8 L-12.4,-16.4 L-19.2,-14 Z", "url(#steel)", 0.6) +
+        line("M-31.6,-58.6 L-24.8,-61", INK, 0.7, 0.7) +
+        line("M-27.6,-42.4 L-20.8,-44.8", INK, 0.7, 0.7) +
+        shape("M-30.6,-52.6 L-24.2,-54.8 L-23.4,-50.6 L-29.8,-48.4 Z", "url(#paint)", 0.5);
+      front +=
+        // Scope stalk clearing the pauldron.
+        line("M15.4,-70.4 L22.6,-80.6", INK, 2.6) +
+        line("M15.4,-70.4 L22.6,-80.6", "#6d7884", 1.5) +
+        shape("M19.2,-84.6 L31.4,-82.4 L30.6,-76 L18.6,-78.2 Z", "url(#steelDk)", 0.9) +
+        `<circle cx="30" cy="-79.4" r="2.6" fill="#0a1016" stroke="${INK}" stroke-width=".7"/>` +
+        line("M21,-82.6 L27.6,-81.4", "#f0f5ff", 0.55, 0.7);
+      glow += glowOf(`<circle cx="30" cy="-79.4" r="1.3"/>`, c.rim, mix(c.rim, "#ffffff", 0.7));
+      break;
+    }
+    case "saboteur": {
+      // Satchel of charges hanging clear of the hip, wired to a wrist
+      // detonator on the other side.
+      back +=
+        shape("M24.4,-52.6 L42.2,-49.4 L39.4,-18.4 L21.6,-21.6 Z", "url(#steelDk)", 1.2) +
+        shape("M26.6,-49.4 L40,-47 L37.8,-22.4 L24.4,-24.8 Z", "#1a1d14", 0.6) +
+        [0, 1, 2].map((i) =>
+          shape(`M${f(28.2 + i * 4.4)},-44.6 L${f(31.8 + i * 4.4)},-44 L${f(30.6 + i * 4.4)},-28.4 L${f(27 + i * 4.4)},-29 Z`, AMBER, 0.6),
+        ).join("") +
+        line("M24,-53.4 C14,-60.6 4,-61 -6,-56", INK, 2.2) +
+        line("M24,-53.4 C14,-60.6 4,-61 -6,-56", "#8a6a34", 1.2);
+      front +=
+        shape("M-29.6,-36.6 L-19.6,-38.8 L-18,-27.4 L-28,-25.2 Z", "url(#steel)", 1) +
+        `<circle cx="-24" cy="-32" r="2.6" fill="${AMBER}" stroke="${INK}" stroke-width=".6"/>` +
+        line("M-28.2,-35 L-21.4,-36.6", "#f0f5ff", 0.55, 0.7);
+      glow += glowOf(`<circle cx="-24" cy="-32" r="1.3"/>`, AMBER, "#ffe2b0");
+      break;
+    }
+    case "corpsman": {
+      // Medical satchel hanging clear of the hip with the cross on its face,
+      // a shoulder beacon, and stim injectors on the thigh. The cross is the
+      // read: it is the one piece of kit nobody mistakes for a weapon.
+      const CROSS = "#eef7f2";
+      back +=
+        shape("M-44.4,-52.6 L-26.6,-56.2 L-23.4,-22 L-41.2,-18.4 Z", "url(#steelDk)", 1.2) +
+        shape("M-42,-49.8 L-28.8,-52.4 L-26.2,-24.8 L-39.4,-22.2 Z", "#16241e", 0.6) +
+        `<g fill="${CROSS}"><rect x="-36.4" y="-43.6" width="3.8" height="13.4" rx=".5"/><rect x="-41" y="-39" width="13" height="3.8" rx=".5"/></g>` +
+        line("M-44,-53.2 C-34,-60.6 -22,-61.4 -12,-56.6", INK, 2.2) +
+        line("M-44,-53.2 C-34,-60.6 -22,-61.4 -12,-56.6", "#3c4a44", 1.2);
+      front +=
+        // Shoulder beacon, so the corpsman is findable in a fight.
+        shape("M13.8,-68.6 L21.6,-70.2 L22.4,-63.8 L14.6,-62.2 Z", "url(#steelDk)", 0.8) +
+        `<g fill="${CROSS}"><rect x="17" y="-68" width="1.8" height="4.6" rx=".3"/><rect x="15.9" y="-66.9" width="4" height="1.8" rx=".3"/></g>`;
+      legs.forEach((leg, i) => {
+        const s = i === 0 ? -1 : 1;
+        const p = lerp(leg.hip, leg.kn, 0.46);
+        front += [0, 1].map((k) =>
+          shape(`M${pt(p[0] + s * (3.4 + k * 3), p[1] - 4.4)} l${f(s * 2.4)},0 l${f(s * -0.4)},9 l${f(s * -1.6)},0 Z`, "#d8ece4", 0.55),
+        ).join("");
+      });
+      glow += glowOf(`<rect x="17.2" y="-67.8" width="1.4" height="4.2" rx=".3"/><rect x="16.1" y="-66.7" width="3.6" height="1.4" rx=".3"/>`, "#7fffd0", "#eafff7");
+      break;
+    }
     default:
       break;
   }

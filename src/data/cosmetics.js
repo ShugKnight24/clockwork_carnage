@@ -252,6 +252,43 @@ export const LOADOUT_CLASSES = [
     startWeapons: [0],
     bonuses: { moveSpeed: 0.5, maxStamina: 130 },
   },
+  // ── Special forces ──
+  // What the cadet is training to become. Each one is a role rather than a
+  // stat tilt: they change which weapon you open a fight with.
+  {
+    id: "breacher",
+    name: "Breacher",
+    desc: "First through the door",
+    unlock: { type: "weaponKills", weapons: [1, 4], count: 40, label: "Score 40 shotgun kills", unit: "kills" },
+    startWeapons: [0, 1],
+    bonuses: { maxHealth: 115, moveSpeed: -0.1 },
+  },
+  {
+    id: "marksman",
+    name: "Marksman",
+    desc: "One shot, one target",
+    unlock: { type: "weaponKills", weapons: [2, 5], count: 30, label: "Score 30 rifle kills", unit: "kills" },
+    startWeapons: [0, 5],
+    bonuses: { moveSpeed: -0.15, maxStamina: 115 },
+  },
+  {
+    id: "saboteur",
+    name: "Saboteur",
+    desc: "Breaks what shoots back",
+    unlock: { type: "arenaRound", count: 10, label: "Survive 10 arena rounds", unit: "rounds" },
+    startWeapons: [0, 7],
+    bonuses: { fireRateMultiplier: 0.95 },
+  },
+  {
+    id: "corpsman",
+    name: "Corpsman",
+    desc: "Keeps the squad standing",
+    unlock: { type: "campaignLevels", count: 6, label: "Clear Act 2 of the campaign", unit: "levels" },
+    startWeapons: [0, 1],
+    // Regen is the squad-support kit turned inward until there is a squad to
+    // point it at. See src/systems/unlocks.js for how the class is earned.
+    bonuses: { maxHealth: 110, regenRate: 1.4 },
+  },
 ];
 
 export const BACKSTORIES = [

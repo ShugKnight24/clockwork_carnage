@@ -1220,6 +1220,9 @@ export class Game {
       this.player.maxStamina = b.maxStamina;
       this.player.stamina = b.maxStamina;
     }
+    // Health regen already exists as an arena upgrade; a class can grant it
+    // outright (see the Corpsman in src/data/cosmetics.js).
+    if (b.regenRate != null) this.player.regenRate += b.regenRate;
     if (cls?.startWeapons) this.player.weapons = [...cls.startWeapons];
     // Class-specific chrono energy tuning
     if (cls?.id === "phantom") {
@@ -1230,6 +1233,17 @@ export class Game {
       this.player.damageMultiplier = 1.15;
     } else if (cls?.id === "gunslinger") {
       this.player.maxChronoEnergy = 100;
+    } else if (cls?.id === "marksman") {
+      // Chrono is the marksman's scope: more of it, spent slower.
+      this.player.maxChronoEnergy = 130;
+    } else if (cls?.id === "saboteur") {
+      this.player.maxChronoEnergy = 110;
+      this.player.splashDamage = (this.player.splashDamage || 0) + 0.15;
+    } else if (cls?.id === "breacher") {
+      this.player.maxChronoEnergy = 85;
+      this.player.armor = Math.max(this.player.armor, 4);
+    } else if (cls?.id === "corpsman") {
+      this.player.maxChronoEnergy = 95;
     }
 
     const origin = BACKSTORIES[this.character.backstoryIndex || 0];
