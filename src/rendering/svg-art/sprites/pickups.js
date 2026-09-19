@@ -46,6 +46,10 @@ export const DEFS =
   halo("haloY", "#ffee88", [0.5, 0.22]) +
   halo("coreR", "#ff3322", [0.55, 0.35]) +
   halo("coreY", "#ffdd44", [0.55, 0.35]) +
+  halo("haloEx", "#00ffaa", [0.5, 0.2]) +
+  grad("lockF", ["#5b6b74", "#3b4952", "#26313a", "#141c23"]) +
+  grad("lockT", ["#6f808a", "#42505a"], "1", "0") +
+  grad("doorF", ["#1b2a33", "#0f1c23", "#080f14", "#04080b"]) +
   `<filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>`;
 
 const GLOW_BOX = [-210, -210, 420, 420];
@@ -240,7 +244,79 @@ function exotic(isDmg) {
   };
 }
 
+/**
+ * Level exit: a recessed blast door rather than a floating panel. Twin leaves
+ * meet on an interlocking seam, a hazard band runs across the sill, and the
+ * frame carries status lamps and a sweeping scan. Sized to the legacy
+ * billboard (2.8 x 4.0 size units) so the engine's placement is unchanged.
+ */
+function airlock() {
+  const W = 140; // door half-width
+  const H = 200; // door half-height
+  const F = 26; // frame thickness
+  let s = "";
+
+  // Recessed frame: outer casing, then the reveal the doors sit inside.
+  s += rect(-W - F, -H - F, (W + F) * 2, (H + F) * 2, "url(#lockF)", 3, 6);
+  s += rect(-W - F * 0.42, -H - F * 0.42, (W + F * 0.42) * 2, (H + F * 0.42) * 2, "#0a1216", 2);
+  // Door leaves, parted by a centre seam.
+  s += rect(-W, -H, W - 4, H * 2, "url(#doorF)", 2.2);
+  s += rect(4, -H, W - 4, H * 2, "url(#doorF)", 2.2);
+  // Interlocking teeth along the seam — the detail that says "blast door".
+  for (let i = 0; i < 7; i++) {
+    const y = -H + 16 + i * ((H * 2 - 32) / 6.5);
+    s += rect(-16, y, 16, 20, "#1d2b34", 1.6);
+    s += rect(0, y + 14, 16, 20, "#1d2b34", 1.6);
+  }
+  // Panel ribs on each leaf.
+  for (let i = 1; i < 4; i++) {
+    const y = -H + (i * H * 2) / 4;
+    s += line(`M${-W + 10},${f(y)}H-10`, "#0a1216", 3, 0.8);
+    s += line(`M10,${f(y)}H${W - 10}`, "#0a1216", 3, 0.8);
+  }
+  // Hazard band across the sill.
+  for (let i = 0; i < 9; i++) {
+    const x = -W + i * ((W * 2) / 9);
+    s += path(`M${f(x)},${H - 26}L${f(x + 16)},${H - 26}L${f(x + 6)},${H}L${f(x - 10)},${H}Z`,
+      i % 2 ? "#12181c" : "#e8b229", 1.2);
+  }
+  // Corner brackets on the casing.
+  for (const [cx, cy] of [[-W - F, -H - F], [W + F - 30, -H - F], [-W - F, H + F - 30], [W + F - 30, H + F - 30]]) {
+    s += rect(cx, cy, 30, 30, "url(#lockT)", 2, 3);
+  }
+
+  // Emissive: seam light, frame strip, lamps and the legend plate.
+  let lit = "";
+  lit += `<rect x="-5" y="${-H + 6}" width="10" height="${H * 2 - 12}" rx="4" fill="#00ffaa" filter="url(#glow)" opacity=".85"/>`;
+  lit += `<rect x="-2" y="${-H + 8}" width="4" height="${H * 2 - 16}" rx="2" fill="#d8fff0"/>`;
+  lit += `<rect x="${-W - F * 0.42}" y="${-H - F * 0.42}" width="${(W + F * 0.42) * 2}" height="${(H + F * 0.42) * 2}" rx="3" fill="none" stroke="#00ffaa" stroke-width="4" filter="url(#glow)" opacity=".7"/>`;
+  for (let i = 0; i < 3; i++) {
+    const y = -H + 40 + i * 60;
+    lit += `<circle cx="${-W - F * 0.7}" cy="${f(y)}" r="9" fill="#00ffaa" filter="url(#glow)"/>`;
+    lit += `<circle cx="${-W - F * 0.7}" cy="${f(y)}" r="4" fill="#eafff7"/>`;
+    lit += `<circle cx="${W + F * 0.7}" cy="${f(y)}" r="9" fill="#00ffaa" filter="url(#glow)"/>`;
+    lit += `<circle cx="${W + F * 0.7}" cy="${f(y)}" r="4" fill="#eafff7"/>`;
+  }
+  return {
+    box: [-210, -250, 420, 500],
+    base: 1,
+    layers: [
+      glowLayer("haloEx", 200, { type: "pulse", min: 0.7, max: 1, speed: 2.2 }, 0.4),
+      { markup: `<g>${s}</g>` },
+      {
+        markup: `<g>${lit}</g>`,
+        blend: "lighter",
+        shade: false,
+        anim: { type: "pulse", min: 0.65, max: 1, speed: 2.6 },
+        // Interior sweep, replacing the hand-rolled scan bar.
+        scan: { rects: [[-W, -H, W * 2, H * 2]], color: "#9dffe0", speed: 90, alpha: 0.32 },
+      },
+    ],
+  };
+}
+
 export const PICKUP_SPRITES = {
+  exit: airlock(),
   health: health(),
   ammo: ammo(),
   weapon: weapon(),

@@ -376,6 +376,9 @@ export function drawWeaponPickup(
 export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
   if (fog <= 0) return;
   const size = Math.max(8, sprWidth * 0.5);
+  // Modern art draws the airlock as a layered SVG blast door; the legacy
+  // canvas drawing below stays as the fallback, same as every other pickup.
+  if (drawModernPickup(ctx, "exit", screenX, centerY, size, time, fog)) return;
   const t = time * 0.003;
   const pulse = 0.7 + Math.sin(t * 1.4) * 0.3;
 
