@@ -78,6 +78,26 @@ if (typeof customElements !== "undefined" && !customElements.get("unlock-toast")
 }
 
 let listening = false;
+let toastEl = null;
+
+/** The shared toast element, created on first use. */
+function toast() {
+  if (!toastEl) {
+    toastEl = document.createElement("unlock-toast");
+    document.body.appendChild(toastEl);
+  }
+  return toastEl;
+}
+
+/**
+ * Announce a battlefield gear drop. Same plate as an unlock, different lead —
+ * the player picked this up rather than earning it through progression.
+ * @param {string} kind e.g. "Armor"
+ * @param {string} name e.g. "Juggernaut"
+ */
+export function showGearToast(kind, name) {
+  toast().show({ kind: kind || "Gear", name: name || "Salvage" });
+}
 
 /** Start listening for progression. Call once after the Game has loaded its saves. */
 export function initUnlockToasts(game) {
@@ -94,10 +114,7 @@ export function initUnlockToasts(game) {
     // ensureUnlockStore() rebuilt it from an empty character on any storage
     // read failure, which wiped grandfathered gear.
     saveUnlockStore(store);
-    if (!el) {
-      el = document.createElement("unlock-toast");
-      document.body.appendChild(el);
-    }
+    el = toast();
     try {
       game.audio?.menuConfirm?.();
     } catch (_) {}

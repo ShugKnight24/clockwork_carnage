@@ -232,6 +232,73 @@ export function drawAmmoPickup(ctx, screenX, centerY, sprWidth, sprHeight, dist,
   ctx.globalAlpha = 1;
 }
 
+/**
+ * Gear drop — a piece of armour left on the floor. Reads as loot rather than a
+ * consumable: a gold-amber plate that turns slowly on a rising glow column,
+ * so it is legible across a room and never mistaken for health or ammo.
+ */
+export function drawGearPickup(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+  if (fog <= 0) return;
+  const size = Math.max(6, sprWidth * 0.34);
+  const bob = Math.sin(time * 0.0032 + 1.1) * size * 0.18;
+  const y = centerY + sprHeight * 0.14 + bob;
+  const spin = time * 0.0016;
+
+  // Light column, so a drop behind cover still shows. Fades out with height
+  // and widens at the base, or it reads as a solid amber post.
+  const colH = size * 2.6;
+  const beam = ctx.createLinearGradient(0, y - colH, 0, y);
+  beam.addColorStop(0, "rgba(255,194,74,0)");
+  beam.addColorStop(1, "rgba(255,210,120,0.5)");
+  ctx.globalAlpha = fog * (0.5 + 0.18 * Math.sin(time * 0.005));
+  ctx.fillStyle = beam;
+  ctx.beginPath();
+  ctx.moveTo(screenX - size * 0.1, y - colH);
+  ctx.lineTo(screenX + size * 0.1, y - colH);
+  ctx.lineTo(screenX + size * 0.3, y);
+  ctx.lineTo(screenX - size * 0.3, y);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(screenX, y);
+  // A slow yaw: the plate turns to catch the light, it does not tumble.
+  ctx.scale(Math.cos(spin) * 0.65 + 0.35, 1);
+
+  // Shoulder-plate silhouette
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#c9922e";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.62, size * 0.34);
+  ctx.lineTo(-size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.62, size * 0.34);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lit upper bevel
+  ctx.fillStyle = "#ffd980";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.36, -size * 0.22);
+  ctx.lineTo(-size * 0.36, -size * 0.22);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "#3a2708";
+  ctx.lineWidth = Math.max(1, size * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.62, size * 0.34);
+  ctx.lineTo(-size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.44, -size * 0.46);
+  ctx.lineTo(size * 0.62, size * 0.34);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 export function drawWeaponPickup(
   ctx,
   screenX,

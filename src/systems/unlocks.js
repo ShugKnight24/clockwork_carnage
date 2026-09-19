@@ -153,6 +153,9 @@ export function describeId(id) {
 
 // ── Persistence ────────────────────────────────────────────
 
+/** The live store, shared by everything that reads or writes ownership. */
+let _store = null;
+
 export function loadUnlockStore() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -185,8 +188,12 @@ function readCampaignSaveLevel() {
  * storm for old progress.
  */
 export function ensureUnlockStore(character, stats, achievements) {
+  // One shared object. The toast listener holds onto the store it was given at
+  // init and writes it back on every progress event; if a drop mutated a
+  // separate copy, that write would silently roll the drop back.
+  if (_store) return _store;
   let store = loadUnlockStore();
-  if (store) return store;
+  if (store) return (_store = store);
   store = { owned: {}, seen: {} };
   const ctx = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel() });
   let hasSavedCharacter = false;
@@ -201,11 +208,58 @@ export function ensureUnlockStore(character, stats, achievements) {
   }
   for (const id of earnedIds(ctx)) store.seen[id] = true;
   saveUnlockStore(store);
-  return store;
+  return (_store = store);
+}
+
+/** Forget the in-memory store. Tests and a storage reset need this. */
+export function resetUnlockStore() {
+  _store = null;
+  invalidateUnlockContext();
 }
 
 let _ctxCache = null;
 let _ctxAt = -Infinity;
+
+/** Drop the memoised context so the next read sees a just-granted item. */
+export function invalidateUnlockContext() {
+  _ctxCache = null;
+  _ctxAt = -Infinity;
+}
+
+/**
+ * Grant an item outright, regardless of whether its rule is met — how a
+ * battlefield drop is recorded. Returns false when it was already owned, so
+ * callers can skip the pickup toast for a duplicate.
+ */
+export function grantOwned(key, index) {
+  if (!LOCKABLE[key]?.table[index]) return false;
+  const store = ensureUnlockStore();
+  const id = `${key}:${index}`;
+  if (store.owned[id]) return false;
+  store.owned[id] = true;
+  // A dropped item is never a surprise — the player watched it fall — so mark
+  // it seen and let the pickup speak for itself instead of the unlock toast.
+  store.seen[id] = true;
+  saveUnlockStore(store);
+  invalidateUnlockContext();
+  return true;
+}
+
+/**
+ * Items the player has not earned or been given yet, as {key, index} pairs.
+ * Gear drops pick from here so a kill never hands over a duplicate.
+ */
+export function lockedItems(ctx) {
+  const out = [];
+  for (const key of Object.keys(LOCKABLE)) {
+    const table = LOCKABLE[key].table;
+    for (let i = 0; i < table.length; i++) {
+      if (!ruleFor(key, i)) continue; // always-available items are not loot
+      if (!unlockState(key, i, ctx).unlocked) out.push({ key, index: i });
+    }
+  }
+  return out;
+}
 
 /**
  * Context for a live Game instance (stats, achievements, campaign save, owned

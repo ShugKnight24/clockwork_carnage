@@ -1,0 +1,110 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  gearBonuses,
+  GEAR_SLOTS,
+  ARMOR_STYLES,
+  HELMET_STYLES,
+  VISOR_STYLES,
+  SHOULDER_STYLES,
+  DEFAULT_CHARACTER,
+} from "../../src/data/cosmetics.js";
+import {
+  grantOwned,
+  lockedItems,
+  unlockState,
+  unlockContext,
+  resetUnlockStore,
+  LOCKABLE,
+} from "../../src/systems/unlocks.js";
+
+const store = {};
+const mockStorage = {
+  getItem: vi.fn((k) => store[k] ?? null),
+  setItem: vi.fn((k, v) => { store[k] = v; }),
+  removeItem: vi.fn((k) => { delete store[k]; }),
+};
+
+beforeEach(() => {
+  for (const k of Object.keys(store)) delete store[k];
+  vi.stubGlobal("localStorage", mockStorage);
+  resetUnlockStore();
+});
+
+describe("gearBonuses", () => {
+  it("is empty for regulation kit", () => {
+    expect(gearBonuses(DEFAULT_CHARACTER)).toEqual({});
+  });
+
+  it("sums across every slot", () => {
+    // Juggernaut armour + Centurion helm + Blackout visor + Bulwark shoulders.
+    const b = gearBonuses({ armorIndex: 2, helmetIndex: 3, visorIndex: 2, shoulderIndex: 4 });
+    expect(b.maxHealthAdd).toBe(40);
+    expect(b.armorAdd).toBe(20);
+    // The heavy set pays for it in speed.
+    expect(b.moveSpeedAdd).toBeLessThan(0);
+  });
+
+  it("gives the light set speed instead of bulk", () => {
+    const b = gearBonuses({ armorIndex: 3, helmetIndex: 4, visorIndex: 1, shoulderIndex: 0 });
+    expect(b.moveSpeedAdd).toBeGreaterThan(0);
+    expect(b.maxHealthAdd ?? 0).toBe(0);
+  });
+
+  it("survives a missing or partial character", () => {
+    expect(gearBonuses(null)).toEqual({});
+    expect(gearBonuses({})).toEqual({});
+  });
+
+  it("covers every lockable cosmetic slot", () => {
+    const slots = GEAR_SLOTS.map(([k]) => k);
+    for (const key of Object.keys(LOCKABLE)) {
+      if (key === "loadoutIndex") continue; // class, not gear
+      expect(slots).toContain(key);
+    }
+  });
+
+  it("only puts bonuses on gear that has to be earned", () => {
+    // A tier-1 starting piece giving stats would make the default kit strictly
+    // worse for no reason the player can see.
+    for (const table of [ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES]) {
+      for (const item of table) {
+        if (item.bonuses) expect(item.tier).toBeGreaterThan(1);
+      }
+    }
+  });
+});
+
+describe("gear drops", () => {
+  const ctx = () => unlockContext({ stats: {}, achievements: {}, campaignSaveLevel: 0, owned: {} });
+
+  it("offers only items that are still locked", () => {
+    const pool = lockedItems(ctx());
+    expect(pool.length).toBeGreaterThan(0);
+    for (const { key, index } of pool) {
+      expect(unlockState(key, index, ctx()).unlocked).toBe(false);
+    }
+  });
+
+  it("grants an item and records it as owned", () => {
+    const { key, index } = lockedItems(ctx())[0];
+    expect(grantOwned(key, index)).toBe(true);
+    expect(JSON.parse(store.cc_unlocks).owned[`${key}:${index}`]).toBe(true);
+  });
+
+  it("reports a duplicate so the pickup can stay quiet", () => {
+    const { key, index } = lockedItems(ctx())[0];
+    expect(grantOwned(key, index)).toBe(true);
+    expect(grantOwned(key, index)).toBe(false);
+  });
+
+  it("marks a drop as already seen, so it is not re-announced as an unlock", () => {
+    const { key, index } = lockedItems(ctx())[0];
+    grantOwned(key, index);
+    expect(JSON.parse(store.cc_unlocks).seen[`${key}:${index}`]).toBe(true);
+  });
+
+  it("refuses an index that is not a real option", () => {
+    expect(grantOwned("armorIndex", 999)).toBe(false);
+    expect(grantOwned("notASlot", 0)).toBe(false);
+  });
+});

@@ -93,44 +93,58 @@ export const ARMOR_STYLES = [
     desc: "Regulation Chrono-Corp armor",
     tier: 1,
   },
-  { id: "recon", name: "Recon", desc: "Lightweight scout plating", tier: 2 },
+  {
+    id: "recon",
+    name: "Recon",
+    desc: "Lightweight scout plating",
+    tier: 2,
+    bonuses: { moveSpeedAdd: 0.25, maxStaminaAdd: 15 },
+  },
   {
     id: "heavy",
     name: "Juggernaut",
     desc: "Reinforced temporal shielding",
     tier: 3,
+    bonuses: { maxHealthAdd: 25, armorAdd: 6, moveSpeedAdd: -0.15 },
   },
-  { id: "stealth", name: "Ghost", desc: "Low-profile shadow plating", tier: 2 },
+  {
+    id: "stealth",
+    name: "Ghost",
+    desc: "Low-profile shadow plating",
+    tier: 2,
+    bonuses: { dashCostAdd: -4, moveSpeedAdd: 0.1 },
+  },
   {
     id: "tech",
     name: "Engineer",
     desc: "Utility-integrated hardsuit",
     tier: 3,
+    bonuses: { maxChronoEnergyAdd: 25, maxHealthAdd: 10 },
   },
 ];
 
 export const HELMET_STYLES = [
   { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
-  { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2 },
-  { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2 },
-  { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3 },
-  { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3 },
+  { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2, bonuses: { maxHealthAdd: 10 } },
+  { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2, bonuses: { armorAdd: 3 } },
+  { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 } },
+  { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
 ];
 
 export const VISOR_STYLES = [
   { id: "standard", name: "Wide Visor", desc: "Full lower-arc optics", tier: 1 },
-  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2 },
-  { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3 },
-  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2 },
-  { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3 },
+  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2, bonuses: { maxChronoEnergyAdd: 10 } },
+  { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3, bonuses: { armorAdd: 4, maxChronoEnergyAdd: 10 } },
+  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+  { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3, bonuses: { maxChronoEnergyAdd: 25 } },
 ];
 
 export const SHOULDER_STYLES = [
   { id: "none", name: "Bare", desc: "No additional plating", tier: 1 },
   { id: "pads", name: "Combat Pads", desc: "Standard oval shoulder pads", tier: 1 },
-  { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2 },
-  { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3 },
-  { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3 },
+  { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2, bonuses: { armorAdd: 3 } },
+  { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 4 } },
+  { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3, bonuses: { armorAdd: 8, moveSpeedAdd: -0.1 } },
 ];
 
 /**
@@ -258,3 +272,34 @@ export const DEFAULT_CHARACTER = {
   backstoryIndex: 0,
   voiceIndex: 0,
 };
+
+/**
+ * Slots whose equipped option can carry stat bonuses, in the order they are
+ * summed. Gear uses the same bonus vocabulary as origins (see BACKSTORIES).
+ */
+export const GEAR_SLOTS = [
+  ["armorIndex", () => ARMOR_STYLES],
+  ["helmetIndex", () => HELMET_STYLES],
+  ["visorIndex", () => VISOR_STYLES],
+  ["shoulderIndex", () => SHOULDER_STYLES],
+];
+
+/**
+ * Total stat bonuses from everything a character is wearing. Additive, and
+ * recomputed from the character each run — nothing about gear is persisted on
+ * the player.
+ * @param {object} character
+ * @returns {Record<string, number>}
+ */
+export function gearBonuses(character) {
+  const out = {};
+  if (!character) return out;
+  for (const [key, table] of GEAR_SLOTS) {
+    const item = table()[character[key] || 0];
+    if (!item?.bonuses) continue;
+    for (const [stat, value] of Object.entries(item.bonuses)) {
+      out[stat] = (out[stat] || 0) + value;
+    }
+  }
+  return out;
+}

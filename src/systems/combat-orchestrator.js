@@ -15,6 +15,7 @@ import {
   pickHitscanTarget,
 } from "./combat.js";
 import { playerEyeZ } from "./physics.js";
+import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame } from "./aim.js";
 import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
@@ -247,6 +248,8 @@ export function onEnemyKill(game, enemy) {
     game.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
   }
 
+  maybeDropGear(game, enemy);
+
   game.player.chronoEnergy = Math.min(
     game.player.maxChronoEnergy,
     game.player.chronoEnergy + fx.chronoBonus,
@@ -356,4 +359,36 @@ export function damagePlayer(game, amount, attacker) {
       }
     }
   }
+}
+
+// ── Gear drops ──────────────────────────────────────────────────────────────
+
+/** Base chance a campaign kill drops a piece of gear. */
+const GEAR_DROP_CHANCE = 0.05;
+/** Multiplier for enemies that are meant to be worth killing. */
+const ELITE_DROP_BONUS = 4;
+
+/**
+ * Roll a gear drop on a campaign kill. Only ever drops something the player
+ * does not already have, so a kill never hands over a duplicate, and the pool
+ * is the same locked-item set the creators show — picking one up is exactly
+ * equivalent to earning it.
+ */
+export function maybeDropGear(game, enemy) {
+  if (!enemy || game.mode !== "campaign") return null;
+  const elite = !!(enemy.def?.isBoss || enemy.def?.elite || enemy.maxHealth >= 200);
+  if (Math.random() >= GEAR_DROP_CHANCE * (elite ? ELITE_DROP_BONUS : 1)) return null;
+
+  const pool = lockedItems(gameUnlockContext(game, { fresh: true }));
+  if (!pool.length) return null;
+  const pick = pool[(Math.random() * pool.length) | 0];
+  const entry = LOCKABLE[pick.key];
+  const drop = new Pickup(enemy.x, enemy.y, "gear", {
+    slot: pick.key,
+    slotIndex: pick.index,
+    label: entry.table[pick.index]?.name || "Gear",
+    kind: entry.kind,
+  });
+  game.entities.push(drop);
+  return drop;
 }

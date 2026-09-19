@@ -33,6 +33,7 @@ import {
   BACKSTORIES,
   VOICE_PROFILES,
   DEFAULT_CHARACTER,
+  gearBonuses,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
 import { renderPostFX as _renderPostFX } from "../src/rendering/postfx.js";
@@ -148,7 +149,7 @@ import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
-import { gameUnlockContext } from "../src/systems/unlocks.js";
+import { gameUnlockContext, grantOwned } from "../src/systems/unlocks.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -1205,8 +1206,9 @@ export class Game {
 
   applyLoadoutBonuses() {
     const cls = LOADOUT_CLASSES[this.character.loadoutIndex];
-    if (!cls || !cls.bonuses) return;
-    const b = cls.bonuses;
+    // Only the class block depends on class bonuses. Returning early here also
+    // skipped the origin and gear bonuses below.
+    const b = (cls && cls.bonuses) || {};
     if (b.fireRateMultiplier != null)
       this.player.fireRateMultiplier = b.fireRateMultiplier;
     if (b.maxHealth != null) {
@@ -1218,15 +1220,15 @@ export class Game {
       this.player.maxStamina = b.maxStamina;
       this.player.stamina = b.maxStamina;
     }
-    if (cls.startWeapons) this.player.weapons = [...cls.startWeapons];
+    if (cls?.startWeapons) this.player.weapons = [...cls.startWeapons];
     // Class-specific chrono energy tuning
-    if (cls.id === "phantom") {
+    if (cls?.id === "phantom") {
       this.player.maxChronoEnergy = 120; // speed demon gets more chrono
       this.player.dashStaminaCost = 15;
-    } else if (cls.id === "enforcer") {
+    } else if (cls?.id === "enforcer") {
       this.player.maxChronoEnergy = 80; // tank gets less chrono
       this.player.damageMultiplier = 1.15;
-    } else if (cls.id === "gunslinger") {
+    } else if (cls?.id === "gunslinger") {
       this.player.maxChronoEnergy = 100;
     }
 
@@ -1239,6 +1241,30 @@ export class Game {
     if (ob.maxChronoEnergyAdd) this.player.maxChronoEnergy += ob.maxChronoEnergyAdd;
     if (ob.dashCostAdd) this.player.dashStaminaCost = Math.max(8, this.player.dashStaminaCost + ob.dashCostAdd);
     if (ob.armorAdd) this.player.armor = Math.max(this.player.armor, ob.armorAdd);
+
+    this.applyGearBonuses();
+  }
+
+  /**
+   * Stat bonuses from the equipped armour, helmet, visor and shoulders. Gear
+   * uses the same bonus vocabulary as origins, and stacks additively with
+   * them; the character is the only source of truth, so this is recomputed
+   * from scratch every run rather than persisted on the player.
+   */
+  applyGearBonuses() {
+    const g = gearBonuses(this.character);
+    if (g.maxHealthAdd) {
+      this.player.maxHealth += g.maxHealthAdd;
+      this.player.health = Math.min(this.player.maxHealth, this.player.health + g.maxHealthAdd);
+    }
+    if (g.maxChronoEnergyAdd) this.player.maxChronoEnergy += g.maxChronoEnergyAdd;
+    if (g.maxStaminaAdd) {
+      this.player.maxStamina += g.maxStaminaAdd;
+      this.player.stamina = this.player.maxStamina;
+    }
+    if (g.dashCostAdd) this.player.dashStaminaCost = Math.max(8, this.player.dashStaminaCost + g.dashCostAdd);
+    if (g.armorAdd) this.player.armor = Math.max(this.player.armor, g.armorAdd);
+    if (g.moveSpeedAdd) this.player.moveSpeed += g.moveSpeedAdd;
   }
 
   getCharacterColor() {
@@ -2199,6 +2225,19 @@ export class Game {
           }
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
+        }
+      } else if (e.type === "gear") {
+        // A battlefield drop grants the piece outright: it shows up unlocked
+        // in both creators, and its bonuses apply from the next run. Nothing
+        // is persisted on the player — the character stays the source of truth.
+        const granted = grantOwned(e.slot, e.slotIndex);
+        e.active = false;
+        this.spawnPickupBurst(e.x, e.y, "weapon");
+        this.audio.pickup();
+        _spawnEnergyBurst(this.player.particles, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 });
+        if (granted) {
+          this.showGearToast?.(e.kind, e.label);
+          this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
         }
       } else if (
         (e.type === "damage2x" || e.type === "invuln") &&

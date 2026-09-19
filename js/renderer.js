@@ -27,6 +27,7 @@ import {
   drawExit,
   drawProjectile,
   drawExoticPickup,
+  drawGearPickup,
 } from "../src/rendering/pickups.js";
 import { drawProp, setFovScale } from "../src/rendering/props.js";
 import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
@@ -1277,6 +1278,17 @@ export class Renderer {
       );
     } else if (entity.type === "weapon") {
       drawWeaponPickup(
+        ctx,
+        screenX,
+        centerY,
+        sprWidth,
+        sprHeight,
+        dist,
+        time,
+        fogFactor,
+      );
+    } else if (entity.type === "gear") {
+      drawGearPickup(
         ctx,
         screenX,
         centerY,

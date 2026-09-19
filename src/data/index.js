@@ -6,6 +6,8 @@ export {
   ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
   DEFAULT_CHARACTER,
+  gearBonuses,
+  GEAR_SLOTS,
 } from './cosmetics.js';
 export { ARIA_COMMS } from './dialogue.js';
 export { WALL_COLORS } from './walls.js';

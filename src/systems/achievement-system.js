@@ -44,6 +44,7 @@ export class AchievementSystem {
       totalGamesPlayed: 0,
       // Unlock progression (src/systems/unlocks.js)
       weaponKills: {}, // weapon id → kills
+      gearFound: 0, // gear pieces picked up off the ground
       campaignLevelsCleared: 0, // campaign levels cleared in order (high-water mark)
     };
     this._lastProgressEmit = 0;

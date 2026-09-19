@@ -7,7 +7,7 @@ import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
-import { initUnlockToasts } from "../src/ui/unlock-toast.js";
+import { initUnlockToasts, showGearToast } from "../src/ui/unlock-toast.js";
 import {
   FramePacer,
   frameCapFor,
@@ -41,6 +41,9 @@ game.applyPerformanceSettings();
 injectDesignTokens();
 preloadShowroom(game);
 initUnlockToasts(game);
+// The DOM toast lives in the UI layer; the game only needs to be able to ask
+// for one when a drop is collected.
+game.showGearToast = showGearToast;
 onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });
