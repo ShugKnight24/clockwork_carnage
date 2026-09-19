@@ -57,6 +57,12 @@ const PRESETS = [
   { name: "Juggernaut", ch: { colorIndex: 2, skinToneIndex: 2, hairIndex: 2, eyeIndex: 4, armorIndex: 2, helmetIndex: 3, visorIndex: 4, shoulderIndex: 3, badgeIndex: 2, weaponSkinIndex: 3 } },
   { name: "Ghost", ch: { colorIndex: 3, skinToneIndex: 3, hairIndex: 0, eyeIndex: 3, armorIndex: 3, helmetIndex: 2, visorIndex: 2, shoulderIndex: 0, badgeIndex: 6, weaponSkinIndex: 1 } },
   { name: "Engineer", ch: { colorIndex: 4, skinToneIndex: 4, hairIndex: 3, eyeIndex: 0, armorIndex: 4, helmetIndex: 1, visorIndex: 3, shoulderIndex: 4, badgeIndex: 5, weaponSkinIndex: 2 } },
+  // Full looks: each of these only reads right with its own helmet and
+  // pauldrons, so the preset is how a player gets the intended silhouette.
+  { name: "Howitzer", ch: { colorIndex: 7, skinToneIndex: 1, hairIndex: 0, eyeIndex: 2, armorIndex: 5, helmetIndex: 5, visorIndex: 1, shoulderIndex: 7, badgeIndex: 2, weaponSkinIndex: 3 } },
+  { name: "Breaker", ch: { colorIndex: 6, skinToneIndex: 2, hairIndex: 1, eyeIndex: 1, armorIndex: 6, helmetIndex: 6, visorIndex: 1, shoulderIndex: 5, badgeIndex: 4, weaponSkinIndex: 5 } },
+  { name: "Reliquary", ch: { colorIndex: 2, skinToneIndex: 3, hairIndex: 0, eyeIndex: 4, armorIndex: 7, helmetIndex: 7, visorIndex: 2, shoulderIndex: 6, badgeIndex: 1, weaponSkinIndex: 1 } },
+  { name: "Pathfinder", ch: { colorIndex: 5, skinToneIndex: 0, hairIndex: 2, eyeIndex: 3, armorIndex: 8, helmetIndex: 8, visorIndex: 2, shoulderIndex: 8, badgeIndex: 7, weaponSkinIndex: 2 } },
 ];
 
 const I = {

@@ -413,8 +413,71 @@ const SHELLS = {
     "M0,-95 C7.8,-95 11.8,-89.8 11.8,-82.5 L11.6,-76 C11.4,-72 9.8,-69.6 6.8,-68.6 L4.2,-68.4 C3.8,-71.4 3.6,-74 4.6,-76.6 " +
     "L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4 L-6.8,-68.6 " +
     "C-9.8,-69.6 -11.4,-72 -11.6,-76 L-11.8,-82.5 C-11.8,-89.8 -7.8,-95 0,-95 Z",
+  // Ordnance: hard faceted brow over a narrow jaw, built around a raised
+  // centre ridge that carries the targeting spine.
+  ordnance:
+    "M0,-97.4 L6.4,-95.6 L11.8,-90.4 L12.6,-82 L11.4,-76.6 L7.2,-71.2 L3.2,-68.2 L0,-67.8 " +
+    "L-3.2,-68.2 L-7.2,-71.2 L-11.4,-76.6 L-12.6,-82 L-11.8,-90.4 L-6.4,-95.6 Z",
+  // Bucket: low, wide and round, sunk deep so the collar swallows the neck.
+  bucket:
+    "M0,-93.2 C9,-93.2 13.6,-88.4 13.8,-81.6 L13.6,-75.4 C13.2,-71.6 10.4,-69 6.2,-68.2 " +
+    "L0,-67.6 L-6.2,-68.2 C-10.4,-69 -13.2,-71.6 -13.6,-75.4 L-13.8,-81.6 C-13.6,-88.4 -9,-93.2 0,-93.2 Z",
+  // Crusader: a beaked snout under a domed skull, cut for a vertical slit.
+  crusader:
+    "M0,-97 C8,-96.4 11.8,-90.8 11.8,-83.4 L11.4,-79 C11,-76.2 9.6,-74.2 7.4,-73 " +
+    "L5.6,-68.2 C3.6,-66.6 -3.6,-66.6 -5.6,-68.2 L-7.4,-73 C-9.6,-74.2 -11,-76.2 -11.4,-79 " +
+    "L-11.8,-83.4 C-11.8,-90.8 -8,-96.4 0,-97 Z",
+  // Sealed: one continuous teardrop shell, no ear cups, no seams.
+  sealed:
+    "M0,-95.8 C8.2,-95.8 12,-90.2 11.8,-82.6 L11.2,-76.2 C10.6,-72.4 8,-69.6 4.4,-68.4 " +
+    "L0,-67.8 L-4.4,-68.4 C-8,-69.6 -10.6,-72.4 -11.2,-76.2 L-11.8,-82.6 C-12,-90.2 -8.2,-95.8 0,-95.8 Z",
 };
-const SHELL_HALF = { standard: 11.2, angular: 12.2, crested: 11.4, wide: 14.2, mohawk: 11.7 };
+const SHELL_HALF = {
+  standard: 11.2, angular: 12.2, crested: 11.4, wide: 14.2, mohawk: 11.7,
+  ordnance: 12.5, bucket: 13.7, crusader: 11.7, sealed: 11.7,
+};
+
+/** Helmets that are one sealed shell — no bolted-on ear cups. */
+const EARLESS_HELMETS = new Set(["sealed", "crusader"]);
+
+/** Extra shell detail per helmet, drawn over the shell and under the visor. */
+function helmetDetail(c, style, w) {
+  switch (style) {
+    case "ordnance":
+      // Targeting spine down the centre ridge, plus a stubby sensor stalk.
+      return (
+        line("M0,-96.4 L0,-69", INK, 1.5, 0.75) +
+        line("M0,-95.6 L0,-70", "#c9d6e2", 0.6, 0.6) +
+        shape("M-12.4,-88.6 L-16.8,-90.6 L-17.4,-86.2 L-12.6,-84.6 Z", "url(#steelDk)", 0.7) +
+        line("M-5.4,-93.6 L-9.6,-89.4 M5.4,-93.6 L9.6,-89.4", INK, 0.55, 0.6)
+      );
+    case "bucket":
+      // Riveted brow band and a chin vent — utilitarian, not sculpted.
+      return (
+        line(`M${f(-w + 1.4)},-85.6 C-6,-88.4 6,-88.4 ${f(w - 1.4)},-85.6`, INK, 0.7, 0.75) +
+        `<g fill="#0a0f16">` +
+        [-9.4, -4.8, 4.8, 9.4].map((x) => `<circle cx="${f(x)}" cy="-84.2" r=".75"/>`).join("") +
+        `</g>` +
+        line("M-5.6,-72 L5.6,-72 M-4.8,-70.2 L4.8,-70.2", INK, 0.55, 0.65)
+      );
+    case "crusader":
+      // Beak ridge and a rim of rivets around the dome, monastic rather than
+      // military: the shell reads as cast, not assembled.
+      return (
+        line("M0,-96 L0,-73.4", INK, 1.2, 0.7) +
+        shape("M-2.4,-74.8 L2.4,-74.8 L1.8,-67.2 L-1.8,-67.2 Z", "url(#steelDk)", 0.7) +
+        `<g fill="#c8102e">` +
+        [-8.6, 0, 8.6].map((x) => `<circle cx="${f(x)}" cy="-91.4" r=".9"/>`).join("") +
+        `</g>` +
+        line("M-9.8,-88.4 C-5,-91 5,-91 9.8,-88.4", "#c8102e", 0.7, 0.85)
+      );
+    case "sealed":
+      // Almost nothing: one soft crown highlight is the whole point.
+      return line("M-6.6,-92.4 C-2.6,-94.2 2.6,-94.2 6.6,-92.4", "#f4fbfa", 0.8, 0.5);
+    default:
+      return "";
+  }
+}
 
 /** Closed visor per style: recess + glass markup and its glow. */
 function closedVisor(c) {
@@ -515,10 +578,13 @@ function head(c, peek) {
     return { front: face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
   }
   const shell = SHELLS[style] || SHELLS.standard;
-  const ears =
-    `<circle cx="${f(-earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>` +
-    `<circle cx="${f(earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`;
-  const earGlow = glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core);
+  const ears = EARLESS_HELMETS.has(style)
+    ? ""
+    : `<circle cx="${f(-earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>` +
+      `<circle cx="${f(earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`;
+  const earGlow = EARLESS_HELMETS.has(style)
+    ? ""
+    : glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core);
   const dome =
     `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
     line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, MATTE.has(c.armor) ? 0.3 : 0.8) +
@@ -577,7 +643,7 @@ function head(c, peek) {
       line("M-1.6,-94.8 L-1.5,-88.6 M1.6,-94.8 L1.5,-88.6", INK, 0.4, 0.5);
   }
   return {
-    front: fins + shape(shell, "url(#steel)") + dome + details + ears + visor.body,
+    front: fins + shape(shell, "url(#steel)") + dome + details + helmetDetail(c, style, w) + ears + visor.body,
     glow: earGlow + visor.glow + (visor.eyeGlints ? eyeGlow(c, 0.9, true) : ""),
   };
 }
@@ -645,6 +711,76 @@ function shoulder(c, s, tilt) {
           line(M("M16.6,-63.6 L29.2,-65.4"), "#f4faff", 0.55, lit ? 0.85 : 0.4) +
           `<g fill="#0a0f16"><circle cx="${f(s * 18.6)}" cy="-61.8" r=".6"/><circle cx="${f(s * 29.4)}" cy="-63.2" r=".6"/><circle cx="${f(s * 29.4)}" cy="-51.4" r=".6"/><circle cx="${f(s * 19.6)}" cy="-50.8" r=".6"/></g>` +
           (lit ? "" : line("M34.6,-65.6 L34.6,-49", c.rim, 0.8, 0.9)),
+      );
+    }
+    case "slab": {
+      // Oversized rounded slab — the single widest silhouette in the set. It
+      // overhangs the arm rather than capping it, so the shoulders read first.
+      const plate = "M8.6,-69.4 C20,-74.6 33,-72.2 38.4,-62 C41.4,-56.2 41,-48.6 38.2,-42.4 " +
+        "C31.6,-38.4 22.4,-38.2 15.4,-41.6 C17.4,-51.2 14.6,-62.4 8.6,-66.2 Z";
+      const lip = "M12.6,-66.8 C22.6,-70.6 32.6,-68.2 37,-60.2";
+      return rot(
+        shape(M(plate), "url(#steel)") +
+          shape(M("M16.4,-45.6 C23.6,-42.4 32,-42.6 38,-46"), "url(#steelDk)", 0.9) +
+          line(M(lip), INK, 2.4, 0.9) +
+          line(M(lip), c.pal.primary, 1.5, 1) +
+          line(M("M14.4,-63.2 C23.4,-67 32.2,-64.8 36,-57.6"), "#f4faff", 0.7, lit ? 0.85 : 0.4) +
+          // Unit indicator, the one bright mark on a very large plate.
+          `<circle cx="${f(s * 27)}" cy="-55" r="3.4" fill="url(#steelDk)" stroke="${INK}" stroke-width=".8"/>` +
+          `<circle cx="${f(s * 27)}" cy="-55" r="1.7" fill="${c.pal.primary}" stroke="${INK}" stroke-width=".4"/>` +
+          (lit
+            ? `<ellipse cx="-26" cy="-60" rx="8" ry="5" fill="url(#sheen)"/>`
+            : line("M40.2,-58 C41.4,-50 40.6,-45.4 38.6,-42.8", c.rim, 0.9, 0.9)),
+      );
+    }
+    case "dome": {
+      // Domed crusader pauldron: a deep half-shell with a raised rim, the
+      // heraldic surface of the suit.
+      const shell = "M9.4,-68.6 C21,-76 34.6,-71.4 38,-58.8 C39.8,-52 38.4,-45.6 35.4,-41.4 " +
+        "C28,-38.6 20,-39.6 15.8,-42.8 C17.8,-52.4 15.2,-63.6 9.4,-66.6 Z";
+      const rim = "M9.6,-67.4 C21.4,-74.2 33.6,-69.8 36.8,-58.4 C38.4,-52.4 37.2,-46.8 34.6,-42.8";
+      return rot(
+        shape(M(shell), "url(#steel)") +
+          line(M(rim), INK, 3.6, 1) +
+          line(M(rim), CANDY, 2.2, 1) +
+          line(M("M13.8,-62.8 C22.4,-67.6 30.6,-64.4 33.8,-56"), CANDY_HI, 0.7, lit ? 0.8 : 0.35) +
+          // Heraldic drop on the face of the plate.
+          `<path d="M${f(s * 26)},-61.6 L${f(s * 30.4)},-53.4 L${f(s * 26)},-45.6 L${f(s * 21.6)},-53.4 Z" fill="${CANDY}" stroke="${INK}" stroke-width=".7"/>` +
+          `<circle cx="${f(s * 26)}" cy="-53.4" r="1.4" fill="#e8d9a4" stroke="${INK}" stroke-width=".35"/>` +
+          (lit ? "" : line("M37.4,-52 C38,-46.6 36.8,-43.4 35,-41.6", c.rim, 0.9, 0.9)),
+      );
+    }
+    case "ordnance": {
+      // Boxy launcher housing rather than a plate: vents, a lift handle and a
+      // rail along the top.
+      const box = "M10.4,-68.6 L29.6,-71.8 L35.2,-66.4 L35.6,-48.2 L30,-43.4 L15.6,-45.4 C17,-54.4 14.8,-63.4 10.4,-65.6 Z";
+      return rot(
+        shape(M(box), "url(#steelDk)") +
+          shape(M("M15,-64.2 L29.4,-66.4 L31.8,-63.6 L32,-49.6 L29.2,-47 L18.2,-48.4 C18.8,-55.4 17.6,-60.4 15,-64.2 Z"), "url(#steel)", 0.8) +
+          // Vent louvres
+          [0, 1, 2].map((i) => line(M(`M19.4,${f(-60.6 + i * 4.4)} L30,${f(-62 + i * 4.4)}`), INK, 1.1, 0.75)).join("") +
+          line(M("M12.4,-69 L30.2,-72"), INK, 2.6, 1) +
+          line(M("M12.4,-69 L30.2,-72"), AMBER, 1.4, 0.9) +
+          // Lift handle
+          line(M("M21,-73.4 C24,-77.2 28.6,-77.6 31,-74.4"), INK, 2.4) +
+          line(M("M21,-73.4 C24,-77.2 28.6,-77.6 31,-74.4"), "#9aa3ad", 1.3) +
+          (lit ? "" : line("M35.8,-65.4 L36.2,-48.6", c.rim, 0.9, 0.9)),
+      );
+    }
+    case "layered": {
+      // Three angular plates stepping down the arm, the sealed-suit answer to
+      // a pauldron: light, overlapping, no bulk.
+      const p1 = "M10.6,-68 L26.4,-70.4 L31.6,-63.4 L29.4,-57.4 L13.4,-58.6 C14.4,-62.4 13,-66 10.6,-68 Z";
+      const p2 = "M13.8,-57 L29.6,-55.8 L32.4,-50.2 L29.2,-46.6 L15.4,-47.4 Z";
+      const p3 = "M15.8,-46 L29.4,-45.2 L31,-41 L27.8,-38.4 L16.8,-39.4 Z";
+      return rot(
+        shape(M(p3), "url(#steelDk)", 0.9) +
+          shape(M(p2), "url(#steel)", 0.9) +
+          shape(M(p1), "url(#steel)", 1) +
+          line(M("M13.4,-65.6 L25.6,-67.4 L29.6,-62.4"), "#f4fbfa", 0.65, lit ? 0.85 : 0.4) +
+          line(M("M13.8,-57 L29.6,-55.8"), INK, 0.55, 0.7) +
+          line(M("M15.8,-46 L29.4,-45.2"), INK, 0.55, 0.7) +
+          (lit ? "" : line("M31.4,-62.8 L32.6,-50 L30.8,-40.6", c.rim, 0.8, 0.9)),
       );
     }
     default:
@@ -793,13 +929,8 @@ function gear(c, pose) {
     case "howitzer": {
       // Shoulder ordnance pod, fed by a belt that runs down into a back hopper.
       back +=
-        part([14.2, -70], [21.4, -84], 5.8, 6.4, { fill: "url(#steelDk)", hi: 0.35, rimColor: c.rim, ink: 0.9 }) +
-        shape("M18.2,-92 L32.6,-89.6 L33.4,-77 L19,-74.8 Z", "url(#steel)", 1) +
-        shape("M32.2,-89 L39.4,-87.8 L39.8,-79.4 L33,-78 Z", "url(#steelDk)", 0.9) +
-        shape("M39.2,-86.8 L44.4,-86 L44.6,-81 L39.6,-80.2 Z", "#14171a", 0.7) +
-        line("M20.2,-89.4 L31.4,-87.6", "#f0f5ff", 0.55, 0.55) +
-        line("M19.8,-81 L31.8,-79.2", INK, 0.6, 0.7) +
-        // Feed belt: pod to hopper, with the links reading along it.
+        // Feed belt: shoulder housing down to the hip hopper, links reading
+        // along it. The Launcher pauldron is what it feeds.
         line("M19.6,-75.6 C15.4,-69 14.4,-59 16.4,-49", INK, 3.6) +
         line("M19.6,-75.6 C15.4,-69 14.4,-59 16.4,-49", "#a8813f", 2.4) +
         [0.2, 0.42, 0.66, 0.88]
@@ -810,7 +941,7 @@ function gear(c, pose) {
           })
           .join("") +
         shape("M8.6,-52 L19.6,-50.4 L20.4,-38.6 L9.2,-39.8 Z", "url(#steelDk)", 0.9);
-      glow += glowOf(`<circle cx="35.2" cy="-83.2" r="1"/>`, AMBER, "#ffe2b0");
+      glow += glowOf(`<circle cx="16.8" cy="-47.4" r=".9"/>`, AMBER, "#ffe2b0");
       // Slab chest with a raised centre rib.
       front +=
         shape("M-13.8,-63.4 L13.8,-63.4 L15.4,-41 L-15.4,-41 Z", "url(#steel)", 1) +

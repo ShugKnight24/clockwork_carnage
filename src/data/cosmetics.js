@@ -157,6 +157,10 @@ export const HELMET_STYLES = [
   { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2, bonuses: { armorAdd: 3 } },
   { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 } },
   { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
+  { id: "ordnance", name: "Ordnance", desc: "Faceted gunner's helm with targeting spine", tier: 3, bonuses: { armorAdd: 4, maxHealthAdd: 8 } },
+  { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
+  { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
+  { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
 ];
 
 export const VISOR_STYLES = [
@@ -173,6 +177,10 @@ export const SHOULDER_STYLES = [
   { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2, bonuses: { armorAdd: 3 } },
   { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 4 } },
   { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3, bonuses: { armorAdd: 8, moveSpeedAdd: -0.1 } },
+  { id: "slab", name: "Slab", desc: "Oversized rounded shoulder slabs", tier: 3, bonuses: { maxHealthAdd: 18, armorAdd: 4, moveSpeedAdd: -0.12 } },
+  { id: "dome", name: "Domed", desc: "Deep crusader half-shells with a raised rim", tier: 3, bonuses: { armorAdd: 9, moveSpeedAdd: -0.08 } },
+  { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, maxHealthAdd: 10, moveSpeedAdd: -0.1 } },
+  { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { maxStaminaAdd: 14, moveSpeedAdd: 0.1 } },
 ];
 
 /**
