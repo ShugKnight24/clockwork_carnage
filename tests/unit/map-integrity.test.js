@@ -107,3 +107,19 @@ describe("runtime nudge safety net", () => {
     expect(stranded).toEqual([]);
   });
 });
+
+describe("prop coverage", () => {
+  it("every prop placed by a level has a renderer", async () => {
+    const [{ PROP_SPRITES }, levels] = await Promise.all([
+      import("../../src/rendering/svg-art/sprites/props.js"),
+      import("../../src/data/levels/campaign.js"),
+    ]);
+    const placed = new Set();
+    for (const lvl of levels.CAMPAIGN_LEVELS) {
+      for (const p of lvl.props || []) placed.add(p.type);
+    }
+    // A prop with no sprite draws nothing and fails silently in both paths.
+    const missing = [...placed].filter((t) => !PROP_SPRITES[t]);
+    expect(missing).toEqual([]);
+  });
+});

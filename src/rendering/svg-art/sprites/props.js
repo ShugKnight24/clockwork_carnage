@@ -321,6 +321,47 @@ function ammoCrate() {
   return { box: [-64, -74, 130, 84], layers: [{ markup: `<g>${s}</g>` }] };
 }
 
+/**
+ * Timber cargo crate with iron corner brackets and a smaller box stacked on
+ * top. Warmer and taller than the olive ammo crate, so a room using both still
+ * reads as two different objects.
+ */
+function crate() {
+  const w = 76;
+  const h = 62;
+  const d = 50;
+  const x = -(w + d * OX) / 2;
+  const y = -h;
+  let s = shadow(2, -6, 56, 15);
+  s += block(x, y, w, h, d, "wd");
+  // Plank seams across the front face.
+  for (let i = 1; i < 3; i++) {
+    s += line(`M${f(x + 1)},${f(y + (h * i) / 3)}h${f(w - 2)}`, "#5f4410", 0.7, 0.55);
+  }
+  // Diagonal brace, the way a shipping crate is actually built.
+  s += line(`M${f(x + 3)},${f(y + h - 3)}L${f(x + w - 3)},${f(y + 3)}`, "#6d4d12", 1.1, 0.5);
+  s += line(`M${f(x + 4)},${f(y + h - 4)}L${f(x + w - 4)},${f(y + 4)}`, "#d9a94a", 0.5, 0.3);
+  // Iron corner brackets.
+  for (const cx of [x, x + w - 8]) {
+    s += rect(cx, y, 8, 8, "url(#dkF)", 0.6) + rect(cx, y + h - 8, 8, 8, "url(#dkF)", 0.6);
+  }
+  // Painted handling chevrons on the side face.
+  const [gx, gy] = pj(x + w, y + 20, d * 0.45);
+  s += line(`M${f(gx - 5)},${f(gy)}l5,-6l5,6`, "#c8532c", 1.6, 0.75);
+  s += line(`M${f(gx - 5)},${f(gy + 7)}l5,-6l5,6`, "#c8532c", 1.6, 0.55);
+
+  // Stacked box — a second, smaller crate sitting on the lid.
+  const tw = 44;
+  const th = 30;
+  const td = 30;
+  const tx = x + 10;
+  const ty = zy(y, d * 0.5) - th;
+  s += block(tx, ty, tw, th, td, "lm");
+  s += line(`M${f(tx + 1)},${f(ty + th / 2)}h${f(tw - 2)}`, "#6b5c4a", 0.6, 0.5);
+  s += rim(`M${f(tx + tw + td * OX)},${f(zy(ty, td) + 1)}V${f(zy(ty + th, td))}`, 0.3);
+  return { box: [-60, -104, 122, 112], layers: [{ markup: `<g>${s}</g>` }] };
+}
+
 /** Hex dumbbell head seen end-on, with the back head peeking out in depth. */
 function hexHead(cx, cy, r) {
   const hex = (ox, oy, rr) => Array.from({ length: 6 }, (_, i) => {
@@ -802,6 +843,7 @@ function barrier() {
 
 export const PROP_SPRITES = {
   locker: locker(),
+  crate: crate(),
   bench: bench(),
   target: target(),
   ammo_crate: ammoCrate(),

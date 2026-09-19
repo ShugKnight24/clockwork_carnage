@@ -24,6 +24,7 @@ const propMinSize = (base, sw, mul) =>
 // ── Lookup table ────────────────────────────────────────────────
 const PROP_RENDERERS = {
   locker: renderLocker,
+  crate: renderCrate,
   bench: renderBench,
   target: renderTarget,
   ammo_crate: renderAmmoCrate,
@@ -330,6 +331,47 @@ function renderTarget(ctx, sx, cy, sw, sh, dist, t, fog) {
     ctx.fill();
   }
 
+  ctx.globalAlpha = 1;
+}
+
+function renderCrate(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const s = propMinSize(6, sw, 0.35);
+  const w = s * 0.92;
+  const h = s * 0.82;
+  const y = groundY(cy, sh) - h / 2;
+
+  // Timber body
+  ctx.globalAlpha = fog * 0.9;
+  ctx.fillStyle = "#9a7016";
+  ctx.fillRect(sx - w / 2, y - h / 2, w, h);
+
+  // Top face
+  ctx.fillStyle = "#c08a28";
+  ctx.beginPath();
+  ctx.moveTo(sx - w / 2, y - h / 2);
+  ctx.lineTo(sx - w / 2 + w * 0.12, y - h / 2 - h * 0.18);
+  ctx.lineTo(sx + w / 2 + w * 0.12, y - h / 2 - h * 0.18);
+  ctx.lineTo(sx + w / 2, y - h / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Diagonal brace — what makes it read as a crate and not a box
+  ctx.strokeStyle = "#5f4410";
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.globalAlpha = fog * 0.75;
+  ctx.beginPath();
+  ctx.moveTo(sx - w / 2, y + h / 2);
+  ctx.lineTo(sx + w / 2, y - h / 2);
+  ctx.stroke();
+
+  // Iron corner brackets
+  ctx.fillStyle = "#3a4450";
+  ctx.globalAlpha = fog * 0.85;
+  const b = Math.max(1, s * 0.12);
+  ctx.fillRect(sx - w / 2, y - h / 2, b, b);
+  ctx.fillRect(sx + w / 2 - b, y - h / 2, b, b);
+  ctx.fillRect(sx - w / 2, y + h / 2 - b, b, b);
+  ctx.fillRect(sx + w / 2 - b, y + h / 2 - b, b, b);
   ctx.globalAlpha = 1;
 }
 
