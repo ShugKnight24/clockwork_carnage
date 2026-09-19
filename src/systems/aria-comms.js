@@ -4,6 +4,22 @@
 import { ARIA_COMMS } from "../data/dialogue.js";
 import { isCompactPhone } from "../../js/layout.js";
 import { isModernArt } from "../rendering/art-style.js";
+import { drawSvgModelAt } from "../rendering/svg-art/index.js";
+
+/**
+ * Beats where ARIA projects herself instead of speaking into the cadet's ear:
+ * the ones she would actually stand up for.
+ */
+const PROJECTED_CATEGORIES = new Set([
+  "bossEncounter",
+  "bossForm2",
+  "criticalHealth",
+  "levelComplete",
+  "tutorialComplete",
+]);
+
+/** Seconds between projections, so her showing up stays an event. */
+const PROJECTION_COOLDOWN = 75;
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 import {
   UI,
@@ -30,6 +46,8 @@ export class AriaCommsSystem {
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
+    this._clock = 0;
+    this._lastProjection = -Infinity;
   }
 
   enable() {
@@ -55,6 +73,8 @@ export class AriaCommsSystem {
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
+    this._clock = 0;
+    this._lastProjection = -Infinity;
   }
 
   queueMessage(category, arenaRound) {
@@ -64,13 +84,29 @@ export class AriaCommsSystem {
     let text = pool[Math.floor(Math.random() * pool.length)];
     text = text.replace("{ROUNDS}", String(arenaRound || 0));
     const prominent = !["idle", "ariaPersonality"].includes(category);
+    const projected = this._shouldProject(category);
     this.queue.push({
       text,
       color: "#00ffdd",
-      duration: prominent ? 4.5 : 3.5,
+      // She holds the floor longer when she has bothered to appear.
+      duration: projected ? 6 : prominent ? 4.5 : 3.5,
       prominent,
+      projected,
       speaker: "ARIA",
     });
+  }
+
+  /**
+   * Whether ARIA projects herself for this line instead of speaking into the
+   * cadet's ear. Reserved for the beats that carry weight, and rate-limited so
+   * it stays an event: if she showed up a minute ago, she stays a voice.
+   */
+  _shouldProject(category) {
+    if (!PROJECTED_CATEGORIES.has(category)) return false;
+    const now = this._clock;
+    if (now - (this._lastProjection ?? -Infinity) < PROJECTION_COOLDOWN) return false;
+    this._lastProjection = now;
+    return true;
   }
 
   /**
@@ -102,6 +138,7 @@ export class AriaCommsSystem {
 
   update(dt, isPlaying) {
     if (!this.enabled) return;
+    this._clock = (this._clock || 0) + dt;
 
     // Drain queue -> active message
     if (!this.message && this.queue.length > 0) {
@@ -166,7 +203,8 @@ export class AriaCommsSystem {
     const agentName = characterName || "Agent";
 
     if (isModernArt()) {
-      if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      if (msg.projected) this._renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop);
+      else if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
       else this._renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
       return;
     }
@@ -653,6 +691,71 @@ export class AriaCommsSystem {
     ctx.restore();
   }
 
+  /**
+   * ARIA projected into the room: a full-height hologram standing beside the
+   * caption rather than a 50px bust inside it. Reserved for the beats in
+   * PROJECTED_CATEGORIES, so the bust stays the everyday voice and this reads
+   * as her actually showing up.
+   */
+  _renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+    let alpha = 1;
+    if (t < 0.45) alpha = t / 0.45;
+    else if (t > dur - 0.6) alpha = 1 - (t - (dur - 0.6)) / 0.6;
+
+    const compact = isCompactPhone(h);
+    // She stands on the left, clear of the vitals ring in the bottom corner.
+    const figH = Math.round(Math.min(h * (compact ? 0.4 : 0.5), 352));
+    const figW = Math.round(figH * 1.03);
+    const figX = Math.round(w * (compact ? 0.02 : 0.055));
+    // Clear the score and round panels in the top-left corner.
+    const figY = Math.round(Math.max(h * (compact ? 0.2 : 0.26), minTop));
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // Materialise: she resolves upward out of the projector over the fade-in.
+    const rise = t < 0.45 ? (1 - t / 0.45) * figH * 0.08 : 0;
+    const drawn = drawSvgModelAt(ctx, "aria", figX, figY + rise, figW, figH, t);
+    ctx.restore();
+
+    // If the bitmaps have not decoded yet, fall back rather than show nothing.
+    if (!drawn) {
+      this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      return;
+    }
+
+    // Caption sits beside her, not over her.
+    const speaker = msg.speaker || "ARIA";
+    const color = speakerTone(speaker);
+    const boxW = Math.min(440, Math.max(240, w - figX - figW - 40));
+    const x = Math.round(figX + figW + 16);
+    const font = uiFont(compact ? 13 : 15, 600);
+    const lineH = compact ? 17 : 19;
+    const lines = this._modernLines(ctx, msg, agentName, font, boxW - 58);
+    const boxH = 26 + lines.length * lineH + 10;
+    const y = Math.round(figY + figH * 0.32);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const dpr = pixelRatio(ctx);
+    const card = captionCardSprite(boxW, boxH, color, dpr);
+    ctx.drawImage(card, x - CARD_PAD, y - CARD_PAD, boxW + CARD_PAD * 2, boxH + CARD_PAD * 2);
+
+    const tab = speakerTabSprite(speaker, color, 11, dpr);
+    ctx.drawImage(tab.c, x + 14 - 3, y - 11 - 3, tab.w + 6, tab.h + 6);
+    drawVoiceBars(ctx, x + 14 + tab.w + 8, y - 11 + tab.h / 2, t, color, this._speaking(msg, t) ? 1 : 0.15);
+
+    // The caption card reserves a well for a portrait on its left. She is
+    // standing right there, so fill it with the link state instead and start
+    // the text clear of it.
+    const wellW = 34;
+    drawVoiceBars(ctx, x + 12, y + boxH / 2, t, color, this._speaking(msg, t) ? 1 : 0.2);
+
+    ctx.font = font;
+    const textY = y + Math.round((boxH - lines.length * lineH) / 2 + lineH * 0.74) + 1;
+    this._drawTyped(ctx, msg, lines, x + wellW + 8, textY, lineH, t, UI.captionInk, UI.ink);
+    ctx.restore();
+  }
+
   _renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
     let slideX = 0;
     if (t < 0.3) slideX = (1 - t / 0.3) * -360;
@@ -1023,14 +1126,24 @@ function portraitSprite(speaker, color, size, dpr) {
       g.stroke();
     };
 
-    // Shoulders / suit.
+    // Shoulders / suit. ARIA's frame is slimmer than the squad's, matching the
+    // hologram in src/rendering/svg-art/models/cast.js.
     g.beginPath();
-    g.moveTo(3, 41);
-    g.lineTo(6, 33);
-    g.quadraticCurveTo(9, 29.5, 15, 28.5);
-    g.lineTo(25, 28.5);
-    g.quadraticCurveTo(31, 29.5, 34, 33);
-    g.lineTo(37, 41);
+    if (isAria) {
+      g.moveTo(6, 41);
+      g.lineTo(8.5, 33.5);
+      g.quadraticCurveTo(11, 30, 16, 29);
+      g.lineTo(24, 29);
+      g.quadraticCurveTo(29, 30, 31.5, 33.5);
+      g.lineTo(34, 41);
+    } else {
+      g.moveTo(3, 41);
+      g.lineTo(6, 33);
+      g.quadraticCurveTo(9, 29.5, 15, 28.5);
+      g.lineTo(25, 28.5);
+      g.quadraticCurveTo(31, 29.5, 34, 33);
+      g.lineTo(37, 41);
+    }
     g.closePath();
     const suit = g.createLinearGradient(6, 28, 30, 41);
     suit.addColorStop(0, "#4a6680");
@@ -1064,20 +1177,20 @@ function portraitSprite(speaker, color, size, dpr) {
       g.stroke();
       // Face: base, shadow side, AO under the jaw.
       g.beginPath();
-      g.ellipse(20, 16.5, 7.4, 9, 0, 0, Math.PI * 2);
-      g.fillStyle = "#dcebf3";
+      g.ellipse(20, 16.5, 7, 8.8, 0, 0, Math.PI * 2);
+      g.fillStyle = "#cdf6ff";
       g.fill();
       g.save();
       g.clip();
-      g.fillStyle = "#a8c1d0";
+      g.fillStyle = "#62cce4";
       g.beginPath();
       g.ellipse(24.5, 18.5, 6, 10, 0, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = "#7f9aab";
+      g.fillStyle = "#2f88a6";
       g.fillRect(12, 23.2, 16, 3);
       g.restore();
       g.beginPath();
-      g.ellipse(20, 16.5, 7.4, 9, 0, 0, Math.PI * 2);
+      g.ellipse(20, 16.5, 7, 8.8, 0, 0, Math.PI * 2);
       ink();
       // Eye sockets (live glow drawn on top per frame) + mouth.
       g.fillStyle = "#2a3a4a";
@@ -1112,17 +1225,9 @@ function portraitSprite(speaker, color, size, dpr) {
       g.strokeStyle = color;
       g.lineWidth = 1.2;
       g.stroke();
-      // Headset band, earpiece and boom mic.
+      // Earpiece and temple lead — no headset band, matching the model.
       g.beginPath();
-      g.arc(20, 16, 10.2, -1.9, -0.25);
-      g.strokeStyle = UI.ink;
-      g.lineWidth = 2.2;
-      g.stroke();
-      g.strokeStyle = "#6f8aa3";
-      g.lineWidth = 1;
-      g.stroke();
-      g.beginPath();
-      g.ellipse(28.6, 17.5, 2.2, 3.6, 0.15, 0, Math.PI * 2);
+      g.ellipse(28.2, 17.5, 1.6, 3.2, 0.15, 0, Math.PI * 2);
       g.fillStyle = "#2e4255";
       g.fill();
       ink();
@@ -1136,6 +1241,11 @@ function portraitSprite(speaker, color, size, dpr) {
       g.arc(22.6, 24.6, 1.1, 0, Math.PI * 2);
       g.fillStyle = color;
       g.fill();
+      // Feed scanlines across the whole tile.
+      g.globalAlpha = 0.18;
+      g.fillStyle = "#bfffff";
+      for (let yy = 1; yy < 40; yy += 2.6) g.fillRect(0, yy, 40, 0.7);
+      g.globalAlpha = 1;
     } else {
       // Pauldrons.
       for (const sx of [1, -1]) {

@@ -161,6 +161,21 @@ export function drawSvgArt(ctx, key, t) {
 }
 
 /**
+ * Draw a cast model into an arbitrary rect, contain-fitted and bottom-anchored.
+ * Used by the HUD to stand ARIA in the world rather than in a portrait tile.
+ * @returns {boolean} true if drawn
+ */
+export function drawSvgModelAt(ctx, key, x, y, w, h, t) {
+  const model = MODELS[key];
+  if (!model || !isModernArt()) return false;
+  const [, , bw, bh] = model.box;
+  const k = Math.min(w / bw, h / bh);
+  const dw = bw * k;
+  const dh = bh * k;
+  return drawLayers(ctx, `art:${key}`, model, t, x + (w - dw) / 2, y + (h - dh), dw, dh, k);
+}
+
+/**
  * Draw a background model cover-fitted to (0, 0, w, h).
  * @returns {boolean} true if drawn
  */

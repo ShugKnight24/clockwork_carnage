@@ -1207,96 +1207,111 @@ const ARIA_FACE = {
 };
 
 function ariaModel() {
+  // Hair: a short asymmetric bob rather than a shapeless fall, so the head
+  // reads as a designed silhouette at portrait size.
   const back =
-    `<path d="M-7.8,-1 C-9,-9.6 -5,-12 0,-12 C5.4,-12 8.8,-9 8,-2 C8.4,1 8,4 7.4,5.6 L5,5.6 L5,0 L-5,0 L-5.4,9 C-7,11 -8.8,12 -9.6,12.4 C-9.2,8 -8.4,3 -7.8,-1Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>`;
+    `<path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L4.6,5 L4.6,0 L-4.6,0 L-5,7.6 C-6.2,9.2 -7.6,10 -8.4,10.4 C-8.2,6.6 -7.8,2.4 -7.4,-1.6Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>`;
   const front =
-    `<path d="M-7.4,1 C-8.4,-8 -4,-11.2 1,-11 C5.6,-10.8 8.2,-8 7.8,-1 C7,-4 5.8,-5.8 3.4,-6.4 C0.6,-6.6 -3.4,-5.4 -5.6,-3 C-6.6,-1.6 -7.1,-0.2 -7.4,1Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>` +
-    `<path d="M-7.6,-2 C-8.6,3 -8.8,8 -9.4,12.4 C-8,11.8 -6.6,10.6 -5.8,9 C-6.2,5 -6.4,1.5 -6,-3Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.4"/>` +
-    `<path d="M-6.4,-5.4 C-7.6,0 -7.8,6 -8.4,11" fill="none" stroke="#6ff6ff" stroke-width="0.55" opacity="0.8"/>` +
-    `<path d="M-3.6,-8.8 C-0.4,-10.4 3.4,-10 6,-7.6 M-5.8,-5.4 C-3.4,-8 0.4,-8.8 4.4,-8.2 M-1.6,-6.4 C1.4,-8 4.6,-7.8 6.8,-5.6 M5.6,-8.8 C7.4,-6.4 8,-3.6 7.8,-1" fill="none" stroke="#9ffaff" stroke-width="0.3" opacity="0.7"/>` +
-    `<path d="M1.4,-6.6 C-1.2,-5.4 -3.6,-3.6 -5,-1.4 C-3,-2.6 -1,-3.4 1.4,-3.8 C0.6,-4.6 0.8,-5.8 1.4,-6.6Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.35"/>`;
+    `<path d="M-7,0.6 C-8,-8 -3.8,-11.2 1,-11 C5.4,-10.8 8,-8 7.6,-1.4 C6.8,-4.2 5.6,-5.8 3.2,-6.4 C0.6,-6.6 -3.2,-5.4 -5.4,-3 C-6.2,-1.8 -6.7,-0.6 -7,0.6Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>` +
+    `<path d="M-7.2,-2.2 C-8.2,2.4 -8.4,6.6 -8.8,10.4 C-7.6,9.8 -6.4,8.8 -5.6,7.4 C-6,4 -6.2,1.2 -5.8,-3Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.4"/>` +
+    `<path d="M-6.2,-5.2 C-7.2,-0.6 -7.4,4.6 -7.8,9" fill="none" stroke="#6ff6ff" stroke-width="0.5" opacity="0.75"/>` +
+    `<path d="M-3.4,-8.6 C-0.4,-10.2 3.2,-9.8 5.8,-7.4 M-5.6,-5.2 C-3.2,-7.8 0.4,-8.6 4.2,-8 M-1.4,-6.2 C1.4,-7.8 4.4,-7.6 6.6,-5.4" fill="none" stroke="#9ffaff" stroke-width="0.28" opacity="0.6"/>`;
+  // Slim earpiece and a temple lead instead of the old headband.
   const headset =
-    `<path d="M-7.9,-1.8 C-8.8,-13.2 8.8,-13.2 7.9,-1.8" fill="none" stroke="#1a6e8e" stroke-width="0.9"/>` +
-    `<path d="M-7.9,-1.8 C-8.8,-13.2 8.8,-13.2 7.9,-1.8" fill="none" stroke="#8ff8ff" stroke-width="0.25" opacity="0.8"/>` +
-    [-1, 1].map((sx) => `<rect x="${r1(sx * 8 - 1.3)}" y="-2" width="2.6" height="5" rx="1" fill="url(#ast)" stroke="#0a3a52" stroke-width="0.35"/>`).join("") +
-    `<path d="M-8,2.6 C-7.4,6.8 -5.2,8.2 -2.8,8.4" fill="none" stroke="#2a8eae" stroke-width="0.5"/><circle cx="-2.6" cy="8.4" r="0.6" fill="#8ff8ff"/>`;
+    [-1, 1].map((sx) => `<rect x="${r1(sx * 7.4 - 0.9)}" y="-2.4" width="1.8" height="4.2" rx="0.9" fill="url(#ast)" stroke="#0a3a52" stroke-width="0.3"/>`).join("") +
+    `<path d="M-7.6,1.4 C-7,5.2 -5,6.6 -3,6.8" fill="none" stroke="#2a8eae" stroke-width="0.45"/><circle cx="-2.8" cy="6.8" r="0.5" fill="#8ff8ff"/>`;
   const head = face("af", { ...ARIA_FACE, x: 0, y: -52, s: 1.5, back, front: front + headset });
 
-  const arm = "M-25,-28.6 C-34,-27.6 -39.4,-21 -40.2,-9 C-40.8,2 -40.2,14 -39,26 L-31.4,28 C-32.2,18 -32.4,8 -32,-2Z";
-  const torso = "M-7.2,-33.6 C-14,-32.6 -23,-29.6 -29,-23.6 C-33,-18.6 -33,-8 -31,4 L-29,30 L29,30 L31,4 C33,-8 33,-18.6 29,-23.6 C23,-29.6 14,-32.6 7.2,-33.6Z";
+  // ── Frame ────────────────────────────────────────────────────────────────
+  // Slim and petite: shoulders pulled in from +-31 to +-19, a narrow waist and
+  // thin arms, so the head reads larger against the body and the whole figure
+  // is a slender vertical rather than a broad slab.
+  const arm =
+    "M-17.6,-27.2 C-22.6,-26 -25.4,-21.4 -26,-12.4 C-26.4,-3.6 -26,6.4 -25.2,16.6 L-21.4,17.6 C-21.8,9 -21.9,1 -21.6,-6.4Z";
+  const torso =
+    "M-5.4,-33.2 C-10.2,-32.4 -15.4,-30 -18.4,-25.6 C-21,-21.2 -20.8,-13.6 -19.4,-5.4 " +
+    "L-17.6,4.4 C-18.4,14 -18.8,23 -18.6,30 L18.6,30 C18.8,23 18.4,14 17.6,4.4 " +
+    "L19.4,-5.4 C20.8,-13.6 21,-21.2 18.4,-25.6 C15.4,-30 10.2,-32.4 5.4,-33.2Z";
+
   let suit = "";
-  suit += `<path d="${arm}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.8"/><path d="${mir(arm)}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.8"/>`;
-  suit += `<path d="${torso}" fill="url(#asu)" stroke="#0a3a52" stroke-width="0.8"/>`;
-  suit += `<path d="M-6.6,-41.8 C-4,-40.2 4,-40.2 6.6,-41.8 L7.6,-32 C4,-30.4 -4,-30.4 -7.6,-32Z" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.6"/>`;
-  suit += `<path d="M-7,-31.6 L-2,-12 L2,-12 L7,-31.6 M-12,-31.4 C-20,-28.4 -26,-24 -29,-18 M12,-31.4 C20,-28.4 26,-24 29,-18 M0,-12 L0,20 M-18,-4 L-6,-4 M18,-4 L6,-4" fill="none" stroke="#7ff6ff" stroke-width="0.55" opacity="0.85"/>`;
-  suit += `<path d="M-6.4,-40.6 C-4,-39.2 4,-39.2 6.4,-40.6" fill="none" stroke="#b4ffff" stroke-width="0.45"/>`;
-  suit += `<circle cx="0" cy="-8" r="1.8" fill="#062536" stroke="#7ff6ff" stroke-width="0.5"/>`;
-  suit += `<path d="M29.6,-22 C33.4,-16 33,-6 31,6" fill="none" stroke="#b4ffff" stroke-width="0.7" opacity="0.7"/>`;
-  suit += `<path d="M-32.4,-15 C-33.2,-5 -33,8 -32,22 M32.4,-15 C33.2,-5 33,8 32,22" fill="none" stroke="#041a26" stroke-width="1.4" opacity="0.6"/>`;
-  suit += `<path d="M-37.6,-19 C-39.2,-12 -39.6,-4 -39.4,4" fill="none" stroke="#9ffaff" stroke-width="0.5" opacity="0.6"/>`;
+  suit += `<path d="${arm}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.7"/><path d="${mir(arm)}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.7"/>`;
+  suit += `<path d="${torso}" fill="url(#asu)" stroke="#0a3a52" stroke-width="0.7"/>`;
+  // High collar, standing away from a long neck.
+  suit += `<path d="M-5,-41.4 C-2.8,-39.8 2.8,-39.8 5,-41.4 L6.2,-31.6 C2.8,-30.2 -2.8,-30.2 -6.2,-31.6Z" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.55"/>`;
+  suit += `<path d="M-4.8,-40.4 C-2.6,-39 2.6,-39 4.8,-40.4" fill="none" stroke="#b4ffff" stroke-width="0.4"/>`;
+  // Panel seams: a centre spine, a chest yoke and waist banding. The body is
+  // the interface, so the lines are data channels rather than tailoring.
+  suit += `<path d="M0,-30.6 L0,26 M-5.4,-30 L-2.4,-16 L2.4,-16 L5.4,-30 M-13.6,-24.4 C-16.6,-21.4 -18,-17 -18.2,-11 M13.6,-24.4 C16.6,-21.4 18,-17 18.2,-11" fill="none" stroke="#7ff6ff" stroke-width="0.45" opacity="0.8"/>`;
+  suit += `<path d="M-16.4,2.4 L16.4,2.4 M-17.2,10 L17.2,10 M-17.8,17.6 L17.8,17.6" fill="none" stroke="#5fe4ff" stroke-width="0.38" opacity="0.5"/>`;
+  // Data ribbon running the length of the torso — the one motif that says
+  // "this is rendered light, not cloth".
+  suit += `<path d="M-2.6,-14 C4.6,-9 -4.6,-2 2.6,3 C-3.4,8 3,14 -1.6,20" fill="none" stroke="#9ffaff" stroke-width="0.4" opacity="0.55"/>`;
+  suit += `<circle cx="0" cy="-9.6" r="1.6" fill="#062536" stroke="#7ff6ff" stroke-width="0.45"/>`;
+  suit += `<path d="M-20.2,-12 C-20.8,-4 -20.6,6 -19.8,16 M20.2,-12 C20.8,-4 20.6,6 19.8,16" fill="none" stroke="#041a26" stroke-width="1.1" opacity="0.5"/>`;
+  suit += `<path d="M18.8,-24 C21.2,-19 21.2,-11 19.8,-3" fill="none" stroke="#b4ffff" stroke-width="0.55" opacity="0.6"/>`;
 
   const silhouette =
     `<path d="${torso}"/><path d="${arm}"/><path d="${mir(arm)}"/>` +
-    at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.8,-1 C-9,-9.6 -5,-12 0,-12 C5.4,-12 8.8,-9 8,-2 C8.4,1 8,4 7.4,5.6 L-9.6,12.4Z"/><rect x="-4" y="4" width="8" height="14"/>`);
+    at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L-8.4,10.4Z"/><rect x="-3.2" y="4" width="6.4" height="14"/>`);
   const figure = `<g mask="url(#afm)">${suit}${head}</g>`;
   const shimmer =
-    `<g mask="url(#afm)" fill="#7ff6ff" opacity="0.1">${silhouette}</g>` +
-    `<clipPath id="aslc"><rect x="-80" y="-58" width="160" height="3.4"/><rect x="-80" y="-20" width="160" height="2"/></clipPath>` +
-    `<g clip-path="url(#aslc)" transform="translate(3.4 0)" fill="#9ffaff" opacity="0.55">${silhouette}</g>`;
+    `<clipPath id="aslc"><rect x="-80" y="-58" width="160" height="3" /><rect x="-80" y="-22" width="160" height="1.8"/></clipPath>` +
+    `<g clip-path="url(#aslc)" transform="translate(2.6 0)" fill="#9ffaff" opacity="0.4">${silhouette}</g>`;
   const scan =
-    `<g mask="url(#asm)" stroke="#bfffff" stroke-width="0.3" opacity="0.32">` +
-    Array.from({ length: 76 }, (_, i) => `<path d="M-40,${r1(-72 + i * 1.4)} L40,${r1(-72 + i * 1.4)}"/>`).join("") +
+    `<g mask="url(#asm)" stroke="#bfffff" stroke-width="0.26" opacity="0.2">` +
+    Array.from({ length: 76 }, (_, i) => `<path d="M-30,${r1(-72 + i * 1.4)} L30,${r1(-72 + i * 1.4)}"/>`).join("") +
     `</g>`;
   const cone =
-    `<path d="M-17,40 L-64,-86 L64,-86 L17,40Z" fill="url(#acn)"/>` +
-    `<ellipse cx="0" cy="40" rx="17" ry="2.6" fill="#8ff8ff" opacity="0.8" filter="url(#agl)"/>`;
+    `<path d="M-12,40 L-46,-86 L46,-86 L12,40Z" fill="url(#acn)"/>` +
+    `<ellipse cx="0" cy="40" rx="13" ry="2.2" fill="#8ff8ff" opacity="0.65" filter="url(#agl)"/>`;
   const frame =
-    `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="#22e6ff" fill-opacity="0.025" stroke="#22e6ff" stroke-width="0.7" stroke-opacity="0.35"/>` +
-    `<path d="M-50,-90 L-58,-90 L-61.4,-76.4 M50,-90 L58,-90 L61.4,-76.4 M-50,24 L-58,24 L-61.4,10.4 M50,24 L58,24 L61.4,10.4" fill="none" stroke="#8ff8ff" stroke-width="1.1"/>` +
+    `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="#22e6ff" fill-opacity="0.02" stroke="#22e6ff" stroke-width="0.7" stroke-opacity="0.3"/>` +
+    `<path d="M-50,-90 L-58,-90 L-61.4,-76.4 M50,-90 L58,-90 L61.4,-76.4 M-50,24 L-58,24 L-61.4,10.4 M50,24 L58,24 L61.4,10.4" fill="none" stroke="#8ff8ff" stroke-width="1"/>` +
     `<g transform="translate(-64 -12)" fill="#7ff6ff">` +
-    [0, 1, 2, 3, 4].map((i) => `<rect x="0" y="${i * 3}" width="${[9, 14, 6, 11, 8][i]}" height="1.2" opacity="0.6"/>`).join("") +
+    [0, 1, 2, 3, 4].map((i) => `<rect x="0" y="${i * 3}" width="${[9, 14, 6, 11, 8][i]}" height="1.2" opacity="0.5"/>`).join("") +
     `</g>` +
-    `<path d="M40,12 L44,12 L45.4,6 L47.4,17 L49.4,3 L51.4,15 L53.4,8 L55,12 L62,12" fill="none" stroke="#8ff8ff" stroke-width="0.6" opacity="0.8"/>`;
+    `<path d="M40,12 L44,12 L45.4,6 L47.4,17 L49.4,3 L51.4,15 L53.4,8 L55,12 L62,12" fill="none" stroke="#8ff8ff" stroke-width="0.6" opacity="0.7"/>`;
   const ring =
-    `<circle cx="0" cy="-52" r="31" fill="none" stroke="#5ff0ff" stroke-width="0.6" stroke-dasharray="16 5 3 5" opacity="0.5"/>` +
-    `<circle cx="0" cy="-52" r="34.6" fill="none" stroke="#5ff0ff" stroke-width="1.6" stroke-dasharray="0.5 3.1" opacity="0.35"/>` +
-    `<path d="M-2,-87.4 L2,-87.4 L0,-84.4Z" fill="#8ff8ff" opacity="0.8"/>`;
+    `<circle cx="0" cy="-52" r="26" fill="none" stroke="#5ff0ff" stroke-width="0.55" stroke-dasharray="14 5 3 5" opacity="0.4"/>` +
+    `<circle cx="0" cy="-52" r="29.6" fill="none" stroke="#5ff0ff" stroke-width="1.4" stroke-dasharray="0.5 3.1" opacity="0.28"/>` +
+    `<path d="M-2,-82.4 L2,-82.4 L0,-79.4Z" fill="#8ff8ff" opacity="0.7"/>`;
   const projector =
-    `<path d="M-23,41 L23,41 L27.4,47.6 L-27.4,47.6Z" fill="url(#ast)" stroke="${INK}" stroke-width="1"/>` +
-    `<path d="M-27.4,47.6 L27.4,47.6 L26,50 L-26,50Z" fill="#0a1018" stroke="${INK}" stroke-width="0.8"/>` +
-    `<ellipse cx="0" cy="40.6" rx="18.4" ry="3" fill="#041620" stroke="#22e6ff" stroke-width="0.7"/>` +
-    `<path d="M-22,42.4 L22,42.4" stroke="#b8d8ee" stroke-width="0.4" opacity="0.6"/>` +
-    `<circle cx="-20" cy="45" r="0.7" fill="#22e6ff"/><circle cx="20" cy="45" r="0.7" fill="#22e6ff"/>`;
+    `<path d="M-19,41 L19,41 L23,47.6 L-23,47.6Z" fill="url(#ast)" stroke="${INK}" stroke-width="1"/>` +
+    `<path d="M-23,47.6 L23,47.6 L21.6,50 L-21.6,50Z" fill="#0a1018" stroke="${INK}" stroke-width="0.8"/>` +
+    `<ellipse cx="0" cy="40.6" rx="14.4" ry="2.6" fill="#041620" stroke="#22e6ff" stroke-width="0.7"/>` +
+    `<path d="M-18,42.4 L18,42.4" stroke="#b8d8ee" stroke-width="0.4" opacity="0.6"/>` +
+    `<circle cx="-16" cy="45" r="0.7" fill="#22e6ff"/><circle cx="16" cy="45" r="0.7" fill="#22e6ff"/>`;
   const eyes =
-    [-1, 1].map((sx) => `<circle cx="${r1(sx * 4.5)}" cy="-52.2" r="1.3" fill="#8ffcff" filter="url(#agl2)"/>`).join("") +
-    `<circle cx="-12" cy="-51.2" r="1.1" fill="#8ffcff" filter="url(#agl2)"/><circle cx="-3.9" cy="-39.4" r="0.9" fill="#b4ffff" filter="url(#agl2)"/>` +
-    `<circle cx="0" cy="-8" r="2" fill="#7ff6ff" filter="url(#agl2)"/>`;
+    [-1, 1].map((sx) => `<circle cx="${r1(sx * 4.5)}" cy="-52.2" r="1.15" fill="#8ffcff" filter="url(#agl2)"/>`).join("") +
+    `<circle cx="-11.2" cy="-51.2" r="0.9" fill="#8ffcff" filter="url(#agl2)"/>` +
+    `<circle cx="0" cy="-9.6" r="1.7" fill="#7ff6ff" filter="url(#agl2)"/>`;
   const float = { type: "float", amp: 1.2, speed: 1.1 };
-  // A smoked-glass plate behind the projection keeps it legible over bright sets.
   const backing =
     `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="url(#abk)" filter="url(#agl)"/>` +
     `<path d="M-54,-86 L-67,-34 L-54,20 L54,20 L67,-34 L54,-86Z" fill="#02070c" opacity="0.55"/>` +
-    `<path d="M-23,41 L23,41 L27.4,50 L-27.4,50Z" fill="#000" opacity="0.5" filter="url(#agl)"/>`;
+    `<path d="M-19,41 L19,41 L23,50 L-23,50Z" fill="#000" opacity="0.5" filter="url(#agl)"/>`;
+  // One thin rim, not a glowing outline: the old pass stacked a 2.2-wide
+  // additive stroke under a 0.6 one and buried every interior line.
   const outline =
-    `<g mask="url(#afm)" fill="none" stroke="#5ff0ff" stroke-width="2.2" stroke-linejoin="round" filter="url(#agl2)">${silhouette}</g>` +
-    `<g mask="url(#afm)" fill="none" stroke="#c8ffff" stroke-width="0.6" stroke-linejoin="round" opacity="0.9">${silhouette}</g>`;
+    `<g mask="url(#afm)" fill="none" stroke="#5ff0ff" stroke-width="1.1" stroke-linejoin="round" opacity="0.5" filter="url(#agl2)">${silhouette}</g>` +
+    `<g mask="url(#afm)" fill="none" stroke="#c8ffff" stroke-width="0.5" stroke-linejoin="round" opacity="0.7">${silhouette}</g>`;
 
   return {
     box: [-76, -96, 152, 148],
     defs:
       faceDefs("af", ARIA_FACE) +
       lin("ahr", [[0, "#2a8aa8"], [0.5, "#0c4460"], [1, "#04202e"]], 0, 0, 1, 1) +
-      lin("asu", [[0, "#2c96b8"], [0.45, "#0f4e6e"], [1, "#052232"]], 0, 0, 1, 0.3) +
-      lin("asa", [[0, "#1c7494"], [1, "#041a26"]], 0, 0, 1, 0) +
+      lin("asu", [[0, "#58c8e4"], [0.45, "#1e7a9e"], [1, "#0a3448"]], 0, 0, 1, 0.3) +
+      lin("asa", [[0, "#3a9cbc"], [1, "#072634"]], 0, 0, 1, 0) +
       lin("ast", [[0, "#6f8aa3"], [0.4, "#3a4d61"], [1, "#141c26"]], 0, 0, 1, 0.5) +
-      lin("acn", [[0, "#22e6ff", 0], [0.6, "#22e6ff", 0.07], [1, "#22e6ff", 0.26]]) +
-      rad("abg", [[0, "#22e6ff", 0.16], [1, "#22e6ff", 0]]) +
+      lin("acn", [[0, "#22e6ff", 0], [0.6, "#22e6ff", 0.05], [1, "#22e6ff", 0.18]]) +
+      rad("abg", [[0, "#22e6ff", 0.1], [1, "#22e6ff", 0]]) +
       rad("abk", [[0, "#01060b", 0.82], [0.75, "#01060b", 0.7], [1, "#01060b", 0.35]]) +
       `<linearGradient id="afg" gradientUnits="userSpaceOnUse" x1="0" y1="-2" x2="0" y2="28"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
       `<mask id="afm" maskUnits="userSpaceOnUse" x="-100" y="-120" width="200" height="200"><rect x="-100" y="-120" width="200" height="200" fill="url(#afg)"/>` +
       `<rect x="-100" y="8" width="200" height="0.8" fill="#000"/><rect x="-100" y="13" width="200" height="1.4" fill="#000"/><rect x="-100" y="18.4" width="200" height="0.8" fill="#000"/><rect x="-100" y="-26" width="200" height="0.5" fill="#000"/></mask>` +
       `<mask id="asm" maskUnits="userSpaceOnUse" x="-100" y="-120" width="200" height="200"><g mask="url(#afm)" fill="#fff"><path d="${torso}"/><path d="${arm}"/><path d="${mir(arm)}"/>` +
-      at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.8,-1 C-9,-9.6 -5,-12 0,-12 C5.4,-12 8.8,-9 8,-2 C8.4,1 8,4 7.4,5.6 L-9.6,12.4Z"/><rect x="-4" y="4" width="8" height="14"/>`) +
+      at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L-8.4,10.4Z"/><rect x="-3.2" y="4" width="6.4" height="14"/>`) +
       `</g></mask>` +
       blur("agl", 2) +
       blur("agl2", 1.2),
@@ -1306,11 +1321,15 @@ function ariaModel() {
       { markup: cone, anim: { type: "pulse", min: 0.55, max: 1, speed: 2.1 }, blend: "lighter" },
       { markup: ring, anim: { type: "spin", speed: 0.25, pivot: [0, -52] }, blend: "lighter" },
       { markup: frame, anim: { type: "flicker", min: 0.5, max: 0.9, speed: 0.7 }, blend: "lighter" },
-      { markup: `<g mask="url(#afm)" fill="#01080e">${silhouette}</g>`, anim: float, opacity: 0.8 },
-      { markup: figure, anim: float, blend: "lighter", opacity: 0.92 },
-      { markup: outline, anim: float, blend: "lighter", opacity: 0.85 },
-      { markup: shimmer, anim: { type: "flicker", min: 0, max: 0.8, speed: 1.6 }, blend: "lighter" },
-      { markup: scan, anim: { type: "drift", amp: 0.6, speed: 5 }, blend: "lighter", opacity: 0.6 },
+      // Dark core first, then the figure drawn normally: the interior art has
+      // to survive, or she is a white cut-out. The additive pass that follows
+      // is what makes her read as projected light.
+      { markup: `<g mask="url(#afm)" fill="#01080e">${silhouette}</g>`, anim: float, opacity: 0.66 },
+      { markup: figure, anim: float, opacity: 0.95 },
+      { markup: figure, anim: float, blend: "lighter", opacity: 0.42 },
+      { markup: outline, anim: float, blend: "lighter", opacity: 0.6 },
+      { markup: shimmer, anim: { type: "flicker", min: 0, max: 0.6, speed: 1.6 }, blend: "lighter" },
+      { markup: scan, anim: { type: "drift", amp: 0.6, speed: 5 }, blend: "lighter", opacity: 0.4 },
       { markup: eyes, anim: float, blend: "lighter" },
       { markup: projector },
     ],
