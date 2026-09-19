@@ -7,6 +7,56 @@ export function createGrid(w, h, fill = 1) {
   return Array.from({ length: h }, () => Array(w).fill(fill));
 }
 
+// ── Height ────────────────────────────────────────────────────────
+// A level can hand the renderer a `heightMap` of builder layers (1-5) beside
+// its grid. Anything below 5 draws as a short wall you can see and shoot over,
+// and `wallHeight` in src/systems/physics.js turns the same number into the
+// line-of-sight and hitscan tests. A map without one is all full-height walls.
+
+/**
+ * Named layer counts, so level data reads as heights rather than integers.
+ * The eye sits at half a wall, so only KNEE and WAIST can be seen over
+ * standing; SHOULDER and TALL block sight while still showing the ceiling.
+ */
+export const LAYER = { KNEE: 1, WAIST: 2, SHOULDER: 3, TALL: 4, FULL: 5 };
+
+/** Companion height grid for a map, full-height everywhere by default. */
+export function createHeights(w, h) {
+  return Array.from({ length: h }, () => Array(w).fill(LAYER.FULL));
+}
+
+/**
+ * Low cover: solid to walk through, open to look and shoot over. Writes the
+ * tile into the grid and the height into the companion map.
+ *
+ * `layers` is one of LAYER.KNEE…LAYER.TALL. Waist-high cover hides a crouched agent
+ * from enemy fire and not a standing one, which is the whole point of it.
+ */
+export function lowWall(g, hm, r1, c1, r2, c2, layers = LAYER.WAIST, v = 3) {
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      g[r][c] = v;
+      hm[r][c] = layers;
+    }
+  }
+}
+
+/** A single low block — a crate-sized piece of cover. */
+export function lowTile(g, hm, r, c, layers = LAYER.WAIST, v = 3) {
+  g[r][c] = v;
+  hm[r][c] = layers;
+}
+
+/**
+ * Scatter low cover through a room on a spacing, the way `coverGrid` places
+ * full pillars — but shootable over, so a firefight has angles instead of
+ * blind corners.
+ */
+export function lowCoverGrid(g, hm, r1, c1, r2, c2, spacingR = 5, spacingC = 6, layers = LAYER.WAIST, v = 3) {
+  for (let r = r1; r <= r2; r += spacingR)
+    for (let c = c1; c <= c2; c += spacingC) lowTile(g, hm, r, c, layers, v);
+}
+
 /** Carve a rectangle to a given tile value (default: open floor). */
 export function carve(g, r1, c1, r2, c2, v = 0) {
   for (let r = r1; r <= r2; r++)

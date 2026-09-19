@@ -10,6 +10,33 @@
  * @param {number} my - Grid Y coordinate (integer)
  * @returns {boolean}
  */
+/**
+ * Eye height in wall units: the floor is 0, the ceiling 1, and the horizon —
+ * where a standing agent looks — is halfway up.
+ */
+export const EYE_Z = 0.5;
+
+/** Crouched eye height. Low enough that waist-high cover actually covers. */
+export const CROUCH_EYE_Z = 0.3;
+
+/** Eye height for a player, following the eased crouch blend. */
+export function playerEyeZ(player) {
+  const t = player?.crouchBlend || 0;
+  return EYE_Z + (CROUCH_EYE_Z - EYE_Z) * t;
+}
+
+/**
+ * Height of the wall in a cell, 0 (open) to 1 (floor to ceiling). `heightMap`
+ * counts builder layers out of 5; a map without one is all full-height walls.
+ */
+export function wallHeight(map, mx, my) {
+  if (mx < 0 || my < 0 || mx >= map.width || my >= map.height) return 1;
+  if (map.grid[my][mx] === 0) return 0;
+  const layers = map.heightMap?.[my]?.[mx];
+  if (layers == null || layers >= 5 || layers <= 0) return 1;
+  return layers / 5;
+}
+
 export function isPassable(map, mx, my) {
   if (mx < 0 || my < 0 || mx >= map.width || my >= map.height) return false;
   return map.grid[my][mx] === 0;
@@ -25,7 +52,7 @@ export function isPassable(map, mx, my) {
  * @param {number} y2 - End Y (world coords)
  * @returns {boolean}
  */
-export function hasLineOfSight(map, x1, y1, x2, y2) {
+export function hasLineOfSight(map, x1, y1, x2, y2, z1 = EYE_Z, z2 = EYE_Z) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -37,7 +64,10 @@ export function hasLineOfSight(map, x1, y1, x2, y2) {
     const cx = Math.floor(x1 + stepX * i);
     const cy = Math.floor(y1 + stepY * i);
     if (cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) return false;
-    if (map.grid[cy][cx] > 0) return false;
+    if (map.grid[cy][cx] === 0) continue;
+    // A short wall only blocks sight below its top edge, so waist-high cover
+    // hides a crouched agent and not a standing one.
+    if (wallHeight(map, cx, cy) > z1 + (z2 - z1) * (i / steps)) return false;
   }
   return true;
 }

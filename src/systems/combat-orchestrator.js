@@ -14,6 +14,7 @@ import {
   distanceToWall,
   pickHitscanTarget,
 } from "./combat.js";
+import { playerEyeZ } from "./physics.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame } from "./aim.js";
 import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
@@ -111,7 +112,7 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
     endDist = hit.dist;
     damageEnemy(game, hit.enemy, damage, hit.zone);
   } else {
-    const wallDist = distanceToWall(game.player, dirX, dirY, game.map, range);
+    const wallDist = distanceToWall(game.player, dirX, dirY, game.map, range, pitch, playerEyeZ(game.player));
     endDist = wallDist;
     if (wallDist < range) game.spawnWallSparks(game.player.x + dirX * wallDist, game.player.y + dirY * wallDist);
   }

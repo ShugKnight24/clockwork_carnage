@@ -16,7 +16,7 @@
 //   via `+= dt * 1000` or `-= enemyDt * 1000` to stay in ms.
 // • `attackRate` in enemy defs: MILLISECONDS (e.g. 1000 = 1s between shots).
 // ────────────────────────────────────────────────────────────────────────────
-import { isPassable, hasLineOfSight } from "./physics.js";
+import { isPassable, hasLineOfSight, EYE_Z, playerEyeZ } from "./physics.js";
 import { Enemy, Projectile } from "../../js/entities.js";
 import {
   ENEMY_MELEE_WINDUP_MS,
@@ -143,7 +143,7 @@ export class AISystem {
         if (ai === "patrol") this._patrolWander(e, enemyDt, map);
         if (
           dist < e.alertRange &&
-          hasLineOfSight(map, e.x, e.y, player.x, player.y)
+          hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))
         ) {
           e.state = "chase";
           e.stateTime = 0;
@@ -275,7 +275,7 @@ export class AISystem {
           dist < e.def.attackRange &&
           time - e.lastAttackTime > scaledAttackRate
         ) {
-          if (hasLineOfSight(map, e.x, e.y, player.x, player.y)) {
+          if (hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))) {
             beginWindup(e, time);
           }
         }
@@ -295,7 +295,7 @@ export class AISystem {
 
       // ── Attack ──
       if (e.state === "attack") {
-        if (hasLineOfSight(map, e.x, e.y, player.x, player.y)) {
+        if (hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))) {
           if (e.def.attackType === "ranged") {
             const angle = Math.atan2(player.y - e.y, player.x - e.x);
             const proj = new Projectile(

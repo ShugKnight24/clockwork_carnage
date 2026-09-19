@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import {
   createGrid,
+  createHeights,
   carve,
   hWall,
   vWall,
@@ -12,6 +13,9 @@ import {
   room,
   corridor,
   coverGrid,
+  lowWall,
+  lowTile,
+  LAYER,
 } from "./map-helpers.js";
 
 // ── LEVEL 1: Chronos Station — Entry ─────────────────────────────
@@ -22,6 +26,7 @@ function buildEntry() {
   const W = 60,
     H = 60;
   const g = createGrid(W, H, 1);
+  const hm = createHeights(W, H);
 
   // ── ENTRY AIRLOCK (rows 53-57, cols 25-34) ──
   carve(g, 53, 25, 57, 34);
@@ -30,8 +35,9 @@ function buildEntry() {
 
   // ── MAIN LOBBY (rows 44-52, cols 17-42) ──
   carve(g, 44, 17, 52, 42);
-  // Reception desk (metal pillars)
-  for (let c = 27; c <= 32; c++) tile(g, 49, c, 3);
+  // Reception desk — waist high, so the lobby fight has an angle over it
+  // instead of a blind wall across the middle of the room.
+  lowWall(g, hm, 49, 27, 49, 32, LAYER.WAIST, 3);
   // Columns
   tile(g, 46, 22);
   tile(g, 46, 37);
@@ -165,6 +171,7 @@ function buildEntry() {
     width: W,
     height: H,
     grid: g,
+    heightMap: hm,
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // ── Enemies (15) — intro difficulty ──

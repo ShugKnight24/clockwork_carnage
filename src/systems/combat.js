@@ -12,6 +12,7 @@ import {
   HEADSHOT_PRECISION_PAD,
   ZONE_RADIUS_PAD,
 } from "../constants.js";
+import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ } from "./physics.js";
 
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
@@ -138,7 +139,7 @@ export function enemyHitRadius(enemy) {
   return Math.max(ENEMY_HIT_RADIUS_MIN, (enemy.def?.radius || 0) + ENEMY_HIT_RADIUS_PAD);
 }
 
-export function distanceToWall(player, dirX, dirY, map, range) {
+export function distanceToWall(player, dirX, dirY, map, range, pitch = 0, eyeZ = EYE_Z) {
   let mapX = Math.floor(player.x);
   let mapY = Math.floor(player.y);
   const deltaDistX = Math.abs(1 / (Math.abs(dirX) < 1e-9 ? 1e-9 : dirX));
@@ -169,7 +170,12 @@ export function distanceToWall(player, dirX, dirY, map, range) {
       ? (mapX - player.x + (1 - stepX) / 2) / dirX
       : (mapY - player.y + (1 - stepY) / 2) / dirY;
     if (dist > range) return range;
-    if (map.grid[mapY][mapX] > 0) return Math.max(0, dist);
+    if (map.grid[mapY][mapX] === 0) continue;
+    // A shot clears a short wall when it is already above the wall's top by
+    // the time it gets there — you can shoot over waist-high cover, and an
+    // enemy behind it is hittable exactly when you can see it.
+    const shotZ = eyeZ + Math.tan(pitch) * dist;
+    if (wallHeight(map, mapX, mapY) > shotZ) return Math.max(0, dist);
   }
 }
 
@@ -268,7 +274,9 @@ export function resolveHitZone(enemy, aimHeight, dirX, dirY) {
 }
 
 export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map) {
-  const maxDist = map ? distanceToWall(player, dirX, dirY, map, range) : range;
+  const maxDist = map
+    ? distanceToWall(player, dirX, dirY, map, range, pitch, playerEyeZ(player))
+    : range;
   let best = null;
   for (const enemy of entities) {
     const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy);
