@@ -89,8 +89,29 @@ const ARMOR_STEEL = {
   heavy: ["#98a2ac", "#66717c", "#353d46", "#171b21", "#0b0e12"],
   stealth: ["#5f6975", "#3c444e", "#22282f", "#0f1318", "#07090c"],
   tech: ["#c2b9a2", "#918872", "#554f40", "#29261e", "#15130f"],
+  // Gun steel, warmed by the brass of its own feed.
+  howitzer: ["#a6a79c", "#74776d", "#41443d", "#1f221e", "#101210"],
+  // Field-painted olive slab plate.
+  trencher: ["#a8ad93", "#757a63", "#424636", "#20231b", "#101208"],
+  // Matte black: almost no specular range, so the candy red carries the suit.
+  reliquary: ["#4a4a50", "#2d2d33", "#18181c", "#0b0b0e", "#050506"],
+  // Pale sealed ceramic, cool and clean.
+  pathfinder: ["#d3dcd9", "#9fadab", "#5d6c6b", "#2c3636", "#161c1d"],
 };
-const ARMOR_WIDTH = { standard: 1, recon: 0.95, heavy: 1.1, stealth: 0.97, tech: 1.03 };
+const ARMOR_WIDTH = {
+  standard: 1, recon: 0.95, heavy: 1.1, stealth: 0.97, tech: 1.03,
+  howitzer: 1.14, trencher: 1.12, reliquary: 1.06, pathfinder: 0.96,
+};
+
+/**
+ * Armour that barely reflects. Drives the matte suit gradient, the flattened
+ * sheen and the low specular on the helmet.
+ */
+const MATTE = new Set(["stealth", "reliquary"]);
+
+/** Candy red: the Reliquary's tabard and trim, not the player's palette. */
+const CANDY = "#c8102e";
+const CANDY_HI = "#ff3c54";
 
 /** Rifle finish ramps and energy colour override (null = palette accent). */
 const WEAPON_FINISH = {
@@ -159,8 +180,8 @@ function bodyMap(c) {
     "#7a1818": c.cape[1],
     "#4a0e0e": c.cape[2],
   };
-  if (c.armor === "stealth") {
-    // Ghost plating is matte: knock the painted-in speculars down.
+  if (MATTE.has(c.armor)) {
+    // Matte plating: knock the painted-in speculars down.
     Object.assign(m, { "#eaf4ff": "#7d8996", "#f4faff": "#8a96a3", "#ffffff": "#8a96a3", "#b8cadb": "#56606c", "#dfe9f4": "#56606c" });
   }
   return m;
@@ -188,7 +209,7 @@ function defs(c) {
   const g = c.finish.stops;
   const skin = c.skin;
   const hair = c.hair.color;
-  const suitLo = c.armor === "stealth" ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"];
+  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"];
   const gun = c.finish.mirror
     ? `<stop offset="0" stop-color="${g[0]}"/><stop offset=".28" stop-color="${g[1]}"/><stop offset=".46" stop-color="#e8eef5"/><stop offset=".7" stop-color="#4a5664"/><stop offset="1" stop-color="${g[2]}"/>`
     : `<stop offset="0" stop-color="${g[0]}"/><stop offset=".3" stop-color="${g[1]}"/><stop offset="1" stop-color="${g[2]}"/>`;
@@ -228,7 +249,7 @@ function defs(c) {
   <stop offset="1" stop-color="#080706"/></linearGradient>
 <radialGradient id="shade"><stop offset="0" stop-color="#000" stop-opacity=".7"/>
   <stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
-<radialGradient id="sheen"><stop offset="0" stop-color="#fff" stop-opacity="${c.armor === "stealth" ? 0.18 : 0.5}"/>
+<radialGradient id="sheen"><stop offset="0" stop-color="#fff" stop-opacity="${MATTE.has(c.armor) ? 0.18 : 0.5}"/>
   <stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
@@ -500,7 +521,7 @@ function head(c, peek) {
   const earGlow = glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core);
   const dome =
     `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
-    line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, c.armor === "stealth" ? 0.3 : 0.8) +
+    line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, MATTE.has(c.armor) ? 0.3 : 0.8) +
     line(`M${f(w - 0.6)},-90 C${f(w + 0.4)},-87 ${f(w + 0.4)},-83 ${f(w - 0.2)},-78.6`, c.rim, 0.8, 0.85);
 
   if (OPEN_HELMETS.has(style)) {
@@ -682,7 +703,7 @@ function decal(c, x, y, scale) {
 
 /** Origin insignia, engraved into the left tasset. */
 function insignia(c) {
-  const col = c.armor === "stealth" ? "#6e7a88" : "#cfdae6";
+  const col = MATTE.has(c.armor) ? "#6e7a88" : "#cfdae6";
   let d;
   switch (c.origin) {
     case "rift_scientist":
@@ -767,6 +788,105 @@ function gear(c, pose) {
       const hz = (x) =>
         `<g transform="translate(${x},-27.2)">${[0, 1.6, 3.2].map((o) => `<path d="M${f(o)},0 L${f(o + 1)},0 L${f(o - 0.6)},5.4 L${f(o - 1.6)},5.4 Z" fill="${AMBER}" opacity=".85"/>`).join("")}</g>`;
       front += hz(-12) + hz(9.8) + shape("M10.4,-22 L15.6,-22.6 L15.8,-14 L10.8,-13.8 Z", "url(#steelDk)", 0.7) + line("M10.8,-19.6 L15.6,-20", AMBER, 0.6, 0.8);
+      break;
+    }
+    case "howitzer": {
+      // Shoulder ordnance pod, fed by a belt that runs down into a back hopper.
+      back +=
+        part([14.2, -70], [21.4, -84], 5.8, 6.4, { fill: "url(#steelDk)", hi: 0.35, rimColor: c.rim, ink: 0.9 }) +
+        shape("M18.2,-92 L32.6,-89.6 L33.4,-77 L19,-74.8 Z", "url(#steel)", 1) +
+        shape("M32.2,-89 L39.4,-87.8 L39.8,-79.4 L33,-78 Z", "url(#steelDk)", 0.9) +
+        shape("M39.2,-86.8 L44.4,-86 L44.6,-81 L39.6,-80.2 Z", "#14171a", 0.7) +
+        line("M20.2,-89.4 L31.4,-87.6", "#f0f5ff", 0.55, 0.55) +
+        line("M19.8,-81 L31.8,-79.2", INK, 0.6, 0.7) +
+        // Feed belt: pod to hopper, with the links reading along it.
+        line("M19.6,-75.6 C15.4,-69 14.4,-59 16.4,-49", INK, 3.6) +
+        line("M19.6,-75.6 C15.4,-69 14.4,-59 16.4,-49", "#a8813f", 2.4) +
+        [0.2, 0.42, 0.66, 0.88]
+          .map((t) => {
+            const y = -75.6 + ((-49) - (-75.6)) * t;
+            const x = 19.6 - 5 * Math.sin(t * Math.PI * 0.9);
+            return `<g transform="translate(${pt(x, y)})">${shape("M-1.5,-1.5 L1.5,-1.5 L1.5,1.5 L-1.5,1.5 Z", "#c99a3e", 0.5)}</g>`;
+          })
+          .join("") +
+        shape("M8.6,-52 L19.6,-50.4 L20.4,-38.6 L9.2,-39.8 Z", "url(#steelDk)", 0.9);
+      glow += glowOf(`<circle cx="35.2" cy="-83.2" r="1"/>`, AMBER, "#ffe2b0");
+      // Slab chest with a raised centre rib.
+      front +=
+        shape("M-13.8,-63.4 L13.8,-63.4 L15.4,-41 L-15.4,-41 Z", "url(#steel)", 1) +
+        shape("M-3.4,-63 L3.4,-63 L4,-41.4 L-4,-41.4 Z", "url(#steelDk)", 0.8) +
+        line("M-12.6,-61.6 L12.6,-61.6", "#f0f5ff", 0.6, 0.5) +
+        line("M-13.2,-52 L13.2,-52", INK, 0.6, 0.6) +
+        // Hazard chevrons on the lower plate.
+        [-11.2, -2.6, 6].map((x) => line(`M${pt(x, -44.8)} l2.6,-4 l2.6,4`, AMBER, 1.5, 0.8)).join("");
+      break;
+    }
+    case "trencher": {
+      // Squared gorget both sides, one heavy slab, webbing, knee plates.
+      const collar = "M-16.4,-63.6 L-17.2,-76.2 L-7.6,-79.4 L-6.2,-71 L-11.8,-68.8 L-11.6,-63.4 Z";
+      front +=
+        shape(collar, "url(#steelDk)", 0.9) +
+        shape(mirror(collar), "url(#steelDk)", 0.9) +
+        line("M-15.8,-65.4 L-16.4,-75.2 L-8.4,-77.8", "#f0f5ff", 0.55, 0.65) +
+        shape("M-14.6,-64.6 L14.6,-64.6 L16,-44.4 L-16,-44.4 Z", "url(#steel)", 1) +
+        line("M0,-64 L0,-44.8", INK, 0.7, 0.8) +
+        line("M-13.4,-62.8 L13.4,-62.8", "#f0f5ff", 0.6, 0.55) +
+        // Bolt rows along the slab edges.
+        `<g fill="#0c1013">` +
+        [-12.4, 12.4].flatMap((x) => [-59, -53, -47.6].map((y) => `<circle cx="${f(x)}" cy="${f(y)}" r=".75"/>`)).join("") +
+        `</g>` +
+        // Webbing and pouches at the belt.
+        line("M-15,-38.4 L15,-38.4", "#2b3024", 2.6) +
+        [-10.4, -2.6, 6.2].map((x) => shape(`M${f(x)},-38 L${f(x + 5)},-38 L${f(x + 4.4)},-29.4 L${f(x + 0.6)},-29.4 Z`, "url(#steelDk)", 0.7)).join("");
+      legs.forEach((leg) => {
+        front += shape(
+          `M${pt(...lerp(leg.hip, leg.kn, 0.72))} l-5.2,1 l1,7.4 l8.4,-1 l-.6,-7 Z`,
+          "url(#steelDk)",
+          0.8,
+        );
+      });
+      break;
+    }
+    case "reliquary": {
+      // High gorget to the jaw, domed chest boss, candy tabard to the knees.
+      const stole = "M-9.6,-70 L-5.4,-70.4 L-3.2,-18 L-8.4,-17.6 Z";
+      back += shape(stole, CANDY, 0.9) + shape(mirror(stole), mix(CANDY, "#000000", 0.35), 0.9);
+      const gorge = "M-14.8,-63.6 C-16.4,-71.6 -12.4,-78.6 -6.2,-80.4 L-4.2,-73.2 C-8.2,-72 -10.6,-68.4 -10.4,-63.4 Z";
+      front +=
+        shape(gorge, "url(#steel)", 0.9) +
+        shape(mirror(gorge), "url(#steelDk)", 0.9) +
+        line("M-13.6,-65.6 C-14.4,-71.8 -11.4,-76.6 -7,-78.4", CANDY_HI, 0.7, 0.8) +
+        // Domed chest with a raised central boss.
+        shape("M-14.2,-64 C-6,-67.2 6,-67.2 14.2,-64 L15.2,-42 L-15.2,-42 Z", "url(#steel)", 1) +
+        `<circle cx="0" cy="-54.4" r="6.6" fill="url(#steelDk)" stroke="${INK}" stroke-width=".9"/>` +
+        `<circle cx="0" cy="-54.4" r="3.2" fill="${CANDY}" stroke="${INK}" stroke-width=".7"/>` +
+        `<circle cx="-1.4" cy="-56" r="1.1" fill="${CANDY_HI}" opacity=".8"/>` +
+        line("M-13,-61.4 C-6,-64 6,-64 13,-61.4", CANDY, 1.2, 0.9) +
+        // Tabard, hanging in front of the legs.
+        shape("M-8.6,-41 L8.6,-41 L10.4,-4 L6.6,0.6 L-6.6,0.6 L-10.4,-4 Z", CANDY, 1) +
+        line("M-7.6,-36.4 L7.6,-36.4", mix(CANDY, "#000000", 0.5), 0.8, 0.9) +
+        line("M0,-40 L0,-0.2", mix(CANDY, "#000000", 0.4), 0.6, 0.7) +
+        line("M-8.8,-14 L8.8,-14", CANDY_HI, 0.6, 0.5) +
+        // Devotional seals on ribbons.
+        [-5.4, 4.2].map((x) =>
+          line(`M${f(x)},-33.6 l0,7.4`, "#d9c88a", 0.7, 0.9) +
+          `<circle cx="${f(x)}" cy="-25.4" r="1.8" fill="#d9c88a" stroke="${INK}" stroke-width=".5"/>`,
+        ).join("");
+      break;
+    }
+    case "pathfinder": {
+      // Sealed ceramic: one smooth shell, almost no seams, a chest readout.
+      back += shape("M-11.6,-72 L11.6,-72 L13,-48 L-13,-48 Z", "url(#steelDk)", 0.9) +
+        line("M-9.8,-70 L9.8,-70", "#eef6f4", 0.5, 0.45);
+      front +=
+        shape("M-14.4,-66.4 C-7.6,-70.4 7.6,-70.4 14.4,-66.4 L15,-40 C7,-37.4 -7,-37.4 -15,-40 Z", "url(#steel)", 1) +
+        // One long seam is the only break in the shell.
+        line("M-13.2,-55.6 C-6.4,-58 6.4,-58 13.2,-55.6", INK, 0.6, 0.55) +
+        line("M-13.4,-63.8 C-7,-67 7,-67 13.4,-63.8", "#f4fbfa", 0.7, 0.6) +
+        // Compact chest computer with a lit readout.
+        shape("M4.2,-53.6 L13.4,-54.6 L13.8,-46.2 L4.6,-45.4 Z", "url(#steelDk)", 0.8) +
+        line("M5.6,-51.6 L12.2,-52.2 M5.8,-49.4 L10.4,-49.8", c.rim, 0.55, 0.85);
+      glow += glowOf(`<rect x="5.2" y="-52.2" width="7.4" height="1" rx=".5"/>`, c.rim, mix(c.rim, "#ffffff", 0.7));
       break;
     }
     default:

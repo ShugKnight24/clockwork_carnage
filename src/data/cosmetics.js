@@ -121,6 +121,34 @@ export const ARMOR_STYLES = [
     tier: 3,
     bonuses: { maxChronoEnergyAdd: 25, maxHealthAdd: 10 },
   },
+  {
+    id: "howitzer",
+    name: "Howitzer",
+    desc: "Shoulder-mounted ordnance platform",
+    tier: 3,
+    bonuses: { maxHealthAdd: 20, armorAdd: 6, moveSpeedAdd: -0.2 },
+  },
+  {
+    id: "trencher",
+    name: "Trencher",
+    desc: "Slab-plated line infantry rig",
+    tier: 3,
+    bonuses: { maxHealthAdd: 20, armorAdd: 5, maxStaminaAdd: 10 },
+  },
+  {
+    id: "reliquary",
+    name: "Reliquary",
+    desc: "Matte black crusader plate, candy red tabard",
+    tier: 3,
+    bonuses: { maxHealthAdd: 15, armorAdd: 7, maxChronoEnergyAdd: 10 },
+  },
+  {
+    id: "pathfinder",
+    name: "Pathfinder",
+    desc: "Sealed ceramic recon shell",
+    tier: 2,
+    bonuses: { moveSpeedAdd: 0.2, maxStaminaAdd: 20, dashCostAdd: -3 },
+  },
 ];
 
 export const HELMET_STYLES = [

@@ -108,3 +108,24 @@ describe("gear drops", () => {
     expect(grantOwned("notASlot", 0)).toBe(false);
   });
 });
+
+describe("armour catalogue", () => {
+  it("gives every style a steel ramp and a width", async () => {
+    // A style missing either renders untextured or at the wrong scale, and
+    // nothing in the creator would tell you.
+    const rig = await import("../../src/rendering/svg-art/agent-rig.js");
+    const svg = rig.buildAgentSvg ?? null;
+    expect(svg, "buildAgentSvg export").toBeTruthy();
+    for (let i = 0; i < ARMOR_STYLES.length; i++) {
+      const markup = svg({ ...DEFAULT_CHARACTER, armorIndex: i });
+      expect(markup.length, ARMOR_STYLES[i].id).toBeGreaterThan(1000);
+      expect(markup).not.toContain("undefined");
+      expect(markup).not.toContain("NaN");
+    }
+  });
+
+  it("keeps armour ids unique", () => {
+    const ids = ARMOR_STYLES.map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
