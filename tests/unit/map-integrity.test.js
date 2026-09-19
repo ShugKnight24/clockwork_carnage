@@ -123,3 +123,35 @@ describe("prop coverage", () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe("level composition", () => {
+  it("does not run every level along the same axis", () => {
+    // Eight of nine used to start on the exact same tile and exit due north.
+    const starts = new Set(
+      CAMPAIGN_LEVELS.map((l) => `${l.playerStart.x},${l.playerStart.y}`),
+    );
+    expect(starts.size).toBeGreaterThanOrEqual(4);
+
+    // Bucket the start->exit heading into compass quadrants.
+    const axes = new Set();
+    for (const l of CAMPAIGN_LEVELS) {
+      if (!l.exit) continue;
+      const dx = l.exit.x - l.playerStart.x;
+      const dy = l.exit.y - l.playerStart.y;
+      axes.add(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N");
+    }
+    expect(axes.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("faces the player into the level on arrival", () => {
+    for (const l of CAMPAIGN_LEVELS) {
+      if (!l.exit) continue;
+      const toExit = Math.atan2(l.exit.y - l.playerStart.y, l.exit.x - l.playerStart.x);
+      let off = (l.playerStart.dir ?? 0) - toExit;
+      while (off > Math.PI) off -= Math.PI * 2;
+      while (off < -Math.PI) off += Math.PI * 2;
+      // Within a quarter turn of the way out — not necessarily straight at it.
+      expect(Math.abs(off), `${l.name} faces away from its exit`).toBeLessThan(Math.PI / 2 + 0.01);
+    }
+  });
+});
