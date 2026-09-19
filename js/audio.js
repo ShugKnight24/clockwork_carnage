@@ -869,16 +869,17 @@ export class AudioManager {
    * @param {boolean} isMoving - whether the player is moving
    * @param {number} now - performance.now() timestamp
    */
-  updateFootsteps(isMoving, now) {
+  /** @param {number} gain - 1 = normal stride, lower for a crouched step. */
+  updateFootsteps(isMoving, now, gain = 1) {
     if (!this.ctx || !this.enabled || !isMoving) return;
     if (now - this._lastFootstepTime < this._footstepCadence) return;
     this._lastFootstepTime = now;
     this._footstepSide ^= 1;
     const pan = this._footstepSide ? -0.15 : 0.15;
-    // Low thud
-    this.playNoise(0.06, 0.15, 400, "lowpass", pan);
+    // Low thud — a crouched boot also loses its top end, not just volume.
+    this.playNoise(0.06, 0.15 * gain, gain < 1 ? 260 : 400, "lowpass", pan);
     // Metallic tap (boot on metal floor)
-    this.playTone(90 + Math.random() * 30, 0.04, "triangle", 0.07, 0, pan);
+    this.playTone(90 + Math.random() * 30, 0.04, "triangle", 0.07 * gain, 0, pan);
   }
 
   /** Adjust footstep cadence based on player speed multiplier */

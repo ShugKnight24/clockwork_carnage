@@ -239,12 +239,16 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const follow = lerp(0.85, 1, b);
   const breath = (time || 0) * 0.001;
   const calm = 1 - 0.85 * b;
+  // Crouching drops the weapon and tucks it toward the chest. It fades out as
+  // the sights come up, or a crouched ADS shot would no longer meet the reticle.
+  const crouch = (o.crouchBlend || 0) * (1 - b);
   const cx = w / 2 + Math.sin(weaponBob) * bobMulX * vf + rig.sx * swayK * vf + rig.ox * w * follow +
-    Math.sin(breath * 1.1) * 1.6 * vf * calm;
+    Math.sin(breath * 1.1) * 1.6 * vf * calm - crouch * 11 * vf;
   const cy = lerp(hipCy, viewH / 2, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
-    weaponKick * 40 * lerp(1, 0.45, b) * vf + rig.oy * viewH * follow + Math.sin(breath * 1.7) * 2.2 * vf * calm;
+    weaponKick * 40 * lerp(1, 0.45, b) * vf + rig.oy * viewH * follow + Math.sin(breath * 1.7) * 2.2 * vf * calm +
+    crouch * 26 * vf;
   const tilt = (isSprinting ? Math.sin(weaponBob) * 0.06 * (1 - b) : 0) + rig.sx * -0.0022 * lerp(1, 0.2, b) +
-    rig.ox * 0.5 * (1 - b) + Math.sin(breath * 0.9) * 0.006 * calm;
+    rig.ox * 0.5 * (1 - b) + Math.sin(breath * 0.9) * 0.006 * calm + crouch * 0.05;
 
   const map = morph(hip, aim, s);
   const dom = u < 0.5 ? hip : aim;

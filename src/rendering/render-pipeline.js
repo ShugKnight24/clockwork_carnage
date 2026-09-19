@@ -184,7 +184,8 @@ export function renderFrame(game) {
   const p = game.player;
   // Camera punch converts to vertical pixel offset (negative = kick upward)
   const punchPx = (p.cameraPunch || 0) * -h * 0.12;
-  const yShift = (p.isSliding ? 40 : p.isCrouching ? 28 : 0) + punchPx;
+  const stanceShift = (p.isSliding ? 40 : 28) * (p.crouchBlend || 0);
+  const yShift = stanceShift + punchPx;
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
@@ -211,12 +212,12 @@ export function renderFrame(game) {
 
   // Render atmospheric dust motes
   if ((game.quality?.particleMultiplier ?? 1) >= 0.5 && game.dustMotes && game.dustMotes.length > 0) {
-    game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul);
+    game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul, undefined, undefined, yShift);
   }
 
   // Hitscan tracers — drawn after sprites so they read on top, before vignette
   if (game.tracers && game.tracers.length > 0) {
-    game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul);
+    game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul, undefined, undefined, yShift);
   }
 
   ctx.restore();

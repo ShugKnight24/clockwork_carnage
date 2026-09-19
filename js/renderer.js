@@ -978,7 +978,7 @@ export class Renderer {
     if (spriteShift) ctx.restore();
   }
 
-  renderParticles(player, particles, time, planeMul = 0.66, camX, camY) {
+  renderParticles(player, particles, time, planeMul = 0.66, camX, camY, yShift = 0) {
     if (!particles || particles.length === 0) return;
     const ctx = this.ctx;
     const w = this.width;
@@ -989,7 +989,9 @@ export class Renderer {
     const planeY = dirX * planeMul;
     const cx = camX != null ? camX : player.x;
     const cy = camY != null ? camY : player.y;
-    const halfH = h / 2;
+    // Share the scene's vertical shift, or motes hang in the air while the
+    // world drops under a crouch.
+    const halfH = h / 2 + yShift;
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -1033,7 +1035,7 @@ export class Renderer {
 
   /** Project a world position into screen space using the same camera math as
    * sprite/particle passes. Returns null if behind the near plane. */
-  _projectWorld(player, x, y, planeMul, camX, camY, zHeight = 0) {
+  _projectWorld(player, x, y, planeMul, camX, camY, zHeight = 0, yShift = 0) {
     const w = this.width;
     const h = this.height;
     const dirX = Math.cos(player.angle);
@@ -1049,12 +1051,12 @@ export class Renderer {
     const ty = invDet * (-planeY * sx + planeX * sy);
     if (ty <= 0.1) return null;
     const screenX = (w / 2) * (1 + tx / ty);
-    const screenY = h / 2 + zHeight * (h / ty);
+    const screenY = h / 2 + yShift + zHeight * (h / ty);
     return { x: screenX, y: screenY, depth: ty };
   }
 
   /** Hitscan tracers — short fading streaks from barrel to impact. */
-  renderTracers(player, tracers, planeMul = 0.66, camX, camY) {
+  renderTracers(player, tracers, planeMul = 0.66, camX, camY, yShift = 0) {
     if (!tracers || tracers.length === 0) return;
     const ctx = this.ctx;
     const w = this.width;
@@ -1064,8 +1066,8 @@ export class Renderer {
       // Slight elevation so tracer reads as gun-height, not floor-height
       const startZ = -0.05;
       const endZ = -0.05 + Math.tan(tr.pitch || 0) * 0.0; // pitched aim already encoded in (x2,y2)
-      const a = this._projectWorld(player, tr.x1, tr.y1, planeMul, camX, camY, startZ);
-      const b = this._projectWorld(player, tr.x2, tr.y2, planeMul, camX, camY, endZ);
+      const a = this._projectWorld(player, tr.x1, tr.y1, planeMul, camX, camY, startZ, yShift);
+      const b = this._projectWorld(player, tr.x2, tr.y2, planeMul, camX, camY, endZ, yShift);
       if (!a || !b) continue;
       // Z-buffer occlusion at endpoint (if hidden behind wall, skip)
       const xb = Math.max(0, Math.min(w - 1, Math.floor(b.x)));

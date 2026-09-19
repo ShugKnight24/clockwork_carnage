@@ -79,9 +79,15 @@ export class PlayerUpdateSystem {
       keys["ArrowUp"] || keys["ArrowDown"];
     p.isSprinting = (keys[kb.sprint] || keys["ShiftRight"]) && isMoving && p.stamina > 0;
 
-    // Footstep audio
-    audio.setFootstepCadence(p.isSprinting ? 1.6 : 1.0);
-    audio.updateFootsteps(isMoving && !p.isDashing && !p.isSliding, performance.now());
+    // Footstep audio — a crouched agent moves at half speed, so the cadence
+    // drops with it and the step itself is quieter. The tutorial promises
+    // "quieter feet"; this is what makes that true.
+    audio.setFootstepCadence(p.isSprinting ? 1.6 : p.isCrouching ? 0.55 : 1.0);
+    audio.updateFootsteps(
+      isMoving && !p.isDashing && !p.isSliding,
+      performance.now(),
+      p.isCrouching ? 0.35 : 1,
+    );
 
     // Stamina management
     if (p.isSprinting) {
@@ -100,6 +106,16 @@ export class PlayerUpdateSystem {
     const crouchHeld = !!keys[kb.crouch];
     const crouchJustPressed = crouchHeld && !this._prevCrouchKey;
     p.isCrouching = crouchHeld && !p.isSliding;
+
+    // Ease the stance. Dropping is quicker than standing back up — going down
+    // is gravity, getting up is work — and a slide drops fastest of all.
+    const lowered = p.isSliding || p.isCrouching;
+    const stanceRate = p.isSliding ? 22 : lowered ? 14 : 9;
+    p.crouchBlend += ((lowered ? 1 : 0) - p.crouchBlend) * Math.min(1, stanceRate * dt);
+    // Snap the tail. An exponential ease never quite lands, and a residual
+    // blend leaves the FOV and the weapon fractionally off forever.
+    if (p.crouchBlend < 0.004) p.crouchBlend = 0;
+    if (p.crouchBlend > 0.996) p.crouchBlend = 1;
 
     // Start slide
     if (

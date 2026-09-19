@@ -77,6 +77,9 @@ export class Player {
     this.isDashing = false;
     // Crouch & Slide
     this.isCrouching = false;
+    // 0 = standing, 1 = fully lowered. Eased, so the camera settles into a
+    // crouch instead of snapping 28px in one frame.
+    this.crouchBlend = 0;
     this.isSliding = false;
     this.slideTime = 0;
     this.slideDirX = 0;

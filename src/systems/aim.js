@@ -154,7 +154,15 @@ export function updateAdsFov(player, dt) {
 
 /** Drive the smooth sprint/dash/slide FOV boost. Call once per frame. */
 export function updateSprintFov(player, dt) {
-  _sprintFovTarget = player.isDashing ? 12 : player.isSliding ? 10 : player.isSprinting ? 8 : 0;
+  // Sprint/dash/slide widen the view; a crouch pulls it in a little, which
+  // reads as hunkering down rather than rushing.
+  _sprintFovTarget = player.isDashing
+    ? 12
+    : player.isSliding
+      ? 10
+      : player.isSprinting
+        ? 8
+        : -4 * (player.crouchBlend || 0);
   [_sprintFovLerp, _sprintFovVel] = smoothDamp(_sprintFovLerp, _sprintFovTarget, _sprintFovVel, SPRINT_FOV_SMOOTH_TIME, Math.min(dt, 0.1));
 }
 
