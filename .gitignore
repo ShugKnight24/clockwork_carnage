@@ -5,8 +5,6 @@ REVIEW.md
 ROADMAP.md
 TESTING.md
 
-.github/
-
 archive/
 
 # Generated changelog reports
@@ -15,21 +13,15 @@ archive/
 # Dev scripts
 scripts/
 
-# Testing
-js/testing/
-
-# Playwright / automation engine
-tests/
+# Playwright / automation engine — output only. The specs, the debug bridge,
+# the config and package.json are tracked so a clone can install and run them.
 playwright-report/
 test-results/
-playwright.config.*
 screenshots/
 .playwright/
 
-# Node tooling (npm/Playwright deps)
+# Node tooling
 node_modules/
-package.json
-package-lock.json
 
 # Telemetry & simulation data
 telemetry/

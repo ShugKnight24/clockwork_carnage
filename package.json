@@ -1,0 +1,40 @@
+{
+  "name": "clockwork-carnage-dev",
+  "version": "0.8.0",
+  "type": "module",
+  "private": true,
+  "description": "Local development and testing suite for Clockwork Carnage",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "echo 'No TypeScript — skipped'",
+    "test": "npx playwright test",
+    "test:smoke": "npx playwright test tests/smoke.spec.js",
+    "test:screenshots": "npx playwright test tests/screenshots.spec.js",
+    "test:bots": "npx playwright test tests/bots.spec.js",
+    "test:telemetry": "npx playwright test tests/telemetry.spec.js",
+    "test:experts": "npx playwright test tests/experts.spec.js",
+    "test:gate": "npx playwright test tests/playtest-gate.spec.js",
+    "gate": "npm run test:gate",
+    "test:journeys": "npx playwright test tests/user-journeys.spec.js",
+    "test:extremes": "npx playwright test tests/extremes.spec.js",
+    "screenshots": "npx playwright test tests/screenshots.spec.js --headed",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:coverage": "vitest run --coverage",
+    "assets:manifest": "node scripts/build-assets.mjs",
+    "assets:generate": "node scripts/generate-sprites.mjs",
+    "assets:build": "npm run assets:generate && npm run assets:manifest",
+    "review": "node scripts/review.mjs",
+    "review:strict": "node scripts/review.mjs --strict",
+    "simulate": "node simulations/run.mjs",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@vitest/coverage-v8": "^4.1.4",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  }
+}
