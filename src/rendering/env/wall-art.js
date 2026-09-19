@@ -550,19 +550,21 @@ const PAINTERS = {
 };
 
 /** Paint one wall face at 512×512. */
-export function paintWall(id, act) {
+export function paintWall(id, act, pal, salt = 0) {
   const c = makeCanvas(T);
   const ctx = c.getContext("2d");
-  const p = getEnvPalette(act);
+  const p = pal || getEnvPalette(act);
   const paint = PAINTERS[id] || PAINTERS[1];
-  paint(ctx, p, rng(id * 7919 + act * 104729), act);
+  // The salt varies the grain per level, so two levels in one act do not share
+  // the same scratches on top of already sharing a silhouette.
+  paint(ctx, p, rng(id * 7919 + act * 104729 + salt * 15485863), act);
   grit(ctx, T, T, 0.12);
   return c;
 }
 
-/** All wall faces for an act as { [id]: mipChain[] } (level 0 = 512px). */
-export function buildWallSet(act) {
+/** All wall faces for a level as { [id]: mipChain[] } (level 0 = 512px). */
+export function buildWallSet(act, pal, salt = 0) {
   const set = {};
-  for (const id of Object.keys(PAINTERS)) set[id] = buildMips(paintWall(+id, act));
+  for (const id of Object.keys(PAINTERS)) set[id] = buildMips(paintWall(+id, act, pal, salt));
   return set;
 }

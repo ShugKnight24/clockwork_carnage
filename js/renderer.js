@@ -78,6 +78,7 @@ export class Renderer {
     this.wallTopY = new Float64Array(this.width);
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
+    this._envLevel = null; // campaign level index, for the per-level palette
     this.textures = generateWallTextures();
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
@@ -104,11 +105,17 @@ export class Renderer {
     }
   }
 
-  /** Called by game.js when the campaign act changes */
-  applyActPalette(act) {
+  /**
+   * Called on campaign level start. The act picks the base palette; the level
+   * index picks the variation on it, so two levels in one act no longer share
+   * the same steel, lamps and air. Pass null for level outside the campaign.
+   */
+  applyActPalette(act, level = null) {
     const a = act ?? 1;
-    if (this._actPalette === a) return;
+    const lv = level ?? null;
+    if (this._actPalette === a && this._envLevel === lv) return;
     this._actPalette = a;
+    this._envLevel = lv;
     this._modernEnv = null;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
@@ -160,9 +167,15 @@ export class Renderer {
   /** Build (or reuse) the Modern environment bundle for the current act. */
   _getModernEnv() {
     const act = this._actPalette || 1;
+    const level = this._envLevel ?? null;
     const brutal = this._visualStyle === 1;
-    if (!this._modernEnv || this._modernEnv.act !== act || this._modernEnv.brutal !== brutal) {
-      this._modernEnv = generateModernEnv(act, brutal);
+    if (
+      !this._modernEnv ||
+      this._modernEnv.act !== act ||
+      this._modernEnv.level !== level ||
+      this._modernEnv.brutal !== brutal
+    ) {
+      this._modernEnv = generateModernEnv(act, brutal, level);
       this._envMapGLVersion = -1;
       if (this.glRenderer) {
         this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);

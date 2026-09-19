@@ -6,7 +6,7 @@
 import { WALL_COLORS } from "../../js/data.js";
 import { buildWallSet } from "./env/wall-art.js";
 import { buildDeckSet } from "./env/deck-art.js";
-import { getEnvPalette, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
+import { getEnvPalette, resolveEnvPalette, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
@@ -415,13 +415,16 @@ export function generateFloorCeilTextures(act, visualStyle) {
  *
  * @param {number} act          1-3
  * @param {boolean} brutal      visualStyle 1 (Brutal) — thicker, darker air
+ * @param {?number} level       campaign level index, or null outside the campaign
  * @returns {object} env bundle consumed by Renderer + GLRenderer
  */
-export function generateModernEnv(act, brutal) {
+export function generateModernEnv(act, brutal, level = null) {
   const a = act || 1;
-  const p = getEnvPalette(a);
-  const walls = buildWallSet(a);
-  const deck = buildDeckSet(a, brutal);
+  // Each campaign level derives its own steel, light and air from the act.
+  const p = resolveEnvPalette(a, level);
+  const salt = level == null ? 0 : level + 1;
+  const walls = buildWallSet(a, p, salt);
+  const deck = buildDeckSet(a, brutal, p, salt);
   const fogMax = brutal ? 0.94 : 0.86;
   const fogDensity = brutal ? FOG_DENSITY * 1.3 : FOG_DENSITY;
   const [n0, n1, n2] = p.fogNear;
@@ -446,7 +449,7 @@ export function generateModernEnv(act, brutal) {
     "rgba(4,6,11,0.44)",  // 3: normal +y
   ];
 
-  const glow = glowColors(a);
+  const glow = glowColors(a, p);
   const glowGL = new Float32Array(24);
   for (let i = 0; i < glow.length && i < 8; i++) {
     const s = GLOW_STRENGTH[i] || 0;
@@ -459,6 +462,7 @@ export function generateModernEnv(act, brutal) {
 
   return {
     act: a,
+    level,
     brutal: !!brutal,
     palette: p,
     walls,

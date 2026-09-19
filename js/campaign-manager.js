@@ -282,7 +282,7 @@ export class CampaignManager {
 
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
-    g.renderer.applyActPalette(this.act);
+    g.renderer.applyActPalette(this.act, this.level);
     if (hasBoss) {
       g.audio.startTrack("boss");
     } else {

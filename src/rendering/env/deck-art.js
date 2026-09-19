@@ -65,11 +65,11 @@ function deckPlate(ctx, x, y, w, h, p, r, tread) {
   ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
 }
 
-function paintFloor(act, brutal) {
+function paintFloor(act, brutal, pal, salt = 0) {
   const c = makeCanvas(T);
   const ctx = c.getContext("2d");
-  const p = getEnvPalette(act);
-  const r = rng(act * 31337 + 7);
+  const p = pal || getEnvPalette(act);
+  const r = rng(act * 31337 + 7 + salt * 2654435761);
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, T, T);
   const gap = 5;
@@ -112,11 +112,11 @@ function paintFloor(act, brutal) {
   return c;
 }
 
-function paintCeiling(act, brutal) {
+function paintCeiling(act, brutal, pal, salt = 0) {
   const c = makeCanvas(T);
   const ctx = c.getContext("2d");
-  const p = getEnvPalette(act);
-  const r = rng(act * 7331 + 3);
+  const p = pal || getEnvPalette(act);
+  const r = rng(act * 7331 + 3 + salt * 2654435761);
   ctx.fillStyle = p.s0;
   ctx.fillRect(0, 0, T, T);
   // Recessed panels between beams
@@ -199,9 +199,9 @@ function paintCeiling(act, brutal) {
  * Floor + ceiling for an act. Returns the 512px canvases (GL uploads level 0
  * and lets the GPU mipmap) and RGBA pixel mip chains for the Canvas2D path.
  */
-export function buildDeckSet(act, brutal = false) {
-  const floor = paintFloor(act, brutal);
-  const ceil = paintCeiling(act, brutal);
+export function buildDeckSet(act, brutal = false, pal, salt = 0) {
+  const floor = paintFloor(act, brutal, pal, salt);
+  const ceil = paintCeiling(act, brutal, pal, salt);
   const pixels = (canvas) => buildMips(canvas, 8).map((m) => m.getContext("2d").getImageData(0, 0, m.width, m.height).data);
   return { floor, ceil, floorMips: pixels(floor), ceilMips: pixels(ceil) };
 }
