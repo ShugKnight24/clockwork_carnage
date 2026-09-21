@@ -1,5 +1,5 @@
 import { WALL_COLORS } from "../data/index.js";
-import { isModernArt } from "../rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { drawPanel, pixelRatio, UI } from "./modern-ui-kit.js";
 
 /**
@@ -174,7 +174,10 @@ function wallLayer(ctx, map, w, h, scale) {
 }
 
 function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs, objectiveWaypoint }) {
-  drawPanel(ctx, x - 3, y - 3, w + 6, h + 6, { variant: "glass", accent: UI.cyan, chamfer: 12 });
+  // Realistic: the HUD skin draws its own soft plate and hairline frame, and
+  // markers drop their ink backing squares and outline.
+  const real = isRealisticArt();
+  if (!real) drawPanel(ctx, x - 3, y - 3, w + 6, h + 6, { variant: "glass", accent: UI.cyan, chamfer: 12 });
 
   const scale = Math.min(w / map.width, h / map.height);
   const ox = x + (w - map.width * scale) / 2;
@@ -186,13 +189,17 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
     const ex = ox + e.x * scale;
     const ey = oy + e.y * scale;
     if (e.type === "enemy") {
-      ctx.fillStyle = UI.ink;
-      ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+      if (!real) {
+        ctx.fillStyle = UI.ink;
+        ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+      }
       ctx.fillStyle = UI.crimson;
       ctx.fillRect(ex - 1.5, ey - 1.5, 3, 3);
     } else if (e.type === "exit") {
-      ctx.fillStyle = UI.ink;
-      ctx.fillRect(ex - 3.5, ey - 3.5, 7, 7);
+      if (!real) {
+        ctx.fillStyle = UI.ink;
+        ctx.fillRect(ex - 3.5, ey - 3.5, 7, 7);
+      }
       ctx.fillStyle = UI.green;
       ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
     } else if (e.type !== "projectile") {
@@ -223,8 +230,10 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
     ctx.beginPath();
     ctx.arc(bx, by, 3 + progress * 7, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = UI.ink;
-    ctx.fillRect(bx - 3, by - 3, 6, 6);
+    if (!real) {
+      ctx.fillStyle = UI.ink;
+      ctx.fillRect(bx - 3, by - 3, 6, 6);
+    }
     ctx.fillStyle = UI.energy;
     ctx.fillRect(bx - 2, by - 2, 4, 4);
   }
@@ -250,10 +259,12 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
   ctx.lineTo(px - ca * back * 0.4, py - sa * back * 0.4);
   ctx.lineTo(px - ca * back + sa * half, py - sa * back - ca * half);
   ctx.closePath();
-  ctx.lineJoin = "round";
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = UI.ink;
-  ctx.stroke();
-  ctx.fillStyle = UI.cyan;
+  if (!real) {
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = UI.ink;
+    ctx.stroke();
+  }
+  ctx.fillStyle = real ? "#8fbcc4" : UI.cyan;
   ctx.fill();
 }

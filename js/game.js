@@ -1,4 +1,8 @@
-import { setArtStyle, onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
+import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle, ART_STYLES } from "../src/rendering/art-style.js";
+
+// Reused light sample for the Realistic viewmodel; no per-frame allocation.
+const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
+import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
@@ -415,7 +419,14 @@ export class Game {
     setArtStyle(this.settings.artStyle);
     // The title-screen toggle flips the style outside the settings menu; keep
     // the saved setting in step so the choice persists.
-    onArtStyleChange((style) => {
+    onArtStyleChange((style, prev) => {
+      // Leaving the Modern asset set for Legacy: hand back the decoded SVG
+      // bitmaps and the 512px environment art rather than keeping them warm
+      // for a style that is no longer drawn. Modern <-> Realistic share them.
+      if (!isModernArt() && prev !== undefined && prev !== style) {
+        releaseRasterCache();
+        this.renderer?.releaseModernEnv?.();
+      }
       if (this.settings.artStyle === style) return;
       this.settings.artStyle = style;
       this.saveSettings();
@@ -721,9 +732,9 @@ export class Game {
     if (this.state === GameState.TITLE && gp.justPressed.interact) {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "GamepadStart", bubbles: true }));
     }
-    // X / Select flips the title-screen art style (the DOM toggle has no pad focus).
+    // X / Select cycles the title-screen art style (the DOM toggle has no pad focus).
     if (this.state === GameState.TITLE && (gp.justPressed.reload || gp.justPressed.minimap)) {
-      setArtStyle(isModernArt() ? 0 : 1);
+      setArtStyle((getArtStyle() + 1) % ART_STYLES.length);
     }
     if (this.state === GameState.MODE_SELECT) {
       if (gp.justPressed.dpadUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
@@ -2081,7 +2092,7 @@ export class Game {
 
   _spawnHitImpact(x, y, enemyColor, isCrit) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit, this.quality?.particleMultiplier ?? 1);
+    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit, this.quality?.particleMultiplier ?? 1, this.lights);
   }
 
   _spawnMuzzleFlash(wep) {
@@ -2102,12 +2113,12 @@ export class Game {
 
   spawnDeathParticles(x, y, c1, c2) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnDeathParticles(this.player.particles, x, y, c1, c2, this.quality?.particleMultiplier ?? 1);
+    _spawnDeathParticles(this.player.particles, x, y, c1, c2, this.quality?.particleMultiplier ?? 1, this.lights);
   }
 
   spawnWallSparks(x, y) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnWallSparks(this.player.particles, x, y, this.quality?.particleMultiplier ?? 1);
+    _spawnWallSparks(this.player.particles, x, y, this.quality?.particleMultiplier ?? 1, this.lights);
   }
 
   spawnPickupBurst(x, y, pickupType) {
@@ -2375,6 +2386,7 @@ export class Game {
       pausedFromState: this.pausedFromState,
       alive: this.player.alive,
       drawGlow: _drawGlow,
+      light: isRealisticArt() ? this.renderer.lightAt(this.player.x, this.player.y, VIEWMODEL_LIGHT) : null,
     });
   }
 

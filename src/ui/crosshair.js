@@ -1,4 +1,4 @@
-import { isModernArt } from "../rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 
 /**
  * Crosshair rendering — pure function, zero game state dependency.
@@ -8,6 +8,10 @@ import { isModernArt } from "../rendering/art-style.js";
  * @param {number} type - crosshair index (0-5)
  */
 export function drawCrosshair(ctx, cx, cy, type) {
+  if (isRealisticArt()) {
+    drawCrosshairRealistic(ctx, cx, cy, type);
+    return;
+  }
   if (isModernArt()) {
     drawCrosshairModern(ctx, cx, cy, type);
     return;
@@ -148,6 +152,89 @@ function drawCrosshairModern(ctx, cx, cy, type) {
     ctx.fillRect(cx - 2.5, cy - 2.5, 5, 5);
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+  } else if (type === 5) {
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fillRect(cx, cy, 1, 1);
+  }
+}
+
+// ─── Realistic ──────────────────────────────────────────────────────────────
+
+// Optic-style reticles: 1px lines on the pixel grid, each laid over a faint
+// dark 3px underlay so they hold on a lit wall. No glow, no saturated colour.
+const R_LINE = "rgba(232,234,229,0.92)";
+const R_RED = "rgba(222,78,66,0.95)";
+const R_EDGE = "rgba(4,6,8,0.42)";
+
+/** Horizontal and vertical ticks from `inner` to `outer`, outline pass or line pass. */
+function realTicks(ctx, x, y, inner, outer, edge) {
+  const len = outer - inner;
+  if (edge) {
+    ctx.fillRect(x - outer - 1, y - 1, len + 2, 3);
+    ctx.fillRect(x + inner, y - 1, len + 2, 3);
+    ctx.fillRect(x - 1, y - outer - 1, 3, len + 2);
+    ctx.fillRect(x - 1, y + inner, 3, len + 2);
+  } else {
+    ctx.fillRect(x - outer, y, len, 1);
+    ctx.fillRect(x + inner + 1, y, len, 1);
+    ctx.fillRect(x, y - outer, 1, len);
+    ctx.fillRect(x, y + inner + 1, 1, len);
+  }
+}
+
+/** 1px ring with a 3px dark underlay. */
+function realRing(ctx, x, y, r, color) {
+  ctx.beginPath();
+  ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
+  ctx.strokeStyle = R_EDGE;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/** Square centre dot of `size` px with a 1px dark border. */
+function realDot(ctx, x, y, size, color) {
+  const o = (size - 1) >> 1;
+  ctx.fillStyle = R_EDGE;
+  ctx.fillRect(x - o - 1, y - o - 1, size + 2, size + 2);
+  ctx.fillStyle = color;
+  ctx.fillRect(x - o, y - o, size, size);
+}
+
+/** Realistic art style: the same six reticles as thin optic markings. */
+function drawCrosshairRealistic(ctx, cx, cy, type) {
+  const x = Math.round(cx);
+  const y = Math.round(cy);
+  if (type === 0) {
+    // Red dot: a small emitter dot, no halo.
+    ctx.beginPath();
+    ctx.arc(x + 0.5, y + 0.5, 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = R_EDGE;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 0.5, y + 0.5, 1.7, 0, Math.PI * 2);
+    ctx.fillStyle = R_RED;
+    ctx.fill();
+  } else if (type === 1) {
+    ctx.fillStyle = R_EDGE;
+    realTicks(ctx, x, y, 4, 11, true);
+    ctx.fillStyle = R_LINE;
+    realTicks(ctx, x, y, 4, 11, false);
+    realDot(ctx, x, y, 1, R_LINE);
+  } else if (type === 2) {
+    realRing(ctx, x, y, 18, R_RED);
+    ctx.fillStyle = R_EDGE;
+    realTicks(ctx, x, y, 6, 18, true);
+    ctx.fillStyle = R_RED;
+    realTicks(ctx, x, y, 6, 18, false);
+    realDot(ctx, x, y, 2, R_RED);
+  } else if (type === 3) {
+    realRing(ctx, x, y, 12, R_LINE);
+    realDot(ctx, x, y, 1, R_LINE);
+  } else if (type === 4) {
+    realDot(ctx, x, y, 2, R_LINE);
   } else if (type === 5) {
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(cx, cy, 1, 1);

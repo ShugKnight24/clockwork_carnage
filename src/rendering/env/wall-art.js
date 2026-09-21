@@ -13,6 +13,7 @@
 import { INK, getEnvPalette } from "./palettes.js";
 import {
   T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, buildMips,
+  material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
 } from "./paint.js";
 
 const CORNICE = 34;
@@ -21,17 +22,25 @@ const PIL = 22; // half pilaster width at each tile edge
 
 /** Pilaster centred on x (drawn at 0 and T so the tile wraps seamlessly). */
 function pilaster(ctx, cx, p, strip) {
-  ctx.fillStyle = lin(ctx, cx - PIL, 0, cx + PIL, 0, [[0, p.s1], [0.3, p.s3], [0.42, p.s4], [0.55, p.s2], [1, p.s0]]);
-  ctx.fillRect(cx - PIL, 0, PIL * 2, T);
-  ctx.fillStyle = INK;
-  ctx.fillRect(cx - PIL - 1, 0, 3, T);
-  ctx.fillRect(cx + PIL - 2, 0, 3, T);
+  if (material()) {
+    // Realistic: flat steel, the rounded column profile lives in the relief.
+    ctx.fillStyle = lin(ctx, 0, 0, 0, T, [[0, p.s2], [1, p.s1]]);
+    ctx.fillRect(cx - PIL, 0, PIL * 2, T);
+    relief((g) => {
+      g.fillStyle = lin(g, cx - PIL, 0, cx + PIL, 0, [[0, grey(0)], [0.2, grey(16)], [0.5, grey(24)], [0.8, grey(16)], [1, grey(0)]]);
+      g.fillRect(cx - PIL, 0, PIL * 2, T);
+    });
+  } else {
+    ctx.fillStyle = lin(ctx, cx - PIL, 0, cx + PIL, 0, [[0, p.s1], [0.3, p.s3], [0.42, p.s4], [0.55, p.s2], [1, p.s0]]);
+    ctx.fillRect(cx - PIL, 0, PIL * 2, T);
+  }
+  ink(ctx, cx - PIL - 1, 0, 3, T, 26);
+  ink(ctx, cx + PIL - 2, 0, 3, T, 26);
   if (strip) {
     // Recessed vertical light strip down the pillar's face.
     lightStrip(ctx, cx - 3, 70, 6, 300, strip, { blur: 16 });
   } else {
-    ctx.fillStyle = INK;
-    ctx.fillRect(cx - 1, CORNICE, 2, KICK - CORNICE);
+    ink(ctx, cx - 1, CORNICE, 2, KICK - CORNICE, 16);
   }
 }
 
@@ -40,12 +49,10 @@ function shell(ctx, p, r, o = {}) {
   ctx.fillRect(0, 0, T, T);
   // Cornice under the ceiling
   plate(ctx, 0, 0, T, CORNICE, p, { tones: [p.s2, p.s1, p.s0], bevel: 4, ink: 0, spec: false });
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, CORNICE - 3, T, 4);
+  ink(ctx, 0, CORNICE - 3, T, 4, 30);
   // Kickplate with vent slots
   plate(ctx, 0, KICK, T, T - KICK, p, { tones: [p.s2, p.s1, p.s0], bevel: 5, ink: 0 });
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, KICK - 1, T, 4);
+  ink(ctx, 0, KICK - 1, T, 4, 30);
   if (o.kickVents !== false) vents(ctx, 150, KICK + 16, 212, 34, 3, p);
   for (const x of [60, 452]) rivet(ctx, x, KICK + 32, 4.5, p);
   for (const cx of [0, T]) pilaster(ctx, cx, p, o.strip);
@@ -115,16 +122,18 @@ function paintHull(ctx, p, r, act, secret) {
   // Horizontal ribs in the bay
   for (let i = 0; i < 3; i++) {
     const ry = 158 + i * 16;
-    ctx.fillStyle = INK;
-    ctx.fillRect(x + 46, ry, w - 92, 3);
+    ink(ctx, x + 46, ry, w - 92, 3, 20);
+    if (material()) {
+      raise(x + 46, ry + 3, w - 92, 4, 10);
+      continue;
+    }
     ctx.fillStyle = p.s3;
     ctx.globalAlpha = 0.6;
     ctx.fillRect(x + 46, ry + 3, w - 92, 2);
     ctx.globalAlpha = 1;
   }
   // Seam with a dim accent light line
-  ctx.fillStyle = INK;
-  ctx.fillRect(x, 236, w, 12);
+  ink(ctx, x, 236, w, 12, 36);
   lightStrip(ctx, x + 40, 240, w - 80, 3, p.accent, { housing: false, blur: 10, alpha: 0.55, core: "rgba(255,255,255,0.35)" });
   // Lower plate: two tall panels
   const hw = (w - 12) / 2;
@@ -133,6 +142,14 @@ function paintHull(ctx, p, r, act, secret) {
   for (const px of [x, x + hw + 12]) {
     for (const [dx, dy] of [[16, 16], [hw - 16, 16], [16, 170], [hw - 16, 170]]) rivet(ctx, px + dx, 250 + dy, 4, p);
     // Small access hatch outline
+    if (material()) {
+      relief((g) => {
+        g.strokeStyle = grey(14);
+        g.lineWidth = 2;
+        g.strokeRect(px + 40, 290, hw - 80, 64);
+      }, "difference");
+      continue;
+    }
     ctx.strokeStyle = INK;
     ctx.lineWidth = 2;
     ctx.strokeRect(px + 40, 290, hw - 80, 64);
@@ -147,6 +164,11 @@ function paintHull(ctx, p, r, act, secret) {
     ctx.strokeRect(x + 70, 98, w - 140, 290);
     ctx.strokeStyle = "rgba(255,255,255,0.1)";
     ctx.strokeRect(x + 72, 100, w - 140, 290);
+    relief((g) => {
+      g.strokeStyle = grey(10);
+      g.lineWidth = 1.5;
+      g.strokeRect(x + 70, 98, w - 140, 290);
+    }, "difference");
   }
   grime(ctx, r, p, act);
 }
@@ -171,20 +193,32 @@ function paintTech(ctx, p, r, act) {
   // Lower service panel: twin coolant conduits + data readout
   plate(ctx, x, 320, w, 116, p);
   for (const cx of [x + 44, x + 84]) {
-    ctx.fillStyle = INK;
-    ctx.fillRect(cx - 11, 326, 22, 104);
-    ctx.fillStyle = lin(ctx, cx - 9, 0, cx + 9, 0, [[0, p.s1], [0.35, p.s4], [1, p.s0]]);
-    ctx.fillRect(cx - 9, 326, 18, 104);
+    ink(ctx, cx - 11, 326, 22, 104, 22);
+    if (material()) {
+      // Coolant pipe: plain steel, round in the relief.
+      ctx.fillStyle = p.s3;
+      ctx.fillRect(cx - 9, 326, 18, 104);
+      relief((g) => {
+        g.fillStyle = lin(g, cx - 9, 0, cx + 9, 0, [[0, grey(8)], [0.4, grey(40)], [1, grey(8)]]);
+        g.fillRect(cx - 9, 326, 18, 104);
+      });
+    } else {
+      ctx.fillStyle = lin(ctx, cx - 9, 0, cx + 9, 0, [[0, p.s1], [0.35, p.s4], [1, p.s0]]);
+      ctx.fillRect(cx - 9, 326, 18, 104);
+    }
     lightStrip(ctx, cx - 2, 340, 4, 76, p.accent, { housing: false, blur: 10 });
   }
   const sx = x + 130;
   const sw = w - 160;
-  ctx.fillStyle = INK;
-  ctx.fillRect(sx - 4, 336, sw + 8, 84);
+  ink(ctx, sx - 4, 336, sw + 8, 84, 18);
   ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#06212a"], [1, "#020b10"]]);
   if (act === 2) ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#2a1606"], [1, "#0e0702"]]);
   if (act === 3) ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#2a0612"], [1, "#0e0206"]]);
   ctx.fillRect(sx, 340, sw, 76);
+  emit((g) => {
+    g.globalAlpha = 0.85;
+    g.fillRect(sx, 340, sw, 76);
+  });
   ctx.save();
   ctx.shadowColor = p.accent;
   ctx.shadowBlur = 8;
@@ -224,6 +258,23 @@ function paintBulkhead(ctx, p, r, act) {
         ctx.fillRect(px, py + r() * gh, gw, 1 + r() * 1.5);
       }
       // Diagonal reinforcement rib
+      if (material()) {
+        ctx.strokeStyle = p.s3;
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(px + 20, py + gh - 20);
+        ctx.lineTo(px + gw - 20, py + 20);
+        ctx.stroke();
+        relief((g) => {
+          g.strokeStyle = grey(22);
+          g.lineWidth = 10;
+          g.beginPath();
+          g.moveTo(px + 20, py + gh - 20);
+          g.lineTo(px + gw - 20, py + 20);
+          g.stroke();
+        });
+        ctx.restore();
+      } else {
       ctx.strokeStyle = INK;
       ctx.lineWidth = 12;
       ctx.beginPath();
@@ -240,6 +291,7 @@ function paintBulkhead(ctx, p, r, act) {
       ctx.lineTo(px + gw - 24, py + 18);
       ctx.stroke();
       ctx.restore();
+      }
       // Rivet rows along the plate edges
       for (let i = 0; i <= 5; i++) {
         const t = 18 + i * ((gw - 36) / 5);
@@ -267,8 +319,8 @@ function paintEnergy(ctx, p, r, act) {
   const gy = 84;
   const gw = w - 80;
   const gh = 318;
-  ctx.fillStyle = INK;
-  ctx.fillRect(gx - 8, gy - 8, gw + 16, gh + 16);
+  ink(ctx, gx - 8, gy - 8, gw + 16, gh + 16, 30);
+  emit((g) => g.fillRect(gx, gy, gw, gh), 6);
   // Plasma column
   ctx.save();
   ctx.beginPath();
@@ -297,16 +349,30 @@ function paintEnergy(ctx, p, r, act) {
   }
   ctx.restore();
   // Glass grid bars
-  for (const bx of [gx + gw / 3, gx + (gw * 2) / 3]) {
+  if (material()) {
+    // Steel glazing bars standing proud of the recessed glass.
+    ctx.fillStyle = p.s2;
+    for (const [bx, by, bw, bh] of [[gx + gw / 3 - 5, gy, 10, gh], [gx + (gw * 2) / 3 - 5, gy, 10, gh], [gx, gy + gh / 2 - 5, gw, 10]]) {
+      ctx.fillRect(bx, by, bw, bh);
+      raise(bx, by, bw, bh, 38);
+      emit((g) => {
+        g.globalCompositeOperation = "destination-out";
+        g.fillRect(bx, by, bw, bh);
+      });
+    }
+  }
+  for (const bx of material() ? [] : [gx + gw / 3, gx + (gw * 2) / 3]) {
     ctx.fillStyle = INK;
     ctx.fillRect(bx - 6, gy, 12, gh);
     ctx.fillStyle = lin(ctx, bx - 4, 0, bx + 4, 0, [[0, p.s2], [0.4, p.s4], [1, p.s0]]);
     ctx.fillRect(bx - 4, gy, 8, gh);
   }
-  ctx.fillStyle = INK;
-  ctx.fillRect(gx, gy + gh / 2 - 6, gw, 12);
-  ctx.fillStyle = lin(ctx, 0, gy + gh / 2 - 4, 0, gy + gh / 2 + 4, [[0, p.s4], [1, p.s1]]);
-  ctx.fillRect(gx, gy + gh / 2 - 4, gw, 8);
+  if (!material()) {
+    ctx.fillStyle = INK;
+    ctx.fillRect(gx, gy + gh / 2 - 6, gw, 12);
+    ctx.fillStyle = lin(ctx, 0, gy + gh / 2 - 4, 0, gy + gh / 2 + 4, [[0, p.s4], [1, p.s1]]);
+    ctx.fillRect(gx, gy + gh / 2 - 4, gw, 8);
+  }
   // Glass glint
   ctx.fillStyle = "rgba(255,255,255,0.1)";
   ctx.beginPath();
@@ -342,8 +408,8 @@ function paintDoor(ctx, p, r, act) {
     // Horizontal pressure grooves
     for (let g = 0; g < 4; g++) {
       const gy = ly + 40 + g * 36;
-      ctx.fillStyle = INK;
-      ctx.fillRect(lx + 20, gy, lw - 40, 4);
+      ink(ctx, lx + 20, gy, lw - 40, 4, 18);
+      if (material()) continue;
       ctx.fillStyle = "rgba(255,255,255,0.14)";
       ctx.fillRect(lx + 20, gy + 4, lw - 40, 2);
     }
@@ -351,15 +417,27 @@ function paintDoor(ctx, p, r, act) {
   }
   hazard(ctx, 76 + 10, ly + 270, T - 152 - 20, 46, p.warn, "#0a0806", 30);
   // Centre seam
-  ctx.fillStyle = INK;
-  ctx.fillRect(T / 2 - 3, ly, 6, lh);
+  ink(ctx, T / 2 - 3, ly, 6, lh, 40);
   lightStrip(ctx, T / 2 - 1, ly + 10, 2, lh - 20, p.accent, { housing: false, blur: 8, alpha: 0.5, core: "rgba(255,255,255,0.3)" });
   // Lock ring + status lamp
-  ctx.fillStyle = INK;
+  const m = material();
+  ctx.fillStyle = m ? m.crevice : INK;
   ctx.beginPath();
   ctx.arc(T / 2, ly + 196, 34, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = rad(ctx, T / 2 - 10, ly + 186, 2, 40, [[0, p.s4], [0.5, p.s2], [1, p.s0]]);
+  relief((g) => {
+    g.fillStyle = grey(18);
+    g.beginPath();
+    g.arc(T / 2, ly + 196, 34, 0, Math.PI * 2);
+    g.fill();
+  }, "difference");
+  relief((g) => {
+    g.fillStyle = rad(g, T / 2, ly + 196, 0, 30, [[0, grey(40)], [0.7, grey(34)], [1, grey(14)]]);
+    g.beginPath();
+    g.arc(T / 2, ly + 196, 30, 0, Math.PI * 2);
+    g.fill();
+  });
+  ctx.fillStyle = m ? p.s2 : rad(ctx, T / 2 - 10, ly + 186, 2, 40, [[0, p.s4], [0.5, p.s2], [1, p.s0]]);
   ctx.beginPath();
   ctx.arc(T / 2, ly + 196, 30, 0, Math.PI * 2);
   ctx.fill();
@@ -380,13 +458,19 @@ function paintParadox(ctx, p, r, act) {
   ctx.lineCap = "round";
   for (let i = 0; i <= ribs; i++) {
     const vx = i * rw;
-    ctx.beginPath();
-    let x = vx;
-    ctx.moveTo(x, 0);
-    for (let y = 0; y <= T; y += 32) {
-      x = vx + (r() - 0.5) * 14;
-      ctx.lineTo(x, y);
+    const pts = [];
+    for (let y = 0; y <= T; y += 32) pts.push(vx + (r() - 0.5) * 14, y);
+    const trace = (g) => {
+      g.beginPath();
+      g.moveTo(vx, 0);
+      for (let k = 0; k < pts.length; k += 2) g.lineTo(pts[k], pts[k + 1]);
+    };
+    if (material()) {
+      // Realistic: a glowing fissure in the gap between two ribs.
+      fissure(ctx, trace, 5);
+      continue;
     }
+    trace(ctx);
     ctx.shadowColor = "#ff2a4a";
     ctx.shadowBlur = 20;
     ctx.strokeStyle = "#ff2a4a";
@@ -401,17 +485,56 @@ function paintParadox(ctx, p, r, act) {
   for (let i = 0; i < ribs; i++) {
     const x = i * rw + 7;
     const w = rw - 14;
-    ctx.fillStyle = INK;
-    ctx.beginPath();
-    ctx.roundRect(x - 3, 20, w + 6, T - 40, 22);
-    ctx.fill();
-    ctx.fillStyle = lin(ctx, x, 0, x + w, 0, [[0, "#1a0f22"], [0.28, "#4a3050"], [0.4, "#8a6a94"], [0.55, "#2c1a34"], [1, "#0a0610"]]);
+    const m = material();
+    if (!m) {
+      ctx.fillStyle = INK;
+      ctx.beginPath();
+      ctx.roundRect(x - 3, 20, w + 6, T - 40, 22);
+      ctx.fill();
+    } else {
+      relief((g) => {
+        // Round across the rib (a cylinder)...
+        g.fillStyle = lin(g, x, 0, x + w, 0, [[0, grey(0)], [0.08, grey(8)], [0.2, grey(26)], [0.35, grey(44)], [0.5, grey(50)], [0.65, grey(44)], [0.8, grey(26)], [0.92, grey(8)], [1, grey(0)]]);
+        g.beginPath();
+        g.roundRect(x, 24, w, T - 48, 18);
+        g.fill();
+        // ...with the bone joints pinched in: each segment's ends round down
+        // into its joint, so the key light from above catches the shoulder
+        // under every joint and the rim above it falls into shade.
+        g.save();
+        g.clip();
+        const seg = (T - 48) / 6;
+        g.globalCompositeOperation = "difference";
+        for (let s = 1; s < 6; s++) {
+          const sy = 24 + s * seg;
+          g.fillStyle = lin(g, 0, sy - 16, 0, sy + 16, [[0, grey(0)], [0.3, grey(4)], [0.5, grey(12)], [0.7, grey(4)], [1, grey(0)]]);
+          g.fillRect(x, sy - 16, w, 32);
+        }
+        g.restore();
+      });
+      emit((g) => {
+        g.globalCompositeOperation = "destination-out";
+        g.beginPath();
+        g.roundRect(x, 24, w, T - 48, 18);
+        g.fill();
+      });
+    }
+    // Realistic albedo carries the cylinder's falloff toward its flanks too:
+    // the key from above cannot shade a vertical rib across its width.
+    ctx.fillStyle = m ? lin(ctx, x, 0, x + w, 0, [[0, "#07040a"], [0.14, "#22152a"], [0.3, "#5a4262"], [0.38, "#6e5478"], [0.48, "#46304e"], [0.7, "#261830"], [0.86, "#1a1020"], [0.94, "#2a1c32"], [1, "#0a060c"]]) : lin(ctx, x, 0, x + w, 0, [[0, "#1a0f22"], [0.28, "#4a3050"], [0.4, "#8a6a94"], [0.55, "#2c1a34"], [1, "#0a0610"]]);
     ctx.beginPath();
     ctx.roundRect(x, 24, w, T - 48, 18);
     ctx.fill();
     // Bone-like segment joints with AO
     for (let s = 1; s < 6; s++) {
       const sy = 24 + s * ((T - 48) / 6);
+      if (m) {
+        // The joint is shaped in the relief above; a shallow seam is enough
+        // (a deep slot made every segment a stained tile).
+        sink(x, sy - 2, w, 4, 6);
+        ink(ctx, x, sy - 1, w, 2, 12);
+        continue;
+      }
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(x, sy - 5, w, 10);
       ctx.fillStyle = INK;
@@ -420,6 +543,7 @@ function paintParadox(ctx, p, r, act) {
       ctx.fillRect(x + 4, sy + 3, w - 8, 2);
     }
     // Violet rim on the right edge
+    if (m) continue;
     ctx.fillStyle = "rgba(155,92,255,0.45)";
     ctx.fillRect(x + w - 4, 34, 2, T - 68);
   }
@@ -435,8 +559,12 @@ function paintGlass(ctx, p, r, act) {
   const gy = 72;
   const gw = w - 60;
   const gh = 340;
-  ctx.fillStyle = INK;
-  ctx.fillRect(gx - 7, gy - 7, gw + 14, gh + 14);
+  ink(ctx, gx - 7, gy - 7, gw + 14, gh + 14, 34);
+  // The view outside is lit by its own sky, not by the room.
+  emit((g) => {
+    g.globalAlpha = 0.7;
+    g.fillRect(gx, gy, gw, gh);
+  });
   ctx.save();
   ctx.beginPath();
   ctx.rect(gx, gy, gw, gh);
@@ -472,6 +600,19 @@ function paintGlass(ctx, p, r, act) {
   ctx.fillRect(gx, gy + gh - 90, gw, 90);
   ctx.restore();
   // Mullions
+  if (material()) {
+    ctx.fillStyle = p.s2;
+    for (const [mx, my, mw, mh] of [[gx + gw / 2 - 5, gy, 10, gh], [gx, gy + 118 - 5, gw, 10]]) {
+      ctx.fillRect(mx, my, mw, mh);
+      raise(mx, my, mw, mh, 42);
+      emit((g) => {
+        g.globalCompositeOperation = "destination-out";
+        g.fillRect(mx, my, mw, mh);
+      });
+    }
+    grime(ctx, r, p, act);
+    return;
+  }
   ctx.fillStyle = INK;
   ctx.fillRect(gx + gw / 2 - 7, gy, 14, gh);
   ctx.fillRect(gx, gy + 118 - 7, gw, 14);
@@ -490,8 +631,11 @@ function paintRift(ctx, p, r, act) {
   plate(ctx, x, 40, w, KICK - 44, p, { tones: [p.s2, p.s1, p.s0], bevel: 8 });
   const cx = T / 2;
   const cy = 240;
-  ctx.fillStyle = INK;
-  ctx.fillRect(x + 26, 66, w - 52, 356);
+  ink(ctx, x + 26, 66, w - 52, 356, 34);
+  emit((g) => {
+    g.globalAlpha = 0.9;
+    g.fillRect(x + 32, 72, w - 64, 344);
+  }, 4);
   ctx.save();
   ctx.beginPath();
   ctx.rect(x + 32, 72, w - 64, 344);
@@ -549,22 +693,51 @@ const PAINTERS = {
   9: paintRift,
 };
 
-/** Paint one wall face at 512×512. */
-export function paintWall(id, act, pal, salt = 0) {
+/**
+ * Paint one wall face at 512×512. With `mat` (from beginMaterial) the same
+ * layout is painted as a material — relief + emissive mask, no ink — ready
+ * for bakeMaterial().
+ */
+export function paintWall(id, act, pal, salt = 0, mat = null) {
   const c = makeCanvas(T);
   const ctx = c.getContext("2d");
   const p = pal || getEnvPalette(act);
   const paint = PAINTERS[id] || PAINTERS[1];
   // The salt varies the grain per level, so two levels in one act do not share
   // the same scratches on top of already sharing a silhouette.
-  paint(ctx, p, rng(id * 7919 + act * 104729 + salt * 15485863), act);
-  grit(ctx, T, T, 0.12);
+  const seed = id * 7919 + act * 104729 + salt * 15485863;
+  if (mat) useMaterial(mat);
+  try {
+    paint(ctx, p, rng(seed), act);
+    grit(ctx, T, T, 0.12);
+  } finally {
+    useMaterial(null);
+  }
   return c;
 }
 
-/** All wall faces for a level as { [id]: mipChain[] } (level 0 = 512px). */
-export function buildWallSet(act, pal, salt = 0) {
+/**
+ * All wall faces for a level as { [id]: mipChain[] } (level 0 = 512px).
+ * `realistic` bakes each face's lighting and wear into its albedo, so
+ * Realistic walls cost nothing extra per frame.
+ */
+export function buildWallSet(act, pal, salt = 0, realistic = false) {
   const set = {};
-  for (const id of Object.keys(PAINTERS)) set[id] = buildMips(paintWall(+id, act, pal, salt));
+  const ids = Object.keys(PAINTERS);
+  if (!realistic) {
+    for (const id of ids) set[id] = buildMips(paintWall(+id, act, pal, salt));
+    return set;
+  }
+  const p = pal || getEnvPalette(act);
+  // Paint every face before reading any back, so the GPU rasterises the
+  // earlier faces while later ones are still being recorded.
+  const faces = ids.map((id) => {
+    const mat = beginMaterial(p);
+    return { id, mat, canvas: paintWall(+id, act, p, salt, mat) };
+  });
+  for (const { id, mat, canvas } of faces) {
+    bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
+    set[id] = buildMips(canvas);
+  }
   return set;
 }

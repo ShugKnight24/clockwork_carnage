@@ -486,6 +486,29 @@ function modernBackground() {
   return { sky, ground };
 }
 
+/**
+ * Modern (realistic) backdrop: the same night skyline and deck, desaturated,
+ * the deck in worn plate under the key light, stars without comic sparkles.
+ * Built on first use only.
+ */
+async function realBackground() {
+  const { realizeModel } = await import("../../src/rendering/svg-art/models/realistic.js");
+  const { sky, ground } = modernBackground();
+  const dial = skyDial();
+  return {
+    sky: realizeModel(sky, {
+      filters: { u: 1.27 },
+      material: (l) => (l.blend ? "emissive" : "plain"),
+      edit: (m, i) => (i === 1 ? m.replace(/<path d="M0 -7[^>]*\/>/g, "") : m),
+    }),
+    dial: { ...dial, layers: dial.layers.map((l) => ({ ...l, opacity: 0.3 })) },
+    ground: realizeModel(ground, {
+      filters: { u: 1.27, spec: 0.35, grime: 0.3, seed: 31 },
+      material: (l, i) => (i === 0 ? "metal" : l.blend ? "emissive" : "plain"),
+    }),
+  };
+}
+
 export class TitleBackground extends HTMLElement {
   constructor() {
     super();
@@ -493,14 +516,26 @@ export class TitleBackground extends HTMLElement {
   }
 
   connectedCallback() {
-    this._unsubscribe ??= attachArtSwitch(this, template, async () => {
-      const { sky, ground } = modernBackground();
-      return (
-        modelHtml("title-sky", sky) +
-        modelHtml("title-dial", skyDial(), { x: 350, y: 195 }) +
-        modelHtml("title-ground", ground)
-      );
-    });
+    this._unsubscribe ??= attachArtSwitch(
+      this,
+      template,
+      async () => {
+        const { sky, ground } = modernBackground();
+        return (
+          modelHtml("title-sky", sky) +
+          modelHtml("title-dial", skyDial(), { x: 350, y: 195 }) +
+          modelHtml("title-ground", ground)
+        );
+      },
+      async () => {
+        const { sky, dial, ground } = await realBackground();
+        return (
+          modelHtml("title-sky-real", sky) +
+          modelHtml("title-dial-real", dial, { x: 350, y: 195 }) +
+          modelHtml("title-ground-real", ground)
+        );
+      },
+    );
   }
 
   disconnectedCallback() {

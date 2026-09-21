@@ -16,6 +16,7 @@ import { createScene } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
 import { WEAPON_MODELS } from "./viewmodel/weapons.js";
 import { smoothDamp } from "../../systems/aim.js";
+import { isRealisticArt } from "../art-style.js";
 
 const DEFS =
   `<filter id="vmBloom" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3"/></filter>` +
@@ -33,15 +34,15 @@ const UNIT = 4;
 const LIMIT = { x0: -240, x1: 240, y0: -100, y1: 170 };
 const MAX_SIDE_PX = 1100;
 
-const built = new Map(); // `${id}|${accent}|${pose}` -> viewmodel
+const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}` -> viewmodel
 
-function build(id, accent, pose, tier = "hi") {
-  const key = `${id}|${accent}|${pose}|${tier}`;
+function build(id, accent, pose, tier = "hi", real = false) {
+  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}`;
   let vm = built.get(key);
   if (vm) return vm;
   const model = WEAPON_MODELS[id];
   if (!model) return null;
-  const sc = createScene(model.cams[pose], accent);
+  const sc = createScene(model.cams[pose], accent, { real });
   sc.detailPx = tier === "lo" ? 2 : 4;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
@@ -71,12 +72,16 @@ function layerScale(px, box) {
 const request = (vm, px) => vm.layers.map((L) => getLayerImage(L.id, L.box, DEFS, L.markup, layerScale(px, L.box)));
 
 let warmQueue = null;
+let warmReal = false;
 /** Decode the other weapons one per frame so switching never shows procedural art. */
-function warmStep(accent, px, tier) {
-  if (!warmQueue) warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
+function warmStep(accent, px, tier, real) {
+  if (!warmQueue || warmReal !== real) {
+    warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
+    warmReal = real;
+  }
   const next = warmQueue.shift();
   if (!next) return;
-  const vm = build(next[0], accent, next[1], tier);
+  const vm = build(next[0], accent, next[1], tier, real);
   if (vm) request(vm, px);
 }
 
@@ -138,13 +143,13 @@ function morph(hip, aim, s, ctx) {
  * above the screen edge; continue each sleeve past its baked end so the hands
  * never float. Cheap: two quads, only during the transition.
  */
-function sleeveExtensions(ctx, vm, alpha) {
+function sleeveExtensions(ctx, vm, alpha, real) {
   if (!vm.sleeves.length) return;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = "#0a1018";
-  ctx.strokeStyle = "#04060b";
-  ctx.lineWidth = 0.6;
+  ctx.fillStyle = real ? "#0d0e0c" : "#0a1018";
+  ctx.strokeStyle = real ? "#050605" : "#04060b";
+  ctx.lineWidth = real ? 0.3 : 0.6;
   for (const { ea, eb, dir, half } of vm.sleeves) {
     const L = 170;
     const fa = [ea[0] + dir[0] * L - half[0] * 0.5, ea[1] + dir[1] * L - half[1] * 0.5];
@@ -169,8 +174,14 @@ function sleeveExtensions(ctx, vm, alpha) {
   ctx.restore();
 }
 
-function drawLayers(ctx, vm, imgs, alpha, glowAlpha) {
+// Which layers a pass paints: everything, only the lit solids, or only the emissive bloom.
+const ALL = 0;
+const SOLID = 1;
+const BLOOM = 2;
+
+function drawLayers(ctx, vm, imgs, alpha, glowAlpha, pass = ALL) {
   vm.layers.forEach((L, i) => {
+    if ((pass === SOLID && L.bloom) || (pass === BLOOM && !L.bloom)) return;
     const [bx, by, bw, bh] = L.box;
     ctx.save();
     if (L.bloom) {
@@ -179,9 +190,128 @@ function drawLayers(ctx, vm, imgs, alpha, glowAlpha) {
     } else {
       ctx.globalAlpha = alpha;
     }
+    // Stencil passes keep the caller's composite mode.
     ctx.drawImage(imgs[i], bx, by, bw, bh);
     ctx.restore();
   });
+}
+
+// Per-frame arguments for paintRig, reused so the lit passes can replay the
+// rig on the light stencil without allocating.
+const rigArgs = { hip: null, aim: null, hipImgs: null, aimImgs: null, s: 0, u: 0, base: 1, glowA: 1, real: false };
+
+/** Paint both poses of the rig (hip swinging toward ADS, then the ADS art) into ctx. */
+function paintRig(c, pass) {
+  const { hip, aim, hipImgs, aimImgs, s, u, base, glowA, real } = rigArgs;
+  if (u < 1) {
+    c.save();
+    morph(hip, aim, s, c);
+    if (s > 0 && pass !== BLOOM) sleeveExtensions(c, hip, base * (1 - u), real);
+    drawLayers(c, hip, hipImgs, base * (1 - u), glowA, pass);
+    c.restore();
+  }
+  if (u > 0) drawLayers(c, aim, aimImgs, base * Math.min(1, u * 1.4), glowA, pass);
+}
+
+/**
+ * ctx.filter that puts the viewmodel in the world's light: brightness from the
+ * light level at the player (renderer.lightAt) with a warm cast from coloured
+ * light, plus the weapon's own muzzle flash for one frame. A filter touches
+ * only the pixels being drawn. The first version replayed the rig onto a
+ * frame-sized stencil and multiplied it back, 2-4 full-screen passes over the
+ * DPR-scaled HUD canvas every frame, and cost Modern ~5 ms of GPU time.
+ */
+const vmFilters = new Map();
+function viewmodelFilter(light, flash) {
+  const lum = 0.2126 * light.r + 0.7152 * light.g + 0.0722 * light.b;
+  const bright = Math.max(0.55, Math.min(1.6, 0.35 + lum * 0.75 + flash * 0.55));
+  const warm = Math.max(0, Math.min(1, (light.r - light.b) * 1.5 + flash * 0.8));
+  const qb = Math.round(bright * 20);
+  const qw = Math.round(warm * 5);
+  const key = (qb << 3) | qw;
+  let f = vmFilters.get(key);
+  if (!f) {
+    f = qw ? `brightness(${qb / 20}) sepia(${(qw / 5) * 0.3})` : `brightness(${qb / 20})`;
+    vmFilters.set(key, f);
+  }
+  return f;
+}
+
+// Unit-radius gradients, one per context (the flash is drawn scaled around the muzzle).
+const flashGrads = new WeakMap();
+function flashGrad(c) {
+  let g = flashGrads.get(c);
+  if (!g) {
+    const fire = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    fire.addColorStop(0, "rgba(255,250,235,1)");
+    fire.addColorStop(0.16, "rgba(255,236,170,0.98)");
+    fire.addColorStop(0.42, "rgba(255,168,64,0.8)");
+    fire.addColorStop(0.75, "rgba(214,86,24,0.35)");
+    fire.addColorStop(1, "rgba(150,40,10,0)");
+    const core = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    core.addColorStop(0, "rgba(255,255,255,1)");
+    core.addColorStop(0.45, "rgba(255,246,214,0.95)");
+    core.addColorStop(1, "rgba(255,210,120,0)");
+    const haze = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    haze.addColorStop(0, "rgba(255,190,110,0.5)");
+    haze.addColorStop(0.35, "rgba(255,140,60,0.18)");
+    haze.addColorStop(1, "rgba(255,120,40,0)");
+    g = { fire, core, haze };
+    flashGrads.set(c, g);
+  }
+  return g;
+}
+
+/**
+ * Realistic muzzle flash for a single frame: a small white-hot core, an
+ * irregular ring of flame petals (random count, length and twist every shot)
+ * and a faint warm haze. Additive, in viewmodel units around (x, y).
+ */
+function realisticFlash(ctx, x, y, fk, alpha) {
+  const g = flashGrad(ctx);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  // Haze.
+  ctx.save();
+  ctx.scale(36 * fk, 30 * fk);
+  ctx.fillStyle = g.haze;
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
+  // Petals: leaf shapes of uneven length radiating from the crown.
+  const R = 20 * fk;
+  const n = 4 + ((Math.random() * 3) | 0);
+  const spin = Math.random() * Math.PI * 2;
+  ctx.save();
+  ctx.scale(R, R);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = spin + (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
+    const len = 0.42 + Math.random() * 0.58;
+    const wid = (0.2 + Math.random() * 0.14) * (0.55 + len * 0.45);
+    const bend = (Math.random() - 0.5) * 0.6;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const tx = ca * len;
+    const ty = sa * len;
+    const mx = ca * len * 0.5;
+    const my = sa * len * 0.5;
+    ctx.moveTo(ca * 0.06, sa * 0.06);
+    ctx.quadraticCurveTo(mx - sa * wid + ca * bend * wid, my + ca * wid + sa * bend * wid, tx, ty);
+    ctx.quadraticCurveTo(mx + sa * wid + ca * bend * wid, my - ca * wid + sa * bend * wid, ca * 0.06, sa * 0.06);
+  }
+  ctx.fillStyle = g.fire;
+  ctx.fill();
+  ctx.restore();
+  // White-hot core, slightly squashed.
+  ctx.save();
+  ctx.rotate(spin);
+  ctx.scale(11 * fk, 9 * fk);
+  ctx.fillStyle = g.core;
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
+  ctx.restore();
 }
 
 /**
@@ -203,13 +333,14 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const px = Math.hypot(m.a, m.b) * UNIT * vf || UNIT;
   // Detail tier: small renders (phones, low render scale) get a simplified glove.
   const tier = px >= 3 ? "hi" : "lo";
-  const hip = build(wep.id, accent, "hip", tier);
-  const aim = build(wep.id, accent, "ads", tier);
+  const real = isRealisticArt();
+  const hip = build(wep.id, accent, "hip", tier, real);
+  const aim = build(wep.id, accent, "ads", tier, real);
   if (!hip || !aim) return false;
   // Both poses stay decoded so the blend never has to fall back mid-motion.
   const hipImgs = request(hip, px);
   const aimImgs = request(aim, px);
-  warmStep(accent, px, tier);
+  warmStep(accent, px, tier, real);
   const b = clamp01(blend);
   const s = smoothstep(clamp01(b / MORPH_END));
   const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
@@ -287,7 +418,9 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
 
   const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4));
   // Muzzle flash sits behind the barrel so the crown occludes its base.
-  if (frame === 1) {
+  if (frame === 1 && real) {
+    realisticFlash(ctx, mx, my - 2, fk, base);
+  } else if (frame === 1) {
     drawGlow(ctx, mx, my - 2, 32 * fk, accent, 0.4);
     drawGlow(ctx, mx, my - 2, 12 * fk, "#ffffff", 0.8);
     ctx.strokeStyle = accent;
@@ -306,14 +439,26 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const pulse = 0.62 + 0.38 * Math.sin(time * 0.008);
   const fired = lastFireTime && since >= 0 && since < 220 ? 1 - since / 220 : 0;
   const glowA = Math.min(1, pulse + fired * 0.6);
-  if (u < 1) {
-    ctx.save();
-    morph(hip, aim, s, ctx);
-    if (s > 0) sleeveExtensions(ctx, hip, base * (1 - u));
-    drawLayers(ctx, hip, hipImgs, base * (1 - u), glowA);
-    ctx.restore();
+  rigArgs.hip = hip;
+  rigArgs.aim = aim;
+  rigArgs.hipImgs = hipImgs;
+  rigArgs.aimImgs = aimImgs;
+  rigArgs.s = s;
+  rigArgs.u = u;
+  rigArgs.base = base;
+  rigArgs.glowA = glowA;
+  rigArgs.real = real;
+  // Realistic: the viewmodel sits in the world's light at the player (and
+  // catches its own muzzle flash). Emissive bloom goes on after, unlit.
+  const light = real ? o.light ?? null : null;
+  if (light) {
+    ctx.filter = viewmodelFilter(light, frame === 1 ? fk : 0);
+    paintRig(ctx, SOLID);
+    ctx.filter = "none";
+    paintRig(ctx, BLOOM);
+  } else {
+    paintRig(ctx, ALL);
   }
-  if (u > 0) drawLayers(ctx, aim, aimImgs, base * Math.min(1, u * 1.4), glowA);
 
   // Spent casing flicks out of the ejection port.
   if (frame === 2 && wep.id !== 2) {
@@ -349,7 +494,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
 }
 
 /** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose. */
-export function viewmodelLayers(id, accent, pose = "hip", tier = "hi") {
-  const vm = build(id, accent, pose, tier);
+export function viewmodelLayers(id, accent, pose = "hip", tier = "hi", real = false) {
+  const vm = build(id, accent, pose, tier, real);
   return vm && { defs: DEFS, layers: vm.layers, muzzle: vm.muzzle };
 }

@@ -5,7 +5,7 @@
  * Pure rendering functions — no game state mutation.
  */
 
-import { isModernArt } from "./art-style.js";
+import { isModernArt, isRealisticArt } from "./art-style.js";
 
 /**
  * Render all post-processing effects in order.
@@ -32,9 +32,18 @@ export function renderPostFX(ctx, w, h, state) {
 
   // Hurt flash — red overlay
   if (postProcessing && player.hurtTime && time - player.hurtTime < 200) {
-    const alpha = 0.3 * (1 - (time - player.hurtTime) / 200);
-    ctx.fillStyle = `rgba(255,0,0,${alpha})`;
-    ctx.fillRect(0, 0, w, h);
+    const k = 1 - (time - player.hurtTime) / 200;
+    if (isRealisticArt()) {
+      // A flat red fill goes through the filmic exposure and floods the whole
+      // frame; blood-at-the-edges reads as a hit without hiding the scene.
+      const prev = ctx.globalAlpha;
+      ctx.globalAlpha = 0.75 * k;
+      ctx.drawImage(getHurtVignette(), 0, 0, w, h);
+      ctx.globalAlpha = prev;
+    } else {
+      ctx.fillStyle = `rgba(255,0,0,${0.3 * k})`;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   // Modern HUD draws its own inked damage chevron and low-HP corner frames
@@ -267,6 +276,14 @@ export function drawBloom(ctx, w, h, canvas) {
 
 /** Color grade — per-act tint overlay. */
 export function drawColorGrade(ctx, w, h, act) {
+  if (isRealisticArt()) {
+    drawRealisticGrade(ctx, w, h);
+    return;
+  }
+  if (isModernArt()) {
+    // Comic: the GPU pass's ink vignette, baked once and stretched.
+    ctx.drawImage(comicVignette(), 0, 0, w, h);
+  }
   const tints = {
     1: "rgba(0,40,60,0.06)",   // subtle teal
     2: "rgba(40,25,0,0.06)",   // warm amber
@@ -274,4 +291,79 @@ export function drawColorGrade(ctx, w, h, act) {
   };
   ctx.fillStyle = tints[act] || tints[1];
   ctx.fillRect(0, 0, w, h);
+}
+
+// ── Realistic grade, Canvas2D fallback ──────────────────────────────────────
+// Used only when WebGL2 is unavailable; the GL path does a full filmic
+// tonemap instead. Canvas2D cannot tonemap cheaply, so this approximates the
+// two parts that carry most of the look: lower saturation and lens falloff.
+let _realVignette = null;
+let _realVigKey = "";
+
+function realisticVignette(w, h) {
+  const key = `${w}x${h}`;
+  if (_realVignette && _realVigKey === key) return _realVignette;
+  const c = (typeof OffscreenCanvas !== "undefined")
+    ? new OffscreenCanvas(w, h)
+    : Object.assign(document.createElement("canvas"), { width: w, height: h });
+  const g = c.getContext("2d");
+  const r = Math.hypot(w, h) / 2;
+  const grad = g.createRadialGradient(w / 2, h / 2, r * 0.35, w / 2, h / 2, r);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,0.42)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+  _realVignette = c;
+  _realVigKey = key;
+  return c;
+}
+
+export function drawRealisticGrade(ctx, w, h) {
+  // Saturation, contrast and exposure are CSS filters on the canvas element
+  // (style.css, data-art-profile="realistic"): the compositor applies them on
+  // the GPU with no pixel readback. Only the lens falloff is drawn here.
+  ctx.drawImage(realisticVignette(w, h), 0, 0);
+}
+
+let _comicVignette = null;
+/** Comic grade: ink-dark corners like the HUD frame. 256x160, stretched. */
+function comicVignette() {
+  if (_comicVignette) return _comicVignette;
+  const vw = 256;
+  const vh = 160;
+  const c = (typeof OffscreenCanvas !== "undefined")
+    ? new OffscreenCanvas(vw, vh)
+    : Object.assign(document.createElement("canvas"), { width: vw, height: vh });
+  const g = c.getContext("2d");
+  g.setTransform(vw / vh, 0, 0, 1, 0, 0);
+  const r = vh * 0.72;
+  const grd = g.createRadialGradient(vh / 2, vh / 2, r * 0.58, vh / 2, vh / 2, r);
+  grd.addColorStop(0, "rgba(4,6,11,0)");
+  grd.addColorStop(1, "rgba(4,6,11,0.4)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, vh, vh);
+  _comicVignette = c;
+  return c;
+}
+
+let _hurtVignette = null;
+/** Realistic hurt flash: clear centre, dark-red edges. Baked once, stretched. */
+function getHurtVignette() {
+  if (_hurtVignette) return _hurtVignette;
+  const vw = 256;
+  const vh = 160;
+  const c = (typeof OffscreenCanvas !== "undefined")
+    ? new OffscreenCanvas(vw, vh)
+    : Object.assign(document.createElement("canvas"), { width: vw, height: vh });
+  const g = c.getContext("2d");
+  g.setTransform(vw / vh, 0, 0, 1, 0, 0);
+  const r = vh * 0.66;
+  const grd = g.createRadialGradient(vh / 2, vh / 2, r * 0.45, vh / 2, vh / 2, r);
+  grd.addColorStop(0, "rgba(140,0,0,0)");
+  grd.addColorStop(0.7, "rgba(120,0,0,0.35)");
+  grd.addColorStop(1, "rgba(60,0,0,0.8)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, vh, vh);
+  _hurtVignette = c;
+  return c;
 }

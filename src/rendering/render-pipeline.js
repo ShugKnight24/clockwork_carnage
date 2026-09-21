@@ -304,7 +304,13 @@ export function renderFrame(game) {
   // GPU post-FX path — use WebGL shader when GL renderer is available
   const _glr = game.renderer.glRenderer;
   const _pp = game.settings.postProcessing !== false;
-  if (_glr && _pp && game.renderer.useWebGL) {
+  // The GPU pass copies the finished 2D frame into WebGL every frame, and on
+  // many browser/GPU combinations that copy blocks the main thread until the
+  // GPU has finished the whole frame (7-10 ms at 1440x900 @2x, and the main
+  // cause of frame spikes). It is opt-in; the default grade runs as CSS
+  // filters on the canvas element plus cached Canvas2D overlays, neither of
+  // which reads pixels back.
+  if (_glr && _pp && game.renderer.useWebGL && game.settings.gpuPostFx) {
     // Per-act grade color in 0-1 range for the GL shader
     const _gradeColors = {
       1: [0, 0.157, 0.235],  // teal
@@ -335,16 +341,12 @@ export function renderFrame(game) {
 
     // GPU post-FX pass: bloom, chromatic aberration, film grain, color grade
     try {
-      _glr.renderPostFXFromCanvas(
-        game.canvas,
-        game.time,
-        _fxBloom,
-        _fxCA,
-        _fxGrain,
-        _gc,
-      );
-      // Draw GL result back to main Canvas2D
-      ctx.drawImage(_glr.canvas, 0, 0);
+      const src = postFxSource(_glr, game.canvas);
+      if (src) {
+        _glr.renderPostFXFromCanvas(src, game.time, _fxBloom, _fxCA, _fxGrain, _gc);
+        // Draw GL result back to main Canvas2D
+        ctx.drawImage(_glr.canvas, 0, 0);
+      }
     } catch (_e) {
       // Shader failure — fall through silently, Canvas 2D already applied overlays
     }
@@ -359,7 +361,10 @@ export function renderFrame(game) {
       canvas: game.canvas,
       postProcessing: game.settings.postProcessing,
       audio: game.audio,
-      enableBloom: _fxBloom,
+      // Canvas2D bloom downsamples the frame into a second canvas every frame,
+      // the same cross-canvas copy the GPU pass was switched off for. Bloom
+      // stays a GPU Film Grade effect.
+      enableBloom: false,
       enableChromaticAberration: _fxCA,
       enableFilmGrain: _fxGrain,
       act: _act,
@@ -399,4 +404,45 @@ export function renderFrame(game) {
   if (game.state === GameState.LEVEL_COMPLETE)
     game.renderLevelComplete(hctx, hw, hh);
   if (profiling) game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
+}
+
+
+/**
+ * Pick what the GPU post-FX pass reads this frame.
+ *
+ * Uploading the 2D canvas straight into WebGL makes the main thread wait for
+ * the GPU to finish drawing the whole 2D frame first: 6-12 ms of blocked time
+ * per frame at 1440x900 @2x, and the main source of frame spikes in every art
+ * style. Instead, snapshot the canvas with createImageBitmap (no CPU wait) and
+ * post-process the most recent completed snapshot. The world is therefore one
+ * frame behind the HUD, which sits on its own canvas.
+ *
+ * Falls back to the direct (blocking) upload where createImageBitmap is
+ * missing or fails, so older browsers keep working.
+ */
+function postFxSource(glr, canvas) {
+  if (glr._syncUpload || typeof createImageBitmap !== "function") return canvas;
+  if (!glr._snapPending) {
+    glr._snapPending = true;
+    createImageBitmap(canvas).then(
+      (bm) => {
+        glr._snapPending = false;
+        if (glr._snapBitmap) glr._snapBitmap.close();
+        glr._snapBitmap = bm;
+      },
+      () => {
+        glr._snapPending = false;
+        glr._syncUpload = true;
+      },
+    );
+  }
+  const bm = glr._snapBitmap;
+  // Size changed (resize, render-scale step): drop the stale snapshot and
+  // show this frame un-post-processed rather than stretch last frame.
+  if (bm && (bm.width !== canvas.width || bm.height !== canvas.height)) {
+    bm.close();
+    glr._snapBitmap = null;
+    return null;
+  }
+  return bm || null;
 }

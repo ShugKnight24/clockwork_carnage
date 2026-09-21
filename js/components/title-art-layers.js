@@ -1,5 +1,5 @@
 /**
- * Modern-mode renderer for the title-screen web components.
+ * Comic and Modern (realistic) renderer for the title-screen web components.
  *
  * Takes models in the svg-art format (see src/rendering/svg-art/index.js) and
  * lays each layer out as its own <img> on a 700×400 stage — the same space as
@@ -8,7 +8,7 @@
  * moves bitmaps instead of the browser repainting blurred vector art each frame.
  */
 
-import { onArtStyleChange, isModernArt } from "../../src/rendering/art-style.js";
+import { onArtStyleChange, isModernArt, isRealisticArt } from "../../src/rendering/art-style.js";
 
 export const STAGE_W = 700;
 export const STAGE_H = 400;
@@ -164,26 +164,34 @@ export function modelHtml(key, model, { x = 0, y = 0, scale = 1 } = {}) {
 }
 
 /**
- * Shared Legacy/Modern switching for a title component. `legacy` is the
- * component's original template; `buildModern` resolves to the stage HTML.
+ * Shared style switching for a title component. `legacy` is the component's
+ * original template; `buildModern` resolves to the Comic stage HTML and
+ * `buildRealistic` (optional) to the Modern (realistic) one. Each stage
+ * template is built once, on first use, and cached separately, so toggling
+ * styles only swaps clones and nothing is ever built or drawn for a style that
+ * is not showing.
  */
-export function attachArtSwitch(host, legacy, buildModern) {
+export function attachArtSwitch(host, legacy, buildModern, buildRealistic = null) {
   let token = 0;
-  let modernTemplate = null;
+  const templates = new Map();
 
   const showLegacy = () => {
     host.shadowRoot.replaceChildren(legacy.content.cloneNode(true));
   };
 
-  const showModern = async () => {
+  const showStage = async (kind, build) => {
     const mine = ++token;
-    if (!modernTemplate) {
-      const html = await buildModern();
-      modernTemplate = document.createElement("template");
-      modernTemplate.innerHTML = `<style>${STAGE_CSS}</style><div class="stage">${html}</div>`;
+    let tpl = templates.get(kind);
+    if (!tpl) {
+      const t0 = performance.now();
+      const html = await build();
+      tpl = document.createElement("template");
+      tpl.innerHTML = `<style>${STAGE_CSS}</style><div class="stage">${html}</div>`;
+      templates.set(kind, tpl);
+      (host.stageBuildMs ??= {})[kind] = Math.round(performance.now() - t0);
     }
     if (mine !== token) return;
-    host.shadowRoot.replaceChildren(modernTemplate.content.cloneNode(true));
+    host.shadowRoot.replaceChildren(tpl.content.cloneNode(true));
     const stage = host.shadowRoot.querySelector(".stage");
     // Fade in once every layer has decoded so the art never assembles piecemeal.
     const imgs = [...stage.querySelectorAll("img")];
@@ -191,15 +199,19 @@ export function attachArtSwitch(host, legacy, buildModern) {
     if (mine === token) stage.classList.add("ready");
   };
 
-  const apply = (modern) => {
-    if (modern) {
-      showModern();
+  const apply = () => {
+    if (buildRealistic && isRealisticArt()) {
+      showStage("realistic", buildRealistic);
+    } else if (isModernArt()) {
+      showStage("comic", buildModern);
     } else {
       token++;
       showLegacy();
     }
   };
 
-  apply(isModernArt());
-  return onArtStyleChange((style) => apply(style === 1));
+  apply();
+  // Comic and Modern (realistic) both use the vector stage; only Legacy uses
+  // the old SVGs.
+  return onArtStyleChange(apply);
 }

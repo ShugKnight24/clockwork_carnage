@@ -1,6 +1,7 @@
 import {
   ART_LEGACY,
-  ART_MODERN,
+  ART_REALISTIC,
+  ART_STYLES,
   getArtStyle,
   onArtStyleChange,
   setArtStyle,
@@ -32,7 +33,7 @@ template.innerHTML = `
   .seg {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     padding: 2px;
     border: 1px solid rgba(0, 255, 204, 0.22);
     border-radius: 3px;
@@ -44,7 +45,7 @@ template.innerHTML = `
     top: 2px;
     bottom: 2px;
     left: 2px;
-    width: calc(50% - 2px);
+    width: calc(33.333% - 1.333px);
     border-radius: 2px;
     background: linear-gradient(180deg, rgba(0, 255, 204, 0.2), rgba(0, 255, 204, 0.08));
     box-shadow:
@@ -55,6 +56,9 @@ template.innerHTML = `
   }
   :host([data-style="modern"]) .thumb {
     transform: translateX(100%);
+  }
+  :host([data-style="realistic"]) .thumb {
+    transform: translateX(200%);
   }
   button {
     position: relative;
@@ -124,13 +128,14 @@ template.innerHTML = `
   <div class="seg">
     <span class="thumb"></span>
     <button type="button" data-value="0" aria-pressed="false">LEGACY</button>
-    <button type="button" data-value="1" aria-pressed="false">MODERN</button>
+    <button type="button" data-value="1" aria-pressed="false">COMIC</button>
+    <button type="button" data-value="2" aria-pressed="false">MODERN</button>
   </div>
 </div>
 `;
 
 /**
- * Title-screen Legacy/Modern art switch. Drives the shared art-style module;
+ * Title-screen Legacy / Comic / Modern art switch (ids 0 / 1 / 2). Drives the shared art-style module;
  * Game persists the choice through its onArtStyleChange subscription.
  */
 export class ArtStyleToggle extends HTMLElement {
@@ -161,7 +166,7 @@ export class ArtStyleToggle extends HTMLElement {
   }
 
   select(style) {
-    setArtStyle(style === ART_LEGACY ? ART_LEGACY : ART_MODERN);
+    setArtStyle(style);
   }
 
   onKey(e) {
@@ -170,13 +175,14 @@ export class ArtStyleToggle extends HTMLElement {
     e.stopPropagation();
     if (e.code === "Enter" || e.code === "Space") return; // native button click
     e.preventDefault();
-    const next = e.code === "ArrowLeft" || e.code === "ArrowUp" ? ART_LEGACY : ART_MODERN;
+    const dir = e.code === "ArrowLeft" || e.code === "ArrowUp" ? -1 : 1;
+    const next = Math.max(ART_LEGACY, Math.min(ART_REALISTIC, getArtStyle() + dir));
     this.select(next);
     this.buttons[next].focus();
   }
 
   sync(style) {
-    this.dataset.style = style === ART_MODERN ? "modern" : "legacy";
+    this.dataset.style = ["legacy", "modern", "realistic"][ART_STYLES.indexOf(style)] ?? "modern";
     this.buttons.forEach((btn) => {
       btn.setAttribute("aria-pressed", String(Number(btn.dataset.value) === style));
     });

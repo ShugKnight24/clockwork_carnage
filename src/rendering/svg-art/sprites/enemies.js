@@ -28,7 +28,10 @@
 
 import { getLayerImage } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
-import { baseDefs, BASE_MATERIALS, paletteMaterials, lit } from "./kit.js";
+import { isRealisticArt } from "../../art-style.js";
+import {
+  baseDefs, BASE_MATERIALS, paletteMaterials, lit, withRealisticBuild, realDefs, REAL_BASE_MATERIALS, realPaletteMaterials,
+} from "./kit.js";
 import { HUMANOIDS, HUMANOID_DEFS, SOLE } from "./humanoids.js";
 import { CREATURES, CREATURE_DEFS } from "./creatures.js";
 import { BOSSES } from "./boss.js";
@@ -42,40 +45,59 @@ const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt"];
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
+// Modern and Realistic are separate model sets with distinct layer ids, so
+// their bitmaps never collide in the raster cache. Realistic models are only
+// built the first time an enemy is prepared while Realistic is active.
 const models = new Map(); // type -> model | null
+const realModels = new Map();
 
-function auraMarkup(box, color) {
+function auraMarkup(box, color, real = false) {
   const [x, y, w, h] = box;
   return (
-    `<defs><radialGradient id="aur"><stop offset="0" stop-color="${color}" stop-opacity=".55"/>` +
-    `<stop offset=".55" stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>` +
+    `<defs><radialGradient id="aur"><stop offset="0" stop-color="${color}" stop-opacity="${real ? ".26" : ".55"}"/>` +
+    `<stop offset=".55" stop-color="${color}" stop-opacity="${real ? ".08" : ".18"}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>` +
     `<ellipse cx="${x + w / 2}" cy="${y + h * 0.55}" rx="${w * 0.48}" ry="${h * 0.46}" fill="url(#aur)"/>`
   );
 }
 
-function buildBoss(type) {
-  const m = BOSSES[type]();
+/** Realistic glow layers keep their emissive shapes but lose the cartoon rings (unfilled circles/ellipses). */
+const stripRings = (m) => m && m.replace(/<(?:circle|ellipse)\b[^>]*fill="none"[^>]*\/>/g, "");
+
+function buildBoss(type, real) {
+  const m = BOSSES[type](real);
   m.type = type;
-  m.refs = m.parts.map((p, i) => ({ ...p, id: `enemy:${type}:${i}`, box: m.box, defs: m.defs }));
+  m.key = real ? `${type}:r` : type;
+  m.refs = m.parts.map((p, i) => ({ ...p, id: `enemy:${type}:${i}${real ? ":r" : ""}`, box: m.box, defs: m.defs }));
   m.all = m.refs;
   return m;
 }
 
-function buildModel(type) {
-  if (BOSSES[type]) return buildBoss(type);
+function buildModel(type, real = false) {
+  if (real) return withRealisticBuild(() => buildModelIn(type, true));
+  return buildModelIn(type, false);
+}
+
+function buildModelIn(type, real) {
+  if (BOSSES[type]) return buildBoss(type, real);
   const spec = HUMANOIDS[type] || CREATURES[type];
   const def = ENEMY_TYPES[type];
   if (!spec || !def) return null;
   const box = spec.box;
-  const mats = BASE_MATERIALS + paletteMaterials("armor", def.color1, def.color2) + (HUMANOID_DEFS[type] || CREATURE_DEFS[type] || "");
-  const defs = baseDefs(box) + mats;
+  const extra = HUMANOID_DEFS[type] || CREATURE_DEFS[type] || "";
+  const mats = real
+    ? REAL_BASE_MATERIALS + realPaletteMaterials("armor", def.color1, def.color2) + extra
+    : BASE_MATERIALS + paletteMaterials("armor", def.color1, def.color2) + extra;
+  const layerDefs = (b) => (real ? baseDefs(b) + realDefs(b) : baseDefs(b)) + mats;
+  const defs = layerDefs(box);
+  const sfx = real ? ":r" : "";
+  const glowOf = real ? stripRings : (m) => m;
   const refs = new Map();
   const ref = (markup, tag, b = box, d = defs) => {
     if (!markup) return null;
     const key = `${b.join(",")}|${markup}`;
     let r = refs.get(key);
     if (!r) {
-      r = { id: `enemy:${type}:${tag}`, markup, box: b, defs: d };
+      r = { id: `enemy:${type}:${tag}${sfx}`, markup, box: b, defs: d };
       refs.set(key, r);
     }
     return r;
@@ -89,18 +111,19 @@ function buildModel(type) {
       const p = built.poses[name] || built.poses.idle;
       poses[name] = {
         body: ref(lit(p.body, box, spec.rim), `v${v}:${name}:body`),
-        glow: ref(p.glow, `v${v}:${name}:glow`),
+        glow: ref(glowOf(p.glow), `v${v}:${name}:glow`),
         at: p.at || {},
       };
     }
     const fx = (built.fx || []).map((l, i) => ({
       ...l,
-      ref: ref(l.glow ? l.markup : lit(l.markup, l.box, spec.rim, { ink: 1.6, rimX: 2, rimY: 1.6 }), `v${v}:fx${i}`, l.box, baseDefs(l.box) + mats),
+      ref: ref(l.glow ? glowOf(l.markup) : lit(l.markup, l.box, spec.rim, { ink: 1.6, rimX: 2, rimY: 1.6 }), `v${v}:fx${i}`, l.box, layerDefs(l.box)),
     }));
     variants.push({ poses, fx });
   }
   return {
     type,
+    key: type + sfx,
     def,
     boss: false,
     box,
@@ -113,19 +136,27 @@ function buildModel(type) {
     shield: spec.shield || null,
     rim: spec.rim,
     variants,
-    aura: spec.aura ? ref(auraMarkup(box, spec.aura), "aura") : null,
+    aura: spec.aura ? ref(auraMarkup(box, spec.aura, real), "aura") : null,
     all: [...refs.values()],
   };
 }
 
 function modelFor(type) {
-  let m = models.get(type);
+  const real = isRealisticArt();
+  const set = real ? realModels : models;
+  let m = set.get(type);
   if (m === undefined) {
-    m = buildModel(type);
-    models.set(type, m);
+    m = buildModel(type, real);
+    set.set(type, m);
   }
   return m;
 }
+
+/**
+ * Build (uncached) one enemy's model for the given style. For tests and
+ * tooling: exposes the exact layer ids, boxes, defs and markup the game uses.
+ */
+export const buildEnemyModel = (type, realistic = false) => buildModel(type, realistic);
 
 /* ── Bitmaps ────────────────────────────────────────────────────────────── */
 
@@ -174,6 +205,12 @@ function layer(ref, pxPerUnit) {
   if (!ref) return null;
   const img = getLayerImage(ref.id, ref.box, ref.defs, ref.markup, capScale(ref.box, pxPerUnit));
   if (!img) return lastBitmap.get(ref.id) || null;
+  // The raster cache now bakes decoded layers into canvases itself; use them
+  // as they are rather than copying again.
+  if (typeof HTMLCanvasElement !== "undefined" && img instanceof HTMLCanvasElement) {
+    lastBitmap.set(ref.id, img);
+    return img;
+  }
   let c = bitmaps.get(img);
   if (c) {
     touch(img, c);
@@ -196,7 +233,7 @@ function layer(ref, pxPerUnit) {
 const warmed = new Set();
 
 function warm(model, pxPerUnit) {
-  const key = `${model.type}@${Math.round(Math.log2(Math.max(pxPerUnit, 0.25)) * 2)}`;
+  const key = `${model.key}@${Math.round(Math.log2(Math.max(pxPerUnit, 0.25)) * 2)}`;
   if (warmed.has(key)) return;
   warmed.add(key);
   for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit));

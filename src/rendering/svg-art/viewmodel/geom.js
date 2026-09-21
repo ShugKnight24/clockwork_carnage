@@ -104,9 +104,11 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
 /**
  * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) }
  * @param {string} accent  character energy colour (emissives, rim light)
+ * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges }
  */
-export function createScene(cam, accent) {
+export function createScene(cam, accent, opts = {}) {
   const { F, ox, oy, oz, kx = 0 } = cam;
+  const real = !!opts.real;
   const eye = [-ox, -oy, -oz];
   const core = mix(accent, "#ffffff", 0.55);
 
@@ -156,7 +158,13 @@ export function createScene(cam, accent) {
    * against the virtual eye, the rest are painter-sorted, lit and inked.
    */
   function solid(faces, mat, o = {}) {
-    const { smooth = false, rim = 0.22, amb = 0.2, spec = true, ink = 0.5, edge = 0.5, depth = true } = o;
+    const { smooth = false, amb = 0.2, spec = true, depth = true } = o;
+    // Realistic: materials over outlines — no ink silhouette, a faint seam, and
+    // a cool neutral bounce instead of the character-coloured rim.
+    const rim = real ? 0 : o.rim ?? 0.22;
+    const ink = real ? 0 : o.ink ?? 0.5;
+    const edge = real ? 0.18 : o.edge ?? 0.5;
+    const bounce = real ? (o.rim ?? 0.22) * 0.35 : 0;
     const all = faces.flat();
     const c = centroid(all);
     const vis = [];
@@ -176,6 +184,7 @@ export function createScene(cam, accent) {
       const lit = Math.max(0, dot(n, KEY));
       let col = ramp(mat, amb + (1 - amb) * lit * 0.86);
       col = mix(col, accent, Math.max(0, dot(n, RIM)) * rim);
+      if (bounce) col = mix(col, "#9aa6b2", Math.max(0, dot(n, RIM)) * bounce);
       const p2 = face.map(P);
       const seam = smooth ? `stroke="${col}" stroke-width=".3"` : `stroke="${INK}" stroke-opacity="${edge}" stroke-width=".22"`;
       out += `<path d="${path(p2)}" fill="${col}" ${seam} stroke-linejoin="round"/>`;
@@ -273,7 +282,7 @@ export function createScene(cam, accent) {
     const { bloom = 1, inner = true } = o;
     const p2 = pts3.map(P);
     const d = path(p2);
-    emit(`<path d="${d}" fill="${accent}" stroke="${INK}" stroke-width=".25" stroke-opacity=".7"/>`);
+    emit(`<path d="${d}" fill="${accent}" stroke="${real ? mix(accent, "#000000", 0.6) : INK}" stroke-width=".25" stroke-opacity=".7"/>`);
     if (inner) {
       const c = p2.reduce((a, p) => [a[0] + p[0] / p2.length, a[1] + p[1] / p2.length], [0, 0]);
       emit(`<path d="${path(p2.map((p) => [c[0] + (p[0] - c[0]) * 0.55, c[1] + (p[1] - c[1]) * 0.55]))}" fill="${core}"/>`);
@@ -286,7 +295,7 @@ export function createScene(cam, accent) {
   }
 
   return {
-    P, k, F, eye, accent, core, layers, target, emit, path, grow,
+    P, k, F, eye, accent, core, layers, target, emit, path, grow, real,
     solid, loft, prismZ, boxZ, cylZ, post, poly, line, disc, glowLine, glowPoly,
   };
 }

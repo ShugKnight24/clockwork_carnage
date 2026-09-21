@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   renderScale: 100,
   effectsQuality: 2,
   postProcessing: true,
+  gpuPostFx: false, // filmic GPU pass: copies each frame to WebGL, so opt-in
   floorTexture: true,
   screenShake: true,
   weaponBob: true,
@@ -160,12 +161,15 @@ export const SETTINGS_REGISTRY = [
   {
     key: "artStyle",
     label: "Art Style",
+    desc: "Legacy pixel look, Comic inked art, or Modern realistic lighting.",
     category: "Display",
     type: "enum",
-    values: ["Legacy", "Modern"],
-    colors: ["#aa8866", "#00ffcc"],
+    // Ids are stable (saved settings store them): 1 is the inked style, 2 the
+    // realistic one. Only the player-facing names changed.
+    values: ["Legacy", "Comic", "Modern"],
+    colors: ["#aa8866", "#00ffcc", "#e8d2a8"],
     min: 0,
-    max: 1,
+    max: 2,
     step: 1,
     wrap: true,
     platform: "all",
@@ -269,6 +273,16 @@ export const SETTINGS_REGISTRY = [
     platform: "all",
     height: { compact: 30, normal: 44 },
     onChange: (g) => g.applyPerformanceSettings?.(),
+  },
+  {
+    key: "gpuPostFx",
+    label: "GPU Film Grade",
+    desc: "Filmic tonemap, bloom and grain on the GPU. Can stutter on some devices.",
+    category: "Performance",
+    type: "toggle",
+    onColor: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
   },
   {
     key: "floorTexture",

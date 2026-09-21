@@ -416,14 +416,17 @@ export function generateFloorCeilTextures(act, visualStyle) {
  * @param {number} act          1-3
  * @param {boolean} brutal      visualStyle 1 (Brutal) — thicker, darker air
  * @param {?number} level       campaign level index, or null outside the campaign
+ * @param {object} [opts]
+ * @param {boolean} [opts.realistic] bake the wall faces as lit materials
+ *        (relief, wear, grime) for the Realistic art style
  * @returns {object} env bundle consumed by Renderer + GLRenderer
  */
-export function generateModernEnv(act, brutal, level = null) {
+export function generateModernEnv(act, brutal, level = null, { realistic = false } = {}) {
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
   const p = resolveEnvPalette(a, level);
   const salt = level == null ? 0 : level + 1;
-  const walls = buildWallSet(a, p, salt);
+  const walls = buildWallSet(a, p, salt, realistic);
   const deck = buildDeckSet(a, brutal, p, salt);
   const fogMax = brutal ? 0.94 : 0.86;
   const fogDensity = brutal ? FOG_DENSITY * 1.3 : FOG_DENSITY;

@@ -64,14 +64,45 @@ export function rot(pts, deg, o = [0, 0], off = [0, 0]) {
   });
 }
 
+/* ── Realistic build mode ─────────────────────────────────────────────────
+ * While `withRealisticBuild` runs, the primitives below emit the Realistic
+ * look instead of the comic one: no ink outlines (a part's edge is a soft,
+ * darker band of its own colour), muted speculars, and `lit` swaps the ink
+ * ring and rim light for key/fill shading, edge occlusion and surface wear.
+ * Outside it every function returns exactly the Modern markup.
+ */
+let REAL = false;
+
+/** Run `fn` with the primitives in Realistic mode (build time only, never per frame). */
+export function withRealisticBuild(fn) {
+  const prev = REAL;
+  REAL = true;
+  try {
+    return fn();
+  } finally {
+    REAL = prev;
+  }
+}
+
+/** Edge of a solid part in Realistic mode: a darker band of its own colour. */
+function edge(fill, w) {
+  if (fill === "none") return ` stroke="#1b1e23" stroke-width="${f(w)}"`;
+  if (fill[0] === "#" && fill.length === 7) return ` stroke="${mix(fill, "#000000", 0.45)}" stroke-width="${f(w * 0.7)}"`;
+  return ` stroke="#000" stroke-opacity=".32" stroke-width="${f(w * 0.7)}"`;
+}
+
 export const sh = (d, fill, w = 1.3, extra = "") =>
-  `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="${w}" stroke-linejoin="round"${extra}/>`;
+  REAL
+    ? `<path d="${d}" fill="${fill}"${w ? edge(fill, w) : ""} stroke-linejoin="round"${extra}/>`
+    : `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="${w}" stroke-linejoin="round"${extra}/>`;
 export const ln = (d, color, w, op = 1) =>
-  `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  REAL && color === INK
+    ? `<path d="${d}" fill="none" stroke="#000" stroke-width="${w}" stroke-opacity="${f(op * 0.45 * 100) / 100}" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
 export const circ = (x, y, r, fill, w = 1.3, extra = "") =>
-  `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${fill}"${w ? ` stroke="${INK}" stroke-width="${w}"` : ""}${extra}/>`;
+  `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${fill}"${w ? (REAL ? edge(fill, w) : ` stroke="${INK}" stroke-width="${w}"`) : ""}${extra}/>`;
 export const ell = (x, y, rx, ry, fill, w = 1.3, extra = "") =>
-  `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="${fill}"${w ? ` stroke="${INK}" stroke-width="${w}"` : ""}${extra}/>`;
+  `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="${fill}"${w ? (REAL ? edge(fill, w) : ` stroke="${INK}" stroke-width="${w}"`) : ""}${extra}/>`;
 export const limb = (a, b, wa, wb, fill, w = 1.3) => sh(capsule(a, b, wa, wb), fill, w);
 
 /** Four-tone material gradient lit from the upper left. */
@@ -120,6 +151,7 @@ export function baseDefs(box) {
  * rim on the right and top edges.
  */
 export function lit(content, box, rim, o = {}) {
+  if (REAL) return litReal(content, box);
   const { ink = 2, rimX = 3, rimY = 2.4, rimOp = 0.95 } = o;
   const [x, y, w, h] = box;
   const R = `x="${x}" y="${y}" width="${w}" height="${h}"`;
@@ -137,6 +169,79 @@ export function lit(content, box, rim, o = {}) {
     `<use href="#c"/>` +
     `<rect ${R} fill="url(#shade)" mask="url(#sil)"/>` +
     `<rect ${R} fill="${rim}" opacity="${rimOp}" mask="url(#rim)"/>`
+  );
+}
+
+/**
+ * Realistic counterpart of `lit` (needs `realDefs`): the figure with its
+ * paint muted, a key light from above-left falling off toward the floor,
+ * occlusion soaking into the silhouette edge away from the key, and fine
+ * grime over every surface. No outline ring, no rim light.
+ */
+function litReal(content, box) {
+  const [x, y, w, h] = box;
+  const R = `x="${x}" y="${y}" width="${w}" height="${h}"`;
+  return (
+    `<defs><g id="c">${content}</g>` +
+    `<mask id="sil" maskUnits="userSpaceOnUse" ${R}><use href="#c" filter="url(#wht)"/></mask></defs>` +
+    `<use href="#c" filter="url(#rsat)"/>` +
+    `<use href="#c" filter="url(#rwear)" opacity=".26"/>` +
+    `<rect ${R} fill="url(#rkey)" mask="url(#sil)"/>` +
+    `<rect ${R} fill="url(#rfall)" mask="url(#sil)"/>` +
+    `<use href="#c" filter="url(#redge)"/>`
+  );
+}
+
+/** Extra <defs> the Realistic `lit` needs, sized to the sprite box. Append to `baseDefs(box)`. */
+export function realDefs(box) {
+  const [x, y, w, h] = box;
+  const R = `filterUnits="userSpaceOnUse" x="${x}" y="${y}" width="${w}" height="${h}"`;
+  return (
+    `<filter id="rsat" ${R}><feColorMatrix type="saturate" values=".7"/></filter>` +
+    // Occlusion band inside the silhouette, biased to the lower right (away
+    // from the key) by offsetting the blurred alpha up and to the left.
+    `<filter id="redge" ${R}><feGaussianBlur in="SourceAlpha" stdDeviation="2.4"/><feOffset dx="-1.4" dy="-1.8" result="b"/>` +
+    `<feComposite in="SourceAlpha" in2="b" operator="arithmetic" k2="1" k3="-1"/>` +
+    `<feColorMatrix type="matrix" values="0 0 0 0 .02 0 0 0 0 .02 0 0 0 0 .03 0 0 0 .8 0"/></filter>` +
+    // Grime and wear: fractal noise thresholded into speckle and blotches.
+    `<filter id="rwear" ${R}><feTurbulence type="fractalNoise" baseFrequency=".32" numOctaves="3" seed="11"/>` +
+    `<feColorMatrix type="matrix" values="0 0 0 0 .07 0 0 0 0 .055 0 0 0 0 .04 -2.6 0 0 0 1.45"/>` +
+    `<feComposite in2="SourceAlpha" operator="in"/></filter>` +
+    `<linearGradient id="rkey" gradientUnits="userSpaceOnUse" x1="${f(x + w * 0.15)}" y1="${f(y)}" x2="${f(x + w * 0.85)}" y2="${f(y + h * 0.8)}">` +
+    `<stop offset="0" stop-color="#fff4e4" stop-opacity=".16"/><stop offset=".38" stop-color="#fff4e4" stop-opacity="0"/>` +
+    `<stop offset=".52" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".46"/></linearGradient>` +
+    `<linearGradient id="rfall" gradientUnits="userSpaceOnUse" x1="0" y1="${f(y)}" x2="0" y2="${f(y + h)}">` +
+    `<stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".5" stop-color="#000" stop-opacity=".04"/>` +
+    `<stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>`
+  );
+}
+
+/** Material with a narrow specular band (metal, gloss paint) instead of a broad highlight. */
+function sheen(id, base, spec, low, deep, at = 0.12) {
+  return (
+    `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2=".45">` +
+    `<stop offset="0" stop-color="${mix(base, low, 0.2)}"/><stop offset="${f(at - 0.06)}" stop-color="${base}"/>` +
+    `<stop offset="${f(at)}" stop-color="${spec}"/><stop offset="${f(at + 0.08)}" stop-color="${base}"/>` +
+    `<stop offset=".6" stop-color="${low}"/><stop offset="1" stop-color="${deep}"/></linearGradient>`
+  );
+}
+
+/** Realistic base materials under the same ids as BASE_MATERIALS. */
+export const REAL_BASE_MATERIALS =
+  sheen("steel", "#7a848e", "#c9cfd4", "#3c444c", "#15191d") +
+  sheen("gun", "#40444a", "#80868c", "#212428", "#0b0c0e", 0.14) +
+  material("cloth", "#3e4146", "#303338", "#1e2024", "#111214") +
+  sheen("brass", "#8c7447", "#d8c79a", "#4f3f22", "#1c150b") +
+  `<linearGradient id="glass" x1="0" y1="0" x2="1" y2=".7"><stop offset="0" stop-color="#8a9aa6"/><stop offset=".18" stop-color="#3a4854"/>` +
+  `<stop offset=".2" stop-color="#b4c0c8"/><stop offset=".24" stop-color="#2c3842"/><stop offset="1" stop-color="#10161b"/></linearGradient>`;
+
+/** Realistic palette materials: painted armour with a satin sheen, not a comic ramp. */
+export function realPaletteMaterials(prefix, c1, c2) {
+  const base = mix(c1, "#6a6d70", 0.22);
+  const dk = mix(mix(c1, c2, 0.5), "#44464a", 0.3);
+  return (
+    sheen(prefix, base, mix(base, "#ffffff", 0.3), mix(base, "#000000", 0.42), mix(c2, "#000000", 0.72), 0.16) +
+    sheen(`${prefix}Dk`, mix(dk, "#000000", 0.15), mix(dk, "#ffffff", 0.15), mix(dk, "#000000", 0.55), "#08090b", 0.16)
   );
 }
 
@@ -160,10 +265,10 @@ export function flash(x, y, r, color, core = "#ffffff") {
 
 /** Soft ambient-occlusion blot where parts meet (neck, armpits, belt, knees). */
 export const ao = (x, y, rx, ry, op = 0.45) =>
-  `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="#000" opacity="${op}" filter="url(#ao)"/>`;
+  `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="#000" opacity="${REAL ? f(Math.min(0.75, op * 1.3) * 100) / 100 : op}" filter="url(#ao)"/>`;
 
-/** Specular strip along a lit edge. */
-export const spec = (d, op = 0.55, w = 1.1) => ln(d, "#ffffff", w, op);
+/** Specular strip along a lit edge (Realistic: a fainter, narrower, warm glint). */
+export const spec = (d, op = 0.55, w = 1.1) => (REAL ? ln(d, "#fff3e2", f(w * 0.7 * 10) / 10, f(op * 0.5 * 100) / 100) : ln(d, "#ffffff", w, op));
 
 /** Hanging cable from a to b with sag, inked with a thin highlight. */
 export function cable(a, b, sag = 6, color = "#1c2027", w = 2) {

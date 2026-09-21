@@ -5,6 +5,7 @@ import {
   buildRifleSvg,
 } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
+import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { gameUnlockContext, unlockState, LOCKABLE } from "../../src/systems/unlocks.js";
 import {
   ARMOR_STYLES,
@@ -238,7 +239,10 @@ svg { display: block; }
 .shaft { position: absolute; top: -10%; width: 26%; height: 90%; left: 19%;
   background: linear-gradient(180deg, rgba(200, 230, 255, 0.1), rgba(200, 230, 255, 0) 80%);
   clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%); filter: blur(6px); }
-.haze { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.45; }
+/* Big blurs get their own compositor layers (will-change): drifting or
+   yaw-shifted on a shared layer, each movement re-rasterised 60px blurs at
+   device resolution — ~100 ms GPU raster tasks every half second. */
+.haze { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.45; will-change: transform; }
 .haze.h1 { width: 46vw; height: 30vh; left: 6vw; top: 52vh; background: color-mix(in srgb, var(--accent) 22%, transparent); animation: drift 14s ease-in-out infinite alternate; }
 .haze.h2 { width: 30vw; height: 40vh; left: 36vw; top: 8vh; background: rgba(90, 120, 180, 0.16); animation: drift 18s ease-in-out infinite alternate-reverse; }
 @keyframes drift { to { transform: translate(4vw, -3vh) scale(1.1); } }
@@ -252,7 +256,7 @@ svg { display: block; }
 .stage { position: absolute; left: 0; top: 0; bottom: 0; right: calc(var(--panel-w) + 32px); outline: none; touch-action: none; cursor: grab; }
 .stage.dragging { cursor: grabbing; }
 .stage:focus-visible .pedestal .plate-disc { box-shadow: 0 0 0 2px var(--cc-cyan), 0 18px 40px rgba(0, 0, 0, 0.8); }
-.rim { position: absolute; width: 34%; height: 62%; top: 16%; border-radius: 50%; filter: blur(46px); opacity: 0.55; pointer-events: none; transition: transform 0.5s var(--cc-ease); }
+.rim { position: absolute; width: 34%; height: 62%; top: 16%; border-radius: 50%; filter: blur(46px); opacity: 0.55; pointer-events: none; transition: transform 0.5s var(--cc-ease); will-change: transform; }
 .rim.r1 { left: 18%; background: rgba(170, 205, 255, 0.24); transform: translateX(calc(var(--yaw) * -40px)); }
 .rim.r2 { right: 14%; background: color-mix(in srgb, var(--accent) 45%, transparent); transform: translateX(calc(var(--yaw) * 40px)); animation: rimPulse 5s ease-in-out infinite; }
 @keyframes rimPulse { 50% { opacity: 0.38; } }
@@ -275,12 +279,16 @@ svg { display: block; }
   background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.35) 48%, transparent 58%);
   background-size: 260% 100%; background-position: calc(50% + var(--yaw) * 60%) 0; transition: background-position 0.2s linear; }
 :host([camera="bust"]) .pedestal { opacity: 0; transform: translateX(-50%) translateY(40px); }
-.figure .ag-fig { animation: breathe 3.8s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+/* Motion lives on wrapper layers, never inside the SVG: the figure carries
+   glow filters (and Modern adds lighting filters), and any animated change
+   inside it re-rasterised the whole figure plus its floor reflection —
+   ~100 ms GPU raster tasks several times a second. */
+.fig-breathe { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 100%; animation: breathe 3.8s ease-in-out infinite; }
+.figure .ag-fig { transform-box: fill-box; transform-origin: 50% 100%; }
 @keyframes breathe { 50% { transform: scaleY(1.009); } }
-.figure .ag-cape { animation: sway 4.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0; }
+.figure .ag-cape { transform-box: fill-box; transform-origin: 50% 0; }
 @keyframes sway { 0%, 100% { transform: rotate(-0.7deg) skewX(-0.4deg); } 50% { transform: rotate(0.7deg) skewX(0.4deg); } }
-.figure .ag-visor { animation: pulse 2.4s ease-in-out infinite; }
-.figure .ag-glow { animation: pulse 3.4s ease-in-out infinite; }
+.figure { will-change: transform; }
 @keyframes pulse { 50% { opacity: 0.68; } }
 
 /* ── Header ───────────────────────────────────────────── */
@@ -324,7 +332,9 @@ svg { display: block; }
 .hint-turn { display: inline-flex; align-items: center; gap: 6px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 2px; color: var(--cc-text-faint); text-transform: uppercase; }
 .hint-turn svg { width: 18px; height: 18px; }
 
-.presets { position: absolute; left: 30px; top: 50%; transform: translateY(-40%); display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+/* Tighter gap and a lower anchor so the "Presets" label clears the origin
+   subtitle under the callsign (it sat on top of it at 1280x720). */
+.presets { position: absolute; left: 30px; top: calc(50% + 18px); transform: translateY(-40%); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .presets .lbl { margin-bottom: 2px; }
 .preset { display: flex; align-items: center; gap: 10px; padding: 0; transition: transform var(--cc-dur-fast) var(--cc-ease); }
 .preset .pthumb { position: relative; width: 52px; height: 52px; overflow: hidden; background: radial-gradient(circle at 45% 38%, #1d2e44, #060a12); border: var(--cc-ink-outline) solid var(--cc-ink);
@@ -572,6 +582,168 @@ button:focus-visible { outline: none; }
 }
 `;
 
+// Modern (realistic) chrome, adopted into the shadow root the first time that
+// style opens (so the Comic markup and stylesheet stay byte-identical). Every
+// rule is scoped to :host([realistic]): thin 1px lines instead of ink, dark
+// translucent plates, off-white text, one desaturated accent, amber only for
+// locks and red only for the destructive/primary warning, and a stage lit like
+// a studio photo (key, fill, rim, polished floor) instead of glow rings.
+const REALISTIC_STYLE = `
+:host([realistic]) {
+  --r-text: #e4e6e1; --r-dim: #98a3a4; --r-faint: #687375; --r-accent: #8fbcc4;
+  --r-line: rgba(228, 230, 225, 0.14); --r-line-hi: rgba(228, 230, 225, 0.32);
+  --r-plate: rgba(16, 18, 21, 0.62); --r-plate-hi: rgba(40, 44, 48, 0.72);
+  --cc-ink: transparent; --cc-cyan: #8fbcc4; --cc-amber: #dca24c; --cc-crimson: #e0493f; --cc-green: #d3dbd5;
+  --cc-text: #e4e6e1; --cc-text-dim: #98a3a4; --cc-text-faint: #687375; --cc-hairline: rgba(228, 230, 225, 0.12);
+  --cc-steel: rgba(255, 255, 255, 0.035); --cc-steel-hi: rgba(255, 255, 255, 0.075);
+  --cc-panel-menu: linear-gradient(180deg, rgba(22, 25, 28, 0.9), rgba(11, 13, 15, 0.92));
+  --cc-panel-well: rgba(0, 0, 0, 0.34); --cc-panel-raised: rgba(255, 255, 255, 0.06);
+  --cc-keycap: rgba(255, 255, 255, 0.05);
+  --plate-bevel: none;
+}
+:host([realistic]) .root { --accent: var(--r-accent);
+  background:
+    radial-gradient(ellipse 46% 60% at 30% 22%, rgba(255, 236, 214, 0.07), transparent 70%),
+    linear-gradient(180deg, #16181b 0%, #0f1113 58%, #0a0b0c 72%, #070808 100%); }
+
+/* Stage: a locker-room wall under a warm key from the upper left, a cool fill
+   from the right, a rim behind the figure and a polished concrete floor. */
+:host([realistic]) .backdrop::before {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, rgba(0, 0, 0, 0.18) 1px 3px, transparent 3px 92px),
+    repeating-linear-gradient(180deg, transparent 0 34px, rgba(255, 255, 255, 0.018) 34px 35px, transparent 35px 46px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 4%, #000 30%, #000 64%, transparent 73%); mask-image: linear-gradient(180deg, transparent 4%, #000 30%, #000 64%, transparent 73%); }
+:host([realistic]) .shaft { left: 14%; width: 34%; background: linear-gradient(180deg, rgba(255, 238, 218, 0.1), rgba(255, 238, 218, 0) 85%); filter: blur(22px); }
+:host([realistic]) .haze.h1 { background: rgba(160, 150, 138, 0.1); }
+:host([realistic]) .haze.h2 { background: rgba(120, 140, 160, 0.08); }
+:host([realistic]) .floor { background-image: radial-gradient(50% 40% at 50% 38%, rgba(255, 240, 222, 0.08), transparent 70%), linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.3)); background-size: auto; }
+:host([realistic]) .halftone, :host([realistic]) .letterbox { display: none; }
+:host([realistic]) .vignette { background: radial-gradient(115% 90% at 36% 42%, transparent 48%, rgba(0, 0, 0, 0.78) 100%); }
+:host([realistic]) .rim { filter: blur(56px); }
+:host([realistic]) .rim.r1 { background: rgba(255, 230, 204, 0.12); }
+:host([realistic]) .rim.r2 { background: rgba(170, 196, 214, 0.16); animation: none; }
+:host([realistic]) .pedestal .plate-disc {
+  background: radial-gradient(60% 70% at 42% 32%, #3b3e41 0%, #232527 48%, #0d0e0f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -8px 16px rgba(0, 0, 0, 0.65), 0 18px 36px rgba(0, 0, 0, 0.7); }
+:host([realistic]) .pedestal .plate-disc::after { border-color: rgba(255, 255, 255, 0.07); box-shadow: none; }
+:host([realistic]) .pedestal .ring { opacity: 0.18; }
+:host([realistic]) .pedestal .ring::before { background: conic-gradient(from 0deg, transparent 0 60%, rgba(255, 244, 230, 0.7) 68%, transparent 78%); }
+:host([realistic]) .stage:focus-visible .pedestal .plate-disc { box-shadow: 0 0 0 1px var(--r-accent), 0 18px 36px rgba(0, 0, 0, 0.7); }
+:host([realistic]) .figure { -webkit-box-reflect: below calc(var(--fig-h, 500px) * -0.043) linear-gradient(transparent 80%, rgba(255, 255, 255, 0.07)); }
+:host([realistic][camera="bust"]) .figure { -webkit-box-reflect: none; }
+/* Performance: the Modern figure is filter-heavy SVG. Keep every per-frame
+   change off it — no box-reflect (it re-renders the whole figure), no CSS
+   animations inside the SVG, and the turn and breathing done as compositor
+   transforms on wrapper layers. The visor and glow pulse move to opacity on
+   the wrapper-free overlay the SVG already paints, so they are dropped here. */
+:host([realistic]) .figure {
+  -webkit-box-reflect: none;
+  will-change: transform;
+  transform: translateX(calc(var(--yaw, 0) * 1.1%)) scaleX(var(--yaw-sx, 1));
+  transform-origin: 50% 100%;
+}
+:host([realistic]) .fig-breathe {
+  position: absolute; inset: 0;
+  will-change: transform;
+  transform-origin: 50% 100%;
+  animation: breathe 3.8s ease-in-out infinite;
+}
+:host([realistic]) .figure .ag-fig,
+:host([realistic]) .figure .ag-cape,
+:host([realistic]) .figure .ag-visor,
+:host([realistic]) .figure .ag-glow { animation: none; }
+:host([realistic]) .haze,
+:host([realistic]) .rim,
+:host([realistic]) .shaft { will-change: transform; }
+:host([realistic]) .sweep { opacity: 0.3; }
+
+/* Type and captions: off-white on nothing, tracked small labels, no ink. */
+:host([realistic]) .kicker { padding: 0; background: none; border: 0; box-shadow: none; color: var(--r-dim); font-weight: 600; letter-spacing: 0.32em; }
+:host([realistic]) .callsign, :host([realistic]) .dialog h2 { color: var(--r-text); filter: none; font-weight: 600; letter-spacing: 0.05em; }
+:host([realistic]) .callsign::before, :host([realistic]) .callsign::after, :host([realistic]) .dialog h2::before, :host([realistic]) .dialog h2::after { display: none; }
+:host([realistic]) .rule { height: 1px; width: 120px; margin: 10px 0 12px 4px; background: var(--r-accent); opacity: 0.7; }
+:host([realistic]) .dialog .rule { margin: 10px auto 14px; background: var(--cc-crimson); }
+:host([realistic]) .sub { color: var(--r-dim); text-shadow: none; font-weight: 600; letter-spacing: 0.18em; }
+:host([realistic]) .sub b { color: var(--r-text); font-weight: 700; }
+:host([realistic]) .caption { background: rgba(10, 12, 14, 0.55); border: 1px solid; box-shadow: none; font-weight: 600; letter-spacing: 0.14em; }
+:host([realistic]) .caption.cream, :host([realistic]) .caption.steel { color: var(--r-text); border-color: var(--r-line-hi); }
+:host([realistic]) .caption.cyan { color: var(--r-accent); border-color: rgba(143, 188, 196, 0.45); }
+:host([realistic]) .caption.amber { color: var(--cc-amber); border-color: rgba(220, 162, 76, 0.5); }
+:host([realistic]) .caption.crimson { color: var(--cc-crimson); border-color: rgba(224, 73, 63, 0.5); }
+:host([realistic]) .key { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--r-line-hi); border-radius: 3px; box-shadow: none; color: var(--r-text); font-weight: 600; }
+:host([realistic]) .hint-turn, :host([realistic]) .keys { color: var(--r-faint); }
+
+/* Plates: translucent dark, 1px hairline, square corners. */
+:host([realistic]) .brackets, :host([realistic]) .opt::before, :host([realistic]) .btn.primary::after { display: none; }
+:host([realistic]) .panel, :host([realistic]) .dialog { filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.55)); }
+:host([realistic]) .frame { background: none; clip-path: none; }
+:host([realistic]) .frame > .body { inset: 0; clip-path: none; box-shadow: inset 0 0 0 1px var(--r-line), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
+:host([realistic]) .frame > .body::after { display: none; }
+:host([realistic]) .section h3 { font-weight: 600; letter-spacing: 0.2em; color: var(--r-dim); padding-left: 10px; }
+:host([realistic]) .section h3::before { width: 2px; background: var(--r-accent); box-shadow: none; }
+:host([realistic]) .section h3::after { background: var(--r-line); }
+:host([realistic]) .section h3 .cur { color: var(--r-faint); }
+:host([realistic]) .section h3 .cur.preview { color: var(--r-accent); }
+:host([realistic]) .plate { background: rgba(255, 255, 255, 0.035); border: 1px solid var(--r-line); clip-path: none; border-radius: 2px; box-shadow: none; }
+:host([realistic]) .plate:hover, :host([realistic]) .plate:focus-visible, :host([realistic].kbd) .plate:focus { background: rgba(255, 255, 255, 0.07); border-color: var(--r-line-hi); box-shadow: none; color: #fff; }
+:host([realistic]) .opt, :host([realistic]) .opt.card, :host([realistic]) .opt:hover, :host([realistic]) .opt.card:hover { box-shadow: none; }
+:host([realistic]) .opt:focus-visible, :host([realistic].kbd) .opt:focus { box-shadow: none !important; outline: 1px solid var(--r-accent); outline-offset: 2px; }
+:host([realistic]) .opt[aria-checked="true"] { background: rgba(143, 188, 196, 0.1); border-color: rgba(143, 188, 196, 0.7); box-shadow: none; }
+:host([realistic]) .opt.card[aria-checked="true"] { box-shadow: inset 2px 0 0 var(--r-accent); }
+:host([realistic]) .opt .tick { color: #0c0e10; background: var(--r-accent); clip-path: none; border-radius: 1px; width: 13px; height: 13px; }
+:host([realistic]) .thumb, :host([realistic]) .badge-tile { background: radial-gradient(circle at 42% 34%, #2a2d31, #0c0d0f 78%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+:host([realistic]) .tier i { background: rgba(228, 230, 225, 0.14); box-shadow: none; }
+:host([realistic]) .tier i.on { background: var(--r-text); }
+:host([realistic]) .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 -3px 5px rgba(0, 0, 0, 0.3); }
+:host([realistic]) .grid.eye .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
+:host([realistic]) .pal { background: rgba(0, 0, 0, 0.45); padding: 1px; gap: 1px; }
+:host([realistic]) .bar { height: 4px; background: rgba(228, 230, 225, 0.1); box-shadow: none; }
+:host([realistic]) .bar i { background: var(--r-accent); box-shadow: none; }
+:host([realistic]) .bar::after { display: none; }
+:host([realistic]) .lockrow .bar i, :host([realistic]) .card .lockprog .bar i { background: var(--cc-amber); }
+:host([realistic]) .lockbadge { color: #1a1206; background: var(--cc-amber); border: 0; box-shadow: none; border-radius: 1px; }
+:host([realistic]) .lock { box-shadow: none; }
+:host([realistic]) .rifle-hero { background: radial-gradient(60% 80% at 50% 50%, #25282c, #0a0b0c 80%); border: 1px solid var(--r-line); box-shadow: none; }
+:host([realistic]) .field input { background: rgba(0, 0, 0, 0.34); border: 0; border-bottom: 1px solid var(--r-line-hi); clip-path: none; box-shadow: none; font-weight: 600; letter-spacing: 0.12em; }
+:host([realistic]) .field input:focus { border-bottom-color: var(--r-accent); box-shadow: 0 1px 0 var(--r-accent); }
+:host([realistic]) .field input[aria-invalid="true"] { border-bottom-color: var(--cc-crimson); box-shadow: 0 1px 0 var(--cc-crimson); }
+:host([realistic]) .content { scrollbar-color: rgba(228, 230, 225, 0.2) transparent; }
+:host([realistic]) .content::-webkit-scrollbar-thumb { background: rgba(228, 230, 225, 0.2); border: 0; }
+
+/* Tabs, tools, segmented controls, presets. */
+:host([realistic]) .tab { clip-path: none; font-weight: 600; letter-spacing: 0.14em; }
+:host([realistic]) .tab:hover { background: rgba(255, 255, 255, 0.04); }
+:host([realistic]) .tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.06); box-shadow: none; color: var(--r-text); }
+:host([realistic]) .tab[aria-selected="true"]::after { left: 22%; right: 22%; bottom: 0; height: 1px; background: var(--r-accent); box-shadow: none; }
+:host([realistic]) .tab[aria-selected="true"] svg { color: var(--r-accent); filter: none; }
+:host([realistic]) .tab:focus-visible, :host([realistic].kbd) .tab:focus { box-shadow: inset 0 0 0 1px var(--r-accent); }
+:host([realistic]) .tool, :host([realistic]) .seg, :host([realistic]) .play { background: rgba(14, 16, 18, 0.6); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
+:host([realistic]) .tool { font-weight: 600; }
+:host([realistic]) .tool:hover, :host([realistic]) .tool:focus-visible, :host([realistic].kbd) .tool:focus { background: rgba(40, 44, 48, 0.72); outline: 1px solid var(--r-accent); outline-offset: 1px; }
+:host([realistic]) .tool:active, :host([realistic]) .play:active, :host([realistic]) .play.ping { box-shadow: none; }
+:host([realistic]) .tool:disabled { outline: none; }
+:host([realistic]) .seg button { font-weight: 600; }
+:host([realistic]) .seg button[aria-pressed="true"] { color: var(--r-text); background: rgba(228, 230, 225, 0.1); box-shadow: inset 0 -1px 0 var(--r-accent); }
+:host([realistic]) .seg button:focus-visible, :host([realistic].kbd) .seg button:focus { outline: 1px solid var(--r-accent); }
+:host([realistic]) .play:hover, :host([realistic]) .play:focus-visible, :host([realistic].kbd) .play:focus { color: #0c0e10; background: var(--r-accent); }
+:host([realistic]) .preset .pthumb { background: radial-gradient(circle at 42% 34%, #2a2d31, #0c0d0f); border: 1px solid var(--r-line); clip-path: none; box-shadow: none; }
+:host([realistic]) .preset:hover .pthumb, :host([realistic]) .preset:focus-visible .pthumb, :host([realistic].kbd) .preset:focus .pthumb { box-shadow: inset 0 0 0 1px var(--r-accent); }
+:host([realistic]) .preset > span:last-child { font-weight: 600; letter-spacing: 0.16em; }
+:host([realistic]) .presets .lbl { background: rgba(12, 14, 16, 0.92); }
+
+/* Actions: the primary is an off-white plate, not a crimson caption. */
+:host([realistic]) .btn { font-weight: 600; letter-spacing: 0.16em; }
+:host([realistic]) .btn.primary { color: #0d0f11; background: #dfe1dc; border: 0; clip-path: none; border-radius: 2px; text-shadow: none; box-shadow: none; }
+:host([realistic]) .btn.primary:hover, :host([realistic]) .btn.primary:focus-visible, :host([realistic].kbd) .btn.primary:focus, :host([realistic]) .btn.primary.ready:focus {
+  filter: none; background: #f4f5f2; box-shadow: 0 0 0 1px #0d0f11, 0 0 0 2px var(--r-accent); }
+:host([realistic]) .btn.primary .key { color: #0d0f11; background: rgba(0, 0, 0, 0.06); border-color: rgba(0, 0, 0, 0.28); }
+:host([realistic]) .dialog .btn.primary { color: #fff4f2; background: #8c2e27; }
+:host([realistic]) .dialog .btn.primary:hover, :host([realistic]) .dialog .btn.primary:focus-visible, :host([realistic].kbd) .dialog .btn.primary:focus { background: #a8362d; }
+:host([realistic]) .confirm { background: rgba(4, 5, 6, 0.72); }
+`;
+
+let realSheet = null;
+
 class AgentShowroom extends HTMLElement {
   constructor() {
     super();
@@ -593,6 +765,7 @@ class AgentShowroom extends HTMLElement {
     this._raf = 0;
     this._renderQueued = false;
     this._thumbSeq = 0;
+    this._real = false; // Modern (realistic) look; Comic otherwise
 
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${STYLE}</style>${this.template()}`;
@@ -616,6 +789,9 @@ class AgentShowroom extends HTMLElement {
       live: $(".live"),
     };
     this.bind();
+    onArtStyleChange(() => {
+      if (this.isOpen && this.syncProfile()) this.renderAll();
+    });
   }
 
   template() {
@@ -741,8 +917,32 @@ class AgentShowroom extends HTMLElement {
     this._focusSaveOnOpen = this.returning;
   }
 
+  /**
+   * Follow the art style: Modern (realistic) swaps the agent renders and, via
+   * the host's [realistic] attribute, the chrome. Returns true on a change.
+   */
+  syncProfile() {
+    const real = isRealisticArt();
+    if (real === this._real) return false;
+    this._real = real;
+    if (real && !this._realAdopted) {
+      if (!realSheet) {
+        realSheet = new CSSStyleSheet();
+        realSheet.replaceSync(REALISTIC_STYLE);
+      }
+      this.shadowRoot.adoptedStyleSheets = [...this.shadowRoot.adoptedStyleSheets, realSheet];
+      this._realAdopted = true;
+    }
+    this.toggleAttribute("realistic", real);
+    (real ? this : this.el.stage).style.removeProperty("--yaw");
+    this._stageKey = null;
+    this._presetsBuilt = false;
+    return true;
+  }
+
   open() {
     this._unlockCtx = null;
+    this.syncProfile();
     this.isOpen = true;
     this.setAttribute("open", "");
     requestAnimationFrame(() => this.setAttribute("shown", ""));
@@ -1394,7 +1594,17 @@ class AgentShowroom extends HTMLElement {
   /** Turn parallax: back gear and cape slide against the body, head leads, light sweeps. */
   applyYaw() {
     const y = this.yaw;
-    this.style.setProperty("--yaw", y.toFixed(3));
+    // Modern (realistic) scopes the property to the stage: set on the host it
+    // restyles every tile, and each filtered thumbnail would re-rasterise per frame.
+    (this._real ? this.el.stage : this).style.setProperty("--yaw", y.toFixed(3));
+    if (this._real) {
+      // Modern's figure carries lighting filters (diffuse + specular + noise).
+      // Any change inside that SVG re-runs them — 100-200 ms at 2x DPR — so
+      // the turn is a compositor transform on the wrapper instead of per-part
+      // parallax transforms inside the SVG.
+      this.el.figure.style.setProperty("--yaw-sx", (1 - Math.abs(y) * 0.07).toFixed(3));
+      return;
+    }
     const svg = this.el.figure.querySelector("svg");
     if (!svg) return;
     const set = (sel, tf) => svg.querySelector(sel)?.setAttribute("transform", tf);
@@ -1473,16 +1683,18 @@ class AgentShowroom extends HTMLElement {
     const ch = this.effective();
     const pose = this.poseChoice;
     const peek = this.stagePeek(ch);
-    const key = `${pose}|${peek}|${APPEARANCE.concat(["loadoutIndex", "backstoryIndex"]).map((k) => ch[k]).join(",")}`;
+    const key = `${this._real ? "r|" : ""}${pose}|${peek}|${APPEARANCE.concat(["loadoutIndex", "backstoryIndex"]).map((k) => ch[k]).join(",")}`;
     if (key === this._stageKey) return;
     this._stageKey = key;
     let markup = this._stageCache.get(key);
     if (!markup) {
-      markup = buildAgentSvg(ch, { pose, peek, idPrefix: "st-" });
+      markup = buildAgentSvg(ch, { pose, peek, idPrefix: "st-", realistic: this._real });
       this._stageCache.set(key, markup);
       if (this._stageCache.size > 48) this._stageCache.delete(this._stageCache.keys().next().value);
     }
-    this.el.figure.innerHTML = markup;
+    // A wrapper carries the breathing animation, so the filtered SVG inside is
+    // rasterised once and only moved by the compositor.
+    this.el.figure.innerHTML = `<div class="fig-breathe">${markup}</div>`;
     this.applyView();
     this.applyYaw();
   }
@@ -1491,7 +1703,7 @@ class AgentShowroom extends HTMLElement {
     this.el.presets.querySelectorAll(".preset").forEach((btn, i) => {
       if (!this._presetsBuilt) {
         const ch = { ...DEFAULT_CHARACTER, ...PRESETS[i].ch };
-        btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat" });
+        btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
       }
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
@@ -1615,7 +1827,8 @@ class AgentShowroom extends HTMLElement {
   /** Update checked states and rebuild thumbnails whose look depends on the character. */
   refreshContent(force = false) {
     const ch = this.character;
-    const sig = APPEARANCE.map((k) => ch[k]).join(",");
+    const sig = APPEARANCE.map((k) => ch[k]).join(",") + (this._real ? "|r" : "");
+    const realistic = this._real;
     this.shadowRoot.querySelectorAll(".content .opt[data-key]").forEach((opt) => {
       const key = opt.dataset.key;
       const idx = Number(opt.dataset.idx);
@@ -1627,16 +1840,16 @@ class AgentShowroom extends HTMLElement {
       const id = `t${this._thumbSeq++}-`;
       switch (thumb.dataset.thumb) {
         case "head":
-          thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, idPrefix: id });
+          thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, idPrefix: id, realistic });
           break;
         case "hair":
-          thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, peek: true, idPrefix: id });
+          thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, peek: true, idPrefix: id, realistic });
           break;
         case "torso":
-          thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat" });
+          thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
           break;
         case "rifle":
-          thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id });
+          thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });
           break;
         default:
       }
@@ -1644,7 +1857,7 @@ class AgentShowroom extends HTMLElement {
     const spin = this.shadowRoot.querySelector(".rifle-hero .spin");
     if (spin && (force || spin.dataset.sig !== sig)) {
       spin.dataset.sig = sig;
-      spin.innerHTML = buildRifleSvg(ch, { idPrefix: `rh${this._thumbSeq++}-` });
+      spin.innerHTML = buildRifleSvg(ch, { idPrefix: `rh${this._thumbSeq++}-`, realistic });
     }
     const input = this.shadowRoot.querySelector("input[name=callsign]");
     if (input && this.shadowRoot.activeElement !== input && input.value !== (ch.name || "")) input.value = ch.name || "";

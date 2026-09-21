@@ -4,6 +4,7 @@
  * Stateless: call updateProjectiles(ctx, dt) each frame.
  */
 import { projectileHitsEnemy } from "./combat.js";
+import { attachProjectileLight, syncProjectileLight } from "../../js/vfx.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -122,11 +123,28 @@ function stepProjectile(p, ctx, stepDt) {
  * @param {object} ctx - Game context bag
  * @param {number} dt  - Delta time in seconds
  */
+// Frame stamp for projectile lights. A level load, restart or tutorial step
+// replaces the projectiles array wholesale (a dozen call sites), which would
+// leave their never-expiring lights burning. Any projectile light not touched
+// last frame has lost its projectile, so it is put out here.
+let _tick = 0;
+
 export function updateProjectiles(ctx, dt) {
   const { projectiles, entities } = ctx;
+  _tick++;
+  if (ctx.lights) {
+    for (const L of ctx.lights) {
+      if (L._projTick !== undefined && L._projTick < _tick - 1) {
+        L.life = 0;
+        L.intensity = 0;
+        L._projTick = undefined;
+      }
+    }
+  }
 
   for (const p of projectiles) {
     if (!p.active) continue;
+    attachProjectileLight(ctx.lights, p);
 
     // Sub-step to prevent wall clipping on fast bullets
     const totalDist = p.speed * dt;
@@ -137,6 +155,10 @@ export function updateProjectiles(ctx, dt) {
 
     p.life -= dt;
     if (p.life <= 0) p.active = false;
+    // Runs after the step, so a bolt that hit something this frame also puts
+    // its light out this frame.
+    syncProjectileLight(p);
+    if (p._light) p._light._projTick = _tick;
   }
 
   // In-place compaction

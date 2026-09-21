@@ -1567,10 +1567,18 @@ export class TitleHero extends HTMLElement {
   }
 
   connectedCallback() {
-    this._unsubscribe ??= attachArtSwitch(this, template, async () => {
-      const { MODELS } = await import("../../src/rendering/svg-art/models/hero.js");
-      return modelHtml("hero", MODELS.hero_armed, HERO_PLACEMENT);
-    });
+    this._unsubscribe ??= attachArtSwitch(
+      this,
+      template,
+      async () => {
+        const { MODELS } = await import("../../src/rendering/svg-art/models/hero.js");
+        return modelHtml("hero", MODELS.hero_armed, HERO_PLACEMENT);
+      },
+      async () => {
+        const { realHeroArmed } = await import("../../src/rendering/svg-art/models/realistic-title.js");
+        return modelHtml("hero-real", realHeroArmed(), HERO_PLACEMENT);
+      },
+    );
   }
 
   disconnectedCallback() {

@@ -798,10 +798,18 @@ export class TitleParadoxLord extends HTMLElement {
   }
 
   connectedCallback() {
-    this._unsubscribe ??= attachArtSwitch(this, template, async () => {
-      const { MODELS } = await import("../../src/rendering/svg-art/models/villain.js");
-      return modelHtml("paradox-lord", MODELS.villain_form2, LORD_PLACEMENT);
-    });
+    this._unsubscribe ??= attachArtSwitch(
+      this,
+      template,
+      async () => {
+        const { MODELS } = await import("../../src/rendering/svg-art/models/villain.js");
+        return modelHtml("paradox-lord", MODELS.villain_form2, LORD_PLACEMENT);
+      },
+      async () => {
+        const { realParadoxLord } = await import("../../src/rendering/svg-art/models/realistic-title.js");
+        return modelHtml("paradox-lord-real", realParadoxLord(), LORD_PLACEMENT);
+      },
+    );
   }
 
   disconnectedCallback() {

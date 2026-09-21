@@ -16,6 +16,7 @@ import { buildAgentParts } from "../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { CHARACTER_COLORS, HELMET_STYLES } from "../data/cosmetics.js";
 import { COLOR } from "./design-tokens.js";
+import { isRealisticArt } from "../rendering/art-style.js";
 
 const INK = COLOR.ink;
 const BOX = [-24, -104.5, 48, 48];
@@ -189,9 +190,14 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
   const s = Math.max(w / BOX[2], h / BOX[3]);
   const px = s * dpr;
 
-  const base = getLayerImage(`portrait:base:${ch.key}`, BOX, ch.defs, ch.base, px);
+  const real = isRealisticArt();
+  const base = real
+    ? getLayerImage(`portrait:rbase:${ch.key}`, BOX, realDefs(ch), realBase(ch), px)
+    : getLayerImage(`portrait:base:${ch.key}`, BOX, ch.defs, ch.base, px);
   if (!base) return false;
-  const bg = getLayerImage(`portrait:bg:${ch.accent}`, BOX, "", backdropMarkup(ch.accent), px);
+  const bg = real
+    ? getLayerImage("portrait:rbg", BOX, "", REAL_BACKDROP, px)
+    : getLayerImage(`portrait:bg:${ch.accent}`, BOX, "", backdropMarkup(ch.accent), px);
 
   const now = performance.now();
   const t = now / 1000;
@@ -240,9 +246,11 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
     if (dmg) ctx.drawImage(dmg, ox, oy, dw, dh);
   }
 
-  const glowA = flicker(t, stage);
+  const glowA = flicker(t, stage) * (real ? 0.6 : 1);
   if (glowA > 0) {
-    const glow = getLayerImage(`portrait:glow:${ch.key}`, BOX, ch.defs, ch.glow, px);
+    const glow = real
+      ? getLayerImage(`portrait:rglow:${ch.key}`, BOX, realDefs(ch), `<g filter="url(#rGlow)">${ch.glow}</g>`, px)
+      : getLayerImage(`portrait:glow:${ch.key}`, BOX, ch.defs, ch.glow, px);
     if (glow) {
       ctx.globalAlpha = glowA;
       ctx.drawImage(glow, ox, oy, dw, dh);
@@ -258,7 +266,9 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
   const shimmerK = healK >= 0 && healK < 1 ? healK : shieldK >= 0 && shieldK < 1 ? shieldK : -1;
   if (shimmerK >= 0) {
     const id = shimmerK === healK ? "silH" : "silS";
-    const sil = getLayerImage(`portrait:${id}:${ch.key}`, BOX, ch.defs, `<g filter="url(#${id})">${ch.base}</g>`, px);
+    const sil = real
+      ? getLayerImage(`portrait:r${id}:${ch.key}`, BOX, realDefs(ch), realSilhouette(ch, `r${id}`), px)
+      : getLayerImage(`portrait:${id}:${ch.key}`, BOX, ch.defs, `<g filter="url(#${id})">${ch.base}</g>`, px);
     if (sil) {
       // Soft-edged band: five slices, brightest in the middle.
       const band = 0.32;
@@ -269,7 +279,7 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
         const top = Math.max(0, c - band / 2 + (i * band) / 5);
         const bot = Math.min(1, c - band / 2 + ((i + 1) * band) / 5);
         if (bot <= top) continue;
-        ctx.globalAlpha = 0.6 * fade * BAND_WEIGHTS[i];
+        ctx.globalAlpha = (real ? 0.3 : 0.6) * fade * BAND_WEIGHTS[i];
         ctx.drawImage(sil, 0, top * sil.height, sil.width, (bot - top) * sil.height, ox, oy + top * dh, dw, (bot - top) * dh);
       }
       ctx.globalAlpha = 0.14 * (1 - shimmerK);
@@ -279,8 +289,16 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
     }
   }
 
-  // White hit flash on the silhouette.
-  if (hk >= 0 && hk < 0.6) {
+  // Hit flash on the silhouette. Realistic: a restrained red wash over the
+  // (already desaturated) bust instead of a white-out.
+  if (real && hk >= 0 && hk < 0.6) {
+    const sil = getLayerImage(`portrait:rsilR:${ch.key}`, BOX, realDefs(ch), realSilhouette(ch, "rsilR"), px);
+    if (sil) {
+      ctx.globalAlpha = 0.4 * (1 - hk / 0.6);
+      ctx.drawImage(sil, ox, oy, dw, dh);
+      ctx.globalAlpha = 1;
+    }
+  } else if (hk >= 0 && hk < 0.6) {
     const sil = getLayerImage(`portrait:silW:${ch.key}`, BOX, ch.defs, `<g filter="url(#silW)">${ch.base}</g>`, px);
     if (sil) {
       ctx.globalAlpha = 0.85 * (1 - hk / 0.6);
@@ -289,7 +307,9 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
     }
   }
 
-  if (dead) {
+  if (real) {
+    drawRealVitals(ctx, x, y, w, h, s, now, pct, dead);
+  } else if (dead) {
     ctx.fillStyle = "rgba(6,8,12,0.5)";
     ctx.fillRect(x, y, w, h);
     const k = Math.min(1, (now - P.deadAt) / 400);
@@ -307,6 +327,87 @@ export function drawPortraitModern(ctx, x, y, w, h, state) {
   }
   ctx.restore();
   return true;
+}
+
+// ─── Realistic ──────────────────────────────────────────────────────────────
+
+/**
+ * Realistic bust: the same character markup with the ink outlines thinned to
+ * a faint contact shade, graded toward desaturated, then lit by a soft key
+ * from the upper left with the lower right falling into shadow. Rasterised
+ * once per character and size like the Modern layers.
+ */
+const REAL_DEFS =
+  `<filter id="rGrade" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">` +
+  `<feColorMatrix type="saturate" values=".28"/>` +
+  `<feComponentTransfer><feFuncR type="linear" slope=".86" intercept=".015"/><feFuncG type="linear" slope=".87" intercept=".015"/>` +
+  `<feFuncB type="linear" slope=".88" intercept=".02"/></feComponentTransfer></filter>` +
+  `<filter id="rGlow" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values=".4"/></filter>` +
+  `<linearGradient id="rKey" x1="0" y1="0" x2="1" y2="1">` +
+  `<stop offset="0" stop-color="#fff4e6" stop-opacity=".2"/><stop offset=".42" stop-color="#fff4e6" stop-opacity="0"/>` +
+  `<stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>` +
+  silFilter("rsilH", "#cfe0da") + silFilter("rsilS", "#b9c9d6") + silFilter("rsilR", "#9e2f27");
+
+const INK_STROKE = `stroke="${INK}"`;
+const SOFT_STROKE = `stroke="rgba(10,12,15,.3)"`;
+
+function realDefs(ch) {
+  if (!ch.rdefs) ch.rdefs = ch.defs + REAL_DEFS;
+  return ch.rdefs;
+}
+
+function realSoft(ch) {
+  if (!ch.rsoft) ch.rsoft = ch.base.split(INK_STROKE).join(SOFT_STROKE);
+  return ch.rsoft;
+}
+
+function realBase(ch) {
+  if (!ch.rbase) {
+    const soft = realSoft(ch);
+    ch.rbase =
+      `<g filter="url(#rGrade)">${soft}</g>` +
+      `<mask id="rMask"><g filter="url(#silW)">${soft}</g></mask>` +
+      `<rect x="${BOX[0]}" y="${BOX[1]}" width="${BOX[2]}" height="${BOX[3]}" fill="url(#rKey)" mask="url(#rMask)"/>`;
+  }
+  return ch.rbase;
+}
+
+function realSilhouette(ch, id) {
+  return `<g filter="url(#${id})">${realSoft(ch)}</g>`;
+}
+
+/** Neutral dark backdrop with a faint key-side falloff; no accent, no scanlines. */
+const REAL_BACKDROP =
+  `<defs><radialGradient id="rpbg" cx=".3" cy=".25" r=".95">` +
+  `<stop offset="0" stop-color="#2a2f33"/><stop offset=".5" stop-color="#121518"/>` +
+  `<stop offset="1" stop-color="#06080a"/></radialGradient></defs>` +
+  `<rect x="${BOX[0]}" y="${BOX[1]}" width="${BOX[2]}" height="${BOX[3]}" fill="url(#rpbg)"/>` +
+  `<ellipse cx="0" cy="-56" rx="30" ry="9" fill="#000" opacity=".5"/>`;
+
+const R_CRIT = "rgb(224,73,63)";
+const R_DEAD = "rgba(6,8,10,0.55)";
+
+/** Realistic low-health / dead overlays: thin, dim, no allocation per frame. */
+function drawRealVitals(ctx, x, y, w, h, s, now, pct, dead) {
+  if (dead) {
+    ctx.fillStyle = R_DEAD;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = Math.min(1, (now - P.deadAt) / 400) * 0.85;
+    ctx.fillStyle = R_CRIT;
+    ctx.fillRect(x, Math.round(y + h * 0.7), w, 1);
+    ctx.globalAlpha = 1;
+  } else if (pct < 0.3) {
+    const pulse = 0.5 + 0.5 * Math.sin(now * (pct < 0.15 ? 0.014 : 0.009));
+    ctx.fillStyle = R_CRIT;
+    ctx.globalAlpha = 0.04 + 0.06 * pulse;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 0.25 + 0.4 * pulse;
+    ctx.fillRect(x, y, w, 1);
+    ctx.fillRect(x, y + h - 1, w, 1);
+    ctx.fillRect(x, y + 1, 1, h - 2);
+    ctx.fillRect(x + w - 1, y + 1, 1, h - 2);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function backdropMarkup(accent) {

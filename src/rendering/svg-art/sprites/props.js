@@ -11,12 +11,33 @@
  * Sprite format mirrors the cutscene models (../index.js):
  *   { box: [x, y, w, h], layers: [{ markup, anim?, blend?, shade? }] }
  * `shade: false` marks emissive layers that should not darken with distance.
+ *
+ * Realistic art style builds a second set from the same geometry
+ * (buildRealisticProps, on first Realistic use): no ink outlines, graded
+ * physical materials, a top key light, grime and scuffs, heavier contact
+ * shadows and restrained emissives. Boxes and anchors are shared, so placement
+ * does not change between styles.
  */
 
 export const INK = "#04060b";
 export const OX = 0.42;
 export const EYE = -150;
 const KZ = 0.0017;
+
+// True only while buildRealisticProps / pickups' Realistic builders run, so
+// the shared builders emit their Realistic variants. Modern builds at import
+// with it false and its markup is unchanged.
+let REAL = false;
+export const isRealBuild = () => REAL;
+/** Run `fn` with the Realistic variants of the shared helpers switched on. */
+export function withRealistic(fn) {
+  REAL = true;
+  try {
+    return fn();
+  } finally {
+    REAL = false;
+  }
+}
 
 export const f = (n) => Math.round(n * 10) / 10;
 export const pts = (list) => list.map(([x, y]) => `${f(x)},${f(y)}`).join(" ");
@@ -130,14 +151,16 @@ export function block(x, y, w, h, d, m, o = {}) {
 
 /** Soft floor contact shadow. */
 export const shadow = (cx, cy, rx, ry, op = 1) =>
-  `<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(ry)}" fill="url(#shadow)" opacity="${op}"/>`;
+  `<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(ry)}" fill="url(#shadow)" opacity="${op}"/>` +
+  // Realistic: a tight occlusion core where the object meets the floor.
+  (REAL ? `<ellipse cx="${f(cx - 1)}" cy="${f(cy + ry * 0.12)}" rx="${f(rx * 0.74)}" ry="${f(ry * 0.5)}" fill="url(#shadowCore)" opacity="${op}"/>` : "");
 
 /** Rim light along an edge — cool cyan, the in-world accent colour. */
-const rim = (d, op = 0.35, w = 0.9) => line(d, "#22e6ff", w, op);
+const rim = (d, op = 0.35, w = 0.9) => (REAL ? line(d, "#e6ecf0", w * 0.8, op * 0.4) : line(d, "#22e6ff", w, op));
 
 /** Small emissive light: blurred halo + bright core (for glow layers). */
 export const lamp = (x, y, r, color, core = "#ffffff") =>
-  `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * 2.6)}" fill="${color}" opacity=".55" filter="url(#glow)"/>` +
+  `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * (REAL ? 1.7 : 2.6))}" fill="${color}" opacity="${REAL ? ".3" : ".55"}" filter="url(#glow)"/>` +
   `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${core}"/>`;
 
 /** Horizontal vent slits with a lit lower lip. */
@@ -164,6 +187,11 @@ function leaf(bx, by, deg, len, wid, bend, fill) {
   const c2 = [mid[0] - nx * wid, mid[1] - ny * wid];
   const d = `M${f(bx)},${f(by)}Q${f(c1[0])},${f(c1[1])} ${f(tip[0])},${f(tip[1])}Q${f(c2[0])},${f(c2[1])} ${f(bx)},${f(by)}Z`;
   const rib = `M${f(bx)},${f(by)}Q${f(mid[0])},${f(mid[1] - 1)} ${f(tip[0])},${f(tip[1])}`;
+  if (REAL) {
+    // Leaves fold along the midrib: the half away from the key light is darker.
+    const half = `M${f(bx)},${f(by)}Q${f(c2[0])},${f(c2[1])} ${f(tip[0])},${f(tip[1])}Q${f(mid[0])},${f(mid[1] - 1)} ${f(bx)},${f(by)}Z`;
+    return path(d, fill, 0.8) + `<path d="${half}" fill="#000" opacity=".26"/>` + line(rib, "#b8f0a0", 0.5, 0.3);
+  }
   return path(d, fill, 0.8) + line(rib, "#b8f0a0", 0.5, 0.35);
 }
 
@@ -545,6 +573,7 @@ function monitorBank() {
   s += rect(mx - 3, my - 22, 6, 22, "url(#pipe)", 0.8);
   s += poly([[mx - 14, my], [mx + 14, my], [mx + 17, my - 3], [mx - 11, my - 3]], "url(#dkT)", 0.7);
   const screens = [];
+  let readouts = "";
   for (const side of [-1, 1]) {
     const sx = mx + side * 33 - 30;
     const sy = my - 64;
@@ -554,6 +583,7 @@ function monitorBank() {
     for (let ln = 0; ln < 5; ln++) {
       const lw = 18 + ((ln * 37 + side * 11 + 60) % 26);
       s += rect(sx + 7, sy + 8 + ln * 5, lw, 1.6, "#00cc66", 0, 0, ` opacity=".75"`);
+      if (REAL) readouts += rect(sx + 7, sy + 8 + ln * 5, lw, 1.6, "#5dffa8", 0, 0, ` opacity=".55"`);
     }
     s += `<rect x="${f(sx + 36)}" y="${f(sy + 22)}" width="16" height="9" fill="none" stroke="#00cc66" stroke-width=".4" stroke-opacity=".7"/>`;
     s += line(`M${f(sx + 37)},${f(sy + 29)}l3,-3l3,2l3,-5l3,3l3,-2`, "#9dffcc", 0.5, 0.8);
@@ -567,6 +597,7 @@ function monitorBank() {
     glow += rect(gx, gy, gw, gh, "#00ff88", 0, 0, ` opacity=".16"`);
     glow += `<ellipse cx="${f(gx + gw / 2)}" cy="${f(gy + gh / 2)}" rx="${f(gw * 0.75)}" ry="${f(gh * 0.9)}" fill="url(#bloomG)"/>`;
   }
+  glow += readouts;
   glow += lamp(x + 68, top + 21, 0.9, "#ff3344", "#ffd0d6") + lamp(x + 75, top + 21, 0.9, "#00ff88", "#d0ffe6");
   return {
     box: [-94, -156, 190, 166],
@@ -841,22 +872,133 @@ function barrier() {
   };
 }
 
-export const PROP_SPRITES = {
-  locker: locker(),
-  crate: crate(),
-  bench: bench(),
-  target: target(),
-  ammo_crate: ammoCrate(),
-  weight_rack: weightRack(),
-  dumbbell: dumbbell(),
-  punching_bag: punchingBag(),
-  desk: desk(),
-  filing_cabinet: filingCabinet(),
-  monitor_bank: monitorBank(),
-  table: table(),
-  chair: chair(),
-  vending_machine: vendingMachine(),
-  weapon_rack: weaponRack(),
-  potted_plant: pottedPlant(),
-  barrier: barrier(),
+const BUILDERS = {
+  locker,
+  crate,
+  bench,
+  target,
+  ammo_crate: ammoCrate,
+  weight_rack: weightRack,
+  dumbbell,
+  punching_bag: punchingBag,
+  desk,
+  filing_cabinet: filingCabinet,
+  monitor_bank: monitorBank,
+  table,
+  chair,
+  vending_machine: vendingMachine,
+  weapon_rack: weaponRack,
+  potted_plant: pottedPlant,
+  barrier,
 };
+
+const buildAll = () => {
+  const out = {};
+  for (const key in BUILDERS) out[key] = BUILDERS[key]();
+  return out;
+};
+
+export const PROP_SPRITES = buildAll();
+
+// ---------------------------------------------------------------------------
+// Realistic set
+// ---------------------------------------------------------------------------
+
+/** Ink outlines become a soft, translucent darker edge. */
+const SOFT_EDGE = "rgba(10,8,6,.34)";
+
+/**
+ * Grade a #rgb / #rrggbb colour toward paint: pulled toward its own
+ * luminance (reduced saturation) and off pure white and black.
+ */
+export function gradeHex(h, sat = 0.66) {
+  const full = h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h;
+  const n = parseInt(full, 16);
+  const c = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  const L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  let out = "#";
+  for (let i = 0; i < 3; i++) {
+    const v = (L + (c[i] - L) * sat) * 0.88 + 0.025;
+    out += Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+/** Realistic pass over finished markup: soft edges for ink, graded colours. `url(#id)` refs are untouched. */
+export const gradeMarkup = (m, sat) =>
+  m
+    .replace(/stroke="#04060b"/g, `stroke="${SOFT_EDGE}"`)
+    .replace(/(?<!url\()#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g, (_, h) => gradeHex(h, sat));
+
+/**
+ * Surface filters for the Realistic wrap. Frequencies are in art units, so
+ * each sprite set passes values that suit its scale (props are centimetres).
+ */
+export const realSurfaceDefs = (grime = 0.035, scuff = "0.06 0.45") =>
+  `<filter id="rWht"><feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/></filter>` +
+  `<filter id="rGrime"><feTurbulence type="fractalNoise" baseFrequency="${grime}" numOctaves="4" seed="3"/>` +
+  `<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2.6 0 0 0 -1.12"/>` +
+  `<feComposite in="SourceGraphic" operator="in"/></filter>` +
+  `<filter id="rScuff"><feTurbulence type="turbulence" baseFrequency="${scuff}" numOctaves="2" seed="11"/>` +
+  `<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 7 0 0 0 -3.9"/>` +
+  `<feComposite in="SourceGraphic" operator="in"/></filter>` +
+  // Key light from above and slightly left, falling off to floor occlusion.
+  `<linearGradient id="rKey" x1=".3" y1="0" x2=".62" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/>` +
+  `<stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".62" stop-color="#000" stop-opacity=".06"/>` +
+  `<stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>` +
+  `<radialGradient id="shadowCore"><stop offset="0" stop-color="#000" stop-opacity=".72"/>` +
+  `<stop offset=".6" stop-color="#000" stop-opacity=".34"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>`;
+
+/**
+ * Wrap a lit (non-emissive) layer: draw it, then key light, grime and scuffs
+ * clipped to its own silhouette. Runs once per layer at build time.
+ */
+export function realWrap(markup, box, grime = 0.36, scuff = 0.2) {
+  const R = `x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[3]}"`;
+  return (
+    `<defs><g id="rl">${markup}</g>` +
+    `<mask id="rm" maskUnits="userSpaceOnUse" ${R}><use href="#rl" filter="url(#rWht)"/></mask></defs>` +
+    `<use href="#rl"/><g mask="url(#rm)"><rect ${R} fill="url(#rKey)"/>` +
+    `<rect ${R} fill="#17120b" opacity="${grime}" filter="url(#rGrime)"/>` +
+    `<rect ${R} fill="#e2dccf" opacity="${scuff}" filter="url(#rScuff)"/></g>`
+  );
+}
+
+/**
+ * Turn a sprite built under withRealistic() into its Realistic form: lit
+ * layers graded and wrapped, emissive layers scaled by `glow`. The raw graded
+ * markup is kept as `silMarkup` for the cheaper distance-fog silhouette.
+ */
+export function realizeSprite(sprite, glow = 0.85, o = {}) {
+  sprite.realistic = true;
+  for (const layer of sprite.layers) {
+    if (layer.shade === false || layer.blend) {
+      layer.opacity = (layer.opacity ?? 1) * glow;
+      continue;
+    }
+    const m = gradeMarkup(layer.markup, o.sat);
+    layer.silMarkup = m;
+    layer.markup = realWrap(m, layer.box || sprite.box, o.grime, o.scuff);
+  }
+  return sprite;
+}
+
+/** Realistic overrides placed ahead of the graded Modern defs (first id wins). */
+const REAL_PROP_FX =
+  `<radialGradient id="shadow"><stop offset="0" stop-color="#000" stop-opacity=".74"/>` +
+  `<stop offset=".5" stop-color="#000" stop-opacity=".4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
+  `<radialGradient id="bloomG"><stop offset="0" stop-color="#9dffd0" stop-opacity=".3"/>` +
+  `<stop offset=".45" stop-color="#00ff88" stop-opacity=".1"/><stop offset="1" stop-color="#00ff88" stop-opacity="0"/></radialGradient>` +
+  `<radialGradient id="warmG"><stop offset="0" stop-color="#fff2c0" stop-opacity=".8"/>` +
+  `<stop offset=".3" stop-color="#ffb030" stop-opacity=".28"/><stop offset="1" stop-color="#ff8a00" stop-opacity="0"/></radialGradient>`;
+
+let realProps = null;
+
+/** Realistic prop set, built on first use and cached: { defs, sprites }. */
+export function buildRealisticProps() {
+  if (realProps) return realProps;
+  const sprites = withRealistic(buildAll);
+  for (const key in sprites) realizeSprite(sprites[key]);
+  realProps = { defs: REAL_PROP_FX + realSurfaceDefs() + gradeMarkup(DEFS), sprites };
+  return realProps;
+}

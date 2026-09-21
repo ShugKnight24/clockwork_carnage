@@ -36,6 +36,13 @@ import {
   ARMED,
   RIFLE_AT,
   RIFLE_ROT,
+  FALLEN,
+  FALLEN_TF,
+  FALLEN_SPARKS,
+  fallenCape,
+  capeFlap,
+  fallenDamage,
+  debris,
 } from "./models/hero.js";
 import {
   CHARACTER_COLORS,
@@ -51,6 +58,7 @@ import {
   LOADOUT_CLASSES,
   BACKSTORIES,
 } from "../../data/cosmetics.js";
+import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 
 // ---------------------------------------------------------------------------
 // Colour helpers
@@ -1199,6 +1207,17 @@ const RIFLE_TF = `transform="translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})"
 /** Canvas of the stage: fits both poses, crests and gear without jumping. */
 export const AGENT_VIEW = { full: [-74, -116, 148, 182], bust: [-30, -111, 60, 60], torso: [-42, -104, 84, 84], helm: [-21, -110, 42, 42] };
 
+/** Chest trim paint following the pectoral seams under the ink lines. */
+const chestTrim = (c) =>
+  line("M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6", c.pal.primary, 1.3, 0.9) +
+  line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
+  line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
+
+/** Gorget, with the bare neck above it when the face shows. */
+const collarOf = (c, showFace, map) =>
+  (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
+  recolor(gorget(), map);
+
 /**
  * All layers of a customised agent as markup strings (without the <svg>).
  * @param {object} character game.character-shaped record
@@ -1231,18 +1250,10 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     };
   }
 
-  // Chest trim paint follows the pectoral seams under the ink lines.
-  const chestTrim =
-    line("M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6", c.pal.primary, 1.3, 0.9) +
-    line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
-    line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
-
-  const collar =
-    (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
-    recolor(gorget(), map);
+  const collar = collarOf(c, showFace, map);
   const body =
     recolor(legs.map((l) => l.body).join("") + torso(), map) +
-    chestTrim +
+    chestTrim(c) +
     insignia(c) +
     kit.front +
     rifle.body +
@@ -1271,6 +1282,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     head: h.front,
     headGlow: h.glow,
     eyesVisible: showFace,
+    look: c,
   };
 }
 
@@ -1287,10 +1299,12 @@ export function scopeIds(markup, prefix) {
  * Full <svg> for a customised agent.
  * @param {object} character
  * `headOnly` draws just collar + head (option tiles), framed by AGENT_VIEW.helm.
- * @param {{ pose?: "idle"|"hero"|"bust", lighting?: "showroom"|"flat", peek?: boolean, idPrefix?: string, className?: string, view?: number[], headOnly?: boolean }} opts
+ * `realistic` renders the Modern (realistic) look instead of the Comic one.
+ * @param {{ pose?: "idle"|"hero"|"bust", lighting?: "showroom"|"flat", peek?: boolean, idPrefix?: string, className?: string, view?: number[], headOnly?: boolean, realistic?: boolean }} opts
  */
-export function buildAgentSvg(character, { pose = "idle", lighting = "showroom", peek = false, idPrefix = "", className = "", view, headOnly = false } = {}) {
+export function buildAgentSvg(character, { pose = "idle", lighting = "showroom", peek = false, idPrefix = "", className = "", view, headOnly = false, realistic = false } = {}) {
   const p = buildAgentParts(character, { pose: pose === "bust" ? "idle" : pose, peek });
+  if (realistic) return realAgentSvg(p, { pose, idPrefix, className, view, headOnly });
   if (headOnly) {
     const v = view || AGENT_VIEW.helm;
     return scopeIds(
@@ -1323,16 +1337,283 @@ export function buildAgentSvg(character, { pose = "idle", lighting = "showroom",
 }
 
 /** Chrono rifle alone, level, in its weapon finish (for loadout chips). */
-export function buildRifleSvg(character, { idPrefix = "" } = {}) {
+export function buildRifleSvg(character, { idPrefix = "", realistic = false } = {}) {
   const c = resolve(character || {});
   const gm = gunMap(c);
   const r = chronoRifle();
   const extra = finishExtras(c);
   const inv = `transform="rotate(${-RIFLE_ROT}) translate(${f(-RIFLE_AT[0])},${f(-RIFLE_AT[1])})"`;
+  const label = `Chrono rifle, ${pick(WEAPON_SKINS, character.weaponSkinIndex).name} finish`;
+  const body = recolor(r.body, gm) + `<g ${RIFLE_TF}>${extra.body}</g>`;
+  const glow = recolor(r.glow, gm) + (extra.glow ? `<g ${RIFLE_TF}>${extra.glow}</g>` : "");
+  if (realistic) {
+    const o = { rims: [c.rim, RIM], keep: SOFT_HIGHLIGHTS };
+    const markup =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -16 106 34" role="img" aria-label="${label}">` +
+      `<defs>${realAgentDefs(c)}${realFilters([-40, -110, 180, 180], { u: 0.4, spec: 0.6, grime: 0.28, seed: 3 })}</defs>` +
+      `<g ${inv}><g filter="url(#rmat)">${realizeMarkup(body, o)}</g>${realizeMarkup(glow, o)}</g>` +
+      `</svg>`;
+    return scopeIds(markup, idPrefix);
+  }
   const markup =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -16 106 34" role="img" aria-label="Chrono rifle, ${pick(WEAPON_SKINS, character.weaponSkinIndex).name} finish">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -16 106 34" role="img" aria-label="${label}">` +
     `<defs>${defs(c)}</defs>` +
-    `<g ${inv}>${recolor(r.body, gm)}<g ${RIFLE_TF}>${extra.body}</g>${recolor(r.glow, gm)}${extra.glow ? `<g ${RIFLE_TF}>${extra.glow}</g>` : ""}</g>` +
+    `<g ${inv}>${body}${glow}</g>` +
     `</svg>`;
   return scopeIds(markup, idPrefix);
+}
+
+// ---------------------------------------------------------------------------
+// Modern (realistic) look
+// ---------------------------------------------------------------------------
+
+/**
+ * Photographic materials for a resolved look, swapped over the Comic defs by
+ * id: each armor keeps its own tint (olive recon, tan tech, pale pathfinder,
+ * black reliquary…) as painted metal with one narrow specular; the undersuit
+ * is dark rubberised fabric, the cape wool, the visor smoked glass tinted by
+ * the palette's energy colour. Palette and skin keep more of their colour than
+ * the armor so every choice stays distinguishable.
+ */
+function realAgentDefs(c) {
+  const s = (ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard).map((h) => realHex(h, 0.35));
+  const matte = MATTE.has(c.armor);
+  const spec = matte ? mix(s[1], s[0], 0.55) : mix(s[0], "#ffffff", 0.15);
+  const base = mix(s[1], s[2], 0.4);
+  const ramp = `x1="0" y1="0" x2="1" y2=".35"`;
+  const cape = c.cape.map((h) => realHex(h, 0.45));
+  const g = c.finish.stops.map((h) => realHex(h, 0.35));
+  const e = c.energy;
+  let d = realizeDefs(defs(c), {}, 0.3);
+  const swap = {
+    steel: sheen("steel", base, spec, s[3], s[4], 0.15, ramp),
+    steelDk: sheen("steelDk", mix(base, s[3], 0.45), mix(base, spec, 0.4), s[3], mix(s[4], "#000000", 0.3), 0.16, ramp),
+    suit:
+      `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25"><stop offset="0" stop-color="${matte ? "#26292d" : "#3a3e43"}"/>` +
+      `<stop offset=".45" stop-color="${matte ? "#131517" : "#1d2024"}"/><stop offset="1" stop-color="#08090a"/></linearGradient>`,
+    cape:
+      `<linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">` +
+      `<stop offset="0" stop-color="${cape[0]}"/><stop offset=".3" stop-color="${cape[1]}"/>` +
+      `<stop offset=".62" stop-color="${cape[2]}"/><stop offset="1" stop-color="${cape[3]}"/></linearGradient>`,
+    visor:
+      `<linearGradient id="visor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(e, "#05080a", 0.9)}"/>` +
+      `<stop offset=".42" stop-color="${mix(e, "#0b1216", 0.62)}"/><stop offset=".58" stop-color="${mix(e, "#d8e2e6", 0.35)}"/>` +
+      `<stop offset="1" stop-color="${mix(e, "#040607", 0.9)}"/></linearGradient>`,
+    gun: c.finish.mirror
+      ? sheen("gun", "#9aa2a8", "#f2f4f5", "#4a5258", "#15181b", 0.3, `x1="0" y1="0" x2="0" y2="1"`)
+      : sheen("gun", g[0], mix(g[0], "#ffffff", 0.3), g[1], g[2], 0.24, `x1="0" y1="0" x2="0" y2="1"`),
+  };
+  for (const [id, m] of Object.entries(swap)) d = swapGradient(d, id, m);
+  return d;
+}
+
+/** Figure markup for the Modern (realistic) look: see buildAgentSvg. */
+/** realizeMarkup options for a resolved look. */
+function realOpts(c) {
+  // Candy red is lacquer, not light: it darkens like paint under the key.
+  return { rims: [c.rim, RIM], desat: 0.4, keep: { ...(MATTE.has(c.armor) ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
+}
+
+function realAgentSvg(p, { pose, idPrefix, className, view, headOnly }) {
+  const c = p.look;
+  const o = realOpts(c);
+  const head = realizeMarkup(p.head, { ...o, desat: 0.15 });
+  const headGlow = realizeMarkup(p.headGlow, o);
+  const collar = realizeMarkup(p.collar, o);
+  // Filter blur and grain are sized in art units, so scale them to the frame:
+  // the stage figure spans ~450px, option tiles ~64px.
+  const v = view || (headOnly ? AGENT_VIEW.helm : pose === "bust" ? AGENT_VIEW.bust : AGENT_VIEW.full);
+  const u = v[2] / (v[2] >= 140 ? 450 : 64);
+  const pad = v[2] * 0.25;
+  const box = [f(v[0] - pad), f(v[1] - pad), f(v[2] + pad * 2), f(v[3] + pad * 2)];
+  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true });
+  const headFx = p.eyesVisible ? "rcloth" : "rmat";
+  if (headOnly) {
+    return scopeIds(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" aria-hidden="true"><defs>${fdefs}</defs>` +
+        `<g filter="url(#rmat)">${collar}</g><g filter="url(#${headFx})">${head}</g>${headGlow}</svg>`,
+      idPrefix,
+    );
+  }
+  const k = f(p.width);
+  const bodyTf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
+  const armed = pose === "hero";
+  const markup =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" role="img" aria-label="Agent preview">` +
+    `<defs>${fdefs}</defs>` +
+    `<g class="ag-fig">` +
+    `<g class="ag-shadow">${contactShadow(0, 58.8, armed ? 44 : 38, 6.2)}</g>` +
+    `<g class="ag-yaw-back"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.back, o)}</g></g></g>` +
+    `<g class="ag-yaw-cape"><g class="ag-cape"><g${bodyTf}><g filter="url(#rcloth)">${realizeMarkup(p.cape, o)}</g></g></g></g>` +
+    `<g class="ag-yaw-body"><g class="ag-body"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.body, o)}</g></g></g>` +
+    `<g class="ag-glow"><g${bodyTf}>${realizeMarkup(p.glow, o)}</g></g></g>` +
+    `<g class="ag-yaw-head"><g class="ag-head"><g filter="url(#${headFx})">${head}</g></g><g class="ag-visor">${headGlow}</g></g>` +
+    `</g></svg>`;
+  return scopeIds(markup, idPrefix);
+}
+
+// ---------------------------------------------------------------------------
+// Cutscene cast
+// ---------------------------------------------------------------------------
+
+/**
+ * Cutscene / flipbook art keys that show the armoured agent. They follow the
+ * saved character; the unarmoured cadet (hero_human, hero_at_desk) does not.
+ */
+export const CAST_KEYS = ["hero", "hero_armed", "hero_fallen"];
+
+const auraDef = (e) =>
+  `<radialGradient id="aura"><stop offset="0" stop-color="${e}" stop-opacity=".13"/>` +
+  `<stop offset=".6" stop-color="${e}" stop-opacity=".04"/><stop offset="1" stop-color="${e}" stop-opacity="0"/></radialGradient>`;
+
+/** Cracks across a closed visor, for the fallen agent (head coordinates). */
+const visorCracks = (c) =>
+  line("M-7.6,-84.6 L-4.8,-81.6 L-5.6,-79.4 M-4.8,-81.6 L-1.6,-80.8 L0.8,-78.2 M-1.6,-80.8 L-0.6,-83.4", mix(c.core, "#ffffff", 0.3), 0.45, 0.85) +
+  line("M-4.8,-81.6 L-8.4,-80.2", mix(c.core, "#ffffff", 0.3), 0.35, 0.6) +
+  line("M4.4,-89.2 L6.2,-86.6 L5.4,-85.6 M6.2,-86.6 L8.6,-86.8", INK, 0.55, 0.9);
+
+/**
+ * The customised agent down on the floor, in the rig coordinates of the stock
+ * hero_fallen (models/hero.js): same limbs, damage and cape, dressed in the
+ * character's armour, shoulders, helmet, gear and colours.
+ */
+function fallenParts(c) {
+  const map = { ...bodyMap(c), "#4a0c0c": c.cape[2], "#e05050": mix(c.cape[0], "#ffffff", 0.2), "#140202": mix(c.cape[3], "#000000", 0.5) };
+  const P = FALLEN;
+  const [upperArm, trappedArm] = [armoredArm(P.arms[0], -1, true), armoredArm(P.arms[1], 1, false)];
+  const [upperLeg, lowerLeg] = [armoredLeg(P.legs[0], -1), armoredLeg(P.legs[1], 1)];
+  const kit = gear(c, P);
+  const showFace = OPEN_HELMETS.has(c.helmet);
+  const h = head(c, false);
+  const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${inner}</g></g>`;
+  const leftDecal = c.shoulder === "pauldrons" || c.shoulder === "armored" ? `<g transform="rotate(14 -12 -65)">${decal(c, -24.4, -56, 0.5)}</g>` : "";
+  return {
+    width: ARMOR_WIDTH[c.armor] || 1,
+    pool: recolor(fallenCape(), map),
+    under:
+      kit.back +
+      recolor(trappedArm.body + lowerLeg.body + upperLeg.body + torso(), map) +
+      chestTrim(c) +
+      insignia(c) +
+      kit.front +
+      fallenDamage() +
+      recolor(shoulder(c, 1, -4), map) +
+      decal(c, 8.8, -57.4, 0.62) +
+      collarOf(c, showFace, map),
+    head: headTf(h.front + (showFace ? "" : visorCracks(c))),
+    over: recolor(capeFlap() + upperArm.body + shoulder(c, -1, 14), map) + leftDecal,
+    glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow,
+    headGlow: headTf(h.glow),
+    sparks: recolor(FALLEN_SPARKS, map),
+    capeIn:
+      `<linearGradient id="capeIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.cape[3]}"/>` +
+      `<stop offset="1" stop-color="${mix(c.cape[3], "#000000", 0.5)}"/></linearGradient>` +
+      `<radialGradient id="scorch"><stop offset="0" stop-color="#050302" stop-opacity=".85"/>` +
+      `<stop offset=".5" stop-color="#1a0f08" stop-opacity=".5"/><stop offset="1" stop-color="#1a0f08" stop-opacity="0"/></radialGradient>`,
+  };
+}
+
+/**
+ * A cutscene model (svg-art/index.js format) of the customised agent for one
+ * of CAST_KEYS. Poses, rig coordinates, layer order and animation match the
+ * stock models in models/hero.js, so every scene keeps its framing; only the
+ * build differs. `realistic` gives the Modern (photographic) treatment.
+ * Pure string work: build once per character and style, never per frame.
+ * @param {object} character game.character-shaped record
+ * @param {string} key one of CAST_KEYS
+ * @param {{ realistic?: boolean }} [opts]
+ */
+export function buildCastModel(character, key, { realistic = false } = {}) {
+  const ch = character || {};
+  if (key === "hero_fallen") return castFallen(resolve(ch), realistic);
+  const armed = key === "hero_armed";
+  const p = buildAgentParts(ch, { pose: armed ? "hero" : "idle" });
+  const c = p.look;
+  const k = f(p.width);
+  const sc = (m) => (k === 1 ? m : `<g transform="scale(${k} 1)">${m}</g>`);
+  const breathe = { type: "breathe", amp: 0.006, speed: 1.6, pivot: [0, 58] };
+  const sway = { type: "sway", amp: 0.022, speed: 1.7, pivot: [0, -64] };
+  const pulse = { type: "pulse", min: 0.7, max: 1, speed: armed ? 3.4 : 2.4 };
+  if (!realistic) {
+    return {
+      box: [-74, -116, armed ? 164 : 148, 182],
+      defs: p.defs + auraDef(c.energy),
+      anim: breathe,
+      layers: [
+        { markup: `<ellipse cx="0" cy="-22" rx="46" ry="78" fill="url(#aura)"/>`, anim: { type: "pulse", min: 0.6, max: 1, speed: 1.2 } },
+        { markup: p.shadow + sc(p.back) },
+        { markup: sc(p.cape), anim: sway },
+        { markup: sc(p.body) + p.head },
+        { markup: sc(p.glow) + p.headGlow, anim: pulse, blend: "lighter" },
+      ],
+    };
+  }
+  const box = [-86, -140, 208, 214];
+  const o = realOpts(c);
+  const R = (m) => realizeMarkup(m, o);
+  const headFx = p.eyesVisible ? "rcloth" : "rmat";
+  return {
+    box,
+    defs: realAgentDefs(c) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.26, seed: 5 }),
+    anim: breathe,
+    layers: [
+      {
+        markup: volumetric({ cx: 4, cy: -26, rx: 58, ry: 84, color: mix("#9fb4c6", c.energy, 0.18), top: -140, shaftW: 44, bottom: 60 }),
+        anim: { type: "pulse", min: 0.82, max: 1, speed: 0.9 },
+        blend: "screen",
+      },
+      { markup: contactShadow(0, 58.8, armed ? 46 : 40, 7) + `<g filter="url(#rmat)">${sc(R(p.back))}</g>` },
+      { markup: `<g filter="url(#rcloth)">${sc(R(p.cape))}</g>`, anim: sway },
+      { markup: `<g filter="url(#rmat)">${sc(R(p.body))}</g><g filter="url(#${headFx})">${realizeMarkup(p.head, { ...o, desat: 0.15 })}</g>` },
+      { markup: sc(R(p.glow)) + R(p.headGlow), anim: pulse, blend: "lighter" },
+    ],
+  };
+}
+
+function castFallen(c, realistic) {
+  const p = fallenParts(c);
+  const k = f(p.width);
+  const sc = (m) => (k === 1 ? m : `<g transform="scale(${k} 1)">${m}</g>`);
+  const TF = (m) => `<g ${FALLEN_TF}>${m}</g>`;
+  const box = [-112, -40, 224, 118];
+  const breathe = { type: "breathe", amp: 0.01, speed: 1.1, pivot: [0, 40] };
+  const glowAnim = { type: "flicker", min: 0.15, max: 0.7, speed: 1.4 };
+  const headAnim = { type: "flicker", min: 0.2, max: 0.65, speed: 2.2 };
+  const sparkAnim = { type: "flicker", min: 0, max: 1, speed: 3.1 };
+  const floor = `<ellipse cx="-4" cy="50" rx="96" ry="14" fill="url(#shade)"/>` + debris();
+  if (!realistic) {
+    return {
+      box,
+      defs: defs(c) + p.capeIn,
+      layers: [
+        { markup: floor },
+        { markup: TF(sc(p.pool + p.under) + p.head + sc(p.over)), anim: breathe },
+        { markup: TF(sc(p.glow)), anim: glowAnim, blend: "lighter" },
+        { markup: TF(p.headGlow), anim: headAnim, blend: "lighter" },
+        { markup: p.sparks, anim: sparkAnim, blend: "lighter" },
+      ],
+    };
+  }
+  const o = realOpts(c);
+  const R = (m) => realizeMarkup(m, o);
+  // Filters wrap the rotated rig so the key light stays screen-space.
+  const headFx = OPEN_HELMETS.has(c.helmet) ? "rcloth" : "rmat";
+  return {
+    box,
+    defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.5, grime: 0.32, seed: 9 }),
+    layers: [
+      { markup: contactShadow(-4, 48, 100, 16) + R(debris()) },
+      {
+        markup:
+          `<g filter="url(#rcloth)">${TF(sc(R(p.pool)))}</g>` +
+          `<g filter="url(#rmat)">${TF(sc(R(p.under)))}</g>` +
+          `<g filter="url(#${headFx})">${TF(realizeMarkup(p.head, { ...o, desat: 0.15 }))}</g>` +
+          `<g filter="url(#rmat)">${TF(sc(R(p.over)))}</g>`,
+        anim: breathe,
+      },
+      { markup: TF(sc(R(p.glow))), anim: glowAnim, blend: "lighter" },
+      { markup: TF(R(p.headGlow)), anim: headAnim, blend: "lighter" },
+      { markup: R(p.sparks), anim: sparkAnim, blend: "lighter" },
+    ],
+  };
 }

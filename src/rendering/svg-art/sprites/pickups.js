@@ -8,9 +8,17 @@
  * Glow layers get their own wide, low-resolution box; they are soft anyway.
  * `base` names the layer that must be decoded before the sprite replaces the
  * legacy drawing (glows sit behind it in draw order).
+ *
+ * Realistic (buildRealisticPickups, on first Realistic use) keeps each key's
+ * box and colour coding but draws real objects: a scuffed med kit, a steel
+ * magazine, a rifle, sealed exotic canisters. Emissives stay bright but small,
+ * with a faint local glow instead of a halo.
  */
 
-import { INK, f, pts, path, rect, line, ell } from "./props.js";
+import {
+  INK, f, pts, path, rect, line, ell,
+  isRealBuild, withRealistic, realizeSprite, realSurfaceDefs, gradeMarkup,
+} from "./props.js";
 
 // Floating items sit below eye level, so depth goes right and up.
 const DX = 0.45;
@@ -88,7 +96,14 @@ function health() {
   // Latches.
   for (const lx of [x + 16, x + w - 26]) s += rect(lx, y - 3, 10, 9, "#00cc44", 1.2, 2);
   // Trim border and panel seam.
+  const REAL = isRealBuild();
   s += `<rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" rx="5" fill="none" stroke="#00cc44" stroke-width="2.4"/>`;
+  if (REAL) {
+    // Printed label and a moulded grip channel: a real kit, not a badge.
+    s += rect(x + 12, y + h - 20, 30, 8, "#e9e6dc", 0, 1);
+    s += line(`M${x + 15},${y + h - 17.5}h18M${x + 15},${y + h - 14.5}h12`, "#5a5e62", 1, 0.7);
+    s += line(`M${x + 8},${y + 22}V${y + h - 24}`, "#000", 2.4, 0.18);
+  }
   s += line(`M${x + 3},${y + h - 6}V${y + 4}H${x + w - 6}`, "#fff", 2, 0.8);
   // Red cross.
   const c = 21;
@@ -102,15 +117,20 @@ function health() {
   const corners = [[x + 6, y + 6], [x + w - 6, y + 6], [x + 6, y + h - 6], [x + w - 6, y + h - 6]];
   for (const [px, py] of corners) {
     s += ell(px, py, 4, 4, "#00ff44", 1.2);
-    lights += `<circle cx="${f(px)}" cy="${f(py)}" r="10" fill="#00ff44" filter="url(#glow)"/><circle cx="${f(px)}" cy="${f(py)}" r="3" fill="#e8ffee"/>`;
+    lights += REAL
+      ? `<circle cx="${f(px)}" cy="${f(py)}" r="6" fill="#00ff44" opacity=".55" filter="url(#glow)"/><circle cx="${f(px)}" cy="${f(py)}" r="2.6" fill="#e8ffee"/>`
+      : `<circle cx="${f(px)}" cy="${f(py)}" r="10" fill="#00ff44" filter="url(#glow)"/><circle cx="${f(px)}" cy="${f(py)}" r="3" fill="#e8ffee"/>`;
   }
-  lights += `<rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" rx="5" fill="none" stroke="#00ff44" stroke-width="4" filter="url(#glow)" opacity=".7"/>`;
-  const pulse = { type: "pulse", min: 0.6, max: 1, speed: 6 };
+  lights += REAL
+    // Light-pipe gasket: a thin lit line in the trim, no bloom band.
+    ? `<rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" rx="5" fill="none" stroke="#39ff6e" stroke-width="1.3" opacity=".75"/>`
+    : `<rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" rx="5" fill="none" stroke="#00ff44" stroke-width="4" filter="url(#glow)" opacity=".7"/>`;
+  const pulse = REAL ? { type: "pulse", min: 0.75, max: 1, speed: 4 } : { type: "pulse", min: 0.6, max: 1, speed: 6 };
   return {
     box: [-72, -80, 150, 150],
     base: 1,
     layers: [
-      glowLayer("haloG", 160, pulse, 0.85),
+      REAL ? glowLayer("haloG", 88, pulse, 0.32) : glowLayer("haloG", 160, pulse, 0.85),
       { markup: `<g>${s}</g>` },
       { markup: `<g>${lights}</g>`, blend: "lighter", shade: false, anim: pulse },
     ],
@@ -150,15 +170,22 @@ function ammo() {
   s += line("M-10,-51H14", "#fff8d8", 1.4, 0.7);
   s += `</g>`;
   s += cartridge(-50, 56, 0.95) + cartridge(-36, 60, 0.9);
-  const spine = `<g transform="rotate(-8)"><path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffaa00" stroke-width="5" filter="url(#glow)"/>` +
-    `<path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffe0a0" stroke-width="1.6"/></g>`;
+  const REAL = isRealBuild();
+  const spine = REAL
+    // Round-count window: a lit amber strip let into the steel, faint spill.
+    ? `<g transform="rotate(-8)"><path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffaa00" stroke-width="3.4" opacity=".7" filter="url(#glow)"/>` +
+      `<path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffd27a" stroke-width="2"/></g>`
+    : `<g transform="rotate(-8)"><path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffaa00" stroke-width="5" filter="url(#glow)"/>` +
+      `<path d="M23,-36C25,-6 29,22 37,50" fill="none" stroke="#ffe0a0" stroke-width="1.6"/></g>`;
   return {
     box: [-64, -76, 130, 150],
     base: 1,
     layers: [
-      glowLayer("haloA", 100, { type: "pulse", min: 0.85, max: 1, speed: 3 }, 0.75),
+      REAL
+        ? glowLayer("haloA", 80, { type: "pulse", min: 0.85, max: 1, speed: 3 }, 0.4)
+        : glowLayer("haloA", 100, { type: "pulse", min: 0.85, max: 1, speed: 3 }, 0.75),
       { markup: `<g>${s}</g>` },
-      { markup: spine, blend: "lighter", shade: false, anim: { type: "pulse", min: 0.55, max: 1, speed: 4 } },
+      { markup: spine, blend: "lighter", shade: false, anim: { type: "pulse", min: REAL ? 0.7 : 0.55, max: 1, speed: 4 } },
     ],
   };
 }
@@ -286,22 +313,34 @@ function airlock() {
   }
 
   // Emissive: seam light, frame strip, lamps and the legend plate.
+  const REAL = isRealBuild();
+  if (REAL) {
+    // Stencilled legend and sill grime: a door that has been used.
+    s += `<g fill="none" stroke="#c9ced0" stroke-width="5" stroke-opacity=".55" stroke-linecap="square">` +
+      `<path d="M${-W + 24},-60h26M${-W + 24},-60v36h26M${-W + 24},-42h18M${-W + 62},-60l22,36M${-W + 84},-60l-22,36M${-W + 98},-60v36M${-W + 110},-60h24M${-W + 122},-60v36"/></g>`;
+    s += `<rect x="${-W}" y="${H - 60}" width="${W * 2}" height="60" fill="#000" opacity=".22"/>`;
+  }
   let lit = "";
-  lit += `<rect x="-5" y="${-H + 6}" width="10" height="${H * 2 - 12}" rx="4" fill="#00ffaa" filter="url(#glow)" opacity=".85"/>`;
+  lit += `<rect x="-5" y="${-H + 6}" width="10" height="${H * 2 - 12}" rx="4" fill="#00ffaa" filter="url(#glow)" opacity="${REAL ? ".5" : ".85"}"/>`;
   lit += `<rect x="-2" y="${-H + 8}" width="4" height="${H * 2 - 16}" rx="2" fill="#d8fff0"/>`;
-  lit += `<rect x="${-W - F * 0.42}" y="${-H - F * 0.42}" width="${(W + F * 0.42) * 2}" height="${(H + F * 0.42) * 2}" rx="3" fill="none" stroke="#00ffaa" stroke-width="4" filter="url(#glow)" opacity=".7"/>`;
+  lit += REAL
+    ? `<rect x="${-W - F * 0.42}" y="${-H - F * 0.42}" width="${(W + F * 0.42) * 2}" height="${(H + F * 0.42) * 2}" rx="3" fill="none" stroke="#5cffc4" stroke-width="2" opacity=".55"/>`
+    : `<rect x="${-W - F * 0.42}" y="${-H - F * 0.42}" width="${(W + F * 0.42) * 2}" height="${(H + F * 0.42) * 2}" rx="3" fill="none" stroke="#00ffaa" stroke-width="4" filter="url(#glow)" opacity=".7"/>`;
   for (let i = 0; i < 3; i++) {
     const y = -H + 40 + i * 60;
-    lit += `<circle cx="${-W - F * 0.7}" cy="${f(y)}" r="9" fill="#00ffaa" filter="url(#glow)"/>`;
+    const r = REAL ? 6 : 9;
+    lit += `<circle cx="${-W - F * 0.7}" cy="${f(y)}" r="${r}" fill="#00ffaa" filter="url(#glow)"/>`;
     lit += `<circle cx="${-W - F * 0.7}" cy="${f(y)}" r="4" fill="#eafff7"/>`;
-    lit += `<circle cx="${W + F * 0.7}" cy="${f(y)}" r="9" fill="#00ffaa" filter="url(#glow)"/>`;
+    lit += `<circle cx="${W + F * 0.7}" cy="${f(y)}" r="${r}" fill="#00ffaa" filter="url(#glow)"/>`;
     lit += `<circle cx="${W + F * 0.7}" cy="${f(y)}" r="4" fill="#eafff7"/>`;
   }
   return {
     box: [-210, -250, 420, 500],
     base: 1,
     layers: [
-      glowLayer("haloEx", 200, { type: "pulse", min: 0.7, max: 1, speed: 2.2 }, 0.4),
+      REAL
+        ? glowLayer("haloEx", 150, { type: "pulse", min: 0.8, max: 1, speed: 2.2 }, 0.2)
+        : glowLayer("haloEx", 200, { type: "pulse", min: 0.7, max: 1, speed: 2.2 }, 0.4),
       { markup: `<g>${s}</g>` },
       {
         markup: `<g>${lit}</g>`,
@@ -309,7 +348,7 @@ function airlock() {
         shade: false,
         anim: { type: "pulse", min: 0.65, max: 1, speed: 2.6 },
         // Interior sweep, replacing the hand-rolled scan bar.
-        scan: { rects: [[-W, -H, W * 2, H * 2]], color: "#9dffe0", speed: 90, alpha: 0.32 },
+        scan: { rects: [[-W, -H, W * 2, H * 2]], color: "#9dffe0", speed: 90, alpha: REAL ? 0.12 : 0.32 },
       },
     ],
   };
@@ -323,3 +362,171 @@ export const PICKUP_SPRITES = {
   damage2x: exotic(true),
   invuln: exotic(false),
 };
+
+// ---------------------------------------------------------------------------
+// Realistic set
+// ---------------------------------------------------------------------------
+
+/**
+ * Weapon drop: a rifle on its side rather than a glowing crate. Gunmetal
+ * receiver, polymer furniture, and the weapon colour (cyan) carried by the
+ * power cell and optic lens. Same box as the Modern crate.
+ */
+function realWeapon() {
+  let s = `<g transform="translate(4 0) rotate(-9 0 0) scale(1.08)">`;
+  // Stock, receiver, handguard, barrel.
+  s += path("M-64,-5L-34,-11V5H-40L-58,11H-64Z", "url(#polyF)", 1.2);
+  s += line("M-60,-3L-37,-8", "#8a9098", 0.9, 0.35);
+  s += rect(-34, -13, 46, 18, "url(#gunF)", 1.2, 2);
+  s += rect(12, -11, 32, 14, "url(#polyF)", 1.1, 2);
+  for (let i = 0; i < 4; i++) s += rect(15 + i * 7, -8, 4, 7, "#0c0e10", 0, 1);
+  s += rect(44, -8, 16, 5, "url(#barrelF)", 0.9, 1);
+  s += rect(58, -9.5, 7, 8, "url(#gunF)", 0.9, 1);
+  // Grip, magazine, trigger guard.
+  s += path("M-24,5H-13L-17,26L-27,24Z", "url(#polyF)", 1.1);
+  s += path("M-5,5H8L13,28L1,30Z", "url(#gunF)", 1.1);
+  s += line("M-4,7L1,28", "#9aa3ac", 0.8, 0.3);
+  s += `<path d="M-13,6C-13,14 -4,14 -4,6" fill="none" stroke="#1c2024" stroke-width="2"/>`;
+  // Optic on a rail.
+  s += rect(-30, -16, 38, 3, "#23282e", 0.8);
+  s += rect(-24, -26, 26, 10, "url(#gunF)", 1.1, 3);
+  s += rect(-27, -27, 5, 12, "#1a1e22", 0.8, 1.5);
+  // Upper-edge highlights: steel catching the key light.
+  s += line("M-33,-12H10M13,-10H42M-23,-25H0", "#dfe6ec", 0.9, 0.45);
+  s += line("M-30,-2H8", "#000", 1.4, 0.25);
+  s += `</g>`;
+  let lit = `<g transform="translate(4 0) rotate(-9 0 0) scale(1.08)">`;
+  lit += `<rect x="16" y="-5" width="24" height="3.4" rx="1.2" fill="#00ccff" opacity=".55" filter="url(#glow)"/>`;
+  lit += `<rect x="17" y="-4.6" width="22" height="2.4" rx="1" fill="#b8f4ff"/>`;
+  lit += `<circle cx="-26.5" cy="-21" r="3" fill="#00ccff" opacity=".5" filter="url(#glow)"/><circle cx="-26.5" cy="-21" r="1.6" fill="#d8f8ff"/>`;
+  lit += `</g>`;
+  return {
+    box: [-66, -64, 140, 118],
+    base: 1,
+    layers: [
+      glowLayer("haloC", 95, { type: "pulse", min: 0.85, max: 1, speed: 2.5 }, 0.38),
+      { markup: `<g>${s}</g>` },
+      { markup: lit, blend: "lighter", shade: false, anim: { type: "pulse", min: 0.7, max: 1, speed: 3.5 } },
+    ],
+  };
+}
+
+/**
+ * Exotic drop: a sealed containment canister. Steel end caps and struts,
+ * a glass tube whose charge glows the pickup's colour (red = damage, gold =
+ * invulnerability), and the glyph stencilled on the lower cap.
+ */
+function realExotic(isDmg) {
+  const core = isDmg ? "#ff3322" : "#ffcc33";
+  const hot = isDmg ? "#ffb09a" : "#fff0b0";
+  // Back half: interior of the tube, the rear of the caps.
+  let back = rect(-30, -62, 60, 124, "#0b0d10", 0, 6);
+  back += rect(-30, -62, 60, 124, "url(#tubeIn)", 0, 6);
+  // Charge column, drawn additively over the dark interior.
+  let lit = `<rect x="-19" y="-54" width="38" height="108" rx="10" fill="${core}" opacity=".55" filter="url(#glow)"/>`;
+  lit += `<rect x="-14" y="-52" width="28" height="104" rx="8" fill="${core}" opacity=".85"/>`;
+  lit += `<rect x="-5" y="-50" width="10" height="100" rx="5" fill="${hot}" opacity=".9"/>`;
+  // Front: glass, struts, caps, glyph.
+  let front = rect(-30, -62, 60, 124, "url(#glassR)", 0, 6);
+  front += line("M-22,-56V56", "#ffffff", 3, 0.28) + line("M20,-56V56", "#ffffff", 1, 0.18);
+  for (const x of [-34, 29]) front += rect(x, -62, 5, 124, "url(#barrelF)", 1, 1.5);
+  const cap = (y, h) =>
+    rect(-40, y, 80, h, "url(#capF)", 1.3, 4) +
+    rect(-40, y + h * 0.5 - 1.5, 80, 3, "#1a1d21", 0) +
+    line(`M-37,${y + 1.5}H37`, "#e6ecf0", 1, 0.5);
+  front += cap(-82, 22) + cap(60, 22);
+  for (const x of [-30, -10, 10, 30]) front += ell(x, -71, 2.2, 2.2, "#2a2e33", 0.6) + ell(x, 71, 2.2, 2.2, "#2a2e33", 0.6);
+  // Hazard band on the top cap, glyph on the bottom cap.
+  front += rect(-36, -79, 72, 5, isDmg ? "#8a2a1c" : "#9a7a22", 0);
+  const glyph = isDmg
+    ? "M-14,64C-14,60 -6,60 -6,64C-6,67 -14,69 -14,73H-5M1,65L10,74M10,65L1,74"
+    : "M0,63V75M-6,69H6";
+  front += `<path d="${glyph}" fill="none" stroke="#e8e4da" stroke-width="2.6" stroke-opacity=".85" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return {
+    box: [-100, -100, 200, 200],
+    base: 1,
+    layers: [
+      glowLayer(isDmg ? "haloR" : "haloY", 110, { type: "pulse", min: 0.7, max: 1, speed: 5 }, 0.34),
+      { markup: `<g>${back}</g>` },
+      { markup: `<g>${lit}</g>`, blend: "lighter", shade: false, anim: { type: "pulse", min: 0.72, max: 1, speed: 5 } },
+      { markup: `<g>${front}</g>` },
+    ],
+  };
+}
+
+/**
+ * Gear drop: a composite shoulder plate with worn edges and an amber status
+ * strip (loot colour). Realistic only; units match drawGearPickup's `size`.
+ */
+function realGear() {
+  let s = path("M-62,30L-46,-40C-30,-50 30,-50 46,-40L62,30C40,40 -40,40 -62,30Z", "url(#plateF)", 1.6);
+  s += path("M-46,-40C-30,-50 30,-50 46,-40L40,-18C24,-26 -24,-26 -40,-18Z", "url(#plateT)", 1.2);
+  s += line("M-54,14C-30,22 30,22 54,14", "#000", 2, 0.35);
+  s += line("M-44,-38C-28,-47 28,-47 44,-38", "#f2e6c8", 1.6, 0.5);
+  // Rivets, strap and buckle.
+  for (const x of [-40, -14, 14, 40]) s += ell(x, -8 + Math.abs(x) * 0.12, 2.6, 2.6, "#3a3226", 0.6);
+  s += rect(-9, 16, 18, 28, "url(#strapF)", 1, 2);
+  s += rect(-7, 24, 14, 9, "#6a6458", 0.8, 1.5);
+  let lit = `<path d="M-30,-2C-12,2 12,2 30,-2" fill="none" stroke="#ffb030" stroke-width="3" opacity=".55" filter="url(#glow)"/>`;
+  lit += `<path d="M-30,-2C-12,2 12,2 30,-2" fill="none" stroke="#ffe0a0" stroke-width="1.4"/>`;
+  return {
+    box: [-80, -80, 160, 160],
+    base: 1,
+    layers: [
+      glowLayer("haloA", 80, { type: "pulse", min: 0.8, max: 1, speed: 3 }, 0.28),
+      { markup: `<g>${s}</g>` },
+      { markup: lit, blend: "lighter", shade: false, anim: { type: "pulse", min: 0.7, max: 1, speed: 3 } },
+    ],
+  };
+}
+
+const lin = (id, stops, x1, y1, x2, y2) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">` +
+  stops.map((c, i) => `<stop offset="${f(i / (stops.length - 1))}" stop-color="${c}"/>`).join("") +
+  `</linearGradient>`;
+
+// Placed ahead of the graded Modern defs, so these ids win.
+const REAL_PICKUP_DEFS =
+  // Med kit: off-white moulded plastic, not a lit white panel.
+  grad("caseF", ["#dedbd2", "#c9c5ba", "#a29d91", "#6f6b62"]) +
+  grad("caseS", ["#8c8880", "#55524c"], "1", ".4") +
+  grad("caseT", ["#e8e5dc", "#c6c2b8"], "1", "0") +
+  grad("cross", ["#c24a40", "#a8261e", "#861a14", "#5a0e0a"]) +
+  grad("gunF", ["#6c737b", "#474d54", "#2c3035", "#181b1e"]) +
+  grad("polyF", ["#3c3f42", "#2a2c2f", "#1b1c1e", "#0e0f10"]) +
+  lin("barrelF", ["#8e959c", "#50565c", "#2a2e32"], 0, 0, 0, 1) +
+  lin("capF", ["#9aa0a6", "#6a7077", "#3e4349", "#23272b"], 0, 0, 0, 1) +
+  lin("tubeIn", ["#000", "#20262c", "#000"], 0, 0, 1, 0) +
+  `<linearGradient id="glassR" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#cfe2ee" stop-opacity=".32"/>` +
+  `<stop offset=".2" stop-color="#cfe2ee" stop-opacity=".06"/><stop offset=".8" stop-color="#cfe2ee" stop-opacity=".04"/>` +
+  `<stop offset="1" stop-color="#cfe2ee" stop-opacity=".22"/></linearGradient>` +
+  grad("plateF", ["#8a8272", "#6a6354", "#4a4539", "#2c2922"]) +
+  grad("plateT", ["#a39a86", "#7c7462"], "1", "0") +
+  grad("strapF", ["#3a3630", "#23201c"]) +
+  halo("haloG", "#00ff44", [0.5, 0.16]) +
+  halo("haloA", "#ffaa00", [0.5, 0.14]) +
+  halo("haloC", "#00ccff", [0.5, 0.14]) +
+  halo("haloR", "#ff4422", [0.5, 0.14]) +
+  halo("haloY", "#ffcc44", [0.5, 0.14]) +
+  halo("haloEx", "#00ffaa", [0.4, 0.12]);
+
+let realPickups = null;
+
+/** Realistic pickup set, built on first use and cached: { defs, sprites }. */
+export function buildRealisticPickups() {
+  if (realPickups) return realPickups;
+  const sprites = withRealistic(() => ({
+    exit: airlock(),
+    health: health(),
+    ammo: ammo(),
+    weapon: realWeapon(),
+    gear: realGear(),
+    damage2x: realExotic(true),
+    invuln: realExotic(false),
+  }));
+  // Pickups are small: finer grime, lighter wear, colour kept a touch richer
+  // so the colour coding still reads at a glance.
+  for (const key in sprites) realizeSprite(sprites[key], 1, { sat: 0.76, grime: 0.26, scuff: 0.16 });
+  realPickups = { defs: REAL_PICKUP_DEFS + realSurfaceDefs(0.05, "0.08 0.6") + gradeMarkup(DEFS, 0.72), sprites };
+  return realPickups;
+}

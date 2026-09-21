@@ -14,7 +14,7 @@
  * uses the Canvas2D software renderer (Uint32Array path).
  */
 
-import { isModernArt } from "../art-style.js";
+import { isModernArt, isRealisticArt } from "../art-style.js";
 
 // ── Shader sources (inlined for zero-fetch boot) ──────────────────
 
@@ -147,6 +147,7 @@ uniform int u_numLights;
 uniform vec4 u_lights[16];     // x, y, radius, intensity
 uniform vec3 u_lightColors[16];
 uniform vec3 u_glowColors[8];
+uniform bool u_realistic;      // physically based lighting profile
 
 out vec4 fragColor;
 
@@ -209,6 +210,67 @@ void main() {
       glow = u_glowColors[gi] * g;
     }
   }
+  if (u_realistic) {
+    // Lights multiply the surface colour instead of adding over it, so a
+    // light pool reads as illuminated concrete rather than a coloured decal.
+    // Low ambient leaves the rest of the deck to fall into shadow.
+    vec3 albedo = color;
+    float occl = pow(ao, 1.7);
+    float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+    vec3 lit = albedo * (isFloor ? 0.78 : 0.62) * occl + glow * (isFloor ? 0.8 : 0.3);
+    if (!isFloor) {
+      // Ceiling lamp panels are light sources, not surfaces: keep them at full
+      // brightness (and a little over, for bloom) instead of shading them.
+      lit += albedo * smoothstep(0.5, 0.85, lum) * 0.9;
+    } else {
+      // Lamp bounce: the ceiling shares the floor's world coordinates, so a
+      // heavily blurred ceiling sample at this point is the lamp directly
+      // overhead. Its emissive part pools soft light onto the deck under it.
+      // Five wide taps at a coarse mip spread the lamp into a soft pool
+      // rather than mirroring its hard rectangle onto the deck.
+      vec3 over = texture(u_ceilTex, wp, 3.5).rgb * 0.4
+        + texture(u_ceilTex, wp + vec2(0.3, 0.0), 3.5).rgb * 0.15
+        + texture(u_ceilTex, wp - vec2(0.3, 0.0), 3.5).rgb * 0.15
+        + texture(u_ceilTex, wp + vec2(0.0, 0.3), 3.5).rgb * 0.15
+        + texture(u_ceilTex, wp - vec2(0.0, 0.3), 3.5).rgb * 0.15;
+      float emit = smoothstep(0.18, 0.6, dot(over, vec3(0.2126, 0.7152, 0.0722)));
+      lit += albedo * over * emit * 1.0 * occl;
+    }
+    // Floor roughness from the texture itself: bright plating is polished,
+    // dark grime is matte, which breaks the specular up across the deck.
+    float gloss = mix(6.0, 48.0, smoothstep(0.08, 0.45, lum));
+    // Schlick Fresnel against a camera ~0.5 units above the deck: grazing
+    // rows far away reflect far more than the floor at the player's feet.
+    float cosV = 0.5 / sqrt(rowDist * rowDist + 0.25);
+    float fres = 0.04 + 0.96 * pow(1.0 - cosV, 5.0);
+    vec2 toCamR = normalize(u_camPos - wp);
+    for (int i = 0; i < 16; i++) {
+      if (i >= u_numLights) break;
+      vec4 L = u_lights[i];
+      vec2 dl = L.xy - wp;
+      float d = length(dl);
+      float reach = L.z * (isFloor ? 2.2 : 1.4);
+      if (d >= reach) continue;
+      // Inverse-square with a smooth window so every light still ends at its
+      // authored radius instead of lighting the whole level faintly.
+      float x = d / reach;
+      float win = clamp(1.0 - x * x * x * x, 0.0, 1.0);
+      float att = win * win / (1.0 + 6.0 * (d * d) / (L.z * L.z));
+      vec3 lc = u_lightColors[i] * L.w;
+      lit += albedo * lc * att * (isFloor ? 1.6 : 1.1) * occl;
+      if (isFloor && d > 0.001) {
+        float s = max(0.0, dot(dl / d, -toCamR));
+        lit += lc * pow(s, gloss) * att * fres * 2.2;
+      }
+    }
+    // Exponential-squared fog: clear up close, thick in the distance.
+    float fd = rowDist * u_fogDensity;
+    float fogR = u_fogMax * (1.0 - exp(-fd * fd * 0.6));
+    lit = mix(lit, mix(u_fogNear, u_fogFar, fogR) * 0.8, fogR);
+    fragColor = vec4(clamp(lit, 0.0, 1.0), 1.0);
+    return;
+  }
+
   color = color * ao + glow * (isFloor ? 1.0 : 0.45);
 
   vec2 toCam = normalize(u_camPos - wp);
@@ -249,6 +311,8 @@ uniform bool u_enableCA;
 uniform bool u_enableGrain;
 uniform vec3 u_gradeColor;     // per-act color grade tint
 uniform bool u_modern;         // Modern art style grade + vignette
+uniform bool u_realistic;      // filmic tonemap + photographic grade
+uniform bool u_flipScene;      // scene uploaded top-row-first from a 2D canvas
 
 out vec4 fragColor;
 
@@ -258,7 +322,11 @@ float rand(vec2 co) {
 }
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 fc = gl_FragCoord.xy / u_resolution;
+  // Canvas rows arrive top-down; flip here rather than with UNPACK_FLIP_Y on
+  // upload, which keeps the upload on the GPU fast path. Everything below is
+  // symmetric in y (vignette, grain, bloom taps), so only sampling flips.
+  vec2 uv = u_flipScene ? vec2(fc.x, 1.0 - fc.y) : fc;
 
   vec3 color;
 
@@ -287,7 +355,7 @@ void main() {
       }
     }
     bloom /= 25.0;
-    color += bloom * 0.15;
+    color += bloom * (u_realistic ? 0.24 : 0.15);
   }
 
   // Film grain
@@ -296,7 +364,23 @@ void main() {
     color += grain;
   }
 
-  if (u_modern) {
+  if (u_realistic) {
+    // Filmic: decode to linear, expose, ACES (Narkowicz fit), re-encode. The
+    // shoulder rolls highlights off like film instead of clipping them flat.
+    vec3 lin = pow(max(color, 0.0), vec3(2.2)) * 1.65;
+    lin = clamp((lin * (2.51 * lin + 0.03)) / (lin * (2.43 * lin + 0.59) + 0.14), 0.0, 1.0);
+    color = pow(lin, vec3(1.0 / 2.2));
+    // Pull saturation down; the stylised palettes read as paint otherwise.
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(vec3(lum), color, 0.8);
+    // Split tone: cool shadows, warm highlights, the act colour only a hint.
+    color += mix(vec3(-0.012, 0.0, 0.018), vec3(0.028, 0.014, -0.018), smoothstep(0.15, 0.75, lum));
+    color += u_gradeColor * 0.04 * (1.0 - smoothstep(0.0, 0.25, lum));
+    // Lens falloff rather than an ink frame.
+    vec2 q = uv - 0.5;
+    q.x *= u_resolution.x / u_resolution.y;
+    color *= mix(1.0, 0.6, smoothstep(0.06, 0.5, dot(q, q)));
+  } else if (u_modern) {
     // Modern grade: ink-dark vignette matching the HUD frame, act colour
     // lifted into the shadows only, and a gentle S-curve for inked contrast.
     vec2 q = uv - 0.5;
@@ -449,6 +533,8 @@ export class GLRenderer {
       enableGrain: gl.getUniformLocation(pp, 'u_enableGrain'),
       gradeColor: gl.getUniformLocation(pp, 'u_gradeColor'),
       modern: gl.getUniformLocation(pp, 'u_modern'),
+      realistic: gl.getUniformLocation(pp, 'u_realistic'),
+      flipScene: gl.getUniformLocation(pp, 'u_flipScene'),
     };
   }
 
@@ -575,7 +661,7 @@ export class GLRenderer {
       yShift: u('u_yShift'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
       mapSize: u('u_mapSize'), fogNear: u('u_fogNear'), fogFar: u('u_fogFar'), fogMax: u('u_fogMax'),
       fogDensity: u('u_fogDensity'), numLights: u('u_numLights'), lights: u('u_lights'),
-      lightColors: u('u_lightColors'), glowColors: u('u_glowColors'),
+      lightColors: u('u_lightColors'), glowColors: u('u_glowColors'), realistic: u('u_realistic'),
     };
     this._lightBuf = new Float32Array(64);
     this._lightColorBuf = new Float32Array(48);
@@ -659,6 +745,7 @@ export class GLRenderer {
     gl.uniform1f(u.fogDensity, env.fogDensity);
     gl.uniform3fv(u.glowColors, env.glowGL);
     gl.uniform2i(u.mapSize, this._envMapW, this._envMapH);
+    gl.uniform1i(u.realistic, isRealisticArt() ? 1 : 0);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.modernFloorTex);
@@ -724,6 +811,8 @@ export class GLRenderer {
     gl.uniform1i(this.u_postfx.enableGrain, enableGrain ? 1 : 0);
     gl.uniform3f(this.u_postfx.gradeColor, gradeColor[0], gradeColor[1], gradeColor[2]);
     gl.uniform1i(this.u_postfx.modern, isModernArt() ? 1 : 0);
+    gl.uniform1i(this.u_postfx.realistic, isRealisticArt() ? 1 : 0);
+    gl.uniform1i(this.u_postfx.flipScene, 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -745,14 +834,24 @@ export class GLRenderer {
     const w = this.width;
     const h = this.height;
 
-    // Upload the Canvas2D content as the scene texture. Canvas rows run
-    // top-down but the shader samples with gl_FragCoord (bottom-up), so the
-    // upload must flip or the whole frame renders upside down. Reset after so
-    // the floor/ceiling pixel uploads keep their own orientation.
+    // Upload the Canvas2D frame as the scene texture. This runs every frame
+    // and was the single largest cost in the game (~6 ms at 1440x900 @2x):
+    // a flipped, un-premultiplied, colour-converted upload makes the browser
+    // read the canvas back to the CPU. Keep every unpack option on the GPU
+    // fast path — no flip (the shader flips instead, u_flipScene), alpha left
+    // premultiplied as the canvas stores it, no colour-space conversion — and
+    // write into the texture already allocated at this size.
     gl.bindTexture(gl.TEXTURE_2D, this.sceneFBO.texture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    if (srcCanvas.width === w && srcCanvas.height === h) {
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
+    }
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.BROWSER_DEFAULT_WEBGL);
 
     // Render post-FX to the GL canvas (default framebuffer)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -772,6 +871,8 @@ export class GLRenderer {
     gl.uniform1i(this.u_postfx.enableGrain, enableGrain ? 1 : 0);
     gl.uniform3f(this.u_postfx.gradeColor, gradeColor[0], gradeColor[1], gradeColor[2]);
     gl.uniform1i(this.u_postfx.modern, isModernArt() ? 1 : 0);
+    gl.uniform1i(this.u_postfx.realistic, isRealisticArt() ? 1 : 0);
+    gl.uniform1i(this.u_postfx.flipScene, 1);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);

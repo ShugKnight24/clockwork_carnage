@@ -983,6 +983,44 @@ function modernClock() {
   };
 }
 
+/**
+ * Modern (realistic) clock: the same pocket watch and portal, in aged brass and
+ * steel under the key light, a glass crystal that reflects, and a portal that
+ * reads as light in haze rather than drawn rings. Built on first use only.
+ */
+async function realClock() {
+  const { realizeModel, sheen } = await import("../../src/rendering/svg-art/models/realistic.js");
+  const src = modernClock();
+  // Crystal: a broad soft reflection, a narrow window streak near the top-left
+  // of the bezel, and the glass darkening toward its rim.
+  const glass =
+    `<defs><clipPath id="rgl"><circle r="68.5"/></clipPath>` +
+    `<linearGradient id="rgr" x1="-60" y1="-60" x2="50" y2="60" gradientUnits="userSpaceOnUse">` +
+    `<stop offset="0" stop-color="#e8eef2" stop-opacity=".16"/><stop offset=".42" stop-color="#e8eef2" stop-opacity=".03"/>` +
+    `<stop offset=".6" stop-color="#e8eef2" stop-opacity="0"/><stop offset="1" stop-color="#e8eef2" stop-opacity=".07"/></linearGradient>` +
+    `<radialGradient id="rgv"><stop offset=".78" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient></defs>` +
+    `<g clip-path="url(#rgl)"><circle r="68.5" fill="url(#rgv)"/><circle r="68.5" fill="url(#rgr)"/>` +
+    `<path d="M-52 -38 C-42 -54 -26 -63 -8 -65 L-7 -61 C-24 -59 -38 -51 -47 -35 Z" fill="#f4f7f9" opacity=".3"/>` +
+    `<path d="M-57 -24 C-56 -29 -54 -33 -52 -36" stroke="#ffffff" stroke-width="1" stroke-opacity=".55" fill="none" stroke-linecap="round"/></g>`;
+  const EMISSIVE = new Set([0, 1, 2, 3, 13, 14]);
+  const model = realizeModel(src, {
+    filters: { u: 1.27, spec: 0.6, grime: 0.28, seed: 21, light: "#fff2e0" },
+    materials: {
+      brass: sheen("brass", "#8a7045", "#e2d1a6", "#4a3a1f", "#18120a", 0.16, `x1="0" y1="0" x2="1" y2="1"`),
+      brassDk: sheen("brassDk", "#5e4a2c", "#a8936a", "#302513", "#0f0b05", 0.18, `x1="0" y1="0" x2="1" y2="1"`),
+      steel: sheen("steel", "#7a8288", "#d6dbde", "#3c4247", "#121416", 0.2, `x1="0" y1="0" x2="1" y2=".4"`),
+      face:
+        `<radialGradient id="face" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#2a3036"/>` +
+        `<stop offset=".45" stop-color="#171b20"/><stop offset="1" stop-color="#07080a"/></radialGradient>`,
+    },
+    material: (l, i) => (EMISSIVE.has(i) ? "emissive" : i === 12 ? "plain" : "metal"),
+    over: [{ markup: glass }],
+  });
+  // The portal's drawn rings recede into haze; its core light stays.
+  for (const i of [1, 2, 3]) model.layers[i] = { ...model.layers[i], opacity: (model.layers[i].opacity ?? 1) * 0.55 };
+  return model;
+}
+
 export class TitleClock extends HTMLElement {
   constructor() {
     super();
@@ -990,8 +1028,11 @@ export class TitleClock extends HTMLElement {
   }
 
   connectedCallback() {
-    this._unsubscribe ??= attachArtSwitch(this, template, async () =>
-      modelHtml("clock", modernClock(), { x: 350, y: 195 }),
+    this._unsubscribe ??= attachArtSwitch(
+      this,
+      template,
+      async () => modelHtml("clock", modernClock(), { x: 350, y: 195 }),
+      async () => modelHtml("clock-real", await realClock(), { x: 350, y: 195 }),
     );
   }
 

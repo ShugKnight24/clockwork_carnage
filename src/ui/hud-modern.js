@@ -8,9 +8,13 @@
  * cached by modern-ui-kit; per frame this only fills bars and draws numbers.
  */
 
+// Drawn through the HUD skin: Modern forwards to the UI kit unchanged,
+// Realistic gets thin strokes and soft plates (see hud-skin.js).
 import {
   UI,
+  HT,
   uiFont,
+  track,
   drawPanel,
   drawBar,
   drawCaption,
@@ -18,7 +22,7 @@ import {
   drawBrackets,
   inkText,
   pixelRatio,
-} from "./modern-ui-kit.js";
+} from "./hud-skin.js";
 import { drawPortrait } from "./portrait.js";
 import { getWeaponSprite } from "../assets/loader.js";
 import { WEAPONS } from "../../js/data.js";
@@ -44,6 +48,7 @@ function label(ctx, text, x, y, size, color, align = "left", spacing = 1) {
   ctx.font = uiFont(size, 700);
   ctx.fillStyle = color;
   ctx.textAlign = align;
+  if (spacing) spacing = track(size, spacing);
   if (spacing) ctx.letterSpacing = `${spacing}px`;
   ctx.fillText(text, x, y);
   if (spacing) ctx.letterSpacing = "0px";
@@ -90,7 +95,7 @@ function healSweep(ctx, x, y, w, h) {
   if (k < 0) return;
   const head = M.healFrom + (M.healTo - M.healFrom) * easeOut(Math.min(1, k * 1.8));
   if (head <= M.healFrom) return;
-  ctx.fillStyle = `rgba(240,255,246,${(0.9 * (1 - k)).toFixed(3)})`;
+  ctx.fillStyle = `rgba(${UI.healCore},${(0.9 * (1 - k)).toFixed(3)})`;
   ctx.fillRect(x + w * M.healFrom, y, w * (head - M.healFrom), h);
   ctx.fillStyle = `rgba(255,255,255,${(1 - k).toFixed(3)})`;
   ctx.fillRect(x + w * head - 1.5, y - 2, 3, h + 4);
@@ -101,7 +106,7 @@ function shieldShards(ctx, x, y, w) {
   const k = since(M.shieldBreakAt, 650);
   if (k < 0 || !M.shards) return;
   const e = easeOut(k);
-  ctx.fillStyle = `rgba(150,200,255,${(1 - k).toFixed(3)})`;
+  ctx.fillStyle = `rgba(${UI.shardRGB},${(1 - k).toFixed(3)})`;
   for (const sh of M.shards) {
     const sx = x + w * sh.t + (sh.t - 0.5) * sh.v * e;
     const sy = y - sh.v * 0.35 * e + 40 * k * k;
@@ -125,7 +130,7 @@ function kickNumber(ctx, str, x, y, size, color, align) {
   ctx.translate(x, y);
   const sc = 1 + 0.1 * kick * kick;
   ctx.scale(sc, sc);
-  number(ctx, str, 0, -kick * 1.5, size, kick > 0.55 ? "#ffffff" : color, align);
+  number(ctx, str, 0, -kick * 1.5, size, kick > 0.55 ? UI.flash : color, align);
   ctx.restore();
 }
 
@@ -185,7 +190,7 @@ export function drawTopLeftStack(game, ctx, fs) {
       const cx = x + pw - 13;
       label(ctx, "TIME", cx, ly, lblSize, UI.textDim, "right");
       ctx.font = uiFont(Math.round(15 * fs), 700, true);
-      ctx.fillStyle = "#b9d4ea";
+      ctx.fillStyle = UI.clock;
       ctx.textAlign = "right";
       ctx.fillText(clock, cx, vy - 1);
     }
@@ -236,9 +241,9 @@ export function drawTopLeftStack(game, ctx, fs) {
     const hot = mHud.heat > 75;
     drawPanel(ctx, x, y, pw, ph, { accent: hot ? UI.crimson : UI.amber, chamfer: 9 });
     label(ctx, "REACTOR RUN", x + 13, y + 16 * fs, Math.round(9 * fs), UI.amber);
-    number(ctx, `${mHud.distance}m`, x + 13, y + 38 * fs, Math.round(22 * fs), "#ffe2a8");
+    number(ctx, `${mHud.distance}m`, x + 13, y + 38 * fs, Math.round(22 * fs), HT.realistic ? UI.text : "#ffe2a8");
     const heatPct = mHud.heat / 100;
-    const heatColor = hot ? UI.crimson : mHud.heat > 50 ? UI.amber : "#ff8a3a";
+    const heatColor = hot ? UI.crimson : mHud.heat > 50 ? UI.amber : HT.realistic ? UI.textDim : "#ff8a3a";
     drawBar(ctx, x + 13, y + 46 * fs, pw - 26, Math.round(6 * fs), heatPct, heatColor, { segments: 10, glow: hot ? 0.5 : 0 });
     label(ctx, `HEAT ${mHud.heat}%`, x + pw - 13, y + 16 * fs, Math.round(9 * fs), heatColor, "right");
     if (braking) label(ctx, "▼ BRAKING", x + 13, y + 68 * fs, Math.round(10 * fs), "#ff6a4a");
@@ -263,8 +268,8 @@ function drawKillsPill(game, ctx, w, fs) {
     ctx.globalAlpha = 1;
   }
   ctx.textBaseline = "middle";
-  label(ctx, "KILLS", kx + 12, ky + ph / 2 + 1, Math.round(9 * fs), done ? UI.green : "#ff8a96");
-  number(ctx, valStr, kx + pw - 12, ky + ph / 2 + 1, valSize, pop >= 0 && pop < 0.5 ? "#ffffff" : UI.text, "right");
+  label(ctx, "KILLS", kx + 12, ky + ph / 2 + 1, Math.round(9 * fs), done ? UI.green : UI.critSoft);
+  number(ctx, valStr, kx + pw - 12, ky + ph / 2 + 1, valSize, pop >= 0 && pop < 0.5 ? UI.flash : UI.text, "right");
   ctx.textBaseline = "alphabetic";
 }
 
@@ -288,7 +293,7 @@ export function drawBossBar(game, ctx, w, fs, py = 18) {
   const ph = 40;
   const pct = Math.max(0, boss.health / boss.maxHealth);
   const form = boss.def.form || 1;
-  const color = form === 3 ? "#ff1f45" : form === 2 ? "#ff2a5f" : UI.crimson;
+  const color = form === 3 ? UI.bossForm3 : form === 2 ? UI.bossForm2 : UI.crimson;
   drawPanel(ctx, px, py, pw, ph, { accent: UI.crimson, chamfer: 10 });
   drawCaption(ctx, w / 2, py - 9, boss.def.name || "BOSS", { size: Math.round(11 * fs), scheme: "crimson", align: "center" });
   drawBar(ctx, px + 14, py + 16, barW, barH, pct, color, { segments: 20, glow: 0.45 });
@@ -296,7 +301,7 @@ export function drawBossBar(game, ctx, w, fs, py = 18) {
   ctx.fillStyle = UI.textDim;
   ctx.textAlign = "right";
   ctx.fillText(`${Math.ceil(boss.health)} / ${boss.maxHealth}`, px + pw - 14, py + ph - 5);
-  label(ctx, `FORM ${form}`, px + 14, py + ph - 5, Math.round(8 * fs), "#ff8a96");
+  label(ctx, `FORM ${form}`, px + 14, py + ph - 5, Math.round(8 * fs), UI.critSoft);
 }
 
 function drawVitals(game, ctx, w, h, f, fs) {
@@ -329,10 +334,10 @@ function drawVitals(game, ctx, w, h, f, fs) {
 
   // HP number block.
   const nx = plateX + 14;
-  label(ctx, "HP", nx, plateY + 10 + Math.round(8 * fs), Math.round(8 * fs), low ? "#ff8a96" : UI.textDim);
+  label(ctx, "HP", nx, plateY + 10 + Math.round(8 * fs), Math.round(8 * fs), low ? UI.critSoft : UI.textDim);
   const hit = since(M.hitAt, 180);
   number(ctx, `${Math.ceil(p.health)}`, nx + (hit >= 0 ? Math.sin(hit * Math.PI * 3) * (1 - hit) * 3 : 0), plateY + plateH - 9, Math.round(24 * fs),
-    hit >= 0 && hit < 0.5 ? "#ffffff" : low ? (pulse(game, 0.012) > 0.5 ? UI.crimson : "#ffd0d6") : UI.text);
+    hit >= 0 && hit < 0.5 ? UI.flash : low ? (pulse(game, 0.012) > 0.5 ? UI.crimson : UI.critPale) : UI.text);
 
   // Bars column.
   const bx = plateX + 14 + numBlockW;
@@ -340,7 +345,7 @@ function drawVitals(game, ctx, w, h, f, fs) {
   let by = plateY + 9;
   if (hasShield) {
     const sp = p.shield / p.maxShield;
-    drawBar(ctx, bx, by, bw, thinH, sp, p.shield < p.maxShield ? "#4f8dff" : "#7fb6ff", { segments: 0, edge: sp < 1 });
+    drawBar(ctx, bx, by, bw, thinH, sp, p.shield < p.maxShield ? UI.shield : HT.realistic ? UI.shieldFull : "#7fb6ff", { segments: 0, edge: sp < 1 });
     shieldShards(ctx, bx, by, bw);
     by += thinH + 3;
   }
@@ -357,7 +362,7 @@ function drawVitals(game, ctx, w, h, f, fs) {
   const showChrono = chronoPct > 0.005 || p.chronoActive;
   const active = p.isSprinting || p.isDashing;
   const stW = showChrono ? Math.round(bw * 0.58) : bw;
-  const stColor = p.isDashing ? "#7ff6ff" : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson;
+  const stColor = p.isDashing ? UI.dash : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson;
   drawBar(ctx, bx, by, stW, thinH, staminaPct, stColor, { glow: active ? 0.5 : 0, edge: false });
   const ty = by + thinH + 4 + lblSize - 1;
   if (staminaPct < 0.99 || active) {
@@ -367,10 +372,11 @@ function drawVitals(game, ctx, w, h, f, fs) {
   if (showChrono) {
     const cX = bx + stW + 8;
     const cW = bw - stW - 8;
-    const cColor = p.chronoActive ? "#c77dff" : chronoPct >= 0.15 ? UI.violet : "#5d4488";
+    const cColor = p.chronoActive ? UI.chrono : chronoPct >= 0.15 ? UI.violet : UI.chronoDim;
+    const cLabel = HT.realistic ? UI.textDim : "#8f7ab8";
     drawBar(ctx, cX, by, cW, thinH, chronoPct, cColor, { glow: p.chronoActive ? 0.6 : 0, edge: false });
-    label(ctx, p.chronoActive ? "SHIFT" : "CHRONO", cX, ty, lblSize, p.chronoActive ? "#d9a8ff" : "#8f7ab8");
-    label(ctx, `${Math.floor(chronoPct * 100)}%`, cX + cW, ty, lblSize, "#8f7ab8", "right", 0);
+    label(ctx, p.chronoActive ? "SHIFT" : "CHRONO", cX, ty, lblSize, p.chronoActive ? UI.chronoText : cLabel);
+    label(ctx, `${Math.floor(chronoPct * 100)}%`, cX + cW, ty, lblSize, cLabel, "right", 0);
   }
 
   if (low) {
@@ -428,15 +434,15 @@ function drawAmmo(game, ctx, w, h, f, fs) {
   const ph = Math.round(numSize + 30 * fs);
   const px = w - pw - 12;
   const py = h - ph - 12;
-  drawPanel(ctx, px, py, pw, ph, { accent: low ? UI.crimson : UI.amber, chamfer: 12 });
+  drawPanel(ctx, px, py, pw, ph, { accent: HT.realistic ? (low ? UI.amber : UI.accent) : low ? UI.crimson : UI.amber, chamfer: 12 });
   if (wep) {
-    ctx.fillStyle = wep.color;
+    ctx.fillStyle = HT.realistic ? UI.accent : wep.color;
     ctx.fillRect(px + 12, py + 9, 3, Math.round(11 * fs));
     label(ctx, wep.name.toUpperCase(), px + 20, py + 9 + Math.round(10 * fs), Math.round(10 * fs), UI.text);
   }
   label(ctx, low ? "LOW" : "AMMO", px + 12, py + ph - 10, Math.round(9 * fs),
-    low ? (pulse(game, 0.01) > 0.5 ? UI.crimson : "#ff8a96") : UI.textDim);
-  kickNumber(ctx, `${ammo}`, px + pw - 12, py + ph - 8, numSize, low ? "#ff5a6e" : "#ffe3a3", "right");
+    low ? (pulse(game, 0.01) > 0.5 ? (HT.realistic ? UI.amber : UI.crimson) : HT.realistic ? UI.ammoLowPale : UI.critSoft) : UI.textDim);
+  kickNumber(ctx, `${ammo}`, px + pw - 12, py + ph - 8, numSize, low ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo, "right");
 }
 
 // ─── Combat cues (all layouts) ──────────────────────────────────────────────
@@ -471,12 +477,22 @@ export function drawModernCombatCues(game, ctx, w, h, barH = 0) {
     ctx.lineTo(-10, 6);
     ctx.lineTo(-22, 6);
     ctx.closePath();
-    ctx.lineJoin = "miter";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = UI.ink;
-    ctx.stroke();
-    ctx.fillStyle = UI.crimson;
-    ctx.fill();
+    if (HT.outline) {
+      ctx.lineJoin = "miter";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = UI.ink;
+      ctx.stroke();
+      ctx.fillStyle = UI.crimson;
+      ctx.fill();
+    } else {
+      // Realistic: a translucent wedge with a hairline edge, no ink.
+      ctx.fillStyle = `rgba(${UI.critRGB},0.35)`;
+      ctx.fill();
+      ctx.lineJoin = "miter";
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = UI.crimson;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -487,7 +503,7 @@ export function drawModernCombatCues(game, ctx, w, h, barH = 0) {
     const m = 14;
     const len = Math.round(Math.min(w, viewH) * 0.09);
     ctx.globalAlpha = a;
-    drawBrackets(ctx, m, m, w - m * 2, viewH - m * 2, UI.ink, len, 6);
+    if (HT.outline) drawBrackets(ctx, m, m, w - m * 2, viewH - m * 2, UI.ink, len, 6);
     drawBrackets(ctx, m, m, w - m * 2, viewH - m * 2, UI.crimson, len, 3);
     ctx.globalAlpha = 1;
   }
@@ -504,9 +520,9 @@ export function drawModernDamageNumber(ctx, dn, x, y, large) {
     inkText(ctx, `${dn.value}`, x, y, UI.gold, 4);
   } else if (dn.head) {
     ctx.font = uiFont(f + 2, 800);
-    inkText(ctx, `${dn.value}`, x, y, "#ff8a3a", 4);
+    inkText(ctx, `${dn.value}`, x, y, HT.realistic ? UI.amber : "#ff8a3a", 4);
     ctx.font = uiFont(large ? 11 : 10, 800);
-    inkText(ctx, "HEADSHOT", x, y - (large ? 20 : 17), "#ffd0a0", 3);
+    inkText(ctx, "HEADSHOT", x, y - (large ? 20 : 17), HT.realistic ? UI.ammoLowPale : "#ffd0a0", 3);
   } else {
     ctx.font = uiFont(f - 3, 700);
     inkText(ctx, `${dn.value}`, x, y, "#ffffff", 3);
@@ -532,10 +548,12 @@ export function drawModernBossNameCard(ctx, card, elapsed, w, h) {
   ctx.save();
   ctx.globalAlpha = alpha;
   drawPanel(ctx, w / 2 - bw / 2, cy - bh / 2, bw, bh, { variant: "menu", accent: UI.crimson, chamfer: 16 });
-  ctx.fillStyle = "rgba(255,42,74,0.16)";
-  ctx.fillRect(w / 2 - bw / 2 + 2, cy - bh / 2 + 2, bw - 4, bh - 4);
+  if (HT.outline) {
+    ctx.fillStyle = "rgba(255,42,74,0.16)";
+    ctx.fillRect(w / 2 - bw / 2 + 2, cy - bh / 2 + 2, bw - 4, bh - 4);
+  }
   const jitter = (Math.sin(elapsed * 0.04) * 2) | 0;
-  drawTitle(ctx, card.title, w / 2 + jitter, cy + 8, 40, UI.crimson, { fillTop: "#fff1f3", fillBottom: "#ffb3be" });
+  drawTitle(ctx, card.title, w / 2 + jitter, cy + 8, 40, UI.crimson, HT.realistic ? {} : { fillTop: "#fff1f3", fillBottom: "#ffb3be" });
   if (card.subtitle) {
     drawCaption(ctx, w / 2, cy + bh / 2 - 12, card.subtitle, { size: 12, scheme: "crimson", align: "center" });
   }
@@ -545,7 +563,8 @@ export function drawModernBossNameCard(ctx, card, elapsed, w, h) {
 /** Arena "stage cleared" banner. */
 export function drawModernStageCleared(game, ctx, w, cy, large) {
   const countSecs = Math.ceil(game.arenaClearTimer);
-  drawTitle(ctx, "STAGE CLEARED", w / 2, cy + (large ? 4 : 0), large ? 46 : 28, UI.green, { fillTop: "#f2fff6", fillBottom: "#8fe8b0" });
+  drawTitle(ctx, "STAGE CLEARED", w / 2, cy + (large ? 4 : 0), large ? 46 : 28, HT.realistic ? UI.accent : UI.green,
+    HT.realistic ? {} : { fillTop: "#f2fff6", fillBottom: "#8fe8b0" });
   drawCaption(ctx, w / 2, cy + (large ? 26 : 16), `Next round in ${countSecs}s`, { size: large ? 13 : 10, align: "center" });
 }
 
@@ -573,7 +592,7 @@ let _consoleKey = "";
  */
 function classicConsole(ctx, w, barH, L, hasShield) {
   const dpr = pixelRatio(ctx);
-  const key = `${w}|${barH}|${dpr}|${hasShield ? 1 : 0}|${L.portraitX}|${L.panelH}`;
+  const key = `${w}|${barH}|${dpr}|${hasShield ? 1 : 0}|${L.portraitX}|${L.panelH}|${HT.realistic ? 1 : 0}`;
   if (_consoleSprite && _consoleKey === key) return _consoleSprite;
   const c = document.createElement("canvas");
   c.width = Math.ceil(w * dpr);

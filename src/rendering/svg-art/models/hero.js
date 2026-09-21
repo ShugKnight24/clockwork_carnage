@@ -157,13 +157,16 @@ export const energy = (inner, color = "#00e5ff") =>
   `<g filter="url(#glow)" fill="${color}" stroke="${color}">${inner}</g>` +
   `<g fill="#bffcff" stroke="#bffcff" opacity=".9">${inner}</g>`;
 
+/** Visor glass outline of the standard helmet (unrotated rig coordinates). */
+export const HELM_GLASS = "M-10.2,-85.1 L-2.4,-83.8 L0,-82.3 L2.4,-83.8 L10.2,-85.1 L10,-79.3 L3.2,-77.7 L0,-76.9 L-3.2,-77.7 L-10,-79.3 Z";
+
 function helmet({ rot = 0, damaged = false }) {
   const tf = `transform="rotate(${rot} 0 -69)"`;
   const shell =
     "M0,-95 C7.6,-95 11.4,-89.8 11.4,-82.5 L11,-77 C10.6,-73.4 8.6,-70.6 5,-69 C3,-68.2 1.5,-68 0,-68 " +
     "C-1.5,-68 -3,-68.2 -5,-69 C-8.6,-70.6 -10.6,-73.4 -11,-77 L-11.4,-82.5 C-11.4,-89.8 -7.6,-95 0,-95 Z";
   const recess = "M-11.3,-86.2 L-2.4,-84.8 L0,-83.2 L2.4,-84.8 L11.3,-86.2 L10.9,-78.4 L3.4,-76.6 L0,-75.6 L-3.4,-76.6 L-10.9,-78.4 Z";
-  const glass = "M-10.2,-85.1 L-2.4,-83.8 L0,-82.3 L2.4,-83.8 L10.2,-85.1 L10,-79.3 L3.2,-77.7 L0,-76.9 L-3.2,-77.7 L-10,-79.3 Z";
+  const glass = HELM_GLASS;
   const body =
     `<g ${tf}>` +
     shape(shell, "url(#steel)") +
@@ -655,7 +658,7 @@ function standingModel({ armed }) {
 // pointing at the floor, so "down" for gravity is +x here: knees drawn up, the right
 // arm pinned along the floor under the body, the left arm slumped down in front of
 // the chest, helmet rolled onto the floor.
-const FALLEN = {
+export const FALLEN = {
   arms: [
     { sh: [-20, -59], el: [3, -68], wr: [25, -62], hand: "open" },
     { sh: [20, -59], el: [30, -38], wr: [31, -15] },
@@ -666,10 +669,10 @@ const FALLEN = {
   ],
 };
 
-const FALLEN_TF = `transform="translate(-10,20) scale(1,.92) rotate(88)"`;
+export const FALLEN_TF = `transform="translate(-10,20) scale(1,.92) rotate(88)"`;
 
 /** Edge of the cape spread on the floor behind the body (rig coordinates). */
-function fallenCape() {
+export function fallenCape() {
   const pool =
     "M-12,-66 C-22,-70 -30,-64 -32,-52 C-34,-36 -34,-14 -32,4 C-31,16 -28,26 -24,34 L-20,30 L-17,38 L-12,32 L-8,40 " +
     "C-4,34 0,28 2,20 L10,-40 C6,-56 0,-64 -12,-66 Z";
@@ -681,7 +684,7 @@ function fallenCape() {
 }
 
 /** Cape slumped over the hip, hanging down the front of the waist to the floor (rig coordinates). */
-function capeFlap() {
+export function capeFlap() {
   const d =
     "M-17,-38 C-19,-28 -18,-18 -15,-10 C-8,-6 4,-4 14,-3 C20,-2 25,0 29,-1 L26,-7 L31,-12 L27,-19 L31,-25 L26,-31 L29,-38 " +
     "C20,-42 8,-46 -3,-46 C-10,-46 -15,-43 -17,-38 Z";
@@ -695,7 +698,7 @@ function capeFlap() {
   );
 }
 
-function fallenDamage() {
+export function fallenDamage() {
   return (
     `<ellipse cx="6" cy="-48" rx="7" ry="5" fill="url(#scorch)"/>` +
     `<ellipse cx="-11" cy="-30" rx="5" ry="3.4" fill="url(#scorch)"/>` +
@@ -707,7 +710,7 @@ function fallenDamage() {
 }
 
 /** Broken plating, bolts and floor cracks around the body (world coordinates). */
-function debris() {
+export function debris() {
   const shard = (x, y, rot, d, fill = "url(#steel)") =>
     `<g transform="translate(${x},${y}) rotate(${rot})">${shape(d, fill, 0.8)}${line("M-2,-1.2 L2.4,-1.6", "#eaf4ff", 0.4, 0.5)}</g>`;
   return (
@@ -729,6 +732,14 @@ function debris() {
   );
 }
 
+/** Suit sparks and loose energy motes around the fallen agent (world coordinates). */
+export const FALLEN_SPARKS =
+  `<g filter="url(#glow)" fill="#00e5ff"><circle cx="-2" cy="12" r="2.2"/><circle cx="60" cy="30" r="1.8"/></g>` +
+  line("M-4,8 L0,4 M-1,11 L5,9.6 M-3,14 L-5.6,18", "#bffcff", 0.5, 0.9) +
+  line("M60,26 L63,22.4 M62,30 L66,31", "#bffcff", 0.45, 0.8) +
+  `<g fill="#8af6ff"><circle cx="-18" cy="-6" r=".7"/><circle cx="24" cy="-10" r=".6"/><circle cx="40" cy="58" r=".7"/>` +
+  `<circle cx="-44" cy="52" r=".6"/><circle cx="74" cy="4" r=".6"/></g>`;
+
 function fallenModel() {
   const helm = helmet({ rot: 24, damaged: true });
   const headTf = `transform="translate(8,2)"`;
@@ -747,12 +758,6 @@ function fallenModel() {
     upperArm.body +
     pauldron(-1, 14);
   const glow = lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow;
-  const sparks =
-    `<g filter="url(#glow)" fill="#00e5ff"><circle cx="-2" cy="12" r="2.2"/><circle cx="60" cy="30" r="1.8"/></g>` +
-    line("M-4,8 L0,4 M-1,11 L5,9.6 M-3,14 L-5.6,18", "#bffcff", 0.5, 0.9) +
-    line("M60,26 L63,22.4 M62,30 L66,31", "#bffcff", 0.45, 0.8) +
-    `<g fill="#8af6ff"><circle cx="-18" cy="-6" r=".7"/><circle cx="24" cy="-10" r=".6"/><circle cx="40" cy="58" r=".7"/>` +
-    `<circle cx="-44" cy="52" r=".6"/><circle cx="74" cy="4" r=".6"/></g>`;
   return {
     box: [-104, -30, 208, 106],
     defs: ARMOR_DEFS,
@@ -764,7 +769,7 @@ function fallenModel() {
       },
       { markup: `<g ${FALLEN_TF}>${glow}</g>`, anim: { type: "flicker", min: 0.15, max: 0.7, speed: 1.4 }, blend: "lighter" },
       { markup: `<g ${FALLEN_TF}><g ${headTf}>${helm.glow}</g></g>`, anim: { type: "flicker", min: 0.2, max: 0.65, speed: 2.2 }, blend: "lighter" },
-      { markup: sparks, anim: { type: "flicker", min: 0, max: 1, speed: 3.1 }, blend: "lighter" },
+      { markup: FALLEN_SPARKS, anim: { type: "flicker", min: 0, max: 1, speed: 3.1 }, blend: "lighter" },
     ],
   };
 }

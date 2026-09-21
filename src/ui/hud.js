@@ -10,7 +10,8 @@ import {
   VISOR_STYLES,
 } from "../../js/data.js";
 import { getWeaponSprite } from "../assets/loader.js";
-import { isModernArt } from "../rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
+import { HT as SKIN, drawPanel as skinPanel, cachedSprite, blitSprite } from "./hud-skin.js";
 import {
   renderModernMinimalPanels,
   renderModernClassic,
@@ -316,6 +317,49 @@ function drawAdsReticle(ctx, game, cx, cy) {
  * All game state accessed via `game` parameter (read-only).
  */
 
+/**
+ * Square minimap for the layouts hud.js places itself. Realistic: minimap.js
+ * leaves the frame to the HUD skin, so sit it on a soft plate, clip to the
+ * map square and add the same hairline bezel as the Vanguard slot.
+ */
+function _drawHudMinimap(ctx, x, y, s, state) {
+  if (!isRealisticArt()) {
+    drawMinimap(ctx, x, y, s, s, state);
+    return;
+  }
+  skinPanel(ctx, x - 3, y - 3, s + 6, s + 6, {});
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, s, s);
+  ctx.clip();
+  drawMinimap(ctx, x, y, s, s, state);
+  ctx.restore();
+  blitSprite(ctx, cachedSprite(ctx, `hud-mapframe:${s}`, s + 6, s + 6, 0, (g) => _paintMapFrame(g, s + 6)), x - 3, y - 3, s + 6, s + 6);
+}
+
+/** Hairline map bezel that fades mid-side, with accent corner ticks. */
+function _paintMapFrame(g, S) {
+  const edge = (x0, y0, x1, y1) => {
+    const grad = g.createLinearGradient(x0, y0, x1, y1);
+    grad.addColorStop(0, "rgba(220,228,226,0.42)");
+    grad.addColorStop(0.5, "rgba(220,228,226,0.1)");
+    grad.addColorStop(1, "rgba(220,228,226,0.42)");
+    return grad;
+  };
+  g.fillStyle = edge(0, 0, S, 0);
+  g.fillRect(0, 0, S, 1);
+  g.fillRect(0, S - 1, S, 1);
+  g.fillStyle = edge(0, 0, 0, S);
+  g.fillRect(0, 0, 1, S);
+  g.fillRect(S - 1, 0, 1, S);
+  g.fillStyle = SKIN.accent;
+  const t = Math.max(6, Math.round(S * 0.08));
+  g.fillRect(0, 0, t, 1);
+  g.fillRect(0, 0, 1, t);
+  g.fillRect(S - t, S - 1, t, 1);
+  g.fillRect(S - 1, S - t, 1, t);
+}
+
 /** Build minimap state from game instance */
 function _minimapState(game) {
   return {
@@ -409,7 +453,7 @@ if (isCompactMobile) {
 
   // Minimap (smaller on compact mobile)
   let mmSize = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
-  drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
+  _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
 
   if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
   if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH);
@@ -1250,7 +1294,7 @@ if (!vanguard) {
     mmSize = Math.min(mmSize, Math.round(w * 0.28));
   }
   const mmY = game.settings.showKills ? 48 : 10;
-  drawMinimap(ctx, w - mmSize - 10, mmY, mmSize, mmSize, _minimapState(game));
+  _drawHudMinimap(ctx, w - mmSize - 10, mmY, mmSize, _minimapState(game));
 }
 
 if (isModernArt()) drawModernCombatCues(game, ctx, w, h, 0);
@@ -1785,7 +1829,7 @@ ctx.textAlign = "left";
 
 // ─── Minimap (top-right) ───
 let mmSize = game.settings.minimapSize;
-drawMinimap(ctx, w - mmSize - 10, 10, mmSize, mmSize, _minimapState(game));
+_drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
 
 if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
 

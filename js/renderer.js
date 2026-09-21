@@ -28,10 +28,18 @@ import {
   drawProjectile,
   drawExoticPickup,
   drawGearPickup,
+  setFxCamera,
+  drawRealisticParticle,
 } from "../src/rendering/pickups.js";
 import { drawProp, setFovScale } from "../src/rendering/props.js";
 import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
-import { isModernArt } from "../src/rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
+import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
+
+// Realistic sprite lighting: one reused light sample and a cache of the
+// quantised ctx.filter strings, so lighting sprites allocates nothing per frame.
+const _litOut = { r: 0, g: 0, b: 0 };
+const _litFilters = new Map();
 import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
 
 // --- Performance: Pre-computed fog rgba string LUT ---
@@ -93,16 +101,66 @@ export class Renderer {
     // WebGL hybrid renderer (renderMode: 0=auto, 1=2D only, 2=3D/WebGL)
     this.glRenderer = null;
     this.useWebGL = false;
-    if (renderMode !== 1) {
-      // Try to initialize WebGL (auto or explicit 3D)
-      this.glRenderer = GLRenderer.create(this.width, this.height);
-      if (this.glRenderer) {
-        this.useWebGL = true;
-        this._uploadFloorCeilToGL();
-        console.log('[Renderer] WebGL2 hybrid renderer active');
-      } else if (renderMode === 2) {
-        console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
-      }
+    this._renderMode = renderMode;
+    this._initGL(renderMode);
+  }
+
+  /**
+   * 1x64 vertical contact-shadow ramp for Realistic walls: dark at the ceiling
+   * and deck joints, clear through the middle. Built once, blitted per column.
+   */
+  _contactShadowStrip() {
+    if (this._aoStrip) return this._aoStrip;
+    const c = document.createElement("canvas");
+    c.width = 1;
+    c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, "rgba(0,0,0,0.55)");
+    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
+    grad.addColorStop(0.22, "rgba(0,0,0,0)");
+    grad.addColorStop(0.74, "rgba(0,0,0,0)");
+    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
+    grad.addColorStop(1, "rgba(0,0,0,0.62)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1, 64);
+    this._aoStrip = c;
+    return c;
+  }
+
+  /**
+   * Light arriving at world point (x, y) for the Realistic style: ceiling lamps
+   * overhead plus dynamic lights. Writes an {r, g, b} multiplier into `out`
+   * (see src/rendering/lighting.js). Sprites, projectiles and the viewmodel
+   * use it to sit in the same light as the deck.
+   */
+  lightAt(x, y, out) {
+    const env = this._modernEnv;
+    if (env && env.lampField === undefined) {
+      env.lampField = buildLampField(env.deck?.ceil) || null;
+    }
+    return sampleLight(out, x, y, this.lights, env ? env.lampField : null);
+  }
+
+  /** Free the Modern 512px wall/deck art; it is rebuilt lazily on next use. */
+  releaseModernEnv() {
+    this._modernEnv = null;
+    this._altModernEnv = null;
+    this._envMapGLVersion = -1;
+  }
+
+  /** Bring up the WebGL hybrid path unless the mode forbids it. */
+  _initGL(renderMode) {
+    if (renderMode === 1) return;
+    // Try to initialize WebGL (auto or explicit 3D)
+    this.glRenderer = GLRenderer.create(this.width, this.height);
+    if (this.glRenderer) {
+      this.useWebGL = true;
+      this._envMapGLVersion = -1;
+      this._uploadFloorCeilToGL();
+      console.log('[Renderer] WebGL2 hybrid renderer active');
+    } else if (renderMode === 2) {
+      console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
     }
   }
 
@@ -170,13 +228,33 @@ export class Renderer {
     const act = this._actPalette || 1;
     const level = this._envLevel ?? null;
     const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
     if (
       !this._modernEnv ||
       this._modernEnv.act !== act ||
       this._modernEnv.level !== level ||
-      this._modernEnv.brutal !== brutal
+      this._modernEnv.brutal !== brutal ||
+      this._modernEnv.realistic !== realistic
     ) {
-      this._modernEnv = generateModernEnv(act, brutal, level);
+      // Keep the other style's set for this level, so flipping Modern <->
+      // Realistic mid-level is instant after the first time instead of a
+      // ~150 ms rebuild on every switch. Two sets at most; a new level drops
+      // both.
+      const prev = this._modernEnv;
+      const alt = this._altModernEnv;
+      if (
+        alt && alt.act === act && alt.level === level &&
+        alt.brutal === brutal && alt.realistic === realistic
+      ) {
+        this._modernEnv = alt;
+      } else {
+        this._modernEnv = generateModernEnv(act, brutal, level, { realistic });
+        this._modernEnv.realistic = realistic;
+      }
+      this._altModernEnv =
+        prev && prev.act === act && prev.level === level && prev.brutal === brutal
+          ? prev
+          : null;
       this._envMapGLVersion = -1;
       if (this.glRenderer) {
         this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);
@@ -523,6 +601,10 @@ export class Renderer {
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
     const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
+    // Realistic reuses the Modern wall art and swaps the lighting: no ink
+    // lines, darker ambient, contact shadows, inverse-square lights.
+    const real = !!menv && isRealisticArt();
+    const aoStrip = real ? this._contactShadowStrip() : null;
     if (menv) {
       this._ensureColBufs(w);
       this._colKey.fill(-1);
@@ -781,6 +863,18 @@ export class Renderer {
           ctx.fillStyle = menv.faceShade[face];
           ctx.fillRect(x, drawStart, 1, colH);
         }
+        if (real) {
+          // Low ambient, batched into the frame's column path (Realistic has
+          // no ink lines to share it with) and filled once after the loop.
+          ctx.rect(x, drawStart, 1, colH);
+          // Soft contact shadow where the wall meets the deck and ceiling,
+          // stretched over the wall's full height so it stays on the joints
+          // when the column is clipped. Walls under ~40px tall are too far
+          // away for it to show, so they skip the blit.
+          if (lineHeight >= 40) {
+            ctx.drawImage(aoStrip, 0, 0, 1, 64, x, fullDrawStart, 1, fullDrawEnd - fullDrawStart);
+          }
+        }
 
         // Act fog with atmospheric perspective (colour and density from the
         // same ramp the deck shader uses, so wall and floor air agree).
@@ -804,8 +898,17 @@ export class Renderer {
             const d2 = ldx * ldx + ldy * ldy;
             const r2 = L.radius * L.radius;
             if (d2 >= r2) continue;
-            const fall = 1 - Math.sqrt(d2) / L.radius;
-            const k = fall * fall * L.intensity;
+            let k;
+            if (real) {
+              // Inverse-square, windowed to the authored radius: hot near the
+              // source, long soft tail, still zero at the edge.
+              const q = d2 / r2;
+              const win = 1 - q * q;
+              k = (win * win * L.intensity * 1.35) / (1 + (6 * d2) / r2);
+            } else {
+              const fall = 1 - Math.sqrt(d2) / L.radius;
+              k = fall * fall * L.intensity;
+            }
             lr += L.color[0] * k;
             lg += L.color[1] * k;
             lb += L.color[2] * k;
@@ -855,7 +958,7 @@ export class Renderer {
         // Inked contact lines at the ceiling and deck joints, batched into one
         // path that the silhouette pass fills after the loop.
         const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
-        if (colH > inkT * 2) {
+        if (!real && colH > inkT * 2) {
           if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
           if (drawEnd < h - 1) ctx.rect(x, drawEnd - inkT, 1, inkT);
         }
@@ -968,7 +1071,11 @@ export class Renderer {
       }
     }
 
-    if (menv) this._drawModernInk(w, h);
+    if (menv && !real) this._drawModernInk(w, h);
+    if (real) {
+      ctx.fillStyle = "rgba(3,4,7,0.16)";
+      ctx.fill();
+    }
 
     // Set FOV scale for prop minimum-size floors
     setFovScale(fov);
@@ -1006,6 +1113,8 @@ export class Renderer {
     // Share the scene's vertical shift, or motes hang in the air while the
     // world drops under a crouch.
     const halfH = h / 2 + yShift;
+    const real = isRealisticArt();
+    if (real) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -1031,6 +1140,7 @@ export class Renderer {
       const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
       const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
+      if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
 
       const r = p.r ?? 255;
       const g = p.g ?? 255;
@@ -1125,6 +1235,7 @@ export class Renderer {
     // Camera right vector, so side-on enemy sprites can face their heading.
     this._camRightX = -dirY;
     this._camRightY = dirX;
+    if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
     // Sort entities by distance from camera (pre-allocated arrays to avoid per-frame GC)
@@ -1346,7 +1457,11 @@ export class Renderer {
         }
       }
       ctx.clip();
-      drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      if (isRealisticArt()) {
+        this._drawPropLit(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      } else {
+        drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      }
       ctx.restore();
     }
   }
@@ -1488,7 +1603,23 @@ export class Renderer {
       const windupT = enemy.state === "windup" && enemy._windupTotalMs > 0
         ? 1 - Math.max(0, enemy._windupLeftMs) / enemy._windupTotalMs
         : 0;
-      drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
+      if (isRealisticArt() && dissolve >= 1) {
+        // Contact shadow: without the Modern ink outline, a sprite with no
+        // shadow reads as floating over the deck.
+        const rx = Math.max(4, (frame.x1 - frame.x0) * 0.3);
+        const ry = rx * 0.2;
+        ctx.globalAlpha = 0.42 * alpha;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(screenX, centerY + frame.y1 - ry, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      if (isRealisticArt() && !hitFlash) {
+        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT);
+      } else {
+        drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
+      }
     }
     ctx.restore();
 
@@ -1498,6 +1629,56 @@ export class Renderer {
       const bodyWidth = halfW * 0.6;
       this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
     }
+  }
+
+  /**
+   * Realistic: draw the sprite into a scratch layer, tint only its own pixels
+   * by the light at the enemy's feet (lamps overhead, muzzle flashes, glowing
+   * projectiles), then blit it back inside the caller's occlusion clip. An
+   * enemy standing between lamps falls into shadow; one under a lamp or beside
+   * a flash lights up with that light's colour.
+   */
+  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT) {
+    // ctx.filter keeps the lighting on the main canvas. The first version
+    // drew each sprite into a scratch canvas and blitted it back, and every
+    // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
+    // frame with a room full of enemies and props.
+    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
+    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, false, dissolve, windupT);
+    ctx.filter = "none";
+  }
+
+  /** Realistic props: same lighting as enemies. */
+  _drawPropLit(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+    // Props carry no emissive-critical gameplay read, so they may fall
+    // further into shadow than enemies do.
+    ctx.filter = this._litFilter(entity.x, entity.y, 0.65);
+    drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog);
+    ctx.filter = "none";
+  }
+
+  /**
+   * CSS filter string for the light at world (wx, wy): brightness from the
+   * light level, capped at `maxShade` darkening, plus a small warm/cool cast
+   * from the light's colour. Quantised and cached, so no string is built per
+   * sprite per frame.
+   */
+  _litFilter(wx, wy, maxShade) {
+    const L = this.lightAt(wx, wy, _litOut);
+    const lum = 0.2126 * L.r + 0.7152 * L.g + 0.0722 * L.b;
+    const shade = lum < 1 ? Math.min(maxShade, (1 - lum) * 0.75) : 0;
+    const bright = lum < 1 ? 1 - shade : Math.min(1.5, 1 + (lum - 1) * 0.6);
+    // Warmth: red over blue beyond neutral pushes a slight sepia cast.
+    const warm = Math.max(0, Math.min(1, (L.r - L.b) * 1.5));
+    const qb = Math.round(bright * 20);
+    const qw = Math.round(warm * 5);
+    const key = (qb << 3) | qw;
+    let f = _litFilters.get(key);
+    if (!f) {
+      f = qw ? `brightness(${qb / 20}) sepia(${(qw / 5) * 0.25})` : `brightness(${qb / 20})`;
+      _litFilters.set(key, f);
+    }
+    return f;
   }
 
   /**
@@ -1511,7 +1692,8 @@ export class Renderer {
    * nearer than the enemy, so walls continue to occlude it.
    */
   _drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist) {
-    const t = 1 - Math.max(0, enemy._windupLeftMs) / enemy._windupTotalMs; // 0..1
+    // `|| 0` keeps a half-initialised windup (debug spawns) from producing NaN.
+    const t = Math.min(1, Math.max(0, 1 - Math.max(0, enemy._windupLeftMs || 0) / enemy._windupTotalMs)); // 0..1
     const melee = enemy.def.attackType !== "ranged";
     const rgb = melee ? "255,64,40" : "255,196,48";
     const cy = (bodyTop + bodyBottom) / 2;
@@ -1538,10 +1720,14 @@ export class Renderer {
     ctx.clip();
 
     ctx.globalCompositeOperation = "lighter";
+    // Realistic keeps the countdown (the ring's size is the timing, which is
+    // gameplay) but draws it as a hairline, and lets the charge-up glow carry
+    // the rest instead of a thick cartoon ring and flicker.
+    const real = isRealisticArt();
 
     // Body wash, brightening toward release.
     const wash = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, reach * 1.3);
-    wash.addColorStop(0, `rgba(${rgb},${0.1 + 0.4 * t})`);
+    wash.addColorStop(0, `rgba(${rgb},${(real ? 0.16 : 0.1) + (real ? 0.55 : 0.4) * t})`);
     wash.addColorStop(1, `rgba(${rgb},0)`);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = wash;
@@ -1550,15 +1736,15 @@ export class Renderer {
     // Contracting ring: wide at the start, tight on the body at the moment of
     // release, so its size is the countdown.
     const r = reach * (2.1 - 1.1 * t);
-    ctx.globalAlpha = alpha * (0.35 + 0.6 * t);
+    ctx.globalAlpha = alpha * (real ? 0.2 + 0.45 * t : 0.35 + 0.6 * t);
     ctx.strokeStyle = `rgb(${rgb})`;
-    ctx.lineWidth = Math.max(1.5, reach * (0.05 + 0.07 * t));
+    ctx.lineWidth = real ? 1 + t : Math.max(1.5, reach * (0.05 + 0.07 * t));
     ctx.beginPath();
     ctx.arc(screenX, cy, r, 0, Math.PI * 2);
     ctx.stroke();
 
     // Final flicker in the last 20% — the "now" beat.
-    if (t > 0.8 && Math.floor(time / 45) % 2 === 0) {
+    if (!real && t > 0.8 && Math.floor(time / 45) % 2 === 0) {
       ctx.globalAlpha = alpha * 0.8;
       ctx.lineWidth = Math.max(1, reach * 0.04);
       ctx.beginPath();

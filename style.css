@@ -1193,3 +1193,46 @@ body {
     box-shadow: 2px 2px 0 var(--cc-ink);
   }
 }
+
+
+/* ── Modern (realistic profile) title chrome ───────────────────────────────
+   The vector art on the title stage is realistic in this profile; the DOM
+   text around it drops the comic gloss, cream plates and inked cards to
+   match. Comic keeps every rule above. */
+:root[data-art-profile="realistic"] #titleScreen h1 {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+  filter: none;
+  color: #e4e6e1;
+  -webkit-text-fill-color: #e4e6e1;
+  background: none;
+  letter-spacing: 0.08em;
+}
+:root[data-art-profile="realistic"] #titleScreen .subtitle {
+  background: rgba(10, 12, 14, 0.55);
+  color: #e4e6e1;
+  border: 1px solid rgba(228, 230, 225, 0.32);
+  box-shadow: none;
+  text-shadow: none;
+}
+:root[data-art-profile="realistic"] #titleScreen .feature-card {
+  background: rgba(16, 18, 21, 0.62);
+  border: 1px solid rgba(228, 230, 225, 0.14);
+  box-shadow: none;
+  clip-path: none;
+}
+:root[data-art-profile="realistic"] #titleScreen .feature-icon {
+  color: #8fbcc4;
+}
+
+
+/* ── Default grade (no GPU Film Grade) ────────────────────────────────────
+   Colour-matrix CSS filters on the game canvas run in the compositor on the
+   GPU and never read pixels back, so they cost the same on every device. They
+   approximate the GPU pass: Modern gets the filmic contrast and lower
+   saturation, Comic a slight inked contrast. */
+:root[data-art-profile="realistic"] #gameCanvas {
+  filter: contrast(1.12) saturate(0.8) brightness(1.06);
+}
+:root[data-art-profile="modern"] #gameCanvas {
+  filter: contrast(1.05) saturate(1.04);
+}

@@ -3,8 +3,9 @@
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
 import { getLayerImage, scaleBucket } from "./svg-art/raster.js";
-import { isModernArt } from "./art-style.js";
-import { DEFS as PROP_DEFS, PROP_SPRITES } from "./svg-art/sprites/props.js";
+import { isModernArt, isRealisticArt } from "./art-style.js";
+import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
+import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
 
 /** Floor plane Y coordinate — single source of truth for all ground-anchored props */
 export const groundY = (cy, sh) => cy + sh * 0.45;
@@ -79,7 +80,8 @@ function layerBitmap(slot, id, box, defs, markup, scale) {
   const img = getLayerImage(id, box, defs, markup, scale);
   if (img) {
     const k = scaleBucket(scale);
-    const exact = img.naturalWidth === Math.max(1, Math.round(box[2] * k));
+    // Baked layers are canvases (width), undecoded ones <img> (naturalWidth).
+    const exact = (img.naturalWidth ?? img.width) === Math.max(1, Math.round(box[2] * k));
     slot.img = exact ? img : null;
     slot.scale = exact ? scale : 0;
   }
@@ -122,16 +124,30 @@ function animate(ctx, anim, t) {
 function prepareSprite(key, sprite, defs) {
   sprite._ready = true;
   sprite._defs = defs + FOG_FILTER;
+  // Realistic layers are different bitmaps of the same key: own cache ids.
+  const pre = sprite.realistic ? "sprite:r:" : "sprite:";
   sprite.layers.forEach((layer, i) => {
-    layer._id = `sprite:${key}:${i}`;
+    layer._id = `${pre}${key}:${i}`;
     layer._box = layer.box || sprite.box;
     layer._slot = { scale: 0, img: null };
     if (layer.shade !== false && !layer.blend) {
-      layer._silId = `sprite:${key}:${i}:fog`;
-      layer._silMarkup = `<g filter="url(#fogSil)">${layer.markup}</g>`;
+      layer._silId = `${pre}${key}:${i}:fog`;
+      layer._silMarkup = `<g filter="url(#fogSil)">${layer.silMarkup ?? layer.markup}</g>`;
       layer._silSlot = { scale: 0, img: null };
     }
   });
+}
+
+// Realistic sprite sets, keyed by the Modern defs the caller passes. Built on
+// the first Realistic draw, never while Modern or Legacy is active.
+let _realProps = null;
+let _realPickups = null;
+
+/** The Realistic { defs, sprites } set standing in for a Modern set, or null. */
+function realisticSet(defs) {
+  if (defs === PROP_DEFS) return _realProps || (_realProps = buildRealisticProps());
+  if (defs === PICKUP_DEFS) return _realPickups || (_realPickups = buildRealisticPickups());
+  return null;
 }
 
 /**
@@ -141,6 +157,15 @@ function prepareSprite(key, sprite, defs) {
  */
 export function drawSvgSprite(ctx, key, sprite, defs, x, y, ppu, t, alpha, fogShade = 0) {
   if (typeof Image === "undefined") return false; // headless unit tests
+  if (isRealisticArt()) {
+    const set = realisticSet(defs);
+    const real = set && set.sprites[key];
+    if (real) {
+      sprite = real;
+      defs = set.defs;
+    }
+  }
+  if (!sprite) return false;
   if (!sprite._ready) prepareSprite(key, sprite, defs);
   const m = ctx.getTransform ? ctx.getTransform() : null;
   const devPpu = ppu * (m ? Math.hypot(m.a, m.b) || 1 : 1);
@@ -199,6 +224,11 @@ function drawScan(ctx, scan, t, alpha) {
  */
 export function warmSvgSprites(sprites, defs, ppu) {
   if (typeof Image === "undefined") return;
+  const set = isRealisticArt() ? realisticSet(defs) : null;
+  if (set) {
+    sprites = set.sprites;
+    defs = set.defs;
+  }
   for (const key in sprites) {
     const sprite = sprites[key];
     if (!sprite._ready) prepareSprite(key, sprite, defs);
@@ -210,15 +240,16 @@ export function warmSvgSprites(sprites, defs, ppu) {
   }
 }
 
-let _propsWarmed = false;
+let _propsWarmed = -1; // art style the prop set was last warmed for
 
 function drawModernProp(ctx, type, sx, cy, sw, sh, time, fog) {
   const sprite = PROP_SPRITES[type];
   if (!sprite) return false;
   const metre = Math.max(sw * SH_PER_METRE, 8 * _fovScale);
   const ppu = metre / 100;
-  if (!_propsWarmed) {
-    _propsWarmed = true;
+  const style = isRealisticArt() ? 2 : 1;
+  if (_propsWarmed !== style) {
+    _propsWarmed = style;
     warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
   }
   const alpha = Math.min(1, fog * 4);
