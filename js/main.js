@@ -6,6 +6,7 @@ import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
+import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
 import { initUnlockToasts, showGearToast } from "../src/ui/unlock-toast.js";
 import {
@@ -68,17 +69,10 @@ function resizeCanvases() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2× for perf
   const cssW = window.innerWidth;
   const cssH = window.innerHeight;
-  let renderW = cssW;
-  let renderH = cssH;
-  // Cap render resolution on mobile to maintain playable FPS
-  if (game.isTouchDevice) {
-    const maxDim = 1280;
-    if (renderW > maxDim || renderH > maxDim) {
-      const scale = maxDim / Math.max(renderW, renderH);
-      renderW = Math.round(renderW * scale);
-      renderH = Math.round(renderH * scale);
-    }
-  }
+  // Render at a per-device pixel budget, not the raw window size: a 4K monitor
+  // is 6x the pixels of a laptop, and a phone GPU a fraction of a desktop's.
+  // (This replaces a flat 1280px cap that only applied to touch devices.)
+  const { w: renderW, h: renderH } = budgetedRenderSize(cssW, cssH, detectDeviceTier());
   nativeW = renderW;
   nativeH = renderH;
 

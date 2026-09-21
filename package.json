@@ -16,6 +16,7 @@
     "test:telemetry": "npx playwright test tests/telemetry.spec.js",
     "test:experts": "npx playwright test tests/experts.spec.js",
     "test:gate": "npx playwright test tests/playtest-gate.spec.js",
+    "test:perf": "npx playwright test tests/perf-budget.spec.js --workers=1",
     "gate": "npm run test:gate",
     "test:journeys": "npx playwright test tests/user-journeys.spec.js",
     "test:extremes": "npx playwright test tests/extremes.spec.js",

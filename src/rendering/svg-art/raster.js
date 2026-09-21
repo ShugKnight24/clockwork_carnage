@@ -16,6 +16,38 @@ const EVICT_IDLE_MS = 2000;
 const layers = new Map(); // layer id -> Map(bucket -> { img, ready, failed, bytes, lastUsed })
 let totalBytes = 0;
 
+// Decoded SVG <img>s are still vector: drawing one into a canvas can re-render
+// the SVG on every draw, and a sub-pixel transform (weapon sway, bob) defeats
+// the browser's cache. That cost ~4 ms a frame for the viewmodel alone. Each
+// decoded layer is baked once into a plain canvas bitmap and that is what
+// callers draw. Baking rasterises the SVG, so it is budgeted per frame; until
+// a layer's turn comes, the <img> is returned and still draws correctly.
+const BAKE_BUDGET_PX = 1.5e6; // per animation frame
+let bakeLeft = BAKE_BUDGET_PX;
+let bakeReset = false;
+function bake(entry) {
+  const img = entry.img;
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (typeof document === "undefined" || !w || !h) return;
+  if (w * h > bakeLeft) return;
+  bakeLeft -= w * h;
+  if (!bakeReset && typeof requestAnimationFrame === "function") {
+    bakeReset = true;
+    requestAnimationFrame(() => {
+      bakeReset = false;
+      bakeLeft = BAKE_BUDGET_PX;
+    });
+  }
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d").drawImage(img, 0, 0);
+  entry.img = c;
+  entry.baked = true;
+  img.src = "";
+}
+
 function evictIdle(now) {
   if (totalBytes <= BYTE_BUDGET) return;
   const idle = [];
@@ -31,7 +63,8 @@ function evictIdle(now) {
     buckets.delete(bucket);
     if (!buckets.size) layers.delete(id);
     totalBytes -= e.bytes;
-    e.img.src = "";
+    if (!e.baked) e.img.src = "";
+    else e.img.width = 0; // free the bitmap now rather than at GC
   }
 }
 
@@ -88,7 +121,10 @@ export function getLayerImage(id, box, defs, markup, scale) {
     evictIdle(now);
   }
   entry.lastUsed = now;
-  if (entry.ready) return entry.img;
+  if (entry.ready) {
+    if (!entry.baked) bake(entry);
+    return entry.img;
+  }
   // Fall back to the nearest decoded size of the same layer so a resize or a
   // distance change never blanks it while the new size decodes.
   let best = null;
@@ -111,4 +147,21 @@ export function getLayerImage(id, box, defs, markup, scale) {
 export function layerFailed(id) {
   for (const e of layers.get(id)?.values() ?? []) if (e.failed) return true;
   return false;
+}
+
+/**
+ * Drop every decoded bitmap. Called when the player leaves the Modern asset
+ * set for Legacy, so up to BYTE_BUDGET of decoded art is not held for a style
+ * that is no longer drawn. Layers re-decode lazily if Modern comes back.
+ */
+export function releaseRasterCache() {
+  for (const buckets of layers.values()) {
+    for (const e of buckets.values()) {
+      if (!e.img) continue;
+      if (e.baked) e.img.width = 0;
+      else e.img.src = "";
+    }
+  }
+  layers.clear();
+  totalBytes = 0;
 }

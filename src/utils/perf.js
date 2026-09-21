@@ -99,6 +99,20 @@ export class AdaptiveQuality {
     if (this.history.length > this.historySize) this.history.shift();
   }
 
+  /**
+   * FPS at the 92nd-percentile frame time: if more than ~8% of frames (one in
+   * twelve) are slow, this reads the slow rate. An average hides stutter: 90 fps with a 50 ms hitch every
+   * few frames still averages well above target.
+   */
+  get lowFPS() {
+    const n = this.history.length;
+    if (n === 0) return 60;
+    const buf = this._sortBuf || (this._sortBuf = new Float64Array(this.historySize));
+    for (let i = 0; i < n; i++) buf[i] = this.history[i];
+    const s = buf.subarray(0, n).sort();
+    return s[Math.floor(n * 0.08)];
+  }
+
   /** Average FPS over the sample window. */
   get averageFPS() {
     if (this.history.length === 0) return 60;
@@ -121,15 +135,18 @@ export class AdaptiveQuality {
     if (this.history.length < this.historySize) return false;
 
     const avg = this.averageFPS;
+    const low = this.lowFPS;
     const prevScale = this.renderScale;
+    // Frequent hitches: roughly one frame in twelve below 60% of target.
+    const hitchy = low < this.targetFPS * 0.6;
 
-    if (avg < this.targetFPS - 10) {
+    if (avg < this.targetFPS - 10 || hitchy) {
       // Significant drop — scale down aggressively
       this.renderScale *= 0.93;
     } else if (avg < this.targetFPS - 5) {
       // Moderate drop — scale down gently
       this.renderScale *= 0.98;
-    } else if (avg > this.targetFPS + 5 && this.renderScale < this.maxScale) {
+    } else if (avg > this.targetFPS + 5 && low > this.targetFPS * 0.8 && this.renderScale < this.maxScale) {
       // Headroom — scale up slowly
       this.renderScale *= 1.01;
     }
