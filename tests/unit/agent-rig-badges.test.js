@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { buildAgentParts, buildCastModel, rigAnchors } from "../../src/rendering/svg-art/agent-rig.js";
 import { STAND, ARMED, FALLEN, VAMBRACE, armJoints } from "../../src/rendering/svg-art/models/hero.js";
-import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { DEFAULT_CHARACTER, ARMOR_STYLES } from "../../src/data/cosmetics.js";
 import { cloneLook } from "../../src/core/character-fields.js";
 import { layer } from "../../src/data/badges.js";
 
@@ -70,5 +70,26 @@ describe("agent badges", () => {
     const ch = { ...DEFAULT_CHARACTER, badgeIndex: 3 };
     delete ch.badge;
     expect(() => buildAgentParts(ch)).not.toThrow();
+  });
+});
+
+describe("armour variants", () => {
+  it("wearing a variant adds its trim and changes the markup", () => {
+    const base = cloneLook(DEFAULT_CHARACTER);
+    const v = cloneLook(DEFAULT_CHARACTER);
+    v.armorVariant = 1;
+    const a = buildAgentParts(base).body;
+    const b = buildAgentParts(v).body;
+    expect(b).not.toBe(a);
+    expect(b.toLowerCase()).toContain(ARMOR_STYLES[0].variant.trim.toLowerCase());
+    expect(b).toContain('data-variant="');
+  });
+
+  it("heavy wear adds scratches", () => {
+    const i = ARMOR_STYLES.findIndex((x) => x.variant.wear >= 0.8);
+    const ch = cloneLook(DEFAULT_CHARACTER);
+    ch.armorIndex = i;
+    ch.armorVariant = 1;
+    expect(buildAgentParts(ch).body).toContain('class="ag-wear"');
   });
 });

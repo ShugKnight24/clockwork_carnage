@@ -166,6 +166,7 @@ function resolve(ch) {
     skin: pick(SKIN_TONES, ch.skinToneIndex),
     hair: pick(HAIR_STYLES, ch.hairIndex),
     eyes: pick(EYE_COLORS, ch.eyeIndex).color,
+    variant: ch.armorVariant ? pick(ARMOR_STYLES, ch.armorIndex).variant || null : null,
     energy: pal.accent,
     core: mix(pal.accent, "#ffffff", 0.72),
     hot: mix(pal.accent, "#ffffff", 0.88),
@@ -1178,6 +1179,28 @@ const chestTrim = (c) =>
   line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
   line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
 
+/** Variant overlay: trim stripes along the existing chest seams and, with wear, scratches. */
+function variantTrim(c) {
+  const v = c.variant;
+  if (!v) return "";
+  let out =
+    `<g data-variant="${v.id}">` +
+    line("M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6", v.trim, 0.9, 0.95) +
+    line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", v.trim, 0.9, 0.95) +
+    line("M-12,-30 L12,-30", v.trim, 0.7, 0.8);
+  if (v.wear > 0.3) {
+    const n = Math.round(v.wear * 8);
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const x = -14 + ((i * 37) % 28);
+      const y = -52 + ((i * 23) % 30);
+      d += `M${x},${y} l${2 + (i % 3)},${1 + (i % 2)} `;
+    }
+    out += `<path class="ag-wear" d="${d}" stroke="#c8ccd0" stroke-width=".35" opacity="${f(0.25 + v.wear * 0.35)}" fill="none"/>`;
+  }
+  return out + `</g>`;
+}
+
 /**
  * Forearm badge: a third of the way down the vambrace, pushed off the
  * centreline toward the arm's outer side far enough that the badge clears the
@@ -1304,6 +1327,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const body =
     recolor(legs.map((l) => l.body).join("") + torso(), map) +
     chestTrim(c) +
+    variantTrim(c) +
     insignia(c) +
     kit.front +
     acc.front +
@@ -1556,6 +1580,7 @@ function fallenParts(c) {
       acc.back +
       recolor(trappedArm.body + lowerLeg.body + upperLeg.body + torso(), map) +
       chestTrim(c) +
+      variantTrim(c) +
       insignia(c) +
       kit.front +
       fallenDamage() +
