@@ -1,7 +1,23 @@
 import { CUTSCENE_SCRIPTS } from "../src/data/cutscene-scripts.js";
 import { drawCutsceneArt } from "../src/rendering/cutscene-art.js";
 import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
-import { isModernArt } from "../src/rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
+import {
+  CS_FONT,
+  INK,
+  PAPER_BALLOON,
+  PAPER_CAPTION,
+  PAPER_RADIO,
+  SUB_TEXT,
+  classifyLine,
+  csFont,
+  drawBalloon,
+  drawCaptionBox,
+  inkFor,
+  readableOn,
+  setTracking,
+  wrapText,
+} from "../src/ui/cutscene-text.js";
 
 // Art keys that only exist as vector models. In Legacy they map to the closest
 // procedural key, or to none so the frame uses the text-only layout instead of
@@ -37,6 +53,7 @@ export class CutsceneEngine {
     isTouchDevice,
     getPlayerName,
     getSettings,
+    getTextLayer,
   }) {
     this.audio = audio;
     this.getKeys = getKeys;
@@ -44,6 +61,12 @@ export class CutsceneEngine {
     this.isTouchDevice = isTouchDevice;
     this.getPlayerName = getPlayerName || (() => "Agent");
     this.getSettings = getSettings || (() => ({ cutsceneAutoAdvance: false }));
+    // Text is drawn on a device-pixel-ratio layer (the HUD canvas) so it stays
+    // crisp while the art canvas runs at the adaptive render scale.
+    // getTextLayer() → { ctx, canvas } | null; defaults to #hudCanvas.
+    this.getTextLayer = getTextLayer || null;
+    this._tl = null;
+    this._textLayouts = new WeakMap();
     this.cutscene = null;
     // Lazy-loaded image cache for flipbook panels (panel.image: "url"). Images
     // are async — drawn only after .complete is true; until then the panel
@@ -334,9 +357,88 @@ export class CutsceneEngine {
     return p;
   }
 
+  // ── Text layer ──────────────────────────────────────────────────
+  /** "legacy" | "comic" (player-facing Comic) | "cine" (player-facing Modern). */
+  _look() {
+    if (!isModernArt()) return "legacy";
+    return isRealisticArt() ? "cine" : "comic";
+  }
+
+  _findTextLayer(ctx) {
+    if (this.getTextLayer) return this.getTextLayer();
+    if (typeof document === "undefined") return null;
+    const c = document.getElementById("hudCanvas");
+    if (!c || !c.getContext) return null;
+    return { canvas: c, ctx: c.getContext("2d") };
+  }
+
+  /**
+   * Resolve the crisp text layer for this frame. The HUD canvas covers the
+   * same CSS box as the art canvas at full DPR, so mapping art-canvas pixels
+   * to it is a plain scale. Falls back to the art canvas itself.
+   */
+  _beginText(ctx, w, h) {
+    const layer = this._findTextLayer(ctx);
+    const art = ctx.canvas;
+    let tl = null;
+    if (
+      layer?.ctx && layer.canvas && art && layer.canvas !== art &&
+      layer.canvas.width > 0 && layer.canvas.style?.display !== "none" &&
+      (!art.style?.width || layer.canvas.style?.width === art.style.width) &&
+      (!art.style?.height || layer.canvas.style?.height === art.style.height)
+    ) {
+      const g = layer.ctx;
+      const kx = layer.canvas.width / w;
+      const ky = layer.canvas.height / h;
+      g.save();
+      tl = { g, kx, ky, k: (kx + ky) / 2, same: false };
+    } else {
+      tl = { g: ctx, kx: 1, ky: 1, k: 1, same: true };
+    }
+    this._tl = tl;
+  }
+
+  _endText() {
+    const tl = this._tl;
+    if (tl && !tl.same) tl.g.restore();
+    this._tl = null;
+  }
+
+  /**
+   * Text context carrying the art context's current transform and alpha, so
+   * text follows shakes, panel slams and page flips.
+   */
+  _tx(ctx) {
+    const tl = this._tl;
+    if (!tl || tl.same) return ctx;
+    const m = ctx.getTransform();
+    tl.g.setTransform(tl.kx * m.a, tl.ky * m.b, tl.kx * m.c, tl.ky * m.d, tl.kx * m.e, tl.ky * m.f);
+    tl.g.globalAlpha = ctx.globalAlpha;
+    return tl.g;
+  }
+
+  /** Device pixels per art pixel (shadowBlur/offsets ignore the transform). */
+  _k() {
+    return this._tl ? this._tl.k : 1;
+  }
+
+  _resolve(text) {
+    return String(text ?? "").replace(/\{AGENT\}/g, this.getPlayerName());
+  }
+
   render(ctx, w, h) {
     if (!this.cutscene) return;
+    this._beginText(ctx, w, h);
+    try {
+      this._renderFrame(ctx, w, h);
+    } finally {
+      this._endText();
+    }
+  }
+
+  _renderFrame(ctx, w, h) {
     const cs = this.cutscene;
+    this._screenH = h;
     const frame = legacyFrame(cs.script[cs.frame]);
     if (!frame) return;
 
@@ -445,273 +547,12 @@ export class CutsceneEngine {
       ctx.fillRect(0, 0, w, h);
     }
 
-    if (frame.title) {
-      const titleY = Math.round((frame.art ? h * 0.11 : h * 0.18) + Math.sin(t * 1.1) * 2 * s);
-      const titleSize = Math.round(18 * s);
-      const titlePadX = Math.round(22 * s);
-      const titlePadY = Math.round(10 * s);
-      ctx.save();
-      ctx.font = `bold ${titleSize}px monospace`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      const titleW = Math.min(w * 0.88, ctx.measureText(frame.title).width + titlePadX * 2);
-      const titleX = (w - titleW) / 2;
-      const plate = ctx.createLinearGradient(titleX, titleY - titleSize, titleX + titleW, titleY + titleSize);
-      plate.addColorStop(0, "rgba(0,255,220,0.04)");
-      plate.addColorStop(0.5, "rgba(0,12,22,0.72)");
-      plate.addColorStop(1, "rgba(255,64,140,0.05)");
-      ctx.fillStyle = plate;
-      ctx.beginPath();
-      ctx.roundRect(titleX, titleY - titleSize - titlePadY, titleW, titleSize + titlePadY * 2, Math.max(5, 9 * s));
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0,230,255,0.35)";
-      ctx.lineWidth = Math.max(1, 1.5 * s);
-      ctx.stroke();
-      // Chromatic aberration title — cyan/magenta offsets for comic-book feel
-      ctx.shadowBlur = 0;
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = 0.55;
-      ctx.fillStyle = "#ff3a8a";
-      ctx.fillText(frame.title, w / 2 - 1.2 * s, titleY);
-      ctx.fillStyle = "#3affff";
-      ctx.fillText(frame.title, w / 2 + 1.2 * s, titleY);
-      ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = 1;
-      ctx.shadowColor = "#00e5ff";
-      ctx.shadowBlur = 10 * s;
-      ctx.fillStyle = "#dffbff";
-      ctx.fillText(frame.title, w / 2, titleY);
-      ctx.restore();
-    }
-
-    // === Text (typewriter reveal with glow) ===
-    if (frame.lines) {
-      const centerY = frame.art ? h * 0.72 : h * 0.4;
-      let lineY = centerY;
-      const textPad = Math.round(30 * s);
-      const textLineH = Math.round(36 * s);
-
-      // Scene-only frames centre their text over the full background; a soft
-      // band keeps it readable over the lit vector environments.
-      if (!frame.art && frame.bg && frame.bg !== "dark") {
-        const bandTop = centerY - textPad * 2;
-        const bandH = frame.lines.length * textLineH + textPad * 3;
-        const band = ctx.createLinearGradient(0, bandTop, 0, bandTop + bandH);
-        band.addColorStop(0, "rgba(0,2,10,0)");
-        band.addColorStop(0.25, "rgba(0,2,10,0.74)");
-        band.addColorStop(0.75, "rgba(0,2,10,0.74)");
-        band.addColorStop(1, "rgba(0,2,10,0)");
-        ctx.fillStyle = band;
-        ctx.fillRect(0, bandTop, w, bandH);
-      }
-
-      // Frosted glass text backdrop
-      if (frame.art) {
-        const tbg = ctx.createLinearGradient(
-          0,
-          centerY - textPad,
-          0,
-          centerY + frame.lines.length * textLineH,
-        );
-        tbg.addColorStop(0, "rgba(0,0,10,0)");
-        tbg.addColorStop(0.12, "rgba(0,0,10,0.85)");
-        tbg.addColorStop(0.88, "rgba(0,0,10,0.85)");
-        tbg.addColorStop(1, "rgba(0,0,10,0)");
-        ctx.fillStyle = tbg;
-        ctx.fillRect(
-          0,
-          centerY - textPad,
-          w,
-          frame.lines.length * textLineH + textPad,
-        );
-
-        const boxX = Math.round(w * 0.05);
-        const boxW = Math.round(w * 0.9);
-        const boxY = Math.round(centerY - textPad + 3 * s);
-        const boxH = Math.round(frame.lines.length * textLineH + textPad - 4 * s);
-        const boxR = Math.max(4, Math.round(10 * s));
-
-        // Main frosted fill — deep center with edge glow
-        const frost = ctx.createRadialGradient(
-          boxX + boxW / 2, boxY + boxH / 2, boxH * 0.15,
-          boxX + boxW / 2, boxY + boxH / 2, boxW * 0.6,
-        );
-        frost.addColorStop(0, "rgba(2,6,18,0.75)");
-        frost.addColorStop(0.7, "rgba(2,6,18,0.75)");
-        frost.addColorStop(1, "rgba(0,180,255,0.06)");
-        ctx.fillStyle = frost;
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
-        ctx.fill();
-
-        // Outer border
-        ctx.strokeStyle = "rgba(0,200,255,0.12)";
-        ctx.lineWidth = Math.max(1, 1.5 * s);
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
-        ctx.stroke();
-
-        // Inner subtle border
-        ctx.strokeStyle = "rgba(255,255,255,0.04)";
-        ctx.lineWidth = Math.max(1, 1 * s);
-        ctx.beginPath();
-        ctx.roundRect(
-          boxX + 2, boxY + 2,
-          Math.max(0, boxW - 4), Math.max(0, boxH - 4),
-          Math.max(3, boxR - 1),
-        );
-        ctx.stroke();
-
-        // Horizontal light sweep
-        const sweepPos = Math.sin(t * 0.4) * 0.5 + 0.5;
-        const sweep = ctx.createLinearGradient(boxX, 0, boxX + boxW, 0);
-        sweep.addColorStop(Math.max(0, sweepPos - 0.15), "rgba(255,255,255,0)");
-        sweep.addColorStop(sweepPos, "rgba(180,220,255,0.045)");
-        sweep.addColorStop(Math.min(1, sweepPos + 0.15), "rgba(255,255,255,0)");
-        ctx.fillStyle = sweep;
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
-        ctx.fill();
-      }
-
-      for (const line of frame.lines) {
-        const lineElapsed = elapsed - line.delay;
-        if (lineElapsed < 0) continue;
-
-        // Template variable substitution
-        const resolvedText = line.text.replace(
-          /\{AGENT\}/g,
-          this.getPlayerName(),
-        );
-
-        // Typewriter — 30% slower than original for better readability
-        const charsPerSec = 18;
-        const visibleChars = Math.min(
-          resolvedText.length,
-          Math.floor((lineElapsed / 1000) * charsPerSec),
-        );
-        const displayText = resolvedText.substring(0, visibleChars);
-        const typing = visibleChars < resolvedText.length;
-
-        // Fade in + slide up
-        const fadeIn = Math.min(1, lineElapsed / 400);
-        const slideOffset = 4 * s * Math.max(0, 1 - lineElapsed / 500);
-        const sz = Math.round((line.size || 16) * s);
-
-        // Impact text scale-in for large lines
-        const isImpact = (line.size || 16) >= 22;
-        const scaleT = isImpact ? Math.min(1, lineElapsed / 600) : 1;
-        const impactScale = isImpact ? 0.88 + 0.12 * scaleT : 1;
-        const impactBlur = isImpact ? (20 - 12 * scaleT) * s : 0;
-
-        lineY -= slideOffset;
-        ctx.globalAlpha = fadeIn;
-        ctx.font = `bold ${sz}px monospace`;
-        ctx.textAlign = "center";
-
-        if (isImpact && scaleT < 1) {
-          ctx.save();
-          ctx.translate(w / 2, lineY);
-          ctx.scale(impactScale, impactScale);
-          ctx.translate(-w / 2, -lineY);
-        }
-
-        // Detect speaker lines ("NAME:" pattern)
-        const speakerMatch = displayText.match(/^([A-Z\s]+):(.*)/);
-
-        if (speakerMatch) {
-          // Speaker name as styled badge
-          const speakerName = speakerMatch[1];
-          const restText = speakerMatch[2].trimStart();
-          const lc = line.color || "#00ffcc";
-          const nameW = ctx.measureText(speakerName).width;
-          const badgePadX = Math.round(8 * s);
-          const badgePadY = Math.round(4 * s);
-          const badgeGap = Math.round(8 * s);
-          const restW = ctx.measureText(restText).width;
-          const totalW = nameW + badgePadX * 2 + badgeGap + restW;
-          const badgeX = w / 2 - totalW / 2;
-
-          // Badge pill background
-          ctx.save();
-          const pillY = lineY - sz + badgePadY;
-          const pillH = sz + badgePadY;
-          const pillW = nameW + badgePadX * 2;
-          ctx.fillStyle = lc + '33'; // ~20% opacity
-          ctx.beginPath();
-          ctx.roundRect(badgeX, pillY, pillW, pillH, Math.max(3, Math.round(5 * s)));
-          ctx.fill();
-          ctx.strokeStyle = lc + '59'; // ~35% opacity
-          ctx.lineWidth = Math.max(1, 1 * s);
-          ctx.stroke();
-
-          // Speaker name text (bold, line color)
-          ctx.shadowColor = lc;
-          ctx.shadowBlur = 6 * s;
-          ctx.strokeStyle = "rgba(0,0,0,0.82)";
-          ctx.lineWidth = Math.max(1.5, 3 * s);
-          ctx.strokeText(speakerName, badgeX + pillW / 2, lineY);
-          ctx.fillStyle = lc;
-          ctx.fillText(speakerName, badgeX + pillW / 2, lineY);
-          ctx.shadowBlur = 0;
-          ctx.restore();
-
-          // Dialogue text (offset right, white)
-          const dialogueX = badgeX + pillW + badgeGap + restW / 2;
-          ctx.strokeStyle = "rgba(0,0,0,0.78)";
-          ctx.lineWidth = Math.max(1.5, 2.6 * s);
-          ctx.strokeText(restText, dialogueX, lineY);
-          ctx.fillStyle = "#f2f6ff";
-          ctx.fillText(restText, dialogueX, lineY);
-        } else {
-          // Normal text with subtle glow + impact shadow boost
-          ctx.save();
-          ctx.shadowColor = line.color || "#88bbff";
-          ctx.shadowBlur = (isImpact && scaleT < 1 ? impactBlur : (typing ? 12 : 5) * s);
-          // Text outline for readability
-          ctx.strokeStyle = "rgba(0,0,0,0.76)";
-          ctx.lineWidth = Math.max(1.5, 2.6 * s);
-          ctx.strokeText(displayText, w / 2, lineY);
-          ctx.fillStyle = line.color || "#f7fbff";
-          ctx.fillText(displayText, w / 2, lineY);
-          ctx.shadowBlur = 0;
-          ctx.restore();
-        }
-
-        // Close impact scale transform
-        if (isImpact && scaleT < 1) {
-          ctx.restore();
-        }
-
-        // Enhanced cursor — beam with glow trail
-        if (typing) {
-          const cursorPhase = (Math.sin(elapsed * 0.01) + 1) / 2;
-          const cursorAlpha = 0.3 + cursorPhase * 0.65;
-          const textW = ctx.measureText(displayText).width;
-          const cursorColor = line.color || "#00ffcc";
-          const cursorX = w / 2 + textW / 2 + 3 * s;
-          const cursorY = lineY - sz + 4 * s;
-          const cursorW = Math.max(1, 2 * s);
-          const cursorH = sz;
-
-          // Glow trail
-          ctx.save();
-          ctx.globalAlpha = cursorAlpha * 0.5;
-          ctx.shadowColor = cursorColor;
-          ctx.shadowBlur = 8 * s;
-          ctx.fillStyle = cursorColor;
-          ctx.fillRect(cursorX, cursorY, cursorW, cursorH);
-          ctx.restore();
-
-          // Main beam
-          ctx.globalAlpha = cursorAlpha;
-          ctx.fillStyle = cursorColor;
-          ctx.fillRect(cursorX, cursorY, cursorW, cursorH);
-        }
-
-        ctx.globalAlpha = 1;
-        lineY += slideOffset + sz + Math.round(14 * s);
-      }
+    // === Title + lines, lettered per art style ===
+    if (frame.title || frame.lines) {
+      const look = this._look();
+      if (look === "comic") this._drawComicText(ctx, w, h, frame, elapsed, t, s);
+      else if (look === "cine") this._drawCineText(ctx, w, h, frame, elapsed, t, s);
+      else this._drawLegacyText(ctx, w, h, frame, elapsed, t, s);
     }
 
     if (frame.shake) {
@@ -825,53 +666,1150 @@ export class CutsceneEngine {
       }
     }
 
-    // === Skip prompt ===
-    // Brighter, pulsing prompt when ready to advance
-    const readyPulse = cs.readyToAdvance
-      ? 0.6 + 0.35 * Math.sin(elapsed / 300)
-      : 0;
-    const skipAlpha = cs.readyToAdvance
-      ? readyPulse
-      : 0.3 + 0.15 * Math.sin(elapsed / 500);
-    ctx.fillStyle = cs.readyToAdvance
-      ? `rgba(0,255,204,${skipAlpha})`
-      : `rgba(255,255,255,${skipAlpha})`;
-    ctx.font = `${Math.round(12 * s)}px monospace`;
-    ctx.textAlign = "right";
-    ctx.fillText(
-      this.isTouchDevice
-        ? "Tap to continue  ·  Hold to skip"
-        : "[ENTER] continue  ·  [ESC] skip",
-      w - Math.round(20 * s),
-      h - barHeight / 2 + Math.round(4 * s),
-    );
+    // === Skip prompt + hold-to-skip bar ===
+    this._drawSkipPrompt(ctx, w, h, h - barHeight / 2, s, elapsed, "bottom");
+  }
 
-    // === Hold-to-skip progress bar ===
-    if (cs.skipHeldStart > 0) {
-      const holdProgress = Math.min(
-        1,
-        (performance.now() - cs.skipHeldStart) / 1000,
-      );
-      const skipBarW = Math.round(120 * s);
-      const skipBarH = Math.round(4 * s);
-      const skipBarX = w - Math.round(20 * s) - skipBarW;
-      const skipBarY = h - barHeight / 2 + Math.round(12 * s);
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarH);
-      ctx.fillStyle = "#00ffcc";
-      ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarH);
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = `${Math.round(10 * s)}px monospace`;
-      ctx.fillText(
-        this.isTouchDevice
-          ? "Hold to skip all..."
-          : "Hold SPACE to skip all...",
-        w - Math.round(20 * s),
-        skipBarY + Math.round(16 * s),
-      );
+  // ── Lines frames: Legacy (terminal typewriter) ──────────────────
+  /** Cached per frame/size/name: wrapped rows and baselines, measured once. */
+  _legacyLayout(g, frame, w, h, s) {
+    const key = `L|${w}|${h}|${s}|${this.getPlayerName()}`;
+    const hit = this._textLayouts.get(frame);
+    if (hit?.key === key) return hit;
+    const maxW = w * 0.86;
+    const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
+    const lines = (frame.lines || []).map((line) => {
+      const text = this._resolve(line.text);
+      const sz = Math.round((line.size || 16) * s);
+      const font = `bold ${sz}px monospace`;
+      const sm = text.match(/^([A-Z\s]+):(.*)/);
+      let speaker = null;
+      let rest = text;
+      let pillW = 0;
+      let gap = 0;
+      if (sm) {
+        speaker = sm[1];
+        rest = sm[2].trimStart();
+        g.save();
+        g.font = font;
+        pillW = g.measureText(speaker).width + Math.round(8 * s) * 2;
+        g.restore();
+        gap = Math.round(8 * s);
+      }
+      const lay = wrapText(g, rest, font, maxW - pillW - gap);
+      return {
+        line, text, sz, font, speaker, pillW, gap,
+        prefixLen: text.length - rest.length,
+        rows: lay.lines, widths: lay.widths,
+        step: sz + Math.round(14 * s),
+      };
+    });
+    // Baselines: rows advance by the line's size + 14s, as before.
+    let base = frame.art ? h * 0.72 : h * 0.4;
+    let y = 0;
+    for (const ln of lines) {
+      ln.y = [];
+      for (let r = 0; r < ln.rows.length; r++) {
+        ln.y.push(y);
+        y += ln.step;
+      }
+    }
+    const last = lines.length ? lines[lines.length - 1] : null;
+    const lastOff = last ? last.y[last.y.length - 1] : 0;
+    const textPad = Math.round(30 * s);
+    const bottomPad = Math.round(26 * s);
+    // Keep the whole block (and its box) clear of the bottom letterbox.
+    const limit = h - barH - Math.round(6 * s);
+    const over = base + lastOff + bottomPad - limit;
+    if (over > 0) base = Math.max(frame.art ? h * 0.46 : h * 0.12, base - over);
+    for (const ln of lines) ln.y = ln.y.map((o) => base + o);
+    const out = {
+      key, lines, base,
+      boxTop: base - textPad,
+      boxBottom: base + lastOff + bottomPad,
+    };
+    this._textLayouts.set(frame, out);
+    return out;
+  }
+
+  _drawLegacyTitle(ctx, w, h, frame, t, s) {
+    const titleY = Math.round((frame.art ? h * 0.11 : h * 0.18) + Math.sin(t * 1.1) * 2 * s);
+    let titleSize = Math.round(18 * s);
+    const titlePadX = Math.round(22 * s);
+    const titlePadY = Math.round(10 * s);
+    const g0 = this._tx(ctx);
+    g0.save();
+    g0.font = `bold ${titleSize}px monospace`;
+    let tw = g0.measureText(frame.title).width;
+    // Shrink to fit narrow screens instead of spilling past the plate.
+    if (tw + titlePadX * 2 > w * 0.92) {
+      titleSize = Math.max(8, Math.floor(titleSize * (w * 0.92 - titlePadX * 2) / tw));
+      g0.font = `bold ${titleSize}px monospace`;
+      tw = g0.measureText(frame.title).width;
+    }
+    g0.restore();
+    const titleW = Math.min(w * 0.94, tw + titlePadX * 2);
+    const titleX = (w - titleW) / 2;
+    ctx.save();
+    const plate = ctx.createLinearGradient(titleX, titleY - titleSize, titleX + titleW, titleY + titleSize);
+    plate.addColorStop(0, "rgba(0,255,220,0.04)");
+    plate.addColorStop(0.5, "rgba(0,12,22,0.72)");
+    plate.addColorStop(1, "rgba(255,64,140,0.05)");
+    ctx.fillStyle = plate;
+    ctx.beginPath();
+    ctx.roundRect(titleX, titleY - titleSize - titlePadY, titleW, titleSize + titlePadY * 2, Math.max(5, 9 * s));
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,230,255,0.35)";
+    ctx.lineWidth = Math.max(1, 1.5 * s);
+    ctx.stroke();
+    ctx.restore();
+    // Chromatic aberration title — cyan/magenta offsets
+    const g = this._tx(ctx);
+    const k = this._k();
+    g.save();
+    g.font = `bold ${titleSize}px monospace`;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.globalCompositeOperation = "screen";
+    g.globalAlpha *= 0.55;
+    g.fillStyle = "#ff3a8a";
+    g.fillText(frame.title, w / 2 - 1.2 * s, titleY);
+    g.fillStyle = "#3affff";
+    g.fillText(frame.title, w / 2 + 1.2 * s, titleY);
+    g.restore();
+    g.save();
+    g.font = `bold ${titleSize}px monospace`;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.shadowColor = "#00e5ff";
+    g.shadowBlur = 10 * s * k;
+    g.fillStyle = "#dffbff";
+    g.fillText(frame.title, w / 2, titleY);
+    g.restore();
+  }
+
+  _drawLegacyText(ctx, w, h, frame, elapsed, t, s) {
+    if (frame.title) this._drawLegacyTitle(ctx, w, h, frame, t, s);
+    if (!frame.lines) return;
+    const lay = this._legacyLayout(this._tx(ctx), frame, w, h, s);
+    const k = this._k();
+
+    // Scene-only frames centre their text over the full background; a soft
+    // band keeps it readable over the lit vector environments.
+    if (!frame.art && frame.bg && frame.bg !== "dark") {
+      const bandTop = lay.boxTop - Math.round(30 * s);
+      const bandH = lay.boxBottom - bandTop + Math.round(30 * s);
+      const band = ctx.createLinearGradient(0, bandTop, 0, bandTop + bandH);
+      band.addColorStop(0, "rgba(0,2,10,0)");
+      band.addColorStop(0.25, "rgba(0,2,10,0.74)");
+      band.addColorStop(0.75, "rgba(0,2,10,0.74)");
+      band.addColorStop(1, "rgba(0,2,10,0)");
+      ctx.fillStyle = band;
+      ctx.fillRect(0, bandTop, w, bandH);
     }
 
-    ctx.textAlign = "left";
+    // Frosted glass text backdrop, sized to the laid-out rows
+    if (frame.art) {
+      const top = lay.boxTop;
+      const hgt = lay.boxBottom - lay.boxTop;
+      const tbg = ctx.createLinearGradient(0, top, 0, top + hgt);
+      tbg.addColorStop(0, "rgba(0,0,10,0)");
+      tbg.addColorStop(0.12, "rgba(0,0,10,0.85)");
+      tbg.addColorStop(0.88, "rgba(0,0,10,0.85)");
+      tbg.addColorStop(1, "rgba(0,0,10,0)");
+      ctx.fillStyle = tbg;
+      ctx.fillRect(0, top, w, hgt);
+
+      const boxX = Math.round(w * 0.05);
+      const boxW = Math.round(w * 0.9);
+      const boxY = Math.round(top + 3 * s);
+      const boxH = Math.round(hgt - 4 * s);
+      const boxR = Math.max(4, Math.round(10 * s));
+      const frost = ctx.createRadialGradient(
+        boxX + boxW / 2, boxY + boxH / 2, boxH * 0.15,
+        boxX + boxW / 2, boxY + boxH / 2, boxW * 0.6,
+      );
+      frost.addColorStop(0, "rgba(2,6,18,0.75)");
+      frost.addColorStop(0.7, "rgba(2,6,18,0.75)");
+      frost.addColorStop(1, "rgba(0,180,255,0.06)");
+      ctx.fillStyle = frost;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,200,255,0.12)";
+      ctx.lineWidth = Math.max(1, 1.5 * s);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.04)";
+      ctx.lineWidth = Math.max(1, 1 * s);
+      ctx.beginPath();
+      ctx.roundRect(boxX + 2, boxY + 2, Math.max(0, boxW - 4), Math.max(0, boxH - 4), Math.max(3, boxR - 1));
+      ctx.stroke();
+      const sweepPos = Math.sin(t * 0.4) * 0.5 + 0.5;
+      const sweep = ctx.createLinearGradient(boxX, 0, boxX + boxW, 0);
+      sweep.addColorStop(Math.max(0, sweepPos - 0.15), "rgba(255,255,255,0)");
+      sweep.addColorStop(sweepPos, "rgba(180,220,255,0.045)");
+      sweep.addColorStop(Math.min(1, sweepPos + 0.15), "rgba(255,255,255,0)");
+      ctx.fillStyle = sweep;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, boxR);
+      ctx.fill();
+    }
+
+    const charsPerSec = 18;
+    for (const ln of lay.lines) {
+      const line = ln.line;
+      const lineElapsed = elapsed - line.delay;
+      if (lineElapsed < 0) continue;
+      const total = ln.text.length;
+      const visible = Math.min(total, Math.floor((lineElapsed / 1000) * charsPerSec));
+      const typing = visible < total;
+      // The speaker badge shows at once; its characters still pace the line.
+      let restVisible = Math.max(0, visible - ln.prefixLen);
+
+      const fadeIn = Math.min(1, lineElapsed / 400);
+      const slide = 4 * s * Math.max(0, 1 - lineElapsed / 500);
+      const sz = ln.sz;
+      const isImpact = (line.size || 16) >= 22;
+      const scaleT = isImpact ? Math.min(1, lineElapsed / 600) : 1;
+      const impactScale = isImpact ? 0.88 + 0.12 * scaleT : 1;
+      const impactBlur = isImpact ? (20 - 12 * scaleT) * s : 0;
+      const y0 = ln.y[0] - slide;
+
+      ctx.save();
+      ctx.globalAlpha = fadeIn;
+      if (isImpact && scaleT < 1) {
+        ctx.translate(w / 2, y0);
+        ctx.scale(impactScale, impactScale);
+        ctx.translate(-w / 2, -y0);
+      }
+      const g = this._tx(ctx);
+      g.save();
+      g.font = ln.font;
+      g.textAlign = "left";
+      g.textBaseline = "alphabetic";
+      g.lineJoin = "round";
+      let cursorX = 0;
+      let cursorY = y0;
+      for (let r = 0; r < ln.rows.length; r++) {
+        const rowY = ln.y[r] - slide;
+        const row = ln.rows[r];
+        const rw = ln.widths[r];
+        let textX = w / 2 - rw / 2;
+        if (ln.speaker && r === 0) {
+          const lc = line.color || "#00ffcc";
+          const totalW = ln.pillW + ln.gap + rw;
+          const badgeX = w / 2 - totalW / 2;
+          const badgePadY = Math.round(4 * s);
+          const pillY = rowY - sz + badgePadY;
+          const pillH = sz + badgePadY;
+          g.fillStyle = lc + "33";
+          g.beginPath();
+          g.roundRect(badgeX, pillY, ln.pillW, pillH, Math.max(3, Math.round(5 * s)));
+          g.fill();
+          g.strokeStyle = lc + "59";
+          g.lineWidth = Math.max(1, 1 * s);
+          g.stroke();
+          g.save();
+          g.textAlign = "center";
+          g.shadowColor = lc;
+          g.shadowBlur = 6 * s * k;
+          g.strokeStyle = "rgba(0,0,0,0.82)";
+          g.lineWidth = Math.max(1.5, 3 * s);
+          g.strokeText(ln.speaker, badgeX + ln.pillW / 2, rowY);
+          g.fillStyle = lc;
+          g.fillText(ln.speaker, badgeX + ln.pillW / 2, rowY);
+          g.restore();
+          textX = badgeX + ln.pillW + ln.gap;
+        }
+        if (restVisible <= 0) {
+          if (r === 0) cursorX = textX;
+          break;
+        }
+        // Anchor on the full row's left edge so typing never re-centres.
+        const shown = restVisible >= row.length ? row : row.slice(0, restVisible);
+        restVisible -= row.length + 1;
+        g.save();
+        if (ln.speaker) {
+          g.strokeStyle = "rgba(0,0,0,0.78)";
+          g.lineWidth = Math.max(1.5, 2.6 * s);
+          g.strokeText(shown, textX, rowY);
+          g.fillStyle = "#f2f6ff";
+          g.fillText(shown, textX, rowY);
+        } else {
+          g.shadowColor = line.color || "#88bbff";
+          g.shadowBlur = (isImpact && scaleT < 1 ? impactBlur : (typing ? 12 : 5) * s) * k;
+          g.strokeStyle = "rgba(0,0,0,0.76)";
+          g.lineWidth = Math.max(1.5, 2.6 * s);
+          g.strokeText(shown, textX, rowY);
+          g.fillStyle = line.color || "#f7fbff";
+          g.fillText(shown, textX, rowY);
+        }
+        g.restore();
+        if (typing) {
+          cursorX = textX + (shown === row ? rw : g.measureText(shown).width);
+          cursorY = rowY;
+        }
+        if (restVisible <= 0) break;
+      }
+      if (typing) {
+        const cursorPhase = (Math.sin(elapsed * 0.01) + 1) / 2;
+        const cursorAlpha = 0.3 + cursorPhase * 0.65;
+        const cursorColor = line.color || "#00ffcc";
+        const cx = cursorX + 3 * s;
+        const cy = cursorY - sz + 4 * s;
+        const cw = Math.max(1, 2 * s);
+        g.save();
+        g.globalAlpha *= cursorAlpha * 0.5;
+        g.shadowColor = cursorColor;
+        g.shadowBlur = 8 * s * k;
+        g.fillStyle = cursorColor;
+        g.fillRect(cx, cy, cw, sz);
+        g.restore();
+        g.save();
+        g.globalAlpha *= cursorAlpha;
+        g.fillStyle = cursorColor;
+        g.fillRect(cx, cy, cw, sz);
+        g.restore();
+      }
+      g.restore();
+      ctx.restore();
+    }
+  }
+
+  // ── Lines frames: Comic (lettered balloons and captions) ────────
+  /** Lettering size for this screen, in art-canvas px. */
+  _comicSize(h) {
+    return Math.max(13, Math.min(30, h * 0.026));
+  }
+
+  _comicItem(g, kind, text, cz, w, narrow) {
+    const upper = text.toUpperCase();
+    if (kind === "splash") {
+      const font = csFont("sfx", cz, 400);
+      const lay = wrapText(g, upper, font, w * 0.9);
+      const lineH = cz * 1.02;
+      return { kind, font, rows: lay.lines, widths: lay.widths, lineH, padX: 0, padY: cz * 0.1,
+        w: lay.width, h: lay.lines.length * lineH + cz * 0.2 };
+    }
+    const font = csFont("letter", cz, 700);
+    const cap = kind === "caption";
+    const maxW = narrow
+      ? w * (cap ? 0.8 : 0.7)
+      : Math.min(w * (cap ? 0.58 : 0.46), cz * (cap ? 30 : 24));
+    const padX = cap ? cz * 0.75 : cz * 1.15;
+    const padY = cap ? cz * 0.5 : cz * 0.7;
+    const lay = wrapText(g, upper, font, maxW - padX * 2);
+    const lineH = cz * 1.2;
+    return { kind, font, rows: lay.lines, widths: lay.widths, lineH, padX, padY,
+      w: lay.width + padX * 2, h: lay.lines.length * lineH + padY * 2 };
+  }
+
+  _comicLayout(g, frame, w, h) {
+    const key = `C|${w}|${h}|${this.getPlayerName()}`;
+    const hit = this._textLayouts.get(frame);
+    if (hit?.key === key) return hit;
+    const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
+    const narrow = w < 900;
+    const src = (frame.lines || []).map((line) => {
+      const cls = classifyLine(this._resolve(line.text));
+      let kind = "caption";
+      if (cls.speaker) kind = "radio";
+      else if (cls.quoted) kind = "balloon";
+      else if ((line.size || 16) >= 24) kind = "splash";
+      return { line, cls, kind };
+    });
+    const bottom = h - barH - h * 0.03;
+    const topLimit = frame.art ? h * (narrow ? 0.4 : 0.48) : barH + h * 0.06;
+    let cz = this._comicSize(h);
+    let items;
+    let total;
+    const gapOf = (c) => c * 0.55;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      items = src.map(({ line, cls, kind }) => {
+        const sizeK = kind === "splash" ? Math.max(1.5, Math.min(2.6, ((line.size || 16) / 16) * 1.35)) : 1;
+        const it = this._comicItem(g, kind, cls.text, cz * sizeK, w, narrow);
+        it.line = line;
+        it.speaker = cls.speaker;
+        it.cz = cz;
+        if (kind === "radio") {
+          it.tagFont = csFont("letter", cz * 0.72, 700);
+          it.tagH = cz * 1.05;
+          it.top = it.tagH * 0.55; // tag straddles the top edge
+        } else {
+          it.top = 0;
+        }
+        return it;
+      });
+      total = items.reduce((a, it) => a + it.h + it.top, 0) + gapOf(cz) * Math.max(0, items.length - 1);
+      if (total <= bottom - topLimit || cz <= 11) break;
+      cz *= 0.9;
+    }
+    // Stack: under the figure when there is art, centred otherwise.
+    let y = frame.art
+      ? Math.max(topLimit, Math.min(h * 0.62, bottom - total))
+      : Math.max(topLimit, (h - total) / 2);
+    const mixed = items.some((it) => it.kind === "caption") && items.some((it) => it.kind !== "caption" && it.kind !== "splash");
+    const off = mixed ? Math.min(w * 0.07, cz * 4) : 0;
+    const margin = w * 0.03;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      y += it.top;
+      const cx = w / 2 + (it.kind === "caption" ? -off : it.kind === "splash" ? 0 : off);
+      it.x = Math.max(margin, Math.min(w - margin - it.w, cx - it.w / 2));
+      it.y = y;
+      y += it.h + gapOf(cz);
+    }
+    // Tails: the first balloon points at the figure; a balloon right after
+    // another joins it with a connector; others point sideways at the figure.
+    const spk = { x: w / 2, y: h * 0.4 };
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind !== "balloon" || !frame.art) continue;
+      const prev = items[i - 1];
+      if (prev && prev.kind === "balloon") {
+        it.connect = prev;
+      } else if (!items.slice(0, i).some((p) => p.kind === "balloon" || p.kind === "caption" || p.kind === "radio")) {
+        const ax = it.x + it.w / 2;
+        const dx = spk.x - ax;
+        const dy = spk.y - it.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const L = Math.min(d * 0.6, cz * 3.2);
+        it.tail = { x: ax + (dx / d) * L, y: it.y + (dy / d) * L, base: cz * 1.1 };
+      } else {
+        const left = it.x + it.w / 2 >= w / 2;
+        it.tail = {
+          x: left ? it.x - cz * 1.7 : it.x + it.w + cz * 1.7,
+          y: it.y - cz * 0.2,
+          base: cz * 1.0,
+        };
+      }
+    }
+    // Location caption, top left.
+    let title = null;
+    if (frame.title) {
+      const tz = cz * 0.78;
+      const font = csFont("letter", tz, 700);
+      const lay = wrapText(g, String(frame.title).toUpperCase(), font, w * (narrow ? 0.6 : 0.42));
+      const padX = tz * 0.7;
+      const padY = tz * 0.45;
+      title = { font, rows: lay.lines, lineH: tz * 1.2, padX, padY,
+        x: Math.max(margin, w * 0.04), y: barH + h * 0.03,
+        w: lay.width + padX * 2, h: lay.lines.length * tz * 1.2 + padY * 2, tz };
+    }
+    const out = { key, items, title, cz };
+    this._textLayouts.set(frame, out);
+    return out;
+  }
+
+  /** Rows of lettering centred in a box (textBaseline middle). */
+  _letterRows(g, it, x, y, color) {
+    g.fillStyle = color;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    const cx = x + it.w / 2;
+    for (let r = 0; r < it.rows.length; r++) {
+      g.fillText(it.rows[r], cx, y + it.padY + it.lineH * (r + 0.5) + it.lineH * 0.04);
+    }
+  }
+
+  _drawComicItem(g, it, x, y, frameArt) {
+    const lw = Math.max(1.2, it.cz * 0.11);
+    g.font = it.font;
+    if (it.kind === "caption") {
+      drawCaptionBox(g, x, y, it.w, it.h, { lw });
+      this._letterRows(g, it, x, y, inkFor(it.line.color, PAPER_CAPTION));
+    } else if (it.kind === "balloon" || it.kind === "radio") {
+      drawBalloon(g, x, y, it.w, it.h, {
+        lw,
+        tail: it.tail || null,
+        radio: it.kind === "radio" || (!frameArt && it.kind === "balloon"),
+        fill: it.kind === "radio" ? PAPER_RADIO : PAPER_BALLOON,
+      });
+      this._letterRows(g, it, x, y, INK);
+      if (it.kind === "radio" && it.speaker) {
+        // Name tab on the balloon's top-left edge.
+        g.font = it.tagFont;
+        // Measured once; the item object is part of the cached layout.
+        if (it.tagW == null) it.tagW = g.measureText(it.speaker).width + it.cz * 0.9;
+        const tw = it.tagW;
+        const tx = x + it.h * 0.35;
+        const ty = y - it.tagH * 0.55;
+        g.fillStyle = INK;
+        g.fillRect(tx, ty, tw, it.tagH);
+        g.fillStyle = readableOn(it.line.color || "#00ffcc", INK, 7);
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(it.speaker, tx + tw / 2, ty + it.tagH * 0.54);
+      }
+    } else {
+      // Splash lettering: ink outline, hard drop, colour fill.
+      const col = it.line.color || "#ffcc00";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.lineJoin = "round";
+      const cx = x + it.w / 2;
+      const drop = it.lineH * 0.06;
+      for (let r = 0; r < it.rows.length; r++) {
+        const ry = y + it.padY + it.lineH * (r + 0.5);
+        g.fillStyle = INK;
+        g.fillText(it.rows[r], cx + drop, ry + drop);
+        g.strokeStyle = INK;
+        g.lineWidth = it.lineH * 0.13;
+        g.strokeText(it.rows[r], cx, ry);
+        g.fillStyle = readableOn(col, "#101010", 4.5);
+        g.fillText(it.rows[r], cx, ry);
+      }
+    }
+  }
+
+  _drawComicText(ctx, w, h, frame, elapsed, t, s) {
+    const g0 = this._tx(ctx);
+    const lay = this._comicLayout(g0, frame, w, h);
+    if (lay.title) {
+      const tt = lay.title;
+      const a = Math.min(1, elapsed / 250);
+      ctx.save();
+      ctx.globalAlpha *= a;
+      const g = this._tx(ctx);
+      g.save();
+      drawCaptionBox(g, tt.x, tt.y, tt.w, tt.h, { lw: Math.max(1.2, tt.tz * 0.1), fill: PAPER_CAPTION });
+      g.font = tt.font;
+      g.fillStyle = INK;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      for (let r = 0; r < tt.rows.length; r++) {
+        g.fillText(tt.rows[r], tt.x + tt.padX, tt.y + tt.padY + tt.lineH * (r + 0.5) + tt.lineH * 0.04);
+      }
+      g.restore();
+      ctx.restore();
+    }
+    for (const it of lay.items) {
+      const le = elapsed - it.line.delay;
+      if (le < 0) continue;
+      // Pop in: quick scale-up from the balloon centre, no typing.
+      const p = Math.min(1, le / 170);
+      const ease = 1 - Math.pow(1 - p, 3);
+      const sc = (it.kind === "splash" ? 1.25 - 0.25 * ease : 0.86 + 0.14 * ease);
+      ctx.save();
+      ctx.globalAlpha *= Math.min(1, le / 110);
+      const cx = it.x + it.w / 2;
+      const cy = it.y + it.h / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(sc, sc);
+      ctx.translate(-cx, -cy);
+      const g = this._tx(ctx);
+      g.save();
+      this._drawComicItem(g, it, it.x, it.y, !!frame.art);
+      if (it.connect) {
+        // Connector neck to the previous balloon of the same speaker: paper
+        // over both outlines, ink down the two sides only.
+        const pc = it.connect;
+        const bx = (Math.max(pc.x, it.x) + Math.min(pc.x + pc.w, it.x + it.w)) / 2;
+        const lw = Math.max(1.2, it.cz * 0.11);
+        const hw = it.cz * 0.35;
+        const y0 = pc.y + pc.h;
+        const y1 = it.y;
+        g.fillStyle = PAPER_BALLOON;
+        g.fillRect(bx - hw, y0 - lw * 1.6, hw * 2, y1 - y0 + lw * 3.2);
+        g.strokeStyle = INK;
+        g.lineWidth = lw * 2;
+        g.beginPath();
+        g.moveTo(bx - hw - lw, y0 - lw * 0.4);
+        g.lineTo(bx - hw - lw, y1 + lw * 0.4);
+        g.moveTo(bx + hw + lw, y0 - lw * 0.4);
+        g.lineTo(bx + hw + lw, y1 + lw * 0.4);
+        g.stroke();
+      }
+      g.restore();
+      ctx.restore();
+    }
+  }
+
+  // ── Lines frames: Modern (cinematic subtitles) ──────────────────
+  _cineSize(h) {
+    return Math.max(14, Math.min(34, h * 0.03));
+  }
+
+  _cineLayout(g, frame, w, h) {
+    const key = `M|${w}|${h}|${this.getPlayerName()}`;
+    const hit = this._textLayouts.get(frame);
+    if (hit?.key === key) return hit;
+    const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
+    const card = !frame.art; // text-only frames read as a title card
+    let sz = this._cineSize(h);
+    let items;
+    let total;
+    const bottom = h - barH - h * 0.035;
+    const topLimit = card ? barH + h * 0.05 : h * 0.45;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const maxW = Math.min(w * (card ? 0.8 : 0.74), sz * 30);
+      items = (frame.lines || []).map((line) => {
+        const cls = classifyLine(this._resolve(line.text));
+        const upper = cls.text === cls.text.toUpperCase() && /[A-Z]/.test(cls.text);
+        const big = card && (line.size || 16) >= 24;
+        let font;
+        let tracking = 0;
+        let lineH;
+        let text = cls.text;
+        let kind = "sub";
+        if (big) {
+          kind = "display";
+          font = csFont("caps", sz * 1.9, 700);
+          tracking = sz * 0.3;
+          lineH = sz * 2.1;
+          text = text.toUpperCase();
+        } else if (upper && text.length <= 40) {
+          kind = "slug";
+          font = csFont("caps", sz * 0.82, 700);
+          tracking = sz * 0.22;
+          lineH = sz * 1.3;
+        } else {
+          const narr = !cls.quoted && !cls.speaker;
+          font = csFont("cine", sz, narr ? 400 : 500, narr);
+          lineH = sz * 1.32;
+        }
+        const lay = wrapText(g, text, font, maxW, tracking);
+        const it = { line, kind, font, tracking, rows: lay.lines, widths: lay.widths, lineH, speaker: cls.speaker };
+        it.nameH = cls.speaker ? sz * 0.95 : 0;
+        it.h = it.nameH + lay.lines.length * lineH;
+        return it;
+      });
+      total = items.reduce((a, it) => a + it.h, 0) + sz * 0.45 * Math.max(0, items.length - 1);
+      if (total <= bottom - topLimit || sz <= 12) break;
+      sz *= 0.9;
+    }
+    let y = card ? Math.max(topLimit, (h - total) / 2) : bottom - total;
+    for (const it of items) {
+      it.y = y;
+      y += it.h + sz * 0.45;
+    }
+    let title = null;
+    if (frame.title) {
+      title = {
+        font: csFont("caps", sz * 0.58, 700),
+        tracking: sz * 0.14,
+        x: Math.max(w * 0.05, 16),
+        y: barH + h * 0.045,
+        rule: sz * 1.4,
+        text: String(frame.title).toUpperCase(),
+      };
+    }
+    const out = { key, items, title, sz, bandTop: bottom - total - sz * 2.2, card };
+    this._textLayouts.set(frame, out);
+    return out;
+  }
+
+  _drawCineText(ctx, w, h, frame, elapsed, t, s) {
+    // Subtitles hold still under camera shake.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g0 = this._tx(ctx);
+    const lay = this._cineLayout(g0, frame, w, h);
+    const sz = lay.sz;
+    const k = this._k();
+    const first = lay.items.length ? elapsed - lay.items[0].line.delay : -1;
+
+    // Translucent band under the subtitle block.
+    if (!lay.card && first > 0) {
+      const a = Math.min(1, first / 400);
+      const band = ctx.createLinearGradient(0, lay.bandTop, 0, h);
+      band.addColorStop(0, "rgba(0,0,0,0)");
+      band.addColorStop(0.3, `rgba(0,0,0,${0.5 * a})`);
+      band.addColorStop(1, `rgba(0,0,0,${0.72 * a})`);
+      ctx.fillStyle = band;
+      ctx.fillRect(0, lay.bandTop, w, h - lay.bandTop);
+    }
+
+    const g = this._tx(ctx);
+    g.save();
+    g.textBaseline = "alphabetic";
+    g.shadowColor = "rgba(0,0,0,0.9)";
+    g.shadowBlur = sz * 0.22 * k;
+    g.shadowOffsetY = sz * 0.05 * k;
+
+    if (lay.title) {
+      const tt = lay.title;
+      const a = Math.min(1, elapsed / 600);
+      g.globalAlpha = 0.8 * a;
+      g.fillStyle = SUB_TEXT;
+      g.fillRect(tt.x, tt.y - sz * 0.22, tt.rule, Math.max(1, sz * 0.06));
+      g.font = tt.font;
+      setTracking(g, tt.tracking);
+      g.textAlign = "left";
+      g.fillText(tt.text, tt.x + tt.rule + sz * 0.5, tt.y);
+      setTracking(g, 0);
+    }
+
+    // Newest line at full strength; earlier lines settle back.
+    let newest = -1;
+    for (let i = 0; i < lay.items.length; i++) {
+      if (elapsed >= lay.items[i].line.delay) newest = i;
+    }
+    g.textAlign = "center";
+    for (let i = 0; i <= newest; i++) {
+      const it = lay.items[i];
+      const le = elapsed - it.line.delay;
+      const a = Math.min(1, le / 300) * (i < newest && !lay.card ? 0.66 : 1);
+      const rise = sz * 0.12 * Math.max(0, 1 - le / 300);
+      g.globalAlpha = a;
+      let y = it.y - rise;
+      if (it.speaker) {
+        g.font = csFont("caps", sz * 0.6, 700);
+        setTracking(g, sz * 0.14);
+        g.fillStyle = readableOn(it.line.color || "#9fd8ff", "#101010", 5);
+        g.fillText(it.speaker, w / 2 + sz * 0.07, y + sz * 0.62);
+        setTracking(g, 0);
+        y += it.nameH;
+      }
+      g.font = it.font;
+      setTracking(g, it.tracking);
+      g.fillStyle = it.kind === "slug" ? "rgba(244,241,234,0.82)" : SUB_TEXT;
+      for (let r = 0; r < it.rows.length; r++) {
+        g.fillText(it.rows[r], w / 2 + it.tracking / 2, y + it.lineH * (r + 0.78));
+      }
+      setTracking(g, 0);
+    }
+    g.restore();
+    ctx.restore();
+  }
+
+  // ── Continue / skip prompt ──────────────────────────────────────
+  /**
+   * Bottom-right prompt (lines frames) or top-right (comic pages), plus the
+   * hold-to-skip bar. Wording follows the input device.
+   */
+  _drawSkipPrompt(ctx, w, h, cy, s, elapsed, where) {
+    const cs = this.cutscene;
+    const look = this._look();
+    const touch = this.isTouchDevice;
+    const right = w - Math.round(Math.max(16, 20 * s));
+    let barY;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const g = this._tx(ctx);
+    g.save();
+    g.textAlign = "right";
+    g.textBaseline = "middle";
+    if (look === "legacy") {
+      const ready = cs.readyToAdvance && where === "bottom";
+      const a = ready ? 0.6 + 0.35 * Math.sin(elapsed / 300) : 0.3 + 0.15 * Math.sin(elapsed / 500);
+      g.fillStyle = ready ? `rgba(0,255,204,${a})` : `rgba(255,255,255,${Math.max(a, where === "top" ? 0.4 : 0)})`;
+      g.font = `${Math.max(10, Math.round(12 * s))}px monospace`;
+      const label = where === "bottom"
+        ? (touch ? "Tap to continue  ·  Hold to skip" : "[ENTER] continue  ·  [ESC] skip")
+        : (touch ? "Tap: next  ·  Hold: skip" : "[ENTER] next  ·  [ESC] skip");
+      g.fillText(label, right, cy);
+    } else {
+      const px = Math.max(10, Math.round(h * 0.017));
+      const ready = cs.readyToAdvance;
+      const a = ready ? 0.78 + 0.18 * Math.sin(elapsed / 320) : 0.55;
+      g.font = csFont("caps", px, 700);
+      setTracking(g, px * 0.14);
+      g.fillStyle = look === "comic" ? `rgba(255,241,184,${a})` : `rgba(244,241,234,${a})`;
+      const label = touch
+        ? "TAP TO CONTINUE   ·   HOLD TO SKIP"
+        : "ENTER  CONTINUE   ·   ESC  SKIP";
+      g.fillText(label, right, cy);
+      setTracking(g, 0);
+    }
+    g.restore();
+    ctx.restore();
+
+    if (cs.skipHeldStart > 0) {
+      const holdProgress = Math.min(1, (performance.now() - cs.skipHeldStart) / 1000);
+      const skipBarW = Math.round(Math.max(90, 120 * s));
+      const skipBarH = Math.max(2, Math.round(4 * s));
+      const skipBarX = right - skipBarW;
+      barY = where === "bottom" ? cy - Math.max(14, 18 * s) - skipBarH : cy + Math.max(10, 12 * s);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(skipBarX, barY, skipBarW, skipBarH);
+      ctx.fillStyle = look === "cine" ? SUB_TEXT : "#00ffcc";
+      ctx.fillRect(skipBarX, barY, skipBarW * holdProgress, skipBarH);
+      ctx.save();
+      const g2 = this._tx(ctx);
+      g2.save();
+      g2.fillStyle = "rgba(255,255,255,0.6)";
+      g2.textAlign = "right";
+      g2.textBaseline = where === "bottom" ? "bottom" : "top";
+      g2.font = look === "legacy"
+        ? `${Math.max(9, Math.round(10 * s))}px monospace`
+        : csFont("caps", Math.max(9, Math.round(h * 0.014)), 700);
+      g2.fillText(
+        touch ? "Hold to skip all..." : "Hold SPACE to skip all...",
+        right,
+        where === "bottom" ? barY - 4 : barY + skipBarH + 4,
+      );
+      g2.restore();
+      ctx.restore();
+    }
+  }
+
+  // ── Panel / page lettering (flipbook pages + comic panels) ──────
+  /**
+   * Caption layout for one panel, cached on the panel object. `mode` is
+   * "page" (full-bleed flipbook page) or "panel" (a panel on a comic page).
+   */
+  _panelCaptionLayout(g, panel, pw, ph, mode) {
+    const look = this._look();
+    const sh = this._screenH || ph;
+    const key = `${look}|${mode}|${Math.round(pw)}|${Math.round(ph)}|${sh}|${this.getPlayerName()}`;
+    const hit = this._textLayouts.get(panel);
+    if (hit?.key === key) return hit;
+    const text = this._resolve(panel.caption);
+    const cls = classifyLine(text);
+    const capSize = panel.captionSize ?? (mode === "page" ? 13 : 12);
+    const out = { key, look, cls };
+    if (look === "legacy") {
+      const s = this._legacyS(sh);
+      const fontSize = Math.max(11, Math.round(capSize * s));
+      const padX = Math.round(14 * s);
+      const font = `bold ${fontSize}px monospace`;
+      const maxW = mode === "page" ? pw - padX * 4 : pw - 12 - padX * 2;
+      const lay = wrapText(g, text, font, maxW);
+      Object.assign(out, { font, fontSize, padX, padY: Math.round(8 * s), rows: lay.lines, widths: lay.widths,
+        lineH: fontSize + Math.max(3, 4 * s), width: lay.width, text });
+    } else if (look === "comic") {
+      const narrow = pw < 900;
+      let kind = cls.speaker ? "radio" : cls.quoted ? "balloon" : "caption";
+      if (capSize >= 18 && !cls.speaker && !cls.quoted) kind = "splash";
+      const base = this._comicSize(sh) * (mode === "page" ? 1 : 0.8);
+      const cz = Math.max(10.5, base * Math.sqrt(capSize / (mode === "page" ? 14 : 12)));
+      const it = this._comicItem(g, kind, cls.text, kind === "splash" ? cz * 1.7 : cz, pw, narrow);
+      // Keep every box inside its panel.
+      if (it.w > pw * 0.92 && kind !== "splash") {
+        const lay = wrapText(g, cls.text.toUpperCase(), it.font, pw * 0.92 - it.padX * 2);
+        it.rows = lay.lines;
+        it.widths = lay.widths;
+        it.w = lay.width + it.padX * 2;
+        it.h = lay.lines.length * it.lineH + it.padY * 2;
+      }
+      it.cz = cz;
+      it.speaker = cls.speaker;
+      it.line = { color: panel.captionColor };
+      if (kind === "radio") {
+        it.tagFont = csFont("letter", cz * 0.72, 700);
+        it.tagH = cz * 1.05;
+      }
+      out.item = it;
+      out.w = it.w;
+      out.h = it.h + (kind === "radio" ? it.tagH * 0.55 : 0);
+    } else {
+      const sz = this._cineSize(sh) * (mode === "page" ? 0.9 : 0.7);
+      const card = capSize >= 18 && !cls.speaker;
+      const font = card ? csFont("caps", sz * 1.5, 700) : csFont("cine", sz, cls.quoted || cls.speaker ? 500 : 400, !cls.quoted && !cls.speaker);
+      const tracking = card ? sz * 0.26 : 0;
+      const shown = card ? cls.text.toUpperCase() : cls.text;
+      const padX = card ? 0 : sz * 0.85;
+      const padY = card ? 0 : sz * 0.5;
+      const lay = wrapText(g, shown, font, Math.min(pw * 0.86, sz * 32) - padX * 2, tracking);
+      const lineH = card ? sz * 1.8 : sz * 1.3;
+      const nameH = cls.speaker ? sz * 0.9 : 0;
+      Object.assign(out, { font, tracking, card, sz, padX, padY, rows: lay.lines, lineH, nameH,
+        w: lay.width + padX * 2, h: lay.lines.length * lineH + padY * 2 + nameH });
+    }
+    this._textLayouts.set(panel, out);
+    return out;
+  }
+
+  /** Legacy scale factor (text sizes in the original layout). */
+  _legacyS(h) {
+    const raw = h / 900;
+    return this.isTouchDevice ? Math.max(0.82, raw) : raw;
+  }
+
+  /** Box top for a caption of height `bh` in a `ph`-tall area. */
+  _captionY(pos, ph, bh, inset) {
+    if (pos === "top") return inset;
+    if (pos === "center") return (ph - bh) / 2;
+    return ph - bh - inset;
+  }
+
+  /**
+   * Draw a caption in a pw×ph area at the context origin. `reveal` is ms
+   * since the caption appeared (Legacy types; the others pop or fade in).
+   */
+  _drawCaption(ctx, panel, pw, ph, mode, reveal) {
+    const g0 = this._tx(ctx);
+    const L = this._panelCaptionLayout(g0, panel, pw, ph, mode);
+    const pos = panel.captionPos || "bottom";
+    const k = this._k();
+    if (L.look === "legacy") {
+      const boxH = L.rows.length * L.lineH + L.padY * 2;
+      if (mode === "page") {
+        const boxW = Math.min(pw - L.padX * 2, L.width + L.padX * 2);
+        const boxX = (pw - boxW) / 2;
+        const boxY = this._captionY(pos, ph, boxH, L.padY * 1.5);
+        ctx.fillStyle = panel.captionBg || "rgba(248,238,210,0.96)";
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, Math.max(2, 4 * (L.fontSize / 13)));
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.6)";
+        ctx.lineWidth = Math.max(1, L.fontSize * 0.11);
+        ctx.stroke();
+        const g = this._tx(ctx);
+        g.save();
+        g.font = L.font;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillStyle = readableOn(panel.captionColor || "#1a1208", panel.captionBg || "#f8eed2", 4.5);
+        for (let r = 0; r < L.rows.length; r++) {
+          g.fillText(L.rows[r], boxX + boxW / 2, boxY + L.padY + L.lineH * (r + 0.5));
+        }
+        g.restore();
+        return;
+      }
+      // Comic-page panel: dark plate, typed in, anchored left so it never shifts.
+      const capBg = panel.captionBg || "rgba(0,0,0,0.85)";
+      const capColor = readableOn(panel.captionColor || "#ffffff", "#0a0a12", 4.5);
+      const boxW = Math.min(pw - 12, L.width + 20);
+      const boxX = (pw - boxW) / 2;
+      const boxY = this._captionY(pos, ph, boxH, 6);
+      ctx.fillStyle = capBg;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 3);
+      ctx.fill();
+      ctx.strokeStyle = capColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      const visible = Math.min(L.text.length, Math.floor((reveal / 1000) * 35));
+      let left = visible;
+      const g = this._tx(ctx);
+      g.save();
+      g.font = L.font;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.shadowColor = capColor;
+      g.shadowBlur = (visible < L.text.length ? 8 : 3) * k;
+      g.fillStyle = capColor;
+      for (let r = 0; r < L.rows.length && left > 0; r++) {
+        const row = L.rows[r];
+        g.fillText(left >= row.length ? row : row.slice(0, left), pw / 2 - L.widths[r] / 2, boxY + L.padY + L.lineH * (r + 0.5));
+        left -= row.length + 1;
+      }
+      g.restore();
+      return;
+    }
+
+    const a = Math.min(1, reveal / 160);
+    if (L.look === "comic") {
+      const it = L.item;
+      const inset = mode === "page" ? ph * 0.05 : Math.max(6, it.cz * 0.5);
+      const top = this._captionY(pos, ph, L.h, inset);
+      const x = (pw - it.w) / 2;
+      const y = top + (it.kind === "radio" ? it.tagH * 0.55 : 0);
+      const ease = 1 - Math.pow(1 - a, 3);
+      const sc = it.kind === "splash" ? 1.2 - 0.2 * ease : 0.88 + 0.12 * ease;
+      ctx.save();
+      ctx.globalAlpha *= Math.min(1, reveal / 110);
+      ctx.translate(pw / 2, y + it.h / 2);
+      ctx.scale(sc, sc);
+      ctx.translate(-pw / 2, -(y + it.h / 2));
+      const g = this._tx(ctx);
+      g.save();
+      this._drawComicItem(g, it, x, y, false);
+      g.restore();
+      ctx.restore();
+      return;
+    }
+
+    // Modern: translucent plate, clean sans, soft shadow.
+    const inset = mode === "page" ? ph * 0.06 : Math.max(6, L.sz * 0.5);
+    const y = this._captionY(pos, ph, L.h, inset);
+    const x = (pw - L.w) / 2;
+    ctx.save();
+    ctx.globalAlpha *= a;
+    const g = this._tx(ctx);
+    g.save();
+    if (!L.card) {
+      g.fillStyle = "rgba(6,8,12,0.66)";
+      g.beginPath();
+      g.roundRect(x, y, L.w, L.h, L.sz * 0.25);
+      g.fill();
+    }
+    g.shadowColor = "rgba(0,0,0,0.9)";
+    g.shadowBlur = L.sz * 0.22 * k;
+    g.shadowOffsetY = L.sz * 0.05 * k;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    let ty = y + L.padY;
+    if (L.cls.speaker) {
+      g.font = csFont("caps", L.sz * 0.6, 700);
+      setTracking(g, L.sz * 0.14);
+      g.fillStyle = readableOn(panel.captionColor || "#9fd8ff", "#101010", 5);
+      g.fillText(L.cls.speaker, pw / 2 + L.sz * 0.07, ty + L.nameH * 0.45);
+      ty += L.nameH;
+    }
+    g.font = L.font;
+    setTracking(g, L.tracking);
+    g.fillStyle = L.card ? readableOn(panel.captionColor || SUB_TEXT, "#101010", 7) : SUB_TEXT;
+    for (let r = 0; r < L.rows.length; r++) {
+      g.fillText(L.rows[r], pw / 2 + L.tracking / 2, ty + L.lineH * (r + 0.5));
+    }
+    setTracking(g, 0);
+    g.restore();
+    ctx.restore();
+  }
+
+  /** Onomatopoeia at the panel's sfx anchor. `grow` 0..1 is the slam-in. */
+  _drawSfx(ctx, panel, pw, ph, s, mode, grow = 1) {
+    const look = this._look();
+    const sx = (panel.sfxX ?? 0.5) * pw;
+    const sy = (panel.sfxY ?? (mode === "page" ? 0.4 : 0.3)) * ph;
+    ctx.save();
+    ctx.translate(sx, sy);
+    if (look === "cine") {
+      // Film sound caption instead of drawn lettering.
+      const px = this._cineSize(this._screenH || ph) * 0.62;
+      const g = this._tx(ctx);
+      g.save();
+      g.font = csFont("caps", px, 700);
+      setTracking(g, px * 0.2);
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.shadowColor = "rgba(0,0,0,0.9)";
+      g.shadowBlur = px * 0.3 * this._k();
+      g.fillStyle = "rgba(244,241,234,0.85)";
+      g.fillText(`[ ${panel.sfx} ]`, px * 0.1, 0);
+      setTracking(g, 0);
+      g.restore();
+      ctx.restore();
+      return;
+    }
+    const sc = mode === "panel" ? 0.5 + 0.5 * grow : 1;
+    ctx.scale(sc, sc);
+    ctx.rotate(((panel.sfxRot ?? (mode === "page" ? -8 : 0)) * Math.PI) / 180);
+    const g = this._tx(ctx);
+    g.save();
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.lineJoin = "round";
+    if (look === "legacy") {
+      if (mode === "page") {
+        const sz = (panel.sfxSize ?? 28) * s;
+        g.font = `900 italic ${sz}px Impact, "Arial Black", sans-serif`;
+        g.lineWidth = Math.max(2, 4 * s);
+      } else {
+        g.font = `bold ${Math.round((panel.sfxSize || 28) * s)}px monospace`;
+        g.lineWidth = 4;
+      }
+      g.strokeStyle = "#000";
+      g.strokeText(panel.sfx, 0, 0);
+      g.fillStyle = panel.sfxColor || "#ffcc00";
+      g.fillText(panel.sfx, 0, 0);
+    } else {
+      // Comic: heavy italic display, hard ink drop, fat round-joined outline.
+      const sz = Math.max(20, (panel.sfxSize ?? 28) * 1.35 * Math.max(s, this._comicSize(this._screenH || ph) / 22));
+      g.font = csFont("sfx", sz, 400, true);
+      setTracking(g, sz * 0.02);
+      const drop = sz * 0.07;
+      g.lineWidth = sz * 0.2;
+      g.strokeStyle = INK;
+      g.strokeText(panel.sfx, drop, drop);
+      g.fillStyle = INK;
+      g.fillText(panel.sfx, drop, drop);
+      g.strokeText(panel.sfx, 0, 0);
+      g.fillStyle = panel.sfxColor || "#ffcc00";
+      g.fillText(panel.sfx, 0, 0);
+      // Highlight rim along the top of the letters.
+      g.lineWidth = Math.max(1, sz * 0.03);
+      g.strokeStyle = "rgba(255,255,255,0.55)";
+      g.strokeText(panel.sfx, -sz * 0.012, -sz * 0.02);
+      setTracking(g, 0);
+    }
+    g.restore();
+    ctx.restore();
+  }
+
+  /** Flipbook page lettering: sfx, caption, prompt. Origin = page top-left. */
+  _drawPageText(ctx, pw, ph, panel, t, s, textAlpha) {
+    ctx.save();
+    ctx.globalAlpha *= textAlpha;
+    if (panel.sfx) this._drawSfx(ctx, panel, pw, ph, s, "page");
+    if (panel.caption) this._drawCaption(ctx, panel, pw, ph, "page", 1e9);
+    if (panel.prompt) this._drawPagePrompt(ctx, panel, pw, ph, t, s);
+    ctx.restore();
+  }
+
+  _drawPagePrompt(ctx, panel, pw, ph, t, s) {
+    const look = this._look();
+    const pulse = 0.65 + 0.35 * Math.sin(t * 5);
+    let prompt = panel.prompt.replace(/\x1b/g, "");
+    if (this.isTouchDevice) prompt = prompt.replace(/PRESS SPACE\s*\/\s*CLICK/i, "TAP");
+    const py2 = ph * (panel.promptY ?? 0.78);
+    const color = panel.promptColor || "#00ffcc";
+    const k = this._k();
+    const g = this._tx(ctx);
+    g.save();
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.lineJoin = "round";
+    if (look === "legacy") {
+      let size = Math.round((panel.promptSize ?? 20) * s);
+      g.font = `900 ${size}px monospace`;
+      const mw = g.measureText(prompt).width;
+      if (mw > pw * 0.92) {
+        size = Math.max(9, Math.floor(size * (pw * 0.92) / mw));
+        g.font = `900 ${size}px monospace`;
+      }
+      g.globalCompositeOperation = "lighter";
+      g.shadowColor = color;
+      g.shadowBlur = (12 + pulse * 16) * k;
+      g.strokeStyle = "rgba(0,0,0,0.8)";
+      g.lineWidth = Math.max(2, 4 * s);
+      g.strokeText(prompt, pw / 2, py2);
+      g.fillStyle = color;
+      g.globalAlpha *= 0.7 + pulse * 0.3;
+      g.fillText(prompt, pw / 2, py2);
+    } else {
+      const sh = this._screenH || ph;
+      let px = Math.max(12, Math.min(26, sh * 0.026)) * ((panel.promptSize ?? 18) / 18);
+      g.font = csFont("caps", px, 800);
+      const tr = px * 0.16;
+      setTracking(g, tr);
+      const mw = g.measureText(prompt).width;
+      if (mw > pw * 0.9) {
+        px *= (pw * 0.9) / mw;
+        g.font = csFont("caps", px, 800);
+        setTracking(g, px * 0.16);
+      }
+      if (look === "comic") {
+        g.lineWidth = px * 0.3;
+        g.strokeStyle = INK;
+        g.strokeText(prompt, pw / 2 + px * 0.08, py2);
+        g.fillStyle = color;
+        g.globalAlpha *= 0.75 + pulse * 0.25;
+        g.fillText(prompt, pw / 2 + px * 0.08, py2);
+      } else {
+        g.shadowColor = "rgba(0,0,0,0.9)";
+        g.shadowBlur = px * 0.4 * k;
+        g.fillStyle = SUB_TEXT;
+        g.globalAlpha *= 0.55 + pulse * 0.4;
+        g.fillText(prompt, pw / 2 + px * 0.08, py2);
+      }
+      setTracking(g, 0);
+    }
+    g.restore();
+  }
+
+  /** Small page counter (e.g. "3 / 7"), right-aligned at (x, y). */
+  _drawPageCounter(ctx, text, x, y, s) {
+    const look = this._look();
+    const g = this._tx(ctx);
+    g.save();
+    g.textAlign = "right";
+    g.textBaseline = "alphabetic";
+    if (look === "legacy") {
+      g.font = `${Math.max(10, Math.round(11 * s))}px monospace`;
+      g.fillStyle = "rgba(180,200,220,0.6)";
+    } else {
+      const px = Math.max(10, Math.round((this._screenH || 720) * 0.016));
+      g.font = csFont("caps", px, 700);
+      setTracking(g, px * 0.16);
+      g.fillStyle = look === "comic" ? "rgba(255,241,184,0.75)" : "rgba(244,241,234,0.7)";
+    }
+    g.fillText(text, x, y);
+    setTracking(g, 0);
+    g.restore();
   }
 
   // ── Flipbook (Marvel-style page-turn intro) ─────────────────────
@@ -942,12 +1880,14 @@ export class CutsceneEngine {
 
       // Draw the next page underneath (revealed as current page flips away)
       if (nextPage && flipT > 0) {
-        this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1);
+        this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1, 0);
       }
 
       // Draw current page with horizontal page-flip transform
       if (flipT === 0) {
-        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+        // Lettering settles onto the page just after it lands.
+        const textIn = Math.min(1, (now - cs.fbPageStart) / 220);
+        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1, textIn);
       } else {
         // Ease in-out for natural flip motion
         const eased = flipT < 0.5
@@ -964,7 +1904,7 @@ export class CutsceneEngine {
         ctx.translate(spineX, py + ph / 2);
         ctx.transform(sx, skewY * sx, 0, 1, 0, 0);
         ctx.translate(-spineX, -(py + ph / 2));
-        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1);
+        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1, Math.max(0, 1 - flipT * 2.5));
         ctx.restore();
 
         // Shadow cast by the lifting page on the next page
@@ -994,12 +1934,7 @@ export class CutsceneEngine {
 
     // Page indicator (subtle, bottom-right). The cover is not a page.
     if (cs.fbPhase === "pages") {
-      ctx.save();
-      ctx.font = `${Math.round(11 * s)}px monospace`;
-      ctx.fillStyle = "rgba(180,200,220,0.45)";
-      ctx.textAlign = "right";
-      ctx.fillText(`${cs.fbPage + 1} / ${fb.pages.length}`, px + pw - 8 * s, py + ph - 8 * s);
-      ctx.restore();
+      this._drawPageCounter(ctx, `${cs.fbPage + 1} / ${fb.pages.length}`, px + pw - Math.max(8, 10 * s), py + ph - Math.max(8, 10 * s), s);
     }
   }
 
@@ -1102,7 +2037,7 @@ export class CutsceneEngine {
 
     // Page 1 waits under the cover
     if (open > 0) {
-      this._drawFlipbookPage(ctx, px, py, pw, ph, fb.pages[0].panel, t, s, paperTint, 1);
+      this._drawFlipbookPage(ctx, px, py, pw, ph, fb.pages[0].panel, t, s, paperTint, 1, 0);
       this._drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, e);
     }
 
@@ -1408,7 +2343,7 @@ export class CutsceneEngine {
   }
 
   /** Render a single flipbook page (panel) into the given rect. */
-  _drawFlipbookPage(ctx, px, py, pw, ph, panel, t, s, paperTint, alpha) {
+  _drawFlipbookPage(ctx, px, py, pw, ph, panel, t, s, paperTint, alpha, textAlpha = 1) {
     ctx.save();
     ctx.globalAlpha = alpha;
 
@@ -1485,99 +2420,6 @@ export class CutsceneEngine {
     }
     ctx.globalAlpha = alpha;
 
-    // SFX (KRAKOOM!)
-    if (panel.sfx) {
-      ctx.save();
-      const sx = (panel.sfxX ?? 0.5) * pw;
-      const sy = (panel.sfxY ?? 0.4) * ph;
-      const sz = (panel.sfxSize ?? 28) * s;
-      ctx.translate(sx, sy);
-      ctx.rotate(((panel.sfxRot ?? -8) * Math.PI) / 180);
-      ctx.font = `900 italic ${sz}px Impact, "Arial Black", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.lineWidth = Math.max(2, 4 * s);
-      ctx.strokeStyle = "#000";
-      ctx.strokeText(panel.sfx, 0, 0);
-      ctx.fillStyle = panel.sfxColor || "#ffcc00";
-      ctx.fillText(panel.sfx, 0, 0);
-      ctx.restore();
-    }
-
-    // Caption box
-    if (panel.caption) {
-      const pos = panel.captionPos || "bottom";
-      const fontSize = Math.round((panel.captionSize ?? 13) * s);
-      const padX = Math.round(14 * s);
-      const padY = Math.round(8 * s);
-      ctx.font = `bold ${fontSize}px monospace`;
-      ctx.textAlign = "center";
-      const text = panel.caption.replace(/\{AGENT\}/g, this.getPlayerName());
-      // Wrap to width
-      const maxW = pw - padX * 4;
-      const words = text.split(" ");
-      const lines = [];
-      let cur = "";
-      for (const word of words) {
-        const test = cur ? `${cur} ${word}` : word;
-        if (ctx.measureText(test).width > maxW && cur) {
-          lines.push(cur);
-          cur = word;
-        } else {
-          cur = test;
-        }
-      }
-      if (cur) lines.push(cur);
-
-      const boxH = lines.length * (fontSize + 4 * s) + padY * 2;
-      const boxW = Math.min(
-        pw - padX * 2,
-        Math.max(...lines.map(l => ctx.measureText(l).width)) + padX * 2,
-      );
-      const boxX = (pw - boxW) / 2;
-      let boxY;
-      if (pos === "top") boxY = padY * 1.5;
-      else if (pos === "center") boxY = (ph - boxH) / 2;
-      else boxY = ph - boxH - padY * 1.5;
-
-      // Caption plate (vintage off-white)
-      ctx.fillStyle = panel.captionBg || "rgba(248,238,210,0.96)";
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, boxW, boxH, Math.max(2, 4 * s));
-      ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.6)";
-      ctx.lineWidth = Math.max(1, 1.5 * s);
-      ctx.stroke();
-
-      ctx.fillStyle = panel.captionColor || "#1a1208";
-      lines.forEach((ln, i) => {
-        ctx.fillText(
-          ln,
-          boxX + boxW / 2,
-          boxY + padY + fontSize + i * (fontSize + 4 * s) - 2,
-        );
-      });
-    }
-
-    if (panel.prompt) {
-      const pulse = 0.65 + 0.35 * Math.sin(t * 5);
-      const prompt = panel.prompt.replace(/\x1b/g, "");
-      const py2 = ph * (panel.promptY ?? 0.78);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.textAlign = "center";
-      ctx.font = `900 ${Math.round((panel.promptSize ?? 20) * s)}px monospace`;
-      ctx.shadowColor = panel.promptColor || "#00ffcc";
-      ctx.shadowBlur = 12 + pulse * 16;
-      ctx.strokeStyle = "rgba(0,0,0,0.8)";
-      ctx.lineWidth = Math.max(2, 4 * s);
-      ctx.strokeText(prompt, pw / 2, py2);
-      ctx.fillStyle = panel.promptColor || "#00ffcc";
-      ctx.globalAlpha = 0.7 + pulse * 0.3;
-      ctx.fillText(prompt, pw / 2, py2);
-      ctx.restore();
-    }
-
     // Action speed-lines
     if (panel.action) {
       ctx.strokeStyle = `rgba(0,0,0,${0.18 + 0.06 * Math.sin(t * 4)})`;
@@ -1593,6 +2435,12 @@ export class CutsceneEngine {
         ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2);
         ctx.stroke();
       }
+    }
+
+    // Lettering last, so speed lines never cross it.
+    if (textAlpha > 0) {
+      ctx.globalAlpha = alpha;
+      this._drawPageText(ctx, pw, ph, panel, t, s, textAlpha);
     }
 
     ctx.restore();
@@ -1762,88 +2610,32 @@ export class CutsceneEngine {
       ctx.lineWidth = Math.max(1, s);
       ctx.strokeRect(px + 2, py + 2, pw - 4, ph - 4);
 
-      // Caption box text
+      // Caption + onomatopoeia, lettered per art style
       if (panel.caption) {
         const captionElapsed = panelElapsed - 400;
         if (captionElapsed > 0) {
-          const capFade = Math.min(1, captionElapsed / 400);
-          const capBg = panel.captionBg || "rgba(0,0,0,0.85)";
-          const capColor = panel.captionColor || "#ffffff";
-          const capSize = Math.round((panel.captionSize || 12) * s);
-          const capPos = panel.captionPos || "bottom";
-
-          ctx.font = `bold ${capSize}px monospace`;
-          const textW = ctx.measureText(panel.caption).width;
-          const boxW = Math.min(pw - 12, textW + 20);
-          const boxH = capSize + 14;
-
-          let boxX = px + (pw - boxW) / 2;
-          let boxY;
-          if (capPos === "top") boxY = py + 6;
-          else if (capPos === "center") boxY = py + (ph - boxH) / 2;
-          else boxY = py + ph - boxH - 6;
-
-          ctx.globalAlpha = panelAlpha * capFade;
-          ctx.fillStyle = capBg;
-          ctx.beginPath();
-          ctx.roundRect(boxX, boxY, boxW, boxH, 3);
-          ctx.fill();
-          ctx.strokeStyle = capColor;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.roundRect(boxX, boxY, boxW, boxH, 3);
-          ctx.stroke();
-
-          // Typewriter reveal with glow
-          const charsPerSec = 35;
-          const visibleChars = Math.min(
-            panel.caption.length,
-            Math.floor((captionElapsed / 1000) * charsPerSec),
-          );
           ctx.save();
-          ctx.shadowColor = capColor;
-          ctx.shadowBlur = visibleChars < panel.caption.length ? 8 : 3;
-          ctx.fillStyle = capColor;
-          ctx.textAlign = "center";
-          ctx.fillText(
-            panel.caption.substring(0, visibleChars),
-            px + pw / 2,
-            boxY + capSize + 4,
-          );
-          ctx.textAlign = "left";
+          ctx.globalAlpha = panelAlpha * Math.min(1, captionElapsed / 400);
+          ctx.translate(px, py);
+          this._drawCaption(ctx, panel, pw, ph, "panel", captionElapsed);
           ctx.restore();
         }
       }
-
-      // SFX text (comic style onomatopoeia)
       if (panel.sfx) {
         const sfxElapsed = panelElapsed - 150;
         if (sfxElapsed > 0) {
-          const sfxScale = 0.5 + 0.5 * Math.min(1, sfxElapsed / 200);
           const sfxAlpha =
             Math.min(1, sfxElapsed / 200) *
             (1 - Math.max(0, (sfxElapsed - 2000) / 500));
           if (sfxAlpha > 0) {
             ctx.save();
             ctx.globalAlpha = sfxAlpha;
-            const sfxX = px + pw * (panel.sfxX || 0.5);
-            const sfxY = py + ph * (panel.sfxY || 0.3);
-            ctx.translate(sfxX, sfxY);
-            ctx.scale(sfxScale, sfxScale);
-            ctx.rotate(((panel.sfxRot || 0) * Math.PI) / 180);
-            ctx.font = `bold ${Math.round((panel.sfxSize || 28) * s)}px monospace`;
-            ctx.strokeStyle = "#000000";
-            ctx.lineWidth = 4;
-            ctx.textAlign = "center";
-            ctx.strokeText(panel.sfx, 0, 0);
-            ctx.fillStyle = panel.sfxColor || "#ffcc00";
-            ctx.fillText(panel.sfx, 0, 0);
-            ctx.textAlign = "left";
+            ctx.translate(px, py);
+            this._drawSfx(ctx, panel, pw, ph, s, "panel", Math.min(1, sfxElapsed / 200));
             ctx.restore();
           }
         }
       }
-
       ctx.restore(); // border + scale
     }
 
@@ -1868,48 +2660,9 @@ export class CutsceneEngine {
     ctx.fillStyle = botBarC;
     ctx.fillRect(0, h - barH, w, barH);
 
-    // === Frame page number ===
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.font = `italic ${Math.round(11 * s)}px monospace`;
-    ctx.textAlign = "right";
-    ctx.fillText(
-      `${cs.frame + 1} / ${cs.script.length}`,
-      w - Math.round(16 * s),
-      h - barH / 2 + Math.round(4 * s),
-    );
-
-    // === Skip prompt ===
-    const skipAlpha = 0.3 + 0.1 * Math.sin(elapsed / 500);
-    ctx.fillStyle = `rgba(255,255,255,${skipAlpha})`;
-    ctx.font = `${Math.round(12 * s)}px monospace`;
-    ctx.fillText(
-      "[ENTER] next  ·  [ESC] skip",
-      w - Math.round(240 * s),
-      barH / 2 + Math.round(4 * s),
-    );
-
-    // === Hold-to-skip progress bar ===
-    if (cs.skipHeldStart > 0) {
-      const holdProgress = Math.min(
-        1,
-        (performance.now() - cs.skipHeldStart) / 1000,
-      );
-      const skipBarW = Math.round(120 * s);
-      const skipBarBH = Math.round(4 * s);
-      const skipBarX = w - Math.round(240 * s);
-      const skipBarY = barH / 2 + Math.round(12 * s);
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
-      ctx.fillRect(skipBarX, skipBarY, skipBarW, skipBarBH);
-      ctx.fillStyle = "#00ffcc";
-      ctx.fillRect(skipBarX, skipBarY, skipBarW * holdProgress, skipBarBH);
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = `${Math.round(10 * s)}px monospace`;
-      ctx.fillText(
-        "Hold SPACE to skip all...",
-        w - Math.round(240 * s),
-        skipBarY + Math.round(16 * s),
-      );
-    }
+    // === Page number (bottom) + continue/skip prompt (top) ===
+    this._drawPageCounter(ctx, `${cs.frame + 1} / ${cs.script.length}`, w - Math.round(Math.max(16, 20 * s)), h - Math.max(5, barH * 0.28), s);
+    this._drawSkipPrompt(ctx, w, h, barH / 2, s, elapsed, "top");
 
     ctx.textAlign = "left";
   }

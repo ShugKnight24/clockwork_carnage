@@ -3,6 +3,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 // Reused light sample for the Realistic viewmodel; no per-frame allocation.
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
 import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
+import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
@@ -879,6 +880,8 @@ export class Game {
 
   loadCharacter() {
     Persistence.loadCharacter(this);
+    // Cutscenes and the comic draw the player's own build.
+    setCastCharacter(this.character);
   }
 
   setAlwaysTutorial(on) {
@@ -1319,6 +1322,7 @@ export class Game {
   _exitCreator(saved) {
     if (saved) {
       this.saveCharacter();
+      setCastCharacter(this.character);
       trackEvent("character_create", {
         loadout_class: this.character.loadoutClass || "default",
       });
@@ -1375,6 +1379,8 @@ export class Game {
         getTouchControls: () => this.touchControls,
         isTouchDevice: isPrimaryTouchDevice(),
         getPlayerName: () => this.character.name || "Agent",
+        // Cutscene text draws on the full-DPR HUD canvas so it stays crisp.
+        getTextLayer: () => ({ ctx: this.hudCtx, canvas: this.hudCanvas }),
         getSettings: () => this.settings,
       });
     }

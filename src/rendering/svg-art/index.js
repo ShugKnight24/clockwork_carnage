@@ -19,7 +19,8 @@
  */
 
 import { getLayerImage } from "./raster.js";
-import { isModernArt } from "../art-style.js";
+import { isModernArt, isRealisticArt } from "../art-style.js";
+import { buildCastModel, CAST_KEYS } from "./agent-rig.js";
 import { MODELS as HERO } from "./models/hero.js";
 import { MODELS as CAST } from "./models/cast.js";
 import { MODELS as VILLAIN } from "./models/villain.js";
@@ -53,6 +54,76 @@ const DISPLAY_SCALE = {
   unknown_recording: 1.25,
   redacted_file: 1.25,
 };
+
+// ---------------------------------------------------------------------------
+// Cast: the armoured agent dressed as the player built it
+// ---------------------------------------------------------------------------
+
+const DRESSED = new Set(CAST_KEYS);
+// Cosmetic fields that change the drawn agent (name and voice do not).
+const CAST_FIELDS = [
+  "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
+  "visorIndex", "shoulderIndex", "badgeIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex",
+];
+const castHashOf = (ch) => CAST_FIELDS.map((k) => ch[k] | 0).join(".");
+let castRef = null; // the live record (game.character)
+let castLook = null; // snapshot the models are built from
+let castHash = "";
+// key -> { id, model }, built on first draw; one map per style (Comic, Modern)
+const castEntries = [new Map(), new Map()];
+const stockEntries = new Map(); // key -> { id, model }
+
+/**
+ * Dress the cutscene agent (CAST_KEYS) from a saved character. Cheap: models
+ * are rebuilt lazily on their next draw, once per character and art style,
+ * and their layer ids carry a hash of the look so stale bitmaps are never
+ * reused. Pass null to go back to the stock hero.
+ * @param {object|null} character game.character-shaped record
+ */
+export function setCastCharacter(character) {
+  castRef = character || null;
+  const hash = castRef ? castHashOf(castRef) : "";
+  if (hash === castHash && (castLook !== null) === (castRef !== null)) return;
+  castHash = hash;
+  castLook = castRef ? { ...castRef } : null;
+  castEntries[0].clear();
+  castEntries[1].clear();
+  // Build the current style's models while the browser is idle, so the first
+  // cutscene frame only blits. A later change supersedes this one.
+  if (castLook && typeof requestIdleCallback === "function") {
+    const hash = castHash;
+    requestIdleCallback(() => {
+      if (hash !== castHash || !isModernArt()) return;
+      for (const key of CAST_KEYS) modelEntry(key);
+    });
+  }
+}
+
+/** Pick up in-place edits of the live record (once per cutscene, not per frame). */
+function refreshCast() {
+  if (castRef && castHashOf(castRef) !== castHash) setCastCharacter(castRef);
+}
+
+function modelEntry(key) {
+  if (castLook && DRESSED.has(key)) {
+    const real = isRealisticArt();
+    const entries = castEntries[real ? 1 : 0];
+    let e = entries.get(key);
+    if (!e) {
+      e = { id: `art:${key}@${castHash}${real ? "~r" : ""}`, model: buildCastModel(castLook, key, { realistic: real }) };
+      entries.set(key, e);
+    }
+    return e;
+  }
+  let e = stockEntries.get(key);
+  if (!e) {
+    const model = MODELS[key];
+    if (!model) return null;
+    e = { id: `art:${key}`, model };
+    stockEntries.set(key, e);
+  }
+  return e;
+}
 
 export const hasSvgArt = (key) => key in MODELS;
 export const hasSvgBg = (key) => key in BACKGROUNDS;
@@ -142,8 +213,8 @@ function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale) {
  * @returns {boolean} true if drawn
  */
 export function drawSvgArt(ctx, key, t) {
-  const model = MODELS[key];
-  if (!model || !isModernArt()) return false;
+  if (!isModernArt() || !(key in MODELS)) return false;
+  const { id, model } = modelEntry(key);
   const [bx, by, bw, bh] = model.box;
   ctx.save();
   const display = DISPLAY_SCALE[key] ?? 1;
@@ -155,7 +226,7 @@ export function drawSvgArt(ctx, key, t) {
   } else if (display !== 1) {
     ctx.scale(display, display);
   }
-  const drawn = drawLayers(ctx, `art:${key}`, model, t, bx, by, bw, bh, 1);
+  const drawn = drawLayers(ctx, id, model, t, bx, by, bw, bh, 1);
   ctx.restore();
   return drawn;
 }
@@ -166,13 +237,13 @@ export function drawSvgArt(ctx, key, t) {
  * @returns {boolean} true if drawn
  */
 export function drawSvgModelAt(ctx, key, x, y, w, h, t) {
-  const model = MODELS[key];
-  if (!model || !isModernArt()) return false;
+  if (!isModernArt() || !(key in MODELS)) return false;
+  const { id, model } = modelEntry(key);
   const [, , bw, bh] = model.box;
   const k = Math.min(w / bw, h / bh);
   const dw = bw * k;
   const dh = bh * k;
-  return drawLayers(ctx, `art:${key}`, model, t, x + (w - dw) / 2, y + (h - dh), dw, dh, k);
+  return drawLayers(ctx, id, model, t, x + (w - dw) / 2, y + (h - dh), dw, dh, k);
 }
 
 /**
@@ -198,11 +269,13 @@ export function drawSvgBg(ctx, w, h, key, t) {
 /** Start decoding the bitmaps a script will need so the first frame is not procedural. */
 export function warmSvgArt(artKeys, bgKeys, ctx, w, h) {
   if (!isModernArt()) return;
+  refreshCast();
   const base = pixelScale(ctx) * 2 * (h / 900);
   for (const key of artKeys) {
-    const m = MODELS[key];
+    if (!(key in MODELS)) continue;
+    const { id, model: m } = modelEntry(key);
     const k = base * (DISPLAY_SCALE[key] ?? 1);
-    if (m) m.layers.forEach((l, i) => getLayerImage(`art:${key}:${i}`, m.box, m.defs || "", l.markup, k));
+    m.layers.forEach((l, i) => getLayerImage(`${id}:${i}`, m.box, m.defs || "", l.markup, k));
   }
   for (const key of bgKeys) {
     const m = BACKGROUNDS[key];
