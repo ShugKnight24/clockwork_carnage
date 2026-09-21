@@ -16,7 +16,9 @@ import {
   getSettingsForCategory,
   getVisibleCategories,
   applySettingStep,
+  DEFAULT_SETTINGS,
 } from "../../js/settings-registry.js";
+import { settingsLayout } from "../../js/layout.js";
 
 export function dispatchKeyPress(game, code, e) {
   // Nested Spaghetti 😂🤦‍♂️
@@ -438,27 +440,56 @@ export function dispatchKeyPress(game, code, e) {
 
   if (game.state === GameState.SETTINGS) {
     // Category-aware navigation: Q/E = category, W/S/↑/↓ = navigate, A/D/←/→ = value, Enter/Space = cycle
-    const cats = getVisibleCategories(game.isTouchDevice);
+    // Pass `settings` so this list matches the one the screen draws: some
+    // categories appear only for certain values.
+    const cats = getVisibleCategories(game.isTouchDevice, game.settings);
     const catIdx = cats.indexOf(game.settingsCategory);
     const settingsDef = getSettingsForCategory(
       game.isTouchDevice,
       game.settingsCategory,
+      game.settings,
     );
     const settingsCount = settingsDef.length;
 
-    // Switch category: Q = prev, E = next
-    if (code === "KeyQ") {
-      const next = (catIdx - 1 + cats.length) % cats.length;
+    /** Keep the highlighted row inside the scrolled view band. */
+    const followSelection = () => {
+      if (!game.hudW || !game.hudH) return;
+      game.settingsScroll = settingsLayout(
+        game.hudW,
+        game.hudH,
+        game.settingsSelection,
+        game.isTouchDevice,
+        game.settingsCategory,
+        game.settingsScroll,
+        true,
+      ).scrollY;
+    };
+
+    const gotoCategory = (next) => {
       game.settingsCategory = cats[next];
       game.settingsSelection = 0;
+      game.settingsScroll = 0;
       game.audio.menuSelect();
+    };
+
+    // Switch category: Q = prev, E = next
+    if (code === "KeyQ") {
+      gotoCategory((catIdx - 1 + cats.length) % cats.length);
       return;
     }
     if (code === "KeyE") {
-      const next = (catIdx + 1) % cats.length;
-      game.settingsCategory = cats[next];
-      game.settingsSelection = 0;
-      game.audio.menuSelect();
+      gotoCategory((catIdx + 1) % cats.length);
+      return;
+    }
+
+    if (settingsCount === 0) {
+      if (code === "Escape") {
+        game.saveSettings();
+        game.state = game._settingsReturnToMenu
+          ? GameState.MODE_SELECT
+          : GameState.PAUSED;
+        game._settingsReturnToMenu = false;
+      }
       return;
     }
 
@@ -466,12 +497,45 @@ export function dispatchKeyPress(game, code, e) {
     if (code === "ArrowUp" || code === "KeyW") {
       game.settingsSelection =
         (game.settingsSelection - 1 + settingsCount) % settingsCount;
+      followSelection();
       game.audio.menuSelect();
       return;
     }
     if (code === "ArrowDown" || code === "KeyS") {
       game.settingsSelection = (game.settingsSelection + 1) % settingsCount;
+      followSelection();
       game.audio.menuSelect();
+      return;
+    }
+    if (code === "Home" || code === "PageUp") {
+      game.settingsSelection =
+        code === "Home" ? 0 : Math.max(0, game.settingsSelection - 5);
+      followSelection();
+      game.audio.menuSelect();
+      return;
+    }
+    if (code === "End" || code === "PageDown") {
+      game.settingsSelection =
+        code === "End"
+          ? settingsCount - 1
+          : Math.min(settingsCount - 1, game.settingsSelection + 5);
+      followSelection();
+      game.audio.menuSelect();
+      return;
+    }
+
+    // Reset the highlighted setting to its shipped default.
+    if (code === "Backspace" || code === "Delete") {
+      const def = settingsDef[game.settingsSelection];
+      if (def && def.type !== "action") {
+        const fallback = DEFAULT_SETTINGS[def.key];
+        if (fallback !== undefined && game.settings[def.key] !== fallback) {
+          game.settings[def.key] = fallback;
+          if (def.onChange) def.onChange(game);
+          game.saveSettings();
+          game.audio.menuConfirm();
+        }
+      }
       return;
     }
 
@@ -488,6 +552,14 @@ export function dispatchKeyPress(game, code, e) {
     if (stepDir !== 0) {
       const def = settingsDef[game.settingsSelection];
       if (def) {
+        // Action rows run a command; they have no value to step.
+        if (def.type === "action") {
+          if (stepDir > 0) {
+            def.onClick?.(game);
+            game.audio.menuConfirm();
+          }
+          return;
+        }
         if (applySettingStep(game.settings, def, stepDir)) {
           if (def.onChange) def.onChange(game);
           game.saveSettings();
@@ -502,7 +574,12 @@ export function dispatchKeyPress(game, code, e) {
       if (now - game.lastEscTime < 200) return;
       game.lastEscTime = now;
       game.saveSettings();
-      game.state = GameState.PAUSED;
+      // Opened from mode select, so go back there rather than to a pause
+      // menu for a match that was never started.
+      game.state = game._settingsReturnToMenu
+        ? GameState.MODE_SELECT
+        : GameState.PAUSED;
+      game._settingsReturnToMenu = false;
     }
     return;
   }

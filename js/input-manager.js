@@ -224,14 +224,15 @@ export class InputManager {
     b.mouseup   = (e) => this._onMouseUp(e);
     b.wheel     = (e) => {
       e.preventDefault();
-      const now = Date.now();
-      const timeSinceLastSwitch = now - this._lastWeaponSwitch;
-      
-      // Ignore if in cooldown or below threshold (prevents trackpad ghost-switching)
-      if (timeSinceLastSwitch < this._WEAPON_SWITCH_COOLDOWN) return;
-      if (Math.abs(e.deltaY) < this._WHEEL_THRESHOLD) return;
-      
-      this._lastWeaponSwitch = now;
+      // The cooldown and threshold exist to stop a trackpad ghost-switching
+      // weapons mid-fight. Menus scroll with the wheel, where the same gate
+      // swallows all but the first notch of a flick, so gate it on play only.
+      if (this._getState() === this._playingState) {
+        const now = Date.now();
+        if (now - this._lastWeaponSwitch < this._WEAPON_SWITCH_COOLDOWN) return;
+        if (Math.abs(e.deltaY) < this._WHEEL_THRESHOLD) return;
+        this._lastWeaponSwitch = now;
+      }
       this._onWheel(e.deltaY);
     };
     b.lockchange = () => {

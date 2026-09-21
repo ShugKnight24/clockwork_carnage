@@ -1,8 +1,11 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import {
   isCompactPhone,
   pauseLayout,
   settingsLayout,
+  settingsCategoryRects,
+  resolveSettingsHit,
   upgradeLayout,
   tutorialMenuLayout,
 } from "../../js/layout.js";
@@ -140,16 +143,187 @@ function testTutorialMenuLayout() {
   assert.equal(large.menuW, 360, "large viewport should use max menu width");
 }
 
-function run() {
-  testIsCompactPhone();
-  testPauseLayoutCompact();
-  testSettingsLayoutCompact();
-  testUpgradeLayoutCompact();
-  testPauseLayout();
-  testSettingsLayout();
-  testUpgradeLayout();
-  testTutorialMenuLayout();
-  console.log("layout.test.js: all tests passed");
+
+function testSettingsScrollClamp() {
+  // Performance is the longest category and overflows a short window.
+  const short = settingsLayout(1280, 520, 0, false, "Performance", 0, false);
+  assert.ok(short.maxScroll > 0, "long category on a short window must scroll");
+  assert.equal(
+    settingsLayout(1280, 520, 0, false, "Performance", -500, false).scrollY,
+    0,
+    "negative scroll clamps to 0",
+  );
+  assert.equal(
+    settingsLayout(1280, 520, 0, false, "Performance", 99999, false).scrollY,
+    short.maxScroll,
+    "overscroll clamps to maxScroll",
+  );
+
+  // A tall window fits everything, so there is nothing to scroll.
+  const tall = settingsLayout(1280, 2000, 0, false, "Performance", 0, false);
+  assert.equal(tall.maxScroll, 0, "tall window should not scroll");
 }
 
-run();
+function testSettingsScrollFollowsSelection() {
+  const last =
+    settingsLayout(1280, 520, 0, false, "Performance", 0, false).rows.length - 1;
+  const followed = settingsLayout(1280, 520, last, false, "Performance", 0, true);
+  const row = followed.rows[last];
+  assert.ok(followed.scrollY > 0, "selecting the last row must scroll down");
+  assert.ok(row.visible, "the selected row must end up inside the view band");
+  assert.ok(
+    row.y + row.h <= followed.viewTop + followed.viewH + 0.5,
+    "the selected row must sit above the footer band",
+  );
+
+  // Rows scrolled past the top are not drawn and not hit-testable.
+  assert.equal(followed.rows[0].visible, false, "first row scrolls out of view");
+}
+
+function testSettingsFooterReservesSpace() {
+  const layout = settingsLayout(1280, 720, 0, false, "Performance", 0, false);
+  assert.ok(layout.footerH > 0, "footer band must be reserved");
+  assert.equal(
+    layout.viewH,
+    720 - layout.viewTop - layout.footerH,
+    "view band must exclude the footer",
+  );
+}
+
+function testSettingsTouchTargets() {
+  const touch = settingsLayout(740, 360, 0, true, "Performance", 0, false);
+  assert.ok(touch.backBtn.h >= 44, "touch back button must be >= 44px tall");
+  for (const row of touch.rows) {
+    assert.ok(row.decZone.w >= 44, "decrement zone must be >= 44px wide");
+    assert.ok(row.incZone.w >= 44, "increment zone must be >= 44px wide");
+    assert.ok(
+      row.incZone.x >= row.decZone.x + row.decZone.w,
+      "stepper zones must not overlap",
+    );
+  }
+}
+
+function testResolveSettingsHit() {
+  const cats = ["Gameplay", "Display", "Performance"];
+  const layout = settingsLayout(1280, 720, 0, false, "Performance", 0, false);
+  const rects = settingsCategoryRects(layout, cats);
+
+  assert.equal(
+    resolveSettingsHit(layout, rects, rects[1].x + 10, rects[1].y + 5).cat,
+    "Display",
+    "sidebar click resolves to its category",
+  );
+  assert.equal(
+    resolveSettingsHit(
+      layout,
+      rects,
+      layout.backBtn.x + 4,
+      layout.backBtn.y + 4,
+    ).kind,
+    "back",
+    "back button is hit before anything else",
+  );
+
+  const row = layout.rows[1];
+  const inc = resolveSettingsHit(
+    layout,
+    rects,
+    row.incZone.x + 2,
+    row.y + row.h / 2,
+  );
+  assert.equal(inc.kind, "row");
+  assert.equal(inc.index, 1);
+  assert.equal(inc.zone, "inc");
+
+  const dec = resolveSettingsHit(
+    layout,
+    rects,
+    row.decZone.x + 2,
+    row.y + row.h / 2,
+  );
+  assert.equal(dec.zone, "dec", "left stepper zone decrements");
+
+  // The label area selects the row without changing its value.
+  assert.equal(
+    resolveSettingsHit(layout, rects, layout.panelX + 20, row.y + row.h / 2)
+      .zone,
+    "row",
+  );
+
+  // A click in the footer band hits nothing.
+  assert.equal(
+    resolveSettingsHit(layout, rects, layout.panelX + 20, 719).kind,
+    "none",
+  );
+}
+
+function testResolveSettingsHitSlider() {
+  const layout = settingsLayout(1280, 720, 0, false, "Audio", 0, false);
+  const rects = settingsCategoryRects(layout, ["Audio"]);
+  const row = layout.rows.find((r) => r.slider);
+  assert.ok(row, "Audio should contain a slider row");
+
+  const mid = resolveSettingsHit(
+    layout,
+    rects,
+    row.slider.x + row.slider.w / 2,
+    row.slider.hitY + 2,
+  );
+  assert.equal(mid.zone, "slider");
+  assert.ok(
+    Math.abs(mid.pct - 0.5) < 0.02,
+    `slider pct should read ~0.5, got ${mid.pct}`,
+  );
+
+  const left = resolveSettingsHit(
+    layout,
+    rects,
+    row.slider.x - 200,
+    row.slider.hitY + 2,
+  );
+  assert.equal(left.pct, undefined, "outside the bar is not a slider hit");
+}
+
+function testSettingsCategoryRectsFit() {
+  // Nine categories on a short window must still clear the back button.
+  const cats = [
+    "Gameplay", "Display", "Performance", "Audio", "Controls",
+    "Gamepad", "Accessibility", "HUD", "Mobile",
+  ];
+  const layout = settingsLayout(760, 420, 0, true, "Gameplay", 0, false);
+  const rects = settingsCategoryRects(layout, cats);
+  assert.equal(rects.length, cats.length);
+  const last = rects[rects.length - 1];
+  assert.ok(
+    last.y + last.h <= layout.backBtn.y,
+    `last category (bottom ${last.y + last.h}) must sit above the back button (${layout.backBtn.y})`,
+  );
+  for (let i = 1; i < rects.length; i++) {
+    assert.equal(rects[i].y, rects[i - 1].y + rects[i - 1].h, "rects must abut");
+  }
+
+  // A tall window keeps the full-size rows.
+  const tall = settingsCategoryRects(
+    settingsLayout(1280, 1000, 0, false, "Gameplay", 0, false),
+    cats,
+  );
+  assert.equal(tall[0].h, 38, "desktop rows stay 38px when there is room");
+}
+
+describe("layout", () => {
+  it("flags compact phone heights", testIsCompactPhone);
+  it("lays out the pause menu on a compact phone", testPauseLayoutCompact);
+  it("lays out settings on a compact phone", testSettingsLayoutCompact);
+  it("lays out upgrades on a compact phone", testUpgradeLayoutCompact);
+  it("lays out the pause menu on desktop", testPauseLayout);
+  it("lays out settings on desktop", testSettingsLayout);
+  it("lays out upgrades on desktop", testUpgradeLayout);
+  it("sizes the tutorial menu to the viewport", testTutorialMenuLayout);
+  it("clamps settings scroll to the list length", testSettingsScrollClamp);
+  it("keeps the selected setting inside the view band", testSettingsScrollFollowsSelection);
+  it("reserves the footer band out of the row view", testSettingsFooterReservesSpace);
+  it("gives touch 44px steppers and back button", testSettingsTouchTargets);
+  it("resolves pointer hits to category, row, zone or back", testResolveSettingsHit);
+  it("reads a slider position from a pointer hit", testResolveSettingsHitSlider);
+  it("fits every category above the back button", testSettingsCategoryRectsFit);
+});

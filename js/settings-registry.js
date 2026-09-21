@@ -103,6 +103,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "difficulty",
     label: "Difficulty",
+    desc: "Enemy damage, health and aggression.",
     category: "Gameplay",
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
@@ -117,6 +118,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "cutsceneAutoAdvance",
     label: "Cutscene Auto-Advance",
+    desc: "Story panels advance on their own.",
     category: "Gameplay",
     type: "toggle",
     onColor: "#ffaa00",
@@ -126,6 +128,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "crosshair",
     label: "Crosshair",
+    desc: "Reticle shape drawn at screen centre.",
     category: "Gameplay",
     type: "enum",
     values: [
@@ -148,6 +151,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "minimapSize",
     label: "Minimap Size",
+    desc: "Pixel width of the corner minimap.",
     category: "Display",
     type: "slider",
     min: 100,
@@ -180,6 +184,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "visualStyle",
     label: "Visual Style",
+    desc: "Colour grade and lighting mood.",
     category: "Display",
     type: "enum",
     values: ["Clockwork", "Brutal"],
@@ -198,6 +203,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "graphicsPreset",
     label: "Graphics Preset",
+    desc: "One-click quality bundle. Auto picks by device.",
     category: "Performance",
     type: "enum",
     values: ["Auto", "Ultra-Low", "Low", "Medium", "High", "Ultra", "Custom"],
@@ -213,6 +219,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "frameTarget",
     label: "Frame Target",
+    desc: "Frame cap. Auto follows the display refresh rate.",
     category: "Performance",
     type: "enum",
     values: ["Auto", "30 FPS", "60 FPS", "90 FPS", "120 FPS"],
@@ -228,6 +235,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "batterySaver",
     label: "Battery Saver",
+    desc: "Lower the frame cap and render scale to save power.",
     category: "Performance",
     type: "toggle",
     onColor: "#44ffaa",
@@ -238,6 +246,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "renderScale",
     label: "Render Scale",
+    desc: "Internal resolution. Lower is faster and softer.",
     category: "Performance",
     type: "slider",
     min: 50,
@@ -252,6 +261,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "effectsQuality",
     label: "Effects Quality",
+    desc: "Particle, decal and debris budget.",
     category: "Performance",
     type: "enum",
     values: ["Low", "Medium", "High"],
@@ -267,6 +277,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "postProcessing",
     label: "Post Processing",
+    desc: "Full-screen effect pass. Off is fastest.",
     category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
@@ -287,6 +298,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "floorTexture",
     label: "Floor Detail",
+    desc: "Detailed floor and ceiling texturing.",
     category: "Performance",
     type: "toggle",
     onColor: "#ffaa00",
@@ -297,6 +309,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "screenShake",
     label: "Screen Shake",
+    desc: "Camera kick on hits and explosions.",
     category: "Performance",
     type: "toggle",
     onColor: "#ff8844",
@@ -306,6 +319,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "weaponBob",
     label: "Weapon Bob",
+    desc: "Weapon sway while moving.",
     category: "Performance",
     type: "toggle",
     onColor: "#44ffaa",
@@ -315,6 +329,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showPerformanceOverlay",
     label: "Performance Overlay",
+    desc: "FPS and frame-time readout. Same as F.",
     category: "Performance",
     type: "toggle",
     onColor: "#ffcc00",
@@ -325,6 +340,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "enableBloom",
     label: "Bloom",
+    desc: "Glow bleed around bright pixels.",
     category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
@@ -334,6 +350,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "enableChromaticAberration",
     label: "Chromatic Aberration",
+    desc: "Colour fringing towards the screen edges.",
     category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
@@ -343,6 +360,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "enableFilmGrain",
     label: "Film Grain",
+    desc: "Animated grain over the frame.",
     category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
@@ -352,6 +370,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "shadowQuality",
     label: "Shadow Quality",
+    desc: "Resolution of cast shadows.",
     category: "Performance",
     type: "enum",
     values: ["Off", "Low", "High"],
@@ -366,6 +385,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "lightingQuality",
     label: "Lighting Quality",
+    desc: "Number of dynamic lights drawn per frame.",
     category: "Performance",
     type: "enum",
     values: ["Low", "Medium", "High"],
@@ -381,6 +401,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "renderMode",
     label: "Render Mode",
+    desc: "Canvas2D, or the WebGL hybrid renderer.",
     category: "Display",
     type: "enum",
     values: ["Auto", "2D (Canvas)", "3D (WebGL)"],
@@ -391,11 +412,13 @@ export const SETTINGS_REGISTRY = [
     wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
+    onChange: (g) => g.applyRenderMode?.(),
   },
   // ─── Audio ───
   {
     key: "musicVolume",
     label: "Music Volume",
+    desc: "Soundtrack level.",
     category: "Audio",
     type: "slider",
     min: 0,
@@ -410,6 +433,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "sfxVolume",
     label: "SFX Volume",
+    desc: "Weapons, enemies and interface level.",
     category: "Audio",
     type: "slider",
     min: 0,
@@ -425,6 +449,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "sensitivity",
     label: "Mouse Sensitivity",
+    desc: "Mouse look speed.",
     category: "Controls",
     type: "slider",
     min: 0.5,
@@ -439,6 +464,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fov",
     label: "FOV",
+    desc: "Field of view in degrees. Higher sees wider.",
     category: "Controls",
     type: "slider",
     min: 50,
@@ -452,6 +478,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "viewMode",
     label: "View Mode",
+    desc: "Camera position for the player character.",
     category: "Controls",
     type: "enum",
     values: ["First Person", "Third Person"],
@@ -466,6 +493,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "invertX",
     label: "Invert X Axis",
+    desc: "Flip the horizontal look direction.",
     category: "Controls",
     type: "toggle",
     onColor: "#ff8844",
@@ -475,6 +503,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "invertY",
     label: "Invert Y Axis",
+    desc: "Flip the vertical look direction.",
     category: "Controls",
     type: "toggle",
     onColor: "#ff8844",
@@ -485,6 +514,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "gamepadEnabled",
     label: "Controller Support",
+    desc: "Read connected controllers.",
     category: "Gamepad",
     type: "toggle",
     onColor: "#00ffcc",
@@ -495,6 +525,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "gamepadLookSensitivity",
     label: "Look Sensitivity",
+    desc: "Right-stick look speed.",
     category: "Gamepad",
     type: "slider",
     min: 0.5,
@@ -510,6 +541,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "gamepadDeadzone",
     label: "Stick Deadzone",
+    desc: "Stick travel ignored around centre. Raise to stop drift.",
     category: "Gamepad",
     type: "slider",
     min: 0.05,
@@ -525,6 +557,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "gamepadRumble",
     label: "Controller Rumble",
+    desc: "Vibration on hits and weapon fire.",
     category: "Gamepad",
     type: "toggle",
     onColor: "#ffaa00",
@@ -536,6 +569,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fontScale",
     label: "Font Scale",
+    desc: "Size of all interface text.",
     category: "Accessibility",
     type: "slider",
     min: 100,
@@ -549,6 +583,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "colorblind",
     label: "Colorblind Mode",
+    desc: "Recolour damage, pickups and markers.",
     category: "Accessibility",
     type: "enum",
     values: ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
@@ -564,6 +599,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "hudStyle",
     label: "HUD Style",
+    desc: "Preset arrangement of the heads-up display.",
     category: "HUD",
     type: "enum",
     values: ["Minimal", "Classic DOOM", "Tactical", "Custom", "Vanguard"],
@@ -578,6 +614,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "editCustomHud",
     label: "Edit Custom HUD",
+    desc: "Open the drag-and-drop HUD editor.",
     category: "HUD",
     type: "action",
     buttonLabel: "EDIT LAYOUT",
@@ -589,6 +626,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "hudScale",
     label: "HUD Scale",
+    desc: "Size of the heads-up display.",
     category: "HUD",
     type: "slider",
     min: 75,
@@ -602,6 +640,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "staminaBarSize",
     label: "Stamina Bar Size",
+    desc: "Width of the stamina bar.",
     category: "HUD",
     type: "slider",
     min: 75,
@@ -615,6 +654,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showPortrait",
     label: "Show Portrait",
+    desc: "Character portrait and health face.",
     category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
@@ -624,6 +664,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showWeapons",
     label: "Show Weapons",
+    desc: "Weapon slot strip.",
     category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
@@ -633,6 +674,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showKills",
     label: "Show Kills",
+    desc: "Kill counter.",
     category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
@@ -642,6 +684,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "showScore",
     label: "Show Score",
+    desc: "Score readout.",
     category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
@@ -652,6 +695,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "touchSensitivity",
     label: "Touch Sensitivity",
+    desc: "Drag-to-look speed.",
     category: "Mobile",
     type: "slider",
     min: 0.5,
@@ -666,6 +710,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "haptics",
     label: "Haptic Feedback",
+    desc: "Vibration on touch controls.",
     category: "Mobile",
     type: "toggle",
     onColor: "#00ffcc",
@@ -675,6 +720,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "autoFire",
     label: "Auto-Fire (Twin Stick)",
+    desc: "Fire automatically while the right stick is held.",
     category: "Mobile",
     type: "toggle",
     onColor: "#ffaa00",
@@ -684,6 +730,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "swipeWeapons",
     label: "Swipe to Swap Weapons",
+    desc: "Swipe across the screen to change weapon.",
     category: "Mobile",
     type: "toggle",
     onColor: "#00ccff",

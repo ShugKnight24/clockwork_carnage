@@ -39,7 +39,6 @@ export default defineConfig({
 
   test: {
     include: ["tests/unit/**/*.test.js", "tests/unit/**/*.spec.js"],
-    exclude: ["tests/unit/layout.test.js"],
     environment: "node",
     coverage: {
       provider: "v8",

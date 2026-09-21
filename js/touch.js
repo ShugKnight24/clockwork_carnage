@@ -18,6 +18,8 @@ import {
 import {
   pauseLayout,
   settingsLayout,
+  settingsCategoryRects,
+  resolveSettingsHit,
   upgradeLayout,
   tutorialMenuLayout,
 } from "./layout.js";
@@ -258,6 +260,11 @@ export class TouchControls {
       return;
     }
 
+    // Settings: a finger on the row list may become a drag-scroll.
+    if (g.state === "settings" && e.changedTouches.length > 0) {
+      this.startSettingsDrag(e.changedTouches[0]);
+    }
+
     // Cutscene: tap to advance, track hold start for skip
     if (g.state === "cutscene") {
       if (e.changedTouches.length > 0) {
@@ -453,6 +460,13 @@ export class TouchControls {
 
   onTouchMove(e) {
     e.preventDefault();
+
+    if (this.game.state === "settings") {
+      for (const touch of e.changedTouches) {
+        if (this.moveSettingsDrag(touch)) return;
+      }
+      return;
+    }
 
     // Hold-to-skip is checked every frame in game.js updateCutscene()
     // via this.cutsceneHoldTouch — no need to duplicate here.
@@ -723,15 +737,83 @@ export class TouchControls {
     }
   }
 
+  /**
+   * Touch point in the space the HUD is drawn in.
+   *
+   * The HUD canvas backing store is DPR-scaled but its ctx is pre-scaled by
+   * the same DPR, so the screen is laid out in hudW/hudH CSS pixels.
+   * Hit-testing in backing pixels put every tap at 2x on a retina phone.
+   */
+  settingsPoint(touch) {
+    const g = this.game;
+    const rect = g.hudCanvas.getBoundingClientRect();
+    return {
+      x: (touch.clientX - rect.left) * (g.hudW / rect.width),
+      y: (touch.clientY - rect.top) * (g.hudH / rect.height),
+    };
+  }
+
+  /** Begin a drag-scroll of the settings list. */
+  startSettingsDrag(touch) {
+    const g = this.game;
+    const p = this.settingsPoint(touch);
+    const { sideW } = settingsLayout(
+      g.hudW,
+      g.hudH,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
+      g.settingsScroll,
+      false,
+    );
+    this.settingsDrag =
+      p.x > sideW
+        ? {
+            id: touch.identifier,
+            startY: p.y,
+            startScroll: g.settingsScroll || 0,
+            moved: false,
+          }
+        : null;
+  }
+
+  /** Continue a drag-scroll; returns true when it consumed the move. */
+  moveSettingsDrag(touch) {
+    const d = this.settingsDrag;
+    if (!d || touch.identifier !== d.id) return false;
+    const g = this.game;
+    const dy = this.settingsPoint(touch).y - d.startY;
+    if (Math.abs(dy) > 8) d.moved = true;
+    const layout = settingsLayout(
+      g.hudW,
+      g.hudH,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
+      d.startScroll - dy,
+      false,
+    );
+    g.settingsScroll = layout.scrollY;
+    return true;
+  }
+
   handleSettingsTap(touch) {
     const g = this.game;
-    const hud = g.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
-    const h = hud.height;
-    const x = touch.clientX * scaleX;
-    const y = touch.clientY * scaleY;
+    const drag = this.settingsDrag;
+    // Another finger owns the in-flight drag. Clearing it here would strand
+    // that finger mid-scroll, and a second thumb landing during a scroll is
+    // not a deliberate tap either.
+    if (drag && drag.id !== touch.identifier) return;
+    if (drag) {
+      this.settingsDrag = null;
+      // A drag that scrolled the list is not a tap on whatever ended up under
+      // the finger.
+      if (drag.moved) return;
+    }
+
+    const w = g.hudW;
+    const h = g.hudH;
+    const { x, y } = this.settingsPoint(touch);
 
     const layout = settingsLayout(
       w,
@@ -739,46 +821,50 @@ export class TouchControls {
       g.settingsSelection,
       g.isTouchDevice,
       g.settingsCategory,
+      g.settingsScroll,
+      false,
     );
-    const { headerH, sideW, panelX, panelW, contentTop, catItemH, itemHeights } =
-      layout;
+    g.settingsScroll = layout.scrollY;
+    const cats = getVisibleCategories(g.isTouchDevice, g.settings);
+    const hit = resolveSettingsHit(
+      layout,
+      settingsCategoryRects(layout, cats),
+      x,
+      y,
+    );
 
-    // ── Sidebar tap: switch category ──
-    if (x < sideW && y > headerH) {
-      const cats = getVisibleCategories(g.isTouchDevice);
-      const ci = Math.floor((y - contentTop) / catItemH);
-      if (ci >= 0 && ci < cats.length) {
-        g.settingsCategory = cats[ci];
+    if (hit.kind === "back") {
+      g.handleKeyPress("Escape");
+      return;
+    }
+    if (hit.kind === "category") {
+      if (hit.cat !== g.settingsCategory) {
+        g.settingsCategory = hit.cat;
         g.settingsSelection = 0;
+        g.settingsScroll = 0;
         g.audio.menuSelect();
       }
       return;
     }
+    if (hit.kind !== "row") return;
 
-    // ── Right panel tap: change setting value ──
-    let cursorY = contentTop;
-    for (let i = 0; i < itemHeights.length; i++) {
-      if (
-        y >= cursorY &&
-        y <= cursorY + itemHeights[i] &&
-        x >= panelX &&
-        x <= panelX + panelW
-      ) {
-        g.settingsSelection = i;
-        // Left half = decrease, right half = increase
-        if (x < panelX + panelW / 2) {
-          g.handleKeyPress("ArrowLeft");
-        } else {
-          g.handleKeyPress("ArrowRight");
-        }
-        return;
-      }
-      cursorY += itemHeights[i];
+    const def = layout.visibleDefs[hit.index];
+    if (!def) return;
+    if (hit.index !== g.settingsSelection) {
+      g.settingsSelection = hit.index;
+      g.audio.menuSelect();
     }
 
-    // Tap below all items → back
-    if (y > cursorY) {
-      g.handleKeyPress("Escape");
+    if (hit.zone === "slider") {
+      g._setSliderFromPct(def, hit.pct);
+      return;
+    }
+    if (hit.zone === "dec") {
+      g.handleKeyPress("ArrowLeft");
+      return;
+    }
+    if (hit.zone === "inc" || def.type === "toggle" || def.type === "action") {
+      g.handleKeyPress("ArrowRight");
     }
   }
 
@@ -890,7 +976,7 @@ export class TouchControls {
 
     // Draw settings back button hint
     if (gs === "settings") {
-      this.renderSettingsHint(ctx);
+      // The settings screen draws its own back button and hint band.
       return;
     }
 
@@ -1293,38 +1379,6 @@ export class TouchControls {
       ctx.fillStyle = "#fff";
       ctx.fillText("SAVE", s.x + s.w / 2, s.y + s.h / 2);
     }
-    ctx.globalAlpha = 1;
-  }
-
-  renderSettingsHint(ctx) {
-    const w = this.zones.w;
-    const h = this.zones.h;
-    ctx.globalAlpha = 0.6;
-    // Back button at bottom
-    const btnW = 120;
-    const btnH = 44;
-    const bx = (w - btnW) / 2;
-    const by = h - 60;
-    ctx.fillStyle = "#556677";
-    ctx.strokeStyle = "#aabbcc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, btnW, btnH, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("< BACK", bx + btnW / 2, by + btnH / 2);
-    // Hint text
-    ctx.fillStyle = "#8899aa";
-    ctx.font = "12px monospace";
-    ctx.fillText(
-      "Tap setting to change  ·  Left = decrease  ·  Right = increase",
-      w / 2,
-      by - 12,
-    );
     ctx.globalAlpha = 1;
   }
 

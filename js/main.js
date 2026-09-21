@@ -249,6 +249,17 @@ document.getElementById("btnArchive").addEventListener("click", () => {
   game._archiveReturnToMenu = true;
 });
 
+// Settings used to be reachable only by starting a match and pausing.
+document.getElementById("btnSettings").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  showGameCanvases();
+  game.settingsSelection = 0;
+  game.settingsScroll = 0;
+  game.state = GameState.SETTINGS;
+  game._settingsReturnToMenu = true;
+});
+
 // Expose dev flag toggle on window for console access
 window.ccDevTutorial = (on) => {
   game.setAlwaysTutorial(on !== false);
@@ -413,6 +424,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnStats").click();
     } else if (e.code === "Digit8") {
       document.getElementById("btnArchive").click();
+    } else if (e.code === "Digit9") {
+      document.getElementById("btnSettings").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (

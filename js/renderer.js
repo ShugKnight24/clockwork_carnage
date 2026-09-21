@@ -165,6 +165,26 @@ export class Renderer {
   }
 
   /**
+   * Switch renderer backend at runtime. The Render Mode setting used to be
+   * read once at construction — before settings loaded — so changing it in
+   * the menu did nothing.
+   *
+   * @param {number} mode 0 = auto, 1 = Canvas2D only, 2 = WebGL hybrid
+   */
+  setRenderMode(mode) {
+    const next = mode === 1 || mode === 2 ? mode : 0;
+    if (next === this._renderMode) return;
+    this._renderMode = next;
+
+    if (this.glRenderer) {
+      this.glRenderer.destroy();
+      this.glRenderer = null;
+      this.useWebGL = false;
+    }
+    this._initGL(next);
+  }
+
+  /**
    * Called on campaign level start. The act picks the base palette; the level
    * index picks the variation on it, so two levels in one act no longer share
    * the same steel, lamps and air. Pass null for level outside the campaign.

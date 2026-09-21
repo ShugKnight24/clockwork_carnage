@@ -1,7 +1,8 @@
 // Click dispatch — extracted from game.js menu click handlers.
 // Pure functions: receives game instance + DOM event, mutates game state.
-// 1:1 extractions of _handleCreatorClick, _handleVictoryClick,
-// _handleSettingsClick, _handleGameOverClick.
+// 1:1 extractions of _handleCreatorClick, _handleVictoryClick and
+// _handleGameOverClick. The settings screen now lives in game.js and reads its
+// geometry from js/layout.js, so it is not duplicated here.
 //
 // Callers: game._handle*Click() methods delegate here.
 
@@ -12,10 +13,6 @@ import {
 } from "../ui/character-creator.js";
 import { isCompactPhone } from "../../js/layout.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
-import {
-  getSettingsForCategory,
-  getVisibleCategories,
-} from "../../js/settings-registry.js";
 
 export function handleCreatorClick(game, e) {
   const rect = game.canvas.getBoundingClientRect();
@@ -120,112 +117,6 @@ export function handleVictoryClick(game, e) {
     game.audio.startTrack("menu");
     game.audio.startAmbient("menu");
   });
-}
-
-export function handleSettingsClick(game, e) {
-  const rect = game.canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) * (game.canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (game.canvas.height / rect.height);
-  const w = game.canvas.width;
-  const h = game.canvas.height;
-  const compact = game.isTouchDevice && isCompactPhone(h);
-
-  const headerH = compact ? 36 : 52;
-  const sideW = compact ? 90 : 160;
-  const panelX = sideW + 1;
-  const panelW = w - panelX - 12;
-  const contentTop = headerH + 8;
-  const catItemH = compact ? 28 : 38;
-  const barW = Math.min(panelW * 0.55, 240);
-  const barH = 6;
-
-  const cats = getVisibleCategories(game.isTouchDevice, game.settings);
-  const defs = getSettingsForCategory(
-    game.isTouchDevice,
-    game.settingsCategory,
-    game.settings
-  );
-
-  // ── Sidebar click: switch category or back ──
-  if (x < sideW && y > headerH) {
-    // Back button at bottom of sidebar
-    const backY = h - 32;
-    if (y >= backY - 14 && y < backY + 10) {
-      game.handleKeyPress("Escape");
-      return;
-    }
-    const ci = Math.floor((y - contentTop) / catItemH);
-    if (ci >= 0 && ci < cats.length) {
-      game.settingsCategory = cats[ci];
-      game.settingsSelection = 0;
-      game.audio.menuSelect();
-    }
-    return;
-  }
-
-  // ── Right panel: click on setting row ──
-  if (x >= panelX && x <= panelX + panelW && y >= contentTop) {
-    let rowY = contentTop;
-    for (let i = 0; i < defs.length; i++) {
-      const def = defs[i];
-      const itemH = compact ? def.height.compact : def.height.normal;
-      if (y >= rowY && y < rowY + itemH) {
-        game.settingsSelection = i;
-
-        // Slider: click-to-set on bar region
-        if (def.type === "slider" && def.barColor) {
-          const sliderY = rowY + (compact ? 20 : 28);
-          const sliderX = panelX + (compact ? 8 : 14);
-          const sliderW = Math.min(panelW - (compact ? 16 : 28), barW);
-          if (
-            y >= sliderY - 4 &&
-            y <= sliderY + barH + 4 &&
-            x >= sliderX &&
-            x <= sliderX + sliderW
-          ) {
-            const pct = Math.max(0, Math.min(1, (x - sliderX) / sliderW));
-            let val = def.min + pct * (def.max - def.min);
-            // Snap to step
-            val = Math.round(val / def.step) * def.step;
-            val = Math.max(def.min, Math.min(def.max, val));
-            if (def.round != null)
-              val =
-                Math.round(val * Math.pow(10, def.round)) /
-                Math.pow(10, def.round);
-            game.settings[def.key] = val;
-            if (def.onChange) def.onChange(game);
-            game.saveSettings();
-            game.audio.menuConfirm();
-            return;
-          }
-        }
-        
-        // Action buttons
-        if (def.type === "action") {
-          if (def.onClick) {
-            def.onClick(game);
-            game.audio.menuConfirm();
-          }
-          return;
-        }
-
-        // Left half: decrement, right half: increment
-        const midX = panelX + panelW / 2;
-        if (x < midX) {
-          game.handleKeyPress("ArrowLeft");
-        } else {
-          game.handleKeyPress("ArrowRight");
-        }
-        return;
-      }
-      rowY += itemH;
-    }
-
-    // Clicked below all rows — back
-    if (y > rowY) {
-      game.handleKeyPress("Escape");
-    }
-  }
 }
 
 export function handleGameOverClick(game, e) {

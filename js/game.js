@@ -49,7 +49,14 @@ import { AudioManager } from "./audio.js";
 import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
 import { Profiler } from "../src/utils/profiler.js";
 import { trackEvent } from "./analytics.js";
-import { upgradeLayout, tutorialMenuLayout, isCompactPhone } from "./layout.js";
+import {
+  upgradeLayout,
+  tutorialMenuLayout,
+  isCompactPhone,
+  settingsLayout,
+  settingsCategoryRects,
+  resolveSettingsHit,
+} from "./layout.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController } from "../src/systems/squad-comms.js";
@@ -146,7 +153,6 @@ import { renderFrame } from "../src/rendering/render-pipeline.js";
 import {
   handleCreatorClick,
   handleVictoryClick,
-  handleSettingsClick,
   handleGameOverClick,
 } from "../src/systems/input-click-dispatch.js";
 import { GameState } from "../src/types.js";
@@ -278,6 +284,7 @@ export class Game {
     this.settings = { ...DEFAULT_SETTINGS };
     this.settingsSelection = 0;
     this.settingsCategory = "Gameplay"; // active sidebar category
+    this.settingsScroll = 0; // pixel scroll offset of the settings row list
     this.lastEscTime = 0;
     // Mouse hover tracking for settings UI
     this._settingsMouseX = -1;
@@ -288,18 +295,29 @@ export class Game {
           this.canvas.style.cursor = "";
         return;
       }
-      const rect = this.canvas.getBoundingClientRect();
-      const sx = (e.clientX - rect.left) * (this.canvas.width / rect.width);
-      const sy = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+      const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
+      const sx = (e.clientX - rect.left) * (this.hudW / rect.width);
+      const sy = (e.clientY - rect.top) * (this.hudH / rect.height);
       this._settingsMouseX = sx;
       this._settingsMouseY = sy;
-      // Set pointer cursor when hovering interactive areas
-      const cph = this.isTouchDevice && isCompactPhone(this.canvas.height);
-      const hdrH = cph ? 36 : 52;
-      const sdW = cph ? 90 : 160;
-      const inSidebar = sx < sdW && sy > hdrH;
-      const inPanel = sx >= sdW + 1 && sy > hdrH + 8;
-      this.canvas.style.cursor = inSidebar || inPanel ? "pointer" : "";
+      // Pointer cursor only where a click actually does something.
+      const layout = settingsLayout(
+        this.hudW,
+        this.hudH,
+        this.settingsSelection,
+        this.isTouchDevice,
+        this.settingsCategory,
+        this.settingsScroll,
+        false
+      );
+      const cats = getVisibleCategories(this.isTouchDevice, this.settings);
+      const hit = resolveSettingsHit(
+        layout,
+        settingsCategoryRects(layout, cats),
+        sx,
+        sy
+      );
+      this.canvas.style.cursor = hit.kind === "none" ? "" : "pointer";
     });
 
     // Share URL handling
@@ -410,6 +428,7 @@ export class Game {
     this.loadSettings();
     this._applyMobileMigration();
     this.applyGamepadSettings();
+    this.applyRenderMode();
     this.applyPerformanceSettings();
     this.loadDevFlags();
     this.showFPS = !!this.settings.showPerformanceOverlay;
@@ -602,7 +621,7 @@ export class Game {
     }
     // Settings
     if (this.state === GameState.SETTINGS) {
-      // Handled via InputManager clicks, but could do background updates if needed
+      if (e.button === 0) this._handleSettingsClick(e);
       return;
     }
     
@@ -662,16 +681,24 @@ export class Game {
   /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
   _inputWheel(deltaY) {
     if (this.state === GameState.SETTINGS) {
-      const defs = getSettingsForCategory(
+      const layout = settingsLayout(
+        this.hudW,
+        this.hudH,
+        this.settingsSelection,
         this.isTouchDevice,
         this.settingsCategory,
-        this.settings
+        this.settingsScroll,
+        false
       );
-      if (!defs.length) return;
+      if (layout.maxScroll <= 0) return;
+      // Follow the wheel's own delta where the browser gives one; the gamepad
+      // path passes ±1, which floors to one row-ish step.
       const dir = deltaY > 0 ? 1 : -1;
-      this.settingsSelection =
-        (this.settingsSelection + dir + defs.length) % defs.length;
-      this.audio.menuSelect();
+      const step = Math.min(160, Math.max(48, Math.abs(deltaY)));
+      this.settingsScroll = Math.max(
+        0,
+        Math.min(layout.maxScroll, this.settingsScroll + dir * step)
+      );
       return;
     }
     if (this.state !== GameState.PLAYING) return;
@@ -813,6 +840,11 @@ export class Game {
       vibrationEnabled: this.settings.gamepadRumble,
       invertLookY: this.settings.invertY,
     });
+  }
+
+  /** Push the Render Mode setting into the renderer (auto / 2D / WebGL). */
+  applyRenderMode() {
+    this.renderer?.setRenderMode?.(Number(this.settings.renderMode) || 0);
   }
 
   applyPerformanceSettings() {
@@ -2529,7 +2561,98 @@ export class Game {
       settings: this.settings,
       mouseX: this._settingsMouseX,
       mouseY: this._settingsMouseY,
+      settingsScroll: this.settingsScroll,
     });
+  }
+
+  /**
+   * Desktop click on the settings screen. Until now this screen drew hover
+   * states and a "click to adjust" hint but listened to nothing: only touch
+   * could change a value with a pointer.
+   */
+  _handleSettingsClick(e) {
+    // Read the event directly: a click can arrive with no preceding mousemove
+    // (touchpad tap, synthetic click), and the cached hover point is then stale.
+    // Coordinates are CSS-logical (hudW/hudH), the space the HUD is drawn in.
+    const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (this.hudW / rect.width);
+    const y = (e.clientY - rect.top) * (this.hudH / rect.height);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    this._settingsMouseX = x;
+    this._settingsMouseY = y;
+    const layout = settingsLayout(
+      this.hudW,
+      this.hudH,
+      this.settingsSelection,
+      this.isTouchDevice,
+      this.settingsCategory,
+      this.settingsScroll,
+      false
+    );
+    this.settingsScroll = layout.scrollY;
+    const cats = getVisibleCategories(this.isTouchDevice, this.settings);
+    const hit = resolveSettingsHit(
+      layout,
+      settingsCategoryRects(layout, cats),
+      x,
+      y
+    );
+
+    if (hit.kind === "back") {
+      this.handleKeyPress("Escape");
+      return;
+    }
+    if (hit.kind === "category") {
+      if (hit.cat !== this.settingsCategory) {
+        this.settingsCategory = hit.cat;
+        this.settingsSelection = 0;
+        this.settingsScroll = 0;
+        this.audio.menuSelect();
+      }
+      return;
+    }
+    if (hit.kind !== "row") return;
+
+    const def = layout.visibleDefs[hit.index];
+    if (!def) return;
+    if (hit.index !== this.settingsSelection) {
+      this.settingsSelection = hit.index;
+      this.audio.menuSelect();
+    }
+
+    if (hit.zone === "slider") {
+      this._setSliderFromPct(def, hit.pct);
+      return;
+    }
+    if (def.type === "action") {
+      def.onClick?.(this);
+      this.audio.menuConfirm();
+      return;
+    }
+    if (hit.zone === "dec") {
+      this.handleKeyPress("ArrowLeft");
+      return;
+    }
+    if (hit.zone === "inc" || def.type === "toggle") {
+      this.handleKeyPress("ArrowRight");
+    }
+  }
+
+  /** Drop a slider straight onto the clicked position, snapped to its step. */
+  _setSliderFromPct(def, pct) {
+    if (def.type !== "slider") return;
+    const raw = def.min + (def.max - def.min) * pct;
+    let val = def.min + Math.round((raw - def.min) / def.step) * def.step;
+    val = Math.max(def.min, Math.min(def.max, val));
+    if (def.round != null) {
+      const f = Math.pow(10, def.round);
+      val = Math.round(val * f) / f;
+    }
+    if (val === this.settings[def.key]) return;
+    this.settings[def.key] = val;
+    def.onChange?.(this);
+    this.saveSettings();
+    this.audio.menuSelect();
   }
 
   renderControlsScreen(ctx, w, h) {
@@ -2868,10 +2991,6 @@ export class Game {
 
   _handleVictoryClick(e) {
     handleVictoryClick(this, e);
-  }
-
-  _handleSettingsClick(e) {
-    handleSettingsClick(this, e);
   }
 
   _handleGameOverClick(e) {
