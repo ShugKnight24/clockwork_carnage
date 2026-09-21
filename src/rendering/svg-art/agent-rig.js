@@ -1184,8 +1184,8 @@ const chestTrim = (c) =>
 export function rigAnchors(P, tilt, pose) {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
   const mid = (a, b, t = 0.5) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  const fl = mid(armL.el, armL.wr, 0.45);
-  const fr = mid(armR.el, armR.wr, 0.45);
+  const fl = mid(armL.el, armL.wr, 0.2);
+  const fr = mid(armR.el, armR.wr, 0.2);
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
   return {
