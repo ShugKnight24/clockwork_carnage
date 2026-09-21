@@ -7,6 +7,7 @@ import {
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { gameUnlockContext, unlockState, LOCKABLE } from "../../src/systems/unlocks.js";
+import { lookKey } from "../../src/core/character-fields.js";
 import {
   ARMOR_STYLES,
   BACKSTORIES,
@@ -1683,7 +1684,7 @@ class AgentShowroom extends HTMLElement {
     const ch = this.effective();
     const pose = this.poseChoice;
     const peek = this.stagePeek(ch);
-    const key = `${this._real ? "r|" : ""}${pose}|${peek}|${APPEARANCE.concat(["loadoutIndex", "backstoryIndex"]).map((k) => ch[k]).join(",")}`;
+    const key = `${this._real ? "r|" : ""}${pose}|${peek}|${lookKey(ch)}`;
     if (key === this._stageKey) return;
     this._stageKey = key;
     let markup = this._stageCache.get(key);
@@ -1827,7 +1828,7 @@ class AgentShowroom extends HTMLElement {
   /** Update checked states and rebuild thumbnails whose look depends on the character. */
   refreshContent(force = false) {
     const ch = this.character;
-    const sig = APPEARANCE.map((k) => ch[k]).join(",") + (this._real ? "|r" : "");
+    const sig = lookKey(ch) + (this._real ? "|r" : "");
     const realistic = this._real;
     this.shadowRoot.querySelectorAll(".content .opt[data-key]").forEach((opt) => {
       const key = opt.dataset.key;

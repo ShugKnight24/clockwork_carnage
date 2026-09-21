@@ -21,6 +21,7 @@
 import { getLayerImage } from "./raster.js";
 import { isModernArt, isRealisticArt } from "../art-style.js";
 import { buildCastModel, CAST_KEYS } from "./agent-rig.js";
+import { lookKey, cloneLook } from "../../core/character-fields.js";
 import { MODELS as HERO } from "./models/hero.js";
 import { MODELS as CAST } from "./models/cast.js";
 import { MODELS as VILLAIN } from "./models/villain.js";
@@ -60,12 +61,7 @@ const DISPLAY_SCALE = {
 // ---------------------------------------------------------------------------
 
 const DRESSED = new Set(CAST_KEYS);
-// Cosmetic fields that change the drawn agent (name and voice do not).
-const CAST_FIELDS = [
-  "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
-  "visorIndex", "shoulderIndex", "badgeIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex",
-];
-const castHashOf = (ch) => CAST_FIELDS.map((k) => ch[k] | 0).join(".");
+const castHashOf = (ch) => lookKey(ch);
 let castRef = null; // the live record (game.character)
 let castLook = null; // snapshot the models are built from
 let castHash = "";
@@ -85,7 +81,7 @@ export function setCastCharacter(character) {
   const hash = castRef ? castHashOf(castRef) : "";
   if (hash === castHash && (castLook !== null) === (castRef !== null)) return;
   castHash = hash;
-  castLook = castRef ? { ...castRef } : null;
+  castLook = castRef ? cloneLook(castRef) : null;
   castEntries[0].clear();
   castEntries[1].clear();
   // Build the current style's models while the browser is idle, so the first

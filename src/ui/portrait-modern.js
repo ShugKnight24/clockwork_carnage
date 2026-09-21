@@ -17,17 +17,13 @@ import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { CHARACTER_COLORS, HELMET_STYLES } from "../data/cosmetics.js";
 import { COLOR } from "./design-tokens.js";
 import { isRealisticArt } from "../rendering/art-style.js";
+import { lookKey } from "../core/character-fields.js";
 
 const INK = COLOR.ink;
 const BOX = [-24, -104.5, 48, 48];
 const OPEN = new Set(["wide", "mohawk"]);
 
 // ─── Character layers ───────────────────────────────────────────────────────
-
-const CHAR_FIELDS = [
-  "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
-  "visorIndex", "shoulderIndex", "badgeIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex",
-];
 
 let _charRef = null;
 let _charKey = "";
@@ -42,7 +38,7 @@ function characterLayers(character) {
   // Key off the cosmetic indices so an edited character rebuilds, but an
   // untouched one costs a short string compare per frame.
   if (c !== _charRef || !_char) {
-    const key = CHAR_FIELDS.map((k) => c[k] | 0).join(".");
+    const key = lookKey(c);
     _charRef = c;
     if (key !== _charKey || !_char) {
       _charKey = key;
