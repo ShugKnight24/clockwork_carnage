@@ -15,10 +15,22 @@ const cache = new Map(); // id → HTMLImageElement | null
 let manifestPromise = null;
 let manifestData = null;
 
+// Vite serves the app under `base`, which is /clockwork_carnage/ in production.
+// A document-relative "assets/..." only happens to resolve when the page URL
+// ends in a slash; anywhere else it escapes the base and 404s, and the caller
+// silently falls back to procedural art.
+const BASE = import.meta.env?.BASE_URL ?? "/";
+
+/** Resolve a manifest-relative asset path against the deployed base. */
+function assetUrl(path) {
+  if (/^([a-z]+:)?\/\//i.test(path) || path.startsWith("data:")) return path;
+  return `${BASE}${path.replace(/^\/+/, "")}`;
+}
+
 async function loadManifest() {
   if (manifestData) return manifestData;
   if (!manifestPromise) {
-    manifestPromise = fetch("assets/manifest.json")
+    manifestPromise = fetch(assetUrl("assets/manifest.json"))
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         manifestData = j || { sets: {} };
@@ -56,7 +68,7 @@ export function getSprite(bucket, id) {
     const img = new Image();
     img.onload = () => cache.set(key, img);
     img.onerror = () => cache.set(key, null);
-    img.src = entry.src;
+    img.src = assetUrl(entry.src);
   });
   return null;
 }
