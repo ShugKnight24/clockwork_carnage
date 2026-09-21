@@ -242,25 +242,43 @@ export function createPlaytestGate(game, tools) {
 
   function playCampaign(run, ctx, player) {
     const levelsToRun = CAMPAIGN_LEVELS.length;
+    const bossLevel = CAMPAIGN_LEVELS.findIndex((l) => l?.isBossLevel);
+
+    // Every level in act 1, then the boss once per act: each act replays the
+    // nine levels, and only the act-3 boss ends the campaign.
     for (let level = 0; level < levelsToRun; level++) {
-      startCampaignLevel(level);
-      preparePlayer(player);
-      stepAndWatch(run, ctx, player, 10, `campaign ${level} start`);
-
-      if (CAMPAIGN_LEVELS[level]?.isBossLevel) {
-        killBossDirectly();
-        skipCutscenes(run, ctx, player);
-        assertState(run, [GameState.VICTORY, GameState.CUTSCENE, GameState.PLAYING], `boss level ${level} should resolve`);
-        continue;
-      }
-
-      killEnemiesDirectly();
-      if (!game.exitEntity) throw new Error(`Campaign level ${level} has no exit`);
-      game.player.x = game.exitEntity.x;
-      game.player.y = game.exitEntity.y;
-      stepAndWatch(run, ctx, player, 5, `campaign ${level} exit`);
-      assertState(run, [GameState.LEVEL_COMPLETE], `campaign level ${level} should complete`);
+      if (level === bossLevel) continue;
+      runCampaignLevel(run, ctx, player, level);
     }
+    for (const act of [1, 2, 3]) {
+      startCampaignLevel(bossLevel, act);
+      preparePlayer(player);
+      stepAndWatch(run, ctx, player, 10, `act ${act} boss start`);
+      killBossDirectly();
+      skipCutscenes(run, ctx, player);
+      if (act < 3) {
+        if (game.campaign.act !== act + 1 || game.campaign.level !== 0) {
+          throw new Error(
+            `act ${act} boss should open act ${act + 1} at level 0, got act ${game.campaign.act} level ${game.campaign.level}`,
+          );
+        }
+      } else {
+        assertState(run, [GameState.VICTORY], "act 3 boss should end the campaign");
+      }
+    }
+  }
+
+  function runCampaignLevel(run, ctx, player, level) {
+    startCampaignLevel(level);
+    preparePlayer(player);
+    stepAndWatch(run, ctx, player, 10, `campaign ${level} start`);
+
+    killEnemiesDirectly();
+    if (!game.exitEntity) throw new Error(`Campaign level ${level} has no exit`);
+    game.player.x = game.exitEntity.x;
+    game.player.y = game.exitEntity.y;
+    stepAndWatch(run, ctx, player, 5, `campaign ${level} exit`);
+    assertState(run, [GameState.LEVEL_COMPLETE], `campaign level ${level} should complete`);
   }
 
   function playArena(run, ctx, player) {
@@ -325,10 +343,10 @@ export function createPlaytestGate(game, tools) {
     assertState(run, [GameState.MODE_SELECT], "creator should return to mode select");
   }
 
-  function startCampaignLevel(level) {
+  function startCampaignLevel(level, act = 1) {
     game.mode = "campaign";
     game.campaignLevel = level;
-    game.campaignAct = level < 3 ? 1 : level < 6 ? 2 : 3;
+    game.campaignAct = act;
     game.player.reset();
     game.loadCampaignLevel(level);
     game.state = GameState.PLAYING;

@@ -51,11 +51,17 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
-    startCampaign(level = 0) {
+    /**
+     * The campaign plays all nine levels once per act (roster, briefings and
+     * boss form change with the act), so act and level are independent.
+     * Deriving the act from the level index started level 8 as the form-3
+     * boss, which ends the game in one kill.
+     */
+    startCampaign(level = 0, act = 1) {
       game.audio.init();
       game.mode = "campaign";
       game.campaignLevel = level;
-      game.campaignAct = level < 3 ? 1 : level < 6 ? 2 : 3;
+      game.campaignAct = act;
       game.player.reset();
       game.player.alive = true;
       game.loadCampaignLevel(level);
@@ -333,15 +339,15 @@ export function createDebugBridge(game) {
     // ── Cutscene Control ──────────────────────────────────
     /** Advance cutscene by one frame */
     advanceCutscene() {
-      if (game.cutsceneEngine.isActive) {
+      if (game.cutsceneEngine?.isActive) {
         game.cutsceneEngine.advance();
       }
-      return game.cutsceneEngine.isActive;
+      return game.cutsceneEngine?.isActive;
     },
 
     /** Skip entire cutscene */
     skipCutscene() {
-      if (game.cutsceneEngine.isActive) {
+      if (game.cutsceneEngine?.isActive) {
         game.cutsceneEngine.end();
       }
       return game.state;
