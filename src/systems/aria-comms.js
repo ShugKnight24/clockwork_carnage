@@ -3,7 +3,7 @@
 
 import { ARIA_COMMS } from "../data/dialogue.js";
 import { isCompactPhone } from "../../js/layout.js";
-import { isModernArt } from "../rendering/art-style.js";
+import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { drawSvgModelAt } from "../rendering/svg-art/index.js";
 
 /**
@@ -30,6 +30,7 @@ import {
   drawKeycap,
   pixelRatio,
 } from "../ui/modern-ui-kit.js";
+import * as skin from "../ui/hud-skin.js";
 
 export class AriaCommsSystem {
   constructor(game = null) {
@@ -202,6 +203,11 @@ export class AriaCommsSystem {
     const dur = msg.duration;
     const agentName = characterName || "Agent";
 
+    if (isRealisticArt() && !msg.projected) {
+      if (msg.prominent) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      else this._renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
+      return;
+    }
     if (isModernArt()) {
       if (msg.projected) this._renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop);
       else if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
@@ -719,7 +725,8 @@ export class AriaCommsSystem {
 
     // If the bitmaps have not decoded yet, fall back rather than show nothing.
     if (!drawn) {
-      this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      if (isRealisticArt()) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      else this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
       return;
     }
 
@@ -728,6 +735,18 @@ export class AriaCommsSystem {
     const color = speakerTone(speaker);
     const boxW = Math.min(440, Math.max(240, w - figX - figW - 40));
     const x = Math.round(figX + figW + 16);
+    if (isRealisticArt()) {
+      // She is standing right there: the plate carries no portrait.
+      const font = skin.uiFont(compact ? 13 : 14, 600);
+      const lineH = compact ? 17 : 19;
+      const lines = this._modernLines(ctx, msg, agentName, font, boxW - 32);
+      const boxH = realBoxH(lines.length, 0, lineH);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      this._drawRealCard(ctx, x, Math.round(figY + figH * 0.32), boxW, boxH, 0, lines, font, lineH, msg, t);
+      ctx.restore();
+      return;
+    }
     const font = uiFont(compact ? 13 : 15, 600);
     const lineH = compact ? 17 : 19;
     const lines = this._modernLines(ctx, msg, agentName, font, boxW - 58);
@@ -810,24 +829,119 @@ export class AriaCommsSystem {
     ctx.globalAlpha = a;
   }
 
+  // ─── Realistic comms plate ───────────────────────────────────────────────
+  // Same anchors, fades, slides and typewriter as the Modern captions; only
+  // the chrome changes: a translucent HUD-skin plate, tracked speaker label
+  // with an accent tick, a signal meter in place of the comic tab, and the
+  // portrait desaturated behind a hairline frame.
+
+  _renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+    let alpha = 1;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
+    const k = Math.min(1, t / 0.3);
+    const slideY = t < 0.3 ? -18 * (1 - k) * (1 - k) + Math.sin(k * Math.PI) * 3 : 0;
+
+    const boxW = Math.min(460, w - 24);
+    const x = Math.round((w - boxW) / 2);
+    const y = Math.round(Math.max(h * 0.135, minTop ? minTop + 12 : 0) + slideY);
+    const port = 48;
+    const font = skin.uiFont(15, 600);
+    const lineH = 19;
+    const lines = this._modernLines(ctx, msg, agentName, font, boxW - realTextX(port) - 16);
+    const boxH = realBoxH(lines.length, port, lineH);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    this._drawRealCard(ctx, x, y, boxW, boxH, port, lines, font, lineH, msg, t);
+    ctx.restore();
+  }
+
+  _renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
+    let slideX = 0;
+    if (t < 0.3) slideX = (1 - t / 0.3) * -360;
+    else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * -360;
+    let alpha = 1;
+    if (t < 0.3) alpha = t / 0.3;
+    else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
+
+    const compact = isTouchDevice && isCompactPhone(h);
+    const boxW = compact ? Math.min(360, w - 32) : 360;
+    const port = 38;
+    const font = skin.uiFont(13, 600);
+    const lineH = 16;
+    const lines = this._modernLines(ctx, msg, agentName, font, boxW - realTextX(port) - 14);
+    const boxH = realBoxH(lines.length, port, lineH);
+    const bx = Math.round((w - boxW) / 2 + slideX);
+    const by = this._modernSubtleBottom(h, compact) - boxH;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    this._drawRealCard(ctx, bx, by, boxW, boxH, port, lines, font, lineH, msg, t);
+    ctx.restore();
+  }
+
+  /** Plate, portrait (when `port` > 0), speaker header and typed text. */
+  _drawRealCard(ctx, x, y, boxW, boxH, port, lines, font, lineH, msg, t) {
+    const speaker = msg.speaker || "ARIA";
+    const tone = realTone(speaker);
+    const dpr = pixelRatio(ctx);
+    skin.drawPanel(ctx, x, y, boxW, boxH, { accent: tone, variant: "raised" });
+
+    if (port > 0) {
+      const px = x + REAL_PAD;
+      const py = y + Math.round((boxH - port) / 2);
+      ctx.drawImage(realPortraitSprite(speaker, tone, port, dpr), px - 2, py - 2, port + 4, port + 4);
+      if (speaker === "ARIA") {
+        // Her eyes still breathe, in the plate's neutral light.
+        const u = port / 40;
+        const cx = px + port / 2;
+        const cy = py + port * 0.47;
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * (0.3 + 0.25 * Math.sin(t * 3));
+        ctx.fillStyle = "#dcebec";
+        ctx.fillRect(cx - 5.4 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
+        ctx.fillRect(cx + 2.2 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
+        ctx.globalAlpha = a;
+      }
+    }
+
+    const tx = x + realTextX(port);
+    const label = realLabelSprite(speaker, tone, dpr);
+    const headY = y + REAL_HEAD_Y;
+    ctx.drawImage(label.c, tx - 2, headY - label.h / 2 - 2, label.w + 4, label.h + 4);
+    drawSignal(ctx, tx + label.w + 7, headY + 4, t, tone, this._speaking(msg, t));
+    // Hairline under the header, fading toward the right edge.
+    ctx.drawImage(realRuleSprite(dpr), tx, headY + 8, x + boxW - 14 - tx, 1);
+
+    ctx.font = font;
+    const textY = y + REAL_HEAD_H + Math.round(lineH * 0.74) + Math.max(0, Math.round((boxH - REAL_HEAD_H - 8 - lines.length * lineH) / 2));
+    this._drawTyped(ctx, msg, lines, tx, textY, lineH, t, skin.HT.text, skin.HT.accent);
+  }
+
   _renderModernLog(ctx, w, h, characterName) {
     const panelW = Math.min(580, w - 32);
     const panelH = Math.min(430, h - 40);
     const panelX = Math.round((w - panelW) / 2);
     const panelY = Math.round((h - panelH) / 2);
     const compact = panelH < 340;
+    // Realistic swaps in the HUD skin's plate, title and palette.
+    const real = isRealisticArt();
+    const C = real ? skin.HT : UI;
+    const panel = real ? skin.drawPanel : drawPanel;
+    const font$ = real ? skin.uiFont : uiFont;
 
-    drawPanel(ctx, panelX, panelY, panelW, panelH, { variant: "menu", accent: UI.cyan, chamfer: 18 });
+    panel(ctx, panelX, panelY, panelW, panelH, { variant: "menu", accent: C.cyan, chamfer: 18 });
     const titleSize = compact ? 20 : 26;
     const titleBase = panelY + (compact ? 34 : 44);
-    drawTitle(ctx, "ARIA COMMS LOG", w / 2, titleBase, titleSize, UI.cyan);
+    (real ? skin.drawTitle : drawTitle)(ctx, "ARIA COMMS LOG", w / 2, titleBase, titleSize, C.cyan);
 
     const footH = compact ? 30 : 38;
     const listX = panelX + 16;
     const listY = titleBase + (compact ? 16 : 22);
     const listW = panelW - 32;
     const listH = panelY + panelH - footH - listY;
-    drawPanel(ctx, listX, listY, listW, listH, { variant: "well", chamfer: 8 });
+    panel(ctx, listX, listY, listW, listH, { variant: "well", chamfer: 8 });
 
     const log = this.messageLog;
     const lineH = compact ? 22 : 25;
@@ -837,12 +951,12 @@ export class AriaCommsSystem {
     const scrollable = log.length > maxLines;
 
     if (log.length === 0) {
-      drawCaption(ctx, w / 2, listY + listH / 2 - 10, "No messages yet", { size: 11, scheme: "steel", align: "center" });
+      (real ? skin.drawCaption : drawCaption)(ctx, w / 2, listY + listH / 2 - 10, "No messages yet", { size: 11, scheme: "steel", align: "center" });
     } else {
       const agent = characterName || "Agent";
       const textX = listX + 48;
       const textMaxW = listW - 48 - (scrollable ? 22 : 12);
-      const font = uiFont(13, 600);
+      const font = font$(13, 600);
       ctx.textBaseline = "middle";
       for (let i = startIdx; i < endIdx; i++) {
         const row = i - startIdx;
@@ -854,16 +968,16 @@ export class AriaCommsSystem {
         }
         const newest = i === log.length - 1;
         if (newest) {
-          ctx.fillStyle = UI.cyan;
-          ctx.fillRect(listX + 5, ry + 4, 3, lineH - 8);
+          ctx.fillStyle = C.cyan;
+          ctx.fillRect(listX + 5, ry + 4, real ? 1 : 3, lineH - 8);
         }
-        ctx.font = uiFont(11, 700, true);
+        ctx.font = font$(11, 700, true);
         ctx.textAlign = "right";
-        ctx.fillStyle = newest ? UI.cyan : UI.textFaint;
+        ctx.fillStyle = newest ? C.cyan : C.textFaint;
         ctx.fillText(String(i + 1).padStart(2, "0"), listX + 36, mid + 1);
         ctx.font = font;
         ctx.textAlign = "left";
-        ctx.fillStyle = newest ? "#ffffff" : "#c3d2df";
+        ctx.fillStyle = real ? (newest ? C.text : C.textDim) : newest ? "#ffffff" : "#c3d2df";
         ctx.fillText(truncateTo(ctx, font, log[i].replace(/\{AGENT\}/g, agent), textMaxW), textX, mid + 1);
       }
       ctx.textBaseline = "alphabetic";
@@ -873,20 +987,20 @@ export class AriaCommsSystem {
       const trackX = listX + listW - 12;
       const trackY = listY + 8;
       const trackH = listH - 16;
-      ctx.fillStyle = "rgba(4,6,11,0.9)";
-      ctx.fillRect(trackX, trackY, 4, trackH);
+      ctx.fillStyle = real ? C.track : "rgba(4,6,11,0.9)";
+      ctx.fillRect(trackX, trackY, real ? 2 : 4, trackH);
       const thumbH = Math.max(18, (trackH * maxLines) / log.length);
       const range = log.length - maxLines;
       const pos = range > 0 ? 1 - Math.min(this.logScroll, range) / range : 1;
-      ctx.fillStyle = UI.cyan;
-      ctx.fillRect(trackX, Math.round(trackY + (trackH - thumbH) * pos), 4, Math.round(thumbH));
+      ctx.fillStyle = C.cyan;
+      ctx.fillRect(trackX, Math.round(trackY + (trackH - thumbH) * pos), real ? 2 : 4, Math.round(thumbH));
     }
 
     // Footer key hints inside the plate.
     const fy = panelY + panelH - footH / 2 - 10;
     const hints = [["L", "to close"], ["ESC", "to resume"]];
     if (scrollable) hints.push(["W/S", "to scroll"]);
-    ctx.font = uiFont(11, 700);
+    ctx.font = font$(11, 700);
     let total = 0;
     const parts = hints.map(([key, text]) => {
       const keys = key.split("/");
@@ -899,9 +1013,9 @@ export class AriaCommsSystem {
     let hx = Math.round(w / 2 - total / 2);
     for (const p of parts) {
       for (let i = 0; i < p.keys.length; i++) {
-        hx += drawKeycap(ctx, hx, fy, p.keys[i], { size: 10 }) + (i < p.keys.length - 1 ? 4 : 0);
+        hx += (real ? realKeycap : drawKeycap)(ctx, hx, fy, p.keys[i], { size: 10 }) + (i < p.keys.length - 1 ? 4 : 0);
       }
-      ctx.fillStyle = UI.textDim;
+      ctx.fillStyle = C.textDim;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.letterSpacing = "1px";
@@ -1346,4 +1460,135 @@ function truncateTo(ctx, font, text, maxW) {
 function keycapWidth(text, size) {
   const tw = Math.ceil(measureLabel(uiFont(size, 700), String(text), 0.5));
   return Math.max(Math.round(size * 1.9), tw + Math.round(size * 1.1));
+}
+
+// ─── Realistic comms art (cached sprites; per frame only blits + text) ──────
+
+const REAL_PAD = 12;
+const REAL_HEAD_Y = 15; // header label centre, from the plate top
+const REAL_HEAD_H = 24; // header band height; body text starts below it
+
+const realTextX = (port) => (port > 0 ? REAL_PAD + port + 12 : 16);
+const realBoxH = (n, port, lineH) => Math.max(port + REAL_PAD * 2 - 4, REAL_HEAD_H + n * lineH + 10);
+
+const _realTones = new Map();
+/**
+ * Speaker tone for Realistic: ARIA takes the skin accent, squad colours are
+ * pulled halfway to their own grey so a name still reads without shouting.
+ */
+function realTone(speaker) {
+  if (!speaker || speaker === "ARIA") return skin.HT.accent;
+  let tone = _realTones.get(speaker);
+  if (!tone) {
+    const n = parseInt((SQUAD_TAB_COLORS[speaker] || "#e8dcc0").slice(1), 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    const l = 0.3 * r + 0.59 * g + 0.11 * b;
+    const mix = (c) => Math.round((c + (l - c) * 0.5) * 0.86 + 20);
+    tone = `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+    _realTones.set(speaker, tone);
+  }
+  return tone;
+}
+
+/** Accent tick plus the speaker's name in small tracked caps. */
+function realLabelSprite(speaker, tone, dpr) {
+  const size = 10;
+  const text = String(speaker || "ARIA").toUpperCase();
+  const font = skin.uiFont(size, 700);
+  const spacing = Math.round(size * 0.22 * 10) / 10;
+  const w = 7 + Math.ceil(measureLabel(font, text, spacing));
+  const h = 12;
+  const c = commsSprite(`rlabel:${text}:${tone}`, w, h, 2, dpr, (g, sw, sh) => {
+    g.fillStyle = tone;
+    g.fillRect(0, 1, 1, sh - 2);
+    g.font = font;
+    if ("letterSpacing" in g) g.letterSpacing = `${spacing}px`;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillStyle = tone;
+    g.fillText(text, 7, sh / 2 + 0.5);
+  });
+  return { c, w, h };
+}
+
+/** 1px header rule that fades out to the right (stretched per plate). */
+function realRuleSprite(dpr) {
+  return commsSprite("rrule", 64, 1, 0, dpr, (g, sw) => {
+    const grad = g.createLinearGradient(0, 0, sw, 0);
+    grad.addColorStop(0, "rgba(226,232,230,0.16)");
+    grad.addColorStop(1, "rgba(226,232,230,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, sw, 1);
+  });
+}
+
+/**
+ * Signal meter beside the speaker label: four stepped 1px bars. While the
+ * line is still typing the link "transmits" (the top bars flicker); once it
+ * has landed the meter settles to a steady, dim reading.
+ */
+function drawSignal(ctx, x, baseY, t, tone, live) {
+  const a = ctx.globalAlpha;
+  ctx.fillStyle = tone;
+  const lit = live ? 2 + ((Math.sin(t * 11) + Math.sin(t * 7.3 + 1)) > 0.2 ? 2 : 1) : 4;
+  for (let i = 0; i < 4; i++) {
+    const bh = 2 + i * 2;
+    ctx.globalAlpha = a * (i < lit ? (live ? 0.85 : 0.45) : 0.18);
+    ctx.fillRect(Math.round(x + i * 3), Math.round(baseY - bh), 1, bh);
+  }
+  ctx.globalAlpha = a;
+}
+
+/**
+ * The Modern portrait glyph, graded down to near-monochrome, lit from the
+ * upper left and seated behind a hairline frame instead of the ink bezel.
+ */
+function realPortraitSprite(speaker, tone, size, dpr) {
+  const isAria = speaker === "ARIA";
+  return commsSprite(`rport:${isAria ? "ARIA" : "SQUAD"}:${tone}`, size, size, 2, dpr, (g, s) => {
+    const src = portraitSprite(speaker, tone, size, dpr);
+    const k = 6 * (s / 40);
+    g.save();
+    cutPath(g, 1, 1, s - 2, s - 2, k - 1);
+    g.clip();
+    g.fillStyle = "#0b0e11";
+    g.fillRect(0, 0, s, s);
+    g.filter = "saturate(0.3) brightness(0.9)";
+    g.drawImage(src, -2, -2, s + 4, s + 4);
+    g.filter = "none";
+    const key = g.createLinearGradient(0, 0, s, s);
+    key.addColorStop(0, "rgba(255,244,230,0.1)");
+    key.addColorStop(0.5, "rgba(0,0,0,0)");
+    key.addColorStop(1, "rgba(0,0,0,0.4)");
+    g.fillStyle = key;
+    g.fillRect(0, 0, s, s);
+    g.restore();
+    g.strokeStyle = "rgba(222,230,228,0.34)";
+    g.lineWidth = 1;
+    cutPath(g, 0.5, 0.5, s - 1, s - 1, k - 0.5);
+    g.stroke();
+  });
+}
+
+/** Hairline keycap for the Realistic log footer; same width as drawKeycap. */
+function realKeycap(ctx, x, y, text, opts = {}) {
+  const size = Math.round(opts.size || 11);
+  const w = keycapWidth(text, size);
+  const h = Math.round(size * 1.9);
+  const bx = Math.round(x);
+  const by = Math.round(y);
+  ctx.fillStyle = "rgba(10,14,17,0.5)";
+  ctx.fillRect(bx, by, w, h);
+  ctx.strokeStyle = "rgba(222,230,228,0.3)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, by + 0.5, w - 1, h - 1);
+  ctx.font = skin.uiFont(size, 700);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = skin.HT.text;
+  ctx.fillText(String(text), bx + w / 2, by + h / 2);
+  ctx.textBaseline = "alphabetic";
+  return w;
 }
