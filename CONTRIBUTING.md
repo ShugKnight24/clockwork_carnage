@@ -50,47 +50,82 @@ Feature requests are welcome as GitHub Issues. Please include:
 - **Evidence** — Links to similar features in other games, user feedback, benchmarks, etc.
 - **Scope** — Is this a small tweak or a major system? Be honest about the effort involved.
 
-I have a detailed roadmap and a large backlog. Check the [GitHub Issues](../../issues) and project board for current priorities. Your suggestion may already be planned, deferred, or intentionally excluded. I'll do my best to respond, but no guarantees on timeline.
+I have a detailed roadmap and a large backlog, but they live in local planning files (`ROADMAP.md`, `REVIEW.md`, `TESTING.md`, `NOTES.md`, `IDEAS.md`) that are gitignored and therefore not visible in a clone. For an outside contributor, [GitHub Issues](../../issues) is the only public view of what's being worked on — open one and I'll say whether it's already planned, deferred, or intentionally excluded. I'll do my best to respond, but no guarantees on timeline.
 
 ---
 
 ## 🔧 Development Setup
 
-### Playing the Game
+### Running the Game
 
-```
-Open index.html in a modern browser. That's it. No build step required.
-```
-
-### Running Tests (Optional — For Contributors)
-
-The test infrastructure uses Playwright and is intentionally **not part of the public game**. All testing files (`tests/`, `package.json`, `node_modules/`, `playwright.config.js`, etc.) are gitignored.
-
-If you're contributing code and want to run tests locally:
+This is a Vite app. Opening `index.html` from disk no longer works — the page sets a `default-src 'self'` CSP and the boot script reads `import.meta.env.BASE_URL`.
 
 ```bash
 npm install
-npx playwright install
-npx playwright test
+npm run dev     # Vite dev server on http://localhost:3000
 ```
+
+A production build is committed to `dist/` and refreshed in explicit "build: refresh dist bundle" commits. To rebuild it:
+
+```bash
+npm run build
+```
+
+### Running the Tests
+
+`tests/`, `package.json`, `package-lock.json`, `playwright.config.js` and `vite.config.js` are all tracked, so a fresh clone can install and run everything below.
+
+```bash
+npm install
+npx playwright install                   # once, for the browser binaries
+
+npm run test:unit                        # vitest — 28 files, 637 tests
+npx playwright test tests/smoke.spec.js  # 17 smoke checks
+npm run build                            # the vite build must succeed
+```
+
+`npx playwright test` with no arguments runs all 21 specs, which takes considerably longer. CI (`.github/workflows/ci.yml`) runs four stages on push: syntax-check, unit-tests, build, smoke-test.
+
+**Caveat:** `scripts/` is gitignored, so the npm scripts that shell into it — `assets:manifest`, `assets:generate`, `assets:build`, `review`, `review:strict` — cannot run from a clean clone. Neither can `simulate`, which needs the gitignored `simulations/`.
 
 ### Project Structure
 
 ```
-index.html          — Entry point (open in browser)
-style.css           — All UI styling
-js/game.js          — Core game engine (~9,600 lines)
-js/data.js          — Game data (maps, enemies, weapons, dialogue)
-js/renderer.js      — DDA raycaster + sprite rendering
-js/audio.js         — Procedural Web Audio synthesis
-js/main.js          — Boot, game loop, HTML wiring
-js/builder.js       — Builder mode (Temporal Forge)
-js/meltdown.js      — Meltdown: Reactor Run (endless runner)
-js/cutscene.js      — Cutscene engine
-js/touch.js         — Mobile touch controls
-js/entities.js      — Entity classes
-js/settings-registry.js — Settings system
-js/layout.js        — Shared geometry helpers
+index.html          — Vite entry; boots js/main.js and the title web components
+style.css           — DOM/menu styling
+vite.config.js      — build config and vitest config
+dist/               — committed production build
+
+js/                 — app shell and entry point (23 top-level modules)
+  main.js           — boot, frame loop, dev-tool wiring
+  game.js           — game object and state machine (~3,100 lines)
+  renderer.js       — DDA raycaster, sprite rendering, WebGL2 init and the hybrid GL path
+  audio.js          — procedural Web Audio synthesis
+  builder.js        — Builder mode (Temporal Forge)
+  meltdown.js       — Meltdown: Reactor Run (endless runner)
+  cutscene.js       — cutscene engine
+  touch.js          — mobile touch controls
+  input-manager.js  — keyboard/mouse state, keybinds, pointer lock
+  layout.js         — shared screen geometry and hit-testing
+  settings-registry.js — settings definitions
+  entities.js       — entity classes
+  data.js           — 18-line barrel re-exporting src/data/
+  components/       — web components used in the title markup
+  testing/          — debug bridge and bots; loaded only when dev tools are on
+  net/              — multiplayer prototype; currently referenced by nothing
+
+src/                — the bulk of the code (129 modules, ~57,700 lines)
+  constants.js      — shared tuning values
+  core/             — save system and persistence
+  data/             — weapons, enemies, walls, dialogue, cosmetics, achievements, levels/
+  rendering/        — render pipeline, textures, post-FX, props, weather,
+                      plus enemies/, env/, svg-art/ (Comic and Modern art) and webgl/
+  systems/          — AI, aim, combat, physics, player and projectile updates,
+                      spawner, input dispatch, archive, unlocks
+  ui/               — HUD variants, settings, character creator, archive,
+                      upgrade and game-over screens
+  utils/            — math, seeded RNG, pooling, profiling
+  assets/           — manifest-backed image loader
 ```
 
 ---
@@ -103,8 +138,8 @@ If you do open a PR:
 2. **Describe what you changed and why.** Include before/after screenshots for visual changes.
 3. **Test on at least 2 browsers** (Chrome + one other).
 4. **Don't modify core architecture** without prior discussion in an issue.
-5. **Don't add external dependencies.** This is a zero-dependency vanilla JS project. That's intentional.
-6. **Don't commit** `node_modules/`, `package.json`, `package-lock.json`, test results, or any gitignored files.
+5. **Don't add runtime dependencies.** The shipped game imports nothing but its own modules, and that's intentional. Dev tooling is fine — there are four devDependencies (`vite`, `vitest`, `@vitest/coverage-v8`, `@playwright/test`) — but adding a fifth needs a good reason.
+6. **Don't commit** `node_modules/`, test results, screenshots, or anything else matched by `.gitignore`. `package.json` and `package-lock.json` *are* tracked; update them when you change dependencies.
 
 ---
 
