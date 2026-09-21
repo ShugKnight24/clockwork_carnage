@@ -12,6 +12,8 @@
  * visor pulse) and offset them for the turn parallax.
  */
 
+import { badgeIcon } from "./insignia/symbols.js";
+export { badgeIcon };
 import {
   INK,
   RIM,
@@ -800,38 +802,6 @@ function shoulder(c, s, tilt) {
 // ---------------------------------------------------------------------------
 // Emblems
 // ---------------------------------------------------------------------------
-
-const STAR = (() => {
-  let d = "";
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const r = i % 2 ? 2 : 4.8;
-    d += `${i ? "L" : "M"}${pt(Math.cos(a) * r, Math.sin(a) * r + 0.3)} `;
-  }
-  return d + "Z";
-})();
-
-/** Badge icon in a -5..5 box, drawn in `color`. */
-export function badgeIcon(icon, color, dark) {
-  switch (icon) {
-    case "shield":
-      return `<path d="M0,-4.8 L4,-3.3 C4,0.8 2.4,3.4 0,4.8 C-2.4,3.4 -4,0.8 -4,-3.3 Z" fill="${color}"/><path d="M-2,-0.6 L0,1.6 L2,-0.6" fill="none" stroke="${dark}" stroke-width=".9"/>`;
-    case "skull":
-      return `<path d="M-3.8,0.8 C-4.8,-4.8 4.8,-4.8 3.8,0.8 L2.6,1.8 L2.6,4 L-2.6,4 L-2.6,1.8 Z" fill="${color}"/><g fill="${dark}"><circle cx="-1.6" cy="-0.6" r="1.1"/><circle cx="1.6" cy="-0.6" r="1.1"/><rect x="-.3" y="2.2" width=".6" height="1.8"/></g>`;
-    case "clock":
-      return `<circle r="4.2" fill="none" stroke="${color}" stroke-width="1.1"/><path d="M0,-2.8 L0,0 L2,1.4" fill="none" stroke="${color}" stroke-width=".9" stroke-linecap="round"/>`;
-    case "star":
-      return `<path d="${STAR}" fill="${color}"/>`;
-    case "bolt":
-      return `<path d="M1.2,-5 L-3,0.8 L-0.4,0.8 L-1.4,5 L3,-1 L0.4,-1 Z" fill="${color}"/>`;
-    case "eye":
-      return `<path d="M-4.8,0 Q0,-4.2 4.8,0 Q0,4.2 -4.8,0 Z" fill="${color}"/><circle r="1.6" fill="${dark}"/>`;
-    case "rift":
-      return `<path d="M0,-5 L1.8,0 L0,5 L-1.8,0 Z" fill="${color}"/><path d="M-4.2,-2.4 C-2,-4 2.2,-3.6 3.6,-1 M4.2,2.4 C2,4 -2.2,3.6 -3.6,1" fill="none" stroke="${color}" stroke-width=".8" stroke-linecap="round"/>`;
-    default:
-      return "";
-  }
-}
 
 /** Painted decal: dark roundel, icon in palette accent. */
 function decal(c, x, y, scale) {
