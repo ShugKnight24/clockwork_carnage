@@ -64,6 +64,7 @@ import {
 import { renderBadge, resolveTreatment } from "./insignia/compose.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../core/character-normalize.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
+import { paintAccessories } from "./accessories/index.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 
 // ---------------------------------------------------------------------------
@@ -1196,31 +1197,56 @@ function forearmAnchor({ el, wr }, s, t = 0.3, size = 4.4) {
   };
 }
 
+/** Direction a→b as an anchor turn: 0 points down (+y), like the badge anchors. */
+const turnOf = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]) * 57.3 - 90;
+
+/** Forearm centreline: midpoint, turn and length, for gear that wraps the arm. */
+function forearmAxis({ el, wr }) {
+  return { x: (el[0] + wr[0]) / 2, y: (el[1] + wr[1]) / 2, rot: turnOf(el, wr), len: Math.hypot(wr[0] - el[0], wr[1] - el[1]), size: 0 };
+}
+
+/** Height of the side rail where lamps and whips mount; Ordnance's sensor stalk sits there, so it drops to the ear cup. */
+const SIDE_RAIL = { ordnance: -79.4 };
+
+/** Top of each helmet shell (SHELLS), where crown gear seats. */
+const SHELL_TOP = {
+  standard: -95, angular: -96, crested: -95.6, wide: -96.4, mohawk: -95,
+  ordnance: -97.4, bucket: -93.2, crusader: -97, sealed: -95.8,
+};
+
 /**
  * Attachment points on the rig, in rig units: badges (Task 8) and
  * accessories (Task 9) are placed from here, never from their own offsets.
- * `size` is the badge diameter at that point.
+ * `size` is the badge diameter at that point. Helmet mounts (crown, browL,
+ * sideL) are seated on the given helmet's shell.
  */
-export function rigAnchors(P, tilt, pose) {
+export function rigAnchors(P, tilt, pose, helmet = "standard") {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
+  const top = SHELL_TOP[helmet] ?? SHELL_TOP.standard;
+  const half = SHELL_HALF[helmet] || SHELL_HALF.standard;
+  const [legL, legR] = P.legs;
+  const thigh = lerp(legL.hip, legL.kn, 0.36);
   return {
     chest: { x: 8.8, y: -57.4, rot: 0, size: 7.7 },
     shoulderL: { x: -24.4, y: -56, rot: tilt[0], pivot: [-12, -65], size: 6.2 },
     forearmL: forearmAnchor(armL, -1),
     forearmR: forearmAnchor(armR, 1),
+    forearmAxisL: forearmAxis(armL),
+    forearmAxisR: forearmAxis(armR),
     helmet: { x: -8.6, y: -90, rot: -8, size: 4.6 },
     neck: { x: 0, y: -69, rot: 0, size: 0 },
     back: { x: 0, y: -48, rot: 0, size: 0 },
-    belt: { x: 0, y: -21, rot: 0, size: 0 },
+    belt: { x: 0, y: -25.2, rot: 0, size: 0, half: 14.4 },
     hipL: { x: hipL[0] - 3, y: hipL[1] + 2, rot: 0, size: 0 },
     hipR: { x: hipR[0] + 3, y: hipR[1] + 2, rot: 0, size: 0 },
-    kneeL: { x: kneeL[0], y: kneeL[1], rot: 0, size: 0 },
-    kneeR: { x: kneeR[0], y: kneeR[1], rot: 0, size: 0 },
-    crown: { x: 0, y: -104, rot: 0, size: 0 },
-    browL: { x: -6, y: -93, rot: 0, size: 0 },
-    sideL: { x: -10.5, y: -88, rot: 0, size: 0 },
+    thighL: { x: thigh[0], y: thigh[1], rot: turnOf(legL.hip, legL.kn), size: 0 },
+    kneeL: { x: kneeL[0], y: kneeL[1], rot: turnOf(legL.kn, legL.an), size: 0 },
+    kneeR: { x: kneeR[0], y: kneeR[1], rot: turnOf(legR.kn, legR.an), size: 0 },
+    crown: { x: 0, y: top + 0.8, rot: 0, size: 0 },
+    browL: { x: 0, y: top + 7.6, rot: 0, size: 0 },
+    sideL: { x: -half + 0.2, y: SIDE_RAIL[helmet] ?? -86.4, rot: 0, size: 0 },
     pose,
   };
 }
@@ -1256,7 +1282,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     const s = i === 0 ? -1 : 1;
     return -s * clamp((armSwing(arm, s) - 8) * 0.35, -4, 12);
   });
-  const A = rigAnchors(P, tilt, armed ? "armed" : "standing");
+  const A = rigAnchors(P, tilt, armed ? "armed" : "standing", c.helmet);
+  const acc = paintAccessories(c.accessories, A, c);
   const shoulderAO = P.arms.map((arm) => `<ellipse cx="${f(arm.sh[0])}" cy="${f(arm.sh[1] + 9)}" rx="7" ry="3.4" fill="url(#shade)"/>`).join("");
   const kit = gear(c, P);
   const showFace = peek || OPEN_HELMETS.has(c.helmet);
@@ -1279,6 +1306,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     chestTrim(c) +
     insignia(c) +
     kit.front +
+    acc.front +
     rifle.body +
     recolor(arms.map((a) => a.body).join("") + shoulderAO, map) +
     recolor(shoulder(c, -1, tilt[0]) + shoulder(c, 1, tilt[1]), map) +
@@ -1286,26 +1314,27 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
     rifle.hands +
-    collar;
+    collar +
+    acc.top;
 
-  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + kit.glow + rifle.glow;
+  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
-  let cape = recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
-  if (CAPE_HEM[c.armor]) {
+  let cape = acc.replacesCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
+  if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
   return {
     defs: defs(c),
     width: ARMOR_WIDTH[c.armor] || 1,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
-    back: kit.back,
+    back: kit.back + acc.back,
     cape,
     body,
     glow,
     collar,
-    head: h.front + helmBadge,
-    headGlow: h.glow,
+    head: h.front + helmBadge + acc.head,
+    headGlow: h.glow + acc.headGlow,
     eyesVisible: showFace,
     look: c,
   };
@@ -1515,14 +1544,16 @@ function fallenParts(c) {
   const showFace = OPEN_HELMETS.has(c.helmet);
   const h = head(c, false);
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${inner}</g></g>`;
-  const A = rigAnchors(FALLEN, [14, -4], "fallen");
+  const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
+  const acc = paintAccessories(c.accessories, A, c);
   const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   return {
     width: ARMOR_WIDTH[c.armor] || 1,
-    pool: recolor(fallenCape(), map),
+    pool: acc.replacesCape ? "" : recolor(fallenCape(), map),
     under:
       kit.back +
+      acc.back +
       recolor(trappedArm.body + lowerLeg.body + upperLeg.body + torso(), map) +
       chestTrim(c) +
       insignia(c) +
@@ -1530,11 +1561,12 @@ function fallenParts(c) {
       fallenDamage() +
       recolor(shoulder(c, 1, -4), map) +
       (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
-      collarOf(c, showFace, map),
-    head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c))),
-    over: recolor(capeFlap() + upperArm.body + shoulder(c, -1, 14), map) + leftBadge,
-    glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow,
-    headGlow: headTf(h.glow),
+      collarOf(c, showFace, map) +
+      acc.front,
+    head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
+    over: recolor((acc.replacesCape ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + acc.top,
+    glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
+    headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),
     capeIn:
       `<linearGradient id="capeIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.cape[3]}"/>` +
