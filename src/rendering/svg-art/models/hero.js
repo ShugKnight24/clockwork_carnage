@@ -314,6 +314,13 @@ export const armSwing = (arm, s) => {
  * rerebrace with bicep mass, a vambrace that tapers wrist-ward, and an elbow cop
  * capping the joint. Ambient occlusion falls on whatever the arm overlaps.
  */
+/**
+ * Vambrace layout as fractions of elbow→wrist: the energy channel (under an
+ * ink seam `seam` wide) and the chrono device centre, whose plate is
+ * `deviceHalf` = [across, along] half-extents. Rig anchors keep badges off these.
+ */
+export const VAMBRACE = { channel: [0.3, 0.82], seam: 1.1, device: 0.62, deviceHalf: [3.2, 2.7] };
+
 export function armoredArm(arm, s, chrono) {
   const { sh, el, wr } = armJoints(arm, s);
   const hand = arm.hand ?? "fist";
@@ -326,7 +333,7 @@ export function armoredArm(arm, s, chrono) {
   delta -= 360 * Math.round(delta / 360);
   const copA = upA + delta / 2;
   const foreLen = dist(el, wr);
-  const devAt = lerp(el, wr, 0.62);
+  const devAt = lerp(el, wr, VAMBRACE.device);
   let body =
     `<path d="${sleeve}" fill="#000" opacity=".55" filter="url(#ao)" transform="translate(${f(-s * 1.8)},1.6)"/>` +
     merged(sleeve, "url(#suit)") +
@@ -335,7 +342,7 @@ export function armoredArm(arm, s, chrono) {
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
     part(lerp(el, wr, foreLen < 14 ? 0.05 : 0.14), lerp(el, wr, 0.9), 10.2, 7.2, { bulge: 0.9, hi: 0.5 }) +
-    line(`M${pt(...lerp(el, wr, 0.3))}L${pt(...lerp(el, wr, 0.82))}`, "#05131a", 1.1, 0.8) +
+    line(`M${pt(...lerp(el, wr, VAMBRACE.channel[0]))}L${pt(...lerp(el, wr, VAMBRACE.channel[1]))}`, "#05131a", VAMBRACE.seam, 0.8) +
     // elbow cop capping the joint, with a fan on the outer side
     `<g transform="translate(${pt(...el)}) rotate(${f(copA)})">` +
     shape(`M${f(s * 2.6)},-3.2 C${f(s * 6.6)},-4.4 ${f(s * 8)},0 ${f(s * 6.6)},3.6 L${f(s * 3)},2.8 Z`, "url(#steelDk)", 0.7) +
@@ -348,11 +355,11 @@ export function armoredArm(arm, s, chrono) {
     shape("M-4.6,-2.6 L4.6,-2.6 L4.9,.6 L-4.9,.6 Z", "#0a0f16", 0.6) +
     line("M-4.2,-1.9 L4.2,-1.9", "#6f8aa3", 0.35, 0.6) +
     `</g>`;
-  let glow = energy(`<path d="M${pt(...lerp(el, wr, 0.3))}L${pt(...lerp(el, wr, 0.82))}" fill="none" stroke-width=".45" stroke-linecap="round"/>`);
+  let glow = energy(`<path d="M${pt(...lerp(el, wr, VAMBRACE.channel[0]))}L${pt(...lerp(el, wr, VAMBRACE.channel[1]))}" fill="none" stroke-width=".45" stroke-linecap="round"/>`);
   if (chrono) {
     body +=
       `<g transform="translate(${pt(...devAt)}) rotate(${f(foA)})">` +
-      `<rect x="-3.2" y="-2.7" width="6.4" height="5.4" rx=".9" fill="#0a0f16" stroke="${INK}" stroke-width=".5"/>` +
+      `<rect x="${-VAMBRACE.deviceHalf[0]}" y="${-VAMBRACE.deviceHalf[1]}" width="${VAMBRACE.deviceHalf[0] * 2}" height="${VAMBRACE.deviceHalf[1] * 2}" rx=".9" fill="#0a0f16" stroke="${INK}" stroke-width=".5"/>` +
       `<rect x="-2.2" y="-1.7" width="4.4" height="3.4" rx=".4" fill="#0b6f80"/></g>`;
     glow += `<g transform="translate(${pt(...devAt)}) rotate(${f(foA)})">${energy(`<rect x="-1.9" y="-1.4" width="3.8" height="2.8" rx=".3"/>`)}</g>`;
   }

@@ -1,7 +1,7 @@
 // tests/unit/agent-rig-badges.test.js
 import { describe, it, expect } from "vitest";
 import { buildAgentParts, buildCastModel, rigAnchors } from "../../src/rendering/svg-art/agent-rig.js";
-import { STAND, armJoints } from "../../src/rendering/svg-art/models/hero.js";
+import { STAND, ARMED, FALLEN, VAMBRACE, armJoints } from "../../src/rendering/svg-art/models/hero.js";
 import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
 import { cloneLook } from "../../src/core/character-fields.js";
 import { layer } from "../../src/data/badges.js";
@@ -31,14 +31,29 @@ describe("agent badges", () => {
     expect(scales).toEqual([0.077, 0.062, 0.044, 0.046]);
   });
 
-  it("idle forearm badges sit above the vambrace energy channel", () => {
-    const A = rigAnchors(STAND, [0, 0], "standing");
-    [["forearmL", -1], ["forearmR", 1]].forEach(([key, side], i) => {
-      const { el, wr } = armJoints(STAND.arms[i], side);
-      const len = Math.hypot(wr[0] - el[0], wr[1] - el[1]);
-      const d = Math.hypot(A[key].x - el[0], A[key].y - el[1]);
-      // The channel runs from 0.3 to 0.82 of elbow→wrist (hero.js armoredArm).
-      expect(d + A[key].size / 2).toBeLessThanOrEqual(0.3 * len);
+  describe.each([
+    ["standing", STAND, [true, false]],
+    ["armed", ARMED, [false, false]],
+    ["fallen", FALLEN, [true, false]],
+  ])("%s forearm badges clear the vambrace", (pose, P, chrono) => {
+    const A = rigAnchors(P, [0, 0], pose);
+    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const segDist = (p, a, b) => {
+      const ab = [b[0] - a[0], b[1] - a[1]];
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1]) / (ab[0] ** 2 + ab[1] ** 2)));
+      return Math.hypot(p[0] - a[0] - ab[0] * t, p[1] - a[1] - ab[1] * t);
+    };
+    it.each([["forearmL", 0, -1], ["forearmR", 1, 1]])("%s", (key, i, side) => {
+      const { el, wr } = armJoints(P.arms[i], side);
+      const a = A[key];
+      const r = a.size / 2;
+      const c = [a.x, a.y];
+      // Channel + ink seam, drawn as in hero.js armoredArm.
+      const d = segDist(c, lerp(el, wr, VAMBRACE.channel[0]), lerp(el, wr, VAMBRACE.channel[1]));
+      expect(d).toBeGreaterThanOrEqual(r + VAMBRACE.seam / 2);
+      if (chrono[i]) expect(Math.hypot(c[0] - lerp(el, wr, VAMBRACE.device)[0], c[1] - lerp(el, wr, VAMBRACE.device)[1])).toBeGreaterThanOrEqual(r + Math.hypot(...VAMBRACE.deviceHalf));
+      // Outer side: away from the body centreline.
+      expect(Math.sign(a.x - lerp(el, wr, 0.3)[0])).toBe(side);
     });
   });
 

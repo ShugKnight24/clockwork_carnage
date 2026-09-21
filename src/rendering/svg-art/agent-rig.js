@@ -28,6 +28,7 @@ import {
   armoredLeg,
   armoredArm,
   armJoints,
+  VAMBRACE,
   armSwing,
   pauldron,
   torso,
@@ -1177,22 +1178,38 @@ const chestTrim = (c) =>
   line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
 
 /**
+ * Forearm badge: a third of the way down the vambrace, pushed off the
+ * centreline toward the arm's outer side far enough that the badge clears the
+ * energy channel and its ink seam in every pose (and so the chrono device).
+ */
+function forearmAnchor({ el, wr }, s, t = 0.3, size = 4.4) {
+  const len = Math.hypot(wr[0] - el[0], wr[1] - el[1]) || 1;
+  const d = [(wr[0] - el[0]) / len, (wr[1] - el[1]) / len];
+  let n = [-d[1], d[0]];
+  if (n[0] * s < 0) n = [-n[0], -n[1]];
+  const off = size / 2 + VAMBRACE.seam / 2 + 0.25;
+  return {
+    x: el[0] + d[0] * len * t + n[0] * off,
+    y: el[1] + d[1] * len * t + n[1] * off,
+    rot: Math.atan2(d[1], d[0]) * 57.3 - 90,
+    size,
+  };
+}
+
+/**
  * Attachment points on the rig, in rig units: badges (Task 8) and
  * accessories (Task 9) are placed from here, never from their own offsets.
  * `size` is the badge diameter at that point.
  */
 export function rigAnchors(P, tilt, pose) {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
-  const mid = (a, b, t = 0.5) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  const fl = mid(armL.el, armL.wr, 0.2);
-  const fr = mid(armR.el, armR.wr, 0.2);
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
   return {
     chest: { x: 8.8, y: -57.4, rot: 0, size: 7.7 },
     shoulderL: { x: -24.4, y: -56, rot: tilt[0], pivot: [-12, -65], size: 6.2 },
-    forearmL: { x: fl[0], y: fl[1], rot: Math.atan2(armL.wr[1] - armL.el[1], armL.wr[0] - armL.el[0]) * 57.3 - 90, size: 4.4 },
-    forearmR: { x: fr[0], y: fr[1], rot: Math.atan2(armR.wr[1] - armR.el[1], armR.wr[0] - armR.el[0]) * 57.3 - 90, size: 4.4 },
+    forearmL: forearmAnchor(armL, -1),
+    forearmR: forearmAnchor(armR, 1),
     helmet: { x: -8.6, y: -90, rot: -8, size: 4.6 },
     neck: { x: 0, y: -69, rot: 0, size: 0 },
     back: { x: 0, y: -48, rot: 0, size: 0 },
