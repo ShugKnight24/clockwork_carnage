@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   getDifficultyMultipliers,
   getArenaEnemyTypes,
@@ -201,8 +201,18 @@ describe("createArenaEnemies", () => {
 
   it("scales health with difficulty", () => {
     const hard = getDifficultyMultipliers(2);
+    // Both rolls must pick the same enemy types, or a hard roll that happens
+    // to draw weaker types fails the comparison (this test was flaky).
+    const seq = () => {
+      let i = 0;
+      return () => ((i++ * 0.6180339887) % 1);
+    };
+    const rnd = vi.spyOn(Math, "random");
+    rnd.mockImplementation(seq());
     const normal = createArenaEnemies(3, spawns, diff);
+    rnd.mockImplementation(seq());
     const harder = createArenaEnemies(3, spawns, hard);
+    rnd.mockRestore();
     // At least some enemies should have higher health on hard
     const avgNormal = normal.reduce((s, e) => s + e.health, 0) / normal.length;
     const avgHard = harder.reduce((s, e) => s + e.health, 0) / harder.length;
