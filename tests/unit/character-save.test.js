@@ -130,3 +130,42 @@ describe("character save/load", () => {
     expect(loaded).toEqual(DEFAULT_CHARACTER);
   });
 });
+
+describe("badge and accessory persistence", () => {
+  it("migrates a pre-badge-object save", () => {
+    store.cc_character = JSON.stringify({ ...DEFAULT_CHARACTER, badge: undefined, accessories: undefined, badgeIndex: 5 });
+    const ch = structuredClone(DEFAULT_CHARACTER);
+    loadCharacter(ch);
+    expect(ch.badge.layers[0].symbol).toBe(BADGES[5].icon);
+    expect(ch.badge.placements).toContain("chest");
+    expect(ch.accessories.back).toBe("none");
+  });
+
+  it("round-trips a full custom badge and accessories", () => {
+    const ch = structuredClone(DEFAULT_CHARACTER);
+    ch.badge = { layers: [{ frame: "cog", symbol: "guard", enamel: "oxblood", metal: "gold", x: 0, y: 0, scale: 1, rot: 0 }], finish: "patch", placements: ["chest", "helmet"] };
+    ch.accessories = { ...ch.accessories, back: "cloak", helmet: "plume" };
+    ch.armorVariant = 1;
+    saveCharacter(ch);
+    const loaded = structuredClone(DEFAULT_CHARACTER);
+    loadCharacter(loaded);
+    expect(loaded.badge).toEqual(ch.badge);
+    expect(loaded.accessories).toEqual(ch.accessories);
+    expect(loaded.armorVariant).toBe(1);
+  });
+
+  it("a saved badge object wins over a stale badgeIndex", () => {
+    const badge = { layers: [{ frame: "hex", symbol: "rift", enamel: "violet", metal: "steel", x: 0, y: 0, scale: 1, rot: 0 }], finish: "insignia", placements: ["forearm"] };
+    store.cc_character = JSON.stringify({ ...DEFAULT_CHARACTER, badgeIndex: 2, badge });
+    const ch = structuredClone(DEFAULT_CHARACTER);
+    loadCharacter(ch);
+    expect(ch.badge).toEqual(badge);
+  });
+
+  it("clamps armorVariant to 0..1", () => {
+    store.cc_character = JSON.stringify({ ...DEFAULT_CHARACTER, armorVariant: 7 });
+    const ch = structuredClone(DEFAULT_CHARACTER);
+    loadCharacter(ch);
+    expect(ch.armorVariant).toBe(1);
+  });
+});

@@ -11,6 +11,7 @@ import {
   ACHIEVEMENTS,
 } from "../data/index.js";
 import { SETTINGS_REGISTRY } from "../../js/settings-registry.js";
+import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "./character-normalize.js";
 
 const SAVE_VERSION = 1;
 
@@ -118,8 +119,11 @@ export function loadCharacter(character) {
       loadoutIndex: LOADOUT_CLASSES.length - 1,
       backstoryIndex: BACKSTORIES.length - 1,
       voiceIndex: VOICE_PROFILES.length - 1,
+      armorVariant: 1,
     };
+    const OBJECT_FIELDS = new Set(["badge", "accessories"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
+      if (OBJECT_FIELDS.has(key)) continue;
       if (Object.prototype.hasOwnProperty.call(saved, key)) {
         let val = saved[key];
         if (typeof val !== typeof DEFAULT_CHARACTER[key]) continue;
@@ -127,6 +131,10 @@ export function loadCharacter(character) {
         character[key] = val;
       }
     }
+    character.badge = saved.badge
+      ? normalizeBadge(saved.badge)
+      : migrateLegacyBadge(Number(saved.badgeIndex) || 0, Number(saved.shoulderIndex) || 0);
+    character.accessories = normalizeAccessories(saved.accessories);
   } catch (_) {}
 }
 
