@@ -296,7 +296,7 @@ function openHand(wr, el) {
  * toward the midline; `upper` / `fore` set segment lengths (shorter = foreshortened).
  * Explicit `el` / `wr` points override for gripping or sprawled poses.
  */
-function armJoints(arm, s) {
+export function armJoints(arm, s) {
   const { sh, rot = 8, bend = 12, upper = 28, fore = 24 } = arm;
   const el = arm.el || polar(sh, s * rot, upper);
   const wr = arm.wr || polar(el, s * (rot - bend), fore);

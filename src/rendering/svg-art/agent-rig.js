@@ -27,6 +27,7 @@ import {
   part,
   armoredLeg,
   armoredArm,
+  armJoints,
   armSwing,
   pauldron,
   torso,
@@ -55,11 +56,13 @@ import {
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
-  BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
   BACKSTORIES,
 } from "../../data/cosmetics.js";
+import { renderBadge, resolveTreatment } from "./insignia/compose.js";
+import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../core/character-normalize.js";
+import { ENAMELS, METALS } from "../../data/badges.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 
 // ---------------------------------------------------------------------------
@@ -151,7 +154,9 @@ function resolve(ch) {
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
-    badge: pick(BADGES, ch.badgeIndex).icon,
+    badge: ch.badge ? normalizeBadge(ch.badge) : migrateLegacyBadge(ch.badgeIndex | 0, ch.shoulderIndex | 0),
+    treatment: resolveTreatment(ch),
+    accessories: normalizeAccessories(ch.accessories),
     weapon,
     finish,
     loadout: pick(LOADOUT_CLASSES, ch.loadoutIndex).id,
@@ -803,18 +808,6 @@ function shoulder(c, s, tilt) {
 // Emblems
 // ---------------------------------------------------------------------------
 
-/** Painted decal: dark roundel, icon in palette accent. */
-function decal(c, x, y, scale) {
-  if (!c.badge) return "";
-  return (
-    `<g transform="translate(${f(x)},${f(y)}) scale(${scale})">` +
-    `<circle r="6.2" fill="#070b11" stroke="${INK}" stroke-width=".8"/>` +
-    `<circle r="5.4" fill="none" stroke="${c.pal.primary}" stroke-width=".7" opacity=".9"/>` +
-    badgeIcon(c.badge, c.pal.accent, "#070b11") +
-    `</g>`
-  );
-}
-
 /** Origin insignia, engraved into the left tasset. */
 function insignia(c) {
   const col = MATTE.has(c.armor) ? "#6e7a88" : "#cfdae6";
@@ -1183,6 +1176,48 @@ const chestTrim = (c) =>
   line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
   line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
 
+/**
+ * Attachment points on the rig, in rig units: badges (Task 8) and
+ * accessories (Task 9) are placed from here, never from their own offsets.
+ * `size` is the badge diameter at that point.
+ */
+export function rigAnchors(P, tilt, pose) {
+  const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
+  const mid = (a, b, t = 0.5) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const fl = mid(armL.el, armL.wr, 0.45);
+  const fr = mid(armR.el, armR.wr, 0.45);
+  const [hipL, hipR] = P.legs.map((l) => l.hip);
+  const [kneeL, kneeR] = P.legs.map((l) => l.kn);
+  return {
+    chest: { x: 8.8, y: -57.4, rot: 0, size: 7.7 },
+    shoulderL: { x: -24.4, y: -56, rot: tilt[0], pivot: [-12, -65], size: 6.2 },
+    forearmL: { x: fl[0], y: fl[1], rot: Math.atan2(armL.wr[1] - armL.el[1], armL.wr[0] - armL.el[0]) * 57.3 - 90, size: 4.4 },
+    forearmR: { x: fr[0], y: fr[1], rot: Math.atan2(armR.wr[1] - armR.el[1], armR.wr[0] - armR.el[0]) * 57.3 - 90, size: 4.4 },
+    helmet: { x: -8.6, y: -90, rot: -8, size: 4.6 },
+    neck: { x: 0, y: -69, rot: 0, size: 0 },
+    back: { x: 0, y: -48, rot: 0, size: 0 },
+    belt: { x: 0, y: -21, rot: 0, size: 0 },
+    hipL: { x: hipL[0] - 3, y: hipL[1] + 2, rot: 0, size: 0 },
+    hipR: { x: hipR[0] + 3, y: hipR[1] + 2, rot: 0, size: 0 },
+    kneeL: { x: kneeL[0], y: kneeL[1], rot: 0, size: 0 },
+    kneeR: { x: kneeR[0], y: kneeR[1], rot: 0, size: 0 },
+    crown: { x: 0, y: -104, rot: 0, size: 0 },
+    browL: { x: -6, y: -93, rot: 0, size: 0 },
+    sideL: { x: -10.5, y: -88, rot: 0, size: 0 },
+    pose,
+  };
+}
+
+/** A badge sized and turned for one anchor. */
+function badgeAt(c, a, detail = "high") {
+  // Badge art spans ~100 units; f() rounds to 0.1, too coarse for these scales.
+  const s = Math.round(a.size * 10) / 1000;
+  const inner = `<g transform="translate(${f(a.x)},${f(a.y)}) rotate(${f(a.rot)}) scale(${s})">${renderBadge(c.badge, { treatment: c.treatment, detail })}</g>`;
+  return a.pivot ? `<g transform="rotate(${f(a.rot)} ${a.pivot[0]} ${a.pivot[1]})">${inner.replace(` rotate(${f(a.rot)})`, " rotate(0)")}</g>` : inner;
+}
+
+const wears = (c, where) => c.badge.placements.includes(where);
+
 /** Gorget, with the bare neck above it when the face shows. */
 const collarOf = (c, showFace, map) =>
   (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
@@ -1204,6 +1239,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     const s = i === 0 ? -1 : 1;
     return -s * clamp((armSwing(arm, s) - 8) * 0.35, -4, 12);
   });
+  const A = rigAnchors(P, tilt, armed ? "armed" : "standing");
   const shoulderAO = P.arms.map((arm) => `<ellipse cx="${f(arm.sh[0])}" cy="${f(arm.sh[1] + 9)}" rx="7" ry="3.4" fill="url(#shade)"/>`).join("");
   const kit = gear(c, P);
   const showFace = peek || OPEN_HELMETS.has(c.helmet);
@@ -1229,13 +1265,15 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     rifle.body +
     recolor(arms.map((a) => a.body).join("") + shoulderAO, map) +
     recolor(shoulder(c, -1, tilt[0]) + shoulder(c, 1, tilt[1]), map) +
-    decal(c, 8.8, -57.4, 0.62) +
-    (c.shoulder === "pauldrons" || c.shoulder === "armored" ? `<g transform="rotate(${f(tilt[0])} -12 -65)">${decal(c, -24.4, -56, 0.5)}</g>` : "") +
+    (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
+    (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
+    (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
     rifle.hands +
     collar;
 
   const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + kit.glow + rifle.glow;
   const h = head(c, peek);
+  const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
@@ -1249,7 +1287,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     body,
     glow,
     collar,
-    head: h.front,
+    head: h.front + helmBadge,
     headGlow: h.glow,
     eyesVisible: showFace,
     look: c,
@@ -1380,8 +1418,12 @@ function realAgentDefs(c) {
 /** Figure markup for the Modern (realistic) look: see buildAgentSvg. */
 /** realizeMarkup options for a resolved look. */
 function realOpts(c) {
+  // Badge enamel and metal keep their colour so brass stays warm under the grade.
+  const badgeKeep = {};
+  for (const e of ENAMELS) badgeKeep[e.color] = e.color;
+  for (const m of METALS) for (const col of m.ramp) badgeKeep[col] = col;
   // Candy red is lacquer, not light: it darkens like paint under the key.
-  return { rims: [c.rim, RIM], desat: 0.4, keep: { ...(MATTE.has(c.armor) ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
+  return { rims: [c.rim, RIM], desat: 0.4, keep: { ...badgeKeep, ...(MATTE.has(c.armor) ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
 }
 
 function realAgentSvg(p, { pose, idPrefix, className, view, headOnly }) {
@@ -1456,7 +1498,9 @@ function fallenParts(c) {
   const showFace = OPEN_HELMETS.has(c.helmet);
   const h = head(c, false);
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${inner}</g></g>`;
-  const leftDecal = c.shoulder === "pauldrons" || c.shoulder === "armored" ? `<g transform="rotate(14 -12 -65)">${decal(c, -24.4, -56, 0.5)}</g>` : "";
+  const A = rigAnchors(FALLEN, [14, -4], "fallen");
+  const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";
+  const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   return {
     width: ARMOR_WIDTH[c.armor] || 1,
     pool: recolor(fallenCape(), map),
@@ -1468,10 +1512,10 @@ function fallenParts(c) {
       kit.front +
       fallenDamage() +
       recolor(shoulder(c, 1, -4), map) +
-      decal(c, 8.8, -57.4, 0.62) +
+      (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
       collarOf(c, showFace, map),
-    head: headTf(h.front + (showFace ? "" : visorCracks(c))),
-    over: recolor(capeFlap() + upperArm.body + shoulder(c, -1, 14), map) + leftDecal,
+    head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c))),
+    over: recolor(capeFlap() + upperArm.body + shoulder(c, -1, 14), map) + leftBadge,
     glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow,
     headGlow: headTf(h.glow),
     sparks: recolor(FALLEN_SPARKS, map),
