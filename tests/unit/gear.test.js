@@ -59,8 +59,9 @@ describe("gearBonuses", () => {
 
   it("covers every lockable cosmetic slot", () => {
     const slots = GEAR_SLOTS.map(([k]) => k);
-    for (const key of Object.keys(LOCKABLE)) {
+    for (const [key, entry] of Object.entries(LOCKABLE)) {
       if (key === "loadoutIndex") continue; // class, not gear
+      if (entry.byId) continue; // badge/accessory virtual keys: bonuses summed separately, via ACCESSORY_SLOTS
       expect(slots).toContain(key);
     }
   });

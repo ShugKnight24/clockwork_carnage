@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   unlockContext,
   unlockState,
@@ -7,8 +7,17 @@ import {
   earnedIds,
   newlyEarned,
   describeId,
+  variantState,
+  sanitizeLocked,
+  ownedKey,
+  LOCKABLE as LOCK,
+  ensureUnlockStore,
+  resetUnlockStore,
 } from "../../src/systems/unlocks.js";
-import { LOADOUT_CLASSES, ARMOR_STYLES } from "../../src/data/cosmetics.js";
+import { LOADOUT_CLASSES, ARMOR_STYLES, DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { SYMBOLS, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
+import { ACCESSORIES } from "../../src/data/accessories.js";
+import { cloneLook } from "../../src/core/character-fields.js";
 
 const idx = (table, id) => table.findIndex((x) => x.id === id);
 const GUN = idx(LOADOUT_CLASSES, "gunslinger");
@@ -85,5 +94,101 @@ describe("unlock rules", () => {
     const ctx = unlockContext({ stats: { weaponKills: null, totalDashes: "x" } });
     expect(unlockState("loadoutIndex", PHA, ctx).value).toBe(0);
     expect(ruleFor("badgeIndex", 1)).toBe(null);
+  });
+});
+
+describe("badge and accessory unlocks", () => {
+  it("classic and faction symbols are free; earned ones are locked", () => {
+    const ctx = unlockContext();
+    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "clock"), ctx).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "corps"), ctx).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "lordslayer"), ctx).unlocked).toBe(false);
+  });
+
+  it("achievement rules unlock symbols and presets", () => {
+    const ctx = unlockContext({ achievements: { lordSlayer: true } });
+    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "lordslayer"), ctx).unlocked).toBe(true);
+    expect(unlockState("badge.preset", indexOfId(BADGE_PRESETS, "p_lordslayer"), ctx).unlocked).toBe(true);
+  });
+
+  it("campaignActs counts defeated acts and a finished campaign counts as three", () => {
+    const act1 = indexOfId(SYMBOLS, "act1");
+    const act3 = indexOfId(SYMBOLS, "act3");
+    expect(unlockState("badge.symbol", act1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", act3, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(false);
+    expect(unlockState("badge.symbol", act3, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
+  });
+
+  it("finishes: insignia free, holo needs the campaign", () => {
+    const ctx = unlockContext();
+    expect(unlockState("badge.finish", indexOfId(FINISHES, "insignia"), ctx).unlocked).toBe(true);
+    expect(unlockState("badge.finish", indexOfId(FINISHES, "holo"), ctx).unlocked).toBe(false);
+  });
+
+  it("accessory tiers follow the tier rules", () => {
+    const ctx = unlockContext();
+    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "backpack"), ctx).unlocked).toBe(true);
+    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), ctx).unlocked).toBe(false);
+    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(true);
+  });
+
+  it("ownership of id-based items survives table reordering", () => {
+    const i = indexOfId(SYMBOLS, "lordslayer");
+    expect(ownedKey("badge.symbol", i)).toBe("badge.symbol:#lordslayer");
+    expect(ownedKey("armorIndex", 2)).toBe("armorIndex:2");
+    const ctx = unlockContext({ owned: { "badge.symbol:#lordslayer": true } });
+    expect(unlockState("badge.symbol", i, ctx).unlocked).toBe(true);
+  });
+
+  it("variants lock by their own rule", () => {
+    const ghost = ARMOR_STYLES.findIndex((a) => a.variant.unlock.id === "untouchable");
+    expect(variantState(ghost, unlockContext()).unlocked).toBe(false);
+    expect(variantState(ghost, unlockContext({ achievements: { untouchable: true } })).unlocked).toBe(true);
+  });
+
+  it("sanitizeLocked resets unowned locked picks and keeps owned ones", () => {
+    const ch = cloneLook(DEFAULT_CHARACTER);
+    ch.accessories.back = "antenna";
+    ch.badge = { layers: [{ frame: "disc", symbol: "lordslayer", enamel: "teal", metal: "brass", x: 0, y: 0, scale: 1, rot: 0 }], finish: "holo", placements: ["chest"] };
+    ch.armorVariant = 1;
+    const changes = sanitizeLocked(ch, unlockContext({ owned: { "acc.back:#antenna": true } }));
+    expect(changes.accessories?.back ?? ch.accessories.back).toBe("antenna");
+    expect(changes.badge.layers[0].symbol).toBe("clock");
+    expect(changes.badge.finish).toBe("auto");
+    expect(changes.armorVariant).toBe(0);
+  });
+
+  it("every virtual key is lockable", () => {
+    for (const k of ["badge.preset", "badge.symbol", "badge.finish", "acc.back", "acc.legs"]) expect(LOCK[k]).toBeTruthy();
+  });
+});
+
+describe("unlock store v2 migration", () => {
+  const store = {};
+  const mockStorage = {
+    getItem: (k) => store[k] ?? null,
+    setItem: (k, v) => { store[k] = v; },
+    removeItem: (k) => { delete store[k]; },
+  };
+
+  beforeEach(() => {
+    for (const k of Object.keys(store)) delete store[k];
+    vi.stubGlobal("localStorage", mockStorage);
+    resetUnlockStore();
+  });
+
+  it("marks a pre-v2 store's earned virtual ids as seen, so they don't all toast at once", () => {
+    // A store saved before badges/accessories/variants were lockable.
+    localStorage.setItem("cc_unlocks", JSON.stringify({ owned: {}, seen: {} }));
+    const stats = { tutorialComplete: true };
+    const achievements = {};
+    const store2 = ensureUnlockStore(null, stats, achievements);
+    expect(store2.v2).toBe(true);
+
+    const ctx = unlockContext({ stats, achievements });
+    const earnedVirtual = earnedIds(ctx).filter((id) => id.includes("."));
+    expect(earnedVirtual.length).toBeGreaterThan(0);
+    for (const id of earnedVirtual) expect(store2.seen[id]).toBe(true);
+    expect(newlyEarned(ctx, store2.seen)).toEqual([]);
   });
 });

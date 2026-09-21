@@ -19,6 +19,9 @@ import {
   LOADOUT_CLASSES,
   TIER_UNLOCKS,
 } from "../data/cosmetics.js";
+import { FIELD_TABLES, getIndex } from "../core/character-fields.js";
+import { indexOfId } from "../data/badges.js";
+import { ACCESSORY_SLOTS } from "../data/accessories.js";
 
 const STORE_KEY = "cc_unlocks";
 
@@ -30,6 +33,27 @@ export const LOCKABLE = {
   shoulderIndex: { table: SHOULDER_STYLES, kind: "Shoulders" },
   loadoutIndex: { table: LOADOUT_CLASSES, kind: "Loadout class" },
 };
+
+const VIRTUAL_KINDS = {
+  "badge.preset": "Badge",
+  "badge.symbol": "Badge symbol",
+  "badge.frame": "Badge frame",
+  "badge.enamel": "Enamel",
+  "badge.metal": "Metal",
+  "badge.finish": "Badge finish",
+};
+// Badge and accessory fields are nested (a layer stack, a per-slot id), not
+// flat indices, so they carry their own table and are looked up by item id
+// rather than array position — see ownedKey().
+for (const [key, table] of Object.entries(FIELD_TABLES)) {
+  LOCKABLE[key] = { table, kind: VIRTUAL_KINDS[key] || `${key.slice(4)[0].toUpperCase()}${key.slice(5)} gear`, byId: true };
+}
+
+/** Ownership id: index for the legacy flat tables, item id for id-based tables. */
+export function ownedKey(key, index) {
+  const entry = LOCKABLE[key];
+  return entry?.byId ? `${key}:#${entry.table[index]?.id}` : `${key}:${index}`;
+}
 
 /** Rule attached to an item, or null when it is always available. */
 export function ruleFor(key, index) {
@@ -55,6 +79,9 @@ export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel
   return {
     tutorialComplete: !!stats.tutorialComplete,
     campaignLevelsCleared: cleared,
+    // Highest act whose Paradox Lord has fallen; a finished campaign implies
+    // all three acts are done even if the per-act stat lagged behind.
+    campaignActsCleared: Math.max(Number(stats.campaignActsCleared) || 0, stats.campaignComplete ? 3 : 0),
     highestArenaRound: Number(stats.highestArenaRound) || 0,
     totalDashes: Number(stats.totalDashes) || 0,
     weaponKills: stats.weaponKills && typeof stats.weaponKills === "object" ? stats.weaponKills : {},
@@ -72,6 +99,8 @@ export function evaluateRule(rule, ctx) {
       return count(ctx.tutorialComplete ? 1 : 0, 1);
     case "campaignLevels":
       return count(ctx.campaignLevelsCleared, rule.count);
+    case "campaignActs":
+      return count(ctx.campaignActsCleared, rule.count);
     case "arenaRound":
       return count(ctx.highestArenaRound, rule.count);
     case "dashes":
@@ -113,7 +142,7 @@ export function unlockState(key, index, ctx) {
   const rule = ruleFor(key, index);
   if (!rule) return { unlocked: true, rule: null, value: 1, target: 1, pct: 1, hint: "" };
   const e = evaluateRule(rule, ctx);
-  const owned = !!ctx.owned?.[`${key}:${index}`];
+  const owned = !!ctx.owned?.[ownedKey(key, index)];
   return {
     unlocked: e.met || owned,
     rule,
@@ -126,14 +155,18 @@ export function unlockState(key, index, ctx) {
 
 export const isUnlocked = (key, index, ctx) => unlockState(key, index, ctx).unlocked;
 
-/** Every lockable option that is currently unlocked by its rule, as "key:index" ids. */
+/** Every lockable option that is currently unlocked by its rule, as ownedKey() ids. */
 export function earnedIds(ctx) {
   const out = [];
   for (const [key, { table }] of Object.entries(LOCKABLE)) {
     table.forEach((_, i) => {
       const rule = ruleFor(key, i);
-      if (rule && evaluateRule(rule, ctx).met) out.push(`${key}:${i}`);
+      if (rule && evaluateRule(rule, ctx).met) out.push(ownedKey(key, i));
     });
+  }
+  // Armour variants live on ARMOR_STYLES[i].variant, not in a LOCKABLE table.
+  for (const a of ARMOR_STYLES) {
+    if (a.variant?.unlock && evaluateRule(a.variant.unlock, ctx).met) out.push(`armorVariant:#${a.variant.id}`);
   }
   return out;
 }
@@ -143,11 +176,17 @@ export function newlyEarned(ctx, seen) {
   return earnedIds(ctx).filter((id) => !seen[id]);
 }
 
-/** Display name for an id, e.g. "Loadout class · Enforcer". */
+/** Display name for an id, e.g. "Loadout class · Enforcer" or "Badge symbol · Lord Slayer". */
 export function describeId(id) {
   const [key, idx] = id.split(":");
+  if (key === "armorVariant" && idx?.startsWith("#")) {
+    const vid = idx.slice(1);
+    const armor = ARMOR_STYLES.find((a) => a.variant?.id === vid);
+    return armor ? { kind: "Armour variant", name: armor.variant.name, tier: 0 } : { kind: "", name: id, tier: 0 };
+  }
   const entry = LOCKABLE[key];
-  const item = entry?.table[Number(idx)];
+  if (!entry) return { kind: "", name: id, tier: 0 };
+  const item = idx?.startsWith("#") ? entry.table.find((x) => x.id === idx.slice(1)) : entry.table[Number(idx)];
   return item ? { kind: entry.kind, name: item.name, tier: item.tier || 0 } : { kind: "", name: id, tier: 0 };
 }
 
@@ -161,7 +200,7 @@ export function loadUnlockStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return { owned: data.owned || {}, seen: data.seen || {} };
+    return { owned: data.owned || {}, seen: data.seen || {}, v2: !!data.v2 };
   } catch (_) {
     return null;
   }
@@ -169,7 +208,7 @@ export function loadUnlockStore() {
 
 export function saveUnlockStore(store) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen, v2: !!store.v2 }));
   } catch (_) {}
 }
 
@@ -186,6 +225,11 @@ function readCampaignSaveLevel() {
  * First run: grandfather gear already equipped in the saved character and
  * mark current unlocks as seen, so nobody loses their look or gets a toast
  * storm for old progress.
+ *
+ * Stores saved before badges/accessories/variants were lockable (no `v2`
+ * flag) would otherwise have every newly-lockable id fire the unlock toast
+ * at once for progress the player already made — so on first touch after the
+ * upgrade, mark everything currently earned as seen instead.
  */
 export function ensureUnlockStore(character, stats, achievements) {
   // One shared object. The toast listener holds onto the store it was given at
@@ -193,8 +237,16 @@ export function ensureUnlockStore(character, stats, achievements) {
   // separate copy, that write would silently roll the drop back.
   if (_store) return _store;
   let store = loadUnlockStore();
-  if (store) return (_store = store);
-  store = { owned: {}, seen: {} };
+  if (store) {
+    if (!store.v2) {
+      const ctx = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel(), owned: store.owned });
+      for (const id of earnedIds(ctx)) store.seen[id] = true;
+      store.v2 = true;
+      saveUnlockStore(store);
+    }
+    return (_store = store);
+  }
+  store = { owned: {}, seen: {}, v2: true };
   const ctx = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel() });
   let hasSavedCharacter = false;
   try {
@@ -202,8 +254,8 @@ export function ensureUnlockStore(character, stats, achievements) {
   } catch (_) {}
   if (hasSavedCharacter && character) {
     for (const key of Object.keys(LOCKABLE)) {
-      const i = character[key];
-      if (ruleFor(key, i) && !evaluateRule(ruleFor(key, i), ctx).met) store.owned[`${key}:${i}`] = true;
+      const i = getIndex(character, key);
+      if (ruleFor(key, i) && !evaluateRule(ruleFor(key, i), ctx).met) store.owned[ownedKey(key, i)] = true;
     }
   }
   for (const id of earnedIds(ctx)) store.seen[id] = true;
@@ -234,7 +286,7 @@ export function invalidateUnlockContext() {
 export function grantOwned(key, index) {
   if (!LOCKABLE[key]?.table[index]) return false;
   const store = ensureUnlockStore();
-  const id = `${key}:${index}`;
+  const id = ownedKey(key, index);
   if (store.owned[id]) return false;
   store.owned[id] = true;
   // A dropped item is never a surprise — the player watched it fall — so mark
@@ -259,6 +311,58 @@ export function lockedItems(ctx) {
     }
   }
   return out;
+}
+
+/**
+ * Unlock state for an armour style's variant treatment. Variants live on
+ * ARMOR_STYLES[i].variant rather than in a LOCKABLE table, so they get their
+ * own reader instead of `unlockState`.
+ * @returns {{ unlocked: boolean, rule: object|null, value: number, target: number, pct: number, hint: string }}
+ */
+export function variantState(armorIndex, ctx) {
+  const v = ARMOR_STYLES[armorIndex]?.variant;
+  if (!v) return { unlocked: false, rule: null, value: 0, target: 1, pct: 0, hint: "" };
+  const e = evaluateRule(v.unlock, ctx);
+  const owned = !!ctx.owned?.[`armorVariant:#${v.id}`];
+  return {
+    unlocked: e.met || owned,
+    rule: v.unlock,
+    value: e.value,
+    target: e.target,
+    pct: e.target ? e.value / e.target : 0,
+    hint: progressText(v.unlock, e),
+  };
+}
+
+/**
+ * Changes that strip locked, unowned nested picks — a badge symbol or finish,
+ * an accessory, an armour variant — from a saved character. Run on load so a
+ * save from before a rule tightened (or from a cleared unlock store) never
+ * keeps showing gear the player has not earned. Returns only the fields that
+ * changed, for `Object.assign(character, sanitizeLocked(character, ctx))`.
+ */
+export function sanitizeLocked(ch, ctx) {
+  const changes = {};
+  const ok = (key, id) => unlockState(key, indexOfId(LOCKABLE[key].table, id), ctx).unlocked;
+  const acc = { ...ch.accessories };
+  let accChanged = false;
+  for (const { id } of ACCESSORY_SLOTS) {
+    if (acc[id] !== "none" && !ok(`acc.${id}`, acc[id])) {
+      acc[id] = "none";
+      accChanged = true;
+    }
+  }
+  if (accChanged) changes.accessories = acc;
+  const b = ch.badge;
+  if (b) {
+    const layers = b.layers.map((l) => (ok("badge.symbol", l.symbol) ? { ...l } : { ...l, symbol: "clock" }));
+    const finish = ok("badge.finish", b.finish) ? b.finish : "auto";
+    if (finish !== b.finish || layers.some((l, i) => l.symbol !== b.layers[i].symbol)) {
+      changes.badge = { ...b, layers, finish, placements: [...b.placements] };
+    }
+  }
+  if (ch.armorVariant && !variantState(ch.armorIndex | 0, ctx).unlocked) changes.armorVariant = 0;
+  return changes;
 }
 
 /**

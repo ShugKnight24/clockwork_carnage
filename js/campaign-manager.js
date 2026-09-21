@@ -377,6 +377,8 @@ export class CampaignManager {
   handleBossKill() {
     const g = this.game;
     g.achievementStats.bossKilled = true;
+    g.achievementStats.campaignActsCleared = Math.max(g.achievementStats.campaignActsCleared || 0, this.act);
+    g.saveAchievements();
     g.checkAchievements();
     trackEvent("boss_kill", {
       mode: "campaign",

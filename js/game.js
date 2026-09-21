@@ -160,7 +160,7 @@ import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
-import { gameUnlockContext, grantOwned } from "../src/systems/unlocks.js";
+import { gameUnlockContext, grantOwned, sanitizeLocked } from "../src/systems/unlocks.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -912,6 +912,9 @@ export class Game {
 
   loadCharacter() {
     Persistence.loadCharacter(this);
+    // Strip any locked, unowned picks (a rule tightened, or the unlock store
+    // was cleared) before the build is drawn or played with.
+    Object.assign(this.character, sanitizeLocked(this.character, gameUnlockContext(this, { fresh: true })));
     // Cutscenes and the comic draw the player's own build.
     setCastCharacter(this.character);
   }

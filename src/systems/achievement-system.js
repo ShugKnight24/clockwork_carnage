@@ -46,6 +46,7 @@ export class AchievementSystem {
       weaponKills: {}, // weapon id → kills
       gearFound: 0, // gear pieces picked up off the ground
       campaignLevelsCleared: 0, // campaign levels cleared in order (high-water mark)
+      campaignActsCleared: 0, // Paradox Lord defeats, highest act (1..3)
     };
     this._lastProgressEmit = 0;
   }
