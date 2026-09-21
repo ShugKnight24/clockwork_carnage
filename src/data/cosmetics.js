@@ -1,5 +1,8 @@
 // ── Character Creator ────────────────────────────────────
 
+import { DEFAULT_BADGE } from "./badges.js";
+import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, accessoryItem } from "./accessories.js";
+
 export const CHARACTER_COLORS = [
   {
     id: "chrono_teal",
@@ -92,6 +95,8 @@ export const ARMOR_STYLES = [
     name: "Standard Issue",
     desc: "Regulation Chrono-Corp armor",
     tier: 1,
+    badgeTreatment: { finish: "insignia", metal: "brass" },
+    variant: { id: "standard_parade", name: "Parade Dress", desc: "Polished for the medal line", trim: "#d9a441", wear: 0, badgeTreatment: { finish: "insignia", metal: "gold" }, unlock: { type: "achievement", id: "tutorialGrad", label: "Earn Academy Graduate" } },
   },
   {
     id: "recon",
@@ -99,6 +104,8 @@ export const ARMOR_STYLES = [
     desc: "Lightweight scout plating",
     tier: 2,
     bonuses: { moveSpeedAdd: 0.25, maxStaminaAdd: 15 },
+    badgeTreatment: { finish: "stencil", metal: "steel" },
+    variant: { id: "recon_ghostline", name: "Ghostline", desc: "Taped seams, scuffed paint", trim: "#9fb8c8", wear: 0.5, badgeTreatment: { finish: "stencil", metal: "blackened" }, unlock: { type: "dashes", count: 500, label: "Dash 500 times", unit: "dashes" } },
   },
   {
     id: "heavy",
@@ -106,6 +113,8 @@ export const ARMOR_STYLES = [
     desc: "Reinforced temporal shielding",
     tier: 3,
     bonuses: { maxHealthAdd: 25, armorAdd: 6, moveSpeedAdd: -0.15 },
+    badgeTreatment: { finish: "insignia", metal: "steel" },
+    variant: { id: "juggernaut_siegebreaker", name: "Siegebreaker", desc: "Battle-scarred and riveted", trim: "#b0482c", wear: 0.8, badgeTreatment: { finish: "stencil", metal: "steel" }, unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" } },
   },
   {
     id: "stealth",
@@ -113,6 +122,8 @@ export const ARMOR_STYLES = [
     desc: "Low-profile shadow plating",
     tier: 2,
     bonuses: { dashCostAdd: -4, moveSpeedAdd: 0.1 },
+    badgeTreatment: { finish: "insignia", metal: "blackened" },
+    variant: { id: "ghost_nightfall", name: "Nightfall", desc: "Light-eating finish", trim: "#3a4a66", wear: 0.1, badgeTreatment: { finish: "insignia", metal: "blackened" }, unlock: { type: "achievement", id: "untouchable", label: "Earn Untouchable" } },
   },
   {
     id: "tech",
@@ -120,6 +131,8 @@ export const ARMOR_STYLES = [
     desc: "Utility-integrated hardsuit",
     tier: 3,
     bonuses: { maxChronoEnergyAdd: 25, maxHealthAdd: 10 },
+    badgeTreatment: { finish: "stencil", metal: "steel" },
+    variant: { id: "engineer_foreman", name: "Foreman", desc: "Hazard stripes and tool scars", trim: "#e0a030", wear: 0.6, badgeTreatment: { finish: "stencil", metal: "brass" }, unlock: { type: "achievement", id: "droneHunter", label: "Earn Drone Hunter" } },
   },
   {
     id: "howitzer",
@@ -127,6 +140,8 @@ export const ARMOR_STYLES = [
     desc: "Shoulder-mounted ordnance platform",
     tier: 3,
     bonuses: { maxHealthAdd: 20, armorAdd: 6, moveSpeedAdd: -0.2 },
+    badgeTreatment: { finish: "insignia", metal: "steel" },
+    variant: { id: "howitzer_redline", name: "Redline", desc: "Heat-blued barrels and red trim", trim: "#c8342a", wear: 0.5, badgeTreatment: { finish: "insignia", metal: "blackened" }, unlock: { type: "achievement", id: "scoreMaster", label: "Earn Score Master" } },
   },
   {
     id: "trencher",
@@ -134,6 +149,8 @@ export const ARMOR_STYLES = [
     desc: "Slab-plated line infantry rig",
     tier: 3,
     bonuses: { maxHealthAdd: 20, armorAdd: 5, maxStaminaAdd: 10 },
+    badgeTreatment: { finish: "patch", metal: "brass" },
+    variant: { id: "trencher_mudlark", name: "Mudlark", desc: "Caked in trench mud", trim: "#6a5a3a", wear: 1, badgeTreatment: { finish: "patch", metal: "blackened" }, unlock: { type: "achievement", id: "roundVeteran", label: "Earn Round Veteran" } },
   },
   {
     id: "reliquary",
@@ -141,6 +158,8 @@ export const ARMOR_STYLES = [
     desc: "Matte black crusader plate, candy red tabard",
     tier: 3,
     bonuses: { maxHealthAdd: 15, armorAdd: 7, maxChronoEnergyAdd: 10 },
+    badgeTreatment: { finish: "insignia", metal: "gold" },
+    variant: { id: "reliquary_gilded", name: "Gilded", desc: "Gold leaf over every edge", trim: "#f2c230", wear: 0, badgeTreatment: { finish: "insignia", metal: "gold" }, unlock: { type: "achievement", id: "lordSlayer", label: "Earn Lord Slayer" } },
   },
   {
     id: "pathfinder",
@@ -148,6 +167,8 @@ export const ARMOR_STYLES = [
     desc: "Sealed ceramic recon shell",
     tier: 2,
     bonuses: { moveSpeedAdd: 0.2, maxStaminaAdd: 20, dashCostAdd: -3 },
+    badgeTreatment: { finish: "insignia", metal: "brass" },
+    variant: { id: "pathfinder_frontier", name: "Frontier", desc: "Sun-bleached and patched", trim: "#c8b98a", wear: 0.7, badgeTreatment: { finish: "patch", metal: "brass" }, unlock: { type: "achievement", id: "speedDemon", label: "Earn Speed Demon" } },
   },
 ];
 
@@ -344,6 +365,9 @@ export const DEFAULT_CHARACTER = {
   loadoutIndex: 0,
   backstoryIndex: 0,
   voiceIndex: 0,
+  badge: DEFAULT_BADGE,
+  accessories: DEFAULT_ACCESSORIES,
+  armorVariant: 0,
 };
 
 /**
@@ -367,12 +391,12 @@ export const GEAR_SLOTS = [
 export function gearBonuses(character) {
   const out = {};
   if (!character) return out;
-  for (const [key, table] of GEAR_SLOTS) {
-    const item = table()[character[key] || 0];
-    if (!item?.bonuses) continue;
-    for (const [stat, value] of Object.entries(item.bonuses)) {
-      out[stat] = (out[stat] || 0) + value;
-    }
-  }
+  const add = (bonuses) => {
+    if (!bonuses) return;
+    for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
+  };
+  for (const [key, table] of GEAR_SLOTS) add(table()[character[key] || 0]?.bonuses);
+  const acc = character.accessories || {};
+  for (const { id } of ACCESSORY_SLOTS) add(accessoryItem(id, acc[id])?.bonuses);
   return out;
 }

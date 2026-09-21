@@ -16,6 +16,8 @@ import {
   resetUnlockStore,
   LOCKABLE,
 } from "../../src/systems/unlocks.js";
+import { ACCESSORY_SLOTS } from "../../src/data/accessories.js";
+import { DEFAULT_BADGE } from "../../src/data/badges.js";
 
 const store = {};
 const mockStorage = {
@@ -127,5 +129,44 @@ describe("armour catalogue", () => {
   it("keeps armour ids unique", () => {
     const ids = ARMOR_STYLES.map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("armour treatments and variants", () => {
+  it("every armour has a badge treatment and one earned variant", () => {
+    for (const a of ARMOR_STYLES) {
+      expect(["insignia", "stencil", "patch", "holo"]).toContain(a.badgeTreatment.finish);
+      expect(["brass", "steel", "blackened", "gold"]).toContain(a.badgeTreatment.metal);
+      expect(a.variant.id).toMatch(/^[a-z_]+$/);
+      expect(a.variant.unlock).toBeTruthy();
+      expect(a.variant.trim).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(a.variant.wear).toBeGreaterThanOrEqual(0);
+      expect(a.variant.wear).toBeLessThanOrEqual(1);
+    }
+    expect(new Set(ARMOR_STYLES.map((a) => a.variant.id)).size).toBe(ARMOR_STYLES.length);
+  });
+
+  it("default character carries the new fields", () => {
+    expect(DEFAULT_CHARACTER.badge).toEqual(DEFAULT_BADGE);
+    expect(Object.keys(DEFAULT_CHARACTER.accessories)).toEqual(ACCESSORY_SLOTS.map((s) => s.id));
+    expect(DEFAULT_CHARACTER.armorVariant).toBe(0);
+  });
+});
+
+describe("gearBonuses with accessories", () => {
+  it("adds accessory perks to armour perks", () => {
+    const ch = { ...DEFAULT_CHARACTER, accessories: { ...DEFAULT_CHARACTER.accessories, back: "backpack", waist: "belt" } };
+    const base = gearBonuses(DEFAULT_CHARACTER);
+    const g = gearBonuses(ch);
+    expect(g.maxStaminaAdd || 0).toBe((base.maxStaminaAdd || 0) + 8);
+    expect(g.maxHealthAdd || 0).toBe((base.maxHealthAdd || 0) + 5);
+  });
+
+  it("ignores unknown accessory ids and a missing accessories object", () => {
+    const bad = { ...DEFAULT_CHARACTER, accessories: { back: "nope" } };
+    expect(gearBonuses(bad)).toEqual(gearBonuses(DEFAULT_CHARACTER));
+    const none = { ...DEFAULT_CHARACTER };
+    delete none.accessories;
+    expect(() => gearBonuses(none)).not.toThrow();
   });
 });
