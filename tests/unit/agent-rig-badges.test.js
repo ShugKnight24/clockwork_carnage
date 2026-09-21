@@ -92,4 +92,12 @@ describe("armour variants", () => {
     ch.armorVariant = 1;
     expect(buildAgentParts(ch).body).toContain('class="ag-wear"');
   });
+
+  it("low wear draws no scratches", () => {
+    const i = ARMOR_STYLES.findIndex((x) => x.variant.wear < 0.3);
+    const ch = cloneLook(DEFAULT_CHARACTER);
+    ch.armorIndex = i;
+    ch.armorVariant = 1;
+    expect(buildAgentParts(ch).body).not.toContain('class="ag-wear"');
+  });
 });

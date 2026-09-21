@@ -1173,10 +1173,14 @@ const RIFLE_TF = `transform="translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})"
 /** Canvas of the stage: fits both poses, crests and gear without jumping. */
 export const AGENT_VIEW = { full: [-74, -116, 148, 182], bust: [-30, -111, 60, 60], torso: [-42, -104, 84, 84], helm: [-21, -110, 42, 42] };
 
+/** Pectoral seam paths (left/right), shared by chestTrim and variantTrim so they never drift apart. */
+const SEAM_L = "M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6";
+const SEAM_R = "M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6";
+
 /** Chest trim paint following the pectoral seams under the ink lines. */
 const chestTrim = (c) =>
-  line("M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6", c.pal.primary, 1.3, 0.9) +
-  line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
+  line(SEAM_L, c.pal.primary, 1.3, 0.9) +
+  line(SEAM_R, mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
   line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
 
 /** Variant overlay: trim stripes along the existing chest seams and, with wear, scratches. */
@@ -1185,8 +1189,8 @@ function variantTrim(c) {
   if (!v) return "";
   let out =
     `<g data-variant="${v.id}">` +
-    line("M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6", v.trim, 0.9, 0.95) +
-    line("M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6", v.trim, 0.9, 0.95) +
+    line(SEAM_L, v.trim, 0.9, 0.95) +
+    line(SEAM_R, v.trim, 0.9, 0.95) +
     line("M-12,-30 L12,-30", v.trim, 0.7, 0.8);
   if (v.wear > 0.3) {
     const n = Math.round(v.wear * 8);
