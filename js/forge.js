@@ -15,7 +15,8 @@ import {
 } from "../src/world/voxel-physics.js";
 import { SurvivalSession } from "../src/rpg/survival-session.js";
 import { PlayerStore } from "../src/rpg/player-store.js";
-import { itemForBlock } from "../src/rpg/items.js";
+import { itemForBlock, itemById } from "../src/rpg/items.js";
+import { SKILLS, MAX_LEVEL, xpForLevel } from "../src/rpg/skills.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -99,6 +100,27 @@ export function removeAllowed(world, x, y, z) {
   if (!world.inBounds(x, y, z)) return false;
   const id = world.get(x, y, z);
   return id !== AIR && id !== BEDROCK;
+}
+
+/**
+ * One row per station-free recipe. Locked rows are kept, not hidden, so
+ * levelling has a visible destination. `note` carries the single most useful
+ * reason it cannot be made right now: the level gate outranks missing inputs.
+ */
+export function craftMenuRows(session) {
+  const qty = ([id, n]) => `${n} ${itemById(id).name}`;
+  return session.recipes(null).map((r) => {
+    const check = session.canCraft(r.id);
+    return {
+      id: r.id,
+      name: r.name,
+      inputText: r.inputs.map(qty).join(", "),
+      outputText: qty(r.output),
+      locked: r.locked,
+      craftable: check.ok,
+      note: check.ok ? null : check.reason,
+    };
+  });
 }
 
 /**
@@ -294,6 +316,9 @@ export class ForgeMode {
     this.breakProgress = 0;
     /** The item id the hotbar has selected in survival. */
     this.heldItem = null;
+    /** Craft menu, survival only — C opens it, the arrows walk it. */
+    this.craftOpen = false;
+    this.craftIndex = 0;
     this.selectedEnemy = 0;
     this.selectedPickup = 0;
 
@@ -431,6 +456,44 @@ export class ForgeMode {
   handleKeyDown(e) {
     const code = e.code;
     const ctrl = e.ctrlKey || e.metaKey;
+
+    // Survival crafting. The menu only ever exists behind `survival`, and only
+    // claims keys the Forge itself does not use, so creative keeps every key.
+    if (this.survival && code === "KeyC" && !ctrl) {
+      this.craftOpen = !this.craftOpen;
+      this.craftIndex = 0;
+      this.audio.menuSelect();
+      return true;
+    }
+    if (this.survival && this.craftOpen && !ctrl) {
+      const rows = craftMenuRows(this.survival);
+      if (code === "ArrowDown") {
+        this.craftIndex = (this.craftIndex + 1) % rows.length;
+        this.audio.menuSelect();
+        return true;
+      }
+      if (code === "ArrowUp") {
+        this.craftIndex = (this.craftIndex + rows.length - 1) % rows.length;
+        this.audio.menuSelect();
+        return true;
+      }
+      if (code === "Enter") {
+        const row = rows[this.craftIndex];
+        const res = this.survival.craft(row.id);
+        if (!res.ok) this._warn(res.reason);
+        else {
+          this.audio.menuConfirm();
+          if (res.leveled)
+            this._warn(`Construction level ${this.survival.skills.level("construction")}`);
+        }
+        return true;
+      }
+      if (code === "Escape") {
+        this.craftOpen = false;
+        this.audio.menuSelect();
+        return true;
+      }
+    }
 
     if (code === "KeyS" && ctrl) {
       e.preventDefault();
@@ -1041,6 +1104,8 @@ export class ForgeMode {
   _adopt(world, id = this.currentSlot) {
     this.world = world;
     this.survival = attachSurvival(world, this.survivalSession);
+    this.craftOpen = false; // a creative world must never inherit an open menu
+    this.craftIndex = 0;
     this.currentSlot = id;
     this.history = [];
     this.historyIndex = -1;
@@ -1416,6 +1481,7 @@ export class ForgeMode {
 
     this._renderHotbar(ctx, w, h);
     this._renderToolLabel(ctx, w, h);
+    if (this.survival) this._renderSurvival(ctx, w, h);
 
     if (this.showHelp && !this.suppressHelp) this._renderHelp(ctx);
     this._renderStatus(ctx, w, h);
@@ -1551,6 +1617,134 @@ export class ForgeMode {
       ctx.fillStyle = "rgba(255,255,255,0.7)";
       ctx.fillText("L-click to move the play-test start", w / 2, y - 44);
     }
+    ctx.textAlign = "left";
+  }
+
+  /**
+   * Everything the RPG adds to the HUD, behind the one `survival` check the
+   * rest of the Forge is built on: a creative world draws exactly as before.
+   */
+  _renderSurvival(ctx, w, h) {
+    if (this.breakProgress > 0) this._renderBreakRing(ctx, w / 2, h / 2);
+    this._renderSkills(ctx, w, h);
+    if (this.craftOpen) this._renderCraftMenu(ctx, w, h);
+  }
+
+  /** Ring around the crosshair, closing as the targeted block gives way. */
+  _renderBreakRing(ctx, cx, cy) {
+    const r = 20;
+    const end = -Math.PI / 2 + Math.PI * 2 * Math.min(1, this.breakProgress);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#00ffcc";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI / 2, end);
+    ctx.stroke();
+  }
+
+  /** Level and progress to the next one, bottom-left, clear of the hotbar. */
+  _renderSkills(ctx, w, h) {
+    const panelW = 190;
+    const panelH = 26 + SKILLS.length * 22;
+    const x0 = 14;
+    const y0 = h - 14 - panelH;
+
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, panelW, panelH, 8);
+    ctx.fill();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "bold 11px monospace";
+    ctx.fillText(
+      this.craftOpen ? "SURVIVAL — [C] CLOSE" : "SURVIVAL — [C] CRAFT",
+      x0 + 10,
+      y0 + 16,
+    );
+
+    const skills = this.survival.skills;
+    const barW = panelW - 20;
+    for (let i = 0; i < SKILLS.length; i++) {
+      const s = SKILLS[i];
+      const level = skills.level(s.id);
+      const y = y0 + 34 + i * 22;
+      ctx.fillStyle = "#00ffcc";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`${s.name} Lv ${level}`, x0 + 10, y);
+
+      // Levels come from xp, so the bar is the same derivation, not a store.
+      const base = xpForLevel(level);
+      const next = xpForLevel(level + 1);
+      const frac =
+        level >= MAX_LEVEL
+          ? 1
+          : Math.max(0, Math.min(1, ((skills.xp[s.id] || 0) - base) / (next - base)));
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(x0 + 10, y + 5, barW, 3);
+      ctx.fillStyle = "rgba(0,255,200,0.6)";
+      ctx.fillRect(x0 + 10, y + 5, barW * frac, 3);
+    }
+  }
+
+  /**
+   * Everything craftable without a station. Locked rows are dimmed warm, rows
+   * whose inputs are missing are dimmed grey, and both carry their own reason.
+   */
+  _renderCraftMenu(ctx, w, h) {
+    const rows = craftMenuRows(this.survival);
+    const rowH = 34;
+    const panelW = 360;
+    const panelH = 30 + rows.length * rowH + 26;
+    const x0 = (w - panelW) / 2;
+    const y0 = (h - panelH) / 2;
+
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, panelW, panelH, 8);
+    ctx.fill();
+
+    ctx.fillStyle = "#00ffcc";
+    ctx.font = "bold 13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("CRAFT", w / 2, y0 + 20);
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const y = y0 + 30 + i * rowH;
+      if (i === this.craftIndex) {
+        ctx.fillStyle = "rgba(0,255,200,0.12)";
+        ctx.fillRect(x0 + 6, y, panelW - 12, rowH - 2);
+        ctx.strokeStyle = "#00ffcc";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x0 + 6, y, panelW - 12, rowH - 2);
+      }
+      const tint = r.locked
+        ? "rgba(255,120,80,0.65)"
+        : r.craftable
+          ? "#00ffcc"
+          : "rgba(255,255,255,0.4)";
+      ctx.textAlign = "left";
+      ctx.fillStyle = tint;
+      ctx.font = "bold 12px monospace";
+      ctx.fillText(r.name, x0 + 16, y + 15);
+      ctx.fillStyle = r.craftable ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.3)";
+      ctx.font = "11px monospace";
+      ctx.fillText(`${r.inputText} → ${r.outputText}`, x0 + 16, y + 28);
+      if (r.note) {
+        ctx.fillStyle = tint;
+        ctx.textAlign = "right";
+        ctx.fillText(r.note, x0 + panelW - 16, y + 15);
+      }
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("↑↓ Select   Enter Craft   Esc Close", w / 2, y0 + panelH - 10);
     ctx.textAlign = "left";
   }
 
