@@ -4,7 +4,7 @@ import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointe
 import { World } from "../src/world/world.js";
 import { AIR, BEDROCK, BLOCKS } from "../src/world/blocks.js";
 import { generateWorld } from "../src/world/world-gen.js";
-import { WorldStore } from "../src/world/world-store.js";
+import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
 import { convertLegacyMap } from "../src/world/legacy-convert.js";
 import {
@@ -89,6 +89,22 @@ export function hotbarWindow(selected, total, visible) {
 
 export function nextTool(tool) {
   return TOOLS[(TOOLS.indexOf(tool) + 1) % TOOLS.length];
+}
+
+/**
+ * Push `edit` onto the history: anything undone is dropped, and the oldest entry
+ * goes once the log is full.
+ * @returns {{history: Array, index: number}} the new log and cursor
+ */
+export function recordEdit(history, index, edit, max = MAX_HISTORY) {
+  const next = history.slice(0, index + 1);
+  next.push(edit);
+  let cursor = next.length - 1;
+  while (next.length > max) {
+    next.shift();
+    cursor--;
+  }
+  return { history: next, index: cursor };
 }
 
 /**
@@ -247,7 +263,13 @@ export class ForgeMode {
 
     this.currentSlot = 0;
     this.mapIndex = []; // [{id, name, updatedAt}]
+    /** True once the store has failed and the session is memory-only. */
+    this.storageFailed = false;
     this._busy = false;
+    /** An imported world is being edited before its slot id exists. */
+    this._slotPending = false;
+    /** Edits since the last successful save; `stop()` skips a redundant write. */
+    this._dirty = false;
 
     this.keys = {};
     this.mouseDx = 0;
@@ -268,24 +290,38 @@ export class ForgeMode {
 
   // ─── Lifecycle ───────────────────────────────────────────
 
-  /** Resolves once the world is loaded — the host awaits it before rendering. */
+  /**
+   * Resolves once the world is loaded — the host awaits it before rendering.
+   * Never rejects: a store that will not open drops the Forge into an in-memory
+   * world so the editor still runs, with `storageFailed` saying so on the HUD.
+   */
   async start() {
-    await this._migrateLegacy();
-    this.mapIndex = await this.store.list();
-
-    if (this.mapIndex.length === 0) {
-      const world = generateWorld({
-        terrain: true,
-        seed: Date.now(),
-        name: "My Creation",
-      });
-      await this.store.save(0, world);
+    try {
+      await this._migrateLegacy();
+    } catch (_) {
+      /* migration is best-effort; a broken legacy map must not cost the session */
+    }
+    try {
       this.mapIndex = await this.store.list();
-      this._adopt(world, 0);
-    } else {
-      const id = this._preferredSlot();
-      const world = (await this.store.load(id)) || generateWorld({ terrain: true, seed: Date.now() });
-      this._adopt(world, id);
+      if (this.mapIndex.length === 0) {
+        const world = generateWorld({
+          terrain: true,
+          seed: Date.now(),
+          name: "My Creation",
+        });
+        await this.store.save(0, world);
+        this.mapIndex = await this.store.list();
+        this._adopt(world, 0);
+      } else {
+        const id = this._preferredSlot();
+        const world =
+          (await this.store.load(id)) ||
+          generateWorld({ terrain: true, seed: Date.now() });
+        this._adopt(world, id);
+      }
+      this.storageFailed = false;
+    } catch (_) {
+      await this._fallBackToMemory();
     }
 
     this.tile = 1;
@@ -301,9 +337,31 @@ export class ForgeMode {
     requestPointerLockSafe(this.canvas);
   }
 
+  /**
+   * The host saves before calling this (input-dispatch does on Q), so only edits
+   * made since the last save are written again.
+   */
   stop() {
     this.active = false;
-    if (this.world) this._fire(this.store.save(this.currentSlot, this.world));
+    if (this._dirty) this._fire(this._persistCurrent());
+  }
+
+  /** Storage is gone: keep editing in memory and say so on the HUD. */
+  async _fallBackToMemory() {
+    this.store = new WorldStore(new MemoryBackend());
+    this.storageFailed = true;
+    const world = generateWorld({
+      terrain: true,
+      seed: Date.now(),
+      name: "My Creation",
+    });
+    this._adopt(world, 0);
+    try {
+      await this.store.save(0, world);
+      this.mapIndex = await this.store.list();
+    } catch (_) {
+      this.mapIndex = [{ id: 0, name: world.meta.name }];
+    }
   }
 
   /** Kept for the host, which still calls it after a play-test. The World needs no sync. */
@@ -360,13 +418,13 @@ export class ForgeMode {
       return true;
     }
     // T → cycle tool
-    if (code === "KeyT") {
+    if (code === "KeyT" && !ctrl) {
       this.toolMode = nextTool(this.toolMode);
       this.audio.menuSelect();
       return true;
     }
     // G → cycle sub-type within the current tool
-    if (code === "KeyG") {
+    if (code === "KeyG" && !ctrl) {
       if (this.toolMode === "spawn") {
         this.selectedEnemy = (this.selectedEnemy + 1) % ENEMY_KEYS.length;
         this.audio.menuSelect();
@@ -379,11 +437,11 @@ export class ForgeMode {
       }
       return false;
     }
-    if (code === "KeyF") {
+    if (code === "KeyF" && !ctrl) {
       this.renameMap();
       return true;
     }
-    if (code === "Tab") {
+    if (code === "Tab" && !ctrl) {
       e.preventDefault();
       this.overhead = !this.overhead;
       if (this.overhead) exitPointerLockSafe();
@@ -391,12 +449,12 @@ export class ForgeMode {
       return true;
     }
     // 1-9 pick blocks 1-9; 0 cycles the natural blocks
-    if (code >= "Digit1" && code <= "Digit9") {
+    if (code >= "Digit1" && code <= "Digit9" && !ctrl) {
       this.tile = parseInt(code.charAt(5), 10);
       this.audio.menuSelect();
       return true;
     }
-    if (code === "Digit0") {
+    if (code === "Digit0" && !ctrl) {
       const i = NATURAL_BLOCKS.indexOf(this.tile);
       this.tile = NATURAL_BLOCKS[(i + 1) % NATURAL_BLOCKS.length];
       this.audio.menuSelect();
@@ -413,34 +471,34 @@ export class ForgeMode {
       this.audio.menuSelect();
       return true;
     }
-    if (code === "KeyR") {
+    if (code === "KeyR" && !ctrl) {
       this.player.pitch = 0;
       return true;
     }
-    if (code === "KeyN") {
+    if (code === "KeyN" && !ctrl) {
       this.noclip = !this.noclip;
       this.velZ = 0;
       return true;
     }
-    if (code === "KeyV") {
+    if (code === "KeyV" && !ctrl) {
       this.terrainNew = !this.terrainNew;
       this.audio.menuSelect();
       return true;
     }
-    if (code === "KeyH") {
+    if (code === "KeyH" && !ctrl) {
       this.showHelp = !this.showHelp;
       return true;
     }
-    if (code === "KeyP") {
+    if (code === "KeyP" && !ctrl) {
       if (this.onPlayTest) this.onPlayTest();
       return true;
     }
-    if (code === "BracketLeft") {
+    if (code === "BracketLeft" && !ctrl) {
       this.settings.fov = Math.max(50, this.settings.fov - 5);
       this.audio.menuSelect();
       return true;
     }
-    if (code === "BracketRight") {
+    if (code === "BracketRight" && !ctrl) {
       this.settings.fov = Math.min(120, this.settings.fov + 5);
       this.audio.menuSelect();
       return true;
@@ -652,21 +710,25 @@ export class ForgeMode {
     );
   }
 
-  /** The empty cell against the targeted face, or null when nothing is targeted. */
+  /** The cell against the targeted face, or null when nothing is targeted. */
   _placeCell() {
     const t = this.target;
     if (!t) return null;
     return { x: t.x + t.face[0], y: t.y + t.face[1], z: t.z + t.face[2] };
   }
 
+  /** Same cell, but only when a marker may stand in it: in the world and empty. */
+  _freeCell() {
+    const c = this._placeCell();
+    if (!c || !this.world.inBounds(c.x, c.y, c.z)) return null;
+    return this.world.get(c.x, c.y, c.z) === AIR ? c : null;
+  }
+
   _record(edit) {
-    this.history.length = this.historyIndex + 1;
-    this.history.push(edit);
-    this.historyIndex++;
-    if (this.history.length > MAX_HISTORY) {
-      this.history.shift();
-      this.historyIndex--;
-    }
+    const next = recordEdit(this.history, this.historyIndex, edit);
+    this.history = next.history;
+    this.historyIndex = next.index;
+    this._dirty = true;
   }
 
   _editBlock(x, y, z, to) {
@@ -729,8 +791,8 @@ export class ForgeMode {
   }
 
   placeSpawn() {
-    const c = this._placeCell();
-    if (!c || this.world.get(c.x, c.y, c.z) !== AIR) return;
+    const c = this._freeCell();
+    if (!c) return;
     const list = this.world.meta.enemySpawns || [];
     if (this._occupied(list, c)) return;
     const type = ENEMY_KEYS[this.selectedEnemy] || "drone";
@@ -739,8 +801,8 @@ export class ForgeMode {
   }
 
   placePickup() {
-    const c = this._placeCell();
-    if (!c || this.world.get(c.x, c.y, c.z) !== AIR) return;
+    const c = this._freeCell();
+    if (!c) return;
     const list = this.world.meta.pickups || [];
     if (this._occupied(list, c)) return;
     const type = PICKUP_TYPES[this.selectedPickup];
@@ -777,8 +839,8 @@ export class ForgeMode {
   }
 
   placeExit() {
-    const c = this._placeCell();
-    if (!c || this.world.get(c.x, c.y, c.z) !== AIR) return;
+    const c = this._freeCell();
+    if (!c) return;
     this._editMeta("exit", this._markerAt(c));
     this.audio.menuConfirm();
   }
@@ -791,8 +853,8 @@ export class ForgeMode {
 
   /** Moves the play-test start to the targeted cell, facing the way the builder looks. */
   placeStart() {
-    const c = this._placeCell();
-    if (!c || this.world.get(c.x, c.y, c.z) !== AIR) return;
+    const c = this._freeCell();
+    if (!c) return;
     this._editMeta("spawn", { ...this._markerAt(c), yaw: this.player.angle });
     this.audio.menuConfirm();
   }
@@ -834,6 +896,7 @@ export class ForgeMode {
     this.player.z = Math.max(s.z, groundHeight(world, s.x, s.y, PLAYER.half));
     this.player.angle = s.yaw || 0;
     this.cursorZ = Math.floor(this.player.z);
+    this._dirty = false; // a freshly loaded or generated world matches the store
     this._persistSlot();
   }
 
@@ -843,11 +906,31 @@ export class ForgeMode {
     return promise;
   }
 
+  /** A slot operation is under way, or the slot id itself is not settled yet. */
+  _slotBusy() {
+    return this._busy || this._slotPending;
+  }
+
+  _warn(text) {
+    this.notice = { text, t: 3 };
+    this.saveFlash = 0;
+  }
+
+  /**
+   * Write the current world to its slot. Refused while an import is still
+   * reserving an id, where `currentSlot` still names the world we came from.
+   */
+  _persistCurrent() {
+    if (!this.world || this._slotPending) return Promise.resolve();
+    return this.store.save(this.currentSlot, this.world);
+  }
+
   saveMap() {
     if (!this.world) return Promise.resolve();
     const entry = this.mapIndex.find((e) => e.id === this.currentSlot);
     if (entry) entry.name = this.world.meta.name;
     this.saveFlash = 2;
+    this._dirty = this._slotPending; // a pending import is written by _saveAsNewSlot
     this._persistSlot();
     let blocks = 0;
     for (let i = 0; i < this.world.blocks.length; i++)
@@ -856,14 +939,17 @@ export class ForgeMode {
       map_name: this.world.meta.name,
       block_count: blocks,
     });
-    return this._fire(this.store.save(this.currentSlot, this.world));
+    return this._persistCurrent().catch(() => {
+      this._dirty = true;
+      this._warn("Save failed \u2014 storage unavailable");
+    });
   }
 
   async newMap() {
-    if (this._busy) return;
+    if (this._slotBusy()) return;
     this._busy = true;
     try {
-      if (this.world) await this.store.save(this.currentSlot, this.world);
+      await this._persistCurrent();
       const id = await this.store.nextId();
       const world = generateWorld({
         terrain: this.terrainNew,
@@ -873,33 +959,38 @@ export class ForgeMode {
       await this.store.save(id, world);
       this.mapIndex = await this.store.list();
       this._adopt(world, id);
+      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuConfirm();
+    } catch (_) {
+      this._warn("Could not create a world \u2014 storage unavailable");
     } finally {
       this._busy = false;
     }
   }
 
   async switchMap(dir) {
-    if (this._busy || this.mapIndex.length < 2) return;
+    if (this._slotBusy() || this.mapIndex.length < 2) return;
     this._busy = true;
     try {
-      if (this.world) await this.store.save(this.currentSlot, this.world);
+      await this._persistCurrent();
       const cur = this.mapIndex.findIndex((e) => e.id === this.currentSlot);
-      const next =
-        (cur + dir + this.mapIndex.length) % this.mapIndex.length;
+      const next = (cur + dir + this.mapIndex.length) % this.mapIndex.length;
       const id = this.mapIndex[next].id;
       const world = (await this.store.load(id)) || generateWorld({ terrain: false });
       this._adopt(world, id);
+      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuSelect();
+    } catch (_) {
+      this._warn("Could not open that world \u2014 storage unavailable");
     } finally {
       this._busy = false;
     }
   }
 
   async deleteCurrentMap() {
-    if (this._busy || this.mapIndex.length <= 1) return; // never delete the last world
+    if (this._slotBusy() || this.mapIndex.length <= 1) return; // never delete the last world
     this._busy = true;
     try {
       await this.store.remove(this.currentSlot);
@@ -907,8 +998,11 @@ export class ForgeMode {
       const id = this.mapIndex[0].id;
       const world = (await this.store.load(id)) || generateWorld({ terrain: false });
       this._adopt(world, id);
+      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuConfirm();
+    } catch (_) {
+      this._warn("Could not delete that world \u2014 storage unavailable");
     } finally {
       this._busy = false;
     }
@@ -1030,22 +1124,33 @@ export class ForgeMode {
 
   /**
    * Edit `world` from this moment on — the host reads `.map` straight after
-   * importing, so the swap cannot wait on storage — and give it its own slot
-   * as soon as the store hands out an id.
+   * importing, so the swap cannot wait on storage — and give it its own slot as
+   * soon as the store hands out an id. Until then `_slotPending` holds off every
+   * write, because `currentSlot` still names the world this one replaced.
    */
   _takeOver(world) {
+    this._slotPending = true;
     this._adopt(world);
+    this._dirty = true; // nothing has stored it yet
     return this._fire(this._saveAsNewSlot(world));
   }
 
   async _saveAsNewSlot(world) {
-    const id = await this.store.nextId();
-    this.currentSlot = id;
-    this._persistSlot();
-    await this.store.save(id, world);
-    this.mapIndex = await this.store.list();
-    this.saveFlash = 2;
-    this.audio.menuConfirm();
+    try {
+      const id = await this.store.nextId();
+      this.currentSlot = id;
+      this._slotPending = false;
+      this._persistSlot();
+      await this.store.save(id, world);
+      this.mapIndex = await this.store.list();
+      this._dirty = false;
+      this.saveFlash = 2;
+      this.audio.menuConfirm();
+    } catch (_) {
+      this._warn("Imported world could not be saved \u2014 storage unavailable");
+    } finally {
+      this._slotPending = false;
+    }
   }
 
   /** Ctrl+Shift+S — hands the host a share hash, or explains why there is none. */
@@ -1118,6 +1223,17 @@ export class ForgeMode {
       ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
       ctx.fillText(this.notice.text, w / 2, 76);
+      ctx.textAlign = "left";
+    }
+    if (this.storageFailed) {
+      ctx.fillStyle = "rgba(255,80,60,0.9)";
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "STORAGE UNAVAILABLE — EDITS WON'T BE SAVED",
+        w / 2,
+        96,
+      );
       ctx.textAlign = "left";
     }
 
