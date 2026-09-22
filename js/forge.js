@@ -289,6 +289,9 @@ export class ForgeMode {
     this.survivalSession = new SurvivalSession();
     /** Non-null only in a survival world; every RPG rule lives behind it. */
     this.survival = null;
+    /** Survival breaks on a held button; creative still breaks on the click. */
+    this.holdingBreak = false;
+    this.breakProgress = 0;
     /** The item id the hotbar has selected in survival. */
     this.heldItem = null;
     this.selectedEnemy = 0;
@@ -579,8 +582,22 @@ export class ForgeMode {
         return;
       default:
         if (place) this.placeBlock();
-        else this.removeBlock();
+        else {
+          this.holdingBreak = true;
+          this.removeBlock();
+        }
     }
+  }
+
+  /**
+   * Releasing the break button discards partial progress — see spec §5.
+   * Mirrors `handleMouseDown`: left places, every other button breaks.
+   */
+  handleMouseUp(button) {
+    if (button === 0) return;
+    this.holdingBreak = false;
+    this.survival?.cancelBreak();
+    this.breakProgress = 0;
   }
 
   /** Mouse wheel cycles the placeable palette. The host routes wheel events here. */
@@ -626,6 +643,24 @@ export class ForgeMode {
         -PITCH_LIMIT,
         Math.min(PITCH_LIMIT, this.player.pitch),
       );
+    }
+
+    if (this.survival) {
+      if (this.holdingBreak && this.target) {
+        const t = this.target;
+        // `dt` is seconds here; the session counts a break in milliseconds.
+        const res = this.survival.tickBreak(dt * 1000, t, this.world.get(t.x, t.y, t.z));
+        this.breakProgress = this.survival.progress;
+        if (res.broke) {
+          this._editBlock(t.x, t.y, t.z, AIR);
+          this.audio.menuSelect();
+          if (res.leveled) this._warn(`Mining level ${this.survival.miningLevel()}`);
+          this.breakProgress = 0;
+        }
+      } else if (this.breakProgress !== 0) {
+        this.survival.cancelBreak();
+        this.breakProgress = 0;
+      }
     }
 
     const speed = (this.noclip ? NOCLIP_SPEED : MOVE_SPEED) * dt;

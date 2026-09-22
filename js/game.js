@@ -346,6 +346,9 @@ export class Game {
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
       onMouseUp: (e) => {
+        // Same canvas listener pair as the mousedown above, so a release
+        // outside the canvas still cancels a survival break.
+        if (this.state === GameState.BUILDER) this.builder?.handleMouseUp(e.button);
         if (e.button === 0) this.player.isFiring = false;
         if (e.button === 2) this.player.isAiming = false;
       },
@@ -742,6 +745,11 @@ export class Game {
   /** Reacts to pointer lock acquire/release. */
   _inputLockChange(locked, wasLocked) {
     if (this.isTouchDevice) return; // touch controls manage their own state
+    // Alt-tabbing away swallows the mouseup, so the Forge would keep mining a
+    // block with the button already released.
+    if (wasLocked && !locked && this.state === GameState.BUILDER) {
+      this.builder?.handleMouseUp(2);
+    }
     // Only auto-pause if we lost lock without ESC (e.g. alt-tab)
     if (wasLocked && !locked && this.state === GameState.PLAYING) {
       this.player.isAiming = false;
