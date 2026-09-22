@@ -22,25 +22,25 @@ describe("tools", () => {
 
   it("picks the best tier held, and bare hands when none is", () => {
     const empty = new Inventory();
-    expect(bestTool(empty)).toBe(TOOLS.HAND);
+    expect(bestTool(empty).tool).toBe(TOOLS.HAND);
 
     const stone = new Inventory();
     stone.add("pick_stone", 1);
-    expect(bestTool(stone)).toBe(TOOLS.PICK_STONE);
+    expect(bestTool(stone).tool).toBe(TOOLS.PICK_STONE);
 
     const both = new Inventory();
     both.add("pick_stone", 1);
     both.add("pick_metal", 1);
-    expect(bestTool(both)).toBe(TOOLS.PICK_METAL);
+    expect(bestTool(both).tool).toBe(TOOLS.PICK_METAL);
 
     const reversed = new Inventory();
     reversed.add("pick_metal", 1);
     reversed.add("pick_stone", 1);
-    expect(bestTool(reversed)).toBe(TOOLS.PICK_METAL);
+    expect(bestTool(reversed).tool).toBe(TOOLS.PICK_METAL);
   });
 
   it("falls back to hands for a null inventory", () => {
-    expect(bestTool(null)).toBe(TOOLS.HAND);
+    expect(bestTool(null).tool).toBe(TOOLS.HAND);
   });
 });
 
@@ -66,5 +66,39 @@ describe("durability tables", () => {
   it("agrees with the item table", () => {
     expect(TOOLS.PICK_STONE.durability).toBe(itemById("pick_stone").durability);
     expect(TOOLS.PICK_METAL.durability).toBe(itemById("pick_metal").durability);
+  });
+});
+
+describe("bestTool with wear", () => {
+  it("returns the tool and the slot it came from", () => {
+    const inv = new Inventory();
+    inv.add("stone", 1);
+    inv.add("pick_stone", 1);
+    expect(bestTool(inv)).toEqual({ tool: TOOLS.PICK_STONE, slot: 1 });
+    expect(bestTool(new Inventory())).toEqual({ tool: TOOLS.HAND, slot: -1 });
+    expect(bestTool(null)).toEqual({ tool: TOOLS.HAND, slot: -1 });
+  });
+
+  it("skips a worn tool in favour of a lesser intact one", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("pick_metal", 1);
+    inv.wearSlot(1, 400); // the metal one is spent
+    expect(bestTool(inv)).toEqual({ tool: TOOLS.PICK_STONE, slot: 0 });
+  });
+
+  it("falls back to hands when every tool is worn out", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 120);
+    expect(bestTool(inv)).toEqual({ tool: TOOLS.HAND, slot: -1 });
+  });
+
+  it("prefers the least worn of two of the same tier", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 100);
+    expect(bestTool(inv).slot).toBe(1);
   });
 });

@@ -21,11 +21,14 @@ export class SurvivalSession {
     this.inventory = inventory || new Inventory();
     /** One bit per cell: was this block placed by the player? See spec §6. */
     this.placed = new Uint8Array(CELLS >> 3);
-    this.breaking = null; // { cell, blockId, elapsed, need }
+    this.breaking = null; // { cell, blockId, elapsed, need, toolSlot, toolItem }
     this.progress = 0;
   }
 
-  tool() { return bestTool(this.inventory); }
+  tool() { return bestTool(this.inventory).tool; }
+
+  /** @returns {{tool:object, slot:number}} the tool that will take the wear */
+  toolSlot() { return bestTool(this.inventory); }
 
   miningLevel() { return this.skills.level("mining"); }
 
@@ -70,11 +73,14 @@ export class SurvivalSession {
       return { ok: false, reason: "Inventory full" };
     }
 
+    const picked = this.toolSlot();
     this.breaking = {
       cell: { ...cell },
       blockId,
       elapsed: 0,
-      need: breakTime(blockId, this.miningLevel(), this.tool()),
+      need: breakTime(blockId, this.miningLevel(), picked.tool),
+      toolSlot: picked.slot,
+      toolItem: picked.slot >= 0 ? this.inventory.slots[picked.slot].item : null,
     };
     this.progress = 0;
     return { ok: true };

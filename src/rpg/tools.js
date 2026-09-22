@@ -16,12 +16,25 @@ const BY_ITEM = new Map(
 
 export const toolForItem = (itemId) => BY_ITEM.get(itemId) || null;
 
-/** @returns {object} the highest-tier tool in `inventory`, else `TOOLS.HAND` */
+/**
+ * The best usable tool held, and the slot holding it. A tool at zero
+ * durability is skipped entirely, so a spent pickaxe never beats an intact
+ * lesser one — and bare hands are always the floor.
+ * @returns {{tool: object, slot: number}} slot is -1 for TOOLS.HAND
+ */
 export function bestTool(inventory) {
-  if (!inventory) return TOOLS.HAND;
-  let best = TOOLS.HAND;
-  for (const [itemId, tool] of BY_ITEM) {
-    if (tool.tier > best.tier && inventory.count(itemId) > 0) best = tool;
+  const none = { tool: TOOLS.HAND, slot: -1 };
+  if (!inventory?.slots) return none;
+  let best = none;
+  for (let i = 0; i < inventory.slots.length; i++) {
+    const s = inventory.slots[i];
+    if (!s) continue;
+    const tool = BY_ITEM.get(s.item);
+    if (!tool || (s.dur ?? tool.durability) <= 0) continue;
+    if (tool.tier > best.tool.tier) best = { tool, slot: i };
+    // Same tier: take the least worn, so wear spreads instead of destroying one.
+    else if (tool.tier === best.tool.tier && best.slot >= 0 &&
+             (s.dur ?? 0) > (inventory.slots[best.slot].dur ?? 0)) best = { tool, slot: i };
   }
   return best;
 }
