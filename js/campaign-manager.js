@@ -177,6 +177,7 @@ export class CampaignManager {
     }
     const level = CAMPAIGN_LEVELS[index];
     g.map = structuredClone(level);
+    g.world = null;
     g.player.x = level.playerStart.x;
     g.player.y = level.playerStart.y;
     g.player.angle = level.playerStart.dir;

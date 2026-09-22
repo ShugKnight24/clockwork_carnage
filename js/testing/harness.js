@@ -73,6 +73,7 @@ function resetGame(game) {
   game.entities = [];
   game.projectiles = [];
   game.map = null;
+  game.world = null;
   game.mode = null;
   game.state = GameState.TITLE;
   game.killedEnemies = 0;

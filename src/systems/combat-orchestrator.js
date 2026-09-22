@@ -113,7 +113,11 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
     endDist = hit.dist;
     damageEnemy(game, hit.enemy, damage, hit.zone);
   } else {
-    const wallDist = distanceToWall(game.player, dirX, dirY, game.map, range, pitch, playerEyeZ(game.player));
+    // A voxel level has no grid to march; the shot reaches its full range
+    // until Task 11 casts against the world instead.
+    const wallDist = game.map
+      ? distanceToWall(game.player, dirX, dirY, game.map, range, pitch, playerEyeZ(game.player))
+      : range;
     endDist = wallDist;
     if (wallDist < range) game.spawnWallSparks(game.player.x + dirX * wallDist, game.player.y + dirY * wallDist);
   }

@@ -9,8 +9,120 @@ import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
 import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
+import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
+import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
+
+/** Half-height in canvas pixels the enemy bitmaps are rasterised at. */
+const ENEMY_SPRITE_PX = 128;
+
+const PICKUP_COLORS = {
+  health: "#ff4466",
+  ammo: "#ffcc33",
+  weapon: "#00ccff",
+  gear: "#ffb84d",
+  damage2x: "#ff5028",
+  invuln: "#ffdc78",
+  exit: "#44ffaa",
+};
+const _pickupIcons = new Map();
+
+/**
+ * Placeholder billboard for a pickup or the exit. The 2D pickup art draws
+ * straight into the frame with no bakeable sprite behind it, so until Task 11
+ * gives them real quads this is a tinted disc with the type's initial.
+ */
+function pickupIcon(type) {
+  let icon = _pickupIcons.get(type);
+  if (icon) return icon;
+  icon = document.createElement("canvas");
+  icon.width = icon.height = 32;
+  const c = icon.getContext("2d");
+  const color = PICKUP_COLORS[type] || "#ffffff";
+  c.fillStyle = color;
+  c.globalAlpha = 0.35;
+  c.beginPath();
+  c.arc(16, 16, 15, 0, Math.PI * 2);
+  c.fill();
+  c.globalAlpha = 1;
+  c.beginPath();
+  c.arc(16, 16, 10, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#04080f";
+  c.font = "bold 14px monospace";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText((type || "?")[0].toUpperCase(), 16, 17);
+  _pickupIcons.set(type, icon);
+  return icon;
+}
+
+/**
+ * Feet-anchored billboards for everything alive in a voxel play-test.
+ * Enemy bitmaps are still decoding for the first frames after a spawn; those
+ * enemies are simply left out until their body canvas exists.
+ */
+function spriteListFromEntities(game) {
+  const out = [];
+  const ctx = game.renderer.ctx;
+  for (const e of game.entities) {
+    if (!e.active) continue;
+    if (e.type === "enemy") {
+      if (e.state === "dead") continue;
+      const frame = prepareEnemySprite(ctx, e, ENEMY_SPRITE_PX, game.time);
+      if (!frame?.body) continue; // boss rigs and undecoded bitmaps
+      const def = e.def || {};
+      out.push({
+        x: e.x,
+        y: e.y,
+        z: e.z || 0,
+        w: def.radius * 2.2 || 0.9,
+        h: def.hitHeight * 2 || 1.6,
+        image: frame.body,
+        key: `enemy:${e.enemyType}:${frame.pose}`,
+      });
+      continue;
+    }
+    if (e.type === "projectile") continue;
+    const exit = e.type === "exit";
+    out.push({
+      x: e.x,
+      y: e.y,
+      z: e.z || 0,
+      w: exit ? 1.2 : 0.6,
+      h: exit ? 1.8 : 0.6,
+      image: pickupIcon(e.type),
+      key: `pickup:${e.type}`,
+    });
+  }
+  return out;
+}
+
+/**
+ * Draw the voxel world into the 2D frame. Falls back to the empty-level fill
+ * when the renderer is missing or its context is lost.
+ * @returns {boolean} true when the world made it onto the canvas
+ */
+function drawVoxelScene(game, ctx, w, h, cam, sprites, lights) {
+  const vr = game.voxelRenderer;
+  const drawn =
+    vr &&
+    game.world &&
+    vr.render(cam, game.world, sprites, lights, {
+      style: styleName(),
+      act: game.world.meta.act || 1,
+      quality: game.quality,
+    }) !== false;
+  if (!drawn) {
+    ctx.fillStyle = "#020610";
+    ctx.fillRect(0, 0, w, h);
+    return false;
+  }
+  ctx.drawImage(vr.canvas, 0, 0, w, h);
+  if (game.showFPS) game.profiler.currentPhases.voxel = vr.stats.ms;
+  return true;
+}
 
 /**
  * Fetch and mount the Modern <agent-showroom> overlay. main.js calls this on
@@ -112,6 +224,15 @@ export function renderFrame(game) {
     // competing help surfaces on screen at once.
     const onboarding = !game._builderOnboardingDismissed;
     game.builder.suppressHelp = onboarding;
+    drawVoxelScene(
+      game,
+      ctx,
+      w,
+      h,
+      game.builder.cameraFor(),
+      game.builder.spritesFor(),
+      null,
+    );
     game.builder.render(ctx, w, h, game.time);
     if (onboarding) {
       game._renderBuilderOnboarding(ctx, w, h);
@@ -124,6 +245,15 @@ export function renderFrame(game) {
     game.state === GameState.PAUSED &&
     game.pausedFromState === GameState.BUILDER
   ) {
+    drawVoxelScene(
+      game,
+      ctx,
+      w,
+      h,
+      game.builder.cameraFor(),
+      game.builder.spritesFor(),
+      null,
+    );
     game.builder.render(ctx, w, h, game.time);
     const hctx = game.hudCtx;
     const hw = game.hudW;
@@ -190,7 +320,17 @@ export function renderFrame(game) {
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
   const skipFloorCeil = game.quality && !game.quality.enableFloorTexture;
-  if (game.map?.grid) {
+  if (game.world) {
+    drawVoxelScene(
+      game,
+      ctx,
+      w,
+      h,
+      camFromPlayer(game.player, game.settings, renderFov),
+      spriteListFromEntities(game),
+      game.lights || null,
+    );
+  } else if (game.map?.grid) {
     // Hand the renderer this frame's dynamic light list so wall/floor
     // shading can sample radial brightness. Cleared each frame implicitly
     // because the array is replaced by reference.
@@ -210,13 +350,17 @@ export function renderFrame(game) {
     ctx.fillRect(0, 0, w, h);
   }
 
+  // Motes and tracers project through the raycaster's camera, which a voxel
+  // level does not use. TODO(Task 11): draw them as quads in the voxel pass.
+  const flat2D = !game.world;
+
   // Render atmospheric dust motes
-  if ((game.quality?.particleMultiplier ?? 1) >= 0.5 && game.dustMotes && game.dustMotes.length > 0) {
+  if (flat2D && (game.quality?.particleMultiplier ?? 1) >= 0.5 && game.dustMotes && game.dustMotes.length > 0) {
     game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul, undefined, undefined, yShift);
   }
 
   // Hitscan tracers — drawn after sprites so they read on top, before vignette
-  if (game.tracers && game.tracers.length > 0) {
+  if (flat2D && game.tracers && game.tracers.length > 0) {
     game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul, undefined, undefined, yShift);
   }
 

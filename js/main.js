@@ -99,6 +99,7 @@ function resizeCanvases() {
   if (game.renderer) {
     game.renderer.resize(gw, gh);
   }
+  game.voxelRenderer?.resize(gw, gh);
   invalidateHUD();
 }
 
@@ -205,12 +206,33 @@ document.getElementById("btnTutorial").addEventListener("click", () => {
   game.startTutorial();
 });
 
-document.getElementById("btnBuilder").addEventListener("click", () => {
+/** The Forge needs WebGL2; say so on the button rather than open a blank canvas. */
+function markForgeUnavailable() {
+  const btn = document.getElementById("btnBuilder");
+  if (!btn) return;
+  btn.classList.add("mode-btn-disabled");
+  btn.setAttribute("aria-disabled", "true");
+  const desc = btn.querySelector(".mode-desc");
+  if (desc) desc.textContent = "Unavailable — the Forge needs WebGL2 on this device.";
+}
+
+document.getElementById("btnBuilder").addEventListener("click", async () => {
   initAudio();
+  if (game.voxelUnavailable) {
+    markForgeUnavailable();
+    return;
+  }
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "builder" });
-  game.startBuilder();
+  await game.startBuilder();
+  if (game.voxelUnavailable) {
+    markForgeUnavailable();
+    titleScreen.classList.add("hidden");
+    modeSelect.classList.remove("hidden");
+    gameCanvas.style.display = "none";
+    hudCanvas.style.display = "none";
+  }
 });
 
 document.getElementById("btnMeltdown").addEventListener("click", () => {

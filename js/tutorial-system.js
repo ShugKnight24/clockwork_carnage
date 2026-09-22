@@ -87,6 +87,7 @@ export class TutorialSystem {
   initLevel() {
     const g = this.game;
     g.map = structuredClone(TUTORIAL_MAP);
+    g.world = null;
     g.player.x = TUTORIAL_MAP.playerStart.x;
     g.player.y = TUTORIAL_MAP.playerStart.y;
     g.player.angle = TUTORIAL_MAP.playerStart.dir;

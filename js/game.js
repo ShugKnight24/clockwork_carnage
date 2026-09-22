@@ -57,6 +57,8 @@ import {
   settingsCategoryRects,
   resolveSettingsHit,
 } from "./layout.js";
+import { styleName, spawnFromMeta } from "../src/systems/voxel-glue.js";
+import { World } from "../src/world/world.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController } from "../src/systems/squad-comms.js";
@@ -165,7 +167,7 @@ export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
 let _CutsceneEngine = null;
-let _BuilderMode = null;
+let _ForgeMode = null;
 let _MeltdownMode = null;
 
 const _DEV = import.meta.env?.DEV ?? false;
@@ -215,7 +217,10 @@ export class Game {
     this.dustMotes = null;
     this.projectiles = [];
     this._chronoBombs = [];
+    /** Legacy grid map. Null while a voxel `world` is the level. */
     this.map = null;
+    /** Voxel level (Forge + play-test). Null in every grid-map mode. */
+    this.world = null;
     this._stateManager = new StateManager(GameState.TITLE);
     this.assetEditor = new AssetEditor(this);
     this.mode = null; // 'arena', 'campaign', or 'meltdown'
@@ -363,8 +368,11 @@ export class Game {
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
-    // Builder mode (extracted)
-    this.builder = null; // Lazy-loaded on builder entry
+    // Forge mode (extracted)
+    this.builder = null; // Lazy-loaded on Forge entry
+    this.voxelRenderer = null; // Lazy-loaded with the Forge, shared with the play-test
+    /** True once WebGL2 has been asked for and refused; the Forge stays shut. */
+    this.voxelUnavailable = false;
     this._builderOpts = {
       renderer: this.renderer,
       audio: this.audio,
@@ -684,6 +692,10 @@ export class Game {
 
   /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
   _inputWheel(deltaY) {
+    if (this.state === GameState.BUILDER) {
+      this.builder?.handleWheel(deltaY);
+      return;
+    }
     if (this.state === GameState.SETTINGS) {
       const layout = settingsLayout(
         this.hudW,
@@ -1089,6 +1101,7 @@ export class Game {
     // Generate the meltdown corridor
     const mMap = this.meltdown.start(heroKey, ironman);
     this.map = mMap;
+    this.world = null;
     this._meltdownUpgradeChoices = null;
     this._meltdownUpgradeSel = 0;
 
@@ -1127,6 +1140,7 @@ export class Game {
     // Rotate maps each round
     const mapIdx = (this.arenaRound - 1) % ARENA_MAPS.length;
     this.map = structuredClone(ARENA_MAPS[mapIdx]);
+    this.world = null;
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
@@ -1516,6 +1530,8 @@ export class Game {
   }
 
   interact() {
+    // Doors and secret walls are grid tiles; the voxel Forge has neither yet.
+    if (this.world) return;
     // Check for doors/secrets at multiple distances in front of player
     const cos = Math.cos(this.player.angle);
     const sin = Math.sin(this.player.angle);
@@ -2091,7 +2107,10 @@ export class Game {
         map: this.map,
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
-        noclip: !!this._noclip,
+        // A voxel level has no grid to test against. Noclip skips every
+        // `isPassable` call, so the play-test walks a flat plane until Task 10
+        // gives the player the voxel physics body.
+        noclip: !!this._noclip || !!this.world,
       },
       dt,
     );
@@ -2104,6 +2123,7 @@ export class Game {
   }
 
   isPassable(mx, my) {
+    if (this.world) return true; // TODO(Task 10): answer from the voxel column
     return _isPassable(this.map, mx, my);
   }
 
@@ -2158,6 +2178,9 @@ export class Game {
   }
 
   updateEnemies(dt) {
+    // TODO(Task 10): the AI navigates the grid map; a voxel level has none, so
+    // enemies hold position in a play-test until it learns the world.
+    if (this.world) return;
     const fx = this.aiSystem.update(
       {
         entities: this.entities,
@@ -2185,10 +2208,14 @@ export class Game {
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
+    if (this.world) return true; // TODO(Task 10): hasLineOfSight3D against the world
     return _hasLineOfSight(this.map, x1, y1, x2, y2);
   }
 
   updateProjectiles(dt) {
+    // TODO(Task 11): projectiles collide against the grid; skip them in a
+    // voxel play-test rather than let them fly through a map that is not there.
+    if (this.world) return;
     _updateProjectiles(
       {
         projectiles: this.projectiles,
@@ -2766,22 +2793,49 @@ export class Game {
     };
   }
 
-  // ── Builder Mode (delegated to BuilderMode) ────────────────────
+  // ── Forge Mode (delegated to ForgeMode) ────────────────────────
 
+  /**
+   * Loads the voxel renderer and the Forge, and opens its world. Everything
+   * async about the Forge happens here so `_enterBuilder` — and therefore a
+   * warm `startBuilder()` — stays synchronous.
+   */
   async _ensureBuilder() {
-    if (!this.builder) {
-      if (!_BuilderMode) {
-        _BuilderMode = (await import("./builder.js")).BuilderMode;
+    if (this.voxelUnavailable) return;
+    if (!this.voxelRenderer) {
+      const { VoxelRenderer } = await import(
+        "../src/rendering/voxel/voxel-renderer.js"
+      );
+      this.voxelRenderer = VoxelRenderer.create(
+        this.canvas.width,
+        this.canvas.height,
+      );
+      if (!this.voxelRenderer) {
+        this.voxelUnavailable = true;
+        this._shareToast = {
+          text: "The Forge needs WebGL2 on this device",
+          life: 4.0,
+        };
+        return;
       }
-      this.builder = new _BuilderMode(this._builderOpts);
-      this.builder.onShareMap = () => this._shareBuilderMap();
+    }
+    if (!this.builder) {
+      if (!_ForgeMode) {
+        _ForgeMode = (await import("./forge.js")).ForgeMode;
+      }
+      this.builder = new _ForgeMode(this._builderOpts);
+      this.builder.onShareMap = (hash) => this._shareBuilderMap(hash);
+      this.builder.onPlayTest = () => this.startBuilderPlayTest();
+      await this.builder.start();
     }
   }
 
   /** @see startMeltdown — same sync-when-warm contract. */
   startBuilder() {
-    if (!this.builder) {
-      return this._ensureBuilder().then(() => this._enterBuilder());
+    if (!this.builder?.world) {
+      return this._ensureBuilder().then(() => {
+        if (this.builder?.world) this._enterBuilder();
+      });
     }
     this._enterBuilder();
     return Promise.resolve();
@@ -2789,51 +2843,71 @@ export class Game {
 
   _enterBuilder() {
     this.mode = "builder";
-    this.builder.start();
+    // `start()` ran in _ensureBuilder; re-entry resumes the live world rather
+    // than reloading it, so unsaved edits survive a trip through a play-test.
+    this.builder.active = true;
     this.builder.onPlayTest = () => this.startBuilderPlayTest();
-    this.map = this.builder.map;
+    this.world = this.builder.world;
+    this.map = null;
     this.entities = [];
+    this.projectiles = [];
     this.dustMotes = null;
+    this.exitEntity = null;
+    // Baking a style's materials costs ~200 ms on its first use; pay it here
+    // rather than inside the first frame.
+    this.voxelRenderer.setStyle(styleName(), this.world.meta.act || 1);
     this.state = GameState.BUILDER;
+    this.lockPointer();
   }
 
   startBuilderPlayTest() {
-    // Save builder state so we can return
+    const world = this.builder?.world;
+    if (!world) return;
+
+    // Save the editor camera so we can drop back into it afterwards
+    const cam = this.builder.player;
     this._builderSnapshot = {
-      playerX: this.builder.player.x,
-      playerY: this.builder.player.y,
-      playerAngle: this.builder.player.angle,
+      playerX: cam.x,
+      playerY: cam.y,
+      playerZ: cam.z,
+      playerAngle: cam.angle,
+      playerPitch: cam.pitch,
     };
 
-    // Use the builder's map as the gameplay map.
-    // BUG-034: Ensure heightMap is valid — older saves may lack it,
-    // causing the renderer's heightFrac to NaN/clip walls to zero.
-    this.map = this.builder.map;
-    if (!this.map.heightMap || this.map.heightMap.length !== this.map.height) {
-      this.builder.syncGrid(); // Rebuilds heightMap from layers
-    }
+    this.world = world;
+    this.map = null;
     this.entities = [];
     this.dustMotes = null;
     this.projectiles = [];
 
-    // Find a spawn point — center of map or player position
-    const spawnX = this.builder.player.x;
-    const spawnY = this.builder.player.y;
+    // The world's own spawn, unless it is buried — then the editor camera.
+    const spawn = spawnFromMeta(world) || {
+      x: cam.x,
+      y: cam.y,
+      z: cam.z,
+      yaw: cam.angle,
+    };
 
     // Reset player for play-test
-    this.player = new Player(spawnX, spawnY);
+    this.player = new Player(spawn.x, spawn.y);
+    this.player.z = spawn.z;
+    this.player.vz = 0;
+    this.player.pitch = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
     this.player.ammo = 50;
-    this.player.angle = this.builder.player.angle;
+    this.player.angle = spawn.yaw;
     this.player.weapons = [0, 1]; // pistol + shotgun
     this.player.currentWeapon = 0;
 
     // Spawn enemies — prefer placed spawns, fallback to random
     let spawned = 0;
-    if (this.map.enemySpawns && this.map.enemySpawns.length > 0) {
-      for (const s of this.map.enemySpawns) {
-        const enemy = new Enemy(s.x + 0.5, s.y + 0.5, s.enemy || "drone");
+    const placed = world.meta.enemySpawns || [];
+    if (placed.length > 0) {
+      for (const s of placed) {
+        const enemy = new Enemy(s.x, s.y, s.type || "drone");
+        enemy.z = s.z;
+        enemy.vz = 0;
         this.entities.push(enemy);
         spawned++;
       }
@@ -2841,42 +2915,33 @@ export class Game {
       const enemyTypes = ["drone", "phantom", "beast"];
       const maxEnemies = 8;
       for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
-        const ex = 1.5 + Math.random() * (this.map.width - 3);
-        const ey = 1.5 + Math.random() * (this.map.height - 3);
-        const gx = Math.floor(ex),
-          gy = Math.floor(ey);
-        if (
-          gx >= 0 &&
-          gy >= 0 &&
-          gx < this.map.width &&
-          gy < this.map.height &&
-          this.map.grid[gy][gx] === 0
-        ) {
-          const dist = Math.sqrt((ex - spawnX) ** 2 + (ey - spawnY) ** 2);
-          if (dist > 3) {
-            const etype = enemyTypes[spawned % enemyTypes.length];
-            const enemy = new Enemy(ex, ey, etype);
-            this.entities.push(enemy);
-            spawned++;
-          }
-        }
+        const ex = 1.5 + Math.random() * (World.W - 3);
+        const ey = 1.5 + Math.random() * (World.D - 3);
+        const ez = world.topSolid(Math.floor(ex), Math.floor(ey)) + 1;
+        if (ez <= 0 || ez + 2 >= World.H) continue;
+        const dist = Math.hypot(ex - spawn.x, ey - spawn.y);
+        if (dist <= 3) continue;
+        const enemy = new Enemy(ex, ey, enemyTypes[spawned % enemyTypes.length]);
+        enemy.z = ez;
+        enemy.vz = 0;
+        this.entities.push(enemy);
+        spawned++;
       }
     }
 
-    // Spawn pickups from builder-placed entities
-    if (this.map.entities && this.map.entities.length > 0) {
-      for (const e of this.map.entities) {
-        this.entities.push(
-          new Pickup(e.x, e.y, e.type, { weaponId: e.weaponId }),
-        );
-      }
+    // Spawn pickups from Forge-placed markers
+    for (const p of world.meta.pickups || []) {
+      const pickup = new Pickup(p.x, p.y, p.type, { weaponId: p.weaponId });
+      pickup.z = p.z;
+      this.entities.push(pickup);
     }
 
-    // Spawn exit marker from builder
-    if (this.map.exit) {
+    // Spawn exit marker from the Forge
+    if (world.meta.exit) {
       this.exitEntity = {
-        x: this.map.exit.x,
-        y: this.map.exit.y,
+        x: world.meta.exit.x,
+        y: world.meta.exit.y,
+        z: world.meta.exit.z,
         type: "exit",
         active: true,
       };
@@ -2884,6 +2949,8 @@ export class Game {
     } else {
       this.exitEntity = null;
     }
+
+    this.voxelRenderer?.setStyle(styleName(), world.meta.act || 1);
 
     this.killedEnemies = 0;
     this.totalEnemies = spawned;
@@ -2906,16 +2973,23 @@ export class Game {
     this._playtestEndTimer = null;
     this.state = GameState.BUILDER;
     this.mode = "builder";
-    this.map = this.builder.map;
+    this.world = this.builder.world;
+    this.map = null;
     this.entities = [];
     this.dustMotes = null;
     this.projectiles = [];
+    this.exitEntity = null;
+    this.builder.active = true;
     // Clear stale gameplay HUD
     this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
     if (this._builderSnapshot) {
-      this.builder.player.x = this._builderSnapshot.playerX;
-      this.builder.player.y = this._builderSnapshot.playerY;
-      this.builder.player.angle = this._builderSnapshot.playerAngle;
+      const s = this._builderSnapshot;
+      this.builder.player.x = s.playerX;
+      this.builder.player.y = s.playerY;
+      this.builder.player.z = s.playerZ;
+      this.builder.player.angle = s.playerAngle;
+      this.builder.player.pitch = s.playerPitch;
+      this.builder.velZ = 0;
       this._builderSnapshot = null;
     }
     // Delay pointer lock to avoid race with browser's ESC-triggered unlock
@@ -2925,6 +2999,11 @@ export class Game {
   _handleHashChange() {
     const hash = window.location.hash.substring(1);
     if (!hash) return;
+    // v4 world shares carry the packed world itself, not a JSON blob.
+    if (hash.startsWith("v4.")) {
+      this._loadSharedWorld(hash);
+      return;
+    }
     try {
       const decoded = this._decodeShareURL(hash);
       if (decoded.mode === "arena") {
@@ -2954,6 +3033,26 @@ export class Game {
     this._sharedScoreView = true;
   }
 
+  /** A `v4.` share hash: unpack it into its own Forge slot and open it. */
+  async _loadSharedWorld(hash) {
+    let payload;
+    try {
+      const { fromShareHash, encodeWorld } = await import(
+        "../src/world/world-codec.js"
+      );
+      const world = await fromShareHash(hash);
+      world.meta.name = "Shared";
+      // ForgeMode adopts a save payload, not a live World, so it owns the
+      // slot bookkeeping; the round-trip costs one encode of an RLE world.
+      payload = encodeWorld(world);
+    } catch (e) {
+      console.warn("Invalid shared world:", e);
+      return;
+    }
+    await this._adoptSharedWorld(payload);
+  }
+
+  /** Legacy `{mode:"builder", map}` share: the Forge converts the grid itself. */
   async _loadSharedMap(mapGrid) {
     if (
       !Array.isArray(mapGrid) ||
@@ -2961,14 +3060,19 @@ export class Game {
       !Array.isArray(mapGrid[0])
     )
       return;
-    await this.startBuilder();
-    this.builder.importMapData({
+    await this._adoptSharedWorld({
       name: "Shared Map",
       width: mapGrid[0].length,
       height: mapGrid.length,
       grid: mapGrid,
     });
-    this.map = this.builder.map;
+  }
+
+  async _adoptSharedWorld(payload) {
+    await this.startBuilder();
+    if (!this.builder?.world) return; // WebGL2 missing — the Forge never opened
+    if (!this.builder.importMapData(payload)) return;
+    this.world = this.builder.world;
   }
 
   _handleVictoryClick(e) {
@@ -3014,10 +3118,9 @@ export class Game {
         total: this.totalEnemies || 0,
       };
     } else if (this.state === GameState.BUILDER) {
-      shareData = {
-        mode: "builder",
-        map: this.builder.map.grid,
-      };
+      // The Forge packs the world itself and calls back into _shareBuilderMap.
+      this.builder?.shareMap();
+      return;
     }
 
     if (shareData) {
@@ -3058,14 +3161,20 @@ export class Game {
     }
   }
 
-  _shareBuilderMap() {
-    const shareData = {
-      mode: "builder",
-      map: this.builder?.map?.grid,
-    };
-    if (!Array.isArray(shareData.map) || shareData.map.length === 0) return;
-    const hash = this._encodeShareURL(shareData);
+  /**
+   * ForgeMode hands us a ready `v4.` hash (or nothing, when the world is too
+   * big to share and it has already said so on the HUD).
+   */
+  _shareBuilderMap(hash) {
+    if (!hash) return;
     const url = `${window.location.origin}${window.location.pathname}#${hash}`;
+    // replaceState, not location.hash: a hashchange here would re-import the
+    // world we just shared as a fresh slot.
+    try {
+      window.history.replaceState(null, "", `#${hash}`);
+    } catch (_) {
+      /* some embeddings forbid history writes; the copied URL still works */
+    }
     navigator.clipboard
       .writeText(url)
       .then(() => {

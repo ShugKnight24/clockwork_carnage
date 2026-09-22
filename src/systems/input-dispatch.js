@@ -386,6 +386,7 @@ export function dispatchKeyPress(game, code, e) {
       }
       if (game.pausedFromState === GameState.BUILDER) {
         game.mode = null;
+        game.world = null;
         game.exitEntity = null;
         game.entities = [];
         game.projectiles = [];

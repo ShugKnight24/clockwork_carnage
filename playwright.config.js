@@ -27,6 +27,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     viewport: { width: 1280, height: 720 },
+    // Plain headless Chromium has no WebGL at all, so the Forge (WebGL2) and
+    // the renderer's GL hybrid path would never run under test.
+    launchOptions: { args: ["--use-gl=angle", "--enable-gpu"] },
   },
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
