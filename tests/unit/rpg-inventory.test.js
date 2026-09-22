@@ -85,3 +85,96 @@ describe("Inventory", () => {
     expect(back.count("rock")).toBe(3);
   });
 });
+
+describe("tool durability", () => {
+  it("never merges tools — two pickaxes take two slots", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("pick_stone", 1);
+    expect(inv.count("pick_stone")).toBe(2);
+    expect(inv.slots.filter((s) => s).length).toBe(2);
+  });
+
+  it("gives a new tool full durability and a material none", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("stone", 5);
+    expect(inv.slots[0].dur).toBe(120);
+    expect(inv.slots[1].dur).toBe(undefined);
+  });
+
+  it("honours a per-item stack of one in fits", () => {
+    const inv = new Inventory(2);
+    expect(inv.fits("pick_stone", 2)).toBe(true);
+    expect(inv.fits("pick_stone", 3)).toBe(false);
+    expect(inv.fits("stone", 128)).toBe(true);
+  });
+
+  it("wears a slot down to zero and no further", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    expect(inv.wearSlot(0, 20)).toBe(100);
+    expect(inv.wearSlot(0, 1000)).toBe(0);
+    expect(inv.slots[0].dur).toBe(0);
+    expect(inv.slots[0].item).toBe("pick_stone"); // worn, not gone
+  });
+
+  it("ignores wear on a material slot or an empty slot", () => {
+    const inv = new Inventory();
+    inv.add("stone", 5);
+    expect(inv.wearSlot(0, 3)).toBe(null);
+    expect(inv.wearSlot(5, 3)).toBe(null);
+    expect(inv.slots[0].n).toBe(5);
+  });
+
+  it("finds the most worn tool, and repairs it to full", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("pick_stone", 1);
+    inv.wearSlot(1, 90);
+    expect(inv.findWorn("pick_stone")).toBe(1);
+    expect(inv.repairSlot(1)).toBe(true);
+    expect(inv.slots[1].dur).toBe(120);
+    expect(inv.findWorn("pick_metal")).toBe(-1);
+  });
+
+  it("removes the most worn tool first, keeping the fresh one", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 100); // slot 0 is the worn one
+    inv.remove("pick_stone", 1);
+    const left = inv.slots.find((s) => s && s.item === "pick_stone");
+    expect(left.dur).toBe(120);
+  });
+
+  // Review Focus 1
+  it("round-trips durability through JSON", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 45);
+    const back = Inventory.fromJSON(JSON.parse(JSON.stringify(inv.toJSON())));
+    expect(back.slots[0].dur).toBe(75);
+  });
+
+  // Review Focus 2
+  it("loads a spec-1 tool with no dur at full durability, never broken", () => {
+    const back = Inventory.fromJSON([{ item: "pick_metal", n: 1 }]);
+    expect(back.slots[0].dur).toBe(400);
+  });
+
+  // Review Focus 3
+  it("clamps a dur that is out of range, negative or not a number", () => {
+    expect(Inventory.fromJSON([{ item: "pick_stone", n: 1, dur: 9999 }]).slots[0].dur).toBe(120);
+    expect(Inventory.fromJSON([{ item: "pick_stone", n: 1, dur: -5 }]).slots[0].dur).toBe(0);
+    expect(Inventory.fromJSON([{ item: "pick_stone", n: 1, dur: "x" }]).slots[0].dur).toBe(120);
+    expect(Inventory.fromJSON([{ item: "pick_stone", n: 1, dur: NaN }]).slots[0].dur).toBe(120);
+  });
+
+  it("never lets a tool slot hold more than one", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 3);
+    expect(inv.slots.filter((s) => s).length).toBe(3);
+    inv.slots.filter((s) => s).forEach((s) => expect(s.n).toBe(1));
+  });
+});
