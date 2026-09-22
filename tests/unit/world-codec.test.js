@@ -24,10 +24,7 @@ describe("v4 codec", () => {
     w.set(5, 5, 32, 8); w.meta.name = "Test"; w.meta.exit = { x: 3, y: 4, z: 32 };
     const o = encodeWorld(w);
     expect(o.version).toBe(4); expect(o.size).toEqual([128, 128, 64]);
-    // generateWorld scatters ore (2% per rock cell) even with terrain:false, so a
-    // "flat" world's RLE still carries ~8k singleton breaks (~85k JSON chars) —
-    // still ~12x smaller than a non-RLE array of the same 1,048,576 cells.
-    expect(JSON.stringify(o).length).toBeLessThan(90000);
+    expect(JSON.stringify(o).length).toBeLessThan(6000);
     const back = decodeWorld(o);
     expect(back.get(5, 5, 32)).toBe(8); expect(back.meta.name).toBe("Test"); expect(back.meta.exit).toEqual({ x: 3, y: 4, z: 32 });
     expect(Buffer.from(back.blocks).equals(Buffer.from(w.blocks))).toBe(true);

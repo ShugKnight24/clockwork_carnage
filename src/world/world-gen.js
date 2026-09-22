@@ -31,7 +31,7 @@ export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New 
       const beach = terrain && top <= 29;
       for (let z = 0; z <= top; z++) {
         let id = z === 0 ? BEDROCK : z < top - 4 ? ROCK : z < top ? DIRT : beach ? SAND : GRASS;
-        if (id === ROCK && z > 2 && rng.next() < 0.02) id = ORE;
+        if (terrain && id === ROCK && z > 2 && rng.next() < 0.02) id = ORE;
         w.blocks[w.index(x, y, z)] = id;
       }
     }

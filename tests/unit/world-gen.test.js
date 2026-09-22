@@ -12,6 +12,8 @@ describe("generateWorld", () => {
     expect(w.get(10, 10, 0)).toBe(BEDROCK);
     expect(w.get(10, 10, 32)).toBe(AIR);
     expect(w.meta.spawn).toEqual({ x: 64.5, y: 64.5, z: 32, yaw: 0 });
+    // ore veins are a terrain:true feature; a flat world is bedrock/rock/dirt/grass only
+    expect(w.blocks.includes(14)).toBe(false);
   });
 
   it("terrain: deterministic per seed, surface stays within 26..38, has ore", () => {
