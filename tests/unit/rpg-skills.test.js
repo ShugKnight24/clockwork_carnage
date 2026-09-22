@@ -61,6 +61,28 @@ describe("Skills", () => {
     expect(s.level("nope")).toBe(1);
   });
 
+  it("refuses Infinity, NaN, strings and negatives rather than corrupting the ledger", () => {
+    const s = new Skills();
+    expect(s.grant("mining", Infinity)).toBe(null);
+    expect(s.grant("mining", NaN)).toBe(null);
+    expect(s.grant("mining", "123")).toBe(null);
+    expect(s.grant("mining", -5)).toBe(null);
+    expect(s.xp.mining).toBe(0);
+    expect(typeof s.xp.mining).toBe("number");
+
+    s.grant("mining", 50);
+    s.grant("mining", "123");
+    expect(s.xp.mining).toBe(50); // not the string "50123"
+  });
+
+  it("sanitises a corrupt stored record instead of loading it", () => {
+    expect(Skills.fromJSON({ mining: "500" }).xp.mining).toBe(0);
+    expect(Skills.fromJSON({ mining: -900 }).xp.mining).toBe(0);
+    expect(Skills.fromJSON({ mining: Infinity }).xp.mining).toBe(0);
+    expect(Skills.fromJSON({ mining: NaN }).xp.mining).toBe(0);
+    expect(Skills.fromJSON({ mining: 500 }).xp.mining).toBe(500); // good data still loads
+  });
+
   it("round-trips through JSON and ignores unknown keys", () => {
     const s = Skills.fromJSON({ mining: 500, nope: 9999 });
     expect(s.xp.mining).toBe(500);

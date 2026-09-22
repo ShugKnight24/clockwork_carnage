@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Branch: `feat/v0.8.0`. Never commit to `master`.
+- Branch: `feat/forge-survival` (cut from `feat/v0.8.0`). Never commit to `master`.
 - No AI attribution in any commit message. Conventional Commits: `<type>(<scope>): <imperative summary>`.
 - Modules under `src/rpg/` must not import `js/forge.js`, `src/rendering/**`, or anything touching a GL context. `gather.js` is the only one that may import `src/world/blocks.js`.
 - The v4 world codec is not modified. `world.meta.mode` persists via the existing `structuredClone`.

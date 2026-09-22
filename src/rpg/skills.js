@@ -14,6 +14,13 @@ const CURVE_POWER = 1.85;
 
 const SKILL_IDS = new Set(SKILLS.map((s) => s.id));
 
+/**
+ * A finite, non-negative number. Mirrors Inventory's `validQty`: xp arrives
+ * from persisted records as well as from the tables, so a corrupt save must
+ * not be able to concatenate a string onto the ledger or store Infinity.
+ */
+const validXp = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0;
+
 /** Cumulative xp needed to reach level `L`. Level 1 is free. */
 export function xpForLevel(L) {
   if (L <= 1) return 0;
@@ -30,7 +37,7 @@ export function levelFor(xp) {
 export class Skills {
   constructor(xp = {}) {
     this.xp = {};
-    for (const s of SKILLS) this.xp[s.id] = xp[s.id] || 0;
+    for (const s of SKILLS) this.xp[s.id] = validXp(xp[s.id]) ? xp[s.id] : 0;
   }
 
   level(id) {
@@ -39,7 +46,7 @@ export class Skills {
 
   /** @returns {{level:number,leveled:boolean}|null} null when nothing was granted */
   grant(id, amount) {
-    if (!SKILL_IDS.has(id) || !(amount > 0)) return null;
+    if (!SKILL_IDS.has(id) || !validXp(amount) || amount === 0) return null;
     const before = this.level(id);
     this.xp[id] += amount;
     const level = this.level(id);

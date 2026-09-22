@@ -144,7 +144,9 @@ Cumulative XP to reach level `L`, shared by both skills, capped at 50:
 XP(L) = floor(8 * (L - 1) ** 1.85)
 ```
 
-L5 ≈ 108, L15 ≈ 968, L50 ≈ 11,344.
+L5 = 103, L15 = 1,055, L50 = 10,714. In gathered blocks that is about 21 Dirt
+to reach Mining 5 (which unlocks Rock, and so the first pickaxe) and about 71
+Rock to reach Mining 15 for Ore.
 
 **Gathering** values extend the existing `BLOCKS` entries rather than living in a
 parallel table:
