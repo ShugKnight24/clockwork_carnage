@@ -84,7 +84,7 @@ npx playwright test tests/smoke.spec.js  # 17 smoke checks
 npm run build                            # the vite build must succeed
 ```
 
-`npx playwright test` with no arguments runs all 21 specs, which takes considerably longer. CI (`.github/workflows/ci.yml`) runs four stages on push: syntax-check, unit-tests, build, smoke-test.
+`npx playwright test` with no arguments runs all 24 specs, which takes considerably longer. CI (`.github/workflows/ci.yml`) runs four stages on push: syntax-check, unit-tests, build, smoke-test.
 
 **Caveat:** `scripts/` is gitignored, so the npm scripts that shell into it — `assets:manifest`, `assets:generate`, `assets:build`, `review`, `review:strict` — cannot run from a clean clone. Neither can `simulate`, which needs the gitignored `simulations/`.
 

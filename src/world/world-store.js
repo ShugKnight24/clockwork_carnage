@@ -15,7 +15,10 @@ export class IdbBackend {
     this._p = new Promise((res, rej) => {
       const req = indexedDB.open("cc_worlds", 1);
       req.onupgradeneeded = () => req.result.createObjectStore("worlds", { keyPath: "id" });
-      req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
+      req.onsuccess = () => res(req.result);
+      // Drop the cached promise so a later call opens again rather than
+      // replaying one failure — a private-mode or quota refusal is transient.
+      req.onerror = () => { this._p = null; rej(req.error); };
     });
     return this._p;
   }

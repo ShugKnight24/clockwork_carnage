@@ -44,6 +44,21 @@ describe("forge placement rules", () => {
     expect(placementAllowed(w, 10, 10, 34, [me])).toBe(true);
   });
 
+  it("refuses a block that would bury a marker's body", () => {
+    const w = flat();
+    const spawn = { x: 20.5, y: 20.5, z: 32 };
+    // The marker's own cell and the one its head occupies are both off limits.
+    expect(placementAllowed(w, 20, 20, 32, [], [spawn])).toBe(false);
+    expect(placementAllowed(w, 20, 20, 33, [], [spawn])).toBe(false);
+    // Beside it and over its head is fine.
+    expect(placementAllowed(w, 21, 20, 32, [], [spawn])).toBe(true);
+    expect(placementAllowed(w, 20, 20, 34, [], [spawn])).toBe(true);
+    // Every marker kind, and a missing one (no exit placed yet).
+    const markers = [null, { x: 30.5, y: 31.5, z: 40 }];
+    expect(placementAllowed(w, 30, 31, 41, [], markers)).toBe(false);
+    expect(placementAllowed(w, 30, 31, 42, [], markers)).toBe(true);
+  });
+
   it("refuses a block in an occupied cell or outside the world", () => {
     const w = flat();
     expect(placementAllowed(w, 10, 10, 31, [])).toBe(false); // ground is solid
@@ -296,4 +311,39 @@ describe("forge storage failures", () => {
     expect((await store.load(previous)).meta.name).toBe("Original");
     expect((await store.load(f.currentSlot)).meta.name).toBe("Imported");
   });
+
+  it("never writes an import over the world it replaced when the slot id fails", async () => {
+    // The store answers once, then fails the id lookup the import needs.
+    const backend = new MemoryBackend();
+    let fail = false;
+    const realGetAll = backend.getAll.bind(backend);
+    backend.getAll = async () => {
+      if (fail) { fail = false; throw new Error("store unavailable"); }
+      return realGetAll();
+    };
+
+    const f = forge(new WorldStore(backend));
+    await f.start();
+    const previous = f.currentSlot;
+    f.world.meta.name = "Original";
+    await f.saveMap();
+
+    fail = true;
+    await f._takeOver(generateWorld({ terrain: false, name: "Imported" }));
+    expect(f.notice.text).toMatch(/could not be saved/);
+    expect(f._slotPending).toBe(true); // still has no slot of its own
+
+    // The next save must not land on the world the import replaced.
+    await f.saveMap();
+    await f.stop();
+    expect((await f.store.load(previous)).meta.name).toBe("Original");
+
+    // And once storage answers again the import gets its own slot.
+    await f.saveMap();
+    expect(f._slotPending).toBe(false);
+    expect(f.currentSlot).not.toBe(previous);
+    expect((await f.store.load(f.currentSlot)).meta.name).toBe("Imported");
+    expect((await f.store.load(previous)).meta.name).toBe("Original");
+  });
 });
+

@@ -35,6 +35,8 @@ export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
 const LEGACY_SAVE_KEY = "cc_builder_map";
 const LEGACY_INDEX_KEY = "cc_builder_maps_index";
 const FORGE_CURRENT_KEY = "cc_forge_current_slot";
+/** Legacy keys already converted, so the migration need not read every world. */
+const MIGRATED_KEYS_KEY = "cc_forge_migrated_keys";
 
 const PITCH_LIMIT = (85 * Math.PI) / 180;
 const MOVE_SPEED = 8.0;
@@ -49,11 +51,15 @@ const clone = (v) => (v == null ? v : structuredClone(v));
 
 /**
  * May a block go into this cell? Only empty, in-bounds cells that no body
- * (the editor's own player, a play-test entity) is standing in.
+ * (the editor's own player, a play-test entity) is standing in, and none that
+ * would bury a marker.
  * @param {World} world
  * @param {Array<{x:number,y:number,z:number,half:number,height:number}>} bodies
+ * @param {Array<{x:number,y:number,z:number}|null>} markers feet positions of
+ *   the spawns, pickups, exit and start; a marker's body fills its own cell and
+ *   the one above it, so neither may be filled with a block.
  */
-export function placementAllowed(world, x, y, z, bodies = []) {
+export function placementAllowed(world, x, y, z, bodies = [], markers = []) {
   if (!world.inBounds(x, y, z)) return false;
   if (world.get(x, y, z) !== AIR) return false;
   for (const b of bodies) {
@@ -66,6 +72,12 @@ export function placementAllowed(world, x, y, z, bodies = []) {
       b.z < z + 1
     )
       return false;
+  }
+  for (const m of markers) {
+    if (!m) continue;
+    if (Math.floor(m.x) !== x || Math.floor(m.y) !== y) continue;
+    const mz = Math.floor(m.z);
+    if (z === mz || z === mz + 1) return false;
   }
   return true;
 }
@@ -268,6 +280,9 @@ export class ForgeMode {
     this._busy = false;
     /** An imported world is being edited before its slot id exists. */
     this._slotPending = false;
+    /** The imported world still waiting for a slot, so `saveMap` can retry. */
+    this._pendingWorld = null;
+    this._slotSaving = false;
     /** Edits since the last successful save; `stop()` skips a redundant write. */
     this._dirty = false;
 
@@ -608,8 +623,10 @@ export class ForgeMode {
       let dz = 0;
       if (this.keys["Space"]) dz += speed;
       if (down) dz -= speed;
-      this.player.x = Math.max(0.01, Math.min(World.W - 0.01, this.player.x + mx));
-      this.player.y = Math.max(0.01, Math.min(World.D - 0.01, this.player.y + my));
+      // Same box `moveAABB` clamps a walking body to, so dropping out of
+      // noclip against an edge does not shunt the camera sideways.
+      this.player.x = Math.max(PLAYER.half, Math.min(World.W - PLAYER.half, this.player.x + mx));
+      this.player.y = Math.max(PLAYER.half, Math.min(World.D - PLAYER.half, this.player.y + my));
       this.player.z = Math.max(
         0,
         Math.min(World.H - PLAYER.height, this.player.z + dz),
@@ -697,6 +714,17 @@ export class ForgeMode {
     ];
   }
 
+  /** Every marker in the world, as the feet positions `placementAllowed` reads. */
+  _markers() {
+    const meta = this.world?.meta || {};
+    return [
+      ...(meta.enemySpawns || []),
+      ...(meta.pickups || []),
+      meta.exit,
+      meta.spawn,
+    ];
+  }
+
   _pick() {
     const cam = this.cameraFor();
     const cp = Math.cos(cam.pitch);
@@ -778,7 +806,8 @@ export class ForgeMode {
   placeBlock() {
     const c = this._placeCell();
     if (!c) return;
-    if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies())) return;
+    if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers()))
+      return;
     if (this._editBlock(c.x, c.y, c.z, this.tile)) this.audio.menuConfirm();
   }
 
@@ -952,6 +981,13 @@ export class ForgeMode {
       map_name: this.world.meta.name,
       block_count: blocks,
     });
+    // An import whose slot reservation failed still has no id of its own \u2014
+    // writing now would land on the world it replaced. Retry the reservation.
+    if (this._slotPending) {
+      return this._pendingWorld
+        ? this._fire(this._saveAsNewSlot(this._pendingWorld))
+        : Promise.resolve();
+    }
     return this._persistCurrent().catch(() => {
       this._markDirty();
       this._warn("Save failed \u2014 storage unavailable");
@@ -1032,6 +1068,10 @@ export class ForgeMode {
    * One-time import of the 2D builder's localStorage maps. Each legacy key is
    * converted once — a world already carrying that `meta.legacyKey` is proof it
    * ran — and localStorage is left untouched.
+   *
+   * The proof costs a decode of every stored world, so the claimed keys are
+   * cached in localStorage: once every legacy key is in the cache, entering the
+   * Forge reads nothing at all.
    */
   async _migrateLegacy() {
     const keys = [];
@@ -1049,8 +1089,10 @@ export class ForgeMode {
     }
     if (keys.length === 0) return;
 
+    const claimed = this._readMigratedKeys();
+    if (keys.every((k) => claimed.has(k))) return; // nothing new since last time
+
     const rows = await this.store.list();
-    const claimed = new Set();
     for (const row of rows) {
       const world = await this.store.load(row.id).catch(() => null);
       if (world?.meta?.legacyKey) claimed.add(world.meta.legacyKey);
@@ -1058,6 +1100,9 @@ export class ForgeMode {
 
     for (const key of keys) {
       if (claimed.has(key)) continue;
+      // A key that cannot be read or converted never will be: claim it anyway,
+      // or the whole scan runs again on every entry for the rest of time.
+      claimed.add(key);
       let data = null;
       try {
         const raw = localStorage.getItem(key);
@@ -1075,7 +1120,26 @@ export class ForgeMode {
       world.meta.legacyKey = key;
       const id = await this.store.nextId();
       await this.store.save(id, world);
-      claimed.add(key);
+    }
+    this._writeMigratedKeys(claimed);
+  }
+
+  /** @returns {Set<string>} legacy keys a past migration already converted */
+  _readMigratedKeys() {
+    try {
+      const raw = localStorage.getItem(MIGRATED_KEYS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(list) ? list.filter((k) => typeof k === "string") : []);
+    } catch (_) {
+      return new Set();
+    }
+  }
+
+  _writeMigratedKeys(claimed) {
+    try {
+      localStorage.setItem(MIGRATED_KEYS_KEY, JSON.stringify([...claimed]));
+    } catch (_) {
+      /* storage full or unavailable; the next entry just scans again */
     }
   }
 
@@ -1141,26 +1205,36 @@ export class ForgeMode {
    */
   _takeOver(world) {
     this._slotPending = true;
+    this._pendingWorld = world;
     this._adopt(world);
     this._markDirty(); // nothing has stored it yet
     return this._fire(this._saveAsNewSlot(world));
   }
 
+  /**
+   * Give `world` a slot of its own. `_slotPending` clears only once the world
+   * is actually in the store: a store that failed before handing out an id
+   * leaves `currentSlot` naming the world this one replaced, and clearing the
+   * guard there would let the next save overwrite it. `saveMap` retries.
+   */
   async _saveAsNewSlot(world) {
+    if (this._slotSaving) return;
+    this._slotSaving = true;
     try {
       const id = await this.store.nextId();
       this.currentSlot = id;
-      this._slotPending = false;
       this._persistSlot();
       await this.store.save(id, world);
       this.mapIndex = await this.store.list();
+      this._slotPending = false;
+      this._pendingWorld = null;
       this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuConfirm();
     } catch (_) {
       this._warn("Imported world could not be saved \u2014 storage unavailable");
     } finally {
-      this._slotPending = false;
+      this._slotSaving = false;
     }
   }
 

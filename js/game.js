@@ -57,7 +57,7 @@ import {
   settingsCategoryRects,
   resolveSettingsHit,
 } from "./layout.js";
-import { styleName, spawnFromMeta } from "../src/systems/voxel-glue.js";
+import { styleName, spawnFromMeta, standableNear } from "../src/systems/voxel-glue.js";
 import { World } from "../src/world/world.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
@@ -520,6 +520,12 @@ export class Game {
    */
   resumeGame() {
     this._stateManager.resume();
+    // Settings may have changed the art style while we were paused, and a
+    // first bake of Modern's materials costs ~220 ms. Pay it here rather than
+    // in the first frame back.
+    if (this.world) {
+      this.voxelRenderer?.setStyle(styleName(), this.world.meta.act || 1);
+    }
     this.lockPointer();
   }
 
@@ -2959,8 +2965,12 @@ export class Game {
     const placed = world.meta.enemySpawns || [];
     if (placed.length > 0) {
       for (const s of placed) {
-        const enemy = new Enemy(s.x, s.y, s.type || "drone");
-        enemy.z = s.z;
+        // A marker can end up buried — a block placed over it, terrain
+        // converted around it — so resolve each one the way the player's own
+        // spawn is resolved rather than starting an enemy inside a block.
+        const at = standableNear(world, s.x, s.y, s.z) || s;
+        const enemy = new Enemy(at.x, at.y, s.type || "drone");
+        enemy.z = at.z;
         enemy.vz = 0;
         this.entities.push(enemy);
         spawned++;
@@ -3034,6 +3044,9 @@ export class Game {
     this.projectiles = [];
     this.exitEntity = null;
     this.builder.active = true;
+    // Same pre-bake as every other way into a voxel state: the style may have
+    // changed in the play-test's settings screen.
+    this.voxelRenderer?.setStyle(styleName(), this.world.meta.act || 1);
     // Clear stale gameplay HUD
     this.hudCtx.clearRect(0, 0, this.hudW, this.hudH);
     if (this._builderSnapshot) {
@@ -3187,7 +3200,8 @@ export class Game {
       };
     } else if (this.state === GameState.BUILDER) {
       // The Forge packs the world itself and calls back into _shareBuilderMap.
-      this.builder?.shareMap();
+      // `_fire` swallows the rejection, the way the Forge's own hot key does.
+      this.builder?._fire(this.builder.shareMap());
       return;
     }
 

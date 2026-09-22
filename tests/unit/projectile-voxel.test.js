@@ -133,24 +133,25 @@ describe("projectiles in a voxel world", () => {
     expect(overhead.playerHits).toHaveLength(0);
   });
 
-  it("a splash on a roof spares the walker on the floor beneath it", () => {
+  it("a splash on a one-block roof spares the walker beneath it", () => {
     const world = generateWorld({ terrain: false });
-    // A two-block-thick roof at z = 34/35, with a wall for the bolt to burst on.
-    for (let x = 24; x <= 28; x++) for (let y = 19; y <= 21; y++) {
-      world.set(x, y, 34, 1);
-      world.set(x, y, 35, 1);
-    }
-    for (let z = 36; z < 39; z++) world.set(29, 20, z, 1);
+    // A roof exactly one block thick, at z = 33.
+    for (let x = 24; x <= 32; x++) for (let y = 19; y <= 22; y++) world.set(x, y, 33, 1);
 
-    const below = mkEnemy(26.5, 20.5, FLOOR);       // on the ground, under the roof
-    const beside = mkEnemy(28.2, 20.5, 36);         // on the roof, next to the blast
+    const beside = mkEnemy(29.0, 20.5, 34);   // on the roof, where the bolt goes off
+    const below = mkEnemy(29.0, 20.5, FLOOR); // on the ground directly under it
     // A heavy round (over the splash threshold) skimming the roof.
-    const p = bolt(24.5, 20.5, 36.4, 0, { speed: 12 });
+    const p = bolt(25.5, 20.5, 34.0, 0, { speed: 12 });
     p.damage = 80;
-    const { ctx, hits } = makeCtx(world, [p], [below, beside]);
+    const { ctx, hits } = makeCtx(world, [p], [beside, below]);
     fly(ctx, [p]);
 
     expect(p.active).toBe(false);
+    // The walker's hit centre is 1.65 blocks under the blast — well inside the
+    // 2-block sphere, so only the roof between them can spare it. Check that
+    // before checking it went unhurt, or the roof proves nothing.
+    const centre = FLOOR + below.def.hitCenter;
+    expect(Math.hypot(p.x - below.x, p.y - below.y, p.z - centre)).toBeLessThan(2);
     const hurt = hits.map((h) => h.e);
     expect(hurt).toContain(beside);
     expect(hurt).not.toContain(below);

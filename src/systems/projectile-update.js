@@ -7,7 +7,7 @@ import { projectileHitsEnemy } from "./combat.js";
 import { attachProjectileLight, syncProjectileLight } from "../../js/vfx.js";
 import { isSolid } from "../world/blocks.js";
 import { World } from "../world/world.js";
-import { PLAYER } from "../world/voxel-physics.js";
+import { PLAYER, hasLineOfSight3D } from "../world/voxel-physics.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -26,17 +26,19 @@ function isAliveEnemy(e) {
 /**
  * Is `e` inside the blast? A grid level has one floor, so a disc is the whole
  * answer. A voxel level stacks them: a bolt going off on a roof is a sphere's
- * radius away from the walker under it, not zero, and the blast must not reach
- * through the roof.
+ * radius away from the walker under it, not zero — and even inside that sphere
+ * the blast has to reach them, so a single block of floor between the two stops
+ * it.
  */
 function withinBlast(p, e, radius, world) {
   const dx = p.x - e.x, dy = p.y - e.y;
   let d2 = dx * dx + dy * dy;
-  if (world) {
-    const dz = (p.z ?? 0) - ((e.z ?? 0) + (e.def?.hitCenter ?? 0.35));
-    d2 += dz * dz;
-  }
-  return d2 < radius * radius;
+  if (!world) return d2 < radius * radius;
+  const cz = (e.z ?? 0) + (e.def?.hitCenter ?? 0.35);
+  const dz = (p.z ?? 0) - cz;
+  d2 += dz * dz;
+  if (d2 >= radius * radius) return false;
+  return hasLineOfSight3D(world, p.x, p.y, p.z ?? 0, e.x, e.y, cz);
 }
 
 /** Disable EMP-vulnerable enemies in radius. */

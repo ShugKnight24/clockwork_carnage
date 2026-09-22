@@ -8,6 +8,8 @@
  *     must not render 8 MP per frame);
  *   - CPU render time per frame (ccDebug.getPerf().renderMs) stays inside a
  *     per-profile budget in both art styles;
+ *   - the Forge's own voxel phase (phases.voxel) stays inside its own budget,
+ *     so a regression there cannot hide inside the wider renderMs figure;
  *   - no main-thread long task over the hitch budget once the scene is warm
  *     (the old GPU post-FX readback and the filtered creator figure both
  *     showed up here as 100-250 ms tasks).
@@ -32,6 +34,9 @@ const STYLES = [
   { name: "modern", id: 2 },
 ];
 const LONG_TASK_BUDGET = 120;
+// The voxel pass measured 0.1-1.1 ms across every profile; 6 ms is loud enough
+// to catch a cull or re-mesh regression and quiet enough to survive noise.
+const VOXEL_MS_BUDGET = 6;
 
 let browser;
 test.beforeAll(async () => {
@@ -155,6 +160,7 @@ for (const profile of PROFILES) {
       test.info().annotations.push({ type: "perf", description: JSON.stringify(r) });
       expect(r.pixels, "render pixels over the tier budget").toBeLessThanOrEqual(profile.pixelCap * 1.01);
       expect(r.renderMs, "CPU render time per frame").toBeLessThanOrEqual(profile.renderMs);
+      expect(r.voxelMs, "voxel pass per frame").toBeLessThanOrEqual(VOXEL_MS_BUDGET);
       expect(r.longMax, "main-thread hitch").toBeLessThanOrEqual(LONG_TASK_BUDGET * profile.cpu);
     });
   }

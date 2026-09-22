@@ -253,7 +253,6 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
     vr.render(cam, game.world, sprites, lights, {
       style: styleName(),
       act: game.world.meta.act || 1,
-      quality: game.quality,
       fx,
       segments,
     }) !== false;

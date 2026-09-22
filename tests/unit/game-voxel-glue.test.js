@@ -3,7 +3,7 @@ import { World } from "../../src/world/world.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { PLAYER } from "../../src/world/voxel-physics.js";
 import { ART_LEGACY, ART_MODERN, ART_REALISTIC } from "../../src/rendering/art-style.js";
-import { styleName, camFromPlayer, spawnFromMeta } from "../../src/systems/voxel-glue.js";
+import { styleName, camFromPlayer, spawnFromMeta, standableNear } from "../../src/systems/voxel-glue.js";
 
 /** Flat world: solid up to z=31, so a standing spawn has its feet at 32. */
 const flat = () => generateWorld({ terrain: false });
@@ -62,5 +62,45 @@ describe("spawnFromMeta", () => {
     const world = new World(); // all air: no column has a floor
     expect(spawnFromMeta(world)).toBeNull();
     expect(spawnFromMeta(null)).toBeNull();
+  });
+});
+
+describe("standableNear", () => {
+  it("keeps a cell that already has standing room", () => {
+    const world = flat();
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 32 });
+  });
+
+  it("climbs the column when a block has been dropped on the marker", () => {
+    const world = flat();
+    world.set(40, 40, 32, 1); // a builder placed a block over the spawn
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 33 });
+
+    world.set(40, 40, 33, 1); // and another on top of that
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 34 });
+  });
+
+  it("steps to a neighbouring column when its own is full to the roof", () => {
+    const world = flat();
+    for (let z = 32; z < World.H; z++) world.set(40, 40, z, 1);
+    const at = standableNear(world, 40.5, 40.5, 32);
+    expect(at.z).toBe(32);
+    expect(Math.hypot(at.x - 40.5, at.y - 40.5)).toBeLessThanOrEqual(1.5);
+  });
+
+  it("takes the body's own size, so a wider body needs a wider gap", () => {
+    const world = flat();
+    // A one-block slot: air at (40, 40, 32), walled on every side.
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let z = 32; z < 35; z++) world.set(40 + dx, 40 + dy, z, 1);
+    }
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 32 });
+    // Half a block wider than the slot: the search has to leave it.
+    const wide = standableNear(world, 40.5, 40.5, 32, 0.6, PLAYER.height);
+    expect(wide).not.toEqual({ x: 40.5, y: 40.5, z: 32 });
+  });
+
+  it("returns null when nothing within reach has a floor", () => {
+    expect(standableNear(new World(), 40.5, 40.5, 32)).toBeNull();
   });
 });

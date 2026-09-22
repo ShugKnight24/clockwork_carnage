@@ -24,6 +24,23 @@ async function waitForForge(page, timeoutMs = 20_000) {
   );
 }
 
+/**
+ * Waits until the chunk mesher has nothing left to build. Only four chunks are
+ * re-meshed per frame, so `chunksDrawn` undercounts until the cache catches up.
+ */
+async function waitForMeshIdle(page, timeoutMs = 30_000) {
+  await page.evaluate(() => { window.ccDebug.game.__meshIdle = 0; });
+  await page.waitForFunction(
+    () => {
+      const g = window.ccDebug?.game;
+      if (!g?.voxelRenderer) return false;
+      g.__meshIdle = g.voxelRenderer.stats.meshedThisFrame === 0 ? g.__meshIdle + 1 : 0;
+      return g.__meshIdle > 30;
+    },
+    { timeout: timeoutMs },
+  );
+}
+
 /** Re-aims the builder camera and recomputes its raycast target (`update()` does both). */
 async function aimAndUpdate(page, { x, y, z, angle = 0, pitch = 0 }) {
   await page.evaluate(
@@ -79,6 +96,38 @@ test.describe("Voxel Forge", () => {
     expect(chunksDrawn).toBeGreaterThan(0);
 
     await screenshot(page, "forge-editor");
+  });
+
+  test("draws the whole world at the lowest quality preset", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    /**
+     * Chunks drawn from a ground pose in one corner looking diagonally across
+     * the world — the longest sight line there is — once the mesher has caught
+     * up. The terrain is seeded from the clock, so the exact count moves; what
+     * must not move is that the far side of the map is in it.
+     */
+    const drawnLookingAcross = async () => {
+      const z = await page.evaluate(() => window.ccDebug.game.world.topSolid(2, 2) + 1);
+      await aimAndUpdate(page, { x: 2.5, y: 2.5, z, angle: Math.PI / 4, pitch: 0 });
+      await waitForMeshIdle(page);
+      return page.evaluate(() => window.ccDebug.game.voxelRenderer.stats.chunksDrawn);
+    };
+
+    // `quality.drawDistance` counts raycaster tiles — 8 on the lowest tier,
+    // which as a voxel radius would leave nothing but sky past a few chunks.
+    const q = await debug(page, "quality", "ultra-low");
+    expect(q.drawDistance).toBe(8);
+    const low = await drawnLookingAcross();
+    expect(low).toBeGreaterThan(40);
+    await screenshot(page, "forge-ultra-low");
+
+    // The voxel pass has its own radius, so the tier makes no difference to it.
+    await debug(page, "quality", "ultra");
+    expect(await drawnLookingAcross()).toBe(low);
   });
 
   test("places and breaks blocks", async ({ page }) => {
@@ -242,6 +291,38 @@ test.describe("Voxel Forge", () => {
 
     await page.evaluate(() => window.ccDebug.game.exitBuilderPlayTest());
     expect(await debug(page, "getState")).toBe("builder");
+  });
+
+  test("starts a buried enemy spawn on top of what buried it", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    // A platform, a spawn on it, and then a block dropped right on the spawn.
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      await debug(page, "setBlock", 70 + dx, 64 + dy, 40, 1);
+    }
+    await debug(page, "setBlock", 70, 64, 42, 0); // clear the head room above
+    await debug(page, "addEnemySpawn", 70.5, 64.5, 41, "beast");
+    await debug(page, "setBlock", 70, 64, 41, 1); // buries the spawn
+
+    await debug(page, "startBuilderPlayTest");
+    const spawnZ = await page.evaluate(() => {
+      const e = window.ccDebug.game.entities.find((x) => x.type === "enemy");
+      return e ? { x: e.x, y: e.y, z: e.z } : null;
+    });
+    expect(spawnZ).not.toBeNull();
+    // On top of the block, not inside it.
+    expect(spawnZ.z).toBe(42);
+    expect(
+      await page.evaluate(
+        ([x, y, z]) => window.ccDebug.game.world.get(Math.floor(x), Math.floor(y), Math.floor(z)),
+        [spawnZ.x, spawnZ.y, spawnZ.z],
+      ),
+    ).toBe(0);
+
+    await page.evaluate(() => window.ccDebug.game.exitBuilderPlayTest());
   });
 
   test("renders the three art styles without console errors", async ({ browser }) => {

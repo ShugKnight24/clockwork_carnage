@@ -111,6 +111,39 @@ describe("voxel physics", () => {
     expect(aabbOverlapsSolid(w, 10.5, 10.5, 32, 0.3, 1.7)).toBe(true);
   });
 
+  it("walls the world edges instead of letting a body walk off the map", () => {
+    const w = flat();
+    // West: the body stops with its west face flush on x = 0.
+    const west = moveAABB(w, body(1, 10.5, 32), -4, 0, 0);
+    expect(west.x).toBeCloseTo(PLAYER.half, 6);
+    expect(west.hitX).toBe(true);
+
+    // And the far side, which is World.W away rather than at zero.
+    const east = moveAABB(w, body(World.W - 1, 10.5, 32), 4, 0, 0);
+    expect(east.x).toBeCloseTo(World.W - PLAYER.half, 6);
+    expect(east.hitX).toBe(true);
+
+    const north = moveAABB(w, body(10.5, 1, 32), 0, -4, 0);
+    expect(north.y).toBeCloseTo(PLAYER.half, 6);
+    expect(north.hitY).toBe(true);
+
+    const south = moveAABB(w, body(10.5, World.D - 1, 32), 0, 4, 0);
+    expect(south.y).toBeCloseTo(World.D - PLAYER.half, 6);
+    expect(south.hitY).toBe(true);
+  });
+
+  it("caps a body under the world roof and on the world floor", () => {
+    const w = new World(); // all air: nothing to stop the fall but the world itself
+    const up = moveAABB(w, body(10.5, 10.5, 60), 0, 0, 20);
+    expect(up.z).toBeCloseTo(World.H - PLAYER.height, 6);
+    expect(up.hitZ).toBe(true);
+
+    const down = moveAABB(w, body(10.5, 10.5, 4), 0, 0, -20);
+    expect(down.z).toBe(0);
+    expect(down.hitZ).toBe(true);
+    expect(down.grounded).toBe(true);
+  });
+
   // Not in the brief: the sweep's core invariant, whatever it hits and from wherever.
   it("never comes to rest inside a solid block", () => {
     const w = flat();

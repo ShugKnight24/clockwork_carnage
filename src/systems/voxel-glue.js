@@ -39,14 +39,14 @@ export function camFromPlayer(player, settings = {}, fovDeg = settings.fov || 70
 const SUPPORT = 0.05;
 
 /**
- * Room for a standing player at (x, y, z) with something under their feet.
- * Support matters: a spawn hanging over a hole drops the player forever in a
- * world that has no floor there.
+ * Room for a standing body at (x, y, z) with something under its feet.
+ * Support matters: a spawn hanging over a hole drops whatever stands there
+ * forever in a world that has no floor under it.
  */
-function standable(world, x, y, z) {
-  if (z < 0 || z + PLAYER.height >= World.H) return false;
-  if (aabbOverlapsSolid(world, x, y, z, PLAYER.half, PLAYER.height)) return false;
-  return aabbOverlapsSolid(world, x, y, z - SUPPORT, PLAYER.half, PLAYER.height);
+function standable(world, x, y, z, half = PLAYER.half, height = PLAYER.height) {
+  if (z < 0 || z + height >= World.H) return false;
+  if (aabbOverlapsSolid(world, x, y, z, half, height)) return false;
+  return aabbOverlapsSolid(world, x, y, z - SUPPORT, half, height);
 }
 
 /** Cells of the square ring at radius `r` around (cx, cy), the centre when r is 0. */
@@ -65,26 +65,46 @@ function* ring(cx, cy, r) {
 const SEARCH_RADIUS = 24;
 
 /**
- * Where a play-test starts. The world's own spawn wins; when it is buried (an
- * edit dropped blocks on it, or a legacy import landed it inside terrain) the
- * nearest column whose top has standing room is used instead.
+ * The nearest cell to (x, y, z) where a body of this size stands with something
+ * under its feet. A marker buried by a later edit — a block dropped on it, or a
+ * legacy import that landed it inside converted terrain — resolves to the top
+ * of what buried it: the column is searched upward first, then the columns
+ * around it, so the body starts on the nearest free supported cell.
+ * @returns {{x:number,y:number,z:number}|null} null when nowhere within reach fits
+ */
+export function standableNear(world, x, y, z, half = PLAYER.half, height = PLAYER.height) {
+  if (standable(world, x, y, z, half, height)) return { x, y, z };
+  for (let up = Math.floor(z) + 1; up + height < World.H; up++) {
+    if (standable(world, x, y, up, half, height)) return { x, y, z: up };
+  }
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  for (let r = 0; r <= SEARCH_RADIUS; r++) {
+    for (const [bx, by] of ring(cx, cy, r)) {
+      if (bx < 0 || by < 0 || bx >= World.W || by >= World.D) continue;
+      const top = world.topSolid(bx, by) + 1;
+      if (top <= 0) continue; // an empty column has no floor to stand on
+      if (standable(world, bx + 0.5, by + 0.5, top, half, height)) {
+        return { x: bx + 0.5, y: by + 0.5, z: top };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Where a play-test starts. The world's own spawn wins; when it is buried the
+ * nearest standable cell is used instead.
  * @returns {{x:number,y:number,z:number,yaw:number}|null} null when nowhere fits
  */
 export function spawnFromMeta(world) {
   if (!world || !world.meta) return null;
   const s = world.meta.spawn;
-  const yaw = s?.yaw || 0;
-  if (s && standable(world, s.x, s.y, s.z)) return { x: s.x, y: s.y, z: s.z, yaw };
-
-  const cx = Math.floor(s?.x ?? World.W / 2);
-  const cy = Math.floor(s?.y ?? World.D / 2);
-  for (let r = 0; r <= SEARCH_RADIUS; r++) {
-    for (const [x, y] of ring(cx, cy, r)) {
-      if (x < 0 || y < 0 || x >= World.W || y >= World.D) continue;
-      const z = world.topSolid(x, y) + 1;
-      if (z <= 0) continue; // an empty column has no floor to stand on
-      if (standable(world, x + 0.5, y + 0.5, z)) return { x: x + 0.5, y: y + 0.5, z, yaw };
-    }
-  }
-  return null;
+  const at = standableNear(
+    world,
+    s?.x ?? World.W / 2,
+    s?.y ?? World.D / 2,
+    s?.z ?? World.GROUND,
+  );
+  return at ? { ...at, yaw: s?.yaw || 0 } : null;
 }

@@ -30,6 +30,28 @@ const CS = World.CS;            // chunk size in blocks
 const CHUNKS_X = World.CX, CHUNKS_Y = World.CY;
 const CHUNK_RADIUS = (CS * Math.sqrt(3)) / 2;
 const NEAR = 0.05, FAR = 256;
+
+/**
+ * Chunk cull radius, in blocks. Deliberately NOT `quality.drawDistance`: that
+ * knob counts raycaster *tiles* (8–20) and would cut the voxel horizon to a few
+ * dozen blocks — an empty sky on the low tiers. It is set past half the world
+ * diagonal so every chunk of the 128×128×64 world is eligible and the frustum,
+ * not an arbitrary ring, decides what is drawn. The fog ramp still fades the
+ * distance; this only bounds the cull.
+ */
+export const VOXEL_DRAW_DISTANCE = 160;
+
+/**
+ * Is a chunk near enough to draw? Sphere-vs-sphere against the chunk's
+ * bounding sphere, so a chunk whose centre is just past the radius but whose
+ * corner is inside still counts.
+ * @param {number[]} origin chunk's minimum corner in blocks
+ */
+export function chunkInDistance(origin, camX, camY, camZ, maxDist = VOXEL_DRAW_DISTANCE) {
+  const cx = origin[0] + CS / 2, cy = origin[1] + CS / 2, cz = origin[2] + CS / 2;
+  return Math.hypot(cx - camX, cy - camY, cz - camZ) <= maxDist + CS;
+}
+
 /** Glass art is painted opaque (it is a window in a wall), so the renderer owns its opacity. */
 const GLASS_ALPHA = 0.42;
 
@@ -150,6 +172,7 @@ export class VoxelRenderer {
     this.gl = gl; this.canvas = canvas;
     this.width = canvas.width; this.height = canvas.height;
     this.lost = false; this.destroyed = false; this._restoreWarned = false;
+    this._pendingSize = null;  // a resize that arrived while the context was lost
     this.chunks = new Map();   // chunkIndex -> { origin, opaque, alpha, dist }
     this._alphaOrder = [];     // scratch for the back-to-front see-through pass
     this.world = null;
@@ -170,6 +193,14 @@ export class VoxelRenderer {
       if (this.destroyed) return;
       this.chunks.clear();
       this.atlasKey = "";
+      // A resize that arrived while the context was gone was dropped, not
+      // applied: take it now so the rebuilt framebuffer matches the canvas.
+      if (this._pendingSize) {
+        [this.width, this.height] = this._pendingSize;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this._pendingSize = null;
+      }
       try {
         this._initGL();
       } catch (err) {
@@ -270,8 +301,11 @@ export class VoxelRenderer {
   }
 
   resize(w, h) {
-    if (this.destroyed || this.lost) return;
+    if (this.destroyed) return;
     if (!(w > 0 && h > 0)) return;
+    // No GL to resize while the context is gone, and the window does not stop
+    // changing size meanwhile: remember the last one for the restore handler.
+    if (this.lost) { this._pendingSize = w === this.width && h === this.height ? null : [w, h]; return; }
     if (w === this.width && h === this.height) return;
     this.width = w; this.height = h;
     this.canvas.width = w; this.canvas.height = h;
@@ -424,7 +458,7 @@ export class VoxelRenderer {
    * @param {import("../../world/world.js").World} world
    * @param {Array<{x,y,z,w,h,image,key,alpha?,tint?,flipX?}>} sprites feet-anchored billboards
    * @param {Array<{x,y,z,color,radius,intensity}>} lights
-   * @param {{style,act?,quality?,fx?,segments?}} opts `fx` are additive
+   * @param {{style,act?,fx?,segments?}} opts `fx` are additive
    *   billboards (particles) and `segments` world-space streaks (tracers),
    *   both drawn with the sprite program after the solid billboards
    * @returns {boolean} false when the GL context is lost
@@ -446,7 +480,7 @@ export class VoxelRenderer {
     this._extractPlanes(this.viewProj);
 
     const styleId = STYLE_ID[this.style] ?? 1;
-    const maxDist = opts.quality?.drawDistance ?? 96;
+    const maxDist = VOXEL_DRAW_DISTANCE;
 
     // ── Scene pass ──
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
@@ -574,8 +608,8 @@ export class VoxelRenderer {
   }
 
   _visible(origin, cam, maxDist) {
+    if (!chunkInDistance(origin, cam.x, cam.y, cam.z, maxDist)) return false;
     const cx = origin[0] + CS / 2, cy = origin[1] + CS / 2, cz = origin[2] + CS / 2;
-    if (Math.hypot(cx - cam.x, cy - cam.y, cz - cam.z) > maxDist + CS) return false;
     const p = this.planes;
     for (let i = 0; i < 6; i++) {
       if (p[i * 4] * cx + p[i * 4 + 1] * cy + p[i * 4 + 2] * cz + p[i * 4 + 3] < -CHUNK_RADIUS) return false;
