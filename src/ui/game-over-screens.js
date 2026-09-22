@@ -541,7 +541,7 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
     { key: 'Right Click', action: 'Break block' },
     { key: '1 – 9 / Wheel', action: 'Choose block' },
     { key: 'Space', action: 'Jump' },
-    { key: 'T', action: 'Tool (block/spawn/pickup/exit)' },
+    { key: 'T', action: 'Tool cycle (5 modes)' },
     { key: 'Tab', action: 'Overhead view' },
     { key: 'P', action: 'Play-test' },
     { key: 'Ctrl+S', action: 'Save' },

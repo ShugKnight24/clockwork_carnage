@@ -79,7 +79,7 @@ npm run build
 npm install
 npx playwright install                   # once, for the browser binaries
 
-npm run test:unit                        # vitest — 28 files, 637 tests
+npm run test:unit                        # vitest — 51 files, 843 tests
 npx playwright test tests/smoke.spec.js  # 17 smoke checks
 npm run build                            # the vite build must succeed
 ```
