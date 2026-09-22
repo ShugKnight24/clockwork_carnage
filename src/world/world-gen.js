@@ -38,5 +38,6 @@ export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New 
   }
   w.meta.spawn = { x: 64.5, y: 64.5, z: w.topSolid(64, 64) + 1, yaw: 0 };
   w.dirty.fill(1); // generation is not an edit; the renderer meshes everything on first sight anyway
+  w.version++; // direct blocks[] writes bypass set(), so bump version once to honor the "bumps on every change" contract
   return w;
 }

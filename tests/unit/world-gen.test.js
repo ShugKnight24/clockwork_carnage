@@ -28,4 +28,10 @@ describe("generateWorld", () => {
     expect(a.get(64, 64, a.topSolid(64, 64) + 1)).toBe(AIR);
     expect(a.meta.spawn.z).toBe(a.topSolid(64, 64) + 1);
   });
+
+  it("bumps world.version and marks every chunk dirty", () => {
+    const w = generateWorld({ terrain: false });
+    expect(w.version).toBeGreaterThan(0);
+    expect(w.takeDirty().length).toBe(256);
+  });
 });
