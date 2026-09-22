@@ -343,7 +343,9 @@ export class ForgeMode {
    */
   stop() {
     this.active = false;
-    if (this._dirty) this._fire(this._persistCurrent());
+    if (!this._dirty) return Promise.resolve();
+    this._dirty = false;
+    return this._fire(this._persistCurrent());
   }
 
   /** Storage is gone: keep editing in memory and say so on the HUD. */
@@ -724,11 +726,20 @@ export class ForgeMode {
     return this.world.get(c.x, c.y, c.z) === AIR ? c : null;
   }
 
+  /**
+   * The world holds something the store has not seen. Every path that changes
+   * blocks or meta calls this — edits, undo, redo, rename, import — because
+   * `stop()` writes only when it is set.
+   */
+  _markDirty() {
+    this._dirty = true;
+  }
+
   _record(edit) {
     const next = recordEdit(this.history, this.historyIndex, edit);
     this.history = next.history;
     this.historyIndex = next.index;
-    this._dirty = true;
+    this._markDirty();
   }
 
   _editBlock(x, y, z, to) {
@@ -753,12 +764,14 @@ export class ForgeMode {
   undo() {
     if (this.historyIndex < 0) return;
     undoEdit(this.world, this.history[this.historyIndex--]);
+    this._markDirty();
     this.audio.menuSelect();
   }
 
   redo() {
     if (this.historyIndex >= this.history.length - 1) return;
     applyEdit(this.world, this.history[++this.historyIndex]);
+    this._markDirty();
     this.audio.menuSelect();
   }
 
@@ -940,7 +953,7 @@ export class ForgeMode {
       block_count: blocks,
     });
     return this._persistCurrent().catch(() => {
-      this._dirty = true;
+      this._markDirty();
       this._warn("Save failed \u2014 storage unavailable");
     });
   }
@@ -959,7 +972,6 @@ export class ForgeMode {
       await this.store.save(id, world);
       this.mapIndex = await this.store.list();
       this._adopt(world, id);
-      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuConfirm();
     } catch (_) {
@@ -979,7 +991,6 @@ export class ForgeMode {
       const id = this.mapIndex[next].id;
       const world = (await this.store.load(id)) || generateWorld({ terrain: false });
       this._adopt(world, id);
-      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuSelect();
     } catch (_) {
@@ -998,7 +1009,6 @@ export class ForgeMode {
       const id = this.mapIndex[0].id;
       const world = (await this.store.load(id)) || generateWorld({ terrain: false });
       this._adopt(world, id);
-      this._dirty = false;
       this.saveFlash = 2;
       this.audio.menuConfirm();
     } catch (_) {
@@ -1014,6 +1024,7 @@ export class ForgeMode {
     const name = prompt("Rename world:", current);
     if (!name || name.trim().length === 0) return;
     this.world.meta.name = name.trim().substring(0, 40);
+    this._markDirty();
     this.saveMap();
   }
 
@@ -1131,7 +1142,7 @@ export class ForgeMode {
   _takeOver(world) {
     this._slotPending = true;
     this._adopt(world);
-    this._dirty = true; // nothing has stored it yet
+    this._markDirty(); // nothing has stored it yet
     return this._fire(this._saveAsNewSlot(world));
   }
 

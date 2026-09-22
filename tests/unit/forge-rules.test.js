@@ -208,6 +208,49 @@ const forge = (store) =>
     store,
   });
 
+describe("forge dirty tracking", () => {
+  /** `stop()` writes only when the world holds something the store has not seen. */
+  it("marks the world dirty on every edit, undo and redo", async () => {
+    const f = forge(new WorldStore(new MemoryBackend()));
+    await f.start();
+    expect(f._dirty).toBe(false);
+
+    f._editBlock(10, 10, 40, 1);
+    expect(f._dirty).toBe(true);
+    await f.saveMap();
+    expect(f._dirty).toBe(false);
+
+    f.undo();
+    expect(f._dirty).toBe(true);
+    await f.saveMap();
+    expect(f._dirty).toBe(false);
+
+    f.redo();
+    expect(f._dirty).toBe(true);
+  });
+
+  it("leaves the world clean when undo and redo have nothing to do", async () => {
+    const f = forge(new WorldStore(new MemoryBackend()));
+    await f.start();
+    f.undo(); // empty history
+    f.redo(); // nothing undone
+    expect(f._dirty).toBe(false);
+  });
+
+  it("persists an undo made after a save when the Forge stops", async () => {
+    const store = new WorldStore(new MemoryBackend());
+    const f = forge(store);
+    await f.start();
+    f._editBlock(10, 10, 40, 1);
+    await f.saveMap();
+    expect((await store.load(f.currentSlot)).get(10, 10, 40)).toBe(1);
+
+    f.undo(); // place → Ctrl+S → Ctrl+Z → quit
+    await f.stop();
+    expect((await store.load(f.currentSlot)).get(10, 10, 40)).toBe(AIR);
+  });
+});
+
 describe("forge storage failures", () => {
   it("starts into an in-memory world instead of throwing", async () => {
     const f = forge(new WorldStore(new DeadBackend()));
