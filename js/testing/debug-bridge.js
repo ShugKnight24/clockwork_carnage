@@ -101,6 +101,24 @@ export function createDebugBridge(game) {
       return list.length;
     },
 
+    /** Place the exit marker a play-test ends on. @returns {object|null} the marker */
+    setVoxelExit(x, y, z) {
+      const world = game.world || game.builder?.world;
+      if (!world) return null;
+      world.meta.exit = { x, y, z };
+      return { ...world.meta.exit };
+    },
+
+    /** Add a pickup marker for the next play-test. @returns {number} count */
+    addVoxelPickup(x, y, z, type = "ammo", weaponId) {
+      const world = game.world || game.builder?.world;
+      if (!world) return 0;
+      const list = world.meta.pickups || [];
+      list.push({ x, y, z, type, weaponId });
+      world.meta.pickups = list;
+      return list.length;
+    },
+
     /** Move where a play-test drops the player in. */
     setVoxelSpawn(x, y, z, yaw = 0) {
       const world = game.world || game.builder?.world;

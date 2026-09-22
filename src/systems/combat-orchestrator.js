@@ -13,8 +13,10 @@ import {
   isBossEnemy,
   distanceToWall,
   pickHitscanTarget,
+  voxelShotReach,
 } from "./combat.js";
 import { playerEyeZ } from "./physics.js";
+import { playerEyeZ3D } from "../world/voxel-physics.js";
 import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame } from "./aim.js";
@@ -80,6 +82,13 @@ export function fireWeapon(game) {
         dirX, dirY, damage, 12, "player",
       );
       proj.pitch = aimPitch;
+      if (game.world) {
+        // A voxel bolt flies in three dimensions: it leaves the eye on the
+        // camera's own pitch and keeps its world height as it travels.
+        proj.pitch = game.player.pitch || 0;
+        proj.z = playerEyeZ3D(game.player);
+        proj.dirZ = Math.sin(proj.pitch);
+      }
       proj.weaponId = wep.id;
       if (wep.id === 7) proj.emp = true;
       proj.color = game.getCharacterColor().accent || wep.color;
@@ -102,19 +111,39 @@ export function fireWeapon(game) {
   game.gamepad?.vibrateLight?.();
 }
 
+/** Where a voxel tracer leaves the gun: down and to the right of the eye, so it reads as a streak rather than a dot under the crosshair. */
+const BARREL_FORWARD = 0.45, BARREL_RIGHT = 0.22, BARREL_DROP = 0.2;
+
+/**
+ * World height an enemy's VFX belong at — the middle of its hit volume. A grid
+ * level places its particles relative to the horizon and wants no height at
+ * all, so it gets null.
+ */
+function hitHeightOf(game, enemy) {
+  if (!game.world) return null;
+  return (enemy.z || 0) + (enemy.def?.hitCenter ?? 0.35);
+}
+
 export function hitscan(game, angle, damage, range, pitch = 0) {
+  const world = game.world || null;
+  // A voxel level is looked at with the real camera pitch. The 2D `pitch` is
+  // the reticle's offset inside the raycaster's projection, which this camera
+  // does not use, so the shot would leave the barrel level with the floor.
+  if (world) pitch = game.player.pitch || 0;
   const dirX = Math.cos(angle);
   const dirY = Math.sin(angle);
-  const hit = pickHitscanTarget(game.player, dirX, dirY, pitch, range, game.entities, game.map);
+  const hit = pickHitscanTarget(game.player, dirX, dirY, pitch, range, game.entities, game.map, world);
   // Tracer end = hit point, wall, or max range. Always spawn a tracer so the
   // player sees where the bullet went (closes the muzzle-flash → impact gap).
   let endDist;
   if (hit) {
     endDist = hit.dist;
     damageEnemy(game, hit.enemy, damage, hit.zone);
+  } else if (world) {
+    const reach = voxelShotReach(world, game.player, dirX, dirY, pitch, range);
+    endDist = reach.dist;
+    if (reach.blocked) game.spawnWallSparks(reach.x, reach.y, reach.z);
   } else {
-    // A voxel level has no grid to march; the shot reaches its full range
-    // until Task 11 casts against the world instead.
     const wallDist = game.map
       ? distanceToWall(game.player, dirX, dirY, game.map, range, pitch, playerEyeZ(game.player))
       : range;
@@ -123,7 +152,7 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   }
   if (game.tracers) {
     const wep = game.player.getWeaponDef?.();
-    game.tracers.push({
+    const tracer = {
       x1: game.player.x,
       y1: game.player.y,
       x2: game.player.x + dirX * endDist,
@@ -132,7 +161,18 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
       life: 0.06,
       maxLife: 0.06,
       color: TRACER_COLORS[wep?.id] || "255,220,120",
-    });
+    };
+    if (world) {
+      // The voxel pass draws the streak as a quad in the world, so it needs
+      // both ends in 3D — and a muzzle to leave from, or a shot fired along
+      // the view axis would project onto the crosshair and vanish.
+      const eyeZ = playerEyeZ3D(game.player);
+      tracer.x1 += dirX * BARREL_FORWARD + dirY * BARREL_RIGHT;
+      tracer.y1 += dirY * BARREL_FORWARD - dirX * BARREL_RIGHT;
+      tracer.z1 = eyeZ - BARREL_DROP;
+      tracer.z2 = eyeZ + Math.tan(pitch) * endDist;
+    }
+    game.tracers.push(tracer);
   }
 }
 
@@ -177,7 +217,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   game.hitMarkerHead = isHead;
   game.hitMarkerKill = enemy.health <= 0;
   game._lastHitWasCrit = isCrit || isHead;
-  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead);
+  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead, hitHeightOf(game, enemy));
   game.damageNumbers.push({
     x: enemy.x, y: enemy.y,
     value: Math.round(finalDamage),
@@ -207,7 +247,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
       const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
       const dist2 = Math.hypot(target.x - game.player.x, target.y - game.player.y);
       game.audio.enemyDeath(pan2, dist2);
-      game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2);
+      game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2, hitHeightOf(game, target));
       game.glitchEffect = 0.3;
       onEnemyKill(game, target);
     }
@@ -224,7 +264,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
     const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
     game.audio.enemyDeath(panDeath, distDeath);
-    game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2);
+    game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
     game.glitchEffect = 0.3;
     onEnemyKill(game, enemy);
     // Hit-stop — freeze gameplay for a beat on kills (DOOM-like impact)
@@ -341,7 +381,7 @@ export function damagePlayer(game, amount, attacker) {
       const panThorns = game.audio.calculatePan(attacker.x, attacker.y, game.player.x, game.player.y, game.player.angle);
       const distThorns = Math.hypot(attacker.x - game.player.x, attacker.y - game.player.y);
       game.audio.enemyDeath(panThorns, distThorns);
-      game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2);
+      game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2, hitHeightOf(game, attacker));
       game.glitchEffect = 0.3;
       onEnemyKill(game, attacker);
     }

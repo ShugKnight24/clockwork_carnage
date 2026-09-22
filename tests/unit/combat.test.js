@@ -10,8 +10,11 @@ import {
   enemyHitRadius,
   pickHitscanTarget,
   rayEnemyHit,
+  voxelShotReach,
 } from "../../src/systems/combat.js";
 import { aimAngles } from "../../src/systems/aim.js";
+import { generateWorld } from "../../src/world/world-gen.js";
+import { PLAYER } from "../../src/world/voxel-physics.js";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -293,5 +296,59 @@ describe("enemy hit geometry", () => {
     const enemy = makeEnemy({ x: dist, y: 0, def: { radius: 0.3, hitCenter: Math.tan(pitch) * dist, hitHeight: 0.2 } });
     const hit = rayEnemyHit(player, Math.cos(yaw), Math.sin(yaw), 30, pitch, enemy);
     expect(hit?.enemy).toBe(enemy);
+  });
+});
+
+// ── 3D hitscan against a voxel world ─────────────────────
+
+describe("hitscan in a voxel world", () => {
+  /** Flat world: blocks fill z < 32, so a body stands with its feet at z = 32. */
+  const FLOOR = 32;
+  /** Feet at the floor, so the eye rides at 33.6 — over a one-block wall, under a two. */
+  const shooter = () => ({ x: 20.5, y: 20.5, z: FLOOR });
+  const eyeZ = FLOOR + PLAYER.eye;
+  /** A drone hovering with its hit centre exactly on the level sight line. */
+  const drone = (x) => makeEnemy({
+    x, y: 20.5, z: eyeZ - 0.35,
+    def: { radius: 0.3, hitCenter: 0.35, hitHeight: 0.55 },
+  });
+  const wall = (world, height) => {
+    for (let y = 19; y <= 22; y++) {
+      for (let z = FLOOR; z < FLOOR + height; z++) world.set(23, y, z, 1);
+    }
+  };
+
+  it("a two-block wall stops the shot short of the drone behind it", () => {
+    const world = generateWorld({ terrain: false });
+    wall(world, 2);
+    const reach = voxelShotReach(world, shooter(), 1, 0, 0, 30);
+    expect(reach.blocked).toBe(true);
+    expect(reach.dist).toBeCloseTo(2.5);
+    expect(reach.z).toBeCloseTo(eyeZ);
+    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [drone(26.5)], null, world)).toBeNull();
+  });
+
+  it("a shot clears a one-block wall and hits the drone behind it", () => {
+    const world = generateWorld({ terrain: false });
+    wall(world, 1);
+    expect(voxelShotReach(world, shooter(), 1, 0, 0, 30).blocked).toBe(false);
+    const enemy = drone(26.5);
+    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [enemy], null, world)?.enemy).toBe(enemy);
+  });
+
+  it("a drone below the sight line is missed even with nothing in the way", () => {
+    const world = generateWorld({ terrain: false });
+    const enemy = drone(26.5);
+    enemy.z -= 2;
+    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [enemy], null, world)).toBeNull();
+  });
+
+  it("aiming up clears the two-block wall a level shot died on", () => {
+    const world = generateWorld({ terrain: false });
+    wall(world, 2);
+    const pitch = Math.atan2(3, 6); // 6 blocks out, 3 up
+    const enemy = drone(26.5);
+    enemy.z = eyeZ + 3 - 0.35;
+    expect(pickHitscanTarget(shooter(), 1, 0, pitch, 30, [enemy], null, world)?.enemy).toBe(enemy);
   });
 });

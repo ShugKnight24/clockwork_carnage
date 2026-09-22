@@ -5,6 +5,9 @@
  */
 import { projectileHitsEnemy } from "./combat.js";
 import { attachProjectileLight, syncProjectileLight } from "../../js/vfx.js";
+import { isSolid } from "../world/blocks.js";
+import { World } from "../world/world.js";
+import { PLAYER } from "../world/voxel-physics.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -13,6 +16,8 @@ const SPLASH_RADIUS = 2;
 const SPLASH_DAMAGE_FACTOR = 0.5;
 const HEAVY_SPLASH_THRESHOLD = 50;
 const PLAYER_HIT_RADIUS_SQ = 0.25;
+/** Half the standing body, plus a little: the z band a voxel bolt must reach to hit the player. */
+const PLAYER_HIT_HALF = PLAYER.height * 0.5 + 0.1;
 
 function isAliveEnemy(e) {
   return e?.type === "enemy" && e.active && e.state !== "dead";
@@ -46,7 +51,7 @@ function applySplash(p, primary, ctx) {
   // Bright orange explosion light, ~250ms — bleeds onto floor + nearby walls.
   if (ctx.lights) {
     ctx.lights.push({
-      x: p.x, y: p.y,
+      x: p.x, y: p.y, z: p.z ?? World.GROUND + 0.5,
       color: [255, 140, 50],
       radius: 6,
       baseIntensity: 2.2,
@@ -59,13 +64,14 @@ function applySplash(p, primary, ctx) {
 
 /** Test if projectile p hits any enemy candidate; mutates state on hit. */
 function tryHitEnemies(p, ctx, prevX, prevY) {
+  const in3D = !!ctx.world;
   // Query slightly inflated radius so we catch enemies whose cylinder is
   // brushed by the swept segment but whose center is outside the step radius.
   const queryR = Math.max(1.5, Math.hypot(p.x - prevX, p.y - prevY) + 0.8);
   const candidates = ctx.entityGrid.query(p.x, p.y, queryR);
   let best = null;
   for (const e of candidates) {
-    const hit = projectileHitsEnemy(p, e, prevX, prevY);
+    const hit = projectileHitsEnemy(p, e, prevX, prevY, in3D);
     if (hit && (!best || hit.dist < best.dist)) best = hit;
   }
   if (!best) return false;
@@ -91,28 +97,49 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
 
 function tryHitPlayer(p, ctx) {
   const dx = p.x - ctx.player.x, dy = p.y - ctx.player.y;
-  if (dx * dx + dy * dy < PLAYER_HIT_RADIUS_SQ) {
-    ctx.damagePlayer(p.damage);
-    p.active = false;
-    return true;
+  if (dx * dx + dy * dy >= PLAYER_HIT_RADIUS_SQ) return false;
+  if (ctx.world) {
+    // The player is a body, not a column: a bolt aimed at their chest passes
+    // harmlessly over their head from a floor above.
+    const centre = (ctx.player.z || 0) + PLAYER.height * 0.5;
+    if (Math.abs((p.z || 0) - centre) > PLAYER_HIT_HALF) return false;
   }
-  return false;
+  ctx.damagePlayer(p.damage);
+  p.active = false;
+  return true;
 }
 
 function stepProjectile(p, ctx, stepDt) {
   const prevX = p.x;
   const prevY = p.y;
-  p.x += p.dirX * p.speed * stepDt;
-  p.y += p.dirY * p.speed * stepDt;
+  // `dirZ` is the vertical part of a unit 3D heading, so the horizontal part
+  // shrinks to match and the bolt keeps one speed however steeply it is aimed.
+  // A 2D bullet has no dirZ, flies flat, and takes the whole step horizontally.
+  const dz = p.dirZ || 0;
+  const hStep = Math.sqrt(Math.max(0, 1 - dz * dz)) * p.speed * stepDt;
+  p.x += p.dirX * hStep;
+  p.y += p.dirY * hStep;
 
-  const mx = Math.floor(p.x), my = Math.floor(p.y);
-  const { map } = ctx;
-  if (mx < 0 || my < 0 || mx >= map.width || my >= map.height) {
-    p.active = false; return;
-  }
-  if (map.grid[my][mx] > 0) {
-    ctx.spawnWallSparks(p.x, p.y);
-    p.active = false; return;
+  if (ctx.world) {
+    p.z = (p.z || 0) + dz * p.speed * stepDt;
+    const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
+    if (bx < 0 || by < 0 || bz < 0 || bx >= World.W || by >= World.D || bz >= World.H) {
+      p.active = false; return;
+    }
+    if (isSolid(ctx.world.get(bx, by, bz))) {
+      ctx.spawnWallSparks(p.x, p.y, p.z);
+      p.active = false; return;
+    }
+  } else {
+    const mx = Math.floor(p.x), my = Math.floor(p.y);
+    const { map } = ctx;
+    if (mx < 0 || my < 0 || mx >= map.width || my >= map.height) {
+      p.active = false; return;
+    }
+    if (map.grid[my][mx] > 0) {
+      ctx.spawnWallSparks(p.x, p.y);
+      p.active = false; return;
+    }
   }
 
   if (p.owner === "player") tryHitEnemies(p, ctx, prevX, prevY);

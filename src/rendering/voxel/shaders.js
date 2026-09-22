@@ -76,10 +76,12 @@ void main() {
 export const SPRITE_VERT = `#version 300 es
 precision highp float;
 layout(location=0) in vec2 a_corner;   // -0.5..0.5, 0..1
-uniform mat4 u_viewProj; uniform vec3 u_pos; uniform vec3 u_right; uniform vec2 u_size; uniform vec2 u_uvFlip;
+uniform mat4 u_viewProj; uniform vec3 u_pos; uniform vec3 u_right; uniform vec3 u_up; uniform vec2 u_size; uniform vec2 u_uvFlip;
 out vec2 v_uv;
+// u_right/u_up span the quad: a billboard stands on world up, a tracer lies
+// along the shot with its width turned to face the eye.
 void main() {
-  vec3 p = u_pos + u_right * (a_corner.x * u_size.x) + vec3(0.0, 0.0, a_corner.y * u_size.y);
+  vec3 p = u_pos + u_right * (a_corner.x * u_size.x) + u_up * (a_corner.y * u_size.y);
   v_uv = vec2(a_corner.x + 0.5, 1.0 - a_corner.y);
   if (u_uvFlip.x > 0.5) v_uv.x = 1.0 - v_uv.x;
   gl_Position = u_viewProj * vec4(p, 1.0);

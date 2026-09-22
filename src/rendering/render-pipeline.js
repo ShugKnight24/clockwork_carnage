@@ -32,8 +32,8 @@ const _pickupIcons = new Map();
 
 /**
  * Placeholder billboard for a pickup or the exit. The 2D pickup art draws
- * straight into the frame with no bakeable sprite behind it, so until Task 11
- * gives them real quads this is a tinted disc with the type's initial.
+ * straight into the frame with no bakeable sprite behind it, so this is a
+ * tinted disc with the type's initial until they get real quads.
  */
 function pickupIcon(type) {
   let icon = _pickupIcons.get(type);
@@ -60,10 +60,73 @@ function pickupIcon(type) {
   return icon;
 }
 
+let _dotCanvas = null;
+/** Soft round dot, white so a tint can colour it: bullets, sparks and debris. */
+function softDot() {
+  if (_dotCanvas) return _dotCanvas;
+  _dotCanvas = document.createElement("canvas");
+  // 32px, not the 8 a distant mote needs: a bolt leaving the barrel is
+  // magnified enough that a coarser gradient shows its texels as a square.
+  _dotCanvas.width = _dotCanvas.height = 32;
+  const c = _dotCanvas.getContext("2d");
+  const g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.5, "rgba(255,255,255,0.75)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = g;
+  c.fillRect(0, 0, 32, 32);
+  return _dotCanvas;
+}
+
+let _streakCanvas = null;
 /**
- * Feet-anchored billboards for everything alive in a voxel play-test.
- * Only enemies, the pickup kinds above and the exit get one; anything else
- * (props, projectiles) is left to Task 11.
+ * Tracer ribbon: uniform along the shot, fading out across its width so the
+ * quad's edges do not read as a hard-edged strip of paper.
+ */
+function streakTexture() {
+  if (_streakCanvas) return _streakCanvas;
+  _streakCanvas = document.createElement("canvas");
+  _streakCanvas.width = 4;
+  _streakCanvas.height = 64;
+  const c = _streakCanvas.getContext("2d");
+  const g = c.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, "rgba(255,255,255,0)");
+  g.addColorStop(0.5, "rgba(255,255,255,1)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = g;
+  c.fillRect(0, 0, 4, 64);
+  return _streakCanvas;
+}
+
+/** Sprites a voxel frame may carry, particles included. */
+const VOXEL_SPRITE_BUDGET = 400;
+
+/** "r,g,b" (0-255) → the 0-1 triple the sprite program multiplies by. */
+function tintFromCsv(csv) {
+  const p = String(csv || "").split(",");
+  return [(+p[0] || 255) / 255, (+p[1] || 255) / 255, (+p[2] || 255) / 255];
+}
+
+const _hexTints = new Map();
+/** "#rrggbb" → the same 0-1 triple. Cached; the caller must not mutate it. */
+function hexTint(hex) {
+  if (!hex || hex.length < 7) return [1, 1, 1];
+  let t = _hexTints.get(hex);
+  if (!t) {
+    t = [
+      (parseInt(hex.slice(1, 3), 16) || 0) / 255,
+      (parseInt(hex.slice(3, 5), 16) || 0) / 255,
+      (parseInt(hex.slice(5, 7), 16) || 0) / 255,
+    ];
+    _hexTints.set(hex, t);
+  }
+  return t;
+}
+
+/**
+ * Feet-anchored billboards for everything solid in a voxel play-test: enemies,
+ * the pickup kinds above and the exit. Anything else (props) is left out;
+ * projectiles and particles are light, and go through `fxSprites`.
  */
 function spriteListFromEntities(game) {
   const out = [];
@@ -106,12 +169,83 @@ function spriteListFromEntities(game) {
   return out;
 }
 
+/** Diameter of a bolt in flight, in blocks. */
+const PROJECTILE_SIZE = 0.3;
+
+/**
+ * Bolts in flight, then sparks, smoke and debris as tinted dots — up to
+ * whatever is left of the frame's sprite budget. All of it is drawn as light
+ * (additive, no depth write), which is what it is.
+ *
+ * A particle's `z` is an offset from the raycaster's horizon (negative = up),
+ * which means nothing in a level made of blocks; `wz` is the world height its
+ * spawner stamped on it, and `z` still carries the rise and fall on top of
+ * that. A particle with no `wz` was not placed in the world, so it is skipped
+ * rather than drawn somewhere wrong.
+ */
+function fxSprites(game, budget) {
+  const out = [];
+  for (const e of game.entities) {
+    if (!e.active || e.type !== "projectile") continue;
+    if (out.length >= budget) return out;
+    out.push({
+      x: e.x, y: e.y, z: (e.z || 0) - PROJECTILE_SIZE / 2,
+      w: PROJECTILE_SIZE, h: PROJECTILE_SIZE,
+      image: softDot(),
+      key: "fx:dot",
+      tint: hexTint(e.color),
+    });
+  }
+  const particles = game.player?.particles;
+  if (!particles) return out;
+  for (const p of particles) {
+    if (out.length >= budget) break;
+    if (p.wz == null || p.life <= 0) continue;
+    const s = Math.max(0.05, (p.size || 0.04) * 2);
+    out.push({
+      x: p.x,
+      y: p.y,
+      z: p.wz - p.z - s / 2,
+      w: s,
+      h: s,
+      image: softDot(),
+      key: "fx:dot",
+      alpha: Math.min(1, p.life / (p.maxLife || 0.3)),
+      tint: [(p.r || 0) / 255, (p.g || 0) / 255, (p.b || 0) / 255],
+    });
+  }
+  return out;
+}
+
+/**
+ * Hitscan tracers as world-space streaks for the voxel pass. The 2D renderer
+ * draws the same list through its own projection; only a voxel level carries
+ * the `z1/z2` these need.
+ */
+function segmentListFromTracers(game) {
+  const out = [];
+  for (const tr of game.tracers || []) {
+    const t = Math.max(0, tr.life / tr.maxLife);
+    if (t <= 0 || tr.z1 == null) continue;
+    out.push({
+      x1: tr.x1, y1: tr.y1, z1: tr.z1,
+      x2: tr.x2, y2: tr.y2, z2: tr.z2,
+      image: streakTexture(),
+      key: "fx:streak",
+      width: 0.05,
+      alpha: t,
+      tint: tintFromCsv(tr.color),
+    });
+  }
+  return out;
+}
+
 /**
  * Draw the voxel world into the 2D frame. Falls back to the empty-level fill
  * when the renderer is missing or its context is lost.
  * @returns {boolean} true when the world made it onto the canvas
  */
-function drawVoxelScene(game, ctx, w, h, cam, sprites, lights) {
+function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segments = null) {
   const vr = game.voxelRenderer;
   const drawn =
     vr &&
@@ -120,6 +254,8 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights) {
       style: styleName(),
       act: game.world.meta.act || 1,
       quality: game.quality,
+      fx,
+      segments,
     }) !== false;
   if (!drawn) {
     ctx.fillStyle = "#020610";
@@ -328,14 +464,17 @@ export function renderFrame(game) {
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
   const skipFloorCeil = game.quality && !game.quality.enableFloorTexture;
   if (game.world) {
+    const voxelSprites = spriteListFromEntities(game);
     drawVoxelScene(
       game,
       ctx,
       w,
       h,
       camFromPlayer(game.player, game.settings, renderFov),
-      spriteListFromEntities(game),
+      voxelSprites,
       game.lights || null,
+      fxSprites(game, VOXEL_SPRITE_BUDGET - voxelSprites.length),
+      segmentListFromTracers(game),
     );
   } else if (game.map?.grid) {
     // Hand the renderer this frame's dynamic light list so wall/floor
@@ -357,8 +496,9 @@ export function renderFrame(game) {
     ctx.fillRect(0, 0, w, h);
   }
 
-  // Motes and tracers project through the raycaster's camera, which a voxel
-  // level does not use. TODO(Task 11): draw them as quads in the voxel pass.
+  // Motes and tracers project through the raycaster's camera. A voxel level
+  // does not use it: its tracers and particles were drawn as world quads in
+  // the pass above, and it grows no dust motes.
   const flat2D = !game.world;
 
   // Render atmospheric dust motes

@@ -22,6 +22,7 @@ import {
   playerEyeZ3D,
 } from "../world/voxel-physics.js";
 import { beginWindup } from "./ai.js";
+import { Projectile } from "../../js/entities.js";
 import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
 
 /** Fallback footprint for a def that carries no hitbox (combat.js agrees). */
@@ -197,10 +198,7 @@ export class VoxelAISystem {
       if (e.state === "attack") {
         if (los) {
           if (def.attackType === "ranged") {
-            // Projectiles do not fly in a voxel level yet (Task 11), so a shot
-            // that finished its telegraph resolves along the sight line that
-            // allowed it rather than spawning a round that never lands.
-            fx.damagePlayerCalls.push({ damage: def.damage, attacker: e });
+            this._fireProjectile(ctx, e, def, sightZ);
             audio?.enemyShoot?.(
               audio.calculatePan?.(e.x, e.y, player.x, player.y, player.angle) ?? 0,
             );
@@ -215,6 +213,36 @@ export class VoxelAISystem {
     }
 
     return fx;
+  }
+
+  /**
+   * Launch a bolt from the enemy's eye at the middle of the player's body. It
+   * carries its own height, so it can be ducked under or stepped out of while
+   * it is in the air — which is the whole point of firing one instead of
+   * resolving the shot the instant the telegraph ends.
+   * @param {number} sightZ height the shot leaves from
+   */
+  _fireProjectile(ctx, e, def, sightZ) {
+    const { player, projectiles, entities } = ctx;
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const yaw = Math.atan2(dy, dx);
+    const targetZ = (player.z || 0) + PLAYER.height * 0.5;
+    const pitch = Math.atan2(targetZ - sightZ, Math.max(1e-6, Math.hypot(dx, dy)));
+    const proj = new Projectile(
+      e.x + Math.cos(yaw) * 0.4,
+      e.y + Math.sin(yaw) * 0.4,
+      Math.cos(yaw),
+      Math.sin(yaw),
+      def.damage,
+      def.projectileSpeed || 6,
+      "enemy",
+    );
+    proj.z = sightZ + Math.tan(pitch) * 0.4;
+    proj.dirZ = Math.sin(pitch);
+    proj.pitch = pitch;
+    proj.color = def.color1;
+    projectiles?.push(proj);
+    entities?.push(proj);
   }
 
   /**

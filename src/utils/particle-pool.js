@@ -9,6 +9,9 @@ import { ObjectPool } from "./object-pool.js";
 
 const createParticle = () => ({
   x: 0, y: 0, z: 0,
+  // World height for the voxel pass. `z` is a 2D offset from the horizon, so
+  // it places nothing in a level made of blocks; null means "not placed".
+  wz: null,
   vx: 0, vy: 0, vz: 0,
   r: 0, g: 0, b: 0,
   life: 0, size: 0,
@@ -17,6 +20,7 @@ const createParticle = () => ({
 
 const resetParticle = (p) => {
   p.x = p.y = p.z = 0;
+  p.wz = null;
   p.vx = p.vy = p.vz = 0;
   p.r = p.g = p.b = 0;
   p.life = p.size = 0;

@@ -13,6 +13,7 @@ import {
   ZONE_RADIUS_PAD,
 } from "../constants.js";
 import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ } from "./physics.js";
+import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
 
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
@@ -179,7 +180,38 @@ export function distanceToWall(player, dirX, dirY, map, range, pitch = 0, eyeZ =
   }
 }
 
-export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy) {
+/**
+ * How far a shot flies in a voxel level before a block stops it.
+ *
+ * The ray leaves the eye and carries the player's real pitch, so a shot clears
+ * a wall exactly when the player can see over it. `dist` comes back as a
+ * *horizontal* distance because that is what the enemy tests measure along;
+ * `x/y/z` is the 3D point the bullet stopped at, for sparks and impact light.
+ *
+ * @param {number} pitch radians, positive = up
+ * @returns {{dist:number, x:number, y:number, z:number, blocked:boolean}}
+ */
+export function voxelShotReach(world, player, dirX, dirY, pitch, range) {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const ox = player.x, oy = player.y, oz = playerEyeZ3D(player);
+  const block = raycastBlocks(world, ox, oy, oz, dirX * cp, dirY * cp, sp, range);
+  const d = block ? block.dist : range;
+  return {
+    dist: d * cp,
+    x: ox + dirX * cp * d,
+    y: oy + dirY * cp * d,
+    z: oz + sp * d,
+    blocked: !!block,
+  };
+}
+
+/**
+ * @param {number} [eyeZ] height the ray starts at. A grid level measures a
+ *   hit volume from the shooter's eye, so it leaves this at 0; a voxel level
+ *   has real block heights, and passes the eye's world z so the volume is
+ *   compared in the same space as `enemy.z`.
+ */
+export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
   if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
 
   const ex = enemy.x - player.x;
@@ -187,7 +219,7 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy) {
   const along = ex * dirX + ey * dirY;
   if (along <= 0 || along > range) return null;
 
-  const aimHeight = Math.tan(pitch || 0) * along;
+  const aimHeight = eyeZ + Math.tan(pitch || 0) * along;
 
   // Resolve which zone the bullet would land in (head/core/legs/armor/body).
   // Tight zones (heads) get a smaller angular pad so headshots reward precision.
@@ -273,13 +305,22 @@ export function resolveHitZone(enemy, aimHeight, dirX, dirY) {
   return { name: "body", mult: 1, tight: false };
 }
 
-export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map) {
-  const maxDist = map
-    ? distanceToWall(player, dirX, dirY, map, range, pitch, playerEyeZ(player))
-    : range;
+/**
+ * Nearest enemy the shot reaches. A voxel level stops the bullet with blocks,
+ * a grid level with walls; either way the enemies are only tested out to
+ * wherever the world took the bullet.
+ * @param {import("../world/world.js").World} [world] set for a voxel level
+ */
+export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map, world = null) {
+  const eyeZ = world ? playerEyeZ3D(player) : 0;
+  const maxDist = world
+    ? voxelShotReach(world, player, dirX, dirY, pitch, range).dist
+    : map
+      ? distanceToWall(player, dirX, dirY, map, range, pitch, playerEyeZ(player))
+      : range;
   let best = null;
   for (const enemy of entities) {
-    const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy);
+    const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy, eyeZ);
     if (hit && (!best || hit.dist < best.dist)) best = hit;
   }
   return best;
@@ -296,9 +337,12 @@ export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, ma
  * Pre-conditions: projectile has `originX`, `originY`, `dirX`, `dirY`,
  * optional `pitch`. Caller passes `prevX/prevY` (position before this step).
  *
+ * @param {boolean} [in3D] voxel level: the bullet knows its own world height,
+ *   so the vertical test compares `p.z` against the enemy's hit volume rather
+ *   than extrapolating a launch pitch over the travel.
  * @returns {{ enemy, dist } | null} hit info (dist = travel along ray from origin)
  */
-export function projectileHitsEnemy(p, enemy, prevX, prevY) {
+export function projectileHitsEnemy(p, enemy, prevX, prevY, in3D = false) {
   if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
 
   // Reuse hitscan's swept-ray logic for symmetry. Use the projectile's full
@@ -325,8 +369,9 @@ export function projectileHitsEnemy(p, enemy, prevX, prevY) {
     { x: ox, y: oy },
     dirX, dirY,
     travelDist,
-    p.pitch || 0,
+    in3D ? 0 : p.pitch || 0,
     enemy,
+    in3D ? p.z || 0 : 0,
   );
   if (!hit) return null;
 

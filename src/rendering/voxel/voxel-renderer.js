@@ -192,7 +192,7 @@ export class VoxelRenderer {
     this.postProg = compile(gl, POST_VERT, POST_FRAG);
     this.u = {
       chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
-      sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
+      sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_up", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
       post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth"]),
     };
     this.sprites = new SpriteCache(gl);
@@ -424,7 +424,9 @@ export class VoxelRenderer {
    * @param {import("../../world/world.js").World} world
    * @param {Array<{x,y,z,w,h,image,key,alpha?,tint?,flipX?}>} sprites feet-anchored billboards
    * @param {Array<{x,y,z,color,radius,intensity}>} lights
-   * @param {{style,act?,quality?}} opts
+   * @param {{style,act?,quality?,fx?,segments?}} opts `fx` are additive
+   *   billboards (particles) and `segments` world-space streaks (tracers),
+   *   both drawn with the sprite program after the solid billboards
    * @returns {boolean} false when the GL context is lost
    */
   render(cam, world, sprites, lights, opts) {
@@ -486,6 +488,11 @@ export class VoxelRenderer {
     }
 
     this._drawSprites(sprites, cam);
+    // Sparks and smoke are light, not surfaces: they add to what is behind
+    // them and leave the scene's depth alone, so the ink pass keeps outlining
+    // the world rather than drawing a box around every mote.
+    this._drawSprites(opts.fx, cam, true);
+    this._drawSegments(opts.segments, cam);
 
     // Glass and other see-through faces last, over everything solid. They keep
     // the linear depth of what is behind them, so the ink pass outlines that
@@ -590,7 +597,8 @@ export class VoxelRenderer {
     return out;
   }
 
-  _drawSprites(list, cam) {
+  /** @param {boolean} [additive] draw as light: no depth write, no ink outline */
+  _drawSprites(list, cam, additive = false) {
     if (!list || !list.length) return;
     const gl = this.gl;
     const order = [];
@@ -606,6 +614,7 @@ export class VoxelRenderer {
     const u = this.u.sprite;
     gl.uniformMatrix4fv(u.u_viewProj, false, this.viewProj);
     gl.uniform3f(u.u_right, rx, ry, 0);
+    gl.uniform3f(u.u_up, 0, 0, 1);   // billboards stand upright in the world
     gl.uniform1i(u.u_tex, 0);
     gl.uniform3fv(u.u_fogColor, this.fog.near);
     gl.activeTexture(gl.TEXTURE0);
@@ -614,8 +623,9 @@ export class VoxelRenderer {
     gl.enable(gl.BLEND);
     // Straight alpha for the colour, but attachment 1 (linear depth) must be
     // replaced outright, and it writes alpha 1 — so both get the right result.
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.depthMask(true);
+    gl.blendFunc(gl.SRC_ALPHA, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(!additive);
+    if (additive) gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
 
     for (const { s, d } of order) {
       const entry = this.sprites.get(s.key, s.image);
@@ -634,8 +644,82 @@ export class VoxelRenderer {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
+    if (additive) {
+      gl.depthMask(true);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    }
     gl.disable(gl.BLEND);
     gl.enable(gl.CULL_FACE);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * World-space streaks — bullet tracers — as thin quads turned to face the
+   * eye. The sprite program draws them: `u_right` runs along the segment and
+   * `u_up` across it, so the ribbon is widest where the camera can see it and
+   * the same texture, tint and fog apply as to any billboard.
+   *
+   * @param {Array<{x1,y1,z1,x2,y2,z2,image,key,width?,alpha?,tint?}>} list
+   */
+  _drawSegments(list, cam) {
+    if (!list || !list.length) return;
+    const gl = this.gl;
+    gl.useProgram(this.spriteProg);
+    const u = this.u.sprite;
+    gl.uniformMatrix4fv(u.u_viewProj, false, this.viewProj);
+    gl.uniform1i(u.u_tex, 0);
+    gl.uniform2f(u.u_uvFlip, 0, 0);
+    gl.uniform3fv(u.u_fogColor, this.fog.near);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindVertexArray(this.spriteVao);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    // Additive: a tracer is light, and two crossing streaks brighten rather
+    // than punch a hole in each other.
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.depthMask(false);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
+
+    for (const s of list) {
+      const entry = this.sprites.get(s.key, s.image);
+      if (!entry) continue;
+      let ax = s.x2 - s.x1, ay = s.y2 - s.y1, az = s.z2 - s.z1;
+      const len = Math.hypot(ax, ay, az);
+      if (len < 1e-4) continue;
+      ax /= len; ay /= len; az /= len;
+      const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2, mz = (s.z1 + s.z2) / 2;
+      const ex = mx - cam.x, ey = my - cam.y, ez = mz - cam.z;
+      // Across the segment and across the line of sight: the widest face the
+      // eye can be shown. A shot fired straight down the view axis has no such
+      // face, and `len` guards the degenerate cross product.
+      let ux = ay * ez - az * ey, uy = az * ex - ax * ez, uz = ax * ey - ay * ex;
+      const ul = Math.hypot(ux, uy, uz);
+      if (ul < 1e-4) continue;
+      ux /= ul; uy /= ul; uz /= ul;
+      const width = s.width || 0.05;
+      const dist = Math.hypot(ex, ey, ez);
+      const fog = Math.min(this.fog.max, this.fog.max * (1 - Math.exp(-dist * this.fog.density)));
+      gl.bindTexture(gl.TEXTURE_2D, entry.tex);
+      // a_corner.y runs 0..1, so the ribbon grows off one edge: start half a
+      // width back and it straddles the shot line.
+      gl.uniform3f(u.u_pos, mx - ux * width / 2, my - uy * width / 2, mz - uz * width / 2);
+      gl.uniform3f(u.u_right, ax, ay, az);
+      gl.uniform3f(u.u_up, ux, uy, uz);
+      gl.uniform2f(u.u_size, len, width);
+      gl.uniform1f(u.u_alpha, s.alpha ?? 1);
+      const t = s.tint || [1, 1, 1];
+      gl.uniform3f(u.u_tint, t[0], t[1], t[2]);
+      gl.uniform1f(u.u_fog, fog);
+      gl.uniform1f(u.u_depth, dist);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.CULL_FACE);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     gl.bindVertexArray(null);
   }
 

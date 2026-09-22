@@ -15,6 +15,14 @@ import {
 } from "./particle-system.js";
 import { particlePool } from "../src/utils/particle-pool.js";
 import { isRealisticArt } from "../src/rendering/art-style.js";
+import { World } from "../src/world/world.js";
+
+/**
+ * Height a light sits at when the caller has nothing better: head height over
+ * a voxel level's ground floor. The raycaster ignores `z` entirely, so this
+ * only ever matters to the voxel renderer.
+ */
+const DEFAULT_LIGHT_Z = World.GROUND + 0.5;
 
 const _rgbCache = new Map();
 
@@ -47,11 +55,12 @@ const scaledCount = (count, quality = 1) => Math.max(0, Math.round(count * quali
  * @param {number} radius     world units of effective falloff
  * @param {number} intensity  peak brightness multiplier (0.5 = mild, 2 = intense)
  * @param {number} life       seconds until the light fully fades out
+ * @param {number} [z]         world height; only the voxel renderer reads it
  */
-export function spawnPointLight(lights, x, y, color, radius, intensity, life) {
+export function spawnPointLight(lights, x, y, color, radius, intensity, life, z = DEFAULT_LIGHT_Z) {
   if (!lights) return;
   lights.push({
-    x, y,
+    x, y, z: z ?? DEFAULT_LIGHT_Z,
     color,
     radius,
     baseIntensity: intensity,
@@ -106,7 +115,7 @@ export function attachProjectileLight(lights, p) {
   if (lights.length >= MAX_PROJECTILE_LIGHT_SLOTS) return;
   const [radius, intensity] = PROJ_LIGHT[projectileKind(p)];
   const L = {
-    x: p.x, y: p.y,
+    x: p.x, y: p.y, z: Number.isFinite(p.z) ? p.z : DEFAULT_LIGHT_Z,
     color: hexRGB(p.color, [255, 0, 68]),
     radius,
     baseIntensity: intensity,
@@ -124,6 +133,7 @@ export function syncProjectileLight(p) {
   if (!L) return;
   L.x = p.x;
   L.y = p.y;
+  if (Number.isFinite(p.z)) L.z = p.z;
   if (!p.active) {
     L.life = 0;
     L.intensity = 0;
@@ -167,7 +177,7 @@ function spawnChips(particles, x, y, opts) {
 }
 
 /** Realistic hit on a (mechanical) enemy: sparks, coolant chips, a wisp, a flash. */
-function spawnHitImpactRealistic(particles, x, y, enemyColor, isCrit, quality, lights) {
+function spawnHitImpactRealistic(particles, x, y, enemyColor, isCrit, quality, lights, wz) {
   const n = scaledCount(isCrit ? 14 : 9, quality);
   for (let i = 0; i < n; i++) {
     spawnSpark(particles, x, y, -0.2 - Math.random() * 0.25, 2, 3.5, 0.12, 0.2);
@@ -179,13 +189,13 @@ function spawnHitImpactRealistic(particles, x, y, enemyColor, isCrit, quality, l
     speed: 1, life: 0.25,
   });
   spawnSmoke(particles, x, y, { count: scaledCount(isCrit ? 2 : 1, quality), r: 95, g: 95, b: 100, speed: 0.2, life: 0.3 });
-  spawnPointLight(lights, x, y, [255, 190, 120], 2, isCrit ? 0.7 : 0.45, 0.06);
+  spawnPointLight(lights, x, y, [255, 190, 120], 2, isCrit ? 0.7 : 0.45, 0.06, wz);
 }
 
 /** Hit-impact particles at bullet impact point on an enemy. */
-export function spawnHitImpact(particles, x, y, enemyColor, isCrit, quality = 1, lights = null) {
+export function spawnHitImpact(particles, x, y, enemyColor, isCrit, quality = 1, lights = null, wz = null) {
   if (isRealisticArt()) {
-    spawnHitImpactRealistic(particles, x, y, enemyColor, isCrit, quality, lights);
+    spawnHitImpactRealistic(particles, x, y, enemyColor, isCrit, quality, lights, wz);
     return;
   }
   let [r, g, b] = hexRGB(enemyColor, [200, 60, 60]);
@@ -250,7 +260,7 @@ export function spawnMuzzleFlash(particles, player, wep, quality = 1) {
 }
 
 /** Realistic death: fireball lobes, a spark shower, dark smoke, debris, a flash. */
-function spawnDeathRealistic(particles, x, y, c2, quality, lights) {
+function spawnDeathRealistic(particles, x, y, c2, quality, lights, wz) {
   const lobes = scaledCount(5, quality);
   for (let i = 0; i < lobes; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -274,13 +284,13 @@ function spawnDeathRealistic(particles, x, y, c2, quality, lights) {
   spawnSmoke(particles, x, y, { count: scaledCount(7, quality), r: 90, g: 86, b: 82, life: 0.9 });
   const [dr, dg, db] = hexRGB(c2 || "#808080", [80, 75, 70]);
   spawnChips(particles, x, y, { count: scaledCount(6, quality), r: dr >> 1, g: dg >> 1, b: db >> 1 });
-  spawnPointLight(lights, x, y, [255, 150, 70], 4.5, 1.0, 0.25);
+  spawnPointLight(lights, x, y, [255, 150, 70], 4.5, 1.0, 0.25, wz);
 }
 
 /** Death explosion particles + smoke + metallic debris. */
-export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1, lights = null) {
+export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1, lights = null, wz = null) {
   if (isRealisticArt()) {
-    spawnDeathRealistic(particles, x, y, c2, quality, lights);
+    spawnDeathRealistic(particles, x, y, c2, quality, lights, wz);
     return;
   }
   const count = scaledCount(12, quality);
@@ -307,7 +317,7 @@ export function spawnDeathParticles(particles, x, y, c1, c2, quality = 1, lights
 }
 
 /** Wall-impact sparks + debris chips. */
-export function spawnWallSparks(particles, x, y, quality = 1, lights = null) {
+export function spawnWallSparks(particles, x, y, quality = 1, lights = null, wz = null) {
   if (isRealisticArt()) {
     const n = scaledCount(8 + Math.floor(Math.random() * 5), quality);
     for (let i = 0; i < n; i++) {
@@ -316,7 +326,7 @@ export function spawnWallSparks(particles, x, y, quality = 1, lights = null) {
     // Pale concrete dust, slow and short-lived.
     spawnSmoke(particles, x, y, { count: scaledCount(3, quality), r: 150, g: 142, b: 128, speed: 0.15, life: 0.45 });
     spawnChips(particles, x, y, { count: scaledCount(3, quality), speed: 1, life: 0.3 });
-    spawnPointLight(lights, x, y, [255, 170, 90], 1.8, 0.55, 0.06);
+    spawnPointLight(lights, x, y, [255, 170, 90], 1.8, 0.55, 0.06, wz);
     return;
   }
   const count = scaledCount(5 + Math.floor(Math.random() * 4), quality);

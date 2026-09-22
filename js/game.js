@@ -79,6 +79,7 @@ import {
   PLAYER as VOXEL_PLAYER,
   aabbOverlapsSolid,
   groundHeight,
+  playerEyeZ3D,
 } from "../src/world/voxel-physics.js";
 import {
   getDifficultyMultipliers as _getDifficultyMultipliers,
@@ -2041,7 +2042,11 @@ export class Game {
     if (this.mode === "playtest" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
       const dy = this.player.y - this.exitEntity.y;
-      if (dx * dx + dy * dy < 1.0) {
+      // A voxel level stacks floors: standing on the roof above the exit is
+      // not standing on it.
+      const sameLevel =
+        !this.world || Math.abs((this.player.z || 0) - (this.exitEntity.z || 0)) < 1.5;
+      if (dx * dx + dy * dy < 1.0 && sameLevel) {
         if (!this._playtestEndTimer) {
           this._playtestEndTimer = 1.5;
         }
@@ -2148,14 +2153,26 @@ export class Game {
   // TODO: Improve Enemy AI
   // ─── VFX / Particles ──────────────────────────────────────────────────────
 
-  _spawnHitImpact(x, y, enemyColor, isCrit) {
+  /**
+   * Run a spawner and stamp what it produced with the world height it belongs
+   * at. A particle's `z` is an offset from the raycaster's horizon, which
+   * places nothing in a level made of blocks; `wz` is the height the voxel
+   * pass draws it at, and a burst with no known height stays 2D-only.
+   */
+  _spawnParticlesAt(wz, spawn) {
     if (!this.player.particles) this.player.particles = [];
-    _spawnHitImpact(this.player.particles, x, y, enemyColor, isCrit, this.quality?.particleMultiplier ?? 1, this.lights);
+    const ps = this.player.particles;
+    const from = ps.length;
+    spawn(ps);
+    if (this.world && wz != null) for (let i = from; i < ps.length; i++) ps[i].wz = wz;
+  }
+
+  _spawnHitImpact(x, y, enemyColor, isCrit, wz = null) {
+    this._spawnParticlesAt(wz, (ps) =>
+      _spawnHitImpact(ps, x, y, enemyColor, isCrit, this.quality?.particleMultiplier ?? 1, this.lights, wz));
   }
 
   _spawnMuzzleFlash(wep) {
-    if (!this.player.particles) this.player.particles = [];
-    _spawnMuzzleFlash(this.player.particles, this.player, wep, this.quality?.particleMultiplier ?? 1);
     // Brief light bleed at the barrel — falls off in ~80 ms so it reads
     // as a flash, not a flare. Color follows weapon family.
     const FLASH_LIGHT = {
@@ -2166,22 +2183,28 @@ export class Game {
     const color = FLASH_LIGHT[wep.id] || [255, 200, 90];
     const bx = this.player.x + Math.cos(this.player.angle) * 0.6;
     const by = this.player.y + Math.sin(this.player.angle) * 0.6;
-    _spawnPointLight(this.lights, bx, by, color, 4.5, 1.4, 0.08);
+    const bz = this.world ? playerEyeZ3D(this.player) : null;
+    // The flash particles live half a metre from the eye, where a world quad
+    // would fill the screen. They belong to the viewmodel: the raycaster draws
+    // them, the voxel pass leaves them to the gun sprite and this light.
+    this._spawnParticlesAt(null, (ps) =>
+      _spawnMuzzleFlash(ps, this.player, wep, this.quality?.particleMultiplier ?? 1));
+    _spawnPointLight(this.lights, bx, by, color, 4.5, 1.4, 0.08, bz);
   }
 
-  spawnDeathParticles(x, y, c1, c2) {
-    if (!this.player.particles) this.player.particles = [];
-    _spawnDeathParticles(this.player.particles, x, y, c1, c2, this.quality?.particleMultiplier ?? 1, this.lights);
+  spawnDeathParticles(x, y, c1, c2, wz = null) {
+    this._spawnParticlesAt(wz, (ps) =>
+      _spawnDeathParticles(ps, x, y, c1, c2, this.quality?.particleMultiplier ?? 1, this.lights, wz));
   }
 
-  spawnWallSparks(x, y) {
-    if (!this.player.particles) this.player.particles = [];
-    _spawnWallSparks(this.player.particles, x, y, this.quality?.particleMultiplier ?? 1, this.lights);
+  spawnWallSparks(x, y, wz = null) {
+    this._spawnParticlesAt(wz, (ps) =>
+      _spawnWallSparks(ps, x, y, this.quality?.particleMultiplier ?? 1, this.lights, wz));
   }
 
-  spawnPickupBurst(x, y, pickupType) {
-    if (!this.player.particles) this.player.particles = [];
-    _spawnPickupBurst(this.player.particles, x, y, pickupType, this.quality?.particleMultiplier ?? 1);
+  spawnPickupBurst(x, y, pickupType, wz = null) {
+    this._spawnParticlesAt(wz, (ps) =>
+      _spawnPickupBurst(ps, x, y, pickupType, this.quality?.particleMultiplier ?? 1));
   }
 
   updateParticles(dt) {
@@ -2227,19 +2250,19 @@ export class Game {
   }
 
   updateProjectiles(dt) {
-    // TODO(Task 11): projectiles collide against the grid; skip them in a
-    // voxel play-test rather than let them fly through a map that is not there.
-    if (this.world) return;
     _updateProjectiles(
       {
         projectiles: this.projectiles,
         entities: this.entities,
         entityGrid: this.entityGrid,
         map: this.map,
+        // Blocks instead of a grid: a bolt keeps its own height and dies on
+        // whatever solid it flies into.
+        world: this.world,
         player: this.player,
         time: this.time,
         audio: this.audio,
-        spawnWallSparks: (x, y) => this.spawnWallSparks(x, y),
+        spawnWallSparks: (x, y, z) => this.spawnWallSparks(x, y, z),
         damageEnemy: (e, d, z) => this.damageEnemy(e, d, z),
         damagePlayer: (d) => this.damagePlayer(d),
         lights: this.lights,
@@ -2262,6 +2285,9 @@ export class Game {
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       if (dx * dx + dy * dy > 1.0) continue;
+      // Reach, not a column: a pickup two blocks overhead is not picked up
+      // from the floor below it.
+      if (this.world && Math.abs((this.player.z || 0) - (e.z || 0)) >= 1.5) continue;
 
       // In tutorial, block pickups until step 13 ("Resupply")
       if (this.mode === "tutorial" && this.tutorialStep < 13) {
@@ -2275,7 +2301,7 @@ export class Game {
           this.player.health + 25,
         );
         e.active = false;
-        this.spawnPickupBurst(e.x, e.y, "health");
+        this.spawnPickupBurst(e.x, e.y, "health", this.world ? e.z : null);
         this.audio.pickup();
         this.triggerAriaOnce("healthPickup", "healthPickup");
         if (this.mode === "tutorial" && this.tutorialStep === 13)
@@ -2284,7 +2310,7 @@ export class Game {
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
-        this.spawnPickupBurst(e.x, e.y, "ammo");
+        this.spawnPickupBurst(e.x, e.y, "ammo", this.world ? e.z : null);
         this.audio.pickup();
         if (this.mode === "tutorial" && this.tutorialStep === 13)
           this.tutorialPickedUp = true;
@@ -2298,7 +2324,7 @@ export class Game {
         }
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
-        this.spawnPickupBurst(e.x, e.y, "weapon");
+        this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         _spawnEnergyBurst(this.player.particles, e.x, e.y, {
           count: 8,
           r: 50,
@@ -2318,7 +2344,7 @@ export class Game {
         // is persisted on the player — the character stays the source of truth.
         const granted = grantOwned(e.slot, e.slotIndex);
         e.active = false;
-        this.spawnPickupBurst(e.x, e.y, "weapon");
+        this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this.audio.pickup();
         _spawnEnergyBurst(this.player.particles, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 });
         if (granted) {
@@ -2336,6 +2362,7 @@ export class Game {
           e.x,
           e.y,
           e.type === "damage2x" ? "weapon" : "health",
+          this.world ? e.z : null,
         );
         this.audio.pickup();
         _spawnEnergyBurst(this.player.particles, e.x, e.y, {
