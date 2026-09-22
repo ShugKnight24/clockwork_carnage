@@ -100,6 +100,57 @@ async function layOutSightLine(page, blocks) {
   }, blocks);
 }
 
+/**
+ * Crafts `id` the way a player does: reopen the menu — which resets the
+ * highlight and re-scans for benches — walk the highlight down to the row, and
+ * press Enter. Fails the test if the row is not on offer at all.
+ * @returns {Promise<string|null>} the notice the craft left on the HUD, if any
+ */
+async function craftRow(page, id) {
+  if (await page.evaluate(() => window.ccDebug.game.builder.craftOpen)) {
+    await pressForgeKey(page, "KeyC");
+  }
+  await pressForgeKey(page, "KeyC");
+  const rows = await debug(page, "craftRowIds");
+  expect(rows, `"${id}" is on offer`).toContain(id);
+  for (let i = 0; i < rows.indexOf(id); i++) await pressForgeKey(page, "ArrowDown");
+  expect(await page.evaluate(() => window.ccDebug.game.builder.craftIndex)).toBe(
+    rows.indexOf(id),
+  );
+  await pressForgeKey(page, "Enter");
+  const notice = await page.evaluate(() => window.ccDebug.game.builder.notice?.text ?? null);
+  await pressForgeKey(page, "Escape");
+  return notice;
+}
+
+/**
+ * Runs the Forge's own loop until its station scan has certainly fired —
+ * `stationsNear` is polled on a timer, not rebuilt per frame, so a test that
+ * reads it straight after an edit reads the previous scan.
+ */
+async function pollStations(page) {
+  await page.evaluate(() => {
+    const b = window.ccDebug.game.builder;
+    for (let i = 0; i < 40; i++) b.update(1 / 60); // 0.67s > STATION_POLL_MS
+  });
+}
+
+/** Holds the break button on the current target until the cell empties. */
+async function mineTarget(page) {
+  return page.evaluate(() => {
+    const b = window.ccDebug.game.builder;
+    const t = { ...b.target };
+    b.handleMouseDown(2);
+    let ticks = 0;
+    while (ticks < 1200 && b.world.get(t.x, t.y, t.z) !== 0) {
+      b.update(1 / 60);
+      ticks++;
+    }
+    b.handleMouseUp(2);
+    return { cell: t, ticks, block: b.world.get(t.x, t.y, t.z) };
+  });
+}
+
 /** A v3 (pre-voxel) builder map: a 5-layer stone wall and a 2-layer metal wall. */
 function legacyV3Map() {
   const grid = () => Array.from({ length: 60 }, () => Array(60).fill(0));
@@ -567,5 +618,225 @@ test.describe("Voxel Forge", () => {
     expect(await debug(page, "forgeSurvival")).toBe(null);
 
     await screenshot(page, "forge-survival-mode-toggle");
+  });
+
+  test("survival: build a workbench, place it, and repair a worn pickaxe at an anvil", async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    // The onboarding card eats the first real keypress and would otherwise
+    // black out the middle of this test's screenshot.
+    await page.keyboard.press("Space");
+
+    // M is the whole way in. Noclip keeps gravity from dragging the aim off
+    // the cell during the many frames a held break takes.
+    expect(await pressForgeKey(page, "KeyM")).toBe(true);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.isSurvival())).toBe(true);
+    await page.evaluate(() => {
+      window.ccDebug.game.builder.noclip = true;
+    });
+
+    // Stock the pack directly: gathering a forge's worth of stone by hand is
+    // spec 1's test, not this one. The grant opens every station's rows, so
+    // what hides them below is the missing bench and nothing else.
+    await page.evaluate(() => {
+      const s = window.ccDebug.game.builder.survival;
+      s.skills.grant("construction", 100_000);
+      s.inventory.add("stone", 40);
+      s.inventory.add("metal", 30);
+      s.inventory.add("rock", 20);
+    });
+
+    // A clear sight line with a stone anchor at (46,64,49) to build against.
+    await layOutSightLine(page, [[46, 1]]);
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+
+    // 1. Nothing in reach: the bench is the only station the menu offers, and
+    // everything a bench would unlock is absent.
+    expect(await pressForgeKey(page, "KeyC")).toBe(true);
+    expect(await debug(page, "forgeStations")).toEqual([]);
+    const before = await debug(page, "craftRowIds");
+    expect(before).toContain("cut_stone");
+    expect(before).toContain("workbench");
+    expect(before).not.toContain("anvil");
+    expect(before).not.toContain("smelt_metal");
+    expect(before).not.toContain("repair_pick_stone");
+    expect(await pressForgeKey(page, "Escape")).toBe(true);
+
+    // 2. Craft one through the menu, then put it down as a real block against
+    // the anchor — the same place-from-the-pack path stone goes through.
+    await craftRow(page, "workbench");
+    expect((await debug(page, "forgeSurvival")).items.workbench).toBe(1);
+
+    const bench = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.heldItem = "workbench";
+      const target = b.target;
+      b.handleMouseDown(0);
+      return {
+        target,
+        block: b.world.get(45, 64, 49),
+        left: b.survival.inventory.count("workbench"),
+        placed: b.survival.wasPlaced(45, 64, 49),
+      };
+    });
+    expect(bench.target).toMatchObject({ x: 46, y: 64, z: 49 });
+    expect(bench.block).toBe(16);
+    expect(bench.left).toBe(0);
+    expect(bench.placed).toBe(true);
+
+    // The Forge's own timed scan notices it — nothing here pokes stationsNear.
+    await pollStations(page);
+    expect(await debug(page, "forgeStations")).toEqual(["workbench"]);
+    const atBench = await debug(page, "craftRowIds");
+    expect(atBench).toContain("anvil");
+    expect(atBench).toContain("smelt_metal");
+    expect(atBench).not.toContain("repair_pick_stone");
+
+    // 3. The anvil is a workbench-tier build; place it beside the bench.
+    await craftRow(page, "anvil");
+    const anvil = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.heldItem = "anvil";
+      const target = b.target;
+      b.handleMouseDown(0);
+      return { target, block: b.world.get(44, 64, 49) };
+    });
+    expect(anvil.target).toMatchObject({ x: 45, y: 64, z: 49 }); // the bench itself
+    expect(anvil.block).toBe(17);
+
+    await pollStations(page);
+    expect((await debug(page, "forgeStations")).sort()).toEqual(["anvil", "workbench"]);
+    expect(await debug(page, "craftRowIds")).toContain("repair_pick_stone");
+
+    // 4. Wear a pickaxe out by mining with it, and repair it at the anvil.
+    await page.evaluate(() => {
+      window.ccDebug.game.builder.survival.inventory.add("pick_stone", 1);
+    });
+    expect(await debug(page, "forgeTool")).toEqual({ id: "pick_stone", dur: 120, max: 120 });
+
+    // Three stone blocks to dig, on a sight line of their own so the two
+    // stations stay standing (and stay in reach) while the pickaxe wears.
+    for (const y of [65, 66, 67]) await debug(page, "setBlock", 40, y, 49, 1);
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: Math.PI / 2, pitch: 0 });
+    for (const y of [65, 66]) {
+      const dug = await mineTarget(page);
+      expect(dug.cell).toMatchObject({ x: 40, y, z: 49 });
+      expect(dug.block).toBe(0);
+    }
+    expect(await debug(page, "forgeTool")).toEqual({ id: "pick_stone", dur: 118, max: 120 });
+
+    // Skip the middle 117 blocks, then break one more for real: the point is
+    // that the game's own break path is what empties it.
+    const spent = await page.evaluate(async () => {
+      const b = window.ccDebug.game.builder;
+      const slot = b.survival.inventory.slots.findIndex((s) => s && s.item === "pick_stone");
+      b.survival.inventory.wearSlot(slot, 117); // one use left
+      return { slot, dur: b.survival.inventory.slots[slot].dur };
+    });
+    expect(spent.dur).toBe(1);
+
+    const last = await mineTarget(page);
+    expect(last.block).toBe(0);
+    const dead = await page.evaluate(
+      (slot) => window.ccDebug.game.builder.survival.inventory.slots[slot].dur,
+      spent.slot,
+    );
+    expect(dead).toBe(0);
+    // A spent pickaxe is no better than bare hands, but it is still in the pack.
+    expect(await debug(page, "forgeTool")).toBe(null);
+    expect((await debug(page, "forgeSurvival")).tool).toBe("hand");
+
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    await pollStations(page);
+    const stock = await debug(page, "forgeSurvival");
+    await craftRow(page, "repair_pick_stone");
+    const after = await page.evaluate(
+      (slot) => ({
+        dur: window.ccDebug.game.builder.survival.inventory.slots[slot].dur,
+        items: {
+          stone: window.ccDebug.game.builder.survival.inventory.count("stone"),
+          rock: window.ccDebug.game.builder.survival.inventory.count("rock"),
+        },
+      }),
+      spent.slot,
+    );
+    expect(after.dur).toBe(120);
+    expect(after.items.stone).toBe(stock.items.stone - 1);
+    expect(after.items.rock).toBe(stock.items.rock - 1);
+    expect(await debug(page, "forgeTool")).toEqual({ id: "pick_stone", dur: 120, max: 120 });
+
+    await screenshot(page, "forge-stations-repair");
+
+    // 5. Walk away, and the tiers close behind you.
+    const away = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.keys[b.keybinds.moveBack] = true;
+      let ticks = 0;
+      while (ticks < 600 && b.stationsNear.size > 0) {
+        b.update(1 / 60);
+        ticks++;
+      }
+      b.keys[b.keybinds.moveBack] = false;
+      return { ticks, x: b.player.x, stations: [...b.stationsNear] };
+    });
+    expect(away.stations).toEqual([]);
+    expect(away.x).toBeLessThan(40.5);
+    const gone = await debug(page, "craftRowIds");
+    expect(gone).toContain("workbench");
+    expect(gone).not.toContain("anvil");
+    expect(gone).not.toContain("smelt_metal");
+    expect(gone).not.toContain("repair_pick_stone");
+    // The benches are still standing; only the player moved.
+    expect(await page.evaluate(() => window.ccDebug.game.world.get(45, 64, 49))).toBe(16);
+    expect(await page.evaluate(() => window.ccDebug.game.world.get(44, 64, 49))).toBe(17);
+  });
+
+  test("the three station blocks read apart from stone and rock", async ({ page }) => {
+    test.setTimeout(120_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    // Any key clears the onboarding card that covers half the viewport, H
+    // folds away the shortcut list behind it, and noclip keeps the posed
+    // camera from falling to the ground before the shot is taken.
+    await page.keyboard.press("Space");
+    await page.keyboard.press("KeyH");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.showHelp)).toBe(false);
+    await page.evaluate(() => {
+      window.ccDebug.game.builder.noclip = true;
+    });
+
+    // Workbench, Anvil and Forge in a row, with a Stone and a Rock beside them
+    // for comparison, in a cleared pocket of air. `paintNatural` falls back to
+    // rock art for any face name it does not match, so a station whose painter
+    // never ran still renders — as grey noise. Only looking at this shot
+    // catches that, which is why the row is posed rather than just placed.
+    await page.evaluate(() => {
+      const w = window.ccDebug.game.world;
+      for (let x = 36; x <= 50; x++)
+        for (let y = 58; y <= 70; y++)
+          for (let z = 46; z <= 54; z++) w.set(x, y, z, 0);
+      for (const [y, id] of [[62, 16], [63, 17], [64, 18], [65, 1], [66, 13]]) {
+        w.set(45, y, 49, id);
+      }
+    });
+    // Close enough that the face art, not just the base colour, is legible,
+    // and high enough to catch each station's distinct top face.
+    const pose = { x: 42, y: 64.5, z: 49.6, angle: 0, pitch: -0.35 };
+    await aimAndUpdate(page, pose);
+    await waitForMeshIdle(page);
+    // Re-aim after the mesher: the live loop has been running all along.
+    await aimAndUpdate(page, pose);
+
+    const drawn = await page.evaluate(
+      () => window.ccDebug.game.voxelRenderer.stats.chunksDrawn,
+    );
+    expect(drawn).toBeGreaterThan(0);
+    await screenshot(page, "forge-stations");
   });
 });

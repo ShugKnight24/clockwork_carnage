@@ -18,6 +18,7 @@ import {
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { Enemy } from "../entities.js";
 import { effectiveAimFov } from "../../src/systems/aim.js";
+import { bestTool } from "../../src/rpg/tools.js";
 
 export function createDebugBridge(game) {
   const bridge = {
@@ -165,6 +166,39 @@ export function createDebugBridge(game) {
         xp: { ...s.skills.xp },
         items,
       };
+    },
+
+    /**
+     * Station names within reach, as the Forge last polled them. A `Set` does
+     * not cross the page bridge, so it is handed back as a plain array.
+     */
+    forgeStations() {
+      return [...(game.builder?.stationsNear ?? [])];
+    },
+
+    /**
+     * The craft menu's row ids for whatever is currently in reach — what the
+     * player would see listed, without reading pixels.
+     *
+     * `craftMenuRows` lives in the lazily-loaded Forge chunk, so it is pulled
+     * in dynamically: a static import would drag the whole Forge into the boot
+     * bundle. There is no builder until that chunk has loaded, so this always
+     * resolves from the module cache.
+     */
+    async craftRowIds() {
+      const b = game.builder;
+      if (!b?.survival) return [];
+      const { craftMenuRows } = await import("../forge.js");
+      return craftMenuRows(b.survival, b.stationsNear).map((r) => r.id);
+    },
+
+    /** Best held tool and its wear, or null bare-handed. */
+    forgeTool() {
+      const inv = game.builder?.survival?.inventory;
+      if (!inv) return null;
+      const { tool, slot } = bestTool(inv);
+      if (slot < 0) return null;
+      return { id: tool.id, dur: inv.slots[slot].dur, max: tool.durability };
     },
 
     async startBuilderPlayTest() {
