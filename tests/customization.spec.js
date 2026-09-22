@@ -68,6 +68,43 @@ test("locked preset shows a toast and leaves the character unchanged", async ({ 
   expect(await snapshot()).toBe(before);
 });
 
+test("a dropped badge preset cannot smuggle in a locked symbol", async ({ page }) => {
+  await openCreator(page);
+  // Grant the preset itself the way a battlefield drop does, without the
+  // achievement its symbol needs. Picking it must not equip that symbol: a
+  // saved look sanitizeLocked rewrites on the next load is a silent rollback.
+  const i = await page.evaluate(async () => {
+    const m = await import("/src/systems/unlocks.js");
+    const { BADGE_PRESETS, indexOfId } = await import("/src/data/badges.js");
+    const idx = indexOfId(BADGE_PRESETS, "p_lordslayer");
+    m.grantOwned("badge.preset", idx);
+    const room = document.querySelector("agent-showroom");
+    room._unlockCtx = null; // the showroom caches the context per open
+    room.renderAll(false);
+    return idx;
+  });
+  await tab(page, "badge").click();
+  await opt(page, "badge.preset", i).click();
+  const badge = await page.evaluate(() => window.ccDebug.game.character.badge);
+  expect(badge.layers[0].symbol).toBe("clock");
+  // The rest of the preset still applies, and it is on the agent.
+  expect(badge.placements).toContain("chest");
+});
+
+test("earning a badge symbol raises an unlock toast", async ({ page }) => {
+  await openCreator(page);
+  // Felling the Act 1 Lord opens act badges, the Field Patch finish and their
+  // presets — none of which carry a gear tier, the only thing the toast used
+  // to announce besides loadout classes.
+  await page.evaluate(() => {
+    window.ccDebug.game.achievementStats.campaignActsCleared = 1;
+    window.dispatchEvent(new CustomEvent("cc:progress"));
+  });
+  const plate = page.locator("unlock-toast .plate");
+  await expect(plate.locator(".kind")).toHaveText(/Badge/i);
+  expect(await page.evaluate(() => document.querySelector("unlock-toast").queue.length)).toBeGreaterThan(0);
+});
+
 test("locked armour variant is rejected and armorVariant stays 0", async ({ page }) => {
   await openCreator(page);
   await tab(page, "suit").click();

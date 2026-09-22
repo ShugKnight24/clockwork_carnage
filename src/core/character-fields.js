@@ -58,7 +58,7 @@ export function withIndex(ch, key, idx) {
     return { badge: { ...badge, layers, placements: shown(badge.placements) } };
   }
   if (key === "badge.finish") {
-    return { badge: { ...badge, layers: badge.layers.map((l) => ({ ...l })), placements: [...badge.placements], finish: FINISHES[idx].id } };
+    return { badge: { ...badge, layers: badge.layers.map((l) => ({ ...l })), placements: shown(badge.placements), finish: FINISHES[idx].id } };
   }
   if (key.startsWith("acc.")) {
     const slot = key.slice(4);

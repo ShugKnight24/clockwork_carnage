@@ -61,6 +61,7 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
+import { cloneLook } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -410,7 +411,9 @@ export class Game {
     });
 
     // Character creator state
-    this.character = { ...DEFAULT_CHARACTER };
+    // cloneLook, not a spread: the badge stack and accessory record are objects
+    // on DEFAULT_CHARACTER, and the live character is edited in place.
+    this.character = cloneLook(DEFAULT_CHARACTER);
     this.creatorCategory = 0;
     // Row cursor for the PLACE tab, which toggles a set instead of picking one.
     this.creatorPlacementSel = 0;

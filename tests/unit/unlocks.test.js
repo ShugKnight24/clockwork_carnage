@@ -111,6 +111,23 @@ describe("badge and accessory unlocks", () => {
     expect(unlockState("badge.preset", indexOfId(BADGE_PRESETS, "p_lordslayer"), ctx).unlocked).toBe(true);
   });
 
+  it("backfills acts for saves made before campaignActsCleared was tracked", () => {
+    const act1 = indexOfId(SYMBOLS, "act1");
+    const act2 = indexOfId(SYMBOLS, "act2");
+    // A run parked in act 3 got there by felling the act 1 and act 2 Lords.
+    const parked = unlockContext({ stats: {}, campaignSaveAct: 3 });
+    expect(parked.campaignActsCleared).toBe(2);
+    expect(unlockState("badge.symbol", act2, parked).unlocked).toBe(true);
+    // No save left, but the achievement stat remembers a Lord went down.
+    const bossed = unlockContext({ stats: { bossKilled: true } });
+    expect(bossed.campaignActsCleared).toBe(1);
+    expect(unlockState("badge.symbol", act1, bossed).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", act2, bossed).unlocked).toBe(false);
+    // A first act still in progress grants nothing.
+    expect(unlockContext({ stats: {}, campaignSaveAct: 1 }).campaignActsCleared).toBe(0);
+    expect(unlockContext().campaignActsCleared).toBe(0);
+  });
+
   it("campaignActs counts defeated acts and a finished campaign counts as three", () => {
     const act1 = indexOfId(SYMBOLS, "act1");
     const act3 = indexOfId(SYMBOLS, "act3");

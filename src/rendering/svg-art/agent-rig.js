@@ -12,8 +12,6 @@
  * visor pulse) and offset them for the turn parallax.
  */
 
-import { badgeIcon } from "./insignia/symbols.js";
-export { badgeIcon };
 import {
   INK,
   RIM,
@@ -1587,6 +1585,8 @@ function fallenParts(c) {
   const acc = paintAccessories(c.accessories, A, c);
   const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
+  // The free arm lies on top of the body, so its vambrace badge rides with it.
+  const armBadge = wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "";
   return {
     width: ARMOR_WIDTH[c.armor] || 1,
     pool: acc.replacesCape ? "" : recolor(fallenCape(), map),
@@ -1604,7 +1604,7 @@ function fallenParts(c) {
       collarOf(c, showFace, map) +
       acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((acc.replacesCape ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + acc.top,
+    over: recolor((acc.replacesCape ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
     glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),

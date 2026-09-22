@@ -66,6 +66,14 @@ describe("agent badges", () => {
     expect(JSON.stringify(m)).toContain("data-finish=");
   });
 
+  it("fallen cast model draws every placement, including forearm-only", () => {
+    const fallenCount = (placements) =>
+      count(JSON.stringify(buildCastModel(withBadge(placements), "hero_fallen")), "data-finish=");
+    expect(fallenCount([])).toBe(0);
+    for (const p of ["chest", "shoulder", "forearm", "helmet"]) expect(fallenCount([p]), p).toBe(1);
+    expect(fallenCount(["chest", "shoulder", "forearm", "helmet"])).toBe(4);
+  });
+
   it("a legacy-shaped record (badgeIndex only) still draws", () => {
     const ch = { ...DEFAULT_CHARACTER, badgeIndex: 3 };
     delete ch.badge;

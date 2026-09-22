@@ -1458,7 +1458,14 @@ class AgentShowroom extends HTMLElement {
       this.preview = null;
       return;
     }
-    this.commit(withIndex(this.character, key, idx));
+    const changes = withIndex(this.character, key, idx);
+    // A preset is one unlock but carries a whole badge: a dropped one can hold
+    // a symbol or finish the agent has not earned. Strip those now rather than
+    // saving a look that sanitizeLocked silently rewrites on the next load.
+    if (key === "badge.preset") {
+      Object.assign(changes, sanitizeLocked({ ...this.character, ...changes }, this.unlockCtx()));
+    }
+    this.commit(changes);
     this.sfx("menuSelect");
     this.announce(`${sec.title}: ${item.name}`);
   }
@@ -1958,7 +1965,7 @@ class AgentShowroom extends HTMLElement {
   renderPresets() {
     this.el.presets.querySelectorAll(".preset").forEach((btn, i) => {
       if (!this._presetsBuilt) {
-        const ch = { ...DEFAULT_CHARACTER, ...PRESETS[i].ch };
+        const ch = { ...cloneLook(DEFAULT_CHARACTER), ...cloneLook(PRESETS[i].ch) };
         btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
       }
       const lock = this.presetLock(i);

@@ -88,6 +88,3 @@ export function symbolMarkup(id, fg, bg) {
   const s = S[id];
   return s ? s(fg, bg) : "";
 }
-
-/** Old name kept for the showroom's tile code; same -5..5 box. */
-export const badgeIcon = (icon, color, dark) => symbolMarkup(icon, color, dark);

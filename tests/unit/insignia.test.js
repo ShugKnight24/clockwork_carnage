@@ -22,6 +22,15 @@ describe("insignia", () => {
     expect(symbolMarkup("nope", "#fff", "#000")).toBe("");
   });
 
+  it("an unknown frame falls back to the disc instead of throwing", () => {
+    const stack = { layers: [layer("clock", "no-such-frame", "teal", "brass")], finish: "insignia", placements: ["chest"] };
+    const disc = { layers: [layer("clock", "disc", "teal", "brass")], finish: "insignia", placements: ["chest"] };
+    for (const f of FINISHES.filter((x) => x.id !== "auto")) {
+      expect(() => renderBadge({ ...stack, finish: f.id }, {}), f.id).not.toThrow();
+      expect(renderBadge({ ...stack, finish: f.id }, {})).toBe(renderBadge({ ...disc, finish: f.id }, {}));
+    }
+  });
+
   it("every frame has outer and inner paths", () => {
     for (const f of FRAMES) {
       expect(FRAME_PATHS[f.id].outer).toMatch(/^M/);

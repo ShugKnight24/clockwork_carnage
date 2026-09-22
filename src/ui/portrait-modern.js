@@ -25,7 +25,6 @@ const OPEN = new Set(["wide", "mohawk"]);
 
 // ─── Character layers ───────────────────────────────────────────────────────
 
-let _charRef = null;
 let _charKey = "";
 let _char = null;
 
@@ -33,30 +32,32 @@ function silFilter(id, color) {
   return `<filter id="${id}" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="${color}"/><feComposite in2="SourceAlpha" operator="in"/></filter>`;
 }
 
-function characterLayers(character) {
+/**
+ * Cached bust layers for a character. Exported so tests can prove the cache
+ * rebuilds on an edit; the portrait itself is the only real caller.
+ */
+export function characterLayers(character) {
   const c = character || {};
-  // Key off the cosmetic indices so an edited character rebuilds, but an
-  // untouched one costs a short string compare per frame.
-  if (c !== _charRef || !_char) {
-    const key = lookKey(c);
-    _charRef = c;
-    if (key !== _charKey || !_char) {
-      _charKey = key;
-      const p = buildAgentParts(c, { pose: "idle" });
-      const k = Math.round(p.width * 100) / 100;
-      const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
-      const base = `<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}`;
-      const accent = (CHARACTER_COLORS[c.colorIndex | 0] || CHARACTER_COLORS[0]).accent;
-      const helmet = (HELMET_STYLES[c.helmetIndex | 0] || HELMET_STYLES[0]).id;
-      _char = {
-        key,
-        accent,
-        open: OPEN.has(helmet),
-        defs: p.defs + silFilter("silW", "#ffffff") + silFilter("silH", "#7dffc4") + silFilter("silS", "#7cc8ff"),
-        base,
-        glow: p.headGlow,
-      };
-    }
+  // Key off the whole look, every call: `game.character` is one object mutated
+  // in place, so identity never changes and only the key can catch an edit. An
+  // untouched character costs a short string compare per frame.
+  const key = lookKey(c);
+  if (key !== _charKey || !_char) {
+    _charKey = key;
+    const p = buildAgentParts(c, { pose: "idle" });
+    const k = Math.round(p.width * 100) / 100;
+    const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
+    const base = `<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}`;
+    const accent = (CHARACTER_COLORS[c.colorIndex | 0] || CHARACTER_COLORS[0]).accent;
+    const helmet = (HELMET_STYLES[c.helmetIndex | 0] || HELMET_STYLES[0]).id;
+    _char = {
+      key,
+      accent,
+      open: OPEN.has(helmet),
+      defs: p.defs + silFilter("silW", "#ffffff") + silFilter("silH", "#7dffc4") + silFilter("silS", "#7cc8ff"),
+      base,
+      glow: p.headGlow,
+    };
   }
   return _char;
 }

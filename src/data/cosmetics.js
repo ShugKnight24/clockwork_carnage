@@ -350,6 +350,11 @@ export const VOICE_PROFILES = [
   { id: "synthetic", name: "Synthetic", desc: "Vocoder edge, chrono-modulated", pitch: 1.45 },
 ];
 
+/**
+ * The starting look. `badge` and `accessories` are the shared singletons from
+ * badges.js / accessories.js, so a spread of this record aliases them — build a
+ * live, editable character with `cloneLook(DEFAULT_CHARACTER)` instead.
+ */
 export const DEFAULT_CHARACTER = {
   name: "Agent",
   colorIndex: 0,

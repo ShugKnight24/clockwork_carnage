@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { FIELD_TABLES, isVirtualKey, getIndex, withIndex, togglePlacement, cloneLook, lookKey } from "../../src/core/character-fields.js";
 import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
-import { SYMBOLS, FRAMES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
+import { SYMBOLS, FRAMES, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 
 const fresh = () => cloneLook(DEFAULT_CHARACTER);
@@ -36,6 +36,14 @@ describe("character fields", () => {
     const ch = fresh();
     expect(ch.badge.placements).toEqual([]);
     const changes = withIndex(ch, "badge.symbol", indexOfId(SYMBOLS, "star"));
+    expect(changes.badge.placements).toEqual(["chest"]);
+  });
+
+  it("withIndex on badge.finish adds chest when placements are empty", () => {
+    const ch = fresh();
+    expect(ch.badge.placements).toEqual([]);
+    const changes = withIndex(ch, "badge.finish", indexOfId(FINISHES, "patch"));
+    expect(changes.badge.finish).toBe("patch");
     expect(changes.badge.placements).toEqual(["chest"]);
   });
 

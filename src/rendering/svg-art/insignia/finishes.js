@@ -3,6 +3,9 @@
  * badge can repeat inside one SVG and survives scopeIds / realizeMarkup.
  * Inputs: frame paths (-50..50), symbol painter (-5..5), enamel colour and a
  * metal ramp [hi, mid, lo, edge]. `detail: "low"` drops fine strokes.
+ *
+ * An unknown frame id falls back to the disc, the way an unknown symbol paints
+ * nothing: a stale save must never throw inside the model build.
  */
 import { FRAME_PATHS } from "./frames.js";
 import { symbolMarkup } from "./symbols.js";
@@ -10,7 +13,7 @@ import { symbolMarkup } from "./symbols.js";
 const SYM = (id, fg, bg) => `<g transform="scale(6.2)">${symbolMarkup(id, fg, bg)}</g>`;
 
 function insignia({ frame, symbol, enamel, ramp, detail }) {
-  const { outer, inner } = FRAME_PATHS[frame];
+  const { outer, inner } = FRAME_PATHS[frame] || FRAME_PATHS.disc;
   const [hi, mid, lo, edge] = ramp;
   const fine = detail === "high"
     ? `<path d="${outer}" fill="none" stroke="${hi}" stroke-width="2" opacity=".55" transform="translate(-1.2,-1.6)"/>` +
@@ -27,7 +30,7 @@ function insignia({ frame, symbol, enamel, ramp, detail }) {
 }
 
 function patch({ frame, symbol, enamel, ramp, detail }) {
-  const { outer, inner } = FRAME_PATHS[frame];
+  const { outer, inner } = FRAME_PATHS[frame] || FRAME_PATHS.disc;
   const thread = ramp[0];
   const stitch = detail === "high"
     ? `<path d="${inner}" fill="none" stroke="${thread}" stroke-width="1.6" stroke-dasharray="4 3" opacity=".8"/>` +
@@ -42,7 +45,7 @@ function patch({ frame, symbol, enamel, ramp, detail }) {
 }
 
 function holo({ frame, symbol, enamel, ramp, detail }) {
-  const { outer, inner } = FRAME_PATHS[frame];
+  const { outer, inner } = FRAME_PATHS[frame] || FRAME_PATHS.disc;
   const light = ramp[0];
   const halo = detail === "high"
     ? `<path d="${outer}" fill="none" stroke="${enamel}" stroke-width="7" opacity=".35"/>` +
@@ -58,7 +61,7 @@ function holo({ frame, symbol, enamel, ramp, detail }) {
 }
 
 function stencil({ frame, symbol, enamel, ramp, detail }) {
-  const { outer } = FRAME_PATHS[frame];
+  const { outer } = FRAME_PATHS[frame] || FRAME_PATHS.disc;
   const paint = ramp[1];
   const spray = detail === "high"
     ? `<path d="${outer}" fill="none" stroke="${paint}" stroke-width="5" opacity=".18" transform="scale(1.04)"/>`

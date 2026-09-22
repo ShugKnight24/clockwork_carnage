@@ -1,6 +1,7 @@
 /**
  * "Unlocked" celebration: a small caption-plate toast when progression earns a
- * loadout class or gear tier (rules in src/systems/unlocks.js).
+ * loadout class, gear tier, badge part, finish, accessory or armour variant
+ * (rules in src/systems/unlocks.js).
  *
  * AchievementSystem fires `cc:progress` on window when stats change (at most
  * once a second during play); this module re-evaluates unlocks then, announces
@@ -11,7 +12,7 @@
 
 import { tokensCss } from "./design-tokens.js";
 import {
-  describeId,
+  announcements,
   ensureUnlockStore,
   gameUnlockContext,
   newlyEarned,
@@ -118,19 +119,6 @@ export function initUnlockToasts(game) {
     try {
       game.audio?.menuConfirm?.();
     } catch (_) {}
-    // Classes get their own line; a gear tier opens items across several
-    // slots at once, so it is announced once by tier.
-    const tiers = new Set();
-    for (const id of fresh) {
-      if (id.startsWith("loadoutIndex")) {
-        el.show(describeId(id));
-        continue;
-      }
-      const tier = describeId(id).tier;
-      if (tier && !tiers.has(tier)) {
-        tiers.add(tier);
-        el.show({ kind: "Gear tier", name: `MK ${"I".repeat(tier)} armor, helmets, visors & shoulders` });
-      }
-    }
+    for (const msg of announcements(fresh)) el.show(msg);
   });
 }

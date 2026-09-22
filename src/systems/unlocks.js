@@ -66,9 +66,9 @@ export function ruleFor(key, index) {
 
 /**
  * Snapshot of everything rules can look at.
- * @param {{ stats?: object, achievements?: object, campaignSaveLevel?: number, owned?: object }} src
+ * @param {{ stats?: object, achievements?: object, campaignSaveLevel?: number, campaignSaveAct?: number, owned?: object }} src
  */
-export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel = 0, owned = {} } = {}) {
+export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel = 0, campaignSaveAct = 0, owned = {} } = {}) {
   // Levels cleared in order: the tracked high-water mark, the level an
   // in-progress save sits on, or all of them once the campaign is beaten.
   const cleared = Math.max(
@@ -79,9 +79,17 @@ export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel
   return {
     tutorialComplete: !!stats.tutorialComplete,
     campaignLevelsCleared: cleared,
-    // Highest act whose Paradox Lord has fallen; a finished campaign implies
-    // all three acts are done even if the per-act stat lagged behind.
-    campaignActsCleared: Math.max(Number(stats.campaignActsCleared) || 0, stats.campaignComplete ? 3 : 0),
+    // Highest act whose Paradox Lord has fallen. `campaignActsCleared` only
+    // started being tracked with these unlocks, so a save made before that
+    // reads 0 however far it got — backfill it from signals those saves do
+    // carry: a finished campaign is all three acts; a run parked in act N has
+    // cleared N-1; `bossKilled` means at least one Lord fell.
+    campaignActsCleared: Math.max(
+      Number(stats.campaignActsCleared) || 0,
+      stats.campaignComplete ? 3 : 0,
+      (Number(campaignSaveAct) || 1) - 1,
+      stats.bossKilled ? 1 : 0,
+    ),
     highestArenaRound: Number(stats.highestArenaRound) || 0,
     totalDashes: Number(stats.totalDashes) || 0,
     weaponKills: stats.weaponKills && typeof stats.weaponKills === "object" ? stats.weaponKills : {},
@@ -190,6 +198,38 @@ export function describeId(id) {
   return item ? { kind: entry.kind, name: item.name, tier: item.tier || 0 } : { kind: "", name: id, tier: 0 };
 }
 
+// The four flat slots that share TIER_UNLOCKS: one tier opens items across all
+// of them at once, so they are announced together rather than four times over.
+const TIER_SLOTS = new Set(["armorIndex", "helmetIndex", "visorIndex", "shoulderIndex"]);
+
+/**
+ * The lines the unlock toast should show for a batch of freshly earned ids, in
+ * order. Loadout classes, badges, finishes, accessories and armour variants
+ * each get their own plate; the tier-gated armour slots collapse into one plate
+ * per tier. Everything the toast marks as seen must come back out of here, or
+ * that unlock is silently swallowed.
+ * @param {string[]} ids ownedKey() ids, e.g. "badge.symbol:#lordslayer"
+ * @returns {{ kind: string, name: string }[]}
+ */
+export function announcements(ids) {
+  const out = [];
+  const tiers = new Set();
+  for (const id of ids) {
+    const key = id.split(":")[0];
+    const info = describeId(id);
+    if (TIER_SLOTS.has(key) && info.tier) {
+      if (tiers.has(info.tier)) continue;
+      tiers.add(info.tier);
+      out.push({ kind: "Gear tier", name: `MK ${"I".repeat(info.tier)} armor, helmets, visors & shoulders` });
+      continue;
+    }
+    // An id whose table entry has gone (a renamed item in an old save) has no
+    // kind and nothing worth showing.
+    if (info.kind) out.push({ kind: info.kind, name: info.name });
+  }
+  return out;
+}
+
 // ── Persistence ────────────────────────────────────────────
 
 /** The live store, shared by everything that reads or writes ownership. */
@@ -212,12 +252,15 @@ export function saveUnlockStore(store) {
   } catch (_) {}
 }
 
-function readCampaignSaveLevel() {
+/** How far an in-progress campaign save got: `{ level, act }`, 0/0 when there is none. */
+function readCampaignSave() {
   try {
     const raw = localStorage.getItem("cc_campaign_save");
-    return raw ? Number(JSON.parse(raw).level) || 0 : 0;
+    if (!raw) return { level: 0, act: 0 };
+    const data = JSON.parse(raw);
+    return { level: Number(data.level) || 0, act: Number(data.act) || 0 };
   } catch (_) {
-    return 0;
+    return { level: 0, act: 0 };
   }
 }
 
@@ -239,7 +282,8 @@ export function ensureUnlockStore(character, stats, achievements) {
   let store = loadUnlockStore();
   if (store) {
     if (!store.v2) {
-      const ctx = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel(), owned: store.owned });
+      const save = readCampaignSave();
+      const ctx = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act, owned: store.owned });
       for (const id of earnedIds(ctx)) store.seen[id] = true;
       store.v2 = true;
       saveUnlockStore(store);
@@ -247,7 +291,8 @@ export function ensureUnlockStore(character, stats, achievements) {
     return (_store = store);
   }
   store = { owned: {}, seen: {}, v2: true };
-  const ctx = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel() });
+  const save = readCampaignSave();
+  const ctx = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act });
   let hasSavedCharacter = false;
   try {
     hasSavedCharacter = !!localStorage.getItem("cc_character");
@@ -376,7 +421,8 @@ export function gameUnlockContext(game, { fresh = false } = {}) {
   const stats = game?.achievementStats || {};
   const achievements = game?.unlockedAchievements || {};
   const store = ensureUnlockStore(game?.character, stats, achievements);
-  _ctxCache = unlockContext({ stats, achievements, campaignSaveLevel: readCampaignSaveLevel(), owned: store.owned });
+  const save = readCampaignSave();
+  _ctxCache = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act, owned: store.owned });
   _ctxAt = now;
   return _ctxCache;
 }

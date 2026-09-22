@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { lookKey, cloneLook } from "../../src/core/character-fields.js";
+import { characterLayers } from "../../src/ui/portrait-modern.js";
 import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
 
 /**
@@ -53,6 +54,36 @@ describe("look cache key (cast, portrait, showroom)", () => {
       const b = cloneLook(a);
       mutate(b);
       expect(lookKey(b)).not.toBe(lookKey(a));
+    }
+  });
+});
+
+/**
+ * The portrait holds one character object for the whole page session and the
+ * creator edits it in place, so an identity check can never see a change: only
+ * the look key can. Building the layers is pure string work (rasterising
+ * happens later, in drawPortraitModern), so this runs without a canvas.
+ */
+describe("modern portrait layer cache", () => {
+  const live = cloneLook(DEFAULT_CHARACTER);
+
+  it("reuses the layers while the character is untouched", () => {
+    const first = characterLayers(live);
+    expect(characterLayers(live)).toBe(first);
+  });
+
+  it("rebuilds when the same object's badge, gear or helmet is edited", () => {
+    for (const mutate of [
+      (c) => { c.badge.placements = ["chest"]; },
+      (c) => { c.badge.layers[0].symbol = "star"; },
+      (c) => { c.accessories.back = "cloak"; },
+      (c) => { c.helmetIndex = 1; },
+    ]) {
+      const before = characterLayers(live);
+      mutate(live);
+      const after = characterLayers(live);
+      expect(after).not.toBe(before);
+      expect(after.key).toBe(lookKey(live));
     }
   });
 });
