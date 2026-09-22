@@ -17,6 +17,7 @@ import { SurvivalSession } from "../src/rpg/survival-session.js";
 import { PlayerStore } from "../src/rpg/player-store.js";
 import { itemForBlock, itemById } from "../src/rpg/items.js";
 import { SKILLS, MAX_LEVEL, xpForLevel } from "../src/rpg/skills.js";
+import { bestTool as bestToolOf } from "../src/rpg/tools.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -48,6 +49,8 @@ const NOCLIP_SPEED = 14.0;
 const MAX_HISTORY = 200;
 const HOTBAR_VISIBLE = 10;
 const MARKER_SIZE = 0.8;
+/** How often the Forge re-scans for nearby stations, in milliseconds. */
+const STATION_POLL_MS = 500;
 
 const clone = (v) => (v == null ? v : structuredClone(v));
 
@@ -103,19 +106,20 @@ export function removeAllowed(world, x, y, z) {
 }
 
 /**
- * One row per station-free recipe. Locked rows are kept, not hidden, so
- * levelling has a visible destination. `note` carries the single most useful
- * reason it cannot be made right now: the level gate outranks missing inputs.
+ * One row per recipe the stations in reach allow. Locked rows are kept, not
+ * hidden, so levelling has a visible destination. `note` carries the single
+ * most useful reason it cannot be made right now: the level gate outranks
+ * missing inputs. A repair has no output, so it names itself instead.
  */
-export function craftMenuRows(session) {
+export function craftMenuRows(session, stations = null) {
   const qty = ([id, n]) => `${n} ${itemById(id).name}`;
-  return session.recipes(null).map((r) => {
-    const check = session.canCraft(r.id);
+  return session.recipes(stations).map((r) => {
+    const check = session.canCraft(r.id, stations);
     return {
       id: r.id,
       name: r.name,
       inputText: r.inputs.map(qty).join(", "),
-      outputText: qty(r.output),
+      outputText: r.output ? qty(r.output) : r.name,
       locked: r.locked,
       craftable: check.ok,
       note: check.ok ? null : check.reason,
@@ -319,6 +323,9 @@ export class ForgeMode {
     /** Craft menu, survival only — C opens it, the arrows walk it. */
     this.craftOpen = false;
     this.craftIndex = 0;
+    /** Stations within reach, refreshed on a timer rather than per frame. */
+    this.stationsNear = new Set();
+    this.stationPoll = 0;
     this.selectedEnemy = 0;
     this.selectedPickup = 0;
 
@@ -462,11 +469,16 @@ export class ForgeMode {
     if (this.survival && code === "KeyC" && !ctrl) {
       this.craftOpen = !this.craftOpen;
       this.craftIndex = 0;
+      if (this.craftOpen) {
+        // Re-scan now, so the menu can never open on a stale bench.
+        this.stationsNear = this.survival.stations(this.world, this.player);
+        this.stationPoll = STATION_POLL_MS;
+      }
       this.audio.menuSelect();
       return true;
     }
     if (this.survival && this.craftOpen && !ctrl) {
-      const rows = craftMenuRows(this.survival);
+      const rows = this._craftRows();
       if (code === "ArrowDown") {
         this.craftIndex = (this.craftIndex + 1) % rows.length;
         this.audio.menuSelect();
@@ -479,7 +491,7 @@ export class ForgeMode {
       }
       if (code === "Enter") {
         const row = rows[this.craftIndex];
-        const res = this.survival.craft(row.id);
+        const res = this.survival.craft(row.id, this.stationsNear);
         if (!res.ok) this._warn(res.reason);
         else {
           this.audio.menuConfirm();
@@ -713,6 +725,12 @@ export class ForgeMode {
     }
 
     if (this.survival) {
+      // A radius scan is far too costly per frame, and a bench does not move.
+      this.stationPoll -= dt * 1000;
+      if (this.stationPoll <= 0) {
+        this.stationsNear = this.survival.stations(this.world, this.player);
+        this.stationPoll = STATION_POLL_MS;
+      }
       if (this.holdingBreak && this.target) {
         const t = this.target;
         // `dt` is seconds here; the session counts a break in milliseconds.
@@ -1664,6 +1682,17 @@ export class ForgeMode {
     if (this.craftOpen) this._renderCraftMenu(ctx, w, h);
   }
 
+  /**
+   * The rows for the stations in reach, with the selection clamped: walking
+   * away from a bench shrinks the list under an index that was valid when it
+   * was made, and the Enter branch indexes straight into it.
+   */
+  _craftRows() {
+    const rows = craftMenuRows(this.survival, this.stationsNear);
+    if (this.craftIndex >= rows.length) this.craftIndex = Math.max(0, rows.length - 1);
+    return rows;
+  }
+
   /** Ring around the crosshair, closing as the targeted block gives way. */
   _renderBreakRing(ctx, cx, cy) {
     const r = 20;
@@ -1681,8 +1710,11 @@ export class ForgeMode {
 
   /** Level and progress to the next one, bottom-left, clear of the hotbar. */
   _renderSkills(ctx, w, h) {
+    // Bare hands wear out on nothing, so the panel only grows the wear row
+    // once a tool is actually held.
+    const { tool, slot } = bestToolOf(this.survival.inventory);
     const panelW = 190;
-    const panelH = 26 + SKILLS.length * 22;
+    const panelH = 26 + (SKILLS.length + (slot >= 0 ? 1 : 0)) * 22;
     const x0 = 14;
     const y0 = h - 14 - panelH;
 
@@ -1722,6 +1754,20 @@ export class ForgeMode {
       ctx.fillStyle = "rgba(0,255,200,0.6)";
       ctx.fillRect(x0 + 10, y + 5, barW * frac, 3);
     }
+
+    // Tool wear, under the skills. Nothing is drawn bare-handed.
+    if (slot >= 0) {
+      const barY = y0 + 34 + SKILLS.length * 22;
+      const dur = this.survival.inventory.slots[slot].dur;
+      const frac = Math.max(0, Math.min(1, dur / tool.durability));
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "11px monospace";
+      ctx.fillText(`${tool.name} ${dur}/${tool.durability}`, x0 + 10, barY);
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(x0 + 10, barY + 5, barW, 3);
+      ctx.fillStyle = frac > 0.25 ? "rgba(0,255,200,0.6)" : "rgba(255,120,80,0.8)";
+      ctx.fillRect(x0 + 10, barY + 5, barW * frac, 3);
+    }
   }
 
   /**
@@ -1729,10 +1775,12 @@ export class ForgeMode {
    * whose inputs are missing are dimmed grey, and both carry their own reason.
    */
   _renderCraftMenu(ctx, w, h) {
-    const rows = craftMenuRows(this.survival);
+    const rows = this._craftRows();
     const rowH = 34;
     const panelW = 360;
-    const panelH = 30 + rows.length * rowH + 26;
+    /** Title plus the line naming the stations in reach. */
+    const headH = 46;
+    const panelH = headH + rows.length * rowH + 26;
     const x0 = (w - panelW) / 2;
     const y0 = (h - panelH) / 2;
 
@@ -1746,9 +1794,16 @@ export class ForgeMode {
     ctx.textAlign = "center";
     ctx.fillText("CRAFT", w / 2, y0 + 20);
 
+    // Station header: what this bench can make, or that there is no bench.
+    const names = [...this.stationsNear].map((s) => s[0].toUpperCase() + s.slice(1));
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "11px monospace";
+    ctx.fillText(names.length ? `At: ${names.join(", ")}` : "No station", x0 + 16, y0 + 37);
+
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      const y = y0 + 30 + i * rowH;
+      const y = y0 + headH + i * rowH;
       if (i === this.craftIndex) {
         ctx.fillStyle = "rgba(0,255,200,0.12)";
         ctx.fillRect(x0 + 6, y, panelW - 12, rowH - 2);
