@@ -32,6 +32,13 @@ const PICKUP_COLORS = { health: "#44ff44", ammo: "#ffcc00", weapon: "#00ccff" };
 
 /** Every block a builder may place. Bedrock (15) is the world floor and is not one. */
 export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+/**
+ * Stations are craftable, so survival needs a way to select and place one.
+ * They stay out of `PLACEABLE_BLOCKS` so the creative palette is unchanged:
+ * a station does nothing in creative, where every recipe is already free.
+ */
+export const STATION_BLOCKS = [16, 17, 18];
+export const SURVIVAL_BLOCKS = [...PLACEABLE_BLOCKS, ...STATION_BLOCKS];
 /** Blocks the 0 key cycles — the natural set that has no digit of its own. */
 const NATURAL_BLOCKS = [10, 11, 12, 13, 14];
 export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
@@ -682,10 +689,11 @@ export class ForgeMode {
   /** Mouse wheel cycles the placeable palette. The host routes wheel events here. */
   handleWheel(deltaY) {
     if (!this.active) return;
-    const i = PLACEABLE_BLOCKS.indexOf(this.tile);
+    const pal = this._palette();
+    const i = pal.indexOf(this.tile);
     const dir = deltaY > 0 ? 1 : -1;
-    const n = PLACEABLE_BLOCKS.length;
-    this.tile = PLACEABLE_BLOCKS[(i + dir + n) % n];
+    const n = pal.length;
+    this.tile = pal[(i + dir + n) % n];
     this.audio.menuSelect();
   }
 
@@ -1122,6 +1130,11 @@ export class ForgeMode {
     }
   }
 
+  /** The block ids the palette can reach: survival adds the stations. */
+  _palette() {
+    return this.survival ? SURVIVAL_BLOCKS : PLACEABLE_BLOCKS;
+  }
+
   /** @returns {boolean} true when the edited world is a survival world */
   isSurvival() {
     return this.world?.meta?.mode === "survival";
@@ -1144,6 +1157,8 @@ export class ForgeMode {
     if (!this.survival) {
       this.craftOpen = false;
       this.craftIndex = 0;
+      // A station is not in the creative palette; do not strand the cursor on one.
+      if (STATION_BLOCKS.includes(this.tile)) this.tile = PLACEABLE_BLOCKS[0];
     }
     this._warn(mode === "survival" ? "SURVIVAL — gather to build" : "CREATIVE — unlimited blocks");
     this.audio.menuConfirm();
@@ -1579,8 +1594,9 @@ export class ForgeMode {
   _renderHotbar(ctx, w, h) {
     const cell = 34;
     const gap = 4;
-    const total = PLACEABLE_BLOCKS.length;
-    const sel = Math.max(0, PLACEABLE_BLOCKS.indexOf(this.tile));
+    const pal = this._palette();
+    const total = pal.length;
+    const sel = Math.max(0, pal.indexOf(this.tile));
     const { start, end } = hotbarWindow(sel, total, HOTBAR_VISIBLE);
     const shown = end - start;
     const barW = shown * (cell + gap) - gap;
@@ -1598,7 +1614,7 @@ export class ForgeMode {
     ctx.fillText(BLOCKS[this.tile]?.name || "", w / 2, y0 - 12);
 
     for (let i = start; i < end; i++) {
-      const id = PLACEABLE_BLOCKS[i];
+      const id = pal[i];
       const x = x0 + (i - start) * (cell + gap);
       ctx.fillStyle = BLOCKS[id].color;
       ctx.fillRect(x, y0, cell, cell);

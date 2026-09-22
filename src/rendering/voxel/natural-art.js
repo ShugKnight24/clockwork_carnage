@@ -71,11 +71,26 @@ export function paintNatural(name, size, style) {
     case "anvil": {
       const c = noiseCanvas(size, BASE[name], { ...st, seed: 12, cell: size / 32, desat: 0.5 });
       const g = c.getContext("2d");
-      // Banded iron, lighter where it would be struck.
-      g.fillStyle = "rgba(210,214,222,0.18)";
-      g.fillRect(0, name === "anvil_top" ? size * 0.3 : size * 0.12, size, size * 0.26);
-      g.strokeStyle = "rgba(18,20,24,0.6)"; g.lineWidth = Math.max(1, size / 80);
-      g.strokeRect(size * 0.08, size * 0.08, size * 0.84, size * 0.84);
+      // A low-contrast band read as "grey block with a rectangle on it" and
+      // vanished against rock. Silhouette carries further than hue, so the
+      // side face is a three-tier anvil shape and the top is a bright struck
+      // face with its hardy hole.
+      if (name === "anvil_top") {
+        g.fillStyle = "rgba(226,232,242,0.5)";
+        g.fillRect(size * 0.1, size * 0.22, size * 0.8, size * 0.56);
+        g.fillStyle = "rgba(14,16,20,0.85)";
+        g.fillRect(size * 0.62, size * 0.38, size * 0.14, size * 0.14);
+        g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = Math.max(1, size / 96);
+        g.strokeRect(size * 0.1, size * 0.22, size * 0.8, size * 0.56);
+      } else {
+        g.fillStyle = "rgba(20,22,28,0.75)";
+        g.fillRect(size * 0.22, size * 0.62, size * 0.56, size * 0.3); // plinth
+        g.fillRect(size * 0.36, size * 0.44, size * 0.28, size * 0.2); // waist
+        g.fillStyle = "rgba(232,238,248,0.55)";
+        g.fillRect(size * 0.06, size * 0.2, size * 0.88, size * 0.22); // struck face
+        g.fillStyle = "rgba(20,22,28,0.75)";
+        g.fillRect(0, size * 0.42, size * 0.06, size * 0.06);          // horn shadow
+      }
       return c;
     }
     case "forge_top":

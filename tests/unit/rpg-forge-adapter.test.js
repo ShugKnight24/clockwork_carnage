@@ -189,3 +189,54 @@ describe("the mode toggle — the player-facing way into survival", () => {
     expect(attachSurvival(back, new SurvivalSession())).not.toBe(null);
   });
 });
+
+describe("stations are selectable in survival only", () => {
+  const forge = () => {
+    const f = new ForgeMode({
+      renderer: null,
+      audio: { menuSelect() {}, menuConfirm() {} },
+      settings: {},
+      keybinds: {},
+      canvas: null,
+    });
+    f._adopt(new World(), 0);
+    return f;
+  };
+
+  it("keeps the creative palette exactly as it was", async () => {
+    const { PLACEABLE_BLOCKS } = await import("../../js/forge.js");
+    const f = forge();
+    expect(f._palette()).toBe(PLACEABLE_BLOCKS);
+    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  });
+
+  it("adds the three stations to the survival palette", async () => {
+    const { SURVIVAL_BLOCKS } = await import("../../js/forge.js");
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    expect(f._palette()).toBe(SURVIVAL_BLOCKS);
+    expect(SURVIVAL_BLOCKS).toContain(16);
+    expect(SURVIVAL_BLOCKS).toContain(17);
+    expect(SURVIVAL_BLOCKS).toContain(18);
+  });
+
+  it("can actually reach a station by cycling, which is the only way to place one", async () => {
+    const { SURVIVAL_BLOCKS } = await import("../../js/forge.js");
+    const f = forge();
+    f.active = true; // handleWheel early-returns on an inactive Forge
+    f.handleKeyDown({ code: "KeyM" });
+    const seen = new Set();
+    for (let i = 0; i < SURVIVAL_BLOCKS.length; i++) { seen.add(f.tile); f.handleWheel(1); }
+    expect(seen.has(16)).toBe(true);
+    expect(seen.has(18)).toBe(true);
+  });
+
+  it("does not strand the cursor on a station when leaving survival", async () => {
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    f.tile = 17;
+    f.handleKeyDown({ code: "KeyM" }); // back to creative
+    expect(f.tile).toBe(1);
+    expect(f._palette()).not.toContain(17);
+  });
+});
