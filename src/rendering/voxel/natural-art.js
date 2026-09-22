@@ -29,7 +29,7 @@ function noiseCanvas(size, base, { amp = 0.12, cell = 8, seed = 1, posterize = 0
 const BASE = {
   dirt: [110, 76, 46], grass_top: [82, 140, 58], sand: [216, 200, 144], rock: [92, 96, 104], ore: [92, 96, 104], bedrock: [30, 32, 36],
   workbench: [138, 106, 58], workbench_top: [156, 122, 70],
-  anvil: [74, 78, 87], anvil_top: [92, 96, 104],
+  anvil: [74, 78, 87], anvil_top: [112, 121, 137],
   forge: [90, 52, 40], forge_top: [120, 58, 34],
 };
 
