@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   sfxVolume: 80, // 0..100
   sensitivity: 1.0, // 0.5..2.0
   fov: 70, // 50..120 degrees
+  forgeFov: 120, // Forge only; defaults to the widest view for building
+  forgeInvertY: false, // Forge look is non-inverted regardless of the FPS setting
   viewMode: 0, // 0=first-person, 1=third-person
   invertX: false,
   invertY: false,
@@ -472,6 +474,29 @@ export const SETTINGS_REGISTRY = [
     step: 5,
     format: (v) => `${v}°`,
     barColor: () => "#cc88ff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "forgeFov",
+    label: "Forge FOV",
+    desc: "Field of view inside the Forge. Separate from the campaign so building can sit further back.",
+    category: "Controls",
+    type: "slider",
+    min: 50,
+    max: 120,
+    step: 5,
+    format: (v) => `${v}°`,
+    barColor: () => "#cc88ff",
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "forgeInvertY",
+    label: "Forge Invert Y",
+    desc: "Invert vertical look inside the Forge only. Off by default.",
+    category: "Controls",
+    type: "toggle",
     platform: "all",
     height: { compact: 42, normal: 60 },
   },

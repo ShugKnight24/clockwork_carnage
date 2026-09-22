@@ -511,12 +511,12 @@ export class ForgeMode {
       return true;
     }
     if (code === "BracketLeft" && !ctrl) {
-      this.settings.fov = Math.max(50, this.settings.fov - 5);
+      this.settings.forgeFov = Math.max(50, this.settings.forgeFov - 5);
       this.audio.menuSelect();
       return true;
     }
     if (code === "BracketRight" && !ctrl) {
-      this.settings.fov = Math.min(120, this.settings.fov + 5);
+      this.settings.forgeFov = Math.min(120, this.settings.forgeFov + 5);
       this.audio.menuSelect();
       return true;
     }
@@ -581,8 +581,10 @@ export class ForgeMode {
 
     if (this.mouseLocked) {
       const sens = (this.settings.sensitivity || 1.0) * 0.002;
-      const invX = this.settings.invertX ? -1 : 1;
-      const invY = this.settings.invertY ? -1 : 1;
+      // The Forge keeps its own look settings: a player who inverts the
+      // campaign's Y axis should not have the builder inverted with it.
+      const invX = 1;
+      const invY = this.settings.forgeInvertY ? -1 : 1;
       this.player.angle += this.mouseDx * sens * invX;
       this.player.pitch -= this.mouseDy * sens * invY;
       this.player.pitch = Math.max(
@@ -673,7 +675,7 @@ export class ForgeMode {
       z: this.player.z + PLAYER.eye,
       yaw: this.player.angle,
       pitch: this.player.pitch,
-      fovDeg: this.settings.fov || 70,
+      fovDeg: this.settings.forgeFov || 120,
     };
   }
 
@@ -1483,7 +1485,7 @@ export class ForgeMode {
     ctx.fillStyle = "rgba(0,255,200,0.6)";
     ctx.font = "bold 12px monospace";
     ctx.fillText(`CURSOR Z ${this.cursorZ}`, w - 14, h - 90);
-    ctx.fillText(`FOV ${this.settings.fov}`, w - 14, h - 106);
+    ctx.fillText(`FOV ${this.settings.forgeFov}`, w - 14, h - 106);
 
     const undoCount = this.historyIndex + 1;
     const redoCount = this.history.length - this.historyIndex - 1;
