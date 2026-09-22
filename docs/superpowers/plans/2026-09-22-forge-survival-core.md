@@ -20,7 +20,7 @@
 - Levels are derived from XP, never stored.
 - Every tuning number lives in a table in its own module. No numeric literal at a call site.
 - Creative mode behaviour must be byte-identical to today: unlimited palette, instant break, no XP, no inventory.
-- Baseline to hold: 856 unit tests across 52 files passing. Run `npm run test:unit` before every commit.
+- Baseline at the time of writing: 856 unit tests across 52 files. On completion the branch stands at 956 across 64. Run `npm run test:unit` before every commit.
 
 ## Review Focus
 
@@ -1615,7 +1615,7 @@ Expected: PASS, 11 tests
 - [ ] **Step 5: Run the whole unit suite**
 
 Run: `npm run test:unit`
-Expected: PASS — 856 baseline tests plus the new ones, 0 failures
+Expected: PASS — the running baseline plus the new ones, 0 failures
 
 - [ ] **Step 6: Commit**
 
@@ -2249,8 +2249,12 @@ git commit -m "test(forge): cover the survival mine-craft-place loop end to end"
 
 ## Done when
 
-- `npm run test:unit` passes with the 856 baseline tests plus roughly 70 new ones.
+- `npm run test:unit` passes: 956 tests across 64 files (856 baseline + 100 new).
 - `npx playwright test tests/forge.spec.js --workers=1` passes.
 - A creative world behaves exactly as before: unlimited palette, instant break, no HUD change.
+- Pressing M turns the edited world into a survival world and back, the choice
+  persists through a save, and the status badge says which mode is active.
+  (This was missed in the original plan — the feature was unreachable without
+  it — and was added after the branch review.)
 - A survival world requires holding to break, gates Rock at Mining 5 and Ore at Mining 15, drops items into a 36-slot inventory, crafts the five basic recipes, and speeds up visibly once a pickaxe is made.
 - Mining level and inventory survive a page reload, carried by `cc_player`, independent of which world is loaded.

@@ -19,6 +19,8 @@ Then open the URL Vite prints. A production build is committed to `dist/`, so yo
 
 **Builder Mode (Temporal Forge)** — Build in a full voxel world (128×128×64, ground level in the middle so you can dig down as easily as you build up). First-person placing and breaking with a 6-block reach, 14 block types (the station's own materials plus dirt, grass, sand, rock and ore), and gravity, jump and step-up so the world plays the way it looks. Play-test your creation against enemies that walk, climb and fly. Older flat-map levels convert automatically. Worlds save in the browser (IndexedDB), export/import as `.ccw` (old `.json` maps still import), and share by URL when the world is small enough to fit in one. Requires WebGL2 — the rest of the game runs without it.
 
+**Survival Mode (in the Forge)** — Press **M** to turn the world you are editing into a survival world; press it again to go back. Creative is unchanged and still the level editor. In survival, blocks are a finite resource: hold to break, and how long it takes depends on the block's hardness, your Mining level and the pickaxe you carry. Drops stack in a 36-slot pack. **Mining** levels up as you gather and gates harder blocks — Rock at 5, Metal at 10, Ore at 15. **Construction** levels up as you craft and gates recipes: refine Rock into Stone, melt Sand into Glass, smelt Ore into Metal, and build a Stone or Metal Pickaxe to mine faster. Press **C** for the craft menu. Your skills and pack are per-character and follow you between worlds, so a shared build never carries anyone's progress.
+
 **Character Creator** — Customize across 5 categories, pick a loadout class that sets your starting weapons and stat bonuses, and earn gear from campaign kills.
 
 - Work in progress - Still improving graphical fidelity, making selections impact gameplay, and adding more options.
@@ -54,7 +56,7 @@ All controls are rebindable in Settings → Controls.
 
 **Settings** is reachable from the pause menu and from the mode-select screen (key `9`). Every row carries a one-line description, the list scrolls, and the whole screen is clickable with the mouse.
 
-**Builder:** WASD to move, Mouse to look, Left Click to place, Right Click to break, 1–9 or wheel to pick a block, Space to jump, Tab for overhead view, Ctrl+S to save, Ctrl+Shift+S to share, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import, P to play-test, H for all shortcuts.
+**Builder:** WASD to move, Mouse to look, Left Click to place, Right Click to break (hold to break in survival), 1–9 or wheel to pick a block, Space to jump, Tab for overhead view, M for creative/survival, C for the craft menu, Ctrl+S to save, Ctrl+Shift+S to share, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import, P to play-test, H for all shortcuts.
 
 **Mobile:** Full touch control support with virtual joystick and action buttons.
 
