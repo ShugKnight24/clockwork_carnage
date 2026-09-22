@@ -132,15 +132,17 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   if (world) pitch = game.player.pitch || 0;
   const dirX = Math.cos(angle);
   const dirY = Math.sin(angle);
-  const hit = pickHitscanTarget(game.player, dirX, dirY, pitch, range, game.entities, game.map, world);
+  // Cast the blocks once: the enemy tests, the sparks and the tracer all want
+  // the same answer for how far this shot got.
+  const reach = world ? voxelShotReach(world, game.player, dirX, dirY, pitch, range) : null;
+  const hit = pickHitscanTarget(game.player, dirX, dirY, pitch, range, game.entities, game.map, reach);
   // Tracer end = hit point, wall, or max range. Always spawn a tracer so the
   // player sees where the bullet went (closes the muzzle-flash → impact gap).
   let endDist;
   if (hit) {
     endDist = hit.dist;
     damageEnemy(game, hit.enemy, damage, hit.zone);
-  } else if (world) {
-    const reach = voxelShotReach(world, game.player, dirX, dirY, pitch, range);
+  } else if (reach) {
     endDist = reach.dist;
     if (reach.blocked) game.spawnWallSparks(reach.x, reach.y, reach.z);
   } else {
@@ -165,12 +167,19 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
     if (world) {
       // The voxel pass draws the streak as a quad in the world, so it needs
       // both ends in 3D — and a muzzle to leave from, or a shot fired along
-      // the view axis would project onto the crosshair and vanish.
+      // the view axis would project onto the crosshair and vanish. Both ends
+      // move sideways and down by the same amount, so the streak is the shot's
+      // own line translated to the barrel: parallel to the bullet, and ending
+      // where the bullet ended.
       const eyeZ = playerEyeZ3D(game.player);
-      tracer.x1 += dirX * BARREL_FORWARD + dirY * BARREL_RIGHT;
-      tracer.y1 += dirY * BARREL_FORWARD - dirX * BARREL_RIGHT;
-      tracer.z1 = eyeZ - BARREL_DROP;
-      tracer.z2 = eyeZ + Math.tan(pitch) * endDist;
+      const rise = Math.tan(pitch);
+      const sideX = dirY * BARREL_RIGHT, sideY = -dirX * BARREL_RIGHT;
+      tracer.x1 += sideX + dirX * BARREL_FORWARD;
+      tracer.y1 += sideY + dirY * BARREL_FORWARD;
+      tracer.z1 = eyeZ - BARREL_DROP + rise * BARREL_FORWARD;
+      tracer.x2 += sideX;
+      tracer.y2 += sideY;
+      tracer.z2 = eyeZ - BARREL_DROP + rise * endDist;
     }
     game.tracers.push(tracer);
   }

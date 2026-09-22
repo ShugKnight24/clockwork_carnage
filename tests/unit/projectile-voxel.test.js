@@ -133,6 +133,29 @@ describe("projectiles in a voxel world", () => {
     expect(overhead.playerHits).toHaveLength(0);
   });
 
+  it("a splash on a roof spares the walker on the floor beneath it", () => {
+    const world = generateWorld({ terrain: false });
+    // A two-block-thick roof at z = 34/35, with a wall for the bolt to burst on.
+    for (let x = 24; x <= 28; x++) for (let y = 19; y <= 21; y++) {
+      world.set(x, y, 34, 1);
+      world.set(x, y, 35, 1);
+    }
+    for (let z = 36; z < 39; z++) world.set(29, 20, z, 1);
+
+    const below = mkEnemy(26.5, 20.5, FLOOR);       // on the ground, under the roof
+    const beside = mkEnemy(28.2, 20.5, 36);         // on the roof, next to the blast
+    // A heavy round (over the splash threshold) skimming the roof.
+    const p = bolt(24.5, 20.5, 36.4, 0, { speed: 12 });
+    p.damage = 80;
+    const { ctx, hits } = makeCtx(world, [p], [below, beside]);
+    fly(ctx, [p]);
+
+    expect(p.active).toBe(false);
+    const hurt = hits.map((h) => h.e);
+    expect(hurt).toContain(beside);
+    expect(hurt).not.toContain(below);
+  });
+
   it("a flat bullet with no dirZ keeps the speed it was given", () => {
     const world = generateWorld({ terrain: false });
     const p = bolt(20.5, 20.5, FLOOR + 1.5);

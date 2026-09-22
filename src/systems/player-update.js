@@ -44,6 +44,10 @@ function applyMouseAim(p, mouse, settings) {
  * Voxel look: the mouse aims the camera itself — yaw around, pitch up and
  * down — the way the Forge flies. There is no reticle to push first, so the
  * caller never recenters one.
+ *
+ * The free-aim offsets are cleared rather than left alone: the crosshair is
+ * drawn at the centre of a voxel view, and a stale offset from a 2D level
+ * would send the shot somewhere the player is not looking.
  */
 function applyVoxelLook(p, mouse, settings) {
   const sens = (settings.sensitivity || 1) * PLAYER_VOXEL_LOOK_SENSITIVITY;
@@ -53,6 +57,8 @@ function applyVoxelLook(p, mouse, settings) {
     -PLAYER_PITCH_LIMIT,
     PLAYER_PITCH_LIMIT,
   );
+  p.aimOffsetX = 0;
+  p.aimOffsetY = 0;
   mouse.dx = 0;
   mouse.dy = 0;
   return true;

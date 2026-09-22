@@ -23,15 +23,30 @@ function isAliveEnemy(e) {
   return e?.type === "enemy" && e.active && e.state !== "dead";
 }
 
+/**
+ * Is `e` inside the blast? A grid level has one floor, so a disc is the whole
+ * answer. A voxel level stacks them: a bolt going off on a roof is a sphere's
+ * radius away from the walker under it, not zero, and the blast must not reach
+ * through the roof.
+ */
+function withinBlast(p, e, radius, world) {
+  const dx = p.x - e.x, dy = p.y - e.y;
+  let d2 = dx * dx + dy * dy;
+  if (world) {
+    const dz = (p.z ?? 0) - ((e.z ?? 0) + (e.def?.hitCenter ?? 0.35));
+    d2 += dz * dz;
+  }
+  return d2 < radius * radius;
+}
+
 /** Disable EMP-vulnerable enemies in radius. */
-function applyEmpBurst(p, hitTargets, time, audio, player, entityGrid) {
-  const blast = entityGrid.query(p.x, p.y, EMP_RADIUS);
+function applyEmpBurst(p, ctx) {
+  const blast = ctx.entityGrid.query(p.x, p.y, EMP_RADIUS);
   for (const e of blast) {
     if (!isAliveEnemy(e)) continue;
-    const dx = e.x - p.x, dy = e.y - p.y;
-    if (dx * dx + dy * dy >= EMP_RADIUS * EMP_RADIUS) continue;
+    if (!withinBlast(p, e, EMP_RADIUS, ctx.world)) continue;
     if (e.def?.attackType !== "ranged" && e.enemyType !== "drone") continue;
-    e._empDisabledUntil = time + EMP_DURATION_MS;
+    e._empDisabledUntil = ctx.time + EMP_DURATION_MS;
     e.state = "pain";
     e.painTimer = EMP_PAIN_MS;
     e._staggered = true; // EMP cancels a telegraphed attack
@@ -43,8 +58,7 @@ function applySplash(p, primary, ctx) {
   const nearby = ctx.entityGrid.query(p.x, p.y, SPLASH_RADIUS);
   for (const e of nearby) {
     if (e === primary || !isAliveEnemy(e)) continue;
-    const dx = p.x - e.x, dy = p.y - e.y;
-    if (dx * dx + dy * dy < SPLASH_RADIUS * SPLASH_RADIUS) {
+    if (withinBlast(p, e, SPLASH_RADIUS, ctx.world)) {
       ctx.damageEnemy(e, p.damage * SPLASH_DAMAGE_FACTOR);
     }
   }
@@ -86,7 +100,7 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
     const pan = ctx.audio.calculatePan(e.x, e.y, ctx.player.x, ctx.player.y, ctx.player.angle);
     const dist = Math.hypot(e.x - ctx.player.x, e.y - ctx.player.y);
     ctx.audio.enemyHit(pan, dist);
-    applyEmpBurst(p, e, ctx.time, ctx.audio, ctx.player, ctx.entityGrid);
+    applyEmpBurst(p, ctx);
   }
 
   ctx.damageEnemy(e, p.damage, best.zone);

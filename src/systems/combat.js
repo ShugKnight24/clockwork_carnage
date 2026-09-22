@@ -309,12 +309,16 @@ export function resolveHitZone(enemy, aimHeight, dirX, dirY) {
  * Nearest enemy the shot reaches. A voxel level stops the bullet with blocks,
  * a grid level with walls; either way the enemies are only tested out to
  * wherever the world took the bullet.
- * @param {import("../world/world.js").World} [world] set for a voxel level
+ *
+ * @param {{dist:number}} [reach] a voxel level's block reach, already cast by
+ *   `voxelShotReach`. Passing it in rather than a world keeps the ray march to
+ *   one per shot — the caller needs the same reach for its sparks and tracer —
+ *   and its presence is what makes the enemy tests 3D.
  */
-export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map, world = null) {
-  const eyeZ = world ? playerEyeZ3D(player) : 0;
-  const maxDist = world
-    ? voxelShotReach(world, player, dirX, dirY, pitch, range).dist
+export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map, reach = null) {
+  const eyeZ = reach ? playerEyeZ3D(player) : 0;
+  const maxDist = reach
+    ? reach.dist
     : map
       ? distanceToWall(player, dirX, dirY, map, range, pitch, playerEyeZ(player))
       : range;

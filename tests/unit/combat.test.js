@@ -317,6 +317,11 @@ describe("hitscan in a voxel world", () => {
       for (let z = FLOOR; z < FLOOR + height; z++) world.set(23, y, z, 1);
     }
   };
+  /** What the shot reaches — the caller casts this once and hands it over. */
+  const shoot = (world, pitch, entities) => pickHitscanTarget(
+    shooter(), 1, 0, pitch, 30, entities, null,
+    voxelShotReach(world, shooter(), 1, 0, pitch, 30),
+  );
 
   it("a two-block wall stops the shot short of the drone behind it", () => {
     const world = generateWorld({ terrain: false });
@@ -325,7 +330,7 @@ describe("hitscan in a voxel world", () => {
     expect(reach.blocked).toBe(true);
     expect(reach.dist).toBeCloseTo(2.5);
     expect(reach.z).toBeCloseTo(eyeZ);
-    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [drone(26.5)], null, world)).toBeNull();
+    expect(shoot(world, 0, [drone(26.5)])).toBeNull();
   });
 
   it("a shot clears a one-block wall and hits the drone behind it", () => {
@@ -333,14 +338,14 @@ describe("hitscan in a voxel world", () => {
     wall(world, 1);
     expect(voxelShotReach(world, shooter(), 1, 0, 0, 30).blocked).toBe(false);
     const enemy = drone(26.5);
-    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [enemy], null, world)?.enemy).toBe(enemy);
+    expect(shoot(world, 0, [enemy])?.enemy).toBe(enemy);
   });
 
   it("a drone below the sight line is missed even with nothing in the way", () => {
     const world = generateWorld({ terrain: false });
     const enemy = drone(26.5);
     enemy.z -= 2;
-    expect(pickHitscanTarget(shooter(), 1, 0, 0, 30, [enemy], null, world)).toBeNull();
+    expect(shoot(world, 0, [enemy])).toBeNull();
   });
 
   it("aiming up clears the two-block wall a level shot died on", () => {
@@ -349,6 +354,6 @@ describe("hitscan in a voxel world", () => {
     const pitch = Math.atan2(3, 6); // 6 blocks out, 3 up
     const enemy = drone(26.5);
     enemy.z = eyeZ + 3 - 0.35;
-    expect(pickHitscanTarget(shooter(), 1, 0, pitch, 30, [enemy], null, world)?.enemy).toBe(enemy);
+    expect(shoot(world, pitch, [enemy])?.enemy).toBe(enemy);
   });
 });

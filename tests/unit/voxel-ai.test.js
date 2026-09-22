@@ -68,3 +68,58 @@ describe("VoxelAISystem", () => {
     expect(e.x).toBeGreaterThan(21); expect(Math.abs(e.z - 36)).toBeLessThan(0.6);
   });
 });
+
+describe("VoxelAISystem ranged attacks", () => {
+  /** An enemy's eye sits half a body above its feet; no def here sets hitHeight. */
+  const SIGHT_OFFSET = 0.55;
+  /** The bolt aims at the middle of a standing player: PLAYER.height / 2. */
+  const PLAYER_CENTRE = 0.85;
+  const FLOOR = 32;
+
+  /** One update with the enemy already through its telegraph. */
+  const fireOnce = (world, e, player) => {
+    const c = { ...ctx(world, [e], player), projectiles: [], entities: [e] };
+    e.state = "attack";
+    new VoxelAISystem().update(c, 1 / 60);
+    return c;
+  };
+
+  it("a drone overhead fires a bolt that descends to the player's chest", () => {
+    const world = generateWorld({ terrain: false });
+    const e = mkEnemy("drone", 20.5, 20.5, 36);
+    const sightZ = 36 + SIGHT_OFFSET;
+    const player = { x: 24.5, y: 20.5, z: FLOOR, health: 100 };
+    const c = fireOnce(world, e, player);
+
+    expect(c.projectiles).toHaveLength(1);
+    const p = c.projectiles[0];
+    expect(c.entities).toContain(p);
+    expect(p.owner).toBe("enemy");
+    expect(p.dirZ).toBeLessThan(0);          // it is shooting down at us
+    // Leaves the drone's own sight height, carried 0.4 blocks along the shot.
+    const pitch = Math.atan2(FLOOR + PLAYER_CENTRE - sightZ, 4);
+    expect(p.z).toBeCloseTo(sightZ + Math.tan(pitch) * 0.4, 6);
+    expect(p.dirZ).toBeCloseTo(Math.sin(pitch), 6);
+  });
+
+  it("a shooter level with the player's chest fires flat", () => {
+    const world = generateWorld({ terrain: false });
+    // Feet placed so its eye lands exactly on the player's centre.
+    const e = mkEnemy("phantom", 20.5, 20.5, FLOOR + PLAYER_CENTRE - SIGHT_OFFSET);
+    const player = { x: 24.5, y: 20.5, z: FLOOR, health: 100 };
+    const c = fireOnce(world, e, player);
+
+    expect(c.projectiles).toHaveLength(1);
+    const p = c.projectiles[0];
+    expect(p.dirZ).toBeCloseTo(0, 6);
+    expect(p.z).toBeCloseTo(FLOOR + PLAYER_CENTRE, 6);
+  });
+
+  it("a melee enemy spawns nothing", () => {
+    const world = generateWorld({ terrain: false });
+    const melee = Object.keys(ENEMY_TYPES).find((k) => ENEMY_TYPES[k].attackType !== "ranged");
+    const e = mkEnemy(melee, 24.0, 20.5, FLOOR);
+    const c = fireOnce(world, e, { x: 24.5, y: 20.5, z: FLOOR, health: 100 });
+    expect(c.projectiles).toHaveLength(0);
+  });
+});

@@ -2325,12 +2325,8 @@ export class Game {
         this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
-        _spawnEnergyBurst(this.player.particles, e.x, e.y, {
-          count: 8,
-          r: 50,
-          g: 200,
-          b: 255,
-        });
+        this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
+          _spawnEnergyBurst(ps, e.x, e.y, { count: 8, r: 50, g: 200, b: 255 }));
         if (this.mode === "tutorial") {
           if (this.tutorialWeaponPickedUp) {
             this.tutorialSecondWeaponPickedUp = true;
@@ -2346,7 +2342,8 @@ export class Game {
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this.audio.pickup();
-        _spawnEnergyBurst(this.player.particles, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 });
+        this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
+          _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
           this.showGearToast?.(e.kind, e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
@@ -2365,12 +2362,13 @@ export class Game {
           this.world ? e.z : null,
         );
         this.audio.pickup();
-        _spawnEnergyBurst(this.player.particles, e.x, e.y, {
-          count: 14,
-          r: e.type === "damage2x" ? 255 : 255,
-          g: e.type === "damage2x" ? 80 : 220,
-          b: e.type === "damage2x" ? 40 : 120,
-        });
+        this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
+          _spawnEnergyBurst(ps, e.x, e.y, {
+            count: 14,
+            r: 255,
+            g: e.type === "damage2x" ? 80 : 220,
+            b: e.type === "damage2x" ? 40 : 120,
+          }));
       }
     }
   }
@@ -2946,6 +2944,9 @@ export class Game {
     this.player.z = spawn.z;
     this.player.vz = 0;
     this.player.pitch = 0;
+    // The camera is the aim in a voxel level; the reticle sits dead centre.
+    this.player.aimOffsetX = 0;
+    this.player.aimOffsetY = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
     this.player.ammo = 50;
