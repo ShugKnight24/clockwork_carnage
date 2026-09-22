@@ -164,7 +164,7 @@ test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) =
     const g = window.ccDebug.game;
     const w = g.canvas.width;
     const h = g.canvas.height;
-    const L = getCreatorLayout(w, h, g.isTouchDevice && w < 700);
+    const L = getCreatorLayout(w, h, g.isTouchDevice && w < 700, g.isTouchDevice);
     const rects = CREATOR_CATEGORIES.map((c, i) => tabRect(L, i));
     return {
       w,
@@ -187,11 +187,38 @@ test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) =
     const { getCreatorLayout, tabRect } = await import("/src/ui/character-creator.js");
     const g = window.ccDebug.game;
     const rect = g.canvas.getBoundingClientRect();
-    const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700);
+    const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
     const t = tabRect(L, i);
     const k = rect.width / g.canvas.width;
     return { x: rect.left + (t.x + t.w / 2) * k, y: rect.top + (t.y + t.h / 2) * k };
   }, target);
   await page.mouse.click(point.x, point.y);
   expect(await page.evaluate(() => window.ccDebug.game.creatorCategory)).toBe(target);
+});
+
+test.describe("legacy creator on a touch phone", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+
+  test("tab strip clears the touch edge-cycle zones", async ({ page }) => {
+    await openLegacyCreator(page);
+    const strip = await page.evaluate(async () => {
+      const { getCreatorLayout, tabRect, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+      const g = window.ccDebug.game;
+      const w = g.canvas.width;
+      const L = getCreatorLayout(w, g.canvas.height, g.isTouchDevice && w < 700, g.isTouchDevice);
+      const rects = CREATOR_CATEGORIES.map((c, i) => tabRect(L, i));
+      return {
+        touch: !!g.isTouchDevice,
+        w,
+        // js/touch.js turns taps within 60 CSS px of either edge into category
+        // cycling, and draws the ◀/▶ arrows there.
+        zone: 60 * (w / window.innerWidth),
+        minX: Math.min(...rects.map((r) => r.x)),
+        maxX: Math.max(...rects.map((r) => r.x + r.w)),
+      };
+    });
+    expect(strip.touch).toBe(true);
+    expect(strip.minX).toBeGreaterThanOrEqual(strip.zone);
+    expect(strip.maxX).toBeLessThanOrEqual(strip.w - strip.zone);
+  });
 });

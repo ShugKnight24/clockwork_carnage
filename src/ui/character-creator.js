@@ -18,7 +18,7 @@ import { getIndex, withIndex, lookKey } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
-import { buildAgentParts, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
+import { buildAgentParts, AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS } from "../rendering/svg-art/agent-rig.js";
 
 // ── Shared category definitions (used by render + click handler) ──
 
@@ -95,7 +95,18 @@ export function tabRect(L, i) {
 
 // ── Layout calculator (shared between render + click detection) ──
 
-export function getCreatorLayout(w, h, isMobile) {
+/**
+ * Width to keep clear down each side of the tab strip. The touch overlay puts
+ * its ◀/▶ category arrows and their 60 CSS-px tap zones there (js/touch.js),
+ * and with this many tabs the strip would otherwise run underneath them.
+ */
+function edgeInset(w, isTouch) {
+  if (!isTouch) return 0;
+  const cssW = typeof window !== "undefined" && window.innerWidth > 0 ? window.innerWidth : w;
+  return Math.ceil(64 * (w / cssW));
+}
+
+export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   const titleY = isMobile ? 34 : 44;
   const tabGap = isMobile ? 4 : 8;
   const n = CREATOR_CATEGORIES.length;
@@ -104,7 +115,7 @@ export function getCreatorLayout(w, h, isMobile) {
   // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
   // fewest rows that let every tab keep its minimum width, then spread the
   // tabs evenly over them.
-  const avail = w - (isMobile ? 16 : 50);
+  const avail = w - (isMobile ? 16 : 50) - 2 * edgeInset(w, isTouch);
   const fitPerRow = Math.max(1, Math.floor((avail + tabGap) / (minTabW + tabGap)));
   const tabRows = Math.ceil(n / fitPerRow);
   const perRow = Math.ceil(n / tabRows);
@@ -178,9 +189,24 @@ function badgeLayer(ch, detail = "high") {
   };
 }
 
+// How the preview stands for the field being edited — the same rules the
+// showroom uses (js/components/agent-showroom.js): the rifle only exists in the
+// armed pose, and the face is only drawn under a closed helmet when asked for.
+const ARMED_KEYS = new Set(["loadoutIndex", "weaponSkinIndex"]);
+const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
+const IDLE_STAGE = { pose: "idle", peek: false };
+
+function stageFor(key, ch) {
+  const helmet = HELMET_STYLES[ch.helmetIndex | 0]?.id;
+  return {
+    pose: ARMED_KEYS.has(key) ? "hero" : "idle",
+    peek: FACE_KEYS.has(key) && !OPEN_HELMETS.has(helmet),
+  };
+}
+
 /** Defs + markup for the full customised agent, in AGENT_VIEW.full space. */
-function agentMarkup(ch) {
-  const p = buildAgentParts(ch, { pose: "idle" });
+function agentMarkup(ch, { pose, peek } = IDLE_STAGE) {
+  const p = buildAgentParts(ch, { pose, peek });
   const k = Math.round(p.width * 100) / 100;
   const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
   return {
@@ -198,12 +224,13 @@ function pixelRatio(ctx) {
 let _figure = null;
 
 /**
- * Draw the customised agent centred on (cx, cy), `h` px tall. Returns false
- * while the bitmap is still decoding so the caller can fall back.
+ * Draw the customised agent centred on (cx, cy), `h` px tall, posed for the
+ * field being edited. Returns false while the bitmap is still decoding so the
+ * caller can fall back.
  */
-function drawAgentFigure(ctx, ch, cx, cy, h) {
-  const key = lookKey(ch);
-  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch) };
+function drawAgentFigure(ctx, ch, cx, cy, h, stage = IDLE_STAGE) {
+  const key = `${stage.pose}:${stage.peek ? 1 : 0}:${lookKey(ch)}`;
+  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch, stage) };
   const s = h / AGENT_VIEW.full[3];
   const img = getLayerImage(`legacy-agent:${key}`, AGENT_VIEW.full, _figure.defs, _figure.markup, s * pixelRatio(ctx));
   if (!img) return false;
@@ -817,7 +844,7 @@ export function renderCharacterCreator(
   }
 
   const isMobile = isTouchDevice && w < 700;
-  const L = getCreatorLayout(w, h, isMobile);
+  const L = getCreatorLayout(w, h, isMobile, !!isTouchDevice);
 
   // ── Ambient floating particles ──
   const particleCount = isMobile ? 12 : 24;
@@ -1124,7 +1151,7 @@ export function renderCharacterCreator(
     Math.min((L.previewW - 48) / 120, (prevH - 96) / 150),
   );
   const prevCY = L.contentY + prevH / 2 - 10;
-  if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150)) {
+  if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150, stageFor(curCat.key, char))) {
     renderCharacterPreview(
       ctx,
       prevCX,

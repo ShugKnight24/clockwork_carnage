@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
@@ -49,7 +49,6 @@ const APPEARANCE = [
 ];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
-const OPEN_HELMETS = new Set(["wide", "mohawk"]);
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
 
 /** A library badge worn at the given places. */

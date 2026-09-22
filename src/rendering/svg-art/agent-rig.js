@@ -413,7 +413,8 @@ function braid(c) {
 // Helmets and visors
 // ---------------------------------------------------------------------------
 
-const OPEN_HELMETS = new Set(["wide", "mohawk"]);
+/** Helmets that leave the face visible without `peek`. */
+export const OPEN_HELMETS = new Set(["wide", "mohawk"]);
 
 const SHELLS = {
   standard:
