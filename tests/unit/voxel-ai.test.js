@@ -26,6 +26,38 @@ describe("VoxelAISystem", () => {
     expect(e.x).toBeGreaterThan(23.5);
   });
 
+  it("flyer crossing a step climbs at a bounded rate instead of popping", () => {
+    const w = generateWorld({ terrain: false });
+    const type = Object.keys(ENEMY_TYPES).find((k) => ENEMY_TYPES[k].flying);
+    // A five-block wall of ground the flyer has to rise over.
+    for (let x = 24; x < 40; x++) for (let y = 14; y < 28; y++) for (let z = 32; z < 37; z++) w.set(x, y, z, 1);
+    const e = mkEnemy(type, 20.5, 20.5, 33);
+    const ai = new VoxelAISystem();
+    const c = ctx(w, [e], { x: 44.5, y: 20.5, z: 37, health: 100 });
+    const dt = 1 / 60;
+    const LIMIT = 3 * dt; // FLY_RATE, blocks per second
+    let peak = 0;
+    for (let i = 0; i < 600; i++) {
+      const was = e.z;
+      c.time += 16;
+      ai.update(c, dt);
+      peak = Math.max(peak, Math.abs(e.z - was));
+    }
+    expect(peak).toBeLessThanOrEqual(LIMIT + 1e-9);
+    expect(e.z).toBeGreaterThan(37); // it did get over the wall, one step at a time
+  });
+
+  it("two flyers spawned together do not bob in lockstep", () => {
+    const w = generateWorld({ terrain: false });
+    const type = Object.keys(ENEMY_TYPES).find((k) => ENEMY_TYPES[k].flying);
+    const a = mkEnemy(type, 20.5, 20.5, 36);
+    const b = mkEnemy(type, 20.5, 24.5, 36);
+    const ai = new VoxelAISystem();
+    const c = ctx(w, [a, b], { x: 20.5, y: 22.5, z: 32, health: 100 });
+    for (let i = 0; i < 120; i++) { c.time += 16; ai.update(c, 1 / 60); }
+    expect(a.z).not.toBeCloseTo(b.z, 3);
+  });
+
   it("flyer holds altitude and closes distance", () => {
     const w = generateWorld({ terrain: false });
     const type = Object.keys(ENEMY_TYPES).find((k) => ENEMY_TYPES[k].flying);

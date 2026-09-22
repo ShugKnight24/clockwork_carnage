@@ -69,19 +69,16 @@ import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
 import {
   isPassable as _isPassable,
-  hasLineOfSight as _hasLineOfSight,
   moveWithCollision,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
-import { VoxelAISystem, ENEMY_SIGHT_OFFSET } from "../src/systems/voxel-ai.js";
+import { VoxelAISystem } from "../src/systems/voxel-ai.js";
 import {
   PLAYER as VOXEL_PLAYER,
   aabbOverlapsSolid,
   groundHeight,
-  hasLineOfSight3D,
-  playerEyeZ3D,
 } from "../src/world/voxel-physics.js";
 import {
   getDifficultyMultipliers as _getDifficultyMultipliers,
@@ -2139,7 +2136,7 @@ export class Game {
    */
   isPassable(mx, my) {
     if (this.world) {
-      const z = this.world.topSolid(mx, my) + 1;
+      const z = groundHeight(this.world, mx + 0.5, my + 0.5, VOXEL_PLAYER.half);
       if (z <= 0) return false; // an empty column has no floor to stand on
       return !aabbOverlapsSolid(
         this.world, mx + 0.5, my + 0.5, z, VOXEL_PLAYER.half, VOXEL_PLAYER.height,
@@ -2227,21 +2224,6 @@ export class Game {
     this.totalEnemies += fx.totalEnemiesAdded;
     // Filter detonated chrono-bombs
     this._chronoBombs = this._chronoBombs.filter((b) => b.active);
-  }
-
-  /**
-   * Clear sight between two ground positions. The signature carries no
-   * heights, which a voxel level needs: the source looks out from the middle
-   * of a body standing on its own column, the target is the player's eye —
-   * the pair every caller means.
-   */
-  hasLineOfSight(x1, y1, x2, y2) {
-    if (this.world) {
-      const z1 =
-        groundHeight(this.world, x1, y1, VOXEL_PLAYER.half) + ENEMY_SIGHT_OFFSET;
-      return hasLineOfSight3D(this.world, x1, y1, z1, x2, y2, playerEyeZ3D(this.player));
-    }
-    return _hasLineOfSight(this.map, x1, y1, x2, y2);
   }
 
   updateProjectiles(dt) {

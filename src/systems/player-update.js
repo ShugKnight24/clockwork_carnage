@@ -290,11 +290,19 @@ export class PlayerUpdateSystem {
   _applyVoxelMove(ctx, moveX, moveY, dt, flags) {
     const { player: p, keys, keybinds: kb, mode, noclip, world } = ctx;
     if (p.z == null) p.z = 0;
+    // Something moved the player behind this system's back — a noclip flight, a
+    // teleport, a respawn. Whatever height they were last falling from means
+    // nothing now, and billing it on the next landing would be a phantom fall.
+    if (p._lastVoxelZ !== p.z) p._fallFrom = p.z;
+
     if (noclip) {
-      p.x += moveX;
-      p.y += moveY;
       p.vz = 0;
       p.grounded = false;
+      p.x += moveX;
+      p.y += moveY;
+      // Flying down and switching noclip off must not bill the descent.
+      p._fallFrom = p.z;
+      p._lastVoxelZ = p.z;
       return flags;
     }
 
@@ -323,6 +331,7 @@ export class PlayerUpdateSystem {
     p.x = res.x;
     p.y = res.y;
     p.z = res.z;
+    p._lastVoxelZ = res.z;
     p.grounded = res.grounded;
     if (res.grounded && p.vz <= 0) p.vz = 0;
     else if (res.hitZ && p.vz > 0) p.vz = 0; // cracked the head on a ceiling

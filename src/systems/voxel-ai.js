@@ -27,7 +27,7 @@ import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
 /** Fallback footprint for a def that carries no hitbox (combat.js agrees). */
 const DEFAULT_RADIUS = 0.3;
 /** Half a body's height: an enemy sights from this far above its own feet. */
-export const ENEMY_SIGHT_OFFSET = 0.55;
+const ENEMY_SIGHT_OFFSET = 0.55;
 /** How close a chaser presses, as a fraction of its own attack range. */
 const PRESS_FRACTION = 0.6;
 /** …but never further out than this, so a melee enemy always closes. */
@@ -36,6 +36,19 @@ const PRESS_MIN = 1.2;
 const HOVER_AMPLITUDE = 0.3, HOVER_RATE = 0.002;
 /** Blocks a flyer keeps between itself and whatever it is crossing. */
 const FLYER_CLEARANCE = 1;
+/** How far ahead a flyer reads the ground, so a hill lifts it before it arrives. */
+const FLYER_LOOKAHEAD = 1.5;
+/** Blocks per second a flyer may climb or sink to reach that altitude. */
+const FLY_RATE = 3;
+
+/**
+ * A fixed bob offset per flyer, so a pair of drones do not rise and fall in
+ * lockstep. Taken from where it spawned rather than `Math.random`, so a replay
+ * of the same level bobs the same way.
+ */
+function hoverPhase(e) {
+  return (e.x * 7.13 + e.y * 3.71 + e.z * 1.37) % (Math.PI * 2);
+}
 
 /** Collision box for an enemy: as wide as its sprite, twice its hit height. */
 function bodyOf(e) {
@@ -47,7 +60,7 @@ function bodyOf(e) {
 }
 
 /** Where an enemy looks from — the middle of its body, not its feet. */
-export function enemySightZ(e) {
+function enemySightZ(e) {
   return (e.z || 0) + bodyOf(e).height * 0.5;
 }
 
@@ -156,7 +169,7 @@ export class VoxelAISystem {
         }
       }
 
-      if (def.flying) this._moveFlyer(world, e, stepX, stepY, time);
+      if (def.flying) this._moveFlyer(world, e, stepX, stepY, time, enemyDt);
       else this._moveWalker(world, e, stepX, stepY, enemyDt);
 
       if (stunned) continue;
@@ -221,21 +234,27 @@ export class VoxelAISystem {
 
     // Still walled in after the step-up had its go: jump, if what is one block
     // up is open. A full jump impulse, not a fraction of one — 0.8 of it peaks
-    // at 0.96 blocks and would scrape every ledge it tried to clear.
-    if ((res.hitX || res.hitY) && res.grounded && this._hopClears(world, e, stepX, stepY, half, height)) {
-      e.vz = PLAYER.jump;
+    // at 0.96 blocks and would scrape every ledge it tried to clear. Only the
+    // axis that actually hit is probed: a body sliding along a wall is blocked
+    // on one axis while the other runs free, and has nothing to hop over.
+    if (res.grounded && (res.hitX || res.hitY)) {
+      const dirX = res.hitX ? Math.sign(stepX) : 0;
+      const dirY = res.hitX ? 0 : Math.sign(stepY);
+      if (this._hopClears(world, e, dirX, dirY, half, height)) e.vz = PLAYER.jump;
     }
   }
 
-  /** Is the space one block above the obstacle ahead free to land in? */
-  _hopClears(world, e, stepX, stepY, half, height) {
-    const len = Math.hypot(stepX, stepY);
-    if (len < 1e-6) return false;
+  /**
+   * Is the space one block above the obstacle ahead free to land in?
+   * @param {number} dirX -1, 0 or 1 — the blocked axis, not a heading
+   */
+  _hopClears(world, e, dirX, dirY, half, height) {
+    if (!dirX && !dirY) return false;
     const ahead = half + 0.5; // the middle of the cell the body is pressed against
     return !aabbOverlapsSolid(
       world,
-      e.x + (stepX / len) * ahead,
-      e.y + (stepY / len) * ahead,
+      e.x + dirX * ahead,
+      e.y + dirY * ahead,
       e.z + PLAYER.step,
       half,
       height,
@@ -243,16 +262,29 @@ export class VoxelAISystem {
   }
 
   /** Air movement: hold the spawn altitude (bobbing), pass over the ground. */
-  _moveFlyer(world, e, stepX, stepY, time) {
+  _moveFlyer(world, e, stepX, stepY, time, dt) {
     const { half, height } = bodyOf(e);
     if (!Number.isFinite(e._hoverZ)) e._hoverZ = e.z;
-    // Never lower than the ground it is crossing, or a drone that set out over
-    // a valley would swim through the next hill.
-    const floor = groundHeight(world, e.x, e.y, half) + FLYER_CLEARANCE;
+    if (!Number.isFinite(e._hoverPhase)) e._hoverPhase = hoverPhase(e);
+    // Never lower than the ground it is crossing — and it reads that ground a
+    // step ahead as well, or a drone that set out over a valley would press
+    // into the next hill instead of rising over it.
+    const len = Math.hypot(stepX, stepY);
+    const aheadX = len > 1e-6 ? e.x + (stepX / len) * FLYER_LOOKAHEAD : e.x;
+    const aheadY = len > 1e-6 ? e.y + (stepY / len) * FLYER_LOOKAHEAD : e.y;
+    const floor =
+      Math.max(groundHeight(world, e.x, e.y, half), groundHeight(world, aheadX, aheadY, half)) +
+      FLYER_CLEARANCE;
     const target =
-      Math.max(e._hoverZ, floor) + Math.sin(time * HOVER_RATE) * HOVER_AMPLITUDE;
+      Math.max(e._hoverZ, floor) +
+      Math.sin(time * HOVER_RATE + e._hoverPhase) * HOVER_AMPLITUDE;
+    // Climb and sink at a bounded rate. The ground under a flyer can rise a
+    // whole hill between one cell and the next, and sweeping that difference
+    // in a single frame would teleport it up and drop it back.
+    const limit = FLY_RATE * dt;
+    const dz = Math.max(-limit, Math.min(limit, target - e.z));
     const body = { x: e.x, y: e.y, z: e.z, half, height };
-    const res = moveAABB(world, body, stepX, stepY, target - e.z, { step: 0 });
+    const res = moveAABB(world, body, stepX, stepY, dz, { step: 0 });
     e.x = res.x;
     e.y = res.y;
     e.z = res.z;
