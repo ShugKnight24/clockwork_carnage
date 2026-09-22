@@ -65,6 +65,17 @@ describe("Inventory", () => {
     expect(inv.count("nope")).toBe(0);
   });
 
+  it("preserves the slot count through a round trip", () => {
+    // A clone that grew to 36 slots would tell crafting an output fits when
+    // it does not, and the inputs would already be gone.
+    const small = new Inventory(4);
+    small.add("stone", 64);
+    const clone = Inventory.fromJSON(small.toJSON());
+    expect(clone.slots.length).toBe(4);
+    expect(clone.fits("rock", 300)).toBe(small.fits("rock", 300));
+    expect(clone.count("stone")).toBe(64);
+  });
+
   it("round-trips through JSON", () => {
     const inv = new Inventory();
     inv.add("stone", 70);
