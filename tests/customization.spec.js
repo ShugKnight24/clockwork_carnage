@@ -52,3 +52,28 @@ test("no console errors across the new tabs", async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+test("locked preset shows a toast and leaves the character unchanged", async ({ page }) => {
+  await openCreator(page);
+  const snapshot = () =>
+    page.evaluate(() => {
+      const ch = window.ccDebug.game.character;
+      return JSON.stringify({ badge: ch.badge, accessories: ch.accessories, armorIndex: ch.armorIndex });
+    });
+  const before = await snapshot();
+  // Juggernaut (preset 1) needs the tier-3 "heavy" armour, which a fresh save
+  // (no campaign progress, no arena survival) has not earned.
+  await room(page).locator('.preset[data-preset="1"]').click();
+  await expect(room(page).locator(".toast")).toHaveText(/Juggernaut locked/);
+  expect(await snapshot()).toBe(before);
+});
+
+test("locked armour variant is rejected and armorVariant stays 0", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "suit").click();
+  const chip = room(page).locator('[data-variant="1"]');
+  await chip.click({ force: true });
+  await expect(room(page).locator(".toast")).toHaveText(/locked/);
+  await expect(chip).toHaveClass(/shake/);
+  expect(await page.evaluate(() => window.ccDebug.game.character.armorVariant)).toBe(0);
+});
