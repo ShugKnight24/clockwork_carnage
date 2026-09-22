@@ -7,7 +7,9 @@ import {
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { gameUnlockContext, unlockState, LOCKABLE } from "../../src/systems/unlocks.js";
-import { lookKey } from "../../src/core/character-fields.js";
+import { cloneLook, getIndex, lookKey, tableFor, withIndex } from "../../src/core/character-fields.js";
+import { SYMBOLS, FRAMES, ENAMELS, METALS, layer } from "../../src/data/badges.js";
+import { ACCESSORY_SLOTS, ACCESSORIES } from "../../src/data/accessories.js";
 import {
   ARMOR_STYLES,
   BACKSTORIES,
@@ -48,6 +50,7 @@ const APPEARANCE = [
   "shoulderIndex",
   "badgeIndex",
   "weaponSkinIndex",
+  "armorVariant",
 ];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
@@ -69,6 +72,8 @@ const PRESETS = [
 
 const I = {
   identity: `<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.4"/><path d="M5.6 16.4c.8-1.8 2-2.6 3.4-2.6s2.6.8 3.4 2.6M14.5 10h4M14.5 13.5h3"/></svg>`,
+  gear: `<svg viewBox="0 0 24 24"><path d="M7 4h10l2 4v12H5V8Z"/><path d="M9 4v4h6V4M9 13h6"/></svg>`,
+  badge: `<svg viewBox="0 0 24 24"><path d="M12 3 19 6v6c0 4-3 7-7 9-4-2-7-5-7-9V6Z"/><circle cx="12" cy="11.5" r="3"/></svg>`,
   suit: `<svg viewBox="0 0 24 24"><path d="M8 3 4 5.5 3 11l3 1.2V21h12v-8.8l3-1.2-1-5.5L16 3c-.8 1.6-2.2 2.4-4 2.4S8.8 4.6 8 3Z"/><path d="M12 9v8M9 12.5h6"/></svg>`,
   helmet: `<svg viewBox="0 0 24 24"><path d="M12 3c5 0 7.5 3.5 7.5 8.2V16c0 2.4-2 4.6-4.6 5H9.1C6.5 20.6 4.5 18.4 4.5 16v-4.8C4.5 6.5 7 3 12 3Z"/><path d="M5 11.2 11 12.4l1 1.2 1-1.2 6-1.2-.2 3.4-5.6 1-1.2.8-1.2-.8-5.6-1Z"/></svg>`,
   colors: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.4-1.2-1.6-1.2-3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3Z"/><circle cx="7.5" cy="11" r="1.3"/><circle cx="10" cy="7" r="1.3"/><circle cx="15" cy="7" r="1.3"/></svg>`,
@@ -129,7 +134,11 @@ const CATEGORIES = [
     ],
   },
 ];
+// Badge and gear sections (virtual keys) can omit `data`: their table comes from character-fields.
+for (const c of CATEGORIES) for (const s of c.sections) if (s.key && !s.data) s.data = tableFor(s.key);
 
+/** Field equality for flat indices and the nested badge / accessory records. */
+const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TIER = ["", "I", "II", "III"];
@@ -352,13 +361,16 @@ svg { display: block; }
   transition: transform var(--cc-dur-slow) var(--cc-ease); }
 .panel > .frame { position: absolute; inset: 0; }
 .handle { display: none; }
-.tabs { position: relative; display: grid; grid-template-columns: auto repeat(5, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
+.tabs { position: relative; display: grid; grid-template-columns: auto repeat(${CATEGORIES.length}, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
 .tabkey { margin: 0 2px; }
 .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 2px 10px; color: var(--cc-text-dim); background: transparent;
   font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.5px; text-transform: uppercase; outline: none;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: color var(--cc-dur-fast), background var(--cc-dur-fast), box-shadow var(--cc-dur-fast); }
 .tab svg { width: 22px; height: 22px; }
+/* Icon-only by default so every category fits; the label shows for the active, hovered or focused tab. */
+.tab .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tab:hover .t, .tab:focus-visible .t, :host(.kbd) .tab:focus .t, .tab[aria-selected="true"] .t { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
 .tab:hover { color: var(--cc-text); background: rgba(130, 160, 188, 0.08); }
 /* Focused button (drawButton "focus"): raised steel, accent bar, centred accent underline. */
 .tab[aria-selected="true"] { color: #fff; background: var(--cc-panel-raised); box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.34), inset 0 0 0 1px var(--cc-ink); }
@@ -532,7 +544,7 @@ button:focus-visible { outline: none; }
   :host([sheet="collapsed"]) .stage { right: 0; }
   :host([sheet="collapsed"]) .hdr { right: 180px; }
   .stage { right: calc(var(--panel-w) + 8px); }
-  .tabs { padding: 14px 8px 6px 12px; grid-template-columns: repeat(5, 1fr); }
+  .tabs { padding: 14px 8px 6px 12px; grid-template-columns: repeat(${CATEGORIES.length}, 1fr); }
   .tabkey, .keys, .btn .key, .hint-turn, .presets .lbl, .preset > span:last-child { display: none; }
   .tab { padding: 4px 0 7px; font-size: var(--cc-type-micro); letter-spacing: 0.5px; gap: 3px; }
   .tab svg { width: 20px; height: 20px; }
@@ -798,7 +810,7 @@ class AgentShowroom extends HTMLElement {
   template() {
     const tabs = CATEGORIES.map(
       (c, i) =>
-        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" tabindex="-1">${I[c.id]}<span>${c.label}</span></button>`,
+        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" tabindex="-1">${I[c.id]}<span class="t">${c.label}</span></button>`,
     ).join("");
     const presets = PRESETS.map(
       (p, i) => `<button class="preset" data-preset="${i}" aria-label="Apply ${p.name} preset"><span class="pthumb"></span><span>${p.name}</span></button>`,
@@ -970,10 +982,9 @@ class AgentShowroom extends HTMLElement {
     this._raf = 0;
   }
 
+  /** Deep enough copy of the editable fields that later edits never alias it. */
   pick(ch) {
-    const out = {};
-    for (const k of FIELDS) out[k] = ch[k];
-    return out;
+    return cloneLook(Object.fromEntries(FIELDS.map((k) => [k, ch[k]])));
   }
 
   get character() {
@@ -982,7 +993,7 @@ class AgentShowroom extends HTMLElement {
 
   isDirty() {
     const ch = this.character;
-    return FIELDS.some((k) => ch[k] !== this.snapshot[k]);
+    return FIELDS.some((k) => !sameValue(ch[k], this.snapshot[k]));
   }
 
   sfx(name) {
@@ -1248,14 +1259,14 @@ class AgentShowroom extends HTMLElement {
 
   effective() {
     const ch = this.pick(this.character);
-    if (this.preview) ch[this.preview.key] = this.preview.value;
+    if (this.preview) Object.assign(ch, withIndex(ch, this.preview.key, this.preview.value));
     return ch;
   }
 
   setPreview(p) {
     const same = p && this.preview && p.key === this.preview.key && p.value === this.preview.value;
     if (same || (!p && !this.preview)) return;
-    if (p && this.character[p.key] === p.value) p = null;
+    if (p && getIndex(this.character, p.key) === p.value) p = null;
     clearTimeout(this._previewClear);
     if (!p) {
       // Short grace so sliding between tiles doesn't flash the committed look.
@@ -1282,11 +1293,11 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
-    if (this.character[key] === idx) {
+    if (getIndex(this.character, key) === idx) {
       this.preview = null;
       return;
     }
-    this.commit({ [key]: idx });
+    this.commit(withIndex(this.character, key, idx));
     this.sfx("menuSelect");
     this.announce(`${sec.title}: ${item.name}`);
   }
@@ -1295,7 +1306,7 @@ class AgentShowroom extends HTMLElement {
     this.el.save.classList.remove("ready");
     const ch = this.character;
     const prev = this.pick(ch);
-    if (!Object.keys(changes).some((k) => ch[k] !== changes[k])) return false;
+    if (!Object.keys(changes).some((k) => !sameValue(ch[k], changes[k]))) return false;
     this.undoStack.push(prev);
     if (this.undoStack.length > 60) this.undoStack.shift();
     Object.assign(ch, changes);
@@ -1307,7 +1318,7 @@ class AgentShowroom extends HTMLElement {
   undo() {
     const prev = this.undoStack.pop();
     if (!prev) return this.sfx("menuNav");
-    Object.assign(this.character, prev);
+    Object.assign(this.character, cloneLook(prev));
     this.preview = null;
     this.sfx("menuSelect");
     this.announce("Undone");
@@ -1317,6 +1328,8 @@ class AgentShowroom extends HTMLElement {
   reset() {
     const def = {};
     for (const k of APPEARANCE) def[k] = DEFAULT_CHARACTER[k];
+    def.badge = structuredClone(DEFAULT_CHARACTER.badge);
+    def.accessories = { ...DEFAULT_CHARACTER.accessories };
     if (this.commit(def)) {
       this.sfx("menuSelect");
       this.toast("Reset to standard issue");
@@ -1334,8 +1347,6 @@ class AgentShowroom extends HTMLElement {
       helmetIndex: r(HELMET_STYLES.length),
       visorIndex: r(VISOR_STYLES.length),
       shoulderIndex: r(SHOULDER_STYLES.length),
-      // Most agents wear a badge; plain chests stay rare.
-      badgeIndex: Math.random() < 0.15 ? 0 : 1 + r(BADGES.length - 1),
       weaponSkinIndex: r(WEAPON_SKINS.length),
     };
     // Keep it tasteful: Ghost plating reads best with dark optics and finishes,
@@ -1346,12 +1357,30 @@ class AgentShowroom extends HTMLElement {
     }
     if (SKIN_TONES[next.skinToneIndex].id === "synthetic" && Math.random() < 0.7) next.eyeIndex = Math.random() < 0.5 ? 5 : 1;
     // Only what the agent has earned: re-roll locked picks from the unlocked set.
+    // Badge and gear keys are id-based virtual fields, rolled separately below.
     const ctx = this.unlockCtx();
+    const unlocked = (key, table) => table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
     for (const key of Object.keys(LOCKABLE)) {
-      const open = LOCKABLE[key].table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
+      if (LOCKABLE[key].byId) continue;
+      const open = unlocked(key, LOCKABLE[key].table);
       if (key === "loadoutIndex") next.loadoutIndex = open[r(open.length)] ?? this.character.loadoutIndex;
       else if (!open.includes(next[key])) next[key] = open[r(open.length)] ?? 0;
     }
+    const roll = (key, table, skip = -1) => {
+      const open = unlocked(key, table).filter((i) => i !== skip);
+      return table[open.length ? open[r(open.length)] : 0].id;
+    };
+    // Most agents wear the badge on the chest; bare suits stay rare.
+    next.badge = {
+      layers: [layer(roll("badge.symbol", SYMBOLS), roll("badge.frame", FRAMES), roll("badge.enamel", ENAMELS), roll("badge.metal", METALS))],
+      finish: "auto",
+      placements: Math.random() < 0.85 ? ["chest"] : [],
+    };
+    // Half the slots stay empty; the rest take an earned item ("none" is index 0).
+    next.accessories = Object.fromEntries(
+      ACCESSORY_SLOTS.map(({ id }) => [id, Math.random() < 0.5 ? "none" : roll(`acc.${id}`, ACCESSORIES[id], 0)]),
+    );
+    next.armorVariant = 0;
     this.commit(next);
     this.sfx("menuConfirm");
     this.flashStage();
@@ -1362,7 +1391,7 @@ class AgentShowroom extends HTMLElement {
   presetLock(i) {
     const ctx = this.unlockCtx();
     for (const [key, idx] of Object.entries(PRESETS[i].ch)) {
-      if (!LOCKABLE[key]) continue;
+      if (!LOCKABLE[key] || LOCKABLE[key].byId) continue;
       const st = unlockState(key, idx, ctx);
       if (!st.unlocked) return st;
     }
@@ -1378,7 +1407,9 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
-    this.commit({ ...p.ch });
+    // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
+    const armorVariant = p.ch.armorIndex === this.character.armorIndex ? this.character.armorVariant : 0;
+    this.commit({ ...p.ch, armorVariant });
     this.sfx("menuConfirm");
     this.flashStage();
     this.toast(`${p.name} preset applied`);
@@ -1455,7 +1486,7 @@ class AgentShowroom extends HTMLElement {
   }
 
   discard() {
-    Object.assign(this.character, this.snapshot);
+    Object.assign(this.character, cloneLook(this.snapshot));
     this.closeConfirm(true);
     this.leave();
   }
@@ -1729,7 +1760,7 @@ class AgentShowroom extends HTMLElement {
       const cur = sec.querySelector(".cur");
       if (!s || !cur) return;
       const previewing = this.preview?.key === s.key;
-      const idx = previewing ? this.preview.value : this.character[s.key];
+      const idx = previewing ? this.preview.value : getIndex(this.character, s.key);
       cur.textContent = s.data[idx]?.name || "";
       cur.classList.toggle("preview", previewing);
     });
@@ -1833,11 +1864,11 @@ class AgentShowroom extends HTMLElement {
     this.shadowRoot.querySelectorAll(".content .opt[data-key]").forEach((opt) => {
       const key = opt.dataset.key;
       const idx = Number(opt.dataset.idx);
-      opt.setAttribute("aria-checked", String(ch[key] === idx));
+      opt.setAttribute("aria-checked", String(getIndex(ch, key) === idx));
       const thumb = opt.querySelector(".thumb[data-thumb]");
       if (!thumb || (!force && thumb.dataset.sig === sig)) return;
       thumb.dataset.sig = sig;
-      const variant = { ...ch, [key]: idx };
+      const variant = { ...ch, ...withIndex(ch, key, idx) };
       const id = `t${this._thumbSeq++}-`;
       switch (thumb.dataset.thumb) {
         case "head":
