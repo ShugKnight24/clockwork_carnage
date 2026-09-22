@@ -58,9 +58,13 @@ export const recipeById = (id) => BY_ID.get(id) || null;
  * @returns {Array<object & {locked:boolean, reason:string|null}>}
  */
 export function availableRecipes(skills, stations = null, table = RECIPES) {
+  // A number or a plain object is not iterable, and `new Set(5)` throws. A
+  // bad argument should show the station-free tier, not crash the craft menu.
+  const iterable = stations != null && typeof stations[Symbol.iterator] === "function";
   const inRange =
     stations == null ? new Set() :
-    typeof stations === "string" ? new Set([stations]) : new Set(stations);
+    typeof stations === "string" ? new Set([stations]) :
+    iterable ? new Set(stations) : new Set();
   return table
     .filter((r) => r.station === null || inRange.has(r.station))
     .map((r) => {

@@ -175,3 +175,14 @@ describe("a repair must never consume the tool it restores", () => {
     });
   });
 });
+
+describe("availableRecipes with a malformed stations argument", () => {
+  it("degrades to the station-free tier instead of throwing", () => {
+    const s = new Skills({ construction: 100_000 });
+    const free = availableRecipes(s, null).map((r) => r.id).sort();
+    for (const bad of [5, {}, true, Symbol("x")]) {
+      expect(() => availableRecipes(s, bad)).not.toThrow();
+      expect(availableRecipes(s, bad).map((r) => r.id).sort()).toEqual(free);
+    }
+  });
+});
