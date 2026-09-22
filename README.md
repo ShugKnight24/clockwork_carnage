@@ -17,7 +17,7 @@ Then open the URL Vite prints. A production build is committed to `dist/`, so yo
 
 **Arena Mode** — Endless wave survival with 4 difficulty settings, 18 upgrades, kill streaks (DOUBLE KILL → GODLIKE), slow-mo last kills, and stats tracking.
 
-**Builder Mode (Temporal Forge)** — Design your own levels with a multi-layer editor. Undo/redo, export/import as JSON, multi-map save slots, spawn point placement, and play-test your creations.
+**Builder Mode (Temporal Forge)** — Build in a full voxel world (128×128×64, ground level in the middle so you can dig down as easily as you build up). First-person placing and breaking with a 6-block reach, 14 block types (the station's own materials plus dirt, grass, sand, rock and ore), and gravity, jump and step-up so the world plays the way it looks. Play-test your creation against enemies that walk, climb and fly. Older flat-map levels convert automatically. Worlds save in the browser (IndexedDB), export/import as `.ccw` (old `.json` maps still import), and share by URL when the world is small enough to fit in one. Requires WebGL2 — the rest of the game runs without it.
 
 **Character Creator** — Customize across 5 categories, pick a loadout class that sets your starting weapons and stat bonuses, and earn gear from campaign kills.
 
@@ -54,7 +54,7 @@ All controls are rebindable in Settings → Controls.
 
 **Settings** is reachable from the pause menu and from the mode-select screen (key `9`). Every row carries a one-line description, the list scrolls, and the whole screen is clickable with the mouse.
 
-**Builder:** WASD to move, Mouse to look, Left Click to place, Right Click to remove, Q/E to switch layers, T for spawn points, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import.
+**Builder:** WASD to move, Mouse to look, Left Click to place, Right Click to break, 1–9 or wheel to pick a block, Space to jump, Tab for overhead view, Ctrl+S to save, Ctrl+Shift+S to share, Ctrl+Z/Ctrl+Shift+Z for undo/redo, Ctrl+E/I for export/import, P to play-test, H for all shortcuts.
 
 **Mobile:** Full touch control support with virtual joystick and action buttons.
 

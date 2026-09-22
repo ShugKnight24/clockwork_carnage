@@ -513,7 +513,7 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
   ctx.fillStyle = `rgba(0,0,0,${0.72 * pulse})`;
   ctx.fillRect(0, 0, w, h);
 
-  const bw = Math.min(520, w * 0.88), bh = 280;
+  const bw = Math.min(520, w * 0.88), bh = 328;
   const bx = w / 2 - bw / 2, by = h / 2 - bh / 2;
 
   ctx.fillStyle = 'rgba(0,10,20,0.96)';
@@ -529,21 +529,23 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
   ctx.shadowColor = '#00ccff';
   ctx.shadowBlur = 10;
   ctx.font = 'bold 18px monospace';
-  ctx.fillText('MAP BUILDER', w / 2, by + 36);
+  ctx.fillText('THE FORGE', w / 2, by + 36);
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = 'rgba(0,200,255,0.3)';
   ctx.fillRect(bx + 20, by + 46, bw - 40, 1);
 
   const lines = [
-    { key: 'WASD / Arrow Keys', action: 'Move camera' },
-    { key: 'Left Click', action: 'Place tile' },
-    { key: 'Right Click', action: 'Erase tile' },
-    { key: '1 – 9', action: 'Select tile type' },
-    { key: 'E', action: 'Place / move player start' },
-    { key: 'P', action: 'Play-test your map' },
-    { key: 'Ctrl+S', action: 'Save map' },
-    { key: 'Ctrl+Shift+S', action: 'Share map URL' },
+    { key: 'WASD / Mouse', action: 'Move and look' },
+    { key: 'Left Click', action: 'Place block' },
+    { key: 'Right Click', action: 'Break block' },
+    { key: '1 – 9 / Wheel', action: 'Choose block' },
+    { key: 'Space', action: 'Jump' },
+    { key: 'T', action: 'Tool (block/spawn/pickup/exit)' },
+    { key: 'Tab', action: 'Overhead view' },
+    { key: 'P', action: 'Play-test' },
+    { key: 'Ctrl+S', action: 'Save' },
+    { key: 'H', action: 'All shortcuts' },
   ];
   ctx.font = '12px monospace';
   const lineH = 24;

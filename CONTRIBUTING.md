@@ -88,6 +88,8 @@ npm run build                            # the vite build must succeed
 
 **Caveat:** `scripts/` is gitignored, so the npm scripts that shell into it — `assets:manifest`, `assets:generate`, `assets:build`, `review`, `review:strict` — cannot run from a clean clone. Neither can `simulate`, which needs the gitignored `simulations/`.
 
+**WebGL2 in CI:** plain headless Chromium has no WebGL2, so `playwright.config.js` launches Chromium with `--use-gl=angle --enable-gpu`. Without those flags the Forge (and the WebGL2 hybrid renderer) can't initialize and its specs fail.
+
 ### Project Structure
 
 ```
@@ -101,7 +103,7 @@ js/                 — app shell and entry point (23 top-level modules)
   game.js           — game object and state machine (~3,100 lines)
   renderer.js       — DDA raycaster, sprite rendering, WebGL2 init and the hybrid GL path
   audio.js          — procedural Web Audio synthesis
-  builder.js        — Builder mode (Temporal Forge)
+  forge.js          — Forge (voxel builder)
   meltdown.js       — Meltdown: Reactor Run (endless runner)
   cutscene.js       — cutscene engine
   touch.js          — mobile touch controls
@@ -118,8 +120,10 @@ src/                — the bulk of the code (129 modules, ~57,700 lines)
   constants.js      — shared tuning values
   core/             — save system and persistence
   data/             — weapons, enemies, walls, dialogue, cosmetics, achievements, levels/
+  world/            — voxel world data, physics, saves, legacy conversion
   rendering/        — render pipeline, textures, post-FX, props, weather,
                       plus enemies/, env/, svg-art/ (Comic and Modern art) and webgl/
+    voxel/          — WebGL2 chunk renderer, mesher, atlas, shaders (the Forge)
   systems/          — AI, aim, combat, physics, player and projectile updates,
                       spawner, input dispatch, archive, unlocks
   ui/               — HUD variants, settings, character creator, archive,
