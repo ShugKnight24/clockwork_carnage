@@ -54,6 +54,15 @@ describe("breakTime", () => {
     expect(breakTime(10, 50, TOOLS.PICK_METAL)).toBeGreaterThan(0);
   });
 
+  it("falls back to bare hands for a malformed tool rather than returning NaN", () => {
+    const hand = breakTime(13, 1, TOOLS.HAND);
+    expect(breakTime(13, 1, {})).toBe(hand);
+    expect(breakTime(13, 1, { mult: NaN })).toBe(hand);
+    expect(breakTime(13, 1, { mult: 0 })).toBe(hand);
+    expect(breakTime(13, 1, { mult: -1 })).toBe(hand);
+    expect(breakTime(13, 1, null)).toBe(hand);
+  });
+
   it("is infinite for unbreakable blocks", () => {
     expect(breakTime(BEDROCK, 50)).toBe(Infinity);
     expect(breakTime(999, 50)).toBe(Infinity);

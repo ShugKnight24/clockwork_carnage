@@ -48,7 +48,10 @@ export function breakTime(blockId, level, tool = TOOLS.HAND) {
   if (!entry(blockId)) return Infinity;
   const hardness = BLOCKS[blockId]?.hardness;
   if (!Number.isFinite(hardness)) return Infinity;
-  return (hardness * MS_PER_HARDNESS * tool.mult) / (1 + level * LEVEL_SPEED);
+  // A malformed tool would otherwise yield NaN, which makes break progress
+  // NaN and the block silently unbreakable. Fall back to bare hands.
+  const mult = Number.isFinite(tool?.mult) && tool.mult > 0 ? tool.mult : TOOLS.HAND.mult;
+  return (hardness * MS_PER_HARDNESS * mult) / (1 + level * LEVEL_SPEED);
 }
 
 /** @returns {string|null} the item id a broken block yields */
