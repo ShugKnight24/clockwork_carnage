@@ -33,6 +33,17 @@ describe("recipe table", () => {
     });
   });
 
+  it("cannot be corrupted through a row handed out by availableRecipes", () => {
+    const row = availableRecipes(new Skills())[0];
+    const source = RECIPES.find((r) => r.id === row.id);
+    const before = JSON.stringify(source.inputs);
+    // ES modules are strict mode, so mutating the frozen table throws.
+    expect(() => { row.inputs[0][1] = 999; }).toThrow();
+    expect(() => { row.inputs.push(["stone", 1]); }).toThrow();
+    expect(() => { RECIPES.push({}); }).toThrow();
+    expect(JSON.stringify(source.inputs)).toBe(before);
+  });
+
   it("looks a recipe up by id", () => {
     expect(recipeById("cut_stone").output).toEqual(["stone", 1]);
     expect(recipeById("nope")).toBe(null);

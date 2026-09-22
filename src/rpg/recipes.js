@@ -15,6 +15,21 @@ export const RECIPES = [
   recipe("pick_metal", "Metal Pickaxe", [["metal", 3], ["rock", 2]],   ["pick_metal", 1], 10, 60),
 ];
 
+/**
+ * `availableRecipes` hands out shallow copies whose `inputs` still point at
+ * these arrays, so the table is frozen rather than copied per call: the menu
+ * rebuilds on every keypress, and freezing costs nothing at runtime while
+ * making accidental mutation of the global table throw instead of corrupt.
+ */
+for (const r of RECIPES) {
+  r.inputs.forEach(Object.freeze);
+  Object.freeze(r.inputs);
+  Object.freeze(r.output);
+  Object.freeze(r.requires);
+  Object.freeze(r);
+}
+Object.freeze(RECIPES);
+
 const BY_ID = new Map(RECIPES.map((r) => [r.id, r]));
 
 export const recipeById = (id) => BY_ID.get(id) || null;
