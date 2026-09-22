@@ -1,19 +1,14 @@
-import {
-  AGENT_VIEW,
-  badgeIcon,
-  buildAgentSvg,
-  buildRifleSvg,
-} from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
-import { gameUnlockContext, unlockState, LOCKABLE } from "../../src/systems/unlocks.js";
-import { cloneLook, getIndex, lookKey, tableFor, withIndex } from "../../src/core/character-fields.js";
-import { SYMBOLS, FRAMES, ENAMELS, METALS, layer } from "../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../../src/data/accessories.js";
+import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
+import { cloneLook, getIndex, lookKey, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
+import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
+import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
   BACKSTORIES,
-  BADGES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
   EYE_COLORS,
@@ -57,17 +52,29 @@ const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const OPEN_HELMETS = new Set(["wide", "mohawk"]);
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
 
+/** A library badge worn at the given places. */
+const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
+const gear = (items) => ({ ...DEFAULT_ACCESSORIES, ...items });
+
 const PRESETS = [
-  { name: "Regulation", ch: { colorIndex: 0, skinToneIndex: 0, hairIndex: 1, eyeIndex: 1, armorIndex: 0, helmetIndex: 0, visorIndex: 0, shoulderIndex: 1, badgeIndex: 3, weaponSkinIndex: 0 } },
-  { name: "Juggernaut", ch: { colorIndex: 2, skinToneIndex: 2, hairIndex: 2, eyeIndex: 4, armorIndex: 2, helmetIndex: 3, visorIndex: 4, shoulderIndex: 3, badgeIndex: 2, weaponSkinIndex: 3 } },
-  { name: "Ghost", ch: { colorIndex: 3, skinToneIndex: 3, hairIndex: 0, eyeIndex: 3, armorIndex: 3, helmetIndex: 2, visorIndex: 2, shoulderIndex: 0, badgeIndex: 6, weaponSkinIndex: 1 } },
-  { name: "Engineer", ch: { colorIndex: 4, skinToneIndex: 4, hairIndex: 3, eyeIndex: 0, armorIndex: 4, helmetIndex: 1, visorIndex: 3, shoulderIndex: 4, badgeIndex: 5, weaponSkinIndex: 2 } },
+  { name: "Regulation", ch: { colorIndex: 0, skinToneIndex: 0, hairIndex: 1, eyeIndex: 1, armorIndex: 0, helmetIndex: 0, visorIndex: 0, shoulderIndex: 1, weaponSkinIndex: 0,
+    badge: presetBadge("p_clock", ["chest", "shoulder"]), accessories: gear({ waist: "belt", neck: "tags" }) } },
+  { name: "Juggernaut", ch: { colorIndex: 2, skinToneIndex: 2, hairIndex: 2, eyeIndex: 4, armorIndex: 2, helmetIndex: 3, visorIndex: 4, shoulderIndex: 3, weaponSkinIndex: 3,
+    badge: presetBadge("p_skull", ["chest"]), accessories: gear({ back: "backpack", legs: "kneepads" }) } },
+  { name: "Ghost", ch: { colorIndex: 3, skinToneIndex: 3, hairIndex: 0, eyeIndex: 3, armorIndex: 3, helmetIndex: 2, visorIndex: 2, shoulderIndex: 0, weaponSkinIndex: 1,
+    badge: presetBadge("p_eye", ["chest"]), accessories: gear({ helmet: "nvg", waist: "holster" }) } },
+  { name: "Engineer", ch: { colorIndex: 4, skinToneIndex: 4, hairIndex: 3, eyeIndex: 0, armorIndex: 4, helmetIndex: 1, visorIndex: 3, shoulderIndex: 4, weaponSkinIndex: 2,
+    badge: presetBadge("p_bolt", ["chest", "forearm"]), accessories: gear({ arms: "screen", waist: "belt" }) } },
   // Full looks: each of these only reads right with its own helmet and
   // pauldrons, so the preset is how a player gets the intended silhouette.
-  { name: "Howitzer", ch: { colorIndex: 7, skinToneIndex: 1, hairIndex: 0, eyeIndex: 2, armorIndex: 5, helmetIndex: 5, visorIndex: 1, shoulderIndex: 7, badgeIndex: 2, weaponSkinIndex: 3 } },
-  { name: "Breaker", ch: { colorIndex: 6, skinToneIndex: 2, hairIndex: 1, eyeIndex: 1, armorIndex: 6, helmetIndex: 6, visorIndex: 1, shoulderIndex: 5, badgeIndex: 4, weaponSkinIndex: 5 } },
-  { name: "Reliquary", ch: { colorIndex: 2, skinToneIndex: 3, hairIndex: 0, eyeIndex: 4, armorIndex: 7, helmetIndex: 7, visorIndex: 2, shoulderIndex: 6, badgeIndex: 1, weaponSkinIndex: 1 } },
-  { name: "Pathfinder", ch: { colorIndex: 5, skinToneIndex: 0, hairIndex: 2, eyeIndex: 3, armorIndex: 8, helmetIndex: 8, visorIndex: 2, shoulderIndex: 8, badgeIndex: 7, weaponSkinIndex: 2 } },
+  { name: "Howitzer", ch: { colorIndex: 7, skinToneIndex: 1, hairIndex: 0, eyeIndex: 2, armorIndex: 5, helmetIndex: 5, visorIndex: 1, shoulderIndex: 7, weaponSkinIndex: 3,
+    badge: presetBadge("p_skull", ["chest", "shoulder"]), accessories: gear({ back: "backpack", neck: "bandolier" }) } },
+  { name: "Breaker", ch: { colorIndex: 6, skinToneIndex: 2, hairIndex: 1, eyeIndex: 1, armorIndex: 6, helmetIndex: 6, visorIndex: 1, shoulderIndex: 5, weaponSkinIndex: 5,
+    badge: presetBadge("p_star", ["chest"]), accessories: gear({ legs: "shins", arms: "gauntlets" }) } },
+  { name: "Reliquary", ch: { colorIndex: 2, skinToneIndex: 3, hairIndex: 0, eyeIndex: 4, armorIndex: 7, helmetIndex: 7, visorIndex: 2, shoulderIndex: 6, weaponSkinIndex: 1,
+    badge: presetBadge("p_shield", ["chest", "helmet"]), accessories: gear({ back: "cloak", helmet: "plume" }) } },
+  { name: "Pathfinder", ch: { colorIndex: 5, skinToneIndex: 0, hairIndex: 2, eyeIndex: 3, armorIndex: 8, helmetIndex: 8, visorIndex: 2, shoulderIndex: 8, weaponSkinIndex: 2,
+    badge: presetBadge("p_rift", ["chest"]), accessories: gear({ back: "antenna", neck: "scarf" }) } },
 ];
 
 const I = {
@@ -104,7 +111,6 @@ const CATEGORIES = [
     sections: [
       { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
       { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
-      { key: "badgeIndex", title: "Badge", data: BADGES, kind: "badge" },
     ],
   },
   {
@@ -118,6 +124,30 @@ const CATEGORIES = [
       { key: "skinToneIndex", title: "Face", data: SKIN_TONES, kind: "skin" },
       { key: "hairIndex", title: "Hair", data: HAIR_STYLES, kind: "hair" },
     ],
+  },
+  {
+    id: "gear",
+    label: "Gear",
+    sections: ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
+  },
+  {
+    id: "badge",
+    label: "Badge",
+    camera: "torso",
+    // Library picks a finished design; Configure builds one part by part.
+    modes: {
+      library: [{ type: "badgeHero" }, { key: "badge.preset", title: "Library", data: BADGE_PRESETS, kind: "badgePreset", groupBy: "set" }],
+      configure: [
+        { type: "badgeHero" },
+        { key: "badge.symbol", title: "Symbol", data: SYMBOLS, kind: "symbol", groupBy: "set" },
+        { key: "badge.frame", title: "Frame", data: FRAMES, kind: "frame" },
+        { key: "badge.enamel", title: "Enamel", data: ENAMELS, kind: "enamel" },
+        { key: "badge.metal", title: "Metal", data: METALS, kind: "metal" },
+        { key: "badge.finish", title: "Finish", data: FINISHES, kind: "finish" },
+        { type: "placement", title: "Placement" },
+      ],
+    },
+    sections: [],
   },
   {
     id: "colors",
@@ -134,8 +164,20 @@ const CATEGORIES = [
     ],
   },
 ];
+/** Every section of a category, across all of its modes. */
+const allSections = (c) => (c.modes ? Object.values(c.modes).flat() : c.sections);
 // Badge and gear sections (virtual keys) can omit `data`: their table comes from character-fields.
-for (const c of CATEGORIES) for (const s of c.sections) if (s.key && !s.data) s.data = tableFor(s.key);
+for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key && !s.data) s.data = tableFor(s.key);
+/** Gear tile framing per slot (agent space), so each item fills its tile. */
+const GEAR_VIEW = {
+  back: [-40, -106, 80, 80],
+  waist: [-34, -70, 68, 68],
+  helmet: [-25, -128, 50, 50],
+  arms: [-38, -84, 76, 76],
+  neck: [-30, -102, 60, 60],
+  legs: [-32, -34, 64, 64],
+};
+const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", act: "Act emblems", earned: "Earned" };
 
 /** Field equality for flat indices and the nested badge / accessory records. */
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
@@ -283,12 +325,12 @@ svg { display: block; }
 @keyframes spin { to { transform: translate(-50%, -50%) scaleY(0.25) rotate(360deg); } }
 .figure-wrap { position: absolute; left: 50%; bottom: 11.5%; height: 78%; aspect-ratio: 148 / 182; transform: translateX(-50%); pointer-events: none; }
 .figure { position: absolute; inset: 0; -webkit-box-reflect: below calc(var(--fig-h, 500px) * -0.043) linear-gradient(transparent 72%, rgba(255, 255, 255, 0.16)); }
-:host([camera="bust"]) .figure { -webkit-box-reflect: none; }
+:host([camera="bust"]) .figure, :host([camera="torso"]) .figure { -webkit-box-reflect: none; }
 .figure svg { width: 100%; height: 100%; overflow: visible; }
 .sweep { position: absolute; inset: 0; mix-blend-mode: overlay; opacity: 0.9; pointer-events: none;
   background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.35) 48%, transparent 58%);
   background-size: 260% 100%; background-position: calc(50% + var(--yaw) * 60%) 0; transition: background-position 0.2s linear; }
-:host([camera="bust"]) .pedestal { opacity: 0; transform: translateX(-50%) translateY(40px); }
+:host([camera="bust"]) .pedestal, :host([camera="torso"]) .pedestal { opacity: 0; transform: translateX(-50%) translateY(40px); }
 /* Motion lives on wrapper layers, never inside the SVG: the figure carries
    glow filters (and Modern adds lighting filters), and any animated change
    inside it re-rasterised the whole figure plus its floor reflection —
@@ -387,7 +429,13 @@ svg { display: block; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
 .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
-.grid.badge { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+.grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
+.grid.frame { grid-template-columns: repeat(6, 1fr); }
+.grid.finish, .grid.gear { grid-template-columns: repeat(5, 1fr); }
+/* Keep the last text line clear of the plate's bottom-left bracket. */
+.grid.finish .opt, .grid.gear .opt { padding-bottom: 9px; }
+.grid.enamel { grid-template-columns: repeat(6, 1fr); }
+.grid.metal { grid-template-columns: repeat(4, 1fr); }
 .grid.eye, .grid.skin { grid-template-columns: repeat(6, 1fr); }
 .grid.palette { grid-template-columns: repeat(2, 1fr); }
 .grid.rifle { grid-template-columns: repeat(3, 1fr); }
@@ -417,7 +465,8 @@ svg { display: block; }
 .thumb { position: relative; aspect-ratio: 1; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); overflow: hidden; }
 .thumb svg { width: 100%; height: 100%; }
 .oname { font: 700 var(--cc-type-label)/1.1 var(--cc-font); letter-spacing: 0.6px; text-transform: uppercase; color: inherit; padding: 0 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.badge .oname, .grid.rifle .oname { min-height: 2.2em; letter-spacing: 0.2px; }
+.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.rifle .oname, .grid.gear .oname,
+.grid.badgePreset .oname, .grid.symbol .oname, .grid.frame .oname, .grid.finish .oname { min-height: 2.2em; letter-spacing: 0.2px; }
 .card .oname { font-size: var(--cc-type-row); letter-spacing: var(--cc-track-row); }
 .tier { display: flex; gap: 2px; padding: 0 2px 2px; align-items: center; font: 700 var(--cc-type-micro)/1 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 1px; white-space: nowrap; }
 .tier i { width: 8px; height: 3px; background: rgba(111, 138, 163, 0.3); box-shadow: 0 0 0 0.5px var(--cc-ink); }
@@ -426,11 +475,26 @@ svg { display: block; }
 .grid.eye .opt, .grid.skin .opt { padding: 7px 4px; align-items: center; --cc-chamfer: 7px; }
 .grid.eye .swatch, .grid.skin .swatch { width: min(34px, 100%); flex: none; }
 .grid.eye .swatch { background: radial-gradient(circle, #fff 0 12%, var(--c) 26%, color-mix(in srgb, var(--c) 30%, #000) 70%); box-shadow: 0 0 0 var(--cc-ink-outline) var(--cc-ink), 0 0 12px color-mix(in srgb, var(--c) 60%, transparent); }
-.grid.eye .oname, .grid.skin .oname { display: none; }
+.grid.eye .oname, .grid.skin .oname, .grid.enamel .oname { display: none; }
+.grid.enamel .opt, .grid.metal .opt { padding: 7px 4px; align-items: center; --cc-chamfer: 7px; min-height: 44px; }
+.grid.enamel .swatch, .grid.metal .swatch { width: min(34px, 100%); flex: none; }
+/* Enamel: a glossy cabochon of the colour. */
+.grid.enamel .swatch { background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--c) 45%, #fff) 0 10%, var(--c) 42%, color-mix(in srgb, var(--c) 55%, #000) 100%); }
+.grid.metal .oname { text-align: center; min-height: 0; }
 .pal { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; height: 42px; gap: 2px; background: var(--cc-ink); padding: 1.5px; }
 .pal i:first-child { grid-row: span 2; }
 .badge-tile { aspect-ratio: 1; display: grid; place-items: center; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); }
-.badge-tile svg { width: 64%; height: 64%; }
+.badge-tile svg { width: 82%; height: 82%; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55)); }
+.opt .onote { margin-top: -3px; padding: 0 2px; font: 600 var(--cc-type-micro)/1.1 var(--cc-font); letter-spacing: 0.5px; color: var(--cc-text-dim); text-transform: uppercase; }
+.opt .tprog { height: 4px; margin: 0 2px 2px; flex: none; }
+.opt .tprog i { background: var(--cc-amber); }
+.thumb.empty { display: grid; place-items: center; }
+.thumb.empty svg { width: 34%; height: 34%; fill: none; stroke: var(--cc-text-faint); stroke-width: 1.6; stroke-linecap: round; }
+.gperk { padding: 0 2px 2px; font: 700 var(--cc-type-micro)/1.15 var(--cc-font); letter-spacing: 0.4px; color: var(--cc-cyan); text-transform: uppercase; }
+.section h3 .cur.locked { color: var(--cc-amber); }
+.snote { margin: 8px 0 0; font: 500 var(--cc-type-label)/1.35 var(--cc-font); color: var(--cc-text-dim); }
+.snote[hidden] { display: none; }
+.section.muted .grid .opt:not(:hover):not(:focus) { opacity: 0.55; }
 .grid.rifle .thumb { aspect-ratio: 2.4; }
 .card .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .card .desc { font: 500 var(--cc-type-body)/1.35 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 0.3px; }
@@ -473,6 +537,58 @@ svg { display: block; }
   background: radial-gradient(60% 80% at 50% 50%, color-mix(in srgb, var(--accent) 16%, #0c1522), #04070c 80%); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55); }
 .rifle-hero .spin { width: 82%; animation: turntable 7s ease-in-out infinite; transform-style: preserve-3d; }
 @keyframes turntable { 0%, 100% { transform: rotateY(-28deg) rotateX(8deg); } 50% { transform: rotateY(28deg) rotateX(8deg); } }
+
+/* Badge tab: the worn badge large, with the mode switch under it. */
+.badge-hero { margin-top: 12px; }
+.hero-well { position: relative; display: grid; grid-template-columns: 148px 1fr; gap: 16px; align-items: center; padding: 10px 16px 10px 10px;
+  background: radial-gradient(38% 80% at 22% 50%, color-mix(in srgb, var(--accent) 20%, #0c1522), #04070c 85%); border: var(--cc-ink-outline) solid var(--cc-ink);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(111, 138, 163, 0.18); }
+.hero-art { width: 148px; height: 148px; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.65)); }
+@media (max-height: 820px) {
+  .hero-well { grid-template-columns: 112px 1fr; }
+  .hero-art { width: 112px; height: 112px; }
+}
+.hero-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hero-kicker { font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 2px; text-transform: uppercase; color: var(--cc-text-faint); }
+.hero-kicker.preview { color: var(--cc-cyan); }
+.hero-name { font: 800 var(--cc-type-heading)/1.05 var(--cc-font); letter-spacing: 1px; text-transform: uppercase; color: #fff; text-shadow: 2px 2px 0 var(--cc-ink); }
+.hero-parts { font: 600 var(--cc-type-body)/1.3 var(--cc-font); color: var(--cc-text-dim); }
+.hero-finish { font: 700 var(--cc-type-label)/1.2 var(--cc-font); letter-spacing: 1px; text-transform: uppercase; color: var(--cc-cyan); }
+.hero-worn { font: 600 var(--cc-type-label)/1.2 var(--cc-font); color: var(--cc-text-dim); }
+.hero-worn.off { color: var(--cc-amber); }
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-top: 10px; padding: 3px; background: var(--cc-panel-well); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55), 2px 2px 0 var(--cc-ink); }
+/* Chips: small steel toggles (mode switch, placements, armour finish). */
+.chip { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 12px;
+  font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.2px; text-transform: uppercase; color: var(--cc-text-dim);
+  background: var(--cc-steel); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: var(--plate-bevel);
+  transition: color var(--cc-dur-fast), background var(--cc-dur-fast), box-shadow var(--cc-dur-fast); }
+.chip:hover { color: #fff; background: var(--cc-steel-hi); }
+.chip.on { color: #fff; background: linear-gradient(180deg, rgba(34, 230, 255, 0.18), rgba(34, 230, 255, 0.02)), var(--cc-steel-hi); box-shadow: inset 0 1px 0 rgba(185, 240, 255, 0.45), inset 0 0 0 2px var(--cc-cyan); }
+.chip:focus-visible, :host(.kbd) .chip:focus { outline: none; box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--cc-cyan); }
+.modes .chip { min-height: 32px; border: 0; background: none; box-shadow: none; letter-spacing: 1.5px; }
+.modes .chip.on { color: var(--cc-caption-cyan-text); background: var(--cc-caption-cyan); box-shadow: 0 0 0 1px var(--cc-ink), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+.modes .chip:hover:not(.on) { color: var(--cc-text); background: rgba(130, 160, 188, 0.08); }
+.modes .chip:focus-visible, :host(.kbd) .modes .chip:focus { box-shadow: inset 0 0 0 2px var(--cc-cyan); }
+.chip.soon { color: var(--cc-text-faint); cursor: not-allowed; }
+.soon-tag { padding: 2px 4px 1px; font: 700 8px/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-caption-amber-text); background: var(--cc-caption-amber); border: 1px solid var(--cc-ink); }
+.chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.chip.place { justify-content: flex-start; min-height: 40px; }
+.chip .box { flex: none; width: 16px; height: 16px; padding: 1px; color: transparent; background: var(--cc-panel-well); border: 1.5px solid var(--cc-ink); box-shadow: inset 0 0 0 1px rgba(111, 138, 163, 0.35); }
+.chip .box svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.chip.on .box { color: var(--cc-caption-cyan-text); background: var(--cc-cyan); box-shadow: none; }
+.gcap { margin: 4px 0 8px; font-size: var(--cc-type-micro); padding: 3px 8px 2px; }
+.group + .group { margin-top: 12px; }
+/* Standard / variant finish under the armour grid. */
+.variant { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 10px; background: var(--cc-panel-well); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.5); }
+.variant:empty { display: none; }
+.vlabel { flex-basis: 100%; margin: 1px 0 -1px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 2px; text-transform: uppercase; color: var(--cc-text-faint); }
+.variant .chip { flex: 1; min-width: 0; }
+.variant .chip.locked { color: var(--cc-text-faint); cursor: not-allowed; }
+.variant .lk svg { width: 12px; height: 12px; fill: none; stroke: var(--cc-amber); stroke-width: 2.4; }
+.vdesc { flex-basis: 100%; font: 500 var(--cc-type-body)/1.3 var(--cc-font); color: var(--cc-text-dim); }
+.vlock { flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
+.vlock .bar { height: 5px; }
+.vlock .bar i { background: var(--cc-amber); }
 
 .field { position: relative; display: block; }
 .field input { width: 100%; height: 50px; padding: 0 64px 0 16px; font: 800 var(--cc-type-heading)/1 var(--cc-font); letter-spacing: 2px; text-transform: uppercase; color: #fff;
@@ -578,6 +694,9 @@ button:focus-visible { outline: none; }
   .toast { bottom: 58px; }
   .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .opt { min-height: 44px; }
+  .hero-well { grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
+  .hero-art { width: 96px; height: 96px; }
+  .hero-name { font-size: var(--cc-type-row); }
 }
 @media (max-width: 600px) and (min-height: 501px) {
   :host { --panel-w: 100vw; }
@@ -588,6 +707,13 @@ button:focus-visible { outline: none; }
   .presets, .hint-turn { display: none; }
   .stage-tools { bottom: calc(56vh + 8px); left: 12px; transform: none; }
   .toast { left: 50%; bottom: calc(56vh + 60px); }
+  .hero-well { grid-template-columns: 84px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
+  .hero-art { width: 84px; height: 84px; }
+  .hero-meta { gap: 4px; }
+  .hero-kicker { display: none; }
+  .hero-name { font-size: var(--cc-type-row); }
+  .hero-parts { font-size: var(--cc-type-label); }
+  .modes { margin-top: 8px; }
 }
 @media (hover: none) { .opt:hover, .tool:hover, .preset:hover, .plate:hover { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
@@ -643,7 +769,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .pedestal .ring::before { background: conic-gradient(from 0deg, transparent 0 60%, rgba(255, 244, 230, 0.7) 68%, transparent 78%); }
 :host([realistic]) .stage:focus-visible .pedestal .plate-disc { box-shadow: 0 0 0 1px var(--r-accent), 0 18px 36px rgba(0, 0, 0, 0.7); }
 :host([realistic]) .figure { -webkit-box-reflect: below calc(var(--fig-h, 500px) * -0.043) linear-gradient(transparent 80%, rgba(255, 255, 255, 0.07)); }
-:host([realistic][camera="bust"]) .figure { -webkit-box-reflect: none; }
+:host([realistic][camera="bust"]) .figure, :host([realistic][camera="torso"]) .figure { -webkit-box-reflect: none; }
 /* Performance: the Modern figure is filter-heavy SVG. Keep every per-frame
    change off it — no box-reflect (it re-renders the whole figure), no CSS
    animations inside the SVG, and the turn and breathing done as compositor
@@ -723,6 +849,23 @@ const REALISTIC_STYLE = `
 :host([realistic]) .content { scrollbar-color: rgba(228, 230, 225, 0.2) transparent; }
 :host([realistic]) .content::-webkit-scrollbar-thumb { background: rgba(228, 230, 225, 0.2); border: 0; }
 
+:host([realistic]) .hero-well, :host([realistic]) .variant { background: radial-gradient(40% 90% at 22% 50%, #25282c, #0a0b0c 85%); border: 1px solid var(--r-line); box-shadow: none; }
+:host([realistic]) .variant { background: rgba(0, 0, 0, 0.3); }
+:host([realistic]) .hero-name { font-weight: 600; letter-spacing: 0.08em; color: var(--r-text); text-shadow: none; }
+:host([realistic]) .hero-kicker, :host([realistic]) .vlabel { font-weight: 600; letter-spacing: 0.24em; }
+:host([realistic]) .hero-finish, :host([realistic]) .gperk { color: var(--r-accent); font-weight: 600; }
+:host([realistic]) .modes { background: rgba(14, 16, 18, 0.6); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
+:host([realistic]) .chip { font-weight: 600; letter-spacing: 0.14em; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
+:host([realistic]) .chip:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--r-line-hi); }
+:host([realistic]) .chip.on { color: var(--r-text); background: rgba(143, 188, 196, 0.1); border-color: rgba(143, 188, 196, 0.7); box-shadow: none; }
+:host([realistic]) .chip:focus-visible, :host([realistic].kbd) .chip:focus { box-shadow: none; outline: 1px solid var(--r-accent); outline-offset: 2px; }
+:host([realistic]) .modes .chip { border: 0; background: none; }
+:host([realistic]) .modes .chip.on { color: var(--r-text); background: rgba(228, 230, 225, 0.1); box-shadow: inset 0 -1px 0 var(--r-accent); }
+:host([realistic]) .chip .box { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--r-line-hi); border-radius: 1px; box-shadow: none; }
+:host([realistic]) .chip.on .box { color: #0c0e10; background: var(--r-accent); border-color: var(--r-accent); }
+:host([realistic]) .soon-tag { color: var(--cc-amber); background: none; border-color: rgba(220, 162, 76, 0.5); font-weight: 600; }
+:host([realistic]) .opt .tprog i, :host([realistic]) .vlock .bar i { background: var(--cc-amber); }
+
 /* Tabs, tools, segmented controls, presets. */
 :host([realistic]) .tab { clip-path: none; font-weight: 600; letter-spacing: 0.14em; }
 :host([realistic]) .tab:hover { background: rgba(255, 255, 255, 0.04); }
@@ -762,6 +905,7 @@ class AgentShowroom extends HTMLElement {
     super();
     this.game = null;
     this.category = 0;
+    this.badgeMode = "library"; // Badge tab: library | configure
     this.preview = null; // { key, value } applied on top of game.character for the stage
     this.previewSection = null;
     this.undoStack = [];
@@ -907,7 +1051,9 @@ class AgentShowroom extends HTMLElement {
     this.confirmOpen = false;
     this.el.confirm.hidden = true;
     this.category = 0;
+    this.badgeMode = "library";
     this.yaw = this.yawTarget = 0;
+    this._yawRestore = null;
     this.poseChoice = "idle";
     this.cameraChoice = "full";
     this.setAttribute("camera", "full");
@@ -1075,6 +1221,9 @@ class AgentShowroom extends HTMLElement {
     }
     if (t.dataset.cat != null) return this.setCategory(Number(t.dataset.cat));
     if (t.dataset.voice != null) return this.playVoice(Number(t.dataset.voice), t);
+    if (t.dataset.mode) return this.setBadgeMode(t.dataset.mode);
+    if (t.dataset.placement) return this.togglePlacement(t.dataset.placement);
+    if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
     if (t.dataset.preset != null) return this.applyPreset(Number(t.dataset.preset));
     if (t.dataset.camera) return this.setCamera(t.dataset.camera, true);
@@ -1095,19 +1244,24 @@ class AgentShowroom extends HTMLElement {
     }
   }
 
+  /** The option a pointer or focus event is over, as a preview, or undefined when it is none. */
+  previewOf(target) {
+    const opt = target.closest?.(".opt[data-idx], .chip[data-variant]");
+    if (!opt) return undefined;
+    return opt.dataset.variant != null ? { el: opt, key: "armorVariant", value: Number(opt.dataset.variant) } : { el: opt, key: opt.dataset.key, value: Number(opt.dataset.idx) };
+  }
+
   onHover(e, on) {
     if (e.pointerType === "touch") return;
-    const opt = e.target.closest?.(".opt[data-idx]");
-    if (!opt) return;
-    if (!on && opt.contains(e.relatedTarget)) return;
-    this.setPreview(on ? { key: opt.dataset.key, value: Number(opt.dataset.idx) } : null);
+    const p = this.previewOf(e.target);
+    if (!p) return;
+    if (!on && p.el.contains(e.relatedTarget)) return;
+    this.setPreview(on ? { key: p.key, value: p.value } : null);
   }
 
   onFocus(e, on) {
-    const opt = e.target.closest?.(".opt[data-idx]");
-    if (opt && this.classList.contains("kbd")) {
-      this.setPreview(on ? { key: opt.dataset.key, value: Number(opt.dataset.idx) } : null);
-    }
+    const p = this.previewOf(e.target);
+    if (p && this.classList.contains("kbd")) this.setPreview(on ? { key: p.key, value: p.value } : null);
     const sec = e.target.closest?.(".section");
     this.previewSection = on && sec ? sec.dataset.key || null : null;
   }
@@ -1207,7 +1361,7 @@ class AgentShowroom extends HTMLElement {
     const root = this.shadowRoot;
     return [
       ...this.el.tabs,
-      ...root.querySelectorAll(".content .opt, .content input, .content .play"),
+      ...root.querySelectorAll(".content .opt, .content .chip, .content input, .content .play"),
       this.el.back,
       this.el.save,
     ].filter((el) => el.offsetParent !== null);
@@ -1265,19 +1419,35 @@ class AgentShowroom extends HTMLElement {
 
   setPreview(p) {
     const same = p && this.preview && p.key === this.preview.key && p.value === this.preview.value;
-    if (same || (!p && !this.preview)) return;
+    if (same || (!p && !this.preview && this._yawRestore == null)) return;
+    if (p) this.turnFor(p.key);
     if (p && getIndex(this.character, p.key) === p.value) p = null;
     clearTimeout(this._previewClear);
     if (!p) {
       // Short grace so sliding between tiles doesn't flash the committed look.
       this._previewClear = setTimeout(() => {
         this.preview = null;
+        this.restoreYaw();
         this.queueRender();
       }, 70);
       return;
     }
     this.preview = p;
     this.queueRender();
+  }
+
+  /** Gear sections turn the agent to show their slot (the back from behind); restoreYaw() turns back. */
+  turnFor(key) {
+    const yaw = this.sectionFor(key)?.yaw;
+    if (yaw == null) return;
+    this._yawRestore ??= this.yawTarget;
+    if (yaw !== this.yawTarget) this.setYaw(yaw);
+  }
+
+  restoreYaw() {
+    if (this._yawRestore == null) return;
+    this.setYaw(this._yawRestore);
+    this._yawRestore = null;
   }
 
   choose(key, idx, el) {
@@ -1293,6 +1463,7 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
+    this.turnFor(key);
     if (getIndex(this.character, key) === idx) {
       this.preview = null;
       return;
@@ -1313,6 +1484,47 @@ class AgentShowroom extends HTMLElement {
     this.preview = null;
     this.renderAll(false);
     return true;
+  }
+
+  setBadgeMode(mode) {
+    if (mode === "editor") {
+      this.sfx("menuNav");
+      return this.toast("Badge editor: coming soon");
+    }
+    if (mode === this.badgeMode) return;
+    const refocus = this.shadowRoot.activeElement?.dataset?.mode != null;
+    this.badgeMode = mode;
+    this.preview = null;
+    this.sfx("menuSelect");
+    this.renderContent();
+    if (refocus) this.focusNav(this.el.content.querySelector(`[data-mode="${mode}"]`));
+    this.announce(`Badge ${mode}`);
+  }
+
+  togglePlacement(id) {
+    this.commit(togglePlacement(this.character, id));
+    this.sfx("menuSelect");
+    const on = this.character.badge.placements.includes(id);
+    this.announce(`Badge ${on ? "on" : "off"}: ${byId(PLACEMENTS, id)?.name || id}`);
+  }
+
+  chooseVariant(v, el) {
+    const ch = this.character;
+    if (v) {
+      const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+      if (!st.unlocked) {
+        el?.classList.remove("shake");
+        void el?.offsetWidth;
+        el?.classList.add("shake");
+        this.toast(`${ARMOR_STYLES[ch.armorIndex | 0].variant.name} locked · ${st.hint}`);
+        this.sfx("menuNav");
+        return;
+      }
+    }
+    if (!this.commit({ armorVariant: v })) return;
+    this.sfx("menuSelect");
+    const a = ARMOR_STYLES[ch.armorIndex | 0];
+    this.announce(`Armour: ${v ? a.variant.name : "Standard"}`);
   }
 
   undo() {
@@ -1390,8 +1602,20 @@ class AgentShowroom extends HTMLElement {
   /** First locked piece of a preset, or null when the agent can wear all of it. */
   presetLock(i) {
     const ctx = this.unlockCtx();
-    for (const [key, idx] of Object.entries(PRESETS[i].ch)) {
-      if (!LOCKABLE[key] || LOCKABLE[key].byId) continue;
+    const { badge, accessories, ...flat } = PRESETS[i].ch;
+    const byIdPicks = [
+      ["badge.symbol", badge.layers[0].symbol],
+      ["badge.frame", badge.layers[0].frame],
+      ["badge.enamel", badge.layers[0].enamel],
+      ["badge.metal", badge.layers[0].metal],
+      ["badge.finish", badge.finish],
+      ...Object.entries(accessories).filter(([, id]) => id !== "none").map(([slot, id]) => [`acc.${slot}`, id]),
+    ];
+    const picks = [
+      ...Object.entries(flat).filter(([key]) => LOCKABLE[key] && !LOCKABLE[key].byId),
+      ...byIdPicks.map(([key, id]) => [key, indexOfId(LOCKABLE[key].table, id)]),
+    ];
+    for (const [key, idx] of picks) {
       const st = unlockState(key, idx, ctx);
       if (!st.unlocked) return st;
     }
@@ -1409,7 +1633,10 @@ class AgentShowroom extends HTMLElement {
     }
     // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
     const armorVariant = p.ch.armorIndex === this.character.armorIndex ? this.character.armorVariant : 0;
-    this.commit({ ...p.ch, armorVariant });
+    const next = { ...cloneLook(p.ch), armorVariant };
+    // Belt and braces: anything the agent has not earned falls back instead of equipping.
+    Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
+    this.commit(next);
     this.sfx("menuConfirm");
     this.flashStage();
     this.toast(`${p.name} preset applied`);
@@ -1530,6 +1757,7 @@ class AgentShowroom extends HTMLElement {
     const changed = next !== this.category;
     this.category = next;
     this.preview = null;
+    this.restoreYaw();
     const cat = CATEGORIES[next];
     // Categories frame the stage for what they edit; manual toggles still win after.
     this.setCamera(cat.camera || "full");
@@ -1543,15 +1771,20 @@ class AgentShowroom extends HTMLElement {
   }
 
   sectionFor(key) {
-    for (const c of CATEGORIES) for (const s of c.sections) if (s.key === key) return s;
+    for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key === key) return s;
     return null;
+  }
+
+  /** The sections a category shows now (the Badge tab's depend on its mode). */
+  sectionsOf(cat) {
+    return cat.modes ? cat.modes[this.badgeMode] : cat.sections;
   }
 
   setCamera(mode, user = false) {
     this.cameraChoice = mode;
     this.setAttribute("camera", mode);
     this.shadowRoot.querySelectorAll("[data-camera]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.camera === mode)));
-    this.tweenView(mode === "bust" ? AGENT_VIEW.bust : AGENT_VIEW.full);
+    this.tweenView(AGENT_VIEW[mode] || AGENT_VIEW.full);
     if (user) this.sfx("menuNav");
   }
 
@@ -1669,6 +1902,7 @@ class AgentShowroom extends HTMLElement {
       this.renderStage();
       this.renderHeader();
       this.renderPreviewLabels();
+      this.renderBadgeHero();
     });
   }
 
@@ -1761,8 +1995,13 @@ class AgentShowroom extends HTMLElement {
       if (!s || !cur) return;
       const previewing = this.preview?.key === s.key;
       const idx = previewing ? this.preview.value : getIndex(this.character, s.key);
-      cur.textContent = s.data[idx]?.name || "";
-      cur.classList.toggle("preview", previewing);
+      const st = previewing && LOCKABLE[s.key] ? unlockState(s.key, idx, this.unlockCtx()) : null;
+      const locked = !!st && !st.unlocked;
+      const ch = previewing ? this.effective() : this.character;
+      const variant = s.key === "armorIndex" && ch.armorVariant ? ` · ${ARMOR_STYLES[idx]?.variant?.name || ""}` : "";
+      cur.textContent = `${s.data[idx]?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
+      cur.classList.toggle("preview", previewing && !locked);
+      cur.classList.toggle("locked", locked);
     });
   }
 
@@ -1770,7 +2009,7 @@ class AgentShowroom extends HTMLElement {
     const cat = CATEGORIES[this.category];
     const c = this.el.content;
     c.setAttribute("aria-labelledby", `tab-${cat.id}`);
-    c.innerHTML = cat.sections.map((s) => this.sectionHtml(s)).join("");
+    c.innerHTML = this.sectionsOf(cat).map((s) => this.sectionHtml(s)).join("");
     c.scrollTop = 0;
     if (swapDir) {
       c.style.setProperty("--swap-dir", `${swapDir * 14}px`);
@@ -1789,9 +2028,95 @@ class AgentShowroom extends HTMLElement {
         <label class="field"><input id="callsign" name="callsign" maxlength="16" autocomplete="off" spellcheck="false" value="${esc(name)}" aria-describedby="callsign-err" aria-invalid="${!!msg}"><span class="count">${name.length}/16</span></label>
         <p class="err ${msg ? "" : "ok"}" id="callsign-err">${esc(msg || "Letters, numbers, space . _ ' -")}</p></div>`;
     }
-    const items = s.data.map((item, i) => this.optionHtml(s, item, i)).join("");
+    if (s.type === "badgeHero") return this.badgeHeroHtml();
+    if (s.type === "placement") {
+      const on = this.character.badge.placements;
+      const chips = PLACEMENTS.map(
+        (p) => `<button class="chip place${on.includes(p.id) ? " on" : ""}" role="checkbox" aria-checked="${on.includes(p.id)}" data-placement="${p.id}" tabindex="-1"><span class="box" aria-hidden="true">${I.check}</span>${esc(p.name)}</button>`,
+      ).join("");
+      return `<div class="section" data-section="placement"><h3><span>${s.title}</span></h3><div class="chips" role="group" aria-label="Badge placement">${chips}</div></div>`;
+    }
     const extra = s.kind === "rifle" ? `<div class="rifle-hero" aria-hidden="true"><div class="spin"></div></div>` : "";
-    return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}<div class="grid ${s.kind}" role="radiogroup" aria-label="${s.title}">${items}</div>${this.lockInfoHtml(s)}</div>`;
+    const grid = (entries, attrs = "") => `<div class="grid ${s.kind}"${attrs}>${entries.map(([item, i]) => this.optionHtml(s, item, i)).join("")}</div>`;
+    let body;
+    if (s.groupBy) {
+      // Captioned runs of one set each (Factions, Classic, Ranks…), in table order.
+      const groups = new Map();
+      s.data.forEach((item, i) => {
+        const g = item[s.groupBy];
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push([item, i]);
+      });
+      body = `<div class="groups" role="radiogroup" aria-label="${s.title}">${[...groups]
+        .map(([g, entries]) => `<div class="group"><span class="gcap caption steel">${esc(GROUP_NAMES[g] || g)}</span>${grid(entries)}</div>`)
+        .join("")}</div>`;
+    } else {
+      body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
+    }
+    const variant = s.key === "armorIndex" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
+    const note = s.key === "badge.metal" ? `<p class="snote" data-note="auto-metal" hidden>Auto finish takes its metal from the armour. Pick a finish below to use your own.</p>` : "";
+    // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
+    const locks = s.groupBy ? "" : this.lockInfoHtml(s);
+    return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  badgeHeroHtml() {
+    const modes = [
+      ["library", "Library"],
+      ["configure", "Configure"],
+      ["editor", "Editor"],
+    ]
+      .map(([m, name]) =>
+        m === "editor"
+          ? `<button class="chip mode soon" data-mode="editor" aria-disabled="true" title="Coming soon" tabindex="-1">${name}<span class="soon-tag">Soon</span></button>`
+          : `<button class="chip mode${this.badgeMode === m ? " on" : ""}" data-mode="${m}" aria-pressed="${this.badgeMode === m}" tabindex="-1">${name}</button>`,
+      )
+      .join("");
+    return `<div class="section badge-hero" data-section="badgeHero">
+      <div class="hero-well"><svg class="hero-art" viewBox="-54 -54 108 108" aria-hidden="true"></svg><div class="hero-meta"></div></div>
+      <div class="modes" role="group" aria-label="Badge mode">${modes}</div></div>`;
+  }
+
+  /** The big badge and its description, following hover previews. */
+  renderBadgeHero() {
+    const hero = this.shadowRoot.querySelector(".badge-hero");
+    if (!hero) return;
+    const ch = this.effective();
+    const b = ch.badge;
+    const t = resolveTreatment(ch);
+    const sig = `${lookKey(ch)}|${this.preview ? "p" : ""}`;
+    if (hero.dataset.sig === sig) return;
+    hero.dataset.sig = sig;
+    hero.querySelector(".hero-art").innerHTML = renderBadge(b, { treatment: t });
+    const l = b.layers[0];
+    const name = (table, id) => byId(table, id)?.name || id;
+    const finish = b.finish === "auto" ? `${name(FINISHES, t.finish)} · matches armour` : name(FINISHES, b.finish);
+    const metal = b.finish === "auto" ? name(METALS, t.metal) : name(METALS, l.metal);
+    const worn = b.placements.length
+      ? `<span class="hero-worn">Worn on ${b.placements.map((p) => esc(name(PLACEMENTS, p))).join(" · ")}</span>`
+      : `<span class="hero-worn off">Not worn · choose a placement</span>`;
+    hero.querySelector(".hero-meta").innerHTML =
+      `<span class="hero-kicker${this.preview ? " preview" : ""}">${this.preview ? "Preview" : "Your badge"}</span>` +
+      `<span class="hero-name">${esc(name(SYMBOLS, l.symbol))}</span>` +
+      `<span class="hero-parts">${esc(name(FRAMES, l.frame))} · ${esc(name(ENAMELS, l.enamel))} · ${esc(metal)}</span>` +
+      `<span class="hero-finish">${esc(finish)}</span>${worn}`;
+  }
+
+  /** Standard / variant choice under the armour grid. */
+  variantHtml() {
+    const ch = this.character;
+    const v = ARMOR_STYLES[ch.armorIndex | 0]?.variant;
+    if (!v) return "";
+    const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+    const lock = st.unlocked
+      ? `<span class="vdesc">${esc(v.desc)}</span>`
+      : `<span class="vlock"><span class="lock caption amber">${I.lock}${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></span>`;
+    return (
+      `<span class="vlabel">Variant</span>` +
+      `<button class="chip${ch.armorVariant ? "" : " on"}" role="radio" aria-checked="${!ch.armorVariant}" data-variant="0" tabindex="-1">Standard</button>` +
+      `<button class="chip${ch.armorVariant ? " on" : ""}${st.unlocked ? "" : " locked"}" role="radio" aria-checked="${!!ch.armorVariant}" data-variant="1" tabindex="-1"${st.unlocked ? "" : ` aria-disabled="true" title="${esc(st.hint)}"`}>${st.unlocked ? "" : `<span class="lk" aria-hidden="true">${I.lock}</span>`}${esc(v.name)}</button>` +
+      lock
+    );
   }
 
   /** Requirement rows for locked tiles (cards carry their own). One row per distinct rule. */
@@ -1820,15 +2145,37 @@ class AgentShowroom extends HTMLElement {
     const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
     const tick = `<span class="tick" aria-hidden="true">${I.check}</span>`;
     const tier = item.tier ? `<span class="tier" aria-hidden="true">${[1, 2, 3].map((t) => `<i class="${t <= item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
+    // Locked badge and gear tiles: amber lock corner, rule in the tooltip, progress along the foot.
+    const lockAttr = locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : "";
+    const lockMark = locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : "";
+    const prog = locked ? `<span class="tprog bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span>` : "";
     switch (s.kind) {
+      case "badgePreset":
+      case "symbol":
+      case "frame":
+      case "finish": {
+        const auto = s.kind === "finish" && item.id === "auto";
+        const note = auto ? `<span class="onote"></span>` : "";
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr || ` title="${esc(item.name)}"`}>${tick}${lockMark}<span class="thumb badge-tile" data-thumb="badge"></span><span class="oname">${esc(auto ? "Auto" : item.name)}</span>${note}${prog}</button>`;
+      }
+      case "enamel":
+        return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "metal":
+        return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:linear-gradient(135deg, ${item.ramp[0]}, ${item.ramp[1]} 42%, ${item.ramp[2]} 78%, ${item.ramp[3]})"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "gear": {
+        const thumb =
+          item.id === "none"
+            ? `<span class="thumb empty" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="m7 17 10-10"/></svg></span>`
+            : `<span class="thumb" data-thumb="gear" data-slot="${s.key.slice(4)}"></span>`;
+        const perk = item.perk ? `<span class="gperk">${esc(item.perk)}</span>` : "";
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}${thumb}<span class="oname">${esc(item.name)}</span>${tier}${perk}${prog}</button>`;
+      }
       case "eye":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "palette":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span></button>`;
-      case "badge":
-        return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}">${tick}<span class="badge-tile" aria-hidden="true">${item.icon ? `<svg viewBox="-6.5 -6.5 13 13">${badgeIcon(item.icon, "var(--accent)", "#070b11")}</svg>` : `<span class="oname" style="color:var(--faint)">None</span>`}</span><span class="oname">${esc(item.name)}</span></button>`;
       case "origin":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="row"><span class="oname">${esc(item.name)}</span></span><span class="desc">${esc(item.desc)}</span><span class="perk caption cyan">${esc(item.perk)}</span></button>`;
       case "voice":
@@ -1883,9 +2230,40 @@ class AgentShowroom extends HTMLElement {
         case "rifle":
           thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });
           break;
+        case "gear":
+          thumb.innerHTML = buildAgentSvg(variant, { view: GEAR_VIEW[thumb.dataset.slot], idPrefix: id, lighting: "flat", realistic });
+          break;
+        case "badge": {
+          const t = resolveTreatment(ch);
+          thumb.innerHTML = `<svg viewBox="-54 -54 108 108">${renderBadge(variant.badge, { treatment: t, detail: "low" })}</svg>`;
+          const note = opt.querySelector(".onote");
+          if (note) note.textContent = byId(FINISHES, t.finish)?.name || t.finish;
+          break;
+        }
         default:
       }
     });
+    const autoMetal = this.shadowRoot.querySelector('.content [data-note="auto-metal"]');
+    if (autoMetal) {
+      autoMetal.hidden = ch.badge.finish !== "auto";
+      autoMetal.closest(".section").classList.toggle("muted", ch.badge.finish === "auto");
+    }
+    this.shadowRoot.querySelectorAll(".content .chip[data-placement]").forEach((chip) => {
+      const on = ch.badge.placements.includes(chip.dataset.placement);
+      chip.classList.toggle("on", on);
+      chip.setAttribute("aria-checked", String(on));
+    });
+    const variantBox = this.shadowRoot.querySelector(".content .variant");
+    if (variantBox) {
+      const html = this.variantHtml();
+      if (variantBox.dataset.html !== html) {
+        const focused = this.shadowRoot.activeElement?.dataset?.variant;
+        variantBox.innerHTML = html;
+        variantBox.dataset.html = html;
+        if (focused != null) variantBox.querySelector(`[data-variant="${focused}"]`)?.focus({ preventScroll: true });
+      }
+    }
+    this.renderBadgeHero();
     const spin = this.shadowRoot.querySelector(".rifle-hero .spin");
     if (spin && (force || spin.dataset.sig !== sig)) {
       spin.dataset.sig = sig;
