@@ -34,6 +34,33 @@ describe("voxel physics", () => {
     expect(r.z).toBe(32); expect(r.hitX).toBe(true);
   });
 
+  it("keeps the step-up flag when a later axis settles back down", () => {
+    const w = flat();
+    w.set(12, 10, 32, 1); // X climbs onto this
+    w.set(12, 11, 33, 1); // then Y is blocked at the new head height and steps again, over a hole
+    const r = moveAABB(w, body(11.5, 10.5, 32), 0.6, 2.0, 0);
+    expect(r.z).toBe(33);
+    expect(r.stepped).toBe(true);
+  });
+
+  it("stops flush on the far side of a wall moving in -x", () => {
+    const w = flat();
+    for (let z = 32; z < 35; z++) w.set(20, 10, z, 1);
+    const r = moveAABB(w, body(24.5, 10.5, 32), -9, 0, 0);
+    expect(r.hitX).toBe(true);
+    expect(r.x).toBeGreaterThan(21 + 0.3); // the block ends at 21; never inside it
+    expect(r.x).toBeCloseTo(21.3, 3);
+  });
+
+  it("ground height takes the tallest column a footprint straddles", () => {
+    const w = flat();
+    w.set(11, 11, 32, 1);
+    w.set(12, 11, 32, 1); w.set(12, 11, 33, 1);
+    w.set(11, 12, 32, 1);
+    expect(groundHeight(w, 12, 12, 0.3)).toBe(34); // straddles all four; (12,11) is the tallest
+    expect(groundHeight(w, 12.5, 12.5, 0.3)).toBe(32); // only (12,12), bare ground
+  });
+
   it("falls onto the ground and reports grounded; a ceiling block stops a jump", () => {
     const w = flat();
     let r = moveAABB(w, body(10.5, 10.5, 35), 0, 0, -10);

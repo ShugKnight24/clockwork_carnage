@@ -29,11 +29,17 @@ export function aabbOverlapsSolid(world, x, y, z, half, height) {
   return false;
 }
 
+/** z just above the highest solid block in a column (0 when the column holds none). */
+function columnTop(world, x, y) {
+  for (let z = World.H - 1; z >= 0; z--) if (isSolid(world.get(x, y, z))) return z + 1;
+  return 0;
+}
+
 /** Highest solid top under the footprint (0 if none). */
 export function groundHeight(world, x, y, half) {
   let g = 0;
   const x0 = Math.floor(x - half), x1 = Math.floor(x + half - EPS), y0 = Math.floor(y - half), y1 = Math.floor(y + half - EPS);
-  for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) g = Math.max(g, world.topSolid(bx, by) + 1);
+  for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) g = Math.max(g, columnTop(world, bx, by));
   return g;
 }
 
@@ -58,23 +64,25 @@ function contactPos(b, axis, v, dir) {
 /**
  * Move `b` along one axis, stopping against the first block in the way. Travels in
  * sub-steps no longer than SUBSTEP so a fast body cannot tunnel, and only ever
- * leaves `b` somewhere `aabbOverlapsSolid` calls free.
+ * leaves `b` somewhere `aabbOverlapsSolid` calls free. A body that starts inside a
+ * solid has nothing to rest against, so it is reported blocked and left where it is —
+ * this never pushes a body out of a block.
  * @returns {boolean} true when something blocked the move
  */
 function sweepAxis(world, b, axis, delta) {
   const key = AXES[axis];
+  const start = b[key];
   const n = Math.max(1, Math.ceil(Math.abs(delta) / SUBSTEP));
   const s = delta / n;
-  let pos = b[key];
+  let pos = start;
   for (let i = 0; i < n; i++) {
     const next = pos + s;
     if (!overlapsAt(world, b, axis, next)) { pos = next; continue; }
     const flush = contactPos(b, axis, next, Math.sign(s));
-    // A body that started out inside a block has no face to rest against: keep the last good spot.
     b[key] = overlapsAt(world, b, axis, flush) ? pos : flush;
     return true;
   }
-  b[key] = pos;
+  b[key] = start + delta; // the whole move landed: take the exact destination, not the summed sub-steps
   return false;
 }
 
@@ -87,13 +95,15 @@ export function moveAABB(world, body, dx, dy, dz, { step = PLAYER.step } = {}) {
   const b = { x: body.x, y: body.y, z: body.z, half: body.half, height: body.height };
   const out = { hitX: false, hitY: false, hitZ: false, grounded: false, stepped: false };
   // Only a body that is standing on something may climb; one in mid-air just hits the wall.
-  const supported = aabbOverlapsSolid(world, b.x, b.y, b.z - SUPPORT, b.half, b.height);
+  const supported = (p) => aabbOverlapsSolid(world, p.x, p.y, p.z - SUPPORT, b.half, b.height);
 
   const sweepWithStep = (axis, delta) => {
     const key = AXES[axis];
     const from = { x: b.x, y: b.y, z: b.z };
+    // Asked per axis: an earlier axis may have stepped the body up, or off a ledge.
+    const onGround = supported(from);
     const blocked = sweepAxis(world, b, axis, delta);
-    if (!blocked || step <= 0 || !supported) return blocked;
+    if (!blocked || step <= 0 || !onGround) return blocked;
     const gained = Math.abs(b[key] - from[key]);
     // Retry the move one step higher, then drop back onto whatever is up there.
     const up = { x: from.x, y: from.y, z: from.z + step, half: b.half, height: b.height };
@@ -102,14 +112,14 @@ export function moveAABB(world, body, dx, dy, dz, { step = PLAYER.step } = {}) {
     if (Math.abs(up[key] - from[key]) <= gained + EPS) return true; // the obstacle is more than one block tall
     sweepAxis(world, up, 2, -step);
     b.x = up.x; b.y = up.y; b.z = up.z;
-    out.stepped = up.z > from.z + EPS;
+    out.stepped ||= up.z > from.z + EPS; // a later axis settling back down does not undo an earlier climb
     return blockedUp;
   };
 
   if (dx !== 0) out.hitX = sweepWithStep(0, dx);
   if (dy !== 0) out.hitY = sweepWithStep(1, dy);
   if (dz !== 0) out.hitZ = sweepAxis(world, b, 2, dz);
-  out.grounded = (out.hitZ && dz < 0) || aabbOverlapsSolid(world, b.x, b.y, b.z - SUPPORT, b.half, b.height);
+  out.grounded = (out.hitZ && dz < 0) || supported(b);
   return { x: b.x, y: b.y, z: b.z, ...out };
 }
 
