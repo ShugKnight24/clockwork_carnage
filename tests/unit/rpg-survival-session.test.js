@@ -171,3 +171,67 @@ describe("placed flags are world-local", () => {
     expect(s.tickBreak(1e6, DIRT, DIRT_ID).broke).toBe(false);
   });
 });
+
+describe("tool wear", () => {
+  const withPick = () => {
+    const s = session();
+    s.inventory.add("pick_stone", 1);
+    return s;
+  };
+  const mineOnce = (s) => {
+    s.beginBreak(DIRT, DIRT_ID);
+    return s.tickBreak(1e6, DIRT, DIRT_ID);
+  };
+
+  it("costs one durability per block broken", () => {
+    const s = withPick();
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+    mineOnce(s);
+    expect(s.inventory.slots[slot].dur).toBe(119);
+    mineOnce(s);
+    expect(s.inventory.slots[slot].dur).toBe(118);
+  });
+
+  it("reports worn exactly once, on the break that empties it", () => {
+    const s = withPick();
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+    s.inventory.wearSlot(slot, 118); // 120 - 118 = 2 uses left
+    expect(mineOnce(s).worn).toBe(false);   // down to 1, not empty yet
+    expect(s.inventory.slots[slot].dur).toBe(1);
+    expect(mineOnce(s).worn).toBe(true);    // this is the one that empties it
+    expect(s.inventory.slots[slot].dur).toBe(0);
+    expect(mineOnce(s).worn).toBe(false);   // already worn, not reported again
+  });
+
+  it("falls back to bare hands once worn, so breaking gets slower", () => {
+    const s = withPick();
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+    const fast = breakTime(DIRT_ID, 1, TOOLS.PICK_STONE);
+    s.beginBreak(DIRT, DIRT_ID);
+    expect(s.breaking.need).toBeCloseTo(fast, 5);
+    s.cancelBreak();
+
+    s.inventory.wearSlot(slot, 120);
+    s.beginBreak(DIRT, DIRT_ID);
+    expect(s.breaking.need).toBeCloseTo(breakTime(DIRT_ID, 1, TOOLS.HAND), 5);
+  });
+
+  it("grants no wear at all bare-handed", () => {
+    const s = session();
+    expect(mineOnce(s).worn).toBe(false);
+    expect(s.inventory.slots.every((x) => !x || x.dur == null)).toBe(true);
+  });
+
+  // Review Focus 4
+  it("does not wear a slot whose tool the player crafted away mid-break", () => {
+    const s = withPick();
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+    s.beginBreak(DIRT, DIRT_ID);
+    s.inventory.remove("pick_stone", 1);   // gone mid-hold
+    s.inventory.add("stone", 4);           // something else now occupies the slot
+    const res = s.tickBreak(1e6, DIRT, DIRT_ID);
+    expect(res.broke).toBe(true);
+    expect(s.inventory.slots[slot]?.dur).toBe(undefined); // the stone was not "worn"
+    expect(s.inventory.count("stone")).toBe(4);
+  });
+});

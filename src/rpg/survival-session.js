@@ -15,6 +15,9 @@ import { availableRecipes } from "./recipes.js";
 
 const CELLS = World.W * World.D * World.H;
 
+/** Durability spent per block broken. */
+const WEAR_PER_BLOCK = 1;
+
 export class SurvivalSession {
   constructor({ skills, inventory } = {}) {
     this.skills = skills || new Skills();
@@ -126,11 +129,23 @@ export class SurvivalSession {
     this.clearPlaced(x, y, z);
     this.cancelBreak();
 
+    // Wear the tool that actually started this break. The slot is re-checked
+    // because the player may have crafted it away while holding the button.
+    let worn = false;
+    const ts = b.toolSlot;
+    if (ts >= 0) {
+      const slot = this.inventory.slots[ts];
+      if (slot && slot.item === b.toolItem && slot.dur > 0) {
+        worn = this.inventory.wearSlot(ts, WEAR_PER_BLOCK) === 0;
+      }
+    }
+
     return {
       broke: true,
       drop,
       xp: placedByPlayer ? 0 : xpFor(b.blockId),
       leveled: granted?.leveled ?? false,
+      worn,
     };
   }
 
