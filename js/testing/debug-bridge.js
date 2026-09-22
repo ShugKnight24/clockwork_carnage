@@ -81,6 +81,34 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
+    // ── Voxel level building ──────────────────────────────
+    // The Forge is mouse-driven; these reach the same world directly so a
+    // test can lay out geometry and spawns without aiming a cursor at it.
+
+    /** Set one block in the live voxel world. @returns {boolean} it changed */
+    setBlock(x, y, z, id = 1) {
+      const world = game.world || game.builder?.world;
+      return world ? world.set(x, y, z, id) : false;
+    },
+
+    /** Add an enemy spawn marker for the next play-test. @returns {number} count */
+    addEnemySpawn(x, y, z, type = "drone") {
+      const world = game.world || game.builder?.world;
+      if (!world) return 0;
+      const list = world.meta.enemySpawns || [];
+      list.push({ x, y, z, type });
+      world.meta.enemySpawns = list;
+      return list.length;
+    },
+
+    /** Move where a play-test drops the player in. */
+    setVoxelSpawn(x, y, z, yaw = 0) {
+      const world = game.world || game.builder?.world;
+      if (!world) return null;
+      world.meta.spawn = { x, y, z, yaw };
+      return { ...world.meta.spawn };
+    },
+
     async startBuilderPlayTest() {
       game.audio.init();
       // startBuilder lazy-loads the builder chunk on first use.
@@ -184,6 +212,12 @@ export function createDebugBridge(game) {
       return {
         x: game.player.x,
         y: game.player.y,
+        // Voxel levels give the player a third axis; a grid level leaves these
+        // at zero.
+        z: game.player.z || 0,
+        vz: game.player.vz || 0,
+        pitch: game.player.pitch || 0,
+        grounded: !!game.player.grounded,
         angle: game.player.angle,
         aimOffsetX: game.player.aimOffsetX || 0,
         aimOffsetY: game.player.aimOffsetY || 0,
@@ -274,6 +308,7 @@ export function createDebugBridge(game) {
           type: e.enemyType,
           x: e.x,
           y: e.y,
+          z: e.z || 0,
           health: e.health,
           state: e.state,
           windupLeftMs: e._windupLeftMs || 0,

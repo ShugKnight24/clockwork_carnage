@@ -35,8 +35,9 @@ export function attackWindupMs(def) {
 /**
  * Enter the telegraph. The attack cooldown starts here, so the windup sits
  * inside the existing attackRate and overall damage output is unchanged.
+ * Exported so the voxel AI telegraphs attacks on exactly the same clock.
  */
-function beginWindup(e, time) {
+export function beginWindup(e, time) {
   const ms = attackWindupMs(e.def);
   e.state = "windup";
   e.stateTime = 0;

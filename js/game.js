@@ -75,6 +75,14 @@ import {
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
+import { VoxelAISystem, ENEMY_SIGHT_OFFSET } from "../src/systems/voxel-ai.js";
+import {
+  PLAYER as VOXEL_PLAYER,
+  aabbOverlapsSolid,
+  groundHeight,
+  hasLineOfSight3D,
+  playerEyeZ3D,
+} from "../src/world/voxel-physics.js";
 import {
   getDifficultyMultipliers as _getDifficultyMultipliers,
   filterArenaSpawns,
@@ -365,6 +373,7 @@ export class Game {
     this._prevCrouchKey = false;
     this.playerUpdateSystem = new PlayerUpdateSystem();
     this.aiSystem = new AISystem();
+    this.voxelAiSystem = new VoxelAISystem();
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
@@ -2106,25 +2115,36 @@ export class Game {
         settings: this.settings,
         mode: this.mode,
         map: this.map,
+        // A voxel level has blocks instead of a grid: the system sweeps the
+        // player's body through them, with gravity, jumping and pitch.
+        world: this.world,
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
-        // A voxel level has no grid to test against. Noclip skips every
-        // `isPassable` call, so the play-test walks a flat plane until Task 10
-        // gives the player the voxel physics body.
-        noclip: !!this._noclip || !!this.world,
+        noclip: !!this._noclip,
       },
       dt,
     );
     if (flags) {
       if (flags.tutorialSlid) this.tutorialSlid = true;
       if (flags.tutorialCrouched) this.tutorialCrouched = true;
+      if (flags.fallDamage > 0) this.damagePlayer(flags.fallDamage);
     }
     // Smooth ADS FOV transition — must run every frame
     updateAdsFov(this.player, dt);
   }
 
+  /**
+   * Is the cell walkable? A voxel column has no single answer, so it gives the
+   * one the 2D callers are really asking for: could a body stand on top of it.
+   */
   isPassable(mx, my) {
-    if (this.world) return true; // TODO(Task 10): answer from the voxel column
+    if (this.world) {
+      const z = this.world.topSolid(mx, my) + 1;
+      if (z <= 0) return false; // an empty column has no floor to stand on
+      return !aabbOverlapsSolid(
+        this.world, mx + 0.5, my + 0.5, z, VOXEL_PLAYER.half, VOXEL_PLAYER.height,
+      );
+    }
     return _isPassable(this.map, mx, my);
   }
 
@@ -2179,14 +2199,15 @@ export class Game {
   }
 
   updateEnemies(dt) {
-    // TODO(Task 10): the AI navigates the grid map; a voxel level has none, so
-    // enemies hold position in a play-test until it learns the world.
-    if (this.world) return;
-    const fx = this.aiSystem.update(
+    // Same context, same effects, two navigators: the grid AI walks `map`,
+    // the voxel one sweeps bodies through `world`.
+    const ai = this.world ? this.voxelAiSystem : this.aiSystem;
+    const fx = ai.update(
       {
         entities: this.entities,
         player: this.player,
         map: this.map,
+        world: this.world,
         time: this.time,
         timeScale: this.timeScale,
         projectiles: this.projectiles,
@@ -2208,8 +2229,18 @@ export class Game {
     this._chronoBombs = this._chronoBombs.filter((b) => b.active);
   }
 
+  /**
+   * Clear sight between two ground positions. The signature carries no
+   * heights, which a voxel level needs: the source looks out from the middle
+   * of a body standing on its own column, the target is the player's eye —
+   * the pair every caller means.
+   */
   hasLineOfSight(x1, y1, x2, y2) {
-    if (this.world) return true; // TODO(Task 10): hasLineOfSight3D against the world
+    if (this.world) {
+      const z1 =
+        groundHeight(this.world, x1, y1, VOXEL_PLAYER.half) + ENEMY_SIGHT_OFFSET;
+      return hasLineOfSight3D(this.world, x1, y1, z1, x2, y2, playerEyeZ3D(this.player));
+    }
     return _hasLineOfSight(this.map, x1, y1, x2, y2);
   }
 

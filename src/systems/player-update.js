@@ -1,11 +1,24 @@
 // ─── Player Update System ───────────────────────────────────────────────────
 // Player movement: WASD, dash, sprint, crouch, slide, mouse look.
 // Owns _prevCrouchKey state for edge detection.
+//
+// Two worlds, one set of speeds: on the raycaster's grid the player slides
+// along walls with a per-axis `isPassable` test and the mouse drives the
+// free-aim reticle; in a voxel level (`ctx.world`) the same horizontal intent
+// goes through the swept AABB, gravity and the jump key make the third axis
+// real, and the mouse drives yaw and pitch directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
 import { clamp, decay } from "../utils/math.js";
 import { applyAimDelta, recenterAim } from "./aim.js";
-import { PLAYER_ADS_MOVE_MULT, PLAYER_MOUSE_TURN_RATE } from "../constants.js";
+import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
+import {
+  PLAYER_ADS_MOVE_MULT,
+  PLAYER_MOUSE_TURN_RATE,
+  PLAYER_PITCH_LIMIT,
+  PLAYER_VOXEL_LOOK_SENSITIVITY,
+  PLAYER_FALL_DAMAGE_PER_BLOCK,
+} from "../constants.js";
 
 /**
  * Halo-style hybrid aim: mouse moves the reticle freely; on clamp, the
@@ -27,16 +40,40 @@ function applyMouseAim(p, mouse, settings) {
   return true;
 }
 
+/**
+ * Voxel look: the mouse aims the camera itself — yaw around, pitch up and
+ * down — the way the Forge flies. There is no reticle to push first, so the
+ * caller never recenters one.
+ */
+function applyVoxelLook(p, mouse, settings) {
+  const sens = (settings.sensitivity || 1) * PLAYER_VOXEL_LOOK_SENSITIVITY;
+  p.angle += mouse.dx * sens * (settings.invertX ? -1 : 1);
+  p.pitch = clamp(
+    (p.pitch || 0) - mouse.dy * sens * (settings.invertY ? -1 : 1),
+    -PLAYER_PITCH_LIMIT,
+    PLAYER_PITCH_LIMIT,
+  );
+  mouse.dx = 0;
+  mouse.dy = 0;
+  return true;
+}
+
+/** Whichever look model this level uses. @returns {boolean} the mouse moved */
+function applyLook(p, mouse, settings, world) {
+  return world ? applyVoxelLook(p, mouse, settings) : applyMouseAim(p, mouse, settings);
+}
+
 export class PlayerUpdateSystem {
   _prevCrouchKey = false;
 
   /**
-   * @param {{ player, keys, keybinds, mouse, settings, mode, map, audio }} ctx
+   * @param {{ player, keys, keybinds, mouse, settings, mode, map, audio, world? }} ctx
+   *   `world` switches the whole method to voxel movement and camera pitch.
    * @param {number} dt
-   * @returns {{ tutorialSlid?: boolean, tutorialCrouched?: boolean } | null}
+   * @returns {{ tutorialSlid?: boolean, tutorialCrouched?: boolean, fallDamage?: number } | null}
    */
   update(ctx, dt) {
-    const { player: p, keys, keybinds: kb, mouse, settings, mode, map, audio, noclip, voiceProfile } = ctx;
+    const { player: p, keys, keybinds: kb, mouse, settings, mode, audio, world, voiceProfile } = ctx;
     let moveX = 0, moveY = 0;
     const cos = Math.cos(p.angle);
     const sin = Math.sin(p.angle);
@@ -56,14 +93,10 @@ export class PlayerUpdateSystem {
         moveY = p.dashDirY * dashSpeed * dt;
 
         // Collision detection (dash)
-        const margin = 0.2;
-        const newX = p.x + moveX;
-        const newY = p.y + moveY;
-        if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
-        if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+        flags = this._applyMove(ctx, moveX, moveY, dt, flags);
 
         // Mouse free-aim during dash; edge overflow still turns camera.
-        applyMouseAim(p, mouse, settings);
+        applyLook(p, mouse, settings, world);
         if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
         if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
 
@@ -147,11 +180,7 @@ export class PlayerUpdateSystem {
         moveY = p.slideDirY * slideSpeed * dt;
 
         // Collision (slide)
-        const margin = 0.2;
-        const newX = p.x + moveX;
-        const newY = p.y + moveY;
-        if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
-        if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+        flags = this._applyMove(ctx, moveX, moveY, dt, flags);
 
         // Camera tilt during slide — lean into the turn
         p.cameraTilt = (p.cameraTilt || 0) + (0.08 - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
@@ -218,7 +247,7 @@ export class PlayerUpdateSystem {
     p.weaponSwayX += (p.weaponSwayTargetX * swayScale - p.weaponSwayX) * swaySpring;
     p.weaponSwayY += (p.weaponSwayTargetY * swayScale - p.weaponSwayY) * swaySpring;
 
-    const aimed = applyMouseAim(p, mouse, settings);
+    const aimed = applyLook(p, mouse, settings, world);
     // Recenter only while the player is moving (walking/strafing) and not
     // touching the mouse. Holding still + aiming keeps the reticle parked
     // exactly where the player put it — bullets fly there.
@@ -229,13 +258,87 @@ export class PlayerUpdateSystem {
     if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
 
     // Collision detection and movement
+    flags = this._applyMove(ctx, moveX, moveY, dt, flags);
+
+    this._prevCrouchKey = crouchHeld;
+    return flags;
+  }
+
+  /**
+   * Commit one frame of horizontal intent. On the grid each axis is tested
+   * separately so the player slides along walls; in a voxel level the whole
+   * body sweeps through the world and the vertical axis comes alive.
+   * @returns {object|null} `flags`, with `fallDamage` added if a landing hurt
+   */
+  _applyMove(ctx, moveX, moveY, dt, flags) {
+    const { player: p, map, noclip, world } = ctx;
+    if (world) return this._applyVoxelMove(ctx, moveX, moveY, dt, flags);
+
     const margin = 0.2;
     const newX = p.x + moveX;
     const newY = p.y + moveY;
     if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
     if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+    return flags;
+  }
 
-    this._prevCrouchKey = crouchHeld;
+  /**
+   * Voxel movement: the swept AABB, gravity, the jump key and the crouch
+   * stance. Fall damage lands in `flags` because the play-test owns the
+   * health bar, not this system.
+   */
+  _applyVoxelMove(ctx, moveX, moveY, dt, flags) {
+    const { player: p, keys, keybinds: kb, mode, noclip, world } = ctx;
+    if (p.z == null) p.z = 0;
+    if (noclip) {
+      p.x += moveX;
+      p.y += moveY;
+      p.vz = 0;
+      p.grounded = false;
+      return flags;
+    }
+
+    // Standing up takes headroom. Under a low ceiling the stance stays
+    // crouched rather than pushing the body into the blocks above it.
+    const lowered = p.isCrouching || p.isSliding;
+    const canStand =
+      !lowered && !aabbOverlapsSolid(world, p.x, p.y, p.z, PLAYER.half, PLAYER.height);
+    const height = canStand ? PLAYER.height : PLAYER.crouchHeight;
+    // A forced crouch holds the camera down with the body; letting the stance
+    // ease back up would raise the eye into the ceiling.
+    if (!lowered && !canStand) p.crouchBlend = 1;
+
+    if (p.grounded && !p.isSliding && keys[kb?.jump || "Space"]) {
+      p.vz = PLAYER.jump;
+      p.grounded = false;
+    }
+    p.vz = (p.vz || 0) - PLAYER.gravity * dt;
+
+    const res = moveAABB(
+      world,
+      { x: p.x, y: p.y, z: p.z, half: PLAYER.half, height },
+      moveX, moveY, p.vz * dt,
+    );
+    const wasAirborne = !p.grounded;
+    p.x = res.x;
+    p.y = res.y;
+    p.z = res.z;
+    p.grounded = res.grounded;
+    if (res.grounded && p.vz <= 0) p.vz = 0;
+    else if (res.hitZ && p.vz > 0) p.vz = 0; // cracked the head on a ceiling
+
+    // Fall damage: measured from the height the feet left the ground at, so a
+    // jump only hurts when it takes the player off something tall.
+    if (!res.grounded) {
+      if (!wasAirborne) p._fallFrom = p.z;
+      return flags;
+    }
+    const drop = (p._fallFrom ?? p.z) - p.z;
+    p._fallFrom = p.z;
+    if (wasAirborne && mode === "playtest" && drop > PLAYER.fallDamageFrom) {
+      flags = flags || {};
+      flags.fallDamage = (drop - PLAYER.fallDamageFrom) * PLAYER_FALL_DAMAGE_PER_BLOCK;
+    }
     return flags;
   }
 

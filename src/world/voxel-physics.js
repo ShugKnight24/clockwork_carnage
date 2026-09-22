@@ -18,6 +18,16 @@ const SUPPORT = 0.05;
 
 const AXES = ["x", "y", "z"];
 
+/**
+ * Eye height of a player whose feet are at `z`, riding the crouch blend the
+ * same way the camera and the raycaster's `playerEyeZ` do. Sight lines — the
+ * camera's, the enemies' — all start here.
+ */
+export function playerEyeZ3D(player) {
+  const t = Math.min(1, Math.max(0, player.crouchBlend || 0));
+  return (player.z || 0) + PLAYER.eye + (PLAYER.crouchEye - PLAYER.eye) * t;
+}
+
 /** Any solid block inside the box [x±half, y±half, z..z+height)? */
 export function aabbOverlapsSolid(world, x, y, z, half, height) {
   const x0 = Math.floor(x - half), x1 = Math.floor(x + half - EPS);

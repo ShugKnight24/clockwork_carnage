@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { World } from "../../src/world/world.js";
 import { generateWorld } from "../../src/world/world-gen.js";
-import { PLAYER, aabbOverlapsSolid, moveAABB, groundHeight, raycastBlocks, hasLineOfSight3D } from "../../src/world/voxel-physics.js";
+import { PLAYER, aabbOverlapsSolid, moveAABB, groundHeight, raycastBlocks, hasLineOfSight3D, playerEyeZ3D } from "../../src/world/voxel-physics.js";
 
 const flat = () => generateWorld({ terrain: false });
 const body = (x, y, z) => ({ x, y, z, half: PLAYER.half, height: PLAYER.height });
@@ -93,6 +93,14 @@ describe("voxel physics", () => {
     for (let z = 32; z < 36; z++) for (let y = 8; y < 13; y++) if (!(z === 33 && y === 10)) w.set(15, y, z, 1);
     expect(hasLineOfSight3D(w, 10.5, 10.5, 33.5, 20.5, 10.5, 33.5)).toBe(true);
     expect(hasLineOfSight3D(w, 10.5, 10.5, 32.5, 20.5, 10.5, 32.5)).toBe(false);
+  });
+
+  it("eye height rides the crouch blend", () => {
+    expect(playerEyeZ3D({ x: 0, y: 0, z: 32 })).toBeCloseTo(32 + PLAYER.eye, 5);
+    expect(playerEyeZ3D({ z: 32, crouchBlend: 1 })).toBeCloseTo(32 + PLAYER.crouchEye, 5);
+    expect(playerEyeZ3D({ z: 32, crouchBlend: 0.5 })).toBeCloseTo(
+      32 + (PLAYER.eye + PLAYER.crouchEye) / 2, 5,
+    );
   });
 
   it("placement refused when it overlaps the player AABB", () => {

@@ -44,6 +44,18 @@ export const PLAYER_AIM_LIMIT_Y = 0.30;
 export const PLAYER_AIM_SENSITIVITY = 0.0017;
 export const PLAYER_MOUSE_TURN_RATE = 0.002;
 
+/** How far the camera may look up or down in a voxel level, in radians.
+ *  Straight up reads as broken, so it stops just short of it. */
+export const PLAYER_PITCH_LIMIT = (85 * Math.PI) / 180;
+
+/** Radians of yaw/pitch per pixel of mouse motion in a voxel level, before the
+ *  player's sensitivity setting scales it. No reticle there: the mouse aims
+ *  the camera itself. */
+export const PLAYER_VOXEL_LOOK_SENSITIVITY = 0.002;
+
+/** Damage per block fallen beyond `PLAYER.fallDamageFrom`. */
+export const PLAYER_FALL_DAMAGE_PER_BLOCK = 5;
+
 /** Reticle decay rate when player is walking (per second). Gentle: bullets
  *  always land exactly where the crosshair was painted; recenter just
  *  smooths the reticle back as the player runs forward. */

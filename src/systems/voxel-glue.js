@@ -3,7 +3,7 @@
 // no game state, so it is unit-testable without a browser.
 
 import { getArtStyle, ART_LEGACY, ART_REALISTIC } from "../rendering/art-style.js";
-import { PLAYER, aabbOverlapsSolid } from "../world/voxel-physics.js";
+import { PLAYER, aabbOverlapsSolid, playerEyeZ3D } from "../world/voxel-physics.js";
 import { World } from "../world/world.js";
 
 /**
@@ -25,12 +25,10 @@ export function styleName(style = getArtStyle()) {
  * @param {number} [fovDeg] effective FOV (ADS/sprint) when the caller has one
  */
 export function camFromPlayer(player, settings = {}, fovDeg = settings.fov || 70) {
-  const t = Math.min(1, Math.max(0, player.crouchBlend || 0));
-  const eye = PLAYER.eye + (PLAYER.crouchEye - PLAYER.eye) * t;
   return {
     x: player.x,
     y: player.y,
-    z: (player.z || 0) + eye,
+    z: playerEyeZ3D(player),
     yaw: player.angle || 0,
     pitch: player.pitch || 0,
     fovDeg,

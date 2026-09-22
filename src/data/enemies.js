@@ -14,6 +14,11 @@
 //
 // First zone matched (top→bottom order) wins. Fallback = "body" with mult 1.
 //
+// `flying: true` marks a def whose renderer draws it off the ground (the drone
+// spheres hover and bob). In a voxel level VoxelAISystem keeps a flyer at its
+// spawn altitude instead of walking it along the floor; everything without the
+// flag falls, walks and steps up like the player. The raycast levels ignore it.
+//
 // Defaults provided for ranged-class enemies (head + body); melee/swarm use a
 // looser body-only profile so headshots aren't over-rewarded vs glass cannons.
 const HUMANOID_ZONES = [
@@ -52,6 +57,7 @@ export const ENEMY_TYPES = {
     xp: 10,
     attackType: "ranged",
     ai: "strafe_fire", // Orbits player while firing
+    flying: true,
     chronoMultiplier: 0.0, // Drones fully freeze during Chrono Shift
     hitZones: ROBOT_ZONES,
   },
@@ -344,6 +350,7 @@ export const ENEMY_TYPES = {
     xp: 28,
     attackType: "ranged",
     ai: "swarm",
+    flying: true,
     echoCloneOnDeath: true,
     cloneCount: 1,
     hitZones: ROBOT_ZONES,
