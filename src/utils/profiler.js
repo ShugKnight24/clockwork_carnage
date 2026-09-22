@@ -13,13 +13,14 @@
  * data and renders a live overlay with FPS graph, stacked budget bars,
  * and detailed phase breakdown.
  *
- * Render phases: raycast, vignette, weapon, effects, hud, overlays
+ * Render phases: raycast, voxel, vignette, weapon, effects, hud, overlays
  * Update phases: player, enemies, projectiles, pickups, misc
  */
 
 /** Phase keys and display colors */
 const RENDER_PHASES = [
   { key: "raycast", label: "ray", color: "rgba(0,100,255,0.5)" },
+  { key: "voxel", label: "vox", color: "rgba(0,170,220,0.5)" },
   { key: "vignette", label: "vig", color: "rgba(0,60,180,0.4)" },
   { key: "weapon", label: "wpn", color: "rgba(80,80,255,0.4)" },
   { key: "effects", label: "fx", color: "rgba(120,40,200,0.4)" },
