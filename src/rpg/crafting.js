@@ -46,7 +46,10 @@ function cloneInventory(inventory) {
 }
 
 /**
- * @returns {{ok:true,output:[string,number],leveled:boolean}|{ok:false,reason:string}}
+ * @returns {{ok:true, output:[string,number]|null, repaired:string|null,
+ *   leveled:boolean} | {ok:false, reason:string}}
+ *   `output` is null for a repair, which restores a worn tool instead of
+ *   yielding an item; `repaired` names that tool and is null otherwise.
  */
 export function craft(recipeId, inventory, skills) {
   const check = canCraft(recipeId, inventory, skills);

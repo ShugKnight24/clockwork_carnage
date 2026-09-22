@@ -157,3 +157,21 @@ describe("availableRecipes with a set of stations", () => {
     expect(ids).not.toContain("cast_energy");
   });
 });
+
+describe("a repair must never consume the tool it restores", () => {
+  it("keeps every repair's own tool out of its inputs", () => {
+    // craft() removes inputs most-worn-first, so a repair listing its own tool
+    // would consume the exact slot canCraft approved. findWorn would then miss,
+    // repairSlot(-1) would quietly return false, and craft would still report
+    // success — inputs gone, nothing repaired.
+    RECIPES.filter((r) => r.repairs).forEach((r) => {
+      expect(r.inputs.map(([id]) => id)).not.toContain(r.repairs);
+    });
+  });
+
+  it("points every repair at an item that can actually wear", () => {
+    RECIPES.filter((r) => r.repairs).forEach((r) => {
+      expect(itemById(r.repairs)?.durability).toBeGreaterThan(0);
+    });
+  });
+});
