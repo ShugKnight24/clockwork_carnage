@@ -178,3 +178,32 @@ describe("tool durability", () => {
     inv.slots.filter((s) => s).forEach((s) => expect(s.n).toBe(1));
   });
 });
+
+describe("ordering and repair robustness", () => {
+  it("orders material slots without relying on NaN coercion or sort stability", () => {
+    const inv = new Inventory();
+    for (let i = 0; i < 4; i++) inv.add("stone", 64);
+    // Every pairwise comparison between material slots must be exactly 0.
+    const wear = (i) => inv.slots[i].dur ?? Number.MAX_SAFE_INTEGER;
+    for (let a = 0; a < 4; a++) {
+      for (let b = 0; b < 4; b++) expect(wear(a) - wear(b)).toBe(0);
+    }
+    expect(inv._byWear("stone")).toEqual([0, 1, 2, 3]);
+    expect(inv.remove("stone", 70)).toBe(true);
+    expect(inv.count("stone")).toBe(186);
+  });
+
+  it("refuses to repair a slot whose item the table no longer knows", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.slots[0].item = "removed_in_a_later_build";
+    expect(() => inv.repairSlot(0)).not.toThrow();
+    expect(inv.repairSlot(0)).toBe(false);
+  });
+
+  it("refuses to repair a material slot", () => {
+    const inv = new Inventory();
+    inv.add("stone", 4);
+    expect(inv.repairSlot(0)).toBe(false);
+  });
+});

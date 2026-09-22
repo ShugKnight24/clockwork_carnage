@@ -162,7 +162,20 @@ Expected: PASS
 - [ ] **Step 5: Run the whole unit suite**
 
 Run: `npm run test:unit`
-Expected: FAIL is acceptable here ONLY in `rpg-inventory`/`rpg-crafting` if they assume every item stacks to 64 — Task 2 fixes that. Record exactly which tests fail and why. If anything else fails, stop and report.
+Expected: exactly ONE failure, at `tests/unit/rpg-items.test.js:28`, where the
+spec-1 loop asserts `i.stack === STACK_MAX` for every item. This design repeals
+that law (§1: "`STACK_MAX` stays 64; it becomes the default rather than the
+law"), so update that one assertion, in this task, to:
+
+```js
+expect(i.stack).toBe(i.durability === undefined ? STACK_MAX : 1);
+```
+
+which keeps the invariant exact rather than loosening it to `<= STACK_MAX`.
+
+`rpg-inventory` and `rpg-crafting` stay GREEN here — `Inventory` still reads the
+global `STACK_MAX` and ignores the per-item `stack` until Task 2 wires it. If
+anything beyond `rpg-items.test.js:28` fails, stop and report.
 
 - [ ] **Step 6: Commit**
 

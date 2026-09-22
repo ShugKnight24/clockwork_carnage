@@ -72,12 +72,18 @@ export class Inventory {
     return n - left;
   }
 
-  /** Matching slot indices, most worn first. Materials sort as if full. */
+  /**
+   * Matching slot indices, most worn first. Materials have no `dur` and sort
+   * as if full — via a finite sentinel, not Infinity, because subtracting two
+   * Infinities yields NaN and would leave material order resting on the
+   * engine coercing that to zero and on the sort being stable.
+   */
   _byWear(itemId) {
+    const wear = (i) => this.slots[i].dur ?? Number.MAX_SAFE_INTEGER;
     return this.slots
       .map((s, i) => (s && s.item === itemId ? i : -1))
       .filter((i) => i >= 0)
-      .sort((a, b) => (this.slots[a].dur ?? Infinity) - (this.slots[b].dur ?? Infinity));
+      .sort((a, b) => wear(a) - wear(b));
   }
 
   /**
@@ -109,7 +115,10 @@ export class Inventory {
   repairSlot(i) {
     const s = this.slots[i];
     if (!s || s.dur == null) return false;
-    s.dur = itemById(s.item).durability;
+    // A slot can outlive its item id if the table changes under a save.
+    const item = itemById(s.item);
+    if (!item?.durability) return false;
+    s.dur = item.durability;
     return true;
   }
 
