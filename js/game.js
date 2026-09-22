@@ -117,7 +117,6 @@ import {
 } from "../src/ui/game-over-screens.js";
 import {
   renderCharacterCreator as _renderCharacterCreator,
-  renderCharacterPreview as _renderCharacterPreview,
   CREATOR_CATEGORIES,
   getCreatorLayout,
 } from "../src/ui/character-creator.js";
@@ -413,6 +412,8 @@ export class Game {
     // Character creator state
     this.character = { ...DEFAULT_CHARACTER };
     this.creatorCategory = 0;
+    // Row cursor for the PLACE tab, which toggles a set instead of picking one.
+    this.creatorPlacementSel = 0;
     // Kept in sync with CREATOR_CATEGORIES.length (touch.js reads this).
     this.creatorCategoryCount = CREATOR_CATEGORIES.length;
     this.creatorReturnState = null; // state to return to after saving
@@ -1351,6 +1352,7 @@ export class Game {
       this.character,
       this.isTouchDevice,
       gameUnlockContext(this),
+      this.creatorPlacementSel,
     );
   }
 
@@ -1373,32 +1375,6 @@ export class Game {
 
   _handleCreatorClick(e) {
     handleCreatorClick(this, e);
-  }
-
-  _renderCharacterPreview(
-    ctx,
-    cx,
-    cy,
-    palette,
-    armor,
-    badge,
-    skin,
-    now,
-    loadout,
-    scale,
-  ) {
-    _renderCharacterPreview(
-      ctx,
-      cx,
-      cy,
-      palette,
-      armor,
-      badge,
-      skin,
-      now,
-      loadout,
-      scale,
-    );
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────

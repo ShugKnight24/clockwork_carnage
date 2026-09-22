@@ -1173,6 +1173,16 @@ const RIFLE_TF = `transform="translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})"
 /** Canvas of the stage: fits both poses, crests and gear without jumping. */
 export const AGENT_VIEW = { full: [-74, -116, 148, 182], bust: [-30, -111, 60, 60], torso: [-42, -104, 84, 84], helm: [-21, -110, 42, 42] };
 
+/** Close crops on the body region each accessory slot occupies, for gear thumbnails. */
+export const GEAR_VIEW = {
+  back: [-40, -106, 80, 80],
+  waist: [-34, -70, 68, 68],
+  helmet: [-25, -128, 50, 50],
+  arms: [-38, -84, 76, 76],
+  neck: [-30, -102, 60, 60],
+  legs: [-32, -34, 64, 64],
+};
+
 /** Pectoral seam paths (left/right), shared by chestTrim and variantTrim so they never drift apart. */
 const SEAM_L = "M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6";
 const SEAM_R = "M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6";

@@ -77,3 +77,121 @@ test("locked armour variant is rejected and armorVariant stays 0", async ({ page
   await expect(chip).toHaveClass(/shake/);
   expect(await page.evaluate(() => window.ccDebug.game.character.armorVariant)).toBe(0);
 });
+
+// ── Legacy canvas creator: the same badge stack and gear slots ──
+
+async function openLegacyCreator(page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.clear();
+      localStorage.setItem("cc_settings", JSON.stringify({ artStyle: 0 }));
+    } catch (_) {}
+  });
+  await loadGame(page);
+  await debug(page, "showCharacterCreate");
+  await page.waitForTimeout(500);
+}
+
+/** Select the tab that edits `key`, and return its index. */
+const legacyTab = (page, key) =>
+  page.evaluate(async (k) => {
+    const { CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+    const i = CREATOR_CATEGORIES.findIndex((c) => c.key === k);
+    window.ccDebug.game.creatorCategory = i;
+    window.ccDebug.game.creatorPlacementSel = 0;
+    return i;
+  }, key);
+
+test("legacy creator edits badge and gear", async ({ page }) => {
+  await openLegacyCreator(page);
+  const keys = await page.evaluate(async () =>
+    (await import("/src/ui/character-creator.js")).CREATOR_CATEGORIES.map((c) => c.key),
+  );
+  expect(keys).toEqual(
+    expect.arrayContaining([
+      "badge.symbol",
+      "badge.frame",
+      "badge.enamel",
+      "badge.metal",
+      "badge.finish",
+      "badge.placement",
+      "acc.back",
+      "acc.waist",
+      "acc.helmet",
+      "acc.arms",
+      "acc.neck",
+      "acc.legs",
+    ]),
+  );
+
+  // The default badge is the clock (symbol 2), so one step down is the star.
+  await legacyTab(page, "badge.symbol");
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => window.ccDebug.game.character.badge.layers[0].symbol)).toBe("star");
+  // Picking any badge field wears the badge — an empty placement set means the
+  // choice would be invisible.
+  expect(await page.evaluate(() => window.ccDebug.game.character.badge.placements)).toEqual(["chest"]);
+
+  await legacyTab(page, "badge.frame");
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => window.ccDebug.game.character.badge.layers[0].frame)).toBe("shield");
+
+  await legacyTab(page, "acc.back");
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories.back)).toBe("backpack");
+
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "screenshots/legacy-badge.png" });
+});
+
+test("legacy PLACE tab toggles where the badge is worn", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "badge.symbol");
+  await page.keyboard.press("ArrowDown");
+  await legacyTab(page, "badge.placement");
+  // Row 0 is chest, which the symbol pick already turned on.
+  await page.keyboard.press("Space");
+  expect(await page.evaluate(() => window.ccDebug.game.character.badge.placements)).toEqual([]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  expect(await page.evaluate(() => window.ccDebug.game.character.badge.placements)).toEqual(["shoulder"]);
+});
+
+test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) => {
+  await openLegacyCreator(page);
+  const strip = await page.evaluate(async () => {
+    const { getCreatorLayout, tabRect, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+    const g = window.ccDebug.game;
+    const w = g.canvas.width;
+    const h = g.canvas.height;
+    const L = getCreatorLayout(w, h, g.isTouchDevice && w < 700);
+    const rects = CREATOR_CATEGORIES.map((c, i) => tabRect(L, i));
+    return {
+      w,
+      minX: Math.min(...rects.map((r) => r.x)),
+      maxX: Math.max(...rects.map((r) => r.x + r.w)),
+      bottom: Math.max(...rects.map((r) => r.y + r.h)),
+      contentY: L.contentY,
+    };
+  });
+  expect(strip.minX).toBeGreaterThanOrEqual(0);
+  expect(strip.maxX).toBeLessThanOrEqual(strip.w);
+  expect(strip.bottom).toBeLessThanOrEqual(strip.contentY);
+
+  // A tab on the wrapped second row still selects its category when clicked.
+  const target = await legacyTab(page, "acc.legs");
+  await page.evaluate(() => {
+    window.ccDebug.game.creatorCategory = 1;
+  });
+  const point = await page.evaluate(async (i) => {
+    const { getCreatorLayout, tabRect } = await import("/src/ui/character-creator.js");
+    const g = window.ccDebug.game;
+    const rect = g.canvas.getBoundingClientRect();
+    const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700);
+    const t = tabRect(L, i);
+    const k = rect.width / g.canvas.width;
+    return { x: rect.left + (t.x + t.w / 2) * k, y: rect.top + (t.y + t.h / 2) * k };
+  }, target);
+  await page.mouse.click(point.x, point.y);
+  expect(await page.evaluate(() => window.ccDebug.game.creatorCategory)).toBe(target);
+});

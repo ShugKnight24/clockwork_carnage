@@ -7,16 +7,28 @@ import {
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
-  BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
   BACKSTORIES,
   VOICE_PROFILES,
 } from "../../js/data.js";
+import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
+import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
+import { getIndex, withIndex, lookKey } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
+import { getLayerImage } from "../rendering/svg-art/raster.js";
+import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
+import { buildAgentParts, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
 
 // ── Shared category definitions (used by render + click handler) ──
 
+/**
+ * One tab per editable field. `key` is a character-fields key — flat for the
+ * legacy indices, virtual (`badge.*`, `acc.<slot>`) for the nested badge stack
+ * and accessory slots — so every read goes through getIndex and every write
+ * through withIndex. `multi` marks the one tab that toggles a set (placements)
+ * instead of picking a single index.
+ */
 export const CREATOR_CATEGORIES = [
   { name: "NAME", shortLabel: "NAME", data: null, key: null },
   {
@@ -32,7 +44,19 @@ export const CREATOR_CATEGORIES = [
   { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmetIndex" },
   { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visorIndex" },
   { name: "SHOULDER", shortLabel: "SHLD", data: SHOULDER_STYLES, key: "shoulderIndex" },
-  { name: "BADGE", shortLabel: "BDGE", data: BADGES, key: "badgeIndex" },
+  { name: "BADGE", shortLabel: "BDGE", data: SYMBOLS, key: "badge.symbol" },
+  { name: "FRAME", shortLabel: "FRM", data: FRAMES, key: "badge.frame" },
+  { name: "ENAMEL", shortLabel: "ENML", data: ENAMELS, key: "badge.enamel" },
+  { name: "METAL", shortLabel: "MTL", data: METALS, key: "badge.metal" },
+  { name: "FINISH", shortLabel: "FIN", data: FINISHES, key: "badge.finish" },
+  { name: "PLACE", shortLabel: "PLC", data: PLACEMENTS, key: "badge.placement", multi: true },
+  ...ACCESSORY_SLOTS.map((s) => ({
+    name: `GEAR ${s.name.toUpperCase()}`,
+    shortLabel: `G${s.name.slice(0, 3).toUpperCase()}`,
+    data: ACCESSORIES[s.id],
+    key: `acc.${s.id}`,
+    slot: s.id,
+  })),
   {
     name: "SKIN",
     shortLabel: "SKIN",
@@ -49,22 +73,50 @@ export const CREATOR_CATEGORIES = [
   { name: "VOICE", shortLabel: "VOX", data: VOICE_PROFILES, key: "voiceIndex" },
 ];
 
+/** Switch tab, resetting the placement highlight so PLACE always opens on row 0. */
+export function setCreatorCategory(game, index) {
+  game.creatorCategory = index;
+  game.creatorPlacementSel = 0;
+}
+
+/** Bounds of tab `i` in the (possibly multi-row) tab strip. */
+export function tabRect(L, i) {
+  const row = Math.floor(i / L.perRow);
+  const col = i - row * L.perRow;
+  const inRow = Math.min(L.perRow, CREATOR_CATEGORIES.length - row * L.perRow);
+  const rowW = inRow * L.tabW + (inRow - 1) * L.tabGap;
+  return {
+    x: Math.round((L.width - rowW) / 2 + col * (L.tabW + L.tabGap)),
+    y: L.tabY + row * (L.tabH + L.tabGap),
+    w: L.tabW,
+    h: L.tabH,
+  };
+}
+
 // ── Layout calculator (shared between render + click detection) ──
 
 export function getCreatorLayout(w, h, isMobile) {
   const titleY = isMobile ? 34 : 44;
   const tabGap = isMobile ? 4 : 8;
   const n = CREATOR_CATEGORIES.length;
+  const minTabW = isMobile ? 28 : 42;
+  const maxTabW = isMobile ? 46 : 86;
+  // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
+  // fewest rows that let every tab keep its minimum width, then spread the
+  // tabs evenly over them.
+  const avail = w - (isMobile ? 16 : 50);
+  const fitPerRow = Math.max(1, Math.floor((avail + tabGap) / (minTabW + tabGap)));
+  const tabRows = Math.ceil(n / fitPerRow);
+  const perRow = Math.ceil(n / tabRows);
   const tabW = Math.max(
-    isMobile ? 28 : 42,
-    Math.min(isMobile ? 46 : 86, Math.floor((w - 50 - (n - 1) * tabGap) / n)),
+    minTabW,
+    Math.min(maxTabW, Math.floor((avail - (perRow - 1) * tabGap) / perRow)),
   );
-  const tabH = 28;
-  const totalTabW = n * tabW + (n - 1) * tabGap;
-  const tabX0 = (w - totalTabW) / 2;
+  const tabH = isMobile ? 24 : 28;
   const tabY = titleY + 22;
+  const tabStripH = tabRows * tabH + (tabRows - 1) * tabGap;
 
-  const contentY = tabY + tabH + (isMobile ? 12 : 20);
+  const contentY = tabY + tabStripH + (isMobile ? 12 : 20);
   const listW = isMobile ? Math.min(w * 0.45, 180) : 230;
   const previewW = isMobile ? Math.min(w * 0.4, 140) : 300;
   const infoW = isMobile ? 0 : 240;
@@ -81,12 +133,14 @@ export function getCreatorLayout(w, h, isMobile) {
   const maxBySpace = Math.max(3, Math.floor((panelH - 16) / itemH));
 
   return {
+    width: w,
     titleY,
     tabGap,
     tabW,
     tabH,
-    totalTabW,
-    tabX0,
+    tabRows,
+    perRow,
+    tabStripH,
     tabY,
     contentY,
     listW,
@@ -102,6 +156,103 @@ export function getCreatorLayout(w, h, isMobile) {
   };
 }
 
+// ── Shared SVG art, rasterised onto the canvas ──
+//
+// Badges and accessories only exist as SVG, so the Legacy creator draws them
+// the way the Modern portrait does: compose the markup once per look, hand it
+// to the raster cache, blit the bitmap. getLayerImage returns null until the
+// decode lands; the creator redraws every frame, so the art simply appears a
+// frame later rather than blocking.
+
+const BADGE_BOX = [-54, -54, 108, 108];
+
+const badgeSig = (b) =>
+  `${b.finish}|${b.layers.map((l) => `${l.frame}:${l.symbol}:${l.enamel}:${l.metal}`).join(";")}`;
+
+/** Raster id + markup for a character's composed badge. */
+function badgeLayer(ch, detail = "high") {
+  const t = resolveTreatment(ch);
+  return {
+    id: `legacy-badge:${detail}:${badgeSig(ch.badge)}:${t.finish}:${t.metal}`,
+    markup: renderBadge(ch.badge, { treatment: t, detail }),
+  };
+}
+
+/** Defs + markup for the full customised agent, in AGENT_VIEW.full space. */
+function agentMarkup(ch) {
+  const p = buildAgentParts(ch, { pose: "idle" });
+  const k = Math.round(p.width * 100) / 100;
+  const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
+  return {
+    defs: p.defs,
+    markup: `${p.shadow}<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}${p.headGlow}`,
+  };
+}
+
+/** Device pixels per canvas unit, so bitmaps are decoded at the size they draw. */
+function pixelRatio(ctx) {
+  const m = ctx.getTransform ? ctx.getTransform() : null;
+  return m ? Math.hypot(m.a, m.b) || 1 : 1;
+}
+
+let _figure = null;
+
+/**
+ * Draw the customised agent centred on (cx, cy), `h` px tall. Returns false
+ * while the bitmap is still decoding so the caller can fall back.
+ */
+function drawAgentFigure(ctx, ch, cx, cy, h) {
+  const key = lookKey(ch);
+  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch) };
+  const s = h / AGENT_VIEW.full[3];
+  const img = getLayerImage(`legacy-agent:${key}`, AGENT_VIEW.full, _figure.defs, _figure.markup, s * pixelRatio(ctx));
+  if (!img) return false;
+  const w = AGENT_VIEW.full[2] * s;
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  return true;
+}
+
+// Option tiles preview the character as it would look with that option. Both
+// the markup and the id are built once per look, not once per frame.
+const _tiles = new Map();
+let _tileSig = "";
+
+const BADGE_TILE_KEYS = new Set([
+  "badge.symbol",
+  "badge.frame",
+  "badge.enamel",
+  "badge.metal",
+  "badge.finish",
+]);
+
+/** Tile layer for option `idx` of `curCat`, or null for categories without art. */
+function optionTile(curCat, idx, ch, sig) {
+  if (sig !== _tileSig) {
+    _tiles.clear();
+    _tileSig = sig;
+  }
+  const cacheKey = `${curCat.key}:${idx}`;
+  if (_tiles.has(cacheKey)) return _tiles.get(cacheKey);
+  let tile = null;
+  const variant = { ...ch, ...withIndex(ch, curCat.key, idx) };
+  if (BADGE_TILE_KEYS.has(curCat.key)) {
+    const layer = badgeLayer(variant, "low");
+    tile = { id: layer.id, box: BADGE_BOX, defs: "", markup: layer.markup };
+  } else if (curCat.slot) {
+    tile = { id: `legacy-gear:${curCat.slot}:${lookKey(variant)}`, box: GEAR_VIEW[curCat.slot], ...agentMarkup(variant) };
+  }
+  _tiles.set(cacheKey, tile);
+  return tile;
+}
+
+/** Draw an option tile into a square at (x, y). No-op until it has decoded. */
+function drawOptionTile(ctx, curCat, idx, ch, sig, x, y, size) {
+  const tile = optionTile(curCat, idx, ch, sig);
+  if (!tile) return;
+  const img = getLayerImage(tile.id, tile.box, tile.defs, tile.markup, (size / tile.box[2]) * pixelRatio(ctx));
+  if (img) ctx.drawImage(img, x, y, size, size);
+}
+
 // ── Character preview (fully parameterized — no game state) ──
 
 export function renderCharacterPreview(
@@ -110,7 +261,7 @@ export function renderCharacterPreview(
   cy,
   palette,
   armor,
-  badge,
+  character,
   skin,
   now,
   loadout,
@@ -526,67 +677,13 @@ export function renderCharacterPreview(
   // "none" draws nothing.
 
   // ── Badge ──
-  if (badge.icon) {
-    const bx = -8;
-    const by = -armorH / 2 + 16;
-    const br = 12;
-    const icons = {
-      shield: "\u25C6",
-      skull: "\u2620",
-      clock: "\u23F0",
-      star: "\u2605",
-      bolt: "\u26A1",
-      eye: "\u25C9",
-      rift: "\u00D7",
-    };
-    const badgePulse = 0.6 + 0.4 * Math.sin(now * 0.004);
-
-    // Drop shadow for depth
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.beginPath();
-    ctx.arc(bx + 1, by - 3, br + 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Radial gradient base
-    const grad = ctx.createRadialGradient(bx - 3, by - 7, 1, bx, by - 4, br);
-    grad.addColorStop(0, palette.dark);
-    grad.addColorStop(0.7, `${palette.dark}cc`);
-    grad.addColorStop(1, "rgba(0,0,0,0.6)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(bx, by - 4, br, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Accent ring with pulse
-    ctx.strokeStyle = palette.accent;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = badgePulse;
-    ctx.beginPath();
-    ctx.arc(bx, by - 4, br, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner ring
-    ctx.strokeStyle = palette.accent + "33";
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.arc(bx, by - 4, br - 3, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Specular highlight
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.ellipse(bx - 3, by - 8, 4, 2.5, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Icon
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = palette.accent;
-    ctx.font = "bold 18px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(icons[badge.icon] || "\u2726", bx, by + 2);
-    ctx.textAlign = "left";
+  // The same composed SVG insignia the showroom and the agent rig draw, so the
+  // Legacy figure wears exactly what was picked.
+  if (character?.badge?.placements?.length) {
+    const layer = badgeLayer(character);
+    const size = 26;
+    const img = getLayerImage(layer.id, BADGE_BOX, "", layer.markup, (size / 108) * pixelRatio(ctx));
+    if (img) ctx.drawImage(img, -8 - size / 2, -armorH / 2 + 12 - size / 2, size, size);
   }
 
   // ── Weapon (right hand) ──
@@ -680,6 +777,7 @@ export function renderCharacterCreator(
   character,
   isTouchDevice,
   unlockCtx = null,
+  placementSel = 0,
 ) {
   const now = performance.now();
   const cat = creatorCategory;
@@ -689,7 +787,6 @@ export function renderCharacterCreator(
   const hairStyle = HAIR_STYLES[char.hairIndex || 0];
   const eyeColor = EYE_COLORS[char.eyeIndex || 0];
   const armor = ARMOR_STYLES[char.armorIndex];
-  const badge = BADGES[char.badgeIndex];
   const skin = WEAPON_SKINS[char.weaponSkinIndex];
   const loadout = LOADOUT_CLASSES[char.loadoutIndex];
   const origin = BACKSTORIES[char.backstoryIndex || 0];
@@ -760,19 +857,16 @@ export function renderCharacterCreator(
   ctx.stroke();
 
   // ─── Category tabs ───
-  const tabLabels = isMobile
-    ? categories.map((c) => c.shortLabel)
-    : categories.map((c) => c.name);
-
+  const tabFont = `${isMobile ? 9 : 11}px monospace`;
   for (let i = 0; i < categories.length; i++) {
-    const tx = L.tabX0 + i * (L.tabW + L.tabGap);
+    const t = tabRect(L, i);
     const selected = i === cat;
 
     ctx.fillStyle = selected
       ? `${palette.primary}44`
       : "rgba(255,255,255,0.04)";
     ctx.beginPath();
-    ctx.roundRect(tx, L.tabY, L.tabW, L.tabH, 4);
+    ctx.roundRect(t.x, t.y, t.w, t.h, 4);
     ctx.fill();
 
     if (selected) {
@@ -782,15 +876,19 @@ export function renderCharacterCreator(
       ctx.strokeStyle = palette.accent;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(tx, L.tabY, L.tabW, L.tabH, 4);
+      ctx.roundRect(t.x, t.y, t.w, t.h, 4);
       ctx.stroke();
       ctx.restore();
     }
 
     ctx.fillStyle = selected ? palette.accent : "rgba(255,255,255,0.35)";
-    ctx.font = `${selected ? "bold " : ""}${isMobile ? 9 : 11}px monospace`;
+    ctx.font = `${selected ? "bold " : ""}${tabFont}`;
     ctx.textAlign = "center";
-    ctx.fillText(tabLabels[i], tx + L.tabW / 2, L.tabY + 18);
+    // Full name when it fits the tab, short label otherwise — twenty-odd tabs
+    // leave no room for "SHOULDER" on a narrow screen.
+    const full = categories[i].name;
+    const label = !isMobile && ctx.measureText(full).width <= t.w - 8 ? full : categories[i].shortLabel;
+    ctx.fillText(label, t.x + t.w / 2, t.y + t.h / 2 + 4);
   }
 
   // ─── NAME tab — special rendering ───
@@ -844,24 +942,26 @@ export function renderCharacterCreator(
     const prevScale = isMobile
       ? 1.0
       : Math.max(1.2, Math.min(2.4, (prevBottom - prevTop - 70) / 150));
-    renderCharacterPreview(
-      ctx,
-      prevCX,
-      prevCY,
-      palette,
-      armor,
-      badge,
-      skin,
-      now,
-      loadout,
-      prevScale,
-      helmet,
-      visor,
-      shoulder,
-      skinTone,
-      hairStyle,
-      eyeColor,
-    );
+    if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150)) {
+      renderCharacterPreview(
+        ctx,
+        prevCX,
+        prevCY,
+        palette,
+        armor,
+        char,
+        skin,
+        now,
+        loadout,
+        prevScale,
+        helmet,
+        visor,
+        shoulder,
+        skinTone,
+        hairStyle,
+        eyeColor,
+      );
+    }
 
     // Styled nameplate (name step)
     const npText = char.name || "Agent";
@@ -904,7 +1004,15 @@ export function renderCharacterCreator(
   // ─── Item list (left panel) ───
   const curCat = categories[cat];
   const items = curCat.data;
-  const selIdx = char[curCat.key];
+  // PLACE toggles a set, so its "selection" is a cursor over the rows; every
+  // other tab reads the character's current index for that field.
+  const multi = !!curCat.multi;
+  const worn = char.badge?.placements || [];
+  const selIdx = multi
+    ? Math.min(Math.max(placementSel | 0, 0), items.length - 1)
+    : getIndex(char, curCat.key);
+  const lookSig = lookKey(char);
+  const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot;
   const listX = L.contentX;
   const maxVisible = Math.min(items.length, L.maxBySpace);
   const listH = L.panelH;
@@ -943,7 +1051,8 @@ export function renderCharacterCreator(
 
     // Color swatches for visual categories
     const swatch = item.primary || item.color;
-    if ((curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex") && swatch) {
+    const hasSwatch = curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex";
+    if (hasSwatch && swatch) {
       ctx.fillStyle = swatch;
       ctx.beginPath();
       ctx.roundRect(listX + 14, iy + 8, 18, 18, 3);
@@ -956,8 +1065,29 @@ export function renderCharacterCreator(
       }
     }
 
-    const hasSwatch = curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex";
-    const labelX = hasSwatch ? listX + 40 : listX + 16;
+    // Worn / not worn box for the placement toggles.
+    if (multi) {
+      const on = worn.includes(item.id);
+      ctx.strokeStyle = on ? palette.accent : "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(listX + 14, iy + 9, 16, 16, 3);
+      ctx.stroke();
+      if (on) {
+        ctx.strokeStyle = palette.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(listX + 18, iy + 17);
+        ctx.lineTo(listX + 21, iy + 21);
+        ctx.lineTo(listX + 27, iy + 13);
+        ctx.stroke();
+      }
+    } else if (hasTile) {
+      // Badge and gear options preview themselves; everything else is text.
+      drawOptionTile(ctx, curCat, i, char, lookSig, listX + 12, iy + 4, L.itemH - 10);
+    }
+
+    const labelX = hasSwatch || hasTile || multi ? listX + 40 : listX + 16;
     ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.45)";
     ctx.font = `${isSelected ? "bold " : ""}12px monospace`;
     ctx.textAlign = "left";
@@ -993,24 +1123,27 @@ export function renderCharacterCreator(
     1.0,
     Math.min((L.previewW - 48) / 120, (prevH - 96) / 150),
   );
-  renderCharacterPreview(
-    ctx,
-    prevCX,
-    L.contentY + prevH / 2 - 10,
-    palette,
-    armor,
-    badge,
-    skin,
-    now,
-    loadout,
-    prevScale,
-    helmet,
-    visor,
-    shoulder,
-    skinTone,
-    hairStyle,
-    eyeColor,
-  );
+  const prevCY = L.contentY + prevH / 2 - 10;
+  if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150)) {
+    renderCharacterPreview(
+      ctx,
+      prevCX,
+      prevCY,
+      palette,
+      armor,
+      char,
+      skin,
+      now,
+      loadout,
+      prevScale,
+      helmet,
+      visor,
+      shoulder,
+      skinTone,
+      hairStyle,
+      eyeColor,
+    );
+  }
 
   // ── Scan-line overlay ──
   ctx.save();
@@ -1086,6 +1219,20 @@ export function renderCharacterCreator(
         }
       }
       if (line) ctx.fillText(line, infoX + 12, lineY);
+    }
+
+    // Gear perk, and how to work the placement toggles.
+    if (curCat.slot && selectedItem.perk) {
+      ctx.fillStyle = palette.accent;
+      ctx.font = "bold 10px monospace";
+      ctx.fillText(selectedItem.perk.toUpperCase(), infoX + 12, L.contentY + 96);
+    }
+    if (multi) {
+      ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
+      ctx.font = "11px monospace";
+      ctx.fillText(worn.includes(selectedItem.id) ? "Worn here" : "Not worn here", infoX + 12, L.contentY + 52);
+      ctx.fillStyle = "rgba(180,200,220,0.45)";
+      ctx.fillText("SPACE / click toggles", infoX + 12, L.contentY + 72);
     }
 
     if (curCat.key === "backstoryIndex" && selectedItem.perk) {
@@ -1205,9 +1352,21 @@ export function renderCharacterCreator(
     const locked = items
       .map((it, i) => ({ it, st: unlockState(curCat.key, i, unlockCtx) }))
       .filter((e) => !e.st.unlocked);
-    let ly = L.contentY + listH - 14 - (locked.length - 1) * 30;
+    // A category can have dozens of locked options (badge symbols); list only
+    // as many as the panel holds and count the rest, or the block runs off the
+    // top of the screen and over the tabs.
+    const room = Math.max(1, Math.floor((listH - 170) / 30));
+    const shownLocks = locked.slice(0, room);
+    const moreLocks = locked.length - shownLocks.length;
+    let ly = L.contentY + listH - 14 - (shownLocks.length + (moreLocks ? 1 : 0) - 1) * 30;
     ctx.textAlign = "left";
-    for (const { it, st } of locked) {
+    if (moreLocks) {
+      ctx.fillStyle = "rgba(180,200,220,0.55)";
+      ctx.font = "9px monospace";
+      ctx.fillText(`+${moreLocks} more locked`, infoX + 12, ly);
+      ly += 30;
+    }
+    for (const { it, st } of shownLocks) {
       ctx.fillStyle = "rgba(255,100,100,0.7)";
       ctx.font = "bold 10px monospace";
       ctx.fillText(`\uD83D\uDD12 ${it.name}`, infoX + 12, ly - 12);
@@ -1250,7 +1409,9 @@ export function renderCharacterCreator(
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(
-      "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
+      multi
+        ? "Click or TAB/A/D = category  \u00B7  W/S = row  \u00B7  SPACE = wear here  \u00B7  ENTER = save  \u00B7  ESC = cancel"
+        : "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
       w / 2,
       h - 20,
     );

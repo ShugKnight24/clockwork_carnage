@@ -1,4 +1,4 @@
-import { AGENT_VIEW, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
@@ -168,15 +168,6 @@ const CATEGORIES = [
 const allSections = (c) => (c.modes ? Object.values(c.modes).flat() : c.sections);
 // Badge and gear sections (virtual keys) can omit `data`: their table comes from character-fields.
 for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key && !s.data) s.data = tableFor(s.key);
-/** Gear tile framing per slot (agent space), so each item fills its tile. */
-const GEAR_VIEW = {
-  back: [-40, -106, 80, 80],
-  waist: [-34, -70, 68, 68],
-  helmet: [-25, -128, 50, 50],
-  arms: [-38, -84, 76, 76],
-  neck: [-30, -102, 60, 60],
-  legs: [-32, -34, 64, 64],
-};
 const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", act: "Act emblems", earned: "Earned" };
 
 /** Field equality for flat indices and the nested badge / accessory records. */

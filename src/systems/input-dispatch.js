@@ -10,7 +10,8 @@ import { isModernArt } from "../rendering/art-style.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { UPGRADES } from "../data/upgrades.js";
-import { CREATOR_CATEGORIES } from "../ui/character-creator.js";
+import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
+import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
 import { archiveLayout, archiveEntries } from "../ui/archive-screen.js";
 import {
   getSettingsForCategory,
@@ -149,21 +150,18 @@ export function dispatchKeyPress(game, code, e) {
       }
       // Tab / Arrow to switch category
       if (code === "Tab") {
-        if (game.keys["ShiftLeft"] || game.keys["ShiftRight"]) {
-          game.creatorCategory = (game.creatorCategory - 1 + catLen) % catLen;
-        } else {
-          game.creatorCategory = (game.creatorCategory + 1) % catLen;
-        }
+        const dir = game.keys["ShiftLeft"] || game.keys["ShiftRight"] ? -1 : 1;
+        setCreatorCategory(game, (game.creatorCategory + dir + catLen) % catLen);
         game.audio.menuSelect();
         return;
       }
       if (code === "ArrowRight") {
-        game.creatorCategory = (game.creatorCategory + 1) % catLen;
+        setCreatorCategory(game, (game.creatorCategory + 1) % catLen);
         game.audio.menuSelect();
         return;
       }
       if (code === "ArrowLeft") {
-        game.creatorCategory = (game.creatorCategory - 1 + catLen) % catLen;
+        setCreatorCategory(game, (game.creatorCategory - 1 + catLen) % catLen);
         game.audio.menuSelect();
         return;
       }
@@ -186,47 +184,50 @@ export function dispatchKeyPress(game, code, e) {
 
     // Switch category
     if (code === "Tab") {
-      if (game.keys["ShiftLeft"] || game.keys["ShiftRight"]) {
-        // Shift+Tab → previous category
-        game.creatorCategory = (game.creatorCategory - 1 + catLen) % catLen;
-      } else {
-        game.creatorCategory = (game.creatorCategory + 1) % catLen;
-      }
+      // Shift+Tab → previous category
+      const dir = game.keys["ShiftLeft"] || game.keys["ShiftRight"] ? -1 : 1;
+      setCreatorCategory(game, (game.creatorCategory + dir + catLen) % catLen);
       game.audio.menuSelect();
       return;
     }
     if (code === "ArrowRight" || code === "KeyD") {
-      game.creatorCategory = (game.creatorCategory + 1) % catLen;
+      setCreatorCategory(game, (game.creatorCategory + 1) % catLen);
       game.audio.menuSelect();
       return;
     }
     if (code === "ArrowLeft" || code === "KeyA") {
-      game.creatorCategory = (game.creatorCategory - 1 + catLen) % catLen;
+      setCreatorCategory(game, (game.creatorCategory - 1 + catLen) % catLen);
       game.audio.menuSelect();
       return;
     }
 
-    // Navigate items within category
-    if (code === "ArrowUp" || code === "KeyW") {
-      let next = (game.character[curCat.key] - 1 + itemLen) % itemLen;
+    // Navigate items within category. Badge and gear fields are nested, so the
+    // index is read and written through character-fields rather than off the
+    // character directly.
+    const step = code === "ArrowUp" || code === "KeyW" ? -1 : code === "ArrowDown" || code === "KeyS" ? 1 : 0;
+    if (step) {
+      if (curCat.multi) {
+        // PLACE moves a row cursor; SPACE below does the actual toggling.
+        game.creatorPlacementSel = ((game.creatorPlacementSel | 0) + step + itemLen) % itemLen;
+        game.audio.menuSelect();
+        return;
+      }
+      let next = (getIndex(game.character, curCat.key) + step + itemLen) % itemLen;
       // Skip options that are still locked (classes, tiered gear).
       const unlockCtx = gameUnlockContext(game);
       for (let tries = 0; tries < itemLen; tries++) {
         if (isUnlocked(curCat.key, next, unlockCtx)) break;
-        next = (next - 1 + itemLen) % itemLen;
+        next = (next + step + itemLen) % itemLen;
       }
-      game.character[curCat.key] = next;
+      Object.assign(game.character, withIndex(game.character, curCat.key, next));
       game.audio.menuSelect();
       return;
     }
-    if (code === "ArrowDown" || code === "KeyS") {
-      let next = (game.character[curCat.key] + 1) % itemLen;
-      const unlockCtx = gameUnlockContext(game);
-      for (let tries = 0; tries < itemLen; tries++) {
-        if (isUnlocked(curCat.key, next, unlockCtx)) break;
-        next = (next + 1) % itemLen;
-      }
-      game.character[curCat.key] = next;
+
+    // Wear / remove the highlighted placement (PLACE tab only).
+    if (code === "Space" && curCat.multi) {
+      const placement = curCat.data[(game.creatorPlacementSel | 0) % itemLen];
+      Object.assign(game.character, togglePlacement(game.character, placement.id));
       game.audio.menuSelect();
       return;
     }

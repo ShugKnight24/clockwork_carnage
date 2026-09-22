@@ -10,7 +10,10 @@ import { GameState } from "../types.js";
 import {
   CREATOR_CATEGORIES,
   getCreatorLayout,
+  setCreatorCategory,
+  tabRect,
 } from "../ui/character-creator.js";
+import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
 import { isCompactPhone } from "../../js/layout.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 
@@ -27,12 +30,13 @@ export function handleCreatorClick(game, e) {
   const categories = CREATOR_CATEGORIES;
   const L = getCreatorLayout(w, h, isMobile);
 
-  // Tab click detection
-  if (my >= L.tabY && my <= L.tabY + L.tabH) {
+  // Tab click detection — the strip wraps over several rows once there are
+  // more tabs than fit across the screen.
+  if (my >= L.tabY && my <= L.tabY + L.tabStripH) {
     for (let i = 0; i < categories.length; i++) {
-      const tx = L.tabX0 + i * (L.tabW + L.tabGap);
-      if (mx >= tx && mx <= tx + L.tabW) {
-        game.creatorCategory = i;
+      const t = tabRect(L, i);
+      if (mx >= t.x && mx <= t.x + t.w && my >= t.y && my <= t.y + t.h) {
+        setCreatorCategory(game, i);
         game.audio.menuSelect();
         return;
       }
@@ -49,7 +53,9 @@ export function handleCreatorClick(game, e) {
 
   // Same window the renderer uses — L.maxBySpace is derived from panel height.
   const maxVisible = Math.min(items.length, L.maxBySpace);
-  const selIdx = game.character[curCat.key];
+  const selIdx = curCat.multi
+    ? Math.min(Math.max(game.creatorPlacementSel | 0, 0), items.length - 1)
+    : getIndex(game.character, curCat.key);
   let scrollOff = 0;
   if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
 
@@ -59,8 +65,17 @@ export function handleCreatorClick(game, e) {
       if (idx >= items.length) break;
       const iy = L.contentY + 8 + vi * L.itemH;
       if (my >= iy && my <= iy + L.itemH) {
+        // PLACE toggles where the badge is worn; every other tab picks one
+        // option, writing through character-fields so nested badge and gear
+        // keys land in the right place.
+        if (curCat.multi) {
+          game.creatorPlacementSel = idx;
+          Object.assign(game.character, togglePlacement(game.character, items[idx].id));
+          game.audio.menuSelect();
+          return;
+        }
         if (!isUnlocked(curCat.key, idx, gameUnlockContext(game))) return;
-        game.character[curCat.key] = idx;
+        Object.assign(game.character, withIndex(game.character, curCat.key, idx));
         return;
       }
     }
