@@ -95,8 +95,15 @@ export class SurvivalSession {
     if (this.progress < 1) return { broke: false };
 
     const { x, y, z } = b.cell;
-    const placedByPlayer = this.wasPlaced(x, y, z);
     const drop = dropsFor(b.blockId);
+    // The fit was checked at beginBreak, but that was seconds ago and the
+    // player may have crafted since. Re-check, or the block is destroyed and
+    // its drop silently vanishes.
+    if (drop && !this.inventory.fits(drop, 1)) {
+      this.cancelBreak();
+      return { broke: false, reason: "Inventory full" };
+    }
+    const placedByPlayer = this.wasPlaced(x, y, z);
     if (drop) this.inventory.add(drop, 1);
 
     let granted = null;

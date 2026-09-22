@@ -56,6 +56,21 @@ describe("breaking", () => {
     expect(s.progress).toBe(0);
   });
 
+  it("refuses to destroy the block when the pack filled during the break", () => {
+    const s = session();
+    s.beginBreak(DIRT, DIRT_ID);           // fits at this point
+    s.tickBreak(10, DIRT, DIRT_ID);
+    for (const slot of s.inventory.slots.keys()) s.inventory.add("stone", 64);
+    expect(s.inventory.fits("dirt", 1)).toBe(false);
+
+    const res = s.tickBreak(1e6, DIRT, DIRT_ID);
+    expect(res.broke).toBe(false);          // block survives
+    expect(res.reason).toBe("Inventory full");
+    expect(s.inventory.count("dirt")).toBe(0);
+    expect(s.skills.xp.mining).toBe(0);
+    expect(s.progress).toBe(0);
+  });
+
   // Review Focus 2
   it("credits at most one block for a single huge dt", () => {
     const s = session();
