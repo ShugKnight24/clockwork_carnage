@@ -5,7 +5,7 @@
  * Mirrors the shape of WorldStore's IdbBackend, including dropping the cached
  * open promise on error so a private-mode or quota refusal can be retried.
  */
-import { Inventory } from "./inventory.js";
+import { Inventory, TOTAL_SLOTS } from "./inventory.js";
 import { Skills } from "./skills.js";
 
 export const PLAYER_VERSION = 1;
@@ -52,7 +52,7 @@ export function decodePlayer(row) {
   }
   return {
     skills: Skills.fromJSON(row.skills),
-    inventory: Inventory.fromJSON(row.inventory),
+    inventory: Inventory.fromJSON(row.inventory, TOTAL_SLOTS),
     stale: false,
   };
 }

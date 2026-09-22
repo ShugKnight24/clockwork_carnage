@@ -54,3 +54,16 @@ describe("PlayerStore", () => {
     await expect(store.save(0, { skills: new Skills(), inventory: new Inventory() })).resolves.toBe(false);
   });
 });
+
+describe("inventory sizing on load", () => {
+  it("always gives a character a full pack, even from a truncated record", () => {
+    const p = decodePlayer({
+      id: 0, version: PLAYER_VERSION,
+      skills: {}, inventory: [{ item: "stone", n: 4 }],
+    });
+    expect(p.inventory.slots.length).toBe(36);
+    expect(p.inventory.count("stone")).toBe(4);
+    expect(decodePlayer({ id: 0, version: PLAYER_VERSION, skills: {}, inventory: null })
+      .inventory.slots.length).toBe(36);
+  });
+});

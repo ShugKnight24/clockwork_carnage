@@ -70,16 +70,18 @@ export class Inventory {
 
   /**
    * Unknown item ids are dropped rather than thrown on — see player-store.
-   * The slot count comes from the data, because `toJSON` emits one entry per
-   * slot: a clone that silently grew to TOTAL_SLOTS would over-report room,
-   * and crafting's fit probe would then consume inputs for an output that
-   * does not actually fit.
+   * Without an explicit `size` the slot count is inferred from the data,
+   * because `toJSON` emits one entry per slot: a clone that silently grew to
+   * TOTAL_SLOTS would over-report room, and crafting's fit probe would then
+   * consume inputs for an output that does not actually fit. Loading a
+   * character passes `size` instead, so a truncated record cannot shrink a
+   * player's pack.
    */
-  static fromJSON(data) {
-    if (!Array.isArray(data)) return new Inventory();
-    const size = Math.min(Math.max(data.length, 1), TOTAL_SLOTS);
-    const inv = new Inventory(size);
-    data.slice(0, size).forEach((s, i) => {
+  static fromJSON(data, size = null) {
+    if (!Array.isArray(data)) return new Inventory(size ?? TOTAL_SLOTS);
+    const n = size ?? Math.min(Math.max(data.length, 1), TOTAL_SLOTS);
+    const inv = new Inventory(n);
+    data.slice(0, n).forEach((s, i) => {
       if (s && itemById(s.item) && validQty(s.n)) {
         inv.slots[i] = { item: s.item, n: Math.min(s.n, STACK_MAX) };
       }
