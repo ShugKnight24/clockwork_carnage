@@ -347,8 +347,10 @@ export class Game {
       onMouseDown: (e) => this._inputMouseDown(e),
       onMouseUp: (e) => {
         // Same canvas listener pair as the mousedown above, so a release
-        // outside the canvas still cancels a survival break.
-        if (this.state === GameState.BUILDER) this.builder?.handleMouseUp(e.button);
+        // outside the canvas still cancels a survival break. Not gated on the
+        // state: a play-test started mid-hold would otherwise swallow the
+        // release and leave the Forge thinking the button is still down.
+        this.builder?.handleMouseUp(e.button);
         if (e.button === 0) this.player.isFiring = false;
         if (e.button === 2) this.player.isAiming = false;
       },

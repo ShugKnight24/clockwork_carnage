@@ -119,3 +119,22 @@ describe("ForgeMode hold to break", () => {
     expect(f.world.get(5, 5, 32)).toBe(0);
   });
 });
+
+describe("release outside the Forge state", () => {
+  it("clears holdingBreak even when the release arrives after a state change", async () => {
+    const { ForgeMode } = await import("../../js/forge.js");
+    const f = new ForgeMode({
+      renderer: null,
+      audio: { menuSelect() {}, menuConfirm() {} },
+      settings: {},
+      keybinds: {},
+      canvas: null,
+    });
+    f.holdingBreak = true;
+    // handleMouseUp is called unconditionally by the host now, so the Forge
+    // itself must tolerate a release it never saw the press for.
+    f.handleMouseUp(2);
+    expect(f.holdingBreak).toBe(false);
+    expect(f.breakProgress).toBe(0);
+  });
+});
