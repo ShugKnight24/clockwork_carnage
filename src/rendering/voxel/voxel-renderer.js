@@ -11,6 +11,7 @@
  * World axes: x/y horizontal, z up. Yaw is measured from +x toward +y, pitch is
  * positive looking up.
  */
+import { World } from "../../world/world.js";
 import { BLOCKS } from "../../world/blocks.js";
 import { meshChunk, STRIDE } from "./mesher.js";
 import { buildAtlas, ATLAS_SIZE } from "./atlas.js";
@@ -24,8 +25,9 @@ import { generateWallTextures } from "../textures.js";
 const MESH_BUDGET = 4;          // chunks re-meshed per frame
 const STYLE_ID = { legacy: 0, comic: 1, modern: 2 };
 const MAX_LIGHTS = 16;          // must match the array size in CHUNK_FRAG
-const MAX_LAYERS = 32;          // must match u_emissiveByLayer in CHUNK_FRAG
-const CS = 16;                  // chunk size in blocks
+const MAX_LAYERS = 32;          // must match u_emissiveByLayer/u_layerAlpha in CHUNK_FRAG
+const CS = World.CS;            // chunk size in blocks
+const CHUNKS_X = World.CX, CHUNKS_Y = World.CY;
 const CHUNK_RADIUS = (CS * Math.sqrt(3)) / 2;
 const NEAR = 0.05, FAR = 256;
 /** Glass art is painted opaque (it is a window in a wall), so the renderer owns its opacity. */
@@ -147,16 +149,9 @@ export class VoxelRenderer {
   constructor(gl, canvas) {
     this.gl = gl; this.canvas = canvas;
     this.width = canvas.width; this.height = canvas.height;
-    this.lost = false;
-    canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.lost = true; });
-    canvas.addEventListener("webglcontextrestored", () => {
-      this.lost = false;
-      this.chunks.clear();
-      this.atlasKey = "";
-      this._initGL();
-      if (this.world) this.world.dirty.fill(1);
-    });
-    this.chunks = new Map();   // chunkIndex -> { origin, opaque, alpha }
+    this.lost = false; this.destroyed = false; this._restoreWarned = false;
+    this.chunks = new Map();   // chunkIndex -> { origin, opaque, alpha, dist }
+    this._alphaOrder = [];     // scratch for the back-to-front see-through pass
     this.world = null;
     this.atlasKey = ""; this.style = "comic"; this.layerOf = null; this.emissiveByLayer = null;
     this.atlasTex = null;
@@ -168,6 +163,25 @@ export class VoxelRenderer {
     this.lightData = new Float32Array(MAX_LIGHTS * 4);
     this.lightColors = new Float32Array(MAX_LIGHTS * 3);
     this.fog = { near: [0.05, 0.08, 0.12], far: [0.02, 0.04, 0.08], density: FOG_DENSITY * 0.35, max: 0.85 };
+    // Kept on `this` so destroy() can take them off the canvas again: a restore
+    // event on a destroyed renderer would otherwise rebuild everything it freed.
+    this._onContextLost = (e) => { e.preventDefault(); this.lost = true; };
+    this._onContextRestored = () => {
+      if (this.destroyed) return;
+      this.chunks.clear();
+      this.atlasKey = "";
+      try {
+        this._initGL();
+      } catch (err) {
+        // Stay lost rather than claim a context we could not finish building.
+        if (!this._restoreWarned) { this._restoreWarned = true; console.warn("[VoxelRenderer] context restore failed", err); }
+        return;
+      }
+      this.lost = false;
+      if (this.world) this.world.dirty.fill(1);
+    };
+    canvas.addEventListener("webglcontextlost", this._onContextLost);
+    canvas.addEventListener("webglcontextrestored", this._onContextRestored);
     this._initGL();
   }
 
@@ -177,7 +191,7 @@ export class VoxelRenderer {
     this.spriteProg = compile(gl, SPRITE_VERT, SPRITE_FRAG);
     this.postProg = compile(gl, POST_VERT, POST_FRAG);
     this.u = {
-      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_style", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
+      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
       sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
       post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth"]),
     };
@@ -256,6 +270,8 @@ export class VoxelRenderer {
   }
 
   resize(w, h) {
+    if (this.destroyed || this.lost) return;
+    if (!(w > 0 && h > 0)) return;
     if (w === this.width && h === this.height) return;
     this.width = w; this.height = h;
     this.canvas.width = w; this.canvas.height = h;
@@ -271,6 +287,7 @@ export class VoxelRenderer {
 
   /** Rebuild the atlas when style or act changes. */
   setStyle(style, act) {
+    if (this.destroyed || this.lost) return;
     const key = `${style}|${act}`;
     if (key === this.atlasKey) return;
     const pal = resolveEnvPalette(act, null);
@@ -330,9 +347,11 @@ export class VoxelRenderer {
 
   // ── Chunk meshes ─────────────────────────────────────────────────────────
 
+  /** Squared chunk-grid distance; inlined so the sort comparator allocates nothing. */
   _chunkDist(ci, camChunk) {
-    const [cx, cy, cz] = this.world.chunkCoords(ci);
-    const dx = cx - camChunk[0], dy = cy - camChunk[1], dz = cz - camChunk[2];
+    const dx = (ci % CHUNKS_X) - camChunk[0];
+    const dy = (((ci / CHUNKS_X) | 0) % CHUNKS_Y) - camChunk[1];
+    const dz = ((ci / (CHUNKS_X * CHUNKS_Y)) | 0) - camChunk[2];
     return dx * dx + dy * dy + dz * dz;
   }
 
@@ -340,18 +359,18 @@ export class VoxelRenderer {
     const dirty = this.world.takeDirty();
     if (!dirty.length) return 0;
     // Nearest first; the rest stay dirty for the next frame.
-    dirty.sort((a, b) => this._chunkDist(a, camChunk) - this._chunkDist(b, camChunk));
-    const now = dirty.slice(0, MESH_BUDGET);
-    for (const i of dirty.slice(MESH_BUDGET)) this.world.dirty[i] = 1;
-    for (const ci of now) this._buildChunk(ci);
-    return now.length;
+    if (dirty.length > MESH_BUDGET) dirty.sort((a, b) => this._chunkDist(a, camChunk) - this._chunkDist(b, camChunk));
+    const n = Math.min(dirty.length, MESH_BUDGET);
+    for (let i = n; i < dirty.length; i++) this.world.dirty[dirty[i]] = 1;
+    for (let i = 0; i < n; i++) this._buildChunk(dirty[i]);
+    return n;
   }
 
   _buildChunk(ci) {
     const [cx, cy, cz] = this.world.chunkCoords(ci);
     const m = meshChunk(this.world, cx, cy, cz, this.layerOf);
     let c = this.chunks.get(ci);
-    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null }; this.chunks.set(ci, c); }
+    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null, dist: 0 }; this.chunks.set(ci, c); }
     this._upload(c, "opaque", m.opaque);
     this._upload(c, "alpha", m.alpha);
     if (!c.opaque && !c.alpha) { this.chunks.delete(ci); }
@@ -409,7 +428,7 @@ export class VoxelRenderer {
    * @returns {boolean} false when the GL context is lost
    */
   render(cam, world, sprites, lights, opts) {
-    if (this.lost) return false;
+    if (this.lost || this.destroyed) return false;
     const t0 = performance.now();
     const gl = this.gl;
     if (world !== this.world) this.setWorld(world);
@@ -452,7 +471,6 @@ export class VoxelRenderer {
     gl.uniform1f(u.u_fogDensity, this.fog.density);
     gl.uniform1f(u.u_fogMax, this.fog.max);
     gl.uniform3fv(u.u_ambient, AMBIENT[this.style] || AMBIENT.comic);
-    gl.uniform1i(u.u_style, styleId);
     gl.uniform3fv(u.u_emissiveByLayer, this.emissiveByLayer);
     gl.uniform1fv(u.u_layerAlpha, this.layerAlpha);
     gl.uniform1f(u.u_alphaPass, 0);
@@ -479,8 +497,10 @@ export class VoxelRenderer {
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
     gl.useProgram(this.chunkProg);
     gl.uniform1f(u.u_alphaPass, 1);
-    for (const c of this.chunks.values()) {
-      if (!c.alpha || !this._visible(c.origin, cam, maxDist)) continue;
+    // Back to front: they do not write depth, so a near pane drawn first would
+    // be overwritten by a far one, and opaque faces in this bucket (doors) would
+    // not cover the glass behind them.
+    for (const c of this._sortedAlphaChunks(cam, maxDist)) {
       gl.uniform3fv(u.u_origin, c.origin);
       gl.bindVertexArray(c.alpha.vao);
       gl.drawElements(gl.TRIANGLES, c.alpha.count, c.alpha.indexType, 0);
@@ -505,6 +525,9 @@ export class VoxelRenderer {
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
+    // Leave no scene target sampled: both are colour attachments again next frame.
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, null);
 
     this.sprites.evict();
     this.stats.ms = performance.now() - t0;
@@ -551,6 +574,20 @@ export class VoxelRenderer {
       if (p[i * 4] * cx + p[i * 4 + 1] * cy + p[i * 4 + 2] * cz + p[i * 4 + 3] < -CHUNK_RADIUS) return false;
     }
     return true;
+  }
+
+  /** Visible see-through chunks, farthest first. Reuses one array and one field per chunk. */
+  _sortedAlphaChunks(cam, maxDist) {
+    const out = this._alphaOrder;
+    out.length = 0;
+    for (const c of this.chunks.values()) {
+      if (!c.alpha || !this._visible(c.origin, cam, maxDist)) continue;
+      const dx = c.origin[0] + CS / 2 - cam.x, dy = c.origin[1] + CS / 2 - cam.y, dz = c.origin[2] + CS / 2 - cam.z;
+      c.dist = dx * dx + dy * dy + dz * dz;
+      out.push(c);
+    }
+    out.sort((a, b) => b.dist - a.dist);
+    return out;
   }
 
   _drawSprites(list, cam) {
@@ -603,9 +640,14 @@ export class VoxelRenderer {
   }
 
   destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.canvas.removeEventListener("webglcontextlost", this._onContextLost);
+    this.canvas.removeEventListener("webglcontextrestored", this._onContextRestored);
     const gl = this.gl;
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
+    this._alphaOrder.length = 0;
     this._freeFBO();
     if (this.atlasTex) { gl.deleteTexture(this.atlasTex); this.atlasTex = null; }
     if (this.sprites) this.sprites.destroy();

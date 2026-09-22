@@ -37,7 +37,6 @@ uniform vec3 u_cam;
 uniform vec3 u_fogNear; uniform vec3 u_fogFar; uniform float u_fogDensity; uniform float u_fogMax;
 uniform vec3 u_ambient;
 uniform int u_numLights; uniform vec4 u_lights[16]; uniform vec3 u_lightColors[16];
-uniform int u_style;                   // 0 legacy 1 comic 2 modern
 uniform vec3 u_emissiveByLayer[32];
 uniform float u_layerAlpha[32];        // per-layer opacity; 1.0 for everything but glass
 uniform float u_alphaPass;             // 1.0 while the see-through faces are drawn
