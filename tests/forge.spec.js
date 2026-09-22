@@ -57,6 +57,49 @@ async function aimAndUpdate(page, { x, y, z, angle = 0, pitch = 0 }) {
   );
 }
 
+/**
+ * Flips the loaded world to survival. `_adopt` is the only path that hands the
+ * Forge its `survival`, and it stands the player back on the world spawn, so
+ * every aim has to come after it. Noclip is on because a held break spans many
+ * frames and gravity would otherwise drag the aim off the targeted cell.
+ */
+async function enterSurvival(page) {
+  await page.evaluate(() => {
+    const b = window.ccDebug.game.builder;
+    b.world.meta.mode = "survival";
+    b._adopt(b.world, b.currentSlot);
+    b.noclip = true;
+  });
+}
+
+/** Feeds the Forge a bare keydown; `handleKeyDown` reads only these fields. */
+async function pressForgeKey(page, code) {
+  return page.evaluate(
+    (c) =>
+      window.ccDebug.game.builder.handleKeyDown({
+        code: c,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        preventDefault() {},
+      }),
+    code,
+  );
+}
+
+/**
+ * Clears the sight line the block tests aim down and puts `blocks` on it.
+ * z=49 is well clear of any generated terrain, so the raycast hits only what
+ * the test put there.
+ */
+async function layOutSightLine(page, blocks) {
+  await page.evaluate((list) => {
+    const w = window.ccDebug.game.world;
+    for (let x = 40; x <= 47; x++) w.set(x, 64, 49, 0);
+    for (const [x, id] of list) w.set(x, 64, 49, id);
+  }, blocks);
+}
+
 /** A v3 (pre-voxel) builder map: a 5-layer stone wall and a 2-layer metal wall. */
 function legacyV3Map() {
   const grid = () => Array.from({ length: 60 }, () => Array(60).fill(0));
@@ -356,5 +399,139 @@ test.describe("Voxel Forge", () => {
         await ctx.close();
       }
     }
+  });
+
+  test("survival: gate, hold to break, craft the drop, place the result", async ({ page }) => {
+    test.setTimeout(120_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    // A world with no `meta.mode` is creative, so nothing is attached yet.
+    expect(await debug(page, "forgeSurvival")).toBe(null);
+    await enterSurvival(page);
+    const fresh = await debug(page, "forgeSurvival");
+    expect(fresh).not.toBe(null);
+    expect(fresh.mining).toBe(1);
+    expect(fresh.tool).toBe("hand");
+    expect(fresh.items).toEqual({});
+
+    // Rock to mine, and a stone anchor behind it to place against afterwards.
+    await layOutSightLine(page, [[45, 13], [46, 1]]);
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    expect(await page.evaluate(() => window.ccDebug.game.builder.target)).toMatchObject({
+      x: 45,
+      y: 64,
+      z: 49,
+    });
+
+    // Rock is gated at Mining 5, so bare hands at level 1 must refuse it.
+    const refusal = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.handleMouseDown(2);
+      b.update(1 / 60);
+      const out = { notice: b.notice?.text ?? null, block: b.world.get(45, 64, 49) };
+      b.handleMouseUp(2);
+      return out;
+    });
+    expect(refusal.notice).toBe("Requires Mining 5");
+    expect(refusal.block).toBe(13);
+
+    // Past the gate, the block still takes a sustained hold rather than a click.
+    const mined = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.survival.skills.grant("mining", 200); // Mining 6
+      b.handleMouseDown(2);
+      b.update(1 / 60);
+      const first = { progress: b.survival.progress, block: b.world.get(45, 64, 49) };
+      let ticks = 1;
+      while (ticks < 600 && b.world.get(45, 64, 49) === 13) {
+        b.update(1 / 60);
+        ticks++;
+      }
+      b.handleMouseUp(2);
+      return {
+        first,
+        ticks,
+        block: b.world.get(45, 64, 49),
+        rock: b.survival.inventory.count("rock"),
+        xp: b.survival.skills.xp.mining,
+      };
+    });
+    expect(mined.first.block).toBe(13); // one frame of holding is not enough
+    expect(mined.first.progress).toBeGreaterThan(0);
+    expect(mined.first.progress).toBeLessThan(1);
+    expect(mined.ticks).toBeGreaterThan(20);
+    expect(mined.block).toBe(0);
+    expect(mined.rock).toBe(1);
+    expect(mined.xp).toBe(215); // the 200 granted plus Rock's 15
+
+    // Craft through the menu the player actually uses: C opens it, Enter makes
+    // the highlighted row (Cut Stone), Escape closes it.
+    expect(await pressForgeKey(page, "KeyC")).toBe(true);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.craftOpen)).toBe(true);
+
+    const craftRow = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.survival.inventory.add("rock", 1); // Cut Stone takes two
+      return { index: b.craftIndex, name: b.survival.recipes(null)[b.craftIndex].name };
+    });
+    expect(craftRow).toEqual({ index: 0, name: "Cut Stone" });
+
+    expect(await pressForgeKey(page, "Enter")).toBe(true);
+    const afterCraft = await debug(page, "forgeSurvival");
+    expect(afterCraft.items).toEqual({ stone: 1 });
+    expect(afterCraft.xp.construction).toBe(10);
+
+    expect(await pressForgeKey(page, "Escape")).toBe(true);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.craftOpen)).toBe(false);
+
+    // Place the crafted stone into the hole the rock left, spending the item.
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    const placed = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.heldItem = "stone";
+      const target = b.target;
+      b.handleMouseDown(0);
+      return {
+        target,
+        block: b.world.get(45, 64, 49),
+        stone: b.survival.inventory.count("stone"),
+        // Placed blocks pay no mining xp when broken again.
+        wasPlaced: b.survival.wasPlaced(45, 64, 49),
+      };
+    });
+    expect(placed.target).toMatchObject({ x: 46, y: 64, z: 49 });
+    expect(placed.block).toBe(1);
+    expect(placed.stone).toBe(0);
+    expect(placed.wasPlaced).toBe(true);
+
+    await screenshot(page, "forge-survival-loop");
+  });
+
+  test("creative: no session, and one click still breaks a gated block", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    expect(await debug(page, "forgeSurvival")).toBe(null);
+
+    await layOutSightLine(page, [[45, 13]]);
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+
+    const broken = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.handleMouseDown(2); // one click, no hold
+      return { survival: b.survival, block: b.world.get(45, 64, 49), notice: b.notice };
+    });
+    // Rock would need Mining 5 in survival; creative has no gate and no hold.
+    expect(broken.survival).toBe(null);
+    expect(broken.block).toBe(0);
+    expect(broken.notice).toBe(null);
+
+    // C is the craft menu key in survival only — creative must not claim it.
+    expect(await pressForgeKey(page, "KeyC")).toBe(false);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.craftOpen)).toBe(false);
   });
 });

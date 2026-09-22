@@ -143,6 +143,30 @@ export function createDebugBridge(game) {
       };
     },
 
+    /**
+     * Survival progression for the world open in the Forge, or null in a
+     * creative one — that null is the flag e2e coverage branches on. Returns
+     * plain data because the session itself holds a typed array the page
+     * bridge cannot hand back.
+     */
+    forgeSurvival() {
+      const s = game.builder?.survival;
+      if (!s) return null;
+      const items = {};
+      for (const slot of s.inventory.slots) {
+        if (slot) items[slot.item] = s.inventory.count(slot.item);
+      }
+      return {
+        progress: s.progress,
+        breaking: s.breaking !== null,
+        tool: s.tool().id,
+        mining: s.skills.level("mining"),
+        construction: s.skills.level("construction"),
+        xp: { ...s.skills.xp },
+        items,
+      };
+    },
+
     async startBuilderPlayTest() {
       game.audio.init();
       // startBuilder lazy-loads the builder chunk on first use.
