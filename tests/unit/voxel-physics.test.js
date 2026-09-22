@@ -1,0 +1,92 @@
+import { describe, it, expect } from "vitest";
+import { World } from "../../src/world/world.js";
+import { generateWorld } from "../../src/world/world-gen.js";
+import { PLAYER, aabbOverlapsSolid, moveAABB, groundHeight, raycastBlocks, hasLineOfSight3D } from "../../src/world/voxel-physics.js";
+
+const flat = () => generateWorld({ terrain: false });
+const body = (x, y, z) => ({ x, y, z, half: PLAYER.half, height: PLAYER.height });
+
+describe("voxel physics", () => {
+  it("overlap test and ground height", () => {
+    const w = flat();
+    expect(aabbOverlapsSolid(w, 10.5, 10.5, 32, 0.3, 1.7)).toBe(false);
+    expect(aabbOverlapsSolid(w, 10.5, 10.5, 31.5, 0.3, 1.7)).toBe(true);
+    w.set(10, 10, 32, 1);
+    expect(groundHeight(w, 10.5, 10.5, 0.3)).toBe(33);
+    expect(groundHeight(w, 20.5, 20.5, 0.3)).toBe(32);
+  });
+
+  it("walks into a two-block wall and stops; slides along it", () => {
+    const w = flat();
+    for (let z = 32; z < 34; z++) w.set(12, 10, z, 1);
+    const r = moveAABB(w, body(11.5, 10.5, 32), 1.0, 0.4, 0);
+    expect(r.x).toBeCloseTo(12 - 0.3 - 1e-3, 2); expect(r.hitX).toBe(true);
+    expect(r.y).toBeCloseTo(10.9, 5);
+  });
+
+  it("steps up a single block and not a double", () => {
+    const w = flat();
+    w.set(12, 10, 32, 1);
+    let r = moveAABB(w, body(11.5, 10.5, 32), 0.6, 0, 0, { step: 1 });
+    expect(r.z).toBe(33); expect(r.stepped).toBe(true); expect(r.x).toBeCloseTo(12.1, 5);
+    w.set(12, 10, 33, 1);
+    r = moveAABB(w, body(11.5, 10.5, 32), 0.6, 0, 0, { step: 1 });
+    expect(r.z).toBe(32); expect(r.hitX).toBe(true);
+  });
+
+  it("falls onto the ground and reports grounded; a ceiling block stops a jump", () => {
+    const w = flat();
+    let r = moveAABB(w, body(10.5, 10.5, 35), 0, 0, -10);
+    expect(r.z).toBe(32); expect(r.grounded).toBe(true); expect(r.hitZ).toBe(true);
+    w.set(10, 10, 34, 1);
+    r = moveAABB(w, body(10.5, 10.5, 32), 0, 0, 2);
+    expect(r.z).toBeCloseTo(34 - 1.7, 3); expect(r.hitZ).toBe(true);
+  });
+
+  it("does not tunnel through a wall at high speed", () => {
+    const w = flat();
+    for (let z = 32; z < 35; z++) w.set(20, 10, z, 1);
+    const r = moveAABB(w, body(15.5, 10.5, 32), 9, 0, 0);
+    expect(r.x).toBeLessThan(20 - 0.3);
+  });
+
+  it("raycasts to the first block and reports the face hit", () => {
+    const w = flat();
+    w.set(15, 10, 33, 8);
+    const hit = raycastBlocks(w, 10.5, 10.5, 33.5, 1, 0, 0, 6);
+    expect(hit).toMatchObject({ x: 15, y: 10, z: 33, id: 8, face: [-1, 0, 0] });
+    expect(hit.dist).toBeCloseTo(4.5, 5);
+    expect(raycastBlocks(w, 10.5, 10.5, 40, 1, 0, 0, 6)).toBeNull();
+    const down = raycastBlocks(w, 10.5, 10.5, 34, 0, 0, -1, 6);
+    expect(down).toMatchObject({ z: 31, face: [0, 0, 1] });
+  });
+
+  it("3D line of sight through a one-block gap", () => {
+    const w = flat();
+    for (let z = 32; z < 36; z++) for (let y = 8; y < 13; y++) if (!(z === 33 && y === 10)) w.set(15, y, z, 1);
+    expect(hasLineOfSight3D(w, 10.5, 10.5, 33.5, 20.5, 10.5, 33.5)).toBe(true);
+    expect(hasLineOfSight3D(w, 10.5, 10.5, 32.5, 20.5, 10.5, 32.5)).toBe(false);
+  });
+
+  it("placement refused when it overlaps the player AABB", () => {
+    const w = flat();
+    // the block at the player's feet cell
+    expect(aabbOverlapsSolid(w, 10.5, 10.5, 32, 0.3, 1.7)).toBe(false);
+    w.set(10, 10, 32, 1);
+    expect(aabbOverlapsSolid(w, 10.5, 10.5, 32, 0.3, 1.7)).toBe(true);
+  });
+
+  // Not in the brief: the sweep's core invariant, whatever it hits and from wherever.
+  it("never comes to rest inside a solid block", () => {
+    const w = flat();
+    for (let z = 32; z < 35; z++) { w.set(12, 10, z, 1); w.set(20, 10, z, 1); }
+    w.set(11, 11, 34, 1); // low ceiling beside the wall
+    const moves = [[1, 0.4, 0], [9, 0, 0], [-9, 0, 0], [0, 0, -10], [0, 0, 2], [0.6, 0.6, -0.4], [0.37, -0.91, 3.3]];
+    for (const [dx, dy, dz] of moves) {
+      const r = moveAABB(w, body(11.5, 10.5, 32), dx, dy, dz);
+      expect(aabbOverlapsSolid(w, r.x, r.y, r.z, PLAYER.half, PLAYER.height), `move ${dx},${dy},${dz}`).toBe(false);
+      expect(r.z).toBeGreaterThanOrEqual(0);
+      expect(r.z + PLAYER.height).toBeLessThanOrEqual(World.H);
+    }
+  });
+});
