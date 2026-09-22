@@ -222,3 +222,24 @@ test.describe("legacy creator on a touch phone", () => {
     expect(strip.maxX).toBeLessThanOrEqual(strip.w - strip.zone);
   });
 });
+
+// ── Full-look screenshot sweep across all three art styles ──
+
+for (const [style, name] of [[0, "legacy"], [1, "comic"], [2, "modern"]]) {
+  test(`full look screenshot ${name}`, async ({ page }) => {
+    await page.addInitScript((s) => { try { localStorage.clear(); localStorage.setItem("cc_settings", JSON.stringify({ artStyle: s })); } catch (_) {} }, style);
+    await loadGame(page);
+    await debug(page, "showCharacterCreate");
+    await page.waitForTimeout(700);
+    await page.evaluate(async () => {
+      const g = window.ccDebug.game;
+      const m = await import("/src/systems/unlocks.js");
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      g.character.badge = { layers: [{ frame: "shield", symbol: "guard", enamel: "oxblood", metal: "brass", x: 0, y: 0, scale: 1, rot: 0 }], finish: "auto", placements: ["chest", "shoulder", "helmet"] };
+      g.character.accessories = { back: "backpack", waist: "belt", helmet: "nvg", arms: "screen", neck: "scarf", legs: "kneepads" };
+      document.querySelector("agent-showroom")?.renderAll?.();
+    });
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `screenshots/custom-${name}.png` });
+  });
+}

@@ -161,6 +161,12 @@ describe("badge and accessory unlocks", () => {
   it("every virtual key is lockable", () => {
     for (const k of ["badge.preset", "badge.symbol", "badge.finish", "acc.back", "acc.legs"]) expect(LOCK[k]).toBeTruthy();
   });
+
+  it("describeId names id-based unlocks", () => {
+    expect(describeId("badge.symbol:#lordslayer")).toMatchObject({ kind: "Badge symbol", name: "Lord Slayer" });
+    expect(describeId("acc.back:#antenna").name).toBe("Rift Antenna");
+    expect(describeId(`armorVariant:#${ARMOR_STYLES[0].variant.id}`).kind).toBe("Armour variant");
+  });
 });
 
 describe("unlock store v2 migration", () => {
