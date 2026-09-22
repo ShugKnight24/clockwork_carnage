@@ -141,3 +141,33 @@ describe("tool and crafting pass-through", () => {
     expect(s.skills.xp.construction).toBe(10);
   });
 });
+
+describe("placed flags are world-local", () => {
+  it("clears on a world switch but keeps skills and inventory", () => {
+    const s = session();
+    s.inventory.add("dirt", 1);
+    s.tryPlace("dirt");
+    s.markPlaced(10, 10, 10);
+    s.skills.grant("mining", 500);
+    s.inventory.add("rock", 3);
+    expect(s.wasPlaced(10, 10, 10)).toBe(true);
+
+    s.resetPlaced(); // what _adopt does when a new world loads
+
+    // The same cell in the next world is natural again, so it pays xp.
+    expect(s.wasPlaced(10, 10, 10)).toBe(false);
+    // ...but progression is per-character and must survive the switch.
+    expect(s.skills.xp.mining).toBe(500);
+    expect(s.inventory.count("rock")).toBe(3);
+  });
+
+  it("abandons an in-progress break when the world changes", () => {
+    const s = session();
+    s.beginBreak(DIRT, DIRT_ID);
+    s.tickBreak(10, DIRT, DIRT_ID);
+    expect(s.progress).toBeGreaterThan(0);
+    s.resetPlaced();
+    expect(s.progress).toBe(0);
+    expect(s.tickBreak(1e6, DIRT, DIRT_ID).broke).toBe(false);
+  });
+});

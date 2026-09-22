@@ -1103,6 +1103,9 @@ export class ForgeMode {
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
   _adopt(world, id = this.currentSlot) {
     this.world = world;
+    // A fresh world means fresh placed-block flags; the character's skills
+    // and inventory deliberately carry over.
+    this.survivalSession.resetPlaced();
     this.survival = attachSurvival(world, this.survivalSession);
     this.craftOpen = false; // a creative world must never inherit an open menu
     this.craftIndex = 0;

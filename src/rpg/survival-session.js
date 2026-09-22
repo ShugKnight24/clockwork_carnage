@@ -43,6 +43,15 @@ export class SurvivalSession {
     this.placed[i >> 3] &= ~(1 << (i & 7));
   }
 
+  /**
+   * The bitset is world-local: one session outlives every world switch, and
+   * the bits are absolute coordinates, so without this a block placed in one
+   * world would silently cost the xp of a natural block at the same cell in
+   * the next. Progression itself is deliberately NOT reset — it is
+   * per-character and carries across worlds.
+   */
+  resetPlaced() { this.placed.fill(0); this.cancelBreak(); }
+
   wasPlaced(x, y, z) {
     const i = this._bit(x, y, z);
     return (this.placed[i >> 3] & (1 << (i & 7))) !== 0;
@@ -143,4 +152,3 @@ export class SurvivalSession {
   craft(recipeId) { return craftRecipe(recipeId, this.inventory, this.skills); }
 }
 
-export { TOOLS };
