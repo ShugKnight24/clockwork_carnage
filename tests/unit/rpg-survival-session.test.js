@@ -235,3 +235,31 @@ describe("tool wear", () => {
     expect(s.inventory.count("stone")).toBe(4);
   });
 });
+
+describe("revising your own build is free", () => {
+  it("costs no durability to take back a block you placed", () => {
+    const s = session();
+    s.inventory.add("pick_stone", 1);
+    s.inventory.add("dirt", 1);
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+
+    s.tryPlace("dirt");
+    s.markPlaced(DIRT.x, DIRT.y, DIRT.z);
+    s.beginBreak(DIRT, DIRT_ID);
+    const res = s.tickBreak(1e6, DIRT, DIRT_ID);
+
+    expect(res.broke).toBe(true);
+    expect(s.inventory.count("dirt")).toBe(1);        // the block comes back
+    expect(s.skills.xp.mining).toBe(0);               // no xp, as before
+    expect(s.inventory.slots[slot].dur).toBe(120);    // and no wear
+  });
+
+  it("still costs durability on a natural block", () => {
+    const s = session();
+    s.inventory.add("pick_stone", 1);
+    const slot = s.inventory.slots.findIndex((x) => x && x.item === "pick_stone");
+    s.beginBreak(DIRT, DIRT_ID);
+    s.tickBreak(1e6, DIRT, DIRT_ID);
+    expect(s.inventory.slots[slot].dur).toBe(119);
+  });
+});

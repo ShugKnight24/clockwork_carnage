@@ -119,6 +119,12 @@ It skips any tool whose slot `dur <= 0`, so a worn pickaxe is passed over in
 favour of a lesser intact one, and bare hands are the floor. Every caller
 updates; there are two.
 
+Breaking a block the player placed costs **no** durability, the same way it
+pays no xp — the placed-block bitset means it never came from the world. This
+was not in the first draft of this spec; a review raised it, and the call was
+made during implementation because the Forge's core loop is revising a
+structure, and charging wear for every correction taxes exactly that.
+
 `SurvivalSession` decrements the used tool's slot by 1 on each completed break,
 and emits `worn: true` in the `tickBreak` result on the transition to zero so
 the Forge can say so once rather than every frame.

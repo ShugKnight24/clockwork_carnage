@@ -133,7 +133,11 @@ export class SurvivalSession {
     // because the player may have crafted it away while holding the button.
     let worn = false;
     const ts = b.toolSlot;
-    if (ts >= 0) {
+    // Taking back a block you placed costs no durability, for the same reason
+    // it pays no xp: it never came from the world. The Forge's core loop is
+    // revising a structure, and charging wear for every correction would tax
+    // exactly the thing players are here to do.
+    if (ts >= 0 && !placedByPlayer) {
       const slot = this.inventory.slots[ts];
       if (slot && slot.item === b.toolItem && slot.dur > 0) {
         worn = this.inventory.wearSlot(ts, WEAR_PER_BLOCK) === 0;
