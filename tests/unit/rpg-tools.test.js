@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { TOOLS, toolForItem, bestTool } from "../../src/rpg/tools.js";
 import { Inventory } from "../../src/rpg/inventory.js";
+import { itemById } from "../../src/rpg/items.js";
 
 describe("tools", () => {
   it("orders tiers so a better tool always has a smaller multiplier", () => {
@@ -40,5 +41,30 @@ describe("tools", () => {
 
   it("falls back to hands for a null inventory", () => {
     expect(bestTool(null)).toBe(TOOLS.HAND);
+  });
+});
+
+describe("durability tables", () => {
+  it("gives every real tool a durability and a repair cost", () => {
+    for (const t of [TOOLS.PICK_STONE, TOOLS.PICK_METAL]) {
+      expect(t.durability).toBeGreaterThan(0);
+      expect(Array.isArray(t.repair)).toBe(true);
+      expect(t.repair.length).toBeGreaterThan(0);
+      t.repair.forEach(([id, n]) => {
+        expect(typeof id).toBe("string");
+        expect(n).toBeGreaterThan(0);
+      });
+    }
+    expect(TOOLS.HAND.durability).toBe(Infinity);
+    expect(TOOLS.HAND.repair).toEqual([]);
+  });
+
+  it("makes the better tool last longer", () => {
+    expect(TOOLS.PICK_METAL.durability).toBeGreaterThan(TOOLS.PICK_STONE.durability);
+  });
+
+  it("agrees with the item table", () => {
+    expect(TOOLS.PICK_STONE.durability).toBe(itemById("pick_stone").durability);
+    expect(TOOLS.PICK_METAL.durability).toBe(itemById("pick_metal").durability);
   });
 });

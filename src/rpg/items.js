@@ -7,7 +7,7 @@
 export const STACK_MAX = 64;
 
 const block = (id, name, blockId) => ({ id, name, stack: STACK_MAX, blockId });
-const tool = (id, name) => ({ id, name, stack: STACK_MAX, blockId: null });
+const tool = (id, name, durability) => ({ id, name, stack: 1, blockId: null, durability });
 
 export const ITEMS = [
   block("stone", "Stone", 1),
@@ -24,8 +24,11 @@ export const ITEMS = [
   block("sand", "Sand", 12),
   block("rock", "Rock", 13),
   block("ore", "Ore", 14),
-  tool("pick_stone", "Stone Pickaxe"),
-  tool("pick_metal", "Metal Pickaxe"),
+  block("workbench", "Workbench", 16),
+  block("anvil", "Anvil", 17),
+  block("forge", "Forge", 18),
+  tool("pick_stone", "Stone Pickaxe", 120),
+  tool("pick_metal", "Metal Pickaxe", 400),
 ];
 
 const BY_ID = new Map(ITEMS.map((i) => [i.id, i]));

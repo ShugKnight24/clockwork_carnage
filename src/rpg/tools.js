@@ -5,9 +5,9 @@
  * hotbar redesign. Durability is not modelled; it arrives with stations.
  */
 export const TOOLS = {
-  HAND: { id: "hand", name: "Bare Hands", item: null, mult: 1.0, tier: 0 },
-  PICK_STONE: { id: "pick_stone", name: "Stone Pickaxe", item: "pick_stone", mult: 0.75, tier: 1 },
-  PICK_METAL: { id: "pick_metal", name: "Metal Pickaxe", item: "pick_metal", mult: 0.55, tier: 2 },
+  HAND: { id: "hand", name: "Bare Hands", item: null, mult: 1.0, tier: 0, durability: Infinity, repair: [] },
+  PICK_STONE: { id: "pick_stone", name: "Stone Pickaxe", item: "pick_stone", mult: 0.75, tier: 1, durability: 120, repair: [["stone", 1], ["rock", 1]] },
+  PICK_METAL: { id: "pick_metal", name: "Metal Pickaxe", item: "pick_metal", mult: 0.55, tier: 2, durability: 400, repair: [["metal", 1], ["rock", 1]] },
 };
 
 const BY_ITEM = new Map(
