@@ -52,3 +52,28 @@ describe("stationsInRange", () => {
     expect(stationsInRange(w, at(64.5, 64.5, 32)).has("workbench")).toBe(true);
   });
 });
+
+describe("the station ids are pinned to the block table", () => {
+  it("fails loudly here rather than silently never detecting a station", async () => {
+    const { BLOCKS } = await import("../../src/world/blocks.js");
+    // STATIONS hardcodes ids. If a block is ever inserted at 16, nothing
+    // throws: stationsInRange just returns empty forever and every
+    // station-gated recipe becomes uncraftable with no error anywhere.
+    // This test is the alarm for that.
+    expect(BLOCKS[STATIONS.workbench].name).toBe("Workbench");
+    expect(BLOCKS[STATIONS.anvil].name).toBe("Anvil");
+    expect(BLOCKS[STATIONS.forge].name).toBe("Forge");
+    expect(new Set(Object.values(STATIONS)).size).toBe(3);
+  });
+
+  it("detects every station the block table calls a station", async () => {
+    const { BLOCKS } = await import("../../src/world/blocks.js");
+    const { World } = await import("../../src/world/world.js");
+    for (const [name, id] of Object.entries(STATIONS)) {
+      const w = new World();
+      w.set(65, 64, 32, id);
+      expect(stationsInRange(w, { x: 64.5, y: 64.5, z: 32 }).has(name)).toBe(true);
+      expect(BLOCKS[id].kind).toBe("solid");
+    }
+  });
+});
