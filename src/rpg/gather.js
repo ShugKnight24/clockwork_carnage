@@ -27,6 +27,9 @@ export const GATHER = {
   12: { minLevel: 1,  xp: 5  },  // Sand
   13: { minLevel: 5,  xp: 15 },  // Rock
   14: { minLevel: 15, xp: 35 },  // Ore
+  16: { minLevel: 1,  xp: 5  },  // Workbench — you built it; the bitset pays no xp
+  17: { minLevel: 1,  xp: 5  },  // Anvil
+  18: { minLevel: 1,  xp: 5  },  // Forge
 };
 
 const entry = (blockId) => GATHER[blockId] || null;

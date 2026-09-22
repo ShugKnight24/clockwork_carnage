@@ -11,6 +11,7 @@ export const FACE = { TOP: 0, SIDE: 1, BOTTOM: 2 };
 
 const wall = (t) => ({ top: `wall:${t}`, side: `wall:${t}`, bottom: `wall:${t}` });
 const nat = (n) => ({ top: `nat:${n}`, side: `nat:${n}`, bottom: `nat:${n}` });
+const station = (n) => ({ top: `nat:${n}_top`, side: `nat:${n}`, bottom: `nat:${n}` });
 
 export const BLOCKS = [
   { id: 0, name: "Air", kind: "air", faces: null, hardness: 0, color: "#000000" },
@@ -29,6 +30,9 @@ export const BLOCKS = [
   { id: 13, name: "Rock", kind: "solid", faces: nat("rock"), hardness: 1.5, color: "#5b5f66" },
   { id: 14, name: "Ore", kind: "solid", faces: nat("ore"), hardness: 2, emissive: [0.15, 0.4, 0.5], color: "#3f7f8f" },
   { id: 15, name: "Bedrock", kind: "solid", faces: nat("bedrock"), hardness: Infinity, color: "#1d1f23" },
+  { id: 16, name: "Workbench", kind: "solid", faces: station("workbench"), hardness: 1, color: "#8a6a3a" },
+  { id: 17, name: "Anvil", kind: "solid", faces: station("anvil"), hardness: 1.5, color: "#4a4e57" },
+  { id: 18, name: "Forge", kind: "solid", faces: station("forge"), hardness: 1.5, color: "#5a3428", emissive: [0.9, 0.35, 0.1] },
 ];
 
 export const isSolid = (id) => id !== AIR && BLOCKS[id]?.kind !== "air";

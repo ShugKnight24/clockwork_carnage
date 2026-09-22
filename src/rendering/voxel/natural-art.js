@@ -28,6 +28,9 @@ function noiseCanvas(size, base, { amp = 0.12, cell = 8, seed = 1, posterize = 0
 
 const BASE = {
   dirt: [110, 76, 46], grass_top: [82, 140, 58], sand: [216, 200, 144], rock: [92, 96, 104], ore: [92, 96, 104], bedrock: [30, 32, 36],
+  workbench: [138, 106, 58], workbench_top: [156, 122, 70],
+  anvil: [74, 78, 87], anvil_top: [92, 96, 104],
+  forge: [90, 52, 40], forge_top: [120, 58, 34],
 };
 
 /**
@@ -47,6 +50,47 @@ export function paintNatural(name, size, style) {
       return c;
     }
     case "ore": return noiseCanvas(size, BASE.rock, { ...st, seed: 6, spots: { count: 14, r: size / 20, color: style === "legacy" ? "#3fb0c8" : "rgba(80,220,240,0.9)" } });
+    case "workbench_top":
+    case "workbench": {
+      const c = noiseCanvas(size, BASE[name], { ...st, seed: 11, cell: size / 12 });
+      const g = c.getContext("2d");
+      // Plank seams: along the grain on top, upright on the sides.
+      g.strokeStyle = "rgba(48,32,16,0.55)"; g.lineWidth = Math.max(1, size / 96);
+      const n = 4;
+      for (let i = 1; i < n; i++) {
+        const p = (i / n) * size;
+        g.beginPath();
+        if (name === "workbench_top") { g.moveTo(0, p); g.lineTo(size, p); }
+        else { g.moveTo(p, 0); g.lineTo(p, size); }
+        g.stroke();
+      }
+      if (name !== "workbench_top") { g.strokeRect(size * 0.02, size * 0.02, size * 0.96, size * 0.96); }
+      return c;
+    }
+    case "anvil_top":
+    case "anvil": {
+      const c = noiseCanvas(size, BASE[name], { ...st, seed: 12, cell: size / 32, desat: 0.5 });
+      const g = c.getContext("2d");
+      // Banded iron, lighter where it would be struck.
+      g.fillStyle = "rgba(210,214,222,0.18)";
+      g.fillRect(0, name === "anvil_top" ? size * 0.3 : size * 0.12, size, size * 0.26);
+      g.strokeStyle = "rgba(18,20,24,0.6)"; g.lineWidth = Math.max(1, size / 80);
+      g.strokeRect(size * 0.08, size * 0.08, size * 0.84, size * 0.84);
+      return c;
+    }
+    case "forge_top":
+    case "forge": {
+      const c = noiseCanvas(size, BASE[name], { ...st, seed: 13, cell: size / 20 });
+      const g = c.getContext("2d");
+      // Coals: hot on top, a soot-darkened mouth on the sides.
+      const hot = name === "forge_top";
+      for (let i = 0; i < (hot ? 26 : 10); i++) {
+        const x = hash(i, 21, 13) * size, y = hash(i, 22, 13) * size;
+        g.fillStyle = hot ? `rgba(255,${120 + hash(i, 23, 13) * 90 | 0},40,0.75)` : "rgba(20,14,12,0.5)";
+        g.beginPath(); g.arc(x, y, size / 26 * (0.5 + hash(i, 24, 13)), 0, Math.PI * 2); g.fill();
+      }
+      return c;
+    }
     default: return noiseCanvas(size, BASE[name] || BASE.rock, { ...st, seed: name.length });
   }
 }

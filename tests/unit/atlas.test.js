@@ -11,6 +11,6 @@ describe("atlas layer table", () => {
     expect(l(11, FACE.TOP)).not.toBe(l(11, FACE.SIDE)); // grass top vs side
     expect(l(11, FACE.BOTTOM)).toBe(l(10, FACE.TOP));    // grass bottom = dirt
     const distinct = new Set(); for (const b of BLOCKS) if (b.faces) for (const f of [0, 1, 2]) distinct.add(l(b.id, f));
-    expect(distinct.size).toBe(9 + 7); // 9 wall tiles + dirt, grass_top, grass_side, sand, rock, ore, bedrock
+    expect(distinct.size).toBe(9 + 7 + 6); // 9 wall tiles + dirt, grass_top, grass_side, sand, rock, ore, bedrock + a side and a top for each station
   });
 });

@@ -83,3 +83,14 @@ describe("drops and xp", () => {
     expect(xpFor(AIR)).toBe(0);
   });
 });
+
+describe("stations are gatherable", () => {
+  it("drops itself and pays xp, like any other block", () => {
+    for (const [id, item] of [[16, "workbench"], [17, "anvil"], [18, "forge"]]) {
+      expect(canMine(id, 50)).toEqual({ ok: true });
+      expect(dropsFor(id)).toBe(item);
+      expect(xpFor(id)).toBeGreaterThan(0);
+      expect(Number.isFinite(breakTime(id, 1))).toBe(true);
+    }
+  });
+});

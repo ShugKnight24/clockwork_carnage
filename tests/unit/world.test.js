@@ -3,18 +3,28 @@ import { World } from "../../src/world/world.js";
 import { BLOCKS, AIR, BEDROCK, isSolid, isOpaque, LAYER_TO_BLOCKS, FACE } from "../../src/world/blocks.js";
 
 describe("blocks", () => {
-  it("has stable ids and the fourteen playable blocks plus bedrock", () => {
-    expect(BLOCKS.length).toBe(16);
+  it("has stable ids and the fourteen playable blocks, bedrock and three stations", () => {
+    expect(BLOCKS.length).toBe(19);
     BLOCKS.forEach((b, i) => expect(b.id).toBe(i));
     expect(BLOCKS.map((b) => b.name)).toEqual([
       "Air", "Stone", "Tech", "Metal", "Energy", "Door", "Secret", "Boss", "Glass", "Rift",
       "Dirt", "Grass", "Sand", "Rock", "Ore", "Bedrock",
+      "Workbench", "Anvil", "Forge",
     ]);
     expect(AIR).toBe(0); expect(BEDROCK).toBe(15);
     expect(isSolid(AIR)).toBe(false); expect(isSolid(8)).toBe(true);
     expect(isOpaque(8)).toBe(false); expect(isOpaque(1)).toBe(true);
+    expect(isSolid(16)).toBe(true); expect(isOpaque(16)).toBe(true);
     expect(LAYER_TO_BLOCKS).toEqual([0, 1, 1, 2, 2, 3]);
     expect(FACE).toEqual({ TOP: 0, SIDE: 1, BOTTOM: 2 });
+  });
+
+  it("gives each station a distinct top face so it reads from above", () => {
+    for (const id of [16, 17, 18]) {
+      expect(BLOCKS[id].faces.top).not.toBe(BLOCKS[id].faces.side);
+      expect(BLOCKS[id].hardness).toBeGreaterThan(0);
+      expect(Number.isFinite(BLOCKS[id].hardness)).toBe(true);
+    }
   });
 });
 
