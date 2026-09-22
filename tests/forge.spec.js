@@ -534,4 +534,38 @@ test.describe("Voxel Forge", () => {
     expect(await pressForgeKey(page, "KeyC")).toBe(false);
     expect(await page.evaluate(() => window.ccDebug.game.builder.craftOpen)).toBe(false);
   });
+  test("survival is reachable with the M key and survives a save", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    // Creative by default — no session at all.
+    expect(await page.evaluate(() => window.ccDebug.game.builder.isSurvival())).toBe(false);
+    expect(await debug(page, "forgeSurvival")).toBe(null);
+
+    // One keypress through the real handler is the whole entry point.
+    await page.evaluate(() => window.ccDebug.game.builder.handleKeyDown({ code: "KeyM" }));
+    expect(await page.evaluate(() => window.ccDebug.game.builder.isSurvival())).toBe(true);
+    const snap = await debug(page, "forgeSurvival");
+    expect(snap).not.toBe(null);
+    expect(snap.mining).toBe(1);
+
+    // `meta.mode` rides the v4 codec, so a full browser reload keeps it.
+    await page.evaluate(() => window.ccDebug.game.builder.saveMap());
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForSelector("#titleScreen", { state: "visible", timeout: 10_000 });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    expect(await page.evaluate(() => window.ccDebug.game.builder.isSurvival())).toBe(true);
+    expect(await debug(page, "forgeSurvival")).not.toBe(null);
+
+    // And back out again, which detaches the session.
+    await page.evaluate(() => window.ccDebug.game.builder.handleKeyDown({ code: "KeyM" }));
+    expect(await debug(page, "forgeSurvival")).toBe(null);
+
+    await screenshot(page, "forge-survival-mode-toggle");
+  });
 });

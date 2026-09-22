@@ -124,3 +124,68 @@ describe("undo and redo in survival", () => {
     expect(f.survival).toBe(null);
   });
 });
+
+describe("the mode toggle — the player-facing way into survival", () => {
+  const forge = () => {
+    const f = new ForgeMode({
+      renderer: null,
+      audio: { menuSelect() {}, menuConfirm() {} },
+      settings: {},
+      keybinds: {},
+      canvas: null,
+    });
+    f._adopt(new World(), 0);
+    return f;
+  };
+
+  it("starts creative and flips to survival, attaching a session", () => {
+    const f = forge();
+    expect(f.isSurvival()).toBe(false);
+    expect(f.survival).toBe(null);
+
+    f.handleKeyDown({ code: "KeyM" });
+    expect(f.isSurvival()).toBe(true);
+    expect(f.survival).not.toBe(null);
+    expect(f.world.meta.mode).toBe("survival");
+  });
+
+  it("flips back, detaching the session and closing the craft menu", () => {
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    f.craftOpen = true;
+    f.holdingBreak = true;
+
+    f.handleKeyDown({ code: "KeyM" });
+    expect(f.survival).toBe(null);
+    expect(f.craftOpen).toBe(false);
+    expect(f.holdingBreak).toBe(false);
+    expect(f.world.meta.mode).toBe("creative");
+  });
+
+  it("keeps progression across a mode flip but not the placed flags", () => {
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    f.survival.skills.grant("mining", 300);
+    f.survival.inventory.add("rock", 5);
+    f.survival.markPlaced(1, 2, 3);
+
+    f.handleKeyDown({ code: "KeyM" }); // to creative
+    f.handleKeyDown({ code: "KeyM" }); // and back
+    expect(f.survival.skills.xp.mining).toBe(300);
+    expect(f.survival.inventory.count("rock")).toBe(5);
+    expect(f.survival.wasPlaced(1, 2, 3)).toBe(false);
+  });
+
+  it("consumes the key and does not fall through to the host", () => {
+    expect(forge().handleKeyDown({ code: "KeyM" })).toBe(true);
+    expect(forge().handleKeyDown({ code: "KeyM", ctrlKey: true })).not.toBe(true);
+  });
+
+  it("survives a save and reload as a survival world", async () => {
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    const back = await unpackWorld(await packWorld(f.world));
+    expect(back.meta.mode).toBe("survival");
+    expect(attachSurvival(back, new SurvivalSession())).not.toBe(null);
+  });
+});

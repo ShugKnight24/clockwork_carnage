@@ -603,6 +603,10 @@ export class ForgeMode {
       this.audio.menuSelect();
       return true;
     }
+    if (code === "KeyM" && !ctrl) {
+      this._setMode(this.isSurvival() ? "creative" : "survival");
+      return true;
+    }
     if (code === "KeyH" && !ctrl) {
       this.showHelp = !this.showHelp;
       return true;
@@ -1098,6 +1102,33 @@ export class ForgeMode {
     } catch (_) {
       /* storage full or unavailable */
     }
+  }
+
+  /** @returns {boolean} true when the edited world is a survival world */
+  isSurvival() {
+    return this.world?.meta?.mode === "survival";
+  }
+
+  /**
+   * Switch the edited world between creative and survival. This is the only
+   * player-facing way into survival: `meta.mode` rides the v4 codec, so the
+   * choice persists with the world once it is saved.
+   */
+  _setMode(mode) {
+    if (!this.world) return;
+    this.world.meta.mode = mode;
+    // A mode change is a fresh start for the placed-block flags, and any
+    // half-finished break belongs to the mode that is ending.
+    this.survivalSession.resetPlaced();
+    this.survival = attachSurvival(this.world, this.survivalSession);
+    this.holdingBreak = false;
+    this.breakProgress = 0;
+    if (!this.survival) {
+      this.craftOpen = false;
+      this.craftIndex = 0;
+    }
+    this._warn(mode === "survival" ? "SURVIVAL — gather to build" : "CREATIVE — unlimited blocks");
+    this.audio.menuConfirm();
   }
 
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
@@ -1770,6 +1801,8 @@ export class ForgeMode {
       "R — Reset Pitch",
       "N — Noclip",
       "V — Terrain/Flat new world",
+      "M — Creative/Survival mode",
+      "C — Craft menu (survival)",
       "F — Rename World",
       "Tab — Overhead",
       "Ctrl+S — Save",
@@ -1800,6 +1833,11 @@ export class ForgeMode {
       ctx.fillStyle = "rgba(255,200,0,0.8)";
       ctx.font = "bold 12px monospace";
       ctx.fillText("NOCLIP", w - 14, 24);
+    }
+    if (this.survival) {
+      ctx.fillStyle = "rgba(0,255,200,0.85)";
+      ctx.font = "bold 12px monospace";
+      ctx.fillText("SURVIVAL", w - 14, this.noclip ? 40 : 24);
     }
     ctx.fillStyle = "rgba(0,255,200,0.6)";
     ctx.font = "bold 12px monospace";
