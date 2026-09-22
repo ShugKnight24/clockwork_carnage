@@ -127,6 +127,22 @@ export function createDebugBridge(game) {
       return { ...world.meta.spawn };
     },
 
+    /** Voxel renderer + world mesh state, for tests that wait out a mesh sweep. */
+    forgeWorldStats() {
+      const world = game.world || game.builder?.world;
+      const vr = game.voxelRenderer;
+      if (!world || !vr) return null;
+      let dirty = 0;
+      for (let i = 0; i < world.dirty.length; i++) if (world.dirty[i]) dirty++;
+      return {
+        chunksDrawn: vr.stats.chunksDrawn,
+        meshedThisFrame: vr.stats.meshedThisFrame,
+        ms: vr.stats.ms,
+        version: world.version,
+        dirty,
+      };
+    },
+
     async startBuilderPlayTest() {
       game.audio.init();
       // startBuilder lazy-loads the builder chunk on first use.

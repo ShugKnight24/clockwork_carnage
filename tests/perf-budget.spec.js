@@ -72,11 +72,37 @@ async function measure(profile, style, scene) {
       d.godMode(true);
     } else if (scene === "creator") {
       d.showCharacterCreate();
+    } else if (scene === "forge") {
+      d.startBuilder();
+      // startBuilder() is fire-and-forget (lazy-loads the voxel renderer and
+      // forge.js chunk, then generates or migrates a world) — wait for the
+      // state flip and a first drawn chunk before the warm-up timer below,
+      // so a slow/throttled load doesn't eat into the warm-up budget.
+      await new Promise((res) => {
+        const check = () =>
+          g.state === "builder" && (g.voxelRenderer?.stats.chunksDrawn ?? 0) > 0
+            ? res()
+            : requestAnimationFrame(check);
+        requestAnimationFrame(check);
+      });
+      // A freshly loaded world starts with every chunk dirty; let the
+      // mesh-budget sweep finish so it isn't still running when sampling
+      // starts (a few consecutive idle frames confirm it settled).
+      await new Promise((res) => {
+        let idle = 0;
+        const check = () => {
+          idle = g.voxelRenderer.stats.meshedThisFrame === 0 ? idle + 1 : 0;
+          idle >= 5 ? res() : requestAnimationFrame(check);
+        };
+        requestAnimationFrame(check);
+      });
     }
-    // Warm: decode art, bake textures, let the governor settle.
+    // Warm: decode art, bake textures (Modern's first setStyle bakes
+    // materials here, ~220ms), let the governor settle.
     await new Promise((res) => setTimeout(res, 3000));
     window.__longTasks.length = 0;
     const samples = [];
+    const voxelSamples = [];
     const sr = document.querySelector("agent-showroom");
     let yaw = 0;
     await new Promise((res) => {
@@ -85,14 +111,21 @@ async function measure(profile, style, scene) {
         if (scene === "campaign") {
           g.player.angle += 0.02;
           samples.push(d.getPerf().renderMs);
+        } else if (scene === "forge") {
+          g.builder.player.angle += 0.02;
+          const p = d.getPerf();
+          samples.push(p.renderMs);
+          voxelSamples.push(p.phases.voxel);
         } else if (sr?.setYaw) sr.setYaw((yaw += 0.05), true);
         performance.now() < end ? requestAnimationFrame(tick) : res();
       };
       requestAnimationFrame(tick);
     });
     const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    const voxelAvg = voxelSamples.length ? voxelSamples.reduce((a, b) => a + b, 0) / voxelSamples.length : 0;
     return {
       renderMs: avg,
+      voxelMs: voxelAvg,
       pixels: g.canvas.width * g.canvas.height,
       longMax: window.__longTasks.length ? Math.max(...window.__longTasks) : 0,
     };
@@ -106,6 +139,19 @@ for (const profile of PROFILES) {
     test(`${profile.name} / ${style.name}: gameplay within budget`, async () => {
       test.setTimeout(90_000);
       const r = await measure(profile, style, "campaign");
+      test.info().annotations.push({ type: "perf", description: JSON.stringify(r) });
+      expect(r.pixels, "render pixels over the tier budget").toBeLessThanOrEqual(profile.pixelCap * 1.01);
+      expect(r.renderMs, "CPU render time per frame").toBeLessThanOrEqual(profile.renderMs);
+      expect(r.longMax, "main-thread hitch").toBeLessThanOrEqual(LONG_TASK_BUDGET * profile.cpu);
+    });
+  }
+}
+
+for (const profile of PROFILES) {
+  for (const style of STYLES) {
+    test(`${profile.name} / ${style.name}: forge within budget`, async () => {
+      test.setTimeout(90_000);
+      const r = await measure(profile, style, "forge");
       test.info().annotations.push({ type: "perf", description: JSON.stringify(r) });
       expect(r.pixels, "render pixels over the tier budget").toBeLessThanOrEqual(profile.pixelCap * 1.01);
       expect(r.renderMs, "CPU render time per frame").toBeLessThanOrEqual(profile.renderMs);
