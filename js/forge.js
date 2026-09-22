@@ -13,6 +13,9 @@ import {
   groundHeight,
   raycastBlocks,
 } from "../src/world/voxel-physics.js";
+import { SurvivalSession } from "../src/rpg/survival-session.js";
+import { PlayerStore } from "../src/rpg/player-store.js";
+import { itemForBlock } from "../src/rpg/items.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -80,6 +83,15 @@ export function placementAllowed(world, x, y, z, bodies = [], markers = []) {
     if (z === mz || z === mz + 1) return false;
   }
   return true;
+}
+
+/**
+ * Survival is selected per world. Old worlds have no `mode` and stay creative,
+ * so the editor behaves exactly as it did before this change.
+ * @returns {import("../src/rpg/survival-session.js").SurvivalSession|null}
+ */
+export function attachSurvival(world, session) {
+  return world?.meta?.mode === "survival" ? session : null;
 }
 
 /** Anything solid but bedrock can be dug out. */
@@ -239,6 +251,7 @@ export class ForgeMode {
    * @param {object} deps.keybinds  - Keybind map (moveForward, moveBack, moveLeft, moveRight)
    * @param {HTMLCanvasElement} deps.canvas - The game canvas (for pointer lock)
    * @param {WorldStore} [deps.store] - Injectable for tests; defaults to IndexedDB
+   * @param {PlayerStore} [deps.playerStore] - Injectable for tests; defaults to IndexedDB
    */
   constructor(deps) {
     this.renderer = deps.renderer;
@@ -270,6 +283,14 @@ export class ForgeMode {
     this.historyIndex = -1;
 
     this.toolMode = "block";
+    /** Progression is per-character and outlives any one world. */
+    this.playerStore = deps.playerStore || new PlayerStore();
+    /** Built once from the stored character, then attached per world. */
+    this.survivalSession = new SurvivalSession();
+    /** Non-null only in a survival world; every RPG rule lives behind it. */
+    this.survival = null;
+    /** The item id the hotbar has selected in survival. */
+    this.heldItem = null;
     this.selectedEnemy = 0;
     this.selectedPickup = 0;
 
@@ -311,6 +332,13 @@ export class ForgeMode {
    * world so the editor still runs, with `storageFailed` saying so on the HUD.
    */
   async start() {
+    // The character outlives every world, so it is read before one is adopted:
+    // `_adopt` is what hands this session to a survival world.
+    const saved = await this.playerStore.load(0);
+    this.survivalSession = new SurvivalSession({
+      skills: saved.skills,
+      inventory: saved.inventory,
+    });
     try {
       await this._migrateLegacy();
     } catch (_) {
@@ -348,6 +376,13 @@ export class ForgeMode {
     this.noclip = false;
     this.toolMode = "block";
     this.active = true;
+
+    // After the reset above, or the notice it sets would be wiped out. A
+    // creative world has no progression to lose, so it never sees these.
+    if (this.survival) {
+      if (saved.unavailable) this._warn("Progress will not be saved");
+      else if (saved.stale) this._warn("Character saved by a newer version");
+    }
 
     requestPointerLockSafe(this.canvas);
   }
@@ -791,16 +826,32 @@ export class ForgeMode {
     this._record(edit);
   }
 
+  /**
+   * Run one history entry through `apply` — `undoEdit` or `applyEdit`. Both
+   * write the world behind the survival session's back, so the placed-by-player
+   * bit is reconciled from what the cell held on either side: a block the
+   * history hands back was never found by the player and must not pay mining xp
+   * a second time. A meta edit names no cell and is left alone.
+   */
+  _replayEdit(edit, apply) {
+    const before = edit.meta ? AIR : this.world.get(edit.x, edit.y, edit.z);
+    apply(this.world, edit);
+    if (!this.survival || edit.meta) return;
+    const after = this.world.get(edit.x, edit.y, edit.z);
+    if (before === AIR && after !== AIR) this.survival.markPlaced(edit.x, edit.y, edit.z);
+    else if (before !== AIR && after === AIR) this.survival.clearPlaced(edit.x, edit.y, edit.z);
+  }
+
   undo() {
     if (this.historyIndex < 0) return;
-    undoEdit(this.world, this.history[this.historyIndex--]);
+    this._replayEdit(this.history[this.historyIndex--], undoEdit);
     this._markDirty();
     this.audio.menuSelect();
   }
 
   redo() {
     if (this.historyIndex >= this.history.length - 1) return;
-    applyEdit(this.world, this.history[++this.historyIndex]);
+    this._replayEdit(this.history[++this.historyIndex], applyEdit);
     this._markDirty();
     this.audio.menuSelect();
   }
@@ -810,14 +861,39 @@ export class ForgeMode {
     if (!c) return;
     if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers()))
       return;
-    if (this._editBlock(c.x, c.y, c.z, this.tile)) this.audio.menuConfirm();
+
+    if (!this.survival) {
+      if (this._editBlock(c.x, c.y, c.z, this.tile)) this.audio.menuConfirm();
+      return;
+    }
+
+    const itemId = this.heldItem ?? itemForBlock(this.tile);
+    const spend = this.survival.tryPlace(itemId);
+    if (!spend.ok) {
+      this._warn(spend.reason);
+      return;
+    }
+    if (this._editBlock(c.x, c.y, c.z, spend.blockId)) {
+      this.survival.markPlaced(c.x, c.y, c.z);
+      this.audio.menuConfirm();
+    } else {
+      this.survival.refund(itemId); // the edit was a no-op; do not eat the item
+    }
   }
 
+  /** In survival this only *starts* a break; holding the button finishes it. */
   removeBlock() {
     const t = this.target;
     if (!t) return;
     if (!removeAllowed(this.world, t.x, t.y, t.z)) return;
-    if (this._editBlock(t.x, t.y, t.z, AIR)) this.audio.menuSelect();
+
+    if (!this.survival) {
+      if (this._editBlock(t.x, t.y, t.z, AIR)) this.audio.menuSelect();
+      return;
+    }
+
+    const begun = this.survival.beginBreak(t, this.world.get(t.x, t.y, t.z));
+    if (!begun.ok) this._warn(begun.reason);
   }
 
   // ─── Markers ─────────────────────────────────────────────
@@ -929,6 +1005,7 @@ export class ForgeMode {
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
   _adopt(world, id = this.currentSlot) {
     this.world = world;
+    this.survival = attachSurvival(world, this.survivalSession);
     this.currentSlot = id;
     this.history = [];
     this.historyIndex = -1;
@@ -966,6 +1043,16 @@ export class ForgeMode {
    */
   _persistCurrent() {
     if (!this.world || this._slotPending) return Promise.resolve();
+    // The character lives in its own store, so it rides along on every world
+    // write rather than waiting for the Forge to close.
+    if (this.survival) {
+      this._fire(
+        this.playerStore.save(0, {
+          skills: this.survival.skills,
+          inventory: this.survival.inventory,
+        }),
+      );
+    }
     return this.store.save(this.currentSlot, this.world);
   }
 
