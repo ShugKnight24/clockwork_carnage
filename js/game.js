@@ -373,6 +373,7 @@ export class Game {
     this.voxelRenderer = null; // Lazy-loaded with the Forge, shared with the play-test
     /** True once WebGL2 has been asked for and refused; the Forge stays shut. */
     this.voxelUnavailable = false;
+    this._builderLoad = null; // In-flight _ensureBuilder promise, shared by concurrent entries
     this._builderOpts = {
       renderer: this.renderer,
       audio: this.audio,
@@ -2800,7 +2801,19 @@ export class Game {
    * async about the Forge happens here so `_enterBuilder` — and therefore a
    * warm `startBuilder()` — stays synchronous.
    */
-  async _ensureBuilder() {
+  _ensureBuilder() {
+    // Two quick clicks must not each build a VoxelRenderer: the second would
+    // orphan the first one's GL context. The in-flight promise is shared and
+    // dropped once it settles, so a later entry can retry after a failure.
+    if (!this._builderLoad) {
+      this._builderLoad = this._loadBuilder().finally(() => {
+        this._builderLoad = null;
+      });
+    }
+    return this._builderLoad;
+  }
+
+  async _loadBuilder() {
     if (this.voxelUnavailable) return;
     if (!this.voxelRenderer) {
       const { VoxelRenderer } = await import(
@@ -2811,11 +2824,9 @@ export class Game {
         this.canvas.height,
       );
       if (!this.voxelRenderer) {
+        // main.js says so on the Forge button; a canvas toast would never
+        // paint, because mode select is DOM and the canvases are hidden.
         this.voxelUnavailable = true;
-        this._shareToast = {
-          text: "The Forge needs WebGL2 on this device",
-          life: 4.0,
-        };
         return;
       }
     }
@@ -2826,8 +2837,10 @@ export class Game {
       this.builder = new _ForgeMode(this._builderOpts);
       this.builder.onShareMap = (hash) => this._shareBuilderMap(hash);
       this.builder.onPlayTest = () => this.startBuilderPlayTest();
-      await this.builder.start();
     }
+    // A ForgeMode whose last `start()` failed to produce a world gets another
+    // go, rather than leaving the Forge silently unopenable.
+    if (!this.builder.world) await this.builder.start();
   }
 
   /** @see startMeltdown — same sync-when-warm contract. */
@@ -3073,6 +3086,20 @@ export class Game {
     if (!this.builder?.world) return; // WebGL2 missing — the Forge never opened
     if (!this.builder.importMapData(payload)) return;
     this.world = this.builder.world;
+    // The world now has a slot of its own; keeping the hash would import a
+    // second copy on the next reload.
+    this._clearShareHash();
+  }
+
+  /** Drop the share hash from the address bar without firing `hashchange`. */
+  _clearShareHash() {
+    try {
+      if (!window.location.hash) return;
+      const bare = window.location.pathname + window.location.search;
+      window.history.replaceState(null, "", bare);
+    } catch (_) {
+      /* some embeddings forbid history writes; the link still works */
+    }
   }
 
   _handleVictoryClick(e) {
@@ -3168,13 +3195,10 @@ export class Game {
   _shareBuilderMap(hash) {
     if (!hash) return;
     const url = `${window.location.origin}${window.location.pathname}#${hash}`;
-    // replaceState, not location.hash: a hashchange here would re-import the
-    // world we just shared as a fresh slot.
-    try {
-      window.history.replaceState(null, "", `#${hash}`);
-    } catch (_) {
-      /* some embeddings forbid history writes; the copied URL still works */
-    }
+    // The link goes to the clipboard, never into our own address bar: leaving
+    // `#v4.…` there makes a reload import the author's own world as a second
+    // "Shared" slot.
+    this._clearShareHash();
     navigator.clipboard
       .writeText(url)
       .then(() => {

@@ -26,6 +26,8 @@ const PICKUP_COLORS = {
   invuln: "#ffdc78",
   exit: "#44ffaa",
 };
+/** Non-enemy entities that earn a billboard; everything else is skipped. */
+const MARKER_TYPES = new Set(Object.keys(PICKUP_COLORS));
 const _pickupIcons = new Map();
 
 /**
@@ -60,8 +62,8 @@ function pickupIcon(type) {
 
 /**
  * Feet-anchored billboards for everything alive in a voxel play-test.
- * Enemy bitmaps are still decoding for the first frames after a spawn; those
- * enemies are simply left out until their body canvas exists.
+ * Only enemies, the pickup kinds above and the exit get one; anything else
+ * (props, projectiles) is left to Task 11.
  */
 function spriteListFromEntities(game) {
   const out = [];
@@ -71,7 +73,10 @@ function spriteListFromEntities(game) {
     if (e.type === "enemy") {
       if (e.state === "dead") continue;
       const frame = prepareEnemySprite(ctx, e, ENEMY_SPRITE_PX, game.time);
-      if (!frame?.body) continue; // boss rigs and undecoded bitmaps
+      // `frame` is a shared object the boss branch fills differently: it sets
+      // `parts` and leaves whatever `body` the previous enemy left behind, so
+      // the model has to be asked whether this frame is a boss.
+      if (!frame?.body || frame.model?.boss) continue;
       const def = e.def || {};
       out.push({
         x: e.x,
@@ -80,11 +85,13 @@ function spriteListFromEntities(game) {
         w: def.radius * 2.2 || 0.9,
         h: def.hitHeight * 2 || 1.6,
         image: frame.body,
-        key: `enemy:${e.enemyType}:${frame.pose}`,
+        // The variant picks a different body bitmap for the same type and
+        // pose, so it belongs in the cache identity.
+        key: `enemy:${e.enemyType}:${frame.m?.variant ?? 0}:${frame.pose}`,
       });
       continue;
     }
-    if (e.type === "projectile") continue;
+    if (!MARKER_TYPES.has(e.type)) continue;
     const exit = e.type === "exit";
     out.push({
       x: e.x,
@@ -365,7 +372,13 @@ export function renderFrame(game) {
   }
 
   ctx.restore();
-  if (profiling) game.profiler.currentPhases.raycast = performance.now() - _tRay0;
+  if (profiling) {
+    // The voxel pass reports itself as `voxel` (drawVoxelScene); counting it in
+    // `raycast` as well would show the same milliseconds twice. Each branch
+    // zeroes the other's phase so neither shows a stale figure.
+    game.profiler.currentPhases.raycast = game.world ? 0 : performance.now() - _tRay0;
+    if (!game.world) game.profiler.currentPhases.voxel = 0;
+  }
 
   // Subtle atmospheric horizon gradient (per-act fog tint)
   const _act = game.campaign?.act || 1;
