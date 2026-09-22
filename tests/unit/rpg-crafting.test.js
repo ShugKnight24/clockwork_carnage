@@ -93,3 +93,68 @@ describe("craft", () => {
     expect(leveled).toBe(true);
   });
 });
+
+describe("repair recipes", () => {
+  const worn = (dur) => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 120 - dur);
+    inv.add("stone", 4);
+    inv.add("rock", 4);
+    return inv;
+  };
+
+  it("restores the tool to full and consumes the inputs", () => {
+    const inv = worn(10);
+    const skills = new Skills();
+    const res = craft("repair_pick_stone", inv, skills);
+    expect(res.ok).toBe(true);
+    expect(res.repaired).toBe("pick_stone");
+    expect(inv.slots[0].dur).toBe(120);
+    expect(inv.count("stone")).toBe(3);
+    expect(inv.count("rock")).toBe(3);
+    expect(skills.xp.construction).toBe(15);
+  });
+
+  it("repairs the most worn of two", () => {
+    const inv = worn(10);
+    inv.add("pick_stone", 1); // a second, full one
+    const fresh = inv.slots.findIndex((s, i) => i !== 0 && s && s.item === "pick_stone");
+    craft("repair_pick_stone", inv, new Skills());
+    expect(inv.slots[0].dur).toBe(120);
+    expect(inv.slots[fresh].dur).toBe(120);
+  });
+
+  it("refuses with nothing worn and consumes nothing", () => {
+    const inv = new Inventory();
+    inv.add("stone", 4); inv.add("rock", 4);
+    const skills = new Skills();
+    expect(craft("repair_pick_stone", inv, skills))
+      .toEqual({ ok: false, reason: "Nothing to repair" });
+    expect(inv.count("stone")).toBe(4);
+    expect(skills.xp.construction).toBe(0);
+  });
+
+  it("refuses a repair whose tool is already at full", () => {
+    const inv = worn(120);
+    expect(craft("repair_pick_stone", inv, new Skills()))
+      .toEqual({ ok: false, reason: "Nothing to repair" });
+  });
+
+  it("refuses when the inputs are short, leaving the tool worn", () => {
+    const inv = new Inventory();
+    inv.add("pick_stone", 1);
+    inv.wearSlot(0, 100);
+    expect(craft("repair_pick_stone", inv, new Skills()).ok).toBe(false);
+    expect(inv.slots[0].dur).toBe(20);
+  });
+
+  it("does not need a free slot, since a repair yields no item", () => {
+    const inv = new Inventory(3);
+    inv.add("pick_stone", 1); inv.wearSlot(0, 60);
+    inv.add("stone", 64); inv.add("rock", 64);
+    expect(inv.fits("stone", 1)).toBe(false); // pack is full
+    expect(craft("repair_pick_stone", inv, new Skills()).ok).toBe(true);
+    expect(inv.slots[0].dur).toBe(120);
+  });
+});

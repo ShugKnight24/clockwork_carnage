@@ -22,6 +22,14 @@ export function canCraft(recipeId, inventory, skills) {
     }
   }
 
+  // A repair yields no item, so it needs a worn tool rather than a free slot.
+  if (r.repairs) {
+    const slot = inventory.findWorn(r.repairs);
+    const full = slot >= 0 && inventory.slots[slot].dur >= itemById(r.repairs).durability;
+    if (slot < 0 || full) return { ok: false, reason: "Nothing to repair" };
+    return { ok: true };
+  }
+
   // Check the output fits against the inventory as it will be *after* the
   // inputs come out, since removing them may free the slot the output needs.
   const probe = cloneInventory(inventory);
@@ -46,8 +54,20 @@ export function craft(recipeId, inventory, skills) {
 
   const r = recipeById(recipeId);
   for (const [itemId, n] of r.inputs) inventory.remove(itemId, n);
-  inventory.add(r.output[0], r.output[1]);
+
+  let repaired = null;
+  if (r.repairs) {
+    inventory.repairSlot(inventory.findWorn(r.repairs));
+    repaired = r.repairs;
+  } else {
+    inventory.add(r.output[0], r.output[1]);
+  }
   const granted = skills.grant("construction", r.xp);
 
-  return { ok: true, output: [...r.output], leveled: granted?.leveled ?? false };
+  return {
+    ok: true,
+    output: r.output ? [...r.output] : null,
+    repaired,
+    leveled: granted?.leveled ?? false,
+  };
 }
