@@ -11,7 +11,8 @@ import { bestTool, TOOLS } from "./tools.js";
 import { canMine, breakTime, dropsFor, xpFor } from "./gather.js";
 import { itemById, blockForItem } from "./items.js";
 import { craft as craftRecipe, canCraft } from "./crafting.js";
-import { availableRecipes } from "./recipes.js";
+import { availableRecipes, recipeById } from "./recipes.js";
+import { stationsInRange } from "./stations.js";
 
 const CELLS = World.W * World.D * World.H;
 
@@ -172,8 +173,28 @@ export class SurvivalSession {
 
   // ─── Crafting ─────────────────────────────────────────────
 
-  recipes(station = null) { return availableRecipes(this.skills, station); }
-  canCraft(recipeId) { return canCraft(recipeId, this.inventory, this.skills); }
-  craft(recipeId) { return craftRecipe(recipeId, this.inventory, this.skills); }
+  /** @returns {Set<string>} stations within reach of `player` in `world` */
+  stations(world, player) { return stationsInRange(world, player); }
+
+  recipes(stations = null) { return availableRecipes(this.skills, stations); }
+
+  /**
+   * A recipe whose station is not in reach is refused by name, so the message
+   * tells the player what to go and build rather than just saying no.
+   */
+  canCraft(recipeId, stations = null) {
+    const r = recipeById(recipeId);
+    if (r?.station && !(stations && new Set(stations).has(r.station))) {
+      const name = r.station[0].toUpperCase() + r.station.slice(1);
+      return { ok: false, reason: `Needs a ${name}` };
+    }
+    return canCraft(recipeId, this.inventory, this.skills);
+  }
+
+  craft(recipeId, stations = null) {
+    const gate = this.canCraft(recipeId, stations);
+    if (!gate.ok) return gate;
+    return craftRecipe(recipeId, this.inventory, this.skills);
+  }
 }
 

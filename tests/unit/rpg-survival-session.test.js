@@ -263,3 +263,39 @@ describe("revising your own build is free", () => {
     expect(s.inventory.slots[slot].dur).toBe(119);
   });
 });
+
+describe("station-aware crafting", () => {
+  it("reports the stations around the player", async () => {
+    const { World } = await import("../../src/world/world.js");
+    const { STATIONS } = await import("../../src/rpg/stations.js");
+    const s = session();
+    const w = new World();
+    w.set(65, 64, 32, STATIONS.workbench);
+    expect([...s.stations(w, { x: 64.5, y: 64.5, z: 32 })]).toEqual(["workbench"]);
+    expect(s.stations(null, null).size).toBe(0);
+  });
+
+  it("refuses a recipe whose station is not in reach", () => {
+    const s = session();
+    s.skills.grant("construction", 100_000);
+    s.inventory.add("ore", 2);
+    expect(s.canCraft("smelt_metal")).toEqual({ ok: false, reason: "Needs a Workbench" });
+    expect(s.canCraft("smelt_metal", new Set(["workbench"])).ok).toBe(true);
+  });
+
+  it("crafts once the station is in reach", () => {
+    const s = session();
+    s.skills.grant("construction", 100_000);
+    s.inventory.add("ore", 2);
+    expect(s.craft("smelt_metal").ok).toBe(false);
+    expect(s.inventory.count("ore")).toBe(2);
+    expect(s.craft("smelt_metal", new Set(["workbench"])).ok).toBe(true);
+    expect(s.inventory.count("metal")).toBe(1);
+  });
+
+  it("still crafts the station-free tier with nothing in reach", () => {
+    const s = session();
+    s.inventory.add("rock", 2);
+    expect(s.craft("cut_stone").ok).toBe(true);
+  });
+});
