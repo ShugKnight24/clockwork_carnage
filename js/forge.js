@@ -9,7 +9,7 @@ import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/w
 import { convertLegacyMap } from "../src/world/legacy-convert.js";
 import {
   PLAYER,
-  moveAABB,
+  stepWalker,
   groundHeight,
   raycastBlocks,
 } from "../src/world/voxel-physics.js";
@@ -882,30 +882,15 @@ export class ForgeMode {
       this.velZ = 0;
       this.grounded = false;
     } else {
-      if (this.keys["Space"] && this.grounded) {
-        this.velZ = PLAYER.jump;
-        this.grounded = false;
-      }
-      this.velZ -= PLAYER.gravity * dt;
-      const res = moveAABB(
-        this.world,
-        {
-          x: this.player.x,
-          y: this.player.y,
-          z: this.player.z,
-          half: PLAYER.half,
-          height: PLAYER.height,
-        },
-        mx,
-        my,
-        this.velZ * dt,
-        { step: PLAYER.step },
-      );
-      this.player.x = res.x;
-      this.player.y = res.y;
-      this.player.z = res.z;
-      this.grounded = res.grounded;
-      if (res.hitZ || (res.grounded && this.velZ < 0)) this.velZ = 0;
+      // Walking and swimming are one step; on dry land it is the old
+      // jump-gravity-move sequence. Space swims up, the crouch key dives.
+      const s = (this._walker ??= { against: false, submersion: 0 });
+      s.x = this.player.x; s.y = this.player.y; s.z = this.player.z;
+      s.velZ = this.velZ; s.grounded = this.grounded;
+      const down = this.keys[this.keybinds.crouch] || this.keys["ControlLeft"] || this.keys["ControlRight"];
+      stepWalker(this.world, s, { mx, my, up: !!this.keys["Space"], down: !!down }, dt);
+      this.player.x = s.x; this.player.y = s.y; this.player.z = s.z;
+      this.velZ = s.velZ; this.grounded = s.grounded;
     }
 
     this.target = this._pick();
