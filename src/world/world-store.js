@@ -82,6 +82,10 @@ export class IdbBackend {
       for (const key of del) cols.delete([row.id, key]);
       for (const c of put) cols.put(c);
       tx.objectStore("worlds").put(row);
+      // Nothing else joins this transaction, so commit now instead of when it
+      // goes idle: a save made as the page hides must not wait for a task the
+      // unloading page will never run.
+      tx.commit?.();
     });
   }
   delete(id) {
