@@ -40,7 +40,7 @@
 - a teach card up and the line is about the lesson → **fold**: spoken on the comms channel as usual, drawn inside the card as a narration row, no plate;
 - a teach card up otherwise → **low**: the plate drops to the low comms slot above the vitals (projected keeps its figure on the left, caption kept below the card).
 
-**Folding.** A teach card folds `powerUnlocked` (ARIA's "new pattern in the shard" line that fires as the card comes up) for every power, and the first-shift lines (`chronoShiftActivated`, `chronoShiftLoud`) for Foresight, whose lesson is shifting.
+**Folding.** A teach card folds `powerUnlocked` (ARIA's "new pattern in the shard" line that fires as the card comes up) for every power, and the first-shift lines (`chronoShiftActivated`, `chronoShiftLoud`) for Foresight, whose lesson is shifting. On a phone the card has no room for the row, so the line keeps its low plate.
 
 **Chip lane (right side, under the minimap / kill feed).** One chip at a time, priority `achievement 50 > unlock 40 > gear 30`, 3.2–3.5 s each. A new chip does not start while a boss intro or level title is up, while a teach card is in its first 6 s, or in heavy combat (hurt in the last 2.5 s, slow-mo, or three hostiles engaged within 12 tiles). An unlock or achievement waits at most 25 s of that before it shows anyway (never over a boss intro); a gear pickup chip is dropped after 12 s. With three or more waiting, each chip plays at 0.6× its time (at least 1.8 s), so a first session's burst of unlocks clears quickly; the lane holds at most 16, past that the lowest-priority, oldest one goes. Outside play (the customize screen) the unlock toast keeps its old top-centre place.
 
@@ -98,5 +98,6 @@ Tested for no overlap between lanes and against every reserved rectangle at 1280
 ## Deferred
 
 - A level title card in play: the kind and its priority are in place; nothing draws one yet.
+- The boss intro plate keeps its own centre band (0.35 h); on a phone it still crosses the LOCK / REWIND buttons for its 3.5 s, as before.
 - Tutorial step cards stay on the game canvas with their own anchor; the tutorial has one message at a time already.
 - Legacy Tactical / Custom are mapped to the Minimal reservations (same corners); a Custom layout the player has rearranged in the HUD editor is not read.
