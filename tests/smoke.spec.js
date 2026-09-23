@@ -20,9 +20,10 @@ test.describe("Game Loading", () => {
 
   test("title screen is visible", async ({ page }) => {
     await loadGame(page);
-    const title = page.locator("#titleScreen h1");
+    // The title is the brand logotype, an image named for screen readers.
+    const title = page.locator("#titleScreen h1").getByRole("img", { name: "Clockwork Carnage" });
     await expect(title).toBeVisible();
-    await expect(title).toHaveText("CLOCKWORK CARNAGE");
+    await expect.poll(() => title.evaluate((img) => img.complete && img.naturalWidth > 0)).toBe(true);
   });
 
   test("debug bridge is exposed", async ({ page }) => {

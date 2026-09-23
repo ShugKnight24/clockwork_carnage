@@ -43,13 +43,16 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; font-src 'self'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/brand/icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <!-- Title Screen -->
     <div id="titleScreen">
-      <h1>CLOCKWORK CARNAGE</h1>
+      <h1 class="title-logo-wrap">
+        <img id="titleLogo" class="title-logo" src="assets/brand/comic/logotype.svg" alt="Clockwork Carnage" />
+      </h1>
       <div class="title-svg-container">
         <title-background></title-background>
         <title-clock></title-clock>
@@ -73,7 +76,7 @@
                 <path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
               </svg>
             </div>
-            <div class="feature-title">3-ACT CAMPAIGN</div>
+            <div class="feature-title">4-ACT CAMPAIGN</div>
             <div class="feature-desc">
               Fight through temporal anomalies. Defeat the Paradox Lord.
             </div>

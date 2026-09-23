@@ -5,7 +5,7 @@ import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom } from "../src/rendering/render-pipeline.js";
-import { onArtStyleChange, isModernArt } from "../src/rendering/art-style.js";
+import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
 import { initUnlockToasts, showGearToast } from "../src/ui/unlock-toast.js";
@@ -48,6 +48,18 @@ game.showGearToast = showGearToast;
 onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });
+
+// The title logotype wears the active art style's finish: Legacy's neon,
+// Comic's ink, or Modern's steel (assets/brand, built by scripts/brand).
+const titleLogo = document.getElementById("titleLogo");
+function syncTitleLogo() {
+  if (!titleLogo) return;
+  const s = getArtStyle();
+  const finish = s === ART_LEGACY ? "legacy" : s === ART_REALISTIC ? "modern" : "comic";
+  titleLogo.src = `assets/brand/${finish}/logotype.svg`;
+}
+syncTitleLogo();
+onArtStyleChange(syncTitleLogo);
 
 // initialize analytics (consent UI waits until first user interaction)
 initAnalytics();
