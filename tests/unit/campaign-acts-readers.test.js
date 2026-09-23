@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ACTS, getAct } from "../../src/data/campaign/acts.js";
+import { ACTS, getAct, bossLevelIndex } from "../../src/data/campaign/acts.js";
 import {
   createCampaignEntities,
   applyActEnemyRoster,
@@ -10,7 +10,7 @@ import { AriaCommsSystem } from "../../src/systems/aria-comms.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
 
 // The systems that used to branch on act numbers now read the act's row.
-// These pin the reading; campaign-acts-parity pins the values.
+// These pin the reading; acts.test.js pins the values.
 
 const diff = getDifficultyMultipliers(1);
 const bossMap = {
@@ -70,10 +70,10 @@ describe("squad presence", () => {
     }
   });
 
-  it("leaves Act I alone and brings Lyra in at Act II level 1", () => {
+  it("leaves Act I alone and brings Lyra in first, at Act II level 0", () => {
     expect(getPresentSquad(1, 0)).toEqual([]);
-    expect(getPresentSquad(2, 0)).not.toContain("lyra");
-    expect(getPresentSquad(2, 1)).toContain("lyra");
+    expect(getPresentSquad(1, bossLevelIndex(1))).toEqual([]);
+    expect(getPresentSquad(2, 0)).toEqual(["lyra"]);
     expect(getPresentSquad(99, 0)).toEqual([]);
   });
 });
@@ -94,9 +94,9 @@ describe("ARIA idle pool", () => {
     expect(pick({ act: 3, ambient: "act3Ambient" }, 0.1)).toBe("act3Ambient");
   });
 
-  it("has no ambient pool without one (Act I until phase 2)", () => {
-    expect(getAct(1).ambient).toBeNull();
-    expect(pick({ act: 1, ambient: getAct(1).ambient }, 0.1)).toBe("idle");
+  it("draws on act1Ambient in Act I, and on nothing without a pool", () => {
+    expect(pick({ act: 1, ambient: getAct(1).ambient }, 0.1)).toBe("act1Ambient");
+    expect(pick({ act: 1 }, 0.1)).toBe("idle");
     expect(pick({ act: 1 }, 0.6)).toBe("ariaPersonality");
   });
 

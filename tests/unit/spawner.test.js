@@ -11,6 +11,7 @@ import {
   createMeltdownPickups,
   applyActEnemyRoster,
 } from "../../src/systems/spawner.js";
+import { ENEMY_TYPES } from "../../src/data/enemies.js";
 
 // ── getDifficultyMultipliers ────────────────────────────────────────────────
 
@@ -285,16 +286,18 @@ describe("createCampaignEntities", () => {
     expect(pickups.length).toBe(1);
   });
 
-  it("remaps boss to boss_form2 in act 2", () => {
+  it("puts the Hound in act 2's boss slot, unscaled by the act", () => {
     const { entities } = createCampaignEntities(level, 2, 0, diff);
-    const boss = entities.find(e => e.type === "enemy" && e.enemyType.startsWith("boss"));
-    expect(boss.enemyType).toBe("boss_form2");
+    const boss = entities.find(e => e.type === "enemy" && e.def.boss);
+    expect(boss.enemyType).toBe("hound");
+    expect(boss.health).toBe(Math.floor(ENEMY_TYPES.hound.health * diff.healthMul));
   });
 
-  it("remaps boss to boss_form3 in act 3", () => {
-    const { entities } = createCampaignEntities(level, 3, 0, diff);
-    const boss = entities.find(e => e.type === "enemy" && e.enemyType.startsWith("boss"));
-    expect(boss.enemyType).toBe("boss_form3");
+  it("remaps boss to boss_form2 in act 3 and boss_form3 in act 4", () => {
+    const form = (act) => createCampaignEntities(level, act, 0, diff).entities
+      .find(e => e.type === "enemy" && e.def.boss).enemyType;
+    expect(form(3)).toBe("boss_form2");
+    expect(form(4)).toBe("boss_form3");
   });
 
   it("creates exit entity when level has exit", () => {
@@ -448,25 +451,37 @@ describe("applyActEnemyRoster", () => {
   });
 
   it("substitutes out-of-roster enemies for act 2", () => {
-    const entities = [makeEnemy("drone"), makeEnemy("phantom")];
+    const entities = [makeEnemy("glitchling"), makeEnemy("phantom"), makeEnemy("drone")];
     applyActEnemyRoster(entities, 2, diff);
+    expect(entities[0].enemyType).toBe("phaseStalker");
+    expect(entities[1].enemyType).toBe("henchman");
+    expect(entities[2].enemyType).toBe("drone");
+  });
+
+  it("substitutes out-of-roster enemies for act 3", () => {
+    const entities = [makeEnemy("drone"), makeEnemy("phantom")];
+    applyActEnemyRoster(entities, 3, diff);
     expect(entities[0].enemyType).toBe("corruptCop");
     expect(entities[1].enemyType).toBe("henchman");
   });
 
-  it("substitutes out-of-roster enemies for act 3", () => {
+  it("substitutes out-of-roster enemies for act 4", () => {
     const entities = [makeEnemy("drone"), makeEnemy("corruptCop")];
-    applyActEnemyRoster(entities, 3, diff);
+    applyActEnemyRoster(entities, 4, diff);
     expect(entities[0].enemyType).toBe("echoDrone");
     expect(entities[1].enemyType).toBe("sentinel");
   });
 
+  it("keeps Act I's Shield Commander instead of swapping it for a sentinel", () => {
+    const entities = [makeEnemy("shieldCommander")];
+    applyActEnemyRoster(entities, 1, diff);
+    expect(entities[0].enemyType).toBe("shieldCommander");
+  });
+
   it("never modifies boss enemies", () => {
-    const entities = [makeEnemy("boss"), makeEnemy("boss_form2"), makeEnemy("boss_form3")];
-    applyActEnemyRoster(entities, 2, diff);
-    expect(entities[0].enemyType).toBe("boss");
-    expect(entities[1].enemyType).toBe("boss_form2");
-    expect(entities[2].enemyType).toBe("boss_form3");
+    const entities = [makeEnemy("boss"), makeEnemy("boss_form2"), makeEnemy("boss_form3"), makeEnemy("hound")];
+    applyActEnemyRoster(entities, 1, diff);
+    expect(entities.map((e) => e.enemyType)).toEqual(["boss", "boss_form2", "boss_form3", "hound"]);
   });
 
   it("skips non-enemy entities", () => {

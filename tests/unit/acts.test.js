@@ -2,25 +2,30 @@ import { describe, it, expect } from "vitest";
 import {
   ACTS,
   NG_PLUS,
+  RECRUITS,
   getAct,
   getActLevel,
   isLastAct,
   totalActs,
   maxActLevels,
   bossLevelIndex,
+  sceneSlots,
 } from "../../src/data/campaign/acts.js";
 import { CUTSCENE_KEYS } from "../../src/data/cutscene-keys.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { ARIA_COMMS } from "../../src/data/dialogue.js";
 
-// The shape of the story as data (spec §Testing, acts.test.js), scoped to
-// what phase 1 describes: today's three acts over the nine station maps.
+// The shape of the story as data (spec §Testing, acts.test.js): four acts,
+// 29 slots, one recruit per chapter of Act II, one farewell per level of IV.
 
 const CAST = new Set(["kael", "nova", "rook", "lyra"]);
 
 describe("ACTS", () => {
-  it("numbers acts 1..n in order", () => {
-    expect(ACTS.map((a) => a.id)).toEqual(ACTS.map((_, i) => i + 1));
+  it("is four acts of 8 + 7 + 7 + 7 levels", () => {
+    expect(ACTS.map((a) => a.id)).toEqual([1, 2, 3, 4]);
+    expect(ACTS.map((a) => a.levels.length)).toEqual([8, 7, 7, 7]);
+    expect(ACTS.reduce((n, a) => n + a.levels.length, 0)).toBe(29);
+    expect(ACTS.map((a) => a.title)).toEqual(["THE FALL", "THE BONDS", "THE HUNT", "THE SACRIFICE"]);
   });
 
   it("gives every act a palette, roster, boss card, ARIA line and outro", () => {
@@ -35,6 +40,11 @@ describe("ACTS", () => {
     }
   });
 
+  it("climbs the boss ladder: Form 1, the Hound, Form 2, the Final Form", () => {
+    expect(ACTS.map((a) => a.boss.type)).toEqual(["boss", "hound", "boss_form2", "boss_form3"]);
+    expect(ACTS.map((a) => a.scale)).toEqual([...ACTS.map((a) => a.scale)].sort((a, b) => a - b));
+  });
+
   it("uses only real enemy types in rosters, substitutes and bosses", () => {
     for (const act of ACTS) {
       for (const t of act.roster) expect(ENEMY_TYPES[t], `${act.id}: ${t}`).toBeDefined();
@@ -47,23 +57,21 @@ describe("ACTS", () => {
   });
 
   it("names only scenes that exist", () => {
-    const keys = (act) => [
-      ...act.intro,
-      ...act.outro,
-      ...act.levels.flatMap((l) => l.briefing ?? []),
-    ];
-    for (const act of ACTS) {
-      for (const k of keys(act)) expect(CUTSCENE_KEYS.has(k), `act ${act.id}: ${k}`).toBe(true);
+    for (const { key, act, level } of sceneSlots()) {
+      expect(CUTSCENE_KEYS.has(key), `act ${act}.${level}: ${key}`).toBe(true);
     }
     for (const k of NG_PLUS.trueEnding) expect(CUTSCENE_KEYS.has(k), k).toBe(true);
   });
 
+  it("plays each scene in one slot only", () => {
+    const keys = sceneSlots().map((s) => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("names only ARIA pools that exist", () => {
     for (const act of ACTS) {
-      if (act.ambient) expect(ARIA_COMMS[act.ambient], act.ambient).toBeDefined();
-      if (act.boss.squadPool != null) {
-        expect(ARIA_COMMS[`bossPhase${act.boss.squadPool}Squad`]).toBeDefined();
-      }
+      expect(ARIA_COMMS[act.ambient], `act ${act.id} ambient`).toBeDefined();
+      if (act.boss.squadPool != null) expect(ARIA_COMMS[act.boss.squadPool], act.boss.squadPool).toBeDefined();
       for (const l of act.levels) {
         for (const line of l.onStart) expect(ARIA_COMMS[line.aria], line.aria).toBeDefined();
       }
@@ -79,27 +87,107 @@ describe("ACTS", () => {
     }
   });
 
-  it("lists only cast members as squad, and presence never shrinks inside an act", () => {
-    for (const act of ACTS) {
-      let before = [];
-      for (const [i, l] of act.levels.entries()) {
-        for (const m of l.squad) expect(CAST.has(m), `${act.id}.${i}: ${m}`).toBe(true);
-        for (const m of before) expect(l.squad, `${act.id}.${i} lost ${m}`).toContain(m);
-        before = l.squad;
-      }
-    }
-  });
-
   it("looks acts and levels up by 1-based act and 0-based level", () => {
     expect(getAct(2).id).toBe(2);
     expect(getAct(0)).toBeUndefined();
     expect(getAct(ACTS.length + 1)).toBeUndefined();
     expect(getActLevel(1, 0)).toBe(ACTS[0].levels[0]);
     expect(getActLevel(1, ACTS[0].levels.length)).toBeUndefined();
-    expect(isLastAct(ACTS.at(-1).id)).toBe(true);
-    expect(isLastAct(1)).toBe(ACTS.length === 1);
-    expect(totalActs()).toBe(ACTS.length);
-    expect(maxActLevels()).toBe(Math.max(...ACTS.map((a) => a.levels.length)));
+    expect(isLastAct(4)).toBe(true);
+    expect(isLastAct(3)).toBe(false);
+    expect(totalActs()).toBe(4);
+    expect(maxActLevels()).toBe(8);
+  });
+});
+
+describe("Act I", () => {
+  it("plays eight of the station maps, without the Nexus", () => {
+    expect(ACTS[0].levels.map((l) => l.map)).toEqual([
+      "entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "core",
+    ]);
+  });
+
+  it("is ARIA alone: no squad anywhere, not even at the boss (problem 4)", () => {
+    for (const l of ACTS[0].levels) expect(l.squad).toEqual([]);
+    expect(ACTS[0].boss.squadPool).toBeNull();
+  });
+
+  it("has its own ambient pool (act1Ambient used to be dead)", () => {
+    expect(ACTS[0].ambient).toBe("act1Ambient");
+  });
+
+  it("keeps its Shield Commander rather than swapping it (problem 6)", () => {
+    expect(ACTS[0].roster).toContain("shieldCommander");
+    expect(ACTS[0].substitutes.shieldCommander).toBeUndefined();
+  });
+});
+
+describe("the Gathering (Act II)", () => {
+  const act = getAct(2);
+
+  it("recruits Lyra, Rook, Nova, Kael, in that order", () => {
+    expect(RECRUITS.map((r) => r.member)).toEqual(["lyra", "rook", "nova", "kael"]);
+    const levels = RECRUITS.map((r) => r.level);
+    expect(levels).toEqual([...levels].sort((a, b) => a - b));
+    expect(new Set(levels).size).toBe(4);
+  });
+
+  it("has nobody present before they join, and presence never shrinks", () => {
+    for (const [i, l] of act.levels.entries()) {
+      for (const m of l.squad) expect(CAST.has(m), `2.${i}: ${m}`).toBe(true);
+      const joined = RECRUITS.filter((r) => r.level <= i).map((r) => r.member);
+      expect([...l.squad].sort(), `2.${i}`).toEqual([...joined].sort());
+    }
+  });
+
+  it("stands on the placeholder maps the spec names", () => {
+    expect(act.levels.map((l) => l.map)).toEqual([
+      "reactor", "containment", "server_farm", "nexus", "research", "checkpoint", "core",
+    ]);
+  });
+
+  it("keeps Lyra's name off the comms until the lift", () => {
+    expect(act.levels[0].callsigns).toEqual({ lyra: "UNKNOWN" });
+    for (const l of act.levels.slice(1)) expect(l.callsigns).toBeUndefined();
+  });
+
+  it("tells one recruit per chapter, each scene in its slot", () => {
+    const slot = (key) => sceneSlots().find((s) => s.key === key);
+    const order = [
+      "gathering_extraction", "gathering_lyra", "gathering_rook", "gathering_rook_shard",
+      "gathering_nova", "gathering_greenhouse", "hound_attack", "gathering_kael",
+      "gathering_kael_joins", "hound_intro", "gathering_finale", "lyra_reveal",
+    ];
+    for (const k of order) expect(slot(k)?.act, k).toBe(2);
+    const levels = order.map((k) => slot(k).level);
+    expect(levels).toEqual([...levels].sort((a, b) => a - b));
+  });
+});
+
+describe("Acts III and IV", () => {
+  it("fields the whole squad through Act III", () => {
+    for (const l of getAct(3).levels) expect([...l.squad].sort()).toEqual([...CAST].sort());
+  });
+
+  it("lets them go in Act IV in the reverse of the order they joined", () => {
+    const iv = getAct(4).levels;
+    const leaving = [];
+    for (let i = 1; i < iv.length; i++) {
+      for (const m of iv[i - 1].squad) if (!iv[i].squad.includes(m)) leaving.push(m);
+      for (const m of iv[i].squad) expect(iv[i - 1].squad, `4.${i} gains ${m}`).toContain(m);
+    }
+    expect(leaving).toEqual(RECRUITS.map((r) => r.member).reverse());
+    expect(iv.at(-1).squad).toEqual([]);
+    expect(getAct(4).boss.squadPool).toBeNull();
+  });
+
+  it("borrows Research and the Nexus for the Archive and the Engine", () => {
+    expect(getAct(3).levels.map((l) => l.map)).toEqual([
+      "checkpoint", "server_farm", "reactor", "voss_lab", "research", "nexus", "core",
+    ]);
+    expect(getAct(4).levels.map((l) => l.map)).toEqual([
+      "entry", "server_farm", "containment", "nexus", "research", "nexus", "core",
+    ]);
   });
 });
 
@@ -136,9 +224,15 @@ describe("ACTS against the MAPS registry", async () => {
     expect(campaignLevelMap(99, 0)).toBeNull();
   });
 
-  it("lists each distinct campaign map once", () => {
+  it("lists each distinct campaign map once, all nine station maps in play", () => {
     const maps = campaignMaps();
     expect(new Set(maps).size).toBe(maps.length);
+    expect(maps).toHaveLength(9);
     expect(maps.map((m) => m.name)).toContain("The Paradox Core");
+  });
+
+  it("places Act I's Shield Commander in Containment", () => {
+    const containment = campaignLevelMap(1, 3);
+    expect(containment.entities.some((e) => e.enemyType === "shieldCommander")).toBe(true);
   });
 });

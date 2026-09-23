@@ -11,8 +11,9 @@ import { ACTS } from "../../src/data/campaign/acts.js";
 /**
  * Each env with the palette of the act the station was authored around: the
  * nine maps were built three to an act, so that is the look each was tuned in.
+ * (Act I no longer plays the Nexus, so the list is spelled out.)
  */
-const ENVS = ACTS[0].levels.map((l) => l.env);
+const ENVS = ["entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "nexus", "core"];
 const PALETTE_OF = [1, 1, 1, 2, 2, 2, 3, 3, 3];
 const LEVELS = ENVS.map((env, i) => ({ act: PALETTE_OF[i], level: env }));
 

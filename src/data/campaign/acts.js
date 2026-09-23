@@ -5,12 +5,12 @@
  * levels an act has. CampaignManager, the spawner, squad comms, ARIA's idle
  * pools, unlocks and the playtest gate all read this table.
  *
- * Phase 1 of the story restructure (docs/superpowers/specs/
- * 2026-09-22-campaign-story-restructure-design.md) describes today's campaign
- * and nothing more: three acts that each replay the nine station maps, with
- * the act changing the briefings, roster, boss form and squad. Where today's
- * behaviour is a known bug the spec fixes later, the value is kept and the
- * comment says so. This module imports no maps, so light modules can read it;
+ * Phase 2 of the story restructure (docs/superpowers/specs/
+ * 2026-09-22-campaign-story-restructure-design.md, §16.2): four acts, 29
+ * levels. Act I plays eight of the nine station maps. Acts II-IV stand on
+ * placeholder maps until their own are built, so each placeholder keeps the
+ * station map's seed and rotation; only the story, roster and squad are the
+ * act's. This module imports no maps, so light modules can read it;
  * src/data/levels/campaign.js turns a level entry into a playable map.
  *
  * Act fields:
@@ -19,7 +19,7 @@
  *   substitutes  type -> replacement for enemies outside the roster
  *   scale      health and damage multiplier for non-boss enemies
  *   boss       type replacing the map's "boss" placeholder, name card, ARIA
- *              line, and squad pool (ARIA_COMMS.bossPhase{N}Squad)
+ *              line, and the ARIA_COMMS pool the squad reacts from (or null)
  *   ambient    ARIA idle pool for the act, or null
  *   intro      scenes played on entering the act from the one before
  *   outro      scenes played when the act's boss falls
@@ -30,65 +30,95 @@
  *   seed       cover-variation seed
  *   boss       the act's boss fight: it ends on the kill, not at an exit
  *   briefing   scenes played before the level, or null
- *   squad      members present for comms
+ *   squad      members present for comms, and in the party art of the
+ *              scenes played in this slot
+ *   callsigns  member -> comms label, for someone present but not yet named
  *   onStart    one-shot ARIA lines: { aria, delay, minNgPlus? }
  */
 
 /** @typedef {"kael"|"nova"|"rook"|"lyra"} SquadMember */
 
 /**
- * The nine station maps, in the order every act plays them. Rotations and
- * seeds are the values the maps have always been prepared with, so no tile
- * moves: the seed was 7919 + index * 104729.
+ * The nine station maps, keyed by id. Rotations and seeds are the values the
+ * maps have always been prepared with, so no tile moves: the seed was
+ * 7919 + index * 104729 in the order Act I used to play them.
  */
-const STATION = [
-  { map: "entry", rotation: 0 },
-  { map: "checkpoint", rotation: 90 },
-  { map: "research", rotation: 0 },
-  { map: "containment", rotation: 0 },
-  { map: "server_farm", rotation: 180 },
-  { map: "reactor", rotation: 0 },
-  { map: "voss_lab", rotation: 0 },
-  { map: "nexus", rotation: 270 },
-  { map: "core", rotation: 0, boss: true },
-].map((s, i) => ({ boss: false, ...s, env: s.map, seed: 7919 + i * 104729 }));
+const STATION = Object.fromEntries(
+  [
+    { map: "entry", rotation: 0 },
+    { map: "checkpoint", rotation: 90 },
+    { map: "research", rotation: 0 },
+    { map: "containment", rotation: 0 },
+    { map: "server_farm", rotation: 180 },
+    { map: "reactor", rotation: 0 },
+    { map: "voss_lab", rotation: 0 },
+    { map: "nexus", rotation: 270 },
+    { map: "core", rotation: 0, boss: true },
+  ].map((s, i) => [s.map, { boss: false, ...s, env: s.map, seed: 7919 + i * 104729 }]),
+);
 
 /** NG+ runs hear the dead squad at the start of every act. */
 const NG_PLUS_BARK = { aria: "ngPlusDeadSquad", delay: 5000, minNgPlus: 1 };
 
 /**
- * One act's pass over the station maps.
- * @param {(string|null)[]} briefings - scene key per level
- * @param {(level: number) => SquadMember[]} squad
- * @param {Record<number, object[]>} [onStart] - extra lines by level
+ * One level on a station map (its own, or standing in for one not built yet).
+ * @param {string} map - STATION id
+ * @param {string[]|null} briefing
+ * @param {SquadMember[]} squad
+ * @param {{ onStart?: object[], callsigns?: Record<string, string> }} [extra]
  */
-function stationLevels(briefings, squad, onStart = {}) {
-  return STATION.map((s, i) => ({
-    ...s,
-    briefing: briefings[i] ? [briefings[i]] : null,
-    squad: squad(i),
-    onStart: [...(onStart[i] || []), ...(i === 0 ? [NG_PLUS_BARK] : [])],
-  }));
+function level(map, briefing, squad, { onStart = [], callsigns = null } = {}) {
+  return {
+    ...STATION[map],
+    briefing,
+    squad,
+    ...(callsigns ? { callsigns } : {}),
+    onStart,
+  };
 }
 
-const FULL_SQUAD = ["kael", "nova", "rook", "lyra"];
+/** The first level of every act carries the NG+ bark. */
+function levels(list) {
+  list[0].onStart = [...list[0].onStart, NG_PLUS_BARK];
+  return list;
+}
+
+/**
+ * Who joins, in order, and the Act II level (0-based) where they are first
+ * present. Act IV lets them go in the reverse order: the last to join is the
+ * first to stay behind.
+ */
+export const RECRUITS = [
+  { member: "lyra", act: 2, level: 0 },
+  { member: "rook", act: 2, level: 2 },
+  { member: "nova", act: 2, level: 4 },
+  { member: "kael", act: 2, level: 6 },
+];
+
+const ALL = ["lyra", "rook", "nova", "kael"];
 
 export const ACTS = [
   {
     id: 1,
     title: "THE FALL",
     palette: 1,
-    roster: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
+    roster: [
+      "drone",
+      "glitchling",
+      "phantom",
+      "corruptCop",
+      "sentinel",
+      "shieldCommander",
+      "temporalSummoner",
+    ],
     substitutes: {
       henchman: "corruptCop",
       beast: "sentinel",
       phaseStalker: "phantom",
       chronoBomber: "phantom",
       temporalEngineer: "phantom",
-      shieldCommander: "sentinel",
       riftLeaper: "phantom",
       timeWarden: "sentinel",
-      temporalSummoner: "phantom",
       echoDrone: "drone",
     },
     scale: 1,
@@ -96,35 +126,84 @@ export const ACTS = [
       type: "boss",
       card: { title: "PARADOX LORD", subtitle: "FIRST INCURSION" },
       aria: "bossEncounter",
-      // The player is alone in Act I, yet the squad still chimes in at this
-      // boss. Phase 2 sets this to null (spec problem 4).
-      squadPool: 1,
+      // Alone: ARIA only (spec problem 4).
+      squadPool: null,
     },
-    // act1Ambient exists but has never played; phase 2 wires it.
-    ambient: null,
+    ambient: "act1Ambient",
     // A new campaign's prologue (flipbook, clocking in, intro, first memory)
     // is sequenced by CampaignManager.start, and NG+ by startNgPlus.
     intro: [],
     outro: ["false_victory"],
-    levels: stationLevels(
-      [
-        null,
-        "security_briefing",
-        "research_briefing",
-        "containment_briefing",
-        "server_briefing",
-        "reactor_briefing",
-        "voss_lab_briefing",
-        "nexus_briefing",
-        "paradox_core_briefing",
-      ],
-      () => [],
-    ),
+    // The Temporal Nexus moved to Act IV (spec decision 8).
+    levels: levels([
+      level("entry", null, []),
+      level("checkpoint", ["security_briefing"], []),
+      level("research", ["research_briefing"], []),
+      level("containment", ["containment_briefing"], []),
+      level("server_farm", ["server_briefing"], []),
+      level("reactor", ["reactor_briefing"], []),
+      level("voss_lab", ["voss_lab_briefing"], []),
+      level("core", ["paradox_core_briefing"], []),
+    ]),
   },
   {
     id: 2,
+    // "The Gathering" is the act's design name and its scenes' keys; the
+    // card the player sees keeps "The Bonds" (spec decision 1).
     title: "THE BONDS",
     palette: 2,
+    roster: [
+      "henchman",
+      "corruptCop",
+      "drone",
+      "phaseStalker",
+      "chronoBomber",
+      "temporalEngineer",
+      "beast",
+      "shieldCommander",
+      "temporalSummoner",
+    ],
+    substitutes: {
+      glitchling: "phaseStalker",
+      phantom: "henchman",
+      sentinel: "corruptCop",
+      riftLeaper: "phaseStalker",
+      timeWarden: "temporalEngineer",
+      echoDrone: "drone",
+    },
+    scale: 1.2,
+    boss: {
+      type: "hound",
+      card: { title: "THE HOUND", subtitle: "SUIT C-0016. NOBODY INSIDE." },
+      aria: "bossHound",
+      squadPool: "houndSquad",
+    },
+    ambient: "gatheringAmbient",
+    intro: ["act2_transition_fb", "gathering_extraction"],
+    outro: ["gathering_finale", "lyra_reveal"],
+    // Placeholder maps per spec §16.2 until the Act II maps are built.
+    levels: levels([
+      // Evac Shafts. Lyra guides you out before she has a name.
+      level("reactor", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" } }),
+      // Salvage Deck. Lyra names herself in the lift, so the old Act 3
+      // Analyst L.M. and encrypted-channel barks are retired.
+      level("containment", ["gathering_lyra", "gathering_rook"], ["lyra"]),
+      // Maintenance Spine.
+      level("server_farm", ["gathering_rook_shard", "the_hunt_begins"], ["lyra", "rook"]),
+      // Transit Loop.
+      level("nexus", ["gathering_nova"], ["lyra", "rook"]),
+      // The Greenhouse.
+      level("research", ["gathering_greenhouse"], ["lyra", "rook", "nova"]),
+      // The Precinct.
+      level("checkpoint", ["hound_attack", "gathering_kael"], ["lyra", "rook", "nova"]),
+      // The Foundry, with the Hound in the Core's boss slot.
+      level("core", ["gathering_kael_joins", "hound_intro"], [...ALL]),
+    ]),
+  },
+  {
+    id: 3,
+    title: "THE HUNT",
+    palette: 3,
     roster: [
       "corruptCop",
       "henchman",
@@ -133,6 +212,7 @@ export const ACTS = [
       "chronoBomber",
       "temporalEngineer",
       "shieldCommander",
+      "timeWarden",
     ],
     substitutes: {
       drone: "corruptCop",
@@ -140,7 +220,6 @@ export const ACTS = [
       phantom: "henchman",
       sentinel: "shieldCommander",
       riftLeaper: "phaseStalker",
-      timeWarden: "shieldCommander",
       temporalSummoner: "temporalEngineer",
       echoDrone: "chronoBomber",
     },
@@ -149,30 +228,27 @@ export const ACTS = [
       type: "boss_form2",
       card: { title: "PARADOX LORD", subtitle: "SECOND INCURSION" },
       aria: "bossForm2",
-      squadPool: 2,
+      squadPool: "bossPhase2Squad",
     },
     ambient: "act2Ambient",
-    intro: ["act2_transition_fb", "act2_intro"],
+    intro: ["hunt_transition_fb", "hunt_intro", "act2_level2"],
     outro: ["act2_victory"],
-    levels: stationLevels(
-      [
-        null,
-        "act2_level2",
-        "act2_level3",
-        "act2_level4",
-        "act2_level5",
-        "act2_level6",
-        "voss_confrontation",
-        "act2_level8",
-        "act2_level9",
-      ],
-      // Lyra is revealed in act2_level2, the briefing before level 1.
-      (i) => (i >= 1 ? [...FULL_SQUAD] : ["kael", "nova", "rook"]),
-    ),
+    // Each level stands on the station map its remix will start from; the
+    // Archive and the Engine borrow Research and the Nexus.
+    levels: levels([
+      level("checkpoint", null, [...ALL]),
+      level("server_farm", ["act2_level5"], [...ALL]),
+      level("reactor", ["act2_level6"], [...ALL]),
+      level("voss_lab", ["act2_level7", "voss_confrontation", "act2_level3"], [...ALL]),
+      level("research", ["archive_briefing"], [...ALL]),
+      level("nexus", ["engine_briefing"], [...ALL]),
+      level("core", ["level3_briefing", "act2_level9"], [...ALL]),
+    ]),
   },
   {
-    id: 3,
+    id: 4,
     title: "THE SACRIFICE",
+    // Palette 4 (the white-hot rift) comes with the Act IV maps.
     palette: 3,
     roster: [
       "beast",
@@ -198,35 +274,30 @@ export const ACTS = [
       type: "boss_form3",
       card: { title: "PARADOX LORD", subtitle: "FINAL INCURSION" },
       aria: "bossForm3",
-      squadPool: 3,
+      // You walk in alone.
+      squadPool: null,
     },
     ambient: "act3Ambient",
-    intro: ["act3_transition_fb", "lyra_reveal", "act3_intro"],
+    intro: ["act3_transition_fb", "act3_intro", "act3_level2"],
     outro: ["true_victory"],
-    levels: stationLevels(
-      [
-        null,
-        "act3_level2",
-        "act3_boss",
-        "act3_level4",
-        "act3_level5",
-        "act3_level6",
-        "origin_panels",
-        "act3_level8",
-        "act3_level9",
-      ],
-      () => [...FULL_SQUAD],
-      {
-        0: [{ aria: "encryptedChannelReveal", delay: 3000 }],
-        1: [{ aria: "analystLMReveal", delay: 3000 }],
-      },
-    ),
+    // They stay behind in the reverse of the order they joined.
+    levels: levels([
+      level("entry", null, [...ALL]),
+      // The Loop has no source map; the Server Farm's aisles repeat.
+      level("server_farm", ["act3_boss"], [...ALL]),
+      level("containment", ["act3_level4"], [...ALL]),
+      level("nexus", ["nexus_briefing", "act2_level8", "nova_decoy"], ["lyra", "rook", "nova"]),
+      level("research", ["act3_level5"], ["lyra", "rook"]),
+      level("nexus", ["act3_level6", "act3_level8"], ["lyra"]),
+      level("core", ["act3_level7", "act3_level9"], []),
+    ]),
   },
 ];
 
 /**
  * New Game+: where a cycle starts, and the cycle whose final victory plays
- * the true ending instead of offering another loop.
+ * the true ending instead of offering another loop. The spec moves the true
+ * ending to NG+1 with every fragment once the Act IV fragments exist.
  */
 export const NG_PLUS = {
   startAct: 1,
@@ -261,4 +332,22 @@ export function maxActLevels() {
 /** Index of the act's boss level, or -1. */
 export function bossLevelIndex(act) {
   return getAct(act)?.levels.findIndex((l) => l.boss) ?? -1;
+}
+
+/**
+ * Where each scene the table names plays: `{ key, act, level }`, with the
+ * level whose squad is present while it plays. A briefing plays in its own
+ * slot; an act's intro at its first level; its outro at its boss level.
+ */
+export function sceneSlots() {
+  const out = [];
+  for (const act of ACTS) {
+    for (const key of act.intro) out.push({ key, act: act.id, level: 0 });
+    act.levels.forEach((l, i) => {
+      for (const key of l.briefing ?? []) out.push({ key, act: act.id, level: i });
+    });
+    const boss = act.levels.findIndex((l) => l.boss);
+    for (const key of act.outro) out.push({ key, act: act.id, level: boss });
+  }
+  return out;
 }
