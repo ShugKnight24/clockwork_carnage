@@ -1,3 +1,5 @@
+import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine } from "../src/audio/voice.js";
+
 export class AudioManager {
   constructor() {
     this.ctx = null;
@@ -32,14 +34,37 @@ export class AudioManager {
 
     // Chrono shift (slow-mo) time scale
     this._timeScale = 1;
+    this._slowmo = false;
+
+    // Master level at 100% volume; the settings slider scales it.
+    this._masterLevel = 0.8;
+    this._masterVolume = 1;
+
+    // Voices: one active line per channel ("cutscene", "comms"), so a new
+    // line on a channel cuts the old one off instead of talking over it.
+    this.voiceGain = null;
+    this._voice = null;
+    this._speech = new Map();
+    this._speechUntil = 0;
+    this._noiseClips = new Map();
+    this._noiseLoop = null;
   }
 
   init() {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.8;
-    this.masterGain.connect(this.ctx.destination);
+    this.masterGain.gain.value = this._masterLevel * this._masterVolume;
+    // A brickwall-ish limiter on the master: layered gunfire, music and a voice
+    // line can sum past full scale, and nothing else stops them clipping.
+    this.limiter = this.ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -6;
+    this.limiter.knee.value = 6;
+    this.limiter.ratio.value = 12;
+    this.limiter.attack.value = 0.003;
+    this.limiter.release.value = 0.25;
+    this.masterGain.connect(this.limiter);
+    this.limiter.connect(this.ctx.destination);
 
     this.sfxGain = this.ctx.createGain();
     this.sfxGain.gain.value = 1.0;
@@ -53,6 +78,36 @@ export class AudioManager {
     this.ambientGain = this.ctx.createGain();
     this.ambientGain.gain.value = 0.12;
     this.ambientGain.connect(this.masterGain);
+
+    this.voiceGain = this.ctx.createGain();
+    this.voiceGain.gain.value = this._voiceVolume ?? 0.8;
+    this.voiceGain.connect(this.masterGain);
+    this._voice = new VoiceSynth(this.ctx, () => this._noiseLoopBuffer());
+  }
+
+  /**
+   * White noise of a given length, made once per length and reused. Filling a
+   * fresh buffer with Math.random() on every shot, hi-hat and ambient pulse was
+   * a steady stream of garbage on the audio path.
+   */
+  _noiseClip(seconds) {
+    const key = Math.max(1, Math.round(seconds * 1000));
+    let buf = this._noiseClips.get(key);
+    if (!buf) {
+      const n = Math.max(1, Math.round(this.ctx.sampleRate * key / 1000));
+      buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      if (this._noiseClips.size > 64) this._noiseClips.clear();
+      this._noiseClips.set(key, buf);
+    }
+    return buf;
+  }
+
+  /** Two seconds of noise for looping sources (voice consonants). */
+  _noiseLoopBuffer() {
+    if (!this._noiseLoop) this._noiseLoop = this._noiseClip(2);
+    return this._noiseLoop;
   }
 
   resume() {
@@ -65,12 +120,7 @@ export class AudioManager {
 
   playNoise(duration, gain, filterFreq, filterType = "lowpass", pan = 0) {
     if (!this.ctx || !this.enabled) return;
-    const bufferSize = this.ctx.sampleRate * duration;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
+    const buffer = this._noiseClip(duration);
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
 
@@ -135,8 +185,8 @@ export class AudioManager {
     osc.detune.value = detune;
 
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(gain, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    g.gain.setValueAtTime(gain, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + duration);
 
     osc.connect(g);
     g.connect(this.musicGain);
@@ -145,25 +195,22 @@ export class AudioManager {
       osc.disconnect();
       g.disconnect();
     };
-    osc.start();
-    osc.stop(this.ctx.currentTime + duration);
+    osc.start(this._mt());
+    osc.stop(this._mt() + duration);
   }
 
   // Noise routed through musicGain
   _playMusicNoise(duration, gain, filterFreq, filterType = "lowpass") {
     if (!this.ctx || !this.musicEnabled) return;
-    const bufSize = this.ctx.sampleRate * duration;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(duration);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
     f.type = filterType;
     f.frequency.value = filterFreq;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(gain, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    g.gain.setValueAtTime(gain, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + duration);
     src.connect(f);
     f.connect(g);
     g.connect(this.musicGain);
@@ -172,7 +219,7 @@ export class AudioManager {
       f.disconnect();
       g.disconnect();
     };
-    src.start();
+    src.start(this._mt());
   }
 
   // ─── Spatial audio helpers ───────────────────────────────────────────
@@ -198,28 +245,34 @@ export class AudioManager {
     sfxFn(pan);
   }
 
+  /**
+   * An enemy calls out when it spots you, and cries out when it dies, in its
+   * type's voice. Barks are sound effects (the SFX slider owns them), and a
+   * short global gap keeps a room full of enemies from shouting in unison.
+   */
+  enemyBark(type, kind, pan = 0, distance = 0) {
+    if (!this.ctx || !this.enabled || !this._voice) return;
+    const key = enemyVoiceKey(type);
+    if (!key) return;
+    const now = this.ctx.currentTime;
+    if (now - (this._lastBark ?? -1) < (kind === "death" ? 0.15 : 0.5)) return;
+    this._lastBark = now;
+    const plan = kind === "death"
+      ? planBark("death")
+      : planUtterance(enemyAlertLine(key, Math.random()) || "Hey!", VOICES[key], { charsPerSec: 16 });
+    const volume = Math.max(0.15, 1 - Math.min(1, distance / 20) * 0.85);
+    this._voice.play(plan, VOICES[key], this.sfxGain, { pan, volume: volume * 1.6 });
+  }
+
+  /** Effort, pain and death sounds in the voice picked in the creator. */
   playerGrunt(profile = {}, kind = "hurt") {
-    if (!this.ctx || !this.enabled) return;
-    const pitch = Math.max(0.6, Math.min(1.8, profile.pitch || 1));
-    const base = kind === "death" ? 150 : kind === "slide" ? 210 : 190;
-    const dur = kind === "death" ? 0.28 : 0.12;
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const g = this.ctx.createGain();
-    osc.type = profile.id === "synthetic" ? "sawtooth" : "triangle";
-    osc.frequency.setValueAtTime(base * pitch, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(40, base * pitch * 0.55), t + dur);
-    filter.type = "bandpass";
-    filter.frequency.value = profile.id === "synthetic" ? 900 : 420;
-    g.gain.setValueAtTime(kind === "death" ? 0.22 : 0.12, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(filter);
-    filter.connect(g);
-    g.connect(this.sfxGain);
-    osc.onended = () => { osc.disconnect(); filter.disconnect(); g.disconnect(); };
-    osc.start(t);
-    osc.stop(t + dur);
+    if (!this.ctx || !this.enabled || !this._voice) return;
+    // Rapid hits (shotgun pellets, a swarm) would otherwise stack grunts.
+    const now = this.ctx.currentTime;
+    if (kind !== "death" && now - (this._lastGrunt ?? -1) < 0.3) return;
+    this._lastGrunt = now;
+    const v = playerVoice(profile);
+    this._voice.play(planBark(kind), v, this.voiceGain, { volume: kind === "death" ? 1.3 : 1 });
   }
 
   // ─── Weapon sounds ───────────────────────────────────────────────────
@@ -247,6 +300,8 @@ export class AudioManager {
     this._duckLevel += (this._duckTarget - this._duckLevel) * Math.min(1, 8 * dt);
     // Always decay target toward 0 (music recovers)
     this._duckTarget *= Math.max(0, 1 - 2 * dt);
+    // While someone is speaking, hold the music down so the voice sits on top.
+    if (this.ctx.currentTime < this._speechUntil) this._duckTarget = Math.max(this._duckTarget, 0.55);
     // Apply: duck to 30% at full duck
     const gain = this._musicBaseGain * (1 - this._duckLevel * 0.7);
     this.musicGain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.05);
@@ -297,12 +352,17 @@ export class AudioManager {
     // Smoothly interpolate to avoid clicks
     const t = this.ctx.currentTime;
     this._timeScale = Math.max(0.25, Math.min(2, timeScale));
-    // Duck the master slightly during slow-mo for dramatic effect
-    if (timeScale < 0.8) {
-      this.masterGain.gain.setTargetAtTime(0.6, t, 0.1);
-    } else {
-      this.masterGain.gain.setTargetAtTime(0.8, t, 0.1);
+    // Duck the master slightly during slow-mo for dramatic effect. This runs
+    // every frame, so only schedule when the state flips.
+    const slowmo = timeScale < 0.8;
+    if (slowmo !== this._slowmo) {
+      this._slowmo = slowmo;
+      this.masterGain.gain.setTargetAtTime(this._masterTarget(), t, 0.1);
     }
+  }
+
+  _masterTarget() {
+    return this._masterLevel * this._masterVolume * (this._slowmo ? 0.75 : 1);
   }
 
   // Chrono Pistol (id: 0)
@@ -1001,13 +1061,28 @@ export class AudioManager {
     this._trackBeat = 0;
 
     const beatDur = 60 / this._trackTempo;
-    const playBeat = () => {
+    // Look-ahead scheduling: a coarse timer wakes every 25 ms and books every
+    // beat due in the next 120 ms at its exact audio-clock time. Firing each
+    // beat from its own setTimeout drifted and stuttered whenever a frame ran
+    // long, because the notes started whenever the timer happened to land.
+    let next = this.ctx.currentTime + 0.05;
+    const pump = () => {
       if (!this.musicEnabled) return;
-      this._dispatchBeat(track, this._trackBeat, beatDur);
-      this._trackBeat++;
-      this._musicTimer = setTimeout(playBeat, beatDur * 1000);
+      while (next < this.ctx.currentTime + 0.12) {
+        this._musicWhen = Math.max(next, this.ctx.currentTime);
+        this._dispatchBeat(track, this._trackBeat, beatDur);
+        this._musicWhen = null;
+        this._trackBeat++;
+        next += beatDur;
+      }
+      this._musicTimer = setTimeout(pump, 25);
     };
-    playBeat();
+    pump();
+  }
+
+  /** Audio-clock time for music notes: the beat being booked, else now. */
+  _mt() {
+    return this._musicWhen ?? this.ctx.currentTime;
   }
 
   _defaultTempo(track) {
@@ -1036,13 +1111,13 @@ export class AudioManager {
     osc.type = "sawtooth";
     osc.frequency.value = note;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + beatDur * 0.8);
+    g.gain.setValueAtTime(0.3, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + beatDur * 0.8);
     osc.connect(g);
     g.connect(this.musicGain);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
-    osc.start();
-    osc.stop(this.ctx.currentTime + beatDur * 0.8);
+    osc.start(this._mt());
+    osc.stop(this._mt() + beatDur * 0.8);
 
     // Hi-hat on even beats
     if (beat % 2 === 0) this._musicHiHat(0.05, 0.15);
@@ -1076,13 +1151,13 @@ export class AudioManager {
     osc.type = "sawtooth";
     osc.frequency.value = note;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.35, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + beatDur * 0.7);
+    g.gain.setValueAtTime(0.35, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + beatDur * 0.7);
     osc.connect(g);
     g.connect(this.musicGain);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
-    osc.start();
-    osc.stop(this.ctx.currentTime + beatDur * 0.7);
+    osc.start(this._mt());
+    osc.stop(this._mt() + beatDur * 0.7);
 
     // Double-time hi-hats
     this._musicHiHat(0.04, 0.18);
@@ -1115,13 +1190,13 @@ export class AudioManager {
     osc.type = "sawtooth";
     osc.frequency.value = note;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.38, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + beatDur * 0.6);
+    g.gain.setValueAtTime(0.38, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + beatDur * 0.6);
     osc.connect(g);
     g.connect(this.musicGain);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
-    osc.start();
-    osc.stop(this.ctx.currentTime + beatDur * 0.6);
+    osc.start(this._mt());
+    osc.stop(this._mt() + beatDur * 0.6);
 
     // Double-time kick every beat
     this._musicKick(170, 0.6);
@@ -1178,13 +1253,13 @@ export class AudioManager {
     osc.type = "sawtooth";
     osc.frequency.value = note;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.32, this.ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + beatDur * 0.5);
+    g.gain.setValueAtTime(0.32, this._mt());
+    g.gain.exponentialRampToValueAtTime(0.001, this._mt() + beatDur * 0.5);
     osc.connect(g);
     g.connect(this.musicGain);
     osc.onended = () => { osc.disconnect(); g.disconnect(); };
-    osc.start();
-    osc.stop(this.ctx.currentTime + beatDur * 0.5);
+    osc.start(this._mt());
+    osc.stop(this._mt() + beatDur * 0.5);
 
     // Relentless hi-hats every beat
     this._musicHiHat(0.03, 0.16);
@@ -1209,15 +1284,12 @@ export class AudioManager {
 
   _musicHiHat(duration, gain) {
     if (!this.ctx || !this.musicEnabled) return;
-    const bufSize = this.ctx.sampleRate * duration;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(duration);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const hg = this.ctx.createGain();
-    hg.gain.setValueAtTime(gain, this.ctx.currentTime);
-    hg.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    hg.gain.setValueAtTime(gain, this._mt());
+    hg.gain.exponentialRampToValueAtTime(0.001, this._mt() + duration);
     const hf = this.ctx.createBiquadFilter();
     hf.type = "highpass";
     hf.frequency.value = 8000;
@@ -1225,37 +1297,34 @@ export class AudioManager {
     hf.connect(hg);
     hg.connect(this.musicGain);
     src.onended = () => { src.disconnect(); hf.disconnect(); hg.disconnect(); };
-    src.start();
+    src.start(this._mt());
   }
 
   _musicKick(startFreq, gain) {
     if (!this.ctx || !this.musicEnabled) return;
     const kick = this.ctx.createOscillator();
     kick.type = "sine";
-    kick.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
-    kick.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.15);
+    kick.frequency.setValueAtTime(startFreq, this._mt());
+    kick.frequency.exponentialRampToValueAtTime(30, this._mt() + 0.15);
     const kg = this.ctx.createGain();
-    kg.gain.setValueAtTime(gain, this.ctx.currentTime);
-    kg.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+    kg.gain.setValueAtTime(gain, this._mt());
+    kg.gain.exponentialRampToValueAtTime(0.001, this._mt() + 0.15);
     kick.connect(kg);
     kg.connect(this.musicGain);
     kick.onended = () => { kick.disconnect(); kg.disconnect(); };
-    kick.start();
-    kick.stop(this.ctx.currentTime + 0.15);
+    kick.start(this._mt());
+    kick.stop(this._mt() + 0.15);
   }
 
   _musicSnare(gain) {
     if (!this.ctx || !this.musicEnabled) return;
     // Noise body
-    const bufSize = this.ctx.sampleRate * 0.1;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(0.1);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const sg = this.ctx.createGain();
-    sg.gain.setValueAtTime(gain, this.ctx.currentTime);
-    sg.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+    sg.gain.setValueAtTime(gain, this._mt());
+    sg.gain.exponentialRampToValueAtTime(0.001, this._mt() + 0.1);
     const sf = this.ctx.createBiquadFilter();
     sf.type = "bandpass";
     sf.frequency.value = 3000;
@@ -1263,21 +1332,21 @@ export class AudioManager {
     sf.connect(sg);
     sg.connect(this.musicGain);
     src.onended = () => { src.disconnect(); sf.disconnect(); sg.disconnect(); };
-    src.start();
+    src.start(this._mt());
 
     // Tonal snap
     const snap = this.ctx.createOscillator();
     snap.type = "triangle";
-    snap.frequency.setValueAtTime(200, this.ctx.currentTime);
-    snap.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.05);
+    snap.frequency.setValueAtTime(200, this._mt());
+    snap.frequency.exponentialRampToValueAtTime(100, this._mt() + 0.05);
     const snapG = this.ctx.createGain();
-    snapG.gain.setValueAtTime(gain * 0.5, this.ctx.currentTime);
-    snapG.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.06);
+    snapG.gain.setValueAtTime(gain * 0.5, this._mt());
+    snapG.gain.exponentialRampToValueAtTime(0.001, this._mt() + 0.06);
     snap.connect(snapG);
     snapG.connect(this.musicGain);
     snap.onended = () => { snap.disconnect(); snapG.disconnect(); };
-    snap.start();
-    snap.stop(this.ctx.currentTime + 0.06);
+    snap.start(this._mt());
+    snap.stop(this._mt() + 0.06);
   }
 
   // ─── Ambient soundscape system ────────────────────────────────────────
@@ -1329,10 +1398,7 @@ export class AudioManager {
 
   _ambientIndustrial() {
     // Low rumble
-    const bufSize = this.ctx.sampleRate * 2;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(2);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
@@ -1372,10 +1438,7 @@ export class AudioManager {
 
   _ambientArena() {
     // Crowd murmur
-    const bufSize = this.ctx.sampleRate * 2.5;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(2.5);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
@@ -1429,10 +1492,7 @@ export class AudioManager {
     alarm.stop(t + 1.6);
 
     // Low rumble
-    const bufSize = this.ctx.sampleRate * 2;
-    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+    const buf = this._noiseClip(2);
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
@@ -1462,10 +1522,7 @@ export class AudioManager {
 
     // Soft wind (50% chance)
     if (Math.random() < 0.5) {
-      const bufSize = this.ctx.sampleRate * 3;
-      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+      const buf = this._noiseClip(3);
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       const f = this.ctx.createBiquadFilter();
@@ -1495,8 +1552,42 @@ export class AudioManager {
   // ─── Volume controls ──────────────────────────────────────────────────
 
   setVolume(v) {
-    if (this.masterGain) {
-      this.masterGain.gain.value = Math.max(0, Math.min(1, v));
+    this._masterVolume = Math.max(0, Math.min(1, v));
+    if (this.masterGain) this.masterGain.gain.setTargetAtTime(this._masterTarget(), this.ctx.currentTime, 0.02);
+  }
+
+  setVoiceVolume(v) {
+    this._voiceVolume = Math.max(0, Math.min(1, v));
+    if (this.voiceGain) this.voiceGain.gain.value = this._voiceVolume;
+  }
+
+  // ─── Voices ─────────────────────────────────────────────────────────────
+
+  /**
+   * Speak a line in a character's babble voice.
+   * @param {string} text
+   * @param {string|object} voice  key into VOICES, "player", or a voice object
+   * @param {{channel?: string, charsPerSec?: number, pan?: number, profile?: object}} opts
+   */
+  speak(text, voice, { channel = "comms", charsPerSec = 18, pan = 0, profile = null } = {}) {
+    if (!this.ctx || !this.enabled || !this._voice || !text) return null;
+    const v = typeof voice === "object" ? voice : voice === "player" ? playerVoice(profile) : VOICES[voice];
+    if (!v) return null;
+    this.stopSpeech(channel);
+    const handle = this._voice.play(planUtterance(text, v, { charsPerSec }), v, this.voiceGain, { pan });
+    if (handle) {
+      this._speech.set(channel, handle);
+      this._speechUntil = Math.max(this._speechUntil, handle.endTime);
+    }
+    return handle;
+  }
+
+  /** Cut a channel's line short (frame skipped), or every channel. */
+  stopSpeech(channel = null) {
+    for (const [ch, h] of this._speech) {
+      if (channel && ch !== channel) continue;
+      h.stop();
+      this._speech.delete(ch);
     }
   }
 

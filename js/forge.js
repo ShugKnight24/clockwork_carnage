@@ -1,4 +1,5 @@
 import { trackEvent } from "./analytics.js";
+import { playBlockSound } from "../src/audio/block-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
 import { AIR, BEDROCK } from "../src/world/blocks.js";
@@ -771,11 +772,18 @@ export class ForgeMode {
       if (this.holdingBreak && this.target && !this.invOpen) {
         const t = this.target;
         // `dt` is seconds here; the session counts a break in milliseconds.
-        const res = this.survival.tickBreak(dt * 1000, t, this.world.get(t.x, t.y, t.z));
+        const hitId = this.world.get(t.x, t.y, t.z);
+        const res = this.survival.tickBreak(dt * 1000, t, hitId);
         this.breakProgress = this.survival.progress;
+        // Chip sounds while the pick works, so a slow break still feels busy.
+        this.mineTap = (this.mineTap ?? 0) - dt;
+        if (!res.broke && this.breakProgress > 0 && this.mineTap <= 0) {
+          playBlockSound(this.audio, hitId, "hit");
+          this.mineTap = 0.24;
+        }
         if (res.broke) {
           this._editBlock(t.x, t.y, t.z, AIR);
-          this.audio.menuSelect();
+          playBlockSound(this.audio, hitId, "break");
           if (res.leveled) this._warn(`Mining level ${this.survival.miningLevel()}`);
           this.breakProgress = 0;
           // The drop may have landed in the selected slot; the tool just wore.
@@ -1022,7 +1030,7 @@ export class ForgeMode {
       return;
 
     if (!this.survival) {
-      if (this._editBlock(c.x, c.y, c.z, this.tile)) this.audio.menuConfirm();
+      if (this._editBlock(c.x, c.y, c.z, this.tile)) playBlockSound(this.audio, this.tile, "place");
       return;
     }
 
@@ -1035,7 +1043,7 @@ export class ForgeMode {
     }
     if (this._editBlock(c.x, c.y, c.z, spend.blockId)) {
       this.survival.markPlaced(c.x, c.y, c.z);
-      this.audio.menuConfirm();
+      playBlockSound(this.audio, spend.blockId, "place");
     } else {
       this.survival.refund(itemId); // the edit was a no-op; do not eat the item
     }
@@ -1050,7 +1058,8 @@ export class ForgeMode {
     if (!removeAllowed(this.world, t.x, t.y, t.z)) return;
 
     if (!this.survival) {
-      if (this._editBlock(t.x, t.y, t.z, AIR)) this.audio.menuSelect();
+      const id = this.world.get(t.x, t.y, t.z);
+      if (this._editBlock(t.x, t.y, t.z, AIR)) playBlockSound(this.audio, id, "break");
       return;
     }
 

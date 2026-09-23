@@ -2,6 +2,7 @@ import { CUTSCENE_SCRIPTS } from "../src/data/cutscene-scripts.js";
 import { drawCutsceneArt } from "../src/rendering/cutscene-art.js";
 import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
+import { voiceKeyFor } from "../src/audio/voice.js";
 import {
   CS_FONT,
   INK,
@@ -54,8 +55,10 @@ export class CutsceneEngine {
     getPlayerName,
     getSettings,
     getTextLayer,
+    getVoiceProfile,
   }) {
     this.audio = audio;
+    this.getVoiceProfile = getVoiceProfile || (() => null);
     this.getKeys = getKeys;
     this.getTouchControls = getTouchControls;
     this.isTouchDevice = isTouchDevice;
@@ -106,6 +109,7 @@ export class CutsceneEngine {
       onComplete,
       particles: [],
       skipHeldStart: 0,
+      spoken: 0,
     };
     return true;
   }
@@ -140,12 +144,17 @@ export class CutsceneEngine {
       // enough back that all text is visible.
       cs.frameStart = performance.now() - 60000;
       cs.readyToAdvance = true;
+      // The text jumped to the end; the voice goes quiet rather than racing.
+      cs.spoken = frame?.lines?.length ?? 0;
+      this.audio.stopSpeech?.("cutscene");
       return;
     }
 
     // Ready — move to next frame
     cs.frame++;
     cs.frameStart = performance.now();
+    cs.spoken = 0;
+    this.audio.stopSpeech?.("cutscene");
     cs.particles = [];
     cs.readyToAdvance = false;
     cs.fbPhase = null;
@@ -209,6 +218,7 @@ export class CutsceneEngine {
   }
 
   end() {
+    this.audio.stopSpeech?.("cutscene");
     const cb = this.cutscene?.onComplete;
     this.cutscene = null;
     if (cb) cb();
@@ -242,6 +252,7 @@ export class CutsceneEngine {
     const charsPerSec = 18; // 30% slower than original 25 for better readability
 
     if (frame.lines) {
+      this._voiceLines(cs, frame, elapsed, charsPerSec);
       // Check if all lines have finished typing
       const lastLine = frame.lines[frame.lines.length - 1];
       const lastDelay = lastLine ? lastLine.delay : 0;
@@ -420,6 +431,31 @@ export class CutsceneEngine {
   /** Device pixels per art pixel (shadowBlur/offsets ignore the transform). */
   _k() {
     return this._tl ? this._tl.k : 1;
+  }
+
+  /**
+   * Give each line its speaker's babble voice as it starts typing. Lines are
+   * voiced in order, one at a time per cutscene; narration stays silent.
+   */
+  _voiceLines(cs, frame, elapsed, charsPerSec) {
+    const lines = frame.lines;
+    while (cs.spoken < lines.length && elapsed >= lines[cs.spoken].delay) {
+      const line = lines[cs.spoken++];
+      const cls = classifyLine(this._resolve(line.text));
+      const key = voiceKeyFor({
+        speaker: cls.speaker,
+        quoted: cls.quoted,
+        lineVoice: line.voice,
+        frameVoice: frame.voice,
+        art: frame.art,
+      });
+      if (!key) continue;
+      this.audio.speak?.(cls.text, key, {
+        channel: "cutscene",
+        charsPerSec,
+        profile: this.getVoiceProfile(),
+      });
+    }
   }
 
   _resolve(text) {

@@ -2,6 +2,7 @@
 // Extracted from game.js — Strangler Fig Phase 3.3
 
 import { ARIA_COMMS } from "../data/dialogue.js";
+import { voiceKeyFor } from "../audio/voice.js";
 import { isCompactPhone } from "../../js/layout.js";
 import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { drawSvgModelAt } from "../rendering/svg-art/index.js";
@@ -64,6 +65,7 @@ export class AriaCommsSystem {
   }
 
   resetAll() {
+    this.game?.audio?.stopSpeech?.("comms");
     this.queue = [];
     this.message = null;
     this.triggered = {};
@@ -147,6 +149,7 @@ export class AriaCommsSystem {
       this.message = { ...msg, life: 0 };
       this.idleTimer = 0;
       this.messageLog.push(msg.text);
+      this._voice(msg);
     }
     if (this.message) {
       this.message.life += dt;
@@ -172,6 +175,20 @@ export class AriaCommsSystem {
       this.idleThreshold = 25 + Math.random() * 25;
       this.idleTimer = 0;
     }
+  }
+
+  /**
+   * Speak the line in its speaker's voice. The plate types at TYPE_RATE, far
+   * faster than speech, so the voice paces itself to fit most of the time the
+   * line stays up instead.
+   */
+  _voice(msg) {
+    const audio = this.game?.audio;
+    if (!audio?.speak) return;
+    const key = voiceKeyFor({ speaker: msg.speaker || "ARIA" });
+    const text = String(msg.text).replace(/\{AGENT\}/g, this.game?.character?.name || "Agent");
+    const charsPerSec = Math.max(16, text.length / Math.max(1, msg.duration * 0.8));
+    audio.speak(text, key, { channel: "comms", charsPerSec });
   }
 
   /** Narrative context for idle-pool selection. */

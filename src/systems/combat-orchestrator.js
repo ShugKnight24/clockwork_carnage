@@ -256,6 +256,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
       const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
       const dist2 = Math.hypot(target.x - game.player.x, target.y - game.player.y);
       game.audio.enemyDeath(pan2, dist2);
+      game.audio.enemyBark?.(target.enemyType, "death", pan2, dist2);
       game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2, hitHeightOf(game, target));
       game.glitchEffect = 0.3;
       onEnemyKill(game, target);
@@ -273,6 +274,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
     const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
     game.audio.enemyDeath(panDeath, distDeath);
+    game.audio.enemyBark?.(enemy.enemyType, "death", panDeath, distDeath);
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
     game.glitchEffect = 0.3;
     onEnemyKill(game, enemy);
@@ -390,6 +392,7 @@ export function damagePlayer(game, amount, attacker) {
       const panThorns = game.audio.calculatePan(attacker.x, attacker.y, game.player.x, game.player.y, game.player.angle);
       const distThorns = Math.hypot(attacker.x - game.player.x, attacker.y - game.player.y);
       game.audio.enemyDeath(panThorns, distThorns);
+      game.audio.enemyBark?.(attacker.enemyType, "death", panThorns, distThorns);
       game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2, hitHeightOf(game, attacker));
       game.glitchEffect = 0.3;
       onEnemyKill(game, attacker);

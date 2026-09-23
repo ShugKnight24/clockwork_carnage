@@ -149,6 +149,7 @@ export class AISystem {
           e.state = "chase";
           e.stateTime = 0;
           e.lastAttackTime = time; // prevents instant first shot
+          audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), dist);
         }
       }
 

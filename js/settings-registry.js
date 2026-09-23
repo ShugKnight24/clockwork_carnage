@@ -19,7 +19,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
   cutsceneAutoAdvance: false, // manual advance by default
   minimapSize: 200,
+  masterVolume: 100, // 0..100
   musicVolume: 80, // 0..100
+  voiceVolume: 80, // 0..100 — character babble voices and grunts
   sfxVolume: 80, // 0..100
   sensitivity: 0.7, // 0.2..2.0
   fov: 70, // 50..120 degrees
@@ -418,6 +420,21 @@ export const SETTINGS_REGISTRY = [
   },
   // ─── Audio ───
   {
+    key: "masterVolume",
+    label: "Master Volume",
+    desc: "Overall game volume.",
+    category: "Audio",
+    type: "slider",
+    min: 0,
+    max: 100,
+    step: 10,
+    format: (v) => (v === 0 ? "MUTED" : `${v}%`),
+    barColor: (v) => (v === 0 ? "#ff4444" : "#ffcc00"),
+    onChange: (g) => g.audio.setVolume(g.settings.masterVolume / 100),
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
     key: "musicVolume",
     label: "Music Volume",
     desc: "Soundtrack level.",
@@ -444,6 +461,21 @@ export const SETTINGS_REGISTRY = [
     format: (v) => (v === 0 ? "MUTED" : `${v}%`),
     barColor: (v) => (v === 0 ? "#ff4444" : "#88aaff"),
     onChange: (g) => g.audio.setSfxVolume(g.settings.sfxVolume / 100),
+    platform: "all",
+    height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "voiceVolume",
+    label: "Voice Volume",
+    desc: "Character voices in cutscenes and comms, and your agent's grunts.",
+    category: "Audio",
+    type: "slider",
+    min: 0,
+    max: 100,
+    step: 10,
+    format: (v) => (v === 0 ? "MUTED" : `${v}%`),
+    barColor: (v) => (v === 0 ? "#ff4444" : "#ff88cc"),
+    onChange: (g) => g.audio.setVoiceVolume(g.settings.voiceVolume / 100),
     platform: "all",
     height: { compact: 42, normal: 60 },
   },

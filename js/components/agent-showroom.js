@@ -1675,8 +1675,9 @@ class AgentShowroom extends HTMLElement {
     try {
       audio?.init?.();
       audio?.resume?.();
-      audio?.playerGrunt?.(profile, "hurt");
-      setTimeout(() => audio?.playerGrunt?.(profile, "slide"), 220);
+      // A short line in the chosen voice, then the grunt it makes when hit.
+      audio?.speak?.("Agent reporting. Ready when you are.", "player", { channel: "preview", profile });
+      setTimeout(() => audio?.playerGrunt?.(profile, "hurt"), 2300);
     } catch (_) {}
     btn.classList.remove("ping");
     void btn.offsetWidth;

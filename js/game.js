@@ -882,8 +882,10 @@ export class Game {
   }
 
   applyAudioSettings() {
+    this.audio.setVolume(this.settings.masterVolume / 100);
     this.audio.setMusicVolume(this.settings.musicVolume / 100);
     this.audio.setSfxVolume(this.settings.sfxVolume / 100);
+    this.audio.setVoiceVolume(this.settings.voiceVolume / 100);
   }
 
   // Save / Load
@@ -1460,6 +1462,7 @@ export class Game {
         // Cutscene text draws on the full-DPR HUD canvas so it stays crisp.
         getTextLayer: () => ({ ctx: this.hudCtx, canvas: this.hudCanvas }),
         getSettings: () => this.settings,
+        getVoiceProfile: () => this.getVoiceProfile(),
       });
     }
   }
@@ -2145,6 +2148,7 @@ export class Game {
       this.achievementStats.totalDashes++;
       this.triggerAriaOnce("dash", "dashUsed");
       this.audio.dashSound?.();
+      this.audio.playerGrunt?.(this.getVoiceProfile(), "dash");
     }
   }
 
