@@ -13,7 +13,9 @@ import { AIR, BLOCKS } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { SKILLS, MAX_LEVEL, xpForLevel } from "../rpg/skills.js";
 import { bestTool as bestToolOf } from "../rpg/tools.js";
-import { renderInventory } from "./forge-inventory.js";
+import { blockForItem } from "../rpg/items.js";
+import { HOTBAR_SLOTS } from "../rpg/inventory.js";
+import { renderInventory, slotVisual, TOOL_COLOR } from "./forge-inventory.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 export const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -142,13 +144,50 @@ export function renderHUD(forge, ctx, w, h) {
   ctx.textAlign = "left";
 }
 
+/**
+ * What the in-play hotbar draws. Survival shows the nine inventory slots with
+ * counts and wear; creative shows its unlimited palette, unchanged.
+ *
+ * The creative palette is read back off the forge rather than imported, for
+ * the same reason `_craftRows` is: importing `js/forge.js` here would be a
+ * cycle.
+ * @returns {Array<{blockId:number|null,count:number,wear:number|null,label:string}>}
+ */
+export function hotbarCells(forge) {
+  if (!forge.survival) {
+    return forge._palette().map((id) => ({
+      blockId: id, count: 0, wear: null, label: BLOCKS[id].name,
+    }));
+  }
+  return forge.survival.inventory.slots.slice(0, HOTBAR_SLOTS).map((s) => {
+    const v = slotVisual(s);
+    return {
+      blockId: s ? blockForItem(s.item) : null,
+      count: v.count, wear: v.wear, label: v.label,
+    };
+  });
+}
+
+/** The colour a cell is filled with: its block's, a tool's, or nothing. */
+function cellColor(c) {
+  if (c.blockId != null) return BLOCKS[c.blockId].color;
+  return c.label ? TOOL_COLOR : null;
+}
+
 export function renderHotbar(forge, ctx, w, h) {
   const cell = 34;
   const gap = 4;
-  const pal = forge._palette();
-  const total = pal.length;
-  const sel = Math.max(0, pal.indexOf(forge.tile));
-  const { start, end } = hotbarWindow(sel, total, HOTBAR_VISIBLE);
+  const cells = hotbarCells(forge);
+  const survival = !!forge.survival;
+  const total = cells.length;
+  // Survival is exactly nine cells, so the strip holds every one of them and
+  // windowing is a creative-only concern — its palette outruns the strip.
+  const sel = survival
+    ? forge.hotbarIndex
+    : Math.max(0, cells.findIndex((c) => c.blockId === forge.tile));
+  const { start, end } = survival
+    ? { start: 0, end: total }
+    : hotbarWindow(sel, total, HOTBAR_VISIBLE);
   const shown = end - start;
   const barW = shown * (cell + gap) - gap;
   const x0 = (w - barW) / 2;
@@ -162,21 +201,45 @@ export function renderHotbar(forge, ctx, w, h) {
   ctx.fillStyle = "#00ffcc";
   ctx.font = "bold 13px monospace";
   ctx.textAlign = "center";
-  ctx.fillText(BLOCKS[forge.tile]?.name || "", w / 2, y0 - 12);
+  ctx.fillText(
+    survival ? cells[sel]?.label || "" : BLOCKS[forge.tile]?.name || "",
+    w / 2,
+    y0 - 12,
+  );
 
   for (let i = start; i < end; i++) {
-    const id = pal[i];
+    const c = cells[i];
     const x = x0 + (i - start) * (cell + gap);
-    ctx.fillStyle = BLOCKS[id].color;
+    const selected = survival ? i === sel : c.blockId === forge.tile;
+    const color = cellColor(c);
+    // An empty survival slot still needs a cell, or the strip loses its shape.
+    ctx.fillStyle = color || "rgba(255,255,255,0.08)";
     ctx.fillRect(x, y0, cell, cell);
-    if (id === forge.tile) {
+    if (selected) {
       ctx.strokeStyle = "#00ffcc";
       ctx.lineWidth = 2;
       ctx.strokeRect(x - 2, y0 - 2, cell + 4, cell + 4);
     }
-    ctx.fillStyle = id === forge.tile ? "#ffffff" : "rgba(255,255,255,0.4)";
+    if (c.count) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 11px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(String(c.count), x + cell - 3, y0 + cell - 4);
+      ctx.textAlign = "center";
+    }
+    if (c.wear != null) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(x + 4, y0 + cell - 8, cell - 8, 3);
+      ctx.fillStyle = c.wear > 0.25 ? "rgba(0,255,200,0.8)" : "rgba(255,120,80,0.9)";
+      ctx.fillRect(x + 4, y0 + cell - 8, (cell - 8) * c.wear, 3);
+    }
+    ctx.fillStyle = selected ? "#ffffff" : "rgba(255,255,255,0.4)";
     ctx.font = "bold 10px monospace";
-    ctx.fillText(id <= 9 ? String(id) : "0", x + cell / 2, y0 + cell + 12);
+    ctx.fillText(
+      survival ? String(i + 1) : c.blockId <= 9 ? String(c.blockId) : "0",
+      x + cell / 2,
+      y0 + cell + 12,
+    );
   }
   // Scroll arrows so it is clear the palette runs past the window.
   ctx.fillStyle = "rgba(255,255,255,0.35)";

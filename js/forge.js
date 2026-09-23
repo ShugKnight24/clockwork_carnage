@@ -501,6 +501,8 @@ export class ForgeMode {
           if (res.leveled)
             this._warn(`Construction level ${this.survival.skills.level("construction")}`);
         }
+        // A craft spends inputs and may fill the selected slot with the output.
+        this.refreshHeld();
         return true;
       }
       if (code === "Escape") {
@@ -583,8 +585,13 @@ export class ForgeMode {
     }
     // 1-9 pick blocks 1-9; 0 cycles the natural blocks
     if (code >= "Digit1" && code <= "Digit9" && !ctrl) {
-      this.tile = parseInt(code.charAt(5), 10);
-      this.audio.menuSelect();
+      const n = parseInt(code.charAt(5), 10);
+      // In survival a digit picks a hotbar slot; creative still picks a block.
+      if (this.survival) this.selectHotbar(n - 1);
+      else {
+        this.tile = n;
+        this.audio.menuSelect();
+      }
       return true;
     }
     if (code === "Digit0" && !ctrl) {
@@ -685,15 +692,40 @@ export class ForgeMode {
     this.breakProgress = 0;
   }
 
-  /** Mouse wheel cycles the placeable palette. The host routes wheel events here. */
+  /**
+   * Mouse wheel steps the survival hotbar and cycles the creative palette.
+   * Survival still cycles the palette as well, because a station has no other
+   * way to be selected until placement reads the hotbar alone.
+   */
   handleWheel(deltaY) {
     if (!this.active) return;
+    const dir = deltaY > 0 ? 1 : -1;
+    if (this.survival) {
+      this.hotbarIndex = (this.hotbarIndex + dir + HOTBAR_SLOTS) % HOTBAR_SLOTS;
+      this.refreshHeld();
+    }
     const pal = this._palette();
     const i = pal.indexOf(this.tile);
-    const dir = deltaY > 0 ? 1 : -1;
     const n = pal.length;
     this.tile = pal[(i + dir + n) % n];
     this.audio.menuSelect();
+  }
+
+  /** Select a hotbar slot, which is what decides the block you place. */
+  selectHotbar(i) {
+    if (!this.survival || i < 0 || i >= HOTBAR_SLOTS) return;
+    this.hotbarIndex = i;
+    this.refreshHeld();
+    this.audio.menuSelect();
+  }
+
+  /**
+   * `heldItem` follows the selected slot. The selection deliberately stays put
+   * when a slot empties: jumping would move the player's hand without asking.
+   */
+  refreshHeld() {
+    if (!this.survival) { this.heldItem = null; return; }
+    this.heldItem = this.survival.inventory.slots[this.hotbarIndex]?.item ?? null;
   }
 
   feedMouse(dx, dy, locked) {
@@ -751,6 +783,8 @@ export class ForgeMode {
           this.audio.menuSelect();
           if (res.leveled) this._warn(`Mining level ${this.survival.miningLevel()}`);
           this.breakProgress = 0;
+          // The drop may have landed in the selected slot; the tool just wore.
+          this.refreshHeld();
         }
       } else if (this.breakProgress !== 0) {
         this.survival.cancelBreak();
@@ -1009,6 +1043,8 @@ export class ForgeMode {
     } else {
       this.survival.refund(itemId); // the edit was a no-op; do not eat the item
     }
+    // The stack just shrank, and the last one of it may have gone.
+    this.refreshHeld();
   }
 
   /** In survival this only *starts* a break; holding the button finishes it. */
@@ -1157,6 +1193,8 @@ export class ForgeMode {
     // still reachable — `_dropCarried` cannot return it once `survival` is null.
     this._dropCarried();
     this.survival = attachSurvival(this.world, this.survivalSession);
+    // A different inventory (or none at all) is now under the same index.
+    this.refreshHeld();
     this.holdingBreak = false;
     this.breakProgress = 0;
     if (!this.survival) {
@@ -1186,6 +1224,8 @@ export class ForgeMode {
       exitPointerLockSafe();
     } else {
       this._dropCarried();
+      // Whatever the screen rearranged, the hand goes back to the same index.
+      this.refreshHeld();
       // A refusal is survivable: play resumes unlocked and the next click locks.
       requestPointerLockSafe(this.canvas);
     }
@@ -1219,10 +1259,20 @@ export class ForgeMode {
     const hit = this._invHit();
     if (hit.kind !== "slot") return;
     const inv = this.survival.inventory;
-    if (shift) { shiftMove(inv, hit.index); this.audio.menuSelect(); return; }
-    if (this.carried) { this.carried = dropStack(inv, hit.index, this.carried); return; }
+    if (shift) {
+      shiftMove(inv, hit.index);
+      this.refreshHeld();
+      this.audio.menuSelect();
+      return;
+    }
+    if (this.carried) {
+      this.carried = dropStack(inv, hit.index, this.carried);
+      this.refreshHeld();
+      return;
+    }
     this.pressedSlot = hit.index;
     this.carried = takeStack(inv, hit.index);
+    this.refreshHeld();
   }
 
   _invRelease(button) {
@@ -1241,6 +1291,7 @@ export class ForgeMode {
     } else if (this.carried) {
       this._dropCarried(); // outside the panel: put it back, never lose it
     }
+    this.refreshHeld();
     this.pressedSlot = -1;
   }
 
@@ -1253,6 +1304,7 @@ export class ForgeMode {
     // Before the swap, while the old world's inventory can still take it back.
     this._dropCarried();
     this.survival = attachSurvival(world, this.survivalSession);
+    this.refreshHeld();
     this.craftOpen = false; // a creative world must never inherit an open menu
     this.craftIndex = 0;
     this.invOpen = false; // nor an open inventory screen

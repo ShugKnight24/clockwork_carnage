@@ -7,7 +7,8 @@ import { inventoryLayout } from "../../js/layout.js";
 import { BLOCKS } from "../world/blocks.js";
 import { itemById, blockForItem } from "../rpg/items.js";
 
-const TOOL_COLOR = "#b9c2d0";
+/** A tool has no block to borrow a colour from, so it gets its own. */
+export const TOOL_COLOR = "#b9c2d0";
 
 /** @returns {{color:string|null,label:string,count:number,wear:number|null}} */
 export function slotVisual(slot) {
