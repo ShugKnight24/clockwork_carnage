@@ -15,7 +15,7 @@ import { World, chunkKeyCoords } from "../../world/world.js";
 import { BLOCKS } from "../../world/blocks.js";
 import { meshChunk, STRIDE } from "./mesher.js";
 import { buildAtlas, ATLAS_SIZE } from "./atlas.js";
-import { CHUNK_VERT, CHUNK_FRAG, WATER_VERT, WATER_FRAG, SPRITE_VERT, SPRITE_FRAG, POST_VERT, POST_FRAG } from "./shaders.js";
+import { CHUNK_VERT, CHUNK_FRAG, WATER_VERT, WATER_FRAG, SPRITE_VERT, SPRITE_FRAG, POST_VERT, POST_FRAG, RIPPLE_PERIOD, FOG_FADE } from "./shaders.js";
 import { eyeInWater } from "../../world/voxel-physics.js";
 import { SpriteCache } from "./sprite-cache.js";
 import { resolveEnvPalette, FOG_DENSITY } from "../env/palettes.js";
@@ -23,7 +23,8 @@ import { buildWallSet } from "../env/wall-art.js";
 import { buildDeckSet } from "../env/deck-art.js";
 import { generateWallTextures } from "../textures.js";
 
-const MESH_BUDGET = 4;          // chunks re-meshed per frame
+/** Milliseconds of meshing a frame when the caller names no budget; at least one chunk is always built. */
+const MESH_MS = 3;
 const STYLE_ID = { legacy: 0, comic: 1, modern: 2 };
 const MAX_LIGHTS = 16;          // must match the array size in CHUNK_FRAG
 const MAX_LAYERS = 32;          // must match u_emissiveByLayer/u_layerAlpha in CHUNK_FRAG
@@ -38,6 +39,10 @@ const NEAR = 0.05, FAR = 256;
  * diagonal so every chunk of the 128×128×64 world is eligible and the frustum,
  * not an arbitrary ring, decides what is drawn. The fog ramp still fades the
  * distance; this only bounds the cull.
+ *
+ * That is the radius of every bounded world, on every tier. An endless world
+ * is drawn to the streamer's radius instead, which does follow the tier
+ * (world-streamer.js `drawRadiusFor`), and fades its last blocks into fog.
  */
 export const VOXEL_DRAW_DISTANCE = 160;
 
@@ -50,6 +55,45 @@ export const VOXEL_DRAW_DISTANCE = 160;
 export function chunkInDistance(origin, camX, camY, camZ, maxDist = VOXEL_DRAW_DISTANCE) {
   const cx = origin[0] + CS / 2, cy = origin[1] + CS / 2, cz = origin[2] + CS / 2;
   return Math.hypot(cx - camX, cy - camY, cz - camZ) <= maxDist + CS;
+}
+
+/**
+ * Full fog at the edge of the drawn disc: 0 inside `end - FOG_FADE`, 1 at
+ * `end`, smoothstep between — the same curve the shaders use, for sprites.
+ * @param {number} d horizontal distance from the eye
+ */
+export function edgeFog(d, end) {
+  const t = Math.min(1, Math.max(0, (d - (end - FOG_FADE)) / FOG_FADE));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Dirty chunk keys that may be meshed now, nearest the eye first: a chunk
+ * whose column centre is within `meshRadius` blocks of the eye horizontally,
+ * and whose column has all eight neighbours resident (`World.columnReady`),
+ * so no chunk is ever built against a neighbour that reads as air. The rest
+ * stay dirty until the camera or the streamer brings them in.
+ * @returns {number[]}
+ */
+export function meshOrder(world, keys, camX, camY, camZ, meshRadius = Infinity) {
+  const out = [], dist = [], cc = [0, 0, 0];
+  let lastCol = NaN, lastOk = false;
+  for (const key of keys) {
+    chunkKeyCoords(key, cc);
+    const col = (key - cc[2]) / World.CZ;
+    if (col !== lastCol) {
+      lastCol = col;
+      lastOk = Math.hypot(cc[0] * CS + CS / 2 - camX, cc[1] * CS + CS / 2 - camY) <= meshRadius &&
+        world.columnReady(cc[0], cc[1]);
+    }
+    if (!lastOk) continue;
+    const dx = cc[0] * CS + CS / 2 - camX, dy = cc[1] * CS + CS / 2 - camY, dz = cc[2] * CS + CS / 2 - camZ;
+    out.push(out.length);
+    dist.push(dx * dx + dy * dy + dz * dz, key);
+  }
+  out.sort((a, b) => dist[a * 2] - dist[b * 2]);
+  for (let i = 0; i < out.length; i++) out[i] = dist[out[i] * 2 + 1];
+  return out;
 }
 
 /** Glass art is painted opaque (it is a window in a wall), so the renderer owns its opacity. */
@@ -105,9 +149,14 @@ function compile(gl, vs, fs) {
   return p;
 }
 
+/** A world coordinate modulo whole ripple periods: the water's world phase, kept small. */
+export function wrapOffset(v) {
+  return v - Math.floor(v / RIPPLE_PERIOD) * RIPPLE_PERIOD;
+}
+
 // ── Matrix helpers (column-major, the layout uniformMatrix4fv wants) ────────
 
-function perspective(out, fovY, aspect, near, far) {
+export function perspective(out, fovY, aspect, near, far) {
   const f = 1 / Math.tan(fovY / 2);
   out.fill(0);
   out[0] = f / aspect;
@@ -118,7 +167,19 @@ function perspective(out, fovY, aspect, near, far) {
   return out;
 }
 
-function lookAt(out, eye, yaw, pitch) {
+/**
+ * The whole block the eye is in. Every position handed to the GPU is relative
+ * to it (shaders.js): whole-block differences are exact in doubles and stay
+ * exact as float32, so a corner two chunks share lands on the same bits in
+ * both and no crack can open between them. The view matrix then carries only
+ * the eye's fraction of a block, which float32 holds to a millionth.
+ */
+export function eyeAnchor(cam, out = [0, 0, 0]) {
+  out[0] = Math.floor(cam.x); out[1] = Math.floor(cam.y); out[2] = Math.floor(cam.z);
+  return out;
+}
+
+export function lookAt(out, eye, yaw, pitch) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const fx = Math.cos(yaw) * cp, fy = Math.sin(yaw) * cp, fz = sp;
   // right = forward × worldUp(+z); it degenerates only when looking straight up
@@ -138,7 +199,7 @@ function lookAt(out, eye, yaw, pitch) {
   return out;
 }
 
-function mul4(out, a, b) {
+export function mul4(out, a, b) {
   for (let c = 0; c < 4; c++) {
     const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
     for (let r = 0; r < 4; r++) {
@@ -182,11 +243,12 @@ export class VoxelRenderer {
     this._pendingSize = null;  // a resize that arrived while the context was lost
     this.chunks = new Map();   // world chunk key -> { origin, opaque, alpha, dist }
     this._alphaOrder = [];     // scratch for the back-to-front see-through pass
-    this._cc = [0, 0, 0];      // scratch for decoding chunk keys
+    this._fogEnd = 1e9;        // horizontal distance of full fog; none in a bounded world
+    this._anchor = [0, 0, 0];  // the eye's whole block: GPU positions are relative to it
     this.world = null;
     this.atlasKey = ""; this.style = "comic"; this.layerOf = null; this.emissiveByLayer = null;
     this.atlasTex = null;
-    this.stats = { chunksDrawn: 0, meshedThisFrame: 0, ms: 0 };
+    this.stats = { chunksDrawn: 0, meshedThisFrame: 0, chunks: 0, ms: 0 };
     this.proj = new Float32Array(16);
     this.view = new Float32Array(16);
     this.viewProj = new Float32Array(16);
@@ -234,10 +296,10 @@ export class VoxelRenderer {
     this.spriteProg = compile(gl, SPRITE_VERT, SPRITE_FRAG);
     this.postProg = compile(gl, POST_VERT, POST_FRAG);
     this.u = {
-      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
+      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_eye", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_fogEnd", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
       sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_up", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
-      water: this._uniforms(this.waterProg, ["u_viewProj", "u_origin", "u_atlas", "u_sceneDepth", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_time", "u_mode"]),
-      post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth", "u_underwater", "u_time"]),
+      water: this._uniforms(this.waterProg, ["u_viewProj", "u_origin", "u_atlas", "u_sceneDepth", "u_eye", "u_wrap", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_fogEnd", "u_ambient", "u_time", "u_mode"]),
+      post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth", "u_underwater", "u_time", "u_fogEnd"]),
     };
     this.sprites = new SpriteCache(gl);
     this.anisoExt = gl.getExtension("EXT_texture_filter_anisotropic");
@@ -341,7 +403,7 @@ export class VoxelRenderer {
     this.world = world;
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
-    if (world) world.markAllDirty();
+    if (world) { world.takeEvicted(); world.markAllDirty(); }
   }
 
   /** Rebuild the atlas when style or act changes. */
@@ -406,22 +468,34 @@ export class VoxelRenderer {
 
   // ── Chunk meshes ─────────────────────────────────────────────────────────
 
-  /** Squared chunk-grid distance; decodes into a scratch array so the sort comparator allocates nothing. */
-  _chunkDist(key, camChunk) {
-    const c = chunkKeyCoords(key, this._cc);
-    const dx = c[0] - camChunk[0], dy = c[1] - camChunk[1], dz = c[2] - camChunk[2];
-    return dx * dx + dy * dy + dz * dz;
+  /**
+   * Build dirty chunks nearest first until `budgetMs` is spent, at least one
+   * a frame so progress never stalls. Chunks `meshOrder` holds back, and any
+   * the budget did not reach, stay dirty for a later frame.
+   */
+  _meshDirty(cam, budgetMs, meshRadius) {
+    const w = this.world;
+    if (!w.dirty.size) return 0;
+    const order = meshOrder(w, w.dirty, cam.x, cam.y, cam.z, meshRadius);
+    const t0 = performance.now();
+    let n = 0;
+    for (const key of order) {
+      if (n > 0 && performance.now() - t0 >= budgetMs) break;
+      w.dirty.delete(key);
+      this._buildChunk(key);
+      n++;
+    }
+    return n;
   }
 
-  _meshDirty(camChunk) {
-    const dirty = this.world.takeDirty();
-    if (!dirty.length) return 0;
-    // Nearest first; the rest stay dirty for the next frame.
-    if (dirty.length > MESH_BUDGET) dirty.sort((a, b) => this._chunkDist(a, camChunk) - this._chunkDist(b, camChunk));
-    const n = Math.min(dirty.length, MESH_BUDGET);
-    for (let i = n; i < dirty.length; i++) this.world.dirty.add(dirty[i]);
-    for (let i = 0; i < n; i++) this._buildChunk(dirty[i]);
-    return n;
+  /** Free the meshes of columns the world has unloaded. */
+  _evict() {
+    for (const key of this.world.takeEvicted()) {
+      const c = this.chunks.get(key);
+      if (!c) continue;
+      this._freeChunk(c);
+      this.chunks.delete(key);
+    }
   }
 
   _buildChunk(key) {
@@ -483,9 +557,13 @@ export class VoxelRenderer {
    * @param {import("../../world/world.js").World} world
    * @param {Array<{x,y,z,w,h,image,key,alpha?,tint?,flipX?}>} sprites feet-anchored billboards
    * @param {Array<{x,y,z,color,radius,intensity}>} lights
-   * @param {{style,act?,fx?,segments?}} opts `fx` are additive
-   *   billboards (particles) and `segments` world-space streaks (tracers),
-   *   both drawn with the sprite program after the solid billboards
+   * @param {{style,act?,fx?,segments?,meshMs?,drawRadius?,meshRadius?,fogEnd?}} opts
+   *   `fx` are additive billboards (particles) and `segments` world-space
+   *   streaks (tracers), both drawn with the sprite program after the solid
+   *   billboards. `meshMs` is this frame's meshing budget; `drawRadius` the
+   *   chunk cull radius, `meshRadius` how far from the eye chunks are built,
+   *   and `fogEnd` the horizontal distance of full fog — an endless world's
+   *   streamer sets all three, a bounded world keeps the defaults.
    * @returns {boolean} false when the GL context is lost
    */
   render(cam, world, sprites, lights, opts) {
@@ -494,8 +572,11 @@ export class VoxelRenderer {
     const gl = this.gl;
     if (world !== this.world) this.setWorld(world);
     this.setStyle(opts.style, opts.act || 1);
-    const camChunk = [Math.floor(cam.x) >> 4, Math.floor(cam.y) >> 4, Math.floor(cam.z) >> 4];
-    this.stats.meshedThisFrame = this._meshDirty(camChunk);
+    this._evict();
+    this.stats.meshedThisFrame = this._meshDirty(cam, opts.meshMs ?? MESH_MS, opts.meshRadius ?? Infinity);
+    this.stats.chunks = this.chunks.size;
+    const fogEnd = opts.fogEnd ?? 1e9;
+    this._fogEnd = fogEnd;
     const underwater = eyeInWater(world, cam.x, cam.y, cam.z);
     this.frameFog = underwater ? UNDERWATER_FOG : this.fog;
     const fog = this.frameFog;
@@ -504,12 +585,13 @@ export class VoxelRenderer {
     const aspect = this.width / this.height;
     const fovY = 2 * Math.atan(Math.tan(((cam.fovDeg || 70) * Math.PI) / 180 / 2) / aspect);
     perspective(this.proj, fovY, aspect, NEAR, FAR);
-    lookAt(this.view, [cam.x, cam.y, cam.z], cam.yaw, cam.pitch);
+    const A = eyeAnchor(cam, this._anchor);
+    lookAt(this.view, [cam.x - A[0], cam.y - A[1], cam.z - A[2]], cam.yaw, cam.pitch);
     mul4(this.viewProj, this.proj, this.view);
     this._extractPlanes(this.viewProj);
 
     const styleId = STYLE_ID[this.style] ?? 1;
-    const maxDist = VOXEL_DRAW_DISTANCE;
+    const maxDist = opts.drawRadius ?? VOXEL_DRAW_DISTANCE;
 
     // ── Scene pass ──
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
@@ -530,11 +612,12 @@ export class VoxelRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.atlasTex);
     gl.uniform1i(u.u_atlas, 0);
-    gl.uniform3f(u.u_cam, cam.x, cam.y, cam.z);
+    gl.uniform3f(u.u_eye, cam.x - A[0], cam.y - A[1], cam.z - A[2]);
     gl.uniform3fv(u.u_fogNear, fog.near);
     gl.uniform3fv(u.u_fogFar, fog.far);
     gl.uniform1f(u.u_fogDensity, fog.density);
     gl.uniform1f(u.u_fogMax, fog.max);
+    gl.uniform1f(u.u_fogEnd, fogEnd);
     gl.uniform3fv(u.u_ambient, AMBIENT[this.style] || AMBIENT.comic);
     gl.uniform3fv(u.u_emissiveByLayer, this.emissiveByLayer);
     gl.uniform1fv(u.u_layerAlpha, this.layerAlpha);
@@ -544,7 +627,9 @@ export class VoxelRenderer {
     this.stats.chunksDrawn = 0;
     for (const c of this.chunks.values()) {
       if (!c.opaque || !this._visible(c.origin, cam, maxDist)) continue;
-      gl.uniform3fv(u.u_origin, c.origin);
+      // The big subtraction happens here, in doubles; the GPU only ever sees
+      // the small, whole-block difference.
+      gl.uniform3f(u.u_origin, c.origin[0] - A[0], c.origin[1] - A[1], c.origin[2] - A[2]);
       gl.bindVertexArray(c.opaque.vao);
       gl.drawElements(gl.TRIANGLES, c.opaque.count, c.opaque.indexType, 0);
       this.stats.chunksDrawn++;
@@ -572,7 +657,7 @@ export class VoxelRenderer {
     // be overwritten by a far one, and opaque faces in this bucket (doors) would
     // not cover the glass behind them.
     for (const c of this._sortedAlphaChunks(cam, maxDist)) {
-      gl.uniform3fv(u.u_origin, c.origin);
+      gl.uniform3f(u.u_origin, c.origin[0] - A[0], c.origin[1] - A[1], c.origin[2] - A[2]);
       gl.bindVertexArray(c.alpha.vao);
       gl.drawElements(gl.TRIANGLES, c.alpha.count, c.alpha.indexType, 0);
     }
@@ -595,6 +680,7 @@ export class VoxelRenderer {
     gl.uniform1f(this.u.post.u_inkWidth, Math.max(1, this.height / 720));
     gl.uniform1f(this.u.post.u_underwater, underwater ? 1 : 0);
     gl.uniform1f(this.u.post.u_time, time);
+    gl.uniform1f(this.u.post.u_fogEnd, fogEnd);
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -607,14 +693,16 @@ export class VoxelRenderer {
     return true;
   }
 
+  /** Point lights, relative to the eye's block like everything else the shaders see. */
   _setLights(lights) {
+    const A = this._anchor;
     const u = this.u.chunk;
     const list = lights || [];
     const n = Math.min(list.length, MAX_LIGHTS);
     for (let i = 0; i < n; i++) {
       const l = list[i];
-      this.lightData[i * 4] = l.x; this.lightData[i * 4 + 1] = l.y;
-      this.lightData[i * 4 + 2] = l.z ?? 0; this.lightData[i * 4 + 3] = Math.max(0.001, l.radius || 0);
+      this.lightData[i * 4] = l.x - A[0]; this.lightData[i * 4 + 1] = l.y - A[1];
+      this.lightData[i * 4 + 2] = (l.z ?? 0) - A[2]; this.lightData[i * 4 + 3] = Math.max(0.001, l.radius || 0);
       const k = (l.intensity ?? 1) / 255;
       const c = l.color || [255, 255, 255];
       this.lightColors[i * 3] = c[0] * k; this.lightColors[i * 3 + 1] = c[1] * k; this.lightColors[i * 3 + 2] = c[2] * k;
@@ -639,9 +727,11 @@ export class VoxelRenderer {
     }
   }
 
+  /** Distance cull in world doubles, then the frustum, whose planes are anchor-relative. */
   _visible(origin, cam, maxDist) {
     if (!chunkInDistance(origin, cam.x, cam.y, cam.z, maxDist)) return false;
-    const cx = origin[0] + CS / 2, cy = origin[1] + CS / 2, cz = origin[2] + CS / 2;
+    const A = this._anchor;
+    const cx = origin[0] + CS / 2 - A[0], cy = origin[1] + CS / 2 - A[1], cz = origin[2] + CS / 2 - A[2];
     const p = this.planes;
     for (let i = 0; i < 6; i++) {
       if (p[i * 4] * cx + p[i * 4 + 1] * cy + p[i * 4 + 2] * cz + p[i * 4 + 3] < -CHUNK_RADIUS) return false;
@@ -699,11 +789,17 @@ export class VoxelRenderer {
     gl.uniform1i(u.u_atlas, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.depthCopyTex);
     gl.uniform1i(u.u_sceneDepth, 1);
-    gl.uniform3f(u.u_cam, cam.x, cam.y, cam.z);
+    // The ripples are laid out in world space. The eye's position modulo a
+    // whole number of ripple periods gives them their world phase without a
+    // big number ever reaching the GPU, so they stay put as the eye moves.
+    const A = this._anchor;
+    gl.uniform3f(u.u_eye, cam.x - A[0], cam.y - A[1], cam.z - A[2]);
+    gl.uniform3f(u.u_wrap, wrapOffset(A[0]), wrapOffset(A[1]), A[2]);
     gl.uniform3fv(u.u_fogNear, fog.near);
     gl.uniform3fv(u.u_fogFar, fog.far);
     gl.uniform1f(u.u_fogDensity, fog.density);
     gl.uniform1f(u.u_fogMax, fog.max);
+    gl.uniform1f(u.u_fogEnd, this._fogEnd);
     gl.uniform3fv(u.u_ambient, AMBIENT[this.style] || AMBIENT.comic);
     gl.uniform1f(u.u_time, time);
     gl.disable(gl.CULL_FACE);
@@ -712,7 +808,7 @@ export class VoxelRenderer {
     const drawAll = (mode) => {
       gl.uniform1i(u.u_mode, mode);
       for (const c of list) {
-        gl.uniform3fv(u.u_origin, c.origin);
+        gl.uniform3f(u.u_origin, c.origin[0] - A[0], c.origin[1] - A[1], c.origin[2] - A[2]);
         gl.bindVertexArray(c.water.vao);
         gl.drawElements(gl.TRIANGLES, c.water.count, c.water.indexType, 0);
       }
@@ -773,9 +869,12 @@ export class VoxelRenderer {
       const entry = this.sprites.get(s.key, s.image);
       if (!entry) continue;
       const dist = Math.sqrt(d);
-      const fog = Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density)));
+      const fog = Math.max(
+        Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density))),
+        edgeFog(Math.hypot(s.x - cam.x, s.y - cam.y), this._fogEnd),
+      );
       gl.bindTexture(gl.TEXTURE_2D, entry.tex);
-      gl.uniform3f(u.u_pos, s.x, s.y, s.z);
+      gl.uniform3f(u.u_pos, s.x - this._anchor[0], s.y - this._anchor[1], s.z - this._anchor[2]);
       gl.uniform2f(u.u_size, s.w, s.h);
       gl.uniform2f(u.u_uvFlip, s.flipX ? 1 : 0, 0);
       gl.uniform1f(u.u_alpha, s.alpha ?? 1);
@@ -841,11 +940,15 @@ export class VoxelRenderer {
       ux /= ul; uy /= ul; uz /= ul;
       const width = s.width || 0.05;
       const dist = Math.hypot(ex, ey, ez);
-      const fog = Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density)));
+      const fog = Math.max(
+        Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density))),
+        edgeFog(Math.hypot(ex, ey), this._fogEnd),
+      );
       gl.bindTexture(gl.TEXTURE_2D, entry.tex);
       // a_corner.y runs 0..1, so the ribbon grows off one edge: start half a
-      // width back and it straddles the shot line.
-      gl.uniform3f(u.u_pos, mx - ux * width / 2, my - uy * width / 2, mz - uz * width / 2);
+      // width back and it straddles the shot line. Anchor-relative, as ever.
+      const A = this._anchor;
+      gl.uniform3f(u.u_pos, mx - A[0] - ux * width / 2, my - A[1] - uy * width / 2, mz - A[2] - uz * width / 2);
       gl.uniform3f(u.u_right, ax, ay, az);
       gl.uniform3f(u.u_up, ux, uy, uz);
       gl.uniform2f(u.u_size, len, width);
