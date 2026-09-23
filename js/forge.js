@@ -1,5 +1,6 @@
 import { trackEvent } from "./analytics.js";
 import { playBlockSound, playWaterSound, WaterSoundTracker } from "../src/audio/block-sounds.js";
+import { VesselSoundTracker, playVesselSound } from "../src/audio/vessel-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
 import { AIR, BEDROCK, WATER, SAPLING, PLANKS, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
@@ -383,6 +384,7 @@ export class ForgeMode {
     /** Seconds the Forge has run: the clock the hulls bob to. */
     this._clock = 0;
     this._wake = new WakeTrail();
+    this._vesselSounds = new VesselSoundTracker();
 
     this.currentSlot = 0;
     this.mapIndex = []; // [{id, name, updatedAt}]
@@ -1335,9 +1337,17 @@ export class ForgeMode {
     for (const v of live) {
       const steer = v === r && !this.overhead && !this.invOpen && !this.craftOpen;
       const x = v.x, y = v.y, z = v.z, yaw = v.yaw;
-      stepVessel(this.world, v, steer ? this._rideInput() : undefined, dt);
+      const input = steer ? this._rideInput() : undefined;
+      const ev = stepVessel(this.world, v, input, dt);
       if (Math.abs(v.x - x) + Math.abs(v.y - y) + Math.abs(v.z - z) > 1e-4) this._markDirty();
-      if (v === r) this.player.angle += v.yaw - yaw;
+      if (v === r) {
+        this.player.angle += v.yaw - yaw;
+        const sounds = this._vesselSounds.update({ kind: v.kind, throttle: input?.throttle ?? 0, dt, ...ev });
+        for (const [name, k, pitch] of sounds) playVesselSound(this.audio, name, k, pitch, v.kind);
+      } else if ((ev.splash > 2 || ev.bump > 2) && Math.hypot(v.x - this.player.x, v.y - this.player.y) < 16) {
+        // Someone else's hull landing or hitting the shore nearby.
+        playVesselSound(this.audio, ev.splash > 2 ? "splash" : "bump", Math.max(ev.splash, ev.bump) / 10, 1, v.kind);
+      }
     }
     this._wake.update(dt, live);
     if (r) this._seatRider();
@@ -1368,6 +1378,7 @@ export class ForgeMode {
     const v = nearestVessel(this._liveVessels(), this.player.x, this.player.y, this.player.z);
     if (!v) return false;
     this.riding = v;
+    this._vesselSounds = new VesselSoundTracker();
     this.noclip = false;
     this.holdingBreak = false;
     this.breakProgress = 0;
