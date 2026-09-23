@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t d">
+<title id="t">Clockwork Carnage</title><desc id="d">Favicon. The gear-C mark: a gear broken open into a C, its second hand stopped at eleven seconds. Modern style, machined steel, no ink, soft light.</desc>
+<defs>
+    <linearGradient id="steelM" x1="0" y1="-50" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9f2fa"/><stop offset=".45" stop-color="#9fb3c6"/><stop offset=".55" stop-color="#6c8196"/><stop offset="1" stop-color="#2c3a48"/>
+    </linearGradient>
+    <linearGradient id="letM" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4f8fc"/><stop offset=".5" stop-color="#b8c7d6"/><stop offset=".52" stop-color="#8a9db0"/><stop offset="1" stop-color="#5a6d80"/>
+    </linearGradient>
+    <linearGradient id="redM" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff6a80"/><stop offset=".5" stop-color="#ff2a4a"/><stop offset="1" stop-color="#b3102b"/>
+    </linearGradient>
+    <linearGradient id="redC" x1="0" y1="-50" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff7a8e"/><stop offset=".5" stop-color="#ff2a4a"/><stop offset="1" stop-color="#9e0d26"/>
+    </linearGradient>
+    <filter id="rift" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".45"/></filter></defs>
+<rect width="64" height="64" rx="7.68" fill="#0b1422"/><g transform="translate(32 32) scale(.6)"><g filter="url(#soft)">
+      <path d="M29.94 23.4L28.11 25.57L25.57 28.11L26.42 38.87L8.81 46.17L1.79 37.96L-1.79 37.96L-8.81 46.17L-26.42 38.87L-25.57 28.11L-28.11 25.57L-38.87 26.42L-46.17 8.81L-37.96 1.79L-37.96 -1.79L-46.17 -8.81L-38.87 -26.42L-28.11 -25.57L-25.57 -28.11L-26.42 -38.87L-8.81 -46.17L-1.79 -37.96L1.79 -37.96L8.81 -46.17L26.42 -38.87L25.57 -28.11L28.11 -25.57L29.94 -23.4L18.91 -14.78A24 24 0 1 0 18.91 14.78Z" fill="url(#steelM)"/>
+      <path d="M29.94 23.4L28.11 25.57L25.57 28.11L26.42 38.87L8.81 46.17L1.79 37.96L-1.79 37.96L-8.81 46.17L-26.42 38.87L-25.57 28.11L-28.11 25.57L-38.87 26.42L-46.17 8.81L-37.96 1.79L-37.96 -1.79L-46.17 -8.81L-38.87 -26.42L-28.11 -25.57L-25.57 -28.11L-26.42 -38.87L-8.81 -46.17L-1.79 -37.96L1.79 -37.96L8.81 -46.17L26.42 -38.87L25.57 -28.11L28.11 -25.57L29.94 -23.4L18.91 -14.78A24 24 0 1 0 18.91 14.78Z" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="1"/>
+      
+      <line x1="0" y1="0" x2="0" y2="-21" stroke="#0b1422" stroke-width="8.6" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-21" stroke="#22e6ff" stroke-width="6" stroke-linecap="round"/>
+      <line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#0b1422" stroke-width="6.6" stroke-linecap="round"/><line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#ff2a4a" stroke-width="4" stroke-linecap="round"/>
+      <circle r="6" fill="#eef4fa"/><circle r="2.4" fill="#ff2a4a"/>
+    </g></g>
+</svg>

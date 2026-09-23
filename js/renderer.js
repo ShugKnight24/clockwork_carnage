@@ -1,19 +1,250 @@
 import { WALL_COLORS } from "./data.js";
 
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv } from "../src/rendering/textures.js";
+import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
+
+/** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
+ *  floor/ceiling loop: both only read module constants, so rebuilding the
+ *  closures on every frame cost an allocation and bought nothing. */
+const aoAt = (d) => {
+  if (d >= AO_RADIUS) return 1;
+  const t = d / AO_RADIUS;
+  return AO_FLOOR + (1 - AO_FLOOR) * t * t * (3 - 2 * t);
+};
+
+/** Emissive falloff away from a glowing cell. */
+const glowAt = (d) => {
+  if (d >= GLOW_RADIUS) return 0;
+  const t = 1 - d / GLOW_RADIUS;
+  return t * t;
+};
+import { ENEMY_RENDERERS } from "../src/rendering/enemies/index.js";
+import {
+  drawPickup,
+  drawHealthPickup,
+  drawAmmoPickup,
+  drawWeaponPickup,
+  drawExit,
+  drawProjectile,
+  drawExoticPickup,
+  drawGearPickup,
+  setFxCamera,
+  drawRealisticParticle,
+} from "../src/rendering/pickups.js";
+import { drawProp, setFovScale } from "../src/rendering/props.js";
+import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
+import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
+import { castColumn, createColumnHits, coverClipY, MAX_COLUMN_HITS } from "../src/rendering/column-cast.js";
+import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
+
+// Realistic sprite lighting: one reused light sample and a cache of the
+// quantised ctx.filter strings, so lighting sprites allocates nothing per frame.
+const _litOut = { r: 0, g: 0, b: 0 };
+const _litFilters = new Map();
+import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+
+// Short-wall records kept per screen column (one per wall the ray crosses).
+const COVER_STRIDE = MAX_COLUMN_HITS;
+
+// Short-wall top faces: fog steps, how much darker than the art they read,
+// and a per-texture cache of the fogged colours (see Renderer._capLUT).
+const CAP_FOG_STEPS = 32;
+const CAP_SHADE = 0.28;
+const _capCache = new WeakMap();
+const _noTexture = {}; // cache slot for a wall type with no art
+let _avgCanvas = null;
+
+/** Average colour of a wall texture, from a smoothed 4x4 downsample. */
+function _averageColor(tex) {
+  try {
+    if (!_avgCanvas) {
+      _avgCanvas = document.createElement("canvas");
+      _avgCanvas.width = _avgCanvas.height = 4;
+    }
+    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
+    c.clearRect(0, 0, 4, 4);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(tex, 0, 0, 4, 4);
+    const d = c.getImageData(0, 0, 4, 4).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < 64; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+    return [r / 16, g / 16, b / 16];
+  } catch (_) {
+    return [90, 96, 108]; // no texture or unreadable: neutral steel
+  }
+}
+
+// --- Performance: Pre-computed fog rgba string LUT ---
+// Quantize fog alpha to 64 discrete steps to avoid per-column string creation
+const FOG_CACHE_STEPS = 64;
+const _fogCache = new Map(); // key: "r,g,b" -> Array[FOG_CACHE_STEPS+1] of rgba strings
+
+function _getFogString(r, g, b, alpha) {
+  const step = Math.min(FOG_CACHE_STEPS, (alpha * FOG_CACHE_STEPS + 0.5) | 0);
+  const key = `${r},${g},${b}`;
+  let lut = _fogCache.get(key);
+  if (!lut) {
+    lut = new Array(FOG_CACHE_STEPS + 1);
+    for (let i = 0; i <= FOG_CACHE_STEPS; i++) {
+      const a = (i / FOG_CACHE_STEPS).toFixed(4);
+      lut[i] = `rgba(${r},${g},${b},${a})`;
+    }
+    _fogCache.set(key, lut);
+  }
+  return lut[step];
+}
+
+// --- Performance: Pre-allocated sprite sort arrays ---
+// Reused each frame to avoid per-frame allocation + GC pressure.
+let _spriteDistBuf = new Float64Array(256);
+let _spriteOrderBuf = new Int32Array(256);
+let _spriteOrderCount = 0;
+const _byDistanceDesc = (a, b) => _spriteDistBuf[b] - _spriteDistBuf[a];
+
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
 // TODO: Asset Pipeline for the above or is this overkill
 // TODO: Refine assets and improve variety
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, renderMode = 0) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.width = canvas.width;
     this.height = canvas.height;
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
-    this.generateTextures();
-    this._generateFloorCeilTextures();
+    // Ray-march scratch for the wall pass; short-wall records for sprites are
+    // sized per frame (_ensureCoverBufs).
+    this._colHits = createColumnHits();
+    this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
+    this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
+    this._envLevel = null; // campaign level env id, for the per-level palette
+    this.textures = generateWallTextures();
+    this._regenerateFloorCeil();
+    this._floorCeilBuffer = null;
+    // Modern art style environment: 512px wall/deck art per act, built lazily
+    // so Legacy never pays for it. `_envMap` carries per-cell contact-AO and
+    // emissive-spill bytes for the deck shading.
+    this._modernEnv = null;
+    this._envMap = new EnvMap();
+    this._envMapGLVersion = -1;
+
+    // WebGL hybrid renderer (renderMode: 0=auto, 1=2D only, 2=3D/WebGL)
+    this.glRenderer = null;
+    this.useWebGL = false;
+    this._renderMode = renderMode;
+    this._initGL(renderMode);
+  }
+
+  /**
+   * 1x64 vertical contact-shadow ramp for Realistic walls: dark at the ceiling
+   * and deck joints, clear through the middle. Built once, blitted per column.
+   */
+  _contactShadowStrip() {
+    if (this._aoStrip) return this._aoStrip;
+    const c = document.createElement("canvas");
+    c.width = 1;
+    c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, "rgba(0,0,0,0.55)");
+    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
+    grad.addColorStop(0.22, "rgba(0,0,0,0)");
+    grad.addColorStop(0.74, "rgba(0,0,0,0)");
+    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
+    grad.addColorStop(1, "rgba(0,0,0,0.62)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1, 64);
+    this._aoStrip = c;
+    return c;
+  }
+
+  /**
+   * Light arriving at world point (x, y) for the Realistic style: ceiling lamps
+   * overhead plus dynamic lights. Writes an {r, g, b} multiplier into `out`
+   * (see src/rendering/lighting.js). Sprites, projectiles and the viewmodel
+   * use it to sit in the same light as the deck.
+   */
+  lightAt(x, y, out) {
+    const env = this._modernEnv;
+    if (env && env.lampField === undefined) {
+      env.lampField = buildLampField(env.deck?.ceil) || null;
+    }
+    return sampleLight(out, x, y, this.lights, env ? env.lampField : null);
+  }
+
+  /** Free the Modern 512px wall/deck art; it is rebuilt lazily on next use. */
+  releaseModernEnv() {
+    this._modernEnv = null;
+    this._altModernEnv = null;
+    this._envMapGLVersion = -1;
+  }
+
+  /** Bring up the WebGL hybrid path unless the mode forbids it. */
+  _initGL(renderMode) {
+    if (renderMode === 1) return;
+    // Try to initialize WebGL (auto or explicit 3D)
+    this.glRenderer = GLRenderer.create(this.width, this.height);
+    if (this.glRenderer) {
+      this.useWebGL = true;
+      this._envMapGLVersion = -1;
+      this._uploadFloorCeilToGL();
+      console.log('[Renderer] WebGL2 hybrid renderer active');
+    } else if (renderMode === 2) {
+      console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
+    }
+  }
+
+  /**
+   * Switch renderer backend at runtime. The Render Mode setting used to be
+   * read once at construction — before settings loaded — so changing it in
+   * the menu did nothing.
+   *
+   * @param {number} mode 0 = auto, 1 = Canvas2D only, 2 = WebGL hybrid
+   */
+  setRenderMode(mode) {
+    const next = mode === 1 || mode === 2 ? mode : 0;
+    if (next === this._renderMode) return;
+    this._renderMode = next;
+
+    if (this.glRenderer) {
+      this.glRenderer.destroy();
+      this.glRenderer = null;
+      this.useWebGL = false;
+    }
+    this._initGL(next);
+  }
+
+  /**
+   * Called on campaign level start. The act's palette id picks the base
+   * palette; the level's env id (LEVEL_ENVS) picks the variation on it, so two
+   * levels in one act no longer share the same steel, lamps and air. Pass null
+   * for level outside the campaign.
+   */
+  applyActPalette(act, level = null) {
+    const a = act ?? 1;
+    const lv = level ?? null;
+    if (this._actPalette === a && this._envLevel === lv) return;
+    this._actPalette = a;
+    this._envLevel = lv;
+    this._modernEnv = null;
+    this._regenerateFloorCeil();
+    this._floorCeilBuffer = null;
+    if (this.useWebGL) this._uploadFloorCeilToGL();
+  }
+
+  /** Called by settings onChange — 0 = Clockwork, 1 = Brutal */
+  applyVisualStyle(styleIndex) {
+    const idx = styleIndex ?? 0;
+    if (this._visualStyle === idx) return;
+    this._visualStyle = idx;
+    this._modernEnv = null;
+    this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
   }
 
@@ -23,221 +254,219 @@ export class Renderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.zBuffer = new Float64Array(w);
+    this._occN = null;
+    this._colKey = null;
     this._floorCeilBuffer = null;
+    if (this.glRenderer) this.glRenderer.resize(w, h);
   }
 
-  generateTextures() {
-    const size = 64;
-    for (const [id, color] of Object.entries(WALL_COLORS)) {
-      const c = document.createElement("canvas");
-      c.width = size;
-      c.height = size;
-      const ctx = c.getContext("2d");
-      const imgData = ctx.createImageData(size, size);
-      const d = imgData.data;
-      const wid = parseInt(id);
+  /** Upload floor/ceiling pixel data to WebGL textures */
+  _uploadFloorCeilToGL() {
+    if (!this.glRenderer) return;
+    // Convert raw pixel arrays to RGBA Uint8ClampedArray for GL upload
+    const floorRGBA = new Uint8ClampedArray(256 * 256 * 4);
+    const ceilRGBA = new Uint8ClampedArray(256 * 256 * 4);
+    for (let i = 0; i < 256 * 256; i++) {
+      const si = i * 4;
+      floorRGBA[si] = this._floorTexPixels[si];
+      floorRGBA[si + 1] = this._floorTexPixels[si + 1];
+      floorRGBA[si + 2] = this._floorTexPixels[si + 2];
+      floorRGBA[si + 3] = 255;
+      ceilRGBA[si] = this._ceilTexPixels[si];
+      ceilRGBA[si + 1] = this._ceilTexPixels[si + 1];
+      ceilRGBA[si + 2] = this._ceilTexPixels[si + 2];
+      ceilRGBA[si + 3] = 255;
+    }
+    this.glRenderer.uploadFloorCeilTextures(floorRGBA, ceilRGBA);
+  }
 
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const i = (y * size + x) * 4;
-          let r = color.r,
-            g = color.g,
-            b = color.b;
-          const noise = (Math.random() * 10 - 5) | 0;
-
-          if (wid === 1) {
-            // Stone - brick pattern
-            const brickH = 16,
-              brickW = 32;
-            const row = Math.floor(y / brickH);
-            const offset = (row % 2) * (brickW / 2);
-            const bx = (x + offset) % brickW;
-            if (y % brickH < 1 || bx < 1) {
-              r -= 30;
-              g -= 30;
-              b -= 30;
-            }
-          } else if (wid === 2) {
-            // Tech - circuit lines
-            if (x % 16 === 0 || y % 16 === 0) {
-              r += 40;
-              g += 60;
-              b += 80;
-            }
-            if (x % 32 < 4 && y % 32 < 4) {
-              r += 60;
-              g += 100;
-              b += 80;
-            }
-          } else if (wid === 3) {
-            // Metal - rivets
-            if ((x === 4 || x === 60) && (y === 4 || y === 60)) {
-              r += 50;
-              g += 50;
-              b += 50;
-            }
-            if (x < 2 || x > 62 || y < 2 || y > 62) {
-              r -= 20;
-              g -= 20;
-              b -= 20;
-            }
-          } else if (wid === 4) {
-            // Energy - glowing pulse lines
-            const wave = Math.sin(y * 0.2 + x * 0.1) * 30;
-            r += wave;
-            g += wave * 0.3;
-            b += wave;
-            if (y % 8 === 0) {
-              r += 40;
-              b += 60;
-            }
-          } else if (wid === 5) {
-            // Door
-            if (x > 4 && x < 60 && y > 4 && y < 60) {
-              r += 20;
-              g += 10;
-              b -= 10;
-            }
-            if (x >= 28 && x <= 36 && y >= 28 && y <= 36) {
-              r += 40;
-              g += 40;
-              b += 40;
-            }
-          } else if (wid === 6) {
-            // Secret - same as stone with subtle difference
-            const brickH = 16,
-              brickW = 32;
-            const row = Math.floor(y / brickH);
-            const offset = (row % 2) * (brickW / 2);
-            const bx = (x + offset) % brickW;
-            if (y % brickH < 1 || bx < 1) {
-              r -= 30;
-              g -= 30;
-              b -= 30;
-            }
-          } else if (wid === 7) {
-            // Boss walls - ominous
-            const glow = Math.sin(x * 0.15) * Math.sin(y * 0.15) * 25;
-            r += glow * 2;
-            g += glow * 0.5;
-            b += glow;
-          } else if (wid === 9) {
-            // Temporal rift
-            const wave1 = Math.sin(x * 0.3 + y * 0.2) * 20;
-            const wave2 = Math.cos(x * 0.15 - y * 0.25) * 15;
-            r += wave1;
-            g += wave1 + wave2;
-            b += wave2 + 40;
-          }
-
-          r = Math.max(0, Math.min(255, r + noise));
-          g = Math.max(0, Math.min(255, g + noise));
-          b = Math.max(0, Math.min(255, b + noise));
-          d[i] = r;
-          d[i + 1] = g;
-          d[i + 2] = b;
-          d[i + 3] = 255;
-        }
+  /** Build (or reuse) the Modern environment bundle for the current act. */
+  _getModernEnv() {
+    const act = this._actPalette || 1;
+    const level = this._envLevel ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    if (
+      !this._modernEnv ||
+      this._modernEnv.act !== act ||
+      this._modernEnv.level !== level ||
+      this._modernEnv.brutal !== brutal ||
+      this._modernEnv.realistic !== realistic
+    ) {
+      // Keep the other style's set for this level, so flipping Modern <->
+      // Realistic mid-level is instant after the first time instead of a
+      // ~150 ms rebuild on every switch. Two sets at most; a new level drops
+      // both.
+      const prev = this._modernEnv;
+      const alt = this._altModernEnv;
+      if (
+        alt && alt.act === act && alt.level === level &&
+        alt.brutal === brutal && alt.realistic === realistic
+      ) {
+        this._modernEnv = alt;
+      } else {
+        this._modernEnv = generateModernEnv(act, brutal, level, { realistic });
+        this._modernEnv.realistic = realistic;
       }
-      ctx.putImageData(imgData, 0, 0);
-      this.textures[id] = c;
+      this._altModernEnv =
+        prev && prev.act === act && prev.level === level && prev.brutal === brutal
+          ? prev
+          : null;
+      this._envMapGLVersion = -1;
+      if (this.glRenderer) {
+        this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);
+      }
+    }
+    return this._modernEnv;
+  }
+
+  _ensureColBufs(w) {
+    if (this._colKey && this._colKey.length === w) return;
+    this._colKey = new Int32Array(w);
+    this._colTop = new Int32Array(w);
+    this._colBot = new Int32Array(w);
+    this._colZ = new Float64Array(w);
+  }
+
+  /**
+   * Per-column short-wall records for the sprite pass: for each short wall a
+   * column crosses, its distance and the screen Y (unshifted) below which it
+   * hides anything further away. See coverClipY().
+   */
+  _ensureCoverBufs(w) {
+    if (this._occN && this._occN.length === w) return;
+    this._occN = new Uint8Array(w);
+    this._occDist = new Float32Array(w * COVER_STRIDE);
+    this._occY = new Float32Array(w * COVER_STRIDE);
+  }
+
+  /**
+   * Screen Y (unshifted) below which something `depth` away in column `x` is
+   * hidden by short walls in front of it; Infinity when none are.
+   * Only meaningful in front of the column's full wall (zBuffer).
+   */
+  coverClipY(x, depth) {
+    if (!this._occN) return Infinity; // no wall pass yet at this size
+    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity);
+  }
+
+  /** Is a projected point (unshifted screen Y) hidden by a wall or low cover? */
+  pointHidden(x, depth, y, slack = 0.1) {
+    if (x < 0 || x >= this.width) return true;
+    x |= 0;
+    return depth > this.zBuffer[x] + slack || y >= this.coverClipY(x, depth);
+  }
+
+  /**
+   * Add clip rects for a sprite spanning columns x0..x1 and rows top..bottom
+   * at `depth`: each column is cut where a full wall stands in front and
+   * shortened to the silhouette of any low cover in front. Adjacent columns
+   * with the same cut merge into one rect. Returns 0 when nothing shows, 1
+   * when the sprite is partly hidden (clip needed), 2 when fully visible.
+   */
+  _spriteClipPath(ctx, x0, x1, top, bottom, depth) {
+    const zb = this.zBuffer;
+    if (x0 < 0) x0 = 0;
+    if (x1 > zb.length - 1) x1 = zb.length - 1;
+    let runStart = -1;
+    let runBot = 0;
+    let shown = 0;
+    let hidden = false;
+    ctx.beginPath();
+    for (let x = x0; x <= x1 + 1; x++) {
+      // Lowest visible row in this column, or -Infinity when none is.
+      let bot = -Infinity;
+      if (x <= x1) {
+        if (depth < zb[x]) {
+          bot = this.coverClipY(x, depth);
+          if (bot > bottom) bot = bottom;
+          if (bot <= top) bot = -Infinity;
+        }
+        if (bot < bottom) hidden = true;
+      }
+      if (runStart >= 0 && bot !== runBot) {
+        ctx.rect(runStart, top, x - runStart, runBot - top);
+        runStart = -1;
+      }
+      if (bot > top && runStart < 0) {
+        runStart = x;
+        runBot = bot;
+        shown++;
+      }
+    }
+    return shown === 0 ? 0 : hidden ? 1 : 2;
+  }
+
+  /**
+   * Top face of a short wall under the eye, seen from above: one flat fill per
+   * column in the wall art's average colour, a shade darker than the face and
+   * fogged at the far edge's distance. Caps are a pixel or two tall except up
+   * close, so a texture blit there bought nothing and cost a draw call.
+   */
+  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real) {
+    const mmips = menv ? menv.walls[wallType] : null;
+    const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
+    const lut = this._capLUT(tex, menv);
+    let s;
+    if (menv) {
+      s = 1 - Math.exp(-dist * menv.fogDensity);
+    } else {
+      s = dist / 20 / (this._visualStyle === 1 ? 0.85 : 0.6);
+      if (s > 1) s = 1;
+    }
+    ctx.fillStyle = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
+    ctx.fillRect(x, top, 1, bot - top);
+    // Batched with the frame's column path: Realistic's ambient fill, or the
+    // Comic ink line along the far edge.
+    if (menv) {
+      if (real) ctx.rect(x, top, 1, bot - top);
+      else ctx.rect(x, top, 1, 1);
     }
   }
 
-  _generateFloorCeilTextures() {
-    const size = 64;
-
-    // Floor: dark metallic grating with grid lines and rivets
-    const floorImg = new ImageData(size, size);
-    const fd = floorImg.data;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const i = (y * size + x) * 4;
-        let r = 22,
-          g = 25,
-          b = 32;
-        const noise = (Math.random() * 8 - 4) | 0;
-        // Grid lines every 16px
-        if (x % 16 === 0 || y % 16 === 0) {
-          r += 12;
-          g += 15;
-          b += 20;
-        }
-        // Heavier seam every 32px
-        if (x % 32 < 2 || y % 32 < 2) {
-          r += 8;
-          g += 10;
-          b += 14;
-        }
-        // Rivets at intersections
-        const rx = x % 32,
-          ry = y % 32;
-        if (rx >= 2 && rx <= 4 && ry >= 2 && ry <= 4) {
-          r += 20;
-          g += 22;
-          b += 28;
-        }
-        // Subtle glow spots (embedded floor lights)
-        const cx = (x % 32) - 16,
-          cy = (y % 32) - 16;
-        const d = Math.sqrt(cx * cx + cy * cy);
-        if (d < 2.5) {
-          r += 8;
-          g += 18;
-          b += 30;
-        }
-        fd[i] = Math.max(0, Math.min(255, r + noise));
-        fd[i + 1] = Math.max(0, Math.min(255, g + noise));
-        fd[i + 2] = Math.max(0, Math.min(255, b + noise));
-        fd[i + 3] = 255;
+  /**
+   * Fogged cap colours for one wall texture, CAP_FOG_STEPS + 1 of them from
+   * clear to fully fogged, using the same fog colour and ceiling as the wall
+   * pass of the active style. Built once per texture and fog setting.
+   */
+  _capLUT(tex, menv) {
+    const key = menv ? menv : this._visualStyle;
+    const slot = tex || _noTexture;
+    let e = _capCache.get(slot);
+    if (e && e.key === key) return e.lut;
+    const avg = _averageColor(tex);
+    const lut = new Array(CAP_FOG_STEPS + 1);
+    for (let i = 0; i <= CAP_FOG_STEPS; i++) {
+      const t = i / CAP_FOG_STEPS;
+      let fr, fg, fb, a;
+      if (menv) {
+        const n = menv.fogNear, f = menv.fogFar;
+        fr = n[0] + (f[0] - n[0]) * t;
+        fg = n[1] + (f[1] - n[1]) * t;
+        fb = n[2] + (f[2] - n[2]) * t;
+        a = t * menv.fogMax;
+      } else {
+        const brutal = this._visualStyle === 1;
+        [fr, fg, fb] = brutal ? [8, 8, 20] : [10, 18, 32];
+        a = t * (brutal ? 0.85 : 0.6);
       }
+      const k = (1 - CAP_SHADE) * (1 - a);
+      lut[i] = `rgb(${(avg[0] * k + fr * a) | 0},${(avg[1] * k + fg * a) | 0},${(avg[2] * k + fb * a) | 0})`;
     }
-    this._floorTexPixels = fd;
-
-    // Ceiling: dark panels with recessed lights and structural beams
-    const ceilImg = new ImageData(size, size);
-    const cd = ceilImg.data;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const i = (y * size + x) * 4;
-        let r = 10,
-          g = 10,
-          b = 20;
-        const noise = (Math.random() * 6 - 3) | 0;
-        // Panel edges
-        if (x % 32 === 0 || y % 32 === 0) {
-          r -= 3;
-          g -= 3;
-          b -= 3;
-        }
-        // Structural beam strips every 32px (horizontal)
-        if (y % 32 < 3) {
-          r += 6;
-          g += 6;
-          b += 8;
-        }
-        // Recessed light in panel center
-        const px = (x % 32) - 16,
-          py = (y % 32) - 16;
-        const dl = Math.sqrt(px * px + py * py);
-        if (dl < 2) {
-          r += 15;
-          g += 20;
-          b += 35;
-        }
-        cd[i] = Math.max(0, Math.min(255, r + noise));
-        cd[i + 1] = Math.max(0, Math.min(255, g + noise));
-        cd[i + 2] = Math.max(0, Math.min(255, b + noise));
-        cd[i + 3] = 255;
-      }
-    }
-    this._ceilTexPixels = cd;
+    _capCache.set(slot, { key, lut });
+    return lut;
   }
 
-  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY) {
+  /**
+   * Modern Canvas2D floor/ceiling (no-WebGL fallback). Same mip-filtered deck
+   * art, contact AO and emissive spill as the shader, at half vertical
+   * resolution like the legacy loop.
+   */
+  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env) {
     const w = this.width;
     const h = this.height;
-    const halfH = h >> 1;
+    const halfH = (h >> 1) + Math.round(yShift);
+    const projH = h >> 1;
 
     if (
       !this._floorCeilBuffer ||
@@ -245,8 +474,209 @@ export class Renderer {
       this._floorCeilBuffer.height !== h
     ) {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
+      this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
+    }
+    const buf32 = this._floorCeilBuf32;
+
+    const rayDirX0 = dirX - planeX;
+    const rayDirY0 = dirY - planeY;
+    const rayDirX1 = dirX + planeX;
+    const rayDirY1 = dirY + planeY;
+
+    const [fn0, fn1, fn2] = env.fogNear;
+    const [ff0, ff1, ff2] = env.fogFar;
+    const fogMax = env.fogMax;
+    const fogDensity = env.fogDensity;
+    const floorMips = env.deck.floorMips;
+    const ceilMips = env.deck.ceilMips;
+    const maxLvl = floorMips.length - 1;
+    const glow = env.glowRGB;
+
+    // Horizon = the thickest air.
+    const hr = (fn0 + (ff0 - fn0) * fogMax) | 0;
+    const hg = (fn1 + (ff1 - fn1) * fogMax) | 0;
+    const hb = (fn2 + (ff2 - fn2) * fogMax) | 0;
+    buf32.fill((255 << 24) | (hb << 16) | (hg << 8) | hr);
+
+    const em = this._envMap;
+    const cells = em.rgba;
+    const mw = em.w;
+    const mh = em.h;
+    const planeLen = Math.hypot(planeX, planeY) * 2;
+    const floorStart = Math.max(1, halfH + 1);
+    const loopEnd = h % 2 === 0 ? h : h - 1;
+
+    for (let y = floorStart; y < loopEnd; y += 2) {
+      const p = y - halfH;
+      if (p <= 0) continue;
+      const rowDist = projH / p;
+      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
+      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
+      let fx = camX + rowDist * rayDirX0;
+      let fy = camY + rowDist * rayDirY0;
+
+      const fog = fogMax * (1 - Math.exp(-rowDist * fogDensity));
+      const invFog = 1 - fog;
+      const fR = (fn0 + (ff0 - fn0) * fog) * fog;
+      const fG = (fn1 + (ff1 - fn1) * fog) * fog;
+      const fB = (fn2 + (ff2 - fn2) * fog) * fog;
+
+      // Pick the mip whose texels are about screen-pixel sized: kills the
+      // shimmer the 256px nearest-sampled deck had at distance.
+      const foot = Math.max((512 * rowDist * planeLen) / w, (512 * rowDist * rowDist) / projH);
+      let lvl = 0;
+      while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
+      const floorTex = floorMips[lvl];
+      const ceilTex = ceilMips[lvl];
+      const size = 512 >> lvl;
+      const mask = size - 1;
+
+      const rowOff = y * w;
+      const rowOff1 = (y - 1) * w;
+      const cy = 2 * halfH - 1 - y;
+      const cy2 = cy + 1;
+      const ceilVisible = cy >= 0 && cy < h;
+
+      for (let x = 0; x < w; x++) {
+        const tx = ((fx * size) | 0) & mask;
+        const ty = ((fy * size) | 0) & mask;
+        const ti = (ty * size + tx) * 4;
+
+        let ao = 1;
+        let gr = 0, gg = 0, gb = 0;
+        if (cells && fx >= 0 && fy >= 0) {
+          const cxI = fx | 0;
+          const cyI = fy | 0;
+          if (cxI < mw && cyI < mh) {
+            const o = (cyI * mw + cxI) * 4;
+            const m = cells[o];
+            const gbits = cells[o + 1];
+            if (m !== 0) {
+              const dx = fx - cxI;
+              const dy = fy - cyI;
+              if (m & 1) ao = Math.min(ao, aoAt(dx));
+              if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
+              if (m & 4) ao = Math.min(ao, aoAt(dy));
+              if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
+              if (m & 240) {
+                if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
+                if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
+                if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
+                if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
+              }
+            }
+            if (gbits !== 0) {
+              const dx = fx - cxI;
+              const dy = fy - cyI;
+              let g = 0;
+              if (gbits & 1) g = Math.max(g, glowAt(dx));
+              if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
+              if (gbits & 4) g = Math.max(g, glowAt(dy));
+              if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
+              const c = glow[cells[o + 2]];
+              if (c) {
+                gr = c[0] * g;
+                gg = c[1] * g;
+                gb = c[2] * g;
+              }
+            }
+          }
+        }
+
+        if (y < h) {
+          let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
+          let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
+          let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
+          if (fr > 255) fr = 255;
+          if (fg > 255) fg = 255;
+          if (fb > 255) fb = 255;
+          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+          buf32[rowOff + x] = packed;
+          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+        }
+
+        if (ceilVisible) {
+          let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
+          let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
+          let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
+          if (cr > 255) cr = 255;
+          if (cg > 255) cg = 255;
+          if (cb > 255) cb = 255;
+          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+          buf32[cy * w + x] = cPacked;
+          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
+        }
+
+        fx += stepX;
+        fy += stepY;
+      }
+    }
+
+    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * Modern silhouette pass: one ink line per column run where the wall plane
+   * changes (block corners and occlusion edges) plus the batched top/bottom
+   * contact lines recorded during the wall loop. Only a few dozen fills.
+   */
+  _drawModernInk(w, h) {
+    const ctx = this.ctx;
+    const key = this._colKey;
+    const top = this._colTop;
+    const bot = this._colBot;
+    // Depth of the nearest surface per column (the one the key describes).
+    const zb = this._colZ;
+    ctx.fillStyle = "rgba(4,6,11,0.9)";
+    ctx.fill(); // top/bottom contact lines accumulated as rects in the loop
+    for (let x = 1; x < w; x++) {
+      const k = key[x];
+      const kp = key[x - 1];
+      if (k === kp || k < 0 || kp < 0) continue;
+      const z0 = zb[x - 1];
+      const z1 = zb[x];
+      const nearX = z1 < z0 ? x : x - 1;
+      const nearZ = z1 < z0 ? z1 : z0;
+      const lh = h / nearZ;
+      const lw = lh > 900 ? 3 : lh > 260 ? 2 : 1;
+      let t, b;
+      if (Math.abs(z1 - z0) < 0.05 * nearZ + 0.02) {
+        t = Math.min(top[x], top[x - 1]);
+        b = Math.max(bot[x], bot[x - 1]);
+      } else {
+        t = top[nearX];
+        b = bot[nearX];
+      }
+      if (b <= t) continue;
+      ctx.fillRect(nearX === x ? x : x - lw + 1, t, lw, b - t);
+    }
+  }
+
+  _regenerateFloorCeil() {
+    const { floorPixels, ceilPixels } = generateFloorCeilTextures(this._actPalette, this._visualStyle);
+    this._floorTexPixels = floorPixels;
+    this._ceilTexPixels = ceilPixels;
+  }
+
+  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0) {
+    const w = this.width;
+    const h = this.height;
+    const halfH = (h >> 1) + Math.round(yShift);
+
+    // Projection height for distance calc (unshifted for correct perspective)
+    const projH = h >> 1;
+
+    if (
+      !this._floorCeilBuffer ||
+      this._floorCeilBuffer.width !== w ||
+      this._floorCeilBuffer.height !== h
+    ) {
+      this._floorCeilBuffer = this.ctx.createImageData(w, h);
+      this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
     }
     const buf = this._floorCeilBuffer.data;
+    // Uint32Array view for single 32-bit pixel writes (4× fewer stores)
+    const buf32 = this._floorCeilBuf32;
     const floorTex = this._floorTexPixels;
     const ceilTex = this._ceilTexPixels;
 
@@ -255,99 +685,86 @@ export class Renderer {
     const rayDirX1 = dirX + planeX;
     const rayDirY1 = dirY + planeY;
 
-    const fogR = 8,
-      fogG = 8,
-      fogB = 20;
+    // Act-tinted fog: Act1=teal, Act2=amber, Act3=crimson, Act4=white-hot violet
+    const act = this._actPalette || 1;
+    const actFog = act === 2
+      ? { r: 20, g: 10, b: 4 }
+      : act === 3
+        ? { r: 22, g: 4, b: 8 }
+        : act === 4
+          ? { r: 30, g: 22, b: 32 }
+          : { r: 8, g: 18, b: 30 }; // Act 1 default teal
+    const brutal = this._visualStyle === 1;
+    const fogR = brutal ? actFog.r : actFog.r + 4;
+    const fogG = brutal ? actFog.g : actFog.g + 4;
+    const fogB = brutal ? actFog.b : actFog.b + 8;
+    const fogMaxOpacity = brutal ? 0.92 : 0.7;
 
+    // Pre-pack fog as 32-bit ABGR (little-endian) for fast fill
+    const fogPacked = (255 << 24) | (fogB << 16) | (fogG << 8) | fogR;
+    // Fill entire buffer with fog (single 32-bit writes)
+    buf32.fill(fogPacked);
+
+    const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
-    for (let y = halfH + 1; y < loopEnd; y += 2) {
+
+    // Pre-compute per-row fog LUT to avoid redundant math per-pixel
+    for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
-      const rowDist = halfH / p;
+      if (p <= 0) continue;
+      const rowDist = projH / p;
       const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
       const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
       let fx = camX + rowDist * rayDirX0;
       let fy = camY + rowDist * rayDirY0;
 
-      const fog = Math.min(0.92, rowDist / 12);
+      const fog = Math.min(fogMaxOpacity, rowDist / 12);
       const invFog = 1 - fog;
       const fR = fogR * fog,
         fG = fogG * fog,
         fB = fogB * fog;
 
+      const rowOff = y * w;
+      const rowOff1 = (y - 1) * w;
+
       for (let x = 0; x < w; x++) {
-        const tx = ((fx * 64) | 0) & 63;
-        const ty = ((fy * 64) | 0) & 63;
-        const ti = (ty * 64 + tx) * 4;
+        const tx = ((fx * 256) | 0) & 255;
+        const ty = ((fy * 256) | 0) & 255;
+        const ti = (ty * 256 + tx) * 4;
 
-        // Floor pixel
-        const fi = (y * w + x) * 4;
-        const fr = floorTex[ti] * invFog + fR;
-        const fg = floorTex[ti + 1] * invFog + fG;
-        const fb = floorTex[ti + 2] * invFog + fB;
-        buf[fi] = fr;
-        buf[fi + 1] = fg;
-        buf[fi + 2] = fb;
-        buf[fi + 3] = 255;
-        // Copy to skipped row
-        const fi2 = ((y - 1) * w + x) * 4;
-        buf[fi2] = fr;
-        buf[fi2 + 1] = fg;
-        buf[fi2 + 2] = fb;
-        buf[fi2 + 3] = 255;
+        // Floor pixel — single 32-bit write
+        if (y < h) {
+          const fr = (floorTex[ti] * invFog + fR) | 0;
+          const fg = (floorTex[ti + 1] * invFog + fG) | 0;
+          const fb = (floorTex[ti + 2] * invFog + fB) | 0;
+          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+          buf32[rowOff + x] = packed;
+          // Copy to skipped row
+          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+        }
 
-        // Ceiling pixel (mirrored)
-        const cy = h - 1 - y;
-        const ci = (cy * w + x) * 4;
-        const cr = ceilTex[ti] * invFog + fR;
-        const cg = ceilTex[ti + 1] * invFog + fG;
-        const cb = ceilTex[ti + 2] * invFog + fB;
-        buf[ci] = cr;
-        buf[ci + 1] = cg;
-        buf[ci + 2] = cb;
-        buf[ci + 3] = 255;
-        // Copy ceiling skipped row
-        const ci2 = ((cy + 1) * w + x) * 4;
-        buf[ci2] = cr;
-        buf[ci2 + 1] = cg;
-        buf[ci2 + 2] = cb;
-        buf[ci2 + 3] = 255;
+        // Ceiling pixel (mirrored around shifted horizon)
+        const cy = 2 * halfH - 1 - y;
+        if (cy >= 0 && cy < h) {
+          const cr = (ceilTex[ti] * invFog + fR) | 0;
+          const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
+          const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
+          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+          buf32[cy * w + x] = cPacked;
+          // Copy ceiling skipped row
+          const cy2 = cy + 1;
+          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
+        }
 
         fx += stepX;
         fy += stepY;
       }
     }
 
-    // Fill leftover row when height is odd
-    if (h % 2 !== 0 && h > halfH + 1) {
-      const lastY = h - 1;
-      const prevY = lastY - 1;
-      for (let x = 0; x < w; x++) {
-        const src = (prevY * w + x) * 4;
-        const dst = (lastY * w + x) * 4;
-        buf[dst] = buf[src];
-        buf[dst + 1] = buf[src + 1];
-        buf[dst + 2] = buf[src + 2];
-        buf[dst + 3] = 255;
-        // Mirror for ceiling top row
-        const cSrc = ((h - 1 - prevY) * w + x) * 4;
-        const cDst = ((h - 1 - lastY) * w + x) * 4;
-        if (cDst >= 0) {
-          buf[cDst] = buf[cSrc] || fogR;
-          buf[cDst + 1] = buf[cSrc + 1] || fogG;
-          buf[cDst + 2] = buf[cSrc + 2] || fogB;
-          buf[cDst + 3] = 255;
-        }
-      }
-    }
-
-    // Horizon line
-    const hi = halfH * w * 4;
-    for (let x = 0; x < w; x++) {
-      const idx = hi + x * 4;
-      buf[idx] = fogR;
-      buf[idx + 1] = fogG;
-      buf[idx + 2] = fogB;
-      buf[idx + 3] = 255;
+    // Horizon line (at shifted position, if visible)
+    if (halfH >= 0 && halfH < h) {
+      const hi = halfH * w;
+      for (let x = 0; x < w; x++) buf32[hi + x] = fogPacked;
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
@@ -369,6 +786,19 @@ export class Renderer {
 
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
+
+    // Modern art style environment. Gated off for Legacy and for the low
+    // presets that already drop floor textures — those keep the old look.
+    const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
+    // Realistic reuses the Modern wall art and swaps the lighting: no ink
+    // lines, darker ambient, contact shadows, inverse-square lights.
+    const real = !!menv && isRealisticArt();
+    const aoStrip = real ? this._contactShadowStrip() : null;
+    if (menv) {
+      this._ensureColBufs(w);
+      this._colKey.fill(-1);
+      if (this._envMap.sync(map)) this._envMapGLVersion = -1;
+    }
 
     // Convert FOV degrees to camera plane multiplier
     const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
@@ -403,16 +833,64 @@ export class Renderer {
       camY = tryY;
     }
 
-    // Draw textured floor and ceiling (or gradient fallback for builder)
-    if (!skipFloorCeil) {
-      this._renderFloorCeiling(
-        camX,
-        camY,
-        dirX,
-        dirY,
-        -dirY * planeMul,
-        dirX * planeMul,
-      );
+    // Draw textured floor and ceiling (with yShift for pitch support)
+    if (menv) {
+      let drawn = false;
+      if (this.useWebGL && this.glRenderer) {
+        if (this._envMapGLVersion !== this._envMap.version) {
+          this.glRenderer.uploadEnvMap(this._envMap.rgba, this._envMap.w, this._envMap.h);
+          this._envMapGLVersion = this._envMap.version;
+        }
+        drawn = this.glRenderer.renderFloorCeilingModern(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          Math.round(yShift),
+          menv,
+          this.lights || [],
+        );
+        if (drawn) ctx.drawImage(this.glRenderer.canvas, 0, 0);
+      }
+      if (!drawn) {
+        this._renderFloorCeilingModern(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          yShift,
+          menv,
+        );
+      }
+    } else if (!skipFloorCeil) {
+      if (this.useWebGL && this.glRenderer) {
+        // GPU-accelerated floor/ceiling with dynamic lighting
+        const act = this._actPalette || 1;
+        const brutal = this._visualStyle === 1;
+        const actFog = act === 2
+          ? [24 / 255, 14 / 255, 12 / 255]
+          : act === 3
+            ? [26 / 255, 8 / 255, 16 / 255]
+            : act === 4
+              ? [36 / 255, 28 / 255, 38 / 255]
+              : [12 / 255, 22 / 255, 38 / 255];
+        const fogMax = brutal ? 0.92 : 0.7;
+        this.glRenderer.renderFloorCeiling(
+          camX, camY, dirX, dirY,
+          -dirY * planeMul, dirX * planeMul,
+          Math.round(yShift),
+          actFog, fogMax,
+          this.lights || [],
+        );
+        // Composite WebGL result onto Canvas2D
+        ctx.drawImage(this.glRenderer.canvas, 0, 0);
+      } else {
+        this._renderFloorCeiling(
+          camX,
+          camY,
+          dirX,
+          dirY,
+          -dirY * planeMul,
+          dirX * planeMul,
+          yShift,
+        );
+      }
     } else {
       // Gradient fallback for builder mode (uses yShift for vertical offset)
       const centerY = (h >> 1) + yShift;
@@ -428,170 +906,498 @@ export class Renderer {
       ctx.fillRect(0, centerY, w, h - centerY);
     }
 
-    // Raycasting
+    // Raycasting. Each column marches through any short walls (low cover) to
+    // the full-height wall behind them and draws them front to back: every
+    // wall shows only above the lowest short-wall silhouette in front of it.
     const planeX = -dirY * planeMul;
     const planeY = dirX * planeMul;
+    const horizon = h / 2 + yShift;
+    const hits = this._colHits;
+    this._ensureCoverBufs(w);
+    const occN = this._occN;
+    const occDist = this._occDist;
+    const occY = this._occY;
+
+    if (menv) ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
       const cameraX = (2 * x) / w - 1;
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      let mapX = Math.floor(camX);
-      let mapY = Math.floor(camY);
+      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits);
+      const stepX = hits.stepX;
+      const stepY = hits.stepY;
+      const nHits = hits.n;
+      // Rows from `openBot` down are already covered by nearer short walls.
+      let openBot = h;
+      let nOcc = 0;
+      let closeDist = hits.dist[nHits - 1];
+      const occBase = x * COVER_STRIDE;
 
-      const deltaDistX = Math.abs(1 / rayDirX);
-      const deltaDistY = Math.abs(1 / rayDirY);
+      for (let hi = 0; hi < nHits; hi++) {
+        const mapX = hits.mapX[hi];
+        const mapY = hits.mapY[hi];
+        const side = hits.side[hi];
+        const wallType = hits.type[hi];
+        const perpWallDist = hits.dist[hi];
+        // Variable height: 5 layers = full wall, 1 layer = 20% (from the floor up).
+        const heightFrac = hits.frac[hi];
 
-      let stepX, stepY, sideDistX, sideDistY;
+        const lineHeight = (h / perpWallDist) | 0;
+        const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
+        const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
 
-      if (rayDirX < 0) {
-        stepX = -1;
-        sideDistX = (camX - mapX) * deltaDistX;
-      } else {
-        stepX = 1;
-        sideDistX = (mapX + 1.0 - camX) * deltaDistX;
-      }
-      if (rayDirY < 0) {
-        stepY = -1;
-        sideDistY = (camY - mapY) * deltaDistY;
-      } else {
-        stepY = 1;
-        sideDistY = (mapY + 1.0 - camY) * deltaDistY;
-      }
+        const faceTop = heightFrac < 1
+          ? (fullDrawEnd - (fullDrawEnd - fullDrawStart) * heightFrac) | 0
+          : fullDrawStart;
+        let drawStart = faceTop;
+        let drawEnd = fullDrawEnd;
+        // A nearer short wall hides the lower part of this one.
+        const clipped = openBot < h && drawEnd > openBot;
+        if (clipped) drawEnd = openBot;
 
-      let hit = 0;
-      let side = 0;
-      let wallType = 0;
+        if (drawStart < 0) drawStart = 0;
+        if (drawEnd >= h) drawEnd = h - 1;
 
-      // DDA
-      while (hit === 0) {
-        if (sideDistX < sideDistY) {
-          sideDistX += deltaDistX;
-          mapX += stepX;
-          side = 0;
-        } else {
-          sideDistY += deltaDistY;
-          mapY += stepY;
-          side = 1;
+        if (drawEnd > drawStart) {
+          // Texture coordinate
+          let wallX;
+          if (side === 0) {
+            wallX = camY + perpWallDist * rayDirY;
+          } else {
+            wallX = camX + perpWallDist * rayDirX;
+          }
+          wallX -= Math.floor(wallX);
+
+          const mmips = menv ? menv.walls[wallType] : null;
+          if (mmips) {
+            // Mip level ≈ one texel per screen pixel, so distant walls sample
+            // pre-filtered art instead of aliasing across the 512px face.
+            const lvl =
+              lineHeight >= 384 ? 0 :
+                lineHeight >= 192 ? 1 :
+                  lineHeight >= 96 ? 2 :
+                    lineHeight >= 48 ? 3 :
+                      lineHeight >= 24 ? 4 : 5;
+            const mtex = mmips[lvl];
+            const S = mtex.width;
+            let texX = (wallX * S) | 0;
+            if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+              texX = S - 1 - texX;
+            }
+            const mstep = S / lineHeight;
+            const srcY = (drawStart - fullDrawStart) * mstep;
+            const colH = drawEnd - drawStart;
+            const srcH = Math.min(S - srcY, colH * mstep);
+            if (srcH > 0 && colH > 0) {
+              ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
+            }
+
+            // Directional key light: faces turned away from it fall toward ink.
+            const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
+            if (face !== 0) {
+              ctx.fillStyle = menv.faceShade[face];
+              ctx.fillRect(x, drawStart, 1, colH);
+            }
+            if (real) {
+              // Low ambient, batched into the frame's column path (Realistic has
+              // no ink lines to share it with) and filled once after the loop.
+              ctx.rect(x, drawStart, 1, colH);
+              // Soft contact shadow where the wall meets the deck and ceiling,
+              // stretched over the wall's full height so it stays on the joints
+              // when the column is clipped. Walls under ~40px tall are too far
+              // away for it to show, so they skip the blit.
+              if (lineHeight >= 40) {
+                const fullH = fullDrawEnd - fullDrawStart;
+                ctx.drawImage(aoStrip, 0, ((drawStart - fullDrawStart) / fullH) * 64, 1, (colH / fullH) * 64, x, drawStart, 1, colH);
+              }
+            }
+
+            // Act fog with atmospheric perspective (colour and density from the
+            // same ramp the deck shader uses, so wall and floor air agree).
+            const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
+            const fogAmount = fogK;
+            const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
+            if (fi > 0) {
+              ctx.fillStyle = menv.fogLUT[fi];
+              ctx.fillRect(x, drawStart, 1, colH);
+            }
+
+            // Dynamic lights, with a hot rim where they catch an exposed corner.
+            if (this.lights && this.lights.length > 0) {
+              const hitWX = camX + perpWallDist * rayDirX;
+              const hitWY = camY + perpWallDist * rayDirY;
+              let lr = 0, lg = 0, lb = 0;
+              for (let li = 0; li < this.lights.length; li++) {
+                const L = this.lights[li];
+                const ldx = L.x - hitWX;
+                const ldy = L.y - hitWY;
+                const d2 = ldx * ldx + ldy * ldy;
+                const r2 = L.radius * L.radius;
+                if (d2 >= r2) continue;
+                let k;
+                if (real) {
+                  // Inverse-square, windowed to the authored radius: hot near the
+                  // source, long soft tail, still zero at the edge.
+                  const q = d2 / r2;
+                  const win = 1 - q * q;
+                  k = (win * win * L.intensity * 1.35) / (1 + (6 * d2) / r2);
+                } else {
+                  const fall = 1 - Math.sqrt(d2) / L.radius;
+                  k = fall * fall * L.intensity;
+                }
+                lr += L.color[0] * k;
+                lg += L.color[1] * k;
+                lb += L.color[2] * k;
+              }
+              if (lr + lg + lb > 1) {
+                if (wallX < 0.07 || wallX > 0.93) {
+                  // Only a real block corner gets the rim; a continuous wall
+                  // plane shouldn't light up every cell seam.
+                  const nx = side === 0 ? mapX : mapX + (wallX < 0.07 ? -1 : 1);
+                  const ny = side === 0 ? mapY + (wallX < 0.07 ? -1 : 1) : mapY;
+                  const open =
+                    nx >= 0 && ny >= 0 && nx < map.width && ny < map.height &&
+                    map.grid[ny][nx] === 0;
+                  if (open) {
+                    lr *= 2.4;
+                    lg *= 2.4;
+                    lb *= 2.4;
+                  }
+                }
+                const peak = Math.max(lr, lg, lb);
+                const a = Math.min(0.9, peak / 255);
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(
+                  Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
+                );
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Door-frame spill onto the walls flanking a door tile.
+            if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
+              const low = wallX < 0.1;
+              const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
+              const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
+              if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
+                const ac = menv.accentRGB;
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Inked contact lines at the ceiling and deck joints, batched into one
+            // path that the silhouette pass fills after the loop.
+            const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
+            if (!real && colH > inkT * 2) {
+              if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
+              if (drawEnd < h - 1 && !clipped) ctx.rect(x, drawEnd - inkT, 1, inkT);
+            }
+            if (hi === 0) {
+              // The silhouette pass outlines the nearest surface in each column.
+              this._colKey[x] = side === 0 ? mapX << 1 : (mapY << 1) | 1;
+              this._colTop[x] = drawStart;
+              this._colBot[x] = drawEnd;
+              this._colZ[x] = perpWallDist;
+            }
+          } else if (this.textures[wallType]) {
+            const tex = this.textures[wallType];
+            let texX = (wallX * 256) | 0;
+            if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+              texX = 255 - texX;
+            }
+
+            // Draw textured wall strip
+            const texHeight = 256;
+            const step = texHeight / lineHeight;
+            let texPos = (drawStart - fullDrawStart) * step;
+
+            // Use drawImage for textured columns
+            const srcY = Math.max(0, texPos);
+            const srcH = Math.min(256, (drawEnd - drawStart) * step);
+            if (srcH > 0 && drawEnd > drawStart) {
+              ctx.drawImage(
+                tex,
+                texX,
+                srcY,
+                1,
+                srcH,
+                x,
+                drawStart,
+                1,
+                drawEnd - drawStart,
+              );
+            }
+
+            // Darken side walls for depth
+            if (side === 1) {
+              ctx.fillStyle = "rgba(0,0,0,0.3)";
+              ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+            }
+
+            // Distance fog (cached rgba strings to avoid per-column string creation)
+            const wallFogMax = this._visualStyle === 1 ? 0.85 : 0.6;
+            const fogAmount = Math.min(wallFogMax, perpWallDist / 20);
+            if (fogAmount > 0) {
+              const [wfR, wfG, wfB] =
+                this._visualStyle === 1 ? [8, 8, 20] : [10, 18, 32];
+              ctx.fillStyle = _getFogString(wfR, wfG, wfB, fogAmount);
+              ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+            }
+
+            // Dynamic lights — additive radial bleed at the wall hit point.
+            // Each active light is sampled by squared distance for cheap falloff.
+            // Skipped entirely when no lights are present (zero overhead common case).
+            if (this.lights && this.lights.length > 0) {
+              const hitWX = camX + perpWallDist * rayDirX;
+              const hitWY = camY + perpWallDist * rayDirY;
+              let lr = 0, lg = 0, lb = 0;
+              for (let li = 0; li < this.lights.length; li++) {
+                const L = this.lights[li];
+                const ldx = L.x - hitWX;
+                const ldy = L.y - hitWY;
+                const d2 = ldx * ldx + ldy * ldy;
+                const r2 = L.radius * L.radius;
+                if (d2 >= r2) continue;
+                // Quadratic falloff (1 - d/r)^2 reads better than linear.
+                const fall = 1 - Math.sqrt(d2) / L.radius;
+                const k = fall * fall * L.intensity;
+                lr += L.color[0] * k;
+                lg += L.color[1] * k;
+                lb += L.color[2] * k;
+              }
+              if (lr + lg + lb > 1) {
+                // Cap alpha so big stacks don't blow out the column.
+                const peak = Math.max(lr, lg, lb);
+                const a = Math.min(0.85, peak / 255);
+                const nr = Math.min(255, lr | 0);
+                const ng = Math.min(255, lg | 0);
+                const nb = Math.min(255, lb | 0);
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(nr, ng, nb, a);
+                ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Door frame overlay — teal accent on walls adjacent to door tiles
+            if (wallType !== 5 && wallType > 0 && perpWallDist < 15) {
+              let hasDoorNeighbor = false;
+              if (side === 0) {
+                // Vertical face — check tiles above/below for doors
+                if ((wallX < 0.12 && mapY > 0 && map.grid[mapY - 1][mapX] === 5) ||
+                    (wallX > 0.88 && mapY < map.height - 1 && map.grid[mapY + 1][mapX] === 5)) {
+                  hasDoorNeighbor = true;
+                }
+              } else {
+                // Horizontal face — check tiles left/right for doors
+                if ((wallX < 0.12 && mapX > 0 && map.grid[mapY][mapX - 1] === 5) ||
+                    (wallX > 0.88 && mapX < map.width - 1 && map.grid[mapY][mapX + 1] === 5)) {
+                  hasDoorNeighbor = true;
+                }
+              }
+              if (hasDoorNeighbor) {
+                const frameAlpha = Math.max(0, (1 - fogAmount) * 0.5);
+                ctx.fillStyle = _getFogString(0, 180, 120, frameAlpha);
+                ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+              }
+            }
+          }
         }
-        if (mapX < 0 || mapY < 0 || mapX >= map.width || mapY >= map.height) {
-          hit = 1;
-          wallType = 1;
+
+        if (heightFrac >= 1) break;
+
+        // Short wall under the eye: its top face shows, out to where the ray
+        // leaves the cell. That far edge is the silhouette behind it.
+        let top = faceTop;
+        if (heightFrac < 0.5) {
+          let capTop = (horizon + ((0.5 - heightFrac) * h) / hits.exit[hi]) | 0;
+          if (capTop < 0) capTop = 0;
+          const capBot = faceTop < openBot ? faceTop : openBot;
+          if (capBot > capTop) {
+            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real);
+          }
+          top = capTop;
+        }
+        if (top < openBot) openBot = top > 0 ? top : 0;
+        // Sprites compare in unshifted screen space (they are translated by
+        // yShift afterwards), so store the silhouette that way.
+        occDist[occBase + nOcc] = perpWallDist;
+        occY[occBase + nOcc] = openBot - yShift;
+        nOcc++;
+        if (openBot <= 0) {
+          closeDist = perpWallDist;
           break;
         }
-        if (map.grid[mapY][mapX] > 0) {
-          hit = 1;
-          wallType = map.grid[mapY][mapX];
-        }
       }
+      occN[x] = nOcc;
+      // Depth of whatever closes the column: the full wall, or a short wall
+      // that covers it top to bottom.
+      this.zBuffer[x] = closeDist;
+    }
 
-      let perpWallDist;
-      if (side === 0) {
-        perpWallDist = (mapX - camX + (1 - stepX) / 2) / rayDirX;
-      } else {
-        perpWallDist = (mapY - camY + (1 - stepY) / 2) / rayDirY;
-      }
+    if (menv && !real) this._drawModernInk(w, h);
+    if (real) {
+      ctx.fillStyle = "rgba(3,4,7,0.16)";
+      ctx.fill();
+    }
 
-      if (perpWallDist < 0.01) perpWallDist = 0.01;
+    // Set FOV scale for prop minimum-size floors
+    setFovScale(fov);
 
-      // TODO: For short walls (heightFrac < 1), store wall-top Y per column
-      // so renderSprites() can show sprites above short walls instead of
-      // fully occluding them based on distance alone.
-      this.zBuffer[x] = perpWallDist;
-
-      const lineHeight = Math.floor(h / perpWallDist);
-      const fullDrawStart = Math.floor(-lineHeight / 2 + h / 2 + yShift);
-      const fullDrawEnd = Math.floor(lineHeight / 2 + h / 2 + yShift);
-
-      // Variable height: heightMap determines how tall the wall renders
-      // 5 layers = full wall, 1 layer = 20% wall (from ground up)
-      let heightFrac = 1;
-      if (
-        map.heightMap &&
-        mapX >= 0 &&
-        mapY >= 0 &&
-        mapX < map.width &&
-        mapY < map.height
-      ) {
-        const hCount = map.heightMap[mapY][mapX];
-        if (hCount > 0 && hCount < 5) {
-          heightFrac = hCount / 5;
-        }
-      }
-
-      let drawStart, drawEnd;
-      if (heightFrac < 1) {
-        // Short wall: grows upward from floor level
-        drawEnd = fullDrawEnd;
-        const wallPx = fullDrawEnd - fullDrawStart;
-        drawStart = Math.floor(drawEnd - wallPx * heightFrac);
-      } else {
-        drawStart = fullDrawStart;
-        drawEnd = fullDrawEnd;
-      }
-
-      if (drawStart < 0) drawStart = 0;
-      if (drawEnd >= h) drawEnd = h - 1;
-
-      // Texture coordinate
-      let wallX;
-      if (side === 0) {
-        wallX = camY + perpWallDist * rayDirY;
-      } else {
-        wallX = camX + perpWallDist * rayDirX;
-      }
-      wallX -= Math.floor(wallX);
-
-      const tex = this.textures[wallType];
-      if (tex) {
-        let texX = Math.floor(wallX * 64);
-        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-          texX = 63 - texX;
-        }
-
-        // Draw textured wall strip
-        const texHeight = 64;
-        const step = texHeight / lineHeight;
-        let texPos = (drawStart - h / 2 + lineHeight / 2) * step;
-
-        // Use drawImage for textured columns
-        const srcY = Math.max(0, texPos);
-        const srcH = Math.min(64, (drawEnd - drawStart) * step);
-        if (srcH > 0 && drawEnd > drawStart) {
-          ctx.drawImage(
-            tex,
-            texX,
-            srcY,
-            1,
-            srcH,
-            x,
-            drawStart,
-            1,
-            drawEnd - drawStart,
-          );
-        }
-
-        // Darken side walls for depth
-        if (side === 1) {
-          ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-        }
-
-        // Distance fog
-        const fogAmount = Math.min(0.85, perpWallDist / 20);
-        if (fogAmount > 0) {
-          ctx.fillStyle = `rgba(8,8,20,${fogAmount})`;
-          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-        }
-      }
+    // Sprites project around h/2; shift them with the walls and floor so props
+    // and enemies stay planted on the ground while crouching or sliding.
+    const spriteShift = yShift | 0;
+    if (spriteShift) {
+      ctx.save();
+      ctx.translate(0, spriteShift);
     }
 
     // Render sprites
-    this.renderSprites(player, entities, time, planeMul, camX, camY);
+    this.renderSprites(player, entities, time, planeMul, camX, camY, player._drawDistance);
+
+    // Render particles
+    if (player.particles) {
+      this.renderParticles(player, player.particles, time, planeMul, camX, camY);
+    }
+
+    if (spriteShift) ctx.restore();
   }
 
-  renderSprites(player, entities, time, planeMul = 0.66, camX, camY) {
+  renderParticles(player, particles, time, planeMul = 0.66, camX, camY, yShift = 0) {
+    if (!particles || particles.length === 0) return;
+    const ctx = this.ctx;
+    const w = this.width;
+    const h = this.height;
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
+    const cx = camX != null ? camX : player.x;
+    const cy = camY != null ? camY : player.y;
+    // Share the scene's vertical shift, or motes hang in the air while the
+    // world drops under a crouch.
+    const halfH = h / 2 + yShift;
+    const real = isRealisticArt();
+    if (real) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const spriteX = p.x - cx;
+      const spriteY = p.y - cy;
+
+      const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+      const transformX = invDet * (dirY * spriteX - dirX * spriteY);
+      const transformY = invDet * (-planeY * spriteX + planeX * spriteY);
+
+      if (transformY <= 0.1) continue;
+
+      const screenX = ((w / 2) * (1 + transformX / transformY)) | 0;
+
+      // Basic occlusion check
+      if (
+        screenX < 0 ||
+        screenX >= w ||
+        transformY > this.zBuffer[screenX] + 0.1
+      )
+        continue;
+
+      const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
+      // p.z is height offset (0 = floor level, negative = up)
+      const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
+      // Low cover in front hides motes below its top edge.
+      if (screenY - yShift >= this.coverClipY(screenX, transformY)) continue;
+      if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
+
+      const r = p.r ?? 255;
+      const g = p.g ?? 255;
+      const b = p.b ?? 255;
+      const a = p.life ?? 1;
+
+      ctx.fillStyle = _getFogString(r, g, b, a);
+      ctx.fillRect(
+        (screenX - size / 2) | 0,
+        (screenY - size / 2) | 0,
+        Math.max(1, size),
+        Math.max(1, size),
+      );
+    }
+  }
+
+  /** Project a world position into screen space using the same camera math as
+   * sprite/particle passes. Returns null if behind the near plane. */
+  _projectWorld(player, x, y, planeMul, camX, camY, zHeight = 0, yShift = 0) {
+    const w = this.width;
+    const h = this.height;
+    const dirX = Math.cos(player.angle);
+    const dirY = Math.sin(player.angle);
+    const planeX = -dirY * planeMul;
+    const planeY = dirX * planeMul;
+    const cx = camX != null ? camX : player.x;
+    const cy = camY != null ? camY : player.y;
+    const sx = x - cx;
+    const sy = y - cy;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    const tx = invDet * (dirY * sx - dirX * sy);
+    const ty = invDet * (-planeY * sx + planeX * sy);
+    if (ty <= 0.1) return null;
+    const screenX = (w / 2) * (1 + tx / ty);
+    const screenY = h / 2 + yShift + zHeight * (h / ty);
+    // baseY: the same point without the scene's vertical shift, the space the
+    // low-cover records (coverClipY) are kept in.
+    return { x: screenX, y: screenY, baseY: screenY - yShift, depth: ty };
+  }
+
+  /** Hitscan tracers — short fading streaks from barrel to impact. */
+  renderTracers(player, tracers, planeMul = 0.66, camX, camY, yShift = 0) {
+    if (!tracers || tracers.length === 0) return;
+    const ctx = this.ctx;
+    const w = this.width;
+    for (const tr of tracers) {
+      const t = Math.max(0, tr.life / tr.maxLife);
+      if (t <= 0) continue;
+      // Slight elevation so tracer reads as gun-height, not floor-height
+      const startZ = -0.05;
+      const endZ = -0.05 + Math.tan(tr.pitch || 0) * 0.0; // pitched aim already encoded in (x2,y2)
+      const a = this._projectWorld(player, tr.x1, tr.y1, planeMul, camX, camY, startZ, yShift);
+      const b = this._projectWorld(player, tr.x2, tr.y2, planeMul, camX, camY, endZ, yShift);
+      if (!a || !b) continue;
+      // Z-buffer occlusion at endpoint (if hidden behind wall, skip)
+      const xb = Math.max(0, Math.min(w - 1, Math.floor(b.x)));
+      if (this.pointHidden(xb, b.depth, b.baseY)) continue;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      // Outer glow
+      ctx.globalAlpha = 0.35 * t;
+      ctx.strokeStyle = `rgba(${tr.color},1)`;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      // Hot core
+      ctx.globalAlpha = t;
+      ctx.strokeStyle = `rgba(255,255,240,1)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // --- Entity Rendering ---
+  renderSprites(player, entities, time, planeMul = 0.66, camX, camY, drawDistance) {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
@@ -603,17 +1409,32 @@ export class Renderer {
     // Use camera position for sprite rendering (defaults to player pos)
     const cx = camX != null ? camX : player.x;
     const cy = camY != null ? camY : player.y;
+    // Camera right vector, so side-on enemy sprites can face their heading.
+    this._camRightX = -dirY;
+    this._camRightY = dirX;
+    if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
+    const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
-    // Sort entities by distance from camera
-    const sorted = entities
-      .filter((e) => e.active !== false)
-      .map((e) => ({
-        ...e,
-        dist: (cx - e.x) ** 2 + (cy - e.y) ** 2,
-      }))
-      .sort((a, b) => b.dist - a.dist);
+    // Sort entities by distance from camera (pre-allocated arrays to avoid per-frame GC)
+    // Grow backing buffers if entity count exceeds capacity
+    if (entities.length > _spriteDistBuf.length) {
+      _spriteDistBuf = new Float64Array(entities.length * 2);
+      _spriteOrderBuf = new Int32Array(entities.length * 2);
+    }
+    _spriteOrderCount = 0;
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i].active === false && !entities[i].dissolving) continue;
+      const distSq = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
+      if (distSq > maxDistSq && entities[i].type !== "exit") continue;
+      _spriteOrderBuf[_spriteOrderCount++] = i;
+      _spriteDistBuf[i] = distSq;
+    }
+    // Sort the active portion of the order buffer
+    // subarray() is a view, so the sort runs in place without copying.
+    const spriteOrder = _spriteOrderBuf.subarray(0, _spriteOrderCount).sort(_byDistanceDesc);
 
-    for (const entity of sorted) {
+    for (let si = 0; si < spriteOrder.length; si++) {
+      const entity = entities[spriteOrder[si]];
       const spriteX = entity.x - cx;
       const spriteY = entity.y - cy;
 
@@ -623,30 +1444,55 @@ export class Renderer {
 
       if (transformY <= 0.1) continue;
 
-      const spriteScreenX = Math.floor((w / 2) * (1 + transformX / transformY));
-      const spriteHeight = Math.abs(Math.floor(h / transformY));
-      const spriteWidth = Math.abs(Math.floor(h / transformY));
+      const spriteScreenX = ((w / 2) * (1 + transformX / transformY)) | 0;
+      const spriteHeight = (Math.abs(h / transformY)) | 0;
+      const spriteWidth = spriteHeight;
 
-      const drawStartY = Math.max(0, Math.floor(-spriteHeight / 2 + h / 2));
-      const drawEndY = Math.min(h - 1, Math.floor(spriteHeight / 2 + h / 2));
+      const drawStartY = Math.max(0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min(h - 1, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
-        Math.floor(-spriteWidth / 2 + spriteScreenX),
+        (-spriteWidth / 2 + spriteScreenX) | 0,
       );
       const drawEndX = Math.min(
         w - 1,
-        Math.floor(spriteWidth / 2 + spriteScreenX),
+        (spriteWidth / 2 + spriteScreenX) | 0,
       );
 
-      // Check if any column is visible
+      // Check if any column is visible: in front of the column's wall and
+      // reaching above any low cover in front of it.
       let visible = false;
       for (let x = drawStartX; x <= drawEndX; x++) {
-        if (transformY < this.zBuffer[x]) {
+        if (transformY < this.zBuffer[x] && drawStartY < this.coverClipY(x, transformY)) {
           visible = true;
           break;
         }
       }
       if (!visible) continue;
+
+      // Ground shadow — dark ellipse at entity's feet. A phased Hound, a
+      // Foresight ghost and an afterimage cast none.
+      if (entity.type === "enemy" && !entity.dissolving && !entity._phased && !(entity.renderAlpha < 1)) {
+        const shadowW = spriteWidth * 0.6;
+        const shadowH = spriteHeight * 0.12;
+        const shadowY = Math.floor(spriteHeight / 2 + h / 2) - shadowH * 0.5;
+        // Walls and low cover in front hide the shadow with the feet.
+        const vis = this._spriteClipPath(
+          ctx,
+          Math.floor(spriteScreenX - shadowW / 2), Math.ceil(spriteScreenX + shadowW / 2),
+          shadowY - shadowH, shadowY + shadowH, transformY,
+        );
+        if (vis) {
+          ctx.save();
+          if (vis === 1) ctx.clip();
+          ctx.globalAlpha = Math.min(0.35, 2.0 / transformY); // fade with distance
+          ctx.fillStyle = "#000";
+          ctx.beginPath();
+          ctx.ellipse(spriteScreenX, shadowY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
 
       // Draw the entity
       this.drawEntity(
@@ -680,12 +1526,30 @@ export class Renderer {
   ) {
     const w = this.width;
     const h = this.height;
-    const centerY = Math.floor(h / 2);
+    const centerY = (h / 2) | 0;
 
     // Distance fog factor
-    const fogFactor = Math.max(0, 1 - dist / 20);
+    const fogDist = this._visualStyle === 1 ? 20 : 30;
+    const fogFactor = Math.max(0, 1 - dist / fogDist);
+
+    // Pickups, the exit and projectiles: cut by walls and low cover in front,
+    // over the full screen height and a half-sprite margin so glows survive.
+    // Enemies and props clip themselves to their own extents below.
+    let clipped = false;
+    if (entity.type !== "enemy" && entity.type !== "prop") {
+      const pad = sprWidth >> 1;
+      const vis = this._spriteClipPath(ctx, startX - pad, endX + pad, -h, 2 * h, dist);
+      if (vis === 0) return;
+      if (vis === 1) {
+        ctx.save();
+        ctx.clip();
+        clipped = true;
+      }
+    }
 
     if (entity.type === "enemy") {
+      // Out of phase, the Hound is drawn as a shimmer by src/rendering/chrono-fx.js.
+      if (entity._phased) return;
       this.drawEnemy(
         ctx,
         entity,
@@ -698,10 +1562,10 @@ export class Renderer {
         sprHeight,
         dist,
         time,
-        fogFactor,
+        fogFactor * (entity.renderAlpha ?? 1),
       );
     } else if (entity.type === "health") {
-      this.drawHealthPickup(
+      drawHealthPickup(
         ctx,
         screenX,
         centerY,
@@ -712,7 +1576,7 @@ export class Renderer {
         fogFactor,
       );
     } else if (entity.type === "ammo") {
-      this.drawAmmoPickup(
+      drawAmmoPickup(
         ctx,
         screenX,
         centerY,
@@ -723,7 +1587,7 @@ export class Renderer {
         fogFactor,
       );
     } else if (entity.type === "weapon") {
-      this.drawWeaponPickup(
+      drawWeaponPickup(
         ctx,
         screenX,
         centerY,
@@ -733,8 +1597,31 @@ export class Renderer {
         time,
         fogFactor,
       );
+    } else if (entity.type === "gear") {
+      drawGearPickup(
+        ctx,
+        screenX,
+        centerY,
+        sprWidth,
+        sprHeight,
+        dist,
+        time,
+        fogFactor,
+      );
+    } else if (entity.type === "damage2x" || entity.type === "invuln") {
+      drawExoticPickup(
+        ctx,
+        screenX,
+        centerY,
+        sprWidth,
+        sprHeight,
+        dist,
+        time,
+        fogFactor,
+        entity.type,
+      );
     } else if (entity.type === "exit") {
-      this.drawExit(
+      drawExit(
         ctx,
         screenX,
         centerY,
@@ -745,7 +1632,11 @@ export class Renderer {
         fogFactor,
       );
     } else if (entity.type === "projectile") {
-      this.drawProjectile(
+      // The player's own shots spawn inches from the camera, where the billboard
+      // is screen-sized and would white out the reticle; fade them in as they
+      // leave the muzzle.
+      const nearFade = entity.owner === "player" ? Math.min(1, Math.max(0, (dist - 0.5) / 0.75)) : 1;
+      drawProjectile(
         ctx,
         screenX,
         centerY,
@@ -753,9 +1644,24 @@ export class Renderer {
         dist,
         entity,
         time,
-        fogFactor,
+        fogFactor * nearFade,
       );
+    } else if (entity.type === "prop") {
+      // Z-buffer clipping — same pattern as enemies so props behind walls
+      // and low cover don't bleed through
+      // The clip also crops the art to its sprite box, so it applies even
+      // when nothing is in front.
+      if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+      ctx.save();
+      ctx.clip();
+      if (isRealisticArt()) {
+        this._drawPropLit(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      } else {
+        drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
+      }
+      ctx.restore();
     }
+    if (clipped) ctx.restore();
   }
 
   drawEnemy(
@@ -773,24 +1679,33 @@ export class Renderer {
     fog,
   ) {
     const h = this.height;
-    const centerY = Math.floor(h / 2);
+    const centerY = (h / 2) | 0;
     const halfW = sprWidth / 2;
     const halfH = sprHeight / 2;
 
     const def = enemy.def;
     if (!def) return;
 
-    const c1 = def.color1;
-    const c2 = def.color2;
-
-    // Only draw columns not occluded by walls
-    ctx.save();
-    ctx.beginPath();
-    for (let x = startX; x <= endX; x++) {
-      if (dist < this.zBuffer[x]) {
-        ctx.rect(x, startY, 1, endY - startY);
+    // Modern art: SVG pose sprites. Falls through to the procedural sprite
+    // until the type's bitmaps have decoded.
+    if (isModernArt()) {
+      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY);
+      if (frame) {
+        this._drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog);
+        return;
       }
     }
+
+    // Prefer per-instance palette (set at spawn with slight HSL jitter so
+    // a horde of drones doesn't read as 30 identical sprites). Falls back
+    // to the def palette if spawner didn't seed an override.
+    const c1 = enemy.baseColor || def.color1;
+    const c2 = enemy.darkColor || def.color2;
+
+    // Only draw columns not occluded by walls, and only above low cover.
+    // The clip also crops the art to its sprite box, so it always applies.
+    if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+    ctx.save();
     ctx.clip();
 
     const alpha = fog;
@@ -810,3350 +1725,208 @@ export class Renderer {
 
     ctx.globalAlpha = alpha;
 
-    if (enemy.enemyType === "drone") {
-      // Drone (Enhanced hovering combat sphere)
-      const sphereR = bodyWidth * 0.8;
-      const sphereCY = centerY - halfH * 0.05;
-      const dronePulse = Math.sin(time * 0.004 + enemy.x * 3);
-      const hover = Math.sin(time * 0.005 + enemy.y * 2) * halfH * 0.01;
-
-      // Outer energy field
-      ctx.fillStyle = `rgba(0,255,170,${0.04 + dronePulse * 0.02})`;
-      ctx.beginPath();
-      ctx.arc(screenX, sphereCY + hover, sphereR * 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Main sphere body
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.arc(screenX, sphereCY + hover, sphereR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Equator ring (tech seam)
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX,
-        sphereCY + hover,
-        sphereR * 0.95,
-        sphereR * 0.15,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.stroke();
-
-      // Upper hemisphere highlight
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
-      ctx.beginPath();
-      ctx.arc(
-        screenX,
-        sphereCY + hover - sphereR * 0.2,
-        sphereR * 0.75,
-        Math.PI,
-        0,
-      );
-      ctx.fill();
-
-      // Inner glow ring
-      ctx.fillStyle = baseColor;
-      ctx.beginPath();
-      ctx.arc(screenX, sphereCY + hover, sphereR * 0.65, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Panel seams (4 meridian lines)
-      ctx.strokeStyle = "rgba(0,0,0,0.2)";
-      ctx.lineWidth = 1;
-      for (let ps = 0; ps < 4; ps++) {
-        const angle = (ps / 4) * Math.PI;
-        ctx.beginPath();
-        ctx.moveTo(
-          screenX + Math.cos(angle) * sphereR * 0.15,
-          sphereCY + hover - sphereR * 0.85,
-        );
-        ctx.quadraticCurveTo(
-          screenX + Math.cos(angle) * sphereR * 0.9,
-          sphereCY + hover,
-          screenX + Math.cos(angle) * sphereR * 0.15,
-          sphereCY + hover + sphereR * 0.85,
-        );
-        ctx.stroke();
+    // Death dissolve effect — fade out + scanline noise
+    let dissolveAlpha = 1;
+    if (enemy.dissolving && enemy.dissolveTimer != null) {
+      dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
+      ctx.globalAlpha = alpha * dissolveAlpha;
+      // Shift hue toward white during dissolve
+      if (dissolveAlpha < 0.5) {
+        ctx.globalCompositeOperation = "lighter";
       }
-
-      // Specular highlight
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.beginPath();
-      ctx.arc(
-        screenX - sphereR * 0.25,
-        sphereCY + hover - sphereR * 0.3,
-        sphereR * 0.18,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.15)";
-      ctx.beginPath();
-      ctx.arc(
-        screenX - sphereR * 0.15,
-        sphereCY + hover - sphereR * 0.2,
-        sphereR * 0.08,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-
-      // Eye housing (recessed ring)
-      ctx.strokeStyle = "rgba(0,0,0,0.3)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(screenX, sphereCY + hover, sphereR * 0.32, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Eye
-      const blink = Math.sin(time * 0.005 + enemy.x * 10) > 0.95;
-      if (!blink) {
-        // Eye glow halo
-        ctx.fillStyle = "rgba(0,255,170,0.15)";
-        ctx.beginPath();
-        ctx.arc(screenX, sphereCY + hover, sphereR * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-        // Iris
-        ctx.fillStyle = "#00ffaa";
-        ctx.beginPath();
-        ctx.arc(screenX, sphereCY + hover, sphereR * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-        // Iris ring detail
-        ctx.strokeStyle = "rgba(0,200,150,0.5)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(screenX, sphereCY + hover, sphereR * 0.18, 0, Math.PI * 2);
-        ctx.stroke();
-        // Pupil (tracks slightly)
-        const pupilTrack = Math.sin(time * 0.002 + enemy.y) * sphereR * 0.04;
-        ctx.fillStyle = "#003322";
-        ctx.beginPath();
-        ctx.arc(
-          screenX + pupilTrack,
-          sphereCY + hover,
-          sphereR * 0.1,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Pupil highlight
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(
-          screenX + pupilTrack + sphereR * 0.04,
-          sphereCY + hover - sphereR * 0.04,
-          sphereR * 0.04,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      } else {
-        // Blink — thin line
-        ctx.strokeStyle = "#00ffaa";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(screenX - sphereR * 0.2, sphereCY + hover);
-        ctx.lineTo(screenX + sphereR * 0.2, sphereCY + hover);
-        ctx.stroke();
-      }
-
-      // Sensor dots (3 around equator)
-      for (let sd = 0; sd < 3; sd++) {
-        const sda = (sd / 3) * Math.PI * 2 + time * 0.002;
-        const sdx = screenX + Math.cos(sda) * sphereR * 0.8;
-        const sdy = sphereCY + hover + Math.sin(sda) * sphereR * 0.12;
-        ctx.fillStyle = `rgba(0,255,170,${0.3 + dronePulse * 0.2})`;
-        ctx.beginPath();
-        ctx.arc(sdx, sdy, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Antenna (more detailed)
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 2;
-      const antBaseY = sphereCY + hover - sphereR;
-      const antTipY = antBaseY - halfH * 0.2;
-      ctx.beginPath();
-      ctx.moveTo(screenX, antBaseY);
-      ctx.lineTo(screenX, antTipY);
-      ctx.stroke();
-      // Antenna joint
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.arc(screenX, antBaseY, 2, 0, Math.PI * 2);
-      ctx.fill();
-      // Antenna tip glow
-      ctx.fillStyle = `rgba(0,255,170,${0.3 + dronePulse * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(screenX, antTipY, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#00ffaa";
-      ctx.beginPath();
-      ctx.arc(screenX, antTipY, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Thruster jets underneath (3 small vents)
-      const thrustBase = sphereCY + hover + sphereR * 0.7;
-      for (let tj = 0; tj < 3; tj++) {
-        const txOff = (tj - 1) * bodyWidth * 0.25;
-        // Vent housing
-        ctx.fillStyle = "rgba(0,0,0,0.3)";
-        ctx.fillRect(screenX + txOff - 3, thrustBase, 6, sphereR * 0.2);
-        // Thrust glow
-        const thrustFlicker = 0.5 + Math.sin(time * 0.015 + tj * 2) * 0.3;
-        ctx.fillStyle = `rgba(0,255,170,${0.15 * thrustFlicker})`;
-        ctx.beginPath();
-        ctx.moveTo(screenX + txOff - 4, thrustBase + sphereR * 0.15);
-        ctx.lineTo(
-          screenX + txOff,
-          thrustBase + sphereR * 0.4 + thrustFlicker * sphereR * 0.1,
-        );
-        ctx.lineTo(screenX + txOff + 4, thrustBase + sphereR * 0.15);
-        ctx.fill();
-      }
-
-      // Hover glow underneath (enhanced)
-      ctx.fillStyle = `rgba(0,255,170,${0.06 + dronePulse * 0.03})`;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX,
-        bodyBottom + halfH * 0.1,
-        bodyWidth * 0.6,
-        halfH * 0.08,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.fillStyle = baseColor;
-      ctx.globalAlpha = alpha * 0.2;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX,
-        bodyBottom + halfH * 0.1,
-        bodyWidth * 0.35,
-        halfH * 0.04,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-    } else if (enemy.enemyType === "phantom") {
-      // Phantom (Enhanced ethereal wraith)
-      const phaseOff = Math.sin(time * 0.003 + enemy.y * 5) * bodyWidth * 0.15;
-      const drift = Math.sin(time * 0.002 + enemy.x * 3) * halfH * 0.01;
-      const phantomPulse = (Math.sin(time * 0.004 + enemy.y * 2) + 1) * 0.5;
-
-      // Outer ethereal aura
-      ctx.fillStyle = "rgba(150,50,255,0.04)";
-      ctx.globalAlpha = alpha * 0.6;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + phaseOff,
-        centerY + drift,
-        bodyWidth * 1.2,
-        halfH * 0.55,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-
-      // Ghostly body
-      ctx.fillStyle = baseColor;
-      ctx.globalAlpha = alpha * 0.5;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, bodyTop + drift);
-      ctx.quadraticCurveTo(
-        screenX - bodyWidth * 1.0 + phaseOff,
-        centerY + drift,
-        screenX - bodyWidth * 0.6,
-        bodyBottom + drift,
-      );
-      ctx.lineTo(screenX + bodyWidth * 0.6, bodyBottom + drift);
-      ctx.quadraticCurveTo(
-        screenX + bodyWidth * 1.0 + phaseOff,
-        centerY + drift,
-        screenX + bodyWidth * 0.3 + phaseOff,
-        bodyTop + drift,
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      // Secondary body layer (depth)
-      ctx.fillStyle = darkColor;
-      ctx.globalAlpha = alpha * 0.2;
-      ctx.beginPath();
-      ctx.moveTo(
-        screenX - bodyWidth * 0.2 + phaseOff * 0.5,
-        bodyTop + halfH * 0.05 + drift,
-      );
-      ctx.quadraticCurveTo(
-        screenX - bodyWidth * 0.8 + phaseOff * 0.5,
-        centerY + drift,
-        screenX - bodyWidth * 0.5,
-        bodyBottom - halfH * 0.02 + drift,
-      );
-      ctx.lineTo(screenX + bodyWidth * 0.5, bodyBottom - halfH * 0.02 + drift);
-      ctx.quadraticCurveTo(
-        screenX + bodyWidth * 0.8 + phaseOff * 0.5,
-        centerY + drift,
-        screenX + bodyWidth * 0.2 + phaseOff * 0.5,
-        bodyTop + halfH * 0.05 + drift,
-      );
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-
-      // Inner ethereal core
-      ctx.fillStyle = darkColor;
-      ctx.globalAlpha = alpha * 0.7;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + phaseOff,
-        centerY - halfH * 0.05 + drift,
-        bodyWidth * 0.45,
-        halfH * 0.25,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-
-      // Rib-like internal structures (showing through translucent body)
-      ctx.strokeStyle = "rgba(100,30,180,0.15)";
-      ctx.lineWidth = 1;
-      for (let rb = 0; rb < 4; rb++) {
-        const rby = centerY - halfH * 0.08 + rb * halfH * 0.08 + drift;
-        ctx.beginPath();
-        ctx.moveTo(screenX - bodyWidth * 0.3 + phaseOff, rby);
-        ctx.quadraticCurveTo(
-          screenX + phaseOff,
-          rby + halfH * 0.02,
-          screenX + bodyWidth * 0.3 + phaseOff,
-          rby - halfH * 0.01,
-        );
-        ctx.stroke();
-      }
-
-      // Two hollow eyes (enhanced with glow layers)
-      const eyeY = centerY - halfH * 0.1 + drift;
-      // Left eye glow
-      ctx.fillStyle = `rgba(204,102,255,${0.15 + phantomPulse * 0.1})`;
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.18,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Right eye glow
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.18,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Eye orbs
-      ctx.fillStyle = "#cc66ff";
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.12,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.12,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Dark eye centers
-      ctx.fillStyle = "#220033";
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.05,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bodyWidth * 0.25 + phaseOff,
-        eyeY,
-        bodyWidth * 0.05,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Eye highlights
-      ctx.fillStyle = "rgba(255,200,255,0.4)";
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bodyWidth * 0.28 + phaseOff,
-        eyeY - bodyWidth * 0.04,
-        bodyWidth * 0.03,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bodyWidth * 0.22 + phaseOff,
-        eyeY - bodyWidth * 0.04,
-        bodyWidth * 0.03,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-
-      // Wailing mouth
-      const mouthOpen = 0.5 + Math.sin(time * 0.006 + enemy.x * 4) * 0.3;
-      ctx.fillStyle = "#110022";
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + phaseOff,
-        centerY + halfH * 0.08 + drift,
-        bodyWidth * 0.1,
-        halfH * 0.04 * mouthOpen,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-
-      // Tendrils hanging down (more variety)
-      ctx.globalAlpha = alpha * 0.4;
-      ctx.lineWidth = 2;
-      for (let t = 0; t < 5; t++) {
-        const tx = screenX - bodyWidth * 0.5 + t * bodyWidth * 0.25;
-        const tWave = Math.sin(time * 0.004 + t * 1.7) * bodyWidth * 0.1;
-        const tLen = halfH * (0.2 + (t % 2) * 0.12);
-        ctx.strokeStyle = `rgba(${150 + t * 15},${50 + t * 10},255,0.4)`;
-        ctx.beginPath();
-        ctx.moveTo(tx, bodyBottom + drift);
-        ctx.quadraticCurveTo(
-          tx + tWave,
-          bodyBottom + drift + tLen * 0.5,
-          tx + tWave * 0.5,
-          bodyBottom + drift + tLen,
-        );
-        ctx.stroke();
-        // Tendril tip fade
-        ctx.fillStyle = `rgba(150,50,255,${0.15 - t * 0.02})`;
-        ctx.beginPath();
-        ctx.arc(
-          tx + tWave * 0.5,
-          bodyBottom + drift + tLen,
-          1.5,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      }
-      ctx.globalAlpha = alpha;
-
-      // Floating soul wisps (orbiting particles)
-      for (let w = 0; w < 3; w++) {
-        const wa = time * 0.003 + w * ((Math.PI * 2) / 3);
-        const wDist = bodyWidth * (0.7 + Math.sin(time * 0.002 + w) * 0.15);
-        const wx = screenX + Math.cos(wa) * wDist;
-        const wy = centerY + drift + Math.sin(wa) * halfH * 0.3;
-        ctx.fillStyle = `rgba(180,100,255,${0.2 + phantomPulse * 0.15})`;
-        ctx.beginPath();
-        ctx.arc(wx, wy, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Glitch lines (2 for more effect)
-      ctx.fillStyle = `rgba(150,50,255,0.35)`;
-      const glitchY =
-        bodyTop + ((time * 0.7 + enemy.x * 100) % (bodyBottom - bodyTop));
-      ctx.fillRect(screenX - bodyWidth - 3, glitchY, bodyWidth * 2 + 6, 2);
-      const glitchY2 =
-        bodyTop + ((time * 0.4 + enemy.y * 80) % (bodyBottom - bodyTop));
-      ctx.fillStyle = `rgba(100,30,200,0.2)`;
-      ctx.fillRect(screenX - bodyWidth * 0.5, glitchY2, bodyWidth, 1);
-    } else if (enemy.enemyType === "beast") {
-      // Beast (Cerberus)
-      const bW = bodyWidth * 1.4;
-      const breathe = Math.sin(time * 0.006 + enemy.x * 3) * halfH * 0.015;
-      const backY = centerY - halfH * 0.22 + breathe;
-      const chestY = centerY - halfH * 0.28 + breathe;
-      const bellyY = centerY + halfH * 0.18;
-      const rumpY = centerY - halfH * 0.08 + breathe;
-
-      // Ground shadow
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX,
-        bellyY + halfH * 0.28,
-        bW * 0.9,
-        halfH * 0.04,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-
-      // Torso
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.85, bellyY + halfH * 0.05);
-      ctx.quadraticCurveTo(
-        screenX - bW * 0.7,
-        rumpY - halfH * 0.06,
-        screenX - bW * 0.4,
-        backY,
-      );
-      ctx.quadraticCurveTo(
-        screenX,
-        backY - halfH * 0.08,
-        screenX + bW * 0.3,
-        chestY,
-      );
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.55,
-        chestY - halfH * 0.02,
-        screenX + bW * 0.65,
-        chestY + halfH * 0.03,
-      );
-      // Rounded chest front
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.72,
-        chestY + halfH * 0.12,
-        screenX + bW * 0.68,
-        bellyY - halfH * 0.02,
-      );
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.65,
-        bellyY + halfH * 0.06,
-        screenX + bW * 0.55,
-        bellyY + halfH * 0.08,
-      );
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.2,
-        bellyY + halfH * 0.12,
-        screenX - bW * 0.3,
-        bellyY + halfH * 0.08,
-      );
-      ctx.quadraticCurveTo(
-        screenX - bW * 0.6,
-        bellyY + halfH * 0.06,
-        screenX - bW * 0.85,
-        bellyY + halfH * 0.05,
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      // Belly underside highlight
-      ctx.strokeStyle = hitFlash ? "#ffcccc" : "rgba(255,255,255,0.06)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.4, bellyY + halfH * 0.1);
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.1,
-        bellyY + halfH * 0.13,
-        screenX + bW * 0.5,
-        bellyY + halfH * 0.08,
-      );
-      ctx.stroke();
-
-      // Muscle definition
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5;
-      // Shoulder muscles
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bW * 0.35,
-        centerY - halfH * 0.05,
-        bW * 0.3,
-        Math.PI * 1.2,
-        Math.PI * 1.9,
-      );
-      ctx.stroke();
-      // Shoulder highlight
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bW * 0.35,
-        centerY - halfH * 0.06,
-        bW * 0.28,
-        Math.PI * 1.3,
-        Math.PI * 1.7,
-      );
-      ctx.stroke();
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5;
-      // Haunch muscles
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bW * 0.5,
-        centerY + halfH * 0.02,
-        bW * 0.26,
-        Math.PI * 1.3,
-        Math.PI * 1.8,
-      );
-      ctx.stroke();
-      // Haunch highlight
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(
-        screenX - bW * 0.5,
-        centerY + halfH * 0.01,
-        bW * 0.24,
-        Math.PI * 1.4,
-        Math.PI * 1.7,
-      );
-      ctx.stroke();
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5;
-      // Ribcage lines
-      for (let r = 0; r < 3; r++) {
-        const rx = screenX - bW * 0.1 + r * bW * 0.15;
-        ctx.beginPath();
-        ctx.moveTo(rx, backY + halfH * 0.02);
-        ctx.quadraticCurveTo(
-          rx + bW * 0.02,
-          centerY + halfH * 0.02,
-          rx,
-          bellyY,
-        );
-        ctx.stroke();
-      }
-      // Chest/pectoral muscles
-      ctx.beginPath();
-      ctx.arc(
-        screenX + bW * 0.45,
-        centerY - halfH * 0.12,
-        bW * 0.18,
-        Math.PI * 0.8,
-        Math.PI * 1.5,
-      );
-      ctx.stroke();
-
-      // Fur texture strokes along the back and sides
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
-      ctx.lineWidth = 1;
-      for (let f = 0; f < 8; f++) {
-        const ft = f / 7;
-        const fx = screenX - bW * 0.65 + ft * bW * 1.2;
-        const fy =
-          rumpY +
-          (backY - rumpY) * ft +
-          breathe -
-          Math.sin(ft * Math.PI) * halfH * 0.03;
-        const fDir = -1 + Math.sin(f * 2.3) * 0.5;
-        ctx.beginPath();
-        ctx.moveTo(fx, fy);
-        ctx.lineTo(fx + bW * 0.03 * fDir, fy + halfH * 0.06);
-        ctx.stroke();
-      }
-      // Darker fur strokes on belly
-      ctx.strokeStyle = "rgba(0,0,0,0.1)";
-      for (let f = 0; f < 5; f++) {
-        const fx = screenX - bW * 0.3 + f * bW * 0.15;
-        ctx.beginPath();
-        ctx.moveTo(fx, bellyY);
-        ctx.lineTo(fx + bW * 0.02, bellyY + halfH * 0.05);
-        ctx.stroke();
-      }
-
-      // Battle scars
-      ctx.strokeStyle = "rgba(80,20,20,0.4)";
-      ctx.lineWidth = 1.5;
-      // Scar across shoulder
-      ctx.beginPath();
-      ctx.moveTo(screenX + bW * 0.15, backY + halfH * 0.05);
-      ctx.lineTo(screenX + bW * 0.3, backY + halfH * 0.12);
-      ctx.lineTo(screenX + bW * 0.25, backY + halfH * 0.18);
-      ctx.stroke();
-      // Scar on flank
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.35, centerY - halfH * 0.02);
-      ctx.lineTo(screenX - bW * 0.2, centerY + halfH * 0.03);
-      ctx.stroke();
-
-      // Neck muscles
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(screenX + bW * 0.5, chestY + halfH * 0.02);
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.55,
-        chestY - halfH * 0.04,
-        screenX + bW * 0.65,
-        chestY - halfH * 0.06,
-      );
-      ctx.stroke();
-      ctx.lineWidth = 1.5;
-      // Heads
-      const neckBaseX = screenX + bW * 0.55;
-      const neckBaseY = chestY;
-
-      // Shared neck mass
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX + bW * 0.4, chestY - halfH * 0.08);
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.65,
-        chestY - halfH * 0.18,
-        screenX + bW * 0.75,
-        chestY - halfH * 0.06,
-      );
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.75,
-        bellyY - halfH * 0.05,
-        screenX + bW * 0.5,
-        chestY + halfH * 0.12,
-      );
-      ctx.quadraticCurveTo(
-        screenX + bW * 0.35,
-        chestY + halfH * 0.1,
-        screenX + bW * 0.4,
-        chestY - halfH * 0.08,
-      );
-      ctx.fill();
-
-      // Chain collar around neck mass
-      ctx.strokeStyle = "#555566";
-      ctx.lineWidth = 2.5;
-      const collarY = chestY + halfH * 0.02;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + bW * 0.55,
-        collarY,
-        bW * 0.18,
-        halfH * 0.06,
-        -0.2,
-        Math.PI * 0.3,
-        Math.PI * 1.7,
-      );
-      ctx.stroke();
-      // Chain links
-      ctx.strokeStyle = "#777788";
-      ctx.lineWidth = 1.5;
-      for (let cl = 0; cl < 4; cl++) {
-        const ca = Math.PI * 0.4 + cl * 0.35;
-        const cx = screenX + bW * 0.55 + Math.cos(ca) * bW * 0.17;
-        const cy = collarY + Math.sin(ca) * halfH * 0.055;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      // Hanging chain segment
-      ctx.strokeStyle = "#555566";
-      ctx.lineWidth = 2;
-      const chainHangX = screenX + bW * 0.55 + bW * 0.15;
-      ctx.beginPath();
-      ctx.moveTo(chainHangX, collarY + halfH * 0.04);
-      ctx.quadraticCurveTo(
-        chainHangX + bW * 0.05,
-        collarY + halfH * 0.12,
-        chainHangX - bW * 0.02,
-        collarY + halfH * 0.16,
-      );
-      ctx.stroke();
-
-      const drawHoundHead = (hx, hy, sc) => {
-        const sw = bW * 0.28 * sc;
-        const sh = halfH * 0.12 * sc;
-        const jawAmt =
-          Math.sin(time * 0.005 + hx) * halfH * 0.012 + halfH * 0.025;
-
-        // Neck
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(neckBaseX, neckBaseY - halfH * 0.02);
-        ctx.quadraticCurveTo(
-          neckBaseX + (hx - neckBaseX) * 0.6,
-          neckBaseY + (hy - neckBaseY) * 0.5,
-          hx - sw * 0.2,
-          hy - sh * 0.3,
-        );
-        ctx.lineTo(hx - sw * 0.2, hy + sh * 0.3);
-        ctx.quadraticCurveTo(
-          neckBaseX + (hx - neckBaseX) * 0.6,
-          neckBaseY + (hy - neckBaseY) * 0.5 + halfH * 0.05,
-          neckBaseX,
-          neckBaseY + halfH * 0.04,
-        );
-        ctx.fill();
-
-        // Skull
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.9, hy + sh * 0.1);
-        ctx.quadraticCurveTo(
-          hx + sw,
-          hy - sh * 0.3,
-          hx + sw * 0.5,
-          hy - sh * 0.8,
-        );
-        ctx.quadraticCurveTo(hx, hy - sh, hx - sw * 0.35, hy - sh * 0.5);
-        ctx.quadraticCurveTo(hx - sw * 0.4, hy, hx - sw * 0.3, hy + sh * 0.4);
-        ctx.quadraticCurveTo(
-          hx + sw * 0.1,
-          hy + sh * 0.8,
-          hx + sw * 0.5,
-          hy + sh * 0.5,
-        );
-        ctx.quadraticCurveTo(
-          hx + sw * 0.8,
-          hy + sh * 0.35,
-          hx + sw * 0.9,
-          hy + sh * 0.1,
-        );
-        ctx.fill();
-
-        // Pointed ear
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.1, hy - sh * 0.85);
-        ctx.lineTo(hx - sw * 0.05, hy - sh * 1.7);
-        ctx.lineTo(hx + sw * 0.3, hy - sh * 0.9);
-        ctx.fill();
-        // Inner ear
-        ctx.fillStyle = "#440000";
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.12, hy - sh * 0.9);
-        ctx.lineTo(hx + sw * 0.0, hy - sh * 1.4);
-        ctx.lineTo(hx + sw * 0.24, hy - sh * 0.95);
-        ctx.fill();
-
-        // Eye (layered glow, no shadowBlur for performance)
-        const er = sw * 0.14;
-        const eyeX = hx + sw * 0.28;
-        const eyeBaseY = hy - sh * 0.25;
-        ctx.fillStyle = "rgba(255,34,0,0.15)";
-        ctx.beginPath();
-        ctx.arc(eyeX, eyeBaseY, er * 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,34,0,0.3)";
-        ctx.beginPath();
-        ctx.arc(eyeX, eyeBaseY, er * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#ff2200";
-        ctx.beginPath();
-        ctx.arc(eyeX, eyeBaseY, er, 0, Math.PI * 2);
-        ctx.fill();
-        // Slit pupil
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(hx + sw * 0.26, hy - sh * 0.3, er * 0.3, er * 1.2);
-        // Eye highlight
-        ctx.fillStyle = "rgba(255,200,150,0.35)";
-        ctx.beginPath();
-        ctx.arc(
-          eyeX - er * 0.25,
-          eyeBaseY - er * 0.25,
-          er * 0.25,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Brow ridge (heavier)
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.02, hy - sh * 0.48);
-        ctx.quadraticCurveTo(
-          hx + sw * 0.25,
-          hy - sh * 0.55,
-          hx + sw * 0.48,
-          hy - sh * 0.4,
-        );
-        ctx.stroke();
-        ctx.lineWidth = 1.5;
-
-        // Snout wrinkles
-        ctx.strokeStyle = "rgba(0,0,0,0.2)";
-        ctx.lineWidth = 1;
-        for (let wr = 0; wr < 3; wr++) {
-          const wry = hy + sh * 0.0 + wr * sh * 0.1;
-          ctx.beginPath();
-          ctx.moveTo(hx + sw * 0.55, wry);
-          ctx.quadraticCurveTo(
-            hx + sw * 0.7,
-            wry - sh * 0.03,
-            hx + sw * 0.85,
-            wry + sh * 0.01,
-          );
-          ctx.stroke();
-        }
-
-        // Upper jaw / snout
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.5, hy + sh * 0.05);
-        ctx.lineTo(hx + sw * 1.1, hy + sh * 0.1);
-        ctx.lineTo(hx + sw * 1.1, hy + sh * 0.32);
-        ctx.lineTo(hx + sw * 0.4, hy + sh * 0.37);
-        ctx.closePath();
-        ctx.fill();
-        // Nose
-        ctx.fillStyle = "#111111";
-        ctx.beginPath();
-        ctx.ellipse(
-          hx + sw * 1.05,
-          hy + sh * 0.2,
-          sw * 0.07,
-          sh * 0.1,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Nostrils
-        ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.ellipse(
-          hx + sw * 1.02,
-          hy + sh * 0.19,
-          sw * 0.03,
-          sh * 0.04,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(
-          hx + sw * 1.08,
-          hy + sh * 0.19,
-          sw * 0.03,
-          sh * 0.04,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Nostril smoke/breath
-        const smokePhase = Math.sin(time * 0.004 + hx * 2);
-        if (smokePhase > 0) {
-          ctx.globalAlpha = smokePhase * 0.2;
-          ctx.fillStyle = "rgba(180,120,120,0.3)";
-          for (let sm = 0; sm < 3; sm++) {
-            const smOff = sm * sw * 0.08;
-            const smY = hy + sh * 0.15 - smOff * 0.5 - smokePhase * sh * 0.15;
-            const smR = sw * 0.04 + sm * sw * 0.03;
-            ctx.beginPath();
-            ctx.arc(hx + sw * 1.12 + smOff * 0.3, smY, smR, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-        }
-
-        // Lower jaw
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.3, hy + sh * 0.42 + jawAmt);
-        ctx.lineTo(hx + sw * 1.0, hy + sh * 0.38 + jawAmt * 0.6);
-        ctx.lineTo(hx + sw * 1.0, hy + sh * 0.52 + jawAmt);
-        ctx.lineTo(hx + sw * 0.3, hy + sh * 0.65 + jawAmt);
-        ctx.closePath();
-        ctx.fill();
-        // Mouth interior
-        ctx.fillStyle = "#330000";
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.4, hy + sh * 0.33);
-        ctx.lineTo(hx + sw * 0.95, hy + sh * 0.28);
-        ctx.lineTo(hx + sw * 0.95, hy + sh * 0.42 + jawAmt * 0.4);
-        ctx.lineTo(hx + sw * 0.4, hy + sh * 0.5 + jawAmt * 0.3);
-        ctx.fill();
-        // Tongue
-        ctx.fillStyle = "#881133";
-        ctx.beginPath();
-        ctx.ellipse(
-          hx + sw * 0.65,
-          hy + sh * 0.46 + jawAmt * 0.3,
-          sw * 0.15,
-          sh * 0.08,
-          0,
-          0,
-          Math.PI,
-        );
-        ctx.fill();
-
-        // Upper fangs
-        ctx.fillStyle = "#eeeedd";
-        const fl = sh * 0.65;
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.48 - 1.5, hy + sh * 0.28);
-        ctx.lineTo(hx + sw * 0.48, hy + sh * 0.28 + fl);
-        ctx.lineTo(hx + sw * 0.48 + 1.5, hy + sh * 0.28);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(hx + sw * 0.85 - 1.5, hy + sh * 0.24);
-        ctx.lineTo(hx + sw * 0.85, hy + sh * 0.24 + fl * 0.8);
-        ctx.lineTo(hx + sw * 0.85 + 1.5, hy + sh * 0.24);
-        ctx.fill();
-        // Smaller teeth
-        for (let t = 0; t < 3; t++) {
-          const tx = hx + sw * 0.52 + t * sw * 0.1;
-          ctx.beginPath();
-          ctx.moveTo(tx - 1, hy + sh * 0.3);
-          ctx.lineTo(tx, hy + sh * 0.3 + fl * 0.35);
-          ctx.lineTo(tx + 1, hy + sh * 0.3);
-          ctx.fill();
-        }
-        // Lower fangs
-        for (let t = 0; t < 2; t++) {
-          const tx = hx + sw * 0.5 + t * sw * 0.25;
-          ctx.beginPath();
-          ctx.moveTo(tx - 1, hy + sh * 0.47 + jawAmt * 0.4);
-          ctx.lineTo(tx, hy + sh * 0.47 + jawAmt * 0.4 - fl * 0.3);
-          ctx.lineTo(tx + 1, hy + sh * 0.47 + jawAmt * 0.4);
-          ctx.fill();
-        }
-        // Drool (thicker, more strands)
-        ctx.lineWidth = 1;
-        for (let d = 0; d < 3; d++) {
-          const dx = hx + sw * 0.45 + d * sw * 0.2;
-          const dLen =
-            halfH * 0.05 + Math.sin(time * 0.008 + d + hx) * halfH * 0.025;
-          // Drool strand
-          ctx.strokeStyle = `rgba(200,50,50,${0.3 + d * 0.1})`;
-          ctx.beginPath();
-          ctx.moveTo(dx, hy + sh * 0.46 + jawAmt * 0.3);
-          ctx.quadraticCurveTo(
-            dx + Math.sin(time * 0.003 + d) * 2.5,
-            hy + sh * 0.46 + jawAmt * 0.3 + dLen * 0.6,
-            dx + Math.sin(time * 0.004 + d) * 1.5,
-            hy + sh * 0.46 + jawAmt * 0.3 + dLen,
-          );
-          ctx.stroke();
-          // Drool droplet at tip
-          if (d < 2) {
-            ctx.fillStyle = "rgba(200,50,50,0.3)";
-            ctx.beginPath();
-            ctx.arc(
-              dx + Math.sin(time * 0.004 + d) * 1.5,
-              hy + sh * 0.46 + jawAmt * 0.3 + dLen,
-              1.2,
-              0,
-              Math.PI * 2,
-            );
-            ctx.fill();
-          }
-        }
-      };
-
-      // Draw order
-      drawHoundHead(screenX + bW * 0.65, chestY + halfH * 0.12, 0.7);
-      drawHoundHead(screenX + bW * 0.68, chestY - halfH * 0.18, 0.72);
-      drawHoundHead(screenX + bW * 0.82, chestY - halfH * 0.02, 1.0);
-      // Legs
-      ctx.fillStyle = darkColor;
-      // Front legs
-      const drawDogLeg = (lx, ly, isRear) => {
-        const legW = bW * 0.1;
-        const upperLen = halfH * 0.18;
-        const lowerLen = halfH * 0.16;
-        const pawY = ly + upperLen + lowerLen;
-        // Upper leg
-        ctx.fillRect(lx - legW * 0.6, ly, legW * 1.2, upperLen);
-        // Upper leg muscle highlight
-        ctx.strokeStyle = "rgba(255,255,255,0.06)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(lx - legW * 0.2, ly + 2);
-        ctx.lineTo(lx - legW * 0.15, ly + upperLen * 0.7);
-        ctx.stroke();
-        // Joint
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.arc(lx, ly + upperLen, legW * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        // Joint ring
-        ctx.strokeStyle = "rgba(0,0,0,0.2)";
-        ctx.beginPath();
-        ctx.arc(lx, ly + upperLen, legW * 0.5, 0, Math.PI * 2);
-        ctx.stroke();
-        // Lower leg
-        const offset = isRear ? -legW * 0.3 : legW * 0.3;
-        ctx.fillStyle = darkColor;
-        ctx.beginPath();
-        ctx.moveTo(lx - legW * 0.4, ly + upperLen);
-        ctx.lineTo(lx + offset - legW * 0.3, pawY);
-        ctx.lineTo(lx + offset + legW * 0.3, pawY);
-        ctx.lineTo(lx + legW * 0.4, ly + upperLen);
-        ctx.fill();
-        // Paw base
-        ctx.fillRect(lx + offset - legW * 0.6, pawY, legW * 1.2, halfH * 0.03);
-        // Paw pad
-        ctx.fillStyle = "#1a1008";
-        ctx.beginPath();
-        ctx.ellipse(
-          lx + offset,
-          pawY + halfH * 0.015,
-          legW * 0.35,
-          halfH * 0.012,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Claws
-        ctx.fillStyle = "#ccccaa";
-        for (let c = 0; c < 3; c++) {
-          ctx.beginPath();
-          ctx.moveTo(
-            lx + offset - legW * 0.4 + c * legW * 0.4,
-            pawY + halfH * 0.03,
-          );
-          ctx.lineTo(
-            lx + offset - legW * 0.4 + c * legW * 0.4,
-            pawY + halfH * 0.07,
-          );
-          ctx.lineTo(
-            lx + offset - legW * 0.4 + c * legW * 0.4 + 1,
-            pawY + halfH * 0.03,
-          );
-          ctx.fill();
-        }
-        ctx.fillStyle = darkColor;
-      };
-      drawDogLeg(screenX + bW * 0.55, bellyY + halfH * 0.02, false);
-      drawDogLeg(screenX + bW * 0.3, bellyY + halfH * 0.04, false);
-      drawDogLeg(screenX - bW * 0.5, bellyY + halfH * 0.01, true);
-      drawDogLeg(screenX - bW * 0.7, bellyY + halfH * 0.03, true);
-      // Tail
-      const tailBaseX = screenX - bW * 0.7;
-      const tailBaseY = rumpY + breathe;
-      const tailSwing = Math.sin(time * 0.006 + enemy.y * 2) * halfH * 0.08;
-      const tailMidX = tailBaseX - bW * 0.25;
-      const tailMidY = tailBaseY - halfH * 0.18 + tailSwing * 0.5;
-      const tailEndX = tailBaseX - bW * 0.3;
-      const tailEndY = tailBaseY - halfH * 0.22 + tailSwing;
-      // Tail body
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(tailBaseX + bW * 0.08, tailBaseY - halfH * 0.04);
-      ctx.quadraticCurveTo(
-        tailMidX,
-        tailMidY - halfH * 0.025,
-        tailEndX,
-        tailEndY,
-      );
-      ctx.lineTo(tailEndX + 1, tailEndY + halfH * 0.01);
-      ctx.quadraticCurveTo(
-        tailMidX + bW * 0.02,
-        tailMidY + halfH * 0.03,
-        tailBaseX + bW * 0.08,
-        tailBaseY + halfH * 0.04,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Sword blade tip
-      const swordLen = bW * 0.25;
-      const sAng = Math.atan2(tailEndY - tailMidY, tailEndX - tailMidX);
-      ctx.save();
-      ctx.translate(tailEndX, tailEndY);
-      ctx.rotate(sAng);
-      // Blade glow
-      ctx.fillStyle = "rgba(176,184,192,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(-2, -halfH * 0.08);
-      ctx.lineTo(swordLen + 2, 0);
-      ctx.lineTo(-2, halfH * 0.08);
-      ctx.fill();
-      // Main blade
-      ctx.fillStyle = "#b0b8c0";
-      ctx.beginPath();
-      ctx.moveTo(0, -halfH * 0.06);
-      ctx.lineTo(swordLen, 0);
-      ctx.lineTo(0, halfH * 0.06);
-      ctx.fill();
-      // Blade edge highlight
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(1, -halfH * 0.04);
-      ctx.lineTo(swordLen * 0.9, 0);
-      ctx.stroke();
-      // Blood edge
-      ctx.strokeStyle = "rgba(180,30,30,0.35)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(2, halfH * 0.04);
-      ctx.lineTo(swordLen * 0.7, halfH * 0.01);
-      ctx.stroke();
-      // Cross guard (more detailed)
-      ctx.fillStyle = "#665544";
-      ctx.fillRect(-4, -halfH * 0.09, 8, halfH * 0.18);
-      // Guard ornamentation
-      ctx.fillStyle = "#887766";
-      ctx.fillRect(-3, -halfH * 0.09, 6, 2);
-      ctx.fillRect(-3, halfH * 0.07, 6, 2);
-      ctx.restore();
-
-      // Spines (enhanced with glow tips)
-      for (let sp = 0; sp < 7; sp++) {
-        const t = sp / 6;
-        const sx = screenX - bW * 0.65 + t * bW * 1.1;
-        const backCurveY =
-          rumpY +
-          (backY - rumpY) * t +
-          breathe -
-          Math.sin(t * Math.PI) * halfH * 0.04;
-        const spH = halfH * (0.055 + Math.sin(sp * 1.5 + time * 0.003) * 0.015);
-        // Spine base shadow
-        ctx.fillStyle = "rgba(0,0,0,0.15)";
-        ctx.beginPath();
-        ctx.moveTo(sx - 3, backCurveY);
-        ctx.lineTo(sx, backCurveY - spH * 0.3);
-        ctx.lineTo(sx + 3, backCurveY);
-        ctx.fill();
-        // Spine
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.moveTo(sx - 2, backCurveY);
-        ctx.lineTo(sx, backCurveY - spH);
-        ctx.lineTo(sx + 2, backCurveY);
-        ctx.fill();
-        // Spine highlight
-        ctx.strokeStyle = "rgba(255,255,255,0.1)";
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(sx - 1, backCurveY);
-        ctx.lineTo(sx, backCurveY - spH);
-        ctx.stroke();
-      }
-    } else if (
-      enemy.enemyType === "boss" ||
-      enemy.enemyType === "boss_form2" ||
-      enemy.enemyType === "boss_form3"
-    ) {
-      // ─── Paradox Lord (all forms) ───
-      const bossForm = enemy.def.form || 1;
-      const formScale = 1 + (bossForm - 1) * 0.08;
-      const bW = bodyWidth * 1.15 * formScale;
-      const bTop = bodyTop - halfH * 0.12;
-      const bBot = bodyBottom + halfH * 0.05;
-      const torsoH = bBot - bTop;
-      const breathe = Math.sin(time * 0.002) * halfH * 0.015;
-      const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
-
-      // Form-dependent brighter colors (original c1/c2 are too dark)
-      const formBaseColors = ["#ff3399", "#ff2277", "#ff1155"];
-      const formDarkColors = ["#881144", "#771144", "#991133"];
-      const formAccents = ["#ff66bb", "#ff44aa", "#ff2299"];
-      const bossBaseColor = hitFlash ? "#ffffff" : formBaseColors[bossForm - 1];
-      const bossDarkColor = hitFlash ? "#ffaaaa" : formDarkColors[bossForm - 1];
-      const bossAccent = hitFlash ? "#ffcccc" : formAccents[bossForm - 1];
-
-      // Dark aura — intensifies with form
-      ctx.save();
-      const auraR = bW * (1.8 + (bossForm - 1) * 0.3) + pulse * bW * 0.3;
-      const auraGrad = ctx.createRadialGradient(
-        screenX,
-        centerY,
-        bW * 0.3,
-        screenX,
-        centerY,
-        auraR,
-      );
-      auraGrad.addColorStop(0, `rgba(120,0,50,${0.18 + bossForm * 0.04})`);
-      auraGrad.addColorStop(0.6, `rgba(60,0,25,${0.08 + bossForm * 0.02})`);
-      auraGrad.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(screenX, centerY, auraR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Shadow/cape mass behind body
-      ctx.fillStyle = "#1a0010";
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 1.1, bTop + torsoH * 0.1);
-      ctx.quadraticCurveTo(
-        screenX - bW * 1.4,
-        centerY,
-        screenX - bW * 1.0,
-        bBot + halfH * 0.4,
-      );
-      ctx.lineTo(screenX + bW * 1.0, bBot + halfH * 0.4);
-      ctx.quadraticCurveTo(
-        screenX + bW * 1.4,
-        centerY,
-        screenX + bW * 1.1,
-        bTop + torsoH * 0.1,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Cape rim glow
-      ctx.strokeStyle = `rgba(255,0,100,${0.12 + pulse * 0.08})`;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Main body
-      ctx.fillStyle = bossDarkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.85, bTop + breathe);
-      ctx.lineTo(screenX - bW, bTop + torsoH * 0.15 + breathe);
-      ctx.lineTo(screenX - bW * 0.95, bBot);
-      ctx.lineTo(screenX + bW * 0.95, bBot);
-      ctx.lineTo(screenX + bW, bTop + torsoH * 0.15 + breathe);
-      ctx.lineTo(screenX + bW * 0.85, bTop + breathe);
-      ctx.closePath();
-      ctx.fill();
-      // Body edge highlight
-      ctx.strokeStyle = `rgba(255,80,160,${0.2 + pulse * 0.1})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Chest armor plate
-      ctx.fillStyle = bossBaseColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - bW * 0.7, bTop + torsoH * 0.08 + breathe);
-      ctx.lineTo(screenX - bW * 0.8, bTop + torsoH * 0.2 + breathe);
-      ctx.lineTo(screenX - bW * 0.75, bBot - torsoH * 0.15);
-      ctx.lineTo(screenX, bBot - torsoH * 0.1);
-      ctx.lineTo(screenX + bW * 0.75, bBot - torsoH * 0.15);
-      ctx.lineTo(screenX + bW * 0.8, bTop + torsoH * 0.2 + breathe);
-      ctx.lineTo(screenX + bW * 0.7, bTop + torsoH * 0.08 + breathe);
-      ctx.closePath();
-      ctx.fill();
-      // Armor ribbing
-      ctx.strokeStyle = hitFlash ? "#ff8888" : bossAccent;
-      ctx.lineWidth = 1;
-      for (let r = 0; r < 5; r++) {
-        const ry = bTop + torsoH * (0.2 + r * 0.12) + breathe;
-        ctx.beginPath();
-        ctx.moveTo(screenX - bW * 0.7, ry);
-        ctx.lineTo(screenX + bW * 0.7, ry);
-        ctx.stroke();
-      }
-      // Center chest seam
-      ctx.strokeStyle = hitFlash ? "#ff8888" : formAccents[bossForm - 1];
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(screenX, bTop + torsoH * 0.08 + breathe);
-      ctx.lineTo(screenX, bBot - torsoH * 0.1);
-      ctx.stroke();
-
-      // Chest energy core (layered glow, no shadowBlur for performance)
-      const coreY = bTop + torsoH * 0.3 + breathe;
-      const coreR = bW * 0.12 + pulse * bW * 0.04;
-      ctx.fillStyle = `rgba(255,0,68,${0.12 + pulse * 0.12})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.3 + pulse * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,136,${0.5 + pulse * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,136,187,${0.6 + pulse * 0.2})`;
-      ctx.beginPath();
-      ctx.arc(screenX, coreY, coreR * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Shoulder pauldrons with spikes
-      const drawPauldron = (side) => {
-        const sx = screenX + side * bW * 0.85;
-        const sy = bTop + torsoH * 0.05 + breathe;
-        const pW = bW * 0.4;
-        const pH = torsoH * 0.25;
-        // Base plate
-        ctx.fillStyle = bossDarkColor;
-        ctx.beginPath();
-        ctx.arc(sx + side * pW * 0.2, sy + pH * 0.4, pW * 0.55, 0, Math.PI * 2);
-        ctx.fill();
-        // Outer armor shell
-        ctx.fillStyle = bossBaseColor;
-        ctx.beginPath();
-        ctx.ellipse(
-          sx + side * pW * 0.15,
-          sy + pH * 0.35,
-          pW * 0.45,
-          pH * 0.4,
-          side * 0.2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Edge highlight
-        ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.ellipse(
-          sx + side * pW * 0.15,
-          sy + pH * 0.35,
-          pW * 0.45,
-          pH * 0.4,
-          side * 0.2,
-          -Math.PI * 0.8,
-          Math.PI * 0.3,
-        );
-        ctx.stroke();
-        // Spikes
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
-        // Main spike
-        ctx.beginPath();
-        ctx.moveTo(sx + side * pW * 0.2, sy + pH * 0.1);
-        ctx.lineTo(sx + side * pW * 0.9, sy - pH * 0.6);
-        ctx.lineTo(sx + side * pW * 0.35, sy + pH * 0.25);
-        ctx.fill();
-        // Secondary spike
-        ctx.beginPath();
-        ctx.moveTo(sx + side * pW * 0.45, sy + pH * 0.15);
-        ctx.lineTo(sx + side * pW * 1.1, sy - pH * 0.2);
-        ctx.lineTo(sx + side * pW * 0.55, sy + pH * 0.35);
-        ctx.fill();
-        // Back spike
-        ctx.beginPath();
-        ctx.moveTo(sx - side * pW * 0.05, sy + pH * 0.05);
-        ctx.lineTo(sx + side * pW * 0.3, sy - pH * 0.8);
-        ctx.lineTo(sx + side * pW * 0.1, sy + pH * 0.2);
-        ctx.fill();
-      };
-      drawPauldron(-1);
-      drawPauldron(1);
-
-      // Head
-      const headW = bW * 0.55;
-      const headH = torsoH * 0.3;
-      const headTop = bTop - headH * 0.65 + breathe;
-      const headCX = screenX;
-      const headCY = headTop + headH * 0.5;
-      // Neck
-      ctx.fillStyle = bossDarkColor;
-      ctx.fillRect(
-        screenX - bW * 0.2,
-        headTop + headH * 0.7,
-        bW * 0.4,
-        torsoH * 0.15,
-      );
-      // Skull shape
-      ctx.fillStyle = bossDarkColor;
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.8, headCY + headH * 0.15);
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.85,
-        headCY - headH * 0.2,
-        headCX - headW * 0.5,
-        headCY - headH * 0.5,
-      );
-      ctx.quadraticCurveTo(
-        headCX,
-        headCY - headH * 0.65,
-        headCX + headW * 0.5,
-        headCY - headH * 0.5,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.85,
-        headCY - headH * 0.2,
-        headCX + headW * 0.8,
-        headCY + headH * 0.15,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.6,
-        headCY + headH * 0.55,
-        headCX,
-        headCY + headH * 0.6,
-      );
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.6,
-        headCY + headH * 0.55,
-        headCX - headW * 0.8,
-        headCY + headH * 0.15,
-      );
-      ctx.fill();
-      // Helmet plate
-      ctx.fillStyle = bossBaseColor;
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.65, headCY - headH * 0.1);
-      ctx.quadraticCurveTo(
-        headCX,
-        headCY - headH * 0.55,
-        headCX + headW * 0.65,
-        headCY - headH * 0.1,
-      );
-      ctx.quadraticCurveTo(
-        headCX + headW * 0.5,
-        headCY + headH * 0.1,
-        headCX,
-        headCY + headH * 0.15,
-      );
-      ctx.quadraticCurveTo(
-        headCX - headW * 0.5,
-        headCY + headH * 0.1,
-        headCX - headW * 0.65,
-        headCY - headH * 0.1,
-      );
-      ctx.fill();
-      // Center ridge
-      ctx.strokeStyle = hitFlash ? "#ffcccc" : bossAccent;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(headCX, headCY - headH * 0.5);
-      ctx.lineTo(headCX, headCY + headH * 0.15);
-      ctx.stroke();
-
-      // Horns
-      const drawHorn = (side, length, curve, thickness) => {
-        const hx = headCX + side * headW * 0.5;
-        const hy = headCY - headH * 0.35;
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#773344";
-        ctx.beginPath();
-        ctx.moveTo(hx - thickness, hy);
-        ctx.quadraticCurveTo(
-          hx + side * headW * curve,
-          hy - length * 0.6,
-          hx + side * headW * curve * 0.8,
-          hy - length,
-        );
-        ctx.lineTo(hx + side * headW * curve * 0.8 + side * 1, hy - length + 2);
-        ctx.quadraticCurveTo(
-          hx + side * headW * curve * 0.5,
-          hy - length * 0.5,
-          hx + thickness,
-          hy,
-        );
-        ctx.fill();
-        // Horn ridges
-        ctx.strokeStyle = hitFlash ? "#ff8888" : "#553322";
-        ctx.lineWidth = 0.8;
-        for (let rr = 0; rr < 3; rr++) {
-          const t = 0.2 + rr * 0.25;
-          const rx = hx + side * headW * curve * t * 0.8;
-          const ry = hy - length * t * 0.7;
-          ctx.beginPath();
-          ctx.moveTo(rx - thickness * (1 - t * 0.5), ry);
-          ctx.lineTo(rx + thickness * (1 - t * 0.5), ry);
-          ctx.stroke();
-        }
-        // Glowing tip (layered glow, no shadowBlur)
-        ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
-        ctx.beginPath();
-        ctx.arc(
-          hx + side * headW * curve * 0.8,
-          hy - length + 1,
-          5 + pulse * 2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,68,${0.4 + pulse * 0.4})`;
-        ctx.beginPath();
-        ctx.arc(
-          hx + side * headW * curve * 0.8,
-          hy - length + 1,
-          2 + pulse,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      };
-      drawHorn(-1, halfH * 0.35, 0.7, 3);
-      drawHorn(1, halfH * 0.35, 0.7, 3);
-      // Center horn (taller)
-      const chx = headCX;
-      const chy = headCY - headH * 0.45;
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#883344";
-      ctx.beginPath();
-      ctx.moveTo(chx - 3.5, chy);
-      ctx.quadraticCurveTo(
-        chx - 2,
-        chy - halfH * 0.25,
-        chx,
-        chy - halfH * 0.45,
-      );
-      ctx.quadraticCurveTo(chx + 2, chy - halfH * 0.25, chx + 3.5, chy);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.15 + pulse * 0.15})`;
-      ctx.beginPath();
-      ctx.arc(chx, chy - halfH * 0.45, 6 + pulse * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.5 + pulse * 0.4})`;
-      ctx.beginPath();
-      ctx.arc(chx, chy - halfH * 0.45, 2.5 + pulse * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Three eyes
-      const eyeY = headCY - headH * 0.05;
-      const drawEye = (ex, ey, size, isCenter) => {
-        const sw = size * (isCenter ? 1.4 : 1.0);
-        const sh = size * (isCenter ? 0.8 : 0.6);
-        // Eye socket shadow
-        ctx.fillStyle = "#000000";
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Eye glow (layered fills, no shadowBlur for performance)
-        ctx.fillStyle = `rgba(255,0,0,${0.12 + pulse * 0.1})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.8, sh * 1.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,0,${0.3 + pulse * 0.15})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 1.3, sh * 1.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,0,0,${0.7 + pulse * 0.3})`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw, sh, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Bright iris
-        ctx.fillStyle = `rgba(255,${80 + pulse * 50},${80 + pulse * 50},0.9)`;
-        ctx.beginPath();
-        ctx.ellipse(ex, ey, sw * 0.55, sh * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Slit pupil
-        ctx.fillStyle = "#000000";
-        const pupilTrack = Math.sin(time * 0.0015 + enemy.x) * sw * 0.15;
-        ctx.beginPath();
-        ctx.ellipse(
-          ex + pupilTrack,
-          ey,
-          sw * 0.12,
-          sh * 0.8,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        // Specular highlight
-        ctx.fillStyle = "rgba(255,200,200,0.5)";
-        ctx.beginPath();
-        ctx.arc(ex - sw * 0.25, ey - sh * 0.3, sw * 0.15, 0, Math.PI * 2);
-        ctx.fill();
-      };
-      const eSize = bW * 0.09;
-      drawEye(headCX - headW * 0.35, eyeY, eSize, false);
-      drawEye(headCX, eyeY - headH * 0.05, eSize, true);
-      drawEye(headCX + headW * 0.35, eyeY, eSize, false);
-      // Form 2+: extra eyes
-      if (bossForm >= 2) {
-        drawEye(headCX - headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
-        drawEye(headCX + headW * 0.55, eyeY + headH * 0.12, eSize * 0.7, false);
-      }
-      // Form 3: even more eyes
-      if (bossForm >= 3) {
-        drawEye(
-          headCX - headW * 0.15,
-          eyeY + headH * 0.18,
-          eSize * 0.55,
-          false,
-        );
-        drawEye(
-          headCX + headW * 0.15,
-          eyeY + headH * 0.18,
-          eSize * 0.55,
-          false,
-        );
-      }
-
-      // Jaw / mouth
-      const jawY = headCY + headH * 0.2;
-      const jawOpen = 1.5 + Math.sin(time * 0.003) * 1.5;
-      // Upper jaw
-      ctx.fillStyle = bossDarkColor;
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.5, jawY);
-      ctx.lineTo(headCX - headW * 0.55, jawY + headH * 0.15);
-      ctx.lineTo(headCX + headW * 0.55, jawY + headH * 0.15);
-      ctx.lineTo(headCX + headW * 0.5, jawY);
-      ctx.fill();
-      // Lower jaw
-      ctx.fillStyle = hitFlash ? "#ffaaaa" : "#441122";
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.45, jawY + headH * 0.15 + jawOpen);
-      ctx.quadraticCurveTo(
-        headCX,
-        jawY + headH * 0.35 + jawOpen * 1.5,
-        headCX + headW * 0.45,
-        jawY + headH * 0.15 + jawOpen,
-      );
-      ctx.lineTo(headCX + headW * 0.5, jawY + headH * 0.12);
-      ctx.lineTo(headCX - headW * 0.5, jawY + headH * 0.12);
-      ctx.fill();
-      // Mouth interior
-      ctx.fillStyle = "#1a0005";
-      ctx.beginPath();
-      ctx.moveTo(headCX - headW * 0.4, jawY + headH * 0.12);
-      ctx.lineTo(headCX + headW * 0.4, jawY + headH * 0.12);
-      ctx.quadraticCurveTo(
-        headCX,
-        jawY + headH * 0.28 + jawOpen,
-        headCX - headW * 0.4,
-        jawY + headH * 0.12,
-      );
-      ctx.fill();
-      // Upper fangs
-      ctx.fillStyle = "#eeddcc";
-      const fangH = headH * 0.2 + jawOpen * 0.5;
-      for (let f = 0; f < 6; f++) {
-        const fx = headCX - headW * 0.35 + f * headW * 0.14;
-        const big = f === 0 || f === 5 ? 1.6 : f === 1 || f === 4 ? 1.2 : 0.7;
-        ctx.beginPath();
-        ctx.moveTo(fx - 1.5 * big, jawY + headH * 0.12);
-        ctx.lineTo(fx, jawY + headH * 0.12 + fangH * big);
-        ctx.lineTo(fx + 1.5 * big, jawY + headH * 0.12);
-        ctx.fill();
-      }
-      // Lower fangs
-      for (let f = 0; f < 4; f++) {
-        const fx = headCX - headW * 0.25 + f * headW * 0.17;
-        const big = f === 0 || f === 3 ? 1.3 : 0.6;
-        const fy = jawY + headH * 0.15 + jawOpen * 0.7;
-        ctx.beginPath();
-        ctx.moveTo(fx - 1.2 * big, fy);
-        ctx.lineTo(fx, fy - fangH * big * 0.6);
-        ctx.lineTo(fx + 1.2 * big, fy);
-        ctx.fill();
-      }
-      // Drool
-      ctx.strokeStyle = "rgba(180,0,40,0.5)";
-      ctx.lineWidth = 1;
-      for (let d = 0; d < 3; d++) {
-        const dx = headCX - headW * 0.2 + d * headW * 0.2;
-        const dLen =
-          halfH * 0.04 + Math.sin(time * 0.007 + d * 2) * halfH * 0.025;
-        ctx.beginPath();
-        ctx.moveTo(dx, jawY + headH * 0.12 + fangH * 0.8);
-        ctx.lineTo(
-          dx + Math.sin(time * 0.003 + d) * 2,
-          jawY + headH * 0.12 + fangH * 0.8 + dLen,
-        );
-        ctx.stroke();
-      }
-
-      // Arms
-      const drawArm = (side) => {
-        const shX = screenX + side * bW * 0.85;
-        const shY = bTop + torsoH * 0.12 + breathe;
-        const elbX = screenX + side * bW * 1.15;
-        const elbY = centerY + halfH * 0.1;
-        const handX = screenX + side * bW * 0.9;
-        const handY = bBot + halfH * 0.15;
-        // Upper arm
-        ctx.strokeStyle = bossDarkColor;
-        ctx.lineWidth = bW * 0.22;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(shX, shY);
-        ctx.quadraticCurveTo(elbX, elbY, handX, handY);
-        ctx.stroke();
-        // Armor on upper arm
-        ctx.strokeStyle = bossBaseColor;
-        ctx.lineWidth = bW * 0.15;
-        ctx.beginPath();
-        ctx.moveTo(shX, shY + torsoH * 0.05);
-        ctx.lineTo(elbX * 0.7 + shX * 0.3, (shY + elbY) * 0.5);
-        ctx.stroke();
-        // Elbow spike
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
-        ctx.beginPath();
-        ctx.moveTo(elbX, elbY - bW * 0.05);
-        ctx.lineTo(elbX + side * bW * 0.2, elbY - halfH * 0.08);
-        ctx.lineTo(elbX, elbY + bW * 0.05);
-        ctx.fill();
-        // Forearm armor
-        ctx.strokeStyle = bossBaseColor;
-        ctx.lineWidth = bW * 0.13;
-        ctx.beginPath();
-        ctx.moveTo(elbX, elbY);
-        ctx.lineTo((elbX + handX) * 0.5, (elbY + handY) * 0.5);
-        ctx.stroke();
-        // Clawed hand
-        ctx.fillStyle = bossDarkColor;
-        ctx.beginPath();
-        ctx.arc(handX, handY, bW * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-        // Claws
-        ctx.fillStyle = "#eeddcc";
-        for (let cl = 0; cl < 4; cl++) {
-          const ang =
-            (side > 0 ? Math.PI * 0.3 : -Math.PI * 0.3) + cl * 0.35 * side;
-          const clawLen = bW * 0.15;
-          const cx1 = handX + Math.cos(ang) * bW * 0.1;
-          const cy1 = handY + Math.sin(ang) * bW * 0.1;
-          ctx.beginPath();
-          ctx.moveTo(cx1 - 1.5, cy1);
-          ctx.lineTo(
-            cx1 + Math.cos(ang) * clawLen,
-            cy1 + Math.sin(ang) * clawLen,
-          );
-          ctx.lineTo(cx1 + 1.5, cy1);
-          ctx.fill();
-        }
-      };
-      drawArm(-1);
-      drawArm(1);
-
-      // Belt / midsection
-      ctx.fillStyle = hitFlash ? "#666666" : "#331118";
-      ctx.fillRect(
-        screenX - bW * 0.85,
-        bBot - torsoH * 0.12,
-        bW * 1.7,
-        torsoH * 0.08,
-      );
-      // Buckle
-      ctx.fillStyle = bossBaseColor;
-      ctx.beginPath();
-      ctx.arc(screenX, bBot - torsoH * 0.08, bW * 0.08, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(255,0,68,${0.3 + pulse * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(screenX, bBot - torsoH * 0.08, bW * 0.04, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Legs
-      const drawLeg = (side) => {
-        const hipX = screenX + side * bW * 0.35;
-        const hipY = bBot - torsoH * 0.04;
-        const kneeX = hipX + side * bW * 0.1;
-        const kneeY = bBot + halfH * 0.25;
-        const footX = hipX;
-        const footY = bBot + halfH * 0.5;
-        const legW = bW * 0.25;
-        // Upper leg
-        ctx.fillStyle = bossDarkColor;
-        ctx.beginPath();
-        ctx.moveTo(hipX - legW, hipY);
-        ctx.lineTo(kneeX - legW * 0.8, kneeY);
-        ctx.lineTo(kneeX + legW * 0.8, kneeY);
-        ctx.lineTo(hipX + legW, hipY);
-        ctx.fill();
-        // Knee armor
-        ctx.fillStyle = bossBaseColor;
-        ctx.beginPath();
-        ctx.arc(kneeX, kneeY, legW * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-        // Knee spike
-        ctx.fillStyle = hitFlash ? "#ffaaaa" : "#882244";
-        ctx.beginPath();
-        ctx.moveTo(kneeX + side * legW * 0.4, kneeY - legW * 0.3);
-        ctx.lineTo(kneeX + side * legW * 1.2, kneeY);
-        ctx.lineTo(kneeX + side * legW * 0.4, kneeY + legW * 0.3);
-        ctx.fill();
-        // Shin
-        ctx.fillStyle = bossDarkColor;
-        ctx.beginPath();
-        ctx.moveTo(kneeX - legW * 0.7, kneeY);
-        ctx.lineTo(footX - legW * 0.9, footY);
-        ctx.lineTo(footX + legW * 0.9, footY);
-        ctx.lineTo(kneeX + legW * 0.7, kneeY);
-        ctx.fill();
-        // Shin guard
-        ctx.fillStyle = bossBaseColor;
-        ctx.fillRect(
-          kneeX - legW * 0.4,
-          kneeY + legW * 0.3,
-          legW * 0.8,
-          (footY - kneeY) * 0.6,
-        );
-        // Boot
-        ctx.fillStyle = hitFlash ? "#552222" : "#0a0004";
-        ctx.beginPath();
-        ctx.moveTo(footX - legW * 1.1, footY);
-        ctx.lineTo(
-          footX - legW * 0.5 + side * legW * 0.8,
-          footY + halfH * 0.06,
-        );
-        ctx.lineTo(footX + legW * 1.1, footY);
-        ctx.fill();
-      };
-      drawLeg(-1);
-      drawLeg(1);
-
-      // Crackling temporal energy
-      ctx.strokeStyle = `rgba(255,0,136,${0.15 + pulse * 0.2})`;
-      ctx.lineWidth = 1;
-      for (let e = 0; e < 4; e++) {
-        const eAng = time * 0.002 + e * Math.PI * 0.5;
-        const eR = bW * 0.9 + Math.sin(time * 0.005 + e) * bW * 0.3;
-        const ex1 = screenX + Math.cos(eAng) * eR * 0.3;
-        const ey1 = centerY + Math.sin(eAng) * eR * 0.3;
-        const ex2 = screenX + Math.cos(eAng + 0.5) * eR;
-        const ey2 = centerY + Math.sin(eAng + 0.5) * eR;
-        ctx.beginPath();
-        ctx.moveTo(ex1, ey1);
-        ctx.lineTo(
-          (ex1 + ex2) * 0.5 + Math.sin(time * 0.01 + e) * 5,
-          (ey1 + ey2) * 0.5,
-        );
-        ctx.lineTo(ex2, ey2);
-        ctx.stroke();
-      }
-
-      // Floating debris / temporal shards
-      const shardCount = 5 + (bossForm - 1) * 3;
-      for (let s = 0; s < shardCount; s++) {
-        const sAng = time * 0.001 + s * Math.PI * 0.4;
-        const sR = bW * 1.2 + Math.sin(time * 0.003 + s * 2) * bW * 0.2;
-        const sx2 = screenX + Math.cos(sAng) * sR;
-        const sy2 = centerY + Math.sin(sAng) * sR * 0.6;
-        const sSize = 2 + Math.sin(s * 3) * 1.5;
-        ctx.fillStyle = `rgba(255,0,68,${0.15 + Math.sin(time * 0.004 + s) * 0.1})`;
-        ctx.save();
-        ctx.translate(sx2, sy2);
-        ctx.rotate(time * 0.002 + s);
-        ctx.fillRect(-sSize, -sSize * 0.5, sSize * 2, sSize);
-        ctx.restore();
-      }
-
-      // Form 2+: crackling energy corona
-      if (bossForm >= 2) {
-        ctx.strokeStyle = `rgba(255,0,100,${0.2 + pulse * 0.15})`;
-        ctx.lineWidth = 1.5;
-        for (let arc = 0; arc < 3 + bossForm; arc++) {
-          const arcAng =
-            time * (0.0015 + arc * 0.0003) +
-            (arc * Math.PI * 2) / (3 + bossForm);
-          const arcR = bW * (1.4 + bossForm * 0.15);
-          ctx.beginPath();
-          ctx.arc(screenX, centerY, arcR, arcAng, arcAng + 0.8);
-          ctx.stroke();
-        }
-      }
-
-      // Form 3: reality distortion rings
-      if (bossForm >= 3) {
-        ctx.save();
-        ctx.globalAlpha = alpha * (0.08 + pulse * 0.06);
-        for (let ring = 0; ring < 3; ring++) {
-          const ringR =
-            bW * (1.6 + ring * 0.4) + Math.sin(time * 0.002 + ring) * bW * 0.1;
-          ctx.strokeStyle = `rgba(255,${ring * 40},${200 - ring * 60},0.4)`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(
-            screenX,
-            centerY,
-            ringR,
-            ringR * 0.3,
-            time * 0.001 + ring * 0.5,
-            0,
-            Math.PI * 2,
-          );
-          ctx.stroke();
-        }
-        ctx.globalAlpha = alpha;
-        ctx.restore();
-      }
-    } else if (enemy.enemyType === "corruptCop") {
-      // Corrupt Cop
-      const copW = bodyWidth * 0.75;
-      const torsoH = bodyBottom - bodyTop;
-      // Body
-      ctx.fillStyle = "#cc8800";
-      ctx.fillRect(screenX - copW, bodyTop, copW * 2, torsoH);
-      // Armor panels
-      ctx.fillStyle = "#aa6600";
-      ctx.fillRect(
-        screenX - copW * 0.8,
-        bodyTop + torsoH * 0.06,
-        copW * 1.6,
-        torsoH * 0.88,
-      );
-      // Center chest plate
-      ctx.fillStyle = "#996600";
-      ctx.fillRect(
-        screenX - copW * 0.4,
-        bodyTop + torsoH * 0.12,
-        copW * 0.8,
-        torsoH * 0.4,
-      );
-      // Molle webbing
-      ctx.fillStyle = "rgba(0,0,0,0.2)";
-      for (let p = 0; p < 3; p++) {
-        ctx.fillRect(
-          screenX - copW * 0.35 + p * copW * 0.28,
-          bodyTop + torsoH * 0.15,
-          copW * 0.22,
-          torsoH * 0.12,
-        );
-      }
-      // Shoulder pads
-      ctx.fillStyle = "#bb7700";
-      ctx.fillRect(
-        screenX - copW * 1.05,
-        bodyTop - torsoH * 0.02,
-        copW * 0.35,
-        torsoH * 0.2,
-      );
-      ctx.fillRect(
-        screenX + copW * 0.7,
-        bodyTop - torsoH * 0.02,
-        copW * 0.35,
-        torsoH * 0.2,
-      );
-      // Helmet
-      const hR = copW * 0.55;
-      const hCY = bodyTop - hR * 0.5;
-      ctx.fillStyle = "#bb7700";
-      ctx.beginPath();
-      ctx.ellipse(screenX, hCY, hR * 1.1, hR, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Helmet ridge
-      ctx.fillStyle = "#996600";
-      ctx.fillRect(screenX - hR * 1.2, hCY + hR * 0.1, hR * 2.4, hR * 0.25);
-      // Visor
-      ctx.fillStyle = "#ffbb00";
-      ctx.globalAlpha = alpha * (0.75 + Math.sin(time * 0.004) * 0.15);
-      ctx.fillRect(screenX - hR * 0.85, hCY + hR * 0.15, hR * 1.7, hR * 0.35);
-      ctx.globalAlpha = alpha;
-      // Visor reflection
-      ctx.fillStyle = "rgba(255,255,255,0.25)";
-      ctx.fillRect(screenX - hR * 0.6, hCY + hR * 0.2, hR * 0.5, hR * 0.15);
-      // NVG mount
-      ctx.fillStyle = "#885500";
-      ctx.fillRect(screenX + hR * 0.5, hCY - hR * 0.6, hR * 0.3, hR * 0.5);
-      ctx.fillStyle = "#00ff44";
-      ctx.fillRect(screenX + hR * 0.55, hCY - hR * 0.55, hR * 0.15, hR * 0.12);
-      // Neck guard
-      ctx.fillStyle = "#885500";
-      ctx.fillRect(screenX - hR * 0.6, hCY + hR * 0.5, hR * 1.2, hR * 0.4);
-      // SWAT label on shoulder
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${Math.max(6, bodyWidth * 0.15)}px monospace`;
-      ctx.textAlign = "center";
-      ctx.fillText("SWAT", screenX - copW * 0.88, bodyTop + torsoH * 0.12);
-      ctx.textAlign = "left";
-      // Belt
-      ctx.fillStyle = "#333333";
-      ctx.fillRect(
-        screenX - copW * 0.7,
-        bodyBottom - torsoH * 0.12,
-        copW * 1.4,
-        torsoH * 0.1,
-      );
-      // Belt pouches
-      ctx.fillStyle = "#444444";
-      ctx.fillRect(
-        screenX - copW * 0.65,
-        bodyBottom - torsoH * 0.16,
-        copW * 0.18,
-        torsoH * 0.12,
-      );
-      ctx.fillRect(
-        screenX + copW * 0.5,
-        bodyBottom - torsoH * 0.16,
-        copW * 0.18,
-        torsoH * 0.12,
-      );
-      // Riot Shield
-      const rshX = screenX - copW * 1.15;
-      const rshY = bodyTop - torsoH * 0.15;
-      const rshW = copW * 1.1;
-      const rshH = torsoH * 1.5;
-      // Left arm holding shield
-      ctx.fillStyle = "#aa6600";
-      ctx.fillRect(
-        screenX - copW * 1.0,
-        bodyTop + torsoH * 0.12,
-        copW * 0.18,
-        torsoH * 0.45,
-      );
-      // Shield body
-      ctx.fillStyle = "rgba(180,220,255,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(rshX - rshW * 0.48, rshY + rshH * 0.05);
-      ctx.quadraticCurveTo(rshX - rshW * 0.5, rshY, rshX, rshY);
-      ctx.quadraticCurveTo(
-        rshX + rshW * 0.5,
-        rshY,
-        rshX + rshW * 0.48,
-        rshY + rshH * 0.05,
-      );
-      ctx.lineTo(rshX + rshW * 0.48, rshY + rshH * 0.92);
-      ctx.quadraticCurveTo(
-        rshX + rshW * 0.48,
-        rshY + rshH,
-        rshX + rshW * 0.38,
-        rshY + rshH,
-      );
-      ctx.lineTo(rshX - rshW * 0.38, rshY + rshH);
-      ctx.quadraticCurveTo(
-        rshX - rshW * 0.48,
-        rshY + rshH,
-        rshX - rshW * 0.48,
-        rshY + rshH * 0.92,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Shield border / frame
-      ctx.strokeStyle = "rgba(200,230,255,0.5)";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(rshX - rshW * 0.48, rshY + rshH * 0.05);
-      ctx.quadraticCurveTo(rshX - rshW * 0.5, rshY, rshX, rshY);
-      ctx.quadraticCurveTo(
-        rshX + rshW * 0.5,
-        rshY,
-        rshX + rshW * 0.48,
-        rshY + rshH * 0.05,
-      );
-      ctx.lineTo(rshX + rshW * 0.48, rshY + rshH * 0.92);
-      ctx.quadraticCurveTo(
-        rshX + rshW * 0.48,
-        rshY + rshH,
-        rshX + rshW * 0.38,
-        rshY + rshH,
-      );
-      ctx.lineTo(rshX - rshW * 0.38, rshY + rshH);
-      ctx.quadraticCurveTo(
-        rshX - rshW * 0.48,
-        rshY + rshH,
-        rshX - rshW * 0.48,
-        rshY + rshH * 0.92,
-      );
-      ctx.closePath();
-      ctx.stroke();
-      // Shield reflection
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      ctx.beginPath();
-      ctx.ellipse(
-        rshX - rshW * 0.1,
-        rshY + rshH * 0.22,
-        rshW * 0.18,
-        rshH * 0.18,
-        -0.3,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
-      ctx.beginPath();
-      ctx.ellipse(
-        rshX + rshW * 0.15,
-        rshY + rshH * 0.55,
-        rshW * 0.12,
-        rshH * 0.12,
-        0.2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Shield horizontal braces
-      ctx.strokeStyle = "rgba(180,210,240,0.3)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(rshX - rshW * 0.4, rshY + rshH * 0.3);
-      ctx.lineTo(rshX + rshW * 0.4, rshY + rshH * 0.3);
-      ctx.moveTo(rshX - rshW * 0.4, rshY + rshH * 0.55);
-      ctx.lineTo(rshX + rshW * 0.4, rshY + rshH * 0.55);
-      ctx.moveTo(rshX - rshW * 0.38, rshY + rshH * 0.8);
-      ctx.lineTo(rshX + rshW * 0.38, rshY + rshH * 0.8);
-      ctx.stroke();
-      // Assault Rifle
-      // Right arm
-      ctx.fillStyle = "#aa6600";
-      ctx.fillRect(
-        screenX + copW * 0.75,
-        bodyTop + torsoH * 0.15,
-        copW * 0.22,
-        torsoH * 0.55,
-      );
-      // Rifle body
-      const rifleY = bodyTop + torsoH * 0.42;
-      ctx.fillStyle = "#333333";
-      ctx.fillRect(screenX + copW * 0.55, rifleY, copW * 0.8, copW * 0.22);
-      // Barrel shroud
-      ctx.fillStyle = "#444444";
-      ctx.fillRect(
-        screenX + copW * 1.3,
-        rifleY + copW * 0.02,
-        copW * 0.55,
-        copW * 0.14,
-      );
-      // Barrel tip / muzzle brake
-      ctx.fillStyle = "#555555";
-      ctx.fillRect(
-        screenX + copW * 1.8,
-        rifleY - copW * 0.01,
-        copW * 0.12,
-        copW * 0.2,
-      );
-      // Cooling vents on barrel
-      ctx.fillStyle = "#2a2a2a";
-      for (let v = 0; v < 3; v++) {
-        ctx.fillRect(
-          screenX + copW * 1.35 + v * copW * 0.15,
-          rifleY + copW * 0.03,
-          copW * 0.08,
-          copW * 0.08,
-        );
-      }
-      // Stock
-      ctx.fillStyle = "#2a2a2a";
-      ctx.fillRect(
-        screenX + copW * 0.35,
-        rifleY + copW * 0.02,
-        copW * 0.25,
-        copW * 0.16,
-      );
-      ctx.fillStyle = "#3a3a3a";
-      ctx.fillRect(
-        screenX + copW * 0.3,
-        rifleY + copW * 0.04,
-        copW * 0.1,
-        copW * 0.1,
-      );
-      // Magazine
-      ctx.fillStyle = "#cc8800";
-      ctx.fillRect(
-        screenX + copW * 0.85,
-        rifleY + copW * 0.18,
-        copW * 0.14,
-        copW * 0.28,
-      );
-      // Scope
-      ctx.fillStyle = "#222222";
-      ctx.fillRect(
-        screenX + copW * 0.75,
-        rifleY - copW * 0.1,
-        copW * 0.3,
-        copW * 0.1,
-      );
-      ctx.fillStyle = "#1a1a1a";
-      ctx.fillRect(
-        screenX + copW * 0.8,
-        rifleY - copW * 0.06,
-        copW * 0.2,
-        copW * 0.06,
-      );
-      // Scope lens glow
-      ctx.fillStyle = "#ff3300";
-      ctx.beginPath();
-      ctx.arc(
-        screenX + copW * 1.0,
-        rifleY - copW * 0.04,
-        copW * 0.035,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Foregrip
-      ctx.fillStyle = "#aa6600";
-      ctx.fillRect(
-        screenX + copW * 1.15,
-        rifleY + copW * 0.18,
-        copW * 0.12,
-        copW * 0.18,
-      );
-      // Tactical light under barrel
-      ctx.fillStyle = "#444444";
-      ctx.fillRect(
-        screenX + copW * 1.4,
-        rifleY + copW * 0.14,
-        copW * 0.08,
-        copW * 0.1,
-      );
-      ctx.fillStyle = "#ffff88";
-      ctx.globalAlpha = alpha * 0.3;
-      ctx.fillRect(
-        screenX + copW * 1.41,
-        rifleY + copW * 0.15,
-        copW * 0.06,
-        copW * 0.04,
-      );
-      ctx.globalAlpha = alpha;
-      // Tactical gloves
-      ctx.fillStyle = "#333333";
-      ctx.fillRect(
-        screenX - copW * 1.02,
-        bodyTop + torsoH * 0.5,
-        copW * 0.22,
-        torsoH * 0.08,
-      );
-      ctx.fillRect(
-        screenX + copW * 0.78,
-        bodyTop + torsoH * 0.52,
-        copW * 0.24,
-        torsoH * 0.08,
-      );
-      // Legs
-      ctx.fillStyle = "#996600";
-      const clegW = copW * 0.38;
-      ctx.fillRect(screenX - copW * 0.5, bodyBottom, clegW, halfH * 0.32);
-      ctx.fillRect(screenX + copW * 0.12, bodyBottom, clegW, halfH * 0.32);
-      // Knee pads
-      ctx.fillStyle = "#775500";
-      ctx.fillRect(
-        screenX - copW * 0.48,
-        bodyBottom + halfH * 0.08,
-        clegW * 0.8,
-        halfH * 0.08,
-      );
-      ctx.fillRect(
-        screenX + copW * 0.14,
-        bodyBottom + halfH * 0.08,
-        clegW * 0.8,
-        halfH * 0.08,
-      );
-      // Combat boots
-      ctx.fillStyle = "#222222";
-      ctx.fillRect(
-        screenX - copW * 0.55,
-        bodyBottom + halfH * 0.26,
-        clegW + copW * 0.12,
-        halfH * 0.07,
-      );
-      ctx.fillRect(
-        screenX + copW * 0.08,
-        bodyBottom + halfH * 0.26,
-        clegW + copW * 0.12,
-        halfH * 0.07,
-      );
-    } else if (enemy.enemyType === "sentinel") {
-      // Sentinel
-      const sentW = bodyWidth * 1.4;
-      const sentTop = bodyTop - halfH * 0.15;
-      const sentBot = bodyBottom + halfH * 0.05;
-      const sentH = sentBot - sentTop;
-      // Massive plate armor body
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - sentW, sentTop + sentH * 0.08);
-      ctx.lineTo(screenX - sentW * 0.5, sentTop);
-      ctx.lineTo(screenX + sentW * 0.5, sentTop);
-      ctx.lineTo(screenX + sentW, sentTop + sentH * 0.08);
-      ctx.lineTo(screenX + sentW * 0.9, sentBot);
-      ctx.lineTo(screenX - sentW * 0.9, sentBot);
-      ctx.closePath();
-      ctx.fill();
-      // Chest plate
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(
-        screenX - sentW * 0.75,
-        sentTop + sentH * 0.06,
-        sentW * 1.5,
-        sentH * 0.88,
-      );
-      // Upper chest plate detail
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - sentW * 0.5, sentTop + sentH * 0.1);
-      ctx.lineTo(screenX, sentTop + sentH * 0.22);
-      ctx.lineTo(screenX + sentW * 0.5, sentTop + sentH * 0.1);
-      ctx.lineTo(screenX + sentW * 0.45, sentTop + sentH * 0.35);
-      ctx.lineTo(screenX - sentW * 0.45, sentTop + sentH * 0.35);
-      ctx.closePath();
-      ctx.fill();
-      // Battle damage scratches on chest
-      ctx.strokeStyle = "rgba(200,200,220,0.3)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(screenX - sentW * 0.3, sentTop + sentH * 0.25);
-      ctx.lineTo(screenX + sentW * 0.1, sentTop + sentH * 0.4);
-      ctx.moveTo(screenX + sentW * 0.2, sentTop + sentH * 0.3);
-      ctx.lineTo(screenX + sentW * 0.4, sentTop + sentH * 0.5);
-      ctx.stroke();
-      // Waist plate / fauld
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - sentW * 0.65,
-        sentTop + sentH * 0.55,
-        sentW * 1.3,
-        sentH * 0.08,
-      );
-      // Tassets
-      for (let t = 0; t < 4; t++) {
-        const tx = screenX - sentW * 0.5 + t * sentW * 0.35;
-        ctx.fillStyle = t % 2 === 0 ? darkColor : baseColor;
-        ctx.fillRect(tx, sentTop + sentH * 0.62, sentW * 0.28, sentH * 0.15);
-      }
-      // Shoulder pauldrons
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX - sentW * 0.72,
-        sentTop + sentH * 0.08,
-        sentW * 0.26,
-        sentH * 0.1,
-        -0.2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + sentW * 0.72,
-        sentTop + sentH * 0.08,
-        sentW * 0.26,
-        sentH * 0.1,
-        0.2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Pauldron edge trim
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(
-        screenX - sentW * 0.72,
-        sentTop + sentH * 0.08,
-        sentW * 0.23,
-        Math.PI * 0.8,
-        Math.PI * 2.2,
-      );
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(
-        screenX + sentW * 0.72,
-        sentTop + sentH * 0.08,
-        sentW * 0.23,
-        Math.PI * 0.8,
-        Math.PI * 2.2,
-      );
-      ctx.stroke();
-      // Rivets on pauldrons
-      ctx.fillStyle = "#aabbcc";
-      for (let r = 0; r < 3; r++) {
-        ctx.beginPath();
-        ctx.arc(
-          screenX - sentW * (0.58 + r * 0.08),
-          sentTop + sentH * 0.08,
-          2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(
-          screenX + sentW * (0.58 + r * 0.08),
-          sentTop + sentH * 0.08,
-          2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      }
-      // Great Helm
-      const helmW = sentW * 0.48;
-      const helmH = sentH * 0.28;
-      const helmY = sentTop - helmH * 0.55;
-      // Helm body
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX - helmW, helmY + helmH * 0.2);
-      ctx.lineTo(screenX - helmW * 0.7, helmY);
-      ctx.lineTo(screenX + helmW * 0.7, helmY);
-      ctx.lineTo(screenX + helmW, helmY + helmH * 0.2);
-      ctx.lineTo(screenX + helmW * 0.9, helmY + helmH);
-      ctx.lineTo(screenX - helmW * 0.9, helmY + helmH);
-      ctx.closePath();
-      ctx.fill();
-      // Helm face plate
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(
-        screenX - helmW * 0.75,
-        helmY + helmH * 0.15,
-        helmW * 1.5,
-        helmH * 0.7,
-      );
-      // Visor slit
-      ctx.fillStyle = "#111122";
-      // Horizontal slit
-      ctx.fillRect(
-        screenX - helmW * 0.5,
-        helmY + helmH * 0.35,
-        helmW * 1.0,
-        helmH * 0.12,
-      );
-      // Vertical slit
-      ctx.fillRect(
-        screenX - helmW * 0.06,
-        helmY + helmH * 0.25,
-        helmW * 0.12,
-        helmH * 0.35,
-      );
-      // Glowing eyes behind visor slit (layered glow, no shadowBlur)
-      ctx.fillStyle = "rgba(136,187,255,0.2)";
-      ctx.fillRect(
-        screenX - helmW * 0.35 - 3,
-        helmY + helmH * 0.37 - 3,
-        helmW * 0.2 + 6,
-        helmH * 0.08 + 6,
-      );
-      ctx.fillRect(
-        screenX + helmW * 0.15 - 3,
-        helmY + helmH * 0.37 - 3,
-        helmW * 0.2 + 6,
-        helmH * 0.08 + 6,
-      );
-      ctx.fillStyle = "#aaddff";
-      ctx.fillRect(
-        screenX - helmW * 0.35,
-        helmY + helmH * 0.37,
-        helmW * 0.2,
-        helmH * 0.08,
-      );
-      ctx.fillRect(
-        screenX + helmW * 0.15,
-        helmY + helmH * 0.37,
-        helmW * 0.2,
-        helmH * 0.08,
-      );
-      // Breathing holes on face plate
-      ctx.fillStyle = "#111122";
-      for (let bh = 0; bh < 3; bh++) {
-        ctx.beginPath();
-        ctx.arc(
-          screenX - helmW * 0.2 + bh * helmW * 0.2,
-          helmY + helmH * 0.7,
-          2,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      }
-      // Helm crest / plume ridge
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - helmW * 0.06,
-        helmY - helmH * 0.1,
-        helmW * 0.12,
-        helmH * 0.3,
-      );
-      // Cross emblem on helm
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(screenX - 1.5, helmY + helmH * 0.05, 3, helmH * 0.12);
-      ctx.fillRect(screenX - helmW * 0.1, helmY + helmH * 0.08, helmW * 0.2, 3);
-      // Tower Shield
-      const shieldX = screenX - sentW * 0.55;
-      const shieldY = sentTop - sentH * 0.02;
-      const shieldW = sentW * 0.6;
-      const shieldSH = sentH * 1.08;
-      // Left arm behind shield
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - sentW * 0.7,
-        sentTop + sentH * 0.12,
-        sentW * 0.18,
-        sentH * 0.5,
-      );
-      // Shield body
-      ctx.fillStyle = "#445566";
-      ctx.beginPath();
-      ctx.moveTo(shieldX - shieldW * 0.5, shieldY + shieldSH * 0.06);
-      ctx.quadraticCurveTo(shieldX - shieldW * 0.5, shieldY, shieldX, shieldY);
-      ctx.quadraticCurveTo(
-        shieldX + shieldW * 0.5,
-        shieldY,
-        shieldX + shieldW * 0.5,
-        shieldY + shieldSH * 0.06,
-      );
-      ctx.lineTo(shieldX + shieldW * 0.5, shieldY + shieldSH * 0.94);
-      ctx.quadraticCurveTo(
-        shieldX + shieldW * 0.5,
-        shieldY + shieldSH,
-        shieldX + shieldW * 0.4,
-        shieldY + shieldSH,
-      );
-      ctx.lineTo(shieldX - shieldW * 0.4, shieldY + shieldSH);
-      ctx.quadraticCurveTo(
-        shieldX - shieldW * 0.5,
-        shieldY + shieldSH,
-        shieldX - shieldW * 0.5,
-        shieldY + shieldSH * 0.94,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Shield inner field
-      ctx.fillStyle = "#667788";
-      ctx.fillRect(
-        shieldX - shieldW * 0.38,
-        shieldY + shieldSH * 0.08,
-        shieldW * 0.76,
-        shieldSH * 0.84,
-      );
-      // Cross emblem
-      ctx.fillStyle = "#334455";
-      ctx.fillRect(shieldX - 3, shieldY + shieldSH * 0.1, 6, shieldSH * 0.72);
-      ctx.fillRect(
-        shieldX - shieldW * 0.25,
-        shieldY + shieldSH * 0.38,
-        shieldW * 0.5,
-        6,
-      );
-      // Horizontal reinforcement bands
-      ctx.fillStyle = "#556677";
-      ctx.fillRect(
-        shieldX - shieldW * 0.45,
-        shieldY + shieldSH * 0.22,
-        shieldW * 0.9,
-        3,
-      );
-      ctx.fillRect(
-        shieldX - shieldW * 0.45,
-        shieldY + shieldSH * 0.58,
-        shieldW * 0.9,
-        3,
-      );
-      ctx.fillRect(
-        shieldX - shieldW * 0.45,
-        shieldY + shieldSH * 0.85,
-        shieldW * 0.9,
-        3,
-      );
-      // Shield border
-      ctx.strokeStyle = "#889aaa";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(shieldX - shieldW * 0.5, shieldY + shieldSH * 0.06);
-      ctx.quadraticCurveTo(shieldX - shieldW * 0.5, shieldY, shieldX, shieldY);
-      ctx.quadraticCurveTo(
-        shieldX + shieldW * 0.5,
-        shieldY,
-        shieldX + shieldW * 0.5,
-        shieldY + shieldSH * 0.06,
-      );
-      ctx.lineTo(shieldX + shieldW * 0.5, shieldY + shieldSH * 0.94);
-      ctx.quadraticCurveTo(
-        shieldX + shieldW * 0.5,
-        shieldY + shieldSH,
-        shieldX + shieldW * 0.4,
-        shieldY + shieldSH,
-      );
-      ctx.lineTo(shieldX - shieldW * 0.4, shieldY + shieldSH);
-      ctx.quadraticCurveTo(
-        shieldX - shieldW * 0.5,
-        shieldY + shieldSH,
-        shieldX - shieldW * 0.5,
-        shieldY + shieldSH * 0.94,
-      );
-      ctx.closePath();
-      ctx.stroke();
-      // Shield boss
-      ctx.fillStyle = "#889aaa";
-      ctx.beginPath();
-      ctx.arc(
-        shieldX,
-        shieldY + shieldSH * 0.38,
-        shieldW * 0.08,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Corner rivets
-      ctx.fillStyle = "#aabbcc";
-      for (const [rx, ry] of [
-        [shieldX - shieldW * 0.4, shieldY + shieldSH * 0.1],
-        [shieldX + shieldW * 0.4, shieldY + shieldSH * 0.1],
-        [shieldX - shieldW * 0.4, shieldY + shieldSH * 0.9],
-        [shieldX + shieldW * 0.4, shieldY + shieldSH * 0.9],
-      ]) {
-        ctx.beginPath();
-        ctx.arc(rx, ry, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // Halberd
-      // Right arm
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX + sentW * 0.75,
-        sentTop + sentH * 0.1,
-        sentW * 0.2,
-        sentH * 0.5,
-      );
-      // Gauntlet
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(
-        screenX + sentW * 0.72,
-        sentTop + sentH * 0.48,
-        sentW * 0.26,
-        sentH * 0.1,
-      );
-      // Shaft
-      const shaftX = screenX + sentW * 0.85;
-      const shaftTop = sentTop - sentH * 0.35;
-      const shaftBot = sentBot + halfH * 0.25;
-      ctx.fillStyle = "#665544";
-      ctx.fillRect(shaftX - 2, shaftTop, 4, shaftBot - shaftTop);
-      // Shaft wrap / grip
-      ctx.fillStyle = "#443322";
-      ctx.fillRect(shaftX - 3, sentTop + sentH * 0.42, 6, sentH * 0.18);
-      // Axe blade
-      ctx.fillStyle = "#b0b8c0";
-      ctx.beginPath();
-      ctx.moveTo(shaftX, shaftTop + sentH * 0.02);
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.4,
-        shaftTop + sentH * 0.04,
-        shaftX + sentW * 0.35,
-        shaftTop + sentH * 0.2,
-      );
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.3,
-        shaftTop + sentH * 0.35,
-        shaftX,
-        shaftTop + sentH * 0.42,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Blade shading
-      ctx.fillStyle = "#9aa0a8";
-      ctx.beginPath();
-      ctx.moveTo(shaftX, shaftTop + sentH * 0.06);
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.28,
-        shaftTop + sentH * 0.08,
-        shaftX + sentW * 0.24,
-        shaftTop + sentH * 0.2,
-      );
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.2,
-        shaftTop + sentH * 0.3,
-        shaftX,
-        shaftTop + sentH * 0.36,
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Blade edge
-      ctx.strokeStyle = "rgba(255,255,255,0.6)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(shaftX + sentW * 0.02, shaftTop + sentH * 0.03);
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.38,
-        shaftTop + sentH * 0.05,
-        shaftX + sentW * 0.33,
-        shaftTop + sentH * 0.2,
-      );
-      ctx.quadraticCurveTo(
-        shaftX + sentW * 0.28,
-        shaftTop + sentH * 0.34,
-        shaftX + sentW * 0.02,
-        shaftTop + sentH * 0.41,
-      );
-      ctx.stroke();
-      // Back spike
-      ctx.fillStyle = "#a0a8b0";
-      ctx.beginPath();
-      ctx.moveTo(shaftX, shaftTop + sentH * 0.1);
-      ctx.lineTo(shaftX - sentW * 0.15, shaftTop + sentH * 0.18);
-      ctx.lineTo(shaftX, shaftTop + sentH * 0.25);
-      ctx.fill();
-      // Top spike
-      ctx.fillStyle = "#c0c8d0";
-      ctx.beginPath();
-      ctx.moveTo(shaftX - 3, shaftTop + sentH * 0.02);
-      ctx.lineTo(shaftX, shaftTop - sentH * 0.08);
-      ctx.lineTo(shaftX + 3, shaftTop + sentH * 0.02);
-      ctx.fill();
-      // Spike edge highlight
-      ctx.strokeStyle = "rgba(255,255,255,0.4)";
-      ctx.beginPath();
-      ctx.moveTo(shaftX - 2, shaftTop + sentH * 0.01);
-      ctx.lineTo(shaftX, shaftTop - sentH * 0.07);
-      ctx.stroke();
-      // Langet
-      ctx.fillStyle = "#888899";
-      ctx.fillRect(shaftX - 3, shaftTop + sentH * 0.02, 2, sentH * 0.15);
-      ctx.fillRect(shaftX + 1, shaftTop + sentH * 0.02, 2, sentH * 0.15);
-      // Legs
-      ctx.fillStyle = darkColor;
-      const slegW = sentW * 0.4;
-      ctx.fillRect(screenX - sentW * 0.55, sentBot, slegW, halfH * 0.32);
-      ctx.fillRect(screenX + sentW * 0.15, sentBot, slegW, halfH * 0.32);
-      // Knee cops
-      ctx.fillStyle = baseColor;
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX - sentW * 0.35,
-        sentBot + halfH * 0.06,
-        slegW * 0.35,
-        halfH * 0.06,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(
-        screenX + sentW * 0.35,
-        sentBot + halfH * 0.06,
-        slegW * 0.35,
-        halfH * 0.06,
-        0,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      // Sabatons
-      ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - sentW * 0.6,
-        sentBot + halfH * 0.26,
-        slegW + sentW * 0.12,
-        halfH * 0.08,
-      );
-      ctx.fillRect(
-        screenX + sentW * 0.1,
-        sentBot + halfH * 0.26,
-        slegW + sentW * 0.12,
-        halfH * 0.08,
-      );
-    } else if (enemy.enemyType === "glitchling") {
-      // Glitchling
-      const glitchOff = Math.sin(time * 0.02 + enemy.x * 7) * bodyWidth * 0.15;
-      const glitchOff2 = Math.cos(time * 0.015 + enemy.y * 5) * bodyWidth * 0.1;
-      const gW = bodyWidth * 0.7;
-      const gTop = centerY - halfH * 0.2;
-      const gBot = centerY + halfH * 0.3;
-
-      // Afterimage/ghost trail
-      ctx.globalAlpha = alpha * 0.12;
-      ctx.fillStyle = "#00ff66";
-      ctx.beginPath();
-      ctx.moveTo(screenX + glitchOff * 2.5, gTop - halfH * 0.12);
-      ctx.lineTo(screenX - gW * 1.1 + glitchOff2 * 2, gBot + halfH * 0.02);
-      ctx.lineTo(screenX + gW * 1.1 + glitchOff2 * 2, gBot + halfH * 0.02);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-
-      // Triangular body - outer
-      ctx.fillStyle = darkColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX + glitchOff, gTop - halfH * 0.1);
-      ctx.lineTo(screenX - gW + glitchOff2, gBot);
-      ctx.lineTo(screenX + gW + glitchOff2, gBot);
-      ctx.closePath();
-      ctx.fill();
-
-      // Inner triangle
-      ctx.fillStyle = baseColor;
-      ctx.beginPath();
-      ctx.moveTo(screenX + glitchOff, gTop + halfH * 0.02);
-      ctx.lineTo(screenX - gW * 0.65 + glitchOff2, gBot - halfH * 0.04);
-      ctx.lineTo(screenX + gW * 0.65 + glitchOff2, gBot - halfH * 0.04);
-      ctx.closePath();
-      ctx.fill();
-
-      // Data corruption pattern inside body
-      ctx.fillStyle = "#00ff44";
-      ctx.globalAlpha = alpha * 0.15;
-      const patternY = gTop + halfH * 0.08;
-      const patternH = (gBot - gTop) * 0.7;
-      for (let p = 0; p < 6; p++) {
-        const py = patternY + (p / 6) * patternH;
-        const pw = gW * 0.4 * (1 - p / 8);
-        if (Math.sin(time * 0.03 + p * 1.7) > 0) {
-          ctx.fillRect(screenX - pw + glitchOff * 0.5, py, pw * 2, 1.5);
-        }
-      }
-      ctx.globalAlpha = alpha;
-
-      // Eye - pulsing
-      const eyePulse = 0.7 + Math.sin(time * 0.012) * 0.3;
-      const eyeSize2 = gW * 0.3;
-
-      // Eye glow
-      ctx.fillStyle = "#00ff66";
-      ctx.globalAlpha = alpha * 0.3 * eyePulse;
-      ctx.beginPath();
-      ctx.arc(screenX + glitchOff, centerY, eyeSize2 * 1.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = alpha;
-
-      // Eye core
-      ctx.fillStyle = "#00ff66";
-      ctx.fillRect(
-        screenX - eyeSize2 / 2 + glitchOff,
-        centerY - eyeSize2 / 2,
-        eyeSize2,
-        eyeSize2,
-      );
-
-      // Eye pupil
-      ctx.fillStyle = "#003311";
-      const pupilS = eyeSize2 * 0.35;
-      ctx.fillRect(
-        screenX - pupilS / 2 + glitchOff,
-        centerY - pupilS / 2,
-        pupilS,
-        pupilS,
-      );
-
-      // Scan line across eye
-      ctx.fillStyle = "#00ff66";
-      ctx.globalAlpha = alpha * 0.6;
-      const scanY = centerY - eyeSize2 / 2 + ((time * 0.05) % eyeSize2);
-      ctx.fillRect(screenX - eyeSize2 / 2 + glitchOff, scanY, eyeSize2, 1);
-      ctx.globalAlpha = alpha;
-
-      // Glitch static lines (more varied)
-      ctx.fillStyle = "#00ff44";
-      ctx.globalAlpha = alpha * 0.5;
-      for (let g = 0; g < 5; g++) {
-        const gy = gTop + Math.random() * (gBot - gTop);
-        const gx = (Math.random() - 0.5) * bodyWidth * 0.4;
-        const gLen = gW * (0.5 + Math.random() * 1.5);
-        ctx.fillRect(screenX - gLen / 2 + gx, gy, gLen, 1);
-      }
-      ctx.globalAlpha = alpha;
-
-      // Floating data fragments around body
-      ctx.fillStyle = "#00ff66";
-      ctx.globalAlpha = alpha * 0.35;
-      for (let f = 0; f < 3; f++) {
-        const fAngle = time * 0.004 + f * ((Math.PI * 2) / 3);
-        const fDist = gW * 1.1;
-        const fx = screenX + Math.cos(fAngle) * fDist;
-        const fy = centerY + Math.sin(fAngle) * halfH * 0.3;
-        ctx.fillRect(fx - 2, fy - 1, 4, 2);
-      }
-      ctx.globalAlpha = alpha;
-
-      // No legs - it floats/glitches
+    }
+
+    const renderFn = ENEMY_RENDERERS[enemy.enemyType];
+    if (renderFn) {
+      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash);
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
-      ctx.fillRect(
-        screenX - bodyWidth,
-        bodyTop,
-        bodyWidth * 2,
-        bodyBottom - bodyTop,
-      );
+      ctx.fillRect(screenX - bodyWidth, bodyTop, bodyWidth * 2, bodyBottom - bodyTop);
       ctx.fillStyle = baseColor;
-      ctx.fillRect(
-        screenX - bodyWidth * 0.7,
-        bodyTop + (bodyBottom - bodyTop) * 0.1,
-        bodyWidth * 1.4,
-        (bodyBottom - bodyTop) * 0.8,
-      );
+      ctx.fillRect(screenX - bodyWidth * 0.7, bodyTop + (bodyBottom - bodyTop) * 0.1, bodyWidth * 1.4, (bodyBottom - bodyTop) * 0.8);
       ctx.fillStyle = "#00ffaa";
-      const eyeSize3 = bodyWidth * 0.2;
-      ctx.fillRect(
-        screenX - eyeSize3,
-        bodyTop + (bodyBottom - bodyTop) * 0.25 - eyeSize3 / 2,
-        eyeSize3 * 2,
-        eyeSize3,
-      );
+      const eyeSize = bodyWidth * 0.2;
+      ctx.fillRect(screenX - eyeSize, bodyTop + (bodyBottom - bodyTop) * 0.25 - eyeSize / 2, eyeSize * 2, eyeSize);
       ctx.fillStyle = darkColor;
-      const legW3 = bodyWidth * 0.3;
-      ctx.fillRect(screenX - bodyWidth * 0.5, bodyBottom, legW3, halfH * 0.3);
-      ctx.fillRect(screenX + bodyWidth * 0.2, bodyBottom, legW3, halfH * 0.3);
+      const legW = bodyWidth * 0.3;
+      ctx.fillRect(screenX - bodyWidth * 0.5, bodyBottom, legW, halfH * 0.3);
+      ctx.fillRect(screenX + bodyWidth * 0.2, bodyBottom, legW, halfH * 0.3);
     }
 
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    if (enemy.state === "windup" && enemy._windupTotalMs > 0 && !enemy.dissolving) {
+      this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
+    }
   }
 
-  drawPickup(
-    ctx,
-    screenX,
-    centerY,
-    sprWidth,
-    sprHeight,
-    dist,
-    color,
-    symbol,
-    time,
-    fog,
-  ) {
-    if (fog <= 0) return;
-    const size = Math.max(4, sprWidth * 0.3);
-    const bob = Math.sin(time * 0.004) * size * 0.2;
-    const spin = time * 0.003;
-    const y = centerY + sprHeight * 0.15 + bob;
+  /**
+   * Modern enemy sprite. Occlusion uses the same per-column test as the
+   * procedural path (a column draws only where the enemy is nearer than the
+   * wall, and only above any low cover in front of it), but spans the
+   * sprite's own extent so wide or tall art is not cropped to the square
+   * sprite column. Adjacent columns with the same cut merge into one clip
+   * rect, and a sprite with nothing in front is drawn unclipped.
+   */
+  _drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog) {
+    const alpha = fog;
+    if (alpha <= 0) return;
+    const x0 = Math.max(0, Math.floor(screenX + frame.x0));
+    const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + frame.x1));
+    const top = centerY + frame.y0;
+    const height = frame.y1 - frame.y0;
 
-    // Outer pulsing glow
-    const pulse = 0.3 + Math.sin(time * 0.006) * 0.15;
-    ctx.globalAlpha = fog * pulse;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 1.3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Inner glow
-    ctx.globalAlpha = fog * 0.4;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 0.9, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Diamond-shaped core (rotates)
+    const vis = this._spriteClipPath(ctx, x0, x1, top, top + height, dist);
     ctx.save();
-    ctx.translate(screenX, y);
-    ctx.rotate(spin);
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.55);
-    ctx.lineTo(size * 0.55, 0);
-    ctx.lineTo(0, size * 0.55);
-    ctx.lineTo(-size * 0.55, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    // Inner highlight
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.3);
-    ctx.lineTo(size * 0.3, 0);
-    ctx.lineTo(0, size * 0.3);
-    ctx.lineTo(-size * 0.3, 0);
-    ctx.closePath();
-    ctx.fill();
+    if (vis) {
+      if (vis === 1) ctx.clip();
+      const hitFlash = !!enemy.hitTime && time - enemy.hitTime < 100;
+      const dissolve = enemy.dissolving && enemy.dissolveTimer != null ? Math.max(0, enemy.dissolveTimer / 0.5) : 1;
+      const windupT = enemy.state === "windup" && enemy._windupTotalMs > 0
+        ? 1 - Math.max(0, enemy._windupLeftMs) / enemy._windupTotalMs
+        : 0;
+      if (isRealisticArt() && dissolve >= 1) {
+        // Contact shadow: without the Modern ink outline, a sprite with no
+        // shadow reads as floating over the deck.
+        const rx = Math.max(4, (frame.x1 - frame.x0) * 0.3);
+        const ry = rx * 0.2;
+        ctx.globalAlpha = 0.42 * alpha;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(screenX, centerY + frame.y1 - ry, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      if (isRealisticArt() && !hitFlash) {
+        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT);
+      } else {
+        drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
+      }
+    }
     ctx.restore();
 
-    // Sparkle particles
-    ctx.fillStyle = "#ffffff";
-    for (let i = 0; i < 3; i++) {
-      const angle = spin * 2 + i * ((Math.PI * 2) / 3);
-      const sparkR = size * 0.8;
-      const sx = Math.cos(angle) * sparkR;
-      const sy = Math.sin(angle) * sparkR;
-      ctx.globalAlpha = fog * (0.3 + Math.sin(time * 0.01 + i) * 0.3);
-      ctx.beginPath();
-      ctx.arc(screenX + sx, y + sy, Math.max(1, size * 0.08), 0, Math.PI * 2);
-      ctx.fill();
+    if (enemy.state === "windup" && enemy._windupTotalMs > 0 && !enemy.dissolving) {
+      const bodyTop = centerY - halfH * 0.4;
+      const bodyBottom = centerY + halfH * 0.5;
+      const bodyWidth = halfW * 0.6;
+      this._drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist);
     }
-
-    ctx.globalAlpha = 1;
   }
 
-  drawHealthPickup(
-    ctx,
-    screenX,
-    centerY,
-    sprWidth,
-    sprHeight,
-    dist,
-    time,
-    fog,
-  ) {
-    if (fog <= 0) return;
-    const size = Math.max(6, sprWidth * 0.35);
-    const bob = Math.sin(time * 0.004) * size * 0.2;
-    const y = centerY + sprHeight * 0.15 + bob;
-    const pulse = 0.8 + Math.sin(time * 0.006) * 0.2;
-
-    // Outer radial glow
-    ctx.globalAlpha = fog * 0.2 * pulse;
-    ctx.fillStyle = "#00ff44";
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 1.6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Soft glow ring
-    ctx.globalAlpha = fog * 0.3;
-    ctx.fillStyle = "#00ff44";
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // White background with rounded look
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(screenX - size * 0.6, y - size * 0.6, size * 1.2, size * 1.2);
-
-    // Highlight on box
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillRect(screenX - size * 0.6, y - size * 0.6, size * 0.4, size * 1.2);
-
-    // Red cross
-    const crossT = size * 0.22;
-    ctx.fillStyle = "#ff2222";
-    ctx.fillRect(screenX - crossT / 2, y - size * 0.45, crossT, size * 0.9);
-    ctx.fillRect(screenX - size * 0.45, y - crossT / 2, size * 0.9, crossT);
-
-    // Cross highlight
-    ctx.fillStyle = "rgba(255,100,100,0.3)";
-    ctx.fillRect(
-      screenX - crossT / 2,
-      y - size * 0.45,
-      crossT * 0.4,
-      size * 0.9,
-    );
-
-    // Border with pulse
-    ctx.strokeStyle = "#00cc44";
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = fog * pulse;
-    ctx.strokeRect(
-      screenX - size * 0.6,
-      y - size * 0.6,
-      size * 1.2,
-      size * 1.2,
-    );
-
-    // Corner dots
-    ctx.fillStyle = "#00ff44";
-    ctx.globalAlpha = fog * 0.6;
-    const corners = [
-      [-1, -1],
-      [1, -1],
-      [-1, 1],
-      [1, 1],
-    ];
-    corners.forEach(([cx, cy]) => {
-      ctx.beginPath();
-      ctx.arc(
-        screenX + cx * size * 0.6,
-        y + cy * size * 0.6,
-        Math.max(1, size * 0.06),
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-    });
-
-    ctx.globalAlpha = 1;
+  /**
+   * Realistic: draw the sprite into a scratch layer, tint only its own pixels
+   * by the light at the enemy's feet (lamps overhead, muzzle flashes, glowing
+   * projectiles), then blit it back inside the caller's occlusion clip. An
+   * enemy standing between lamps falls into shadow; one under a lamp or beside
+   * a flash lights up with that light's colour.
+   */
+  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT) {
+    // ctx.filter keeps the lighting on the main canvas. The first version
+    // drew each sprite into a scratch canvas and blitted it back, and every
+    // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
+    // frame with a room full of enemies and props.
+    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
+    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, false, dissolve, windupT);
+    ctx.filter = "none";
   }
 
-  drawAmmoPickup(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
-    if (fog <= 0) return;
-    const size = Math.max(6, sprWidth * 0.35);
-    const bob = Math.sin(time * 0.004 + 1) * size * 0.2;
-    const y = centerY + sprHeight * 0.15 + bob;
-    // Soft glow
-    ctx.globalAlpha = fog * 0.3;
-    ctx.fillStyle = "#ffaa00";
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 1.0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = fog;
-    // Magazine body
-    const magW = size * 0.5;
-    const magH = size * 1.0;
-    ctx.fillStyle = "#555555";
-    ctx.fillRect(screenX - magW / 2, y - magH / 2, magW, magH);
-    // Highlight strip on magazine
-    ctx.fillStyle = "#777777";
-    ctx.fillRect(
-      screenX - magW / 2 + 1,
-      y - magH / 2 + 1,
-      magW * 0.3,
-      magH - 2,
-    );
-    // Cartridge tips
-    const tipH = magH * 0.15;
-    ctx.fillStyle = "#ddaa33";
-    ctx.fillRect(
-      screenX - magW / 2 + 1,
-      y - magH / 2 - tipH + 1,
-      magW * 0.25,
-      tipH,
-    );
-    ctx.fillRect(screenX, y - magH / 2 - tipH + 1, magW * 0.25, tipH);
-    ctx.fillRect(
-      screenX - magW / 4,
-      y - magH / 2 - tipH * 0.7 + 1,
-      magW * 0.25,
-      tipH * 0.7,
-    );
-    // Feed lip detail at top
-    ctx.fillStyle = "#666666";
-    ctx.fillRect(screenX - magW / 2 - 1, y - magH / 2, magW + 2, 2);
-    // Border
-    ctx.strokeStyle = "#ffaa00";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(screenX - magW / 2, y - magH / 2, magW, magH);
-    ctx.globalAlpha = 1;
+  /** Realistic props: same lighting as enemies. */
+  _drawPropLit(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+    // Props carry no emissive-critical gameplay read, so they may fall
+    // further into shadow than enemies do.
+    ctx.filter = this._litFilter(entity.x, entity.y, 0.65);
+    drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog);
+    ctx.filter = "none";
   }
 
-  drawWeaponPickup(
-    ctx,
-    screenX,
-    centerY,
-    sprWidth,
-    sprHeight,
-    dist,
-    time,
-    fog,
-  ) {
-    if (fog <= 0) return;
-    const size = Math.max(6, sprWidth * 0.35);
-    const bob = Math.sin(time * 0.004 + 2) * size * 0.2;
-    const y = centerY + sprHeight * 0.15 + bob;
-    // Soft glow
-    ctx.globalAlpha = fog * 0.3;
-    ctx.fillStyle = "#00ccff";
-    ctx.beginPath();
-    ctx.arc(screenX, y, size * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = fog;
-    // Metal crate body
-    const crW = size * 0.9;
-    const crH = size * 0.7;
-    ctx.fillStyle = "#667788";
-    ctx.fillRect(screenX - crW / 2, y - crH / 2, crW, crH);
-    // Top face
-    ctx.fillStyle = "#889aaa";
-    ctx.beginPath();
-    ctx.moveTo(screenX - crW / 2, y - crH / 2);
-    ctx.lineTo(screenX - crW / 2 + crW * 0.15, y - crH / 2 - crH * 0.2);
-    ctx.lineTo(screenX + crW / 2 + crW * 0.15, y - crH / 2 - crH * 0.2);
-    ctx.lineTo(screenX + crW / 2, y - crH / 2);
-    ctx.closePath();
-    ctx.fill();
-    // Right face
-    ctx.fillStyle = "#556677";
-    ctx.beginPath();
-    ctx.moveTo(screenX + crW / 2, y - crH / 2);
-    ctx.lineTo(screenX + crW / 2 + crW * 0.15, y - crH / 2 - crH * 0.2);
-    ctx.lineTo(screenX + crW / 2 + crW * 0.15, y + crH / 2 - crH * 0.2);
-    ctx.lineTo(screenX + crW / 2, y + crH / 2);
-    ctx.closePath();
-    ctx.fill();
-    // Cross straps
-    ctx.strokeStyle = "#88aacc";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(screenX - crW / 2, y - crH / 2);
-    ctx.lineTo(screenX + crW / 2, y + crH / 2);
-    ctx.moveTo(screenX + crW / 2, y - crH / 2);
-    ctx.lineTo(screenX - crW / 2, y + crH / 2);
-    ctx.stroke();
-    // Corner rivets
-    ctx.fillStyle = "#aaccee";
-    const rivetR = Math.max(1, size * 0.05);
-    [
-      [-crW / 2 + 2, -crH / 2 + 2],
-      [crW / 2 - 2, -crH / 2 + 2],
-      [-crW / 2 + 2, crH / 2 - 2],
-      [crW / 2 - 2, crH / 2 - 2],
-    ].forEach(([rx, ry]) => {
-      ctx.beginPath();
-      ctx.arc(screenX + rx, y + ry, rivetR, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    // Border
-    ctx.strokeStyle = "#00ccff";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(screenX - crW / 2, y - crH / 2, crW, crH);
-    ctx.globalAlpha = 1;
+  /**
+   * CSS filter string for the light at world (wx, wy): brightness from the
+   * light level, capped at `maxShade` darkening, plus a small warm/cool cast
+   * from the light's colour. Quantised and cached, so no string is built per
+   * sprite per frame.
+   */
+  _litFilter(wx, wy, maxShade) {
+    const L = this.lightAt(wx, wy, _litOut);
+    const lum = 0.2126 * L.r + 0.7152 * L.g + 0.0722 * L.b;
+    const shade = lum < 1 ? Math.min(maxShade, (1 - lum) * 0.75) : 0;
+    const bright = lum < 1 ? 1 - shade : Math.min(1.5, 1 + (lum - 1) * 0.6);
+    // Warmth: red over blue beyond neutral pushes a slight sepia cast.
+    const warm = Math.max(0, Math.min(1, (L.r - L.b) * 1.5));
+    const qb = Math.round(bright * 20);
+    const qw = Math.round(warm * 5);
+    const key = (qb << 3) | qw;
+    let f = _litFilters.get(key);
+    if (!f) {
+      f = qw ? `brightness(${qb / 20}) sepia(${(qw / 5) * 0.25})` : `brightness(${qb / 20})`;
+      _litFilters.set(key, f);
+    }
+    return f;
   }
 
-  drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
-    if (fog <= 0) return;
-    const size = Math.max(8, sprWidth * 0.5);
-    const t = time * 0.003;
-    const pulse = 0.7 + Math.sin(t * 1.7) * 0.3;
+  /**
+   * Attack telegraph, drawn from shared AI state so every enemy renderer gets
+   * it without per-type code. A ring closes onto the body as the windup runs
+   * out and the body brightens, so the timing reads at a glance. Red for melee
+   * (get out of reach), amber for ranged (a projectile is coming).
+   * Uses its own column clip rather than the sprite's: the sprite clip is only
+   * as tall as the sprite, which sliced the ring flat at top and bottom. This
+   * clip spans the ring's full extent and still skips columns where a wall is
+   * nearer than the enemy, so walls continue to occlude it.
+   */
+  _drawAttackTelegraph(ctx, enemy, screenX, bodyTop, bodyBottom, bodyWidth, halfH, alpha, time, dist) {
+    // `|| 0` keeps a half-initialised windup (debug spawns) from producing NaN.
+    const t = Math.min(1, Math.max(0, 1 - Math.max(0, enemy._windupLeftMs || 0) / enemy._windupTotalMs)); // 0..1
+    const melee = enemy.def.attackType !== "ranged";
+    const rgb = melee ? "255,64,40" : "255,196,48";
+    const cy = (bodyTop + bodyBottom) / 2;
+    const reach = Math.max(bodyWidth * 1.1, halfH * 0.45);
+    const extent = reach * 2.1 * 1.25 + 4; // widest ring incl. the flicker ring
 
+    const x0 = Math.max(0, Math.floor(screenX - extent));
+    const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + extent));
+    if (x1 < x0) return;
+
+    const vis = this._spriteClipPath(ctx, x0, x1, cy - extent, cy + extent, dist);
+    if (!vis) return;
     ctx.save();
-    ctx.translate(screenX, centerY);
+    if (vis === 1) ctx.clip();
 
-    // Outer radial glow
-    ctx.globalAlpha = fog * pulse * 0.25;
-    const grd = ctx.createRadialGradient(0, 0, size * 0.3, 0, 0, size * 2.2);
-    grd.addColorStop(0, "#00ffaa");
-    grd.addColorStop(0.5, "#00aa66");
-    grd.addColorStop(1, "transparent");
-    ctx.fillStyle = grd;
-    ctx.fillRect(-size * 2.2, -size * 2.2, size * 4.4, size * 4.4);
+    ctx.globalCompositeOperation = "lighter";
+    // Realistic keeps the countdown (the ring's size is the timing, which is
+    // gameplay) but draws it as a hairline, and lets the charge-up glow carry
+    // the rest instead of a thick cartoon ring and flicker.
+    const real = isRealisticArt();
 
-    // Swirling ring
-    ctx.globalAlpha = fog * pulse * 0.6;
-    ctx.strokeStyle = "#00ff88";
-    ctx.lineWidth = Math.max(2, size * 0.15);
+    // Body wash, brightening toward release.
+    const wash = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, reach * 1.3);
+    wash.addColorStop(0, `rgba(${rgb},${(real ? 0.16 : 0.1) + (real ? 0.55 : 0.4) * t})`);
+    wash.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = wash;
+    ctx.fillRect(screenX - reach * 1.3, cy - reach * 1.3, reach * 2.6, reach * 2.6);
+
+    // Contracting ring: wide at the start, tight on the body at the moment of
+    // release, so its size is the countdown.
+    const r = reach * (2.1 - 1.1 * t);
+    ctx.globalAlpha = alpha * (real ? 0.2 + 0.45 * t : 0.35 + 0.6 * t);
+    ctx.strokeStyle = `rgb(${rgb})`;
+    ctx.lineWidth = real ? 1 + t : Math.max(1.5, reach * (0.05 + 0.07 * t));
     ctx.beginPath();
-    ctx.ellipse(0, 0, size * 1.1, size * 1.6, 0, 0, Math.PI * 2);
+    ctx.arc(screenX, cy, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Inner ring
-    ctx.globalAlpha = fog * pulse * 0.9;
-    ctx.strokeStyle = "#aaffdd";
-    ctx.lineWidth = Math.max(1, size * 0.08);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, size * 0.7, size * 1.1, 0, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Rotating energy arcs
-    for (let i = 0; i < 4; i++) {
-      const a = t * 2 + (i * Math.PI) / 2;
-      const rx = Math.cos(a) * size * 0.9;
-      const ry = Math.sin(a) * size * 1.3;
-      ctx.globalAlpha = fog * 0.6;
-      ctx.fillStyle = i % 2 === 0 ? "#00ffcc" : "#88ffdd";
+    // Final flicker in the last 20% — the "now" beat.
+    if (!real && t > 0.8 && Math.floor(time / 45) % 2 === 0) {
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.lineWidth = Math.max(1, reach * 0.04);
       ctx.beginPath();
-      ctx.arc(rx, ry, Math.max(2, size * 0.12), 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(screenX, cy, r * 1.25, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
-    // Central bright core
-    ctx.globalAlpha = fog * pulse;
-    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.5);
-    core.addColorStop(0, "#ffffff");
-    core.addColorStop(0.3, "#aaffee");
-    core.addColorStop(1, "transparent");
-    ctx.fillStyle = core;
-    ctx.fillRect(-size * 0.5, -size * 0.5, size, size);
-
-    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
-  drawProjectile(ctx, screenX, centerY, sprWidth, dist, entity, time, fog) {
-    if (fog <= 0) return;
-    const size = Math.max(3, sprWidth * 0.15);
-    const color = entity.color || "#ff0044";
-    const t = time * 0.006;
-
-    // Outer glow halo
-    ctx.globalAlpha = fog * 0.35;
-    const glow = ctx.createRadialGradient(
-      screenX,
-      centerY,
-      0,
-      screenX,
-      centerY,
-      size * 3,
-    );
-    glow.addColorStop(0, color);
-    glow.addColorStop(1, "transparent");
-    ctx.fillStyle = glow;
-    ctx.fillRect(screenX - size * 3, centerY - size * 3, size * 6, size * 6);
-
-    // Core orb
-    ctx.globalAlpha = fog * 0.8;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(screenX, centerY, size * 0.9, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Bright center
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(screenX, centerY, size * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Sparks
-    ctx.globalAlpha = fog * 0.6;
-    for (let i = 0; i < 3; i++) {
-      const a = t + i * 2.1;
-      const sx = screenX + Math.cos(a) * size * 1.4;
-      const sy = centerY + Math.sin(a) * size * 1.4;
-      ctx.fillStyle = color;
-      ctx.fillRect(sx - 1, sy - 1, 2, 2);
-    }
-
-    ctx.globalAlpha = 1;
-  }
 }

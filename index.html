@@ -7,6 +7,32 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Clockwork Carnage</title>
+    <!-- Social Meta Tags (OpenGraph / Twitter) -->
+    <meta property="og:title" content="Clockwork Carnage" />
+    <meta
+      property="og:description"
+      content="A fast-paced retro-future raycaster with time-bending combat and deep customization."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://shugmishumunov.github.io/clockwork_carnage/"
+    />
+    <meta
+      property="og:image"
+      content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.svg"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Clockwork Carnage" />
+    <meta
+      name="twitter:description"
+      content="A fast-paced retro-future raycaster with time-bending combat and deep customization."
+    />
+    <meta
+      name="twitter:image"
+      content="https://shugmishumunov.github.io/clockwork_carnage/assets/og-image.svg"
+    />
+
     <!-- PWA: open in standalone (fullscreen-like) when added to home screen -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -14,29 +40,19 @@
     <meta name="theme-color" content="#0a0e14" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; font-src 'self'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/brand/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="style.css" />
-    <!-- Google tag (gtag.js) -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-M2ETG779YT"
-    ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-
-      gtag("config", "G-M2ETG779YT");
-    </script>
   </head>
   <body>
     <!-- Title Screen -->
     <div id="titleScreen">
-      <h1>CLOCKWORK CARNAGE</h1>
+      <h1 class="title-logo-wrap">
+        <img id="titleLogo" class="title-logo" src="assets/brand/comic/logotype.svg" alt="Clockwork Carnage" />
+      </h1>
       <div class="title-svg-container">
         <title-background></title-background>
         <title-clock></title-clock>
@@ -46,7 +62,65 @@
 
       <div class="subtitle">Glitch Protocol</div>
       <div class="start-prompt">[ CLICK OR PRESS ENTER TO START ]</div>
+
+      <div class="landing-features">
+        <div class="landing-tagline">
+          A retro-future FPS with time-bending combat
+        </div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="12" r="2.5" />
+                <path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
+              </svg>
+            </div>
+            <div class="feature-title">4-ACT CAMPAIGN</div>
+            <div class="feature-desc">
+              Fight through temporal anomalies. Defeat the Paradox Lord.
+            </div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 6.5V12l3.5 2.5" />
+              </svg>
+            </div>
+            <div class="feature-title">CHRONO SHIFT</div>
+            <div class="feature-desc">
+              Slow time, dash through bullets, and bend reality to survive.
+            </div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 8.5 12 3.5l9 5v7L12 20.5 3 15.5z" />
+                <path d="M3 8.5 12 13.5l9-5M12 13.5v7" />
+              </svg>
+            </div>
+            <div class="feature-title">BUILD + SHARE</div>
+            <div class="feature-desc">
+              Create custom arenas with the Temporal Forge level editor.
+            </div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13 2.5 4.5 13.5H11l-.5 8L19 10.5h-6.5z" />
+              </svg>
+            </div>
+            <div class="feature-title">ZERO INSTALL</div>
+            <div class="feature-desc">
+              Runs in any browser. No downloads. Keyboard, touch, or controller.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="version-label" id="versionLabel"></div>
+      <art-style-toggle></art-style-toggle>
     </div>
 
     <!-- Mode Select Screen -->
@@ -121,6 +195,45 @@
           CONTINUE CAMPAIGN
           <div class="mode-desc" id="continueCampaignDesc"></div>
         </button>
+        <button
+          class="mode-btn"
+          id="btnMeltdown"
+          style="border-color: rgba(255, 100, 0, 0.4)"
+        >
+          <!-- Flame/reactor icon -->
+          <svg
+            class="btn-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 2C8 8 4 12 4 16c0 4.4 3.6 8 8 8s8-3.6 8-8c0-4-4-8-8-14z"
+              fill="currentColor"
+              opacity="0.6"
+            >
+              <animate
+                attributeName="opacity"
+                values="0.4;0.8;0.4"
+                dur="1.5s"
+                repeatCount="indefinite"
+              />
+            </path>
+            <path
+              d="M12 10c-2 3-4 5-4 7a4 4 0 008 0c0-2-2-4-4-7z"
+              fill="currentColor"
+              opacity="0.9"
+            />
+          </svg>
+          MELTDOWN: REACTOR RUN
+          <div class="mode-desc">
+            Reactor critical. Auto-run forward. Survive the corridor. How far
+            can you get?
+          </div>
+          <span class="key-hint">[2]</span>
+        </button>
         <button class="mode-btn" id="btnArena">
           <!-- Hourglass -->
           <svg
@@ -153,11 +266,11 @@
               />
             </circle>
           </svg>
-          TEMPORAL ARENA
+          NEON ABYSS
           <div class="mode-desc">
             60-second combat loop. Survive, upgrade, repeat.
           </div>
-          <span class="key-hint">[2]</span>
+          <span class="key-hint">[3]</span>
         </button>
         <button class="mode-btn continue-btn hidden" id="btnContinueArena">
           CONTINUE ARENA
@@ -195,11 +308,12 @@
               />
             </circle>
           </svg>
-          TEMPORAL CALIBRATION
+          CHRONOS ACADEMY
+          <span style="opacity: 0.5; font-size: 0.8em">(Tutorial)</span>
           <div class="mode-desc">
-            Learn the basics. Master movement, combat, and abilities.
+            Cadet basic training. Master movement, weapons, and time-bending.
           </div>
-          <span class="key-hint">[3]</span>
+          <span class="key-hint">[4]</span>
         </button>
         <button class="mode-btn" id="btnBuilder">
           <!-- Grid/blocks icon -->
@@ -260,7 +374,7 @@
             Build your own arenas. Place walls, enemies, and test your
             creations.
           </div>
-          <span class="key-hint">[4]</span>
+          <span class="key-hint">[5]</span>
         </button>
         <button class="mode-btn" id="btnCustomize">
           <!-- Person/gear icon -->
@@ -298,7 +412,115 @@
           <div class="mode-desc">
             Colors, armor, badges, weapon skins, loadouts.
           </div>
-          <span class="key-hint">[5]</span>
+          <span class="key-hint">[6]</span>
+        </button>
+        <button
+          class="mode-btn"
+          id="btnStats"
+          style="border-color: rgba(0, 255, 200, 0.3)"
+        >
+          <svg
+            class="btn-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              x="3"
+              y="14"
+              width="4"
+              height="8"
+              rx="1"
+              fill="currentColor"
+              opacity="0.5"
+            />
+            <rect
+              x="10"
+              y="8"
+              width="4"
+              height="14"
+              rx="1"
+              fill="currentColor"
+              opacity="0.7"
+            />
+            <rect
+              x="17"
+              y="2"
+              width="4"
+              height="20"
+              rx="1"
+              fill="currentColor"
+              opacity="0.9"
+            />
+          </svg>
+          LIFETIME STATS
+          <div class="mode-desc">
+            Kills, deaths, accuracy, time played, and more.
+          </div>
+          <span class="key-hint">[7]</span>
+        </button>
+        <button
+          class="mode-btn"
+          id="btnArchive"
+          style="border-color: rgba(0, 200, 255, 0.3)"
+        >
+          <svg
+            class="btn-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M3 4.5h18v4H3z" />
+            <path d="M4.5 8.5v11h15v-11" />
+            <path d="M9.5 12.5h5" />
+          </svg>
+          ARCHIVE
+          <div class="mode-desc">
+            Enemy dossiers and recovered Dead Squad memories.
+          </div>
+          <span class="key-hint">[8]</span>
+        </button>
+        <button
+          class="mode-btn"
+          id="btnSettings"
+          style="border-color: rgba(150, 170, 200, 0.35)"
+        >
+          <!-- Gear -->
+          <svg
+            class="btn-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="12"
+              cy="12"
+              r="3.2"
+              stroke="currentColor"
+              stroke-width="1.6"
+            />
+            <path
+              d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          SETTINGS
+          <div class="mode-desc">
+            Graphics, audio, controls and accessibility.
+          </div>
+          <span class="key-hint">[9]</span>
         </button>
       </div>
       <div class="coming-soon">
@@ -380,6 +602,7 @@
       import "./js/components/title-clock.js";
       import "./js/components/title-hero.js";
       import "./js/components/title-paradox-lord.js";
+      import "./js/components/art-style-toggle.js";
     </script>
   </body>
 </html>

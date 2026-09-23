@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 996.4102564102564 280" role="img" aria-labelledby="t d">
+<title id="t">Clockwork Carnage</title><desc id="d">Horizontal lockup. The gear-C mark: a gear broken open into a C, its second hand stopped at eleven seconds. Modern style, machined steel, no ink, soft light.</desc>
+<defs>
+    <linearGradient id="steelM" x1="0" y1="-50" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e9f2fa"/><stop offset=".45" stop-color="#9fb3c6"/><stop offset=".55" stop-color="#6c8196"/><stop offset="1" stop-color="#2c3a48"/>
+    </linearGradient>
+    <linearGradient id="letM" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4f8fc"/><stop offset=".5" stop-color="#b8c7d6"/><stop offset=".52" stop-color="#8a9db0"/><stop offset="1" stop-color="#5a6d80"/>
+    </linearGradient>
+    <linearGradient id="redM" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff6a80"/><stop offset=".5" stop-color="#ff2a4a"/><stop offset="1" stop-color="#b3102b"/>
+    </linearGradient>
+    <linearGradient id="redC" x1="0" y1="-50" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff7a8e"/><stop offset=".5" stop-color="#ff2a4a"/><stop offset="1" stop-color="#9e0d26"/>
+    </linearGradient>
+    <filter id="rift" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".45"/></filter></defs>
+<g transform="translate(120 120) scale(2.3)"><g filter="url(#soft)">
+      <path d="M32.33 21.81L36.64 27.81L27.81 36.64L20.55 33.15L18.43 34.37L17.83 42.41L5.77 45.64L1.23 38.98L-1.23 38.98L-5.77 45.64L-17.83 42.41L-18.43 34.37L-20.55 33.15L-27.81 36.64L-36.64 27.81L-33.15 20.55L-34.37 18.43L-42.41 17.83L-45.64 5.77L-38.98 1.23L-38.98 -1.23L-45.64 -5.77L-42.41 -17.83L-34.37 -18.43L-33.15 -20.55L-36.64 -27.81L-27.81 -36.64L-20.55 -33.15L-18.43 -34.37L-17.83 -42.41L-5.77 -45.64L-1.23 -38.98L1.23 -38.98L5.77 -45.64L17.83 -42.41L18.43 -34.37L20.55 -33.15L27.81 -36.64L36.64 -27.81L32.33 -21.81L22.38 -15.1A27 27 0 1 0 22.38 15.1Z" fill="url(#steelM)"/>
+      <path d="M32.33 21.81L36.64 27.81L27.81 36.64L20.55 33.15L18.43 34.37L17.83 42.41L5.77 45.64L1.23 38.98L-1.23 38.98L-5.77 45.64L-17.83 42.41L-18.43 34.37L-20.55 33.15L-27.81 36.64L-36.64 27.81L-33.15 20.55L-34.37 18.43L-42.41 17.83L-45.64 5.77L-38.98 1.23L-38.98 -1.23L-45.64 -5.77L-42.41 -17.83L-34.37 -18.43L-33.15 -20.55L-36.64 -27.81L-27.81 -36.64L-20.55 -33.15L-18.43 -34.37L-17.83 -42.41L-5.77 -45.64L-1.23 -38.98L1.23 -38.98L5.77 -45.64L17.83 -42.41L18.43 -34.37L20.55 -33.15L27.81 -36.64L36.64 -27.81L32.33 -21.81L22.38 -15.1A27 27 0 1 0 22.38 15.1Z" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="1"/>
+      
+      <line x1="0" y1="0" x2="-7.5" y2="-12.99" stroke="#0b1422" stroke-width="6.6" stroke-linecap="round"/><line x1="0" y1="0" x2="-7.5" y2="-12.99" stroke="#dfe8f0" stroke-width="4" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-21" stroke="#0b1422" stroke-width="6.2" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-21" stroke="#22e6ff" stroke-width="3.6" stroke-linecap="round"/>
+      <line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#0b1422" stroke-width="4.800000000000001" stroke-linecap="round"/><line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#ff2a4a" stroke-width="2.2" stroke-linecap="round"/>
+      <circle r="4.4" fill="#eef4fa"/><circle r="1.8" fill="#ff2a4a"/>
+    </g></g><g transform="translate(300 0) scale(1.03)"><g transform="translate(0 0)"><g filter="url(#soft)"><g fill="none" stroke-width="18" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="2" stroke="url(#letM)"><path d="M47 9H23L9 23V91H47" transform="translate(0 0)"/><path d="M9 9V91H47" transform="translate(73 0)"/><path d="M23 9H47V77L33 91H9V23Z" transform="translate(146 0)"/><path d="M47 9H23L9 23V91H47" transform="translate(219 0)"/><path d="M9 9V91M47 9L22 50L47 91" transform="translate(292 0)"/><path d="M9 9V91L28 64L47 91V9" transform="translate(365 0)"/><path d="M23 9H47V77L33 91H9V23Z" transform="translate(438 0)"/><path d="M9 91V9H33L47 23V41L37 51H9M31 51L47 91" transform="translate(511 0)"/><path d="M9 9V91M47 9L22 50L47 91" transform="translate(584 0)"/></g></g></g><g transform="translate(73 134)"><g filter="url(#soft)"><g fill="none" stroke-width="18" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="2" stroke="url(#redM)"><path d="M47 9H23L9 23V91H47" transform="translate(0 0)"/><path d="M9 91V23L23 9H47V91M9 55H47" transform="translate(73 0)"/><path d="M9 91V9H33L47 23V41L37 51H9M31 51L47 91" transform="translate(146 0)"/><path d="M9 91V9L47 91V9" transform="translate(219 0)"/><path d="M9 91V23L23 9H47V91M9 55H47" transform="translate(292 0)"/><path d="M47 9H23L9 23V91H33L47 77V55H30" transform="translate(365 0)"/><path d="M47 9H9V91H47M9 50H38" transform="translate(438 0)"/></g></g></g></g>
+</svg>

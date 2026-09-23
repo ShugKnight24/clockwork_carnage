@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="t d">
+<title id="t">Clockwork Carnage</title><desc id="d">The gear-C mark: a gear broken open into a C, its second hand stopped at eleven seconds. Legacy style, neon line art on the void, like the original terminal HUD.</desc>
+<defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="rift" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter>
+    <radialGradient id="bgL" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#0d1a38"/><stop offset="1" stop-color="#05060c"/></radialGradient></defs>
+<rect width="120" height="120" rx="14.399999999999999" fill="url(#bgL)"/><g transform="translate(60 60)">
+      <g fill="none"><line x1="0" y1="0" x2="-7.5" y2="-12.99" stroke="#05060c" stroke-width="7" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-21" stroke="#05060c" stroke-width="7" stroke-linecap="round"/><line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#05060c" stroke-width="7" stroke-linecap="round"/></g>
+      <g filter="url(#glow)" fill="none" stroke-linejoin="round">
+      <path d="M32.33 21.81L36.64 27.81L27.81 36.64L20.55 33.15L18.43 34.37L17.83 42.41L5.77 45.64L1.23 38.98L-1.23 38.98L-5.77 45.64L-17.83 42.41L-18.43 34.37L-20.55 33.15L-27.81 36.64L-36.64 27.81L-33.15 20.55L-34.37 18.43L-42.41 17.83L-45.64 5.77L-38.98 1.23L-38.98 -1.23L-45.64 -5.77L-42.41 -17.83L-34.37 -18.43L-33.15 -20.55L-36.64 -27.81L-27.81 -36.64L-20.55 -33.15L-18.43 -34.37L-17.83 -42.41L-5.77 -45.64L-1.23 -38.98L1.23 -38.98L5.77 -45.64L17.83 -42.41L18.43 -34.37L20.55 -33.15L27.81 -36.64L36.64 -27.81L32.33 -21.81L22.38 -15.1A27 27 0 1 0 22.38 15.1Z" stroke="#22e6ff" stroke-width="2.6"/>
+      <line x1="0" y1="0" x2="-7.5" y2="-12.99" stroke="#22e6ff" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-21" stroke="#00ffcc" stroke-width="3.4" stroke-linecap="round"/>
+      <line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#ff2a4a" stroke-width="2.4" stroke-linecap="round"/>
+      <circle r="3.6" fill="#00ffcc" stroke="none"/>
+    </g></g>
+</svg>

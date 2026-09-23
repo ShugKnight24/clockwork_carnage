@@ -1,3 +1,5 @@
+import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+
 const template = document.createElement("template");
 template.innerHTML = `
   <style>
@@ -785,11 +787,34 @@ template.innerHTML = `
   </svg>
 `;
 
+// Modern art: the Paradox Lord cutscene model in his crimson form, the legacy
+// title colours, standing on the deck opposite the hero.
+const LORD_PLACEMENT = { x: 554, y: 207, scale: 0.84 };
+
 export class TitleParadoxLord extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this.shadowRoot.appendChild(template.content.cloneNode(true));
+  }
+
+  connectedCallback() {
+    this._unsubscribe ??= attachArtSwitch(
+      this,
+      template,
+      async () => {
+        const { MODELS } = await import("../../src/rendering/svg-art/models/villain.js");
+        return modelHtml("paradox-lord", MODELS.villain_form2, LORD_PLACEMENT);
+      },
+      async () => {
+        const { realParadoxLord } = await import("../../src/rendering/svg-art/models/realistic-title.js");
+        return modelHtml("paradox-lord-real", realParadoxLord(), LORD_PLACEMENT);
+      },
+    );
+  }
+
+  disconnectedCallback() {
+    this._unsubscribe?.();
+    this._unsubscribe = null;
   }
 }
 

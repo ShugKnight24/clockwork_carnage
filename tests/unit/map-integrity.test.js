@@ -1,0 +1,160 @@
+/**
+ * Campaign map integrity.
+ *
+ * Encodes what a level has to satisfy to be playable as authored. Reachability
+ * uses the same passability the game does: floor (0) is walkable, and doors (5)
+ * and secret walls (6) become floor when the player interacts with them. Nothing
+ * else in the grid ever changes at runtime.
+ */
+import { describe, it, expect } from "vitest";
+import { campaignMaps } from "../../src/data/index.js";
+
+// Each distinct campaign map once: every act replays the same nine.
+const CAMPAIGN_MAPS = campaignMaps();
+import { validatePropPosition } from "../../src/systems/spawner.js";
+
+const OPENABLE = new Set([0, 5, 6]);
+
+function reachableFrom(level) {
+  const sx = Math.floor(level.playerStart.x);
+  const sy = Math.floor(level.playerStart.y);
+  const seen = new Set([`${sx},${sy}`]);
+  const queue = [[sx, sy]];
+  for (let i = 0; i < queue.length; i++) {
+    const [cx, cy] = queue[i];
+    for (const [nx, ny] of [
+      [cx + 1, cy],
+      [cx - 1, cy],
+      [cx, cy + 1],
+      [cx, cy - 1],
+    ]) {
+      if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || !OPENABLE.has(level.grid[ny][nx])) continue;
+      seen.add(key);
+      queue.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+const label = (e) => `${e.enemyType || e.type}@${Math.floor(e.x)},${Math.floor(e.y)}`;
+
+describe.each(CAMPAIGN_MAPS.map((level, i) => [i, level.name, level]))(
+  "campaign level %i — %s",
+  (_i, _name, level) => {
+    const reach = reachableFrom(level);
+
+    it("places every entity on open floor", () => {
+      const inWalls = (level.entities || []).filter((e) => {
+        const t = level.grid[Math.floor(e.y)]?.[Math.floor(e.x)];
+        return t !== 0;
+      });
+      expect(inWalls.map(label)).toEqual([]);
+    });
+
+    it("lets the player reach every enemy and pickup", () => {
+      const sealed = (level.entities || []).filter(
+        (e) => !reach.has(`${Math.floor(e.x)},${Math.floor(e.y)}`),
+      );
+      expect(sealed.map(label)).toEqual([]);
+    });
+
+    it("authors the exit on reachable floor", () => {
+      if (!level.exit) return; // boss level ends on the kill
+      const ex = Math.floor(level.exit.x);
+      const ey = Math.floor(level.exit.y);
+      expect(level.grid[ey][ex], "exit tile").toBe(0);
+      expect(reach.has(`${ex},${ey}`), "exit reachable").toBe(true);
+    });
+
+    it("puts every secret wall where the player can stand next to it", () => {
+      // Interaction probes 0.5-1.5 tiles straight ahead, so the player has to
+      // stand on reachable floor orthogonally adjacent to the secret.
+      const blocked = [];
+      for (let y = 0; y < level.height; y++) {
+        for (let x = 0; x < level.width; x++) {
+          if (level.grid[y][x] !== 6) continue;
+          const standable = [
+            [x + 1, y],
+            [x - 1, y],
+            [x, y + 1],
+            [x, y - 1],
+          ].some(
+            ([ax, ay]) =>
+              level.grid[ay]?.[ax] === 0 && reach.has(`${ax},${ay}`),
+          );
+          if (!standable) blocked.push(`${x},${y}`);
+        }
+      }
+      expect(blocked).toEqual([]);
+    });
+  },
+);
+
+describe("runtime nudge safety net", () => {
+  it("never has to fall back to a wall position", () => {
+    const stranded = [];
+    CAMPAIGN_MAPS.forEach((level, i) => {
+      for (const e of level.entities || []) {
+        const pos = validatePropPosition(
+          Math.floor(e.x),
+          Math.floor(e.y),
+          level.grid,
+          level.width,
+          level.height,
+        );
+        if (!pos) stranded.push(`${i}:${label(e)}`);
+      }
+    });
+    expect(stranded).toEqual([]);
+  });
+});
+
+describe("prop coverage", () => {
+  it("every prop placed by a level has a renderer", async () => {
+    const [{ PROP_SPRITES }, levels] = await Promise.all([
+      import("../../src/rendering/svg-art/sprites/props.js"),
+      import("../../src/data/levels/campaign.js"),
+    ]);
+    const placed = new Set();
+    for (const lvl of levels.campaignMaps()) {
+      for (const p of lvl.props || []) placed.add(p.type);
+    }
+    // A prop with no sprite draws nothing and fails silently in both paths.
+    const missing = [...placed].filter((t) => !PROP_SPRITES[t]);
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("level composition", () => {
+  it("does not run every level along the same axis", () => {
+    // Eight of nine used to start on the exact same tile and exit due north.
+    const starts = new Set(
+      CAMPAIGN_MAPS.map((l) => `${l.playerStart.x},${l.playerStart.y}`),
+    );
+    expect(starts.size).toBeGreaterThanOrEqual(4);
+
+    // Bucket the start->exit heading into compass quadrants.
+    const axes = new Set();
+    for (const l of CAMPAIGN_MAPS) {
+      if (!l.exit) continue;
+      const dx = l.exit.x - l.playerStart.x;
+      const dy = l.exit.y - l.playerStart.y;
+      axes.add(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N");
+    }
+    expect(axes.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it("faces the player into the level on arrival", () => {
+    for (const l of CAMPAIGN_MAPS) {
+      if (!l.exit) continue;
+      const toExit = Math.atan2(l.exit.y - l.playerStart.y, l.exit.x - l.playerStart.x);
+      let off = (l.playerStart.dir ?? 0) - toExit;
+      while (off > Math.PI) off -= Math.PI * 2;
+      while (off < -Math.PI) off += Math.PI * 2;
+      // Within a quarter turn of the way out — not necessarily straight at it.
+      expect(Math.abs(off), `${l.name} faces away from its exit`).toBeLessThan(Math.PI / 2 + 0.01);
+    }
+  });
+});

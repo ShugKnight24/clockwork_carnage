@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 124 124" role="img" aria-labelledby="t d">
+<title id="t">Clockwork Carnage</title><desc id="d">Alternative: a clock face torn at eleven o'clock. Comic style.</desc>
+<defs>
+    <pattern id="dots" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="3.5" cy="3.5" r="1.4" fill="#04060b" opacity="0.18"/>
+    </pattern>
+    <filter id="rift" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3"/></filter>
+    <linearGradient id="steelC" x1="0" y1="-50" x2="0" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9fb6cb"/><stop offset=".5" stop-color="#6f8aa3"/><stop offset="1" stop-color="#3a4d61"/>
+    </linearGradient></defs>
+<rect width="124" height="124" rx="14.879999999999999" fill="#f3e9cf"/><rect width="124" height="124" rx="14.879999999999999" fill="url(#dots)"/><g transform="translate(60 60)"><path d="M-22 -38.11L-10.49 -30.22L-14.65 -13.33L2.08 -8.44L-2.08 8.44L14.65 13.33L10.49 30.22L22 38.11" fill="none" stroke="#9b5cff" stroke-width="12" opacity=".85" filter="url(#rift)"/>
+      <g transform="translate(5 6)" fill="#04060b"><path d="M-22 -38.11L-10.49 -30.22L-14.65 -13.33L2.08 -8.44L-2.08 8.44L14.65 13.33L10.49 30.22L22 38.11A44 44 0 0 1 -22 -38.11Z"/><g transform="translate(7 5) rotate(6)"><path d="M22 38.11L10.49 30.22L14.65 13.33L-2.08 8.44L2.08 -8.44L-14.65 -13.33L-10.49 -30.22L-22 -38.11A44 44 0 0 1 22 38.11Z"/></g></g>
+      <path d="M-22 -38.11L-10.49 -30.22L-14.65 -13.33L2.08 -8.44L-2.08 8.44L14.65 13.33L10.49 30.22L22 38.11A44 44 0 0 1 -22 -38.11Z" fill="#f3e9cf" stroke="#04060b" stroke-width="4" stroke-linejoin="round"/>
+      <g transform="translate(7 5) rotate(6)"><path d="M22 38.11L10.49 30.22L14.65 13.33L-2.08 8.44L2.08 -8.44L-14.65 -13.33L-10.49 -30.22L-22 -38.11A44 44 0 0 1 22 38.11Z" fill="#ff2a4a" stroke="#04060b" stroke-width="4" stroke-linejoin="round"/><path d="M22 38.11L10.49 30.22L14.65 13.33L-2.08 8.44L2.08 -8.44L-14.65 -13.33L-10.49 -30.22L-22 -38.11A44 44 0 0 1 22 38.11Z" fill="url(#dots)"/></g>
+      <path d="M0 -36L0 -30M18 -31.18L20 -34.64M31.18 -18L34.64 -20M36 0L30 0M31.18 18L34.64 20M18 31.18L20 34.64M0 36L0 30M-18 31.18L-20 34.64M-31.18 18L-34.64 20M-36 0L-30 0M-31.18 -18L-34.64 -20M-18 -31.18L-20 -34.64" stroke="#04060b" stroke-width="3" stroke-linecap="round"/>
+      <line x1="0" y1="0" x2="-10" y2="-17.32" stroke="#04060b" stroke-width="6" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="-30" stroke="#04060b" stroke-width="6" stroke-linecap="round"/><line x1="-7.31" y1="3.25" x2="34.71" y2="-15.46" stroke="#04060b" stroke-width="5" stroke-linecap="round"/><line x1="-7.31" y1="3.25" x2="34.71" y2="-15.46" stroke="#ff2a4a" stroke-width="2.4" stroke-linecap="round"/><circle r="4.5" fill="#ffae3a" stroke="#04060b" stroke-width="2.5"/></g>
+</svg>

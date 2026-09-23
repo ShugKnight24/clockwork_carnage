@@ -1,0 +1,137 @@
+import { describe, it, expect } from "vitest";
+import { World } from "../../src/world/world.js";
+import { generateWorld } from "../../src/world/world-gen.js";
+import { PLAYER } from "../../src/world/voxel-physics.js";
+import { ART_LEGACY, ART_MODERN, ART_REALISTIC } from "../../src/rendering/art-style.js";
+import { styleName, camFromPlayer, spawnFromMeta, standableNear } from "../../src/systems/voxel-glue.js";
+
+/** Flat world: solid up to z=31, so a standing spawn has its feet at 32. */
+const flat = () => generateWorld({ terrain: false });
+
+describe("styleName", () => {
+  it("maps every art style id to a renderer style", () => {
+    expect(styleName(ART_LEGACY)).toBe("legacy");
+    expect(styleName(ART_MODERN)).toBe("comic");
+    expect(styleName(ART_REALISTIC)).toBe("modern");
+  });
+});
+
+describe("camFromPlayer", () => {
+  it("puts the eye above the feet and follows the crouch blend", () => {
+    const player = { x: 10.5, y: 20.5, z: 32, angle: 1.25, pitch: -0.4 };
+    const cam = camFromPlayer(player, { fov: 90 });
+    expect(cam).toEqual({ x: 10.5, y: 20.5, z: 32 + PLAYER.eye, yaw: 1.25, pitch: -0.4, fovDeg: 90 });
+
+    expect(camFromPlayer({ ...player, crouchBlend: 1 }, { fov: 90 }).z).toBeCloseTo(32 + PLAYER.crouchEye);
+    // Half-way through the blend the eye sits half-way between the two heights.
+    expect(camFromPlayer({ ...player, crouchBlend: 0.5 }, { fov: 90 }).z).toBeCloseTo(
+      32 + (PLAYER.eye + PLAYER.crouchEye) / 2,
+    );
+    // An effective FOV (ADS, sprint) overrides the settings default.
+    expect(camFromPlayer(player, { fov: 90 }, 55).fovDeg).toBe(55);
+  });
+});
+
+describe("spawnFromMeta", () => {
+  it("uses the world's own spawn when a player fits there", () => {
+    const world = flat();
+    world.meta.spawn = { x: 64.5, y: 64.5, z: 32, yaw: 1.5 };
+    expect(spawnFromMeta(world)).toEqual({ x: 64.5, y: 64.5, z: 32, yaw: 1.5 });
+  });
+
+  it("falls back to the nearest standable column top when the spawn is buried", () => {
+    const world = flat();
+    world.meta.spawn = { x: 64.5, y: 64.5, z: 32, yaw: 0.5 };
+    // Bury the spawn column and its whole 3x3 neighbourhood head-high.
+    for (let y = 63; y <= 65; y++) {
+      for (let x = 63; x <= 65; x++) {
+        for (let z = 32; z < 34; z++) world.set(x, y, z, 1);
+      }
+    }
+    // The nearest column is the buried one itself — stand on top of it.
+    expect(spawnFromMeta(world)).toEqual({ x: 64.5, y: 64.5, z: 34, yaw: 0.5 });
+
+    // Cap that column to the world roof and the search steps off it instead.
+    for (let z = 34; z < World.H; z++) world.set(64, 64, z, 1);
+    const spawn = spawnFromMeta(world);
+    expect(spawn.z).toBe(34);
+    expect(Math.hypot(spawn.x - 64.5, spawn.y - 64.5)).toBeLessThanOrEqual(1.5); // a ring-1 neighbour
+  });
+
+  it("returns null when there is nowhere to stand", () => {
+    const world = new World(); // all air: no column has a floor
+    expect(spawnFromMeta(world)).toBeNull();
+    expect(spawnFromMeta(null)).toBeNull();
+  });
+});
+
+describe("standableNear", () => {
+  it("keeps a cell that already has standing room", () => {
+    const world = flat();
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 32 });
+  });
+
+  it("climbs the column when a block has been dropped on the marker", () => {
+    const world = flat();
+    world.set(40, 40, 32, 1); // a builder placed a block over the spawn
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 33 });
+
+    world.set(40, 40, 33, 1); // and another on top of that
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 34 });
+  });
+
+  it("steps to a neighbouring column when its own is full to the roof", () => {
+    const world = flat();
+    for (let z = 32; z < World.H; z++) world.set(40, 40, z, 1);
+    const at = standableNear(world, 40.5, 40.5, 32);
+    expect(at.z).toBe(32);
+    expect(Math.hypot(at.x - 40.5, at.y - 40.5)).toBeLessThanOrEqual(1.5);
+  });
+
+  it("takes the body's own size, so a wider body needs a wider gap", () => {
+    const world = flat();
+    // A one-block slot: air at (40, 40, 32), walled on every side.
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let z = 32; z < 35; z++) world.set(40 + dx, 40 + dy, z, 1);
+    }
+    expect(standableNear(world, 40.5, 40.5, 32)).toEqual({ x: 40.5, y: 40.5, z: 32 });
+    // Half a block wider than the slot: the search has to leave it.
+    const wide = standableNear(world, 40.5, 40.5, 32, 0.6, PLAYER.height);
+    expect(wide).not.toEqual({ x: 40.5, y: 40.5, z: 32 });
+  });
+
+  it("returns null when nothing within reach has a floor", () => {
+    expect(standableNear(new World(), 40.5, 40.5, 32)).toBeNull();
+  });
+
+  it("never stands a body on the bed of a pool, but on the dry bank beside it", () => {
+    const world = flat();
+    // A pool 7 across and 3 deep round (40, 40), its bed at z = 28.
+    for (let y = 37; y <= 43; y++) for (let x = 37; x <= 43; x++) for (let z = 29; z <= 31; z++) world.set(x, y, z, 19);
+    const at = standableNear(world, 40.5, 40.5, 29);
+    expect(at).not.toBeNull();
+    expect(at.z).toBe(32);
+    expect(Math.max(Math.abs(at.x - 40.5), Math.abs(at.y - 40.5))).toBe(4);
+    expect(world.get(Math.floor(at.x), Math.floor(at.y), 31)).toBe(11);
+  });
+});
+
+describe("spawn fallbacks read the world's bounds", () => {
+  it("falls back to the centre of the bounds when a world has no spawn", () => {
+    const w = new World({ bounds: { x0: -64, y0: -64, x1: 0, y1: 0 } });
+    for (let y = -64; y < 0; y++) for (let x = -64; x < 0; x++) w.set(x, y, 10, 1);
+    w.meta.spawn = null;
+    expect(spawnFromMeta(w)).toEqual({ x: -31.5, y: -31.5, z: 11, yaw: 0 });
+  });
+
+  it("never picks a cell outside the bounds", () => {
+    const w = new World({ bounds: { x0: -16, y0: 0, x1: 0, y1: 16 } });
+    // Only the edge column has ground; the search must not step off the world to find more.
+    for (let y = 0; y < 16; y++) w.set(-1, y, 10, 1);
+    const at = standableNear(w, -1.5, 8.5, 30);
+    expect(at).not.toBeNull();
+    expect(at.x).toBe(-0.5); // the only column with ground, not one past the edge
+    expect(at.z).toBe(11);
+    expect(Math.abs(at.y - 8.5)).toBeLessThanOrEqual(1);
+  });
+});

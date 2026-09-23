@@ -10,24 +10,20 @@ archive/
 # Generated changelog reports
 .changelog/
 
-# Dev scripts
-scripts/
+# Dev scripts. The brand generator is the exception: assets/brand is built
+# from it and can only be regenerated with it.
+scripts/*
+!scripts/brand/
 
-# Testing
-js/testing/
-
-# Playwright / automation engine
-tests/
+# Playwright / automation engine — output only. The specs, the debug bridge,
+# the config and package.json are tracked so a clone can install and run them.
 playwright-report/
 test-results/
-playwright.config.*
 screenshots/
 .playwright/
 
-# Node tooling (npm/Playwright deps)
+# Node tooling
 node_modules/
-package.json
-package-lock.json
 
 # Telemetry & simulation data
 telemetry/
@@ -41,3 +37,17 @@ js/editor/
 
 # Untracked game prototypes (experimental, not part of Clockwork Carnage)
 prototypes/
+
+# Local dev tools and temporary files
+tools/
+tmp_grid.txt
+
+# Documentation artifact (should be untracked)
+docs/WEAPONS_ENEMIES.md
+weapons_enemies.md
+
+# Playwright MCP session data
+.playwright-mcp/
+
+# Loose capture PNGs dropped at the repo root by manual test runs
+/*.png

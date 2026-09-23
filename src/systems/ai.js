@@ -1,0 +1,811 @@
+// ─── AI System ──────────────────────────────────────────────────────────────
+// Enemy state machine: idle/patrol → chase → windup → attack.
+// The windup is the attack telegraph: the enemy plants, faces the player and
+// renders a warning before the hit resolves (see renderer drawEnemy).
+// Sub-boss abilities: summon, chrono-bomb, teleport/leap, shield regen, HUD disrupt.
+// Boss special abilities: charge, stomp, missile spread, warp.
+// The Hound: a beast's lunge with a long tell, and quill volleys (a bristle,
+// then a fan of slow quills) that land whether or not it is phased.
+// Chrono-bomb fuse + detonation.
+// Chronos: an enemy standing in a Time-Lock's slab runs at a tenth, and a
+// Rewind echo draws every enemy nearer to it than to the player (ctx.chrono).
+// Each enemy exposes its movement intent (`_moveAngle`, `_moveSpeed`) for
+// Foresight's ghosts.
+//
+// ─── TIMER CONVENTION ───────────────────────────────────────────────────────
+// • `dt` (seconds): The clamped game.deltaTime (≤0.033s). Used for movement,
+//   decay timers, and anything that multiplies by dt directly.
+// • `time` (ms): Sim-time in milliseconds (game.time). Used for cooldown
+//   comparisons: `time - e.lastAttackTime > scaledAttackRate`.
+// • Enemy internal timers (`painTimer`, `_summonTimer`, `_bombTimer`,
+//   `_teleportTimer`, `_supportTimer`, `_windupLeftMs`): All in MILLISECONDS. They tick
+//   via `+= dt * 1000` or `-= enemyDt * 1000` to stay in ms.
+// • `attackRate` in enemy defs: MILLISECONDS (e.g. 1000 = 1s between shots).
+// ────────────────────────────────────────────────────────────────────────────
+import { isPassable, hasLineOfSight, EYE_Z, playerEyeZ } from "./physics.js";
+import { Enemy, Projectile } from "../../js/entities.js";
+import { updateForm2, recordShot } from "./boss-form2.js";
+import {
+  ENEMY_MELEE_WINDUP_MS,
+  ENEMY_RANGED_WINDUP_MS,
+  ENEMY_MELEE_WHIFF_SLACK,
+} from "../constants.js";
+
+/** Telegraph length for an enemy def, in ms. */
+export function attackWindupMs(def) {
+  if (Number.isFinite(def?.attackWindupMs)) return def.attackWindupMs;
+  return def?.attackType === "ranged"
+    ? ENEMY_RANGED_WINDUP_MS
+    : ENEMY_MELEE_WINDUP_MS;
+}
+
+/**
+ * Enter the telegraph. The attack cooldown starts here, so the windup sits
+ * inside the existing attackRate and overall damage output is unchanged.
+ * Exported so the voxel AI telegraphs attacks on exactly the same clock.
+ */
+export function beginWindup(e, time) {
+  const ms = attackWindupMs(e.def);
+  e.state = "windup";
+  e.stateTime = 0;
+  e._windupTotalMs = ms;
+  e._windupLeftMs = ms;
+  e.lastAttackTime = time;
+}
+
+/**
+ * The directions of a quill volley: `count` quills spread evenly across
+ * `spread` radians, centred on the aim. Pure, so the telegraph can draw the
+ * fan the volley will follow.
+ * @param {{ count: number, spread: number }} q - a def's `quills`
+ * @param {number} aim - radians
+ */
+export function quillFan(q, aim) {
+  const n = Math.max(1, q.count);
+  if (n === 1) return [aim];
+  return Array.from({ length: n }, (_, i) => aim - q.spread / 2 + (q.spread * i) / (n - 1));
+}
+
+/**
+ * @typedef {{
+ *   entities: Array, player: Object, map: number[][],
+ *   time: number, timeScale: number,
+ *   projectiles: Array, chronoBombs: Array, damageNumbers: Array,
+ *   audio: Object,
+ * }} AIContext
+ *
+ * @typedef {{
+ *   damagePlayerCalls: Array<{damage: number, attacker?: Object}>,
+ *   screenShake: number,
+ *   hudDisabledUntil: number | null,
+ *   ariaMessages: string[],
+ *   totalEnemiesAdded: number,
+ * }} AIEffects
+ */
+
+export class AISystem {
+  /**
+   * @param {AIContext} ctx
+   * @param {number} dt
+   * @returns {AIEffects}
+   */
+  update(ctx, dt) {
+    const {
+      entities,
+      player,
+      map,
+      time,
+      timeScale,
+      projectiles,
+      chronoBombs,
+      damageNumbers,
+      audio,
+      chrono,
+    } = ctx;
+    const echo = chrono?.echo ?? null;
+    const fx = {
+      damagePlayerCalls: [],
+      screenShake: 0,
+      hudDisabledUntil: null,
+      ariaMessages: [],
+      totalEnemiesAdded: 0,
+    };
+
+    // Tick dissolve timers for dying enemies
+    for (let i = entities.length - 1; i >= 0; i--) {
+      const e = entities[i];
+      if (e.dissolving) {
+        e.dissolveTimer -= dt;
+        if (e.dissolveTimer <= 0) {
+          e.dissolving = false;
+          e.active = false;
+        }
+      }
+    }
+
+    for (const e of entities) {
+      if (e.type !== "enemy" || !e.active || e.dissolving) continue;
+      // The Final Form's stopped time holds everyone else, and drives him.
+      if (chrono?.frozen?.(e)) continue;
+
+      // Enemy-specific chrono scale
+      const chronoMult = Number.isFinite(e.chronoMultiplier)
+        ? e.chronoMultiplier
+        : Number.isFinite(e.def?.chronoMultiplier)
+          ? e.def.chronoMultiplier
+          : 0.15;
+      const enemyDt = (player.chronoActive ? dt * chronoMult : dt) * (chrono?.enemyTimeScale(e) ?? 1);
+
+      // The echo decoy pulls whoever is nearer to it than to the player.
+      const toEcho =
+        !!echo && Math.hypot(echo.x - e.x, echo.y - e.y) < Math.hypot(player.x - e.x, player.y - e.y);
+      const target = toEcho ? echo : player;
+      const dx = target.x - e.x;
+      const dy = target.y - e.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ai = e.def.ai || "chase";
+
+      // Form 2's Counter-shift and Replay (src/systems/boss-form2.js). Before
+      // the pain state: a hit does not loosen his hold on your shift, and a
+      // replay does not wait for you to stop shooting.
+      if (e.def.counterShift || e.def.replay) {
+        updateForm2(e, {
+          dt: enemyDt,
+          realDt: timeScale > 0 ? dt / timeScale : dt,
+          player,
+          projectiles,
+          entities,
+          damageNumbers,
+          audio,
+          fx,
+        });
+      }
+
+      // Pain state. Ordinary hits pause a telegraphed attack; a crit, headshot
+      // or EMP (which set _staggered) cancels it. Without that distinction any
+      // weapon firing faster than the windup would stun-lock melee enemies.
+      if (e.painTimer > 0) {
+        e.painTimer -= enemyDt * 1000;
+        if (e.painTimer <= 0) {
+          if (!e._staggered && e._windupLeftMs > 0) {
+            e.state = "windup";
+          } else {
+            e._windupLeftMs = 0;
+            e.state = "chase";
+          }
+          e._staggered = false;
+        }
+        continue;
+      }
+
+      // EMP-disabled
+      if (e._empDisabledUntil && time < e._empDisabledUntil) continue;
+
+      e.stateTime += enemyDt;
+
+      // ── Idle ──
+      if (e.state === "idle") {
+        if (ai === "patrol") this._patrolWander(e, enemyDt, map);
+        if (
+          dist < e.alertRange &&
+          hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))
+        ) {
+          e.state = "chase";
+          e.stateTime = 0;
+          e.lastAttackTime = time; // prevents instant first shot
+          audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), dist);
+        }
+      }
+
+      // ── Chase ──
+      if (e.state === "chase") {
+        const angle = Math.atan2(dy, dx);
+        e.angle = angle;
+
+        // Beast charge ability (telegraph → sprint → impact)
+        this._updateBeastCharge(e, enemyDt, dist, angle, player, map, fx);
+        // The Hound's quills (telegraph → a fan of rounds, twice when hurt)
+        if (e.def.quills) this._updateQuills(e, enemyDt, dist, target, player, map, projectiles, entities, audio);
+
+        // Movement gate: normally stop inside attackRange, but strafe_fire / erratic
+        // keep moving to create combat dynamism. Charging beast is controlled separately.
+        const inAttackBand = dist <= e.def.attackRange * 0.8;
+        const keepMoving = ai === "strafe_fire" || ai === "erratic";
+        const charging = e._chargeState === "sprint";
+        // The Hound plants its feet while its quills stand up, and while it
+        // coils for a lunge (the lane it drew starts where it stands).
+        const bristling = e._quillState === "bristle" || (e.def.lungeLock && e._chargeState === "windup");
+        const shouldMove = !charging && !bristling && (!inAttackBand || keepMoving);
+        e._moveSpeed = 0;
+
+        if (shouldMove) {
+          let moveAngle = angle;
+          let moveSpeed = e.speed;
+
+          if (ai === "flanker") {
+            const strafeDir = Math.floor(e.x * 7 + e.y * 13) % 2 ? 1 : -1;
+            const strafeFactor = Math.min(1, dist / (e.def.attackRange * 1.5));
+            moveAngle = angle + strafeDir * strafeFactor * 1.05;
+            moveSpeed *= 1.1;
+          } else if (ai === "strafe_fire") {
+            // Orbit perpendicular to player while maintaining attackRange band
+            if (e._orbitDir == null)
+              e._orbitDir = Math.floor(e.x * 11 + e.y * 17) % 2 ? 1 : -1;
+            if (e._orbitFlipTimer == null)
+              e._orbitFlipTimer = 2 + Math.random() * 2;
+            e._orbitFlipTimer -= enemyDt;
+            if (e._orbitFlipTimer <= 0) {
+              e._orbitDir *= -1;
+              e._orbitFlipTimer = 2 + Math.random() * 2;
+            }
+            const bandTarget = e.def.attackRange * 0.7;
+            const radial = dist > bandTarget ? 0 : Math.PI; // push out if too close
+            const tangent = e._orbitDir * Math.PI * 0.5;
+            moveAngle =
+              dist < bandTarget * 0.75 ? angle + radial : angle + tangent;
+            moveSpeed *= 0.9;
+          } else if (ai === "erratic") {
+            // Jitter angle + occasional sudden dodge
+            if (e._jitterTimer == null) e._jitterTimer = 0;
+            if (e._dodgeTimer == null) e._dodgeTimer = 1 + Math.random() * 2;
+            e._jitterTimer -= enemyDt;
+            e._dodgeTimer -= enemyDt;
+            if (e._jitterTimer <= 0) {
+              e._jitterOffset = (Math.random() - 0.5) * 1.4;
+              e._jitterTimer = 0.15 + Math.random() * 0.2;
+            }
+            if (e._dodgeTimer <= 0) {
+              e._dodgeOffset = (Math.random() < 0.5 ? -1 : 1) * (Math.PI * 0.5);
+              e._dodgeDuration = 0.25;
+              e._dodgeTimer = 1.5 + Math.random() * 2;
+            }
+            if (e._dodgeDuration > 0) {
+              moveAngle = angle + (e._dodgeOffset || 0);
+              e._dodgeDuration -= enemyDt;
+              moveSpeed *= 1.3;
+            } else {
+              moveAngle = angle + (e._jitterOffset || 0);
+            }
+          } else if (ai === "ambush") {
+            if (e.stateTime < 2) moveSpeed *= 1.8;
+          } else if (ai === "guard") {
+            // Hold position — back away if player gets too close
+            if (dist < e.def.attackRange * 0.5) {
+              moveAngle = angle + Math.PI;
+              moveSpeed *= 0.6;
+            } else {
+              moveSpeed = 0;
+            }
+          } else if (ai === "swarm") {
+            // Orbit-strafe around player
+            const orbitDir = Math.floor(e.x * 3 + e.y * 7) % 2 ? 1 : -1;
+            moveAngle = angle + orbitDir * Math.PI * 0.45;
+            moveSpeed *= 1.2;
+          } else if (ai === "support") {
+            // Maintain range — retreat if too close, cautious approach otherwise
+            if (dist < e.def.attackRange * 0.6) {
+              moveAngle = angle + Math.PI;
+              moveSpeed *= 0.8;
+            } else if (dist > e.def.attackRange * 0.9) {
+              moveSpeed *= 0.6;
+            } else {
+              moveSpeed = 0;
+            }
+          } else if (ai === "teleport_strike" || ai === "teleport_melee") {
+            // Cautious creep between teleports
+            moveSpeed *= 0.5;
+          }
+
+          e._moveAngle = moveAngle;
+          e._moveSpeed = moveSpeed;
+          const speed = moveSpeed * enemyDt;
+          const newX = e.x + Math.cos(moveAngle) * speed;
+          const newY = e.y + Math.sin(moveAngle) * speed;
+          const margin = 0.3;
+          const mx = Math.cos(moveAngle) >= 0 ? margin : -margin;
+          const my = Math.sin(moveAngle) >= 0 ? margin : -margin;
+          if (
+            isPassable(map, Math.floor(newX + mx), Math.floor(e.y)) &&
+            isPassable(map, Math.floor(newX + mx), Math.floor(e.y + margin)) &&
+            isPassable(map, Math.floor(newX + mx), Math.floor(e.y - margin))
+          ) {
+            e.x = newX;
+          }
+          if (
+            isPassable(map, Math.floor(e.x), Math.floor(newY + my)) &&
+            isPassable(map, Math.floor(e.x + margin), Math.floor(newY + my)) &&
+            isPassable(map, Math.floor(e.x - margin), Math.floor(newY + my))
+          ) {
+            e.y = newY;
+          }
+        }
+
+        // Attack if in range
+        const chronoAttackScale =
+          player.chronoActive && chronoMult > 0 ? chronoMult : 1;
+        const scaledAttackRate =
+          e.def.attackRate / timeScale / chronoAttackScale;
+        if (
+          dist < e.def.attackRange &&
+          time - e.lastAttackTime > scaledAttackRate
+        ) {
+          if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
+            beginWindup(e, time);
+          }
+        }
+      }
+
+      // ── Windup (telegraph) ──
+      if (e.state === "windup") {
+        e.angle = Math.atan2(dy, dx); // keep tracking the player while winding up
+        // `|| 0` guards a windup restored from a save without its timer.
+        e._windupLeftMs = (e._windupLeftMs || 0) - enemyDt * 1000;
+        if (e._windupLeftMs <= 0) {
+          e._windupLeftMs = 0;
+          e.state = "attack";
+          e.stateTime = 0;
+        }
+      }
+
+      // ── Attack ──
+      if (e.state === "attack") {
+        if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
+          if (e.def.attackType === "ranged") {
+            const angle = Math.atan2(target.y - e.y, target.x - e.x);
+            const proj = new Projectile(
+              e.x + Math.cos(angle) * 0.4,
+              e.y + Math.sin(angle) * 0.4,
+              Math.cos(angle),
+              Math.sin(angle),
+              e.def.damage,
+              e.def.projectileSpeed || 6,
+              "enemy",
+            );
+            proj.color = e.def.color1;
+            projectiles.push(proj);
+            entities.push(proj);
+            if (e.def.replay) recordShot(e, proj);
+            audio.enemyShoot(
+              audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
+            );
+          } else if (dist <= e.def.attackRange * ENEMY_MELEE_WHIFF_SLACK) {
+            // A swing at the echo lands on nothing. A phased Hound's swing still
+            // lands: "Its attacks still land and still telegraph" (story spec §6).
+            if (!toEcho) fx.damagePlayerCalls.push({ damage: e.def.damage, attacker: e });
+          }
+          // else: the player stepped out during the telegraph — the swing whiffs.
+        }
+        e.state = "chase";
+        e.stateTime = 0;
+      }
+
+      // ── Sub-boss abilities ──
+
+      // Summoner
+      if (e.def.summonType && e.state !== "dead") {
+        e._summonTimer = (e._summonTimer || 0) + dt * 1000;
+        if (e._summonTimer >= e.def.summonInterval) {
+          e._summonTimer = 0;
+          const summonCount = entities.filter(
+            (s) =>
+              s.type === "enemy" &&
+              s.active &&
+              s._summoned &&
+              s.state !== "dead",
+          ).length;
+          if (summonCount < (e.def.summonMax || 3)) {
+            const sAngle = Math.random() * Math.PI * 2;
+            const sx = e.x + Math.cos(sAngle) * 1.5;
+            const sy = e.y + Math.sin(sAngle) * 1.5;
+            if (isPassable(map, Math.floor(sx), Math.floor(sy))) {
+              const summon = new Enemy(sx, sy, e.def.summonType);
+              summon._summoned = true;
+              entities.push(summon);
+              fx.totalEnemiesAdded++;
+            }
+          }
+        }
+      }
+
+      // Chrono-Bomber
+      if (e.def.dropsBombs && e.state === "chase") {
+        e._bombTimer = (e._bombTimer || 0) + dt * 1000;
+        if (e._bombTimer >= 4000) {
+          e._bombTimer = 0;
+          chronoBombs.push({
+            x: e.x,
+            y: e.y,
+            radius: e.def.bombRadius || 2.0,
+            damage: e.def.bombDamage || 25,
+            fuseLife: 0,
+            fuseDuration: 1.5,
+            active: true,
+          });
+        }
+      }
+
+      // Teleport / leap
+      if (e.state !== "dead") {
+        if (e.def.teleportCooldown || e.def.leapDistance) {
+          e._teleportTimer = e._teleportTimer || 0;
+          e._teleportTimer += dt * 1000;
+          const cooldown = e.def.teleportCooldown || 3000;
+          if (e._teleportTimer >= cooldown) {
+            e._teleportTimer = 0;
+            if (dist > (e.def.attackRange || 2) * 0.8 && dist < 30) {
+              const atp = Math.atan2(player.y - e.y, player.x - e.x);
+              const leapDist =
+                e.def.leapDistance || Math.max(1.5, e.def.attackRange || 3);
+              const tx = player.x - Math.cos(atp) * Math.min(1.5, leapDist);
+              const ty = player.y - Math.sin(atp) * Math.min(1.5, leapDist);
+              if (isPassable(map, Math.floor(tx), Math.floor(ty))) {
+                e.x = tx;
+                e.y = ty;
+                // Land into a telegraph. Striking the tick after teleporting
+                // gave the player no window to react to a 22-30 damage hit.
+                beginWindup(e, time);
+                fx.screenShake = Math.max(fx.screenShake, 2);
+                audio.enemyHit(
+                  audio.calculatePan(
+                    e.x,
+                    e.y,
+                    player.x,
+                    player.y,
+                    player.angle,
+                  ),
+                  Math.hypot(e.x - player.x, e.y - player.y),
+                );
+              }
+            }
+          }
+        }
+
+        // Shield regen
+        if (e.def.shieldRegen) {
+          if (e._shieldMax == null) {
+            e._shieldMax =
+              e.def.shieldMax || Math.max(20, Math.floor(e.def.health * 0.25));
+            e._shield = e._shieldMax;
+          }
+          e._shield = Math.min(
+            e._shieldMax,
+            (e._shield || 0) + (e.def.shieldRegenRate || 2) * dt,
+          );
+        }
+
+        // HUD disrupt
+        if (e.def.disablesHUD) {
+          e._supportTimer = (e._supportTimer || 0) + dt * 1000;
+          if (e._supportTimer >= (e.def.supportInterval || 8500)) {
+            e._supportTimer = 0;
+            fx.hudDisabledUntil = time + (e.def.disableDuration || 3000);
+            fx.ariaMessages.push("hudDisrupted");
+          }
+        }
+
+        // ── Boss specials ──
+        this._updateBoss(
+          e,
+          dt,
+          dist,
+          player,
+          map,
+          projectiles,
+          entities,
+          damageNumbers,
+          audio,
+          fx,
+        );
+      }
+    }
+
+    // Chrono-bomb fuse + detonation
+    for (const bomb of chronoBombs) {
+      if (!bomb.active || chrono?.timeStopped?.()) continue;
+      bomb.fuseLife += dt;
+      if (bomb.fuseLife >= bomb.fuseDuration) {
+        const bdx = player.x - bomb.x;
+        const bdy = player.y - bomb.y;
+        if (bdx * bdx + bdy * bdy < bomb.radius * bomb.radius) {
+          fx.damagePlayerCalls.push({ damage: bomb.damage });
+        }
+        bomb.active = false;
+      }
+    }
+
+    return fx;
+  }
+
+  /** Boss charge / stomp / missiles / warp */
+  _updateBoss(
+    e,
+    dt,
+    dist,
+    player,
+    map,
+    projectiles,
+    entities,
+    damageNumbers,
+    audio,
+    fx,
+  ) {
+    const isBoss =
+      e.enemyType === "boss" ||
+      e.enemyType === "boss_form2" ||
+      e.enemyType === "boss_form3";
+    if (!isBoss || e.state === "dead" || e.dissolving) return;
+
+    const form = e.def.form || 1;
+    e._bossChargeCD = e._bossChargeCD || 0;
+    e._bossStompCD = e._bossStompCD || 0;
+    e._bossMissileCD = e._bossMissileCD || 0;
+    e._bossTeleportCD = e._bossTeleportCD || 0;
+    e._bossChargeCD -= dt * 1000;
+    e._bossStompCD -= dt * 1000;
+    e._bossMissileCD -= dt * 1000;
+    e._bossTeleportCD -= dt * 1000;
+
+    const atp = Math.atan2(player.y - e.y, player.x - e.x);
+
+    // Form 1+: Charge
+    if (form >= 1 && e._bossChargeCD <= 0 && dist > 4 && dist < 20) {
+      e._bossChargeCD = 6000;
+      e._bossCharging = true;
+      e._bossChargeTimer = 0;
+      e._bossChargeDuration = 1.0;
+      e._bossChargeAngle = atp;
+    }
+    if (e._bossCharging) {
+      e._bossChargeTimer += dt;
+      const chargeSpeed = e.speed * 3.5 * dt;
+      const cx = e.x + Math.cos(e._bossChargeAngle) * chargeSpeed;
+      const cy = e.y + Math.sin(e._bossChargeAngle) * chargeSpeed;
+      if (isPassable(map, Math.floor(cx), Math.floor(cy))) {
+        e.x = cx;
+        e.y = cy;
+      }
+      const cdx = player.x - e.x;
+      const cdy = player.y - e.y;
+      if (cdx * cdx + cdy * cdy < 1.5 * 1.5) {
+        fx.damagePlayerCalls.push({ damage: e.def.damage * 1.5, attacker: e });
+        fx.screenShake = Math.max(fx.screenShake, 8);
+        e._bossCharging = false;
+      }
+      if (e._bossChargeTimer >= e._bossChargeDuration) {
+        e._bossCharging = false;
+        fx.screenShake = Math.max(fx.screenShake, 3);
+      }
+    }
+
+    // Form 2+: Stomp
+    if (form >= 2 && e._bossStompCD <= 0 && dist < 5) {
+      e._bossStompCD = 5000;
+      if (dist < 4) {
+        fx.damagePlayerCalls.push({ damage: e.def.damage * 0.8, attacker: e });
+        fx.screenShake = Math.max(fx.screenShake, 12);
+      }
+      damageNumbers.push({
+        x: e.x,
+        y: e.y,
+        value: "STOMP!",
+        crit: true,
+        life: 1.2,
+        vx: (Math.random() - 0.5) * 20,
+      });
+    }
+
+    // Form 2+: Missile spread
+    if (
+      form >= 2 &&
+      e._bossMissileCD <= 0 &&
+      dist > 3 &&
+      dist < e.def.attackRange * 1.2
+    ) {
+      e._bossMissileCD = 4000;
+      for (let m = -1; m <= 1; m++) {
+        const mAngle = atp + m * 0.3;
+        const proj = new Projectile(
+          e.x + Math.cos(mAngle) * 0.5,
+          e.y + Math.sin(mAngle) * 0.5,
+          Math.cos(mAngle),
+          Math.sin(mAngle),
+          e.def.damage * 0.6,
+          7,
+          "enemy",
+        );
+        proj.color = form === 3 ? "#ff2244" : "#e04800";
+        projectiles.push(proj);
+        entities.push(proj);
+        if (e.def.replay) recordShot(e, proj);
+      }
+      audio.enemyShoot(
+        audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
+      );
+    }
+
+    // Form 3: Teleport behind player
+    if (form >= 3 && e._bossTeleportCD <= 0 && dist > 8) {
+      e._bossTeleportCD = 8000;
+      const behind = player.angle + Math.PI;
+      const tx = player.x + Math.cos(behind) * 3;
+      const ty = player.y + Math.sin(behind) * 3;
+      if (isPassable(map, Math.floor(tx), Math.floor(ty))) {
+        e.x = tx;
+        e.y = ty;
+        fx.screenShake = Math.max(fx.screenShake, 5);
+        damageNumbers.push({
+          x: e.x,
+          y: e.y,
+          value: "WARP!",
+          crit: true,
+          life: 1.0,
+          vx: (Math.random() - 0.5) * 20,
+        });
+      }
+    }
+  }
+
+  /**
+   * Beast charge ability — telegraph windup → sprint → impact.
+   * No-op for enemies without `chargeCooldown` in def.
+   */
+  _updateBeastCharge(e, dt, dist, angle, player, map, fx) {
+    const def = e.def;
+    if (!def.chargeCooldown) return;
+    e._chargeCD = (e._chargeCD ?? 0) - dt;
+    e._chargeState = e._chargeState ?? "ready";
+
+    if (e._chargeState === "ready") {
+      if (e._quillState && e._quillState !== "ready") return;
+      if (e._chargeCD <= 0 && dist > def.attackRange && dist < def.sightRange) {
+        e._chargeState = "windup";
+        e._chargeTimer = def.chargeWindup ?? 0.6;
+        e._chargeAngle = angle;
+      }
+      return;
+    }
+
+    if (e._chargeState === "windup") {
+      e._chargeTimer -= dt;
+      // A lane-locked lunge (the Hound) follows you through most of its tell,
+      // then commits: the lane it drew is the lane it runs.
+      if (def.lungeLock && e._chargeTimer > (def.chargeWindup ?? 0.6) * 0.3) e._chargeAngle = angle;
+      if (e._chargeTimer <= 0) {
+        e._chargeState = "sprint";
+        e._chargeTimer = def.chargeDuration ?? 0.9;
+        if (!def.lungeLock) e._chargeAngle = angle; // re-aim at sprint start
+      }
+      return;
+    }
+
+    if (e._chargeState === "sprint") {
+      const spd = e.speed * (def.chargeSpeedMul ?? 3.0) * dt;
+      const nx = e.x + Math.cos(e._chargeAngle) * spd;
+      const ny = e.y + Math.sin(e._chargeAngle) * spd;
+      const margin = 0.3;
+      let hitWall = false;
+      if (
+        isPassable(
+          map,
+          Math.floor(nx + (Math.cos(e._chargeAngle) >= 0 ? margin : -margin)),
+          Math.floor(e.y),
+        )
+      ) {
+        e.x = nx;
+      } else hitWall = true;
+      if (
+        isPassable(
+          map,
+          Math.floor(e.x),
+          Math.floor(ny + (Math.sin(e._chargeAngle) >= 0 ? margin : -margin)),
+        )
+      ) {
+        e.y = ny;
+      } else hitWall = true;
+
+      const pdx = player.x - e.x;
+      const pdy = player.y - e.y;
+      if (pdx * pdx + pdy * pdy < 1.2 * 1.2) {
+        fx.damagePlayerCalls.push({
+          damage: def.damage * (def.chargeDamageMul ?? 1.5),
+          attacker: e,
+        });
+        fx.screenShake = Math.max(fx.screenShake, 6);
+        e._chargeState = "ready";
+        e._chargeCD = def.chargeCooldown;
+        return;
+      }
+      e._chargeTimer -= dt;
+      if (e._chargeTimer <= 0 || hitWall) {
+        e._chargeState = "ready";
+        e._chargeCD = def.chargeCooldown;
+      }
+    }
+  }
+
+  /**
+   * Quill volleys: at range and in sight, the Hound stops and bristles for
+   * `windup` seconds (its ridge stands and runs hot, and the fan it will fire
+   * is drawn on the floor), then fires `count` slow quills across `spread`.
+   * Below half health it fires a second volley straight after the first.
+   * Quills are ordinary enemy rounds: they hit while it is phased, and a
+   * Time-Lock catches them. Timers in seconds (enemy time).
+   */
+  _updateQuills(e, dt, dist, target, player, map, projectiles, entities, audio) {
+    const q = e.def.quills;
+    e._quillState = e._quillState ?? "ready";
+    // It opens with a volley on sight: the first comes a second in.
+    e._quillCD = (e._quillCD ?? 1.2) - dt;
+    if (e._quillState === "ready") {
+      if (e._quillCD > 0 || e._chargeState !== "ready" || e.state !== "chase") return;
+      if (dist < q.minRange || dist > q.maxRange) return;
+      if (!hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) return;
+      e._quillState = "bristle";
+      e._quillTimer = q.windup;
+      e._quillVolleys = e.health < e.maxHealth * 0.5 ? q.volleysHurt : 1;
+      e._quillAim = Math.atan2(target.y - e.y, target.x - e.x);
+      audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan?.(e.x, e.y, player.x, player.y, player.angle) ?? 0, dist);
+      return;
+    }
+    e._quillTimer -= dt;
+    // Tracks you until the last fifth of the tell, then commits.
+    if (e._quillTimer > q.windup * 0.2) e._quillAim = Math.atan2(target.y - e.y, target.x - e.x);
+    e.angle = e._quillAim;
+    if (e._quillTimer > 0) return;
+    for (const a of quillFan(q, e._quillAim)) {
+      const quill = new Projectile(e.x + Math.cos(a) * 0.6, e.y + Math.sin(a) * 0.6, Math.cos(a), Math.sin(a), e.def.quills.damage, q.speed, "enemy");
+      quill.color = "#ffd79a";
+      quill._quill = true;
+      projectiles.push(quill);
+      entities.push(quill);
+    }
+    audio.enemyShoot(audio.calculatePan(e.x, e.y, player.x, player.y, player.angle));
+    e._quillVolleys--;
+    if (e._quillVolleys > 0) {
+      e._quillTimer = q.gap;
+      return;
+    }
+    e._quillState = "ready";
+    e._quillCD = q.cooldown;
+  }
+
+  /** Patrol wander: pick a random direction and drift slowly */
+  _patrolWander(e, dt, map) {
+    if (e._wanderAngle == null) {
+      e._wanderAngle = e.angle;
+      e._wanderTimer = 0;
+    }
+    e._wanderTimer -= dt;
+    if (e._wanderTimer <= 0) {
+      e._wanderAngle += (Math.random() - 0.5) * Math.PI;
+      e._wanderTimer = 1.5 + Math.random() * 2;
+    }
+    const speed = e.speed * 0.35 * dt;
+    const newX = e.x + Math.cos(e._wanderAngle) * speed;
+    const newY = e.y + Math.sin(e._wanderAngle) * speed;
+    const margin = 0.3;
+    const mx = Math.cos(e._wanderAngle) >= 0 ? margin : -margin;
+    const my = Math.sin(e._wanderAngle) >= 0 ? margin : -margin;
+    if (
+      isPassable(map, Math.floor(newX + mx), Math.floor(e.y)) &&
+      isPassable(map, Math.floor(newX + mx), Math.floor(e.y + margin)) &&
+      isPassable(map, Math.floor(newX + mx), Math.floor(e.y - margin))
+    ) {
+      e.x = newX;
+    } else {
+      e._wanderAngle += Math.PI;
+    }
+
+    if (
+      isPassable(map, Math.floor(e.x), Math.floor(newY + my)) &&
+      isPassable(map, Math.floor(e.x + margin), Math.floor(newY + my)) &&
+      isPassable(map, Math.floor(e.x - margin), Math.floor(newY + my))
+    ) {
+      e.y = newY;
+    } else {
+      e._wanderAngle += Math.PI;
+    }
+
+    e.angle = e._wanderAngle;
+  }
+}

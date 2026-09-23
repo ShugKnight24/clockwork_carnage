@@ -3,19 +3,34 @@
  *
  * Left side: Virtual joystick for movement (feeds game.keys)
  * Right side: Touch-drag area for look (feeds game.mouse.dx/dy)
- * Buttons: Fire, Dash, Interact, Chrono Shift, Sprint toggle, Pause
+ * Buttons: Fire, Aim, Dash, Interact, Chrono Shift, Sprint toggle, Pause
  *
  * Self-contained — call TouchControls.init(game) after game is created.
  * Only activates on touch-capable devices.
  */
 
 import { UPGRADES, WEAPONS } from "./data.js";
-import { getVisibleSettings, COMPACT_PHONE_HEIGHT } from "./game.js";
+import { isModernArt } from "../src/rendering/art-style.js";
+import {
+  COMPACT_PHONE_HEIGHT,
+  getVisibleCategories,
+} from "./settings-registry.js";
+import {
+  pauseLayout,
+  settingsLayout,
+  settingsCategoryRects,
+  resolveSettingsHit,
+  upgradeLayout,
+  tutorialMenuLayout,
+} from "./layout.js";
+import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
+import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
 
 export class TouchControls {
   static init(game) {
     // Only activate on touch devices
-    if (!("ontouchstart" in window)) return null;
+    if (!isPrimaryTouchDevice()) return null;
 
     const tc = new TouchControls(game);
     tc.setup();
@@ -41,6 +56,7 @@ export class TouchControls {
 
     // Fire state
     this.fireTouch = null;
+    this.aimTouch = null;
 
     // Layout zones (set on resize)
     this.zones = {};
@@ -60,6 +76,8 @@ export class TouchControls {
 
     // Chrono shift touch tracking
     this.chronoTouch = null;
+    // Crouch touch tracking
+    this.crouchTouch = null;
 
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
@@ -93,6 +111,8 @@ export class TouchControls {
     this.canvas.style.cssText =
       "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:20;pointer-events:none;";
     document.body.appendChild(this.canvas);
+    // resize() applies the DPR transform, so the context must exist first.
+    this.ctx = this.canvas.getContext("2d");
 
     // Create touch-event catcher (above hudCanvas z-index:10, below touch canvas z-index:20)
     this.touchLayer = document.createElement("div");
@@ -102,21 +122,24 @@ export class TouchControls {
     document.body.appendChild(this.touchLayer);
 
     this.resize();
-    window.addEventListener("resize", () => this.resize());
+    this._onResize = () => this.resize();
+    this._onTouchStart = (e) => this.onTouchStart(e);
+    this._onTouchMove = (e) => this.onTouchMove(e);
+    this._onTouchEnd = (e) => this.onTouchEnd(e);
+
+    window.addEventListener("resize", this._onResize);
 
     // Touch events on the touch layer
-    this.touchLayer.addEventListener(
-      "touchstart",
-      (e) => this.onTouchStart(e),
-      { passive: false },
-    );
-    this.touchLayer.addEventListener("touchmove", (e) => this.onTouchMove(e), {
+    this.touchLayer.addEventListener("touchstart", this._onTouchStart, {
       passive: false,
     });
-    this.touchLayer.addEventListener("touchend", (e) => this.onTouchEnd(e), {
+    this.touchLayer.addEventListener("touchmove", this._onTouchMove, {
       passive: false,
     });
-    this.touchLayer.addEventListener("touchcancel", (e) => this.onTouchEnd(e), {
+    this.touchLayer.addEventListener("touchend", this._onTouchEnd, {
+      passive: false,
+    });
+    this.touchLayer.addEventListener("touchcancel", this._onTouchEnd, {
       passive: false,
     });
 
@@ -127,96 +150,31 @@ export class TouchControls {
     document.body.style.cursor = "none";
   }
 
+  destroy() {
+    window.removeEventListener("resize", this._onResize);
+    this.touchLayer.removeEventListener("touchstart", this._onTouchStart);
+    this.touchLayer.removeEventListener("touchmove", this._onTouchMove);
+    this.touchLayer.removeEventListener("touchend", this._onTouchEnd);
+    this.touchLayer.removeEventListener("touchcancel", this._onTouchEnd);
+    this.canvas.remove();
+    this.touchLayer.remove();
+  }
+
   resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.canvas.width = w;
-    this.canvas.height = h;
+    this.canvas.style.width = w + "px";
+    this.canvas.style.height = h + "px";
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     this._updateSafeArea();
-    const sa = this.safeArea;
 
-    // Compact phone detection: landscape phone with short viewport
-    const isCompactPhone = h < COMPACT_PHONE_HEIGHT;
-
-    // Keep joystick radius in sync with viewport
-    this.joyRadius = isCompactPhone ? 45 : 60;
-
-    // Button sizing base — smallest derived target (sprint: 0.55×btnSize×2)
-    // stays ≥ 44px (Apple HIG) thanks to this floor
-    // On compact phones, slightly smaller buttons to avoid crowding
-    const btnSize = isCompactPhone
-      ? Math.max(40, Math.min(46, w * 0.07))
-      : Math.max(44, Math.min(56, w * 0.09));
-    const pad = (isCompactPhone ? 10 : 14) + sa.right;
-    const bottomPad = (isCompactPhone ? 8 : 14) + sa.bottom;
-
-    // Default joystick hint center (shown when no thumb is on left zone)
-    const joyHintX = Math.max(80, 60 + sa.left);
-    const joyHintY = isCompactPhone ? h - 90 - sa.bottom : h - 140 - sa.bottom;
-
-    this.zones = {
-      w,
-      h,
-      btnSize,
-      isCompactPhone,
-      // Hint position for joystick (shown when not touching)
-      joyCenter: { x: joyHintX, y: joyHintY },
-      // Right side buttons — fire is large and accessible, others spaced around it
-      fireBtn: {
-        x: w - pad - btnSize * 1.6,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 1.0
-          : h - bottomPad - btnSize * 1.3,
-        r: btnSize,
-      },
-      dashBtn: {
-        x: w - pad - btnSize * 0.5,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 2.5
-          : h - bottomPad - btnSize * 3.2,
-        r: btnSize * 0.65,
-      },
-      interactBtn: {
-        x: w - pad - btnSize * 2.9,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 2.5
-          : h - bottomPad - btnSize * 3.2,
-        r: btnSize * 0.65,
-      },
-      // Sprint toggle — left side above joystick
-      sprintBtn: {
-        x: Math.max(60, 42 + sa.left),
-        y: isCompactPhone ? h - 170 - sa.bottom : h - 260 - sa.bottom,
-        r: btnSize * 0.55,
-      },
-      // Chrono Shift (time slow) — left side above sprint
-      chronoBtn: {
-        x: Math.max(60, 42 + sa.left),
-        y: isCompactPhone ? h - 240 - sa.bottom : h - 350 - sa.bottom,
-        r: btnSize * 0.6,
-      },
-      // Weapon cycle — left of fire, easily reachable by right thumb
-      weaponBtn: {
-        x: w - pad - btnSize * 3.2,
-        y: isCompactPhone
-          ? h - bottomPad - btnSize * 1.0
-          : h - bottomPad - btnSize * 1.3,
-        r: btnSize * 0.55,
-      },
-      pauseBtn: {
-        x: w - 50 - sa.right,
-        y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 22 : 26,
-      },
-      fullscreenBtn: {
-        x: w - 110 - sa.right,
-        y: (isCompactPhone ? 28 : 40) + sa.top,
-        r: isCompactPhone ? 22 : 26,
-      },
-      // Divider: left quarter = movement, rest = look
-      midX: w * 0.28,
-    };
+    this.zones = touchZones({ w, h, safeArea: this.safeArea });
+    // Keep the joystick radius in sync with the viewport.
+    this.joyRadius = this.zones.isCompactPhone ? 45 : 60;
   }
 
   /** Read CSS custom property safe area insets (iPhone X+ notch, Dynamic Island) */
@@ -237,11 +195,14 @@ export class TouchControls {
 
   hitTest(x, y) {
     const z = this.zones;
-    // Use tighter hit radii than visual radii for buttons
-    // so dragging to look doesn't accidentally trigger buttons
-    const hitShrink = 0.85;
+    // Tighter hit radii than the drawn ones so dragging to look does not
+    // trigger a button. touch-layout floors each radius so the shrunk circle
+    // still clears the 44px minimum target.
+    const hitShrink = HIT_SHRINK;
     if (this.dist(x, y, z.fireBtn.x, z.fireBtn.y) < z.fireBtn.r * hitShrink)
       return "fire";
+    if (this.dist(x, y, z.aimBtn.x, z.aimBtn.y) < z.aimBtn.r * hitShrink)
+      return "aim";
     if (this.dist(x, y, z.dashBtn.x, z.dashBtn.y) < z.dashBtn.r * hitShrink)
       return "dash";
     if (
@@ -254,11 +215,22 @@ export class TouchControls {
       z.chronoBtn.r * hitShrink
     )
       return "chrono";
+    // REWIND and LOCK exist only once the campaign has granted them.
+    const powers = this.game.chronoPowers;
+    if (powers?.has("rewind") && this.dist(x, y, z.rewindBtn.x, z.rewindBtn.y) < z.rewindBtn.r * hitShrink)
+      return "rewind";
+    if (powers?.has("timeLock") && this.dist(x, y, z.lockBtn.x, z.lockBtn.y) < z.lockBtn.r * hitShrink)
+      return "lock";
     if (
       this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) <
       z.sprintBtn.r * hitShrink
     )
       return "sprint";
+    if (
+      this.dist(x, y, z.crouchBtn.x, z.crouchBtn.y) <
+      z.crouchBtn.r * hitShrink
+    )
+      return "crouch";
     if (
       this.dist(x, y, z.weaponBtn.x, z.weaponBtn.y) <
       z.weaponBtn.r * hitShrink
@@ -294,6 +266,11 @@ export class TouchControls {
       return;
     }
 
+    // Settings: a finger on the row list may become a drag-scroll.
+    if (g.state === "settings" && e.changedTouches.length > 0) {
+      this.startSettingsDrag(e.changedTouches[0]);
+    }
+
     // Cutscene: tap to advance, track hold start for skip
     if (g.state === "cutscene") {
       if (e.changedTouches.length > 0) {
@@ -304,7 +281,7 @@ export class TouchControls {
       return;
     }
 
-    // Tutorial completion: route taps to menu items
+    // Tutorial completion: route taps to specific menu items
     if (g.state === "tutorialComplete") {
       if (e.changedTouches.length > 0) {
         this.handleTutorialCompleteTap(e.changedTouches[0]);
@@ -359,6 +336,8 @@ export class TouchControls {
 
     // Character creator: forward taps for tab/item clicks + nav
     if (g.state === "characterCreate") {
+      // Modern mode: the <agent-showroom> overlay takes its own touches.
+      if (isModernArt()) return;
       if (e.changedTouches.length > 0) {
         const t = e.changedTouches[0];
         const w = this.zones.w;
@@ -425,9 +404,7 @@ export class TouchControls {
 
           // If double tapped, but they haven't moved the joystick out of the deadzone
           // we still want to dash. We use true for default to forward.
-          setTimeout(() => {
-            this.triggerDirectionalDash(g, true);
-          }, 0);
+          this.triggerDirectionalDash(g, true);
 
           this.lastTapTime = 0;
         } else {
@@ -445,6 +422,11 @@ export class TouchControls {
         g.player.isFiring = true;
         this.activeButtons.add("fire");
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
+      } else if (zone === "aim" && this.aimTouch === null) {
+        this.aimTouch = touch.identifier;
+        g.player.isAiming = true;
+        this.activeButtons.add("aim");
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "dash") {
         this.activeButtons.add("dash");
         this.triggerDirectionalDash(g, true);
@@ -455,6 +437,17 @@ export class TouchControls {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;
         g.keys[g.keybinds.chronoShift] = true;
+      } else if (zone === "rewind") {
+        this.activeButtons.add("rewind");
+        if (g.chronoRewind() && g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
+      } else if (zone === "lock") {
+        this.activeButtons.add("lock");
+        if (g.chronoLock() && g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
+      } else if (zone === "crouch" && this.crouchTouch === null) {
+        this.activeButtons.add("crouch");
+        this.crouchTouch = touch.identifier;
+        g.keys[g.keybinds.crouch] = true;
+        if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "sprint") {
         this.sprintToggleActive = !this.sprintToggleActive;
         this.activeButtons.add("sprint");
@@ -480,6 +473,13 @@ export class TouchControls {
   onTouchMove(e) {
     e.preventDefault();
 
+    if (this.game.state === "settings") {
+      for (const touch of e.changedTouches) {
+        if (this.moveSettingsDrag(touch)) return;
+      }
+      return;
+    }
+
     // Hold-to-skip is checked every frame in game.js updateCutscene()
     // via this.cutsceneHoldTouch — no need to duplicate here.
 
@@ -492,6 +492,14 @@ export class TouchControls {
         const dx = touch.clientX - this.lookLast.x;
         const dy = touch.clientY - this.lookLast.y;
 
+        // Touch look uses the same reticle path as mouse so visual crosshair
+        // and bullet trajectory stay aligned. Auto-fire only gates firing.
+        let rawSens = Number(this.game.settings.touchSensitivity);
+        if (!Number.isFinite(rawSens)) rawSens = 1.5;
+        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+        this.game.mouse.dx += dx * touchSens;
+        this.game.mouse.dy += dy * touchSens;
+
         // Twin-stick auto-fire handling
         if (this.game.settings.autoFire) {
           const originDx = touch.clientX - this.lookOrigin.x;
@@ -500,10 +508,6 @@ export class TouchControls {
           const deadzone = 20;
 
           if (dist > deadzone) {
-            // Treat the look gesture as a joystick pushing out
-            // Calculate angle directly rather than passing through mouse.dx/dy
-            this.game.player.angle = Math.atan2(originDy, originDx);
-
             // Auto fire
             if (!this.game.player.isFiring) {
               this.game.player.isFiring = true;
@@ -518,13 +522,6 @@ export class TouchControls {
               this.activeButtons.delete("fire");
             }
           }
-        } else {
-          // Standard swipe-to-look (scaled for touch sensitivity from settings)
-          let rawSens = Number(this.game.settings.touchSensitivity);
-          if (!Number.isFinite(rawSens)) rawSens = 1.5;
-          const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
-          this.game.mouse.dx += dx * touchSens;
-          this.game.mouse.dy += dy * touchSens;
         }
 
         this.lookLast.x = touch.clientX;
@@ -596,18 +593,29 @@ export class TouchControls {
         this.fireTouch = null;
         this.game.player.isFiring = false;
         this.activeButtons.delete("fire");
+      } else if (touch.identifier === this.aimTouch) {
+        this.aimTouch = null;
+        this.game.player.isAiming = false;
+        this.activeButtons.delete("aim");
       } else if (touch.identifier === this.chronoTouch) {
         this.chronoTouch = null;
         this.game.keys[this.game.keybinds.chronoShift] = false;
         this.activeButtons.delete("chrono");
+      } else if (touch.identifier === this.crouchTouch) {
+        this.crouchTouch = null;
+        this.game.keys[this.game.keybinds.crouch] = false;
+        this.activeButtons.delete("crouch");
       }
     }
     // Clear transient buttons
     this.activeButtons.delete("dash");
+    this.activeButtons.delete("rewind");
+    this.activeButtons.delete("lock");
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
     this.activeButtons.delete("sprint");
     this.activeButtons.delete("weapon");
+
   }
 
   updateJoystickKeys() {
@@ -637,67 +645,65 @@ export class TouchControls {
     this.game.keys[kb.sprint] = this.sprintToggleActive;
   }
 
-  /** Shared pause menu button layout — used by both tap handler and renderer */
-  _pauseButtonLayout() {
+  handlePauseTap(touch) {
+    // The ARIA log covers the menu: any tap closes it instead of hitting a
+    // button hidden underneath.
+    if (this.game.showAriaLog) {
+      this.game.handleKeyPress("KeyL");
+      return;
+    }
     const w = this.zones.w;
     const h = this.zones.h;
-    const isCompact = this.zones.isCompactPhone;
-    const btnY = isCompact ? h * 0.55 : h / 2 + 115;
-    const btnH = isCompact ? 40 : 50;
-    const btnW = Math.max(44, Math.min(isCompact ? 80 : 90, (w - 60) / 4 - 10));
-    const gap = isCompact ? 6 : 10;
-    const labels = ["RESUME", "SETTINGS", "CONTROLS", "QUIT"];
-    const colors = ["#00ccff", "#88aaff", "#aabbcc", "#ff4444"];
-    const totalW = labels.length * btnW + (labels.length - 1) * gap;
-    const startX = (w - totalW) / 2;
-    return {
-      w,
-      h,
-      isCompact,
-      btnY,
-      btnH,
-      btnW,
-      gap,
-      labels,
-      colors,
-      totalW,
-      startX,
-    };
-  }
-
-  handlePauseTap(touch) {
-    const { w, h, btnY, btnH, btnW, gap, labels, startX } =
-      this._pauseButtonLayout();
     const x = touch.clientX;
     const y = touch.clientY;
+    const layout = pauseLayout(w, h, this.game.mode);
 
-    if (y >= btnY && y <= btnY + btnH) {
-      for (let i = 0; i < labels.length; i++) {
-        const bx = startX + i * (btnW + gap);
-        if (x >= bx && x <= bx + btnW) {
-          if (i === 0)
-            this.game.handleKeyPress("Escape"); // Resume
-          else if (i === 1)
-            this.game.handleKeyPress("KeyS"); // Settings
-          else if (i === 2)
-            this.game.handleKeyPress("KeyC"); // Controls
-          else if (i === 3) this.game.handleKeyPress("KeyQ"); // Quit
-          return;
-        }
+    for (const btn of layout.buttons) {
+      if (
+        x >= btn.x &&
+        x <= btn.x + btn.w &&
+        y >= btn.y &&
+        y <= btn.y + btn.h
+      ) {
+        if (btn.index === 0)
+          this.game.handleKeyPress("Escape"); // Resume
+        else if (btn.index === 1)
+          this.game.handleKeyPress("KeyS"); // Settings
+        else if (btn.index === 2)
+          this.game.handleKeyPress("KeyC"); // Controls
+        else if (btn.index === 3) this.game.handleKeyPress("KeyQ"); // Quit
+        return;
       }
     }
-    // Save button for campaign (below main row)
-    if (this.game.mode === "campaign") {
-      const saveY = btnY + btnH + 10;
-      const saveBtnW = 100;
-      const saveX = (w - saveBtnW) / 2;
-      if (
-        y >= saveY &&
-        y <= saveY + 40 &&
-        x >= saveX &&
-        x <= saveX + saveBtnW
-      ) {
+
+    if (layout.saveBtn) {
+      const s = layout.saveBtn;
+      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
         this.game.handleKeyPress("KeyF");
+      }
+    }
+  }
+
+  handleTutorialCompleteTap(touch) {
+    const g = this.game;
+    const w = this.zones.w;
+    const h = this.zones.h;
+    const x = touch.clientX;
+    const y = touch.clientY;
+    const layout = tutorialMenuLayout(w, h, 4);
+
+    for (let i = 0; i < 4; i++) {
+      const iy = layout.my + 8 + i * layout.itemH;
+      if (
+        x >= layout.mx &&
+        x <= layout.mx + layout.menuW &&
+        y >= iy &&
+        y <= iy + layout.itemH - 6
+      ) {
+        g.tutorialMenuSelection = i;
+        g.audio.menuConfirm();
+        g.executeTutorialCompletionChoice(i);
+        return;
       }
     }
   }
@@ -745,125 +751,175 @@ export class TouchControls {
     }
   }
 
-  handleTutorialCompleteTap(touch) {
+  /**
+   * Touch point in the space the HUD is drawn in.
+   *
+   * The HUD canvas backing store is DPR-scaled but its ctx is pre-scaled by
+   * the same DPR, so the screen is laid out in hudW/hudH CSS pixels.
+   * Hit-testing in backing pixels put every tap at 2x on a retina phone.
+   */
+  settingsPoint(touch) {
     const g = this.game;
-    const w = this.zones.w;
-    const h = this.zones.h;
-    const x = touch.clientX;
-    const y = touch.clientY;
+    const rect = g.hudCanvas.getBoundingClientRect();
+    return {
+      x: (touch.clientX - rect.left) * (g.hudW / rect.width),
+      y: (touch.clientY - rect.top) * (g.hudH / rect.height),
+    };
+  }
 
-    // Menu layout must match renderTutorialCompletionMenu in game.js
-    const menuW = Math.min(360, w - 40);
-    const itemH = 52;
-    const menuItems = 4;
-    const mx = (w - menuW) / 2;
-    const my = h * 0.35;
+  /** Begin a drag-scroll of the settings list. */
+  startSettingsDrag(touch) {
+    const g = this.game;
+    const p = this.settingsPoint(touch);
+    const { sideW } = settingsLayout(
+      g.hudW,
+      g.hudH,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
+      g.settingsScroll,
+      false,
+    );
+    this.settingsDrag =
+      p.x > sideW
+        ? {
+            id: touch.identifier,
+            startY: p.y,
+            startScroll: g.settingsScroll || 0,
+            moved: false,
+          }
+        : null;
+  }
 
-    for (let i = 0; i < menuItems; i++) {
-      const iy = my + 8 + i * itemH;
-      if (x >= mx && x <= mx + menuW && y >= iy && y <= iy + itemH - 6) {
-        g.tutorialMenuSelection = i;
-        g.audio.menuConfirm();
-        g.executeTutorialCompletionChoice(i);
-        return;
-      }
-    }
+  /** Continue a drag-scroll; returns true when it consumed the move. */
+  moveSettingsDrag(touch) {
+    const d = this.settingsDrag;
+    if (!d || touch.identifier !== d.id) return false;
+    const g = this.game;
+    const dy = this.settingsPoint(touch).y - d.startY;
+    if (Math.abs(dy) > 8) d.moved = true;
+    const layout = settingsLayout(
+      g.hudW,
+      g.hudH,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
+      d.startScroll - dy,
+      false,
+    );
+    g.settingsScroll = layout.scrollY;
+    return true;
   }
 
   handleSettingsTap(touch) {
-    const hud = this.game.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
-    const h = hud.height;
-    const x = touch.clientX * scaleX;
-    const y = touch.clientY * scaleY;
-    const compactSettings = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
-    const panelW = compactSettings ? Math.min(w - 20, 380) : 440;
-    const panelX = w / 2 - panelW / 2;
-    const visibleDefs = getVisibleSettings(this.game.isTouchDevice);
-    const itemHeights = visibleDefs.map((def) =>
-      compactSettings ? def.height.compact : def.height.normal,
+    const g = this.game;
+    const drag = this.settingsDrag;
+    // Another finger owns the in-flight drag. Clearing it here would strand
+    // that finger mid-scroll, and a second thumb landing during a scroll is
+    // not a deliberate tap either.
+    if (drag && drag.id !== touch.identifier) return;
+    if (drag) {
+      this.settingsDrag = null;
+      // A drag that scrolled the list is not a tap on whatever ended up under
+      // the finger.
+      if (drag.moved) return;
+    }
+
+    const w = g.hudW;
+    const h = g.hudH;
+    const { x, y } = this.settingsPoint(touch);
+
+    const layout = settingsLayout(
+      w,
+      h,
+      g.settingsSelection,
+      g.isTouchDevice,
+      g.settingsCategory,
+      g.settingsScroll,
+      false,
+    );
+    g.settingsScroll = layout.scrollY;
+    const cats = getVisibleCategories(g.isTouchDevice, g.settings);
+    const hit = resolveSettingsHit(
+      layout,
+      settingsCategoryRects(layout, cats),
+      x,
+      y,
     );
 
-    // Scroll-aware startY — must match renderSettingsScreen in game.js
-    const totalH = itemHeights.reduce((a, b) => a + b, 0);
-    const visibleH = h - (compactSettings ? 60 : 120);
-    const titleAreaY = compactSettings ? 28 : 50;
-    let startY = titleAreaY + (compactSettings ? 20 : 40);
-    if (totalH > visibleH) {
-      let selTop = 0;
-      for (let si = 0; si < this.game.settingsSelection; si++)
-        selTop += itemHeights[si];
-      const selCenter = selTop + itemHeights[this.game.settingsSelection] / 2;
-      const idealOffset = visibleH / 2 - selCenter;
-      const maxOffset = 0;
-      const minOffset = visibleH - totalH;
-      startY += Math.max(minOffset, Math.min(maxOffset, idealOffset));
-    }
-    if (y > startY + totalH) {
-      this.game.handleKeyPress("Escape");
+    if (hit.kind === "back") {
+      g.handleKeyPress("Escape");
       return;
     }
-
-    // Find which setting was tapped
-    for (let i = 0; i < itemHeights.length; i++) {
-      if (
-        y >= startY &&
-        y <= startY + itemHeights[i] &&
-        x >= panelX &&
-        x <= panelX + panelW
-      ) {
-        this.game.settingsSelection = i;
-        // Left half = decrease, right half = increase
-        if (x < w / 2) {
-          this.game.handleKeyPress("ArrowLeft");
-        } else {
-          this.game.handleKeyPress("ArrowRight");
-        }
-        return;
+    if (hit.kind === "category") {
+      if (hit.cat !== g.settingsCategory) {
+        g.settingsCategory = hit.cat;
+        g.settingsSelection = 0;
+        g.settingsScroll = 0;
+        g.audio.menuSelect();
       }
-      startY += itemHeights[i];
+      return;
+    }
+    if (hit.kind !== "row") return;
+
+    const def = layout.visibleDefs[hit.index];
+    if (!def) return;
+    if (hit.index !== g.settingsSelection) {
+      g.settingsSelection = hit.index;
+      g.audio.menuSelect();
+    }
+
+    if (hit.zone === "slider") {
+      g._setSliderFromPct(def, hit.pct);
+      return;
+    }
+    if (hit.zone === "dec") {
+      g.handleKeyPress("ArrowLeft");
+      return;
+    }
+    if (hit.zone === "inc" || def.type === "toggle" || def.type === "action") {
+      g.handleKeyPress("ArrowRight");
     }
   }
 
   handleUpgradeTap(touch) {
-    const hud = this.game.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
-    const h = hud.height;
+    const w = this.game.hudW;
+    const h = this.game.hudH;
+    const scaleX = w / window.innerWidth;
+    const scaleY = h / window.innerHeight;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 
     const g = this.game;
     const upgradeKeys = Object.keys(UPGRADES);
-    const cols = 2;
-    // Must match renderUpgradeScreen in game.js
-    const compactUpg = this.game.isTouchDevice && h < COMPACT_PHONE_HEIGHT;
-    const headerY = compactUpg ? 14 : 40;
-    const startY = headerY + (compactUpg ? 30 : 90);
-    const cardH = compactUpg ? 40 : 64;
-    const cardGap = compactUpg ? 3 : 6;
-    const colW = compactUpg ? Math.min(280, Math.floor((w - 36) / 2)) : 320;
-    const leftX = w / 2 - colW - (compactUpg ? 6 : 12);
-    const totalRows = Math.ceil(upgradeKeys.length / cols);
-    const contY = startY + totalRows * (cardH + cardGap) + 20;
+    const layout = upgradeLayout(
+      w,
+      h,
+      upgradeKeys.length,
+      this.game.isTouchDevice,
+      g.upgradeSelection,
+    );
 
-    // Check continue button area
-    if (y >= contY - 18 && y <= contY + 18) {
+    if (y >= layout.contY - 18 && y <= layout.contY + 18) {
       g.upgradeSelection = upgradeKeys.length;
       g.handleKeyPress("Enter");
       return;
     }
 
-    // Check upgrade grid
     for (let i = 0; i < upgradeKeys.length; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const baseX = col === 0 ? leftX : w / 2 + (compactUpg ? 6 : 12);
-      const uy = startY + row * (cardH + cardGap);
-      if (x >= baseX && x <= baseX + colW && y >= uy && y <= uy + cardH) {
+      const col = i % layout.cols;
+      const row = Math.floor(i / layout.cols);
+      const baseX = col === 0 ? layout.leftX : layout.rightX;
+      const uy = layout.startY + row * (layout.cardH + layout.cardGap);
+      // Ignore rows scrolled outside the visible window — they are clipped
+      // on screen, so a tap there must not select them.
+      if (uy + layout.cardH < layout.listTop || uy > layout.listBottom) continue;
+      if (
+        x >= baseX &&
+        x <= baseX + layout.colW &&
+        y >= uy &&
+        y <= uy + layout.cardH
+      ) {
         g.upgradeSelection = i;
         g.handleKeyPress("Enter");
         return;
@@ -872,10 +928,9 @@ export class TouchControls {
   }
 
   handleControlsTap(touch) {
-    const hud = this.game.hudCanvas;
-    const scaleX = hud.width / window.innerWidth;
-    const scaleY = hud.height / window.innerHeight;
-    const w = hud.width;
+    const w = this.game.hudW;
+    const scaleX = w / window.innerWidth;
+    const scaleY = this.game.hudH / window.innerHeight;
     const x = touch.clientX * scaleX;
     const y = touch.clientY * scaleY;
 
@@ -921,7 +976,7 @@ export class TouchControls {
   }
 
   render() {
-    const ctx = this.ctx || (this.ctx = this.canvas.getContext("2d"));
+    const ctx = this.ctx;
     const z = this.zones;
     ctx.clearRect(0, 0, z.w, z.h);
 
@@ -935,7 +990,7 @@ export class TouchControls {
 
     // Draw settings back button hint
     if (gs === "settings") {
-      this.renderSettingsHint(ctx);
+      // The settings screen draws its own back button and hint band.
       return;
     }
 
@@ -1021,6 +1076,16 @@ export class TouchControls {
       this.activeButtons.has("fire") ? "#ff4444" : "#ff6644",
     );
 
+    // ── Aim-down-sights button ──
+    this.drawButton(
+      ctx,
+      z.aimBtn.x,
+      z.aimBtn.y,
+      z.aimBtn.r,
+      "AIM",
+      this.game.player?.isAiming ? "#66eeff" : "#337799",
+    );
+
     // ── Dash button ──
     this.drawButton(
       ctx,
@@ -1054,6 +1119,37 @@ export class TouchControls {
         : this.activeButtons.has("chrono")
           ? "#aa44dd"
           : "#9944ff",
+    );
+
+    // ── Rewind and Time-Lock, once granted, with their cooldowns ──
+    const powers = this.game.chronoPowers;
+    for (const [id, key, label, color, active] of [
+      ["rewind", "rewindBtn", "REWIND", "#ff5fb4", "rewind"],
+      ["timeLock", "lockBtn", "LOCK", "#4f9dff", "lock"],
+    ]) {
+      if (!powers?.has(id)) continue;
+      const b = z[key];
+      const cd = powers.cooldown(id);
+      this.drawButton(ctx, b.x, b.y, b.r, label, cd.left > 0 ? "#555566" : this.activeButtons.has(active) ? "#ffffff" : color);
+      if (cd.left > 0) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd.frac));
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // ── Crouch button (small) ──
+    this.drawButton(
+      ctx,
+      z.crouchBtn.x,
+      z.crouchBtn.y,
+      z.crouchBtn.r,
+      "CROUCH",
+      this.activeButtons.has("crouch") ? "#66dd66" : "#558855",
     );
 
     // ── Sprint toggle button (left side) ──
@@ -1157,10 +1253,11 @@ export class TouchControls {
     ctx.font = `${isCompact ? 11 : 14}px monospace`;
     ctx.fillText("Drag to aim", w * 0.7, h / 2 - (isCompact ? 8 : 15));
 
-    // Button hints
+    // Button hints. Stacked upward from the dismiss prompt so the last line
+    // cannot land on it — a fixed base ran the list off a 360px-tall phone.
     const hintFont = isCompact ? 11 : 14;
-    const hintGap = isCompact ? 16 : 25;
-    const hintBase = isCompact ? h - 80 : h - 145;
+    const hintGap = isCompact ? 15 : 25;
+    const dismissY = h - this.safeArea.bottom - (isCompact ? 14 : 30);
     const hints = [
       { label: "FIRE", desc: "Big button", color: "#ff6644" },
       { label: "DASH", desc: "Top-right", color: "#00cccc" },
@@ -1168,6 +1265,8 @@ export class TouchControls {
       { label: "SLOW", desc: "Time slow", color: "#9944ff" },
       { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00" },
     ];
+    const hintBase =
+      dismissY - (isCompact ? 20 : 28) - (hints.length - 1) * hintGap;
     for (let i = 0; i < hints.length; i++) {
       ctx.fillStyle = hints[i].color;
       ctx.font = `bold ${hintFont}px monospace`;
@@ -1182,7 +1281,7 @@ export class TouchControls {
     const pulse = 0.5 + 0.3 * Math.sin(performance.now() / 400);
     ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
     ctx.font = `bold ${isCompact ? 13 : 16}px monospace`;
-    ctx.fillText("TAP ANYWHERE TO START", w / 2, h - (isCompact ? 12 : 30));
+    ctx.fillText("TAP ANYWHERE TO START", w / 2, dismissY);
   }
 
   renderCreatorOverlay(ctx) {
@@ -1254,70 +1353,67 @@ export class TouchControls {
   }
 
   renderPauseButtons(ctx) {
-    const { w, h, btnY, btnH, btnW, gap, labels, colors, startX } =
-      this._pauseButtonLayout();
+    const w = this.zones.w;
+    const h = this.zones.h;
+    // Buttons would draw over the ARIA log panel; offer a close hint instead.
+    if (this.game.showAriaLog) {
+      if (isModernArt()) {
+        drawButton(ctx, w / 2 - 70, h - 46, 140, 36, "Close log", "focus", UI.cyan, { size: 13 });
+      } else {
+        ctx.fillStyle = "rgba(170,200,220,0.8)";
+        ctx.font = "bold 12px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("TAP TO CLOSE LOG", w / 2, h - 18);
+      }
+      return;
+    }
+    const layout = pauseLayout(w, h, this.game.mode);
+    if (isModernArt()) {
+      for (const btn of layout.buttons) {
+        const accent = btn.index === 0 ? UI.cyan : btn.index === 3 ? UI.crimson : UI.steelHi;
+        drawButton(ctx, btn.x, btn.y, btn.w, btn.h, btn.label, btn.index === 0 ? "focus" : "idle", accent, {
+          idleAccent: btn.index === 3 ? UI.crimson : null,
+          idleColor: btn.index === 3 ? "#ff8a96" : UI.text,
+          size: layout.compact ? 11 : 13,
+        });
+      }
+      if (layout.saveBtn) {
+        const sv = layout.saveBtn;
+        drawButton(ctx, sv.x, sv.y, sv.w, sv.h, "Save", "idle", UI.green, { idleAccent: UI.green, idleColor: UI.green, size: 12 });
+      }
+      return;
+    }
 
     ctx.globalAlpha = 0.7;
-    for (let i = 0; i < labels.length; i++) {
-      const bx = startX + i * (btnW + gap);
-      ctx.fillStyle = colors[i];
+    for (const btn of layout.buttons) {
+      const bx = btn.x;
+      const by = btn.y;
+      const btnW = btn.w;
+      const btnH = btn.h;
+      ctx.fillStyle = btn.color;
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(bx, btnY, btnW, btnH, 8);
+      ctx.roundRect(bx, by, btnW, btnH, 8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#fff";
       ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(labels[i], bx + btnW / 2, btnY + btnH / 2);
+      ctx.fillText(btn.label, bx + btnW / 2, by + btnH / 2);
     }
 
-    if (this.game.mode === "campaign") {
-      const saveY = btnY + btnH + 10;
-      const saveBtnW = 100;
-      const saveX = (w - saveBtnW) / 2;
+    if (layout.saveBtn) {
+      const s = layout.saveBtn;
       ctx.fillStyle = "#00aa44";
       ctx.beginPath();
-      ctx.roundRect(saveX, saveY, saveBtnW, 40, 8);
+      ctx.roundRect(s.x, s.y, s.w, s.h, 8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#fff";
-      ctx.fillText("SAVE", saveX + saveBtnW / 2, saveY + 20);
+      ctx.fillText("SAVE", s.x + s.w / 2, s.y + s.h / 2);
     }
-    ctx.globalAlpha = 1;
-  }
-
-  renderSettingsHint(ctx) {
-    const w = this.zones.w;
-    const h = this.zones.h;
-    ctx.globalAlpha = 0.6;
-    // Back button at bottom
-    const btnW = 120;
-    const btnH = 44;
-    const bx = (w - btnW) / 2;
-    const by = h - 60;
-    ctx.fillStyle = "#556677";
-    ctx.strokeStyle = "#aabbcc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, btnW, btnH, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("< BACK", bx + btnW / 2, by + btnH / 2);
-    // Hint text
-    ctx.fillStyle = "#8899aa";
-    ctx.font = "12px monospace";
-    ctx.fillText(
-      "Tap setting to change  ·  Left = decrease  ·  Right = increase",
-      w / 2,
-      by - 12,
-    );
     ctx.globalAlpha = 1;
   }
 
