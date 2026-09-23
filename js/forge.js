@@ -164,12 +164,19 @@ export function recordEdit(history, index, edit, max = MAX_HISTORY) {
  * Apply one history entry: a block edit `{x,y,z,from,to}` or a meta edit
  * `{meta,from,to}` (markers). Both directions go through the same pair so
  * undo and redo can never drift apart.
+ *
+ * A block edit only replays onto the block it left behind. The world also
+ * changes on its own — a sapling grows into a trunk, a bucket scoops water —
+ * and undoing a planted sapling after it grew would otherwise cut the bottom
+ * log out of a tree. A cell that no longer holds what the entry expects is
+ * left alone and the replay reports false.
  */
 export function applyEdit(world, edit) {
   if (edit.meta) {
     world.meta[edit.meta] = clone(edit.to);
     return true;
   }
+  if (world.get(edit.x, edit.y, edit.z) !== edit.from) return false;
   return world.set(edit.x, edit.y, edit.z, edit.to);
 }
 
@@ -178,6 +185,7 @@ export function undoEdit(world, edit) {
     world.meta[edit.meta] = clone(edit.from);
     return true;
   }
+  if (world.get(edit.x, edit.y, edit.z) !== edit.to) return false;
   return world.set(edit.x, edit.y, edit.z, edit.from);
 }
 
@@ -1102,7 +1110,10 @@ export class ForgeMode {
    */
   _replayEdit(edit, apply) {
     const before = edit.meta ? AIR : this.world.get(edit.x, edit.y, edit.z);
-    apply(this.world, edit);
+    if (!apply(this.world, edit)) {
+      this._warn("That spot has changed since");
+      return;
+    }
     if (!this.survival || edit.meta) return;
     const after = this.world.get(edit.x, edit.y, edit.z);
     if (before === AIR && after !== AIR) this.survival.markPlaced(edit.x, edit.y, edit.z);

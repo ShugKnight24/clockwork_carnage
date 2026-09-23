@@ -433,3 +433,24 @@ describe("forge storage failures", () => {
   });
 });
 
+
+describe("history replay against a world that changed on its own", () => {
+  it("leaves a grown tree alone when the sapling planting is undone", () => {
+    const w = new World();
+    const edit = { x: 10, y: 10, z: 40, from: 0, to: 23 }; // plant a sapling
+    applyEdit(w, edit);
+    w.set(10, 10, 40, 20); // it grew: the cell is now a log
+    expect(undoEdit(w, edit)).toBe(false);
+    expect(w.get(10, 10, 40)).toBe(20);
+  });
+
+  it("refuses a redo onto a cell that has been filled since", () => {
+    const w = new World();
+    const edit = { x: 11, y: 10, z: 40, from: 0, to: 1 };
+    applyEdit(w, edit);
+    undoEdit(w, edit);
+    w.set(11, 10, 40, 19); // water poured in
+    expect(applyEdit(w, edit)).toBe(false);
+    expect(w.get(11, 10, 40)).toBe(19);
+  });
+});
