@@ -938,4 +938,72 @@ test.describe("Voxel Forge", () => {
     expect(dropped.carried).toBe(null);
     expect(dropped.at12).toEqual({ item: "stone", n: 20 });
   });
+
+  test("survival: drag a stack to the hotbar, then place it — real input throughout", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    await page.keyboard.press("Space");
+    await page.keyboard.press("KeyM");
+    await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.noclip = true;
+      b.survival.inventory.slots[12] = { item: "stone", n: 20 }; // in the backpack
+    });
+
+    await page.keyboard.press("KeyI");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.invOpen)).toBe(true);
+    // The cursor must actually come back, or none of this is clickable.
+    expect(await page.evaluate(() => document.pointerLockElement === null)).toBe(true);
+
+    const pts = await page.evaluate(async () => {
+      const g = window.ccDebug.game, b = g.builder;
+      const { inventoryLayout } = await import("/js/layout.js");
+      const l = inventoryLayout(b.hudSize.w, b.hudSize.h, b.survival.inventory.slots.length);
+      const rect = g.canvas.getBoundingClientRect();
+      const at = (i) => {
+        const c = l.cells.find((x) => x.index === i);
+        return {
+          x: rect.left + (c.x + c.w / 2) * (rect.width / g.canvas.width),
+          y: rect.top + (c.y + c.h / 2) * (rect.height / g.canvas.height),
+        };
+      };
+      return { from: at(12), to: at(0) };
+    });
+
+    await page.mouse.move(pts.from.x, pts.from.y);
+    await page.mouse.down();
+    await page.mouse.move(pts.to.x, pts.to.y, { steps: 8 });
+    await screenshot(page, "forge-inventory");
+    await page.mouse.up();
+
+    const moved = await page.evaluate(() => {
+      const inv = window.ccDebug.game.builder.survival.inventory;
+      return { at0: inv.slots[0], at12: inv.slots[12], carried: window.ccDebug.game.builder.carried };
+    });
+    expect(moved.at0).toEqual({ item: "stone", n: 20 });
+    expect(moved.at12).toBe(null);
+    expect(moved.carried).toBe(null);
+
+    await page.keyboard.press("KeyI");   // close
+    expect(await page.evaluate(() => window.ccDebug.game.builder.invOpen)).toBe(false);
+    await page.keyboard.press("Digit1"); // select the slot we dragged into
+    expect(await page.evaluate(() => window.ccDebug.game.builder.heldItem)).toBe("stone");
+
+    await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      for (let x = 40; x <= 47; x++) b.world.set(x, 64, 49, 0);
+      b.world.set(45, 64, 49, 1);
+    });
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    const placed = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      const before = b.survival.inventory.count("stone");
+      b.handleMouseDown(0);
+      return { before, after: b.survival.inventory.count("stone") };
+    });
+    expect(placed.after).toBe(placed.before - 1);
+  });
 });

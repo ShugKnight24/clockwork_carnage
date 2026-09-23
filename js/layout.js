@@ -359,7 +359,7 @@ export function inventoryLayout(w, h, slotCount = 36) {
     x: Math.round((w - gridW) / 2) - pad,
     y: Math.round((h - gridH) / 2) - pad - 10,
     w: gridW + pad * 2,
-    h: gridH + pad * 2 + 20, // room for the title
+    h: gridH + pad * 2 + 20 + 12, // room for the title and the hint line
   };
   const originX = panel.x + pad;
   const originY = panel.y + pad + 20;

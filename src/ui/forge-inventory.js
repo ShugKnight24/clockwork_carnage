@@ -38,11 +38,16 @@ export function renderInventory(forge, ctx, w, h) {
   ctx.font = "bold 13px monospace";
   ctx.textAlign = "left";
   ctx.fillText("INVENTORY", layout.panel.x + 18, layout.panel.y + 24);
+  // The hint sits under the grid, not beside the title: the panel is only as
+  // wide as nine cells and the two strings collided at every window size.
   ctx.fillStyle = "rgba(255,255,255,0.4)";
-  ctx.font = "11px monospace";
-  ctx.textAlign = "right";
-  ctx.fillText("Drag to move   Shift-click to swap rows   I / Esc to close",
-    layout.panel.x + layout.panel.w - 18, layout.panel.y + 24);
+  ctx.font = "10px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "Drag to move   Shift-click to swap rows   I / Esc to close",
+    layout.panel.x + layout.panel.w / 2,
+    layout.panel.y + layout.panel.h - 7,
+  );
   ctx.textAlign = "left";
 
   for (const c of layout.cells) {
