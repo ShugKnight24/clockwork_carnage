@@ -145,6 +145,11 @@ export const ENEMY_TYPES = {
     attackWindupMs: 320,
     form: 2,
     boss: true,
+    // Form 2 (spec §6): your shift does not slow him, he takes a shift held
+    // too long, and he replays his volleys (src/systems/boss-form2.js).
+    chronoMultiplier: 1.0,
+    counterShift: true,
+    replay: true,
     hitZones: BOSS_ZONES,
   },
   boss_form3: {

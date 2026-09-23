@@ -19,6 +19,7 @@
  */
 import { predictEnemy, windupLine, projectilePath } from "../systems/chrono-powers.js";
 import { hazardState } from "../systems/chrono-hazards.js";
+import { pendingReplay, FORM2 } from "../systems/boss-form2.js";
 
 const FLOOR = 0.5;
 const WAIST = 0.12;
@@ -399,6 +400,59 @@ function drawObjective(ctx, r, game, planeMul, yShift) {
   ctx.restore();
 }
 
+/**
+ * Form 2's tells. Counter-shift: while you shift, a clock face on the floor
+ * round him fills from gold to crimson; when it closes he takes your shift.
+ * Replay: every origin of the volley about to replay is marked, and in a
+ * shift Foresight draws where each round will fly.
+ */
+function drawForm2(ctx, r, game, planeMul, yShift) {
+  const p = game.player;
+  const now = performance.now() / 1000;
+  const foresight = p.chronoActive && game.chronoPowers?.has("foresight");
+  ctx.save();
+  for (const e of game.entities) {
+    if (e.type !== "enemy" || !e.active || e.state === "dead" || e.dissolving) continue;
+    const charge = e.def?.counterShift ? e._counterCharge ?? 0 : 0;
+    if (charge > 0) {
+      const R = 1.3;
+      const n = 24;
+      const filled = Math.round(n * Math.min(1, charge));
+      const warm = charge < 0.5;
+      for (let i = 0; i < n; i++) {
+        const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2;
+        const a1 = -Math.PI / 2 + ((i + 1) / n) * Math.PI * 2;
+        const on = i < filled;
+        ctx.lineWidth = on ? 4 : 1.5;
+        ctx.strokeStyle = on
+          ? warm ? "rgba(255,211,106,0.9)" : `rgba(255,42,74,${0.75 + 0.25 * Math.sin(now * 18)})`
+          : "rgba(255,255,255,0.18)";
+        worldLine(ctx, r, game, planeMul, yShift, e.x + Math.cos(a0) * R, e.y + Math.sin(a0) * R,
+          e.x + Math.cos(a1) * R, e.y + Math.sin(a1) * R, FLOOR - 0.01);
+      }
+      // The clock hand: his reach, closing on twelve.
+      const hand = -Math.PI / 2 + Math.min(1, charge) * Math.PI * 2;
+      ctx.strokeStyle = "rgba(255,240,220,0.9)";
+      ctx.lineWidth = 2;
+      worldLine(ctx, r, game, planeMul, yShift, e.x, e.y, e.x + Math.cos(hand) * R, e.y + Math.sin(hand) * R, FLOOR - 0.01);
+    }
+    for (const s of e.def?.replay ? pendingReplay(e) : []) {
+      const soon = Math.max(0, Math.min(1, 1 - s.in));
+      floorMark(ctx, r, game, planeMul, yShift, s.x, s.y, 0.25 + 0.2 * soon, `rgba(197,139,255,${0.35 + 0.4 * soon})`);
+      ctx.strokeStyle = `rgba(230,200,255,${0.4 + 0.5 * soon})`;
+      ctx.lineWidth = 2;
+      worldLine(ctx, r, game, planeMul, yShift, s.x - 0.2, s.y, s.x + 0.2, s.y, WAIST);
+      worldLine(ctx, r, game, planeMul, yShift, s.x, s.y - 0.2, s.x, s.y + 0.2, WAIST);
+      if (foresight) {
+        ctx.strokeStyle = "rgba(197,139,255,0.55)";
+        ctx.lineWidth = 1.5;
+        worldLine(ctx, r, game, planeMul, yShift, s.x, s.y, s.x + s.dx * 8, s.y + s.dy * 8, WAIST, true);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -475,6 +529,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
   const cp = game.chronoPowers;
   drawHazards(ctx, r, game, planeMul, yShift);
   drawObjective(ctx, r, game, planeMul, yShift);
+  drawForm2(ctx, r, game, planeMul, yShift);
   drawRifts(ctx, r, game, planeMul, yShift);
   let sprites = houndShimmer(ctx, r, game, planeMul, yShift);
   if (cp?.lock) drawLock(ctx, r, game, planeMul, yShift, cp.lock);
@@ -515,6 +570,33 @@ export function renderChronoScreen(game, ctx, w, h) {
     g.addColorStop(1, `rgba(255,20,50,${0.28 * k})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+  }
+  // Form 2: his hand closing on your shift pulses the edges crimson; once he
+  // has it, the world goes grey-violet and slow until you are yours again.
+  let reach = 0;
+  for (const e of game.entities) if (e.def?.counterShift && e.active) reach = Math.max(reach, e._counterCharge ?? 0);
+  if (reach >= 0.5 && game.player.chronoActive) {
+    const k = (reach - 0.5) / 0.5;
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
+    g.addColorStop(0, "rgba(255,42,74,0)");
+    g.addColorStop(1, `rgba(255,42,74,${0.45 * k * (0.6 + 0.4 * Math.sin(performance.now() * (0.01 + 0.02 * k)))})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  const held = game.player.counterShifted ?? 0;
+  if (held > 0) {
+    const k = Math.min(1, held / FORM2.counterShift.slowFor + 0.3);
+    ctx.save();
+    ctx.globalCompositeOperation = "saturation";
+    ctx.fillStyle = `rgba(128,128,128,${0.6 * k})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "source-over";
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.7);
+    g.addColorStop(0, "rgba(120,40,200,0.05)");
+    g.addColorStop(1, `rgba(120,40,200,${0.5 * k})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
   // Reactor heat: the edges glow as the core climbs, and flash on overload.
   const o = hz?.objective;

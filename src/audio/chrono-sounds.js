@@ -27,6 +27,10 @@ export const CHRONO_SOUNDS = {
   blade: [[0, "noise", 0.06, 0.12, 1800, "bandpass"]],
   seal: [[0, "tone", 196, 0.3, "triangle", 0.12], [0.12, "tone", 294, 0.4, "triangle", 0.12]],
   loop: [[0, "tone", 440, 0.2, "sine", 0.1], [0.08, "tone", 220, 0.3, "sine", 0.1]],
+  // Form 2 takes your shift: the shift chime run backwards and dragged down.
+  counterShift: [[0, "tone", 440, 0.15, "sine", 0.12], [0.08, "tone", 660, 0.2, "sine", 0.1], [0.1, "tone", 55, 0.8, "sawtooth", 0.14], [0, "noise", 0.5, 0.12, 500, "lowpass"]],
+  // A replayed volley: a tape spooling back, then the same rounds again.
+  replay: [[0, "tone", 330, 0.1, "square", 0.06], [0.08, "tone", 262, 0.1, "square", 0.06], [0.16, "tone", 196, 0.3, "triangle", 0.1], [0, "noise", 0.35, 0.08, 3000, "bandpass"]],
 };
 
 /** Beyond this many tiles a positional sound is not played. */

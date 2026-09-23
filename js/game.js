@@ -77,6 +77,7 @@ import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
 import { teachHint } from "../src/ui/chrono-hud.js";
 import { ChronoHazards } from "../src/systems/chrono-hazards.js";
+import { canShift, counterShiftScale } from "../src/systems/boss-form2.js";
 import { VoxelAISystem } from "../src/systems/voxel-ai.js";
 import {
   PLAYER as VOXEL_PLAYER,
@@ -1822,7 +1823,8 @@ export class Game {
 
     // Player movement
     const _profilePlayerStart = this.showFPS ? performance.now() : 0;
-    this.updatePlayer(dt);
+    // Form 2's Counter-shift holds you at half speed for a moment.
+    this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
 
@@ -1974,6 +1976,7 @@ export class Game {
     if (
       chronoKeyHeld &&
       !this.player.chronoActive &&
+      canShift(this.player) &&
       this.player.chronoEnergy >= this.chronoPowers.engageCost()
     ) {
       this.player.chronoActive = true;

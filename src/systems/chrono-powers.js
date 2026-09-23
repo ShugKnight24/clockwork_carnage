@@ -427,7 +427,11 @@ export class ChronoPowers {
     this.rifts = [];
     this.clock = 0;
     this.caughtTotal = 0;
-    if (game.player) game.player.chronoDashMult = 1;
+    if (game.player) {
+      game.player.chronoDashMult = 1;
+      // Form 2's hold on your shift never follows you out of the fight.
+      game.player.counterShifted = 0;
+    }
     this._sampleIn = 0;
     this._announced = false;
     /** Powers granted at this slot, for the unlock line and teach card. */

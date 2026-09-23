@@ -22,6 +22,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 import { isPassable, hasLineOfSight, EYE_Z, playerEyeZ } from "./physics.js";
 import { Enemy, Projectile } from "../../js/entities.js";
+import { updateForm2, recordShot } from "./boss-form2.js";
 import {
   ENEMY_MELEE_WINDUP_MS,
   ENEMY_RANGED_WINDUP_MS,
@@ -126,6 +127,22 @@ export class AISystem {
       const dy = target.y - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const ai = e.def.ai || "chase";
+
+      // Form 2's Counter-shift and Replay (src/systems/boss-form2.js). Before
+      // the pain state: a hit does not loosen his hold on your shift, and a
+      // replay does not wait for you to stop shooting.
+      if (e.def.counterShift || e.def.replay) {
+        updateForm2(e, {
+          dt: enemyDt,
+          realDt: timeScale > 0 ? dt / timeScale : dt,
+          player,
+          projectiles,
+          entities,
+          damageNumbers,
+          audio,
+          fx,
+        });
+      }
 
       // Pain state. Ordinary hits pause a telegraphed attack; a crit, headshot
       // or EMP (which set _staggered) cancels it. Without that distinction any
@@ -325,6 +342,7 @@ export class AISystem {
             proj.color = e.def.color1;
             projectiles.push(proj);
             entities.push(proj);
+            if (e.def.replay) recordShot(e, proj);
             audio.enemyShoot(
               audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
             );
@@ -576,6 +594,7 @@ export class AISystem {
         proj.color = form === 3 ? "#ff2244" : "#e04800";
         projectiles.push(proj);
         entities.push(proj);
+        if (e.def.replay) recordShot(e, proj);
       }
       audio.enemyShoot(
         audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
