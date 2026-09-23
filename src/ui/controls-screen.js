@@ -23,7 +23,7 @@ const RESET_BORDER = 'rgba(255,170,0,0.4)';
 // Display labels for keycodes (single source of truth).
 const KEY_DISPLAY = {
   KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyF: 'F',
-  KeyQ: 'Q', KeyR: 'R', KeyP: 'P', KeyC: 'C',
+  KeyQ: 'Q', KeyR: 'R', KeyP: 'P', KeyC: 'C', KeyX: 'X', KeyV: 'V',
   Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
   ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift',
   ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl',
@@ -44,6 +44,8 @@ const BIND_LABELS = {
   weapon7: 'Weapon 7', weapon8: 'Weapon 8',
   toggleFPS: 'Toggle FPS',
   chronoShift: 'Chrono Shift (Slow Time)',
+  chronoRewind: 'Rewind Echo (Nova)',
+  chronoLock: 'Time-Lock (Kael)',
 };
 
 export function formatKeyCode(code) {
@@ -59,7 +61,7 @@ export function drawControlsOverlay(ctx, w, h, alpha, state) {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  const boxW = 300, boxH = 270;
+  const boxW = 330, boxH = 350;
   const bx = (w - boxW) / 2, by = (h - boxH) / 2;
 
   // Drop shadow
@@ -102,6 +104,10 @@ export function drawControlsOverlay(ctx, w, h, alpha, state) {
     [`${fk('crouch')}`,          'Crouch',               '#88ddff'],
     [`${fk('sprint')}+${fk('crouch')}`, 'Slide',          '#88ddff'],
     [`${fwd}×2`,                 'Dash (double-tap)',    '#88ddff'],
+    [`${fk('chronoShift')} (hold)`, 'Chrono Shift',      '#c77dff'],
+    [`${fk('chronoShift')}+${fwd}×2`, 'Chrono Dash (Rook)', '#3dff8a'],
+    [`${fk('chronoRewind')}`,    'Rewind Echo (Nova)',   '#ff5fb4'],
+    [`${fk('chronoLock')}`,      'Time-Lock (Kael)',     '#4f9dff'],
     [`${fk('pause')}/P`,         'Pause',                '#aabbcc'],
   ];
 

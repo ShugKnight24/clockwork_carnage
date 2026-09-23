@@ -343,6 +343,9 @@ export function dispatchKeyPress(game, code, e) {
     }
 
     if (code === game.keybinds.interact) game.interact();
+    // Chronos powers on their own keys (spec decision 4: no double-taps).
+    if (code === game.keybinds.chronoRewind && !e?.repeat) game.chronoRewind?.();
+    if (code === game.keybinds.chronoLock && !e?.repeat) game.chronoLock?.();
     // Meltdown hero ability (Q key)
     if (code === "KeyQ" && game.mode === "meltdown" && game.meltdown.alive) {
       const abilityResult = game.meltdown.useAbility();

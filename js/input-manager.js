@@ -42,6 +42,9 @@ export const DEFAULT_KEYBINDS = {
   toggleFPS: "KeyF",
   chronoShift: "KeyQ",
   crouch: "ControlLeft",
+  // Nova's Rewind and Kael's Time-Lock, once the campaign has granted them.
+  chronoRewind: "KeyX",
+  chronoLock: "KeyV",
 };
 
 /**

@@ -215,6 +215,12 @@ export class TouchControls {
       z.chronoBtn.r * hitShrink
     )
       return "chrono";
+    // REWIND and LOCK exist only once the campaign has granted them.
+    const powers = this.game.chronoPowers;
+    if (powers?.has("rewind") && this.dist(x, y, z.rewindBtn.x, z.rewindBtn.y) < z.rewindBtn.r * hitShrink)
+      return "rewind";
+    if (powers?.has("timeLock") && this.dist(x, y, z.lockBtn.x, z.lockBtn.y) < z.lockBtn.r * hitShrink)
+      return "lock";
     if (
       this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) <
       z.sprintBtn.r * hitShrink
@@ -431,6 +437,12 @@ export class TouchControls {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;
         g.keys[g.keybinds.chronoShift] = true;
+      } else if (zone === "rewind") {
+        this.activeButtons.add("rewind");
+        if (g.chronoRewind() && g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
+      } else if (zone === "lock") {
+        this.activeButtons.add("lock");
+        if (g.chronoLock() && g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
       } else if (zone === "crouch" && this.crouchTouch === null) {
         this.activeButtons.add("crouch");
         this.crouchTouch = touch.identifier;
@@ -597,6 +609,8 @@ export class TouchControls {
     }
     // Clear transient buttons
     this.activeButtons.delete("dash");
+    this.activeButtons.delete("rewind");
+    this.activeButtons.delete("lock");
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
     this.activeButtons.delete("sprint");
@@ -1106,6 +1120,27 @@ export class TouchControls {
           ? "#aa44dd"
           : "#9944ff",
     );
+
+    // ── Rewind and Time-Lock, once granted, with their cooldowns ──
+    const powers = this.game.chronoPowers;
+    for (const [id, key, label, color, active] of [
+      ["rewind", "rewindBtn", "REWIND", "#ff5fb4", "rewind"],
+      ["timeLock", "lockBtn", "LOCK", "#4f9dff", "lock"],
+    ]) {
+      if (!powers?.has(id)) continue;
+      const b = z[key];
+      const cd = powers.cooldown(id);
+      this.drawButton(ctx, b.x, b.y, b.r, label, cd.left > 0 ? "#555566" : this.activeButtons.has(active) ? "#ffffff" : color);
+      if (cd.left > 0) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd.frac));
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
 
     // ── Crouch button (small) ──
     this.drawButton(

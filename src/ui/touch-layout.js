@@ -38,6 +38,8 @@ export const BUTTON_KEYS = [
   "weaponBtn",
   "pauseBtn",
   "fullscreenBtn",
+  "rewindBtn",
+  "lockBtn",
 ];
 
 /**
@@ -61,6 +63,12 @@ export function touchZones({ w, h, safeArea }) {
   // screen edge and the left safe-area inset.
   const leftX = Math.max(60, 42 + sa.left, MIN_BUTTON_RADIUS + 8 + sa.left);
   const topY = (isCompactPhone ? 28 : 40) + sa.top + MIN_BUTTON_RADIUS * 0.2;
+  // The chrono column: SLOW, and CROUCH offset right of it. LOCK and REWIND
+  // join SLOW's row once the campaign grants those powers.
+  const chronoY = h - (isCompactPhone ? 240 : 350) - sa.bottom;
+  const crouchY = h - (isCompactPhone ? 200 : 290) - sa.bottom;
+  const crouchX = leftX + Math.max(btnSize * 0.9, MIN_BUTTON_RADIUS * 1.9);
+  const powerStep = Math.max(MIN_BUTTON_RADIUS * 2.1, btnSize * 1.1);
 
   return {
     w,
@@ -105,15 +113,27 @@ export function touchZones({ w, h, safeArea }) {
     // Chrono Shift (time slow) — left side, above sprint.
     chronoBtn: {
       x: leftX,
-      y: h - (isCompactPhone ? 240 : 350) - sa.bottom,
+      y: chronoY,
       r: floorRadius(btnSize * 0.6),
     },
     // Crouch — offset right of the sprint/chrono column so the floored radii
     // of all three still clear one another.
     crouchBtn: {
-      x: leftX + Math.max(btnSize * 0.9, MIN_BUTTON_RADIUS * 1.9),
-      y: h - (isCompactPhone ? 200 : 290) - sa.bottom,
+      x: crouchX,
+      y: crouchY,
       r: floorRadius(btnSize * 0.45),
+    },
+    // Kael's Time-Lock and Nova's Rewind: a row out from SLOW, past CROUCH,
+    // so a short landscape phone still has room for them.
+    lockBtn: {
+      x: crouchX + powerStep,
+      y: chronoY,
+      r: floorRadius(btnSize * 0.5),
+    },
+    rewindBtn: {
+      x: crouchX + powerStep * 2,
+      y: chronoY,
+      r: floorRadius(btnSize * 0.5),
     },
     // Weapon cycle — left of fire, still under the right thumb.
     weaponBtn: {

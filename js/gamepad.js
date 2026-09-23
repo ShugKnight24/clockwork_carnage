@@ -160,6 +160,7 @@ export class GamepadManager {
       reload: false,    // X / □
       chronoShift: false, // Y / △
       sprint: false,    // L3 (left stick click)
+      chronoLock: false, // R3 (right stick click): Kael's Time-Lock
 
       // Shoulder buttons
       weaponNext: false, // RB
@@ -185,6 +186,7 @@ export class GamepadManager {
         minimap: false,
         weaponNext: false,
         weaponPrev: false,
+        chronoLock: false,
         dpadUp: false,
         dpadDown: false,
         dpadLeft: false,
@@ -233,6 +235,7 @@ export class GamepadManager {
 
     // ── Stick clicks ──
     result.sprint = this._btn(gp, BTN.L3);
+    result.chronoLock = this._btn(gp, BTN.R3);
 
     // ── Menu ──
     result.pause = this._btn(gp, BTN.START);
@@ -254,6 +257,7 @@ export class GamepadManager {
     result.justPressed.minimap = curr[BTN.SELECT] && !this._prevButtons[BTN.SELECT];
     result.justPressed.weaponNext = curr[BTN.RB] && !this._prevButtons[BTN.RB];
     result.justPressed.weaponPrev = curr[BTN.LB] && !this._prevButtons[BTN.LB];
+    result.justPressed.chronoLock = curr[BTN.R3] && !this._prevButtons[BTN.R3];
     result.justPressed.dpadUp = curr[BTN.DPAD_UP] && !this._prevButtons[BTN.DPAD_UP];
     result.justPressed.dpadDown = curr[BTN.DPAD_DOWN] && !this._prevButtons[BTN.DPAD_DOWN];
     result.justPressed.dpadLeft = curr[BTN.DPAD_LEFT] && !this._prevButtons[BTN.DPAD_LEFT];
@@ -331,12 +335,14 @@ export class GamepadManager {
           interact: '✕', dash: '○', reload: '□', chronoShift: '△',
           shoot: 'R2', aim: 'L2', weaponNext: 'R1', weaponPrev: 'L1',
           pause: 'OPTIONS', minimap: 'SHARE', sprint: 'L3',
+          chronoRewind: 'L1', chronoLock: 'R3',
         };
       case 'switch':
         return {
           interact: 'B', dash: 'A', reload: 'Y', chronoShift: 'X',
           shoot: 'ZR', aim: 'ZL', weaponNext: 'R', weaponPrev: 'L',
           pause: '+', minimap: '-', sprint: 'LS',
+          chronoRewind: 'L', chronoLock: 'RS',
         };
       case 'xbox':
       default:
@@ -344,6 +350,7 @@ export class GamepadManager {
           interact: 'A', dash: 'B', reload: 'X', chronoShift: 'Y',
           shoot: 'RT', aim: 'LT', weaponNext: 'RB', weaponPrev: 'LB',
           pause: 'MENU', minimap: 'VIEW', sprint: 'LS',
+          chronoRewind: 'LB', chronoLock: 'RS',
         };
     }
   }

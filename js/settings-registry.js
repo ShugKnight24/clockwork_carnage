@@ -17,6 +17,7 @@ import { setArtStyle } from "../src/rendering/art-style.js";
 export const DEFAULT_SETTINGS = Object.freeze({
   crosshair: 0, // 0=red dot, 1=green cross, 2=acog, 3=circle, 4=minimal, 5=none
   difficulty: 1, // 0=easy, 1=normal, 2=hard, 3=nightmare
+  hunterResponse: 0, // 0=Auto (Story only on Easy), 1=On, 2=Story only, 3=Off
   cutsceneAutoAdvance: false, // manual advance by default
   minimapSize: 200,
   masterVolume: 100, // 0..100
@@ -112,6 +113,21 @@ export const SETTINGS_REGISTRY = [
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
     colors: ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"],
+    min: 0,
+    max: 3,
+    step: 1,
+    wrap: true,
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "hunterResponse",
+    label: "Hunter Response",
+    desc: "Long shifts draw Voss's hunters. Story only keeps the whispers.",
+    category: "Gameplay",
+    type: "enum",
+    values: ["Auto", "On", "Story only", "Off"],
+    colors: ["#00ccff", "#ff2a4a", "#ffaa00", "#8899aa"],
     min: 0,
     max: 3,
     step: 1,
