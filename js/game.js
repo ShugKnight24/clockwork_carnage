@@ -1731,6 +1731,9 @@ export class Game {
       this.mouse.dx = 0;
       this.mouse.dy = 0;
       this.builder.update(this.deltaTime);
+      // New, switched, deleted and imported worlds replace the Forge's world
+      // behind the host's back; the renderer draws this one.
+      this.world = this.builder.world;
       return;
     }
     if (this.state === GameState.HUD_EDITOR) {

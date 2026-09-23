@@ -192,6 +192,37 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-editor");
   });
 
+  test("a world made with Ctrl+N is the one drawn", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    const before = await page.evaluate(() => window.ccDebug.game.builder.world.meta.gen);
+    expect(before).toMatchObject({ kind: "terrain", v: 1 });
+
+    await page.keyboard.press("Control+KeyN");
+    await page.waitForFunction(
+      (seed) => window.ccDebug.game.builder.world.meta.gen?.seed !== seed,
+      before.seed,
+      { timeout: 10_000 },
+    );
+    // The host renders its own reference to the world; before the fix it kept
+    // drawing the old one while every edit went to the new one.
+    await page.waitForFunction(
+      () => {
+        const g = window.ccDebug.game;
+        return g.world === g.builder.world && g.voxelRenderer.world === g.builder.world;
+      },
+      null,
+      { timeout: 10_000 },
+    );
+    const gen = await page.evaluate(() => window.ccDebug.game.world.meta.gen);
+    expect(Number.isInteger(gen.seed) && gen.seed >= 0 && gen.seed < 2 ** 32).toBe(true);
+    await waitForMeshIdle(page);
+    expect(await page.evaluate(() => window.ccDebug.game.voxelRenderer.stats.chunksDrawn)).toBeGreaterThan(0);
+  });
+
   test("draws the whole world at the lowest quality preset", async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);
