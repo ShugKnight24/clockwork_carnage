@@ -887,10 +887,10 @@ function buildContainment() {
       // North corridor
       { x: 10.5, y: 16.5, type: "enemy", enemyType: "corruptCop" },
       { x: 49.5, y: 16.5, type: "enemy", enemyType: "corruptCop" },
-      // Sub-boss arena (shield commander approach)
+      // Sub-boss arena: the Shield Commander ARIA warns about, flanked
       { x: 25.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
       { x: 34.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
-      { x: 29.5, y: 5.5, type: "enemy", enemyType: "phantom" },
+      { x: 29.5, y: 5.5, type: "enemy", enemyType: "shieldCommander" },
       { x: 30.5, y: 5.5, type: "enemy", enemyType: "phantom" },
       // Warden's office — Voss docs guarded
       { x: 7.5, y: 7.5, type: "enemy", enemyType: "henchman" },

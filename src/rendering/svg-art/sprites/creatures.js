@@ -342,6 +342,9 @@ export const CREATURES = {
   glitchling: { build: glitchling, variants: 3, box: [-50, -54, 100, 94], rim: "#7dff9a", floater: true, jitter: true },
   phantom: { build: phantom, variants: 3, box: [-56, -100, 112, 176], rim: "#e59bff", floater: true, size: 1.1 },
   beast: { build: beast, variants: 2, box: [-110, -80, 222, 176], rim: "#ff8a3a" },
+  // The Hound (C-0016) until its own art lands: the plated beast in pale heat
+  // colours, a shimmer around it, snapping between positions.
+  hound: { build: (v) => beast(v + 1), variants: 1, box: [-110, -80, 222, 176], rim: "#ffe2a8", aura: "#ffd79a", jitter: true, size: 1.2 },
 };
 
 export const CREATURE_DEFS = {

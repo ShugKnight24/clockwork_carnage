@@ -1,5 +1,6 @@
 import { GameState } from "../game.js";
 import { ACTS, isLastAct, UPGRADES } from "../data.js";
+import { isBossEnemy } from "../../src/systems/combat.js";
 
 const VALID_STATES = new Set(Object.values(GameState));
 const PLAYER_DEFS = {
@@ -364,7 +365,7 @@ export function createPlaytestGate(game, tools) {
   }
 
   function killBossDirectly() {
-    const boss = game.entities.find((e) => e.type === "enemy" && e.active && e.enemyType?.startsWith("boss"));
+    const boss = game.entities.find((e) => e.type === "enemy" && e.active && isBossEnemy(e));
     if (!boss) throw new Error("Boss level has no active boss");
     boss.health = 1;
     game.damageEnemy(boss, 999999, { name: "body", mult: 1 });

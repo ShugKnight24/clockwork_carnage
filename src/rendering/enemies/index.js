@@ -14,6 +14,7 @@ import { renderTimeWarden } from "./time-warden.js";
 import { renderEchoDrone } from "./echo-drone.js";
 import { renderRiftLeaper } from "./rift-leaper.js";
 import { renderTemporalEngineer } from "./temporal-engineer.js";
+import { renderHound } from "./hound.js";
 
 export const ENEMY_RENDERERS = {
   drone: renderDrone,
@@ -34,4 +35,5 @@ export const ENEMY_RENDERERS = {
   echoDrone: renderEchoDrone,
   riftLeaper: renderRiftLeaper,
   temporalEngineer: renderTemporalEngineer,
+  hound: renderHound,
 };

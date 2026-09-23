@@ -16,7 +16,7 @@ import { ACTS, getAct } from "../data/campaign/acts.js";
  * Returns [baseHex, darkHex]. Pure; safe to call at spawn or replacement.
  */
 export function jitterPalette(baseHex, darkHex, kind) {
-  if (!baseHex || kind === "boss" || kind === "boss_form2" || kind === "boss_form3") {
+  if (!baseHex || ENEMY_TYPES[kind]?.boss) {
     return [baseHex, darkHex];
   }
   const dh = (Math.random() - 0.5) * 16;        // ±8°
@@ -234,7 +234,7 @@ export function createCampaignEntities(level, act, ngPlusCycle, diff) {
       let enemyType = e.enemyType;
       if (enemyType === "boss") enemyType = actDef?.boss.type ?? "boss";
       const enemy = new Enemy(safe.x, safe.y, enemyType);
-      const actScale = enemyType.startsWith("boss") ? 1 : (actDef?.scale ?? 1);
+      const actScale = ENEMY_TYPES[enemyType]?.boss ? 1 : (actDef?.scale ?? 1);
       enemy.health = Math.floor(
         enemy.health * diff.healthMul * actScale * ngScale,
       );
@@ -360,7 +360,7 @@ export function applyActEnemyRoster(entities, act, diff) {
   const subs = actDef?.substitutes ?? {};
   for (const e of entities) {
     if (e.type !== "enemy") continue;
-    if (e.enemyType && e.enemyType.startsWith("boss")) continue;
+    if (ENEMY_TYPES[e.enemyType]?.boss) continue;
     if (e.enemyType && !roster.includes(e.enemyType)) {
       const replacement = subs[e.enemyType];
       if (replacement && ENEMY_TYPES[replacement]) {

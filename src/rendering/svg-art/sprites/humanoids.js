@@ -907,6 +907,7 @@ const EXTRA_DEFS = {
   sentinel: `<linearGradient id="tabard" x1="0" y1="0" x2="1" y2=".3"><stop offset="0" stop-color="#3a4f78"/><stop offset=".5" stop-color="#1c2a48"/><stop offset="1" stop-color="#0a1020"/></linearGradient>`,
   phaseStalker: `<linearGradient id="scarf" x1="0" y1="0" x2="1" y2=".3"><stop offset="0" stop-color="#2f8a74"/><stop offset=".5" stop-color="#155244"/><stop offset="1" stop-color="#05201a"/></linearGradient>`,
   beast: `<linearGradient id="hideDk" x1="0" y1="0" x2="1" y2=".45"><stop offset="0" stop-color="#5a1e08"/><stop offset=".4" stop-color="#2c0c04"/><stop offset="1" stop-color="#0a0302"/></linearGradient>`,
+  hound: `<linearGradient id="hideDk" x1="0" y1="0" x2="1" y2=".45"><stop offset="0" stop-color="#4a3a2c"/><stop offset=".4" stop-color="#241a12"/><stop offset="1" stop-color="#080604"/></linearGradient>`,
   temporalSummoner: `<linearGradient id="skinV" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#cdb6e0"/><stop offset="1" stop-color="#4a3860"/></linearGradient>`,
   riftLeaper: `<linearGradient id="hide" x1="0" y1="0" x2="1" y2=".45"><stop offset="0" stop-color="#8a4a86"/><stop offset=".3" stop-color="#4e2250"/><stop offset="1" stop-color="#12051a"/></linearGradient>` +
     `<linearGradient id="claw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a1030"/><stop offset=".6" stop-color="#c77ab8"/><stop offset="1" stop-color="#ffe6fa"/></linearGradient>`,

@@ -132,7 +132,7 @@ function buildModelIn(type, real) {
     pivot: spec.floater ? 0 : SOLE,
     floater: !!spec.floater,
     jitter: !!spec.jitter,
-    sideOn: type === "beast",
+    sideOn: type === "beast" || type === "hound",
     shield: spec.shield || null,
     rim: spec.rim,
     variants,

@@ -166,6 +166,38 @@ export const ENEMY_TYPES = {
     boss: true,
     hitZones: BOSS_ZONES,
   },
+  // Act II's boss: suit C-0016, the prototype before yours, walking with
+  // nobody inside. A placeholder until its own art and phasing land (spec
+  // §6): a chrono beast's body and moves at boss weight, drawn in the pale
+  // heat colours of an empty suit and stuttering between frames.
+  hound: {
+    name: "The Hound",
+    health: 1100,
+    speed: 1.3,
+    damage: 32,
+    attackRate: 1300,
+    attackRange: 3,
+    sightRange: 30,
+    radius: 0.5,
+    score: 8000,
+    color1: "#e8c9a0",
+    color2: "#3a2a1e",
+    xp: 300,
+    attackType: "melee",
+    attackWindupMs: 450,
+    ai: "ambush",
+    chargeCooldown: 4000,
+    chargeWindup: 0.6,
+    chargeDuration: 0.9,
+    chargeSpeedMul: 3.0,
+    chargeDamageMul: 1.5,
+    chronoMultiplier: 1.5,
+    boss: true,
+    hitZones: [
+      { name: "head", top: 0.85, bottom: 0.65, mult: 2.5, tight: true },
+      { name: "core", top: 0.65, bottom: 0.30, mult: 1.4 },
+    ],
+  },
   corruptCop: {
     name: "Corrupt SWAT Officer",
     health: 50,
