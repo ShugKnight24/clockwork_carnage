@@ -189,7 +189,7 @@ export const ENEMY_TYPES = {
   // fight runs on.
   hound: {
     name: "The Hound",
-    health: 1000,
+    health: 900,
     speed: 1.35,
     damage: 30,
     attackRate: 1300,

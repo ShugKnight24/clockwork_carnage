@@ -68,6 +68,11 @@
 - [ ] Unit suite; smoke, playtest-gate, level-looks e2e on 5192.
 - [ ] Headless GPU captures (Comic, 1920×1080): each map entry and set piece, overhead minimaps, the Hound shimmering / solid / attacking, the collapse chase.
 
+## Outcome
+
+- Collapse, measured with real key input in the game (Normal): a walker who never shifts is caught twice (100 → 80 HP) and gets out with the hint card up; a sprinter who never shifts clears Shaft A in 7.9 s with the front three steps behind; a sprinter who shifts once keeps four or more steps clear.
+- The Hound: 900 HP (unscaled by act), lunge every ~4.2 s at range, quills every ~5.5 s; the tells were checked in GPU captures in all three art styles.
+
 ## Deferred
 
 - Rook's friendly turrets in the Salvage Deck and scripted waves in the Precinct (both need a wave/ally system; the maps hold the space for them).
