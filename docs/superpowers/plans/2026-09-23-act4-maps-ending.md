@@ -112,9 +112,17 @@ Each map serves its beat; all are 60×60 with a `heightMap`, secrets and props, 
 - [ ] `npx vitest run --testTimeout=60000`; smoke, playtest-gate, level-looks on port 5194.
 - [ ] Headless GPU captures at 1920×1080 in Comic art: each Act IV map (entry and set piece), Form 3's stopped time, the epilogue, a parting-gift scene.
 
+## Results (2026-09-23)
+
+- `npx vitest run --testTimeout=60000`: 1754 passed (baseline 1665), with `act4-maps`, `act4-chronos` and `eleven-seconds` added.
+- `smoke`, `playtest-gate` and `level-looks` e2e: 27 passed on port 5194.
+- GPU captures (Comic, 1920×1080, WebGL2 active, no console errors): every Act IV map at entry and at its set piece, the three phases of Eleven Seconds, the gift scenes, Lyra's recording, the epilogue and an NG+ echo.
+- Found while capturing: the raycaster stops at the first solid cell, low walls included, so nothing behind waist- or knee-high cover is drawn (floor and ceiling show through). It predates this work and touches every map with low cover; Act IV keeps its main sightlines clear of it.
+
 ## Deferred
 
 - Re-basing IV-5/IV-6 on the III-5/III-6 grids once they exist (Decision 1).
+- Drawing walls behind low cover in the raycaster (see Results).
 - Counter-shift on Form 3 (it ships with Form 2).
 - NG+ extra levels (the `extraLevels` hook only), `origin_panels` as the NG+ opener.
 - A gift marker on the HUD's power chips (HUD files are another agent's this sprint).
