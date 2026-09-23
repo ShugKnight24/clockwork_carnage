@@ -20,6 +20,7 @@ import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { Enemy } from "../entities.js";
 import { effectiveAimFov } from "../../src/systems/aim.js";
 import { bestTool } from "../../src/rpg/tools.js";
+import { streamerFor } from "../../src/world/world-streamer.js";
 
 export function createDebugBridge(game) {
   const bridge = {
@@ -134,12 +135,21 @@ export function createDebugBridge(game) {
       const world = game.world || game.builder?.world;
       const vr = game.voxelRenderer;
       if (!world || !vr) return null;
+      const st = streamerFor(world);
       return {
         chunksDrawn: vr.stats.chunksDrawn,
         meshedThisFrame: vr.stats.meshedThisFrame,
         ms: vr.stats.ms,
         version: world.version,
         dirty: world.dirty.size,
+        // Streaming, for endless worlds: what is resident and what it costs.
+        endless: world.endless,
+        columns: world.columns.size,
+        meshes: vr.stats.chunks,
+        edits: world.edits.size,
+        pending: st ? st.stats.pending : 0,
+        streamMs: st ? st.stats.ms : 0,
+        drawRadius: st ? st.radii.draw : null,
       };
     },
 

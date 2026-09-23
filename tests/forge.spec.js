@@ -41,6 +41,33 @@ async function waitForMeshIdle(page, timeoutMs = 30_000) {
   );
 }
 
+/**
+ * New worlds are endless and load their columns as they are drawn, so a cell
+ * away from the spawn reads as air until the streamer reaches it.
+ */
+async function waitForColumn(page, x, y, timeoutMs = 30_000) {
+  await page.waitForFunction(
+    ([x, y]) => window.ccDebug?.game?.builder?.world?.isLoaded(x, y),
+    [x, y],
+    { timeout: timeoutMs },
+  );
+}
+
+/** Ctrl+N with B pressed first: a bounded 128 × 128 world, as every world was before phase 4. */
+async function newBoundedWorld(page) {
+  await page.evaluate(() => { window.ccDebug.game.builder.boundedNew = true; });
+  const before = await page.evaluate(() => window.ccDebug.game.builder.world.meta.gen.seed);
+  await page.keyboard.press("Control+KeyN");
+  await page.waitForFunction(
+    (seed) => {
+      const g = window.ccDebug.game;
+      return g.builder.world.meta.gen.seed !== seed && g.world === g.builder.world && !g.builder.world.endless;
+    },
+    before,
+    { timeout: 10_000 },
+  );
+}
+
 /** Re-aims the builder camera and recomputes its raycast target (`update()` does both). */
 async function aimAndUpdate(page, { x, y, z, angle = 0, pitch = 0 }) {
   await page.evaluate(
@@ -229,6 +256,16 @@ test.describe("Voxel Forge", () => {
     await debug(page, "startBuilder");
     await waitForForge(page);
 
+    // An endless world draws to a radius that follows the tier (decision #4).
+    await debug(page, "quality", "ultra-low");
+    await page.waitForFunction(() => window.ccDebug.forgeWorldStats()?.drawRadius === 80);
+    await debug(page, "quality", "ultra");
+    await page.waitForFunction(() => window.ccDebug.forgeWorldStats()?.drawRadius === 160);
+
+    // A bounded world keeps the whole box on every tier, as it always did.
+    await page.keyboard.press("Space"); // dismiss onboarding
+    await newBoundedWorld(page);
+
     /**
      * Chunks drawn from a ground pose in one corner looking diagonally across
      * the world — the longest sight line there is — once the mesher has caught
@@ -306,6 +343,7 @@ test.describe("Voxel Forge", () => {
 
     await debug(page, "startBuilder");
     await waitForForge(page);
+    await waitForColumn(page, 100, 100);
     expect(await page.evaluate(() => window.ccDebug.game.world.get(100, 100, 50))).toBe(7);
   });
 
@@ -394,6 +432,8 @@ test.describe("Voxel Forge", () => {
     await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
     await debug(page, "startBuilder");
     await waitForForge(page);
+    await waitForColumn(page, 43, 64);
+    await waitForColumn(page, 45, 64);
     const after = await page.evaluate(() => {
       const w = window.ccDebug.game.builder.world;
       return [w.get(43, 64, 49), w.get(44, 64, 49), w.get(45, 64, 49)];
@@ -1241,5 +1281,82 @@ test.describe("Voxel Forge", () => {
       return { before, after: b.survival.inventory.count("stone") };
     });
     expect(placed.after).toBe(placed.before - 1);
+  });
+
+  test("endless: fly 600 blocks, terrain keeps coming, memory stays bounded, a far build survives a reload", async ({ page }) => {
+    test.setTimeout(300_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+    expect(await page.evaluate(() => window.ccDebug.game.builder.world.endless)).toBe(true);
+
+    // Noclip with real keys: N, then Space to climb clear of the hills, then
+    // W along +x (a new world faces +x) for 600 blocks.
+    await page.keyboard.press("KeyN");
+    await page.keyboard.down("Space");
+    await page.waitForFunction(() => window.ccDebug.game.builder.player.z > 52, null, { timeout: 30_000 });
+    await page.keyboard.up("Space");
+    const start = await page.evaluate(() => window.ccDebug.game.builder.player.x);
+    const samples = [];
+    await page.keyboard.down("KeyW");
+    for (;;) {
+      await page.waitForTimeout(1000);
+      const s = await page.evaluate(() => ({ x: window.ccDebug.game.builder.player.x, ...window.ccDebug.forgeWorldStats() }));
+      samples.push(s);
+      if (s.x - start >= 600) break;
+      if (samples.length > 200) throw new Error(`flew only ${s.x - start} blocks`);
+    }
+    await page.keyboard.up("KeyW");
+    const end = samples[samples.length - 1];
+    // Terrain is drawn the whole way: every sample drew chunks, and the
+    // resident set never grew past the unload disc (radius 220 blocks).
+    const unloadDisc = Math.PI * ((220 + 12) / 16) ** 2;
+    for (const s of samples) {
+      expect(s.chunksDrawn, `at x=${s.x.toFixed(0)}`).toBeGreaterThan(20);
+      expect(s.columns, `at x=${s.x.toFixed(0)}`).toBeLessThan(unloadDisc);
+    }
+    // The ground under the player is really there, 600 blocks out.
+    const here = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      const x = Math.floor(b.player.x), y = Math.floor(b.player.y);
+      return { loaded: b.world.isLoaded(x, y), top: b.world.topSolid(x, y), spawn: b.world.isLoaded(0, 0) };
+    });
+    expect(here.loaded).toBe(true);
+    expect(here.top).toBeGreaterThan(10);
+    expect(here.spawn).toBe(false); // the start is long unloaded
+
+    // Build out here, then fly back far enough for the column to unload: its
+    // edit must be folded, not dropped.
+    const far = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      const x = Math.floor(b.player.x) + 3, y = Math.floor(b.player.y);
+      b._editBlock(x, y, 62, 9);
+      return { x, y };
+    });
+    await page.evaluate(() => { window.ccDebug.game.builder.player.angle = Math.PI; });
+    await page.keyboard.down("KeyW");
+    await page.waitForFunction(
+      ({ x, y }) => !window.ccDebug.game.builder.world.isLoaded(x, y),
+      far,
+      { timeout: 120_000 },
+    );
+    await page.keyboard.up("KeyW");
+    expect(await page.evaluate(({ x, y }) => window.ccDebug.game.builder.world.edits.has(
+      window.ccDebug.game.builder.world.columnKey(x >> 4, y >> 4)), far)).toBe(true);
+
+    // Reload with no explicit save: the page hiding writes it.
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.evaluate(({ x, y }) => {
+      const b = window.ccDebug.game.builder;
+      Object.assign(b.player, { x: x + 0.5, y: y + 0.5, z: 63 - 1.7 });
+      b.noclip = true;
+    }, far);
+    await waitForColumn(page, far.x, far.y);
+    expect(await page.evaluate(({ x, y }) => window.ccDebug.game.builder.world.get(x, y, 62), far)).toBe(9);
+    await screenshot(page, "forge-endless-far-build");
   });
 });
