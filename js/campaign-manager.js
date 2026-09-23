@@ -111,6 +111,7 @@ export class CampaignManager {
         }
         g.killedEnemies = data.killedEnemies ?? 0;
       }
+      this._noteMigration(raw);
       return true;
     } catch (err) {
       // A save this build cannot apply: restart its level rather than leave
@@ -118,8 +119,18 @@ export class CampaignManager {
       console.warn("[Campaign] save could not be applied; restarting level", err);
       g.player.reset();
       this.loadLevel(index);
+      this._noteMigration(raw);
       return true;
     }
+  }
+
+  /**
+   * A save from before the story restructure was moved to where its act now
+   * begins (save-system migrateCampaignSave); ARIA says so, once. The save
+   * loadLevel just wrote no longer carries the flag.
+   */
+  _noteMigration(raw) {
+    if (raw.migrated) this.game.queueAriaMessage?.("storyRestructured");
   }
 
   clearSave() {

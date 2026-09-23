@@ -16,6 +16,11 @@ import { SETTINGS_REGISTRY } from "../../js/settings-registry.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "./character-normalize.js";
 
 const SAVE_VERSION = 1;
+/**
+ * Campaign saves moved to v2 with the four-act campaign (29 slots instead of
+ * three passes over nine maps). Arena saves did not change and stay v1.
+ */
+export const CAMPAIGN_SAVE_VERSION = 2;
 
 function clampSetting(key, val) {
   const def = SETTINGS_REGISTRY.find((s) => s.key === key);
@@ -326,6 +331,45 @@ export function clearArenaSave() {
 
 // ── Campaign Save ────────────────────────────────────────
 
+/**
+ * Bring a campaign save up to CAMPAIGN_SAVE_VERSION, or null if it cannot be.
+ *
+ * v1 saves were made when every act replayed the same nine maps. The story
+ * restructure (spec §15 "Save migration", decision 12) restarts the act a
+ * save was in, where the act changed:
+ *   - Act I levels 0-6 are the same maps with the same seeds, so they keep
+ *     everything, down to where the player stood.
+ *   - Act I levels 7-8 (the Nexus, which left Act I, and the Core) land on
+ *     the Core, now Act I's level 7.
+ *   - Act 2 restarts at the Gathering's first level: there is no honest
+ *     mid-point in a different story. Act 3 restarts at Act IV.
+ * Anything restarted loses its mid-level state (grid, enemies, position) and
+ * is flagged `migrated` so the game can say why, once. The NG+ cycle, player
+ * stats, weapons and difficulty carry over.
+ * @param {object} data
+ * @returns {object|null}
+ */
+export function migrateCampaignSave(data) {
+  if (!data || typeof data !== "object") return null;
+  if (data.version === CAMPAIGN_SAVE_VERSION) return data;
+  if (data.version !== 1) return null;
+  const act = data.act || 1;
+  const level = data.level | 0;
+  if (act === 1 && level >= 0 && level <= 6) return { ...data, version: CAMPAIGN_SAVE_VERSION };
+  const to = { 1: { act: 1, level: 7 }, 2: { act: 2, level: 0 }, 3: { act: 4, level: 0 } }[act];
+  if (!to) return null;
+  const {
+    mapGrid: _grid,
+    entityStates: _entities,
+    killedEnemies: _killed,
+    playerX: _x,
+    playerY: _y,
+    playerAngle: _angle,
+    ...kept
+  } = data;
+  return { ...kept, version: CAMPAIGN_SAVE_VERSION, act: to.act, level: to.level, migrated: true };
+}
+
 export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGrid, entities, killedEnemies) {
   try {
     const entityStates = entities.map(e => {
@@ -335,7 +379,7 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
       return { type: e.type, active: e.active };
     });
     const data = {
-      version: SAVE_VERSION,
+      version: CAMPAIGN_SAVE_VERSION,
       level,
       act: act || 1,
       ngPlusCycle: ngPlusCycle || 0,
@@ -354,13 +398,16 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
   } catch (_) {}
 }
 
-/** Returns parsed save data or null. Game applies state changes. */
+/**
+ * Returns parsed save data, migrated to the current version, or null. Game
+ * applies state changes. A save no migration can read is cleared.
+ */
 export function loadCampaignData() {
   try {
     const raw = localStorage.getItem("cc_campaign_save");
     if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (data.version !== SAVE_VERSION) {
+    const data = migrateCampaignSave(JSON.parse(raw));
+    if (!data) {
       clearCampaignSave();
       return null;
     }
@@ -390,9 +437,10 @@ export function getSaveInfo() {
       info.push({ mode: "arena", round: d.round, score: d.score });
     }
     const campaign = localStorage.getItem("cc_campaign_save");
-    if (campaign) {
-      const d = JSON.parse(campaign);
-      info.push({ mode: "campaign", level: d.level + 1, score: d.score, ngPlusCycle: d.ngPlusCycle || 0 });
+    // Report where a Continue will actually land, after any migration.
+    const d = campaign ? migrateCampaignSave(JSON.parse(campaign)) : null;
+    if (d) {
+      info.push({ mode: "campaign", act: d.act || 1, level: d.level + 1, score: d.score, ngPlusCycle: d.ngPlusCycle || 0 });
     }
   } catch (_) {}
   return info;
