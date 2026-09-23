@@ -62,41 +62,56 @@ export class CampaignManager {
 
   load() {
     const g = this.game;
-    const data = Save.loadCampaignData();
-    if (!data) return false;
-
-    g.mode = "campaign";
-    this.level = data.level;
-    this.act = data.act || 1;
-    this.ngPlusCycle = data.ngPlusCycle || 0;
-    g.settings.difficulty = data.difficulty ?? g.settings.difficulty;
-    g.player.reset();
-    this.loadLevel(this.level);
-    g.player.deserialize(data);
-    if (data.playerX !== undefined) {
-      g.player.x = data.playerX;
-      g.player.y = data.playerY;
-      g.player.angle = data.playerAngle;
-      g.player.aimOffsetX = data.aimOffsetX || 0;
-      g.player.aimOffsetY = data.aimOffsetY ?? data.playerPitch ?? 0;
+    const raw = Save.loadCampaignData();
+    if (!raw) return false;
+    const index = raw.level | 0;
+    const level = CAMPAIGN_LEVELS[index];
+    if (!level) {
+      this.clearSave();
+      return false;
     }
-    if (data.mapGrid) g.map.grid = data.mapGrid;
-    if (data.entityStates && data.entityStates.length === g.entities.length) {
-      for (let i = 0; i < data.entityStates.length; i++) {
-        const saved = data.entityStates[i];
-        const ent = g.entities[i];
-        if (saved.type !== ent.type) continue;
-        ent.active = saved.active;
-        if (saved.type === "enemy" && ent.type === "enemy") {
-          ent.health = saved.health;
-          ent.x = saved.x;
-          ent.y = saved.y;
-          ent.state = saved.state;
-        }
+    try {
+      const data = Save.sanitizeCampaignSave(raw, level);
+      g.mode = "campaign";
+      this.level = index;
+      this.act = data.act || 1;
+      this.ngPlusCycle = data.ngPlusCycle || 0;
+      g.settings.difficulty = data.difficulty ?? g.settings.difficulty;
+      g.player.reset();
+      this.loadLevel(this.level);
+      g.player.deserialize(data);
+      if (data.playerX !== undefined) {
+        g.player.x = data.playerX;
+        g.player.y = data.playerY;
+        g.player.angle = data.playerAngle;
       }
-      g.killedEnemies = data.killedEnemies ?? 0;
+      if (data.mapGrid) g.map.grid = data.mapGrid;
+      if (data.entityStates && data.entityStates.length === g.entities.length) {
+        for (let i = 0; i < data.entityStates.length; i++) {
+          const saved = data.entityStates[i];
+          const ent = g.entities[i];
+          if (saved.type !== ent.type) continue;
+          ent.active = saved.active;
+          if (saved.type === "enemy" && ent.type === "enemy") {
+            if (Number.isFinite(saved.health)) ent.health = saved.health;
+            if (saved.x !== undefined) {
+              ent.x = saved.x;
+              ent.y = saved.y;
+            }
+            ent.state = saved.state;
+          }
+        }
+        g.killedEnemies = data.killedEnemies ?? 0;
+      }
+      return true;
+    } catch (err) {
+      // A save this build cannot apply: restart its level rather than leave
+      // the player in a half-loaded one.
+      console.warn("[Campaign] save could not be applied; restarting level", err);
+      g.player.reset();
+      this.loadLevel(index);
+      return true;
     }
-    return true;
   }
 
   clearSave() {

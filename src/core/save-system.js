@@ -9,7 +9,9 @@ import {
   BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
   DEFAULT_CHARACTER,
   ACHIEVEMENTS,
+  WEAPONS,
 } from "../data/index.js";
+import { PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_Y } from "../constants.js";
 import { SETTINGS_REGISTRY } from "../../js/settings-registry.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "./character-normalize.js";
 
@@ -234,6 +236,71 @@ export function saveArena(round, player, upgradeLevels, difficulty) {
     };
     localStorage.setItem("cc_arena_save", JSON.stringify(data));
   } catch (_) {}
+}
+
+/**
+ * Make a campaign save safe to apply to `level` (the level's current data).
+ *
+ * Saves outlive the maps they were made on. A grid of another size crashed
+ * every frame; a position that is now inside a wall, or a NaN that JSON wrote
+ * as null, left the player staring at walls unable to move. Anything that no
+ * longer fits is dropped, so the caller falls back to the level's own start
+ * for that part and keeps the rest (weapons, score, upgrades).
+ */
+export function sanitizeCampaignSave(data, level) {
+  const out = { ...data };
+  const fin = Number.isFinite;
+  const { width: W, height: H } = level;
+  const gridOk =
+    Array.isArray(data.mapGrid) && data.mapGrid.length === H &&
+    data.mapGrid.every((row) => Array.isArray(row) && row.length === W && row.every(fin));
+  if (!gridOk) {
+    delete out.mapGrid;
+    delete out.entityStates;
+    delete out.killedEnemies;
+  }
+  const grid = gridOk ? data.mapGrid : level.grid;
+  const open = (x, y) =>
+    fin(x) && fin(y) && x >= 0 && y >= 0 && x < W && y < H && grid[Math.floor(y)][Math.floor(x)] === 0;
+
+  if (!open(data.playerX, data.playerY) || !fin(data.playerAngle)) {
+    delete out.playerX;
+    delete out.playerY;
+    delete out.playerAngle;
+  }
+  const clampAim = (v, lim) => (fin(v) ? Math.max(-lim, Math.min(lim, v)) : 0);
+  out.aimOffsetX = clampAim(data.aimOffsetX, PLAYER_AIM_LIMIT_X);
+  out.aimOffsetY = clampAim(data.aimOffsetY, PLAYER_AIM_LIMIT_Y);
+
+  // Player stats: a non-number means "keep the fresh player's value".
+  for (const [k, v] of Object.entries(out)) {
+    if (k === "aimOffsetX" || k === "aimOffsetY") continue;
+    if (typeof v === "number" && !fin(v)) delete out[k];
+    if (v === null && k !== "mapGrid") delete out[k];
+  }
+  if (!(out.health > 0)) delete out.health;
+
+  if (Array.isArray(data.weapons)) {
+    const ids = [...new Set(data.weapons.filter((w) => Number.isInteger(w) && w >= 0 && w < WEAPONS.length))];
+    if (ids.length) {
+      // currentWeapon indexes the weapons array; keep the same gun selected.
+      const held = data.weapons[data.currentWeapon];
+      out.weapons = ids;
+      out.currentWeapon = Math.max(0, ids.indexOf(held));
+    } else {
+      delete out.weapons;
+      delete out.currentWeapon;
+    }
+  }
+
+  if (Array.isArray(out.entityStates)) {
+    out.entityStates = out.entityStates.map((e) => {
+      if (e?.type !== "enemy" || open(e.x, e.y)) return e;
+      const { x: _x, y: _y, ...rest } = e;
+      return rest;
+    });
+  }
+  return out;
 }
 
 /** Returns parsed save data or null. Game applies state changes. */
