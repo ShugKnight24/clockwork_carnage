@@ -5,7 +5,7 @@
  * Pure typed-array work — no DOM, no GL — so it runs in node and in a worker.
  */
 import { World } from "../../world/world.js";
-import { isOpaque, isSolid, isWater, FACE } from "../../world/blocks.js";
+import { isOpaque, isSolid, isWater, isCutout, isPlant, FACE } from "../../world/blocks.js";
 
 export const STRIDE = 8;
 const CS = World.CS;
@@ -104,14 +104,16 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
           const z = az * d + uz * i + vz * j;
           const id = get(x, y, z);
           let vis = 0, aoPacked = 0;
-          if (id !== 0) {
+          if (id !== 0 && !isPlant(id)) {
             const nId = get(x + nx, y + ny, z + nz);
             // An opaque neighbour hides any face; a see-through block (glass,
             // door) only hides the face it shares with its own kind, so a pane
             // has no interior faces but still meets stone with a visible face.
             // Water is hidden by water and by anything opaque: a lake draws
-            // its surface, and its bed draws itself.
-            const covered = isOpaque(id) ? isOpaque(nId) : nId === id || (isWater(id) && isOpaque(nId));
+            // its surface, and its bed draws itself. Leaves are hidden only by
+            // opaque blocks, so a canopy seen through its holes has leaves
+            // behind them instead of the sky.
+            const covered = isOpaque(id) || isCutout(id) ? isOpaque(nId) : nId === id || (isWater(id) && isOpaque(nId));
             vis = covered ? 0 : id;
           }
           if (vis && isWater(id)) {
@@ -164,7 +166,9 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
           const c11 = [c10[0] + vx * h, c10[1] + vy * h, c10[2] + vz * h];
           const aos = [ao & 3, (ao >> 2) & 3, (ao >> 4) & 3, (ao >> 6) & 3];
           const layer = layerOf(id, faceKind(n));
-          const target = isOpaque(id) ? opaqueB : isWater(id) ? waterB : alphaB;
+          // Cut-outs ride with the opaque faces: the chunk shader discards
+          // their texture's holes, so they need no sorting and write depth.
+          const target = isOpaque(id) || isCutout(id) ? opaqueB : isWater(id) ? waterB : alphaB;
           // u × v points along +axis, so +axis faces wind c00→c10→c11→c01 and
           // -axis faces take the reverse ring; both are CCW seen from outside.
           if (n % 2 === 0) {
@@ -179,5 +183,24 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
       }
     }
   }
+  plants(get, opaqueB, layerOf);
   return { opaque: opaqueB.finish(), alpha: alphaB.finish(), water: waterB.finish() };
+}
+
+/**
+ * A plant is two quads crossed on the cell's diagonals, each drawn from both
+ * sides since chunk faces are culled from the back. They never merge and hide
+ * nothing. The foot corners take a little AO so a sapling sits in the grass.
+ */
+function plants(get, target, layerOf) {
+  for (let z = 0; z < CS; z++) for (let y = 0; y < CS; y++) for (let x = 0; x < CS; x++) {
+    const id = get(x, y, z);
+    if (id === 0 || !isPlant(id)) continue;
+    const layer = layerOf(id, FACE.SIDE), ao = [2, 2, 3, 3];
+    for (const [ax, ay, bx, by, n] of [[x, y, x + 1, y + 1, 0], [x + 1, y, x, y + 1, 1]]) {
+      const c0 = [ax, ay, z], c1 = [bx, by, z], c2 = [bx, by, z + 1], c3 = [ax, ay, z + 1];
+      target.quad([c0, c1, c2, c3], [[0, 0], [1, 0], [1, 1], [0, 1]], ao, n, layer);
+      target.quad([c0, c3, c2, c1], [[0, 0], [0, 1], [1, 1], [1, 0]], [ao[0], ao[3], ao[2], ao[1]], n, layer);
+    }
+  }
 }

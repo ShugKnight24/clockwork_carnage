@@ -3,13 +3,14 @@ import { World } from "../../src/world/world.js";
 import { BLOCKS, AIR, BEDROCK, isSolid, isOpaque, LAYER_TO_BLOCKS, FACE } from "../../src/world/blocks.js";
 
 describe("blocks", () => {
-  it("has stable ids and the fourteen playable blocks, bedrock, three stations and water", () => {
-    expect(BLOCKS.length).toBe(20);
+  it("has stable ids and the fourteen playable blocks, bedrock, three stations, water and wood", () => {
+    expect(BLOCKS.length).toBe(24);
     BLOCKS.forEach((b, i) => expect(b.id).toBe(i));
     expect(BLOCKS.map((b) => b.name)).toEqual([
       "Air", "Stone", "Tech", "Metal", "Energy", "Door", "Secret", "Boss", "Glass", "Rift",
       "Dirt", "Grass", "Sand", "Rock", "Ore", "Bedrock",
       "Workbench", "Anvil", "Forge", "Water",
+      "Log", "Leaves", "Planks", "Sapling",
     ]);
     expect(AIR).toBe(0); expect(BEDROCK).toBe(15);
     expect(isSolid(AIR)).toBe(false); expect(isSolid(8)).toBe(true);

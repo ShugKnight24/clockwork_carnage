@@ -11,6 +11,7 @@ const MATERIAL = {
   1: "stone", 2: "metal", 3: "metal", 4: "energy", 5: "wood", 6: "stone", 7: "stone",
   8: "glass", 9: "energy", 10: "soft", 11: "soft", 12: "sand", 13: "stone", 14: "stone",
   15: "stone", 16: "wood", 17: "metal", 18: "stone", 19: "water",
+  20: "wood", 21: "leaves", 22: "wood", 23: "leaves",
 };
 
 export const materialOf = (blockId) => MATERIAL[blockId] || "stone";
@@ -39,6 +40,12 @@ const SOUNDS = {
     place: [0.05, 0.2, 700, "bandpass", [[220, 0.1, "triangle", 0.3], [330, 0.06, "sine", 0.12]]],
     hit: [0.04, 0.16, 900, "bandpass", [[250, 0.05, "triangle", 0.15]]],
     break: [0.18, 0.3, 800, "bandpass", [[180, 0.14, "triangle", 0.25]]],
+  },
+  leaves: {
+    // A dry rustle: bright filtered noise, no body.
+    place: [0.12, 0.18, 3400, "bandpass", []],
+    hit: [0.07, 0.14, 4200, "bandpass", []],
+    break: [0.24, 0.24, 3000, "bandpass", [[420, 0.05, "triangle", 0.04]]],
   },
   metal: {
     // Inharmonic partials read as struck metal rather than a note.

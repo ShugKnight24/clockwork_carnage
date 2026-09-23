@@ -8,6 +8,7 @@
 export const AIR = 0;
 export const BEDROCK = 15;
 export const WATER = 19;
+export const LOG = 20, LEAVES = 21, PLANKS = 22, SAPLING = 23;
 /**
  * A water cell with air above is filled to this fraction of its height. The
  * renderer lowers the surface to it and physics and the underwater camera test
@@ -41,13 +42,29 @@ export const BLOCKS = [
   { id: 17, name: "Anvil", kind: "solid", faces: station("anvil"), hardness: 1.5, color: "#4a4e57" },
   { id: 18, name: "Forge", kind: "solid", faces: station("forge"), hardness: 1.5, color: "#5a3428", emissive: [0.9, 0.35, 0.1] },
   { id: 19, name: "Water", kind: "water", faces: nat("water"), hardness: 0, color: "#2f8fbf" },
+  { id: 20, name: "Log", kind: "solid", faces: { top: "nat:log_top", side: "nat:log", bottom: "nat:log_top" }, hardness: 1, color: "#7a5532" },
+  { id: 21, name: "Leaves", kind: "leaves", faces: nat("leaves"), hardness: 0.2, color: "#3f7a34" },
+  { id: 22, name: "Planks", kind: "solid", faces: nat("planks"), hardness: 0.8, color: "#b88a52" },
+  { id: 23, name: "Sapling", kind: "plant", faces: nat("sapling"), hardness: 0.1, color: "#5aa040" },
 ];
 
 /** Water is a see-through block that bodies, rays and bolts pass through. */
 export const isWater = (id) => id === WATER;
-export const isSolid = (id) => id !== AIR && id !== WATER && BLOCKS[id]?.kind !== "air";
-/** Opaque blocks hide the faces of their neighbours; glass and doors do not. */
+/** A plant (a sapling) is walked through, like water, but can still be picked and broken. */
+export const isPlant = (id) => BLOCKS[id]?.kind === "plant";
+// Physics asks this millions of times a second: one table read, not a lookup and three compares.
+const SOLID = new Uint8Array(256).fill(1); // an id no block owns reads as solid, as it always has
+for (const b of BLOCKS) SOLID[b.id] = b.kind !== "air" && b.kind !== "water" && b.kind !== "plant" ? 1 : 0;
+export const isSolid = (id) => SOLID[id] === 1;
+/** Opaque blocks hide the faces of their neighbours; glass, doors and leaves do not. */
 export const isOpaque = (id) => isSolid(id) && BLOCKS[id].kind === "solid";
+/**
+ * Cut-out blocks are drawn with the opaque faces, their texture's holes
+ * discarded rather than blended: leaves, and a sapling's crossed quads.
+ */
+export const isCutout = (id) => { const k = BLOCKS[id]?.kind; return k === "leaves" || k === "plant"; };
+/** What the pick ray stops on by default: anything solid, and plants. */
+export const isTargetable = (id) => isSolid(id) || isPlant(id);
 
 /** Legacy builder layer count (0–5) → block height; a full wall is 3 blocks. */
 export const LAYER_TO_BLOCKS = [0, 1, 1, 2, 2, 3];

@@ -1,5 +1,5 @@
 // src/world/world.js
-import { AIR, BEDROCK, WATER } from "./blocks.js";
+import { AIR, BEDROCK, isSolid } from "./blocks.js";
 import { generateColumn, surfaceHeight } from "./column-gen.js";
 import { genOf, applyDelta, foldColumn } from "./world-delta.js";
 
@@ -346,16 +346,13 @@ export class World {
     return out;
   }
 
-  /** z of the highest block in a column that is neither air nor water, or -1. */
+  /** z of the highest solid block in a column, or -1. Water and saplings are not ground. */
   topSolid(x, y) {
     if (x < this._x0 || y < this._y0 || x >= this._x1 || y >= this._y1) return -1;
     const col = this.column(x >> 4, y >> 4);
     if (!col) return -1;
     const off = ((y & 15) << 4) | (x & 15);
-    for (let z = H - 1; z >= 0; z--) {
-      const id = col.blocks[(z << 8) | off];
-      if (id !== AIR && id !== WATER) return z;
-    }
+    for (let z = H - 1; z >= 0; z--) if (isSolid(col.blocks[(z << 8) | off])) return z;
     return -1;
   }
 
