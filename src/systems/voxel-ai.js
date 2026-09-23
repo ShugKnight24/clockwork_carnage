@@ -22,6 +22,7 @@ import {
   playerEyeZ3D,
 } from "../world/voxel-physics.js";
 import { beginWindup } from "./ai.js";
+import { AIR, isWater } from "../world/blocks.js";
 import { Projectile } from "../../js/entities.js";
 import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
 
@@ -41,6 +42,22 @@ const FLYER_CLEARANCE = 1;
 const FLYER_LOOKAHEAD = 1.5;
 /** Blocks per second a flyer may climb or sink to reach that altitude. */
 const FLY_RATE = 3;
+/** How far below its feet a walker looks for water before stepping off a bank. */
+const WATER_LOOKDOWN = 4;
+
+/**
+ * Would feet at (x, y, z) be in water, or land in it? The feet's own cell,
+ * then the first thing that is not air below it, within a short drop.
+ * Walkers do not swim (water spec, non-goals), so they keep out of it.
+ */
+function wetAt(world, x, y, z) {
+  const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
+  for (let d = 0; d <= WATER_LOOKDOWN; d++) {
+    const id = world.get(bx, by, bz - d);
+    if (id !== AIR) return isWater(id);
+  }
+  return false;
+}
 
 /**
  * A fixed bob offset per flyer, so a pair of drones do not rise and fall in
@@ -254,6 +271,13 @@ export class VoxelAISystem {
    */
   _moveWalker(world, e, stepX, stepY, dt) {
     const { half, height } = bodyOf(e);
+    // A dry walker will not step into water, or off a bank into it: the axis
+    // whose leading edge would get wet is dropped, so it waits at the shore
+    // or slides along it. One already in the water walks out as before.
+    if (!wetAt(world, e.x, e.y, e.z)) {
+      if (stepX && wetAt(world, e.x + stepX + Math.sign(stepX) * half, e.y, e.z)) stepX = 0;
+      if (stepY && wetAt(world, e.x, e.y + stepY + Math.sign(stepY) * half, e.z)) stepY = 0;
+    }
     e.vz = (e.vz || 0) - PLAYER.gravity * dt;
     const body = { x: e.x, y: e.y, z: e.z, half, height };
     const res = moveAABB(world, body, stepX, stepY, e.vz * dt);
