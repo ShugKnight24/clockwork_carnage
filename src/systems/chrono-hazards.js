@@ -220,6 +220,10 @@ export class ChronoHazards {
    */
   update(game, dt) {
     if (!this.piece) return;
+    if (game.mode !== "campaign") {
+      this.reset();
+      return;
+    }
     const p = game.player;
     const prevClock = this.clock;
     this.clock += dt * (p.chronoActive ? HAZARD_CHRONO : 1);

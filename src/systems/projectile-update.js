@@ -20,7 +20,8 @@ const PLAYER_HIT_RADIUS_SQ = 0.25;
 const PLAYER_HIT_HALF = PLAYER.height * 0.5 + 0.1;
 
 function isAliveEnemy(e) {
-  return e?.type === "enemy" && e.active && e.state !== "dead";
+  // A phased enemy (the Hound, while you are not shifting) is not there to hit.
+  return e?.type === "enemy" && e.active && e.state !== "dead" && !e._phased;
 }
 
 /**
@@ -136,6 +137,9 @@ function stepProjectile(p, ctx, stepDt) {
   p.x += p.dirX * hStep;
   p.y += p.dirY * hStep;
 
+  // Kael's Time-Lock: an enemy round that crosses it stops there and hangs.
+  if (ctx.chronoPowers?.captureProjectile(p, prevX, prevY, p.x, p.y)) return;
+
   if (ctx.world) {
     p.z = (p.z || 0) + dz * p.speed * stepDt;
     const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
@@ -189,13 +193,19 @@ export function updateProjectiles(ctx, dt) {
   for (const p of projectiles) {
     if (!p.active) continue;
     attachProjectileLight(ctx.lights, p);
+    // Held in a Time-Lock: no travel, no ageing, until the lock drops it.
+    if (p.frozen) {
+      syncProjectileLight(p);
+      if (p._light) p._light._projTick = _tick;
+      continue;
+    }
 
     // Sub-step to prevent wall clipping on fast bullets
     const totalDist = p.speed * dt;
     const steps = Math.max(1, Math.ceil(totalDist / 0.3));
     const stepDt = dt / steps;
 
-    for (let s = 0; s < steps && p.active; s++) stepProjectile(p, ctx, stepDt);
+    for (let s = 0; s < steps && p.active && !p.frozen; s++) stepProjectile(p, ctx, stepDt);
 
     p.life -= dt;
     if (p.life <= 0) p.active = false;

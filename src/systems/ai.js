@@ -5,6 +5,10 @@
 // Sub-boss abilities: summon, chrono-bomb, teleport/leap, shield regen, HUD disrupt.
 // Boss special abilities: charge, stomp, missile spread, warp.
 // Chrono-bomb fuse + detonation.
+// Chronos: an enemy standing in a Time-Lock's slab runs at a tenth, and a
+// Rewind echo draws every enemy nearer to it than to the player (ctx.chrono).
+// Each enemy exposes its movement intent (`_moveAngle`, `_moveSpeed`) for
+// Foresight's ghosts.
 //
 // ─── TIMER CONVENTION ───────────────────────────────────────────────────────
 // • `dt` (seconds): The clamped game.deltaTime (≤0.033s). Used for movement,
@@ -80,7 +84,9 @@ export class AISystem {
       chronoBombs,
       damageNumbers,
       audio,
+      chrono,
     } = ctx;
+    const echo = chrono?.echo ?? null;
     const fx = {
       damagePlayerCalls: [],
       screenShake: 0,
@@ -110,10 +116,14 @@ export class AISystem {
         : Number.isFinite(e.def?.chronoMultiplier)
           ? e.def.chronoMultiplier
           : 0.15;
-      const enemyDt = player.chronoActive ? dt * chronoMult : dt;
+      const enemyDt = (player.chronoActive ? dt * chronoMult : dt) * (chrono?.enemyTimeScale(e) ?? 1);
 
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
+      // The echo decoy pulls whoever is nearer to it than to the player.
+      const toEcho =
+        !!echo && Math.hypot(echo.x - e.x, echo.y - e.y) < Math.hypot(player.x - e.x, player.y - e.y);
+      const target = toEcho ? echo : player;
+      const dx = target.x - e.x;
+      const dy = target.y - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const ai = e.def.ai || "chase";
 
@@ -167,6 +177,7 @@ export class AISystem {
         const keepMoving = ai === "strafe_fire" || ai === "erratic";
         const charging = e._chargeState === "sprint";
         const shouldMove = !charging && (!inAttackBand || keepMoving);
+        e._moveSpeed = 0;
 
         if (shouldMove) {
           let moveAngle = angle;
@@ -246,6 +257,8 @@ export class AISystem {
             moveSpeed *= 0.5;
           }
 
+          e._moveAngle = moveAngle;
+          e._moveSpeed = moveSpeed;
           const speed = moveSpeed * enemyDt;
           const newX = e.x + Math.cos(moveAngle) * speed;
           const newY = e.y + Math.sin(moveAngle) * speed;
@@ -277,7 +290,7 @@ export class AISystem {
           dist < e.def.attackRange &&
           time - e.lastAttackTime > scaledAttackRate
         ) {
-          if (hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))) {
+          if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
             beginWindup(e, time);
           }
         }
@@ -297,9 +310,9 @@ export class AISystem {
 
       // ── Attack ──
       if (e.state === "attack") {
-        if (hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))) {
+        if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
           if (e.def.attackType === "ranged") {
-            const angle = Math.atan2(player.y - e.y, player.x - e.x);
+            const angle = Math.atan2(target.y - e.y, target.x - e.x);
             const proj = new Projectile(
               e.x + Math.cos(angle) * 0.4,
               e.y + Math.sin(angle) * 0.4,
@@ -316,7 +329,8 @@ export class AISystem {
               audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
             );
           } else if (dist <= e.def.attackRange * ENEMY_MELEE_WHIFF_SLACK) {
-            fx.damagePlayerCalls.push({ damage: e.def.damage, attacker: e });
+            // A swing at the echo lands on nothing.
+            if (!toEcho) fx.damagePlayerCalls.push({ damage: e.def.damage, attacker: e });
           }
           // else: the player stepped out during the telegraph — the swing whiffs.
         }

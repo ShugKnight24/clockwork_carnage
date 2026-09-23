@@ -193,6 +193,9 @@ export const ENEMY_TYPES = {
     chargeDamageMul: 1.5,
     chronoMultiplier: 1.5,
     boss: true,
+    // Always visible as a heat-shimmer, solid only while the player shifts
+    // (spec decision 7): src/systems/chrono-powers.js sets `_phased`.
+    phased: true,
     hitZones: [
       { name: "head", top: 0.85, bottom: 0.65, mult: 2.5, tight: true },
       { name: "core", top: 0.65, bottom: 0.30, mult: 1.4 },

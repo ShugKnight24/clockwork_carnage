@@ -251,7 +251,8 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     for (const target of killed) {
       game.player.score += target.def.score;
       game.player.kills++;
-      game.killedEnemies++;
+      // Hunters never count toward the level (spec §3).
+      if (!target._hunter) game.killedEnemies++;
       game.achievementStats.totalKills++;
       const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
       const dist2 = Math.hypot(target.x - game.player.x, target.y - game.player.y);
@@ -269,7 +270,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     markEnemyDead(enemy, game.time);
     game.player.score += enemy.def.score;
     game.player.kills++;
-    game.killedEnemies++;
+    if (!enemy._hunter) game.killedEnemies++;
     game.achievementStats.totalKills++;
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
     const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
@@ -304,6 +305,8 @@ export function onEnemyKill(game, enemy) {
   }
 
   maybeDropGear(game, enemy);
+  // Hunter payouts and the teach rooms' kill counts.
+  game.chronoPowers?.onEnemyKill(game, enemy);
 
   game.player.chronoEnergy = Math.min(
     game.player.maxChronoEnergy,
@@ -430,10 +433,11 @@ const ELITE_DROP_BONUS = 4;
  * is the same locked-item set the creators show — picking one up is exactly
  * equivalent to earning it.
  */
-export function maybeDropGear(game, enemy) {
+export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   if (!enemy || game.mode !== "campaign") return null;
-  const elite = !!(enemy.def?.isBoss || enemy.def?.elite || enemy.maxHealth >= 200);
-  if (Math.random() >= GEAR_DROP_CHANCE * (elite ? ELITE_DROP_BONUS : 1)) return null;
+  // Hunters out of a Resonance rift roll as elites: being heard pays out.
+  const elite = !!(enemy.def?.isBoss || enemy.def?.elite || enemy._hunter || enemy.maxHealth >= 200);
+  if (Math.random() >= chance * (elite ? ELITE_DROP_BONUS : 1)) return null;
 
   const pool = lockedItems(gameUnlockContext(game, { fresh: true }));
   if (!pool.length) return null;

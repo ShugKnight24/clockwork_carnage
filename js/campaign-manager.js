@@ -244,6 +244,11 @@ export class CampaignManager {
       );
     }
 
+    // Chronos: the powers this slot has earned, and its set piece (seals, a
+    // teach room's enemies) laid over the map before the enemies are counted.
+    g.chronoPowers?.startLevel(g);
+    g.chronoHazards?.load(g, entry);
+
     g.killedEnemies = 0;
     g.totalEnemies = g.entities.filter((e) => e.type === "enemy").length;
     g.killStreakSystem.reset();
@@ -291,6 +296,11 @@ export class CampaignManager {
     } else if (g.squadComms && entry.squad.length > 0) {
       // Squad chimes in at non-boss level starts, when anyone is present
       this._afterLevelStart(1500, () => g.squadComms.onCombatStart());
+    }
+
+    // A power granted at this slot: ARIA says so as its teach card comes up.
+    if (g.chronoPowers?.fresh?.length && g.queueAriaMessage) {
+      this._afterLevelStart(2500, () => g.queueAriaMessage("powerUnlocked"));
     }
 
     // One-shot lore lines for this level (Sprint E 4.3/4.4 reveals, and the

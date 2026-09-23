@@ -74,6 +74,8 @@ import {
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
+import { ChronoPowers } from "../src/systems/chrono-powers.js";
+import { ChronoHazards } from "../src/systems/chrono-hazards.js";
 import { VoxelAISystem } from "../src/systems/voxel-ai.js";
 import {
   PLAYER as VOXEL_PLAYER,
@@ -98,6 +100,7 @@ import {
   damageEnemy as _damageEnemy,
   onEnemyKill as _onEnemyKill,
   damagePlayer as _damagePlayer,
+  maybeDropGear as _maybeDropGear,
 } from "../src/systems/combat-orchestrator.js";
 import { drawCrosshair } from "../src/ui/crosshair.js";
 import { drawScanlines } from "../src/ui/scanlines.js";
@@ -392,6 +395,10 @@ export class Game {
     this._prevCrouchKey = false;
     this.playerUpdateSystem = new PlayerUpdateSystem();
     this.aiSystem = new AISystem();
+    // Chronos (spec §3-§5): the ally powers, Resonance and the level-clock
+    // set pieces. game.js only calls them.
+    this.chronoPowers = new ChronoPowers();
+    this.chronoHazards = new ChronoHazards();
     this.voxelAiSystem = new VoxelAISystem();
     this.controlsSelection = 0;
     this.rebindingKey = null; // null = not rebinding, string = action being rebound
@@ -856,7 +863,12 @@ export class Game {
       }
       if (gp.justPressed.interact) this.interact();
       if (gp.justPressed.weaponNext || gp.justPressed.dpadRight) this._inputWheel(1);
-      if (gp.justPressed.weaponPrev || gp.justPressed.dpadLeft) this._inputWheel(-1);
+      // LB while shifting is Nova's Rewind (spec decision 4); otherwise it
+      // cycles weapons as it always has.
+      const rewindPad = gp.justPressed.weaponPrev && this.player.chronoActive && this.chronoPowers.has("rewind");
+      if (rewindPad) this.chronoRewind();
+      if ((gp.justPressed.weaponPrev && !rewindPad) || gp.justPressed.dpadLeft) this._inputWheel(-1);
+      if (gp.justPressed.chronoLock) this.chronoLock();
       if (gp.justPressed.pause) this.handleKeyPress(this.keybinds.pause);
     } else {
       if (gp.justPressed.dpadUp) this.handleKeyPress("ArrowUp");
@@ -1682,6 +1694,8 @@ export class Game {
   damagePlayer(amount, attacker) {
     // Meltdown exotic pickup: temporary full invulnerability
     if (this.mode === "meltdown" && this.meltdown?.isInvulnerable()) return;
+    // A Chrono Dash is untouchable the whole way.
+    if (this.chronoPowers.isInvulnerable(this.player)) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
@@ -1792,6 +1806,8 @@ export class Game {
     // Player movement
     const _profilePlayerStart = this.showFPS ? performance.now() : 0;
     this.updatePlayer(dt);
+    this.chronoPowers.update(this, dt, this.deltaTime);
+    this.chronoHazards.update(this, dt);
 
     if (this.mode === "meltdown" && this.meltdown.alive) {
       updateMeltdownRun(this, dt);
@@ -1892,8 +1908,9 @@ export class Game {
         this.timeScale = this.player.chronoActive ? 0.3 : 1;
       }
     } else if (this.player.chronoActive) {
-      // Chrono Shift — player-activated time slow
-      this.player.chronoEnergy -= 33 * this.deltaTime; // ~3s at full
+      // Chrono Shift — player-activated time slow. 33/s (~3s at full), 28/s
+      // once Rook has tuned the shard.
+      this.player.chronoEnergy -= this.chronoPowers.drainRate() * this.deltaTime;
       this.timeScale = 0.3;
       if (this.player.chronoEnergy <= 0) {
         this.player.chronoEnergy = 0;
@@ -1934,15 +1951,17 @@ export class Game {
 
   _updateChronoEnergy() {
     // Chrono Shift activation (hold-to-activate, like sprint)
-    // Need 15 energy to engage; once active, stays on until key released or energy depleted
+    // Need 15 energy to engage (10 once tuned); once active, stays on until
+    // key released or energy depleted
     const chronoKeyHeld = !!this.keys[this.keybinds.chronoShift];
     if (
       chronoKeyHeld &&
       !this.player.chronoActive &&
-      this.player.chronoEnergy >= 15
+      this.player.chronoEnergy >= this.chronoPowers.engageCost()
     ) {
       this.player.chronoActive = true;
       if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+      this.chronoPowers.onShiftStart(this);
     } else if (this.player.chronoActive && !chronoKeyHeld) {
       this.player.chronoActive = false;
       this.timeScale = 1;
@@ -2146,6 +2165,13 @@ export class Game {
         rawDirY /= len;
       }
     }
+    // While shifting, once Rook has tuned the shard: a Chrono Dash instead.
+    const dir = rawDirX !== undefined ? [rawDirX, rawDirY] : this._dashDirFor(code);
+    if (this.chronoPowers.tryChronoDash(this, dir[0], dir[1])) {
+      this.achievementStats.totalDashes++;
+      this.gamepad?.vibrateLight?.();
+      return;
+    }
     const triggered = this.playerUpdateSystem.triggerDash(
       { player: this.player, keybinds: this.keybinds },
       code,
@@ -2159,6 +2185,35 @@ export class Game {
       this.audio.dashSound?.();
       this.audio.playerGrunt?.(this.getVoiceProfile(), "dash");
     }
+  }
+
+  /** World direction of a double-tapped movement key. */
+  _dashDirFor(code) {
+    const cos = Math.cos(this.player.angle);
+    const sin = Math.sin(this.player.angle);
+    const kb = this.keybinds;
+    if (code === kb.moveBack) return [-cos, -sin];
+    if (code === kb.moveLeft) return [sin, -cos];
+    if (code === kb.moveRight) return [-sin, cos];
+    return [cos, sin];
+  }
+
+  /** Nova's Rewind Echo (X / LB while shifting / REWIND). */
+  chronoRewind() {
+    if (this.state !== GameState.PLAYING || !this.player.alive) return false;
+    return this.chronoPowers.tryRewind(this);
+  }
+
+  /** Kael's Time-Lock (V / R3 / LOCK). */
+  chronoLock() {
+    if (this.state !== GameState.PLAYING || !this.player.alive) return false;
+    return this.chronoPowers.tryTimeLock(this);
+  }
+
+  /** A set piece's gear cache: one guaranteed gear roll, or supplies. */
+  spawnGearCache(x, y) {
+    const drop = _maybeDropGear(this, { x, y, maxHealth: 0 }, { chance: 1 });
+    if (!drop) this.entities.push(new Pickup(x, y, "health"), new Pickup(x + 0.3, y, "ammo"));
   }
 
   updatePlayer(dt) {
@@ -2289,6 +2344,8 @@ export class Game {
         chronoBombs: this._chronoBombs,
         damageNumbers: this.damageNumbers,
         audio: this.audio,
+        // Time-Lock's slab and Rewind's echo decoy.
+        chrono: this.chronoPowers,
       },
       dt,
     );
@@ -2321,6 +2378,8 @@ export class Game {
         damageEnemy: (e, d, z) => this.damageEnemy(e, d, z),
         damagePlayer: (d) => this.damagePlayer(d),
         lights: this.lights,
+        // Enemy rounds that cross a Time-Lock hang there.
+        chronoPowers: this.chronoPowers,
       },
       dt,
     );

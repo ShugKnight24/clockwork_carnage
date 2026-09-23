@@ -566,6 +566,14 @@ export class ChronoPowers {
    */
   update(game, dt, realDt) {
     const p = game.player;
+    // Arena, meltdown and the rest start without calling startLevel: a
+    // campaign's powers must not follow the player there (spec decision 5).
+    if (game.mode !== "campaign" && (this.powers.length || this.resonanceOn)) this.startLevel(game);
+    // The Hunter response setting can change mid-level.
+    if (game.mode === "campaign" && getAct(this.act)?.resonance) {
+      this.policy = hunterPolicy(game.settings?.hunterResponse ?? 0, game.settings?.difficulty ?? 1);
+      this.resonanceOn = this.policy !== "off";
+    }
     this.clock += realDt;
     for (const k of Object.keys(this.cooldowns)) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - realDt);
 

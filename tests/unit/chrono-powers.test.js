@@ -22,7 +22,10 @@ import {
   ChronoPowers,
 } from "../../src/systems/chrono-powers.js";
 import { ACTS, getActLevel } from "../../src/data/campaign/acts.js";
-import { Projectile } from "../../js/entities.js";
+import { Enemy, Projectile } from "../../js/entities.js";
+import { AISystem } from "../../src/systems/ai.js";
+import { rayEnemyHit, projectileHitsEnemy } from "../../src/systems/combat.js";
+import { updateProjectiles } from "../../src/systems/projectile-update.js";
 
 // Spec §3 (Resonance), §4 (the four powers), §16.3, and the 2026-09-22
 // decisions: Story only on Easy, Rewind on its own input, no powers outside
@@ -536,5 +539,78 @@ describe("ChronoPowers runtime", () => {
     game.player.chronoActive = true;
     cp.update(game, 0.05, 0.05);
     expect(hound._phased).toBe(false);
+  });
+});
+
+describe("Chronos in the combat systems", () => {
+  const open = () => ({ width: 30, height: 30, grid: Array.from({ length: 30 }, () => new Array(30).fill(0)) });
+  const audio = { calculatePan: () => 0, enemyShoot: () => {}, enemyHit: () => {}, enemyBark: () => {} };
+  const aiCtx = (entities, player, chrono, time) => ({
+    entities, player, map: open(), time, timeScale: 1,
+    projectiles: [], chronoBombs: [], damageNumbers: [], audio, chrono,
+  });
+
+  it("lets rounds through the Hound until the player shifts", () => {
+    const cp = new ChronoPowers();
+    const game = fakeGame({ act: 2, level: 6 });
+    const hound = new Enemy(15.5, 10, "hound");
+    game.entities.push(hound);
+    cp.startLevel(game);
+    const shot = () => rayEnemyHit({ x: 10, y: 10 }, 1, 0, 20, 0, hound);
+    const round = () => projectileHitsEnemy({ x: 15.5, y: 10, originX: 10, originY: 10, dirX: 1, dirY: 0 }, hound, 15, 10);
+    cp.update(game, 0.016, 0.016);
+    expect(shot()).toBeNull();
+    expect(round()).toBeNull();
+    game.player.chronoActive = true;
+    cp.update(game, 0.016, 0.016);
+    expect(shot()).not.toBeNull();
+    expect(round()).not.toBeNull();
+  });
+
+  it("runs an enemy in the Time-Lock's slab at a tenth", () => {
+    const ai = new AISystem();
+    const player = { x: 10, y: 10, angle: 0, chronoActive: false };
+    const walker = () => Object.assign(new Enemy(20, 10, "henchman"), { state: "chase", lastAttackTime: 1e12 });
+    const free = walker();
+    const held = walker();
+    const lock = makeTimeLock(18.5, 10, 0, 0); // plane at x = 20, across the lane
+    const chrono = { echo: null, enemyTimeScale: (e) => (e === held && inLockSlab(lock, e.x, e.y) ? POWERS.timeLock.slow : 1) };
+    for (let i = 0; i < 10; i++) ai.update(aiCtx([free, held], player, chrono, 1000 + i * 16), 1 / 60);
+    expect(20 - held.x).toBeCloseTo((20 - free.x) * POWERS.timeLock.slow, 3);
+  });
+
+  it("sends the swing at the echo instead of the player", () => {
+    const ai = new AISystem();
+    const e = Object.assign(new Enemy(10, 10, "sentinel"), { state: "chase", lastAttackTime: -1e9 });
+    const player = { x: 16, y: 10, angle: 0, chronoActive: false };
+    const chrono = { echo: { x: 11, y: 10 }, enemyTimeScale: () => 1 };
+    let hits = 0;
+    for (let i = 0; i < 120; i++) hits += ai.update(aiCtx([e], player, chrono, i * 16), 1 / 60).damagePlayerCalls.length;
+    expect(e.lastAttackTime).toBeGreaterThan(-1e9); // it did swing
+    expect(hits).toBe(0);
+  });
+
+  it("holds a caught round in the air and drops it when the lock ends", () => {
+    const cp = new ChronoPowers();
+    const game = fakeGame({ act: 2, level: 6 });
+    game.map = open();
+    cp.startLevel(game);
+    game.player.angle = Math.PI;
+    cp.tryTimeLock(game); // plane at x = 8.5
+    const round = new Projectile(4, 10, 1, 0, 10, 10, "enemy");
+    const ctx = {
+      projectiles: [round], entities: [round], map: game.map, player: game.player, time: 0, audio,
+      entityGrid: { query: () => [] }, spawnWallSparks: () => {}, damageEnemy: () => {}, damagePlayer: () => {},
+      lights: null, chronoPowers: cp,
+    };
+    for (let i = 0; i < 60; i++) updateProjectiles(ctx, 1 / 60);
+    expect(round.frozen).toBe(true);
+    expect(round.active).toBe(true);
+    expect(round.x).toBeCloseTo(8.5, 5);
+    expect(ctx.projectiles).toContain(round);
+    cp.update(game, 5, 5);
+    updateProjectiles(ctx, 1 / 60);
+    expect(round.active).toBe(false);
+    expect(ctx.projectiles).not.toContain(round);
   });
 });

@@ -70,6 +70,7 @@ export function applySplashDamage(entities, sourceEnemy, finalDamage, splashMult
 
   for (const target of entities) {
     if (target === sourceEnemy || target.type !== "enemy" || !target.active || target.state === "dead") continue;
+    if (target._phased) continue;
     const dx = target.x - sourceEnemy.x;
     const dy = target.y - sourceEnemy.y;
     if (dx * dx + dy * dy >= splashRadius * splashRadius) continue;
@@ -212,6 +213,8 @@ export function voxelShotReach(world, player, dirX, dirY, pitch, range) {
  */
 export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
   if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
+  // The Hound out of phase: rounds pass through until the player shifts.
+  if (enemy._phased) return null;
 
   const ex = enemy.x - player.x;
   const ey = enemy.y - player.y;
@@ -347,6 +350,7 @@ export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, ma
  */
 export function projectileHitsEnemy(p, enemy, prevX, prevY, in3D = false) {
   if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
+  if (enemy._phased) return null;
 
   // Reuse hitscan's swept-ray logic for symmetry. Use the projectile's full
   // travel ray (origin → current pos) so the angular pad scales with distance
