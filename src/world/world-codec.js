@@ -3,7 +3,7 @@
  * packWorld → one byte tag (1 = gzip, 0 = raw utf-8) + payload, so the same
  * bytes serve IndexedDB, .ccw export, and (base64url) the share hash.
  */
-import { World } from "./world.js";
+import { World, DEFAULT_BOUNDS } from "./world.js";
 import { convertLegacyMap } from "./legacy-convert.js";
 
 export function rleEncode(u8) {
@@ -23,18 +23,40 @@ export function rleDecode(pairs, length) {
   return u8;
 }
 
+/**
+ * v4 stores one flat array, `(z * 128 + y) * 128 + x`, over the 128 box at the
+ * origin. A world with other bounds has no v4 form; it waits for v5.
+ */
+const V4 = DEFAULT_BOUNDS.x1, V4_CELLS = V4 * V4 * World.H;
+const isV4Box = (b) => b.x0 === 0 && b.y0 === 0 && b.x1 === V4 && b.y1 === V4;
+
+/** Copy between the columns and a flat v4 array, one 16-cell row at a time. */
+function eachV4Row(w, fn) {
+  for (let cy = 0; cy < V4 / 16; cy++) for (let cx = 0; cx < V4 / 16; cx++) {
+    const col = w.ensureColumn(cx, cy).blocks;
+    for (let z = 0; z < World.H; z++) for (let ly = 0; ly < 16; ly++) {
+      fn(col, (z << 8) | (ly << 4), (z * V4 + cy * 16 + ly) * V4 + cx * 16);
+    }
+  }
+}
+
 export function encodeWorld(w) {
-  return { version: 4, size: [World.W, World.D, World.H], meta: structuredClone(w.meta), blocks: rleEncode(w.blocks) };
+  if (!isV4Box(w.bounds)) throw new Error("only the 128 box has a v4 form");
+  const flat = new Uint8Array(V4_CELLS);
+  eachV4Row(w, (col, c, f) => flat.set(col.subarray(c, c + 16), f));
+  return { version: 4, size: [V4, V4, World.H], meta: structuredClone(w.meta), blocks: rleEncode(flat) };
 }
 
 export function decodeWorld(o) {
   if (!o || typeof o !== "object") throw new Error("bad world");
   if (o.version !== 4) return convertLegacyMap(o);
   const [x, y, z] = o.size || [];
-  if (x !== World.W || y !== World.D || z !== World.H) throw new Error(`unsupported size ${o.size}`);
+  if (x !== V4 || y !== V4 || z !== World.H) throw new Error(`unsupported size ${o.size}`);
   const w = new World(o.meta || {});
-  w.blocks = rleDecode(o.blocks, w.blocks.length);
-  w.dirty.fill(1); w.version++;
+  if (!isV4Box(w.bounds)) throw new Error("v4 world with bounds other than its box");
+  const flat = rleDecode(o.blocks, V4_CELLS);
+  eachV4Row(w, (col, c, f) => col.set(flat.subarray(f, f + 16), c));
+  w.markAllDirty(); w.version++;
   return w;
 }
 

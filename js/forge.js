@@ -264,7 +264,8 @@ export class ForgeMode {
     this.store = deps.store || new WorldStore();
 
     this.world = null;
-    this.player = { x: 64.5, y: 64.5, z: World.GROUND, angle: 0, pitch: 0 };
+    // A placeholder until _adopt stands the player on a world's spawn.
+    this.player = { x: 0.5, y: 0.5, z: World.GROUND, angle: 0, pitch: 0 };
     this.velZ = 0;
     this.grounded = true;
 
@@ -829,8 +830,9 @@ export class ForgeMode {
       if (down) dz -= speed;
       // Same box `moveAABB` clamps a walking body to, so dropping out of
       // noclip against an edge does not shunt the camera sideways.
-      this.player.x = Math.max(PLAYER.half, Math.min(World.W - PLAYER.half, this.player.x + mx));
-      this.player.y = Math.max(PLAYER.half, Math.min(World.D - PLAYER.half, this.player.y + my));
+      const { x0, y0, x1, y1 } = this.world.bounds;
+      this.player.x = Math.max(x0 + PLAYER.half, Math.min(x1 - PLAYER.half, this.player.x + mx));
+      this.player.y = Math.max(y0 + PLAYER.half, Math.min(y1 - PLAYER.half, this.player.y + my));
       this.player.z = Math.max(
         0,
         Math.min(World.H - PLAYER.height, this.player.z + dz),
@@ -1316,7 +1318,7 @@ export class ForgeMode {
     this.historyIndex = -1;
     this.velZ = 0;
     this.player.pitch = 0;
-    const s = world.meta.spawn || { x: 64.5, y: 64.5, z: World.GROUND, yaw: 0 };
+    const s = world.meta.spawn || world.defaultSpawn();
     this.player.x = s.x;
     this.player.y = s.y;
     this.player.z = Math.max(s.z, groundHeight(world, s.x, s.y, PLAYER.half));
@@ -1368,12 +1370,9 @@ export class ForgeMode {
     this.saveFlash = 2;
     this._dirty = this._slotPending; // a pending import is written by _saveAsNewSlot
     this._persistSlot();
-    let blocks = 0;
-    for (let i = 0; i < this.world.blocks.length; i++)
-      if (this.world.blocks[i] !== AIR) blocks++;
     trackEvent("forge_save", {
       map_name: this.world.meta.name,
-      block_count: blocks,
+      block_count: this.world.countBlocks(),
     });
     // An import whose slot reservation failed still has no id of its own \u2014
     // writing now would land on the world it replaced. Retry the reservation.

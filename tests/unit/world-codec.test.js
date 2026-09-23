@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { rleEncode, rleDecode, encodeWorld, decodeWorld, packWorld, unpackWorld, toShareHash, fromShareHash } from "../../src/world/world-codec.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { World } from "../../src/world/world.js";
+import { World as FlatWorld } from "./fixtures/flat-world.js";
+import { createHash } from "node:crypto";
+
+/** Every resident cell, in column order. */
+const cells = (w) => Buffer.concat([...w.columns.values()].map((c) => Buffer.from(c.blocks)));
+const sha = (o) => createHash("sha256").update(JSON.stringify(o)).digest("hex");
 
 describe("rle", () => {
   it("round-trips and compresses runs", () => {
@@ -27,7 +33,7 @@ describe("v4 codec", () => {
     expect(JSON.stringify(o).length).toBeLessThan(6000);
     const back = decodeWorld(o);
     expect(back.get(5, 5, 32)).toBe(8); expect(back.meta.name).toBe("Test"); expect(back.meta.exit).toEqual({ x: 3, y: 4, z: 32 });
-    expect(Buffer.from(back.blocks).equals(Buffer.from(w.blocks))).toBe(true);
+    expect(cells(back).equals(cells(w))).toBe(true);
   });
 
   it("packs with gzip and unpacks", async () => {
@@ -36,7 +42,7 @@ describe("v4 codec", () => {
     expect(bytes[0]).toBe(1); // gzip tag
     expect(bytes.length).toBeLessThan(60000);
     const back = await unpackWorld(bytes);
-    expect(Buffer.from(back.blocks).equals(Buffer.from(w.blocks))).toBe(true);
+    expect(cells(back).equals(cells(w))).toBe(true);
   });
 
   it("round-trips without CompressionStream", async () => {
@@ -62,14 +68,48 @@ describe("v4 codec", () => {
     // (period-16) sequence, not noise, and gzip crushes it well under the share
     // limit. Mix the bits (splitmix32-style) so each cell is genuinely
     // high-entropy and RLE/gzip can't rescue it.
-    for (let i = 0; i < noisy.blocks.length; i++) {
-      let h = (i ^ 0x9e3779b9) >>> 0;
-      h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
-      h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
-      h ^= h >>> 16;
-      noisy.blocks[i] = h & 15;
+    let i = 0;
+    for (const col of noisy.columns.values()) {
+      for (let c = 0; c < col.blocks.length; c++, i++) {
+        let h = (i ^ 0x9e3779b9) >>> 0;
+        h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+        h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+        h ^= h >>> 16;
+        col.blocks[c] = h & 15;
+      }
     }
     expect(await toShareHash(noisy)).toBeNull();
+  });
+});
+
+describe("v4 from column storage", () => {
+  it("writes the same document the flat array did", () => {
+    const w = generateWorld({ terrain: true, seed: 11 });
+    for (let z = 30; z < 50; z++) { w.set(15, 16, z, 8); w.set(16, 15, z, 5); w.set(127, 0, z, 2); w.set(0, 127, z, 3); }
+    w.meta.name = "Borders";
+    const flat = new FlatWorld(structuredClone(w.meta));
+    for (let z = 0; z < 64; z++) for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) flat.blocks[flat.index(x, y, z)] = w.get(x, y, z);
+    const before = { version: 4, size: [128, 128, 64], meta: structuredClone(flat.meta), blocks: rleEncode(flat.blocks) };
+    expect(JSON.stringify(encodeWorld(w))).toBe(JSON.stringify(before));
+    const back = decodeWorld(JSON.parse(JSON.stringify(before)));
+    expect(cells(back).equals(cells(w))).toBe(true);
+    expect(back.dirty.size).toBe(256);
+  });
+
+  it("generates and encodes byte-identically to the flat-array build", () => {
+    // Hashes of encodeWorld(generateWorld(...)) taken on feat/v0.8.0 before
+    // columns: generation order, ore and the v4 layout are all unchanged.
+    expect(sha(encodeWorld(generateWorld({ terrain: true, seed: 7 })))).toBe("d19abf2c518af9ce3a3e178ed40c44775b6c80a915f49e7420e2a35a00293353");
+    expect(sha(encodeWorld(generateWorld({ terrain: true, seed: 1234567 })))).toBe("2cbaebce0c0ab9dbc290a5651ab0ca9ac42fea01e5a4af22b328a7ebd6c541e6");
+    expect(sha(encodeWorld(generateWorld({ terrain: false })))).toBe("ecae5cd63447cd12c2931315416ba632bde8bb1a8608f48fa3000a36a58e7f37");
+  });
+
+  it("has no v4 form for a world with other bounds", () => {
+    const w = new World({ bounds: { x0: -64, y0: 0, x1: 64, y1: 128 } });
+    expect(() => encodeWorld(w)).toThrow();
+    const o = encodeWorld(generateWorld({ terrain: false }));
+    o.meta.bounds = { x0: -64, y0: 0, x1: 64, y1: 128 };
+    expect(() => decodeWorld(o)).toThrow();
   });
 });
 

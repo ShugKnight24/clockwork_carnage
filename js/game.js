@@ -3019,9 +3019,10 @@ export class Game {
     } else {
       const enemyTypes = ["drone", "phantom", "beast"];
       const maxEnemies = 8;
+      const { x0, y0, x1, y1 } = world.bounds;
       for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
-        const ex = 1.5 + Math.random() * (World.W - 3);
-        const ey = 1.5 + Math.random() * (World.D - 3);
+        const ex = x0 + 1.5 + Math.random() * (x1 - x0 - 3);
+        const ey = y0 + 1.5 + Math.random() * (y1 - y0 - 3);
         const ez = world.topSolid(Math.floor(ex), Math.floor(ey)) + 1;
         if (ez <= 0 || ez + 2 >= World.H) continue;
         const dist = Math.hypot(ex - spawn.x, ey - spawn.y);

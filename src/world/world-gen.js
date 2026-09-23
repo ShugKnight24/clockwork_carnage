@@ -24,20 +24,25 @@ export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New 
   const w = new World({ name, act });
   const rng = new SeededRNG(seed);
   const noise = terrain ? makeNoise(rng) : null;
-  for (let y = 0; y < World.D; y++) {
-    for (let x = 0; x < World.W; x++) {
+  const { x0, y0, x1, y1 } = w.bounds;
+  // The ore roll is one sequential RNG stream, so this y, x, z visiting order
+  // is part of the terrain: changing it moves every ore block.
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const col = w.ensureColumn(x >> 4, y >> 4).blocks, off = ((y & 15) << 4) | (x & 15);
       const surface = terrain ? Math.round(31 + noise(x, y) * 6) : 31; // 25..37 → clamped below
       const top = Math.max(26, Math.min(38, surface));
       const beach = terrain && top <= 29;
       for (let z = 0; z <= top; z++) {
         let id = z === 0 ? BEDROCK : z < top - 4 ? ROCK : z < top ? DIRT : beach ? SAND : GRASS;
         if (terrain && id === ROCK && z > 2 && rng.next() < 0.02) id = ORE;
-        w.blocks[w.index(x, y, z)] = id;
+        col[(z << 8) | off] = id; // straight into the column: generation is not an edit
       }
     }
   }
-  w.meta.spawn = { x: 64.5, y: 64.5, z: w.topSolid(64, 64) + 1, yaw: 0 };
-  w.dirty.fill(1); // generation is not an edit; the renderer meshes everything on first sight anyway
-  w.version++; // direct blocks[] writes bypass set(), so bump version once to honor the "bumps on every change" contract
+  const s = w.defaultSpawn();
+  w.meta.spawn = { ...s, z: w.topSolid(Math.floor(s.x), Math.floor(s.y)) + 1 };
+  w.markAllDirty(); // the renderer meshes everything on first sight anyway
+  w.version++; // direct column writes bypass set(), so bump version once to honor the "bumps on every change" contract
   return w;
 }

@@ -29,9 +29,10 @@ describe("blocks", () => {
 });
 
 describe("World", () => {
-  it("indexes z-major and clamps out-of-bounds reads", () => {
+  it("indexes columns z-major and clamps out-of-bounds reads", () => {
     const w = new World();
-    expect(w.index(1, 2, 3)).toBe((3 * 128 + 2) * 128 + 1);
+    w.set(17, 34, 3, 5);
+    expect(w.column(1, 2).blocks[(3 * 16 + 2) * 16 + 1]).toBe(5);
     expect(w.get(0, 0, -1)).toBe(BEDROCK);
     expect(w.get(0, 0, 64)).toBe(AIR);
     expect(w.get(-1, 0, 10)).toBe(AIR);

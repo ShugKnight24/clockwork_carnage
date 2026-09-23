@@ -134,14 +134,12 @@ export function createDebugBridge(game) {
       const world = game.world || game.builder?.world;
       const vr = game.voxelRenderer;
       if (!world || !vr) return null;
-      let dirty = 0;
-      for (let i = 0; i < world.dirty.length; i++) if (world.dirty[i]) dirty++;
       return {
         chunksDrawn: vr.stats.chunksDrawn,
         meshedThisFrame: vr.stats.meshedThisFrame,
         ms: vr.stats.ms,
         version: world.version,
-        dirty,
+        dirty: world.dirty.size,
       };
     },
 

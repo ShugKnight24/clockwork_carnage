@@ -11,7 +11,7 @@
  * World axes: x/y horizontal, z up. Yaw is measured from +x toward +y, pitch is
  * positive looking up.
  */
-import { World } from "../../world/world.js";
+import { World, chunkKeyCoords } from "../../world/world.js";
 import { BLOCKS } from "../../world/blocks.js";
 import { meshChunk, STRIDE } from "./mesher.js";
 import { buildAtlas, ATLAS_SIZE } from "./atlas.js";
@@ -27,7 +27,6 @@ const STYLE_ID = { legacy: 0, comic: 1, modern: 2 };
 const MAX_LIGHTS = 16;          // must match the array size in CHUNK_FRAG
 const MAX_LAYERS = 32;          // must match u_emissiveByLayer/u_layerAlpha in CHUNK_FRAG
 const CS = World.CS;            // chunk size in blocks
-const CHUNKS_X = World.CX, CHUNKS_Y = World.CY;
 const CHUNK_RADIUS = (CS * Math.sqrt(3)) / 2;
 const NEAR = 0.05, FAR = 256;
 
@@ -173,8 +172,9 @@ export class VoxelRenderer {
     this.width = canvas.width; this.height = canvas.height;
     this.lost = false; this.destroyed = false; this._restoreWarned = false;
     this._pendingSize = null;  // a resize that arrived while the context was lost
-    this.chunks = new Map();   // chunkIndex -> { origin, opaque, alpha, dist }
+    this.chunks = new Map();   // world chunk key -> { origin, opaque, alpha, dist }
     this._alphaOrder = [];     // scratch for the back-to-front see-through pass
+    this._cc = [0, 0, 0];      // scratch for decoding chunk keys
     this.world = null;
     this.atlasKey = ""; this.style = "comic"; this.layerOf = null; this.emissiveByLayer = null;
     this.atlasTex = null;
@@ -209,7 +209,7 @@ export class VoxelRenderer {
         return;
       }
       this.lost = false;
-      if (this.world) this.world.dirty.fill(1);
+      if (this.world) this.world.markAllDirty();
     };
     canvas.addEventListener("webglcontextlost", this._onContextLost);
     canvas.addEventListener("webglcontextrestored", this._onContextRestored);
@@ -316,7 +316,7 @@ export class VoxelRenderer {
     this.world = world;
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
-    if (world) world.dirty.fill(1);
+    if (world) world.markAllDirty();
   }
 
   /** Rebuild the atlas when style or act changes. */
@@ -355,7 +355,7 @@ export class VoxelRenderer {
     // Layer ids moved, so every cached mesh is stale.
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
-    if (this.world) this.world.dirty.fill(1);
+    if (this.world) this.world.markAllDirty();
   }
 
   _uploadAtlas(canvases, nearest) {
@@ -381,11 +381,10 @@ export class VoxelRenderer {
 
   // ── Chunk meshes ─────────────────────────────────────────────────────────
 
-  /** Squared chunk-grid distance; inlined so the sort comparator allocates nothing. */
-  _chunkDist(ci, camChunk) {
-    const dx = (ci % CHUNKS_X) - camChunk[0];
-    const dy = (((ci / CHUNKS_X) | 0) % CHUNKS_Y) - camChunk[1];
-    const dz = ((ci / (CHUNKS_X * CHUNKS_Y)) | 0) - camChunk[2];
+  /** Squared chunk-grid distance; decodes into a scratch array so the sort comparator allocates nothing. */
+  _chunkDist(key, camChunk) {
+    const c = chunkKeyCoords(key, this._cc);
+    const dx = c[0] - camChunk[0], dy = c[1] - camChunk[1], dz = c[2] - camChunk[2];
     return dx * dx + dy * dy + dz * dz;
   }
 
@@ -395,19 +394,19 @@ export class VoxelRenderer {
     // Nearest first; the rest stay dirty for the next frame.
     if (dirty.length > MESH_BUDGET) dirty.sort((a, b) => this._chunkDist(a, camChunk) - this._chunkDist(b, camChunk));
     const n = Math.min(dirty.length, MESH_BUDGET);
-    for (let i = n; i < dirty.length; i++) this.world.dirty[dirty[i]] = 1;
+    for (let i = n; i < dirty.length; i++) this.world.dirty.add(dirty[i]);
     for (let i = 0; i < n; i++) this._buildChunk(dirty[i]);
     return n;
   }
 
-  _buildChunk(ci) {
-    const [cx, cy, cz] = this.world.chunkCoords(ci);
+  _buildChunk(key) {
+    const [cx, cy, cz] = this.world.chunkCoords(key);
     const m = meshChunk(this.world, cx, cy, cz, this.layerOf);
-    let c = this.chunks.get(ci);
-    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null, dist: 0 }; this.chunks.set(ci, c); }
+    let c = this.chunks.get(key);
+    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null, dist: 0 }; this.chunks.set(key, c); }
     this._upload(c, "opaque", m.opaque);
     this._upload(c, "alpha", m.alpha);
-    if (!c.opaque && !c.alpha) { this.chunks.delete(ci); }
+    if (!c.opaque && !c.alpha) { this.chunks.delete(key); }
   }
 
   _upload(c, name, mesh) {
