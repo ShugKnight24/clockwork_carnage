@@ -112,6 +112,10 @@ function showGameCanvases() {
   modeSelect.classList.add("hidden");
   gameCanvas.style.display = "block";
   hudCanvas.style.display = "block";
+  // The consent card is a menu question. In play it sits over the HUD's lower
+  // right corner and cannot be clicked under pointer lock; unanswered, it is
+  // asked again next session.
+  document.getElementById("cc-analytics-modal")?.style.setProperty("display", "none");
 }
 
 function updateContinueButtons() {

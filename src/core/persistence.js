@@ -68,6 +68,7 @@ export function startNgPlus(game) {
 }
 
 export function applyMobileMigration(...args) { return Save.applyMobileMigration(...args); }
+export function applyDefaultsMigration(...args) { return Save.applyDefaultsMigration(...args); }
 export function loadDevFlags(...args) { return Save.loadDevFlags(...args); }
 export function setAlwaysTutorial(...args) { return Save.setAlwaysTutorial(...args); }
 export function hasSave(...args) { return Save.hasSave(...args); }

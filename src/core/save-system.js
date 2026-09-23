@@ -76,6 +76,22 @@ export function applyMobileMigration(isTouchDevice, settings, saveFn) {
   } catch (_) {}
 }
 
+/**
+ * Every key is written back on boot, so a changed default never reaches a
+ * player who has launched the game before. Move values still sitting on the
+ * old default; anything the player chose stays.
+ */
+export function applyDefaultsMigration(isTouchDevice, settings, saveFn) {
+  try {
+    if (localStorage.getItem("cc_defaults_v1")) return;
+    let changed = false;
+    if (settings.sensitivity === 1.0) { settings.sensitivity = 0.7; changed = true; }
+    if (!isTouchDevice && settings.hudStyle === 4) { settings.hudStyle = 1; changed = true; }
+    if (changed) saveFn();
+    localStorage.setItem("cc_defaults_v1", "1");
+  } catch (_) {}
+}
+
 // ── Dev Flags ────────────────────────────────────────────
 
 export function loadDevFlags() {

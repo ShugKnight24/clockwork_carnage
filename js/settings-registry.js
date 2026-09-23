@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   minimapSize: 200,
   musicVolume: 80, // 0..100
   sfxVolume: 80, // 0..100
-  sensitivity: 1.0, // 0.5..2.0
+  sensitivity: 0.7, // 0.2..2.0
   fov: 70, // 50..120 degrees
   forgeFov: 120, // Forge only; defaults to the widest view for building
   forgeInvertY: false, // Forge look is non-inverted regardless of the FPS setting
@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
   visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
   artStyle: 1, // 0=Legacy (procedural canvas art), 1=Modern (vector SVG art)
-  hudStyle: 4, // 0=Minimal, 1=Classic (bottom bar + portrait), 2=Tactical, 3=Custom, 4=Vanguard (Modern flagship; Legacy draws it as Minimal)
+  hudStyle: 1, // 0=Minimal, 1=Classic DOOM (bottom bar + portrait), 2=Tactical, 3=Custom, 4=Vanguard (Modern only; Legacy draws it as Minimal)
   hudScale: 100, // 75, 100, 125 percent
   staminaBarSize: 100, // 75, 100, 125, 150 percent
   showPortrait: true,
@@ -454,7 +454,7 @@ export const SETTINGS_REGISTRY = [
     desc: "Mouse look speed.",
     category: "Controls",
     type: "slider",
-    min: 0.5,
+    min: 0.2,
     max: 2.0,
     step: 0.1,
     round: 1,

@@ -465,6 +465,8 @@ export class Game {
     if (this.isTouchDevice) {
       this.settings.fov = 100;
       this.settings.hudScale = 75;
+      // The DOOM bar is 160px tall; phones keep Vanguard's compact layout.
+      this.settings.hudStyle = 4;
     }
     this.loadSettings();
     this._applyMobileMigration();
@@ -963,6 +965,7 @@ export class Game {
     Persistence.applyMobileMigration(this.isTouchDevice, this.settings, () =>
       this.saveSettings(),
     );
+    Persistence.applyDefaultsMigration(this.isTouchDevice, this.settings, () => this.saveSettings());
   }
 
   loadDevFlags() {
