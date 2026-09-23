@@ -5,23 +5,9 @@
  */
 import { World, DEFAULT_BOUNDS } from "./world.js";
 import { convertLegacyMap } from "./legacy-convert.js";
+import { rleEncode, rleDecode } from "./rle.js";
 
-export function rleEncode(u8) {
-  const out = [];
-  let i = 0;
-  while (i < u8.length) {
-    const v = u8[i]; let n = 1;
-    while (i + n < u8.length && u8[i + n] === v && n < 65535) n++;
-    out.push(v, n); i += n;
-  }
-  return out;
-}
-
-export function rleDecode(pairs, length) {
-  const u8 = new Uint8Array(length); let p = 0;
-  for (let i = 0; i < pairs.length; i += 2) { u8.fill(pairs[i], p, p + pairs[i + 1]); p += pairs[i + 1]; }
-  return u8;
-}
+export { rleEncode, rleDecode };
 
 /**
  * v4 stores one flat array, `(z * 128 + y) * 128 + x`, over the 128 box at the

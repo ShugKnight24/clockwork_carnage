@@ -3,6 +3,7 @@ import { AIR, BEDROCK } from "./blocks.js";
 
 const H = 64, CS = 16, CZ = H / CS; // 4 render chunks stacked in a column
 const COLUMN_CELLS = CS * CS * H;   // 16384
+const PLACED_BYTES = COLUMN_CELLS >> 3;
 
 /**
  * Endless worlds will stop at ±2²⁰ blocks. The border is what keeps every
@@ -73,9 +74,18 @@ export class World {
       exit: null, enemySpawns: [], pickups: [],
       ...meta,
     };
-    this.columns = new Map(); // colKey -> { cx, cy, blocks, modified }
+    this.columns = new Map(); // colKey -> { cx, cy, blocks, modified, placed }
     this.dirty = new Set();   // render chunk keys waiting to be meshed
     this.version = 0; // bumps on every change; caches key off it
+    // The saved form of every column that differs from its generator,
+    // resident or not (world-delta.js): colKey -> { cx, cy, overlay, placed, rev }.
+    // `dropped` holds tombstones for deltas that went away. Both are stamped
+    // from `editRev`, and `persisted` ({store, id, rev}, see world-store.js)
+    // says how far the store has caught up, so a save writes only the rest.
+    this.edits = new Map();
+    this.dropped = new Map();
+    this.editRev = 0;
+    this.persisted = null;
     // Two caches in front of the Map, whose keys are too big for V8's fast
     // small-integer path. The last column resolved catches runs of
     // neighbouring cells (physics sweeps, station scans, the mesher's copy);
@@ -124,7 +134,7 @@ export class World {
   ensureColumn(cx, cy) {
     let col = this.column(cx, cy);
     if (col) return col;
-    col = { cx, cy, blocks: new Uint8Array(COLUMN_CELLS), modified: false };
+    col = { cx, cy, blocks: new Uint8Array(COLUMN_CELLS), modified: false, placed: null };
     this.columns.set(colKey(cx, cy), col);
     for (let cz = 0; cz < CZ; cz++) this.dirty.add(this.chunkIndex(cx, cy, cz));
     return this.column(cx, cy);
@@ -245,6 +255,53 @@ export class World {
       for (let i = 0; i < b.length; i++) if (b[i] !== AIR) n++;
     }
     return n;
+  }
+
+  // ─── Placed-by-player bits (survival, spec §12) ─────────────
+
+  /**
+   * One bit per cell, in a 2 KB bitset allocated on a column's first mark and
+   * saved with its delta. Changing a bit marks the column modified, because
+   * the bit is part of what the column saves. Cells outside the world have no
+   * bit: they cannot hold a block either.
+   */
+  markPlaced(x, y, z) { this._setPlaced(x, y, z, true); }
+  clearPlaced(x, y, z) { this._setPlaced(x, y, z, false); }
+
+  wasPlaced(x, y, z) {
+    if (!this.inBounds(x, y, z)) return false;
+    const bits = this.column(x >> 4, y >> 4)?.placed;
+    if (!bits) return false;
+    const i = (z << 8) | ((y & 15) << 4) | (x & 15);
+    return (bits[i >> 3] & (1 << (i & 7))) !== 0;
+  }
+
+  _setPlaced(x, y, z, on) {
+    if (!this.inBounds(x, y, z)) return;
+    const col = this.column(x >> 4, y >> 4);
+    if (!col || (!on && !col.placed)) return;
+    if (!col.placed) col.placed = new Uint8Array(PLACED_BYTES);
+    const i = (z << 8) | ((y & 15) << 4) | (x & 15), m = 1 << (i & 7);
+    if (((col.placed[i >> 3] & m) !== 0) === on) return;
+    col.placed[i >> 3] ^= m;
+    col.modified = true;
+  }
+
+  /** Forget every placed bit, resident or saved (the survival mode toggle). */
+  clearAllPlaced() {
+    for (const col of this.columns.values()) {
+      if (col.placed) { col.placed = null; col.modified = true; }
+    }
+    // Deltas of columns that are not resident lose their bits here; resident
+    // ones are re-diffed on the next fold.
+    for (const [key, d] of this.edits) {
+      if (!d.placed || this.columns.has(key)) continue;
+      // An all-"as generated" overlay is one run: the bits were all it kept.
+      if (d.overlay.length === 2 && d.overlay[0] === 0xff) {
+        this.edits.delete(key);
+        this.dropped.set(key, ++this.editRev);
+      } else this.edits.set(key, { ...d, placed: null, rev: ++this.editRev });
+    }
   }
 
   /** Every resident chunk. */
