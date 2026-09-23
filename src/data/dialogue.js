@@ -436,4 +436,60 @@ export const ARIA_COMMS = {
     "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
     "Every wing's a crime scene. Somebody scrubbed his name off every one of them.",
   ],
+
+  // ── Chronos (story restructure §3-§5) ──
+  // From Act II the governor is gone and every shift is loud.
+  chronoShiftLoud: [
+    "Every shift rings his bell. Make them count.",
+    "Shift's live. So is he, somewhere, listening. Short and sharp, {AGENT}.",
+    "There it goes. I burned the governor to save you. I'd do it again. Keep it quick.",
+  ],
+  resonanceRising: [
+    "He's listening. Keep it short.",
+    "Resonance climbing. You're loud, {AGENT}. Ease off the shard.",
+    "That's a lot of bell. Let it settle before he gets a bearing.",
+  ],
+  // Spoken on the comms plate as VOSS, in the Lord's voice.
+  lordHearsYou: [
+    "There you are.",
+    "My eleven seconds. I'd know them anywhere.",
+    "Louder, Cadet. I'm almost there.",
+  ],
+  hunterResponse: [
+    "Rift opening behind you. He sent something to fetch you.",
+    "Temporal tear, close. Hunters. He heard that one.",
+    "Something just stepped out of nowhere. Marked it. Make it pay out.",
+  ],
+  powerUnlocked: [
+    "New pattern in the shard. Somebody left something of themselves in the suit.",
+    "Suit update. Not from the Bureau. From a friend.",
+    "Another piece of them in the shard. I've marked it on your HUD.",
+  ],
+  teachDone: [
+    "That's it. That's how it's done.",
+    "Got it first try. Almost like you were built for this.",
+    "Lesson logged. The door's yours.",
+  ],
+  // Form 2's Counter-shift and Form 3's stopped time (wired with those fights).
+  counterShift: [
+    "He's taking the shift from you. Let go of it. Now.",
+    "He's unaffected. Long shifts feed him. Short ones, or none.",
+  ],
+  elevenSeconds: [
+    "Everything stopped. Everything except you two.",
+    "His time-stop. Your window. Move.",
+  ],
+  ventGallery: [
+    "Plasma vents on a cycle. Shift and the gaps get wide. There's a cache at the back.",
+  ],
+  stasisRoom: [
+    "This room stopped at the instant of the collapse. Water still hanging. Don't touch anything.",
+    "Frozen field. Nothing here can hurt you. That's somehow worse.",
+  ],
+  loopRepeats: [
+    "We've been here. Same scuff on the rail. The corridor's looping. Shift, and look for the seam.",
+  ],
+  loopBroken: [
+    "Seam's broken. We're out of the loop. Don't look back, it'll try again.",
+  ],
 };

@@ -32,6 +32,8 @@ export const SQUAD_TAB_COLORS = {
   NOVA: "#ff5fb4",
   ROOK: "#3dff8a",
   SQUAD: "#ffd24a",
+  // Voss on the comms plate when Resonance reaches him (spec §3).
+  VOSS: "#ff2a4a",
 };
 
 /**
@@ -164,5 +166,21 @@ export class SquadCommsController {
   }
   onSecretFound() {
     this.emit({ preferred: "rook" });
+  }
+
+  /**
+   * A scripted line for one member (a set piece's beat), under the level's
+   * callsign. Silent when that member is not here.
+   * @param {SquadMember} member
+   * @param {string} text
+   */
+  say(member, text) {
+    const { act, level } = this.context;
+    const cfg = SQUAD_CONFIG[member];
+    if (!cfg || !getPresentSquad(act, level).includes(member)) return false;
+    if (!this.ariaComms?.queueSquadMessage) return false;
+    const label = squadCallsign(act, level, member);
+    this.ariaComms.queueSquadMessage(label, null, label === cfg.label ? cfg.color : "#4488ff", text);
+    return true;
   }
 }

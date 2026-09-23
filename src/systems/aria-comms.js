@@ -37,6 +37,21 @@ const CATEGORY_EMOTIONS = {
   bossForm2: "urgent",
   idle: "warm",
   ariaPersonality: "warm",
+  // Chronos (spec §3-§4): the governed shift is a thrill, the loud one a
+  // worry; Resonance and hunters are urgent; a new power is a gift.
+  chronoShiftActivated: "excited",
+  chronoShiftLoud: "worried",
+  resonanceRising: "urgent",
+  lordHearsYou: "menacing",
+  hunterResponse: "urgent",
+  powerUnlocked: "happy",
+  teachDone: "happy",
+  counterShift: "afraid",
+  elevenSeconds: "tender",
+  ventGallery: "curious",
+  stasisRoom: "sad",
+  loopRepeats: "curious",
+  loopBroken: "excited",
 };
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 import {
@@ -141,7 +156,7 @@ export class AriaCommsSystem {
    * Queue a squad line: a random one from `category`, or `line` when the
    * caller has already chosen who says what.
    */
-  queueSquadMessage(speaker, category, color, line = null) {
+  queueSquadMessage(speaker, category, color, line = null, { voice = null, emotion = null } = {}) {
     if (!this.enabled) return;
     const pool = ARIA_COMMS[category];
     if (!line && (!pool || pool.length === 0)) return;
@@ -152,6 +167,10 @@ export class AriaCommsSystem {
       duration: 3.5,
       prominent: false,
       speaker: speaker || "SQUAD",
+      // A speaker label can differ from the voice: VOSS on the plate is the
+      // Lord's voice, not the tactician's.
+      voice,
+      emotion: emotion ?? CATEGORY_EMOTIONS[category] ?? null,
     });
   }
 
@@ -207,7 +226,7 @@ export class AriaCommsSystem {
   _voice(msg) {
     const audio = this.game?.audio;
     if (!audio?.speak) return;
-    const key = voiceKeyFor({ speaker: msg.speaker || "ARIA" });
+    const key = msg.voice ?? voiceKeyFor({ speaker: msg.speaker || "ARIA" });
     const text = String(msg.text).replace(/\{AGENT\}/g, this.game?.character?.name || "Agent");
     const charsPerSec = Math.max(16, text.length / Math.max(1, msg.duration * 0.8));
     audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
