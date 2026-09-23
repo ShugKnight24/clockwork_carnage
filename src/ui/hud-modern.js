@@ -24,12 +24,9 @@ import {
   pixelRatio,
 } from "./hud-skin.js";
 import { drawPortrait } from "./portrait.js";
-import { getWeaponSprite } from "../assets/loader.js";
+import { drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
-
-const weaponSlug = (name) =>
-  (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
 const DIFF_SCHEMES = ["steel", "cyan", "amber", "crimson"];
@@ -403,12 +400,9 @@ function drawWeaponSlots(game, ctx, x0, y, slotW, slotH, gap, fs) {
       chamfer: 6,
     });
     const wp = WEAPON_LOOKUP(p.weapons[i]);
-    const spriteImg = wp ? getWeaponSprite(weaponSlug(wp.name)) : null;
-    if (spriteImg) {
-      const inset = 4;
-      ctx.globalAlpha = active ? 1 : 0.5;
-      ctx.drawImage(spriteImg, sx + inset, y + inset, slotW - inset * 2, slotH - inset * 2);
-      ctx.globalAlpha = 1;
+    const inset = 4;
+    if (wp && drawWeaponIcon(ctx, wp.id, wp.color, sx + inset, y + inset, slotW - inset * 2, slotH - inset * 2,
+      { alpha: active ? 1 : 0.55, glow: active ? 1 : 0.35 })) {
       label(ctx, `${i + 1}`, sx + 4, y + 10, Math.round(8 * fs), active ? UI.cyan : UI.textFaint, "left", 0);
     } else {
       number(ctx, `${i + 1}`, sx + slotW / 2, y + slotH / 2 + 5, Math.round(14 * fs), active ? "#ffffff" : UI.textFaint, "center");
@@ -685,10 +679,14 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
   const numSize = Math.round(Math.min(58, panelH * 0.55) * fs);
   const numY = panelY + panelH - Math.round(panelH * 0.26);
 
-  // Ammo.
+  // Ammo: the gun in hand beside its count, so the panel shows what you are
+  // holding, not only how much of it is left.
   const lowAmmo = p.ammo <= 10;
-  kickNumber(ctx, `${p.ammo}`, pad + ammoW / 2, numY, numSize, lowAmmo ? "#ff5a6e" : "#ffd48a", "center");
   const wep = p.getWeaponDef();
+  const drewGun = wep && game.settings.showWeapons &&
+    drawWeaponIcon(ctx, wep.id, wep.color, pad + 14, panelY + panelH * 0.2, ammoW * 0.56 - 14, panelH * 0.5);
+  const numX = drewGun ? pad + ammoW * 0.78 : pad + ammoW / 2;
+  kickNumber(ctx, `${p.ammo}`, numX, numY, numSize, lowAmmo ? "#ff5a6e" : "#ffd48a", "center");
   if (wep) label(ctx, wep.name.toUpperCase(), pad + ammoW / 2, panelY + panelH - 9, Math.round(9 * fs), wep.color, "center");
 
   // Health.
@@ -740,12 +738,9 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
     });
     if (has) {
       const wp = WEAPON_LOOKUP(p.weapons[i]);
-      const img = wp ? getWeaponSprite(weaponSlug(wp.name)) : null;
-      if (img) {
-        ctx.globalAlpha = isActive ? 1 : 0.45;
-        ctx.drawImage(img, cx + 7, cy + 7, cellW - 14, cellH - 14);
-        ctx.globalAlpha = 1;
-      }
+      // Owned weapons read as real guns; the one in hand glows.
+      if (wp) drawWeaponIcon(ctx, wp.id, wp.color, cx + 8, cy + 10, cellW - 16, cellH - 16,
+        { alpha: isActive ? 1 : 0.7, glow: isActive ? 1 : 0.25 });
     }
     label(ctx, `${i + 1}`, cx + 7, cy + 14, Math.round(10 * fs), isActive ? UI.cyan : has ? UI.amber : "#3b4b5b", "left", 0);
   }

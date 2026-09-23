@@ -189,3 +189,33 @@ export function silhouetteLayers(id, color, pxPerUnit) {
   const glowImg = getLayerImage(`wsil:${id}:glow:${color}`, SILHOUETTE_BOX, DEFS, `<g color="${color}">${prof.glow}</g>`, pxPerUnit);
   return body ? { body, glow: glowImg } : null;
 }
+
+/**
+ * Draw a weapon's profile fitted and centred inside a box, aspect kept. Every
+ * HUD's weapon slots use this, so the icons match the in-hand art instead of
+ * the older flat sprite sheet. Returns false while the bitmaps decode.
+ * `glow` scales the emissive layer: 0 for a dim, unselected slot.
+ */
+export function drawWeaponIcon(ctx, id, color, x, y, w, h, { alpha = 1, glow = 1 } = {}) {
+  const ar = SILHOUETTE_BOX[2] / SILHOUETTE_BOX[3];
+  let W = w;
+  let H = w / ar;
+  if (H > h) {
+    H = h;
+    W = h * ar;
+  }
+  const t = ctx.getTransform();
+  const layers = silhouetteLayers(id, color, (W / SILHOUETTE_BOX[2]) * (Math.hypot(t.a, t.b) || 1));
+  if (!layers) return false;
+  const dx = x + (w - W) / 2;
+  const dy = y + (h - H) / 2;
+  const a0 = ctx.globalAlpha;
+  ctx.globalAlpha = a0 * alpha;
+  ctx.drawImage(layers.body, dx, dy, W, H);
+  if (layers.glow && glow > 0) {
+    ctx.globalAlpha = a0 * alpha * glow;
+    ctx.drawImage(layers.glow, dx, dy, W, H);
+  }
+  ctx.globalAlpha = a0;
+  return true;
+}

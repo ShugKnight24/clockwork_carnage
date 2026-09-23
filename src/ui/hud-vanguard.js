@@ -33,7 +33,8 @@ import { hudMotion as M, since, easeOut } from "./hud-motion.js";
 import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar } from "./hud-modern.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
-import { silhouetteLayers, SILHOUETTE_BOX } from "./weapon-silhouettes.js";
+import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
+import { WEAPONS } from "../../js/data.js";
 import { reticlePoint } from "../systems/aim.js";
 
 const TAU = Math.PI * 2;
@@ -615,27 +616,32 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   drawWeaponSilhouette(ctx, wep, right - W + (1 - slide) * 24, y - H, W, H, alpha, M.heat);
   y -= H + 8;
 
-  // Slot chips.
+  // Arsenal strip: every carried weapon as a small profile, so the player
+  // sees what they have without cycling. The one in hand is lit.
   if (game.settings.showWeapons && p.weapons.length > 1) {
-    const cw = 18;
+    const cw = Math.round(54 * f);
+    const ch = Math.round(24 * f);
+    const gap = 4;
     const n = p.weapons.length;
-    const x0 = right - n * (cw + 3) + 3;
-    const target = x0 + p.currentWeapon * (cw + 3);
+    const x0 = right - n * (cw + gap) + gap;
+    const target = x0 + p.currentWeapon * (cw + gap);
     _slotX = _slotX < 0 ? target : _slotX + (target - _slotX) * 0.35;
     for (let i = 0; i < n; i++) {
-      const x = x0 + i * (cw + 3);
+      const x = x0 + i * (cw + gap);
       const on = i === p.currentWeapon;
       if (HT.outline) {
         ctx.fillStyle = UI.ink;
-        ctx.fillRect(x - 1, y - 15, cw + 2, 16);
+        ctx.fillRect(x - 1, y - ch - 1, cw + 2, ch + 2);
       }
       ctx.fillStyle = on ? UI.slotOn : UI.slotOff;
-      ctx.fillRect(x, y - 14, cw, 14);
-      text(ctx, `${i + 1}`, x + cw / 2, y - 3, 10, on ? UI.flash : UI.textDim, "center", 700);
+      ctx.fillRect(x, y - ch, cw, ch);
+      const wd = WEAPONS[p.weapons[i]];
+      if (wd) drawWeaponIcon(ctx, wd.id, wd.color, x + 3, y - ch + 2, cw - 6, ch - 4, { alpha: on ? 1 : 0.55, glow: on ? 1 : 0 });
+      text(ctx, `${i + 1}`, x + 3, y - ch + 9, 8, on ? UI.flash : UI.textDim, "left", 700);
     }
     ctx.fillStyle = UI.cyan;
     ctx.fillRect(Math.round(_slotX), y + 2, cw, HT.outline ? 2 : 1);
-    y -= 22;
+    y -= ch + 8;
   }
   drawPickupToasts(ctx, right, y, fs);
 }
@@ -984,8 +990,26 @@ function drawVanguardMinimap(ctx, x, y, s, minimapState) {
 
 // ─── Layouts ────────────────────────────────────────────────────────────────
 
+/**
+ * Vanguard is laid out for 1280×720. On a bigger screen the whole layer
+ * scales up with it (to 1.6×), so 1080p and 1440p get the same composition
+ * rather than the same pixels huddled in the corners. Sprites and profiles
+ * rasterise at the transformed size, so nothing goes soft.
+ */
+export function vanguardScale(w, h) {
+  return Math.max(1, Math.min(1.6, Math.min(w / 1280, h / 720)));
+}
+
 /** Desktop / tablet Vanguard. Draws its own minimap. */
 export function renderVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
+  const k = vanguardScale(w, h);
+  ctx.save();
+  ctx.scale(k, k);
+  layoutVanguardPanels(game, ctx, w / k, h / k, f, portraitState, minimapState);
+  ctx.restore();
+}
+
+function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
   const fs = (game.settings.fontScale || 100) / 100;
   const m = Math.round(22 * Math.min(1, w / 1280) + 6);
 
