@@ -699,11 +699,18 @@ export class Game {
         this._builderOnboardingDismissed = true;
         return;
       }
-      if (this.builder && !this.mouse.locked && !this.builder.overhead) {
+      // The inventory screen is cursor-driven, like overhead: a click there is
+      // a click on the screen, not the gesture that takes the pointer back.
+      if (
+        this.builder &&
+        !this.mouse.locked &&
+        !this.builder.overhead &&
+        !this.builder.invOpen
+      ) {
         this.lockPointer();
         return;
       }
-      this.builder?.handleMouseDown(e.button);
+      this.builder?.handleMouseDown(e.button, e.shiftKey);
       return;
     }
     if (e.button === 0) {

@@ -15,7 +15,9 @@ import {
 import { SurvivalSession } from "../src/rpg/survival-session.js";
 import { PlayerStore } from "../src/rpg/player-store.js";
 import { itemForBlock, itemById } from "../src/rpg/items.js";
-import { returnStack } from "../src/rpg/inventory-ops.js";
+import { returnStack, takeStack, dropStack, shiftMove } from "../src/rpg/inventory-ops.js";
+import { HOTBAR_SLOTS } from "../src/rpg/inventory.js";
+import { inventoryLayout, resolveInventoryHit } from "./layout.js";
 /**
  * The HUD, and with it the constants that only exist to be drawn. The
  * dependency runs one way — this file imports the HUD, never the reverse —
@@ -310,6 +312,10 @@ export class ForgeMode {
     this.carried = null;
     /** Which hotbar slot is selected, 0..8. */
     this.hotbarIndex = 0;
+    /** The slot a drag started on, so a press-and-release on it is a select. */
+    this.pressedSlot = -1;
+    /** Last HUD size seen while drawing, so input can lay out the same grid. */
+    this.hudSize = { w: 1280, h: 720 };
     /** Stations within reach, refreshed on a timer rather than per frame. */
     this.stationsNear = new Set();
     this.stationPoll = 0;
@@ -637,7 +643,9 @@ export class ForgeMode {
     return false; // Not consumed — host should handle (e.g. Escape)
   }
 
-  handleMouseDown(button) {
+  handleMouseDown(button, shift = false) {
+    // The screen owns the cursor while it is open, so no click reaches the world.
+    if (this.invOpen) { this._invPress(button, shift); return; }
     if (!this.active || this.overhead || !this.world) return;
     const place = button === 0;
     switch (this.toolMode) {
@@ -670,6 +678,7 @@ export class ForgeMode {
    * Mirrors `handleMouseDown`: left places, every other button breaks.
    */
   handleMouseUp(button) {
+    if (this.invOpen) { this._invRelease(button); return; }
     if (button === 0) return;
     this.holdingBreak = false;
     this.survival?.cancelBreak();
@@ -1198,6 +1207,43 @@ export class ForgeMode {
     this.cursor.y = y;
   }
 
+  /** The cell under the cursor, laid out from the same size the screen drew at. */
+  _invHit() {
+    const inv = this.survival.inventory;
+    const layout = inventoryLayout(this.hudSize.w, this.hudSize.h, inv.slots.length);
+    return resolveInventoryHit(layout, this.cursor.x, this.cursor.y);
+  }
+
+  _invPress(button, shift) {
+    if (button !== 0) return;
+    const hit = this._invHit();
+    if (hit.kind !== "slot") return;
+    const inv = this.survival.inventory;
+    if (shift) { shiftMove(inv, hit.index); this.audio.menuSelect(); return; }
+    if (this.carried) { this.carried = dropStack(inv, hit.index, this.carried); return; }
+    this.pressedSlot = hit.index;
+    this.carried = takeStack(inv, hit.index);
+  }
+
+  _invRelease(button) {
+    if (button !== 0) return;
+    const hit = this._invHit();
+    const inv = this.survival.inventory;
+
+    if (this.carried && hit.kind === "slot") {
+      // Released on the slot it came from with no move: treat it as a select.
+      if (hit.index === this.pressedSlot) {
+        this.carried = dropStack(inv, hit.index, this.carried);
+        if (hit.index < HOTBAR_SLOTS) this.hotbarIndex = hit.index;
+      } else {
+        this.carried = dropStack(inv, hit.index, this.carried);
+      }
+    } else if (this.carried) {
+      this._dropCarried(); // outside the panel: put it back, never lose it
+    }
+    this.pressedSlot = -1;
+  }
+
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
   _adopt(world, id = this.currentSlot) {
     this.world = world;
@@ -1552,6 +1598,8 @@ export class ForgeMode {
    * it out of here keeps this file about the world and the input that edits it.
    */
   render(ctx, w, h) {
+    this.hudSize.w = w;
+    this.hudSize.h = h;
     renderForge(this, ctx, w, h);
   }
 

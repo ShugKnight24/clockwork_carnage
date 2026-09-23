@@ -103,3 +103,77 @@ describe("the inventory screen", () => {
     expect(f.invOpen).toBe(false);
   });
 });
+
+import { inventoryLayout } from "../../js/layout.js";
+
+describe("clicking and dragging in the screen", () => {
+  const W = 1280, H = 720;
+  const open = () => {
+    const f = forge();
+    f.hudSize = { w: W, h: H };
+    f.handleKeyDown({ code: "KeyI" });
+    return f;
+  };
+  const centre = (inv, index) => {
+    const c = inventoryLayout(W, H, inv.slots.length).cells.find((x) => x.index === index);
+    return [c.x + c.w / 2, c.y + c.h / 2];
+  };
+
+  it("picks up a stack on press and drops it on release", () => {
+    const f = open();
+    const inv = f.survival.inventory;
+    inv.add("stone", 12);
+
+    f.handleMouseMove(...centre(inv, 0));
+    f.handleMouseDown(0);
+    expect(f.carried).toEqual({ item: "stone", n: 12 });
+    expect(inv.slots[0]).toBe(null);
+
+    f.handleMouseMove(...centre(inv, 14));
+    f.handleMouseUp(0);
+    expect(f.carried).toBe(null);
+    expect(inv.slots[14]).toEqual({ item: "stone", n: 12 });
+  });
+
+  it("returns the stack when released outside the panel", () => {
+    const f = open();
+    const inv = f.survival.inventory;
+    inv.add("rock", 6);
+    f.handleMouseMove(...centre(inv, 0));
+    f.handleMouseDown(0);
+    f.handleMouseMove(2, 2);
+    f.handleMouseUp(0);
+    expect(f.carried).toBe(null);
+    expect(inv.count("rock")).toBe(6);
+  });
+
+  it("selects a hotbar slot on a click that moves nothing", () => {
+    const f = open();
+    const inv = f.survival.inventory;
+    inv.slots[3] = { item: "stone", n: 2 };
+    f.handleMouseMove(...centre(inv, 3));
+    f.handleMouseDown(0);
+    f.handleMouseUp(0);
+    expect(f.hotbarIndex).toBe(3);
+    expect(inv.slots[3]).toEqual({ item: "stone", n: 2 });
+  });
+
+  it("shift-clicks a stack between the rows", () => {
+    const f = open();
+    const inv = f.survival.inventory;
+    inv.slots[9] = { item: "dirt", n: 5 };
+    f.handleMouseMove(...centre(inv, 9));
+    f.handleMouseDown(0, true);
+    expect(inv.slots[9]).toBe(null);
+    expect(inv.slots[0]).toEqual({ item: "dirt", n: 5 });
+  });
+
+  it("ignores clicks while the screen is shut", () => {
+    const f = forge();
+    const inv = f.survival.inventory;
+    inv.add("stone", 4);
+    f.handleMouseDown(0);
+    expect(f.carried).toBe(null);
+    expect(inv.count("stone")).toBe(4);
+  });
+});
