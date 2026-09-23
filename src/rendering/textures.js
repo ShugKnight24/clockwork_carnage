@@ -6,7 +6,7 @@
 import { WALL_COLORS } from "../../js/data.js";
 import { buildWallSet } from "./env/wall-art.js";
 import { buildDeckSet } from "./env/deck-art.js";
-import { getEnvPalette, resolveEnvPalette, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
+import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
@@ -415,7 +415,8 @@ export function generateFloorCeilTextures(act, visualStyle) {
  *
  * @param {number} act          1-3
  * @param {boolean} brutal      visualStyle 1 (Brutal) — thicker, darker air
- * @param {?number} level       campaign level index, or null outside the campaign
+ * @param {?string} level       campaign level env id (LEVEL_ENVS), or null
+ *                              outside the campaign
  * @param {object} [opts]
  * @param {boolean} [opts.realistic] bake the wall faces as lit materials
  *        (relief, wear, grime) for the Realistic art style
@@ -425,7 +426,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
   const p = resolveEnvPalette(a, level);
-  const salt = level == null ? 0 : level + 1;
+  const salt = envSalt(level);
   const walls = buildWallSet(a, p, salt, realistic);
   const deck = buildDeckSet(a, brutal, p, salt);
   const fogMax = brutal ? 0.94 : 0.86;

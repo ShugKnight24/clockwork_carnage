@@ -6,7 +6,7 @@
  * (player, entities, audio, renderer, etc).
  */
 import * as Save from "../src/core/save-system.js";
-import { campaignLevelMap, getAct } from "./data.js";
+import { campaignMap, campaignLevelMap, getAct, getActLevel } from "./data.js";
 import {
   createCampaignEntities,
   createMissedWeaponPickups,
@@ -182,7 +182,8 @@ export class CampaignManager {
   loadLevel(index) {
     const g = this.game;
     this._clearLevelTimers();
-    const level = campaignLevelMap(this.act, index);
+    const entry = getActLevel(this.act, index);
+    const level = campaignMap(entry);
     if (!level) {
       g.state = GameState.VICTORY;
       g.audio.stopMusic();
@@ -299,7 +300,7 @@ export class CampaignManager {
 
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
-    g.renderer.applyActPalette(this.act, this.level);
+    g.renderer.applyActPalette(getAct(this.act)?.palette ?? this.act, entry.env);
     if (hasBoss) {
       g.audio.startTrack("boss");
     } else {

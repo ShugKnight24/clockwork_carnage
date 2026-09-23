@@ -87,7 +87,7 @@ export class Renderer {
     this.wallTopY = new Float64Array(this.width);
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
-    this._envLevel = null; // campaign level index, for the per-level palette
+    this._envLevel = null; // campaign level env id, for the per-level palette
     this.textures = generateWallTextures();
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
@@ -185,9 +185,10 @@ export class Renderer {
   }
 
   /**
-   * Called on campaign level start. The act picks the base palette; the level
-   * index picks the variation on it, so two levels in one act no longer share
-   * the same steel, lamps and air. Pass null for level outside the campaign.
+   * Called on campaign level start. The act's palette id picks the base
+   * palette; the level's env id (LEVEL_ENVS) picks the variation on it, so two
+   * levels in one act no longer share the same steel, lamps and air. Pass null
+   * for level outside the campaign.
    */
   applyActPalette(act, level = null) {
     const a = act ?? 1;

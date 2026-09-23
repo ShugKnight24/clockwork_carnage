@@ -69,57 +69,68 @@ export const getEnvPalette = (act) => ENV_PALETTES[act] || ENV_PALETTES[1];
  * left out falls through to the act.
  *
  * `steel` is {h, s, l}: hue degrees to rotate, and saturation / lightness
- * multipliers. Keyed by campaign level index.
+ * multipliers. Keyed by env id: a level entry in src/data/campaign/acts.js
+ * names its env, and its act names the base palette.
+ *
+ * `salt` varies the painted wall and deck detail per env. It is the campaign
+ * index each env had when this table was keyed by index, plus one, so the
+ * walls paint exactly as they always have.
  */
 export const LEVEL_ENVS = {
   // ── Act 1: Chronos Station ──
-  0: { name: "Entry" },
-  1: {
+  entry: { name: "Entry", salt: 1 },
+  checkpoint: {
     // Security: harder and colder than the lobby, lit by fluorescent white.
     name: "Checkpoint",
+    salt: 2,
     steel: { h: -14, s: 0.55, l: 0.85, lift: 0.02 },
     accent: "#6fe8ff", accentDeep: "#10485c", lamp: "#f2fbff",
     fogNear: [10, 16, 22], fogFar: [46, 62, 74],
   },
-  2: {
+  research: {
     // Research: clinical, bright, lit green over the benches.
     name: "Research Wing",
+    salt: 3,
     steel: { h: 38, s: 0.4, l: 1.1, lift: 0.1 },
     accent: "#4effc0", accentDeep: "#0b6a52", lamp: "#f4fff9",
     energy: "#63ffd0", energyHot: "#d6fff1",
     fogNear: [20, 30, 27], fogFar: [72, 96, 84],
   },
   // ── Act 2: industrial depths ──
-  3: { name: "Containment" },
-  4: {
+  containment: { name: "Containment", salt: 4 },
+  server_farm: {
     // Server farm: cold machine light fighting the rust.
     name: "Server Farm",
+    salt: 5,
     steel: { h: 34, s: 0.3, l: 0.95, lift: 0.05 },
     accent: "#7ee3c4", accentDeep: "#1d5a4c", lamp: "#cdf2e6",
     energy: "#46d6ff", energyHot: "#cdf2ff",
     fogNear: [10, 18, 18], fogFar: [40, 64, 62],
   },
-  5: {
+  reactor: {
     // Reactor: everything runs hot, the air itself glows.
     name: "Reactor",
+    salt: 6,
     steel: { h: -16, s: 1.4, l: 0.95, lift: 0.04 },
     accent: "#ff6a1e", accentDeep: "#7a2606", lamp: "#ffcf92",
     energy: "#ff3a1e", energyHot: "#ffd2b0",
     fogNear: [42, 16, 6], fogFar: [120, 52, 18],
   },
   // ── Act 3: corrupted core ──
-  6: { name: "Voss' Laboratory" },
-  7: {
+  voss_lab: { name: "Voss' Laboratory", salt: 7 },
+  nexus: {
     // Nexus: the violet goes cold and electric.
     name: "Temporal Nexus",
+    salt: 8,
     steel: { h: 34, s: 0.75, l: 1.0, lift: 0.05 },
     accent: "#8a6bff", accentDeep: "#221068", lamp: "#cfc6ff",
     energy: "#6f7bff", energyHot: "#dcd6ff",
     fogNear: [14, 12, 38], fogFar: [48, 42, 108],
   },
-  8: {
+  core: {
     // Paradox Core: near-black metal, everything else is the rift.
     name: "Paradox Core",
+    salt: 9,
     steel: { h: -12, s: 1.4, l: 0.5, lift: -0.015 },
     accent: "#ff1f5a", accentDeep: "#54000f", lamp: "#ffb3c6",
     energy: "#ff4df0", energyHot: "#ffd6fb",
@@ -176,21 +187,28 @@ export function shiftHex(hex, { h = 0, s = 1, l = 1, lift = 0 } = {}) {
 }
 
 const STEEL_KEYS = ["s0", "s1", "s2", "s3", "s4", "trim"];
+/** LEVEL_ENVS fields that describe the env rather than its look. */
+const ENV_META = new Set(["name", "salt"]);
+
+/** Texture salt for an env id; 0 outside the campaign. */
+export function envSalt(env) {
+  return (env != null && LEVEL_ENVS[env]?.salt) || 0;
+}
 
 /**
- * The palette for one campaign level: its act's base, with the level's own
- * steel shift and named overrides applied. `level` is the campaign index;
- * pass null (arena, tutorial, builder) for the plain act palette.
+ * The palette for one campaign level: its act's base palette, with the
+ * level env's steel shift and named overrides applied. `env` is a
+ * LEVEL_ENVS id; pass null (arena, tutorial, builder) for the plain palette.
  */
-export function resolveEnvPalette(act, level) {
-  const base = getEnvPalette(act);
-  const spec = level == null ? null : LEVEL_ENVS[level];
-  if (!spec || (!spec.steel && Object.keys(spec).length <= 1)) return base;
+export function resolveEnvPalette(palette, env) {
+  const base = getEnvPalette(palette);
+  const spec = env == null ? null : LEVEL_ENVS[env];
+  if (!spec || !Object.keys(spec).some((k) => !ENV_META.has(k))) return base;
 
   const out = { ...base };
   if (spec.steel) for (const k of STEEL_KEYS) out[k] = shiftHex(base[k], spec.steel);
   for (const [k, v] of Object.entries(spec)) {
-    if (k === "steel" || k === "name") continue;
+    if (k === "steel" || ENV_META.has(k)) continue;
     out[k] = v;
   }
   // The authored *RGB triples are not the hex: each act's light tint is a

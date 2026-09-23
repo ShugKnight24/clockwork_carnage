@@ -13,7 +13,7 @@ const { getDifficultyMultipliers } = await import("../../src/systems/spawner.js"
 const { applyActEnemyRoster } = await import("../../src/systems/spawner.js");
 const { getPresentSquad } = await import("../../src/systems/squad-comms.js");
 const { AriaCommsSystem } = await import("../../src/systems/aria-comms.js");
-const { resolveEnvPalette } = await import("../../src/rendering/env/palettes.js");
+const { resolveEnvPalette, envSalt } = await import("../../src/rendering/env/palettes.js");
 const { CUTSCENE_KEYS } = await import("../../src/data/cutscene-keys.js");
 const { ENEMY_TYPES } = await import("../../js/data.js");
 const { unlockContext } = await import("../../src/systems/unlocks.js");
@@ -98,7 +98,7 @@ function levelSnapshot(g, cm, log) {
       : null,
     palette: paletteCall ? resolveEnvPalette(...paletteCall[1]) : null,
     // Wall and deck painting are salted per level; the salt must not move.
-    textureSalt: paletteCall ? paletteCall[1][1] + 1 : null,
+    textureSalt: paletteCall ? envSalt(paletteCall[1][1]) : null,
     idlePools: ariaCall ? idlePools(ariaCall[1]) : null,
     events: log.filter((l) => l[0] !== "palette" && l[0] !== "ariaContext"),
   };

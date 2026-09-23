@@ -4,11 +4,17 @@ import {
   getEnvPalette,
   shiftHex,
   LEVEL_ENVS,
+  envSalt,
 } from "../../src/rendering/env/palettes.js";
+import { ACTS } from "../../src/data/campaign/acts.js";
 
-/** Act each campaign level belongs to, matching campaign-manager's mapping. */
-const ACT_OF = [1, 1, 1, 2, 2, 2, 3, 3, 3];
-const LEVELS = ACT_OF.map((act, level) => ({ act, level }));
+/**
+ * Each env with the palette of the act the station was authored around: the
+ * nine maps were built three to an act, so that is the look each was tuned in.
+ */
+const ENVS = ACTS[0].levels.map((l) => l.env);
+const PALETTE_OF = [1, 1, 1, 2, 2, 2, 3, 3, 3];
+const LEVELS = ENVS.map((env, i) => ({ act: PALETTE_OF[i], level: env }));
 
 const KEY_FIELDS = ["s0", "s2", "s4", "accent", "lamp"];
 const signature = (p) =>
@@ -27,7 +33,8 @@ describe("per-level environment palettes", () => {
   it("keeps each level inside its act's family", () => {
     // The first level of each act is the untouched act base.
     for (const first of [0, 3, 6]) {
-      expect(resolveEnvPalette(ACT_OF[first], first)).toEqual(getEnvPalette(ACT_OF[first]));
+      expect(resolveEnvPalette(PALETTE_OF[first], ENVS[first]))
+        .toEqual(getEnvPalette(PALETTE_OF[first]));
     }
   });
 
@@ -48,14 +55,24 @@ describe("per-level environment palettes", () => {
       }
     }
     // Reactor's light is warmer than the Act 2 base it derives from.
-    const reactor = resolveEnvPalette(2, 5);
+    const reactor = resolveEnvPalette(2, "reactor");
     const act2 = getEnvPalette(2);
     expect(reactor.accentRGB[0] - reactor.accentRGB[2])
       .toBeGreaterThan(act2.accentRGB[0] - act2.accentRGB[2]);
   });
 
-  it("names every campaign level", () => {
-    for (let i = 0; i < 9; i++) expect(LEVEL_ENVS[i]?.name).toBeTruthy();
+  it("names the env of every campaign level in every act", () => {
+    for (const act of ACTS) {
+      for (const l of act.levels) expect(LEVEL_ENVS[l.env]?.name, l.env).toBeTruthy();
+      expect(act.palette, `act ${act.id}`).toBeTruthy();
+    }
+  });
+
+  it("keeps each env's texture salt distinct, and none outside the campaign", () => {
+    const salts = ENVS.map(envSalt);
+    expect(new Set(salts).size).toBe(ENVS.length);
+    expect(salts.every((s) => s > 0)).toBe(true);
+    expect(envSalt(null)).toBe(0);
   });
 });
 
