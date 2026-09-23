@@ -68,8 +68,7 @@ export const TOOLS = ["block", "spawn", "pickup", "exit", "start", "vessel"];
  * Boards the vessel in reach, or leaves the one ridden. `B` for "board" for
  * now: `E` is kept for a general interact action (tools, stations, vessels)
  * that does not exist yet, and moving boarding onto it is this one line.
- * With no vessel ridden or in reach the key keeps its older job, the
- * Endless/Bounded choice for the next world.
+ * Ctrl+B is not this key's: it belongs to expanding an old world.
  */
 export const VESSEL_KEY = "KeyB";
 /** Seconds of held break that pick a vessel up in survival. */
@@ -335,7 +334,7 @@ export class ForgeMode {
     this.active = false;
     /** V toggles what Ctrl+N generates. */
     this.terrainNew = true;
-    /** B toggles whether Ctrl+N makes an endless world (the default) or the 128 × 128 box. */
+    /** Shift+V toggles whether Ctrl+N makes an endless world (the default) or the 128 × 128 box. */
     this.boundedNew = false;
 
     this.history = [];
@@ -737,15 +736,15 @@ export class ForgeMode {
       this.velZ = 0;
       return true;
     }
+    // V picks Terrain or Flat for the next world, Shift+V Endless or Bounded.
     if (code === "KeyV" && !ctrl) {
-      this.terrainNew = !this.terrainNew;
+      if (e.shiftKey) this.boundedNew = !this.boundedNew;
+      else this.terrainNew = !this.terrainNew;
       this.audio.menuSelect();
       return true;
     }
-    if (code === VESSEL_KEY && !ctrl && this._toggleRide()) return true;
-    if (code === "KeyB" && !ctrl) {
-      this.boundedNew = !this.boundedNew;
-      this.audio.menuSelect();
+    if (code === VESSEL_KEY && !ctrl) {
+      if (!this._toggleRide()) this._warn("No vessel in reach");
       return true;
     }
     if (code === "KeyM" && !ctrl) {
@@ -1366,8 +1365,7 @@ export class ForgeMode {
 
   /**
    * `VESSEL_KEY`: leave the vessel ridden, or board the nearest one in reach.
-   * @returns {boolean} false when there was nothing to board, so the key can
-   *   fall through to its other job
+   * @returns {boolean} false when there was nothing to board
    */
   _toggleRide() {
     if (this.riding) {

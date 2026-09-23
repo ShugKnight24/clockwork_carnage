@@ -88,13 +88,22 @@ describe("the Forge's vessels: boarding", () => {
     expect(f.player.z).toBe(32);
   });
 
-  it(`${VESSEL_KEY} with nothing in reach still switches the next world to Bounded`, async () => {
+  it(`${VESSEL_KEY} with nothing in reach says so, and leaves the next world alone`, async () => {
     const f = await forgeOn(lake());
     f.world.meta.vessels = [makeVessel("raft", 20.5, 20.5, 30.7)];
     Object.assign(f.player, { x: 100.5, y: 40.5, z: 32 });
     expect(key(f, VESSEL_KEY)).toBe(true);
     expect(f.riding).toBe(null);
-    expect(f.boundedNew).toBe(true);
+    expect(f.boundedNew).toBe(false);
+    expect(f.notice?.text).toBe("No vessel in reach");
+  });
+
+  it("Ctrl+B is not the vessel key", async () => {
+    const f = await forgeOn(lake());
+    f.world.meta.vessels = [makeVessel("boat", 68.5, 40.5, SURFACE - VESSELS.boat.draft)];
+    Object.assign(f.player, { x: 70.6, y: 40.5, z: 32 });
+    f.handleKeyDown({ code: VESSEL_KEY, ctrlKey: true, metaKey: false, shiftKey: false, preventDefault() {} });
+    expect(f.riding).toBe(null);
   });
 
   it("W for two seconds drives a ridden boat across the water, afloat, the rider with it", async () => {

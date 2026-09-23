@@ -14,7 +14,7 @@
 
 - Branch off `feat/v0.8.0`. Conventional Commits, no AI attribution. Do not push.
 - Not touched: campaign/story files, `js/audio.js`, `src/ui/hud*.js`, the world codec and store (a test proves `meta.vessels` rides through both). `src/world/world.js` and the column generators are not edited: another change is working there.
-- `B` already toggles Endless/Bounded for the next world. It boards or leaves a vessel when one is ridden or within reach, and toggles as before otherwise, so the phase 4 flow and its tests are unchanged. `VESSEL_KEY` in `js/forge.js` is the one place the binding lives.
+- `B` boards and leaves vessels. It used to toggle Endless/Bounded for the next world (phase 4); that choice moves to Shift+V, beside V's Terrain/Flat, with its HUD hint, help line and tests. Ctrl+B is left alone: it belongs to expanding an old world. `VESSEL_KEY` in `js/forge.js` is the one place the binding lives.
 - No new atlas layers: models reuse Log, Planks, Metal, Tech, Energy and Rock.
 - Baseline to hold: 1,436 unit tests; `tests/forge.spec.js`, `tests/smoke.spec.js` and `tests/perf-budget.spec.js` green.
 
@@ -30,7 +30,7 @@
 - **Land:** a raft or boat on ground has no power and grinds to a stop; a jetski crawls at up to 1 block/s so it can be nudged back in.
 - **Jetski hop:** Space while floating lifts it about 1.2 blocks, enough to clear a one-block shore step or a swell.
 - **Collision:** `moveAABB` with `step: 0` and the kind's box: a hull stops at a beach and cannot climb a bank. Unloaded columns are solid to it, as to any body.
-- **Riding:** `B` mounts the nearest vessel within 2.5 blocks. W/S throttle and reverse, A/D steer, the mouse looks around and the view turns with the hull. `B` again dismounts onto the nearest standable dry cell within 4 blocks, else into the water beside the hull.
+- **Riding:** `B` mounts the nearest vessel within 2.5 blocks (Endless/Bounded for the next world moves to Shift+V). W/S throttle and reverse, A/D steer, the mouse looks around and the view turns with the hull. `B` again dismounts onto the nearest standable dry cell within 4 blocks, else into the water beside the hull.
 - **Placing:** creative — the `vessel` tool (T), G cycles the kind, left click places on the targeted water surface or ground, right click removes the vessel under the crosshair. Survival — holding a vessel item, the pick ray stops on water and a left click places it; holding the break button on a vessel for half a second picks it up into the inventory.
 - **Streaming:** a vessel in an unloaded column is not stepped or drawn and stays in `meta.vessels`; the ridden one carries the camera, which is the streamer's centre.
 
@@ -68,7 +68,7 @@
 
 ### Task 4: The Forge
 
-- [ ] **Failing tests** (`tests/unit/vessel-forge.test.js`, a `ForgeMode` on a `MemoryBackend`): creative vessel tool places a boat on water and right click removes it; `B` near a vessel mounts it, `B` again dismounts onto dry land; `B` with nothing near still toggles Bounded; W for 2 s moves the ridden boat across the water and it stays afloat, the player seated on it; survival places a crafted boat from the hotbar (the item is spent) and a held break picks it up (the item returns); `meta.vessels` round-trips through `encodeWorld`/`decodeWorld` and a `WorldStore` save and load; a vessel in an unloaded column is not stepped or drawn and is still saved; a streamer following a ridden vessel 400 blocks keeps its column resident.
+- [ ] **Failing tests** (`tests/unit/vessel-forge.test.js`, a `ForgeMode` on a `MemoryBackend`): creative vessel tool places a boat on water and right click removes it; `B` near a vessel mounts it, `B` again dismounts onto dry land; `B` with nothing near says so and Shift+V toggles Bounded; Ctrl+B does not board; W for 2 s moves the ridden boat across the water and it stays afloat, the player seated on it; survival places a crafted boat from the hotbar (the item is spent) and a held break picks it up (the item returns); `meta.vessels` round-trips through `encodeWorld`/`decodeWorld` and a `WorldStore` save and load; a vessel in an unloaded column is not stepped or drawn and is still saved; a streamer following a ridden vessel 400 blocks keeps its column resident.
 - [ ] **Implement** in `js/forge.js`, the HUD and the pipeline. Commit `feat(forge): place, board and steer vessels`.
 
 ### Task 5: Sounds and wake

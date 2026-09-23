@@ -17,7 +17,7 @@ const forge = () =>
     canvas: null,
     store: new WorldStore(new MemoryBackend()),
   });
-const key = (f, code, ctrl = false) => f.handleKeyDown({ code, ctrlKey: ctrl, metaKey: false, shiftKey: false, preventDefault() {} });
+const key = (f, code, ctrl = false, shift = false) => f.handleKeyDown({ code, ctrlKey: ctrl, metaKey: false, shiftKey: shift, preventDefault() {} });
 
 describe("the Forge in an endless world", () => {
   it("makes its first world endless and stands the player on loaded ground", async () => {
@@ -30,20 +30,21 @@ describe("the Forge in an endless world", () => {
     expect(f.player.z).toBe(f.world.topSolid(Math.floor(f.player.x), Math.floor(f.player.y)) + 1);
   });
 
-  it("makes the next world bounded after B, and endless again after another B", async () => {
+  it("makes the next world bounded after Shift+V, and endless again after another", async () => {
     const f = forge();
     await f.start();
-    expect(newWorldLabel(f)).toBe("NEW: TERRAIN · ENDLESS  [V/B]");
-    expect(key(f, "KeyB")).toBe(true);
+    expect(newWorldLabel(f)).toBe("NEW: TERRAIN · ENDLESS  [V/⇧V]");
+    expect(key(f, "KeyV", false, true)).toBe(true);
     expect(f.boundedNew).toBe(true);
-    expect(newWorldLabel(f)).toBe("NEW: TERRAIN · BOUNDED 128×128  [V/B]");
+    expect(f.terrainNew).toBe(true);
+    expect(newWorldLabel(f)).toBe("NEW: TERRAIN · BOUNDED 128×128  [V/⇧V]");
     key(f, "KeyV");
-    expect(newWorldLabel(f)).toBe("NEW: FLAT · BOUNDED 128×128  [V/B]");
+    expect(newWorldLabel(f)).toBe("NEW: FLAT · BOUNDED 128×128  [V/⇧V]");
     await f.newMap();
     expect(f.world.endless).toBe(false);
     expect(f.world.bounds).toEqual({ x0: 0, y0: 0, x1: 128, y1: 128 });
     expect(f.world.meta.gen.kind).toBe("flat");
-    key(f, "KeyB");
+    key(f, "KeyV", false, true);
     await f.newMap();
     expect(f.world.endless).toBe(true);
   });

@@ -53,7 +53,7 @@ async function waitForColumn(page, x, y, timeoutMs = 30_000) {
   );
 }
 
-/** Ctrl+N with B pressed first: a bounded 128 × 128 world, as every world was before phase 4. */
+/** Ctrl+N with Shift+V pressed first: a bounded 128 × 128 world, as every world was before phase 4. */
 async function newBoundedWorld(page) {
   await page.evaluate(() => { window.ccDebug.game.builder.boundedNew = true; });
   const before = await page.evaluate(() => window.ccDebug.game.builder.world.meta.gen.seed);

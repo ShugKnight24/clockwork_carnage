@@ -523,8 +523,8 @@ export function renderHelp(forge, ctx) {
     "R — Reset Pitch",
     "N — Noclip",
     "V — Terrain/Flat new world",
+    "Shift+V — Endless/Bounded new world",
     "B — Board/leave a vessel in reach",
-    "B — else Endless/Bounded new world",
     "M — Creative/Survival mode",
     "C — Craft menu (survival)",
     "F — Rename World",
@@ -612,11 +612,11 @@ export function renderStatus(forge, ctx, w, h) {
   ctx.textAlign = "left";
 }
 
-/** "NEW: TERRAIN · ENDLESS  [V/B]" — what Ctrl+N makes next. */
+/** "NEW: TERRAIN · ENDLESS  [V/⇧V]" — what Ctrl+N makes next. */
 export function newWorldLabel(forge) {
   const kind = forge.terrainNew ? "TERRAIN" : "FLAT";
   const size = forge.boundedNew ? "BOUNDED 128×128" : "ENDLESS";
-  return `NEW: ${kind} · ${size}  [V/B]`;
+  return `NEW: ${kind} · ${size}  [V/⇧V]`;
 }
 
 /** Blocks on a side of the overhead window of an endless world. */
