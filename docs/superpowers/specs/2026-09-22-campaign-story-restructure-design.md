@@ -1535,7 +1535,8 @@ finished act between phases 4 and 6, if a build ships between them.
 
 These supersede anything above that disagrees.
 
-1. **Act III is "The Hunt".** The Act II card and flipbook keep "The Bonds".
+1. **Act III is "The Hunt"** and Act II is "The Gathering" on screen too.
+   "The Bonds" is retired as an act title.
 2. **True ending at NG+1 with all twelve fragments** (was NG+3). Longer term,
    NG+ adds extra levels rather than only replaying, for replayability and a
    deeper story. That is future scope, not this spec's phases.

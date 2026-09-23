@@ -1608,7 +1608,7 @@ export const CUTSCENE_SCRIPTS = {
   // Like Goku gathering the Z-Fighters / Chief rallying Spartans
   // ═══════════════════════════════════════════════════════════════════
   // ═══════════════════════════════════════════════════════════════════
-  // ACT II — THE GATHERING (on screen: THE BONDS)
+  // ACT II — THE GATHERING
   // One recruit per chapter: Lyra, Rook, Nova, Kael. Each tagline appears
   // once, in that person's own scene, and nobody is introduced twice. Party
   // frames name who is there; nobody stands in the lineup before joining.
@@ -2771,7 +2771,7 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       lines: [
         { text: "END OF ACT II", delay: 0, color: "#334455", size: 28 },
-        { text: "— THE BONDS —", delay: 800, color: "#ffaa44", size: 18 },
+        { text: "— THE GATHERING —", delay: 800, color: "#ffaa44", size: 18 },
       ],
       duration: 4000,
     },
@@ -5621,7 +5621,7 @@ export const CUTSCENE_SCRIPTS = {
           { hold: 1300, flipMs: 550, panel: { bg: "reactor", caption: "ARIA: \"Vitals back. Suit's wrecked. You're alive. Don't waste it.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
           { hold: 1100, flipMs: 500, panel: { bg: "boss_lair", art: "villain", caption: "He let you live. He wants an audience.", captionPos: "bottom", captionColor: "#a01010", captionSize: 13, action: true, halftone: 0.16 } },
           { hold: 1400, flipMs: 550, panel: { bg: "reactor", art: "hero_armed", caption: "This time, you don't walk back in alone.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
-          { hold: 1800, flipMs: 0, panel: { bg: "reactor", caption: "ACT II — THE BONDS", captionPos: "center", captionColor: "#ff8844", captionSize: 20 } },
+          { hold: 1800, flipMs: 0, panel: { bg: "reactor", caption: "ACT II — THE GATHERING", captionPos: "center", captionColor: "#ff8844", captionSize: 20 } },
         ],
       },
       title: "ACT II",

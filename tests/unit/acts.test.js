@@ -25,7 +25,7 @@ describe("ACTS", () => {
     expect(ACTS.map((a) => a.id)).toEqual([1, 2, 3, 4]);
     expect(ACTS.map((a) => a.levels.length)).toEqual([8, 7, 7, 7]);
     expect(ACTS.reduce((n, a) => n + a.levels.length, 0)).toBe(29);
-    expect(ACTS.map((a) => a.title)).toEqual(["THE FALL", "THE BONDS", "THE HUNT", "THE SACRIFICE"]);
+    expect(ACTS.map((a) => a.title)).toEqual(["THE FALL", "THE GATHERING", "THE HUNT", "THE SACRIFICE"]);
   });
 
   it("gives every act a palette, roster, boss card, ARIA line and outro", () => {

@@ -148,9 +148,7 @@ export const ACTS = [
   },
   {
     id: 2,
-    // "The Gathering" is the act's design name and its scenes' keys; the
-    // card the player sees keeps "The Bonds" (spec decision 1).
-    title: "THE BONDS",
+    title: "THE GATHERING",
     palette: 2,
     roster: [
       "henchman",
