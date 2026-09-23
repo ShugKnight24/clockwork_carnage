@@ -274,8 +274,17 @@ describe("placed flags are saved with the world", () => {
       playerStore: new PlayerStore(new MemoryPlayerBackend()),
     });
 
+  /**
+   * Load the column holding (x, y). The seed is random, and a spawn far from
+   * the origin leaves it unloaded, where edits and placed bits are dropped.
+   */
+  const resident = (f, x, y) => f.world.ensureColumn(x >> 4, y >> 4);
+
+  const was = (f, x, y, z) => (resident(f, x, y), f.survival.wasPlaced(x, y, z));
+
   /** What placeBlock does once the hotbar has paid for the block. */
   const place = (f, { x, y, z }, id = ROCK) => {
+    resident(f, x, y);
     f._editBlock(x, y, z, id);
     f.survival.markPlaced(x, y, z);
   };
@@ -293,8 +302,9 @@ describe("placed flags are saved with the world", () => {
     const g = stored(store);
     await g.start();
     expect(g.isSurvival()).toBe(true);
+    resident(g, 5, 5);
     expect(g.world.get(5, 5, 55)).toBe(ROCK);
-    expect(g.survival.wasPlaced(5, 5, 55)).toBe(true);
+    expect(was(g, 5, 5, 55)).toBe(true);
     g.survival.skills.grant("mining", xpForLevel(5));
     const banked = g.survival.skills.xp.mining;
     const res = mine(g, cell);
@@ -312,16 +322,16 @@ describe("placed flags are saved with the world", () => {
     place(f, { x: 9, y: 9, z: 56 });
     await f.newMap();
     f.handleKeyDown({ code: "KeyM" });
-    expect(f.survival.wasPlaced(9, 9, 56)).toBe(false);
+    expect(was(f, 9, 9, 56)).toBe(false);
     place(f, { x: 10, y: 9, z: 56 });
 
     await f.switchMap(1); // back to the first world, saving this one
     expect(f.currentSlot).toBe(first);
-    expect(f.survival.wasPlaced(9, 9, 56)).toBe(true);
-    expect(f.survival.wasPlaced(10, 9, 56)).toBe(false);
+    expect(was(f, 9, 9, 56)).toBe(true);
+    expect(was(f, 10, 9, 56)).toBe(false);
     await f.switchMap(1);
-    expect(f.survival.wasPlaced(10, 9, 56)).toBe(true);
-    expect(f.survival.wasPlaced(9, 9, 56)).toBe(false);
+    expect(was(f, 10, 9, 56)).toBe(true);
+    expect(was(f, 9, 9, 56)).toBe(false);
   });
 
   it("the mode toggle still clears them, and the clear is saved", async () => {
@@ -336,12 +346,12 @@ describe("placed flags are saved with the world", () => {
     f.handleKeyDown({ code: "KeyM" });
     f.handleKeyDown({ code: "KeyM" });
     expect(f._dirty).toBe(true); // meta.mode and the bits both changed
-    expect(f.survival.wasPlaced(5, 5, 55)).toBe(false);
+    expect(was(f, 5, 5, 55)).toBe(false);
     await f.stop();
 
     const g = stored(store);
     await g.start();
-    expect(g.survival.wasPlaced(5, 5, 55)).toBe(false);
+    expect(was(g, 5, 5, 55)).toBe(false);
   });
 });
 
