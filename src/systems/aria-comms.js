@@ -137,11 +137,15 @@ export class AriaCommsSystem {
    * @param {string} category - ARIA_COMMS pool key (e.g. "kaelComms")
    * @param {string} [color] - hex color for text tint
    */
-  queueSquadMessage(speaker, category, color) {
+  /**
+   * Queue a squad line: a random one from `category`, or `line` when the
+   * caller has already chosen who says what.
+   */
+  queueSquadMessage(speaker, category, color, line = null) {
     if (!this.enabled) return;
     const pool = ARIA_COMMS[category];
-    if (!pool || pool.length === 0) return;
-    const text = pool[Math.floor(Math.random() * pool.length)];
+    if (!line && (!pool || pool.length === 0)) return;
+    const text = line ?? pool[Math.floor(Math.random() * pool.length)];
     this.queue.push({
       text,
       color: color || "#ffcc66",

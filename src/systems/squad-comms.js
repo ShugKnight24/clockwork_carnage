@@ -3,10 +3,14 @@
 // Gated by campaign act + member presence. Rate-limited to prevent spam.
 //
 // Who is present at each level is the level's `squad` in
-// src/data/campaign/acts.js.
+// src/data/campaign/acts.js: nobody in Act I, then one recruit per chapter of
+// Act II in the order Lyra, Rook, Nova, Kael, everyone in Act III, and fewer
+// each level of Act IV. Nobody speaks before they have joined, and a member
+// present before they have a name speaks under the level's callsign.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { getActLevel } from "../data/campaign/acts.js";
+import { ARIA_COMMS } from "../data/dialogue.js";
 
 /** @typedef {"kael"|"nova"|"rook"|"lyra"} SquadMember */
 
@@ -37,6 +41,11 @@ export const SQUAD_TAB_COLORS = {
  */
 export function getPresentSquad(act, level = 0) {
   return getActLevel(act, level)?.squad ?? [];
+}
+
+/** The comms label a present member speaks under at this level. */
+export function squadCallsign(act, level, member) {
+  return getActLevel(act, level)?.callsigns?.[member] ?? SQUAD_CONFIG[member]?.label ?? null;
 }
 
 export class SquadCommsController {
@@ -99,7 +108,10 @@ export class SquadCommsController {
     const cfg = SQUAD_CONFIG[member];
     if (!cfg) return false;
 
-    this.ariaComms.queueSquadMessage(cfg.label, cfg.category, cfg.color);
+    // Under a callsign the plate keeps the encrypted channel's blue, not the
+    // member's colour, so the colour does not name them either.
+    const label = squadCallsign(act, level, member);
+    this.ariaComms.queueSquadMessage(label, cfg.category, label === cfg.label ? cfg.color : "#4488ff");
     this.cooldown =
       this.minCooldown + Math.random() * (this.maxCooldown - this.minCooldown);
     return true;
@@ -126,13 +138,28 @@ export class SquadCommsController {
       preferred: "kael",
     });
   }
-  onBossPhase(phase) {
-    // Per-phase ensemble chatter (ARIA_COMMS.bossPhase{N}Squad).
-    const cat = `bossPhase${phase}Squad`;
-    const key = `bossPhase:${phase}`;
+  /**
+   * One line of boss-fight chatter from `pool` (an ARIA_COMMS key whose lines
+   * read "Name: line"), spoken by a member who is actually here. Nobody here,
+   * or nobody the pool has a line for, means silence: ARIA has the fight alone.
+   * @param {string} pool
+   */
+  onBossPhase(pool) {
+    const key = `bossPhase:${pool}`;
     if (this.triggered.has(key)) return;
     if (!this.ariaComms || !this.ariaComms.queueSquadMessage) return;
-    this.ariaComms.queueSquadMessage("SQUAD", cat, "#ffddaa");
+    const { act, level } = this.context;
+    const present = getPresentSquad(act, level);
+    const lines = (ARIA_COMMS[pool] ?? [])
+      .map((text) => {
+        const m = /^([A-Za-z]+):\s*(.*)$/.exec(text);
+        return m ? { member: m[1].toLowerCase(), text: m[2] } : null;
+      })
+      .filter((l) => l && present.includes(l.member) && SQUAD_CONFIG[l.member]);
+    if (lines.length === 0) return;
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    const cfg = SQUAD_CONFIG[line.member];
+    this.ariaComms.queueSquadMessage(squadCallsign(act, level, line.member), pool, cfg.color, line.text);
     this.triggered.add(key);
   }
   onSecretFound() {

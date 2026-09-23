@@ -312,6 +312,38 @@ export const ARIA_COMMS = {
     "Lyra said seventeen endings. We're still in a good one. Let's not get creative.",
   ],
 
+  // ── Act II (the Gathering) ARIA idle lines ──
+  // The act recruits one person at a time, so nobody is named here: a line
+  // can play before anyone has joined.
+  gatheringAmbient: [
+    "The outer rings are running on backup power and spite. Relatable.",
+    "He hasn't rewritten this part of the station yet. It still looks like the place it was. I'm grateful, and I don't know why.",
+    "I tore the governor off your time module in the Core. Every time he finds us, that's on me. I'd do it again. I just want you to know I know.",
+    "That module's running raw now. Keep the shifts short, {AGENT}. I don't like what might be listening.",
+    "Survivor chatter on the maintenance bands. Not many. Enough to be worth finding.",
+    "Three days since the Core, give or take. Time's being generous with its estimates.",
+  ],
+
+  // ── Act II boss: the Hound (suit C-0016) ──
+  bossHound: [
+    "That's C-0016. The suit before yours. No life signs inside. It's walking anyway.",
+    "No heat, no heartbeat, no pilot. Nothing's wearing that suit. It's wearing itself.",
+    "Empty frame, full charge. Don't let it close the distance.",
+  ],
+  // Squad lines at the Hound; each is spoken by the member it names, and only
+  // when that member is there.
+  houndSquad: [
+    "Kael: It charges on the tell. Watch the shoulders, not the claws.",
+    "Nova: Big, fast, empty. I've raced worse. Not many.",
+    "Rook: C-series frame. Somebody rushed the welds. Hit the seams.",
+    "Lyra: It isn't aiming at you. It's aiming where you're about to be. So don't be there.",
+  ],
+
+  // ── Save migration notice (campaign save v1 → v2), once ──
+  storyRestructured: [
+    "The story's been rewritten while you were away, {AGENT}. I've moved us to where it picks up. Your gear came with us.",
+  ],
+
   // ── 4.3: Encrypted channel voice payoff ──
   encryptedChannelReveal: [
     "That encrypted channel from the reactor? I finally traced it. It's Lyra. A later Lyra, transmitting from a timeline that hasn't happened yet.",
