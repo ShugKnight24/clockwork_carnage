@@ -22,6 +22,7 @@ import {
 import { FIELD_TABLES, getIndex } from "../core/character-fields.js";
 import { indexOfId } from "../data/badges.js";
 import { ACCESSORY_SLOTS } from "../data/accessories.js";
+import { maxActLevels, totalActs } from "../data/campaign/acts.js";
 
 const STORE_KEY = "cc_unlocks";
 
@@ -71,10 +72,12 @@ export function ruleFor(key, index) {
 export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel = 0, campaignSaveAct = 0, owned = {} } = {}) {
   // Levels cleared in order: the tracked high-water mark, the level an
   // in-progress save sits on, or all of them once the campaign is beaten.
+  // The mark is still a level index within an act, so "all of them" is the
+  // longest act's level count.
   const cleared = Math.max(
     Number(stats.campaignLevelsCleared) || 0,
     Number(campaignSaveLevel) || 0,
-    stats.campaignComplete ? 9 : 0,
+    stats.campaignComplete ? maxActLevels() : 0,
   );
   return {
     tutorialComplete: !!stats.tutorialComplete,
@@ -82,11 +85,11 @@ export function unlockContext({ stats = {}, achievements = {}, campaignSaveLevel
     // Highest act whose Paradox Lord has fallen. `campaignActsCleared` only
     // started being tracked with these unlocks, so a save made before that
     // reads 0 however far it got — backfill it from signals those saves do
-    // carry: a finished campaign is all three acts; a run parked in act N has
+    // carry: a finished campaign is every act; a run parked in act N has
     // cleared N-1; `bossKilled` means at least one Lord fell.
     campaignActsCleared: Math.max(
       Number(stats.campaignActsCleared) || 0,
-      stats.campaignComplete ? 3 : 0,
+      stats.campaignComplete ? totalActs() : 0,
       (Number(campaignSaveAct) || 1) - 1,
       stats.bossKilled ? 1 : 0,
     ),

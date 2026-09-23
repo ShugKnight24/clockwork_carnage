@@ -18,6 +18,7 @@ import { LOADOUT_CLASSES, ARMOR_STYLES, DEFAULT_CHARACTER } from "../../src/data
 import { SYMBOLS, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 import { cloneLook } from "../../src/core/character-fields.js";
+import { ACTS } from "../../src/data/campaign/acts.js";
 
 const idx = (table, id) => table.findIndex((x) => x.id === id);
 const GUN = idx(LOADOUT_CLASSES, "gunslinger");
@@ -27,6 +28,12 @@ const MK2 = ARMOR_STYLES.findIndex((a) => a.tier === 2);
 const MK3 = ARMOR_STYLES.findIndex((a) => a.tier === 3);
 
 describe("unlock rules", () => {
+  it("backfills a finished campaign with every act and the longest act's levels", () => {
+    const ctx = unlockContext({ stats: { campaignComplete: true } });
+    expect(ctx.campaignActsCleared).toBe(ACTS.length);
+    expect(ctx.campaignLevelsCleared).toBe(Math.max(...ACTS.map((a) => a.levels.length)));
+  });
+
   it("fresh agent: recruit and tier I only", () => {
     const ctx = unlockContext();
     expect(unlockState("loadoutIndex", 0, ctx).unlocked).toBe(true);

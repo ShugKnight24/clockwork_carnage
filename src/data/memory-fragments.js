@@ -2,11 +2,13 @@
  * Memory Fragments — collectible story pieces from the Dead Squad.
  * 3 fragments per member (Voss, Miri, Kai), one per act.
  *
- * `act` is the campaign loop (1-3): the nine maps are replayed three times with
- * escalating rosters. `level` is the 1-based map number (1-9) within a loop, so
- * any act can use any map. Hidden fragments are found behind a secret wall on
- * that map; visible ones are awarded when the map is completed, so they cannot
- * sit on map 9, which ends on the boss kill rather than an exit.
+ * `act` is the campaign act (an ACTS id in src/data/campaign/acts.js) and
+ * `level` the 1-based level within that act; the game looks fragments up with
+ * (campaign.act, campaign.level + 1). Hidden fragments are found behind a
+ * secret wall on that level's map; visible ones are awarded when the level is
+ * completed, so they cannot sit on an act's boss level, which ends on the
+ * kill rather than an exit. tests/unit/archive.test.js pins every tag to a
+ * real slot.
  */
 export const MEMORY_FRAGMENTS = [
   // ─── VOSS (Tactician) ─────────────────────────────────────────────
