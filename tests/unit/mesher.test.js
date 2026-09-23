@@ -137,3 +137,81 @@ describe("mesher reading a padded copy", () => {
     expect(asked).toBe(0);
   });
 });
+
+describe("mesher: water", () => {
+  const W = 19;
+  /** Every water vertex as {x, y, z, n, flag}; the AO byte carries the surface flag. */
+  const waterVerts = (m) => {
+    const out = [];
+    for (let i = 0; i < m.water.verts.length; i += STRIDE) {
+      const v = m.water.verts;
+      out.push({ x: v[i], y: v[i + 1], z: v[i + 2], n: v[i + 3], flag: v[i + 7] });
+    }
+    return out;
+  };
+  /** A stone basin with its floor at z = 4 and walls one ring out, around x, y in 5..7. */
+  const basin = () => {
+    const w = new World();
+    for (let y = 4; y <= 8; y++) for (let x = 4; x <= 8; x++) {
+      w.set(x, y, 4, 1);
+      if (x === 4 || x === 8 || y === 4 || y === 8) { w.set(x, y, 5, 1); w.set(x, y, 6, 1); }
+    }
+    return w;
+  };
+
+  it("a lone water cell gives six faces, all in the water buffer", () => {
+    const w = new World(); w.set(5, 5, 5, W);
+    const m = meshChunk(w, 0, 0, 0, layerOf);
+    expect(quads(m.water)).toBe(6);
+    expect(quads(m.opaque)).toBe(0); expect(quads(m.alpha)).toBe(0);
+    const layers = new Set(); for (let i = 0; i < m.water.verts.length; i += STRIDE) layers.add(m.water.verts[i + 6]);
+    expect(layers).toEqual(new Set([layerOf(W, 0), layerOf(W, 1), layerOf(W, 2)]));
+  });
+
+  it("flags the corners on the open surface and no others", () => {
+    const w = new World(); w.set(5, 5, 5, W);
+    for (const v of waterVerts(meshChunk(w, 0, 0, 0, layerOf))) expect(v.flag).toBe(v.z === 6 ? 1 : 0);
+  });
+
+  it("a cell with water above is full to the top; only the top cell's upper edge is surface", () => {
+    const w = new World(); w.set(5, 5, 5, W); w.set(5, 5, 6, W);
+    const vs = waterVerts(meshChunk(w, 0, 0, 0, layerOf));
+    expect(vs.some((v) => v.z === 6 && v.flag === 0)).toBe(true); // the lower cell's side, up to z = 6, unlowered
+    for (const v of vs) {
+      if (v.z === 7) expect(v.flag).toBe(1);
+      if (v.z === 5) expect(v.flag).toBe(0);
+    }
+  });
+
+  it("water under a solid ceiling is not a surface", () => {
+    const w = new World(); w.set(5, 5, 5, W); w.set(5, 5, 6, 1);
+    const vs = waterVerts(meshChunk(w, 0, 0, 0, layerOf));
+    expect(vs.every((v) => v.flag === 0)).toBe(true);
+    expect(vs.some((v) => v.n === 4)).toBe(false); // the stone hides the water's top
+  });
+
+  it("a pool has no inner faces and no faces against its basin; its top is one quad", () => {
+    const w = basin();
+    const dry = meshChunk(w, 0, 0, 0, layerOf);
+    for (let z = 5; z <= 6; z++) for (let y = 5; y <= 7; y++) for (let x = 5; x <= 7; x++) w.set(x, y, z, W);
+    const m = meshChunk(w, 0, 0, 0, layerOf);
+    expect(quads(m.water)).toBe(1);
+    expect(m.water.verts[3]).toBe(4); // the one quad faces up
+    expect(waterVerts(m).every((v) => v.z === 7 && v.flag === 1)).toBe(true);
+    // The basin's own faces are drawn against water exactly as against air.
+    expect(quads(m.opaque)).toBe(quads(dry.opaque));
+    expect(Buffer.from(m.opaque.verts).equals(Buffer.from(dry.opaque.verts))).toBe(true);
+  });
+
+  it("water and glass keep the faces they share, each in its own buffer", () => {
+    const w = new World(); w.set(5, 5, 5, W); w.set(6, 5, 5, 8);
+    const m = meshChunk(w, 0, 0, 0, layerOf);
+    expect(quads(m.water)).toBe(6); expect(quads(m.alpha)).toBe(6);
+    expect(waterVerts(m).some((v) => v.n === 0 && v.x === 6)).toBe(true);
+  });
+
+  it("an all-air chunk has an empty water buffer too", () => {
+    const m = meshChunk(new World(), 0, 0, 0, layerOf);
+    expect(m.water.count).toBe(0);
+  });
+});

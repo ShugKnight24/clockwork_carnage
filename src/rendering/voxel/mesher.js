@@ -5,7 +5,7 @@
  * Pure typed-array work — no DOM, no GL — so it runs in node and in a worker.
  */
 import { World } from "../../world/world.js";
-import { isOpaque, isSolid, FACE } from "../../world/blocks.js";
+import { isOpaque, isSolid, isWater, FACE } from "../../world/blocks.js";
 
 export const STRIDE = 8;
 const CS = World.CS;
@@ -69,17 +69,22 @@ class Builder {
  * @param {World} world
  * @param {number} cx @param {number} cy @param {number} cz chunk coords
  * @param {(id: number, faceKind: number) => number} layerOf atlas layer per block face
- * @returns {{ opaque: { verts: Uint8Array, indices: Uint16Array|Uint32Array, count: number }, alpha: object }}
+ * @returns {{ opaque: { verts: Uint8Array, indices: Uint16Array|Uint32Array, count: number }, alpha: object, water: object }}
+ *   `water` vertices carry no AO: their AO byte is 1 on a corner that sits on
+ *   an open surface, which the vertex shader lowers to WATER_SURFACE.
  */
 export function meshChunk(world, cx, cy, cz, layerOf) {
   const ox = cx * CS, oy = cy * CS, oz = cz * CS;
   world.readBox(ox - 1, oy - 1, oz - 1, P, P, P, pad);
-  const opaqueB = new Builder(), alphaB = new Builder();
+  const opaqueB = new Builder(), alphaB = new Builder(), waterB = new Builder();
   // A quarter of today's terrain chunks are sky; nothing to sweep.
-  if (!anyBlock()) return { opaque: opaqueB.finish(), alpha: alphaB.finish() };
+  if (!anyBlock()) return { opaque: opaqueB.finish(), alpha: alphaB.finish(), water: waterB.finish() };
   // Chunk-local coordinates, -1..16, into the padded copy.
   const get = (x, y, z) => pad[((z + 1) * P + y + 1) * P + x + 1];
   const solid = (x, y, z) => (isSolid(get(x, y, z)) ? 1 : 0);
+  // A water cell is filled to WATER_SURFACE only when open air (not water, not
+  // a block) is above it; under anything else it is full.
+  const openTop = (x, y, z) => { const a = get(x, y, z + 1); return !isWater(a) && !isSolid(a); };
   const mask = new Int32Array(CS * CS), maskAO = new Uint8Array(CS * CS);
 
   for (let n = 0; n < 6; n++) {
@@ -104,10 +109,20 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
             // An opaque neighbour hides any face; a see-through block (glass,
             // door) only hides the face it shares with its own kind, so a pane
             // has no interior faces but still meets stone with a visible face.
-            const covered = isOpaque(id) ? isOpaque(nId) : nId === id;
+            // Water is hidden by water and by anything opaque: a lake draws
+            // its surface, and its bed draws itself.
+            const covered = isOpaque(id) ? isOpaque(nId) : nId === id || (isWater(id) && isOpaque(nId));
             vis = covered ? 0 : id;
           }
-          if (vis) {
+          if (vis && isWater(id)) {
+            // No AO on water. Instead flag the corners on the cell's top edge
+            // when it is open to the air: all four of a top face, none of a
+            // bottom face, and a side face's +z pair (+v on x faces, +u on y).
+            if (n !== 5 && openTop(x, y, z)) {
+              aoPacked = n === 4 ? 0x55 : axis === 0 ? (1 << 4) | (1 << 6) : (1 << 2) | (1 << 4);
+            }
+            any = true;
+          } else if (vis) {
             // AO samples sit in the plane one step along the normal, around each corner.
             const bx = x + nx, by = y + ny, bz = z + nz;
             const uN = solid(bx - ux, by - uy, bz - uz), uP = solid(bx + ux, by + uy, bz + uz);
@@ -149,7 +164,7 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
           const c11 = [c10[0] + vx * h, c10[1] + vy * h, c10[2] + vz * h];
           const aos = [ao & 3, (ao >> 2) & 3, (ao >> 4) & 3, (ao >> 6) & 3];
           const layer = layerOf(id, faceKind(n));
-          const target = isOpaque(id) ? opaqueB : alphaB;
+          const target = isOpaque(id) ? opaqueB : isWater(id) ? waterB : alphaB;
           // u × v points along +axis, so +axis faces wind c00→c10→c11→c01 and
           // -axis faces take the reverse ring; both are CCW seen from outside.
           if (n % 2 === 0) {
@@ -164,5 +179,5 @@ export function meshChunk(world, cx, cy, cz, layerOf) {
       }
     }
   }
-  return { opaque: opaqueB.finish(), alpha: alphaB.finish() };
+  return { opaque: opaqueB.finish(), alpha: alphaB.finish(), water: waterB.finish() };
 }
