@@ -330,7 +330,7 @@ test.describe("Voxel Forge", () => {
     expect(await page.evaluate(() => window.location.hash)).toBe("");
     try {
       const clip = await page.evaluate(() => navigator.clipboard.readText());
-      expect(clip).toContain("#v4.");
+      expect(clip).toContain("#v5.");
     } catch (_) {
       /* clipboard read unavailable — the hash assertion above still holds */
     }
@@ -341,7 +341,7 @@ test.describe("Voxel Forge", () => {
       const { toShareHash } = await import("/src/world/world-codec.js");
       return toShareHash(window.ccDebug.game.world);
     });
-    expect(hash).toMatch(/^v4\./);
+    expect(hash).toMatch(/^v5\./);
 
     const ctx2 = await browser.newContext();
     try {
@@ -359,6 +359,209 @@ test.describe("Voxel Forge", () => {
         window.ccDebug.game.builder.mapIndex.map((e) => e.name),
       );
       expect(slotNames).toContain("Shared");
+    } finally {
+      await ctx2.close();
+    }
+  });
+
+  test("keeps a build across a reload with no explicit save", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+
+    // Pick a block with a real key and place two against an anchor. Nothing
+    // saves: the page hiding on reload is what has to write them.
+    await page.keyboard.press("Digit5");
+    const tile = await page.evaluate(() => window.ccDebug.game.builder.tile);
+    await layOutSightLine(page, [[45, 1]]);
+    // Aim and click in one turn of the page: between turns the game loop runs
+    // and gravity would pull the aim off the face.
+    const before = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.noclip = true;
+      for (let i = 0; i < 2; i++) {
+        Object.assign(b.player, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+        b.update(0);
+        b.handleMouseDown(0);
+      }
+      return { a: b.world.get(44, 64, 49), b: b.world.get(43, 64, 49), dirty: b._dirty };
+    });
+    expect(before).toEqual({ a: tile, b: tile, dirty: true });
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    const after = await page.evaluate(() => {
+      const w = window.ccDebug.game.builder.world;
+      return [w.get(43, 64, 49), w.get(44, 64, 49), w.get(45, 64, 49)];
+    });
+    expect(after).toEqual([tile, tile, 1]);
+
+    // Stored as v5: a meta row and a row per edited column, no blob.
+    const stored = await page.evaluate(async () => {
+      const b = window.ccDebug.game.builder;
+      const db = await b.store.backend._db();
+      const row = await b.store.backend.get(b.currentSlot);
+      const cols = await b.store.backend.getColumns(b.currentSlot);
+      return { version: db.version, bytes: "bytes" in row, gen: row.meta.gen.kind, cols: cols.length };
+    });
+    expect(stored).toMatchObject({ version: 2, bytes: false, gen: "terrain" });
+    expect(stored.cols).toBeGreaterThan(0);
+    expect(stored.cols).toBeLessThanOrEqual(2);
+  });
+
+  test("survival: a block placed before a reload still pays no xp", async ({ page }) => {
+    test.setTimeout(120_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+    await page.keyboard.press("KeyM"); // into survival
+    await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.noclip = true;
+      b.survival.inventory.slots[2] = { item: "stone", n: 1 };
+    });
+    await page.keyboard.press("Digit3");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.heldItem)).toBe("stone");
+
+    await layOutSightLine(page, [[45, 1]]);
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(0));
+    expect(
+      await page.evaluate(() => {
+        const b = window.ccDebug.game.builder;
+        return [b.world.get(44, 64, 49), b.survival.wasPlaced(44, 64, 49)];
+      }),
+    ).toEqual([1, true]);
+
+    await page.keyboard.press("Control+KeyS");
+    // Wait for the write itself, not just the flash.
+    await page.waitForFunction(async () => {
+      const b = window.ccDebug.game.builder;
+      return (await b.store.load(b.currentSlot))?.wasPlaced(44, 64, 49) === true;
+    });
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    const reloaded = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.noclip = true;
+      b.survival.skills.grant("mining", 200);
+      return { survival: b.isSurvival(), placed: b.survival.wasPlaced(44, 64, 49), xp: b.survival.skills.xp.mining };
+    });
+    expect(reloaded).toMatchObject({ survival: true, placed: true });
+
+    await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
+    expect(await page.evaluate(() => window.ccDebug.game.builder.target)).toMatchObject({ x: 44, y: 64, z: 49 });
+    const mined = await mineTarget(page);
+    expect(mined.block).toBe(0);
+    const after = await debug(page, "forgeSurvival");
+    expect(after.xp.mining).toBe(reloaded.xp); // the loop the survival spec left open stays shut
+    expect(after.items.stone).toBe(1); // the drop still comes back
+  });
+
+  test("opens a v4 world left by the version 1 store and rewrites it as v5", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    // What an older build left behind: cc_worlds version 1, one `worlds`
+    // store, one row holding a packed v4 world with no generator in its meta.
+    const made = await page.evaluate(async () => {
+      const { encodeV4 } = await import("/src/world/world-codec.js");
+      const { generateWorld } = await import("/src/world/world-gen.js");
+      const w = generateWorld({ terrain: true, seed: 4242 });
+      delete w.meta.gen;
+      w.meta.name = "From v4";
+      w.set(64, 64, 50, 7); w.set(0, 0, 50, 3); w.set(127, 127, 50, 5);
+      const json = new TextEncoder().encode(JSON.stringify(encodeV4(w)));
+      const gz = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+      const bytes = new Uint8Array(gz.length + 1); bytes[0] = 1; bytes.set(gz, 1);
+      await new Promise((res, rej) => {
+        const req = indexedDB.open("cc_worlds", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("worlds", { keyPath: "id" });
+        req.onerror = () => rej(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("worlds", "readwrite");
+          tx.objectStore("worlds").put({ id: 0, name: "From v4", updatedAt: 1, bytes });
+          tx.oncomplete = () => { db.close(); res(); };
+          tx.onerror = () => rej(tx.error);
+        };
+      });
+      return { edge: w.topSolid(127, 64), corner: w.get(3, 3, w.topSolid(3, 3)) };
+    });
+
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    const opened = await page.evaluate(() => {
+      const w = window.ccDebug.game.builder.world;
+      return {
+        name: w.meta.name, gen: w.meta.gen.kind, bounds: w.bounds,
+        marks: [w.get(64, 64, 50), w.get(0, 0, 50), w.get(127, 127, 50)],
+        edge: w.topSolid(127, 64), corner: w.get(3, 3, w.topSolid(3, 3)),
+        outside: w.get(128, 64, 30),
+      };
+    });
+    expect(opened).toEqual({
+      name: "From v4", gen: "void", bounds: { x0: 0, y0: 0, x1: 128, y1: 128 },
+      marks: [7, 3, 5], edge: made.edge, corner: made.corner, outside: 0,
+    });
+
+    await page.evaluate(() => window.ccDebug.game.builder.saveMap());
+    await page.waitForFunction(async () => {
+      const b = window.ccDebug.game.builder;
+      const row = await b.store.backend.get(0);
+      return row && !("bytes" in row);
+    });
+    const stored = await page.evaluate(async () => {
+      const b = window.ccDebug.game.builder;
+      return { version: (await b.store.backend._db()).version, cols: (await b.store.backend.getColumns(0)).length };
+    });
+    expect(stored).toEqual({ version: 2, cols: 64 });
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    expect(
+      await page.evaluate(() => {
+        const w = window.ccDebug.game.builder.world;
+        return [w.get(64, 64, 50), w.topSolid(127, 64)];
+      }),
+    ).toEqual([7, made.edge]);
+  });
+
+  test("a v4. share link from before v5 still opens", async ({ page, browser }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    const hash = await page.evaluate(async () => {
+      const { encodeV4 } = await import("/src/world/world-codec.js");
+      const { generateWorld } = await import("/src/world/world-gen.js");
+      const w = generateWorld({ terrain: false });
+      w.set(90, 90, 50, 9);
+      const json = new TextEncoder().encode(JSON.stringify(encodeV4(w)));
+      const gz = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+      const bytes = new Uint8Array(gz.length + 1); bytes[0] = 1; bytes.set(gz, 1);
+      let s = ""; for (const b of bytes) s += String.fromCharCode(b);
+      return "v4." + btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    });
+
+    const ctx2 = await browser.newContext();
+    try {
+      const page2 = await ctx2.newPage();
+      await page2.addInitScript(() => {
+        localStorage.setItem("cc_analytics_consent", "declined");
+      });
+      await page2.goto(`/#${hash}`, { waitUntil: "networkidle" });
+      await page2.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+      await waitForForge(page2, 30_000);
+      expect(await page2.evaluate(() => window.ccDebug.game.world.get(90, 90, 50))).toBe(9);
+      expect(await page2.evaluate(() => window.ccDebug.game.world.meta.name)).toBe("Shared");
     } finally {
       await ctx2.close();
     }
