@@ -204,6 +204,27 @@ function drawBindValue(ctx, args) {
   }
 }
 
+/**
+ * How far to scroll the bindings list so the selected row (or the reset
+ * button) stays on screen. Zero when the whole list fits.
+ */
+export function bindingsScroll(h, rows, selection, itemH = 36, startY = 100) {
+  const listBottom = startY + (rows + 2) * itemH + 30;
+  if (listBottom <= h) return 0;
+  const want = startY + (selection + 3) * itemH - h;
+  return Math.max(0, Math.min(listBottom - h, want));
+}
+
+/** Clip below the header and scroll the list; pair with ctx.restore(). */
+function beginList(ctx, w, h, scroll, startY) {
+  ctx.save();
+  if (!scroll) return;
+  ctx.beginPath();
+  ctx.rect(0, startY - 16, w, h - startY + 16);
+  ctx.clip();
+  ctx.translate(0, -scroll);
+}
+
 export function renderControlsScreen(ctx, w, h, state) {
   const { keybinds, controlsSelection, rebindingKey, keybindSwapFlash } = state;
   if (isModernArt()) {
@@ -221,6 +242,7 @@ export function renderControlsScreen(ctx, w, h, state) {
   const panelW = 480;
   const itemH = 36;
   const startY = 100;
+  beginList(ctx, w, h, bindingsScroll(h, bindKeys.length, controlsSelection, itemH, startY), startY);
 
   for (let i = 0; i < bindKeys.length; i++) {
     const key = bindKeys[i];
@@ -282,6 +304,7 @@ export function renderControlsScreen(ctx, w, h, state) {
     : 'W/S to navigate · ENTER to rebind · ESC to go back';
   ctx.fillText(help, w / 2, resetY + itemH + 20);
   ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 // ─── Modern art style ───────────────────────────────────────────────────────
@@ -298,6 +321,7 @@ function renderControlsScreenModern(ctx, w, h, state) {
   const itemH = 36;
   const startY = 100;
   const now = performance.now();
+  beginList(ctx, w, h, bindingsScroll(h, bindKeys.length, controlsSelection, itemH, startY), startY);
 
   drawPanel(ctx, panelX - 18, startY - 14, panelW + 36, (bindKeys.length + 1) * itemH + 34, {
     variant: 'menu', accent: UI.cyan, chamfer: 18,
@@ -358,4 +382,5 @@ function renderControlsScreenModern(ctx, w, h, state) {
   ctx.fillText(help, w / 2, resetY + itemH + 20);
   ctx.letterSpacing = '0px';
   ctx.textAlign = 'left';
+  ctx.restore();
 }
