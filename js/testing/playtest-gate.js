@@ -1,6 +1,7 @@
 import { GameState } from "../game.js";
 import { ACTS, isLastAct, UPGRADES } from "../data.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
+import { powersFor } from "../../src/systems/chrono-powers.js";
 
 const VALID_STATES = new Set(Object.values(GameState));
 const PLAYER_DEFS = {
@@ -252,6 +253,7 @@ export function createPlaytestGate(game, tools) {
       startCampaignLevel(bossLevel, act.id);
       preparePlayer(player);
       stepAndWatch(run, ctx, player, 10, `act ${act.id} boss start`);
+      assertChronos(act.id, bossLevel);
       killBossDirectly();
       skipCutscenes(run, ctx, player);
       if (!isLastAct(act.id)) {
@@ -272,6 +274,7 @@ export function createPlaytestGate(game, tools) {
     startCampaignLevel(level, act);
     preparePlayer(player);
     stepAndWatch(run, ctx, player, 10, `campaign ${slot} start`);
+    assertChronos(act, level);
 
     killEnemiesDirectly();
     if (!game.exitEntity) throw new Error(`Campaign level ${slot} has no exit`);
@@ -279,6 +282,21 @@ export function createPlaytestGate(game, tools) {
     game.player.y = game.exitEntity.y;
     stepAndWatch(run, ctx, player, 5, `campaign ${slot} exit`);
     assertState(run, [GameState.LEVEL_COMPLETE], `campaign level ${slot} should complete`);
+  }
+
+  /**
+   * Chronos at a campaign slot (spec, Testing): exactly the powers the slot
+   * implies, and in Act I, where the governor is on, no Resonance and no
+   * hunters.
+   */
+  function assertChronos(act, level) {
+    const want = powersFor(act, level, { ngPlus: game.campaign.ngPlusCycle || 0 }).join(",");
+    const got = game.chronoPowers.powers.join(",");
+    if (got !== want) throw new Error(`campaign ${act}.${level} powers: want [${want}], got [${got}]`);
+    if (act === 1) {
+      if (game.chronoPowers.resonanceOn) throw new Error(`campaign ${act}.${level}: Resonance is on in Act I`);
+      if (game.entities.some((e) => e._hunter)) throw new Error(`campaign ${act}.${level}: a hunter response in Act I`);
+    }
   }
 
   function playArena(run, ctx, player) {
