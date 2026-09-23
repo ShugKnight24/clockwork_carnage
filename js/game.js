@@ -3116,8 +3116,10 @@ export class Game {
   _handleHashChange() {
     const hash = window.location.hash.substring(1);
     if (!hash) return;
-    // v4 world shares carry the packed world itself, not a JSON blob.
-    if (hash.startsWith("v4.")) {
+    // World shares (`v5.`, and `v4.` from before v5) carry the packed world
+    // itself, not a JSON blob. The same test as the codec's `isShareHash`,
+    // which is not loaded until a world is actually opened.
+    if (/^v[45]\./.test(hash)) {
       this._loadSharedWorld(hash);
       return;
     }
@@ -3150,7 +3152,7 @@ export class Game {
     this._sharedScoreView = true;
   }
 
-  /** A `v4.` share hash: unpack it into its own Forge slot and open it. */
+  /** A `v5.` or `v4.` share hash: unpack it into its own Forge slot and open it. */
   async _loadSharedWorld(hash) {
     let payload;
     try {
@@ -3294,14 +3296,14 @@ export class Game {
   }
 
   /**
-   * ForgeMode hands us a ready `v4.` hash (or nothing, when the world is too
+   * ForgeMode hands us a ready `v5.` hash (or nothing, when the world is too
    * big to share and it has already said so on the HUD).
    */
   _shareBuilderMap(hash) {
     if (!hash) return;
     const url = `${window.location.origin}${window.location.pathname}#${hash}`;
     // The link goes to the clipboard, never into our own address bar: leaving
-    // `#v4.…` there makes a reload import the author's own world as a second
+    // `#v5.…` there makes a reload import the author's own world as a second
     // "Shared" slot.
     this._clearShareHash();
     navigator.clipboard
