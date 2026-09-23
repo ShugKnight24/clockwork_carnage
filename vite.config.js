@@ -40,6 +40,9 @@ export default defineConfig({
   test: {
     include: ["tests/unit/**/*.test.js", "tests/unit/**/*.spec.js"],
     environment: "node",
+    // Whole-world sweeps (terrain generation, meshing, save round trips) take
+    // a second or two on a laptop and can pass 5 s on a shared 2-core runner.
+    testTimeout: 30_000,
     coverage: {
       provider: "v8",
       include: ["src/systems/**", "src/utils/**", "src/core/**"],
