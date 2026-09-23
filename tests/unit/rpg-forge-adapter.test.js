@@ -204,11 +204,11 @@ describe("placement comes from the hotbar, not the palette", () => {
     return f;
   };
 
-  it("keeps the creative palette at exactly the original fourteen", async () => {
+  it("keeps the creative palette at the original fourteen plus water", async () => {
     const { PLACEABLE_BLOCKS } = await import("../../js/forge.js");
     const f = forge();
     expect(f._palette()).toBe(PLACEABLE_BLOCKS);
-    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19]);
   });
 
   it("uses the same palette in survival, because placement no longer reads it", async () => {

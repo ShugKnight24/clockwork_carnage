@@ -1,8 +1,8 @@
 import { trackEvent } from "./analytics.js";
-import { playBlockSound } from "../src/audio/block-sounds.js";
+import { playBlockSound, playWaterSound, WaterSoundTracker } from "../src/audio/block-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
-import { AIR, BEDROCK } from "../src/world/blocks.js";
+import { AIR, BEDROCK, WATER, isSolid, isWater } from "../src/world/blocks.js";
 import { generateWorld, randomSeed } from "../src/world/world-gen.js";
 import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
@@ -10,6 +10,7 @@ import { convertLegacyMap } from "../src/world/legacy-convert.js";
 import {
   PLAYER,
   stepWalker,
+  eyeInWater,
   groundHeight,
   raycastBlocks,
 } from "../src/world/voxel-physics.js";
@@ -35,9 +36,9 @@ import {
 export { hotbarWindow };
 
 /** Every block a builder may place. Bedrock (15) is the world floor and is not one. */
-export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, WATER];
 /** Blocks the 0 key cycles — the natural set that has no digit of its own. */
-const NATURAL_BLOCKS = [10, 11, 12, 13, 14];
+const NATURAL_BLOCKS = [10, 11, 12, 13, 14, WATER];
 export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
 
 // Legacy 2D-builder storage, read once at start and then left alone.
@@ -70,10 +71,14 @@ const clone = (v) => (v == null ? v : structuredClone(v));
  * @param {Array<{x:number,y:number,z:number}|null>} markers feet positions of
  *   the spawns, pickups, exit and start; a marker's body fills its own cell and
  *   the one above it, so neither may be filled with a block.
+ * @param {number|null} [blockId] what is being placed. Water fills a cell as
+ *   air does, so a block may replace it, and water may go where a body stands.
  */
-export function placementAllowed(world, x, y, z, bodies = [], markers = []) {
+export function placementAllowed(world, x, y, z, bodies = [], markers = [], blockId = null) {
   if (!world.inBounds(x, y, z)) return false;
-  if (world.get(x, y, z) !== AIR) return false;
+  const here = world.get(x, y, z);
+  if (here !== AIR && !isWater(here)) return false;
+  if (blockId != null && !isSolid(blockId)) bodies = [];
   for (const b of bodies) {
     if (
       b.x + b.half > x &&
@@ -891,9 +896,17 @@ export class ForgeMode {
       stepWalker(this.world, s, { mx, my, up: !!this.keys["Space"], down: !!down }, dt);
       this.player.x = s.x; this.player.y = s.y; this.player.z = s.z;
       this.velZ = s.velZ; this.grounded = s.grounded;
+      this._waterSounds(s, len > 0 || !!this.keys["Space"] || !!down, dt);
     }
 
     this.target = this._pick();
+  }
+
+  /** Splashes, drips and strokes from how wet the player is this frame. */
+  _waterSounds(s, moving, dt) {
+    const eyeUnder = eyeInWater(this.world, s.x, s.y, s.z + PLAYER.eye);
+    const events = (this._splash ??= new WaterSoundTracker()).update({ sub: s.submersion, eyeUnder, velZ: s.velZ, moving, dt });
+    for (const [kind, strength] of events) playWaterSound(this.audio, kind, strength);
   }
 
   // ─── Camera and sprites for the voxel renderer ───────────
@@ -970,6 +983,9 @@ export class ForgeMode {
       Math.sin(cam.yaw) * cp,
       Math.sin(cam.pitch),
       PLAYER.reach,
+      // Holding water in creative, the ray stops on water too: place on a
+      // lake's surface to raise it, break to take water away.
+      !this.survival && this.toolMode === "block" && this.tile === WATER ? (id) => id !== AIR : undefined,
     );
   }
 
@@ -1055,7 +1071,7 @@ export class ForgeMode {
   placeBlock() {
     const c = this._placeCell();
     if (!c) return;
-    if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers()))
+    if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers(), this.survival ? null : this.tile))
       return;
 
     if (!this.survival) {

@@ -17,7 +17,8 @@ const make = (mode) => {
 describe("hotbarCells", () => {
   it("lists the creative palette, unlimited", () => {
     const cells = hotbarCells(make("creative"));
-    expect(cells.length).toBe(14);
+    expect(cells.length).toBe(15);
+    expect(cells[14].blockId).toBe(19); // water, last
     expect(cells[0].blockId).toBe(1);
     expect(cells[0].count).toBe(0);
   });

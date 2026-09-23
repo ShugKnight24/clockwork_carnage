@@ -4,12 +4,13 @@
  * noise primitives, with a little random pitch so repeated hits do not machine-
  * gun the same sample.
  */
+import { SWIM } from "../world/voxel-physics.js";
 
 /** Block id → material. Ids follow src/world/blocks.js. */
 const MATERIAL = {
   1: "stone", 2: "metal", 3: "metal", 4: "energy", 5: "wood", 6: "stone", 7: "stone",
   8: "glass", 9: "energy", 10: "soft", 11: "soft", 12: "sand", 13: "stone", 14: "stone",
-  15: "stone", 16: "wood", 17: "metal", 18: "stone",
+  15: "stone", 16: "wood", 17: "metal", 18: "stone", 19: "water",
 };
 
 export const materialOf = (blockId) => MATERIAL[blockId] || "stone";
@@ -50,12 +51,83 @@ const SOUNDS = {
     hit: [0.03, 0.1, 6000, "highpass", [[2200, 0.08, "sine", 0.05]]],
     break: [0.3, 0.4, 5500, "highpass", [[1980, 0.25, "sine", 0.08], [3100, 0.2, "sine", 0.05], [2640, 0.3, "sine", 0.05]]],
   },
+  water: {
+    // A gloop going in, a scoop coming out; there is nothing to chip at.
+    place: [0.16, 0.26, 650, "lowpass", [[300, 0.1, "sine", 0.16], [190, 0.14, "sine", 0.14]]],
+    hit: [0.08, 0.1, 900, "lowpass", []],
+    break: [0.2, 0.28, 1000, "lowpass", [[220, 0.08, "sine", 0.12], [330, 0.1, "sine", 0.1]]],
+  },
   energy: {
     place: [0.05, 0.1, 4000, "bandpass", [[660, 0.15, "square", 0.06], [990, 0.12, "sine", 0.08]]],
     hit: [0.03, 0.08, 4000, "bandpass", [[880, 0.06, "square", 0.04]]],
     break: [0.2, 0.2, 3000, "bandpass", [[990, 0.25, "sawtooth", 0.06], [495, 0.3, "sine", 0.08]]],
   },
 };
+
+/**
+ * Water movement sounds, each [noise dur, noise gain, noise Hz, filter,
+ * tones[]] at full strength. `enter` is a splash, `exit` drips off, `stroke` a
+ * swish through the water, `dive` the muffled gulp of going under.
+ */
+const WATER_EVENTS = {
+  enter: [0.42, 0.55, 1300, "lowpass", [[140, 0.16, "sine", 0.22], [95, 0.22, "sine", 0.18]]],
+  exit: [0.16, 0.16, 3200, "highpass", [[1480, 0.05, "sine", 0.05], [1960, 0.04, "sine", 0.04]]],
+  stroke: [0.26, 0.14, 780, "bandpass", []],
+  dive: [0.3, 0.24, 420, "lowpass", [[85, 0.28, "sine", 0.16]]],
+};
+
+/**
+ * Play a water movement sound. `strength` 0..1 scales loudness, and a splash
+ * also lasts longer the harder you hit the water.
+ */
+export function playWaterSound(audio, kind, strength = 1) {
+  if (!audio?.ctx) return;
+  const recipe = WATER_EVENTS[kind];
+  if (!recipe) return;
+  const k = Math.max(0.05, Math.min(1, strength));
+  const [nd, ng, nf, type, tones] = recipe;
+  const vary = 0.9 + Math.random() * 0.2;
+  audio.playNoise(nd * (kind === "enter" ? 0.6 + 0.4 * k : 1), ng * k, nf * vary, type);
+  for (const [f, d, wave, g] of tones) audio.playTone(f * vary, d, wave, g * k);
+}
+
+/** A splash or a drip at most this often, so bobbing at the waterline is not a drum roll. */
+const SPLASH_GAP = 0.4;
+/** Seconds between swim strokes while moving. */
+const STROKE_EVERY = 0.6;
+
+/**
+ * Turns how wet the player is, frame to frame, into water sounds. Pure: it
+ * returns `[kind, strength]` pairs for the caller to play, so it is tested
+ * without audio. The first update only records the state, so arriving in a
+ * world already in water makes no splash.
+ */
+export class WaterSoundTracker {
+  constructor() { this.sub = null; this.eye = false; this.gap = 0; this.stroke = 0; }
+
+  /** @param {{sub:number, eyeUnder:boolean, velZ:number, moving:boolean, dt:number}} s */
+  update({ sub, eyeUnder, velZ, moving, dt }) {
+    const out = [];
+    this.gap = Math.max(0, this.gap - dt);
+    this.stroke = Math.max(0, this.stroke - dt);
+    if (this.sub !== null) {
+      if (this.sub === 0 && sub > 0 && this.gap === 0) {
+        out.push(["enter", Math.min(1, 0.25 + Math.max(0, -velZ) / 20)]);
+        this.gap = SPLASH_GAP;
+      } else if (this.sub > 0 && sub === 0 && this.gap === 0) {
+        out.push(["exit", Math.max(0.3, Math.min(1, this.sub * 1.4))]);
+        this.gap = SPLASH_GAP;
+      }
+      if (eyeUnder && !this.eye) out.push(["dive", 1]);
+      if (sub >= SWIM.wade && moving && this.stroke === 0) {
+        out.push(["stroke", 1]);
+        this.stroke = STROKE_EVERY;
+      }
+    }
+    this.sub = sub; this.eye = eyeUnder;
+    return out;
+  }
+}
 
 /** Play a block sound through `audio` (an AudioManager). */
 export function playBlockSound(audio, blockId, action) {

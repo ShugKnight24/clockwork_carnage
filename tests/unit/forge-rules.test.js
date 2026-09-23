@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { World } from "../../src/world/world.js";
 import { generateWorld } from "../../src/world/world-gen.js";
-import { AIR, BEDROCK } from "../../src/world/blocks.js";
+import { AIR, BEDROCK, WATER } from "../../src/world/blocks.js";
 import { PLAYER } from "../../src/world/voxel-physics.js";
 import { WorldStore, MemoryBackend } from "../../src/world/world-store.js";
 import {
@@ -60,6 +60,22 @@ describe("forge placement rules", () => {
     expect(placementAllowed(w, 30, 31, 42, [], markers)).toBe(true);
   });
 
+  it("places into water as into air, replacing it", () => {
+    const w = flat();
+    w.set(10, 10, 32, WATER);
+    expect(placementAllowed(w, 10, 10, 32, [])).toBe(true);
+    expect(placementAllowed(w, 10, 10, 32, [], [], 1)).toBe(true);
+  });
+
+  it("lets water, which nothing collides with, go where a body stands", () => {
+    const w = flat();
+    const me = body(10.5, 10.5);
+    expect(placementAllowed(w, 10, 10, 32, [me], [], WATER)).toBe(true);
+    expect(placementAllowed(w, 10, 10, 32, [me], [], 1)).toBe(false);
+    // A marker is still never buried, even in water.
+    expect(placementAllowed(w, 20, 20, 32, [], [{ x: 20.5, y: 20.5, z: 32 }], WATER)).toBe(false);
+  });
+
   it("refuses a block in an occupied cell or outside the world", () => {
     const w = flat();
     expect(placementAllowed(w, 10, 10, 31, [])).toBe(false); // ground is solid
@@ -79,7 +95,7 @@ describe("forge placement rules", () => {
 
 describe("forge hotbar and tools", () => {
   it("keeps the selection inside the window at both ends", () => {
-    const total = PLACEABLE_BLOCKS.length; // 14
+    const total = PLACEABLE_BLOCKS.length; // 15
     for (let sel = 0; sel < total; sel++) {
       const { start, end } = hotbarWindow(sel, total, 10);
       expect(sel).toBeGreaterThanOrEqual(start);
@@ -99,7 +115,7 @@ describe("forge hotbar and tools", () => {
   it("never offers bedrock in the placeable palette", () => {
     expect(PLACEABLE_BLOCKS).not.toContain(BEDROCK);
     expect(PLACEABLE_BLOCKS).not.toContain(AIR);
-    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19]);
   });
 
   it("cycles tools back to the first", () => {
