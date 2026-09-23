@@ -21,6 +21,9 @@
  *   boss       type replacing the map's "boss" placeholder, name card, ARIA
  *              line, and the ARIA_COMMS pool the squad reacts from (or null)
  *   ambient    ARIA idle pool for the act, or null
+ *   resonance  whether shifting is loud (Resonance, hunters): off in Act I,
+ *              where the suit's governor is still on
+ *   hunters    enemy types a hunter response drops through the rift
  *   intro      scenes played on entering the act from the one before
  *   outro      scenes played when the act's boss falls
  *
@@ -34,6 +37,12 @@
  *              scenes played in this slot
  *   callsigns  member -> comms label, for someone present but not yet named
  *   onStart    one-shot ARIA lines: { aria, delay, minNgPlus? }
+ *   grants     Chronos powers that are yours from the start of this level
+ *              (src/systems/chrono-powers.js powersFor adds up every grant
+ *              before a slot, so a loaded save has exactly the powers its
+ *              position implies)
+ *   setPiece   SET_PIECES id (src/data/campaign/set-pieces.js): the level's
+ *              hazards, seals and teach room, laid over its map
  */
 
 /** @typedef {"kael"|"nova"|"rook"|"lyra"} SquadMember */
@@ -65,15 +74,18 @@ const NG_PLUS_BARK = { aria: "ngPlusDeadSquad", delay: 5000, minNgPlus: 1 };
  * @param {string} map - STATION id
  * @param {string[]|null} briefing
  * @param {SquadMember[]} squad
- * @param {{ onStart?: object[], callsigns?: Record<string, string> }} [extra]
+ * @param {{ onStart?: object[], callsigns?: Record<string, string>,
+ *   grants?: string[], setPiece?: string }} [extra]
  */
-function level(map, briefing, squad, { onStart = [], callsigns = null } = {}) {
+function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null } = {}) {
   return {
     ...STATION[map],
     briefing,
     squad,
     ...(callsigns ? { callsigns } : {}),
     onStart,
+    grants,
+    ...(setPiece ? { setPiece } : {}),
   };
 }
 
@@ -130,6 +142,8 @@ export const ACTS = [
       squadPool: null,
     },
     ambient: "act1Ambient",
+    resonance: false,
+    hunters: [],
     // A new campaign's prologue (flipbook, clocking in, intro, first memory)
     // is sequenced by CampaignManager.start, and NG+ by startNgPlus.
     intro: [],
@@ -141,7 +155,8 @@ export const ACTS = [
       level("research", ["research_briefing"], []),
       level("containment", ["containment_briefing"], []),
       level("server_farm", ["server_briefing"], []),
-      level("reactor", ["reactor_briefing"], []),
+      // The optional Vent Gallery: the one set piece before the governor burns.
+      level("reactor", ["reactor_briefing"], [], { setPiece: "vent_gallery" }),
       level("voss_lab", ["voss_lab_briefing"], []),
       level("core", ["paradox_core_briefing"], []),
     ]),
@@ -177,25 +192,44 @@ export const ACTS = [
       squadPool: "houndSquad",
     },
     ambient: "gatheringAmbient",
+    resonance: true,
+    hunters: ["riftLeaper", "echoDrone"],
     intro: ["act2_transition_fb", "gathering_extraction"],
     outro: ["gathering_finale", "lyra_reveal"],
     // Placeholder maps per spec §16.2 until the Act II maps are built.
     levels: levels([
       // Evac Shafts. Lyra guides you out before she has a name.
-      level("reactor", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" } }),
+      level("reactor", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" }, setPiece: "evac_shafts" }),
       // Salvage Deck. Lyra names herself in the lift, so the old Act 3
       // Analyst L.M. and encrypted-channel barks are retired.
-      level("containment", ["gathering_lyra", "gathering_rook"], ["lyra"]),
+      // Lyra's Foresight is loaded in the lift, and taught in the first hall.
+      level("containment", ["gathering_lyra", "gathering_rook"], ["lyra"], {
+        grants: ["foresight"],
+        setPiece: "salvage_foresight",
+      }),
       // Maintenance Spine.
-      level("server_farm", ["gathering_rook_shard", "the_hunt_begins"], ["lyra", "rook"]),
+      // Rook tunes the shard before the level: Chrono Dash and a quieter shift.
+      level("server_farm", ["gathering_rook_shard", "the_hunt_begins"], ["lyra", "rook"], {
+        grants: ["dash"],
+        setPiece: "spine_fans",
+      }),
       // Transit Loop.
-      level("nexus", ["gathering_nova"], ["lyra", "rook"]),
+      level("nexus", ["gathering_nova"], ["lyra", "rook"], { setPiece: "transit_crossings" }),
       // The Greenhouse.
-      level("research", ["gathering_greenhouse"], ["lyra", "rook", "nova"]),
+      level("research", ["gathering_greenhouse"], ["lyra", "rook", "nova"], { setPiece: "greenhouse_stasis" }),
       // The Precinct.
-      level("checkpoint", ["hound_attack", "gathering_kael"], ["lyra", "rook", "nova"]),
+      // Nova's rewind came back with her after the Hound; the Precinct's
+      // sentry teaches it.
+      level("checkpoint", ["hound_attack", "gathering_kael"], ["lyra", "rook", "nova"], {
+        grants: ["rewind"],
+        setPiece: "precinct_rewind",
+      }),
       // The Foundry, with the Hound in the Core's boss slot.
-      level("core", ["gathering_kael_joins", "hound_intro"], [...ALL]),
+      // Kael's shield, wired into the shard, meets the Foundry's sentry line.
+      level("core", ["gathering_kael_joins", "hound_intro"], [...ALL], {
+        grants: ["timeLock"],
+        setPiece: "foundry_lock",
+      }),
     ]),
   },
   {
@@ -229,6 +263,8 @@ export const ACTS = [
       squadPool: "bossPhase2Squad",
     },
     ambient: "act2Ambient",
+    resonance: true,
+    hunters: ["riftLeaper", "echoDrone", "timeWarden"],
     intro: ["hunt_transition_fb", "hunt_intro", "act2_level2"],
     outro: ["act2_victory"],
     // Each level stands on the station map its remix will start from; the
@@ -276,13 +312,15 @@ export const ACTS = [
       squadPool: null,
     },
     ambient: "act3Ambient",
+    resonance: true,
+    hunters: ["riftLeaper", "echoDrone", "timeWarden"],
     intro: ["act3_transition_fb", "act3_intro", "act3_level2"],
     outro: ["true_victory"],
     // They stay behind in the reverse of the order they joined.
     levels: levels([
       level("entry", null, [...ALL]),
       // The Loop has no source map; the Server Farm's aisles repeat.
-      level("server_farm", ["act3_boss"], [...ALL]),
+      level("server_farm", ["act3_boss"], [...ALL], { setPiece: "the_loop" }),
       level("containment", ["act3_level4"], [...ALL]),
       level("nexus", ["nexus_briefing", "act2_level8", "nova_decoy"], ["lyra", "rook", "nova"]),
       level("research", ["act3_level5"], ["lyra", "rook"]),
