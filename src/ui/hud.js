@@ -26,6 +26,7 @@ import {
 } from "./hud-modern.js";
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
+import { drawChronoCluster } from "./chrono-hud.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -1138,6 +1139,11 @@ if (game.settings.showKills) {
     );
   }
 
+  // Chronos: the Resonance eye and the unlocked powers, over the bars.
+  drawChronoCluster(ctx, game, resourceBarX, (showChrono ? resourceBaseY - thinH - thinGap : resourceBaseY) - Math.round(18 * hudFactor) / 2 - 8, {
+    size: Math.round(18 * hudFactor),
+  });
+
   // ── Shield bar (thin, only when player has shield) ──
   if (game.player.maxShield > 0) {
     const shieldPct = game.player.shield / game.player.maxShield;
@@ -1539,6 +1545,11 @@ if (showChrono) {
   ctx.font = "bold 9px monospace";
   ctx.fillText("[HOLD Q]", chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
 }
+
+// Chronos: the Resonance eye and the unlocked powers, on the bars' row.
+drawChronoCluster(ctx, game, Math.floor(w / 2 - totalW / 2) + totalW + 14, staminaBarY + staminaBarH / 2, {
+  size: Math.round(24 * staminaFactor),
+});
 
 // ─── DOOM-Style Bottom Bar ───
 // Base panel
@@ -2064,6 +2075,11 @@ if (chronoPct > 0.005 || game.player.chronoActive) {
     : "rgba(150,100,200,0.25)";
   ctx.lineWidth = 1;
   ctx.strokeRect(cBarX, cBarY, cBarW, cBarH);
+}
+
+{
+  const chipS = Math.round(14 * hudFactor);
+  drawChronoCluster(ctx, game, w / 2, stBarY - Math.round(5 * hudFactor) - 12 - chipS / 2, { size: chipS, align: "center", labels: false });
 }
 
 // Bottom bar background

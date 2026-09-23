@@ -36,6 +36,7 @@ import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { reticlePoint } from "../systems/aim.js";
+import { drawChronoCluster } from "./chrono-hud.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -428,6 +429,9 @@ function drawVitalsReadout(game, ctx, x, cy, f, fs, low, compact) {
     }
     by += bh + (compact ? 4 : 6);
   }
+  // Chronos: the Resonance eye and the unlocked powers, under the bars.
+  const chipS = Math.round((compact ? 12 : 18) * f);
+  if (drawChronoCluster(ctx, game, x + 4, by + chipS / 2 + 1, { size: chipS, labels: !compact })) by += chipS + 4;
   return by;
 }
 

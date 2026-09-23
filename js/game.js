@@ -74,7 +74,8 @@ import {
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
-import { ChronoPowers } from "../src/systems/chrono-powers.js";
+import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
+import { teachHint } from "../src/ui/chrono-hud.js";
 import { ChronoHazards } from "../src/systems/chrono-hazards.js";
 import { VoxelAISystem } from "../src/systems/voxel-ai.js";
 import {
@@ -112,6 +113,7 @@ import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaig
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
   renderTutorialOverlay as _renderTutorialOverlay,
+  renderTeachCard as _renderTeachCard,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
 } from "../src/ui/tutorial-ui.js";
 import { renderSettingsScreen as _renderSettingsScreen } from "../src/ui/settings-screen.js";
@@ -1047,7 +1049,7 @@ export class Game {
       h,
       this.character.name,
       this.isTouchDevice,
-      this.mode === "tutorial" ? this._tutorialCardBottom || 0 : 0,
+      this.mode === "tutorial" ? this._tutorialCardBottom || 0 : this._teachCardBottom || 0,
     );
   }
 
@@ -1319,6 +1321,21 @@ export class Game {
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
     });
+  }
+
+  /** The level's Chronos teach card, until its lesson lands. */
+  renderTeachCard(ctx, w, h) {
+    const t = this.chronoHazards.teach;
+    if (!t?.card) {
+      this._teachCardBottom = 0;
+      return;
+    }
+    const clock = this.chronoPowers.clock;
+    const shownAt = 1.5;
+    const fade = t.done ? 1 - (this.chronoHazards.clock - t.doneAt) / 1.5 : 1;
+    const color = POWERS[t.power]?.color ?? "#8844ff";
+    const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color };
+    this._teachCardBottom = clock > shownAt ? _renderTeachCard(ctx, w, h, step, clock - shownAt, fade) : 0;
   }
 
   renderTutorialCompletionMenu(ctx, w, h) {

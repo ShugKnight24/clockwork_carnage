@@ -24,6 +24,7 @@ import {
   pixelRatio,
 } from "./hud-skin.js";
 import { drawPortrait } from "./portrait.js";
+import { drawChronoCluster } from "./chrono-hud.js";
 import { drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
@@ -376,6 +377,9 @@ function drawVitals(game, ctx, w, h, f, fs) {
     label(ctx, `${Math.floor(chronoPct * 100)}%`, cX + cW, ty, lblSize, cLabel, "right", 0);
   }
 
+  // Chronos: the Resonance eye and the unlocked powers, over the plate.
+  drawChronoCluster(ctx, game, plateX + 4, plateY - Math.round(12 * f) - 6, { size: Math.round(18 * f) });
+
   if (low) {
     const a = 0.45 + 0.55 * pulse(game, 0.012);
     ctx.globalAlpha = a;
@@ -672,6 +676,8 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
     label(ctx, p.chronoActive ? "CHRONO SHIFT" : "CHRONO  [HOLD Q]", cx, sbY - 5, Math.round(10 * fs), p.chronoActive ? "#d9a8ff" : "#8f7ab8");
     label(ctx, `${Math.floor(chronoPct * 100)}%`, cx + cw, sbY - 5, Math.round(10 * fs), "#8f7ab8", "right", 0);
   }
+  // Chronos: the Resonance eye and the unlocked powers, on the bars' row.
+  drawChronoCluster(ctx, game, sx + totalW + 14, sbY + sbH / 2, { size: Math.round(24 * staminaFactor) });
 
   // Console.
   ctx.drawImage(classicConsole(ctx, w, barH, L, hasShield), 0, h - barH - 12, w, barH + 12);
@@ -819,6 +825,8 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
     drawBar(ctx, Math.floor(w / 2 - cBarW / 2), stBarY - cBarH - 5, cBarW, cBarH, chronoPct,
       p.chronoActive ? "#c77dff" : UI.violet, { glow: p.chronoActive ? 0.6 : 0, edge: false });
   }
+  const chipS = Math.round(14 * hudFactor);
+  drawChronoCluster(ctx, game, w / 2, stBarY - Math.max(3, Math.round(4 * hudFactor)) - 10 - chipS / 2, { size: chipS, align: "center", labels: false });
 
   // Strip.
   drawPanel(ctx, -4, h - barH, w + 8, barH + 4, { variant: "hud", chamfer: 0 });
@@ -963,6 +971,7 @@ export function renderModernTacticalPanels(game, ctx, w, h, f) {
   if (chronoPct > 0.005 || p.chronoActive) {
     drawBar(ctx, cx - 50 * f, cy + 20, 100 * f, 3, chronoPct, p.chronoActive ? "#c77dff" : UI.violet, { glow: p.chronoActive ? 0.6 : 0, edge: false });
   }
+  drawChronoCluster(ctx, game, cx, cy + 32 + 8 * f, { size: Math.round(16 * f), align: "center" });
   if (low) {
     ctx.globalAlpha = 0.45 + 0.55 * pulse(game, 0.012);
     drawBrackets(ctx, lx - 6, wy - 6, wingW + 12, wingH + 12, UI.crimson, 12, 2);

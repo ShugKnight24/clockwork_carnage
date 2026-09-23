@@ -475,6 +475,23 @@ export function renderTutorialOverlay(ctx, w, h, state) {
   return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
 }
 
+/**
+ * A Chronos teach card (src/data/campaign/set-pieces.js): the tutorial's own
+ * step card, so a power is taught the way the suit was. No step counter.
+ * @param {{ title: string, hint: string, color: string }} step - hint already
+ *   filled in for the device (src/ui/chrono-hud.js teachHint)
+ * @param {number} elapsed - seconds since it came up
+ * @param {number} [fade] - 1 while it stands, falling to 0 as it goes
+ * @returns {number} the card's bottom edge in px
+ */
+export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1) {
+  const fadeIn = Math.min(1, elapsed / 0.4) * Math.max(0, Math.min(1, fade));
+  if (fadeIn <= 0) return 0;
+  const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
+  if (isModernArt()) return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0);
+  return renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0);
+}
+
 /** Full-screen tutorial completion menu (4 choices after training). */
 export function renderTutorialCompletionMenu(ctx, w, h, selection = 0) {
   const now = performance.now();
@@ -530,8 +547,10 @@ function keycapW(text, size) {
 const KEY_WORDS = new Set([
   "CLICK", "E", "Q", "SHIFT", "CTRL", "ENTER", "ESC", "TAB", "SPACE",
   "USE", "FIRE", "AIM", "RUN", "CROUCH", "SLOW", "DASH",
+  // The Chronos powers' keys, pad buttons and touch buttons (teach cards).
+  "X", "V", "Y", "B", "LB", "RS", "L1", "R3", "REWIND", "LOCK",
 ]);
-const SPEAKER_SCHEMES = { ARIA: "cyan", SUPERVISOR: "amber" };
+const SPEAKER_SCHEMES = { ARIA: "cyan", SUPERVISOR: "amber", LYRA: "amber", ROOK: "cyan", NOVA: "amber", KAEL: "cyan" };
 
 /**
  * Break hint copy into atoms: plain words, keycap groups and speaker tabs.
