@@ -5,6 +5,7 @@
 import { Enemy, Pickup, Prop } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../js/data.js";
 import { SeededRNG } from "../utils/seeded-rng.js";
+import { ACTS, getAct } from "../data/campaign/acts.js";
 
 /**
  * Per-instance palette jitter — shift HSL hue ±8° and lightness ±6% so
@@ -207,12 +208,14 @@ export function filterArenaSpawns(spawns, px, py, grid, rng) {
 /**
  * Create scaled entities for a campaign level.
  * @param {{ entities: Array, exit?: { x: number, y: number } }} level
- * @param {number} act
+ * @param {number} act - ACTS id: its boss type replaces the map's "boss", and
+ *   its scale applies to everything else
  * @param {number} ngPlusCycle
  * @param {ReturnType<getDifficultyMultipliers>} diff
  * @returns {{ entities: (Enemy|Pickup)[], exitEntity: Object|null }}
  */
 export function createCampaignEntities(level, act, ngPlusCycle, diff) {
+  const actDef = getAct(act);
   const ngScale = 1 + (ngPlusCycle || 0) * 0.3;
   const result = [];
   const gW = level.width ?? level.grid?.[0]?.length ?? 0;
@@ -229,12 +232,9 @@ export function createCampaignEntities(level, act, ngPlusCycle, diff) {
     const safe = nudge(e.x, e.y);
     if (e.type === "enemy") {
       let enemyType = e.enemyType;
-      if (enemyType === "boss") {
-        if (act === 2) enemyType = "boss_form2";
-        else if (act === 3) enemyType = "boss_form3";
-      }
+      if (enemyType === "boss") enemyType = actDef?.boss.type ?? "boss";
       const enemy = new Enemy(safe.x, safe.y, enemyType);
-      const actScale = enemyType.startsWith("boss") ? 1 : 1 + (act - 1) * 0.4;
+      const actScale = enemyType.startsWith("boss") ? 1 : (actDef?.scale ?? 1);
       enemy.health = Math.floor(
         enemy.health * diff.healthMul * actScale * ngScale,
       );
@@ -346,74 +346,18 @@ export function createMeltdownPickups(pickupSpawns) {
 
 // ── Act-aware enemy roster ──────────────────────────────────────────────────
 
-/** @type {Record<number, string[]>} */
-const ACT_ROSTERS = {
-  1: ["drone", "glitchling", "phantom", "corruptCop", "sentinel"],
-  2: [
-    "corruptCop",
-    "henchman",
-    "beast",
-    "phaseStalker",
-    "chronoBomber",
-    "temporalEngineer",
-    "shieldCommander",
-  ],
-  3: [
-    "beast",
-    "riftLeaper",
-    "timeWarden",
-    "temporalSummoner",
-    "echoDrone",
-    "sentinel",
-    "phaseStalker",
-  ],
-};
-
-/** @type {Record<number, Record<string, string>>} */
-const ACT_SUBSTITUTES = {
-  1: {
-    henchman: "corruptCop",
-    beast: "sentinel",
-    phaseStalker: "phantom",
-    chronoBomber: "phantom",
-    temporalEngineer: "phantom",
-    shieldCommander: "sentinel",
-    riftLeaper: "phantom",
-    timeWarden: "sentinel",
-    temporalSummoner: "phantom",
-    echoDrone: "drone",
-  },
-  2: {
-    drone: "corruptCop",
-    glitchling: "phaseStalker",
-    phantom: "henchman",
-    sentinel: "shieldCommander",
-    riftLeaper: "phaseStalker",
-    timeWarden: "shieldCommander",
-    temporalSummoner: "temporalEngineer",
-    echoDrone: "chronoBomber",
-  },
-  3: {
-    drone: "echoDrone",
-    glitchling: "phaseStalker",
-    corruptCop: "sentinel",
-    phantom: "riftLeaper",
-    henchman: "riftLeaper",
-    chronoBomber: "temporalSummoner",
-    temporalEngineer: "temporalSummoner",
-    shieldCommander: "timeWarden",
-  },
-};
-
 /**
  * Remap enemy types to act-appropriate roster. Mutates entities in place.
+ * The roster and substitutes are the act's row in ACTS; an unknown act
+ * keeps Act 1's roster and swaps nothing.
  * @param {Enemy[]} entities
  * @param {number} act
  * @param {ReturnType<getDifficultyMultipliers>} diff
  */
 export function applyActEnemyRoster(entities, act, diff) {
-  const roster = ACT_ROSTERS[act] || ACT_ROSTERS[1];
-  const subs = ACT_SUBSTITUTES[act] || {};
+  const actDef = getAct(act);
+  const roster = actDef?.roster ?? ACTS[0].roster;
+  const subs = actDef?.substitutes ?? {};
   for (const e of entities) {
     if (e.type !== "enemy") continue;
     if (e.enemyType && e.enemyType.startsWith("boss")) continue;

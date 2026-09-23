@@ -2,11 +2,11 @@
 // Routes squad voice lines (Kael/Nova/Rook/Lyra) into the ARIA comms queue.
 // Gated by campaign act + member presence. Rate-limited to prevent spam.
 //
-// Narrative canon:
-//   • Act 1: No squad — player is alone. Only ARIA.
-//   • Act 2: Kael, Nova, Rook present. Lyra revealed mid-act.
-//   • Act 3: Full squad (Kael, Nova, Rook, Lyra).
+// Who is present at each level is the level's `squad` in
+// src/data/campaign/acts.js.
 // ────────────────────────────────────────────────────────────────────────────
+
+import { getActLevel } from "../data/campaign/acts.js";
 
 /** @typedef {"kael"|"nova"|"rook"|"lyra"} SquadMember */
 
@@ -31,19 +31,12 @@ export const SQUAD_TAB_COLORS = {
 };
 
 /**
- * @param {number} act - campaign act (1-3)
+ * @param {number} act - campaign act (1-based)
  * @param {number} level - level index within act (0-based)
  * @returns {SquadMember[]} members narratively present for lines
  */
 export function getPresentSquad(act, level = 0) {
-  if (act <= 1) return [];
-  if (act === 2) {
-    // Lyra revealed in act2_level2 onwards
-    return level >= 1
-      ? ["kael", "nova", "rook", "lyra"]
-      : ["kael", "nova", "rook"];
-  }
-  return ["kael", "nova", "rook", "lyra"];
+  return getActLevel(act, level)?.squad ?? [];
 }
 
 export class SquadCommsController {

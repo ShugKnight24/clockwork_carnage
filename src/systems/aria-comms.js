@@ -209,20 +209,22 @@ export class AriaCommsSystem {
     audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
   }
 
-  /** Narrative context for idle-pool selection. */
-  setNarrativeContext({ act = 1, ngPlusCycle = 0 } = {}) {
+  /**
+   * Narrative context for idle-pool selection. `ambient` is the act's own
+   * idle pool (ACTS[].ambient), or null for none.
+   */
+  setNarrativeContext({ act = 1, ngPlusCycle = 0, ambient = null } = {}) {
     this.narrativeAct = act | 0;
     this.ngPlusCycle = ngPlusCycle | 0;
+    this.ambientPool = ambient;
   }
 
   _pickIdlePool() {
-    const act = this.narrativeAct || 1;
     const ngPlus = this.ngPlusCycle || 0;
     const r = Math.random();
     // NG+ cycles: chance of loop-awareness lines
     if (ngPlus >= 1 && r < 0.25) return "ngPlusAriaLoop";
-    if (act === 3 && r < 0.35) return "act3Ambient";
-    if (act === 2 && r < 0.35) return "act2Ambient";
+    if (this.ambientPool && r < 0.35) return this.ambientPool;
     return r < 0.5 ? "idle" : "ariaPersonality";
   }
 

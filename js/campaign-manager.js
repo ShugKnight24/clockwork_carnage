@@ -241,6 +241,7 @@ export class CampaignManager {
       g.ariaComms.setNarrativeContext({
         act: this.act,
         ngPlusCycle: this.ngPlusCycle || 0,
+        ambient: getAct(this.act)?.ambient ?? null,
       });
     }
 

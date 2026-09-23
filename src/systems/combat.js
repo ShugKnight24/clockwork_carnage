@@ -14,6 +14,7 @@ import {
 } from "../constants.js";
 import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ } from "./physics.js";
 import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
+import { ENEMY_TYPES } from "../data/enemies.js";
 
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
@@ -122,12 +123,10 @@ export function calculatePlayerDamage(amount, player) {
 }
 
 /**
- * Check if an enemy is a campaign boss type.
+ * Check if an enemy is a campaign boss type: its def carries `boss: true`.
  */
 export function isBossEnemy(enemy) {
-  return enemy.enemyType === "boss" ||
-    enemy.enemyType === "boss_form2" ||
-    enemy.enemyType === "boss_form3";
+  return ENEMY_TYPES[enemy.enemyType]?.boss === true;
 }
 
 export function aimHitsTargetHeight(aimHeight, enemy) {
