@@ -85,3 +85,26 @@ describe("resolveInventoryHit", () => {
     expect(resolveInventoryHit(l, c.x + c.w, c.y).index).not.toBe(5);
   });
 });
+
+describe("narrow viewports", () => {
+  it("keeps the panel on screen at phone widths instead of overflowing", () => {
+    for (const [w, h] of [[375, 812], [420, 800], [480, 700], [320, 640]]) {
+      const l = inventoryLayout(w, h);
+      expect(l.panel.x).toBeGreaterThanOrEqual(0);
+      expect(l.panel.x + l.panel.w).toBeLessThanOrEqual(w);
+      for (const c of l.cells) {
+        expect(c.x).toBeGreaterThanOrEqual(0);
+        expect(c.x + c.w).toBeLessThanOrEqual(w);
+      }
+    }
+  });
+
+  it("still uses the full cell size when there is room", () => {
+    expect(inventoryLayout(1280, 720).cell).toBe(44);
+    expect(inventoryLayout(375, 812).cell).toBeLessThan(44);
+  });
+
+  it("never collapses cells to nothing", () => {
+    expect(inventoryLayout(100, 100).cell).toBeGreaterThanOrEqual(18);
+  });
+});

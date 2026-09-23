@@ -338,10 +338,13 @@ export function tutorialMenuLayout(w, h, itemCount) {
  * Coordinates are hudW/hudH CSS pixels, never the DPR-scaled backing store.
  */
 export function inventoryLayout(w, h, slotCount = 36) {
-  const cell = 44;
   const gap = 6;
   const cols = 9;
   const pad = 18;
+  // The grid is nine columns wide whatever happens, so the cell shrinks to fit
+  // rather than the panel hanging off both edges. hudW is window.innerWidth
+  // with no floor, and this project targets viewports down to 420px.
+  const cell = Math.max(18, Math.min(44, Math.floor((w - pad * 2 - (cols - 1) * gap) / cols)));
   const rowGap = 14; // between the backpack block and the hotbar row
 
   const backpackCount = Math.max(0, Math.min(slotCount, 36) - 9);
