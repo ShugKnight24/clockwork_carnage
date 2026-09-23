@@ -2,8 +2,26 @@ import { trackEvent } from "./analytics.js";
 import { playBlockSound, playWaterSound, WaterSoundTracker } from "../src/audio/block-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
-import { AIR, BEDROCK, WATER, SAPLING, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
+import { AIR, BEDROCK, WATER, SAPLING, PLANKS, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
 import { randomTick, saplingFits } from "../src/world/trees.js";
+import {
+  VESSELS,
+  VESSEL_KINDS,
+  SEATED_EYE,
+  makeVessel,
+  sanitizeVessels,
+  vesselsOf,
+  stepVessel,
+  placementFor,
+  canPlaceVessel,
+  nearestVessel,
+  dismountCell,
+  pickVessel,
+  seatOf,
+  vesselPose,
+  WakeTrail,
+} from "../src/world/vessels.js";
+import { vesselModel } from "../src/rendering/voxel/vessel-models.js";
 import { generateWorld, randomSeed } from "../src/world/world-gen.js";
 import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
@@ -43,7 +61,20 @@ export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 
 const NATURAL_BLOCKS = [10, 11, 12, 13, 14, WATER, 20, 21, 22, SAPLING];
 /** Seconds between the random ticks that grow saplings near the player. */
 const GROW_TICK = 1;
-export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
+export const TOOLS = ["block", "spawn", "pickup", "exit", "start", "vessel"];
+
+/**
+ * Boards the vessel in reach, or leaves the one ridden. `B` for "board" for
+ * now: `E` is kept for a general interact action (tools, stations, vessels)
+ * that does not exist yet, and moving boarding onto it is this one line.
+ * With no vessel ridden or in reach the key keeps its older job, the
+ * Endless/Bounded choice for the next world.
+ */
+export const VESSEL_KEY = "KeyB";
+/** Seconds of held break that pick a vessel up in survival. */
+const VESSEL_PICKUP_SECONDS = 0.5;
+/** The list a world with no vessels answers, so none is written into its meta. */
+const NO_VESSELS = Object.freeze([]);
 
 // Legacy 2D-builder storage, read once at start and then left alone.
 const LEGACY_SAVE_KEY = "cc_builder_map";
@@ -144,6 +175,9 @@ export function craftMenuRows(session, stations = null) {
 export function nextTool(tool) {
   return TOOLS[(TOOLS.indexOf(tool) + 1) % TOOLS.length];
 }
+
+/** The block a vessel sounds like when it is placed, boarded or taken: metal for a jetski, wood for the rest. */
+const hullBlock = (kind) => (kind === "jetski" ? 3 : PLANKS);
 
 /**
  * Push `edit` onto the history: anything undone is dropped, and the oldest entry
@@ -337,6 +371,18 @@ export class ForgeMode {
     this.stationPoll = 0;
     this.selectedEnemy = 0;
     this.selectedPickup = 0;
+    /** The vessel kind the vessel tool places, an index into VESSEL_KINDS. */
+    this.vesselKind = 0;
+    /** The vessel being ridden, or null. It is one of `world.meta.vessels`. */
+    this.riding = null;
+    /** The vessel under the crosshair when it is nearer than any block. */
+    this.vesselTarget = null;
+    this._vesselBreakT = 0;
+    /** How the ridden hull sits this frame (bob, pitch, roll), for the seat camera. */
+    this._ridePose = { dz: 0, pitch: 0, roll: 0 };
+    /** Seconds the Forge has run: the clock the hulls bob to. */
+    this._clock = 0;
+    this._wake = new WakeTrail();
 
     this.currentSlot = 0;
     this.mapIndex = []; // [{id, name, updatedAt}]
@@ -362,6 +408,11 @@ export class ForgeMode {
 
     this.onPlayTest = null;
     this.onShareMap = null;
+  }
+
+  /** `VESSEL_KEY` as the HUD names it ("B"), so a moved binding moves its hints too. */
+  get vesselKeyLabel() {
+    return VESSEL_KEY.replace(/^Key/, "");
   }
 
   /** The World, under the name the host has always used. */
@@ -628,6 +679,11 @@ export class ForgeMode {
         this.audio.menuSelect();
         return true;
       }
+      if (this.toolMode === "vessel") {
+        this.vesselKind = (this.vesselKind + 1) % VESSEL_KINDS.length;
+        this.audio.menuSelect();
+        return true;
+      }
       return false;
     }
     if (code === "KeyF" && !ctrl) {
@@ -674,6 +730,7 @@ export class ForgeMode {
       return true;
     }
     if (code === "KeyN" && !ctrl) {
+      if (this.riding) this._dismount(); // noclip flies; it does not steer a hull
       this.noclip = !this.noclip;
       this.velZ = 0;
       return true;
@@ -683,6 +740,7 @@ export class ForgeMode {
       this.audio.menuSelect();
       return true;
     }
+    if (code === VESSEL_KEY && !ctrl && this._toggleRide()) return true;
     if (code === "KeyB" && !ctrl) {
       this.boundedNew = !this.boundedNew;
       this.audio.menuSelect();
@@ -734,6 +792,13 @@ export class ForgeMode {
       case "start":
         if (place) this.placeStart();
         return;
+      case "vessel":
+        if (place) this.placeVessel(VESSEL_KINDS[this.vesselKind]);
+        else {
+          this.holdingBreak = true;
+          this.removeBlock();
+        }
+        return;
       default:
         if (place) this.placeBlock();
         else {
@@ -753,6 +818,7 @@ export class ForgeMode {
     this.holdingBreak = false;
     this.survival?.cancelBreak();
     this.breakProgress = 0;
+    this._vesselBreakT = 0;
   }
 
   /**
@@ -829,6 +895,8 @@ export class ForgeMode {
       // Growth writes the world directly: it is not the player's edit to undo.
       if (randomTick(this.world, this.player.x, this.player.y, Math.random) > 0) this._markDirty();
     }
+    this._clock += dt;
+    this._stepVessels(dt);
     if (this.overhead) return;
 
     // The screen owns the cursor; any motion it saw is not a look input.
@@ -855,7 +923,17 @@ export class ForgeMode {
         this.stationsNear = this.survival.stations(this.world, this.player);
         this.stationPoll = STATION_POLL_MS;
       }
-      if (this.holdingBreak && this.target && !this.invOpen) {
+      if (this.holdingBreak && this.vesselTarget && !this.invOpen) {
+        // A vessel is not mined: holding the button on it for a moment
+        // takes it back into the inventory, whatever the pick.
+        this._vesselBreakT += dt;
+        this.breakProgress = Math.min(1, this._vesselBreakT / VESSEL_PICKUP_SECONDS);
+        if (this._vesselBreakT >= VESSEL_PICKUP_SECONDS) {
+          this._takeVessel(this.vesselTarget);
+          this._vesselBreakT = 0;
+          this.breakProgress = 0;
+        }
+      } else if (this.holdingBreak && this.target && !this.invOpen) {
         const t = this.target;
         // `dt` is seconds here; the session counts a break in milliseconds.
         const hitId = this.world.get(t.x, t.y, t.z);
@@ -878,7 +956,14 @@ export class ForgeMode {
       } else if (this.breakProgress !== 0) {
         this.survival.cancelBreak();
         this.breakProgress = 0;
+        this._vesselBreakT = 0;
       }
+    }
+
+    // A rider steers the hull (`_stepVessels`) and sits where it put them.
+    if (this.riding) {
+      this.target = this._pick();
+      return;
     }
 
     const speed = (this.noclip ? NOCLIP_SPEED : MOVE_SPEED) * dt;
@@ -954,7 +1039,8 @@ export class ForgeMode {
     return {
       x: this.player.x,
       y: this.player.y,
-      z: this.player.z + PLAYER.eye,
+      // Seated, the eye is lower, and it rides the hull's bob.
+      z: this.riding ? this.player.z + SEATED_EYE + this._ridePose.dz : this.player.z + PLAYER.eye,
       yaw: this.player.angle,
       pitch: this.player.pitch,
       fovDeg: this.settings.forgeFov || 120,
@@ -1009,17 +1095,30 @@ export class ForgeMode {
     ];
   }
 
+  /**
+   * The block under the crosshair — or, when a vessel's hull is nearer, no
+   * block and `vesselTarget` set: you are aiming at the hull, not past it.
+   */
   _pick() {
     const cam = this.cameraFor();
     const cp = Math.cos(cam.pitch);
+    const dx = Math.cos(cam.yaw) * cp, dy = Math.sin(cam.yaw) * cp, dz = Math.sin(cam.pitch);
+    const hit = this._pickBlock(cam, dx, dy, dz);
+    const hulls = this._liveVessels().filter((v) => v !== this.riding);
+    const hull = hulls.length ? pickVessel(hulls, cam.x, cam.y, cam.z, dx, dy, dz, PLAYER.reach) : null;
+    this.vesselTarget = hull && (!hit || hull.dist < hit.dist) ? hull.vessel : null;
+    return this.vesselTarget ? null : hit;
+  }
+
+  _pickBlock(cam, dx, dy, dz) {
     return raycastBlocks(
       this.world,
       cam.x,
       cam.y,
       cam.z,
-      Math.cos(cam.yaw) * cp,
-      Math.sin(cam.yaw) * cp,
-      Math.sin(cam.pitch),
+      dx,
+      dy,
+      dz,
       PLAYER.reach,
       // Holding water in creative, or an empty bucket in survival, the ray
       // stops on water too: place on a lake's surface to raise it, break or
@@ -1030,7 +1129,9 @@ export class ForgeMode {
   }
 
   _targetsWater() {
-    if (this.survival) return this.heldItem === "bucket";
+    // A vessel goes on the water, so the ray has to stop there to place one.
+    if (this.toolMode === "vessel") return true;
+    if (this.survival) return this.heldItem === "bucket" || !!itemById(this.heldItem)?.vessel;
     return this.toolMode === "block" && this.tile === WATER;
   }
 
@@ -1142,6 +1243,7 @@ export class ForgeMode {
 
   placeBlock() {
     if (this.survival && (this.heldItem === "bucket" || this.heldItem === "bucket_water")) { this._useBucket(); return; }
+    if (this.survival && itemById(this.heldItem)?.vessel) { this.placeVessel(this.heldItem); return; }
     const c = this._placeCell();
     if (!c) return;
     if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers(), this.survival ? null : this.tile))
@@ -1173,6 +1275,13 @@ export class ForgeMode {
 
   /** In survival this only *starts* a break; holding the button finishes it. */
   removeBlock() {
+    // A hull under the crosshair is what the button is for. Creative takes
+    // it at once; survival picks it up on a held button (`update`).
+    if (this.vesselTarget) {
+      if (!this.survival) this._takeVessel(this.vesselTarget);
+      this._vesselBreakT = 0;
+      return;
+    }
     const t = this.target;
     if (!t) return;
     if (!removeAllowed(this.world, t.x, t.y, t.z)) return;
@@ -1185,6 +1294,166 @@ export class ForgeMode {
 
     const begun = this.survival.beginBreak(t, this.world.get(t.x, t.y, t.z));
     if (!begun.ok) this._warn(begun.reason);
+  }
+
+  // ─── Vessels ─────────────────────────────────────────────
+
+  /** The world's vessels. A world that never had one answers an empty list and keeps no key for it. */
+  _vessels() {
+    return this.world?.meta.vessels || NO_VESSELS;
+  }
+
+  /**
+   * Vessels in loaded columns: the ones that move, are drawn and can be
+   * reached. One in a column that is not loaded is frozen where it was, as
+   * an enemy is (endless-world spec §16), and stays in the save.
+   */
+  _liveVessels() {
+    const w = this.world, list = this._vessels();
+    if (!w || !list.length) return NO_VESSELS;
+    return list.filter((v) => !w.unloadedAt(Math.floor(v.x), Math.floor(v.y)));
+  }
+
+  /** WASD and Space as a hull's controls: throttle, steering, a jetski's hop. */
+  _rideInput() {
+    const k = this.keys, b = this.keybinds;
+    return {
+      throttle: (k[b.moveForward] ? 1 : 0) - (k[b.moveBack] ? 1 : 0),
+      steer: (k[b.moveRight] ? 1 : 0) - (k[b.moveLeft] ? 1 : 0),
+      hop: !!k.Space,
+    };
+  }
+
+  /**
+   * One frame of every live vessel. The ridden one takes the keys (not while
+   * a screen owns them) and turns the rider's view with it, the way a seat
+   * turns under you; the rest drift and settle. Any hull that moved is an
+   * unsaved change, since vessels are saved with the world.
+   */
+  _stepVessels(dt) {
+    const live = this._liveVessels(), r = this.riding;
+    for (const v of live) {
+      const steer = v === r && !this.overhead && !this.invOpen && !this.craftOpen;
+      const x = v.x, y = v.y, z = v.z, yaw = v.yaw;
+      stepVessel(this.world, v, steer ? this._rideInput() : undefined, dt);
+      if (Math.abs(v.x - x) + Math.abs(v.y - y) + Math.abs(v.z - z) > 1e-4) this._markDirty();
+      if (v === r) this.player.angle += v.yaw - yaw;
+    }
+    this._wake.update(dt, live);
+    if (r) this._seatRider();
+  }
+
+  /** Put the rider on the seat of the hull they ride. */
+  _seatRider() {
+    const s = seatOf(this.riding);
+    this.player.x = s.x;
+    this.player.y = s.y;
+    this.player.z = s.z;
+    this.velZ = 0;
+    this.grounded = true;
+    this._ridePose = vesselPose(this.riding, this._clock);
+  }
+
+  /**
+   * `VESSEL_KEY`: leave the vessel ridden, or board the nearest one in reach.
+   * @returns {boolean} false when there was nothing to board, so the key can
+   *   fall through to its other job
+   */
+  _toggleRide() {
+    if (this.riding) {
+      this._dismount();
+      return true;
+    }
+    if (!this.world) return false;
+    const v = nearestVessel(this._liveVessels(), this.player.x, this.player.y, this.player.z);
+    if (!v) return false;
+    this.riding = v;
+    this.noclip = false;
+    this.holdingBreak = false;
+    this.breakProgress = 0;
+    this._seatRider();
+    playBlockSound(this.audio, hullBlock(v.kind), "place");
+    return true;
+  }
+
+  /** Step off onto the nearest dry cell, or into the water beside the hull. */
+  _dismount() {
+    const v = this.riding;
+    if (!v) return;
+    this.riding = null;
+    const d = dismountCell(this.world, v);
+    this.player.x = d.x;
+    this.player.y = d.y;
+    this.player.z = d.z;
+    this.velZ = 0;
+    this.grounded = d.dry;
+    this._ridePose = { dz: 0, pitch: 0, roll: 0 };
+    this._markDirty();
+    playBlockSound(this.audio, hullBlock(v.kind), "hit");
+  }
+
+  /**
+   * Put a vessel of `kind` on the targeted water or level ground, facing the
+   * way the builder looks. Survival spends one from the inventory.
+   */
+  placeVessel(kind) {
+    const k = VESSELS[kind];
+    if (!k || !this.world) return;
+    if (this.survival && this.survival.inventory.count(kind) < 1) {
+      this._warn(`No ${k.name} to place`);
+      return;
+    }
+    const at = placementFor(this.world, kind, this.target);
+    if (!at) {
+      this._warn("Place it on water or level ground");
+      return;
+    }
+    if (!canPlaceVessel(this.world, this._liveVessels(), kind, at.x, at.y, at.z)) {
+      this._warn(`No room for a ${k.name} here`);
+      return;
+    }
+    if (this.survival) {
+      this.survival.inventory.remove(kind, 1);
+      this.refreshHeld();
+    }
+    vesselsOf(this.world).push(makeVessel(kind, at.x, at.y, at.z, this.player.angle));
+    this._markDirty();
+    playBlockSound(this.audio, hullBlock(kind), "place");
+    if (isWater(this.target.id)) playWaterSound(this.audio, "enter", 0.35);
+  }
+
+  /** Take a vessel out of the world; survival gets the item back. */
+  _takeVessel(v) {
+    if (!v || v === this.riding) return;
+    if (this.survival) {
+      if (!this.survival.inventory.fits(v.kind, 1)) {
+        this._warn("Inventory full");
+        return;
+      }
+      this.survival.inventory.add(v.kind, 1);
+      this.refreshHeld();
+    }
+    const list = this._vessels();
+    const i = list.indexOf(v);
+    if (i >= 0) list.splice(i, 1);
+    if (this.vesselTarget === v) this.vesselTarget = null;
+    this._markDirty();
+    playBlockSound(this.audio, hullBlock(v.kind), "break");
+  }
+
+  /** Hulls for the voxel renderer's model pass, bobbing on the water. */
+  modelsFor() {
+    const out = [];
+    for (const v of this._liveVessels()) {
+      const p = v === this.riding ? this._ridePose : vesselPose(v, this._clock);
+      out.push({ model: vesselModel(v.kind), x: v.x, y: v.y, z: v.z + p.dz, yaw: v.yaw, pitch: p.pitch, roll: p.roll });
+    }
+    return out;
+  }
+
+  /** A jetski's spray and foam, as plain particles for the renderer's additive pass. */
+  fxFor() {
+    return this._wake.sprites();
   }
 
   // ─── Markers ─────────────────────────────────────────────
@@ -1422,6 +1691,12 @@ export class ForgeMode {
 
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
   _adopt(world, id = this.currentSlot) {
+    // A rider belongs to the world they were riding in.
+    this.riding = null;
+    this.vesselTarget = null;
+    this._wake = new WakeTrail();
+    // Saved vessels are data from disk or a link: checked before they move.
+    if (world.meta.vessels !== undefined) world.meta.vessels = sanitizeVessels(world.meta.vessels);
     this.world = world;
     // The placed-block flags live in the world and were loaded with it; the
     // character's skills and inventory deliberately carry over.

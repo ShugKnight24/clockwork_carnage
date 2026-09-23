@@ -15,6 +15,7 @@ import { SKILLS, MAX_LEVEL, xpForLevel } from "../rpg/skills.js";
 import { bestTool as bestToolOf } from "../rpg/tools.js";
 import { blockForItem } from "../rpg/items.js";
 import { HOTBAR_SLOTS } from "../rpg/inventory.js";
+import { VESSELS, VESSEL_KINDS } from "../world/vessels.js";
 import { renderInventory, slotVisual, TOOL_COLOR } from "./forge-inventory.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
@@ -29,6 +30,20 @@ const PICKUP_LABELS = { health: "Health", ammo: "Ammo", weapon: "Weapon" };
 const PICKUP_COLORS = { health: "#44ff44", ammo: "#ffcc00", weapon: "#00ccff" };
 
 const HOTBAR_VISIBLE = 10;
+
+/**
+ * The line that tells a rider how to drive, or null when nobody rides.
+ * Keys are named from the forge's own binding, so moving boarding to another
+ * key moves the hint with it.
+ */
+export function ridingHint(forge, key = "B") {
+  const v = forge.riding;
+  if (!v) return null;
+  const k = VESSELS[v.kind];
+  const speed = Math.hypot(v.vx, v.vy);
+  const hop = v.kind === "jetski" ? " · Space hop" : "";
+  return `${k.name.toUpperCase()} ${speed.toFixed(1)} b/s — W/S throttle · A/D steer${hop} · ${key} leave`;
+}
 
 /**
  * The slice of the palette to draw, always containing `selected`.
@@ -86,7 +101,17 @@ export function renderHUD(forge, ctx, w, h) {
   ctx.lineTo(cx, cy + 12);
   ctx.stroke();
 
-  if (forge.target) {
+  if (forge.vesselTarget) {
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `${VESSELS[forge.vesselTarget.kind]?.name || "Vessel"} — ${forge.vesselKeyLabel || "B"} board · RClick ${forge.survival ? "hold to pick up" : "remove"}`,
+      cx,
+      cy + 22,
+    );
+    ctx.textAlign = "left";
+  } else if (forge.target) {
     const t = forge.target;
     ctx.fillStyle = "rgba(255,255,255,0.45)";
     ctx.font = "11px monospace";
@@ -101,6 +126,18 @@ export function renderHUD(forge, ctx, w, h) {
 
   renderHotbar(forge, ctx, w, h);
   renderToolLabel(forge, ctx, w, h);
+  const ride = ridingHint(forge, forge.vesselKeyLabel);
+  if (ride) {
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    ctx.roundRect(w / 2 - 250, h - 150, 500, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = "#ffd27a";
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(ride, w / 2, h - 133);
+    ctx.textAlign = "left";
+  }
   if (forge.survival) renderSurvival(forge, ctx, w, h);
 
   if (forge.showHelp && !forge.suppressHelp) renderHelp(forge, ctx);
@@ -257,6 +294,7 @@ export function renderToolLabel(forge, ctx, w, h) {
     pickup: "PICKUP",
     exit: "EXIT",
     start: "START",
+    vessel: "VESSEL",
   };
   const colors = {
     block: "#00ffcc",
@@ -264,6 +302,7 @@ export function renderToolLabel(forge, ctx, w, h) {
     pickup: "#ffcc00",
     exit: "#00ccff",
     start: "#ffffff",
+    vessel: "#ffd27a",
   };
   const y = h - 58;
   ctx.fillStyle = colors[forge.toolMode] || "#00ffcc";
@@ -299,6 +338,14 @@ export function renderToolLabel(forge, ctx, w, h) {
   } else if (forge.toolMode === "start") {
     ctx.fillStyle = "rgba(255,255,255,0.7)";
     ctx.fillText("L-click to move the play-test start", w / 2, y - 44);
+  } else if (forge.toolMode === "vessel") {
+    const kind = VESSEL_KINDS[forge.vesselKind] || VESSEL_KINDS[0];
+    ctx.fillStyle = "#ffd27a";
+    ctx.fillText(
+      `[G] ${VESSELS[kind].name} (${forge.vesselKind + 1}/${VESSEL_KINDS.length}) — L-click on water`,
+      w / 2,
+      y - 44,
+    );
   }
   ctx.textAlign = "left";
 }
@@ -467,7 +514,7 @@ export function renderHelp(forge, ctx) {
     "0 — Natural Blocks",
     "Wheel — Block",
     "Q/E — Lower/Raise build cursor (overhead)",
-    "T — Tool (Block/Spawn/Pickup/Exit/Start)",
+    "T — Tool (Block/Spawn/Pickup/Exit/Start/Vessel)",
     "G — Cycle Sub-type",
     "[ / ] — FOV -/+",
     ", / . — Prev/Next World",
@@ -476,7 +523,8 @@ export function renderHelp(forge, ctx) {
     "R — Reset Pitch",
     "N — Noclip",
     "V — Terrain/Flat new world",
-    "B — Endless/Bounded new world",
+    "B — Board/leave a vessel in reach",
+    "B — else Endless/Bounded new world",
     "M — Creative/Survival mode",
     "C — Craft menu (survival)",
     "F — Rename World",
