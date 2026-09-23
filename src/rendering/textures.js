@@ -277,6 +277,19 @@ const ACT_PALETTES = {
       ceilLight: { r: 35, g: 6, b: 40 }, seamG: 4, seamB: 12, rivetG: 8, rivetB: 30,
     },
   },
+  // Act IV: the Act III violet, bleached by white-hot rift light.
+  4: {
+    normal: {
+      floorBase: { r: 46, g: 36, b: 48 }, floorGrid: { r: 28, g: 20, b: 30 },
+      floorGlow: { r: 70, g: 50, b: 66 }, ceilBase: { r: 30, g: 22, b: 34 },
+      ceilLight: { r: 70, g: 60, b: 72 }, seamG: 14, seamB: 20, rivetG: 30, rivetB: 44,
+    },
+    brutal: {
+      floorBase: { r: 34, g: 26, b: 36 }, floorGrid: { r: 20, g: 14, b: 22 },
+      floorGlow: { r: 56, g: 40, b: 54 }, ceilBase: { r: 22, g: 16, b: 26 },
+      ceilLight: { r: 54, g: 46, b: 58 }, seamG: 10, seamB: 14, rivetG: 22, rivetB: 32,
+    },
+  },
 };
 
 /**

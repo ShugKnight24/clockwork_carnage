@@ -114,7 +114,7 @@ export function renderWeather(ctx, w, h, game) {
     _renderDataMotes(ctx, w, h, t, dt);
   } else if (act === 2) {
     _renderEmbers(ctx, w, h, t, dt);
-  } else if (act === 3) {
+  } else if (act >= 3) {
     _renderTemporalCracks(ctx, w, h, t);
     _renderWarningPulse(ctx, w, h, t);
   }

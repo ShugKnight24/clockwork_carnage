@@ -571,7 +571,8 @@ export function renderFrame(game) {
     const hy0 = horizonY - bandH / 2;
     const actHorizon = _act === 2
       ? "20,10,4" : _act === 3
-        ? "22,4,8" : "8,18,30";
+        ? "22,4,8" : _act === 4
+          ? "40,30,42" : "8,18,30";
     const hGrad = ctx.createLinearGradient(0, hy0, 0, hy0 + bandH);
     hGrad.addColorStop(0, "transparent");
     hGrad.addColorStop(0.5, `rgba(${actHorizon},0.12)`);

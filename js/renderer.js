@@ -518,13 +518,15 @@ export class Renderer {
     const rayDirX1 = dirX + planeX;
     const rayDirY1 = dirY + planeY;
 
-    // Act-tinted fog: Act1=teal, Act2=amber, Act3=crimson
+    // Act-tinted fog: Act1=teal, Act2=amber, Act3=crimson, Act4=white-hot violet
     const act = this._actPalette || 1;
     const actFog = act === 2
       ? { r: 20, g: 10, b: 4 }
       : act === 3
         ? { r: 22, g: 4, b: 8 }
-        : { r: 8, g: 18, b: 30 }; // Act 1 default teal
+        : act === 4
+          ? { r: 30, g: 22, b: 32 }
+          : { r: 8, g: 18, b: 30 }; // Act 1 default teal
     const brutal = this._visualStyle === 1;
     const fogR = brutal ? actFog.r : actFog.r + 4;
     const fogG = brutal ? actFog.g : actFog.g + 4;
@@ -699,7 +701,9 @@ export class Renderer {
           ? [24 / 255, 14 / 255, 12 / 255]
           : act === 3
             ? [26 / 255, 8 / 255, 16 / 255]
-            : [12 / 255, 22 / 255, 38 / 255];
+            : act === 4
+              ? [36 / 255, 28 / 255, 38 / 255]
+              : [12 / 255, 22 / 255, 38 / 255];
         const fogMax = brutal ? 0.92 : 0.7;
         this.glRenderer.renderFloorCeiling(
           camX, camY, dirX, dirY,

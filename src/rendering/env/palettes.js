@@ -6,6 +6,7 @@
  * Act 1 Chronos Station: blue steel, cyan light.
  * Act 2 industrial depths: rusted bronze steel, amber sodium light.
  * Act 3 corrupted core: violet-black steel, crimson/violet light.
+ * Act 4 the sacrifice: that violet bleached by white-hot rift light.
  */
 
 export const INK = "#04060b";
@@ -52,6 +53,21 @@ export const ENV_PALETTES = {
     rift: "#ff4df0",
     fogNear: [16, 5, 13], fogFar: [54, 18, 42],
     lampRGB: [255, 140, 175], accentRGB: [255, 42, 74],
+  },
+  4: {
+    // Act IV, the Sacrifice: the Act III violet bleached by white-hot rift
+    // light. Paler steel, hot white-pink accents, air that glows.
+    s0: "#141018", s1: "#221c28", s2: "#342b3c", s3: "#4e4458", s4: "#b6a8c4",
+    trim: "#2e2636",
+    accent: "#ff9ad0", accentDeep: "#6a2a4a",
+    warn: "#ffd27a", alert: "#ff3a5a",
+    lamp: "#fff4fb",
+    grime: [10, 6, 12],
+    rust: "#3a2440",
+    energy: "#f0c8ff", energyHot: "#ffffff",
+    rift: "#fff2c8",
+    fogNear: [34, 24, 36], fogFar: [120, 96, 124],
+    lampRGB: [255, 236, 250], accentRGB: [255, 154, 208],
   },
 };
 
@@ -200,6 +216,67 @@ export const LEVEL_ENVS = {
     accent: "#ff1f5a", accentDeep: "#4a000e", lamp: "#ffa6c0",
     energy: "#ff4df0", energyHot: "#ffd6fb",
     fogNear: [16, 3, 14], fogFar: [104, 10, 58],
+  },
+  // ── Act IV: the Sacrifice (palette 4) ──
+  entry_last: {
+    // The lobby you started in, cold blue steel under a white rift.
+    name: "Entry — Last Time",
+    salt: 41,
+    steel: { h: -70, s: 0.7, l: 1.0, lift: 0.02 },
+    accent: "#9fe8ff", accentDeep: "#1c4a60", lamp: "#f0fbff",
+    fogNear: [20, 26, 38], fogFar: [96, 118, 140],
+  },
+  the_loop: {
+    // Habitat sodium lamps, the same ones, block after block.
+    name: "The Loop",
+    salt: 42,
+    steel: { h: 40, s: 0.6, l: 1.05, lift: 0.03 },
+    accent: "#ffb870", accentDeep: "#6a3a14", lamp: "#ffe6c8",
+    fogNear: [30, 22, 20], fogFar: [110, 84, 70],
+  },
+  containment_last: {
+    // Alert red on bleached steel: the block is being dragged into the rift.
+    name: "Containment — Last Stand",
+    salt: 43,
+    steel: { h: 20, s: 1.1, l: 0.9 },
+    accent: "#ff4a4a", accentDeep: "#6a1010", lamp: "#ffd0d0",
+    fogNear: [30, 10, 14], fogFar: [100, 40, 48],
+  },
+  nexus_decoy: {
+    // The Nexus, electric, the violet gone nearly white.
+    name: "Temporal Nexus — The Decoy",
+    salt: 44,
+    steel: { h: -20, s: 0.9, l: 1.05, lift: 0.03 },
+    accent: "#b89bff", accentDeep: "#2c1a6a", lamp: "#e8e0ff",
+    energy: "#a88bff", energyHot: "#efe8ff",
+    fogNear: [22, 18, 44], fogFar: [90, 80, 150],
+  },
+  archive_burns: {
+    // Fire in the stacks.
+    name: "The Archive Burns",
+    salt: 45,
+    steel: { h: 50, s: 0.8, l: 0.95 },
+    accent: "#ff7a2a", accentDeep: "#6a2606", lamp: "#ffd2a8",
+    energy: "#ff6a1a", energyHot: "#ffe0c0",
+    fogNear: [44, 18, 10], fogFar: [140, 64, 30],
+  },
+  engine_firing: {
+    // The Engine awake: white-gold, the air itself lit.
+    name: "The Engine — Firing",
+    salt: 46,
+    steel: { h: 60, s: 0.5, l: 1.1, lift: 0.04 },
+    accent: "#ffe28a", accentDeep: "#6a5210", lamp: "#fffbe8",
+    energy: "#fff0a0", energyHot: "#ffffff",
+    fogNear: [40, 32, 24], fogFar: [150, 130, 100],
+  },
+  core_endgame: {
+    // The Core with its rings gone: near-black, and the rift is white.
+    name: "The Paradox Core — Endgame",
+    salt: 47,
+    steel: { h: 0, s: 0.4, l: 0.45, lift: -0.02 },
+    accent: "#ffffff", accentDeep: "#3a2a40", lamp: "#ffffff",
+    energy: "#ffffff", energyHot: "#ffffff",
+    fogNear: [12, 8, 14], fogFar: [96, 80, 100],
   },
 };
 

@@ -512,7 +512,7 @@ export function grime(ctx, r, p, act) {
       ctx.fillRect(x - rr, y - rr, rr * 2, rr * 2);
     }
   }
-  if (act === 3 && M) {
+  if (act >= 3 && M) {
     // Realistic: the veins are hairline fissures glowing from inside.
     const pts = new Float32Array(16);
     const trace = (g) => {
@@ -533,7 +533,7 @@ export function grime(ctx, r, p, act) {
       }
       fissure(ctx, trace, 2.4);
     }
-  } else if (act === 3) {
+  } else if (act >= 3) {
     ctx.save();
     ctx.lineCap = "round";
     for (let i = 0; i < 3; i++) {
@@ -764,7 +764,7 @@ export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed) {
   C[0] = rust[0]; C[1] = rust[1]; C[2] = rust[2];
   C[3] = Math.min(255, bare[0] * 1.1); C[4] = Math.min(255, bare[1] * 1.1); C[5] = Math.min(255, bare[2] * 1.1);
   C[6] = p.grime[0]; C[7] = p.grime[1]; C[8] = p.grime[2];
-  C[9] = act === 2 ? 0.85 : act === 3 ? 0.6 : 0.55;
+  C[9] = act === 2 ? 0.85 : act >= 3 ? 0.6 : 0.55;
 
   // One call per row keeps the hot loop small for the optimising compiler.
   for (let y = 0; y < T; y++) shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, row[y], ofs);

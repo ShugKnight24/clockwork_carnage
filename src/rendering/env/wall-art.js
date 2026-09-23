@@ -213,7 +213,7 @@ function paintTech(ctx, p, r, act) {
   ink(ctx, sx - 4, 336, sw + 8, 84, 18);
   ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#06212a"], [1, "#020b10"]]);
   if (act === 2) ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#2a1606"], [1, "#0e0702"]]);
-  if (act === 3) ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#2a0612"], [1, "#0e0206"]]);
+  if (act >= 3) ctx.fillStyle = lin(ctx, 0, 340, 0, 416, [[0, "#2a0612"], [1, "#0e0206"]]);
   ctx.fillRect(sx, 340, sw, 76);
   emit((g) => {
     g.globalAlpha = 0.85;
@@ -569,7 +569,7 @@ function paintGlass(ctx, p, r, act) {
   ctx.beginPath();
   ctx.rect(gx, gy, gw, gh);
   ctx.clip();
-  const sky = act === 2 ? ["#2a1a0e", "#4a3018", "#140c06"] : act === 3 ? ["#1e0a1e", "#3a1234", "#0c040c"] : ["#0a2436", "#1d4d66", "#06131d"];
+  const sky = act === 2 ? ["#2a1a0e", "#4a3018", "#140c06"] : act >= 3 ? ["#1e0a1e", "#3a1234", "#0c040c"] : ["#0a2436", "#1d4d66", "#06131d"];
   ctx.fillStyle = lin(ctx, 0, gy, 0, gy + gh, [[0, sky[2]], [0.55, sky[1]], [1, sky[0]]]);
   ctx.fillRect(gx, gy, gw, gh);
   // Distant structures and running lights behind the glass
