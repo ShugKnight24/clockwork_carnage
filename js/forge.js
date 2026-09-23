@@ -14,7 +14,7 @@ import {
   vesselsOf,
   stepVessel,
   placementFor,
-  canPlaceVessel,
+  fitVessel,
   nearestVessel,
   dismountCell,
   pickVessel,
@@ -1414,12 +1414,13 @@ export class ForgeMode {
       this._warn(`No ${k.name} to place`);
       return;
     }
-    const at = placementFor(this.world, kind, this.target);
-    if (!at) {
+    const aimed = placementFor(this.world, kind, this.target);
+    if (!aimed) {
       this._warn("Place it on water or level ground");
       return;
     }
-    if (!canPlaceVessel(this.world, this._liveVessels(), kind, at.x, at.y, at.z)) {
+    const at = fitVessel(this.world, this._liveVessels(), kind, aimed);
+    if (!at) {
       this._warn(`No room for a ${k.name} here`);
       return;
     }

@@ -27,23 +27,24 @@ function grid(sx, sy, sz, paint) {
 }
 
 /**
- * Raft, 2¼ × 2 blocks: three logs lashed side by side, two plank cross-beams
- * on top, the rider sitting on the logs between them.
+ * Raft, 2¼ × 2 blocks: a plank deck lashed across logs, with a plank rail
+ * at bow and stern. A log's top face is its rings, so the logs lie under the
+ * deck and show their bark at the sides.
  */
 function raft() {
   return grid(9, 8, 3, (put) => {
     for (let y = 0; y < 8; y++) for (let x = 0; x < 9; x++) {
       put(x, y, 0, LOG);
-      // A groove between the logs, so they read as three and not a slab.
-      if (y !== 2 && y !== 5) put(x, y, 1, LOG);
+      // Deck boards run across the logs with a gap after every pair.
+      if (x % 3 !== 2) put(x, y, 1, PLANKS);
     }
-    for (const x of [1, 7]) for (let y = 0; y < 8; y++) put(x, y, 2, PLANKS);
+    for (const x of [0, 8]) for (let y = 0; y < 8; y++) put(x, y, 2, PLANKS);
   });
 }
 
 /**
  * Boat, 3 × 1½ blocks: a plank hull that narrows to the bow and stern, a flat
- * floor, two thwarts to sit on and a metal cap on the stem.
+ * floor, two thwarts to sit on and a log stem post at the bow.
  */
 function boat() {
   const sx = 12, sy = 6;
@@ -60,27 +61,31 @@ function boat() {
       }
     }
     for (const x of [4, 8]) for (let y = 1; y < sy - 1; y++) put(x, y, 1, PLANKS);
-    put(sx - 1, 2, 2, METAL); put(sx - 1, 3, 2, METAL);
+    put(sx - 1, 2, 2, LOG); put(sx - 1, 3, 2, LOG);
   });
 }
 
 /**
- * Jetski, 2¼ × 1 blocks: a metal hull, a tech-plate body, a dark saddle, a
- * handlebar pod and a glowing energy stripe and headlight at the bow.
+ * Jetski, 2¼ × 1 blocks: a metal hull with glowing energy strakes down both
+ * sides, a tech-plate body, a dark saddle, handlebars across the pod, an
+ * energy dash and a headlight in the nose.
  */
 function jetski() {
   const sx = 9, sy = 4;
   return grid(sx, sy, 4, (put) => {
     for (let x = 1; x < sx - 1; x++) for (let y = 1; y < 3; y++) put(x, y, 0, METAL);
     for (let x = 0; x < sx; x++) for (let y = 0; y < sy; y++) {
-      if (x === sx - 1 && (y === 0 || y === 3)) continue; // a pointed bow
-      put(x, y, 1, y === 0 || y === 3 ? (x >= 2 && x <= 6 ? ENERGY : METAL) : METAL);
+      const side = y === 0 || y === 3;
+      if (x === sx - 1 && side) continue; // a pointed bow
+      // Strakes down both sides, and tail lights across the stern.
+      put(x, y, 1, (side && x >= 1 && x <= 7) || (x === 0 && !side) ? ENERGY : METAL);
     }
     for (let x = 0; x < 7; x++) for (let y = 0; y < sy; y++) put(x, y, 2, TECH);
     put(sx - 2, 1, 2, TECH); put(sx - 2, 2, 2, TECH);
     put(sx - 1, 1, 2, ENERGY); put(sx - 1, 2, 2, ENERGY);
     for (let x = 1; x < 5; x++) for (let y = 1; y < 3; y++) put(x, y, 3, ROCK);
-    put(6, 1, 3, STONE); put(6, 2, 3, STONE);
+    for (let y = 0; y < sy; y++) put(6, y, 3, STONE);
+    put(5, 1, 3, ENERGY); put(5, 2, 3, ENERGY);
   });
 }
 

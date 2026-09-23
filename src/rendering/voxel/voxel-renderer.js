@@ -686,12 +686,14 @@ export class VoxelRenderer {
     this._drawModels(opts.models, cam, maxDist);
 
     this._drawSprites(sprites, cam);
+    this._drawWater(cam, maxDist, time);
     // Sparks and smoke are light, not surfaces: they add to what is behind
     // them and leave the scene's depth alone, so the ink pass keeps outlining
-    // the world rather than drawing a box around every mote.
+    // the world rather than drawing a box around every mote. After the water,
+    // which has written its surface's depth by then: spray over a lake stays
+    // bright instead of being tinted over, and a spark under it is hidden.
     this._drawSprites(opts.fx, cam, true);
     this._drawSegments(opts.segments, cam);
-    this._drawWater(cam, maxDist, time);
 
     // Glass and other see-through faces last, over everything solid. They keep
     // the linear depth of what is behind them, so the ink pass outlines that
@@ -913,7 +915,9 @@ export class VoxelRenderer {
     // replaced outright, and it writes alpha 1 — so both get the right result.
     gl.blendFunc(gl.SRC_ALPHA, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(!additive);
-    if (additive) gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
+    // Light leaves the colour alpha alone too: it holds the face id the ink
+    // pass reads, and a mote adding to it would be outlined in black.
+    if (additive) { gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]); gl.colorMask(true, true, true, false); }
 
     for (const { s, d } of order) {
       const entry = this.sprites.get(s.key, s.image);
@@ -937,6 +941,7 @@ export class VoxelRenderer {
 
     if (additive) {
       gl.depthMask(true);
+      gl.colorMask(true, true, true, true);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     }

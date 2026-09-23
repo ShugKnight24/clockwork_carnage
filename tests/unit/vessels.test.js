@@ -4,7 +4,7 @@ import { WATER, WATER_SURFACE } from "../../src/world/blocks.js";
 import { isWater } from "../../src/world/blocks.js";
 import {
   VESSELS, VESSEL_KINDS, makeVessel, sanitizeVessels, vesselsOf, waterSurfaceAt, stepVessel,
-  canPlaceVessel, placementFor, nearestVessel, dismountCell, pickVessel, vesselPose, WakeTrail, MOUNT_REACH,
+  canPlaceVessel, placementFor, fitVessel, nearestVessel, dismountCell, pickVessel, vesselPose, WakeTrail, MOUNT_REACH,
 } from "../../src/world/vessels.js";
 
 const DT = 1 / 60;
@@ -203,6 +203,21 @@ describe("vessels: placing, boarding, leaving", () => {
     list.push(makeVessel("boat", onWater.x, onWater.y, onWater.z));
     expect(canPlaceVessel(w, list, "raft", onWater.x + 1, onWater.y, onWater.z)).toBe(false);
     expect(canPlaceVessel(w, list, "raft", onWater.x + 5, onWater.y, onWater.z)).toBe(true);
+  });
+
+  it("slides a hull aimed at the water by the bank off the bank, but never onto land", () => {
+    const w = lake();
+    const at = placementFor(w, "raft", { x: 69, y: 40, z: 30, id: WATER, face: [0, 0, 1] });
+    expect(canPlaceVessel(w, [], "raft", at.x, at.y, at.z)).toBe(false); // it would hang over the bank
+    const fit = fitVessel(w, [], "raft", at);
+    expect(fit.x + VESSELS.raft.half).toBeLessThanOrEqual(70);
+    expect(Math.hypot(fit.x - at.x, fit.y - at.y)).toBeLessThanOrEqual(1.5);
+    expect(fit.z).toBe(at.z);
+    expect(fitVessel(w, [], "boat", placementFor(w, "boat", { x: 40, y: 40, z: 30, id: WATER, face: [0, 0, 1] }))).toMatchObject({ x: 40.5, y: 40.5 });
+    // A bowl too small for a raft has nowhere to slide to.
+    const pond = generateWorld({ terrain: false });
+    pond.set(20, 20, 31, WATER);
+    expect(fitVessel(pond, [], "raft", placementFor(pond, "raft", { x: 20, y: 20, z: 31, id: WATER, face: [0, 0, 1] }))).toBeNull();
   });
 
   it("boards only a vessel within reach, the nearest first", () => {

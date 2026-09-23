@@ -189,10 +189,34 @@ export function placementFor(world, kind, t) {
   const x = t.x + 0.5, y = t.y + 0.5;
   if (isWater(t.id)) {
     const surf = waterSurfaceAt(world, x, y, t.z);
-    return surf == null ? null : { x, y, z: surf - k.draft };
+    return surf == null ? null : { x, y, z: surf - k.draft, water: true };
   }
   if (t.face[2] !== 1) return null;
-  return { x, y, z: t.z + 1 };
+  return { x, y, z: t.z + 1, water: false };
+}
+
+/** How far `fitVessel` may slide a hull from where it was aimed, in blocks. */
+const FIT_REACH = 1.5;
+
+/**
+ * Where a hull fits nearest the spot `placementFor` chose: the spot itself,
+ * else the nearest free one within `FIT_REACH` at the same height, still over
+ * water when it was aimed at water. A raft is wider than the cell a player
+ * points at by the shore, and they mean "here", not "exactly this cell".
+ * @returns {{x:number, y:number, z:number}|null} null when nothing near fits
+ */
+export function fitVessel(world, vessels, kind, at) {
+  if (!at) return null;
+  let best = null, bd = Infinity;
+  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
+    const d = Math.hypot(i, j) * 0.5;
+    if (d > FIT_REACH || d >= bd) continue;
+    const x = at.x + i * 0.5, y = at.y + j * 0.5;
+    if (at.water && waterSurfaceAt(world, x, y, at.z) == null) continue;
+    if (!canPlaceVessel(world, vessels, kind, x, y, at.z)) continue;
+    best = { x, y, z: at.z }; bd = d;
+  }
+  return best;
 }
 
 /** Is there room for a hull of `kind` at (x, y, z): nothing solid, nothing unloaded, no other hull in the way? */
@@ -320,13 +344,14 @@ export function vesselPose(v, t) {
 const WAKE_FROM = 4;
 
 /**
- * Spray and foam thrown up behind a jetski at speed: two jets of droplets
- * that rise and fall off the stern, and flat foam that lingers where it went.
- * Plain particles, drawn by the renderer's additive `fx` billboards. `rand`
- * is injected so a test can fix the spray.
+ * Spray and foam thrown up behind a jetski at speed: a rooster tail of
+ * droplets that rises and falls off the stern, and foam that spreads from
+ * both sides of it into a V and lingers where the jetski went. Plain
+ * particles, drawn by the renderer's additive `fx` billboards. `rand` is
+ * injected so a test can fix the spray.
  */
 export class WakeTrail {
-  static MAX = 180;
+  static MAX = 240;
 
   constructor(rand = Math.random) {
     this.rand = rand;
@@ -350,33 +375,41 @@ export class WakeTrail {
       if (v.kind !== "jetski" || !v.floating) continue;
       const speed = Math.hypot(v.vx, v.vy);
       if (speed < WAKE_FROM) continue;
-      this._acc += (speed - WAKE_FROM + 2) * 9 * dt;
+      this._acc += (speed - WAKE_FROM + 2) * 12 * dt;
       const fx = Math.cos(v.yaw), fy = Math.sin(v.yaw), k = VESSELS.jetski;
+      const back = k.half * 2, surface = v.z + k.draft;
       while (this._acc >= 1) {
         this._acc -= 1;
         if (p.length >= WakeTrail.MAX) continue;
-        const r = this.rand, side = r() < 0.5 ? -1 : 1, spray = r() < 0.6;
-        const back = k.half * 2, out = 0.3 + r() * 0.2;
-        const kick = 1 + r() * 1.5;
-        p.push({
+        const r = this.rand, side = r() < 0.5 ? -1 : 1, spray = r() < 0.35;
+        // Spray leaves the stern's centre, up and back; foam its sides, outward.
+        const out = spray ? (r() - 0.5) * 0.3 : 0.35 + r() * 0.15;
+        const kick = spray ? (r() - 0.5) * 1.6 : 0.8 + r() * 0.9;
+        const aft = spray ? 1.5 + r() * 2 : 0;
+        const q = {
           x: v.x - fx * back - fy * side * out, y: v.y - fy * back + fx * side * out,
-          z: v.z + k.draft + 0.05,
-          vx: v.vx * 0.15 - fy * side * kick, vy: v.vy * 0.15 + fx * side * kick,
-          vz: spray ? 2 + r() * 2.5 : 0, spray,
-          life: spray ? 0.6 + r() * 0.3 : 1.4 + r() * 0.8, max: 0,
-          size: spray ? 0.14 + r() * 0.1 : 0.3 + r() * 0.2,
-        });
-        p[p.length - 1].max = p[p.length - 1].life;
+          z: surface,
+          vx: v.vx * 0.1 - fx * aft - fy * side * kick, vy: v.vy * 0.1 - fy * aft + fx * side * kick,
+          vz: spray ? 3 + r() * 2.5 : 0, spray,
+          life: spray ? 0.5 + r() * 0.35 : 1.3 + r() * 0.8, max: 0,
+          size: spray ? 0.22 + r() * 0.18 : 0.38 + r() * 0.3,
+        };
+        q.max = q.life;
+        p.push(q);
       }
     }
   }
 
-  /** Feet-anchored additive billboards, for the renderer's `fx`. */
+  /**
+   * Feet-anchored additive billboards, for the renderer's `fx`. Spray is
+   * centred on its droplet; foam stands on the surface, or the water drawn
+   * after it would cover its lower half.
+   */
   sprites() {
     return this.p.map((q) => ({
-      x: q.x, y: q.y, z: q.z - q.size / 2, w: q.size, h: q.size,
-      alpha: Math.min(1, (q.life / q.max) * 1.6) * (q.spray ? 0.9 : 0.55),
-      tint: q.spray ? [0.85, 0.95, 1] : [0.7, 0.85, 0.9],
+      x: q.x, y: q.y, z: q.spray ? q.z - q.size / 2 : q.z, w: q.size, h: q.size * (q.spray ? 1 : 0.6),
+      alpha: q.spray ? Math.min(1, (q.life / q.max) * 2) : 0.8 * (q.life / q.max),
+      tint: q.spray ? [0.95, 1, 1] : [0.75, 0.92, 1],
     }));
   }
 }
