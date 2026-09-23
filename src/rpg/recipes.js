@@ -18,6 +18,7 @@ export const RECIPES = [
   recipe("pick_metal",  "Metal Pickaxe", [["metal", 3], ["rock", 2]],            ["pick_metal", 1], 10, 60),
   recipe("workbench",   "Workbench",     [["stone", 10], ["metal", 2]],          ["workbench", 1],  5,  100),
   recipe("saw_planks",  "Saw Planks",    [["log", 1]],                           ["planks", 4],     1,  5),
+  recipe("raft",        "Raft",          [["log", 6]],                           ["raft", 1],       1,  20),
 
   recipe("smelt_metal", "Smelt Metal",   [["ore", 2]],                           ["metal", 1],      5,  30, "workbench"),
   recipe("reinforce",   "Reinforce Stone", [["stone", 4], ["metal", 1]],         ["tech", 2],       6,  40, "workbench"),
@@ -25,12 +26,14 @@ export const RECIPES = [
   recipe("forge",       "Forge",         [["stone", 12], ["metal", 8], ["energy", 2]], ["forge", 1], 15, 400, "workbench"),
   recipe("bucket",      "Bucket",        [["metal", 3]],                         ["bucket", 1],     5,  30, "workbench"),
   recipe("wood_door",   "Wooden Door",   [["planks", 6]],                        ["door", 1],       3,  20, "workbench"),
+  recipe("boat",        "Boat",          [["planks", 8], ["metal", 1]],          ["boat", 1],       3,  40, "workbench"),
 
   repair("repair_pick_stone", "Repair Stone Pickaxe", [["stone", 1], ["rock", 1]], "pick_stone", 1,  15, "anvil"),
   repair("repair_pick_metal", "Repair Metal Pickaxe", [["metal", 1], ["rock", 1]], "pick_metal", 10, 35, "anvil"),
 
   recipe("cast_energy", "Cast Energy",   [["ore", 4], ["glass", 2]],             ["energy", 1],     18, 90, "forge"),
   recipe("bind_rift",   "Bind Rift",     [["energy", 4], ["secret", 1]],         ["rift", 1],       25, 200, "forge"),
+  recipe("jetski",      "Jetski",        [["metal", 8], ["energy", 2], ["tech", 2]], ["jetski", 1], 15, 150, "forge"),
 ];
 
 /**

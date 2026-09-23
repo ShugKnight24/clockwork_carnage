@@ -33,7 +33,7 @@ describe("recipe table", () => {
     expect(ids).toContain("pick_stone");
     // The basic tier stays craftable anywhere — nothing here may drift behind
     // a station, or a fresh character could never build its first workbench.
-    const free = ["cut_stone", "melt_glass", "pick_stone", "pick_metal", "workbench", "saw_planks"];
+    const free = ["cut_stone", "melt_glass", "pick_stone", "pick_metal", "workbench", "saw_planks", "raft"];
     free.forEach((id) => expect(recipeById(id).station).toBe(null));
     // Every other row names a station that actually exists.
     RECIPES.filter((r) => !free.includes(r.id)).forEach((r) => {

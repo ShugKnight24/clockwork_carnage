@@ -11,7 +11,7 @@ import { PlayerStore, MemoryPlayerBackend } from "../../src/rpg/player-store.js"
 describe("craft menu rows", () => {
   it("shows every station-free recipe, locked ones included", () => {
     const rows = craftMenuRows(new SurvivalSession());
-    expect(rows.length).toBe(6); // the five basics and sawing planks
+    expect(rows.length).toBe(7); // the five basics, sawing planks and the raft
     expect(rows.map((r) => r.id)).toContain("pick_metal");
     const locked = rows.find((r) => r.id === "pick_metal");
     expect(locked.locked).toBe(true);

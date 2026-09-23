@@ -10,6 +10,8 @@ const block = (id, name, blockId) => ({ id, name, stack: STACK_MAX, blockId });
 const tool = (id, name, durability) => ({ id, name, stack: 1, blockId: null, durability });
 /** One per slot, no block and no wear; `color` stands in for the block colour in the hotbar. */
 const vessel = (id, name, color) => ({ id, name, stack: 1, blockId: null, color });
+/** A vessel you ride (src/world/vessels.js): placed on water as an entity, not a block. */
+const ride = (id, name, color) => ({ ...vessel(id, name, color), vessel: id });
 
 export const ITEMS = [
   block("stone", "Stone", 1),
@@ -37,6 +39,9 @@ export const ITEMS = [
   // A bucket scoops a water source and pours it back: the slot swaps between the two.
   vessel("bucket", "Bucket", "#9aa3ad"),
   vessel("bucket_water", "Water Bucket", "#2f8fbf"),
+  ride("raft", "Raft", "#8a6a3f"),
+  ride("boat", "Boat", "#a8743c"),
+  ride("jetski", "Jetski", "#e0a02a"),
 ];
 
 const BY_ID = new Map(ITEMS.map((i) => [i.id, i]));

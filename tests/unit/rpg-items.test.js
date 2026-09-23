@@ -25,8 +25,8 @@ describe("items", () => {
     ITEMS.forEach((i) => {
       expect(typeof i.name).toBe("string");
       expect(i.name.length).toBeGreaterThan(0);
-      // Tools and buckets are one per slot; everything else stacks.
-      const single = i.durability !== undefined || i.id.startsWith("bucket");
+      // Tools, buckets and vessels are one per slot; everything else stacks.
+      const single = i.durability !== undefined || i.id.startsWith("bucket") || !!i.vessel;
       expect(i.stack).toBe(single ? 1 : STACK_MAX);
     });
     expect(STACK_MAX).toBe(64);
