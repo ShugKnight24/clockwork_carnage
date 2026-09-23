@@ -236,7 +236,7 @@ function warm(model, pxPerUnit) {
   const key = `${model.key}@${Math.round(Math.log2(Math.max(pxPerUnit, 0.25)) * 2)}`;
   if (warmed.has(key)) return;
   warmed.add(key);
-  for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit));
+  for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit), true);
 }
 
 /* ── Tinted copies (hit flash, elite trim, dissolve edge) ───────────────── */

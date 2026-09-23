@@ -48,6 +48,42 @@ function bake(entry) {
   img.src = "";
 }
 
+// SVG decoding runs on the main thread even with decoding="async". A model's
+// first sighting prefetches every pose and variant (a henchman is 38 layers,
+// ~220 KB of markup), and starting them all in one frame stalled the tutorial
+// for 150+ ms when its first drones spawned. Prefetches wait in this queue and
+// start a few per frame; layers drawn this frame start at once.
+const DECODES_PER_FRAME = 3;
+const queue = [];
+let decodesLeft = DECODES_PER_FRAME;
+let decodeReset = false;
+
+function startDecode(entry) {
+  const doc = entry.pending();
+  entry.pending = null;
+  const img = entry.img;
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc)}`;
+  const done = () => { entry.ready = img.naturalWidth > 0; entry.failed = !entry.ready; };
+  if (typeof img.decode === "function") img.decode().then(done, () => { entry.failed = true; });
+  else img.onload = done;
+}
+
+function pumpDecodes() {
+  if (!decodeReset && typeof requestAnimationFrame === "function") {
+    decodeReset = true;
+    requestAnimationFrame(() => {
+      decodeReset = false;
+      decodesLeft = DECODES_PER_FRAME;
+    });
+  }
+  while (decodesLeft > 0 && queue.length) {
+    const entry = queue.shift();
+    if (!entry.pending) continue; // started by a draw, or evicted
+    decodesLeft--;
+    startDecode(entry);
+  }
+}
+
 function evictIdle(now) {
   if (totalBytes <= BYTE_BUDGET) return;
   const idle = [];
@@ -63,6 +99,7 @@ function evictIdle(now) {
     buckets.delete(bucket);
     if (!buckets.size) layers.delete(id);
     totalBytes -= e.bytes;
+    e.pending = null;
     if (!e.baked) e.img.src = "";
     else e.img.width = 0; // free the bitmap now rather than at GC
   }
@@ -95,10 +132,12 @@ function buildDocument(box, defs, markup, pxW, pxH) {
  * @param {string} defs    shared <defs> contents
  * @param {string} markup  layer body
  * @param {number} scale   device pixels per art unit
+ * @param {boolean} prefetch  warming ahead of use: decode when the per-frame budget allows
  */
-export function getLayerImage(id, box, defs, markup, scale) {
+export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
   const bucket = scaleBucket(scale);
   const now = performance.now();
+  pumpDecodes();
   let buckets = layers.get(id);
   if (!buckets) {
     buckets = new Map();
@@ -110,15 +149,17 @@ export function getLayerImage(id, box, defs, markup, scale) {
     const pxW = Math.max(1, Math.round(box[2] * k));
     const pxH = Math.max(1, Math.round(box[3] * k));
     const img = new Image();
-    entry = { img, ready: false, failed: false, bytes: pxW * pxH * 4, lastUsed: now };
+    entry = { img, ready: false, failed: false, bytes: pxW * pxH * 4, lastUsed: now, pending: null };
     buckets.set(bucket, entry);
     totalBytes += entry.bytes;
     img.decoding = "async";
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildDocument(box, defs, markup, pxW, pxH))}`;
-    const done = () => { entry.ready = img.naturalWidth > 0; entry.failed = !entry.ready; };
-    if (typeof img.decode === "function") img.decode().then(done, () => { entry.failed = true; });
-    else img.onload = done;
+    entry.pending = () => buildDocument(box, defs, markup, pxW, pxH);
+    if (prefetch) queue.push(entry);
+    else startDecode(entry);
     evictIdle(now);
+  } else if (entry.pending && !prefetch) {
+    // Drawn now: jump the prefetch queue.
+    startDecode(entry);
   }
   entry.lastUsed = now;
   if (entry.ready) {
@@ -157,11 +198,13 @@ export function layerFailed(id) {
 export function releaseRasterCache() {
   for (const buckets of layers.values()) {
     for (const e of buckets.values()) {
+      e.pending = null;
       if (!e.img) continue;
       if (e.baked) e.img.width = 0;
       else e.img.src = "";
     }
   }
   layers.clear();
+  queue.length = 0;
   totalBytes = 0;
 }
