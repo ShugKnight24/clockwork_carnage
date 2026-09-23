@@ -2,12 +2,13 @@
 import { describe, it, expect } from "vitest";
 import { GATHER, canMine, breakTime, dropsFor, xpFor } from "../../src/rpg/gather.js";
 import { TOOLS } from "../../src/rpg/tools.js";
-import { BLOCKS, AIR, BEDROCK } from "../../src/world/blocks.js";
+import { BLOCKS, AIR, BEDROCK, isSolid } from "../../src/world/blocks.js";
 
 describe("gather table", () => {
   it("covers every solid block except air and bedrock", () => {
     const covered = Object.keys(GATHER).map(Number);
-    const expected = BLOCKS.filter((b) => b.id !== AIR && b.id !== BEDROCK).map((b) => b.id);
+    // Water is not mined: it is scooped with a bucket (water spec, phase C).
+    const expected = BLOCKS.filter((b) => b.id !== AIR && b.id !== BEDROCK && isSolid(b.id)).map((b) => b.id);
     expect(covered.sort((a, b) => a - b)).toEqual(expected.sort((a, b) => a - b));
   });
 });

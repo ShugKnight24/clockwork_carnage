@@ -34,7 +34,39 @@ const BASE = {
 };
 
 /**
- * @param {"dirt"|"grass_top"|"grass_side"|"sand"|"rock"|"ore"|"bedrock"} name
+ * Ripples for the water surface. The shader scrolls this layer two ways and
+ * reads its brightness as the ripple field, so it must tile seamlessly: every
+ * wave has a whole number of periods across the tile, the warp included. Comic
+ * bands it into cel steps with bright crest strokes, legacy posterises harder,
+ * modern stays smooth.
+ */
+function paintWater(size, style) {
+  const c = document.createElement("canvas"); c.width = size; c.height = size;
+  const g = c.getContext("2d"); const img = g.createImageData(size, size); const d = img.data;
+  const TAU = Math.PI * 2;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / size, v = y / size;
+    const wu = u + 0.08 * Math.sin(TAU * (2 * v + 0.3)) + 0.05 * Math.sin(TAU * (3 * v - u));
+    const wv = v + 0.07 * Math.sin(TAU * (3 * u + 0.1)) + 0.04 * Math.sin(TAU * (u + 2 * v));
+    let f = 0.5
+      + 0.22 * Math.sin(TAU * (2 * wu + wv))
+      + 0.16 * Math.sin(TAU * (3 * wv - wu))
+      + 0.08 * Math.sin(TAU * (5 * wu + 4 * wv));
+    // Sharpen the crests: ripples are thin bright lines over broad troughs.
+    f = Math.max(0, Math.min(1, f));
+    f = f * f * (1.2 - 0.2 * f);
+    if (style === "comic") f = Math.round(f * 4) / 4 + (f > 0.8 ? 0.15 : 0);
+    else if (style === "legacy") f = Math.round(f * 3) / 3;
+    f = Math.max(0, Math.min(1, f));
+    const o = (y * size + x) * 4;
+    d[o] = 40 + 170 * f; d[o + 1] = 110 + 130 * f; d[o + 2] = 150 + 100 * f; d[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+/**
+ * @param {"dirt"|"grass_top"|"grass_side"|"sand"|"rock"|"ore"|"bedrock"|"water"} name
  * @param {number} size
  * @param {"legacy"|"comic"|"modern"} style
  * @returns {HTMLCanvasElement}
@@ -42,6 +74,7 @@ const BASE = {
 export function paintNatural(name, size, style) {
   const st = style === "legacy" ? { amp: 0.18, cell: size / 16, posterize: 4 } : style === "comic" ? { amp: 0.2, cell: size / 24, ink: "rgba(10,13,18,0.8)" } : { amp: 0.1, cell: size / 48, desat: 0.35 };
   switch (name) {
+    case "water": return paintWater(size, style);
     case "grass_side": {
       const c = noiseCanvas(size, BASE.dirt, { ...st, seed: 3 });
       const g = c.getContext("2d"); const top = noiseCanvas(size, BASE.grass_top, { ...st, seed: 4 });

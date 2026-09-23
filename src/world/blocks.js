@@ -7,6 +7,13 @@
  */
 export const AIR = 0;
 export const BEDROCK = 15;
+export const WATER = 19;
+/**
+ * A water cell with air above is filled to this fraction of its height. The
+ * renderer lowers the surface to it and physics and the underwater camera test
+ * read the same number, so the view never turns blue above the drawn surface.
+ */
+export const WATER_SURFACE = 0.875;
 export const FACE = { TOP: 0, SIDE: 1, BOTTOM: 2 };
 
 const wall = (t) => ({ top: `wall:${t}`, side: `wall:${t}`, bottom: `wall:${t}` });
@@ -33,9 +40,12 @@ export const BLOCKS = [
   { id: 16, name: "Workbench", kind: "solid", faces: station("workbench"), hardness: 1, color: "#8a6a3a" },
   { id: 17, name: "Anvil", kind: "solid", faces: station("anvil"), hardness: 1.5, color: "#4a4e57" },
   { id: 18, name: "Forge", kind: "solid", faces: station("forge"), hardness: 1.5, color: "#5a3428", emissive: [0.9, 0.35, 0.1] },
+  { id: 19, name: "Water", kind: "water", faces: nat("water"), hardness: 0, color: "#2f8fbf" },
 ];
 
-export const isSolid = (id) => id !== AIR && BLOCKS[id]?.kind !== "air";
+/** Water is a see-through block that bodies, rays and bolts pass through. */
+export const isWater = (id) => id === WATER;
+export const isSolid = (id) => id !== AIR && id !== WATER && BLOCKS[id]?.kind !== "air";
 /** Opaque blocks hide the faces of their neighbours; glass and doors do not. */
 export const isOpaque = (id) => isSolid(id) && BLOCKS[id].kind === "solid";
 
