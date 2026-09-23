@@ -24,6 +24,7 @@
  * device in use (src/ui/chrono-hud.js teachHint).
  */
 import { MAPS } from "../levels/campaign.js";
+import { ACT4_SET_PIECES } from "../levels/act4-maps.js";
 import { rotatePoint, rotateCell } from "../levels/map-helpers.js";
 import { ACT3_SET_PIECES } from "../levels/act3-maps.js";
 
@@ -188,21 +189,10 @@ export const SET_PIECES = {
     },
   },
 
-  // IV-2 The Loop, on the Server Farm until its own map exists: the central
-  // catwalk repeats. Crossing its seam while shifting breaks it.
-  the_loop: {
-    open: [[29, 38]],
-    hazards: [
-      {
-        id: "catwalk_loop", type: "loop", rect: [27, 34, 32, 43],
-        seamA: { x: 27, y: 34 }, seamB: { x: 33, y: 34 }, out: { x: 30, y: 33 },
-        back: { x: 30, y: 43.2 },
-      },
-    ],
-  },
-
   // Act III, The Hunt: authored beside their maps in act3-maps.js.
   ...ACT3_SET_PIECES,
+  // Act IV's pieces live with its maps, in their coordinates.
+  ...ACT4_SET_PIECES,
 };
 
 // ── Rotation ─────────────────────────────────────────────────────────────────

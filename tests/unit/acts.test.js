@@ -191,10 +191,65 @@ describe("Acts III and IV", () => {
     expect(new Set(seeds).size).toBe(seeds.length);
   });
 
-  it("keeps Act IV on its placeholder maps", () => {
-    expect(getAct(4).levels.map((l) => l.map)).toEqual([
-      "entry", "server_farm", "containment", "nexus", "research", "nexus", "core",
+  it("plays Act IV on its own seven maps, in the white-hot palette", () => {
+    const iv = getAct(4);
+    expect(iv.levels.map((l) => l.map)).toEqual([
+      "entry_last", "the_loop", "containment_last", "nexus_decoy", "archive_burns", "engine_firing", "core_endgame",
     ]);
+    expect(iv.palette).toBe(4);
+    for (const l of iv.levels) expect(l.env).toBe(l.map);
+    // No two Act IV slots share a seed and rotation with anything else.
+    const keys = ACTS.flatMap((a) => a.levels).map((l) => `${l.map}|${l.seed}|${l.rotation}`);
+    for (const l of iv.levels) expect(keys.filter((k) => k === `${l.map}|${l.seed}|${l.rotation}`)).toHaveLength(1);
+  });
+
+  it("leaves one parting gift per ally, in the level they stay behind in", () => {
+    const iv = getAct(4).levels;
+    const gifts = iv.map((l) => l.gifts ?? []);
+    expect(gifts).toEqual([[], [], ["timeLock"], ["rewind"], ["dash"], ["foresight"], []]);
+    // Each is given where its ally is last present.
+    const giver = { timeLock: "kael", rewind: "nova", dash: "rook", foresight: "lyra" };
+    iv.forEach((l, i) => {
+      for (const g of l.gifts ?? []) {
+        expect(l.squad, `4.${i}`).toContain(giver[g]);
+        expect(iv[i + 1].squad, `4.${i + 1}`).not.toContain(giver[g]);
+      }
+    });
+  });
+
+  it("closes the Final Form on Eleven Seconds and the epilogue", () => {
+    const iv = getAct(4);
+    expect(iv.boss.card.subtitle).toMatch(/ELEVEN SECONDS/);
+    expect(iv.outro).toEqual(["true_victory", "epilogue_message"]);
+    expect(iv.levels.at(-1).onStart.map((l) => l.aria)).toContain("ariaStillHere");
+  });
+});
+
+describe("NG+", () => {
+  it("opens the true ending at NG+1 with all twelve fragments (spec decision 2)", async () => {
+    const { earnsTrueEnding } = await import("../../src/data/campaign/acts.js");
+    const { MEMORY_FRAGMENTS } = await import("../../src/data/memory-fragments.js");
+    expect(MEMORY_FRAGMENTS).toHaveLength(NG_PLUS.fragments);
+    expect(earnsTrueEnding(0, 12)).toBe(false);
+    expect(earnsTrueEnding(1, 12)).toBe(true);
+    expect(earnsTrueEnding(1, 11)).toBe(false);
+    expect(earnsTrueEnding(3, 11)).toBe(false);
+  });
+
+  it("gives every echoed scene a script, a key, and an Act II original", async () => {
+    const { sceneFor } = await import("../../src/data/campaign/acts.js");
+    const act2 = new Set(sceneSlots().filter((s) => s.act === 2).map((s) => s.key));
+    for (const [from, to] of Object.entries(NG_PLUS.scenes)) {
+      expect(act2.has(from), from).toBe(true);
+      expect(CUTSCENE_KEYS.has(to), to).toBe(true);
+      expect(sceneFor(from, 0)).toBe(from);
+      expect(sceneFor(from, 1)).toBe(to);
+    }
+    expect(sceneFor("true_victory", 2)).toBe("true_victory");
+  });
+
+  it("keeps a hook for NG+ levels of its own", () => {
+    expect(NG_PLUS.extraLevels).toEqual({});
   });
 });
 
@@ -231,12 +286,17 @@ describe("ACTS against the MAPS registry", async () => {
     expect(campaignLevelMap(99, 0)).toBeNull();
   });
 
-  it("lists each distinct campaign map once, all nine station maps in play", () => {
+  it("lists each distinct campaign map once, every map in play", () => {
     const maps = campaignMaps();
     expect(new Set(maps).size).toBe(maps.length);
     const station = ["entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "nexus", "core"];
     for (const id of station) expect(maps.map((m) => m.name), id).toContain(MAPS[id].name);
-    expect(maps.map((m) => m.name)).toContain("The Paradox Core");
+    // One prepared map per distinct (map, seed, rotation) the acts name.
+    const distinct = new Set(ACTS.flatMap((a) => a.levels).map((l) => `${l.map}|${l.seed}|${l.rotation}`));
+    expect(maps).toHaveLength(distinct.size);
+    const names = maps.map((m) => m.name);
+    expect(names).toContain("The Paradox Core");
+    expect(names).toContain("The Paradox Core — Endgame");
   });
 
   it("places Act I's Shield Commander in Containment", () => {

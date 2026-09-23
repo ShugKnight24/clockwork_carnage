@@ -1,7 +1,8 @@
 /**
  * Memory Fragments — collectible story pieces from the Dead Squad.
- * 3 fragments per member (Voss, Miri, Kai), one in each of Acts I-III, each
- * placed with the recruit or place that echoes it (spec §8).
+ * 4 fragments per member (Voss, Miri, Kai), one in each of Acts I-IV, each
+ * placed with the recruit or place that echoes it (spec §8). All twelve, on
+ * an NG+ run, earn the true ending (NG_PLUS in src/data/campaign/acts.js).
  *
  * `act` is the campaign act (an ACTS id in src/data/campaign/acts.js) and
  * `level` the 1-based level within that act; the game looks fragments up with
@@ -43,6 +44,17 @@ export const MEMORY_FRAGMENTS = [
     level: 4,
     hidden: false,
   },
+  {
+    // IV-2, The Loop: the flat held still behind the tenement wall.
+    id: 'voss_4',
+    member: 'Voss',
+    title: 'The Other Choice',
+    text: 'A room held still at one instant. Your Voss sits on a supply crate with a mug going cold, the squad asleep around him. On his slate: PROJECT PARADOX. ELEVEN SECONDS. One signature short. He reads it once, all the way to the end. Then he wipes it, turns the slate face down, and pulls a blanket over Kai. "Not tonight. They need a tactician more than time needs a master."',
+    ariaReaction: 'Same proposal. Same man. One of him signed it. This one tucked a blanket round Kai and went back to his map. That\'s the whole difference, and it\'s the size of a blanket.',
+    act: 4,
+    level: 2,
+    hidden: true,
+  },
 
   // ─── MIRI (Medic) ─────────────────────────────────────────────────
   {
@@ -75,6 +87,17 @@ export const MEMORY_FRAGMENTS = [
     level: 5,
     hidden: false,
   },
+  {
+    // IV-3, Containment: the field medbay behind the intake wall.
+    id: 'miri_4',
+    member: 'Miri',
+    title: 'The Lullaby',
+    text: 'A flooded corridor, the lights out. You\'re across Miri\'s knees with a fever you don\'t remember having. This time she doesn\'t hum it. She sings it, low, the words at last: "Sleep now, the stars keep time. / The dark keeps watch, and I keep you. / And if the morning\'s late, my love, / I\'ll wait the way the lamplights do." Her voice breaks on the last line. She sings it again anyway.',
+    ariaReaction: 'Those are the words. I\'ve been humming the wrong notes around them since the day I came online. I\'m keeping them. All of them.',
+    act: 4,
+    level: 3,
+    hidden: true,
+  },
 
   // ─── KAI (Engineer) ────────────────────────────────────────────────
   {
@@ -105,6 +128,17 @@ export const MEMORY_FRAGMENTS = [
     ariaReaction: 'I heard the torch cut out over comms. Then nothing. That door never opened again.',
     act: 3,
     level: 6,
+    hidden: false,
+  },
+  {
+    // IV-5, the Archive: Rook hands it over before he stays to burn it.
+    id: 'kai_4',
+    member: 'Kai',
+    title: 'The Anchor',
+    text: 'Rook\'s hands, not Kai\'s, closing the last seam on a fist-sized cylinder of brass and glass. Kai\'s handwriting runs round its collar, copied line for line from a blueprint folded too many times. Under "I checked it twice," a new line in Rook\'s blocky capitals: CHECKED IT A THIRD TIME. HE WAS RIGHT. He closes your fingers over it. "Holds a door from the inside. That\'s what it was always for."',
+    ariaReaction: 'Two engineers who never met, a timeline apart, and the machine still works. Kai would have been insufferable about it.',
+    act: 4,
+    level: 5,
     hidden: false,
   },
 ];

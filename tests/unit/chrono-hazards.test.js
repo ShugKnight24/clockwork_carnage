@@ -6,6 +6,7 @@ import {
   bladeHits,
   turretShots,
   hazardState,
+  ngPlusHazard,
   ChronoHazards,
 } from "../../src/systems/chrono-hazards.js";
 import { SET_PIECES, SEAL_TILE, setPieceFor, rotateSetPiece } from "../../src/data/campaign/set-pieces.js";
@@ -392,21 +393,28 @@ describe("ChronoHazards runtime", () => {
     expect(game.aria).toContain("stasisRoom");
   });
 
-  it("loops you back until you cross the seam shifting", () => {
-    const { game, hz } = levelGame(4, 1);
-    const loop = hz.hazards[0];
-    const p = game.player;
+  /** A point inside a loop's rect, and one just past its seam. */
+  function loopPoints(loop) {
     const [c1, r1, c2, r2] = loop.rect;
-    // Walk out through the seam: the seam is the rect edge nearest `out`.
-    const inside = { x: (c1 + c2 + 1) / 2, y: (r1 + r2 + 1) / 2 };
     const seamMid = { x: (loop.seamA.x + loop.seamB.x) / 2, y: (loop.seamA.y + loop.seamB.y) / 2 };
-    const outside = { x: seamMid.x + (loop.out.x - seamMid.x) * 1.2, y: seamMid.y + (loop.out.y - seamMid.y) * 1.2 };
+    return {
+      inside: { x: (c1 + c2 + 1) / 2, y: (r1 + r2 + 1) / 2 },
+      outside: { x: seamMid.x + (loop.out.x - seamMid.x) * 1.2, y: seamMid.y + (loop.out.y - seamMid.y) * 1.2 },
+    };
+  }
+
+  it("loops the Archive's reading room back toward the fire until you cross its seam shifting", () => {
+    const { game, hz } = levelGame(4, 4);
+    const loop = hz.hazards.find((h) => h.type === "loop");
+    const p = game.player;
+    const { inside, outside } = loopPoints(loop);
     Object.assign(p, inside);
     hz.update(game, 0.016);
     Object.assign(p, outside);
     hz.update(game, 0.016);
     expect(p.x).toBeCloseTo(loop.back.x);
     expect(p.y).toBeCloseTo(loop.back.y);
+    expect(game.aria).toContain("loopRepeats");
     Object.assign(p, inside);
     hz.update(game, 0.016);
     p.chronoActive = true;
@@ -414,6 +422,63 @@ describe("ChronoHazards runtime", () => {
     hz.update(game, 0.016);
     expect(p.x).toBeCloseTo(outside.x);
     expect(hazardState(loop, hz.clock, hz.triggers[loop.id]).broken).toBe(true);
+  });
+
+  it("loops the Loop's boulevard until you rewind back through its seam (spec IV-2)", () => {
+    const { game, hz } = levelGame(4, 1);
+    const loop = hz.hazards.find((h) => h.type === "loop");
+    expect(loop.breaksOn).toBe("rewind");
+    const p = game.player;
+    const { inside, outside } = loopPoints(loop);
+    const walkOut = (shifting = false) => {
+      p.chronoActive = false;
+      Object.assign(p, inside);
+      hz.update(game, 0.016);
+      p.chronoActive = shifting;
+      Object.assign(p, outside);
+      hz.update(game, 0.016);
+    };
+    // A rewind before it has ever thrown you back does nothing.
+    hz.notify("rewind", { lost: 0 });
+    expect(hz.triggers[loop.id]).toBeUndefined();
+    // A shift does not break this seam.
+    walkOut(true);
+    expect(p.y).toBeCloseTo(loop.back.y);
+    expect(game.aria).toContain("loopRewind");
+    // Too long after the throw-back and a rewind misses it.
+    for (let i = 0; i < 300; i++) hz.update(game, 0.02);
+    hz.notify("rewind", { lost: 0 });
+    expect(hz.triggers[loop.id]).toBeUndefined();
+    // Thrown back, then a rewind straight away: back through the seam in time.
+    walkOut();
+    expect(p.y).toBeCloseTo(loop.back.y);
+    hz.notify("rewind", { lost: 0 });
+    expect(hazardState(loop, hz.clock, hz.triggers[loop.id]).broken).toBe(true);
+    expect(game.aria).toContain("loopBroken");
+    walkOut();
+    expect(p.x).toBeCloseTo(outside.x);
+    expect(p.y).toBeCloseTo(outside.y);
+  });
+
+  it("hardens set pieces in NG+: faster collapses and rotors, longer burns, quicker turrets", () => {
+    const collapse = { type: "collapse", rate: 2, delay: 1 };
+    const blade = { type: "blade", speed: 7 };
+    const vent = { type: "vent", period: 3, on: 1.3 };
+    const turret = { type: "gate", kind: "turret", interval: 1 };
+    expect(ngPlusHazard(collapse, 0)).toBe(collapse);
+    expect(ngPlusHazard(collapse, 1).rate).toBeCloseTo(2.5);
+    expect(ngPlusHazard(collapse, 1).delay).toBeCloseTo(0.8);
+    expect(ngPlusHazard(blade, 2).speed).toBeCloseTo(10.5);
+    expect(ngPlusHazard(vent, 1).on).toBeGreaterThan(1.3);
+    // A burn never takes more than three quarters of its cycle: a gap stays.
+    expect(ngPlusHazard(vent, 9).on).toBeLessThanOrEqual(3 * 0.75);
+    expect(ngPlusHazard(turret, 1).interval).toBeLessThan(1);
+    // Capped at three cycles.
+    expect(ngPlusHazard(blade, 9).speed).toBeCloseTo(ngPlusHazard(blade, 3).speed);
+    // The runtime lays the hardened piece.
+    const ng = levelGame(4, 0, { campaign: { act: 4, level: 0, ngPlusCycle: 1 } });
+    const base = levelGame(4, 0);
+    expect(ng.hz.hazards[0].rate).toBeGreaterThan(base.hz.hazards[0].rate);
   });
 
   it("drops the first hunters and the bell line in the Evac Shafts", () => {

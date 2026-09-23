@@ -43,6 +43,9 @@
  *              position implies)
  *   setPiece   SET_PIECES id (src/data/campaign/set-pieces.js): the level's
  *              hazards, seals and teach room, laid over its map
+ *   gifts      Act IV: powers whose ally stays behind in this level and
+ *              leaves a last upgrade to it (chrono-powers.js giftsFor; only an
+ *              ally who was actually recruited can leave one)
  */
 
 /** @typedef {"kael"|"nova"|"rook"|"lyra"} SquadMember */
@@ -85,6 +88,32 @@ function level(map, briefing, squad, { onStart = [], callsigns = null, grants = 
     ...(callsigns ? { callsigns } : {}),
     onStart,
     grants,
+    ...(setPiece ? { setPiece } : {}),
+  };
+}
+
+/**
+ * One level on a map of its own rather than a station map: the rotation,
+ * seed and boss flag are the entry's, and its env shares the map's id.
+ * @param {string} map - MAPS id
+ * @param {{ rotation?: number, seed: number, boss?: boolean }} at
+ * @param {string[]|null} briefing
+ * @param {SquadMember[]} squad
+ * @param {{ onStart?: object[], grants?: string[], gifts?: string[],
+ *   setPiece?: string }} [extra]
+ */
+function own(map, { rotation = 0, seed, boss = false }, briefing, squad, { onStart = [], grants = [], gifts = [], setPiece = null } = {}) {
+  return {
+    map,
+    env: map,
+    rotation,
+    seed,
+    boss,
+    briefing,
+    squad,
+    onStart,
+    grants,
+    ...(gifts.length ? { gifts } : {}),
     ...(setPiece ? { setPiece } : {}),
   };
 }
@@ -301,8 +330,8 @@ export const ACTS = [
   {
     id: 4,
     title: "THE SACRIFICE",
-    // Palette 4 (the white-hot rift) comes with the Act IV maps.
-    palette: 3,
+    // The white-hot rift light bleaching the Act III violet.
+    palette: 4,
     roster: [
       "beast",
       "riftLeaper",
@@ -325,7 +354,7 @@ export const ACTS = [
     scale: 1.8,
     boss: {
       type: "boss_form3",
-      card: { title: "PARADOX LORD", subtitle: "FINAL INCURSION" },
+      card: { title: "PARADOX LORD", subtitle: "FINAL FORM · ELEVEN SECONDS" },
       aria: "bossForm3",
       // You walk in alone.
       squadPool: null,
@@ -334,32 +363,92 @@ export const ACTS = [
     resonance: true,
     hunters: ["riftLeaper", "echoDrone", "timeWarden"],
     intro: ["act3_transition_fb", "act3_intro", "act3_level2"],
-    outro: ["true_victory"],
-    // They stay behind in the reverse of the order they joined.
+    // The ending, then Lyra, weeks later, closing the reactor channel.
+    outro: ["true_victory", "epilogue_message"],
+    // Act IV's own maps (src/data/levels/act4-maps.js). They stay behind in
+    // the reverse of the order they joined, and each leaves a last upgrade
+    // to their power in the briefing of the level they stay in (`gifts`).
     levels: levels([
-      level("entry", null, [...ALL]),
-      // The Loop has no source map; the Server Farm's aisles repeat.
-      level("server_farm", ["act3_boss"], [...ALL], { setPiece: "the_loop" }),
-      level("containment", ["act3_level4"], [...ALL]),
-      level("nexus", ["nexus_briefing", "act2_level8", "nova_decoy"], ["lyra", "rook", "nova"]),
-      level("research", ["act3_level5"], ["lyra", "rook"]),
-      level("nexus", ["act3_level6", "act3_level8"], ["lyra"]),
-      level("core", ["act3_level7", "act3_level9"], []),
+      // Entry — Last Time: the airlock where it began, running east now.
+      own("entry_last", { rotation: 90, seed: 3137 }, null, [...ALL], { setPiece: "entry_falls" }),
+      // The Loop: "one wing at a time". Rewind through the seam.
+      own("the_loop", { rotation: 180, seed: 3251 }, ["act3_boss"], [...ALL], { setPiece: "the_loop" }),
+      // Containment — Last Stand: Kael holds the doors. "Take the rest of it."
+      own("containment_last", { rotation: 90, seed: 3373 }, ["act3_level4"], [...ALL], {
+        setPiece: "last_stand",
+        gifts: ["timeLock"],
+      }),
+      // Temporal Nexus — The Decoy: Nova runs toward them.
+      own("nexus_decoy", { rotation: 0, seed: 3491 }, ["nexus_briefing", "act2_level8", "nova_decoy"], ["lyra", "rook", "nova"], {
+        setPiece: "nova_decoy",
+        gifts: ["rewind"],
+      }),
+      // The Archive Burns: Rook stays to blow it, and hands you Kai's anchor.
+      own("archive_burns", { rotation: 0, seed: 3613 }, ["act3_level5"], ["lyra", "rook"], {
+        setPiece: "archive_fire",
+        gifts: ["dash"],
+      }),
+      // The Engine — Firing: Lyra pulls the trigger, and records one line.
+      own("engine_firing", { rotation: 180, seed: 3739 }, ["act3_level6", "act3_level8"], ["lyra"], {
+        setPiece: "engine_countdown",
+        gifts: ["foresight"],
+      }),
+      // The Paradox Core — Endgame: you, alone. ARIA is the last voice left.
+      own("core_endgame", { rotation: 0, seed: 3863, boss: true }, ["act3_level7", "act3_level9"], [], {
+        onStart: [{ aria: "ariaStillHere", delay: 9000 }],
+      }),
     ]),
   },
 ];
 
 /**
- * New Game+: where a cycle starts, and the cycle whose final victory plays
- * the true ending instead of offering another loop. The spec moves the true
- * ending to NG+1 with every fragment once the Act IV fragments exist.
+ * New Game+: where a cycle starts, and what earns the true ending.
+ *
+ * Spec decision 2: finishing any NG+ cycle (from `trueEndingCycle` on) with
+ * all `fragments` memory fragments plays the true ending instead of offering
+ * another loop. Without them the loop goes round again, as NG+2 and NG+3
+ * always did.
+ *
+ * `scenes` are the déjà-vu versions of the Gathering (spec decision 10): in
+ * NG+ the allies half-remember you, their lines change, and Nova is
+ * recruited out of order, pulling you out of the Core before she has ever
+ * met you. Every scene is played through `sceneFor`, so a key without a
+ * variant plays as written.
+ *
+ * `extraLevels` is the hook for NG+ levels of their own (decision 2, "NG+
+ * adds extra levels rather than only replaying"): act id -> level entries,
+ * shaped like any other, to be inserted for cycles >= 1. Nothing reads it
+ * yet; it is here so they arrive as data.
  */
 export const NG_PLUS = {
   startAct: 1,
   startLevel: 0,
-  trueEndingCycle: 3,
+  trueEndingCycle: 1,
+  fragments: 12,
   trueEnding: ["ng_plus_true_ending"],
+  scenes: {
+    gathering_extraction: "gathering_extraction_echo",
+    gathering_lyra: "gathering_lyra_echo",
+    gathering_rook: "gathering_rook_echo",
+    gathering_nova: "gathering_nova_echo",
+    hound_attack: "hound_attack_echo",
+    gathering_kael: "gathering_kael_echo",
+  },
+  extraLevels: {},
 };
+
+/** The scene to play for `key` in NG+ cycle `ngPlus`: its echo, or itself. */
+export function sceneFor(key, ngPlus = 0) {
+  return (ngPlus > 0 && NG_PLUS.scenes[key]) || key;
+}
+
+/**
+ * Does finishing the last act now play the true ending? Every fragment,
+ * from the gate cycle on.
+ */
+export function earnsTrueEnding(ngPlus, fragmentsFound) {
+  return ngPlus >= NG_PLUS.trueEndingCycle && fragmentsFound >= NG_PLUS.fragments;
+}
 
 /** @param {number} id - 1-based act number */
 export function getAct(id) {
