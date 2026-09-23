@@ -1319,8 +1319,9 @@ export class Renderer {
       }
       if (!visible) continue;
 
-      // Ground shadow — dark ellipse at entity's feet
-      if (entity.type === "enemy" && !entity.dissolving) {
+      // Ground shadow — dark ellipse at entity's feet. A phased Hound, a
+      // Foresight ghost and an afterimage cast none.
+      if (entity.type === "enemy" && !entity.dissolving && !entity._phased && !(entity.renderAlpha < 1)) {
         const shadowW = spriteWidth * 0.6;
         const shadowH = spriteHeight * 0.12;
         const shadowY = Math.floor(spriteHeight / 2 + h / 2) - shadowH * 0.5;
@@ -1372,6 +1373,8 @@ export class Renderer {
     const fogFactor = Math.max(0, 1 - dist / fogDist);
 
     if (entity.type === "enemy") {
+      // Out of phase, the Hound is drawn as a shimmer by src/rendering/chrono-fx.js.
+      if (entity._phased) return;
       this.drawEnemy(
         ctx,
         entity,
@@ -1384,7 +1387,7 @@ export class Renderer {
         sprHeight,
         dist,
         time,
-        fogFactor,
+        fogFactor * (entity.renderAlpha ?? 1),
       );
     } else if (entity.type === "health") {
       drawHealthPickup(

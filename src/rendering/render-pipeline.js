@@ -12,6 +12,7 @@ import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
+import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
 
@@ -531,6 +532,8 @@ export function renderFrame(game) {
       skipFloorCeil,
       yShift,
     );
+    // Chronos: Foresight, the Time-Lock, the echo, set pieces, the Hound.
+    renderChronoWorld(game, game.renderer, renderPlaneMul, yShift);
   } else {
     ctx.fillStyle = "#020610";
     ctx.fillRect(0, 0, w, h);
@@ -609,6 +612,7 @@ export function renderFrame(game) {
     ctx.drawImage(game._vignetteCanvas, 0, 0);
   }
   if (profiling) game.profiler.currentPhases.vignette = performance.now() - _tVig0;
+  renderChronoScreen(game, ctx, w, h);
 
   // Draw weapon (hidden in third person)
   const _tWpn0 = profiling ? performance.now() : 0;
@@ -716,6 +720,9 @@ export function renderFrame(game) {
   // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
   if (game.mode === "tutorial") {
     game.renderTutorialOverlay(ctx, w, h);
+  } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
+    // A Chronos teach card, in the same place and the same card.
+    game.renderTeachCard(ctx, w, h);
   }
   if (profiling) game.profiler.currentPhases.hud = performance.now() - _tHud0;
 
