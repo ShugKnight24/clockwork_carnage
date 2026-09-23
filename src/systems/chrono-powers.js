@@ -397,6 +397,7 @@ export class ChronoPowers {
     this.echo = null;
     this.rifts = [];
     this.clock = 0;
+    this.caughtTotal = 0;
     this._sampleIn = 0;
     this._announced = false;
     this._pool = "chronoShiftActivated";
@@ -425,6 +426,7 @@ export class ChronoPowers {
     this.echo = null;
     this.rifts = [];
     this.clock = 0;
+    this.caughtTotal = 0;
     this._sampleIn = 0;
     this._announced = false;
     /** Powers granted at this slot, for the unlock line and teach card. */
@@ -538,7 +540,8 @@ export class ChronoPowers {
     p.frozen = true;
     lock.caught++;
     lock.held.push(p);
-    this._onCatch?.(lock.caught);
+    // Across every lock this level: the Foundry's seal counts them.
+    this.caughtTotal++;
     return true;
   }
 

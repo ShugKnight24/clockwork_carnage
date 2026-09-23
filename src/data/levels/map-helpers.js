@@ -136,7 +136,7 @@ export function cellRow(g, startR, startC, count, cellW, cellH, wallType = 3, do
 // so the campaign stops reading as one corridor walked nine times.
 
 /** Rotate a point (world units) by `deg` clockwise inside a w x h grid. */
-function rotatePoint(x, y, w, h, deg) {
+export function rotatePoint(x, y, w, h, deg) {
   if (deg === 90) return [h - y, x];
   if (deg === 180) return [w - x, h - y];
   if (deg === 270) return [y, w - x];
@@ -144,7 +144,7 @@ function rotatePoint(x, y, w, h, deg) {
 }
 
 /** Rotate a cell index by `deg` clockwise inside a w x h grid. */
-function rotateCell(c, r, w, h, deg) {
+export function rotateCell(c, r, w, h, deg) {
   if (deg === 90) return [h - 1 - r, c];
   if (deg === 180) return [w - 1 - c, h - 1 - r];
   if (deg === 270) return [r, w - 1 - c];
