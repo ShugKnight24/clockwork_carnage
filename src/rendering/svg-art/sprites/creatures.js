@@ -340,12 +340,14 @@ const HOUND_POSES = {
   attack: { lean: -8, head: -8, bob: -12, quill: -24, fore: [58, 30], hind: [-44, 4], reach: 1 },
   hurt: { lean: -12, head: -20, quill: 12, fore: [8, 4], hind: [-6, 2] },
   bristle: { lean: -4, head: 20, crouch: 6, quill: 44, fore: [20, 0], hind: [-14, 0], hot: 1 },
+  // Not a play pose: the cutscene's empty suit fallen open, ember out.
+  fallen: { lean: 6, head: 30, crouch: 48, quill: 22, fore: [62, 0], hind: [-58, 0], out: 1 },
 };
 
 /** Where the quills root along the back (before the body's lean). */
 const QUILL_ROOTS = [[-48, -24], [-34, -34], [-19, -41], [-4, -45], [11, -44], [25, -38]];
 
-function hound() {
+export function hound() {
   const poses = {};
   for (const [name, b] of Object.entries(HOUND_POSES)) {
     const bob = (b.bob || 0) + (b.crouch || 0);
@@ -462,14 +464,15 @@ function hound() {
     const eye = [hp[0] + 14, hp[1] - 1];
     const hotEye = name === "windup" || name === "attack" || b.hot;
     let gHead = "";
-    if (name !== "hurt") {
+    if (b.out) gHead += circ(eye[0], eye[1], 1.2, "#6a3010", 0);
+    else if (name !== "hurt") {
       gHead += circ(eye[0], eye[1], hotEye ? 4.4 : 3, "#ffb020", 0) + circ(eye[0], eye[1], hotEye ? 2 : 1.2, "#fff4d0", 0);
       // A clock hand, turning in the empty helmet.
       gHead += ln(`M${P(eye[0], eye[1])}l${f(hotEye ? 5 : 3.5)} ${f(hotEye ? -4 : -3)}`, "#ffd890", 1.2);
       gHead += `<circle cx="${f(eye[0])}" cy="${f(eye[1])}" r="${hotEye ? 7.5 : 6}" fill="none" stroke="#ff9a3a" stroke-width="1" opacity=".75"/>`;
     } else gHead += circ(eye[0], eye[1], 1.6, "#a05010", 0);
-    let gBody = name === "hurt" ? "" : ln(`M-6 ${f(4 + bob)}q6 -2 12 2`, "#ff7a2a", 1.6, 0.8) + circ(2, 6 + bob, 1.6, "#ffc070", 0);
-    gBody += quillGlow;
+    let gBody = name === "hurt" || b.out ? "" : ln(`M-6 ${f(4 + bob)}q6 -2 12 2`, "#ff7a2a", 1.6, 0.8) + circ(2, 6 + bob, 1.6, "#ffc070", 0);
+    if (!b.out) gBody += quillGlow;
     if (name === "windup") gBody += ln(`M-58 ${f(-10 + bob)}Q-8 ${f(-58 + bob)} 44 ${f(-40 + bob)}`, "#ff6a1a", 1.8, 0.75);
     if (name === "attack") gBody += ln(`M-60 ${f(-4 + bob)}Q-10 ${f(-52 + bob)} 50 ${f(-34 + bob)}`, "#ffd08a", 2.2, 0.6);
     const cable = rot([[-62, 6 + bob]], b.lean, pivot)[0];

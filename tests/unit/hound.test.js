@@ -7,6 +7,11 @@ import { buildEnemyModel } from "../../src/rendering/svg-art/sprites/enemies.js"
 import { ENEMY_RENDERERS } from "../../src/rendering/enemies/index.js";
 import { getAct } from "../../src/data/campaign/acts.js";
 import { campaignMap } from "../../src/data/levels/campaign.js";
+import { hasSvgArt } from "../../src/rendering/svg-art/index.js";
+import { MODELS as HOUND_ART } from "../../src/rendering/svg-art/models/hound.js";
+import { drawCutsceneArt } from "../../src/rendering/cutscene-art.js";
+import { setArtStyle, getArtStyle, ART_LEGACY } from "../../src/rendering/art-style.js";
+import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 
 // The Hound, suit C-0016 (spec §6): always visible, solid only while you
 // shift, and every attack it has comes with a tell you can read and still
@@ -199,5 +204,39 @@ describe("the Hound's art", () => {
   it("has a Legacy renderer of its own", () => {
     expect(typeof ENEMY_RENDERERS.hound).toBe("function");
     expect(ENEMY_RENDERERS.hound).not.toBe(ENEMY_RENDERERS.beast);
+  });
+});
+
+describe("the Hound in the cutscenes", () => {
+  it("appears in the scenes that show it: through the glass, in the den, fallen open", () => {
+    const arts = (key) => CUTSCENE_SCRIPTS[key].map((f) => f.art);
+    expect(arts("hound_attack")).toContain("hound");
+    expect(arts("hound_intro")).toContain("hound");
+    expect(arts("gathering_finale")[0]).toBe("hound_fallen");
+  });
+
+  it("has a vector model for Comic and Modern, cut from its sprite", () => {
+    for (const key of ["hound", "hound_fallen"]) {
+      expect(hasSvgArt(key), key).toBe(true);
+      const m = HOUND_ART[key];
+      expect(m.layers.length).toBeGreaterThan(1);
+      expect(m.layers.some((l) => l.markup.includes("url(#void)")), key).toBe(true);
+      expect(m.defs).toContain('id="quill"');
+    }
+  });
+
+  it("draws in Legacy without throwing", () => {
+    const before = getArtStyle();
+    setArtStyle(ART_LEGACY);
+    const grad = { addColorStop() {} };
+    const ctx = new Proxy({}, {
+      get: (_t, prop) => (prop === "createRadialGradient" || prop === "createLinearGradient" ? () => grad : () => {}),
+      set: () => true,
+    });
+    try {
+      for (const key of ["hound", "hound_fallen"]) expect(() => drawCutsceneArt(ctx, 1600, 900, key, 1.5)).not.toThrow();
+    } finally {
+      setArtStyle(before);
+    }
   });
 });

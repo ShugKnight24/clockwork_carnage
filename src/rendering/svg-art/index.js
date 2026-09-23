@@ -26,10 +26,11 @@ import { MODELS as HERO } from "./models/hero.js";
 import { MODELS as CAST, partyModel } from "./models/cast.js";
 import { MODELS as VILLAIN } from "./models/villain.js";
 import { MODELS as SCENE_ART, BACKGROUNDS as SCENE_BGS } from "./models/scenes.js";
+import { MODELS as HOUND } from "./models/hound.js";
 import { BACKGROUNDS as BACKDROPS } from "./models/backdrops.js";
 import { partyMembers } from "../party.js";
 
-const MODELS = { ...HERO, ...CAST, ...VILLAIN, ...SCENE_ART };
+const MODELS = { ...HERO, ...CAST, ...VILLAIN, ...SCENE_ART, ...HOUND };
 const BACKGROUNDS = { ...SCENE_BGS, ...BACKDROPS };
 
 // Vector models hold detail at any size, so human-scale figures are framed

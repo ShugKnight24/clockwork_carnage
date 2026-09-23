@@ -6,6 +6,7 @@
 
 import { drawSvgArt } from "./svg-art/index.js";
 import { orderParty, partyMembers } from "./party.js";
+import { renderHound } from "./enemies/hound.js";
 
 /** Legacy lineup silhouettes: class colour, visor and name label. */
 const LEGACY_PARTY = {
@@ -1846,6 +1847,11 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
       drawSquadSolo(ctx, t, art);
       break;
 
+    case "hound":
+    case "hound_fallen":
+      drawHoundArt(ctx, t, art === "hound_fallen");
+      break;
+
     case "lyra": {
       // LYRA — The Chrono-Analyst, holographic data displays around her
       const fadeIn = Math.min(1, t / 1.0);
@@ -3616,6 +3622,38 @@ function drawSquadSolo(ctx, t, id) {
   ctx.stroke();
 
   ctx.globalAlpha = 1;
+}
+
+/**
+ * The Hound (C-0016), Legacy: the in-world procedural suit (enemies/hound.js)
+ * drawn at cutscene scale, feet on +60. Standing, it bristles and stutters a
+ * frame behind itself; fallen, it lies open with its ember out.
+ */
+function drawHoundArt(ctx, t, fallen) {
+  const halfH = 64; // one sprite unit = 0.7 art units; its floor (+86) lands on +60
+  const cy = 60 - 86 * (halfH / 100) * 1.1;
+  const pose = fallen
+    ? { x: 0, painTimer: 1, _moveSpeed: 0 }
+    : { x: 0, _quillState: "bristle", _moveSpeed: 0 };
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, t / 0.6);
+  const glow = ctx.createRadialGradient(0, 0, 8, 0, 0, 110);
+  glow.addColorStop(0, fallen ? "rgba(255,150,60,0.06)" : "rgba(255,180,90,0.16)");
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(-120, -120, 240, 200);
+  if (fallen) {
+    ctx.translate(0, 34);
+    ctx.rotate(-0.24);
+    renderHound(ctx, 0, cy, 0, halfH, 0, 0, 0, "#b8a488", "#2a1e14", 0.9, t * 1000, pose, false);
+  } else {
+    // A frame behind itself: the afterimage, then the suit.
+    const step = Math.floor(t * 9);
+    const jitter = ((Math.sin(step * 12.9898) * 43758.5453) % 1) * 3;
+    renderHound(ctx, -12 + jitter, cy, 0, halfH, 0, 0, 0, "#e8c9a0", "#3a2a1e", 0.22, t * 1000 - 120, pose, false);
+    renderHound(ctx, jitter * 0.4, cy, 0, halfH, 0, 0, 0, "#e8c9a0", "#3a2a1e", 1, t * 1000, pose, false);
+  }
+  ctx.restore();
 }
 
 export function drawParadoxAbomination(ctx, t, phase = 1) {

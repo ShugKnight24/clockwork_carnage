@@ -2296,6 +2296,7 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "station",
+      art: "hound",
       flash: "#ffffff",
       shake: 6,
       lines: [
@@ -2680,12 +2681,24 @@ export const CUTSCENE_SCRIPTS = {
       particles: "sparks",
       duration: 8500,
     },
+    {
+      bg: "boss_lair",
+      art: "hound",
+      lines: [
+        { text: "It's already on the casting floor, where its rack should be.", delay: 0, color: "#ffd79a", size: 16 },
+        { text: "Its ridge stands up. It has heard you.", delay: 2400, color: "#ff8844", size: 16 },
+      ],
+      shake: 1,
+      particles: "embers",
+      duration: 5500,
+    },
   ],
 
   /** Act II outro: the empty suit falls, and the people next to you. */
   gathering_finale: [
     {
       bg: "boss_lair",
+      art: "hound_fallen",
       flash: "#ffd79a",
       shake: 4,
       lines: [
