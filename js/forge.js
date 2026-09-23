@@ -8,6 +8,7 @@ import { generateWorld, randomSeed } from "../src/world/world-gen.js";
 import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
 import { convertLegacyMap } from "../src/world/legacy-convert.js";
+import { canExpand, expandWorld, canRestoreBounds, restoreBounds } from "../src/world/world-expand.js";
 import {
   PLAYER,
   stepWalker,
@@ -594,6 +595,11 @@ export class ForgeMode {
     if (code === "KeyD" && ctrl) {
       e.preventDefault();
       this._fire(this.deleteCurrentMap());
+      return true;
+    }
+    if (code === "KeyB" && ctrl) {
+      e.preventDefault();
+      this.toggleEndless();
       return true;
     }
     if (code === "Comma" && !ctrl) {
@@ -1565,6 +1571,42 @@ export class ForgeMode {
     } finally {
       this._busy = false;
     }
+  }
+
+  /**
+   * Ctrl+B, pressed twice: grow a bounded world endless, or put one that grew
+   * back inside its old edge (world-expand.js). The first press only asks, on
+   * the notice line; a second press while that notice is up confirms. Either
+   * way nothing is lost — the old bounds ride in the world's meta, and edits
+   * outside them wait there — so the result is saved at once, and the player
+   * stays where they stand if that is still inside the world.
+   */
+  toggleEndless() {
+    const w = this.world;
+    if (!w || this._slotBusy()) return;
+    const grow = canExpand(w);
+    if (!grow && !canRestoreBounds(w)) {
+      this._warn("This world is already endless");
+      return;
+    }
+    if (!this.notice || this.notice !== this._endlessAsk) {
+      this._warn(grow
+        ? "Make this world endless? New land blends into its edge. Ctrl+B again to confirm"
+        : "Put this world back inside its old edge? Ctrl+B again to confirm");
+      this._endlessAsk = this.notice;
+      return;
+    }
+    this._endlessAsk = null;
+    const next = grow ? expandWorld(w) : restoreBounds(w);
+    const { x, y, z, angle, pitch } = this.player;
+    this._adopt(next);
+    if (next.inBounds(Math.floor(x), Math.floor(y), 0)) {
+      Object.assign(this.player, { x, y, z, angle, pitch });
+      next.loadAround(x, y);
+    }
+    this._markDirty();
+    this.saveMap();
+    this.notice = { text: grow ? "The world is endless now (Ctrl+B twice to undo)" : "The world is back inside its old edge", t: 3 };
   }
 
   renameMap() {

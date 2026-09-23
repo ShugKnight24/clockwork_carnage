@@ -485,6 +485,7 @@ export function renderHelp(forge, ctx) {
     "Ctrl+Shift+S — Share URL",
     "Ctrl+N — New World",
     "Ctrl+D — Delete World",
+    "Ctrl+B ×2 — Make World Endless / Undo",
     "Ctrl+Z — Undo",
     "Ctrl+Shift+Z — Redo",
     "Ctrl+E — Export .ccw",

@@ -6,6 +6,7 @@ import { GEN_VERSION } from "../../src/world/column-gen.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { overheadWindow, newWorldLabel, OVERHEAD_SPAN } from "../../src/ui/forge-hud.js";
 import { fallbackEnemyArea, FALLBACK_REACH } from "../../src/systems/voxel-glue.js";
+import { oldVoidWorld } from "./fixtures/old-world.js";
 
 const forge = () =>
   new ForgeMode({
@@ -113,5 +114,77 @@ describe("play-test fallback enemies", () => {
     const a = fallbackEnemyArea(w, { x: 1000.5, y: -20.5 });
     expect(FALLBACK_REACH).toBe(48);
     expect(a).toEqual({ x0: 952.5, y0: -68.5, x1: 1048.5, y1: 27.5, reach: 48 });
+  });
+});
+
+describe("growing a bounded world endless (Ctrl+B, twice)", () => {
+  /** A Forge on a bounded world from before v5: a void world with a flat floor and a mark. */
+  async function onOldWorld() {
+    const f = forge();
+    await f.start();
+    const old = oldVoidWorld(() => 31, { seed: 8 });
+    old.set(100, 64, 40, 3);
+    await f.store.save(1, old);
+    f.mapIndex = await f.store.list();
+    await f.switchMap(1);
+    expect(f.world.endless).toBe(false);
+    return f;
+  }
+
+  it("asks first, and changes nothing on one press", async () => {
+    const f = await onOldWorld();
+    const w = f.world;
+    expect(key(f, "KeyB", true)).toBe(true);
+    expect(f.world).toBe(w);
+    expect(f.notice.text).toMatch(/endless/i);
+    expect(f.boundedNew).toBe(false); // Ctrl+B is not B
+  });
+
+  it("grows the world on the second press, keeps the player where they stand, and saves it endless", async () => {
+    const f = await onOldWorld();
+    f.player.x = 120.5; f.player.y = 64.5; f.player.z = 32; f.player.angle = 1.25;
+    key(f, "KeyB", true);
+    for (let i = 0; i < 60; i++) f.update(1 / 60); // a second later: still asking
+    key(f, "KeyB", true);
+    const w = f.world;
+    expect(w.endless).toBe(true);
+    expect(w.meta.gen.kind).toBe("blend");
+    expect([f.player.x, f.player.y, f.player.angle]).toEqual([120.5, 64.5, 1.25]);
+    expect(w.isLoaded(120, 64)).toBe(true);
+    expect(w.isLoaded(130, 64)).toBe(true); // the new land next to the player
+    expect(w.get(100, 64, 40)).toBe(3);
+    await f.saveMap();
+    const back = await f.store.load(f.currentSlot);
+    expect(back.endless).toBe(true);
+    expect(back.meta.expandedFrom).toEqual({ x0: 0, y0: 0, x1: 128, y1: 128 });
+  });
+
+  it("forgets the question once its notice has gone", async () => {
+    const f = await onOldWorld();
+    key(f, "KeyB", true);
+    for (let i = 0; i < 60 * 6; i++) f.update(1 / 60);
+    key(f, "KeyB", true);
+    expect(f.world.endless).toBe(false);
+  });
+
+  it("puts an expanded world back inside its old edge the same way", async () => {
+    const f = await onOldWorld();
+    key(f, "KeyB", true); key(f, "KeyB", true);
+    expect(f.world.endless).toBe(true);
+    key(f, "KeyB", true);
+    expect(f.notice.text).toMatch(/old edge/i);
+    key(f, "KeyB", true);
+    expect(f.world.endless).toBe(false);
+    expect(f.world.bounds).toEqual({ x0: 0, y0: 0, x1: 128, y1: 128 });
+    expect(f.world.get(100, 64, 40)).toBe(3);
+  });
+
+  it("says so in a world that was born endless", async () => {
+    const f = forge();
+    await f.start();
+    const w = f.world;
+    key(f, "KeyB", true); key(f, "KeyB", true);
+    expect(f.world).toBe(w);
+    expect(f.notice.text).toMatch(/already endless/i);
   });
 });
