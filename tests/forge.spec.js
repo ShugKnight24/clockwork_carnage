@@ -840,28 +840,30 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-stations");
   });
 
-  test("survival: a player can select and place a station with only wheel and click", async ({ page }) => {
+  test("survival: a player can select a crafted station and place it, with real input", async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);
     await debug(page, "startBuilder");
     await waitForForge(page);
+
+    await page.keyboard.press("Space"); // dismiss onboarding
+    await page.keyboard.press("KeyM");  // into survival
+    expect(await page.evaluate(() => window.ccDebug.game.builder.isSurvival())).toBe(true);
+
     await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
-      b.handleKeyDown({ code: "KeyM" });
       b.noclip = true;
-      b.survival.inventory.add("workbench", 1);
+      // A crafted station, sitting in the third hotbar slot.
+      b.survival.inventory.slots[2] = { item: "workbench", n: 1 };
     });
 
-    // Cycle the palette with the wheel alone until the Workbench is selected.
-    // No heldItem assignment: this is the path a real player has.
-    const selected = await page.evaluate(() => {
-      const b = window.ccDebug.game.builder;
-      for (let i = 0; i < 40 && b.tile !== 16; i++) b.handleWheel(1);
-      return b.tile;
-    });
-    expect(selected).toBe(16);
+    // Select it with a digit key. The palette can no longer reach a station at
+    // all; the hotbar is the only path, which is the point of this spec.
+    await page.keyboard.press("Digit3");
+    const held = await page.evaluate(() => window.ccDebug.game.builder.heldItem);
+    expect(held).toBe("workbench");
 
-    // Stand in cleared air and aim at a solid block so there is a face to build on.
+    // Aim at a face and place it with one click.
     await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
       for (let x = 40; x <= 47; x++) b.world.set(x, 64, 49, 0);
@@ -869,29 +871,26 @@ test.describe("Voxel Forge", () => {
     });
     await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
 
-    // One left click is the whole action.
     const placed = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
-      const before = b.survival.inventory.count("workbench");
-      b.handleMouseDown(0);
       const cell = b.target;
+      b.handleMouseDown(0);
       return {
-        before,
-        after: b.survival.inventory.count("workbench"),
+        left: b.survival.inventory.count("workbench"),
         blockAtFace: cell ? b.world.get(cell.x - 1, cell.y, cell.z) : null,
       };
     });
-    expect(placed.before).toBe(1);
-    expect(placed.after).toBe(0);      // spent from the pack
+    expect(placed.left).toBe(0);        // spent from the pack
     expect(placed.blockAtFace).toBe(16); // and standing in the world
 
-    // The bench it just placed is now in reach, which opens its tier.
-    const rows = await page.evaluate(async () => {
+    // The wheel now steps the hotbar rather than the block palette.
+    const wheeled = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
-      for (let i = 0; i < 40; i++) b.update(1 / 60);
-      return window.ccDebug.craftRowIds();
+      const tile = b.tile;
+      b.handleWheel(1);
+      return { hotbarIndex: b.hotbarIndex, tileUnchanged: b.tile === tile };
     });
-    expect(rows).toContain("anvil");
+    expect(wheeled.tileUnchanged).toBe(true);
   });
 
   test("survival: the inventory grid is clickable where it is actually drawn", async ({ page }) => {

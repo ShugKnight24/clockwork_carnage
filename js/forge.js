@@ -14,7 +14,7 @@ import {
 } from "../src/world/voxel-physics.js";
 import { SurvivalSession } from "../src/rpg/survival-session.js";
 import { PlayerStore } from "../src/rpg/player-store.js";
-import { itemForBlock, itemById } from "../src/rpg/items.js";
+import { itemById } from "../src/rpg/items.js";
 import { returnStack, takeStack, dropStack, shiftMove } from "../src/rpg/inventory-ops.js";
 import { HOTBAR_SLOTS } from "../src/rpg/inventory.js";
 import { inventoryLayout, resolveInventoryHit } from "./layout.js";
@@ -35,13 +35,6 @@ export { hotbarWindow };
 
 /** Every block a builder may place. Bedrock (15) is the world floor and is not one. */
 export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-/**
- * Stations are craftable, so survival needs a way to select and place one.
- * They stay out of `PLACEABLE_BLOCKS` so the creative palette is unchanged:
- * a station does nothing in creative, where every recipe is already free.
- */
-export const STATION_BLOCKS = [16, 17, 18];
-export const SURVIVAL_BLOCKS = [...PLACEABLE_BLOCKS, ...STATION_BLOCKS];
 /** Blocks the 0 key cycles — the natural set that has no digit of its own. */
 const NATURAL_BLOCKS = [10, 11, 12, 13, 14];
 export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
@@ -703,6 +696,8 @@ export class ForgeMode {
     if (this.survival) {
       this.hotbarIndex = (this.hotbarIndex + dir + HOTBAR_SLOTS) % HOTBAR_SLOTS;
       this.refreshHeld();
+      this.audio.menuSelect();
+      return;
     }
     const pal = this._palette();
     const i = pal.indexOf(this.tile);
@@ -1031,7 +1026,8 @@ export class ForgeMode {
       return;
     }
 
-    const itemId = this.heldItem ?? itemForBlock(this.tile);
+    const itemId = this.heldItem;
+    if (!itemId) { this._warn("Nothing selected"); return; }
     const spend = this.survival.tryPlace(itemId);
     if (!spend.ok) {
       this._warn(spend.reason);
@@ -1170,7 +1166,7 @@ export class ForgeMode {
 
   /** The block ids the palette can reach: survival adds the stations. */
   _palette() {
-    return this.survival ? SURVIVAL_BLOCKS : PLACEABLE_BLOCKS;
+    return PLACEABLE_BLOCKS;
   }
 
   /** @returns {boolean} true when the edited world is a survival world */
@@ -1201,8 +1197,6 @@ export class ForgeMode {
       this.craftOpen = false;
       this.craftIndex = 0;
       this.invOpen = false;
-      // A station is not in the creative palette; do not strand the cursor on one.
-      if (STATION_BLOCKS.includes(this.tile)) this.tile = PLACEABLE_BLOCKS[0];
     }
     this._warn(mode === "survival" ? "SURVIVAL — gather to build" : "CREATIVE — unlimited blocks");
     this.audio.menuConfirm();

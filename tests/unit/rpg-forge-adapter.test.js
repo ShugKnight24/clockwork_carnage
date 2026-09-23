@@ -190,7 +190,7 @@ describe("the mode toggle — the player-facing way into survival", () => {
   });
 });
 
-describe("stations are selectable in survival only", () => {
+describe("placement comes from the hotbar, not the palette", () => {
   const forge = () => {
     const f = new ForgeMode({
       renderer: null,
@@ -200,43 +200,64 @@ describe("stations are selectable in survival only", () => {
       canvas: null,
     });
     f._adopt(new World(), 0);
+    f.active = true;
     return f;
   };
 
-  it("keeps the creative palette exactly as it was", async () => {
+  it("keeps the creative palette at exactly the original fourteen", async () => {
     const { PLACEABLE_BLOCKS } = await import("../../js/forge.js");
     const f = forge();
     expect(f._palette()).toBe(PLACEABLE_BLOCKS);
     expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
   });
 
-  it("adds the three stations to the survival palette", async () => {
-    const { SURVIVAL_BLOCKS } = await import("../../js/forge.js");
+  it("uses the same palette in survival, because placement no longer reads it", async () => {
+    const { PLACEABLE_BLOCKS } = await import("../../js/forge.js");
     const f = forge();
     f.handleKeyDown({ code: "KeyM" });
-    expect(f._palette()).toBe(SURVIVAL_BLOCKS);
-    expect(SURVIVAL_BLOCKS).toContain(16);
-    expect(SURVIVAL_BLOCKS).toContain(17);
-    expect(SURVIVAL_BLOCKS).toContain(18);
+    expect(f._palette()).toBe(PLACEABLE_BLOCKS);
+    expect(f._palette()).not.toContain(16);
   });
 
-  it("can actually reach a station by cycling, which is the only way to place one", async () => {
-    const { SURVIVAL_BLOCKS } = await import("../../js/forge.js");
+  it("places a station from a hotbar slot, which the palette could never reach", () => {
     const f = forge();
-    f.active = true; // handleWheel early-returns on an inactive Forge
     f.handleKeyDown({ code: "KeyM" });
-    const seen = new Set();
-    for (let i = 0; i < SURVIVAL_BLOCKS.length; i++) { seen.add(f.tile); f.handleWheel(1); }
-    expect(seen.has(16)).toBe(true);
-    expect(seen.has(18)).toBe(true);
+    f.survival.inventory.slots[0] = { item: "workbench", n: 1 };
+    f.selectHotbar(0);
+    expect(f.heldItem).toBe("workbench");
+    expect(f.survival.tryPlace(f.heldItem)).toEqual({ ok: true, blockId: 16 });
   });
 
-  it("does not strand the cursor on a station when leaving survival", async () => {
+  it("steps the hotbar on the wheel in survival and leaves the tile alone", () => {
     const f = forge();
     f.handleKeyDown({ code: "KeyM" });
-    f.tile = 17;
-    f.handleKeyDown({ code: "KeyM" }); // back to creative
-    expect(f.tile).toBe(1);
-    expect(f._palette()).not.toContain(17);
+    const tile = f.tile;
+    f.handleWheel(1);
+    expect(f.hotbarIndex).toBe(1);
+    expect(f.tile).toBe(tile);
+  });
+
+  it("still cycles the palette on the wheel in creative", () => {
+    const f = forge();
+    const before = f.tile;
+    f.handleWheel(1);
+    expect(f.tile).not.toBe(before);
+  });
+
+  it("refuses to place with an empty hand rather than doing nothing", () => {
+    const f = forge();
+    f.handleKeyDown({ code: "KeyM" });
+    f.selectHotbar(0); // empty slot
+    expect(f.heldItem).toBe(null);
+    // `face` is an [x,y,z] array, and the cell it points at must be free.
+    // Well clear of the spawn, or placementAllowed refuses for overlapping
+    // the player and we never reach the guard under test.
+    f.world.set(70, 70, 32, 1);
+    f.target = { x: 70, y: 70, z: 32, face: [0, 0, 1] };
+    f.notice = null; // drop the mode-toggle notice so the assertion is clean
+    f.placeBlock();
+    expect(f.notice?.text).toBe("Nothing selected");
+    expect(f.world.get(70, 70, 33)).toBe(0); // and nothing was placed
   });
 });
+
