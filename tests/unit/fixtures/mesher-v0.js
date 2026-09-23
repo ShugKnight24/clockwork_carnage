@@ -1,33 +1,18 @@
 /**
+ * Frozen copy of src/rendering/voxel/mesher.js from before the padded copy
+ * (feat/v0.8.0, 16397dd), reading every cell through `world.get`. The new
+ * mesher must match it byte for byte; do not edit it to match new behaviour.
+ *
  * Greedy mesher for one 16³ chunk. Faces are emitted per axis/direction as
  * merged rectangles when block id and the four per-vertex AO values match.
  * Vertex: x,y,z (0..16 local), n (0..5), u,v (block units), layer, ao (0..3).
  * Pure typed-array work — no DOM, no GL — so it runs in node and in a worker.
  */
-import { World } from "../../world/world.js";
-import { isOpaque, isSolid, FACE } from "../../world/blocks.js";
+import { World } from "../../../src/world/world.js";
+import { isOpaque, isSolid, FACE } from "../../../src/world/blocks.js";
 
 export const STRIDE = 8;
 const CS = World.CS;
-
-/**
- * The chunk plus one cell on every side (18³, 5.8 KB), copied out of the world
- * once per chunk. The hidden-face and AO tests read it directly instead of
- * calling `world.get` up to ten times per visible face, and it is exactly the
- * message a worker would need if meshing ever moves off the main thread.
- * Shared scratch: meshChunk is synchronous and never re-entered.
- */
-const P = CS + 2;
-const pad = new Uint8Array(P * P * P);
-
-/** True when the chunk's own 16³ (not its padding) has any block at all. */
-function anyBlock() {
-  for (let z = 1; z <= CS; z++) for (let y = 1; y <= CS; y++) {
-    const row = (z * P + y) * P;
-    for (let x = row + 1; x <= row + CS; x++) if (pad[x] !== 0) return true;
-  }
-  return false;
-}
 
 /** n: 0=+x 1=-x 2=+y 3=-y 4=+z 5=-z */
 export const NORMALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -73,13 +58,9 @@ class Builder {
  */
 export function meshChunk(world, cx, cy, cz, layerOf) {
   const ox = cx * CS, oy = cy * CS, oz = cz * CS;
-  world.readBox(ox - 1, oy - 1, oz - 1, P, P, P, pad);
-  const opaqueB = new Builder(), alphaB = new Builder();
-  // A quarter of today's terrain chunks are sky; nothing to sweep.
-  if (!anyBlock()) return { opaque: opaqueB.finish(), alpha: alphaB.finish() };
-  // Chunk-local coordinates, -1..16, into the padded copy.
-  const get = (x, y, z) => pad[((z + 1) * P + y + 1) * P + x + 1];
+  const get = (x, y, z) => world.get(ox + x, oy + y, oz + z);
   const solid = (x, y, z) => (isSolid(get(x, y, z)) ? 1 : 0);
+  const opaqueB = new Builder(), alphaB = new Builder();
   const mask = new Int32Array(CS * CS), maskAO = new Uint8Array(CS * CS);
 
   for (let n = 0; n < 6; n++) {

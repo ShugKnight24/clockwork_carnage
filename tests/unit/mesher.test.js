@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { World } from "../../src/world/world.js";
 import { meshChunk, vertexAO, STRIDE, NORMALS } from "../../src/rendering/voxel/mesher.js";
+import { meshChunk as meshChunkV0 } from "./fixtures/mesher-v0.js";
+import { generateWorld } from "../../src/world/world-gen.js";
+import { SeededRNG } from "../../src/utils/seeded-rng.js";
 
 const layerOf = (id, face) => id * 3 + face;
 const quads = (m) => m.indices.length / 6;
@@ -76,5 +79,61 @@ describe("mesher", () => {
     const m = meshChunk(w, 0, 0, 0, layerOf);
     const aos = new Set(); for (let i = 0; i < m.opaque.verts.length; i += STRIDE) if (m.opaque.verts[i + 3] === 4) aos.add(m.opaque.verts[i + 7]);
     expect(aos.size).toBeGreaterThan(1);
+  });
+});
+
+describe("mesher reading a padded copy", () => {
+  /** A world with see-through and station blocks scattered over chunk and column borders. */
+  function busyWorld(seed) {
+    const w = generateWorld({ terrain: true, seed });
+    const rng = new SeededRNG(seed);
+    // Half the edits land on a chunk face, where the neighbour reads matter.
+    const coord = () => (rng.next() < 0.5 ? ((rng.next() * 8) | 0) * 16 + (rng.next() < 0.5 ? 0 : 15) : (rng.next() * 128) | 0);
+    for (let i = 0; i < 4000; i++) {
+      const id = [0, 1, 5, 8, 8, 9, 16, 18][(rng.next() * 8) | 0];
+      w.set(coord(), coord(), 20 + ((rng.next() * 40) | 0), id);
+    }
+    return w;
+  }
+
+  const identical = (a, b) =>
+    a.count === b.count &&
+    a.indices.constructor === b.indices.constructor &&
+    Buffer.from(a.verts).equals(Buffer.from(b.verts)) &&
+    Buffer.from(a.indices.buffer).equals(Buffer.from(b.indices.buffer));
+
+  it("matches the per-voxel mesher byte for byte over whole worlds", () => {
+    for (const w of [busyWorld(5), busyWorld(77), generateWorld({ terrain: false })]) {
+      let faces = 0;
+      w.forEachChunk((cx, cy, cz) => {
+        const a = meshChunk(w, cx, cy, cz, layerOf), b = meshChunkV0(w, cx, cy, cz, layerOf);
+        for (const pass of ["opaque", "alpha"]) {
+          if (!identical(a[pass], b[pass])) expect(`${pass} ${cx},${cy},${cz}`).toBe("identical");
+        }
+        faces += a.opaque.count + a.alpha.count;
+      });
+      expect(faces).toBeGreaterThan(0);
+    }
+  });
+
+  it("matches at the edges of a world bounded at negative coordinates", () => {
+    const w = new World({ bounds: { x0: -32, y0: -32, x1: 0, y1: 0 } });
+    for (let y = -32; y < 0; y++) for (let x = -32; x < 0; x++) {
+      for (let z = 0; z < 20 + ((x * y) & 7); z++) w.set(x, y, z, z === 0 ? 15 : 13);
+    }
+    w.set(-17, -16, 25, 8); w.set(-16, -17, 25, 5); w.set(-1, -1, 40, 1);
+    w.forEachChunk((cx, cy, cz) => {
+      const a = meshChunk(w, cx, cy, cz, layerOf), b = meshChunkV0(w, cx, cy, cz, layerOf);
+      expect(identical(a.opaque, b.opaque) && identical(a.alpha, b.alpha), `${cx},${cy},${cz}`).toBe(true);
+    });
+  });
+
+  it("skips an all-air chunk without asking for a single layer", () => {
+    const w = generateWorld({ terrain: false });
+    let asked = 0;
+    const m = meshChunk(w, 3, 3, 3, (id, f) => { asked++; return layerOf(id, f); });
+    expect(m.opaque.count + m.alpha.count).toBe(0);
+    expect(m.opaque.verts.length).toBe(0);
+    expect(asked).toBe(0);
   });
 });
