@@ -15,7 +15,8 @@ import { World, chunkKeyCoords } from "../../world/world.js";
 import { BLOCKS } from "../../world/blocks.js";
 import { meshChunk, STRIDE } from "./mesher.js";
 import { buildAtlas, ATLAS_SIZE } from "./atlas.js";
-import { CHUNK_VERT, CHUNK_FRAG, SPRITE_VERT, SPRITE_FRAG, POST_VERT, POST_FRAG } from "./shaders.js";
+import { CHUNK_VERT, CHUNK_FRAG, WATER_VERT, WATER_FRAG, SPRITE_VERT, SPRITE_FRAG, POST_VERT, POST_FRAG } from "./shaders.js";
+import { eyeInWater } from "../../world/voxel-physics.js";
 import { SpriteCache } from "./sprite-cache.js";
 import { resolveEnvPalette, FOG_DENSITY } from "../env/palettes.js";
 import { buildWallSet } from "../env/wall-art.js";
@@ -53,6 +54,13 @@ export function chunkInDistance(origin, camX, camY, camZ, maxDist = VOXEL_DRAW_D
 
 /** Glass art is painted opaque (it is a window in a wall), so the renderer owns its opacity. */
 const GLASS_ALPHA = 0.42;
+
+/**
+ * Fog while the eye is under water: dense and blue-green, so the far side of a
+ * lake fades out within a dozen blocks. It replaces the palette's fog for the
+ * frame, sky clear included, and the post pass tints and wobbles on top.
+ */
+const UNDERWATER_FOG = { near: [0.07, 0.3, 0.36], far: [0.03, 0.15, 0.24], density: 0.14, max: 0.97 };
 
 /** Ambient light per style: legacy is flat, modern sits dark so the tonemap has headroom. */
 const AMBIENT = {
@@ -186,6 +194,9 @@ export class VoxelRenderer {
     this.lightData = new Float32Array(MAX_LIGHTS * 4);
     this.lightColors = new Float32Array(MAX_LIGHTS * 3);
     this.fog = { near: [0.05, 0.08, 0.12], far: [0.02, 0.04, 0.08], density: FOG_DENSITY * 0.35, max: 0.85 };
+    this.frameFog = this.fog;  // this.fog, or the underwater fog while the eye is submerged
+    this._waterOrder = [];     // scratch for the visible water chunks
+    this._clock0 = typeof performance !== "undefined" ? performance.now() : 0;
     // Kept on `this` so destroy() can take them off the canvas again: a restore
     // event on a destroyed renderer would otherwise rebuild everything it freed.
     this._onContextLost = (e) => { e.preventDefault(); this.lost = true; };
@@ -219,12 +230,14 @@ export class VoxelRenderer {
   _initGL() {
     const gl = this.gl;
     this.chunkProg = compile(gl, CHUNK_VERT, CHUNK_FRAG);
+    this.waterProg = compile(gl, WATER_VERT, WATER_FRAG);
     this.spriteProg = compile(gl, SPRITE_VERT, SPRITE_FRAG);
     this.postProg = compile(gl, POST_VERT, POST_FRAG);
     this.u = {
       chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
       sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_up", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
-      post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth"]),
+      water: this._uniforms(this.waterProg, ["u_viewProj", "u_origin", "u_atlas", "u_sceneDepth", "u_cam", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_ambient", "u_time", "u_mode"]),
+      post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth", "u_underwater", "u_time"]),
     };
     this.sprites = new SpriteCache(gl);
     this.anisoExt = gl.getExtension("EXT_texture_filter_anisotropic");
@@ -276,6 +289,16 @@ export class VoxelRenderer {
     gl.texStorage2D(gl.TEXTURE_2D, 1, this.depthIsFloat ? gl.R16F : gl.RGBA8, w, h);
     for (const [p, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, p, v);
 
+    // What lies behind the water, copied out before the water pass writes its
+    // own surface distance there: the water shader reads it for thickness.
+    this.depthCopyTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.depthCopyTex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, this.depthIsFloat ? gl.R16F : gl.RGBA8, w, h);
+    for (const [p, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, p, v);
+    this.copyFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.copyFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.depthCopyTex, 0);
+
     this.depthRb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRb);
     gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
@@ -298,6 +321,8 @@ export class VoxelRenderer {
     if (this.colorTex) { gl.deleteTexture(this.colorTex); this.colorTex = null; }
     if (this.linearDepthTex) { gl.deleteTexture(this.linearDepthTex); this.linearDepthTex = null; }
     if (this.depthRb) { gl.deleteRenderbuffer(this.depthRb); this.depthRb = null; }
+    if (this.copyFbo) { gl.deleteFramebuffer(this.copyFbo); this.copyFbo = null; }
+    if (this.depthCopyTex) { gl.deleteTexture(this.depthCopyTex); this.depthCopyTex = null; }
   }
 
   resize(w, h) {
@@ -403,10 +428,11 @@ export class VoxelRenderer {
     const [cx, cy, cz] = this.world.chunkCoords(key);
     const m = meshChunk(this.world, cx, cy, cz, this.layerOf);
     let c = this.chunks.get(key);
-    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null, dist: 0 }; this.chunks.set(key, c); }
+    if (!c) { c = { origin: new Float32Array([cx * CS, cy * CS, cz * CS]), opaque: null, alpha: null, water: null, dist: 0 }; this.chunks.set(key, c); }
     this._upload(c, "opaque", m.opaque);
     this._upload(c, "alpha", m.alpha);
-    if (!c.opaque && !c.alpha) { this.chunks.delete(key); }
+    this._upload(c, "water", m.water);
+    if (!c.opaque && !c.alpha && !c.water) { this.chunks.delete(key); }
   }
 
   _upload(c, name, mesh) {
@@ -442,7 +468,7 @@ export class VoxelRenderer {
 
   _freeChunk(c) {
     const gl = this.gl;
-    for (const name of ["opaque", "alpha"]) {
+    for (const name of ["opaque", "alpha", "water"]) {
       const s = c[name];
       if (!s) continue;
       gl.deleteVertexArray(s.vao); gl.deleteBuffer(s.vbo); gl.deleteBuffer(s.ibo);
@@ -470,6 +496,10 @@ export class VoxelRenderer {
     this.setStyle(opts.style, opts.act || 1);
     const camChunk = [Math.floor(cam.x) >> 4, Math.floor(cam.y) >> 4, Math.floor(cam.z) >> 4];
     this.stats.meshedThisFrame = this._meshDirty(camChunk);
+    const underwater = eyeInWater(world, cam.x, cam.y, cam.z);
+    this.frameFog = underwater ? UNDERWATER_FOG : this.fog;
+    const fog = this.frameFog;
+    const time = ((performance.now() - this._clock0) / 1000) % 3600;
 
     const aspect = this.width / this.height;
     const fovY = 2 * Math.atan(Math.tan(((cam.fovDeg || 70) * Math.PI) / 180 / 2) / aspect);
@@ -487,7 +517,7 @@ export class VoxelRenderer {
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     // The sky is the far fog colour; its normal id sits outside the 0..5 face
     // range so comic ink outlines the horizon.
-    gl.clearBufferfv(gl.COLOR, 0, [this.fog.far[0], this.fog.far[1], this.fog.far[2], 1]);
+    gl.clearBufferfv(gl.COLOR, 0, [fog.far[0], fog.far[1], fog.far[2], 1]);
     gl.clearBufferfv(gl.COLOR, 1, [1, 0, 0, 1]);   // depth is stored as dist/FAR
     gl.clearBufferfi(gl.DEPTH_STENCIL, 0, 1, 0);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true);
@@ -501,10 +531,10 @@ export class VoxelRenderer {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.atlasTex);
     gl.uniform1i(u.u_atlas, 0);
     gl.uniform3f(u.u_cam, cam.x, cam.y, cam.z);
-    gl.uniform3fv(u.u_fogNear, this.fog.near);
-    gl.uniform3fv(u.u_fogFar, this.fog.far);
-    gl.uniform1f(u.u_fogDensity, this.fog.density);
-    gl.uniform1f(u.u_fogMax, this.fog.max);
+    gl.uniform3fv(u.u_fogNear, fog.near);
+    gl.uniform3fv(u.u_fogFar, fog.far);
+    gl.uniform1f(u.u_fogDensity, fog.density);
+    gl.uniform1f(u.u_fogMax, fog.max);
     gl.uniform3fv(u.u_ambient, AMBIENT[this.style] || AMBIENT.comic);
     gl.uniform3fv(u.u_emissiveByLayer, this.emissiveByLayer);
     gl.uniform1fv(u.u_layerAlpha, this.layerAlpha);
@@ -526,6 +556,7 @@ export class VoxelRenderer {
     // the world rather than drawing a box around every mote.
     this._drawSprites(opts.fx, cam, true);
     this._drawSegments(opts.segments, cam);
+    this._drawWater(cam, maxDist, time);
 
     // Glass and other see-through faces last, over everything solid. They keep
     // the linear depth of what is behind them, so the ink pass outlines that
@@ -562,6 +593,8 @@ export class VoxelRenderer {
     gl.uniform2f(this.u.post.u_texel, 1 / this.width, 1 / this.height);
     gl.uniform1i(this.u.post.u_style, styleId);
     gl.uniform1f(this.u.post.u_inkWidth, Math.max(1, this.height / 720));
+    gl.uniform1f(this.u.post.u_underwater, underwater ? 1 : 0);
+    gl.uniform1f(this.u.post.u_time, time);
     gl.bindVertexArray(this.quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
@@ -630,6 +663,82 @@ export class VoxelRenderer {
     return out;
   }
 
+  /**
+   * Water, after everything solid and before glass, in three passes over the
+   * visible water meshes (they are small: a flat lake is one quad a chunk).
+   * First the linear depth of what lies behind is copied out, so the colour
+   * pass can tell a shallow shelf from a deep hole. Then:
+   * 1. depth: water writes the depth buffer and its surface distance, so only
+   *    the nearest surface of a pool survives and is blended exactly once;
+   * 2. colour: blended over the scene where the depth matches, both faces, so
+   *    the surface is seen from below as well;
+   * 3. id: water's own face id into the colour alpha, so the comic ink pass
+   *    outlines the shore instead of the bed's blocks through the water.
+   * Glass behind a water surface is therefore hidden rather than blended; glass
+   * in front of water, a window onto the sea, draws correctly.
+   */
+  _drawWater(cam, maxDist, time) {
+    const list = this._waterOrder;
+    list.length = 0;
+    for (const c of this.chunks.values()) if (c.water && this._visible(c.origin, cam, maxDist)) list.push(c);
+    this.stats.waterChunks = list.length;
+    if (!list.length) return;
+    const gl = this.gl, w = this.width, h = this.height, fog = this.frameFog;
+
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fbo);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.copyFbo);
+    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+    gl.readBuffer(gl.COLOR_ATTACHMENT0);
+
+    gl.useProgram(this.waterProg);
+    const u = this.u.water;
+    gl.uniformMatrix4fv(u.u_viewProj, false, this.viewProj);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.atlasTex);
+    gl.uniform1i(u.u_atlas, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.depthCopyTex);
+    gl.uniform1i(u.u_sceneDepth, 1);
+    gl.uniform3f(u.u_cam, cam.x, cam.y, cam.z);
+    gl.uniform3fv(u.u_fogNear, fog.near);
+    gl.uniform3fv(u.u_fogFar, fog.far);
+    gl.uniform1f(u.u_fogDensity, fog.density);
+    gl.uniform1f(u.u_fogMax, fog.max);
+    gl.uniform3fv(u.u_ambient, AMBIENT[this.style] || AMBIENT.comic);
+    gl.uniform1f(u.u_time, time);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.BLEND);
+
+    const drawAll = (mode) => {
+      gl.uniform1i(u.u_mode, mode);
+      for (const c of list) {
+        gl.uniform3fv(u.u_origin, c.origin);
+        gl.bindVertexArray(c.water.vao);
+        gl.drawElements(gl.TRIANGLES, c.water.count, c.water.indexType, 0);
+      }
+    };
+    gl.drawBuffers([gl.NONE, gl.COLOR_ATTACHMENT1]);
+    gl.depthMask(true);
+    drawAll(1);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.NONE]);
+    gl.depthMask(false);
+    gl.colorMask(true, true, true, false);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    drawAll(2);
+    gl.disable(gl.BLEND);
+    gl.colorMask(false, false, false, true);
+    drawAll(3);
+
+    gl.colorMask(true, true, true, true);
+    gl.depthMask(true);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    gl.enable(gl.CULL_FACE);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindVertexArray(null);
+  }
+
   /** @param {boolean} [additive] draw as light: no depth write, no ink outline */
   _drawSprites(list, cam, additive = false) {
     if (!list || !list.length) return;
@@ -649,7 +758,7 @@ export class VoxelRenderer {
     gl.uniform3f(u.u_right, rx, ry, 0);
     gl.uniform3f(u.u_up, 0, 0, 1);   // billboards stand upright in the world
     gl.uniform1i(u.u_tex, 0);
-    gl.uniform3fv(u.u_fogColor, this.fog.near);
+    gl.uniform3fv(u.u_fogColor, this.frameFog.near);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindVertexArray(this.spriteVao);
     gl.disable(gl.CULL_FACE);
@@ -664,7 +773,7 @@ export class VoxelRenderer {
       const entry = this.sprites.get(s.key, s.image);
       if (!entry) continue;
       const dist = Math.sqrt(d);
-      const fog = Math.min(this.fog.max, this.fog.max * (1 - Math.exp(-dist * this.fog.density)));
+      const fog = Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density)));
       gl.bindTexture(gl.TEXTURE_2D, entry.tex);
       gl.uniform3f(u.u_pos, s.x, s.y, s.z);
       gl.uniform2f(u.u_size, s.w, s.h);
@@ -703,7 +812,7 @@ export class VoxelRenderer {
     gl.uniformMatrix4fv(u.u_viewProj, false, this.viewProj);
     gl.uniform1i(u.u_tex, 0);
     gl.uniform2f(u.u_uvFlip, 0, 0);
-    gl.uniform3fv(u.u_fogColor, this.fog.near);
+    gl.uniform3fv(u.u_fogColor, this.frameFog.near);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindVertexArray(this.spriteVao);
     gl.disable(gl.CULL_FACE);
@@ -732,7 +841,7 @@ export class VoxelRenderer {
       ux /= ul; uy /= ul; uz /= ul;
       const width = s.width || 0.05;
       const dist = Math.hypot(ex, ey, ez);
-      const fog = Math.min(this.fog.max, this.fog.max * (1 - Math.exp(-dist * this.fog.density)));
+      const fog = Math.min(this.frameFog.max, this.frameFog.max * (1 - Math.exp(-dist * this.frameFog.density)));
       gl.bindTexture(gl.TEXTURE_2D, entry.tex);
       // a_corner.y runs 0..1, so the ribbon grows off one edge: start half a
       // width back and it straddles the shot line.
@@ -770,9 +879,10 @@ export class VoxelRenderer {
     if (this.sprites) this.sprites.destroy();
     for (const vao of [this.quadVao, this.spriteVao]) if (vao) gl.deleteVertexArray(vao);
     for (const vbo of [this.quadVbo, this.spriteVbo]) if (vbo) gl.deleteBuffer(vbo);
-    for (const p of [this.chunkProg, this.spriteProg, this.postProg]) if (p) gl.deleteProgram(p);
+    for (const p of [this.chunkProg, this.waterProg, this.spriteProg, this.postProg]) if (p) gl.deleteProgram(p);
     this.quadVao = this.spriteVao = this.quadVbo = this.spriteVbo = null;
-    this.chunkProg = this.spriteProg = this.postProg = null;
+    this.chunkProg = this.waterProg = this.spriteProg = this.postProg = null;
+    this._waterOrder.length = 0;
     this.world = null;
   }
 }
