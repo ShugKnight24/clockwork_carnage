@@ -256,13 +256,15 @@ describe("forge dirty tracking", () => {
     const store = new WorldStore(new MemoryBackend());
     const f = forge(store);
     await f.start();
-    f._editBlock(10, 10, 40, 1);
+    // z = 60 is above any generated terrain (it tops out at 47), so undo
+    // really leaves air there whatever the random seed made.
+    f._editBlock(10, 10, 60, 1);
     await f.saveMap();
-    expect((await store.load(f.currentSlot)).get(10, 10, 40)).toBe(1);
+    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(1);
 
     f.undo(); // place → Ctrl+S → Ctrl+Z → quit
     await f.stop();
-    expect((await store.load(f.currentSlot)).get(10, 10, 40)).toBe(AIR);
+    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(AIR);
   });
 });
 

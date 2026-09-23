@@ -3,7 +3,7 @@ import { playBlockSound } from "../src/audio/block-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
 import { AIR, BEDROCK } from "../src/world/blocks.js";
-import { generateWorld } from "../src/world/world-gen.js";
+import { generateWorld, randomSeed } from "../src/world/world-gen.js";
 import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
 import { convertLegacyMap } from "../src/world/legacy-convert.js";
@@ -372,7 +372,7 @@ export class ForgeMode {
       if (this.mapIndex.length === 0) {
         const world = generateWorld({
           terrain: true,
-          seed: Date.now(),
+          seed: randomSeed(),
           name: "My Creation",
         });
         await this.store.save(0, world);
@@ -382,7 +382,7 @@ export class ForgeMode {
         const id = this._preferredSlot();
         const world =
           (await this.store.load(id)) ||
-          generateWorld({ terrain: true, seed: Date.now() });
+          generateWorld({ terrain: true, seed: randomSeed() });
         this._adopt(world, id);
       }
       this.storageFailed = false;
@@ -427,7 +427,7 @@ export class ForgeMode {
     this.storageFailed = true;
     const world = generateWorld({
       terrain: true,
-      seed: Date.now(),
+      seed: randomSeed(),
       name: "My Creation",
     });
     this._adopt(world, 0);
@@ -1395,7 +1395,7 @@ export class ForgeMode {
       const id = await this.store.nextId();
       const world = generateWorld({
         terrain: this.terrainNew,
-        seed: Date.now(),
+        seed: randomSeed(),
         name: `Map ${id + 1}`,
       });
       await this.store.save(id, world);

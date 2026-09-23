@@ -8,6 +8,8 @@ import { createHash } from "node:crypto";
 /** Every resident cell, in column order. */
 const cells = (w) => Buffer.concat([...w.columns.values()].map((c) => Buffer.from(c.blocks)));
 const sha = (o) => createHash("sha256").update(JSON.stringify(o)).digest("hex");
+/** sha of {version, size, blocks} of a flat world's v4 document, from before generator v1. */
+const FLAT_BLOCKS_SHA = "1488c496429bac426847a081dd4b26aa7969abbfdd33e4f35b6e7997f02fd9ac";
 
 describe("rle", () => {
   it("round-trips and compresses runs", () => {
@@ -96,12 +98,13 @@ describe("v4 from column storage", () => {
     expect(back.dirty.size).toBe(256);
   });
 
-  it("generates and encodes byte-identically to the flat-array build", () => {
-    // Hashes of encodeWorld(generateWorld(...)) taken on feat/v0.8.0 before
-    // columns: generation order, ore and the v4 layout are all unchanged.
-    expect(sha(encodeWorld(generateWorld({ terrain: true, seed: 7 })))).toBe("d19abf2c518af9ce3a3e178ed40c44775b6c80a915f49e7420e2a35a00293353");
-    expect(sha(encodeWorld(generateWorld({ terrain: true, seed: 1234567 })))).toBe("2cbaebce0c0ab9dbc290a5651ab0ca9ac42fea01e5a4af22b328a7ebd6c541e6");
-    expect(sha(encodeWorld(generateWorld({ terrain: false })))).toBe("ecae5cd63447cd12c2931315416ba632bde8bb1a8608f48fa3000a36a58e7f37");
+  it("keeps a flat world's blocks byte-identical to the flat-array build", () => {
+    // The block half of encodeWorld(generateWorld({terrain: false})) hashed on
+    // feat/v0.8.0 before columns. Terrain moved to generator v1 (hashed in
+    // column-gen.test.js); flat worlds only gained meta.gen.
+    const o = encodeWorld(generateWorld({ terrain: false }));
+    expect(sha({ version: o.version, size: o.size, blocks: o.blocks })).toBe(FLAT_BLOCKS_SHA);
+    expect(o.meta.gen).toEqual({ kind: "flat", seed: 1, v: 1 });
   });
 
   it("has no v4 form for a world with other bounds", () => {

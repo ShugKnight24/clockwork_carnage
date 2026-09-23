@@ -89,8 +89,8 @@ async function pressForgeKey(page, code) {
 
 /**
  * Clears the sight line the block tests aim down and puts `blocks` on it.
- * z=49 is well clear of any generated terrain, so the raycast hits only what
- * the test put there.
+ * z=49 is well clear of any generated terrain (it tops out at z=47), so the
+ * raycast hits only what the test put there.
  */
 async function layOutSightLine(page, blocks) {
   await page.evaluate((list) => {
@@ -394,12 +394,14 @@ test.describe("Voxel Forge", () => {
     await waitForForge(page);
 
     // A platform, a spawn on it, and then a block dropped right on the spawn.
+    // Built above z=47, the highest generated ground, so the terrain the seed
+    // happened to make cannot bury the column further.
     for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      await debug(page, "setBlock", 70 + dx, 64 + dy, 40, 1);
+      await debug(page, "setBlock", 70 + dx, 64 + dy, 50, 1);
     }
-    await debug(page, "setBlock", 70, 64, 42, 0); // clear the head room above
-    await debug(page, "addEnemySpawn", 70.5, 64.5, 41, "beast");
-    await debug(page, "setBlock", 70, 64, 41, 1); // buries the spawn
+    await debug(page, "setBlock", 70, 64, 52, 0); // clear the head room above
+    await debug(page, "addEnemySpawn", 70.5, 64.5, 51, "beast");
+    await debug(page, "setBlock", 70, 64, 51, 1); // buries the spawn
 
     await debug(page, "startBuilderPlayTest");
     const spawnZ = await page.evaluate(() => {
@@ -408,7 +410,7 @@ test.describe("Voxel Forge", () => {
     });
     expect(spawnZ).not.toBeNull();
     // On top of the block, not inside it.
-    expect(spawnZ.z).toBe(42);
+    expect(spawnZ.z).toBe(52);
     expect(
       await page.evaluate(
         ([x, y, z]) => window.ccDebug.game.world.get(Math.floor(x), Math.floor(y), Math.floor(z)),
