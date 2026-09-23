@@ -329,7 +329,8 @@ export class AISystem {
               audio.calculatePan(e.x, e.y, player.x, player.y, player.angle),
             );
           } else if (dist <= e.def.attackRange * ENEMY_MELEE_WHIFF_SLACK) {
-            // A swing at the echo lands on nothing.
+            // A swing at the echo lands on nothing. A phased Hound's swing still
+            // lands: "Its attacks still land and still telegraph" (story spec §6).
             if (!toEcho) fx.damagePlayerCalls.push({ damage: e.def.damage, attacker: e });
           }
           // else: the player stepped out during the telegraph — the swing whiffs.
