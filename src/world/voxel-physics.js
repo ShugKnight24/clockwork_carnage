@@ -2,7 +2,7 @@
 // Swept-AABB collision, block picking and line of sight against the voxel World.
 // Everything here is pure: it reads the world and returns a new position, so the
 // player, enemies and the build tools can all share one notion of "solid".
-import { isSolid, isWater, WATER_SURFACE } from "./blocks.js";
+import { AIR, isSolid, isWater, WATER_SURFACE } from "./blocks.js";
 import { World } from "./world.js";
 
 export const PLAYER = { half: 0.3, height: 1.7, crouchHeight: 1.2, eye: 1.6, crouchEye: 1.1, gravity: 24, jump: 8.5, step: 1.0, reach: 6, fallDamageFrom: 6 };
@@ -28,13 +28,20 @@ export function playerEyeZ3D(player) {
   return (player.z || 0) + PLAYER.eye + (PLAYER.crouchEye - PLAYER.eye) * t;
 }
 
-/** Any solid block inside the box [x±half, y±half, z..z+height)? */
+/**
+ * Any solid block inside the box [x±half, y±half, z..z+height)? A cell in a
+ * column of an endless world that is not loaded yet counts as solid: a body
+ * can never walk, fall or be pushed into ground that is not there, and waits
+ * at the edge until it arrives. Rays and bolts see such a cell as air.
+ */
 export function aabbOverlapsSolid(world, x, y, z, half, height) {
   const x0 = Math.floor(x - half), x1 = Math.floor(x + half - EPS);
   const y0 = Math.floor(y - half), y1 = Math.floor(y + half - EPS);
   const z0 = Math.floor(z), z1 = Math.floor(z + height - EPS);
   for (let bz = z0; bz <= z1; bz++) for (let by = y0; by <= y1; by++) for (let bx = x0; bx <= x1; bx++) {
-    if (isSolid(world.get(bx, by, bz))) return true;
+    const id = world.get(bx, by, bz);
+    if (isSolid(id)) return true;
+    if (id === AIR && bz >= 0 && bz < World.H && world.unloadedAt(bx, by)) return true;
   }
   return false;
 }

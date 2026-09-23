@@ -139,7 +139,8 @@ function stepProjectile(p, ctx, stepDt) {
   if (ctx.world) {
     p.z = (p.z || 0) + dz * p.speed * stepDt;
     const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
-    if (!ctx.world.inBounds(bx, by, bz)) {
+    // Out of the world, or into a column not loaded yet: nothing to hit there.
+    if (!ctx.world.inBounds(bx, by, bz) || ctx.world.unloadedAt(bx, by)) {
       p.active = false; return;
     }
     if (isSolid(ctx.world.get(bx, by, bz))) {

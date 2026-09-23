@@ -97,6 +97,9 @@ export class VoxelAISystem {
 
     for (const e of entities) {
       if (e.type !== "enemy" || !e.active || e.dissolving) continue;
+      // An enemy whose column is not loaded is frozen until the player comes
+      // near enough to load it: there is no ground under it to simulate.
+      if (world.unloadedAt(Math.floor(e.x), Math.floor(e.y))) continue;
       const def = e.def || {};
 
       // Enemy-specific chrono scale

@@ -94,18 +94,18 @@ export function standableNear(world, x, y, z, half = PLAYER.half, height = PLAYE
 
 /**
  * Where a play-test starts. The world's own spawn wins; when it is buried the
- * nearest standable cell is used instead.
+ * nearest standable cell is used instead. The search reaches 24 blocks, so it
+ * stays inside the 3 × 3 columns loaded around the spawn.
  * @returns {{x:number,y:number,z:number,yaw:number}|null} null when nowhere fits
  */
 export function spawnFromMeta(world) {
   if (!world || !world.meta) return null;
   const s = world.meta.spawn;
   const fallback = world.defaultSpawn();
-  const at = standableNear(
-    world,
-    s?.x ?? fallback.x,
-    s?.y ?? fallback.y,
-    s?.z ?? fallback.z,
-  );
+  const x = s?.x ?? fallback.x, y = s?.y ?? fallback.y;
+  // An endless world may not hold the spawn's columns yet: load the ground
+  // the search stands on first (a no-op in a bounded world).
+  world.loadAround(x, y, 1);
+  const at = standableNear(world, x, y, s?.z ?? fallback.z);
   return at ? { ...at, yaw: s?.yaw || 0 } : null;
 }

@@ -134,6 +134,8 @@ function spriteListFromEntities(game) {
   const ctx = game.renderer.ctx;
   for (const e of game.entities) {
     if (!e.active) continue;
+    // Not drawn in a column that is not loaded: it is frozen there (spec §16).
+    if (game.world.unloadedAt(Math.floor(e.x), Math.floor(e.y))) continue;
     if (e.type === "enemy") {
       if (e.state === "dead") continue;
       const frame = prepareEnemySprite(ctx, e, ENEMY_SPRITE_PX, game.time);
