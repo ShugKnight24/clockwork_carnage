@@ -379,9 +379,9 @@ function drawObjective(ctx, r, game, planeMul, yShift) {
     const held = Math.min(1, (o.held[s.id] ?? 0) / o.hold);
     for (let row = r1; row <= r2; row++) {
       for (let col = c1; col <= c2; col++) {
-        const a = cleared ? 0.12 : live ? 0.3 + 0.2 * Math.sin(now * 5) + 0.4 * held : 0.12;
+        const a = cleared ? 0.1 : live ? 0.18 + 0.12 * Math.sin(now * 5) + 0.35 * held : 0.08;
         const fill = cleared ? `rgba(80,80,90,${a})` : `rgba(${cr},${cg},${cb},${a})`;
-        floorMark(ctx, r, game, planeMul, yShift, col + 0.5, row + 0.5, 0.46, fill);
+        floorMark(ctx, r, game, planeMul, yShift, col + 0.5, row + 0.5, 0.34, fill);
       }
     }
     if (live) {
@@ -415,7 +415,7 @@ function drawForm2(ctx, r, game, planeMul, yShift) {
     if (e.type !== "enemy" || !e.active || e.state === "dead" || e.dissolving) continue;
     const charge = e.def?.counterShift ? e._counterCharge ?? 0 : 0;
     if (charge > 0) {
-      const R = 1.3;
+      const R = 1.8;
       const n = 24;
       const filled = Math.round(n * Math.min(1, charge));
       const warm = charge < 0.5;
@@ -423,7 +423,7 @@ function drawForm2(ctx, r, game, planeMul, yShift) {
         const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2;
         const a1 = -Math.PI / 2 + ((i + 1) / n) * Math.PI * 2;
         const on = i < filled;
-        ctx.lineWidth = on ? 4 : 1.5;
+        ctx.lineWidth = on ? 6 : 2;
         ctx.strokeStyle = on
           ? warm ? "rgba(255,211,106,0.9)" : `rgba(255,42,74,${0.75 + 0.25 * Math.sin(now * 18)})`
           : "rgba(255,255,255,0.18)";
@@ -579,7 +579,7 @@ export function renderChronoScreen(game, ctx, w, h) {
     const k = (reach - 0.5) / 0.5;
     const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
     g.addColorStop(0, "rgba(255,42,74,0)");
-    g.addColorStop(1, `rgba(255,42,74,${0.45 * k * (0.6 + 0.4 * Math.sin(performance.now() * (0.01 + 0.02 * k)))})`);
+    g.addColorStop(1, `rgba(255,42,74,${(0.25 + 0.4 * k) * (0.6 + 0.4 * Math.sin(performance.now() * (0.01 + 0.02 * k)))})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }
