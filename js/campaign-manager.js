@@ -21,6 +21,7 @@ import {
   applyActEnemyRoster,
 } from "../src/systems/spawner.js";
 import { isBossEnemy } from "../src/systems/combat.js";
+import { levelsBefore } from "../src/data/campaign/acts.js";
 import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
 
@@ -330,7 +331,11 @@ export class CampaignManager {
 
     this.level++;
     g.achievementStats.totalCampaignLevels++;
-    g.achievementStats.campaignLevelsCleared = Math.max(g.achievementStats.campaignLevelsCleared || 0, this.level);
+    // Counted across the campaign, not within the act.
+    g.achievementStats.campaignLevelsCleared = Math.max(
+      g.achievementStats.campaignLevelsCleared || 0,
+      levelsBefore(this.act) + this.level,
+    );
     g.saveAchievements();
 
     if (!getActLevel(this.act, this.level)) {

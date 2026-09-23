@@ -329,6 +329,16 @@ export function maxActLevels() {
   return Math.max(...ACTS.map((a) => a.levels.length));
 }
 
+/** Levels in every act before this one: level L of act A is campaign level levelsBefore(A) + L. */
+export function levelsBefore(act) {
+  return ACTS.filter((a) => a.id < act).reduce((n, a) => n + a.levels.length, 0);
+}
+
+/** Levels in the whole campaign. */
+export function totalLevels() {
+  return levelsBefore(Infinity);
+}
+
 /** Index of the act's boss level, or -1. */
 export function bossLevelIndex(act) {
   return getAct(act)?.levels.findIndex((l) => l.boss) ?? -1;

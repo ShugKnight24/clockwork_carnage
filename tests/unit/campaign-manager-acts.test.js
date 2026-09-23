@@ -66,6 +66,14 @@ describe("CampaignManager on ACTS", () => {
     }
   });
 
+  it("counts levels cleared across the campaign, not within the act", () => {
+    const { g, cm } = makeCampaign();
+    cm.act = 2;
+    cm.level = 0;
+    cm.nextLevel();
+    expect(g.achievementStats.campaignLevelsCleared).toBe(ACTS[0].levels.length + 1);
+  });
+
   it("skips a briefing this build has no script for", () => {
     const { g, cm, scenes } = makeCampaign({ scripts: () => false });
     cm.act = 1;

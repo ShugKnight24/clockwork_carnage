@@ -28,10 +28,18 @@ const MK2 = ARMOR_STYLES.findIndex((a) => a.tier === 2);
 const MK3 = ARMOR_STYLES.findIndex((a) => a.tier === 3);
 
 describe("unlock rules", () => {
-  it("backfills a finished campaign with every act and the longest act's levels", () => {
+  it("backfills a finished campaign with every act and every level", () => {
     const ctx = unlockContext({ stats: { campaignComplete: true } });
     expect(ctx.campaignActsCleared).toBe(ACTS.length);
-    expect(ctx.campaignLevelsCleared).toBe(Math.max(...ACTS.map((a) => a.levels.length)));
+    expect(ctx.campaignLevelsCleared).toBe(ACTS.reduce((n, a) => n + a.levels.length, 0));
+  });
+
+  it("counts levels across the campaign, not within one act", () => {
+    // A save parked at Act II level 2 has cleared all of Act I and two more.
+    const parked = unlockContext({ campaignSaveAct: 2, campaignSaveLevel: 2 });
+    expect(parked.campaignLevelsCleared).toBe(ACTS[0].levels.length + 2);
+    // An older, per-act mark never counts against the player.
+    expect(unlockContext({ stats: { campaignLevelsCleared: 8 } }).campaignLevelsCleared).toBe(8);
   });
 
   it("fresh agent: recruit and tier I only", () => {
