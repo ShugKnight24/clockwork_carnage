@@ -141,7 +141,7 @@ function drawForesight(ctx, r, game, planeMul, yShift) {
   for (const e of game.entities) {
     if (e.type !== "enemy" || !e.active || e.state === "dead" || e.dissolving) continue;
     if (Math.hypot(e.x - p.x, e.y - p.y) > 22) continue;
-    const g = predictEnemy(e, game.map);
+    const g = predictEnemy(e, game.map, cp?.spec?.("foresight").horizon);
     if (Math.hypot(g.x - e.x, g.y - e.y) > 0.2) {
       const ghost = proxyOf(e, "ghost");
       ghost.x = g.x;
@@ -353,9 +353,11 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
         figure(ctx, r, game, planeMul, yShift, f.x, f.y, f.color, 0.6 * fade, top);
       }
     } else if (h.type === "loop" && !st.broken) {
-      ctx.lineWidth = shifting ? 3 : 1;
-      ctx.strokeStyle = shifting ? `rgba(120,255,230,${0.7 + 0.3 * Math.sin(now * 6)})` : "rgba(120,255,230,0.12)";
-      for (const z of [FLOOR, WAIST, -0.4]) worldLine(ctx, r, game, planeMul, yShift, h.seamA.x, h.seamA.y, h.seamB.x, h.seamB.y, z, !shifting);
+      // Foresight shows the seam where the loop does not match itself.
+      const seen = shifting || !!game.chronoPowers?.foresightOn?.(game.player);
+      ctx.lineWidth = seen ? 3 : 1;
+      ctx.strokeStyle = seen ? `rgba(120,255,230,${0.7 + 0.3 * Math.sin(now * 6)})` : "rgba(120,255,230,0.12)";
+      for (const z of [FLOOR, WAIST, -0.4]) worldLine(ctx, r, game, planeMul, yShift, h.seamA.x, h.seamA.y, h.seamB.x, h.seamB.y, z, !seen);
     }
   }
   ctx.restore();
@@ -539,7 +541,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
     const left = Math.max(0, cp.echo.until - cp.clock);
     figure(ctx, r, game, planeMul, yShift, cp.echo.x, cp.echo.y, "#ff5fb4", 0.55 * Math.min(1, left / 0.5));
   }
-  if (cp?.has("foresight") && game.player.chronoActive) sprites = sprites.concat(drawForesight(ctx, r, game, planeMul, yShift));
+  if (cp?.foresightOn?.(game.player)) sprites = sprites.concat(drawForesight(ctx, r, game, planeMul, yShift));
   if (sprites.length) {
     const shift = yShift | 0;
     ctx.save();
@@ -622,4 +624,58 @@ export function renderChronoScreen(game, ctx, w, h) {
     ctx.fillStyle = `rgba(255,95,180,${0.22 * a})`;
     ctx.fillRect(0, 0, w, h);
   }
+  const stop = cp?.stop?.view?.();
+  if (stop) drawStoppedTime(ctx, w, h, stop);
+}
+
+/**
+ * Eleven Seconds on screen. The telegraph: a white ring closing on you and
+ * the colour draining. The stop: the world grey and still, and his clock in
+ * the middle of the sky, counting down his eleven seconds. His window is
+ * cooler (your time) and says so.
+ */
+function drawStoppedTime(ctx, w, h, { phase, frac, seconds, stop }) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const big = Math.hypot(w, h) / 2;
+  ctx.save();
+  if (phase === "telegraph") {
+    const r = big * (1 - frac * 0.82);
+    ctx.globalCompositeOperation = "saturation";
+    ctx.fillStyle = `rgba(128,128,128,${0.6 * frac})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.5 * frac})`;
+    ctx.lineWidth = Math.max(2, h * 0.006);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  const yours = phase === "window";
+  ctx.globalCompositeOperation = "saturation";
+  ctx.fillStyle = "rgba(128,128,128,0.92)";
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = "source-over";
+  const edge = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, big);
+  edge.addColorStop(0, yours ? "rgba(150,230,255,0.04)" : "rgba(255,255,255,0.06)");
+  edge.addColorStop(1, yours ? "rgba(90,200,255,0.3)" : "rgba(255,240,250,0.34)");
+  ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, w, h);
+  // His clock.
+  const size = Math.round(Math.min(w, h) * 0.075);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${size}px "Courier New", monospace`;
+  const secs = Math.ceil(seconds);
+  const label = `00:${String(secs).padStart(2, "0")}`;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillText(label, cx + 2, h * 0.16 + 2);
+  ctx.fillStyle = yours ? "#9fe8ff" : "#ffffff";
+  ctx.fillText(label, cx, h * 0.16);
+  ctx.font = `600 ${Math.round(size * 0.3)}px "Courier New", monospace`;
+  ctx.fillStyle = yours ? "rgba(159,232,255,0.9)" : "rgba(255,255,255,0.75)";
+  ctx.fillText(yours ? "EVERYTHING STOPPED BUT YOU" : stop === 0 ? "HIS ELEVEN SECONDS" : "", cx, h * 0.16 + size * 0.75);
+  ctx.restore();
 }

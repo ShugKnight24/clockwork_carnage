@@ -31,6 +31,11 @@ export const CHRONO_SOUNDS = {
   counterShift: [[0, "tone", 440, 0.15, "sine", 0.12], [0.08, "tone", 660, 0.2, "sine", 0.1], [0.1, "tone", 55, 0.8, "sawtooth", 0.14], [0, "noise", 0.5, 0.12, 500, "lowpass"]],
   // A replayed volley: a tape spooling back, then the same rounds again.
   replay: [[0, "tone", 330, 0.1, "square", 0.06], [0.08, "tone", 262, 0.1, "square", 0.06], [0.16, "tone", 196, 0.3, "triangle", 0.1], [0, "noise", 0.35, 0.08, 3000, "bandpass"]],
+  // Eleven Seconds: a clock winding down before he stops time, the world
+  // dropping out from under it, and time coming back in a rush.
+  stopWind: [[0, "tone", 1568, 0.06, "square", 0.05], [0.35, "tone", 1568, 0.06, "square", 0.05], [0.65, "tone", 1568, 0.06, "square", 0.06], [0.9, "tone", 1568, 0.06, "square", 0.07], [1.1, "tone", 1568, 0.06, "square", 0.08], [1.25, "tone", 1568, 0.06, "square", 0.09]],
+  timeStop: [[0, "tone", 440, 1.2, "sine", 0.14], [0, "tone", 110, 1.6, "triangle", 0.16], [0, "noise", 0.6, 0.2, 500, "lowpass"], [0.15, "tone", 55, 1.8, "sine", 0.14]],
+  timeResume: [[0, "noise", 0.4, 0.16, 3000, "highpass"], [0, "tone", 110, 0.3, "sine", 0.1], [0.1, "tone", 220, 0.3, "sine", 0.1], [0.2, "tone", 440, 0.4, "sine", 0.1]],
 };
 
 /** Beyond this many tiles a positional sound is not played. */

@@ -1804,8 +1804,10 @@ export class Game {
     }
 
     const dt = this.deltaTime * this.timeScale;
+    // The Final Form's first stop holds you too: no move, look, shot or shift.
+    const frozen = this.chronoPowers.playerFrozen();
 
-    this._updateChronoEnergy();
+    if (!frozen) this._updateChronoEnergy();
 
     // Kill streak update (timer decay + display fade)
     _safeCall("KillStreak", () => this.killStreakSystem.update(this.deltaTime));
@@ -1824,7 +1826,7 @@ export class Game {
     // Player movement
     const _profilePlayerStart = this.showFPS ? performance.now() : 0;
     // Form 2's Counter-shift holds you at half speed for a moment.
-    this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
+    if (!frozen) this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
 
@@ -1833,7 +1835,7 @@ export class Game {
     }
 
     // Firing
-    if (this.player.isFiring) {
+    if (this.player.isFiring && !frozen) {
       this.fireWeapon();
     }
 

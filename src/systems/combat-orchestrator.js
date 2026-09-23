@@ -189,6 +189,15 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   game.shotsHit++;
   game.achievementStats.totalShotsHit++;
 
+  // The Final Form: untouchable while he stops time, his frozen armour worth
+  // double in his window (src/systems/eleven-seconds.js).
+  const stopScale = game.chronoPowers?.damageScale?.(enemy) ?? 1;
+  if (stopScale === 0) {
+    game.glitchEffect = Math.max(game.glitchEffect ?? 0, 0.12);
+    return;
+  }
+  damage *= stopScale;
+
   // Apply zone multiplier before crit/shield. Crit + zone stack multiplicatively
   // (a headshot crit does HEADSHOT_MULT * 2 = 5x base damage).
   const zoneName = zone?.name || "body";

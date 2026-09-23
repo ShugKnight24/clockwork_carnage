@@ -169,6 +169,11 @@ export const ENEMY_TYPES = {
     attackWindupMs: 280,
     form: 3,
     boss: true,
+    // Eleven Seconds (src/systems/eleven-seconds.js): he stops time at 75%,
+    // 50% and 25%. Your shift does not slow him; waiting for his stop is
+    // the answer.
+    elevenSeconds: true,
+    chronoMultiplier: 1,
     hitZones: BOSS_ZONES,
   },
   // Act II's boss: suit C-0016, the prototype before yours, walking with

@@ -193,8 +193,10 @@ export function updateProjectiles(ctx, dt) {
   for (const p of projectiles) {
     if (!p.active) continue;
     attachProjectileLight(ctx.lights, p);
-    // Held in a Time-Lock: no travel, no ageing, until the lock drops it.
-    if (p.frozen) {
+    // Held in a Time-Lock: no travel, no ageing, until the lock drops it. An
+    // enemy round in the Final Form's stopped time hangs the same way, and
+    // flies on when time does.
+    if (p.frozen || ctx.chronoPowers?.holdsProjectile?.(p)) {
       syncProjectileLight(p);
       if (p._light) p._light._projTick = _tick;
       continue;

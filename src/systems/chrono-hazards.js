@@ -19,7 +19,8 @@
  *             `holds` keeps the enemies inside it frozen mid-step until you
  *             leave through its `release` zone or hurt one of them
  *   loop      leaving through the seam puts you back at the start, until you
- *             cross it while shifting
+ *             cross it while shifting (or, with `breaksOn: "rewind"`, until
+ *             you rewind back through it just after it threw you back)
  *   rewrite   walls that close and open on the level clock (Act III's
  *             rewritten station): a closing cell waits for whoever stands in
  *             it, and a rewrite only ever reopens the cells it closed
@@ -27,6 +28,8 @@
  * A set piece may also carry an `objective` (racks to burn, valves to turn
  * against a heat clock): stations you hold still in, a seal it opens when
  * they are all done, and a card drawn like a teach card.
+ *
+ * In NG+ every hazard is harder (`ngPlusHazard`).
  *
  * The set piece's teach room lives here too: its seal, the room it clears,
  * the enemies it adds, its goal and the card (drawn by the HUD).
@@ -110,6 +113,35 @@ export function turretShots(h, from, to) {
 }
 
 /**
+ * Spec decision 10: in NG+ the set pieces get harder. Per cycle (up to three)
+ * collapses and rotors run a quarter faster, vents and laser gates burn a
+ * little longer (never more than three quarters of their cycle, so a gap is
+ * always there), and turrets fire a fifth faster.
+ */
+export function ngPlusHazard(h, ngPlus = 0) {
+  const c = Math.min(3, Math.max(0, ngPlus | 0));
+  if (!c) return h;
+  const fast = 1 + 0.25 * c;
+  switch (h.type) {
+    case "collapse":
+      return { ...h, rate: h.rate * fast, delay: (h.delay ?? 0) / fast };
+    case "blade":
+      return { ...h, speed: h.speed * fast };
+    case "vent":
+      return { ...h, on: Math.min(h.period * 0.75, h.on * (1 + 0.15 * c)) };
+    case "gate":
+      return h.kind === "turret"
+        ? { ...h, interval: h.interval / (1 + 0.2 * c) }
+        : { ...h, on: Math.min(h.period * 0.75, h.on * (1 + 0.15 * c)) };
+    default:
+      return h;
+  }
+}
+
+/** Sim seconds after a loop throws you back in which a rewind breaks it. */
+export const LOOP_REWIND_WINDOW = 4;
+
+/**
  * Everything drawable or dangerous about a hazard at `clock`: the one place
  * the renderer, the HUD and the runtime read.
  */
@@ -177,6 +209,8 @@ export class ChronoHazards {
     this.inStasis = false;
     this._owned = {};
     this._hitAt = {};
+    this._loopedAt = {};
+    this._game = null;
     this._pending = {};
     this._simTime = 0;
     this._entered = new Set();
@@ -193,7 +227,8 @@ export class ChronoHazards {
     const piece = game.mode === "campaign" ? setPieceFor(entry) : null;
     if (!piece) return;
     this.piece = piece;
-    this.hazards = piece.hazards ?? [];
+    const ngPlus = game.campaign?.ngPlusCycle ?? 0;
+    this.hazards = (piece.hazards ?? []).map((h) => ngPlusHazard(h, ngPlus));
     const grid = game.map.grid;
     for (const [c, r] of piece.seals ?? []) if (grid[r]?.[c] === 0) grid[r][c] = SEAL_TILE;
     for (const [c, r] of piece.open ?? []) if (grid[r]?.[c] != null) grid[r][c] = 0;
@@ -230,6 +265,7 @@ export class ChronoHazards {
 
   /** Teach goals hear about kills, rewinds and catches from the powers. */
   notify(kind, data = {}) {
+    if (kind === "rewind") this._rewindThroughSeam();
     const t = this.teach;
     if (!t || t.done) return;
     const g = t.goal;
@@ -269,6 +305,7 @@ export class ChronoHazards {
       this.reset();
       return;
     }
+    this._game = game;
     const p = game.player;
     const prevClock = this.clock;
     this.clock += dt * (p.chronoActive ? HAZARD_CHRONO : 1);
@@ -402,18 +439,33 @@ export class ChronoHazards {
     // Out through the seam, not back the way you came.
     const side = (pt) => Math.sign((h.seamB.x - h.seamA.x) * (pt.y - h.seamA.y) - (h.seamB.y - h.seamA.y) * (pt.x - h.seamA.x));
     if (side(p) !== side(h.out)) return;
-    if (p.chronoActive) {
-      this.triggers[h.id] = this.clock; // the seam breaks
-      game.queueAriaMessage?.("loopBroken");
-      playChronoSound(game.audio, "seal");
+    if (p.chronoActive && (h.breaksOn ?? "shift") === "shift") {
+      this._breakLoop(h, game);
       return;
     }
     p.x = h.back.x;
     p.y = h.back.y;
+    // A rewind now takes you back through the seam, in time rather than space.
+    this._loopedAt[h.id] = this._simTime;
     playChronoSound(game.audio, "loop");
     if (!this._entered.has(`${h.id}:told`)) {
       this._entered.add(`${h.id}:told`);
-      game.queueAriaMessage?.("loopRepeats");
+      game.queueAriaMessage?.(h.breaksOn === "rewind" ? "loopRewind" : "loopRepeats");
+    }
+  }
+
+  _breakLoop(h, game = this._game) {
+    this.triggers[h.id] = this.clock; // the seam breaks
+    game?.queueAriaMessage?.("loopBroken");
+    playChronoSound(game?.audio, "seal");
+  }
+
+  /** IV-2: a rewind soon after the loop threw you back breaks a rewind-seamed loop. */
+  _rewindThroughSeam() {
+    for (const h of this.hazards) {
+      if (h.type !== "loop" || h.breaksOn !== "rewind" || this.triggers[h.id] != null) continue;
+      const at = this._loopedAt[h.id];
+      if (at != null && this._simTime - at <= LOOP_REWIND_WINDOW) this._breakLoop(h);
     }
   }
 

@@ -110,6 +110,8 @@ export class AISystem {
 
     for (const e of entities) {
       if (e.type !== "enemy" || !e.active || e.dissolving) continue;
+      // The Final Form's stopped time holds everyone else, and drives him.
+      if (chrono?.frozen?.(e)) continue;
 
       // Enemy-specific chrono scale
       const chronoMult = Number.isFinite(e.chronoMultiplier)
@@ -479,7 +481,7 @@ export class AISystem {
 
     // Chrono-bomb fuse + detonation
     for (const bomb of chronoBombs) {
-      if (!bomb.active) continue;
+      if (!bomb.active || chrono?.timeStopped?.()) continue;
       bomb.fuseLife += dt;
       if (bomb.fuseLife >= bomb.fuseDuration) {
         const bdx = player.x - bomb.x;

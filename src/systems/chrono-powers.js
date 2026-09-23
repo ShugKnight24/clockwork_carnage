@@ -27,6 +27,7 @@ import { ENEMY_TYPES } from "../data/enemies.js";
 import { Enemy } from "../../js/entities.js";
 import { hasLineOfSight, isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
+import { ElevenSeconds } from "./eleven-seconds.js";
 
 /** In the order they are granted, which is also the HUD's order. */
 export const POWER_IDS = ["foresight", "dash", "rewind", "timeLock"];
@@ -59,17 +60,79 @@ export const POWERS = {
  * @param {{ ngPlus?: number }} [opts]
  * @returns {string[]}
  */
-export function powersFor(act, level, { ngPlus = 0 } = {}) {
-  if (!getAct(act)) return [];
+export function powersFor(act, level, { ngPlus = 0, acts = ACTS } = {}) {
+  if (!acts.some((a) => a.id === act)) return [];
   if (ngPlus > 0) return [...POWER_IDS];
   const got = new Set();
-  for (const a of ACTS) {
+  for (const a of acts) {
     if (a.id > act) break;
     a.levels.forEach((l, i) => {
       if (a.id < act || i <= level) for (const g of l.grants ?? []) got.add(g);
     });
   }
   return POWER_IDS.filter((p) => got.has(p));
+}
+
+// ── Parting gifts ────────────────────────────────────────────────────────────
+
+/**
+ * Spec decision 9: an ally who stays behind in Act IV leaves a last upgrade
+ * to the power they gave you, in the briefing of the level they stay in.
+ * Each gift overrides fields of its power's POWERS entry.
+ *
+ *   Kael   Time-Lock holds 6 s, not 4        "Take the rest of it."
+ *   Nova   Rewind is back in 7 s; the echo stands 4 s
+ *   Rook   Chrono Dash costs 12 and rings nothing
+ *   Lyra   Foresight without a shift, 0.9 s ahead: the Final Form punishes
+ *          shifting, and she will not have you ringing the bell to see him
+ */
+export const GIFTS = {
+  timeLock: { from: "kael", duration: 6 },
+  rewind: { from: "nova", cooldown: 7, echoLife: 4 },
+  dash: { from: "rook", cost: 12, resonance: 0 },
+  foresight: { from: "lyra", horizon: 0.9, passive: true },
+};
+
+/**
+ * Every gift yours at `level` of `act`: named by a level entry's `gifts` at
+ * or before the slot, for a power you hold there, from an ally who has been
+ * present in a squad list by then. Only the allies the player actually
+ * recruited leave one.
+ * @returns {string[]} power ids, in POWER_IDS order
+ */
+export function giftsFor(act, level, { ngPlus = 0, acts = ACTS } = {}) {
+  const powers = powersFor(act, level, { ngPlus, acts });
+  const met = new Set();
+  const given = new Set();
+  for (const a of acts) {
+    if (a.id > act) break;
+    a.levels.forEach((l, i) => {
+      if (a.id === act && i > level) return;
+      for (const m of l.squad ?? []) met.add(m);
+      for (const g of l.gifts ?? []) if (met.has(GIFTS[g]?.from)) given.add(g);
+    });
+  }
+  return POWER_IDS.filter((p) => given.has(p) && powers.includes(p));
+}
+
+// ── NG+ hunters ──────────────────────────────────────────────────────────────
+
+/**
+ * Spec decision 10: in NG+ the hunter responses get harder. Per cycle, up to
+ * two: one more response allowed a level, a pack one bigger, and ten seconds
+ * off the cooldown.
+ */
+export const NG_PLUS_HUNT = { cycles: 2, cap: 1, pack: 1, cooldown: 10 };
+
+/** Caps, pack size and cooldown for a difficulty and NG+ cycle. */
+export function huntRules(difficulty, ngPlus = 0) {
+  const c = Math.min(NG_PLUS_HUNT.cycles, Math.max(0, ngPlus | 0));
+  return {
+    cap: hunterCap(difficulty) + c * NG_PLUS_HUNT.cap,
+    packMin: 2 + c * NG_PLUS_HUNT.pack,
+    packMax: 4 + c * NG_PLUS_HUNT.pack,
+    cooldown: RESONANCE.cooldown - c * NG_PLUS_HUNT.cooldown,
+  };
 }
 
 /** Engage cost and drain for a power set: Rook's tuning comes with the dash. */
@@ -129,9 +192,9 @@ export function newResonance() {
  * set off: "warn" (ARIA at 50), "whisper" (Voss at 75), "hunt" (at 100).
  * @param {ReturnType<typeof newResonance>} r
  * @param {{ dt: number, shifting: boolean, add?: number, policy: string,
- *   cap: number, bossLevel: boolean }} input
+ *   cap: number, bossLevel: boolean, cooldown?: number }} input
  */
-export function stepResonance(r, { dt, shifting, add = 0, policy, cap, bossLevel }) {
+export function stepResonance(r, { dt, shifting, add = 0, policy, cap, bossLevel, cooldown = RESONANCE.cooldown }) {
   const events = [];
   if (policy === "off") return events;
   const R = RESONANCE;
@@ -169,7 +232,7 @@ export function stepResonance(r, { dt, shifting, add = 0, policy, cap, bossLevel
     events.push("hunt");
     r.value = 0;
     r.responses++;
-    r.cooldown = R.cooldown;
+    r.cooldown = cooldown;
     r.warned = false;
     r.whispered = false;
   }
@@ -401,6 +464,12 @@ export class ChronoPowers {
     this._sampleIn = 0;
     this._announced = false;
     this._pool = "chronoShiftActivated";
+    this.gifts = [];
+    this.freshGifts = [];
+    this.rules = huntRules(1, 0);
+    /** The Final Form's stopped time (src/systems/eleven-seconds.js). */
+    this.stop = new ElevenSeconds();
+    this._decoyLine = 0;
   }
 
   /** Read the slot from the game and forget everything from the last level. */
@@ -411,10 +480,16 @@ export class ChronoPowers {
     const actDef = getAct(act);
     const entry = getActLevel(act, level);
     const difficulty = game.settings?.difficulty ?? 1;
-    this.powers = campaign ? powersFor(act, level, { ngPlus: game.campaign?.ngPlusCycle ?? 0 }) : [];
+    const ngPlus = campaign ? (game.campaign?.ngPlusCycle ?? 0) : 0;
+    this.powers = campaign ? powersFor(act, level, { ngPlus }) : [];
+    // What the allies who stayed behind left in the suit, and which of those
+    // arrived at this slot (for ARIA's line).
+    this.gifts = campaign ? giftsFor(act, level, { ngPlus }) : [];
+    this.freshGifts = campaign ? (entry?.gifts ?? []).filter((g) => this.gifts.includes(g)) : [];
     this.policy = campaign && actDef?.resonance ? hunterPolicy(game.settings?.hunterResponse ?? 0, difficulty) : "off";
     this.resonanceOn = this.policy !== "off";
-    this.cap = hunterCap(difficulty);
+    this.rules = huntRules(difficulty, ngPlus);
+    this.cap = this.rules.cap;
     this.bossLevel = !!entry?.boss;
     this.hunters = actDef?.hunters ?? [];
     this.act = act;
@@ -434,12 +509,48 @@ export class ChronoPowers {
     }
     this._sampleIn = 0;
     this._announced = false;
+    this._decoyLine = 0;
+    this.stop.reset();
     /** Powers granted at this slot, for the unlock line and teach card. */
     this.fresh = campaign && !(game.campaign?.ngPlusCycle > 0) ? (entry?.grants ?? []) : [];
   }
 
   has(id) {
     return this.powers.includes(id);
+  }
+
+  /** A power's numbers, with its parting gift applied once it has one. */
+  spec(id) {
+    const base = POWERS[id];
+    return this.gifts.includes(id) ? { ...base, ...GIFTS[id] } : base;
+  }
+
+  /** Foresight draws while you shift, or always once Lyra has left you hers. */
+  foresightOn(player) {
+    return this.has("foresight") && (!!player?.chronoActive || !!this.spec("foresight").passive);
+  }
+
+  // ── Eleven Seconds: the questions the rest of the game asks ──
+
+  /** Is this enemy held still (or driven) by the Final Form's stopped time? */
+  frozen(e) {
+    return this.stop.frozen(e);
+  }
+
+  playerFrozen() {
+    return this.stop.playerFrozen();
+  }
+
+  holdsProjectile(p) {
+    return this.stop.holdsProjectile(p);
+  }
+
+  damageScale(e) {
+    return this.stop.damageScale(e);
+  }
+
+  timeStopped() {
+    return this.stop.stopped;
   }
 
   engageCost() {
@@ -453,7 +564,7 @@ export class ChronoPowers {
   /** Seconds left on a power's cooldown, and its fraction remaining (0..1). */
   cooldown(id) {
     const left = this.cooldowns[id] ?? 0;
-    const full = POWERS[id]?.cooldown ?? 1;
+    const full = (POWERS[id] && this.spec(id).cooldown) ?? 1;
     return { left, frac: Math.max(0, Math.min(1, left / full)) };
   }
 
@@ -477,8 +588,8 @@ export class ChronoPowers {
    */
   tryChronoDash(game, dirX, dirY) {
     const p = game.player;
-    if (!p.chronoActive || !this.has("dash")) return false;
-    const spec = POWERS.dash;
+    if (!p.chronoActive || !this.has("dash") || this.stop.playerFrozen()) return false;
+    const spec = this.spec("dash");
     if (this.cooldowns.dash > 0 || p.isDashing || p.chronoEnergy < spec.cost) return false;
     p.chronoEnergy -= spec.cost;
     p.isDashing = true;
@@ -494,8 +605,8 @@ export class ChronoPowers {
 
   /** Nova's rewind: back three seconds, an echo left where you stood. */
   tryRewind(game) {
-    if (!this.has("rewind")) return false;
-    const spec = POWERS.rewind;
+    if (!this.has("rewind") || this.stop.playerFrozen()) return false;
+    const spec = this.spec("rewind");
     const p = game.player;
     if (this.cooldowns.rewind > 0 || p.chronoEnergy < spec.cost || p.alive === false) return false;
     const then = this.buffer.sampleAt(this.clock - spec.window);
@@ -521,13 +632,13 @@ export class ChronoPowers {
 
   /** Kael's Time-Lock. It does not need a shift. */
   tryTimeLock(game) {
-    if (!this.has("timeLock")) return false;
-    const spec = POWERS.timeLock;
+    if (!this.has("timeLock") || this.stop.playerFrozen()) return false;
+    const spec = this.spec("timeLock");
     const p = game.player;
     if (this.cooldowns.timeLock > 0 || p.chronoEnergy < spec.cost) return false;
     p.chronoEnergy -= spec.cost;
     this._releaseLock();
-    this.lock = makeTimeLock(p.x, p.y, p.angle, this.clock);
+    this.lock = makeTimeLock(p.x, p.y, p.angle, this.clock, spec);
     this.cooldowns.timeLock = spec.cooldown;
     this._ring(game, "timeLock");
     playChronoSound(game.audio, "lock");
@@ -603,12 +714,14 @@ export class ChronoPowers {
         policy: this.policy,
         cap: this.cap,
         bossLevel: this.bossLevel,
+        cooldown: this.rules.cooldown,
       });
       this._pendingRing = 0;
       for (const ev of events) this._onResonance(game, ev);
     }
 
     this._updatePhased(game, realDt);
+    this.stop.update(game, realDt);
   }
 
   /** Spawn a hunter pack out of a rift; `scripted` ignores the meter and caps. */
@@ -618,7 +731,8 @@ export class ChronoPowers {
     if (!cell) return [];
     const diff = game.getDifficultyMultipliers?.() ?? { healthMul: 1, damageMul: 1, speedMul: 1 };
     const scale = getAct(this.act)?.scale ?? 1;
-    const count = 2 + Math.floor(rng() * 3);
+    const { packMin, packMax } = this.rules;
+    const count = packMin + Math.floor(rng() * (packMax - packMin + 1));
     const pack = [];
     for (let i = 0; i < count; i++) {
       const type = this.hunters[i % this.hunters.length];
@@ -649,7 +763,8 @@ export class ChronoPowers {
 
   _ring(game, id) {
     if (!this.resonanceOn) return;
-    this._pendingRing = (this._pendingRing ?? 0) + (RESONANCE.events[id] ?? 0);
+    // Rook's last tune: a gifted Chrono Dash rings nothing.
+    this._pendingRing = (this._pendingRing ?? 0) + (this.spec(id)?.resonance ?? RESONANCE.events[id] ?? 0);
   }
 
   _onResonance(game, ev) {
@@ -658,7 +773,19 @@ export class ChronoPowers {
       const w = VOSS_WHISPER;
       game.ariaComms?.queueSquadMessage?.(w.speaker, "lordHearsYou", w.color, null, { voice: w.voice, emotion: w.emotion });
       playChronoSound(game.audio, "whisper");
-    } else if (ev === "hunt") this.huntNow(game);
+    } else if (ev === "hunt") {
+      // IV-4: the pack he sends goes after Nova instead, and she says so.
+      const decoy = game.chronoHazards?.piece?.decoy;
+      if (decoy) this._decoyTakes(game, decoy);
+      else this.huntNow(game);
+    }
+  }
+
+  /** The hunters a decoy draws off: a line from her, and nothing comes through. */
+  _decoyTakes(game, decoy) {
+    const lines = decoy.lines ?? [];
+    if (lines.length) game.squadComms?.say?.(decoy.member, lines[this._decoyLine++ % lines.length]);
+    playChronoSound(game.audio, "whisper");
   }
 
   _releaseLock() {
