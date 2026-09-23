@@ -238,7 +238,10 @@ function buildLoop() {
     const lamp = i === 0 ? 8 : 3;
     tile(g, t + 1, 27, lamp);
     tile(g, t + 1, 32, lamp);
-    lowWall(g, hm, t + 4, 29, t + 4, 30, LAYER.KNEE, 3);
+    // Planters against the kerbs, not in the middle: a low wall stops the
+    // raycaster, so the view down the boulevard stays clear.
+    lowTile(g, hm, t + 4, 26, LAYER.KNEE, 3);
+    lowTile(g, hm, t + 4, 33, LAYER.KNEE, 3);
     // Side doors into the tenements and the market.
     door(g, t + 2, 25);
     carve(g, t + 2, 24, t + 2, 24);
@@ -406,7 +409,7 @@ function buildContainmentLast() {
   }
 
   // Cover for a fighting retreat: waist-high barricades facing north.
-  lowWall(g, hm, 40, 28, 40, 31, LAYER.WAIST, 3);
+  lowWall(g, hm, 40, 27, 40, 28, LAYER.WAIST, 3);
   lowWall(g, hm, 33, 13, 33, 14, LAYER.WAIST, 3);
   lowWall(g, hm, 33, 45, 33, 46, LAYER.WAIST, 3);
   lowWall(g, hm, 45, 20, 45, 23, LAYER.WAIST, 3);
@@ -527,8 +530,8 @@ function buildNexusDecoy() {
   // Cover in the outer ring, off the mirror.
   lowWall(g, hm, 46, 16, 46, 18, LAYER.WAIST, 3);
   lowWall(g, hm, 50, 40, 50, 42, LAYER.WAIST, 3);
-  lowWall(g, hm, 45, 29, 45, 30, LAYER.KNEE, 3);
-  lowWall(g, hm, 28, 9, 30, 11, LAYER.WAIST, 3);
+  lowWall(g, hm, 45, 24, 45, 25, LAYER.KNEE, 3);
+  lowWall(g, hm, 28, 7, 29, 7, LAYER.WAIST, 3);
   lowWall(g, hm, 38, 48, 38, 50, LAYER.WAIST, 3);
 
   // Secrets: behind both storage rooms.
