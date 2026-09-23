@@ -481,7 +481,7 @@ export class ChronoHazards {
       for (const key of mine) {
         const r = Math.floor(key / 1000);
         const c = key % 1000;
-        if (grid[r]?.[c] === (h.wall ?? 2)) grid[r][c] = 0;
+        if (grid[r]?.[c] === (h.wall ?? 3)) grid[r][c] = 0;
       }
       mine.clear();
       return;
@@ -505,7 +505,7 @@ export class ChronoHazards {
           (e) => e.type === "enemy" && e.active && e.state !== "dead" && Math.floor(e.x) === c && Math.floor(e.y) === r,
         );
         if (occupied) continue;
-        grid[r][c] = h.wall ?? 2;
+        grid[r][c] = h.wall ?? 3;
         mine.add(key);
       }
     }

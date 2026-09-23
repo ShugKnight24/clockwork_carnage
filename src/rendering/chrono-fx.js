@@ -312,6 +312,17 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
       ctx.strokeStyle = st.on ? "rgba(255,40,70,0.9)" : st.priming ? "rgba(255,40,70,0.45)" : "rgba(255,40,70,0.15)";
       for (const z of [0.3, WAIST, -0.1]) worldLine(ctx, r, game, planeMul, yShift, h.a.x, h.a.y, h.b.x, h.b.y, z, !st.on);
     } else if (h.type === "gate" && h.kind === "turret") {
+      // A fixed stream's lane: a faint sight line, brightening the half
+      // second before each burst, so its rhythm can be read and crossed.
+      if (h.aim !== "player" && h.angle != null && !h.stopped) {
+        const next = Math.ceil(hz.clock / h.interval) * h.interval;
+        const firing = hz.clock - (next - h.interval) < (h.burst ?? 1) * (h.gap ?? 0) + 0.12;
+        const soon = next - hz.clock < 0.5;
+        const len = h.range ?? 12;
+        ctx.strokeStyle = firing ? "rgba(255,150,60,0.75)" : soon ? `rgba(255,60,40,${0.45 + 0.35 * Math.sin(now * 30)})` : "rgba(255,60,40,0.14)";
+        ctx.lineWidth = firing || soon ? 2 : 1;
+        worldLine(ctx, r, game, planeMul, yShift, h.x, h.y, h.x + Math.cos(h.angle) * len, h.y + Math.sin(h.angle) * len, WAIST, !(firing || soon));
+      }
       const pt = proj(r, game, planeMul, yShift, h.x, h.y, 0.05);
       if (visible(r, pt) && !h.stopped) {
         const s = Math.max(4, (r.height / pt.depth) * 0.22);
