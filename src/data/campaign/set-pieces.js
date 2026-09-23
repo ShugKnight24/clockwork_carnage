@@ -100,8 +100,9 @@ export const SET_PIECES = {
     ],
   },
 
-  // II-2 Salvage Deck. Foresight's teach room: the first hall, sealed, three
-  // phase stalkers blinking between its pillars. Two kills while shifting.
+  // II-2 Salvage Deck. Foresight's teach room: the receiving hall, sealed,
+  // three phase stalkers blinking between its pillars. Two kills while
+  // shifting open its doorways into the hangar.
   salvage_foresight: {
     teach: {
       power: "foresight",
@@ -109,66 +110,93 @@ export const SET_PIECES = {
         title: "FORESIGHT — SEE WHERE THEY'RE GOING",
         hint: "LYRA: \"Everyone studies the fights. I study the gaps.\" {SHIFT} and every enemy shows where it will be. Two kills while shifting opens the hall.",
       },
-      seal: [...cellsOf([13, 43, 16, 43]), ...cellsOf([27, 43, 32, 43]), ...cellsOf([43, 43, 46, 43])],
-      clear: [13, 44, 46, 52],
+      seal: [...cellsOf([22, 44, 24, 44]), ...cellsOf([35, 44, 37, 44])],
+      clear: [16, 45, 43, 55],
       spawn: [
-        { type: "phaseStalker", x: 20.5, y: 46.5 },
-        { type: "phaseStalker", x: 38.5, y: 46.5 },
-        { type: "phaseStalker", x: 29.5, y: 45.5 },
+        { type: "phaseStalker", x: 22.5, y: 46.5 },
+        { type: "phaseStalker", x: 37.5, y: 46.5 },
+        { type: "phaseStalker", x: 29.5, y: 46.5 },
       ],
       goal: { kind: "shiftKills", count: 2 },
     },
   },
 
-  // II-3 Maintenance Spine. Chrono Dash's teach corridor: a fan gallery of
-  // three rotors across the start room's mouth, too fast for a normal dash.
-  // Then the central catwalk collapses under you.
+  // II-3 Maintenance Spine. Chrono Dash's teach: a fan gallery of three
+  // rotors across the way in, too fast for a normal dash. Then the catwalk
+  // comes down behind you (landings on its two platforms), and the piston
+  // hall's three crushers slam in a wave: time them, or shift through.
   spine_fans: {
     hazards: [
-      { id: "fan_w", type: "blade", x: 27, y: 53, radius: 1.6, arms: 2, speed: 7, phase: 0, width: 0.3, damage: 20, dashable: true },
-      { id: "fan_c", type: "blade", x: 30, y: 53, radius: 1.6, arms: 2, speed: 7, phase: 1, width: 0.3, damage: 20, dashable: true },
-      { id: "fan_e", type: "blade", x: 33, y: 53, radius: 1.6, arms: 2, speed: 7, phase: 2, width: 0.3, damage: 20, dashable: true },
+      { id: "fan_w", type: "blade", x: 5.5, y: 45.5, radius: 1.6, arms: 2, speed: 7, phase: 0, width: 0.3, damage: 20, dashable: true },
+      { id: "fan_c", type: "blade", x: 8.5, y: 45.5, radius: 1.6, arms: 2, speed: 7, phase: 1, width: 0.3, damage: 20, dashable: true },
+      { id: "fan_e", type: "blade", x: 11.5, y: 45.5, radius: 1.6, arms: 2, speed: 7, phase: 2, width: 0.3, damage: 20, dashable: true },
       {
-        id: "catwalk", type: "collapse", trigger: [27, 41, 32, 43],
-        steps: rowSweep(27, 32, 43, 34), delay: 0.5, rate: 6, damage: 5, wall: RUBBLE, aria: "collapseChase",
+        id: "catwalk", type: "collapse", trigger: [14, 31, 16, 34],
+        steps: colSweep(29, 36, 14, 41), landings: [0, 10, 19],
+        delay: 1, rate: 4.4, wall: RUBBLE, aria: "collapseChase",
       },
+      { id: "piston_a", type: "piston", rect: [45, 30, 46, 35], period: 2.6, on: 1.1, phase: 0, damage: 12 },
+      { id: "piston_b", type: "piston", rect: [49, 30, 50, 35], period: 2.6, on: 1.1, phase: 0.85, damage: 12 },
+      { id: "piston_c", type: "piston", rect: [53, 30, 54, 35], period: 2.6, on: 1.1, phase: 1.7, damage: 12 },
     ],
-    // The catwalk's door is already blown.
-    open: [[29, 38]],
     teach: {
       power: "dash",
       card: {
         title: "CHRONO DASH — THROUGH THE FANS",
         hint: "ROOK: \"Quieter now. Cheaper too.\" {SHIFT}, then {DASH}: twice as far and nothing touches you. 20 chrono a dash.",
       },
-      goal: { kind: "reach", rect: [15, 44, 44, 49] },
+      goal: { kind: "reach", rect: [3, 36, 13, 41] },
     },
   },
 
-  // II-4 Transit Loop. Trains still cross both side shafts on a schedule
-  // nobody wrote. A placeholder for the junction set piece.
+  // II-4 Transit Loop. Two trains still run the line across the middle on a
+  // schedule nobody wrote, eastbound on the north track, westbound on the
+  // south, and every way north crosses it. Nova is on the channel by the
+  // junction, and by the far platform she's in.
   transit_crossings: {
     hazards: [
-      { id: "train_w", type: "gate", kind: "laser", a: { x: 7, y: 30.5 }, b: { x: 14, y: 30.5 }, period: 4, on: 1.6, phase: 0, damage: 15 },
-      { id: "train_e", type: "gate", kind: "laser", a: { x: 46, y: 30.5 }, b: { x: 53, y: 30.5 }, period: 4, on: 1.6, phase: 2, damage: 15 },
+      {
+        id: "train_east", type: "train", a: { x: 4, y: 29 }, b: { x: 56, y: 29 }, half: 1,
+        speed: 15, length: 9, period: 6, phase: 0, damage: 20,
+      },
+      {
+        id: "train_west", type: "train", a: { x: 56, y: 31 }, b: { x: 4, y: 31 }, half: 1,
+        speed: 15, length: 9, period: 6, phase: 3, damage: 20,
+      },
+    ],
+    scripted: [
+      {
+        id: "nova_junction", rect: [27, 32, 32, 38],
+        squad: { member: "nova", text: "Two trains, six seconds apart. Go on the gap, not on the horn. Or don't. I'm already across.", joining: true },
+      },
+      {
+        id: "nova_platform", rect: [35, 10, 48, 19],
+        squad: { member: "nova", text: "Fine. I'll run with you. For now.", joining: true },
+      },
     ],
   },
 
   // II-5 The Greenhouse. The west glasshouse, frozen at the instant of the
   // collapse: water hanging in the air. Story, not threat.
   greenhouse_stasis: {
-    hazards: [{ id: "glasshouse", type: "stasis", rect: [4, 23, 19, 28], motes: 48 }],
-    enter: { rect: [4, 23, 19, 28], aria: "stasisRoom" },
+    hazards: [{ id: "glasshouse", type: "stasis", rect: [3, 20, 15, 36], motes: 72 }],
+    enter: { rect: [3, 20, 15, 36], aria: "stasisRoom" },
   },
 
-  // II-6 The Precinct. Rewind's teach room: the start room is sealed and an
-  // old precinct sentry fires a burst you cannot dodge. Take the hit, then
-  // un-take it; the echo you leave draws its next burst.
+  // II-6 The Precinct. Rewind's teach room: the locker room you clocked in
+  // at, sealed, and an old precinct sentry whose burst you cannot dodge.
+  // Take the hit, then un-take it; the echo you leave draws its next burst.
+  // Then Kael's line: a turret stream straight down the lobby, which every
+  // way east has to cross between its bursts.
   precinct_rewind: {
     hazards: [
       {
-        id: "precinct_sentry", type: "gate", kind: "turret", x: 39.4, y: 53.4, aim: "player",
+        id: "precinct_sentry", type: "gate", kind: "turret", x: 22.4, y: 39.4, aim: "player",
         interval: 3.2, burst: 4, gap: 0.09, speed: 24, damage: 7, range: 14,
+      },
+      {
+        id: "lobby_stream", type: "gate", kind: "turret", x: 35.5, y: 49.4, angle: Math.PI / 2,
+        interval: 2.6, burst: 6, gap: 0.1, speed: 18, damage: 9, range: 10,
       },
     ],
     teach: {
@@ -177,18 +205,18 @@ export const SET_PIECES = {
         title: "REWIND — GO BACK THREE SECONDS",
         hint: "NOVA: \"Take the hit. Then un-take it.\" Let the sentry land a burst, then press {REWIND}.",
       },
-      seal: cellsOf([20, 52, 39, 52]),
+      seal: [[26, 41], [26, 42], ...cellsOf([19, 47, 21, 47])],
       goal: { kind: "rewind", damage: 20 },
     },
   },
 
-  // II-7 The Foundry. Time-Lock's teach corridor: a sentry stream across the
-  // start room's mouth, a line of fire you cannot cross. Five caught rounds
-  // open the seal and shut the sentry down before the Hound.
+  // II-7 The Foundry. Time-Lock's teach corridor: a sentry stream across it,
+  // a line of fire you cannot cross. Five caught rounds open the seal into
+  // the rack hall and shut the sentry down before the Hound.
   foundry_lock: {
     hazards: [
       {
-        id: "foundry_sentry", type: "gate", kind: "turret", x: 26.3, y: 54.5, angle: 0,
+        id: "foundry_sentry", type: "gate", kind: "turret", x: 26.5, y: 46.5, angle: 0,
         interval: 0.16, burst: 1, speed: 16, damage: 12, range: 12,
       },
     ],
@@ -198,7 +226,7 @@ export const SET_PIECES = {
         title: "TIME-LOCK — FREEZE A WALL OF TIME",
         hint: "KAEL: \"Hold it with me.\" Face the sentry and press {LOCK}. Catch five rounds.",
       },
-      seal: cellsOf([26, 53, 33, 53]),
+      seal: cellsOf([27, 43, 32, 43]),
       goal: { kind: "catches", count: 5 },
       stopOnDone: ["foundry_sentry"],
     },

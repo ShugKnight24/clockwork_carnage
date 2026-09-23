@@ -12,6 +12,8 @@ import {
   collapseHit,
   collapseStepAt,
   collapseLanding,
+  trainSpan,
+  trainHits,
 } from "../../src/systems/chrono-hazards.js";
 import { SET_PIECES, SEAL_TILE, setPieceFor, rotateSetPiece } from "../../src/data/campaign/set-pieces.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
@@ -130,17 +132,44 @@ describe("hazards are passable with a shift", () => {
   });
 
   it("a train crossing is the same: wider in a shift", () => {
-    const gate = SET_PIECES.transit_crossings.hazards[0];
-    const hitGate = (clock, x, y) => cycleOn(gate, clock) && Math.abs(y - gate.a.y) < 0.4;
-    const across = { x: 10, y0: 32, y1: 29 };
-    const normal = safeFraction(gate.period, (start) => crossing({ ...across, speed: WALK, start, hit: hitGate }));
-    const shifted = safeFraction(gate.period, (start) => crossing({ ...across, speed: WALK, start, shift: 10, hit: hitGate }));
+    const [east, west] = SET_PIECES.transit_crossings.hazards;
+    const hitTrain = (clock, x, y) => trainHits(east, clock, x, y) || trainHits(west, clock, x, y);
+    const across = { x: 30, y0: 33.5, y1: 26.5 }; // the junction, south to north
+    const normal = safeFraction(east.period, (start) => crossing({ ...across, speed: WALK, start, hit: hitTrain }));
+    const shifted = safeFraction(east.period, (start) => crossing({ ...across, speed: WALK, start, shift: 10, hit: hitTrain }));
+    expect(normal).toBeGreaterThan(0.2); // readable: most gaps are walkable
+    expect(normal).toBeLessThan(0.9); // but the timetable matters
     expect(shifted).toBeGreaterThan(normal);
   });
 
-  it("a Time-Lock from the start tile, facing the sentry, lies across the Foundry's stream", () => {
+  it("a train sweeps its whole line on a timetable, then the line is empty", () => {
+    const [east] = SET_PIECES.transit_crossings.hazards;
+    expect(trainSpan(east, 0)).toEqual({ head: 0, tail: 0, len: 52 });
+    const mid = trainSpan(east, 2);
+    expect(mid.head).toBeCloseTo(30);
+    expect(mid.tail).toBeCloseTo(21);
+    expect(trainHits(east, 2, 4 + 25, 29)).toBe(true);
+    expect(trainHits(east, 2, 4 + 25, 31.6)).toBe(false); // the other track
+    expect(trainSpan(east, 5.5)).toBeNull(); // gone, until the next run
+    expect(hazardState(east, 4.8).horn).toBe(true);
+  });
+
+  it("a piston is wall on its cycle, and a shift widens its gaps", () => {
+    // Each crusher on its own: the gaps between them are safe to stand in.
+    for (const h of SET_PIECES.spine_fans.hazards.filter((x) => x.type === "piston")) {
+      const [c1, , c2] = h.rect;
+      const hit = (clock, _x, x) => cycleOn(h, clock) && x + 0.3 > c1 && x - 0.3 < c2 + 1;
+      const cross = (start, shift) => crossing({ x: 0, y0: c1 - 1, y1: c2 + 2, speed: WALK, start, shift, hit });
+      const normal = safeFraction(h.period, (start) => cross(start, 0));
+      const shifted = safeFraction(h.period, (start) => cross(start, 10));
+      expect(normal, h.id).toBeGreaterThan(0.15);
+      expect(shifted - normal, h.id).toBeGreaterThan(0.15);
+    }
+  });
+
+  it("a Time-Lock from the corridor, facing the sentry, lies across the Foundry's stream", () => {
     const sentry = SET_PIECES.foundry_lock.hazards[0];
-    const lock = makeTimeLock(29.5, 55.5, sentry.angle + Math.PI, 0);
+    const lock = makeTimeLock(sentry.x + 3, sentry.y + 1.5, sentry.angle + Math.PI, 0);
     const end = { x: sentry.x + Math.cos(sentry.angle) * 8, y: sentry.y + Math.sin(sentry.angle) * 8 };
     expect(lockCrossing(lock, sentry.x, sentry.y, end.x, end.y)).not.toBeNull();
   });
@@ -436,6 +465,45 @@ describe("ChronoHazards runtime", () => {
     hz.update(game, 0.016);
     expect(hunts).toEqual([{ scripted: true }]);
     expect(game.said).toEqual([["lyra", s.squad.text]]);
+  });
+
+  it("slams a piston shut on its cycle, never on you: a hit and a shove instead", () => {
+    const { game, hz } = levelGame(2, 2);
+    const h = hz.hazards.find((x) => x.id === "piston_a");
+    const [c1, r1, c2, r2] = h.rect;
+    const p = game.player;
+    p.x = c1 + 1;
+    p.y = r1 + 2.5;
+    hz.clock = h.period - (h.phase ?? 0) - 0.01; // about to close
+    hz.update(game, 0.02);
+    expect(game.hits).toEqual([h.damage]);
+    expect(p.x < c1 || p.x > c2 + 1).toBe(true);
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) expect(game.map.grid[r][c]).not.toBe(0);
+    hz.update(game, h.on + 0.05); // open again
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) expect(game.map.grid[r][c]).toBe(0);
+  });
+
+  it("a train knocks you clear of its track, once", () => {
+    const { game, hz } = levelGame(2, 3);
+    const east = hz.hazards.find((x) => x.id === "train_east");
+    const p = game.player;
+    p.x = 29.5;
+    p.y = 29.2;
+    hz.clock = 2 - 0.01; // the head is at x = 34, the tail at 25
+    hz.update(game, 0.01);
+    expect(game.hits).toEqual([east.damage]);
+    expect(trainHits(east, hz.clock, p.x, p.y)).toBe(false);
+    expect(game.map.grid[Math.floor(p.y)][Math.floor(p.x)]).toBe(0);
+  });
+
+  it("lets Nova on the channel mid-level in the Transit Loop", () => {
+    const { game, hz } = levelGame(2, 3);
+    const s = setPieceFor(ACTS[1].levels[3]).scripted.find((x) => x.id === "nova_junction");
+    game.squadComms.say = (m, t, o) => game.said.push([m, t, o]);
+    game.player.x = s.rect[0] + 1.5;
+    game.player.y = s.rect[1] + 1.5;
+    hz.update(game, 0.016);
+    expect(game.said).toEqual([["nova", s.squad.text, { joining: true }]]);
   });
 
   it("lays nothing over a level outside the campaign", () => {

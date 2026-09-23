@@ -196,6 +196,9 @@ export const ACTS = [
     id: 2,
     title: "THE GATHERING",
     palette: 2,
+    // Spec §7's roster, plus what its levels name: II-1's Act I leftovers
+    // (glitchlings, phantoms), the Precinct's sentinels and the Foundry's
+    // rift leapers and echo drones.
     roster: [
       "henchman",
       "corruptCop",
@@ -206,14 +209,14 @@ export const ACTS = [
       "beast",
       "shieldCommander",
       "temporalSummoner",
+      "glitchling",
+      "phantom",
+      "sentinel",
+      "riftLeaper",
+      "echoDrone",
     ],
     substitutes: {
-      glitchling: "phaseStalker",
-      phantom: "henchman",
-      sentinel: "corruptCop",
-      riftLeaper: "phaseStalker",
       timeWarden: "temporalEngineer",
-      echoDrone: "drone",
     },
     scale: 1.2,
     boss: {
@@ -227,39 +230,45 @@ export const ACTS = [
     hunters: ["riftLeaper", "echoDrone"],
     intro: ["act2_transition_fb", "gathering_extraction"],
     outro: ["gathering_finale", "lyra_reveal"],
-    // Placeholder maps per spec §16.2 until the Act II maps are built.
+    // Its own maps (src/data/levels/act2-maps.js): six new, and the Precinct,
+    // a remix of the tutorial station.
     levels: levels([
       // Evac Shafts. Lyra guides you out before she has a name.
       level("evac_shafts", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" }, setPiece: "evac_shafts", seed: 20101 }),
       // Salvage Deck. Lyra names herself in the lift, so the old Act 3
       // Analyst L.M. and encrypted-channel barks are retired.
       // Lyra's Foresight is loaded in the lift, and taught in the first hall.
-      level("containment", ["gathering_lyra", "gathering_rook"], ["lyra"], {
+      level("salvage_deck", ["gathering_lyra", "gathering_rook"], ["lyra"], {
         grants: ["foresight"],
         setPiece: "salvage_foresight",
+        seed: 20203,
       }),
       // Maintenance Spine.
       // Rook tunes the shard before the level: Chrono Dash and a quieter shift.
-      level("server_farm", ["gathering_rook_shard", "the_hunt_begins"], ["lyra", "rook"], {
+      level("maintenance_spine", ["gathering_rook_shard", "the_hunt_begins"], ["lyra", "rook"], {
         grants: ["dash"],
         setPiece: "spine_fans",
+        seed: 20305,
       }),
       // Transit Loop.
-      level("nexus", ["gathering_nova"], ["lyra", "rook"], { setPiece: "transit_crossings" }),
+      level("transit_loop", ["gathering_nova"], ["lyra", "rook"], { setPiece: "transit_crossings", seed: 20407 }),
       // The Greenhouse.
-      level("research", ["gathering_greenhouse"], ["lyra", "rook", "nova"], { setPiece: "greenhouse_stasis" }),
+      level("greenhouse", ["gathering_greenhouse"], ["lyra", "rook", "nova"], { setPiece: "greenhouse_stasis", seed: 20509 }),
       // The Precinct.
       // Nova's rewind came back with her after the Hound; the Precinct's
       // sentry teaches it.
-      level("checkpoint", ["hound_attack", "gathering_kael"], ["lyra", "rook", "nova"], {
+      level("precinct", ["hound_attack", "gathering_kael"], ["lyra", "rook", "nova"], {
         grants: ["rewind"],
         setPiece: "precinct_rewind",
+        seed: 20611,
       }),
-      // The Foundry, with the Hound in the Core's boss slot.
+      // The Foundry, the Hound's den.
       // Kael's shield, wired into the shard, meets the Foundry's sentry line.
-      level("core", ["gathering_kael_joins", "hound_intro"], [...ALL], {
+      level("foundry", ["gathering_kael_joins", "hound_intro"], [...ALL], {
         grants: ["timeLock"],
         setPiece: "foundry_lock",
+        seed: 20713,
+        boss: true,
       }),
     ]),
   },

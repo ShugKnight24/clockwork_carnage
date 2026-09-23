@@ -170,14 +170,16 @@ export class SquadCommsController {
 
   /**
    * A scripted line for one member (a set piece's beat), under the level's
-   * callsign. Silent when that member is not here.
+   * callsign. Silent when that member is not here, unless the line is the
+   * one where they join the channel mid-level (`joining`: Nova in II-4).
    * @param {SquadMember} member
    * @param {string} text
+   * @param {{ joining?: boolean }} [opts]
    */
-  say(member, text) {
+  say(member, text, { joining = false } = {}) {
     const { act, level } = this.context;
     const cfg = SQUAD_CONFIG[member];
-    if (!cfg || !getPresentSquad(act, level).includes(member)) return false;
+    if (!cfg || (!joining && !getPresentSquad(act, level).includes(member))) return false;
     if (!this.ariaComms?.queueSquadMessage) return false;
     const label = squadCallsign(act, level, member);
     this.ariaComms.queueSquadMessage(label, null, label === cfg.label ? cfg.color : "#4488ff", text);

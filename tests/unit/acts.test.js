@@ -142,7 +142,7 @@ describe("the Gathering (Act II)", () => {
 
   it("stands on its own maps: six new and the Precinct", () => {
     expect(act.levels.map((l) => l.map)).toEqual([
-      "evac_shafts", "containment", "server_farm", "nexus", "research", "checkpoint", "core",
+      "evac_shafts", "salvage_deck", "maintenance_spine", "transit_loop", "greenhouse", "precinct", "foundry",
     ]);
   });
 

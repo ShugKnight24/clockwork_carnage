@@ -17,6 +17,10 @@
  *   vent      a zone that burns for `on` seconds out of every `period`
  *   gate      a laser line on the same cycle, or a turret firing real rounds
  *             a Time-Lock can catch
+ *   piston    cells that slam shut for `on` seconds of every `period`: they
+ *             never close on you; they hit you and shove you out instead
+ *   train     a train running down a line on a timetable: its body sweeps
+ *             the track from `a` to `b`, and knocks you off it
  *   stasis    a room frozen at one instant: story, never damage. One that
  *             `holds` keeps the enemies inside it frozen mid-step until you
  *             leave through its `release` zone or hurt one of them
@@ -46,7 +50,7 @@ export const HAZARD_CHRONO = 0.15;
 /** The player's body, for hazard contact. */
 const BODY = 0.3;
 /** Seconds between two hits from the same hazard (sim time). */
-const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, piston: 0.6 };
+const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, piston: 0.6, train: 1 };
 
 /**
  * What the rubble costs when a collapse catches you, by difficulty (Easy,
@@ -152,6 +156,30 @@ function segDist(a, b, x, y) {
 }
 
 /**
+ * A train's body along its line at `clock`, as distances from `a`: the
+ * head and the tail, or null while the line is empty between runs.
+ */
+export function trainSpan(h, clock) {
+  const len = Math.hypot(h.b.x - h.a.x, h.b.y - h.a.y);
+  const t = (((clock + (h.phase ?? 0)) % h.period) + h.period) % h.period;
+  const head = t * h.speed;
+  const tail = head - h.length;
+  if (tail >= len) return null;
+  return { head: Math.min(head, len), tail: Math.max(0, tail), len };
+}
+
+/** Does the train touch a body at (x, y)? */
+export function trainHits(h, clock, x, y, body = BODY) {
+  const span = trainSpan(h, clock);
+  if (!span) return false;
+  const ux = (h.b.x - h.a.x) / span.len;
+  const uy = (h.b.y - h.a.y) / span.len;
+  const along = (x - h.a.x) * ux + (y - h.a.y) * uy;
+  const across = Math.abs(-(x - h.a.x) * uy + (y - h.a.y) * ux);
+  return across < h.half + body && along > span.tail - body && along < span.head + body;
+}
+
+/**
  * Shot times of a turret in (from, to]: every `interval` a burst of `burst`
  * rounds `gap` apart.
  */
@@ -212,6 +240,13 @@ export function hazardState(h, clock, triggeredAt = null) {
       return { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + (h.warn ?? 0.5)) };
     case "gate":
       return h.kind === "turret" ? { firing: true } : { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + (h.warn ?? 0.5)) };
+    case "piston":
+      return { closed: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + 0.5) };
+    case "train": {
+      const span = trainSpan(h, clock);
+      // The horn: the next run is under a second and a half away.
+      return { span, horn: !span && !!trainSpan(h, clock + 1.5) };
+    }
     case "loop":
       return { broken: triggeredAt != null };
     case "stasis":
@@ -389,6 +424,10 @@ export class ChronoHazards {
         if (this.triggers[h.id] == null && cellIn(h.rect, p.x, p.y)) this.inStasis = true;
       } else if (h.type === "loop") this._loop(game, h);
       else if (h.type === "rewrite") this._rewrite(game, h);
+      else if (h.type === "piston") this._piston(game, h);
+      else if (h.type === "train") {
+        if (trainHits(h, this.clock, p.x, p.y)) this._trainHit(game, h);
+      }
     }
     if (this.objective) this._updateObjective(game, dt, this.clock - prevClock);
 
@@ -396,7 +435,7 @@ export class ChronoHazards {
       if (this._entered.has(s.id) || !cellIn(s.rect, p.x, p.y)) continue;
       this._entered.add(s.id);
       if (s.hunt && game.chronoPowers?.resonanceOn) game.chronoPowers.huntNow(game, { scripted: true });
-      if (s.squad) game.squadComms?.say?.(s.squad.member, s.squad.text);
+      if (s.squad) game.squadComms?.say?.(s.squad.member, s.squad.text, { joining: !!s.squad.joining });
     }
     const enter = this.piece.enter;
     if (enter && !this._entered.has("enter") && cellIn(enter.rect, p.x, p.y)) {
@@ -428,6 +467,75 @@ export class ChronoHazards {
     game.damagePlayer?.(h.damage);
     if (h.type === "blade") playChronoSound(game.audio, "blade");
     else if (h.type === "vent") playChronoSound(game.audio, "vent");
+  }
+
+  /**
+   * A crusher: its cells are wall while it is closed. It never closes on you
+   * or an enemy; if you are under it when it comes down it hits you and
+   * shoves you out the nearer side.
+   */
+  _piston(game, h) {
+    const grid = game.map.grid;
+    const mine = (this._filled[h.id] ??= new Set());
+    if (!cycleOn(h, this.clock)) {
+      for (const key of mine) {
+        const r = Math.floor(key / 1000);
+        const c = key % 1000;
+        if (grid[r]?.[c] === (h.wall ?? 2)) grid[r][c] = 0;
+      }
+      mine.clear();
+      return;
+    }
+    const p = game.player;
+    const [c1, r1, c2, r2] = h.rect;
+    if (bodyIn(h.rect, p.x, p.y)) {
+      this._hit(game, h);
+      // Out the nearer side, along the way you were crossing.
+      const wide = c2 - c1 >= r2 - r1;
+      if (!wide) p.x = p.x - c1 < c2 + 1 - p.x ? c1 - BODY - 0.05 : c2 + 1 + BODY + 0.05;
+      else p.y = p.y - r1 < r2 + 1 - p.y ? r1 - BODY - 0.05 : r2 + 1 + BODY + 0.05;
+      playChronoSound(game.audio, "collapse");
+    }
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) {
+        const key = r * 1000 + c;
+        if (mine.has(key) || grid[r]?.[c] !== 0) continue;
+        if (Math.floor(p.x) === c && Math.floor(p.y) === r) continue;
+        const occupied = game.entities.some(
+          (e) => e.type === "enemy" && e.active && e.state !== "dead" && Math.floor(e.x) === c && Math.floor(e.y) === r,
+        );
+        if (occupied) continue;
+        grid[r][c] = h.wall ?? 2;
+        mine.add(key);
+      }
+    }
+  }
+
+  /** A train: one hit, and it throws you clear of the track. */
+  _trainHit(game, h) {
+    const p = game.player;
+    const last = this._hitAt[h.id];
+    if (last != null && this._simTime - last < REHIT.train) return;
+    this._hit(game, h);
+    const len = Math.hypot(h.b.x - h.a.x, h.b.y - h.a.y);
+    const nx = -(h.b.y - h.a.y) / len;
+    const ny = (h.b.x - h.a.x) / len;
+    const side = (p.x - h.a.x) * nx + (p.y - h.a.y) * ny >= 0 ? 1 : -1;
+    const open = (x, y) => game.map.grid[Math.floor(y)]?.[Math.floor(x)] === 0;
+    for (const s of [side, -side]) {
+      for (const d of [h.half + 0.45, h.half + 1.45, h.half + 2.45]) {
+        const across = (p.x - h.a.x) * nx + (p.y - h.a.y) * ny;
+        const x = p.x + nx * (s * d - across);
+        const y = p.y + ny * (s * d - across);
+        if (open(x, y) && !trainHits(h, this.clock, x, y)) {
+          p.x = x;
+          p.y = y;
+          game.screenShake = Math.max(game.screenShake ?? 0, 9);
+          playChronoSound(game.audio, "collapse");
+          return;
+        }
+      }
+    }
   }
 
   /**

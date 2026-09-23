@@ -10,7 +10,8 @@
  *   Time-Lock   a pane of blue, frozen time; the rounds it holds hang in it
  *   Rewind      the echo you left behind, a flickering pink figure
  *   hazards     fans, vents, laser gates and sentries, the collapse's warning
- *               band, stasis motes, the loop's seam, hunter rifts
+ *               band, pistons' footprints, trains, stasis motes, the loop's
+ *               seam, hunter rifts
  *   the Hound   a heat-shimmer drawn from a stuttered position with a trail
  *               of afterimages and scorched footprints; solid while you shift
  *
@@ -329,6 +330,20 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
           floorMark(ctx, r, game, planeMul, yShift, c + 0.5, rr + 0.5, 0.45, `rgba(255,40,40,${0.25 + 0.2 * Math.sin(now * 12)})`);
         }
       }
+    } else if (h.type === "piston") {
+      // Closed, the crusher is wall (the grid draws it). Open, its footprint
+      // is striped on the deck, and flashes the half-second before it slams.
+      if (st.closed) continue;
+      const [c1, r1, c2, r2] = h.rect;
+      const warn = st.priming ? 0.35 + 0.3 * Math.sin(now * 24) : 0.14;
+      for (let row = r1; row <= r2; row++) {
+        for (let col = c1; col <= c2; col++) {
+          if (game.map.grid[row]?.[col] !== 0) continue;
+          floorMark(ctx, r, game, planeMul, yShift, col + 0.5, row + 0.5, 0.42, `rgba(255,${st.priming ? 60 : 150},30,${warn})`);
+        }
+      }
+    } else if (h.type === "train") {
+      drawTrain(ctx, r, game, planeMul, yShift, h, st, now);
     } else if (h.type === "stasis") {
       // Debris and water, hanging where the collapse left them.
       const [c1, r1, c2, r2] = h.rect;
@@ -460,6 +475,60 @@ function drawForm2(ctx, r, game, planeMul, yShift) {
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/**
+ * A train on its line: a long dark carriage, its two flanks and nose drawn
+ * as panes with a strip of lit windows, a headlight, and warning lamps on
+ * the track while the horn sounds (the next run is close).
+ */
+function drawTrain(ctx, r, game, planeMul, yShift, h, st, now) {
+  const len = Math.hypot(h.b.x - h.a.x, h.b.y - h.a.y);
+  const ux = (h.b.x - h.a.x) / len;
+  const uy = (h.b.y - h.a.y) / len;
+  const nx = -uy;
+  const ny = ux;
+  const at = (d, side) => ({ x: h.a.x + ux * d + nx * side, y: h.a.y + uy * d + ny * side });
+  if (!st.span) {
+    if (!st.horn) return;
+    // Lamps along the track edge, blinking in a run toward the train's way.
+    const blink = 0.5 + 0.5 * Math.sin(now * 14);
+    for (let d = 2; d < len; d += 4) {
+      for (const side of [-h.half, h.half]) {
+        const p = at(d, side);
+        floorMark(ctx, r, game, planeMul, yShift, p.x, p.y, 0.16, `rgba(255,60,40,${0.3 + 0.5 * blink})`);
+      }
+    }
+    return;
+  }
+  const { head, tail } = st.span;
+  if (head - tail < 0.05) return;
+  const w = h.half * 0.92;
+  const TOP = -0.3;
+  const body = "rgba(34,30,28,0.97)";
+  // Flanks: dark carriage with a band of lit windows.
+  for (const side of [-w, w]) {
+    const a = at(tail, side);
+    const b = at(head, side);
+    worldPane(ctx, r, game, planeMul, yShift, a.x, a.y, b.x, b.y, TOP, body, Math.max(4, Math.ceil((head - tail) * 2)));
+    worldPane(ctx, r, game, planeMul, yShift, a.x, a.y, b.x, b.y, -0.02, (u) => ((u * (head - tail)) % 1.2 < 0.8 ? "rgba(255,214,140,0.9)" : "rgba(40,36,34,0.95)"),
+      Math.max(6, Math.ceil((head - tail) * 3)), 0.12);
+  }
+  // The nose, and its headlight.
+  const n0 = at(head, -w);
+  const n1 = at(head, w);
+  worldPane(ctx, r, game, planeMul, yShift, n0.x, n0.y, n1.x, n1.y, TOP, "rgba(60,54,48,0.98)", 4);
+  const lamp = proj(r, game, planeMul, yShift, at(head + 0.05, 0).x, at(head + 0.05, 0).y, 0.15);
+  if (visible(r, lamp)) {
+    const s = Math.max(3, (r.height / lamp.depth) * 0.12);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = "rgba(255,240,200,0.9)";
+    ctx.beginPath();
+    ctx.arc(lamp.x, lamp.y, s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 function drawRifts(ctx, r, game, planeMul, yShift) {

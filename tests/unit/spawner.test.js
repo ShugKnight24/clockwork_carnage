@@ -450,12 +450,10 @@ describe("applyActEnemyRoster", () => {
     expect(entities[1].enemyType).toBe("sentinel");
   });
 
-  it("substitutes out-of-roster enemies for act 2", () => {
-    const entities = [makeEnemy("glitchling"), makeEnemy("phantom"), makeEnemy("drone")];
+  it("substitutes out-of-roster enemies for act 2, and keeps what its levels name", () => {
+    const entities = [makeEnemy("timeWarden"), makeEnemy("glitchling"), makeEnemy("echoDrone"), makeEnemy("drone")];
     applyActEnemyRoster(entities, 2, diff);
-    expect(entities[0].enemyType).toBe("phaseStalker");
-    expect(entities[1].enemyType).toBe("henchman");
-    expect(entities[2].enemyType).toBe("drone");
+    expect(entities.map((e) => e.enemyType)).toEqual(["temporalEngineer", "glitchling", "echoDrone", "drone"]);
   });
 
   it("substitutes out-of-roster enemies for act 3", () => {
