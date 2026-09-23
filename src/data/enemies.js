@@ -96,7 +96,7 @@ export const ENEMY_TYPES = {
     attackType: "melee",
     attackWindupMs: 450,
     ai: "ambush",
-    chargeCooldown: 5000, // ms between charges
+    chargeCooldown: 5, // seconds between charges (ai.js counts it down in dt)
     chargeWindup: 0.6, // seconds to telegraph before sprint
     chargeDuration: 0.9, // seconds of sprint
     chargeSpeedMul: 3.0, // speed multiplier during charge
