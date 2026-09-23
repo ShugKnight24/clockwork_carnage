@@ -427,6 +427,7 @@ export class ChronoPowers {
     this.rifts = [];
     this.clock = 0;
     this.caughtTotal = 0;
+    if (game.player) game.player.chronoDashMult = 1;
     this._sampleIn = 0;
     this._announced = false;
     /** Powers granted at this slot, for the unlock line and teach card. */
@@ -502,7 +503,9 @@ export class ChronoPowers {
     p.y = then.y;
     p.angle = then.angle;
     p.health = rewindHealth(p.health, then.health);
+    // A rewind cancels a dash in flight, Chrono Dash or not.
     p.isDashing = false;
+    p.chronoDashMult = 1;
     this.buffer.clear();
     this.cooldowns.rewind = spec.cooldown;
     this._ring(game, "rewind");

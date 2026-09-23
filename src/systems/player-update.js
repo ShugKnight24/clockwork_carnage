@@ -389,6 +389,7 @@ export class PlayerUpdateSystem {
     p.dashDirX = dirX;
     p.dashDirY = dirY;
     p.dashCooldown = 0.4;
+    p.chronoDashMult = 1; // an ordinary dash: no Chrono Dash reach or i-frames
     p.stamina -= cost;
     p.staminaRegenDelay = 0.5;
     return true;

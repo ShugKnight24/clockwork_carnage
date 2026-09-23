@@ -473,6 +473,19 @@ describe("ChronoPowers runtime", () => {
     expect(cp.res.value).toBeGreaterThanOrEqual(RESONANCE.events.dash * 2 - 1e-9);
   });
 
+  it("leaves no Chrono Dash reach behind after a rewind cuts one short", () => {
+    const cp = new ChronoPowers();
+    const game = fakeGame({ act: 2, level: 5 });
+    cp.startLevel(game);
+    cp.update(game, 0.05, 0.05);
+    game.player.chronoActive = true;
+    expect(cp.tryChronoDash(game, 1, 0)).toBe(true);
+    expect(cp.tryRewind(game)).toBe(true);
+    expect(game.player.isDashing).toBe(false);
+    expect(game.player.chronoDashMult).toBe(1);
+    expect(cp.isInvulnerable(game.player)).toBe(false);
+  });
+
   it("does not Chrono Dash before Rook tunes the shard", () => {
     const cp = new ChronoPowers();
     const game = fakeGame({ act: 2, level: 1 });
