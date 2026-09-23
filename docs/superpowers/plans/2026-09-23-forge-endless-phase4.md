@@ -38,6 +38,8 @@ Measured from the camera's exact position to a column's centre, in blocks, so th
 
 At D = 160 that is about 470 resident columns (7.7 MB of blocks) and at most about 600 before unloading (9.8 MB). The spec's 11/13-column radii were measured from the player's column, which leaves up to 22 blocks of the draw disc unmeshed on a diagonal; the fog fade would then show holes.
 
+GPU positions are relative to the whole block the eye is in rather than the eye itself: whole-block differences are exact in float32, so a corner two chunks share lands on the same bits in both and no crack can open; the view matrix carries the eye's fraction of a block and `u_eye` gives the shaders the same.
+
 ## Budgets (§6)
 
 - Steady: 3 ms a frame for loading and meshing together. Loading takes at most half, at least one column; meshing takes the rest, at least one chunk.
@@ -70,14 +72,14 @@ At D = 160 that is about 470 resident columns (7.7 MB of blocks) and at most abo
 | `src/ui/forge-hud.js` | overhead window, "Endless" status, new-world indicator |
 | `js/forge.js`, `js/game.js` | endless by default, B toggles Bounded, teleport loading, placement in loaded columns, play-test fallback near spawn |
 | `js/testing/debug-bridge.js` | stream stats for tests |
-| `tests/unit/world-streamer.test.js`, `tests/unit/camera-relative.test.js` | **New** |
+| `tests/unit/world-endless.test.js`, `tests/unit/world-streamer.test.js`, `tests/unit/camera-relative.test.js`, `tests/unit/endless-bodies.test.js`, `tests/unit/forge-endless.test.js` | **New** |
 | `tests/forge.spec.js`, `tests/perf-budget.spec.js` | endless e2e, long flight |
 
 ---
 
 ### Task 1: Endless worlds in `World`
 
-- [ ] **Failing tests** (`world-streamer.test.js`, part 1): an endless world has border bounds, no columns, `meta.endless`; `ensureColumn` produces exactly `generateColumn` bytes with the saved delta laid over them and is not modified; `set` into an unloaded column loads it and writes; `unloadColumn` of a modified column folds its delta, deletes the column, clears both caches (a `get` after unload answers air, a reload answers the edit), queues its four chunk keys in `evicted` and drops them from `dirty`; `unloadColumn` of an unmodified column leaves `edits` alone; `unloadedAt` inside bounds only; `columnReady` needs all eight neighbours, except past the border; `defaultSpawn` of an endless world stands on the generated surface at (0.5, 0.5); `topSolid` skips water; bounded worlds: `unloadedAt` is false everywhere, `columnReady` true.
+- [ ] **Failing tests** (`world-endless.test.js`): an endless world has border bounds, no columns, `meta.endless`; `ensureColumn` produces exactly `generateColumn` bytes with the saved delta laid over them and is not modified; `set` into an unloaded column loads it and writes; `unloadColumn` of a modified column folds its delta, deletes the column, clears both caches (a `get` after unload answers air, a reload answers the edit), queues its four chunk keys in `evicted` and drops them from `dirty`; `unloadColumn` of an unmodified column leaves `edits` alone; `unloadedAt` inside bounds only; `columnReady` needs all eight neighbours, except past the border; `defaultSpawn` of an endless world stands on the generated surface at (0.5, 0.5); `topSolid` skips water; bounded worlds: `unloadedAt` is false everywhere, `columnReady` true.
 - [ ] **Implement.** Commit `feat(world): load and unload columns of endless worlds`.
 
 ### Task 2: `WorldStreamer`
