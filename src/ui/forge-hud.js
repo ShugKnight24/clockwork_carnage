@@ -508,11 +508,11 @@ export function renderStatus(forge, ctx, w, h) {
     ctx.font = "bold 12px monospace";
     ctx.fillText("NOCLIP", w - 14, 24);
   }
-  if (forge.survival) {
-    ctx.fillStyle = "rgba(0,255,200,0.85)";
-    ctx.font = "bold 12px monospace";
-    ctx.fillText("SURVIVAL", w - 14, forge.noclip ? 40 : 24);
-  }
+  // Both modes are named, with the key that switches, so creative players can
+  // find survival without opening the help panel.
+  ctx.fillStyle = forge.survival ? "rgba(0,255,200,0.85)" : "rgba(255,255,255,0.6)";
+  ctx.font = "bold 12px monospace";
+  ctx.fillText(forge.survival ? "SURVIVAL  [M]" : "CREATIVE  [M]", w - 14, forge.noclip ? 40 : 24);
   ctx.fillStyle = "rgba(0,255,200,0.6)";
   ctx.font = "bold 12px monospace";
   ctx.fillText(`CURSOR Z ${forge.cursorZ}`, w - 14, h - 90);

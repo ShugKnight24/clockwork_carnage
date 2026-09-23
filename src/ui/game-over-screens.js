@@ -513,7 +513,7 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
   ctx.fillStyle = `rgba(0,0,0,${0.72 * pulse})`;
   ctx.fillRect(0, 0, w, h);
 
-  const bw = Math.min(520, w * 0.88), bh = 328;
+  const bw = Math.min(520, w * 0.88), bh = 352;
   const bx = w / 2 - bw / 2, by = h / 2 - bh / 2;
 
   ctx.fillStyle = 'rgba(0,10,20,0.96)';
@@ -543,6 +543,7 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
     { key: 'Space', action: 'Jump' },
     { key: 'T', action: 'Tool cycle (5 modes)' },
     { key: 'Tab', action: 'Overhead view' },
+    { key: 'M', action: 'Creative / Survival mode' },
     { key: 'P', action: 'Play-test' },
     { key: 'Ctrl+S', action: 'Save' },
     { key: 'H', action: 'All shortcuts' },
