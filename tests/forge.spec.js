@@ -226,7 +226,7 @@ test.describe("Voxel Forge", () => {
     await waitForForge(page);
 
     const before = await page.evaluate(() => window.ccDebug.game.builder.world.meta.gen);
-    expect(before).toMatchObject({ kind: "terrain", v: 1 });
+    expect(before).toMatchObject({ kind: "terrain", v: 2 });
 
     await page.keyboard.press("Control+KeyN");
     await page.waitForFunction(
@@ -248,6 +248,42 @@ test.describe("Voxel Forge", () => {
     expect(Number.isInteger(gen.seed) && gen.seed >= 0 && gen.seed < 2 ** 32).toBe(true);
     await waitForMeshIdle(page);
     expect(await page.evaluate(() => window.ccDebug.game.voxelRenderer.stats.chunksDrawn)).toBeGreaterThan(0);
+  });
+
+  test("a new world has water near its dry spawn, and draws it", async ({ page }) => {
+    test.setTimeout(90_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    // A fixed seed, so the test does not ride on the ~3% of random worlds
+    // whose 128-block box holds no water at all.
+    const found = await page.evaluate(async () => {
+      const { generateWorld } = await import("/src/world/world-gen.js");
+      const b = window.ccDebug.game.builder;
+      b._takeOver(generateWorld({ terrain: true, seed: 7 }));
+      const w = b.world, s = w.meta.spawn;
+      let near = Infinity, at = null;
+      for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+        if (w.get(x, y, 29) !== 19) continue;
+        const d = Math.max(Math.abs(x + 0.5 - s.x), Math.abs(y + 0.5 - s.y));
+        if (d < near) { near = d; at = { x, y }; }
+      }
+      return { gen: w.meta.gen, spawn: s, feet: w.get(Math.floor(s.x), Math.floor(s.y), s.z), ground: w.topSolid(Math.floor(s.x), Math.floor(s.y)), near, at };
+    });
+    expect(found.gen).toEqual({ kind: "terrain", seed: 7, v: 2 });
+    expect(found.feet).toBe(0);
+    expect(found.ground).toBeGreaterThanOrEqual(30);
+    expect(found.near).toBeLessThanOrEqual(48);
+
+    // Stand on the bank and look at it: the water pass has something to draw.
+    const { x, y } = found.at;
+    await page.waitForFunction(() => window.ccDebug.game.voxelRenderer.world === window.ccDebug.game.builder.world, null, { timeout: 10_000 });
+    await page.evaluate(() => { window.ccDebug.game.builder.noclip = true; });
+    await aimAndUpdate(page, { x: x + 0.5, y: y - 5.5, z: 34, angle: Math.PI / 2, pitch: -0.4 });
+    await waitForMeshIdle(page);
+    await page.waitForFunction(() => (window.ccDebug.game.voxelRenderer.stats.waterChunks ?? 0) > 0, null, { timeout: 10_000 });
+    await screenshot(page, "forge-new-world-water");
   });
 
   test("draws the whole world at the lowest quality preset", async ({ page }) => {
