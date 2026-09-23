@@ -93,8 +93,10 @@ export class PlayerUpdateSystem {
       p.dashTime -= dt;
       if (p.dashTime <= 0) {
         p.isDashing = false;
+        p.chronoDashMult = 1;
       } else {
-        const dashSpeed = p.moveSpeed * 3.5 * p.dashDistMult;
+        // A Chrono Dash (src/systems/chrono-powers.js) runs 2.2x as far.
+        const dashSpeed = p.moveSpeed * 3.5 * p.dashDistMult * (p.chronoDashMult || 1);
         moveX = p.dashDirX * dashSpeed * dt;
         moveY = p.dashDirY * dashSpeed * dt;
 
