@@ -100,8 +100,16 @@ export class AchievementSystem {
     }
   }
 
-  /** @returns {{ playSound: boolean }} */
-  updateToast(dt) {
+  /**
+   * With a message director, each unlocked achievement waits its turn in the
+   * chip lane (held back through boss intros, fresh teach cards and heavy
+   * combat) and shows for as long as the director gives it.
+   * @param {number} dt
+   * @param {import("../ui/message-director.js").MessageDirector} [director]
+   * @returns {{ playSound: boolean }}
+   */
+  updateToast(dt, director = null) {
+    if (director) return this._directedToast(director);
     let playSound = false;
     if (!this.achievementToast && this.achievementQueue.length > 0) {
       const id = this.achievementQueue.shift();
@@ -122,18 +130,51 @@ export class AchievementSystem {
     return { playSound };
   }
 
+  _directedToast(director) {
+    while (this.achievementQueue.length > 0) {
+      const id = this.achievementQueue.shift();
+      if (ACHIEVEMENTS[id]) director.post(`achievement:${id}`, "achievement", { id });
+    }
+    let playSound = false;
+    const cur = director.current("chip");
+    if (cur?.kind === "achievement") {
+      const ach = ACHIEVEMENTS[cur.data.id];
+      if (this.achievementToast?.id !== cur.data.id) {
+        this.achievementToast = { id: cur.data.id, name: ach.name, description: ach.description, icon: ach.icon, time: 0, duration: cur.duration };
+        playSound = true;
+      }
+      this.achievementToast.time = director.age(cur.key);
+    } else {
+      this.achievementToast = null;
+    }
+    return { playSound };
+  }
+
   // ── Rendering ──────────────────────────────────────────
 
-  renderToast(ctx, w, h) {
+  /**
+   * @param {object} [director] - with lanes, the toast is a chip in the chip
+   *   lane (under the minimap) instead of a card over the minimap
+   */
+  renderToast(ctx, w, h, director = null) {
     const toast = this.achievementToast;
     if (!toast) return;
     const t = toast.time, dur = toast.duration;
+    const lane = director?.lanes?.chips;
+    const boxW = lane ? lane.w : 320, boxH = lane ? Math.min(70, lane.h - 4) : 70;
     let slideX = 0;
-    if (t < 0.4) slideX = (1 - t / 0.4) * 350;
-    else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * 350;
+    if (t < 0.4) slideX = (1 - t / 0.4) * (boxW + 30);
+    else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * (boxW + 30);
 
-    const boxW = 320, boxH = 70;
-    const bx = w - boxW - 20 + slideX, by = 20;
+    const bx = (lane ? lane.x : w - boxW - 20) + slideX, by = lane ? lane.y : 20;
+    if (lane && boxH < 50) {
+      this._renderChipLine(ctx, toast, bx, by, boxW, boxH);
+      return;
+    }
+    // Laid out for a 70px card; a chip lane scales it down.
+    const k = boxH / 70;
+    const px = (n) => Math.round(n * k);
+    const textW = boxW - px(55) - 8;
 
     ctx.save();
     ctx.fillStyle = "rgba(10, 10, 30, 0.92)";
@@ -145,18 +186,35 @@ export class AchievementSystem {
 
     const iconImg = this.achievementIcons[toast.icon];
     if (iconImg?.complete && iconImg.naturalWidth > 0) {
-      ctx.drawImage(iconImg, bx + 14, by + 19, 32, 32);
+      ctx.drawImage(iconImg, bx + px(14), by + px(19), px(32), px(32));
     } else {
-      ctx.font = "28px monospace"; ctx.textAlign = "center";
-      ctx.fillText(toast.icon, bx + 30, by + 44);
+      ctx.font = `${px(28)}px monospace`; ctx.textAlign = "center";
+      ctx.fillText(toast.icon, bx + px(30), by + px(44));
     }
 
-    ctx.fillStyle = "#ffcc00"; ctx.font = "bold 11px monospace"; ctx.textAlign = "left";
-    ctx.fillText("ACHIEVEMENT UNLOCKED", bx + 55, by + 22);
-    ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px monospace";
-    ctx.fillText(toast.name, bx + 55, by + 42);
-    ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "12px monospace";
-    ctx.fillText(toast.description, bx + 55, by + 58);
+    ctx.fillStyle = "#ffcc00"; ctx.font = `bold ${px(11)}px monospace`; ctx.textAlign = "left";
+    ctx.fillText("ACHIEVEMENT UNLOCKED", bx + px(55), by + px(22), textW);
+    ctx.fillStyle = "#ffffff"; ctx.font = `bold ${px(16)}px monospace`;
+    ctx.fillText(toast.name, bx + px(55), by + px(42), textW);
+    ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = `${px(12)}px monospace`;
+    ctx.fillText(toast.description, bx + px(55), by + px(58), textW);
+    ctx.restore();
+  }
+
+  /** One-line chip for a phone's short chip lane. */
+  _renderChipLine(ctx, toast, bx, by, boxW, boxH) {
+    ctx.save();
+    ctx.fillStyle = "rgba(10, 10, 30, 0.92)";
+    ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.fill();
+    ctx.fillStyle = "#ffcc00";
+    ctx.fillRect(bx, by, 3, boxH);
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = "bold 9px monospace";
+    ctx.fillText("ACHIEVEMENT", bx + 9, by + boxH / 2);
+    const lw = ctx.measureText("ACHIEVEMENT").width;
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 11px monospace";
+    ctx.fillText(toast.name, bx + 17 + lw, by + boxH / 2, boxW - lw - 24);
     ctx.restore();
   }
 
