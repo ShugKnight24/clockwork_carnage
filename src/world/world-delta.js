@@ -11,7 +11,7 @@
  * saved against it (column-gen.js): the overlay says "differs from what
  * version N makes", nothing more.
  */
-import { GEN_VERSION, generateColumn } from "./column-gen.js";
+import { GEN_V1, GEN_VERSIONS, generateColumn } from "./column-gen.js";
 import { rleEncode, rleDecode } from "./rle.js";
 
 export const NO_EDIT = 0xff;
@@ -22,14 +22,15 @@ export const PLACED_BYTES = CELLS >> 3;
  * The generator of a world that never stored one — built before generators
  * were stored, or converted from a legacy map. It makes only air, so every
  * block in such a world is an edit and its deltas are its full content.
+ * Void is the same in every version; it keeps the version it was made with.
  */
-export const VOID_GEN = Object.freeze({ kind: "void", v: GEN_VERSION });
+export const VOID_GEN = Object.freeze({ kind: "void", v: GEN_V1 });
 
 export const genOf = (meta) => meta?.gen || VOID_GEN;
 
 /** Throws unless `gen` is a generator this build can reproduce exactly. */
 export function checkGen(gen) {
-  const ok = gen && typeof gen === "object" && gen.v === GEN_VERSION &&
+  const ok = gen && typeof gen === "object" && GEN_VERSIONS.includes(gen.v) &&
     (gen.kind === "terrain" || gen.kind === "flat" || gen.kind === "void") &&
     (gen.seed === undefined ? gen.kind !== "terrain" : Number.isInteger(gen.seed) && gen.seed >= 0 && gen.seed <= 0xffffffff);
   if (!ok) throw new Error(`unsupported generator ${JSON.stringify(gen)}`);

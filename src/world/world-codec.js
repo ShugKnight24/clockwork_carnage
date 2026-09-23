@@ -14,7 +14,7 @@
 import { World, DEFAULT_BOUNDS, colKey } from "./world.js";
 import { convertLegacyMap } from "./legacy-convert.js";
 import { rleEncode, rleDecode, rleLength } from "./rle.js";
-import { GEN_VERSION } from "./column-gen.js";
+import { GEN_V1 } from "./column-gen.js";
 import { checkGen, foldEdits, restoreColumns, PLACED_BYTES } from "./world-delta.js";
 import { randomSeed } from "./world-gen.js";
 
@@ -121,7 +121,7 @@ function decodeV4(o) {
 function migrated(w) {
   let ok = false;
   try { ok = w.meta.gen !== undefined && !!checkGen(w.meta.gen); } catch (_) { /* replaced below */ }
-  if (!ok) w.meta.gen = { kind: "void", seed: randomSeed(), v: GEN_VERSION };
+  if (!ok) w.meta.gen = { kind: "void", seed: randomSeed(), v: GEN_V1 };
   return w;
 }
 

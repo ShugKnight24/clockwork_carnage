@@ -18,6 +18,7 @@
  *   against it. New terrain is a new version, with the old one kept beside it.
  */
 import { AIR, BEDROCK } from "./blocks.js";
+import * as V2 from "./column-gen-v2.js";
 
 /**
  * Generator version 1 — FROZEN on 2026-09-22 (Forge endless world, phase 2).
@@ -28,7 +29,21 @@ import { AIR, BEDROCK } from "./blocks.js";
  * version-1 worlds never take; a golden hash is never re-recorded to make a
  * change pass.
  */
-export const GEN_VERSION = 1;
+export const GEN_V1 = 1;
+
+/**
+ * The version new worlds are made with. Generator version 2
+ * (column-gen-v2.js) adds the sea, beaches, lakes, rivers and trees; the
+ * exported functions below hand a `v: 2` terrain world to it and keep every
+ * other world on the version-1 code, which is unchanged.
+ */
+export const GEN_VERSION = V2.GEN_V2;
+
+/** Generator versions this build can reproduce exactly. */
+export const GEN_VERSIONS = Object.freeze([GEN_V1, V2.GEN_V2]);
+
+/** Only terrain differs between versions; flat and void are the same in both. */
+const isV2 = (gen) => gen.v === V2.GEN_V2 && gen.kind === "terrain";
 
 const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
 const CS = 16, H = 64, CELLS = CS * CS * H;
@@ -164,6 +179,7 @@ const wScratch = new Float64Array(4);
  * heights, are known without generating the column.
  */
 export function surfaceHeight(gen, x, y) {
+  if (isV2(gen)) return V2.surfaceHeight(gen, x, y);
   if (gen.kind === "flat") return FLAT_TOP;
   if (gen.kind !== "terrain") return -1;
   return clampTop(rawHeight(saltsFor(gen.seed >>> 0), x, y, wScratch));
@@ -184,6 +200,7 @@ const P = CS + 2;
  * heights with no change here.
  */
 export function sampleColumn(gen, cx, cy, out = { top: new Int16Array(P * P), biome: new Uint8Array(CS * CS) }) {
+  if (isV2(gen)) return V2.sampleColumn(gen, cx, cy, out);
   const { top, biome } = out;
   if (gen.kind !== "terrain") {
     top.fill(gen.kind === "flat" ? FLAT_TOP : -1);
@@ -219,6 +236,7 @@ const ROCKLINE = 41;
  * or high. A rock cell above z = 2 is ore when its own hash says so.
  */
 export function fillColumn(gen, cx, cy, sample, out = new Uint8Array(CELLS)) {
+  if (isV2(gen)) return V2.fillColumn(gen, cx, cy, sample, out);
   out.fill(AIR);
   if (gen.kind !== "terrain" && gen.kind !== "flat") return out;
   const terrain = gen.kind === "terrain";
@@ -257,11 +275,13 @@ const sampleScratch = { top: new Int16Array(P * P), biome: new Uint8Array(CS * C
  * columns. `gen.kind` is "terrain", "flat" or "void" (all air).
  */
 export function generateColumn(gen, cx, cy, out = new Uint8Array(CELLS)) {
+  if (isV2(gen)) return V2.generateColumn(gen, cx, cy, out);
   return fillColumn(gen, cx, cy, sampleColumn(gen, cx, cy, sampleScratch), out);
 }
 
 /** Biome weights at a cell, for tests and tools. Not used by generation. */
 export function biomeAt(gen, x, y) {
+  if (isV2(gen)) return V2.biomeAt(gen, x, y);
   const w = biomeWeights(saltsFor(gen.seed >>> 0), x, y, new Float64Array(4));
   return { weights: Array.from(w), biome: BIOMES[w.indexOf(Math.max(...w))] };
 }
@@ -274,10 +294,12 @@ const SPAWN_REACH = 24;
  * its eight neighbours are within one block of it, which the one-block
  * step-up climbs without a jump. Square rings outward, so the nearest such
  * cell wins; the start cell itself when nothing in reach qualifies. Uses only
- * `surfaceHeight`, so it needs no column in memory.
+ * `surfaceHeight`, so it needs no column in memory. Version 2 also wants dry
+ * land with no tree in the way, inside `bounds` when given.
  * @returns {{x:number,y:number,z:number}} z is the first air cell above ground
  */
-export function findSpawn(gen, x, y) {
+export function findSpawn(gen, x, y, bounds = null) {
+  if (isV2(gen)) return V2.findSpawn(gen, x, y, bounds);
   const cx = Math.floor(x), cy = Math.floor(y);
   const level = (bx, by) => {
     const t = surfaceHeight(gen, bx, by);

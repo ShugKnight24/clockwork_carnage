@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
-  GEN_VERSION, BIOMES, MAX_TOP, generateColumn, sampleColumn, fillColumn, surfaceHeight, findSpawn, biomeAt,
+  GEN_V1, BIOMES, MAX_TOP, generateColumn, sampleColumn, fillColumn, surfaceHeight, findSpawn, biomeAt,
 } from "../../src/world/column-gen.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { AIR, BEDROCK } from "../../src/world/blocks.js";
@@ -252,7 +252,7 @@ describe("generator v1 is frozen", () => {
   });
 
   it("is version 1", () => {
-    expect(GEN_VERSION).toBe(1);
+    expect(GEN_V1).toBe(1);
   });
 
   // Recorded when v1 was frozen (2026-09-22), and identical under V8 (node)
@@ -290,7 +290,7 @@ describe("generator v1 is frozen", () => {
   });
 
   it("matches the golden bytes of a whole 128 × 128 world and of flat ground", () => {
-    const w = generateWorld({ terrain: true, seed: 7 });
+    const w = generateWorld({ terrain: true, seed: 7, v: 1 });
     expect(sha(Buffer.concat([...w.columns.values()].map((c) => Buffer.from(c.blocks))))).toBe("297f25dbf3a135c0d400dbc9501f5c05e003548c3b1e2647aefd81fc4c0fe871");
     expect(sha(generateColumn({ kind: "flat", seed: 1, v: 1 }, 0, 0))).toBe("34c6c37d91559a5d8f07c78adb5583b40a75d368f238ffcd080c7fd52f229789");
   });

@@ -16,12 +16,13 @@ export function randomSeed() {
  * An endless world generates nothing here: columns are loaded around the
  * player as it moves (world-streamer.js), and its spawn is found from surface
  * heights alone. A bounded world is the 128 box, generated whole.
+ * `v` is the generator version, the newest unless a caller needs an old one.
  */
-export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New World", endless = false } = {}) {
-  const gen = { kind: terrain ? "terrain" : "flat", seed: seed >>> 0, v: GEN_VERSION };
+export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New World", endless = false, v = GEN_VERSION } = {}) {
+  const gen = { kind: terrain ? "terrain" : "flat", seed: seed >>> 0, v };
   const w = new World(endless ? { name, act, gen, endless: true } : { name, act, gen });
   const s = w.defaultSpawn();
-  w.meta.spawn = { ...findSpawn(gen, s.x, s.y), yaw: 0 };
+  w.meta.spawn = { ...findSpawn(gen, s.x, s.y, w.bounds), yaw: 0 };
   if (endless) return w;
   const { x0, y0, x1, y1 } = w.bounds;
   for (let cy = y0 >> 4; cy <= (y1 - 1) >> 4; cy++) for (let cx = x0 >> 4; cx <= (x1 - 1) >> 4; cx++) {

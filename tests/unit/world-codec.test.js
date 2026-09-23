@@ -101,7 +101,7 @@ describe("v5 codec", () => {
     const edited = () => { const w = generateWorld({ terrain: false }); w.set(1, 1, 40, 3); return encodeWorld(w); };
     const bad = [
       (o) => { o.meta.gen = { kind: "caves", seed: 1, v: 1 }; },
-      (o) => { o.meta.gen.v = 2; },
+      (o) => { o.meta.gen.v = 3; },
       (o) => { o.meta.gen = { kind: "terrain", v: 1 }; },
       (o) => { delete o.columns; },
     ];
@@ -136,10 +136,11 @@ describe("v4 still opens", () => {
   it("keeps a flat world's blocks byte-identical to the flat-array build", () => {
     // The block half of the v4 document of generateWorld({terrain: false})
     // hashed on feat/v0.8.0 before columns. Terrain moved to generator v1
-    // (hashed in column-gen.test.js); flat worlds only gained meta.gen.
+    // (hashed in column-gen.test.js); flat worlds only gained meta.gen, and
+    // are the same in every generator version.
     const o = encodeV4(generateWorld({ terrain: false }));
     expect(sha({ version: o.version, size: o.size, blocks: o.blocks })).toBe(FLAT_BLOCKS_SHA);
-    expect(o.meta.gen).toEqual({ kind: "flat", seed: 1, v: 1 });
+    expect(o.meta.gen).toEqual({ kind: "flat", seed: 1, v: 2 });
   });
 
   it("has no v4 form for a world with other bounds", () => {
@@ -178,7 +179,7 @@ describe("v4 still opens", () => {
     const src = generateWorld({ terrain: true, seed: 31 });
     src.set(10, 10, 50, 5); src.set(100, 100, 50, 6);
     const w = decodeWorld(JSON.parse(JSON.stringify(encodeV4(src))));
-    expect(w.meta.gen).toEqual({ kind: "terrain", seed: 31, v: 1 });
+    expect(w.meta.gen).toEqual({ kind: "terrain", seed: 31, v: 2 });
     const v5 = encodeWorld(w);
     expect(v5.columns.map(([cx, cy]) => `${cx},${cy}`)).toEqual(["0,0", "6,6"]);
     expect(cells(decodeWorld(v5)).equals(cells(src))).toBe(true);

@@ -85,7 +85,8 @@ describe("mesher", () => {
 describe("mesher reading a padded copy", () => {
   /** A world with see-through and station blocks scattered over chunk and column borders. */
   function busyWorld(seed) {
-    const w = generateWorld({ terrain: true, seed });
+    // Generator v1: the reference mesher predates water and cut-out leaves.
+    const w = generateWorld({ terrain: true, seed, v: 1 });
     const rng = new SeededRNG(seed);
     // Half the edits land on a chunk face, where the neighbour reads matter.
     const coord = () => (rng.next() < 0.5 ? ((rng.next() * 8) | 0) * 16 + (rng.next() < 0.5 ? 0 : 15) : (rng.next() * 128) | 0);
