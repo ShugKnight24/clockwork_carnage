@@ -6,7 +6,15 @@
  * (player, entities, audio, renderer, etc).
  */
 import * as Save from "../src/core/save-system.js";
-import { campaignMap, campaignLevelMap, getAct, getActLevel } from "./data.js";
+import {
+  ACTS,
+  NG_PLUS,
+  campaignMap,
+  campaignLevelMap,
+  getAct,
+  getActLevel,
+  isLastAct,
+} from "./data.js";
 import {
   createCampaignEntities,
   createMissedWeaponPickups,
@@ -248,21 +256,14 @@ export class CampaignManager {
 
     this._applyActEnemyRoster();
 
-    const hasBoss = g.entities.some(
-      (e) =>
-        e.type === "enemy" &&
-        (e.enemyType === "boss" ||
-          e.enemyType === "boss_form2" ||
-          e.enemyType === "boss_form3"),
-    );
+    const act = getAct(this.act);
+    const hasBoss = g.entities.some((e) => e.type === "enemy" && isBossEnemy(e));
     if (hasBoss) {
-      const form = this.act;
-      if (form === 2) g.queueAriaMessage("bossForm2");
-      else if (form === 3) g.queueAriaMessage("bossForm3");
-      else g.queueAriaMessage("bossEncounter");
+      g.queueAriaMessage(act.boss.aria);
       // Sprint E 4.10: Squad ensemble chatter per boss phase
-      if (g.squadComms && typeof g.squadComms.onBossPhase === "function") {
-        this._afterLevelStart(2000, () => g.squadComms.onBossPhase(form));
+      const pool = act.boss.squadPool;
+      if (pool != null && g.squadComms && typeof g.squadComms.onBossPhase === "function") {
+        this._afterLevelStart(2000, () => g.squadComms.onBossPhase(pool));
       }
       // Boss intro flourish — 2.5s slow-mo + glitch spike + name card.
       // Drives drama on first encounter without depending on a cutscene
@@ -270,37 +271,26 @@ export class CampaignManager {
       g.slowMoTimer = 2.5;
       g.timeScale = 0.4;
       g.glitchEffect = Math.max(g.glitchEffect, 0.8);
-      const BOSS_NAMES = {
-        1: { title: "PARADOX LORD", subtitle: "FIRST INCURSION" },
-        2: { title: "PARADOX LORD", subtitle: "SECOND INCURSION" },
-        3: { title: "PARADOX LORD", subtitle: "FINAL INCURSION" },
-      };
       g.bossNameCard = {
-        ...(BOSS_NAMES[form] || BOSS_NAMES[1]),
+        ...act.boss.card,
         time: g.time,
         duration: 3500,
       };
-    } else if (g.squadComms && this.act >= 2) {
-      // Squad chimes in at non-boss level starts (act 2+ only)
+    } else if (g.squadComms && entry.squad.length > 0) {
+      // Squad chimes in at non-boss level starts, when anyone is present
       this._afterLevelStart(1500, () => g.squadComms.onCombatStart());
     }
 
-    // Sprint E 4.3/4.4: one-shot Act 3 lore reveals
-    if (this.act === 3) {
-      if (this.level === 0 && g.queueAriaMessage) {
-        this._afterLevelStart(3000, () => g.queueAriaMessage("encryptedChannelReveal"));
-      } else if (this.level === 1 && g.queueAriaMessage) {
-        this._afterLevelStart(3000, () => g.queueAriaMessage("analystLMReveal"));
-      }
-    }
-    // Sprint E 4.6: NG+ Dead Squad foreshadowing (cycles 1+)
-    if (this.ngPlusCycle >= 1 && this.level === 0 && g.queueAriaMessage) {
-      this._afterLevelStart(5000, () => g.queueAriaMessage("ngPlusDeadSquad"));
+    // One-shot lore lines for this level (Sprint E 4.3/4.4 reveals, and the
+    // 4.6 NG+ Dead Squad foreshadowing).
+    for (const line of entry.onStart) {
+      if ((line.minNgPlus ?? 0) > (this.ngPlusCycle || 0) || !g.queueAriaMessage) continue;
+      this._afterLevelStart(line.delay ?? 0, () => g.queueAriaMessage(line.aria));
     }
 
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
-    g.renderer.applyActPalette(getAct(this.act)?.palette ?? this.act, entry.env);
+    g.renderer.applyActPalette(act.palette, entry.env);
     if (hasBoss) {
       g.audio.startTrack("boss");
     } else {
@@ -332,7 +322,7 @@ export class CampaignManager {
     g.achievementStats.campaignLevelsCleared = Math.max(g.achievementStats.campaignLevelsCleared || 0, this.level);
     g.saveAchievements();
 
-    if (this.level >= (getAct(this.act)?.levels.length ?? 0)) {
+    if (!getActLevel(this.act, this.level)) {
       this.loadLevel(this.level); // triggers VICTORY via bounds check
       return;
     }
@@ -347,49 +337,12 @@ export class CampaignManager {
     }
     g.player.ammo = Math.min(g.player.ammo + 20, 999);
 
-    // Act-based briefing cutscenes
-    const actBriefings = {
-      1: {
-        1: "security_briefing",
-        2: "research_briefing",
-        3: "containment_briefing",
-        4: "server_briefing",
-        5: "reactor_briefing",
-        6: "voss_lab_briefing",
-        7: "nexus_briefing",
-        8: "paradox_core_briefing",
-      },
-      2: {
-        1: "act2_level2",
-        2: "act2_level3",
-        3: "act2_level4",
-        4: "act2_level5",
-        5: "act2_level6",
-        6: "voss_confrontation",
-        7: "act2_level8",
-        8: "act2_level9",
-      },
-      3: {
-        1: "act3_level2",
-        2: "act3_boss",
-        3: "act3_level4",
-        4: "act3_level5",
-        5: "act3_level6",
-        6: "origin_panels",
-        7: "act3_level8",
-        8: "act3_level9",
-      },
-    };
-    const briefingKey = actBriefings[this.act]?.[this.level];
-    if (briefingKey && g.hasCutsceneScript(briefingKey)) {
-      g.startCutscene(briefingKey, () => {
-        this.loadLevel(this.level);
-        this.save();
-      });
-    } else {
+    // The level's briefing, then the level.
+    const entry = getActLevel(this.act, this.level);
+    this._playScenes(entry.briefing ?? [], () => {
       this.loadLevel(this.level);
       this.save();
-    }
+    });
   }
 
   handleBossKill() {
@@ -404,64 +357,38 @@ export class CampaignManager {
       time_seconds: Math.floor((performance.now() - g.roundStartTime) / 1000),
     });
 
-    if (this.act === 1) {
+    // An act this build does not know ends the campaign, as it always has.
+    const act = getAct(this.act) ?? ACTS[ACTS.length - 1];
+    if (!isLastAct(act.id)) {
+      // The act's outro, then the next act opens at level 0 behind its intro.
+      const next = ACTS[ACTS.indexOf(act) + 1];
       g.audio.stopMusic();
-      g.startCutscene("false_victory", () => {
-        this.act = 2;
+      this._playScenes(act.outro, () => {
+        this.act = next.id;
         this.level = 0;
         g.player.health = g.player.maxHealth;
         g.player.ammo = Math.min(g.player.ammo + 50, 999);
-        const afterAct2Fb = () => {
-          g.startCutscene("act2_intro", () => {
-            this.loadLevel(0);
-            this.save();
-          });
-        };
-        if (g.hasCutsceneScript("act2_transition_fb")) {
-          g.startCutscene("act2_transition_fb", afterAct2Fb);
-        } else {
-          afterAct2Fb();
-        }
-      });
-    } else if (this.act === 2) {
-      g.audio.stopMusic();
-      g.startCutscene("act2_victory", () => {
-        this.act = 3;
-        this.level = 0;
-        g.player.health = g.player.maxHealth;
-        g.player.ammo = Math.min(g.player.ammo + 50, 999);
-        const afterAct3Fb = () => {
-          g.startCutscene("lyra_reveal", () => {
-            g.startCutscene("act3_intro", () => {
-              this.loadLevel(0);
-              this.save();
-            });
-          });
-        };
-        if (g.hasCutsceneScript("act3_transition_fb")) {
-          g.startCutscene("act3_transition_fb", afterAct3Fb);
-        } else {
-          afterAct3Fb();
-        }
+        this._playScenes(next.intro, () => {
+          this.loadLevel(0);
+          this.save();
+        });
       });
     } else {
-      // Act 3 — game complete
+      // Last act — game complete
       g.achievementStats.campaignComplete = true;
       g.checkAchievements();
       g.audio.stopMusic();
       Save.updateNgPlusBest(this.ngPlusCycle);
 
-      if (this.ngPlusCycle >= 3) {
-        g.startCutscene("true_victory", () => {
-          g.startCutscene("ng_plus_true_ending", () => {
-            g.state = GameState.VICTORY;
-            g.audio.roundComplete();
-            this.clearSave();
-            g.unlockPointer();
-          });
+      if (this.ngPlusCycle >= NG_PLUS.trueEndingCycle) {
+        this._playScenes([...act.outro, ...NG_PLUS.trueEnding], () => {
+          g.state = GameState.VICTORY;
+          g.audio.roundComplete();
+          this.clearSave();
+          g.unlockPointer();
         });
       } else {
-        g.startCutscene("true_victory", () => {
+        this._playScenes(act.outro, () => {
           g.state = GameState.VICTORY;
           this.ngPlusPrompt = true;
           this.ngPlusPromptSel = 0;
@@ -476,8 +403,8 @@ export class CampaignManager {
     const g = this.game;
     this.ngPlusCycle++;
     this.ngPlusPrompt = false;
-    this.act = 1;
-    this.level = 0;
+    this.act = NG_PLUS.startAct;
+    this.level = NG_PLUS.startLevel;
     this.missedWeapons = [];
     g.player.health = g.player.maxHealth;
     g.player.shield = g.player.maxShield || 0;
@@ -487,7 +414,7 @@ export class CampaignManager {
     const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
     const hasCycleCutscene = g.hasCutsceneScript(cutsceneKey);
     const afterCutscene = () => {
-      this.loadLevel(0);
+      this.loadLevel(this.level);
       this.save();
       g.lockPointer();
     };
@@ -500,6 +427,17 @@ export class CampaignManager {
   }
 
   // ── internal ──
+
+  /** Play scenes in order, skipping any this build has no script for. */
+  _playScenes(keys, done) {
+    const g = this.game;
+    const next = (i) => {
+      if (i >= keys.length) return done();
+      if (!g.hasCutsceneScript(keys[i])) return next(i + 1);
+      g.startCutscene(keys[i], () => next(i + 1));
+    };
+    next(0);
+  }
 
   _applyActEnemyRoster() {
     applyActEnemyRoster(
