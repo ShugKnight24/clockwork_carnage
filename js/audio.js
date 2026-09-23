@@ -1,4 +1,4 @@
-import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine } from "../src/audio/voice.js";
+import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine, inferEmotion } from "../src/audio/voice.js";
 
 export class AudioManager {
   constructor() {
@@ -1567,14 +1567,17 @@ export class AudioManager {
    * Speak a line in a character's babble voice.
    * @param {string} text
    * @param {string|object} voice  key into VOICES, "player", or a voice object
-   * @param {{channel?: string, charsPerSec?: number, pan?: number, profile?: object}} opts
+   * @param {{channel?: string, charsPerSec?: number, pan?: number, profile?: object, emotion?: string}} opts
+   *   emotion: a key of EMOTIONS; when absent it is inferred from the words,
+   *   falling back to the voice's own default mood.
    */
-  speak(text, voice, { channel = "comms", charsPerSec = 18, pan = 0, profile = null } = {}) {
+  speak(text, voice, { channel = "comms", charsPerSec = 18, pan = 0, profile = null, emotion = null } = {}) {
     if (!this.ctx || !this.enabled || !this._voice || !text) return null;
     const v = typeof voice === "object" ? voice : voice === "player" ? playerVoice(profile) : VOICES[voice];
     if (!v) return null;
     this.stopSpeech(channel);
-    const handle = this._voice.play(planUtterance(text, v, { charsPerSec }), v, this.voiceGain, { pan });
+    const mood = emotion || inferEmotion(text, v.emotion || "neutral");
+    const handle = this._voice.play(planUtterance(text, v, { charsPerSec, emotion: mood }), v, this.voiceGain, { pan });
     if (handle) {
       this._speech.set(channel, handle);
       this._speechUntil = Math.max(this._speechUntil, handle.endTime);

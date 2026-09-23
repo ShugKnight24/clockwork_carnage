@@ -454,6 +454,7 @@ export class CutsceneEngine {
         channel: "cutscene",
         charsPerSec,
         profile: this.getVoiceProfile(),
+        emotion: line.emotion || frame.emotion || null,
       });
     }
   }

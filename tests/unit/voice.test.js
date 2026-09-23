@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   VOICES,
+  EMOTIONS,
+  resolveVoice,
+  inferEmotion,
   playerVoice,
   voiceKeyFor,
   syllabify,
@@ -56,9 +59,19 @@ describe("planUtterance", () => {
     expect(last.semiEnd).toBeGreaterThan(last.semi);
   });
 
-  it("snaps pitch to the voice's scale", () => {
-    const { events } = planUtterance("Warning. Temporal breach detected.", VOICES.aria);
-    for (const e of events) expect([0, 2, 4, 7, 9]).toContain(((e.semi % 12) + 12) % 12);
+  it("snaps pitch to a synthetic voice's scale", () => {
+    const { events } = planUtterance("Warning. Temporal breach detected.", VOICES.drone);
+    for (const e of events) expect([0, 3, 7]).toContain(((e.semi % 12) + 12) % 12);
+  });
+
+  it("falls at the end of a statement", () => {
+    const { events } = planUtterance("We hold the line here.", VOICES.kael);
+    expect(events.at(-1).semiEnd).toBeLessThan(events.at(-1).semi);
+  });
+
+  it("gives the stressed syllable of a content word the longer share", () => {
+    const { events } = planUtterance("paradox", VOICES.lyra);
+    expect(events[0].slot).toBeGreaterThan(events[1].slot);
   });
 
   it("is silent for empty text", () => {
@@ -97,5 +110,35 @@ describe("player voices", () => {
 
   it("has a bark for each grunt kind", () => {
     for (const k of ["hurt", "death", "slide", "dash", "jump"]) expect(planBark(k).events.length).toBe(1);
+  });
+});
+
+describe("emotions", () => {
+  it("colours a voice: sad is lower, narrower and breathier than happy", () => {
+    const sad = resolveVoice(VOICES.lyra, "sad");
+    const happy = resolveVoice(VOICES.lyra, "happy");
+    expect(sad.pitch).toBeLessThan(happy.pitch);
+    expect(sad.range).toBeLessThan(happy.range);
+    expect(sad.breath).toBeGreaterThan(happy.breath);
+  });
+
+  it("uses the voice's own mood when a line gives none", () => {
+    expect(planUtterance("Hello.", VOICES.aria).mood.fall).toBe(EMOTIONS.warm.fall);
+  });
+
+  it("reads mood from the words", () => {
+    expect(inferEmotion("Move, now! Incoming!")).toBe("urgent");
+    expect(inferEmotion("They're gone...")).toBe("sad");
+    expect(inferEmotion("I'm proud of you.")).toBe("tender");
+    expect(inferEmotion("Did you hear that?")).toBe("curious");
+    expect(inferEmotion("Hold position.", "warm")).toBe("warm");
+  });
+
+  it("keeps ARIA a person, not a machine", () => {
+    const a = VOICES.aria;
+    expect(a.wave).toBeUndefined();
+    expect(a.am).toBeUndefined();
+    expect(a.scale).toBeUndefined();
+    expect(a.tilt).toBeGreaterThanOrEqual(1.5);
   });
 });

@@ -21,6 +21,23 @@ const PROJECTED_CATEGORIES = new Set([
 
 /** Seconds between projections, so her showing up stays an event. */
 const PROJECTION_COOLDOWN = 75;
+
+/**
+ * How ARIA sounds for each kind of line. She is warm by default; these are
+ * the beats where she should sound like she means it.
+ */
+const CATEGORY_EMOTIONS = {
+  lowHealth: "worried",
+  criticalHealth: "afraid",
+  firstKill: "happy",
+  levelComplete: "happy",
+  tutorialComplete: "tender",
+  secretFound: "curious",
+  bossEncounter: "urgent",
+  bossForm2: "urgent",
+  idle: "warm",
+  ariaPersonality: "warm",
+};
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 import {
   UI,
@@ -96,6 +113,7 @@ export class AriaCommsSystem {
       prominent,
       projected,
       speaker: "ARIA",
+      emotion: CATEGORY_EMOTIONS[category] ?? null,
     });
   }
 
@@ -188,7 +206,7 @@ export class AriaCommsSystem {
     const key = voiceKeyFor({ speaker: msg.speaker || "ARIA" });
     const text = String(msg.text).replace(/\{AGENT\}/g, this.game?.character?.name || "Agent");
     const charsPerSec = Math.max(16, text.length / Math.max(1, msg.duration * 0.8));
-    audio.speak(text, key, { channel: "comms", charsPerSec });
+    audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
   }
 
   /** Narrative context for idle-pool selection. */
