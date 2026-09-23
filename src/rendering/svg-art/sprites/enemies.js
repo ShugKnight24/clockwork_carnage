@@ -41,7 +41,8 @@ const ATTACK_MS = 240;
 const HIT_POSE_MS = 160;
 const FLASH_MS = 150;
 const SPARK_MS = 220;
-const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt"];
+// `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
+const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle"];
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
@@ -414,6 +415,7 @@ function pickPose(enemy, m, time, model) {
   if (enemy.dissolving) return "hurt";
   if (enemy.painTimer > 0 || (enemy.hitTime && time - enemy.hitTime < HIT_POSE_MS)) return "hurt";
   if (enemy.state === "windup" || enemy._chargeState === "windup") return "windup";
+  if (enemy._quillState === "bristle") return "bristle";
   if (time - m.attackAt < ATTACK_MS) return "attack";
   if (!model.floater && (m.speed > 0.2 || enemy._chargeState === "sprint")) {
     const stepMs = Math.max(120, Math.min(360, 520 / Math.max(0.5, m.speed)));

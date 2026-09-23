@@ -942,9 +942,7 @@ if (game.settings.showKills) {
       e.type === "enemy" &&
       e.active &&
       e.health > 0 &&
-      (e.enemyType === "boss" ||
-        e.enemyType === "boss_form2" ||
-        e.enemyType === "boss_form3"),
+      e.def?.boss,
   );
   if (bossEntity) {
     const bossBarW = Math.min(400, w * 0.4);

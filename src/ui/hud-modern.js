@@ -273,10 +273,8 @@ function drawKillsPill(game, ctx, w, fs) {
 
 function findBoss(game) {
   for (const e of game.entities) {
-    if (e.type === "enemy" && e.active && e.health > 0 &&
-      (e.enemyType === "boss" || e.enemyType === "boss_form2" || e.enemyType === "boss_form3")) {
-      return e;
-    }
+    // Any campaign boss (the def flag): the Lord's forms and the Hound.
+    if (e.type === "enemy" && e.active && e.health > 0 && e.def?.boss) return e;
   }
   return null;
 }
@@ -299,7 +297,10 @@ export function drawBossBar(game, ctx, w, fs, py = 18) {
   ctx.fillStyle = UI.textDim;
   ctx.textAlign = "right";
   ctx.fillText(`${Math.ceil(boss.health)} / ${boss.maxHealth}`, px + pw - 14, py + ph - 5);
-  label(ctx, `FORM ${form}`, px + 14, py + ph - 5, Math.round(8 * fs), UI.critSoft);
+  // A boss with no forms says whether it can be hit: the Hound is only solid
+  // while you shift.
+  const tag = boss.def.form ? `FORM ${form}` : boss.def.phased ? (boss._phased ? "PHASED - SHIFT TO HIT" : "SOLID") : "";
+  if (tag) label(ctx, tag, px + 14, py + ph - 5, Math.round(8 * fs), boss._phased ? UI.textDim : UI.critSoft);
 }
 
 function drawVitals(game, ctx, w, h, f, fs) {

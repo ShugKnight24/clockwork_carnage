@@ -13,7 +13,8 @@
  *               band, pistons' footprints, trains, stasis motes, the loop's
  *               seam, hunter rifts
  *   the Hound   a heat-shimmer drawn from a stuttered position with a trail
- *               of afterimages and scorched footprints; solid while you shift
+ *               of afterimages and scorched footprints; solid while you shift;
+ *               its tells (the lunge's lane, the quills' fan) for everyone
  *
  * `renderChronoScreen` adds the screen-space parts: the stasis room's
  * desaturation and a crimson edge when Resonance is high.
@@ -21,6 +22,7 @@
 import { predictEnemy, windupLine, projectilePath } from "../systems/chrono-powers.js";
 import { hazardState } from "../systems/chrono-hazards.js";
 import { pendingReplay, FORM2 } from "../systems/boss-form2.js";
+import { quillFan } from "../systems/ai.js";
 
 const FLOOR = 0.5;
 const WAIST = 0.12;
@@ -555,6 +557,49 @@ function drawRifts(ctx, r, game, planeMul, yShift) {
 }
 
 /**
+ * The Hound's tells, for everyone, shifting or not (Foresight adds its thin
+ * red line on top): a scorched lane burning brighter along the floor where
+ * its lunge will run, and the fan its quills will fly while its ridge stands.
+ */
+function houndTells(ctx, r, game, planeMul, yShift) {
+  const open = (x, y) => game.map.grid[Math.floor(y)]?.[Math.floor(x)] === 0;
+  const now = performance.now() / 1000;
+  ctx.save();
+  for (const e of game.entities) {
+    if (e.type !== "enemy" || !e.active || e.dissolving || !e.def?.phased) continue;
+    const d = e.def;
+    if (e._chargeState === "windup") {
+      const t = 1 - Math.max(0, e._chargeTimer ?? 0) / (d.chargeWindup ?? 0.6);
+      const a = e._chargeAngle ?? 0;
+      const reach = (e.speed ?? d.speed) * (d.chargeSpeedMul ?? 3) * (d.chargeDuration ?? 0.9);
+      let len = 0;
+      while (len < reach && open(e.x + Math.cos(a) * (len + 0.25), e.y + Math.sin(a) * (len + 0.25))) len += 0.25;
+      const pulse = 0.75 + 0.25 * Math.sin(now * (10 + 20 * t));
+      for (let s = 0.6; s < len; s += 0.45) {
+        const k = 1 - s / (len + 1);
+        floorMark(ctx, r, game, planeMul, yShift, e.x + Math.cos(a) * s, e.y + Math.sin(a) * s, 0.3 + 0.1 * t,
+          `rgba(255,${Math.round(150 - 110 * t)},40,${(0.12 + 0.45 * t) * k * pulse})`);
+      }
+      ctx.strokeStyle = `rgba(255,${Math.round(200 - 150 * t)},80,${0.35 + 0.5 * t})`;
+      ctx.lineWidth = 1 + 2.5 * t;
+      worldLine(ctx, r, game, planeMul, yShift, e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, FLOOR - 0.01);
+    }
+    if (e._quillState === "bristle" && d.quills) {
+      const q = d.quills;
+      const t = 1 - Math.max(0, e._quillTimer ?? 0) / q.windup;
+      ctx.strokeStyle = `rgba(255,215,154,${0.2 + 0.55 * t})`;
+      ctx.lineWidth = 1 + t;
+      for (const a of quillFan(q, e._quillAim ?? 0)) {
+        let len = 0;
+        while (len < 7 && open(e.x + Math.cos(a) * (len + 0.25), e.y + Math.sin(a) * (len + 0.25))) len += 0.25;
+        worldLine(ctx, r, game, planeMul, yShift, e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len, WAIST + 0.08, true);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/**
  * The Hound out of phase: its afterimages and footprints here, and the proxies
  * the sprite pass draws at a stuttered position.
  */
@@ -604,6 +649,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
   drawObjective(ctx, r, game, planeMul, yShift);
   drawForm2(ctx, r, game, planeMul, yShift);
   drawRifts(ctx, r, game, planeMul, yShift);
+  houndTells(ctx, r, game, planeMul, yShift);
   let sprites = houndShimmer(ctx, r, game, planeMul, yShift);
   if (cp?.lock) drawLock(ctx, r, game, planeMul, yShift, cp.lock);
   if (cp?.echo) {

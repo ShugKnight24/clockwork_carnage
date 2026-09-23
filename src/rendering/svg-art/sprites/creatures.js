@@ -324,6 +324,166 @@ function beast(v = 0) {
   return { poses, fx: [{ box: [-40, -52, 48, 64], markup: tail, anchor: "tail", anim: { type: "sway", amp: 0.16, speed: 0.0034, pivot: [0, 0] }, back: true }] };
 }
 
+/* ── The Hound (suit C-0016) ───────────────────────────────────────────────
+ * The prototype before yours, empty, running on all fours: the suit's arms
+ * are its forelegs, the helmet hangs low like a hound on a scent, a ridge of
+ * heat-sink quills runs down its back, and the visor is open on nothing but
+ * an ember that turns like a clock hand. Side-on like the beast, facing +x.
+ * `bristle` is the quill volley's tell: the ridge stands up and runs hot.
+ */
+const HOUND_POSES = {
+  idle: { lean: 0, head: 6, quill: 0, fore: [0, 0], hind: [0, 0] },
+  moveA: { lean: -3, head: 2, bob: -4, quill: -6, fore: [30, 14], hind: [-24, 8] },
+  moveB: { lean: 3, head: 8, bob: 0, quill: -6, fore: [-22, 6], hind: [26, 16] },
+  // The lunge's tell: coiled low, nose down, the ridge laid flat.
+  windup: { lean: 7, head: 16, crouch: 16, quill: -18, fore: [-16, 2], hind: [20, 4] },
+  attack: { lean: -8, head: -8, bob: -12, quill: -24, fore: [58, 30], hind: [-44, 4], reach: 1 },
+  hurt: { lean: -12, head: -20, quill: 12, fore: [8, 4], hind: [-6, 2] },
+  bristle: { lean: -4, head: 20, crouch: 6, quill: 44, fore: [20, 0], hind: [-14, 0], hot: 1 },
+};
+
+/** Where the quills root along the back (before the body's lean). */
+const QUILL_ROOTS = [[-48, -24], [-34, -34], [-19, -41], [-4, -45], [11, -44], [25, -38]];
+
+function hound() {
+  const poses = {};
+  for (const [name, b] of Object.entries(HOUND_POSES)) {
+    const bob = (b.bob || 0) + (b.crouch || 0);
+    const hip = [-44, -2 + bob];
+    const shoulder = [36, -14 + bob];
+    const pivot = [-4, -10 + bob];
+    const rotBody = `rotate(${b.lean} ${pivot[0]} ${f(pivot[1])})`;
+
+    // A suit leg, digitigrade in a crouch: thigh, shin, boot.
+    const hindLeg = (h, [swing, lift], far) => {
+      const foot = [h[0] + Math.sin((swing * Math.PI) / 180) * 34, SOLE - 3 - lift];
+      const knee = [h[0] + 16, (h[1] + foot[1]) / 2 - 6];
+      const ankle = [foot[0] - 12, foot[1] - 16];
+      const mat = far ? "url(#hideDk)" : "url(#armorDk)";
+      let m = limb(h, knee, 21, 17, mat) + limb(knee, ankle, 15, 11, mat) + limb(ankle, [foot[0] - 2, foot[1] - 4], 11, 9, mat);
+      if (!far) {
+        m += plate([[h[0] - 10, h[1] - 6], [knee[0] + 2, knee[1] - 12], [knee[0] + 6, knee[1] + 2], [h[0] - 6, h[1] + 12]], "url(#armor)", 1.2, 0.5);
+        m += plate([[knee[0] - 4, knee[1] - 2], [knee[0] + 7, knee[1] + 2], [ankle[0] + 5, ankle[1] + 4], [ankle[0] - 3, ankle[1]]], "url(#armor)", 1.1, 0.4);
+      }
+      m += sh(`M${P(foot[0] - 13, foot[1] - 7)}h20q6 0 7 7h-27Z`, "url(#gun)", 1.1);
+      return m;
+    };
+    // A suit arm used as a foreleg: elbow bent back like a dog's, a gauntlet
+    // splayed into three long talons.
+    const foreLeg = (s, [swing, lift], far) => {
+      const reach = b.reach || 0;
+      const hand = [s[0] + 8 + Math.sin((swing * Math.PI) / 180) * 38, SOLE - 4 - lift - reach * 22];
+      const elbow = [(s[0] + hand[0]) / 2 - 12 + reach * 10, (s[1] + hand[1]) / 2 + 2 - reach * 8];
+      const mat = far ? "url(#hideDk)" : "url(#armorDk)";
+      let m = limb(s, elbow, 22, 17, mat) + limb(elbow, hand, 17, 14, mat);
+      if (!far) {
+        m += plate([[s[0] - 8, s[1] - 4], [elbow[0] + 6, elbow[1] - 8], [elbow[0] + 4, elbow[1] + 6], [s[0] - 10, s[1] + 10]], "url(#armor)", 1.2, 0.45);
+        m += plate([[elbow[0] + 2, elbow[1] - 5], [hand[0] + 4, hand[1] - 8], [hand[0] - 3, hand[1] - 1], [elbow[0] - 4, elbow[1] + 5]], "url(#armor)", 1.1, 0.4);
+      }
+      const talon = (dx, dy, len) => {
+        const a = [hand[0] + dx * 0.3, hand[1] - 3 + dy * 0.3];
+        const t = [hand[0] + dx + len, hand[1] + dy + (reach ? -6 : 3)];
+        return `M${P(a[0], a[1] - 2.2)}Q${P((a[0] + t[0]) / 2, a[1] - 5)} ${P(t[0], t[1])}Q${P((a[0] + t[0]) / 2, a[1] + 2)} ${P(a[0], a[1] + 2.2)}Z`;
+      };
+      m += sh(`M${P(hand[0] - 10, hand[1] - 11)}h17l5 9l-5 5h-17Z`, "url(#gun)", 1.1);
+      m += sh(talon(4, -2, 16) + talon(6, 2, 20) + talon(2, 5, 14), far ? "url(#gun)" : "url(#talon)", 1);
+      return m;
+    };
+
+    let body = hindLeg(hip, [-b.hind[0] * 0.7, b.hind[1] * 0.6], true) + foreLeg(shoulder, [-b.fore[0] * 0.7, b.fore[1] * 0.6], true);
+
+    // ── The suit's back and chest, hunched ──
+    let torso = "";
+    torso += sh(
+      `M-64 ${f(4 + bob)}Q-66 ${f(-26 + bob)} -40 ${f(-34 + bob)}Q-4 ${f(-56 + bob)} 34 ${f(-40 + bob)}` +
+        `Q54 ${f(-32 + bob)} 54 ${f(-12 + bob)}L50 ${f(10 + bob)}Q10 ${f(20 + bob)} -40 ${f(16 + bob)}Q-60 ${f(14 + bob)} -64 ${f(4 + bob)}Z`,
+      "url(#armor)",
+      1.9,
+    );
+    // The undersuit: dark, ribbed, torn open over nothing.
+    torso += sh(`M-58 ${f(8 + bob)}Q-8 ${f(26 + bob)} 50 ${f(4 + bob)}Q10 ${f(20 + bob)} -40 ${f(16 + bob)}Z`, "url(#hideDk)", 0);
+    for (const x of [-34, -22, -10, 2, 14, 26]) torso += ln(`M${x} ${f(8 + bob + Math.abs(x) * 0.05)}l2 ${f(8 - Math.abs(x) * 0.08)}`, INK, 1, 0.55);
+    torso += sh(`M-14 ${f(2 + bob)}Q0 ${f(-8 + bob)} 16 ${f(0 + bob)}Q14 ${f(12 + bob)} 0 ${f(13 + bob)}Q-14 ${f(12 + bob)} -14 ${f(2 + bob)}Z`, "url(#void)", 1.3);
+    torso += ln(`M-10 ${f(4 + bob)}l6 3M10 ${f(2 + bob)}l-4 5M-2 ${f(0 + bob)}l1 6`, "#6a5646", 0.9, 0.8);
+    // Back plates, a segmented spine the quills root in.
+    const backPlate = (x0, x1, y0, y1) =>
+      plate([[x0, y0 + bob + 8], [x0 + 3, y0 + bob - 2], [x1 - 2, y1 + bob - 3], [x1, y1 + bob + 7]], "url(#armorDk)", 1.3, 0.55);
+    torso += backPlate(-58, -36, -26, -34) + backPlate(-38, -12, -34, -44) + backPlate(-14, 10, -44, -46) + backPlate(8, 32, -46, -38);
+    torso += spec(`M-60 ${f(-12 + bob)}Q-44 ${f(-32 + bob)} -14 ${f(-46 + bob)}`, 0.5, 1.8);
+    // Pauldron over the near shoulder, with its stencil: C-0016.
+    torso += plate([[18, -30 + bob], [48, -34 + bob], [56, -10 + bob], [26, -2 + bob]], "url(#armor)", 1.4, 0.6);
+    torso += ln(`M28 ${f(-20 + bob)}h4M34 ${f(-22 + bob)}v4M38 ${f(-21 + bob)}h3v3h-3M44 ${f(-22 + bob)}v4M47 ${f(-22 + bob)}h3v4h-3z`, "#2a1c12", 1.1, 0.85);
+    torso += plate([[-62, -8 + bob], [-44, -16 + bob], [-38, 4 + bob], [-58, 10 + bob]], "url(#armor)", 1.2, 0.45);
+    torso += circ(40, -6 + bob, 2, "url(#brass)", 0.6) + circ(-50, 0 + bob, 1.8, "url(#brass)", 0.6);
+    // Scorch where the heat vents: a C-series suit running with nobody to cool.
+    torso += `<path d="M-30 ${f(-30 + bob)}q8 6 18 2q-6 8 -18 6Z" fill="#1a0e06" opacity=".45"/>`;
+
+    // ── Quills: heat-sink fins along the ridge ──
+    let quills = "";
+    let quillGlow = "";
+    QUILL_ROOTS.forEach(([qx, qy], i) => {
+      const root = [qx, qy + bob];
+      const len = 22 + (i === 2 || i === 3 ? 8 : i === 0 ? -4 : 3);
+      const deg = 222 - b.quill * 0.95 + (i - 2.5) * 3;
+      const tip = polar(root, deg, len);
+      const side = polar(root, deg + 90, 3.4);
+      const side2 = polar(root, deg - 90, 3.4);
+      quills += sh(poly([side, lerp(side, tip, 0.7), tip, lerp(side2, tip, 0.7), side2]), "url(#quill)", 1.1);
+      if (name !== "hurt") {
+        const r = b.hot ? 3.4 : 1.6;
+        quillGlow += circ(tip[0], tip[1], r, b.hot ? "#fff0c8" : "#ffb45a", 0);
+        if (b.hot) quillGlow += ln(`M${P(lerp(root, tip, 0.4)[0], lerp(root, tip, 0.4)[1])}L${P(tip[0], tip[1])}`, "#ff9a3a", 2, 0.9);
+      }
+    });
+
+    // ── The helmet: open on nothing ──
+    const hp = [66, -14 + bob];
+    // A human helmet on a hound's neck: drawn a size up so it reads as a suit's.
+    const rotHead = `rotate(${b.head} ${hp[0] - 14} ${hp[1]}) translate(${hp[0] - 14} ${f(hp[1])}) scale(1.22) translate(${14 - hp[0]} ${f(-hp[1])})`;
+    let head = sh(
+      `M${P(hp[0] - 16, hp[1] - 14)}Q${P(hp[0] + 2, hp[1] - 28)} ${P(hp[0] + 20, hp[1] - 12)}Q${P(hp[0] + 26, hp[1] - 2)} ${P(hp[0] + 22, hp[1] + 10)}` +
+        `Q${P(hp[0] + 8, hp[1] + 18)} ${P(hp[0] - 10, hp[1] + 14)}Q${P(hp[0] - 22, hp[1] + 4)} ${P(hp[0] - 16, hp[1] - 14)}Z`,
+      "url(#armor)",
+      1.8,
+    );
+    head += spec(`M${P(hp[0] - 12, hp[1] - 15)}Q${P(hp[0] + 2, hp[1] - 25)} ${P(hp[0] + 16, hp[1] - 13)}`, 0.55, 1.4);
+    // Visor frame, and the dark where a face should be, cracked.
+    head += sh(`M${P(hp[0] + 4, hp[1] - 10)}L${P(hp[0] + 22, hp[1] - 6)}L${P(hp[0] + 22, hp[1] + 6)}L${P(hp[0] + 6, hp[1] + 6)}Z`, "url(#void)", 1.5);
+    head += ln(`M${P(hp[0] + 10, hp[1] - 9)}l3 6l-2 4l3 5`, "#8a7058", 0.9, 0.9);
+    head += sh(`M${P(hp[0] - 6, hp[1] + 8)}q10 6 24 0l-2 6q-10 4 -20 0Z`, "url(#armorDk)", 1.2);
+    head += sh(`M${P(hp[0] - 14, hp[1] - 4)}h8v10h-8Z`, "url(#gun)", 1);
+    // A torn cable where a neck seal used to be.
+    head += ln(`M${P(hp[0] - 18, hp[1] + 6)}q-6 8 -2 16`, INK, 2.6) + ln(`M${P(hp[0] - 18, hp[1] + 6)}q-6 8 -2 16`, "#3c3a3a", 1.4);
+
+    const near = hindLeg(hip, b.hind, false) + foreLeg(shoulder, b.fore, false);
+    body += `<g transform="${rotBody}">${torso}${quills}<g transform="${rotHead}">${head}</g></g>` + near;
+
+    // ── Glow: the ember in the helmet, the vents, the quill tips ──
+    const eye = [hp[0] + 14, hp[1] - 1];
+    const hotEye = name === "windup" || name === "attack" || b.hot;
+    let gHead = "";
+    if (name !== "hurt") {
+      gHead += circ(eye[0], eye[1], hotEye ? 4.4 : 3, "#ffb020", 0) + circ(eye[0], eye[1], hotEye ? 2 : 1.2, "#fff4d0", 0);
+      // A clock hand, turning in the empty helmet.
+      gHead += ln(`M${P(eye[0], eye[1])}l${f(hotEye ? 5 : 3.5)} ${f(hotEye ? -4 : -3)}`, "#ffd890", 1.2);
+      gHead += `<circle cx="${f(eye[0])}" cy="${f(eye[1])}" r="${hotEye ? 7.5 : 6}" fill="none" stroke="#ff9a3a" stroke-width="1" opacity=".75"/>`;
+    } else gHead += circ(eye[0], eye[1], 1.6, "#a05010", 0);
+    let gBody = name === "hurt" ? "" : ln(`M-6 ${f(4 + bob)}q6 -2 12 2`, "#ff7a2a", 1.6, 0.8) + circ(2, 6 + bob, 1.6, "#ffc070", 0);
+    gBody += quillGlow;
+    if (name === "windup") gBody += ln(`M-58 ${f(-10 + bob)}Q-8 ${f(-58 + bob)} 44 ${f(-40 + bob)}`, "#ff6a1a", 1.8, 0.75);
+    if (name === "attack") gBody += ln(`M-60 ${f(-4 + bob)}Q-10 ${f(-52 + bob)} 50 ${f(-34 + bob)}`, "#ffd08a", 2.2, 0.6);
+    const cable = rot([[-62, 6 + bob]], b.lean, pivot)[0];
+    poses[name] = {
+      body,
+      glow: `<g transform="${rotBody}">${glow(gBody)}<g transform="${rotHead}">${glow(gHead)}</g></g>`,
+      at: { cable },
+    };
+  }
+  // A coolant hose torn out of the back, dragging.
+  const hose = ln("M0 0Q-10 16 -4 30Q0 40 -8 48", INK, 5) + ln("M0 0Q-10 16 -4 30Q0 40 -8 48", "#4a3e36", 3) + sh("M-12 46h8l2 6h-12Z", "url(#gun)", 1);
+  return { poses, fx: [{ box: [-24, -6, 34, 62], markup: hose, anchor: "cable", anim: { type: "sway", amp: 0.14, speed: 0.0031, pivot: [0, 0] }, back: true }] };
+}
+
 function gearPlate(x, y, r) {
   let d = "";
   const teeth = 9;
@@ -342,11 +502,15 @@ export const CREATURES = {
   glitchling: { build: glitchling, variants: 3, box: [-50, -54, 100, 94], rim: "#7dff9a", floater: true, jitter: true },
   phantom: { build: phantom, variants: 3, box: [-56, -100, 112, 176], rim: "#e59bff", floater: true, size: 1.1 },
   beast: { build: beast, variants: 2, box: [-110, -80, 222, 176], rim: "#ff8a3a" },
-  // The Hound (C-0016) until its own art lands: the plated beast in pale heat
-  // colours, a shimmer around it, snapping between positions.
-  hound: { build: (v) => beast(v + 1), variants: 1, box: [-110, -80, 222, 176], rim: "#ffe2a8", aura: "#ffd79a", jitter: true, size: 1.2 },
+  // The Hound (C-0016): an empty C-series suit on all fours, pale with heat.
+  hound: { build: hound, variants: 1, box: [-100, -96, 212, 192], rim: "#ffe2a8", aura: "#ffd79a", size: 1.25 },
 };
 
 export const CREATURE_DEFS = {
+  hound:
+    `<linearGradient id="hideDk" x1="0" y1="0" x2="1" y2=".45"><stop offset="0" stop-color="#4a3a2c"/><stop offset=".4" stop-color="#241a12"/><stop offset="1" stop-color="#080604"/></linearGradient>` +
+    `<radialGradient id="void" cx=".6" cy=".45" r=".7"><stop offset="0" stop-color="#2a1406"/><stop offset=".45" stop-color="#0a0503"/><stop offset="1" stop-color="#000000"/></radialGradient>` +
+    `<linearGradient id="quill" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#2a2420"/><stop offset=".55" stop-color="#8a7a66"/><stop offset="1" stop-color="#f4e2c0"/></linearGradient>` +
+    `<linearGradient id="talon" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a3028"/><stop offset=".6" stop-color="#b8a488"/><stop offset="1" stop-color="#fff1d8"/></linearGradient>`,
   phantom: `<linearGradient id="mask" x1="0" y1="0" x2="1" y2=".6"><stop offset="0" stop-color="#fff6ff"/><stop offset=".5" stop-color="#cdb8d8"/><stop offset="1" stop-color="#5a4a66"/></linearGradient>`,
 };

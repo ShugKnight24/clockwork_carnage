@@ -4,6 +4,8 @@
 // renders a warning before the hit resolves (see renderer drawEnemy).
 // Sub-boss abilities: summon, chrono-bomb, teleport/leap, shield regen, HUD disrupt.
 // Boss special abilities: charge, stomp, missile spread, warp.
+// The Hound: a beast's lunge with a long tell, and quill volleys (a bristle,
+// then a fan of slow quills) that land whether or not it is phased.
 // Chrono-bomb fuse + detonation.
 // Chronos: an enemy standing in a Time-Lock's slab runs at a tenth, and a
 // Rewind echo draws every enemy nearer to it than to the player (ctx.chrono).
@@ -49,6 +51,19 @@ export function beginWindup(e, time) {
   e._windupTotalMs = ms;
   e._windupLeftMs = ms;
   e.lastAttackTime = time;
+}
+
+/**
+ * The directions of a quill volley: `count` quills spread evenly across
+ * `spread` radians, centred on the aim. Pure, so the telegraph can draw the
+ * fan the volley will follow.
+ * @param {{ count: number, spread: number }} q - a def's `quills`
+ * @param {number} aim - radians
+ */
+export function quillFan(q, aim) {
+  const n = Math.max(1, q.count);
+  if (n === 1) return [aim];
+  return Array.from({ length: n }, (_, i) => aim - q.spread / 2 + (q.spread * i) / (n - 1));
 }
 
 /**
@@ -189,13 +204,18 @@ export class AISystem {
 
         // Beast charge ability (telegraph → sprint → impact)
         this._updateBeastCharge(e, enemyDt, dist, angle, player, map, fx);
+        // The Hound's quills (telegraph → a fan of rounds, twice when hurt)
+        if (e.def.quills) this._updateQuills(e, enemyDt, dist, target, player, map, projectiles, entities, audio);
 
         // Movement gate: normally stop inside attackRange, but strafe_fire / erratic
         // keep moving to create combat dynamism. Charging beast is controlled separately.
         const inAttackBand = dist <= e.def.attackRange * 0.8;
         const keepMoving = ai === "strafe_fire" || ai === "erratic";
         const charging = e._chargeState === "sprint";
-        const shouldMove = !charging && (!inAttackBand || keepMoving);
+        // The Hound plants its feet while its quills stand up, and while it
+        // coils for a lunge (the lane it drew starts where it stands).
+        const bristling = e._quillState === "bristle" || (e.def.lungeLock && e._chargeState === "windup");
+        const shouldMove = !charging && !bristling && (!inAttackBand || keepMoving);
         e._moveSpeed = 0;
 
         if (shouldMove) {
@@ -636,6 +656,7 @@ export class AISystem {
     e._chargeState = e._chargeState ?? "ready";
 
     if (e._chargeState === "ready") {
+      if (e._quillState && e._quillState !== "ready") return;
       if (e._chargeCD <= 0 && dist > def.attackRange && dist < def.sightRange) {
         e._chargeState = "windup";
         e._chargeTimer = def.chargeWindup ?? 0.6;
@@ -646,10 +667,13 @@ export class AISystem {
 
     if (e._chargeState === "windup") {
       e._chargeTimer -= dt;
+      // A lane-locked lunge (the Hound) follows you through most of its tell,
+      // then commits: the lane it drew is the lane it runs.
+      if (def.lungeLock && e._chargeTimer > (def.chargeWindup ?? 0.6) * 0.3) e._chargeAngle = angle;
       if (e._chargeTimer <= 0) {
         e._chargeState = "sprint";
         e._chargeTimer = def.chargeDuration ?? 0.9;
-        e._chargeAngle = angle; // re-aim at sprint start
+        if (!def.lungeLock) e._chargeAngle = angle; // re-aim at sprint start
       }
       return;
     }
@@ -697,6 +721,52 @@ export class AISystem {
         e._chargeCD = def.chargeCooldown;
       }
     }
+  }
+
+  /**
+   * Quill volleys: at range and in sight, the Hound stops and bristles for
+   * `windup` seconds (its ridge stands and runs hot, and the fan it will fire
+   * is drawn on the floor), then fires `count` slow quills across `spread`.
+   * Below half health it fires a second volley straight after the first.
+   * Quills are ordinary enemy rounds: they hit while it is phased, and a
+   * Time-Lock catches them. Timers in seconds (enemy time).
+   */
+  _updateQuills(e, dt, dist, target, player, map, projectiles, entities, audio) {
+    const q = e.def.quills;
+    e._quillState = e._quillState ?? "ready";
+    // It opens with a volley on sight: the first comes a second in.
+    e._quillCD = (e._quillCD ?? 1.2) - dt;
+    if (e._quillState === "ready") {
+      if (e._quillCD > 0 || e._chargeState !== "ready" || e.state !== "chase") return;
+      if (dist < q.minRange || dist > q.maxRange) return;
+      if (!hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) return;
+      e._quillState = "bristle";
+      e._quillTimer = q.windup;
+      e._quillVolleys = e.health < e.maxHealth * 0.5 ? q.volleysHurt : 1;
+      e._quillAim = Math.atan2(target.y - e.y, target.x - e.x);
+      audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan?.(e.x, e.y, player.x, player.y, player.angle) ?? 0, dist);
+      return;
+    }
+    e._quillTimer -= dt;
+    // Tracks you until the last fifth of the tell, then commits.
+    if (e._quillTimer > q.windup * 0.2) e._quillAim = Math.atan2(target.y - e.y, target.x - e.x);
+    e.angle = e._quillAim;
+    if (e._quillTimer > 0) return;
+    for (const a of quillFan(q, e._quillAim)) {
+      const quill = new Projectile(e.x + Math.cos(a) * 0.6, e.y + Math.sin(a) * 0.6, Math.cos(a), Math.sin(a), e.def.quills.damage, q.speed, "enemy");
+      quill.color = "#ffd79a";
+      quill._quill = true;
+      projectiles.push(quill);
+      entities.push(quill);
+    }
+    audio.enemyShoot(audio.calculatePan(e.x, e.y, player.x, player.y, player.angle));
+    e._quillVolleys--;
+    if (e._quillVolleys > 0) {
+      e._quillTimer = q.gap;
+      return;
+    }
+    e._quillState = "ready";
+    e._quillCD = q.cooldown;
   }
 
   /** Patrol wander: pick a random direction and drift slowly */

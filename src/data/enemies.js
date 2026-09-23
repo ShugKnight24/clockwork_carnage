@@ -177,34 +177,55 @@ export const ENEMY_TYPES = {
     hitZones: BOSS_ZONES,
   },
   // Act II's boss: suit C-0016, the prototype before yours, walking with
-  // nobody inside. A placeholder until its own art and phasing land (spec
-  // §6): a chrono beast's body and moves at boss weight, drawn in the pale
-  // heat colours of an empty suit and stuttering between frames.
+  // nobody inside (spec §6). Always visible as a heat-shimmer, solid only
+  // while the player shifts (decision 7): src/systems/chrono-powers.js sets
+  // `_phased`. Its attacks land either way, and each has a long tell:
+  //   lunge  a beast's charge (the charge fields are SECONDS here, which is
+  //          what _updateBeastCharge counts in): coil for 0.9 s with the lane
+  //          drawn on the floor, then run it
+  //   quills a bristle, then five slow quills in a fan (ai.js _updateQuills);
+  //          two volleys back to back below half health
+  // It sheds echo drones as it hunts: kills that feed the chrono pool the
+  // fight runs on.
   hound: {
     name: "The Hound",
-    health: 1100,
-    speed: 1.3,
-    damage: 32,
+    health: 1000,
+    speed: 1.35,
+    damage: 30,
     attackRate: 1300,
-    attackRange: 3,
+    attackRange: 2.6,
     sightRange: 30,
-    radius: 0.5,
+    radius: 0.55,
     score: 8000,
     color1: "#e8c9a0",
     color2: "#3a2a1e",
     xp: 300,
     attackType: "melee",
-    attackWindupMs: 450,
+    attackWindupMs: 520,
     ai: "ambush",
-    chargeCooldown: 4000,
-    chargeWindup: 0.6,
-    chargeDuration: 0.9,
-    chargeSpeedMul: 3.0,
-    chargeDamageMul: 1.5,
+    chargeCooldown: 4.2,
+    chargeWindup: 0.9,
+    chargeDuration: 0.95,
+    chargeSpeedMul: 5,
+    chargeDamageMul: 1.4,
+    lungeLock: true,
+    quills: {
+      cooldown: 5.5,
+      windup: 0.75,
+      count: 5,
+      spread: 0.7,
+      speed: 6.5,
+      damage: 12,
+      minRange: 3.5,
+      maxRange: 16,
+      volleysHurt: 2,
+      gap: 0.45,
+    },
+    summonType: "echoDrone",
+    summonInterval: 15000,
+    summonMax: 2,
     chronoMultiplier: 1.5,
     boss: true,
-    // Always visible as a heat-shimmer, solid only while the player shifts
-    // (spec decision 7): src/systems/chrono-powers.js sets `_phased`.
     phased: true,
     hitZones: [
       { name: "head", top: 0.85, bottom: 0.65, mult: 2.5, tight: true },
