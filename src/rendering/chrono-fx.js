@@ -414,27 +414,29 @@ function drawForm2(ctx, r, game, planeMul, yShift) {
   for (const e of game.entities) {
     if (e.type !== "enemy" || !e.active || e.state === "dead" || e.dissolving) continue;
     const charge = e.def?.counterShift ? e._counterCharge ?? 0 : 0;
-    if (charge > 0) {
-      const R = 1.8;
-      const n = 24;
-      const filled = Math.round(n * Math.min(1, charge));
-      const warm = charge < 0.5;
-      for (let i = 0; i < n; i++) {
-        const a0 = -Math.PI / 2 + (i / n) * Math.PI * 2;
-        const a1 = -Math.PI / 2 + ((i + 1) / n) * Math.PI * 2;
-        const on = i < filled;
-        ctx.lineWidth = on ? 6 : 2;
-        ctx.strokeStyle = on
-          ? warm ? "rgba(255,211,106,0.9)" : `rgba(255,42,74,${0.75 + 0.25 * Math.sin(now * 18)})`
-          : "rgba(255,255,255,0.18)";
-        worldLine(ctx, r, game, planeMul, yShift, e.x + Math.cos(a0) * R, e.y + Math.sin(a0) * R,
-          e.x + Math.cos(a1) * R, e.y + Math.sin(a1) * R, FLOOR - 0.01);
-      }
-      // The clock hand: his reach, closing on twelve.
-      const hand = -Math.PI / 2 + Math.min(1, charge) * Math.PI * 2;
+    const c = charge > 0 ? proj(r, game, planeMul, yShift, e.x, e.y, -0.05) : null;
+    if (c && visible(r, c)) {
+      // A clock face standing over him, facing you: it fills from gold to
+      // crimson as his hand closes, and when the hand reaches twelve he has it.
+      const R = Math.max(14, Math.min(220, (r.height / c.depth) * 0.75));
+      const k = Math.min(1, charge);
+      const warm = k < 0.5;
+      ctx.lineWidth = Math.max(2, R * 0.12);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = warm ? "rgba(255,211,106,0.9)" : `rgba(255,42,74,${0.75 + 0.25 * Math.sin(now * 18)})`;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, R, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+      ctx.stroke();
+      const hand = -Math.PI / 2 + k * Math.PI * 2;
       ctx.strokeStyle = "rgba(255,240,220,0.9)";
-      ctx.lineWidth = 2;
-      worldLine(ctx, r, game, planeMul, yShift, e.x, e.y, e.x + Math.cos(hand) * R, e.y + Math.sin(hand) * R, FLOOR - 0.01);
+      ctx.lineWidth = Math.max(1.5, R * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.x + Math.cos(hand) * R * 0.85, c.y + Math.sin(hand) * R * 0.85);
+      ctx.stroke();
     }
     for (const s of e.def?.replay ? pendingReplay(e) : []) {
       const soon = Math.max(0, Math.min(1, 1 - s.in));
