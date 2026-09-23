@@ -99,26 +99,83 @@ describe("CampaignManager on ACTS", () => {
     });
   });
 
-  it("wins after the last act's boss, offering NG+ until the true-ending cycle", () => {
+  it("wins after the last act's boss: the true ending takes NG+ and every fragment", () => {
     const last = ACTS.at(-1);
-    const run = (ngPlusCycle) => {
+    const run = (ngPlusCycle, found) => {
       const c = makeCampaign();
+      c.g.archive = { fragmentProgress: () => ({ found, total: NG_PLUS.fragments }) };
       c.cm.act = last.id;
       c.cm.level = last.levels.length - 1;
       c.cm.ngPlusCycle = ngPlusCycle;
       c.cm.handleBossKill();
       return c;
     };
-    const first = run(0);
+    // The first run ends on the ending and the epilogue, and offers a loop.
+    const first = run(0, NG_PLUS.fragments);
     expect(first.scenes).toEqual(last.outro);
+    expect(last.outro).toEqual(["true_victory", "epilogue_message"]);
     expect(first.g.state).toBe(GameState.VICTORY);
     expect(first.cm.ngPlusPrompt).toBe(true);
+    expect(first.cm.trueEnding).toBe(false);
     expect(first.g.achievementStats.campaignComplete).toBe(true);
 
-    const trueEnd = run(NG_PLUS.trueEndingCycle);
+    // NG+1 (spec decision 2) with all twelve: the true ending.
+    expect(NG_PLUS.trueEndingCycle).toBe(1);
+    expect(NG_PLUS.fragments).toBe(12);
+    const trueEnd = run(1, 12);
     expect(trueEnd.scenes).toEqual([...last.outro, ...NG_PLUS.trueEnding]);
     expect(trueEnd.g.state).toBe(GameState.VICTORY);
     expect(trueEnd.cm.ngPlusPrompt).toBe(false);
+    expect(trueEnd.cm.trueEnding).toBe(true);
+
+    // One memory short, and the loop goes round again, even on NG+3.
+    for (const cycle of [1, 3]) {
+      const short = run(cycle, 11);
+      expect(short.scenes).toEqual(last.outro);
+      expect(short.cm.ngPlusPrompt).toBe(true);
+      expect(short.cm.trueEnding).toBe(false);
+    }
+  });
+
+  it("plays the Gathering's déjà-vu echoes in NG+, and the originals before it", () => {
+    const act2 = ACTS.find((a) => a.id === 2);
+    const echoed = Object.keys(NG_PLUS.scenes);
+    expect(echoed).toHaveLength(6);
+    for (const ng of [0, 1]) {
+      const played = [];
+      act2.levels.forEach((entry, level) => {
+        if (level === 0) return;
+        const { cm, scenes } = makeCampaign();
+        cm.act = 2;
+        cm.level = level - 1;
+        cm.ngPlusCycle = ng;
+        cm.nextLevel();
+        played.push(...scenes);
+      });
+      // The act's intro, through the same path.
+      const { cm, scenes } = makeCampaign();
+      cm.ngPlusCycle = ng;
+      cm._playScenes(act2.intro, () => {});
+      played.push(...scenes);
+      for (const key of echoed) {
+        expect(played.includes(key), `ng ${ng}: ${key}`).toBe(ng === 0);
+        expect(played.includes(NG_PLUS.scenes[key]), `ng ${ng}: ${NG_PLUS.scenes[key]}`).toBe(ng > 0);
+      }
+    }
+  });
+
+  it("announces each parting gift once, as its ally stays behind", () => {
+    const iv = ACTS.at(-1);
+    const heard = [];
+    iv.levels.forEach((entry, level) => {
+      const { g, cm, aria } = makeCampaign();
+      g.chronoPowers = { startLevel() {}, freshGifts: entry.gifts ?? [] };
+      cm.act = iv.id;
+      cm.loadLevel(level);
+      vi.advanceTimersByTime(10000);
+      heard.push(...aria.filter((k) => k.startsWith("gift")));
+    });
+    expect(heard).toEqual(["giftTimeLock", "giftRewind", "giftDash", "giftForesight"]);
   });
 
   it("shows the act's boss card and ARIA line at its boss level", () => {

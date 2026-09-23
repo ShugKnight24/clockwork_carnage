@@ -2922,6 +2922,8 @@ export class Game {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
       ngPlusCycle: this.ngPlusCycle,
+      // The ending that played: the loop is broken only by the true ending.
+      trueEnding: !!this.campaign?.trueEnding,
       mode: this.mode,
       ngPlusPrompt: this.ngPlusPrompt,
       ngPlusPromptSel: this.ngPlusPromptSel,

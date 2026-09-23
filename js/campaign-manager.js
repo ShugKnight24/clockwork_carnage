@@ -21,9 +21,17 @@ import {
   applyActEnemyRoster,
 } from "../src/systems/spawner.js";
 import { isBossEnemy } from "../src/systems/combat.js";
-import { levelsBefore } from "../src/data/campaign/acts.js";
+import { levelsBefore, sceneFor, earnsTrueEnding } from "../src/data/campaign/acts.js";
 import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
+
+/** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
+const GIFT_LINES = {
+  timeLock: "giftTimeLock",
+  rewind: "giftRewind",
+  dash: "giftDash",
+  foresight: "giftForesight",
+};
 
 export class CampaignManager {
   constructor(game) {
@@ -33,6 +41,7 @@ export class CampaignManager {
     this.missedWeapons = [];
     this.ngPlusCycle = 0;
     this.ngPlusPrompt = false;
+    this.trueEnding = false;
     this.ngPlusPromptSel = 0;
     this.promptSelection = 0;
     // Delayed level-start callouts. Cleared on the next loadLevel so a
@@ -149,6 +158,7 @@ export class CampaignManager {
     this.act = 1;
     this.ngPlusCycle = 0;
     this.ngPlusPrompt = false;
+    this.trueEnding = false;
     g.achievementStats.totalGamesPlayed++;
     this.missedWeapons = [];
     g.player.reset();
@@ -302,6 +312,11 @@ export class CampaignManager {
     if (g.chronoPowers?.fresh?.length && g.queueAriaMessage) {
       this._afterLevelStart(2500, () => g.queueAriaMessage("powerUnlocked"));
     }
+    // Act IV: what the ally who stays behind in this level left in the suit.
+    for (const gift of g.chronoPowers?.freshGifts ?? []) {
+      if (!g.queueAriaMessage) break;
+      this._afterLevelStart(3500, () => g.queueAriaMessage(GIFT_LINES[gift]));
+    }
 
     // One-shot lore lines for this level (Sprint E 4.3/4.4 reveals, and the
     // 4.6 NG+ Dead Squad foreshadowing).
@@ -406,7 +421,9 @@ export class CampaignManager {
       g.audio.stopMusic();
       Save.updateNgPlusBest(this.ngPlusCycle);
 
-      if (this.ngPlusCycle >= NG_PLUS.trueEndingCycle) {
+      // The true ending: any NG+ cycle finished with every memory recovered.
+      this.trueEnding = earnsTrueEnding(this.ngPlusCycle, g.archive?.fragmentProgress?.().found ?? 0);
+      if (this.trueEnding) {
         this._playScenes([...act.outro, ...NG_PLUS.trueEnding], () => {
           g.state = GameState.VICTORY;
           g.audio.roundComplete();
@@ -429,6 +446,7 @@ export class CampaignManager {
     const g = this.game;
     this.ngPlusCycle++;
     this.ngPlusPrompt = false;
+    this.trueEnding = false;
     this.act = NG_PLUS.startAct;
     this.level = NG_PLUS.startLevel;
     this.missedWeapons = [];
@@ -454,13 +472,17 @@ export class CampaignManager {
 
   // ── internal ──
 
-  /** Play scenes in order, skipping any this build has no script for. */
+  /**
+   * Play scenes in order, skipping any this build has no script for. In NG+
+   * a scene with a déjà-vu echo (NG_PLUS.scenes) plays the echo instead.
+   */
   _playScenes(keys, done) {
     const g = this.game;
     const next = (i) => {
       if (i >= keys.length) return done();
-      if (!g.hasCutsceneScript(keys[i])) return next(i + 1);
-      g.startCutscene(keys[i], () => next(i + 1));
+      const key = sceneFor(keys[i], this.ngPlusCycle || 0);
+      if (!g.hasCutsceneScript(key)) return next(i + 1);
+      g.startCutscene(key, () => next(i + 1));
     };
     next(0);
   }

@@ -247,6 +247,9 @@ export function renderVictory(ctx, w, h, state) {
     time, isTouchDevice, ngPlusCycle, mode,
     ngPlusPrompt, ngPlusPromptSel, deltaTime, shareToast, statsCardData,
   } = state;
+  // The loop is broken by the true ending (NG+ with every memory), not by
+  // a cycle count.
+  const final = state.trueEnding ?? ngPlusCycle >= 3;
 
   const compact = isTouchDevice && isCompactPhone(h);
   if (isModernArt()) return renderVictoryModern(ctx, w, h, state, compact);
@@ -285,23 +288,23 @@ export function renderVictory(ctx, w, h, state) {
   // Title with teal glow
   ctx.shadowColor = '#00ffcc';
   ctx.shadowBlur = compact ? 12 : 25;
-  ctx.fillStyle = ngPlusCycle >= 3 ? '#ffcc00' : '#00ffcc';
+  ctx.fillStyle = final ? '#ffcc00' : '#00ffcc';
   ctx.font = `bold ${titleSize}px monospace`;
   ctx.textAlign = 'center';
-  const victoryTitle = ngPlusCycle >= 3 ? 'THE LOOP IS BROKEN' : 'TIMELINE RESTORED';
+  const victoryTitle = final ? 'THE LOOP IS BROKEN' : 'TIMELINE RESTORED';
   ctx.fillText(victoryTitle, w / 2, titleY);
   ctx.shadowBlur = 0;
   // Subtitles
   ctx.fillStyle = '#ffcc00';
   ctx.font = `bold ${compact ? 12 : 18}px monospace`;
-  const victorySubtitle = ngPlusCycle >= 3
+  const victorySubtitle = final
     ? 'Every timeline. Every loop. You broke them all.'
     : 'The Paradox Lord has been destroyed — for good.';
   ctx.fillText(victorySubtitle, w / 2, compact ? titleY + 22 : h / 2 - 35);
   if (!compact) {
     ctx.fillStyle = 'rgba(170,220,255,0.7)';
     ctx.font = '16px monospace';
-    ctx.fillText('Three forms. Three acts. One team.', w / 2, h / 2 - 8);
+    ctx.fillText('Four acts. Three forms. One team.', w / 2, h / 2 - 8);
     ctx.fillText('The quantum continuum is stable once more.', w / 2, h / 2 + 14);
     ctx.strokeStyle = 'rgba(255,204,0,0.15)';
     ctx.beginPath();
@@ -315,7 +318,7 @@ export function renderVictory(ctx, w, h, state) {
     ctx.fillStyle = '#cc88ff';
     ctx.font = `bold ${compact ? 10 : 14}px monospace`;
     ctx.textAlign = 'center';
-    const cycleLabel = ngPlusCycle >= 3
+    const cycleLabel = final
       ? 'FINAL TIMELINE — THE LOOP IS BROKEN'
       : `TIMELINE LOOP ${ngPlusCycle}`;
     ctx.fillText(cycleLabel, w / 2, compact ? titleY - 10 : titleY - 20);
@@ -698,7 +701,7 @@ function renderVictoryModern(ctx, w, h, state, compact) {
     time, isTouchDevice, ngPlusCycle, mode,
     ngPlusPrompt, ngPlusPromptSel, deltaTime, shareToast, statsCardData,
   } = state;
-  const final = ngPlusCycle >= 3;
+  const final = state.trueEnding ?? ngPlusCycle >= 3;
   drawBackdrop(ctx, w, h, 'gold', 0.97);
 
   // Rising embers, cheap rects.
@@ -727,7 +730,7 @@ function renderVictoryModern(ctx, w, h, state, compact) {
     ctx.textAlign = 'center';
     ctx.font = uiFont(16, 500);
     ctx.fillStyle = '#b9cfe0';
-    ctx.fillText('Three forms. Three acts. One team.', w / 2, h / 2 + 2);
+    ctx.fillText('Four acts. Three forms. One team.', w / 2, h / 2 + 2);
     ctx.fillText('The quantum continuum is stable once more.', w / 2, h / 2 + 24);
   }
 
