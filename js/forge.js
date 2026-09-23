@@ -63,9 +63,9 @@ const clone = (v) => (v == null ? v : structuredClone(v));
 // ─── Pure edit rules (unit-tested in tests/unit/forge-rules.test.js) ────────
 
 /**
- * May a block go into this cell? Only empty, in-bounds cells that no body
- * (the editor's own player, a play-test entity) is standing in, and none that
- * would bury a marker.
+ * May a block go into this cell? Only empty, in-bounds, loaded cells that no
+ * body (the editor's own player, a play-test entity) is standing in, and none
+ * that would bury a marker.
  * @param {World} world
  * @param {Array<{x:number,y:number,z:number,half:number,height:number}>} bodies
  * @param {Array<{x:number,y:number,z:number}|null>} markers feet positions of
@@ -75,7 +75,7 @@ const clone = (v) => (v == null ? v : structuredClone(v));
  *   air does, so a block may replace it, and water may go where a body stands.
  */
 export function placementAllowed(world, x, y, z, bodies = [], markers = [], blockId = null) {
-  if (!world.inBounds(x, y, z)) return false;
+  if (!world.inBounds(x, y, z) || !world.isLoaded(x, y)) return false;
   const here = world.get(x, y, z);
   if (here !== AIR && !isWater(here)) return false;
   if (blockId != null && !isSolid(blockId)) bodies = [];
@@ -288,6 +288,8 @@ export class ForgeMode {
     this.active = false;
     /** V toggles what Ctrl+N generates. */
     this.terrainNew = true;
+    /** B toggles whether Ctrl+N makes an endless world (the default) or the 128 × 128 box. */
+    this.boundedNew = false;
 
     this.history = [];
     this.historyIndex = -1;
@@ -385,6 +387,7 @@ export class ForgeMode {
           terrain: true,
           seed: randomSeed(),
           name: "My Creation",
+          endless: true,
         });
         await this.store.save(0, world);
         this.mapIndex = await this.store.list();
@@ -393,7 +396,7 @@ export class ForgeMode {
         const id = this._preferredSlot();
         const world =
           (await this.store.load(id)) ||
-          generateWorld({ terrain: true, seed: randomSeed() });
+          generateWorld({ terrain: true, seed: randomSeed(), endless: true });
         this._adopt(world, id);
       }
       this.storageFailed = false;
@@ -471,6 +474,7 @@ export class ForgeMode {
       terrain: true,
       seed: randomSeed(),
       name: "My Creation",
+      endless: true,
     });
     this._adopt(world, 0);
     try {
@@ -662,6 +666,11 @@ export class ForgeMode {
       this.audio.menuSelect();
       return true;
     }
+    if (code === "KeyB" && !ctrl) {
+      this.boundedNew = !this.boundedNew;
+      this.audio.menuSelect();
+      return true;
+    }
     if (code === "KeyM" && !ctrl) {
       this._setMode(this.isSurvival() ? "creative" : "survival");
       return true;
@@ -781,6 +790,12 @@ export class ForgeMode {
 
   update(dt) {
     if (!this.active || !this.world) return;
+    // Walking never enters a column that is not loaded (it is solid), so the
+    // player standing in one was put there: a teleport, a noclip flight past
+    // the streamer, a test. Load the ground under them now (spec §5).
+    if (this.world.unloadedAt(Math.floor(this.player.x), Math.floor(this.player.y))) {
+      this.world.loadAround(this.player.x, this.player.y);
+    }
     if (this.saveFlash > 0) this.saveFlash = Math.max(0, this.saveFlash - dt);
     if (this.notice) {
       this.notice.t -= dt;
@@ -1364,6 +1379,9 @@ export class ForgeMode {
     this.velZ = 0;
     this.player.pitch = 0;
     const s = world.meta.spawn || world.defaultSpawn();
+    // An endless world holds no columns until something asks: the ground the
+    // player lands on is loaded now, the rest streams in as it is drawn.
+    world.loadAround(s.x, s.y);
     this.player.x = s.x;
     this.player.y = s.y;
     this.player.z = Math.max(s.z, groundHeight(world, s.x, s.y, PLAYER.half));
@@ -1418,6 +1436,8 @@ export class ForgeMode {
     trackEvent("forge_save", {
       map_name: this.world.meta.name,
       block_count: this.world.countBlocks(),
+      edited_columns: this.world.edits.size,
+      endless: this.world.endless,
     });
     // An import whose slot reservation failed still has no id of its own \u2014
     // writing now would land on the world it replaced. Retry the reservation.
@@ -1442,6 +1462,7 @@ export class ForgeMode {
         terrain: this.terrainNew,
         seed: randomSeed(),
         name: `Map ${id + 1}`,
+        endless: !this.boundedNew,
       });
       await this.store.save(id, world);
       this.mapIndex = await this.store.list();

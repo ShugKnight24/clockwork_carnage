@@ -109,3 +109,19 @@ export function spawnFromMeta(world) {
   const at = standableNear(world, x, y, s?.z ?? fallback.z);
   return at ? { ...at, yaw: s?.yaw || 0 } : null;
 }
+
+/** How far from the spawn an endless world's play-test scatters fallback enemies. */
+export const FALLBACK_REACH = 48;
+
+/**
+ * Where a play-test with no placed enemies scatters its fallback ones. A
+ * bounded level uses its whole box, as it always has, so an old level plays
+ * as its author tested it. An endless world has no box: the disc of
+ * `FALLBACK_REACH` blocks around the spawn.
+ * @returns {{x0:number, y0:number, x1:number, y1:number, reach:number}}
+ */
+export function fallbackEnemyArea(world, spawn) {
+  if (!world.endless) return { ...world.bounds, reach: Infinity };
+  const r = FALLBACK_REACH;
+  return { x0: spawn.x - r, y0: spawn.y - r, x1: spawn.x + r, y1: spawn.y + r, reach: r };
+}

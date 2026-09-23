@@ -475,6 +475,7 @@ export function renderHelp(forge, ctx) {
     "R — Reset Pitch",
     "N — Noclip",
     "V — Terrain/Flat new world",
+    "B — Endless/Bounded new world",
     "M — Creative/Survival mode",
     "C — Craft menu (survival)",
     "F — Rename World",
@@ -513,6 +514,10 @@ export function renderStatus(forge, ctx, w, h) {
   ctx.fillStyle = forge.survival ? "rgba(0,255,200,0.85)" : "rgba(255,255,255,0.6)";
   ctx.font = "bold 12px monospace";
   ctx.fillText(forge.survival ? "SURVIVAL  [M]" : "CREATIVE  [M]", w - 14, forge.noclip ? 40 : 24);
+  // What Ctrl+N makes next, with the keys that change it.
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.font = "11px monospace";
+  ctx.fillText(newWorldLabel(forge), w - 14, forge.noclip ? 56 : 40);
   ctx.fillStyle = "rgba(0,255,200,0.6)";
   ctx.font = "bold 12px monospace";
   ctx.fillText(`CURSOR Z ${forge.cursorZ}`, w - 14, h - 90);
@@ -557,10 +562,31 @@ export function renderStatus(forge, ctx, w, h) {
   ctx.textAlign = "left";
 }
 
-/** Top-down slice of the world's bounds at `cursorZ`, fitted to the screen. */
+/** "NEW: TERRAIN · ENDLESS  [V/B]" — what Ctrl+N makes next. */
+export function newWorldLabel(forge) {
+  const kind = forge.terrainNew ? "TERRAIN" : "FLAT";
+  const size = forge.boundedNew ? "BOUNDED 128×128" : "ENDLESS";
+  return `NEW: ${kind} · ${size}  [V/B]`;
+}
+
+/** Blocks on a side of the overhead window of an endless world. */
+export const OVERHEAD_SPAN = 128;
+
+/**
+ * What the overhead map shows: a bounded world's whole bounds, as always, or
+ * a 128 × 128 window centred on the player in an endless one.
+ * @returns {{x0:number, y0:number, x1:number, y1:number}}
+ */
+export function overheadWindow(world, player) {
+  if (!world.endless) return world.bounds;
+  const x0 = Math.floor(player.x) - OVERHEAD_SPAN / 2, y0 = Math.floor(player.y) - OVERHEAD_SPAN / 2;
+  return { x0, y0, x1: x0 + OVERHEAD_SPAN, y1: y0 + OVERHEAD_SPAN };
+}
+
+/** Top-down slice of the world at `cursorZ` (see `overheadWindow`), fitted to the screen. */
 export function renderOverhead(forge, ctx, w, h) {
   const world = forge.world;
-  const { x0, y0, x1, y1 } = world.bounds;
+  const { x0, y0, x1, y1 } = overheadWindow(world, forge.player);
   const bw = x1 - x0, bh = y1 - y0;
   const pad = 60;
   const cs = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
@@ -573,6 +599,16 @@ export function renderOverhead(forge, ctx, w, h) {
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#0b0b16";
   ctx.fillRect(ox + x0 * cs, oy + y0 * cs, bw * cs, bh * cs);
+  // Columns not loaded yet are background, not open air.
+  if (world.endless) {
+    ctx.fillStyle = "#050510";
+    for (let cy = y0 >> 4; cy <= (y1 - 1) >> 4; cy++) for (let cx = x0 >> 4; cx <= (x1 - 1) >> 4; cx++) {
+      if (world.column(cx, cy)) continue;
+      const ax = Math.max(x0, cx * 16), ay = Math.max(y0, cy * 16);
+      const bx = Math.min(x1, cx * 16 + 16), by = Math.min(y1, cy * 16 + 16);
+      ctx.fillRect(ox + ax * cs, oy + ay * cs, (bx - ax) * cs, (by - ay) * cs);
+    }
+  }
 
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
@@ -584,6 +620,7 @@ export function renderOverhead(forge, ctx, w, h) {
   }
 
   const marker = (mx, my, color, square) => {
+    if (mx < x0 || my < y0 || mx >= x1 || my >= y1) return; // outside the window
     const px = ox + mx * cs;
     const py = oy + my * cs;
     ctx.fillStyle = color;
@@ -626,7 +663,7 @@ export function renderOverhead(forge, ctx, w, h) {
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.font = "13px monospace";
   ctx.fillText(
-    `Block: ${BLOCKS[forge.tile]?.name}  |  Cursor Z: ${z} (Q/E)  |  ${bw}×${bh}×${World.H}`,
+    `Block: ${BLOCKS[forge.tile]?.name}  |  Cursor Z: ${z} (Q/E)  |  ${world.endless ? `Endless  |  ${Math.floor(forge.player.x)}, ${Math.floor(forge.player.y)}` : `${bw}×${bh}×${World.H}`}`,
     w / 2,
     h - 34,
   );

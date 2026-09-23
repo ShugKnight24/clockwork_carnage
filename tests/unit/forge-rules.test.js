@@ -230,6 +230,16 @@ class DeadBackend {
   async delete() { throw new Error("store unavailable"); }
 }
 
+/**
+ * A block as the store holds it. The Forge makes endless worlds, which load
+ * no column until asked, so the cell's column is loaded first.
+ */
+async function stored(store, id, x, y, z) {
+  const w = await store.load(id);
+  w.loadAround(x, y, 0);
+  return w.get(x, y, z);
+}
+
 const forge = (store) =>
   new ForgeMode({
     renderer: {},
@@ -277,11 +287,11 @@ describe("forge dirty tracking", () => {
     // really leaves air there whatever the random seed made.
     f._editBlock(10, 10, 60, 1);
     await f.saveMap();
-    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(1);
+    expect(await stored(store, f.currentSlot, 10, 10, 60)).toBe(1);
 
     f.undo(); // place → Ctrl+S → Ctrl+Z → quit
     await f.stop();
-    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(AIR);
+    expect(await stored(store, f.currentSlot, 10, 10, 60)).toBe(AIR);
   });
 });
 
@@ -308,7 +318,7 @@ describe("forge autosave", () => {
     await saves.mock.results[0].value;
     expect(f._dirty).toBe(false);
     expect(f.saveFlash).toBe(0); // quiet: the explicit save keeps its flash
-    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(1);
+    expect(await stored(store, f.currentSlot, 10, 10, 60)).toBe(1);
 
     run(f, AUTOSAVE_SECONDS * 2);
     expect(saves).toHaveBeenCalledTimes(1);

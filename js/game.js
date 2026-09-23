@@ -57,7 +57,7 @@ import {
   settingsCategoryRects,
   resolveSettingsHit,
 } from "./layout.js";
-import { styleName, spawnFromMeta, standableNear } from "../src/systems/voxel-glue.js";
+import { styleName, spawnFromMeta, standableNear, fallbackEnemyArea } from "../src/systems/voxel-glue.js";
 import { World } from "../src/world/world.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
@@ -3027,10 +3027,12 @@ export class Game {
     } else {
       const enemyTypes = ["drone", "phantom", "beast"];
       const maxEnemies = 8;
-      const { x0, y0, x1, y1 } = world.bounds;
+      // Only loaded columns can take one: topSolid is -1 in the rest.
+      const { x0, y0, x1, y1, reach } = fallbackEnemyArea(world, spawn);
       for (let attempt = 0; attempt < 200 && spawned < maxEnemies; attempt++) {
         const ex = x0 + 1.5 + Math.random() * (x1 - x0 - 3);
         const ey = y0 + 1.5 + Math.random() * (y1 - y0 - 3);
+        if (Math.hypot(ex - spawn.x, ey - spawn.y) > reach) continue;
         const ez = world.topSolid(Math.floor(ex), Math.floor(ey)) + 1;
         if (ez <= 0 || ez + 2 >= World.H) continue;
         const dist = Math.hypot(ex - spawn.x, ey - spawn.y);
