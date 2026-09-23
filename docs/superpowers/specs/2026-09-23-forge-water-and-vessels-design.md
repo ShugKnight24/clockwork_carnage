@@ -442,3 +442,22 @@ water, at the surface and submerged, looked at before any phase is called done.
    is renewable, or are trees a finite resource per world?
 7. **Water in play-test levels.** Enemies do not swim; should they avoid water
    (a pathing change), or is walking along the bed acceptable for now?
+
+## Decisions (answered 2026-09-23)
+
+These supersede anything above that disagrees.
+
+1. **Rivers: yes.** Channels at sea level join lakes to the sea.
+2. **About 25% water overall, varying by region.** Large-scale regions change
+   the share — a coastal/archipelago region with much more sea, a continental
+   interior with little — so water amount is itself part of the biome mix
+   rather than a flat 25% everywhere.
+3. **Mount key: `B` for now.** `E` is reserved for a future general
+   "interact" action (tools, stations, vessels); vessels should move to it
+   when that exists, so keep the binding in one place.
+4. **Leaves drop saplings, and saplings grow into trees**, so wood is
+   renewable. Grown trees are not player-placed, so chopping them earns xp.
+5. **Buckets are craftable** and arrive with phase B, not phase C: scoop a
+   source block, place it elsewhere.
+6. Defaults kept: the jetski needs a Forge station at construction level 15;
+   play-test enemies avoid water.
