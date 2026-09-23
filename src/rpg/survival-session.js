@@ -25,9 +25,16 @@ export class SurvivalSession {
     this.skills = skills || new Skills();
     this.inventory = inventory || new Inventory();
     /**
-     * One bit per cell: was this block placed by the player? See spec §6.
-     * Sparse, one 2 KB bitset per column that has any, so it assumes no world
-     * size. The endless-world spec §12 later moves these into the world.
+     * Was this block placed by the player? See spec §6. The bits belong to the
+     * world (endless-world spec §12), which saves them with its columns, so a
+     * reload cannot turn a placed block back into a natural one. `attach`
+     * names the world; these calls forward to it.
+     * @type {import("../world/world.js").World|null}
+     */
+    this.world = null;
+    /**
+     * The bits of a session attached to no world — tests and tools. Sparse,
+     * one 2 KB bitset per column that has any.
      * @type {Map<number, Uint8Array>} colKey -> bits
      */
     this.placed = new Map();
@@ -46,7 +53,17 @@ export class SurvivalSession {
 
   _bit(x, y, z) { return (z << 8) | ((y & 15) << 4) | (x & 15); }
 
+  /**
+   * Play in `world` from now on. Its placed bits come with it, so switching
+   * worlds needs no reset; only the half-finished break is left behind.
+   */
+  attach(world) {
+    this.world = world;
+    this.cancelBreak();
+  }
+
   markPlaced(x, y, z) {
+    if (this.world) { this.world.markPlaced(x, y, z); return; }
     if (z < 0 || z >= World.H) return;
     const key = colKey(x >> 4, y >> 4);
     let bits = this.placed.get(key);
@@ -56,6 +73,7 @@ export class SurvivalSession {
   }
 
   clearPlaced(x, y, z) {
+    if (this.world) { this.world.clearPlaced(x, y, z); return; }
     const bits = this.placed.get(colKey(x >> 4, y >> 4));
     if (!bits || z < 0 || z >= World.H) return;
     const i = this._bit(x, y, z);
@@ -63,15 +81,18 @@ export class SurvivalSession {
   }
 
   /**
-   * The bitset is world-local: one session outlives every world switch, and
-   * the bits are absolute coordinates, so without this a block placed in one
-   * world would silently cost the xp of a natural block at the same cell in
-   * the next. Progression itself is deliberately NOT reset — it is
-   * per-character and carries across worlds.
+   * Forget every placed bit: the mode toggle's fresh start, which clears the
+   * attached world's bits (and so saves the clear). Progression itself is
+   * deliberately NOT reset — it is per-character and carries across worlds.
    */
-  resetPlaced() { this.placed.clear(); this.cancelBreak(); }
+  resetPlaced() {
+    this.world?.clearAllPlaced();
+    this.placed.clear();
+    this.cancelBreak();
+  }
 
   wasPlaced(x, y, z) {
+    if (this.world) return this.world.wasPlaced(x, y, z);
     const bits = this.placed.get(colKey(x >> 4, y >> 4));
     if (!bits || z < 0 || z >= World.H) return false;
     const i = this._bit(x, y, z);

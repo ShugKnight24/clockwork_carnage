@@ -261,3 +261,87 @@ describe("placement comes from the hotbar, not the palette", () => {
   });
 });
 
+describe("placed flags are saved with the world", () => {
+  /** A Forge on `store` that opens its world the way the game does, through start(). */
+  const stored = (store) =>
+    new ForgeMode({
+      renderer: {},
+      audio: { menuSelect() {}, menuConfirm() {} },
+      settings: { fov: 70, sensitivity: 1 },
+      keybinds: { moveForward: "KeyW", moveBack: "KeyS", moveLeft: "KeyA", moveRight: "KeyD" },
+      canvas: null,
+      store,
+      playerStore: new PlayerStore(new MemoryPlayerBackend()),
+    });
+
+  /** What placeBlock does once the hotbar has paid for the block. */
+  const place = (f, { x, y, z }, id = ROCK) => {
+    f._editBlock(x, y, z, id);
+    f.survival.markPlaced(x, y, z);
+  };
+
+  it("a reload keeps a placed block from paying mining xp", async () => {
+    // The survival core spec's open loop: place, reload, break for xp, repeat.
+    const store = new WorldStore(new MemoryBackend());
+    const f = stored(store);
+    await f.start();
+    f.handleKeyDown({ code: "KeyM" });
+    const cell = { x: 5, y: 5, z: 55 };
+    place(f, cell);
+    await f.saveMap();
+
+    const g = stored(store);
+    await g.start();
+    expect(g.isSurvival()).toBe(true);
+    expect(g.world.get(5, 5, 55)).toBe(ROCK);
+    expect(g.survival.wasPlaced(5, 5, 55)).toBe(true);
+    g.survival.skills.grant("mining", xpForLevel(5));
+    const banked = g.survival.skills.xp.mining;
+    const res = mine(g, cell);
+    expect(res.broke).toBe(true);
+    expect(res.xp).toBe(0);
+    expect(g.survival.skills.xp.mining).toBe(banked);
+  });
+
+  it("keeps each world's bits to itself across a switch", async () => {
+    const store = new WorldStore(new MemoryBackend());
+    const f = stored(store);
+    await f.start();
+    f.handleKeyDown({ code: "KeyM" });
+    const first = f.currentSlot;
+    place(f, { x: 9, y: 9, z: 56 });
+    await f.newMap();
+    f.handleKeyDown({ code: "KeyM" });
+    expect(f.survival.wasPlaced(9, 9, 56)).toBe(false);
+    place(f, { x: 10, y: 9, z: 56 });
+
+    await f.switchMap(1); // back to the first world, saving this one
+    expect(f.currentSlot).toBe(first);
+    expect(f.survival.wasPlaced(9, 9, 56)).toBe(true);
+    expect(f.survival.wasPlaced(10, 9, 56)).toBe(false);
+    await f.switchMap(1);
+    expect(f.survival.wasPlaced(10, 9, 56)).toBe(true);
+    expect(f.survival.wasPlaced(9, 9, 56)).toBe(false);
+  });
+
+  it("the mode toggle still clears them, and the clear is saved", async () => {
+    const store = new WorldStore(new MemoryBackend());
+    const f = stored(store);
+    await f.start();
+    f.handleKeyDown({ code: "KeyM" });
+    place(f, { x: 5, y: 5, z: 55 });
+    await f.saveMap();
+    expect(f._dirty).toBe(false);
+
+    f.handleKeyDown({ code: "KeyM" });
+    f.handleKeyDown({ code: "KeyM" });
+    expect(f._dirty).toBe(true); // meta.mode and the bits both changed
+    expect(f.survival.wasPlaced(5, 5, 55)).toBe(false);
+    await f.stop();
+
+    const g = stored(store);
+    await g.start();
+    expect(g.survival.wasPlaced(5, 5, 55)).toBe(false);
+  });
+});
+

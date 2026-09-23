@@ -5,6 +5,7 @@ import { Inventory } from "../../src/rpg/inventory.js";
 import { Skills } from "../../src/rpg/skills.js";
 import { breakTime } from "../../src/rpg/gather.js";
 import { TOOLS } from "../../src/rpg/tools.js";
+import { World } from "../../src/world/world.js";
 
 const session = (over = {}) =>
   new SurvivalSession({ skills: new Skills(), inventory: new Inventory(), ...over });
@@ -297,6 +298,33 @@ describe("station-aware crafting", () => {
     const s = session();
     s.inventory.add("rock", 2);
     expect(s.craft("cut_stone").ok).toBe(true);
+  });
+});
+
+describe("placed flags attached to a world", () => {
+  it("live in the world, so another world has its own and a reattach finds them", () => {
+    const s = session();
+    const a = new World(), b = new World();
+    s.attach(a);
+    s.markPlaced(10, 10, 10);
+    expect(a.wasPlaced(10, 10, 10)).toBe(true);
+    s.attach(b);
+    expect(s.wasPlaced(10, 10, 10)).toBe(false);
+    s.attach(a);
+    expect(s.wasPlaced(10, 10, 10)).toBe(true);
+    s.clearPlaced(10, 10, 10);
+    expect(a.wasPlaced(10, 10, 10)).toBe(false);
+  });
+
+  it("resetPlaced clears the attached world's bits and the break", () => {
+    const s = session();
+    const w = new World();
+    s.attach(w);
+    s.markPlaced(1, 2, 3);
+    s.beginBreak(DIRT, DIRT_ID);
+    s.resetPlaced();
+    expect(w.wasPlaced(1, 2, 3)).toBe(false);
+    expect(s.breaking).toBe(null);
   });
 });
 

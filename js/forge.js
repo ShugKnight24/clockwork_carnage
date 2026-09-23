@@ -1194,8 +1194,10 @@ export class ForgeMode {
     if (!this.world) return;
     this.world.meta.mode = mode;
     // A mode change is a fresh start for the placed-block flags, and any
-    // half-finished break belongs to the mode that is ending.
+    // half-finished break belongs to the mode that is ending. Both the mode
+    // and the cleared flags are saved with the world.
     this.survivalSession.resetPlaced();
+    this._markDirty();
     // A stack on the cursor goes back while the inventory it came from is
     // still reachable — `_dropCarried` cannot return it once `survival` is null.
     this._dropCarried();
@@ -1303,9 +1305,9 @@ export class ForgeMode {
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
   _adopt(world, id = this.currentSlot) {
     this.world = world;
-    // A fresh world means fresh placed-block flags; the character's skills
-    // and inventory deliberately carry over.
-    this.survivalSession.resetPlaced();
+    // The placed-block flags live in the world and were loaded with it; the
+    // character's skills and inventory deliberately carry over.
+    this.survivalSession.attach(world);
     // Before the swap, while the old world's inventory can still take it back.
     this._dropCarried();
     this.survival = attachSurvival(world, this.survivalSession);
