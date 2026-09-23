@@ -10,6 +10,7 @@ import { GameState } from "../types.js";
 import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
+import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
@@ -241,12 +242,30 @@ function segmentListFromTracers(game) {
 }
 
 /**
+ * One frame of streaming for an endless world, just before it is drawn: the
+ * one call site the Forge and a play-test share (spec §5). Loading takes at
+ * most half the frame's budget and meshing the rest, so each always moves.
+ * Bounded worlds have no streamer and get the renderer's defaults.
+ * @returns {{meshMs:number, drawRadius:number, meshRadius:number, fogEnd:number, ms:number}|null}
+ */
+function streamVoxels(game, cam) {
+  const st = streamerFor(game.world);
+  if (!st) return null;
+  st.setDrawRadius(drawRadiusFor(game.quality));
+  const budget = st.budget(cam.x, cam.y);
+  const ms = st.update(cam.x, cam.y, budget / 2);
+  const r = st.radii;
+  return { meshMs: Math.max(0, budget - ms), drawRadius: r.draw, meshRadius: r.mesh, fogEnd: r.draw, ms };
+}
+
+/**
  * Draw the voxel world into the 2D frame. Falls back to the empty-level fill
  * when the renderer is missing or its context is lost.
  * @returns {boolean} true when the world made it onto the canvas
  */
 function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segments = null) {
   const vr = game.voxelRenderer;
+  const stream = vr && game.world ? streamVoxels(game, cam) : null;
   const drawn =
     vr &&
     game.world &&
@@ -255,6 +274,7 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
       act: game.world.meta.act || 1,
       fx,
       segments,
+      ...stream,
     }) !== false;
   if (!drawn) {
     ctx.fillStyle = "#020610";
@@ -262,7 +282,8 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
     return false;
   }
   ctx.drawImage(vr.canvas, 0, 0, w, h);
-  if (game.showFPS) game.profiler.currentPhases.voxel = vr.stats.ms;
+  // Streaming is part of the voxel phase: it is what the long flight costs.
+  if (game.showFPS) game.profiler.currentPhases.voxel = vr.stats.ms + (stream?.ms || 0);
   return true;
 }
 
