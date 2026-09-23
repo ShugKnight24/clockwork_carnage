@@ -107,6 +107,12 @@ Resonance decays 8/s after 2 s without a shift. Hunter caps per level: Easy 1, N
 - [ ] `npx vitest run --testTimeout=60000`; smoke, playtest-gate, level-looks, weapon-fire e2e on port 5191.
 - [ ] Headless GPU captures: each power used with real key presses in its teach room; HUD in DOOM (1) and Vanguard (4) at 1920×1080; the Hound shimmering and solid.
 
+## Done when
+
+- `npx vitest run --testTimeout=60000` passes, with `chrono-powers`, `chrono-hazards` and `controls-screen` added.
+- `smoke`, `playtest-gate` (now asserting each slot's powers and no hunters in Act I), `level-looks` and `weapon-fire` pass on port 5191.
+- A headless GPU run uses each power with real key presses in its teach room (and on a scripted standard gamepad), and captures the HUD in DOOM and Vanguard at 1920×1080 and the Hound shimmering and solid.
+
 ## Deferred
 
 - Real Act II maps, pistons and the train set piece proper (phase 4); the real Hound art and quill volleys (phase 4).

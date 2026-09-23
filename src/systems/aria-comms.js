@@ -49,6 +49,7 @@ const CATEGORY_EMOTIONS = {
   counterShift: "afraid",
   elevenSeconds: "tender",
   ventGallery: "curious",
+  collapseChase: "urgent",
   stasisRoom: "sad",
   loopRepeats: "curious",
   loopBroken: "excited",

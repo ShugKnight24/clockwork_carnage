@@ -68,11 +68,11 @@ export const SET_PIECES = {
     hazards: [
       {
         id: "shaft_west", type: "collapse", trigger: [4, 40, 12, 42],
-        steps: rowSweep(4, 12, 43, 21), delay: 0.4, rate: 7, damage: 8, wall: RUBBLE,
+        steps: rowSweep(4, 12, 43, 21), delay: 0.4, rate: 7, damage: 5, wall: RUBBLE, aria: "collapseChase",
       },
       {
         id: "shaft_east", type: "collapse", trigger: [47, 40, 55, 42],
-        steps: rowSweep(47, 55, 43, 21), delay: 0.4, rate: 7, damage: 8, wall: RUBBLE,
+        steps: rowSweep(47, 55, 43, 21), delay: 0.4, rate: 7, damage: 5, wall: RUBBLE, aria: "collapseChase",
       },
     ],
     scripted: [
@@ -113,7 +113,7 @@ export const SET_PIECES = {
       { id: "fan_e", type: "blade", x: 33, y: 53, radius: 1.6, arms: 2, speed: 7, phase: 2, width: 0.3, damage: 20, dashable: true },
       {
         id: "catwalk", type: "collapse", trigger: [27, 41, 32, 43],
-        steps: rowSweep(27, 32, 43, 34), delay: 0.5, rate: 6, damage: 8, wall: RUBBLE,
+        steps: rowSweep(27, 32, 43, 34), delay: 0.5, rate: 6, damage: 5, wall: RUBBLE, aria: "collapseChase",
       },
     ],
     // The catwalk's door is already blown.

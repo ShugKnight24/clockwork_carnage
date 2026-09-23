@@ -479,6 +479,10 @@ export const ARIA_COMMS = {
     "Everything stopped. Everything except you two.",
     "His time-stop. Your window. Move.",
   ],
+  collapseChase: [
+    "It's coming down behind you. Run, and shift if it gains. It's slower in there than you are.",
+    "Ceiling's going! Don't outrun it on your legs, outrun it in time. Shift!",
+  ],
   ventGallery: [
     "Plasma vents on a cycle. Shift and the gaps get wide. There's a cache at the back.",
   ],

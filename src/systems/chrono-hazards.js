@@ -32,7 +32,7 @@ export const HAZARD_CHRONO = 0.15;
 /** The player's body, for hazard contact. */
 const BODY = 0.3;
 /** Seconds between two hits from the same hazard (sim time). */
-const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, collapse: 0.3 };
+const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, collapse: 0.35 };
 
 const cellIn = ([c1, r1, c2, r2], x, y) => x >= c1 && x < c2 + 1 && y >= r1 && y < r2 + 1;
 
@@ -288,6 +288,10 @@ export class ChronoHazards {
     if (this.triggers[h.id] == null && cellIn(h.trigger, p.x, p.y)) {
       this.triggers[h.id] = this.clock;
       playChronoSound(game.audio, "collapse");
+      if (h.aria && !this._entered.has("collapse:told")) {
+        this._entered.add("collapse:told");
+        game.queueAriaMessage?.(h.aria);
+      }
     }
     const front = collapseFront(h, this.clock, this.triggers[h.id]);
     if (front < 0) return;

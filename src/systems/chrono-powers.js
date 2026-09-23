@@ -455,7 +455,8 @@ export class ChronoPowers {
 
   /** The first shift of a level: governed in Act I, loud from Act II. */
   onShiftStart(game) {
-    if (this._announced) return;
+    // The tutorial and the other modes keep their own shift; this is the story's.
+    if (this._announced || game.mode !== "campaign") return;
     this._announced = true;
     game.queueAriaMessage?.(this._pool);
     playChronoSound(game.audio, this.resonanceOn ? "shiftLoud" : "shift");
