@@ -379,6 +379,8 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
         const top = f.pose === "kneel" ? FLOOR - (FLOOR - HEAD) * 0.55 : HEAD;
         floorMark(ctx, r, game, planeMul, yShift, f.x, f.y, 0.3, `rgba(255,255,255,${0.12 * fade})`);
         figure(ctx, r, game, planeMul, yShift, f.x, f.y, f.color, 0.6 * fade, top);
+        _caught.push(f);
+        _caughtFade.push(fade);
       }
     } else if (h.type === "loop" && !st.broken) {
       // Foresight shows the seam where the loop does not match itself.
@@ -652,7 +654,19 @@ function houndShimmer(ctx, r, game, planeMul, yShift) {
  * @param {number} planeMul
  * @param {number} yShift
  */
+// The people a stasis room caught, gathered by the world pass so the screen
+// pass can paint them back in colour after it greys the room: the instant is
+// grey, the people in it are not. Reused every frame, never reallocated.
+const _caught = [];
+const _caughtFade = [];
+const _caughtView = { r: null, planeMul: 1, yShift: 0 };
+
 export function renderChronoWorld(game, r, planeMul, yShift) {
+  _caught.length = 0;
+  _caughtFade.length = 0;
+  _caughtView.r = r;
+  _caughtView.planeMul = planeMul;
+  _caughtView.yShift = yShift;
   if (game.mode !== "campaign" || !game.map?.grid) return;
   const ctx = r.ctx;
   const cp = game.chronoPowers;
@@ -691,6 +705,16 @@ export function renderChronoScreen(game, ctx, w, h) {
     ctx.fillStyle = "rgba(170,210,255,0.06)";
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
+    // The caught figures keep their colour: the two Vosses at the console
+    // are the point of the Engine's hall, and the grade washed them out.
+    if (_caughtView.r && _caught.length) {
+      const { r, planeMul, yShift } = _caughtView;
+      for (let i = 0; i < _caught.length; i++) {
+        const f = _caught[i];
+        const top = f.pose === "kneel" ? FLOOR - (FLOOR - HEAD) * 0.55 : HEAD;
+        figure(ctx, r, game, planeMul, yShift, f.x, f.y, f.color, 0.75 * _caughtFade[i], top);
+      }
+    }
   }
   const v = cp?.resonanceOn ? cp.res.value : 0;
   if (v >= 50) {
