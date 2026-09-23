@@ -297,6 +297,9 @@ test.describe("Voxel Forge", () => {
     await loadGame(page);
     await debug(page, "startBuilder");
     await waitForForge(page);
+    // The aims below hang in the air between page turns; without noclip the
+    // game loop's gravity can drag them off the target on a busy machine.
+    await page.evaluate(() => { window.ccDebug.game.builder.noclip = true; });
 
     // Direct edits via the debug bridge (high above any generated terrain).
     await debug(page, "setBlock", 20, 20, 49, 5);
