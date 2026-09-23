@@ -54,6 +54,8 @@ const MAX_HISTORY = 200;
 const MARKER_SIZE = 0.8;
 /** How often the Forge re-scans for nearby stations, in milliseconds. */
 const STATION_POLL_MS = 500;
+/** Seconds between quiet saves while the world holds unsaved edits. */
+export const AUTOSAVE_SECONDS = 30;
 
 const clone = (v) => (v == null ? v : structuredClone(v));
 
@@ -329,6 +331,10 @@ export class ForgeMode {
     this._slotSaving = false;
     /** Edits since the last successful save; `stop()` skips a redundant write. */
     this._dirty = false;
+    /** Seconds of play since the last autosave check. */
+    this._autosaveT = 0;
+    /** The page-hide listeners, registered once by the first `start()`. */
+    this._onPageHide = null;
 
     this.keys = {};
     this.mouseDx = 0;
@@ -399,6 +405,8 @@ export class ForgeMode {
     this.noclip = false;
     this.toolMode = "block";
     this.active = true;
+    this._autosaveT = 0;
+    this._listenForPageHide();
 
     // After the reset above, or the notice it sets would be wiped out. A
     // creative world has no progression to lose, so it never sees these.
@@ -419,6 +427,35 @@ export class ForgeMode {
     if (!this._dirty) return Promise.resolve();
     this._dirty = false;
     return this._fire(this._persistCurrent());
+  }
+
+  /**
+   * Write unsaved edits now, quietly: the autosave and the page-hide handler.
+   * The explicit save keeps its flash; this one only speaks up if it fails,
+   * and leaves the world dirty so the next attempt writes it again.
+   */
+  flush() {
+    if (!this._dirty || !this.world || this._slotBusy()) return Promise.resolve();
+    this._dirty = false;
+    return this._persistCurrent().catch(() => {
+      this._markDirty();
+      this._warn("Autosave failed — storage unavailable");
+    });
+  }
+
+  /**
+   * A tab closed, reloaded or sent to the background may never come back, so
+   * unsaved edits go to the store as it hides. `visibilitychange` covers the
+   * mobile browsers that skip `pagehide`. One set of listeners per Forge; they
+   * outlive `stop()`, and `flush()` has nothing to do once it has written.
+   */
+  _listenForPageHide() {
+    if (this._onPageHide || typeof globalThis.addEventListener !== "function") return;
+    this._onPageHide = () => this._fire(this.flush());
+    globalThis.addEventListener("pagehide", this._onPageHide);
+    globalThis.document?.addEventListener?.("visibilitychange", () => {
+      if (globalThis.document.visibilityState === "hidden") this._onPageHide();
+    });
   }
 
   /** Storage is gone: keep editing in memory and say so on the HUD. */
@@ -743,6 +780,11 @@ export class ForgeMode {
     if (this.notice) {
       this.notice.t -= dt;
       if (this.notice.t <= 0) this.notice = null;
+    }
+    this._autosaveT += dt;
+    if (this._autosaveT >= AUTOSAVE_SECONDS) {
+      this._autosaveT = 0;
+      this._fire(this.flush());
     }
     if (this.overhead) return;
 

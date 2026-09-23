@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { World } from "../../src/world/world.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { AIR, BEDROCK } from "../../src/world/blocks.js";
@@ -15,6 +15,7 @@ import {
   recordEdit,
   applyEdit,
   undoEdit,
+  AUTOSAVE_SECONDS,
 } from "../../js/forge.js";
 
 const flat = () => generateWorld({ terrain: false });
@@ -265,6 +266,63 @@ describe("forge dirty tracking", () => {
     f.undo(); // place → Ctrl+S → Ctrl+Z → quit
     await f.stop();
     expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(AIR);
+  });
+});
+
+describe("forge autosave", () => {
+  const counted = async () => {
+    const store = new WorldStore(new MemoryBackend());
+    const f = forge(store);
+    await f.start();
+    const saves = vi.spyOn(store, "save");
+    return { f, store, saves };
+  };
+  const run = (f, seconds) => { for (let t = 0; t < seconds * 10; t++) f.update(0.1); };
+
+  it(`writes a dirty world every ${AUTOSAVE_SECONDS} seconds and a clean one never`, async () => {
+    const { f, store, saves } = await counted();
+    run(f, AUTOSAVE_SECONDS * 2);
+    expect(saves).not.toHaveBeenCalled();
+
+    f._editBlock(10, 10, 60, 1);
+    run(f, AUTOSAVE_SECONDS - 1);
+    expect(saves).not.toHaveBeenCalled();
+    run(f, 1.5);
+    expect(saves).toHaveBeenCalledTimes(1);
+    await saves.mock.results[0].value;
+    expect(f._dirty).toBe(false);
+    expect(f.saveFlash).toBe(0); // quiet: the explicit save keeps its flash
+    expect((await store.load(f.currentSlot)).get(10, 10, 60)).toBe(1);
+
+    run(f, AUTOSAVE_SECONDS * 2);
+    expect(saves).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps counting in the overhead view", async () => {
+    const { f, saves } = await counted();
+    f._editBlock(10, 10, 60, 1);
+    f.overhead = true;
+    run(f, AUTOSAVE_SECONDS + 1);
+    expect(saves).toHaveBeenCalledTimes(1);
+  });
+
+  it("flush() — the page-hide handler — writes only a dirty world", async () => {
+    const { f, saves } = await counted();
+    await f.flush();
+    expect(saves).not.toHaveBeenCalled();
+    f._editBlock(10, 10, 60, 1);
+    await f.flush();
+    expect(saves).toHaveBeenCalledTimes(1);
+    expect(f._dirty).toBe(false);
+  });
+
+  it("leaves the world dirty when the write fails", async () => {
+    const { f, store } = await counted();
+    f._editBlock(10, 10, 60, 1);
+    store.backend = new DeadBackend();
+    await f.flush();
+    expect(f._dirty).toBe(true);
+    expect(f.notice.text).toMatch(/storage unavailable/);
   });
 });
 
