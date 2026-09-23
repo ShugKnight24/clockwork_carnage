@@ -289,7 +289,9 @@ describe("ACTS against the MAPS registry", async () => {
   it("lists each distinct campaign map once, every map in play", () => {
     const maps = campaignMaps();
     expect(new Set(maps).size).toBe(maps.length);
-    const station = ["entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "nexus", "core"];
+    // Act I's eight station maps. The old Temporal Nexus is out of play now
+    // that Act IV has its own reworked Nexus and Act II its own Transit Loop.
+    const station = ["entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "core"];
     for (const id of station) expect(maps.map((m) => m.name), id).toContain(MAPS[id].name);
     // One prepared map per distinct (map, seed, rotation) the acts name.
     const distinct = new Set(ACTS.flatMap((a) => a.levels).map((l) => `${l.map}|${l.seed}|${l.rotation}`));
