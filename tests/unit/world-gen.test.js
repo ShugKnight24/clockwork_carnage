@@ -54,12 +54,14 @@ describe("generateWorld", () => {
     expect(cells(again).equals(cells(w))).toBe(true);
   });
 
-  it("spawns on level ground inside the box for many seeds", () => {
+  it("spawns on dry, level ground inside the box for many seeds", () => {
     for (let seed = 1; seed <= 20; seed++) {
       const w = generateWorld({ terrain: true, seed: seed * 104729 });
       const s = w.meta.spawn, bx = Math.floor(s.x), by = Math.floor(s.y), t = w.topSolid(bx, by);
       expect(w.inBounds(bx, by, s.z)).toBe(true);
       expect(s.z).toBe(t + 1);
+      expect(t).toBeGreaterThanOrEqual(30); // at or above the sea line: never on a lake or sea bed
+      expect(w.get(bx, by, s.z)).toBe(AIR);
       expect(s.yaw).toBe(0);
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         expect(Math.abs(w.topSolid(bx + dx, by + dy) - t)).toBeLessThanOrEqual(1);

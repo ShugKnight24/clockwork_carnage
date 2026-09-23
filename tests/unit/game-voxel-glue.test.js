@@ -103,6 +103,17 @@ describe("standableNear", () => {
   it("returns null when nothing within reach has a floor", () => {
     expect(standableNear(new World(), 40.5, 40.5, 32)).toBeNull();
   });
+
+  it("never stands a body on the bed of a pool, but on the dry bank beside it", () => {
+    const world = flat();
+    // A pool 7 across and 3 deep round (40, 40), its bed at z = 28.
+    for (let y = 37; y <= 43; y++) for (let x = 37; x <= 43; x++) for (let z = 29; z <= 31; z++) world.set(x, y, z, 19);
+    const at = standableNear(world, 40.5, 40.5, 29);
+    expect(at).not.toBeNull();
+    expect(at.z).toBe(32);
+    expect(Math.max(Math.abs(at.x - 40.5), Math.abs(at.y - 40.5))).toBe(4);
+    expect(world.get(Math.floor(at.x), Math.floor(at.y), 31)).toBe(11);
+  });
 });
 
 describe("spawn fallbacks read the world's bounds", () => {

@@ -5,6 +5,7 @@
 import { getArtStyle, ART_LEGACY, ART_REALISTIC } from "../rendering/art-style.js";
 import { PLAYER, aabbOverlapsSolid, playerEyeZ3D } from "../world/voxel-physics.js";
 import { World } from "../world/world.js";
+import { isWater } from "../world/blocks.js";
 
 /**
  * Art style id → the name `VoxelRenderer.setStyle` understands.
@@ -41,10 +42,12 @@ const SUPPORT = 0.05;
 /**
  * Room for a standing body at (x, y, z) with something under its feet.
  * Support matters: a spawn hanging over a hole drops whatever stands there
- * forever in a world that has no floor under it.
+ * forever in a world that has no floor under it. A lake or sea bed is not a
+ * place to start: feet in water do not count.
  */
 function standable(world, x, y, z, half = PLAYER.half, height = PLAYER.height) {
   if (z < 0 || z + height >= World.H) return false;
+  if (isWater(world.get(Math.floor(x), Math.floor(y), Math.floor(z)))) return false;
   if (aabbOverlapsSolid(world, x, y, z, half, height)) return false;
   return aabbOverlapsSolid(world, x, y, z - SUPPORT, half, height);
 }
