@@ -482,13 +482,16 @@ test.describe("Voxel Forge", () => {
     // Wait for the write itself, not just the flash.
     await page.waitForFunction(async () => {
       const b = window.ccDebug.game.builder;
-      return (await b.store.load(b.currentSlot))?.wasPlaced(44, 64, 49) === true;
+      const w = await b.store.load(b.currentSlot);
+      w?.loadAround(44, 64, 0); // an endless world loads no column until asked
+      return w?.wasPlaced(44, 64, 49) === true;
     });
 
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
     await debug(page, "startBuilder");
     await waitForForge(page);
+    await waitForColumn(page, 44, 64);
     const reloaded = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
       b.noclip = true;
@@ -1358,5 +1361,29 @@ test.describe("Voxel Forge", () => {
     await waitForColumn(page, far.x, far.y);
     expect(await page.evaluate(({ x, y }) => window.ccDebug.game.builder.world.get(x, y, 62), far)).toBe(9);
     await screenshot(page, "forge-endless-far-build");
+  });
+
+  test("endless: half a million blocks out, the world streams in and draws", async ({ page }) => {
+    test.setTimeout(120_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+    await page.evaluate(() => {
+      const b = window.ccDebug.game.builder;
+      b.noclip = true;
+      Object.assign(b.player, { x: 500_000.5, y: 500_000.5, z: 52, pitch: -0.3, angle: 0.7 });
+    });
+    // The ground under the player loads at once; the rest streams until
+    // nothing is pending, and the old neighbourhood of the spawn is dropped.
+    await waitForColumn(page, 500_000, 500_000, 5_000);
+    await page.waitForFunction(() => {
+      const s = window.ccDebug.forgeWorldStats();
+      return s.pending === 0 && s.chunksDrawn > 50 && !window.ccDebug.game.builder.world.isLoaded(0, 0);
+    }, null, { timeout: 60_000 });
+    await waitForMeshIdle(page);
+    const s = await page.evaluate(() => window.ccDebug.forgeWorldStats());
+    expect(s.columns).toBeLessThan(Math.PI * ((220 + 12) / 16) ** 2);
+    await screenshot(page, "forge-endless-500k");
   });
 });
