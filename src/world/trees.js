@@ -6,6 +6,10 @@
  * on. Only integer arithmetic and bit operations, so the generator may call
  * it (column-gen-v2.js carries the rules for frozen generators).
  *
+ * The shapes and `plantOver` are part of generator version 2's frozen output
+ * (column-gen-v2.js): changing them moves every v2 world. A new shape is a new
+ * species, used only by a later generator version or by saplings.
+ *
  * Trees overlap freely. Whatever order they are planted in, a cell ends as
  * the strongest of what was written there: terrain and water are never
  * replaced, a log beats leaves, and leaves only fill air. That is what lets

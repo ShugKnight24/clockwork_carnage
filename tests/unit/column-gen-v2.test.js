@@ -7,6 +7,7 @@ import {
 import { SEA, BIOMES, MIN_TOP, MAX_TOP, regionAt } from "../../src/world/column-gen-v2.js";
 import { AIR, BEDROCK, WATER, LOG, LEAVES } from "../../src/world/blocks.js";
 import { DEFAULT_BOUNDS } from "../../src/world/world.js";
+import { generateWorld } from "../../src/world/world-gen.js";
 
 const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
 const GROUND = new Set([BEDROCK, GRASS, DIRT, SAND, ROCK, ORE]);
@@ -304,5 +305,50 @@ describe("generator v2 rules", () => {
         }
       }
     }
+  });
+});
+
+describe("generator v2 is frozen", () => {
+  // Recorded when v2 was frozen (2026-09-23), and identical under V8 (node)
+  // and JavaScriptCore (bun). These never change: a failure here means
+  // generator v2's output moved, which would strand every saved edit in a v2
+  // world on shifted terrain. Put new terrain in a v3 path; never record anew.
+  // [seed, cx, cy, sha256 of the column's 16,384 bytes]
+  const GOLDEN = [
+    [7, 0, 0, "7ed38562f94755a1d46ed42aedf827c0566508a71972eb9dbc46252b9d532739"], // a river
+    [7, 4, 4, "03c768ff67aa4557357185b54fa63c8b209f4c677fee3ba95a44f42f6922099d"],
+    [7, -1, -1, "b816f42139546642de175ae199decf2b55690092f38a2df537e80286e2d5f3a5"],
+    [7, -37, 12, "ddbc8667b130721a81c446324983c0d9a35bfca8e360bfbea64e1702cdb1c83c"],
+    [7, 6250, -6250, "1486d24e3e3835040a701ff7c2a079d83d2019d18015447f2b197aee640d9971"],
+    [7, 65535, -65536, "bd8a8121fa5178f6a73659c4c09b84039ea8101093ce28666d4c0c4a0592d58c"],
+    [1234567, 0, 0, "1b34edbd56e4c71fd56b555505bd724defc5e5dfe865fd9dd1288892a099a08e"],
+    [1234567, 4, 4, "ea1b4072ce232b5676fda2967a636970d2e398c133223ce4cc08b640a8a5d4bc"],
+    [1234567, -1, -1, "c8ae2b827ab8b7f40a9a19f3b4946b4af1b14de3047a800c13184abcd69b3126"],
+    [1234567, -37, 12, "7bc3bfe41309da67886a73a6d9eb5ad53e1f2f5024a7fc72a2e4b3f235bac7df"],
+    [1234567, 6250, -6250, "9d805d72283035f3aefca9ed2964d1b364efc679ad90cdb9391918766de9495f"],
+    [1234567, 65535, -65536, "52505e10381aae6be4ce4e7e2abb86c8a24214add60c08d5d10c0ad84ed49e28"],
+    [3735928559, 0, 0, "ad4e3dd3a62370cd9d9fe788417aa3da05e28d49e95aae2452ddacff0dd8b88e"],
+    [3735928559, 4, 4, "18e781d72a89e9942a1cf978d6984476f1571f1ce4333a58d378da4e021763c3"],
+    [3735928559, -1, -1, "63bf53b4ea273a18305d9f64400af33b8cdfebfe9c0aa0d5086766d504632666"],
+    [3735928559, -37, 12, "c0d8651e099d243808be79450f98fb912da902fafdefc3202c479097b9bf5f69"],
+    [3735928559, 6250, -6250, "2efc803feca69822eedfb537fc97ce912519f279c5c6308422099ca468efcf58"],
+    [3735928559, 65535, -65536, "bad3f080fcd2327623c3f187b73eb0aeb40bdf7e373d17b06bf4c5f852fc8045"],
+    [7, 20, 23, "b5fc8ed7f2cf8d67db063e93f1f2aa0cd3bf88b28d64d20d47d41ecc83cfb24e"], // open sea
+    [7, -66, -89, "20ef7576dd28733cab93ddf24c9b582b37768ff9a06ce439c27f81c19094fc46"], // a basin lake
+    [7, 3, -4, "65932bebab20620928b15c67e6810d7ffa5d458233a76cea646ddda6df449420"], // forest
+    [7, 0, -1, "c856326fddc25511b3798d672c2ff6e982730ab1770ad3c7ac8413dab4cda47d"], // a palm
+    [7, -1, 0, "40f1ecc49ca685fadec0b7d0427af9ca184de1d2890c2c2e1d7b020d7ec7548c"], // a pine
+    [7, -4, -6, "fcf681b9c5b93915e889055057d62b81513997d8e8d77b061f39b30f7f4e2728"], // a shrub
+  ];
+
+  it("matches the golden bytes of fixed columns", () => {
+    for (const [seed, cx, cy, hash] of GOLDEN) expect(sha(generateColumn(v2(seed), cx, cy)), `${seed} ${cx},${cy}`).toBe(hash);
+  });
+
+  it("matches the golden bytes of a whole new 128 × 128 world, and flat ground is v1's", () => {
+    const w = generateWorld({ terrain: true, seed: 7 });
+    expect(w.meta.gen).toEqual({ kind: "terrain", seed: 7, v: 2 });
+    expect(sha(Buffer.concat([...w.columns.values()].map((c) => Buffer.from(c.blocks))))).toBe("43be14f7ab1ae158d94f92aac3010f2de1ce958928701fb21a4a891ec760e870");
+    expect(sha(generateColumn({ kind: "flat", seed: 1, v: 2 }, 0, 0))).toBe("34c6c37d91559a5d8f07c78adb5583b40a75d368f238ffcd080c7fd52f229789");
   });
 });

@@ -17,6 +17,15 @@
 import { AIR, BEDROCK, WATER } from "./blocks.js";
 import { SPECIES, TREE_REACH, treeShape, treeTop, plantOver } from "./trees.js";
 
+/**
+ * Generator version 2 — FROZEN on 2026-09-23 (Forge water, phase B). Worlds
+ * made since store `meta.gen.v = 2` and their saved edits are diffs against
+ * this file's exact output, held to golden hashes in
+ * tests/unit/column-gen-v2.test.js (identical under V8 and JavaScriptCore).
+ * Every constant, field, tree shape (trees.js `treeShape`, `treeTop`,
+ * `plantOver`) and rule below is part of that output. New terrain goes into a
+ * version 3 path; a golden hash is never re-recorded to make a change pass.
+ */
 export const GEN_V2 = 2;
 
 const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
