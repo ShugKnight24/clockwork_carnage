@@ -314,6 +314,14 @@ describe("comms rules", () => {
     run(d, 0.1);
     expect(d.showing("teach")).toBe(true);
   });
+
+  it("keeps a lesson line on its own plate on a phone, where the card has no room", () => {
+    const d = fresh();
+    d.lanes = { kind: "compact", chipsShareHeadline: true };
+    d.post("teach", "teach", { fold: teachFolds("timeLock") });
+    run(d, 0.1);
+    expect(d.commsPlacement(line({ category: "powerUnlocked" }))).toBe("low");
+  });
 });
 
 describe("combat intensity", () => {

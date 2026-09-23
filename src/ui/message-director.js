@@ -221,7 +221,9 @@ export class MessageDirector {
     // A headline about to show counts: a line that starts now would be
     // under it (or over the boss intro) a frame later.
     const q = this.queues.headline;
-    return commsPlacement(msg, this.active.headline ?? q[pickNext(q)] ?? null);
+    const place = commsPlacement(msg, this.active.headline ?? q[pickNext(q)] ?? null);
+    // A phone's card has no room for a narration row: the line keeps its plate.
+    return place === "fold" && this.lanes?.kind === "compact" ? "low" : place;
   }
 
   /** Forget a lane (a new level: the last one's plates are stale). */
