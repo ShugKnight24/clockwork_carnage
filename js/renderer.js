@@ -34,6 +34,7 @@ import {
 import { drawProp, setFovScale } from "../src/rendering/props.js";
 import { GLRenderer } from "../src/rendering/webgl/gl-renderer.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
+import { castColumn, createColumnHits, coverClipY, MAX_COLUMN_HITS } from "../src/rendering/column-cast.js";
 import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
 
 // Realistic sprite lighting: one reused light sample and a cache of the
@@ -41,6 +42,42 @@ import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
 const _litOut = { r: 0, g: 0, b: 0 };
 const _litFilters = new Map();
 import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+
+// Short-wall records kept per screen column (one per wall the ray crosses).
+const COVER_STRIDE = MAX_COLUMN_HITS;
+
+// Short-wall top faces: fog steps, how much darker than the art they read,
+// and a per-texture cache of the fogged colours (see Renderer._capLUT).
+const CAP_FOG_STEPS = 32;
+const CAP_SHADE = 0.28;
+const _capCache = new WeakMap();
+const _noTexture = {}; // cache slot for a wall type with no art
+let _avgCanvas = null;
+
+/** Average colour of a wall texture, from a smoothed 4x4 downsample. */
+function _averageColor(tex) {
+  try {
+    if (!_avgCanvas) {
+      _avgCanvas = document.createElement("canvas");
+      _avgCanvas.width = _avgCanvas.height = 4;
+    }
+    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
+    c.clearRect(0, 0, 4, 4);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(tex, 0, 0, 4, 4);
+    const d = c.getImageData(0, 0, 4, 4).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < 64; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+    return [r / 16, g / 16, b / 16];
+  } catch (_) {
+    return [90, 96, 108]; // no texture or unreadable: neutral steel
+  }
+}
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -81,10 +118,9 @@ export class Renderer {
     this.height = canvas.height;
     this.textures = {};
     this.zBuffer = new Float64Array(this.width);
-    // BUG-030: Store wall-top screen Y per column so sprites behind short
-    // walls can render their upper portion above the wall.
-    // -1 means full-height wall (no sprite pass-through).
-    this.wallTopY = new Float64Array(this.width);
+    // Ray-march scratch for the wall pass; short-wall records for sprites are
+    // sized per frame (_ensureCoverBufs).
+    this._colHits = createColumnHits();
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this._envLevel = null; // campaign level env id, for the per-level palette
@@ -218,7 +254,7 @@ export class Renderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.zBuffer = new Float64Array(w);
-    this.wallTopY = new Float64Array(w);
+    this._occN = null;
     this._colKey = null;
     this._floorCeilBuffer = null;
     if (this.glRenderer) this.glRenderer.resize(w, h);
@@ -289,6 +325,136 @@ export class Renderer {
     this._colKey = new Int32Array(w);
     this._colTop = new Int32Array(w);
     this._colBot = new Int32Array(w);
+    this._colZ = new Float64Array(w);
+  }
+
+  /**
+   * Per-column short-wall records for the sprite pass: for each short wall a
+   * column crosses, its distance and the screen Y (unshifted) below which it
+   * hides anything further away. See coverClipY().
+   */
+  _ensureCoverBufs(w) {
+    if (this._occN && this._occN.length === w) return;
+    this._occN = new Uint8Array(w);
+    this._occDist = new Float32Array(w * COVER_STRIDE);
+    this._occY = new Float32Array(w * COVER_STRIDE);
+  }
+
+  /**
+   * Screen Y (unshifted) below which something `depth` away in column `x` is
+   * hidden by short walls in front of it; Infinity when none are.
+   * Only meaningful in front of the column's full wall (zBuffer).
+   */
+  coverClipY(x, depth) {
+    if (!this._occN) return Infinity; // no wall pass yet at this size
+    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity);
+  }
+
+  /** Is a projected point (unshifted screen Y) hidden by a wall or low cover? */
+  pointHidden(x, depth, y, slack = 0.1) {
+    if (x < 0 || x >= this.width) return true;
+    x |= 0;
+    return depth > this.zBuffer[x] + slack || y >= this.coverClipY(x, depth);
+  }
+
+  /**
+   * Add clip rects for a sprite spanning columns x0..x1 and rows top..bottom
+   * at `depth`: each column is cut where a full wall stands in front and
+   * shortened to the silhouette of any low cover in front. Adjacent columns
+   * with the same cut merge into one rect. Returns 0 when nothing shows, 1
+   * when the sprite is partly hidden (clip needed), 2 when fully visible.
+   */
+  _spriteClipPath(ctx, x0, x1, top, bottom, depth) {
+    const zb = this.zBuffer;
+    if (x0 < 0) x0 = 0;
+    if (x1 > zb.length - 1) x1 = zb.length - 1;
+    let runStart = -1;
+    let runBot = 0;
+    let shown = 0;
+    let hidden = false;
+    ctx.beginPath();
+    for (let x = x0; x <= x1 + 1; x++) {
+      // Lowest visible row in this column, or -Infinity when none is.
+      let bot = -Infinity;
+      if (x <= x1) {
+        if (depth < zb[x]) {
+          bot = this.coverClipY(x, depth);
+          if (bot > bottom) bot = bottom;
+          if (bot <= top) bot = -Infinity;
+        }
+        if (bot < bottom) hidden = true;
+      }
+      if (runStart >= 0 && bot !== runBot) {
+        ctx.rect(runStart, top, x - runStart, runBot - top);
+        runStart = -1;
+      }
+      if (bot > top && runStart < 0) {
+        runStart = x;
+        runBot = bot;
+        shown++;
+      }
+    }
+    return shown === 0 ? 0 : hidden ? 1 : 2;
+  }
+
+  /**
+   * Top face of a short wall under the eye, seen from above: one flat fill per
+   * column in the wall art's average colour, a shade darker than the face and
+   * fogged at the far edge's distance. Caps are a pixel or two tall except up
+   * close, so a texture blit there bought nothing and cost a draw call.
+   */
+  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real) {
+    const mmips = menv ? menv.walls[wallType] : null;
+    const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
+    const lut = this._capLUT(tex, menv);
+    let s;
+    if (menv) {
+      s = 1 - Math.exp(-dist * menv.fogDensity);
+    } else {
+      s = dist / 20 / (this._visualStyle === 1 ? 0.85 : 0.6);
+      if (s > 1) s = 1;
+    }
+    ctx.fillStyle = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
+    ctx.fillRect(x, top, 1, bot - top);
+    // Batched with the frame's column path: Realistic's ambient fill, or the
+    // Comic ink line along the far edge.
+    if (menv) {
+      if (real) ctx.rect(x, top, 1, bot - top);
+      else ctx.rect(x, top, 1, 1);
+    }
+  }
+
+  /**
+   * Fogged cap colours for one wall texture, CAP_FOG_STEPS + 1 of them from
+   * clear to fully fogged, using the same fog colour and ceiling as the wall
+   * pass of the active style. Built once per texture and fog setting.
+   */
+  _capLUT(tex, menv) {
+    const key = menv ? menv : this._visualStyle;
+    const slot = tex || _noTexture;
+    let e = _capCache.get(slot);
+    if (e && e.key === key) return e.lut;
+    const avg = _averageColor(tex);
+    const lut = new Array(CAP_FOG_STEPS + 1);
+    for (let i = 0; i <= CAP_FOG_STEPS; i++) {
+      const t = i / CAP_FOG_STEPS;
+      let fr, fg, fb, a;
+      if (menv) {
+        const n = menv.fogNear, f = menv.fogFar;
+        fr = n[0] + (f[0] - n[0]) * t;
+        fg = n[1] + (f[1] - n[1]) * t;
+        fb = n[2] + (f[2] - n[2]) * t;
+        a = t * menv.fogMax;
+      } else {
+        const brutal = this._visualStyle === 1;
+        [fr, fg, fb] = brutal ? [8, 8, 20] : [10, 18, 32];
+        a = t * (brutal ? 0.85 : 0.6);
+      }
+      const k = (1 - CAP_SHADE) * (1 - a);
+      lut[i] = `rgb(${(avg[0] * k + fr * a) | 0},${(avg[1] * k + fg * a) | 0},${(avg[2] * k + fb * a) | 0})`;
+    }
+    _capCache.set(slot, { key, lut });
+    return lut;
   }
 
   /**
@@ -459,7 +625,8 @@ export class Renderer {
     const key = this._colKey;
     const top = this._colTop;
     const bot = this._colBot;
-    const zb = this.zBuffer;
+    // Depth of the nearest surface per column (the one the key describes).
+    const zb = this._colZ;
     ctx.fillStyle = "rgba(4,6,11,0.9)";
     ctx.fill(); // top/bottom contact lines accumulated as rects in the loop
     for (let x = 1; x < w; x++) {
@@ -619,7 +786,6 @@ export class Renderer {
 
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
-    this.wallTopY.fill(-1); // -1 = full-height wall (no pass-through)
 
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
@@ -740,9 +906,17 @@ export class Renderer {
       ctx.fillRect(0, centerY, w, h - centerY);
     }
 
-    // Raycasting
+    // Raycasting. Each column marches through any short walls (low cover) to
+    // the full-height wall behind them and draws them front to back: every
+    // wall shows only above the lowest short-wall silhouette in front of it.
     const planeX = -dirY * planeMul;
     const planeY = dirX * planeMul;
+    const horizon = h / 2 + yShift;
+    const hits = this._colHits;
+    this._ensureCoverBufs(w);
+    const occN = this._occN;
+    const occDist = this._occDist;
+    const occY = this._occY;
 
     if (menv) ctx.beginPath();
 
@@ -751,349 +925,323 @@ export class Renderer {
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      let mapX = camX | 0;
-      let mapY = camY | 0;
+      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits);
+      const stepX = hits.stepX;
+      const stepY = hits.stepY;
+      const nHits = hits.n;
+      // Rows from `openBot` down are already covered by nearer short walls.
+      let openBot = h;
+      let nOcc = 0;
+      let closeDist = hits.dist[nHits - 1];
+      const occBase = x * COVER_STRIDE;
 
-      const deltaDistX = Math.abs(1 / rayDirX);
-      const deltaDistY = Math.abs(1 / rayDirY);
+      for (let hi = 0; hi < nHits; hi++) {
+        const mapX = hits.mapX[hi];
+        const mapY = hits.mapY[hi];
+        const side = hits.side[hi];
+        const wallType = hits.type[hi];
+        const perpWallDist = hits.dist[hi];
+        // Variable height: 5 layers = full wall, 1 layer = 20% (from the floor up).
+        const heightFrac = hits.frac[hi];
 
-      let stepX, stepY, sideDistX, sideDistY;
+        const lineHeight = (h / perpWallDist) | 0;
+        const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
+        const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
 
-      if (rayDirX < 0) {
-        stepX = -1;
-        sideDistX = (camX - mapX) * deltaDistX;
-      } else {
-        stepX = 1;
-        sideDistX = (mapX + 1.0 - camX) * deltaDistX;
-      }
-      if (rayDirY < 0) {
-        stepY = -1;
-        sideDistY = (camY - mapY) * deltaDistY;
-      } else {
-        stepY = 1;
-        sideDistY = (mapY + 1.0 - camY) * deltaDistY;
-      }
+        const faceTop = heightFrac < 1
+          ? (fullDrawEnd - (fullDrawEnd - fullDrawStart) * heightFrac) | 0
+          : fullDrawStart;
+        let drawStart = faceTop;
+        let drawEnd = fullDrawEnd;
+        // A nearer short wall hides the lower part of this one.
+        const clipped = openBot < h && drawEnd > openBot;
+        if (clipped) drawEnd = openBot;
 
-      let hit = 0;
-      let side = 0;
-      let wallType = 0;
+        if (drawStart < 0) drawStart = 0;
+        if (drawEnd >= h) drawEnd = h - 1;
 
-      // DDA
-      while (hit === 0) {
-        if (sideDistX < sideDistY) {
-          sideDistX += deltaDistX;
-          mapX += stepX;
-          side = 0;
-        } else {
-          sideDistY += deltaDistY;
-          mapY += stepY;
-          side = 1;
-        }
-        if (mapX < 0 || mapY < 0 || mapX >= map.width || mapY >= map.height) {
-          hit = 1;
-          wallType = 1;
-          break;
-        }
-        if (map.grid[mapY][mapX] > 0) {
-          hit = 1;
-          wallType = map.grid[mapY][mapX];
-        }
-      }
-
-      let perpWallDist;
-      if (side === 0) {
-        perpWallDist = (mapX - camX + (1 - stepX) / 2) / rayDirX;
-      } else {
-        perpWallDist = (mapY - camY + (1 - stepY) / 2) / rayDirY;
-      }
-
-      if (perpWallDist < 0.01) perpWallDist = 0.01;
-
-      // BUG-030: Store wall-top Y so sprite pass can draw above short walls.
-      this.zBuffer[x] = perpWallDist;
-
-      const lineHeight = (h / perpWallDist) | 0;
-      const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
-      const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
-
-      // Variable height: heightMap determines how tall the wall renders
-      // 5 layers = full wall, 1 layer = 20% wall (from ground up)
-      let heightFrac = 1;
-      if (
-        map.heightMap &&
-        mapX >= 0 &&
-        mapY >= 0 &&
-        mapX < map.width &&
-        mapY < map.height
-      ) {
-        const hCount = map.heightMap[mapY]?.[mapX] ?? 5;
-        if (hCount > 0 && hCount < 5) {
-          heightFrac = hCount / 5;
-        }
-      }
-
-      let drawStart, drawEnd;
-      if (heightFrac < 1) {
-        // Short wall: grows upward from floor level
-        drawEnd = fullDrawEnd;
-        const wallPx = fullDrawEnd - fullDrawStart;
-        drawStart = (drawEnd - wallPx * heightFrac) | 0;
-        // BUG-030: Record wall-top screen Y for short walls
-        this.wallTopY[x] = drawStart;
-      } else {
-        drawStart = fullDrawStart;
-        drawEnd = fullDrawEnd;
-        this.wallTopY[x] = -1; // Full-height wall — fully occluding
-      }
-
-      if (drawStart < 0) drawStart = 0;
-      if (drawEnd >= h) drawEnd = h - 1;
-
-      // Texture coordinate
-      let wallX;
-      if (side === 0) {
-        wallX = camY + perpWallDist * rayDirY;
-      } else {
-        wallX = camX + perpWallDist * rayDirX;
-      }
-      wallX -= Math.floor(wallX);
-
-      const mmips = menv ? menv.walls[wallType] : null;
-      if (mmips) {
-        // Mip level ≈ one texel per screen pixel, so distant walls sample
-        // pre-filtered art instead of aliasing across the 512px face.
-        const lvl =
-          lineHeight >= 384 ? 0 :
-            lineHeight >= 192 ? 1 :
-              lineHeight >= 96 ? 2 :
-                lineHeight >= 48 ? 3 :
-                  lineHeight >= 24 ? 4 : 5;
-        const mtex = mmips[lvl];
-        const S = mtex.width;
-        let texX = (wallX * S) | 0;
-        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-          texX = S - 1 - texX;
-        }
-        const mstep = S / lineHeight;
-        const srcY = (drawStart - fullDrawStart) * mstep;
-        const colH = drawEnd - drawStart;
-        const srcH = Math.min(S - srcY, colH * mstep);
-        if (srcH > 0 && colH > 0) {
-          ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
-        }
-
-        // Directional key light: faces turned away from it fall toward ink.
-        const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
-        if (face !== 0) {
-          ctx.fillStyle = menv.faceShade[face];
-          ctx.fillRect(x, drawStart, 1, colH);
-        }
-        if (real) {
-          // Low ambient, batched into the frame's column path (Realistic has
-          // no ink lines to share it with) and filled once after the loop.
-          ctx.rect(x, drawStart, 1, colH);
-          // Soft contact shadow where the wall meets the deck and ceiling,
-          // stretched over the wall's full height so it stays on the joints
-          // when the column is clipped. Walls under ~40px tall are too far
-          // away for it to show, so they skip the blit.
-          if (lineHeight >= 40) {
-            ctx.drawImage(aoStrip, 0, 0, 1, 64, x, fullDrawStart, 1, fullDrawEnd - fullDrawStart);
+        if (drawEnd > drawStart) {
+          // Texture coordinate
+          let wallX;
+          if (side === 0) {
+            wallX = camY + perpWallDist * rayDirY;
+          } else {
+            wallX = camX + perpWallDist * rayDirX;
           }
-        }
+          wallX -= Math.floor(wallX);
 
-        // Act fog with atmospheric perspective (colour and density from the
-        // same ramp the deck shader uses, so wall and floor air agree).
-        const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
-        const fogAmount = fogK;
-        const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
-        if (fi > 0) {
-          ctx.fillStyle = menv.fogLUT[fi];
-          ctx.fillRect(x, drawStart, 1, colH);
-        }
-
-        // Dynamic lights, with a hot rim where they catch an exposed corner.
-        if (this.lights && this.lights.length > 0) {
-          const hitWX = camX + perpWallDist * rayDirX;
-          const hitWY = camY + perpWallDist * rayDirY;
-          let lr = 0, lg = 0, lb = 0;
-          for (let li = 0; li < this.lights.length; li++) {
-            const L = this.lights[li];
-            const ldx = L.x - hitWX;
-            const ldy = L.y - hitWY;
-            const d2 = ldx * ldx + ldy * ldy;
-            const r2 = L.radius * L.radius;
-            if (d2 >= r2) continue;
-            let k;
-            if (real) {
-              // Inverse-square, windowed to the authored radius: hot near the
-              // source, long soft tail, still zero at the edge.
-              const q = d2 / r2;
-              const win = 1 - q * q;
-              k = (win * win * L.intensity * 1.35) / (1 + (6 * d2) / r2);
-            } else {
-              const fall = 1 - Math.sqrt(d2) / L.radius;
-              k = fall * fall * L.intensity;
+          const mmips = menv ? menv.walls[wallType] : null;
+          if (mmips) {
+            // Mip level ≈ one texel per screen pixel, so distant walls sample
+            // pre-filtered art instead of aliasing across the 512px face.
+            const lvl =
+              lineHeight >= 384 ? 0 :
+                lineHeight >= 192 ? 1 :
+                  lineHeight >= 96 ? 2 :
+                    lineHeight >= 48 ? 3 :
+                      lineHeight >= 24 ? 4 : 5;
+            const mtex = mmips[lvl];
+            const S = mtex.width;
+            let texX = (wallX * S) | 0;
+            if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+              texX = S - 1 - texX;
             }
-            lr += L.color[0] * k;
-            lg += L.color[1] * k;
-            lb += L.color[2] * k;
-          }
-          if (lr + lg + lb > 1) {
-            if (wallX < 0.07 || wallX > 0.93) {
-              // Only a real block corner gets the rim; a continuous wall
-              // plane shouldn't light up every cell seam.
-              const nx = side === 0 ? mapX : mapX + (wallX < 0.07 ? -1 : 1);
-              const ny = side === 0 ? mapY + (wallX < 0.07 ? -1 : 1) : mapY;
-              const open =
-                nx >= 0 && ny >= 0 && nx < map.width && ny < map.height &&
-                map.grid[ny][nx] === 0;
-              if (open) {
-                lr *= 2.4;
-                lg *= 2.4;
-                lb *= 2.4;
+            const mstep = S / lineHeight;
+            const srcY = (drawStart - fullDrawStart) * mstep;
+            const colH = drawEnd - drawStart;
+            const srcH = Math.min(S - srcY, colH * mstep);
+            if (srcH > 0 && colH > 0) {
+              ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
+            }
+
+            // Directional key light: faces turned away from it fall toward ink.
+            const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
+            if (face !== 0) {
+              ctx.fillStyle = menv.faceShade[face];
+              ctx.fillRect(x, drawStart, 1, colH);
+            }
+            if (real) {
+              // Low ambient, batched into the frame's column path (Realistic has
+              // no ink lines to share it with) and filled once after the loop.
+              ctx.rect(x, drawStart, 1, colH);
+              // Soft contact shadow where the wall meets the deck and ceiling,
+              // stretched over the wall's full height so it stays on the joints
+              // when the column is clipped. Walls under ~40px tall are too far
+              // away for it to show, so they skip the blit.
+              if (lineHeight >= 40) {
+                const fullH = fullDrawEnd - fullDrawStart;
+                ctx.drawImage(aoStrip, 0, ((drawStart - fullDrawStart) / fullH) * 64, 1, (colH / fullH) * 64, x, drawStart, 1, colH);
               }
             }
-            const peak = Math.max(lr, lg, lb);
-            const a = Math.min(0.9, peak / 255);
-            const prev = ctx.globalCompositeOperation;
-            ctx.globalCompositeOperation = "lighter";
-            ctx.fillStyle = _getFogString(
-              Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
-            );
-            ctx.fillRect(x, drawStart, 1, colH);
-            ctx.globalCompositeOperation = prev;
-          }
-        }
 
-        // Door-frame spill onto the walls flanking a door tile.
-        if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
-          const low = wallX < 0.1;
-          const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
-          const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
-          if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
-            const ac = menv.accentRGB;
-            const prev = ctx.globalCompositeOperation;
-            ctx.globalCompositeOperation = "lighter";
-            ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
-            ctx.fillRect(x, drawStart, 1, colH);
-            ctx.globalCompositeOperation = prev;
-          }
-        }
-
-        // Inked contact lines at the ceiling and deck joints, batched into one
-        // path that the silhouette pass fills after the loop.
-        const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
-        if (!real && colH > inkT * 2) {
-          if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
-          if (drawEnd < h - 1) ctx.rect(x, drawEnd - inkT, 1, inkT);
-        }
-        this._colKey[x] = side === 0 ? mapX << 1 : (mapY << 1) | 1;
-        this._colTop[x] = drawStart;
-        this._colBot[x] = drawEnd;
-      } else if (this.textures[wallType]) {
-        const tex = this.textures[wallType];
-        let texX = (wallX * 256) | 0;
-        if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
-          texX = 255 - texX;
-        }
-
-        // Draw textured wall strip
-        const texHeight = 256;
-        const step = texHeight / lineHeight;
-        let texPos = (drawStart - h / 2 + lineHeight / 2) * step;
-
-        // Use drawImage for textured columns
-        const srcY = Math.max(0, texPos);
-        const srcH = Math.min(256, (drawEnd - drawStart) * step);
-        if (srcH > 0 && drawEnd > drawStart) {
-          ctx.drawImage(
-            tex,
-            texX,
-            srcY,
-            1,
-            srcH,
-            x,
-            drawStart,
-            1,
-            drawEnd - drawStart,
-          );
-        }
-
-        // Darken side walls for depth
-        if (side === 1) {
-          ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-        }
-
-        // Distance fog (cached rgba strings to avoid per-column string creation)
-        const wallFogMax = this._visualStyle === 1 ? 0.85 : 0.6;
-        const fogAmount = Math.min(wallFogMax, perpWallDist / 20);
-        if (fogAmount > 0) {
-          const [wfR, wfG, wfB] =
-            this._visualStyle === 1 ? [8, 8, 20] : [10, 18, 32];
-          ctx.fillStyle = _getFogString(wfR, wfG, wfB, fogAmount);
-          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-        }
-
-        // Dynamic lights — additive radial bleed at the wall hit point.
-        // Each active light is sampled by squared distance for cheap falloff.
-        // Skipped entirely when no lights are present (zero overhead common case).
-        if (this.lights && this.lights.length > 0) {
-          const hitWX = camX + perpWallDist * rayDirX;
-          const hitWY = camY + perpWallDist * rayDirY;
-          let lr = 0, lg = 0, lb = 0;
-          for (let li = 0; li < this.lights.length; li++) {
-            const L = this.lights[li];
-            const ldx = L.x - hitWX;
-            const ldy = L.y - hitWY;
-            const d2 = ldx * ldx + ldy * ldy;
-            const r2 = L.radius * L.radius;
-            if (d2 >= r2) continue;
-            // Quadratic falloff (1 - d/r)^2 reads better than linear.
-            const fall = 1 - Math.sqrt(d2) / L.radius;
-            const k = fall * fall * L.intensity;
-            lr += L.color[0] * k;
-            lg += L.color[1] * k;
-            lb += L.color[2] * k;
-          }
-          if (lr + lg + lb > 1) {
-            // Cap alpha so big stacks don't blow out the column.
-            const peak = Math.max(lr, lg, lb);
-            const a = Math.min(0.85, peak / 255);
-            const nr = Math.min(255, lr | 0);
-            const ng = Math.min(255, lg | 0);
-            const nb = Math.min(255, lb | 0);
-            const prev = ctx.globalCompositeOperation;
-            ctx.globalCompositeOperation = "lighter";
-            ctx.fillStyle = _getFogString(nr, ng, nb, a);
-            ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-            ctx.globalCompositeOperation = prev;
-          }
-        }
-
-        // Door frame overlay — teal accent on walls adjacent to door tiles
-        if (wallType !== 5 && wallType > 0 && perpWallDist < 15) {
-          let hasDoorNeighbor = false;
-          if (side === 0) {
-            // Vertical face — check tiles above/below for doors
-            if ((wallX < 0.12 && mapY > 0 && map.grid[mapY - 1][mapX] === 5) ||
-                (wallX > 0.88 && mapY < map.height - 1 && map.grid[mapY + 1][mapX] === 5)) {
-              hasDoorNeighbor = true;
+            // Act fog with atmospheric perspective (colour and density from the
+            // same ramp the deck shader uses, so wall and floor air agree).
+            const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
+            const fogAmount = fogK;
+            const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
+            if (fi > 0) {
+              ctx.fillStyle = menv.fogLUT[fi];
+              ctx.fillRect(x, drawStart, 1, colH);
             }
-          } else {
-            // Horizontal face — check tiles left/right for doors
-            if ((wallX < 0.12 && mapX > 0 && map.grid[mapY][mapX - 1] === 5) ||
-                (wallX > 0.88 && mapX < map.width - 1 && map.grid[mapY][mapX + 1] === 5)) {
-              hasDoorNeighbor = true;
+
+            // Dynamic lights, with a hot rim where they catch an exposed corner.
+            if (this.lights && this.lights.length > 0) {
+              const hitWX = camX + perpWallDist * rayDirX;
+              const hitWY = camY + perpWallDist * rayDirY;
+              let lr = 0, lg = 0, lb = 0;
+              for (let li = 0; li < this.lights.length; li++) {
+                const L = this.lights[li];
+                const ldx = L.x - hitWX;
+                const ldy = L.y - hitWY;
+                const d2 = ldx * ldx + ldy * ldy;
+                const r2 = L.radius * L.radius;
+                if (d2 >= r2) continue;
+                let k;
+                if (real) {
+                  // Inverse-square, windowed to the authored radius: hot near the
+                  // source, long soft tail, still zero at the edge.
+                  const q = d2 / r2;
+                  const win = 1 - q * q;
+                  k = (win * win * L.intensity * 1.35) / (1 + (6 * d2) / r2);
+                } else {
+                  const fall = 1 - Math.sqrt(d2) / L.radius;
+                  k = fall * fall * L.intensity;
+                }
+                lr += L.color[0] * k;
+                lg += L.color[1] * k;
+                lb += L.color[2] * k;
+              }
+              if (lr + lg + lb > 1) {
+                if (wallX < 0.07 || wallX > 0.93) {
+                  // Only a real block corner gets the rim; a continuous wall
+                  // plane shouldn't light up every cell seam.
+                  const nx = side === 0 ? mapX : mapX + (wallX < 0.07 ? -1 : 1);
+                  const ny = side === 0 ? mapY + (wallX < 0.07 ? -1 : 1) : mapY;
+                  const open =
+                    nx >= 0 && ny >= 0 && nx < map.width && ny < map.height &&
+                    map.grid[ny][nx] === 0;
+                  if (open) {
+                    lr *= 2.4;
+                    lg *= 2.4;
+                    lb *= 2.4;
+                  }
+                }
+                const peak = Math.max(lr, lg, lb);
+                const a = Math.min(0.9, peak / 255);
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(
+                  Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
+                );
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Door-frame spill onto the walls flanking a door tile.
+            if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
+              const low = wallX < 0.1;
+              const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
+              const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
+              if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
+                const ac = menv.accentRGB;
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Inked contact lines at the ceiling and deck joints, batched into one
+            // path that the silhouette pass fills after the loop.
+            const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
+            if (!real && colH > inkT * 2) {
+              if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
+              if (drawEnd < h - 1 && !clipped) ctx.rect(x, drawEnd - inkT, 1, inkT);
+            }
+            if (hi === 0) {
+              // The silhouette pass outlines the nearest surface in each column.
+              this._colKey[x] = side === 0 ? mapX << 1 : (mapY << 1) | 1;
+              this._colTop[x] = drawStart;
+              this._colBot[x] = drawEnd;
+              this._colZ[x] = perpWallDist;
+            }
+          } else if (this.textures[wallType]) {
+            const tex = this.textures[wallType];
+            let texX = (wallX * 256) | 0;
+            if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
+              texX = 255 - texX;
+            }
+
+            // Draw textured wall strip
+            const texHeight = 256;
+            const step = texHeight / lineHeight;
+            let texPos = (drawStart - fullDrawStart) * step;
+
+            // Use drawImage for textured columns
+            const srcY = Math.max(0, texPos);
+            const srcH = Math.min(256, (drawEnd - drawStart) * step);
+            if (srcH > 0 && drawEnd > drawStart) {
+              ctx.drawImage(
+                tex,
+                texX,
+                srcY,
+                1,
+                srcH,
+                x,
+                drawStart,
+                1,
+                drawEnd - drawStart,
+              );
+            }
+
+            // Darken side walls for depth
+            if (side === 1) {
+              ctx.fillStyle = "rgba(0,0,0,0.3)";
+              ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+            }
+
+            // Distance fog (cached rgba strings to avoid per-column string creation)
+            const wallFogMax = this._visualStyle === 1 ? 0.85 : 0.6;
+            const fogAmount = Math.min(wallFogMax, perpWallDist / 20);
+            if (fogAmount > 0) {
+              const [wfR, wfG, wfB] =
+                this._visualStyle === 1 ? [8, 8, 20] : [10, 18, 32];
+              ctx.fillStyle = _getFogString(wfR, wfG, wfB, fogAmount);
+              ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+            }
+
+            // Dynamic lights — additive radial bleed at the wall hit point.
+            // Each active light is sampled by squared distance for cheap falloff.
+            // Skipped entirely when no lights are present (zero overhead common case).
+            if (this.lights && this.lights.length > 0) {
+              const hitWX = camX + perpWallDist * rayDirX;
+              const hitWY = camY + perpWallDist * rayDirY;
+              let lr = 0, lg = 0, lb = 0;
+              for (let li = 0; li < this.lights.length; li++) {
+                const L = this.lights[li];
+                const ldx = L.x - hitWX;
+                const ldy = L.y - hitWY;
+                const d2 = ldx * ldx + ldy * ldy;
+                const r2 = L.radius * L.radius;
+                if (d2 >= r2) continue;
+                // Quadratic falloff (1 - d/r)^2 reads better than linear.
+                const fall = 1 - Math.sqrt(d2) / L.radius;
+                const k = fall * fall * L.intensity;
+                lr += L.color[0] * k;
+                lg += L.color[1] * k;
+                lb += L.color[2] * k;
+              }
+              if (lr + lg + lb > 1) {
+                // Cap alpha so big stacks don't blow out the column.
+                const peak = Math.max(lr, lg, lb);
+                const a = Math.min(0.85, peak / 255);
+                const nr = Math.min(255, lr | 0);
+                const ng = Math.min(255, lg | 0);
+                const nb = Math.min(255, lb | 0);
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(nr, ng, nb, a);
+                ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+                ctx.globalCompositeOperation = prev;
+              }
+            }
+
+            // Door frame overlay — teal accent on walls adjacent to door tiles
+            if (wallType !== 5 && wallType > 0 && perpWallDist < 15) {
+              let hasDoorNeighbor = false;
+              if (side === 0) {
+                // Vertical face — check tiles above/below for doors
+                if ((wallX < 0.12 && mapY > 0 && map.grid[mapY - 1][mapX] === 5) ||
+                    (wallX > 0.88 && mapY < map.height - 1 && map.grid[mapY + 1][mapX] === 5)) {
+                  hasDoorNeighbor = true;
+                }
+              } else {
+                // Horizontal face — check tiles left/right for doors
+                if ((wallX < 0.12 && mapX > 0 && map.grid[mapY][mapX - 1] === 5) ||
+                    (wallX > 0.88 && mapX < map.width - 1 && map.grid[mapY][mapX + 1] === 5)) {
+                  hasDoorNeighbor = true;
+                }
+              }
+              if (hasDoorNeighbor) {
+                const frameAlpha = Math.max(0, (1 - fogAmount) * 0.5);
+                ctx.fillStyle = _getFogString(0, 180, 120, frameAlpha);
+                ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+              }
             }
           }
-          if (hasDoorNeighbor) {
-            const frameAlpha = Math.max(0, (1 - fogAmount) * 0.5);
-            ctx.fillStyle = _getFogString(0, 180, 120, frameAlpha);
-            ctx.fillRect(x, drawStart, 1, drawEnd - drawStart);
+        }
+
+        if (heightFrac >= 1) break;
+
+        // Short wall under the eye: its top face shows, out to where the ray
+        // leaves the cell. That far edge is the silhouette behind it.
+        let top = faceTop;
+        if (heightFrac < 0.5) {
+          let capTop = (horizon + ((0.5 - heightFrac) * h) / hits.exit[hi]) | 0;
+          if (capTop < 0) capTop = 0;
+          const capBot = faceTop < openBot ? faceTop : openBot;
+          if (capBot > capTop) {
+            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real);
           }
+          top = capTop;
+        }
+        if (top < openBot) openBot = top > 0 ? top : 0;
+        // Sprites compare in unshifted screen space (they are translated by
+        // yShift afterwards), so store the silhouette that way.
+        occDist[occBase + nOcc] = perpWallDist;
+        occY[occBase + nOcc] = openBot - yShift;
+        nOcc++;
+        if (openBot <= 0) {
+          closeDist = perpWallDist;
+          break;
         }
       }
+      occN[x] = nOcc;
+      // Depth of whatever closes the column: the full wall, or a short wall
+      // that covers it top to bottom.
+      this.zBuffer[x] = closeDist;
     }
 
     if (menv && !real) this._drawModernInk(w, h);
@@ -1165,6 +1313,8 @@ export class Renderer {
       const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
       const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
+      // Low cover in front hides motes below its top edge.
+      if (screenY - yShift >= this.coverClipY(screenX, transformY)) continue;
       if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
 
       const r = p.r ?? 255;
@@ -1201,7 +1351,9 @@ export class Renderer {
     if (ty <= 0.1) return null;
     const screenX = (w / 2) * (1 + tx / ty);
     const screenY = h / 2 + yShift + zHeight * (h / ty);
-    return { x: screenX, y: screenY, depth: ty };
+    // baseY: the same point without the scene's vertical shift, the space the
+    // low-cover records (coverClipY) are kept in.
+    return { x: screenX, y: screenY, baseY: screenY - yShift, depth: ty };
   }
 
   /** Hitscan tracers — short fading streaks from barrel to impact. */
@@ -1220,7 +1372,7 @@ export class Renderer {
       if (!a || !b) continue;
       // Z-buffer occlusion at endpoint (if hidden behind wall, skip)
       const xb = Math.max(0, Math.min(w - 1, Math.floor(b.x)));
-      if (b.depth > this.zBuffer[xb] + 0.1) continue;
+      if (this.pointHidden(xb, b.depth, b.baseY)) continue;
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.lineCap = "round";
@@ -1307,16 +1459,11 @@ export class Renderer {
         (spriteWidth / 2 + spriteScreenX) | 0,
       );
 
-      // Check if any column is visible (BUG-030: account for short walls)
+      // Check if any column is visible: in front of the column's wall and
+      // reaching above any low cover in front of it.
       let visible = false;
       for (let x = drawStartX; x <= drawEndX; x++) {
-        if (transformY < this.zBuffer[x]) {
-          visible = true;
-          break;
-        }
-        // Sprite is behind wall, but if it's a short wall and the sprite
-        // extends above the wall-top, it's still partially visible.
-        if (this.wallTopY[x] >= 0 && drawStartY < this.wallTopY[x]) {
+        if (transformY < this.zBuffer[x] && drawStartY < this.coverClipY(x, transformY)) {
           visible = true;
           break;
         }
@@ -1329,13 +1476,22 @@ export class Renderer {
         const shadowW = spriteWidth * 0.6;
         const shadowH = spriteHeight * 0.12;
         const shadowY = Math.floor(spriteHeight / 2 + h / 2) - shadowH * 0.5;
-        ctx.save();
-        ctx.globalAlpha = Math.min(0.35, 2.0 / transformY); // fade with distance
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.ellipse(spriteScreenX, shadowY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Walls and low cover in front hide the shadow with the feet.
+        const vis = this._spriteClipPath(
+          ctx,
+          Math.floor(spriteScreenX - shadowW / 2), Math.ceil(spriteScreenX + shadowW / 2),
+          shadowY - shadowH, shadowY + shadowH, transformY,
+        );
+        if (vis) {
+          ctx.save();
+          if (vis === 1) ctx.clip();
+          ctx.globalAlpha = Math.min(0.35, 2.0 / transformY); // fade with distance
+          ctx.fillStyle = "#000";
+          ctx.beginPath();
+          ctx.ellipse(spriteScreenX, shadowY, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
 
       // Draw the entity
@@ -1375,6 +1531,21 @@ export class Renderer {
     // Distance fog factor
     const fogDist = this._visualStyle === 1 ? 20 : 30;
     const fogFactor = Math.max(0, 1 - dist / fogDist);
+
+    // Pickups, the exit and projectiles: cut by walls and low cover in front,
+    // over the full screen height and a half-sprite margin so glows survive.
+    // Enemies and props clip themselves to their own extents below.
+    let clipped = false;
+    if (entity.type !== "enemy" && entity.type !== "prop") {
+      const pad = sprWidth >> 1;
+      const vis = this._spriteClipPath(ctx, startX - pad, endX + pad, -h, 2 * h, dist);
+      if (vis === 0) return;
+      if (vis === 1) {
+        ctx.save();
+        ctx.clip();
+        clipped = true;
+      }
+    }
 
     if (entity.type === "enemy") {
       // Out of phase, the Hound is drawn as a shimmer by src/rendering/chrono-fx.js.
@@ -1476,14 +1647,12 @@ export class Renderer {
         fogFactor * nearFade,
       );
     } else if (entity.type === "prop") {
-      // Z-buffer clipping — same pattern as enemies so props behind walls don't bleed through
+      // Z-buffer clipping — same pattern as enemies so props behind walls
+      // and low cover don't bleed through
+      // The clip also crops the art to its sprite box, so it applies even
+      // when nothing is in front.
+      if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
       ctx.save();
-      ctx.beginPath();
-      for (let x = startX; x <= endX; x++) {
-        if (dist < this.zBuffer[x]) {
-          ctx.rect(x, startY, 1, endY - startY);
-        }
-      }
       ctx.clip();
       if (isRealisticArt()) {
         this._drawPropLit(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
@@ -1492,6 +1661,7 @@ export class Renderer {
       }
       ctx.restore();
     }
+    if (clipped) ctx.restore();
   }
 
   drawEnemy(
@@ -1532,14 +1702,10 @@ export class Renderer {
     const c1 = enemy.baseColor || def.color1;
     const c2 = enemy.darkColor || def.color2;
 
-    // Only draw columns not occluded by walls
+    // Only draw columns not occluded by walls, and only above low cover.
+    // The clip also crops the art to its sprite box, so it always applies.
+    if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
     ctx.save();
-    ctx.beginPath();
-    for (let x = startX; x <= endX; x++) {
-      if (dist < this.zBuffer[x]) {
-        ctx.rect(x, startY, 1, endY - startY);
-      }
-    }
     ctx.clip();
 
     const alpha = fog;
@@ -1599,9 +1765,10 @@ export class Renderer {
   /**
    * Modern enemy sprite. Occlusion uses the same per-column test as the
    * procedural path (a column draws only where the enemy is nearer than the
-   * wall), but spans the sprite's own extent so wide or tall art is not
-   * cropped to the square sprite column. Adjacent visible columns are merged
-   * into one clip rect.
+   * wall, and only above any low cover in front of it), but spans the
+   * sprite's own extent so wide or tall art is not cropped to the square
+   * sprite column. Adjacent columns with the same cut merge into one clip
+   * rect, and a sprite with nothing in front is drawn unclipped.
    */
   _drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog) {
     const alpha = fog;
@@ -1611,21 +1778,10 @@ export class Renderer {
     const top = centerY + frame.y0;
     const height = frame.y1 - frame.y0;
 
+    const vis = this._spriteClipPath(ctx, x0, x1, top, top + height, dist);
     ctx.save();
-    ctx.beginPath();
-    let any = false;
-    let runStart = -1;
-    for (let x = x0; x <= x1 + 1; x++) {
-      const open = x <= x1 && dist < this.zBuffer[x];
-      if (open && runStart < 0) runStart = x;
-      else if (!open && runStart >= 0) {
-        ctx.rect(runStart, top, x - runStart, height);
-        runStart = -1;
-        any = true;
-      }
-    }
-    if (any) {
-      ctx.clip();
+    if (vis) {
+      if (vis === 1) ctx.clip();
       const hitFlash = !!enemy.hitTime && time - enemy.hitTime < 100;
       const dissolve = enemy.dissolving && enemy.dissolveTimer != null ? Math.max(0, enemy.dissolveTimer / 0.5) : 1;
       const windupT = enemy.state === "windup" && enemy._windupTotalMs > 0
@@ -1732,20 +1888,10 @@ export class Renderer {
     const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + extent));
     if (x1 < x0) return;
 
+    const vis = this._spriteClipPath(ctx, x0, x1, cy - extent, cy + extent, dist);
+    if (!vis) return;
     ctx.save();
-    ctx.beginPath();
-    let any = false;
-    for (let x = x0; x <= x1; x++) {
-      if (dist < this.zBuffer[x]) {
-        ctx.rect(x, cy - extent, 1, extent * 2);
-        any = true;
-      }
-    }
-    if (!any) {
-      ctx.restore();
-      return;
-    }
-    ctx.clip();
+    if (vis === 1) ctx.clip();
 
     ctx.globalCompositeOperation = "lighter";
     // Realistic keeps the countdown (the ring's size is the timing, which is

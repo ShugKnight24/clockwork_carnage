@@ -49,11 +49,11 @@ function proj(r, game, planeMul, yShift, x, y, z) {
   return r._projectWorld(game.player, x, y, planeMul, undefined, undefined, z, yShift);
 }
 
-/** Is a projected point in front of the wall in its column? */
+/** Is a projected point in front of the wall in its column, and above any low cover? */
 function visible(r, pt) {
   if (!pt) return false;
   const x = Math.max(0, Math.min(r.width - 1, Math.floor(pt.x)));
-  return pt.depth < r.zBuffer[x] + 0.05;
+  return !r.pointHidden(x, pt.depth, pt.baseY, 0.05);
 }
 
 /** A world line from (x0,y0) to (x1,y1) at height z, occluded per sample. */
