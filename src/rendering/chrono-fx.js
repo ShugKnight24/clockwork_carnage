@@ -106,10 +106,10 @@ function floorMark(ctx, r, game, planeMul, yShift, x, y, rw, fill) {
   ctx.fill();
 }
 
-/** A standing figure (the echo): capsule body and head, `alpha` 0..1. */
-function figure(ctx, r, game, planeMul, yShift, x, y, color, alpha) {
+/** A standing figure (the echo): capsule body and head, `alpha` 0..1. `top` lowers the head for a kneeling one. */
+function figure(ctx, r, game, planeMul, yShift, x, y, color, alpha, top = HEAD) {
   const foot = proj(r, game, planeMul, yShift, x, y, FLOOR);
-  const head = proj(r, game, planeMul, yShift, x, y, HEAD);
+  const head = proj(r, game, planeMul, yShift, x, y, top);
   if (!foot || !head || !visible(r, foot)) return;
   const hgt = foot.y - head.y;
   const wdt = hgt * 0.28;
@@ -261,6 +261,12 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
       floorMark(ctx, r, game, planeMul, yShift, h.x, h.y, 0.25, "rgba(40,20,10,0.8)");
     } else if (h.type === "vent" || (h.type === "gate" && h.kind !== "turret" && h.rect)) {
       const [c1, r1, c2, r2] = h.rect;
+      // The Archive's replaying blast is violet-white, and Foresight (in a
+      // shift) counts it down: the marks fill as the eleven seconds run out.
+      const hot = h.blast ? "210,160,255" : "255,120,40";
+      const glow = h.blast ? "235,210,255" : "255,170,60";
+      const seen = h.blast && shifting && game.chronoPowers?.has("foresight");
+      const t = h.blast ? ((((hz.clock + (h.phase ?? 0)) % h.period) + h.period) % h.period) / h.period : 0;
       for (let row = r1; row <= r2; row++) {
         for (let col = c1; col <= c2; col++) {
           if (game.map.grid[row]?.[col] !== 0) continue;
@@ -268,12 +274,33 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
           if (st.on) {
             const flick = 0.75 + 0.25 * Math.sin(now * 20 + col * 1.7 + row);
             ctx.globalCompositeOperation = "lighter";
-            worldPane(ctx, r, game, planeMul, yShift, x - 0.45, y, x + 0.45, y, -0.25 * flick, "rgba(255,120,40,0.22)", 2);
+            worldPane(ctx, r, game, planeMul, yShift, x - 0.45, y, x + 0.45, y, (h.blast ? -0.6 : -0.25) * flick, `rgba(${hot},0.22)`, 2);
             ctx.globalCompositeOperation = "source-over";
-            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.45, "rgba(255,170,60,0.45)");
+            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.45, `rgba(${glow},0.45)`);
+          } else if (st.priming) {
+            const beat = h.blast ? 0.3 + 0.25 * Math.sin(now * 14) : 0.3;
+            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.42, `rgba(${hot},${beat})`);
+          } else if (seen) {
+            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.42, `rgba(${hot},${0.08 + 0.2 * t})`);
           } else {
-            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.42, st.priming ? "rgba(255,120,40,0.3)" : "rgba(60,30,20,0.55)");
+            floorMark(ctx, r, game, planeMul, yShift, x, y, 0.42, h.blast ? "rgba(40,30,60,0.5)" : "rgba(60,30,20,0.55)");
           }
+        }
+      }
+    } else if (h.type === "rewrite") {
+      // A wall that is not there yet: its ghost on the floor, flickering
+      // when it is about to close, brighter while you shift.
+      const p = game.player;
+      if (st.closed) continue;
+      const a = st.priming ? 0.35 + 0.3 * Math.sin(now * 16) : shifting ? 0.28 : 0.1;
+      for (const [c, rr] of h.cells) {
+        if (game.map.grid[rr]?.[c] !== 0) continue;
+        if (Math.hypot(c + 0.5 - p.x, rr + 0.5 - p.y) > 18) continue;
+        floorMark(ctx, r, game, planeMul, yShift, c + 0.5, rr + 0.5, 0.48, `rgba(190,120,255,${a})`);
+        if (st.priming || shifting) {
+          ctx.strokeStyle = `rgba(210,160,255,${a})`;
+          ctx.lineWidth = 1;
+          worldLine(ctx, r, game, planeMul, yShift, c + 0.05, rr + 0.5, c + 0.95, rr + 0.5, -0.45, true);
         }
       }
     } else if (h.type === "gate" && h.kind !== "turret") {
@@ -316,6 +343,14 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
         ctx.fillStyle = i % 3 ? "rgba(170,220,255,0.75)" : "rgba(210,200,180,0.8)";
         ctx.fillRect(pt.x - s / 2, pt.y - s / 2, s, s * (i % 3 ? 1.6 : 1));
       }
+      // The people the instant caught: still as a photograph, until it breaks.
+      const fade = st.broken ? Math.max(0, 1 - (hz.clock - hz.triggers[h.id]) / 1.2) : 1;
+      for (const f of h.figures ?? []) {
+        if (fade <= 0) break;
+        const top = f.pose === "kneel" ? FLOOR - (FLOOR - HEAD) * 0.55 : HEAD;
+        floorMark(ctx, r, game, planeMul, yShift, f.x, f.y, 0.3, `rgba(255,255,255,${0.12 * fade})`);
+        figure(ctx, r, game, planeMul, yShift, f.x, f.y, f.color, 0.6 * fade, top);
+      }
     } else if (h.type === "loop" && !st.broken) {
       ctx.lineWidth = shifting ? 3 : 1;
       ctx.strokeStyle = shifting ? `rgba(120,255,230,${0.7 + 0.3 * Math.sin(now * 6)})` : "rgba(120,255,230,0.12)";
@@ -323,6 +358,50 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
     }
   }
   ctx.restore();
+}
+
+/**
+ * An objective's stations: the one you can work now pulses in the
+ * objective's colour and fills as you hold; cleared ones go dark.
+ */
+function drawObjective(ctx, r, game, planeMul, yShift) {
+  const o = game.chronoHazards?.objective;
+  if (!o || o.done) return;
+  const now = performance.now() / 1000;
+  const next = o.stations.find((s) => !o.cleared.includes(s.id));
+  const [cr, cg, cb] = hexToRgb(o.color ?? "#ffae3a");
+  ctx.save();
+  for (const s of o.stations) {
+    const cleared = o.cleared.includes(s.id);
+    const live = !cleared && (!o.order || s === next);
+    const [c1, r1, c2, r2] = s.rect;
+    const held = Math.min(1, (o.held[s.id] ?? 0) / o.hold);
+    for (let row = r1; row <= r2; row++) {
+      for (let col = c1; col <= c2; col++) {
+        const a = cleared ? 0.12 : live ? 0.3 + 0.2 * Math.sin(now * 5) + 0.4 * held : 0.12;
+        const fill = cleared ? `rgba(80,80,90,${a})` : `rgba(${cr},${cg},${cb},${a})`;
+        floorMark(ctx, r, game, planeMul, yShift, col + 0.5, row + 0.5, 0.46, fill);
+      }
+    }
+    if (live) {
+      // A beacon over the station, taller as the hold completes.
+      const cx = (c1 + c2 + 1) / 2, cy = (r1 + r2 + 1) / 2;
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.8)`;
+      ctx.lineWidth = 2;
+      const top = FLOOR - 0.3 - 0.8 * held;
+      for (let k = 0; k < 4; k++) {
+        const a0 = (k / 4) * Math.PI * 2 + now;
+        worldLine(ctx, r, game, planeMul, yShift, cx + Math.cos(a0) * 0.4, cy + Math.sin(a0) * 0.4,
+          cx + Math.cos(a0 + Math.PI / 2) * 0.4, cy + Math.sin(a0 + Math.PI / 2) * 0.4, top);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function drawRifts(ctx, r, game, planeMul, yShift) {
@@ -395,6 +474,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
   const ctx = r.ctx;
   const cp = game.chronoPowers;
   drawHazards(ctx, r, game, planeMul, yShift);
+  drawObjective(ctx, r, game, planeMul, yShift);
   drawRifts(ctx, r, game, planeMul, yShift);
   let sprites = houndShimmer(ctx, r, game, planeMul, yShift);
   if (cp?.lock) drawLock(ctx, r, game, planeMul, yShift, cp.lock);
@@ -435,6 +515,22 @@ export function renderChronoScreen(game, ctx, w, h) {
     g.addColorStop(1, `rgba(255,20,50,${0.28 * k})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
+  }
+  // Reactor heat: the edges glow as the core climbs, and flash on overload.
+  const o = hz?.objective;
+  if (o?.heatClock && o.heatOn && !o.done) {
+    const k = Math.max(0, (o.heat - 55) / 45);
+    if (k > 0) {
+      const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.4, w / 2, h / 2, Math.max(w, h) * 0.75);
+      g.addColorStop(0, "rgba(255,90,20,0)");
+      g.addColorStop(1, `rgba(255,90,20,${0.3 * k * (0.7 + 0.3 * Math.sin(performance.now() * 0.008))})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (o.overloadAt != null && hz.clock - o.overloadAt < 0.5) {
+      ctx.fillStyle = `rgba(255,170,90,${0.4 * (1 - (hz.clock - o.overloadAt) / 0.5)})`;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
   const echo = cp?.echo;
   if (echo && cp.clock - echo.born < 0.35) {

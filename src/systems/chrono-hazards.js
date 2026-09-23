@@ -15,9 +15,18 @@
  *   vent      a zone that burns for `on` seconds out of every `period`
  *   gate      a laser line on the same cycle, or a turret firing real rounds
  *             a Time-Lock can catch
- *   stasis    a room frozen at one instant: story, never damage
+ *   stasis    a room frozen at one instant: story, never damage. One that
+ *             `holds` keeps the enemies inside it frozen mid-step until you
+ *             leave through its `release` zone or hurt one of them
  *   loop      leaving through the seam puts you back at the start, until you
  *             cross it while shifting
+ *   rewrite   walls that close and open on the level clock (Act III's
+ *             rewritten station): a closing cell waits for whoever stands in
+ *             it, and a rewrite only ever reopens the cells it closed
+ *
+ * A set piece may also carry an `objective` (racks to burn, valves to turn
+ * against a heat clock): stations you hold still in, a seal it opens when
+ * they are all done, and a card drawn like a teach card.
  *
  * The set piece's teach room lives here too: its seal, the room it clears,
  * the enemies it adds, its goal and the card (drawn by the HUD).
@@ -111,14 +120,46 @@ export function hazardState(h, clock, triggeredAt = null) {
     case "blade":
       return { angle: bladeAngle(h, clock) };
     case "vent":
-      return { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + 0.5) };
+      return { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + (h.warn ?? 0.5)) };
     case "gate":
-      return h.kind === "turret" ? { firing: true } : { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + 0.5) };
+      return h.kind === "turret" ? { firing: true } : { on: cycleOn(h, clock), priming: !cycleOn(h, clock) && cycleOn(h, clock + (h.warn ?? 0.5)) };
     case "loop":
       return { broken: triggeredAt != null };
+    case "stasis":
+      return { broken: triggeredAt != null };
+    case "rewrite":
+      return rewriteState(h, clock);
     default:
       return {};
   }
+}
+
+/**
+ * A rewriting wall: closed for `on` seconds of every `period`, and priming
+ * (its cells flicker) for `warn` seconds before it closes.
+ */
+export function rewriteState(h, clock) {
+  const closed = cycleOn(h, clock);
+  return { closed, priming: !closed && cycleOn(h, clock + (h.warn ?? 1)) };
+}
+
+/**
+ * Heat after `dClock` more seconds of level clock: it climbs at `rate`, and
+ * at `max` it overloads (the caller pulses) and falls back to `reset`.
+ * @returns {{ heat: number, overload: boolean }}
+ */
+export function stepHeat(spec, heat, dClock) {
+  const next = heat + dClock * spec.rate;
+  if (next >= spec.max) return { heat: spec.reset, overload: true };
+  return { heat: next, overload: false };
+}
+
+/** An objective's card hint with its progress filled in. */
+export function objectiveHint(o) {
+  return o.hintTemplate
+    .replace("{DONE}", String(o.cleared.length))
+    .replace("{COUNT}", String(o.stations.length))
+    .replace("{HEAT}", String(Math.round(o.heat)));
 }
 
 export class ChronoHazards {
@@ -132,7 +173,9 @@ export class ChronoHazards {
     this.clock = 0;
     this.triggers = {};
     this.teach = null;
+    this.objective = null;
     this.inStasis = false;
+    this._owned = {};
     this._hitAt = {};
     this._pending = {};
     this._simTime = 0;
@@ -155,6 +198,8 @@ export class ChronoHazards {
     for (const [c, r] of piece.seals ?? []) if (grid[r]?.[c] === 0) grid[r][c] = SEAL_TILE;
     for (const [c, r] of piece.open ?? []) if (grid[r]?.[c] != null) grid[r][c] = 0;
     if (piece.cache) game.spawnGearCache?.(piece.cache.x, piece.cache.y);
+    for (const h of this.hazards) if (h.type === "stasis" && h.holds) this._hold(game, h);
+    if (piece.objective) this._loadObjective(game, piece.objective);
 
     const t = piece.teach;
     if (t) {
@@ -241,9 +286,12 @@ export class ChronoHazards {
       else if (h.type === "gate") {
         if (cycleOn(h, this.clock) && segDist(h.a, h.b, p.x, p.y) < BODY + 0.1) this._hit(game, h);
       } else if (h.type === "stasis") {
-        if (cellIn(h.rect, p.x, p.y)) this.inStasis = true;
+        if (h.holds && this.triggers[h.id] == null) this._watchHold(game, h);
+        if (this.triggers[h.id] == null && cellIn(h.rect, p.x, p.y)) this.inStasis = true;
       } else if (h.type === "loop") this._loop(game, h);
+      else if (h.type === "rewrite") this._rewrite(game, h);
     }
+    if (this.objective) this._updateObjective(game, dt, this.clock - prevClock);
 
     for (const s of this.piece.scripted ?? []) {
       if (this._entered.has(s.id) || !cellIn(s.rect, p.x, p.y)) continue;
@@ -271,7 +319,7 @@ export class ChronoHazards {
   }
 
   _hit(game, h) {
-    const gap = REHIT[h.type] ?? 0.4;
+    const gap = h.rehit ?? REHIT[h.type] ?? 0.4;
     const last = this._hitAt[h.id];
     if (last != null && this._simTime - last < gap) return;
     // A Chrono Dash goes through anything flagged dashable, and its i-frames
@@ -369,15 +417,185 @@ export class ChronoHazards {
     }
   }
 
+  /** Is anyone (the player, or a live enemy) standing in cell (c, r)? */
+  _occupied(game, c, r) {
+    const p = game.player;
+    if (bodyIn([c, r, c, r], p.x, p.y)) return true;
+    return game.entities.some(
+      (e) => e.type === "enemy" && e.active && e.state !== "dead" && bodyIn([c, r, c, r], e.x, e.y, 0.25),
+    );
+  }
+
+  /**
+   * Walls that close and open on the level clock. A closing cell waits for
+   * whoever stands in it, so a rewrite never traps anyone, and it only ever
+   * opens the cells it closed itself.
+   */
+  _rewrite(game, h) {
+    const { closed } = rewriteState(h, this.clock);
+    const grid = game.map.grid;
+    const wall = h.wall ?? SEAL_TILE;
+    const own = (this._owned[h.id] ??= new Set());
+    for (const [c, r] of h.cells) {
+      const key = r * 1000 + c;
+      if (closed) {
+        if (own.has(key) || grid[r]?.[c] !== 0 || this._occupied(game, c, r)) continue;
+        grid[r][c] = wall;
+        own.add(key);
+      } else if (own.has(key)) {
+        if (grid[r][c] === wall) grid[r][c] = 0;
+        own.delete(key);
+      }
+    }
+    if (h.aria && !this._entered.has("rewrite:told")) {
+      const p = game.player;
+      if (h.cells.some(([c, r]) => Math.hypot(c + 0.5 - p.x, r + 0.5 - p.y) < 5)) {
+        this._entered.add("rewrite:told");
+        game.queueAriaMessage?.(h.aria);
+      }
+    }
+  }
+
+  /** Freeze the enemies inside a holding stasis field, mid-step. */
+  _hold(game, h) {
+    for (const e of game.entities) {
+      if (e.type !== "enemy" || !cellIn(h.rect, e.x, e.y)) continue;
+      e._stasis = h.id;
+      e._stasisHp = e.health;
+      // The AI skips anything EMP-disabled: no step, no shot, no alert.
+      e._empDisabledUntil = Infinity;
+    }
+  }
+
+  /** The field breaks when you leave through its `release`, or hurt what it holds. */
+  _watchHold(game, h) {
+    const p = game.player;
+    const held = game.entities.filter((e) => e._stasis === h.id);
+    const hurt = held.some((e) => !e.active || e.health < e._stasisHp);
+    if (!hurt && !(h.release && cellIn(h.release, p.x, p.y))) return;
+    this.triggers[h.id] = this.clock;
+    for (const e of held) {
+      e._empDisabledUntil = 0;
+      e._stasis = null;
+      if (e.state === "dead" || !e.active) continue;
+      e.state = "chase";
+      e.stateTime = 0;
+      e.alertRange = 99;
+      // Woken, not firing: the first shot waits a full attack cycle.
+      e.lastAttackTime = game.time ?? 0;
+    }
+    playChronoSound(game.audio, "collapse");
+    if (h.aria) game.queueAriaMessage?.(h.aria);
+    if (h.squad) game.squadComms?.say?.(h.squad.member, h.squad.text);
+  }
+
+  _loadObjective(game, spec) {
+    const grid = game.map.grid;
+    for (const [c, r] of spec.seal ?? []) if (grid[r]?.[c] === 0) grid[r][c] = SEAL_TILE;
+    const o = {
+      ...spec,
+      hintTemplate: spec.card.hint,
+      card: { ...spec.card },
+      cleared: [],
+      held: {},
+      heat: 0,
+      heatOn: !!spec.heatClock && !spec.heatClock.trigger,
+      heatWarned: false,
+      overloads: 0,
+      overloadAt: null,
+      done: false,
+      doneAt: null,
+    };
+    o.card.hint = objectiveHint(o);
+    this.objective = o;
+  }
+
+  /**
+   * Stand in a station for `hold` seconds (sim time) to clear it; `order`
+   * takes them one at a time. A heat clock climbs on the level clock, so a
+   * shift stretches the window, and every station cleared cools it by `drop`.
+   */
+  _updateObjective(game, dt, dClock) {
+    const o = this.objective;
+    if (o.done) return;
+    const p = game.player;
+    const hs = o.heatClock;
+    if (hs) {
+      if (!o.heatOn && cellIn(hs.trigger, p.x, p.y)) {
+        o.heatOn = true;
+        if (hs.aria) game.queueAriaMessage?.(hs.aria);
+      }
+      if (o.heatOn) {
+        const step = stepHeat(hs, o.heat, dClock);
+        o.heat = step.heat;
+        if (step.overload) {
+          o.overloads++;
+          o.overloadAt = this.clock;
+          o.heatWarned = false;
+          game.damagePlayer?.(hs.damage);
+          game.screenShake = Math.max(game.screenShake ?? 0, 10);
+          playChronoSound(game.audio, "collapse");
+          if (hs.overloadAria) game.queueAriaMessage?.(hs.overloadAria);
+        } else if (!o.heatWarned && o.heat >= hs.warnAt) {
+          o.heatWarned = true;
+          if (hs.warnAria) game.queueAriaMessage?.(hs.warnAria);
+        } else if (o.heat < hs.warnAt - 20) o.heatWarned = false;
+      }
+    }
+    const next = o.stations.find((s) => !o.cleared.includes(s.id));
+    for (const s of o.stations) {
+      if (o.cleared.includes(s.id) || (o.order && s !== next)) continue;
+      if (bodyIn(s.rect, p.x, p.y, 0)) {
+        o.held[s.id] = (o.held[s.id] ?? 0) + dt;
+        if (o.held[s.id] >= o.hold) this._clearStation(game, s);
+      } else {
+        o.held[s.id] = Math.max(0, (o.held[s.id] ?? 0) - dt * 2);
+      }
+    }
+    if (o.cleared.length === o.stations.length) {
+      o.done = true;
+      o.doneAt = this.clock;
+      const grid = game.map.grid;
+      for (const [c, r] of o.seal ?? []) if (grid[r]?.[c] === SEAL_TILE) grid[r][c] = 0;
+      playChronoSound(game.audio, "seal");
+      if (o.doneAria) game.queueAriaMessage?.(o.doneAria);
+      if (o.doneLine) game.squadComms?.say?.(o.doneLine.member, o.doneLine.text);
+    }
+    o.card.hint = objectiveHint(o);
+  }
+
+  _clearStation(game, s) {
+    const o = this.objective;
+    o.cleared.push(s.id);
+    const grid = game.map.grid;
+    for (const [c, r] of s.burn ?? []) if (grid[r]?.[c]) grid[r][c] = o.burnTile ?? 4;
+    if (o.heatClock) o.heat = Math.max(0, o.heat - o.heatClock.drop);
+    playChronoSound(game.audio, "seal");
+    if (s.line) game.squadComms?.say?.(s.line.member, s.line.text);
+    else if (o.stationAria) game.queueAriaMessage?.(o.stationAria);
+  }
+
   /** The state a save needs: the clock and when each hazard was set off. */
   serialize() {
-    return { clock: this.clock, triggers: { ...this.triggers } };
+    const o = this.objective;
+    return {
+      clock: this.clock,
+      triggers: { ...this.triggers },
+      ...(o ? { objective: { cleared: [...o.cleared], heat: o.heat, heatOn: o.heatOn } } : {}),
+    };
   }
 
   restore(state) {
     if (!state) return;
     this.clock = state.clock ?? 0;
     this.triggers = { ...(state.triggers ?? {}) };
+    const o = this.objective;
+    if (o && state.objective) {
+      o.cleared = o.stations.filter((s) => state.objective.cleared?.includes(s.id)).map((s) => s.id);
+      o.heat = state.objective.heat ?? 0;
+      o.heatOn = !!state.objective.heatOn;
+      o.card.hint = objectiveHint(o);
+    }
   }
 }
 

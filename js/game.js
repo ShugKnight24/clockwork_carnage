@@ -1323,9 +1323,9 @@ export class Game {
     });
   }
 
-  /** The level's Chronos teach card, until its lesson lands. */
+  /** The level's Chronos teach card, until its lesson lands; or its objective's. */
   renderTeachCard(ctx, w, h) {
-    const t = this.chronoHazards.teach;
+    const t = this.chronoHazards.teach ?? this.chronoHazards.objective;
     if (!t?.card) {
       this._teachCardBottom = 0;
       return;
@@ -1333,7 +1333,7 @@ export class Game {
     const clock = this.chronoPowers.clock;
     const shownAt = 1.5;
     const fade = t.done ? 1 - (this.chronoHazards.clock - t.doneAt) / 1.5 : 1;
-    const color = POWERS[t.power]?.color ?? "#8844ff";
+    const color = POWERS[t.power]?.color ?? t.color ?? "#8844ff";
     const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color };
     this._teachCardBottom = clock > shownAt ? _renderTeachCard(ctx, w, h, step, clock - shownAt, fade) : 0;
   }
