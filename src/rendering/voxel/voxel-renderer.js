@@ -14,6 +14,7 @@
 import { World, chunkKeyCoords } from "../../world/world.js";
 import { BLOCKS } from "../../world/blocks.js";
 import { meshChunk, STRIDE } from "./mesher.js";
+import { meshModel, modelMatrix } from "./vessel-models.js";
 import { buildAtlas, ATLAS_SIZE } from "./atlas.js";
 import { CHUNK_VERT, CHUNK_FRAG, WATER_VERT, WATER_FRAG, SPRITE_VERT, SPRITE_FRAG, POST_VERT, POST_FRAG, RIPPLE_PERIOD, FOG_FADE } from "./shaders.js";
 import { eyeInWater } from "../../world/voxel-physics.js";
@@ -31,6 +32,8 @@ const MAX_LAYERS = 32;          // must match u_emissiveByLayer/u_layerAlpha in 
 const CS = World.CS;            // chunk size in blocks
 const CHUNK_RADIUS = (CS * Math.sqrt(3)) / 2;
 const NEAR = 0.05, FAR = 256;
+/** The chunk shader's model transform for everything that is not a model. */
+const IDENTITY3 = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
 /**
  * Chunk cull radius, in blocks. Deliberately NOT `quality.drawDistance`: that
@@ -242,6 +245,8 @@ export class VoxelRenderer {
     this.lost = false; this.destroyed = false; this._restoreWarned = false;
     this._pendingSize = null;  // a resize that arrived while the context was lost
     this.chunks = new Map();   // world chunk key -> { origin, opaque, alpha, dist }
+    this.models = new Map();   // model key -> { opaque } meshed with the current atlas
+    this._modelMat = new Float32Array(9);
     this._alphaOrder = [];     // scratch for the back-to-front see-through pass
     this._fogEnd = 1e9;        // horizontal distance of full fog; none in a bounded world
     this._anchor = [0, 0, 0];  // the eye's whole block: GPU positions are relative to it
@@ -265,6 +270,7 @@ export class VoxelRenderer {
     this._onContextRestored = () => {
       if (this.destroyed) return;
       this.chunks.clear();
+      this.models.clear();
       this.atlasKey = "";
       // A resize that arrived while the context was gone was dropped, not
       // applied: take it now so the rebuilt framebuffer matches the canvas.
@@ -296,7 +302,7 @@ export class VoxelRenderer {
     this.spriteProg = compile(gl, SPRITE_VERT, SPRITE_FRAG);
     this.postProg = compile(gl, POST_VERT, POST_FRAG);
     this.u = {
-      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_eye", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_fogEnd", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass"]),
+      chunk: this._uniforms(this.chunkProg, ["u_viewProj", "u_origin", "u_atlas", "u_eye", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_fogEnd", "u_ambient", "u_numLights", "u_lights", "u_lightColors", "u_emissiveByLayer", "u_layerAlpha", "u_alphaPass", "u_model", "u_pivot", "u_uvScale"]),
       sprite: this._uniforms(this.spriteProg, ["u_viewProj", "u_pos", "u_right", "u_up", "u_size", "u_uvFlip", "u_tex", "u_alpha", "u_tint", "u_fog", "u_fogColor", "u_depth"]),
       water: this._uniforms(this.waterProg, ["u_viewProj", "u_origin", "u_atlas", "u_sceneDepth", "u_eye", "u_wrap", "u_fogNear", "u_fogFar", "u_fogDensity", "u_fogMax", "u_fogEnd", "u_ambient", "u_time", "u_mode"]),
       post: this._uniforms(this.postProg, ["u_color", "u_depth", "u_texel", "u_style", "u_inkWidth", "u_underwater", "u_time", "u_fogEnd"]),
@@ -442,6 +448,7 @@ export class VoxelRenderer {
     // Layer ids moved, so every cached mesh is stale.
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
+    this._freeModels();
     if (this.world) this.world.markAllDirty();
   }
 
@@ -550,6 +557,44 @@ export class VoxelRenderer {
     }
   }
 
+  // ── Models ───────────────────────────────────────────────────────────────
+
+  /**
+   * Small voxel models (vessels) drawn with the chunk program, turned and
+   * scaled about their keel. Each is meshed once per atlas and cached by its
+   * key. The position is taken from the eye's block in doubles, like every
+   * chunk origin, so a hull far from spawn sits as still as the ground.
+   * @param {Array<{model:{key,size,cells,pivot,scale}, x,y,z, yaw, pitch?, roll?}>} list
+   */
+  _drawModels(list, cam, maxDist) {
+    if (!list || !list.length) return;
+    const gl = this.gl, u = this.u.chunk, A = this._anchor;
+    for (const m of list) {
+      if (Math.hypot(m.x - cam.x, m.y - cam.y) > maxDist) continue;
+      let c = this.models.get(m.model.key);
+      if (!c) {
+        c = { opaque: null, alpha: null, water: null };
+        this._upload(c, "opaque", meshModel(m.model, this.layerOf).opaque);
+        this.models.set(m.model.key, c);
+      }
+      if (!c.opaque) continue;
+      gl.uniformMatrix3fv(u.u_model, false, modelMatrix(m.yaw, m.pitch || 0, m.roll || 0, m.model.scale, this._modelMat));
+      gl.uniform3fv(u.u_pivot, m.model.pivot);
+      gl.uniform1f(u.u_uvScale, m.model.scale);
+      gl.uniform3f(u.u_origin, m.x - A[0], m.y - A[1], m.z - A[2]);
+      gl.bindVertexArray(c.opaque.vao);
+      gl.drawElements(gl.TRIANGLES, c.opaque.count, c.opaque.indexType, 0);
+    }
+    gl.uniformMatrix3fv(u.u_model, false, IDENTITY3);
+    gl.uniform3f(u.u_pivot, 0, 0, 0);
+    gl.uniform1f(u.u_uvScale, 1);
+  }
+
+  _freeModels() {
+    for (const c of this.models.values()) this._freeChunk(c);
+    this.models.clear();
+  }
+
   // ── Frame ────────────────────────────────────────────────────────────────
 
   /**
@@ -557,10 +602,11 @@ export class VoxelRenderer {
    * @param {import("../../world/world.js").World} world
    * @param {Array<{x,y,z,w,h,image,key,alpha?,tint?,flipX?}>} sprites feet-anchored billboards
    * @param {Array<{x,y,z,color,radius,intensity}>} lights
-   * @param {{style,act?,fx?,segments?,meshMs?,drawRadius?,meshRadius?,fogEnd?}} opts
+   * @param {{style,act?,fx?,segments?,models?,meshMs?,drawRadius?,meshRadius?,fogEnd?}} opts
    *   `fx` are additive billboards (particles) and `segments` world-space
    *   streaks (tracers), both drawn with the sprite program after the solid
-   *   billboards. `meshMs` is this frame's meshing budget; `drawRadius` the
+   *   billboards. `models` are voxel models (vessels, `_drawModels`), drawn
+   *   with the opaque chunks. `meshMs` is this frame's meshing budget; `drawRadius` the
    *   chunk cull radius, `meshRadius` how far from the eye chunks are built,
    *   and `fogEnd` the horizontal distance of full fog — an endless world's
    *   streamer sets all three, a bounded world keeps the defaults.
@@ -622,6 +668,9 @@ export class VoxelRenderer {
     gl.uniform3fv(u.u_emissiveByLayer, this.emissiveByLayer);
     gl.uniform1fv(u.u_layerAlpha, this.layerAlpha);
     gl.uniform1f(u.u_alphaPass, 0);
+    gl.uniformMatrix3fv(u.u_model, false, IDENTITY3);
+    gl.uniform3f(u.u_pivot, 0, 0, 0);
+    gl.uniform1f(u.u_uvScale, 1);
     this._setLights(lights);
 
     this.stats.chunksDrawn = 0;
@@ -634,6 +683,7 @@ export class VoxelRenderer {
       gl.drawElements(gl.TRIANGLES, c.opaque.count, c.opaque.indexType, 0);
       this.stats.chunksDrawn++;
     }
+    this._drawModels(opts.models, cam, maxDist);
 
     this._drawSprites(sprites, cam);
     // Sparks and smoke are light, not surfaces: they add to what is behind
@@ -976,6 +1026,7 @@ export class VoxelRenderer {
     const gl = this.gl;
     for (const c of this.chunks.values()) this._freeChunk(c);
     this.chunks.clear();
+    this._freeModels();
     this._alphaOrder.length = 0;
     this._freeFBO();
     if (this.atlasTex) { gl.deleteTexture(this.atlasTex); this.atlasTex = null; }

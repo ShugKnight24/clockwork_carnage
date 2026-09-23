@@ -221,6 +221,17 @@ function fxSprites(game, budget) {
 }
 
 /**
+ * The Forge's own light — a jetski's spray and foam — as additive dots. The
+ * Forge hands over plain particles; the dot texture lives here with the rest.
+ */
+function forgeFx(builder) {
+  const list = builder.fxFor?.();
+  if (!list?.length) return null;
+  for (const p of list) { p.image = softDot(); p.key = "fx:dot"; }
+  return list;
+}
+
+/**
  * Hitscan tracers as world-space streaks for the voxel pass. The 2D renderer
  * draws the same list through its own projection; only a voxel level carries
  * the `z1/z2` these need.
@@ -265,7 +276,7 @@ function streamVoxels(game, cam) {
  * when the renderer is missing or its context is lost.
  * @returns {boolean} true when the world made it onto the canvas
  */
-function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segments = null) {
+function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segments = null, models = null) {
   const vr = game.voxelRenderer;
   const stream = vr && game.world ? streamVoxels(game, cam) : null;
   const drawn =
@@ -276,6 +287,7 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
       act: game.world.meta.act || 1,
       fx,
       segments,
+      models,
       ...stream,
     }) !== false;
   if (!drawn) {
@@ -397,6 +409,9 @@ export function renderFrame(game) {
       game.builder.cameraFor(),
       game.builder.spritesFor(),
       null,
+      forgeFx(game.builder),
+      null,
+      game.builder.modelsFor?.(),
     );
     game.builder.render(ctx, w, h, game.time);
     if (onboarding) {
@@ -418,6 +433,9 @@ export function renderFrame(game) {
       game.builder.cameraFor(),
       game.builder.spritesFor(),
       null,
+      forgeFx(game.builder),
+      null,
+      game.builder.modelsFor?.(),
     );
     game.builder.render(ctx, w, h, game.time);
     const hctx = game.hudCtx;

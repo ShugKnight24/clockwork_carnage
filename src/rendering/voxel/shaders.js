@@ -38,15 +38,19 @@ layout(location=3) in float a_layer;
 layout(location=4) in float a_ao;      // 0..3
 uniform mat4 u_viewProj;
 uniform vec3 u_origin;                 // chunk origin relative to the eye's block, in blocks
+// A vessel model is a chunk mesh drawn turned and scaled about its keel:
+// u_model rotates and scales it about u_pivot (model cells), and u_uvScale
+// keeps its texture as dense as the world's. Chunks draw with the identity.
+uniform mat3 u_model; uniform vec3 u_pivot; uniform float u_uvScale;
 out vec2 v_uv; out float v_layer; out float v_ao; out float v_normal; out vec3 v_rel;
 void main() {
-  vec3 p = a_pos + u_origin;
+  vec3 p = u_model * (a_pos - u_pivot) + u_origin;
   int n = int(a_normal + 0.5);
   // The mesher runs its u along +z on the ±y faces (its axis basis picks u×v =
   // +axis), so swap there to keep the texture's v the vertical one. The atlas
   // itself is uploaded flipped, so v then grows up the wall as the art expects.
   vec2 uv = (n == 2 || n == 3) ? a_uv.yx : a_uv;
-  v_rel = p; v_uv = uv; v_layer = a_layer; v_ao = a_ao / 3.0; v_normal = a_normal;
+  v_rel = p; v_uv = uv * u_uvScale; v_layer = a_layer; v_ao = a_ao / 3.0; v_normal = a_normal;
   gl_Position = u_viewProj * vec4(p, 1.0);
 }`;
 
