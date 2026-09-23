@@ -38,7 +38,7 @@
 
 | File | Responsibility |
 |---|---|
-| `src/data/campaign/acts.js` | Four acts, 29 slots, `callsigns`, `RECRUITS`, `SQUAD_ORDER`, `sceneSlots()` |
+| `src/data/campaign/acts.js` | Four acts, 29 slots, `callsigns`, `RECRUITS`, `sceneSlots()`, `levelsBefore()` |
 | `src/data/cutscene-scripts.js`, `cutscene-keys.js` | Act II scenes, re-slotted and reworded scenes, voice and emotion fields |
 | `src/data/dialogue.js` | `gatheringAmbient`, `houndSquad`, `storyRestructured` |
 | `src/data/enemies.js`, `src/systems/spawner.js`, `src/systems/combat.js` | `hound`; boss checks read the def flag |
@@ -50,6 +50,7 @@
 | `src/rendering/cutscene-art.js`, `js/cutscene.js`, `js/game.js` | Legacy party by members, Legacy solos, frame → art key, slot fallback |
 | `src/core/save-system.js`, `js/campaign-manager.js` | Campaign save v2, v1 migration, one-time notice |
 | `src/data/memory-fragments.js` | Tags for the new slots |
+| `src/systems/unlocks.js` | Levels cleared counted across the campaign |
 | `js/testing/playtest-gate.js` | Kill any boss by the flag |
 | `tests/unit/*` | See each task |
 
@@ -130,11 +131,16 @@ Act II's slots and chains:
 
 ---
 
+### Task 10: Levels cleared across acts
+
+- [ ] Act I at eight levels and the rest at seven left "Clear 8 campaign levels" out of reach until the end: `campaignLevelsCleared` and the save backfill count from the start of the campaign (`levelsBefore(act) + level`). Older per-act marks are smaller and still stand.
+- [ ] Commit `fix(unlocks): count campaign levels cleared across acts`.
+
 ## Deferred
 
 - Chronos powers, Resonance, hazards, teach rooms, `grants` (phase 3). The Hound's phasing and heat-shimmer look (phase 4, with the real Hound art and boss bar: the HUD's boss list lives in files other agents own).
 - New maps and remixes (phases 4-6). Palette 4.
-- Badges and cosmetics re-keyed to Lord defeats, cumulative levels cleared, "Act II · The Precinct" level names (they need stat migration and HUD files).
+- Badges and cosmetics re-keyed to Lord defeats ("Second Incursion" now falls to the Hound, "Final Incursion" to Form 2), and "Act II · The Precinct" level names: they need a stats migration and HUD files. Levels cleared is already counted across acts (Task 10).
 - NG+1-with-twelve-fragments true ending, `epilogue_message`, déjà-vu recruit scenes, Act IV fragments and parting gifts (phase 6).
 - Lyra in field gear and the Hound as cutscene art.
 
