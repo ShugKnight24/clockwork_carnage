@@ -76,6 +76,8 @@ import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
 import { teachHint } from "../src/ui/chrono-hud.js";
+import { MessageDirector, combatIntense, teachFolds } from "../src/ui/message-director.js";
+import { messageLanes } from "../src/ui/message-lanes.js";
 import { ChronoHazards } from "../src/systems/chrono-hazards.js";
 import { canShift, counterShiftScale } from "../src/systems/boss-form2.js";
 import { VoxelAISystem } from "../src/systems/voxel-ai.js";
@@ -244,6 +246,9 @@ export class Game {
     this.arenaRound = 1;
     this.particleSystem = null; // initialized in startGame
     this.killStreakSystem = new KillStreakSystem(this);
+    // Owns the screen for transient messages: teach cards, the boss intro,
+    // ARIA's plates, unlock and achievement chips (src/ui/message-director.js).
+    this.messages = new MessageDirector();
     this.ariaComms = new AriaCommsSystem(this);
     this.squadComms = new SquadCommsController(this);
     this.achievementSystem = new AchievementSystem(this);
@@ -1021,12 +1026,66 @@ export class Game {
   }
 
   updateAchievementToast(dt) {
-    const fx = this.achievementSystem.updateToast(dt);
+    const fx = this.achievementSystem.updateToast(dt, this.messages);
     if (fx.playSound) this.audio.pickup();
   }
 
   renderAchievementToast(ctx, w, h) {
-    this.achievementSystem.renderToast(ctx, w, h);
+    this.achievementSystem.renderToast(ctx, w, h, this.messages);
+  }
+
+  /**
+   * The message director's frame: its lanes for this HUD, how intense the
+   * fight is, and its clock (stopped while paused). Once per HUD frame.
+   */
+  updateMessages() {
+    const d = this.messages;
+    const now = performance.now();
+    this._messagesForLevel();
+    const p = this.player;
+    let boss = false;
+    let engaged = 0;
+    for (const e of this.entities) {
+      if (e.type !== "enemy" || !e.active || e.health <= 0) continue;
+      if (e.enemyType === "boss" || e.enemyType === "boss_form2" || e.enemyType === "boss_form3") boss = true;
+      if ((e.state === "chase" || e.state === "attack" || e.state === "windup") && (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 144) engaged++;
+    }
+    const s = this.settings;
+    const compact = !!this.isTouchDevice && isCompactPhone(this.hudH);
+    const sa = this.touchControls?.safeArea;
+    const key = [this.hudW, this.hudH, s.hudStyle, isModernArt(), compact, s.hudScale, s.fontScale,
+      s.minimapSize, s.showKills, s.showWeapons, boss, sa?.left, sa?.right].join(":");
+    if (key !== this._msgLanesKey) {
+      this._msgLanesKey = key;
+      d.lanes = messageLanes({
+        w: this.hudW, h: this.hudH, hudStyle: s.hudStyle, modern: isModernArt(), compact,
+        hudScale: s.hudScale, fontScale: s.fontScale, minimapSize: s.minimapSize,
+        showKills: s.showKills !== false, showWeapons: s.showWeapons !== false, boss, safeArea: sa,
+      });
+    }
+    const intense = combatIntense({ sinceHurt: (this.time - (p.hurtTime ?? -1e9)) / 1000, engaged, slowMo: this.slowMoTimer > 0 });
+    // ARIA's top plate and a teach card share the top: the card waits for her line.
+    const m = this.ariaComms.message;
+    d.commsTop = !!m && m.place === "top" && m.prominent && !m.projected && d.lanes?.comms !== d.lanes?.commsLow;
+    this.postBossIntro();
+    d.update(now / 1000, { paused: this.state !== GameState.PLAYING, intense });
+    d.drivenAt = now;
+  }
+
+  /** A new level's plates start fresh; chips carry over. */
+  _messagesForLevel() {
+    if (this.map === this._msgMap) return;
+    this._msgMap = this.map;
+    this.messages.resetLane("headline");
+  }
+
+  /** Hand the campaign's boss intro card (bossNameCard) to the director, once. */
+  postBossIntro() {
+    this._messagesForLevel();
+    const card = this.bossNameCard;
+    if (!card || card._key) return;
+    card._key = `boss:${card.title ?? ""}`;
+    this.messages.post(card._key, "bossIntro", null, { duration: card.duration / 1000 });
   }
 
   // ── ARIA in-game comms (delegated to AriaCommsSystem) ──
@@ -1039,6 +1098,8 @@ export class Game {
   }
 
   updateAriaComms(dt) {
+    // Before ARIA picks her next line, so one queued with the boss waits for its plate.
+    this.postBossIntro();
     this.ariaComms.update(dt, this.state === GameState.PLAYING);
     this.squadComms.update(dt);
   }
@@ -1050,7 +1111,8 @@ export class Game {
       h,
       this.character.name,
       this.isTouchDevice,
-      this.mode === "tutorial" ? this._tutorialCardBottom || 0 : this._teachCardBottom || 0,
+      // Tutorial step cards keep their own anchor; the director places the rest.
+      this.mode === "tutorial" ? this._tutorialCardBottom || 0 : 0,
     );
   }
 
@@ -1324,19 +1386,42 @@ export class Game {
     });
   }
 
-  /** The level's Chronos teach card, until its lesson lands; or its objective's. */
+  /**
+   * The level's Chronos teach card, until its lesson lands; or its objective's
+   * card (racks to burn, valves to turn). It holds the headline lane: it waits
+   * for a boss intro in progress, and ARIA's line about a new power plays
+   * inside it as its narration.
+   */
   renderTeachCard(ctx, w, h) {
     const t = this.chronoHazards.teach ?? this.chronoHazards.objective;
-    if (!t?.card) {
-      this._teachCardBottom = 0;
+    const d = this.messages;
+    if (!t?.card || t._msgDone || this.chronoPowers.clock <= 1.5) return;
+    const key = t.power ? `teach:${t.power}` : `objective:${t.id ?? "level"}`;
+    if (!t._msgPosted) {
+      t._msgPosted = true;
+      d.post(key, "teach", t.power ? { fold: teachFolds(t.power) } : null);
+    }
+    if (!d.showing(key)) return;
+    const fade = t.done ? 1 - (this.chronoHazards.clock - t.doneAt) / 1.5 : 1;
+    if (fade <= 0) {
+      t._msgDone = true;
+      d.done(key);
       return;
     }
-    const clock = this.chronoPowers.clock;
-    const shownAt = 1.5;
-    const fade = t.done ? 1 - (this.chronoHazards.clock - t.doneAt) / 1.5 : 1;
     const color = POWERS[t.power]?.color ?? t.color ?? "#8844ff";
     const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color };
-    this._teachCardBottom = clock > shownAt ? _renderTeachCard(ctx, w, h, step, clock - shownAt, fade) : 0;
+    const lane = d.lanes?.headline;
+    const m = this.ariaComms.message;
+    const narration = m?.place === "fold"
+      ? { speaker: m.speaker || "ARIA", text: m.text.replace(/\{AGENT\}/g, this.character?.name || "Agent"), t: m.life, dur: m.duration }
+      : null;
+    _renderTeachCard(ctx, w, h, step, d.age(key), fade, {
+      top: lane ? lane.y + 6 : 60,
+      maxW: lane?.w,
+      cx: lane ? lane.x + lane.w / 2 : w / 2,
+      compact: d.lanes?.kind === "compact",
+      narration,
+    });
   }
 
   renderTutorialCompletionMenu(ctx, w, h) {
@@ -2614,6 +2699,7 @@ export class Game {
 
   // HUD rendering — forwarded to src/ui/hud.js
   renderHUD() {
+    if (this.state === GameState.PLAYING || this.state === GameState.PAUSED) this.updateMessages();
     _renderHUD(this);
   }
 

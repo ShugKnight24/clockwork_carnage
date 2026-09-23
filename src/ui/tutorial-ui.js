@@ -342,27 +342,38 @@ function renderHudBoot(ctx, w, h, elapsed) {
  * Draw a single tutorial step's instruction card. Auto-sizes to text length
  * with a maximum width clamp; word-wraps long hints onto a second line.
  */
-function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps) {
-  const TITLE_FONT = "bold 20px monospace";
-  const HINT_FONT = "14px monospace";
-  const PAD_X = 30;
-  const PAD_Y = 14;
-  const MAX_W = Math.min(720, w - 80);
-  const TITLE_HINT_GAP = 10;
-  const HINT_LINE_H = 18;
+function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, place = {}) {
+  const compact = !!place.compact;
+  const PAD_X = compact ? 12 : 30;
+  const PAD_Y = compact ? 7 : 14;
+  const MAX_W = Math.min(720, place.maxW ?? w - 80);
+  const HINT_FONT = compact ? "11px monospace" : "14px monospace";
+  const TITLE_HINT_GAP = compact ? 4 : 10;
+  const HINT_LINE_H = compact ? 14 : 18;
+  const cx = place.cx ?? w / 2;
 
-  // Measure
+  // Measure; a title too wide for a narrow lane shrinks to fit.
+  let titleSize = compact ? 14 : 20;
+  ctx.font = `bold ${titleSize}px monospace`;
+  const fullTitleW = ctx.measureText(step.title).width;
+  if (fullTitleW > MAX_W - PAD_X * 2) titleSize = Math.max(10, Math.floor((titleSize * (MAX_W - PAD_X * 2)) / fullTitleW));
+  const TITLE_FONT = `bold ${titleSize}px monospace`;
   ctx.font = TITLE_FONT;
   const titleW = ctx.measureText(step.title).width;
   ctx.font = HINT_FONT;
   const hintLines = wrapText(ctx, step.hint, MAX_W - PAD_X * 2);
   const hintW = hintLines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+  // ARIA's folded line, as a footer: "ARIA: ..." in her colour.
+  const narr = narrationState(place.narration);
+  const narrText = narr ? `${place.narration.speaker}: ${place.narration.text}` : "";
+  const narrLines = narr ? wrapText(ctx, narrText, MAX_W - PAD_X * 2) : [];
+  const narrH = narr ? Math.round((narrLines.length * HINT_LINE_H + 10) * narr.a) : 0;
 
-  const contentW = Math.max(titleW, hintW);
+  const contentW = Math.max(titleW, hintW, narr ? Math.min(MAX_W - PAD_X * 2, ctx.measureText(narrText).width) : 0);
   const boxW = Math.min(MAX_W, contentW + PAD_X * 2);
-  const boxH = PAD_Y * 2 + 22 /* title height */ + TITLE_HINT_GAP + hintLines.length * HINT_LINE_H;
-  const bx = (w - boxW) / 2;
-  const by = 60;
+  const boxH = PAD_Y * 2 + titleSize + 2 /* title height */ + TITLE_HINT_GAP + hintLines.length * HINT_LINE_H + narrH;
+  const bx = cx - boxW / 2;
+  const by = place.top ?? 60;
 
   ctx.save();
   ctx.globalAlpha = fadeIn * 0.92;
@@ -403,17 +414,27 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps) {
   ctx.fillStyle = step.color;
   ctx.font = TITLE_FONT;
   ctx.textAlign = "center";
-  ctx.fillText(step.title, w / 2, by + PAD_Y + 16);
+  const titleBase = Math.round(titleSize * 0.8);
+  ctx.fillText(step.title, cx, by + PAD_Y + titleBase);
   ctx.restore();
 
   // Hint lines
   ctx.fillStyle = "rgba(255,255,255,0.82)";
   ctx.font = HINT_FONT;
   ctx.textAlign = "center";
-  let hy = by + PAD_Y + 16 + TITLE_HINT_GAP + 14;
+  let hy = by + PAD_Y + titleBase + TITLE_HINT_GAP + HINT_LINE_H - 4;
   for (const line of hintLines) {
-    ctx.fillText(line, w / 2, hy);
+    ctx.fillText(line, cx, hy);
     hy += HINT_LINE_H;
+  }
+
+  if (narr) {
+    ctx.globalAlpha = fadeIn * narr.a;
+    ctx.fillStyle = "rgba(0, 200, 255, 0.25)";
+    ctx.fillRect(bx + PAD_X, hy - HINT_LINE_H + 8, boxW - PAD_X * 2, 1);
+    ctx.fillStyle = "#00ccff";
+    ctx.textAlign = "left";
+    drawTypedLines(ctx, narrLines, narr.chars + place.narration.speaker.length + 2, bx + PAD_X, hy + 6, HINT_LINE_H);
   }
 
   ctx.restore();
@@ -482,14 +503,60 @@ export function renderTutorialOverlay(ctx, w, h, state) {
  *   filled in for the device (src/ui/chrono-hud.js teachHint)
  * @param {number} elapsed - seconds since it came up
  * @param {number} [fade] - 1 while it stands, falling to 0 as it goes
+ * @param {{ top?: number, maxW?: number, cx?: number, compact?: boolean,
+ *   narration?: { speaker: string, text: string, t: number, dur: number } }} [lay]
+ *   the message director's headline lane, and ARIA's line when it is folded
+ *   into the card: spoken on the comms channel, typed here as a footer row
  * @returns {number} the card's bottom edge in px
  */
-export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1) {
+export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1, lay = {}) {
   const fadeIn = Math.min(1, elapsed / 0.4) * Math.max(0, Math.min(1, fade));
   if (fadeIn <= 0) return 0;
   const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
-  if (isModernArt()) return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0);
-  return renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0);
+  if (isModernArt()) return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
+  return renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
+}
+
+const NARRATION_TYPE_RATE = 60; // chars/s, ARIA's own plate rate
+
+/**
+ * A folded comms line's presence (0..1: in over 0.3 s, out over its last
+ * 0.5 s) and the part of it typed so far.
+ */
+function narrationState(n) {
+  if (!n) return null;
+  const a = Math.max(0, Math.min(1, n.t / 0.3, (n.dur - n.t) / 0.5));
+  if (a <= 0) return null;
+  const chars = Math.max(0, Math.floor((n.t - 0.12) * NARRATION_TYPE_RATE));
+  return { a, chars };
+}
+
+/** Plain word wrap on a font (narration rows). */
+function wrapFont(font, text, maxW) {
+  const words = text.split(" ");
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const cand = line ? `${line} ${word}` : word;
+    if (line && measureSpaced(font, cand) > maxW) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = cand;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** Draw up to `chars` characters of wrapped lines, left-aligned from x. */
+function drawTypedLines(ctx, lines, chars, x, y, lineH) {
+  let left = chars;
+  for (let i = 0; i < lines.length && left > 0; i++) {
+    const shown = lines[i].slice(0, left);
+    ctx.fillText(shown, x, y + i * lineH);
+    left -= lines[i].length + 1;
+  }
 }
 
 /** Full-screen tutorial completion menu (4 choices after training). */
@@ -697,24 +764,36 @@ function drawRichLine(ctx, line, lay, x, midY, font, color) {
   ctx.textBaseline = "alphabetic";
 }
 
-function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps) {
-  const TITLE_SIZE = 20;
+function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, place = {}) {
+  const compact = !!place.compact;
+  const PAD_X = compact ? 12 : 30;
+  const PAD_Y = compact ? 7 : 14;
+  const MAX_W = Math.min(720, place.maxW ?? w - 80);
+  // Titles shrink to fit a narrow lane rather than run off the plate.
+  let TITLE_SIZE = compact ? 14 : 20;
+  const fitTitle = measureSpaced(uiFont(TITLE_SIZE, 800), step.title, 1);
+  if (fitTitle > MAX_W - PAD_X * 2) TITLE_SIZE = Math.max(10, Math.floor((TITLE_SIZE * (MAX_W - PAD_X * 2)) / fitTitle));
   const titleFont = uiFont(TITLE_SIZE, 800);
-  const hintFont = uiFont(15, 600);
-  const PAD_X = 30;
-  const PAD_Y = 14;
-  const MAX_W = Math.min(720, w - 80);
-  const TITLE_H = 24;
-  const GAP = 8;
-  const LINE_H = 25;
+  const hintFont = uiFont(compact ? 11 : 15, 600);
+  const TITLE_H = compact ? 16 : 24;
+  const GAP = compact ? 3 : 8;
+  const LINE_H = compact ? 20 : 25;
+  const cx = Math.round(place.cx ?? w / 2);
 
   const titleW = measureSpaced(titleFont, step.title, 1);
   const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont);
-  const contentW = Math.max(titleW, lay.w);
+  // ARIA's folded line: a footer row under a hairline, typed as she speaks.
+  const narr = narrationState(place.narration);
+  const narrFont = uiFont(compact ? 11 : 13, 600);
+  const narrLineH = compact ? 14 : 17;
+  const tabW = narr ? Math.ceil(measureSpaced(uiFont(10, 700), place.narration.speaker, 0.8)) + 22 : 0;
+  const narrLines = narr ? wrapFont(narrFont, place.narration.text, MAX_W - PAD_X * 2 - tabW) : [];
+  const narrH = narr ? Math.round((narrLines.length * narrLineH + 12) * narr.a) : 0;
+  const contentW = Math.max(titleW, lay.w, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
   const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2));
-  const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PAD_Y - 4;
-  const bx = Math.round((w - boxW) / 2);
-  const by = 60;
+  const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PAD_Y - 4 + narrH;
+  const bx = Math.round(cx - boxW / 2);
+  const by = Math.round(place.top ?? 60);
 
   ctx.save();
   ctx.globalAlpha = fadeIn;
@@ -732,13 +811,27 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.letterSpacing = "1px";
-  inkText(ctx, step.title, w / 2, by + PAD_Y + 18, step.color, 4);
+  inkText(ctx, step.title, cx, by + PAD_Y + Math.round(TITLE_SIZE * 0.9), step.color, compact ? 3 : 4);
   ctx.letterSpacing = "0px";
 
   let midY = by + PAD_Y + TITLE_H + GAP + LINE_H / 2 - 1;
   for (const line of lay.lines) {
-    drawRichLine(ctx, line, lay, Math.round(w / 2 - line.w / 2), midY, hintFont, UI.text);
+    drawRichLine(ctx, line, lay, Math.round(cx - line.w / 2), midY, hintFont, UI.text);
     midY += LINE_H;
+  }
+
+  if (narr) {
+    const top = by + boxH - PAD_Y + 4 - narrH;
+    ctx.globalAlpha = fadeIn * narr.a;
+    ctx.fillStyle = UI.textFaint;
+    ctx.fillRect(bx + PAD_X, top, boxW - PAD_X * 2, 1);
+    const scheme = SPEAKER_SCHEMES[place.narration.speaker] || "cyan";
+    drawCaption(ctx, bx + PAD_X, top + 6, place.narration.speaker, { size: 10, scheme });
+    ctx.font = narrFont;
+    ctx.fillStyle = UI.textDim;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    drawTypedLines(ctx, narrLines, narr.chars, bx + PAD_X + tabW, top + 6 + narrLineH - 3, narrLineH);
   }
   ctx.restore();
   ctx.textAlign = "left";

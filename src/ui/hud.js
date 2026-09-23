@@ -220,13 +220,29 @@ function drawDamageNumber(ctx, dn, x, y, large) {
  * Driven by game.bossNameCard `{title, subtitle, time, duration}`.
  * Draws a centered banner roughly 35% down the screen so it doesn't
  * stomp the boss silhouette in the middle of the viewport.
+ *
+ * It holds the message director's headline lane: it shows when the lane is
+ * its turn (straight away unless a teach card is fresh), times itself from
+ * then, and ARIA's line and any chips wait until it is gone.
  */
 function drawBossNameCard(ctx, game, w, h) {
   const card = game.bossNameCard;
   if (!card) return;
-  const elapsed = game.time - card.time;
+  const d = game.messages;
+  let elapsed = game.time - card.time;
+  if (d) {
+    game.postBossIntro?.();
+    const st = d.status(card._key);
+    if (st === "queued") return;
+    if (st !== "showing") {
+      game.bossNameCard = null;
+      return;
+    }
+    elapsed = d.age(card._key) * 1000;
+  }
   if (elapsed >= card.duration) {
     game.bossNameCard = null;
+    d?.done(card._key);
     return;
   }
   if (isModernArt()) {

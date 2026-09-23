@@ -73,6 +73,7 @@ const CATEGORY_EMOTIONS = {
   lyraRecorded: "tender",
 };
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
+import { pickNext, pruneQueue } from "../ui/message-director.js";
 import {
   UI,
   uiFont,
@@ -148,6 +149,9 @@ export class AriaCommsSystem {
       projected,
       speaker: "ARIA",
       emotion: CATEGORY_EMOTIONS[category] ?? null,
+      // The message director's comms rules read these (priority, expiry, folding).
+      category,
+      queuedAt: this._clock,
     });
   }
 
@@ -190,6 +194,8 @@ export class AriaCommsSystem {
       // Lord's voice, not the tactician's.
       voice,
       emotion: emotion ?? CATEGORY_EMOTIONS[category] ?? null,
+      category,
+      queuedAt: this._clock,
     });
   }
 
@@ -203,13 +209,21 @@ export class AriaCommsSystem {
     if (!this.enabled) return;
     this._clock = (this._clock || 0) + dt;
 
-    // Drain queue -> active message
+    // Drain queue -> active message: the most important line first, stale
+    // ones dropped, and none while a boss intro holds the screen. Where it
+    // goes (its place: top, low, or folded into a teach card) is decided
+    // now and kept for its life (src/ui/message-director.js).
     if (!this.message && this.queue.length > 0) {
-      const msg = this.queue.shift();
-      this.message = { ...msg, life: 0 };
-      this.idleTimer = 0;
-      this.messageLog.push(msg.text);
-      this._voice(msg);
+      pruneQueue(this.queue, this._clock);
+      const i = pickNext(this.queue);
+      const place = i < 0 ? "hold" : (this.game?.messages?.commsPlacement(this.queue[i]) ?? "top");
+      if (place !== "hold") {
+        const [msg] = this.queue.splice(i, 1);
+        this.message = { ...msg, life: 0, place };
+        this.idleTimer = 0;
+        this.messageLog.push(msg.text);
+        this._voice(msg);
+      }
     }
     if (this.message) {
       this.message.life += dt;
@@ -276,29 +290,50 @@ export class AriaCommsSystem {
    */
   renderMessage(ctx, w, h, characterName, isTouchDevice, minTop = 0) {
     const msg = this.message;
-    if (!msg) return;
+    // A folded line is spoken, and typed inside the teach card instead.
+    if (!msg || msg.place === "fold") return;
 
     const t = msg.life;
     const dur = msg.duration;
     const agentName = characterName || "Agent";
+    const a = this._anchor(msg, minTop);
+    // Projected beside a teach card: her figure stands clear of the card.
+    const projTop = msg.place === "low" && a?.headline ? a.headline.y + a.headline.h + 8 : minTop;
 
     if (isRealisticArt() && !msg.projected) {
-      if (msg.prominent) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop);
-      else this._renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
+      if (msg.prominent) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop, a);
+      else this._renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a);
       return;
     }
     if (isModernArt()) {
-      if (msg.projected) this._renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop);
-      else if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
-      else this._renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
+      if (msg.projected) this._renderModernProjection(ctx, w, h, msg, t, dur, agentName, projTop, a);
+      else if (msg.prominent) this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop, a);
+      else this._renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a);
       return;
     }
 
     if (msg.prominent) {
-      this._renderProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      this._renderProminent(ctx, w, h, msg, t, dur, agentName, minTop, a);
     } else {
-      this._renderSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice);
+      this._renderSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a);
     }
+  }
+
+  /**
+   * Where the message director puts this line: a plate width, its centre,
+   * and either a top edge (the comms lane) or a bottom edge (the low lane:
+   * subtle lines, a line beside a teach card, and every line on a phone).
+   * Null without lanes; the renderers then use their own anchors.
+   */
+  _anchor(msg, minTop) {
+    const lanes = this.game?.messages?.lanes;
+    if (!lanes) return null;
+    const low = msg.place === "low" || !msg.prominent || lanes.comms === lanes.commsLow;
+    const r = low ? lanes.commsLow : lanes.comms;
+    const a = { cx: r.x + r.w / 2, maxW: r.w, headline: lanes.headline };
+    if (low) a.bottom = r.y + r.h;
+    else a.top = Math.max(r.y + 12, minTop ? minTop + 22 : 0);
+    return a;
   }
 
   /** Render ARIA comms log overlay. */
@@ -381,7 +416,7 @@ export class AriaCommsSystem {
 
   // ── Private rendering helpers ──
 
-  _renderProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+  _renderProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0, a = null) {
     let alpha = 1;
     if (t < 0.4) alpha = t / 0.4;
     else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
@@ -391,11 +426,9 @@ export class AriaCommsSystem {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    const pBoxW = 460;
-    const pBx = (w - pBoxW) / 2;
-    // Sits high enough to clear the reticle and the horizon where enemies
-    // appear. At 0.28 it parked directly in the firing sightline.
-    const pBy = Math.max(h * 0.135, minTop ? minTop + 12 : 0) + slideY;
+    const pBoxW = Math.min(460, a?.maxW ?? 460);
+    const cx = a ? a.cx : w / 2;
+    const pBx = cx - pBoxW / 2;
 
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);
@@ -404,6 +437,9 @@ export class AriaCommsSystem {
     const lines = this._wordWrap(ctx, ariaText, maxTextW);
     const lineH = 17;
     const pBoxH = 64 + Math.max(0, lines.length - 1) * lineH;
+    // Sits high enough to clear the reticle and the horizon where enemies
+    // appear. At 0.28 it parked directly in the firing sightline.
+    const pBy = (a?.bottom != null ? a.bottom - pBoxH : (a?.top ?? Math.max(h * 0.135, minTop ? minTop + 12 : 0))) + slideY;
 
     // Background
     ctx.fillStyle = "rgba(0, 8, 16, 0.95)";
@@ -428,21 +464,21 @@ export class AriaCommsSystem {
         : "#00ccff";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(msg.speaker || "ARIA", w / 2, pBy + 18);
+    ctx.fillText(msg.speaker || "ARIA", cx, pBy + 18);
 
     // Message text centered
     ctx.fillStyle = msg.color;
     ctx.font = "14px monospace";
     const textStartY = lines.length > 1 ? pBy + 36 : pBy + 44;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], w / 2, textStartY + i * lineH);
+      ctx.fillText(lines[i], cx, textStartY + i * lineH);
     }
 
     ctx.textAlign = "left";
     ctx.restore();
   }
 
-  _renderSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
+  _renderSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a = null) {
     let slideX = 0;
     if (t < 0.3) slideX = (1 - t / 0.3) * -360;
     else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * -360;
@@ -457,15 +493,15 @@ export class AriaCommsSystem {
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);
     const isCompactMobile = isTouchDevice && isCompactPhone(h);
-    const boxW = isCompactMobile ? Math.min(340, w - 32) : 340;
+    const boxW = Math.min(isCompactMobile ? Math.min(340, w - 32) : 340, a?.maxW ?? Infinity);
     const textAreaX = 54;
     const maxTextW = boxW - textAreaX - 12;
     ctx.font = "13px monospace";
     const msgLines = this._wordWrap(ctx, ariaText, maxTextW);
     const lineH = 15;
     const boxH = 54 + Math.max(0, msgLines.length - 1) * lineH;
-    const bx = (w - boxW) / 2 + slideX;
-    const by = h - boxH - 70;
+    const bx = (a ? a.cx - boxW / 2 : (w - boxW) / 2) + slideX;
+    const by = (a?.bottom ?? h - 70) - boxH;
 
     // Background
     ctx.fillStyle = "rgba(0, 10, 20, 0.92)";
@@ -733,7 +769,7 @@ export class AriaCommsSystem {
     return h - 150;
   }
 
-  _renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+  _renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0, a = null) {
     let alpha = 1;
     if (t < 0.3) alpha = t / 0.3;
     else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
@@ -741,11 +777,8 @@ export class AriaCommsSystem {
     const k = Math.min(1, t / 0.3);
     const slideY = t < 0.3 ? -18 * (1 - k) * (1 - k) + Math.sin(k * Math.PI) * 3 : 0;
 
-    const boxW = Math.min(460, w - 24);
-    const x = Math.round((w - boxW) / 2);
-    // Same anchor as legacy; the speaker tab pokes ~10px above the plate, so
-    // clear the tutorial card by that much more.
-    const y = Math.round(Math.max(h * 0.135, minTop ? minTop + 22 : 0) + slideY);
+    const boxW = Math.min(460, w - 24, a?.maxW ?? Infinity);
+    const x = Math.round((a ? a.cx : w / 2) - boxW / 2);
 
     const speaker = msg.speaker || "ARIA";
     const color = speakerTone(speaker);
@@ -755,6 +788,11 @@ export class AriaCommsSystem {
     const lineH = 19;
     const lines = this._modernLines(ctx, msg, agentName, font, x + boxW - 18 - tx);
     const boxH = Math.max(port + 22, 26 + lines.length * lineH + 10);
+    // Same anchor as legacy; the speaker tab pokes ~10px above the plate, so
+    // clear the tutorial card by that much more. The director's lanes already
+    // leave room for the tab.
+    const top = a?.bottom != null ? a.bottom - boxH : (a?.top ?? Math.max(h * 0.135, minTop ? minTop + 22 : 0));
+    const y = Math.round(top + slideY);
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -782,7 +820,7 @@ export class AriaCommsSystem {
    * PROJECTED_CATEGORIES, so the bust stays the everyday voice and this reads
    * as her actually showing up.
    */
-  _renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+  _renderModernProjection(ctx, w, h, msg, t, dur, agentName, minTop = 0, a = null) {
     let alpha = 1;
     if (t < 0.45) alpha = t / 0.45;
     else if (t > dur - 0.6) alpha = 1 - (t - (dur - 0.6)) / 0.6;
@@ -804,8 +842,8 @@ export class AriaCommsSystem {
 
     // If the bitmaps have not decoded yet, fall back rather than show nothing.
     if (!drawn) {
-      if (isRealisticArt()) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop);
-      else this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop);
+      if (isRealisticArt()) this._renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop, a);
+      else this._renderModernProminent(ctx, w, h, msg, t, dur, agentName, minTop, a);
       return;
     }
 
@@ -854,7 +892,7 @@ export class AriaCommsSystem {
     ctx.restore();
   }
 
-  _renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
+  _renderModernSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a = null) {
     let slideX = 0;
     if (t < 0.3) slideX = (1 - t / 0.3) * -360;
     else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * -360;
@@ -863,15 +901,15 @@ export class AriaCommsSystem {
     else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
 
     const compact = isTouchDevice && isCompactPhone(h);
-    const boxW = compact ? Math.min(360, w - 32) : 360;
+    const boxW = Math.min(compact ? Math.min(360, w - 32) : 360, a?.maxW ?? Infinity);
     const port = 40;
     const tx = 12 + port + 12;
     const font = uiFont(13, 600);
     const lineH = 16;
     const lines = this._modernLines(ctx, msg, agentName, font, boxW - tx - 14);
     const boxH = Math.max(port + 18, 22 + lines.length * lineH + 8);
-    const bx = Math.round((w - boxW) / 2 + slideX);
-    const by = this._modernSubtleBottom(h, compact) - boxH;
+    const bx = Math.round((a ? a.cx : w / 2) - boxW / 2 + slideX);
+    const by = (a?.bottom ?? this._modernSubtleBottom(h, compact)) - boxH;
 
     const speaker = msg.speaker || "ARIA";
     const color = speakerTone(speaker);
@@ -914,21 +952,22 @@ export class AriaCommsSystem {
   // with an accent tick, a signal meter in place of the comic tab, and the
   // portrait desaturated behind a hairline frame.
 
-  _renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0) {
+  _renderRealProminent(ctx, w, h, msg, t, dur, agentName, minTop = 0, a = null) {
     let alpha = 1;
     if (t < 0.3) alpha = t / 0.3;
     else if (t > dur - 0.5) alpha = 1 - (t - (dur - 0.5)) / 0.5;
     const k = Math.min(1, t / 0.3);
     const slideY = t < 0.3 ? -18 * (1 - k) * (1 - k) + Math.sin(k * Math.PI) * 3 : 0;
 
-    const boxW = Math.min(460, w - 24);
-    const x = Math.round((w - boxW) / 2);
-    const y = Math.round(Math.max(h * 0.135, minTop ? minTop + 12 : 0) + slideY);
+    const boxW = Math.min(460, w - 24, a?.maxW ?? Infinity);
+    const x = Math.round((a ? a.cx : w / 2) - boxW / 2);
     const port = 48;
     const font = skin.uiFont(15, 600);
     const lineH = 19;
     const lines = this._modernLines(ctx, msg, agentName, font, boxW - realTextX(port) - 16);
     const boxH = realBoxH(lines.length, port, lineH);
+    const top = a?.bottom != null ? a.bottom - boxH : (a?.top ?? Math.max(h * 0.135, minTop ? minTop + 12 : 0));
+    const y = Math.round(top + slideY);
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -936,7 +975,7 @@ export class AriaCommsSystem {
     ctx.restore();
   }
 
-  _renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice) {
+  _renderRealSubtle(ctx, w, h, msg, t, dur, agentName, isTouchDevice, a = null) {
     let slideX = 0;
     if (t < 0.3) slideX = (1 - t / 0.3) * -360;
     else if (t > dur - 0.4) slideX = ((t - (dur - 0.4)) / 0.4) * -360;
@@ -945,14 +984,14 @@ export class AriaCommsSystem {
     else if (t > dur - 0.4) alpha = 1 - (t - (dur - 0.4)) / 0.4;
 
     const compact = isTouchDevice && isCompactPhone(h);
-    const boxW = compact ? Math.min(360, w - 32) : 360;
+    const boxW = Math.min(compact ? Math.min(360, w - 32) : 360, a?.maxW ?? Infinity);
     const port = 38;
     const font = skin.uiFont(13, 600);
     const lineH = 16;
     const lines = this._modernLines(ctx, msg, agentName, font, boxW - realTextX(port) - 14);
     const boxH = realBoxH(lines.length, port, lineH);
-    const bx = Math.round((w - boxW) / 2 + slideX);
-    const by = this._modernSubtleBottom(h, compact) - boxH;
+    const bx = Math.round((a ? a.cx : w / 2) - boxW / 2 + slideX);
+    const by = (a?.bottom ?? this._modernSubtleBottom(h, compact)) - boxH;
 
     ctx.save();
     ctx.globalAlpha = alpha;
