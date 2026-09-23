@@ -61,7 +61,7 @@ import { styleName, spawnFromMeta, standableNear } from "../src/systems/voxel-gl
 import { World } from "../src/world/world.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
-import { SquadCommsController } from "../src/systems/squad-comms.js";
+import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
 import { cloneLook } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
@@ -1463,6 +1463,11 @@ export class Game {
         getTextLayer: () => ({ ctx: this.hudCtx, canvas: this.hudCanvas }),
         getSettings: () => this.settings,
         getVoiceProfile: () => this.getVoiceProfile(),
+        // A party frame that names nobody shows who is with you in this slot.
+        getParty: () =>
+          this.mode === "campaign" && this.campaign
+            ? ["you", ...getPresentSquad(this.campaign.act, this.campaign.level)]
+            : null,
       });
     }
   }

@@ -23,10 +23,11 @@ import { isModernArt, isRealisticArt } from "../art-style.js";
 import { buildCastModel, CAST_KEYS } from "./agent-rig.js";
 import { lookKey, cloneLook } from "../../core/character-fields.js";
 import { MODELS as HERO } from "./models/hero.js";
-import { MODELS as CAST } from "./models/cast.js";
+import { MODELS as CAST, partyModel } from "./models/cast.js";
 import { MODELS as VILLAIN } from "./models/villain.js";
 import { MODELS as SCENE_ART, BACKGROUNDS as SCENE_BGS } from "./models/scenes.js";
 import { BACKGROUNDS as BACKDROPS } from "./models/backdrops.js";
+import { partyMembers } from "../party.js";
 
 const MODELS = { ...HERO, ...CAST, ...VILLAIN, ...SCENE_ART };
 const BACKGROUNDS = { ...SCENE_BGS, ...BACKDROPS };
@@ -40,6 +41,9 @@ const DISPLAY_SCALE = {
   hero_at_desk: 1.3,
   hero_fallen: 1.3,
   lyra: 1.3,
+  kael: 1.3,
+  nova: 1.3,
+  rook: 1.3,
   aria: 1.3,
   party: 1.5,
   portrait_voss: 1.35,
@@ -55,6 +59,8 @@ const DISPLAY_SCALE = {
   unknown_recording: 1.25,
   redacted_file: 1.25,
 };
+
+const displayScale = (key) => DISPLAY_SCALE[partyMembers(key) ? "party" : key] ?? 1;
 
 // ---------------------------------------------------------------------------
 // Cast: the armoured agent dressed as the player built it
@@ -113,7 +119,10 @@ function modelEntry(key) {
   }
   let e = stockEntries.get(key);
   if (!e) {
-    const model = MODELS[key];
+    // A lineup of fewer than everyone ("party:lyra+you") is its own model,
+    // and its own bitmaps: the key is in the layer id.
+    const members = key in MODELS ? null : partyMembers(key);
+    const model = members ? partyModel(members) : MODELS[key];
     if (!model) return null;
     e = { id: `art:${key}`, model };
     stockEntries.set(key, e);
@@ -121,7 +130,10 @@ function modelEntry(key) {
   return e;
 }
 
-export const hasSvgArt = (key) => key in MODELS;
+/** A key names a model: a registered one, or a party lineup. */
+const isModel = (key) => key in MODELS || partyMembers(key) !== null;
+
+export const hasSvgArt = isModel;
 export const hasSvgBg = (key) => key in BACKGROUNDS;
 
 function pixelScale(ctx) {
@@ -209,11 +221,11 @@ function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale) {
  * @returns {boolean} true if drawn
  */
 export function drawSvgArt(ctx, key, t) {
-  if (!isModernArt() || !(key in MODELS)) return false;
+  if (!isModernArt() || !isModel(key)) return false;
   const { id, model } = modelEntry(key);
   const [bx, by, bw, bh] = model.box;
   ctx.save();
-  const display = DISPLAY_SCALE[key] ?? 1;
+  const display = displayScale(key);
   if (model.intro !== false) {
     const fadeIn = Math.min(1, t / 1.2);
     const s = (0.9 + fadeIn * 0.1) * display;
@@ -233,7 +245,7 @@ export function drawSvgArt(ctx, key, t) {
  * @returns {boolean} true if drawn
  */
 export function drawSvgModelAt(ctx, key, x, y, w, h, t) {
-  if (!isModernArt() || !(key in MODELS)) return false;
+  if (!isModernArt() || !isModel(key)) return false;
   const { id, model } = modelEntry(key);
   const [, , bw, bh] = model.box;
   const k = Math.min(w / bw, h / bh);
@@ -268,9 +280,9 @@ export function warmSvgArt(artKeys, bgKeys, ctx, w, h) {
   refreshCast();
   const base = pixelScale(ctx) * 2 * (h / 900);
   for (const key of artKeys) {
-    if (!(key in MODELS)) continue;
+    if (!isModel(key)) continue;
     const { id, model: m } = modelEntry(key);
-    const k = base * (DISPLAY_SCALE[key] ?? 1);
+    const k = base * displayScale(key);
     m.layers.forEach((l, i) => getLayerImage(`${id}:${i}`, m.box, m.defs || "", l.markup, k));
   }
   for (const key of bgKeys) {

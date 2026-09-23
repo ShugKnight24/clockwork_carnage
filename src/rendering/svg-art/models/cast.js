@@ -1,8 +1,11 @@
 /**
- * Supporting cast: ARIA (hologram co-pilot), Lyra, the five-person squad and the
- * Voss / Miri / Kai memory portraits. Art units, origin at chest height; see
- * ../index.js for the model format.
+ * Supporting cast: ARIA (hologram co-pilot), Lyra, the squad (as a lineup of
+ * whoever has joined, and Kael, Nova and Rook alone) and the Voss / Miri / Kai
+ * memory portraits. Art units, origin at chest height; see ../index.js for the
+ * model format.
  */
+
+import { FULL_PARTY, orderParty, partyLayout } from "../../party.js";
 
 const INK = "#04060b";
 
@@ -833,55 +836,181 @@ function squadMembers() {
   return { kael, nova, rook, you, lyra };
 }
 
-function partyModel() {
-  const m = squadMembers();
-  const place = (x, y, s, markup) => at(x, y, s, markup);
-  const K = [-84, 2.2, 0.64];
-  const L = [-44, 4.2, 0.6];
-  const Y = [0, 3.4, 0.7];
-  const N = [44, 3.8, 0.62];
-  const R = [84, 2.8, 0.62];
+/** Plate, suit, helmet and kit gradients the armoured squad figures paint with. */
+function squadDefs() {
+  return (
+    lin("st", [[0, "#8aa4bc"], [0.3, "#4a6078"], [0.7, "#2a3a4c"], [1, "#141c26"]], 0, 0, 1, 0.4) +
+    lin("st2", [[0, "#5a7088"], [0.5, "#2e3e50"], [1, "#121a24"]], 0, 0, 1, 0.3) +
+    lin("hm", [[0, "#9ab4ca"], [0.35, "#50667e"], [1, "#16202c"]], 0, 0, 1, 0.6) +
+    lin("su", [[0, "#2a3644"], [0.5, "#161e28"], [1, "#080c12"]], 0, 0, 1, 0) +
+    lin("bt", [[0, "#2e3846"], [1, "#07090d"]], 0, 0, 1, 0) +
+    lin("cp", [[0, "#a02626"], [0.45, "#6b1515"], [1, "#2e0707"]], 0, 0, 1, 0) +
+    lin("nv", [[0, "#2c4058"], [1, "#0a121c"]], 0, 0, 1, 0) +
+    lin("pk", [[0, "#ff5a96"], [0.5, "#b82a60"], [1, "#4a0c24"]], 0, 0, 1, 0.3) +
+    lin("pkb", [[0, "#3a4858"], [1, "#10161e"]], 0, 0, 1, 0) +
+    blur("gl", 1.6) +
+    blur("fl", 1.2) +
+    blur("ao", 1.5)
+  );
+}
+
+/**
+ * One squad member alone, in the standard standing frame (head top -94, feet
+ * +58.6), the way `lyra` stands: a pool of their colour behind them, a ground
+ * shadow and ring, what they carry that says who they are, the figure, and
+ * the glow of visor and trim.
+ */
+function soloModel(id, { color, props = "", propAnim, extraDefs = "", aura = color }) {
+  const fig = (squadCache ??= squadMembers())[id];
+  const ground =
+    `<ellipse cx="0" cy="-26" rx="70" ry="80" fill="url(#${id}amb)"/>` +
+    `<ellipse cx="0" cy="58.8" rx="30" ry="4" fill="url(#gsh)"/>` +
+    `<ellipse cx="0" cy="58.6" rx="22" ry="3.4" fill="none" stroke="${color}" stroke-width="1" opacity="0.75"/>` +
+    `<ellipse cx="0" cy="58.6" rx="19" ry="2.6" fill="${color}" opacity="0.25" filter="url(#fl)"/>`;
+  return {
+    box: [-80, -112, 160, 176],
+    defs:
+      squadDefs() +
+      rad(`${id}amb`, [[0, aura, 0.2], [1, aura, 0]]) +
+      rad("gsh", [[0, "#000", 0.65], [1, "#000", 0]]) +
+      extraDefs,
+    anim: { type: "breathe", amp: 0.005, speed: 1.4, pivot: [0, 58] },
+    layers: [
+      { markup: ground, anim: { type: "pulse", min: 0.7, max: 1, speed: 1.2 } },
+      props && { markup: props, anim: propAnim, blend: "lighter" },
+      { markup: fig.back + fig.body },
+      { markup: fig.glow, anim: { type: "pulse", min: 0.6, max: 1, speed: 2.4 }, blend: "lighter" },
+    ].filter(Boolean),
+  };
+}
+
+/**
+ * Kael alone: the shield up, and clipped to his chest strap the Supervisor's
+ * handset, the radio that went to static in the tutorial. Its light still
+ * blinks; a ghost of signal arcs off it.
+ */
+function kaelModel() {
+  const radio =
+    `<g transform="translate(15 -61) rotate(8)">` +
+    `<path d="M0,-11 L0,-19" stroke="#6a7888" stroke-width="1.1" stroke-linecap="round"/>` +
+    `<rect x="-3.2" y="-11" width="6.4" height="12" rx="1.2" fill="#1c232c" stroke="${INK}" stroke-width="0.8"/>` +
+    `<rect x="-2.2" y="-9.4" width="4.4" height="3" rx="0.4" fill="#3a2a10"/>` +
+    `<path d="M-2,-4.2 L2,-4.2 M-2,-2.6 L2,-2.6 M-2,-1 L2,-1" stroke="#0a0e12" stroke-width="0.5"/>` +
+    `</g>`;
+  const signal =
+    `<g transform="translate(15 -80)">` +
+    `<path d="M-4,-2 A5 5 0 0 1 4,-2 M-7,-4.4 A9 9 0 0 1 7,-4.4 M-10,-6.8 A13 13 0 0 1 10,-6.8" fill="none" stroke="#ffb454" stroke-width="0.7" stroke-dasharray="2 1.4" opacity="0.7"/>` +
+    `<circle cx="0" cy="0.6" r="1.2" fill="#ff3a2a" filter="url(#gl)"/><circle cx="0" cy="0.6" r="0.5" fill="#ffd0c0"/>` +
+    `</g>`;
+  const m = soloModel("kael", {
+    color: "#4488ff",
+    props: signal,
+    propAnim: { type: "flicker", min: 0.2, max: 1, speed: 1.3 },
+  });
+  // The handset sits on the figure, so it joins the body layer.
+  const body = m.layers.find((l) => !l.anim && !l.blend);
+  body.markup += radio;
+  return m;
+}
+
+/** Nova alone: blades low, weight forward, the air behind her still catching up. */
+function novaModel() {
+  const streaks = [
+    [-70, -60, 34], [-76, -38, 42], [-66, -14, 28], [-74, 8, 38], [-62, 30, 24],
+  ].map(([x, y, len]) =>
+    `<path d="M${x},${y} L${x + len},${y - 1.4}" stroke="#ff4488" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>` +
+    `<path d="M${x + len * 0.4},${y + 1.2} L${x + len},${y}" stroke="#ffd2e4" stroke-width="0.6" stroke-linecap="round" opacity="0.7"/>`,
+  ).join("");
+  return soloModel("nova", {
+    color: "#ff4488",
+    props: streaks,
+    propAnim: { type: "drift", amp: 3, speed: 3.2 },
+  });
+}
+
+/**
+ * Rook alone: wrench in hand, and behind him the thing he is always halfway
+ * through fixing, a wireframe suit schematic with one part circled.
+ */
+function rookModel() {
+  // Off his wrench side, clear of the arm rig on his pack.
+  const schematic =
+    `<g transform="translate(-47 -64) rotate(-6)">` +
+    `<rect x="-17" y="-22" width="34" height="46" rx="1" fill="#44ff88" fill-opacity="0.07" stroke="#6affa4" stroke-width="0.6" stroke-opacity="0.7"/>` +
+    `<path d="M-17,-16 L17,-16" stroke="#6affa4" stroke-width="0.4" opacity="0.6"/>` +
+    `<rect x="-14" y="-20" width="9" height="2.2" fill="#aaffc8" opacity="0.8"/>` +
+    // helmet, torso, arms, legs of a suit in outline
+    `<path d="M0,-12 C3,-12 4,-10 4,-7.4 C4,-5 2.6,-4 0,-4 C-2.6,-4 -4,-5 -4,-7.4 C-4,-10 -3,-12 0,-12Z M-7,-3 L7,-3 L6,9 L-6,9Z M-7,-3 L-11,7 M7,-3 L11,7 M-4,9 L-5,20 M4,9 L5,20" fill="none" stroke="#aaffc8" stroke-width="0.7" opacity="0.85"/>` +
+    // the part he has circled: the module in the chest
+    `<circle cx="0" cy="2" r="3.6" fill="none" stroke="#ffcc44" stroke-width="0.7" stroke-dasharray="2.4 1"/>` +
+    `<path d="M3.2,0 L12,-8 L15,-8" fill="none" stroke="#ffcc44" stroke-width="0.5"/>` +
+    `</g>`;
+  return soloModel("rook", {
+    color: "#44ff88",
+    props: schematic,
+    propAnim: { type: "flicker", min: 0.55, max: 0.95, speed: 0.9 },
+  });
+}
+
+/** Each member's ground offset, scale and colour in the lineup. */
+const PARTY_POSE = {
+  kael: { y: 2.2, s: 0.64, col: "#4488ff" },
+  lyra: { y: 4.2, s: 0.6, col: "#ffaa44" },
+  you: { y: 3.4, s: 0.7, col: "#00ffcc" },
+  nova: { y: 3.8, s: 0.62, col: "#ff4488" },
+  rook: { y: 2.8, s: 0.62, col: "#44ff88" },
+};
+
+let squadCache = null;
+
+/**
+ * The lineup of whoever has joined (src/rendering/party.js): the same figures
+ * in the same order, re-centred on the members present.
+ * @param {string[]} [members]
+ */
+export function partyModel(members = FULL_PARTY) {
+  const m = (squadCache ??= squadMembers());
+  const xs = partyLayout(members);
+  const list = orderParty(members);
+  const T = (id) => [xs[id], PARTY_POSE[id].y, PARTY_POSE[id].s];
+  const place = (id, markup) => at(...T(id), markup);
   const ring = (x, y, col) =>
     `<ellipse cx="${x}" cy="${y}" rx="15" ry="2.6" fill="none" stroke="${col}" stroke-width="0.9" opacity="0.8"/>` +
     `<ellipse cx="${x}" cy="${y}" rx="13" ry="2" fill="${col}" opacity="0.28" filter="url(#fl)"/>`;
-  const feet = (T) => r1(T[1] + 58.6 * T[2]);
+  const feet = (id) => r1(PARTY_POSE[id].y + 58.6 * PARTY_POSE[id].s);
+  // The ground glow and shadow shrink with the group.
+  const span = list.length ? Math.max(...list.map((id) => Math.abs(xs[id]))) : 0;
   const floor =
-    `<ellipse cx="0" cy="-10" rx="118" ry="62" fill="url(#amb)"/>` +
-    `<ellipse cx="0" cy="44" rx="112" ry="9" fill="url(#gsh)"/>` +
-    ring(K[0], feet(K), "#4488ff") + ring(L[0], feet(L), "#ffaa44") + ring(Y[0], feet(Y), "#00ffcc") +
-    ring(N[0], feet(N), "#ff4488") + ring(R[0], feet(R), "#44ff88");
+    `<ellipse cx="0" cy="-10" rx="${r1(Math.min(118, span + 34))}" ry="62" fill="url(#amb)"/>` +
+    `<ellipse cx="0" cy="44" rx="${r1(Math.min(112, span + 28))}" ry="9" fill="url(#gsh)"/>` +
+    list.map((id) => ring(xs[id], feet(id), PARTY_POSE[id].col)).join("");
+  // Outermost first, so nearer figures overlap the ones beside them.
+  const crew = list.filter((id) => id !== "you").sort((a, b) => Math.abs(xs[b]) - Math.abs(xs[a]));
+  const figure = (id) =>
+    id === "lyra" ? m.lyra.hairBack + m.lyra.body : m[id].back + m[id].body;
+  const hasYou = list.includes("you");
+  const layers = [
+    { markup: floor, anim: { type: "pulse", min: 0.65, max: 1, speed: 1.8 } },
+    crew.length && { markup: crew.map((id) => place(id, figure(id))).join("") },
+    hasYou && { markup: place("you", m.you.back), anim: { type: "sway", amp: 0.018, speed: 1.7, pivot: [xs.you, -43] } },
+    hasYou && { markup: place("you", m.you.body) },
+    {
+      markup: list.map((id) => place(id, m[id].glow)).join(""),
+      anim: { type: "pulse", min: 0.6, max: 1, speed: 2.4 },
+      blend: "lighter",
+    },
+  ].filter(Boolean);
   return {
     box: [-116, -72, 232, 126],
     defs:
       lyraDefs() +
-      lin("st", [[0, "#8aa4bc"], [0.3, "#4a6078"], [0.7, "#2a3a4c"], [1, "#141c26"]], 0, 0, 1, 0.4) +
-      lin("st2", [[0, "#5a7088"], [0.5, "#2e3e50"], [1, "#121a24"]], 0, 0, 1, 0.3) +
-      lin("hm", [[0, "#9ab4ca"], [0.35, "#50667e"], [1, "#16202c"]], 0, 0, 1, 0.6) +
-      lin("su", [[0, "#2a3644"], [0.5, "#161e28"], [1, "#080c12"]], 0, 0, 1, 0) +
-      lin("bt", [[0, "#2e3846"], [1, "#07090d"]], 0, 0, 1, 0) +
-      lin("cp", [[0, "#a02626"], [0.45, "#6b1515"], [1, "#2e0707"]], 0, 0, 1, 0) +
-      lin("nv", [[0, "#2c4058"], [1, "#0a121c"]], 0, 0, 1, 0) +
-      lin("pk", [[0, "#ff5a96"], [0.5, "#b82a60"], [1, "#4a0c24"]], 0, 0, 1, 0.3) +
-      lin("pkb", [[0, "#3a4858"], [1, "#10161e"]], 0, 0, 1, 0) +
+      squadDefs() +
       rad("amb", [[0, "#22c8ff", 0.13], [1, "#22c8ff", 0]]) +
       rad("gsh", [[0, "#000", 0.7], [1, "#000", 0]]) +
-      blur("gl", 1.6) +
-      blur("fl", 1.2) +
-      blur("lyg", 1.4) +
-      blur("ao", 1.5),
+      blur("lyg", 1.4),
     anim: { type: "breathe", amp: 0.004, speed: 1.5, pivot: [0, 44] },
-    layers: [
-      { markup: floor, anim: { type: "pulse", min: 0.65, max: 1, speed: 1.8 } },
-      { markup: place(...K, m.kael.back + m.kael.body) + place(...R, m.rook.back + m.rook.body) },
-      { markup: place(...L, m.lyra.hairBack + m.lyra.body) + place(...N, m.nova.back + m.nova.body) },
-      { markup: place(...Y, m.you.back), anim: { type: "sway", amp: 0.018, speed: 1.7, pivot: [0, -43] } },
-      { markup: place(...Y, m.you.body) },
-      {
-        markup: place(...K, m.kael.glow) + place(...R, m.rook.glow) + place(...L, m.lyra.glow) + place(...N, m.nova.glow) + place(...Y, m.you.glow),
-        anim: { type: "pulse", min: 0.6, max: 1, speed: 2.4 },
-        blend: "lighter",
-      },
-    ],
+    members: list,
+    layers,
   };
 }
 
@@ -1515,8 +1644,18 @@ export const MODELS = {
   aria: ariaModel(),
   /** Lyra: senior chrono-analyst in a long amber-trimmed coat, projecting a time dial. */
   lyra: lyraModel(),
-  /** The squad lineup: KAEL, LYRA, YOU (hero), NOVA, ROOK with class-coloured visors. */
+  /**
+   * The squad lineup: KAEL, LYRA, YOU (hero), NOVA, ROOK with class-coloured
+   * visors. A lineup of fewer is `party:lyra+you` and is built on first use
+   * (svg-art/index.js, partyModel).
+   */
   party: partyModel(),
+  /** Kael: vanguard in heavy plate behind his shield, the Supervisor's radio on his chest. */
+  kael: kaelModel(),
+  /** Nova: striker in light armour, twin blades low, motion still trailing her. */
+  nova: novaModel(),
+  /** Rook: engineer with a wrench and an arm rig, a suit schematic glowing behind him. */
+  rook: rookModel(),
   /** Voss the tactician: silver-haired officer bust with a timeline echo behind him. */
   portrait_voss: vossModel(),
   /** Miri the medic: warm bust in teal and white, med-scanner raised. */

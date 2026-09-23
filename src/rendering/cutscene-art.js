@@ -5,6 +5,16 @@
  */
 
 import { drawSvgArt } from "./svg-art/index.js";
+import { orderParty, partyMembers } from "./party.js";
+
+/** Legacy lineup silhouettes: class colour, visor and name label. */
+const LEGACY_PARTY = {
+  kael: { color: "#4488ff", visor: "#4488ff", label: "KAEL" }, // Vanguard
+  lyra: { color: "#ffaa44", visor: "#ffaa44", label: "LYRA" }, // Chrono-Analyst
+  you: { color: "#00ffcc", visor: "#00ffcc", label: "YOU" }, // Agent
+  nova: { color: "#ff4488", visor: "#ff4488", label: "NOVA" }, // Striker
+  rook: { color: "#44ff88", visor: "#44ff88", label: "ROOK" }, // Engineer
+};
 
 export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
   const cx = w / 2;
@@ -25,6 +35,10 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
     ctx.restore();
     return;
   }
+
+  // "party:lyra+you" draws the lineup of just those members.
+  const members = partyMembers(art);
+  if (members) art = "party";
 
   switch (art) {
     case "villain":
@@ -1745,7 +1759,8 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
     }
 
     case "party": {
-      // The five-person squad — silhouettes with class identifiers
+      // The squad as it stands: silhouettes with class identifiers, only for
+      // the members this frame names (see ../rendering/party.js)
       const fadeIn = Math.min(1, t / 1.2);
       ctx.globalAlpha = fadeIn;
 
@@ -1756,15 +1771,11 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
       ctx.fillStyle = partyGrad;
       ctx.fillRect(-140, -80, 280, 160);
 
-      const members = [
-        { x: -56, color: "#4488ff", visor: "#4488ff", label: "KAEL" }, // Vanguard
-        { x: -28, color: "#ffaa44", visor: "#ffaa44", label: "LYRA" }, // Chrono-Analyst
-        { x: 0, color: "#00ffcc", visor: "#00ffcc", label: "YOU" }, // Agent
-        { x: 28, color: "#ff4488", visor: "#ff4488", label: "NOVA" }, // Striker
-        { x: 56, color: "#44ff88", visor: "#44ff88", label: "ROOK" }, // Engineer
-      ];
+      // Evenly spaced, centred on whoever is there.
+      const ids = orderParty(members);
+      const lineup = ids.map((id, i) => ({ x: (i - (ids.length - 1) / 2) * 28, ...LEGACY_PARTY[id] }));
 
-      for (const m of members) {
+      for (const m of lineup) {
         ctx.save();
         ctx.translate(m.x, 0);
 
@@ -1828,6 +1839,12 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
       ctx.globalAlpha = 1;
       break;
     }
+
+    case "kael":
+    case "nova":
+    case "rook":
+      drawSquadSolo(ctx, t, art);
+      break;
 
     case "lyra": {
       // LYRA — The Chrono-Analyst, holographic data displays around her
@@ -3388,6 +3405,217 @@ export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
   }
 
   ctx.restore();
+}
+
+/**
+ * Kael, Nova or Rook alone (Legacy): an armoured trooper in the lyra frame
+ * (head near -62, boots at 38), built to their kit, with what each carries.
+ * Kael: the shield, and the Supervisor's radio blinking on his chest.
+ * Nova: twin blades low, the air behind her still catching up.
+ * Rook: wrench, antenna pack, and a suit schematic flickering beside him.
+ */
+function drawSquadSolo(ctx, t, id) {
+  const kit = {
+    kael: { color: "#4488ff", glow: "68,136,255", w: 15, pad: 6 },
+    nova: { color: "#ff4488", glow: "255,68,136", w: 10, pad: 3 },
+    rook: { color: "#44ff88", glow: "68,255,136", w: 12.5, pad: 4 },
+  }[id];
+  const { color, glow, w, pad } = kit;
+  const fadeIn = Math.min(1, t / 1.0);
+  ctx.globalAlpha = fadeIn;
+
+  const aura = ctx.createRadialGradient(0, -10, 10, 0, -10, 85);
+  aura.addColorStop(0, `rgba(${glow},0.13)`);
+  aura.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(-100, -95, 200, 170);
+
+  // Behind the figure.
+  if (id === "nova") {
+    ctx.strokeStyle = `rgba(${glow},0.45)`;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 5; i++) {
+      const y = -46 + i * 17;
+      const x = -58 + Math.sin(t * 3.2 + i) * 3;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 22 + (i % 2) * 8, y - 1);
+      ctx.stroke();
+    }
+  } else if (id === "rook") {
+    ctx.save();
+    ctx.translate(-40, -38);
+    ctx.rotate(-0.1);
+    const a = 0.5 + Math.sin(t * 1.7) * 0.2;
+    ctx.fillStyle = `rgba(68,255,136,${0.08 * a + 0.04})`;
+    ctx.strokeStyle = `rgba(106,255,164,${0.6 * a})`;
+    ctx.lineWidth = 0.6;
+    ctx.fillRect(-14, -18, 28, 38);
+    ctx.strokeRect(-14, -18, 28, 38);
+    ctx.strokeStyle = `rgba(170,255,200,${0.8 * a})`;
+    ctx.beginPath();
+    ctx.arc(0, -8, 3.5, 0, Math.PI * 2);
+    ctx.moveTo(-6, -3);
+    ctx.lineTo(6, -3);
+    ctx.lineTo(5, 8);
+    ctx.lineTo(-5, 8);
+    ctx.closePath();
+    ctx.moveTo(-4, 8);
+    ctx.lineTo(-5, 17);
+    ctx.moveTo(4, 8);
+    ctx.lineTo(5, 17);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255,204,68,${a})`;
+    ctx.setLineDash([2, 1]);
+    ctx.beginPath();
+    ctx.arc(0, 2, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    // Antenna off the pack.
+    ctx.strokeStyle = "#8898a8";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-9, -40);
+    ctx.lineTo(-12, -72);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(68,255,136,${0.6 + Math.sin(t * 4) * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(-12, -72, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Legs and boots.
+  ctx.fillStyle = "#1a2430";
+  ctx.fillRect(-w * 0.45, 8, w * 0.38, 26);
+  ctx.fillRect(w * 0.07, 8, w * 0.38, 26);
+  ctx.fillStyle = "#3a4a5c";
+  ctx.fillRect(-w * 0.48, 14, w * 0.42, 8);
+  ctx.fillRect(w * 0.06, 14, w * 0.42, 8);
+  ctx.fillStyle = "#0e1218";
+  ctx.fillRect(-w * 0.5, 32, w * 0.46, 6);
+  ctx.fillRect(w * 0.04, 32, w * 0.46, 6);
+  ctx.fillStyle = color;
+  ctx.fillRect(-w * 0.5, 32, w * 0.46, 1);
+  ctx.fillRect(w * 0.04, 32, w * 0.46, 1);
+
+  // Torso: undersuit, chest plate, belt.
+  ctx.fillStyle = "#1a2430";
+  ctx.fillRect(-w * 0.55, -40, w * 1.1, 50);
+  ctx.fillStyle = "#4a6078";
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.62, -40);
+  ctx.lineTo(w * 0.62, -40);
+  ctx.lineTo(w * 0.52, -14);
+  ctx.lineTo(-w * 0.52, -14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#161e28";
+  ctx.fillRect(-w * 0.58, 4, w * 1.16, 4);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-2, -33);
+  ctx.lineTo(2, -33);
+  ctx.lineTo(0, -29);
+  ctx.closePath();
+  ctx.fill();
+
+  // Arms.
+  ctx.fillStyle = "#2a3a4c";
+  ctx.fillRect(-w * 0.62 - 5, -38, 5, 34);
+  ctx.fillRect(w * 0.62, -38, 5, 34);
+  ctx.fillStyle = color;
+  ctx.fillRect(-w * 0.62 - 5, -18, 5, 1);
+  ctx.fillRect(w * 0.62, -18, 5, 1);
+
+  // Pauldrons.
+  ctx.fillStyle = "#5a7088";
+  for (const s of id === "nova" ? [-1] : [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(s * (w * 0.62 + 1), -38, 4 + pad * 0.6, 3.4 + pad * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Helmet, visor.
+  ctx.fillStyle = "#50667e";
+  ctx.beginPath();
+  ctx.arc(0, -52, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#03070c";
+  ctx.fillRect(-7, -55, 14, 5);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.fillRect(-6, -54, 12, 2.4);
+  ctx.shadowBlur = 0;
+
+  // In hand, and on the chest.
+  if (id === "kael") {
+    ctx.fillStyle = "#4a6078";
+    ctx.beginPath();
+    ctx.moveTo(-30, -40);
+    ctx.quadraticCurveTo(-20, -44, -12, -40);
+    ctx.lineTo(-12, 6);
+    ctx.quadraticCurveTo(-18, 16, -21, 18);
+    ctx.quadraticCurveTo(-26, 16, -30, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-21, -36);
+    ctx.lineTo(-21, 12);
+    ctx.moveTo(-26, -22);
+    ctx.lineTo(-21, -17);
+    ctx.lineTo(-16, -22);
+    ctx.stroke();
+    // The Supervisor's radio.
+    ctx.fillStyle = "#1c232c";
+    ctx.fillRect(4, -38, 5, 9);
+    ctx.strokeStyle = "#6a7888";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(6.5, -38);
+    ctx.lineTo(6.5, -45);
+    ctx.stroke();
+    ctx.fillStyle = Math.sin(t * 5) > 0.3 ? "#ff3a2a" : "#5a1410";
+    ctx.beginPath();
+    ctx.arc(6.5, -45.5, 1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === "nova") {
+    ctx.strokeStyle = "#ffd2e4";
+    ctx.lineWidth = 1.4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 5;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * (w * 0.62 + 2.5), -4);
+      ctx.lineTo(s * (w * 0.62 + 12), 16);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.strokeStyle = "#9fb2c4";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.62 - 2.5, -4);
+    ctx.lineTo(-w * 0.62 - 4, 14);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(-w * 0.62 - 4, 16, 2.4, 0.3, Math.PI * 1.7);
+    ctx.stroke();
+  }
+
+  // Ground ring.
+  ctx.strokeStyle = `rgba(${glow},${0.5 + Math.sin(t * 2) * 0.15})`;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(0, 39, 18, 2.6, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.globalAlpha = 1;
 }
 
 export function drawParadoxAbomination(ctx, t, phase = 1) {

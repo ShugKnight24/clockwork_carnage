@@ -3,6 +3,7 @@ import { drawCutsceneArt } from "../src/rendering/cutscene-art.js";
 import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
 import { voiceKeyFor } from "../src/audio/voice.js";
+import { partyKey } from "../src/rendering/party.js";
 import {
   CS_FONT,
   INK,
@@ -42,6 +43,11 @@ function legacyFrame(frame) {
   return f;
 }
 
+// A party frame draws only the members it names (`party: ["lyra", "you"]`),
+// or, naming nobody, whoever is with you in this slot; both renderers read
+// the member set from the art key (src/rendering/party.js).
+const _partyFrames = new WeakMap();
+
 // Flipbook cover: closed idle before it swings open on its own, then the swing.
 const FB_COVER_IDLE_MS = 1200;
 const FB_COVER_OPEN_MS = 1100;
@@ -56,9 +62,11 @@ export class CutsceneEngine {
     getSettings,
     getTextLayer,
     getVoiceProfile,
+    getParty,
   }) {
     this.audio = audio;
     this.getVoiceProfile = getVoiceProfile || (() => null);
+    this.getParty = getParty || (() => null);
     this.getKeys = getKeys;
     this.getTouchControls = getTouchControls;
     this.isTouchDevice = isTouchDevice;
@@ -459,6 +467,26 @@ export class CutsceneEngine {
     }
   }
 
+  /** The art key a frame draws: a party frame's key carries its members. */
+  _artKey(frame) {
+    if (frame?.art !== "party") return frame?.art;
+    return partyKey(frame.party ?? this.getParty() ?? undefined);
+  }
+
+  /** The frame as drawn: Legacy stand-ins, and a party frame's lineup. */
+  _resolveFrame(raw) {
+    const frame = legacyFrame(raw);
+    if (frame?.art !== "party") return frame;
+    const art = this._artKey(frame);
+    if (art === "party") return frame;
+    let f = _partyFrames.get(frame);
+    if (!f || f.art !== art) {
+      f = { ...frame, art };
+      _partyFrames.set(frame, f);
+    }
+    return f;
+  }
+
   _resolve(text) {
     return String(text ?? "").replace(/\{AGENT\}/g, this.getPlayerName());
   }
@@ -476,7 +504,7 @@ export class CutsceneEngine {
   _renderFrame(ctx, w, h) {
     const cs = this.cutscene;
     this._screenH = h;
-    const frame = legacyFrame(cs.script[cs.frame]);
+    const frame = this._resolveFrame(cs.script[cs.frame]);
     if (!frame) return;
 
     if (!cs.svgWarmed) {
@@ -484,7 +512,7 @@ export class CutsceneEngine {
       const arts = new Set();
       const bgs = new Set();
       const collect = (f) => {
-        if (f.art) arts.add(f.art);
+        if (f.art) arts.add(this._artKey(f));
         if (f.bg) bgs.add(f.bg);
       };
       for (const f of cs.script) {
