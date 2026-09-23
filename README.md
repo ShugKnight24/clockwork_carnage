@@ -13,7 +13,7 @@ Then open the URL Vite prints. A production build is committed to `dist/`, so yo
 
 ## Features
 
-**Campaign Mode** — 3-act story through the 9 levels of Chronos Station. Each act revisits the station with a new enemy roster, new briefings and a stronger form of the Paradox Lord. Cutscenes, a comic book origin sequence, and ARIA, your AI companion, who provides tactical callouts, idle chatter, and personality.
+**Campaign Mode** — a 4-act story across 29 levels: The Fall, The Gathering, The Hunt and The Sacrifice. You recruit one ally per chapter, learn their Chronos powers, face the Hound and three forms of the Paradox Lord. Cutscenes, a comic book origin sequence, and ARIA, your AI companion, who provides tactical callouts, idle chatter, and personality.
 
 **Arena Mode** — Endless wave survival with 4 difficulty settings, 18 upgrades, kill streaks (DOUBLE KILL → GODLIKE), slow-mo last kills, and stats tracking.
 
