@@ -305,10 +305,16 @@ export class Game {
       // settings. The two branches are keyed off the game state, so only one
       // of them can ever run for a given move.
       if (this.state === GameState.BUILDER && this.builder?.invOpen) {
-        const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
+        // The Forge HUD is drawn on the GAME canvas, which render-pipeline
+        // sizes with budgetedRenderSize x stableScale — smaller than hudW on a
+        // large window or under adaptive quality. Hit-testing must use that
+        // same space, not the hud canvas's CSS pixels, or the cursor and the
+        // grid disagree and the screen is unusable. Both canvases are
+        // displayed at the same CSS size, so the rect is the bridge.
+        const rect = this.canvas.getBoundingClientRect();
         this.builder.handleMouseMove(
-          (e.clientX - rect.left) * (this.hudW / rect.width),
-          (e.clientY - rect.top) * (this.hudH / rect.height),
+          (e.clientX - rect.left) * (this.canvas.width / rect.width),
+          (e.clientY - rect.top) * (this.canvas.height / rect.height),
         );
       }
       if (this.state !== GameState.SETTINGS) {

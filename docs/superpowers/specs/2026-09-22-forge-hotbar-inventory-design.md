@@ -101,11 +101,20 @@ settings geometry as a real, shipped bug.
 
 ### 3. Coordinates
 
-The screen is drawn in `hudW`/`hudH` CSS pixels, so hit-testing must be in the
-same space. Cursor position comes from a `mousemove` listener converting
-`clientX/Y` through `getBoundingClientRect()` exactly as `js/game.js:309` does
-for settings — **not** from the DPR-scaled backing store, which is the bug that
-made every tap land at 2x on retina.
+Hit-testing must happen in the same space the screen is drawn in. For the
+settings screen that is `hudW`/`hudH` CSS pixels. **For the Forge HUD it is
+not**: `render-pipeline.js` calls `builder.render(ctx, w, h)` with the *game*
+canvas dimensions, which are `budgetedRenderSize` times the adaptive
+`stableScale` and so are strictly smaller than `hudW` on a large window or
+under load. Measured at 2400x1350: draw space 1789x1006 against a CSS space of
+2400x1350, putting a cell's true position ~290px from where a `hudW`-based
+conversion would look for it.
+
+So the cursor is converted through the game canvas's own rect and backing size.
+Both canvases are displayed at the same CSS size, so the rect is the bridge.
+The principle is "hit-test in the space you draw in", and the DPR-scaled
+backing store remains wrong for the *hud* canvas, which is where that bug bit
+before.
 
 The Forge gains `handleMouseMove(x, y)` taking HUD-space coordinates. It is
 only meaningful while the inventory is open; during play the existing

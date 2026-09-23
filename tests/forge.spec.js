@@ -893,4 +893,50 @@ test.describe("Voxel Forge", () => {
     });
     expect(rows).toContain("anvil");
   });
+
+  test("survival: the inventory grid is clickable where it is actually drawn", async ({ page }) => {
+    test.setTimeout(90_000);
+    // A large window makes the game canvas smaller than the CSS size, which is
+    // exactly when a hudW-based hit test drifts. At 1280x720 the two spaces
+    // coincide and this test cannot tell a correct fix from a broken one.
+    await page.setViewportSize({ width: 2400, height: 1350 });
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+
+    await page.keyboard.press("Space"); // dismiss onboarding
+    await page.keyboard.press("KeyM");  // into survival
+    await page.evaluate(() => {
+      window.ccDebug.game.builder.survival.inventory.slots[12] = { item: "stone", n: 20 };
+    });
+    await page.keyboard.press("KeyI");
+
+    const info = await page.evaluate(async () => {
+      const g = window.ccDebug.game, b = g.builder;
+      const { inventoryLayout } = await import("/js/layout.js");
+      const l = inventoryLayout(b.hudSize.w, b.hudSize.h, b.survival.inventory.slots.length);
+      const c = l.cells.find((x) => x.index === 12);
+      const rect = g.canvas.getBoundingClientRect();
+      return {
+        spacesDiffer: b.hudSize.w !== g.hudW,
+        x: rect.left + (c.x + c.w / 2) * (rect.width / g.canvas.width),
+        y: rect.top + (c.y + c.h / 2) * (rect.height / g.canvas.height),
+      };
+    });
+    // If this ever goes false the test has stopped discriminating and must be revisited.
+    expect(info.spacesDiffer).toBe(true);
+
+    await page.mouse.move(info.x, info.y);
+    await page.mouse.down();
+    const picked = await page.evaluate(() => window.ccDebug.game.builder.carried);
+    await page.mouse.up();
+    expect(picked).toEqual({ item: "stone", n: 20 });
+
+    const dropped = await page.evaluate(() => {
+      const inv = window.ccDebug.game.builder.survival.inventory;
+      return { carried: window.ccDebug.game.builder.carried, at12: inv.slots[12] };
+    });
+    expect(dropped.carried).toBe(null);
+    expect(dropped.at12).toEqual({ item: "stone", n: 20 });
+  });
 });

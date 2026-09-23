@@ -17,7 +17,7 @@
 - **Tasks 1–2 are a pure refactor. No behaviour may change.** The 15 Forge e2e tests are the proof; if any fails, the move is wrong, not the test.
 - `js/forge.js` must be SMALLER than 2046 lines when this plan is done. Report the count at the end of every task that touches it.
 - Creative keeps its unlimited palette and its current in-play hotbar rendering.
-- Hit-testing happens in `hudW`/`hudH` CSS-pixel space, never the DPR-scaled backing store — the project shipped that bug once and every tap landed at 2x on retina.
+- Hit-test in the space you draw in. The Forge HUD is drawn on the GAME canvas (`budgetedRenderSize` x `stableScale`), NOT in `hudW`/`hudH`, so the cursor is converted through the game canvas's rect and backing size. Using `hudW` here puts a cell ~290px from where the player clicks at 2400x1350.
 - Geometry lives in `js/layout.js` only. No second copy anywhere; a duplicated copy of the settings geometry was a live bug in this repo.
 - `src/ui/forge-hud.js` and `src/ui/forge-inventory.js` draw only. They must not mutate world or session state.
 - Baseline to hold: 1028 unit tests across 65 files, 15 Forge e2e. Run `npm run test:unit` before every commit.
