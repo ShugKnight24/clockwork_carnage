@@ -10,8 +10,10 @@ archive/
 # Generated changelog reports
 .changelog/
 
-# Dev scripts
-scripts/
+# Dev scripts. The brand generator is the exception: assets/brand is built
+# from it and can only be regenerated with it.
+scripts/*
+!scripts/brand/
 
 # Playwright / automation engine — output only. The specs, the debug bridge,
 # the config and package.json are tracked so a clone can install and run them.

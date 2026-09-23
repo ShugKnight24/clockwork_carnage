@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t d">
+<title id="t">Clockwork Carnage</title><desc id="d">Favicon. The gear-C mark: a gear broken open into a C, its second hand stopped at eleven seconds. Legacy style, neon line art on the void, like the original terminal HUD.</desc>
+<defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="rift" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter>
+    <radialGradient id="bgL" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#0d1a38"/><stop offset="1" stop-color="#05060c"/></radialGradient></defs>
+<rect width="64" height="64" rx="7.68" fill="url(#bgL)"/><g transform="translate(32 32) scale(.6)">
+      <g fill="none"><line x1="0" y1="0" x2="0" y2="-21" stroke="#05060c" stroke-width="7" stroke-linecap="round"/><line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#05060c" stroke-width="7" stroke-linecap="round"/></g>
+      <g filter="url(#glow)" fill="none" stroke-linejoin="round">
+      <path d="M29.94 23.4L28.11 25.57L25.57 28.11L26.42 38.87L8.81 46.17L1.79 37.96L-1.79 37.96L-8.81 46.17L-26.42 38.87L-25.57 28.11L-28.11 25.57L-38.87 26.42L-46.17 8.81L-37.96 1.79L-37.96 -1.79L-46.17 -8.81L-38.87 -26.42L-28.11 -25.57L-25.57 -28.11L-26.42 -38.87L-8.81 -46.17L-1.79 -37.96L1.79 -37.96L8.81 -46.17L26.42 -38.87L25.57 -28.11L28.11 -25.57L29.94 -23.4L18.91 -14.78A24 24 0 1 0 18.91 14.78Z" stroke="#22e6ff" stroke-width="4"/>
+      <line x1="0" y1="0" x2="0" y2="-21" stroke="#00ffcc" stroke-width="5" stroke-linecap="round"/>
+      <line x1="-8.22" y1="3.66" x2="45.68" y2="-20.34" stroke="#ff2a4a" stroke-width="4" stroke-linecap="round"/>
+      <circle r="5" fill="#00ffcc" stroke="none"/>
+    </g></g>
+</svg>
