@@ -136,6 +136,71 @@ export const LEVEL_ENVS = {
     energy: "#ff4df0", energyHot: "#ffd6fb",
     fogNear: [12, 2, 10], fogFar: [86, 8, 40],
   },
+  // ── Act III, The Hunt: the violet-crimson base, one place at a time ──
+  rewritten_wing: {
+    // Act I's wing under his violet: the old cyan survives in the rifts.
+    name: "The Rewritten Wing",
+    salt: 31,
+    steel: { h: -38, s: 0.8, l: 1.05, lift: 0.03 },
+    accent: "#b06bff", accentDeep: "#351068", lamp: "#e6dcff",
+    rift: "#6fe8ff",
+    fogNear: [13, 9, 24], fogFar: [48, 36, 88],
+  },
+  server_siege: {
+    // Cold rack light, and the crimson of racks burning.
+    name: "Server Farm Siege",
+    salt: 32,
+    steel: { h: -70, s: 0.5, l: 0.9, lift: 0.02 },
+    accent: "#ff4d6a", accentDeep: "#5e0a1c", lamp: "#d6e8ff",
+    energy: "#ff7a3a", energyHot: "#ffd2b0",
+    fogNear: [8, 9, 18], fogFar: [34, 40, 72],
+  },
+  reactor_overload: {
+    // Violet steel in a furnace: the air is orange with heat.
+    name: "Reactor Overload",
+    salt: 33,
+    steel: { h: 22, s: 1.3, l: 0.95, lift: 0.03 },
+    accent: "#ff5a1e", accentDeep: "#6e1806", lamp: "#ffc2a0",
+    energy: "#ff2a1e", energyHot: "#ffd0b8",
+    fogNear: [44, 10, 10], fogFar: [128, 38, 26],
+  },
+  lords_lab: {
+    // Monitor light: thousands of takes, all glowing the same green.
+    name: "The Lord's Laboratory",
+    salt: 34,
+    steel: { h: -150, s: 0.45, l: 0.95, lift: 0.03 },
+    accent: "#8cffc8", accentDeep: "#0e5a3c", lamp: "#e8fff0",
+    energy: "#ff2a4a", energyHot: "#ffc6d6",
+    fogNear: [9, 14, 15], fogFar: [36, 56, 58],
+  },
+  archive: {
+    // Paper-pale lilac, like light through old film.
+    name: "The Archive of Rewinds",
+    salt: 35,
+    steel: { h: -20, s: 0.55, l: 1.25, lift: 0.08 },
+    accent: "#d6c6ff", accentDeep: "#3c2a78", lamp: "#f4eeff",
+    energy: "#b36bff", energyHot: "#f2d6ff",
+    fogNear: [20, 16, 30], fogFar: [76, 64, 104],
+  },
+  engine: {
+    // The frozen instant: gold light that has stopped moving.
+    name: "The Chronos Engine",
+    salt: 36,
+    steel: { h: 50, s: 0.7, l: 1.05, lift: 0.04 },
+    accent: "#ffd36a", accentDeep: "#6a4a0a", lamp: "#fff2c8",
+    energy: "#ffb347", energyHot: "#fff0cc",
+    rift: "#ffe9a8",
+    fogNear: [22, 15, 8], fogFar: [92, 70, 40],
+  },
+  core_broken: {
+    // The Core again, darker, the rift through every crack.
+    name: "The Paradox Core: Broken Rings",
+    salt: 37,
+    steel: { h: -24, s: 1.5, l: 0.45, lift: -0.02 },
+    accent: "#ff1f5a", accentDeep: "#4a000e", lamp: "#ffa6c0",
+    energy: "#ff4df0", energyHot: "#ffd6fb",
+    fogNear: [16, 3, 14], fogFar: [104, 10, 58],
+  },
 };
 
 const clamp255 = (v) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));

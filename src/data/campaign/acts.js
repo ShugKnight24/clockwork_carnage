@@ -236,6 +236,9 @@ export const ACTS = [
     id: 3,
     title: "THE HUNT",
     palette: 3,
+    // Today's Act 2 roster plus wardens, and the types the Act III levels
+    // name in the spec (phase 5): summoners (III-3, III-4), phantoms (III-4),
+    // echo drones and rift leapers (III-5), sentinels (III-6).
     roster: [
       "corruptCop",
       "henchman",
@@ -245,15 +248,15 @@ export const ACTS = [
       "temporalEngineer",
       "shieldCommander",
       "timeWarden",
+      "temporalSummoner",
+      "phantom",
+      "echoDrone",
+      "riftLeaper",
+      "sentinel",
     ],
     substitutes: {
       drone: "corruptCop",
       glitchling: "phaseStalker",
-      phantom: "henchman",
-      sentinel: "shieldCommander",
-      riftLeaper: "phaseStalker",
-      temporalSummoner: "temporalEngineer",
-      echoDrone: "chronoBomber",
     },
     scale: 1.4,
     boss: {
@@ -267,16 +270,32 @@ export const ACTS = [
     hunters: ["riftLeaper", "echoDrone", "timeWarden"],
     intro: ["hunt_transition_fb", "hunt_intro", "act2_level2"],
     outro: ["act2_victory"],
-    // Each level stands on the station map its remix will start from; the
-    // Archive and the Engine borrow Research and the Nexus.
+    // Act III's own maps (src/data/levels/act3-maps.js): five remixes of the
+    // Act I places they rewrite, and the Archive and the Engine. Each entry
+    // is built on its source station map's entry and then names its own map,
+    // env, turn and seed.
     levels: levels([
-      level("checkpoint", null, [...ALL]),
-      level("server_farm", ["act2_level5"], [...ALL]),
-      level("reactor", ["act2_level6"], [...ALL]),
-      level("voss_lab", ["act2_level7", "voss_confrontation", "act2_level3"], [...ALL]),
-      level("research", ["archive_briefing"], [...ALL]),
-      level("nexus", ["engine_briefing"], [...ALL]),
-      level("core", ["level3_briefing", "act2_level9"], [...ALL]),
+      // III-1 The Rewritten Wing: Checkpoint and Research, merged. Lyra leads.
+      { ...level("checkpoint", null, [...ALL], { setPiece: "rewritten_walls" }),
+        map: "rewritten_wing", env: "rewritten_wing", rotation: 270, seed: 31001 },
+      // III-2 Server Farm Siege: burn the racks. Rook leads.
+      { ...level("server_farm", ["act2_level5"], [...ALL], { setPiece: "rack_burn" }),
+        map: "server_siege", env: "server_siege", rotation: 90, seed: 31002 },
+      // III-3 Reactor Overload: valves against the heat clock. Kael leads.
+      { ...level("reactor", ["act2_level6"], [...ALL], { setPiece: "coolant_valves" }),
+        map: "reactor_overload", env: "reactor_overload", rotation: 180, seed: 31003 },
+      // III-4 The Lord's Laboratory: the one surviving take.
+      { ...level("voss_lab", ["act2_level7", "voss_confrontation", "act2_level3"], [...ALL], { setPiece: "surviving_take" }),
+        map: "lords_lab", env: "lords_lab", rotation: 0, seed: 31004 },
+      // III-5 The Archive of Rewinds (new).
+      { ...level("research", ["archive_briefing"], [...ALL], { setPiece: "archive_takes" }),
+        map: "archive", env: "archive", rotation: 0, seed: 31005 },
+      // III-6 The Chronos Engine (new).
+      { ...level("nexus", ["engine_briefing"], [...ALL], { setPiece: "engine_stasis" }),
+        map: "engine", env: "engine", rotation: 90, seed: 31006 },
+      // III-7 The Paradox Core, second visit: broken rings, Form 2.
+      { ...level("core", ["level3_briefing", "act2_level9"], [...ALL]),
+        map: "core_broken", env: "core_broken", rotation: 0, seed: 31007 },
     ]),
   },
   {

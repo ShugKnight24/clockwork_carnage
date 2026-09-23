@@ -181,10 +181,17 @@ describe("Acts III and IV", () => {
     expect(getAct(4).boss.squadPool).toBeNull();
   });
 
-  it("borrows Research and the Nexus for the Archive and the Engine", () => {
+  it("stands Act III on its own maps: five remixes, the Archive and the Engine", () => {
     expect(getAct(3).levels.map((l) => l.map)).toEqual([
-      "checkpoint", "server_farm", "reactor", "voss_lab", "research", "nexus", "core",
+      "rewritten_wing", "server_siege", "reactor_overload", "lords_lab", "archive", "engine", "core_broken",
     ]);
+    // Each map has its own look, turn and cover seed.
+    expect(getAct(3).levels.map((l) => l.env)).toEqual(getAct(3).levels.map((l) => l.map));
+    const seeds = getAct(3).levels.map((l) => l.seed);
+    expect(new Set(seeds).size).toBe(seeds.length);
+  });
+
+  it("keeps Act IV on its placeholder maps", () => {
     expect(getAct(4).levels.map((l) => l.map)).toEqual([
       "entry", "server_farm", "containment", "nexus", "research", "nexus", "core",
     ]);
@@ -227,7 +234,8 @@ describe("ACTS against the MAPS registry", async () => {
   it("lists each distinct campaign map once, all nine station maps in play", () => {
     const maps = campaignMaps();
     expect(new Set(maps).size).toBe(maps.length);
-    expect(maps).toHaveLength(9);
+    const station = ["entry", "checkpoint", "research", "containment", "server_farm", "reactor", "voss_lab", "nexus", "core"];
+    for (const id of station) expect(maps.map((m) => m.name), id).toContain(MAPS[id].name);
     expect(maps.map((m) => m.name)).toContain("The Paradox Core");
   });
 

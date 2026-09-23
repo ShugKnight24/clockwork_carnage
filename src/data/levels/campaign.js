@@ -3,12 +3,13 @@
 // 7 = boss wall, 8 = glass, 9 = temporal rift wall
 
 import { STATION_MAPS } from "./station-maps.js";
+import { ACT3_MAPS } from "./act3-maps.js";
 import { rotateLevel, varyCover } from "./map-helpers.js";
 import { SeededRNG } from "../../utils/seeded-rng.js";
 import { ACTS, getActLevel } from "../campaign/acts.js";
 
 /** Every campaign map as authored, keyed by the id a level entry names. */
-export const MAPS = { ...STATION_MAPS };
+export const MAPS = { ...STATION_MAPS, ...ACT3_MAPS };
 
 const prepared = new Map();
 

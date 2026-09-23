@@ -25,6 +25,7 @@
  */
 import { MAPS } from "../levels/campaign.js";
 import { rotatePoint, rotateCell } from "../levels/map-helpers.js";
+import { ACT3_SET_PIECES } from "../levels/act3-maps.js";
 
 /** Rift wall: the teach seals and the collapsed centre of the Evac Shafts. */
 export const SEAL_TILE = 9;
@@ -199,6 +200,9 @@ export const SET_PIECES = {
       },
     ],
   },
+
+  // Act III, The Hunt: authored beside their maps in act3-maps.js.
+  ...ACT3_SET_PIECES,
 };
 
 // ── Rotation ─────────────────────────────────────────────────────────────────
@@ -219,6 +223,9 @@ function rotateHazard(hz, w, h, d) {
   if (hz.rect) out.rect = rotRect(hz.rect, w, h, d);
   if (hz.trigger) out.trigger = rotRect(hz.trigger, w, h, d);
   if (hz.steps) out.steps = hz.steps.map((s) => rotCells(s, w, h, d));
+  if (hz.cells) out.cells = rotCells(hz.cells, w, h, d);
+  if (hz.release) out.release = rotRect(hz.release, w, h, d);
+  if (hz.figures) out.figures = hz.figures.map((f) => ({ ...rotPt(f, w, h, d), facing: (f.facing ?? 0) + rad }));
   if (hz.x != null) Object.assign(out, rotPt({ x: hz.x, y: hz.y }, w, h, d));
   for (const k of ["a", "b", "seamA", "seamB", "out", "back"]) if (hz[k]) out[k] = rotPt(hz[k], w, h, d);
   if (hz.angle != null) out.angle = hz.angle + rad;
@@ -240,6 +247,19 @@ export function rotateSetPiece(piece, w, h, deg) {
   if (piece.cache) out.cache = rotPt(piece.cache, w, h, d);
   if (piece.enter) out.enter = { ...piece.enter, rect: rotRect(piece.enter.rect, w, h, d) };
   if (piece.scripted) out.scripted = piece.scripted.map((s) => ({ ...s, rect: rotRect(s.rect, w, h, d) }));
+  if (piece.objective) {
+    const o = piece.objective;
+    out.objective = {
+      ...o,
+      stations: o.stations.map((s) => ({
+        ...s,
+        rect: rotRect(s.rect, w, h, d),
+        ...(s.burn ? { burn: rotCells(s.burn, w, h, d) } : {}),
+      })),
+      ...(o.seal ? { seal: rotCells(o.seal, w, h, d) } : {}),
+      ...(o.heatClock?.trigger ? { heatClock: { ...o.heatClock, trigger: rotRect(o.heatClock.trigger, w, h, d) } } : {}),
+    };
+  }
   if (piece.teach) {
     const t = piece.teach;
     out.teach = {

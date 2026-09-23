@@ -53,6 +53,15 @@ const CATEGORY_EMOTIONS = {
   stasisRoom: "sad",
   loopRepeats: "curious",
   loopBroken: "excited",
+  // Act III's set pieces and Form 2.
+  rewriteWalls: "curious",
+  reactorHeat: "urgent",
+  reactorHeatHigh: "urgent",
+  reactorOverload: "afraid",
+  archiveBlast: "worried",
+  survivingTake: "sad",
+  stasisBreaks: "urgent",
+  replayVolley: "urgent",
 };
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 import {

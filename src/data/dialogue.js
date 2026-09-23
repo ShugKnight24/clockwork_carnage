@@ -496,4 +496,31 @@ export const ARIA_COMMS = {
   loopBroken: [
     "Seam's broken. We're out of the loop. Don't look back, it'll try again.",
   ],
+  // ── Act III, The Hunt: set pieces and Form 2 ──
+  rewriteWalls: [
+    "Those walls weren't here last week. They close on his clock. Shift, and you'll see the rhythm.",
+    "The architecture's moving. One way's always open. Find it before you run at it.",
+  ],
+  reactorHeat: [
+    "Core heat's climbing. Valves, in order. Every shift buys you time on that clock.",
+  ],
+  reactorHeatHigh: [
+    "Heat's past three quarters. Next valve, now, or shift and slow the whole reactor down.",
+  ],
+  reactorOverload: [
+    "Overload! That was a pulse, not the big one. Get to the next valve before it builds again.",
+  ],
+  archiveBlast: [
+    "That room goes off every eleven seconds. Same blast, same instant. Count it, or shift and watch for it.",
+  ],
+  survivingTake: [
+    "One take where the station survives. One. And the figure in it is walking in alone.",
+  ],
+  stasisBreaks: [
+    "The field's broken. Everything it was holding just remembered where it was going. Behind you!",
+  ],
+  replayVolley: [
+    "He's replaying his last volley. Same rounds, same places. Watch the marks.",
+    "Ghost rounds. They fly where he fired them, not where you are. Move off the lines.",
+  ],
 };

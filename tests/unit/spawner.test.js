@@ -459,10 +459,10 @@ describe("applyActEnemyRoster", () => {
   });
 
   it("substitutes out-of-roster enemies for act 3", () => {
-    const entities = [makeEnemy("drone"), makeEnemy("phantom")];
+    const entities = [makeEnemy("drone"), makeEnemy("glitchling")];
     applyActEnemyRoster(entities, 3, diff);
     expect(entities[0].enemyType).toBe("corruptCop");
-    expect(entities[1].enemyType).toBe("henchman");
+    expect(entities[1].enemyType).toBe("phaseStalker");
   });
 
   it("substitutes out-of-roster enemies for act 4", () => {
