@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   GEN_VERSION, BIOMES, MAX_TOP, generateColumn, sampleColumn, fillColumn, surfaceHeight, findSpawn, biomeAt,
 } from "../../src/world/column-gen.js";
+import { generateWorld } from "../../src/world/world-gen.js";
 import { AIR, BEDROCK } from "../../src/world/blocks.js";
 
 const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
@@ -241,7 +242,7 @@ describe("findSpawn", () => {
   });
 });
 
-describe("generator v1 determinism rules", () => {
+describe("generator v1 is frozen", () => {
   it("uses only math that every engine computes to the same bits", () => {
     const src = readFileSync(new URL("../../src/world/column-gen.js", import.meta.url), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, ""); // code only, not the comments that name the banned calls
@@ -252,5 +253,45 @@ describe("generator v1 determinism rules", () => {
 
   it("is version 1", () => {
     expect(GEN_VERSION).toBe(1);
+  });
+
+  // Recorded when v1 was frozen (2026-09-22), and identical under V8 (node)
+  // and JavaScriptCore (bun). These never change: a failure here means
+  // generator v1's output moved, which would strand every saved edit on
+  // shifted terrain. Put new terrain in a v2 path instead; never record anew.
+  // [seed, cx, cy, sha256 of the column's 16,384 bytes]
+  const GOLDEN = [
+    [7, 0, 0, "a3e27935c9727bdd8e2f244f2ce72d99153bec5270917e28ce9b7699b8bd03d0"],
+    [7, 4, 4, "3c0d43a053792e6bc22b27584899acc6988d9a6a9fa5962f9410ae79b0bac431"],
+    [7, -1, -1, "2bd289f7cc50ae1946b9f8b8763f477c983629517d0e55943c8da50d0be0dd2b"],
+    [7, -37, 12, "aa4b77b1ea097c53ef0874ce4ed7efae92b7d9dcf8915cd485a8443d144da353"],
+    [7, 6250, -6250, "3d78b82f43bf05946e9486785b7f66206216756f2bc06b418a8f916f3248f7c0"],
+    [7, 65535, -65536, "d138d164224a0e3740140b9c1efc67749015d171f29087a927882875f9b93ca8"],
+    [1234567, 0, 0, "e88f6894351fa80e782d265b38199823d80007a75d816744aad447a1cbf79e47"],
+    [1234567, 4, 4, "63c4be9269ac5d9f4eaebb744c4424d1db3d6bc1ed29d8fd50cb8ed7fd9ce47a"],
+    [1234567, -1, -1, "ff2de73d8093e1c682d5e0e761dbd0fc3de46c398a4d004707f3407d228f8029"],
+    [1234567, -37, 12, "0ceaf20bdf2540991430a9c48a576b154935cf82e089fe6311388afba5952c05"],
+    [1234567, 6250, -6250, "fb8dc7c644bcc2295bec5de3ba81eecbd37edfbda7722eced089e874f34c0d60"],
+    [1234567, 65535, -65536, "62ddfa912b2c726cf9ba8b4d3c384a848b22c09aaeedf221c0af584d11d1a248"],
+    [3735928559, 0, 0, "d3fbc6b6c0ff9c2910809ac52d3dd5199455c861b5c1af5564dde0c70f8c7a6b"],
+    [3735928559, 4, 4, "35f3068933d34368cbaebc1c5dc2d6074c05bbe88eb68a4adf8515da185f7811"],
+    [3735928559, -1, -1, "f88ab152cd35c3dce4d9ca543d27c68505ffe742af5a908d39f9b5a1afeb88d6"],
+    [3735928559, -37, 12, "aaaf0cfb4a82649420b6723b3d5cc1680621277b8ecb2d4b365ddec8f96c0e9e"],
+    [3735928559, 6250, -6250, "2bb5c7016ca6adf0fd9ce7b018cd88de1265b5b3e04042568274312269897a07"],
+    [3735928559, 65535, -65536, "4e97f4ee450aa5bf99312b55573cb183a98f4ca65e0a62be4476521703ddf17e"],
+    [7, -9, -40, "5eafe37950ee4320a6eb3f376d408911921c4e4532428cac6052f47d3ddd1917"], // all plains
+    [7, 35, -40, "747b325b1dda5ab6a499807255f7ba803b6821bfdb9e8f199c0272e28995c98a"], // all hills
+    [7, 12, -40, "9910004c2545654ea46eae51f8262bccef349a535bf1f42f70585a1a00bb8937"], // all highlands
+    [7, -19, -35, "bde8621b35e38b0d4969d3c9ad5705784a92d64fb34c93b3e8c9ecfb13842f49"], // all sands
+  ];
+
+  it("matches the golden bytes of fixed columns", () => {
+    for (const [seed, cx, cy, hash] of GOLDEN) expect(sha(generateColumn(terrain(seed), cx, cy)), `${seed} ${cx},${cy}`).toBe(hash);
+  });
+
+  it("matches the golden bytes of a whole 128 × 128 world and of flat ground", () => {
+    const w = generateWorld({ terrain: true, seed: 7 });
+    expect(sha(Buffer.concat([...w.columns.values()].map((c) => Buffer.from(c.blocks))))).toBe("297f25dbf3a135c0d400dbc9501f5c05e003548c3b1e2647aefd81fc4c0fe871");
+    expect(sha(generateColumn({ kind: "flat", seed: 1, v: 1 }, 0, 0))).toBe("34c6c37d91559a5d8f07c78adb5583b40a75d368f238ffcd080c7fd52f229789");
   });
 });

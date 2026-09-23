@@ -19,7 +19,15 @@
  */
 import { AIR, BEDROCK } from "./blocks.js";
 
-/** Generator version, stored in every world's `meta.gen.v`. */
+/**
+ * Generator version 1 — FROZEN on 2026-09-22 (Forge endless world, phase 2).
+ * Worlds store `meta.gen.v`, and their saved edits are diffs against this
+ * version's exact output, held to golden hashes in tests/unit/column-gen.test.js.
+ * Any change to the bytes below, however small, strands every edited column on
+ * shifted terrain. New biomes, trees or caves go into a version 2 path that
+ * version-1 worlds never take; a golden hash is never re-recorded to make a
+ * change pass.
+ */
 export const GEN_VERSION = 1;
 
 const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
