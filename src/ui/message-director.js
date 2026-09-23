@@ -23,20 +23,26 @@
  * producer says done), ttl (longest wait in the queue before it is dropped),
  * sticky + minHold (up until done; after minHold a waiting `preempts` item
  * may take its turn and it comes back after), maxDefer (a chip held back by
- * intense moments shows anyway after this long).
+ * intense moments shows anyway after this long), top (drawn where ARIA's
+ * top plate goes, so it waits for one that is up to finish).
  */
 export const MESSAGE_KINDS = {
-  teach: { lane: "headline", priority: 100, sticky: true, minHold: 6 },
+  teach: { lane: "headline", priority: 100, sticky: true, minHold: 6, top: true },
   bossIntro: { lane: "headline", priority: 90, duration: 3.5, ttl: 8, preempts: true },
   // Reserved: nothing draws a level title in play yet.
-  levelTitle: { lane: "headline", priority: 80, duration: 3, ttl: 6, preempts: true },
+  levelTitle: { lane: "headline", priority: 80, duration: 3, ttl: 6, preempts: true, top: true },
   achievement: { lane: "chip", priority: 50, duration: 3.5, maxDefer: 25 },
   unlock: { lane: "chip", priority: 40, duration: 3.2, maxDefer: 25 },
   gear: { lane: "chip", priority: 30, duration: 3.2, ttl: 12 },
 };
 
 /** Most items a lane will queue; past it the lowest priority, oldest goes. */
-export const LANE_CAPS = { headline: 4, chip: 8 };
+export const LANE_CAPS = { headline: 4, chip: 16 };
+
+/** A chip backlog this long plays each chip faster (a first session earns a burst of unlocks). */
+const CHIP_BACKLOG = 3;
+const CHIP_HURRY = 0.6;
+const CHIP_MIN = 1.8;
 
 /** A frame longer than this (a stall, a backgrounded tab) counts as this. */
 const MAX_STEP = 0.25;
@@ -131,6 +137,8 @@ export class MessageDirector {
     this.lanes = null;
     /** performance.now() of the last update from a HUD frame. */
     this.drivenAt = -Infinity;
+    /** A comms plate is up in the top comms slot (set by the game each frame). */
+    this.commsTop = false;
   }
 
   /**
@@ -166,6 +174,9 @@ export class MessageDirector {
   }
 
   _show(item) {
+    if (item.lane === "chip" && this.queues.chip.length >= CHIP_BACKLOG && item.duration != null) {
+      item.duration = Math.max(CHIP_MIN, item.duration * CHIP_HURRY);
+    }
     item.status = "showing";
     item.shownAt = this.clock;
     this.active[item.lane] = item;
@@ -207,7 +218,10 @@ export class MessageDirector {
 
   /** Where a comms line goes right now (see commsPlacement). */
   commsPlacement(msg) {
-    return commsPlacement(msg, this.active.headline);
+    // A headline about to show counts: a line that starts now would be
+    // under it (or over the boss intro) a frame later.
+    const q = this.queues.headline;
+    return commsPlacement(msg, this.active.headline ?? q[pickNext(q)] ?? null);
   }
 
   /** Forget a lane (a new level: the last one's plates are stale). */
@@ -259,6 +273,9 @@ export class MessageDirector {
       q.push(cur);
     } else if (lane === "chip" && this._holdChips(next)) {
       return;
+    } else if (next.top && this.commsTop) {
+      // ARIA is mid-line where the card goes; her next line goes low.
+      return;
     }
     q.splice(q.indexOf(next), 1);
     this._show(next);
@@ -266,11 +283,12 @@ export class MessageDirector {
 
   /**
    * Chips wait out a boss intro or level title (always), a teach card's
-   * first read and heavy combat (up to the chip's maxDefer).
+   * first read and heavy combat (up to the chip's maxDefer). On a phone the
+   * chip lane is where the headline is, so there they wait for any headline.
    */
   _holdChips(next) {
     const head = this.active.headline;
-    if (head && !head.sticky) return true;
+    if (head && (!head.sticky || this.lanes?.chipsShareHeadline)) return true;
     const busy = this.intense || (head && this.clock - head.shownAt < head.minHold);
     if (!busy) return false;
     return !(next.maxDefer != null && this.clock - next.postedAt >= next.maxDefer);

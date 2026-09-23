@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   MESSAGE_KINDS,
+  LANE_CAPS,
   MessageDirector,
   commsRule,
   pickNext,
@@ -187,6 +188,19 @@ describe("chip lane", () => {
     expect(e.status("u")).toBe("queued");
   });
 
+  it("on a phone, waits for any headline to clear", () => {
+    const d = fresh();
+    d.lanes = { chipsShareHeadline: true };
+    d.post("teach", "teach");
+    run(d, 0.1);
+    d.post("u", "unlock");
+    run(d, MESSAGE_KINDS.unlock.maxDefer + 5);
+    expect(d.status("u")).toBe("queued");
+    d.done("teach");
+    run(d, 0.2);
+    expect(d.showing("u")).toBe(true);
+  });
+
   it("drops a stale gear pickup chip", () => {
     const d = fresh();
     d.post("g", "gear");
@@ -197,12 +211,23 @@ describe("chip lane", () => {
   it("never lets the chip queue pile up", () => {
     const d = fresh();
     d.post("g0", "gear");
-    for (let i = 0; i < 12; i++) d.post(`u${i}`, "unlock");
-    expect(d.pending("chip").length).toBeLessThanOrEqual(8);
+    for (let i = 0; i < 20; i++) d.post(`u${i}`, "unlock");
+    expect(d.pending("chip").length).toBeLessThanOrEqual(LANE_CAPS.chip);
     // The gear chip (lowest priority) went first, then the oldest unlocks.
     expect(d.status("g0")).toBe("expired");
     expect(d.status("u0")).toBe("expired");
-    expect(d.status("u11")).toBe("queued");
+    expect(d.status("u19")).toBe("queued");
+  });
+
+  it("plays a backlog of chips faster", () => {
+    const d = fresh();
+    for (let i = 0; i < 6; i++) d.post(`u${i}`, "unlock");
+    run(d, 0.1);
+    expect(d.current("chip").duration).toBeLessThan(MESSAGE_KINDS.unlock.duration);
+    const e = fresh();
+    e.post("u", "unlock");
+    run(e, 0.1);
+    expect(e.current("chip").duration).toBe(MESSAGE_KINDS.unlock.duration);
   });
 });
 
@@ -267,12 +292,27 @@ describe("comms rules", () => {
     expect(foldsInto({ category: "powerUnlocked", speaker: "KAEL" }, card("timeLock"))).toBe(false);
   });
 
-  it("director placement follows the current headline", () => {
+  it("director placement follows the headline, including one about to show", () => {
     const d = fresh();
     expect(d.commsPlacement(line())).toBe("top");
     d.post("boss", "bossIntro");
+    // Posted this frame, granted next: a line starting now already waits.
+    expect(d.commsPlacement(line())).toBe("hold");
     run(d, 0.1);
     expect(d.commsPlacement(line())).toBe("hold");
+  });
+
+  it("holds a teach card while ARIA is mid-line in the top slot, and sends her next line low", () => {
+    const d = fresh();
+    d.commsTop = true;
+    d.post("teach", "teach", { fold: teachFolds("rewind") });
+    run(d, 2);
+    expect(d.status("teach")).toBe("queued");
+    expect(d.commsPlacement(line({ category: "bossEncounter" }))).toBe("low");
+    expect(d.commsPlacement(line({ category: "powerUnlocked" }))).toBe("fold");
+    d.commsTop = false;
+    run(d, 0.1);
+    expect(d.showing("teach")).toBe(true);
   });
 });
 

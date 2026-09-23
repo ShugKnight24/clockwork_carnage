@@ -32,28 +32,28 @@
 
 ## Rules
 
-**Headline lane (top centre, one at a time).** Priority `teach 100 > bossIntro 90 > levelTitle 80`. Nothing is interrupted while it is fresh: a waiting item goes next by priority, then by age. A teach card is sticky (up until its lesson lands); once it has been up for its 6 s read, a waiting boss intro or level title may take the lane for its turn and the card comes back after. A boss intro that could not show within 8 s, or a level title within 6 s, is dropped (the moment has passed). The headline's rectangle starts below the compass and boss bar of the HUD in use, so the card no longer sits on Vanguard's compass.
+**Headline lane (top centre, one at a time).** Priority `teach 100 > bossIntro 90 > levelTitle 80`. Nothing is interrupted while it is fresh: a waiting item goes next by priority, then by age. A teach card is sticky (up until its lesson lands); once it has been up for its 6 s read, a waiting boss intro or level title may take the lane for its turn and the card comes back after. A boss intro that could not show within 8 s, or a level title within 6 s, is dropped (the moment has passed). A teach card also waits for a prominent ARIA plate already up in the top slot to finish (her next line goes low instead). The headline's rectangle starts below the compass and boss bar of the HUD in use, so the card no longer sits on Vanguard's compass.
 
 **Comms lane.** ARIA's queue becomes a priority queue with expiry: projected 70 (30 s), prominent 50 (20 s), squad 40 (12 s), idle/subtle 20 (6 s); equal priorities keep their order, stale lines are dropped before the next one is picked. Where a line goes is decided when it starts and kept for its life:
 - no headline → its usual place (prominent plate top-centre, below the compass/boss bar; subtle above the vitals; projected on the left);
-- a boss intro or level title up → **hold**: the line waits and plays (voice included) as soon as the plate clears;
+- a boss intro or level title up, or posted and about to show → **hold**: the line waits and plays (voice included) as soon as the plate clears;
 - a teach card up and the line is about the lesson → **fold**: spoken on the comms channel as usual, drawn inside the card as a narration row, no plate;
 - a teach card up otherwise → **low**: the plate drops to the low comms slot above the vitals (projected keeps its figure on the left, caption kept below the card).
 
 **Folding.** A teach card folds `powerUnlocked` (ARIA's "new pattern in the shard" line that fires as the card comes up) for every power, and the first-shift lines (`chronoShiftActivated`, `chronoShiftLoud`) for Foresight, whose lesson is shifting.
 
-**Chip lane (right side, under the minimap / kill feed).** One chip at a time, priority `achievement 50 > unlock 40 > gear 30`, 3.2–3.5 s each. A new chip does not start while a boss intro or level title is up, while a teach card is in its first 6 s, or in heavy combat (hurt in the last 2.5 s, slow-mo, or three hostiles engaged within 12 tiles). An unlock or achievement waits at most 25 s of that before it shows anyway (never over a boss intro); a gear pickup chip is dropped after 12 s. The lane holds at most 8; past that the lowest-priority, oldest one goes. Outside play (the customize screen) the unlock toast keeps its old top-centre place.
+**Chip lane (right side, under the minimap / kill feed).** One chip at a time, priority `achievement 50 > unlock 40 > gear 30`, 3.2–3.5 s each. A new chip does not start while a boss intro or level title is up, while a teach card is in its first 6 s, or in heavy combat (hurt in the last 2.5 s, slow-mo, or three hostiles engaged within 12 tiles). An unlock or achievement waits at most 25 s of that before it shows anyway (never over a boss intro); a gear pickup chip is dropped after 12 s. With three or more waiting, each chip plays at 0.6× its time (at least 1.8 s), so a first session's burst of unlocks clears quickly; the lane holds at most 16, past that the lowest-priority, oldest one goes. Outside play (the customize screen) the unlock toast keeps its old top-centre place.
 
 ## Lanes
 
 | Lane | Desktop | Phone (landscape, < 420 px tall) |
 |---|---|---|
-| headline | `min(720, w − 80)` wide, centred, top below the reserved top-centre strip (≥ 60) | between the top-left vitals and the minimap / pause buttons |
-| comms (top) | `min(460, w − 24)` wide, `max(0.135 h, strip + 22)` | same rule |
+| headline | `min(720, w − 80)` wide, centred, top below the reserved top-centre strip (≥ 60) | between the top-left vitals and the minimap, compact type; on a small phone it may cover the kill feed rather than the reticle |
+| comms (top) | `min(460, w − 24)` wide, `max(0.135 h, strip + 22)` | the low slot: the top belongs to the clusters and the headline |
 | commsLow | same width, bottom at the existing subtle-plate anchor, raised above any bottom block it would touch | above the compact console, between the touch clusters |
-| chips | 300 wide at the right margin, below the minimap (and kill feed / pickup captions on Vanguard) | 240 wide under the minimap, above the aim/dash buttons |
+| chips | 300 wide at the right margin, below the minimap (and kill feed / pickup captions on Vanguard) | 240 × 30 one-line chip under the minimap; it may share the headline's row, so chips wait for any headline to clear |
 
-Tested for no overlap between lanes and against every reserved rectangle at 1280×720, 1920×1080, 2560×1440 and 844×390, for DOOM, Vanguard, Minimal, Tactical and Legacy, with and without a boss bar.
+Tested for no overlap between lanes and against every reserved rectangle at 1280×720, 1920×1080, 2560×1440, 844×390 and 667×375, for DOOM, Vanguard, Minimal, Tactical and Legacy, with and without a boss bar.
 
 ## File Structure
 
@@ -74,13 +74,13 @@ Tested for no overlap between lanes and against every reserved rectangle at 1280
 
 ### Task 1: The director (pure)
 
-- [ ] **Failing tests** (`tests/unit/message-director.test.js`): one headline at a time, next by priority then age; a fresh headline is never interrupted; a sticky teach card yields to a waiting boss intro only after its 6 s and resumes after; a boss intro that waited 8 s expires; timed items finish on their duration; the clock does not run while paused and a long frame is clamped; chips are one at a time, deferred by intensity, a boss intro and a fresh teach card, shown after 25 s of deferral, never over a boss intro; gear chips expire after 12 s; the chip lane caps at 8 and drops the lowest priority first; re-posting a key is a no-op; `commsRule` ranks projected > prominent > squad > subtle; `pickNext` is priority then FIFO; `pruneQueue` drops stale lines by rule; `commsPlacement` gives top / hold / fold / low; `foldsInto` folds `powerUnlocked` into any teach card and the shift lines only into Foresight's; `combatIntense` reads hurt, slow-mo and engaged count.
-- [ ] **Implement** `src/ui/message-director.js`. Commit `feat(ui): message director for headline, comms and chip lanes`.
+- [x] **Failing tests** (`tests/unit/message-director.test.js`): one headline at a time, next by priority then age; a fresh headline is never interrupted; a sticky teach card yields to a waiting boss intro only after its 6 s and resumes after; a boss intro that waited 8 s expires; timed items finish on their duration; the clock does not run while paused and a long frame is clamped; chips are one at a time, deferred by intensity, a boss intro and a fresh teach card, shown after 25 s of deferral, never over a boss intro; gear chips expire after 12 s; the chip lane caps at 16, drops the lowest priority first and plays a backlog faster; re-posting a key is a no-op; `commsRule` ranks projected > prominent > squad > subtle; `pickNext` is priority then FIFO; `pruneQueue` drops stale lines by rule; `commsPlacement` gives top / hold / fold / low; `foldsInto` folds `powerUnlocked` into any teach card and the shift lines only into Foresight's; `combatIntense` reads hurt, slow-mo and engaged count.
+- [x] **Implement** `src/ui/message-director.js`. Commit `feat(ui): message director for headline, comms and chip lanes`.
 
 ### Task 2: Lanes (pure geometry)
 
-- [ ] **Failing tests** (`tests/unit/message-lanes.test.js`): for each size × style × boss, the four lanes lie on screen, do not overlap one another (headline/commsLow/chips, comms/chips) nor any reserved rectangle; the chip lane fits a chip; the headline sits below Vanguard's compass and boss bar; the phone headline stays between the top clusters and clear of the touch buttons; `commsBottom` matches the old subtle anchors where they were already clear.
-- [ ] **Implement** `src/ui/message-lanes.js`. Commit `feat(ui): message lanes fitted around every HUD layout`.
+- [x] **Failing tests** (`tests/unit/message-lanes.test.js`): for each size × style × boss, the four lanes lie on screen, do not overlap one another (headline/commsLow/chips, comms/chips) nor any reserved rectangle; the chip lane fits a chip; the headline sits below Vanguard's compass and boss bar; the phone headline stays between the top clusters and clear of the touch buttons; `commsBottom` matches the old subtle anchors where they were already clear.
+- [x] **Implement** `src/ui/message-lanes.js`. Commit `feat(ui): message lanes fitted around every HUD layout`.
 
 ### Task 3: Glue
 
