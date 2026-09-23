@@ -2,7 +2,8 @@ import { trackEvent } from "./analytics.js";
 import { playBlockSound, playWaterSound, WaterSoundTracker } from "../src/audio/block-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
-import { AIR, BEDROCK, WATER, isSolid, isWater } from "../src/world/blocks.js";
+import { AIR, BEDROCK, WATER, SAPLING, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
+import { randomTick, saplingFits } from "../src/world/trees.js";
 import { generateWorld, randomSeed } from "../src/world/world-gen.js";
 import { WorldStore, MemoryBackend } from "../src/world/world-store.js";
 import { packWorld, unpackWorld, decodeWorld, toShareHash } from "../src/world/world-codec.js";
@@ -36,9 +37,11 @@ import {
 export { hotbarWindow };
 
 /** Every block a builder may place. Bedrock (15) is the world floor and is not one. */
-export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, WATER];
+export const PLACEABLE_BLOCKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, WATER, 20, 21, 22, SAPLING];
 /** Blocks the 0 key cycles — the natural set that has no digit of its own. */
-const NATURAL_BLOCKS = [10, 11, 12, 13, 14, WATER];
+const NATURAL_BLOCKS = [10, 11, 12, 13, 14, WATER, 20, 21, 22, SAPLING];
+/** Seconds between the random ticks that grow saplings near the player. */
+const GROW_TICK = 1;
 export const TOOLS = ["block", "spawn", "pickup", "exit", "start"];
 
 // Legacy 2D-builder storage, read once at start and then left alone.
@@ -806,6 +809,12 @@ export class ForgeMode {
       this._autosaveT = 0;
       this._fire(this.flush());
     }
+    this._growT = (this._growT ?? 0) + dt;
+    if (this._growT >= GROW_TICK) {
+      this._growT = 0;
+      // Growth writes the world directly: it is not the player's edit to undo.
+      if (randomTick(this.world, this.player.x, this.player.y, Math.random) > 0) this._markDirty();
+    }
     if (this.overhead) return;
 
     // The screen owns the cursor; any motion it saw is not a look input.
@@ -998,10 +1007,41 @@ export class ForgeMode {
       Math.sin(cam.yaw) * cp,
       Math.sin(cam.pitch),
       PLAYER.reach,
-      // Holding water in creative, the ray stops on water too: place on a
-      // lake's surface to raise it, break to take water away.
-      !this.survival && this.toolMode === "block" && this.tile === WATER ? (id) => id !== AIR : undefined,
+      // Holding water in creative, or an empty bucket in survival, the ray
+      // stops on water too: place on a lake's surface to raise it, break or
+      // scoop to take water away. Otherwise it stops on anything solid and on
+      // saplings, which are walked through but can still be dug up.
+      this._targetsWater() ? (id) => id !== AIR : isTargetable,
     );
+  }
+
+  _targetsWater() {
+    if (this.survival) return this.heldItem === "bucket";
+    return this.toolMode === "block" && this.tile === WATER;
+  }
+
+  /**
+   * Scoop with an empty bucket, pour with a full one. The world edit is an
+   * ordinary one (undo, save); the session turns the held bucket over.
+   */
+  _useBucket() {
+    const i = this.hotbarIndex;
+    if (this.heldItem === "bucket") {
+      const t = this.target;
+      if (!t || !isWater(this.world.get(t.x, t.y, t.z))) { this._warn("Nothing to scoop"); return; }
+      if (this._editBlock(t.x, t.y, t.z, AIR)) {
+        this.survival.fillBucket(i);
+        playBlockSound(this.audio, WATER, "break");
+      }
+    } else {
+      const c = this._placeCell();
+      if (!c || !placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers(), WATER)) return;
+      if (this._editBlock(c.x, c.y, c.z, WATER)) {
+        this.survival.emptyBucket(i);
+        playBlockSound(this.audio, WATER, "place");
+      }
+    }
+    this.refreshHeld();
   }
 
   /** The cell against the targeted face, or null when nothing is targeted. */
@@ -1084,10 +1124,13 @@ export class ForgeMode {
   }
 
   placeBlock() {
+    if (this.survival && (this.heldItem === "bucket" || this.heldItem === "bucket_water")) { this._useBucket(); return; }
     const c = this._placeCell();
     if (!c) return;
     if (!placementAllowed(this.world, c.x, c.y, c.z, this._bodies(), this._markers(), this.survival ? null : this.tile))
       return;
+    const planting = this.survival ? this.heldItem === "sapling" : this.tile === SAPLING;
+    if (planting && !saplingFits(this.world, c.x, c.y, c.z)) { this._warn("Saplings need grass or dirt"); return; }
 
     if (!this.survival) {
       if (this._editBlock(c.x, c.y, c.z, this.tile)) playBlockSound(this.audio, this.tile, "place");

@@ -1,7 +1,7 @@
 // src/rpg/recipes.js
 /**
- * The crafting table. Every output is a block that already exists, so this
- * adds no atlas art. `station: null` means craftable anywhere; the other tiers
+ * The crafting table. Every output is a block or an item that already exists,
+ * so this adds no atlas art. `station: null` means craftable anywhere; the other tiers
  * name the station that must be within reach, and are hidden otherwise.
  */
 const recipe = (id, name, inputs, output, construction, xp, station = null) =>
@@ -17,11 +17,14 @@ export const RECIPES = [
   recipe("pick_stone",  "Stone Pickaxe", [["stone", 3], ["rock", 2]],            ["pick_stone", 1], 1,  25),
   recipe("pick_metal",  "Metal Pickaxe", [["metal", 3], ["rock", 2]],            ["pick_metal", 1], 10, 60),
   recipe("workbench",   "Workbench",     [["stone", 10], ["metal", 2]],          ["workbench", 1],  5,  100),
+  recipe("saw_planks",  "Saw Planks",    [["log", 1]],                           ["planks", 4],     1,  5),
 
   recipe("smelt_metal", "Smelt Metal",   [["ore", 2]],                           ["metal", 1],      5,  30, "workbench"),
   recipe("reinforce",   "Reinforce Stone", [["stone", 4], ["metal", 1]],         ["tech", 2],       6,  40, "workbench"),
   recipe("anvil",       "Anvil",         [["metal", 6], ["stone", 4]],           ["anvil", 1],      8,  200, "workbench"),
   recipe("forge",       "Forge",         [["stone", 12], ["metal", 8], ["energy", 2]], ["forge", 1], 15, 400, "workbench"),
+  recipe("bucket",      "Bucket",        [["metal", 3]],                         ["bucket", 1],     5,  30, "workbench"),
+  recipe("wood_door",   "Wooden Door",   [["planks", 6]],                        ["door", 1],       3,  20, "workbench"),
 
   repair("repair_pick_stone", "Repair Stone Pickaxe", [["stone", 1], ["rock", 1]], "pick_stone", 1,  15, "anvil"),
   repair("repair_pick_metal", "Repair Metal Pickaxe", [["metal", 1], ["rock", 1]], "pick_metal", 10, 35, "anvil"),

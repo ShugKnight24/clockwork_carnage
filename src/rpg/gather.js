@@ -30,6 +30,18 @@ export const GATHER = {
   16: { minLevel: 1,  xp: 5  },  // Workbench — you built it; the bitset pays no xp
   17: { minLevel: 1,  xp: 5  },  // Anvil
   18: { minLevel: 1,  xp: 5  },  // Forge
+  20: { minLevel: 1,  xp: 8  },  // Log — chopped by hand; a grown tree pays, a placed log does not
+  21: { minLevel: 1,  xp: 1  },  // Leaves — no item; sometimes a sapling (BONUS)
+  22: { minLevel: 1,  xp: 3  },  // Planks
+  23: { minLevel: 1,  xp: 1  },  // Sapling
+};
+
+/**
+ * Chance drops on top of a block's own: leaves shake loose a sapling now and
+ * then, which is what keeps wood renewable. blockId -> { item, chance }.
+ */
+export const BONUS = {
+  21: { item: "sapling", chance: 0.12 },
 };
 
 const entry = (blockId) => GATHER[blockId] || null;
@@ -59,6 +71,15 @@ export function breakTime(blockId, level, tool = TOOLS.HAND) {
 
 /** @returns {string|null} the item id a broken block yields */
 export const dropsFor = (blockId) => (entry(blockId) ? itemForBlock(blockId) : null);
+
+/**
+ * The chance drop for breaking this block, given a roll in [0, 1).
+ * @returns {string|null} an item id, or null when the roll misses
+ */
+export function bonusDrop(blockId, roll) {
+  const b = BONUS[blockId];
+  return b && roll < b.chance ? b.item : null;
+}
 
 /** @returns {number} mining xp for breaking this block */
 export const xpFor = (blockId) => entry(blockId)?.xp ?? 0;

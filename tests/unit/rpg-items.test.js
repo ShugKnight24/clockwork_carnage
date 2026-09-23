@@ -25,7 +25,9 @@ describe("items", () => {
     ITEMS.forEach((i) => {
       expect(typeof i.name).toBe("string");
       expect(i.name.length).toBeGreaterThan(0);
-      expect(i.stack).toBe(i.durability === undefined ? STACK_MAX : 1);
+      // Tools and buckets are one per slot; everything else stacks.
+      const single = i.durability !== undefined || i.id.startsWith("bucket");
+      expect(i.stack).toBe(single ? 1 : STACK_MAX);
     });
     expect(STACK_MAX).toBe(64);
     expect(itemById("pick_metal").name).toBe("Metal Pickaxe");

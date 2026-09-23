@@ -8,6 +8,8 @@ export const STACK_MAX = 64;
 
 const block = (id, name, blockId) => ({ id, name, stack: STACK_MAX, blockId });
 const tool = (id, name, durability) => ({ id, name, stack: 1, blockId: null, durability });
+/** One per slot, no block and no wear; `color` stands in for the block colour in the hotbar. */
+const vessel = (id, name, color) => ({ id, name, stack: 1, blockId: null, color });
 
 export const ITEMS = [
   block("stone", "Stone", 1),
@@ -29,6 +31,12 @@ export const ITEMS = [
   block("forge", "Forge", 18),
   tool("pick_stone", "Stone Pickaxe", 120),
   tool("pick_metal", "Metal Pickaxe", 400),
+  block("log", "Log", 20),
+  block("planks", "Planks", 22),
+  block("sapling", "Sapling", 23),
+  // A bucket scoops a water source and pours it back: the slot swaps between the two.
+  vessel("bucket", "Bucket", "#9aa3ad"),
+  vessel("bucket_water", "Water Bucket", "#2f8fbf"),
 ];
 
 const BY_ID = new Map(ITEMS.map((i) => [i.id, i]));

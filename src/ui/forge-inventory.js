@@ -17,7 +17,7 @@ export function slotVisual(slot) {
   if (!item) return { color: null, label: "", count: 0, wear: null };
   const blockId = blockForItem(slot.item);
   return {
-    color: blockId != null ? BLOCKS[blockId].color : TOOL_COLOR,
+    color: blockId != null ? BLOCKS[blockId].color : item.color || TOOL_COLOR,
     label: item.name,
     count: slot.n > 1 ? slot.n : 0,
     wear: item.durability ? Math.max(0, Math.min(1, (slot.dur ?? item.durability) / item.durability)) : null,

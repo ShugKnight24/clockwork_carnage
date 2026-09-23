@@ -95,7 +95,7 @@ describe("forge placement rules", () => {
 
 describe("forge hotbar and tools", () => {
   it("keeps the selection inside the window at both ends", () => {
-    const total = PLACEABLE_BLOCKS.length; // 15
+    const total = PLACEABLE_BLOCKS.length; // 19
     for (let sel = 0; sel < total; sel++) {
       const { start, end } = hotbarWindow(sel, total, 10);
       expect(sel).toBeGreaterThanOrEqual(start);
@@ -115,7 +115,7 @@ describe("forge hotbar and tools", () => {
   it("never offers bedrock in the placeable palette", () => {
     expect(PLACEABLE_BLOCKS).not.toContain(BEDROCK);
     expect(PLACEABLE_BLOCKS).not.toContain(AIR);
-    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19]);
+    expect(PLACEABLE_BLOCKS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 22, 23]);
   });
 
   it("cycles tools back to the first", () => {

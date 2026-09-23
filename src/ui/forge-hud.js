@@ -163,13 +163,14 @@ export function hotbarCells(forge) {
     const v = slotVisual(s);
     return {
       blockId: s ? blockForItem(s.item) : null,
-      count: v.count, wear: v.wear, label: v.label,
+      count: v.count, wear: v.wear, label: v.label, color: v.color,
     };
   });
 }
 
 /** The colour a cell is filled with: its block's, a tool's, or nothing. */
 function cellColor(c) {
+  if (c.color) return c.color;
   if (c.blockId != null) return BLOCKS[c.blockId].color;
   return c.label ? TOOL_COLOR : null;
 }

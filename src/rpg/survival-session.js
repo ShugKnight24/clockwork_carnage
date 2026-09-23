@@ -8,7 +8,7 @@ import { World, colKey } from "../world/world.js";
 import { Inventory } from "./inventory.js";
 import { Skills } from "./skills.js";
 import { bestTool, TOOLS } from "./tools.js";
-import { canMine, breakTime, dropsFor, xpFor } from "./gather.js";
+import { canMine, breakTime, dropsFor, xpFor, bonusDrop } from "./gather.js";
 import { itemById, blockForItem } from "./items.js";
 import { craft as craftRecipe, canCraft } from "./crafting.js";
 import { availableRecipes, recipeById } from "./recipes.js";
@@ -21,9 +21,11 @@ const COLUMN_BYTES = (16 * 16 * World.H) >> 3;
 const WEAR_PER_BLOCK = 1;
 
 export class SurvivalSession {
-  constructor({ skills, inventory } = {}) {
+  constructor({ skills, inventory, rand = Math.random } = {}) {
     this.skills = skills || new Skills();
     this.inventory = inventory || new Inventory();
+    /** Rolls chance drops; injected so tests can fix the outcome. */
+    this.rand = rand;
     /**
      * Was this block placed by the player? See spec §6. The bits belong to the
      * world (endless-world spec §12), which saves them with its columns, so a
@@ -131,7 +133,8 @@ export class SurvivalSession {
    * Advances the in-progress break. `cell` and `blockId` are what the player
    * is looking at *now*: if either moved, the break cancels rather than
    * crediting a block that is no longer there.
-   * @returns {{broke:boolean, drop?:string|null, xp?:number, leveled?:boolean}}
+   * @returns {{broke:boolean, drop?:string|null, bonus?:string|null, xp?:number, leveled?:boolean}}
+   *   `bonus` is a chance drop that landed in the inventory, e.g. a sapling from leaves
    */
   tickBreak(dtMs, cell, blockId) {
     const b = this.breaking;
@@ -159,6 +162,9 @@ export class SurvivalSession {
     }
     const placedByPlayer = this.wasPlaced(x, y, z);
     if (drop) this.inventory.add(drop, 1);
+    // A chance drop never blocks the break: with no room it is simply lost.
+    const bonus = bonusDrop(b.blockId, this.rand());
+    const gotBonus = bonus !== null && this.inventory.add(bonus, 1) === 1;
 
     let granted = null;
     if (!placedByPlayer) granted = this.skills.grant("mining", xpFor(b.blockId));
@@ -183,6 +189,7 @@ export class SurvivalSession {
     return {
       broke: true,
       drop,
+      bonus: gotBonus ? bonus : null,
       xp: placedByPlayer ? 0 : xpFor(b.blockId),
       leveled: granted?.leveled ?? false,
       worn,
@@ -205,6 +212,24 @@ export class SurvivalSession {
 
   /** Puts a placed block back after the Forge refuses the placement. */
   refund(itemId) { this.inventory.add(itemId, 1); }
+
+  // ─── Buckets ──────────────────────────────────────────────
+
+  /**
+   * Swap the bucket in slot `i` for a full one after the Forge scooped a
+   * water source, or back after it poured one. The Forge edits the world; the
+   * session only turns the item over, in place, so the hotbar keeps its slot.
+   * @returns {boolean} false when slot `i` does not hold the right bucket
+   */
+  fillBucket(i) { return this._swapSlot(i, "bucket", "bucket_water"); }
+  emptyBucket(i) { return this._swapSlot(i, "bucket_water", "bucket"); }
+
+  _swapSlot(i, from, to) {
+    const s = this.inventory.slots[i];
+    if (!s || s.item !== from) return false;
+    s.item = to;
+    return true;
+  }
 
   // ─── Crafting ─────────────────────────────────────────────
 
