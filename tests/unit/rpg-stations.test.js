@@ -77,3 +77,19 @@ describe("the station ids are pinned to the block table", () => {
     }
   });
 });
+
+describe("stationsInRange across columns", () => {
+  it("finds a station across a column border", () => {
+    const w = new World();
+    w.set(17, 40, 32, STATIONS.anvil); // column cx = 1
+    expect([...stationsInRange(w, at(15.5, 40.5, 32))]).toEqual(["anvil"]); // player in cx = 0
+  });
+
+  it("finds a station at negative coordinates in a world bounded there", () => {
+    const w = new World({ bounds: { x0: -32, y0: -32, x1: 0, y1: 0 } });
+    w.set(-17, -3, 5, STATIONS.forge);
+    w.set(-14, -1, 7, STATIONS.workbench);
+    expect([...stationsInRange(w, at(-15.5, -2.5, 5))].sort()).toEqual(["forge", "workbench"]);
+    expect(stationsInRange(w, at(-2.5, -2.5, 5)).size).toBe(0);
+  });
+});

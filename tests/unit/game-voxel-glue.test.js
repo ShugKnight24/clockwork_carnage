@@ -104,3 +104,23 @@ describe("standableNear", () => {
     expect(standableNear(new World(), 40.5, 40.5, 32)).toBeNull();
   });
 });
+
+describe("spawn fallbacks read the world's bounds", () => {
+  it("falls back to the centre of the bounds when a world has no spawn", () => {
+    const w = new World({ bounds: { x0: -64, y0: -64, x1: 0, y1: 0 } });
+    for (let y = -64; y < 0; y++) for (let x = -64; x < 0; x++) w.set(x, y, 10, 1);
+    w.meta.spawn = null;
+    expect(spawnFromMeta(w)).toEqual({ x: -31.5, y: -31.5, z: 11, yaw: 0 });
+  });
+
+  it("never picks a cell outside the bounds", () => {
+    const w = new World({ bounds: { x0: -16, y0: 0, x1: 0, y1: 16 } });
+    // Only the edge column has ground; the search must not step off the world to find more.
+    for (let y = 0; y < 16; y++) w.set(-1, y, 10, 1);
+    const at = standableNear(w, -1.5, 8.5, 30);
+    expect(at).not.toBeNull();
+    expect(at.x).toBe(-0.5); // the only column with ground, not one past the edge
+    expect(at.z).toBe(11);
+    expect(Math.abs(at.y - 8.5)).toBeLessThanOrEqual(1);
+  });
+});

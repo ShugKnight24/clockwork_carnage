@@ -22,10 +22,11 @@ export function stationsInRange(world, player, radius = STATION_RADIUS) {
   const px = Math.floor(player.x), py = Math.floor(player.y), pz = Math.floor(player.z);
   if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return found;
 
-  const lo = (v) => Math.max(0, v - radius);
-  for (let z = lo(pz); z <= Math.min(World.H - 1, pz + radius); z++) {
-    for (let y = lo(py); y <= Math.min(World.D - 1, py + radius); y++) {
-      for (let x = lo(px); x <= Math.min(World.W - 1, px + radius); x++) {
+  // Only the height is clamped: get() already answers air outside the bounds,
+  // and the world may sit anywhere, negative coordinates included.
+  for (let z = Math.max(0, pz - radius); z <= Math.min(World.H - 1, pz + radius); z++) {
+    for (let y = py - radius; y <= py + radius; y++) {
+      for (let x = px - radius; x <= px + radius; x++) {
         const name = BY_ID.get(world.get(x, y, z));
         if (name) found.add(name);
       }

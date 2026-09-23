@@ -557,22 +557,25 @@ export function renderStatus(forge, ctx, w, h) {
   ctx.textAlign = "left";
 }
 
-/** Top-down slice of the world at `cursorZ`, fitted to the screen. */
+/** Top-down slice of the world's bounds at `cursorZ`, fitted to the screen. */
 export function renderOverhead(forge, ctx, w, h) {
   const world = forge.world;
+  const { x0, y0, x1, y1 } = world.bounds;
+  const bw = x1 - x0, bh = y1 - y0;
   const pad = 60;
-  const cs = Math.min((w - pad * 2) / World.W, (h - pad * 2) / World.D);
-  const ox = (w - World.W * cs) / 2;
-  const oy = (h - World.D * cs) / 2;
+  const cs = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+  // Screen position of block (0, 0), so world coordinates map straight through.
+  const ox = (w - bw * cs) / 2 - x0 * cs;
+  const oy = (h - bh * cs) / 2 - y0 * cs;
   const z = forge.cursorZ;
 
   ctx.fillStyle = "#050510";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#0b0b16";
-  ctx.fillRect(ox, oy, World.W * cs, World.D * cs);
+  ctx.fillRect(ox + x0 * cs, oy + y0 * cs, bw * cs, bh * cs);
 
-  for (let y = 0; y < World.D; y++) {
-    for (let x = 0; x < World.W; x++) {
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
       const id = world.get(x, y, z);
       if (id === AIR) continue;
       ctx.fillStyle = BLOCKS[id].color;
@@ -623,7 +626,7 @@ export function renderOverhead(forge, ctx, w, h) {
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.font = "13px monospace";
   ctx.fillText(
-    `Block: ${BLOCKS[forge.tile]?.name}  |  Cursor Z: ${z} (Q/E)  |  ${World.W}×${World.D}×${World.H}`,
+    `Block: ${BLOCKS[forge.tile]?.name}  |  Cursor Z: ${z} (Q/E)  |  ${bw}×${bh}×${World.H}`,
     w / 2,
     h - 34,
   );

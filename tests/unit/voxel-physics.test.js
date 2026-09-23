@@ -118,17 +118,18 @@ describe("voxel physics", () => {
     expect(west.x).toBeCloseTo(PLAYER.half, 6);
     expect(west.hitX).toBe(true);
 
-    // And the far side, which is World.W away rather than at zero.
-    const east = moveAABB(w, body(World.W - 1, 10.5, 32), 4, 0, 0);
-    expect(east.x).toBeCloseTo(World.W - PLAYER.half, 6);
+    // And the far side, which is the bounds' far edge rather than zero.
+    const { x1, y1 } = w.bounds;
+    const east = moveAABB(w, body(x1 - 1, 10.5, 32), 4, 0, 0);
+    expect(east.x).toBeCloseTo(x1 - PLAYER.half, 6);
     expect(east.hitX).toBe(true);
 
     const north = moveAABB(w, body(10.5, 1, 32), 0, -4, 0);
     expect(north.y).toBeCloseTo(PLAYER.half, 6);
     expect(north.hitY).toBe(true);
 
-    const south = moveAABB(w, body(10.5, World.D - 1, 32), 0, 4, 0);
-    expect(south.y).toBeCloseTo(World.D - PLAYER.half, 6);
+    const south = moveAABB(w, body(10.5, y1 - 1, 32), 0, 4, 0);
+    expect(south.y).toBeCloseTo(y1 - PLAYER.half, 6);
     expect(south.hitY).toBe(true);
   });
 
@@ -156,5 +157,23 @@ describe("voxel physics", () => {
       expect(r.z).toBeGreaterThanOrEqual(0);
       expect(r.z + PLAYER.height).toBeLessThanOrEqual(World.H);
     }
+  });
+});
+
+describe("voxel physics in a world bounded away from the origin", () => {
+  it("walls a body at the world's own edges, negative ones included", () => {
+    const w = new World({ bounds: { x0: -48, y0: -32, x1: -16, y1: 0 } });
+    for (let y = -32; y < 0; y++) for (let x = -48; x < -16; x++) w.set(x, y, 0, 15);
+    const west = moveAABB(w, body(-47, -10.5, 1), -4, 0, 0);
+    expect(west.x).toBeCloseTo(-48 + PLAYER.half, 6); expect(west.hitX).toBe(true);
+    const east = moveAABB(w, body(-17, -10.5, 1), 4, 0, 0);
+    expect(east.x).toBeCloseTo(-16 - PLAYER.half, 6); expect(east.hitX).toBe(true);
+    const north = moveAABB(w, body(-30.5, -31, 1), 0, -4, 0);
+    expect(north.y).toBeCloseTo(-32 + PLAYER.half, 6); expect(north.hitY).toBe(true);
+    const south = moveAABB(w, body(-30.5, -1, 1), 0, 4, 0);
+    expect(south.y).toBeCloseTo(0 - PLAYER.half, 6); expect(south.hitY).toBe(true);
+    // Crossing a column border inside the bounds is free.
+    const across = moveAABB(w, body(-33.5, -10.5, 1), 3, 0, 0);
+    expect(across.x).toBeCloseTo(-30.5, 6); expect(across.hitX).toBe(false);
   });
 });

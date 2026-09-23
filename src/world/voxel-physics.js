@@ -97,16 +97,17 @@ function sweepAxis(world, b, axis, delta) {
 }
 
 /**
- * Hold a body inside the world box. The world is 128×128×64 blocks and nothing
- * beyond it: the sides are walls and the bottom is the floor, so a body that
+ * Hold a body inside the world's bounds and its 64-block height. Nothing is
+ * beyond them: the sides are walls and the bottom is the floor, so a body that
  * walks off the map stops at the edge instead of falling forever onto whatever
  * an out-of-bounds read happens to answer. Clamping here rather than leaning on
  * `World.get`'s below-zero BEDROCK makes the physics independent of it.
  * Sets `hitX`/`hitY`/`hitZ` on `out` for whichever axis a clamp engaged.
  */
-function clampToWorld(b, out) {
-  const cx = Math.min(World.W - b.half, Math.max(b.half, b.x));
-  const cy = Math.min(World.D - b.half, Math.max(b.half, b.y));
+function clampToWorld(world, b, out) {
+  const { x0, y0, x1, y1 } = world.bounds;
+  const cx = Math.min(x1 - b.half, Math.max(x0 + b.half, b.x));
+  const cy = Math.min(y1 - b.half, Math.max(y0 + b.half, b.y));
   const cz = Math.min(World.H - b.height, Math.max(0, b.z));
   if (cx !== b.x) { b.x = cx; out.hitX = true; }
   if (cy !== b.y) { b.y = cy; out.hitY = true; }
@@ -146,7 +147,7 @@ export function moveAABB(world, body, dx, dy, dz, { step = PLAYER.step } = {}) {
   if (dx !== 0) out.hitX = sweepWithStep(0, dx);
   if (dy !== 0) out.hitY = sweepWithStep(1, dy);
   if (dz !== 0) out.hitZ = sweepAxis(world, b, 2, dz);
-  clampToWorld(b, out);
+  clampToWorld(world, b, out);
   // `b.z <= 0` is the world floor itself, stood on without a block to stand on.
   out.grounded = (out.hitZ && dz < 0) || b.z <= 0 || supported(b);
   return { x: b.x, y: b.y, z: b.z, ...out };

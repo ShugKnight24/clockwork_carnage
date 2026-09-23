@@ -3,27 +3,27 @@ import { World } from "../../src/world/world.js";
 import { VOXEL_DRAW_DISTANCE, chunkInDistance } from "../../src/rendering/voxel/voxel-renderer.js";
 
 const CS = World.CS;
+const BOX = new World().bounds; // the default 128 box
+const BOX_W = BOX.x1 - BOX.x0, BOX_D = BOX.y1 - BOX.y0;
 
 /** Minimum corner of every chunk in the world, in blocks. */
 function chunkOrigins() {
   const out = [];
-  for (let cz = 0; cz < World.CZ; cz++)
-    for (let cy = 0; cy < World.CY; cy++)
-      for (let cx = 0; cx < World.CX; cx++) out.push([cx * CS, cy * CS, cz * CS]);
+  new World().forEachChunk((cx, cy, cz) => out.push([cx * CS, cy * CS, cz * CS]));
   return out;
 }
 
 describe("voxel chunk distance cull", () => {
   it("reaches past half the world diagonal, so the far wall is never culled away", () => {
     expect(VOXEL_DRAW_DISTANCE).toBeGreaterThanOrEqual(
-      Math.hypot(World.W, World.D, World.H) / 2,
+      Math.hypot(BOX_W, BOX_D, World.H) / 2,
     );
   });
 
   it("keeps every chunk of the world in range from the middle of it", () => {
     const origins = chunkOrigins();
     expect(origins).toHaveLength(256);
-    const [cx, cy, cz] = [World.W / 2, World.D / 2, World.GROUND + 1.6];
+    const [cx, cy, cz] = [BOX.x0 + BOX_W / 2, BOX.y0 + BOX_D / 2, World.GROUND + 1.6];
     for (const o of origins) {
       expect(chunkInDistance(o, cx, cy, cz), `chunk at ${o}`).toBe(true);
     }
@@ -36,7 +36,7 @@ describe("voxel chunk distance cull", () => {
     // does.
     const origins = chunkOrigins();
     const inRange = (d) =>
-      origins.filter((o) => chunkInDistance(o, World.W / 2, World.D / 2, World.GROUND, d)).length;
+      origins.filter((o) => chunkInDistance(o, BOX.x0 + BOX_W / 2, BOX.y0 + BOX_D / 2, World.GROUND, d)).length;
     expect(inRange(8)).toBeLessThan(origins.length / 4);   // the lowest tier
     expect(inRange(20)).toBeLessThan(origins.length / 4);  // and the highest
     expect(inRange(VOXEL_DRAW_DISTANCE)).toBe(origins.length);

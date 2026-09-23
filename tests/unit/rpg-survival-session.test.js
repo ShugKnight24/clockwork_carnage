@@ -299,3 +299,20 @@ describe("station-aware crafting", () => {
     expect(s.craft("cut_stone").ok).toBe(true);
   });
 });
+
+describe("placed flags at any coordinate", () => {
+  it("keeps cells apart at negative and far coordinates, and clears them all", () => {
+    const s = session();
+    const cells = [[-5, -5, 3], [-5, -5, 4], [200000, 7, 3], [-200000, -7, 63], [15, 16, 0], [16, 15, 0]];
+    for (const [x, y, z] of cells) s.markPlaced(x, y, z);
+    for (const [x, y, z] of cells) expect(s.wasPlaced(x, y, z), `${x},${y},${z}`).toBe(true);
+    for (const [x, y, z] of [[-5, -4, 3], [-4, -5, 3], [200000, 8, 3], [16, 16, 0], [15, 15, 0], [5, 5, 3]]) {
+      expect(s.wasPlaced(x, y, z), `${x},${y},${z}`).toBe(false);
+    }
+    s.clearPlaced(-5, -5, 3);
+    expect(s.wasPlaced(-5, -5, 3)).toBe(false);
+    expect(s.wasPlaced(-5, -5, 4)).toBe(true);
+    s.resetPlaced();
+    for (const [x, y, z] of cells) expect(s.wasPlaced(x, y, z)).toBe(false);
+  });
+});

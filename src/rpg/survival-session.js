@@ -4,7 +4,7 @@
  * Forge's knowledge to one nullable field is what lets creative mode stay
  * byte-identical to before.
  */
-import { World } from "../world/world.js";
+import { World, colKey } from "../world/world.js";
 import { Inventory } from "./inventory.js";
 import { Skills } from "./skills.js";
 import { bestTool, TOOLS } from "./tools.js";
@@ -14,7 +14,8 @@ import { craft as craftRecipe, canCraft } from "./crafting.js";
 import { availableRecipes, recipeById } from "./recipes.js";
 import { stationsInRange } from "./stations.js";
 
-const CELLS = World.W * World.D * World.H;
+/** Bytes of placed bits per 16 × 16 × 64 column. */
+const COLUMN_BYTES = (16 * 16 * World.H) >> 3;
 
 /** Durability spent per block broken. */
 const WEAR_PER_BLOCK = 1;
@@ -23,8 +24,13 @@ export class SurvivalSession {
   constructor({ skills, inventory } = {}) {
     this.skills = skills || new Skills();
     this.inventory = inventory || new Inventory();
-    /** One bit per cell: was this block placed by the player? See spec §6. */
-    this.placed = new Uint8Array(CELLS >> 3);
+    /**
+     * One bit per cell: was this block placed by the player? See spec §6.
+     * Sparse, one 2 KB bitset per column that has any, so it assumes no world
+     * size. The endless-world spec §12 later moves these into the world.
+     * @type {Map<number, Uint8Array>} colKey -> bits
+     */
+    this.placed = new Map();
     this.breaking = null; // { cell, blockId, elapsed, need, toolSlot, toolItem }
     this.progress = 0;
   }
@@ -38,16 +44,22 @@ export class SurvivalSession {
 
   // ─── The placed-block bitset ──────────────────────────────
 
-  _bit(x, y, z) { return (z * World.D + y) * World.W + x; }
+  _bit(x, y, z) { return (z << 8) | ((y & 15) << 4) | (x & 15); }
 
   markPlaced(x, y, z) {
+    if (z < 0 || z >= World.H) return;
+    const key = colKey(x >> 4, y >> 4);
+    let bits = this.placed.get(key);
+    if (!bits) this.placed.set(key, (bits = new Uint8Array(COLUMN_BYTES)));
     const i = this._bit(x, y, z);
-    this.placed[i >> 3] |= 1 << (i & 7);
+    bits[i >> 3] |= 1 << (i & 7);
   }
 
   clearPlaced(x, y, z) {
+    const bits = this.placed.get(colKey(x >> 4, y >> 4));
+    if (!bits || z < 0 || z >= World.H) return;
     const i = this._bit(x, y, z);
-    this.placed[i >> 3] &= ~(1 << (i & 7));
+    bits[i >> 3] &= ~(1 << (i & 7));
   }
 
   /**
@@ -57,11 +69,13 @@ export class SurvivalSession {
    * the next. Progression itself is deliberately NOT reset — it is
    * per-character and carries across worlds.
    */
-  resetPlaced() { this.placed.fill(0); this.cancelBreak(); }
+  resetPlaced() { this.placed.clear(); this.cancelBreak(); }
 
   wasPlaced(x, y, z) {
+    const bits = this.placed.get(colKey(x >> 4, y >> 4));
+    if (!bits || z < 0 || z >= World.H) return false;
     const i = this._bit(x, y, z);
-    return (this.placed[i >> 3] & (1 << (i & 7))) !== 0;
+    return (bits[i >> 3] & (1 << (i & 7))) !== 0;
   }
 
   // ─── Breaking ─────────────────────────────────────────────

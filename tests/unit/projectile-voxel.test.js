@@ -166,3 +166,21 @@ describe("projectiles in a voxel world", () => {
     expect(p.z).toBeCloseTo(FLOOR + 1.5, 6);
   });
 });
+
+describe("projectiles in a world bounded away from the origin", () => {
+  it("die at the world's own edge, not at zero", () => {
+    const w = new World({ bounds: { x0: -64, y0: -64, x1: -32, y1: -32 } });
+    const p = bolt(-40.5, -48.5, 40, 0, { yaw: 0, speed: 20 });
+    const { ctx } = makeCtx(w, [p], [], { x: -60, y: -60, z: 1, angle: 0 });
+    let steps = 0;
+    while (p.active && steps++ < 200) updateProjectiles(ctx, 1 / 60);
+    expect(p.active).toBe(false);
+    expect(p.x).toBeGreaterThanOrEqual(-32);
+    expect(p.x).toBeLessThan(-30);
+
+    const q = bolt(-33.5, -48.5, 40, 0, { yaw: Math.PI, speed: 20 }); // west, deeper into the bounds
+    const { ctx: ctx2 } = makeCtx(w, [q], [], { x: -60, y: -60, z: 1, angle: 0 });
+    updateProjectiles(ctx2, 1 / 60);
+    expect(q.active).toBe(true); // negative x inside the bounds is not "outside"
+  });
+});

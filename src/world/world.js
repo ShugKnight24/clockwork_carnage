@@ -62,9 +62,6 @@ function normBounds(b) {
  */
 export class World {
   static H = H; static GROUND = 32; static CS = CS; static CZ = CZ; static BORDER = BORDER;
-  // The fixed box, until the remaining callers read world.bounds instead.
-  static W = 128; static D = 128; static CX = 8; static CY = 8;
-
   constructor(meta = {}) {
     this.bounds = normBounds(meta.bounds);
     const { x0, y0, x1, y1 } = this.bounds;

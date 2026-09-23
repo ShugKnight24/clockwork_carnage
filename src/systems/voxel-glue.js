@@ -81,7 +81,7 @@ export function standableNear(world, x, y, z, half = PLAYER.half, height = PLAYE
   const cy = Math.floor(y);
   for (let r = 0; r <= SEARCH_RADIUS; r++) {
     for (const [bx, by] of ring(cx, cy, r)) {
-      if (bx < 0 || by < 0 || bx >= World.W || by >= World.D) continue;
+      if (!world.isLoaded(bx, by)) continue; // outside the bounds: no floor to stand on
       const top = world.topSolid(bx, by) + 1;
       if (top <= 0) continue; // an empty column has no floor to stand on
       if (standable(world, bx + 0.5, by + 0.5, top, half, height)) {
@@ -100,11 +100,12 @@ export function standableNear(world, x, y, z, half = PLAYER.half, height = PLAYE
 export function spawnFromMeta(world) {
   if (!world || !world.meta) return null;
   const s = world.meta.spawn;
+  const fallback = world.defaultSpawn();
   const at = standableNear(
     world,
-    s?.x ?? World.W / 2,
-    s?.y ?? World.D / 2,
-    s?.z ?? World.GROUND,
+    s?.x ?? fallback.x,
+    s?.y ?? fallback.y,
+    s?.z ?? fallback.z,
   );
   return at ? { ...at, yaw: s?.yaw || 0 } : null;
 }
