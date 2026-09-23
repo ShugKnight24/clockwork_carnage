@@ -301,6 +301,16 @@ export class Game {
     this._settingsMouseX = -1;
     this._settingsMouseY = -1;
     document.addEventListener("mousemove", (e) => {
+      // The Forge's inventory screen wants the same CSS-pixel conversion as
+      // settings. The two branches are keyed off the game state, so only one
+      // of them can ever run for a given move.
+      if (this.state === GameState.BUILDER && this.builder?.invOpen) {
+        const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
+        this.builder.handleMouseMove(
+          (e.clientX - rect.left) * (this.hudW / rect.width),
+          (e.clientY - rect.top) * (this.hudH / rect.height),
+        );
+      }
       if (this.state !== GameState.SETTINGS) {
         if (this.canvas.style.cursor === "pointer")
           this.canvas.style.cursor = "";

@@ -13,6 +13,7 @@ import { AIR, BLOCKS } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { SKILLS, MAX_LEVEL, xpForLevel } from "../rpg/skills.js";
 import { bestTool as bestToolOf } from "../rpg/tools.js";
+import { renderInventory } from "./forge-inventory.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 export const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -62,6 +63,8 @@ export function renderForge(forge, ctx, w, h) {
   if (!forge.world) return;
   if (forge.overhead) renderOverhead(forge, ctx, w, h);
   else renderHUD(forge, ctx, w, h);
+  // The screen draws over the HUD, and only survival ever opens it.
+  if (forge.invOpen) renderInventory(forge, ctx, w, h);
 }
 
 export function renderHUD(forge, ctx, w, h) {

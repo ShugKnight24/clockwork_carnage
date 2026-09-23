@@ -15,6 +15,7 @@ import {
 import { SurvivalSession } from "../src/rpg/survival-session.js";
 import { PlayerStore } from "../src/rpg/player-store.js";
 import { itemForBlock, itemById } from "../src/rpg/items.js";
+import { returnStack } from "../src/rpg/inventory-ops.js";
 /**
  * The HUD, and with it the constants that only exist to be drawn. The
  * dependency runs one way — this file imports the HUD, never the reverse —
@@ -302,6 +303,13 @@ export class ForgeMode {
     /** Craft menu, survival only — C opens it, the arrows walk it. */
     this.craftOpen = false;
     this.craftIndex = 0;
+    /** The inventory screen; survival only, and it owns the cursor while open. */
+    this.invOpen = false;
+    this.cursor = { x: 0, y: 0 };
+    /** The stack on the cursor mid-drag, or null. */
+    this.carried = null;
+    /** Which hotbar slot is selected, 0..8. */
+    this.hotbarIndex = 0;
     /** Stations within reach, refreshed on a timer rather than per frame. */
     this.stationsNear = new Set();
     this.stationPoll = 0;
@@ -442,6 +450,16 @@ export class ForgeMode {
   handleKeyDown(e) {
     const code = e.code;
     const ctrl = e.ctrlKey || e.metaKey;
+
+    // The inventory screen, survival only. `!ctrl` leaves Ctrl+I to import.
+    if (this.survival && code === "KeyI" && !ctrl) {
+      this._setInventory(!this.invOpen);
+      return true;
+    }
+    if (this.invOpen && code === "Escape") {
+      this._setInventory(false);
+      return true;
+    }
 
     // Survival crafting. The menu only ever exists behind `survival`, and only
     // claims keys the Forge itself does not use, so creative keeps every key.
@@ -690,6 +708,9 @@ export class ForgeMode {
     }
     if (this.overhead) return;
 
+    // The screen owns the cursor; any motion it saw is not a look input.
+    if (this.invOpen) { this.mouseDx = 0; this.mouseDy = 0; }
+
     if (this.mouseLocked) {
       const sens = (this.settings.sensitivity || 1.0) * 0.002;
       // The Forge keeps its own look settings: a player who inverts the
@@ -711,7 +732,7 @@ export class ForgeMode {
         this.stationsNear = this.survival.stations(this.world, this.player);
         this.stationPoll = STATION_POLL_MS;
       }
-      if (this.holdingBreak && this.target) {
+      if (this.holdingBreak && this.target && !this.invOpen) {
         const t = this.target;
         // `dt` is seconds here; the session counts a break in milliseconds.
         const res = this.survival.tickBreak(dt * 1000, t, this.world.get(t.x, t.y, t.z));
@@ -1123,17 +1144,58 @@ export class ForgeMode {
     // A mode change is a fresh start for the placed-block flags, and any
     // half-finished break belongs to the mode that is ending.
     this.survivalSession.resetPlaced();
+    // A stack on the cursor goes back while the inventory it came from is
+    // still reachable — `_dropCarried` cannot return it once `survival` is null.
+    this._dropCarried();
     this.survival = attachSurvival(this.world, this.survivalSession);
     this.holdingBreak = false;
     this.breakProgress = 0;
     if (!this.survival) {
       this.craftOpen = false;
       this.craftIndex = 0;
+      this.invOpen = false;
       // A station is not in the creative palette; do not strand the cursor on one.
       if (STATION_BLOCKS.includes(this.tile)) this.tile = PLACEABLE_BLOCKS[0];
     }
     this._warn(mode === "survival" ? "SURVIVAL — gather to build" : "CREATIVE — unlimited blocks");
     this.audio.menuConfirm();
+  }
+
+  /**
+   * Open or shut the inventory screen. Opening releases the pointer so the
+   * screen can be clicked; closing asks for it back — the keypress is the
+   * user gesture browsers require, the same way overhead already works.
+   */
+  _setInventory(open) {
+    if (open === this.invOpen) return;
+    this.invOpen = open;
+    if (open) {
+      this.holdingBreak = false;
+      this.survival?.cancelBreak();
+      this.breakProgress = 0;
+      this.craftOpen = false;
+      exitPointerLockSafe();
+    } else {
+      this._dropCarried();
+      // A refusal is survivable: play resumes unlocked and the next click locks.
+      requestPointerLockSafe(this.canvas);
+    }
+    this.audio.menuSelect();
+  }
+
+  /** Put any carried stack back. A drag must never lose items. */
+  _dropCarried() {
+    if (!this.carried || !this.survival) { this.carried = null; return; }
+    this.carried = returnStack(this.survival.inventory, this.carried);
+    // If it genuinely does not fit it stays carried and the screen stays open.
+    if (this.carried) this.invOpen = true;
+  }
+
+  /** HUD-space cursor position; only meaningful while the screen is open. */
+  handleMouseMove(x, y) {
+    if (!this.invOpen) return;
+    this.cursor.x = x;
+    this.cursor.y = y;
   }
 
   /** Make `world` the one being edited: drop history, stand the player on its spawn. */
@@ -1142,9 +1204,12 @@ export class ForgeMode {
     // A fresh world means fresh placed-block flags; the character's skills
     // and inventory deliberately carry over.
     this.survivalSession.resetPlaced();
+    // Before the swap, while the old world's inventory can still take it back.
+    this._dropCarried();
     this.survival = attachSurvival(world, this.survivalSession);
     this.craftOpen = false; // a creative world must never inherit an open menu
     this.craftIndex = 0;
+    this.invOpen = false; // nor an open inventory screen
     this.currentSlot = id;
     this.history = [];
     this.historyIndex = -1;

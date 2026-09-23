@@ -8,8 +8,10 @@ export function requestPointerLockSafe(element) {
   }
 }
 
-export function exitPointerLockSafe(doc = document) {
-  if (!doc.pointerLockElement || typeof doc.exitPointerLock !== "function") return;
+// The default is read before the try block below, so a missing `document` —
+// a unit test, a worker — must be handled here rather than caught there.
+export function exitPointerLockSafe(doc = typeof document === "undefined" ? null : document) {
+  if (!doc || !doc.pointerLockElement || typeof doc.exitPointerLock !== "function") return;
   try {
     const result = doc.exitPointerLock();
     if (result && typeof result.catch === "function") result.catch(() => {});
