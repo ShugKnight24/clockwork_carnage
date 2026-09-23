@@ -124,6 +124,8 @@ export const ENEMY_TYPES = {
     attackType: "ranged",
     attackWindupMs: 360,
     form: 1,
+    // A campaign boss: isBossEnemy reads this rather than a list of names.
+    boss: true,
     hitZones: BOSS_ZONES,
   },
   boss_form2: {
@@ -142,6 +144,7 @@ export const ENEMY_TYPES = {
     attackType: "ranged",
     attackWindupMs: 320,
     form: 2,
+    boss: true,
     hitZones: BOSS_ZONES,
   },
   boss_form3: {
@@ -160,6 +163,7 @@ export const ENEMY_TYPES = {
     attackType: "ranged",
     attackWindupMs: 280,
     form: 3,
+    boss: true,
     hitZones: BOSS_ZONES,
   },
   corruptCop: {
