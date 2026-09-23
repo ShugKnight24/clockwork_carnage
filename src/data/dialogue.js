@@ -523,4 +523,35 @@ export const ARIA_COMMS = {
     "He's replaying his last volley. Same rounds, same places. Watch the marks.",
     "Ghost rounds. They fly where he fired them, not where you are. Move off the lines.",
   ],
+
+  // ── Act IV: the Sacrifice ──
+  // The Loop's seam breaks on a rewind, not a shift.
+  loopRewind: [
+    "Same bench. Same plant. Same scuff on the rail. It's looping. Walk into the seam, then rewind back through it.",
+  ],
+  // The parting gifts, as each ally stays behind.
+  giftTimeLock: [
+    "Time-Lock holds six seconds now. Kael left you the rest of his.",
+  ],
+  giftRewind: [
+    "Rewind comes back sooner, and your echo stands longer. Nova left you the head start.",
+  ],
+  giftDash: [
+    "Rook's last tune. The dash is cheaper, and it doesn't ring anymore. He'd call that nominal.",
+  ],
+  giftForesight: [
+    "Foresight's running without a shift. Lyra's model, always on. She's watching for you. She always was.",
+  ],
+  // IV-7: everyone else has gone quiet.
+  ariaStillHere: [
+    "Every channel's empty. Every one but mine. I'm still here, {AGENT}. I'm always here.",
+  ],
+  // Form 3, Eleven Seconds. Spoken on the comms plate as VOSS, and as Lyra's
+  // recording, the one she made for you at the Engine.
+  lordStopsTime: [
+    "Eleven seconds, Cadet. Mine. Everything holds still for me.",
+  ],
+  lyraRecorded: [
+    "It can bend everything. Except you.",
+  ],
 };

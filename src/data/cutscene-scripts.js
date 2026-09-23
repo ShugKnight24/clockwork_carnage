@@ -3969,6 +3969,25 @@ export const CUTSCENE_SCRIPTS = {
       duration: 17000,
     },
     {
+      // Kael's parting gift: Time-Lock holds six seconds from here on.
+      bg: "station",
+      art: "kael",
+      voice: "kael",
+      lines: [
+        {
+          text: "He lays his gauntlet over your chest plate, where Rook wired his shield into the shard.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "It hums. Then it holds.", delay: 2800, color: "#4488ff", size: 16 },
+        { text: "\"Take the rest of it.\"", delay: 4600, color: "#4488ff", size: 18, emotion: "tender" },
+        { text: "\"One door's all I ever needed.\"", delay: 6800, color: "#88aaff", size: 16, emotion: "calm" },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+    {
       bg: "station",
       art: "aria",
       lines: [
@@ -4025,6 +4044,24 @@ export const CUTSCENE_SCRIPTS = {
         },
       ],
       duration: 6500,
+    },
+    {
+      // Nova's parting gift: the rewind comes back sooner, the echo stands longer.
+      bg: "temporal_rift",
+      art: "nova",
+      voice: "nova",
+      lines: [
+        {
+          text: "She grabs your wrist. Two taps, where the rewind lives. The shard answers her.",
+          delay: 0,
+          color: "#ff88aa",
+          size: 15,
+        },
+        { text: "\"Keep the head start.\"", delay: 2600, color: "#ff4488", size: 17, emotion: "tender" },
+        { text: "\"I'm already ahead.\"", delay: 4400, color: "#ff88aa", size: 16, emotion: "happy" },
+      ],
+      particles: "sparks",
+      duration: 7500,
     },
     {
       bg: "temporal_rift",
@@ -4114,6 +4151,56 @@ export const CUTSCENE_SCRIPTS = {
       particles: "sparks",
       duration: 12000,
     },
+    {
+      // Rook's parting gift: a Chrono Dash that costs less and rings nothing.
+      bg: "station",
+      art: "rook",
+      voice: "rook",
+      lines: [
+        {
+          text: "He stops. Turns you round by the shoulder. Opens your chest plate one last time.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "Two turns of a driver. Something in the shard goes quiet.", delay: 2600, color: "#44ff88", size: 15 },
+        { text: "\"Last tune. It doesn't ring anymore.\"", delay: 5000, color: "#44ff88", size: 16, emotion: "calm" },
+      ],
+      particles: "sparks",
+      duration: 8500,
+    },
+    {
+      // kai_2 closes: the anchor, finished. It seals the Core at the end.
+      bg: "dark",
+      art: "rook",
+      voice: "rook",
+      flash: "#ffcc88",
+      lines: [
+        {
+          text: "Then he puts something in your hand. Brass and glass, the size of a fist, still warm from the bench.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 15,
+        },
+        { text: "Kai's handwriting runs round its collar.", delay: 3000, color: "#ccaa44", size: 15 },
+        {
+          text: "\"Kai's math was right. I checked it a third time.\"",
+          delay: 5000,
+          color: "#44ff88",
+          size: 16,
+          emotion: "tender",
+        },
+        {
+          text: "\"Holds a door from the inside. That's what it was always for.\"",
+          delay: 7800,
+          color: "#44ff88",
+          size: 15,
+          emotion: "calm",
+        },
+      ],
+      particles: "glow",
+      duration: 11500,
+    },
   ],
 
   act3_level6: [
@@ -4152,6 +4239,29 @@ export const CUTSCENE_SCRIPTS = {
         },
       ],
       particles: "embers",
+      duration: 9500,
+    },
+    {
+      // Lyra's parting gift: Foresight without a shift.
+      bg: "reactor",
+      art: "lyra",
+      lines: [
+        {
+          text: "She reaches past you and keys something into the suit. Her model. All of it.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 15,
+        },
+        {
+          text: "\"It runs without a shift now. You won't have to ring his bell to see him coming.\"",
+          delay: 2600,
+          color: "#ffaa44",
+          size: 15,
+          emotion: "calm",
+        },
+        { text: "\"I'll be watching for you. I always was.\"", delay: 5800, color: "#ffaa44", size: 16, emotion: "tender" },
+      ],
+      particles: "glow",
       duration: 9500,
     },
   ],
@@ -4247,6 +4357,30 @@ export const CUTSCENE_SCRIPTS = {
       particles: "glow",
       shake: 2,
       duration: 4000,
+    },
+    {
+      // The line Form 3 plays back to you, when he stops time.
+      bg: "temporal_rift",
+      art: "lyra",
+      lines: [
+        {
+          text: "At the door she stops you. Takes your helmet in both hands. Keys the suit recorder.",
+          delay: 0,
+          color: "#ffcc88",
+          size: 15,
+        },
+        { text: "\"It can bend everything. Except you.\"", delay: 2800, color: "#ffaa44", size: 18, emotion: "tender" },
+        {
+          text: "She saves it somewhere you can't delete. \"For later. Not now.\"",
+          delay: 5200,
+          color: "#ffcc88",
+          size: 15,
+          voice: "lyra",
+          emotion: "sad",
+        },
+      ],
+      particles: "glow",
+      duration: 9000,
     },
     {
       bg: "temporal_rift",
@@ -4392,6 +4526,24 @@ export const CUTSCENE_SCRIPTS = {
       ],
       particles: "glow",
       duration: 8000,
+    },
+    {
+      // Kai's anchor, finished by Rook, seals the Core.
+      bg: "boss_lair",
+      art: "hero_armed",
+      shake: 4,
+      lines: [
+        { text: "Kai's anchor is still in your fist.", delay: 0, color: "#ccaa44", size: 16 },
+        {
+          text: "You drive it into the floor where he stood. It bites. It holds.",
+          delay: 1800,
+          color: "#ffcc88",
+          size: 16,
+        },
+        { text: "The rift has nowhere left to go.", delay: 4200, color: "#ffffff", size: 18 },
+      ],
+      particles: "embers",
+      duration: 7500,
     },
     {
       bg: "dark",
@@ -4544,6 +4696,115 @@ export const CUTSCENE_SCRIPTS = {
         { text: "The ones who stayed.", delay: 2600, color: "#00ffcc", size: 18 },
         { text: "The ones who got back up.", delay: 3700, color: "#ffcc00", size: 22 },
         { text: "The ones who won.", delay: 5000, color: "#ffffff", size: 26 },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+  ],
+
+  /**
+   * After the ending, weeks later: Lyra closes the channel that opened in Act
+   * I. The reactor warning was always hers; she sends it back down the last
+   * thread of the rift, to a cadet on the worst morning of their life, so
+   * that they walk the one take where the station lives.
+   */
+  epilogue_message: [
+    {
+      bg: "deep_space",
+      lines: [
+        { text: "WEEKS LATER", delay: 0, color: "#aaddff", size: 20 },
+        {
+          text: "The Chronos Engine, cold for the first time in six years.",
+          delay: 1500,
+          color: "#8899aa",
+          size: 15,
+        },
+      ],
+      particles: "stars",
+      duration: 5000,
+    },
+    {
+      bg: "reactor",
+      art: "lyra",
+      lines: [
+        { text: "You find her at the console, the way you knew you would.", delay: 0, color: "#aabbcc", size: 15 },
+        {
+          text: "One thread of the rift is still open behind the glass, thin as a hair. She has been coming here every night to watch it.",
+          delay: 2200,
+          color: "#ffcc88",
+          size: 15,
+        },
+        { text: "\"I went back through the takes. All of them.\"", delay: 6400, color: "#ffaa44", size: 16, emotion: "calm" },
+        {
+          text: "\"The ones where you touch the reactor, you never make it to me.\"",
+          delay: 8800,
+          color: "#ffaa44",
+          size: 15,
+          emotion: "sad",
+        },
+      ],
+      particles: "glow",
+      duration: 13000,
+    },
+    {
+      bg: "dark",
+      art: "lyra",
+      lines: [
+        {
+          text: "She opens a channel. Encrypts it six ways. Aims it down the thread, at the reactor level, on the day time broke.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "\"Agent. Don't touch the reactor. I've seen how this ends.\"",
+          delay: 4200,
+          color: "#4488ff",
+          size: 16,
+          emotion: "tender",
+        },
+        { text: "\"Keep moving. I'll find you. I always do.\"", delay: 7400, color: "#4488ff", size: 16, emotion: "tender" },
+      ],
+      duration: 11500,
+    },
+    {
+      bg: "temporal_rift",
+      flash: "#ffffff",
+      lines: [
+        { text: "The thread takes it. Flares once. Closes.", delay: 0, color: "#ffffff", size: 17 },
+        {
+          text: "For the first time since the eleven seconds, time is shut all the way.",
+          delay: 2000,
+          color: "#aaddff",
+          size: 15,
+        },
+      ],
+      particles: "glow",
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        { text: "\"...So that's who it was.\"", delay: 0, color: "#00ffdd", size: 18, emotion: "tender" },
+        {
+          text: "\"Voiceprint match, one hundred percent. It was always going to be you.\"",
+          delay: 2400,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "warm",
+        },
+      ],
+      duration: 7000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "Lyra finally turns round.", delay: 0, color: "#aabbcc", size: 15 },
+        { text: "\"Somebody had to tell you where to walk.\"", delay: 1800, color: "#ffaa44", size: 16, emotion: "warm" },
+        { text: "\"Told you I'd find you.\"", delay: 4400, color: "#ffaa44", size: 19, emotion: "tender" },
+        { text: "She takes your hand, and doesn't let go.", delay: 6600, color: "#ffffff", size: 16 },
       ],
       particles: "glow",
       duration: 10500,
@@ -4797,7 +5058,11 @@ export const CUTSCENE_SCRIPTS = {
     },
   ],
 
-  /** True Ending — plays after completing NG+ cycle 3 */
+  /**
+   * True Ending — plays after an NG+ run finished with all twelve memory
+   * fragments (NG_PLUS in src/data/campaign/acts.js): you remembered every
+   * one of them, so they get to come back.
+   */
   ng_plus_true_ending: [
     {
       bg: "dark",
@@ -4902,7 +5167,7 @@ export const CUTSCENE_SCRIPTS = {
     {
       bg: "deep_space",
       lines: [
-        { text: "Four passes. Three acts each. One cadet.", delay: 0, color: "#aaddff", size: 16 },
+        { text: "Every pass. Four acts. Twelve memories. One cadet.", delay: 0, color: "#aaddff", size: 16 },
         {
           text: "You've seen every version of this story.",
           delay: 1900,
@@ -4923,6 +5188,553 @@ export const CUTSCENE_SCRIPTS = {
         { text: "Thank you for playing.", delay: 2200, color: "#ffffff", size: 18 },
       ],
       duration: 7000,
+    },
+  ],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // NG+ ECHOES — the Gathering, half-remembered (spec decision 10)
+  // NG_PLUS.scenes in src/data/campaign/acts.js plays these in place of
+  // their Act II scenes from the first loop on. You remember everything;
+  // they remember just enough to stop mid-sentence. And Nova comes first:
+  // she pulls you out of the Core before she has ever met you.
+  // ═══════════════════════════════════════════════════════════════════
+
+  /** NG+ for gathering_extraction: the blur comes first this time. */
+  gathering_extraction_echo: [
+    {
+      bg: "boss_lair",
+      shake: 3,
+      lines: [
+        { text: "The Core is coming down. Again.", delay: 0, color: "#ff8844", size: 18 },
+        {
+          text: "You know this part. The rubble. The ceiling, an inch from your visor.",
+          delay: 1500,
+          color: "#aabbcc",
+          size: 15,
+        },
+      ],
+      particles: "embers",
+      duration: 6000,
+    },
+    {
+      bg: "dark",
+      shake: 6,
+      flash: "#ff4488",
+      lines: [
+        { text: "Then a blur. Backwards.", delay: 0, color: "#ff88aa", size: 18 },
+        {
+          text: "Someone is there three seconds ago, dragging you out of where you were about to be.",
+          delay: 1500,
+          color: "#ffffff",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "reactor",
+      art: "nova",
+      voice: "nova",
+      lines: [
+        {
+          text: "Twin blades. A face you haven't met yet. Not in this loop.",
+          delay: 0,
+          color: "#ff88aa",
+          size: 15,
+        },
+        { text: "\"Not this time.\"", delay: 2400, color: "#ff4488", size: 18, emotion: "urgent" },
+        { text: "She stares at you. Then at her own hands.", delay: 4000, color: "#aabbcc", size: 15 },
+        {
+          text: "\"...I don't know why I said that. I don't know why I'm here.\"",
+          delay: 5600,
+          color: "#ff88aa",
+          size: 15,
+          emotion: "afraid",
+        },
+        { text: "She's gone before you can tell her.", delay: 8600, color: "#aabbcc", size: 15 },
+      ],
+      particles: "sparks",
+      duration: 11000,
+    },
+    {
+      bg: "dark",
+      art: "redacted_file",
+      voice: "unknown",
+      emotion: "urgent",
+      lines: [
+        { text: "[ENCRYPTED CHANNEL — SOURCE UNKNOWN]", delay: 0, color: "#556677", size: 13 },
+        { text: "\"Found you. Don't talk. Breathe, then move.\"", delay: 1500, color: "#4488ff", size: 16 },
+        {
+          text: "\"Service shaft, left of the reactor ring. There's a lift at the bottom.\"",
+          delay: 3900,
+          color: "#4488ff",
+          size: 15,
+        },
+      ],
+      duration: 7500,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "\"That was the fastest thing I've ever logged. It didn't have a name.\"",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "curious",
+        },
+        { text: "\"You know who it was. Don't you.\"", delay: 2800, color: "#00ffdd", size: 16, emotion: "tender" },
+      ],
+      duration: 6500,
+    },
+  ],
+
+  /** NG+ for gathering_lyra: you say her name first. */
+  gathering_lyra_echo: [
+    {
+      bg: "station",
+      shake: 2,
+      lines: [
+        {
+          text: "The lift doors close on the hunters. Twice, then nothing. Exactly like last time.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+      ],
+      duration: 4500,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "A woman at the controls. Bureau jacket, no rank pins. She opens her mouth to introduce herself.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"Marsden.\"", delay: 2800, color: "#00ffcc", size: 17, voice: "player", emotion: "tender" },
+        { text: "She goes very still.", delay: 4000, color: "#aabbcc", size: 15 },
+        {
+          text: "\"...I haven't told you that. I haven't told anyone that on this ring.\"",
+          delay: 5400,
+          color: "#ffaa44",
+          size: 15,
+          emotion: "curious",
+        },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "\"The crate with your name on it. That was me. You already knew that too.\"",
+          delay: 0,
+          color: "#ffaa44",
+          size: 15,
+          emotion: "calm",
+        },
+        {
+          text: "\"Your readings don't drift. You're a fixed point. Everything else goes round again. You don't.\"",
+          delay: 3200,
+          color: "#ffaa44",
+          size: 15,
+          emotion: "calm",
+        },
+        { text: "\"So you remember. All of it.\"", delay: 6600, color: "#ffcc88", size: 16, emotion: "sad" },
+      ],
+      particles: "glow",
+      duration: 10000,
+    },
+    {
+      bg: "dark",
+      art: "aria",
+      lines: [
+        {
+          text: "\"Voiceprint check. Same voice as the channel at the reactor.\"",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "curious",
+        },
+      ],
+      duration: 4000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        { text: "\"I never sent you anything from the reactor.\"", delay: 0, color: "#ffaa44", size: 16, emotion: "worried" },
+        { text: "A pause. A long one.", delay: 2200, color: "#aabbcc", size: 15 },
+        { text: "\"...Not yet.\"", delay: 3600, color: "#ffaa44", size: 18, emotion: "tender" },
+        { text: "\"Why did I say not yet?\"", delay: 5400, color: "#ffcc88", size: 15, emotion: "curious" },
+      ],
+      particles: "glow",
+      duration: 9000,
+    },
+    {
+      bg: "station",
+      art: "lyra",
+      lines: [
+        {
+          text: "The lift drops through the dark. This time she holds your arm instead of the rail.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        {
+          text: "\"Stop shifting unless you have to. Every time you do, you ring a bell he built.\"",
+          delay: 2800,
+          color: "#ff8844",
+          size: 15,
+          emotion: "worried",
+        },
+        {
+          text: "\"I'm not a field agent. I'm coming anyway. ...I think I always come anyway.\"",
+          delay: 5800,
+          color: "#ffaa44",
+          size: 16,
+          emotion: "tender",
+        },
+      ],
+      particles: "glow",
+      duration: 10500,
+    },
+  ],
+
+  /** NG+ for gathering_rook: you finish each other's lines. */
+  gathering_rook_echo: [
+    {
+      bg: "station",
+      lines: [
+        { text: "SALVAGE DECK — DOCKING RING", delay: 0, color: "#00ccff", size: 20 },
+        {
+          text: "Scrap, turrets, and one very locked door. You know which weld goes first.",
+          delay: 1300,
+          color: "#aabbcc",
+          size: 15,
+        },
+      ],
+      duration: 4500,
+    },
+    {
+      bg: "station",
+      art: "rook",
+      voice: "rook",
+      lines: [
+        {
+          text: "A man inside is welding the blast doors shut. The looters are coming up the dock.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"Don't thank me. I'm protecting the doors—\"", delay: 2600, color: "#44ff88", size: 15, emotion: "angry" },
+        { text: "\"—not you. I know.\"", delay: 4200, color: "#00ffcc", size: 16, voice: "player", emotion: "calm" },
+        { text: "The torch stops.", delay: 5800, color: "#aabbcc", size: 15 },
+      ],
+      particles: "sparks",
+      duration: 8500,
+    },
+    {
+      bg: "station",
+      art: "rook",
+      voice: "rook",
+      lines: [
+        { text: "\"Have we met?\"", delay: 0, color: "#44ff88", size: 16, emotion: "curious" },
+        {
+          text: "He's holding out a spare battery. He doesn't remember picking it up.",
+          delay: 1800,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"It's not a gift. It's a—\"", delay: 4200, color: "#44ff88", size: 15 },
+        { text: "\"Deposit.\"", delay: 5400, color: "#00ffcc", size: 16, voice: "player", emotion: "warm" },
+        { text: "\"...Get out of my head and hold my hangar.\"", delay: 6800, color: "#44ff88", size: 16, emotion: "neutral" },
+      ],
+      particles: "sparks",
+      duration: 10000,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        {
+          text: "\"Looters, led by a Shield Commander. You've done this dance. Flank it.\"",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+        },
+        {
+          text: "\"He finished your sentence and you finished his. I'm counting that as a handshake.\"",
+          delay: 2800,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "happy",
+        },
+      ],
+      duration: 6500,
+    },
+  ],
+
+  /** NG+ for gathering_nova: the blur from the Core has a name now. */
+  gathering_nova_echo: [
+    {
+      bg: "station",
+      lines: [
+        { text: "TRANSIT LOOP — MONORAIL RING", delay: 0, color: "#00ccff", size: 20 },
+        { text: "The trains still run, on a schedule nobody wrote.", delay: 1300, color: "#aabbcc", size: 16 },
+      ],
+      duration: 4000,
+    },
+    {
+      bg: "station",
+      art: "nova",
+      voice: "nova",
+      lines: [
+        {
+          text: "The blur from the Core. Three looters are down before you see her stop.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"You again.\"", delay: 2400, color: "#ff4488", size: 16, emotion: "curious" },
+        { text: "\"Have we raced before?\"", delay: 3900, color: "#ff4488", size: 17, emotion: "curious" },
+        { text: "\"...Yeah. We have. I won, didn't I.\"", delay: 6000, color: "#ff88aa", size: 16, emotion: "happy" },
+      ],
+      particles: "sparks",
+      duration: 9000,
+    },
+    {
+      bg: "station",
+      art: "nova",
+      voice: "nova",
+      lines: [
+        {
+          text: "\"I pulled you out of that ceiling and I don't know why. I don't pull people out. I run.\"",
+          delay: 0,
+          color: "#ff4488",
+          size: 15,
+          emotion: "worried",
+        },
+        { text: "\"Beat me to the junction and you can tell me.\"", delay: 3600, color: "#ff4488", size: 16, emotion: "excited" },
+        { text: "She doesn't leave this time. She waits for you to start.", delay: 5800, color: "#aabbcc", size: 15 },
+      ],
+      particles: "sparks",
+      duration: 9000,
+    },
+    {
+      bg: "station",
+      art: "aria",
+      lines: [
+        {
+          text: "\"Beasts on the rails. Shift and they get faster, not slower.\"",
+          delay: 0,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "worried",
+        },
+        {
+          text: "\"And that's our blur from the Core. Nice of her to have a name this time.\"",
+          delay: 2600,
+          color: "#00ffdd",
+          size: 15,
+          emotion: "happy",
+        },
+      ],
+      duration: 6000,
+    },
+  ],
+
+  /** NG+ for hound_attack: Nova does not run. */
+  hound_attack_echo: [
+    {
+      bg: "station",
+      lines: [
+        { text: "EVERY SCREEN, ONE FACE", delay: 0, color: "#ff2244", size: 22 },
+        { text: "Every monitor on the ring lights up at once.", delay: 1200, color: "#cc4466", size: 16 },
+      ],
+      particles: "embers",
+      shake: 2,
+      duration: 4000,
+    },
+    {
+      bg: "boss_lair",
+      art: "villain_form2",
+      lines: [
+        { text: "\"Oh. You found some strays. How sentimental.\"", delay: 0, color: "#ff4466", size: 17 },
+        {
+          text: "\"And you keep ringing my bell, Cadet. Louder every time round.\"",
+          delay: 2400,
+          color: "#ff4466",
+          size: 16,
+          emotion: "curious",
+        },
+        { text: "\"...Every time round. Now why did I say that?\"", delay: 5400, color: "#ff88aa", size: 15, emotion: "curious" },
+      ],
+      particles: "embers",
+      duration: 9000,
+    },
+    {
+      bg: "station",
+      flash: "#ffffff",
+      shake: 6,
+      lines: [
+        { text: "Then the glass wall comes in.", delay: 0, color: "#ffffff", size: 20 },
+        {
+          text: "The empty suit steps through the shards, a few frames behind itself. Listening.",
+          delay: 1500,
+          color: "#ffd79a",
+          size: 16,
+        },
+      ],
+      particles: "sparks",
+      duration: 6000,
+    },
+    {
+      bg: "station",
+      art: "nova",
+      voice: "nova",
+      emotion: "afraid",
+      lines: [
+        { text: "Nova's weight shifts to run. Every muscle in her says run.", delay: 0, color: "#ff88aa", size: 15 },
+        { text: "\"No. Not this time. I know how this goes.\"", delay: 2200, color: "#ff4488", size: 17, emotion: "angry" },
+        { text: "She steps in front of you instead.", delay: 4600, color: "#ffffff", size: 16 },
+      ],
+      shake: 3,
+      duration: 7500,
+    },
+    {
+      bg: "dark",
+      shake: 8,
+      flash: "#ff4488",
+      lines: [
+        { text: "The claw comes down where you both were about to be.", delay: 0, color: "#ff4444", size: 16 },
+        {
+          text: "You aren't there. She took you both back three seconds before it landed.",
+          delay: 2200,
+          color: "#ffffff",
+          size: 16,
+        },
+        { text: "The suit listens a while longer. Then it walks back into the dark.", delay: 4800, color: "#aabbcc", size: 15 },
+      ],
+      particles: "sparks",
+      duration: 8000,
+    },
+    {
+      bg: "station",
+      art: "party",
+      party: ["lyra", "you", "nova", "rook"],
+      lines: [
+        {
+          text: "Later. Her hands are steady. That scares her more than the Hound did.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"Last time the world ended, I ran.\"", delay: 2800, color: "#ff4488", size: 16, voice: "nova", emotion: "sad" },
+        {
+          text: "\"...Which last time? There's more than one, isn't there.\"",
+          delay: 5200,
+          color: "#ff88aa",
+          size: 16,
+          voice: "nova",
+          emotion: "curious",
+        },
+        { text: "Lyra looks at you. She already knows the answer.", delay: 8200, color: "#ffcc88", size: 15 },
+      ],
+      particles: "glow",
+      duration: 11500,
+    },
+  ],
+
+  /** NG+ for gathering_kael: he has said your badge number before. */
+  gathering_kael_echo: [
+    {
+      bg: "locker_room",
+      lines: [
+        { text: "CHRONOS PD — TEMPORAL CRIMES DIVISION", delay: 0, color: "#00ccff", size: 20 },
+        { text: "Where you clocked in, three days ago. And the time before that.", delay: 1500, color: "#aabbcc", size: 16 },
+      ],
+      duration: 5000,
+    },
+    {
+      bg: "dark",
+      art: "kael",
+      voice: "kael",
+      emotion: "calm",
+      lines: [
+        {
+          text: "On the mezzanine: heavy plate, shield up. He's already looking at you when you come in.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "\"Badge eleven-two-three-five.\"", delay: 2600, color: "#4488ff", size: 16 },
+        {
+          text: "\"...I've said that to you before. Standing right here.\"",
+          delay: 4400,
+          color: "#88aaff",
+          size: 15,
+          emotion: "curious",
+        },
+      ],
+      duration: 8000,
+    },
+    {
+      bg: "dark",
+      art: "portrait_supervisor",
+      lines: [
+        {
+          text: "The Supervisor's handset on his chest strap. He doesn't play the last transmission this time.",
+          delay: 0,
+          color: "#aabbcc",
+          size: 15,
+        },
+        { text: "He doesn't have to. You both know how it ends.", delay: 3000, color: "#8899aa", size: 15 },
+      ],
+      duration: 6500,
+    },
+    {
+      bg: "dark",
+      art: "kael",
+      voice: "kael",
+      lines: [
+        { text: "\"I held this door once. I held it wrong.\"", delay: 0, color: "#4488ff", size: 16, emotion: "sad" },
+        { text: "\"...Twice? Why does it feel like twice?\"", delay: 2400, color: "#88aaff", size: 16, emotion: "worried" },
+        {
+          text: "\"I don't do squads. Don't make me watch you hold it without me.\"",
+          delay: 5000,
+          color: "#4488ff",
+          size: 16,
+          emotion: "sad",
+        },
+      ],
+      duration: 9000,
+    },
+    {
+      bg: "locker_room",
+      art: "party",
+      party: ["lyra", "you", "nova", "rook"],
+      lines: [
+        {
+          text: "\"He remembers more than he'll say. So we hold his line, and let him catch up.\"",
+          delay: 0,
+          color: "#ffaa44",
+          size: 15,
+          voice: "lyra",
+          emotion: "calm",
+        },
+        { text: "\"Lobby first. Then his door. Same as—\"", delay: 3000, color: "#44ff88", size: 15, voice: "rook" },
+        { text: "Rook stops. Nobody asks same as what.", delay: 4800, color: "#aabbcc", size: 15 },
+      ],
+      particles: "glow",
+      duration: 8000,
     },
   ],
 

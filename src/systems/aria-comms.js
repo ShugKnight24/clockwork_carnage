@@ -62,6 +62,15 @@ const CATEGORY_EMOTIONS = {
   survivingTake: "sad",
   stasisBreaks: "urgent",
   replayVolley: "urgent",
+  // Act IV: the Loop, the parting gifts, the last voice left, Eleven Seconds.
+  loopRewind: "curious",
+  giftTimeLock: "tender",
+  giftRewind: "tender",
+  giftDash: "warm",
+  giftForesight: "tender",
+  ariaStillHere: "tender",
+  lordStopsTime: "menacing",
+  lyraRecorded: "tender",
 };
 import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 import {
