@@ -480,8 +480,16 @@ export const ARIA_COMMS = {
     "His time-stop. Your window. Move.",
   ],
   collapseChase: [
-    "It's coming down behind you. Run, and shift if it gains. It's slower in there than you are.",
-    "Ceiling's going! Don't outrun it on your legs, outrun it in time. Shift!",
+    "It's coming down behind you. Sprint, and shift if it gains. It's slower in there than you are.",
+    "Ceiling's going! Run! If the red line closes, shift. It falls at a crawl in there.",
+  ],
+  // The collapse caught you: one hit, and back to the last landing.
+  collapseCaught: [
+    "Got you. Just a clip. You're back on the landing. Go again.",
+    "That one landed. You're fine, mostly. Back up, and don't let the red line touch you.",
+  ],
+  collapseHoldShift: [
+    "Legs won't do it tired. Hold the shift as it closes. It crawls while you don't.",
   ],
   ventGallery: [
     "Plasma vents on a cycle. Shift and the gaps get wide. There's a cache at the back.",

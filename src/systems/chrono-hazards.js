@@ -10,7 +10,9 @@
  * teleport for a loop. So `serialize()` is two numbers per hazard and a
  * restore resumes a collapse mid-fall exactly where it was.
  *
- *   collapse  cells fill with rubble step by step once a zone triggers it
+ *   collapse  cells fill with rubble step by step once a zone triggers it;
+ *             if the front reaches you it catches you once (one hit, never
+ *             lethal) and sets you down on the last landing you passed
  *   blade     a rotor: arms sweep a disc (dashable: a Chrono Dash goes through)
  *   vent      a zone that burns for `on` seconds out of every `period`
  *   gate      a laser line on the same cycle, or a turret firing real rounds
@@ -44,7 +46,62 @@ export const HAZARD_CHRONO = 0.15;
 /** The player's body, for hazard contact. */
 const BODY = 0.3;
 /** Seconds between two hits from the same hazard (sim time). */
-const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, collapse: 0.35 };
+const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, piston: 0.6 };
+
+/**
+ * What the rubble costs when a collapse catches you, by difficulty (Easy,
+ * Normal, Hard, Nightmare). One hit per catch, never below 1 HP.
+ */
+export const COLLAPSE_HIT = [5, 10, 20, 20];
+/** Seconds from being set down on a landing until the front reaches it again. */
+export const COLLAPSE_GRACE = 1.6;
+/** The card the second catch brings up. */
+export const COLLAPSE_HINT = {
+  title: "{SHIFT} — OUTRUN IT IN TIME",
+  hint: "ARIA: \"It falls at a crawl while you shift, and you don't.\" {SHIFT} as the red line closes, and run.",
+};
+
+/** The one hit a catch costs on this difficulty. */
+export function collapseHit(difficulty = 1) {
+  return COLLAPSE_HIT[difficulty] ?? COLLAPSE_HIT[1];
+}
+
+/** The collapse step the body at (x, y) stands in, or -1 outside its path. */
+export function collapseStepAt(h, x, y) {
+  const c = Math.floor(x);
+  const r = Math.floor(y);
+  return h.steps.findIndex((s) => s.some(([sc, sr]) => sc === c && sr === r));
+}
+
+/** The last landing at or behind step `at` (the first landing if none). */
+export function collapseLanding(h, at) {
+  const lands = h.landings?.length ? h.landings : [0];
+  let best = lands[0];
+  for (const l of lands) if (l <= at && l > best) best = l;
+  return Math.min(best, at);
+}
+
+/**
+ * Where a caught runner is set down on landing step `land`: its open cell
+ * nearest the step's middle, facing on up the path.
+ */
+export function landingSpot(h, land, grid) {
+  const centre = (cells) => {
+    const n = cells.length || 1;
+    return { x: cells.reduce((a, [c]) => a + c + 0.5, 0) / n, y: cells.reduce((a, [, r]) => a + r + 0.5, 0) / n };
+  };
+  const cells = h.steps[land].filter(([c, r]) => grid[r]?.[c] === 0);
+  const pool = cells.length ? cells : h.steps[land];
+  const mid = centre(pool);
+  let best = pool[0];
+  for (const cell of pool) {
+    if (Math.hypot(cell[0] + 0.5 - mid.x, cell[1] + 0.5 - mid.y) < Math.hypot(best[0] + 0.5 - mid.x, best[1] + 0.5 - mid.y)) best = cell;
+  }
+  const ahead = centre(h.steps[Math.min(h.steps.length - 1, land + 3)]);
+  const x = best[0] + 0.5;
+  const y = best[1] + 0.5;
+  return { x, y, dir: Math.atan2(ahead.y - y, ahead.x - x) };
+}
 
 const cellIn = ([c1, r1, c2, r2], x, y) => x >= c1 && x < c2 + 1 && y >= r1 && y < r2 + 1;
 
@@ -212,6 +269,11 @@ export class ChronoHazards {
     this._loopedAt = {};
     this._game = null;
     this._pending = {};
+    this._filled = {};
+    this._reached = {};
+    this._cleared = new Set();
+    this.caught = 0;
+    this.hint = null;
     this._simTime = 0;
     this._entered = new Set();
     this._prev = null;
@@ -368,26 +430,43 @@ export class ChronoHazards {
     else if (h.type === "vent") playChronoSound(game.audio, "vent");
   }
 
+  /**
+   * A collapse chases you along its steps. It never fills the step you stand
+   * on or anything ahead of it, and it never deals damage over time: when
+   * the front reaches you it catches you once (`_catchCollapse`). Back out of
+   * its start before you finish it and it re-arms instead of sealing you out.
+   */
   _collapse(game, h) {
     const p = game.player;
-    if (this.triggers[h.id] == null && cellIn(h.trigger, p.x, p.y)) {
+    const at = collapseStepAt(h, p.x, p.y);
+    if (this.triggers[h.id] == null) {
+      if (!cellIn(h.trigger, p.x, p.y)) return;
       this.triggers[h.id] = this.clock;
+      this._reached[h.id] = Math.max(0, at);
       playChronoSound(game.audio, "collapse");
       if (h.aria && !this._entered.has("collapse:told")) {
         this._entered.add("collapse:told");
         game.queueAriaMessage?.(h.aria);
       }
     }
+    if (at >= 0) this._reached[h.id] = Math.max(this._reached[h.id] ?? 0, at);
+    if (at < 0 && !this._cleared.has(h.id)) {
+      // Out of its path: through the far end (it may come down now), or
+      // back out of the start, or in a side room off it (it waits).
+      if ((this._reached[h.id] ?? 0) >= h.steps.length - 2) this._cleared.add(h.id);
+      else if (collapseFront(h, this.clock, this.triggers[h.id]) < 0) {
+        this._rearmCollapse(game, h);
+        return;
+      } else return;
+    }
     const front = collapseFront(h, this.clock, this.triggers[h.id]);
     if (front < 0) return;
-    const pc = Math.floor(p.x);
-    const pr = Math.floor(p.y);
-    const playerStep = h.steps.findIndex((s) => s.some(([c, r]) => c === pc && r === pr));
     const grid = game.map.grid;
     const done = (this._pending[h.id] ??= new Set());
+    const filled = (this._filled[h.id] ??= new Set());
     for (let i = 0; i <= front; i++) {
       // Never trap: the step you stand on and everything ahead of it wait.
-      if (playerStep >= 0 && i >= playerStep) break;
+      if (at >= 0 && i >= at) break;
       for (const [c, r] of h.steps[i]) {
         const key = r * 1000 + c;
         if (done.has(key)) continue;
@@ -401,9 +480,71 @@ export class ChronoHazards {
         if (occupied) continue;
         grid[r][c] = h.wall ?? 3;
         done.add(key);
+        filled.add(key);
       }
     }
-    if (playerStep >= 0 && front >= playerStep) this._hit(game, h);
+    // A Chrono Dash is untouchable, even by a ceiling.
+    if (at >= 0 && front >= at && !game.chronoPowers?.isInvulnerable(p)) this._catchCollapse(game, h, at);
+  }
+
+  /** Clear what a collapse filled from step `from` on, so it can fall again. */
+  _unfill(game, h, from = 0) {
+    const grid = game.map.grid;
+    const done = this._pending[h.id];
+    const filled = this._filled[h.id];
+    if (!filled) return;
+    for (let i = from; i < h.steps.length; i++) {
+      for (const [c, r] of h.steps[i]) {
+        const key = r * 1000 + c;
+        if (!filled.has(key)) continue;
+        if (grid[r]?.[c] === (h.wall ?? 3)) grid[r][c] = 0;
+        filled.delete(key);
+        done?.delete(key);
+      }
+    }
+  }
+
+  /** You backed out before it really started: as if it never went off. */
+  _rearmCollapse(game, h) {
+    this._unfill(game, h, 0);
+    delete this.triggers[h.id];
+    delete this._reached[h.id];
+  }
+
+  /**
+   * The rubble caught you. One hit, never lethal; a shake; and you are set
+   * down on the last landing you passed with the front re-armed behind it.
+   * The second time in a level, the card says how to outrun it.
+   */
+  _catchCollapse(game, h, at) {
+    const p = game.player;
+    const land = collapseLanding(h, at);
+    this._unfill(game, h, land);
+    const spot = landingSpot(h, land, game.map.grid);
+    p.x = spot.x;
+    p.y = spot.y;
+    p.angle = spot.dir;
+    p.isDashing = false;
+    p.isSliding = false;
+    // The front comes back to the landing COLLAPSE_GRACE seconds from now.
+    this.triggers[h.id] = this.clock + COLLAPSE_GRACE - (h.delay ?? 0) - land / h.rate;
+    this._reached[h.id] = land;
+
+    const hit = Math.min(collapseHit(game.settings?.difficulty), Math.max(0, p.health - 1));
+    if (hit > 0) {
+      p.health -= hit;
+      game.roundDamageTaken = (game.roundDamageTaken ?? 0) + hit;
+    }
+    p.hurtTime = game.time;
+    game.screenShake = Math.max(game.screenShake ?? 0, 12);
+    game.audio?.playerHit?.();
+    playChronoSound(game.audio, "collapse");
+    this.caught++;
+    if (this.caught === 1) game.queueAriaMessage?.("collapseCaught");
+    else if (this.caught === 2) {
+      this.hint = { card: COLLAPSE_HINT, power: "shift", at: this.clock };
+      game.queueAriaMessage?.("collapseHoldShift");
+    }
   }
 
   _turret(game, h, prevClock) {

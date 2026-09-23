@@ -8,6 +8,10 @@ import {
   hazardState,
   ngPlusHazard,
   ChronoHazards,
+  COLLAPSE_GRACE,
+  collapseHit,
+  collapseStepAt,
+  collapseLanding,
 } from "../../src/systems/chrono-hazards.js";
 import { SET_PIECES, SEAL_TILE, setPieceFor, rotateSetPiece } from "../../src/data/campaign/set-pieces.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
@@ -132,30 +136,6 @@ describe("hazards are passable with a shift", () => {
     const normal = safeFraction(gate.period, (start) => crossing({ ...across, speed: WALK, start, hit: hitGate }));
     const shifted = safeFraction(gate.period, (start) => crossing({ ...across, speed: WALK, start, shift: 10, hit: hitGate }));
     expect(shifted).toBeGreaterThan(normal);
-  });
-
-  it("a collapse crushes a sprinter who never shifts and not one who shifts once", () => {
-    const shaft = SET_PIECES.evac_shafts.hazards[0];
-    const run = (shift) => {
-      const dt = 1 / 120;
-      let t = 0;
-      let clock = 0;
-      let y = 42.5;
-      let crushed = 0;
-      while (y > 21 && t < 30) {
-        const shifting = t < shift;
-        const sim = dt * (shifting ? SHIFT_SCALE : 1);
-        y -= SPRINT * sim;
-        clock += sim * (shifting ? HAZARD_CHRONO : 1);
-        t += dt;
-        const front = collapseFront(shaft, clock, 0);
-        const step = 43 - Math.floor(y); // rows 43..21 are steps 0..22
-        if (front >= step) crushed += sim;
-      }
-      return crushed;
-    };
-    expect(run(0)).toBeGreaterThan(0.5);
-    expect(run(3)).toBe(0); // one tank of chrono, at 33/s
   });
 
   it("a Time-Lock from the start tile, facing the sentry, lies across the Foundry's stream", () => {
@@ -338,42 +318,6 @@ describe("ChronoHazards runtime", () => {
     expect(game.hits).toEqual([]);
   });
 
-  it("fills a collapse behind the player and never in front", () => {
-    const { game, hz } = levelGame(2, 0);
-    const shaft = hz.hazards.find((h) => h.id === "shaft_west");
-    const p = game.player;
-    p.x = 8.5;
-    p.y = 41.5; // in the trigger
-    hz.update(game, 0.016);
-    expect(hz.triggers.shaft_west).toBeDefined();
-    p.y = 35.5;
-    for (let i = 0; i < 300; i++) hz.update(game, 1 / 60); // five seconds: the front reaches the player
-    const grid = game.map.grid;
-    expect(grid[43][8]).not.toBe(0); // behind: rubble
-    expect(grid[35][8]).toBe(0); // under the player: waiting
-    expect(grid[30][8]).toBe(0); // ahead: waiting
-    expect(game.hits.length).toBeGreaterThan(0); // crushed at the front
-    p.y = 19.5; // out of the shaft
-    hz.update(game, 1 / 60);
-    expect(grid[30][8]).not.toBe(0);
-    expect(shaft.steps.length).toBe(23);
-  });
-
-  it("resumes a collapse mid-fall from its saved clock", () => {
-    const { game, hz } = levelGame(2, 0);
-    game.player.x = 8.5;
-    game.player.y = 41.5;
-    hz.update(game, 0.016);
-    for (let i = 0; i < 40; i++) hz.update(game, 1 / 60);
-    const saved = JSON.parse(JSON.stringify(hz.serialize()));
-    const again = new ChronoHazards();
-    again.load(game, ACTS[1].levels[0]);
-    again.restore(saved);
-    const shaft = hz.hazards[0];
-    expect(collapseFront(shaft, again.clock, again.triggers.shaft_west)).toBe(collapseFront(shaft, hz.clock, hz.triggers.shaft_west));
-    expect(hazardState(shaft, again.clock, again.triggers.shaft_west)).toEqual(hazardState(shaft, hz.clock, hz.triggers.shaft_west));
-  });
-
   it("runs the level clock at 0.15x while the player shifts", () => {
     const { game, hz } = levelGame(2, 2);
     hz.update(game, 1);
@@ -500,3 +444,248 @@ describe("ChronoHazards runtime", () => {
     expect(hz.piece).toBeNull();
   });
 });
+
+// ── The collapse (II-1 Evac Shafts) ─────────────────────────────────────────
+// No damage over time: a sprinter who never shifts just makes it, a shift
+// gives a comfortable margin, and the rubble that catches you costs one hit,
+// never your life, and sets you down on the last landing you passed.
+
+const STAMINA_DRAIN = 25; // per sim second while sprinting
+const STAMINA_REGEN = 15; // per sim second, after half a second
+const SHIFT_DRAIN = 33; // chrono per real second, untuned (II-1)
+
+/**
+ * Run a body up a collapse's path, one step a tile. `sprint` holds sprint the
+ * whole way (stamina drains and runs out); `shiftAt` holds Chrono Shift from
+ * the moment the front is that many steps behind, until the tank is empty.
+ * Returns when it arrives, when the front would reach the last step, and
+ * whether the front ever caught it.
+ */
+function runShaft(h, { sprint = true, shiftAt = null } = {}) {
+  const dt = 1 / 120;
+  // From the first step of its trigger a runner touches.
+  const [c1, r1, c2, r2] = h.trigger;
+  let start = Infinity;
+  for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
+    const at = collapseStepAt(h, c + 0.5, r + 0.5);
+    if (at >= 0) start = Math.min(start, at);
+  }
+  const end = h.steps.length - 1;
+  let pos = start + 0.5;
+  let clock = 0;
+  let t = 0;
+  let stamina = 100;
+  let regenDelay = 0;
+  let chrono = 100;
+  let shifting = false;
+  let caught = false;
+  let caughtAt = null;
+  let closest = Infinity;
+  while (pos < end + 1 && t < 60) {
+    const front = collapseFront(h, clock, 0);
+    if (shiftAt != null && !shifting && chrono >= 15 && pos - front <= shiftAt) shifting = true;
+    if (shifting && chrono <= 0) shifting = false;
+    const scale = shifting ? SHIFT_SCALE : 1;
+    const sim = dt * scale;
+    const sprinting = sprint && stamina > 0;
+    if (sprinting) {
+      stamina = Math.max(0, stamina - STAMINA_DRAIN * sim);
+      regenDelay = 0.5;
+    } else if (regenDelay > 0) regenDelay -= sim;
+    else stamina = Math.min(100, stamina + STAMINA_REGEN * sim);
+    if (shifting) chrono -= SHIFT_DRAIN * dt;
+    pos += (sprinting ? SPRINT : WALK) * sim;
+    clock += sim * (shifting ? HAZARD_CHRONO : 1);
+    t += dt;
+    const f = collapseFront(h, clock, 0);
+    if (f >= Math.floor(pos) && !caught) {
+      caught = true;
+      caughtAt = Math.floor(pos);
+    }
+    if (f >= 0) closest = Math.min(closest, pos - f);
+  }
+  // Real seconds until the front reaches the last step, from here (no shift).
+  const frontLeft = Math.max(0, (h.delay + end / h.rate) - clock);
+  return { arrived: t, margin: frontLeft, caught, caughtAt, closest };
+}
+
+describe("the collapse: pace", () => {
+  const shafts = SET_PIECES.evac_shafts.hazards.filter((h) => h.type === "collapse");
+
+  it("lays two shafts, each with landings inside its path", () => {
+    expect(shafts.map((h) => h.id)).toEqual(["shaft_a", "shaft_b"]);
+    for (const h of shafts) {
+      expect(h.damage, "no damage over time").toBeUndefined();
+      expect(h.landings.length).toBeGreaterThanOrEqual(3);
+      for (const l of h.landings) expect(l).toBeLessThan(h.steps.length);
+      expect([...h.landings].sort((a, b) => a - b)).toEqual(h.landings);
+    }
+  });
+
+  it.each(shafts.map((h) => [h.id, h]))("%s: a sprinter who never shifts just makes it", (_id, h) => {
+    const run = runShaft(h, { sprint: true });
+    expect(run.caught).toBe(false);
+    // Just: the ceiling reaches the top a second or so after they do.
+    expect(run.margin).toBeGreaterThan(0.3);
+    expect(run.margin).toBeLessThan(2.5);
+  });
+
+  it.each(shafts.map((h) => [h.id, h]))("%s: a walker is caught partway", (_id, h) => {
+    const run = runShaft(h, { sprint: false });
+    expect(run.caught).toBe(true);
+    // Past the second landing, well short of the top: it teaches, it doesn't ambush.
+    expect(run.caughtAt).toBeGreaterThan(h.landings[1]);
+    expect(run.caughtAt).toBeLessThan(h.steps.length - 4);
+  });
+
+  it.each(shafts.map((h) => [h.id, h]))("%s: one shift as it closes buys a comfortable margin", (_id, h) => {
+    const plain = runShaft(h, { sprint: true });
+    const shifted = runShaft(h, { sprint: true, shiftAt: 6 });
+    expect(shifted.caught).toBe(false);
+    // A tank of chrono is worth most of a second of ceiling, and steps of room.
+    expect(shifted.margin - plain.margin).toBeGreaterThan(0.6);
+    expect(shifted.closest - plain.closest).toBeGreaterThan(2.5);
+    // A walker who shifts as it closes gets further before it catches them.
+    expect(runShaft(h, { sprint: false, shiftAt: 3 }).caughtAt ?? Infinity).toBeGreaterThan(runShaft(h, { sprint: false }).caughtAt);
+  });
+});
+
+describe("the collapse: catching you", () => {
+  /** The Evac Shafts, the player standing in shaft A's trigger, collapse set off. */
+  function inShaftA(extra = {}) {
+    const lv = levelGame(2, 0, { settings: { difficulty: 1 }, time: 0, screenShake: 0, ...extra });
+    const h = lv.hz.hazards.find((x) => x.id === "shaft_a");
+    const p = lv.game.player;
+    p.x = h.trigger[0] + 1.5;
+    p.y = h.trigger[1] + 1.5;
+    lv.hz.update(lv.game, 0.016);
+    return { ...lv, h, p };
+  }
+  const stepCells = (h, i) => h.steps[i];
+  const standOn = (p, h, i) => {
+    const [c, r] = h.steps[i][Math.floor(h.steps[i].length / 2)];
+    p.x = c + 0.5;
+    p.y = r + 0.5;
+  };
+  /** Let the front come until it catches the player (or `secs` run out). */
+  const waitForCatch = (hz, game, secs = 20) => {
+    const before = hz.caught;
+    for (let i = 0; i < secs * 60 && hz.caught === before; i++) hz.update(game, 1 / 60);
+  };
+
+  it("costs one hit by difficulty: 5, 10, 20", () => {
+    expect([0, 1, 2, 3].map(collapseHit)).toEqual([5, 10, 20, 20]);
+  });
+
+  it("fills behind you, never under or in front of you, until the front arrives", () => {
+    const { game, hz, h, p } = inShaftA();
+    standOn(p, h, 20);
+    // Up to the moment before the front reaches step 20.
+    const t = h.delay + 19.5 / h.rate;
+    while (hz.clock < t) hz.update(game, 1 / 60);
+    const grid = game.map.grid;
+    const [bc, br] = stepCells(h, 10)[3];
+    expect(grid[br][bc]).not.toBe(0); // behind: rubble
+    for (const i of [20, 21, 30]) for (const [c, r] of stepCells(h, i)) if (MAP_OPEN(game, c, r)) expect(grid[r][c], `step ${i}`).toBe(0);
+    expect(hz.caught).toBe(0);
+    expect(game.hits).toEqual([]); // no damage over time, ever
+  });
+
+  it("catches you once: one hit, a shake, and back to the last landing", () => {
+    const { game, hz, h, p } = inShaftA();
+    standOn(p, h, 16); // past the second landing (11), short of the third (23)
+    p.health = 80;
+    waitForCatch(hz, game);
+    expect(hz.caught).toBe(1);
+    expect(p.health).toBe(70);
+    expect(game.hits).toEqual([]);
+    expect(game.screenShake).toBeGreaterThan(0);
+    expect(collapseStepAt(h, p.x, p.y)).toBe(11);
+    expect(collapseLanding(h, 16)).toBe(11);
+    // Rubble behind the landing stays; from the landing on, it is clear again.
+    const grid = game.map.grid;
+    const [bc, br] = stepCells(h, 8)[3];
+    expect(grid[br][bc]).not.toBe(0);
+    for (let i = 11; i < h.steps.length; i++) for (const [c, r] of stepCells(h, i)) if (MAP_OPEN(game, c, r)) expect(grid[r][c], `step ${i}`).toBe(0);
+    expect(game.aria).toContain("collapseCaught");
+  });
+
+  it("re-arms the front behind the landing: you get the grace, then it comes again", () => {
+    const { game, hz, h, p } = inShaftA();
+    standOn(p, h, 16);
+    waitForCatch(hz, game);
+    const trig = hz.triggers[h.id];
+    expect(collapseFront(h, hz.clock + COLLAPSE_GRACE - 0.05, trig)).toBeLessThan(11);
+    expect(collapseFront(h, hz.clock + COLLAPSE_GRACE + 0.01, trig)).toBeGreaterThanOrEqual(11);
+    // Run from the landing and the front follows without catching you.
+    for (let i = 0; i < 60; i++) {
+      p.y -= (SPRINT * 1.2) / 60; // up the shaft, a sprint
+      hz.update(game, 1 / 60);
+    }
+    expect(hz.caught).toBe(1);
+  });
+
+  it("is never lethal: at 1 HP a catch leaves you at 1 HP, alive", () => {
+    const { game, hz, h, p } = inShaftA({ settings: { difficulty: 3 } });
+    p.alive = true;
+    p.health = 1;
+    standOn(p, h, 16);
+    waitForCatch(hz, game);
+    expect(hz.caught).toBe(1);
+    expect(p.health).toBe(1);
+    expect(p.alive).toBe(true);
+    p.health = 15;
+    waitForCatch(hz, game);
+    expect(p.health).toBe(1);
+  });
+
+  it("shows the hold-shift card and ARIA's hint on the second catch, not the first", () => {
+    const { game, hz, h, p } = inShaftA();
+    standOn(p, h, 16);
+    waitForCatch(hz, game);
+    expect(hz.hint).toBeNull();
+    waitForCatch(hz, game); // standing still on the landing: caught again
+    expect(hz.caught).toBe(2);
+    expect(hz.hint?.card.title).toContain("{SHIFT}");
+    expect(game.aria).toContain("collapseHoldShift");
+  });
+
+  it("re-arms instead of sealing you out when you back out of its start", () => {
+    const { game, hz, h, p } = inShaftA();
+    expect(hz.triggers[h.id]).toBeDefined();
+    p.x = 9.5;
+    p.y = 52.5; // back into the crash bay before it starts to fall
+    hz.update(game, 0.2);
+    expect(hz.triggers[h.id]).toBeUndefined();
+    for (let i = 0; i < 600; i++) hz.update(game, 1 / 60);
+    for (const [c, r] of stepCells(h, 0)) if (MAP_OPEN(game, c, r)) expect(game.map.grid[r][c]).toBe(0);
+  });
+
+  it("comes all the way down once you are out the far end", () => {
+    const { game, hz, h, p } = inShaftA();
+    standOn(p, h, h.steps.length - 1);
+    hz.update(game, 0.016);
+    p.x = 20.5;
+    p.y = 8.5; // the pump hall
+    for (let i = 0; i < 12 * 60; i++) hz.update(game, 1 / 60);
+    const [c, r] = stepCells(h, h.steps.length - 1)[3];
+    expect(game.map.grid[r][c]).not.toBe(0);
+    expect(hz.caught).toBe(0);
+  });
+
+  it("resumes a collapse mid-fall from its saved clock", () => {
+    const { game, hz, h } = inShaftA();
+    for (let i = 0; i < 90; i++) hz.update(game, 1 / 60);
+    const saved = JSON.parse(JSON.stringify(hz.serialize()));
+    const again = new ChronoHazards();
+    again.load(game, ACTS[1].levels[0]);
+    again.restore(saved);
+    expect(collapseFront(h, again.clock, again.triggers[h.id])).toBe(collapseFront(h, hz.clock, hz.triggers[h.id]));
+    expect(hazardState(h, again.clock, again.triggers[h.id])).toEqual(hazardState(h, hz.clock, hz.triggers[h.id]));
+  });
+});
+
+/** Open floor in the Evac Shafts as authored (a step's wall cells stay wall). */
+function MAP_OPEN(_game, c, r) {
+  return campaignMap(ACTS[1].levels[0]).grid[r][c] === 0;
+}

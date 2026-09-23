@@ -48,6 +48,14 @@ function rowSweep(c1, c2, from, to) {
   return steps;
 }
 
+/** A collapse that fills a run `r1..r2` one column at a time, from `from` to `to`. */
+function colSweep(r1, r2, from, to) {
+  const steps = [];
+  const dir = to < from ? -1 : 1;
+  for (let c = from; c !== to + dir; c += dir) steps.push(cellsOf([c, r1, c, r2]));
+  return steps;
+}
+
 export const SET_PIECES = {
   // I-6 Reactor Access. The one set piece while the governor is on, and it is
   // optional: the north-west store room, three plasma vents on offset cycles
@@ -62,24 +70,31 @@ export const SET_PIECES = {
     enter: { rect: [4, 5, 15, 10], aria: "ventGallery" },
   },
 
-  // II-1 Evac Shafts. The centre lift has come down; the side shafts are
-  // still collapsing behind you, and only a shift outruns them. Halfway, the
-  // first hunters, and the channel voice explaining the bell.
+  // II-1 Evac Shafts. Both shafts are still coming down behind you. A
+  // sprinter who never shifts just makes it; a shift buys seconds. If the
+  // rubble catches you it costs one hit, never your life, and sets you down
+  // on the last landing you passed (the alcoves) with the front re-armed
+  // behind you. Halfway, in the pump hall, the first hunters, and the
+  // channel voice explaining the bell.
   evac_shafts: {
-    seals: cellsOf([22, 42, 37, 42]),
     hazards: [
       {
-        id: "shaft_west", type: "collapse", trigger: [4, 40, 12, 42],
-        steps: rowSweep(4, 12, 43, 21), delay: 0.4, rate: 7, damage: 5, wall: RUBBLE, aria: "collapseChase",
+        // Up the west wall, rows 48 → 13.
+        id: "shaft_a", type: "collapse", trigger: [6, 46, 9, 48],
+        steps: rowSweep(3, 9, 48, 13), landings: [2, 11, 23],
+        delay: 1, rate: 4.4, wall: RUBBLE, aria: "collapseChase",
       },
       {
-        id: "shaft_east", type: "collapse", trigger: [47, 40, 55, 42],
-        steps: rowSweep(47, 55, 43, 21), delay: 0.4, rate: 7, damage: 5, wall: RUBBLE, aria: "collapseChase",
+        // East along the ceiling, then down the east wall to the lift.
+        id: "shaft_b", type: "collapse", trigger: [37, 3, 39, 6],
+        steps: [...colSweep(3, 8, 37, 46), ...colSweep(3, 6, 47, 50), ...rowSweep(47, 53, 7, 28)],
+        landings: [1, 5, 25],
+        delay: 1, rate: 4.4, wall: RUBBLE, aria: "collapseChase",
       },
     ],
     scripted: [
       {
-        id: "first_hunt", rect: [5, 13, 54, 19], hunt: true,
+        id: "first_hunt", rect: [12, 4, 28, 11], hunt: true,
         squad: { member: "lyra", text: "Every time you shift, you ring a bell he built. He just answered." },
       },
     ],

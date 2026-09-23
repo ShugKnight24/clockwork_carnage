@@ -1393,6 +1393,34 @@ export class Game {
    * inside it as its narration.
    */
   renderTeachCard(ctx, w, h) {
+    const hint = this.chronoHazards.hint;
+    const t0 = this.chronoHazards.teach ?? this.chronoHazards.objective;
+    if ((!t0?.card || t0.done) && hint) {
+      // A set piece's own hint (the collapse's second catch), for a few
+      // seconds, in the headline lane like any teach card.
+      const d = this.messages;
+      const key = `hint:${hint.at}`;
+      const age = this.chronoHazards.clock - hint.at;
+      if (age > 7) {
+        this.chronoHazards.hint = null;
+        d.done(key);
+        return;
+      }
+      if (!hint._msgPosted) {
+        hint._msgPosted = true;
+        d.post(key, "teach", null);
+      }
+      if (!d.showing(key)) return;
+      const step = { title: teachHint(hint.card.title, this).toUpperCase(), hint: teachHint(hint.card.hint, this), color: "#ffae3a" };
+      const lane = d.lanes?.headline;
+      _renderTeachCard(ctx, w, h, step, age + 1, Math.min(1, (7 - age) / 1.2), {
+        top: lane ? lane.y + 6 : 60,
+        maxW: lane?.w,
+        cx: lane ? lane.x + lane.w / 2 : w / 2,
+        compact: d.lanes?.kind === "compact",
+      });
+      return;
+    }
     const t = this.chronoHazards.teach ?? this.chronoHazards.objective;
     const d = this.messages;
     if (!t?.card || t._msgDone || this.chronoPowers.clock <= 1.5) return;

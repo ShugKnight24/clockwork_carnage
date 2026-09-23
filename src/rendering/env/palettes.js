@@ -132,6 +132,67 @@ export const LEVEL_ENVS = {
     energy: "#ff3a1e", energyHot: "#ffd2b0",
     fogNear: [42, 16, 6], fogFar: [120, 52, 18],
   },
+  // ── Act II: the Gathering (palette 2), the rings the Lord never rewrote ──
+  evac_shafts: {
+    // Under the Core: emergency red through dust, the rift glowing below.
+    name: "Evac Shafts",
+    salt: 21,
+    steel: { h: -8, s: 1.1, l: 0.8 },
+    accent: "#ff5a2a", accentDeep: "#6a1a06", lamp: "#ffb68a",
+    fogNear: [30, 12, 6], fogFar: [92, 40, 18],
+  },
+  salvage_deck: {
+    // Scrap hangar: sodium orange, and the blue-white of Rook's welding.
+    name: "Salvage Deck",
+    salt: 22,
+    steel: { h: 6, s: 0.8, l: 1.05, lift: 0.03 },
+    accent: "#ffc04a", lamp: "#fff0cc",
+    energy: "#7fd4ff", energyHot: "#e2f6ff",
+    fogNear: [16, 12, 9], fogFar: [70, 56, 40],
+  },
+  maintenance_spine: {
+    // The spine: grey machine steel, work lights, fans that never stop.
+    name: "Maintenance Spine",
+    salt: 23,
+    steel: { h: 20, s: 0.6, l: 0.9 },
+    accent: "#ff9a2e", accentDeep: "#5e2a06", lamp: "#ffd9a0",
+    energy: "#ff5e2e",
+    fogNear: [10, 10, 10], fogFar: [48, 44, 40],
+  },
+  transit_loop: {
+    // The monorail ring: clean air, long sightlines, signal yellow.
+    name: "Transit Loop",
+    salt: 24,
+    steel: { h: -4, s: 0.7, l: 1.15, lift: 0.05 },
+    accent: "#ffd23a", lamp: "#fff4d8",
+    fogNear: [22, 16, 10], fogFar: [96, 76, 52],
+  },
+  greenhouse: {
+    // Hydroponics: the only green, warm light in the act.
+    name: "The Greenhouse",
+    salt: 25,
+    steel: { h: 70, s: 0.6, l: 1.1, lift: 0.06 },
+    accent: "#9dff6a", accentDeep: "#2c6a14", lamp: "#fff1c2",
+    energy: "#b8ff5a", energyHot: "#f0ffd0",
+    fogNear: [14, 22, 10], fogFar: [70, 96, 52],
+  },
+  precinct: {
+    // Chronos PD, three days barricaded: dark, cold blue in the windows.
+    name: "The Precinct",
+    salt: 26,
+    steel: { h: -20, s: 0.5, l: 0.7, lift: -0.01 },
+    accent: "#6f9bff", accentDeep: "#1a2e66", lamp: "#c8b89a",
+    fogNear: [6, 5, 7], fogFar: [30, 26, 30],
+  },
+  foundry: {
+    // The C-series fabrication hall: poured metal, white-gold heat.
+    name: "The Foundry",
+    salt: 27,
+    steel: { h: -10, s: 1.2, l: 0.75 },
+    accent: "#ffcf5a", accentDeep: "#6e4206", lamp: "#ffe0a0",
+    energy: "#ff8a1e", energyHot: "#fff0c0",
+    fogNear: [34, 18, 6], fogFar: [110, 64, 20],
+  },
   // ── Act 3: corrupted core ──
   voss_lab: { name: "Voss' Laboratory", salt: 7 },
   nexus: {

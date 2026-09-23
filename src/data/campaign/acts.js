@@ -73,16 +73,18 @@ const STATION = Object.fromEntries(
 const NG_PLUS_BARK = { aria: "ngPlusDeadSquad", delay: 5000, minNgPlus: 1 };
 
 /**
- * One level on a station map (its own, or standing in for one not built yet).
- * @param {string} map - STATION id
+ * One level: on a station map (its own, or standing in for one not built
+ * yet), or on an act's own map, which names its seed and, for a finale, the
+ * boss flag. An own map's env is its id and it is played as authored.
+ * @param {string} map - STATION id, or a MAPS id
  * @param {string[]|null} briefing
  * @param {SquadMember[]} squad
  * @param {{ onStart?: object[], callsigns?: Record<string, string>,
- *   grants?: string[], setPiece?: string }} [extra]
+ *   grants?: string[], setPiece?: string, seed?: number, boss?: boolean }} [extra]
  */
-function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null } = {}) {
+function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null, seed = 0, boss = false } = {}) {
   return {
-    ...STATION[map],
+    ...(STATION[map] ?? { map, env: map, rotation: 0, seed, boss }),
     briefing,
     squad,
     ...(callsigns ? { callsigns } : {}),
@@ -228,7 +230,7 @@ export const ACTS = [
     // Placeholder maps per spec §16.2 until the Act II maps are built.
     levels: levels([
       // Evac Shafts. Lyra guides you out before she has a name.
-      level("reactor", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" }, setPiece: "evac_shafts" }),
+      level("evac_shafts", null, ["lyra"], { callsigns: { lyra: "UNKNOWN" }, setPiece: "evac_shafts", seed: 20101 }),
       // Salvage Deck. Lyra names herself in the lift, so the old Act 3
       // Analyst L.M. and encrypted-channel barks are retired.
       // Lyra's Foresight is loaded in the lift, and taught in the first hall.
