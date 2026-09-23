@@ -31,6 +31,19 @@ describe("vessel models", () => {
       expect(bottom).toBeGreaterThan(0);
     });
 
+    it(`the ${kind} keeps the water out: nothing open to the sky below its waterline`, () => {
+      const m = vesselModel(kind), [sx, sy, sz] = m.size;
+      const at = (x, y, z) => m.cells[x + sx * (y + sy * z)];
+      for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) {
+        let z = 0;
+        while (z < sz && !at(x, y, z)) z++;
+        if (z === sz) continue; // an empty column
+        while (z < sz && at(x, y, z)) z++;
+        // The first gap above the hull's bottom in this column, bob included.
+        expect(z * m.scale, `${kind} column ${x},${y}`).toBeGreaterThanOrEqual(VESSELS[kind].draft + 0.05);
+      }
+    });
+
     it(`the ${kind} is as wide as its hull's box, within a cell`, () => {
       const m = vesselModel(kind);
       expect(Math.abs(m.size[1] * MODEL_SCALE - 2 * VESSELS[kind].half)).toBeLessThanOrEqual(MODEL_SCALE + 1e-9);

@@ -286,6 +286,85 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-new-world-water");
   });
 
+  test("vessels: place a boat, board it with B, drive it with W, and find it again after a reload", async ({ page }) => {
+    test.setTimeout(120_000);
+    await loadGame(page);
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+
+    // Seed 11, whose 128 box has a shore cell looking out along an axis over
+    // a lane of open water long enough for two seconds at a boat's top speed.
+    const shore = await page.evaluate(async () => {
+      const { generateWorld } = await import("/src/world/world-gen.js");
+      const b = window.ccDebug.game.builder;
+      b._takeOver(generateWorld({ terrain: true, seed: 11 }));
+      const w = b.world;
+      const water = (x, y) => w.get(x, y, 29) === 19 && w.get(x, y, 30) === 0;
+      for (let y = 4; y < 124; y++) for (let x = 4; x < 124; x++) {
+        const top = w.topSolid(x, y);
+        if (top < 29 || top > 31 || w.get(x, y, top + 1) !== 0) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          let open = true;
+          for (let k = 1; k <= 18 && open; k++) for (let j = -2; j <= 2 && open; j++) {
+            open = water(x + dx * k + dy * j, y + dy * k + dx * j);
+          }
+          if (open) return { x, y, dx, dy, z: top + 1 };
+        }
+      }
+      return null;
+    });
+    expect(shore, "a coast in the seed-11 world").not.toBeNull();
+    await page.waitForFunction(() => window.ccDebug.game.voxelRenderer.world === window.ccDebug.game.builder.world, null, { timeout: 10_000 });
+    await page.waitForFunction(() => !window.ccDebug.game.builder._slotPending, null, { timeout: 10_000 });
+
+    // The vessel tool and the boat, with real keys: T cycles the tools, G the kinds.
+    for (let i = 0; i < 5; i++) await page.keyboard.press("KeyT");
+    await page.keyboard.press("KeyG");
+    expect(await page.evaluate(() => [window.ccDebug.game.builder.toolMode, window.ccDebug.game.builder.vesselKind])).toEqual(["vessel", 1]);
+
+    // Stand on the shore, look at the water two blocks out, and place it.
+    const placed = await page.evaluate(({ x, y, dx, dy, z }) => {
+      const b = window.ccDebug.game.builder;
+      const ex = x + 0.5, ey = y + 0.5, tx = ex + dx * 2, ty = ey + dy * 2;
+      Object.assign(b.player, { x: ex, y: ey, z, angle: Math.atan2(ty - ey, tx - ex), pitch: Math.atan2(29.9 - (z + 1.6), 2) });
+      b.velZ = 0;
+      b.update(0);
+      b.handleMouseDown(0);
+      const v = b.world.meta.vessels?.[0];
+      return v ? { kind: v.kind, x: v.x, y: v.y, z: v.z } : null;
+    }, shore);
+    expect(placed?.kind).toBe("boat");
+
+    // Board with a real B and drive with a real W for two seconds.
+    await page.keyboard.press("KeyB");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.riding?.kind)).toBe("boat");
+    await page.keyboard.down("KeyW");
+    await page.waitForTimeout(2000);
+    await page.keyboard.up("KeyW");
+    const driven = await page.evaluate(() => {
+      const b = window.ccDebug.game.builder, v = b.riding;
+      return { x: v.x, y: v.y, z: v.z, under: b.world.get(Math.floor(v.x), Math.floor(v.y), Math.floor(v.z)) };
+    });
+    const along = (driven.x - placed.x) * shore.dx + (driven.y - placed.y) * shore.dy;
+    expect(along, "across the water").toBeGreaterThan(4);
+    expect(Math.abs(driven.z - placed.z), "afloat at its draft").toBeLessThan(0.1);
+    expect(driven.under).toBe(19);
+    await screenshot(page, "forge-boat-driven");
+
+    // Off again, then a reload with no explicit save: the page hiding writes it.
+    await page.keyboard.press("KeyB");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.riding)).toBe(null);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    const after = await page.evaluate(() => window.ccDebug.game.builder.world.meta.vessels);
+    expect(after).toHaveLength(1);
+    expect(after[0].kind).toBe("boat");
+    expect(Math.hypot(after[0].x - driven.x, after[0].y - driven.y)).toBeLessThan(3);
+  });
+
   test("draws the whole world at the lowest quality preset", async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);

@@ -43,25 +43,28 @@ function raft() {
 }
 
 /**
- * Boat, 3 × 1½ blocks: a plank hull that narrows to the bow and stern, a flat
- * floor, two thwarts to sit on and a log stem post at the bow.
+ * Boat, 3 × 1½ × 1 blocks: a plank hull that narrows to the bow and stern,
+ * two thwarts to sit on and a log stem post at the bow. The floor is two
+ * cells up, clear of the waterline at the boat's draft, so the water drawn
+ * around the hull never shows inside it.
  */
 function boat() {
   const sx = 12, sy = 6;
   // Half-width of the hull at each station along it, in cells from the centre line.
   const beam = [1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 2, 1];
-  return grid(sx, sy, 3, (put) => {
+  return grid(sx, sy, 4, (put) => {
     for (let x = 0; x < sx; x++) {
       const b = beam[x], y0 = sy / 2 - b, y1 = sy / 2 + b - 1;
       for (let y = y0; y <= y1; y++) {
         // The keel layer is a cell narrower, so the hull's sides flare.
         if (b === 1 || (y > y0 && y < y1) || x === 0 || x === sx - 1) put(x, y, 0, PLANKS);
+        put(x, y, 1, PLANKS);
         const wall = y === y0 || y === y1 || x === 0 || x === sx - 1 || b === 1;
-        if (wall) { put(x, y, 1, PLANKS); put(x, y, 2, PLANKS); }
+        if (wall) { put(x, y, 2, PLANKS); put(x, y, 3, PLANKS); }
       }
     }
-    for (const x of [4, 8]) for (let y = 1; y < sy - 1; y++) put(x, y, 1, PLANKS);
-    put(sx - 1, 2, 2, LOG); put(sx - 1, 3, 2, LOG);
+    for (const x of [4, 8]) for (let y = 1; y < sy - 1; y++) put(x, y, 2, PLANKS);
+    put(sx - 1, 2, 3, LOG); put(sx - 1, 3, 3, LOG);
   });
 }
 

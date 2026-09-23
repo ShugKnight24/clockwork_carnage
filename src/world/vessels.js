@@ -29,12 +29,12 @@ export const VESSELS = {
   raft: {
     name: "Raft", half: 1.1, height: 0.45, draft: 0.2,
     maxSpeed: 3.5, maxReverse: 1.5, accel: 1.4, coast: 0.8, turn: 1.1, grip: 20,
-    landCrawl: 0, hop: 0, seat: [0, 0.45], bob: 0.05,
+    landCrawl: 0, hop: 0, seat: [0, 0.5], bob: 0.05,
   },
   boat: {
-    name: "Boat", half: 0.8, height: 0.7, draft: 0.3,
+    name: "Boat", half: 0.8, height: 1, draft: 0.3,
     maxSpeed: 6, maxReverse: 2.5, accel: 1.2, coast: 0.7, turn: 1.8, grip: 20,
-    landCrawl: 0, hop: 0, seat: [-0.25, 0.3], bob: 0.04,
+    landCrawl: 0, hop: 0, seat: [-0.25, 0.5], bob: 0.04,
   },
   jetski: {
     name: "Jetski", half: 0.55, height: 0.8, draft: 0.25,
