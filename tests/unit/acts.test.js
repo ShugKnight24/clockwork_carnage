@@ -102,3 +102,43 @@ describe("ACTS", () => {
     expect(maxActLevels()).toBe(Math.max(...ACTS.map((a) => a.levels.length)));
   });
 });
+
+describe("ACTS against the MAPS registry", async () => {
+  const { MAPS, campaignMap, campaignLevelMap, campaignMaps } = await import(
+    "../../src/data/levels/campaign.js"
+  );
+
+  it("resolves every level's map id", () => {
+    for (const act of ACTS) {
+      for (const [i, l] of act.levels.entries()) {
+        expect(MAPS[l.map], `${act.id}.${i}: ${l.map}`).toBeDefined();
+        expect(campaignLevelMap(act.id, i)).toBe(campaignMap(l));
+      }
+    }
+  });
+
+  it("flags as boss exactly the levels whose map is a boss map", () => {
+    for (const act of ACTS) {
+      for (const [i, l] of act.levels.entries()) {
+        expect(!!campaignMap(l).isBossLevel, `${act.id}.${i}`).toBe(l.boss);
+      }
+    }
+  });
+
+  it("prepares a map once per seed and rotation, leaving the registry untouched", () => {
+    const before = JSON.stringify(MAPS.entry.grid);
+    const a = campaignMap({ map: "entry", seed: 1, rotation: 0 });
+    const b = campaignMap({ map: "entry", seed: 2, rotation: 90 });
+    expect(campaignMap({ map: "entry", seed: 1, rotation: 0 })).toBe(a);
+    expect(b).not.toBe(a);
+    expect(JSON.stringify(MAPS.entry.grid)).toBe(before);
+    expect(campaignMap({ map: "nope", seed: 1 })).toBeNull();
+    expect(campaignLevelMap(99, 0)).toBeNull();
+  });
+
+  it("lists each distinct campaign map once", () => {
+    const maps = campaignMaps();
+    expect(new Set(maps).size).toBe(maps.length);
+    expect(maps.map((m) => m.name)).toContain("The Paradox Core");
+  });
+});

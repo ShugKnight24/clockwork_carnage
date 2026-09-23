@@ -18,7 +18,7 @@ import {
   ENEMY_TYPES,
   ARENA_MAP,
   ARENA_MAPS,
-  CAMPAIGN_LEVELS,
+  campaignMaps,
   UPGRADES,
   ACHIEVEMENTS,
   TUTORIAL_MAP,
@@ -372,14 +372,15 @@ function runDataValidation() {
   }
 
   // Campaign levels
+  const campaignLevels = campaignMaps();
   r.assert(
-    CAMPAIGN_LEVELS.length >= 3,
-    `CAMPAIGN_LEVELS: ${CAMPAIGN_LEVELS.length} levels defined`,
-    "CAMPAIGN_LEVELS: expected at least 3 levels",
+    campaignLevels.length >= 3,
+    `Campaign maps: ${campaignLevels.length} levels defined`,
+    "Campaign maps: expected at least 3 levels",
   );
 
-  for (let i = 0; i < CAMPAIGN_LEVELS.length; i++) {
-    const level = CAMPAIGN_LEVELS[i];
+  for (let i = 0; i < campaignLevels.length; i++) {
+    const level = campaignLevels[i];
     const label = `Campaign[${i}] "${level.name}"`;
     r.assert(
       level.grid.length === level.height,
@@ -590,7 +591,7 @@ function runMapReachability() {
   const allMaps = [
     { name: "Tutorial", map: TUTORIAL_MAP },
     ...ARENA_MAPS.map((m, i) => ({ name: `Arena[${i}] "${m.name}"`, map: m })),
-    ...CAMPAIGN_LEVELS.map((m, i) => ({ name: `Campaign ${i}`, map: m })),
+    ...campaignMaps().map((m, i) => ({ name: `Campaign ${i}`, map: m })),
   ];
 
   for (const { name, map } of allMaps) {

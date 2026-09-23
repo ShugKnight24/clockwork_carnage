@@ -7,7 +7,10 @@
  * else in the grid ever changes at runtime.
  */
 import { describe, it, expect } from "vitest";
-import { CAMPAIGN_LEVELS } from "../../src/data/index.js";
+import { campaignMaps } from "../../src/data/index.js";
+
+// Each distinct campaign map once: every act replays the same nine.
+const CAMPAIGN_MAPS = campaignMaps();
 import { validatePropPosition } from "../../src/systems/spawner.js";
 
 const OPENABLE = new Set([0, 5, 6]);
@@ -37,7 +40,7 @@ function reachableFrom(level) {
 
 const label = (e) => `${e.enemyType || e.type}@${Math.floor(e.x)},${Math.floor(e.y)}`;
 
-describe.each(CAMPAIGN_LEVELS.map((level, i) => [i, level.name, level]))(
+describe.each(CAMPAIGN_MAPS.map((level, i) => [i, level.name, level]))(
   "campaign level %i — %s",
   (_i, _name, level) => {
     const reach = reachableFrom(level);
@@ -92,7 +95,7 @@ describe.each(CAMPAIGN_LEVELS.map((level, i) => [i, level.name, level]))(
 describe("runtime nudge safety net", () => {
   it("never has to fall back to a wall position", () => {
     const stranded = [];
-    CAMPAIGN_LEVELS.forEach((level, i) => {
+    CAMPAIGN_MAPS.forEach((level, i) => {
       for (const e of level.entities || []) {
         const pos = validatePropPosition(
           Math.floor(e.x),
@@ -115,7 +118,7 @@ describe("prop coverage", () => {
       import("../../src/data/levels/campaign.js"),
     ]);
     const placed = new Set();
-    for (const lvl of levels.CAMPAIGN_LEVELS) {
+    for (const lvl of levels.campaignMaps()) {
       for (const p of lvl.props || []) placed.add(p.type);
     }
     // A prop with no sprite draws nothing and fails silently in both paths.
@@ -128,13 +131,13 @@ describe("level composition", () => {
   it("does not run every level along the same axis", () => {
     // Eight of nine used to start on the exact same tile and exit due north.
     const starts = new Set(
-      CAMPAIGN_LEVELS.map((l) => `${l.playerStart.x},${l.playerStart.y}`),
+      CAMPAIGN_MAPS.map((l) => `${l.playerStart.x},${l.playerStart.y}`),
     );
     expect(starts.size).toBeGreaterThanOrEqual(4);
 
     // Bucket the start->exit heading into compass quadrants.
     const axes = new Set();
-    for (const l of CAMPAIGN_LEVELS) {
+    for (const l of CAMPAIGN_MAPS) {
       if (!l.exit) continue;
       const dx = l.exit.x - l.playerStart.x;
       const dy = l.exit.y - l.playerStart.y;
@@ -144,7 +147,7 @@ describe("level composition", () => {
   });
 
   it("faces the player into the level on arrival", () => {
-    for (const l of CAMPAIGN_LEVELS) {
+    for (const l of CAMPAIGN_MAPS) {
       if (!l.exit) continue;
       const toExit = Math.atan2(l.exit.y - l.playerStart.y, l.exit.x - l.playerStart.x);
       let off = (l.playerStart.dir ?? 0) - toExit;

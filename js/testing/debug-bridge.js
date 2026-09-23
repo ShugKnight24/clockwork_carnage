@@ -11,7 +11,8 @@
 import { GameState } from "../game.js";
 import {
   WEAPONS,
-  CAMPAIGN_LEVELS,
+  getAct,
+  campaignMap,
   UPGRADES,
   ENEMY_TYPES,
 } from "../data.js";
@@ -565,8 +566,10 @@ export function createDebugBridge(game) {
     },
 
     // ── Campaign Info ─────────────────────────────────────
-    listCampaignLevels() {
-      return CAMPAIGN_LEVELS.map((l, i) => ({
+    /** The levels of one act, in play order: startCampaign's `level`. */
+    listCampaignLevels(act = 1) {
+      const maps = (getAct(act)?.levels ?? []).map(campaignMap);
+      return maps.map((l, i) => ({
         index: i,
         name: l.name,
         width: l.width,

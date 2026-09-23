@@ -1,5 +1,5 @@
 import { GameState } from "../game.js";
-import { CAMPAIGN_LEVELS, UPGRADES } from "../data.js";
+import { ACTS, isLastAct, UPGRADES } from "../data.js";
 
 const VALID_STATES = new Set(Object.values(GameState));
 const PLAYER_DEFS = {
@@ -241,44 +241,43 @@ export function createPlaytestGate(game, tools) {
   }
 
   function playCampaign(run, ctx, player) {
-    const levelsToRun = CAMPAIGN_LEVELS.length;
-    const bossLevel = CAMPAIGN_LEVELS.findIndex((l) => l?.isBossLevel);
-
-    // Every level in act 1, then the boss once per act: each act replays the
-    // nine levels, and only the act-3 boss ends the campaign.
-    for (let level = 0; level < levelsToRun; level++) {
-      if (level === bossLevel) continue;
-      runCampaignLevel(run, ctx, player, level);
-    }
-    for (const act of [1, 2, 3]) {
-      startCampaignLevel(bossLevel, act);
+    // Every act from the table: each level up to its exit, then the act's
+    // boss, which opens the next act at level 0 or, after the last, wins.
+    for (const act of ACTS) {
+      const bossLevel = act.levels.findIndex((l) => l.boss);
+      act.levels.forEach((l, level) => {
+        if (!l.boss) runCampaignLevel(run, ctx, player, level, act.id);
+      });
+      startCampaignLevel(bossLevel, act.id);
       preparePlayer(player);
-      stepAndWatch(run, ctx, player, 10, `act ${act} boss start`);
+      stepAndWatch(run, ctx, player, 10, `act ${act.id} boss start`);
       killBossDirectly();
       skipCutscenes(run, ctx, player);
-      if (act < 3) {
-        if (game.campaign.act !== act + 1 || game.campaign.level !== 0) {
+      if (!isLastAct(act.id)) {
+        const next = ACTS[ACTS.indexOf(act) + 1].id;
+        if (game.campaign.act !== next || game.campaign.level !== 0) {
           throw new Error(
-            `act ${act} boss should open act ${act + 1} at level 0, got act ${game.campaign.act} level ${game.campaign.level}`,
+            `act ${act.id} boss should open act ${next} at level 0, got act ${game.campaign.act} level ${game.campaign.level}`,
           );
         }
       } else {
-        assertState(run, [GameState.VICTORY], "act 3 boss should end the campaign");
+        assertState(run, [GameState.VICTORY], `act ${act.id} boss should end the campaign`);
       }
     }
   }
 
-  function runCampaignLevel(run, ctx, player, level) {
-    startCampaignLevel(level);
+  function runCampaignLevel(run, ctx, player, level, act = 1) {
+    const slot = `${act}.${level}`;
+    startCampaignLevel(level, act);
     preparePlayer(player);
-    stepAndWatch(run, ctx, player, 10, `campaign ${level} start`);
+    stepAndWatch(run, ctx, player, 10, `campaign ${slot} start`);
 
     killEnemiesDirectly();
-    if (!game.exitEntity) throw new Error(`Campaign level ${level} has no exit`);
+    if (!game.exitEntity) throw new Error(`Campaign level ${slot} has no exit`);
     game.player.x = game.exitEntity.x;
     game.player.y = game.exitEntity.y;
-    stepAndWatch(run, ctx, player, 5, `campaign ${level} exit`);
-    assertState(run, [GameState.LEVEL_COMPLETE], `campaign level ${level} should complete`);
+    stepAndWatch(run, ctx, player, 5, `campaign ${slot} exit`);
+    assertState(run, [GameState.LEVEL_COMPLETE], `campaign level ${slot} should complete`);
   }
 
   function playArena(run, ctx, player) {

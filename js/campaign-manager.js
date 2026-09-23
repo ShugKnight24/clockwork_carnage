@@ -6,7 +6,7 @@
  * (player, entities, audio, renderer, etc).
  */
 import * as Save from "../src/core/save-system.js";
-import { CAMPAIGN_LEVELS } from "./data.js";
+import { campaignLevelMap, getAct } from "./data.js";
 import {
   createCampaignEntities,
   createMissedWeaponPickups,
@@ -65,7 +65,7 @@ export class CampaignManager {
     const raw = Save.loadCampaignData();
     if (!raw) return false;
     const index = raw.level | 0;
-    const level = CAMPAIGN_LEVELS[index];
+    const level = campaignLevelMap(raw.act || 1, index);
     if (!level) {
       this.clearSave();
       return false;
@@ -182,7 +182,8 @@ export class CampaignManager {
   loadLevel(index) {
     const g = this.game;
     this._clearLevelTimers();
-    if (index >= CAMPAIGN_LEVELS.length) {
+    const level = campaignLevelMap(this.act, index);
+    if (!level) {
       g.state = GameState.VICTORY;
       g.audio.stopMusic();
       g.audio.roundComplete();
@@ -190,7 +191,6 @@ export class CampaignManager {
       g.unlockPointer();
       return;
     }
-    const level = CAMPAIGN_LEVELS[index];
     g.map = structuredClone(level);
     g.world = null;
     g.player.x = level.playerStart.x;
@@ -330,7 +330,7 @@ export class CampaignManager {
     g.achievementStats.campaignLevelsCleared = Math.max(g.achievementStats.campaignLevelsCleared || 0, this.level);
     g.saveAchievements();
 
-    if (this.level >= CAMPAIGN_LEVELS.length) {
+    if (this.level >= (getAct(this.act)?.levels.length ?? 0)) {
       this.loadLevel(this.level); // triggers VICTORY via bounds check
       return;
     }

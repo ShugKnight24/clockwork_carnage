@@ -107,31 +107,33 @@ describe("persistence", () => {
 });
 
 describe("fragment placement matches the campaign", async () => {
-  const { CAMPAIGN_LEVELS } = await import("../../src/data/index.js");
-  // `act` is a campaign loop: the nine maps are replayed three times with
-  // escalating rosters. `level` is the 1-based map number within any loop, so
-  // any act can reference any of the nine maps.
+  const { getActLevel, campaignLevelMap } = await import("../../src/data/index.js");
+  // `act` is the campaign act and `level` the 1-based level within it; the
+  // game looks fragments up with (campaign.act, campaign.level + 1).
+  const slot = (f) => getActLevel(f.act, f.level - 1);
+  const map = (f) => campaignLevelMap(f.act, f.level - 1);
 
-  it("references a real map, numbered 1-9, in a real act", () => {
+  it("references a real level slot in a real act", () => {
     for (const f of MEMORY_FRAGMENTS) {
-      expect(CAMPAIGN_LEVELS[f.level - 1], `${f.id} level`).toBeDefined();
-      expect([1, 2, 3], `${f.id} act`).toContain(f.act);
+      expect(slot(f), `${f.id} act ${f.act} level ${f.level}`).toBeDefined();
+      expect(map(f), `${f.id} map`).toBeTruthy();
     }
   });
 
   it("puts hidden fragments on maps that have a secret wall", () => {
     for (const f of MEMORY_FRAGMENTS.filter((m) => m.hidden)) {
-      const level = CAMPAIGN_LEVELS[f.level - 1];
+      const level = map(f);
       const secrets = level.grid.flat().filter((t) => t === 6).length;
       expect(secrets, `${f.id} on ${level.name}`).toBeGreaterThan(0);
     }
   });
 
-  it("puts visible fragments only on maps that end at an exit", () => {
-    // Visible fragments are awarded on LEVEL_COMPLETE, which the boss map
-    // never reaches — the boss kill starts the next loop or ends the game.
+  it("puts visible fragments only on non-boss levels that end at an exit", () => {
+    // Visible fragments are awarded on LEVEL_COMPLETE, which the boss level
+    // never reaches — the boss kill starts the next act or ends the game.
     for (const f of MEMORY_FRAGMENTS.filter((m) => !m.hidden)) {
-      const level = CAMPAIGN_LEVELS[f.level - 1];
+      const level = map(f);
+      expect(slot(f).boss, `${f.id} on a boss level`).toBe(false);
       expect(level.exit, `${f.id} on ${level.name}`).toBeTruthy();
     }
   });
