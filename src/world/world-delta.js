@@ -12,6 +12,7 @@
  * version N makes", nothing more.
  */
 import { GEN_V1, GEN_VERSIONS, generateColumn } from "./column-gen.js";
+import { checkBlend } from "./column-gen-blend.js";
 import { rleEncode, rleDecode } from "./rle.js";
 
 export const NO_EDIT = 0xff;
@@ -30,6 +31,10 @@ export const genOf = (meta) => meta?.gen || VOID_GEN;
 
 /** Throws unless `gen` is a generator this build can reproduce exactly. */
 export function checkGen(gen) {
+  if (gen?.kind === "blend") {
+    if (!checkBlend(gen)) throw new Error("unsupported blend generator");
+    return gen;
+  }
   const ok = gen && typeof gen === "object" && GEN_VERSIONS.includes(gen.v) &&
     (gen.kind === "terrain" || gen.kind === "flat" || gen.kind === "void") &&
     (gen.seed === undefined ? gen.kind !== "terrain" : Number.isInteger(gen.seed) && gen.seed >= 0 && gen.seed <= 0xffffffff);

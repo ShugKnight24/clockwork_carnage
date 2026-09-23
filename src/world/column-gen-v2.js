@@ -291,6 +291,19 @@ export function surfaceHeight(gen, x, y) {
   return clampTop(rawHeight(saltsFor(gen.seed >>> 0), x, y, wScratch));
 }
 
+const levelScratch = new Float64Array(6);
+
+/**
+ * The ground height before it is rounded and clamped (peaks squashed as
+ * `surfaceHeight` squashes them), for the blend band (column-gen-blend.js),
+ * which eases it toward an old edge and rounds once. Its own scratch, so it
+ * can be called from inside `treeAtCell`'s height hook.
+ */
+export function surfaceLevel(gen, x, y) {
+  const h = rawHeight(saltsFor(gen.seed >>> 0), x, y, levelScratch);
+  return h > SOFT_TOP ? SOFT_TOP + (h - SOFT_TOP) * 0.5 : h;
+}
+
 /** The surface biome: the heaviest weight after patchy jitter, as in version 1. */
 function surfaceBiome(sl, x, y, w) {
   const j = noise(sl[L_JITTER], x, y, 5) * 0.12 + turned(sl[L_JITTER], y, x, 16) * 0.2;
@@ -362,21 +375,28 @@ const MAX_DENSITY = 0.5;
  * The tree rooted in grid cell (i, j), or null. Everything it reads is a pure
  * function of the root's coordinates — its height, its biome, the slope
  * under it, the forest field — so every column that asks gets the same tree.
+ *
+ * `topAt(x, y, t)`, when given, turns this version's ground height `t` at a
+ * cell into the height the caller's world has there (the blend band of an
+ * old world grown endless, column-gen-blend.js). Without it the output is
+ * this version's, unchanged.
  * @returns {{x:number, y:number, z:number, species:number, h:number}|null} z is the root cell, one above the ground
  */
-export function treeAtCell(gen, i, j) {
+export function treeAtCell(gen, i, j, topAt = null) {
   const sl = saltsFor(gen.seed >>> 0);
   const hc = hash2(sl[L_TREE], i, j);
   const roll = (hc >>> 16) / 65536;
   if (roll >= MAX_DENSITY) return null;
   const x = i * TREE_CELL + (hc & 3), y = j * TREE_CELL + ((hc >>> 2) & 3);
   const w = wScratch;
-  const t = clampTop(rawHeight(sl, x, y, w));
+  let t = clampTop(rawHeight(sl, x, y, w));
+  if (topAt) t = topAt(x, y, t);
   if (t < SEA - 1) return null;
   const b = surfaceBiome(sl, x, y, w);
   let slope = 0;
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-    slope = Math.max(slope, Math.abs(clampTop(rawHeight(sl, x + dx, y + dy, w)) - t));
+    const n = clampTop(rawHeight(sl, x + dx, y + dy, w));
+    slope = Math.max(slope, Math.abs((topAt ? topAt(x + dx, y + dy, n) : n) - t));
   }
   if (slope > 1) return null;
   const cap = dress(sl, x, y, t, b, slope, dressScratch)[0];
@@ -401,13 +421,15 @@ export function treeAtCell(gen, i, j) {
  * Plant into `out` every tree whose blocks can reach the column: the roots in
  * the column and within TREE_REACH of it, which lie in it and its eight
  * neighbours (endless-world spec §4). Only the column's own cells are written.
+ * `treeAt` picks the tree of a grid cell; the blend band passes one that
+ * roots trees on its own heights and keeps them off the old area.
  */
-function plantTrees(gen, cx, cy, out) {
+export function plantTrees(gen, cx, cy, out, treeAt = treeAtCell) {
   const x0 = cx * CS, y0 = cy * CS;
   const i0 = Math.floor((x0 - TREE_REACH) / TREE_CELL), i1 = Math.floor((x0 + CS - 1 + TREE_REACH) / TREE_CELL);
   const j0 = Math.floor((y0 - TREE_REACH) / TREE_CELL), j1 = Math.floor((y0 + CS - 1 + TREE_REACH) / TREE_CELL);
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-    const tr = treeAtCell(gen, i, j);
+    const tr = treeAt(gen, i, j);
     if (!tr) continue;
     if (tr.x < x0 - TREE_REACH || tr.x >= x0 + CS + TREE_REACH || tr.y < y0 - TREE_REACH || tr.y >= y0 + CS + TREE_REACH) continue;
     treeShape(tr.species, tr.h, (dx, dy, dz, id) => {

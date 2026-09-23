@@ -19,6 +19,7 @@
  */
 import { AIR, BEDROCK } from "./blocks.js";
 import * as V2 from "./column-gen-v2.js";
+import * as Blend from "./column-gen-blend.js";
 
 /**
  * Generator version 1 — FROZEN on 2026-09-22 (Forge endless world, phase 2).
@@ -35,7 +36,8 @@ export const GEN_V1 = 1;
  * The version new worlds are made with. Generator version 2
  * (column-gen-v2.js) adds the sea, beaches, lakes, rivers and trees; the
  * exported functions below hand a `v: 2` terrain world to it and keep every
- * other world on the version-1 code, which is unchanged.
+ * other world on the version-1 code, which is unchanged. A `kind: "blend"`
+ * world, an old world grown endless, goes to column-gen-blend.js.
  */
 export const GEN_VERSION = V2.GEN_V2;
 
@@ -180,6 +182,7 @@ const wScratch = new Float64Array(4);
  */
 export function surfaceHeight(gen, x, y) {
   if (isV2(gen)) return V2.surfaceHeight(gen, x, y);
+  if (gen.kind === "blend") return Blend.surfaceHeight(gen, x, y);
   if (gen.kind === "flat") return FLAT_TOP;
   if (gen.kind !== "terrain") return -1;
   return clampTop(rawHeight(saltsFor(gen.seed >>> 0), x, y, wScratch));
@@ -201,6 +204,7 @@ const P = CS + 2;
  */
 export function sampleColumn(gen, cx, cy, out = { top: new Int16Array(P * P), biome: new Uint8Array(CS * CS) }) {
   if (isV2(gen)) return V2.sampleColumn(gen, cx, cy, out);
+  if (gen.kind === "blend") return Blend.sampleColumn(gen, cx, cy, out);
   const { top, biome } = out;
   if (gen.kind !== "terrain") {
     top.fill(gen.kind === "flat" ? FLAT_TOP : -1);
@@ -237,6 +241,7 @@ const ROCKLINE = 41;
  */
 export function fillColumn(gen, cx, cy, sample, out = new Uint8Array(CELLS)) {
   if (isV2(gen)) return V2.fillColumn(gen, cx, cy, sample, out);
+  if (gen.kind === "blend") return Blend.fillColumn(gen, cx, cy, sample, out);
   out.fill(AIR);
   if (gen.kind !== "terrain" && gen.kind !== "flat") return out;
   const terrain = gen.kind === "terrain";
@@ -276,12 +281,14 @@ const sampleScratch = { top: new Int16Array(P * P), biome: new Uint8Array(CS * C
  */
 export function generateColumn(gen, cx, cy, out = new Uint8Array(CELLS)) {
   if (isV2(gen)) return V2.generateColumn(gen, cx, cy, out);
+  if (gen.kind === "blend") return Blend.generateColumn(gen, cx, cy, out);
   return fillColumn(gen, cx, cy, sampleColumn(gen, cx, cy, sampleScratch), out);
 }
 
 /** Biome weights at a cell, for tests and tools. Not used by generation. */
 export function biomeAt(gen, x, y) {
   if (isV2(gen)) return V2.biomeAt(gen, x, y);
+  if (gen.kind === "blend") return Blend.biomeAt(gen, x, y);
   const w = biomeWeights(saltsFor(gen.seed >>> 0), x, y, new Float64Array(4));
   return { weights: Array.from(w), biome: BIOMES[w.indexOf(Math.max(...w))] };
 }
