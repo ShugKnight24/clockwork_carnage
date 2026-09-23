@@ -67,29 +67,36 @@ export function applyDelta(col, d) {
 }
 
 /**
- * Turn every modified resident column into its saved delta in `world.edits`.
- * A column diffed back to exactly what the generator makes loses its delta and
- * leaves a tombstone in `world.dropped`, so the store can delete its row. Both
- * are stamped with a fresh `editRev`, which is how a save finds what changed
- * since the last one it wrote.
+ * Turn one resident column into its saved delta in `world.edits`, or, when it
+ * diffs back to exactly what the generator makes, drop its delta and leave a
+ * tombstone in `world.dropped` so the store can delete its row. Both are
+ * stamped with a fresh `editRev`, which is how a save finds what changed since
+ * the last one it wrote. Unloading a column runs this before it lets go.
+ * @returns {boolean} a delta was added, changed or dropped
+ */
+export function foldColumn(world, key, col, gen = genOf(world.meta)) {
+  col.modified = false;
+  const d = columnDelta(gen, col);
+  if (d) {
+    d.rev = ++world.editRev;
+    world.edits.set(key, d);
+    world.dropped.delete(key);
+    return true;
+  }
+  if (!world.edits.delete(key)) return false;
+  world.dropped.set(key, ++world.editRev);
+  return true;
+}
+
+/**
+ * Fold every modified resident column (`foldColumn`).
  * @returns {number} deltas added, changed or dropped
  */
 export function foldEdits(world) {
   const gen = genOf(world.meta);
   let n = 0;
   for (const [key, col] of world.columns) {
-    if (!col.modified) continue;
-    col.modified = false;
-    const d = columnDelta(gen, col);
-    if (d) {
-      d.rev = ++world.editRev;
-      world.edits.set(key, d);
-      world.dropped.delete(key);
-      n++;
-    } else if (world.edits.delete(key)) {
-      world.dropped.set(key, ++world.editRev);
-      n++;
-    }
+    if (col.modified && foldColumn(world, key, col, gen)) n++;
   }
   return n;
 }

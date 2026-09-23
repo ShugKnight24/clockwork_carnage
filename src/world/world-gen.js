@@ -10,19 +10,23 @@ export function randomSeed() {
 }
 
 /**
- * A new world, filled column by column from its stored generator settings
- * (`meta.gen`), so the same terrain can be made again from the meta alone.
- * Still the bounded 128 box and still generated whole: streaming comes later.
+ * A new world from its stored generator settings (`meta.gen`), so the same
+ * terrain can be made again from the meta alone.
+ *
+ * An endless world generates nothing here: columns are loaded around the
+ * player as it moves (world-streamer.js), and its spawn is found from surface
+ * heights alone. A bounded world is the 128 box, generated whole.
  */
-export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New World" } = {}) {
+export function generateWorld({ terrain = false, seed = 1, act = 1, name = "New World", endless = false } = {}) {
   const gen = { kind: terrain ? "terrain" : "flat", seed: seed >>> 0, v: GEN_VERSION };
-  const w = new World({ name, act, gen });
+  const w = new World(endless ? { name, act, gen, endless: true } : { name, act, gen });
+  const s = w.defaultSpawn();
+  w.meta.spawn = { ...findSpawn(gen, s.x, s.y), yaw: 0 };
+  if (endless) return w;
   const { x0, y0, x1, y1 } = w.bounds;
   for (let cy = y0 >> 4; cy <= (y1 - 1) >> 4; cy++) for (let cx = x0 >> 4; cx <= (x1 - 1) >> 4; cx++) {
     generateColumn(gen, cx, cy, w.ensureColumn(cx, cy).blocks); // straight into the column: generation is not an edit
   }
-  const s = w.defaultSpawn();
-  w.meta.spawn = { ...findSpawn(gen, s.x, s.y), yaw: 0 };
   w.markAllDirty(); // the renderer meshes everything on first sight anyway
   w.version++; // direct column writes bypass set(), so bump version once to honor the "bumps on every change" contract
   return w;
