@@ -618,6 +618,86 @@ test.describe("Voxel Forge", () => {
     ).toEqual([7, made.edge]);
   });
 
+  test("an old v4 world grows endless on Ctrl+B twice, and the seam and the build survive a reload", async ({ page }) => {
+    test.setTimeout(180_000);
+    await loadGame(page);
+    // A v4 world as an older build left it: rolling ground, no generator, a
+    // tower standing on the east edge and a mark in the middle.
+    await page.evaluate(async () => {
+      const { encodeV4 } = await import("/src/world/world-codec.js");
+      const { oldVoidWorld, oldTerrain } = await import("/tests/unit/fixtures/old-world.js");
+      const w = oldVoidWorld(oldTerrain(42), { seed: 42 });
+      delete w.meta.gen;
+      w.meta.name = "Old Fort";
+      w.meta.spawn = { x: 120.5, y: 64.5, z: 45, yaw: 0 };
+      for (let z = 38; z < 48; z++) w.set(127, 64, z, 3);
+      w.set(64, 64, 50, 7);
+      const json = new TextEncoder().encode(JSON.stringify(encodeV4(w)));
+      const gz = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+      const bytes = new Uint8Array(gz.length + 1); bytes[0] = 1; bytes.set(gz, 1);
+      await new Promise((res, rej) => {
+        const req = indexedDB.open("cc_worlds", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("worlds", { keyPath: "id" });
+        req.onerror = () => rej(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("worlds", "readwrite");
+          tx.objectStore("worlds").put({ id: 0, name: "Old Fort", updatedAt: 1, bytes });
+          tx.oncomplete = () => { db.close(); res(); };
+          tx.onerror = () => rej(tx.error);
+        };
+      });
+    });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    await page.keyboard.press("Space"); // dismiss onboarding
+    expect(await page.evaluate(() => window.ccDebug.game.builder.world.endless)).toBe(false);
+
+    /** Natural ground both sides of the old edge, south and east, and the build. */
+    const readSeam = () => page.evaluate(() => {
+      const w = window.ccDebug.game.builder.world;
+      w.loadAround(64, 64, 6);
+      const ground = new Set([15, 10, 11, 12, 13, 14]);
+      const g = (x, y) => { let z = -1; while (z < 63 && ground.has(w.get(x, y, z + 1))) z++; return z; };
+      const seam = [], steps = [];
+      for (let k = 0; k < 128; k += 2) {
+        for (const x of [126, 127, 128, 129, 140]) seam.push(g(x, k));
+        for (const y of [1, 0, -1, -2, -12]) seam.push(g(k, y));
+        steps.push(Math.abs(g(128, k) - g(127, k)), Math.abs(g(k, -1) - g(k, 0)));
+      }
+      return { seam, worst: Math.max(...steps), tower: w.get(127, 64, 47), mark: w.get(64, 64, 50), endless: w.endless, gen: w.meta.gen.kind };
+    });
+
+    // Real keys: the first Ctrl+B asks, the second confirms.
+    await page.keyboard.press("Control+KeyB");
+    expect(await page.evaluate(() => window.ccDebug.game.builder.notice?.text)).toMatch(/endless/i);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.world.endless)).toBe(false);
+    await page.keyboard.press("Control+KeyB");
+    await page.waitForFunction(() => window.ccDebug.game.builder.world.endless, null, { timeout: 10_000 });
+    const grown = await readSeam();
+    expect(grown).toMatchObject({ tower: 3, mark: 7, endless: true, gen: "blend" });
+    expect(grown.worst).toBeLessThanOrEqual(1); // no cliff at the old edge
+
+    // Fly east past the seam with real keys, well into the new land.
+    await page.keyboard.press("KeyN");
+    await page.evaluate(() => { const b = window.ccDebug.game.builder; b.player.angle = 0; b.player.z = 50; });
+    await page.keyboard.down("KeyW");
+    await page.waitForFunction(() => window.ccDebug.game.builder.player.x > 200, null, { timeout: 60_000 });
+    await page.keyboard.up("KeyW");
+    await waitForColumn(page, 220, 64);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.world.topSolid(220, 64))).toBeGreaterThan(10);
+    await screenshot(page, "forge-old-world-grown");
+
+    // Reload: the world opens endless, with the build and the seam as they were.
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
+    await debug(page, "startBuilder");
+    await waitForForge(page);
+    const reloaded = await readSeam();
+    expect(reloaded).toEqual(grown);
+    expect(await page.evaluate(() => window.ccDebug.game.builder.world.meta.expandedFrom)).toEqual({ x0: 0, y0: 0, x1: 128, y1: 128 });
+  });
+
   test("a v4. share link from before v5 still opens", async ({ page, browser }) => {
     test.setTimeout(90_000);
     await loadGame(page);
