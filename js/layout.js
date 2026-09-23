@@ -330,3 +330,74 @@ export function tutorialMenuLayout(w, h, itemCount) {
   const my = h * 0.35;
   return { menuW, itemH, menuH, mx, my };
 }
+
+/**
+ * The Forge's inventory screen. Geometry lives here, beside the settings
+ * layout, so the renderer and the mouse handler read the same rects — a
+ * duplicated copy of that geometry has already been a live bug in this repo.
+ * Coordinates are hudW/hudH CSS pixels, never the DPR-scaled backing store.
+ */
+export function inventoryLayout(w, h, slotCount = 36) {
+  const cell = 44;
+  const gap = 6;
+  const cols = 9;
+  const pad = 18;
+  const rowGap = 14; // between the backpack block and the hotbar row
+
+  const backpackCount = Math.max(0, Math.min(slotCount, 36) - 9);
+  const backpackRows = Math.ceil(backpackCount / cols);
+  const hotbarCount = Math.min(slotCount, 9);
+
+  const gridW = cols * cell + (cols - 1) * gap;
+  const gridH = backpackRows * cell + Math.max(0, backpackRows - 1) * gap
+    + (hotbarCount ? rowGap + cell : 0);
+
+  const panel = {
+    x: Math.round((w - gridW) / 2) - pad,
+    y: Math.round((h - gridH) / 2) - pad - 10,
+    w: gridW + pad * 2,
+    h: gridH + pad * 2 + 20, // room for the title
+  };
+  const originX = panel.x + pad;
+  const originY = panel.y + pad + 20;
+
+  const cells = [];
+  // Backpack first in index order (slots 9..35), laid out above the hotbar.
+  for (let i = 0; i < backpackCount; i++) {
+    cells.push({
+      index: 9 + i, region: "backpack", w: cell, h: cell,
+      x: originX + (i % cols) * (cell + gap),
+      y: originY + Math.floor(i / cols) * (cell + gap),
+    });
+  }
+  const hotbarY = originY + backpackRows * (cell + gap) + rowGap
+    - (backpackRows ? gap : 0);
+  for (let i = 0; i < hotbarCount; i++) {
+    cells.push({
+      index: i, region: "hotbar", w: cell, h: cell,
+      x: originX + i * (cell + gap), y: hotbarY,
+    });
+  }
+  cells.sort((a, b) => a.index - b.index);
+  return { panel, cells, cell, gap };
+}
+
+/**
+ * Half-open variant of `hitRect` for grid cells: a cell owns its top-left
+ * pixel and not the pixel past its right or bottom edge. `hitRect` is
+ * inclusive on both bounds, which is fine for isolated buttons but would give
+ * two neighbouring cells a shared edge pixel, handed to whichever is tested
+ * first.
+ */
+function hitCell(rect, x, y) {
+  return x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h;
+}
+
+/** @returns {{kind:"slot"|"panel"|"none", index:number}} */
+export function resolveInventoryHit(layout, x, y) {
+  if (!hitRect(layout.panel, x, y)) return { kind: "none", index: -1 };
+  for (const c of layout.cells) {
+    if (hitCell(c, x, y)) return { kind: "slot", index: c.index };
+  }
+  return { kind: "panel", index: -1 };
+}
