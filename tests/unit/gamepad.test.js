@@ -355,6 +355,32 @@ describe("GamepadManager", () => {
     gm.updateSettings({ enabled: false });
     expect(row.desc).toBe("Controller support is off.");
   });
+
+  it("learns a drifting stick's resting offset so the camera stays still", () => {
+    // A worn right stick resting at (0.24, -0.2): past the 0.15 deadzone.
+    pads[0] = pad({ axes: [0.05, 0, 0.24, -0.2] });
+    const gm = new GamepadManager();
+    let r = gm.poll(0);
+    expect(r.lookX).not.toBe(0); // before calibration it turns
+    for (let t = 16; t <= 600; t += 16) {
+      pads[0].timestamp = t;
+      r = gm.poll(t);
+    }
+    expect(r.lookX).toBe(0);
+    expect(r.lookY).toBe(0);
+    expect(gm.stickBias[2]).toBeCloseTo(0.24);
+    // Full deflection still reaches the edge.
+    pads[0].axes = [0, 0, 1, 0];
+    pads[0].timestamp = 700;
+    expect(gm.poll(700).lookX).toBeGreaterThan(gm.settings.lookSensitivity * 0.95);
+  });
+
+  it("does not learn a stick the player is pushing", () => {
+    pads[0] = pad({ axes: [0, -0.9, 0, 0] });
+    const gm = new GamepadManager();
+    for (let t = 0; t <= 600; t += 16) gm.poll(t);
+    expect(gm.stickBias[1]).toBe(0);
+  });
 });
 
 describe("describeGamepadStatus", () => {

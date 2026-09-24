@@ -95,9 +95,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
 /** Live controller status ({ value, desc }), bound by the game at start-up. */
 let gamepadStatus = null;
 
+let gamepadManager = null;
+
 /** Point the Gamepad page's status row at the GamepadManager's status object. */
-export function bindGamepadStatus(status) {
+export function bindGamepadStatus(status, manager = null) {
   gamepadStatus = status;
+  gamepadManager = manager;
 }
 
 /** Ordered list of setting categories shown in the sidebar */
@@ -615,6 +618,26 @@ export const SETTINGS_REGISTRY = [
       g.gamepad?.rescan?.();
       if (!g.gamepad?.connected && g.xinputUsb?.supported) g.xinputUsb.request();
     },
+  },
+  {
+    // Live stick readout plus re-centring, for pads that drift.
+    key: "gamepadCalibrate",
+    label: "Calibrate Sticks",
+    get desc() {
+      const gp = gamepadManager;
+      if (!gp?.connected) return "Connect a controller, leave both sticks untouched, then select this.";
+      const f = (v) => (v >= 0 ? " " : "") + v.toFixed(2);
+      const [lx, ly, rx, ry] = gp.rawAxes;
+      const [bx, by, cx, cy] = gp.stickBias;
+      return `Hands off the sticks, then select. Now L ${f(lx)} ${f(ly)}  R ${f(rx)} ${f(ry)} · centre L ${f(bx)} ${f(by)}  R ${f(cx)} ${f(cy)}`;
+    },
+    category: "Gamepad",
+    type: "action",
+    buttonLabel: "CALIBRATE",
+    color: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: (g) => g.gamepad?.calibrate?.(),
   },
   {
     key: "gamepadEnabled",

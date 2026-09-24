@@ -63,6 +63,10 @@ const NAV_REPEAT = 110;
 
 /** A stick on an idle pad must pass this (or the deadzone) to take over as the active pad. */
 const SWITCH_STICK = 0.5;
+// Stick centre calibration: sampling window, and the most a resting stick may
+// read (anything past it is the player pushing the stick).
+const CALIB_MS = 500;
+const CALIB_MAX = 0.35;
 // Virtual (WebUSB) pads take indices from here up, clear of the browser's.
 const VIRTUAL_BASE = 16;
 
@@ -324,6 +328,9 @@ export class GamepadManager {
     this._virtualSeq = 0;
     this._padList = [];
 
+    /** Last raw stick values of the active pad, before offset and deadzone. */
+    this.rawAxes = [0, 0, 0, 0];
+
     /** Toast callback (set externally) */
     this.onConnect = null;
     this.onDisconnect = null;
@@ -416,6 +423,43 @@ export class GamepadManager {
     this._handleDisconnect({ gamepad: pad });
   }
 
+  /**
+   * Learn the resting stick offsets over half a second. Runs when a pad is
+   * adopted and on request; a sample with any stick past CALIB_MAX means the
+   * player is using it, and those samples are skipped.
+   */
+  _calibrate(st, axes, now) {
+    const c = st.calib;
+    if (c.pending) {
+      c.pending = false;
+      c.until = now + CALIB_MS;
+      c.n = 0;
+      c.sum.fill(0);
+    }
+    if (c.until < 0) return;
+    if (now < c.until) {
+      if (axes.every((v) => Math.abs(v) < CALIB_MAX)) {
+        for (let i = 0; i < 4; i++) c.sum[i] += axes[i];
+        c.n++;
+      }
+      return;
+    }
+    c.until = -1;
+    if (c.n >= 3) for (let i = 0; i < 4; i++) st.bias[i] = c.sum[i] / c.n;
+    this._refreshStatus();
+  }
+
+  /** Re-learn the active pad's resting stick offsets (settings action). */
+  calibrate() {
+    const st = this._pads[this.activeIndex];
+    if (st) st.calib.pending = true;
+  }
+
+  /** Resting offsets being subtracted from the active pad, [lx, ly, rx, ry]. */
+  get stickBias() {
+    return this._pads[this.activeIndex]?.bias ?? [0, 0, 0, 0];
+  }
+
   /** Re-read connected pads (the settings row's action). */
   rescan() {
     if (this.activeIndex < 0) this._scanForGamepad();
@@ -446,6 +490,11 @@ export class GamepadManager {
         busy: false,
         lastActive: -1,
         memo: createPadMemo(),
+        // Resting stick offsets. Worn sticks (old 360 pads especially) sit
+        // 0.15-0.3 off centre, past the deadzone, and the camera turns on
+        // its own; the offset is learned while the sticks are untouched.
+        bias: [0, 0, 0, 0],
+        calib: { pending: true, until: -1, n: 0, sum: [0, 0, 0, 0] },
       };
       this._pads[gp.index] = st;
     }
@@ -551,6 +600,15 @@ export class GamepadManager {
     const st = this._padState(gp);
     const view = normalizeGamepad(gp, this._view, st.memo, st.kind);
     const curr = view.pressed;
+    this._calibrate(st, view.axes, now);
+    const ax = view.axes;
+    for (let i = 0; i < 4; i++) {
+      this.rawAxes[i] = ax[i];
+      // Re-centre, rescaling each side so a full push still reads 1.
+      const b = st.bias[i];
+      const d = ax[i] - b;
+      ax[i] = Math.max(-1, Math.min(1, d / (d > 0 ? 1 - b : 1 + b)));
+    }
 
     // ── Sticks (radial deadzone) ──
     const dz = this.settings.deadzone;

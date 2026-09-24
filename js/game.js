@@ -399,7 +399,7 @@ export class Game {
     this._gamepadNextKeys = new Set();
     this._lastGamepadMove = { x: 0, y: 0 };
     // The Gamepad settings page shows this; a chime marks a pad arriving or leaving.
-    bindGamepadStatus(this.gamepad.status);
+    bindGamepadStatus(this.gamepad.status, this.gamepad);
     this.gamepad.onConnect = (name) => {
       console.info(`[gamepad] using ${name} (${this.gamepad.mappingKind} mapping)`);
       this.audio?.menuSelect?.();
