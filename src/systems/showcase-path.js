@@ -10,6 +10,8 @@
  * that curve is checked against the walls before a loop is accepted.
  */
 
+// Packs a cell into one number for Set lookups; wider than any map can be.
+const CELL_KEY = 1 << 16;
 const isOpen = (grid, x, y) => grid[y]?.[x] === 0;
 
 /** Sample the segment every quarter cell; any wall sample blocks it. */
@@ -74,14 +76,14 @@ const PASSABLE = new Set([0, 5, 6]);
 
 /** Cells the player can reach from the start (spawn rooms are often sealed by a door). */
 function reachable(grid, sx, sy) {
-  const seen = new Set([sy * 4096 + sx]);
+  const seen = new Set([sy * CELL_KEY + sx]);
   const queue = [[sx, sy]];
   for (let q = 0; q < queue.length; q++) {
     const [x, y] = queue[q];
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx, ny = y + dy;
-      if (!PASSABLE.has(grid[ny]?.[nx]) || seen.has(ny * 4096 + nx)) continue;
-      seen.add(ny * 4096 + nx);
+      if (!PASSABLE.has(grid[ny]?.[nx]) || seen.has(ny * CELL_KEY + nx)) continue;
+      seen.add(ny * CELL_KEY + nx);
       queue.push([nx, ny]);
     }
   }
@@ -138,7 +140,7 @@ function searchLoop(grid, start, { minClear, stride, maxTurn, minPoints, maxPoin
   const nodes = [];
   for (let y = 0; y < grid.length; y += stride) {
     for (let x = 0; x < grid[y].length; x += stride) {
-      if (clear[y][x] >= minClear && reach.has(y * 4096 + x)) nodes.push({ x: x + 0.5, y: y + 0.5 });
+      if (clear[y][x] >= minClear && reach.has(y * CELL_KEY + x)) nodes.push({ x: x + 0.5, y: y + 0.5 });
     }
   }
   if (nodes.length < minPoints) return null;
@@ -339,6 +341,9 @@ function curveOf(points) {
 
 /** Closed loop sample: `t` in [0, 1) wraps; `angle` looks along the direction of travel. */
 export function samplePath(points, t) {
+  if (!points?.length) return { x: 0, y: 0, angle: 0 };
+  if (points.length < 2) return { x: points[0].x, y: points[0].y, angle: 0 };
+  if (!Number.isFinite(t)) t = 0;
   const { ctrl, cum, total } = curveOf(points);
   const n = ctrl.length;
   const target = (((t % 1) + 1) % 1) * total;

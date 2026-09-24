@@ -35,4 +35,12 @@ describe("showcase path", () => {
     const grid = [[0, 1, 0]];
     expect(hasLineOfSight(grid, { x: 0.5, y: 0.5 }, { x: 2.5, y: 0.5 })).toBe(false);
   });
+
+  it("stays finite for degenerate input", () => {
+    const one = [{ x: 2.5, y: 3.5 }];
+    expect(samplePath(one, 0.3)).toEqual({ x: 2.5, y: 3.5, angle: 0 });
+    const pts = buildShowcasePath(campaignMap(getActLevel(1, 0)));
+    const s = samplePath(pts, NaN);
+    expect(Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.angle)).toBe(true);
+  });
 });
