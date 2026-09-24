@@ -95,6 +95,14 @@ export class AdaptiveQuality {
 
   /** Record a frame's FPS. Call every frame. */
   recordFPS(fps) {
+    // A lone frame over ~250 ms in an otherwise running game is a stall — a
+    // level load, a tab switch, a first-sight asset decode — not the
+    // machine's pace. Counting it downscaled the whole next level for a one-off
+    // wait; start the window over instead (the warmup guard then holds).
+    if (fps < 4 && this.history.length && this.averageFPS > 20) {
+      this.history.length = 0;
+      return;
+    }
     this.history.push(fps);
     if (this.history.length > this.historySize) this.history.shift();
   }
@@ -136,7 +144,6 @@ export class AdaptiveQuality {
 
     const avg = this.averageFPS;
     const low = this.lowFPS;
-    const prevScale = this.renderScale;
     // Frequent hitches: roughly one frame in twelve below 60% of target.
     const hitchy = low < this.targetFPS * 0.6;
 
@@ -148,7 +155,7 @@ export class AdaptiveQuality {
       this.renderScale *= 0.98;
     } else if (avg > this.targetFPS + 5 && low > this.targetFPS * 0.8 && this.renderScale < this.maxScale) {
       // Headroom — scale up slowly
-      this.renderScale *= 1.01;
+      this.renderScale *= 1.02;
     }
 
     this.renderScale = clamp(this.renderScale, this.minScale, this.maxScale);
@@ -174,8 +181,13 @@ export class AdaptiveQuality {
       this.enableFloorTexture = true;
     }
 
-    if (Math.abs(this.renderScale - prevScale) <= 0.04) return false;
-    if (now - this.lastResize < 2000) return false;
+    // Resize when the target has drifted far enough from what the canvases
+    // use. Comparing one step against the previous one meant 2% up-steps never
+    // qualified: after a single downscale the game stayed soft for the rest
+    // of the session. A resize reallocates the GL canvas and framebuffer
+    // (~60 ms measured), so it stays rare.
+    if (Math.abs(this.renderScale - this.stableScale) < 0.06) return false;
+    if (now - this.lastResize < 3000) return false;
     this.lastResize = now;
     return true;
   }
