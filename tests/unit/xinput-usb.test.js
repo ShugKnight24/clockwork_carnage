@@ -92,8 +92,8 @@ describe("GamepadManager with a virtual pad", () => {
     pad.timestamp = 5;
     const r = gm.poll(10);
     expect(r.connected).toBe(true);
-    expect(r.interact).toBe(true);
-    expect(r.shoot).toBe(true);
+    expect(r.pressed.confirm).toBe(true); // A
+    expect(r.pressed.fire).toBe(true);
     expect(r.moveX).toBeGreaterThan(0.9);
 
     gm.removeVirtualPad(pad);

@@ -9,8 +9,12 @@
  *   const gp = new GamepadManager();
  *   // In game loop:
  *   const input = gp.poll();
- *   // input.moveX, input.moveY, input.lookX, input.lookY, input.shoot, etc.
+ *   // input.moveX/moveY/lookX/lookY (sticks), input.pressed.dash,
+ *   // input.justPressed.interact, ... per action in the binding table
+ *   // (src/systems/pad-actions.js GAMEPAD_ACTIONS).
  */
+
+import { GAMEPAD_ACTIONS, PAD_LABELS, resolvePadActions } from '../src/systems/pad-actions.js';
 
 // ── Standard Gamepad Button Mapping (W3C "standard" layout) ─────
 // Works for Xbox, PS5, Switch Pro, and most modern controllers.
@@ -301,8 +305,12 @@ export class GamepadManager {
     this.activeGamepad = null;
     this.activeIndex = -1;
 
-    /** Previous frame button states for edge detection */
+    /** Button states (this and last frame) for per-action edge detection */
     this._prevButtons = new Array(17).fill(false);
+    this._downButtons = new Array(17).fill(false);
+
+    /** Action → button table poll() resolves (a remap edits this table). */
+    this.bindings = GAMEPAD_ACTIONS;
 
     /** Connected controller info for display */
     this.controllerId = '';
@@ -599,7 +607,6 @@ export class GamepadManager {
 
     const st = this._padState(gp);
     const view = normalizeGamepad(gp, this._view, st.memo, st.kind);
-    const curr = view.pressed;
     this._calibrate(st, view.axes, now);
     const ax = view.axes;
     for (let i = 0; i < 4; i++) {
@@ -621,56 +628,24 @@ export class GamepadManager {
 
     if (this.settings.invertLookY) result.lookY *= -1;
 
-    // ── Triggers (analog, 0 to 1 — treat as button if > 0.1) ──
-    result.shoot = view.values[BTN.RT] > 0.1;
-    result.aim = view.values[BTN.LT] > 0.1;
-
-    // ── Face buttons ──
-    result.interact = curr[BTN.A];
-    result.dash = curr[BTN.B];
-    result.reload = curr[BTN.X];
-    result.chronoShift = curr[BTN.Y];
-
-    // ── Shoulders ──
-    result.weaponNext = curr[BTN.RB];
-    result.weaponPrev = curr[BTN.LB];
-
-    // ── Stick clicks ──
-    result.sprint = curr[BTN.L3];
-    result.chronoLock = curr[BTN.R3];
-
-    // ── Menu ──
-    result.pause = curr[BTN.START];
-    result.minimap = curr[BTN.SELECT];
-
-    // ── D-pad ──
-    result.dpadUp = curr[BTN.DPAD_UP];
-    result.dpadDown = curr[BTN.DPAD_DOWN];
-    result.dpadLeft = curr[BTN.DPAD_LEFT];
-    result.dpadRight = curr[BTN.DPAD_RIGHT];
-
-    // ── Edge detection (just pressed this frame) ──
+    // ── Actions: held and just-pressed, from the binding table ──
+    // Triggers stay analog in the view; past 0.1 they count as held.
+    const down = this._downButtons;
     const prev = this._prevButtons;
     const jp = result.justPressed;
-    jp.interact = curr[BTN.A] && !prev[BTN.A];
-    jp.dash = curr[BTN.B] && !prev[BTN.B];
-    jp.reload = curr[BTN.X] && !prev[BTN.X];
-    jp.chronoShift = curr[BTN.Y] && !prev[BTN.Y];
-    jp.pause = curr[BTN.START] && !prev[BTN.START];
-    jp.minimap = curr[BTN.SELECT] && !prev[BTN.SELECT];
-    jp.weaponNext = curr[BTN.RB] && !prev[BTN.RB];
-    jp.weaponPrev = curr[BTN.LB] && !prev[BTN.LB];
-    jp.chronoLock = curr[BTN.R3] && !prev[BTN.R3];
-    jp.dpadUp = curr[BTN.DPAD_UP] && !prev[BTN.DPAD_UP];
-    jp.dpadDown = curr[BTN.DPAD_DOWN] && !prev[BTN.DPAD_DOWN];
-    jp.dpadLeft = curr[BTN.DPAD_LEFT] && !prev[BTN.DPAD_LEFT];
-    jp.dpadRight = curr[BTN.DPAD_RIGHT] && !prev[BTN.DPAD_RIGHT];
+    result.anyButton = resolvePadActions(view, prev, down, result.pressed, jp, this.bindings);
+
+    // Raw d-pad edges: the Forge steps its cursor with them.
+    jp.dpadUp = down[BTN.DPAD_UP] && !prev[BTN.DPAD_UP];
+    jp.dpadDown = down[BTN.DPAD_DOWN] && !prev[BTN.DPAD_DOWN];
+    jp.dpadLeft = down[BTN.DPAD_LEFT] && !prev[BTN.DPAD_LEFT];
+    jp.dpadRight = down[BTN.DPAD_RIGHT] && !prev[BTN.DPAD_RIGHT];
 
     // ── Menu navigation: d-pad or left stick, with hold-to-repeat ──
-    this._updateNav(view.axes[AXIS.LEFT_X], view.axes[AXIS.LEFT_Y], curr, now, jp);
+    this._updateNav(view.axes[AXIS.LEFT_X], view.axes[AXIS.LEFT_Y], down, now, jp);
 
     // Save current state for next frame
-    for (let i = 0; i < 17; i++) prev[i] = curr[i];
+    for (let i = 0; i < 17; i++) prev[i] = down[i];
 
     return result;
   }
@@ -765,34 +740,18 @@ export class GamepadManager {
   // ── Display Helpers ────────────────────────────────────────────
 
   /**
-   * Get display labels for the current controller type.
-   * Useful for showing context-sensitive button prompts in-game.
+   * Button legend per action for the current controller type, from the
+   * binding table (the same legends the prompts draw).
    */
   getButtonLabels() {
-    switch (this.controllerType) {
-      case 'playstation':
-        return {
-          interact: '✕', dash: '○', reload: '□', chronoShift: '△',
-          shoot: 'R2', aim: 'L2', weaponNext: 'R1', weaponPrev: 'L1',
-          pause: 'OPTIONS', minimap: 'SHARE', sprint: 'L3',
-          chronoRewind: 'L1', chronoLock: 'R3',
-        };
-      case 'switch':
-        return {
-          interact: 'B', dash: 'A', reload: 'Y', chronoShift: 'X',
-          shoot: 'ZR', aim: 'ZL', weaponNext: 'R', weaponPrev: 'L',
-          pause: '+', minimap: '-', sprint: 'LS',
-          chronoRewind: 'L', chronoLock: 'RS',
-        };
-      case 'xbox':
-      default:
-        return {
-          interact: 'A', dash: 'B', reload: 'X', chronoShift: 'Y',
-          shoot: 'RT', aim: 'LT', weaponNext: 'RB', weaponPrev: 'LB',
-          pause: 'MENU', minimap: 'VIEW', sprint: 'LS',
-          chronoRewind: 'LB', chronoLock: 'RS',
-        };
+    const family = this.controllerType === 'playstation' || this.controllerType === 'switch' ? this.controllerType : 'xbox';
+    const legends = PAD_LABELS[family];
+    const labels = {};
+    for (const action in this.bindings) {
+      const i = this.bindings[action];
+      if (typeof i === 'number' && i < legends.length) labels[action] = legends[i];
     }
+    return labels;
   }
 }
 
@@ -810,7 +769,7 @@ function padBusy(gp, kind, dz) {
 }
 
 function createResult() {
-  return resetResult({ justPressed: {} });
+  return resetResult({ pressed: {}, justPressed: {} });
 }
 
 /** Zero the reused poll() result in place. */
@@ -821,50 +780,13 @@ function resetResult(r) {
   r.lookX = 0;        // -1 (left) to +1 (right) — right stick
   r.lookY = 0;        // -1 (up) to +1 (down) — right stick
 
-  // Face buttons (current frame state)
-  r.shoot = false;     // RT (right trigger)
-  r.aim = false;       // LT (left trigger)
-  r.interact = false;  // A / ✕
-  r.dash = false;      // B / ○
-  r.reload = false;    // X / □
-  r.chronoShift = false; // Y / △
-  r.sprint = false;    // L3 (left stick click)
-  r.chronoLock = false; // R3 (right stick click): Kael's Time-Lock
-
-  // Shoulder buttons
-  r.weaponNext = false; // RB
-  r.weaponPrev = false; // LB
-
-  // Menu
-  r.pause = false;     // Start
-  r.minimap = false;   // Select
-
-  // D-pad (for menu navigation + weapon select)
-  r.dpadUp = false;
-  r.dpadDown = false;
-  r.dpadLeft = false;
-  r.dpadRight = false;
-
-  // Edge-detected (true only on the frame the button is first pressed).
-  // nav* also fire while the d-pad or left stick is held (menu repeat).
-  const jp = r.justPressed;
-  jp.interact = false;
-  jp.dash = false;
-  jp.reload = false;
-  jp.chronoShift = false;
-  jp.pause = false;
-  jp.minimap = false;
-  jp.weaponNext = false;
-  jp.weaponPrev = false;
-  jp.chronoLock = false;
-  jp.dpadUp = false;
-  jp.dpadDown = false;
-  jp.dpadLeft = false;
-  jp.dpadRight = false;
-  jp.navUp = false;
-  jp.navDown = false;
-  jp.navLeft = false;
-  jp.navRight = false;
+  // Per action (src/systems/pad-actions.js): held this frame, and true only
+  // on the frame its button goes down. justPressed also carries the raw
+  // d-pad edges (dpadUp...) and nav*, which fire while the d-pad or left
+  // stick is held (menu repeat).
+  for (const k in r.pressed) r.pressed[k] = false;
+  for (const k in r.justPressed) r.justPressed[k] = false;
+  r.anyButton = false;  // any button but Home held
 
   // Meta
   r.connected = false;

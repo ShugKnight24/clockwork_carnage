@@ -864,6 +864,11 @@ export class Game {
       this._lastGamepadMove.y = moveY;
     }
 
+    // Actions come from the pad's binding table (src/systems/pad-actions.js),
+    // read by what they mean here: gameplay while PLAYING, menus elsewhere.
+    const held = gp.pressed;
+    const jp = gp.justPressed;
+
     // In menus the left stick navigates through justPressed.nav*; holding
     // W/A/S/D as well would move the selection twice.
     const stickMoves = this.state === GameState.PLAYING || this.state === GameState.BUILDER;
@@ -871,42 +876,44 @@ export class Game {
     this._setGamepadKey(this.keybinds.moveBack, stickMoves && moveY > 0.25, nextHeld);
     this._setGamepadKey(this.keybinds.moveLeft, stickMoves && moveX < -0.25, nextHeld);
     this._setGamepadKey(this.keybinds.moveRight, stickMoves && moveX > 0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.sprint, gp.sprint, nextHeld);
-    this._setGamepadKey(this.keybinds.crouch, gp.reload, nextHeld);
-    this._setGamepadKey(this.keybinds.chronoShift, gp.chronoShift, nextHeld);
+    this._setGamepadKey(this.keybinds.sprint, stickMoves && held.sprint, nextHeld);
+    this._setGamepadKey(this.keybinds.crouch, stickMoves && held.crouch, nextHeld);
+    // Play only: the shift key is Q, which menus and the Forge already get
+    // from prevTab on the same bumper.
+    this._setGamepadKey(this.keybinds.chronoShift, this.state === GameState.PLAYING && held.chronoShift, nextHeld);
 
-    if (this.state === GameState.TITLE && gp.justPressed.interact) {
+    if (this.state === GameState.TITLE && jp.start) {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "GamepadStart", bubbles: true }));
     }
     // X / Select cycles the title-screen art style (the DOM toggle has no pad focus).
-    if (this.state === GameState.TITLE && (gp.justPressed.reload || gp.justPressed.minimap)) {
+    if (this.state === GameState.TITLE && (jp.artStyle || jp.minimap)) {
       setArtStyle((getArtStyle() + 1) % ART_STYLES.length);
     }
     if (this.state === GameState.MODE_SELECT) {
-      if (gp.justPressed.navUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
-      if (gp.justPressed.navDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
-      if (gp.justPressed.interact) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
-      if (gp.justPressed.pause || gp.justPressed.dash) document.getElementById("btnBack")?.click();
+      if (jp.navUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
+      if (jp.navDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
+      if (jp.confirm) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
+      if (jp.pause || jp.back) document.getElementById("btnBack")?.click();
     }
     if (this.state === GameState.PLAYING && this._meltdownUpgradeChoices) {
       // The meltdown upgrade overlay takes the keyboard's arrows + Enter.
-      const jp = gp.justPressed;
       this.player.isFiring = false;
       this.player.isAiming = false;
       if (jp.navLeft || jp.navUp) this.handleKeyPress("ArrowLeft");
       if (jp.navRight || jp.navDown) this.handleKeyPress("ArrowRight");
-      if (jp.interact) this.handleKeyPress("Enter");
+      if (jp.confirm) this.handleKeyPress("Enter");
     } else if (this.state === GameState.PLAYING) {
-      this.player.isFiring = gp.shoot;
-      this.player.isAiming = gp.aim;
+      const p = this.player;
+      p.isFiring = held.fire;
+      p.isAiming = held.aim;
       if (gp.lookX || gp.lookY) {
         const aimScale = 420 * dt;
         this.mouse.dx += gp.lookX * aimScale;
         this.mouse.dy += gp.lookY * aimScale;
       }
-      if (gp.justPressed.dash) {
-        const cos = Math.cos(this.player.angle);
-        const sin = Math.sin(this.player.angle);
+      if (jp.dash) {
+        const cos = Math.cos(p.angle);
+        const sin = Math.sin(p.angle);
         const lx = this._lastGamepadMove.x || 0;
         const ly = this._lastGamepadMove.y || -1;
         const rawX = cos * -ly + sin * lx;
@@ -914,33 +921,38 @@ export class Game {
         this.triggerDash(this.keybinds.moveForward, rawX, rawY);
         this.gamepad.vibrateLight();
       }
-      if (gp.justPressed.interact) this.interact();
-      if (gp.justPressed.weaponNext || gp.justPressed.dpadRight) this._inputWheel(1);
-      // LB while shifting is Nova's Rewind (spec decision 4); otherwise it
-      // cycles weapons as it always has.
-      const rewindPad = gp.justPressed.weaponPrev && this.player.chronoActive && this.chronoPowers.has("rewind");
-      if (rewindPad) this.chronoRewind();
-      if ((gp.justPressed.weaponPrev && !rewindPad) || gp.justPressed.dpadLeft) this._inputWheel(-1);
-      if (gp.justPressed.chronoLock) this.chronoLock();
-      if (gp.justPressed.pause) this.handleKeyPress(this.keybinds.pause);
+      if (jp.interact) this.interact();
+      // Rewind shares its bumper with previous weapon: while shifting with
+      // Nova's power it rewinds (spec decision 4), otherwise it cycles.
+      const rewind = jp.chronoRewind && p.chronoActive && this.chronoPowers.has("rewind");
+      if (rewind) this.chronoRewind();
+      const weaponBefore = p.currentWeapon;
+      if (jp.weaponNext || jp.weaponCycleNext) this._inputWheel(1);
+      if ((jp.weaponPrev && !rewind) || jp.weaponCyclePrev) this._inputWheel(-1);
+      if (jp.weaponLast && p.lastWeapon >= 0 && p.lastWeapon < p.weapons.length) p.currentWeapon = p.lastWeapon;
+      if (jp.weaponFirst && p.weapons.length) p.currentWeapon = 0; // slot 1, as the 1 key
+      // The tutorial's switch step only heard the number keys and touch.
+      if (p.currentWeapon !== weaponBefore && this.mode === "tutorial") this.tutorialWeaponSwapped = true;
+      if (jp.chronoLock) this.chronoLock();
+      if (jp.pause) this.handleKeyPress(this.keybinds.pause);
     } else {
-      // The Forge walks on the stick, so only its d-pad maps to arrows.
-      const jp = gp.justPressed;
+      // The Forge walks on the stick, so only its d-pad maps to arrows; B
+      // holds crouch there (descend), so only Start leaves it.
       const forge = this.state === GameState.BUILDER;
+      const cutscene = this.state === GameState.CUTSCENE;
       if (forge ? jp.dpadUp : jp.navUp) this.handleKeyPress("ArrowUp");
       if (forge ? jp.dpadDown : jp.navDown) this.handleKeyPress("ArrowDown");
       if (forge ? jp.dpadLeft : jp.navLeft) this.handleKeyPress("ArrowLeft");
       if (forge ? jp.dpadRight : jp.navRight) this.handleKeyPress("ArrowRight");
-      if (gp.justPressed.interact) this.handleKeyPress("Enter");
-      if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
-      if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
-      if (gp.justPressed.weaponNext) this.handleKeyPress("KeyE");
-      // Y toggles cutscene auto-play.
-      if (this.state === GameState.CUTSCENE && gp.justPressed.chronoShift) this.toggleCutsceneAuto();
+      if (cutscene ? jp.advance : jp.confirm) this.handleKeyPress("Enter");
+      if (jp.pause || (!forge && (cutscene ? jp.skip : jp.back))) this.handleKeyPress("Escape");
+      if (jp.prevTab) this.handleKeyPress("KeyQ");
+      if (jp.nextTab) this.handleKeyPress("KeyE");
+      if (cutscene && jp.auto) this.toggleCutsceneAuto();
       // Showroom face buttons: X randomize, Y save & deploy.
       if (this.state === GameState.CHARACTER_CREATE && isModernArt()) {
-        if (gp.justPressed.reload) this.handleKeyPress("GamepadX");
-        if (gp.justPressed.chronoShift) this.handleKeyPress("GamepadY");
+        if (jp.randomize) this.handleKeyPress("GamepadX");
+        if (jp.deploy) this.handleKeyPress("GamepadY");
       }
     }
 
@@ -1919,6 +1931,8 @@ export class Game {
     this.time = (this.time || 0) + this.deltaTime * 1000;
     this.wallTime = timestamp;
 
+    // Before the pad reads it: switches made by key events since last frame count.
+    this.player?.trackWeapon();
     this._updateGamepadInput(this.deltaTime);
 
     this._updateTimeScale();
@@ -2400,7 +2414,7 @@ export class Game {
     return [cos, sin];
   }
 
-  /** Nova's Rewind Echo (X / LB while shifting / REWIND). */
+  /** Nova's Rewind Echo (X / RB while shifting / REWIND). */
   chronoRewind() {
     if (this.state !== GameState.PLAYING || !this.player.alive) return false;
     return this.chronoPowers.tryRewind(this);

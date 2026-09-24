@@ -214,10 +214,10 @@ describe("GamepadManager", () => {
     pads[0] = pad({ id: FIREFOX_360, mapping: "", axes: [0, -1, -1, 0, 0, 1, 0, 0], down: [0] });
     const gm = new GamepadManager();
     const r = gm.poll(0);
-    expect(r.shoot).toBe(true);
-    expect(r.aim).toBe(false);
+    expect(r.pressed.fire).toBe(true);
+    expect(r.pressed.aim).toBe(false);
     expect(r.moveY).toBeCloseTo(-1);
-    expect(r.justPressed.interact).toBe(true);
+    expect(r.justPressed.confirm).toBe(true);
     expect(gm.controllerType).toBe("xbox");
   });
 
@@ -241,7 +241,7 @@ describe("GamepadManager", () => {
     const r = gm.poll(16);
     expect(gm.activeIndex).toBe(1);
     expect(gm.controllerType).toBe("playstation");
-    expect(r.justPressed.interact).toBe(true);
+    expect(r.justPressed.confirm).toBe(true);
   });
 
   it("does not hand over to an idle pad with a stuck button", () => {

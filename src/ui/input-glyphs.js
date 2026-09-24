@@ -14,79 +14,21 @@
  *   drawPrompt     the same footer on a canvas, glyph then label per item.
  *   glyphHTML      a glyph as DOM (renderDomGlyphs fills [data-glyph]).
  *
- * GAMEPAD_ACTIONS is the pad layout, by W3C standard button index. js/gamepad.js
- * reads the same buttons into its named poll() fields and js/game.js acts on
- * those; tests/unit/input-glyphs.test.js presses each button here through
- * poll() and checks the field it lands on, so the two cannot drift apart.
+ * The pad layout is GAMEPAD_ACTIONS (src/systems/pad-actions.js): js/gamepad.js
+ * resolves poll().pressed / justPressed per action from the same table the
+ * glyphs here read, so what a prompt shows is what the button does.
  */
 import { formatKeyCode } from "./controls-screen.js";
 import { drawKeycap, uiFont } from "./modern-ui-kit.js";
+import { GAMEPAD_ACTIONS, PAD, PAD_LABELS } from "../systems/pad-actions.js";
 
-// ─── Pad layout ─────────────────────────────────────────────────────────────
-
-/** Standard button indices by Xbox name. */
-export const PAD = {
-  A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7,
-  VIEW: 8, MENU: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15,
-};
-
-/**
- * Action → standard button index, or a d-pad / stick pseudo button:
- * "dpad" (all four), "dpadV", "dpadH", "lstick", "rstick".
- * Gameplay (PLAYING in js/game.js _updateGamepadInput) then menus (the
- * non-PLAYING branch, where A is Enter, B and Start are Escape, LB/RB are Q/E).
- */
-export const GAMEPAD_ACTIONS = {
-  // Gameplay
-  interact: PAD.A,
-  dash: PAD.B,
-  crouch: PAD.X,
-  chronoShift: PAD.Y,
-  weaponPrev: PAD.LB,
-  chronoRewind: PAD.LB, // LB while shifting
-  weaponNext: PAD.RB,
-  aim: PAD.LT,
-  fire: PAD.RT,
-  sprint: PAD.LS,
-  chronoLock: PAD.RS,
-  pause: PAD.MENU,
-  minimap: PAD.VIEW,
-  weaponCycle: "dpadH",
-  move: "lstick",
-  look: "rstick",
-  // Menus
-  confirm: PAD.A,
-  back: PAD.B,
-  prevTab: PAD.LB,
-  nextTab: PAD.RB,
-  navigate: "dpad",
-  navigateV: "dpadV",
-  navigateH: "dpadH",
-  arrowsV: "dpadV",
-  arrowsH: "dpadH",
-  start: PAD.A,
-  artStyle: PAD.X, // title screen: X (or View) cycles the art style
-  // Cutscenes: A advances, Y toggles auto-play, B or Start skips.
-  advance: PAD.A,
-  auto: PAD.Y,
-  skip: PAD.B,
-  // Showroom face buttons.
-  randomize: PAD.X,
-  deploy: PAD.Y,
-};
+export { GAMEPAD_ACTIONS, PAD };
 
 /** Face-button colours (Xbox) and symbol colours (PlayStation). */
 export const XBOX_COLORS = { 0: "#5fb33f", 1: "#d9352c", 2: "#2f7fd8", 3: "#e6b422" };
 const PS_COLORS = { 0: "#7fa9e8", 1: "#ef6a63", 2: "#dc8fd0", 3: "#44c9a6" };
 // Legend colour on the filled Xbox buttons: dark on green/yellow, white on red/blue.
 const XBOX_INK = { 0: "#0b1208", 1: "#ffffff", 2: "#ffffff", 3: "#1a1204" };
-
-/** Legend per standard button index, per controller family. */
-const PAD_LABELS = {
-  xbox: ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "⧉", "☰", "LS", "RS"],
-  playstation: ["✕", "○", "□", "△", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3"],
-  switch: ["B", "A", "Y", "X", "L", "R", "ZL", "ZR", "−", "+", "LS", "RS"],
-};
 
 const DPAD_ARROWS = { dpad: "", dpadV: "↕", dpadH: "↔", 12: "↑", 13: "↓", 14: "←", 15: "→" };
 
@@ -124,6 +66,10 @@ const KEYBOARD_FIXED = {
   weaponPrev: "WHEEL",
   weaponNext: "WHEEL",
   weaponCycle: "1-8",
+  weaponCyclePrev: "WHEEL",
+  weaponCycleNext: "WHEEL",
+  weaponLast: "",
+  weaponFirst: "1",
   move: "WASD",
   look: "MOUSE",
   minimap: "TAB",
@@ -191,9 +137,8 @@ export function padActive(gp) {
   if (!gp?.connected) return false;
   // Sticks are already past the radial deadzone (poll zeroes them inside it).
   if (gp.moveX || gp.moveY || gp.lookX || gp.lookY) return true;
-  return !!(gp.shoot || gp.aim || gp.interact || gp.dash || gp.reload || gp.chronoShift ||
-    gp.sprint || gp.chronoLock || gp.weaponNext || gp.weaponPrev || gp.pause || gp.minimap ||
-    gp.dpadUp || gp.dpadDown || gp.dpadLeft || gp.dpadRight);
+  // Triggers count past the same 0.1 that makes them fire or aim.
+  return !!gp.anyButton;
 }
 
 /** Once per poll: a pad in use takes over the prompts. */

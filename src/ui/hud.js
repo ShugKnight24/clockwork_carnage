@@ -27,7 +27,7 @@ import {
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawChronoCluster } from "./chrono-hud.js";
-import { activeDevice, drawPrompt } from "./input-glyphs.js";
+import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -1558,7 +1558,7 @@ if (showChrono) {
   ctx.fillText(`${Math.floor(chronoPct * 100)}%`, chronoBarX + chronoBarW * 0.75, chronoBarY + chronoBarH / 2 + 4);
   ctx.fillStyle = "rgba(150,120,200,0.3)";
   ctx.font = "bold 9px monospace";
-  ctx.fillText("[HOLD Q]", chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
+  ctx.fillText(`[HOLD ${glyph(game, "chronoShift").text}]`, chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
 }
 
 // Chronos: the Resonance eye and the unlocked powers, on the bars' row.

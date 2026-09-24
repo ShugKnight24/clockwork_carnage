@@ -42,6 +42,9 @@ export class Player {
     this.rotSpeed = 3.0;
     this.weapons = [0]; // weapon IDs owned
     this.currentWeapon = 0;
+    // Slot held before the latest switch (the pad's last-weapon button).
+    this.lastWeapon = -1;
+    this._weaponSeen = 0;
     this.damageMultiplier = 1;
     this.regenRate = 0;
     this.critChance = 0;
@@ -104,6 +107,17 @@ export class Player {
     this.chronoActive = false;
     this.particles = [];
   }
+
+  /**
+   * Once a frame: note a weapon switch, whatever made it (keys, wheel, pad,
+   * touch, a pickup), so lastWeapon is always the one held before.
+   */
+  trackWeapon() {
+    if (this.currentWeapon === this._weaponSeen) return;
+    if (this._weaponSeen >= 0) this.lastWeapon = this._weaponSeen;
+    this._weaponSeen = this.currentWeapon;
+  }
+
   /**
    * Gets the weapon definition for the currently equipped weapon.
    * @returns {Object} Weapon definition from WEAPONS data

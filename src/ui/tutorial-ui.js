@@ -658,8 +658,9 @@ function keycapW(text, size) {
 const KEY_WORDS = new Set([
   "CLICK", "E", "Q", "SHIFT", "CTRL", "ENTER", "ESC", "TAB", "SPACE",
   "USE", "FIRE", "AIM", "RUN", "CROUCH", "SLOW", "DASH",
-  // The Chronos powers' keys, pad buttons and touch buttons (teach cards).
-  "X", "V", "Y", "B", "LB", "RS", "L1", "R3", "REWIND", "LOCK",
+  // The Chronos powers' keys and touch buttons (teach cards). Pad buttons
+  // come from the pad's own legends (padLabelGlyph), whatever they're bound to.
+  "X", "V", "REWIND", "LOCK",
 ]);
 const SPEAKER_SCHEMES = { ARIA: "cyan", SUPERVISOR: "amber", LYRA: "amber", ROOK: "cyan", NOVA: "amber", KAEL: "cyan" };
 
