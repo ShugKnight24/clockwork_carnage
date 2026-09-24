@@ -266,6 +266,9 @@ export class TouchControls {
       return;
     }
 
+    // The settings deck takes its own touches; the live view beside it is inert.
+    if (g.state === "settings" && g.settingsDeck?.isOpen) return;
+
     // Settings: a finger on the row list may become a drag-scroll.
     if (g.state === "settings" && e.changedTouches.length > 0) {
       this.startSettingsDrag(e.changedTouches[0]);
@@ -478,6 +481,7 @@ export class TouchControls {
     e.preventDefault();
 
     if (this.game.state === "settings") {
+      if (this.game.settingsDeck?.isOpen) return;
       for (const touch of e.changedTouches) {
         if (this.moveSettingsDrag(touch)) return;
       }

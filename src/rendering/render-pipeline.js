@@ -15,6 +15,7 @@ import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
 import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
+let deckLoad = "idle"; // same states, for <settings-deck>
 
 /** Half-height in canvas pixels the enemy bitmaps are rasterised at. */
 const ENEMY_SPRITE_PX = 128;
@@ -339,11 +340,45 @@ function syncShowroom(game) {
   return inCreator && modern && showroomLoad === "loading";
 }
 
+/** Fetch and mount <settings-deck> the first time Settings opens. */
+function ensureSettingsDeck(game) {
+  if (game.settingsDeck || deckLoad !== "idle") return;
+  deckLoad = "loading";
+  import("../../js/components/settings-deck.js")
+    .then((m) => {
+      game.settingsDeck = m.mountSettingsDeck(game);
+      deckLoad = "ready";
+    })
+    .catch((err) => {
+      deckLoad = "failed";
+      console.warn("[settings] deck failed to load, using the canvas screen", err);
+    });
+}
+
+/**
+ * Open the deck on the first SETTINGS frame (every entry point only sets the
+ * state through game.openSettings) and keep it in step with the state.
+ * Returns true when the canvas settings screen should draw instead.
+ */
+function syncSettingsDeck(game) {
+  const inSettings = game.state === GameState.SETTINGS;
+  if (inSettings) ensureSettingsDeck(game);
+  const deck = game.settingsDeck;
+  if (deck) {
+    if (inSettings && !deck.isOpen) {
+      deck.open({ returnTo: game._settingsReturnTo ?? "pause", section: game._settingsSection ?? undefined });
+    }
+    deck.sync(inSettings);
+  }
+  return inSettings && deckLoad === "failed";
+}
+
 export function renderFrame(game) {
   const ctx = game.renderer.ctx;
   const w = game.renderer.width;
   const h = game.renderer.height;
   const showroom = syncShowroom(game);
+  const canvasSettings = syncSettingsDeck(game);
 
   if (
     game.state === GameState.TITLE ||
@@ -734,8 +769,7 @@ export function renderFrame(game) {
   const hw = game.hudW;
   const hh = game.hudH;
   if (game.state === GameState.PAUSED) game.renderPauseScreen(hctx, hw, hh);
-  if (game.state === GameState.SETTINGS)
-    game.renderSettingsScreen(hctx, hw, hh);
+  if (canvasSettings) game.renderSettingsScreen(hctx, hw, hh);
   if (game.state === GameState.HUD_EDITOR)
     game.hudEditor.render(hctx, hw, hh);
   if (game.state === GameState.CONTROLS)

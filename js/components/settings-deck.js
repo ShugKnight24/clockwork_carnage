@@ -36,6 +36,7 @@ const ICON = {
   balanced: '<path d="M4 16.5a8 8 0 0 1 16 0"/><path d="M12 16.5l4-5"/>',
   max: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
   custom: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+  pad: '<path d="M7.5 7h9a4.5 4.5 0 0 1 4.3 5.8l-1.2 4a2.4 2.4 0 0 1-4.1.9L13.8 16h-3.6l-1.7 1.7a2.4 2.4 0 0 1-4.1-.9l-1.2-4A4.5 4.5 0 0 1 7.5 7z"/><path d="M8 10v3M6.5 11.5h3"/><circle cx="16" cy="10.5" r=".6"/><circle cx="17.5" cy="12.5" r=".6"/>',
   prev: '<path d="M14.5 5.5 8 12l6.5 6.5"/>',
   next: '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
 };
@@ -156,6 +157,13 @@ p { margin: 0; }
 /* Quick cards */
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cards.art { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cards.pad { grid-template-columns: minmax(0, 1fr); }
+.row.card.padcard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 64px; }
+.padcard .cdesc { grid-column: 2; margin-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.padcard .label { grid-column: 2; }
+.padcard .ico { grid-row: 1 / 3; }
+.padcard .chip { grid-column: 3; grid-row: 1 / 3; }
+.row.card.padcard.focused .chip { border-color: var(--d-accent); color: var(--d-accent); }
 .row.card { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 10px; min-height: 88px; padding: 12px;
   border: 1px solid var(--d-line-hi); background: rgba(255, 255, 255, 0.02); }
 .card .ico { width: 26px; height: 26px; color: var(--d-dim); }
@@ -434,6 +442,12 @@ class SettingsDeck extends HTMLElement {
     }
     this.syncSkin();
     if (activeDevice(this.game) !== this.getAttribute("input")) this.syncInput();
+    // The controller card comes and goes with the pad.
+    const pad = !!this.game.gamepad?.connected;
+    if (pad !== this._pad) {
+      this._pad = pad;
+      if (this.isOpen && this.section().id === "quick") this.refresh();
+    }
   }
 
   syncSkin() {
@@ -656,6 +670,14 @@ class SettingsDeck extends HTMLElement {
       this.syncConfirm();
       return;
     }
+    if (item.pad) {
+      const cal = defOf("gamepadCalibrate");
+      cal.onClick?.(this.game);
+      this.sfx("menuConfirm");
+      this.announce(cal.label);
+      this.refresh();
+      return;
+    }
     if (card) return this.applyCard(card);
     if (art) {
       const artDef = defOf("artStyle");
@@ -751,6 +773,8 @@ class SettingsDeck extends HTMLElement {
       return [
         ...QUICK_CARDS.map((card) => ({ kind: "card", key: `card:${card.id}`, card, group: "Performance" })),
         ...ART_CARDS.map((art) => ({ kind: "card", key: `art:${art.style}`, art, group: "Art style" })),
+        // Only with a pad connected: its status, and Calibrate on activate.
+        ...(this.game.gamepad?.connected ? [{ kind: "card", key: "card:controller", pad: true, group: "Controller" }] : []),
       ];
     }
     const items = [];
@@ -807,7 +831,7 @@ class SettingsDeck extends HTMLElement {
         cards = item.kind === "card";
         group = item.group;
         if (group) html += `<h3 class="group">${esc(group)}</h3>`;
-        if (cards) html += `<div class="cards${item.art ? " art" : ""}">`;
+        if (cards) html += `<div class="cards${item.art ? " art" : item.pad ? " pad" : ""}">`;
       }
       html += this.rowHtml(item);
     }
@@ -819,6 +843,7 @@ class SettingsDeck extends HTMLElement {
   rowHtml(item) {
     const { def, card, art, key } = item;
     const k = `data-key="${esc(key)}" data-kind="${item.kind}" tabindex="-1"`;
+    if (item.pad) return `<button class="row card padcard" ${k}>${svg("pad", "ico")}<span class="label"></span><span class="cdesc"></span><span class="chip">Calibrate</span></button>`;
     if (card) return `<button class="row card" ${k}>${svg(card.id, "ico")}<span class="label">${esc(card.label)}</span><span class="cdesc">${esc(card.desc)}</span></button>`;
     if (art) return `<button class="row card" ${k}><span class="thumb s${art.style}" aria-hidden="true"><b>Aa</b></span><span class="label">${esc(art.label)}</span></button>`;
     if (key === "resetSection") return `<button class="row reset" ${k}><span class="label">Reset ${esc(this.section().label)}</span></button>`;
@@ -844,6 +869,13 @@ class SettingsDeck extends HTMLElement {
     this.items.forEach((item, i) => {
       const el = els[i];
       const { def, card, art } = item;
+      if (item.pad) {
+        const { value, desc } = this.padStatus();
+        const label = el.querySelector(".label");
+        if (label.textContent !== value) label.textContent = value;
+        el.querySelector(".cdesc").textContent = desc;
+        return el.setAttribute("aria-label", `Controller ${value}. Calibrate sticks`);
+      }
       if (card) return el.setAttribute("aria-current", String(this.cardActive(card)));
       if (art) return el.setAttribute("aria-current", String(s.artStyle === art.style));
       if (!def) return;
@@ -862,6 +894,11 @@ class SettingsDeck extends HTMLElement {
         if (d.color) el.style.setProperty("--vc", d.color);
       }
     });
+  }
+
+  padStatus() {
+    const st = this.game.gamepad?.status;
+    return { value: st?.value || "CONNECTED", desc: st?.desc || "" };
   }
 
   cardActive(card) {
@@ -971,7 +1008,8 @@ class SettingsDeck extends HTMLElement {
     const item = this.current();
     if (!item) return;
     const { def, card, art } = item;
-    this.el.desc.textContent = card?.desc ?? (art ? ART_DESC[art.style] : def ? def.desc : RESET_DESC) ?? "";
+    const desc = item.pad ? this.padStatus().desc : card?.desc ?? (art ? ART_DESC[art.style] : def ? def.desc : RESET_DESC);
+    this.el.desc.textContent = desc ?? "";
     const note = def ? settingDisplayItem(def, this.game.settings).note : "";
     const cost = def && SECTION_OF[def.key]?.cost;
     this.el.note.innerHTML = [

@@ -289,10 +289,7 @@ document.getElementById("btnSettings").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
-  game.settingsSelection = 0;
-  game.settingsScroll = 0;
-  game.state = GameState.SETTINGS;
-  game._settingsReturnToMenu = true;
+  game.openSettings({ returnTo: "menu" });
 });
 
 // Expose dev flag toggle on window for console access
@@ -541,6 +538,8 @@ function gameLoop(timestamp) {
         titleScreen.classList.add("hidden");
         modeSelect.classList.remove("hidden");
         updateContinueButtons();
+        // No render runs on the menu to put the deck away (frame-error recovery).
+        game.settingsDeck?.sync(false);
         gameCanvas.style.display = "none";
         hudCanvas.style.display = "none";
       } else {

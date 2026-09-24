@@ -400,8 +400,7 @@ export function dispatchKeyPress(game, code, e) {
       game.audio.startAmbient("menu");
     }
     if (code === "KeyS" || code === "Tab") {
-      game.settingsSelection = 0;
-      game.state = GameState.SETTINGS;
+      game.openSettings({ returnTo: "pause" });
     }
     if (code === "KeyC") {
       game.controlsSelection = 0;
@@ -444,6 +443,12 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.SETTINGS) {
+    // The settings deck owns every key while it is open. The canvas screen
+    // below only runs if the deck failed to load.
+    if (game.settingsDeck?.isOpen) {
+      game.settingsDeck.handleKey(code, e);
+      return;
+    }
     // Category-aware navigation: Q/E = category, W/S/↑/↓ = navigate, A/D/←/→ = value, Enter/Space = cycle
     // Pass `settings` so this list matches the one the screen draws: some
     // categories appear only for certain values.

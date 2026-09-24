@@ -333,7 +333,7 @@ export class Game {
           (e.clientY - rect.top) * (this.canvas.height / rect.height),
         );
       }
-      if (this.state !== GameState.SETTINGS) {
+      if (this.state !== GameState.SETTINGS || this.settingsDeck?.isOpen) {
         if (this.canvas.style.cursor === "pointer")
           this.canvas.style.cursor = "";
         return;
@@ -373,7 +373,9 @@ export class Game {
       canvas: this.canvas,
       onKeyDown: (code, e) => this._inputKeyDown(code, e),
       onKeyUp: (code) => {
-        /* state machine reacts to held keys each frame */ void code;
+        // Play reacts to held keys each frame; only the settings deck wants
+        // releases (holding C shows a setting's previous value).
+        if (this.state === GameState.SETTINGS) this.settingsDeck?.handleKeyUp(code);
       },
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
@@ -701,7 +703,11 @@ export class Game {
         e.stopImmediatePropagation();
       }
     }
+    const wasSettings = this.state === GameState.SETTINGS;
     this.handleKeyPress(e.code, e);
+    // Leaving Settings for the menu must not also reach main.js's mode-select
+    // listener, which would take the same Escape as "back to the title".
+    if (wasSettings && this.state === GameState.MODE_SELECT) e.stopImmediatePropagation();
   }
 
   /** Handles all mousedown events with full game state context. */
@@ -713,9 +719,10 @@ export class Game {
       else this.advanceCutsceneFrame();
       return;
     }
-    // Settings
+    // Settings: the deck handles its own pointer events, and a click on the
+    // live view beside it does nothing (in particular, never takes the pointer).
     if (this.state === GameState.SETTINGS) {
-      if (e.button === 0) this._handleSettingsClick(e);
+      if (e.button === 0 && !this.settingsDeck?.isOpen) this._handleSettingsClick(e);
       return;
     }
     
@@ -786,6 +793,7 @@ export class Game {
       return;
     }
     if (this.state === GameState.SETTINGS) {
+      if (this.settingsDeck?.isOpen) return; // the deck's list scrolls natively
       const layout = settingsLayout(
         this.hudW,
         this.hudH,
@@ -835,6 +843,38 @@ export class Game {
 
   handleKeyPress(code, e) {
     dispatchKeyPress(this, code, e);
+  }
+
+  /**
+   * Every way into Settings goes through here, so the deck always knows
+   * where to return: the mode-select menu, the pause menu, or the HUD editor.
+   * The render pipeline opens the deck on the first SETTINGS frame.
+   */
+  openSettings({ returnTo = "pause", section } = {}) {
+    this.state = GameState.SETTINGS;
+    this._settingsReturnTo = returnTo;
+    this._settingsSection = section ?? null;
+    // The canvas screen (only drawn when the deck fails to load) reads these.
+    this._settingsReturnToMenu = returnTo === "menu";
+    this.settingsSelection = 0;
+    this.settingsScroll = 0;
+  }
+
+  onSettingsDeckClose(returnTo) {
+    this.saveSettings();
+    this._settingsReturnToMenu = false;
+    if (returnTo === "menu") {
+      // main.js's loop restores the rest of the menu (canvases hidden,
+      // continue buttons) on the state change, as the old Back did.
+      this.state = GameState.MODE_SELECT;
+      const menu = document.getElementById("modeSelect");
+      menu?.classList.remove("hidden");
+      document.getElementById("btnSettings")?.focus({ preventScroll: true });
+    } else if (returnTo === "hud") {
+      this.hudEditor.start(); // reloads its layout as well as the state
+    } else {
+      this.state = GameState.PAUSED;
+    }
   }
 
   _setGamepadKey(code, on, nextHeld) {
@@ -954,7 +994,14 @@ export class Game {
         if (jp.randomize) this.handleKeyPress("GamepadX");
         if (jp.deploy) this.handleKeyPress("GamepadY");
       }
+      // Settings deck: X resets the row, holding Y shows its previous value.
+      if (this.state === GameState.SETTINGS) {
+        if (jp.randomize) this.handleKeyPress("KeyX");
+        if (jp.deploy) this.handleKeyPress("GamepadY");
+        if (this._padCompareHeld && !held.deploy) this.settingsDeck?.handleKeyUp("GamepadY");
+      }
     }
+    this._padCompareHeld = this.state === GameState.SETTINGS && !!held.deploy;
 
     this._releaseGamepadKeys(nextHeld);
   }
