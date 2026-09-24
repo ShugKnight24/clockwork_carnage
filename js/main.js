@@ -68,11 +68,8 @@ initAnalytics();
 const versionLabel = document.getElementById("versionLabel");
 if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
 
-// Update start prompt for touch devices
-if (primaryTouch) {
-  const startPrompt = titleScreen.querySelector(".start-prompt");
-  if (startPrompt) startPrompt.textContent = "[ TAP TO START ]";
-}
+// The start prompt's keyboard / pad / touch wording is picked by CSS on
+// html[data-input] (src/ui/input-glyphs.js).
 
 // Track native (CSS) dimensions for adaptive resolution
 let nativeW = 0, nativeH = 0;

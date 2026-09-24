@@ -61,7 +61,11 @@
       </div>
 
       <div class="subtitle">Glitch Protocol</div>
-      <div class="start-prompt">[ CLICK OR PRESS ENTER TO START ]</div>
+      <div class="start-prompt">
+        <span data-input-only="keyboard">[ CLICK OR PRESS ENTER TO START ]</span>
+        <span data-input-only="gamepad">[ PRESS <span data-glyph="start" data-glyph-device="gamepad"></span> TO START ]</span>
+        <span data-input-only="touch">[ TAP TO START ]</span>
+      </div>
 
       <div class="landing-features">
         <div class="landing-tagline">
@@ -568,7 +572,12 @@
           </path>
         </svg>
       </div>
-      <button class="back-btn" id="btnBack">← BACK [ESC]</button>
+      <div class="pad-hint" data-input-only="gamepad" aria-hidden="true">
+        <span><span data-glyph="navigateV" data-glyph-device="gamepad"></span> Select</span>
+        <span><span data-glyph="confirm" data-glyph-device="gamepad"></span> Confirm</span>
+        <span><span data-glyph="back" data-glyph-device="gamepad"></span> Back</span>
+      </div>
+      <button class="back-btn" id="btnBack">← BACK <span data-input-only="keyboard">[ESC]</span><span data-input-only="gamepad" data-glyph="back" data-glyph-device="gamepad"></span></button>
       <button
         class="fullscreen-btn"
         id="btnFullscreen"

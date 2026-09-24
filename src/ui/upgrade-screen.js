@@ -15,6 +15,9 @@ import {
   drawBar,
   drawButton,
 } from "./modern-ui-kit.js";
+import { activeDevice, drawPrompt } from "./input-glyphs.js";
+
+const FOOTER = [["navigate", "navigate"], ["confirm", "select"]];
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -311,10 +314,10 @@ export function renderUpgradeScreen(ctx, w, h, state) {
   ctx.fillText(contSelected ? "\u25B6  CONTINUE  \u25B6" : "CONTINUE", w / 2, contY + (compactUpg ? 3 : 5));
 
   // ── Footer hint ──
-  if (!compactUpg) {
-    ctx.fillStyle = "rgba(100,120,140,0.4)";
-    ctx.font = "11px monospace";
-    ctx.fillText("W/S/A/D navigate  \u00B7  ENTER select", w / 2, contY + 34);
+  if (!compactUpg && activeDevice(state.input) !== "touch") {
+    drawPrompt(ctx, w / 2, contY + 30, FOOTER, {
+      input: state.input, size: 10, font: "11px monospace", color: "rgba(100,120,140,0.7)", align: "center", look: "legacy",
+    });
   }
 
   // ── Scanline overlay ──
@@ -452,12 +455,11 @@ function renderUpgradeScreenModern(ctx, w, h, state) {
   drawButton(ctx, w / 2 - contBtnW / 2, contY - contBtnH / 2, contBtnW, contBtnH,
     contSelected ? "Continue  ▶" : "Continue", contSelected ? "focus" : "idle", UI.energy, { size: compact ? 13 : 16 });
 
-  if (!compact) {
-    ctx.fillStyle = UI.textFaint;
-    ctx.font = uiFont(11, 600);
-    ctx.textAlign = "center";
+  if (!compact && activeDevice(state.input) !== "touch") {
     ctx.letterSpacing = "1px";
-    ctx.fillText("W/S/A/D NAVIGATE  ·  ENTER SELECT", w / 2, contY + 36);
+    drawPrompt(ctx, w / 2, contY + 32, FOOTER.map(([a, l]) => [a, l.toUpperCase()]), {
+      input: state.input, size: 10, font: uiFont(11, 600), color: UI.textFaint, align: "center",
+    });
     ctx.letterSpacing = "0px";
   }
   ctx.textAlign = "left";

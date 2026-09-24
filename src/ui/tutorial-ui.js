@@ -17,6 +17,7 @@ import {
   drawBackdrop,
   inkText,
 } from "./modern-ui-kit.js";
+import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -169,14 +170,6 @@ function drawCinematicMenu(ctx, w, h, items, selection, now) {
   ctx.textAlign = "left";
 }
 
-/** Footer hint text centered at the bottom of the screen. */
-function drawFooterHint(ctx, w, h, text) {
-  ctx.fillStyle = FOOTER_GREY;
-  ctx.font = "11px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(text, w / 2, h - 30);
-  ctx.textAlign = "left";
-}
 
 // ─── Tutorial step content (single source of truth) ────────────────────────
 
@@ -185,9 +178,16 @@ function drawFooterHint(ctx, w, h, text) {
  * Step 0 is HUD boot animation, no copy. Step 18 is sandbox, no overlay.
  *
  * Copy chosen to feel like a movie: ARIA narrates, sometimes the supervisor
- * cuts in. Mobile alternatives respect touch verbs.
+ * cuts in. Mobile alternatives respect touch verbs; pad copy names the
+ * buttons of the controller in use (src/ui/input-glyphs.js), and its cards
+ * carry `pad` (the family) so the Modern card draws them as pad glyphs.
+ * @param {"keyboard"|"gamepad"|"touch"|boolean} device  true: touch, false: keyboard
+ * @param {object} [game] for the pad family and the keybinds
  */
-export function tutorialStepCopy(isMobile) {
+export function tutorialStepCopy(device, game = null) {
+  if (device === true) device = "touch";
+  if (device === "gamepad") return padStepCopy(game);
+  const isMobile = device === "touch";
   return [
     null, // step 0 handled separately (HUD boot)
     {
@@ -459,6 +459,27 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
+/** tutorialStepCopy for the pad: the keyboard cards with button names swapped in. */
+function padStepCopy(game) {
+  const copy = tutorialStepCopy("keyboard", game);
+  const b = (action) => glyph(game, action, "gamepad").text;
+  const pad = padFamily(game);
+  const hints = {
+    1: 'ARIA: "Morning, Cadet. Push the right stick to look around. Get used to seeing the world through a weapon."',
+    2: 'ARIA: "Left stick to walk. Head for the bulkhead ahead. Try not to hit the frame."',
+    3: `ARIA: "Sealed bulkhead. Face it and press ${b("interact")}. I'll crack the lock — you look confident."`,
+    5: `ARIA: "Pull ${b("fire")} to fire. Let's confirm the dangerous end works."`,
+    6: `ARIA: "Hold ${b("aim")} to aim down sights. Slower feet, tighter shots."`,
+    7: `ARIA: "Shotgun on the range. Pick it up, then press ${b("weaponNext")} to switch. Right tool, right problem."`,
+    8: `ARIA: "Fitness center. Hold ${b("sprint")} to sprint. Yes, the Bureau has a gym. No, you've never used it."`,
+    9: `ARIA: "Hold ${b("crouch")} to crouch. Smaller target, quieter feet."`,
+    10: `ARIA: "While sprinting, tap ${b("crouch")} to slide. Momentum is armor."`,
+    11: `ARIA: "Tap ${b("dash")} to phase-dash. Blink, and you're somewhere else."`,
+    12: `ARIA: "Time-dilation module online. Hold ${b("chronoShift")} and keep firing. The world crawls. You don't."`,
+  };
+  return copy.map((step, i) => (step ? { ...step, hint: hints[i] ?? step.hint, pad } : step));
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -484,7 +505,8 @@ export function renderTutorialOverlay(ctx, w, h, state) {
     return 0;
   }
 
-  const copy = tutorialStepCopy(isTouchDevice);
+  const device = state.input ? activeDevice(state.input) : isTouchDevice ? "touch" : "keyboard";
+  const copy = tutorialStepCopy(device, state.input);
   const step = copy[tutorialStep];
   if (!step) return 0; // sandbox/completion menu has no overlay
 
@@ -559,11 +581,33 @@ function drawTypedLines(ctx, lines, chars, x, y, lineH) {
   }
 }
 
+/** Menu footer: navigate and select, for the keyboard or pad in use. */
+export const MENU_FOOTER = [["navigateV", "to navigate"], ["confirm", "to select"]];
+
+/**
+ * Menu rows' key hints for the device: number keys have no pad button, so a
+ * pad row shows none, and "[ESC]" becomes the pad's back glyph.
+ */
+export function menuItemsFor(items, input) {
+  if (!input || activeDevice(input) !== "gamepad") return items;
+  const back = glyph(input, "back");
+  return items.map((it) => ({ ...it, key: it.key === "[ESC]" ? `[${back.text}]` : "", glyph: it.key === "[ESC]" ? back : null }));
+}
+
+/** Legacy footer hint, drawn as key glyphs for the device in use. */
+function drawFooterPrompt(ctx, w, y, items, input) {
+  if (activeDevice(input) === "touch") return;
+  drawPrompt(ctx, w / 2, y, items, {
+    input, size: 10, font: "11px monospace", color: FOOTER_GREY, align: "center", look: "legacy",
+  });
+}
+
 /** Full-screen tutorial completion menu (4 choices after training). */
-export function renderTutorialCompletionMenu(ctx, w, h, selection = 0) {
+export function renderTutorialCompletionMenu(ctx, w, h, selection = 0, input = null) {
   const now = performance.now();
+  const items = menuItemsFor(COMPLETION_ITEMS, input);
   if (isModernArt()) {
-    renderModernCompletionMenu(ctx, w, h, selection, now);
+    renderModernCompletionMenu(ctx, w, h, selection, now, items, input);
     return;
   }
 
@@ -575,8 +619,8 @@ export function renderTutorialCompletionMenu(ctx, w, h, selection = 0) {
     now,
   );
 
-  drawCinematicMenu(ctx, w, h, COMPLETION_ITEMS, selection, now);
-  drawFooterHint(ctx, w, h, "W/S to navigate  \u00B7  ENTER to select");
+  drawCinematicMenu(ctx, w, h, items, selection, now);
+  drawFooterPrompt(ctx, w, h - 34, MENU_FOOTER, input);
 
   drawScanlines(ctx, w, h);
   ctx.textAlign = "left";
@@ -621,13 +665,22 @@ const SPEAKER_SCHEMES = { ARIA: "cyan", SUPERVISOR: "amber", LYRA: "amber", ROOK
 
 /**
  * Break hint copy into atoms: plain words, keycap groups and speaker tabs.
- * The text itself is untouched; only how each token is drawn changes.
+ * The text itself is untouched; only how each token is drawn changes. With a
+ * pad family, that pad's button names become pad glyphs instead of keycaps.
  */
-function tokenizeHint(text) {
+function tokenizeHint(text, pad = null) {
   const words = text.split(" ").filter(Boolean);
   const atoms = [];
   for (let i = 0; i < words.length; i++) {
     const wd = words[i];
+    if (pad) {
+      const pm = /^([("']*)(.+?)([.,;:!?"')]*)$/.exec(wd);
+      const g = pm && padLabelGlyph(pad, pm[2]);
+      if (g) {
+        atoms.push({ kind: "keys", keys: [g.text], glyph: g, pre: pm[1], post: pm[3] });
+        continue;
+      }
+    }
     if (wd === "SUPERVISOR" && /^\(radio\):$/.test(words[i + 1] || "")) {
       atoms.push({ kind: "speaker", text: "SUPERVISOR (radio)", scheme: "amber" });
       i++;
@@ -673,14 +726,14 @@ function tokenizeHint(text) {
 const KEY_SIZE = 11;
 const _richCache = new Map();
 
-/** Wrap atoms into centred lines; cached per text/width/font. */
-function layoutRich(text, maxW, font) {
-  const cacheKey = `${font}|${maxW}|${text}`;
+/** Wrap atoms into centred lines; cached per text/width/font/pad family. */
+function layoutRich(text, maxW, font, pad = null) {
+  const cacheKey = `${font}|${maxW}|${pad}|${text}`;
   let lay = _richCache.get(cacheKey);
   if (lay) return lay;
   const space = measureSpaced(font, " ");
   const sepW = measureSpaced(font, "/") + 4;
-  const atoms = tokenizeHint(text).map((a) => {
+  const atoms = tokenizeHint(text, pad).map((a) => {
     if (a.kind === "word") return { ...a, w: measureSpaced(font, a.text) };
     if (a.kind === "speaker" || a.kind === "tag") {
       const size = 10;
@@ -691,8 +744,9 @@ function layoutRich(text, maxW, font) {
     const preW = a.pre ? measureSpaced(font, a.pre) + 1 : 0;
     const postW = a.post ? measureSpaced(font, a.post) + 1 : 0;
     let kw = 0;
+    if (!_mctx) _mctx = document.createElement("canvas").getContext("2d");
     for (let k = 0; k < a.keys.length; k++) {
-      kw += keycapW(a.keys[k], KEY_SIZE) + (k ? (a.sep ? sepW : 3) : 0);
+      kw += (a.glyph ? glyphWidth(_mctx, a.glyph, KEY_SIZE) : keycapW(a.keys[k], KEY_SIZE)) + (k ? (a.sep ? sepW : 3) : 0);
     }
     return { ...a, preW, postW, w: preW + kw + postW };
   });
@@ -751,7 +805,9 @@ function drawRichLine(ctx, line, lay, x, midY, font, color) {
             kx += 3;
           }
         }
-        kx += drawKeycap(ctx, kx, Math.round(midY - KEY_SIZE * 0.95), a.keys[k], { size: KEY_SIZE });
+        kx += a.glyph
+          ? drawGlyph(ctx, kx, midY, a.glyph, KEY_SIZE)
+          : drawKeycap(ctx, kx, Math.round(midY - KEY_SIZE * 0.95), a.keys[k], { size: KEY_SIZE });
       }
       if (a.post) {
         ctx.font = font;
@@ -781,7 +837,7 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const cx = Math.round(place.cx ?? w / 2);
 
   const titleW = measureSpaced(titleFont, step.title, 1);
-  const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont);
+  const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont, step.pad);
   // ARIA's folded line: a footer row under a hairline, typed as she speaks.
   const narr = narrationState(place.narration);
   const narrFont = uiFont(compact ? 11 : 13, 600);
@@ -955,52 +1011,31 @@ export function drawModernMenu(ctx, items, selection, now, layout, labelDy = 24,
     }
 
     const legend = item.key.replace(/^\[|\]$/g, "");
-    drawKeycap(ctx, mx + menuW - 10, Math.round(iy + rowH / 2 - 10), legend, {
-      size: 10, align: "right", accent: isSelected ? accent : null,
-    });
+    if (item.glyph) {
+      drawGlyph(ctx, mx + menuW - 10 - glyphWidth(ctx, item.glyph, 10), Math.round(iy + rowH / 2), item.glyph, 10);
+    } else if (legend) {
+      drawKeycap(ctx, mx + menuW - 10, Math.round(iy + rowH / 2 - 10), legend, {
+        size: 10, align: "right", accent: isSelected ? accent : null,
+      });
+    }
   }
   ctx.textAlign = "left";
 }
 
 /**
- * Footer hint like "W/S to navigate · ENTER to select": each segment's first
- * word becomes keycaps, the rest a dim label. Centred on cx, vertically on midY.
+ * Modern footer from [action, label] pairs: glyphs for the keyboard or pad in
+ * use, labels in dim caps. Centred on cx, midY.
  */
-export function drawModernKeyHints(ctx, cx, midY, text, size = 10) {
-  const labelFont = uiFont(Math.max(9, size), 700);
-  const segs = text.split("·").map((sgm) => sgm.trim()).filter(Boolean).map((sgm) => {
-    const [first, ...rest] = sgm.split(/\s+/);
-    const keys = first.split("/");
-    const label = rest.join(" ").toUpperCase();
-    const kw = keys.reduce((n, k) => n + keycapW(k, size), 0) + (keys.length - 1) * 3;
-    const lw = label ? measureSpaced(labelFont, label, 1) : 0;
-    return { keys, label, kw, lw, w: kw + (label ? 7 + lw : 0) };
+export function drawModernPrompt(ctx, cx, midY, items, input, size = 10) {
+  ctx.save();
+  ctx.letterSpacing = "1px";
+  drawPrompt(ctx, cx, midY, items.map(([a, l]) => [a, l.toUpperCase()]), {
+    input, size, font: uiFont(Math.max(9, size), 700), color: UI.textDim, align: "center", gap: Math.round(size * 2.4),
   });
-  const gap = Math.round(size * 2.4);
-  const total = segs.reduce((n, sg) => n + sg.w, 0) + gap * (segs.length - 1);
-  let x = Math.round(cx - total / 2);
-  const capY = Math.round(midY - size * 0.95);
-  for (const sg of segs) {
-    for (let k = 0; k < sg.keys.length; k++) {
-      x += drawKeycap(ctx, x, capY, sg.keys[k], { size }) + (k < sg.keys.length - 1 ? 3 : 0);
-    }
-    if (sg.label) {
-      ctx.font = labelFont;
-      ctx.letterSpacing = "1px";
-      ctx.fillStyle = UI.textDim;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(sg.label, x + 7, midY);
-      ctx.letterSpacing = "0px";
-      ctx.textBaseline = "alphabetic";
-      x += 7 + sg.lw;
-    }
-    x += gap;
-  }
-  ctx.textAlign = "left";
+  ctx.restore();
 }
 
-function renderModernCompletionMenu(ctx, w, h, selection, now) {
+function renderModernCompletionMenu(ctx, w, h, selection, now, items, input) {
   drawBackdrop(ctx, w, h, "cyan");
   const compact = h < 500;
   const titleY = h * 0.14;
@@ -1011,10 +1046,12 @@ function renderModernCompletionMenu(ctx, w, h, selection, now) {
     size: compact ? 10 : 11, scheme: "steel", align: "center",
   });
 
-  const layout = tutorialMenuLayout(w, h, COMPLETION_ITEMS.length);
-  drawModernMenu(ctx, COMPLETION_ITEMS, selection, now, layout);
-  if (!compact) {
-    drawModernKeyHints(ctx, w / 2, h - 30, "W/S to navigate  ·  ENTER to select", 10);
+  const layout = tutorialMenuLayout(w, h, items.length);
+  drawModernMenu(ctx, items, selection, now, layout);
+  if (activeDevice(input) === "touch") {
+    // Rows are tapped; no key hints.
+  } else if (!compact) {
+    drawModernPrompt(ctx, w / 2, h - 30, MENU_FOOTER, input, 10);
   } else {
     // Short screens: the menu panel runs to the bottom edge, so the hints stack
     // in the gutter beside it instead of overlapping its lower rim.
@@ -1022,8 +1059,8 @@ function renderModernCompletionMenu(ctx, w, h, selection, now) {
     if (w - gutterX >= 140) {
       const gx = Math.round((gutterX + w) / 2);
       const midY = layout.my + layout.menuH / 2;
-      drawModernKeyHints(ctx, gx, midY - 12, "W/S to navigate", 9);
-      drawModernKeyHints(ctx, gx, midY + 12, "ENTER to select", 9);
+      drawModernPrompt(ctx, gx, midY - 12, MENU_FOOTER.slice(0, 1), input, 9);
+      drawModernPrompt(ctx, gx, midY + 12, MENU_FOOTER.slice(1), input, 9);
     }
   }
   ctx.textAlign = "left";

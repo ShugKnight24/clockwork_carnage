@@ -27,6 +27,7 @@ import {
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawChronoCluster } from "./chrono-hud.js";
+import { activeDevice, drawPrompt } from "./input-glyphs.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -1958,9 +1959,16 @@ ctx.fillStyle = "#ffaa00";
 ctx.font = "bold 28px monospace";
 ctx.textAlign = "center";
 ctx.fillText("SYSTEM UPGRADE", w / 2, h * 0.22);
-ctx.fillStyle = "rgba(255,255,255,0.5)";
-ctx.font = "14px monospace";
-ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
+const device = activeDevice(game);
+if (device === "touch") {
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.font = "14px monospace";
+  ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
+} else {
+  drawPrompt(ctx, w / 2, h * 0.22 + 25, [["pick", "select"], ["arrowsH", "move"], ["confirm", "confirm"]], {
+    input: game, size: 12, font: "14px monospace", color: "rgba(255,255,255,0.6)", align: "center", look: "legacy",
+  });
+}
 
 // Cards
 const cardW = Math.min(200, (w - 80) / 3);
@@ -1988,11 +1996,13 @@ for (let i = 0; i < choices.length; i++) {
   ctx.roundRect(cx, startY, cardW, cardH, 8);
   ctx.stroke();
 
-  // Key number
+  // Key number (the pad has no number keys); its colour also tints the icon.
   ctx.fillStyle = selected ? "#00ccff" : "rgba(255,255,255,0.4)";
-  ctx.font = "bold 12px monospace";
-  ctx.textAlign = "left";
-  ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
+  if (device !== "gamepad") {
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
+  }
 
   // Icon
   ctx.font = "32px serif";

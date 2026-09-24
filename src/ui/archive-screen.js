@@ -19,6 +19,10 @@ import {
   drawCaption,
   drawSectionHeader,
 } from "./modern-ui-kit.js";
+import { drawPrompt } from "./input-glyphs.js";
+
+/** Footer: the keys or pad buttons that drive this screen (src/ui/input-glyphs.js). */
+const FOOTER = [["navigateV", "select"], ["navigateH", "tab"], ["back", "back"]];
 
 export const ARCHIVE_TABS = ["BESTIARY", "MEMORIES"];
 
@@ -298,14 +302,9 @@ export function renderArchiveScreen(ctx, w, h, state) {
   }
 
   // Footer
-  ctx.textAlign = "center";
-  ctx.font = "11px monospace";
-  ctx.fillStyle = "rgba(110,130,150,0.55)";
-  ctx.fillText(
-    "W/S select  ·  A/D tab  ·  ESC back",
-    w / 2,
-    h - 16,
-  );
+  drawPrompt(ctx, w / 2, h - 20, FOOTER, {
+    input: state.input, size: 10, font: "11px monospace", color: "rgba(110,130,150,0.75)", align: "center", look: "legacy",
+  });
 
   drawScanlines(ctx, w, h);
   ctx.textAlign = "left";
@@ -453,11 +452,10 @@ function renderArchiveScreenModern(ctx, w, h, state) {
     paragraph(ctx, `“${f.ariaReaction}”`, dx, dy, maxW, 20);
   }
 
-  ctx.textAlign = "center";
-  ctx.font = uiFont(11, 600);
   ctx.letterSpacing = "1px";
-  ctx.fillStyle = UI.textFaint;
-  ctx.fillText("W/S SELECT  ·  A/D TAB  ·  ESC BACK", w / 2, h - 16);
+  drawPrompt(ctx, w / 2, h - 20, FOOTER.map(([a, l]) => [a, l.toUpperCase()]), {
+    input: state.input, size: 10, font: uiFont(11, 600), color: UI.textDim, align: "center",
+  });
   ctx.letterSpacing = "0px";
   ctx.textAlign = "left";
 }

@@ -5,6 +5,45 @@ import { isModernArt } from '../rendering/art-style.js';
 import {
   UI, uiFont, drawBackdrop, drawPanel, drawTitle, drawCaption, drawButton,
 } from './modern-ui-kit.js';
+import { activeDevice, drawPrompt } from './input-glyphs.js';
+
+/** Touch, or the keyboard/pad prompts: state.input is the game (src/ui/input-glyphs.js). */
+const onTouch = (state) => (state.input ? activeDevice(state.input) === 'touch' : !!state.isTouchDevice);
+
+/**
+ * A key prompt centred on (x, y): `touchText` on touch, otherwise glyph +
+ * label pairs for the keyboard or pad in use. Items without a binding on the
+ * device (a pad has no restart or share) are left out; nothing is drawn when
+ * none is left. `y` is the text baseline, as fillText had it.
+ */
+function keyPrompt(ctx, state, items, touchText, x, y, size, alpha, color, modern) {
+  ctx.save();
+  if (onTouch(state)) {
+    ctx.globalAlpha *= alpha;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    if (modern) {
+      ctx.font = uiFont(size, 600);
+      ctx.letterSpacing = '1px';
+      ctx.fillText(touchText.toUpperCase(), x, y);
+      ctx.letterSpacing = '0px';
+    } else {
+      ctx.font = `${size}px monospace`;
+      ctx.fillText(touchText, x, y);
+    }
+  } else {
+    const labels = modern ? items.map(([a, l]) => [a, l.toUpperCase()]) : items;
+    if (modern) ctx.letterSpacing = '1px';
+    drawPrompt(ctx, x, Math.round(y - size * 0.35), labels, {
+      input: state.input, size: Math.max(9, size - 1), color, align: 'center', alpha,
+      font: modern ? uiFont(size, 600) : `${size}px monospace`, look: modern ? 'modern' : 'legacy',
+    });
+    ctx.letterSpacing = '0px';
+  }
+  ctx.restore();
+}
+
+const TITLE_PROMPT = [['confirm', 'return to title'], ['restart', 'restart'], ['share', 'share score']];
 
 /**
  * Share-toast overlay — renders and mutates toast.life in place.
@@ -223,16 +262,8 @@ export function renderGameOver(ctx, w, h, state) {
   // Collapsed to one line because RESTART/QUIT/SHARE buttons sit right below
   // and already carry the same three actions.
   const promptA = 0.4 + Math.sin(time * 0.004) * 0.3;
-  ctx.textAlign = 'center';
-  ctx.font = `${compact ? 10 : 12}px monospace`;
-  ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-  ctx.fillText(
-    isTouchDevice
-      ? 'Tap to return to title'
-      : 'ENTER  return to title   ·   R  restart   ·   S  share score',
-    w / 2,
-    btnY - 16,
-  );
+  keyPrompt(ctx, state, TITLE_PROMPT, 'Tap to return to title', w / 2, btnY - 16,
+    compact ? 10 : 12, promptA, 'rgb(170,170,170)', false);
   ctx.textAlign = 'left';
 
   const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
@@ -365,21 +396,14 @@ export function renderVictory(ctx, w, h, state) {
       ctx.fillText(opts[i].desc, ox + optW / 2, oy + (compact ? 32 : 40));
     }
 
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 10 : 12}px monospace`;
-    ctx.textAlign = 'center';
-    const ngPromptText = isTouchDevice ? 'Tap a choice' : 'Arrow keys to choose, ENTER to confirm';
-    ctx.fillText(ngPromptText, w / 2, promptY + optH + (compact ? 14 : 22));
+    keyPrompt(ctx, state, [['arrowsH', 'choose'], ['confirm', 'confirm']], 'Tap a choice',
+      w / 2, promptY + optH + (compact ? 14 : 22), compact ? 10 : 12, promptA, 'rgb(170,170,170)', false);
   } else {
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 12 : 14}px monospace`;
-    ctx.textAlign = 'center';
-    const victoryPrompt = isTouchDevice ? 'Tap to return to title' : 'Press ENTER to return to title';
-    ctx.fillText(victoryPrompt, w / 2, vCardBottom + (compact ? 20 : 25));
-    if (!isTouchDevice) {
-      ctx.fillStyle = `rgba(0,200,255,${promptA * 0.7})`;
-      ctx.font = `${compact ? 11 : 13}px monospace`;
-      ctx.fillText('Press S to share score', w / 2, vCardBottom + (compact ? 38 : 45));
+    keyPrompt(ctx, state, [['confirm', 'return to title']], 'Tap to return to title',
+      w / 2, vCardBottom + (compact ? 20 : 25), compact ? 12 : 14, promptA, 'rgb(170,170,170)', false);
+    if (!onTouch(state)) {
+      keyPrompt(ctx, state, [['share', 'share score']], '', w / 2, vCardBottom + (compact ? 38 : 45),
+        compact ? 11 : 13, promptA * 0.7, 'rgb(0,200,255)', false);
     }
   }
   ctx.textAlign = 'left';
@@ -497,11 +521,8 @@ export function renderLevelComplete(ctx, w, h, state) {
   // Continue prompt — fades in last
   if (promptT > 0) {
     const promptA = promptT * (0.4 + Math.sin(time * 0.004) * 0.3);
-    ctx.fillStyle = `rgba(170,170,170,${promptA})`;
-    ctx.font = `${compact ? 12 : 14}px monospace`;
-    ctx.textAlign = 'center';
-    const lcPrompt = isTouchDevice ? 'Tap to continue' : 'Press ENTER to continue';
-    ctx.fillText(lcPrompt, w / 2, lcCardBottom + (compact ? 40 : 52));
+    keyPrompt(ctx, state, [['confirm', 'continue']], 'Tap to continue',
+      w / 2, lcCardBottom + (compact ? 40 : 52), compact ? 12 : 14, promptA, 'rgb(170,170,170)', false);
   }
   ctx.textAlign = 'left';
 
@@ -578,14 +599,7 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
 // Same anchors as the legacy screens (gameOverBtns and the NG+ option boxes
 // are hit-tested), redrawn as inked titles, caption plates and steel panels.
 
-function hint(ctx, text, x, y, size, alpha) {
-  ctx.font = uiFont(size, 600);
-  ctx.textAlign = 'center';
-  ctx.letterSpacing = '1px';
-  ctx.fillStyle = `rgba(185,200,214,${alpha.toFixed(3)})`;
-  ctx.fillText(text.toUpperCase(), x, y);
-  ctx.letterSpacing = '0px';
-}
+const HINT_COLOR = 'rgb(185,200,214)';
 
 function renderGameOverModern(ctx, w, h, state, compact) {
   const {
@@ -688,8 +702,8 @@ function renderGameOverModern(ctx, w, h, state, compact) {
   }
 
   const promptA = 0.55 + Math.sin(time * 0.004) * 0.3;
-  hint(ctx, isTouchDevice ? 'Tap to return to title' : 'Enter  return to title   ·   R  restart   ·   S  share score',
-    w / 2, btnY - 16, compact ? 10 : 12, promptA);
+  keyPrompt(ctx, state, TITLE_PROMPT, 'Tap to return to title', w / 2, btnY - 16,
+    compact ? 10 : 12, promptA, HINT_COLOR, true);
   ctx.textAlign = 'left';
 
   const toastResult = renderShareToast(ctx, w, h, shareToast, deltaTime);
@@ -763,18 +777,14 @@ function renderVictoryModern(ctx, w, h, state, compact) {
       ctx.fillStyle = sel ? '#c9d6e2' : UI.textFaint;
       ctx.fillText(opts[i].desc, ox + optW / 2, promptY + (compact ? 32 : 41));
     }
-    hint(ctx, isTouchDevice ? 'Tap a choice' : 'Arrow keys to choose, Enter to confirm',
-      w / 2, promptY + optH + (compact ? 14 : 22), compact ? 10 : 12, promptA);
+    keyPrompt(ctx, state, [['arrowsH', 'choose'], ['confirm', 'confirm']], 'Tap a choice',
+      w / 2, promptY + optH + (compact ? 14 : 22), compact ? 10 : 12, promptA, HINT_COLOR, true);
   } else {
-    hint(ctx, isTouchDevice ? 'Tap to return to title' : 'Press Enter to return to title',
-      w / 2, vCardBottom + (compact ? 20 : 26), compact ? 11 : 13, promptA);
-    if (!isTouchDevice) {
-      ctx.globalAlpha = promptA;
-      ctx.font = uiFont(compact ? 11 : 12, 700);
-      ctx.fillStyle = UI.cyan;
-      ctx.textAlign = 'center';
-      ctx.fillText('S  SHARE SCORE', w / 2, vCardBottom + (compact ? 38 : 46));
-      ctx.globalAlpha = 1;
+    keyPrompt(ctx, state, [['confirm', 'return to title']], 'Tap to return to title',
+      w / 2, vCardBottom + (compact ? 20 : 26), compact ? 11 : 13, promptA, HINT_COLOR, true);
+    if (!onTouch(state)) {
+      keyPrompt(ctx, state, [['share', 'share score']], '', w / 2, vCardBottom + (compact ? 38 : 46),
+        compact ? 11 : 12, promptA, UI.cyan, true);
     }
   }
   ctx.textAlign = 'left';
@@ -815,8 +825,8 @@ function renderLevelCompleteModern(ctx, w, h, state, compact, t) {
     ctx.globalAlpha = 1;
   }
   if (promptT > 0) {
-    hint(ctx, isTouchDevice ? 'Tap to continue' : 'Press Enter to continue', w / 2, lcCardBottom + (compact ? 40 : 56),
-      compact ? 11 : 13, promptT * (0.55 + Math.sin(time * 0.004) * 0.3));
+    keyPrompt(ctx, state, [['confirm', 'continue']], 'Tap to continue', w / 2, lcCardBottom + (compact ? 40 : 56),
+      compact ? 11 : 13, promptT * (0.55 + Math.sin(time * 0.004) * 0.3), HINT_COLOR, true);
   }
   ctx.textAlign = 'left';
 }

@@ -18,15 +18,12 @@ import { isModernArt } from "../rendering/art-style.js";
 import { uiFont } from "./modern-ui-kit.js";
 import { POWERS } from "../systems/chrono-powers.js";
 import { formatKeyCode } from "./controls-screen.js";
+import { activeDevice, glyph } from "./input-glyphs.js";
 
 const EYE = "#ff2a4a";
 
 /** keyboard, gamepad or touch: whichever the player is using now. */
-export function inputDevice(game) {
-  if (game.isTouchDevice) return "touch";
-  if (game.lastInputWasGamepad && game.gamepad?.connected) return "gamepad";
-  return "keyboard";
-}
+export const inputDevice = activeDevice;
 
 /** What to press for each power, for the device in use. */
 export function powerKeys(game, device = inputDevice(game)) {
@@ -34,14 +31,17 @@ export function powerKeys(game, device = inputDevice(game)) {
     return { shift: "hold SLOW", dash: "DASH", rewind: "REWIND", lock: "LOCK", chip: { foresight: "", dash: "", rewind: "", timeLock: "" } };
   }
   if (device === "gamepad") {
-    const l = game.gamepad?.getButtonLabels?.() ?? {};
-    const y = l.chronoShift ?? "Y";
+    const pad = (action) => glyph(game, action, "gamepad").text;
+    const y = pad("chronoShift");
+    const b = pad("dash");
+    const lb = pad("chronoRewind");
+    const rs = pad("chronoLock");
     return {
       shift: `hold ${y}`,
-      dash: l.dash ?? "B",
-      rewind: `${l.chronoRewind ?? "LB"} while shifting`,
-      lock: l.chronoLock ?? "RS",
-      chip: { foresight: y, dash: `${y}+${l.dash ?? "B"}`, rewind: `${y}+${l.chronoRewind ?? "LB"}`, timeLock: l.chronoLock ?? "RS" },
+      dash: b,
+      rewind: `${lb} while shifting`,
+      lock: rs,
+      chip: { foresight: y, dash: `${y}+${b}`, rewind: `${y}+${lb}`, timeLock: rs },
     };
   }
   const kb = game.keybinds ?? {};

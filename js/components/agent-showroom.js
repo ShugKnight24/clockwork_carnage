@@ -1,6 +1,7 @@
 import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
+import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
 import { cloneLook, getIndex, lookKey, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
@@ -630,6 +631,9 @@ svg { display: block; }
 .save .k-focus { display: none; }
 .save:focus .k-focus { display: inline-flex; }
 .save:focus .k-any { display: none; }
+/* Key hints for the device in use (host input attribute, from src/ui/input-glyphs.js). */
+:host(:not([input="gamepad"])) .in-pad, :host([input="gamepad"]) .in-kb { display: none !important; }
+.in-pad { display: inline-flex; align-items: center; gap: 3px; }
 .btn:active { transform: translateY(1px); }
 
 .toast { position: absolute; left: calc((100% - var(--panel-w) - 32px) / 2); bottom: 80px; transform: translate(-50%, 12px); white-space: nowrap; opacity: 0; pointer-events: none;
@@ -932,7 +936,7 @@ class AgentShowroom extends HTMLElement {
     this._real = false; // Modern (realistic) look; Comic otherwise
 
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${STYLE}</style>${this.template()}`;
+    root.innerHTML = `<style>${STYLE}${GLYPH_CSS}</style>${this.template()}`;
     const $ = (s) => root.querySelector(s);
     this.$ = $;
     this.el = {
@@ -979,12 +983,12 @@ class AgentShowroom extends HTMLElement {
     <h1 class="callsign">Agent</h1>
     <span class="rule" aria-hidden="true"></span>
     <div class="sub"></div>
-    <div class="ready caption cyan" hidden>Returning agent · <kbd class="key">Enter</kbd> to deploy</div>
+    <div class="ready caption cyan" hidden>Returning agent · <kbd class="key in-kb">Enter</kbd><span class="in-pad" data-glyph="confirm" data-glyph-device="gamepad"></span> to deploy</div>
   </header>
   <div class="toolbar" role="toolbar" aria-label="Edit">
-    <button class="tool" data-act="undo" aria-label="Undo last change">${I.undo}<span class="t">Undo</span><kbd class="key">Z</kbd></button>
+    <button class="tool" data-act="undo" aria-label="Undo last change">${I.undo}<span class="t">Undo</span><kbd class="key in-kb">Z</kbd></button>
     <button class="tool" data-act="reset" aria-label="Reset appearance to standard issue">${I.reset}<span class="t">Reset</span></button>
-    <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key">R</kbd></button>
+    <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key in-kb">R</kbd><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span></button>
   </div>
   <div class="presets" role="group" aria-label="Presets"><span class="lbl caption steel">Presets</span>${presets}</div>
   <div class="stage-tools">
@@ -1002,15 +1006,17 @@ class AgentShowroom extends HTMLElement {
   <aside class="panel" aria-label="Customization">
     <div class="frame"><div class="body">
       <button class="handle" aria-label="Collapse panel" aria-expanded="true">${I.chevron}</button>
-      <div class="tabs" role="tablist" aria-label="Categories"><kbd class="key tabkey" aria-hidden="true">Q</kbd>${tabs}<kbd class="key tabkey" aria-hidden="true">E</kbd></div>
+      <div class="tabs" role="tablist" aria-label="Categories"><kbd class="key tabkey in-kb" aria-hidden="true">Q</kbd><span class="tabkey in-pad" aria-hidden="true" data-glyph="prevTab" data-glyph-device="gamepad"></span>${tabs}<kbd class="key tabkey in-kb" aria-hidden="true">E</kbd><span class="tabkey in-pad" aria-hidden="true" data-glyph="nextTab" data-glyph-device="gamepad"></span></div>
       <div class="content" id="panel" role="tabpanel"></div>
       <footer class="actions">
         <div class="keys" aria-hidden="true">
-          <span><kbd class="key">Tab</kbd>Category</span><span><kbd class="key">↑↓←→</kbd>Browse</span><span><kbd class="key">Enter</kbd>Select</span>
-          <span><kbd class="key">R</kbd>Random</span><span><kbd class="key">Z</kbd>Undo</span>
+          <span class="in-kb"><kbd class="key">Tab</kbd>Category</span><span class="in-kb"><kbd class="key">↑↓←→</kbd>Browse</span><span class="in-kb"><kbd class="key">Enter</kbd>Select</span>
+          <span class="in-kb"><kbd class="key">R</kbd>Random</span><span class="in-kb"><kbd class="key">Z</kbd>Undo</span>
+          <span class="in-pad"><span class="in-pad" data-glyph="prevTab" data-glyph-device="gamepad"></span><span class="in-pad" data-glyph="nextTab" data-glyph-device="gamepad"></span>Category</span><span class="in-pad"><span class="in-pad" data-glyph="navigate" data-glyph-device="gamepad"></span>Browse</span><span class="in-pad"><span class="in-pad" data-glyph="confirm" data-glyph-device="gamepad"></span>Select</span>
+          <span class="in-pad"><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span>Random</span>
         </div>
-        <button class="btn plate back"><kbd class="key">Esc</kbd>Back</button>
-        <button class="btn primary save">Save &amp; Deploy <kbd class="key k-any">⇧ Enter</kbd><kbd class="key k-focus">Enter</kbd></button>
+        <button class="btn plate back"><kbd class="key in-kb">Esc</kbd><span class="in-pad" data-glyph="back" data-glyph-device="gamepad"></span>Back</button>
+        <button class="btn primary save">Save &amp; Deploy <kbd class="key k-any in-kb">⇧ Enter</kbd><kbd class="key k-focus in-kb">Enter</kbd><span class="in-pad" data-glyph="deploy" data-glyph-device="gamepad"></span></button>
       </footer>
     </div><span class="brackets"></span></div>
   </aside>
@@ -1106,9 +1112,18 @@ class AgentShowroom extends HTMLElement {
     return true;
   }
 
+  /** Show keyboard or pad hints, whichever the player used last. */
+  syncInput() {
+    this.setAttribute("input", activeDevice(this.game));
+    renderDomGlyphs(this.game, this.shadowRoot);
+  }
+
   open() {
     this._unlockCtx = null;
     this.syncProfile();
+    this.syncInput();
+    this._onInput ??= () => this.isOpen && this.syncInput();
+    window.addEventListener("cc-input-change", this._onInput);
     this.isOpen = true;
     this.setAttribute("open", "");
     requestAnimationFrame(() => this.setAttribute("shown", ""));

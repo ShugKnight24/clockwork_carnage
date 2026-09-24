@@ -157,6 +157,7 @@ import {
 } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { installInputTracking, padFor, trackGamepad } from "../src/ui/input-glyphs.js";
 export {
   COMPACT_PHONE_HEIGHT,
   SETTINGS_REGISTRY,
@@ -400,6 +401,8 @@ export class Game {
     this._gamepadPrevKeys = new Set();
     this._gamepadNextKeys = new Set();
     this._lastGamepadMove = { x: 0, y: 0 };
+    // Which device the prompts show (src/ui/input-glyphs.js): the last one used.
+    installInputTracking(this);
     // The Gamepad settings page shows this; a chime marks a pad arriving or leaving.
     bindGamepadStatus(this.gamepad.status, this.gamepad);
     this.gamepad.onConnect = (name) => {
@@ -851,6 +854,7 @@ export class Game {
       this._releaseGamepadKeys(nextHeld);
       return;
     }
+    trackGamepad(this, gp);
     const moveX = gp.moveX;
     const moveY = gp.moveY;
     if (Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) {
@@ -882,10 +886,17 @@ export class Game {
       if (gp.justPressed.interact) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
       if (gp.justPressed.pause || gp.justPressed.dash) document.getElementById("btnBack")?.click();
     }
-    if (this.state === GameState.PLAYING) {
+    if (this.state === GameState.PLAYING && this._meltdownUpgradeChoices) {
+      // The meltdown upgrade overlay takes the keyboard's arrows + Enter.
+      const jp = gp.justPressed;
+      this.player.isFiring = false;
+      this.player.isAiming = false;
+      if (jp.navLeft || jp.navUp) this.handleKeyPress("ArrowLeft");
+      if (jp.navRight || jp.navDown) this.handleKeyPress("ArrowRight");
+      if (jp.interact) this.handleKeyPress("Enter");
+    } else if (this.state === GameState.PLAYING) {
       this.player.isFiring = gp.shoot;
       this.player.isAiming = gp.aim;
-      if (gp.aim || gp.shoot || gp.lookX || gp.lookY) this.lastInputWasGamepad = true;
       if (gp.lookX || gp.lookY) {
         const aimScale = 420 * dt;
         this.mouse.dx += gp.lookX * aimScale;
@@ -1372,7 +1383,7 @@ export class Game {
   }
 
   renderCampaignPrompt(ctx, w, h) {
-    _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0);
+    _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0, this);
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
@@ -1413,6 +1424,7 @@ export class Game {
     this._tutorialCardBottom = _renderTutorialOverlay(ctx, w, h, {
       mode: this.mode,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
     });
@@ -1443,7 +1455,7 @@ export class Game {
         d.post(key, "teach", null);
       }
       if (!d.showing(key)) return;
-      const step = { title: teachHint(hint.card.title, this).toUpperCase(), hint: teachHint(hint.card.hint, this), color: "#ffae3a" };
+      const step = { title: teachHint(hint.card.title, this).toUpperCase(), hint: teachHint(hint.card.hint, this), color: "#ffae3a", pad: padFor(this) };
       const lane = d.lanes?.headline;
       _renderTeachCard(ctx, w, h, step, age + 1, Math.min(1, (7 - age) / 1.2), {
         top: lane ? lane.y + 6 : 60,
@@ -1469,7 +1481,7 @@ export class Game {
       return;
     }
     const color = POWERS[t.power]?.color ?? t.color ?? "#8844ff";
-    const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color };
+    const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color, pad: padFor(this) };
     const lane = d.lanes?.headline;
     const m = this.ariaComms.message;
     const narration = m?.place === "fold"
@@ -1485,7 +1497,7 @@ export class Game {
   }
 
   renderTutorialCompletionMenu(ctx, w, h) {
-    _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0);
+    _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0, this);
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
@@ -3012,12 +3024,14 @@ export class Game {
       selection: this.archiveSelection || 0,
       scroll: this.archiveScroll || 0,
       archive: this.archive,
+      input: this,
     });
   }
 
   renderUpgradeScreen(ctx, w, h) {
     _renderUpgradeScreen(ctx, w, h, {
       isTouchDevice: this.isTouchDevice,
+      input: this,
       arenaRound: this.arenaRound,
       playerScore: this.player.score,
       upgradeLevels: this.upgradeLevels,
@@ -3029,6 +3043,7 @@ export class Game {
     const result = _renderGameOver(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       mode: this.mode,
       arenaRound: this.arenaRound,
       achievementStats: this.achievementStats,
@@ -3067,6 +3082,7 @@ export class Game {
     const result = _renderVictory(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       ngPlusCycle: this.ngPlusCycle,
       // The ending that played: the loop is broken only by the true ending.
       trueEnding: !!this.campaign?.trueEnding,
@@ -3084,6 +3100,7 @@ export class Game {
     _renderLevelComplete(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       levelCompleteTime: this._levelCompleteTime,
       playerSecretsFound: this.player.secretsFound,
       statsCardData: this._statsCardData(),
