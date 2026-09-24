@@ -69,6 +69,16 @@ describe("settings apply", () => {
     expect(g.saveSettings).not.toHaveBeenCalled();
   });
 
+  it("leaves action rows alone: no stored value, no save", () => {
+    const g = game();
+    const calibrate = SETTINGS_REGISTRY.find((d) => d.key === "gamepadCalibrate");
+    expect(applySettingValue(g, calibrate, true)).toBe(false);
+    expect(stepSetting(g, calibrate, 1)).toBe(false);
+    expect(resetSetting(g, calibrate)).toBe(false);
+    expect("gamepadCalibrate" in g.settings).toBe(false);
+    expect(g.saveSettings).not.toHaveBeenCalled();
+  });
+
   it("steps sliders within bounds and resets to default", () => {
     const g = game();
     stepSetting(g, fov, 1);

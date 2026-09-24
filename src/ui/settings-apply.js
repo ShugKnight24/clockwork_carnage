@@ -6,7 +6,8 @@
 import { DEFAULT_SETTINGS, applySettingStep } from "../../js/settings-registry.js";
 
 export function applySettingValue(game, def, value) {
-  if (game.settings[def.key] === value) return false;
+  // Action rows run a command; they have no stored value to write.
+  if (def.type === "action" || game.settings[def.key] === value) return false;
   game.settings[def.key] = value;
   def.onChange?.(game);
   game.saveSettings();
