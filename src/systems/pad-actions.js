@@ -63,6 +63,15 @@ export const GAMEPAD_ACTIONS = {
   deploy: PAD.Y,
 };
 
+/** The shipped layout; GAMEPAD_ACTIONS is the live (remappable) copy. */
+export const DEFAULT_GAMEPAD_ACTIONS = Object.freeze({ ...GAMEPAD_ACTIONS });
+
+/** Gameplay actions a player may rebind. Menu, cutscene and showroom buttons stay fixed. */
+export const REMAPPABLE_PAD_ACTIONS = [
+  "dash", "crouch", "interact", "weaponNext", "chronoShift", "chronoRewind", "weaponPrev",
+  "aim", "fire", "sprint", "chronoLock", "minimap", "weaponCyclePrev", "weaponCycleNext", "weaponLast", "weaponFirst",
+];
+
 /** Legend per standard button index, per controller family. */
 export const PAD_LABELS = {
   xbox: ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "⧉", "☰", "LS", "RS"],
