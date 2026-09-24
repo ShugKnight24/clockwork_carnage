@@ -304,7 +304,8 @@ function drawFooter(ctx, w, h, layout, def, isTouchDevice, colors) {
     ctx.fillStyle = colors.desc;
     ctx.font = colors.descFont(compact ? 11 : 13);
     ctx.textAlign = 'left';
-    ctx.fillText(def.desc, panelX + 14, top + (compact ? 14 : 20));
+    // maxWidth squeezes a long line (the controller status) rather than clip it.
+    ctx.fillText(def.desc, panelX + 14, top + (compact ? 14 : 20), w - panelX - 28);
   }
 
   ctx.fillStyle = colors.hint;

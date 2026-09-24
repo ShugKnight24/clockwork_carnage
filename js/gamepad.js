@@ -52,6 +52,243 @@ const DEFAULTS = {
   invertLookY: false,
 };
 
+// ── Menu Navigation ─────────────────────────────────────────────
+// The left stick drives menus like the d-pad. It engages past NAV_ENGAGE and
+// lets go below NAV_RELEASE, so a worn stick hovering near the line doesn't
+// chatter. Holding either repeats after NAV_DELAY, every NAV_REPEAT (ms).
+const NAV_ENGAGE = 0.6;
+const NAV_RELEASE = 0.35;
+const NAV_DELAY = 400;
+const NAV_REPEAT = 110;
+
+/** A stick on an idle pad must pass this (or the deadzone) to take over as the active pad. */
+const SWITCH_STICK = 0.5;
+// Virtual (WebUSB) pads take indices from here up, clear of the browser's.
+const VIRTUAL_BASE = 16;
+
+// ── Mapping Normalisation ───────────────────────────────────────
+// Chrome (and Edge) remap known pads to the W3C "standard" layout, including
+// a wired Xbox 360 pad on macOS through Chrome's own driver. Firefox on Linux
+// and many 360 clones hand over the raw Linux xpad layout with mapping "":
+//   buttons 0 A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 Back, 7 Start, 8 Guide, 9 L3, 10 R3
+//   axes    0 LX, 1 LY, 2 LT, 3 RX, 4 RY, 5 RT (triggers -1 rest .. +1 pulled),
+//           6/7 d-pad hat (-1/0/1); some drivers give the d-pad as buttons 11-14
+//           (left, right, up, down) instead.
+// Old Windows DirectInput 360 drivers give 5 axes: both triggers share axis 2
+// (LT towards +1, RT towards -1), no Guide, so L3/R3 sit at 8/9, and the
+// d-pad is a POV hat we don't decode (the stick navigates menus anyway).
+
+/** Vendor ids of Microsoft and the XInput clone makers (PDP, PowerA, Harmonix/Rock Candy, Mad Catz). */
+const XINPUT_VENDOR = /(?:^|vendor:\s*)(?:045e|0e6f|24c6|1bad|0738)\b/;
+/** Logitech F310/F510/F710 in their XInput (X) switch position. */
+const LOGITECH_XINPUT = /046d.*c21[def]\b/;
+
+/**
+ * Which layout a pad reports: 'standard' (browser remapped it), 'xpad'
+ * (recognised XInput-style pad in the raw layout above) or 'unknown'
+ * (read as standard, as before, and hope).
+ * @param {{ id?: string, mapping?: string, axes?: ArrayLike<number>, buttons?: ArrayLike<any> }} gp
+ */
+export function mappingKindOf(gp) {
+  if (gp.mapping === 'standard') return 'standard';
+  const axes = gp.axes ? gp.axes.length : 0;
+  const buttons = gp.buttons ? gp.buttons.length : 0;
+  if (detectControllerType(gp.id || '') === 'xbox' && axes >= 5 && buttons >= 10) return 'xpad';
+  return 'unknown';
+}
+
+/** Controller family from a Gamepad id: 'xbox' | 'playstation' | 'switch' | 'generic'. */
+export function detectControllerType(id) {
+  const lower = String(id).toLowerCase();
+  // Sony and Nintendo first: clone makers (PDP, PowerA) sell licensed pads for them too.
+  if (lower.includes('dualsense') || lower.includes('dualshock') ||
+      lower.includes('sony') || lower.includes('playstation') || lower.includes('054c'))
+    return 'playstation';
+  if (lower.includes('pro controller') || lower.includes('057e') || lower.includes('nintendo'))
+    return 'switch';
+  if (lower.includes('xbox') || lower.includes('x-box') || lower.includes('xinput') ||
+      lower.includes('microsoft') || /\b360\b/.test(lower) ||
+      XINPUT_VENDOR.test(lower) || LOGITECH_XINPUT.test(lower))
+    return 'xbox';
+  return 'generic';
+}
+
+/**
+ * Human name from a Gamepad id. Drops Chrome's "(STANDARD GAMEPAD Vendor: 045e
+ * Product: 028e)" suffix and Firefox's "045e-028e-" prefix.
+ */
+export function controllerDisplayName(id) {
+  const name = String(id || '')
+    .replace(/\s*\([^)]*(?:standard gamepad|vendor:)[^)]*\)\s*$/i, '')
+    .replace(/^[0-9a-f]{1,4}-[0-9a-f]{1,4}-/i, '')
+    .trim();
+  return name || 'Controller';
+}
+
+/** Output buffer for normalizeGamepad: 17 standard buttons and 4 axes. */
+export function createPadView() {
+  return { pressed: new Array(17).fill(false), values: new Array(17).fill(0), axes: [0, 0, 0, 0] };
+}
+
+/** Per-pad memory the xpad reader needs (has each trigger axis ever moved?). */
+export function createPadMemo() {
+  return { triggerSeen: [false, false] };
+}
+
+/**
+ * Read a Gamepad-like object `{ id, mapping, buttons, axes }` into the
+ * standard layout. Fills and returns `out`, so the per-frame call allocates
+ * nothing. Unknown layouts are read as standard.
+ * @param {string} [kind] mappingKindOf(gp), when the caller has it cached
+ */
+export function normalizeGamepad(gp, out = createPadView(), memo = createPadMemo(), kind = mappingKindOf(gp)) {
+  if (kind === 'xpad') readXpad(gp, out, memo);
+  else readStandard(gp, out);
+  return out;
+}
+
+function setBtn(out, i, btn) {
+  out.pressed[i] = !!btn && !!btn.pressed;
+  out.values[i] = btn ? (typeof btn.value === 'number' ? btn.value : (btn.pressed ? 1 : 0)) : 0;
+}
+
+function setAnalog(out, i, value) {
+  out.values[i] = value;
+  out.pressed[i] = value > 0.1;
+}
+
+function readStandard(gp, out) {
+  const b = gp.buttons || [];
+  const a = gp.axes || [];
+  for (let i = 0; i < 17; i++) setBtn(out, i, b[i]);
+  for (let i = 0; i < 4; i++) out.axes[i] = a[i] || 0;
+}
+
+/**
+ * xpad trigger axis (-1 rest .. +1 pulled) to 0..1. Firefox reports exactly 0
+ * until the trigger is first touched, which would read as half-pulled, so an
+ * axis that has never left 0 counts as released.
+ */
+function readTrigger(v, memo, slot) {
+  if (typeof v !== 'number') return 0;
+  if (v !== 0) memo.triggerSeen[slot] = true;
+  if (!memo.triggerSeen[slot]) return 0;
+  return Math.max(0, Math.min(1, (v + 1) / 2));
+}
+
+function readXpad(gp, out, memo) {
+  const b = gp.buttons || [];
+  const a = gp.axes || [];
+  const dinput = a.length < 6;
+  setBtn(out, BTN.A, b[0]);
+  setBtn(out, BTN.B, b[1]);
+  setBtn(out, BTN.X, b[2]);
+  setBtn(out, BTN.Y, b[3]);
+  setBtn(out, BTN.LB, b[4]);
+  setBtn(out, BTN.RB, b[5]);
+  setBtn(out, BTN.SELECT, b[6]);
+  setBtn(out, BTN.START, b[7]);
+  out.axes[AXIS.LEFT_X] = a[0] || 0;
+  out.axes[AXIS.LEFT_Y] = a[1] || 0;
+  out.axes[AXIS.RIGHT_X] = a[3] || 0;
+  out.axes[AXIS.RIGHT_Y] = a[4] || 0;
+
+  if (dinput) {
+    const z = a[2] || 0;
+    setAnalog(out, BTN.LT, z > 0 ? Math.min(1, z) : 0);
+    setAnalog(out, BTN.RT, z < 0 ? Math.min(1, -z) : 0);
+    setBtn(out, BTN.L3, b[8]);
+    setBtn(out, BTN.R3, b[9]);
+    setBtn(out, BTN.HOME, null);
+    for (let i = BTN.DPAD_UP; i <= BTN.DPAD_RIGHT; i++) setBtn(out, i, null);
+    return;
+  }
+
+  setAnalog(out, BTN.LT, readTrigger(a[2], memo, 0));
+  setAnalog(out, BTN.RT, readTrigger(a[5], memo, 1));
+  setBtn(out, BTN.HOME, b[8]);
+  setBtn(out, BTN.L3, b[9]);
+  setBtn(out, BTN.R3, b[10]);
+
+  // D-pad: hat axes 6/7, or buttons 11-14 (left, right, up, down), whichever is live.
+  const hx = a[6] || 0;
+  const hy = a[7] || 0;
+  const up = hy < -0.5 || !!(b[13] && b[13].pressed);
+  const down = hy > 0.5 || !!(b[14] && b[14].pressed);
+  const left = hx < -0.5 || !!(b[11] && b[11].pressed);
+  const right = hx > 0.5 || !!(b[12] && b[12].pressed);
+  out.pressed[BTN.DPAD_UP] = up; out.values[BTN.DPAD_UP] = up ? 1 : 0;
+  out.pressed[BTN.DPAD_DOWN] = down; out.values[BTN.DPAD_DOWN] = down ? 1 : 0;
+  out.pressed[BTN.DPAD_LEFT] = left; out.values[BTN.DPAD_LEFT] = left ? 1 : 0;
+  out.pressed[BTN.DPAD_RIGHT] = right; out.values[BTN.DPAD_RIGHT] = right ? 1 : 0;
+}
+
+/**
+ * Radial deadzone: ignore the stick until its distance from centre passes
+ * `dz`, then rescale so the output still reaches 1. Unlike a per-axis
+ * deadzone, diagonals don't snap to the cardinal directions.
+ * @param {{x: number, y: number}} out filled and returned
+ */
+export function radialDeadzone(x, y, dz, out = { x: 0, y: 0 }) {
+  const mag = Math.hypot(x, y);
+  if (mag <= dz || mag === 0) {
+    out.x = 0;
+    out.y = 0;
+    return out;
+  }
+  const scaled = (Math.min(1, mag) - dz) / (1 - dz);
+  out.x = (x / mag) * scaled;
+  out.y = (y / mag) * scaled;
+  return out;
+}
+
+// ── Status Text ─────────────────────────────────────────────────
+
+/** Browser facts the status text needs. */
+export function detectBrowserEnv(nav = typeof navigator !== 'undefined' ? navigator : null) {
+  const ua = (nav && nav.userAgent) || '';
+  return {
+    supported: !!(nav && typeof nav.getGamepads === 'function'),
+    mac: /Macintosh|Mac OS X/.test(ua),
+    chromium: /Chrome\/|Chromium\/|Edg\//.test(ua),
+    webUsb: !!(nav && nav.usb),
+  };
+}
+
+const TYPE_LABEL = { xbox: 'XBOX', playstation: 'PLAYSTATION', switch: 'SWITCH', generic: 'GENERIC' };
+
+/**
+ * Short value plus one-line description for the settings page.
+ * @param {{ enabled: boolean, connected: boolean, name?: string, type?: string, mappingKind?: string, others?: number }} info
+ * @param {{ supported: boolean, mac: boolean, chromium: boolean }} env
+ * @returns {{ value: string, desc: string }}
+ */
+export function describeGamepadStatus(info, env) {
+  if (!info.enabled) return { value: 'OFF', desc: 'Controller support is off.' };
+  if (!env.supported) {
+    return { value: 'UNAVAILABLE', desc: 'This browser exposes no controllers here. Use Chrome or Edge.' };
+  }
+  if (info.connected) {
+    let desc = `Controller: ${info.name} (${info.mappingKind})`;
+    if (info.mappingKind === 'unknown') desc += '. Unrecognised layout; some buttons may be off';
+    if (info.others > 0) desc += `. ${info.others} more connected; press a button on one to switch`;
+    return { value: TYPE_LABEL[info.type] || 'CONNECTED', desc: `${desc}.` };
+  }
+  if (env.mac && !env.chromium) {
+    return {
+      value: 'NONE',
+      desc: "No controller. Press any button on it. Safari and Firefox on macOS can't see wired Xbox 360 pads; use Chrome or Edge.",
+    };
+  }
+  if (env.mac && env.webUsb) {
+    return {
+      value: 'NONE',
+      desc: 'No controller. Press any button on it. A wired third-party Xbox 360 pad? Select this row to connect it over USB.',
+    };
+  }
+  return { value: 'NONE', desc: 'No controller. Press any button on it to connect.' };
+}
+
 export class GamepadManager {
   constructor(settings = {}) {
     this.settings = { ...DEFAULTS, ...settings };
@@ -64,8 +301,28 @@ export class GamepadManager {
     this._prevButtons = new Array(17).fill(false);
 
     /** Connected controller info for display */
+    this.controllerId = '';
     this.controllerName = '';
     this.controllerType = 'unknown'; // 'xbox', 'playstation', 'switch', 'generic'
+    this.mappingKind = 'unknown'; // 'standard', 'xpad', 'unknown'
+    this.connectedCount = 0;
+
+    /** Settings-page status, updated in place (settings-registry reads it). */
+    this.status = { value: 'NONE', desc: '' };
+    this._env = detectBrowserEnv();
+
+    /** Per-index pad memory: id, layout, last timestamp, busy flag, trigger memo. */
+    this._pads = [];
+    this._view = createPadView();
+    this._stick = { x: 0, y: 0 };
+    this._navStick = [false, false, false, false]; // up, down, left, right
+    this._navNext = [-1, -1, -1, -1];
+    this._result = createResult();
+
+    /** Pads read by our own drivers (WebUSB), merged into the native list. */
+    this._virtual = [];
+    this._virtualSeq = 0;
+    this._padList = [];
 
     /** Toast callback (set externally) */
     this.onConnect = null;
@@ -79,56 +336,143 @@ export class GamepadManager {
 
     // Check if a gamepad is already connected
     this._scanForGamepad();
+    this._refreshStatus();
   }
 
   // ── Connection Management ──────────────────────────────────────
 
   _handleConnect(e) {
     const gp = e.gamepad;
-    if (this.activeIndex === -1) {
-      this.activeIndex = gp.index;
-      this.controllerName = gp.id;
-      this.controllerType = this._detectType(gp.id);
-      if (this.onConnect) this.onConnect(this.controllerName, this.controllerType);
-    }
+    this._padState(gp);
+    if (this.activeIndex === -1) this._activate(gp);
+    else this._refreshStatus();
   }
 
   _handleDisconnect(e) {
-    if (e.gamepad.index === this.activeIndex) {
-      if (this.onDisconnect) this.onDisconnect(this.controllerName);
-      this.activeIndex = -1;
-      this.activeGamepad = null;
-      this.controllerName = '';
-      this.controllerType = 'unknown';
-      this._prevButtons.fill(false);
-
-      // Try to find another connected gamepad
-      this._scanForGamepad();
-    }
+    const index = e.gamepad.index;
+    this._pads[index] = undefined;
+    if (index === this.activeIndex) this._dropActive(index);
+    else this._refreshStatus();
   }
 
-  _scanForGamepad() {
-    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+  /** Lose the active pad, say so, and fall back to another connected one. */
+  _dropActive(skipIndex = -1) {
+    if (this.onDisconnect) this.onDisconnect(this.controllerName);
+    this._clearActive();
+    this._scanForGamepad(skipIndex);
+    this._refreshStatus();
+  }
+
+  _clearActive() {
+    this.activeIndex = -1;
+    this.activeGamepad = null;
+    this.controllerId = '';
+    this.controllerName = '';
+    this.controllerType = 'unknown';
+    this.mappingKind = 'unknown';
+    this._resetEdges();
+  }
+
+  /** Adopt the most recently used connected pad (or the first one). */
+  _scanForGamepad(skipIndex = -1, gamepads = this._allPads()) {
+    let best = null;
+    let bestAt = -1;
     for (const gp of gamepads) {
-      if (gp && gp.connected) {
-        this.activeIndex = gp.index;
-        this.controllerName = gp.id;
-        this.controllerType = this._detectType(gp.id);
-        return;
+      if (!gp || !gp.connected || gp.index === skipIndex) continue;
+      const at = this._padState(gp).lastActive;
+      if (!best || at > bestAt) {
+        best = gp;
+        bestAt = at;
       }
     }
+    if (best) this._activate(best);
+  }
+
+  // ── Virtual pads (js/xinput-usb.js) ───────────────────────────
+  // Pads the browser's Gamepad API cannot see, read by our own driver. They
+  // sit in the same list as native pads at indices past the browser's.
+
+  /** Native pads plus virtual ones, indexed by `gp.index`. */
+  _allPads() {
+    const native = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
+    if (!this._virtual.length) return native;
+    const list = this._padList;
+    list.length = 0;
+    for (const gp of native) if (gp) list[gp.index] = gp;
+    for (const v of this._virtual) list[v.index] = v;
+    return list;
+  }
+
+  addVirtualPad(pad) {
+    pad.index = VIRTUAL_BASE + this._virtualSeq++;
+    this._virtual.push(pad);
+    this._handleConnect({ gamepad: pad });
+  }
+
+  removeVirtualPad(pad) {
+    const i = this._virtual.indexOf(pad);
+    if (i < 0) return;
+    this._virtual.splice(i, 1);
+    this._handleDisconnect({ gamepad: pad });
+  }
+
+  /** Re-read connected pads (the settings row's action). */
+  rescan() {
+    if (this.activeIndex < 0) this._scanForGamepad();
+    this._refreshStatus();
+  }
+
+  _activate(gp) {
+    const st = this._padState(gp);
+    this.activeIndex = gp.index;
+    this.activeGamepad = gp;
+    this.controllerId = gp.id;
+    this.controllerName = controllerDisplayName(gp.id);
+    this.controllerType = this._detectType(gp.id);
+    this.mappingKind = st.kind;
+    this._resetEdges();
+    this._refreshStatus();
+    if (this.onConnect) this.onConnect(this.controllerName, this.controllerType);
+  }
+
+  /** Memory for the pad at gp.index; reset when a different device takes the slot. */
+  _padState(gp) {
+    let st = this._pads[gp.index];
+    if (!st || st.id !== gp.id) {
+      st = {
+        id: gp.id,
+        kind: mappingKindOf(gp),
+        timestamp: -1,
+        busy: false,
+        lastActive: -1,
+        memo: createPadMemo(),
+      };
+      this._pads[gp.index] = st;
+    }
+    return st;
   }
 
   _detectType(id) {
-    const lower = id.toLowerCase();
-    if (lower.includes('xbox') || lower.includes('xinput') || lower.includes('microsoft'))
-      return 'xbox';
-    if (lower.includes('dualsense') || lower.includes('dualshock') ||
-        lower.includes('sony') || lower.includes('playstation') || lower.includes('054c'))
-      return 'playstation';
-    if (lower.includes('pro controller') || lower.includes('057e') || lower.includes('nintendo'))
-      return 'switch';
-    return 'generic';
+    return detectControllerType(id);
+  }
+
+  _refreshStatus() {
+    const next = describeGamepadStatus({
+      enabled: this.settings.enabled,
+      connected: this.activeIndex >= 0,
+      name: this.controllerName,
+      type: this.controllerType,
+      mappingKind: this.mappingKind,
+      others: Math.max(0, this.connectedCount - 1),
+    }, this._env);
+    this.status.value = next.value;
+    this.status.desc = next.desc;
+  }
+
+  _resetEdges() {
+    this._prevButtons.fill(false);
+    this._navStick.fill(false);
+    this._navNext.fill(-1);
   }
 
   /** Is a controller currently connected? */
@@ -136,137 +480,174 @@ export class GamepadManager {
     return this.activeIndex >= 0;
   }
 
+  /**
+   * Walk the connected pads: count them, and hand control to one that just
+   * started being used (a button went down or a stick was pushed), so a
+   * second pad, or the same pad back at a new index, takes over without a
+   * reload. The busy check is edge-triggered, so an idle pad with a stuck
+   * button or a drifting stick can't hold the slot.
+   */
+  _selectPad(gamepads, now) {
+    let count = 0;
+    let takeover = null;
+    const dz = Math.max(this.settings.deadzone, SWITCH_STICK);
+    for (let i = 0; i < gamepads.length; i++) {
+      const gp = gamepads[i];
+      if (!gp || !gp.connected) continue;
+      count++;
+      const st = this._padState(gp);
+      // An unchanged timestamp means unchanged input; skip the re-read.
+      if (typeof gp.timestamp === 'number' && gp.timestamp === st.timestamp) continue;
+      st.timestamp = typeof gp.timestamp === 'number' ? gp.timestamp : -1;
+      const busy = padBusy(gp, st.kind, dz);
+      if (busy && !st.busy) {
+        st.lastActive = now;
+        if (gp.index !== this.activeIndex) takeover = gp;
+      }
+      st.busy = busy;
+    }
+    if (count !== this.connectedCount) {
+      this.connectedCount = count;
+      this._refreshStatus();
+    }
+    if (takeover) this._activate(takeover);
+  }
+
   // ── Per-Frame Polling ──────────────────────────────────────────
 
   /**
    * Poll the active gamepad and return a normalized input state.
-   * Call this once per frame from the game loop.
+   * Call this once per frame from the game loop. The returned object is
+   * reused between calls.
    *
+   * @param {number} [now] — ms clock for menu-repeat timing (performance.now())
    * @returns {GamepadInput} Normalized input object
    */
-  poll() {
-    const result = {
-      // Analog sticks (after deadzone)
-      moveX: 0,        // -1 (left) to +1 (right) — left stick
-      moveY: 0,        // -1 (up) to +1 (down) — left stick
-      lookX: 0,        // -1 (left) to +1 (right) — right stick
-      lookY: 0,        // -1 (up) to +1 (down) — right stick
+  poll(now = typeof performance !== 'undefined' ? performance.now() : Date.now()) {
+    const result = resetResult(this._result);
 
-      // Face buttons (current frame state)
-      shoot: false,     // RT (right trigger)
-      aim: false,       // LT (left trigger)
-      interact: false,  // A / ✕
-      dash: false,      // B / ○
-      reload: false,    // X / □
-      chronoShift: false, // Y / △
-      sprint: false,    // L3 (left stick click)
-      chronoLock: false, // R3 (right stick click): Kael's Time-Lock
+    if (!this.settings.enabled) return result;
 
-      // Shoulder buttons
-      weaponNext: false, // RB
-      weaponPrev: false, // LB
+    const gamepads = this._allPads();
+    this._selectPad(gamepads, now);
+    if (this.activeIndex < 0) {
+      // Pads can appear without a gamepadconnected event (Safari, or one
+      // already awake when the page loaded).
+      this._scanForGamepad(-1, gamepads);
+      if (this.activeIndex < 0) return result;
+    }
 
-      // Menu
-      pause: false,     // Start
-      minimap: false,   // Select
-
-      // D-pad (for menu navigation + weapon select)
-      dpadUp: false,
-      dpadDown: false,
-      dpadLeft: false,
-      dpadRight: false,
-
-      // Edge-detected (true only on the frame the button is first pressed)
-      justPressed: {
-        interact: false,
-        dash: false,
-        reload: false,
-        chronoShift: false,
-        pause: false,
-        minimap: false,
-        weaponNext: false,
-        weaponPrev: false,
-        chronoLock: false,
-        dpadUp: false,
-        dpadDown: false,
-        dpadLeft: false,
-        dpadRight: false,
-      },
-
-      // Meta
-      connected: false,
-      controllerType: 'unknown',
-    };
-
-    if (!this.settings.enabled || this.activeIndex < 0) return result;
-
-    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = gamepads[this.activeIndex];
-    if (!gp || !gp.connected) return result;
+    if (!gp || !gp.connected || gp.id !== this.controllerId) {
+      this._pads[this.activeIndex] = undefined;
+      this._dropActive(this.activeIndex);
+      return result;
+    }
 
     this.activeGamepad = gp;
     result.connected = true;
     result.controllerType = this.controllerType;
 
-    // ── Sticks ──
-    result.moveX = this._applyDeadzone(gp.axes[AXIS.LEFT_X] || 0) * this.settings.moveSensitivity;
-    result.moveY = this._applyDeadzone(gp.axes[AXIS.LEFT_Y] || 0) * this.settings.moveSensitivity;
-    result.lookX = this._applyDeadzone(gp.axes[AXIS.RIGHT_X] || 0) * this.settings.lookSensitivity;
-    result.lookY = this._applyDeadzone(gp.axes[AXIS.RIGHT_Y] || 0) * this.settings.lookSensitivity;
+    const st = this._padState(gp);
+    const view = normalizeGamepad(gp, this._view, st.memo, st.kind);
+    const curr = view.pressed;
+
+    // ── Sticks (radial deadzone) ──
+    const dz = this.settings.deadzone;
+    const move = radialDeadzone(view.axes[AXIS.LEFT_X], view.axes[AXIS.LEFT_Y], dz, this._stick);
+    result.moveX = move.x * this.settings.moveSensitivity;
+    result.moveY = move.y * this.settings.moveSensitivity;
+    const look = radialDeadzone(view.axes[AXIS.RIGHT_X], view.axes[AXIS.RIGHT_Y], dz, this._stick);
+    result.lookX = look.x * this.settings.lookSensitivity;
+    result.lookY = look.y * this.settings.lookSensitivity;
 
     if (this.settings.invertLookY) result.lookY *= -1;
 
     // ── Triggers (analog, 0 to 1 — treat as button if > 0.1) ──
-    const ltValue = gp.buttons[BTN.LT] ? (typeof gp.buttons[BTN.LT].value === 'number' ? gp.buttons[BTN.LT].value : (gp.buttons[BTN.LT].pressed ? 1 : 0)) : 0;
-    const rtValue = gp.buttons[BTN.RT] ? (typeof gp.buttons[BTN.RT].value === 'number' ? gp.buttons[BTN.RT].value : (gp.buttons[BTN.RT].pressed ? 1 : 0)) : 0;
-
-    result.shoot = rtValue > 0.1;
-    result.aim = ltValue > 0.1;
+    result.shoot = view.values[BTN.RT] > 0.1;
+    result.aim = view.values[BTN.LT] > 0.1;
 
     // ── Face buttons ──
-    result.interact = this._btn(gp, BTN.A);
-    result.dash = this._btn(gp, BTN.B);
-    result.reload = this._btn(gp, BTN.X);
-    result.chronoShift = this._btn(gp, BTN.Y);
+    result.interact = curr[BTN.A];
+    result.dash = curr[BTN.B];
+    result.reload = curr[BTN.X];
+    result.chronoShift = curr[BTN.Y];
 
     // ── Shoulders ──
-    result.weaponNext = this._btn(gp, BTN.RB);
-    result.weaponPrev = this._btn(gp, BTN.LB);
+    result.weaponNext = curr[BTN.RB];
+    result.weaponPrev = curr[BTN.LB];
 
     // ── Stick clicks ──
-    result.sprint = this._btn(gp, BTN.L3);
-    result.chronoLock = this._btn(gp, BTN.R3);
+    result.sprint = curr[BTN.L3];
+    result.chronoLock = curr[BTN.R3];
 
     // ── Menu ──
-    result.pause = this._btn(gp, BTN.START);
-    result.minimap = this._btn(gp, BTN.SELECT);
+    result.pause = curr[BTN.START];
+    result.minimap = curr[BTN.SELECT];
 
     // ── D-pad ──
-    result.dpadUp = this._btn(gp, BTN.DPAD_UP);
-    result.dpadDown = this._btn(gp, BTN.DPAD_DOWN);
-    result.dpadLeft = this._btn(gp, BTN.DPAD_LEFT);
-    result.dpadRight = this._btn(gp, BTN.DPAD_RIGHT);
+    result.dpadUp = curr[BTN.DPAD_UP];
+    result.dpadDown = curr[BTN.DPAD_DOWN];
+    result.dpadLeft = curr[BTN.DPAD_LEFT];
+    result.dpadRight = curr[BTN.DPAD_RIGHT];
 
     // ── Edge detection (just pressed this frame) ──
-    const curr = this._currentButtons(gp);
-    result.justPressed.interact = curr[BTN.A] && !this._prevButtons[BTN.A];
-    result.justPressed.dash = curr[BTN.B] && !this._prevButtons[BTN.B];
-    result.justPressed.reload = curr[BTN.X] && !this._prevButtons[BTN.X];
-    result.justPressed.chronoShift = curr[BTN.Y] && !this._prevButtons[BTN.Y];
-    result.justPressed.pause = curr[BTN.START] && !this._prevButtons[BTN.START];
-    result.justPressed.minimap = curr[BTN.SELECT] && !this._prevButtons[BTN.SELECT];
-    result.justPressed.weaponNext = curr[BTN.RB] && !this._prevButtons[BTN.RB];
-    result.justPressed.weaponPrev = curr[BTN.LB] && !this._prevButtons[BTN.LB];
-    result.justPressed.chronoLock = curr[BTN.R3] && !this._prevButtons[BTN.R3];
-    result.justPressed.dpadUp = curr[BTN.DPAD_UP] && !this._prevButtons[BTN.DPAD_UP];
-    result.justPressed.dpadDown = curr[BTN.DPAD_DOWN] && !this._prevButtons[BTN.DPAD_DOWN];
-    result.justPressed.dpadLeft = curr[BTN.DPAD_LEFT] && !this._prevButtons[BTN.DPAD_LEFT];
-    result.justPressed.dpadRight = curr[BTN.DPAD_RIGHT] && !this._prevButtons[BTN.DPAD_RIGHT];
+    const prev = this._prevButtons;
+    const jp = result.justPressed;
+    jp.interact = curr[BTN.A] && !prev[BTN.A];
+    jp.dash = curr[BTN.B] && !prev[BTN.B];
+    jp.reload = curr[BTN.X] && !prev[BTN.X];
+    jp.chronoShift = curr[BTN.Y] && !prev[BTN.Y];
+    jp.pause = curr[BTN.START] && !prev[BTN.START];
+    jp.minimap = curr[BTN.SELECT] && !prev[BTN.SELECT];
+    jp.weaponNext = curr[BTN.RB] && !prev[BTN.RB];
+    jp.weaponPrev = curr[BTN.LB] && !prev[BTN.LB];
+    jp.chronoLock = curr[BTN.R3] && !prev[BTN.R3];
+    jp.dpadUp = curr[BTN.DPAD_UP] && !prev[BTN.DPAD_UP];
+    jp.dpadDown = curr[BTN.DPAD_DOWN] && !prev[BTN.DPAD_DOWN];
+    jp.dpadLeft = curr[BTN.DPAD_LEFT] && !prev[BTN.DPAD_LEFT];
+    jp.dpadRight = curr[BTN.DPAD_RIGHT] && !prev[BTN.DPAD_RIGHT];
+
+    // ── Menu navigation: d-pad or left stick, with hold-to-repeat ──
+    this._updateNav(view.axes[AXIS.LEFT_X], view.axes[AXIS.LEFT_Y], curr, now, jp);
 
     // Save current state for next frame
-    for (let i = 0; i < curr.length; i++) this._prevButtons[i] = curr[i];
+    for (let i = 0; i < 17; i++) prev[i] = curr[i];
 
     return result;
+  }
+
+  /** Fill justPressed.navUp/Down/Left/Right from the d-pad and the left stick. */
+  _updateNav(lx, ly, pressed, now, jp) {
+    const s = this._navStick;
+    const ax = Math.abs(lx);
+    const ay = Math.abs(ly);
+    // Engage only on the dominant axis so a diagonal push moves one way.
+    s[0] = s[0] ? ly < -NAV_RELEASE : ly < -NAV_ENGAGE && ay >= ax;
+    s[1] = s[1] ? ly > NAV_RELEASE : ly > NAV_ENGAGE && ay >= ax;
+    s[2] = s[2] ? lx < -NAV_RELEASE : lx < -NAV_ENGAGE && ax > ay;
+    s[3] = s[3] ? lx > NAV_RELEASE : lx > NAV_ENGAGE && ax > ay;
+    jp.navUp = this._navFire(0, s[0] || pressed[BTN.DPAD_UP], now);
+    jp.navDown = this._navFire(1, s[1] || pressed[BTN.DPAD_DOWN], now);
+    jp.navLeft = this._navFire(2, s[2] || pressed[BTN.DPAD_LEFT], now);
+    jp.navRight = this._navFire(3, s[3] || pressed[BTN.DPAD_RIGHT], now);
+  }
+
+  _navFire(dir, held, now) {
+    const next = this._navNext;
+    if (!held) {
+      next[dir] = -1;
+      return false;
+    }
+    if (next[dir] < 0) {
+      next[dir] = now + NAV_DELAY;
+      return true;
+    }
+    if (now >= next[dir]) {
+      next[dir] = now + NAV_REPEAT;
+      return true;
+    }
+    return false;
   }
 
   // ── Haptic Feedback ────────────────────────────────────────────
@@ -311,6 +692,7 @@ export class GamepadManager {
 
   updateSettings(newSettings) {
     Object.assign(this.settings, newSettings);
+    this._refreshStatus();
   }
 
   // ── Cleanup ────────────────────────────────────────────────────
@@ -354,27 +736,80 @@ export class GamepadManager {
         };
     }
   }
+}
 
-  // ── Internal Helpers ───────────────────────────────────────────
+// ── Internal Helpers ─────────────────────────────────────────────
 
-  _applyDeadzone(value) {
-    const dz = this.settings.deadzone;
-    if (Math.abs(value) < dz) return 0;
-    // Remap remaining range to 0-1 for smooth response
-    const sign = value > 0 ? 1 : -1;
-    return sign * ((Math.abs(value) - dz) / (1 - dz));
+/** Any button down, or a stick past `dz`, on a pad in its own layout. */
+function padBusy(gp, kind, dz) {
+  const b = gp.buttons || [];
+  for (let i = 0; i < b.length; i++) {
+    if (b[i] && b[i].pressed) return true;
   }
+  const a = gp.axes || [];
+  const rx = kind === 'xpad' ? 3 : 2;
+  return Math.hypot(a[0] || 0, a[1] || 0) > dz || Math.hypot(a[rx] || 0, a[rx + 1] || 0) > dz;
+}
 
-  _btn(gp, index) {
-    const btn = gp.buttons[index];
-    return btn ? btn.pressed : false;
-  }
+function createResult() {
+  return resetResult({ justPressed: {} });
+}
 
-  _currentButtons(gp) {
-    const result = [];
-    for (let i = 0; i < 17; i++) {
-      result.push(gp.buttons[i] ? gp.buttons[i].pressed : false);
-    }
-    return result;
-  }
+/** Zero the reused poll() result in place. */
+function resetResult(r) {
+  // Analog sticks (after deadzone)
+  r.moveX = 0;        // -1 (left) to +1 (right) — left stick
+  r.moveY = 0;        // -1 (up) to +1 (down) — left stick
+  r.lookX = 0;        // -1 (left) to +1 (right) — right stick
+  r.lookY = 0;        // -1 (up) to +1 (down) — right stick
+
+  // Face buttons (current frame state)
+  r.shoot = false;     // RT (right trigger)
+  r.aim = false;       // LT (left trigger)
+  r.interact = false;  // A / ✕
+  r.dash = false;      // B / ○
+  r.reload = false;    // X / □
+  r.chronoShift = false; // Y / △
+  r.sprint = false;    // L3 (left stick click)
+  r.chronoLock = false; // R3 (right stick click): Kael's Time-Lock
+
+  // Shoulder buttons
+  r.weaponNext = false; // RB
+  r.weaponPrev = false; // LB
+
+  // Menu
+  r.pause = false;     // Start
+  r.minimap = false;   // Select
+
+  // D-pad (for menu navigation + weapon select)
+  r.dpadUp = false;
+  r.dpadDown = false;
+  r.dpadLeft = false;
+  r.dpadRight = false;
+
+  // Edge-detected (true only on the frame the button is first pressed).
+  // nav* also fire while the d-pad or left stick is held (menu repeat).
+  const jp = r.justPressed;
+  jp.interact = false;
+  jp.dash = false;
+  jp.reload = false;
+  jp.chronoShift = false;
+  jp.pause = false;
+  jp.minimap = false;
+  jp.weaponNext = false;
+  jp.weaponPrev = false;
+  jp.chronoLock = false;
+  jp.dpadUp = false;
+  jp.dpadDown = false;
+  jp.dpadLeft = false;
+  jp.dpadRight = false;
+  jp.navUp = false;
+  jp.navDown = false;
+  jp.navLeft = false;
+  jp.navRight = false;
+
+  // Meta
+  r.connected = false;
+  r.controllerType = 'unknown';
+  return r;
 }

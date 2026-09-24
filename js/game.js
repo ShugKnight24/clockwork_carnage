@@ -8,6 +8,7 @@ import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
+import { initXInputUsb } from "./xinput-usb.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
@@ -151,6 +152,7 @@ import {
   getVisibleCategories,
   settingDisplayItem,
   applySettingStep,
+  bindGamepadStatus,
 } from "./settings-registry.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 export {
@@ -396,6 +398,18 @@ export class Game {
     this._gamepadPrevKeys = new Set();
     this._gamepadNextKeys = new Set();
     this._lastGamepadMove = { x: 0, y: 0 };
+    // The Gamepad settings page shows this; a chime marks a pad arriving or leaving.
+    bindGamepadStatus(this.gamepad.status);
+    this.gamepad.onConnect = (name) => {
+      console.info(`[gamepad] using ${name} (${this.gamepad.mappingKind} mapping)`);
+      this.audio?.menuSelect?.();
+    };
+    this.gamepad.onDisconnect = (name) => {
+      console.info(`[gamepad] ${name} disconnected`);
+      this.audio?.menuSelect?.();
+    };
+    // Wired third-party Xbox 360 pads Chrome's own driver skips (macOS).
+    this.xinputUsb = initXInputUsb(this.gamepad);
     this.applyGamepadSettings();
 
     // Previous-frame key state tracking for edge-detection (crouch start)
@@ -817,11 +831,15 @@ export class Game {
   _updateGamepadInput(dt) {
     if (!this.gamepad || !this.settings.gamepadEnabled) return;
     const gp = this.gamepad.poll();
-    if (!gp.connected) return;
 
     // Two sets swapped each frame, so polling allocates nothing.
     const nextHeld = this._gamepadNextKeys;
     nextHeld.clear();
+    // A pad unplugged mid-stride still lets go of the keys it was holding.
+    if (!gp.connected) {
+      this._releaseGamepadKeys(nextHeld);
+      return;
+    }
     const moveX = gp.moveX;
     const moveY = gp.moveY;
     if (Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) {
@@ -829,10 +847,13 @@ export class Game {
       this._lastGamepadMove.y = moveY;
     }
 
-    this._setGamepadKey(this.keybinds.moveForward, moveY < -0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveBack, moveY > 0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveLeft, moveX < -0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveRight, moveX > 0.25, nextHeld);
+    // In menus the left stick navigates through justPressed.nav*; holding
+    // W/A/S/D as well would move the selection twice.
+    const stickMoves = this.state === GameState.PLAYING || this.state === GameState.BUILDER;
+    this._setGamepadKey(this.keybinds.moveForward, stickMoves && moveY < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveBack, stickMoves && moveY > 0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveLeft, stickMoves && moveX < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveRight, stickMoves && moveX > 0.25, nextHeld);
     this._setGamepadKey(this.keybinds.sprint, gp.sprint, nextHeld);
     this._setGamepadKey(this.keybinds.crouch, gp.reload, nextHeld);
     this._setGamepadKey(this.keybinds.chronoShift, gp.chronoShift, nextHeld);
@@ -845,8 +866,8 @@ export class Game {
       setArtStyle((getArtStyle() + 1) % ART_STYLES.length);
     }
     if (this.state === GameState.MODE_SELECT) {
-      if (gp.justPressed.dpadUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
-      if (gp.justPressed.dpadDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
+      if (gp.justPressed.navUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
+      if (gp.justPressed.navDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
       if (gp.justPressed.interact) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
       if (gp.justPressed.pause || gp.justPressed.dash) document.getElementById("btnBack")?.click();
     }
@@ -879,10 +900,13 @@ export class Game {
       if (gp.justPressed.chronoLock) this.chronoLock();
       if (gp.justPressed.pause) this.handleKeyPress(this.keybinds.pause);
     } else {
-      if (gp.justPressed.dpadUp) this.handleKeyPress("ArrowUp");
-      if (gp.justPressed.dpadDown) this.handleKeyPress("ArrowDown");
-      if (gp.justPressed.dpadLeft) this.handleKeyPress("ArrowLeft");
-      if (gp.justPressed.dpadRight) this.handleKeyPress("ArrowRight");
+      // The Forge walks on the stick, so only its d-pad maps to arrows.
+      const jp = gp.justPressed;
+      const forge = this.state === GameState.BUILDER;
+      if (forge ? jp.dpadUp : jp.navUp) this.handleKeyPress("ArrowUp");
+      if (forge ? jp.dpadDown : jp.navDown) this.handleKeyPress("ArrowDown");
+      if (forge ? jp.dpadLeft : jp.navLeft) this.handleKeyPress("ArrowLeft");
+      if (forge ? jp.dpadRight : jp.navRight) this.handleKeyPress("ArrowRight");
       if (gp.justPressed.interact) this.handleKeyPress("Enter");
       if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
       if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
@@ -894,6 +918,11 @@ export class Game {
       }
     }
 
+    this._releaseGamepadKeys(nextHeld);
+  }
+
+  /** Let go of pad-held keys not in `nextHeld`, then swap the two sets. */
+  _releaseGamepadKeys(nextHeld) {
     for (const code of this._gamepadPrevKeys) {
       if (!nextHeld.has(code)) this.keys[code] = false;
     }

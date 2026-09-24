@@ -90,6 +90,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
 //   --- shared ---
 //   onChange(game) – callback after value changes
 //   widget         – special sub-widget key ("crosshairPreview")
+//   --- action-specific ---
+//   buttonLabel, color, onClick(game) – a command row with no stored value
+/** Live controller status ({ value, desc }), bound by the game at start-up. */
+let gamepadStatus = null;
+
+/** Point the Gamepad page's status row at the GamepadManager's status object. */
+export function bindGamepadStatus(status) {
+  gamepadStatus = status;
+}
+
 /** Ordered list of setting categories shown in the sidebar */
 export const SETTING_CATEGORIES = [
   "Gameplay",
@@ -584,6 +594,28 @@ export const SETTINGS_REGISTRY = [
     height: { compact: 30, normal: 44 },
   },
   // ─── Gamepad ───
+  {
+    // Read-only status: the value and footer text follow the live pad.
+    key: "gamepadStatus",
+    label: "Controller",
+    get desc() {
+      return gamepadStatus?.desc || "Press any button on a controller to connect it.";
+    },
+    category: "Gamepad",
+    type: "action",
+    get buttonLabel() {
+      return gamepadStatus?.value || "NONE";
+    },
+    color: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    // With nothing connected, the click also opens Chrome's USB chooser for
+    // wired third-party 360 pads the Gamepad API cannot see (js/xinput-usb.js).
+    onClick: (g) => {
+      g.gamepad?.rescan?.();
+      if (!g.gamepad?.connected && g.xinputUsb?.supported) g.xinputUsb.request();
+    },
+  },
   {
     key: "gamepadEnabled",
     label: "Controller Support",
