@@ -95,10 +95,12 @@ glyphs; `src/systems/pad-actions.js` is the single gamepad binding table
   Below 700 px wide the panel becomes a bottom sheet over the live view.
 - Six sections, replacing nine categories: **Quick**, **Video**, **Audio**,
   **Controls**, **Gameplay**, **Accessibility & HUD** (full mapping in §4).
-- `SETTINGS_REGISTRY` stays the single source. Rows gain `section` and
-  `group` (a subheader within a section); `category` is removed once the old
-  screen is gone. The deck builds rows from row type, so adding a setting is
-  still one registry entry.
+- `SETTINGS_REGISTRY` stays the single source of settings. Where each row is
+  shown — its `section` and `group` (a subheader within a section) and a Video
+  `cost` — lives in one table, `src/ui/settings-sections.js`, with a test that
+  every registry row is placed; `category` is removed once the old screen is
+  gone. The deck builds rows from row type, so adding a setting is one
+  registry entry plus one line in that table.
 
 ### 2. Navigation and input
 
@@ -146,9 +148,10 @@ glyphs; `src/systems/pad-actions.js` is the single gamepad binding table
   once. From the Forge the live view is the voxel scene (already drawn behind
   pause).
 - **From the menu.** `src/systems/showcase.js` starts a sandboxed showcase:
-  - Loads a curated campaign level through the existing level loader with a
-    `showcase` flag that disables saves, stats, achievements, unlocks,
-    analytics, ARIA/squad comms and music changes.
+  - Installs a curated campaign level itself (map, idle enemies, palette)
+    without calling the campaign loader, and restores every borrowed game
+    field on close, so no save, stat, achievement, unlock, analytics,
+    ARIA/squad comms or music path is reachable.
   - The level comes from an act the player has reached (a new player sees
     Act I). Each act has one curated showcase level and camera path.
   - Places a few enemies in idle animation with AI off, adds ambient sparks
@@ -223,7 +226,7 @@ Four phases, each shippable and tested on its own:
 
 | Risk | Mitigation |
 |---|---|
-| Showcase writes real progress through the campaign loader | Explicit `showcase` flag checked at every save, stat, achievement and analytics call it can reach; browser test compares storage before and after. |
+| Showcase writes real progress | It never calls the campaign loader; it swaps a fixed list of game fields and restores them; unit test checks the restore and a browser test compares storage before and after. |
 | Live view costs frame time behind a DOM panel | Solid translucent panel, no backdrop blur; adaptive quality unchanged; measured with `scratch/perf-scenarios.mjs`. |
 | A remap locks a player out | Esc / Start and menu navigation reserved; reset per column; invalid `cc_padbinds` falls back to defaults. |
 | Phone layout | Bottom sheet below 700 px; screenshots at 375 px each phase. |
