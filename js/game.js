@@ -153,7 +153,9 @@ import {
   settingDisplayItem,
   applySettingStep,
   bindGamepadStatus,
+  gamepadSettingsFrom,
 } from "./settings-registry.js";
+import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 export {
   COMPACT_PHONE_HEIGHT,
@@ -624,6 +626,15 @@ export class Game {
     }
     // Tritanopia: remap blue/yellow
     if (m === 3) {
+      // Health green would read close to the remapped cyan; push it to teal
+      // so full, hurt (orange) and critical (red) stay three distinct tones.
+      if (
+        lower === "#00ff66" ||
+        lower === "#44ff44" ||
+        lower === "#00ff00" ||
+        lower === "#00cc44"
+      )
+        return "#22ffdd";
       if (lower === "#00ccff" || lower === "#00ddff" || lower === "#00ffcc")
         return "#ff88cc"; // cyan → pink
       if (lower === "#ffcc00" || lower === "#ffaa00") return "#ff8844"; // yellow → orange
@@ -949,13 +960,7 @@ export class Game {
 
   applyGamepadSettings() {
     if (!this.gamepad) return;
-    this.gamepad.updateSettings({
-      enabled: this.settings.gamepadEnabled,
-      deadzone: this.settings.gamepadDeadzone,
-      lookSensitivity: this.settings.gamepadLookSensitivity,
-      vibrationEnabled: this.settings.gamepadRumble,
-      invertLookY: this.settings.invertY,
-    });
+    this.gamepad.updateSettings(gamepadSettingsFrom(this.settings));
   }
 
   /** Push the Render Mode setting into the renderer (auto / 2D / WebGL). */
@@ -965,47 +970,45 @@ export class Game {
 
   applyPerformanceSettings() {
     if (!this.quality) return;
-    const prevScale = this.quality.renderScale;
-    const presets = ["auto", "ultra-low", "low", "medium", "high", "ultra", "custom"];
-    const preset = presets[this.settings.graphicsPreset] || "auto";
-    const presetParticles = { "ultra-low": 0.15, low: 0.3, medium: 0.5, high: 0.8, ultra: 1 };
+    const q = this.quality;
+    const s = this.settings;
+    const prevScale = q.renderScale;
+    const preset = GRAPHICS_PRESETS[s.graphicsPreset] || "auto";
     const targets = [55, 30, 60, 90, 120];
-    this.quality.targetFPS = this.settings.batterySaver ? 30 : targets[this.settings.frameTarget] || 55;
-    this.quality.maxScale = this.settings.batterySaver ? Math.min(this.quality.maxScale, 0.7) : 1.0;
+    q.targetFPS = s.batterySaver ? 30 : targets[s.frameTarget] || 55;
+    q.maxScale = s.batterySaver ? 0.7 : 1.0;
+    // Choosing a preset or toggling Battery Saver starts from that mode's
+    // full scale. The governor calls this too after each step; those calls
+    // keep its current scale.
+    const mode = `${preset}|${!!s.batterySaver}`;
+    const modeChanged = mode !== this._perfMode;
+    this._perfMode = mode;
     if (preset === "auto") {
-      this.quality.useAuto();
-      if (this.settings.batterySaver && this.quality.renderScale > this.quality.maxScale) {
-        this.quality.renderScale = this.quality.stableScale = this.quality.maxScale;
-      }
+      q.useAuto();
+      if (modeChanged || q.renderScale > q.maxScale) q.resetScale();
     } else if (preset !== "custom") {
-      this.quality.applyPreset(preset);
+      q.applyPreset(preset);
     }
-    const effectMul = [0.3, 0.6, 1][this.settings.effectsQuality] ?? 1;
+    // Presets and Battery Saver cap effects at runtime; the player's toggles
+    // are left as saved (Battery Saver used to overwrite enableBloom and CA).
+    const ceil = effectCeilings(s);
+    const effectMul = [0.3, 0.6, 1][s.effectsQuality] ?? 1;
+    const p = QUALITY_PRESETS[preset];
+    const caps = {
+      particleMultiplier: (p?.particleMultiplier ?? 1) * effectMul * (s.batterySaver ? 0.6 : 1),
+      drawDistance: p?.drawDistance ?? 20,
+      enableVignette: s.postProcessing && ceil.enableVignette,
+      enableFloorTexture: s.floorTexture && ceil.enableFloorTexture,
+    };
     if (preset === "auto") {
-      const scale = this.quality.renderScale;
-      const low = scale < 0.6;
-      const med = scale < 0.8;
-      this.quality.particleMultiplier = (low ? 0.3 : med ? 0.5 : 1) * effectMul * (this.settings.batterySaver ? 0.6 : 1);
-      this.quality.drawDistance = low ? 10 : med ? 14 : 20;
-      this.quality.enableScanlines = this.settings.postProcessing && !med;
-      this.quality.enableVignette = this.settings.postProcessing && !low;
-      this.quality.enableFloorTexture = this.settings.floorTexture && !low;
+      q.setCaps(caps);
     } else {
-      const isCustom = preset === "custom";
-      const customParticles = preset === "custom" ? 1 : (presetParticles[preset] ?? 1);
-      this.quality.applyCustom({
-        renderScale: Math.min(isCustom ? this.settings.renderScale / 100 : this.quality.renderScale, this.quality.maxScale),
-        particleMultiplier: customParticles * effectMul * (this.settings.batterySaver ? 0.6 : 1),
-        enableVignette: this.settings.postProcessing && !this.settings.batterySaver,
-        enableScanlines: this.settings.postProcessing && !this.settings.batterySaver,
-        enableFloorTexture: this.settings.floorTexture,
-      });
+      const scale = preset === "custom" ? s.renderScale / 100 : q.renderScale;
+      q.applyCustom({ renderScale: Math.min(scale, q.maxScale), ...caps });
     }
-    // Battery saver: also disable bloom & CA for max power savings
-    if (this.settings.batterySaver) {
-      this.settings.enableBloom = false;
-      this.settings.enableChromaticAberration = false;
-    }
+    q.enableBloom = ceil.enableBloom;
+    q.enableChromaticAberration = ceil.enableChromaticAberration;
+    q.enableFilmGrain = ceil.enableFilmGrain;
     this.quality.stableScale = this.quality.renderScale;
     if (Math.abs(prevScale - this.quality.renderScale) > 0.001) {
       window.dispatchEvent(new CustomEvent("cc-quality-change"));

@@ -703,10 +703,10 @@ export function renderFrame(game) {
       canvas: game.canvas,
       postProcessing: game.settings.postProcessing,
       audio: game.audio,
-      // Canvas2D bloom downsamples the frame into a second canvas every frame,
-      // the same cross-canvas copy the GPU pass was switched off for. Bloom
-      // stays a GPU Film Grade effect.
-      enableBloom: false,
+      // Canvas-to-canvas draws stay on the GPU; it is the texImage2D upload
+      // into a separate WebGL context that stalls (see above). Passing false
+      // here left the Bloom toggle doing nothing without GPU Film Grade.
+      enableBloom: _fxBloom,
       enableChromaticAberration: _fxCA,
       enableFilmGrain: _fxGrain,
       act: _act,

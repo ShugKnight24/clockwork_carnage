@@ -9,6 +9,7 @@ export { COMPACT_PHONE_HEIGHT } from "../src/constants.js";
 // art-style.js guards its localStorage/document access, so tests can still
 // import this registry without a browser.
 import { setArtStyle } from "../src/rendering/art-style.js";
+import { effectCapReason } from "../src/utils/perf.js";
 
 /**
  * Values a fresh profile starts with. Game copies this, then touch-device
@@ -60,8 +61,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   enableBloom: true,
   enableChromaticAberration: true,
   enableFilmGrain: true,
-  shadowQuality: 2, // 0=off, 1=low, 2=high
-  lightingQuality: 2, // 0=low, 1=medium, 2=high
   renderMode: 0, // 0=auto, 1=2D (Canvas), 2=3D (WebGL)
   gamepadEnabled: true,
   gamepadLookSensitivity: 2.5,
@@ -87,6 +86,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 //   wrap         – whether cycling wraps around
 //   --- toggle-specific ---
 //   onColor      – color when ON (defaults to "#00ccff")
+//   capped       – a preset or Battery Saver can hold it off; labelled "OFF (preset)"
 //   --- shared ---
 //   onChange(game) – callback after value changes
 //   widget         – special sub-widget key ("crosshairPreview")
@@ -121,7 +121,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "difficulty",
     label: "Difficulty",
-    desc: "Enemy damage, health and aggression.",
+    desc: "Enemy damage, health and aggression, for enemies spawned from now on. Continue resumes a run at the difficulty it was saved with.",
     category: "Gameplay",
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
@@ -279,7 +279,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "renderScale",
     label: "Render Scale",
-    desc: "Internal resolution. Lower is faster and softer.",
+    desc: "Internal resolution. Lower is faster and softer. Switches Graphics Preset to Custom.",
     category: "Performance",
     type: "slider",
     min: 50,
@@ -289,7 +289,12 @@ export const SETTINGS_REGISTRY = [
     barColor: () => "#00ccff",
     platform: "all",
     height: { compact: 42, normal: 60 },
-    onChange: (g) => g.applyPerformanceSettings?.(),
+    // Only the Custom preset reads this slider; every other preset sets its
+    // own scale, so moving it there did nothing.
+    onChange: (g) => {
+      g.settings.graphicsPreset = presetIndex("Custom");
+      g.applyPerformanceSettings?.();
+    },
   },
   {
     key: "effectsQuality",
@@ -310,7 +315,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "postProcessing",
     label: "Post Processing",
-    desc: "Full-screen effect pass. Off is fastest.",
+    desc: "Vignette, bloom, aberration, grain and damage flashes. Off is fastest.",
     category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
@@ -336,6 +341,7 @@ export const SETTINGS_REGISTRY = [
     type: "toggle",
     onColor: "#ffaa00",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
     onChange: (g) => g.applyPerformanceSettings?.(),
   },
@@ -378,6 +384,7 @@ export const SETTINGS_REGISTRY = [
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
   },
   {
@@ -388,6 +395,7 @@ export const SETTINGS_REGISTRY = [
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
   },
   {
@@ -398,38 +406,8 @@ export const SETTINGS_REGISTRY = [
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
-  },
-  {
-    key: "shadowQuality",
-    label: "Shadow Quality",
-    desc: "Resolution of cast shadows.",
-    category: "Performance",
-    type: "enum",
-    values: ["Off", "Low", "High"],
-    colors: ["#888888", "#88aacc", "#ffaa00"],
-    min: 0,
-    max: 2,
-    step: 1,
-    wrap: true,
-    platform: "all",
-    height: { compact: 30, normal: 44 },
-  },
-  {
-    key: "lightingQuality",
-    label: "Lighting Quality",
-    desc: "Number of dynamic lights drawn per frame.",
-    category: "Performance",
-    type: "enum",
-    values: ["Low", "Medium", "High"],
-    colors: ["#88aacc", "#00ccff", "#ffaa00"],
-    min: 0,
-    max: 2,
-    step: 1,
-    wrap: true,
-    platform: "all",
-    height: { compact: 30, normal: 44 },
-    onChange: (g) => g.applyPerformanceSettings?.(),
   },
   {
     key: "renderMode",
@@ -595,6 +573,9 @@ export const SETTINGS_REGISTRY = [
     onColor: "#ff8844",
     platform: "desktop",
     height: { compact: 30, normal: 44 },
+    // Pad look runs through the same aim path as the mouse, which applies
+    // the inversion; re-sync the pad so it never inverts a second time.
+    onChange: (g) => g.applyGamepadSettings?.(),
   },
   // ─── Gamepad ───
   {
@@ -697,7 +678,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fontScale",
     label: "Font Scale",
-    desc: "Size of all interface text.",
+    desc: "Size of HUD and message text.",
     category: "Accessibility",
     type: "slider",
     min: 100,
@@ -842,7 +823,7 @@ export const SETTINGS_REGISTRY = [
     category: "Mobile",
     type: "toggle",
     onColor: "#00ffcc",
-    platform: "all",
+    platform: "mobile",
     height: { compact: 30, normal: 44 },
   },
   {
@@ -866,6 +847,25 @@ export const SETTINGS_REGISTRY = [
     height: { compact: 30, normal: 44 },
   },
 ];
+
+/** Index of a Graphics Preset option by its display name. */
+function presetIndex(name) {
+  return SETTINGS_REGISTRY.find((d) => d.key === "graphicsPreset").values.indexOf(name);
+}
+
+/**
+ * GamepadManager settings from the game settings. Look inversion is left
+ * out on purpose: pad look feeds the mouse delta, and the aim path applies
+ * invertY to both, so the pad inverting too cancelled it out.
+ */
+export function gamepadSettingsFrom(settings) {
+  return {
+    enabled: settings.gamepadEnabled,
+    deadzone: settings.gamepadDeadzone,
+    lookSensitivity: settings.gamepadLookSensitivity,
+    vibrationEnabled: settings.gamepadRumble,
+  };
+}
 
 /** Filter registry by platform */
 export function getVisibleSettings(isTouchDevice, settings) {
@@ -921,12 +921,26 @@ export function applySettingStep(settings, def, direction) {
 export function settingDisplayItem(def, settings) {
   const v = settings[def.key];
   switch (def.type) {
-    case "toggle":
+    case "toggle": {
+      // A preset or Battery Saver can hold an effect off; say so rather than
+      // show ON for something that is not drawn.
+      const cap = v && def.capped ? effectCapReason(settings, def.key) : null;
+      if (cap) {
+        return {
+          label: def.label,
+          value: cap === "preset" ? "OFF (preset)" : "OFF (saver)",
+          color: "#888888",
+          note: cap === "preset"
+            ? "Held off by the Graphics Preset; choose Auto, Ultra or Custom to use it."
+            : "Held off while Battery Saver is on.",
+        };
+      }
       return {
         label: def.label,
         value: v ? "ON" : "OFF",
         color: v ? def.onColor || "#00ccff" : "#888888",
       };
+    }
     case "enum":
       return {
         label: def.label,

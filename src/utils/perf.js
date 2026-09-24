@@ -8,12 +8,11 @@
 
 import { clamp } from "./math.js";
 
-const QUALITY_PRESETS = {
+export const QUALITY_PRESETS = {
   ultra: {
     renderScale: 1.0,
     particleMultiplier: 1.0,
     drawDistance: 20,
-    enableScanlines: true,
     enableVignette: true,
     enableFloorTexture: true,
     enableBloom: true,
@@ -24,7 +23,6 @@ const QUALITY_PRESETS = {
     renderScale: 0.85,
     particleMultiplier: 0.8,
     drawDistance: 18,
-    enableScanlines: true,
     enableVignette: true,
     enableFloorTexture: true,
     enableBloom: true,
@@ -35,7 +33,6 @@ const QUALITY_PRESETS = {
     renderScale: 0.7,
     particleMultiplier: 0.5,
     drawDistance: 14,
-    enableScanlines: false,
     enableVignette: true,
     enableFloorTexture: true,
     enableBloom: false,
@@ -46,7 +43,6 @@ const QUALITY_PRESETS = {
     renderScale: 0.5,
     particleMultiplier: 0.3,
     drawDistance: 10,
-    enableScanlines: false,
     enableVignette: false,
     enableFloorTexture: false,
     enableBloom: false,
@@ -57,7 +53,6 @@ const QUALITY_PRESETS = {
     renderScale: 0.35,
     particleMultiplier: 0.15,
     drawDistance: 8,
-    enableScanlines: false,
     enableVignette: false,
     enableFloorTexture: false,
     enableBloom: false,
@@ -65,6 +60,45 @@ const QUALITY_PRESETS = {
     enableFilmGrain: false,
   },
 };
+
+/** Graphics Preset setting values, by index. */
+export const GRAPHICS_PRESETS = ["auto", "ultra-low", "low", "medium", "high", "ultra", "custom"];
+
+/**
+ * What the chosen preset and Battery Saver allow, for the effects the player
+ * also toggles. Runtime caps only: the player's own toggles are never
+ * rewritten, so leaving a preset or Battery Saver brings them straight back.
+ * Pure, so the settings screen can label a capped toggle.
+ */
+export function effectCeilings(settings) {
+  const p = QUALITY_PRESETS[GRAPHICS_PRESETS[settings.graphicsPreset]];
+  const saver = !!settings.batterySaver;
+  return {
+    enableBloom: (p?.enableBloom ?? true) && !saver,
+    enableChromaticAberration: (p?.enableChromaticAberration ?? true) && !saver,
+    enableFilmGrain: p?.enableFilmGrain ?? true,
+    enableVignette: p?.enableVignette ?? true,
+    enableFloorTexture: p?.enableFloorTexture ?? true,
+  };
+}
+
+/**
+ * Why a player toggle is not taking effect: "preset", "saver" or null.
+ * `key` is the settings key (enableBloom, floorTexture, ...).
+ */
+export function effectCapReason(settings, key) {
+  const k = key === "floorTexture" ? "enableFloorTexture" : key;
+  if (effectCeilings(settings)[k] !== false) return null;
+  const p = QUALITY_PRESETS[GRAPHICS_PRESETS[settings.graphicsPreset]];
+  return p && p[k] === false ? "preset" : "saver";
+}
+
+// Governor tiers by render scale. Stepping back up needs a margin above the
+// step-down point, so a scale hovering at a boundary cannot flicker effects.
+const TIER_DOWN = [0.6, 0.8];
+const TIER_UP = [0.65, 0.85];
+const TIER_PARTICLES = [0.3, 0.5, 1];
+const TIER_DRAW = [10, 14, 20];
 
 export class AdaptiveQuality {
   constructor(opts) {
@@ -79,10 +113,14 @@ export class AdaptiveQuality {
     this.lastAdjust = 0;
     this.lastResize = 0;
 
-    // Quality switches
+    // What the player and preset allow. The governor only scales within
+    // these; it never turns on something the player turned off.
+    this.caps = { particleMultiplier: 1, drawDistance: 20, enableVignette: true, enableFloorTexture: true };
+    this._tier = 2; // 0 low, 1 medium, 2 full
+
+    // Effective quality switches the renderer reads
     this.particleMultiplier = 1.0;
     this.drawDistance = 20;
-    this.enableScanlines = true;
     this.enableVignette = true;
     this.enableFloorTexture = true;
     // Post-FX ceilings set by the preset. The player's settings toggles still
@@ -160,26 +198,8 @@ export class AdaptiveQuality {
 
     this.renderScale = clamp(this.renderScale, this.minScale, this.maxScale);
 
-    // Update quality switches based on scale
-    if (this.renderScale < 0.6) {
-      this.enableScanlines = false;
-      this.enableVignette = false;
-      this.particleMultiplier = 0.3;
-      this.drawDistance = 10;
-      this.enableFloorTexture = false;
-    } else if (this.renderScale < 0.8) {
-      this.enableScanlines = false;
-      this.enableVignette = true;
-      this.particleMultiplier = 0.5;
-      this.drawDistance = 14;
-      this.enableFloorTexture = true;
-    } else {
-      this.enableScanlines = true;
-      this.enableVignette = true;
-      this.particleMultiplier = 1.0;
-      this.drawDistance = 20;
-      this.enableFloorTexture = true;
-    }
+    // Scale effects within what the player allowed; see _applyTier.
+    this._applyTier();
 
     // Resize when the target has drifted far enough from what the canvases
     // use. Comparing one step against the previous one meant 2% up-steps never
@@ -192,6 +212,37 @@ export class AdaptiveQuality {
     return true;
   }
 
+  /**
+   * Recompute the effective switches: the caps as-is for a fixed preset, or
+   * the caps scaled by the governor's tier in Auto. Particles multiply, draw
+   * distance takes the smaller, and an effect is only ever switched off here.
+   */
+  _applyTier() {
+    const c = this.caps;
+    let t = 2;
+    if (this.auto) {
+      const s = this.renderScale;
+      t = this._tier;
+      while (t > 0 && s < TIER_DOWN[t - 1]) t--;
+      while (t < 2 && s >= TIER_UP[t]) t++;
+      this._tier = t;
+    }
+    this.particleMultiplier = c.particleMultiplier * TIER_PARTICLES[t];
+    this.drawDistance = Math.min(c.drawDistance, TIER_DRAW[t]);
+    this.enableVignette = c.enableVignette && t >= 1;
+    this.enableFloorTexture = c.enableFloorTexture && t >= 1;
+  }
+
+  /** Set what the player and preset allow; unset keys keep their value. */
+  setCaps({ particleMultiplier, drawDistance, enableVignette, enableFloorTexture } = {}) {
+    const c = this.caps;
+    if (particleMultiplier != null) c.particleMultiplier = clamp(particleMultiplier, 0, 1);
+    if (drawDistance != null) c.drawDistance = drawDistance;
+    if (enableVignette != null) c.enableVignette = !!enableVignette;
+    if (enableFloorTexture != null) c.enableFloorTexture = !!enableFloorTexture;
+    this._applyTier();
+  }
+
   /** Apply a named preset directly. */
   applyPreset(name) {
     const p = QUALITY_PRESETS[name];
@@ -199,11 +250,7 @@ export class AdaptiveQuality {
     this.auto = false;
     this.renderScale = p.renderScale;
     this.stableScale = p.renderScale;
-    this.particleMultiplier = p.particleMultiplier;
-    this.drawDistance = p.drawDistance;
-    this.enableScanlines = p.enableScanlines;
-    this.enableVignette = p.enableVignette;
-    this.enableFloorTexture = p.enableFloorTexture;
+    this.setCaps(p);
     // Presets defined these but they were never copied, so "low" still paid
     // for bloom, chromatic aberration and film grain.
     this.enableBloom = p.enableBloom;
@@ -211,14 +258,10 @@ export class AdaptiveQuality {
     this.enableFilmGrain = p.enableFilmGrain;
   }
 
-  applyCustom({ renderScale, particleMultiplier, drawDistance, enableScanlines, enableVignette, enableFloorTexture }) {
+  applyCustom({ renderScale, ...caps }) {
     this.auto = false;
     if (renderScale != null) this.renderScale = this.stableScale = clamp(renderScale, this.minScale, this.maxScale);
-    if (particleMultiplier != null) this.particleMultiplier = clamp(particleMultiplier, 0, 1);
-    if (drawDistance != null) this.drawDistance = drawDistance;
-    if (enableScanlines != null) this.enableScanlines = !!enableScanlines;
-    if (enableVignette != null) this.enableVignette = !!enableVignette;
-    if (enableFloorTexture != null) this.enableFloorTexture = !!enableFloorTexture;
+    this.setCaps(caps);
   }
 
   useAuto() {
@@ -228,5 +271,18 @@ export class AdaptiveQuality {
     this.enableBloom = true;
     this.enableChromaticAberration = true;
     this.enableFilmGrain = true;
+    this._applyTier();
+  }
+
+  /**
+   * Jump to full resolution, e.g. on leaving Battery Saver or a low preset.
+   * Climbing back at 2% per step took most of a minute. The FPS window
+   * restarts so the governor judges the new scale on its own frames.
+   */
+  resetScale() {
+    this.renderScale = this.stableScale = this.maxScale;
+    this.history.length = 0;
+    this._tier = 2;
+    this._applyTier();
   }
 }

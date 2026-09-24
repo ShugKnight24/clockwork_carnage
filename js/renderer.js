@@ -194,6 +194,9 @@ export class Renderer {
       this.useWebGL = true;
       this._envMapGLVersion = -1;
       this._uploadFloorCeilToGL();
+      // A fresh context has no Modern deck: it was only uploaded when the env
+      // was rebuilt, so switching Render Mode fell back to the soft CPU floor.
+      if (this._modernEnv) this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);
       console.log('[Renderer] WebGL2 hybrid renderer active');
     } else if (renderMode === 2) {
       console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
@@ -246,6 +249,7 @@ export class Renderer {
     this._modernEnv = null;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
+    if (this.useWebGL) this._uploadFloorCeilToGL();
   }
 
   resize(w, h) {

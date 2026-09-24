@@ -690,7 +690,6 @@ export function createDebugBridge(game) {
         renderScale: game.quality.renderScale,
         particles: game.quality.particleMultiplier,
         drawDistance: game.quality.drawDistance,
-        scanlines: game.quality.enableScanlines,
         vignette: game.quality.enableVignette,
         floorTexture: game.quality.enableFloorTexture,
       };

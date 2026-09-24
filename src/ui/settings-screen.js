@@ -288,7 +288,7 @@ function drawEmptyCategory(ctx, layout) {
  * Footer band: what the highlighted setting does, then the key hints.
  * 47 settings with names like "Chromatic Aberration" are unreadable without it.
  */
-function drawFooter(ctx, w, h, layout, def, isTouchDevice, colors) {
+function drawFooter(ctx, w, h, layout, def, item, isTouchDevice, colors) {
   const { compact, footerH, panelX } = layout;
   const top = h - footerH;
   ctx.fillStyle = colors.bg;
@@ -300,12 +300,14 @@ function drawFooter(ctx, w, h, layout, def, isTouchDevice, colors) {
   ctx.lineTo(w, top + 0.5);
   ctx.stroke();
 
-  if (def?.desc) {
+  // A capped toggle explains what is holding it off.
+  const desc = item?.note ? `${def.desc} ${item.note}` : def?.desc;
+  if (desc) {
     ctx.fillStyle = colors.desc;
     ctx.font = colors.descFont(compact ? 11 : 13);
     ctx.textAlign = 'left';
     // maxWidth squeezes a long line (the controller status) rather than clip it.
-    ctx.fillText(def.desc, panelX + 14, top + (compact ? 14 : 20), w - panelX - 28);
+    ctx.fillText(desc, panelX + 14, top + (compact ? 14 : 20), w - panelX - 28);
   }
 
   ctx.fillStyle = colors.hint;
@@ -386,7 +388,7 @@ export function renderSettingsScreen(ctx, w, h, state) {
     drawScrollbar(ctx, layout, 'rgba(255,255,255,0.06)', 'rgba(0,220,200,0.5)');
   }
 
-  drawFooter(ctx, w, h, layout, defs[settingsSelection], isTouchDevice, {
+  drawFooter(ctx, w, h, layout, defs[settingsSelection], items[settingsSelection], isTouchDevice, {
     bg: 'rgba(3,8,14,0.92)',
     rule: 'rgba(0,255,200,0.18)',
     desc: '#8fb6c8',
@@ -608,7 +610,7 @@ function renderSettingsScreenModern(ctx, w, h, state) {
   ctx.restore();
   drawScrollbar(ctx, layout, 'rgba(130,160,188,0.12)', 'rgba(34,230,255,0.55)');
 
-  drawFooter(ctx, w, h, layout, defs[settingsSelection], isTouchDevice, {
+  drawFooter(ctx, w, h, layout, defs[settingsSelection], items[settingsSelection], isTouchDevice, {
     bg: 'rgba(8,13,20,0.94)',
     rule: 'rgba(34,230,255,0.22)',
     desc: '#9fb6c8',
