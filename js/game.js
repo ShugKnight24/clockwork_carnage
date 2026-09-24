@@ -863,6 +863,11 @@ export class Game {
   onSettingsDeckClose(returnTo) {
     this.saveSettings();
     this._settingsReturnToMenu = false;
+    // One open's return target and section never leak into the next, and a
+    // pad Y still held as the deck closes starts fresh next time.
+    this._settingsReturnTo = null;
+    this._settingsSection = null;
+    this._padCompareHeld = false;
     if (returnTo === "menu") {
       // main.js's loop restores the rest of the menu (canvases hidden,
       // continue buttons) on the state change, as the old Back did.
