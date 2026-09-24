@@ -307,3 +307,144 @@ test("Quick shows a controller card only with a pad connected; it calibrates", a
   await card.hover();
   await expect(deck(page).locator(".desc")).toContainText(await page.evaluate(() => window.ccDebug.game.gamepad.status.desc));
 });
+
+// ── The menu showcase (Task 6) ────────────────────────────────
+
+test("showcase from the menu never writes progress and restores the menu", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?debug");
+  await page.waitForFunction(() => window.ccDebug);
+  // Everything but the settings' own storage, which closing the deck saves.
+  const SETTINGS_KEYS = ["cc_settings", "cc_keybinds", "cc_padbinds"];
+  const snap = () => page.evaluate((skip) => Object.fromEntries(Object.keys(localStorage).filter((k) => !skip.includes(k)).map((k) => [k, localStorage.getItem(k)])), SETTINGS_KEYS);
+  await page.keyboard.press("Enter");
+  const before = await snap();
+  const fields = () => page.evaluate(() => {
+    const g = window.ccDebug.game;
+    return { map: g.map, mode: g.mode, entities: g.entities.length, player: g.player && { x: g.player.x, y: g.player.y, angle: g.player.angle, health: g.player.health } };
+  });
+  const gameBefore = await fields();
+  await page.evaluate(() => {
+    const g = window.ccDebug.game;
+    window.__calls = [];
+    for (const k of ["queueAriaMessage", "startTrack", "stopMusic", "saveCampaign", "saveArena"]) {
+      const host = typeof g[k] === "function" ? g : g.audio;
+      const orig = host[k];
+      host[k] = (...a) => { window.__calls.push(k); return orig?.apply(host, a); };
+    }
+  });
+  await page.locator("#btnSettings").click();
+  await page.waitForFunction(() => window.ccDebug.game.mode === "showcase");
+  await expect(page.locator("#gameCanvas")).toHaveCSS("opacity", "1");
+  expect(await page.evaluate(() => window.ccDebug.game.entities.filter((e) => e.type === "enemy").every((e) => e.state === "idle"))).toBe(true);
+  const hp = await page.evaluate(() => window.ccDebug.game.player.health);
+  const x0 = await page.evaluate(() => window.ccDebug.game.player.x);
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.ccDebug.game.player.x)).not.toBe(x0);
+  // AI and damage never run: the enemies stay idle and the player untouched.
+  expect(await page.evaluate(() => window.ccDebug.game.entities.filter((e) => e.type === "enemy").every((e) => e.state === "idle"))).toBe(true);
+  expect(await page.evaluate(() => window.ccDebug.game.player.health)).toBe(hp);
+  await page.keyboard.press("Escape");
+  expect(await state(page)).toBe("modeSelect");
+  expect(await fields()).toEqual(gameBefore);
+  expect(await page.evaluate(() => window.__calls)).toEqual([]);
+  expect(await snap()).toEqual(before);
+});
+
+test("Escape during the showcase load leaves the game as it was", async ({ page }) => {
+  await page.goto("/?debug");
+  await page.waitForFunction(() => window.ccDebug);
+  await page.keyboard.press("Enter");
+  const snap = () => page.evaluate(() => {
+    const g = window.ccDebug.game;
+    return { map: g.map?.name ?? null, mode: g.mode, entities: g.entities.length, player: g.player, palette: [g.renderer._actPalette, g.renderer._envLevel] };
+  });
+  const before = await snap();
+  // Count installs: the showcase applies its act palette only once installed.
+  await page.evaluate(() => {
+    const r = window.ccDebug.game.renderer;
+    const orig = r.applyActPalette.bind(r);
+    window.__palettes = 0;
+    r.applyActPalette = (...a) => { window.__palettes++; return orig(...a); };
+  });
+  // Escape straight after the click: the load takes several frames.
+  await page.locator("#btnSettings").click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+  expect(await state(page)).toBe("modeSelect");
+  expect(await snap()).toEqual(before);
+  expect(await page.evaluate(() => window.ccDebug.game._showcase)).toBeUndefined();
+  expect(await page.evaluate(() => window.__palettes)).toBe(0); // it never installed
+  await expect(page.locator("#modeSelect")).toBeVisible();
+});
+
+// Mean alpha-weighted brightness of a 24x16 grid of HUD blocks.
+const hudBlocks = (page) => page.evaluate(() => {
+  const c = window.ccDebug.game.hudCanvas;
+  const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  const out = [];
+  for (let by = 0; by < 16; by++) {
+    for (let bx = 0; bx < 24; bx++) {
+      let sum = 0, n = 0;
+      for (let y = Math.floor((by * c.height) / 16); y < Math.floor(((by + 1) * c.height) / 16); y += 2) {
+        for (let x = Math.floor((bx * c.width) / 24); x < Math.floor(((bx + 1) * c.width) / 24); x += 2) {
+          const i = (y * c.width + x) * 4;
+          sum += ((d[i] + d[i + 1] + d[i + 2]) / 3) * (d[i + 3] / 255);
+          n++;
+        }
+      }
+      out.push(sum / n);
+    }
+  }
+  return out;
+});
+const blockDiff = (a, b) => a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 3 ? 1 : 0), 0);
+
+test("the HUD shows behind the deck from pause, and HUD settings change it", async ({ page }) => {
+  await startPaused(page);
+  await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "pause" }));
+  await expect(deck(page)).toHaveAttribute("open", "");
+  await page.waitForTimeout(400);
+  const a = await hudBlocks(page);
+  expect(a.filter((v) => v > 1).length).toBeGreaterThan(20); // the match's HUD, not a cleared canvas
+  await page.waitForTimeout(300);
+  const noise = blockDiff(a, await hudBlocks(page));
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("showPortrait"));
+  const was = await setting(page, "showPortrait");
+  await page.keyboard.press("Enter");
+  expect(await setting(page, "showPortrait")).toBe(!was);
+  await page.waitForTimeout(300);
+  const changed = blockDiff(a, await hudBlocks(page));
+  expect(changed, `noise ${noise}`).toBeGreaterThan(Math.max(3, noise * 3));
+});
+
+test("the showcase draws a HUD with a fresh player's values", async ({ page }) => {
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.mode === "showcase");
+  await page.waitForTimeout(400);
+  expect((await hudBlocks(page)).filter((v) => v > 1).length).toBeGreaterThan(20);
+  expect(await page.evaluate(() => { const p = window.ccDebug.game.player; return [p.health, p.maxHealth, p.score, p.kills]; })).toEqual([100, 100, 0, 0]);
+});
+
+test("releasing a volume slider plays a sample on its bus", async ({ page }) => {
+  await openFromMenu(page);
+  await page.evaluate(() => {
+    const a = window.ccDebug.game.audio;
+    window.__samples = [];
+    for (const k of ["shootPistol", "musicSting", "speak"]) {
+      const orig = a[k];
+      a[k] = (...args) => { window.__samples.push(k); return orig.apply(a, args); };
+    }
+  });
+  await deck(page).locator('[role="tab"]', { hasText: "Audio" }).click();
+  const music = deck(page).locator('[role="slider"][data-key="musicVolume"]');
+  const box = await music.locator(".track").boundingBox();
+  await page.mouse.click(box.x + box.width * 0.3, box.y + box.height / 2);
+  expect(await page.evaluate(() => window.__samples)).toEqual(["musicSting"]);
+  // Keys: one sample once the nudges pause, not one per step.
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("voiceVolume"));
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__samples)).toEqual(["musicSting", "speak"]);
+});

@@ -29,6 +29,15 @@ const ART_DESC = [
   "Inked comic art with bold outlines and halftone.",
   "Realistic lighting, soft shadows and a film grade.",
 ];
+// Releasing a volume slider plays a sample on its bus.
+const VOLUME_SAMPLE = {
+  masterVolume: (a) => a.shootPistol(),
+  sfxVolume: (a) => a.shootPistol(),
+  musicVolume: (a) => a.musicSting(),
+  voiceVolume: (a) => a.speak("Systems nominal.", "aria", { channel: "comms" }),
+};
+// Keys and the d-pad have no release per step: sample once the nudges pause.
+const SAMPLE_AFTER_MS = 300;
 const RESET_DESC = "Put every setting in this section back to its default.";
 
 const ICON = {
@@ -424,6 +433,7 @@ class SettingsDeck extends HTMLElement {
 
   /** Put away without telling the game (it already left Settings). */
   hide() {
+    clearTimeout(this._sampleTimer);
     if (this.compareKey) this.compare(false);
     this.state = { ...this.state, confirm: null, compare: false };
     this.el.confirm.hidden = true;
@@ -474,6 +484,29 @@ class SettingsDeck extends HTMLElement {
     if (!active || active.classList.contains("row")) this.focusCurrent();
     else this.reveal(this.rowEls()[this.state.row]);
     this.revealTab();
+  }
+
+  /** The panel's size in CSS px (the live view's framing reads it). */
+  get panelWidth() {
+    return this.el.panel.offsetWidth;
+  }
+
+  get panelHeight() {
+    return this.el.panel.offsetHeight;
+  }
+
+  /** Play the sample for a volume row now, or once its nudges pause. */
+  sampleVolume(def, later = false) {
+    const play = VOLUME_SAMPLE[def?.key];
+    if (!play) return;
+    clearTimeout(this._sampleTimer);
+    const run = () => {
+      try {
+        if (this.game?.audio) play(this.game.audio);
+      } catch (_) {}
+    };
+    if (later) this._sampleTimer = setTimeout(run, SAMPLE_AFTER_MS);
+    else run();
   }
 
   sfx(name) {
@@ -529,6 +562,7 @@ class SettingsDeck extends HTMLElement {
       if (e.type === "pointerup" && !d.live && !d.moved) this.dragTo(e.clientX); // a tap sets the value too
       const def = this.current()?.def;
       if (def) this.announceValue(def);
+      if (def && e.type === "pointerup") this.sampleVolume(def);
     };
     rows.addEventListener("pointerup", end);
     rows.addEventListener("pointercancel", end);
@@ -652,6 +686,7 @@ class SettingsDeck extends HTMLElement {
   change(def, apply, speak = true) {
     const before = this.game.settings[def.key];
     if (!apply()) return false;
+    if (!this._drag) this.sampleVolume(def, true);
     if (!this.compareKey) this.previous[def.key] = before;
     this.refresh();
     if (speak) this.announceValue(def);

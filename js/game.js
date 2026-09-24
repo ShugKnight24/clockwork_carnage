@@ -113,6 +113,7 @@ import { drawPortrait as _drawPortrait } from "../src/ui/portrait.js";
 import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
 import { renderStatsCard } from "../src/ui/stats-card.js";
 import { renderHUD as _renderHUD } from "../src/ui/hud.js";
+import { startShowcase, stopShowcase, updateShowcase } from "../src/systems/showcase.js";
 import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaign-prompt.js";
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
@@ -858,9 +859,50 @@ export class Game {
     this._settingsReturnToMenu = returnTo === "menu";
     this.settingsSelection = 0;
     this.settingsScroll = 0;
+    if (returnTo === "menu") this._startShowcase();
+  }
+
+  /**
+   * From the menu there is no match to show behind the deck, so a showcase
+   * level loads instead. The canvases stay hidden while it builds (the
+   * environment bake and the camera path take a few frames), then fade in.
+   */
+  _startShowcase() {
+    const canvases = [this.canvas, this.hudCanvas];
+    for (const c of canvases) {
+      c.style.transition = "none";
+      c.style.opacity = "0";
+    }
+    // The menu's own low ambient under the scene (a no-op if it is already on).
+    this.audio.startAmbient?.("menu");
+    const campaignSave = this.getSaveInfo().find((s) => s.mode === "campaign") ?? null;
+    const run = startShowcase(this, { campaignSave });
+    const token = this._showcase;
+    run
+      .then(() => {
+        if (this._showcase !== token) return;
+        for (const c of canvases) {
+          c.style.transition = "opacity 300ms ease-out";
+          c.style.opacity = "1";
+        }
+      })
+      .catch((err) => {
+        console.warn("[settings] showcase failed to load", err);
+        this._stopShowcase();
+      });
+  }
+
+  /** Unload the showcase (if any) and put the canvases back as they were. */
+  _stopShowcase() {
+    stopShowcase(this);
+    for (const c of [this.canvas, this.hudCanvas]) {
+      c.style.transition = "";
+      c.style.opacity = "";
+    }
   }
 
   onSettingsDeckClose(returnTo) {
+    this._stopShowcase();
     this.saveSettings();
     this._settingsReturnToMenu = false;
     // One open's return target and section never leak into the next, and a
@@ -2004,6 +2046,10 @@ export class Game {
     // Fade transition tick (runs in any state)
     this._tickTransition(this.deltaTime);
 
+    // Every way out of Settings unloads the showcase, not only the deck's close
+    // (the canvas fallback screen and frame-error recovery set the state).
+    if (this._showcase && this.state !== GameState.SETTINGS) this._stopShowcase();
+
     if (this.state === GameState.CUTSCENE) {
       this.updateCutscene();
       return;
@@ -2024,6 +2070,15 @@ export class Game {
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
       this.hudEditor.update(this.deltaTime, mx, my, !!this.keys[this.keybinds.interact] || this.mouse.down);
+      return;
+    }
+    if (this.state === GameState.SETTINGS) {
+      // The menu's showcase camera; a paused match stays frozen.
+      const deck = this.settingsDeck;
+      const layout = deck?.isOpen ? deck.getAttribute("layout") : null;
+      const panelFrac = layout === "side" && this.hudW > 0 ? deck.panelWidth / this.hudW : 0;
+      const sheetFrac = layout === "sheet" && this.hudH > 0 ? deck.panelHeight / this.hudH : 0;
+      updateShowcase(this, this.deltaTime, { panelFrac, sheetFrac });
       return;
     }
     if (this.state !== GameState.PLAYING) return;

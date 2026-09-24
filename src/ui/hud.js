@@ -406,6 +406,17 @@ function _portraitState(game) {
 }
 
 /**
+ * The settings deck shows the HUD behind it so HUD settings change visibly:
+ * the paused match's own HUD, or the menu showcase's fresh player. Not over
+ * the Forge (its pause draws no FPS HUD) or a menu with nothing loaded yet.
+ */
+function hudBehindDeck(game) {
+  if (game.state !== "settings") return false;
+  if (game.mode === "showcase") return true;
+  return game._settingsReturnTo !== "menu" && game.pausedFromState !== "builder" && !!game.map?.grid;
+}
+
+/**
  * @param {object} game - Game instance (read-only access)
  */
 export function renderHUD(game) {
@@ -414,7 +425,7 @@ const w = game.hudW;
 const h = game.hudH;
 ctx.clearRect(0, 0, w, h);
 
-if (game.state !== "playing" && game.state !== "paused")
+if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
   return;
 
 _checkDirty(game);

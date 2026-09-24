@@ -534,7 +534,8 @@ export function renderFrame(game) {
   // Camera punch converts to vertical pixel offset (negative = kick upward)
   const punchPx = (p.cameraPunch || 0) * -h * 0.12;
   const stanceShift = (p.isSliding ? 40 : 28) * (p.crouchBlend || 0);
-  const yShift = stanceShift + punchPx;
+  // The menu showcase lifts its horizon above the settings bottom sheet.
+  const yShift = stanceShift + punchPx + Math.round((game.showcasePitch || 0) * h);
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
@@ -599,7 +600,8 @@ export function renderFrame(game) {
   }
 
   // Subtle atmospheric horizon gradient (per-act fog tint)
-  const _act = game.campaign?.act || 1;
+  // The menu's settings showcase shows an act without loading its campaign.
+  const _act = game.showcaseAct || game.campaign?.act || 1;
   if (game.map?.grid) {
     const horizonY = (h >> 1) + yShift;
     const bandH = 40;

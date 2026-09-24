@@ -909,6 +909,13 @@ export class AudioManager {
     });
   }
 
+  /** A short phrase on the music bus, so the Music Volume slider has something to preview. */
+  musicSting() {
+    [392, 523, 659].forEach((n, i) => {
+      setTimeout(() => this._playMusicTone(n, 0.3, "square", 0.25), i * 110);
+    });
+  }
+
   menuSelect() {
     this.playTone(600, 0.06, "square", 0.2);
   }

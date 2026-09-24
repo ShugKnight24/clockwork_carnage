@@ -106,7 +106,7 @@ export function renderWeather(ctx, w, h, game) {
   if (game.settings?.effectsQuality === 0) return;
   if ((game.quality?.particleMultiplier ?? 1) < 0.3) return;
 
-  const act = game.campaign?.act || 1;
+  const act = game.showcaseAct || game.campaign?.act || 1;
   const t = game.time || 0;       // ms
   const dt = game.deltaTime || 0; // seconds
 
