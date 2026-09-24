@@ -685,6 +685,23 @@ if (devToolsEnabled) {
     });
 }
 
+// GitHub Pages serves the source unbundled (~200 modules at boot), so a mode's
+// first dynamic import() would fetch its whole module graph mid-session — a
+// hitch on the first cutscene, Meltdown run or Forge visit that the local dev
+// server never shows. Once the title is idle, load them one after another so
+// those imports resolve from the module map. Module loading only: nothing runs
+// until the game asks for it. The Modern floor shader compiles here too.
+// Literal import() calls, so a bundler maps each to its chunk.
+const warmLazyModules = () =>
+  [
+    async () => isModernArt() && game.renderer?.glRenderer?.precompile?.(),
+    () => import("./cutscene.js"),
+    () => import("./meltdown.js"),
+    () => import("../src/rendering/voxel/voxel-renderer.js"),
+    () => import("./forge.js"),
+  ].reduce((chain, load) => chain.then(() => load().catch(() => {})), Promise.resolve());
+(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 3000)))(warmLazyModules, { timeout: 8000 });
+
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);
 if (touch) game.touchControls = touch;

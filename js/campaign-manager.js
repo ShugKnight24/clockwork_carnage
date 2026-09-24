@@ -209,6 +209,21 @@ export class CampaignManager {
     playIntroAndMaybeMemory();
   }
 
+  /**
+   * Bake the next level's environment while its briefing plays: an idle
+   * callback during the scenes, so the level's first frame is not a ~200 ms
+   * freeze. Harmless if the level starts first (the renderer bakes as before).
+   */
+  _prewarmLevel(actId, index) {
+    const r = this.game.renderer;
+    const act = getAct(actId);
+    const entry = act && getActLevel(actId, index);
+    if (!r?.prewarmEnv || !entry) return;
+    const run = () => r.prewarmEnv(act.palette, entry.env);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1500 });
+    else setTimeout(run, 300);
+  }
+
   loadLevel(index) {
     const g = this.game;
     this._clearLevelTimers();
@@ -380,6 +395,7 @@ export class CampaignManager {
 
     // The level's briefing, then the level.
     const entry = getActLevel(this.act, this.level);
+    this._prewarmLevel(this.act, this.level);
     this._playScenes(entry.briefing ?? [], () => {
       this.loadLevel(this.level);
       this.save();
@@ -409,6 +425,7 @@ export class CampaignManager {
         this.level = 0;
         g.player.health = g.player.maxHealth;
         g.player.ammo = Math.min(g.player.ammo + 50, 999);
+        this._prewarmLevel(next.id, 0);
         this._playScenes(next.intro, () => {
           this.loadLevel(0);
           this.save();

@@ -646,6 +646,15 @@ export class GLRenderer {
   }
 
   /**
+   * Compile the Modern floor program ahead of time (main.js, idle on the
+   * title). Compiling it in a level's first frame blocked ~200 ms waiting on
+   * the GPU process for the compile status.
+   */
+  precompile() {
+    this._ensureModernFloor();
+  }
+
+  /**
    * Compile the Modern floor program on first use so Legacy boots exactly as
    * before. Returns false if it can't compile (caller uses the Canvas2D path).
    */

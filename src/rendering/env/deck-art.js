@@ -203,5 +203,19 @@ export function buildDeckSet(act, brutal = false, pal, salt = 0) {
   const floor = paintFloor(act, brutal, pal, salt);
   const ceil = paintCeiling(act, brutal, pal, salt);
   const pixels = (canvas) => buildMips(canvas, 8).map((m) => m.getContext("2d").getImageData(0, 0, m.width, m.height).data);
-  return { floor, ceil, floorMips: pixels(floor), ceilMips: pixels(ceil) };
+  // The mip chains are pixel readbacks of GPU-backed canvases (~100 ms, up to
+  // 57 ms in one call, measured at a level load) and only the Canvas2D floor
+  // caster reads them. Build them on first use, so the WebGL path never pays.
+  let floorMips = null;
+  let ceilMips = null;
+  return {
+    floor,
+    ceil,
+    get floorMips() {
+      return (floorMips ??= pixels(floor));
+    },
+    get ceilMips() {
+      return (ceilMips ??= pixels(ceil));
+    },
+  };
 }

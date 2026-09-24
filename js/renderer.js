@@ -280,6 +280,24 @@ export class Renderer {
     this.glRenderer.uploadFloorCeilTextures(floorRGBA, ceilRGBA);
   }
 
+  /**
+   * Bake the Modern environment for a level that is about to start, so the
+   * ~200 ms bake lands while its briefing is on screen instead of in the
+   * level's first frame. _getModernEnv adopts it if the level matches.
+   */
+  prewarmEnv(act, level = null) {
+    if (!isModernArt()) return;
+    const a = act || 1;
+    const lv = level ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    const same = (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic;
+    if (same(this._modernEnv) || same(this._altModernEnv) || same(this._prewarmedEnv)) return;
+    const env = generateModernEnv(a, brutal, lv, { realistic });
+    env.realistic = realistic;
+    this._prewarmedEnv = env;
+  }
+
   /** Build (or reuse) the Modern environment bundle for the current act. */
   _getModernEnv() {
     const act = this._actPalette || 1;
@@ -299,11 +317,15 @@ export class Renderer {
       // both.
       const prev = this._modernEnv;
       const alt = this._altModernEnv;
+      const warm = this._prewarmedEnv;
+      this._prewarmedEnv = null;
       if (
         alt && alt.act === act && alt.level === level &&
         alt.brutal === brutal && alt.realistic === realistic
       ) {
         this._modernEnv = alt;
+      } else if (warm && warm.act === act && warm.level === level && warm.brutal === brutal && warm.realistic === realistic) {
+        this._modernEnv = warm;
       } else {
         this._modernEnv = generateModernEnv(act, brutal, level, { realistic });
         this._modernEnv.realistic = realistic;
