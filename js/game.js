@@ -732,7 +732,7 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
-      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
+      this.hudEditor.update(this.deltaTime, mx, my, !!this.keys[this.keybinds.interact] || this.mouse.down);
       return;
     }
     if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
@@ -2018,7 +2018,7 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
-      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
+      this.hudEditor.update(this.deltaTime, mx, my, !!this.keys[this.keybinds.interact] || this.mouse.down);
       return;
     }
     if (this.state !== GameState.PLAYING) return;

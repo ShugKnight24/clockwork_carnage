@@ -188,12 +188,15 @@ test("HUD editor returns into the deck, then Escape goes back to the opener", as
   await startPaused(page);
   await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "pause" }));
   await expect(deck(page)).toHaveAttribute("open", "");
-  // The editor's own update calls input.isDown, which InputManager lacks (a
-  // bug older than the deck); stub it so the editor runs long enough to leave.
-  await page.evaluate(() => { window.ccDebug.game.input.isDown ??= () => false; });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
   await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("editCustomHud"));
   await page.keyboard.press("Enter");
   expect(await state(page)).toBe("hudEditor");
+  // The editor keeps running (it used to throw every frame and drop to the menu).
+  await page.waitForTimeout(1500);
+  expect(await state(page)).toBe("hudEditor");
+  expect(errors).toEqual([]);
   await expect(deck(page)).not.toHaveAttribute("open", "");
   await page.keyboard.press("Escape");
   await expect(deck(page)).toHaveAttribute("open", "");
