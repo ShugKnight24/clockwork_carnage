@@ -39,8 +39,11 @@ export function planBind(table, action, input, remappable) {
 export function applyBind(table, action, input, swap = false) {
   const remappable = typeof input === "number" ? REMAPPABLE_PAD_ACTIONS : REMAPPABLE_KEY_ACTIONS;
   const previous = table[action];
-  const displaced = holders(table, action, input, remappable);
-  table[action] = input;
+  // A shared pair still on one button moves as one: rebinding only half of it
+  // would leave the other half behind for the displaced action to land on.
+  const group = [action, ...SHARED_PAD.flatMap((pair) => (pair.includes(action) ? pair.filter((a) => a !== action && table[a] === previous) : []))];
+  const displaced = holders(table, action, input, remappable).filter((a) => !group.includes(a));
+  for (const a of group) table[a] = input;
   if (swap) for (const a of displaced) table[a] = previous;
   return table;
 }

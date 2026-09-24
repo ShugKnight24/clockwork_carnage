@@ -132,4 +132,15 @@ describe("remap rules", () => {
     expect(Object.isFrozen(DEFAULT_GAMEPAD_ACTIONS)).toBe(true);
     expect(Object.isFrozen(GAMEPAD_ACTIONS)).toBe(false);
   });
+
+  it("moving one half of the RB pair moves both, so the displaced action never lands on a doubled RB", () => {
+    const t = { ...DEFAULT_GAMEPAD_ACTIONS };
+    applyBind(t, "chronoRewind", PAD.Y, true);
+    expect(t.chronoRewind).toBe(PAD.Y);
+    expect(t.weaponPrev).toBe(PAD.Y);
+    expect(t.weaponNext).toBe(PAD.RB);
+    const onRB = REMAPPABLE_PAD_ACTIONS.filter((a) => t[a] === PAD.RB);
+    expect(onRB).toEqual(["weaponNext"]);
+    expect(loadPadBinds(savePadBinds(t))).toEqual(JSON.parse(savePadBinds(t)));
+  });
 });
