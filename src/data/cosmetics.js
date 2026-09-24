@@ -78,6 +78,17 @@ export const HAIR_STYLES = [
   { id: "braid", name: "Side Braid", desc: "Tucked under the comm band", color: "#2a1710" },
   { id: "white", name: "White Shock", desc: "Temporal stress streak", color: "#d9e8ff" },
   { id: "none", name: "Clean Shave", desc: "Helmet-seal smooth", color: "#111111" },
+  // Appended, never inserted: saves store the index.
+  { id: "fade", name: "High Top Fade", desc: "Flat top, faded sides", color: "#16110e" },
+  // `brow` overrides the eyebrow colour for dyed cuts.
+  { id: "hawk", name: "Mohawk", desc: "Regulation it is not", color: "#b01e3c", brow: "#2a1a12" },
+  { id: "afro", name: "Afro", desc: "Full volume, helmet be damned", color: "#1e1410" },
+  { id: "topknot", name: "Top Knot", desc: "Tied up and out of the way", color: "#241712" },
+  { id: "slick", name: "Slicked Back", desc: "Briefing-room polish", color: "#101010" },
+  { id: "curtain", name: "Curtain Fringe", desc: "Middle part, soft fringe", color: "#c9a25a" },
+  { id: "long", name: "Long Loose", desc: "Shoulder length", color: "#3a2416" },
+  { id: "locs", name: "Locs", desc: "Shoulder-length locs", color: "#2b1a10" },
+  { id: "ponytail", name: "Ponytail", desc: "Pulled back tight", color: "#6b3a1c" },
 ];
 
 export const EYE_COLORS = [

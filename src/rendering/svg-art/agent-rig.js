@@ -300,14 +300,19 @@ function eyes(c) {
     const x = s * 3.1;
     const M = s > 0 ? mirror : (d) => d;
     return (
-      `<ellipse cx="${x}" cy="-81.9" rx="2.9" ry="1.8" fill="${shadow}" opacity=".35"/>` +
-      `<path d="${M("M-4.7,-81.6 Q-3.1,-82.8 -1.5,-81.6 Q-3.1,-80.7 -4.7,-81.6 Z")}" fill="#e2dad2"/>` +
-      `<circle cx="${f(x + 0.1)}" cy="-81.6" r=".78" fill="${c.eyes}"/>` +
-      `<circle cx="${f(x + 0.1)}" cy="-81.6" r=".34" fill="#050505"/>` +
-      `<circle cx="${f(x - 0.2)}" cy="-81.95" r=".17" fill="#fff"/>` +
-      `<path d="${M("M-4.9,-81.7 Q-3.1,-83.2 -1.3,-81.8 Q-3.1,-82.3 -4.9,-81.7 Z")}" fill="${mix(c.skin.color, shadow, 0.4)}"/>` +
-      line(M("M-4.9,-81.6 Q-3.1,-82.6 -1.3,-81.7"), "#1a100c", 0.45, 0.9) +
-      line(M("M-5.7,-83.9 C-4.5,-84.8 -2.6,-84.9 -1.2,-84.2"), mix(c.hair.id === "none" ? c.skin.shadow : c.hair.color, "#000000", 0.2), 0.85)
+      // Soft socket shade, kept small: a wide dark band read as goggles.
+      `<ellipse cx="${x}" cy="-82.3" rx="2.3" ry="1.2" fill="${shadow}" opacity=".16"/>` +
+      `<path d="${M("M-4.7,-81.6 Q-3.1,-83.3 -1.5,-81.7 Q-3.1,-80.3 -4.7,-81.6 Z")}" fill="#ece6de"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".95" fill="${c.eyes}"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".95" fill="none" stroke="${mix(c.eyes, "#000000", 0.55)}" stroke-width=".2"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".42" fill="#050505"/>` +
+      `<circle cx="${f(x - 0.25)}" cy="-82.05" r=".22" fill="#fff"/>` +
+      // Upper lid: a thin fold, so the eye reads open and alert, not sleepy.
+      `<path d="${M("M-4.9,-81.75 Q-3.1,-83.7 -1.3,-81.9 Q-3.1,-83.1 -4.9,-81.75 Z")}" fill="${mix(c.skin.color, shadow, 0.4)}"/>` +
+      line(M("M-4.9,-81.7 Q-3.1,-83.3 -1.3,-81.8"), "#1a100c", 0.5, 0.95) +
+      line(M("M-4.4,-80.95 Q-3.1,-80.35 -1.8,-80.95"), shadow, 0.25, 0.45) +
+      // Brow: tapered, arched, hair-coloured.
+      `<path d="${M("M-5.9,-83.7 C-4.8,-85 -2.8,-85.3 -1.1,-84.5 L-1.2,-84 C-2.8,-84.6 -4.6,-84.4 -5.7,-83.4 Z")}" fill="${mix(c.hair.brow || (c.hair.id === "none" ? c.skin.shadow : c.hair.color), "#000000", 0.2)}"/>`
     );
   };
   return eye(-1) + eye(1);
@@ -329,9 +334,13 @@ function face(c) {
     line("M-0.5,-80.6 L-0.4,-77.8", mix(c.skin.color, "#ffffff", 0.35), 0.45, 0.5) +
     `<ellipse cx=".5" cy="-76.1" rx="1.9" ry=".55" fill="${shadow}" opacity=".35"/>` +
     line("M-1.7,-76.7 C-1,-75.9 1,-75.9 1.7,-76.7", shadow, 0.45, 0.85) +
-    `<path d="M-2.3,-73.6 C-1,-74.2 1,-74.2 2.3,-73.6 C1,-73.3 -1,-73.3 -2.3,-73.6 Z" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
-    line("M-2.5,-73.5 C-1,-74.1 1,-74.1 2.5,-73.5", mix(shadow, "#000000", 0.4), 0.5, 0.9) +
-    line("M-1.2,-72.6 L1.2,-72.6", mix(c.skin.color, "#ffffff", 0.25), 0.4, 0.4) +
+    // Cheeks: a faint warm lift under each eye.
+    `<ellipse cx="-4.2" cy="-78.2" rx="1.7" ry="1" fill="${mix(c.skin.color, "#d0605a", 0.35)}" opacity=".22"/>` +
+    `<ellipse cx="4.2" cy="-78.2" rx="1.7" ry="1" fill="${mix(c.skin.color, "#d0605a", 0.35)}" opacity=".16"/>` +
+    // Mouth: a level, slightly lifted line (the old curve read as a frown).
+    `<path d="M-2.4,-74 C-1,-74.3 1,-74.3 2.4,-74 C1.2,-73.3 -1.2,-73.3 -2.4,-74 Z" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
+    line("M-2.6,-74.05 C-1.2,-73.55 1.2,-73.55 2.6,-74.05", mix(shadow, "#000000", 0.4), 0.5, 0.9) +
+    line("M-1.3,-72.75 C-0.5,-72.5 0.5,-72.5 1.3,-72.75", mix(c.skin.color, "#ffffff", 0.3), 0.4, 0.45) +
     (synthetic
       ? line("M-6.6,-79.6 L-4.4,-77.4 L-4.6,-74.4 M6.6,-79.6 L4.4,-77.4 L4.6,-74.4 M0,-91.4 L0,-87.8", "#3a424e", 0.4, 0.8)
       : "") +
@@ -355,9 +364,83 @@ function hair(c, under) {
         .map((x) => `<circle cx="${x}" cy="-86.4" r="1.6" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>`)
         .join("");
     if (id === "braid") return braid(c);
-    if (id === "buzz") return line("M-7,-84.6 L-6.9,-82 M7,-84.6 L6.9,-82", c.hair.color, 0.9, 0.7);
+    if (id === "buzz" || id === "fade" || id === "hawk" || id === "slick" || id === "topknot")
+      return line("M-7,-84.6 L-6.9,-82 M7,-84.6 L6.9,-82", c.hair.color, 0.9, 0.7);
+    if (id === "afro")
+      return [-6.4, -4, 4, 6.4]
+        .map((x) => `<circle cx="${x}" cy="${Math.abs(x) > 5 ? -85.4 : -86.8}" r="1.9" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>`)
+        .join("");
+    if (id === "curtain" || id === "long")
+      return shape("M-6.8,-87.6 L6.8,-87.6 L6.6,-85.4 C4.8,-85.6 2.6,-86.2 0.8,-87.2 L-0.8,-87.2 C-2.6,-86.2 -4.8,-85.6 -6.6,-85.4 Z", "url(#hair)", 0.6);
     return "";
   }
+  // Cap that follows the skull to a hairline: shared by the close cuts.
+  const cap = (top, line_, op = 1) =>
+    `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,${f(top)} 0,${f(top)} C4.4,${f(top)} 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,${f(line_ + 0.3)} 0,${f(line_)} C-4.4,${f(line_ + 0.3)} -6.8,-86.6 -7.4,-83.4 Z" fill="url(#hair)" opacity="${op}" stroke="${INK}" stroke-width=".5"/>`;
+  if (id === "fade")
+    return (
+      cap(-92.4, -88.4, 0.55) +
+      shape("M-6.2,-88 C-6.6,-91.6 -6.6,-94.2 -5.8,-95.6 C-3,-96.6 3,-96.6 5.8,-95.6 C6.6,-94.2 6.6,-91.6 6.2,-88 C3.8,-89 -3.8,-89 -6.2,-88 Z", "url(#hair)", 0.7) +
+      line("M-5,-95 C-2.4,-95.8 2.4,-95.8 5,-95", hl, 0.4, 0.5) +
+      line("M-3.6,-93.2 L-3.8,-90.2 M-1.2,-93.6 L-1.2,-90.6 M1.2,-93.6 L1.2,-90.6 M3.6,-93.2 L3.8,-90.2", lo, 0.3, 0.3)
+    );
+  if (id === "hawk")
+    return (
+      `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,-92.4 0,-92.4 C4.4,-92.4 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,-88.1 0,-88.4 C-4.4,-88.1 -6.8,-86.6 -7.4,-83.4 Z" fill="${lo}" opacity=".35"/>` +
+      shape("M-2.4,-88.4 C-3.2,-92 -3,-96 -1.6,-99 L-0.6,-97 L0,-101.4 L0.8,-97.2 L1.8,-99.4 C3,-96 3.2,-92 2.4,-88.4 C1.2,-89 -1.2,-89 -2.4,-88.4 Z", "url(#hair)", 0.7) +
+      line("M-0.9,-90 C-1.2,-93 -1,-95.6 -0.4,-97.6", hl, 0.4, 0.6)
+    );
+  if (id === "afro") {
+    let tex = "";
+    for (let i = 0; i < 14; i++) {
+      const a = Math.PI * (1.08 + (i / 13) * 0.84);
+      tex += `<circle cx="${f(Math.cos(a) * 9.4)}" cy="${f(-90.6 + Math.sin(a) * 7.6)}" r=".7" fill="${hl}" opacity=".35"/>`;
+    }
+    return (
+      shape("M-7.6,-82.6 C-11.8,-84 -12.6,-92.4 -9.2,-96.8 C-6,-100.8 6,-100.8 9.2,-96.8 C12.6,-92.4 11.8,-84 7.6,-82.6 C7,-86.6 4.4,-88.6 0,-88.8 C-4.4,-88.6 -7,-86.6 -7.6,-82.6 Z", "url(#hair)", 0.7) +
+      tex +
+      line("M-7.4,-96 C-4.6,-98.6 1.4,-99.4 5.6,-97.8", hl, 0.45, 0.4)
+    );
+  }
+  if (id === "topknot")
+    return (
+      cap(-92.8, -89, 1) +
+      line("M-5,-89.8 C-3,-91.8 -1,-92.2 0,-92.2 M1.6,-92 C3.6,-91.6 5.2,-90.4 5.8,-88.8", hl, 0.35, 0.55) +
+      `<circle cx="0" cy="-95.8" r="3.1" fill="url(#hair)" stroke="${INK}" stroke-width=".5"/>` +
+      line("M-1.8,-96.8 C-0.8,-97.8 0.8,-97.8 1.8,-96.8", hl, 0.35, 0.5) +
+      shape("M-1.6,-93.2 L1.6,-93.2 L1.4,-92.3 L-1.4,-92.3 Z", c.pal.primary, 0.4)
+    );
+  if (id === "slick")
+    return (
+      cap(-93, -89.6, 1) +
+      line("M-5.8,-88.8 C-4.8,-91.4 -2.6,-92.4 0,-92.6 M-3.4,-89.4 C-2.4,-91.4 -0.6,-92 1.6,-92.2 M0,-89.6 C1,-91.2 2.6,-91.8 4.4,-91.4", hl, 0.3, 0.5) +
+      line("M4.6,-89.6 C5.8,-89 6.6,-87.8 7,-86.6", lo, 0.35, 0.6)
+    );
+  if (id === "locs") {
+    let strands = "";
+    // Two locs frame each side of the face, hanging past the jaw.
+    for (const [x, len] of [[-8.3, 13], [-7.1, 10.5], [7.1, 10.5], [8.3, 13]]) {
+      const y1 = -86 + len;
+      const w = x < 0 ? -0.35 : 0.35;
+      strands += `<path d="M${f(x - 0.6)},-86 C${f(x - 0.6 + w)},${f(-86 + len * 0.5)} ${f(x - 0.5 - w)},${f(y1 - 1.5)} ${f(x - 0.4)},${f(y1)} C${f(x - 0.2)},${f(y1 + 0.7)} ${f(x + 0.2)},${f(y1 + 0.7)} ${f(x + 0.4)},${f(y1)} C${f(x + 0.5 - w)},${f(y1 - 1.5)} ${f(x + 0.6 + w)},${f(-86 + len * 0.5)} ${f(x + 0.6)},-86 Z" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+    }
+    return (
+      shape("M-7.8,-82.6 C-8.4,-90.4 -4.6,-93.8 0,-93.8 C4.6,-93.8 8.4,-90.4 7.8,-82.6 C6.6,-86.2 3.6,-87.8 0,-88 C-3.6,-87.8 -6.6,-86.2 -7.8,-82.6 Z", "url(#hair)", 0.6) +
+      line("M-5.6,-90.6 L-4.6,-88 M-2.8,-92.4 L-2.2,-88.2 M0,-93 L0,-88.2 M2.8,-92.4 L2.2,-88.2 M5.6,-90.6 L4.6,-88", lo, 0.35, 0.55) +
+      strands
+    );
+  }
+  if (id === "ponytail")
+    return (
+      cap(-93, -89.2, 1) +
+      line("M-5.6,-89.4 C-3.6,-91.6 0,-92.4 3.4,-91.8 M-2.6,-89.2 C-0.8,-91 2.2,-91.4 5.2,-90.4", hl, 0.3, 0.5)
+    );
+  if (id === "curtain" || id === "long")
+    return (
+      shape("M-7.7,-82.8 C-8.4,-90 -4.8,-93.8 0,-93.8 C4.8,-93.8 8.4,-90 7.7,-82.8 C7.2,-85.4 5.8,-87 3.2,-87.6 C1.8,-87.8 0.6,-88.8 0,-90.4 C-0.6,-88.8 -1.8,-87.8 -3.2,-87.6 C-5.8,-87 -7.2,-85.4 -7.7,-82.8 Z", "url(#hair)", 0.7) +
+      line("M-0.3,-90.2 C-0.8,-92 -0.8,-93 -0.4,-93.6", lo, 0.35, 0.7) +
+      line("M-6.4,-86.2 C-5.4,-89.6 -3.4,-91.8 -1.2,-92.6 M1.2,-92.6 C3.4,-91.8 5.4,-89.6 6.4,-86.2", hl, 0.35, 0.45)
+    );
   if (id === "none")
     return `<ellipse cx="-2.6" cy="-89.4" rx="3.6" ry="1.6" fill="#fff" opacity=".18"/>` + line("M-6.4,-88.6 C-4,-91.4 2,-91.8 5.6,-89.4", c.skin.shadow, 0.4, 0.3);
   if (id === "buzz")
@@ -394,6 +477,25 @@ function hair(c, under) {
     line("M-6.4,-88 C-4.6,-91.6 -1,-93 2.6,-92.6 M-3.8,-89.4 C-2.4,-91.4 0.6,-92.2 3.6,-91.6", hl, 0.45, 0.6) +
     line("M4.6,-88.4 C5.8,-89.2 6.8,-90.6 7,-91.4 M1,-88.2 C2.6,-89.6 3.6,-90.8 3.8,-92", lo, 0.45, 0.6);
   return id === "white" ? sweep + line("M-5,-89.8 C-3,-92.4 0,-93.2 3,-92.8", c.energy, 0.5, 0.75) : sweep;
+}
+
+/** Hair that falls behind the face: long cuts, locs and the ponytail. */
+function hairBack(c) {
+  const id = c.hair.id;
+  if (id === "long")
+    return shape("M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z", mix(c.hair.color, "#000000", 0.25), 0.7);
+  if (id === "locs") {
+    let out = "";
+    // Roots follow the skull's curve so no loc starts in mid-air.
+    for (let x = -8.4; x <= 8.5; x += 2.1) {
+      const y0 = -91 + (x / 8.4) ** 2 * 4;
+      out += `<path d="M${f(x - 0.9)},${f(y0)} C${f(x - 1.1)},-80 ${f(x - 0.7)},-74 ${f(x - 0.9)},-67.4 C${f(x - 0.6)},-66 ${f(x + 0.6)},-66 ${f(x + 0.9)},-67.4 C${f(x + 0.7)},-74 ${f(x + 1.1)},-80 ${f(x + 0.9)},${f(y0)} Z" fill="${mix(c.hair.color, "#000000", 0.25)}" stroke="${INK}" stroke-width=".35"/>`;
+    }
+    return out;
+  }
+  if (id === "ponytail")
+    return shape("M6.6,-90.6 C10.6,-90 11.4,-85.4 10.6,-80 C10,-75.4 10.8,-71.4 12,-68.4 C9.6,-69.4 8.2,-72.8 8,-77 C7.8,-81 8.4,-85.6 6.4,-88.2 Z", "url(#hair)", 0.6);
+  return "";
 }
 
 function braid(c) {
@@ -592,7 +694,7 @@ function head(c, peek) {
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
-    return { front: face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
+    return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
   }
   const shell = SHELLS[style] || SHELLS.standard;
   const ears = EARLESS_HELMETS.has(style)
@@ -626,7 +728,7 @@ function head(c, peek) {
         `<g fill="#9fb2c4"><circle cx="-8.4" cy="-74" r=".55"/><circle cx="8.4" cy="-74" r=".55"/><circle cx="-9.2" cy="-78.2" r=".55"/><circle cx="9.2" cy="-78.2" r=".55"/></g>`;
     }
     return {
-      front: liner + face(c) + hair(c, true) + shape(shell, "url(#steel)") + dome + extra + ears + visorUp.body,
+      front: hairBack(c) + liner + face(c) + hair(c, true) + shape(shell, "url(#steel)") + dome + extra + ears + visorUp.body,
       glow: earGlow + visorUp.glow + eyeGlow(c, 0.35),
     };
   }
@@ -1170,7 +1272,7 @@ const RIFLE_TF = `transform="translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})"
 // ---------------------------------------------------------------------------
 
 /** Canvas of the stage: fits both poses, crests and gear without jumping. */
-export const AGENT_VIEW = { full: [-74, -116, 148, 182], bust: [-30, -111, 60, 60], torso: [-42, -104, 84, 84], helm: [-21, -110, 42, 42] };
+export const AGENT_VIEW = { full: [-74, -116, 148, 182], bust: [-30, -111, 60, 60], torso: [-42, -104, 84, 84], helm: [-21, -110, 42, 42], face: [-19, -105, 38, 40] };
 
 /** Close crops on the body region each accessory slot occupies, for gear thumbnails. */
 export const GEAR_VIEW = {
@@ -1391,11 +1493,13 @@ export function scopeIds(markup, prefix) {
  * @param {object} character
  * `headOnly` draws just collar + head (option tiles), framed by AGENT_VIEW.helm.
  * `realistic` renders the Modern (realistic) look instead of the Comic one.
- * @param {{ pose?: "idle"|"hero"|"bust", lighting?: "showroom"|"flat", peek?: boolean, idPrefix?: string, className?: string, view?: number[], headOnly?: boolean, realistic?: boolean }} opts
+ * `px` is the [width, height] in CSS pixels the view will be drawn at; Modern
+ * sizes its lighting filters from it (default: the stage's full-body frame).
+ * @param {{ pose?: "idle"|"hero"|"bust", lighting?: "showroom"|"flat", peek?: boolean, idPrefix?: string, className?: string, view?: number[], headOnly?: boolean, realistic?: boolean, px?: number[] }} opts
  */
-export function buildAgentSvg(character, { pose = "idle", lighting = "showroom", peek = false, idPrefix = "", className = "", view, headOnly = false, realistic = false } = {}) {
+export function buildAgentSvg(character, { pose = "idle", lighting = "showroom", peek = false, idPrefix = "", className = "", view, headOnly = false, realistic = false, px } = {}) {
   const p = buildAgentParts(character, { pose: pose === "bust" ? "idle" : pose, peek });
-  if (realistic) return realAgentSvg(p, { pose, idPrefix, className, view, headOnly });
+  if (realistic) return realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px });
   if (headOnly) {
     const v = view || AGENT_VIEW.helm;
     return scopeIds(
@@ -1509,7 +1613,7 @@ function realOpts(c) {
   return { rims: [c.rim, RIM], desat: 0.4, keep: { ...badgeKeep, ...(MATTE.has(c.armor) ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
 }
 
-function realAgentSvg(p, { pose, idPrefix, className, view, headOnly }) {
+function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
   const c = p.look;
   const o = realOpts(c);
   const head = realizeMarkup(p.head, { ...o, desat: 0.15 });
@@ -1518,11 +1622,15 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly }) {
   // Filter blur and grain are sized in art units, so scale them to the frame:
   // the stage figure spans ~450px, option tiles ~64px.
   const v = view || (headOnly ? AGENT_VIEW.helm : pose === "bust" ? AGENT_VIEW.bust : AGENT_VIEW.full);
-  const u = v[2] / (v[2] >= 140 ? 450 : 64);
+  // A close-up drawn with the full-body `u` magnifies every blur and grain
+  // with the zoom, so a caller that knows its frame passes it in `px`.
+  const u = px ? Math.max(v[2] / px[0], v[3] / px[1]) : v[2] / (v[2] >= 140 ? 450 : 64);
   const pad = v[2] * 0.25;
   const box = [f(v[0] - pad), f(v[1] - pad), f(v[2] + pad * 2), f(v[3] + pad * 2)];
-  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true });
-  const headFx = p.eyesVisible ? "rcloth" : "rmat";
+  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true, smooth: px ? 4 : 1 });
+  // A visible face gets skin shading; the cloth filter's blur and weave
+  // smeared eyes and mouth into a grainy mask.
+  const headFx = p.eyesVisible ? "rskin" : "rmat";
   if (headOnly) {
     return scopeIds(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" aria-hidden="true"><defs>${fdefs}</defs>` +
@@ -1654,7 +1762,7 @@ export function buildCastModel(character, key, { realistic = false } = {}) {
   const box = [-86, -140, 208, 214];
   const o = realOpts(c);
   const R = (m) => realizeMarkup(m, o);
-  const headFx = p.eyesVisible ? "rcloth" : "rmat";
+  const headFx = p.eyesVisible ? "rskin" : "rmat";
   return {
     box,
     defs: realAgentDefs(c) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.26, seed: 5 }),

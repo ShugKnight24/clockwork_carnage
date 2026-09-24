@@ -118,11 +118,11 @@ const n2 = (v) => Math.round(v * 100) / 100;
 /**
  * Material filters sized to a model box. `u` is art units per on-screen pixel
  * (roughly), so blur radii and grain stay the same size on screen whatever the
- * model's scale. Ids: rmat (painted metal), rcloth (fabric), rsoft (a wide blur
+ * model's scale. Ids: rmat (painted metal), rcloth (fabric), rskin (faces), rsoft (a wide blur
  * for volumetric light), plus the gradients used by `volumetric` and
  * `contactShadow`.
  */
-export function realFilters(box, { u = 1, spec = 0.55, grime = 0.3, seed = 7, light = "#fff4e8", tint = "#c8d2dc", tight = false } = {}) {
+export function realFilters(box, { u = 1, spec = 0.55, grime = 0.3, seed = 7, light = "#fff4e8", tint = "#c8d2dc", tight = false, smooth = 1 } = {}) {
   const [x, y, w, h] = box;
   // `tight` fits each filter to the filtered element's own bounds, which keeps
   // live (inline, repainted) use cheap; bitmaps use the whole box.
@@ -132,9 +132,13 @@ export function realFilters(box, { u = 1, spec = 0.55, grime = 0.3, seed = 7, li
   const key = `<feDistantLight azimuth="225" elevation="52"/>`;
   // Height: blurred silhouette (rounded forms) + the paint's own luminance
   // (panel seams read as grooves, painted highlights as ridges).
+  // The luminance term is 8-bit: across a wide, dark gradient it steps every
+  // few pixels, and the lighting's normals turn each step into a ridge — the
+  // contour-line "wood grain" seen on large close-ups. `smooth` widens only
+  // that blur (in screen pixels) so the steps melt without softening edges.
   const height = (sa, sl, ka, kl) =>
     `<feColorMatrix in="SourceGraphic" type="luminanceToAlpha" result="lum"/>` +
-    `<feGaussianBlur in="lum" stdDeviation="${n2(sl * u)}" result="lumB"/>` +
+    `<feGaussianBlur in="lum" stdDeviation="${n2(sl * smooth * u)}" result="lumB"/>` +
     `<feGaussianBlur in="SourceAlpha" stdDeviation="${n2(sa * u)}" result="aB"/>` +
     `<feComposite in="aB" in2="lumB" operator="arithmetic" k2="${ka}" k3="${kl}" result="h"/>`;
   // Grime: low-frequency blotches (dirt in the recesses, worn paint) plus a
@@ -174,6 +178,16 @@ export function realFilters(box, { u = 1, spec = 0.55, grime = 0.3, seed = 7, li
     grain(0.07, grime * 0.6, seed + 3) +
     occ(0.5) +
     `<feMerge><feMergeNode in="ls"/><feMergeNode in="gi"/><feMergeNode in="occ"/></feMerge></filter>` +
+    // Skin: a rounded form lit by the same key, no grime, no weave and no
+    // source blur, so eyes, brows and lips stay as sharp as they were drawn.
+    `<filter id="rskin" ${R}>` +
+    `<feGaussianBlur in="SourceAlpha" stdDeviation="${n2(3 * u)}" result="aB"/>` +
+    `<feDiffuseLighting in="aB" surfaceScale="${n2(4 * u)}" diffuseConstant="1.18" lighting-color="${light}" result="dif">${key}</feDiffuseLighting>` +
+    `<feComposite in="SourceGraphic" in2="dif" operator="arithmetic" k1="1" k2=".12" result="lit"/>` +
+    `<feSpecularLighting in="aB" surfaceScale="${n2(4 * u)}" specularConstant=".32" specularExponent="18" lighting-color="${light}" result="sp">${key}</feSpecularLighting>` +
+    `<feComposite in="sp" in2="SourceAlpha" operator="in" result="spI"/>` +
+    `<feComposite in="lit" in2="spI" operator="arithmetic" k2="1" k3=".35" result="ls"/>` +
+    `<feComposite in="ls" in2="SourceAlpha" operator="in"/></filter>` +
     `<filter id="rsoft" ${R}><feGaussianBlur stdDeviation="${n2(9 * u)}"/></filter>` +
     `<filter id="rsoft2" ${R}><feGaussianBlur stdDeviation="${n2(2.2 * u)}"/></filter>` +
     `<radialGradient id="rcsA"><stop offset="0" stop-color="#000" stop-opacity=".62"/><stop offset=".55" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
