@@ -649,7 +649,10 @@ window.ccProfiler = () => game.profiler.getSnapshot();
 
 if (devToolsEnabled) {
   // Expose test runner on window for console access.
-  const testingRoot = `${location.origin}${import.meta.env?.BASE_URL ?? "/"}js/testing/`;
+  // Unbundled (GitHub Pages) has no import.meta.env; js/testing/ sits next to this module.
+  const testingRoot = import.meta.env?.BASE_URL
+    ? `${location.origin}${import.meta.env.BASE_URL}js/testing/`
+    : new URL("./testing/", import.meta.url).href;
   const debugPath = `${testingRoot}harness.js`;
   const bridgePath = `${testingRoot}debug-bridge.js`;
   const telemetryPath = `${testingRoot}telemetry.js`;
