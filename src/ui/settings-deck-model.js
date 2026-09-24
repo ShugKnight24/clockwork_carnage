@@ -32,9 +32,10 @@ export function deckKey(state, code, ctx) {
   if (s.confirm) {
     // A held R (or Enter) must not answer the prompt it just opened.
     if (ctx.repeat) return { state: s, effects };
-    if (code === "Enter" || code === "Space") effects.push({ type: s.confirm });
+    const yes = code === "Enter" || code === "Space";
+    if (yes) effects.push({ type: s.confirm });
     s.confirm = null;
-    effects.push({ type: "sound", name: "menuConfirm" });
+    effects.push({ type: "sound", name: yes ? "menuConfirm" : "menuSelect" });
     return { state: s, effects };
   }
 

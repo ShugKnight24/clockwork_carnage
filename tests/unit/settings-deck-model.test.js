@@ -92,6 +92,15 @@ describe("deck navigation", () => {
     expect(types(r)).not.toContain("step");
   });
 
+  it("cancelling the reset prompt does not reset or play the confirm sound", () => {
+    const open = press(createDeckState(), "KeyR").state;
+    const r = press(open, "Escape");
+    expect(types(r)).not.toContain("resetSection");
+    expect(types(r)).not.toContain("close");
+    expect(r.effects).not.toContainEqual({ type: "sound", name: "menuConfirm" });
+    expect(r.state.confirm).toBeNull();
+  });
+
   it("an empty section still closes on Escape", () => {
     expect(types(deckKey(createDeckState(), "Escape", ctx({ rows: [] })))).toContain("close");
   });
