@@ -271,9 +271,13 @@ export class TouchControls {
       this.startSettingsDrag(e.changedTouches[0]);
     }
 
-    // Cutscene: tap to advance, track hold start for skip
+    // Cutscene: tap the AUTO chip to toggle auto-play; elsewhere tap to
+    // advance, track hold start for skip
     if (g.state === "cutscene") {
-      if (e.changedTouches.length > 0) {
+      const t0 = e.changedTouches[0];
+      if (t0 && g.cutsceneAutoChipHit(t0.clientX, t0.clientY)) {
+        g.toggleCutsceneAuto();
+      } else if (e.changedTouches.length > 0) {
         this.cutsceneHoldTouch = e.changedTouches[0].identifier;
         this.cutsceneHoldStart = performance.now();
         g.advanceCutsceneFrame();

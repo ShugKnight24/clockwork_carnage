@@ -846,6 +846,7 @@ export function dispatchKeyPress(game, code, e) {
     if ((code === "Enter" || code === "Space") && !e?.repeat) {
       game.advanceCutsceneFrame();
     }
+    if (code === "KeyT" && !e?.repeat) game.toggleCutsceneAuto();
     if (code === "Escape") {
       const now = performance.now();
       if (now - game.lastEscTime < 200) return;

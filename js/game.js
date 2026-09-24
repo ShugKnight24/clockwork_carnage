@@ -706,9 +706,11 @@ export class Game {
 
   /** Handles all mousedown events with full game state context. */
   _inputMouseDown(e) {
-    // Cutscene: click to advance frame (manual advance)
+    // Cutscene: click the AUTO chip to toggle auto-play, anywhere else to
+    // advance a frame (manual advance)
     if (this.state === GameState.CUTSCENE && e.button === 0) {
-      this.advanceCutsceneFrame();
+      if (this.cutsceneAutoChipHit(e.clientX, e.clientY)) this.toggleCutsceneAuto();
+      else this.advanceCutsceneFrame();
       return;
     }
     // Settings
@@ -933,6 +935,8 @@ export class Game {
       if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
       if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
       if (gp.justPressed.weaponNext) this.handleKeyPress("KeyE");
+      // Y toggles cutscene auto-play.
+      if (this.state === GameState.CUTSCENE && gp.justPressed.chronoShift) this.toggleCutsceneAuto();
       // Showroom face buttons: X randomize, Y save & deploy.
       if (this.state === GameState.CHARACTER_CREATE && isModernArt()) {
         if (gp.justPressed.reload) this.handleKeyPress("GamepadX");
@@ -1649,6 +1653,8 @@ export class Game {
         // Cutscene text draws on the full-DPR HUD canvas so it stays crisp.
         getTextLayer: () => ({ ctx: this.hudCtx, canvas: this.hudCanvas }),
         getSettings: () => this.settings,
+        // Footer prompts follow the device in use (src/ui/input-glyphs.js).
+        getInput: () => this,
         getVoiceProfile: () => this.getVoiceProfile(),
         // A party frame that names nobody shows who is with you in this slot.
         getParty: () =>
@@ -1701,6 +1707,23 @@ export class Game {
 
   endCutscene() {
     this.cutsceneEngine?.end();
+  }
+
+  /** Flip cutscene auto-play (the AUTO chip, T, pad Y); it applies this frame. */
+  toggleCutsceneAuto() {
+    this.settings.cutsceneAutoAdvance = !this.settings.cutsceneAutoAdvance;
+    this.saveSettings();
+    this.audio.menuSelect();
+  }
+
+  /** Whether a client-space point lands on the cutscene's AUTO chip. */
+  cutsceneAutoChipHit(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!this.cutsceneEngine || !rect.width || !rect.height) return false;
+    return this.cutsceneEngine.autoChipHit(
+      (clientX - rect.left) / rect.width,
+      (clientY - rect.top) / rect.height,
+    );
   }
 
   // ── Fade Transition System ──────────────────────────────────────────

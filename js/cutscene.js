@@ -4,6 +4,8 @@ import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
 import { voiceKeyFor } from "../src/audio/voice.js";
 import { partyKey } from "../src/rendering/party.js";
+import { autoAdvanceAt, countWords, pageHoldMs } from "../src/systems/cutscene-pacing.js";
+import { activeDevice, drawPrompt, glyph } from "../src/ui/input-glyphs.js";
 import {
   CS_FONT,
   INK,
@@ -48,6 +50,20 @@ function legacyFrame(frame) {
 // the member set from the art key (src/rendering/party.js).
 const _partyFrames = new WeakMap();
 
+/**
+ * Footer prompt for a look ("legacy" or modern) at the bottom or top: text on
+ * touch, otherwise [action, label] pairs drawn as glyphs for the keyboard or
+ * pad in use (src/ui/input-glyphs.js: Enter/A continue, T/Y auto, Esc/B skip).
+ */
+function promptLabel(legacy, where, touch) {
+  if (touch) {
+    if (!legacy) return "TAP TO CONTINUE   ·   HOLD TO SKIP";
+    return where === "bottom" ? "Tap to continue  ·  Hold to skip" : "Tap: next  ·  Hold: skip";
+  }
+  if (!legacy) return [["advance", "CONTINUE"], ["auto", "AUTO"], ["skip", "SKIP"]];
+  return [["advance", where === "bottom" ? "continue" : "next"], ["auto", "auto"], ["skip", "skip"]];
+}
+
 // Flipbook cover: closed idle before it swings open on its own, then the swing.
 const FB_COVER_IDLE_MS = 1200;
 const FB_COVER_OPEN_MS = 1100;
@@ -60,6 +76,7 @@ export class CutsceneEngine {
     isTouchDevice,
     getPlayerName,
     getSettings,
+    getInput,
     getTextLayer,
     getVoiceProfile,
     getParty,
@@ -72,12 +89,16 @@ export class CutsceneEngine {
     this.isTouchDevice = isTouchDevice;
     this.getPlayerName = getPlayerName || (() => "Agent");
     this.getSettings = getSettings || (() => ({ cutsceneAutoAdvance: false }));
+    // The game, for which device's prompts to show (null: keyboard or touch).
+    this.getInput = getInput || (() => null);
     // Text is drawn on a device-pixel-ratio layer (the HUD canvas) so it stays
     // crisp while the art canvas runs at the adaptive render scale.
     // getTextLayer() → { ctx, canvas } | null; defaults to #hudCanvas.
     this.getTextLayer = getTextLayer || null;
     this._tl = null;
     this._textLayouts = new WeakMap();
+    this._wordCounts = new WeakMap();
+    this._autoChip = null; // AUTO chip box, fractions of the canvas
     this.cutscene = null;
     // Lazy-loaded image cache for flipbook panels (panel.image: "url"). Images
     // are async — drawn only after .complete is true; until then the panel
@@ -118,6 +139,12 @@ export class CutsceneEngine {
       particles: [],
       skipHeldStart: 0,
       spoken: 0,
+      // Auto-play: the hold counts from no earlier than autoFrom (ms into
+      // the frame); autoFromT/autoAtT are the countdown for the chip bar.
+      autoWas: !!this.getSettings().cutsceneAutoAdvance,
+      autoFrom: 0,
+      autoFromT: 0,
+      autoAtT: 0,
     };
     return true;
   }
@@ -152,6 +179,8 @@ export class CutsceneEngine {
       // enough back that all text is visible.
       cs.frameStart = performance.now() - 60000;
       cs.readyToAdvance = true;
+      // An auto-play hold counts from the reveal, not from the shifted start.
+      cs.autoFrom = 60000;
       // The text jumped to the end; the voice goes quiet rather than racing.
       cs.spoken = frame?.lines?.length ?? 0;
       this.audio.stopSpeech?.("cutscene");
@@ -165,6 +194,7 @@ export class CutsceneEngine {
     this.audio.stopSpeech?.("cutscene");
     cs.particles = [];
     cs.readyToAdvance = false;
+    cs.autoFrom = 0;
     cs.fbPhase = null;
     this.audio.menuSelect();
     if (cs.frame >= cs.script.length) {
@@ -200,8 +230,11 @@ export class CutsceneEngine {
     cs.fbFlipStart = 0;
   }
 
-  /** Advance the flipbook clock: cover idle → swing → page holds → flips. */
-  _stepFlipbook(cs, fb, now) {
+  /**
+   * Advance the flipbook clock: cover idle → swing → page holds → flips.
+   * Under auto-play a captioned page holds long enough to read.
+   */
+  _stepFlipbook(cs, fb, now, auto = false) {
     this._flipbookState(cs, fb);
     if (cs.fbPhase === "cover") {
       if (!cs.fbOpenStart && now - cs.fbCoverStart >= FB_COVER_IDLE_MS) {
@@ -219,10 +252,43 @@ export class CutsceneEngine {
       }
     } else if (
       cs.fbPage < fb.pages.length - 1 &&
-      now - cs.fbPageStart >= (pg.hold ?? 1400)
+      now - (auto ? this._pageClockStart(cs) : cs.fbPageStart) >=
+        (auto ? pageHoldMs(pg) : (pg.hold ?? 1400))
     ) {
       cs.fbFlipStart = now;
     }
+  }
+
+  /** A page's auto-play hold counts from when it settled or AUTO came on. */
+  _pageClockStart(cs) {
+    return Math.max(cs.fbPageStart, cs.frameStart + cs.autoFrom);
+  }
+
+  /** Set the auto-play countdown, in ms since the frame started. */
+  _autoClock(cs, from, at) {
+    cs.autoFromT = cs.frameStart + from;
+    cs.autoAtT = cs.frameStart + at;
+  }
+
+  /** Auto-play countdown 0..1 toward the next advance, or null when none runs. */
+  autoProgress(now = performance.now()) {
+    const cs = this.cutscene;
+    if (!cs?.autoAtT) return null;
+    const span = cs.autoAtT - cs.autoFromT;
+    return span > 0 ? Math.min(1, Math.max(0, (now - cs.autoFromT) / span)) : 1;
+  }
+
+  /** Words to read on a frame (lines, or comic-page captions), cached. */
+  _frameWords(frame) {
+    const name = this.getPlayerName();
+    const hit = this._wordCounts.get(frame);
+    if (hit?.name === name) return hit.words;
+    const text = frame.lines
+      ? frame.lines.map((l) => this._resolve(l.text))
+      : (frame.panels || []).map((p) => this._resolve(p.caption));
+    const words = countWords(text);
+    this._wordCounts.set(frame, { name, words });
+    return words;
   }
 
   end() {
@@ -255,7 +321,13 @@ export class CutsceneEngine {
       cs.skipHeldStart = 0;
     }
 
-    // Auto-advance is optional (default: manual advance via Enter/click)
+    // Auto-play is optional (default: manual advance via Enter/click). The
+    // AUTO chip, T or pad Y flip it mid-scene; switching it on starts this
+    // frame's hold from now rather than jumping a frame read long ago.
+    const auto = !!this.getSettings().cutsceneAutoAdvance;
+    if (auto && !cs.autoWas) cs.autoFrom = elapsed;
+    cs.autoWas = auto;
+    cs.autoAtT = 0;
     // Mark frame as "ready" once all text has finished typing (or duration elapsed).
     const charsPerSec = 18; // 30% slower than original 25 for better readability
 
@@ -265,15 +337,20 @@ export class CutsceneEngine {
       const lastLine = frame.lines[frame.lines.length - 1];
       const lastDelay = lastLine ? lastLine.delay : 0;
       const resolvedLen = lastLine
-        ? (lastLine.text || "").replace(/\{AGENT\}/g, this.getPlayerName()).length
+        ? this._resolve(lastLine.text).length
         : 0;
       const typingDoneAt = lastDelay + (resolvedLen / charsPerSec) * 1000;
       cs.readyToAdvance = elapsed >= typingDoneAt + 300; // 300ms grace after typing
 
-      // Auto-advance if enabled in settings
-      if (this.getSettings().cutsceneAutoAdvance && cs.readyToAdvance) {
-        const autoAdvanceDelay = 1500; // 1.5s after text finishes
-        if (elapsed >= typingDoneAt + autoAdvanceDelay) {
+      if (auto) {
+        const at = autoAdvanceAt({
+          textDoneAt: typingDoneAt,
+          words: this._frameWords(frame),
+          duration: frame.duration,
+          autoFrom: cs.autoFrom,
+        });
+        this._autoClock(cs, Math.max(typingDoneAt, cs.autoFrom), at);
+        if (elapsed >= at) {
           this.advance();
           return;
         }
@@ -283,20 +360,20 @@ export class CutsceneEngine {
       // last page has settled.
       const fb = frame.flipbook;
       const now = performance.now();
-      this._stepFlipbook(cs, fb, now);
+      this._stepFlipbook(cs, fb, now, auto);
       const onLast =
         cs.fbPhase === "pages" &&
         cs.fbPage === fb.pages.length - 1 &&
         !cs.fbFlipStart;
       cs.readyToAdvance = onLast;
-      // requireAction books wait on the last page for press/click/tap.
-      if (
-        onLast &&
-        !fb.requireAction &&
-        this.getSettings().cutsceneAutoAdvance &&
-        now - cs.fbPageStart >= (fb.pages[cs.fbPage].hold ?? 1400) + 400
-      ) {
-        this.advance();
+      // The page clock: settled pages count down to their flip; the settled
+      // last page to the end, unless the book waits for a press
+      // (requireAction books wait on the last page for press/click/tap).
+      if (auto && cs.fbPhase === "pages" && !cs.fbFlipStart && (!onLast || !fb.requireAction)) {
+        const from = this._pageClockStart(cs);
+        cs.autoFromT = from;
+        cs.autoAtT = from + pageHoldMs(fb.pages[cs.fbPage]);
+        if (onLast && now >= cs.autoAtT) this.advance();
       }
       return;
     } else {
@@ -304,10 +381,20 @@ export class CutsceneEngine {
       const minDisplay = Math.min(frame.duration || 2000, 2000);
       cs.readyToAdvance = elapsed >= minDisplay;
 
-      // Auto-advance if enabled
-      if (this.getSettings().cutsceneAutoAdvance && cs.readyToAdvance) {
-        this.advance();
-        return;
+      if (auto) {
+        // Comic pages read their captions once the last panel has slammed in.
+        const textDoneAt = frame.panels?.length ? (frame.panels.length - 1) * 800 + 350 : 0;
+        const at = autoAdvanceAt({
+          textDoneAt,
+          words: this._frameWords(frame),
+          duration: frame.duration,
+          autoFrom: cs.autoFrom,
+        });
+        this._autoClock(cs, Math.max(textDoneAt, cs.autoFrom), at);
+        if (elapsed >= at) {
+          this.advance();
+          return;
+        }
       }
     }
 
@@ -488,7 +575,22 @@ export class CutsceneEngine {
   }
 
   _resolve(text) {
-    return String(text ?? "").replace(/\{AGENT\}/g, this.getPlayerName());
+    const out = String(text ?? "").replace(/\{AGENT\}/g, this.getPlayerName());
+    return out.includes("{") ? out.replace(/\{(ADVANCE|SKIP)\}/g, (_, k) => this._promptWord(k)) : out;
+  }
+
+  /** What resolved text depends on, for the layout caches: the name and the device's prompts. */
+  _textKey() {
+    const input = this.getInput();
+    return input ? `${this.getPlayerName()}|${activeDevice(input)}|${input._inputFamily}` : this.getPlayerName();
+  }
+
+  /** {ADVANCE} / {SKIP} in script text: the key or button for the device in use. */
+  _promptWord(k) {
+    const input = this.getInput();
+    const device = input ? activeDevice(input) : this.isTouchDevice ? "touch" : "keyboard";
+    if (device === "touch") return k === "ADVANCE" ? "Tap" : "hold";
+    return `${k === "ADVANCE" ? "Press " : ""}${glyph(input, k === "ADVANCE" ? "advance" : "skip", device).text}`;
   }
 
   render(ctx, w, h) {
@@ -738,7 +840,7 @@ export class CutsceneEngine {
   // ── Lines frames: Legacy (terminal typewriter) ──────────────────
   /** Cached per frame/size/name: wrapped rows and baselines, measured once. */
   _legacyLayout(g, frame, w, h, s) {
-    const key = `L|${w}|${h}|${s}|${this.getPlayerName()}`;
+    const key = `L|${w}|${h}|${s}|${this._textKey()}`;
     const hit = this._textLayouts.get(frame);
     if (hit?.key === key) return hit;
     const maxW = w * 0.86;
@@ -1070,7 +1172,7 @@ export class CutsceneEngine {
   }
 
   _comicLayout(g, frame, w, h) {
-    const key = `C|${w}|${h}|${this.getPlayerName()}`;
+    const key = `C|${w}|${h}|${this._textKey()}`;
     const hit = this._textLayouts.get(frame);
     if (hit?.key === key) return hit;
     const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
@@ -1296,7 +1398,7 @@ export class CutsceneEngine {
   }
 
   _cineLayout(g, frame, w, h) {
-    const key = `M|${w}|${h}|${this.getPlayerName()}`;
+    const key = `M|${w}|${h}|${this._textKey()}`;
     const hit = this._textLayouts.get(frame);
     if (hit?.key === key) return hit;
     const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
@@ -1440,13 +1542,15 @@ export class CutsceneEngine {
 
   // ── Continue / skip prompt ──────────────────────────────────────
   /**
-   * Bottom-right prompt (lines frames) or top-right (comic pages), plus the
+   * Bottom-right prompt (lines frames, flipbooks) or top-right (comic
+   * pages): the AUTO chip at the edge, the key prompt beside it, plus the
    * hold-to-skip bar. Wording follows the input device.
    */
   _drawSkipPrompt(ctx, w, h, cy, s, elapsed, where) {
     const cs = this.cutscene;
     const look = this._look();
-    const touch = this.isTouchDevice;
+    const input = this.getInput();
+    const touch = input ? activeDevice(input) === "touch" : this.isTouchDevice;
     const right = w - Math.round(Math.max(16, 20 * s));
     let barY;
     ctx.save();
@@ -1455,26 +1559,23 @@ export class CutsceneEngine {
     g.save();
     g.textAlign = "right";
     g.textBaseline = "middle";
+    const px = look === "legacy" ? Math.max(10, Math.round(12 * s)) : Math.max(10, Math.round(h * 0.017));
+    const chipX = this._drawAutoChip(g, look, right, cy, px, w, h);
+    const labelRight = chipX - Math.round(px * 1.1);
     if (look === "legacy") {
       const ready = cs.readyToAdvance && where === "bottom";
       const a = ready ? 0.6 + 0.35 * Math.sin(elapsed / 300) : 0.3 + 0.15 * Math.sin(elapsed / 500);
-      g.fillStyle = ready ? `rgba(0,255,204,${a})` : `rgba(255,255,255,${Math.max(a, where === "top" ? 0.4 : 0)})`;
-      g.font = `${Math.max(10, Math.round(12 * s))}px monospace`;
-      const label = where === "bottom"
-        ? (touch ? "Tap to continue  ·  Hold to skip" : "[ENTER] continue  ·  [ESC] skip")
-        : (touch ? "Tap: next  ·  Hold: skip" : "[ENTER] next  ·  [ESC] skip");
-      g.fillText(label, right, cy);
+      const alpha = ready ? a : Math.max(a, where === "top" ? 0.4 : 0);
+      const color = ready ? "#00ffcc" : "#ffffff";
+      g.font = `${px}px monospace`;
+      this._drawPromptLine(g, promptLabel(true, where, touch), labelRight, cy, px, color, alpha, "legacy", input);
     } else {
-      const px = Math.max(10, Math.round(h * 0.017));
       const ready = cs.readyToAdvance;
       const a = ready ? 0.78 + 0.18 * Math.sin(elapsed / 320) : 0.55;
       g.font = csFont("caps", px, 700);
       setTracking(g, px * 0.14);
-      g.fillStyle = look === "comic" ? `rgba(255,241,184,${a})` : `rgba(244,241,234,${a})`;
-      const label = touch
-        ? "TAP TO CONTINUE   ·   HOLD TO SKIP"
-        : "ENTER  CONTINUE   ·   ESC  SKIP";
-      g.fillText(label, right, cy);
+      const color = look === "comic" ? "#fff1b8" : "#f4f1ea";
+      this._drawPromptLine(g, promptLabel(false, where, touch), labelRight, cy, px, color, a, "modern", input);
       setTracking(g, 0);
     }
     g.restore();
@@ -1500,13 +1601,119 @@ export class CutsceneEngine {
         ? `${Math.max(9, Math.round(10 * s))}px monospace`
         : csFont("caps", Math.max(9, Math.round(h * 0.014)), 700);
       g2.fillText(
-        touch ? "Hold to skip all..." : "Hold SPACE to skip all...",
+        touch ? "Hold to skip all..." : `Hold ${glyph(input, "skipAll", "keyboard").text} to skip all...`,
         right,
         where === "bottom" ? barY - 4 : barY + skipBarH + 4,
       );
       g2.restore();
       ctx.restore();
     }
+  }
+
+  /**
+   * One prompt row right-aligned at `right`: plain text (touch) or glyph +
+   * label pairs for the keyboard or pad in use. `g.font` is the label font.
+   */
+  _drawPromptLine(g, prompt, right, cy, px, color, alpha, look, input) {
+    g.save();
+    if (typeof prompt === "string") {
+      g.globalAlpha *= alpha;
+      g.fillStyle = color;
+      g.fillText(prompt, right, cy);
+    } else {
+      drawPrompt(g, right, cy, prompt, {
+        input, size: Math.max(9, Math.round(px * 0.9)), font: g.font, color, align: "right",
+        gap: Math.round(px * 1.6), look, device: input ? undefined : "keyboard", alpha,
+      });
+    }
+    g.restore();
+  }
+
+  /**
+   * The AUTO chip, right-aligned at `right` on the prompt row: filled with
+   * a play mark when auto-play is on, outlined with a pause mark when off.
+   * While a countdown runs a thin bar under it fills toward the next
+   * advance. Its box is kept as fractions of the art canvas for clicks and
+   * taps (autoChipHit). Returns the chip's left edge.
+   */
+  _drawAutoChip(g, look, right, cy, px, w, h) {
+    const on = !!this.getSettings().cutsceneAutoAdvance;
+    const legacy = look === "legacy";
+    g.save();
+    g.font = legacy ? `bold ${px}px monospace` : csFont("caps", px, 700);
+    setTracking(g, legacy ? 0 : px * 0.14);
+    const textW = g.measureText("AUTO").width;
+    const icon = px * 0.62;
+    const padX = px * 0.6;
+    const cw = Math.round(padX * 2 + textW + px * 0.45 + icon);
+    const ch = Math.round(px * 1.7);
+    const x = right - cw;
+    const y = Math.round(cy - ch / 2);
+    const accent = legacy ? "#00ffcc" : look === "comic" ? PAPER_CAPTION : SUB_TEXT;
+    const r = legacy ? 2 : ch / 2;
+
+    g.beginPath();
+    g.roundRect(x, y, cw, ch, r);
+    if (on) {
+      g.fillStyle = accent;
+      g.fill();
+    } else {
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.fill();
+      g.lineWidth = Math.max(1, px * 0.1);
+      g.strokeStyle = legacy ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.4)";
+      g.stroke();
+    }
+    const ink = on ? (legacy ? "#00261e" : INK) : "rgba(255,255,255,0.6)";
+    g.fillStyle = ink;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillText("AUTO", x + padX, cy + (legacy ? 0 : px * 0.04));
+    setTracking(g, 0);
+
+    // Play ▶ when on, pause ❚❚ when off: drawn, so no font needs the glyphs.
+    const ix = x + cw - padX - icon;
+    const iy = cy - icon / 2;
+    g.beginPath();
+    if (on) {
+      g.moveTo(ix, iy);
+      g.lineTo(ix + icon, cy);
+      g.lineTo(ix, iy + icon);
+      g.closePath();
+    } else {
+      const bw = icon * 0.34;
+      g.rect(ix + icon * 0.05, iy, bw, icon);
+      g.rect(ix + icon * 0.95 - bw, iy, bw, icon);
+    }
+    g.fill();
+
+    const p = on ? this.autoProgress() : null;
+    if (p !== null) {
+      const bh = Math.max(2, Math.round(px * 0.2));
+      const by = y + ch + Math.max(2, Math.round(px * 0.25));
+      g.fillStyle = "rgba(255,255,255,0.18)";
+      g.fillRect(x, by, cw, bh);
+      g.fillStyle = accent;
+      g.fillRect(x, by, cw * p, bh);
+    }
+    g.restore();
+
+    // Generous hit box: finger-sized on touch.
+    const pad = px * (this.isTouchDevice ? 0.9 : 0.4);
+    this._autoChip = {
+      x: (x - pad) / w,
+      y: (y - pad) / h,
+      w: (cw + pad * 2) / w,
+      h: (ch + pad * 2) / h,
+    };
+    return x;
+  }
+
+  /** Whether a point, as fractions (0..1) of the canvas box, is on the AUTO chip. */
+  autoChipHit(fx, fy) {
+    const c = this._autoChip;
+    if (!this.cutscene || !c) return false;
+    return fx >= c.x && fx <= c.x + c.w && fy >= c.y && fy <= c.y + c.h;
   }
 
   // ── Panel / page lettering (flipbook pages + comic panels) ──────
@@ -1517,7 +1724,7 @@ export class CutsceneEngine {
   _panelCaptionLayout(g, panel, pw, ph, mode) {
     const look = this._look();
     const sh = this._screenH || ph;
-    const key = `${look}|${mode}|${Math.round(pw)}|${Math.round(ph)}|${sh}|${this.getPlayerName()}`;
+    const key = `${look}|${mode}|${Math.round(pw)}|${Math.round(ph)}|${sh}|${this._textKey()}`;
     const hit = this._textLayouts.get(panel);
     if (hit?.key === key) return hit;
     const text = this._resolve(panel.caption);
@@ -1799,7 +2006,10 @@ export class CutsceneEngine {
     const look = this._look();
     const pulse = 0.65 + 0.35 * Math.sin(t * 5);
     let prompt = panel.prompt.replace(/\x1b/g, "");
-    if (this.isTouchDevice) prompt = prompt.replace(/PRESS SPACE\s*\/\s*CLICK/i, "TAP");
+    const input = this.getInput();
+    const device = input ? activeDevice(input) : this.isTouchDevice ? "touch" : "keyboard";
+    if (device === "touch") prompt = prompt.replace(/PRESS SPACE\s*\/\s*CLICK/i, "TAP");
+    else if (device === "gamepad") prompt = prompt.replace(/SPACE\s*\/\s*CLICK/i, glyph(input, "advance").text);
     const py2 = ph * (panel.promptY ?? 0.78);
     const color = panel.promptColor || "#00ffcc";
     const k = this._k();
@@ -2001,6 +2211,9 @@ export class CutsceneEngine {
     if (cs.fbPhase === "pages") {
       this._drawPageCounter(ctx, `${cs.fbPage + 1} / ${fb.pages.length}`, px + pw - Math.max(8, 10 * s), py + ph - Math.max(8, 10 * s), s);
     }
+
+    // Footer under the book: AUTO chip + prompt.
+    this._drawSkipPrompt(ctx, w, h, (py + ph + h) / 2, s, elapsed, "bottom");
   }
 
   /** Page binding shadow along the spine edge. */
