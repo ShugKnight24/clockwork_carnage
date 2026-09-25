@@ -56,9 +56,6 @@ import {
   upgradeLayout,
   tutorialMenuLayout,
   isCompactPhone,
-  settingsLayout,
-  settingsCategoryRects,
-  resolveSettingsHit,
 } from "./layout.js";
 import { styleName, spawnFromMeta, standableNear, fallbackEnemyArea } from "../src/systems/voxel-glue.js";
 import { World } from "../src/world/world.js";
@@ -123,12 +120,6 @@ import {
   renderTeachCard as _renderTeachCard,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
 } from "../src/ui/tutorial-ui.js";
-import { renderSettingsScreen as _renderSettingsScreen } from "../src/ui/settings-screen.js";
-import {
-  renderControlsScreen as _renderControlsScreen,
-  drawControlsOverlay as _drawControlsOverlay,
-  formatKeyCode as _formatKeyCode,
-} from "../src/ui/controls-screen.js";
 import {
   renderGameOver as _renderGameOver,
   renderVictory as _renderVictory,
@@ -151,8 +142,6 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_REGISTRY,
   getVisibleSettings,
-  getSettingsForCategory,
-  getVisibleCategories,
   settingDisplayItem,
   applySettingStep,
   bindGamepadStatus,
@@ -312,17 +301,8 @@ export class Game {
     this.deathTimer = 0;
     this.pauseSaveFlash = 0;
     this.settings = { ...DEFAULT_SETTINGS };
-    this.settingsSelection = 0;
-    this.settingsCategory = "Gameplay"; // active sidebar category
-    this.settingsScroll = 0; // pixel scroll offset of the settings row list
     this.lastEscTime = 0;
-    // Mouse hover tracking for settings UI
-    this._settingsMouseX = -1;
-    this._settingsMouseY = -1;
     document.addEventListener("mousemove", (e) => {
-      // The Forge's inventory screen wants the same CSS-pixel conversion as
-      // settings. The two branches are keyed off the game state, so only one
-      // of them can ever run for a given move.
       if (this.state === GameState.BUILDER && this.builder?.invOpen) {
         // The Forge HUD is drawn on the GAME canvas, which render-pipeline
         // sizes with budgetedRenderSize x stableScale — smaller than hudW on a
@@ -336,34 +316,6 @@ export class Game {
           (e.clientY - rect.top) * (this.canvas.height / rect.height),
         );
       }
-      if (this.state !== GameState.SETTINGS || this.settingsDeck?.isOpen) {
-        if (this.canvas.style.cursor === "pointer")
-          this.canvas.style.cursor = "";
-        return;
-      }
-      const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
-      const sx = (e.clientX - rect.left) * (this.hudW / rect.width);
-      const sy = (e.clientY - rect.top) * (this.hudH / rect.height);
-      this._settingsMouseX = sx;
-      this._settingsMouseY = sy;
-      // Pointer cursor only where a click actually does something.
-      const layout = settingsLayout(
-        this.hudW,
-        this.hudH,
-        this.settingsSelection,
-        this.isTouchDevice,
-        this.settingsCategory,
-        this.settingsScroll,
-        false
-      );
-      const cats = getVisibleCategories(this.isTouchDevice, this.settings);
-      const hit = resolveSettingsHit(
-        layout,
-        settingsCategoryRects(layout, cats),
-        sx,
-        sy
-      );
-      this.canvas.style.cursor = hit.kind === "none" ? "" : "pointer";
     });
 
     // Share URL handling
@@ -432,8 +384,6 @@ export class Game {
     this.chronoPowers = new ChronoPowers();
     this.chronoHazards = new ChronoHazards();
     this.voxelAiSystem = new VoxelAISystem();
-    this.controlsSelection = 0;
-    this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
     // Forge mode (extracted)
     this.builder = null; // Lazy-loaded on Forge entry
@@ -671,22 +621,6 @@ export class Game {
       }
       if (this.builder && this.builder.handleKeyDown(e)) return;
     }
-    // Rebinding mode — capture the next key
-    if (this.state === GameState.CONTROLS && this.rebindingKey) {
-      e.preventDefault();
-      if (e.code !== "Escape") {
-        const { swappedAction } = this.input.rebind(this.rebindingKey, e.code);
-        if (swappedAction) {
-          this._keybindSwapFlash = {
-            action: swappedAction,
-            time: performance.now(),
-          };
-        }
-        this.saveSettings();
-      }
-      this.rebindingKey = null;
-      return;
-    }
     // Tab cycles creator categories (input-dispatch); only stop the browser
     // moving focus off the canvas. It used to call a method that never existed.
     if (e.code === "Tab" && this.state === GameState.CHARACTER_CREATE && !isModernArt()) {
@@ -728,10 +662,7 @@ export class Game {
     }
     // Settings: the deck handles its own pointer events, and a click on the
     // live view beside it does nothing (in particular, never takes the pointer).
-    if (this.state === GameState.SETTINGS) {
-      if (e.button === 0 && !this.settingsDeck?.isOpen) this._handleSettingsClick(e);
-      return;
-    }
+    if (this.state === GameState.SETTINGS) return;
     
     // HUD Editor
     if (this.state === GameState.HUD_EDITOR) {
@@ -793,32 +724,10 @@ export class Game {
     }
   }
 
-  /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
+  /** Mouse-wheel: weapon cycling in play, block cycling in the Forge. */
   _inputWheel(deltaY) {
     if (this.state === GameState.BUILDER) {
       this.builder?.handleWheel(deltaY);
-      return;
-    }
-    if (this.state === GameState.SETTINGS) {
-      if (this.settingsDeck?.isOpen) return; // the deck's list scrolls natively
-      const layout = settingsLayout(
-        this.hudW,
-        this.hudH,
-        this.settingsSelection,
-        this.isTouchDevice,
-        this.settingsCategory,
-        this.settingsScroll,
-        false
-      );
-      if (layout.maxScroll <= 0) return;
-      // Follow the wheel's own delta where the browser gives one; the gamepad
-      // path passes ±1, which floors to one row-ish step.
-      const dir = deltaY > 0 ? 1 : -1;
-      const step = Math.min(160, Math.max(48, Math.abs(deltaY)));
-      this.settingsScroll = Math.max(
-        0,
-        Math.min(layout.maxScroll, this.settingsScroll + dir * step)
-      );
       return;
     }
     if (this.state !== GameState.PLAYING) return;
@@ -861,10 +770,6 @@ export class Game {
     this.state = GameState.SETTINGS;
     this._settingsReturnTo = returnTo;
     this._settingsSection = section ?? null;
-    // The canvas screen (only drawn when the deck fails to load) reads these.
-    this._settingsReturnToMenu = returnTo === "menu";
-    this.settingsSelection = 0;
-    this.settingsScroll = 0;
     if (returnTo === "menu") this._startShowcase();
   }
 
@@ -910,7 +815,6 @@ export class Game {
   onSettingsDeckClose(returnTo) {
     this._stopShowcase();
     this.saveSettings();
-    this._settingsReturnToMenu = false;
     // One open's return target and section never leak into the next, and a
     // pad Y still held as the deck closes starts fresh next time.
     this._settingsReturnTo = null;
@@ -2952,13 +2856,6 @@ export class Game {
     });
   }
 
-  drawControlsOverlay(ctx, w, h, alpha) {
-    _drawControlsOverlay(ctx, w, h, alpha, {
-      keybinds: this.keybinds,
-      mode: this.mode,
-    });
-  }
-
   renderPauseScreen(ctx, w, h) {
     if (isModernArt()) {
       renderModernPauseScreen(this, ctx, w, h);
@@ -3046,121 +2943,6 @@ export class Game {
 
   renderAriaLog(ctx, w, h) {
     this.ariaComms.renderLog(ctx, w, h, this.character.name);
-  }
-
-  renderSettingsScreen(ctx, w, h) {
-    _renderSettingsScreen(ctx, w, h, {
-      isTouchDevice: this.isTouchDevice,
-      settingsCategory: this.settingsCategory,
-      settingsSelection: this.settingsSelection,
-      settings: this.settings,
-      mouseX: this._settingsMouseX,
-      mouseY: this._settingsMouseY,
-      settingsScroll: this.settingsScroll,
-    });
-  }
-
-  /**
-   * Desktop click on the settings screen. Until now this screen drew hover
-   * states and a "click to adjust" hint but listened to nothing: only touch
-   * could change a value with a pointer.
-   */
-  _handleSettingsClick(e) {
-    // Read the event directly: a click can arrive with no preceding mousemove
-    // (touchpad tap, synthetic click), and the cached hover point is then stale.
-    // Coordinates are CSS-logical (hudW/hudH), the space the HUD is drawn in.
-    const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (this.hudW / rect.width);
-    const y = (e.clientY - rect.top) * (this.hudH / rect.height);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    this._settingsMouseX = x;
-    this._settingsMouseY = y;
-    const layout = settingsLayout(
-      this.hudW,
-      this.hudH,
-      this.settingsSelection,
-      this.isTouchDevice,
-      this.settingsCategory,
-      this.settingsScroll,
-      false
-    );
-    this.settingsScroll = layout.scrollY;
-    const cats = getVisibleCategories(this.isTouchDevice, this.settings);
-    const hit = resolveSettingsHit(
-      layout,
-      settingsCategoryRects(layout, cats),
-      x,
-      y
-    );
-
-    if (hit.kind === "back") {
-      this.handleKeyPress("Escape");
-      return;
-    }
-    if (hit.kind === "category") {
-      if (hit.cat !== this.settingsCategory) {
-        this.settingsCategory = hit.cat;
-        this.settingsSelection = 0;
-        this.settingsScroll = 0;
-        this.audio.menuSelect();
-      }
-      return;
-    }
-    if (hit.kind !== "row") return;
-
-    const def = layout.visibleDefs[hit.index];
-    if (!def) return;
-    if (hit.index !== this.settingsSelection) {
-      this.settingsSelection = hit.index;
-      this.audio.menuSelect();
-    }
-
-    if (hit.zone === "slider") {
-      this._setSliderFromPct(def, hit.pct);
-      return;
-    }
-    if (def.type === "action") {
-      def.onClick?.(this);
-      this.audio.menuConfirm();
-      return;
-    }
-    if (hit.zone === "dec") {
-      this.handleKeyPress("ArrowLeft");
-      return;
-    }
-    if (hit.zone === "inc" || def.type === "toggle") {
-      this.handleKeyPress("ArrowRight");
-    }
-  }
-
-  /** Drop a slider straight onto the clicked position, snapped to its step. */
-  _setSliderFromPct(def, pct) {
-    if (def.type !== "slider") return;
-    const raw = def.min + (def.max - def.min) * pct;
-    let val = def.min + Math.round((raw - def.min) / def.step) * def.step;
-    val = Math.max(def.min, Math.min(def.max, val));
-    if (def.round != null) {
-      const f = Math.pow(10, def.round);
-      val = Math.round(val * f) / f;
-    }
-    if (val === this.settings[def.key]) return;
-    this.settings[def.key] = val;
-    def.onChange?.(this);
-    this.saveSettings();
-    this.audio.menuSelect();
-  }
-
-  renderControlsScreen(ctx, w, h) {
-    _renderControlsScreen(ctx, w, h, {
-      keybinds: this.keybinds,
-      controlsSelection: this.controlsSelection,
-      rebindingKey: this.rebindingKey,
-      keybindSwapFlash: this._keybindSwapFlash,
-    });
-  }
-
-  formatKeyCode(code) {
-    return _formatKeyCode(code);
   }
 
   renderAchievementsScreen(ctx, w, h) {

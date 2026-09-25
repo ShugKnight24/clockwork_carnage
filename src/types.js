@@ -11,7 +11,6 @@ export const GameState = {
   PLAYING: "playing",
   PAUSED: "paused",
   SETTINGS: "settings",
-  CONTROLS: "controls",
   UPGRADE: "upgrade",
   GAME_OVER: "gameOver",
   BUILDER: "builder",

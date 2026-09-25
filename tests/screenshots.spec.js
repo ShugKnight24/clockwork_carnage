@@ -4,7 +4,7 @@
  * Run: npm run test:screenshots
  * Screenshots saved to: screenshots/
  */
-import { test } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import {
   loadGame,
   debug,
@@ -96,16 +96,21 @@ test.describe("State Screenshots", () => {
     await screenshot(page, "12-pause-menu");
   });
 
-  test("settings screen", async ({ page }) => {
+  test("settings deck", async ({ page }) => {
     await debug(page, "startArena");
-    await debug(page, "showSettings");
+    await debug(page, "showPauseMenu");
+    await debug(page, "showSettings", "pause");
+    await expect(page.locator("settings-deck")).toHaveAttribute("open", "");
     await page.waitForTimeout(200);
     await screenshot(page, "13-settings");
   });
 
-  test("controls screen", async ({ page }) => {
+  test("settings deck: controls", async ({ page }) => {
     await debug(page, "startArena");
+    await debug(page, "showPauseMenu");
     await debug(page, "showControls");
+    await expect(page.locator("settings-deck")).toHaveAttribute("open", "");
+    await expect(page.locator("settings-deck")).toHaveAttribute("section", "controls");
     await page.waitForTimeout(200);
     await screenshot(page, "14-controls");
   });

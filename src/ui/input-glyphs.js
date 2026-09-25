@@ -18,7 +18,7 @@
  * resolves poll().pressed / justPressed per action from the same table the
  * glyphs here read, so what a prompt shows is what the button does.
  */
-import { formatKeyCode } from "./controls-screen.js";
+import { formatKeyCode } from "./key-labels.js";
 import { drawKeycap, uiFont } from "./modern-ui-kit.js";
 import { GAMEPAD_ACTIONS, PAD, PAD_LABELS } from "../systems/pad-actions.js";
 

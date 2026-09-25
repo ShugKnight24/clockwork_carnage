@@ -340,8 +340,12 @@ function syncShowroom(game) {
   return inCreator && modern && showroomLoad === "loading";
 }
 
-/** Fetch and mount <settings-deck> the first time Settings opens. */
-function ensureSettingsDeck(game) {
+/**
+ * Fetch and mount <settings-deck>. main.js calls this once the title is idle
+ * so the deck is ready before Settings first opens; syncSettingsDeck calls it
+ * as a fallback.
+ */
+export function preloadSettingsDeck(game) {
   if (game.settingsDeck || deckLoad !== "idle") return;
   deckLoad = "loading";
   import("../../js/components/settings-deck.js")
@@ -351,26 +355,28 @@ function ensureSettingsDeck(game) {
     })
     .catch((err) => {
       deckLoad = "failed";
-      console.warn("[settings] deck failed to load, using the canvas screen", err);
+      console.warn("[settings] deck failed to load", err);
     });
 }
 
 /**
  * Open the deck on the first SETTINGS frame (every entry point only sets the
- * state through game.openSettings) and keep it in step with the state.
- * Returns true when the canvas settings screen should draw instead.
+ * state through game.openSettings) and keep it in step with the state. There
+ * is no other settings screen, so if the deck cannot load, Settings closes
+ * back to whatever opened it.
  */
 function syncSettingsDeck(game) {
   const inSettings = game.state === GameState.SETTINGS;
-  if (inSettings) ensureSettingsDeck(game);
+  if (inSettings) preloadSettingsDeck(game);
   const deck = game.settingsDeck;
   if (deck) {
     if (inSettings && !deck.isOpen) {
       deck.open({ returnTo: game._settingsReturnTo ?? "pause", section: game._settingsSection ?? undefined });
     }
     deck.sync(inSettings);
+  } else if (inSettings && deckLoad === "failed") {
+    game.onSettingsDeckClose(game._settingsReturnTo ?? "pause");
   }
-  return inSettings && deckLoad === "failed";
 }
 
 export function renderFrame(game) {
@@ -378,7 +384,7 @@ export function renderFrame(game) {
   const w = game.renderer.width;
   const h = game.renderer.height;
   const showroom = syncShowroom(game);
-  const canvasSettings = syncSettingsDeck(game);
+  syncSettingsDeck(game);
 
   if (
     game.state === GameState.TITLE ||
@@ -771,11 +777,8 @@ export function renderFrame(game) {
   const hw = game.hudW;
   const hh = game.hudH;
   if (game.state === GameState.PAUSED) game.renderPauseScreen(hctx, hw, hh);
-  if (canvasSettings) game.renderSettingsScreen(hctx, hw, hh);
   if (game.state === GameState.HUD_EDITOR)
     game.hudEditor.render(hctx, hw, hh);
-  if (game.state === GameState.CONTROLS)
-    game.renderControlsScreen(hctx, hw, hh);
   if (game.state === GameState.ACHIEVEMENTS)
     game.renderAchievementsScreen(hctx, hw, hh);
   if (game.state === GameState.STATS) game.renderStatsScreen(hctx, hw, hh);

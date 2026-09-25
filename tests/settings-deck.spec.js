@@ -164,6 +164,26 @@ test("from pause: deck opens over the live match and Escape returns to pause", a
   expect(await page.evaluate(() => ({ x: window.ccDebug.game.player.x, y: window.ccDebug.game.player.y }))).toEqual(pos);
 });
 
+test("the pause menu's Controls key opens the deck on Controls", async ({ page }) => {
+  await startPaused(page);
+  await page.keyboard.press("KeyC");
+  await expect(deck(page)).toHaveAttribute("open", "");
+  await expect(deck(page)).toHaveAttribute("section", "controls");
+  await page.keyboard.press("Escape");
+  expect(await state(page)).toBe("paused");
+});
+
+test("if the deck cannot load, Settings goes straight back to the menu", async ({ page }) => {
+  await page.route("**/js/components/settings-deck.js*", (route) => route.abort());
+  await page.goto("/?debug");
+  await page.waitForFunction(() => window.ccDebug);
+  await page.keyboard.press("Enter");
+  await page.locator("#btnSettings").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "modeSelect");
+  await expect(page.locator("#modeSelect")).toBeVisible();
+  expect(await page.evaluate(() => window.ccDebug.game._showcase)).toBeUndefined();
+});
+
 test("from pause: no pointer lock, and clicks in the deck or the live view never take it", async ({ page }) => {
   await startPaused(page);
   await page.evaluate(() => {
@@ -367,9 +387,13 @@ test("Escape during the showcase load leaves the game as it was", async ({ page 
     window.__palettes = 0;
     r.applyActPalette = (...a) => { window.__palettes++; return orig(...a); };
   });
-  // Escape straight after the click: the load takes several frames.
-  await page.locator("#btnSettings").click();
-  await page.keyboard.press("Escape");
+  // Escape in the same task as the click, so no frame has run: the deck is
+  // not open yet and the showcase is still loading. (A separate key press
+  // can land a few hundred ms later, after a fast load has installed.)
+  await page.evaluate(() => {
+    document.getElementById("btnSettings").click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", key: "Escape", bubbles: true }));
+  });
   await page.waitForTimeout(800);
   expect(await state(page)).toBe("modeSelect");
   expect(await snap()).toEqual(before);

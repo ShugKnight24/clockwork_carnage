@@ -347,7 +347,6 @@ export async function journeyRageQuit(page, debug, screenshot) {
     "tutorialComplete",
     "characterCreate",
     "settings",
-    "controls",
   ];
   if (!validStates.includes(postSpamState)) {
     issues.push({

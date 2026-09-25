@@ -29,10 +29,9 @@
 const ALLOWED_TRANSITIONS = {
   title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats'],
   modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings'],
-  playing: ['paused', 'settings', 'controls', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
-  paused: ['playing', 'settings', 'controls', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
-  settings: ['paused', 'playing', 'title', 'modeSelect', 'controls'],
-  controls: ['settings', 'paused', 'playing', 'title'],
+  playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
+  paused: ['playing', 'settings', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
+  settings: ['paused', 'playing', 'title', 'modeSelect'],
   upgrade: ['playing'],
   gameOver: ['title', 'modeSelect', 'playing', 'cutscene', 'characterCreate'],
   builder: ['title', 'modeSelect', 'playing', 'settings', 'paused'],

@@ -11,6 +11,7 @@ import {
   describeGamepadStatus,
 } from "../../js/gamepad.js";
 import { SETTINGS_REGISTRY, bindGamepadStatus, settingDisplayItem } from "../../js/settings-registry.js";
+import { SECTION_OF } from "../../src/ui/settings-sections.js";
 
 const btn = (pressed = false, value = pressed ? 1 : 0) => ({ pressed, value });
 const buttons = (n, down = []) => Array.from({ length: n }, (_, i) => btn(down.includes(i)));
@@ -345,7 +346,7 @@ describe("GamepadManager", () => {
     const gm = new GamepadManager();
     bindGamepadStatus(gm.status);
     const row = SETTINGS_REGISTRY.find((d) => d.key === "gamepadStatus");
-    expect(row.category).toBe("Gamepad");
+    expect(SECTION_OF[row.key].group).toBe("Controller");
     expect(settingDisplayItem(row, {}).value).toBe("NONE");
     expect(row.desc).toMatch(/No controller/);
     pads[0] = pad();

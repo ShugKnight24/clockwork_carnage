@@ -17,7 +17,7 @@
 import { isModernArt } from "../rendering/art-style.js";
 import { uiFont } from "./modern-ui-kit.js";
 import { POWERS } from "../systems/chrono-powers.js";
-import { formatKeyCode } from "./controls-screen.js";
+import { formatKeyCode } from "./key-labels.js";
 import { activeDevice, glyph } from "./input-glyphs.js";
 
 const EYE = "#ff2a4a";

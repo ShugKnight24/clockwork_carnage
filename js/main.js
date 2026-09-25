@@ -4,7 +4,7 @@ import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
-import { preloadShowroom } from "../src/rendering/render-pipeline.js";
+import { preloadShowroom, preloadSettingsDeck } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
@@ -697,6 +697,10 @@ const warmLazyModules = () =>
     () => import("./forge.js"),
   ].reduce((chain, load) => chain.then(() => load().catch(() => {})), Promise.resolve());
 (window.requestIdleCallback ?? ((fn) => setTimeout(fn, 3000)))(warmLazyModules, { timeout: 8000 });
+
+// Settings is one click from the menu, so its deck mounts as soon as the
+// title is idle rather than waiting behind the warm-up chain above.
+(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 200)))(() => preloadSettingsDeck(game), { timeout: 2000 });
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);

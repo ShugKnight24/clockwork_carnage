@@ -286,14 +286,14 @@ export function createDebugBridge(game) {
     },
 
     /** Navigate to settings */
-    showSettings() {
-      game.state = GameState.SETTINGS;
+    showSettings(returnTo = "menu") {
+      game.openSettings({ returnTo });
       return game.state;
     },
 
-    /** Navigate to controls */
+    /** Navigate to the settings deck's Controls section */
     showControls() {
-      game.state = GameState.CONTROLS;
+      game.openSettings({ returnTo: "pause", section: "controls" });
       return game.state;
     },
 

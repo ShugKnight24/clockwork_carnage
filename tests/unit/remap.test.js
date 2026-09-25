@@ -173,3 +173,12 @@ describe("remap rules", () => {
     expect(glyph({}, "dash", "gamepad").text).toBe("A");
   });
 });
+
+describe("default key bindings", () => {
+  it("binds Rewind and Time-Lock to their own keys, no key doing two jobs", () => {
+    expect(DEFAULT_KEYBINDS.chronoRewind).toBe("KeyX");
+    expect(DEFAULT_KEYBINDS.chronoLock).toBe("KeyV");
+    const codes = Object.values(DEFAULT_KEYBINDS);
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+});

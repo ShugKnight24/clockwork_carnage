@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, getVisibleSettings } from "../../js/settings-registry.js";
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
+import * as registry from "../../js/settings-registry.js";
 
 const ids = SECTIONS.map((s) => s.id);
 
@@ -85,5 +86,14 @@ describe("settings apply", () => {
     expect(g.settings.fov).toBe(DEFAULT_SETTINGS.fov + fov.step);
     expect(resetSetting(g, fov)).toBe(true);
     expect(g.settings.fov).toBe(DEFAULT_SETTINGS.fov);
+  });
+});
+
+describe("canvas settings removal", () => {
+  it("the old category API is gone", () => {
+    expect(registry.SETTING_CATEGORIES).toBeUndefined();
+    expect(registry.getSettingsForCategory).toBeUndefined();
+    expect(registry.getVisibleCategories).toBeUndefined();
+    for (const def of registry.SETTINGS_REGISTRY) expect(def.category, def.key).toBeUndefined();
   });
 });

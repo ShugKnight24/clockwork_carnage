@@ -58,7 +58,7 @@ export function drawWeapon(ctx, w, h, opts) {
 }
 
 // States where the first-person view is live, and overlays that freeze it in place.
-const OVERLAY_STATES = new Set([GameState.PAUSED, GameState.SETTINGS, GameState.CONTROLS, GameState.HUD_EDITOR]);
+const OVERLAY_STATES = new Set([GameState.PAUSED, GameState.SETTINGS, GameState.HUD_EDITOR]);
 const FADE_SECONDS = 0.18;
 let fade = 1;
 let fadeClock = 0;
