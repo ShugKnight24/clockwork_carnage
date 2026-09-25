@@ -491,6 +491,54 @@ function logoSprite(img, w, dpr) {
   return _logo;
 }
 
+/**
+ * The `title` scene's logo card: the logotype in the upper middle of the
+ * picture and, under it, a stack of short lines (the end card's tagline,
+ * address and controls), each rising in half a beat after the one above.
+ *   card: { lines: { text }[] (cached against these objects), t: seconds into the shot }
+ *   opts: as drawOverlay's (profile, dpr, letterbox, fontScale, logo, bpm, reducedMotion)
+ */
+export function drawEndCard(ctx, w, h, card, opts = {}) {
+  const profile = opts.profile === "legacy" || opts.profile === "realistic" ? opts.profile : "modern";
+  const reduced = !!opts.reducedMotion;
+  const dpr = opts.dpr ?? kit.pixelRatio(ctx);
+  const spb = 60 / (opts.bpm || 120);
+  const t = Math.max(0, card.t ?? 0);
+  _lopts.letterbox = opts.letterbox ?? 0;
+  _lopts.fontScale = opts.fontScale ?? 1;
+  _lopts.safe = opts.safe ?? 0;
+  const L = overlayLayout(w, h, _lopts, _L);
+  const picH = h - 2 * L.barH;
+  const lines = card.lines ?? [];
+  const prevA = ctx.globalAlpha;
+  let y = L.barH + picH * (lines.length ? 0.4 : 0.5);
+  const logo = opts.logo;
+  if (logo && (logo.naturalWidth || logo.width)) {
+    const s = logoSprite(logo, Math.min(w * 0.52, picH * 1.25), dpr);
+    const punch = reduced ? 1 : 1 + 0.08 * (1 - smooth(t / PUNCH_S));
+    const dw = Math.round(s.w * punch);
+    const dh = Math.round(s.h * punch);
+    ctx.globalAlpha = prevA * (reduced ? smooth(t / 0.3) : 1);
+    ctx.drawImage(s.canvas, Math.round(w / 2 - dw / 2), Math.round(y - dh / 2), dw, dh);
+    y += s.h / 2 + L.caption.size * 0.6;
+  }
+  const size = Math.round(L.caption.size * 0.8);
+  for (let i = 0; i < lines.length; i++) {
+    const e = entryFor(lines[i], "end", profile, size, dpr, w);
+    if (e.stale) {
+      bakeSub(e, lines[i].text, profile, size);
+      e.stale = false;
+    }
+    const a = smooth((t - (i + 1) * spb * 0.5) / 0.3);
+    if (a > 0) {
+      ctx.globalAlpha = prevA * a;
+      blit(ctx, e, w / 2 - e.w / 2, y + (reduced ? 0 : (1 - a) * size * 0.5));
+    }
+    y += e.h * 1.1;
+  }
+  ctx.globalAlpha = prevA;
+}
+
 // ─── Cards (boss / squad) ──────────────────────────────────────────────────
 
 function bakeCard(e, c, profile, L) {

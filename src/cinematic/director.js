@@ -16,8 +16,14 @@ import { beatsToSec, secToBeats, reelDuration, stateAt, eventsBetween, validateR
 import { mulberry32, seedFor } from "./seeded.js";
 import { drawOverlay, drawSkipHint, overlayLayout, squadLayout } from "./overlay.js";
 import { activeDevice, glyph } from "../ui/input-glyphs.js";
+import { getArtStyle, setArtStyle } from "../rendering/art-style.js";
+import { logoFor } from "./brand.js";
 import { art } from "./scenes/art.js";
 import { campaign } from "./scenes/campaign.js";
+import { meltdown } from "./scenes/meltdown.js";
+import { forge } from "./scenes/forge.js";
+import { creator } from "./scenes/creator.js";
+import { title } from "./scenes/title.js";
 
 /**
  * Scene adapters by `scene.kind`:
@@ -28,11 +34,17 @@ import { campaign } from "./scenes/campaign.js";
  *   optional prepare(game, spec, { live, shot, reel }) → anything: called
  *     once for the next shot while the current one plays, for heavy work
  *     that shows and borrows nothing (so the cut's build can be quick)
+ *   optional discard(game, prepared): a prepare whose shot never builds
+ *     (the reel stopped first) is handed back, to free what it holds
  *   update(game, dt, local, handle), event(game, ev, handle), teardown(game, handle)
  *   and either draw(gctx, w, h, local, { game, shotLen, handle }) to paint
- *   the game canvas, or `world: true` to have the game's first-person view drawn.
+ *   the game canvas, or `world: true` to have the game's first-person view
+ *   drawn (spec `weapon: false` leaves the viewmodel out);
+ *   optional hud(hctx, w, h, local, { game, shotLen, handle, profile, dpr,
+ *     letterbox, fontScale, reducedMotion }) paints the HUD canvas under the
+ *     overlay, at full resolution (type, logos, the agent).
  */
-export const SCENES = { art, campaign };
+export const SCENES = { art, campaign, meltdown, forge, creator, title };
 
 export function registerScene(kind, adapter) {
   SCENES[kind] = adapter;
@@ -119,6 +131,7 @@ export function stopReel(game, { skipped = false } = {}) {
   if (!sess) return;
   delete game._cinematic;
   leaveShot(game, sess);
+  dropPrep(game, sess);
   sess.unwatch?.();
   delete game._cinematicHidden;
   const { saved } = sess;
@@ -283,6 +296,8 @@ function enterShot(game, sess, index) {
   const live = () => game._cinematic === sess && sess.current === handle;
   let result;
   const prepared = sess.prep?.index === index ? sess.prep.value : null;
+  if (sess.prep?.index === index) sess.prep.used = true;
+  else dropPrep(game, sess);
   try {
     result = scene.build(game, shot.scene, mulberry32(seedFor(sess.reel.id, shot.id)), { live, shot, reel: sess.reel, handle, prepared });
   } catch (err) {
@@ -333,16 +348,61 @@ function prepareNext(game, sess) {
   }
 }
 
-/** Tear down the current scene; one still building is torn down when its build lands. */
+/** A prepare whose shot never built: its adapter frees what it holds. */
+function dropPrep(game, sess) {
+  const prep = sess.prep;
+  if (!prep || prep.used || prep.value == null) return;
+  prep.used = true;
+  const scene = SCENES[sess.reel.shots[prep.index]?.scene.kind];
+  try {
+    scene?.discard?.(game, prep.value);
+  } catch (err) {
+    console.warn("[cinematic] a prepared shot failed to discard", err);
+  }
+}
+
+/**
+ * Tear down the current scene (one still building is torn down when its
+ * build lands), then put back the player's art style if the shot flipped it.
+ */
 function leaveShot(game, sess) {
   const h = sess.current;
   sess.current = null;
-  if (!h) return;
-  if (h.ready) h.scene.teardown?.(game, h);
-  else if (sess.building === h) {
-    h.abandoned = true;
-    sess.building = null;
+  if (h) {
+    if (h.ready) h.scene.teardown?.(game, h);
+    else if (sess.building === h) {
+      h.abandoned = true;
+      sess.building = null;
+    }
   }
+  restoreArtStyle(game, sess);
+}
+
+// ─── Art style flips ──────────────────────────────────────────────────────
+
+/**
+ * `{ type: "artStyle", style }` switches the style for the rest of the shot.
+ * The game saves any style change as the player's setting (its
+ * onArtStyleChange listener in js/game.js); `game._reelArtStyle` tells that
+ * listener to stand aside, so cc_settings never sees a flip. The restore
+ * clears the flag first: going back to the player's own style then runs the
+ * listener as any change does (Legacy hands back the Modern bitmaps) and
+ * finds the setting already matching, so it saves nothing.
+ */
+function flipArtStyle(game, sess, style) {
+  if (!sess.style) {
+    sess.style = { saved: getArtStyle() };
+    game._reelArtStyle = true;
+  }
+  setArtStyle(style);
+}
+
+function restoreArtStyle(game, sess) {
+  const s = sess.style;
+  if (!s) return;
+  sess.style = null;
+  delete game._reelArtStyle;
+  setArtStyle(s.saved);
 }
 
 // ─── Events, music and narration ──────────────────────────────────────────
@@ -382,6 +442,9 @@ function fire(game, sess, ev) {
       return;
     case "squad":
       sess.squad = rollCall(ev, eventBeat(sess, ev));
+      return;
+    case "artStyle":
+      flipArtStyle(game, sess, ev.style);
       return;
   }
   const cur = sess.current;
@@ -498,36 +561,24 @@ const performanceNow = () => (typeof performance !== "undefined" ? performance.n
 
 // ─── Drawing ──────────────────────────────────────────────────────────────
 
-const PROFILE_BRAND = { legacy: "legacy", modern: "comic", realistic: "modern" };
-const logos = new Map();
-
-/** The logotype for an art profile (loaded once; null until decoded). */
-function logoFor(profile) {
-  if (typeof Image === "undefined") return null;
-  const folder = PROFILE_BRAND[profile] ?? "comic";
-  let img = logos.get(folder);
-  if (!img) {
-    img = new Image();
-    img.src = `assets/brand/${folder}/logotype.svg`;
-    logos.set(folder, img);
-  }
-  return img.complete && img.naturalWidth ? img : null;
-}
-
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const envelope = (since, t) => (t >= since && t - since < FLASH_DECAY ? 1 - (t - since) / FLASH_DECAY : 0);
 
 /**
  * Draw the shot on the game canvas and the overlay on the HUD canvas.
- * `drawWorld` renders the game's own first-person view (the render
- * pipeline's world pass) for scenes that install a level (`world: true`);
- * scenes with `draw` paint the game canvas themselves.
+ * `drawWorld({ weapon })` renders the game's own first-person view (the
+ * render pipeline's world pass) for scenes that install a level
+ * (`world: true`); scenes with `draw` paint the game canvas themselves.
  */
 export function renderDirector(game, gctx, hctx, w, h, drawWorld = null) {
   const sess = game._cinematic;
   if (!sess) return;
   const reduced = reducedMotion();
   const cur = sess.current;
+  const st = stateAt(sess.reel, sess.t);
+  const b = secToBeats(sess.reel, Math.max(0, sess.t));
+  const cards = activeCards(sess, b);
+  const member = squadMember(sess.squad, b);
   const shake = reduced ? 0 : sess.shakeAmp * Math.max(0, 1 - (sess.t - sess.shakeAt) / SHAKE_DECAY);
   gctx.save();
   if (shake > 0) gctx.translate(Math.sin(sess.t * 97) * 10 * shake, Math.sin(sess.t * 71) * 6 * shake);
@@ -536,7 +587,10 @@ export function renderDirector(game, gctx, hctx, w, h, drawWorld = null) {
     gctx.fillRect(0, 0, w, h);
     cur.scene.draw(gctx, w, h, localTime(sess), { game, shotLen: beatsToSec(sess.reel, cur.shot.len), handle: cur });
   } else if (cur?.ready && cur.scene.world && drawWorld) {
-    drawWorld();
+    // A card, a title or the roll call covers the picture: a gun hanging
+    // under it reads as a HUD left on, not as the agent.
+    const covered = cards.length > 0 || !!member || st.captions.some((c) => c.kind === "card" || c.kind === "title");
+    drawWorld({ weapon: cur.shot.scene.weapon !== false && !covered });
   } else {
     // Nothing built yet (the clock is holding): black, under the letterbox.
     gctx.fillStyle = "#000";
@@ -561,11 +615,22 @@ export function renderDirector(game, gctx, hctx, w, h, drawWorld = null) {
     dpr: game.dpr,
     safe: safeInset(game),
   };
-  const st = stateAt(sess.reel, sess.t);
-  const b = secToBeats(sess.reel, Math.max(0, sess.t));
-  const cards = activeCards(sess, b);
+  if (cur?.ready && cur.scene.hud) {
+    hctx.save();
+    cur.scene.hud(hctx, hw, hh, localTime(sess), {
+      game,
+      shotLen: beatsToSec(sess.reel, cur.shot.len),
+      handle: cur,
+      profile,
+      dpr: game.dpr,
+      letterbox: st.letterbox ?? 0,
+      fontScale: opts.fontScale,
+      reducedMotion: reduced,
+    });
+    hctx.restore();
+  }
   if (cards.length) st.captions = st.captions.concat(cards);
-  if (squadMember(sess.squad, b)) {
+  if (member) {
     if (!squadArt) loadSquadArt(game, sess.reel);
     st.squad = sess.squad;
     opts.portrait = drawPortrait;

@@ -460,6 +460,9 @@ export class Game {
     // The title-screen toggle flips the style outside the settings menu; keep
     // the saved setting in step so the choice persists.
     onArtStyleChange((style, prev) => {
+      // A reel's style flip (src/cinematic/director.js) is for its shot
+      // only: nothing is saved or released, and the player's style comes back.
+      if (this._reelArtStyle) return;
       // Leaving the Modern asset set for Legacy: hand back the decoded SVG
       // bitmaps and the 512px environment art rather than keeping them warm
       // for a style that is no longer drawn. Modern <-> Realistic share them.

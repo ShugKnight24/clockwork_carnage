@@ -140,7 +140,7 @@ function start(game, level, spec, rng, reel, handle, shot) {
  * Between steps the prepare waits on idle time (with a deadline, so a busy
  * shot still gets its next level staged), not on frames.
  */
-function idle() {
+export function idle() {
   return new Promise((resolve) => {
     if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout: 200 });
     else setTimeout(resolve, 0);
@@ -187,7 +187,7 @@ const noop = () => {};
  * comms, saves, the Bestiary or the player's health; the returned restore
  * puts back the exact values and removes the shadows.
  */
-function borrowCombat(game) {
+export function borrowCombat(game) {
   const fields = COMBAT_FIELDS(game);
   const saved = Object.keys(fields).map((k) => [k, Object.hasOwn(game, k), game[k]]);
   Object.assign(game, fields);
@@ -230,7 +230,7 @@ function borrowCombat(game) {
  * Chronos, the trigger, the viewmodel's kick, enemies, projectiles, effects.
  * Time runs on the reel's clock, scaled by Chrono Shift as in play.
  */
-function simulate(game, state, dt, local) {
+export function simulate(game, state, dt, local) {
   const p = game.player;
   // A scripted shift lasts as long as the script says, not as the tank does.
   if (p.chronoActive) p.chronoEnergy = p.maxChronoEnergy;
@@ -252,12 +252,12 @@ function simulate(game, state, dt, local) {
   game._decayEffects?.(sdt);
 }
 
-/** Math.random answers from the shot's PRNG while `fn` runs (spread, crits, AI). */
-function withRandom(rng, fn) {
+/** Math.random answers from the shot's PRNG while `fn` runs (spread, crits, AI); returns what `fn` does. */
+export function withRandom(rng, fn) {
   const random = Math.random;
   Math.random = rng;
   try {
-    fn();
+    return fn();
   } finally {
     Math.random = random;
   }
@@ -265,7 +265,8 @@ function withRandom(rng, fn) {
 
 // ─── Events ───────────────────────────────────────────────────────────────
 
-const EVENTS = {
+/** The combat events, shared with the `meltdown` scene's swarm. */
+export const EVENTS = {
   spawn(game, ev) {
     const type = ev.enemy ?? "drone";
     const def = ENEMY_TYPES[type];
@@ -399,10 +400,16 @@ function ahead(map, p, dist) {
  * Decode the idle sprite of every enemy type a shot spawns, at the sizes a
  * few tiles away show it, so the first sight of them is not a decode stall.
  */
-async function warmSpawns(game, shot, live, wait = idle) {
+function warmSpawns(game, shot, live, wait = idle) {
+  const types = (shot?.events ?? []).filter((ev) => ev.type === "spawn").map((ev) => ev.enemy ?? "drone");
+  return warmEnemies(game, types, live, wait);
+}
+
+/** The same for a list of enemy types (duplicates are fine). */
+export async function warmEnemies(game, list, live, wait = idle) {
   const ctx = game.renderer?.ctx;
   const viewH = game.renderer?.height;
-  const types = [...new Set((shot?.events ?? []).filter((ev) => ev.type === "spawn").map((ev) => ev.enemy ?? "drone"))];
+  const types = [...new Set(list)];
   if (!ctx || !viewH || !types.length) return;
   const halfHeights = [1.5, 2.5, 4, 7].map((d) => viewH / d / 2);
   const dummies = types.filter((t) => ENEMY_TYPES[t] && !ENEMY_TYPES[t].boss).map((t) => new Enemy(0, 0, t));

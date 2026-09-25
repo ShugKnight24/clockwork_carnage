@@ -402,7 +402,7 @@ export function renderFrame(game) {
 
   if (game.state === GameState.CINEMATIC) {
     // A reel's level shots are the game's own first-person view, minus the HUD.
-    renderDirector(game, ctx, game.hudCtx, w, h, () => renderWorld(game, ctx, w, h));
+    renderDirector(game, ctx, game.hudCtx, w, h, (opts) => renderWorld(game, ctx, w, h, opts));
     return;
   }
 
@@ -541,9 +541,10 @@ export function renderFrame(game) {
  * The first-person view of the current level on the game canvas: the 3D
  * scene, motes and tracers, horizon band, vignette, Chronos screen effects,
  * the weapon and post-FX. Everything after it (HUD, overlay screens) is the
- * caller's; a reel draws this with its own overlay instead of the HUD.
+ * caller's; a reel draws this with its own overlay instead of the HUD, and
+ * leaves the weapon out (`weapon: false`) while a card covers the picture.
  */
-function renderWorld(game, ctx, w, h) {
+function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   // ── Screen shake ─────────────────────────────────────────────────────────
   // Driven by sampled sine at incommensurate frequencies rather than a fresh
   // Math.random() per frame. Per-frame random reads as static buzz; a sampled
@@ -716,12 +717,12 @@ function renderWorld(game, ctx, w, h) {
 
   // Draw weapon (hidden in third person)
   const _tWpn0 = profiling ? performance.now() : 0;
-  if (game.settings.viewMode === 0) {
+  if (weapon && game.settings.viewMode === 0) {
     game.drawWeapon(ctx, w, h);
   }
 
   // Draw player silhouette in third-person mode
-  if (game.settings.viewMode === 1) {
+  if (weapon && game.settings.viewMode === 1) {
     game.drawThirdPersonModel(ctx, w, h);
   }
   if (profiling) game.profiler.currentPhases.weapon = performance.now() - _tWpn0;

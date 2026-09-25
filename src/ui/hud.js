@@ -1955,7 +1955,13 @@ if (game._meltdownUpgradeChoices) {
 game.renderAriaComms(ctx, w, h);
 }
 
-/** Meltdown upgrade selection overlay — 3 choices side by side */
+/**
+ * Meltdown upgrade selection overlay — 3 choices side by side. Exported for
+ * the reels' Meltdown shot (src/cinematic/scenes/meltdown.js).
+ */
+export function renderMeltdownUpgradeOverlay(game, ctx, w, h) {
+  _renderMeltdownUpgradeOverlay(game, ctx, w, h);
+}
 
 function _renderMeltdownUpgradeOverlay(game, ctx, w, h) {
 const choices = game._meltdownUpgradeChoices;
