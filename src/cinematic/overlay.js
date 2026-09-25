@@ -829,7 +829,7 @@ function drawTitleCaption(ctx, c, ct, cl, profile, reduced, dpr, L, logo, w) {
   ctx.globalAlpha = prevA;
 }
 
-function drawCard(ctx, c, ct, cl, profile, reduced, dpr, L, w) {
+function drawCard(ctx, c, ct, cl, profile, reduced, dpr, L, w, solid = false) {
   if (ct < 0) return;
   const e = entryFor(c, "card", profile, Math.round(L.card.h), dpr, w);
   if (e.stale) {
@@ -837,7 +837,8 @@ function drawCard(ctx, c, ct, cl, profile, reduced, dpr, L, w) {
     e.stale = false;
   }
   const inK = smooth(ct / CARD_OPEN_S);
-  const a = Math.min(inK, smooth((cl - ct) / 0.25));
+  // `solid`: the shutter opens at full strength (over the card it replaces).
+  const a = Math.min(solid ? 1 : inK, smooth((cl - ct) / 0.25));
   if (a <= 0) return;
   const prevA = ctx.globalAlpha;
   ctx.globalAlpha = prevA * a;
@@ -874,16 +875,22 @@ export function squadLayout(w, h, L) {
 }
 
 const PORTRAIT_OPEN_S = 0.22;
+const PORTRAIT_CLOSE_S = 0.2;
 const _SL = { card: {} };
 
 /**
  * One member at a time, each for an equal share of the roll call: their
- * portrait (drawn by `portrait(ctx, id, x, y, w, h, t)`) slides in on a
- * panel edged in their colour, with their name card beside it.
+ * portrait (drawn by `portrait(ctx, id, x, y, w, h, t)`) on a panel edged in
+ * their colour, with their name card beside it. There is never an empty
+ * frame between members: each panel wipes in over the one before it, left to
+ * right, and each name card's shutter opens over the last. Only the first
+ * wipes in over the picture and the last wipes away. Wipes rather than
+ * fades, since a portrait may set its own alpha.
  * `squad`: { at, len (beats), members: [{ id, color, card }] }.
  */
 function drawSquad(ctx, w, h, squad, now, spb, profile, reduced, dpr, L, portrait) {
-  const seg = squad.len / squad.members.length;
+  const n = squad.members.length;
+  const seg = squad.len / n;
   const b = now / spb - squad.at;
   const i = Math.floor(b / seg);
   const m = squad.members[i];
@@ -891,32 +898,69 @@ function drawSquad(ctx, w, h, squad, now, spb, profile, reduced, dpr, L, portrai
   const ct = (b - i * seg) * spb;
   const cl = seg * spb;
   const S = squadLayout(w, h, L);
-  const inK = smooth(ct / PORTRAIT_OPEN_S);
-  const a = Math.min(inK, smooth((cl - ct) / 0.2));
-  if (a <= 0) return;
   const P = S.panel;
-  const x = P.x + (reduced ? 0 : Math.round((1 - inK) * w * 0.04));
-  const prevA = ctx.globalAlpha;
-  ctx.globalAlpha = prevA * a;
-  if (profile === "modern") kit.drawPanel(ctx, x, P.y, P.w, P.h, { variant: "menu", accent: m.color, chamfer: 18 });
+  const prev = i > 0 ? squad.members[i - 1] : null;
+  const inK = reduced ? 1 : smooth(ct / PORTRAIT_OPEN_S);
+  // The last member's panel closes right to left as the roll call ends.
+  const outK = i === n - 1 && !reduced ? smooth((cl - ct) / PORTRAIT_CLOSE_S) : 1;
+  if (outK <= 0) return;
+  const edge = P.x + Math.round(P.w * inK);
+  if (prev && inK < 1) drawSquadPanel(ctx, prev, edge, P.x + P.w, P, profile, portrait, cl + ct);
+  drawSquadPanel(ctx, m, P.x, Math.min(edge, P.x + Math.round(P.w * outK)), P, profile, portrait, ct);
+  if (inK < 1) {
+    // The wipe's leading edge, in the incoming member's colour.
+    ctx.fillStyle = m.color;
+    ctx.fillRect(edge - 2, P.y, 3, P.h);
+  }
+  Object.assign(_SL.card, S.card);
+  // The last card fades with the roll call; the others give way to the next one's shutter.
+  const last = i === n - 1;
+  if (prev) drawSquadCardUnder(ctx, prev.card, ct, profile, reduced, dpr, w, h);
+  drawCard(ctx, m.card, ct, last ? cl : Infinity, profile, reduced, dpr, _SL, w, !!prev);
+}
+
+/** Member `m`'s panel and portrait, the part of it between x0 and x1. */
+function drawSquadPanel(ctx, m, x0, x1, P, profile, portrait, t) {
+  if (x1 <= x0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x0, P.y - 4, x1 - x0, P.h + 8);
+  ctx.clip();
+  if (profile === "modern") kit.drawPanel(ctx, P.x, P.y, P.w, P.h, { variant: "menu", accent: m.color, chamfer: 18 });
   else {
     ctx.fillStyle = profile === "legacy" ? "rgba(2,8,14,0.78)" : "rgba(6,9,11,0.72)";
-    ctx.fillRect(x, P.y, P.w, P.h);
+    ctx.fillRect(P.x, P.y, P.w, P.h);
     ctx.strokeStyle = m.color;
     ctx.lineWidth = profile === "legacy" ? 2 : 1;
-    ctx.strokeRect(x + 0.5, P.y + 0.5, P.w - 1, P.h - 1);
+    ctx.strokeRect(P.x + 0.5, P.y + 0.5, P.w - 1, P.h - 1);
   }
   if (portrait) {
-    ctx.save();
     ctx.beginPath();
-    ctx.rect(x + 2, P.y + 2, P.w - 4, P.h - 4);
+    ctx.rect(Math.max(x0, P.x + 2), P.y + 2, Math.min(x1, P.x + P.w - 2) - Math.max(x0, P.x + 2), P.h - 4);
     ctx.clip();
-    portrait(ctx, m.id, x, P.y, P.w, P.h, ct);
-    ctx.restore();
+    portrait(ctx, m.id, P.x, P.y, P.w, P.h, t);
   }
-  ctx.globalAlpha = prevA;
-  Object.assign(_SL.card, S.card);
-  drawCard(ctx, m.card, ct, cl, profile, reduced, dpr, _SL, w);
+  ctx.restore();
+}
+
+/**
+ * The previous member's name card, held open while the next one's shutter
+ * opens over it: all of it but the band the shutter has opened (drawCard's
+ * geometry: the baked card with its glow pad, opening from its centre line).
+ */
+function drawSquadCardUnder(ctx, card, ct, profile, reduced, dpr, w, h) {
+  const inK = reduced ? 1 : smooth(ct / CARD_OPEN_S);
+  if (inK >= 1) return;
+  const C = _SL.card;
+  const half = (C.h / 2 + Math.ceil(C.h * 0.4)) * inK;
+  const mid = Math.round(C.y) + C.h / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, mid - half);
+  ctx.rect(0, mid + half, w, h);
+  ctx.clip();
+  drawCard(ctx, card, CARD_OPEN_S, Infinity, profile, reduced, dpr, _SL, w);
+  ctx.restore();
 }
 
 // ─── Hold-to-skip hint ─────────────────────────────────────────────────────
