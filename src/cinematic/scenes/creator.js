@@ -47,7 +47,9 @@ export function looksFor(character, spec) {
   const own = character ?? DEFAULT_CHARACTER;
   const patches = spec.looks === "curated" ? [{}, ...LOOKS] : [{}, ...(spec.looks ?? [])];
   // A patch replaces whole fields (a badge is one field), over a copy.
-  return patches.map((p) => ({ ...own, ...structuredClone(p) }));
+  // Each look owns its nested objects (badge, accessories), so nothing a shot
+  // does to one can reach game.character.
+  return patches.map((p) => ({ ...structuredClone(own), ...structuredClone(p) }));
 }
 
 const profileNow = () => (typeof document !== "undefined" ? document.documentElement.dataset.artProfile : "modern");
