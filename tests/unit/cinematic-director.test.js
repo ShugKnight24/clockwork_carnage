@@ -315,6 +315,37 @@ describe("resource lifetime", () => {
   });
 });
 
+describe("warm", () => {
+  it("runs for the next shot while the current one plays, early prepare or not, with what was prepared", async () => {
+    const seen = [];
+    const mk = (early) => ({
+      early,
+      prepare: (g, spec) => ({ n: spec.n }),
+      warm: (g, spec, { prepared, live }) => seen.push({ n: spec.n, prepared: prepared?.n, live: live(), shot: directorState(g).shotId }),
+      build() {},
+      update() {},
+      event() {},
+      teardown() {},
+    });
+    registerScene("warmEarly", mk(true));
+    registerScene("warmLate", mk(false));
+    const g = fakeGame();
+    const r = {
+      ...reel,
+      bars: 3,
+      shots: [reel.shots[0], { ...reel.shots[1], scene: { kind: "warmEarly", n: 2 } }, { id: "s3", at: 8, len: 4, scene: { kind: "warmLate", n: 3 } }],
+    };
+    const done = playReel(g, r, { returnTo: "title" });
+    await new Promise((res) => setTimeout(res, 0)); // the opening hold on the early prepare
+    for (let i = 0; i < 400; i++) updateDirector(g, 1 / 60);
+    await done;
+    expect(seen).toEqual([
+      { n: 2, prepared: 2, live: true, shot: "s1" },
+      { n: 3, prepared: 3, live: true, shot: "s2" },
+    ]);
+  });
+});
+
 describe("forge resources", () => {
   // A renderer that counts itself: the reel's GL contexts must all be gone after a skip.
   const made = vi.hoisted(() => []);

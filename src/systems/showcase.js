@@ -11,7 +11,7 @@ import { Enemy, Player } from "../../js/entities.js";
 import { updateParticles, spawnSmoke } from "../../js/particle-system.js";
 import { spawnWallSparks } from "../../js/vfx.js";
 import { particlePool } from "../utils/particle-pool.js";
-import { prefetchIdleEnemy } from "../rendering/svg-art/sprites/enemies.js";
+import { prefetchIdleEnemy, prefetchEnemyModel } from "../rendering/svg-art/sprites/enemies.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { prefetchPropSprite, warmPropSet } from "../rendering/props.js";
 import { createCampaignEntities } from "./spawner.js";
@@ -247,6 +247,43 @@ async function prewarmSprites(game, map, path, props, enemies, live, wait, route
     if (ready || performance.now() > until) return;
     await wait();
     if (!live()) return;
+  }
+}
+
+/**
+ * prewarmSprites for the art set a reel shot flips to (`realistic`: the
+ * Realistic set, else Modern's), before the flip: the staged level's props
+ * and idle enemies, and `fighters` (enemies a shot spawns, `{ x, y,
+ * enemyType }`) in every pose, each only at the sizes `cams` see it. Nothing
+ * the shot does not show is decoded, and the work is spread thin (a job at a
+ * time, a couple of layers decoding at once): it runs under another shot.
+ */
+export async function prewarmStyle(game, { map, props, foes }, cams, realistic, fighters = [], { live = () => true, wait = nextFrame } = {}) {
+  const ctx = game.renderer?.ctx;
+  const viewH = game.renderer?.height;
+  if (!ctx || !viewH || !cams?.length) return;
+  const fov = fovOf(game);
+  const seen = (e) => sightHeights(map.grid, cams, e, fov, viewH);
+  const propJobs = [...new Set(props.map((p) => p.propType))].map((type) => {
+    const hs = props.filter((p) => p.propType === type).flatMap(seen);
+    return [() => prefetchPropSprite(ctx, type, hs, realistic), hs];
+  });
+  const byType = new Map();
+  for (const e of fighters) byType.set(e.enemyType, [...(byType.get(e.enemyType) ?? []), ...seen(e)]);
+  const jobs = [
+    ...foes.map((e) => {
+      const hs = seen(e);
+      return [() => prefetchIdleEnemy(ctx, e, hs.map((h) => h / 2), realistic), hs];
+    }),
+    ...[...byType].map(([type, hs]) => [() => prefetchEnemyModel(ctx, type, hs.map((h) => h / 2), realistic, 2), hs]),
+    ...propJobs,
+  ].filter(([, hs]) => hs.length);
+  const until = performance.now() + PREWARM_MS;
+  for (const [prefetch] of jobs) {
+    while (!prefetch()) {
+      if (performance.now() > until || !live()) return;
+      await wait();
+    }
   }
 }
 

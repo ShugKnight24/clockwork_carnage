@@ -34,7 +34,7 @@
 import { beatsToSec } from "../timeline.js";
 import { getActLevel, getAct } from "../../../js/data.js";
 import {
-  stageLevelScene, installStagedLevel, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
+  stageLevelScene, installStagedLevel, prewarmStyle, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
 } from "../../systems/showcase.js";
 import { samplePath } from "../../systems/showcase-path.js";
 import { Enemy } from "../../../js/entities.js";
@@ -49,6 +49,9 @@ import { decay } from "../../utils/math.js";
 import { prefetchIdleEnemy } from "../../rendering/svg-art/sprites/enemies.js";
 import { generateModernEnv } from "../../rendering/textures.js";
 import { isModernArt, isRealisticArt } from "../../rendering/art-style.js";
+import { prefetchViewmodel } from "../../rendering/svg-art/viewmodels.js";
+import { WEAPONS } from "../../data/weapons.js";
+import { CHARACTER_COLORS } from "../../data/cosmetics.js";
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const fovOf = (game) => game.settings?.fov ?? 75;
@@ -97,6 +100,28 @@ export const campaign = {
         return (prep.staged = live() ? staged : null);
       });
     return prep;
+  },
+
+  /**
+   * A shot that flips the art style, while the shot before it plays: the
+   * sprites and the viewmodel it will show, decoded in each Modern set it
+   * flips to, only at the sizes its camera sees them. Its staging decoded
+   * the set showing as the reel opened, but that is a minute before the flip
+   * and gone cold by then; decoded at the flip, they cost 100-200 ms frames.
+   */
+  async warm(game, spec, { live = () => true, shot, prepared = null } = {}) {
+    const sets = flipSets(shot);
+    if (!sets.length || !prepared) return;
+    const staged = prepared.staged ?? (await prepared.done);
+    const cams = routeOf(spec.camera)?.cams;
+    if (!staged || !cams || !live()) return;
+    const fighters = spawnsOf(shot).map((ev) => ({ x: ev.pos[0], y: ev.pos[1], enemyType: ev.enemy ?? "drone" }));
+    const weapons = [...new Set((shot?.events ?? []).filter((ev) => ev.type === "fire").map((ev) => ev.weapon ?? 0))];
+    for (const realistic of sets) {
+      await prewarmStyle(game, staged, cams, realistic, fighters, { live, wait: idle });
+      if (!live()) return;
+      await warmViewmodels(game, weapons, realistic, live);
+    }
   },
 
   /**
@@ -218,6 +243,34 @@ async function flipEnvs(game, staged, shot, live, wait = idle) {
     envs[realistic ? "realistic" : "comic"] = envFor(game, { entry: staged.entry, palette: staged.palette }, realistic, brutal);
   }
   return envs;
+}
+
+/** The Modern sets a shot's artStyle events flip to: false for Modern, true for Realistic. */
+function flipSets(shot) {
+  const styles = new Set((shot?.events ?? []).filter((ev) => ev.type === "artStyle").map((ev) => ev.style));
+  return [1, 2].filter((s) => styles.has(s)).map((s) => s === 2);
+}
+
+/** A shot's spawns placed at a spot (the fight's enemies, before they exist). */
+const spawnsOf = (shot) => (shot?.events ?? []).filter((ev) => ev.type === "spawn" && Array.isArray(ev.pos));
+
+/** The first-person art of each weapon a shot fires, in one Modern set. */
+async function warmViewmodels(game, weapons, realistic, live) {
+  const ctx = game.renderer?.ctx;
+  const h = game.renderer?.height;
+  if (!ctx || !h || !weapons.length) return;
+  const until = performance.now() + 3000;
+  for (;;) {
+    let ready = true;
+    for (const id of weapons) {
+      const def = WEAPONS[id];
+      if (!def) continue;
+      const accent = CHARACTER_COLORS[game.character?.colorIndex]?.accent ?? def.color;
+      if (!prefetchViewmodel(ctx, h, def.id ?? id, accent, realistic, 1)) ready = false;
+    }
+    if (ready || performance.now() > until || !live()) return;
+    await idle();
+  }
 }
 
 // Environment bundles built for this reel, by level and finish (release()

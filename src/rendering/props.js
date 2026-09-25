@@ -231,7 +231,10 @@ function drawScan(ctx, scan, t, alpha) {
 
 /**
  * Start decoding every sprite's layers at one scale so the first sighting of
- * each type is already vector art rather than a legacy frame.
+ * each type is already vector art rather than a legacy frame. Queued, as any
+ * prefetch: a sprite drawn meanwhile decodes its own layers at once, and the
+ * rest no longer land in one frame (an art style change started ~50 of them
+ * together).
  */
 export function warmSvgSprites(sprites, defs, ppu) {
   if (typeof Image === "undefined") return;
@@ -245,8 +248,8 @@ export function warmSvgSprites(sprites, defs, ppu) {
     if (!sprite._ready) prepareSprite(key, sprite, defs);
     for (const layer of sprite.layers) {
       const scale = rasterScale(ppu * (layer.res || 1), layer._box);
-      getLayerImage(layer._id, layer._box, sprite._defs, layer.markup, scale);
-      if (layer._silId) getLayerImage(layer._silId, layer._box, sprite._defs, layer._silMarkup, scale);
+      getLayerImage(layer._id, layer._box, sprite._defs, layer.markup, scale, true);
+      if (layer._silId) getLayerImage(layer._silId, layer._box, sprite._defs, layer._silMarkup, scale, true);
     }
   }
 }
@@ -264,14 +267,16 @@ export function warmPropSet(sh) {
 /**
  * Decode and bake one prop type at each on-screen sprite height in
  * `sprHeights` ahead of drawing it; call once a frame until it returns true.
- * The largest size goes first, so the rest are downscales of it.
+ * The largest size goes first, so the rest are downscales of it. `realistic`
+ * picks the Realistic or Modern set ahead of a style change (a reel's flip);
+ * left out, the set showing.
  */
-export function prefetchPropSprite(ctx, type, sprHeights) {
-  if (typeof Image === "undefined" || !isModernArt()) return true;
+export function prefetchPropSprite(ctx, type, sprHeights, realistic) {
+  if (typeof Image === "undefined" || (realistic === undefined && !isModernArt())) return true;
   let sprite = PROP_SPRITES[type];
   let defs = PROP_DEFS;
   if (!sprite) return true;
-  const real = isRealisticArt() ? realisticSet(defs) : null;
+  const real = (realistic ?? isRealisticArt()) ? realisticSet(defs) : null;
   if (real?.sprites[type]) {
     sprite = real.sprites[type];
     defs = real.defs;

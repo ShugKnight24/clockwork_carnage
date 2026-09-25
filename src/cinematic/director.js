@@ -34,6 +34,11 @@ import { title } from "./scenes/title.js";
  *   optional prepare(game, spec, { live, shot, reel }) → anything: called
  *     once for the next shot while the current one plays, for heavy work
  *     that shows and borrows nothing (so the cut's build can be quick)
+ *   optional warm(game, spec, { live, shot, reel, prepared }) → Promise | void:
+ *     called for the next shot while the current one plays, as prepare is but
+ *     also when the prepare ran early (`prepared` is its value either way),
+ *     for decodes that belong just before the cut rather than at the reel's
+ *     start (the art a style flip will need). Its result is not waited on.
  *   optional discard(game, prepared): a prepare whose shot never builds
  *     (the reel stopped first) is handed back, to free what it holds
  *   optional early: true | (spec, shot) => boolean: prepare this shot when
@@ -377,13 +382,22 @@ function prepareNext(game, sess) {
   const shot = sess.reel.shots[index];
   if (!shot || sess.prep?.index === index) return;
   sess.prep = { index, value: null };
-  if (sess.early?.values.has(index)) return; // prepared when the reel started
   const scene = SCENES[shot.scene.kind];
-  if (!scene?.prepare) return;
+  const ctx = { live: () => game._cinematic === sess, shot, reel: sess.reel };
+  // An early prepare ran when the reel started.
+  if (scene?.prepare && !sess.early?.values.has(index)) {
+    try {
+      sess.prep.value = scene.prepare(game, shot.scene, ctx) ?? null;
+    } catch (err) {
+      console.warn(`[cinematic] shot "${shot.id}" failed to prepare`, err);
+    }
+  }
+  if (!scene?.warm) return;
   try {
-    sess.prep.value = scene.prepare(game, shot.scene, { live: () => game._cinematic === sess, shot, reel: sess.reel }) ?? null;
+    const prepared = sess.early?.values.get(index) ?? sess.prep.value;
+    Promise.resolve(scene.warm(game, shot.scene, { ...ctx, prepared })).catch((err) => console.warn(`[cinematic] shot "${shot.id}" failed to warm`, err));
   } catch (err) {
-    console.warn(`[cinematic] shot "${shot.id}" failed to prepare`, err);
+    console.warn(`[cinematic] shot "${shot.id}" failed to warm`, err);
   }
 }
 

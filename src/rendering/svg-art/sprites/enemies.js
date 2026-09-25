@@ -142,8 +142,7 @@ function buildModelIn(type, real) {
   };
 }
 
-function modelFor(type) {
-  const real = isRealisticArt();
+function modelFor(type, real = isRealisticArt()) {
   const set = real ? realModels : models;
   let m = set.get(type);
   if (m === undefined) {
@@ -250,9 +249,9 @@ function warm(model, pxPerUnit) {
  * true. The largest size decodes first; each smaller one waits for it and
  * is then a GPU downscale of it (raster.js deriveSmaller), not another parse.
  */
-export function prefetchIdleEnemy(ctx, enemy, halfHeights) {
+export function prefetchIdleEnemy(ctx, enemy, halfHeights, real = isRealisticArt()) {
   if (typeof Image === "undefined") return true;
-  const model = modelFor(enemy.enemyType);
+  const model = modelFor(enemy.enemyType, real);
   if (!model || model.boss) return true;
   const variant = model.variants[motionOf(enemy, 0, model).variant];
   const refs = [variant.poses.idle.body, variant.poses.idle.glow, model.aura, ...variant.fx.map((f) => f.ref)].filter(Boolean);
@@ -269,6 +268,33 @@ export function prefetchIdleEnemy(ctx, enemy, halfHeights) {
     }
   }
   return ready;
+}
+
+/**
+ * prefetchIdleEnemy for every layer of an enemy type's model (all variants,
+ * every pose, fx and aura), for an enemy that will fight on screen, in the
+ * Modern (`real` false) or Realistic set whichever is showing: a reel warms
+ * the set a shot flips to before the flip. Call once a frame until true.
+ * `max` caps how many layers are decoding at once, to spread the work.
+ */
+export function prefetchEnemyModel(ctx, type, halfHeights, real = isRealisticArt(), max = Infinity) {
+  if (typeof Image === "undefined") return true;
+  const model = modelFor(type, real);
+  if (!model || model.boss) return true;
+  const scales = [...halfHeights].sort((a, b) => b - a).map((hh) => pixelScale(ctx) * (hh / 100) * model.scale);
+  let busy = 0;
+  for (const r of model.all) {
+    for (const px of scales) {
+      const scale = capScale(r.box, px);
+      getLayerImage(r.id, r.box, r.defs, r.markup, scale, true);
+      if (!layerBaked(r.id, scale)) {
+        busy++;
+        break;
+      }
+    }
+    if (busy >= max) break;
+  }
+  return busy === 0;
 }
 
 // The raster cache frees its baked canvases (0x0) when Legacy takes over.

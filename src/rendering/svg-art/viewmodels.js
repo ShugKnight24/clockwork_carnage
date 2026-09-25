@@ -11,7 +11,7 @@
  * the procedural muzzle flash.
  */
 
-import { getLayerImage, scaleBucket } from "./raster.js";
+import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
 import { createScene } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
 import { WEAPON_MODELS } from "./viewmodel/weapons.js";
@@ -69,11 +69,15 @@ function layerScale(px, box) {
   return k * 0.999;
 }
 
-const request = (vm, px) => vm.layers.map((L) => getLayerImage(L.id, L.box, DEFS, L.markup, layerScale(px, L.box)));
+const request = (vm, px, prefetch = false) => vm.layers.map((L) => getLayerImage(L.id, L.box, DEFS, L.markup, layerScale(px, L.box), prefetch));
 
 let warmQueue = null;
 let warmReal = false;
-/** Decode the other weapons one per frame so switching never shows procedural art. */
+/**
+ * Decode the other weapons one per frame so switching never shows procedural
+ * art. Queued, as any prefetch: on an art style change they used to decode
+ * at once, a weapon a frame, each frame 50-80 ms.
+ */
 function warmStep(accent, px, tier, real) {
   if (!warmQueue || warmReal !== real) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
@@ -82,7 +86,32 @@ function warmStep(accent, px, tier, real) {
   const next = warmQueue.shift();
   if (!next) return;
   const vm = build(next[0], accent, next[1], tier, real);
-  if (vm) request(vm, px);
+  if (vm) request(vm, px, true);
+}
+
+/**
+ * Decode and bake weapon `id`'s hip and ADS art as drawViewmodel would draw
+ * it on a canvas `h` px tall through `ctx`, in the Realistic or Modern set
+ * (`real`) whichever is showing: a reel warms the set a shot flips to before
+ * the flip. Queued like any prefetch; call once a frame until it returns true.
+ * `max` caps how many layers are decoding at once, to spread the work.
+ */
+export function prefetchViewmodel(ctx, h, id, accent, real, max = Infinity) {
+  if (typeof Image === "undefined" || typeof ctx?.getTransform !== "function") return true;
+  const m = ctx.getTransform();
+  const px = Math.hypot(m.a, m.b) * UNIT * (h / 720) || UNIT;
+  const tier = px >= 3 ? "hi" : "lo";
+  let busy = 0;
+  for (const pose of ["hip", "ads"]) {
+    const vm = build(id, accent, pose, tier, real);
+    for (const L of vm?.layers ?? []) {
+      if (busy >= max) return false;
+      const scale = layerScale(px, L.box);
+      getLayerImage(L.id, L.box, DEFS, L.markup, scale, true);
+      if (!layerBaked(L.id, scale)) busy++;
+    }
+  }
+  return busy === 0;
 }
 
 // Contact shadow gradient lives in unit space, so one per context serves every frame.
