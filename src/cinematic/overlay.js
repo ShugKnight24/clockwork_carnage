@@ -840,7 +840,9 @@ export function drawSkipHint(ctx, w, h, text, progress, opts = {}) {
     ctx.beginPath();
     ctx.arc(x + _skip.w - padX - ring, y + _skip.h / 2, ring, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
     ctx.stroke();
+    // HUD strokes drawn after this rely on the default width.
     ctx.lineCap = "butt";
+    ctx.lineWidth = 1;
   }
   ctx.globalAlpha = prevA;
 }
