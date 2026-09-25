@@ -10,7 +10,7 @@
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS, ART_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
 import { createDeckState, deckKey, deckKeyUp, CAPTURE_MS } from "../../src/ui/settings-deck-model.js";
-import { SETTINGS_REGISTRY, settingDisplayItem } from "../settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../settings-registry.js";
 import { activeDevice, renderDomGlyphs, GLYPH_CSS, glyph, glyphHTML, buttonGlyph, keyLabel, padFamily } from "../../src/ui/input-glyphs.js";
 import { PAD, PAD_LABELS, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
 import { planBind, applyBind, previewBind, resetBindings, savePadBinds, REMAPPABLE_KEY_ACTIONS, STORAGE_KEY_PADBINDS } from "../../src/systems/remap.js";
@@ -157,6 +157,8 @@ p { margin: 0; }
 .value { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font: 700 var(--cc-type-body)/1 var(--d-font);
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--d-dim); white-space: nowrap; }
 .row.focused .value { color: var(--d-text); }
+/* Changed from default: a note-coloured mark after the label. */
+.row.changed .label::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; vertical-align: 2px; background: var(--d-note); }
 
 /* Switch */
 .sw { position: relative; flex: none; width: 42px; height: 22px; background: var(--d-track); border: 2px solid var(--cc-ink);
@@ -1245,6 +1247,14 @@ class SettingsDeck extends HTMLElement {
     }
   }
 
+  /** Mark a row changed from its default, for sight and for screen readers. */
+  markChanged(el, changed) {
+    if (el.classList.contains("changed") === changed) return;
+    el.classList.toggle("changed", changed);
+    if (changed) el.setAttribute("aria-description", "Changed from default");
+    else el.removeAttribute("aria-description");
+  }
+
   /** Values and states, written in place so focus and pointer capture survive. */
   patchRows() {
     const s = this.game.settings;
@@ -1252,6 +1262,7 @@ class SettingsDeck extends HTMLElement {
     this.items.forEach((item, i) => {
       const el = els[i];
       const { def, card, art } = item;
+      if (def && def.type !== "action") this.markChanged(el, def.key in DEFAULT_SETTINGS && s[def.key] !== DEFAULT_SETTINGS[def.key]);
       if (item.pad) {
         const { value, desc } = this.padStatus();
         const label = el.querySelector(".label");
@@ -1266,6 +1277,7 @@ class SettingsDeck extends HTMLElement {
         const html = item.device === "keyboard" ? `<kbd class="key">${esc(keyLabel(v))}</kbd>` : glyphHTML(glyph(this.game, item.action, "gamepad"));
         const bind = el.querySelector(".bind");
         if (bind.innerHTML !== html) bind.innerHTML = html;
+        this.markChanged(el, v !== COLUMN[item.device].defaults[item.action]);
         return el.setAttribute("aria-label", `${remapLabel(item.action)}, ${item.device === "keyboard" ? "key" : "controller button"}: ${this.inputName(item.device, v)}`);
       }
       if (!def) return;

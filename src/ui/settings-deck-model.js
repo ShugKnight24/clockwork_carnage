@@ -13,6 +13,8 @@ const STEPPABLE = new Set(["slider", "enum", "toggle"]);
 const REPEATABLE = new Set(["slider", "enum"]);
 // A remap capture waits this long for an input before giving up.
 export const CAPTURE_MS = 8000;
+// PageUp / PageDown jump this many rows (the old settings screen's step).
+const PAGE_ROWS = 5;
 
 export function deckKey(state, code, ctx) {
   const s = { ...state };
@@ -55,6 +57,16 @@ export function deckKey(state, code, ctx) {
     case "ArrowDown":
       if (n) {
         s.row = (s.row + (code === "ArrowUp" ? -1 : 1) + n) % n;
+        effects.push({ type: "focus" }, { type: "sound", name: "menuSelect" });
+      }
+      break;
+    case "PageUp":
+    case "PageDown":
+    case "Home":
+    case "End":
+      if (n) {
+        const to = { PageUp: s.row - PAGE_ROWS, PageDown: s.row + PAGE_ROWS, Home: 0, End: n - 1 }[code];
+        s.row = Math.max(0, Math.min(n - 1, to));
         effects.push({ type: "focus" }, { type: "sound", name: "menuSelect" });
       }
       break;

@@ -143,6 +143,44 @@ test("keyboard only: reach Video, flip bloom, leave to mode select", async ({ pa
   await expect(page.locator("#gameCanvas")).toBeHidden();
 });
 
+test("PageDown / PageUp / Home / End jump through the rows", async ({ page }) => {
+  await openFromMenu(page);
+  await page.keyboard.press("KeyE"); // Video
+  const keys = await page.evaluate(() => document.querySelector("settings-deck").items.map((i) => i.key));
+  await page.keyboard.press("PageDown");
+  expect(await focusedKey(page)).toBe(keys[5]);
+  await page.keyboard.press("End");
+  expect(await focusedKey(page)).toBe(keys.at(-1));
+  await page.keyboard.press("PageUp");
+  expect(await focusedKey(page)).toBe(keys.at(-6));
+  await page.keyboard.press("Home");
+  expect(await focusedKey(page)).toBe(keys[0]);
+});
+
+test("a row changed from its default is marked, with an accessible description", async ({ page }) => {
+  await openFromMenu(page);
+  await page.keyboard.press("KeyE"); // Video
+  const row = deck(page).locator('[data-key="enableFilmGrain"]');
+  const was = await setting(page, "enableFilmGrain");
+  const dflt = await page.evaluate(async () => (await import("/js/settings-registry.js")).DEFAULT_SETTINGS.enableFilmGrain);
+  expect(was).toBe(dflt);
+  await expect(row).not.toHaveClass(/\bchanged\b/);
+  await expect(row).not.toHaveAttribute("aria-description", /./);
+  await row.click();
+  await expect(row).toHaveClass(/\bchanged\b/);
+  await expect(row).toHaveAttribute("aria-description", "Changed from default");
+  await row.click();
+  await expect(row).not.toHaveClass(/\bchanged\b/);
+  // Remap rows too.
+  await page.mouse.move(5, 5); // off the list, so no hover moves the focus
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("remap:keyboard:interact"));
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("KeyF"); // FPS counter's key: swap
+  await page.keyboard.press("Enter");
+  await expect(deck(page).locator('[data-key="remap:keyboard:interact"]')).toHaveAttribute("aria-description", "Changed from default");
+  await expect(deck(page).locator('[data-key="remap:keyboard:moveForward"]')).not.toHaveAttribute("aria-description", /./);
+});
+
 test("mode select key 9 opens the deck too", async ({ page }) => {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug);

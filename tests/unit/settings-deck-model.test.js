@@ -109,6 +109,18 @@ describe("deck navigation", () => {
     expect(types(start)).toEqual(["captureCancel"]);
   });
 
+  it("PageUp / PageDown jump five rows and Home / End go to the ends, clamped", () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ kind: "toggle", key: `t${i}` }));
+    const at = (row, code) => deckKey({ ...createDeckState(), row }, code, ctx({ rows: many })).state.row;
+    expect(at(0, "PageDown")).toBe(5);
+    expect(at(9, "PageDown")).toBe(11);
+    expect(at(7, "PageUp")).toBe(2);
+    expect(at(3, "PageUp")).toBe(0);
+    expect(at(6, "Home")).toBe(0);
+    expect(at(2, "End")).toBe(11);
+    expect(types(deckKey(createDeckState(), "End", ctx({ rows: many })))).toEqual(["focus", "sound"]);
+  });
+
   it("holding C shows the previous value until release", () => {
     let r = press(createDeckState(), "KeyC");
     expect(r.effects).toContainEqual({ type: "compare", on: true });
