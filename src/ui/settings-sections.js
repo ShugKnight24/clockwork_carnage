@@ -18,10 +18,10 @@ const at = (section, group, cost) => (cost ? { section, group, cost } : { sectio
 
 export const SECTION_OF = {
   // Video
-  artStyle: at("video", "Look"),
-  visualStyle: at("video", "Look"),
-  fov: at("video", "Look"),
-  viewMode: at("video", "Look"),
+  artStyle: at("video", "Look", "med"),
+  visualStyle: at("video", "Look", "low"),
+  fov: at("video", "Look", "low"),
+  viewMode: at("video", "Look", "low"),
   graphicsPreset: at("video", "Quality", "high"),
   renderScale: at("video", "Quality", "high"),
   frameTarget: at("video", "Quality", "med"),
@@ -36,7 +36,7 @@ export const SECTION_OF = {
   floorTexture: at("video", "Effects", "med"),
   screenShake: at("video", "Effects", "low"),
   weaponBob: at("video", "Effects", "low"),
-  showPerformanceOverlay: at("video", "Diagnostics"),
+  showPerformanceOverlay: at("video", "Diagnostics", "low"),
   // Audio
   masterVolume: at("audio", "Volume"),
   musicVolume: at("audio", "Volume"),

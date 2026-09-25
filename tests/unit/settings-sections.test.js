@@ -31,11 +31,10 @@ describe("settings sections", () => {
     expect(groups).toEqual(["Look", "Quality", "Effects", "Diagnostics"]);
   });
 
-  it("gives every Effects and Quality row a cost label", () => {
-    for (const g of rowsForSection("video", false, { ...DEFAULT_SETTINGS })) {
-      if (g.group === "Look" || g.group === "Diagnostics") continue;
-      for (const r of g.rows) expect(SECTION_OF[r.key].cost, r.key).toMatch(/^(low|med|high)$/);
-    }
+  it("gives every Video row a cost label, hidden ones too", () => {
+    const video = Object.keys(SECTION_OF).filter((k) => SECTION_OF[k].section === "video");
+    expect(video.length).toBeGreaterThan(15);
+    for (const key of video) expect(SECTION_OF[key].cost, key).toMatch(/^(low|med|high)$/);
   });
 
   it("shows touch rows only on touch devices", () => {
