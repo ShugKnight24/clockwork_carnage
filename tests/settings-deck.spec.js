@@ -86,17 +86,17 @@ test("every interactive target is at least 44px tall", async ({ page }) => {
 // ── Flows: the deck wired into the game (Task 4) ──────────────
 
 // A standard pad the game can poll; __padSet(i, on) presses button i.
-async function fakePad(page) {
-  await page.addInitScript(() => {
+async function fakePad(page, id = "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)") {
+  await page.addInitScript((padId) => {
     const pad = {
-      id: "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)",
+      id: padId,
       index: 0, mapping: "standard", connected: true, timestamp: 1,
       buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
       axes: [0, 0, 0, 0],
     };
     window.__padSet = (i, on) => { pad.buttons[i] = { pressed: on, touched: on, value: on ? 1 : 0 }; pad.timestamp++; };
     Object.defineProperty(navigator, "getGamepads", { value: () => [pad, null, null, null], configurable: true });
-  });
+  }, id);
 }
 
 async function tapPad(page, i, hold = 80) {
@@ -447,4 +447,209 @@ test("releasing a volume slider plays a sample on its bus", async ({ page }) => 
   await page.keyboard.press("ArrowLeft");
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => window.__samples)).toEqual(["musicSting", "speak"]);
+});
+
+// ── Remapping (Task 8) ───────────────────────────────────────
+
+const dialog = (page) => deck(page).locator('[role="alertdialog"]');
+const focusRow = (page, key) => page.evaluate((k) => document.querySelector("settings-deck").focusRowByKey(k), key);
+const keybind = (page, action) => page.evaluate((a) => window.ccDebug.game.keybinds[a], action);
+const padBind = (page, action) => page.evaluate((a) => window.ccDebug.game.gamepad.bindings[a], action);
+const activeInDeck = (page) => page.evaluate(() => {
+  const a = document.querySelector("settings-deck").shadowRoot.activeElement;
+  return a?.dataset.key ?? a?.getAttribute("role") ?? a?.dataset.confirm ?? a?.tagName;
+});
+
+test("remap Interact to F: prompt updates, play responds, reset restores", async ({ page }) => {
+  await openFromMenu(page);
+  for (let i = 0; i < 3; i++) await page.keyboard.press("KeyE"); // Controls
+  await expect(deck(page)).toHaveAttribute("section", "controls");
+  await focusRow(page, "remap:keyboard:interact");
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toBeVisible();
+  await expect(dialog(page)).toHaveAttribute("aria-modal", "true");
+  await expect(dialog(page)).toContainText("Press a key for Interact");
+  expect(await activeInDeck(page)).toBe("alertdialog"); // focus moved into the dialog
+  await page.keyboard.press("KeyF");
+  // KeyF was toggleFPS: conflict dialog, confirm the swap
+  await expect(dialog(page)).toContainText("FPS counter");
+  await expect(dialog(page)).toContainText("Swap?");
+  expect(await activeInDeck(page)).toBe("yes");
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toBeHidden();
+  expect(await activeInDeck(page)).toBe("remap:keyboard:interact"); // focus back on the cell
+  expect(await keybind(page, "interact")).toBe("KeyF");
+  expect(await keybind(page, "toggleFPS")).toBe("KeyE");
+  await expect(deck(page).locator('[data-key="remap:keyboard:interact"] .bind')).toHaveText("F");
+  await expect(deck(page).locator('[data-key="remap:keyboard:toggleFPS"] .bind')).toHaveText("E");
+  // Prompts read the same table.
+  expect(await page.evaluate(async () => (await import("/src/ui/input-glyphs.js")).glyph(window.ccDebug.game, "interact", "keyboard").text)).toBe("F");
+  // Survives a reload (InputManager storage).
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug);
+  expect(await keybind(page, "interact")).toBe("KeyF");
+  expect(await keybind(page, "toggleFPS")).toBe("KeyE");
+  await page.keyboard.press("Enter");
+  await page.locator("#btnSettings").click();
+  await expect(deck(page)).toHaveAttribute("open", "");
+  await focusRow(page, "resetKeyboard");
+  await page.keyboard.press("Enter");
+  expect(await keybind(page, "interact")).toBe("KeyE");
+  expect(await keybind(page, "toggleFPS")).toBe("KeyF");
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem("cc_keybinds"))).interact).toBe("KeyE");
+});
+
+test("Escape cannot be bound", async ({ page }) => {
+  await openFromMenu(page);
+  for (let i = 0; i < 3; i++) await page.keyboard.press("KeyE");
+  await focusRow(page, "remap:keyboard:interact");
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog(page)).toBeHidden();
+  expect(await keybind(page, "interact")).toBe("KeyE");
+  expect(await state(page)).toBe("settings"); // Esc cancelled the capture, not the deck
+  expect(await activeInDeck(page)).toBe("remap:keyboard:interact");
+});
+
+test("a rebound key works in play at once", async ({ page }) => {
+  await startPaused(page);
+  await page.keyboard.press("KeyS"); // pause → Settings
+  await expect(deck(page)).toHaveAttribute("open", "");
+  await focusRow(page, "remap:keyboard:interact");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("KeyG"); // free: no swap prompt
+  await expect(dialog(page)).toBeHidden();
+  expect(await keybind(page, "interact")).toBe("KeyG");
+  expect(await page.evaluate(() => window.ccDebug.game.input.keybinds === window.ccDebug.game.keybinds)).toBe(true);
+  await page.keyboard.press("Escape"); // deck → pause
+  await page.evaluate(() => {
+    const g = window.ccDebug.game;
+    g.resumeGame();
+    window.__interacts = 0;
+    const orig = g.interact.bind(g);
+    g.interact = (...a) => { window.__interacts++; return orig(...a); };
+  });
+  expect(await state(page)).toBe("playing");
+  await page.keyboard.press("KeyE");
+  expect(await page.evaluate(() => window.__interacts)).toBe(0);
+  await page.keyboard.press("KeyG");
+  expect(await page.evaluate(() => window.__interacts)).toBe(1);
+});
+
+test("capture keeps the browser from acting on Tab, Space and arrows", async ({ page }) => {
+  await openFromMenu(page);
+  await page.evaluate(() => {
+    window.__prevented = {};
+    document.addEventListener("keydown", (e) => { window.__prevented[e.code] = e.defaultPrevented; });
+  });
+  for (const code of ["Tab", "Space", "ArrowDown"]) {
+    await focusRow(page, "remap:keyboard:chronoLock");
+    await page.keyboard.press("Enter");
+    await expect(dialog(page)).toBeVisible();
+    await page.keyboard.press(code); // a free key: binds without a prompt
+    await expect(dialog(page)).toBeHidden();
+    expect(await keybind(page, "chronoLock")).toBe(code);
+    expect(await activeInDeck(page)).toBe("remap:keyboard:chronoLock");
+  }
+  expect(await page.evaluate(() => window.__prevented)).toEqual({ Tab: true, Space: true, ArrowDown: true, Enter: true });
+});
+
+test("controller: A opens capture without binding, keys are ignored, Y swaps with A, prompts and play follow, reload keeps it", async ({ page }) => {
+  await fakePad(page);
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await focusRow(page, "remap:gamepad:dash");
+  await expect(deck(page).locator('[data-key="remap:gamepad:dash"] .bind')).toHaveText("A");
+  await tapPad(page, 0); // A: opens the capture, and must not also bind A or click
+  await expect(dialog(page)).toContainText("Press a button for Dash");
+  await page.waitForTimeout(100);
+  await expect(dialog(page)).toContainText("Press a button for Dash");
+  await page.keyboard.press("KeyG"); // the other device: ignored
+  await page.keyboard.press("Escape");
+  await expect(dialog(page)).toContainText("Press a button for Dash");
+  expect(await keybind(page, "interact")).toBe("KeyE");
+  await tapPad(page, 9); // Start: reserved, keeps listening
+  await expect(dialog(page)).toContainText("reserved for pause");
+  await expect(dialog(page)).toContainText("Press a button for Dash");
+  await tapPad(page, 3); // Y: used by Next weapon
+  await expect(dialog(page)).toContainText("Next weapon");
+  await expect(dialog(page)).toContainText("Swap?");
+  await tapPad(page, 0); // A swaps
+  await expect(dialog(page)).toBeHidden();
+  expect(await padBind(page, "dash")).toBe(3);
+  expect(await padBind(page, "weaponNext")).toBe(0);
+  expect(await page.evaluate(async () => (await import("/src/ui/input-glyphs.js")).glyph(window.ccDebug.game, "dash", "gamepad").text)).toBe("Y");
+  await expect(deck(page).locator('[data-key="remap:gamepad:dash"] .bind')).toHaveText("Y");
+  expect(await activeInDeck(page)).toBe("remap:gamepad:dash");
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem("cc_padbinds")))).toEqual({ dash: 3, weaponNext: 0 });
+
+  // In play, Y dashes now.
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug);
+  expect(await padBind(page, "dash")).toBe(3); // cc_padbinds loaded at start-up
+  await page.evaluate(() => window.ccDebug.startCampaign(0, 1));
+  await page.waitForFunction(() => window.ccDebug.game.state === "playing");
+  await page.evaluate(() => {
+    const g = window.ccDebug.game;
+    window.__dashes = 0;
+    const orig = g.triggerDash.bind(g);
+    g.triggerDash = (...a) => { window.__dashes++; return orig(...a); };
+  });
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await tapPad(page, 3);
+  expect(await page.evaluate(() => window.__dashes)).toBe(1);
+});
+
+test("controller: B cancels, the RB pair moves together, reset restores", async ({ page }) => {
+  await fakePad(page);
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await focusRow(page, "remap:gamepad:dash");
+  await tapPad(page, 0);
+  await expect(dialog(page)).toBeVisible();
+  await tapPad(page, 1); // B cancels
+  await expect(dialog(page)).toBeHidden();
+  expect(await padBind(page, "dash")).toBe(0);
+  expect(await state(page)).toBe("settings");
+  expect(await activeInDeck(page)).toBe("remap:gamepad:dash");
+  await tapPad(page, 0);
+  await tapPad(page, 5); // RB: rewind and previous weapon
+  await expect(dialog(page)).toContainText("Chrono Rewind and Previous weapon");
+  await expect(dialog(page)).toContainText("Chrono Rewind and Previous weapon move together to A");
+  await tapPad(page, 0);
+  expect(await padBind(page, "dash")).toBe(5);
+  expect(await padBind(page, "chronoRewind")).toBe(0);
+  expect(await padBind(page, "weaponPrev")).toBe(0);
+  await focusRow(page, "resetController");
+  await tapPad(page, 0);
+  expect(await padBind(page, "dash")).toBe(0);
+  expect(await padBind(page, "weaponPrev")).toBe(5);
+  expect(await page.evaluate(() => localStorage.getItem("cc_padbinds"))).toBe("{}");
+});
+
+test("controller rows show the connected pad's legends, Xbox with none", async ({ page }) => {
+  await openFromMenu(page);
+  await focusRow(page, "remap:gamepad:dash");
+  await expect(deck(page).locator('[data-key="remap:gamepad:dash"] .bind')).toHaveText("A");
+  await fakePad(page, "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)");
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await focusRow(page, "remap:gamepad:dash");
+  await expect(deck(page).locator('[data-key="remap:gamepad:dash"] .bind')).toHaveText("✕");
+  await expect(deck(page).locator('[data-key="remap:gamepad:weaponPrev"] .bind')).toHaveText("R1");
+});
+
+test("capture gives up after 8 seconds", async ({ page }) => {
+  test.setTimeout(30_000);
+  await openFromMenu(page);
+  await focusRow(page, "remap:keyboard:interact");
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toBeVisible();
+  await page.waitForTimeout(7000);
+  await expect(dialog(page)).toBeVisible();
+  await expect(dialog(page)).toBeHidden({ timeout: 3000 });
+  expect(await keybind(page, "interact")).toBe("KeyE");
+  expect(await activeInDeck(page)).toBe("remap:keyboard:interact");
+  await expect(deck(page).locator('[role="status"]')).toContainText("Interact unchanged");
 });

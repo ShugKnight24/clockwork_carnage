@@ -7,6 +7,9 @@
 import { PAD, REMAPPABLE_PAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS } from "./pad-actions.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 
+/** localStorage key for controller overrides (keyboard keeps cc_keybinds). */
+export const STORAGE_KEY_PADBINDS = "cc_padbinds";
+
 export const REMAPPABLE_KEY_ACTIONS = Object.keys(DEFAULT_KEYBINDS).filter((a) => a !== "pause");
 /** RB rewinds while shifting and is previous weapon otherwise, so these two may share a button. */
 export const SHARED_PAD = [["chronoRewind", "weaponPrev"]];
@@ -46,6 +49,12 @@ export function applyBind(table, action, input, swap = false) {
   for (const a of group) table[a] = input;
   if (swap) for (const a of displaced) table[a] = previous;
   return table;
+}
+
+/** What a swap-bind would change, in table order, without changing `table`. */
+export function previewBind(table, action, input) {
+  const next = applyBind({ ...table }, action, input, true);
+  return Object.keys(table).filter((a) => next[a] !== table[a]).map((a) => ({ action: a, from: table[a], to: next[a] }));
 }
 
 export function resetBindings(table, defaults, actions) {

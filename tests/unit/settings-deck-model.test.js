@@ -70,6 +70,39 @@ describe("deck navigation", () => {
     expect(r.state.capture).toBeNull();
   });
 
+  it("activating a remap cell starts capture for that device; the next key goes to the deck", () => {
+    const remapRows = [{ kind: "remap", key: "interact", device: "keyboard" }];
+    const r = deckKey(createDeckState(), "Enter", { sectionCount: 6, rows: remapRows, repeat: false, now: 1000 });
+    expect(r.effects).toContainEqual({ type: "capture", action: "interact", device: "keyboard" });
+    expect(types(r)).not.toContain("activate");
+    expect(r.state.capture).toEqual({ action: "interact", device: "keyboard", until: 9000 });
+  });
+
+  it("a held Enter does not start capture again", () => {
+    const remapRows = [{ kind: "remap", key: "interact", device: "keyboard" }];
+    const r = deckKey(createDeckState(), "Enter", { sectionCount: 6, rows: remapRows, repeat: true, now: 1000 });
+    expect(r.state.capture).toBeNull();
+    expect(r.effects).toEqual([]);
+  });
+
+  it("capture times out after 8 seconds", () => {
+    const s = { ...createDeckState(), capture: { action: "interact", device: "keyboard", until: 9000 } };
+    const r = deckKey(s, "ArrowDown", { sectionCount: 6, rows: [], repeat: false, now: 9001 });
+    expect(r.state.capture).toBeNull();
+    expect(types(r)).toContain("captureCancel");
+    expect(r.state.row).toBe(0); // the late key is not also a move
+  });
+
+  it("while capturing, the other device is ignored; B (Escape) cancels a pad capture", () => {
+    const s = { ...createDeckState(), capture: { action: "dash", device: "gamepad", until: 9000 } };
+    const kb = deckKey(s, "Escape", ctx({ now: 100, device: "keyboard" }));
+    expect(kb.state.capture).toEqual(s.capture);
+    expect(kb.effects).toEqual([]);
+    const pad = deckKey(s, "Escape", ctx({ now: 100, device: "gamepad" }));
+    expect(pad.state.capture).toBeNull();
+    expect(types(pad)).toEqual(["captureCancel"]);
+  });
+
   it("holding C shows the previous value until release", () => {
     let r = press(createDeckState(), "KeyC");
     expect(r.effects).toContainEqual({ type: "compare", on: true });

@@ -8,6 +8,8 @@ import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
+import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
+import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
 import { initXInputUsb } from "./xinput-usb.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
 import {
@@ -652,6 +654,10 @@ export class Game {
     // InputManager was created in the constructor and registered all DOM
     // listeners. This method now just loads saved keybinds from localStorage.
     this.input.loadKeybinds();
+    // Controller remaps (the settings deck) edit the live table in place.
+    try {
+      Object.assign(GAMEPAD_ACTIONS, loadPadBinds(localStorage.getItem(STORAGE_KEY_PADBINDS)));
+    } catch (_) {}
   }
 
   /** Handles the keydown part that needs full game state context. */
@@ -1022,6 +1028,9 @@ export class Game {
       if (p.currentWeapon !== weaponBefore && this.mode === "tutorial") this.tutorialWeaponSwapped = true;
       if (jp.chronoLock) this.chronoLock();
       if (jp.pause) this.handleKeyPress(this.keybinds.pause);
+    } else if (this.state === GameState.SETTINGS && this.settingsDeck?.state.capture) {
+      // A remap capture takes the raw button; A must not also click, B is its cancel.
+      if (gp.buttonPressed >= 0) this.settingsDeck.captureInput({ kind: "button", index: gp.buttonPressed });
     } else {
       // The Forge walks on the stick, so only its d-pad maps to arrows; B
       // holds crouch there (descend), so only Start leaves it.

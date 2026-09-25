@@ -9,9 +9,12 @@
  */
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS, ART_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
-import { createDeckState, deckKey, deckKeyUp } from "../../src/ui/settings-deck-model.js";
+import { createDeckState, deckKey, deckKeyUp, CAPTURE_MS } from "../../src/ui/settings-deck-model.js";
 import { SETTINGS_REGISTRY, settingDisplayItem } from "../settings-registry.js";
-import { activeDevice, renderDomGlyphs, GLYPH_CSS } from "../../src/ui/input-glyphs.js";
+import { activeDevice, renderDomGlyphs, GLYPH_CSS, glyph, glyphHTML, buttonGlyph, keyLabel, padFamily } from "../../src/ui/input-glyphs.js";
+import { PAD, PAD_LABELS, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
+import { planBind, applyBind, previewBind, resetBindings, savePadBinds, REMAPPABLE_KEY_ACTIONS, STORAGE_KEY_PADBINDS } from "../../src/systems/remap.js";
+import { DEFAULT_KEYBINDS } from "../input-manager.js";
 import { COLOR, tokensCss } from "../../src/ui/design-tokens.js";
 import { onArtStyleChange } from "../../src/rendering/art-style.js";
 
@@ -39,6 +42,30 @@ const VOLUME_SAMPLE = {
 // Keys and the d-pad have no release per step: sample once the nudges pause.
 const SAMPLE_AFTER_MS = 300;
 const RESET_DESC = "Put every setting in this section back to its default.";
+
+// Remap rows: what each action is called, and the two columns.
+const REMAP_LABELS = {
+  dash: "Dash", crouch: "Crouch", interact: "Interact", weaponNext: "Next weapon", weaponPrev: "Previous weapon",
+  chronoShift: "Chrono Shift", chronoRewind: "Chrono Rewind", chronoLock: "Chrono Lock", aim: "Aim", fire: "Fire",
+  sprint: "Sprint", minimap: "Map", weaponCyclePrev: "Cycle weapon back", weaponCycleNext: "Cycle weapon forward",
+  weaponLast: "Last weapon", weaponFirst: "First weapon", moveForward: "Move forward", moveBack: "Move back",
+  moveLeft: "Strafe left", moveRight: "Strafe right", toggleFPS: "FPS counter",
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`weapon${i + 1}`, `Weapon ${i + 1}`])),
+};
+const remapLabel = (action) => REMAP_LABELS[action] ?? action;
+const COLUMN = {
+  keyboard: {
+    group: "Keyboard", reset: "resetKeyboard", resetLabel: "Reset keyboard to default", actions: REMAPPABLE_KEY_ACTIONS, defaults: DEFAULT_KEYBINDS,
+    desc: "Select, then press the new key. Esc cancels.", resetDesc: "Put every key back where it started.",
+  },
+  gamepad: {
+    group: "Controller buttons", reset: "resetController", resetLabel: "Reset controller to default", actions: REMAPPABLE_PAD_ACTIONS, defaults: DEFAULT_GAMEPAD_ACTIONS,
+    desc: "Select, then press the new button. B cancels. Menu buttons stay as they are.", resetDesc: "Put every button back where it started.",
+  },
+};
+const DPAD_WORDS = ["D-pad up", "D-pad down", "D-pad left", "D-pad right"];
+// Spoken names where a family's legend is a symbol.
+const PAD_WORDS = { xbox: { 8: "View", 9: "Menu" }, switch: { 8: "Minus", 9: "Plus" } };
 
 const ICON = {
   battery: '<rect x="3" y="7" width="15" height="10" rx="1.5"/><path d="M21 10.5v3M6.5 10v4"/>',
@@ -163,6 +190,32 @@ p { margin: 0; }
 .row.reset .label { font: 700 var(--cc-type-label)/1 var(--d-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--d-dim); }
 .row.reset.focused .label { color: var(--d-text); }
 
+/* Remap */
+.row[data-kind="remap"] .value { min-width: 3.4em; justify-content: flex-end; }
+.bind { display: inline-flex; align-items: center; font-size: 17px; }
+.bind .ccg { font-size: 15px; }
+.bind .key { min-width: 2.2em; height: 2.2em; font-size: 12px; }
+.row.column-reset .chip { color: var(--d-dim); }
+
+/* Capture and swap: a modal over the whole panel. */
+.modal { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 20px; background: rgba(2, 4, 8, 0.72); outline: none; }
+.mcard { display: grid; gap: 12px; width: min(100%, 380px); padding: 20px; background: var(--cc-panel-menu); border: 1px solid var(--d-accent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55); }
+.mtitle { font: 700 var(--cc-type-row)/1.25 var(--d-head); color: var(--d-text); overflow-wrap: anywhere; }
+.mtext { font: 500 var(--cc-type-body)/1.4 var(--d-font); color: var(--d-dim); }
+.mtext:empty, .mnote:empty { display: none; }
+.mtext span { display: block; }
+.mnote { font: 600 var(--cc-type-body)/1.35 var(--d-font); color: var(--d-note); }
+.mtimer { height: 3px; background: var(--d-track); overflow: hidden; }
+.mtimer i { display: block; height: 100%; background: var(--d-accent); transform-origin: left; animation: mtimer var(--t, 8s) linear forwards; }
+@keyframes mtimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.mbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.mbtns button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; outline: none;
+  font: 700 var(--cc-type-label)/1 var(--d-font); letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid var(--d-line-hi); }
+.mbtns button:hover, .mbtns button:focus-visible, .mbtns button:focus { border-color: var(--d-accent); box-shadow: inset 0 0 0 1px var(--d-accent); }
+.mbtns [data-confirm="yes"] { color: var(--cc-primary-text); background: var(--cc-primary); border-color: var(--cc-ink); }
+.mbtns .ccg, .mbtns .key { font-size: 12px; }
+
 /* Quick cards */
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cards.art { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -209,6 +262,8 @@ footer { position: relative; display: grid; gap: 8px; padding: 12px 16px calc(14
 .confirm button { min-height: 44px; padding: 0 12px; font: 700 var(--cc-type-label)/1 var(--d-font); letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid var(--d-line-hi); outline: none; }
 .confirm button:hover, .confirm button:focus-visible { border-color: var(--d-accent); }
 .confirm [data-confirm="yes"] { color: var(--cc-primary-text); background: var(--cc-primary); border-color: var(--cc-ink); }
+
+@media (max-width: 699px) { .modal { padding: 12px; } .mcard { padding: 16px; } }
 
 /* ── Bottom sheet (narrow windows) ── */
 :host([layout="sheet"]) { --panel-w: 100vw; }
@@ -259,6 +314,10 @@ footer { position: relative; display: grid; gap: 8px; padding: 12px 16px calc(14
 :host([skin="modern"]) .chip { color: var(--cc-text); background: var(--cc-keycap); border: 1px solid var(--cc-ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35), 2px 2px 0 var(--cc-ink); }
 :host([skin="modern"]) .row.focused .chip { color: var(--cc-caption-cyan-text); background: var(--cc-caption-cyan); }
 :host([skin="modern"]) .row.reset { background: var(--cc-panel-well); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55); }
+:host([skin="modern"]) .mcard { background: var(--cc-steel); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.34), inset 4px 0 0 var(--cc-cyan), 5px 5px 0 var(--cc-ink); }
+:host([skin="modern"]) .mbtns button { background: var(--cc-keycap); border: 1px solid var(--cc-ink); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35), 2px 2px 0 var(--cc-ink); }
+:host([skin="modern"]) .mbtns [data-confirm="yes"] { color: var(--cc-caption-cyan-text); background: var(--cc-caption-cyan); }
+:host([skin="modern"]) .mbtns button:focus { outline: 2px solid var(--cc-cyan); outline-offset: 2px; }
 :host([skin="modern"]) .confirm { background: var(--cc-panel-well); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 0 0 1px var(--cc-amber); }
 
 /* ── Legacy: neon on navy, monospace, cyan and violet ── */
@@ -289,6 +348,9 @@ footer { position: relative; display: grid; gap: 8px; padding: 12px 16px calc(14
 :host([skin="legacy"]) .back:hover, :host([skin="legacy"]) .back:focus-visible { color: var(--cc-energy); background: rgba(0, 200, 255, 0.1); }
 :host([skin="legacy"]) .card[aria-current="true"] { background: rgba(0, 255, 204, 0.07); box-shadow: 0 0 14px rgba(0, 255, 204, 0.18) inset; }
 :host([skin="legacy"]) .card[aria-current="true"]::after { box-shadow: 0 0 8px var(--cc-energy); }
+:host([skin="legacy"]) .mcard { background: #0a0a2e; border-color: var(--cc-energy); box-shadow: 0 0 24px rgba(0, 255, 204, 0.25); }
+:host([skin="legacy"]) .mtitle { color: var(--cc-energy); }
+:host([skin="legacy"]) .mbtns [data-confirm="yes"] { color: #021; background: var(--cc-energy); border-color: var(--cc-energy); }
 :host([skin="legacy"]) .confirm [data-confirm="yes"] { color: #fff; background: rgba(255, 42, 74, 0.25); border-color: var(--cc-crimson); }
 
 /* ── Modern (art profile "realistic"): off-white on dark, hairlines, no ink ── */
@@ -321,9 +383,12 @@ footer { position: relative; display: grid; gap: 8px; padding: 12px 16px calc(14
 :host([skin="realistic"]) .chip { border-radius: 2px; }
 :host([skin="realistic"]) .key { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--d-line-hi); box-shadow: none; color: var(--d-text); font-weight: 600; }
 :host([skin="realistic"]) .confirm { border-radius: 3px; }
+:host([skin="realistic"]) .mcard { border-radius: 4px; border-color: var(--d-line-hi); background: #16191c; }
+:host([skin="realistic"]) .mbtns button { border-radius: 2px; font-weight: 600; }
+:host([skin="realistic"]) .mbtns [data-confirm="yes"] { color: #0b0d0f; background: #e4e6e1; border: 0; }
 :host([skin="realistic"]) .confirm [data-confirm="yes"] { color: #fff4f2; background: #8c2e27; border: 0; border-radius: 2px; }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } .mtimer i { animation: none; } }
 `;
 
 class SettingsDeck extends HTMLElement {
@@ -351,7 +416,14 @@ class SettingsDeck extends HTMLElement {
       confirm: $(".confirm"),
       confirmText: $(".confirm p"),
       live: $(".live"),
+      modal: $(".modal"),
+      mTitle: $(".mtitle"),
+      mText: $(".mtext"),
+      mNote: $(".mnote"),
+      mTimer: $(".mtimer"),
+      mBtns: $(".mbtns"),
     };
+    this.pendingBind = null; // the bind a swap prompt is asking about
     this.bind();
     new ResizeObserver(() => this.onResize()).observe(document.documentElement);
     onArtStyleChange(() => {
@@ -399,6 +471,15 @@ class SettingsDeck extends HTMLElement {
     </footer>
   </div>
   <span class="brackets"></span>
+  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="deck-modal-title" aria-describedby="deck-modal-text" tabindex="-1" hidden>
+    <div class="mcard">
+      <p class="mtitle" id="deck-modal-title"></p>
+      <p class="mtext" id="deck-modal-text"></p>
+      <p class="mnote"></p>
+      <div class="mtimer" aria-hidden="true"><i></i></div>
+      <div class="mbtns"></div>
+    </div>
+  </div>
 </aside>
 <div class="sr live" role="status" aria-live="polite"></div>`;
   }
@@ -434,9 +515,12 @@ class SettingsDeck extends HTMLElement {
   /** Put away without telling the game (it already left Settings). */
   hide() {
     clearTimeout(this._sampleTimer);
+    clearTimeout(this._captureTimer);
     if (this.compareKey) this.compare(false);
-    this.state = { ...this.state, confirm: null, compare: false };
+    this.state = { ...this.state, confirm: null, compare: false, capture: null };
+    this.pendingBind = null;
     this.el.confirm.hidden = true;
+    this.el.modal.hidden = true;
     this.isOpen = false;
     this.shadowRoot.activeElement?.blur?.();
     this.removeAttribute("open");
@@ -457,6 +541,12 @@ class SettingsDeck extends HTMLElement {
     if (pad !== this._pad) {
       this._pad = pad;
       if (this.isOpen && this.section().id === "quick") this.refresh();
+    }
+    // Controller rows draw the connected pad's legends (Xbox with none).
+    const family = padFamily(this.game);
+    if (family !== this._family) {
+      this._family = family;
+      if (this.isOpen && this.section().id === "controls") this.patchRows();
     }
   }
 
@@ -573,6 +663,7 @@ class SettingsDeck extends HTMLElement {
     if (!t) return;
     if (t.dataset.section != null) return this.setSection(Number(t.dataset.section));
     if (t.dataset.act === "back") return this.run([{ type: "close" }]);
+    if (t.dataset.act === "cancelCapture") return this.cancelCapture();
     if (t.dataset.confirm) return this.answerConfirm(t.dataset.confirm === "yes");
     const row = t.closest(".row");
     if (!row) return;
@@ -580,6 +671,7 @@ class SettingsDeck extends HTMLElement {
     if (i !== this.state.row) this.focusRow(i, { reveal: false });
     if (t.dataset.step) return this.run([{ type: "step", dir: Number(t.dataset.step) }]);
     if (row.dataset.kind === "slider") return; // pointerdown already set it
+    if (row.dataset.kind === "remap") return this.key("Enter");
     this.run([{ type: "activate" }]);
   }
 
@@ -606,7 +698,23 @@ class SettingsDeck extends HTMLElement {
 
   /** Returns true when the key was consumed. `e` is absent for ccDebug.pressKey. */
   handleKey(code, e) {
-    if (!this.isOpen || code === "Tab") return false; // Tab moves native focus
+    if (!this.isOpen) return false;
+    // A capture takes the next key as it is, and the browser acts on none.
+    if (this.state.capture) {
+      if (e && typeof e.preventDefault === "function") e.preventDefault();
+      if (!e?.repeat) this.captureInput({ kind: "key", code });
+      return true;
+    }
+    // The swap prompt is modal: Tab and arrows move between its two buttons.
+    if (this.state.confirm === "swap" && (code === "Tab" || /^(Arrow|Key[WASD]$)/.test(code))) {
+      if (e && typeof e.preventDefault === "function") e.preventDefault();
+      if (e?.repeat) return true; // the captured key, still held
+      const btns = [...this.el.mBtns.querySelectorAll("button")];
+      const i = btns.indexOf(this.shadowRoot.activeElement);
+      btns[(i + 1) % btns.length]?.focus();
+      return true;
+    }
+    if (code === "Tab") return false; // Tab moves native focus
     if (e && typeof e.preventDefault === "function") e.preventDefault();
     this.classList.add("kbd");
     const alias = { KeyW: "ArrowUp", KeyS: "ArrowDown", KeyA: "ArrowLeft", KeyD: "ArrowRight", NumpadEnter: "Enter" };
@@ -630,12 +738,25 @@ class SettingsDeck extends HTMLElement {
       return true;
     }
 
-    const ctx = { sectionCount: SECTIONS.length, rows: this.rowKinds(), repeat: !!e?.repeat, now: performance.now() };
-    const { state, effects } = deckKey(this.state, c, ctx);
+    const { state, effects } = deckKey(this.state, c, this.ctx({ repeat: !!e?.repeat }));
     this.state = state;
     this.run(effects, { keepTab: onTab });
     this.syncConfirm();
+    this.syncModal();
     return true;
+  }
+
+  ctx(extra) {
+    return { sectionCount: SECTIONS.length, rows: this.rowKinds(), repeat: false, now: performance.now(), ...extra };
+  }
+
+  /** Run one key through the model, as the deck's own buttons do. */
+  key(code, extra) {
+    const { state, effects } = deckKey(this.state, code, this.ctx(extra));
+    this.state = state;
+    this.run(effects);
+    this.syncConfirm();
+    this.syncModal();
   }
 
   handleKeyUp(code) {
@@ -656,7 +777,17 @@ class SettingsDeck extends HTMLElement {
           if (item) this.activate(item);
           break;
         case "reset":
-          if (item?.def && this.change(item.def, () => resetSetting(this.game, item.def), false)) this.announce(`${item.def.label} reset`);
+          if (item?.kind === "remap") this.resetBind(item);
+          else if (item?.def && this.change(item.def, () => resetSetting(this.game, item.def), false)) this.announce(`${item.def.label} reset`);
+          break;
+        case "capture":
+          this.openCapture();
+          break;
+        case "captureCancel":
+          this.endCapture();
+          break;
+        case "swap":
+          this.commitPending();
           break;
         case "resetSection":
           this.resetSection();
@@ -705,6 +836,7 @@ class SettingsDeck extends HTMLElement {
       this.syncConfirm();
       return;
     }
+    if (item.column) return this.resetColumn(item.column);
     if (item.pad) {
       const cal = defOf("gamepadCalibrate");
       cal.onClick?.(this.game);
@@ -759,10 +891,11 @@ class SettingsDeck extends HTMLElement {
   }
 
   answerConfirm(yes) {
-    const { state, effects } = deckKey(this.state, yes ? "Enter" : "Escape", { sectionCount: SECTIONS.length, rows: this.rowKinds(), repeat: false, now: performance.now() });
+    const { state, effects } = deckKey(this.state, yes ? "Enter" : "Escape", this.ctx());
     this.state = state;
     this.run(effects);
     this.syncConfirm();
+    this.syncModal();
     this.focusCurrent();
   }
 
@@ -774,6 +907,209 @@ class SettingsDeck extends HTMLElement {
     const label = SECTIONS[this.state.section].label;
     this.el.confirmText.textContent = `Reset every ${label} setting?`;
     this.announce(`Reset every ${label} setting to its default? Enter to confirm, any other key to cancel.`);
+  }
+
+  // ── Remapping ───────────────────────────────────────────
+
+  table(device) {
+    return device === "keyboard" ? this.game.input?.keybinds ?? this.game.keybinds : GAMEPAD_ACTIONS;
+  }
+
+  /** An input's name in words, for prompts and the live region. */
+  inputName(device, input) {
+    if (device === "keyboard") return keyLabel(input);
+    if (input >= PAD.UP && input <= PAD.RIGHT) return DPAD_WORDS[input - PAD.UP];
+    const family = padFamily(this.game);
+    return PAD_WORDS[family]?.[input] ?? PAD_LABELS[family][input] ?? `Button ${input}`;
+  }
+
+  /** A key cap or pad glyph for the capture's device. */
+  inputCap(device, input) {
+    return device === "keyboard" ? `<kbd class="key">${esc(keyLabel(input))}</kbd>` : glyphHTML(buttonGlyph(input, padFamily(this.game)));
+  }
+
+  /** "Dash moves to RB. Chrono Rewind and Previous weapon move together to A." */
+  describeMoves(device, changes) {
+    const byInput = new Map();
+    for (const c of changes) byInput.set(c.to, [...(byInput.get(c.to) ?? []), remapLabel(c.action)]);
+    return [...byInput].map(([to, names]) => {
+      const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)} move together` : `${names[0]} moves`;
+      return `${who} to ${this.inputName(device, to)}.`;
+    });
+  }
+
+  showModal({ title, lines = [], note = "", timer = false, buttons }) {
+    const m = this.el;
+    m.mTitle.textContent = title;
+    m.mText.innerHTML = lines.map((l) => `<span>${esc(l)}</span>`).join("");
+    m.mNote.textContent = note;
+    m.mTimer.hidden = !timer;
+    if (timer) this.restartTimerBar();
+    m.mBtns.innerHTML = buttons;
+    m.modal.hidden = false;
+  }
+
+  restartTimerBar() {
+    const bar = this.el.mTimer.firstElementChild;
+    bar.style.setProperty("--t", `${CAPTURE_MS}ms`);
+    bar.style.animation = "none";
+    void bar.offsetWidth; // reflow, so the animation starts over
+    bar.style.animation = "";
+  }
+
+  /** Model effect: a remap cell was selected; wait for its device's next input. */
+  openCapture() {
+    const { action, device } = this.state.capture;
+    const kb = device === "keyboard";
+    this.sfx("menuConfirm");
+    const cancelCap = kb ? '<kbd class="key">Esc</kbd>' : glyphHTML(buttonGlyph(PAD.B, padFamily(this.game)));
+    this.showModal({
+      title: `Press a ${kb ? "key" : "button"} for ${remapLabel(action)}…`,
+      lines: [`${kb ? "Esc" : this.inputName("gamepad", PAD.B)} cancels.`],
+      timer: true,
+      buttons: `<button data-act="cancelCapture">${cancelCap}Cancel</button>`,
+    });
+    this.el.modal.focus({ preventScroll: true });
+    this.announce(`Press a ${kb ? "key" : "controller button"} for ${remapLabel(action)}. ${kb ? "Escape" : this.inputName("gamepad", PAD.B)} cancels.`);
+    this.armCaptureTimer();
+  }
+
+  armCaptureTimer() {
+    clearTimeout(this._captureTimer);
+    this._captureTimer = setTimeout(() => {
+      const cap = this.state.capture;
+      if (!cap) return;
+      // The model sees the deadline pass and ends the capture.
+      this.key("Timeout", { device: cap.device, now: Math.max(performance.now(), cap.until) });
+    }, CAPTURE_MS + 20);
+  }
+
+  /** Model effect: capture ended without a bind (Esc / B, the timeout, Cancel). */
+  endCapture() {
+    clearTimeout(this._captureTimer);
+    this.sfx("menuSelect");
+    const item = this.current();
+    this.announce(item?.kind === "remap" ? `${remapLabel(item.action)} unchanged` : "Cancelled");
+  }
+
+  cancelCapture() {
+    const cap = this.state.capture;
+    if (cap) this.key("Escape", { device: cap.device });
+  }
+
+  /**
+   * An input while capturing (keys from handleKey, buttons from the game's pad
+   * poll). The other device's input is ignored; a reserved or unusable input
+   * says why and keeps listening.
+   */
+  captureInput(input) {
+    const cap = this.state.capture;
+    if (!this.isOpen || !cap) return false;
+    const device = input.kind === "button" ? "gamepad" : "keyboard";
+    const value = device === "gamepad" ? input.index : input.code;
+    // B cancels a button capture as Esc cancels a key one.
+    const code = device === "gamepad" ? (value === PAD.B ? "Escape" : `Button${value}`) : value;
+    this.key(code, { device });
+    if (!this.state.capture || device !== cap.device) return true;
+
+    const table = this.table(device);
+    const plan = planBind(table, cap.action, value, COLUMN[device].actions);
+    if (!plan.ok) {
+      const name = this.inputName(device, value);
+      const why = plan.reason === "reserved" ? `${name} is reserved for pause.` : `${name} can't be bound. Try another ${device === "keyboard" ? "key" : "button"}.`;
+      this.el.mNote.textContent = why;
+      this.announce(why);
+      this.sfx("menuSelect");
+      // A fresh window to try again.
+      this.state = { ...this.state, capture: { ...cap, until: performance.now() + CAPTURE_MS } };
+      this.restartTimerBar();
+      this.armCaptureTimer();
+      return true;
+    }
+    clearTimeout(this._captureTimer);
+    this.state = { ...this.state, capture: null };
+    const changes = previewBind(table, cap.action, value);
+    const bind = { action: cap.action, device, input: value, changes };
+    if (!plan.swapWith) {
+      this.pendingBind = bind;
+      this.sfx("menuConfirm");
+      this.commitPending();
+      this.syncModal();
+      return true;
+    }
+    // Taken: ask first, naming everything that would move.
+    this.pendingBind = bind;
+    this.state = { ...this.state, confirm: "swap" };
+    const displaced = changes.filter((c) => c.to !== value).map((c) => remapLabel(c.action));
+    const users = displaced.length > 1 ? `${displaced.slice(0, -1).join(", ")} and ${displaced.at(-1)}` : displaced[0];
+    const kb = device === "keyboard";
+    const fam = padFamily(this.game);
+    const yesCap = kb ? '<kbd class="key">Enter</kbd>' : glyphHTML(buttonGlyph(PAD.A, fam));
+    const noCap = kb ? '<kbd class="key">Esc</kbd>' : glyphHTML(buttonGlyph(PAD.B, fam));
+    const title = `${this.inputName(device, value)} is already used by ${users}. Swap?`;
+    const lines = this.describeMoves(device, changes);
+    this.showModal({
+      title,
+      lines,
+      buttons: `<button data-confirm="yes">${yesCap}Swap</button><button data-confirm="no">${noCap}Cancel</button>`,
+    });
+    this.el.mBtns.querySelector('[data-confirm="yes"]').focus({ preventScroll: true });
+    this.announce(`${title} ${lines.join(" ")}`);
+    return true;
+  }
+
+  /** Apply the bind a capture (and maybe a swap prompt) settled on. */
+  commitPending() {
+    const bind = this.pendingBind;
+    this.pendingBind = null;
+    if (!bind) return;
+    applyBind(this.table(bind.device), bind.action, bind.input, true);
+    this.saveBinds(bind.device);
+    this.patchRows();
+    this.renderFooter();
+    const moves = bind.changes.length ? this.describeMoves(bind.device, bind.changes).join(" ") : `${remapLabel(bind.action)} stays on ${this.inputName(bind.device, bind.input)}.`;
+    this.announce(moves);
+  }
+
+  saveBinds(device) {
+    if (device === "keyboard") {
+      this.game.input?.saveKeybinds?.();
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY_PADBINDS, savePadBinds(GAMEPAD_ACTIONS));
+    } catch (_) {}
+  }
+
+  /** X / Backspace on a remap row: that action back to its default, swapping if taken. */
+  resetBind(item) {
+    const table = this.table(item.device);
+    const def = COLUMN[item.device].defaults[item.action];
+    const changes = previewBind(table, item.action, def);
+    if (!changes.length) return;
+    applyBind(table, item.action, def, true);
+    this.saveBinds(item.device);
+    this.patchRows();
+    this.announce(`${remapLabel(item.action)} reset. ${this.describeMoves(item.device, changes).join(" ")}`);
+  }
+
+  resetColumn(device) {
+    const col = COLUMN[device];
+    resetBindings(this.table(device), col.defaults, col.actions);
+    this.saveBinds(device);
+    this.sfx("menuConfirm");
+    this.patchRows();
+    this.announce(`${col.group} reset to defaults`);
+  }
+
+  /** Show or put away the capture / swap modal to match the state. */
+  syncModal() {
+    const want = !!this.state.capture || this.state.confirm === "swap";
+    if (want || this.el.modal.hidden) return;
+    this.el.modal.hidden = true;
+    this.pendingBind = this.state.confirm === "swap" ? this.pendingBind : null;
+    // Focus returns to the cell that opened it.
+    if (this.isOpen) this.focusCurrent();
   }
 
   /** Hold to show the value before the latest change (Video rows only). */
@@ -813,15 +1149,24 @@ class SettingsDeck extends HTMLElement {
       ];
     }
     const items = [];
+    const remap = (device) => {
+      const col = COLUMN[device];
+      for (const action of col.actions) items.push({ kind: "remap", key: `remap:${device}:${action}`, action, device, group: col.group });
+      items.push({ kind: "action", key: col.reset, column: device, group: col.group });
+    };
     for (const { group, rows } of rowsForSection(id, this.game.isTouchDevice, this.game.settings)) {
+      // Keys between Mouse and Controller; a touch device has no keyboard to remap.
+      if (group === "Controller" && !this.game.isTouchDevice) remap("keyboard");
       for (const def of rows) items.push({ kind: def.type, key: def.key, def, group });
+      if (group === "Controller") remap("gamepad");
     }
     items.push({ kind: "action", key: "resetSection", group: null });
     return items;
   }
 
   rowKinds() {
-    return this.items.map(({ kind, key }) => ({ kind, key }));
+    // Remap rows give the model their action and device.
+    return this.items.map(({ kind, key, action, device }) => (action ? { kind, key: action, device } : { kind, key }));
   }
 
   rowEls() {
@@ -882,6 +1227,8 @@ class SettingsDeck extends HTMLElement {
     if (card) return `<button class="row card" ${k}>${svg(card.id, "ico")}<span class="label">${esc(card.label)}</span><span class="cdesc">${esc(card.desc)}</span></button>`;
     if (art) return `<button class="row card" ${k}><span class="thumb s${art.style}" aria-hidden="true"><b>Aa</b></span><span class="label">${esc(art.label)}</span></button>`;
     if (key === "resetSection") return `<button class="row reset" ${k}><span class="label">Reset ${esc(this.section().label)}</span></button>`;
+    if (item.kind === "remap") return `<button class="row" ${k}><span class="label">${esc(remapLabel(item.action))}</span><span class="value"><span class="bind"></span></span></button>`;
+    if (item.column) return `<button class="row column-reset" ${k}><span class="label">${esc(COLUMN[item.column].resetLabel)}</span><span class="value"><span class="chip">Reset</span></span></button>`;
     const cost = SECTION_OF[def.key]?.cost;
     const pips = cost ? `<span class="pips" data-cost="${cost}" aria-hidden="true"><i></i><i></i><i></i></span>` : "";
     const label = `<span class="label">${esc(def.label)}${pips}</span>`;
@@ -913,6 +1260,13 @@ class SettingsDeck extends HTMLElement {
       }
       if (card) return el.setAttribute("aria-current", String(this.cardActive(card)));
       if (art) return el.setAttribute("aria-current", String(s.artStyle === art.style));
+      if (item.kind === "remap") {
+        const v = this.table(item.device)[item.action];
+        const html = item.device === "keyboard" ? `<kbd class="key">${esc(keyLabel(v))}</kbd>` : glyphHTML(glyph(this.game, item.action, "gamepad"));
+        const bind = el.querySelector(".bind");
+        if (bind.innerHTML !== html) bind.innerHTML = html;
+        return el.setAttribute("aria-label", `${remapLabel(item.action)}, ${item.device === "keyboard" ? "key" : "controller button"}: ${this.inputName(item.device, v)}`);
+      }
       if (!def) return;
       const d = settingDisplayItem(def, s);
       const vt = el.querySelector(".vt, .chip");
@@ -986,7 +1340,8 @@ class SettingsDeck extends HTMLElement {
   focusRowByKey(key) {
     let i = this.items.findIndex((it) => it.key === key);
     if (i < 0) {
-      const section = SECTIONS.findIndex((s) => s.id === SECTION_OF[key]?.section);
+      const remapKey = key.startsWith("remap:") || key === COLUMN.keyboard.reset || key === COLUMN.gamepad.reset;
+      const section = SECTIONS.findIndex((s) => s.id === (remapKey ? "controls" : SECTION_OF[key]?.section));
       if (section < 0) return false;
       this.state = { ...this.state, section, row: 0 };
       this.render();
@@ -1043,7 +1398,8 @@ class SettingsDeck extends HTMLElement {
     const item = this.current();
     if (!item) return;
     const { def, card, art } = item;
-    const desc = item.pad ? this.padStatus().desc : card?.desc ?? (art ? ART_DESC[art.style] : def ? def.desc : RESET_DESC);
+    const col = COLUMN[item.device ?? item.column];
+    const desc = item.pad ? this.padStatus().desc : col ? (item.column ? col.resetDesc : col.desc) : card?.desc ?? (art ? ART_DESC[art.style] : def ? def.desc : RESET_DESC);
     this.el.desc.textContent = desc ?? "";
     const note = def ? settingDisplayItem(def, this.game.settings).note : "";
     const cost = def && SECTION_OF[def.key]?.cost;

@@ -644,6 +644,14 @@ export class GamepadManager {
     // ── Menu navigation: d-pad or left stick, with hold-to-repeat ──
     this._updateNav(view.axes[AXIS.LEFT_X], view.axes[AXIS.LEFT_Y], down, now, jp);
 
+    // The first button to go down this frame, by index: a remap capture binds it.
+    for (let i = 0; i < 17; i++) {
+      if (down[i] && !prev[i]) {
+        result.buttonPressed = i;
+        break;
+      }
+    }
+
     // Save current state for next frame
     for (let i = 0; i < 17; i++) prev[i] = down[i];
 
@@ -787,6 +795,7 @@ function resetResult(r) {
   for (const k in r.pressed) r.pressed[k] = false;
   for (const k in r.justPressed) r.justPressed[k] = false;
   r.anyButton = false;  // any button but Home held
+  r.buttonPressed = -1; // standard index of the first button down this frame
 
   // Meta
   r.connected = false;

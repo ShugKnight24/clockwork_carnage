@@ -1,8 +1,9 @@
 // tests/unit/remap.test.js
 import { describe, it, expect } from "vitest";
 import { PAD, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
-import { planBind, applyBind, resetBindings, loadPadBinds, savePadBinds, isReservedKey, isReservedButton, REMAPPABLE_KEY_ACTIONS } from "../../src/systems/remap.js";
+import { planBind, applyBind, previewBind, resetBindings, loadPadBinds, savePadBinds, isReservedKey, isReservedButton, REMAPPABLE_KEY_ACTIONS } from "../../src/systems/remap.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { glyph } from "../../src/ui/input-glyphs.js";
 
 const pad = () => ({ ...DEFAULT_GAMEPAD_ACTIONS });
 const keys = () => ({ ...DEFAULT_KEYBINDS });
@@ -142,5 +143,33 @@ describe("remap rules", () => {
     const onRB = REMAPPABLE_PAD_ACTIONS.filter((a) => t[a] === PAD.RB);
     expect(onRB).toEqual(["weaponNext"]);
     expect(loadPadBinds(savePadBinds(t))).toEqual(JSON.parse(savePadBinds(t)));
+  });
+
+  it("previewBind lists every action a swap moves, both halves of the RB pair included", () => {
+    const t = pad();
+    expect(previewBind(t, "dash", PAD.RB)).toEqual([
+      { action: "dash", from: PAD.A, to: PAD.RB },
+      { action: "chronoRewind", from: PAD.RB, to: PAD.A },
+      { action: "weaponPrev", from: PAD.RB, to: PAD.A },
+    ]);
+    expect(previewBind(t, "weaponPrev", PAD.Y)).toEqual([
+      { action: "weaponNext", from: PAD.Y, to: PAD.RB },
+      { action: "chronoRewind", from: PAD.RB, to: PAD.Y },
+      { action: "weaponPrev", from: PAD.RB, to: PAD.Y },
+    ]);
+    expect(t).toEqual(DEFAULT_GAMEPAD_ACTIONS); // a preview changes nothing
+    expect(previewBind(keys(), "interact", "KeyG")).toEqual([{ action: "interact", from: "KeyE", to: "KeyG" }]);
+  });
+
+  it("prompts follow a rebind: the live table is what glyphs read", () => {
+    try {
+      applyBind(GAMEPAD_ACTIONS, "dash", PAD.Y, true);
+      expect(glyph({}, "dash", "gamepad").text).toBe("Y");
+      expect(glyph({}, "weaponNext", "gamepad").text).toBe("A");
+      expect(glyph({ gamepad: { controllerType: "playstation" } }, "dash", "gamepad").text).toBe("△");
+    } finally {
+      resetBindings(GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS);
+    }
+    expect(glyph({}, "dash", "gamepad").text).toBe("A");
   });
 });

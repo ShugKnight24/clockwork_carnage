@@ -11,6 +11,8 @@ export function createDeckState({ section = 0, row = 0 } = {}) {
 const STEPPABLE = new Set(["slider", "enum", "toggle"]);
 // A held key repeats; only these kinds may repeat a step.
 const REPEATABLE = new Set(["slider", "enum"]);
+// A remap capture waits this long for an input before giving up.
+export const CAPTURE_MS = 8000;
 
 export function deckKey(state, code, ctx) {
   const s = { ...state };
@@ -21,6 +23,14 @@ export function deckKey(state, code, ctx) {
   const row = ctx.rows[s.row];
 
   if (s.capture) {
+    // A capture left unanswered ends on the next input, whatever it is.
+    if (ctx.now >= s.capture.until) {
+      s.capture = null;
+      effects.push({ type: "captureCancel" });
+      return { state: s, effects };
+    }
+    // Only the cell's device counts: Esc cancels a key, B (sent as Escape) a button.
+    if ((ctx.device ?? "keyboard") !== s.capture.device) return { state: s, effects };
     if (code === "Escape") {
       s.capture = null;
       effects.push({ type: "captureCancel" });
@@ -61,7 +71,13 @@ export function deckKey(state, code, ctx) {
       break;
     case "Enter":
     case "Space":
-      if (row && !ctx.repeat) effects.push({ type: "activate" });
+      if (!row || ctx.repeat) break;
+      if (row.kind === "remap") {
+        s.capture = { action: row.key, device: row.device, until: ctx.now + CAPTURE_MS };
+        effects.push({ type: "capture", action: row.key, device: row.device });
+      } else {
+        effects.push({ type: "activate" });
+      }
       break;
     case "Backspace":
     case "Delete":
