@@ -1,7 +1,7 @@
 # Settings Deck — Live-Preview Settings and Remapping
 
 Date: 2026-09-24
-Status: Draft for review
+Status: Approved; implemented on feat/live-parity-creator-gamepad
 Branch context: `feat/live-parity-creator-gamepad` at `3ba7458`.
 
 ## Goal
@@ -124,8 +124,11 @@ glyphs; `src/systems/pad-actions.js` is the single gamepad binding table
   Low / Med / High cost label on Video rows), and device-aware prompts
   (for example Ⓐ Select · Ⓑ Back · LB/RB Section).
 - **Remapping (Controls).** Each action row has a Keyboard cell and a
-  Controller cell. Selecting a cell opens "Press a key / button… (Esc / B
-  cancels)", listening to that cell's device only, timing out after 8 s. An
+  Controller cell. Selecting a cell opens "Press a key / button… (Esc /
+  Start cancels)", listening to that cell's device only for the binding (Esc
+  or Start from either device cancels), timing out after 8 s. Start is the
+  pad's cancel because it is reserved for pause and can never be a binding,
+  so every other button — B included — stays bindable. An
   input already bound elsewhere shows "Already used by Sprint — swap?"
   (Ⓐ swap, Ⓑ cancel). Esc and Start are reserved for pause; menu navigation
   is fixed and not in the remappable table. Each column has "Reset to
