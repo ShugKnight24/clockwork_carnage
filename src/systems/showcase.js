@@ -275,12 +275,23 @@ export function updateShowcase(game, dt, { panelFrac = 0, sheetFrac = 0 } = {}) 
   const pitch = -Math.max(0, Math.min(0.8, sheetFrac)) / 2;
   game.showcasePitch += (pitch - game.showcasePitch) * Math.min(1, dt * 4);
   placeCamera(game, token);
+  swayWeapon(game.player, token, dt);
   // Drifting dust gives the particle settings something to act on.
   if ((game.quality?.particleMultiplier ?? 1) >= 0.5) game.dustMotes = updateDustMotes(game.dustMotes, dt, game.player);
   else game.dustMotes = null;
 }
 
 const fovOf = (game) => game.settings?.fov ?? 75;
+
+/**
+ * Player updates never run here, so the viewmodel would hang still: give it
+ * a slow walking bob and a breathing sway, leaning a little into the turns.
+ */
+function swayWeapon(p, token, dt) {
+  p.weaponBob = (p.weaponBob || 0) + dt * 5;
+  p.weaponSwayX = Math.sin(token.t * 0.9) * 2.5 - Math.max(-4, Math.min(4, token.vel * 6));
+  p.weaponSwayY = Math.sin(token.t * 1.7) * 1.5;
+}
 
 /** Unload the scene and put every borrowed field back. Safe to call at any time. */
 export function stopShowcase(game) {

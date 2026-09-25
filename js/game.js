@@ -2872,6 +2872,7 @@ export class Game {
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,
       pausedFromState: this.pausedFromState,
+      mode: this.mode,
       alive: this.player.alive,
       drawGlow: _drawGlow,
       light: isRealisticArt() ? this.renderer.lightAt(this.player.x, this.player.y, VIEWMODEL_LIGHT) : null,

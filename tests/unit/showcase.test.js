@@ -56,6 +56,19 @@ describe("showcase", () => {
     expect(g.renderer.applyActPalette).toHaveBeenLastCalledWith(2, "lab");
   });
 
+  it("the weapon walks and sways with the camera", async () => {
+    const g = fakeGame();
+    await startShowcase(g);
+    const seen = new Set();
+    for (let i = 0; i < 120; i++) {
+      updateShowcase(g, 1 / 60);
+      seen.add(`${g.player.weaponSwayX.toFixed(2)},${g.player.weaponSwayY.toFixed(2)}`);
+    }
+    expect(g.player.weaponBob).toBeGreaterThan(0);
+    expect(seen.size).toBeGreaterThan(10);
+    expect(Math.abs(g.player.weaponSwayX)).toBeLessThan(8);
+  });
+
   it("a stop before the install finishes leaves the game untouched", async () => {
     const g = fakeGame();
     const before = borrowed(g);

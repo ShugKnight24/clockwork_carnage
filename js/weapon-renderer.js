@@ -29,6 +29,7 @@ import { GameState } from "../src/types.js";
  * @param {number} [opts.aimOffsetY]   - free-aim reticle offset (fraction of view height)
  * @param {string} [opts.state]        - game state; the viewmodel only shows during live first-person play
  * @param {string} [opts.pausedFromState]
+ * @param {string} [opts.mode]         - game mode; "showcase" (the menu's settings backdrop) counts as live
  * @param {boolean} [opts.alive]
  */
 export function drawWeapon(ctx, w, h, opts) {
@@ -67,9 +68,11 @@ let fadeCanvas = null;
 /** 0…1 viewmodel visibility: eases out on score / game-over / upgrade screens and on death. */
 function viewmodelFade(opts) {
   if (opts.state === undefined) return 1;
+  // The menu's showcase has no paused match under the deck but is a live view.
   const live =
     opts.alive !== false &&
-    (opts.state === GameState.PLAYING || (OVERLAY_STATES.has(opts.state) && opts.pausedFromState === GameState.PLAYING));
+    (opts.state === GameState.PLAYING ||
+      (OVERLAY_STATES.has(opts.state) && (opts.pausedFromState === GameState.PLAYING || opts.mode === "showcase")));
   const now = performance.now();
   const dt = fadeClock ? Math.min(0.1, (now - fadeClock) / 1000) : 1;
   fadeClock = now;
