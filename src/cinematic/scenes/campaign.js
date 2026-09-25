@@ -5,7 +5,8 @@
  * SHOWCASE_FIELDS and put back exactly by its restore), so no campaign
  * loader, save, stat or comms path is reachable from here.
  *
- * spec: { act, level (0-based within the act), enemies = true, camera }
+ * spec: { act, level (0-based within the act), enemies = true, camera,
+ *         early (stage the level as the reel opens: see `early` below) }
  * camera:
  *   { kind: "path", from = 0, loop = 40 }  the showcase's loop through the
  *     level (start at `from` of the loop, `loop` seconds a lap), heading
@@ -29,6 +30,7 @@
  * shot's seeded PRNG, so live and recorded playback match.
  */
 import { beatsToSec } from "../timeline.js";
+import { getActLevel, getAct } from "../../../js/data.js";
 import {
   stageLevelScene, installStagedLevel, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
 } from "../../systems/showcase.js";
@@ -43,6 +45,8 @@ import { SpatialGrid } from "../../utils/spatial-grid.js";
 import { isPassable } from "../../systems/physics.js";
 import { decay } from "../../utils/math.js";
 import { prefetchIdleEnemy } from "../../rendering/svg-art/sprites/enemies.js";
+import { generateModernEnv } from "../../rendering/textures.js";
+import { isModernArt, isRealisticArt } from "../../rendering/art-style.js";
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const fovOf = (game) => game.settings?.fov ?? 75;
@@ -53,6 +57,29 @@ export const campaign = {
   // Drawn by the render pipeline's world pass, not by the scene.
   world: true,
 
+  // A shot that flips the art style builds the level's environment art in
+  // each finish it shows (100-300 ms apiece): done as the reel opens.
+  // A shot can also ask for it (`early: true`), when the shot before it is
+  // too short or too still to hide its level's staging under.
+  early: (spec, shot) => !!spec.early || (shot?.events ?? []).some((ev) => ev.type === "artStyle"),
+
+  /**
+   * Each level's environment art in the finish showing (80-150 ms apiece in
+   * Modern), built while the reel opens on black and kept for the reel:
+   * staged in a prepare, it stalled the shot before; a level seen twice in a
+   * row was built twice, at the cut.
+   */
+  preload(game, spec, { live = () => true } = {}) {
+    // Legacy draws no environment art; a renderer that cannot take a bundle has no use for one.
+    if (!isModernArt() || !game.renderer?.offerEnv) return null;
+    const realistic = isRealisticArt();
+    return idle().then(() => live() && envFor(game, spec, realistic));
+  },
+
+  release() {
+    envCache.clear();
+  },
+
   /**
    * The next shot's level, staged while the current shot plays (the
    * director calls this once, ahead of the cut): nothing is installed, so
@@ -60,9 +87,11 @@ export const campaign = {
    */
   prepare(game, spec, { live = () => true, shot } = {}) {
     const prep = { staged: null, done: null };
-    prep.done = stageLevelScene(game, levelOpts(spec, live, idle))
+    const opts = levelOpts(game, spec, live, idle);
+    prep.done = stageLevelScene(game, opts)
       .then(async (staged) => {
         if (staged) await warmSpawns(game, shot, live, idle);
+        if (staged && live()) staged.envs = await flipEnvs(game, staged, shot, live, idle);
         return (prep.staged = live() ? staged : null);
       });
     return prep;
@@ -75,15 +104,20 @@ export const campaign = {
    */
   build(game, spec, rng, { live = () => true, reel, handle, shot, prepared = null }) {
     if (prepared?.staged) {
-      start(game, installStagedLevel(game, prepared.staged), spec, rng, reel, handle, shot);
+      start(game, installStagedLevel(game, prepared.staged), spec, rng, reel, handle, shot, prepared.staged.envs);
       return;
     }
     return (async () => {
-      const staged = (prepared && (await prepared.done)) || (await stageLevelScene(game, levelOpts(spec, live)));
-      if (!staged || !live()) return;
-      await warmSpawns(game, shot, live);
+      const opts = levelOpts(game, spec, live);
+      let staged = prepared && (await prepared.done);
+      if (!staged) {
+        staged = await stageLevelScene(game, opts);
+        if (!staged || !live()) return;
+        await warmSpawns(game, shot, live);
+        if (live()) staged.envs = await flipEnvs(game, staged, shot, live);
+      }
       if (!live()) return;
-      start(game, installStagedLevel(game, staged), spec, rng, reel, handle, shot);
+      start(game, installStagedLevel(game, staged), spec, rng, reel, handle, shot, staged.envs);
     })();
   },
 
@@ -91,6 +125,7 @@ export const campaign = {
     const state = handle.level;
     if (!state) return;
     placeCamera(game, state, local, dt);
+    if (state.envs) offerEnv(game, state.envs);
     if (!state.combat) {
       updateAmbience(game, state.level.emitters, dt, state.rng);
       return;
@@ -118,18 +153,117 @@ export const campaign = {
   },
 };
 
-function levelOpts(spec, live, wait) {
+function levelOpts(game, spec, live, wait) {
   const opts = { act: spec.act ?? 1, level: spec.level ?? 0, live, enemies: spec.enemies !== false };
   if (wait) opts.wait = wait;
+  const r = routeOf(spec.camera);
+  if (r) Object.assign(opts, r);
+  // The bundle built as the reel opened, handed to the install.
+  opts.env = cachedEnv(game, spec);
   return opts;
 }
 
+/**
+ * A keyed or fixed camera's own route, for the level's staging: waypoints
+ * (the ambience is placed along them) and `{ x, y, heading }` samples (the
+ * sprites are decoded at the sizes those views show). A path camera uses
+ * the showcase loop, so it has none.
+ */
+function routeOf(cam) {
+  if (cam?.kind === "fixed") {
+    const a = cam.angle ?? 0;
+    const at = { x: cam.x, y: cam.y };
+    // A small loop round the spot: the ambience wants a closed path.
+    const path = [0, 1, 2].map((k) => ({ x: at.x + Math.cos(a + (k * 2 * Math.PI) / 3) * 0.2, y: at.y + Math.sin(a + (k * 2 * Math.PI) / 3) * 0.2 }));
+    return { path, cams: [{ ...at, heading: a }] };
+  }
+  if (cam?.kind !== "keys" || !cam.keys?.length) return null;
+  const keys = cam.keys;
+  const cams = [];
+  for (let i = 0; i < keys.length; i++) {
+    const a = keys[i];
+    const b = keys[i + 1];
+    if (!b) {
+      cams.push({ x: a[1], y: a[2], heading: a[3] });
+      break;
+    }
+    const da = Math.atan2(Math.sin(b[3] - a[3]), Math.cos(b[3] - a[3]));
+    for (let k = 0; k < 12; k++) {
+      const u = k / 12;
+      cams.push({ x: a[1] + (b[1] - a[1]) * u, y: a[2] + (b[2] - a[2]) * u, heading: a[3] + da * u });
+    }
+  }
+  const path = keys.length > 1 ? keys.map((k) => ({ x: k[1], y: k[2] })) : routeOf({ kind: "fixed", x: keys[0][1], y: keys[0][2], angle: keys[0][3] }).path;
+  return { path, cams };
+}
+
+/**
+ * A shot that flips the art style (the director's artStyle event) needs the
+ * level's environment art in each Modern finish it flips to; built on a
+ * flip frame, that is a 100-300 ms stall. They are built here, ahead of the
+ * cut, one per idle slot, and offered to the renderer as the style changes.
+ */
+async function flipEnvs(game, staged, shot, live, wait = idle) {
+  const styles = new Set((shot?.events ?? []).filter((ev) => ev.type === "artStyle").map((ev) => ev.style));
+  const r = game.renderer;
+  if (!r || !(styles.has(1) || styles.has(2))) return null;
+  const brutal = r._visualStyle === 1;
+  const envs = {};
+  for (const [style, realistic] of [[1, false], [2, true]]) {
+    if (!styles.has(style)) continue;
+    await wait();
+    if (!live()) return null;
+    envs[realistic ? "realistic" : "comic"] = envFor(game, { entry: staged.entry, palette: staged.palette }, realistic, brutal);
+  }
+  return envs;
+}
+
+// Environment bundles built for this reel, by level and finish (release()
+// drops them when the reel ends).
+const envCache = new Map();
+
+/** The act's level entry and palette for a campaign spec. */
+function levelOf(spec) {
+  const act = spec.act ?? 1;
+  const entry = spec.entry ?? getActLevel(act, spec.level ?? 0) ?? getActLevel(act, 0);
+  return { entry, palette: spec.palette ?? getAct(act)?.palette ?? act };
+}
+
+/** A level's environment bundle in one finish, built once per reel. */
+function envFor(game, spec, realistic, brutal = game.renderer?._visualStyle === 1) {
+  const { entry, palette } = levelOf(spec);
+  const level = entry?.env ?? null;
+  const key = `${palette}|${level}|${brutal ? 1 : 0}|${realistic ? 1 : 0}`;
+  let env = envCache.get(key);
+  if (!env) {
+    env = generateModernEnv(palette, brutal, level, { realistic });
+    env.realistic = realistic;
+    envCache.set(key, env);
+  }
+  return env;
+}
+
+/** This reel's bundle for the level in the finish showing, if one was built. */
+function cachedEnv(game, spec) {
+  if (!envCache.size || !isModernArt()) return null;
+  const { entry, palette } = levelOf(spec);
+  const brutal = game.renderer?._visualStyle === 1;
+  return envCache.get(`${palette}|${entry?.env ?? null}|${brutal ? 1 : 0}|${isRealisticArt() ? 1 : 0}`) ?? null;
+}
+
+/** The environment built for the finish now showing, handed to the renderer to adopt. */
+function offerEnv(game, envs) {
+  if (!isModernArt()) return;
+  const env = envs[isRealisticArt() ? "realistic" : "comic"];
+  if (env && game.renderer?._modernEnv !== env) game.renderer?.offerEnv?.(env);
+}
+
 /** Set the shot up on its freshly installed level. */
-function start(game, level, spec, rng, reel, handle, shot) {
+function start(game, level, spec, rng, reel, handle, shot, envs = null) {
   const cam = spec.camera ?? { kind: "path" };
   // Per-shot state rides on the director's handle for this shot. `back` is
   // how far a rewind has set the camera's clock back.
-  const state = { level, cam, rng, reel, shot, heading: 0, vel: 0, back: 0, fireUntil: null, time0: game.time ?? 0 };
+  const state = { level, cam, rng, reel, shot, envs, heading: 0, vel: 0, back: 0, fireUntil: null, time0: game.time ?? 0 };
   handle.level = state;
   if (cam.kind === "path") state.heading = targetHeading(level.path, pathTime(cam, 0), fovOf(game), 0);
   placeCamera(game, state, 0, 0);
@@ -247,9 +381,22 @@ export function simulate(game, state, dt, local) {
   game.entityGrid.insertAll(game.entities);
   game.updateEnemies?.(sdt);
   game.updateProjectiles?.(sdt);
+  spendNearRounds(game);
   game.screenShake *= decay(0.9, dt);
   if (game.screenShake < 0.1) game.screenShake = 0;
   game._decayEffects?.(sdt);
+}
+
+// The agent takes no damage in a shot, and an enemy round on its last
+// couple of metres to the lens fills the frame with one glowing disc. It is
+// spent here instead, as it would be on the agent's armour a moment later.
+const NEAR_ROUND = 2.2;
+
+function spendNearRounds(game) {
+  const p = game.player;
+  for (const q of game.projectiles ?? []) {
+    if (q.active && q.owner === "enemy" && !q.frozen && Math.hypot(q.x - p.x, q.y - p.y) < NEAR_ROUND) q.active = false;
+  }
 }
 
 /** Math.random answers from the shot's PRNG while `fn` runs (spread, crits, AI); returns what `fn` does. */

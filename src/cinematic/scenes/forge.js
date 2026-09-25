@@ -8,7 +8,10 @@
  *
  * spec: { build: "tower" | "bridge" = "tower", seed, act = 1, terrain = true,
  *         buildBeats = shot length − 2,
- *         orbit: { from = 0.1 (turns), turns = 0.3, radius, height = 5 (above the look) } }
+ *         orbit: { from = 0.1 (turns), turns = 0.3, radius, height = 5 (above the look),
+ *                  lookAt (a share of the finished build's height: hold the look
+ *                  there, the whole build in frame as it rises, instead of
+ *                  following the fresh blocks) } }
  *   The build rises layer by layer on the beat (each beat's blocks land in
  *   its first half: a burst, then a breath) while the camera circles it.
  *
@@ -42,6 +45,10 @@ function idle() {
 }
 
 export const forge = {
+  // The renderer's GL context and its atlas bake (~60 ms in one piece) are
+  // made while the reel opens on black, not under the shot before.
+  early: true,
+
   prepare(game, spec, { live = () => true } = {}) {
     const prep = { sandbox: null, done: null, discarded: false };
     prep.done = createSandbox(game, spec, live, idle).then((sb) => {
@@ -137,6 +144,11 @@ async function createSandbox(game, spec, live, wait = nextFrame) {
   const vr = voxel.VoxelRenderer.create(w, h);
   if (!vr) return null;
   const sb = { vr, world, plan };
+  await wait();
+  if (!live()) {
+    dispose(sb);
+    return null;
+  }
   try {
     // The atlas bake (~200 ms on a style's first use) and the meshing happen
     // here, where nothing is shown, a slice per idle callback.
@@ -321,8 +333,8 @@ function orbitCam(sb, orbit, k, st) {
   const x = plan.center.x + Math.cos(a) * radius;
   const y = plan.center.y + Math.sin(a) * radius;
   const built = st ? st.top - plan.base + 1 : H;
-  const goal = plan.base + Math.max(4, Math.min(H, built) * 0.7);
-  const lookZ = st?.look == null ? goal : st.look + (goal - st.look) * 0.06;
+  const goal = orbit.lookAt != null ? plan.base + H * orbit.lookAt : plan.base + Math.max(4, Math.min(H, built) * 0.7);
+  const lookZ = st?.look == null || orbit.lookAt != null ? goal : st.look + (goal - st.look) * 0.06;
   if (st) st.look = lookZ;
   const ground = world?.topSolid(Math.floor(x), Math.floor(y)) ?? 0;
   const eyeZ = Math.min(60, Math.max(lookZ + (orbit.height ?? 5), ground + 3));

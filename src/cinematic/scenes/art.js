@@ -4,7 +4,9 @@
  * slow pan: `pan: { from: [x, y, zoom], to: [x, y, zoom] }`, x/y as fractions
  * of the picture, eased across the shot. `artAt: [x, y, scale]` places the
  * art alone (x/y fractions of the picture, scale about its centre), for a
- * figure drawn larger than a letterboxed frame. `silhouette: true` paints the art as
+ * figure drawn larger than a letterboxed frame; it can be keyed by art
+ * profile, `{ legacy: [...], default: [...] }`, since Legacy's pixel figures
+ * stand smaller and lower in their picture. `silhouette: true` paints the art as
  * a black shape with a red rim (late-game bosses are never shown in full).
  * Borrows no game fields.
  *
@@ -69,7 +71,7 @@ export const art = {
     }
     cs.drawCutsceneBg(ctx, w, h, spec.bg, local);
     if (spec.art) {
-      const at = spec.artAt;
+      const at = artPlacement(spec.artAt);
       if (at) {
         ctx.translate(w / 2 + (at[0] ?? 0) * w, h / 2 + (at[1] ?? 0) * h);
         ctx.scale(at[2] ?? 1, at[2] ?? 1);
@@ -81,6 +83,13 @@ export const art = {
     ctx.restore();
   },
 };
+
+/** `artAt` for the current art profile: an array, or one keyed by profile with a default. */
+function artPlacement(at) {
+  if (!at || Array.isArray(at)) return at ?? null;
+  const profile = typeof document !== "undefined" ? document.documentElement.dataset.artProfile : null;
+  return at[profile] ?? at.default ?? null;
+}
 
 let layer = null; // one offscreen canvas, reused by every silhouette frame
 

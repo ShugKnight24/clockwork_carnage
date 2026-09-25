@@ -36,6 +36,15 @@ import { title } from "./scenes/title.js";
  *     that shows and borrows nothing (so the cut's build can be quick)
  *   optional discard(game, prepared): a prepare whose shot never builds
  *     (the reel stopped first) is handed back, to free what it holds
+ *   optional early: true | (spec, shot) => boolean: prepare this shot when
+ *     the reel starts instead, holding the clock on the opening black until
+ *     every early prepare's `done` settles (a few seconds at most). For work
+ *     too heavy to hide under any shot's frames (a GL context and its
+ *     atlas bake, environment art in several finishes).
+ *   optional preload(game, spec, { live, shot, reel }) → Promise | null: called for
+ *     every shot as the reel starts, under the same hold, for shared work
+ *     kept by the adapter (not the shot) until release(game), which the
+ *     director calls once per adapter when the reel stops.
  *   update(game, dt, local, handle), event(game, ev, handle), teardown(game, handle)
  *   and either draw(gctx, w, h, local, { game, shotLen, handle }) to paint
  *   the game canvas, or `world: true` to have the game's first-person view
@@ -58,6 +67,8 @@ const FLASH_GAP = 1 / 3;
 const FLASH_DECAY = 0.18;
 const SHAKE_DECAY = 0.35;
 const HOLD_TO_SKIP_MS = 800;
+// The longest the opening black waits on the early prepares.
+const EARLY_MAX_MS = 5000;
 const HINT_LINGER_MS = 2000;
 // A frame longer than this (a stall, or the first frame back in a tab) only
 // moves the reel this far, so it never jumps over a shot.
@@ -122,6 +133,7 @@ export function playReel(game, reel, { returnTo = "title", clock = "real", muted
   if (muted) audio?.setMuted?.(true);
   watchVisibility(game, sess);
   loadSquadArt(game, reel);
+  prepareEarly(game, sess);
   return done;
 }
 
@@ -132,6 +144,7 @@ export function stopReel(game, { skipped = false } = {}) {
   delete game._cinematic;
   leaveShot(game, sess);
   dropPrep(game, sess);
+  dropEarly(game, sess);
   sess.unwatch?.();
   delete game._cinematicHidden;
   const { saved } = sess;
@@ -176,6 +189,10 @@ export async function stepFixed(game) {
       await sess.building.settled;
       continue;
     }
+    if (sess.early?.hold) {
+      await sess.early.settled;
+      continue;
+    }
     const before = sess.t;
     advance(game, sess, STEP);
     if (sess.t !== before || game._cinematic !== sess) return;
@@ -190,7 +207,7 @@ export function directorState(game) {
     reelId: sess.reel.id,
     t: sess.t,
     shotId: sess.current?.shot.id ?? null,
-    paused: !!game._cinematicHidden || !!sess.building,
+    paused: !!game._cinematicHidden || !!sess.building || !!sess.early?.hold,
     hint: performanceNow() < sess.hintUntil || sess.holdSince != null,
     card: activeCards(sess, b)[0]?.text ?? null,
     squad: squadMember(sess.squad, b)?.id ?? null,
@@ -228,7 +245,7 @@ export function directorInput(game, kind, { down = true, code } = {}) {
 // ─── Clock ────────────────────────────────────────────────────────────────
 
 function advance(game, sess, dt) {
-  if (sess.building) return;
+  if (sess.building || sess.early?.hold) return;
   const { reel } = sess;
   // Enter the shot the clock has reached (t < 0 reads as the first shot).
   const idx = stateAt(reel, sess.t).shotIndex;
@@ -295,9 +312,14 @@ function enterShot(game, sess, index) {
   }
   const live = () => game._cinematic === sess && sess.current === handle;
   let result;
-  const prepared = sess.prep?.index === index ? sess.prep.value : null;
+  const early = sess.early?.values.get(index);
+  let prepared = sess.prep?.index === index ? sess.prep.value : null;
   if (sess.prep?.index === index) sess.prep.used = true;
   else dropPrep(game, sess);
+  if (early !== undefined) {
+    sess.early.values.delete(index);
+    prepared = early;
+  }
   try {
     result = scene.build(game, shot.scene, mulberry32(seedFor(sess.reel.id, shot.id)), { live, shot, reel: sess.reel, handle, prepared });
   } catch (err) {
@@ -339,6 +361,7 @@ function prepareNext(game, sess) {
   const shot = sess.reel.shots[index];
   if (!shot || sess.prep?.index === index) return;
   sess.prep = { index, value: null };
+  if (sess.early?.values.has(index)) return; // prepared when the reel started
   const scene = SCENES[shot.scene.kind];
   if (!scene?.prepare) return;
   try {
@@ -346,6 +369,66 @@ function prepareNext(game, sess) {
   } catch (err) {
     console.warn(`[cinematic] shot "${shot.id}" failed to prepare`, err);
   }
+}
+
+/**
+ * Start the prepares of the shots whose adapters ask to be prepared early,
+ * and hold the clock on the opening black until they settle.
+ */
+function prepareEarly(game, sess) {
+  const values = new Map();
+  sess.reel.shots.forEach((shot, index) => {
+    const scene = SCENES[shot.scene.kind];
+    const early = typeof scene?.early === "function" ? scene.early(shot.scene, shot) : !!scene?.early;
+    if (!early || !scene.prepare) return;
+    try {
+      values.set(index, scene.prepare(game, shot.scene, { live: () => game._cinematic === sess, shot, reel: sess.reel }) ?? null);
+    } catch (err) {
+      console.warn(`[cinematic] shot "${shot.id}" failed to prepare`, err);
+    }
+  });
+  const loads = [];
+  for (const shot of sess.reel.shots) {
+    const scene = SCENES[shot.scene.kind];
+    if (!scene?.preload) continue;
+    try {
+      const load = scene.preload(game, shot.scene, { live: () => game._cinematic === sess, shot, reel: sess.reel });
+      if (load) loads.push(Promise.resolve(load).catch(() => {}));
+    } catch (err) {
+      console.warn(`[cinematic] shot "${shot.id}" failed to preload`, err);
+    }
+  }
+  if (!values.size && !loads.length) return;
+  const early = { values, hold: true, settled: null };
+  sess.early = early;
+  const all = Promise.all([...loads, ...[...values.values()].map((v) => Promise.resolve(v?.done).catch(() => {}))]);
+  const cap = new Promise((r) => setTimeout(r, EARLY_MAX_MS));
+  early.settled = Promise.race([all, cap]).then(() => {
+    early.hold = false;
+  });
+}
+
+/** Early prepares whose shots never built (the reel stopped first), then every adapter's preloads. */
+function dropEarly(game, sess) {
+  for (const kind of new Set(sess.reel.shots.map((s) => s.scene.kind))) {
+    try {
+      SCENES[kind]?.release?.(game);
+    } catch (err) {
+      console.warn(`[cinematic] "${kind}" failed to release`, err);
+    }
+  }
+  const early = sess.early;
+  if (!early) return;
+  early.hold = false;
+  for (const [index, value] of early.values) {
+    if (value == null) continue;
+    try {
+      SCENES[sess.reel.shots[index]?.scene.kind]?.discard?.(game, value);
+    } catch (err) {
+      console.warn("[cinematic] an early prepare failed to discard", err);
+    }
+  }
+  early.values.clear();
 }
 
 /** A prepare whose shot never built: its adapter frees what it holds. */

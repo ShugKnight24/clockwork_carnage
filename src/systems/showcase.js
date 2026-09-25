@@ -137,25 +137,33 @@ export async function installLevelScene(game, opts) {
  * environment bake, the level, its camera path and enemy spots (both cached
  * per level), and the sprite decodes. Resolves to what installStagedLevel
  * swaps in, or null if `live()` turned false on the way.
+ *
+ * A caller that flies its own camera (the reel director) can pass the route
+ * instead: `path` (waypoints) and `cams` ({ x, y, heading } samples). The
+ * loop search (tens of ms in one go) is then skipped unless idle enemies need
+ * its spots, and sprites are decoded at the sizes that camera will see. It
+ * can also hand over the level's environment bundle (`env`, built by
+ * generateModernEnv for the act palette and level), which the install gives
+ * the renderer instead of the staging baking one.
  */
-export async function stageLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true }) {
+export async function stageLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true, path: route = null, cams = null, env = null }) {
   const entry = getActLevel(act, level) ?? getActLevel(act, 0);
   const palette = getAct(act)?.palette ?? act;
 
   await wait();
   if (!live()) return null;
-  game.renderer?.prewarmEnv?.(palette, entry.env);
+  if (!env) game.renderer?.prewarmEnv?.(palette, entry.env);
   await wait();
   if (!live()) return null;
   const map = structuredClone(campaignMap(entry));
-  const path = pathFor(entry, map);
+  const path = route ?? pathFor(entry, map);
   const props = levelProps(map, act);
-  const foes = enemies ? enemiesFor(entry, map, path, act, fovOf(game)) : [];
+  const foes = enemies ? enemiesFor(entry, map, route ? pathFor(entry, map) : path, act, fovOf(game)) : [];
   await wait();
   if (!live()) return null;
-  await prewarmSprites(game, map, path, props, foes, live, wait);
+  await prewarmSprites(game, map, path, props, foes, live, wait, cams);
   if (!live()) return null;
-  return { act, entry, palette, map, path, props, foes, emitters: ambientEmitters(map, path) };
+  return { act, entry, palette, map, path, props, foes, env, emitters: ambientEmitters(map, path) };
 }
 
 /**
@@ -163,7 +171,7 @@ export async function stageLevelScene(game, { act, level, live = () => true, wai
  * when stageLevelScene has warmed its environment). A staged level is
  * installed once.
  */
-export function installStagedLevel(game, { act, entry, palette, map, path, props, foes, emitters }) {
+export function installStagedLevel(game, { act, entry, palette, map, path, props, foes, emitters, env = null }) {
   const saved = Object.fromEntries(SHOWCASE_FIELDS.map((k) => [k, game[k]]));
   const savedPalette = [game.renderer?._actPalette, game.renderer?._envLevel];
   Object.assign(game, scene());
@@ -171,6 +179,7 @@ export function installStagedLevel(game, { act, entry, palette, map, path, props
   game.player = new Player(path[0].x, path[0].y, 0);
   game.entities = [...props, ...foes];
   game.showcaseAct = act;
+  if (env) game.renderer?.offerEnv?.(env);
   game.renderer?.applyActPalette?.(palette, entry.env);
   let restored = false;
   return {
@@ -197,12 +206,12 @@ const PREWARM_MS = 3000;
  * show it, while the canvas is still hidden. Decoding on first sight cost
  * 66–750 ms frames through the first loop (SVG rasterises on the main thread).
  */
-async function prewarmSprites(game, map, path, props, enemies, live, wait) {
+async function prewarmSprites(game, map, path, props, enemies, live, wait, route = null) {
   const ctx = game.renderer?.ctx;
   const viewH = game.renderer?.height;
   if (!ctx || !viewH || !isModernArt()) return;
   const fov = fovOf(game);
-  const cams = simulateCamera(path, fov);
+  const cams = route ?? simulateCamera(path, fov);
   // Sprites are as tall on screen as a wall at their depth: viewH / depth.
   const propJobs = [...new Set(props.map((p) => p.propType))].map((type) => {
     const hs = props.filter((p) => p.propType === type).flatMap((p) => sightHeights(map.grid, cams, p, fov, viewH));

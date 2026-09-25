@@ -8,7 +8,8 @@
  * there is none yet), dressed for the shot by patches laid over a copy:
  * game.character is only ever read, so nothing reaches cc_character.
  *
- * spec: { view: "full" | "bust" | "torso" | "helm" = "full",
+ * spec: { view: "full" | "knee" | "bust" | "torso" | "helm" = "full"
+ *           ("knee": head to knee, the three-quarter shot),
  *         looks: patch[] = [] (none: only the player's own look; "curated":
  *           the player's look, then LOOKS), push = 0.06 (slow push-in, as a
  *           fraction of the frame) }
@@ -22,6 +23,15 @@ import { AGENT_VIEW, buildAgentSvg, buildAgentParts } from "../../rendering/svg-
 import { getLayerImage } from "../../rendering/svg-art/raster.js";
 
 const WARM_FRAMES = 45;
+
+// The creator's crops, plus a three-quarter figure (head to knee).
+const VIEWS = { ...AGENT_VIEW, knee: [-62, -118, 124, 140] };
+// How each crop sits in the picture: its box's height as a share of the
+// picture, and its centre. A full figure stands in the picture; the
+// three-quarter one stands right of centre, clear of the captions; a
+// close-up fills the picture (the crop is the frame).
+const FRAMING = { full: [0.9, 0.5, 0.52], knee: [1.08, 0.6, 0.55] };
+const CLOSE_UP = [1.15, 0.56, 0.55];
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const badge = (l, placements) => ({ layers: [l], finish: "auto", placements });
 
@@ -72,7 +82,7 @@ function agentLayer(ch, viewName, realistic, px) {
   const key = `${viewName}|${realistic ? "r" : "c"}|${hash(JSON.stringify(ch))}`;
   let l = markupCache.get(key);
   if (l) return l;
-  const view = AGENT_VIEW[viewName] ?? AGENT_VIEW.full;
+  const view = VIEWS[viewName] ?? VIEWS.full;
   const svg = buildAgentSvg(ch, { view, realistic, px, idPrefix: `reel-${hash(key)}-` });
   const parts = buildAgentParts(ch);
   l = {
@@ -91,12 +101,12 @@ function agentLayer(ch, viewName, realistic, px) {
 function frame(w, h, letterbox, viewName, zoom) {
   const barH = Math.max(0, (h - w / 2.39) / 2) * letterbox;
   const picH = h - 2 * barH;
-  const view = AGENT_VIEW[viewName] ?? AGENT_VIEW.full;
-  // A full figure stands in the picture; a close-up fills it (the crop is the frame).
-  const fh = picH * (viewName === "full" ? 0.9 : 1.15) * zoom;
+  const view = VIEWS[viewName] ?? VIEWS.full;
+  const [fill, fx, fy] = FRAMING[viewName] ?? CLOSE_UP;
+  const fh = picH * fill * zoom;
   const fw = (fh * view[2]) / view[3];
-  const cx = viewName === "full" ? w * 0.5 : w * 0.56;
-  const cy = barH + picH * (viewName === "full" ? 0.52 : 0.55);
+  const cx = w * fx;
+  const cy = barH + picH * fy;
   return { x: cx - fw / 2, y: cy - fh / 2, w: fw, h: fh };
 }
 
@@ -149,7 +159,9 @@ export const creator = {
     const accent = (CHARACTER_COLORS[ch.colorIndex | 0] ?? CHARACTER_COLORS[0]).accent;
     ctx.fillStyle = "#04060b";
     ctx.fillRect(0, 0, w, h);
-    const g = ctx.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.42, h * 0.75);
+    // Lit from behind the figure, wherever the crop stands it.
+    const lx = w * (FRAMING[st.view] ?? CLOSE_UP)[1];
+    const g = ctx.createRadialGradient(lx, h * 0.42, 0, lx, h * 0.42, h * 0.75);
     g.addColorStop(0, hexA(accent, 0.2));
     g.addColorStop(0.55, hexA(accent, 0.05));
     g.addColorStop(1, "rgba(0,0,0,0)");

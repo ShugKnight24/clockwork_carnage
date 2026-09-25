@@ -9,10 +9,13 @@
  * through the campaign scene's combat sandbox.
  *
  * spec: { hero = "agent", pickBeats = 4, pick = 1, speed = 4 (tiles/s),
- *         heat: [from, to] = [20, 60] }
+ *         heat: [from, to] = [20, 60], cardScale = 1 }
  *   The shot opens on the upgrade cards (the run paused behind them, as in
  *   play): the highlight steps across them on the beat and settles on
  *   `pick`; then the agent runs the corridor and the heat climbs.
+ *   `cardScale` draws the cards that much larger, pushing in a little
+ *   further while they are up (the game's overlay is sized for play, and
+ *   reads small in a letterboxed trailer frame).
  * Events: the campaign scene's combat events (spawn, attack, fire, chrono,
  * rewind, timeLock, freeze), timed from the shot's start as always.
  */
@@ -23,6 +26,8 @@ import { swayWeapon } from "../../systems/showcase.js";
 import { Player } from "../../../js/entities.js";
 import { isPassable } from "../../systems/physics.js";
 import { particlePool } from "../../utils/particle-pool.js";
+import { generateModernEnv } from "../../rendering/textures.js";
+import { isModernArt, isRealisticArt } from "../../rendering/art-style.js";
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
@@ -68,6 +73,21 @@ function borrowFields(game, values) {
 
 export const meltdown = {
   world: true,
+
+  preload(game, spec, { live = () => true } = {}) {
+    const r = game.renderer;
+    if (!r?.offerEnv || !isModernArt()) return null;
+    const realistic = isRealisticArt();
+    return idle().then(() => {
+      if (!live()) return;
+      corridorEnv = generateModernEnv(r._actPalette || 1, r._visualStyle === 1, r._envLevel ?? null, { realistic });
+      corridorEnv.realistic = realistic;
+    });
+  },
+
+  release() {
+    corridorEnv = null;
+  },
 
   /** The run staged ahead of the cut: the corridor, its enemies and the cards, decoded. */
   prepare(game, spec, { live = () => true, shot, reel } = {}) {
@@ -134,7 +154,13 @@ export const meltdown = {
       ctx.fillStyle = `rgba(255, ${Math.floor(60 - heat * 0.5)}, 0, ${(intensity * pulse).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
     }
-    if (game._meltdownUpgradeChoices && hud) hud.renderMeltdownUpgradeOverlay(game, ctx, w, h);
+    if (!game._meltdownUpgradeChoices || !hud) return;
+    // The game's overlay laid out on a smaller page, scaled up about the centre.
+    const s = st.cardScale * (1 + 0.06 * smooth(local / Math.max(0.001, st.pickEnd)));
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(s, s);
+    ctx.translate(-w / (2 * s), -h / (2 * s));
+    hud.renderMeltdownUpgradeOverlay(game, ctx, w / s, h / s);
   },
 };
 
@@ -172,8 +198,15 @@ async function stage(game, spec, shot, reel, live, wait) {
   return live() ? staged : null;
 }
 
+// The corridor is drawn in whatever palette the renderer holds (the run sets
+// none), which between shots is the menu's: its environment art (80-150 ms
+// in Modern) is built by preload as the reel opens and handed over at the cut.
+let corridorEnv = null;
+
 function start(game, staged, spec, rng, reel, shot, handle) {
   const { map } = staged;
+  const r = game.renderer;
+  if (corridorEnv && r && corridorEnv.act === (r._actPalette || 1) && corridorEnv.level === (r._envLevel ?? null)) r.offerEnv?.(corridorEnv);
   const player = new Player(map.playerStart.x, map.playerStart.y, map.playerStart.dir);
   const restore = borrowFields(game, MELTDOWN_FIELDS({ ...staged, player }));
   const combat = borrowCombat(game);
@@ -192,6 +225,7 @@ function start(game, staged, spec, rng, reel, shot, handle) {
     shotLen: beatsToSec(reel, shot.len),
     speed: spec.speed ?? 4,
     heat: spec.heat ?? [20, 60],
+    cardScale: spec.cardScale ?? 1,
     // The campaign combat sandbox's per-shot state.
     time0: game.time ?? 0,
     fireUntil: null,

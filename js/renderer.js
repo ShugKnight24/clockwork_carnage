@@ -302,6 +302,15 @@ export class Renderer {
     this._prewarmedEnv = env;
   }
 
+  /**
+   * Hand over an environment bundle built ahead of time (generateModernEnv,
+   * with `realistic` set): the next _getModernEnv adopts it when it matches
+   * the act, level and finish being drawn, as it would a prewarmEnv's.
+   */
+  offerEnv(env) {
+    if (env) this._prewarmedEnv = env;
+  }
+
   /** Build (or reuse) the Modern environment bundle for the current act. */
   _getModernEnv() {
     const act = this._actPalette || 1;
