@@ -14,7 +14,9 @@ export const REMAPPABLE_KEY_ACTIONS = Object.keys(DEFAULT_KEYBINDS).filter((a) =
 /** RB rewinds while shifting and is previous weapon otherwise, so these two may share a button. */
 export const SHARED_PAD = [["chronoRewind", "weaponPrev"]];
 
-export const isReservedKey = (code) => code === "Escape";
+// input-dispatch pauses on P as well as the pause binding, so P bound to an
+// action would pause the game every time it was used.
+export const isReservedKey = (code) => code === "Escape" || code === "KeyP";
 export const isReservedButton = (index) => index === PAD.MENU;
 const reserved = (input) => (typeof input === "number" ? isReservedButton(input) : isReservedKey(input));
 const shared = (a, b) => SHARED_PAD.some(([x, y]) => (x === a && y === b) || (x === b && y === a));

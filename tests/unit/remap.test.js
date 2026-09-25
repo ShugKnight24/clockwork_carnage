@@ -16,6 +16,11 @@ describe("remap rules", () => {
     expect(planBind(keys(), "interact", "Escape", REMAPPABLE_KEY_ACTIONS)).toEqual({ ok: false, reason: "reserved" });
   });
 
+  it("reserves P too: play pauses on it whatever the bindings say", () => {
+    expect(isReservedKey("KeyP")).toBe(true);
+    expect(planBind(keys(), "interact", "KeyP", REMAPPABLE_KEY_ACTIONS)).toEqual({ ok: false, reason: "reserved" });
+  });
+
   it("pause is not remappable", () => {
     expect(REMAPPABLE_KEY_ACTIONS).not.toContain("pause");
     expect(planBind(keys(), "pause", "KeyP", REMAPPABLE_KEY_ACTIONS)).toEqual({ ok: false, reason: "unknown" });
