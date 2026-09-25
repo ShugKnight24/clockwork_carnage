@@ -122,6 +122,33 @@ test.describe("State Screenshots", () => {
   });
 });
 
+// The deck in each art style (it reskins itself) at phone and desktop sizes.
+test.describe("Settings Deck Screenshots", () => {
+  for (const [w, h] of [[375, 812], [1440, 900]]) {
+    for (const art of [0, 1, 2]) {
+      test(`settings deck ${w}x${h}, art style ${art}`, async ({ page }) => {
+        await page.setViewportSize({ width: w, height: h });
+        await page.addInitScript((a) => {
+          if (!sessionStorage.getItem("cc_shot_seeded")) {
+            localStorage.setItem("cc_settings", JSON.stringify({ artStyle: a }));
+            sessionStorage.setItem("cc_shot_seeded", "1");
+          }
+        }, art);
+        await loadGame(page);
+        await debug(page, "startArena");
+        await debug(page, "showPauseMenu");
+        await debug(page, "showSettings");
+        const deck = page.locator("settings-deck");
+        await expect(deck).toHaveAttribute("open", "");
+        await expect(deck).toHaveAttribute("skin", ["legacy", "modern", "realistic"][art]);
+        await expect(deck).toHaveAttribute("layout", w < 700 ? "sheet" : "side");
+        await page.waitForTimeout(400);
+        await screenshot(page, `16-settings-deck-${w}-a${art}`);
+      });
+    }
+  }
+});
+
 test.describe("Cutscene Screenshots", () => {
   test("capture all cutscene first frames", async ({ page }) => {
     await loadGame(page);
