@@ -31,7 +31,9 @@ const ALLOWED_TRANSITIONS = {
   modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings'],
   playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
   paused: ['playing', 'settings', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
-  settings: ['paused', 'playing', 'title', 'modeSelect'],
+  settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor'],
+  // The deck's "Edit custom HUD" row opens the editor; leaving it returns there.
+  hudEditor: ['settings', 'paused', 'playing', 'title', 'modeSelect'],
   upgrade: ['playing'],
   gameOver: ['title', 'modeSelect', 'playing', 'cutscene', 'characterCreate'],
   builder: ['title', 'modeSelect', 'playing', 'settings', 'paused'],
