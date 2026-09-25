@@ -1020,7 +1020,18 @@ export class Game {
   // Save / Load
   // ── Save/Load (delegated to SaveSystem) ──────────────────
   saveSettings() {
-    Persistence.saveSettings(this);
+    // A compare hold shows the previous value live; what persists is still
+    // the chosen one, so a reload or crash mid-hold cannot keep "before".
+    const deck = this.settingsDeck;
+    const key = deck?.compareKey;
+    if (!key) return Persistence.saveSettings(this);
+    const shown = this.settings[key];
+    this.settings[key] = deck.compareValue;
+    try {
+      Persistence.saveSettings(this);
+    } finally {
+      this.settings[key] = shown;
+    }
   }
 
   loadSettings() {

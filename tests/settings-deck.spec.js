@@ -244,6 +244,27 @@ test("a cursor resting on the list never takes focus from the keys; moving it do
   expect(hovered).not.toBe(start + 6);
 });
 
+test("a compare hold never saves the value it shows, and ends when the window loses focus", async ({ page }) => {
+  await openFromMenu(page);
+  await page.keyboard.press("KeyE"); // Video
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("enableFilmGrain"));
+  const was = await setting(page, "enableFilmGrain");
+  await page.keyboard.press("Enter");
+  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("cc_settings")).enableFilmGrain);
+  expect(await saved()).toBe(!was);
+  await page.keyboard.down("KeyC"); // hold: shows the value before
+  expect(await setting(page, "enableFilmGrain")).toBe(was);
+  expect(await saved()).toBe(!was); // …but the chosen value is what is stored
+  await page.evaluate(() => window.ccDebug.game.saveSettings()); // any save meanwhile too
+  expect(await saved()).toBe(!was);
+  // The key-up is lost when focus leaves the window: the hold ends anyway.
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  expect(await setting(page, "enableFilmGrain")).toBe(!was);
+  await page.keyboard.up("KeyC");
+  expect(await setting(page, "enableFilmGrain")).toBe(!was);
+  expect(await saved()).toBe(!was);
+});
+
 test("mode select key 9 opens the deck too", async ({ page }) => {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug);

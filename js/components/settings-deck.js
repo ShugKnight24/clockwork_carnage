@@ -521,6 +521,11 @@ class SettingsDeck extends HTMLElement {
     this.syncInput();
     this._onInput ??= () => this.isOpen && this.syncInput();
     window.addEventListener("cc-input-change", this._onInput);
+    // A key-up that happens outside the window never arrives: end a compare
+    // hold when focus leaves, or the view would stay on "before".
+    this._onBlur ??= () => this.endCompare();
+    window.addEventListener("blur", this._onBlur);
+    document.addEventListener("visibilitychange", this._onBlur);
     this.isOpen = true;
     this.toggleAttribute("open", true);
     this.render();
@@ -546,6 +551,14 @@ class SettingsDeck extends HTMLElement {
     this.removeAttribute("open");
     this.classList.remove("kbd");
     window.removeEventListener("cc-input-change", this._onInput);
+    window.removeEventListener("blur", this._onBlur);
+    document.removeEventListener("visibilitychange", this._onBlur);
+  }
+
+  endCompare() {
+    if (!this.state.compare) return;
+    this.state = { ...this.state, compare: false };
+    this.compare(false);
   }
 
   /** Called every frame by the render pipeline. */
