@@ -168,7 +168,7 @@ export const SIZZLE = {
     // 1:04 — the Paradox Lord's final form: silhouette and card only.
     {
       id: "finale", at: 128, len: 10,
-      scene: { kind: "art", bg: "temporal_rift", art: "villain_final", silhouette: true, artAt: { legacy: [0, 0.2, 0.66], default: [0, 0.3, 0.6] }, pan: { from: [0, 0, 1], to: [0, 0.01, 1.08] } },
+      scene: { kind: "art", bg: "temporal_rift", art: "villain_final", silhouette: true, artAt: { legacy: [0, 0.155, 0.5], default: [0, 0.3, 0.6] }, pan: { from: [0, 0, 1], to: [0, 0.01, 1.08] } },
       events: [{ at: 0, type: "glitch" }, { at: 4, type: "shake", amount: 0.5 }, { at: 8, type: "glitch" }],
       transitionOut: "flash",
     },
