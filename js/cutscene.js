@@ -3792,3 +3792,8 @@ export class CutsceneEngine {
     drawCutsceneArt(ctx, w, h, art, t, this.isTouchDevice);
   }
 }
+
+/** A cutscene backdrop on its own (reel `art` shots); the method keeps no engine state. */
+export function drawCutsceneBg(ctx, w, h, bg, t) {
+  CutsceneEngine.prototype.drawCutsceneBg(ctx, w, h, bg, t);
+}

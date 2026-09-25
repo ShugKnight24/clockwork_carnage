@@ -113,6 +113,7 @@ import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
 import { renderStatsCard } from "../src/ui/stats-card.js";
 import { renderHUD as _renderHUD } from "../src/ui/hud.js";
 import { startShowcase, stopShowcase, updateShowcase } from "../src/systems/showcase.js";
+import { updateDirector, directorInput } from "../src/cinematic/director.js";
 import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaign-prompt.js";
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
@@ -313,8 +314,10 @@ export class Game {
       onKeyDown: (code, e) => this._inputKeyDown(code, e),
       onKeyUp: (code) => {
         // Play reacts to held keys each frame; only the settings deck wants
-        // releases (holding C shows a setting's previous value).
+        // releases (holding C shows a setting's previous value), and a reel
+        // (the lore video's hold to skip).
         if (this.state === GameState.SETTINGS) this.settingsDeck?.handleKeyUp(code);
+        if (this.state === GameState.CINEMATIC) directorInput(this, "key", { down: false, code });
       },
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
@@ -324,6 +327,7 @@ export class Game {
         // state: a play-test started mid-hold would otherwise swallow the
         // release and leave the Forge thinking the button is still down.
         this.builder?.handleMouseUp(e.button);
+        if (this.state === GameState.CINEMATIC) directorInput(this, "pointer", { down: false });
         if (e.button === 0) this.player.isFiring = false;
         if (e.button === 2) this.player.isAiming = false;
       },
@@ -638,6 +642,11 @@ export class Game {
 
   /** Handles all mousedown events with full game state context. */
   _inputMouseDown(e) {
+    // A reel: any button skips it (or starts the lore video's hold).
+    if (this.state === GameState.CINEMATIC) {
+      directorInput(this, "pointer", { down: true });
+      return;
+    }
     // Cutscene: click the AUTO chip to toggle auto-play, anywhere else to
     // advance a frame (manual advance)
     if (this.state === GameState.CUTSCENE && e.button === 0) {
@@ -844,6 +853,16 @@ export class Game {
       return;
     }
     trackGamepad(this, gp);
+    // A reel takes any button as its skip (the lore video's as a hold);
+    // nothing reaches play or the menus underneath.
+    if (this.state === GameState.CINEMATIC) {
+      if (gp.buttonPressed >= 0) directorInput(this, "pad", { down: true });
+      else if (this._reelPadHeld && !gp.anyButton) directorInput(this, "pad", { down: false });
+      this._reelPadHeld = gp.anyButton;
+      this._releaseGamepadKeys(nextHeld);
+      return;
+    }
+    this._reelPadHeld = false;
     const moveX = gp.moveX;
     const moveY = gp.moveY;
     if (Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) {
@@ -1998,6 +2017,12 @@ export class Game {
     // The HUD editor opened from the menu's deck keeps it as its backdrop.
     if (this._showcase && this.state !== GameState.SETTINGS && !this._showcaseBehindEditor()) this._stopShowcase();
 
+    if (this.state === GameState.CINEMATIC) {
+      // A reel keeps time with its music, so it runs on real time rather than
+      // the 30 fps-floored sim step (the director caps a stall itself).
+      updateDirector(this, realDt);
+      return;
+    }
     if (this.state === GameState.CUTSCENE) {
       this.updateCutscene();
       return;

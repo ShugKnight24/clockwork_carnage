@@ -12,10 +12,20 @@ import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
 import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
 import { archiveLayout, archiveEntries } from "../ui/archive-screen.js";
+import { directorInput } from "../cinematic/director.js";
 
 export function dispatchKeyPress(game, code, e) {
   // Nested Spaghetti 😂🤦‍♂️
   // TODO: Abstract into StateManager
+
+  // A reel takes every key as its skip (the lore video's as a hold). It must
+  // not also reach main.js's title/menu listener: a skip back to the menu
+  // would take the same Space or Enter as a click on the focused mode.
+  if (game.state === GameState.CINEMATIC) {
+    directorInput(game, "key", { down: true, code });
+    if (e?.stopImmediatePropagation) swallowKey(e);
+    return;
+  }
 
   // TITLE and MODE_SELECT input is handled exclusively by main.js
   // (which owns the DOM elements for those screens)
@@ -683,4 +693,21 @@ export function dispatchKeyPress(game, code, e) {
     }
     return;
   }
+}
+
+/**
+ * Keep a key the reel took from the page: main.js's listener, the focused
+ * menu button's Enter (on keydown) and Space (on keyup), once the skip has put
+ * the menu back under it. Browser shortcuts keep working.
+ */
+function swallowKey(e) {
+  e.stopImmediatePropagation();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  e.preventDefault();
+  const up = (u) => {
+    if (u.code !== e.code) return;
+    u.preventDefault();
+    window.removeEventListener("keyup", up, true);
+  };
+  window.addEventListener("keyup", up, true);
 }

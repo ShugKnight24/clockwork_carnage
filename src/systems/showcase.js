@@ -103,39 +103,69 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   // deck, keeps it as a backdrop.
   const live = () => game._showcase === token && (game.state === "settings" || game.state === "hudEditor");
   const act = game._showcaseForceAct ?? showcaseAct(game.achievementStats, campaignSave);
-  const entry = getActLevel(act, showcaseLevel(act)) ?? getActLevel(act, 0);
+  const level = await installLevelScene(game, { act, level: showcaseLevel(act), live, wait });
+  if (!level) return;
+
+  token.restore = level.restore;
+  token.path = level.path;
+  token.emitters = level.emitters;
+  token.t = 0;
+  token.vel = 0;
+  game.showcasePitch = 0;
+  token.heading = targetHeading(level.path, 0, fovOf(game), 0);
+  token.installed = true;
+  placeCamera(game, token);
+}
+
+/**
+ * The showcase's level without its camera loop (the reel director flies its
+ * own camera): build the act's level, its props and a few idle enemies over
+ * several `wait()`s, then swap them in for SHOWCASE_FIELDS in one step.
+ * Returns null, touching nothing, when `live()` turns false before the swap;
+ * otherwise `{ act, map, path, emitters, restore }`, where `restore()` puts
+ * every borrowed field and the act palette back (safe to call twice).
+ */
+export async function installLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true }) {
+  const entry = getActLevel(act, level) ?? getActLevel(act, 0);
   const palette = getAct(act)?.palette ?? act;
 
   await wait();
-  if (!live()) return;
+  if (!live()) return null;
   game.renderer?.prewarmEnv?.(palette, entry.env);
   await wait();
-  if (!live()) return;
+  if (!live()) return null;
   const map = structuredClone(campaignMap(entry));
   const path = pathFor(entry, map);
   const props = levelProps(map, act);
-  const enemies = enemiesFor(entry, map, path, act, fovOf(game));
+  const foes = enemies ? enemiesFor(entry, map, path, act, fovOf(game)) : [];
   await wait();
-  if (!live()) return;
-  await prewarmSprites(game, map, path, props, enemies, live, wait);
-  if (!live()) return;
+  if (!live()) return null;
+  await prewarmSprites(game, map, path, props, foes, live, wait);
+  if (!live()) return null;
 
-  token.saved = Object.fromEntries(SHOWCASE_FIELDS.map((k) => [k, game[k]]));
-  token.palette = [game.renderer?._actPalette, game.renderer?._envLevel];
-  token.path = path;
-  token.t = 0;
-  token.vel = 0;
+  const saved = Object.fromEntries(SHOWCASE_FIELDS.map((k) => [k, game[k]]));
+  const savedPalette = [game.renderer?._actPalette, game.renderer?._envLevel];
   Object.assign(game, scene());
   game.map = map;
   game.player = new Player(path[0].x, path[0].y, 0);
-  game.entities = [...props, ...enemies];
+  game.entities = [...props, ...foes];
   game.showcaseAct = act;
-  game.showcasePitch = 0;
   game.renderer?.applyActPalette?.(palette, entry.env);
-  token.heading = targetHeading(path, 0, fovOf(game), 0);
-  token.emitters = ambientEmitters(map, path);
-  token.installed = true;
-  placeCamera(game, token);
+  let restored = false;
+  return {
+    act,
+    map,
+    path,
+    emitters: ambientEmitters(map, path),
+    restore() {
+      if (restored) return;
+      restored = true;
+      for (const p of game.player?.particles ?? []) particlePool.release(p);
+      for (const k of SHOWCASE_FIELDS) game[k] = saved[k];
+      delete game.showcaseAct;
+      game.renderer?.applyActPalette?.(savedPalette[0], savedPalette[1]);
+    },
+  };
 }
 
 // The most the install waits on sprite decodes before fading in anyway.
@@ -306,7 +336,7 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
  * ahead, turned right by the share of the screen the side panel covers so
  * that look lands in the middle of the visible part, left of the panel.
  */
-function targetHeading(path, t, fov, panelFrac) {
+export function targetHeading(path, t, fov, panelFrac) {
   const pos = samplePath(path, t / LOOP_SECONDS);
   const ahead = samplePath(path, (t + LOOK_AHEAD_SECONDS) / LOOP_SECONDS);
   const look = Math.hypot(ahead.x - pos.x, ahead.y - pos.y) > 1e-3 ? Math.atan2(ahead.y - pos.y, ahead.x - pos.x) : pos.angle;
@@ -315,7 +345,7 @@ function targetHeading(path, t, fov, panelFrac) {
 }
 
 /** Critically damped follow (Game Programming Gems 4, 1.10) on the wrapped difference. */
-function stepHeading(cam, goal, dt) {
+export function stepHeading(cam, goal, dt) {
   const target = cam.heading + wrap(goal - cam.heading);
   const omega = 2 / HEADING_SMOOTH;
   const x = omega * dt;
@@ -349,10 +379,17 @@ export function updateShowcase(game, dt, { panelFrac = 0, sheetFrac = 0 } = {}) 
   game.showcasePitch += (pitch - game.showcasePitch) * Math.min(1, dt * 4);
   placeCamera(game, token);
   swayWeapon(game.player, token, dt);
-  // Dust, sparks and steam give the particle settings something to act on.
+  updateAmbience(game, token.emitters, dt);
+}
+
+/**
+ * Dust, sparks and steam give the particle settings something to act on.
+ * `random` times the sparks (the reel passes its seeded one).
+ */
+export function updateAmbience(game, emitters, dt, random = Math.random) {
   const q = game.quality?.particleMultiplier ?? 1;
   const ps = (game.player.particles ??= []);
-  emitAmbient(ps, token, game.player, q, dt);
+  emitAmbient(ps, emitters, game.player, q, dt, random);
   game.dustMotes = updateParticles(ps, dt, 1, game.dustMotes, game.player, { enableDust: q >= 0.5 });
 }
 
@@ -391,15 +428,15 @@ function ambientEmitters(map, path) {
   return out;
 }
 
-function emitAmbient(ps, token, cam, q, dt) {
+function emitAmbient(ps, emitters, cam, q, dt, random) {
   // Low particle quality turns the ambience off, as it thins combat effects.
-  if (q < 0.25 || !token.emitters) return;
-  for (const e of token.emitters) {
+  if (q < 0.25 || !emitters) return;
+  for (const e of emitters) {
     e.next -= dt;
     if (e.next > 0) continue;
     const near = Math.hypot(e.x - cam.x, e.y - cam.y) < EMIT_RANGE;
     if (e.kind === "spark") {
-      e.next = 1.2 + Math.random() * 1.6;
+      e.next = 1.2 + random() * 1.6;
       if (near) spawnWallSparks(ps, e.x, e.y, q);
     } else {
       e.next = 0.18;
@@ -426,9 +463,6 @@ export function stopShowcase(game) {
   if (!token) return;
   delete game._showcase;
   if (!token.installed) return;
-  for (const p of game.player?.particles ?? []) particlePool.release(p);
-  for (const k of SHOWCASE_FIELDS) game[k] = token.saved[k];
-  delete game.showcaseAct;
+  token.restore();
   delete game.showcasePitch;
-  game.renderer?.applyActPalette?.(token.palette[0], token.palette[1]);
 }

@@ -13,6 +13,7 @@ import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
 import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
+import { renderDirector } from "../cinematic/director.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
 let deckLoad = "idle"; // same states, for <settings-deck>
@@ -394,6 +395,12 @@ export function renderFrame(game) {
     return;
   }
 
+  if (game.state === GameState.CINEMATIC) {
+    // A reel's level shots are the game's own first-person view, minus the HUD.
+    renderDirector(game, ctx, game.hudCtx, w, h, () => renderWorld(game, ctx, w, h));
+    return;
+  }
+
   if (game.state === GameState.CUTSCENE) {
     // Clear HUD canvas so it doesn't overlay the cutscene
     game.hudCtx.clearRect(0, 0, game.hudW, game.hudH);
@@ -488,6 +495,50 @@ export function renderFrame(game) {
     return;
   }
 
+  renderWorld(game, ctx, w, h);
+  const profiling = !!game.showFPS;
+
+  // Render HUD on overlay canvas
+  const _tHud0 = profiling ? performance.now() : 0;
+  game.renderHUD();
+
+  // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
+  if (game.mode === "tutorial") {
+    game.renderTutorialOverlay(ctx, w, h);
+  } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
+    // A Chronos teach card, the tutorial's card, on the HUD layer in the
+    // message director's headline lane (same coordinates as ARIA's plates).
+    game.renderTeachCard(game.hudCtx, game.hudW, game.hudH);
+  }
+  if (profiling) game.profiler.currentPhases.hud = performance.now() - _tHud0;
+
+  // Render overlay screens on HUD canvas (it's on top via z-index)
+  const _tOvr0 = profiling ? performance.now() : 0;
+  const hctx = game.hudCtx;
+  const hw = game.hudW;
+  const hh = game.hudH;
+  if (game.state === GameState.PAUSED) game.renderPauseScreen(hctx, hw, hh);
+  if (game.state === GameState.HUD_EDITOR)
+    game.hudEditor.render(hctx, hw, hh);
+  if (game.state === GameState.ACHIEVEMENTS)
+    game.renderAchievementsScreen(hctx, hw, hh);
+  if (game.state === GameState.STATS) game.renderStatsScreen(hctx, hw, hh);
+  if (game.state === GameState.UPGRADE)
+    game.renderUpgradeScreen(hctx, hw, hh);
+  if (game.state === GameState.GAME_OVER) game.renderGameOver(hctx, hw, hh);
+  if (game.state === GameState.VICTORY) game.renderVictory(hctx, hw, hh);
+  if (game.state === GameState.LEVEL_COMPLETE)
+    game.renderLevelComplete(hctx, hw, hh);
+  if (profiling) game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
+}
+
+/**
+ * The first-person view of the current level on the game canvas: the 3D
+ * scene, motes and tracers, horizon band, vignette, Chronos screen effects,
+ * the weapon and post-FX. Everything after it (HUD, overlay screens) is the
+ * caller's; a reel draws this with its own overlay instead of the HUD.
+ */
+function renderWorld(game, ctx, w, h) {
   // ── Screen shake ─────────────────────────────────────────────────────────
   // Driven by sampled sine at incommensurate frequencies rather than a fresh
   // Math.random() per frame. Per-frame random reads as static buzz; a sampled
@@ -756,41 +807,7 @@ export function renderFrame(game) {
     });
   }
   if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
-
-  // Render HUD on overlay canvas
-  const _tHud0 = profiling ? performance.now() : 0;
-  game.renderHUD();
-
-  // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
-  if (game.mode === "tutorial") {
-    game.renderTutorialOverlay(ctx, w, h);
-  } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
-    // A Chronos teach card, the tutorial's card, on the HUD layer in the
-    // message director's headline lane (same coordinates as ARIA's plates).
-    game.renderTeachCard(game.hudCtx, game.hudW, game.hudH);
-  }
-  if (profiling) game.profiler.currentPhases.hud = performance.now() - _tHud0;
-
-  // Render overlay screens on HUD canvas (it's on top via z-index)
-  const _tOvr0 = profiling ? performance.now() : 0;
-  const hctx = game.hudCtx;
-  const hw = game.hudW;
-  const hh = game.hudH;
-  if (game.state === GameState.PAUSED) game.renderPauseScreen(hctx, hw, hh);
-  if (game.state === GameState.HUD_EDITOR)
-    game.hudEditor.render(hctx, hw, hh);
-  if (game.state === GameState.ACHIEVEMENTS)
-    game.renderAchievementsScreen(hctx, hw, hh);
-  if (game.state === GameState.STATS) game.renderStatsScreen(hctx, hw, hh);
-  if (game.state === GameState.UPGRADE)
-    game.renderUpgradeScreen(hctx, hw, hh);
-  if (game.state === GameState.GAME_OVER) game.renderGameOver(hctx, hw, hh);
-  if (game.state === GameState.VICTORY) game.renderVictory(hctx, hw, hh);
-  if (game.state === GameState.LEVEL_COMPLETE)
-    game.renderLevelComplete(hctx, hw, hh);
-  if (profiling) game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
 }
-
 
 /**
  * Pick what the GPU post-FX pass reads this frame.

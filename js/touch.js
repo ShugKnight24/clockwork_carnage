@@ -20,6 +20,7 @@ import {
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
+import { directorInput } from "../src/cinematic/director.js";
 
 export class TouchControls {
   static init(game) {
@@ -262,6 +263,12 @@ export class TouchControls {
 
     // The settings deck takes its own touches; the live view beside it is inert.
     if (g.state === "settings") return;
+
+    // A reel: a tap skips it (the lore video's skip is a held touch).
+    if (g.state === "cinematic") {
+      directorInput(g, "pointer", { down: true });
+      return;
+    }
 
     // Cutscene: tap the AUTO chip to toggle auto-play; elsewhere tap to
     // advance, track hold start for skip
@@ -507,6 +514,11 @@ export class TouchControls {
 
   onTouchEnd(e) {
     e.preventDefault();
+
+    if (this.game.state === "cinematic") {
+      if (e.touches.length === 0) directorInput(this.game, "pointer", { down: false });
+      return;
+    }
 
     // Clear cutscene hold
     if (this.cutsceneHoldTouch !== null) {

@@ -27,8 +27,8 @@
  * observability, not enforcement.
  */
 const ALLOWED_TRANSITIONS = {
-  title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats'],
-  modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings'],
+  title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats', 'cinematic'],
+  modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings', 'cinematic'],
   playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
   paused: ['playing', 'settings', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
   settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor'],
@@ -43,10 +43,12 @@ const ALLOWED_TRANSITIONS = {
   cutscene: ['playing', 'title', 'modeSelect', 'gameOver', 'victory', 'campaignPrompt', 'tutorial', 'characterCreate'],
   campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene'],
   tutorialComplete: ['title', 'modeSelect', 'playing'],
-  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory'],
+  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory', 'cinematic'],
   achievements: ['title', 'modeSelect', 'paused'],
   stats: ['title', 'modeSelect', 'paused'],
-  archive: ['title', 'modeSelect', 'paused'],
+  archive: ['title', 'modeSelect', 'paused', 'cinematic'],
+  // A reel returns to whatever played it; the lore video hands off to the flipbook.
+  cinematic: ['title', 'modeSelect', 'characterCreate', 'archive', 'cutscene'],
 };
 
 export class StateManager {
