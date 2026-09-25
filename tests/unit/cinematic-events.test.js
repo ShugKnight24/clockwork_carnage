@@ -1,6 +1,6 @@
 // tests/unit/cinematic-events.test.js
 import { describe, it, expect, vi } from "vitest";
-import { playReel, stopReel, stepFixed, updateDirector, directorState, registerScene } from "../../src/cinematic/director.js";
+import { playReel, stopReel, stepFixed, updateDirector, directorState, registerScene, SCENES } from "../../src/cinematic/director.js";
 import { ChronoPowers, inLockSlab } from "../../src/systems/chrono-powers.js";
 import { SHOWCASE_FIELDS } from "../../src/systems/showcase.js";
 
@@ -220,5 +220,59 @@ describe("director cards", () => {
     stopReel(g);
     await done;
     expect(seen).toEqual([]);
+  });
+});
+
+describe("prepare", () => {
+  it("prepares the next shot while the current one plays and hands the result to its build", async () => {
+    const log = [];
+    registerScene("prep", {
+      prepare: (g, spec) => (log.push(`prepare:${spec.n}`), { n: spec.n }),
+      build: (g, spec, rng, { prepared }) => log.push(`build:${spec.n}:${prepared?.n ?? "-"}`),
+      update() {},
+      event() {},
+      teardown: () => log.push("teardown"),
+    });
+    const reel = {
+      id: "p", bpm: 120, bars: 3, music: [], narration: [], captions: [],
+      shots: [0, 1, 2].map((n) => ({ id: `s${n}`, at: n * 4, len: 4, scene: { kind: "prep", n } })),
+    };
+    const g = new FakeGame();
+    const done = playReel(g, reel, { returnTo: "title" });
+    for (let i = 0; i < 400; i++) updateDirector(g, 1 / 60);
+    await done;
+    // The first shot has nothing to prepare ahead of it; each later one is
+    // prepared once, after the shot before it is up, and never while built.
+    expect(log).toEqual(["build:0:-", "prepare:1", "teardown", "build:1:1", "prepare:2", "teardown", "build:2:2", "teardown"]);
+  });
+
+  it("a prepared level cuts in on the same frame, without holding the clock", async () => {
+    registerScene("still", { build() {}, update() {}, event() {}, teardown() {} });
+    const reel = {
+      id: "cut", bpm: 120, bars: 2, music: [], narration: [], captions: [],
+      shots: [
+        { id: "a", at: 0, len: 4, scene: { kind: "still" } },
+        { id: "b", at: 4, len: 4, scene: { kind: "campaign", act: 1, level: 5, camera: { kind: "path" } } },
+      ],
+    };
+    const { prepare } = SCENES.campaign;
+    let prep = null;
+    SCENES.campaign.prepare = (...args) => (prep = prepare(...args));
+    const g = new FakeGame();
+    const done = playReel(g, reel, { returnTo: "title" });
+    updateDirector(g, 1 / 60);
+    SCENES.campaign.prepare = prepare;
+    // The level is prepared in the background (its waits are timers here).
+    expect(prep).not.toBeNull();
+    await prep.done;
+    expect(g.map.name).toBe("old");
+    // Frames, with no await between them: the cut's own frame has the level.
+    for (let i = 0; i < 121; i++) updateDirector(g, 1 / 60);
+    expect(directorState(g).shotId).toBe("b");
+    expect(directorState(g).paused).toBe(false);
+    expect(g.mode).toBe("showcase");
+    stopReel(g);
+    await done;
+    expect(g.map.name).toBe("old");
   });
 });

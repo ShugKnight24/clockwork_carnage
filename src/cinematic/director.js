@@ -21,9 +21,13 @@ import { campaign } from "./scenes/campaign.js";
 
 /**
  * Scene adapters by `scene.kind`:
- *   build(game, spec, rng, { live, shot, reel, handle }) → void | Promise
+ *   build(game, spec, rng, { live, shot, reel, handle, prepared }) → void | Promise
  *     (`live()` turns false once the shot is abandoned; `handle` is this
- *     shot's own object, for per-shot state)
+ *     shot's own object, for per-shot state; `prepared` is what the
+ *     adapter's prepare returned for this shot, or null)
+ *   optional prepare(game, spec, { live, shot, reel }) → anything: called
+ *     once for the next shot while the current one plays, for heavy work
+ *     that shows and borrows nothing (so the cut's build can be quick)
  *   update(game, dt, local, handle), event(game, ev, handle), teardown(game, handle)
  *   and either draw(gctx, w, h, local, { game, shotLen, handle }) to paint
  *   the game canvas, or `world: true` to have the game's first-person view drawn.
@@ -85,6 +89,8 @@ export function playReel(game, reel, { returnTo = "title", clock = "real", muted
     // Director-level cards and the squad roll call (reel beats).
     cards: [],
     squad: null,
+    // The next shot's prepare: { index, value }.
+    prep: null,
     holdSince: null,
     hintUntil: 0,
     muted: !!muted,
@@ -222,6 +228,7 @@ function advance(game, sess, dt) {
   }
   flushPending(game, sess);
   if (game._cinematic !== sess) return;
+  if (sess.current?.ready) prepareNext(game, sess);
 
   // Never cross more than one cut per step: the next shot has to be built
   // before any of its time runs. Time cut off at the cut carries over.
@@ -275,8 +282,9 @@ function enterShot(game, sess, index) {
   }
   const live = () => game._cinematic === sess && sess.current === handle;
   let result;
+  const prepared = sess.prep?.index === index ? sess.prep.value : null;
   try {
-    result = scene.build(game, shot.scene, mulberry32(seedFor(sess.reel.id, shot.id)), { live, shot, reel: sess.reel, handle });
+    result = scene.build(game, shot.scene, mulberry32(seedFor(sess.reel.id, shot.id)), { live, shot, reel: sess.reel, handle, prepared });
   } catch (err) {
     console.warn(`[cinematic] shot "${shot.id}" failed to build`, err);
     return;
@@ -304,6 +312,25 @@ function enterShot(game, sess, index) {
       },
     );
   });
+}
+
+/**
+ * Once the current shot is up, let the next shot's adapter do its heavy,
+ * invisible work (a level's bake and path) while this one plays, so the cut
+ * does not stall on it. Only ever one prepare, and it never installs.
+ */
+function prepareNext(game, sess) {
+  const index = sess.shotIndex + 1;
+  const shot = sess.reel.shots[index];
+  if (!shot || sess.prep?.index === index) return;
+  sess.prep = { index, value: null };
+  const scene = SCENES[shot.scene.kind];
+  if (!scene?.prepare) return;
+  try {
+    sess.prep.value = scene.prepare(game, shot.scene, { live: () => game._cinematic === sess, shot, reel: sess.reel }) ?? null;
+  } catch (err) {
+    console.warn(`[cinematic] shot "${shot.id}" failed to prepare`, err);
+  }
 }
 
 /** Tear down the current scene; one still building is torn down when its build lands. */

@@ -125,7 +125,20 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
  * otherwise `{ act, map, path, emitters, restore }`, where `restore()` puts
  * every borrowed field and the act palette back (safe to call twice).
  */
-export async function installLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true }) {
+export async function installLevelScene(game, opts) {
+  const live = opts.live ?? (() => true);
+  const staged = await stageLevelScene(game, opts);
+  if (!staged || !live()) return null;
+  return installStagedLevel(game, staged);
+}
+
+/**
+ * The heavy half of installLevelScene, with no effect on what is shown: the
+ * environment bake, the level, its camera path and enemy spots (both cached
+ * per level), and the sprite decodes. Resolves to what installStagedLevel
+ * swaps in, or null if `live()` turned false on the way.
+ */
+export async function stageLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true }) {
   const entry = getActLevel(act, level) ?? getActLevel(act, 0);
   const palette = getAct(act)?.palette ?? act;
 
@@ -142,7 +155,15 @@ export async function installLevelScene(game, { act, level, live = () => true, w
   if (!live()) return null;
   await prewarmSprites(game, map, path, props, foes, live, wait);
   if (!live()) return null;
+  return { act, entry, palette, map, path, props, foes, emitters: ambientEmitters(map, path) };
+}
 
+/**
+ * Swap a staged level in for SHOWCASE_FIELDS, at once (one frame's work
+ * when stageLevelScene has warmed its environment). A staged level is
+ * installed once.
+ */
+export function installStagedLevel(game, { act, entry, palette, map, path, props, foes, emitters }) {
   const saved = Object.fromEntries(SHOWCASE_FIELDS.map((k) => [k, game[k]]));
   const savedPalette = [game.renderer?._actPalette, game.renderer?._envLevel];
   Object.assign(game, scene());
@@ -156,7 +177,7 @@ export async function installLevelScene(game, { act, level, live = () => true, w
     act,
     map,
     path,
-    emitters: ambientEmitters(map, path),
+    emitters,
     restore() {
       if (restored) return;
       restored = true;

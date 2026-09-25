@@ -30,7 +30,7 @@
  */
 import { beatsToSec } from "../timeline.js";
 import {
-  installLevelScene, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
+  stageLevelScene, installStagedLevel, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
 } from "../../systems/showcase.js";
 import { samplePath } from "../../systems/showcase-path.js";
 import { Enemy } from "../../../js/entities.js";
@@ -53,11 +53,38 @@ export const campaign = {
   // Drawn by the render pipeline's world pass, not by the scene.
   world: true,
 
-  async build(game, spec, rng, { live = () => true, reel, handle, shot }) {
-    await warmSpawns(game, shot, live);
-    if (!live()) return;
-    const level = await installLevelScene(game, { act: spec.act ?? 1, level: spec.level ?? 0, live, enemies: spec.enemies !== false });
-    if (level) start(game, level, spec, rng, reel, handle, shot);
+  /**
+   * The next shot's level, staged while the current shot plays (the
+   * director calls this once, ahead of the cut): nothing is installed, so
+   * it never shows or borrows anything. Waits on idle time between steps.
+   */
+  prepare(game, spec, { live = () => true, shot } = {}) {
+    const prep = { staged: null, done: null };
+    prep.done = stageLevelScene(game, levelOpts(spec, live, idle))
+      .then(async (staged) => {
+        if (staged) await warmSpawns(game, shot, live, idle);
+        return (prep.staged = live() ? staged : null);
+      });
+    return prep;
+  },
+
+  /**
+   * Installs at once (no promise, so the cut shows the level on its first
+   * frame) when the director hands over a staged level; otherwise stages it
+   * now and the director holds the clock until it lands.
+   */
+  build(game, spec, rng, { live = () => true, reel, handle, shot, prepared = null }) {
+    if (prepared?.staged) {
+      start(game, installStagedLevel(game, prepared.staged), spec, rng, reel, handle, shot);
+      return;
+    }
+    return (async () => {
+      const staged = (prepared && (await prepared.done)) || (await stageLevelScene(game, levelOpts(spec, live)));
+      if (!staged || !live()) return;
+      await warmSpawns(game, shot, live);
+      if (!live()) return;
+      start(game, installStagedLevel(game, staged), spec, rng, reel, handle, shot);
+    })();
   },
 
   update(game, dt, local, handle) {
@@ -91,6 +118,12 @@ export const campaign = {
   },
 };
 
+function levelOpts(spec, live, wait) {
+  const opts = { act: spec.act ?? 1, level: spec.level ?? 0, live, enemies: spec.enemies !== false };
+  if (wait) opts.wait = wait;
+  return opts;
+}
+
 /** Set the shot up on its freshly installed level. */
 function start(game, level, spec, rng, reel, handle, shot) {
   const cam = spec.camera ?? { kind: "path" };
@@ -103,9 +136,13 @@ function start(game, level, spec, rng, reel, handle, shot) {
   if ((shot?.events ?? []).some((ev) => COMBAT.has(ev.type))) state.combat = borrowCombat(game);
 }
 
-function nextFrame() {
+/**
+ * Between steps the prepare waits on idle time (with a deadline, so a busy
+ * shot still gets its next level staged), not on frames.
+ */
+function idle() {
   return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
+    if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout: 200 });
     else setTimeout(resolve, 0);
   });
 }
@@ -360,7 +397,7 @@ function ahead(map, p, dist) {
  * Decode the idle sprite of every enemy type a shot spawns, at the sizes a
  * few tiles away show it, so the first sight of them is not a decode stall.
  */
-async function warmSpawns(game, shot, live, wait = nextFrame) {
+async function warmSpawns(game, shot, live, wait = idle) {
   const ctx = game.renderer?.ctx;
   const viewH = game.renderer?.height;
   const types = [...new Set((shot?.events ?? []).filter((ev) => ev.type === "spawn").map((ev) => ev.enemy ?? "drone"))];
