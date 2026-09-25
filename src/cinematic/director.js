@@ -235,7 +235,9 @@ export function directorInput(game, kind, { down = true, code } = {}) {
     sess.hintUntil = now + HINT_LINGER_MS;
     return;
   }
-  sess.held.delete(id);
+  // A release the reel never saw pressed (the key that started it, still
+  // down as it began) is not a skip attempt: no hint.
+  if (!sess.held.delete(id)) return;
   if (!sess.held.size) {
     sess.holdSince = null;
     sess.hintUntil = now + HINT_LINGER_MS;

@@ -138,6 +138,22 @@ describe("director", () => {
   });
 });
 
+describe("hold to skip", () => {
+  it("a key released that was pressed before the reel began shows no hint", async () => {
+    const g = fakeGame();
+    const done = playReel(g, reel, { returnTo: "campaign" });
+    updateDirector(g, 0.1);
+    directorInput(g, "key", { down: false, code: "Enter" });
+    expect(directorState(g).hint).toBe(false);
+    // A press and release the reel did see still does.
+    directorInput(g, "key", { down: true, code: "Space" });
+    directorInput(g, "key", { down: false, code: "Space" });
+    expect(directorState(g).hint).toBe(true);
+    stopReel(g);
+    await done;
+  });
+});
+
 describe("campaign scene", () => {
   function levelGame() {
     return {
