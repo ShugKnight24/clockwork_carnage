@@ -73,6 +73,42 @@ test("a row low in the list stays focused and in view when the panel becomes a s
   expect(seen).toEqual({ key: "showPerformanceOverlay", inView: true });
 });
 
+// Touch phones: a landscape phone keeps a full-height side panel (a bottom
+// sheet there left about one row), portrait gets the sheet.
+for (const [width, height, layout] of [[667, 375, "side"], [812, 375, "side"], [375, 812, "sheet"]]) {
+  test(`touch ${width}x${height}: ${layout}, rows usable, the live view still shows`, async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    await page.goto("/?debug");
+    await page.waitForFunction(() => window.ccDebug);
+    await page.evaluate(() => window.ccDebug.startCampaign(0, 1));
+    await page.waitForFunction(() => window.ccDebug.game.state === "playing");
+    await page.evaluate(() => { window.ccDebug.game.pauseGame(); window.ccDebug.game.openSettings({ returnTo: "pause", section: "video" }); });
+    await expect(deck(page)).toHaveAttribute("open", "");
+    await expect(deck(page)).toHaveAttribute("layout", layout);
+    const m = await page.evaluate(() => {
+      const root = document.querySelector("settings-deck").shadowRoot;
+      const panel = root.querySelector(".panel").getBoundingClientRect();
+      const box = root.querySelector(".rows").getBoundingClientRect();
+      const rows = [...root.querySelectorAll(".rows .row")];
+      return {
+        panel: { left: panel.left, top: panel.top, width: panel.width, height: panel.height },
+        visibleRows: rows.filter((r) => { const b = r.getBoundingClientRect(); return b.top >= box.top - 1 && b.bottom <= box.bottom + 1; }).length,
+        minRow: Math.min(...rows.map((r) => r.getBoundingClientRect().height)),
+      };
+    });
+    expect(m.minRow).toBeGreaterThanOrEqual(44);
+    if (layout === "side") {
+      expect(m.panel.height).toBeGreaterThanOrEqual(height - 40); // full height
+      expect(m.panel.left).toBeGreaterThanOrEqual(width * 0.4 - 1); // 40% of the live view left
+      expect(m.visibleRows).toBeGreaterThanOrEqual(3);
+    } else {
+      expect(m.visibleRows).toBeGreaterThanOrEqual(4);
+    }
+    await ctx.close();
+  });
+}
+
 test("every interactive target is at least 44px tall", async ({ page }) => {
   await openDeck(page);
   await deck(page).locator('[role="tab"]', { hasText: "Video" }).click();

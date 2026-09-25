@@ -18,7 +18,9 @@ import { DEFAULT_KEYBINDS } from "../input-manager.js";
 import { COLOR, tokensCss } from "../../src/ui/design-tokens.js";
 import { onArtStyleChange } from "../../src/rendering/art-style.js";
 
-const SHEET_BELOW = 700; // px: narrower windows get the bottom sheet
+// px: narrower portrait windows get the bottom sheet. A landscape phone keeps
+// the side panel; a sheet on a 375px-tall screen left about one row.
+const SHEET_BELOW = 700;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -90,7 +92,8 @@ ${tokensCss(":host")}
   --d-accent: var(--cc-cyan); --d-group: var(--cc-text);
   --d-note: var(--cc-amber); --d-line: var(--cc-hairline); --d-line-hi: rgba(130, 160, 188, 0.4);
   --d-panel: var(--cc-panel-menu); --d-focus: rgba(34, 230, 255, 0.1); --d-track: rgba(2, 4, 8, 0.9);
-  --panel-w: clamp(360px, 32vw, 480px);
+  /* Never more than 60% of the width: the live view is what a change shows on. */
+  --panel-w: min(clamp(360px, 32vw, 480px), 60vw);
   position: fixed; inset: 0; z-index: 150; display: none; pointer-events: none;
   font: 500 15px/1.35 var(--d-font); color: var(--d-text);
   -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
@@ -279,6 +282,21 @@ footer { position: relative; display: grid; gap: 8px; padding: 12px 16px calc(14
 :host([layout="sheet"]) .rows { padding: 0 6px 14px; }
 :host([layout="sheet"]) footer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) 16px; }
 :host([layout="sheet"]) .desc { min-height: 0; }
+
+/* ── Short screens (a landscape phone): tighter chrome, rows still 44px ── */
+@media (max-height: 480px) {
+  :host([layout="side"]) .head { padding: 6px 10px 2px 16px; }
+  :host([layout="side"]) .title { font-size: var(--cc-type-row); }
+  :host([layout="side"]) .rows { padding: 0 8px 8px; }
+  :host([layout="side"]) .group { margin: 8px 4px 2px 10px; }
+  :host([layout="side"]) .row { min-height: 44px; padding-block: 0; }
+  :host([layout="side"]) .row[data-kind="slider"] { padding-block: 4px 6px; }
+  :host([layout="side"]) .track { margin-top: 4px; }
+  :host([layout="side"]) footer { gap: 4px; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)) 16px; }
+  :host([layout="side"]) .desc { min-height: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  :host([layout="side"]) .prompts { display: none; }
+  :host([skin="modern"][layout="side"]) .panel { top: 8px; right: 8px; bottom: 8px; }
+}
 
 /* ── Comic (art profile "modern"): machined steel plate, ink, brackets ── */
 :host([skin="modern"]) .panel { top: 16px; right: 16px; bottom: 16px; --chamfer: var(--cc-chamfer-lg); background: var(--cc-ink);
@@ -564,7 +582,7 @@ class SettingsDeck extends HTMLElement {
   }
 
   syncLayout() {
-    const layout = innerWidth < SHEET_BELOW ? "sheet" : "side";
+    const layout = innerWidth < SHEET_BELOW && innerHeight > innerWidth ? "sheet" : "side";
     if (this.getAttribute("layout") !== layout) this.setAttribute("layout", layout);
   }
 
