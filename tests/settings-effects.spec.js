@@ -210,6 +210,36 @@ for (const [artStyle, name] of [[1, "Comic"], [2, "Modern"]]) {
       });
     }
 
+    // The same check, driven the way a player does it: a click on the deck's
+    // switch over the paused match, not a write to game.settings.
+    test("enableBloom flipped through the deck UI changes the frame", async () => {
+      const { page } = session;
+      await page.evaluate(() => {
+        window.__reset();
+        window.__set("enableBloom", true);
+        ccDebug.game.pauseGame();
+        ccDebug.game.openSettings({ returnTo: "pause", section: "video" });
+      });
+      const sw = page.locator('settings-deck [role="switch"][data-key="enableBloom"]');
+      await expect(sw).toHaveAttribute("aria-checked", "true");
+      await page.waitForTimeout(600);
+      await page.evaluate(() => { __snap("A"); });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { __snap("A2"); });
+      const noise = await page.evaluate(() => __diff("A", "A2"));
+      await sw.click();
+      await expect(sw).toHaveAttribute("aria-checked", "false");
+      expect(await page.evaluate(() => ccDebug.game.settings.enableBloom)).toBe(false);
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { __snap("B"); });
+      const now = await page.evaluate(() => __diff("A2", "B"));
+      console.log(`[fx] ${name} enableBloom via deck`, JSON.stringify({ noise, now }));
+      expect(changed(now, noise), "the deck's Bloom switch changed the frame").toBe(true);
+      await page.keyboard.press("Escape");
+      expect(await page.evaluate(() => ccDebug.game.state)).toBe("paused");
+      await page.evaluate(() => { ccDebug.game.resumeGame(); window.__reset(); });
+    });
+
     test("leaving Low or Battery Saver restores full scale and the player's toggles", async () => {
       const { page } = session;
       const r = await page.evaluate(() => {
