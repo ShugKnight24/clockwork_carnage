@@ -93,14 +93,20 @@ describe("deck navigation", () => {
     expect(r.state.row).toBe(0); // the late key is not also a move
   });
 
-  it("while capturing, the other device is ignored; B (Escape) cancels a pad capture", () => {
-    const s = { ...createDeckState(), capture: { action: "dash", device: "gamepad", until: 9000 } };
-    const kb = deckKey(s, "Escape", ctx({ now: 100, device: "keyboard" }));
-    expect(kb.state.capture).toEqual(s.capture);
-    expect(kb.effects).toEqual([]);
-    const pad = deckKey(s, "Escape", ctx({ now: 100, device: "gamepad" }));
-    expect(pad.state.capture).toBeNull();
-    expect(types(pad)).toEqual(["captureCancel"]);
+  it("while capturing, the other device's inputs are ignored but its Escape / Start still cancels", () => {
+    const pad = { ...createDeckState(), capture: { action: "dash", device: "gamepad", until: 9000 } };
+    const key = deckKey(pad, "KeyF", ctx({ now: 100, device: "keyboard" }));
+    expect(key.state.capture).toEqual(pad.capture);
+    expect(key.effects).toEqual([]);
+    for (const device of ["keyboard", "gamepad"]) {
+      const r = deckKey(pad, "Escape", ctx({ now: 100, device }));
+      expect(r.state.capture).toBeNull();
+      expect(types(r)).toEqual(["captureCancel"]);
+    }
+    const kb = { ...createDeckState(), capture: { action: "interact", device: "keyboard", until: 9000 } };
+    const start = deckKey(kb, "Escape", ctx({ now: 100, device: "gamepad" }));
+    expect(start.state.capture).toBeNull();
+    expect(types(start)).toEqual(["captureCancel"]);
   });
 
   it("holding C shows the previous value until release", () => {

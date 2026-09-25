@@ -625,10 +625,15 @@ test("controller: A opens capture without binding, keys are ignored, Y swaps wit
   await expect(dialog(page)).toContainText("Press a button for Dash");
   await page.waitForTimeout(100);
   await expect(dialog(page)).toContainText("Press a button for Dash");
-  await page.keyboard.press("KeyG"); // the other device: ignored
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("KeyG"); // the other device: never a binding…
   await expect(dialog(page)).toContainText("Press a button for Dash");
   expect(await keybind(page, "interact")).toBe("KeyE");
+  await page.keyboard.press("Escape"); // …but its Escape still cancels
+  await expect(dialog(page)).toBeHidden();
+  expect(await state(page)).toBe("settings");
+  expect(await padBind(page, "dash")).toBe(0);
+  await tapPad(page, 0); // capture again
+  await expect(dialog(page)).toContainText("Press a button for Dash");
   await tapPad(page, 9); // Start: reserved for pause, so it cancels the capture
   await expect(dialog(page)).toBeHidden();
   expect(await padBind(page, "dash")).toBe(0);
@@ -688,6 +693,21 @@ test("controller: Start cancels, the RB pair moves together, reset restores", as
   expect(await padBind(page, "dash")).toBe(0);
   expect(await padBind(page, "weaponPrev")).toBe(5);
   expect(await page.evaluate(() => localStorage.getItem("cc_padbinds"))).toBe("{}");
+});
+
+test("a keyboard capture is cancelled by the pad's Start", async ({ page }) => {
+  await fakePad(page);
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await focusRow(page, "remap:keyboard:interact");
+  await page.keyboard.press("Enter");
+  await expect(dialog(page)).toContainText("Press a key for Interact");
+  await tapPad(page, 3); // another pad button: ignored
+  await expect(dialog(page)).toBeVisible();
+  await tapPad(page, 9);
+  await expect(dialog(page)).toBeHidden();
+  expect(await keybind(page, "interact")).toBe("KeyE");
+  expect(await state(page)).toBe("settings");
 });
 
 test("controller rows show the connected pad's legends, Xbox with none", async ({ page }) => {

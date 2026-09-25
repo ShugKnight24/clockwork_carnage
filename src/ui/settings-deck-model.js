@@ -29,13 +29,14 @@ export function deckKey(state, code, ctx) {
       effects.push({ type: "captureCancel" });
       return { state: s, effects };
     }
-    // Only the cell's device counts: Esc cancels a key, Start (sent as Escape) a button.
-    if ((ctx.device ?? "keyboard") !== s.capture.device) return { state: s, effects };
+    // Esc or Start (sent as Escape) cancels from either device: a capture
+    // opened by the pad must not trap a keyboard player, or the reverse.
     if (code === "Escape") {
       s.capture = null;
       effects.push({ type: "captureCancel" });
     }
-    // Every other key is the capture itself; the deck handles it.
+    // Every other input is the capture itself; the deck binds it when it
+    // comes from the cell's device.
     return { state: s, effects };
   }
 
