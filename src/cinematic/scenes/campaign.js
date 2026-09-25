@@ -6,7 +6,9 @@
  * loader, save, stat or comms path is reachable from here.
  *
  * spec: { act, level (0-based within the act), enemies = true, camera,
- *         early (stage the level as the reel opens: see `early` below) }
+ *         early (stage the level as the reel opens: see `early` below),
+ *         figures: [{ enemy, pos: [x, y], facing }] (idle, never fighting),
+ *         vents: [{ kind: "spark" | "steam", pos: [x, y] }] }
  * camera:
  *   { kind: "path", from = 0, loop = 40 }  the showcase's loop through the
  *     level (start at `from` of the loop, `loop` seconds a lap), heading
@@ -154,7 +156,7 @@ export const campaign = {
 };
 
 function levelOpts(game, spec, live, wait) {
-  const opts = { act: spec.act ?? 1, level: spec.level ?? 0, live, enemies: spec.enemies !== false };
+  const opts = { act: spec.act ?? 1, level: spec.level ?? 0, live, enemies: spec.enemies !== false, figures: spec.figures ?? [], vents: spec.vents ?? [] };
   if (wait) opts.wait = wait;
   const r = routeOf(spec.camera);
   if (r) Object.assign(opts, r);

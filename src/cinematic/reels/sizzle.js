@@ -47,10 +47,15 @@ export const SIZZLE = {
   shots: [
     // 0:00 — the station out in the dark, ARIA's boot line.
     { id: "boot", at: 0, len: 6, scene: { kind: "art", bg: "deep_space", art: "station", pan: { from: [0, 0, 1], to: [0.01, 0, 1.12] } }, transitionOut: "fade" },
-    // 0:03 — slow flight down the Act I reactor, the lights stuttering.
+    // 0:03 — slow flight down the Act I reactor, the lights stuttering, a
+    // vent sparking by the core and someone standing in the dark past it.
     {
       id: "reactor", at: 6, len: 12,
-      scene: { kind: "campaign", act: 1, level: 5, enemies: false, weapon: false, camera: keys([0, 25.5, 55, N + 0.04], [12, 25.5, 45, N + 0.1]) },
+      scene: {
+        kind: "campaign", act: 1, level: 5, enemies: false, weapon: false, camera: keys([0, 25.5, 55, N + 0.04], [12, 25.5, 45, N + 0.1]),
+        figures: [{ enemy: "henchman", pos: [24.8, 33.5], facing: Math.PI / 2 }],
+        vents: [{ kind: "spark", pos: [27.5, 37.1] }, { kind: "steam", pos: [22.1, 40.5] }],
+      },
       events: [{ at: 5, type: "glitch" }, { at: 9.5, type: "glitch" }],
       transitionOut: "glitch",
     },

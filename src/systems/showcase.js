@@ -144,9 +144,12 @@ export async function installLevelScene(game, opts) {
  * its spots, and sprites are decoded at the sizes that camera will see. It
  * can also hand over the level's environment bundle (`env`, built by
  * generateModernEnv for the act palette and level), which the install gives
- * the renderer instead of the staging baking one.
+ * the renderer instead of the staging baking one. `figures` ({ enemy, pos:
+ * [x, y], facing }) stand idle where it puts them, besides or instead of the
+ * showcase's own, and `vents` ({ kind: "spark" | "steam", pos: [x, y] }) join
+ * the ambience its route finds.
  */
-export async function stageLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true, path: route = null, cams = null, env = null }) {
+export async function stageLevelScene(game, { act, level, live = () => true, wait = nextFrame, enemies = true, path: route = null, cams = null, env = null, figures = [], vents = [] }) {
   const entry = getActLevel(act, level) ?? getActLevel(act, 0);
   const palette = getAct(act)?.palette ?? act;
 
@@ -159,11 +162,20 @@ export async function stageLevelScene(game, { act, level, live = () => true, wai
   const path = route ?? pathFor(entry, map);
   const props = levelProps(map, act);
   const foes = enemies ? enemiesFor(entry, map, route ? pathFor(entry, map) : path, act, fovOf(game)) : [];
+  for (const f of figures) {
+    if (!ENEMY_TYPES[f.enemy] || ENEMY_TYPES[f.enemy].boss) continue;
+    const e = new Enemy(f.pos[0], f.pos[1], f.enemy);
+    e.state = "idle";
+    e.angle = f.facing ?? 0;
+    foes.push(e);
+  }
   await wait();
   if (!live()) return null;
   await prewarmSprites(game, map, path, props, foes, live, wait, cams);
   if (!live()) return null;
-  return { act, entry, palette, map, path, props, foes, env, emitters: ambientEmitters(map, path) };
+  const emitters = ambientEmitters(map, path);
+  for (const v of vents) emitters.push({ x: v.pos[0], y: v.pos[1], kind: v.kind === "steam" ? "steam" : "spark", next: emitters.length * 0.37 });
+  return { act, entry, palette, map, path, props, foes, env, emitters };
 }
 
 /**
