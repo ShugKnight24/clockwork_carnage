@@ -324,6 +324,7 @@ function enterShot(game, sess, index) {
     result = scene.build(game, shot.scene, mulberry32(seedFor(sess.reel.id, shot.id)), { live, shot, reel: sess.reel, handle, prepared });
   } catch (err) {
     console.warn(`[cinematic] shot "${shot.id}" failed to build`, err);
+    failBuild(game, handle);
     return;
   }
   if (!result || typeof result.then !== "function") {
@@ -335,9 +336,9 @@ function enterShot(game, sess, index) {
   // abandoned the build tears it down before anyone awaiting the reel runs.
   const settle = (ok) => {
     if (sess.building === handle) sess.building = null;
-    if (handle.abandoned) {
-      if (ok) handle.scene.teardown?.(game, handle);
-    } else if (ok) handle.ready = true;
+    if (!ok) failBuild(game, handle);
+    else if (handle.abandoned) handle.scene.teardown?.(game, handle);
+    else handle.ready = true;
   };
   handle.settled = new Promise((r) => {
     result.then(
@@ -349,6 +350,19 @@ function enterShot(game, sess, index) {
       },
     );
   });
+}
+
+/**
+ * A build that threw may have put up part of its scene (a level installed,
+ * fields borrowed) before it failed: the teardown takes down whatever it
+ * finds on the handle. The shot stays dark.
+ */
+function failBuild(game, handle) {
+  try {
+    handle.scene.teardown?.(game, handle);
+  } catch (err) {
+    console.warn(`[cinematic] shot "${handle.shot.id}" failed to tear down`, err);
+  }
 }
 
 /**

@@ -188,3 +188,187 @@ describe("campaign scene", () => {
     expect(g.renderer.applyActPalette).not.toHaveBeenCalled();
   });
 });
+
+describe("resource lifetime", () => {
+  // Two quick shots, the second one's adapter under test.
+  const twoShots = (kind) => ({ ...reel, shots: [reel.shots[0], { ...reel.shots[1], scene: { kind } }] });
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("a build that lands after a stop is torn down exactly once, and what it was prepared with is freed", async () => {
+    const res = { freed: 0 };
+    const calls = { prepare: 0, discard: 0, teardown: 0 };
+    let land;
+    registerScene("late", {
+      prepare: () => (calls.prepare++, { res }),
+      discard: () => calls.discard++,
+      // The worst case: an adapter that installs whatever it was handed, live or not.
+      build: (g, spec, rng, { handle, prepared }) =>
+        new Promise((r) => (land = r)).then(() => {
+          handle.res = prepared.res;
+        }),
+      update() {},
+      event() {},
+      teardown: (g, h) => {
+        calls.teardown++;
+        if (h.res) h.res.freed++;
+        h.res = null;
+      },
+    });
+    const g = fakeGame();
+    const done = playReel(g, twoShots("late"), { returnTo: "title" });
+    for (let i = 0; i < 150; i++) updateDirector(g, 1 / 60); // into the second shot: its build is in flight
+    expect(calls.prepare).toBe(1);
+    expect(directorState(g).paused).toBe(true);
+    stopReel(g, { skipped: true });
+    await done;
+    expect(calls.teardown).toBe(0); // nothing is up yet
+    land();
+    await flush();
+    expect(calls.teardown).toBe(1);
+    expect(res.freed).toBe(1);
+    expect(calls.discard).toBe(0); // the build took it over
+    await flush();
+    expect(calls.teardown).toBe(1);
+  });
+
+  it("a build that fails part-way is still torn down, so whatever it had put up comes down", async () => {
+    const calls = { teardown: 0 };
+    registerScene("broken", {
+      build: (g, spec, rng, { handle }) =>
+        Promise.resolve().then(() => {
+          handle.borrowed = true;
+          throw new Error("boom");
+        }),
+      update() {},
+      event() {},
+      teardown: (g, h) => {
+        if (h.borrowed) calls.teardown++;
+        h.borrowed = false;
+      },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const g = fakeGame();
+    const done = playReel(g, twoShots("broken"), { returnTo: "title" });
+    for (let i = 0; i < 150; i++) updateDirector(g, 1 / 60);
+    await flush();
+    stopReel(g);
+    await done;
+    await flush();
+    warn.mockRestore();
+    expect(calls.teardown).toBe(1);
+  });
+
+  it("a stop before the next shot builds hands its prepare back once", async () => {
+    const calls = { discard: 0, build: 0 };
+    registerScene("unbuilt", { prepare: () => ({ res: 1 }), discard: () => calls.discard++, build: () => calls.build++, update() {}, event() {}, teardown() {} });
+    const g = fakeGame();
+    const done = playReel(g, twoShots("unbuilt"), { returnTo: "title" });
+    updateDirector(g, 0.1); // the first shot is up, the second prepared
+    stopReel(g, { skipped: true });
+    await done;
+    expect(calls.build).toBe(0);
+    expect(calls.discard).toBe(1);
+  });
+
+  it("a reel skipped on its opening hold discards every early prepare and releases every preload, once", async () => {
+    const calls = { discard: 0, release: 0, build: 0 };
+    let finish;
+    const pending = new Promise((r) => (finish = r));
+    registerScene("heavy", {
+      early: true,
+      prepare: () => ({ done: pending }),
+      discard: () => calls.discard++,
+      preload: () => pending,
+      release: () => calls.release++,
+      build: () => calls.build++,
+      update() {},
+      event() {},
+      teardown() {},
+    });
+    const g = fakeGame();
+    const done = playReel(g, { ...reel, shots: [{ ...reel.shots[0], scene: { kind: "heavy" } }, { ...reel.shots[1], scene: { kind: "heavy" } }] }, { returnTo: "title" });
+    updateDirector(g, 0.1);
+    expect(directorState(g).paused).toBe(true); // holding on the opening black
+    stopReel(g, { skipped: true });
+    await done;
+    finish();
+    await flush();
+    expect(calls.build).toBe(0);
+    expect(calls.discard).toBe(2);
+    expect(calls.release).toBe(1); // once per adapter, not per shot
+  });
+});
+
+describe("forge resources", () => {
+  // A renderer that counts itself: the reel's GL contexts must all be gone after a skip.
+  const made = vi.hoisted(() => []);
+  // Closed, the valley never finishes meshing (the reel holds on its opening black).
+  const meshing = vi.hoisted(() => ({ done: true }));
+  vi.mock("../../src/rendering/voxel/voxel-renderer.js", () => ({
+    VoxelRenderer: {
+      create() {
+        const vr = {
+          destroyed: 0,
+          gl: null,
+          canvas: {},
+          setStyle() {},
+          resize() {},
+          render: (cam, world) => (meshing.done && world.dirty.clear(), true),
+          destroy: () => vr.destroyed++,
+        };
+        made.push(vr);
+        return vr;
+      },
+    },
+  }));
+  const forgeGame = () => ({ ...fakeGame(), renderer: { width: 64, height: 40 } });
+  const forgeReel = (first) => ({
+    ...reel,
+    shots: [{ ...reel.shots[0], scene: first }, { ...reel.shots[1], scene: { kind: "forge", build: "tower" } }],
+  });
+  const until = async (fn) => {
+    for (let i = 0; i < 400 && !fn(); i++) await new Promise((r) => setTimeout(r, 5));
+  };
+  const live = () => made.filter((vr) => !vr.destroyed);
+
+  it("a skip during the opening hold frees the renderer made for the Forge shot", async () => {
+    made.length = 0;
+    meshing.done = false;
+    const g = forgeGame();
+    const done = playReel(g, forgeReel({ kind: "fake", n: 1 }), { returnTo: "title" });
+    await until(() => made.length > 0); // the early prepare has its GL context, still meshing
+    expect(directorState(g).paused).toBe(true);
+    stopReel(g, { skipped: true });
+    meshing.done = true;
+    await done;
+    await until(() => !live().length);
+    expect(made.length).toBe(1);
+    expect(made[0].destroyed).toBe(1);
+  });
+
+  it("a skip after the valley is ready, before its shot, frees it once", async () => {
+    made.length = 0;
+    const g = forgeGame();
+    const done = playReel(g, forgeReel({ kind: "fake", n: 1 }), { returnTo: "title" });
+    await until(() => directorState(g) && !directorState(g).paused);
+    expect(made.length).toBe(1);
+    updateDirector(g, 0.5);
+    stopReel(g, { skipped: true });
+    await done;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(made[0].destroyed).toBe(1);
+  });
+
+  it("a Forge shot on screen when the reel stops frees its renderer once", async () => {
+    made.length = 0;
+    const g = forgeGame();
+    const done = playReel(g, forgeReel({ kind: "fake", n: 1 }), { returnTo: "title" });
+    await until(() => directorState(g) && !directorState(g).paused);
+    for (let i = 0; i < 150; i++) updateDirector(g, 1 / 60);
+    expect(directorState(g).shotId).toBe("s2");
+    stopReel(g, { skipped: true });
+    await done;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(made.map((vr) => vr.destroyed)).toEqual([1]);
+  });
+});
