@@ -204,6 +204,8 @@ function borrowCombat(game) {
   shadow(game, "saveAchievements", noop);
   // A kill here reveals no Bestiary entry.
   shadow(game.archive, "recordKill", () => false);
+  // Every rumble helper (light, medium, heavy, pulse) ends in vibrate().
+  shadow(game.gamepad, "vibrate", noop);
   shadow(game.gamepad, "vibrateLight", noop);
   shadow(game.gamepad, "vibrateMedium", noop);
   return {
