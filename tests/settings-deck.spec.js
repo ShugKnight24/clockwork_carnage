@@ -181,6 +181,30 @@ test("a row changed from its default is marked, with an accessible description",
   await expect(deck(page).locator('[data-key="remap:keyboard:moveForward"]')).not.toHaveAttribute("aria-description", /./);
 });
 
+test("a cursor resting on the list never takes focus from the keys; moving it does", async ({ page }) => {
+  await startPaused(page);
+  await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "pause", section: "video" }));
+  await expect(deck(page)).toHaveAttribute("open", "");
+  const at = await page.evaluate(() => {
+    const r = document.querySelector("settings-deck").shadowRoot.querySelector(".rows").getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + 150 };
+  });
+  await page.mouse.move(at.x, at.y);
+  await page.waitForTimeout(100);
+  const start = await page.evaluate(() => document.querySelector("settings-deck").state.row);
+  const rows = [];
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(80);
+    rows.push(await page.evaluate(() => document.querySelector("settings-deck").state.row));
+  }
+  expect(rows).toEqual([1, 2, 3, 4, 5, 6].map((d) => start + d));
+  // A real move hands focus back to the pointer.
+  await page.mouse.move(at.x, at.y + 60, { steps: 3 });
+  const hovered = await page.evaluate(() => document.querySelector("settings-deck").state.row);
+  expect(hovered).not.toBe(start + 6);
+});
+
 test("mode select key 9 opens the deck too", async ({ page }) => {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug);

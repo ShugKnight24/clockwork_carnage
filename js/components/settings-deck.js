@@ -616,7 +616,7 @@ class SettingsDeck extends HTMLElement {
   bind() {
     const root = this.shadowRoot;
     root.addEventListener("click", (e) => this.onClick(e));
-    root.addEventListener("pointerover", (e) => this.onHover(e));
+    root.addEventListener("pointermove", (e) => this.onHover(e));
     // Mouse use hides keyboard focus rings again.
     root.addEventListener("pointerdown", () => this.classList.remove("kbd"));
     // Keys arrive through the game's dispatch (handleKey); stop the browser
@@ -679,6 +679,13 @@ class SettingsDeck extends HTMLElement {
 
   onHover(e) {
     if (e.pointerType === "touch" || this._drag) return;
+    // The browser re-sends pointer events under a still cursor after every
+    // layout change (a re-render, a scroll, a resize). Only a real move is
+    // the mouse being used; anything else would steal focus from the keys.
+    const last = this._pointer;
+    this._pointer = { x: e.clientX, y: e.clientY };
+    if (!last || (last.x === e.clientX && last.y === e.clientY)) return;
+    this.classList.remove("kbd");
     const row = e.target.closest?.(".row");
     if (!row) return;
     const i = this.indexOf(row);
