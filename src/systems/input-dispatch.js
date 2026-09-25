@@ -362,6 +362,8 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.PAUSED) {
+    // A key answers the pad's quit prompt with "no" (Q still quits).
+    game.pauseQuitConfirm = false;
     if (code === "Escape" || code === "Enter" || code === "KeyP") {
       const now = performance.now();
       if (now - game.lastEscTime < 200) return;

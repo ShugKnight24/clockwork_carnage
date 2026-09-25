@@ -431,6 +431,31 @@ test("controller: holding the d-pad flips a toggle once but keeps sliding a slid
   expect(fov - (await setting(page, "fov"))).toBeGreaterThan(2);
 });
 
+test("controller in the pause menu: LB never quits, Y opens Settings, X asks before quitting", async ({ page }) => {
+  await fakePad(page);
+  await startPaused(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await tapPad(page, 4); // LB (was Q: straight to the title)
+  expect(await state(page)).toBe("paused");
+  await tapPad(page, 3); // Y
+  await expect(deck(page)).toHaveAttribute("open", "");
+  expect(await state(page)).toBe("settings");
+  await tapPad(page, 1); // B leaves the deck, back to pause
+  expect(await state(page)).toBe("paused");
+  await tapPad(page, 8); // View opens it too
+  expect(await state(page)).toBe("settings");
+  await tapPad(page, 1);
+  await tapPad(page, 2); // X: the quit prompt
+  expect(await page.evaluate(() => window.ccDebug.game.pauseQuitConfirm)).toBe(true);
+  expect(await state(page)).toBe("paused");
+  await tapPad(page, 1); // B cancels it, still paused
+  expect(await page.evaluate(() => window.ccDebug.game.pauseQuitConfirm)).toBe(false);
+  expect(await state(page)).toBe("paused");
+  await tapPad(page, 2);
+  await tapPad(page, 0); // A confirms
+  expect(await state(page)).toBe("title");
+});
+
 test("Quick shows a controller card only with a pad connected; it calibrates", async ({ page }) => {
   await openFromMenu(page);
   await expect(deck(page).locator('[data-key="card:controller"]')).toHaveCount(0);

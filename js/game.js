@@ -149,7 +149,8 @@ import {
 } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-import { installInputTracking, padFor, trackGamepad } from "../src/ui/input-glyphs.js";
+import { installInputTracking, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
+import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 export {
   COMPACT_PHONE_HEIGHT,
   SETTINGS_REGISTRY,
@@ -521,6 +522,7 @@ export class Game {
    * @param {string} [from] - state to return to on resume (defaults to current)
    */
   pauseGame(from) {
+    this.pauseQuitConfirm = false;
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
@@ -932,6 +934,8 @@ export class Game {
       if (p.currentWeapon !== weaponBefore && this.mode === "tutorial") this.tutorialWeaponSwapped = true;
       if (jp.chronoLock) this.chronoLock();
       if (jp.pause) this.handleKeyPress(this.keybinds.pause);
+    } else if (this.state === GameState.PAUSED) {
+      this._padPauseMenu(jp);
     } else if (this.state === GameState.SETTINGS && this.settingsDeck?.state.capture) {
       // A remap capture takes the raw button; A must not also click, B is its cancel.
       if (gp.buttonPressed >= 0) this.settingsDeck.captureInput({ kind: "button", index: gp.buttonPressed });
@@ -967,6 +971,34 @@ export class Game {
     this._padCompareHeld = this.state === GameState.SETTINGS && !!held.deploy;
 
     this._releaseGamepadKeys(nextHeld);
+  }
+
+  /**
+   * The pause menu on a pad: A / B / Start resume, Y or View opens Settings,
+   * X asks to quit. LB used to arrive as Q and quit to the title in one
+   * press, so quitting from a pad now waits for A (B or Start cancels).
+   */
+  _padPauseMenu(jp) {
+    if (this.pauseQuitConfirm) {
+      if (jp.confirm) {
+        this.pauseQuitConfirm = false;
+        this.handleKeyPress("KeyQ");
+      } else if (jp.back || jp.pause) {
+        this.pauseQuitConfirm = false;
+        this.audio.menuSelect?.();
+      }
+      return;
+    }
+    // Up / down scroll the ARIA log when it is open.
+    if (jp.navUp) this.handleKeyPress("ArrowUp");
+    if (jp.navDown) this.handleKeyPress("ArrowDown");
+    if (jp.confirm) this.handleKeyPress("Enter");
+    else if (jp.back || jp.pause) this.handleKeyPress("Escape");
+    else if (jp.deploy || jp.minimap) this.handleKeyPress("KeyS");
+    else if (jp.randomize && !this.showAriaLog) {
+      this.pauseQuitConfirm = true;
+      this.audio.menuSelect?.();
+    }
   }
 
   /** Let go of pad-held keys not in `nextHeld`, then swap the two sets. */
@@ -2877,23 +2909,14 @@ export class Game {
     // Menu entries laid out as a panel. The old version floated a title and a
     // single pipe-separated hint line over a lightly dimmed frame, 210px
     // apart, which read as unfinished next to the other screens.
-    const entries = [
-      { key: "ESC / P", label: "Resume" },
-      { key: "S", label: "Settings" },
-      { key: "A", label: "Achievements" },
-      { key: "B", label: "Archive" },
-      { key: "T", label: "Stats" },
-      { key: "L", label: "ARIA log" },
-    ];
-    if (this.mode === "campaign") entries.push({ key: "F", label: "Save game" });
-    entries.push({ key: "Q", label: "Quit to title" });
+    const { title, entries } = pauseMenuEntries(this, "ESC / P");
 
     ctx.textAlign = "center";
 
     if (this.isTouchDevice) {
       ctx.fillStyle = "#00ffcc";
       ctx.font = `bold ${compact ? 24 : 36}px monospace`;
-      ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
+      ctx.fillText(title, w / 2, compact ? h * 0.2 : h / 2 - 100);
     } else {
       const rowH = 30;
       const panelW = 330;
@@ -2912,8 +2935,8 @@ export class Game {
       ctx.stroke();
 
       ctx.fillStyle = "#00ffcc";
-      ctx.font = "bold 30px monospace";
-      ctx.fillText("PAUSED", w / 2, panelY + 48);
+      ctx.font = `bold ${title.length > 8 ? 22 : 30}px monospace`;
+      ctx.fillText(title, w / 2, panelY + 48);
 
       ctx.strokeStyle = "rgba(0,255,204,0.18)";
       ctx.lineWidth = 1;
@@ -2927,7 +2950,11 @@ export class Game {
         const ey = panelY + 92 + i * rowH;
         ctx.textAlign = "right";
         ctx.fillStyle = "rgba(0,255,204,0.75)";
-        ctx.fillText(entries[i].key, w / 2 - 18, ey);
+        if (entries[i].pad) {
+          const g = padGlyph(entries[i].pad, padFamily(this));
+          drawGlyph(ctx, w / 2 - 18 - glyphWidth(ctx, g, 11, "legacy"), ey - 5, g, 11, "legacy", "rgba(0,255,204,0.75)");
+          ctx.font = "14px monospace";
+        } else ctx.fillText(entries[i].key, w / 2 - 18, ey);
         ctx.textAlign = "left";
         ctx.fillStyle = "#aab4c8";
         ctx.fillText(entries[i].label, w / 2 + 2, ey);
