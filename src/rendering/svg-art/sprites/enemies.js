@@ -26,7 +26,7 @@
  * the renderer can fall back to the procedural sprite for that frame.
  */
 
-import { getLayerImage } from "../raster.js";
+import { getLayerImage, onRasterRelease } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
 import { isRealisticArt } from "../../art-style.js";
 import {
@@ -201,14 +201,17 @@ function evict() {
   }
 }
 
+const drawable = (c) => (c && c.width > 0 && c.height > 0 ? c : null);
+
 /** Canvas copy of a decoded layer: blitting an SVG <img> replays its vector picture every draw. */
 function layer(ref, pxPerUnit) {
   if (!ref) return null;
   const img = getLayerImage(ref.id, ref.box, ref.defs, ref.markup, capScale(ref.box, pxPerUnit));
-  if (!img) return lastBitmap.get(ref.id) || null;
+  if (!img) return drawable(lastBitmap.get(ref.id));
   // The raster cache now bakes decoded layers into canvases itself; use them
   // as they are rather than copying again.
   if (typeof HTMLCanvasElement !== "undefined" && img instanceof HTMLCanvasElement) {
+    if (!drawable(img)) return drawable(lastBitmap.get(ref.id));
     lastBitmap.set(ref.id, img);
     return img;
   }
@@ -216,7 +219,7 @@ function layer(ref, pxPerUnit) {
   if (c) {
     touch(img, c);
   } else {
-    if (copyBudget <= 0) return lastBitmap.get(ref.id) || null;
+    if (copyBudget <= 0) return drawable(lastBitmap.get(ref.id));
     copyBudget--;
     c = document.createElement("canvas");
     c.width = img.naturalWidth;
@@ -239,6 +242,16 @@ function warm(model, pxPerUnit) {
   warmed.add(key);
   for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit), true);
 }
+
+// The raster cache frees its baked canvases (0x0) when Legacy takes over.
+// Holding on to them here made the next Modern frame fall back to a 0x0
+// lastBitmap while the layer re-decoded, and drawImage throws on those.
+onRasterRelease(() => {
+  bitmaps.clear();
+  lastBitmap.clear();
+  lruPx = 0;
+  warmed.clear();
+});
 
 /* ── Tinted copies (hit flash, elite trim, dissolve edge) ───────────────── */
 
@@ -491,7 +504,8 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
 
 /* ── Drawing ────────────────────────────────────────────────────────────── */
 
-const drawBox = (ctx, img, box) => ctx.drawImage(img, box[0], box[1], box[2], box[3]);
+// A 0x0 canvas makes drawImage throw, which would fail the whole frame.
+const drawBox = (ctx, img, box) => img.width > 0 && img.height > 0 && ctx.drawImage(img, box[0], box[1], box[2], box[3]);
 
 /** Transform for a secondary-motion layer; returns its alpha multiplier. */
 function applyFxAnim(ctx, l, time, ph) {

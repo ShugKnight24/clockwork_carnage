@@ -272,6 +272,17 @@ export function layerFailed(id) {
   return false;
 }
 
+const releaseListeners = new Set();
+
+/**
+ * Run `fn` whenever the cache is released. Callers that keep their own
+ * references to returned bitmaps must drop them then: a released canvas is
+ * shrunk to 0x0, and drawImage throws on it.
+ */
+export function onRasterRelease(fn) {
+  releaseListeners.add(fn);
+}
+
 /**
  * Drop every decoded bitmap. Called when the player leaves the Modern asset
  * set for Legacy, so up to BYTE_BUDGET of decoded art is not held for a style
@@ -289,4 +300,5 @@ export function releaseRasterCache() {
   layers.clear();
   queue.length = 0;
   totalBytes = 0;
+  for (const fn of releaseListeners) fn();
 }

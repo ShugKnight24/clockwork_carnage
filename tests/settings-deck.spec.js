@@ -280,6 +280,42 @@ test("art style changed from pause redraws the live view in the new style", asyn
   expect(errors).toEqual([]);
 });
 
+test("rapid art-style switching from pause with enemies in view never breaks the frame", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error" && /Frame error/.test(m.text())) errors.push(m.text().slice(0, 160)); });
+  await page.addInitScript(() => { try { if (!sessionStorage.getItem("s")) { localStorage.setItem("cc_settings", JSON.stringify({ artStyle: 1 })); sessionStorage.setItem("s", "1"); } } catch (_) {} });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?debug");
+  await page.waitForFunction(() => window.ccDebug);
+  await page.evaluate(() => window.ccDebug.startCampaign(5, 1));
+  await page.waitForFunction(() => window.ccDebug.game.state === "playing", null, { timeout: 20_000 });
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => window.ccDebug.game.pauseGame());
+  await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "pause" }));
+  await expect(deck(page)).toHaveAttribute("open", "");
+  expect(await page.evaluate(() => window.ccDebug.game.entities.filter((e) => e.type === "enemy").length)).toBeGreaterThan(0);
+  for (const [to, gap] of [[1, 600], [0, 700], [2, 500], [1, 600], [2, 700]]) {
+    await page.evaluate(async (v) => {
+      const g = window.ccDebug.game;
+      const def = (await import("/js/settings-registry.js")).SETTINGS_REGISTRY.find((d) => d.key === "artStyle");
+      g.settings.artStyle = v;
+      def.onChange?.(g);
+    }, to);
+    await page.waitForTimeout(gap);
+  }
+  await page.waitForTimeout(1000);
+  expect(errors).toEqual([]);
+  expect(await state(page)).toBe("settings");
+  await page.keyboard.press("Escape");
+  expect(await state(page)).toBe("paused");
+  await page.evaluate(() => window.ccDebug.game.resumeGame());
+  await page.waitForTimeout(500);
+  expect(await state(page)).toBe("playing");
+  expect(errors).toEqual([]);
+});
+
 test("controller only: RB to Video, d-pad to a toggle, A flips, Y compares, X resets, B leaves", async ({ page }) => {
   await fakePad(page);
   await openFromMenu(page);

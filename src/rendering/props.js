@@ -2,7 +2,7 @@
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
-import { getLayerImage, scaleBucket } from "./svg-art/raster.js";
+import { getLayerImage, onRasterRelease, scaleBucket } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
@@ -74,16 +74,27 @@ function rasterScale(pxPerUnit, box) {
   return b * 0.999;
 }
 
+// Slots hold bitmaps the raster cache owns. Releasing the cache (Legacy art)
+// shrinks them to 0x0, so a slot filled before the release is never reused.
+let slotEpoch = 0;
+onRasterRelease(() => {
+  slotEpoch++;
+  _propsWarmed = -1;
+});
+
 /** Cached bitmap lookup: skip the string-keyed cache while the bucket is steady. */
 function layerBitmap(slot, id, box, defs, markup, scale) {
-  if (slot.scale === scale && slot.img) return slot.img;
+  if (slot.scale === scale && slot.img && slot.epoch === slotEpoch) return slot.img;
   const img = getLayerImage(id, box, defs, markup, scale);
+  // drawImage throws on a 0x0 bitmap; skip the layer rather than the frame.
+  if (img && !(img.naturalWidth ?? img.width)) return null;
   if (img) {
     const k = scaleBucket(scale);
     // Baked layers are canvases (width), undecoded ones <img> (naturalWidth).
     const exact = (img.naturalWidth ?? img.width) === Math.max(1, Math.round(box[2] * k));
     slot.img = exact ? img : null;
     slot.scale = exact ? scale : 0;
+    slot.epoch = slotEpoch;
   }
   return img;
 }
