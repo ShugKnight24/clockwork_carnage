@@ -139,8 +139,9 @@ export const SIZZLE = {
         { at: 4.5, type: "fire", weapon: 1, dur: 5.5 },
       ],
     },
-    // 0:49 — the Forge: a clock tower rising on the beat, the whole of it in frame.
-    { id: "forge", at: 98, len: 12, scene: { kind: "forge", build: "tower", act: 4, orbit: { from: 0.05, turns: 0.25, radius: 60, height: 3, lookAt: 0.42 } } },
+    // 0:49 — the Forge: a clock tower rising on the beat, seen from low and
+    // close under a clear sky, then the pull-back to the whole of it.
+    { id: "forge", at: 98, len: 12, scene: { kind: "forge", build: "tower", act: 1, orbit: { from: 0.05, turns: 0.12 } } },
     // 0:55 — the creator: a new suit on every other beat, then in close.
     {
       id: "creator", at: 110, len: 4,

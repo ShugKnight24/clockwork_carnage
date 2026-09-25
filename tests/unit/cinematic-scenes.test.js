@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { playReel, stopReel, stepFixed, registerScene } from "../../src/cinematic/director.js";
 import { ChronoPowers } from "../../src/systems/chrono-powers.js";
 import { getArtStyle, setArtStyle, onArtStyleChange, ART_LEGACY, ART_MODERN, ART_REALISTIC } from "../../src/rendering/art-style.js";
-import { planBuild, placedAt } from "../../src/cinematic/scenes/forge.js";
+import { planBuild, placedAt, orbitCam } from "../../src/cinematic/scenes/forge.js";
 import { creator, looksFor, LOOKS } from "../../src/cinematic/scenes/creator.js";
 import { brandFolder } from "../../src/cinematic/brand.js";
 import { END_CARD } from "../../src/cinematic/scenes/title.js";
@@ -132,6 +132,28 @@ describe("forge shots", () => {
     const lastPier = plan.placements.findLastIndex((p, i) => i < firstPlank && p[3] === 20);
     expect(firstPlank).toBeGreaterThan(0);
     expect(lastPier).toBe(firstPlank - 1);
+  });
+
+  it("keep the top of the tower in the letterboxed frame as it rises, then the whole of it", () => {
+    const world = generateWorld({ terrain: true, seed: 20260924, act: 1 });
+    const plan = planBuild(world, "tower");
+    const st = { plan, buildBeats: 10, shotBeats: 12, top: plan.base, look: null };
+    // 70° across at 16:10, less the bars: about ±15.8° of the picture shows.
+    const half = Math.atan(Math.tan((35 * Math.PI) / 180) / 1.6) * (2 / 3);
+    const deg = (r) => (r * 180) / Math.PI;
+    for (let f = 0; f <= 360; f++) {
+      const k = f / 360;
+      const n = placedAt(plan, k * 12, 10);
+      st.top = n ? plan.placements[n - 1][2] : plan.base;
+      const cam = orbitCam({ plan, world }, { from: 0.05, turns: 0.12 }, k, st);
+      const d = Math.hypot(plan.center.x - cam.x, plan.center.y - cam.y);
+      // The near edge of the top layer (the shaft is 7 wide, the spire narrows) and the base's far foot.
+      const reach = Math.max(...plan.placements.filter((p) => p[2] === st.top).map((p) => Math.max(Math.abs(p[0] + 0.5 - plan.center.x), Math.abs(p[1] + 0.5 - plan.center.y)))) + 0.5;
+      const top = Math.atan2(st.top + 1 - cam.z, d - reach) - cam.pitch;
+      expect(deg(top), `top at ${k.toFixed(3)}`).toBeLessThan(deg(half));
+      expect(deg(top), `top at ${k.toFixed(3)}`).toBeGreaterThan(-deg(half));
+      if (k === 1) expect(deg(Math.atan2(plan.base - cam.z, d + 3.5) - cam.pitch)).toBeGreaterThan(-deg(half));
+    }
   });
 
   it("release each beat's blocks in the first half of the beat, all of them by the end", () => {

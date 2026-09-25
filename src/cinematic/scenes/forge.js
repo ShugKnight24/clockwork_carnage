@@ -8,12 +8,15 @@
  *
  * spec: { build: "tower" | "bridge" = "tower", seed, act = 1, terrain = true,
  *         buildBeats = shot length − 2,
- *         orbit: { from = 0.1 (turns), turns = 0.3, radius, height = 5 (above the look),
- *                  lookAt (a share of the finished build's height: hold the look
- *                  there, the whole build in frame as it rises, instead of
- *                  following the fresh blocks) } }
+ *         orbit: { from = 0.1 (turns), turns = 0.12, near, far (the radius as the
+ *                  build starts and as it tops out), wide (the pull-back's
+ *                  radius), eye = 3 (the lens above the site's floor) } }
  *   The build rises layer by layer on the beat (each beat's blocks land in
- *   its first half: a burst, then a breath) while the camera circles it.
+ *   its first half: a burst, then a breath) while the camera circles it low
+ *   and close, looking up, the top of the build always in frame; once it is
+ *   done, the camera pulls back to show the whole of it in the valley.
+ *   The valley is lit as a clear day in every art style (DAYLIGHT), not in
+ *   the act's palette fog: the Forge's own look is untouched.
  *
  * The voxel chunks (renderer, world generator) are imported by prepare, and
  * the world is generated and meshed there too, between idle callbacks, while
@@ -25,6 +28,13 @@ import { beatsToSec, secToBeats } from "../timeline.js";
 const SEED = 20260924;
 const FOV = 70;
 const AIR = 0, STONE = 1, TECH = 2, METAL = 3, ENERGY = 4, GLASS = 8, RIFT = 9, LOG = 20, LEAVES = 21, PLANKS = 22;
+
+// A clear midday sky and a light haze, in place of the act's fog. Modern's
+// tonemap lifts and desaturates, so its sky goes in deeper to come out the
+// same blue.
+const DAYLIGHT = { near: [0.78, 0.86, 0.93], far: [0.47, 0.7, 0.93], density: 0.009, max: 0.55 };
+const DAYLIGHT_MODERN = { near: [0.55, 0.66, 0.8], far: [0.26, 0.45, 0.78], density: 0.009, max: 0.5 };
+const daylight = (style) => (style === "modern" ? DAYLIGHT_MODERN : DAYLIGHT);
 
 let voxel = null; // { VoxelRenderer, generateWorld, styleName } once imported
 
@@ -114,7 +124,8 @@ export const forge = {
     if (!st?.cam) return;
     const { vr, world } = st.sb;
     vr.resize(w, h);
-    const ok = vr.render(st.cam, world, [], null, { style: voxel.styleName(), act: world.meta.act || 1 }) !== false;
+    const style = voxel.styleName();
+    const ok = vr.render(st.cam, world, [], null, { style, act: world.meta.act || 1, fog: daylight(style) }) !== false;
     if (ok) ctx.drawImage(vr.canvas, 0, 0, w, h);
   },
 };
@@ -156,7 +167,7 @@ async function createSandbox(game, spec, live, wait = nextFrame) {
     vr.setStyle(style, act);
     const cam = orbitCam(sb, spec.orbit ?? {}, 0, null);
     for (let i = 0; i < 400 && (world.dirty.size || i === 0); i++) {
-      vr.render(cam, world, [], null, { style, act, meshMs: 6 });
+      vr.render(cam, world, [], null, { style, act, meshMs: 6, fog: daylight(style) });
       await wait();
       if (!live()) {
         dispose(sb);
@@ -173,7 +184,7 @@ async function createSandbox(game, spec, live, wait = nextFrame) {
 function start(sb, spec, reel, shot) {
   const buildBeats = spec.buildBeats ?? Math.max(1, shot.len - 2);
   const orbit = spec.orbit ?? {};
-  const st = { sb, reel, plan: sb.plan, buildBeats, orbit, shotLen: beatsToSec(reel, shot.len), placed: 0, top: sb.plan.base, look: null, cam: null };
+  const st = { sb, reel, plan: sb.plan, buildBeats, shotBeats: shot.len, orbit, shotLen: beatsToSec(reel, shot.len), placed: 0, top: sb.plan.base, look: null, cam: null };
   st.cam = orbitCam(sb, orbit, 0, st);
   return st;
 }
@@ -317,33 +328,51 @@ function bridge(world, cx, cy, base) {
 
 // ─── Camera ───────────────────────────────────────────────────────────────
 
+// The build's top sits this far above the centre of the picture while it
+// rises: inside the letterboxed frame (about ±16° at 16:10) with sky over it.
+const TOP_MARGIN = (7 * Math.PI) / 180;
+
 /**
- * The orbit at fraction `k` of the shot: circling the build's centre, far
- * enough out to hold the whole of it, craning up as it grows. The look
- * follows the fresh blocks (a little under the top of what is built), eased
- * so each beat's burst does not jerk it; `st` carries the eased height
- * (null for a one-off camera).
+ * The camera at fraction `k` of the shot. While the build rises it circles
+ * slowly, low and close, dollying out a little as the build grows and
+ * pitched so the top of what is built (eased, so each beat's burst does not
+ * jerk it) stays in frame. Once the build is done it pulls back and up to
+ * `wide`, the whole of it centred. `st` is null for a one-off camera (the
+ * prepare's meshing), which takes the wide view.
  */
-function orbitCam(sb, orbit, k, st) {
+export function orbitCam(sb, orbit, k, st) {
   const { plan, world } = sb;
   const H = Math.max(plan.height, 8);
-  const radius = orbit.radius ?? (plan.kind === "bridge" ? 36 : 38);
-  const turns = orbit.turns ?? 0.3;
-  const a = ((orbit.from ?? 0.1) + turns * (0.85 * smooth(k) + 0.15 * k)) * Math.PI * 2;
+  const bridge = plan.kind === "bridge";
+  const near = orbit.near ?? (bridge ? 30 : 24);
+  const far = orbit.far ?? (bridge ? 40 : 32);
+  const wide = orbit.wide ?? (bridge ? 56 : 64);
+  const beats = st ? k * st.shotBeats : Infinity;
+  const rise = st ? Math.min(1, beats / st.buildBeats) : 1;
+  const pull = st ? smooth((beats - st.buildBeats) / Math.max(0.5, st.shotBeats - st.buildBeats)) : 1;
+  const a = ((orbit.from ?? 0.1) + (orbit.turns ?? 0.12) * (0.7 * smooth(k) + 0.3 * k)) * Math.PI * 2;
+  const radius = near + (far - near) * smooth(rise) + (wide - far) * pull;
   const x = plan.center.x + Math.cos(a) * radius;
   const y = plan.center.y + Math.sin(a) * radius;
-  const built = st ? st.top - plan.base + 1 : H;
-  const goal = orbit.lookAt != null ? plan.base + H * orbit.lookAt : plan.base + Math.max(4, Math.min(H, built) * 0.7);
-  const lookZ = st?.look == null || orbit.lookAt != null ? goal : st.look + (goal - st.look) * 0.06;
-  if (st) st.look = lookZ;
+  // The top of what is built, eased toward each beat's new layer.
+  const built = st ? st.top + 1 : plan.base + H;
+  const top = st?.look == null ? built : st.look + (built - st.look) * 0.12;
+  if (st) st.look = top;
   const ground = world?.topSolid(Math.floor(x), Math.floor(y)) ?? 0;
-  const eyeZ = Math.min(60, Math.max(lookZ + (orbit.height ?? 5), ground + 3));
+  const low = plan.base + (orbit.eye ?? 3) + (top - plan.base) * 0.2;
+  const high = plan.base + H * 0.5;
+  const eyeZ = Math.min(60, Math.max(low + (high - low) * pull, ground + 2));
+  // Rising: the top a little over the centre, never looking down (the
+  // first layers sit low in the picture, under a sky). Pulled back: the
+  // build's middle.
+  const up = Math.max(0.02, Math.atan2(top - eyeZ, radius) - TOP_MARGIN);
+  const centred = Math.atan2(plan.base + H * 0.5 - eyeZ, radius);
   return {
     x,
     y,
     z: eyeZ,
     yaw: Math.atan2(plan.center.y - y, plan.center.x - x),
-    pitch: Math.atan2(lookZ - eyeZ, radius),
+    pitch: up + (centred - up) * pull,
     fovDeg: FOV,
   };
 }

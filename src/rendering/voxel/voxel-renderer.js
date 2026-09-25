@@ -602,14 +602,16 @@ export class VoxelRenderer {
    * @param {import("../../world/world.js").World} world
    * @param {Array<{x,y,z,w,h,image,key,alpha?,tint?,flipX?}>} sprites feet-anchored billboards
    * @param {Array<{x,y,z,color,radius,intensity}>} lights
-   * @param {{style,act?,fx?,segments?,models?,meshMs?,drawRadius?,meshRadius?,fogEnd?}} opts
+   * @param {{style,act?,fx?,segments?,models?,meshMs?,drawRadius?,meshRadius?,fogEnd?,fog?}} opts
    *   `fx` are additive billboards (particles) and `segments` world-space
    *   streaks (tracers), both drawn with the sprite program after the solid
    *   billboards. `models` are voxel models (vessels, `_drawModels`), drawn
    *   with the opaque chunks. `meshMs` is this frame's meshing budget; `drawRadius` the
    *   chunk cull radius, `meshRadius` how far from the eye chunks are built,
    *   and `fogEnd` the horizontal distance of full fog — an endless world's
-   *   streamer sets all three, a bounded world keeps the defaults.
+   *   streamer sets all three, a bounded world keeps the defaults. `fog`
+   *   ({ near, far, density, max }, far being the sky) replaces the style's
+   *   fog for this frame: a reel's daylight valley.
    * @returns {boolean} false when the GL context is lost
    */
   render(cam, world, sprites, lights, opts) {
@@ -624,7 +626,7 @@ export class VoxelRenderer {
     const fogEnd = opts.fogEnd ?? 1e9;
     this._fogEnd = fogEnd;
     const underwater = eyeInWater(world, cam.x, cam.y, cam.z);
-    this.frameFog = underwater ? UNDERWATER_FOG : this.fog;
+    this.frameFog = underwater ? UNDERWATER_FOG : opts.fog ?? this.fog;
     const fog = this.frameFog;
     const time = ((performance.now() - this._clock0) / 1000) % 3600;
 
