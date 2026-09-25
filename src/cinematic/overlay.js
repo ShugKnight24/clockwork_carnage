@@ -25,6 +25,8 @@ const SLIDE_MS = 0.25; // caption slide in/out (s)
 const SLIDE_PX = 24;
 const PUNCH_S = 0.2; // logo/title scale punch 1.08 → 1
 const CARD_OPEN_S = 0.22;
+// Narration never wraps past this; overlayLayout reserves a band this tall.
+export const NARRATION_LINES = 2;
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -42,15 +44,27 @@ export function overlayLayout(w, h, { letterbox = 0, fontScale = 1, safe = 0 } =
   L.barH = barH;
   const cap = L.caption;
   cap.size = clamp(h * 0.034, 16, 44) * fontScale;
+  // Half the tallest caption plate (Modern's is 2× the type, Comic's ink and
+  // drop shadow reach a little past 1×), so the lane can be kept clear.
+  cap.halfH = cap.size * 1.1;
   cap.x = w * 0.06 + safe;
-  cap.y = h - barH - h * 0.08 - safe;
   cap.maxW = w * 0.62 - safe;
-  // Narration subtitles sit centred under the caption lane, above the bar.
+  // Narration subtitles: bottom-centre, a band of up to NARRATION_LINES lines.
+  // They sink into the bottom bar as far as it has room (so a full letterbox
+  // carries them in the black under the picture, as film subtitles sit) and
+  // the caption lane stays above the band, so the two never crowd each other.
   const nar = L.narration;
   nar.size = Math.max(14, cap.size * 0.72);
+  nar.lineH = Math.round(nar.size * 1.35);
+  nar.padY = Math.round(nar.size * 0.3);
+  const band = NARRATION_LINES * nar.lineH + nar.padY * 2;
+  const margin = h * 0.03;
   nar.x = w / 2;
-  nar.y = h - barH - h * 0.03 - safe;
-  nar.maxW = w * 0.64;
+  nar.y = h - margin - safe - Math.max(0, barH - band - margin * 2);
+  nar.top = nar.y - band;
+  // A phone's width fits few words a line; use most of it.
+  nar.maxW = w < 700 ? w * 0.9 - safe * 2 : w * 0.64;
+  cap.y = Math.min(h - barH - h * 0.08 - safe, nar.top - cap.size * 0.25 - cap.halfH);
   const ti = L.title;
   ti.size = clamp(h * 0.09, 36, 120);
   ti.x = w / 2;
@@ -309,11 +323,23 @@ function bakeCaption(e, text, profile, size, maxW) {
 
 // ─── Narration subtitles (bottom-centre) ───────────────────────────────────
 
+function narrationFont(profile, size) {
+  return profile === "legacy" ? font(LEGACY_MONO, 600, size) : profile === "realistic" ? font(REAL_FAMILY, 400, size) : font(FONT.display, 700, size);
+}
+
 function bakeNarration(e, text, profile, size, maxW) {
-  const f =
-    profile === "legacy" ? font(LEGACY_MONO, 600, size) : profile === "realistic" ? font(REAL_FAMILY, 400, size) : font(FONT.display, 700, size);
-  const spacing = profile === "modern" ? size * 0.02 : 0;
+  let f = narrationFont(profile, size);
+  let spacing = profile === "modern" ? size * 0.02 : 0;
   let lines = wrap(f, text, maxW, spacing);
+  // The layout reserves NARRATION_LINES lines under the caption lane: a longer
+  // line (a narrow phone, a large font scale) shrinks to fit rather than grow
+  // into the captions.
+  while (lines.length > NARRATION_LINES && size > 10) {
+    size = Math.max(10, size * 0.9);
+    f = narrationFont(profile, size);
+    spacing = profile === "modern" ? size * 0.02 : 0;
+    lines = wrap(f, text, maxW, spacing);
+  }
   // Balance the lines so a subtitle never ends on a lone word.
   if (lines.length > 1) {
     const even = textWidth(f, text, spacing) / lines.length;

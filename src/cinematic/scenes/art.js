@@ -2,7 +2,11 @@
  * `art` shots: a cutscene backdrop (`bg`) and optionally a character or
  * set-piece (`art`), painted straight onto the game canvas, with an optional
  * slow pan: `pan: { from: [x, y, zoom], to: [x, y, zoom] }`, x/y as fractions
- * of the picture, eased across the shot. Borrows no game fields.
+ * of the picture, eased across the shot. `artAt: [x, y, scale]` places the
+ * art alone (x/y fractions of the picture, scale about its centre), for a
+ * figure drawn larger than a letterboxed frame. `silhouette: true` paints the art as
+ * a black shape with a red rim (late-game bosses are never shown in full).
+ * Borrows no game fields.
  *
  * The cutscene chunk is loaded on demand (it is large and most sessions never
  * play a reel); the build also waits, a few frames at most, for the Modern
@@ -64,7 +68,53 @@ export const art = {
       ctx.translate(-w / 2 - x * w, -h / 2 - y * h);
     }
     cs.drawCutsceneBg(ctx, w, h, spec.bg, local);
-    if (spec.art) cs.drawCutsceneArt(ctx, w, h, spec.art, local, !!game.isTouchDevice);
+    if (spec.art) {
+      const at = spec.artAt;
+      if (at) {
+        ctx.translate(w / 2 + (at[0] ?? 0) * w, h / 2 + (at[1] ?? 0) * h);
+        ctx.scale(at[2] ?? 1, at[2] ?? 1);
+        ctx.translate(-w / 2, -h / 2);
+      }
+      if (spec.silhouette) drawSilhouette(ctx, w, h, spec.art, local, !!game.isTouchDevice);
+      else cs.drawCutsceneArt(ctx, w, h, spec.art, local, !!game.isTouchDevice);
+    }
     ctx.restore();
   },
 };
+
+let layer = null; // one offscreen canvas, reused by every silhouette frame
+
+/**
+ * The art drawn into a layer, then recoloured in place (source-in keeps its
+ * alpha): first red, stamped a few pixels off each side as the rim, then
+ * near-black for the body on top.
+ */
+function drawSilhouette(ctx, w, h, art, t, touch) {
+  if (typeof document === "undefined") return;
+  layer ??= document.createElement("canvas");
+  if (layer.width !== w || layer.height !== h) {
+    layer.width = w;
+    layer.height = h;
+  }
+  const g = layer.getContext("2d");
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = "source-over";
+  g.clearRect(0, 0, w, h);
+  cs.drawCutsceneArt(g, w, h, art, t, touch);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = "source-in";
+  g.fillStyle = "#ff2a3c";
+  g.fillRect(0, 0, w, h);
+  const r = Math.max(2, Math.round(h * 0.004));
+  const prevA = ctx.globalAlpha;
+  ctx.globalAlpha = prevA * 0.6;
+  ctx.drawImage(layer, -r, 0);
+  ctx.drawImage(layer, r, 0);
+  ctx.drawImage(layer, 0, -r);
+  ctx.globalAlpha = prevA;
+  g.fillStyle = "#06040a";
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "source-over";
+  ctx.drawImage(layer, 0, 0);
+}

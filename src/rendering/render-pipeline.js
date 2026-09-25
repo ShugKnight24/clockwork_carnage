@@ -360,6 +360,11 @@ export function preloadSettingsDeck(game) {
     });
 }
 
+/** True while the deck's chunk is loading (the title's attract loop waits it out). */
+export function settingsDeckLoading() {
+  return deckLoad === "loading";
+}
+
 /**
  * Open the deck on the first SETTINGS frame (every entry point only sets the
  * state through game.openSettings) and keep it in step with the state. There

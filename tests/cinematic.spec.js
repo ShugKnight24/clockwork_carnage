@@ -150,3 +150,111 @@ test("the lore video skips only on a held press", async ({ page }) => {
   // The campaign hand-off owns what comes next; the test stands in for it.
   await page.evaluate(() => (window.ccDebug.game.state = "modeSelect"));
 });
+
+// ─── Title attract loop and Watch Trailer ─────────────────────────────────
+
+const reelState = (page) =>
+  page.evaluate(async () => {
+    const { directorState } = await import("/src/cinematic/director.js");
+    return directorState(window.ccDebug.game);
+  });
+
+/** Boot on a fake clock (it still runs in real time until told otherwise). */
+async function bootIdle(page) {
+  await page.clock.install();
+  await page.goto("/?debug");
+  await page.waitForFunction(() => window.ccDebug);
+  // The settings deck preloads while the title is idle; the attract waits it out.
+  await page.waitForFunction(() => window.ccDebug.game.settingsDeck);
+}
+
+test("leaving the title alone plays the sizzle reel; any key comes back to the title", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await bootIdle(page);
+  await page.clock.fastForward(26000);
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("sizzle");
+  await page.waitForTimeout(500);
+  await page.keyboard.press("KeyA");
+  await page.waitForFunction(() => window.ccDebug.game.state === "title");
+  await expect(page.locator("#titleScreen")).toBeVisible();
+  // The skip key is only a skip: the title did not also take it as "start".
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("title");
+  expect(errors).toEqual([]);
+});
+
+test("the attract loop never starts over the analytics consent card", async ({ page }) => {
+  await bootIdle(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("cc:first-interaction")));
+  await expect(page.locator("#cc-analytics-modal")).toBeVisible();
+  await page.clock.fastForward(26000);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("title");
+  await page.clock.fastForward(26000);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("title");
+});
+
+test("before any gesture the attract loop is silent and still captioned", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await bootIdle(page);
+  await page.clock.fastForward(26000);
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  const audio = await page.evaluate(() => ({ ctx: window.ccDebug.game.audio.ctx?.state ?? null, muted: window.ccDebug.game.audio._muted }));
+  expect(audio.ctx === null || audio.ctx !== "running").toBe(true);
+  expect(audio.muted).toBe(true);
+  // "Chrono-Corp Station." is up from 0.5 s to 3 s: bright pixels in the caption lane.
+  await expect.poll(async () => (await reelState(page))?.t ?? 0).toBeGreaterThan(1.2);
+  const bright = await page.evaluate(() => {
+    const c = document.getElementById("hudCanvas");
+    const g = c.getContext("2d");
+    const d = g.getImageData(0, Math.round(c.height * 0.5), Math.round(c.width * 0.6), Math.round(c.height * 0.5)).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && d[i] + d[i + 1] + d[i + 2] > 450) n++;
+    return n;
+  });
+  expect(bright).toBeGreaterThan(200);
+  await page.mouse.click(640, 360);
+  await page.waitForFunction(() => window.ccDebug.game.state === "title");
+  expect(await page.evaluate(() => window.ccDebug.game.audio._muted)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("Watch Trailer plays with sound, hides the consent card, and Escape returns to its button", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await toMenu(page);
+  const before = await storage(page);
+  // Entering the menu is the first interaction: the consent card is up.
+  await expect(page.locator("#cc-analytics-modal")).toBeVisible();
+  await page.locator("#btnTrailer").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("sizzle");
+  await expect(page.locator("#cc-analytics-modal")).toBeHidden();
+  expect(await page.evaluate(() => window.ccDebug.game.audio._muted)).toBe(false);
+  expect(await page.evaluate(() => window.ccDebug.game.audio.ctx?.state)).toBe("running");
+  await page.waitForTimeout(600);
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => window.ccDebug.game.state === "modeSelect");
+  await expect(page.locator("#modeSelect")).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("btnTrailer");
+  // Still unanswered, and askable: back as it was, no choice written.
+  await expect(page.locator("#cc-analytics-modal")).toBeVisible();
+  expect(await storage(page)).toBe(before);
+  // The skip Escape did not also go back to the title.
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("modeSelect");
+  expect(errors).toEqual([]);
+});
+
+test("0 on mode select starts the trailer", async ({ page }) => {
+  await toMenu(page);
+  await page.keyboard.press("Digit0");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  await page.keyboard.press("Space");
+  await page.waitForFunction(() => window.ccDebug.game.state === "modeSelect");
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe("btnTrailer");
+});

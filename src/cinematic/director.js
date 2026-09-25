@@ -92,6 +92,7 @@ export function playReel(game, reel, { returnTo = "title", clock = "real", muted
       tempo: audio?._trackTempo,
       ambient: audio?._ambientType ?? null,
       focus: typeof document !== "undefined" ? document.activeElement : null,
+      consent: hideConsentCard(),
     },
   };
   game._cinematic = sess;
@@ -114,6 +115,7 @@ export function stopReel(game, { skipped = false } = {}) {
   game.timeScale = saved.timeScale ?? 1;
   if (game.player) game.player.chronoActive = saved.chronoActive ?? false;
   restoreAudio(game.audio, sess);
+  if (saved.consent) saved.consent.el.style.display = saved.consent.display;
   const to = RETURN_STATE[sess.returnTo];
   if (to) {
     game.state = to;
@@ -366,6 +368,20 @@ function restoreAudio(audio, sess) {
   // Whatever was playing under the opener (the title plays nothing).
   if (saved.track) audio.startTrack?.(saved.track, saved.tempo);
   if (saved.ambient) audio.startAmbient?.(saved.ambient);
+}
+
+/**
+ * The analytics consent card (js/analytics.js) floats over every screen. A
+ * reel hides it and puts it back as it was when it ends, still unanswered, so
+ * it can be asked later; no choice is recorded.
+ */
+function hideConsentCard() {
+  if (typeof document === "undefined") return null;
+  const el = document.getElementById("cc-analytics-modal");
+  if (!el) return null;
+  const display = el.style.display;
+  el.style.display = "none";
+  return { el, display };
 }
 
 // ─── Visibility and skip ──────────────────────────────────────────────────

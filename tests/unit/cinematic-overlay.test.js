@@ -20,4 +20,19 @@ describe("overlay layout", () => {
   it("never letterboxes a picture already wider than 2.39:1", () => {
     expect(overlayLayout(2400, 900, { letterbox: 1 }).barH).toBe(0);
   });
+  it.each([
+    [1440, 900],
+    [375, 812],
+  ])("keeps the caption lane clear of the narration band at %ix%i", (w, h) => {
+    for (const letterbox of [0, 0.5, 1]) {
+      for (const fontScale of [1, 1.5]) {
+        const l = overlayLayout(w, h, { letterbox, fontScale });
+        const capBottom = l.caption.y + l.caption.halfH;
+        expect(capBottom).toBeLessThanOrEqual(l.narration.top);
+        expect(l.caption.y - l.caption.halfH).toBeGreaterThanOrEqual(0);
+        expect(l.narration.y).toBeLessThanOrEqual(h);
+        expect(l.narration.top).toBeLessThan(l.narration.y);
+      }
+    }
+  });
 });

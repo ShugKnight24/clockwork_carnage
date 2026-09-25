@@ -4,7 +4,7 @@ import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
-import { preloadShowroom, preloadSettingsDeck } from "../src/rendering/render-pipeline.js";
+import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
@@ -14,6 +14,9 @@ import {
   frameCapFor,
   qualityTargetFPS,
 } from "../src/systems/frame-pacer.js";
+import { playReel } from "../src/cinematic/director.js";
+import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
+import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
@@ -292,6 +295,24 @@ document.getElementById("btnSettings").addEventListener("click", () => {
   game.openSettings({ returnTo: "menu" });
 });
 
+// Watch Trailer: the sizzle reel with sound; any input (or its end) comes
+// back to mode select with this button focused.
+document.getElementById("btnTrailer").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  document.getElementById("btnTrailer").focus({ preventScroll: true });
+  playReel(game, SIZZLE, { returnTo: "menu" });
+});
+
+// Left alone on the title, the sizzle reel plays as an attract loop.
+const attract = createAttract(game, {
+  busy: () => titleBusy(game, document, { deckLoading: settingsDeckLoading }),
+  start: () => startAttract(game),
+});
+for (const type of ["keydown", "pointerdown", "pointermove", "wheel", "touchstart"]) {
+  window.addEventListener(type, attract.poke, { capture: true, passive: true });
+}
+
 // Expose dev flag toggle on window for console access
 window.ccDevTutorial = (on) => {
   game.setAlwaysTutorial(on !== false);
@@ -458,6 +479,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnArchive").click();
     } else if (e.code === "Digit9") {
       document.getElementById("btnSettings").click();
+    } else if (e.code === "Digit0") {
+      document.getElementById("btnTrailer").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
@@ -518,7 +541,9 @@ function gameLoop(timestamp) {
   try {
     const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
     game.update(timestamp);
-    const cap = frameCapFor(game.settings);
+    attract.tick();
+    // The attract loop runs unattended on the title: 30 fps is plenty.
+    const cap = attractFrameCap(game, frameCapFor(game.settings));
     if (!pacer.shouldRender(timestamp, cap)) {
       _errCount = 0;
       requestAnimationFrame(gameLoop);

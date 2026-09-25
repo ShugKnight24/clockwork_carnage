@@ -141,7 +141,7 @@ export { GAME_VERSION } from "../src/constants.js";
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-import { installInputTracking, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
+import { installInputTracking, padActive, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
 import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
@@ -853,6 +853,8 @@ export class Game {
       return;
     }
     trackGamepad(this, gp);
+    // The title's attract loop counts idle time from the last input, pads included.
+    if (padActive(gp)) this.lastPadInputAt = performance.now();
     // A reel takes any button as its skip (the lore video's as a hold);
     // nothing reaches play or the menus underneath.
     if (this.state === GameState.CINEMATIC) {
