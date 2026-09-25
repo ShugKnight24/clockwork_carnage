@@ -432,6 +432,3 @@ export function stopShowcase(game) {
   delete game.showcasePitch;
   game.renderer?.applyActPalette?.(token.palette[0], token.palette[1]);
 }
-
-/** True while a showcase is loading or showing. */
-export const showcaseActive = (game) => !!game._showcase;

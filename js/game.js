@@ -6,7 +6,7 @@ import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
-import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
+import { InputManager } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
 import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
 import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
@@ -137,28 +137,11 @@ import { decay } from "../src/utils/math.js";
 
 export { GAME_VERSION } from "../src/constants.js";
 
-import {
-  COMPACT_PHONE_HEIGHT,
-  DEFAULT_SETTINGS,
-  SETTINGS_REGISTRY,
-  getVisibleSettings,
-  settingDisplayItem,
-  applySettingStep,
-  bindGamepadStatus,
-  gamepadSettingsFrom,
-} from "./settings-registry.js";
+import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { installInputTracking, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
 import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
-export {
-  COMPACT_PHONE_HEIGHT,
-  SETTINGS_REGISTRY,
-  getVisibleSettings,
-  settingDisplayItem,
-  applySettingStep,
-};
-
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
 import { TutorialSystem } from "./tutorial-system.js";
