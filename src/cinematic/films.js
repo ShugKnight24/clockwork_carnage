@@ -66,10 +66,15 @@ export function playLoreThen(game, next, { play = playReel, storage = globalThis
     } catch (_) {}
     next();
   };
-  try {
-    play(game, CAMPAIGN_LORE, { returnTo: "campaign", onEnd: finish });
-  } catch (err) {
-    console.warn("[cinematic] the lore video could not start", err);
+  // A failure before or after the reel starts must still reach the flipbook:
+  // a stranded player on a black screen is worse than a missing intro.
+  const fail = (err) => {
+    console.warn("[cinematic] the lore video could not play", err);
     finish();
+  };
+  try {
+    Promise.resolve(play(game, CAMPAIGN_LORE, { returnTo: "campaign", onEnd: finish })).catch(fail);
+  } catch (err) {
+    fail(err);
   }
 }

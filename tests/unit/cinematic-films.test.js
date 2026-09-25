@@ -59,6 +59,13 @@ describe("playLoreThen", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("goes straight on, once, if the reel fails after it starts", async () => {
+    const next = vi.fn();
+    playLoreThen({}, next, { play: () => Promise.reject(new Error("lost")), storage: memoryStorage() });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("goes straight on if the reel cannot start", () => {
     const next = vi.fn();
     playLoreThen({}, next, { play: () => { throw new Error("no"); }, storage: memoryStorage() });
