@@ -1,8 +1,8 @@
 // Click dispatch — extracted from game.js menu click handlers.
 // Pure functions: receives game instance + DOM event, mutates game state.
 // 1:1 extractions of _handleCreatorClick, _handleVictoryClick and
-// _handleGameOverClick. The settings screen now lives in game.js and reads its
-// geometry from js/layout.js, so it is not duplicated here.
+// _handleGameOverClick. Settings is the <settings-deck> element, which takes
+// its own pointer events, so it has no click handler here.
 //
 // Callers: game._handle*Click() methods delegate here.
 
