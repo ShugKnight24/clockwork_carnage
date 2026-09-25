@@ -329,6 +329,7 @@ export class GamepadManager {
     this._stick = { x: 0, y: 0 };
     this._navStick = [false, false, false, false]; // up, down, left, right
     this._navNext = [-1, -1, -1, -1];
+    this._navRepeat = [false, false, false, false];
     this._result = createResult();
 
     /** Pads read by our own drivers (WebUSB), merged into the native list. */
@@ -672,10 +673,18 @@ export class GamepadManager {
     jp.navDown = this._navFire(1, s[1] || pressed[BTN.DPAD_DOWN], now);
     jp.navLeft = this._navFire(2, s[2] || pressed[BTN.DPAD_LEFT], now);
     jp.navRight = this._navFire(3, s[3] || pressed[BTN.DPAD_RIGHT], now);
+    // A repeat is not a new press: menus that act once per press (a toggle
+    // flip) check these, the way a held key's `repeat` flag is checked.
+    const rep = this._navRepeat;
+    jp.navUpRepeat = jp.navUp && rep[0];
+    jp.navDownRepeat = jp.navDown && rep[1];
+    jp.navLeftRepeat = jp.navLeft && rep[2];
+    jp.navRightRepeat = jp.navRight && rep[3];
   }
 
   _navFire(dir, held, now) {
     const next = this._navNext;
+    this._navRepeat[dir] = false;
     if (!held) {
       next[dir] = -1;
       return false;
@@ -686,6 +695,7 @@ export class GamepadManager {
     }
     if (now >= next[dir]) {
       next[dir] = now + NAV_REPEAT;
+      this._navRepeat[dir] = true;
       return true;
     }
     return false;

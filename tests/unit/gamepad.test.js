@@ -320,6 +320,18 @@ describe("GamepadManager", () => {
       expect(fired).toEqual([0, 400, 510, 620]);
     });
 
+    it("flags repeats so menus can tell a held direction from a new press", () => {
+      pads[0] = pad({ down: [15] });
+      const gm = new GamepadManager();
+      const fired = [];
+      for (let t = 0; t <= 700; t += 10) {
+        const jp = gm.poll(t).justPressed;
+        if (jp.navRight) fired.push(jp.navRightRepeat);
+        else expect(jp.navRightRepeat).toBe(false);
+      }
+      expect(fired).toEqual([false, true, true, true]);
+    });
+
     it("repeats the d-pad too, but dpad* edges stay single", () => {
       pads[0] = pad({ down: [15] });
       const gm = new GamepadManager();

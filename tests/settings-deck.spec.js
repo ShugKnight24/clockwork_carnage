@@ -403,6 +403,34 @@ test("controller only: RB to Video, d-pad to a toggle, A flips, Y compares, X re
   await expect(page.locator("#modeSelect")).toBeVisible();
 });
 
+test("controller: holding the d-pad flips a toggle once but keeps sliding a slider", async ({ page }) => {
+  await fakePad(page);
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("enableFilmGrain"));
+  const was = await setting(page, "enableFilmGrain");
+  // Count every flip while d-pad right is held.
+  await page.evaluate(() => {
+    const s = window.ccDebug.game.settings;
+    let v = s.enableFilmGrain;
+    window.__flips = 0;
+    window.__watch = setInterval(() => { if (s.enableFilmGrain !== v) { v = s.enableFilmGrain; window.__flips++; } }, 5);
+  });
+  await page.evaluate(() => window.__padSet(15, true));
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.__padSet(15, false));
+  await page.waitForTimeout(80);
+  expect(await page.evaluate(() => { clearInterval(window.__watch); return window.__flips; })).toBe(1);
+  expect(await setting(page, "enableFilmGrain")).toBe(!was);
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("fov"));
+  const fov = await setting(page, "fov");
+  await page.evaluate(() => window.__padSet(14, true)); // hold d-pad left
+  await page.waitForTimeout(900);
+  await page.evaluate(() => window.__padSet(14, false));
+  await page.waitForTimeout(80);
+  expect(fov - (await setting(page, "fov"))).toBeGreaterThan(2);
+});
+
 test("Quick shows a controller card only with a pad connected; it calibrates", async ({ page }) => {
   await openFromMenu(page);
   await expect(deck(page).locator('[data-key="card:controller"]')).toHaveCount(0);

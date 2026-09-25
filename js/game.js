@@ -940,10 +940,13 @@ export class Game {
       // holds crouch there (descend), so only Start leaves it.
       const forge = this.state === GameState.BUILDER;
       const cutscene = this.state === GameState.CUTSCENE;
-      if (forge ? jp.dpadUp : jp.navUp) this.handleKeyPress("ArrowUp");
-      if (forge ? jp.dpadDown : jp.navDown) this.handleKeyPress("ArrowDown");
-      if (forge ? jp.dpadLeft : jp.navLeft) this.handleKeyPress("ArrowLeft");
-      if (forge ? jp.dpadRight : jp.navRight) this.handleKeyPress("ArrowRight");
+      // A held direction repeats as a held key does, flagged so the deck's
+      // repeat rules apply (sliders slide, toggles flip once).
+      const nav = (code, fire, repeat) => fire && this.handleKeyPress(code, repeat ? { code, repeat: true } : undefined);
+      nav("ArrowUp", forge ? jp.dpadUp : jp.navUp, !forge && jp.navUpRepeat);
+      nav("ArrowDown", forge ? jp.dpadDown : jp.navDown, !forge && jp.navDownRepeat);
+      nav("ArrowLeft", forge ? jp.dpadLeft : jp.navLeft, !forge && jp.navLeftRepeat);
+      nav("ArrowRight", forge ? jp.dpadRight : jp.navRight, !forge && jp.navRightRepeat);
       if (cutscene ? jp.advance : jp.confirm) this.handleKeyPress("Enter");
       if (jp.pause || (!forge && (cutscene ? jp.skip : jp.back))) this.handleKeyPress("Escape");
       if (jp.prevTab) this.handleKeyPress("KeyQ");
