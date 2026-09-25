@@ -3,6 +3,8 @@ import { validateReel, reelDuration, beatsToSec, capFlashes } from "../../src/ci
 import { SIZZLE } from "../../src/cinematic/reels/sizzle.js";
 import { END_CARD } from "../../src/cinematic/scenes/title.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
+import { CAMPAIGN_LORE } from "../../src/cinematic/reels/campaign-lore.js";
+import { getAct } from "../../src/data/campaign/acts.js";
 
 const LATE_BOSSES = /hound|villain_form2|villain_final/;
 const shot = (id) => SIZZLE.shots.find((s) => s.id === id);
@@ -131,5 +133,84 @@ describe("sizzle reel", () => {
     const end = SIZZLE.shots.at(-1);
     const last = SIZZLE.music.at(-1);
     expect(last).toMatchObject({ at: end.at, stop: true, sting: true });
+  });
+});
+
+// ─── Campaign lore video ───────────────────────────────────────────────────
+
+
+const loreShot = (id) => CAMPAIGN_LORE.shots.find((s) => s.id === id);
+
+describe("campaign lore video", () => {
+  it("is a valid reel of 36–44 s, cut on whole beats", () => {
+    expect(validateReel(CAMPAIGN_LORE)).toEqual([]);
+    const d = reelDuration(CAMPAIGN_LORE);
+    expect(d).toBeGreaterThanOrEqual(36);
+    expect(d).toBeLessThanOrEqual(44);
+    for (const s of CAMPAIGN_LORE.shots) expect(Number.isInteger(s.at) && Number.isInteger(s.len)).toBe(true);
+  });
+
+  it("is slower than the sizzle and scored to a moody track at its own tempo", () => {
+    expect(CAMPAIGN_LORE.bpm).toBeLessThan(SIZZLE.bpm);
+    expect(CAMPAIGN_LORE.music[0].track).toBe("menu");
+    expect(CAMPAIGN_LORE.music.every((c) => c.bpm === undefined)).toBe(true);
+  });
+
+  it("carries ARIA's four lines from the spec, in order, each over its own shot", () => {
+    expect(CAMPAIGN_LORE.narration.map((n) => n.text)).toEqual([
+      "Chrono-Corp built a door through time.",
+      "They said it was safe.",
+      "Then something walked through it.",
+      "You're the last agent still standing.",
+    ]);
+    for (const n of CAMPAIGN_LORE.narration) expect(n.voice ?? "aria").toBe("aria");
+    const owners = CAMPAIGN_LORE.narration.map((n) => CAMPAIGN_LORE.shots.find((s) => n.at >= s.at && n.at + n.len <= s.at + s.len)?.id);
+    expect(owners).toEqual(["station", "labs", "rift", "agent"]);
+  });
+
+  it("follows the spec's shot list: boot, station, labs, rift, the player's agent, the clock", () => {
+    expect(CAMPAIGN_LORE.shots.map((s) => s.id)).toEqual(["boot", "station", "labs", "rift", "agent", "clock"]);
+    expect(loreShot("boot").scene).toMatchObject({ kind: "loreBoot", text: "ARIA online" });
+    expect(loreShot("station").scene).toMatchObject({ kind: "art", bg: "deep_space", art: "station" });
+    expect(loreShot("rift").scene).toMatchObject({ kind: "loreRift", bg: "temporal_rift", art: "villain" });
+    expect(loreShot("rift").events.filter((e) => e.type === "glitch").length).toBeGreaterThanOrEqual(2);
+    // The agent is the player's own: no curated looks, and the visor lights.
+    const agent = loreShot("agent").scene;
+    expect(agent.kind).toBe("loreAgent");
+    expect(agent.looks).toBeUndefined();
+    expect(loreShot("agent").events.some((e) => e.type === "visor")).toBe(true);
+    expect(loreShot("clock").scene.kind).toBe("loreClock");
+  });
+
+  it("shows Act I only, and no late-game boss", () => {
+    const actOne = getAct(1).levels.length;
+    for (const s of CAMPAIGN_LORE.shots) {
+      if (s.scene.kind === "campaign") {
+        expect(s.scene.act).toBe(1);
+        expect(s.scene.level).toBeLessThan(actOne);
+      }
+      expect(s.scene.art ?? "").not.toMatch(LATE_BOSSES);
+      for (const e of s.events ?? []) expect(e.type).not.toBe("spawn");
+    }
+    // The research labs.
+    expect(loreShot("labs").scene).toMatchObject({ kind: "campaign", act: 1, level: 2 });
+  });
+
+  it("ends on the clock landing the act title, and fades out for the flipbook", () => {
+    const title = CAMPAIGN_LORE.captions.find((c) => c.kind === "title");
+    expect(title.text).toBe("ACT I — THE FALL");
+    const clock = loreShot("clock");
+    expect(title.at).toBeGreaterThan(clock.at);
+    expect(title.at + title.len).toBeLessThanOrEqual(clock.at + clock.len);
+    expect(clock.scene.landAt).toBe(title.at - clock.at);
+    expect(clock.transitionOut).toBe("fade");
+  });
+
+  it("fades between its lore beats and never flashes more than 3 times a second", () => {
+    const fades = CAMPAIGN_LORE.shots.slice(0, -1).map((s) => s.transitionOut);
+    expect(fades.filter((t) => t === "fade").length).toBeGreaterThanOrEqual(2);
+    const times = [];
+    for (const s of CAMPAIGN_LORE.shots) for (const e of s.events ?? []) if (e.type === "flash" || e.type === "glitch") times.push(beatsToSec(CAMPAIGN_LORE, s.at + e.at));
+    expect(capFlashes(times).length).toBe(times.length);
   });
 });

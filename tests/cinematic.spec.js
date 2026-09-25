@@ -453,3 +453,147 @@ for (const [style, name] of [[0, "Legacy"], [1, "Comic"], [2, "Modern"]]) {
     expect(errors).toEqual([]);
   });
 }
+
+// ─── Campaign lore video and the Archive's films ──────────────────────────
+
+/** A fresh browser (cleared once, so reloads keep what the test writes), consent answered. */
+async function freshCampaign(page) {
+  await page.addInitScript(() => {
+    try {
+      if (!sessionStorage.getItem("cc_test_cleared")) {
+        localStorage.clear();
+        sessionStorage.setItem("cc_test_cleared", "1");
+      }
+      localStorage.setItem("cc_analytics_consent", "declined");
+    } catch (_) {}
+  });
+  await toMenu(page);
+  // Every state the game passes through, one sample a frame.
+  await page.evaluate(() => {
+    window.__states = [];
+    const tick = () => {
+      const s = window.ccDebug.game.state;
+      if (window.__states.at(-1) !== s) window.__states.push(s);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  await page.locator("#btnCampaign").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
+  await page.waitForTimeout(400);
+}
+
+const seenLore = (page) => page.evaluate(() => localStorage.getItem("cc_seen_lore_video"));
+
+test("a first new campaign plays the lore video between the creator and the flipbook; the next goes straight on", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await freshCampaign(page);
+  await page.keyboard.press("Shift+Enter"); // Save & Deploy
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("lore");
+  expect(await seenLore(page)).toBeNull();
+  // ARIA wakes, then the station: it plays on until skipped with a hold.
+  await expect.poll(async () => (await reelState(page))?.shotId, { timeout: 8000 }).toBe("station");
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("cinematic");
+  await page.keyboard.down("Space");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.keyboard.up("Space");
+  expect(await seenLore(page)).toBe("1");
+  // The cutscene is the flipbook: finishing it writes its own seen flag, then the prologue prompt.
+  await page.evaluate(() => window.ccDebug.skipCutscene());
+  await page.waitForFunction(() => window.ccDebug.game.state === "campaignPrompt");
+  expect(await page.evaluate(() => localStorage.getItem("cc_seen_intro_flipbook"))).toBe("1");
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cinematic", "cutscene", "campaignPrompt"]);
+
+  // A second new campaign: creator, then the flipbook, no lore.
+  await freshCampaign(page);
+  await page.keyboard.press("Shift+Enter");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cutscene"]);
+  expect(errors).toEqual([]);
+});
+
+test("backing out of the creator still plays the lore video, with the default agent in the close-up (Review Focus 5)", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await freshCampaign(page);
+  await page.keyboard.press("Escape"); // Back, nothing saved
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("lore");
+  expect(await page.evaluate(() => localStorage.getItem("cc_character"))).toBeNull();
+  // Jump the reel's clock to just before the agent close-up.
+  await page.evaluate(() => {
+    const sess = window.ccDebug.game._cinematic;
+    const agent = sess.reel.shots.find((s) => s.id === "agent");
+    sess.t = (agent.at * 60) / sess.reel.bpm - 0.05;
+  });
+  await expect.poll(async () => (await reelState(page))?.shotId, { timeout: 8000 }).toBe("agent");
+  await page.waitForFunction(() => window.ccDebug.game._cinematic?.current?.ready);
+  const look = await page.evaluate(async () => {
+    const { DEFAULT_CHARACTER } = await import("/src/data/cosmetics.js");
+    const shown = window.ccDebug.game._cinematic.current.creator.looks[0];
+    return { shown: JSON.stringify(shown), def: JSON.stringify(DEFAULT_CHARACTER), current: JSON.stringify(window.ccDebug.game.character) };
+  });
+  expect(look.shown).toBe(look.current);
+  expect(JSON.parse(look.shown).name).toBe(JSON.parse(look.def).name);
+  // Something is drawn: the agent's pixels in the middle of the HUD canvas.
+  await page.waitForTimeout(3500); // past the visor
+  const lit = await page.evaluate(() => {
+    const c = document.getElementById("hudCanvas");
+    const d = c.getContext("2d").getImageData(Math.round(c.width * 0.35), Math.round(c.height * 0.3), Math.round(c.width * 0.4), Math.round(c.height * 0.4)).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && d[i + 1] + d[i + 2] > 300) n++;
+    return n;
+  });
+  expect(lit).toBeGreaterThan(500);
+  await page.keyboard.down("Space");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.keyboard.up("Space");
+  expect(await seenLore(page)).toBe("1");
+  expect(await page.evaluate(() => localStorage.getItem("cc_character"))).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test("the Archive's FILMS tab plays both films and comes back to the tab", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await toMenu(page);
+  await page.locator("#btnArchive").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "archive");
+  const before = await storage(page);
+  // Left from the first tab wraps round to FILMS.
+  await page.keyboard.press("ArrowLeft");
+  expect(await page.evaluate(() => window.ccDebug.game.archiveTab)).toBe(2);
+  const films = await page.evaluate(async () => {
+    const { archiveEntries } = await import("/src/ui/archive-screen.js");
+    return archiveEntries(2, window.ccDebug.game.archive).map((e) => e.label);
+  });
+  expect(films).toEqual(["Trailer", "Chrono-Corp: Origins"]);
+
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("lore");
+  await page.waitForTimeout(500);
+  // A replay skips on any press, like the trailer.
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => window.ccDebug.game.state === "archive");
+  expect(await page.evaluate(() => [window.ccDebug.game.archiveTab, window.ccDebug.game.archiveSelection])).toEqual([2, 1]);
+
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => window.ccDebug.game.state === "cinematic");
+  expect((await reelState(page)).reelId).toBe("sizzle");
+  await page.waitForTimeout(500);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(() => window.ccDebug.game.state === "archive");
+  expect(await page.evaluate(() => window.ccDebug.game.archiveTab)).toBe(2);
+  // Still in the Archive a moment later (the skip was not also a Back), and a replay marks nothing seen.
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("archive");
+  expect(await storage(page)).toBe(before);
+  expect(errors).toEqual([]);
+});

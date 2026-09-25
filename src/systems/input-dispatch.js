@@ -11,7 +11,8 @@ import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
 import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
-import { archiveLayout, archiveEntries } from "../ui/archive-screen.js";
+import { archiveLayout, archiveEntries, ARCHIVE_TABS, FILMS_TAB } from "../ui/archive-screen.js";
+import { playFilm } from "../cinematic/films.js";
 import { directorInput } from "../cinematic/director.js";
 
 export function dispatchKeyPress(game, code, e) {
@@ -494,15 +495,24 @@ export function dispatchKeyPress(game, code, e) {
     }
     const L = archiveLayout(game.hudW, game.hudH);
     const entries = archiveEntries(game.archiveTab || 0, game.archive);
-    if (code === "KeyA" || code === "ArrowLeft") {
-      game.archiveTab = (game.archiveTab || 0) === 0 ? 1 : 0;
+    // Tabs cycle both ways (A/D, arrows, or the bumpers as Q/E).
+    const step = code === "KeyA" || code === "ArrowLeft" || code === "KeyQ" ? -1
+      : code === "KeyD" || code === "ArrowRight" || code === "KeyE" ? 1 : 0;
+    if (step) {
+      const n = ARCHIVE_TABS.length;
+      game.archiveTab = ((game.archiveTab || 0) + step + n) % n;
       game.archiveSelection = 0;
       game.archiveScroll = 0;
     }
-    if (code === "KeyD" || code === "ArrowRight") {
-      game.archiveTab = (game.archiveTab || 0) === 1 ? 0 : 1;
-      game.archiveSelection = 0;
-      game.archiveScroll = 0;
+    // Films play from here and come back to this tab (the director restores
+    // the Archive state; archiveTab and the selection are left as they are).
+    if ((code === "Enter" || code === "Space") && (game.archiveTab || 0) === FILMS_TAB) {
+      const film = entries[game.archiveSelection || 0];
+      if (film) {
+        game.audio?.menuConfirm?.();
+        playFilm(game, film.key, { returnTo: "archive" });
+      }
+      return;
     }
     if (code === "KeyW" || code === "ArrowUp") {
       game.archiveSelection = Math.max(0, (game.archiveSelection || 0) - 1);

@@ -16,6 +16,7 @@ import {
 } from "../src/systems/frame-pacer.js";
 import { playReel } from "../src/cinematic/director.js";
 import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
+import { playLoreThen } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
@@ -206,11 +207,12 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  // Order: Creator → Flipbook → Prologue prompt (locker room or skip) → Level 1
+  // Order: Creator → lore video (first new campaign only) → Flipbook →
+  // Prologue prompt (locker room or skip) → Level 1
   playCreatorThen(() => {
     // Every new campaign offers the locker-room prologue (default choice) so
     // the station training and its narrative stay reachable after the first run.
-    playIntroFlipbookThen(() => game.showCampaignPrompt());
+    playLoreThen(game, () => playIntroFlipbookThen(() => game.showCampaignPrompt()));
   });
 });
 
