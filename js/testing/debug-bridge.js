@@ -285,8 +285,8 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
-    /** Navigate to settings */
-    showSettings(returnTo = "menu") {
+    /** Navigate to settings; it returns to the menu only when opened from there. */
+    showSettings(returnTo = game.state === GameState.MODE_SELECT ? "menu" : "pause") {
       game.openSettings({ returnTo });
       return game.state;
     },

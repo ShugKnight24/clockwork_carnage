@@ -286,6 +286,19 @@ test("from pause: deck opens over the live match and Escape returns to pause", a
   expect(await page.evaluate(() => ({ x: window.ccDebug.game.player.x, y: window.ccDebug.game.player.y }))).toEqual(pos);
 });
 
+test("ccDebug.showSettings returns to where it was called from", async ({ page }) => {
+  await startPaused(page);
+  await page.evaluate(() => window.ccDebug.showSettings());
+  expect(await page.evaluate(() => window.ccDebug.game._settingsReturnTo)).toBe("pause");
+  expect(await page.evaluate(() => window.ccDebug.game._showcase)).toBeUndefined();
+  await expect(deck(page)).toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  expect(await state(page)).toBe("paused");
+  await page.evaluate(() => { window.ccDebug.game.state = "modeSelect"; });
+  await page.evaluate(() => window.ccDebug.showSettings());
+  expect(await page.evaluate(() => window.ccDebug.game._settingsReturnTo)).toBe("menu");
+});
+
 test("the pause menu's Controls key opens the deck on Controls", async ({ page }) => {
   await startPaused(page);
   await page.keyboard.press("KeyC");
