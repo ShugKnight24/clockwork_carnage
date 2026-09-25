@@ -105,7 +105,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.9; strok
 p { margin: 0; }
 [hidden] { display: none !important; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-:host(:not([input="gamepad"])) .in-pad, :host([input="gamepad"]) .in-kb { display: none !important; }
+:host(:not([input="gamepad"])) .in-pad, :host([input="gamepad"]) .in-kb, :host([input="touch"]) .in-kb { display: none !important; }
 .in-pad, .in-kb { display: inline-flex; align-items: center; gap: 4px; }
 
 /* Readability gradient under the panel; the canvas itself is never filtered. */

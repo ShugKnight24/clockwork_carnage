@@ -98,6 +98,9 @@ for (const [width, height, layout] of [[667, 375, "side"], [812, 375, "side"], [
       };
     });
     expect(m.minRow).toBeGreaterThanOrEqual(44);
+    // No keyboard hints on a touch screen.
+    await expect(deck(page)).toHaveAttribute("input", "touch");
+    await expect(deck(page).locator(".back .in-kb")).toBeHidden();
     if (layout === "side") {
       expect(m.panel.height).toBeGreaterThanOrEqual(height - 40); // full height
       expect(m.panel.left).toBeGreaterThanOrEqual(width * 0.4 - 1); // 40% of the live view left
