@@ -2115,21 +2115,7 @@ export class Game {
       this.fireWeapon();
     }
 
-    // Weapon animation
-    if (this.weaponAnimFrame > 0) {
-      if (this.time - this.weaponAnimTime > 80) {
-        this.weaponAnimFrame++;
-        this.weaponAnimTime = this.time;
-        if (this.weaponAnimFrame > 3) this.weaponAnimFrame = 0;
-      }
-    }
-
-    // Weapon kick recovery (framerate-invariant)
-    this.player.weaponKick *= decay(0.85, this.deltaTime);
-    if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    // Camera punch recovery (faster than weapon kick — camera snaps back)
-    this.player.cameraPunch *= decay(0.78, this.deltaTime);
-    if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
+    this._updateWeaponFeel(this.deltaTime);
     if (_profilePlayerStart) this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
 
@@ -2192,6 +2178,27 @@ export class Game {
     });
     this.updateAriaComms(dt);
     if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
+  }
+
+  /**
+   * The fire animation's frames, and the kick and camera punch settling.
+   * A reel's campaign shots run it too, so their shots recoil as in play.
+   */
+  _updateWeaponFeel(dt) {
+    if (this.weaponAnimFrame > 0) {
+      if (this.time - this.weaponAnimTime > 80) {
+        this.weaponAnimFrame++;
+        this.weaponAnimTime = this.time;
+        if (this.weaponAnimFrame > 3) this.weaponAnimFrame = 0;
+      }
+    }
+
+    // Weapon kick recovery (framerate-invariant)
+    this.player.weaponKick *= decay(0.85, dt);
+    if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+    // Camera punch recovery (faster than weapon kick — camera snaps back)
+    this.player.cameraPunch *= decay(0.78, dt);
+    if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
   }
 
   /** Slow-mo (last kill) outranks Chrono Shift; both drain here. */
@@ -2257,12 +2264,9 @@ export class Game {
       canShift(this.player) &&
       this.player.chronoEnergy >= this.chronoPowers.engageCost()
     ) {
-      this.player.chronoActive = true;
-      if (this.mode === "tutorial") this.tutorialChronoUsed = true;
-      this.chronoPowers.onShiftStart(this);
+      this.startChronoShift();
     } else if (this.player.chronoActive && !chronoKeyHeld) {
-      this.player.chronoActive = false;
-      this.timeScale = 1;
+      this.endChronoShift();
     }
 
     // Passive chrono energy regen (+5/sec)
@@ -2275,6 +2279,19 @@ export class Game {
         this.player.chronoEnergy + 5 * this.deltaTime,
       );
     }
+  }
+
+  /** Engage Chrono Shift: the hold key, and a reel's scripted shift. */
+  startChronoShift() {
+    this.player.chronoActive = true;
+    if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+    this.chronoPowers.onShiftStart(this);
+  }
+
+  /** Release Chrono Shift; time runs at full speed again. */
+  endChronoShift() {
+    this.player.chronoActive = false;
+    this.timeScale = 1;
   }
 
   /** Arena round clock. Returns true when the round just ended (state is now UPGRADE). */

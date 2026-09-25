@@ -384,13 +384,14 @@ export function updateShowcase(game, dt, { panelFrac = 0, sheetFrac = 0 } = {}) 
 
 /**
  * Dust, sparks and steam give the particle settings something to act on.
- * `random` times the sparks (the reel passes its seeded one).
+ * `random` times the sparks (the reel passes its seeded one); `timeScale`
+ * slows the particles as the game's own update does (a reel's Chrono Shift).
  */
-export function updateAmbience(game, emitters, dt, random = Math.random) {
+export function updateAmbience(game, emitters, dt, random = Math.random, timeScale = 1) {
   const q = game.quality?.particleMultiplier ?? 1;
   const ps = (game.player.particles ??= []);
   emitAmbient(ps, emitters, game.player, q, dt, random);
-  game.dustMotes = updateParticles(ps, dt, 1, game.dustMotes, game.player, { enableDust: q >= 0.5 });
+  game.dustMotes = updateParticles(ps, dt, timeScale, game.dustMotes, game.player, { enableDust: q >= 0.5 });
 }
 
 // Emitters within this many tiles of the camera spawn; the rest wait.
@@ -451,7 +452,7 @@ const fovOf = (game) => game.settings?.fov ?? 75;
  * Player updates never run here, so the viewmodel would hang still: give it
  * a slow walking bob and a breathing sway, leaning a little into the turns.
  */
-function swayWeapon(p, token, dt) {
+export function swayWeapon(p, token, dt) {
   p.weaponBob = (p.weaponBob || 0) + dt * 5;
   p.weaponSwayX = Math.sin(token.t * 0.9) * 2.5 - Math.max(-4, Math.min(4, token.vel * 6));
   p.weaponSwayY = Math.sin(token.t * 1.7) * 1.5;

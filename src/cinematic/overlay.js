@@ -660,6 +660,8 @@ const _lopts = { letterbox: 0, fontScale: 1, safe: 0 };
  *   opts.source: the canvas the glitch tears (the game canvas); defaults to
  *     the overlay's own canvas.
  *   A "title" caption with `logo: true` slams `opts.logo` instead of its text.
+ *   state.squad (added by the director): the roll call, its portraits drawn
+ *     by `opts.portrait`.
  */
 export function drawOverlay(ctx, w, h, state, opts = {}) {
   const profile = opts.profile === "legacy" || opts.profile === "realistic" ? opts.profile : "modern";
@@ -691,7 +693,10 @@ export function drawOverlay(ctx, w, h, state, opts = {}) {
     ctx.fillRect(0, h - bh, w, bh);
   }
 
-  // 3. Text layers.
+  // 3. The squad roll call, under the text.
+  if (state.squad) drawSquad(ctx, w, h, state.squad, now, spb, profile, reduced, dpr, L, opts.portrait);
+
+  // 4. Text layers.
   const caps = state.captions;
   let capY = L.caption.y;
   for (let i = 0; caps && i < caps.length; i++) {
@@ -729,7 +734,7 @@ export function drawOverlay(ctx, w, h, state, opts = {}) {
   }
   ctx.globalAlpha = prevA;
 
-  // 4. White flash over everything (logo slams emerge from it).
+  // 5. White flash over everything (logo slams emerge from it).
   if (!reduced && opts.flash > 0) {
     ctx.globalAlpha = prevA * Math.min(1, opts.flash);
     ctx.fillStyle = "#fff";
@@ -801,6 +806,69 @@ function drawCard(ctx, c, ct, cl, profile, reduced, dpr, L, w) {
     ctx.drawImage(e.canvas, 0, top * k, e.canvas.width, vis * k, x - p, y - p + top, e.w + p * 2, vis);
   }
   ctx.globalAlpha = prevA;
+}
+
+// ─── Squad roll call ───────────────────────────────────────────────────────
+
+/**
+ * Where the roll call's portrait panel and name card go: the panel right of
+ * centre, filling most of the letterboxed picture, the card to its left.
+ * Pure; the director uses it to decode portraits at the size they draw.
+ */
+export function squadLayout(w, h, L) {
+  const ph = Math.round((h - 2 * L.barH) * 0.8);
+  const pw = Math.round(Math.min(ph * 0.74, w * 0.34));
+  const cw = Math.round(Math.min(w * 0.36, w * 0.56 - pw * 0.5 - w * 0.08));
+  return {
+    panel: { x: Math.round(w * 0.64 - pw / 2), y: Math.round(h / 2 - ph / 2), w: pw, h: ph },
+    card: { x: Math.round(w * 0.08), y: Math.round(h * 0.46 - L.card.h / 2), w: cw, h: L.card.h },
+  };
+}
+
+const PORTRAIT_OPEN_S = 0.22;
+const _SL = { card: {} };
+
+/**
+ * One member at a time, each for an equal share of the roll call: their
+ * portrait (drawn by `portrait(ctx, id, x, y, w, h, t)`) slides in on a
+ * panel edged in their colour, with their name card beside it.
+ * `squad`: { at, len (beats), members: [{ id, color, card }] }.
+ */
+function drawSquad(ctx, w, h, squad, now, spb, profile, reduced, dpr, L, portrait) {
+  const seg = squad.len / squad.members.length;
+  const b = now / spb - squad.at;
+  const i = Math.floor(b / seg);
+  const m = squad.members[i];
+  if (!m || b < 0) return;
+  const ct = (b - i * seg) * spb;
+  const cl = seg * spb;
+  const S = squadLayout(w, h, L);
+  const inK = smooth(ct / PORTRAIT_OPEN_S);
+  const a = Math.min(inK, smooth((cl - ct) / 0.2));
+  if (a <= 0) return;
+  const P = S.panel;
+  const x = P.x + (reduced ? 0 : Math.round((1 - inK) * w * 0.04));
+  const prevA = ctx.globalAlpha;
+  ctx.globalAlpha = prevA * a;
+  if (profile === "modern") kit.drawPanel(ctx, x, P.y, P.w, P.h, { variant: "menu", accent: m.color, chamfer: 18 });
+  else {
+    ctx.fillStyle = profile === "legacy" ? "rgba(2,8,14,0.78)" : "rgba(6,9,11,0.72)";
+    ctx.fillRect(x, P.y, P.w, P.h);
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = profile === "legacy" ? 2 : 1;
+    ctx.strokeRect(x + 0.5, P.y + 0.5, P.w - 1, P.h - 1);
+  }
+  if (portrait) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + 2, P.y + 2, P.w - 4, P.h - 4);
+    ctx.clip();
+    portrait(ctx, m.id, x, P.y, P.w, P.h, ct);
+    ctx.restore();
+  }
+  ctx.globalAlpha = prevA;
+  Object.assign(_SL.card, S.card);
+  drawCard(ctx, m.card, ct, cl, profile, reduced, dpr, _SL, w);
 }
 
 // ─── Hold-to-skip hint ─────────────────────────────────────────────────────

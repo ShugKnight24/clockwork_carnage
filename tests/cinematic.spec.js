@@ -258,3 +258,86 @@ test("0 on mode select starts the trailer", async ({ page }) => {
   await page.waitForFunction(() => window.ccDebug.game.state === "modeSelect");
   expect(await page.evaluate(() => document.activeElement?.id)).toBe("btnTrailer");
 });
+
+const combatReel = {
+  id: "combat", bpm: 120, bars: 5, music: [], narration: [], captions: [],
+  shots: [
+    {
+      id: "fight", at: 0, len: 10, scene: { kind: "campaign", act: 1, level: 2, camera: { kind: "path", loop: 60 } },
+      events: [
+        { at: 0, type: "spawn", enemy: "henchman", count: 2 },
+        { at: 1, type: "attack", target: "all" },
+        { at: 2, type: "fire", weapon: 1, dur: 3 },
+        { at: 6, type: "card", title: "The Hound", sub: "SUIT C-0016. NOBODY INSIDE.", silhouette: true, len: 3 },
+      ],
+    },
+    {
+      id: "slow", at: 10, len: 10, scene: { kind: "campaign", act: 2, level: 1, camera: { kind: "path", loop: 60 } },
+      events: [
+        { at: 0, type: "spawn", enemy: "drone", count: 3 },
+        { at: 1, type: "chrono", on: true },
+        { at: 2, type: "fire", weapon: 0, dur: 4 },
+        { at: 4, type: "freeze", target: "nearest" },
+        { at: 7, type: "rewind" },
+      ],
+    },
+  ],
+};
+
+/** What a reel must leave exactly as it found it. */
+const gameSnapshot = (page) =>
+  page.evaluate(() => {
+    const g = window.ccDebug.game;
+    // Wall time played keeps counting through a reel, as on any screen.
+    const { totalTimePlayed, ...stats } = g.achievementStats;
+    return JSON.stringify({
+      player: window.ccDebug.getPlayer(),
+      chrono: [g.player.chronoActive, g.player.chronoEnergy],
+      powers: [...g.chronoPowers.powers],
+      stats,
+      shots: [g.shotsFired, g.killedEnemies, g.totalEnemies],
+      streak: g.killStreakSystem.best,
+      timeScale: g.timeScale,
+      audioScale: g.audio._timeScale,
+      mode: g.mode,
+      own: ["damagePlayer", "queueAriaMessage", "triggerAriaOnce", "saveAchievements"].filter((k) => Object.hasOwn(g, k)),
+    });
+  });
+
+test("a combat reel fights, shifts and locks time, then leaves the player, powers and stats untouched", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await toMenu(page);
+  const before = await storage(page);
+  const snap = await gameSnapshot(page);
+  await startReel(page, combatReel, { returnTo: "menu" });
+  // The fight: enemies on screen, the shotgun firing.
+  await page.waitForFunction(() => window.ccDebug.game.player.isFiring === true);
+  expect(await page.evaluate(() => window.ccDebug.game.player.getWeaponDef().id)).toBe(1);
+  expect(await page.evaluate(() => window.ccDebug.game.mode)).toBe("reel");
+  // The shift: time slows through the game's own time-scale pass.
+  await page.waitForFunction(() => window.ccDebug.game.player.chronoActive === true);
+  await page.waitForFunction(() => window.ccDebug.game.timeScale < 0.5);
+  await page.waitForFunction(() => !!window.ccDebug.game.chronoPowers.lock);
+  await page.waitForFunction(() => window.__reelDone, null, { timeout: 20000 });
+  expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("modeSelect");
+  expect(await gameSnapshot(page)).toBe(snap);
+  expect(await storage(page)).toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test("skipping in the middle of a Chrono Shift puts time and the music back (Review Focus 1)", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await toMenu(page);
+  const snap = await gameSnapshot(page);
+  await startReel(page, { ...combatReel, shots: [{ ...combatReel.shots[1], at: 0, len: 12 }], bars: 3 }, { returnTo: "menu" });
+  await page.waitForFunction(() => window.ccDebug.game.player.chronoActive === true && window.ccDebug.game.timeScale < 0.5);
+  await page.waitForFunction(() => window.ccDebug.game.audio._timeScale < 0.5);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(() => window.__reelDone);
+  // A few frames of the menu: nothing turns the slow-down back on.
+  await page.waitForTimeout(300);
+  expect(await gameSnapshot(page)).toBe(snap);
+  expect(errors).toEqual([]);
+});

@@ -14,7 +14,7 @@
 import { GameState } from "../types.js";
 import { beatsToSec, secToBeats, reelDuration, stateAt, eventsBetween, validateReel } from "./timeline.js";
 import { mulberry32, seedFor } from "./seeded.js";
-import { drawOverlay, drawSkipHint } from "./overlay.js";
+import { drawOverlay, drawSkipHint, overlayLayout, squadLayout } from "./overlay.js";
 import { activeDevice, glyph } from "../ui/input-glyphs.js";
 import { art } from "./scenes/art.js";
 import { campaign } from "./scenes/campaign.js";
@@ -82,6 +82,9 @@ export function playReel(game, reel, { returnTo = "title", clock = "real", muted
     shakeAt: -Infinity,
     shakeAmp: 0,
     held: new Set(),
+    // Director-level cards and the squad roll call (reel beats).
+    cards: [],
+    squad: null,
     holdSince: null,
     hintUntil: 0,
     muted: !!muted,
@@ -100,6 +103,7 @@ export function playReel(game, reel, { returnTo = "title", clock = "real", muted
   audio?.stopSpeech?.();
   if (muted) audio?.setMuted?.(true);
   watchVisibility(game, sess);
+  loadSquadArt(game, reel);
   return done;
 }
 
@@ -114,6 +118,8 @@ export function stopReel(game, { skipped = false } = {}) {
   const { saved } = sess;
   game.timeScale = saved.timeScale ?? 1;
   if (game.player) game.player.chronoActive = saved.chronoActive ?? false;
+  // A Chrono Shift's pitch-down and duck, whatever frame the reel ended on.
+  game.audio?.setTimeScale?.(game.timeScale);
   restoreAudio(game.audio, sess);
   if (saved.consent) saved.consent.el.style.display = saved.consent.display;
   const to = RETURN_STATE[sess.returnTo];
@@ -160,12 +166,15 @@ export async function stepFixed(game) {
 export function directorState(game) {
   const sess = game._cinematic;
   if (!sess) return null;
+  const b = secToBeats(sess.reel, sess.t);
   return {
     reelId: sess.reel.id,
     t: sess.t,
     shotId: sess.current?.shot.id ?? null,
     paused: !!game._cinematicHidden || !!sess.building,
     hint: performanceNow() < sess.hintUntil || sess.holdSince != null,
+    card: activeCards(sess, b)[0]?.text ?? null,
+    squad: squadMember(sess.squad, b)?.id ?? null,
   };
 }
 
@@ -333,9 +342,54 @@ function fire(game, sess, ev) {
     case "music":
       playCue(audio, sess.reel, ev);
       return;
+    case "card":
+      sess.cards.push({
+        kind: "card",
+        text: ev.title ?? ev.text ?? "",
+        sub: ev.sub,
+        tone: ev.tone ?? "boss",
+        silhouette: !!ev.silhouette,
+        at: eventBeat(sess, ev),
+        len: ev.len ?? 4,
+      });
+      return;
+    case "squad":
+      sess.squad = rollCall(ev, eventBeat(sess, ev));
+      return;
   }
   const cur = sess.current;
   if (cur?.ready) cur.scene.event?.(game, ev, cur);
+}
+
+/** An event's reel beat (events are timed from their shot's start). */
+const eventBeat = (sess, ev) => (sess.current?.shot.at ?? 0) + (ev.at ?? 0);
+
+const activeCards = (sess, b) => sess.cards.filter((c) => b >= c.at && b < c.at + c.len);
+
+// The squad in their own colours (the Legacy lineup's), each with the power
+// they bring (src/systems/chrono-powers.js).
+const SQUAD = {
+  lyra: { name: "Lyra", sub: "Chrono-Analyst · Foresight", color: "#ffaa44" },
+  rook: { name: "Rook", sub: "Engineer · Chrono Dash", color: "#44ff88" },
+  nova: { name: "Nova", sub: "Striker · Rewind", color: "#ff4488" },
+  kael: { name: "Kael", sub: "Vanguard · Time-Lock", color: "#4488ff" },
+};
+
+function rollCall(ev, at) {
+  const ids = (ev.members ?? Object.keys(SQUAD)).filter((id) => SQUAD[id]);
+  const len = ev.len ?? 2 * ids.length;
+  const seg = len / Math.max(1, ids.length);
+  const members = ids.map((id, i) => ({
+    id,
+    color: SQUAD[id].color,
+    card: { kind: "card", tone: "squad", text: SQUAD[id].name, sub: SQUAD[id].sub, at: at + i * seg, len: seg },
+  }));
+  return { at, len, members };
+}
+
+function squadMember(squad, b) {
+  if (!squad || b < squad.at || b >= squad.at + squad.len) return null;
+  return squad.members[Math.floor(((b - squad.at) / squad.len) * squad.members.length)] ?? null;
 }
 
 function playCue(audio, reel, cue) {
@@ -480,13 +534,62 @@ export function renderDirector(game, gctx, hctx, w, h, drawWorld = null) {
     dpr: game.dpr,
     safe: safeInset(game),
   };
-  drawOverlay(hctx, hw, hh, stateAt(sess.reel, sess.t), opts);
+  const st = stateAt(sess.reel, sess.t);
+  const b = secToBeats(sess.reel, Math.max(0, sess.t));
+  const cards = activeCards(sess, b);
+  if (cards.length) st.captions = st.captions.concat(cards);
+  if (squadMember(sess.squad, b)) {
+    if (!squadArt) loadSquadArt(game, sess.reel);
+    st.squad = sess.squad;
+    opts.portrait = drawPortrait;
+  }
+  drawOverlay(hctx, hw, hh, st, opts);
   const now = performanceNow();
   if (sess.returnTo === "campaign" && (sess.holdSince != null || now < sess.hintUntil)) {
     const progress = sess.holdSince != null ? (now - sess.holdSince) / HOLD_TO_SKIP_MS : 0;
     const alpha = sess.holdSince != null ? 1 : Math.min(1, (sess.hintUntil - now) / 300);
     drawSkipHint(hctx, hw, hh, skipText(game), progress, { profile, dpr: game.dpr, safe: opts.safe, alpha });
   }
+}
+
+// ─── Squad portraits ──────────────────────────────────────────────────────
+
+let squadArt = null; // the cutscene art chunk, loaded when a reel has a roll call
+let squadArtFor = null; // the reel it was last loaded (and warmed) for
+
+/**
+ * A reel with a roll call loads the cutscene art (the squad's models) up
+ * front and starts decoding Modern's bitmaps at the size the panel draws
+ * them, so the first member does not open on the procedural fallback.
+ * Drawing asks again (once per reel) in case the reel was started from
+ * another copy of this module.
+ */
+function loadSquadArt(game, reel) {
+  if (squadArtFor === reel) return;
+  squadArtFor = reel;
+  const ids = [...new Set(reel.shots.flatMap((s) => (s.events ?? []).filter((e) => e.type === "squad").flatMap((e) => e.members ?? Object.keys(SQUAD))))];
+  if (!ids.length || typeof document === "undefined") return;
+  Promise.all([import("../rendering/cutscene-art.js"), import("../rendering/svg-art/index.js")]).then(([art, svg]) => {
+    squadArt = art;
+    const ctx = game.hudCtx;
+    const w = game.hudW;
+    const h = game.hudH;
+    if (!ctx || !w || !h) return;
+    const P = squadLayout(w, h, overlayLayout(w, h, { letterbox: 1 })).panel;
+    svg.warmSvgArt(ids, [], ctx, P.w, P.h * PORTRAIT_FRAME);
+  }, (err) => console.warn("[cinematic] squad art failed to load", err));
+}
+
+// The figure is drawn as if into a picture this much taller than the panel,
+// raised by PORTRAIT_LIFT of the panel, so the panel frames head to waist.
+const PORTRAIT_FRAME = 2.8;
+const PORTRAIT_LIFT = 0.19;
+
+function drawPortrait(ctx, id, x, y, w, h, t) {
+  if (!squadArt) return;
+  ctx.translate(x, y - h * PORTRAIT_LIFT);
+  // Past the models' 1.2 s entrance: the panel's own slide is the entrance.
+  squadArt.drawCutsceneArt(ctx, w, h * PORTRAIT_FRAME, id, 1.2 + t, false);
 }
 
 function skipText(game) {
