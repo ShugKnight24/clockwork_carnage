@@ -94,8 +94,9 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   const token = { installed: false };
   game._showcase = token;
   // Leaving Settings by any path (the canvas fallback screen sets the state
-  // itself) cancels a load still in flight.
-  const live = () => game._showcase === token && game.state === "settings";
+  // itself) cancels a load still in flight; the HUD editor, opened from the
+  // deck, keeps it as a backdrop.
+  const live = () => game._showcase === token && (game.state === "settings" || game.state === "hudEditor");
   const act = game._showcaseForceAct ?? showcaseAct(game.achievementStats, campaignSave);
   const entry = getActLevel(act, showcaseLevel(act)) ?? getActLevel(act, 0);
   const palette = getAct(act)?.palette ?? act;

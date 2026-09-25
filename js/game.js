@@ -772,7 +772,8 @@ export class Game {
     this.state = GameState.SETTINGS;
     this._settingsReturnTo = returnTo;
     this._settingsSection = section ?? null;
-    if (returnTo === "menu") this._startShowcase();
+    // Back from the HUD editor the showcase is still up; keep it.
+    if (returnTo === "menu" && !this._showcase) this._startShowcase();
   }
 
   /**
@@ -803,6 +804,10 @@ export class Game {
         console.warn("[settings] showcase failed to load", err);
         this._stopShowcase();
       });
+  }
+
+  _showcaseBehindEditor() {
+    return this.state === GameState.HUD_EDITOR && this._settingsReturnTo === "menu";
   }
 
   /** Unload the showcase (if any) and put the canvases back as they were. */
@@ -2007,7 +2012,8 @@ export class Game {
 
     // Every way out of Settings unloads the showcase, not only the deck's close
     // (the canvas fallback screen and frame-error recovery set the state).
-    if (this._showcase && this.state !== GameState.SETTINGS) this._stopShowcase();
+    // The HUD editor opened from the menu's deck keeps it as its backdrop.
+    if (this._showcase && this.state !== GameState.SETTINGS && !this._showcaseBehindEditor()) this._stopShowcase();
 
     if (this.state === GameState.CUTSCENE) {
       this.updateCutscene();

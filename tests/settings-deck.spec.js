@@ -582,6 +582,37 @@ test("showcase from the menu never writes progress and restores the menu", async
   expect(await snap()).toEqual(before);
 });
 
+test("the HUD editor opened from the menu's deck keeps the showcase behind it", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "warning" && /StateManager/.test(m.text())) errors.push(m.text()); });
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game._showcase?.installed);
+  expect(await page.evaluate(() => { window.__token = window.ccDebug.game._showcase; return window.ccDebug.game.mode; })).toBe("showcase");
+  await page.evaluate(() => document.querySelector("settings-deck").focusRowByKey("editCustomHud"));
+  await page.keyboard.press("Enter");
+  expect(await state(page)).toBe("hudEditor");
+  await page.waitForTimeout(500);
+  // Still the showcase level, drawn: not a blank canvas.
+  expect(await page.evaluate(() => window.ccDebug.game._showcase === window.__token && window.ccDebug.game.mode)).toBe("showcase");
+  const lit = await page.evaluate(() => {
+    const c = window.ccDebug.game.canvas;
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4 * 97) sum += d[i] + d[i + 1] + d[i + 2];
+    return sum / (d.length / (4 * 97)) / 3;
+  });
+  expect(lit).toBeGreaterThan(12);
+  await page.keyboard.press("Escape"); // back into the deck: the same showcase, not a reload
+  expect(await state(page)).toBe("settings");
+  expect(await page.evaluate(() => window.ccDebug.game._showcase === window.__token)).toBe(true);
+  await page.keyboard.press("Escape"); // the deck closes: now it unloads
+  expect(await state(page)).toBe("modeSelect");
+  expect(await page.evaluate(() => window.ccDebug.game._showcase)).toBeUndefined();
+  expect(await page.evaluate(() => window.ccDebug.game.mode)).not.toBe("showcase");
+  expect(errors).toEqual([]);
+});
+
 test("Escape during the showcase load leaves the game as it was", async ({ page }) => {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug);
