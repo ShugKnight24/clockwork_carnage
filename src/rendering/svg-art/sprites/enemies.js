@@ -26,7 +26,7 @@
  * the renderer can fall back to the procedural sprite for that frame.
  */
 
-import { getLayerImage, onRasterRelease } from "../raster.js";
+import { getLayerImage, layerBaked, onRasterRelease } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
 import { isRealisticArt } from "../../art-style.js";
 import {
@@ -241,6 +241,34 @@ function warm(model, pxPerUnit) {
   if (warmed.has(key)) return;
   warmed.add(key);
   for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit), true);
+}
+
+/**
+ * Decode and bake what an idle `enemy` draws (its variant's idle body and
+ * glow, the aura, the variant's fx) at each on-screen half-height in
+ * `halfHeights`, before it is ever shown. Call once a frame until it returns
+ * true. The largest size decodes first; each smaller one waits for it and
+ * is then a GPU downscale of it (raster.js deriveSmaller), not another parse.
+ */
+export function prefetchIdleEnemy(ctx, enemy, halfHeights) {
+  if (typeof Image === "undefined") return true;
+  const model = modelFor(enemy.enemyType);
+  if (!model || model.boss) return true;
+  const variant = model.variants[motionOf(enemy, 0, model).variant];
+  const refs = [variant.poses.idle.body, variant.poses.idle.glow, model.aura, ...variant.fx.map((f) => f.ref)].filter(Boolean);
+  const scales = [...halfHeights].sort((a, b) => b - a).map((hh) => pixelScale(ctx) * (hh / 100) * model.scale);
+  let ready = true;
+  for (const r of refs) {
+    for (const px of scales) {
+      const scale = capScale(r.box, px);
+      getLayerImage(r.id, r.box, r.defs, r.markup, scale, true);
+      if (!layerBaked(r.id, scale)) {
+        ready = false;
+        break;
+      }
+    }
+  }
+  return ready;
 }
 
 // The raster cache frees its baked canvases (0x0) when Legacy takes over.
@@ -460,7 +488,9 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
   }
   const u = halfH / 100;
   const px = pixelScale(ctx) * u * model.scale;
-  warm(model, px);
+  // The menu showcase's enemies only ever idle; prefetchIdleEnemy decoded
+  // what they draw, and every other pose would only cost decodes on screen.
+  if (!enemy.showcase) warm(model, px);
   const m = motionOf(enemy, time, model);
   const newHit = m.hitAt === time;
   updateBlock(enemy, m, model, time, camRightX, camRightY, newHit);

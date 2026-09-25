@@ -11,6 +11,9 @@ import { Enemy, Player } from "../../js/entities.js";
 import { updateParticles, spawnSmoke } from "../../js/particle-system.js";
 import { spawnWallSparks } from "../../js/vfx.js";
 import { particlePool } from "../utils/particle-pool.js";
+import { prefetchIdleEnemy } from "../rendering/svg-art/sprites/enemies.js";
+import { isModernArt } from "../rendering/art-style.js";
+import { prefetchPropSprite, warmPropSet } from "../rendering/props.js";
 import { createCampaignEntities } from "./spawner.js";
 import { buildShowcasePath, hasLineOfSight, samplePath } from "./showcase-path.js";
 
@@ -110,7 +113,11 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   if (!live()) return;
   const map = structuredClone(campaignMap(entry));
   const path = pathFor(entry, map);
+  const props = levelProps(map, act);
+  const enemies = enemiesFor(entry, map, path, act, fovOf(game));
   await wait();
+  if (!live()) return;
+  await prewarmSprites(game, map, path, props, enemies, live, wait);
   if (!live()) return;
 
   token.saved = Object.fromEntries(SHOWCASE_FIELDS.map((k) => [k, game[k]]));
@@ -121,7 +128,7 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   Object.assign(game, scene());
   game.map = map;
   game.player = new Player(path[0].x, path[0].y, 0);
-  game.entities = [...levelProps(map, act), ...enemiesFor(entry, map, path, act, fovOf(game))];
+  game.entities = [...props, ...enemies];
   game.showcaseAct = act;
   game.showcasePitch = 0;
   game.renderer?.applyActPalette?.(palette, entry.env);
@@ -129,6 +136,69 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   token.emitters = ambientEmitters(map, path);
   token.installed = true;
   placeCamera(game, token);
+}
+
+// The most the install waits on sprite decodes before fading in anyway.
+const PREWARM_MS = 3000;
+
+/**
+ * Decode every enemy's idle sprite and every prop at each size the loop will
+ * show it, while the canvas is still hidden. Decoding on first sight cost
+ * 66–750 ms frames through the first loop (SVG rasterises on the main thread).
+ */
+async function prewarmSprites(game, map, path, props, enemies, live, wait) {
+  const ctx = game.renderer?.ctx;
+  const viewH = game.renderer?.height;
+  if (!ctx || !viewH || !isModernArt()) return;
+  const fov = fovOf(game);
+  const cams = simulateCamera(path, fov);
+  // Sprites are as tall on screen as a wall at their depth: viewH / depth.
+  const propJobs = [...new Set(props.map((p) => p.propType))].map((type) => {
+    const hs = props.filter((p) => p.propType === type).flatMap((p) => sightHeights(map.grid, cams, p, fov, viewH));
+    return [() => prefetchPropSprite(ctx, type, hs), hs];
+  });
+  const jobs = [
+    ...enemies.map((e) => {
+      const hs = sightHeights(map.grid, cams, e, fov, viewH);
+      return [() => prefetchIdleEnemy(ctx, e, hs.map((h) => h / 2)), hs];
+    }),
+    ...propJobs,
+  ].filter(([, hs]) => hs.length);
+  // The game's own first-sight warm of the whole prop set, done here instead
+  // of in the middle of the loop.
+  const firstProp = propJobs.find(([, hs]) => hs.length)?.[1][0];
+  if (firstProp) warmPropSet(firstProp);
+  const until = performance.now() + PREWARM_MS;
+  for (;;) {
+    let ready = true;
+    for (const [prefetch] of jobs) if (!prefetch()) ready = false;
+    if (ready || performance.now() > until) return;
+    await wait();
+    if (!live()) return;
+  }
+}
+
+/**
+ * On-screen sprite heights (canvas px) at which the camera loop sees `e`, the
+ * tallest per half-octave (the raster cache keeps one bitmap per half-octave),
+ * plus one half-octave above the tallest: the loop's samples can miss the
+ * closest pass by a little.
+ */
+function sightHeights(grid, cams, e, fov, viewH) {
+  const half = ((fov / 2) * Math.PI) / 180 + 0.2; // a sprite straddling the edge still draws
+  const byBucket = new Map();
+  for (const c of cams) {
+    const d = Math.hypot(e.x - c.x, e.y - c.y);
+    const a = wrap(Math.atan2(e.y - c.y, e.x - c.x) - c.heading);
+    const depth = d * Math.cos(a);
+    if (Math.abs(a) > half || depth < 0.3 || !hasLineOfSight(grid, c, e)) continue;
+    const h = viewH / depth;
+    const key = Math.ceil(Math.log2(h) * 2);
+    byBucket.set(key, Math.max(byBucket.get(key) ?? 0, h));
+  }
+  const hs = [...byBucket.values()];
+  if (hs.length) hs.push(Math.max(...hs) * Math.SQRT2);
+  return hs;
 }
 
 /** The level's own decoration (props only: no pickups, exit or its real enemies). */

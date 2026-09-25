@@ -2,7 +2,7 @@
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
-import { getLayerImage, onRasterRelease, scaleBucket } from "./svg-art/raster.js";
+import { getLayerImage, layerBaked, onRasterRelease, scaleBucket } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
@@ -253,16 +253,57 @@ export function warmSvgSprites(sprites, defs, ppu) {
 
 let _propsWarmed = -1; // art style the prop set was last warmed for
 
+/** Once per art style, start every prop type decoding at the size a wall `sh` px tall implies. */
+export function warmPropSet(sh) {
+  const style = isRealisticArt() ? 2 : 1;
+  if (_propsWarmed === style) return;
+  _propsWarmed = style;
+  warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
+}
+
+/**
+ * Decode and bake one prop type at each on-screen sprite height in
+ * `sprHeights` ahead of drawing it; call once a frame until it returns true.
+ * The largest size goes first, so the rest are downscales of it.
+ */
+export function prefetchPropSprite(ctx, type, sprHeights) {
+  if (typeof Image === "undefined" || !isModernArt()) return true;
+  let sprite = PROP_SPRITES[type];
+  let defs = PROP_DEFS;
+  if (!sprite) return true;
+  const real = isRealisticArt() ? realisticSet(defs) : null;
+  if (real?.sprites[type]) {
+    sprite = real.sprites[type];
+    defs = real.defs;
+  }
+  if (!sprite._ready) prepareSprite(type, sprite, defs);
+  const m = ctx.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  const ppus = [...sprHeights].sort((a, b) => b - a).map((sh) => (Math.max(sh * SH_PER_METRE, 8 * _fovScale) / 100) * k);
+  let ready = true;
+  for (const layer of sprite.layers) {
+    const ids = [[layer._id, layer.markup]];
+    if (layer._silId) ids.push([layer._silId, layer._silMarkup]);
+    for (const [id, markup] of ids) {
+      for (const ppu of ppus) {
+        const scale = rasterScale(ppu * (layer.res || 1), layer._box);
+        getLayerImage(id, layer._box, sprite._defs, markup, scale, true);
+        if (!layerBaked(id, scale)) {
+          ready = false;
+          break;
+        }
+      }
+    }
+  }
+  return ready;
+}
+
 function drawModernProp(ctx, type, sx, cy, sw, sh, time, fog) {
   const sprite = PROP_SPRITES[type];
   if (!sprite) return false;
   const metre = Math.max(sw * SH_PER_METRE, 8 * _fovScale);
   const ppu = metre / 100;
-  const style = isRealisticArt() ? 2 : 1;
-  if (_propsWarmed !== style) {
-    _propsWarmed = style;
-    warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
-  }
+  warmPropSet(sh);
   const alpha = Math.min(1, fog * 4);
   const shade = Math.min(0.6, (1 - fog) * 1.5);
   return drawSvgSprite(ctx, type, sprite, PROP_DEFS, sx, groundY(cy, sh), ppu, time / 1000, alpha, shade);

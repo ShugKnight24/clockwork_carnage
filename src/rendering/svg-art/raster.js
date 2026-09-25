@@ -266,6 +266,12 @@ export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
   return null;
 }
 
+/** True once this exact size of a layer is decoded and baked (drawing it costs a blit). */
+export function layerBaked(id, scale) {
+  const e = layers.get(id)?.get(scaleBucket(scale));
+  return !!(e && (e.baked || e.failed));
+}
+
 /** True once any bucket of a layer failed to decode (bad markup). */
 export function layerFailed(id) {
   for (const e of layers.get(id)?.values() ?? []) if (e.failed) return true;
