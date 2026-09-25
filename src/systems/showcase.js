@@ -8,7 +8,9 @@
  */
 import { getActLevel, campaignMap, getAct, ENEMY_TYPES } from "../../js/data.js";
 import { Enemy, Player } from "../../js/entities.js";
-import { updateDustMotes } from "../../js/particle-system.js";
+import { updateParticles, spawnSmoke } from "../../js/particle-system.js";
+import { spawnWallSparks } from "../../js/vfx.js";
+import { particlePool } from "../utils/particle-pool.js";
 import { createCampaignEntities } from "./spawner.js";
 import { buildShowcasePath, hasLineOfSight, samplePath } from "./showcase-path.js";
 
@@ -124,6 +126,7 @@ export async function startShowcase(game, { campaignSave = null, wait = nextFram
   game.showcasePitch = 0;
   game.renderer?.applyActPalette?.(palette, entry.env);
   token.heading = targetHeading(path, 0, fovOf(game), 0);
+  token.emitters = ambientEmitters(map, path);
   token.installed = true;
   placeCamera(game, token);
 }
@@ -276,9 +279,63 @@ export function updateShowcase(game, dt, { panelFrac = 0, sheetFrac = 0 } = {}) 
   game.showcasePitch += (pitch - game.showcasePitch) * Math.min(1, dt * 4);
   placeCamera(game, token);
   swayWeapon(game.player, token, dt);
-  // Drifting dust gives the particle settings something to act on.
-  if ((game.quality?.particleMultiplier ?? 1) >= 0.5) game.dustMotes = updateDustMotes(game.dustMotes, dt, game.player);
-  else game.dustMotes = null;
+  // Dust, sparks and steam give the particle settings something to act on.
+  const q = game.quality?.particleMultiplier ?? 1;
+  const ps = (game.player.particles ??= []);
+  emitAmbient(ps, token, game.player, q, dt);
+  game.dustMotes = updateParticles(ps, dt, 1, game.dustMotes, game.player, { enableDust: q >= 0.5 });
+}
+
+// Emitters within this many tiles of the camera spawn; the rest wait.
+const EMIT_RANGE = 12;
+const EMITTER_SLOTS = 8;
+
+/**
+ * Spark and steam vents on walls beside the loop: at up to EMITTER_SLOTS
+ * points along it, the nearest open tile against a wall 1.5–4 tiles away,
+ * alternating spark and steam, never two within 3 tiles.
+ */
+function ambientEmitters(map, path) {
+  const grid = map.grid;
+  const out = [];
+  for (let k = 0; k < EMITTER_SLOTS; k++) {
+    const s = samplePath(path, (k + 0.5) / EMITTER_SLOTS);
+    let best = null;
+    let bestD = Infinity;
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = Math.floor(s.x) + dx + 0.5;
+        const y = Math.floor(s.y) + dy + 0.5;
+        if (!isOpen(grid, x, y)) continue;
+        const wall = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([ax, ay]) => !isOpen(grid, x + ax, y + ay));
+        const d = Math.hypot(x - s.x, y - s.y);
+        if (!wall || d < 1.5 || d >= bestD) continue;
+        best = { x: x + wall[0] * 0.4, y: y + wall[1] * 0.4 };
+        bestD = d;
+      }
+    }
+    if (best && !out.some((e) => Math.hypot(e.x - best.x, e.y - best.y) < 3)) {
+      out.push({ ...best, kind: out.length % 2 ? "steam" : "spark", next: out.length * 0.37 });
+    }
+  }
+  return out;
+}
+
+function emitAmbient(ps, token, cam, q, dt) {
+  // Low particle quality turns the ambience off, as it thins combat effects.
+  if (q < 0.25 || !token.emitters) return;
+  for (const e of token.emitters) {
+    e.next -= dt;
+    if (e.next > 0) continue;
+    const near = Math.hypot(e.x - cam.x, e.y - cam.y) < EMIT_RANGE;
+    if (e.kind === "spark") {
+      e.next = 1.2 + Math.random() * 1.6;
+      if (near) spawnWallSparks(ps, e.x, e.y, q);
+    } else {
+      e.next = 0.18;
+      if (near) spawnSmoke(ps, e.x, e.y, { count: Math.max(1, Math.round(2 * q)), r: 200, g: 206, b: 212, speed: 0.1, life: 1.1 });
+    }
+  }
 }
 
 const fovOf = (game) => game.settings?.fov ?? 75;
@@ -299,6 +356,7 @@ export function stopShowcase(game) {
   if (!token) return;
   delete game._showcase;
   if (!token.installed) return;
+  for (const p of game.player?.particles ?? []) particlePool.release(p);
   for (const k of SHOWCASE_FIELDS) game[k] = token.saved[k];
   delete game.showcaseAct;
   delete game.showcasePitch;

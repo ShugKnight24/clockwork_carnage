@@ -69,6 +69,25 @@ describe("showcase", () => {
     expect(Math.abs(g.player.weaponSwayX)).toBeLessThan(8);
   });
 
+  it("vents sparks and steam beside the loop, and none at low particle quality", async () => {
+    const g = fakeGame();
+    await startShowcase(g);
+    const kinds = new Set();
+    for (let i = 0; i < 60 * 8; i++) {
+      updateShowcase(g, 1 / 60);
+      for (const p of g.player.particles) kinds.add(p._type || "spark");
+    }
+    expect(kinds.has("smoke")).toBe(true); // steam
+    expect(kinds.has("spark")).toBe(true);
+    expect(g.player.particles.length).toBeLessThan(200);
+
+    const low = fakeGame();
+    low.quality.particleMultiplier = 0.2;
+    await startShowcase(low);
+    for (let i = 0; i < 60 * 8; i++) updateShowcase(low, 1 / 60);
+    expect(low.player.particles).toEqual([]);
+  });
+
   it("a stop before the install finishes leaves the game untouched", async () => {
     const g = fakeGame();
     const before = borrowed(g);
