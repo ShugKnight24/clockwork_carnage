@@ -33,7 +33,7 @@ const AIR = 0, STONE = 1, TECH = 2, METAL = 3, ENERGY = 4, GLASS = 8, RIFT = 9, 
 // tonemap lifts and desaturates, so its sky goes in deeper to come out the
 // same blue.
 const DAYLIGHT = { near: [0.78, 0.86, 0.93], far: [0.47, 0.7, 0.93], density: 0.009, max: 0.55 };
-const DAYLIGHT_MODERN = { near: [0.55, 0.66, 0.8], far: [0.26, 0.45, 0.78], density: 0.009, max: 0.5 };
+const DAYLIGHT_MODERN = { near: [0.5, 0.6, 0.74], far: [0.26, 0.45, 0.78], density: 0.007, max: 0.35 };
 const daylight = (style) => (style === "modern" ? DAYLIGHT_MODERN : DAYLIGHT);
 
 let voxel = null; // { VoxelRenderer, generateWorld, styleName } once imported
