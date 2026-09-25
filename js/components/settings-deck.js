@@ -60,7 +60,7 @@ const COLUMN = {
   },
   gamepad: {
     group: "Controller buttons", reset: "resetController", resetLabel: "Reset controller to default", actions: REMAPPABLE_PAD_ACTIONS, defaults: DEFAULT_GAMEPAD_ACTIONS,
-    desc: "Select, then press the new button. B cancels. Menu buttons stay as they are.", resetDesc: "Put every button back where it started.",
+    desc: "Select, then press the new button. Start cancels. Menu buttons stay as they are.", resetDesc: "Put every button back where it started.",
   },
 };
 const DPAD_WORDS = ["D-pad up", "D-pad down", "D-pad left", "D-pad right"];
@@ -962,15 +962,15 @@ class SettingsDeck extends HTMLElement {
     const { action, device } = this.state.capture;
     const kb = device === "keyboard";
     this.sfx("menuConfirm");
-    const cancelCap = kb ? '<kbd class="key">Esc</kbd>' : glyphHTML(buttonGlyph(PAD.B, padFamily(this.game)));
+    const cancelCap = kb ? '<kbd class="key">Esc</kbd>' : glyphHTML(buttonGlyph(PAD.MENU, padFamily(this.game)));
     this.showModal({
       title: `Press a ${kb ? "key" : "button"} for ${remapLabel(action)}…`,
-      lines: [`${kb ? "Esc" : this.inputName("gamepad", PAD.B)} cancels.`],
+      lines: [`${kb ? "Esc" : this.inputName("gamepad", PAD.MENU)} cancels.`],
       timer: true,
       buttons: `<button data-act="cancelCapture">${cancelCap}Cancel</button>`,
     });
     this.el.modal.focus({ preventScroll: true });
-    this.announce(`Press a ${kb ? "key" : "controller button"} for ${remapLabel(action)}. ${kb ? "Escape" : this.inputName("gamepad", PAD.B)} cancels.`);
+    this.announce(`Press a ${kb ? "key" : "controller button"} for ${remapLabel(action)}. ${kb ? "Escape" : this.inputName("gamepad", PAD.MENU)} cancels.`);
     this.armCaptureTimer();
   }
 
@@ -1007,8 +1007,9 @@ class SettingsDeck extends HTMLElement {
     if (!this.isOpen || !cap) return false;
     const device = input.kind === "button" ? "gamepad" : "keyboard";
     const value = device === "gamepad" ? input.index : input.code;
-    // B cancels a button capture as Esc cancels a key one.
-    const code = device === "gamepad" ? (value === PAD.B ? "Escape" : `Button${value}`) : value;
+    // Start (reserved for pause, so never a binding) cancels a button capture
+    // as Esc cancels a key one; that leaves every other button bindable, B too.
+    const code = device === "gamepad" ? (value === PAD.MENU ? "Escape" : `Button${value}`) : value;
     this.key(code, { device });
     if (!this.state.capture || device !== cap.device) return true;
 

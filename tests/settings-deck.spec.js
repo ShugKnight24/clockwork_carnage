@@ -569,8 +569,10 @@ test("controller: A opens capture without binding, keys are ignored, Y swaps wit
   await page.keyboard.press("Escape");
   await expect(dialog(page)).toContainText("Press a button for Dash");
   expect(await keybind(page, "interact")).toBe("KeyE");
-  await tapPad(page, 9); // Start: reserved, keeps listening
-  await expect(dialog(page)).toContainText("reserved for pause");
+  await tapPad(page, 9); // Start: reserved for pause, so it cancels the capture
+  await expect(dialog(page)).toBeHidden();
+  expect(await padBind(page, "dash")).toBe(0);
+  await tapPad(page, 0); // capture again
   await expect(dialog(page)).toContainText("Press a button for Dash");
   await tapPad(page, 3); // Y: used by Next weapon
   await expect(dialog(page)).toContainText("Next weapon");
@@ -601,14 +603,14 @@ test("controller: A opens capture without binding, keys are ignored, Y swaps wit
   expect(await page.evaluate(() => window.__dashes)).toBe(1);
 });
 
-test("controller: B cancels, the RB pair moves together, reset restores", async ({ page }) => {
+test("controller: Start cancels, the RB pair moves together, reset restores", async ({ page }) => {
   await fakePad(page);
   await openFromMenu(page);
   await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
   await focusRow(page, "remap:gamepad:dash");
   await tapPad(page, 0);
   await expect(dialog(page)).toBeVisible();
-  await tapPad(page, 1); // B cancels
+  await tapPad(page, 9); // Start cancels (it can never be a binding)
   await expect(dialog(page)).toBeHidden();
   expect(await padBind(page, "dash")).toBe(0);
   expect(await state(page)).toBe("settings");
@@ -652,4 +654,18 @@ test("capture gives up after 8 seconds", async ({ page }) => {
   expect(await keybind(page, "interact")).toBe("KeyE");
   expect(await activeInDeck(page)).toBe("remap:keyboard:interact");
   await expect(deck(page).locator('[role="status"]')).toContainText("Interact unchanged");
+});
+
+test("controller: B can be bound (it swaps with crouch)", async ({ page }) => {
+  await fakePad(page);
+  await openFromMenu(page);
+  await page.waitForFunction(() => window.ccDebug.game.gamepad.connected);
+  await focusRow(page, "remap:gamepad:dash");
+  await tapPad(page, 0);
+  await expect(dialog(page)).toBeVisible();
+  await tapPad(page, 1); // B is a binding now, not the cancel
+  await expect(dialog(page)).toContainText("Crouch");
+  await tapPad(page, 0); // A confirms the swap
+  expect(await padBind(page, "dash")).toBe(1);
+  expect(await padBind(page, "crouch")).toBe(0);
 });

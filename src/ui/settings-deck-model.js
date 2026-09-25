@@ -29,7 +29,7 @@ export function deckKey(state, code, ctx) {
       effects.push({ type: "captureCancel" });
       return { state: s, effects };
     }
-    // Only the cell's device counts: Esc cancels a key, B (sent as Escape) a button.
+    // Only the cell's device counts: Esc cancels a key, Start (sent as Escape) a button.
     if ((ctx.device ?? "keyboard") !== s.capture.device) return { state: s, effects };
     if (code === "Escape") {
       s.capture = null;
