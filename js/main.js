@@ -22,7 +22,9 @@ import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
-const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam;
+// ?bench runs the scripted benchmark (js/testing/bench.js) once the bridge loads.
+const benchParam = new URLSearchParams(window.location.search).has("bench");
+const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam || benchParam;
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -733,6 +735,7 @@ if (devToolsEnabled) {
     : new URL("./testing/", import.meta.url).href;
   const debugPath = `${testingRoot}harness.js`;
   const bridgePath = `${testingRoot}debug-bridge.js`;
+  const benchPath = `${testingRoot}bench.js`;
   const telemetryPath = `${testingRoot}telemetry.js`;
 
   import(/* @vite-ignore */ debugPath)
@@ -747,10 +750,28 @@ if (devToolsEnabled) {
   import(/* @vite-ignore */ bridgePath)
     .then((mod) => {
       window.ccDebug = mod.createDebugBridge(game);
+      if (benchParam) startBench();
     })
     .catch(() => {
       /* debug bridge not available — skip */
     });
+
+  function startBench() {
+    const q = new URLSearchParams(window.location.search);
+    const art = q.has("art") ? Number(q.get("art")) : null;
+    import(/* @vite-ignore */ benchPath).then(async (bench) => {
+      const panel = bench.showBenchPanel();
+      try {
+        const report = await bench.runBench(window.ccDebug, game, { fixed: q.has("fixed"), art, onStatus: panel.status });
+        window.ccBenchResult = report;
+        console.info("[bench]", JSON.stringify(report));
+        panel.result(report);
+      } catch (err) {
+        window.ccBenchResult = { error: String(err?.stack ?? err) };
+        panel.error(err);
+      }
+    });
+  }
 
   // Expose telemetry collector for session data capture.
   import(/* @vite-ignore */ telemetryPath)

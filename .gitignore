@@ -12,10 +12,12 @@ archive/
 
 # Dev scripts. The brand generator and the reel recorder are the exceptions:
 # assets/brand and docs/media are built from them and can only be
-# regenerated with them.
+# regenerated with them. The benchmark runner is documented for other
+# machines (docs/REMOTE-TESTING.md).
 scripts/*
 !scripts/brand/
 !scripts/reel/
+!scripts/bench.mjs
 
 # Playwright / automation engine — output only. The specs, the debug bridge,
 # the config and package.json are tracked so a clone can install and run them.
@@ -53,3 +55,6 @@ weapons_enemies.md
 
 # Loose capture PNGs dropped at the repo root by manual test runs
 /*.png
+
+# Benchmark reports (npm run bench)
+bench-results/
