@@ -24,6 +24,8 @@ import { isBossEnemy } from "../src/systems/combat.js";
 import { levelsBefore, sceneFor, earnsTrueEnding } from "../src/data/campaign/acts.js";
 import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
+import { getArtStyle, ART_LEGACY } from "../src/rendering/art-style.js";
+import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -297,6 +299,7 @@ export class CampaignManager {
     }
 
     this._applyActEnemyRoster();
+    this._warmRoster();
 
     const act = getAct(this.act);
     const hasBoss = g.entities.some((e) => e.type === "enemy" && isBossEnemy(e));
@@ -502,6 +505,32 @@ export class CampaignManager {
       g.startCutscene(key, () => next(i + 1));
     };
     next(0);
+  }
+
+  /**
+   * Rasterise every pose of this level's enemy types now, a couple of layers
+   * a frame, while the player is still getting their bearings. Left to first
+   * sight, a new type's SVG layers were drawn mid-fight: 60-110 ms stalls on
+   * a fast laptop, the first time each type was seen or shot.
+   */
+  _warmRoster() {
+    const g = this.game;
+    const ctx = g.renderer?.ctx;
+    const viewH = g.renderer?.height;
+    if (!ctx || !viewH || getArtStyle() === ART_LEGACY || typeof requestAnimationFrame !== "function") return;
+    const types = [...new Set(g.entities.filter((e) => e.type === "enemy").map((e) => e.enemyType))];
+    // Half-heights for a close encounter and mid-room range; nearer and
+    // farther sizes are GPU rescales of these (raster.js deriveSmaller).
+    const halfHeights = [viewH / 2.4, viewH / 5];
+    const map = g.map;
+    const until = performance.now() + 8000;
+    let i = 0;
+    const step = () => {
+      if (g.map !== map || i >= types.length || performance.now() > until) return;
+      if (prefetchEnemyModel(ctx, types[i], halfHeights, undefined, 2)) i++;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   _applyActEnemyRoster() {
