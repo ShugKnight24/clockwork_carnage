@@ -19,15 +19,13 @@ export function renderPostFX(ctx, w, h, state) {
   const postProcessing = state.postProcessing !== false;
   const act = state.act || 1;
 
-  // Muzzle flash screen lighting — additive overlay, fades over 100ms
+  // Muzzle flash screen lighting — additive glow around the gun, fades over
+  // 100ms. A flat full-screen fill turned the whole cool-blue deck sepia on
+  // every shot, a strobe under automatic fire, and cost a full-frame fill on
+  // weak GPUs.
   if (state.muzzleFlashTime && time - state.muzzleFlashTime < 100) {
     const t = (time - state.muzzleFlashTime) / 100;
-    const alpha = 0.12 * (1 - t);
-    const prev = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = `rgba(${state.muzzleFlashColor},${alpha})`;
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = prev;
+    drawMuzzleGlow(ctx, w, h, state.muzzleFlashColor, 0.16 * (1 - t));
   }
 
   // Hurt flash — red overlay
@@ -112,6 +110,26 @@ export function renderPostFX(ctx, w, h, state) {
     ctx.fillStyle = "rgba(80,0,0,0.5)";
     ctx.fillRect(0, 0, w, h);
   }
+}
+
+/** Where the gun sits on screen, as a fraction of the frame. */
+const MUZZLE_GLOW_X = 0.6;
+const MUZZLE_GLOW_Y = 0.62;
+
+/** Radial glow from the gun, clipped to its own square so the fill stays small. */
+function drawMuzzleGlow(ctx, w, h, rgb, alpha) {
+  const cx = w * MUZZLE_GLOW_X;
+  const cy = h * MUZZLE_GLOW_Y;
+  const r = h * 0.6;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grd.addColorStop(0, `rgba(${rgb},${alpha})`);
+  grd.addColorStop(0.45, `rgba(${rgb},${alpha * 0.35})`);
+  grd.addColorStop(1, `rgba(${rgb},0)`);
+  const prev = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = grd;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.globalCompositeOperation = prev;
 }
 
 let _grainTile = null;

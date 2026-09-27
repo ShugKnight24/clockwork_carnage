@@ -1834,8 +1834,10 @@ export class Renderer {
         ctx.fill();
         ctx.globalAlpha = 1;
       }
-      if (isRealisticArt() && !hitFlash) {
-        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT);
+      // Hit enemies stay lit: switching to the unlit sprite for the flash
+      // popped a dark figure to full brightness for 100 ms on every hit.
+      if (isRealisticArt()) {
+        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT, hitFlash);
       } else {
         drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
       }
@@ -1857,13 +1859,13 @@ export class Renderer {
    * enemy standing between lamps falls into shadow; one under a lamp or beside
    * a flash lights up with that light's colour.
    */
-  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT) {
+  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT, hitFlash = false) {
     // ctx.filter keeps the lighting on the main canvas. The first version
     // drew each sprite into a scratch canvas and blitted it back, and every
     // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
     // frame with a room full of enemies and props.
     ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
-    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, false, dissolve, windupT);
+    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
     ctx.filter = "none";
   }
 
