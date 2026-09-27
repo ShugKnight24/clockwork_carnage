@@ -14,9 +14,10 @@ import {
   frameCapFor,
   qualityTargetFPS,
 } from "../src/systems/frame-pacer.js";
-import { playReel } from "../src/cinematic/director.js";
+import { playReel, stepFixed, directorState } from "../src/cinematic/director.js";
+import { beatsToSec, reelDuration } from "../src/cinematic/timeline.js";
 import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
-import { playLoreThen } from "../src/cinematic/films.js";
+import { playLoreThen, filmById } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
@@ -313,6 +314,60 @@ const attract = createAttract(game, {
 });
 for (const type of ["keydown", "pointerdown", "pointermove", "wheel", "touchstart"]) {
   window.addEventListener(type, attract.poke, { capture: true, passive: true });
+}
+
+// ?record=<reelId>: scripts/reel/record.mjs exports a film. ccReel.start()
+// plays it on the director's fixed clock: ccReel.step() advances exactly
+// 1/60 s and ccReel.frame() returns the game and HUD canvases composited at
+// 1920x1080. With &audio=1 the film has sound, and ccReel.tap() is the
+// master bus for MediaRecorder (the recorder then steps in time with the
+// audio clock).
+const recordParam = new URLSearchParams(window.location.search).get("record");
+if (recordParam) startRecording(recordParam);
+
+function startRecording(id) {
+  const film = filmById(id);
+  if (!film) {
+    console.error(`[Clockwork Carnage] ?record: no film "${id}"`);
+    return;
+  }
+  const withAudio = new URLSearchParams(window.location.search).has("audio");
+  const reel = film.reel;
+  // The poster: halfway through the closing shot (the logo card).
+  const last = reel.shots[reel.shots.length - 1];
+  const out = document.createElement("canvas");
+  out.width = 1920;
+  out.height = 1080;
+  const octx = out.getContext("2d");
+  const rec = { done: false };
+  titleScreen.classList.add("hidden");
+  if (withAudio) initAudio();
+  window.ccReel = {
+    id,
+    duration: reelDuration(reel),
+    posterAt: beatsToSec(reel, last.at + last.len / 2),
+    start() {
+      rec.finished ??= playReel(game, reel, { returnTo: "title", clock: "fixed", muted: !withAudio }).then(() => (rec.done = true));
+      return rec.finished;
+    },
+    get done() {
+      return rec.done;
+    },
+    state: () => directorState(game),
+    step: () => stepFixed(game),
+    // Render and read back in one task: a WebGL canvas's drawing buffer is
+    // only guaranteed until the browser composites it.
+    frame(type = "image/png", q) {
+      game.render();
+      octx.fillStyle = "#000";
+      octx.fillRect(0, 0, out.width, out.height);
+      octx.drawImage(gameCanvas, 0, 0, out.width, out.height);
+      octx.drawImage(hudCanvas, 0, 0, out.width, out.height);
+      return out.toDataURL(type, q);
+    },
+    tap: () => game.audio.recordTap(),
+    audioTime: () => game.audio.ctx?.currentTime ?? null,
+  };
 }
 
 // Expose dev flag toggle on window for console access

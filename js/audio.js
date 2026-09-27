@@ -388,6 +388,19 @@ export class AudioManager {
     return () => this._beatListeners.delete(fn);
   }
 
+  /**
+   * The master output after the limiter, as a MediaStream (the reel export's
+   * audio pass records it with MediaRecorder). One tap, made on first ask.
+   */
+  recordTap() {
+    this.init();
+    if (!this._recordTap) {
+      this._recordTap = this.ctx.createMediaStreamDestination();
+      this.limiter.connect(this._recordTap);
+    }
+    return this._recordTap.stream;
+  }
+
   // Chrono Pistol (id: 0)
   shootPistol() {
     if (!this.ctx || !this.enabled) return;

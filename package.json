@@ -27,6 +27,8 @@
     "assets:manifest": "node scripts/build-assets.mjs",
     "assets:generate": "node scripts/generate-sprites.mjs",
     "assets:build": "npm run assets:generate && npm run assets:manifest",
+    "reel:record": "node scripts/reel/record.mjs sizzle",
+    "reel:record:lore": "node scripts/reel/record.mjs lore",
     "review": "node scripts/review.mjs",
     "review:strict": "node scripts/review.mjs --strict",
     "simulate": "node simulations/run.mjs",
