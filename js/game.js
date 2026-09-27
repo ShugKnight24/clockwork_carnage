@@ -2065,8 +2065,12 @@ export class Game {
     // Gives DOOM-like impact on kills: the world freezes for a beat.
     // Counted in ms, not frames, so the beat is the same length on a 30 fps
     // cap and on a 144 Hz panel.
+    // The camera stays live: a frozen view reads as lag, not impact.
     if (this.hitStopMs > 0) {
       this.hitStopMs -= this.deltaTime * 1000;
+      if (this.player.alive && !this.chronoPowers.playerFrozen()) {
+        this.playerUpdateSystem.look({ player: this.player, mouse: this.mouse, settings: this.settings, world: this.world });
+      }
       return;
     }
 

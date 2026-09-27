@@ -73,6 +73,16 @@ export class PlayerUpdateSystem {
   _prevCrouchKey = false;
 
   /**
+   * Look only, for frames where the rest of the update is held (hit-stop).
+   * Skipping it let the mouse delta pile up and land as one jump when the
+   * world resumed.
+   * @param {{ player, mouse, settings, world? }} ctx
+   */
+  look({ player, mouse, settings, world }) {
+    applyLook(player, mouse, settings, world);
+  }
+
+  /**
    * @param {{ player, keys, keybinds, mouse, settings, mode, map, audio, world? }} ctx
    *   `world` switches the whole method to voxel movement and camera pitch.
    * @param {number} dt
