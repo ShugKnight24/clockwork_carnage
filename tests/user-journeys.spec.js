@@ -505,10 +505,18 @@ test.describe("User Journeys", () => {
     if (startState === "characterCreate") {
       await page.evaluate(() => window.ccDebug.pressKey("Enter"));
       await page.waitForFunction(
-        () => ["playing", "tutorial", "cutscene", "campaignPrompt"].includes(window.ccDebug?.getState()),
+        () => ["playing", "tutorial", "cutscene", "campaignPrompt", "cinematic"].includes(window.ccDebug?.getState()),
         { timeout: 10000 },
       );
       laps.push({ label: "creator-confirmed", ms: Date.now() - t });
+    }
+
+    // A first new campaign opens on the lore video: hold to skip it to the flipbook.
+    if ((await page.evaluate(() => window.ccDebug.getState())) === "cinematic") {
+      await page.keyboard.down("Space");
+      await page.waitForFunction(() => window.ccDebug?.getState() !== "cinematic", null, { timeout: 5000 });
+      await page.keyboard.up("Space");
+      laps.push({ label: "lore-skipped", ms: Date.now() - t });
     }
 
     const playableState = await page.evaluate(() => window.ccDebug.getState());

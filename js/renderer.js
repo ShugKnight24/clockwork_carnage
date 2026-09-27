@@ -194,6 +194,9 @@ export class Renderer {
       this.useWebGL = true;
       this._envMapGLVersion = -1;
       this._uploadFloorCeilToGL();
+      // A fresh context has no Modern deck: it was only uploaded when the env
+      // was rebuilt, so switching Render Mode fell back to the soft CPU floor.
+      if (this._modernEnv) this.glRenderer.uploadModernDeck(this._modernEnv.deck.floor, this._modernEnv.deck.ceil);
       console.log('[Renderer] WebGL2 hybrid renderer active');
     } else if (renderMode === 2) {
       console.warn('[Renderer] WebGL2 requested but unavailable — falling back to Canvas2D');
@@ -246,6 +249,7 @@ export class Renderer {
     this._modernEnv = null;
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
+    if (this.useWebGL) this._uploadFloorCeilToGL();
   }
 
   resize(w, h) {
@@ -280,6 +284,33 @@ export class Renderer {
     this.glRenderer.uploadFloorCeilTextures(floorRGBA, ceilRGBA);
   }
 
+  /**
+   * Bake the Modern environment for a level that is about to start, so the
+   * ~200 ms bake lands while its briefing is on screen instead of in the
+   * level's first frame. _getModernEnv adopts it if the level matches.
+   */
+  prewarmEnv(act, level = null) {
+    if (!isModernArt()) return;
+    const a = act || 1;
+    const lv = level ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    const same = (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic;
+    if (same(this._modernEnv) || same(this._altModernEnv) || same(this._prewarmedEnv)) return;
+    const env = generateModernEnv(a, brutal, lv, { realistic });
+    env.realistic = realistic;
+    this._prewarmedEnv = env;
+  }
+
+  /**
+   * Hand over an environment bundle built ahead of time (generateModernEnv,
+   * with `realistic` set): the next _getModernEnv adopts it when it matches
+   * the act, level and finish being drawn, as it would a prewarmEnv's.
+   */
+  offerEnv(env) {
+    if (env) this._prewarmedEnv = env;
+  }
+
   /** Build (or reuse) the Modern environment bundle for the current act. */
   _getModernEnv() {
     const act = this._actPalette || 1;
@@ -299,11 +330,15 @@ export class Renderer {
       // both.
       const prev = this._modernEnv;
       const alt = this._altModernEnv;
+      const warm = this._prewarmedEnv;
+      this._prewarmedEnv = null;
       if (
         alt && alt.act === act && alt.level === level &&
         alt.brutal === brutal && alt.realistic === realistic
       ) {
         this._modernEnv = alt;
+      } else if (warm && warm.act === act && warm.level === level && warm.brutal === brutal && warm.realistic === realistic) {
+        this._modernEnv = warm;
       } else {
         this._modernEnv = generateModernEnv(act, brutal, level, { realistic });
         this._modernEnv.realistic = realistic;
@@ -1799,8 +1834,10 @@ export class Renderer {
         ctx.fill();
         ctx.globalAlpha = 1;
       }
-      if (isRealisticArt() && !hitFlash) {
-        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT);
+      // Hit enemies stay lit: switching to the unlit sprite for the flash
+      // popped a dark figure to full brightness for 100 ms on every hit.
+      if (isRealisticArt()) {
+        this._drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT, hitFlash);
       } else {
         drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
       }
@@ -1822,13 +1859,13 @@ export class Renderer {
    * enemy standing between lamps falls into shadow; one under a lamp or beside
    * a flash lights up with that light's colour.
    */
-  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT) {
+  _drawEnemyLit(ctx, frame, enemy, screenX, centerY, alpha, time, dissolve, windupT, hitFlash = false) {
     // ctx.filter keeps the lighting on the main canvas. The first version
     // drew each sprite into a scratch canvas and blitted it back, and every
     // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
     // frame with a room full of enemies and props.
     ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
-    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, false, dissolve, windupT);
+    drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
     ctx.filter = "none";
   }
 

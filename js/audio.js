@@ -39,6 +39,9 @@ export class AudioManager {
     // Master level at 100% volume; the settings slider scales it.
     this._masterLevel = 0.8;
     this._masterVolume = 1;
+    // A reel before any user gesture plays silent (setMuted), over the volume.
+    this._muted = false;
+    this._beatListeners = new Set();
 
     // Voices: one active line per channel ("cutscene", "comms"), so a new
     // line on a channel cuts the old one off instead of talking over it.
@@ -54,7 +57,7 @@ export class AudioManager {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = this._masterLevel * this._masterVolume;
+    this.masterGain.gain.value = this._masterTarget();
     // A brickwall-ish limiter on the master: layered gunfire, music and a voice
     // line can sum past full scale, and nothing else stops them clipping.
     this.limiter = this.ctx.createDynamicsCompressor();
@@ -362,7 +365,40 @@ export class AudioManager {
   }
 
   _masterTarget() {
+    if (this._muted) return 0;
     return this._masterLevel * this._masterVolume * (this._slowmo ? 0.75 : 1);
+  }
+
+  /**
+   * Silence everything without touching the player's volume settings (the
+   * title's attract loop before any gesture). Safe before init(): the flag
+   * holds and init() starts the master at the muted level.
+   */
+  setMuted(muted) {
+    this._muted = !!muted;
+    if (this.masterGain) this.masterGain.gain.setTargetAtTime(this._masterTarget(), this.ctx.currentTime, 0.02);
+  }
+
+  /**
+   * Hear every music beat as it is booked: fn(track, beat, beatDur, when),
+   * `when` the beat's audio-clock time. Returns the unsubscribe function.
+   */
+  onBeat(fn) {
+    this._beatListeners.add(fn);
+    return () => this._beatListeners.delete(fn);
+  }
+
+  /**
+   * The master output after the limiter, as a MediaStream (the reel export's
+   * audio pass records it with MediaRecorder). One tap, made on first ask.
+   */
+  recordTap() {
+    this.init();
+    if (!this._recordTap) {
+      this._recordTap = this.ctx.createMediaStreamDestination();
+      this.limiter.connect(this._recordTap);
+    }
+    return this._recordTap.stream;
   }
 
   // Chrono Pistol (id: 0)
@@ -909,6 +945,13 @@ export class AudioManager {
     });
   }
 
+  /** A short phrase on the music bus, so the Music Volume slider has something to preview. */
+  musicSting() {
+    [392, 523, 659].forEach((n, i) => {
+      setTimeout(() => this._playMusicTone(n, 0.3, "square", 0.25), i * 110);
+    });
+  }
+
   menuSelect() {
     this.playTone(600, 0.06, "square", 0.2);
   }
@@ -1091,6 +1134,7 @@ export class AudioManager {
   }
 
   _dispatchBeat(track, beat, beatDur) {
+    for (const fn of this._beatListeners) fn(track, beat, beatDur, this._musicWhen ?? this.ctx?.currentTime ?? 0);
     switch (track) {
       case "campaign":  this._beatCampaign(beat, beatDur); break;
       case "arena":     this._beatArena(beat, beatDur); break;

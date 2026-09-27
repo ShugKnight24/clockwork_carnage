@@ -8,22 +8,25 @@ import { GameState } from "../types.js";
 import { TUTORIAL_SANDBOX_STEP } from "../constants.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
 import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
-import { archiveLayout, archiveEntries } from "../ui/archive-screen.js";
-import {
-  getSettingsForCategory,
-  getVisibleCategories,
-  applySettingStep,
-  DEFAULT_SETTINGS,
-} from "../../js/settings-registry.js";
-import { settingsLayout } from "../../js/layout.js";
+import { archiveLayout, archiveEntries, ARCHIVE_TABS, FILMS_TAB } from "../ui/archive-screen.js";
+import { playFilm } from "../cinematic/films.js";
+import { directorInput } from "../cinematic/director.js";
 
 export function dispatchKeyPress(game, code, e) {
   // Nested Spaghetti 😂🤦‍♂️
   // TODO: Abstract into StateManager
+
+  // A reel takes every key as its skip (the lore video's as a hold). It must
+  // not also reach main.js's title/menu listener: a skip back to the menu
+  // would take the same Space or Enter as a click on the focused mode.
+  if (game.state === GameState.CINEMATIC) {
+    directorInput(game, "key", { down: true, code });
+    if (e?.stopImmediatePropagation) swallowKey(e);
+    return;
+  }
 
   // TITLE and MODE_SELECT input is handled exclusively by main.js
   // (which owns the DOM elements for those screens)
@@ -370,6 +373,8 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.PAUSED) {
+    // A key answers the pad's quit prompt with "no" (Q still quits).
+    game.pauseQuitConfirm = false;
     if (code === "Escape" || code === "Enter" || code === "KeyP") {
       const now = performance.now();
       if (now - game.lastEscTime < 200) return;
@@ -400,12 +405,10 @@ export function dispatchKeyPress(game, code, e) {
       game.audio.startAmbient("menu");
     }
     if (code === "KeyS" || code === "Tab") {
-      game.settingsSelection = 0;
-      game.state = GameState.SETTINGS;
+      game.openSettings({ returnTo: "pause" });
     }
     if (code === "KeyC") {
-      game.controlsSelection = 0;
-      game.state = GameState.CONTROLS;
+      game.openSettings({ returnTo: "pause", section: "controls" });
     }
     if (code === "KeyA") {
       game.achievementsScroll = 0;
@@ -444,182 +447,18 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.SETTINGS) {
-    // Category-aware navigation: Q/E = category, W/S/↑/↓ = navigate, A/D/←/→ = value, Enter/Space = cycle
-    // Pass `settings` so this list matches the one the screen draws: some
-    // categories appear only for certain values.
-    const cats = getVisibleCategories(game.isTouchDevice, game.settings);
-    const catIdx = cats.indexOf(game.settingsCategory);
-    const settingsDef = getSettingsForCategory(
-      game.isTouchDevice,
-      game.settingsCategory,
-      game.settings,
-    );
-    const settingsCount = settingsDef.length;
-
-    /** Keep the highlighted row inside the scrolled view band. */
-    const followSelection = () => {
-      if (!game.hudW || !game.hudH) return;
-      game.settingsScroll = settingsLayout(
-        game.hudW,
-        game.hudH,
-        game.settingsSelection,
-        game.isTouchDevice,
-        game.settingsCategory,
-        game.settingsScroll,
-        true,
-      ).scrollY;
-    };
-
-    const gotoCategory = (next) => {
-      game.settingsCategory = cats[next];
-      game.settingsSelection = 0;
-      game.settingsScroll = 0;
-      game.audio.menuSelect();
-    };
-
-    // Switch category: Q = prev, E = next
-    if (code === "KeyQ") {
-      gotoCategory((catIdx - 1 + cats.length) % cats.length);
+    // The settings deck owns every key while it is open.
+    if (game.settingsDeck?.isOpen) {
+      game.settingsDeck.handleKey(code, e);
       return;
     }
-    if (code === "KeyE") {
-      gotoCategory((catIdx + 1) % cats.length);
-      return;
-    }
-
-    if (settingsCount === 0) {
-      if (code === "Escape") {
-        game.saveSettings();
-        game.state = game._settingsReturnToMenu
-          ? GameState.MODE_SELECT
-          : GameState.PAUSED;
-        game._settingsReturnToMenu = false;
-      }
-      return;
-    }
-
-    // Move selection within category
-    if (code === "ArrowUp" || code === "KeyW") {
-      game.settingsSelection =
-        (game.settingsSelection - 1 + settingsCount) % settingsCount;
-      followSelection();
-      game.audio.menuSelect();
-      return;
-    }
-    if (code === "ArrowDown" || code === "KeyS") {
-      game.settingsSelection = (game.settingsSelection + 1) % settingsCount;
-      followSelection();
-      game.audio.menuSelect();
-      return;
-    }
-    if (code === "Home" || code === "PageUp") {
-      game.settingsSelection =
-        code === "Home" ? 0 : Math.max(0, game.settingsSelection - 5);
-      followSelection();
-      game.audio.menuSelect();
-      return;
-    }
-    if (code === "End" || code === "PageDown") {
-      game.settingsSelection =
-        code === "End"
-          ? settingsCount - 1
-          : Math.min(settingsCount - 1, game.settingsSelection + 5);
-      followSelection();
-      game.audio.menuSelect();
-      return;
-    }
-
-    // Reset the highlighted setting to its shipped default.
-    if (code === "Backspace" || code === "Delete") {
-      const def = settingsDef[game.settingsSelection];
-      if (def && def.type !== "action") {
-        const fallback = DEFAULT_SETTINGS[def.key];
-        if (fallback !== undefined && game.settings[def.key] !== fallback) {
-          game.settings[def.key] = fallback;
-          if (def.onChange) def.onChange(game);
-          game.saveSettings();
-          game.audio.menuConfirm();
-        }
-      }
-      return;
-    }
-
-    // Change setting value — Enter/Space cycle forward, Left/A decrement, Right/D increment
-    const stepDir =
-      code === "ArrowLeft" || code === "KeyA"
-        ? -1
-        : code === "ArrowRight" ||
-            code === "KeyD" ||
-            code === "Enter" ||
-            code === "Space"
-          ? 1
-          : 0;
-    if (stepDir !== 0) {
-      const def = settingsDef[game.settingsSelection];
-      if (def) {
-        // Action rows run a command; they have no value to step.
-        if (def.type === "action") {
-          if (stepDir > 0) {
-            def.onClick?.(game);
-            game.audio.menuConfirm();
-          }
-          return;
-        }
-        if (applySettingStep(game.settings, def, stepDir)) {
-          if (def.onChange) def.onChange(game);
-          game.saveSettings();
-          game.audio.menuConfirm();
-        }
-      }
-      return;
-    }
-
+    // The deck is still loading (or failed to). Back (Esc, pad B / Start)
+    // closes through the deck's own path so the opener comes back exactly.
     if (code === "Escape") {
       const now = performance.now();
       if (now - game.lastEscTime < 200) return;
       game.lastEscTime = now;
-      game.saveSettings();
-      // Opened from mode select, so go back there rather than to a pause
-      // menu for a match that was never started.
-      game.state = game._settingsReturnToMenu
-        ? GameState.MODE_SELECT
-        : GameState.PAUSED;
-      game._settingsReturnToMenu = false;
-    }
-    return;
-  }
-
-  if (game.state === GameState.CONTROLS) {
-    if (game.rebindingKey) return; // handled by setupInput keydown listener
-    const bindKeys = Object.keys(game.keybinds);
-    const totalItems = bindKeys.length + 1; // +1 for "Reset Defaults"
-    if (code === "ArrowUp" || code === "KeyW") {
-      game.controlsSelection =
-        (game.controlsSelection - 1 + totalItems) % totalItems;
-      game.audio.menuSelect();
-    }
-    if (code === "ArrowDown" || code === "KeyS") {
-      game.controlsSelection = (game.controlsSelection + 1) % totalItems;
-      game.audio.menuSelect();
-    }
-    if (code === "Enter" || code === "Space") {
-      if (game.controlsSelection < bindKeys.length) {
-        // Start rebinding
-        game.rebindingKey = bindKeys[game.controlsSelection];
-        game.audio.menuConfirm();
-      } else {
-        // Reset to defaults (mutate in place so the InputManager alias stays valid)
-        Object.assign(game.keybinds, DEFAULT_KEYBINDS);
-        game.saveSettings();
-        game.audio.menuConfirm();
-      }
-    }
-    if (code === "Escape") {
-      const now = performance.now();
-      if (now - game.lastEscTime < 200) return;
-      game.lastEscTime = now;
-      game.saveSettings();
-      game.state = GameState.PAUSED;
+      game.onSettingsDeckClose(game._settingsReturnTo ?? "pause");
     }
     return;
   }
@@ -656,15 +495,24 @@ export function dispatchKeyPress(game, code, e) {
     }
     const L = archiveLayout(game.hudW, game.hudH);
     const entries = archiveEntries(game.archiveTab || 0, game.archive);
-    if (code === "KeyA" || code === "ArrowLeft") {
-      game.archiveTab = (game.archiveTab || 0) === 0 ? 1 : 0;
+    // Tabs cycle both ways (A/D, arrows, or the bumpers as Q/E).
+    const step = code === "KeyA" || code === "ArrowLeft" || code === "KeyQ" ? -1
+      : code === "KeyD" || code === "ArrowRight" || code === "KeyE" ? 1 : 0;
+    if (step) {
+      const n = ARCHIVE_TABS.length;
+      game.archiveTab = ((game.archiveTab || 0) + step + n) % n;
       game.archiveSelection = 0;
       game.archiveScroll = 0;
     }
-    if (code === "KeyD" || code === "ArrowRight") {
-      game.archiveTab = (game.archiveTab || 0) === 1 ? 0 : 1;
-      game.archiveSelection = 0;
-      game.archiveScroll = 0;
+    // Films play from here and come back to this tab (the director restores
+    // the Archive state; archiveTab and the selection are left as they are).
+    if ((code === "Enter" || code === "Space") && (game.archiveTab || 0) === FILMS_TAB) {
+      const film = entries[game.archiveSelection || 0];
+      if (film) {
+        game.audio?.menuConfirm?.();
+        playFilm(game, film.key, { returnTo: "archive" });
+      }
+      return;
     }
     if (code === "KeyW" || code === "ArrowUp") {
       game.archiveSelection = Math.max(0, (game.archiveSelection || 0) - 1);
@@ -846,6 +694,7 @@ export function dispatchKeyPress(game, code, e) {
     if ((code === "Enter" || code === "Space") && !e?.repeat) {
       game.advanceCutsceneFrame();
     }
+    if (code === "KeyT" && !e?.repeat) game.toggleCutsceneAuto();
     if (code === "Escape") {
       const now = performance.now();
       if (now - game.lastEscTime < 200) return;
@@ -854,4 +703,21 @@ export function dispatchKeyPress(game, code, e) {
     }
     return;
   }
+}
+
+/**
+ * Keep a key the reel took from the page: main.js's listener, the focused
+ * menu button's Enter (on keydown) and Space (on keyup), once the skip has put
+ * the menu back under it. Browser shortcuts keep working.
+ */
+function swallowKey(e) {
+  e.stopImmediatePropagation();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  e.preventDefault();
+  const up = (u) => {
+    if (u.code !== e.code) return;
+    u.preventDefault();
+    window.removeEventListener("keyup", up, true);
+  };
+  window.addEventListener("keyup", up, true);
 }

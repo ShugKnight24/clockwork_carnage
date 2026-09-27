@@ -15,7 +15,8 @@ import {
   resetUnlockStore,
 } from "../../src/systems/unlocks.js";
 import { LOADOUT_CLASSES, ARMOR_STYLES, DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
-import { SYMBOLS, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
+import { SYMBOLS, FINISHES, BADGE_PRESETS, byId, indexOfId } from "../../src/data/badges.js";
+import { ACTS } from "../../src/data/campaign/acts.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 import { cloneLook } from "../../src/core/character-fields.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
@@ -143,12 +144,22 @@ describe("badge and accessory unlocks", () => {
     expect(unlockContext().campaignActsCleared).toBe(0);
   });
 
-  it("campaignActs counts defeated acts and a finished campaign counts as three", () => {
+  it("campaignActs counts defeated acts and a finished campaign counts as all four", () => {
     const act1 = indexOfId(SYMBOLS, "act1");
     const act3 = indexOfId(SYMBOLS, "act3");
+    const act4 = indexOfId(SYMBOLS, "act4");
     expect(unlockState("badge.symbol", act1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
     expect(unlockState("badge.symbol", act3, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(false);
-    expect(unlockState("badge.symbol", act3, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", act4, unlockContext({ stats: { campaignActsCleared: 3 } })).unlocked).toBe(false);
+    expect(unlockState("badge.symbol", act4, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
+  });
+
+  it("every act of the campaign has an emblem and a library preset", () => {
+    for (const a of ACTS) {
+      const sym = byId(SYMBOLS, `act${a.id}`);
+      expect(sym?.unlock).toMatchObject({ type: "campaignActs", count: a.id });
+      expect(byId(BADGE_PRESETS, `p_act${a.id}`)?.unlock).toMatchObject({ type: "campaignActs", count: a.id });
+    }
   });
 
   it("finishes: insignia free, holo needs the campaign", () => {

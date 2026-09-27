@@ -661,13 +661,16 @@ const _caught = [];
 const _caughtFade = [];
 const _caughtView = { r: null, planeMul: 1, yShift: 0 };
 
+/** The campaign's Chronos, or a reel's scripted ones (they draw the same). */
+const chronoShown = (game) => game.mode === "campaign" || !!game.chronoPowers?.scripted;
+
 export function renderChronoWorld(game, r, planeMul, yShift) {
   _caught.length = 0;
   _caughtFade.length = 0;
   _caughtView.r = r;
   _caughtView.planeMul = planeMul;
   _caughtView.yShift = yShift;
-  if (game.mode !== "campaign" || !game.map?.grid) return;
+  if (!chronoShown(game) || !game.map?.grid) return;
   const ctx = r.ctx;
   const cp = game.chronoPowers;
   drawHazards(ctx, r, game, planeMul, yShift);
@@ -693,7 +696,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
 
 /** Screen-space Chronos: stasis desaturation, a crimson edge at high Resonance, the rewind flash. */
 export function renderChronoScreen(game, ctx, w, h) {
-  if (game.mode !== "campaign") return;
+  if (!chronoShown(game)) return;
   const hz = game.chronoHazards;
   const cp = game.chronoPowers;
   if (hz?.inStasis) {

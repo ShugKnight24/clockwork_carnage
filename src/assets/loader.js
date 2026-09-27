@@ -18,8 +18,10 @@ let manifestData = null;
 // Vite serves the app under `base`, which is /clockwork_carnage/ in production.
 // A document-relative "assets/..." only happens to resolve when the page URL
 // ends in a slash; anywhere else it escapes the base and 404s, and the caller
-// silently falls back to procedural art.
-const BASE = import.meta.env?.BASE_URL ?? "/";
+// silently falls back to procedural art. GitHub Pages serves the unbundled
+// source with no Vite, so `import.meta.env` is undefined there: resolve the
+// repo root from this module's own URL (src/assets/loader.js) instead.
+const BASE = import.meta.env?.BASE_URL ?? new URL("../../", import.meta.url).pathname;
 
 /** Resolve a manifest-relative asset path against the deployed base. */
 function assetUrl(path) {

@@ -27,6 +27,7 @@ import {
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawChronoCluster } from "./chrono-hud.js";
+import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -405,6 +406,17 @@ function _portraitState(game) {
 }
 
 /**
+ * The settings deck shows the HUD behind it so HUD settings change visibly:
+ * the paused match's own HUD, or the menu showcase's fresh player. Not over
+ * the Forge (its pause draws no FPS HUD) or a menu with nothing loaded yet.
+ */
+function hudBehindDeck(game) {
+  if (game.state !== "settings") return false;
+  if (game.mode === "showcase") return true;
+  return game._settingsReturnTo !== "menu" && game.pausedFromState !== "builder" && !!game.map?.grid;
+}
+
+/**
  * @param {object} game - Game instance (read-only access)
  */
 export function renderHUD(game) {
@@ -413,7 +425,7 @@ const w = game.hudW;
 const h = game.hudH;
 ctx.clearRect(0, 0, w, h);
 
-if (game.state !== "playing" && game.state !== "paused")
+if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
   return;
 
 _checkDirty(game);
@@ -1557,7 +1569,7 @@ if (showChrono) {
   ctx.fillText(`${Math.floor(chronoPct * 100)}%`, chronoBarX + chronoBarW * 0.75, chronoBarY + chronoBarH / 2 + 4);
   ctx.fillStyle = "rgba(150,120,200,0.3)";
   ctx.font = "bold 9px monospace";
-  ctx.fillText("[HOLD Q]", chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
+  ctx.fillText(`[HOLD ${glyph(game, "chronoShift").text}]`, chronoBarX + chronoBarW - 15, chronoBarY + chronoBarH / 2 + 4);
 }
 
 // Chronos: the Resonance eye and the unlocked powers, on the bars' row.
@@ -1943,7 +1955,13 @@ if (game._meltdownUpgradeChoices) {
 game.renderAriaComms(ctx, w, h);
 }
 
-/** Meltdown upgrade selection overlay — 3 choices side by side */
+/**
+ * Meltdown upgrade selection overlay — 3 choices side by side. Exported for
+ * the reels' Meltdown shot (src/cinematic/scenes/meltdown.js).
+ */
+export function renderMeltdownUpgradeOverlay(game, ctx, w, h) {
+  _renderMeltdownUpgradeOverlay(game, ctx, w, h);
+}
 
 function _renderMeltdownUpgradeOverlay(game, ctx, w, h) {
 const choices = game._meltdownUpgradeChoices;
@@ -1958,9 +1976,16 @@ ctx.fillStyle = "#ffaa00";
 ctx.font = "bold 28px monospace";
 ctx.textAlign = "center";
 ctx.fillText("SYSTEM UPGRADE", w / 2, h * 0.22);
-ctx.fillStyle = "rgba(255,255,255,0.5)";
-ctx.font = "14px monospace";
-ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
+const device = activeDevice(game);
+if (device === "touch") {
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.font = "14px monospace";
+  ctx.fillText("Press 1, 2, or 3 to select — or use Arrow Keys + Enter", w / 2, h * 0.22 + 30);
+} else {
+  drawPrompt(ctx, w / 2, h * 0.22 + 25, [["pick", "select"], ["arrowsH", "move"], ["confirm", "confirm"]], {
+    input: game, size: 12, font: "14px monospace", color: "rgba(255,255,255,0.6)", align: "center", look: "legacy",
+  });
+}
 
 // Cards
 const cardW = Math.min(200, (w - 80) / 3);
@@ -1988,11 +2013,13 @@ for (let i = 0; i < choices.length; i++) {
   ctx.roundRect(cx, startY, cardW, cardH, 8);
   ctx.stroke();
 
-  // Key number
+  // Key number (the pad has no number keys); its colour also tints the icon.
   ctx.fillStyle = selected ? "#00ccff" : "rgba(255,255,255,0.4)";
-  ctx.font = "bold 12px monospace";
-  ctx.textAlign = "left";
-  ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
+  if (device !== "gamepad") {
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`[${i + 1}]`, cx + 10, startY + 20);
+  }
 
   // Icon
   ctx.font = "32px serif";

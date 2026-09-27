@@ -46,7 +46,7 @@ test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await openCreator(page);
-  for (const id of ["gear", "badge", "suit"]) {
+  for (const id of ["gear", "badge", "suit", "face"]) {
     await tab(page, id).click();
     await page.waitForTimeout(200);
   }

@@ -64,6 +64,27 @@ describe("adaptive quality", () => {
     expect(q.renderScale).toBeLessThanOrEqual(0.7);
   });
 
+  it("recovers resolution once frames are smooth again", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55, maxScale: 1 });
+    q.renderScale = q.stableScale = 0.8;
+    let resized = false;
+    for (let t = 10_000; t < 60_000 && !resized; t += 1500) {
+      feed(q, [120]);
+      resized = q.adjust(t);
+    }
+    expect(resized).toBe(true);
+    expect(q.renderScale).toBeGreaterThanOrEqual(0.86);
+  });
+
+  it("treats a lone long stall as a pause, not a slow machine", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55 });
+    feed(q, [120]);
+    q.recordFPS(2); // a 500 ms level load
+    expect(q.history.length).toBe(0);
+    expect(q.adjust(10_000)).toBe(false);
+    expect(q.renderScale).toBe(1);
+  });
+
   it("leaves a smooth run alone", () => {
     const q = new AdaptiveQuality({ targetFPS: 55 });
     feed(q, [60]);

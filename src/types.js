@@ -11,7 +11,6 @@ export const GameState = {
   PLAYING: "playing",
   PAUSED: "paused",
   SETTINGS: "settings",
-  CONTROLS: "controls",
   UPGRADE: "upgrade",
   GAME_OVER: "gameOver",
   BUILDER: "builder",
@@ -26,4 +25,6 @@ export const GameState = {
   ARCHIVE: "archive",
   STATS: "stats",
   HUD_EDITOR: "hudEditor",
+  // A reel (src/cinematic/director.js): the title attract loop, Watch Trailer, the lore video.
+  CINEMATIC: "cinematic",
 };

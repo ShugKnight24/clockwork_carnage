@@ -282,7 +282,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Press ENTER to continue — or any key to skip.",
+          text: "{ADVANCE} to continue — {SKIP} to skip.",
           delay: 6900,
           color: "#8899aa",
           size: 14,
@@ -413,7 +413,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "Press ENTER to continue, or ESC to skip.",
+          text: "{ADVANCE} to continue, {SKIP} to skip.",
           delay: 4500,
           color: "#8899aa",
           size: 14,

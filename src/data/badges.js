@@ -34,9 +34,13 @@ export const SYMBOLS = [
   { id: "rank5", name: "Captain", set: "rank", unlock: levels(8, "Clear 8 campaign levels") },
   { id: "rank6", name: "Commander", set: "rank", unlock: achievement("campaignClear", "Finish the campaign") },
   // Act emblems.
-  { id: "act1", name: "First Incursion", set: "act", unlock: acts(1, "Defeat the Paradox Lord in Act 1") },
-  { id: "act2", name: "Second Incursion", set: "act", unlock: acts(2, "Defeat the Paradox Lord in Act 2") },
-  { id: "act3", name: "Final Incursion", set: "act", unlock: acts(3, "Defeat the Paradox Lord in Act 3") },
+  // One per act of the four-act campaign, named for the fight that ends it.
+  // Act II ends on the Hound, not the Lord; Acts III and IV are his second
+  // incursion and final form.
+  { id: "act1", name: "First Incursion", set: "act", unlock: acts(1, "Defeat the Paradox Lord in Act I") },
+  { id: "act2", name: "Nobody Inside", set: "act", unlock: acts(2, "Bring down the Hound in Act II") },
+  { id: "act3", name: "Second Incursion", set: "act", unlock: acts(3, "Defeat the Paradox Lord in Act III") },
+  { id: "act4", name: "Final Incursion", set: "act", unlock: acts(4, "Defeat the Paradox Lord's final form in Act IV") },
   // Earned from achievements.
   { id: "lordslayer", name: "Lord Slayer", set: "earned", unlock: achievement("lordSlayer", "Earn Lord Slayer") },
   { id: "untouchable", name: "Untouchable", set: "earned", unlock: achievement("untouchable", "Earn Untouchable") },
@@ -87,7 +91,7 @@ export const FINISHES = [
   { id: "auto", name: "Auto (match armour)" },
   { id: "insignia", name: "Insignia" },
   { id: "stencil", name: "Stencil", unlock: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" } },
-  { id: "patch", name: "Field Patch", unlock: acts(1, "Defeat the Paradox Lord in Act 1") },
+  { id: "patch", name: "Field Patch", unlock: acts(1, "Defeat the Paradox Lord in Act I") },
   { id: "holo", name: "Holo", unlock: achievement("campaignClear", "Finish the campaign") },
 ];
 
@@ -131,9 +135,10 @@ export const BADGE_PRESETS = [
   preset("p_rank3", "Sergeant", "rank", layer("rank3", "tag", "olive", "brass"), "auto", levels(4, "Clear 4 campaign levels")),
   preset("p_rank5", "Captain", "rank", layer("rank5", "shield", "navy", "gold"), "auto", levels(8, "Clear 8 campaign levels")),
   preset("p_rank6", "Commander", "rank", layer("rank6", "shield", "crimson", "gold"), "insignia", achievement("campaignClear", "Finish the campaign")),
-  preset("p_act1", "First Incursion", "act", layer("act1", "cog", "teal", "brass"), "auto", acts(1, "Defeat the Paradox Lord in Act 1")),
-  preset("p_act2", "Second Incursion", "act", layer("act2", "cog", "oxblood", "steel"), "auto", acts(2, "Defeat the Paradox Lord in Act 2")),
-  preset("p_act3", "Final Incursion", "act", layer("act3", "cog", "black", "gold"), "auto", acts(3, "Defeat the Paradox Lord in Act 3")),
+  preset("p_act1", "First Incursion", "act", layer("act1", "cog", "teal", "brass"), "auto", acts(1, "Defeat the Paradox Lord in Act I")),
+  preset("p_act2", "Nobody Inside", "act", layer("act2", "cog", "oxblood", "steel"), "auto", acts(2, "Bring down the Hound in Act II")),
+  preset("p_act3", "Second Incursion", "act", layer("act3", "cog", "navy", "steel"), "auto", acts(3, "Defeat the Paradox Lord in Act III")),
+  preset("p_act4", "Final Incursion", "act", layer("act4", "cog", "black", "gold"), "auto", acts(4, "Defeat the Paradox Lord's final form in Act IV")),
   preset("p_lordslayer", "Lord Slayer", "earned", layer("lordslayer", "shield", "crimson", "gold"), "insignia", achievement("lordSlayer", "Earn Lord Slayer")),
   preset("p_untouchable", "Untouchable", "earned", layer("untouchable", "disc", "ivory", "steel"), "insignia", achievement("untouchable", "Earn Untouchable")),
   preset("p_centurion", "Centurion", "earned", layer("centurion", "hex", "oxblood", "brass"), "insignia", achievement("centurion", "Earn Centurion")),

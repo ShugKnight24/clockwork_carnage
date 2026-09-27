@@ -42,7 +42,8 @@ export class HudEditor {
   
   stop() {
     this.save();
-    this.game.state = GameState.SETTINGS;
+    // Back into the deck where Edit Custom HUD lives, keeping its opener.
+    this.game.openSettings({ returnTo: this.game._settingsReturnTo ?? "pause", section: "access" });
     this.dragging = null;
   }
   

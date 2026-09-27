@@ -23,26 +23,39 @@ let totalBytes = 0;
 // callers draw. Baking rasterises the SVG, so it is budgeted per frame; until
 // a layer's turn comes, the <img> is returned and still draws correctly.
 const BAKE_BUDGET_PX = 1.5e6; // per animation frame
+// Rasterising a filter-heavy SVG costs far more per pixel than a flat one
+// (a 50 ms bake was measured inside the pixel budget), so time caps it too.
+const BAKE_MS_PER_FRAME = 6;
 let bakeLeft = BAKE_BUDGET_PX;
+let bakeMsLeft = BAKE_MS_PER_FRAME;
 let bakeReset = false;
-function bake(entry) {
-  const img = entry.img;
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  if (typeof document === "undefined" || !w || !h) return;
-  if (w * h > bakeLeft) return;
-  bakeLeft -= w * h;
+/** Take `px` from this frame's raster budget; false if it does not fit. */
+function spendBake(px) {
+  if (px > bakeLeft || bakeMsLeft <= 0) return false;
+  bakeLeft -= px;
   if (!bakeReset && typeof requestAnimationFrame === "function") {
     bakeReset = true;
     requestAnimationFrame(() => {
       bakeReset = false;
       bakeLeft = BAKE_BUDGET_PX;
+      bakeMsLeft = BAKE_MS_PER_FRAME;
     });
   }
+  return true;
+}
+
+function bake(entry) {
+  const img = entry.img;
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (typeof document === "undefined" || !w || !h) return;
+  if (!spendBake(w * h)) return;
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
+  const t = performance.now();
   c.getContext("2d").drawImage(img, 0, 0);
+  bakeMsLeft -= performance.now() - t;
   entry.img = c;
   entry.baked = true;
   img.src = "";
@@ -54,8 +67,14 @@ function bake(entry) {
 // for 150+ ms when its first drones spawned. Prefetches wait in this queue and
 // start a few per frame; layers drawn this frame start at once.
 const DECODES_PER_FRAME = 3;
+// Parsing a layer's SVG takes 1-70 ms of main thread (measured, Modern's
+// lighting filters are the slow ones), so the count alone let three big ones
+// stack into a 100+ ms frame. Queued decodes also stop once this much of the
+// frame has gone to decoding; the one that crosses it still finishes.
+const DECODE_MS_PER_FRAME = 4;
 const queue = [];
 let decodesLeft = DECODES_PER_FRAME;
+let decodeMsLeft = DECODE_MS_PER_FRAME;
 let decodeReset = false;
 
 function startDecode(entry) {
@@ -74,14 +93,23 @@ function pumpDecodes() {
     requestAnimationFrame(() => {
       decodeReset = false;
       decodesLeft = DECODES_PER_FRAME;
+      decodeMsLeft = DECODE_MS_PER_FRAME;
     });
   }
-  while (decodesLeft > 0 && queue.length) {
+  while (decodesLeft > 0 && decodeMsLeft > 0 && queue.length) {
     const entry = queue.shift();
     if (!entry.pending) continue; // started by a draw, or evicted
     decodesLeft--;
+    const t = performance.now();
     startDecode(entry);
+    decodeMsLeft -= performance.now() - t;
   }
+}
+
+/** Does any size of this layer already have a bitmap to show meanwhile? */
+function hasReady(buckets) {
+  for (const e of buckets.values()) if (e.ready) return true;
+  return false;
 }
 
 function evictIdle(now) {
@@ -103,6 +131,52 @@ function evictIdle(now) {
     if (!e.baked) e.img.src = "";
     else e.img.width = 0; // free the bitmap now rather than at GC
   }
+}
+
+/**
+ * A smaller bucket made from a larger one already baked, with a GPU
+ * downscale instead of a fresh SVG parse. Every new bucket used to re-parse
+ * and re-rasterise the layer's whole SVG on the main thread — 20-70 ms for a
+ * big model — so an enemy walking toward the player hitched at each
+ * half-octave. Shrinking goes in steps of at most 2x so thin lines survive.
+ * Returns null (decode as before) when no larger bitmap exists or the frame's
+ * pixel budget is spent.
+ */
+function deriveSmaller(buckets, bucket, box, now) {
+  if (typeof document === "undefined") return null;
+  let src = null;
+  let srcBucket = Infinity;
+  for (const [b, e] of buckets) {
+    if (b > bucket && b < srcBucket && e.ready && e.baked) {
+      src = e;
+      srcBucket = b;
+    }
+  }
+  if (!src) return null;
+  const k = Math.min(bucket, MAX_PX / box[2], MAX_PX / box[3]);
+  const pxW = Math.max(1, Math.round(box[2] * k));
+  const pxH = Math.max(1, Math.round(box[3] * k));
+  let img = src.img;
+  if (img.width < pxW || !spendBake(pxW * pxH)) return null;
+  while (img.width > pxW * 2) {
+    const half = document.createElement("canvas");
+    half.width = Math.ceil(img.width / 2);
+    half.height = Math.ceil(img.height / 2);
+    const hg = half.getContext("2d");
+    hg.imageSmoothingQuality = "high";
+    hg.drawImage(img, 0, 0, half.width, half.height);
+    img = half;
+  }
+  const c = document.createElement("canvas");
+  c.width = pxW;
+  c.height = pxH;
+  const g = c.getContext("2d");
+  g.imageSmoothingQuality = "high";
+  g.drawImage(img, 0, 0, pxW, pxH);
+  const entry = { img: c, ready: true, failed: false, baked: true, bytes: pxW * pxH * 4, lastUsed: now, pending: null };
+  buckets.set(bucket, entry);
+  totalBytes += entry.bytes;
+  return entry;
 }
 
 /** Round a draw scale up to the next half-octave so bitmaps are never upscaled. */
@@ -144,6 +218,7 @@ export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
     layers.set(id, buckets);
   }
   let entry = buckets.get(bucket);
+  if (!entry) entry = deriveSmaller(buckets, bucket, box, now);
   if (!entry) {
     const k = Math.min(bucket, MAX_PX / box[2], MAX_PX / box[3]);
     const pxW = Math.max(1, Math.round(box[2] * k));
@@ -155,11 +230,18 @@ export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
     img.decoding = "async";
     entry.pending = () => buildDocument(box, defs, markup, pxW, pxH);
     if (prefetch) queue.push(entry);
-    else startDecode(entry);
+    else if (hasReady(buckets)) {
+      // Another size can stand in: jump the queue, but inside the budget.
+      queue.unshift(entry);
+      pumpDecodes();
+    } else startDecode(entry); // nothing to draw at all yet
     evictIdle(now);
   } else if (entry.pending && !prefetch) {
-    // Drawn now: jump the prefetch queue.
-    startDecode(entry);
+    // Drawn now: jump the prefetch queue (at once if nothing else can show).
+    if (hasReady(buckets)) {
+      queue.unshift(entry);
+      pumpDecodes();
+    } else startDecode(entry);
   }
   entry.lastUsed = now;
   if (entry.ready) {
@@ -184,10 +266,27 @@ export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
   return null;
 }
 
+/** True once this exact size of a layer is decoded and baked (drawing it costs a blit). */
+export function layerBaked(id, scale) {
+  const e = layers.get(id)?.get(scaleBucket(scale));
+  return !!(e && (e.baked || e.failed));
+}
+
 /** True once any bucket of a layer failed to decode (bad markup). */
 export function layerFailed(id) {
   for (const e of layers.get(id)?.values() ?? []) if (e.failed) return true;
   return false;
+}
+
+const releaseListeners = new Set();
+
+/**
+ * Run `fn` whenever the cache is released. Callers that keep their own
+ * references to returned bitmaps must drop them then: a released canvas is
+ * shrunk to 0x0, and drawImage throws on it.
+ */
+export function onRasterRelease(fn) {
+  releaseListeners.add(fn);
 }
 
 /**
@@ -207,4 +306,5 @@ export function releaseRasterCache() {
   layers.clear();
   queue.length = 0;
   totalBytes = 0;
+  for (const fn of releaseListeners) fn();
 }

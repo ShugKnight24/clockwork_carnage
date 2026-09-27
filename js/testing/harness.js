@@ -556,23 +556,22 @@ function runStateTransitions(game) {
     `SETTINGS → Escape → ${game.state}`,
   );
 
-  // Test: paused → controls
+  // Test: paused → controls opens the settings deck on its Controls section
   game.state = GameState.PAUSED;
   game.handleKeyPress("KeyC");
   r.assert(
-    game.state === GameState.CONTROLS,
-    "PAUSED → C → CONTROLS",
-    `PAUSED → C → ${game.state}`,
+    game.state === GameState.SETTINGS && game._settingsSection === "controls",
+    "PAUSED → C → SETTINGS (controls)",
+    `PAUSED → C → ${game.state} (${game._settingsSection})`,
   );
 
   // Test: controls → back to pause
-  game.state = GameState.CONTROLS;
   game.lastEscTime = 0;
   game.handleKeyPress("Escape");
   r.assert(
     game.state === GameState.PAUSED,
-    "CONTROLS → Escape → PAUSED",
-    `CONTROLS → Escape → ${game.state}`,
+    "SETTINGS (controls) → Escape → PAUSED",
+    `SETTINGS (controls) → Escape → ${game.state}`,
   );
 
   // Restore

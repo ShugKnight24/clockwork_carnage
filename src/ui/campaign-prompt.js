@@ -2,21 +2,24 @@
 
 import { isModernArt } from "../rendering/art-style.js";
 import { UI, drawBackdrop, drawTitle, drawCaption } from "./modern-ui-kit.js";
-import { drawModernMenu, drawModernKeyHints } from "./tutorial-ui.js";
+import { drawModernMenu, drawModernPrompt, menuItemsFor, MENU_FOOTER } from "./tutorial-ui.js";
+import { activeDevice, drawPrompt } from "./input-glyphs.js";
 
 const PROMPT_TITLE = "START CAMPAIGN";
 const PROMPT_SUBTITLE = "Start in the locker room, or deploy straight into Act 1?";
-const PROMPT_FOOTER = "W/S to navigate  \u00B7  ENTER to select  \u00B7  ESC to go back";
+const PROMPT_FOOTER = [...MENU_FOOTER, ["back", "to go back"]];
 const PROMPT_ITEMS = [
   { label: "PROLOGUE: LOCKER ROOM", key: "[1]", color: "#00ffcc", desc: "Suit up, learn the controls, answer the alarm" },
   { label: "SKIP TO ACT 1", key: "[2]", color: "#ff8844", desc: "Straight into the fire. No training wheels." },
 ];
 
-export function renderCampaignPrompt(ctx, w, h, selection = 0) {
+/** @param {object} [input] the game, for the device's key prompts (src/ui/input-glyphs.js) */
+export function renderCampaignPrompt(ctx, w, h, selection = 0, input = null) {
   const now = performance.now();
   const sel = selection;
+  const items = menuItemsFor(PROMPT_ITEMS, input);
   if (isModernArt()) {
-    renderModernCampaignPrompt(ctx, w, h, sel, now);
+    renderModernCampaignPrompt(ctx, w, h, sel, now, items, input);
     return;
   }
 
@@ -61,7 +64,7 @@ export function renderCampaignPrompt(ctx, w, h, selection = 0) {
   ctx.fillText(PROMPT_SUBTITLE, w / 2, titleY + 28);
 
   // Menu items
-  const menuItems = PROMPT_ITEMS;
+  const menuItems = items;
 
   const menuW = 380;
   const itemH = 56;
@@ -123,15 +126,16 @@ export function renderCampaignPrompt(ctx, w, h, selection = 0) {
   ctx.fillRect(0, h - barHeight, w, barHeight);
 
   // Bottom hint
-  ctx.fillStyle = "rgba(255,255,255,0.2)";
-  ctx.font = "11px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(PROMPT_FOOTER, w / 2, h - barHeight / 2 + 4);
+  if (activeDevice(input) !== "touch") {
+    drawPrompt(ctx, w / 2, h - barHeight / 2, PROMPT_FOOTER, {
+      input, size: 10, font: "11px monospace", color: "rgba(255,255,255,0.3)", align: "center", look: "legacy",
+    });
+  }
   ctx.textAlign = "left";
 }
 
 /** Modern layout: same menu geometry as legacy, kit plates and keycaps. */
-function renderModernCampaignPrompt(ctx, w, h, sel, now) {
+function renderModernCampaignPrompt(ctx, w, h, sel, now, items, input) {
   drawBackdrop(ctx, w, h, "steel");
   const compact = h < 500;
 
@@ -155,11 +159,11 @@ function renderModernCampaignPrompt(ctx, w, h, sel, now) {
   const layout = {
     menuW,
     itemH,
-    menuH: PROMPT_ITEMS.length * itemH + 16,
+    menuH: items.length * itemH + 16,
     mx: (w - menuW) / 2,
     my: h * 0.38,
   };
-  drawModernMenu(ctx, PROMPT_ITEMS, sel, now, layout, 26, 42);
-  drawModernKeyHints(ctx, w / 2, h - barHeight / 2, PROMPT_FOOTER, compact ? 8 : 10);
+  drawModernMenu(ctx, items, sel, now, layout, 26, 42);
+  if (activeDevice(input) !== "touch") drawModernPrompt(ctx, w / 2, h - barHeight / 2, PROMPT_FOOTER, input, compact ? 8 : 10);
   ctx.textAlign = "left";
 }

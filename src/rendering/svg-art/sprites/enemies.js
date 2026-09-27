@@ -26,7 +26,7 @@
  * the renderer can fall back to the procedural sprite for that frame.
  */
 
-import { getLayerImage } from "../raster.js";
+import { getLayerImage, layerBaked, onRasterRelease } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
 import { isRealisticArt } from "../../art-style.js";
 import {
@@ -142,8 +142,7 @@ function buildModelIn(type, real) {
   };
 }
 
-function modelFor(type) {
-  const real = isRealisticArt();
+function modelFor(type, real = isRealisticArt()) {
   const set = real ? realModels : models;
   let m = set.get(type);
   if (m === undefined) {
@@ -201,14 +200,17 @@ function evict() {
   }
 }
 
+const drawable = (c) => (c && c.width > 0 && c.height > 0 ? c : null);
+
 /** Canvas copy of a decoded layer: blitting an SVG <img> replays its vector picture every draw. */
 function layer(ref, pxPerUnit) {
   if (!ref) return null;
   const img = getLayerImage(ref.id, ref.box, ref.defs, ref.markup, capScale(ref.box, pxPerUnit));
-  if (!img) return lastBitmap.get(ref.id) || null;
+  if (!img) return drawable(lastBitmap.get(ref.id));
   // The raster cache now bakes decoded layers into canvases itself; use them
   // as they are rather than copying again.
   if (typeof HTMLCanvasElement !== "undefined" && img instanceof HTMLCanvasElement) {
+    if (!drawable(img)) return drawable(lastBitmap.get(ref.id));
     lastBitmap.set(ref.id, img);
     return img;
   }
@@ -216,7 +218,7 @@ function layer(ref, pxPerUnit) {
   if (c) {
     touch(img, c);
   } else {
-    if (copyBudget <= 0) return lastBitmap.get(ref.id) || null;
+    if (copyBudget <= 0) return drawable(lastBitmap.get(ref.id));
     copyBudget--;
     c = document.createElement("canvas");
     c.width = img.naturalWidth;
@@ -239,6 +241,71 @@ function warm(model, pxPerUnit) {
   warmed.add(key);
   for (const r of model.all) getLayerImage(r.id, r.box, r.defs, r.markup, capScale(r.box, pxPerUnit), true);
 }
+
+/**
+ * Decode and bake what an idle `enemy` draws (its variant's idle body and
+ * glow, the aura, the variant's fx) at each on-screen half-height in
+ * `halfHeights`, before it is ever shown. Call once a frame until it returns
+ * true. The largest size decodes first; each smaller one waits for it and
+ * is then a GPU downscale of it (raster.js deriveSmaller), not another parse.
+ */
+export function prefetchIdleEnemy(ctx, enemy, halfHeights, real = isRealisticArt()) {
+  if (typeof Image === "undefined") return true;
+  const model = modelFor(enemy.enemyType, real);
+  if (!model || model.boss) return true;
+  const variant = model.variants[motionOf(enemy, 0, model).variant];
+  const refs = [variant.poses.idle.body, variant.poses.idle.glow, model.aura, ...variant.fx.map((f) => f.ref)].filter(Boolean);
+  const scales = [...halfHeights].sort((a, b) => b - a).map((hh) => pixelScale(ctx) * (hh / 100) * model.scale);
+  let ready = true;
+  for (const r of refs) {
+    for (const px of scales) {
+      const scale = capScale(r.box, px);
+      getLayerImage(r.id, r.box, r.defs, r.markup, scale, true);
+      if (!layerBaked(r.id, scale)) {
+        ready = false;
+        break;
+      }
+    }
+  }
+  return ready;
+}
+
+/**
+ * prefetchIdleEnemy for every layer of an enemy type's model (all variants,
+ * every pose, fx and aura), for an enemy that will fight on screen, in the
+ * Modern (`real` false) or Realistic set whichever is showing: a reel warms
+ * the set a shot flips to before the flip. Call once a frame until true.
+ * `max` caps how many layers are decoding at once, to spread the work.
+ */
+export function prefetchEnemyModel(ctx, type, halfHeights, real = isRealisticArt(), max = Infinity) {
+  if (typeof Image === "undefined") return true;
+  const model = modelFor(type, real);
+  if (!model || model.boss) return true;
+  const scales = [...halfHeights].sort((a, b) => b - a).map((hh) => pixelScale(ctx) * (hh / 100) * model.scale);
+  let busy = 0;
+  for (const r of model.all) {
+    for (const px of scales) {
+      const scale = capScale(r.box, px);
+      getLayerImage(r.id, r.box, r.defs, r.markup, scale, true);
+      if (!layerBaked(r.id, scale)) {
+        busy++;
+        break;
+      }
+    }
+    if (busy >= max) break;
+  }
+  return busy === 0;
+}
+
+// The raster cache frees its baked canvases (0x0) when Legacy takes over.
+// Holding on to them here made the next Modern frame fall back to a 0x0
+// lastBitmap while the layer re-decoded, and drawImage throws on those.
+onRasterRelease(() => {
+  bitmaps.clear();
+  lastBitmap.clear();
+  lruPx = 0;
+  warmed.clear();
+});
 
 /* ── Tinted copies (hit flash, elite trim, dissolve edge) ───────────────── */
 
@@ -266,24 +333,7 @@ function tintOf(src, color = "#ffffff") {
   return c;
 }
 
-let spotCanvas = null;
-let scratch = null;
 let sparkCanvas = null;
-
-function spot() {
-  if (!spotCanvas) {
-    spotCanvas = document.createElement("canvas");
-    spotCanvas.width = spotCanvas.height = 64;
-    const g = spotCanvas.getContext("2d");
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.35, "rgba(255,250,235,.75)");
-    grad.addColorStop(1, "rgba(255,240,220,0)");
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-  }
-  return spotCanvas;
-}
 
 function spark() {
   if (!sparkCanvas) {
@@ -447,7 +497,9 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
   }
   const u = halfH / 100;
   const px = pixelScale(ctx) * u * model.scale;
-  warm(model, px);
+  // The menu showcase's enemies only ever idle; prefetchIdleEnemy decoded
+  // what they draw, and every other pose would only cost decodes on screen.
+  if (!enemy.showcase) warm(model, px);
   const m = motionOf(enemy, time, model);
   const newHit = m.hitAt === time;
   updateBlock(enemy, m, model, time, camRightX, camRightY, newHit);
@@ -491,7 +543,8 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
 
 /* ── Drawing ────────────────────────────────────────────────────────────── */
 
-const drawBox = (ctx, img, box) => ctx.drawImage(img, box[0], box[1], box[2], box[3]);
+// A 0x0 canvas makes drawImage throw, which would fail the whole frame.
+const drawBox = (ctx, img, box) => img.width > 0 && img.height > 0 && ctx.drawImage(img, box[0], box[1], box[2], box[3]);
 
 /** Transform for a secondary-motion layer; returns its alpha multiplier. */
 function applyFxAnim(ctx, l, time, ph) {
@@ -555,27 +608,33 @@ function impactPoint(ctx, box) {
 }
 
 /** White flash with a hot spot on the side the shot landed. */
+// Nested discs for the impact hot spot: [radius fraction, alpha]. They sum to
+// full strength at the centre and step down towards the rim.
+const HOT_RINGS = [[1, 0.2], [0.6, 0.3], [0.3, 0.5]];
+
 function drawHitFlash(ctx, body, box, impact, k, alpha) {
-  ctx.globalAlpha = alpha * (0.25 + 0.3 * k);
-  drawBox(ctx, tintOf(body), box);
+  // A light whole-body wash; the hot spot at the impact carries the hit. At
+  // over half strength the wash blanked the figure to a white cut-out, and
+  // under sustained fire it never got its detail back.
+  const tint = tintOf(body);
+  ctx.globalAlpha = alpha * (0.1 + 0.22 * k);
+  drawBox(ctx, tint, box);
   if (!impact) return;
-  if (!scratch) scratch = document.createElement("canvas");
-  if (scratch.width < body.width || scratch.height < body.height) {
-    scratch.width = Math.max(scratch.width, body.width);
-    scratch.height = Math.max(scratch.height, body.height);
-  }
-  const g = scratch.getContext("2d");
-  g.globalCompositeOperation = "source-over";
-  g.clearRect(0, 0, body.width, body.height);
-  const sx = ((impact[0] - box[0]) / box[2]) * body.width;
-  const sy = ((impact[1] - box[1]) / box[3]) * body.height;
-  const r = body.width * 0.42;
-  g.drawImage(spot(), sx - r, sy - r, r * 2, r * 2);
-  g.globalCompositeOperation = "destination-in";
-  g.drawImage(body, 0, 0);
+  // The hot spot is the cached white silhouette again, added inside discs
+  // around the impact. It used to be masked in one shared scratch canvas, and
+  // each reuse flushed the GPU: a spread shot into a crowd stalled the frame
+  // once per enemy hit.
+  const r = box[2] * 0.42;
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = alpha * k;
-  ctx.drawImage(scratch, 0, 0, body.width, body.height, box[0], box[1], box[2], box[3]);
+  for (const [f, a] of HOT_RINGS) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(impact[0], impact[1], r * f, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.globalAlpha = alpha * k * a;
+    drawBox(ctx, tint, box);
+    ctx.restore();
+  }
   ctx.globalCompositeOperation = "source-over";
 }
 

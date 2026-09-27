@@ -4,7 +4,7 @@ import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
-import { preloadShowroom } from "../src/rendering/render-pipeline.js";
+import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
@@ -14,10 +14,17 @@ import {
   frameCapFor,
   qualityTargetFPS,
 } from "../src/systems/frame-pacer.js";
+import { playReel, stepFixed, directorState } from "../src/cinematic/director.js";
+import { beatsToSec, reelDuration } from "../src/cinematic/timeline.js";
+import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
+import { playLoreThen, filmById } from "../src/cinematic/films.js";
+import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
-const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam;
+// ?bench runs the scripted benchmark (js/testing/bench.js) once the bridge loads.
+const benchParam = new URLSearchParams(window.location.search).has("bench");
+const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam || benchParam;
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -68,11 +75,8 @@ initAnalytics();
 const versionLabel = document.getElementById("versionLabel");
 if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
 
-// Update start prompt for touch devices
-if (primaryTouch) {
-  const startPrompt = titleScreen.querySelector(".start-prompt");
-  if (startPrompt) startPrompt.textContent = "[ TAP TO START ]";
-}
+// The start prompt's keyboard / pad / touch wording is picked by CSS on
+// html[data-input] (src/ui/input-glyphs.js).
 
 // Track native (CSS) dimensions for adaptive resolution
 let nativeW = 0, nativeH = 0;
@@ -206,11 +210,12 @@ document.getElementById("btnCampaign").addEventListener("click", () => {
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  // Order: Creator → Flipbook → Prologue prompt (locker room or skip) → Level 1
+  // Order: Creator → lore video (first new campaign only) → Flipbook →
+  // Prologue prompt (locker room or skip) → Level 1
   playCreatorThen(() => {
     // Every new campaign offers the locker-room prologue (default choice) so
     // the station training and its narrative stay reachable after the first run.
-    playIntroFlipbookThen(() => game.showCampaignPrompt());
+    playLoreThen(game, () => playIntroFlipbookThen(() => game.showCampaignPrompt()));
   });
 });
 
@@ -292,11 +297,80 @@ document.getElementById("btnSettings").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
-  game.settingsSelection = 0;
-  game.settingsScroll = 0;
-  game.state = GameState.SETTINGS;
-  game._settingsReturnToMenu = true;
+  game.openSettings({ returnTo: "menu" });
 });
+
+// Watch Trailer: the sizzle reel with sound; any input (or its end) comes
+// back to mode select with this button focused.
+document.getElementById("btnTrailer").addEventListener("click", () => {
+  initAudio();
+  game.audio.menuConfirm();
+  document.getElementById("btnTrailer").focus({ preventScroll: true });
+  playReel(game, SIZZLE, { returnTo: "menu" });
+});
+
+// Left alone on the title, the sizzle reel plays as an attract loop.
+const attract = createAttract(game, {
+  busy: () => titleBusy(game, document, { deckLoading: settingsDeckLoading }),
+  start: () => startAttract(game),
+});
+for (const type of ["keydown", "pointerdown", "pointermove", "wheel", "touchstart"]) {
+  window.addEventListener(type, attract.poke, { capture: true, passive: true });
+}
+
+// ?record=<reelId>: scripts/reel/record.mjs exports a film. ccReel.start()
+// plays it on the director's fixed clock: ccReel.step() advances exactly
+// 1/60 s and ccReel.frame() returns the game and HUD canvases composited at
+// 1920x1080. With &audio=1 the film has sound, and ccReel.tap() is the
+// master bus for MediaRecorder (the recorder then steps in time with the
+// audio clock).
+const recordParam = new URLSearchParams(window.location.search).get("record");
+if (recordParam) startRecording(recordParam);
+
+function startRecording(id) {
+  const film = filmById(id);
+  if (!film) {
+    console.error(`[Clockwork Carnage] ?record: no film "${id}"`);
+    return;
+  }
+  const withAudio = new URLSearchParams(window.location.search).has("audio");
+  const reel = film.reel;
+  // The poster: halfway through the closing shot (the logo card).
+  const last = reel.shots[reel.shots.length - 1];
+  const out = document.createElement("canvas");
+  out.width = 1920;
+  out.height = 1080;
+  const octx = out.getContext("2d");
+  const rec = { done: false };
+  titleScreen.classList.add("hidden");
+  if (withAudio) initAudio();
+  window.ccReel = {
+    id,
+    duration: reelDuration(reel),
+    posterAt: beatsToSec(reel, last.at + last.len / 2),
+    start() {
+      rec.finished ??= playReel(game, reel, { returnTo: "title", clock: "fixed", muted: !withAudio }).then(() => (rec.done = true));
+      return rec.finished;
+    },
+    get done() {
+      return rec.done;
+    },
+    state: () => directorState(game),
+    step: () => stepFixed(game),
+    // Render and read back in one task: a WebGL canvas's drawing buffer is
+    // only guaranteed until the browser composites it.
+    frame(type = "image/png", q) {
+      game.render();
+      octx.fillStyle = "#000";
+      octx.fillRect(0, 0, out.width, out.height);
+      octx.drawImage(gameCanvas, 0, 0, out.width, out.height);
+      octx.drawImage(hudCanvas, 0, 0, out.width, out.height);
+      return out.toDataURL(type, q);
+    },
+    tap: () => game.audio.recordTap(),
+    audioTime: () => game.audio.ctx?.currentTime ?? null,
+  };
+}
 
 // Expose dev flag toggle on window for console access
 window.ccDevTutorial = (on) => {
@@ -464,6 +538,8 @@ document.addEventListener("keydown", (e) => {
       document.getElementById("btnArchive").click();
     } else if (e.code === "Digit9") {
       document.getElementById("btnSettings").click();
+    } else if (e.code === "Digit0") {
+      document.getElementById("btnTrailer").click();
     } else if (e.code === "Escape") {
       document.getElementById("btnBack").click();
     } else if (
@@ -524,7 +600,9 @@ function gameLoop(timestamp) {
   try {
     const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
     game.update(timestamp);
-    const cap = frameCapFor(game.settings);
+    attract.tick();
+    // The attract loop runs unattended on the title: 30 fps is plenty.
+    const cap = attractFrameCap(game, frameCapFor(game.settings));
     if (!pacer.shouldRender(timestamp, cap)) {
       _errCount = 0;
       requestAnimationFrame(gameLoop);
@@ -544,6 +622,8 @@ function gameLoop(timestamp) {
         titleScreen.classList.add("hidden");
         modeSelect.classList.remove("hidden");
         updateContinueButtons();
+        // No render runs on the menu to put the deck away (frame-error recovery).
+        game.settingsDeck?.sync(false);
         gameCanvas.style.display = "none";
         hudCanvas.style.display = "none";
       } else {
@@ -649,9 +729,13 @@ window.ccProfiler = () => game.profiler.getSnapshot();
 
 if (devToolsEnabled) {
   // Expose test runner on window for console access.
-  const testingRoot = `${location.origin}${import.meta.env?.BASE_URL ?? "/"}js/testing/`;
+  // Unbundled (GitHub Pages) has no import.meta.env; js/testing/ sits next to this module.
+  const testingRoot = import.meta.env?.BASE_URL
+    ? `${location.origin}${import.meta.env.BASE_URL}js/testing/`
+    : new URL("./testing/", import.meta.url).href;
   const debugPath = `${testingRoot}harness.js`;
   const bridgePath = `${testingRoot}debug-bridge.js`;
+  const benchPath = `${testingRoot}bench.js`;
   const telemetryPath = `${testingRoot}telemetry.js`;
 
   import(/* @vite-ignore */ debugPath)
@@ -666,10 +750,28 @@ if (devToolsEnabled) {
   import(/* @vite-ignore */ bridgePath)
     .then((mod) => {
       window.ccDebug = mod.createDebugBridge(game);
+      if (benchParam) startBench();
     })
     .catch(() => {
       /* debug bridge not available — skip */
     });
+
+  function startBench() {
+    const q = new URLSearchParams(window.location.search);
+    const art = q.has("art") ? Number(q.get("art")) : null;
+    import(/* @vite-ignore */ benchPath).then(async (bench) => {
+      const panel = bench.showBenchPanel();
+      try {
+        const report = await bench.runBench(window.ccDebug, game, { fixed: q.has("fixed"), art, onStatus: panel.status });
+        window.ccBenchResult = report;
+        console.info("[bench]", JSON.stringify(report));
+        panel.result(report);
+      } catch (err) {
+        window.ccBenchResult = { error: String(err?.stack ?? err) };
+        panel.error(err);
+      }
+    });
+  }
 
   // Expose telemetry collector for session data capture.
   import(/* @vite-ignore */ telemetryPath)
@@ -681,6 +783,27 @@ if (devToolsEnabled) {
       /* telemetry not available — skip */
     });
 }
+
+// GitHub Pages serves the source unbundled (~200 modules at boot), so a mode's
+// first dynamic import() would fetch its whole module graph mid-session — a
+// hitch on the first cutscene, Meltdown run or Forge visit that the local dev
+// server never shows. Once the title is idle, load them one after another so
+// those imports resolve from the module map. Module loading only: nothing runs
+// until the game asks for it. The Modern floor shader compiles here too.
+// Literal import() calls, so a bundler maps each to its chunk.
+const warmLazyModules = () =>
+  [
+    async () => isModernArt() && game.renderer?.glRenderer?.precompile?.(),
+    () => import("./cutscene.js"),
+    () => import("./meltdown.js"),
+    () => import("../src/rendering/voxel/voxel-renderer.js"),
+    () => import("./forge.js"),
+  ].reduce((chain, load) => chain.then(() => load().catch(() => {})), Promise.resolve());
+(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 3000)))(warmLazyModules, { timeout: 8000 });
+
+// Settings is one click from the menu, so its deck mounts as soon as the
+// title is idle rather than waiting behind the warm-up chain above.
+(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 200)))(() => preloadSettingsDeck(game), { timeout: 2000 });
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);

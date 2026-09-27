@@ -18,7 +18,7 @@ describe("badge tables", () => {
     expect(bySet("classic")).toBe(7);
     expect(bySet("faction")).toBe(8);
     expect(bySet("rank")).toBe(6);
-    expect(bySet("act")).toBe(3);
+    expect(bySet("act")).toBe(4);
     expect(bySet("earned")).toBeGreaterThanOrEqual(6);
     expect(ids(FRAMES)).toEqual(["disc", "shield", "hex", "chevron", "tag", "cog"]);
     expect(ids(METALS)).toEqual(["brass", "steel", "blackened", "gold"]);

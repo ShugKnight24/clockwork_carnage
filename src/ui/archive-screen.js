@@ -1,10 +1,12 @@
 /**
- * Archive screen — reads the two collections the ArchiveSystem tracks.
+ * Archive screen — reads the two collections the ArchiveSystem tracks, and
+ * the films (src/cinematic/films.js) for replay.
  *
- * Two tabs share one screen because they are the same kind of thing from the
+ * The tabs share one screen because they are the same kind of thing from the
  * player's side: records you earn by playing. Left column lists entries, right
  * pane shows the selected one. Locked entries stay listed but redacted, so the
- * player can see how much is left without being told what it is.
+ * player can see how much is left without being told what it is. Films are
+ * always listed; confirm plays the selected one and comes back to this tab.
  */
 import { BESTIARY } from "../data/bestiary.js";
 import { MEMORY_FRAGMENTS } from "../data/memory-fragments.js";
@@ -19,8 +21,22 @@ import {
   drawCaption,
   drawSectionHeader,
 } from "./modern-ui-kit.js";
+import { drawPrompt } from "./input-glyphs.js";
+import { FILMS } from "../cinematic/films.js";
 
-export const ARCHIVE_TABS = ["BESTIARY", "MEMORIES"];
+/** Footer: the keys or pad buttons that drive this screen (src/ui/input-glyphs.js). */
+const FOOTER = [["navigateV", "select"], ["navigateH", "tab"], ["back", "back"]];
+const FILMS_FOOTER = [["navigateV", "select"], ["confirm", "play"], ["navigateH", "tab"], ["back", "back"]];
+
+export const ARCHIVE_TABS = ["BESTIARY", "MEMORIES", "FILMS"];
+export const FILMS_TAB = 2;
+
+/** A tab's label: what is found of what there is, or how many films. */
+function tabLabel(i, archive) {
+  if (i === FILMS_TAB) return `${ARCHIVE_TABS[i]}  ${FILMS.length}`;
+  const prog = i === 0 ? archive.bestiaryProgress() : archive.fragmentProgress();
+  return `${ARCHIVE_TABS[i]}  ${prog.found}/${prog.total}`;
+}
 
 const THREAT_COLORS = {
   Low: "#66dd88",
@@ -59,6 +75,9 @@ export function archiveLayout(w, h) {
 
 /** Entries for a tab, in a shape both the list and detail pane can consume. */
 export function archiveEntries(tab, archive) {
+  if (tab === FILMS_TAB) {
+    return FILMS.map((f) => ({ key: f.id, label: f.title, sub: f.sub, unlocked: true }));
+  }
   if (tab === 0) {
     return Object.keys(BESTIARY).map((key) => ({
       key,
@@ -126,16 +145,10 @@ export function renderArchiveScreen(ctx, w, h, state) {
     ctx.roundRect(tx, L.tabY, L.tabW, L.tabH, 6);
     ctx.stroke();
 
-    const prog =
-      i === 0 ? archive.bestiaryProgress() : archive.fragmentProgress();
     ctx.fillStyle = active ? "#00ffcc" : "rgba(200,220,235,0.55)";
     ctx.font = "bold 12px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(
-      `${ARCHIVE_TABS[i]}  ${prog.found}/${prog.total}`,
-      tx + L.tabW / 2,
-      L.tabY + 20,
-    );
+    ctx.fillText(tabLabel(i, archive), tx + L.tabW / 2, L.tabY + 20);
   }
 
   // ── Entry list ──
@@ -229,6 +242,26 @@ export function renderArchiveScreen(ctx, w, h, state) {
       ctx.fillText(line, dx, dy);
       dy += 18;
     }
+  } else if (tab === FILMS_TAB) {
+    const f = FILMS.find((m) => m.id === sel.key);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#00ffcc";
+    ctx.font = "bold 18px monospace";
+    ctx.fillText(f.title, dx, dy);
+    dy += 22;
+    ctx.font = "bold 11px monospace";
+    ctx.fillStyle = "rgba(200,160,255,0.85)";
+    ctx.fillText(f.sub.toUpperCase(), dx, dy);
+    dy += 24;
+    ctx.font = "12px monospace";
+    ctx.fillStyle = "rgba(210,225,240,0.85)";
+    for (const line of wrapText(ctx, f.desc, maxW)) {
+      ctx.fillText(line, dx, dy);
+      dy += 17;
+    }
+    drawPrompt(ctx, dx, dy + 22, [["confirm", "play"]], {
+      input: state.input, size: 11, font: "bold 12px monospace", color: "#00ffcc", align: "left", look: "legacy",
+    });
   } else if (tab === 0) {
     const b = BESTIARY[sel.key];
     ctx.textAlign = "left";
@@ -298,14 +331,9 @@ export function renderArchiveScreen(ctx, w, h, state) {
   }
 
   // Footer
-  ctx.textAlign = "center";
-  ctx.font = "11px monospace";
-  ctx.fillStyle = "rgba(110,130,150,0.55)";
-  ctx.fillText(
-    "W/S select  ·  A/D tab  ·  ESC back",
-    w / 2,
-    h - 16,
-  );
+  drawPrompt(ctx, w / 2, h - 20, tab === FILMS_TAB ? FILMS_FOOTER : FOOTER, {
+    input: state.input, size: 10, font: "11px monospace", color: "rgba(110,130,150,0.75)", align: "center", look: "legacy",
+  });
 
   drawScanlines(ctx, w, h);
   ctx.textAlign = "left";
@@ -339,12 +367,11 @@ function renderArchiveScreenModern(ctx, w, h, state) {
       bar: active,
       chamfer: 8,
     });
-    const prog = i === 0 ? archive.bestiaryProgress() : archive.fragmentProgress();
     ctx.font = uiFont(12, active ? 800 : 600);
     ctx.textAlign = "center";
     ctx.letterSpacing = "1.5px";
     ctx.fillStyle = active ? "#ffffff" : UI.textDim;
-    ctx.fillText(`${ARCHIVE_TABS[i]}  ${prog.found}/${prog.total}`, tx + L.tabW / 2, L.tabY + 20);
+    ctx.fillText(tabLabel(i, archive), tx + L.tabW / 2, L.tabY + 20);
     ctx.letterSpacing = "0px";
   }
 
@@ -406,6 +433,25 @@ function renderArchiveScreenModern(ctx, w, h, state) {
     paragraph(ctx, tab === 0
       ? "Defeat this enemy to unlock its dossier."
       : "Recover this fragment in the field to read it.", dx, dy, maxW, 19);
+  } else if (sel && tab === FILMS_TAB) {
+    const f = FILMS.find((m) => m.id === sel.key);
+    drawCaption(ctx, dx, dy - 6, f.title, { size: 16 });
+    dy += 38;
+    ctx.textAlign = "left";
+    ctx.font = uiFont(12, 800);
+    ctx.letterSpacing = "1.5px";
+    ctx.fillStyle = "#c9a8ff";
+    ctx.fillText(f.sub.toUpperCase(), dx, dy);
+    ctx.letterSpacing = "0px";
+    dy += 24;
+    ctx.font = uiFont(14, 500);
+    ctx.fillStyle = "#d3dee8";
+    dy = paragraph(ctx, f.desc, dx, dy, maxW, 20) + 16;
+    ctx.letterSpacing = "1px";
+    drawPrompt(ctx, dx, dy + 8, [["confirm", "PLAY"]], {
+      input: state.input, size: 12, font: uiFont(13, 800), color: UI.cyan, align: "left",
+    });
+    ctx.letterSpacing = "0px";
   } else if (sel && tab === 0) {
     const b = BESTIARY[sel.key];
     drawCaption(ctx, dx, dy - 6, b.name, { size: 16 });
@@ -453,11 +499,10 @@ function renderArchiveScreenModern(ctx, w, h, state) {
     paragraph(ctx, `“${f.ariaReaction}”`, dx, dy, maxW, 20);
   }
 
-  ctx.textAlign = "center";
-  ctx.font = uiFont(11, 600);
   ctx.letterSpacing = "1px";
-  ctx.fillStyle = UI.textFaint;
-  ctx.fillText("W/S SELECT  ·  A/D TAB  ·  ESC BACK", w / 2, h - 16);
+  drawPrompt(ctx, w / 2, h - 20, (tab === FILMS_TAB ? FILMS_FOOTER : FOOTER).map(([a, l]) => [a, l.toUpperCase()]), {
+    input: state.input, size: 10, font: uiFont(11, 600), color: UI.textDim, align: "center",
+  });
   ctx.letterSpacing = "0px";
   ctx.textAlign = "left";
 }

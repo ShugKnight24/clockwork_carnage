@@ -74,4 +74,10 @@ describe("drawWeapon", () => {
     // save/restore should not be called if wep is null
     expect(ctx.save).not.toHaveBeenCalled();
   });
+
+  it("shows in the menu showcase behind the settings deck (no match paused under it)", () => {
+    const ctx = mockCtx();
+    drawWeapon(ctx, 640, 480, baseOpts({ state: "settings", mode: "showcase", alive: true }));
+    expect(ctx.save).toHaveBeenCalled();
+  });
 });

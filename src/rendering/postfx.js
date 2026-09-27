@@ -19,15 +19,13 @@ export function renderPostFX(ctx, w, h, state) {
   const postProcessing = state.postProcessing !== false;
   const act = state.act || 1;
 
-  // Muzzle flash screen lighting — additive overlay, fades over 100ms
+  // Muzzle flash screen lighting — additive glow around the gun, fades over
+  // 100ms. A flat full-screen fill turned the whole cool-blue deck sepia on
+  // every shot, a strobe under automatic fire, and cost a full-frame fill on
+  // weak GPUs.
   if (state.muzzleFlashTime && time - state.muzzleFlashTime < 100) {
     const t = (time - state.muzzleFlashTime) / 100;
-    const alpha = 0.12 * (1 - t);
-    const prev = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = `rgba(${state.muzzleFlashColor},${alpha})`;
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = prev;
+    drawMuzzleGlow(ctx, w, h, state.muzzleFlashColor, 0.16 * (1 - t));
   }
 
   // Hurt flash — red overlay
@@ -114,15 +112,36 @@ export function renderPostFX(ctx, w, h, state) {
   }
 }
 
+/** Where the gun sits on screen, as a fraction of the frame. */
+const MUZZLE_GLOW_X = 0.6;
+const MUZZLE_GLOW_Y = 0.62;
+
+/** Radial glow from the gun, clipped to its own square so the fill stays small. */
+function drawMuzzleGlow(ctx, w, h, rgb, alpha) {
+  const cx = w * MUZZLE_GLOW_X;
+  const cy = h * MUZZLE_GLOW_Y;
+  const r = h * 0.6;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grd.addColorStop(0, `rgba(${rgb},${alpha})`);
+  grd.addColorStop(0.45, `rgba(${rgb},${alpha * 0.35})`);
+  grd.addColorStop(1, `rgba(${rgb},0)`);
+  const prev = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = grd;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.globalCompositeOperation = prev;
+}
+
 let _grainTile = null;
-let _grainTileSize = 256;
+let _grainPattern = null;
+const GRAIN_TILE = 128;
 function getGrainTile() {
   if (_grainTile) return _grainTile;
   const c = (typeof OffscreenCanvas !== "undefined")
-    ? new OffscreenCanvas(_grainTileSize, _grainTileSize)
-    : Object.assign(document.createElement("canvas"), { width: _grainTileSize, height: _grainTileSize });
+    ? new OffscreenCanvas(GRAIN_TILE, GRAIN_TILE)
+    : Object.assign(document.createElement("canvas"), { width: GRAIN_TILE, height: GRAIN_TILE });
   const tctx = c.getContext("2d");
-  const img = tctx.createImageData(_grainTileSize, _grainTileSize);
+  const img = tctx.createImageData(GRAIN_TILE, GRAIN_TILE);
   for (let i = 0; i < img.data.length; i += 4) {
     const v = (Math.random() * 255) | 0;
     img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
@@ -133,22 +152,23 @@ function getGrainTile() {
   return c;
 }
 
+/**
+ * Film grain: a 1:1 noise tile, re-offset ~24 times a second so it crawls
+ * like film. Hard-light around mid-grey lifts and darkens by roughly the same
+ * amount at any brightness; the old overlay at 4.5% was near-invisible in the
+ * dark decks where grain matters most.
+ */
 function drawFilmGrain(ctx, w, h, time) {
-  const tile = getGrainTile();
-  const rotation = time * 0.0001;
+  if (!_grainPattern) _grainPattern = ctx.createPattern(getGrainTile(), "repeat");
+  const f = Math.floor(time / 42);
+  const ox = (f * 73) % GRAIN_TILE;
+  const oy = (f * 151) % GRAIN_TILE;
   ctx.save();
-  ctx.globalAlpha = 0.045;
-  ctx.globalCompositeOperation = "overlay";
-  // Single draw with rotated transform covers the screen (tile is large enough)
-  const cx = w / 2;
-  const cy = h / 2;
-  const scale = Math.max(w, h) / _grainTileSize * 1.5;
-  ctx.setTransform(
-    Math.cos(rotation) * scale, Math.sin(rotation) * scale,
-    -Math.sin(rotation) * scale, Math.cos(rotation) * scale,
-    cx, cy
-  );
-  ctx.drawImage(tile, -_grainTileSize / 2, -_grainTileSize / 2);
+  ctx.globalAlpha = 0.055;
+  ctx.globalCompositeOperation = "hard-light";
+  ctx.translate(-ox, -oy);
+  ctx.fillStyle = _grainPattern;
+  ctx.fillRect(ox, oy, w, h);
   ctx.restore();
 }
 
@@ -218,6 +238,24 @@ export function drawGlitch(ctx, w, h, canvas, intensity) {
   }
 }
 
+/** Scratch canvas at frame size for the red channel of the aberration. */
+let _caCanvas = null;
+let _caCtx = null;
+function scratch(canvas, w, h) {
+  if (!canvas || canvas.width !== w || canvas.height !== h) {
+    canvas = (typeof OffscreenCanvas !== "undefined")
+      ? new OffscreenCanvas(w, h)
+      : Object.assign(document.createElement("canvas"), { width: w, height: h });
+  }
+  return canvas;
+}
+
+/**
+ * Lens fringe: the red channel is replaced by a copy of the frame scaled out
+ * from the centre, so the split is zero mid-screen and grows towards the
+ * edges (~0.2% of the width there). Hits and glitches widen it. Before, it
+ * only ran for 300 ms after damage at 12% alpha, so the toggle showed nothing.
+ */
 export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchEffect) {
   let intensity = glitchEffect * 0.5;
   if (player.hurtTime) {
@@ -225,52 +263,58 @@ export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchE
     if (elapsed < 300) intensity += 0.3 * (1 - elapsed / 300);
   }
   intensity = Math.max(0, Math.min(1, intensity));
-  const offset = Math.ceil(intensity * 3);
-  if (offset < 1) return;
+  const k = 0.004 + intensity * 0.02;
+  const ox = (w * k) / 2;
+  const oy = (h * k) / 2;
+
+  _caCanvas = scratch(_caCanvas, w, h);
+  if (!_caCtx || _caCtx.canvas !== _caCanvas) _caCtx = _caCanvas.getContext("2d");
+  const b = _caCtx;
+  b.globalCompositeOperation = "copy";
+  b.drawImage(canvas, -ox, -oy, w + 2 * ox, h + 2 * oy);
+  b.globalCompositeOperation = "multiply";
+  b.fillStyle = "#ff0000";
+  b.fillRect(0, 0, w, h);
 
   ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = intensity * 0.12;
-  // Horizontal shift
-  ctx.drawImage(canvas, -offset, 0);
-  ctx.drawImage(canvas, offset, 0);
-  // Radial vertical shift — stronger at edges
-  const vOffset = Math.ceil(offset * 0.5);
-  if (vOffset >= 1) {
-    ctx.globalAlpha = intensity * 0.06;
-    ctx.drawImage(canvas, 0, -vOffset);
-    ctx.drawImage(canvas, 0, vOffset);
-  }
+  ctx.globalCompositeOperation = "multiply";
+  ctx.fillStyle = "#00ffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.drawImage(_caCanvas, 0, 0);
   ctx.restore();
 }
 
-/** Bloom — downsample to small buffer, draw back at full size with additive blend. */
-let _bloomCanvas = null;
-let _bloomCtx = null;
-let _bloomW = 0;
-let _bloomH = 0;
+/**
+ * Bloom: downsample to 1/8, keep the highlights, blur, add back. All
+ * canvas-to-canvas draws, so nothing is read back to the CPU.
+ */
+let _bloomA = null;
+let _bloomB = null;
 
 export function drawBloom(ctx, w, h, canvas) {
-  const bw = (w >> 2) || 1;
-  const bh = (h >> 2) || 1;
-  if (!_bloomCanvas || _bloomW !== bw || _bloomH !== bh) {
-    _bloomCanvas = (typeof OffscreenCanvas !== "undefined")
-      ? new OffscreenCanvas(bw, bh)
-      : Object.assign(document.createElement("canvas"), { width: bw, height: bh });
-    _bloomCtx = _bloomCanvas.getContext("2d");
-    _bloomW = bw;
-    _bloomH = bh;
-  }
-  _bloomCtx.drawImage(canvas, 0, 0, bw, bh);
-  // Brightness threshold — boost contrast so only bright areas survive
-  _bloomCtx.globalCompositeOperation = "multiply";
-  _bloomCtx.fillStyle = "rgb(180,180,180)";
-  _bloomCtx.fillRect(0, 0, bw, bh);
-  _bloomCtx.globalCompositeOperation = "source-over";
+  const bw = Math.max(1, w >> 3);
+  const bh = Math.max(1, h >> 3);
+  _bloomA = scratch(_bloomA, bw, bh);
+  _bloomB = scratch(_bloomB, bw, bh);
+  const a = _bloomA.getContext("2d");
+  const b = _bloomB.getContext("2d");
+  a.globalCompositeOperation = "copy";
+  a.drawImage(canvas, 0, 0, bw, bh);
+  // Soft threshold: multiplying the buffer by itself twice is x^4, which
+  // keeps highlights (0.9 -> 0.66) and drops midtones (0.5 -> 0.06).
+  a.globalCompositeOperation = "multiply";
+  a.drawImage(_bloomA, 0, 0);
+  a.drawImage(_bloomA, 0, 0);
+  b.globalCompositeOperation = "copy";
+  b.filter = "blur(2px)";
+  b.drawImage(_bloomA, 0, 0);
+  b.filter = "none";
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha = 0.18;
-  ctx.drawImage(_bloomCanvas, 0, 0, w, h);
+  ctx.globalAlpha = 0.45;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(_bloomB, 0, 0, w, h);
   ctx.restore();
 }
 

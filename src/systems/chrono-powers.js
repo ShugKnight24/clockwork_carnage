@@ -470,6 +470,12 @@ export class ChronoPowers {
     /** The Final Form's stopped time (src/systems/eleven-seconds.js). */
     this.stop = new ElevenSeconds();
     this._decoyLine = 0;
+    /**
+     * A reel's own Chronos (src/cinematic/scenes/campaign.js): its powers are
+     * granted by the script, not by a campaign slot, and it draws and sounds
+     * as the campaign's do outside campaign mode.
+     */
+    this.scripted = false;
   }
 
   /** Read the slot from the game and forget everything from the last level. */
@@ -571,7 +577,7 @@ export class ChronoPowers {
   /** The first shift of a level: governed in Act I, loud from Act II. */
   onShiftStart(game) {
     // The tutorial and the other modes keep their own shift; this is the story's.
-    if (this._announced || game.mode !== "campaign") return;
+    if (this._announced || (game.mode !== "campaign" && !this.scripted)) return;
     this._announced = true;
     game.queueAriaMessage?.(this._pool);
     playChronoSound(game.audio, this.resonanceOn ? "shiftLoud" : "shift");
@@ -687,7 +693,7 @@ export class ChronoPowers {
     const p = game.player;
     // Arena, meltdown and the rest start without calling startLevel: a
     // campaign's powers must not follow the player there (spec decision 5).
-    if (game.mode !== "campaign" && (this.powers.length || this.resonanceOn)) this.startLevel(game);
+    if (game.mode !== "campaign" && !this.scripted && (this.powers.length || this.resonanceOn)) this.startLevel(game);
     // The Hunter response setting can change mid-level.
     if (game.mode === "campaign" && getAct(this.act)?.resonance) {
       this.policy = hunterPolicy(game.settings?.hunterResponse ?? 0, game.settings?.difficulty ?? 1);

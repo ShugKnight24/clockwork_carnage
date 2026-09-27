@@ -63,6 +63,7 @@ const S = {
   act1: (fg, bg) => actMask(fg, bg, 1),
   act2: (fg, bg) => actMask(fg, bg, 2),
   act3: (fg, bg) => actMask(fg, bg, 3),
+  act4: (fg, bg) => actMask(fg, bg, 4),
   // Earned
   lordslayer: (fg, bg) => `${actMask(fg, bg, 0)}<path d="M-4.6,4.4 L4.4,-4.6" stroke="${fg}" stroke-width="1.1" stroke-linecap="round"/>`,
   untouchable: (fg) => `<circle r="4.2" fill="none" stroke="${fg}" stroke-width=".7" stroke-dasharray="1.2 .9"/><path d="${STAR}" fill="${fg}" transform="scale(.55)"/>`,
@@ -80,7 +81,9 @@ const S = {
 
 function actMask(fg, bg, bars) {
   let m = `<path d="M-3.4,-3.4 C-3.4,-5.2 3.4,-5.2 3.4,-3.4 L3,1 C2.2,2.8 -2.2,2.8 -3,1 Z" fill="${fg}"/><path d="M-2.2,-1.6 L-0.6,-1.2 M2.2,-1.6 L0.6,-1.2" stroke="${bg}" stroke-width=".7" stroke-linecap="round"/>`;
-  for (let i = 0; i < bars; i++) m += `<rect x="${f(-3.4 + i * 2.5)}" y="3.4" width="1.8" height="1.2" fill="${fg}"/>`;
+  // Up to three bars keep their original spacing; four narrow to fit the mask.
+  const [w, step] = bars > 3 ? [1.3, 1.9] : [1.8, 2.5];
+  for (let i = 0; i < bars; i++) m += `<rect x="${f(-3.4 + i * step)}" y="3.4" width="${w}" height="1.2" fill="${fg}"/>`;
   return m;
 }
 

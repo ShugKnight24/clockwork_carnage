@@ -1,6 +1,7 @@
 import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
+import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
 import { cloneLook, getIndex, lookKey, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
@@ -50,6 +51,8 @@ const APPEARANCE = [
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
+/** Camera toggle order (the C key cycles through them). */
+const CAMERAS = ["full", "bust", "face"];
 
 /** A library badge worn at the given places. */
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
@@ -82,6 +85,7 @@ const I = {
   badge: `<svg viewBox="0 0 24 24"><path d="M12 3 19 6v6c0 4-3 7-7 9-4-2-7-5-7-9V6Z"/><circle cx="12" cy="11.5" r="3"/></svg>`,
   suit: `<svg viewBox="0 0 24 24"><path d="M8 3 4 5.5 3 11l3 1.2V21h12v-8.8l3-1.2-1-5.5L16 3c-.8 1.6-2.2 2.4-4 2.4S8.8 4.6 8 3Z"/><path d="M12 9v8M9 12.5h6"/></svg>`,
   helmet: `<svg viewBox="0 0 24 24"><path d="M12 3c5 0 7.5 3.5 7.5 8.2V16c0 2.4-2 4.6-4.6 5H9.1C6.5 20.6 4.5 18.4 4.5 16v-4.8C4.5 6.5 7 3 12 3Z"/><path d="M5 11.2 11 12.4l1 1.2 1-1.2 6-1.2-.2 3.4-5.6 1-1.2.8-1.2-.8-5.6-1Z"/></svg>`,
+  face: `<svg viewBox="0 0 24 24"><path d="M12 3c4 0 6.5 3 6.5 7.4 0 4.8-2.8 10.6-6.5 10.6s-6.5-5.8-6.5-10.6C5.5 6 8 3 12 3Z"/><path d="M5.6 9.6C8 9 10.4 7.6 12 5.4c1.6 2.2 4 3.6 6.4 4.2M9.4 11.6h.2M14.4 11.6h.2M10 16.2c1.2.8 2.8.8 4 0"/></svg>`,
   colors: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.4-1.2-1.6-1.2-3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.4 17 3 12 3Z"/><circle cx="7.5" cy="11" r="1.3"/><circle cx="10" cy="7" r="1.3"/><circle cx="15" cy="7" r="1.3"/></svg>`,
   loadout: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>`,
   undo: `<svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg>`,
@@ -119,8 +123,18 @@ const CATEGORIES = [
     sections: [
       { key: "helmetIndex", title: "Helmet", data: HELMET_STYLES, kind: "head" },
       { key: "visorIndex", title: "Visor", data: VISOR_STYLES, kind: "head" },
+    ],
+  },
+  {
+    // The face gets its own tab and a close-up with the helmet off: under the
+    // Helmet tab's bust framing it was a thumbnail inside a thumbnail.
+    id: "face",
+    label: "Face",
+    camera: "face",
+    bareHead: true,
+    sections: [
+      { key: "skinToneIndex", title: "Skin", data: SKIN_TONES, kind: "skin" },
       { key: "eyeIndex", title: "Eyes", data: EYE_COLORS, kind: "eye" },
-      { key: "skinToneIndex", title: "Face", data: SKIN_TONES, kind: "skin" },
       { key: "hairIndex", title: "Hair", data: HAIR_STYLES, kind: "hair" },
     ],
   },
@@ -315,12 +329,12 @@ svg { display: block; }
 @keyframes spin { to { transform: translate(-50%, -50%) scaleY(0.25) rotate(360deg); } }
 .figure-wrap { position: absolute; left: 50%; bottom: 11.5%; height: 78%; aspect-ratio: 148 / 182; transform: translateX(-50%); pointer-events: none; }
 .figure { position: absolute; inset: 0; -webkit-box-reflect: below calc(var(--fig-h, 500px) * -0.043) linear-gradient(transparent 72%, rgba(255, 255, 255, 0.16)); }
-:host([camera="bust"]) .figure, :host([camera="torso"]) .figure { -webkit-box-reflect: none; }
+:host([camera="bust"]) .figure, :host([camera="torso"]) .figure, :host([camera="face"]) .figure { -webkit-box-reflect: none; }
 .figure svg { width: 100%; height: 100%; overflow: visible; }
 .sweep { position: absolute; inset: 0; mix-blend-mode: overlay; opacity: 0.9; pointer-events: none;
   background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.35) 48%, transparent 58%);
   background-size: 260% 100%; background-position: calc(50% + var(--yaw) * 60%) 0; transition: background-position 0.2s linear; }
-:host([camera="bust"]) .pedestal, :host([camera="torso"]) .pedestal { opacity: 0; transform: translateX(-50%) translateY(40px); }
+:host([camera="bust"]) .pedestal, :host([camera="torso"]) .pedestal, :host([camera="face"]) .pedestal { opacity: 0; transform: translateX(-50%) translateY(40px); }
 /* Motion lives on wrapper layers, never inside the SVG: the figure carries
    glow filters (and Modern adds lighting filters), and any animated change
    inside it re-rasterised the whole figure plus its floor reflection —
@@ -328,6 +342,9 @@ svg { display: block; }
 .fig-breathe { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 100%; animation: breathe 3.8s ease-in-out infinite; }
 .figure .ag-fig { transform-box: fill-box; transform-origin: 50% 100%; }
 @keyframes breathe { 50% { transform: scaleY(1.009); } }
+/* Breathing is a compositor scale of the rastered figure, which resamples
+   it: invisible at full height, a soft face in a close-up. */
+:host([camera="bust"]) .fig-breathe, :host([camera="face"]) .fig-breathe { animation: none; }
 .figure .ag-cape { transform-box: fill-box; transform-origin: 50% 0; }
 @keyframes sway { 0%, 100% { transform: rotate(-0.7deg) skewX(-0.4deg); } 50% { transform: rotate(0.7deg) skewX(0.4deg); } }
 .figure { will-change: transform; }
@@ -614,6 +631,9 @@ svg { display: block; }
 .save .k-focus { display: none; }
 .save:focus .k-focus { display: inline-flex; }
 .save:focus .k-any { display: none; }
+/* Key hints for the device in use (host input attribute, from src/ui/input-glyphs.js). */
+:host(:not([input="gamepad"])) .in-pad, :host([input="gamepad"]) .in-kb { display: none !important; }
+.in-pad { display: inline-flex; align-items: center; gap: 3px; }
 .btn:active { transform: translateY(1px); }
 
 .toast { position: absolute; left: calc((100% - var(--panel-w) - 32px) / 2); bottom: 80px; transform: translate(-50%, 12px); white-space: nowrap; opacity: 0; pointer-events: none;
@@ -759,7 +779,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .pedestal .ring::before { background: conic-gradient(from 0deg, transparent 0 60%, rgba(255, 244, 230, 0.7) 68%, transparent 78%); }
 :host([realistic]) .stage:focus-visible .pedestal .plate-disc { box-shadow: 0 0 0 1px var(--r-accent), 0 18px 36px rgba(0, 0, 0, 0.7); }
 :host([realistic]) .figure { -webkit-box-reflect: below calc(var(--fig-h, 500px) * -0.043) linear-gradient(transparent 80%, rgba(255, 255, 255, 0.07)); }
-:host([realistic][camera="bust"]) .figure, :host([realistic][camera="torso"]) .figure { -webkit-box-reflect: none; }
+:host([realistic][camera="bust"]) .figure, :host([realistic][camera="torso"]) .figure, :host([realistic][camera="face"]) .figure { -webkit-box-reflect: none; }
 /* Performance: the Modern figure is filter-heavy SVG. Keep every per-frame
    change off it — no box-reflect (it re-renders the whole figure), no CSS
    animations inside the SVG, and the turn and breathing done as compositor
@@ -777,6 +797,7 @@ const REALISTIC_STYLE = `
   transform-origin: 50% 100%;
   animation: breathe 3.8s ease-in-out infinite;
 }
+:host([realistic][camera="bust"]) .fig-breathe, :host([realistic][camera="face"]) .fig-breathe { animation: none; }
 :host([realistic]) .figure .ag-fig,
 :host([realistic]) .figure .ag-cape,
 :host([realistic]) .figure .ag-visor,
@@ -915,7 +936,7 @@ class AgentShowroom extends HTMLElement {
     this._real = false; // Modern (realistic) look; Comic otherwise
 
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${STYLE}</style>${this.template()}`;
+    root.innerHTML = `<style>${STYLE}${GLYPH_CSS}</style>${this.template()}`;
     const $ = (s) => root.querySelector(s);
     this.$ = $;
     this.el = {
@@ -962,17 +983,17 @@ class AgentShowroom extends HTMLElement {
     <h1 class="callsign">Agent</h1>
     <span class="rule" aria-hidden="true"></span>
     <div class="sub"></div>
-    <div class="ready caption cyan" hidden>Returning agent · <kbd class="key">Enter</kbd> to deploy</div>
+    <div class="ready caption cyan" hidden>Returning agent · <kbd class="key in-kb">Enter</kbd><span class="in-pad" data-glyph="confirm" data-glyph-device="gamepad"></span> to deploy</div>
   </header>
   <div class="toolbar" role="toolbar" aria-label="Edit">
-    <button class="tool" data-act="undo" aria-label="Undo last change">${I.undo}<span class="t">Undo</span><kbd class="key">Z</kbd></button>
+    <button class="tool" data-act="undo" aria-label="Undo last change">${I.undo}<span class="t">Undo</span><kbd class="key in-kb">Z</kbd></button>
     <button class="tool" data-act="reset" aria-label="Reset appearance to standard issue">${I.reset}<span class="t">Reset</span></button>
-    <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key">R</kbd></button>
+    <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key in-kb">R</kbd><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span></button>
   </div>
   <div class="presets" role="group" aria-label="Presets"><span class="lbl caption steel">Presets</span>${presets}</div>
   <div class="stage-tools">
     <div class="seg" role="group" aria-label="Camera">
-      <button data-camera="full" aria-pressed="true">Full</button><button data-camera="bust" aria-pressed="false">Bust</button>
+      <button data-camera="full" aria-pressed="true">Full</button><button data-camera="bust" aria-pressed="false">Bust</button><button data-camera="face" aria-pressed="false">Face</button>
     </div>
     <div class="seg" role="group" aria-label="Pose">
       <button data-pose="idle" aria-pressed="true">Idle</button><button data-pose="hero" aria-pressed="false">Ready</button>
@@ -985,15 +1006,17 @@ class AgentShowroom extends HTMLElement {
   <aside class="panel" aria-label="Customization">
     <div class="frame"><div class="body">
       <button class="handle" aria-label="Collapse panel" aria-expanded="true">${I.chevron}</button>
-      <div class="tabs" role="tablist" aria-label="Categories"><kbd class="key tabkey" aria-hidden="true">Q</kbd>${tabs}<kbd class="key tabkey" aria-hidden="true">E</kbd></div>
+      <div class="tabs" role="tablist" aria-label="Categories"><kbd class="key tabkey in-kb" aria-hidden="true">Q</kbd><span class="tabkey in-pad" aria-hidden="true" data-glyph="prevTab" data-glyph-device="gamepad"></span>${tabs}<kbd class="key tabkey in-kb" aria-hidden="true">E</kbd><span class="tabkey in-pad" aria-hidden="true" data-glyph="nextTab" data-glyph-device="gamepad"></span></div>
       <div class="content" id="panel" role="tabpanel"></div>
       <footer class="actions">
         <div class="keys" aria-hidden="true">
-          <span><kbd class="key">Tab</kbd>Category</span><span><kbd class="key">↑↓←→</kbd>Browse</span><span><kbd class="key">Enter</kbd>Select</span>
-          <span><kbd class="key">R</kbd>Random</span><span><kbd class="key">Z</kbd>Undo</span>
+          <span class="in-kb"><kbd class="key">Tab</kbd>Category</span><span class="in-kb"><kbd class="key">↑↓←→</kbd>Browse</span><span class="in-kb"><kbd class="key">Enter</kbd>Select</span>
+          <span class="in-kb"><kbd class="key">R</kbd>Random</span><span class="in-kb"><kbd class="key">Z</kbd>Undo</span>
+          <span class="in-pad"><span class="in-pad" data-glyph="prevTab" data-glyph-device="gamepad"></span><span class="in-pad" data-glyph="nextTab" data-glyph-device="gamepad"></span>Category</span><span class="in-pad"><span class="in-pad" data-glyph="navigate" data-glyph-device="gamepad"></span>Browse</span><span class="in-pad"><span class="in-pad" data-glyph="confirm" data-glyph-device="gamepad"></span>Select</span>
+          <span class="in-pad"><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span>Random</span>
         </div>
-        <button class="btn plate back"><kbd class="key">Esc</kbd>Back</button>
-        <button class="btn primary save">Save &amp; Deploy <kbd class="key k-any">⇧ Enter</kbd><kbd class="key k-focus">Enter</kbd></button>
+        <button class="btn plate back"><kbd class="key in-kb">Esc</kbd><span class="in-pad" data-glyph="back" data-glyph-device="gamepad"></span>Back</button>
+        <button class="btn primary save">Save &amp; Deploy <kbd class="key k-any in-kb">⇧ Enter</kbd><kbd class="key k-focus in-kb">Enter</kbd><span class="in-pad" data-glyph="deploy" data-glyph-device="gamepad"></span></button>
       </footer>
     </div><span class="brackets"></span></div>
   </aside>
@@ -1089,9 +1112,18 @@ class AgentShowroom extends HTMLElement {
     return true;
   }
 
+  /** Show keyboard or pad hints, whichever the player used last. */
+  syncInput() {
+    this.setAttribute("input", activeDevice(this.game));
+    renderDomGlyphs(this.game, this.shadowRoot);
+  }
+
   open() {
     this._unlockCtx = null;
     this.syncProfile();
+    this.syncInput();
+    this._onInput ??= () => this.isOpen && this.syncInput();
+    window.addEventListener("cc-input-change", this._onInput);
     this.isOpen = true;
     this.setAttribute("open", "");
     requestAnimationFrame(() => this.setAttribute("shown", ""));
@@ -1311,7 +1343,7 @@ class AgentShowroom extends HTMLElement {
         this.undo();
         return consume();
       case "KeyC":
-        this.setCamera(this.cameraChoice === "bust" ? "full" : "bust", true);
+        this.setCamera(CAMERAS[(CAMERAS.indexOf(this.cameraChoice) + 1) % CAMERAS.length], true);
         return consume();
       case "GamepadY":
         this.save();
@@ -1838,7 +1870,10 @@ class AgentShowroom extends HTMLElement {
         this.view = tw.from.map((v, i) => v + (tw.to[i] - v) * k);
         this.applyView();
         if (t < 1) more = true;
-        else this._viewTween = null;
+        else {
+          this._viewTween = null;
+          if (this._real) this.queueRender();
+        }
       }
       if (Math.abs(this.yaw - this.yawTarget) > 0.002) {
         this.yaw += (this.yawTarget - this.yaw) * 0.18;
@@ -1935,7 +1970,7 @@ class AgentShowroom extends HTMLElement {
   }
 
   stagePeek(ch) {
-    if (this.helmetOff) return true;
+    if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
     const helm = HELMET_STYLES[ch.helmetIndex]?.id;
     if (OPEN_HELMETS.has(helm)) return false;
     // Face edits show the face even under a closed helmet.
@@ -1947,12 +1982,19 @@ class AgentShowroom extends HTMLElement {
     const ch = this.effective();
     const pose = this.poseChoice;
     const peek = this.stagePeek(ch);
-    const key = `${this._real ? "r|" : ""}${pose}|${peek}|${lookKey(ch)}`;
+    // Modern sizes its lighting filters to the frame. Rebuilding mid-tween
+    // would re-run them every frame, so the camera it uses only moves on once
+    // the tween lands (animate() queues a render then).
+    if (!this._viewTween) this._fxCamera = this.cameraChoice;
+    const cam = this._real ? this._fxCamera || "full" : "";
+    const key = `${this._real ? "r|" : ""}${cam}|${pose}|${peek}|${lookKey(ch)}`;
     if (key === this._stageKey) return;
     this._stageKey = key;
     let markup = this._stageCache.get(key);
     if (!markup) {
-      markup = buildAgentSvg(ch, { pose, peek, idPrefix: "st-", realistic: this._real });
+      const fig = this.el.figure;
+      const px = this._real && fig.clientWidth ? [fig.clientWidth, fig.clientHeight] : undefined;
+      markup = buildAgentSvg(ch, { pose, peek, idPrefix: "st-", realistic: this._real, view: AGENT_VIEW[cam] || AGENT_VIEW.full, px });
       this._stageCache.set(key, markup);
       if (this._stageCache.size > 48) this._stageCache.delete(this._stageCache.keys().next().value);
     }

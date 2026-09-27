@@ -2,6 +2,8 @@
 
 A retro-style first-person shooter built entirely with vanilla JavaScript, HTML5 Canvas, and procedural art. No frameworks. No hand-drawn art. Every pixel drawn in code.
 
+[![Clockwork Carnage — 76-second trailer](docs/media/sizzle-poster.png)](https://shugknight24.github.io/clockwork_carnage/docs/media/sizzle.mp4)
+
 ## Play
 
 ```bash

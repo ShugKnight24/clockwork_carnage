@@ -2,7 +2,7 @@
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
-import { getLayerImage, scaleBucket } from "./svg-art/raster.js";
+import { getLayerImage, layerBaked, onRasterRelease, scaleBucket } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
@@ -74,16 +74,27 @@ function rasterScale(pxPerUnit, box) {
   return b * 0.999;
 }
 
+// Slots hold bitmaps the raster cache owns. Releasing the cache (Legacy art)
+// shrinks them to 0x0, so a slot filled before the release is never reused.
+let slotEpoch = 0;
+onRasterRelease(() => {
+  slotEpoch++;
+  _propsWarmed = -1;
+});
+
 /** Cached bitmap lookup: skip the string-keyed cache while the bucket is steady. */
 function layerBitmap(slot, id, box, defs, markup, scale) {
-  if (slot.scale === scale && slot.img) return slot.img;
+  if (slot.scale === scale && slot.img && slot.epoch === slotEpoch) return slot.img;
   const img = getLayerImage(id, box, defs, markup, scale);
+  // drawImage throws on a 0x0 bitmap; skip the layer rather than the frame.
+  if (img && !(img.naturalWidth ?? img.width)) return null;
   if (img) {
     const k = scaleBucket(scale);
     // Baked layers are canvases (width), undecoded ones <img> (naturalWidth).
     const exact = (img.naturalWidth ?? img.width) === Math.max(1, Math.round(box[2] * k));
     slot.img = exact ? img : null;
     slot.scale = exact ? scale : 0;
+    slot.epoch = slotEpoch;
   }
   return img;
 }
@@ -220,7 +231,10 @@ function drawScan(ctx, scan, t, alpha) {
 
 /**
  * Start decoding every sprite's layers at one scale so the first sighting of
- * each type is already vector art rather than a legacy frame.
+ * each type is already vector art rather than a legacy frame. Queued, as any
+ * prefetch: a sprite drawn meanwhile decodes its own layers at once, and the
+ * rest no longer land in one frame (an art style change started ~50 of them
+ * together).
  */
 export function warmSvgSprites(sprites, defs, ppu) {
   if (typeof Image === "undefined") return;
@@ -234,24 +248,67 @@ export function warmSvgSprites(sprites, defs, ppu) {
     if (!sprite._ready) prepareSprite(key, sprite, defs);
     for (const layer of sprite.layers) {
       const scale = rasterScale(ppu * (layer.res || 1), layer._box);
-      getLayerImage(layer._id, layer._box, sprite._defs, layer.markup, scale);
-      if (layer._silId) getLayerImage(layer._silId, layer._box, sprite._defs, layer._silMarkup, scale);
+      getLayerImage(layer._id, layer._box, sprite._defs, layer.markup, scale, true);
+      if (layer._silId) getLayerImage(layer._silId, layer._box, sprite._defs, layer._silMarkup, scale, true);
     }
   }
 }
 
 let _propsWarmed = -1; // art style the prop set was last warmed for
 
+/** Once per art style, start every prop type decoding at the size a wall `sh` px tall implies. */
+export function warmPropSet(sh) {
+  const style = isRealisticArt() ? 2 : 1;
+  if (_propsWarmed === style) return;
+  _propsWarmed = style;
+  warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
+}
+
+/**
+ * Decode and bake one prop type at each on-screen sprite height in
+ * `sprHeights` ahead of drawing it; call once a frame until it returns true.
+ * The largest size goes first, so the rest are downscales of it. `realistic`
+ * picks the Realistic or Modern set ahead of a style change (a reel's flip);
+ * left out, the set showing.
+ */
+export function prefetchPropSprite(ctx, type, sprHeights, realistic) {
+  if (typeof Image === "undefined" || (realistic === undefined && !isModernArt())) return true;
+  let sprite = PROP_SPRITES[type];
+  let defs = PROP_DEFS;
+  if (!sprite) return true;
+  const real = (realistic ?? isRealisticArt()) ? realisticSet(defs) : null;
+  if (real?.sprites[type]) {
+    sprite = real.sprites[type];
+    defs = real.defs;
+  }
+  if (!sprite._ready) prepareSprite(type, sprite, defs);
+  const m = ctx.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  const ppus = [...sprHeights].sort((a, b) => b - a).map((sh) => (Math.max(sh * SH_PER_METRE, 8 * _fovScale) / 100) * k);
+  let ready = true;
+  for (const layer of sprite.layers) {
+    const ids = [[layer._id, layer.markup]];
+    if (layer._silId) ids.push([layer._silId, layer._silMarkup]);
+    for (const [id, markup] of ids) {
+      for (const ppu of ppus) {
+        const scale = rasterScale(ppu * (layer.res || 1), layer._box);
+        getLayerImage(id, layer._box, sprite._defs, markup, scale, true);
+        if (!layerBaked(id, scale)) {
+          ready = false;
+          break;
+        }
+      }
+    }
+  }
+  return ready;
+}
+
 function drawModernProp(ctx, type, sx, cy, sw, sh, time, fog) {
   const sprite = PROP_SPRITES[type];
   if (!sprite) return false;
   const metre = Math.max(sw * SH_PER_METRE, 8 * _fovScale);
   const ppu = metre / 100;
-  const style = isRealisticArt() ? 2 : 1;
-  if (_propsWarmed !== style) {
-    _propsWarmed = style;
-    warmSvgSprites(PROP_SPRITES, PROP_DEFS, (sh * SH_PER_METRE) / 100);
-  }
+  warmPropSet(sh);
   const alpha = Math.min(1, fog * 4);
   const shade = Math.min(0.6, (1 - fog) * 1.5);
   return drawSvgSprite(ctx, type, sprite, PROP_DEFS, sx, groundY(cy, sh), ppu, time / 1000, alpha, shade);

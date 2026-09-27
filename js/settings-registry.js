@@ -9,6 +9,7 @@ export { COMPACT_PHONE_HEIGHT } from "../src/constants.js";
 // art-style.js guards its localStorage/document access, so tests can still
 // import this registry without a browser.
 import { setArtStyle } from "../src/rendering/art-style.js";
+import { effectCapReason } from "../src/utils/perf.js";
 
 /**
  * Values a fresh profile starts with. Game copies this, then touch-device
@@ -60,8 +61,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   enableBloom: true,
   enableChromaticAberration: true,
   enableFilmGrain: true,
-  shadowQuality: 2, // 0=off, 1=low, 2=high
-  lightingQuality: 2, // 0=low, 1=medium, 2=high
   renderMode: 0, // 0=auto, 1=2D (Canvas), 2=3D (WebGL)
   gamepadEnabled: true,
   gamepadLookSensitivity: 2.5,
@@ -87,29 +86,29 @@ export const DEFAULT_SETTINGS = Object.freeze({
 //   wrap         – whether cycling wraps around
 //   --- toggle-specific ---
 //   onColor      – color when ON (defaults to "#00ccff")
+//   capped       – a preset or Battery Saver can hold it off; labelled "OFF (preset)"
 //   --- shared ---
 //   onChange(game) – callback after value changes
 //   widget         – special sub-widget key ("crosshairPreview")
-/** Ordered list of setting categories shown in the sidebar */
-export const SETTING_CATEGORIES = [
-  "Gameplay",
-  "Display",
-  "Performance",
-  "Audio",
-  "Controls",
-  "Gamepad",
-  "Accessibility",
-  "HUD",
-  "Mobile",
-];
+//   --- action-specific ---
+//   buttonLabel, color, onClick(game) – a command row with no stored value
+/** Live controller status ({ value, desc }), bound by the game at start-up. */
+let gamepadStatus = null;
+
+let gamepadManager = null;
+
+/** Point the Gamepad page's status row at the GamepadManager's status object. */
+export function bindGamepadStatus(status, manager = null) {
+  gamepadStatus = status;
+  gamepadManager = manager;
+}
 
 export const SETTINGS_REGISTRY = [
   // ─── Gameplay ───
   {
     key: "difficulty",
     label: "Difficulty",
-    desc: "Enemy damage, health and aggression.",
-    category: "Gameplay",
+    desc: "Enemy damage, health and aggression, for enemies spawned from now on. Continue resumes a run at the difficulty it was saved with.",
     type: "enum",
     values: ["Easy", "Normal", "Hard", "Nightmare"],
     colors: ["#44ff44", "#00ccff", "#ffaa00", "#ff2200"],
@@ -124,7 +123,6 @@ export const SETTINGS_REGISTRY = [
     key: "hunterResponse",
     label: "Hunter Response",
     desc: "Long shifts draw Voss's hunters. Story only keeps the whispers.",
-    category: "Gameplay",
     type: "enum",
     values: ["Auto", "On", "Story only", "Off"],
     colors: ["#00ccff", "#ff2a4a", "#ffaa00", "#8899aa"],
@@ -139,7 +137,6 @@ export const SETTINGS_REGISTRY = [
     key: "cutsceneAutoAdvance",
     label: "Cutscene Auto-Advance",
     desc: "Story panels advance on their own.",
-    category: "Gameplay",
     type: "toggle",
     onColor: "#ffaa00",
     platform: "all",
@@ -149,7 +146,6 @@ export const SETTINGS_REGISTRY = [
     key: "crosshair",
     label: "Crosshair",
     desc: "Reticle shape drawn at screen centre.",
-    category: "Gameplay",
     type: "enum",
     values: [
       "Red Dot",
@@ -172,7 +168,6 @@ export const SETTINGS_REGISTRY = [
     key: "minimapSize",
     label: "Minimap Size",
     desc: "Pixel width of the corner minimap.",
-    category: "Display",
     type: "slider",
     min: 100,
     max: 300,
@@ -186,7 +181,6 @@ export const SETTINGS_REGISTRY = [
     key: "artStyle",
     label: "Art Style",
     desc: "Legacy pixel look, Comic inked art, or Modern realistic lighting.",
-    category: "Display",
     type: "enum",
     // Ids are stable (saved settings store them): 1 is the inked style, 2 the
     // realistic one. Only the player-facing names changed.
@@ -205,7 +199,6 @@ export const SETTINGS_REGISTRY = [
     key: "visualStyle",
     label: "Visual Style",
     desc: "Colour grade and lighting mood.",
-    category: "Display",
     type: "enum",
     values: ["Clockwork", "Brutal"],
     colors: ["#00ccff", "#ff4422"],
@@ -224,7 +217,6 @@ export const SETTINGS_REGISTRY = [
     key: "graphicsPreset",
     label: "Graphics Preset",
     desc: "One-click quality bundle. Auto picks by device.",
-    category: "Performance",
     type: "enum",
     values: ["Auto", "Ultra-Low", "Low", "Medium", "High", "Ultra", "Custom"],
     colors: ["#00ffcc", "#666688", "#88aacc", "#00ccff", "#44ffaa", "#ffaa00", "#cc88ff"],
@@ -240,7 +232,6 @@ export const SETTINGS_REGISTRY = [
     key: "frameTarget",
     label: "Frame Target",
     desc: "Frame cap. Auto follows the display refresh rate.",
-    category: "Performance",
     type: "enum",
     values: ["Auto", "30 FPS", "60 FPS", "90 FPS", "120 FPS"],
     colors: ["#00ffcc", "#88aacc", "#00ccff", "#44ffaa", "#ffaa00"],
@@ -256,7 +247,6 @@ export const SETTINGS_REGISTRY = [
     key: "batterySaver",
     label: "Battery Saver",
     desc: "Lower the frame cap and render scale to save power.",
-    category: "Performance",
     type: "toggle",
     onColor: "#44ffaa",
     platform: "all",
@@ -266,8 +256,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "renderScale",
     label: "Render Scale",
-    desc: "Internal resolution. Lower is faster and softer.",
-    category: "Performance",
+    desc: "Internal resolution. Lower is faster and softer. Switches Graphics Preset to Custom.",
     type: "slider",
     min: 50,
     max: 100,
@@ -276,13 +265,17 @@ export const SETTINGS_REGISTRY = [
     barColor: () => "#00ccff",
     platform: "all",
     height: { compact: 42, normal: 60 },
-    onChange: (g) => g.applyPerformanceSettings?.(),
+    // Only the Custom preset reads this slider; every other preset sets its
+    // own scale, so moving it there did nothing.
+    onChange: (g) => {
+      g.settings.graphicsPreset = presetIndex("Custom");
+      g.applyPerformanceSettings?.();
+    },
   },
   {
     key: "effectsQuality",
     label: "Effects Quality",
     desc: "Particle, decal and debris budget.",
-    category: "Performance",
     type: "enum",
     values: ["Low", "Medium", "High"],
     colors: ["#88aacc", "#00ccff", "#ffaa00"],
@@ -297,8 +290,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "postProcessing",
     label: "Post Processing",
-    desc: "Full-screen effect pass. Off is fastest.",
-    category: "Performance",
+    desc: "Vignette, bloom, aberration, grain and damage flashes. Off is fastest.",
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
@@ -309,7 +301,6 @@ export const SETTINGS_REGISTRY = [
     key: "gpuPostFx",
     label: "GPU Film Grade",
     desc: "Filmic tonemap, bloom and grain on the GPU. Can stutter on some devices.",
-    category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
@@ -319,10 +310,10 @@ export const SETTINGS_REGISTRY = [
     key: "floorTexture",
     label: "Floor Detail",
     desc: "Detailed floor and ceiling texturing.",
-    category: "Performance",
     type: "toggle",
     onColor: "#ffaa00",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
     onChange: (g) => g.applyPerformanceSettings?.(),
   },
@@ -330,7 +321,6 @@ export const SETTINGS_REGISTRY = [
     key: "screenShake",
     label: "Screen Shake",
     desc: "Camera kick on hits and explosions.",
-    category: "Performance",
     type: "toggle",
     onColor: "#ff8844",
     platform: "all",
@@ -340,7 +330,6 @@ export const SETTINGS_REGISTRY = [
     key: "weaponBob",
     label: "Weapon Bob",
     desc: "Weapon sway while moving.",
-    category: "Performance",
     type: "toggle",
     onColor: "#44ffaa",
     platform: "all",
@@ -350,7 +339,6 @@ export const SETTINGS_REGISTRY = [
     key: "showPerformanceOverlay",
     label: "Performance Overlay",
     desc: "FPS and frame-time readout. Same as F.",
-    category: "Performance",
     type: "toggle",
     onColor: "#ffcc00",
     platform: "all",
@@ -361,68 +349,36 @@ export const SETTINGS_REGISTRY = [
     key: "enableBloom",
     label: "Bloom",
     desc: "Glow bleed around bright pixels.",
-    category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
   },
   {
     key: "enableChromaticAberration",
     label: "Chromatic Aberration",
     desc: "Colour fringing towards the screen edges.",
-    category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
   },
   {
     key: "enableFilmGrain",
     label: "Film Grain",
     desc: "Animated grain over the frame.",
-    category: "Performance",
     type: "toggle",
     onColor: "#cc88ff",
     platform: "all",
+    capped: true,
     height: { compact: 30, normal: 44 },
-  },
-  {
-    key: "shadowQuality",
-    label: "Shadow Quality",
-    desc: "Resolution of cast shadows.",
-    category: "Performance",
-    type: "enum",
-    values: ["Off", "Low", "High"],
-    colors: ["#888888", "#88aacc", "#ffaa00"],
-    min: 0,
-    max: 2,
-    step: 1,
-    wrap: true,
-    platform: "all",
-    height: { compact: 30, normal: 44 },
-  },
-  {
-    key: "lightingQuality",
-    label: "Lighting Quality",
-    desc: "Number of dynamic lights drawn per frame.",
-    category: "Performance",
-    type: "enum",
-    values: ["Low", "Medium", "High"],
-    colors: ["#88aacc", "#00ccff", "#ffaa00"],
-    min: 0,
-    max: 2,
-    step: 1,
-    wrap: true,
-    platform: "all",
-    height: { compact: 30, normal: 44 },
-    onChange: (g) => g.applyPerformanceSettings?.(),
   },
   {
     key: "renderMode",
     label: "Render Mode",
     desc: "Canvas2D, or the WebGL hybrid renderer.",
-    category: "Display",
     type: "enum",
     values: ["Auto", "2D (Canvas)", "3D (WebGL)"],
     colors: ["#00ffcc", "#00ccff", "#ffaa00"],
@@ -439,7 +395,6 @@ export const SETTINGS_REGISTRY = [
     key: "masterVolume",
     label: "Master Volume",
     desc: "Overall game volume.",
-    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -454,7 +409,6 @@ export const SETTINGS_REGISTRY = [
     key: "musicVolume",
     label: "Music Volume",
     desc: "Soundtrack level.",
-    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -469,7 +423,6 @@ export const SETTINGS_REGISTRY = [
     key: "sfxVolume",
     label: "SFX Volume",
     desc: "Weapons, enemies and interface level.",
-    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -484,7 +437,6 @@ export const SETTINGS_REGISTRY = [
     key: "voiceVolume",
     label: "Voice Volume",
     desc: "Character voices in cutscenes and comms, and your agent's grunts.",
-    category: "Audio",
     type: "slider",
     min: 0,
     max: 100,
@@ -500,7 +452,6 @@ export const SETTINGS_REGISTRY = [
     key: "sensitivity",
     label: "Mouse Sensitivity",
     desc: "Mouse look speed.",
-    category: "Controls",
     type: "slider",
     min: 0.2,
     max: 2.0,
@@ -515,7 +466,6 @@ export const SETTINGS_REGISTRY = [
     key: "fov",
     label: "FOV",
     desc: "Field of view in degrees. Higher sees wider.",
-    category: "Controls",
     type: "slider",
     min: 50,
     max: 120,
@@ -529,7 +479,6 @@ export const SETTINGS_REGISTRY = [
     key: "forgeFov",
     label: "Forge FOV",
     desc: "Field of view inside the Forge. Separate from the campaign so building can sit further back.",
-    category: "Controls",
     type: "slider",
     min: 50,
     max: 120,
@@ -543,7 +492,6 @@ export const SETTINGS_REGISTRY = [
     key: "forgeInvertY",
     label: "Forge Invert Y",
     desc: "Invert vertical look inside the Forge only. Off by default.",
-    category: "Controls",
     type: "toggle",
     platform: "all",
     height: { compact: 42, normal: 60 },
@@ -552,7 +500,6 @@ export const SETTINGS_REGISTRY = [
     key: "viewMode",
     label: "View Mode",
     desc: "Camera position for the player character.",
-    category: "Controls",
     type: "enum",
     values: ["First Person", "Third Person"],
     colors: ["#00ccff", "#ff88cc"],
@@ -567,7 +514,6 @@ export const SETTINGS_REGISTRY = [
     key: "invertX",
     label: "Invert X Axis",
     desc: "Flip the horizontal look direction.",
-    category: "Controls",
     type: "toggle",
     onColor: "#ff8844",
     platform: "desktop",
@@ -577,18 +523,59 @@ export const SETTINGS_REGISTRY = [
     key: "invertY",
     label: "Invert Y Axis",
     desc: "Flip the vertical look direction.",
-    category: "Controls",
     type: "toggle",
     onColor: "#ff8844",
     platform: "desktop",
     height: { compact: 30, normal: 44 },
+    // Pad look runs through the same aim path as the mouse, which applies
+    // the inversion; re-sync the pad so it never inverts a second time.
+    onChange: (g) => g.applyGamepadSettings?.(),
   },
   // ─── Gamepad ───
+  {
+    // Read-only status: the value and footer text follow the live pad.
+    key: "gamepadStatus",
+    label: "Controller",
+    get desc() {
+      return gamepadStatus?.desc || "Press any button on a controller to connect it.";
+    },
+    type: "action",
+    get buttonLabel() {
+      return gamepadStatus?.value || "NONE";
+    },
+    color: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    // With nothing connected, the click also opens Chrome's USB chooser for
+    // wired third-party 360 pads the Gamepad API cannot see (js/xinput-usb.js).
+    onClick: (g) => {
+      g.gamepad?.rescan?.();
+      if (!g.gamepad?.connected && g.xinputUsb?.supported) g.xinputUsb.request();
+    },
+  },
+  {
+    // Live stick readout plus re-centring, for pads that drift.
+    key: "gamepadCalibrate",
+    label: "Calibrate Sticks",
+    get desc() {
+      const gp = gamepadManager;
+      if (!gp?.connected) return "Connect a controller, leave both sticks untouched, then select this.";
+      const f = (v) => (v >= 0 ? " " : "") + v.toFixed(2);
+      const [lx, ly, rx, ry] = gp.rawAxes;
+      const [bx, by, cx, cy] = gp.stickBias;
+      return `Hands off the sticks, then select. Now L ${f(lx)} ${f(ly)}  R ${f(rx)} ${f(ry)} · centre L ${f(bx)} ${f(by)}  R ${f(cx)} ${f(cy)}`;
+    },
+    type: "action",
+    buttonLabel: "CALIBRATE",
+    color: "#cc88ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: (g) => g.gamepad?.calibrate?.(),
+  },
   {
     key: "gamepadEnabled",
     label: "Controller Support",
     desc: "Read connected controllers.",
-    category: "Gamepad",
     type: "toggle",
     onColor: "#00ffcc",
     platform: "all",
@@ -599,7 +586,6 @@ export const SETTINGS_REGISTRY = [
     key: "gamepadLookSensitivity",
     label: "Look Sensitivity",
     desc: "Right-stick look speed.",
-    category: "Gamepad",
     type: "slider",
     min: 0.5,
     max: 4.0,
@@ -615,7 +601,6 @@ export const SETTINGS_REGISTRY = [
     key: "gamepadDeadzone",
     label: "Stick Deadzone",
     desc: "Stick travel ignored around centre. Raise to stop drift.",
-    category: "Gamepad",
     type: "slider",
     min: 0.05,
     max: 0.35,
@@ -631,7 +616,6 @@ export const SETTINGS_REGISTRY = [
     key: "gamepadRumble",
     label: "Controller Rumble",
     desc: "Vibration on hits and weapon fire.",
-    category: "Gamepad",
     type: "toggle",
     onColor: "#ffaa00",
     platform: "all",
@@ -642,8 +626,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "fontScale",
     label: "Font Scale",
-    desc: "Size of all interface text.",
-    category: "Accessibility",
+    desc: "Size of HUD and message text.",
     type: "slider",
     min: 100,
     max: 150,
@@ -657,7 +640,6 @@ export const SETTINGS_REGISTRY = [
     key: "colorblind",
     label: "Colorblind Mode",
     desc: "Recolour damage, pickups and markers.",
-    category: "Accessibility",
     type: "enum",
     values: ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
     colors: ["#888888", "#ffcc00", "#ffcc00", "#ffcc00"],
@@ -673,7 +655,6 @@ export const SETTINGS_REGISTRY = [
     key: "hudStyle",
     label: "HUD Style",
     desc: "Preset arrangement of the heads-up display.",
-    category: "HUD",
     type: "enum",
     values: ["Minimal", "Classic DOOM", "Tactical", "Custom", "Vanguard"],
     colors: ["#00ccff", "#ff2200", "#44ffaa", "#cc88ff", "#22e6ff"],
@@ -688,7 +669,6 @@ export const SETTINGS_REGISTRY = [
     key: "editCustomHud",
     label: "Edit Custom HUD",
     desc: "Open the drag-and-drop HUD editor.",
-    category: "HUD",
     type: "action",
     buttonLabel: "EDIT LAYOUT",
     color: "#cc88ff",
@@ -700,7 +680,6 @@ export const SETTINGS_REGISTRY = [
     key: "hudScale",
     label: "HUD Scale",
     desc: "Size of the heads-up display.",
-    category: "HUD",
     type: "slider",
     min: 75,
     max: 125,
@@ -714,7 +693,6 @@ export const SETTINGS_REGISTRY = [
     key: "staminaBarSize",
     label: "Stamina Bar Size",
     desc: "Width of the stamina bar.",
-    category: "HUD",
     type: "slider",
     min: 75,
     max: 150,
@@ -728,7 +706,6 @@ export const SETTINGS_REGISTRY = [
     key: "showPortrait",
     label: "Show Portrait",
     desc: "Character portrait and health face.",
-    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -738,7 +715,6 @@ export const SETTINGS_REGISTRY = [
     key: "showWeapons",
     label: "Show Weapons",
     desc: "Weapon slot strip.",
-    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -748,7 +724,6 @@ export const SETTINGS_REGISTRY = [
     key: "showKills",
     label: "Show Kills",
     desc: "Kill counter.",
-    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -758,7 +733,6 @@ export const SETTINGS_REGISTRY = [
     key: "showScore",
     label: "Show Score",
     desc: "Score readout.",
-    category: "HUD",
     type: "toggle",
     onColor: "#00ccff",
     platform: "all",
@@ -769,7 +743,6 @@ export const SETTINGS_REGISTRY = [
     key: "touchSensitivity",
     label: "Touch Sensitivity",
     desc: "Drag-to-look speed.",
-    category: "Mobile",
     type: "slider",
     min: 0.5,
     max: 3.0,
@@ -784,17 +757,15 @@ export const SETTINGS_REGISTRY = [
     key: "haptics",
     label: "Haptic Feedback",
     desc: "Vibration on touch controls.",
-    category: "Mobile",
     type: "toggle",
     onColor: "#00ffcc",
-    platform: "all",
+    platform: "mobile",
     height: { compact: 30, normal: 44 },
   },
   {
     key: "autoFire",
     label: "Auto-Fire (Twin Stick)",
     desc: "Fire automatically while the right stick is held.",
-    category: "Mobile",
     type: "toggle",
     onColor: "#ffaa00",
     platform: "mobile",
@@ -804,13 +775,31 @@ export const SETTINGS_REGISTRY = [
     key: "swipeWeapons",
     label: "Swipe to Swap Weapons",
     desc: "Swipe across the screen to change weapon.",
-    category: "Mobile",
     type: "toggle",
     onColor: "#00ccff",
     platform: "mobile",
     height: { compact: 30, normal: 44 },
   },
 ];
+
+/** Index of a Graphics Preset option by its display name. */
+function presetIndex(name) {
+  return SETTINGS_REGISTRY.find((d) => d.key === "graphicsPreset").values.indexOf(name);
+}
+
+/**
+ * GamepadManager settings from the game settings. Look inversion is left
+ * out on purpose: pad look feeds the mouse delta, and the aim path applies
+ * invertY to both, so the pad inverting too cancelled it out.
+ */
+export function gamepadSettingsFrom(settings) {
+  return {
+    enabled: settings.gamepadEnabled,
+    deadzone: settings.gamepadDeadzone,
+    lookSensitivity: settings.gamepadLookSensitivity,
+    vibrationEnabled: settings.gamepadRumble,
+  };
+}
 
 /** Filter registry by platform */
 export function getVisibleSettings(isTouchDevice, settings) {
@@ -822,21 +811,6 @@ export function getVisibleSettings(isTouchDevice, settings) {
       (s.platform === "desktop" && !isTouchDevice)
     );
   });
-}
-
-/** Filter registry by platform AND category */
-export function getSettingsForCategory(isTouchDevice, category, settings) {
-  return getVisibleSettings(isTouchDevice, settings).filter(
-    (s) => s.category === category,
-  );
-}
-
-/** Return ordered list of categories that have at least one visible setting */
-export function getVisibleCategories(isTouchDevice, settings) {
-  const visible = getVisibleSettings(isTouchDevice, settings);
-  return SETTING_CATEGORIES.filter((cat) =>
-    visible.some((s) => s.category === cat),
-  );
 }
 
 /**
@@ -866,12 +840,26 @@ export function applySettingStep(settings, def, direction) {
 export function settingDisplayItem(def, settings) {
   const v = settings[def.key];
   switch (def.type) {
-    case "toggle":
+    case "toggle": {
+      // A preset or Battery Saver can hold an effect off; say so rather than
+      // show ON for something that is not drawn.
+      const cap = v && def.capped ? effectCapReason(settings, def.key) : null;
+      if (cap) {
+        return {
+          label: def.label,
+          value: cap === "preset" ? "OFF (preset)" : "OFF (saver)",
+          color: "#888888",
+          note: cap === "preset"
+            ? "Held off by the Graphics Preset; choose Auto, Ultra or Custom to use it."
+            : "Held off while Battery Saver is on.",
+        };
+      }
       return {
         label: def.label,
         value: v ? "ON" : "OFF",
         color: v ? def.onColor || "#00ccff" : "#888888",
       };
+    }
     case "enum":
       return {
         label: def.label,

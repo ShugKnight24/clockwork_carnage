@@ -285,15 +285,15 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
-    /** Navigate to settings */
-    showSettings() {
-      game.state = GameState.SETTINGS;
+    /** Navigate to settings; it returns to the menu only when opened from there. */
+    showSettings(returnTo = game.state === GameState.MODE_SELECT ? "menu" : "pause") {
+      game.openSettings({ returnTo });
       return game.state;
     },
 
-    /** Navigate to controls */
+    /** Navigate to the settings deck's Controls section */
     showControls() {
-      game.state = GameState.CONTROLS;
+      game.openSettings({ returnTo: "pause", section: "controls" });
       return game.state;
     },
 
@@ -690,7 +690,6 @@ export function createDebugBridge(game) {
         renderScale: game.quality.renderScale,
         particles: game.quality.particleMultiplier,
         drawDistance: game.quality.drawDistance,
-        scanlines: game.quality.enableScanlines,
         vignette: game.quality.enableVignette,
         floorTexture: game.quality.enableFloorTexture,
       };

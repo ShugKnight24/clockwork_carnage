@@ -6,8 +6,11 @@ import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
-import { InputManager, DEFAULT_KEYBINDS } from "./input-manager.js";
+import { InputManager } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
+import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
+import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
+import { initXInputUsb } from "./xinput-usb.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
@@ -53,9 +56,6 @@ import {
   upgradeLayout,
   tutorialMenuLayout,
   isCompactPhone,
-  settingsLayout,
-  settingsCategoryRects,
-  resolveSettingsHit,
 } from "./layout.js";
 import { styleName, spawnFromMeta, standableNear, fallbackEnemyArea } from "../src/systems/voxel-glue.js";
 import { World } from "../src/world/world.js";
@@ -112,6 +112,8 @@ import { drawPortrait as _drawPortrait } from "../src/ui/portrait.js";
 import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
 import { renderStatsCard } from "../src/ui/stats-card.js";
 import { renderHUD as _renderHUD } from "../src/ui/hud.js";
+import { startShowcase, stopShowcase, updateShowcase } from "../src/systems/showcase.js";
+import { updateDirector, directorInput } from "../src/cinematic/director.js";
 import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaign-prompt.js";
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
@@ -119,12 +121,6 @@ import {
   renderTeachCard as _renderTeachCard,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
 } from "../src/ui/tutorial-ui.js";
-import { renderSettingsScreen as _renderSettingsScreen } from "../src/ui/settings-screen.js";
-import {
-  renderControlsScreen as _renderControlsScreen,
-  drawControlsOverlay as _drawControlsOverlay,
-  formatKeyCode as _formatKeyCode,
-} from "../src/ui/controls-screen.js";
 import {
   renderGameOver as _renderGameOver,
   renderVictory as _renderVictory,
@@ -142,25 +138,11 @@ import { decay } from "../src/utils/math.js";
 
 export { GAME_VERSION } from "../src/constants.js";
 
-import {
-  COMPACT_PHONE_HEIGHT,
-  DEFAULT_SETTINGS,
-  SETTINGS_REGISTRY,
-  getVisibleSettings,
-  getSettingsForCategory,
-  getVisibleCategories,
-  settingDisplayItem,
-  applySettingStep,
-} from "./settings-registry.js";
+import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
+import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-export {
-  COMPACT_PHONE_HEIGHT,
-  SETTINGS_REGISTRY,
-  getVisibleSettings,
-  settingDisplayItem,
-  applySettingStep,
-};
-
+import { installInputTracking, padActive, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
+import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
 import { TutorialSystem } from "./tutorial-system.js";
@@ -304,17 +286,8 @@ export class Game {
     this.deathTimer = 0;
     this.pauseSaveFlash = 0;
     this.settings = { ...DEFAULT_SETTINGS };
-    this.settingsSelection = 0;
-    this.settingsCategory = "Gameplay"; // active sidebar category
-    this.settingsScroll = 0; // pixel scroll offset of the settings row list
     this.lastEscTime = 0;
-    // Mouse hover tracking for settings UI
-    this._settingsMouseX = -1;
-    this._settingsMouseY = -1;
     document.addEventListener("mousemove", (e) => {
-      // The Forge's inventory screen wants the same CSS-pixel conversion as
-      // settings. The two branches are keyed off the game state, so only one
-      // of them can ever run for a given move.
       if (this.state === GameState.BUILDER && this.builder?.invOpen) {
         // The Forge HUD is drawn on the GAME canvas, which render-pipeline
         // sizes with budgetedRenderSize x stableScale — smaller than hudW on a
@@ -328,34 +301,6 @@ export class Game {
           (e.clientY - rect.top) * (this.canvas.height / rect.height),
         );
       }
-      if (this.state !== GameState.SETTINGS) {
-        if (this.canvas.style.cursor === "pointer")
-          this.canvas.style.cursor = "";
-        return;
-      }
-      const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
-      const sx = (e.clientX - rect.left) * (this.hudW / rect.width);
-      const sy = (e.clientY - rect.top) * (this.hudH / rect.height);
-      this._settingsMouseX = sx;
-      this._settingsMouseY = sy;
-      // Pointer cursor only where a click actually does something.
-      const layout = settingsLayout(
-        this.hudW,
-        this.hudH,
-        this.settingsSelection,
-        this.isTouchDevice,
-        this.settingsCategory,
-        this.settingsScroll,
-        false
-      );
-      const cats = getVisibleCategories(this.isTouchDevice, this.settings);
-      const hit = resolveSettingsHit(
-        layout,
-        settingsCategoryRects(layout, cats),
-        sx,
-        sy
-      );
-      this.canvas.style.cursor = hit.kind === "none" ? "" : "pointer";
     });
 
     // Share URL handling
@@ -368,7 +313,11 @@ export class Game {
       canvas: this.canvas,
       onKeyDown: (code, e) => this._inputKeyDown(code, e),
       onKeyUp: (code) => {
-        /* state machine reacts to held keys each frame */ void code;
+        // Play reacts to held keys each frame; only the settings deck wants
+        // releases (holding C shows a setting's previous value), and a reel
+        // (the lore video's hold to skip).
+        if (this.state === GameState.SETTINGS) this.settingsDeck?.handleKeyUp(code);
+        if (this.state === GameState.CINEMATIC) directorInput(this, "key", { down: false, code });
       },
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
@@ -378,6 +327,7 @@ export class Game {
         // state: a play-test started mid-hold would otherwise swallow the
         // release and leave the Forge thinking the button is still down.
         this.builder?.handleMouseUp(e.button);
+        if (this.state === GameState.CINEMATIC) directorInput(this, "pointer", { down: false });
         if (e.button === 0) this.player.isFiring = false;
         if (e.button === 2) this.player.isAiming = false;
       },
@@ -396,6 +346,20 @@ export class Game {
     this._gamepadPrevKeys = new Set();
     this._gamepadNextKeys = new Set();
     this._lastGamepadMove = { x: 0, y: 0 };
+    // Which device the prompts show (src/ui/input-glyphs.js): the last one used.
+    installInputTracking(this);
+    // The Gamepad settings page shows this; a chime marks a pad arriving or leaving.
+    bindGamepadStatus(this.gamepad.status, this.gamepad);
+    this.gamepad.onConnect = (name) => {
+      console.info(`[gamepad] using ${name} (${this.gamepad.mappingKind} mapping)`);
+      this.audio?.menuSelect?.();
+    };
+    this.gamepad.onDisconnect = (name) => {
+      console.info(`[gamepad] ${name} disconnected`);
+      this.audio?.menuSelect?.();
+    };
+    // Wired third-party Xbox 360 pads Chrome's own driver skips (macOS).
+    this.xinputUsb = initXInputUsb(this.gamepad);
     this.applyGamepadSettings();
 
     // Previous-frame key state tracking for edge-detection (crouch start)
@@ -408,8 +372,6 @@ export class Game {
     this.chronoPowers = new ChronoPowers();
     this.chronoHazards = new ChronoHazards();
     this.voxelAiSystem = new VoxelAISystem();
-    this.controlsSelection = 0;
-    this.rebindingKey = null; // null = not rebinding, string = action being rebound
 
     // Forge mode (extracted)
     this.builder = null; // Lazy-loaded on Forge entry
@@ -498,6 +460,9 @@ export class Game {
     // The title-screen toggle flips the style outside the settings menu; keep
     // the saved setting in step so the choice persists.
     onArtStyleChange((style, prev) => {
+      // A reel's style flip (src/cinematic/director.js) is for its shot
+      // only: nothing is saved or released, and the player's style comes back.
+      if (this._reelArtStyle) return;
       // Leaving the Modern asset set for Legacy: hand back the decoded SVG
       // bitmaps and the 512px environment art rather than keeping them warm
       // for a style that is no longer drawn. Modern <-> Realistic share them.
@@ -547,6 +512,7 @@ export class Game {
    * @param {string} [from] - state to return to on resume (defaults to current)
    */
   pauseGame(from) {
+    this.pauseQuitConfirm = false;
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
@@ -610,6 +576,15 @@ export class Game {
     }
     // Tritanopia: remap blue/yellow
     if (m === 3) {
+      // Health green would read close to the remapped cyan; push it to teal
+      // so full, hurt (orange) and critical (red) stay three distinct tones.
+      if (
+        lower === "#00ff66" ||
+        lower === "#44ff44" ||
+        lower === "#00ff00" ||
+        lower === "#00cc44"
+      )
+        return "#22ffdd";
       if (lower === "#00ccff" || lower === "#00ddff" || lower === "#00ffcc")
         return "#ff88cc"; // cyan → pink
       if (lower === "#ffcc00" || lower === "#ffaa00") return "#ff8844"; // yellow → orange
@@ -621,6 +596,10 @@ export class Game {
     // InputManager was created in the constructor and registered all DOM
     // listeners. This method now just loads saved keybinds from localStorage.
     this.input.loadKeybinds();
+    // Controller remaps (the settings deck) edit the live table in place.
+    try {
+      Object.assign(GAMEPAD_ACTIONS, loadPadBinds(localStorage.getItem(STORAGE_KEY_PADBINDS)));
+    } catch (_) {}
   }
 
   /** Handles the keydown part that needs full game state context. */
@@ -633,22 +612,6 @@ export class Game {
         if (e.code !== "Escape") return;
       }
       if (this.builder && this.builder.handleKeyDown(e)) return;
-    }
-    // Rebinding mode — capture the next key
-    if (this.state === GameState.CONTROLS && this.rebindingKey) {
-      e.preventDefault();
-      if (e.code !== "Escape") {
-        const { swappedAction } = this.input.rebind(this.rebindingKey, e.code);
-        if (swappedAction) {
-          this._keybindSwapFlash = {
-            action: swappedAction,
-            time: performance.now(),
-          };
-        }
-        this.saveSettings();
-      }
-      this.rebindingKey = null;
-      return;
     }
     // Tab cycles creator categories (input-dispatch); only stop the browser
     // moving focus off the canvas. It used to call a method that never existed.
@@ -673,21 +636,30 @@ export class Game {
         e.stopImmediatePropagation();
       }
     }
+    const wasSettings = this.state === GameState.SETTINGS;
     this.handleKeyPress(e.code, e);
+    // Leaving Settings for the menu must not also reach main.js's mode-select
+    // listener, which would take the same Escape as "back to the title".
+    if (wasSettings && this.state === GameState.MODE_SELECT) e.stopImmediatePropagation();
   }
 
   /** Handles all mousedown events with full game state context. */
   _inputMouseDown(e) {
-    // Cutscene: click to advance frame (manual advance)
+    // A reel: any button skips it (or starts the lore video's hold).
+    if (this.state === GameState.CINEMATIC) {
+      directorInput(this, "pointer", { down: true });
+      return;
+    }
+    // Cutscene: click the AUTO chip to toggle auto-play, anywhere else to
+    // advance a frame (manual advance)
     if (this.state === GameState.CUTSCENE && e.button === 0) {
-      this.advanceCutsceneFrame();
+      if (this.cutsceneAutoChipHit(e.clientX, e.clientY)) this.toggleCutsceneAuto();
+      else this.advanceCutsceneFrame();
       return;
     }
-    // Settings
-    if (this.state === GameState.SETTINGS) {
-      if (e.button === 0) this._handleSettingsClick(e);
-      return;
-    }
+    // Settings: the deck handles its own pointer events, and a click on the
+    // live view beside it does nothing (in particular, never takes the pointer).
+    if (this.state === GameState.SETTINGS) return;
     
     // HUD Editor
     if (this.state === GameState.HUD_EDITOR) {
@@ -695,7 +667,7 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
-      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
+      this.hudEditor.update(this.deltaTime, mx, my, !!this.keys[this.keybinds.interact] || this.mouse.down);
       return;
     }
     if (this.state === GameState.CHARACTER_CREATE && e.button === 0) {
@@ -749,31 +721,10 @@ export class Game {
     }
   }
 
-  /** Mouse-wheel: weapon cycling in play, row navigation in settings. */
+  /** Mouse-wheel: weapon cycling in play, block cycling in the Forge. */
   _inputWheel(deltaY) {
     if (this.state === GameState.BUILDER) {
       this.builder?.handleWheel(deltaY);
-      return;
-    }
-    if (this.state === GameState.SETTINGS) {
-      const layout = settingsLayout(
-        this.hudW,
-        this.hudH,
-        this.settingsSelection,
-        this.isTouchDevice,
-        this.settingsCategory,
-        this.settingsScroll,
-        false
-      );
-      if (layout.maxScroll <= 0) return;
-      // Follow the wheel's own delta where the browser gives one; the gamepad
-      // path passes ±1, which floors to one row-ish step.
-      const dir = deltaY > 0 ? 1 : -1;
-      const step = Math.min(160, Math.max(48, Math.abs(deltaY)));
-      this.settingsScroll = Math.max(
-        0,
-        Math.min(layout.maxScroll, this.settingsScroll + dir * step)
-      );
       return;
     }
     if (this.state !== GameState.PLAYING) return;
@@ -807,6 +758,84 @@ export class Game {
     dispatchKeyPress(this, code, e);
   }
 
+  /**
+   * Every way into Settings goes through here, so the deck always knows
+   * where to return: the mode-select menu, the pause menu, or the HUD editor.
+   * The render pipeline opens the deck on the first SETTINGS frame.
+   */
+  openSettings({ returnTo = "pause", section } = {}) {
+    this.state = GameState.SETTINGS;
+    this._settingsReturnTo = returnTo;
+    this._settingsSection = section ?? null;
+    // Back from the HUD editor the showcase is still up; keep it.
+    if (returnTo === "menu" && !this._showcase) this._startShowcase();
+  }
+
+  /**
+   * From the menu there is no match to show behind the deck, so a showcase
+   * level loads instead. The canvases stay hidden while it builds (the
+   * environment bake and the camera path take a few frames), then fade in.
+   */
+  _startShowcase() {
+    const canvases = [this.canvas, this.hudCanvas];
+    for (const c of canvases) {
+      c.style.transition = "none";
+      c.style.opacity = "0";
+    }
+    // The menu's own low ambient under the scene (a no-op if it is already on).
+    this.audio.startAmbient?.("menu");
+    const campaignSave = this.getSaveInfo().find((s) => s.mode === "campaign") ?? null;
+    const run = startShowcase(this, { campaignSave });
+    const token = this._showcase;
+    run
+      .then(() => {
+        if (this._showcase !== token) return;
+        for (const c of canvases) {
+          c.style.transition = "opacity 300ms ease-out";
+          c.style.opacity = "1";
+        }
+      })
+      .catch((err) => {
+        console.warn("[settings] showcase failed to load", err);
+        this._stopShowcase();
+      });
+  }
+
+  _showcaseBehindEditor() {
+    return this.state === GameState.HUD_EDITOR && this._settingsReturnTo === "menu";
+  }
+
+  /** Unload the showcase (if any) and put the canvases back as they were. */
+  _stopShowcase() {
+    stopShowcase(this);
+    for (const c of [this.canvas, this.hudCanvas]) {
+      c.style.transition = "";
+      c.style.opacity = "";
+    }
+  }
+
+  onSettingsDeckClose(returnTo) {
+    this._stopShowcase();
+    this.saveSettings();
+    // One open's return target and section never leak into the next, and a
+    // pad Y still held as the deck closes starts fresh next time.
+    this._settingsReturnTo = null;
+    this._settingsSection = null;
+    this._padCompareHeld = false;
+    if (returnTo === "menu") {
+      // main.js's loop restores the rest of the menu (canvases hidden,
+      // continue buttons) on the state change, as the old Back did.
+      this.state = GameState.MODE_SELECT;
+      const menu = document.getElementById("modeSelect");
+      menu?.classList.remove("hidden");
+      document.getElementById("btnSettings")?.focus({ preventScroll: true });
+    } else if (returnTo === "hud") {
+      this.hudEditor.start(); // reloads its layout as well as the state
+    } else {
+      this.state = GameState.PAUSED;
+    }
+  }
+
   _setGamepadKey(code, on, nextHeld) {
     if (!on) return; // release is handled in _updateGamepadInput so keyboard holds survive
     nextHeld.add(code);
@@ -817,11 +846,28 @@ export class Game {
   _updateGamepadInput(dt) {
     if (!this.gamepad || !this.settings.gamepadEnabled) return;
     const gp = this.gamepad.poll();
-    if (!gp.connected) return;
 
     // Two sets swapped each frame, so polling allocates nothing.
     const nextHeld = this._gamepadNextKeys;
     nextHeld.clear();
+    // A pad unplugged mid-stride still lets go of the keys it was holding.
+    if (!gp.connected) {
+      this._releaseGamepadKeys(nextHeld);
+      return;
+    }
+    trackGamepad(this, gp);
+    // The title's attract loop counts idle time from the last input, pads included.
+    if (padActive(gp)) this.lastPadInputAt = performance.now();
+    // A reel takes any button as its skip (the lore video's as a hold);
+    // nothing reaches play or the menus underneath.
+    if (this.state === GameState.CINEMATIC) {
+      if (gp.buttonPressed >= 0) directorInput(this, "pad", { down: true });
+      else if (this._reelPadHeld && !gp.anyButton) directorInput(this, "pad", { down: false });
+      this._reelPadHeld = gp.anyButton;
+      this._releaseGamepadKeys(nextHeld);
+      return;
+    }
+    this._reelPadHeld = false;
     const moveX = gp.moveX;
     const moveY = gp.moveY;
     if (Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05) {
@@ -829,39 +875,56 @@ export class Game {
       this._lastGamepadMove.y = moveY;
     }
 
-    this._setGamepadKey(this.keybinds.moveForward, moveY < -0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveBack, moveY > 0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveLeft, moveX < -0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.moveRight, moveX > 0.25, nextHeld);
-    this._setGamepadKey(this.keybinds.sprint, gp.sprint, nextHeld);
-    this._setGamepadKey(this.keybinds.crouch, gp.reload, nextHeld);
-    this._setGamepadKey(this.keybinds.chronoShift, gp.chronoShift, nextHeld);
+    // Actions come from the pad's binding table (src/systems/pad-actions.js),
+    // read by what they mean here: gameplay while PLAYING, menus elsewhere.
+    const held = gp.pressed;
+    const jp = gp.justPressed;
 
-    if (this.state === GameState.TITLE && gp.justPressed.interact) {
+    // In menus the left stick navigates through justPressed.nav*; holding
+    // W/A/S/D as well would move the selection twice.
+    const stickMoves = this.state === GameState.PLAYING || this.state === GameState.BUILDER;
+    this._setGamepadKey(this.keybinds.moveForward, stickMoves && moveY < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveBack, stickMoves && moveY > 0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveLeft, stickMoves && moveX < -0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.moveRight, stickMoves && moveX > 0.25, nextHeld);
+    this._setGamepadKey(this.keybinds.sprint, stickMoves && held.sprint, nextHeld);
+    this._setGamepadKey(this.keybinds.crouch, stickMoves && held.crouch, nextHeld);
+    // Play only: the shift key is Q, which menus and the Forge already get
+    // from prevTab on the same bumper.
+    this._setGamepadKey(this.keybinds.chronoShift, this.state === GameState.PLAYING && held.chronoShift, nextHeld);
+
+    if (this.state === GameState.TITLE && jp.start) {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "GamepadStart", bubbles: true }));
     }
     // X / Select cycles the title-screen art style (the DOM toggle has no pad focus).
-    if (this.state === GameState.TITLE && (gp.justPressed.reload || gp.justPressed.minimap)) {
+    if (this.state === GameState.TITLE && (jp.artStyle || jp.minimap)) {
       setArtStyle((getArtStyle() + 1) % ART_STYLES.length);
     }
     if (this.state === GameState.MODE_SELECT) {
-      if (gp.justPressed.dpadUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
-      if (gp.justPressed.dpadDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
-      if (gp.justPressed.interact) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
-      if (gp.justPressed.pause || gp.justPressed.dash) document.getElementById("btnBack")?.click();
+      if (jp.navUp) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", bubbles: true }));
+      if (jp.navDown) document.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }));
+      if (jp.confirm) document.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", bubbles: true }));
+      if (jp.pause || jp.back) document.getElementById("btnBack")?.click();
     }
-    if (this.state === GameState.PLAYING) {
-      this.player.isFiring = gp.shoot;
-      this.player.isAiming = gp.aim;
-      if (gp.aim || gp.shoot || gp.lookX || gp.lookY) this.lastInputWasGamepad = true;
+    if (this.state === GameState.PLAYING && this._meltdownUpgradeChoices) {
+      // The meltdown upgrade overlay takes the keyboard's arrows + Enter.
+      this.player.isFiring = false;
+      this.player.isAiming = false;
+      if (jp.navLeft || jp.navUp) this.handleKeyPress("ArrowLeft");
+      if (jp.navRight || jp.navDown) this.handleKeyPress("ArrowRight");
+      if (jp.confirm) this.handleKeyPress("Enter");
+    } else if (this.state === GameState.PLAYING) {
+      const p = this.player;
+      p.isFiring = held.fire;
+      p.isAiming = held.aim;
       if (gp.lookX || gp.lookY) {
         const aimScale = 420 * dt;
         this.mouse.dx += gp.lookX * aimScale;
         this.mouse.dy += gp.lookY * aimScale;
       }
-      if (gp.justPressed.dash) {
-        const cos = Math.cos(this.player.angle);
-        const sin = Math.sin(this.player.angle);
+      if (jp.dash) {
+        const cos = Math.cos(p.angle);
+        const sin = Math.sin(p.angle);
         const lx = this._lastGamepadMove.x || 0;
         const ly = this._lastGamepadMove.y || -1;
         const rawX = cos * -ly + sin * lx;
@@ -869,31 +932,89 @@ export class Game {
         this.triggerDash(this.keybinds.moveForward, rawX, rawY);
         this.gamepad.vibrateLight();
       }
-      if (gp.justPressed.interact) this.interact();
-      if (gp.justPressed.weaponNext || gp.justPressed.dpadRight) this._inputWheel(1);
-      // LB while shifting is Nova's Rewind (spec decision 4); otherwise it
-      // cycles weapons as it always has.
-      const rewindPad = gp.justPressed.weaponPrev && this.player.chronoActive && this.chronoPowers.has("rewind");
-      if (rewindPad) this.chronoRewind();
-      if ((gp.justPressed.weaponPrev && !rewindPad) || gp.justPressed.dpadLeft) this._inputWheel(-1);
-      if (gp.justPressed.chronoLock) this.chronoLock();
-      if (gp.justPressed.pause) this.handleKeyPress(this.keybinds.pause);
+      if (jp.interact) this.interact();
+      // Rewind shares its bumper with previous weapon: while shifting with
+      // Nova's power it rewinds (spec decision 4), otherwise it cycles.
+      const rewind = jp.chronoRewind && p.chronoActive && this.chronoPowers.has("rewind");
+      if (rewind) this.chronoRewind();
+      const weaponBefore = p.currentWeapon;
+      if (jp.weaponNext || jp.weaponCycleNext) this._inputWheel(1);
+      if ((jp.weaponPrev && !rewind) || jp.weaponCyclePrev) this._inputWheel(-1);
+      if (jp.weaponLast && p.lastWeapon >= 0 && p.lastWeapon < p.weapons.length) p.currentWeapon = p.lastWeapon;
+      if (jp.weaponFirst && p.weapons.length) p.currentWeapon = 0; // slot 1, as the 1 key
+      // The tutorial's switch step only heard the number keys and touch.
+      if (p.currentWeapon !== weaponBefore && this.mode === "tutorial") this.tutorialWeaponSwapped = true;
+      if (jp.chronoLock) this.chronoLock();
+      if (jp.pause) this.handleKeyPress(this.keybinds.pause);
+    } else if (this.state === GameState.PAUSED) {
+      this._padPauseMenu(jp);
+    } else if (this.state === GameState.SETTINGS && this.settingsDeck?.state.capture) {
+      // A remap capture takes the raw button; A must not also click, B is its cancel.
+      if (gp.buttonPressed >= 0) this.settingsDeck.captureInput({ kind: "button", index: gp.buttonPressed });
     } else {
-      if (gp.justPressed.dpadUp) this.handleKeyPress("ArrowUp");
-      if (gp.justPressed.dpadDown) this.handleKeyPress("ArrowDown");
-      if (gp.justPressed.dpadLeft) this.handleKeyPress("ArrowLeft");
-      if (gp.justPressed.dpadRight) this.handleKeyPress("ArrowRight");
-      if (gp.justPressed.interact) this.handleKeyPress("Enter");
-      if (gp.justPressed.pause || gp.justPressed.dash) this.handleKeyPress("Escape");
-      if (gp.justPressed.weaponPrev) this.handleKeyPress("KeyQ");
-      if (gp.justPressed.weaponNext) this.handleKeyPress("KeyE");
+      // The Forge walks on the stick, so only its d-pad maps to arrows; B
+      // holds crouch there (descend), so only Start leaves it.
+      const forge = this.state === GameState.BUILDER;
+      const cutscene = this.state === GameState.CUTSCENE;
+      // A held direction repeats as a held key does, flagged so the deck's
+      // repeat rules apply (sliders slide, toggles flip once).
+      const nav = (code, fire, repeat) => fire && this.handleKeyPress(code, repeat ? { code, repeat: true } : undefined);
+      nav("ArrowUp", forge ? jp.dpadUp : jp.navUp, !forge && jp.navUpRepeat);
+      nav("ArrowDown", forge ? jp.dpadDown : jp.navDown, !forge && jp.navDownRepeat);
+      nav("ArrowLeft", forge ? jp.dpadLeft : jp.navLeft, !forge && jp.navLeftRepeat);
+      nav("ArrowRight", forge ? jp.dpadRight : jp.navRight, !forge && jp.navRightRepeat);
+      if (cutscene ? jp.advance : jp.confirm) this.handleKeyPress("Enter");
+      if (jp.pause || (!forge && (cutscene ? jp.skip : jp.back))) this.handleKeyPress("Escape");
+      if (jp.prevTab) this.handleKeyPress("KeyQ");
+      if (jp.nextTab) this.handleKeyPress("KeyE");
+      if (cutscene && jp.auto) this.toggleCutsceneAuto();
       // Showroom face buttons: X randomize, Y save & deploy.
       if (this.state === GameState.CHARACTER_CREATE && isModernArt()) {
-        if (gp.justPressed.reload) this.handleKeyPress("GamepadX");
-        if (gp.justPressed.chronoShift) this.handleKeyPress("GamepadY");
+        if (jp.randomize) this.handleKeyPress("GamepadX");
+        if (jp.deploy) this.handleKeyPress("GamepadY");
+      }
+      // Settings deck: X resets the row, holding Y shows its previous value.
+      if (this.state === GameState.SETTINGS) {
+        if (jp.randomize) this.handleKeyPress("KeyX");
+        if (jp.deploy) this.handleKeyPress("GamepadY");
+        if (this._padCompareHeld && !held.deploy) this.settingsDeck?.handleKeyUp("GamepadY");
       }
     }
+    this._padCompareHeld = this.state === GameState.SETTINGS && !!held.deploy;
 
+    this._releaseGamepadKeys(nextHeld);
+  }
+
+  /**
+   * The pause menu on a pad: A / B / Start resume, Y or View opens Settings,
+   * X asks to quit. LB used to arrive as Q and quit to the title in one
+   * press, so quitting from a pad now waits for A (B or Start cancels).
+   */
+  _padPauseMenu(jp) {
+    if (this.pauseQuitConfirm) {
+      if (jp.confirm) {
+        this.pauseQuitConfirm = false;
+        this.handleKeyPress("KeyQ");
+      } else if (jp.back || jp.pause) {
+        this.pauseQuitConfirm = false;
+        this.audio.menuSelect?.();
+      }
+      return;
+    }
+    // Up / down scroll the ARIA log when it is open.
+    if (jp.navUp) this.handleKeyPress("ArrowUp");
+    if (jp.navDown) this.handleKeyPress("ArrowDown");
+    if (jp.confirm) this.handleKeyPress("Enter");
+    else if (jp.back || jp.pause) this.handleKeyPress("Escape");
+    else if (jp.deploy || jp.minimap) this.handleKeyPress("KeyS");
+    else if (jp.randomize && !this.showAriaLog) {
+      this.pauseQuitConfirm = true;
+      this.audio.menuSelect?.();
+    }
+  }
+
+  /** Let go of pad-held keys not in `nextHeld`, then swap the two sets. */
+  _releaseGamepadKeys(nextHeld) {
     for (const code of this._gamepadPrevKeys) {
       if (!nextHeld.has(code)) this.keys[code] = false;
     }
@@ -911,7 +1032,18 @@ export class Game {
   // Save / Load
   // ── Save/Load (delegated to SaveSystem) ──────────────────
   saveSettings() {
-    Persistence.saveSettings(this);
+    // A compare hold shows the previous value live; what persists is still
+    // the chosen one, so a reload or crash mid-hold cannot keep "before".
+    const deck = this.settingsDeck;
+    const key = deck?.compareKey;
+    if (!key) return Persistence.saveSettings(this);
+    const shown = this.settings[key];
+    this.settings[key] = deck.compareValue;
+    try {
+      Persistence.saveSettings(this);
+    } finally {
+      this.settings[key] = shown;
+    }
   }
 
   loadSettings() {
@@ -920,13 +1052,7 @@ export class Game {
 
   applyGamepadSettings() {
     if (!this.gamepad) return;
-    this.gamepad.updateSettings({
-      enabled: this.settings.gamepadEnabled,
-      deadzone: this.settings.gamepadDeadzone,
-      lookSensitivity: this.settings.gamepadLookSensitivity,
-      vibrationEnabled: this.settings.gamepadRumble,
-      invertLookY: this.settings.invertY,
-    });
+    this.gamepad.updateSettings(gamepadSettingsFrom(this.settings));
   }
 
   /** Push the Render Mode setting into the renderer (auto / 2D / WebGL). */
@@ -936,47 +1062,45 @@ export class Game {
 
   applyPerformanceSettings() {
     if (!this.quality) return;
-    const prevScale = this.quality.renderScale;
-    const presets = ["auto", "ultra-low", "low", "medium", "high", "ultra", "custom"];
-    const preset = presets[this.settings.graphicsPreset] || "auto";
-    const presetParticles = { "ultra-low": 0.15, low: 0.3, medium: 0.5, high: 0.8, ultra: 1 };
+    const q = this.quality;
+    const s = this.settings;
+    const prevScale = q.renderScale;
+    const preset = GRAPHICS_PRESETS[s.graphicsPreset] || "auto";
     const targets = [55, 30, 60, 90, 120];
-    this.quality.targetFPS = this.settings.batterySaver ? 30 : targets[this.settings.frameTarget] || 55;
-    this.quality.maxScale = this.settings.batterySaver ? Math.min(this.quality.maxScale, 0.7) : 1.0;
+    q.targetFPS = s.batterySaver ? 30 : targets[s.frameTarget] || 55;
+    q.maxScale = s.batterySaver ? 0.7 : 1.0;
+    // Choosing a preset or toggling Battery Saver starts from that mode's
+    // full scale. The governor calls this too after each step; those calls
+    // keep its current scale.
+    const mode = `${preset}|${!!s.batterySaver}`;
+    const modeChanged = mode !== this._perfMode;
+    this._perfMode = mode;
     if (preset === "auto") {
-      this.quality.useAuto();
-      if (this.settings.batterySaver && this.quality.renderScale > this.quality.maxScale) {
-        this.quality.renderScale = this.quality.stableScale = this.quality.maxScale;
-      }
+      q.useAuto();
+      if (modeChanged || q.renderScale > q.maxScale) q.resetScale();
     } else if (preset !== "custom") {
-      this.quality.applyPreset(preset);
+      q.applyPreset(preset);
     }
-    const effectMul = [0.3, 0.6, 1][this.settings.effectsQuality] ?? 1;
+    // Presets and Battery Saver cap effects at runtime; the player's toggles
+    // are left as saved (Battery Saver used to overwrite enableBloom and CA).
+    const ceil = effectCeilings(s);
+    const effectMul = [0.3, 0.6, 1][s.effectsQuality] ?? 1;
+    const p = QUALITY_PRESETS[preset];
+    const caps = {
+      particleMultiplier: (p?.particleMultiplier ?? 1) * effectMul * (s.batterySaver ? 0.6 : 1),
+      drawDistance: p?.drawDistance ?? 20,
+      enableVignette: s.postProcessing && ceil.enableVignette,
+      enableFloorTexture: s.floorTexture && ceil.enableFloorTexture,
+    };
     if (preset === "auto") {
-      const scale = this.quality.renderScale;
-      const low = scale < 0.6;
-      const med = scale < 0.8;
-      this.quality.particleMultiplier = (low ? 0.3 : med ? 0.5 : 1) * effectMul * (this.settings.batterySaver ? 0.6 : 1);
-      this.quality.drawDistance = low ? 10 : med ? 14 : 20;
-      this.quality.enableScanlines = this.settings.postProcessing && !med;
-      this.quality.enableVignette = this.settings.postProcessing && !low;
-      this.quality.enableFloorTexture = this.settings.floorTexture && !low;
+      q.setCaps(caps);
     } else {
-      const isCustom = preset === "custom";
-      const customParticles = preset === "custom" ? 1 : (presetParticles[preset] ?? 1);
-      this.quality.applyCustom({
-        renderScale: Math.min(isCustom ? this.settings.renderScale / 100 : this.quality.renderScale, this.quality.maxScale),
-        particleMultiplier: customParticles * effectMul * (this.settings.batterySaver ? 0.6 : 1),
-        enableVignette: this.settings.postProcessing && !this.settings.batterySaver,
-        enableScanlines: this.settings.postProcessing && !this.settings.batterySaver,
-        enableFloorTexture: this.settings.floorTexture,
-      });
+      const scale = preset === "custom" ? s.renderScale / 100 : q.renderScale;
+      q.applyCustom({ renderScale: Math.min(scale, q.maxScale), ...caps });
     }
-    // Battery saver: also disable bloom & CA for max power savings
-    if (this.settings.batterySaver) {
-      this.settings.enableBloom = false;
-      this.settings.enableChromaticAberration = false;
-    }
+    q.enableBloom = ceil.enableBloom;
+    q.enableChromaticAberration = ceil.enableChromaticAberration;
+    q.enableFilmGrain = ceil.enableFilmGrain;
     this.quality.stableScale = this.quality.renderScale;
     if (Math.abs(prevScale - this.quality.renderScale) > 0.001) {
       window.dispatchEvent(new CustomEvent("cc-quality-change"));
@@ -1340,7 +1464,7 @@ export class Game {
   }
 
   renderCampaignPrompt(ctx, w, h) {
-    _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0);
+    _renderCampaignPrompt(ctx, w, h, this.campaignPromptSelection || 0, this);
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
@@ -1381,6 +1505,7 @@ export class Game {
     this._tutorialCardBottom = _renderTutorialOverlay(ctx, w, h, {
       mode: this.mode,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
     });
@@ -1411,7 +1536,7 @@ export class Game {
         d.post(key, "teach", null);
       }
       if (!d.showing(key)) return;
-      const step = { title: teachHint(hint.card.title, this).toUpperCase(), hint: teachHint(hint.card.hint, this), color: "#ffae3a" };
+      const step = { title: teachHint(hint.card.title, this).toUpperCase(), hint: teachHint(hint.card.hint, this), color: "#ffae3a", pad: padFor(this) };
       const lane = d.lanes?.headline;
       _renderTeachCard(ctx, w, h, step, age + 1, Math.min(1, (7 - age) / 1.2), {
         top: lane ? lane.y + 6 : 60,
@@ -1437,7 +1562,7 @@ export class Game {
       return;
     }
     const color = POWERS[t.power]?.color ?? t.color ?? "#8844ff";
-    const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color };
+    const step = { title: t.card.title, hint: teachHint(t.card.hint, this), color, pad: padFor(this) };
     const lane = d.lanes?.headline;
     const m = this.ariaComms.message;
     const narration = m?.place === "fold"
@@ -1453,7 +1578,7 @@ export class Game {
   }
 
   renderTutorialCompletionMenu(ctx, w, h) {
-    _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0);
+    _renderTutorialCompletionMenu(ctx, w, h, this.tutorialMenuSelection || 0, this);
   }
 
   // ── Cutscene Delegation (engine in js/cutscene.js) ─────────────────
@@ -1605,6 +1730,8 @@ export class Game {
         // Cutscene text draws on the full-DPR HUD canvas so it stays crisp.
         getTextLayer: () => ({ ctx: this.hudCtx, canvas: this.hudCanvas }),
         getSettings: () => this.settings,
+        // Footer prompts follow the device in use (src/ui/input-glyphs.js).
+        getInput: () => this,
         getVoiceProfile: () => this.getVoiceProfile(),
         // A party frame that names nobody shows who is with you in this slot.
         getParty: () =>
@@ -1657,6 +1784,23 @@ export class Game {
 
   endCutscene() {
     this.cutsceneEngine?.end();
+  }
+
+  /** Flip cutscene auto-play (the AUTO chip, T, pad Y); it applies this frame. */
+  toggleCutsceneAuto() {
+    this.settings.cutsceneAutoAdvance = !this.settings.cutsceneAutoAdvance;
+    this.saveSettings();
+    this.audio.menuSelect();
+  }
+
+  /** Whether a client-space point lands on the cutscene's AUTO chip. */
+  cutsceneAutoChipHit(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!this.cutsceneEngine || !rect.width || !rect.height) return false;
+    return this.cutsceneEngine.autoChipHit(
+      (clientX - rect.left) / rect.width,
+      (clientY - rect.top) / rect.height,
+    );
   }
 
   // ── Fade Transition System ──────────────────────────────────────────
@@ -1852,6 +1996,8 @@ export class Game {
     this.time = (this.time || 0) + this.deltaTime * 1000;
     this.wallTime = timestamp;
 
+    // Before the pad reads it: switches made by key events since last frame count.
+    this.player?.trackWeapon();
     this._updateGamepadInput(this.deltaTime);
 
     this._updateTimeScale();
@@ -1871,6 +2017,17 @@ export class Game {
     // Fade transition tick (runs in any state)
     this._tickTransition(this.deltaTime);
 
+    // Every way out of Settings unloads the showcase, not only the deck's close
+    // (the canvas fallback screen and frame-error recovery set the state).
+    // The HUD editor opened from the menu's deck keeps it as its backdrop.
+    if (this._showcase && this.state !== GameState.SETTINGS && !this._showcaseBehindEditor()) this._stopShowcase();
+
+    if (this.state === GameState.CINEMATIC) {
+      // A reel keeps time with its music, so it runs on real time rather than
+      // the 30 fps-floored sim step (the director caps a stall itself).
+      updateDirector(this, realDt);
+      return;
+    }
     if (this.state === GameState.CUTSCENE) {
       this.updateCutscene();
       return;
@@ -1890,7 +2047,16 @@ export class Game {
       const rect = this.canvas.getBoundingClientRect();
       const mx = (this.mouse.x - rect.left) * (this.canvas.width / rect.width);
       const my = (this.mouse.y - rect.top) * (this.canvas.height / rect.height);
-      this.hudEditor.update(this.deltaTime, mx, my, this.input.isDown("interact") || this.mouse.down);
+      this.hudEditor.update(this.deltaTime, mx, my, !!this.keys[this.keybinds.interact] || this.mouse.down);
+      return;
+    }
+    if (this.state === GameState.SETTINGS) {
+      // The menu's showcase camera; a paused match stays frozen.
+      const deck = this.settingsDeck;
+      const layout = deck?.isOpen ? deck.getAttribute("layout") : null;
+      const panelFrac = layout === "side" && this.hudW > 0 ? deck.panelWidth / this.hudW : 0;
+      const sheetFrac = layout === "sheet" && this.hudH > 0 ? deck.panelHeight / this.hudH : 0;
+      updateShowcase(this, this.deltaTime, { panelFrac, sheetFrac });
       return;
     }
     if (this.state !== GameState.PLAYING) return;
@@ -1899,8 +2065,12 @@ export class Game {
     // Gives DOOM-like impact on kills: the world freezes for a beat.
     // Counted in ms, not frames, so the beat is the same length on a 30 fps
     // cap and on a 144 Hz panel.
+    // The camera stays live: a frozen view reads as lag, not impact.
     if (this.hitStopMs > 0) {
       this.hitStopMs -= this.deltaTime * 1000;
+      if (this.player.alive && !this.chronoPowers.playerFrozen()) {
+        this.playerUpdateSystem.look({ player: this.player, mouse: this.mouse, settings: this.settings, world: this.world });
+      }
       return;
     }
 
@@ -1952,21 +2122,7 @@ export class Game {
       this.fireWeapon();
     }
 
-    // Weapon animation
-    if (this.weaponAnimFrame > 0) {
-      if (this.time - this.weaponAnimTime > 80) {
-        this.weaponAnimFrame++;
-        this.weaponAnimTime = this.time;
-        if (this.weaponAnimFrame > 3) this.weaponAnimFrame = 0;
-      }
-    }
-
-    // Weapon kick recovery (framerate-invariant)
-    this.player.weaponKick *= decay(0.85, this.deltaTime);
-    if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    // Camera punch recovery (faster than weapon kick — camera snaps back)
-    this.player.cameraPunch *= decay(0.78, this.deltaTime);
-    if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
+    this._updateWeaponFeel(this.deltaTime);
     if (_profilePlayerStart) this.profiler.currentPhases.player =
       performance.now() - _profilePlayerStart;
 
@@ -2029,6 +2185,27 @@ export class Game {
     });
     this.updateAriaComms(dt);
     if (_tMisc0) this.profiler.currentPhases.misc = performance.now() - _tMisc0;
+  }
+
+  /**
+   * The fire animation's frames, and the kick and camera punch settling.
+   * A reel's campaign shots run it too, so their shots recoil as in play.
+   */
+  _updateWeaponFeel(dt) {
+    if (this.weaponAnimFrame > 0) {
+      if (this.time - this.weaponAnimTime > 80) {
+        this.weaponAnimFrame++;
+        this.weaponAnimTime = this.time;
+        if (this.weaponAnimFrame > 3) this.weaponAnimFrame = 0;
+      }
+    }
+
+    // Weapon kick recovery (framerate-invariant)
+    this.player.weaponKick *= decay(0.85, dt);
+    if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
+    // Camera punch recovery (faster than weapon kick — camera snaps back)
+    this.player.cameraPunch *= decay(0.78, dt);
+    if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
   }
 
   /** Slow-mo (last kill) outranks Chrono Shift; both drain here. */
@@ -2094,12 +2271,9 @@ export class Game {
       canShift(this.player) &&
       this.player.chronoEnergy >= this.chronoPowers.engageCost()
     ) {
-      this.player.chronoActive = true;
-      if (this.mode === "tutorial") this.tutorialChronoUsed = true;
-      this.chronoPowers.onShiftStart(this);
+      this.startChronoShift();
     } else if (this.player.chronoActive && !chronoKeyHeld) {
-      this.player.chronoActive = false;
-      this.timeScale = 1;
+      this.endChronoShift();
     }
 
     // Passive chrono energy regen (+5/sec)
@@ -2112,6 +2286,19 @@ export class Game {
         this.player.chronoEnergy + 5 * this.deltaTime,
       );
     }
+  }
+
+  /** Engage Chrono Shift: the hold key, and a reel's scripted shift. */
+  startChronoShift() {
+    this.player.chronoActive = true;
+    if (this.mode === "tutorial") this.tutorialChronoUsed = true;
+    this.chronoPowers.onShiftStart(this);
+  }
+
+  /** Release Chrono Shift; time runs at full speed again. */
+  endChronoShift() {
+    this.player.chronoActive = false;
+    this.timeScale = 1;
   }
 
   /** Arena round clock. Returns true when the round just ended (state is now UPGRADE). */
@@ -2333,7 +2520,7 @@ export class Game {
     return [cos, sin];
   }
 
-  /** Nova's Rewind Echo (X / LB while shifting / REWIND). */
+  /** Nova's Rewind Echo (X / RB while shifting / REWIND). */
   chronoRewind() {
     if (this.state !== GameState.PLAYING || !this.player.alive) return false;
     return this.chronoPowers.tryRewind(this);
@@ -2719,6 +2906,7 @@ export class Game {
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,
       pausedFromState: this.pausedFromState,
+      mode: this.mode,
       alive: this.player.alive,
       drawGlow: _drawGlow,
       light: isRealisticArt() ? this.renderer.lightAt(this.player.x, this.player.y, VIEWMODEL_LIGHT) : null,
@@ -2755,13 +2943,6 @@ export class Game {
     });
   }
 
-  drawControlsOverlay(ctx, w, h, alpha) {
-    _drawControlsOverlay(ctx, w, h, alpha, {
-      keybinds: this.keybinds,
-      mode: this.mode,
-    });
-  }
-
   renderPauseScreen(ctx, w, h) {
     if (isModernArt()) {
       renderModernPauseScreen(this, ctx, w, h);
@@ -2780,23 +2961,14 @@ export class Game {
     // Menu entries laid out as a panel. The old version floated a title and a
     // single pipe-separated hint line over a lightly dimmed frame, 210px
     // apart, which read as unfinished next to the other screens.
-    const entries = [
-      { key: "ESC / P", label: "Resume" },
-      { key: "S", label: "Settings" },
-      { key: "A", label: "Achievements" },
-      { key: "B", label: "Archive" },
-      { key: "T", label: "Stats" },
-      { key: "L", label: "ARIA log" },
-    ];
-    if (this.mode === "campaign") entries.push({ key: "F", label: "Save game" });
-    entries.push({ key: "Q", label: "Quit to title" });
+    const { title, entries } = pauseMenuEntries(this, "ESC / P");
 
     ctx.textAlign = "center";
 
     if (this.isTouchDevice) {
       ctx.fillStyle = "#00ffcc";
       ctx.font = `bold ${compact ? 24 : 36}px monospace`;
-      ctx.fillText("PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100);
+      ctx.fillText(title, w / 2, compact ? h * 0.2 : h / 2 - 100);
     } else {
       const rowH = 30;
       const panelW = 330;
@@ -2815,8 +2987,8 @@ export class Game {
       ctx.stroke();
 
       ctx.fillStyle = "#00ffcc";
-      ctx.font = "bold 30px monospace";
-      ctx.fillText("PAUSED", w / 2, panelY + 48);
+      ctx.font = `bold ${title.length > 8 ? 22 : 30}px monospace`;
+      ctx.fillText(title, w / 2, panelY + 48);
 
       ctx.strokeStyle = "rgba(0,255,204,0.18)";
       ctx.lineWidth = 1;
@@ -2830,7 +3002,11 @@ export class Game {
         const ey = panelY + 92 + i * rowH;
         ctx.textAlign = "right";
         ctx.fillStyle = "rgba(0,255,204,0.75)";
-        ctx.fillText(entries[i].key, w / 2 - 18, ey);
+        if (entries[i].pad) {
+          const g = padGlyph(entries[i].pad, padFamily(this));
+          drawGlyph(ctx, w / 2 - 18 - glyphWidth(ctx, g, 11, "legacy"), ey - 5, g, 11, "legacy", "rgba(0,255,204,0.75)");
+          ctx.font = "14px monospace";
+        } else ctx.fillText(entries[i].key, w / 2 - 18, ey);
         ctx.textAlign = "left";
         ctx.fillStyle = "#aab4c8";
         ctx.fillText(entries[i].label, w / 2 + 2, ey);
@@ -2851,121 +3027,6 @@ export class Game {
     this.ariaComms.renderLog(ctx, w, h, this.character.name);
   }
 
-  renderSettingsScreen(ctx, w, h) {
-    _renderSettingsScreen(ctx, w, h, {
-      isTouchDevice: this.isTouchDevice,
-      settingsCategory: this.settingsCategory,
-      settingsSelection: this.settingsSelection,
-      settings: this.settings,
-      mouseX: this._settingsMouseX,
-      mouseY: this._settingsMouseY,
-      settingsScroll: this.settingsScroll,
-    });
-  }
-
-  /**
-   * Desktop click on the settings screen. Until now this screen drew hover
-   * states and a "click to adjust" hint but listened to nothing: only touch
-   * could change a value with a pointer.
-   */
-  _handleSettingsClick(e) {
-    // Read the event directly: a click can arrive with no preceding mousemove
-    // (touchpad tap, synthetic click), and the cached hover point is then stale.
-    // Coordinates are CSS-logical (hudW/hudH), the space the HUD is drawn in.
-    const rect = (this.hudCanvas || this.canvas).getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (this.hudW / rect.width);
-    const y = (e.clientY - rect.top) * (this.hudH / rect.height);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    this._settingsMouseX = x;
-    this._settingsMouseY = y;
-    const layout = settingsLayout(
-      this.hudW,
-      this.hudH,
-      this.settingsSelection,
-      this.isTouchDevice,
-      this.settingsCategory,
-      this.settingsScroll,
-      false
-    );
-    this.settingsScroll = layout.scrollY;
-    const cats = getVisibleCategories(this.isTouchDevice, this.settings);
-    const hit = resolveSettingsHit(
-      layout,
-      settingsCategoryRects(layout, cats),
-      x,
-      y
-    );
-
-    if (hit.kind === "back") {
-      this.handleKeyPress("Escape");
-      return;
-    }
-    if (hit.kind === "category") {
-      if (hit.cat !== this.settingsCategory) {
-        this.settingsCategory = hit.cat;
-        this.settingsSelection = 0;
-        this.settingsScroll = 0;
-        this.audio.menuSelect();
-      }
-      return;
-    }
-    if (hit.kind !== "row") return;
-
-    const def = layout.visibleDefs[hit.index];
-    if (!def) return;
-    if (hit.index !== this.settingsSelection) {
-      this.settingsSelection = hit.index;
-      this.audio.menuSelect();
-    }
-
-    if (hit.zone === "slider") {
-      this._setSliderFromPct(def, hit.pct);
-      return;
-    }
-    if (def.type === "action") {
-      def.onClick?.(this);
-      this.audio.menuConfirm();
-      return;
-    }
-    if (hit.zone === "dec") {
-      this.handleKeyPress("ArrowLeft");
-      return;
-    }
-    if (hit.zone === "inc" || def.type === "toggle") {
-      this.handleKeyPress("ArrowRight");
-    }
-  }
-
-  /** Drop a slider straight onto the clicked position, snapped to its step. */
-  _setSliderFromPct(def, pct) {
-    if (def.type !== "slider") return;
-    const raw = def.min + (def.max - def.min) * pct;
-    let val = def.min + Math.round((raw - def.min) / def.step) * def.step;
-    val = Math.max(def.min, Math.min(def.max, val));
-    if (def.round != null) {
-      const f = Math.pow(10, def.round);
-      val = Math.round(val * f) / f;
-    }
-    if (val === this.settings[def.key]) return;
-    this.settings[def.key] = val;
-    def.onChange?.(this);
-    this.saveSettings();
-    this.audio.menuSelect();
-  }
-
-  renderControlsScreen(ctx, w, h) {
-    _renderControlsScreen(ctx, w, h, {
-      keybinds: this.keybinds,
-      controlsSelection: this.controlsSelection,
-      rebindingKey: this.rebindingKey,
-      keybindSwapFlash: this._keybindSwapFlash,
-    });
-  }
-
-  formatKeyCode(code) {
-    return _formatKeyCode(code);
-  }
-
   renderAchievementsScreen(ctx, w, h) {
     this.achievementSystem.renderScreen(ctx, w, h);
   }
@@ -2980,12 +3041,14 @@ export class Game {
       selection: this.archiveSelection || 0,
       scroll: this.archiveScroll || 0,
       archive: this.archive,
+      input: this,
     });
   }
 
   renderUpgradeScreen(ctx, w, h) {
     _renderUpgradeScreen(ctx, w, h, {
       isTouchDevice: this.isTouchDevice,
+      input: this,
       arenaRound: this.arenaRound,
       playerScore: this.player.score,
       upgradeLevels: this.upgradeLevels,
@@ -2997,6 +3060,7 @@ export class Game {
     const result = _renderGameOver(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       mode: this.mode,
       arenaRound: this.arenaRound,
       achievementStats: this.achievementStats,
@@ -3035,6 +3099,7 @@ export class Game {
     const result = _renderVictory(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       ngPlusCycle: this.ngPlusCycle,
       // The ending that played: the loop is broken only by the true ending.
       trueEnding: !!this.campaign?.trueEnding,
@@ -3052,6 +3117,7 @@ export class Game {
     _renderLevelComplete(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
+      input: this,
       levelCompleteTime: this._levelCompleteTime,
       playerSecretsFound: this.player.secretsFound,
       statsCardData: this._statsCardData(),

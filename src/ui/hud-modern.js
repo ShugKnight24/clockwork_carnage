@@ -25,6 +25,7 @@ import {
 } from "./hud-skin.js";
 import { drawPortrait } from "./portrait.js";
 import { drawChronoCluster } from "./chrono-hud.js";
+import { glyph } from "./input-glyphs.js";
 import { drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
@@ -674,7 +675,7 @@ export function renderModernClassic(game, ctx, w, h, barH, hudFactor, portraitSt
     const cw = totalW - stW - 10;
     const cColor = p.chronoActive ? "#c77dff" : chronoPct >= 0.15 ? UI.violet : "#5d4488";
     drawBar(ctx, cx, sbY, cw, sbH, chronoPct, cColor, { segments: 8, glow: p.chronoActive ? 0.6 : 0.15 });
-    label(ctx, p.chronoActive ? "CHRONO SHIFT" : "CHRONO  [HOLD Q]", cx, sbY - 5, Math.round(10 * fs), p.chronoActive ? "#d9a8ff" : "#8f7ab8");
+    label(ctx, p.chronoActive ? "CHRONO SHIFT" : `CHRONO  [HOLD ${glyph(game, "chronoShift").text}]`, cx, sbY - 5, Math.round(10 * fs), p.chronoActive ? "#d9a8ff" : "#8f7ab8");
     label(ctx, `${Math.floor(chronoPct * 100)}%`, cx + cw, sbY - 5, Math.round(10 * fs), "#8f7ab8", "right", 0);
   }
   // Chronos: the Resonance eye and the unlocked powers, on the bars' row.

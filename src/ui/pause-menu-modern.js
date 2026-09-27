@@ -15,6 +15,8 @@ import {
   drawKeycap,
   drawCaption,
 } from "./modern-ui-kit.js";
+import { pauseMenuEntries } from "./pause-menu-entries.js";
+import { drawGlyph, padGlyph, padFamily } from "./input-glyphs.js";
 
 export function renderModernPauseScreen(game, ctx, w, h) {
   const compact = game.isTouchDevice && isCompactPhone(h);
@@ -25,19 +27,10 @@ export function renderModernPauseScreen(game, ctx, w, h) {
     return;
   }
 
-  const entries = [
-    { key: "ESC", label: "Resume", primary: true },
-    { key: "S", label: "Settings" },
-    { key: "A", label: "Achievements" },
-    { key: "B", label: "Archive" },
-    { key: "T", label: "Stats" },
-    { key: "L", label: "ARIA log" },
-  ];
-  if (game.mode === "campaign") entries.push({ key: "F", label: "Save game" });
-  entries.push({ key: "Q", label: "Quit to title", danger: true });
+  const { title, entries } = pauseMenuEntries(game, "ESC");
 
   if (game.isTouchDevice) {
-    drawTitle(ctx, "PAUSED", w / 2, compact ? h * 0.2 : h / 2 - 100, compact ? 30 : 46, UI.cyan);
+    drawTitle(ctx, title, w / 2, compact ? h * 0.2 : h / 2 - 100, compact ? 30 : 46, UI.cyan);
   } else {
     const rowH = 34;
     const panelW = 360;
@@ -46,7 +39,7 @@ export function renderModernPauseScreen(game, ctx, w, h) {
     const panelY = Math.round(h / 2 - panelH / 2);
 
     drawPanel(ctx, panelX, panelY, panelW, panelH, { variant: "menu", accent: UI.cyan, chamfer: 20 });
-    drawTitle(ctx, "PAUSED", w / 2, panelY + 60, 40, UI.cyan);
+    drawTitle(ctx, title, w / 2, panelY + 60, title.length > 8 ? 30 : 40, UI.cyan);
     drawCaption(ctx, w / 2, panelY + panelH - 11, "Timeline on hold", { size: 9, scheme: "steel", align: "center" });
 
     const listY = panelY + 96;
@@ -60,7 +53,8 @@ export function renderModernPauseScreen(game, ctx, w, h) {
         ctx.fillRect(panelX + 28, ry - 2, panelW - 56, 1);
       }
       const accent = e.danger ? UI.crimson : e.primary ? UI.cyan : null;
-      drawKeycap(ctx, panelX + 34, ry + 5, e.key, { size: 10, accent });
+      if (e.pad) drawGlyph(ctx, panelX + 34, ry + 15, padGlyph(e.pad, padFamily(game)), 10, "modern");
+      else drawKeycap(ctx, panelX + 34, ry + 5, e.key, { size: 10, accent });
       ctx.font = uiFont(15, e.primary ? 800 : 600);
       ctx.textAlign = "left";
       ctx.letterSpacing = "1px";
