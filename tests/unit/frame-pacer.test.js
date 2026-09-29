@@ -78,6 +78,13 @@ describe("frameCapFor", () => {
 describe("qualityTargetFPS", () => {
   it("keeps the uncapped target", () => {
     expect(qualityTargetFPS(0, 60)).toBe(55);
+    expect(qualityTargetFPS(0, 144)).toBe(55);
+    expect(qualityTargetFPS(0, 0)).toBe(55);
+  });
+
+  it("aims under a slow panel even uncapped", () => {
+    // A 50 Hz panel can never deliver 55 fps; aiming there scaled down forever.
+    expect(qualityTargetFPS(0, 50)).toBe(45);
   });
 
   it("follows a low cap so battery saver is not read as a slow machine", () => {

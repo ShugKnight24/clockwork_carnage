@@ -25,13 +25,13 @@ export function frameCapFor(settings) {
 
 /**
  * FPS that adaptive quality should aim for under a given cap.
- * Uncapped keeps the historical 55 fps target. Capped aims just under whatever
- * the cap and the panel can actually deliver, and never asks for more than the
- * uncapped target — so turning a cap on cannot start a render-scale spiral.
+ * Aims just under whatever the cap and the panel can actually deliver, and
+ * never asks for more than 55 fps — so a cap, or a panel under 60 Hz, cannot
+ * start a render-scale spiral. Uncapped on an unmeasured panel keeps 55.
  */
 export function qualityTargetFPS(cap, displayHz) {
-  if (!cap) return 55;
-  const achievable = displayHz > 0 ? Math.min(cap, displayHz) : cap;
+  const achievable = cap ? (displayHz > 0 ? Math.min(cap, displayHz) : cap) : displayHz;
+  if (!achievable) return 55;
   return clamp(achievable - 5, 20, 55);
 }
 
