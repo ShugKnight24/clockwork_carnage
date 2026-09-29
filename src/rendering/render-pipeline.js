@@ -787,7 +787,7 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
       if (src) {
         _glr.renderPostFXFromCanvas(src, game.time, _fxBloom, _fxCA, _fxGrain, _gc);
         // Draw GL result back to main Canvas2D
-        ctx.drawImage(_glr.canvas, 0, 0);
+        _glr.blitTo(ctx);
       }
     } catch (_e) {
       // Shader failure — fall through silently, Canvas 2D already applied overlays

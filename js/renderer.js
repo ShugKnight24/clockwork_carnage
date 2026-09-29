@@ -873,7 +873,7 @@ export class Renderer {
           menv,
           this.lights || [],
         );
-        if (drawn) ctx.drawImage(this.glRenderer.canvas, 0, 0);
+        if (drawn) this.glRenderer.blitTo(ctx);
       }
       if (!drawn) {
         this._renderFloorCeilingModern(
@@ -904,7 +904,7 @@ export class Renderer {
           this.lights || [],
         );
         // Composite WebGL result onto Canvas2D
-        ctx.drawImage(this.glRenderer.canvas, 0, 0);
+        this.glRenderer.blitTo(ctx);
       } else {
         this._renderFloorCeiling(
           camX,

@@ -582,18 +582,35 @@ export class GLRenderer {
     this.ceilTex = createTexture(gl, 256, 256, ceilPixels);
   }
 
-  /** Resize the WebGL canvas + framebuffers. */
+  /**
+   * Resize the render area. The WebGL canvas itself only grows: setting its
+   * width or height reallocates the drawing buffer synchronously (21-82 ms
+   * measured on Chrome's D3D11 backend), and adaptive quality changes the
+   * render size every few seconds on a struggling machine — each step was a
+   * hitch, which the governor then read as a reason to step down again.
+   * Smaller sizes render into the buffer's bottom-left corner, the origin of
+   * gl_FragCoord, so the shaders see the same coordinates; blitTo() copies
+   * that corner out.
+   */
   resize(w, h) {
     this.width = w;
     this.height = h;
-    this.canvas.width = w;
-    this.canvas.height = h;
+    if (w > this.canvas.width || h > this.canvas.height) {
+      this.canvas.width = Math.max(w, this.canvas.width);
+      this.canvas.height = Math.max(h, this.canvas.height);
+    }
 
     // Recreate FBO
     const gl = this.gl;
     gl.deleteFramebuffer(this.sceneFBO.fbo);
     gl.deleteTexture(this.sceneFBO.texture);
     this.sceneFBO = this._createFramebuffer(w, h);
+  }
+
+  /** Draw the last frame rendered here onto a 2D context at its origin. */
+  blitTo(ctx) {
+    const { width: w, height: h } = this;
+    ctx.drawImage(this.canvas, 0, this.canvas.height - h, w, h, 0, 0, w, h);
   }
 
   /**
