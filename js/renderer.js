@@ -107,8 +107,8 @@ export class Renderer {
     // Modern walls drawn by the GL wall pass when it is available; false
     // forces the Canvas2D path (debugging, A/B timing).
     this.gpuWalls = true;
-    this.gpuWallLights = false;
-    this.gpuWallTrilinear = false;
+    this.gpuWallLights = true;
+    this.gpuWallTrilinear = true;
     this._glLight = [0, 0, 0, 0];
     this._glAccent = [0, 0, 0, 0];
     this.textures = generateWallTextures();
