@@ -24,6 +24,45 @@ const add = (v, n) => Math.max(0, Math.min(255, v + n));
  * Generate 256x256 wall textures for each wall type.
  * Returns { [wallId]: HTMLCanvasElement } map.
  */
+const _avgCache = new WeakMap();
+let _avgCanvas = null;
+
+/**
+ * Average colour of a wall texture, from a smoothed 4x4 downsample. Cached
+ * per texture: reading a GPU-backed canvas back waits for the GPU to finish
+ * everything queued (~100 ms measured mid-level on Chrome's D3D11 backend),
+ * so textures are read while they are built, at load, not at first sight.
+ */
+export function averageColor(tex) {
+  if (!tex) return [90, 96, 108]; // no art: neutral steel
+  const hit = _avgCache.get(tex);
+  if (hit) return hit;
+  let avg;
+  try {
+    if (!_avgCanvas) {
+      _avgCanvas = document.createElement("canvas");
+      _avgCanvas.width = _avgCanvas.height = 4;
+    }
+    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
+    c.clearRect(0, 0, 4, 4);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(tex, 0, 0, 4, 4);
+    const d = c.getImageData(0, 0, 4, 4).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < 64; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+    avg = [r / 16, g / 16, b / 16];
+  } catch (_) {
+    avg = [90, 96, 108]; // unreadable: neutral steel
+  }
+  _avgCache.set(tex, avg);
+  return avg;
+}
+
 export function generateWallTextures() {
   const textures = {};
   const size = 256;
@@ -435,12 +474,51 @@ export function generateFloorCeilTextures(act, visualStyle) {
  *        (relief, wear, grime) for the Realistic art style
  * @returns {object} env bundle consumed by Renderer + GLRenderer
  */
+/**
+ * Realistic's low ambient: this colour at this alpha over every wall and cap.
+ * It was a fill of its own per column; it is now folded into the fog fill
+ * (fogAmbientLUT), the cap colours, and — scaled by 1 - alpha — the additive
+ * lights drawn after the fog, which is exactly what the later fill did.
+ */
+export const REAL_AMBIENT = { rgb: [3, 4, 7], alpha: 0.16 };
+
+// Mip levels 0-3 are drawn for walls 48px and taller; the contact shadow was
+// only ever drawn on walls over 40px, so the two smallest levels stay clean.
+const CONTACT_SHADOW_LEVELS = 4;
+
+/**
+ * Realistic's soft contact shadow — dark at the ceiling and deck joints,
+ * clear through the middle — painted into the wall mips once. It was a
+ * per-column blit of a 1x64 ramp with a fractional source rect, which Skia
+ * cannot draw on its fast texture path: on Chrome's D3D11 backend that one
+ * blit took Realistic from vsync to ~30 fps. It spans the wall's full height
+ * exactly as the texture does, so baking it changes nothing on screen.
+ */
+function bakeContactShadow(mips) {
+  for (let i = 0; i < CONTACT_SHADOW_LEVELS && i < mips.length; i++) {
+    const c = mips[i];
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, "rgba(0,0,0,0.55)");
+    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
+    grad.addColorStop(0.22, "rgba(0,0,0,0)");
+    grad.addColorStop(0.74, "rgba(0,0,0,0)");
+    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
+    grad.addColorStop(1, "rgba(0,0,0,0.62)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, c.width, c.height);
+  }
+}
+
 export function generateModernEnv(act, brutal, level = null, { realistic = false } = {}) {
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
   const p = resolveEnvPalette(a, level);
   const salt = envSalt(level);
   const walls = buildWallSet(a, p, salt, realistic);
+  if (realistic) for (const mips of Object.values(walls)) bakeContactShadow(mips);
+  // The raycaster's cap colours come from each wall's smallest mip.
+  for (const mips of Object.values(walls)) averageColor(mips[mips.length - 1]);
   const deck = buildDeckSet(a, brutal, p, salt);
   const fogMax = brutal ? 0.94 : 0.86;
   const fogDensity = brutal ? FOG_DENSITY * 1.3 : FOG_DENSITY;
@@ -456,6 +534,25 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     const g = (n1 + (f1 - n1) * t) | 0;
     const b = (n2 + (f2 - n2) * t) | 0;
     fogLUT[i] = `rgba(${r},${g},${b},${(t * fogMax).toFixed(3)})`;
+  }
+
+  // Fog then Realistic's ambient, as one fill. Two source-over fills of
+  // constant colours compose into one: fog (F, a) then ambient (A, k) leaves
+  // (1 - k)(1 - a) of the wall, so the combined alpha is 1 - (1 - k)(1 - a)
+  // and its colour the weighted mix of F and A.
+  const fogAmbientLUT = new Array(65);
+  const [a0, a1, a2] = REAL_AMBIENT.rgb;
+  const ka = REAL_AMBIENT.alpha;
+  for (let i = 0; i <= 64; i++) {
+    const t = i / 64;
+    const fa = t * fogMax;
+    const beta = 1 - (1 - ka) * (1 - fa);
+    const wf = ((1 - ka) * fa) / beta;
+    const wa = ka / beta;
+    const r = Math.round((n0 + (f0 - n0) * t) * wf + a0 * wa);
+    const g = Math.round((n1 + (f1 - n1) * t) * wf + a1 * wa);
+    const b = Math.round((n2 + (f2 - n2) * t) * wf + a2 * wa);
+    fogAmbientLUT[i] = `rgba(${r},${g},${b},${beta.toFixed(3)})`;
   }
 
   // Key light sits up and to the world's -x/-y; faces turned away fall to ink.
@@ -485,6 +582,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     walls,
     deck,
     fogLUT,
+    fogAmbientLUT,
     fogMax,
     fogDensity,
     fogNear: p.fogNear,

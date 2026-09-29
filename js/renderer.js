@@ -1,6 +1,6 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures, generateModernEnv } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
@@ -52,32 +52,6 @@ const CAP_FOG_STEPS = 32;
 const CAP_SHADE = 0.28;
 const _capCache = new WeakMap();
 const _noTexture = {}; // cache slot for a wall type with no art
-let _avgCanvas = null;
-
-/** Average colour of a wall texture, from a smoothed 4x4 downsample. */
-function _averageColor(tex) {
-  try {
-    if (!_avgCanvas) {
-      _avgCanvas = document.createElement("canvas");
-      _avgCanvas.width = _avgCanvas.height = 4;
-    }
-    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
-    c.clearRect(0, 0, 4, 4);
-    c.imageSmoothingEnabled = true;
-    c.imageSmoothingQuality = "high";
-    c.drawImage(tex, 0, 0, 4, 4);
-    const d = c.getImageData(0, 0, 4, 4).data;
-    let r = 0, g = 0, b = 0;
-    for (let i = 0; i < 64; i += 4) {
-      r += d[i];
-      g += d[i + 1];
-      b += d[i + 2];
-    }
-    return [r / 16, g / 16, b / 16];
-  } catch (_) {
-    return [90, 96, 108]; // no texture or unreadable: neutral steel
-  }
-}
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -125,6 +99,8 @@ export class Renderer {
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this._envLevel = null; // campaign level env id, for the per-level palette
     this.textures = generateWallTextures();
+    // Cap colours read each texture back once; do it now rather than mid-level.
+    for (const tex of Object.values(this.textures)) averageColor(tex);
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
     // Modern art style environment: 512px wall/deck art per act, built lazily
@@ -139,29 +115,6 @@ export class Renderer {
     this.useWebGL = false;
     this._renderMode = renderMode;
     this._initGL(renderMode);
-  }
-
-  /**
-   * 1x64 vertical contact-shadow ramp for Realistic walls: dark at the ceiling
-   * and deck joints, clear through the middle. Built once, blitted per column.
-   */
-  _contactShadowStrip() {
-    if (this._aoStrip) return this._aoStrip;
-    const c = document.createElement("canvas");
-    c.width = 1;
-    c.height = 64;
-    const g = c.getContext("2d");
-    const grad = g.createLinearGradient(0, 0, 0, 64);
-    grad.addColorStop(0, "rgba(0,0,0,0.55)");
-    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
-    grad.addColorStop(0.22, "rgba(0,0,0,0)");
-    grad.addColorStop(0.74, "rgba(0,0,0,0)");
-    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
-    grad.addColorStop(1, "rgba(0,0,0,0.62)");
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 1, 64);
-    this._aoStrip = c;
-    return c;
   }
 
   /**
@@ -355,6 +308,36 @@ export class Renderer {
     return this._modernEnv;
   }
 
+  /**
+   * One-pixel-wide column spans filled in one colour after the wall loop: the
+   * Comic contact lines. They were rect()s on one path, filled once — but a
+   * path of thousands of disjoint rects is beyond Skia's fast GPU path
+   * renderers, and on Chrome's D3D11 backend (every Windows Chromium browser
+   * by default) that one fill cost 50-70 ms a frame. Plain fillRects in one
+   * colour batch into a single draw op.
+   */
+  _addSpan(x, y, h) {
+    let b = this._spans;
+    const i = this._spanN * 3;
+    if (!b || i + 3 > b.length) {
+      const grown = new Float32Array(Math.max(6144, b ? b.length * 2 : 0));
+      if (b) grown.set(b);
+      b = this._spans = grown;
+    }
+    b[i] = x;
+    b[i + 1] = y;
+    b[i + 2] = h;
+    this._spanN++;
+  }
+
+  _fillSpans(ctx, style) {
+    const b = this._spans;
+    const n = this._spanN * 3;
+    this._spanN = 0;
+    ctx.fillStyle = style;
+    for (let i = 0; i < n; i += 3) ctx.fillRect(b[i], b[i + 1], 1, b[i + 2]);
+  }
+
   _ensureColBufs(w) {
     if (this._colKey && this._colKey.length === w) return;
     this._colKey = new Int32Array(w);
@@ -441,7 +424,7 @@ export class Renderer {
   _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real) {
     const mmips = menv ? menv.walls[wallType] : null;
     const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
-    const lut = this._capLUT(tex, menv);
+    const lut = this._capLUT(tex, menv, real);
     let s;
     if (menv) {
       s = 1 - Math.exp(-dist * menv.fogDensity);
@@ -451,12 +434,9 @@ export class Renderer {
     }
     ctx.fillStyle = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
     ctx.fillRect(x, top, 1, bot - top);
-    // Batched with the frame's column path: Realistic's ambient fill, or the
-    // Comic ink line along the far edge.
-    if (menv) {
-      if (real) ctx.rect(x, top, 1, bot - top);
-      else ctx.rect(x, top, 1, 1);
-    }
+    // The Comic ink line along the far edge, batched with the frame's column
+    // spans (_addSpan). Realistic's ambient is already in the cap colour.
+    if (menv && !real) this._addSpan(x, top, 1);
   }
 
   /**
@@ -464,12 +444,12 @@ export class Renderer {
    * clear to fully fogged, using the same fog colour and ceiling as the wall
    * pass of the active style. Built once per texture and fog setting.
    */
-  _capLUT(tex, menv) {
+  _capLUT(tex, menv, real = false) {
     const key = menv ? menv : this._visualStyle;
     const slot = tex || _noTexture;
     let e = _capCache.get(slot);
-    if (e && e.key === key) return e.lut;
-    const avg = _averageColor(tex);
+    if (e && e.key === key && e.real === real) return e.lut;
+    const avg = averageColor(tex);
     const lut = new Array(CAP_FOG_STEPS + 1);
     for (let i = 0; i <= CAP_FOG_STEPS; i++) {
       const t = i / CAP_FOG_STEPS;
@@ -486,9 +466,20 @@ export class Renderer {
         a = t * (brutal ? 0.85 : 0.6);
       }
       const k = (1 - CAP_SHADE) * (1 - a);
-      lut[i] = `rgb(${(avg[0] * k + fr * a) | 0},${(avg[1] * k + fg * a) | 0},${(avg[2] * k + fb * a) | 0})`;
+      let r = avg[0] * k + fr * a;
+      let g = avg[1] * k + fg * a;
+      let b = avg[2] * k + fb * a;
+      if (real) {
+        // Realistic's ambient over the opaque cap colour.
+        const ka = REAL_AMBIENT.alpha;
+        const [ar, ag, ab] = REAL_AMBIENT.rgb;
+        r = r * (1 - ka) + ar * ka;
+        g = g * (1 - ka) + ag * ka;
+        b = b * (1 - ka) + ab * ka;
+      }
+      lut[i] = `rgb(${r | 0},${g | 0},${b | 0})`;
     }
-    _capCache.set(slot, { key, lut });
+    _capCache.set(slot, { key, real, lut });
     return lut;
   }
 
@@ -662,8 +653,7 @@ export class Renderer {
     const bot = this._colBot;
     // Depth of the nearest surface per column (the one the key describes).
     const zb = this._colZ;
-    ctx.fillStyle = "rgba(4,6,11,0.9)";
-    ctx.fill(); // top/bottom contact lines accumulated as rects in the loop
+    this._fillSpans(ctx, "rgba(4,6,11,0.9)"); // top/bottom contact lines recorded in the loop
     for (let x = 1; x < w; x++) {
       const k = key[x];
       const kp = key[x - 1];
@@ -828,7 +818,7 @@ export class Renderer {
     // Realistic reuses the Modern wall art and swaps the lighting: no ink
     // lines, darker ambient, contact shadows, inverse-square lights.
     const real = !!menv && isRealisticArt();
-    const aoStrip = real ? this._contactShadowStrip() : null;
+    const ambientKeep = real ? 1 - REAL_AMBIENT.alpha : 1;
     if (menv) {
       this._ensureColBufs(w);
       this._colKey.fill(-1);
@@ -953,7 +943,7 @@ export class Renderer {
     const occDist = this._occDist;
     const occY = this._occY;
 
-    if (menv) ctx.beginPath();
+    this._spanN = 0;
 
     for (let x = 0; x < w; x++) {
       const cameraX = (2 * x) / w - 1;
@@ -1035,26 +1025,21 @@ export class Renderer {
               ctx.fillStyle = menv.faceShade[face];
               ctx.fillRect(x, drawStart, 1, colH);
             }
-            if (real) {
-              // Low ambient, batched into the frame's column path (Realistic has
-              // no ink lines to share it with) and filled once after the loop.
-              ctx.rect(x, drawStart, 1, colH);
-              // Soft contact shadow where the wall meets the deck and ceiling,
-              // stretched over the wall's full height so it stays on the joints
-              // when the column is clipped. Walls under ~40px tall are too far
-              // away for it to show, so they skip the blit.
-              if (lineHeight >= 40) {
-                const fullH = fullDrawEnd - fullDrawStart;
-                ctx.drawImage(aoStrip, 0, ((drawStart - fullDrawStart) / fullH) * 64, 1, (colH / fullH) * 64, x, drawStart, 1, colH);
-              }
-            }
+            // Realistic's soft contact shadow at the deck and ceiling joints is
+            // painted into the wall mips (bakeContactShadow in textures.js).
 
             // Act fog with atmospheric perspective (colour and density from the
             // same ramp the deck shader uses, so wall and floor air agree).
             const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
             const fogAmount = fogK;
             const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
-            if (fi > 0) {
+            // Realistic's low ambient rides on this fill (fogAmbientLUT), so
+            // it needs no fill of its own; everything drawn on the wall after
+            // it is scaled by ambientKeep, as the separate fill used to do.
+            if (real) {
+              ctx.fillStyle = menv.fogAmbientLUT[fi];
+              ctx.fillRect(x, drawStart, 1, colH);
+            } else if (fi > 0) {
               ctx.fillStyle = menv.fogLUT[fi];
               ctx.fillRect(x, drawStart, 1, colH);
             }
@@ -1102,7 +1087,7 @@ export class Renderer {
                   }
                 }
                 const peak = Math.max(lr, lg, lb);
-                const a = Math.min(0.9, peak / 255);
+                const a = Math.min(0.9, peak / 255) * ambientKeep;
                 const prev = ctx.globalCompositeOperation;
                 ctx.globalCompositeOperation = "lighter";
                 ctx.fillStyle = _getFogString(
@@ -1122,18 +1107,18 @@ export class Renderer {
                 const ac = menv.accentRGB;
                 const prev = ctx.globalCompositeOperation;
                 ctx.globalCompositeOperation = "lighter";
-                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
+                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3) * ambientKeep);
                 ctx.fillRect(x, drawStart, 1, colH);
                 ctx.globalCompositeOperation = prev;
               }
             }
 
-            // Inked contact lines at the ceiling and deck joints, batched into one
-            // path that the silhouette pass fills after the loop.
+            // Inked contact lines at the ceiling and deck joints, batched as column
+            // spans that the silhouette pass fills after the loop.
             const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
             if (!real && colH > inkT * 2) {
-              if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
-              if (drawEnd < h - 1 && !clipped) ctx.rect(x, drawEnd - inkT, 1, inkT);
+              if (drawStart > 0) this._addSpan(x, drawStart, inkT);
+              if (drawEnd < h - 1 && !clipped) this._addSpan(x, drawEnd - inkT, inkT);
             }
             if (hi === 0) {
               // The silhouette pass outlines the nearest surface in each column.
@@ -1280,10 +1265,6 @@ export class Renderer {
     }
 
     if (menv && !real) this._drawModernInk(w, h);
-    if (real) {
-      ctx.fillStyle = "rgba(3,4,7,0.16)";
-      ctx.fill();
-    }
 
     // Set FOV scale for prop minimum-size floors
     setFovScale(fov);
