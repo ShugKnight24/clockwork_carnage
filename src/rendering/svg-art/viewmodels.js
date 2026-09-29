@@ -83,10 +83,19 @@ function warmStep(accent, px, tier, real) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
     warmReal = real;
   }
-  const next = warmQueue.shift();
+  const next = warmQueue[0];
   if (!next) return;
   const vm = build(next[0], accent, next[1], tier, real);
-  if (vm) request(vm, px, true);
+  // Stay on a weapon until every layer is baked, not just decoded: the bake
+  // is the costly part (the GPU rasterises the SVG), and left to the first
+  // frame a weapon was drawn it made switching to it a 60-110 ms hitch.
+  let baked = true;
+  for (const L of vm?.layers ?? []) {
+    const scale = layerScale(px, L.box);
+    getLayerImage(L.id, L.box, DEFS, L.markup, scale, true);
+    if (!layerBaked(L.id, scale)) baked = false;
+  }
+  if (baked) warmQueue.shift();
 }
 
 /**
