@@ -598,7 +598,7 @@ document.addEventListener("visibilitychange", () => {
 
 function gameLoop(timestamp) {
   try {
-    const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
+    const updateStart = devToolsEnabled || game.profiling ? performance.now() : 0;
     game.update(timestamp);
     attract.tick();
     // The attract loop runs unattended on the title: 30 fps is plenty.
@@ -636,7 +636,7 @@ function gameLoop(timestamp) {
 
     let renderMs = 0;
     if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
-      const _tRnd0 = devToolsEnabled || game.showFPS ? performance.now() : 0;
+      const _tRnd0 = devToolsEnabled || game.profiling ? performance.now() : 0;
       game.render();
       renderMs = _tRnd0 ? performance.now() - _tRnd0 : 0;
 
@@ -650,7 +650,7 @@ function gameLoop(timestamp) {
       }
     }
 
-    if (devToolsEnabled || game.showFPS) {
+    if (devToolsEnabled || game.profiling) {
       game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
     }
 

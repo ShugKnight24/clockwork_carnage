@@ -300,7 +300,7 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
   }
   ctx.drawImage(vr.canvas, 0, 0, w, h);
   // Streaming is part of the voxel phase: it is what the long flight costs.
-  if (game.showFPS) game.profiler.currentPhases.voxel = vr.stats.ms + (stream?.ms || 0);
+  if (game.profiling) game.profiler.currentPhases.voxel = vr.stats.ms + (stream?.ms || 0);
   return true;
 }
 
@@ -501,7 +501,7 @@ export function renderFrame(game) {
   }
 
   renderWorld(game, ctx, w, h);
-  const profiling = !!game.showFPS;
+  const profiling = !!game.profiling;
 
   // Render HUD on overlay canvas
   const _tHud0 = profiling ? performance.now() : 0;
@@ -590,7 +590,7 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   }
 
   // Render 3D scene — timed: raycast phase
-  const profiling = !!game.showFPS;
+  const profiling = !!game.profiling;
   const _tRay0 = profiling ? performance.now() : 0;
   // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;

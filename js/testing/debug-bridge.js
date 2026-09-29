@@ -364,10 +364,11 @@ export function createDebugBridge(game) {
 
     /**
      * Enable per-phase profiling and return the profiler's rolling averages.
-     * Phase timings are only collected while game.showFPS is on.
+     * Phase timings are only collected while profiling is on; this turns it on
+     * without the overlay, whose graph would add to the frame being measured.
      */
     getPerf(enable = true) {
-      if (enable) game.showFPS = true;
+      if (enable) game.perfCapture = true;
       return game.profiler?.getSnapshot?.() ?? null;
     },
 

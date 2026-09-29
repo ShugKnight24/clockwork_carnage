@@ -258,6 +258,9 @@ export class Game {
     this.frameCount = 0;
     this.fpsTime = 0;
     this.showFPS = false;
+    // Phase timings without the overlay: the benchmark and perf tests read
+    // them, and drawing the overlay's graph would add to what they measure.
+    this.perfCapture = false;
     this.profiler = new Profiler();
     this.glitchEffect = 0;
     this.hitMarker = 0;
@@ -483,6 +486,11 @@ export class Game {
    * continue to work unchanged.  Internally everything goes through
    * StateManager so transitions are observable and pause logic is centralised.
    */
+  /** Collect per-phase timings: the overlay is showing, or a benchmark asked. */
+  get profiling() {
+    return this.showFPS || this.perfCapture;
+  }
+
   get state() {
     return this._stateManager.current;
   }
@@ -2107,7 +2115,7 @@ export class Game {
     this._regenPlayer(dt);
 
     // Player movement
-    const _profilePlayerStart = this.showFPS ? performance.now() : 0;
+    const _profilePlayerStart = this.profiling ? performance.now() : 0;
     // Form 2's Counter-shift holds you at half speed for a moment.
     if (!frozen) this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
@@ -2147,25 +2155,25 @@ export class Game {
     this.entityGrid.insertAll(this.entities);
 
     // Update enemies
-    const _profileEnemiesStart = this.showFPS ? performance.now() : 0;
+    const _profileEnemiesStart = this.profiling ? performance.now() : 0;
     _safeCall("AI", () => this.updateEnemies(dt));
     if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
 
     // Update projectiles
-    const _profileProjectilesStart = this.showFPS ? performance.now() : 0;
+    const _profileProjectilesStart = this.profiling ? performance.now() : 0;
     _safeCall("Projectiles", () => this.updateProjectiles(dt));
     if (_profileProjectilesStart) this.profiler.currentPhases.projectiles =
       performance.now() - _profileProjectilesStart;
 
     // Check pickups
-    const _profilePickupsStart = this.showFPS ? performance.now() : 0;
+    const _profilePickupsStart = this.profiling ? performance.now() : 0;
     this.checkPickups();
     if (_profilePickupsStart) this.profiler.currentPhases.pickups =
       performance.now() - _profilePickupsStart;
 
     // Misc: exit check, decay, achievements
-    const _tMisc0 = this.showFPS ? performance.now() : 0;
+    const _tMisc0 = this.profiling ? performance.now() : 0;
 
     this._checkExitReached();
 
