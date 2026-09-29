@@ -9,6 +9,8 @@
  *   npm run bench -- --url <url>            any deployment
  *   npm run bench -- --art 2 --fixed        Modern, render scale held at 1
  *   npm run bench -- --chrome               the installed Google Chrome, not Playwright's Chromium
+ *   npm run bench -- --angle vulkan         Chrome's graphics backend on Windows: d3d11 (default), vulkan, gl
+ *   npm run bench -- --size 1296x653        fixed viewport, to compare machines at the same pixel count
  *   npm run bench -- --headless             no window (CPU numbers only; GPU may be software)
  *   npm run bench -- --out report.json      where to write (default bench-results/<host>-<time>.json)
  */
@@ -35,9 +37,10 @@ if (opt("art") != null) url.searchParams.set("art", opt("art"));
 const browser = await chromium.launch({
   headless: flag("headless"),
   channel: flag("chrome") ? "chrome" : undefined,
-  args: ["--use-gl=angle", "--enable-gpu", "--ignore-gpu-blocklist"],
+  args: ["--use-gl=angle", "--enable-gpu", "--ignore-gpu-blocklist", ...(opt("angle") ? [`--use-angle=${opt("angle")}`] : [])],
 });
-const page = await browser.newPage({ viewport: null });
+const size = opt("size")?.split("x").map(Number);
+const page = await browser.newPage({ viewport: size ? { width: size[0], height: size[1] } : null });
 page.on("pageerror", (e) => console.error("[page error]", e.message));
 
 console.log(`Benchmark: ${url.href}`);
