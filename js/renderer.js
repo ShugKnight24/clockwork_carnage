@@ -2,6 +2,7 @@ import { WALL_COLORS } from "./data.js";
 
 import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
+import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
  *  floor/ceiling loop: both only read module constants, so rebuilding the
@@ -52,6 +53,11 @@ const CAP_FOG_STEPS = 32;
 const CAP_SHADE = 0.28;
 const _capCache = new WeakMap();
 const _noTexture = {}; // cache slot for a wall type with no art
+const NO_RGBA = [0, 0, 0, 0];
+// Realistic per-pixel wall light: multiplies the wall's own colour, so it
+// needs more gain than the old additive fill to read as bright up close.
+const WALL_LIGHT_GAIN = 12;
+const WALL_TEX = 512; // Modern wall art, mip 0
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -98,6 +104,13 @@ export class Renderer {
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this._envLevel = null; // campaign level env id, for the per-level palette
+    // Modern walls drawn by the GL wall pass when it is available; false
+    // forces the Canvas2D path (debugging, A/B timing).
+    this.gpuWalls = true;
+    this.gpuWallLights = false;
+    this.gpuWallTrilinear = false;
+    this._glLight = [0, 0, 0, 0];
+    this._glAccent = [0, 0, 0, 0];
     this.textures = generateWallTextures();
     // Cap colours read each texture back once; do it now rather than mid-level.
     for (const tex of Object.values(this.textures)) averageColor(tex);
@@ -421,7 +434,7 @@ export class Renderer {
    * fogged at the far edge's distance. Caps are a pixel or two tall except up
    * close, so a texture blit there bought nothing and cost a draw call.
    */
-  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real) {
+  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real, glWalls = null) {
     const mmips = menv ? menv.walls[wallType] : null;
     const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
     const lut = this._capLUT(tex, menv, real);
@@ -432,8 +445,13 @@ export class Renderer {
       s = dist / 20 / (this._visualStyle === 1 ? 0.85 : 0.6);
       if (s > 1) s = 1;
     }
-    ctx.fillStyle = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
-    ctx.fillRect(x, top, 1, bot - top);
+    const color = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
+    if (glWalls) {
+      glWalls.flat(x, top, bot, rgbaBytes(color));
+    } else {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, top, 1, bot - top);
+    }
     // The Comic ink line along the far edge, batched with the frame's column
     // spans (_addSpan). Realistic's ambient is already in the cap colour.
     if (menv && !real) this._addSpan(x, top, 1);
@@ -859,6 +877,7 @@ export class Renderer {
     }
 
     // Draw textured floor and ceiling (with yShift for pitch support)
+    let glWalls = null;
     if (menv) {
       let drawn = false;
       if (this.useWebGL && this.glRenderer) {
@@ -873,7 +892,19 @@ export class Renderer {
           menv,
           this.lights || [],
         );
-        if (drawn) this.glRenderer.blitTo(ctx);
+        if (drawn) {
+          // Walls join the floor in the GL canvas when they can (see
+          // WallPass); the canvas is copied over once they are drawn.
+          const wp = this.gpuWalls ? this.glRenderer.wallPass() : null;
+          if (wp && wp.useEnv(menv)) {
+            glWalls = wp;
+            // Realistic lights the walls per pixel in the pass (see
+            // WallPass wallLight); Comic keeps its flat per-column light.
+            wp.begin(this.lights, real && this.gpuWallLights ? WALL_LIGHT_GAIN * ambientKeep : 0);
+          } else {
+            this.glRenderer.blitTo(ctx);
+          }
+        }
       }
       if (!drawn) {
         this._renderFloorCeilingModern(
@@ -1015,16 +1046,9 @@ export class Renderer {
             const srcY = (drawStart - fullDrawStart) * mstep;
             const colH = drawEnd - drawStart;
             const srcH = Math.min(S - srcY, colH * mstep);
-            if (srcH > 0 && colH > 0) {
-              ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
-            }
 
             // Directional key light: faces turned away from it fall toward ink.
             const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
-            if (face !== 0) {
-              ctx.fillStyle = menv.faceShade[face];
-              ctx.fillRect(x, drawStart, 1, colH);
-            }
             // Realistic's soft contact shadow at the deck and ceiling joints is
             // painted into the wall mips (bakeContactShadow in textures.js).
 
@@ -1036,19 +1060,14 @@ export class Renderer {
             // Realistic's low ambient rides on this fill (fogAmbientLUT), so
             // it needs no fill of its own; everything drawn on the wall after
             // it is scaled by ambientKeep, as the separate fill used to do.
-            if (real) {
-              ctx.fillStyle = menv.fogAmbientLUT[fi];
-              ctx.fillRect(x, drawStart, 1, colH);
-            } else if (fi > 0) {
-              ctx.fillStyle = menv.fogLUT[fi];
-              ctx.fillRect(x, drawStart, 1, colH);
-            }
+            const fogCss = real ? menv.fogAmbientLUT[fi] : fi > 0 ? menv.fogLUT[fi] : null;
 
             // Dynamic lights, with a hot rim where they catch an exposed corner.
-            if (this.lights && this.lights.length > 0) {
+            let lightA = 0;
+            let lr = 0, lg = 0, lb = 0;
+            if (this.lights && this.lights.length > 0 && !(glWalls && glWalls.lightGain > 0)) {
               const hitWX = camX + perpWallDist * rayDirX;
               const hitWY = camY + perpWallDist * rayDirY;
-              let lr = 0, lg = 0, lb = 0;
               for (let li = 0; li < this.lights.length; li++) {
                 const L = this.lights[li];
                 const ldx = L.x - hitWX;
@@ -1087,27 +1106,69 @@ export class Renderer {
                   }
                 }
                 const peak = Math.max(lr, lg, lb);
-                const a = Math.min(0.9, peak / 255) * ambientKeep;
-                const prev = ctx.globalCompositeOperation;
-                ctx.globalCompositeOperation = "lighter";
-                ctx.fillStyle = _getFogString(
-                  Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
-                );
-                ctx.fillRect(x, drawStart, 1, colH);
-                ctx.globalCompositeOperation = prev;
+                lightA = Math.min(0.9, peak / 255) * ambientKeep;
+                lr = Math.min(255, lr | 0);
+                lg = Math.min(255, lg | 0);
+                lb = Math.min(255, lb | 0);
               }
             }
 
             // Door-frame spill onto the walls flanking a door tile.
+            let accentA = 0;
             if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
               const low = wallX < 0.1;
               const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
               const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
               if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
+                accentA = Math.max(0, (1 - fogAmount) * 0.3) * ambientKeep;
+              }
+            }
+
+            if (glWalls) {
+              const lt = this._glLight;
+              lt[0] = lr; lt[1] = lg; lt[2] = lb; lt[3] = Math.round(lightA * 255);
+              const ac = menv.accentRGB;
+              const at = this._glAccent;
+              at[0] = ac[0]; at[1] = ac[1]; at[2] = ac[2]; at[3] = Math.round(accentA * 255);
+              // Trilinear: a continuous u and a fractional mip (one texel a
+              // pixel) blend the levels, instead of the Canvas2D path's hard
+              // step at each half-octave of wall height.
+              const tri = this.gpuWallTrilinear;
+              const flip = (side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0);
+              const u = tri ? (flip ? 1 - wallX : wallX) : (texX + 0.5) / S;
+              const lod = srcH <= 0 ? -1 : tri ? Math.min(5, Math.max(0, Math.log2(WALL_TEX / lineHeight))) : lvl;
+              glWalls.wall(
+                x, drawStart, drawEnd, wallType, lod, u, srcY / S, (srcY + srcH) / S,
+                face !== 0 ? rgbaBytes(menv.faceShade[face]) : NO_RGBA,
+                fogCss ? rgbaBytes(fogCss) : NO_RGBA,
+                lt, at,
+                camX + perpWallDist * rayDirX, camY + perpWallDist * rayDirY,
+                side === 0 ? -stepX : 0, side === 1 ? -stepY : 0,
+              );
+            } else {
+              if (srcH > 0) {
+                ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
+              }
+              if (face !== 0) {
+                ctx.fillStyle = menv.faceShade[face];
+                ctx.fillRect(x, drawStart, 1, colH);
+              }
+              if (fogCss) {
+                ctx.fillStyle = fogCss;
+                ctx.fillRect(x, drawStart, 1, colH);
+              }
+              if (lightA > 0) {
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(lr, lg, lb, lightA);
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+              if (accentA > 0) {
                 const ac = menv.accentRGB;
                 const prev = ctx.globalCompositeOperation;
                 ctx.globalCompositeOperation = "lighter";
-                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3) * ambientKeep);
+                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], accentA);
                 ctx.fillRect(x, drawStart, 1, colH);
                 ctx.globalCompositeOperation = prev;
               }
@@ -1243,7 +1304,7 @@ export class Renderer {
           if (capTop < 0) capTop = 0;
           const capBot = faceTop < openBot ? faceTop : openBot;
           if (capBot > capTop) {
-            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real);
+            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real, glWalls);
           }
           top = capTop;
         }
@@ -1264,6 +1325,10 @@ export class Renderer {
       this.zBuffer[x] = closeDist;
     }
 
+    if (glWalls) {
+      glWalls.draw(w, h);
+      this.glRenderer.blitTo(ctx);
+    }
     if (menv && !real) this._drawModernInk(w, h);
 
     // Set FOV scale for prop minimum-size floors

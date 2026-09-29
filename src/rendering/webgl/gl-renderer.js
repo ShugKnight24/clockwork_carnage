@@ -14,6 +14,7 @@
  * uses the Canvas2D software renderer (Uint32Array path).
  */
 
+import { WallPass } from "./wall-pass.js";
 import { isModernArt, isRealisticArt } from "../art-style.js";
 
 // ── Shader sources (inlined for zero-fetch boot) ──────────────────
@@ -607,6 +608,15 @@ export class GLRenderer {
     this.sceneFBO = this._createFramebuffer(w, h);
   }
 
+  /** The Modern wall pass, created on first use; null if it cannot compile. */
+  wallPass() {
+    if (this._wallPass === undefined) {
+      const wp = new WallPass(this.gl);
+      this._wallPass = wp.ok ? wp : null;
+    }
+    return this._wallPass;
+  }
+
   /** Draw the last frame rendered here onto a 2D context at its origin. */
   blitTo(ctx) {
     const { width: w, height: h } = this;
@@ -915,6 +925,7 @@ export class GLRenderer {
     if (this.modernFloorTex) gl.deleteTexture(this.modernFloorTex);
     if (this.modernCeilTex) gl.deleteTexture(this.modernCeilTex);
     if (this.envMapTex) gl.deleteTexture(this.envMapTex);
+    this._wallPass?.destroy();
     gl.deleteFramebuffer(this.sceneFBO.fbo);
     gl.deleteTexture(this.sceneFBO.texture);
   }
