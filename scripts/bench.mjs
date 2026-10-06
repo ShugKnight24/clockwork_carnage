@@ -11,6 +11,7 @@
  *   npm run bench -- --chrome               the installed Google Chrome, not Playwright's Chromium
  *   npm run bench -- --angle vulkan         Chrome's graphics backend on Windows: d3d11 (default), vulkan, gl
  *   npm run bench -- --size 1296x653        fixed viewport, to compare machines at the same pixel count
+ *   npm run bench -- --uncapped             no vsync or frame-rate limit: fps shows the headroom, not the display
  *   npm run bench -- --headless             no window (CPU numbers only; GPU may be software)
  *   npm run bench -- --out report.json      where to write (default bench-results/<host>-<time>.json)
  */
@@ -37,7 +38,9 @@ if (opt("art") != null) url.searchParams.set("art", opt("art"));
 const browser = await chromium.launch({
   headless: flag("headless"),
   channel: flag("chrome") ? "chrome" : undefined,
-  args: ["--use-gl=angle", "--enable-gpu", "--ignore-gpu-blocklist", ...(opt("angle") ? [`--use-angle=${opt("angle")}`] : [])],
+  args: ["--use-gl=angle", "--enable-gpu", "--ignore-gpu-blocklist", ...(opt("angle") ? [`--use-angle=${opt("angle")}`] : []),
+    ...(flag("uncapped") ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : []),
+  ],
 });
 const size = opt("size")?.split("x").map(Number);
 const page = await browser.newPage({ viewport: size ? { width: size[0], height: size[1] } : null });
