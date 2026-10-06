@@ -736,8 +736,10 @@ export function buildWallSet(act, pal, salt = 0, realistic = false) {
     return { id, mat, canvas: paintWall(+id, act, p, salt, mat) };
   });
   for (const { id, mat, canvas } of faces) {
-    bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
+    const normals = bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
     set[id] = buildMips(canvas);
+    // Relief normals for the GPU wall pass's dynamic lights (WallPass).
+    set[id].normals = buildMips(normals);
   }
   return set;
 }

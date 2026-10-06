@@ -58,6 +58,8 @@ const NO_RGBA = [0, 0, 0, 0];
 // needs more gain than the old additive fill to read as bright up close.
 const WALL_LIGHT_GAIN = 12;
 const WALL_TEX = 512; // Modern wall art, mip 0
+// Glint of dynamic lights on polished wall relief (Realistic, with normals).
+const WALL_SPEC_GAIN = 0.6;
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -109,6 +111,7 @@ export class Renderer {
     this.gpuWalls = true;
     this.gpuWallLights = true;
     this.gpuWallTrilinear = true;
+    this.gpuWallNormals = true;
     this._glLight = [0, 0, 0, 0];
     this._glAccent = [0, 0, 0, 0];
     this.textures = generateWallTextures();
@@ -900,7 +903,13 @@ export class Renderer {
             glWalls = wp;
             // Realistic lights the walls per pixel in the pass (see
             // WallPass wallLight); Comic keeps its flat per-column light.
-            wp.begin(this.lights, real && this.gpuWallLights ? WALL_LIGHT_GAIN * ambientKeep : 0);
+            wp.useNormals = this.gpuWallNormals;
+            wp.begin(
+              this.lights,
+              real && this.gpuWallLights ? WALL_LIGHT_GAIN * ambientKeep : 0,
+              camX, camY,
+              WALL_SPEC_GAIN * ambientKeep,
+            );
           } else {
             this.glRenderer.blitTo(ctx);
           }

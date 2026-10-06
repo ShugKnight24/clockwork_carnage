@@ -64,14 +64,35 @@ out vec4 outColor;
 // Lights hang at eye height; the texture's v runs ceiling (0) to deck (1).
 const float LIGHT_Z = 0.5;
 
+uniform bool u_hasNormals;
+uniform sampler2DArray u_normals; // R, G: relief normal x, y; B: gloss
+uniform vec3 u_cam;               // camera position, eye height in z
+uniform float u_specGain;
+
 // Realistic lights multiply the wall's own colour, as they do on the deck,
-// fall off in 3D from the light to this pixel, and only reach faces turned
-// toward them — the per-column Canvas2D light was one flat additive colour
-// for the whole column, lit whichever way the wall faced.
+// fall off in 3D from the light to this pixel, and only reach surfaces turned
+// toward them. With the bake's relief normals a light rakes across the
+// panels — seams, bevels and rivet heads catch it — and polished metal
+// glints. The per-column Canvas2D light was one flat additive colour for the
+// whole column, lit whichever way the wall faced.
 vec3 wallLight(vec3 albedo) {
-  vec3 sum = vec3(0.0);
   vec3 p = vec3(v_hit.xy, 1.0 - v_uvl.y);
-  vec3 n = vec3(v_hit.zw, 0.0);
+  vec3 n0 = vec3(v_hit.zw, 0.0);
+  vec3 n = n0;
+  float gloss = 0.0;
+  if (u_hasNormals) {
+    vec3 m = textureLod(u_normals, v_uvl, v_lod).rgb;
+    vec2 nxy = m.rg * 2.0 - 1.0;
+    float nz = sqrt(max(0.0, 1.0 - dot(nxy, nxy)));
+    // Texture u runs along the face normal turned +90 degrees; texture y runs
+    // down the wall.
+    vec3 tangent = vec3(-n0.y, n0.x, 0.0);
+    n = normalize(tangent * nxy.x - vec3(0.0, 0.0, nxy.y) + n0 * nz);
+    gloss = m.b;
+  }
+  vec3 view = normalize(u_cam - p);
+  vec3 diffuse = vec3(0.0);
+  vec3 spec = vec3(0.0);
   for (int i = 0; i < 16; i++) {
     if (i >= u_numLights) break;
     vec4 L = u_lights[i];
@@ -82,10 +103,14 @@ vec3 wallLight(vec3 albedo) {
     float q = d2 / r2;
     float win = 1.0 - q * q;
     float k = win * win * L.w / (1.0 + 6.0 * q);
-    float ndl = max(0.0, dot(n, dl * inversesqrt(max(d2, 1e-4))));
-    sum += u_lightColors[i] * k * ndl;
+    vec3 l = dl * inversesqrt(max(d2, 1e-4));
+    // Light from behind the wall's plane never reaches it, relief or not.
+    if (dot(n0, l) <= 0.0) continue;
+    vec3 c = u_lightColors[i] * k;
+    diffuse += c * max(0.0, dot(n, l));
+    if (gloss > 0.0) spec += c * pow(max(0.0, dot(n, normalize(l + view))), 32.0) * gloss;
   }
-  return albedo * sum * u_lightGain;
+  return albedo * diffuse * u_lightGain + spec * u_specGain;
 }
 
 void main() {
@@ -154,6 +179,14 @@ export class WallPass {
     this.uLights = gl.getUniformLocation(prog, "u_lights");
     this.uLightColors = gl.getUniformLocation(prog, "u_lightColors");
     this.uLightGain = gl.getUniformLocation(prog, "u_lightGain");
+    this.uHasNormals = gl.getUniformLocation(prog, "u_hasNormals");
+    this.uNormals = gl.getUniformLocation(prog, "u_normals");
+    this.uCam = gl.getUniformLocation(prog, "u_cam");
+    this.uSpecGain = gl.getUniformLocation(prog, "u_specGain");
+    this.cam = [0, 0];
+    this.specGain = 0;
+    this.normalTex = null;
+    this.useNormals = true;
     this._lightBuf = new Float32Array(64);
     this._lightColorBuf = new Float32Array(48);
     this.lightGain = 0;
@@ -215,7 +248,9 @@ export class WallPass {
     this.env = env;
     const gl = this.gl;
     if (this.tex) gl.deleteTexture(this.tex);
+    if (this.normalTex) gl.deleteTexture(this.normalTex);
     this.tex = null;
+    this.normalTex = null;
     const ids = Object.keys(env.walls).map(Number);
     const layers = Math.max(...ids);
     for (const id of ids) {
@@ -240,16 +275,43 @@ export class WallPass {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
     this.tex = tex;
+    this.normalTex = ids.every((id) => env.walls[id].normals?.length >= LEVELS)
+      ? this._uploadArray(ids, (id) => env.walls[id].normals, layers)
+      : null;
     return true;
+  }
+
+  /** A texture array of each wall type's mip chain from `chainOf(id)`. */
+  _uploadArray(ids, chainOf, layers) {
+    const gl = this.gl;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, layers);
+    for (const id of ids) {
+      const mips = chainOf(id);
+      for (let l = 0; l < LEVELS; l++) {
+        const s = SIZE >> l;
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, id - 1, s, s, 1, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
+      }
+    }
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
+    return tex;
   }
 
   /**
    * Start a frame. `lights` ({x, y, color 0-255, radius, intensity}) are lit
    * per pixel when `gain` > 0 (Realistic); 0 keeps the per-column colours.
    */
-  begin(lights = null, gain = 0) {
+  begin(lights = null, gain = 0, camX = 0, camY = 0, specGain = 0) {
     this.n = 0;
     this.lightGain = gain;
+    this.specGain = specGain;
+    this.cam[0] = camX;
+    this.cam[1] = camY;
     const n = gain > 0 && lights ? Math.min(lights.length, 16) : 0;
     const lb = this._lightBuf;
     const cb = this._lightColorBuf;
@@ -320,6 +382,14 @@ export class WallPass {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.tex);
     gl.uniform1i(this.uWalls, 0);
     gl.uniform1f(this.uLightGain, this.lightGain);
+    gl.uniform1f(this.uSpecGain, this.specGain);
+    gl.uniform3f(this.uCam, this.cam[0], this.cam[1], 0.5);
+    const normals = this.lightGain > 0 && this.useNormals && this.normalTex;
+    gl.uniform1i(this.uHasNormals, normals ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, normals ? this.normalTex : this.tex);
+    gl.uniform1i(this.uNormals, 1);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(this.uNumLights, this.numLights);
     if (this.numLights) {
       gl.uniform4fv(this.uLights, this._lightBuf);
@@ -338,6 +408,7 @@ export class WallPass {
   destroy() {
     const gl = this.gl;
     if (this.tex) gl.deleteTexture(this.tex);
+    if (this.normalTex) gl.deleteTexture(this.normalTex);
     if (this.buf) gl.deleteBuffer(this.buf);
     if (this.prog) gl.deleteProgram(this.prog);
   }
