@@ -14,7 +14,7 @@
 export const PIXEL_BUDGET = Object.freeze({
   low: 0.55e6, // ~ 990x555
   mid: 1.0e6, // ~ 1333x750
-  high: 1.8e6, // ~ 1790x1005 — a 1440x900 laptop renders native
+  high: 3.7e6, // ~ 2560x1440 — native on a 1440p screen
 });
 
 /**
@@ -68,12 +68,18 @@ export function detectDeviceTier() {
 }
 
 /**
- * Render size for a window of cssW x cssH that fits the tier's pixel budget,
- * keeping aspect. Never upscales past the CSS size.
+ * Render size for a window of cssW x cssH at device pixel ratio `dpr` that
+ * fits the tier's pixel budget, keeping aspect. Never renders past the
+ * window's device pixels. It used to stop at the CSS size, so a 1440p screen
+ * at 150% scaling drew 1251 px wide and the browser stretched it 1.5x,
+ * blocky under image-rendering: pixelated, however much GPU was spare.
  */
-export function budgetedRenderSize(cssW, cssH, tier) {
+export function budgetedRenderSize(cssW, cssH, tier, dpr = 1) {
   const budget = PIXEL_BUDGET[tier] ?? PIXEL_BUDGET.mid;
-  const px = cssW * cssH;
+  const s = Math.max(1, dpr || 1);
+  const devW = cssW * s;
+  const devH = cssH * s;
+  const px = devW * devH;
   const k = px > budget ? Math.sqrt(budget / px) : 1;
-  return { w: Math.max(1, Math.round(cssW * k)), h: Math.max(1, Math.round(cssH * k)) };
+  return { w: Math.max(1, Math.round(devW * k)), h: Math.max(1, Math.round(devH * k)) };
 }

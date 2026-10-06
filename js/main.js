@@ -88,7 +88,7 @@ function resizeCanvases() {
   // Render at a per-device pixel budget, not the raw window size: a 4K monitor
   // is 6x the pixels of a laptop, and a phone GPU a fraction of a desktop's.
   // (This replaces a flat 1280px cap that only applied to touch devices.)
-  const { w: renderW, h: renderH } = budgetedRenderSize(cssW, cssH, detectDeviceTier());
+  const { w: renderW, h: renderH } = budgetedRenderSize(cssW, cssH, detectDeviceTier(), dpr);
   nativeW = renderW;
   nativeH = renderH;
 

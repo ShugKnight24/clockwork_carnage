@@ -28,8 +28,8 @@ const URL = `http://localhost:${PORT}`;
 // Budgets carry headroom over measured values (M1 Pro, 2026-09-21), so they
 // catch regressions rather than machine noise.
 const PROFILES = [
-  { name: "laptop-hidpi", viewport: { width: 1440, height: 900 }, dpr: 2, cpu: 1, renderMs: 6, pixelCap: 1.8e6 },
-  { name: "4k-monitor", viewport: { width: 3840, height: 2160 }, dpr: 1, cpu: 1, renderMs: 8, pixelCap: 1.8e6 },
+  { name: "laptop-hidpi", viewport: { width: 1440, height: 900 }, dpr: 2, cpu: 1, renderMs: 6, pixelCap: 3.7e6 },
+  { name: "4k-monitor", viewport: { width: 3840, height: 2160 }, dpr: 1, cpu: 1, renderMs: 8, pixelCap: 3.7e6 },
   { name: "slow-laptop", viewport: { width: 1280, height: 800 }, dpr: 1, cpu: 4, renderMs: 22, pixelCap: 1.8e6 },
   { name: "phone", viewport: { width: 780, height: 360 }, dpr: 3, cpu: 4, touch: true, renderMs: 22, pixelCap: 1.0e6 },
 ];

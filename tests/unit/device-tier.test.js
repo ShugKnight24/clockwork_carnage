@@ -34,6 +34,14 @@ describe("render pixel budget", () => {
     expect(Math.abs(w / h - 16 / 9)).toBeLessThan(0.01);
   });
 
+  it("renders a high-DPI window at device pixels while the budget allows", () => {
+    // A 1440p screen at 150%: 1251x1286 CSS px is 1877x1929 device px.
+    expect(budgetedRenderSize(1251, 1286, "high", 1.5)).toEqual({ w: 1877, h: 1929 });
+    // The same window on a weaker tier still stops at its budget.
+    const { w, h } = budgetedRenderSize(1251, 1286, "mid", 1.5);
+    expect(w * h).toBeLessThanOrEqual(PIXEL_BUDGET.mid * 1.01);
+  });
+
   it("gives lower tiers fewer pixels", () => {
     const hi = budgetedRenderSize(1920, 1080, "high");
     const lo = budgetedRenderSize(1920, 1080, "low");
