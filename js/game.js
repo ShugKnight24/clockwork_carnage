@@ -1701,6 +1701,18 @@ export class Game {
     );
   }
 
+  /**
+   * The settings deck's "Agent & Suit" row: the full creator, then back to
+   * the deck where it was opened (and to whatever opened the deck), so a
+   * player can wear what they unlock without starting a new campaign.
+   */
+  openCreatorFromSettings() {
+    const returnTo = this._settingsReturnTo ?? "pause";
+    this.creatorCategory = 0;
+    this._creatorSaveCallback = () => this.openSettings({ returnTo, section: "gameplay" });
+    this.state = GameState.CHARACTER_CREATE;
+  }
+
   _exitCreator(saved) {
     if (saved) {
       this.saveCharacter();

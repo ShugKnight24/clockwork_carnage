@@ -666,6 +666,17 @@ export const SETTINGS_REGISTRY = [
     height: { compact: 30, normal: 44 },
   },
   {
+    key: "editAgent",
+    label: "Agent & Suit",
+    desc: "Change your suit, colours, badge, gear and loadout. New unlocks show up here as you earn them.",
+    type: "action",
+    buttonLabel: "OPEN CREATOR",
+    color: "#22e6ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: (game) => game.openCreatorFromSettings(),
+  },
+  {
     key: "editCustomHud",
     label: "Edit Custom HUD",
     desc: "Open the drag-and-drop HUD editor.",

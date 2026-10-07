@@ -31,7 +31,7 @@ const ALLOWED_TRANSITIONS = {
   modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings', 'cinematic'],
   playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
   paused: ['playing', 'settings', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
-  settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor'],
+  settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor', 'characterCreate'],
   // The deck's "Edit custom HUD" row opens the editor; leaving it returns there.
   hudEditor: ['settings', 'paused', 'playing', 'title', 'modeSelect'],
   upgrade: ['playing'],
@@ -43,7 +43,8 @@ const ALLOWED_TRANSITIONS = {
   cutscene: ['playing', 'title', 'modeSelect', 'gameOver', 'victory', 'campaignPrompt', 'tutorial', 'characterCreate'],
   campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene'],
   tutorialComplete: ['title', 'modeSelect', 'playing'],
-  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory', 'cinematic'],
+  // The deck's "Agent & Suit" row opens the creator; leaving it returns there.
+  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory', 'cinematic', 'settings', 'campaignPrompt'],
   achievements: ['title', 'modeSelect', 'paused'],
   stats: ['title', 'modeSelect', 'paused'],
   archive: ['title', 'modeSelect', 'paused', 'cinematic'],

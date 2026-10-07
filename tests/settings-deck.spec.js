@@ -968,3 +968,16 @@ test("controller: B can be bound (it swaps with crouch)", async ({ page }) => {
   expect(await padBind(page, "dash")).toBe(1);
   expect(await padBind(page, "crouch")).toBe(0);
 });
+
+test("Agent & Suit opens the creator and comes back to the Gameplay section", async ({ page }) => {
+  await openDeck(page);
+  // Through the game, as the menu does, so it knows where the deck returns to.
+  await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "menu" }));
+  await deck(page).locator('[role="tab"]', { hasText: "Gameplay" }).click();
+  await deck(page).getByText("OPEN CREATOR").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
+  await page.waitForTimeout(500);
+  await page.keyboard.press("Escape"); // back out: nothing changed, so no discard prompt
+  await page.waitForFunction(() => window.ccDebug.game.state === "settings");
+  expect(await page.evaluate(() => [window.ccDebug.game._settingsReturnTo, window.ccDebug.game._settingsSection])).toEqual(["menu", "gameplay"]);
+});
