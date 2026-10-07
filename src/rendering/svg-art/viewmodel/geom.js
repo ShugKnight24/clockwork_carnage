@@ -102,14 +102,19 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
 }
 
 /**
- * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) }
+ * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) },
+ *   or { side: true, scale } — an orthographic profile of the left flank, muzzle
+ *   pointing right, at `scale` units per mm (HUD weapon icons)
  * @param {string} accent  character energy colour (emissives, rim light)
  * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges }
  */
 export function createScene(cam, accent, opts = {}) {
   const { F, ox, oy, oz, kx = 0 } = cam;
+  const side = !!cam.side;
+  const S = cam.scale || 1;
   const real = !!opts.real;
-  const eye = [-ox, -oy, -oz];
+  // Side view: the eye far off the left flank, so painter order follows x.
+  const eye = side ? [-1e5, 0, 0] : [-ox, -oy, -oz];
   const core = mix(accent, "#ffffff", 0.55);
 
   const layers = {};
@@ -128,13 +133,16 @@ export function createScene(cam, accent, opts = {}) {
   };
 
   /** Units per millimetre at a gun-space point's depth. */
-  const k = ([, , z]) => F / Math.max(20, z + oz);
+  const k = side ? () => S : ([, , z]) => F / Math.max(20, z + oz);
   /** Project a gun-space point (mm) to viewmodel units. */
-  const P = (p) => {
-    const q = k(p);
-    return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
-  };
-  // Which screen winding means "facing the camera"? Probe with a floor-facing quad below the eye.
+  const P = side
+    ? (p) => [p[2] * S, -p[1] * S]
+    : (p) => {
+      const q = k(p);
+      return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
+    };
+  // Which screen winding means "facing the camera"? Probe with a quad facing the
+  // eye: a floor below it, or for the side view the left flank.
   const area2 = (p2) => {
     let a = 0;
     for (let i = 0; i < p2.length; i++) {
@@ -143,8 +151,11 @@ export function createScene(cam, accent, opts = {}) {
     }
     return a;
   };
-  const probe = [[-5, -oy - 60, 200], [5, -oy - 60, 200], [5, -oy - 60, 210], [-5, -oy - 60, 210]];
-  const VIS = Math.sign(area2((dot(newell(probe), [0, 1, 0]) < 0 ? probe.slice().reverse() : probe).map(P))) || 1;
+  const probe = side
+    ? [[0, 0, 0], [0, 0, 10], [0, 10, 10], [0, 10, 0]]
+    : [[-5, -oy - 60, 200], [5, -oy - 60, 200], [5, -oy - 60, 210], [-5, -oy - 60, 210]];
+  const toEye = side ? [-1, 0, 0] : [0, 1, 0];
+  const VIS = Math.sign(area2((dot(newell(probe), toEye) < 0 ? probe.slice().reverse() : probe).map(P))) || 1;
   const path = (pts2, close = true) => {
     for (const p of pts2) grow(cur, p);
     return "M" + pts2.map(pt).join("L") + (close ? "Z" : "");

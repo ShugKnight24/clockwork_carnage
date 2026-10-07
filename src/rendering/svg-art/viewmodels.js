@@ -531,6 +531,43 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   return true;
 }
 
+// Side profiles: millimetres to icon units; a pistol (~200 mm) comes out ~140 wide.
+const PROFILE_SCALE = 0.7;
+const profiles = new Map(); // `${id}|${accent}` -> profile
+
+/**
+ * A weapon's side profile from the same model the viewmodel is built from —
+ * left flank, muzzle right, orthographic, no hands — so a HUD icon is the gun
+ * in hand rather than separate art. The gloves paint into a scene of their
+ * own that is thrown away: the builders interleave hand and weapon calls, and
+ * the weapon's layers stay clean. Returns { defs, body, glow, box [x, y, w, h] }
+ * in icon units, or null for an unknown id.
+ */
+export function weaponProfile(id, accent) {
+  const key = `${id}|${accent}`;
+  let p = profiles.get(key);
+  if (p !== undefined) return p;
+  const model = WEAPON_MODELS[id];
+  p = null;
+  if (model) {
+    const cam = { side: true, scale: PROFILE_SCALE };
+    const sc = createScene(cam, accent);
+    sc.detailPx = 4;
+    const hands = createScene(cam, accent);
+    hands.detailPx = 4;
+    model.build(sc, createHandArt(hands), "hip");
+    const body = sc.layers.body;
+    const glow = sc.layers.glow;
+    const x0 = Math.min(body.min[0], glow?.min[0] ?? Infinity);
+    const y0 = Math.min(body.min[1], glow?.min[1] ?? Infinity);
+    const x1 = Math.max(body.max[0], glow?.max[0] ?? -Infinity);
+    const y1 = Math.max(body.max[1], glow?.max[1] ?? -Infinity);
+    p = { defs: DEFS, body: body.svg, glow: glow?.svg ?? "", box: [x0, y0, x1 - x0, y1 - y0] };
+  }
+  profiles.set(key, p);
+  return p;
+}
+
 /** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose. */
 export function viewmodelLayers(id, accent, pose = "hip", tier = "hi", real = false) {
   const vm = build(id, accent, pose, tier, real);
