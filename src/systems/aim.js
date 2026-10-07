@@ -144,12 +144,37 @@ export function effectiveAimFov(player, settings = {}) {
   return baseFov * (1 - _adsBlend * (1 - PLAYER_ADS_FOV_MULT));
 }
 
-/** Drive the ADS blend (FOV, sensitivity, viewmodel). Call once per frame. */
-export function updateAdsFov(player, dt) {
+// How fast aiming in pulls a free-aim reticle back to centre (per second).
+const ADS_CENTER_RATE = 9;
+
+/** Yaw under the reticle for a horizontal FOV (degrees): the inverse projection in aimAngles. */
+const reticleYaw = (player, fovDeg) =>
+  player.angle + Math.atan(2 * (player.aimOffsetX || 0) * Math.tan((fovDeg * Math.PI) / 360));
+
+/**
+ * Drive the ADS blend (FOV, sensitivity, viewmodel). Call once per frame.
+ *
+ * With `settings`, whatever is under the reticle stays under it through the
+ * zoom. The zoom narrows the view about the screen centre, so a free-aim
+ * reticle off to the side used to drift off its target as you aimed in — and
+ * the view magnified the middle of the screen, not what you were aiming at.
+ * Aiming in now also eases the reticle back to centre, turning the view by
+ * the same angle, so the sights and the magnified view land on the target.
+ * Vertical aim needs neither: the raycaster's zoom is horizontal only.
+ */
+export function updateAdsFov(player, dt, settings = null) {
+  const hold = settings && player && Number.isFinite(player.angle);
+  const yaw0 = hold ? reticleYaw(player, effectiveAimFov(player, settings)) : 0;
   const step = Math.min(dt, 0.1) / ADS_TRANSITION;
   _adsProgress = clamp(_adsProgress + (player?.isAiming ? step : -step), 0, 1);
   const t = _adsProgress;
   _adsBlend = t * t * t * (t * (t * 6 - 15) + 10);
+  if (!hold) return;
+  if (player.isAiming && player.aimOffsetX) {
+    player.aimOffsetX *= 1 - Math.min(1, ADS_CENTER_RATE * Math.min(dt, 0.1));
+    if (Math.abs(player.aimOffsetX) < 1e-4) player.aimOffsetX = 0;
+  }
+  player.angle += yaw0 - reticleYaw(player, effectiveAimFov(player, settings));
 }
 
 /** Drive the smooth sprint/dash/slide FOV boost. Call once per frame. */

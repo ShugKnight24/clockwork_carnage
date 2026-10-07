@@ -2572,7 +2572,7 @@ export class Game {
       if (flags.fallDamage > 0) this.damagePlayer(flags.fallDamage);
     }
     // Smooth ADS FOV transition — must run every frame
-    updateAdsFov(this.player, dt);
+    updateAdsFov(this.player, dt, this.settings);
   }
 
   /**

@@ -2,7 +2,7 @@ import { drawCrosshair } from "./crosshair.js";
 import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
-import { effectiveAimFov, reticlePoint } from "../systems/aim.js";
+import { effectiveAimFov, reticlePoint, getAimBlend } from "../systems/aim.js";
 import { isCompactPhone } from "../../js/layout.js";
 import {
   CHARACTER_COLORS,
@@ -301,33 +301,18 @@ function drawBossNameCard(ctx, game, w, h) {
   ctx.restore();
 }
 
-function drawAdsReticle(ctx, game, cx, cy) {
-  if (!game.player?.isAiming) return;
-  const t = game.time * 0.006;
-  const r = 22 + Math.sin(t) * 1.5;
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  ctx.strokeStyle = "rgba(120,220,255,0.75)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.beginPath();
-  ctx.moveTo(cx - r - 7, cy);
-  ctx.lineTo(cx - r + 6, cy);
-  ctx.moveTo(cx + r - 6, cy);
-  ctx.lineTo(cx + r + 7, cy);
-  ctx.moveTo(cx, cy - r - 7);
-  ctx.lineTo(cx, cy - r + 6);
-  ctx.moveTo(cx, cy + r - 6);
-  ctx.lineTo(cx, cy + r + 7);
-  ctx.stroke();
-  ctx.font = "bold 10px monospace";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(120,220,255,0.75)";
-  ctx.fillText("ADS", cx, cy + r + 20);
-  ctx.restore();
+/**
+ * The crosshair, faded out as the sights come up. At full ADS the sights are
+ * the reticle: the crosshair and an extra "ADS" ring drawn over them hid a
+ * small or distant target right where the player was aiming.
+ */
+function drawAimReticle(ctx, game, cx, cy) {
+  const show = 1 - getAimBlend();
+  if (show <= 0.02) return;
+  const a = ctx.globalAlpha;
+  ctx.globalAlpha = a * show;
+  drawCrosshair(ctx, cx, cy, game.settings.crosshair);
+  ctx.globalAlpha = a;
 }
 
 /**
@@ -489,8 +474,7 @@ if (isCompactMobile) {
 
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
-  drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-  drawAdsReticle(ctx, game, chx, chy);
+  drawAimReticle(ctx, game, chx, chy);
 
   // Hit marker
   drawHitMarker(ctx, game, chx, chy);
@@ -1334,8 +1318,7 @@ if (vanguard) drawVanguardThreatRing(game, ctx, w, h, 0);
 
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
-drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-drawAdsReticle(ctx, game, chx, chy);
+drawAimReticle(ctx, game, chx, chy);
 
 // ─── HIT MARKER ───
 drawHitMarker(ctx, game, chx, chy);
@@ -1872,8 +1855,7 @@ if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
 
 // ─── Crosshair (centered in viewport above bar) ───
 const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
-drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-drawAdsReticle(ctx, game, chx, chy);
+drawAimReticle(ctx, game, chx, chy);
 
 // ─── Hit marker ───
 drawHitMarker(ctx, game, chx, chy);

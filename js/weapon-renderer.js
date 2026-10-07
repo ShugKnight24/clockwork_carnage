@@ -40,7 +40,7 @@ export function drawWeapon(ctx, w, h, opts) {
   const blend = opts.state === undefined ? (opts.isAiming ? 1 : 0) : getAimBlend();
   if (isModernArt() && drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
   if (alpha >= 1) {
-    drawProceduralWeapon(ctx, w, h, opts);
+    drawProceduralWeapon(ctx, w, h, opts, blend);
     return;
   }
   // Fading out/in: the procedural model resets globalAlpha as it draws, so
@@ -50,7 +50,7 @@ export function drawWeapon(ctx, w, h, opts) {
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.clearRect(0, 0, off.width, off.height);
   octx.setTransform(ctx.getTransform());
-  drawProceduralWeapon(octx, w, h, opts);
+  drawProceduralWeapon(octx, w, h, opts, blend);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha *= alpha;
@@ -92,7 +92,7 @@ function fadeLayer(cw, ch) {
 }
 
 /** The original procedural viewmodel (Legacy art, and Modern while SVG bitmaps decode). */
-function drawProceduralWeapon(ctx, w, h, opts) {
+function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const {
     wep,
     energyColor,
@@ -126,8 +126,8 @@ function drawProceduralWeapon(ctx, w, h, opts) {
   // Hip-fire sits the weapon low and to the right and cants it inward, the way
   // a right-handed shooter actually holds it. ADS interpolates that pose to
   // dead centre and upright so the sights line up with the reticle.
-  // `ads` is 0 at the hip, 1 fully aimed.
-  const ads = isAiming ? 1 : 0;
+  // `ads` is 0 at the hip, 1 fully aimed: the eased blend when the caller has one.
+  const ads = adsBlend ?? (isAiming ? 1 : 0);
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
@@ -138,12 +138,16 @@ function drawProceduralWeapon(ctx, w, h, opts) {
   const swayX = (opts.weaponSwayX || 0) * lerp(1, 0.22, ads) * viewportFactor;
   const swayY = (opts.weaponSwayY || 0) * lerp(1, 0.22, ads) * viewportFactor;
 
-  const cx = w / 2 + restOffsetX + bobX + swayX - crouch * 11 * viewportFactor;
-
   // If we have a big HUD bar at the bottom, push the weapon up so it isn't hidden
   const hudOffset = opts.hudStyle === 1 ? (160 * viewportFactor) : 0;
+  // Aimed, the sights sit on the free-aim reticle (where shots go), not the
+  // screen centre: with the crosshair faded out at ADS they are the reticle.
+  const followX = (opts.aimOffsetX || 0) * w * ads;
+  const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
+
+  const cx = w / 2 + restOffsetX + bobX + swayX - crouch * 11 * viewportFactor + followX;
   const cy = h - hudOffset - lerp(196, 250, ads) * viewportFactor + bobY + swayY +
-    kickY * lerp(1, 0.45, ads) + crouch * 26 * viewportFactor;
+    kickY * lerp(1, 0.45, ads) + crouch * 26 * viewportFactor + followY;
 
   // Contact shadow — the viewmodel is the nearest object in the scene, so it
   // occludes ambient light behind itself. Without this the gun floats.

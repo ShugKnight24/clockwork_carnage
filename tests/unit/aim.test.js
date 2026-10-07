@@ -14,6 +14,10 @@ import {
   aimAngles,
   reticlePoint,
   aimHeightAtDistance,
+  updateAdsFov,
+  resetAdsFov,
+  effectiveAimFov,
+  getAimBlend,
 } from "../../src/systems/aim.js";
 import { rayEnemyHit } from "../../src/systems/combat.js";
 import {
@@ -196,5 +200,38 @@ describe("aim — projectile origin matches hit-test origin", () => {
     });
     const hit = rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 30, pitch, target);
     expect(hit?.enemy).toBe(target);
+  });
+});
+
+describe("aim — aiming down sights keeps the target under the reticle", () => {
+  const settings = { fov: 70 };
+  const yawAt = (p) => aimAngles(p, effectiveAimFov(p, settings)).yaw;
+
+  it("holds the aimed-at yaw through the zoom and recentres the reticle", () => {
+    resetAdsFov();
+    const p = { angle: 1.2, aimOffsetX: 0.15, aimOffsetY: -0.2, isAiming: true };
+    const target = yawAt(p);
+    for (let i = 0; i < 60; i++) {
+      updateAdsFov(p, 1 / 60, settings);
+      expect(yawAt(p)).toBeCloseTo(target, 9);
+    }
+    expect(getAimBlend()).toBe(1);
+    expect(Math.abs(p.aimOffsetX)).toBeLessThan(0.002);
+    // Vertical aim is pitch, which the horizontal-only zoom leaves alone.
+    expect(p.aimOffsetY).toBe(-0.2);
+  });
+
+  it("holds it again on the way back out", () => {
+    const p = { angle: 0.4, aimOffsetX: 0.1, isAiming: true };
+    for (let i = 0; i < 30; i++) updateAdsFov(p, 1 / 60, settings);
+    p.aimOffsetX = 0.05; // the player nudges the aim while sighted
+    const target = yawAt(p);
+    p.isAiming = false;
+    for (let i = 0; i < 30; i++) {
+      updateAdsFov(p, 1 / 60, settings);
+      expect(yawAt(p)).toBeCloseTo(target, 9);
+    }
+    expect(getAimBlend()).toBe(0);
+    resetAdsFov();
   });
 });
