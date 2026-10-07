@@ -479,13 +479,17 @@ async function freshCampaign(page) {
     tick();
   });
   await page.locator("#btnCampaign").click();
+  // The comic opens every new campaign and hands over to the creator.
+  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
+  expect((await page.evaluate(() => window.ccDebug.game.cutsceneKey ?? null)) ?? "intro_flipbook").toBe("intro_flipbook");
+  await page.evaluate(() => window.ccDebug.skipCutscene());
   await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
   await page.waitForTimeout(400);
 }
 
 const seenLore = (page) => page.evaluate(() => localStorage.getItem("cc_seen_lore_video"));
 
-test("a first new campaign plays the lore video between the creator and the flipbook; the next goes straight on", async ({ page }) => {
+test("a first new campaign runs comic, creator, then the lore video; the next skips the video", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await freshCampaign(page);
@@ -499,20 +503,18 @@ test("a first new campaign plays the lore video between the creator and the flip
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("cinematic");
   await page.keyboard.down("Space");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.waitForFunction(() => window.ccDebug.game.state === "campaignPrompt", null, { timeout: 5000 });
   await page.keyboard.up("Space");
   expect(await seenLore(page)).toBe("1");
-  // The cutscene is the flipbook: finishing it writes its own seen flag, then the prologue prompt.
-  await page.evaluate(() => window.ccDebug.skipCutscene());
-  await page.waitForFunction(() => window.ccDebug.game.state === "campaignPrompt");
   expect(await page.evaluate(() => localStorage.getItem("cc_seen_intro_flipbook"))).toBe("1");
-  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cinematic", "cutscene", "campaignPrompt"]);
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "cutscene", "characterCreate", "cinematic", "campaignPrompt"]);
 
-  // A second new campaign: creator, then the flipbook, no lore.
+  // A second new campaign: the comic, the creator, then straight to the prompt.
   await freshCampaign(page);
   await page.keyboard.press("Shift+Enter");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
-  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cutscene"]);
+  // The state log samples once a frame: wait for it to catch up.
+  await page.waitForFunction(() => window.__states.at(-1) === "campaignPrompt");
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "cutscene", "characterCreate", "campaignPrompt"]);
   expect(errors).toEqual([]);
 });
 
@@ -550,7 +552,7 @@ test("backing out of the creator still plays the lore video, with the default ag
   });
   expect(lit).toBeGreaterThan(500);
   await page.keyboard.down("Space");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.waitForFunction(() => window.ccDebug.game.state === "campaignPrompt", null, { timeout: 5000 });
   await page.keyboard.up("Space");
   expect(await seenLore(page)).toBe("1");
   expect(await page.evaluate(() => localStorage.getItem("cc_character"))).toBeNull();

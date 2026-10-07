@@ -179,19 +179,22 @@ export class CampaignManager {
           this.loadLevel(0);
         }
       };
+      // ARIA's briefing film (src/cinematic/films.js, LORE_SEEN_KEY) tells the
+      // premise — 2181, the Chronos Engine, the eleven seconds, the last
+      // anchor — so once it has played, "intro" would only say it again.
+      const premise = (next) => {
+        if (Save.hasSeenIntroMemory("cc_seen_lore_video")) next();
+        else g.startCutscene("intro", next);
+      };
       const afterFlipbook = () => {
         if (!fromTutorial && g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
             g.ariaEnabled = true;
             g.queueAriaMessage("campaignStart");
-            g.startCutscene("intro", () => {
-              playMemory();
-            });
+            premise(playMemory);
           });
         } else {
-          g.startCutscene("intro", () => {
-            playMemory();
-          });
+          premise(playMemory);
         }
       };
       // First-play: show Marvel-style flipbook intro before the rest.

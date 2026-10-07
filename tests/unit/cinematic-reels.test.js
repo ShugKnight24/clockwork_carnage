@@ -142,11 +142,11 @@ describe("sizzle reel", () => {
 const loreShot = (id) => CAMPAIGN_LORE.shots.find((s) => s.id === id);
 
 describe("campaign lore video", () => {
-  it("is a valid reel of 36–44 s, cut on whole beats", () => {
+  it("is a valid reel of 48–58 s, cut on whole beats", () => {
     expect(validateReel(CAMPAIGN_LORE)).toEqual([]);
     const d = reelDuration(CAMPAIGN_LORE);
-    expect(d).toBeGreaterThanOrEqual(36);
-    expect(d).toBeLessThanOrEqual(44);
+    expect(d).toBeGreaterThanOrEqual(48);
+    expect(d).toBeLessThanOrEqual(58);
     for (const s of CAMPAIGN_LORE.shots) expect(Number.isInteger(s.at) && Number.isInteger(s.len)).toBe(true);
   });
 
@@ -156,20 +156,28 @@ describe("campaign lore video", () => {
     expect(CAMPAIGN_LORE.music.every((c) => c.bpm === undefined)).toBe(true);
   });
 
-  it("carries ARIA's four lines from the spec, in order, each over its own shot", () => {
+  it("carries ARIA's briefing in order, each line over its own shot", () => {
+    // The background the comic skips: the station, the Chronos Engine and its
+    // eleven seconds, what came through, the wings it took, the agent.
     expect(CAMPAIGN_LORE.narration.map((n) => n.text)).toEqual([
+      "Chronos Station. Humanity's last anchor in time.",
       "Chrono-Corp built a door through time.",
       "They said it was safe.",
-      "Then something walked through it.",
+      "Then someone fired the Chronos Engine. No clearance. No name.",
+      "Eleven seconds. Past, present and future hit the same wall.",
+      "And something walked through.",
+      "Security. Research. Containment. Every wing's a crime scene.",
       "You're the last agent still standing.",
+      "Let's take our station back.",
     ]);
     for (const n of CAMPAIGN_LORE.narration) expect(n.voice ?? "aria").toBe("aria");
     const owners = CAMPAIGN_LORE.narration.map((n) => CAMPAIGN_LORE.shots.find((s) => n.at >= s.at && n.at + n.len <= s.at + s.len)?.id);
-    expect(owners).toEqual(["station", "labs", "rift", "agent"]);
+    expect(owners).toEqual(["station", "station", "engine", "engine", "engine", "rift", "labs", "agent", "agent"]);
   });
 
-  it("follows the spec's shot list: boot, station, labs, rift, the player's agent, the clock", () => {
-    expect(CAMPAIGN_LORE.shots.map((s) => s.id)).toEqual(["boot", "station", "labs", "rift", "agent", "clock"]);
+  it("follows the briefing's shot list: boot, station, engine, rift, labs, the player's agent, the clock", () => {
+    expect(CAMPAIGN_LORE.shots.map((s) => s.id)).toEqual(["boot", "station", "engine", "rift", "labs", "agent", "clock"]);
+    expect(loreShot("engine").scene).toMatchObject({ kind: "art", bg: "deep_space", art: "rift" });
     expect(loreShot("boot").scene).toMatchObject({ kind: "loreBoot", text: "ARIA online" });
     expect(loreShot("station").scene).toMatchObject({ kind: "art", bg: "deep_space", art: "station" });
     expect(loreShot("rift").scene).toMatchObject({ kind: "loreRift", bg: "temporal_rift", art: "villain" });

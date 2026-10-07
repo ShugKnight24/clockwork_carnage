@@ -6412,11 +6412,11 @@ export const CUTSCENE_SCRIPTS = {
             panel: {
               bg: "dark",
               art: "hero_armed",
-              caption: "{AGENT}. Suit up. Nobody else is coming.",
+              caption: "Cadet. Suit up. Nobody else is coming.",
               captionPos: "center",
               captionColor: "#1a1208",
               captionSize: 16,
-              prompt: "PRESS SPACE / CLICK TO BEGIN TRAINING",
+              prompt: "PRESS SPACE / CLICK TO SUIT UP",
               promptColor: "#00ffcc",
               promptSize: 18,
               promptY: 0.78,
