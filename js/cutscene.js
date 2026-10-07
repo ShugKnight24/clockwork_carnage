@@ -65,6 +65,62 @@ function promptLabel(legacy, where, touch) {
 }
 
 // Flipbook cover: closed idle before it swings open on its own, then the swing.
+// Print dots as a repeating pattern, one fillRect a page. Drawn as one arc
+// per dot they were ~17k fills a page a frame at 1080p (two pages during a
+// turn) and the flipbook ran at ~25 fps with 100+ ms frames on a desktop GPU.
+const _halftones = new Map();
+const HALFTONE_RES = 3; // tile pixels per unit, so dots stay round up close
+function halftonePattern(ctx, dot, radius, stagger) {
+  const key = `${dot.toFixed(3)}|${radius.toFixed(3)}|${stagger ? 1 : 0}`;
+  let e = _halftones.get(key);
+  if (!e) {
+    const w = dot * 2;
+    const h = stagger ? dot * 4 : dot * 2;
+    const tile = document.createElement("canvas");
+    tile.width = Math.max(1, Math.round(w * HALFTONE_RES));
+    tile.height = Math.max(1, Math.round(h * HALFTONE_RES));
+    const g = tile.getContext("2d");
+    g.scale(tile.width / w, tile.height / h);
+    g.fillStyle = "#000";
+    const dots = [[0, 0], [w, 0], [0, h], [w, h]];
+    if (stagger) dots.push([dot, dot * 2]);
+    g.beginPath();
+    for (const [x, y] of dots) {
+      g.moveTo(x + radius, y);
+      g.arc(x, y, radius, 0, Math.PI * 2);
+    }
+    g.fill();
+    const pattern = ctx.createPattern(tile, "repeat");
+    pattern.setTransform(new DOMMatrix().scale(w / tile.width, h / tile.height));
+    e = { pattern };
+    if (_halftones.size > 16) _halftones.clear();
+    _halftones.set(key, e);
+  }
+  return e.pattern;
+}
+
+// Paper grain: faint rows every 4 px, as one cached strip stretched across
+// the page instead of a fillRect and an alpha change per row.
+const _grains = new Map(); // height -> strip; the two open pages differ
+function paperGrain(ph) {
+  const h = Math.max(1, Math.ceil(ph));
+  let c = _grains.get(h);
+  if (c) return c;
+  if (_grains.size > 6) _grains.clear();
+  c = document.createElement("canvas");
+  c.width = 1;
+  c.height = h;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 1, h);
+  g.fillStyle = "rgba(200,190,170,0.04)";
+  for (let gy = 0; gy < h; gy += 4) {
+    g.globalAlpha = 0.02 + 0.02 * Math.sin(gy * 0.7);
+    g.fillRect(0, gy, 1, 1);
+  }
+  _grains.set(h, c);
+  return c;
+}
+
 const FB_COVER_IDLE_MS = 1200;
 const FB_COVER_OPEN_MS = 1100;
 
@@ -2469,14 +2525,11 @@ export class CutsceneEngine {
 
     // Print feel: halftone dots + a warm ink wash rising from the bottom
     const dot = 5 * s;
-    c.fillStyle = "rgba(0,0,0,0.12)";
-    for (let yy = 0; yy < ph; yy += dot * 2) {
-      for (let xx = (yy / (dot * 2)) % 2 ? dot : 0; xx < pw; xx += dot * 2) {
-        c.beginPath();
-        c.arc(xx, yy, dot * 0.42, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
+    c.save();
+    c.globalAlpha = 0.12;
+    c.fillStyle = halftonePattern(c, dot, dot * 0.42, true);
+    c.fillRect(0, 0, pw, ph);
+    c.restore();
     const wash = c.createLinearGradient(0, ph, 0, ph * 0.72);
     wash.addColorStop(0, "rgba(150,20,10,0.45)");
     wash.addColorStop(1, "rgba(150,20,10,0)");
@@ -2679,24 +2732,13 @@ export class CutsceneEngine {
     if (panel.halftone) {
       const dot = 4 * s;
       ctx.globalAlpha = panel.halftone * alpha;
-      ctx.fillStyle = "#000";
-      for (let yy = 0; yy < ph; yy += dot * 2) {
-        for (let xx = 0; xx < pw; xx += dot * 2) {
-          ctx.beginPath();
-          ctx.arc(xx, yy, dot * 0.45, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+      ctx.fillStyle = halftonePattern(ctx, dot, dot * 0.45, false);
+      ctx.fillRect(0, 0, pw, ph);
       ctx.globalAlpha = alpha;
     }
 
     // Paper grain texture (subtle, scanline-based)
-    ctx.fillStyle = 'rgba(200,190,170,0.04)';
-    for (let gy = 0; gy < ph; gy += 4) {
-      ctx.globalAlpha = (0.02 + 0.02 * Math.sin(gy * 0.7)) * alpha;
-      ctx.fillRect(0, gy, pw, 1);
-    }
-    ctx.globalAlpha = alpha;
+    ctx.drawImage(paperGrain(ph), 0, 0, pw, Math.ceil(ph));
 
     // Action speed-lines
     if (panel.action) {

@@ -29,9 +29,16 @@ const BAKE_MS_PER_FRAME = 6;
 let bakeLeft = BAKE_BUDGET_PX;
 let bakeMsLeft = BAKE_MS_PER_FRAME;
 let bakeReset = false;
-/** Take `px` from this frame's raster budget; false if it does not fit. */
+/**
+ * Take `px` from this frame's raster budget; false if it does not fit. A
+ * layer larger than the whole budget bakes alone, in a frame nothing else has
+ * baked in yet. It used to never fit, so a full-frame background (a 3200×1800
+ * flipbook backdrop is 5.8 MP) stayed an SVG <img> forever — and the browser
+ * re-rendered the vector art on every draw, every frame.
+ */
 function spendBake(px) {
-  if (px > bakeLeft || bakeMsLeft <= 0) return false;
+  if (bakeMsLeft <= 0) return false;
+  if (px > bakeLeft && bakeLeft < BAKE_BUDGET_PX) return false;
   bakeLeft -= px;
   if (!bakeReset && typeof requestAnimationFrame === "function") {
     bakeReset = true;
