@@ -1720,6 +1720,7 @@ export class Renderer {
         dist,
         time,
         fogFactor,
+        !!entity.sealed,
       );
     } else if (entity.type === "projectile") {
       // The player's own shots spawn inches from the camera, where the billboard

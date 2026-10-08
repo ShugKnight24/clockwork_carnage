@@ -2432,8 +2432,37 @@ export class Game {
     }
   }
 
+  /**
+   * The exit's own point light, teal when open and red while sealed, so the
+   * extraction beacon (src/rendering/pickups.js drawExit) lights the deck and
+   * walls around it. One persistent light, re-added after a level reset
+   * clears the list.
+   */
+  _syncExitLight() {
+    const ex = this.mode === "campaign" ? this.exitEntity : null;
+    let L = this._exitLight;
+    if (!ex) {
+      if (L) {
+        const i = this.lights.indexOf(L);
+        if (i >= 0) this.lights.splice(i, 1);
+        this._exitLight = null;
+      }
+      return;
+    }
+    if (!L) {
+      L = this._exitLight = { x: 0, y: 0, color: [0, 255, 170], radius: 3.4, baseIntensity: 1.1, intensity: 1.1, life: 1e9, maxLife: 1e9 };
+    }
+    L.x = ex.x;
+    L.y = ex.y;
+    L.life = L.maxLife = 1e9;
+    L.color = ex.sealed ? [255, 51, 85] : [0, 255, 170];
+    L.baseIntensity = ex.sealed ? 0.55 : 1.1;
+    if (!this.lights.includes(L)) this.lights.unshift(L);
+  }
+
   /** Campaign exit completes the level; playtest exit arms the end timer. */
   _checkExitReached() {
+    this._syncExitLight();
     // Check exit (campaign)
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
