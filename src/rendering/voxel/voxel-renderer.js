@@ -185,13 +185,18 @@ export function eyeAnchor(cam, out = [0, 0, 0]) {
 export function lookAt(out, eye, yaw, pitch) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const fx = Math.cos(yaw) * cp, fy = Math.sin(yaw) * cp, fz = sp;
-  // right = forward × worldUp(+z); it degenerates only when looking straight up
-  // or down, which the caller's pitch clamp rules out.
-  let sx = fy, sy = -fx, sz = 0;
+  // Screen right is the game's right: the map is y-down, so turning to a
+  // larger yaw turns right and the right of yaw 0 (+x) is +y — the same
+  // convention as movement, mouse look, vessels and the 2D campaign. That is
+  // worldUp × forward, a mirror of the usual right-handed camera, so the
+  // basis is left-handed and front faces wind clockwise on screen (render()).
+  // It degenerates only looking straight up or down, which the pitch clamp
+  // rules out.
+  let sx = -fy, sy = fx, sz = 0;
   const sl = Math.hypot(sx, sy, sz) || 1;
   sx /= sl; sy /= sl; sz /= sl;
-  // up = right × forward
-  const ux = sy * fz - sz * fy, uy = sz * fx - sx * fz, uz = sx * fy - sy * fx;
+  // up = forward × right (the mirrored basis's order)
+  const ux = fy * sz - fz * sy, uy = fz * sx - fx * sz, uz = fx * sy - fy * sx;
   out[0] = sx; out[1] = ux; out[2] = -fx; out[3] = 0;
   out[4] = sy; out[5] = uy; out[6] = -fy; out[7] = 0;
   out[8] = sz; out[9] = uz; out[10] = -fz; out[11] = 0;
@@ -651,7 +656,8 @@ export class VoxelRenderer {
     gl.clearBufferfv(gl.COLOR, 1, [1, 0, 0, 1]);   // depth is stored as dist/FAR
     gl.clearBufferfi(gl.DEPTH_STENCIL, 0, 1, 0);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true);
-    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CCW);
+    // The view is mirrored (lookAt), so counter-clockwise faces land clockwise.
+    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.frontFace(gl.CW);
     gl.disable(gl.BLEND);
 
     gl.useProgram(this.chunkProg);
@@ -900,7 +906,7 @@ export class VoxelRenderer {
     }
     order.sort((a, b) => b.d - a.d);   // back to front
     // Horizontal camera right, so the billboard faces the eye and stays upright.
-    const rx = Math.sin(cam.yaw), ry = -Math.cos(cam.yaw);
+    const rx = -Math.sin(cam.yaw), ry = Math.cos(cam.yaw);
 
     gl.useProgram(this.spriteProg);
     const u = this.u.sprite;
