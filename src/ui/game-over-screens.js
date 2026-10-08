@@ -561,8 +561,8 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
 
   const lines = [
     { key: 'WASD / Mouse', action: 'Move and look' },
-    { key: 'Left Click', action: 'Place block' },
-    { key: 'Right Click', action: 'Break block' },
+    { key: 'Left Click', action: 'Mine block (hold)' },
+    { key: 'Right Click', action: 'Place block' },
     { key: '1 – 9 / Wheel', action: 'Choose block' },
     { key: 'Space', action: 'Jump' },
     { key: 'T', action: 'Tool cycle (5 modes)' },

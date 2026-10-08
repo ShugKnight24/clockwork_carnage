@@ -17,6 +17,7 @@ import { blockForItem } from "../rpg/items.js";
 import { HOTBAR_SLOTS } from "../rpg/inventory.js";
 import { VESSELS, VESSEL_KINDS } from "../world/vessels.js";
 import { renderInventory, slotVisual, TOOL_COLOR } from "./forge-inventory.js";
+import { drawForgeHand, heldKey } from "./forge-viewmodel.js";
 
 // All placeable enemy type keys (exclude boss forms — they're phase variants)
 export const ENEMY_KEYS = Object.keys(ENEMY_TYPES).filter(
@@ -87,6 +88,7 @@ export function renderForge(forge, ctx, w, h) {
 export function renderHUD(forge, ctx, w, h) {
   const cx = w / 2;
   const cy = h / 2;
+  if (forge.hand) drawForgeHand(ctx, w, h, forge.hand, heldKey(forge), forge.accent);
 
   ctx.strokeStyle = forge.target ? "#00ffcc" : "#ffffff";
   ctx.lineWidth = 2;
@@ -106,7 +108,7 @@ export function renderHUD(forge, ctx, w, h) {
     ctx.font = "11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(
-      `${VESSELS[forge.vesselTarget.kind]?.name || "Vessel"} — ${forge.vesselKeyLabel || "B"} board · RClick ${forge.survival ? "hold to pick up" : "remove"}`,
+      `${VESSELS[forge.vesselTarget.kind]?.name || "Vessel"} — ${forge.vesselKeyLabel || "B"} board · LClick ${forge.survival ? "hold to pick up" : "remove"}`,
       cx,
       cy + 22,
     );
@@ -508,8 +510,8 @@ export function renderHelp(forge, ctx) {
   const hints = [
     "WASD — Move",
     "Mouse — Look",
-    "LClick — Place",
-    "RClick — Remove",
+    "LClick — Mine / Remove (hold)",
+    "RClick — Place / Use",
     "1-9 — Block Type",
     "0 — Natural Blocks",
     "Wheel — Block",

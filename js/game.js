@@ -750,7 +750,7 @@ export class Game {
     // Alt-tabbing away swallows the mouseup, so the Forge would keep mining a
     // block with the button already released.
     if (wasLocked && !locked && this.state === GameState.BUILDER) {
-      this.builder?.handleMouseUp(2);
+      this.builder?.handleMouseUp(0);
     }
     // Only auto-pause if we lost lock without ESC (e.g. alt-tab)
     if (wasLocked && !locked && this.state === GameState.PLAYING) {
@@ -3292,6 +3292,8 @@ export class Game {
       this.builder.onShareMap = (hash) => this._shareBuilderMap(hash);
       this.builder.onPlayTest = () => this.startBuilderPlayTest();
     }
+    // The first-person glove wears the agent's suit colour.
+    this.builder.accent = this.getCharacterColor().accent;
     // A ForgeMode whose last `start()` failed to produce a world gets another
     // go, rather than leaving the Forge silently unopenable.
     if (!this.builder.world) await this.builder.start();

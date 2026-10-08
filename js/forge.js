@@ -3,7 +3,7 @@ import { playBlockSound, playWaterSound, WaterSoundTracker } from "../src/audio/
 import { VesselSoundTracker, playVesselSound } from "../src/audio/vessel-sounds.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { World } from "../src/world/world.js";
-import { AIR, BEDROCK, WATER, SAPLING, PLANKS, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
+import { AIR, BEDROCK, WATER, SAPLING, PLANKS, BLOCKS, isSolid, isWater, isTargetable } from "../src/world/blocks.js";
 import { randomTick, saplingFits } from "../src/world/trees.js";
 import {
   VESSELS,
@@ -41,6 +41,7 @@ import { itemById } from "../src/rpg/items.js";
 import { returnStack, takeStack, dropStack, shiftMove } from "../src/rpg/inventory-ops.js";
 import { HOTBAR_SLOTS } from "../src/rpg/inventory.js";
 import { inventoryLayout, resolveInventoryHit } from "./layout.js";
+import { ForgeHand, heldKey } from "../src/ui/forge-viewmodel.js";
 /**
  * The HUD, and with it the constants that only exist to be drawn. The
  * dependency runs one way — this file imports the HUD, never the reverse —
@@ -352,6 +353,8 @@ export class ForgeMode {
     this.breakProgress = 0;
     /** The item id the hotbar has selected in survival. */
     this.heldItem = null;
+    /** First-person hand: swings, punches and mining chips (src/ui/forge-viewmodel.js). */
+    this.hand = new ForgeHand();
     /** Craft menu, survival only — C opens it, the arrows walk it. */
     this.craftOpen = false;
     this.craftIndex = 0;
@@ -776,7 +779,16 @@ export class ForgeMode {
     // The screen owns the cursor while it is open, so no click reaches the world.
     if (this.invOpen) { this._invPress(button, shift); return; }
     if (!this.active || this.overhead || !this.world) return;
-    const place = button === 0;
+    // Left mines and removes (held, in survival); right places and uses — the
+    // convention every block game has trained players on. Middle does nothing.
+    if (button !== 0 && button !== 2) return;
+    const place = button === 2;
+    if (place) this.hand.punch();
+    else {
+      this.hand.swing();
+      // Creative breaks on the click itself: the block bursts at once.
+      if (!this.survival && this.toolMode === "block" && this.target) this._chips(this.target, 12);
+    }
     switch (this.toolMode) {
       case "spawn":
         if (place) this.placeSpawn();
@@ -811,11 +823,11 @@ export class ForgeMode {
 
   /**
    * Releasing the break button discards partial progress — see spec §5.
-   * Mirrors `handleMouseDown`: left places, every other button breaks.
+   * Mirrors `handleMouseDown`: left breaks, right places.
    */
   handleMouseUp(button) {
     if (this.invOpen) { this._invRelease(button); return; }
-    if (button === 0) return;
+    if (button !== 0) return;
     this.holdingBreak = false;
     this.survival?.cancelBreak();
     this.breakProgress = 0;
@@ -944,9 +956,11 @@ export class ForgeMode {
         this.mineTap = (this.mineTap ?? 0) - dt;
         if (!res.broke && this.breakProgress > 0 && this.mineTap <= 0) {
           playBlockSound(this.audio, hitId, "hit");
+          this._chips(t, 4, hitId);
           this.mineTap = 0.24;
         }
         if (res.broke) {
+          this._chips(t, 14, hitId);
           this._editBlock(t.x, t.y, t.z, AIR);
           playBlockSound(this.audio, hitId, "break");
           if (res.leveled) this._warn(`Mining level ${this.survival.miningLevel()}`);
@@ -1024,6 +1038,17 @@ export class ForgeMode {
     }
 
     this.target = this._pick();
+    this.hand.update(dt, {
+      mining: this.holdingBreak && !this.invOpen && !!(this.target || this.vesselTarget),
+      moving: len > 0 && (this.grounded || this.noclip),
+      held: heldKey(this),
+    });
+  }
+
+  /** Chips flying off the block under the crosshair. */
+  _chips(target, n, id = target?.id) {
+    const color = BLOCKS[id ?? this.world?.get(target.x, target.y, target.z)]?.color;
+    if (color) this.hand.chip(color, n);
   }
 
   /** Splashes, drips and strokes from how wet the player is this frame. */

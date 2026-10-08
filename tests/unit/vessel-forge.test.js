@@ -48,23 +48,23 @@ function aimAtWater(f, x = 40.5, y = 30.5) {
 }
 
 describe("the Forge's vessels: creative", () => {
-  it("the vessel tool places the chosen kind on the water and right click takes it away", async () => {
+  it("the vessel tool places the chosen kind on the water with a right click and a left click takes it away", async () => {
     const f = await forgeOn(lake());
     while (f.toolMode !== "vessel") key(f, "KeyT");
     while (VESSEL_KINDS[f.vesselKind] !== "boat") key(f, "KeyG");
     aimAtWater(f);
     expect(f.target?.id).toBe(WATER);
-    f.handleMouseDown(0);
+    f.handleMouseDown(2);
     const list = f.world.meta.vessels;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ kind: "boat" });
     expect(list[0].z).toBeCloseTo(SURFACE - VESSELS.boat.draft, 9);
     expect(f._dirty).toBe(true);
-    f.handleMouseDown(0); // the same spot is taken now
+    f.handleMouseDown(2); // the same spot is taken now
     expect(list).toHaveLength(1);
     f.update(0);
     expect(f.vesselTarget).toBe(list[0]);
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     expect(f.world.meta.vessels).toHaveLength(0);
   });
 });
@@ -150,16 +150,16 @@ describe("the Forge's vessels: survival", () => {
     f.selectHotbar(slot);
     expect(f.heldItem).toBe("boat");
     aimAtWater(f);
-    f.handleMouseDown(0);
+    f.handleMouseDown(2);
     expect(f.world.meta.vessels).toHaveLength(1);
     expect(f.survival.inventory.count("boat")).toBe(0);
     f.update(0);
     expect(f.vesselTarget).toBeTruthy();
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     f.update(0.2);
     expect(f.world.meta.vessels).toHaveLength(1); // not yet: it is a held break
     for (let i = 0; i < 30; i++) f.update(DT);
-    f.handleMouseUp(2);
+    f.handleMouseUp(0);
     expect(f.world.meta.vessels).toHaveLength(0);
     expect(f.survival.inventory.count("boat")).toBe(1);
   });
@@ -168,7 +168,7 @@ describe("the Forge's vessels: survival", () => {
     const f = await forgeOn(lake({ mode: "survival" }));
     while (f.toolMode !== "vessel") key(f, "KeyT");
     aimAtWater(f);
-    f.handleMouseDown(0);
+    f.handleMouseDown(2);
     expect(f.world.meta.vessels ?? []).toHaveLength(0);
     expect(f.notice?.text).toMatch(/No /);
   });
