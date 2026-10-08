@@ -25,6 +25,7 @@ import {
 } from "../data.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { createPlaytestGate } from "./playtest-gate.js";
+import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 
 // ─── Harness core ──────────────────────────────────────────
 
@@ -1269,6 +1270,7 @@ function botCompletionist(game) {
 
   // Walk to exit
   if (game.exitEntity) {
+    collectAllPowerCells(game);
     walkTo(game, game.exitEntity.x, game.exitEntity.y, 800);
     stepGame(game, 30);
     // Check if we reached level complete or cutscene
@@ -1324,6 +1326,7 @@ function botSpeedrunner(game) {
   // Rush to exit
   let exitTicks = 0;
   if (game.exitEntity) {
+    collectAllPowerCells(game);
     exitTicks = walkTo(game, game.exitEntity.x, game.exitEntity.y, 1000);
     stepGame(game, 30);
   }
@@ -1450,6 +1453,7 @@ function botNoDamage(game) {
 
   // Walk to exit
   if (game.exitEntity) {
+    collectAllPowerCells(game);
     walkTo(game, game.exitEntity.x, game.exitEntity.y, 800);
     stepGame(game, 30);
   }

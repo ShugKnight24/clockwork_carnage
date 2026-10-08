@@ -26,6 +26,9 @@ import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
 import { getArtStyle, ART_LEGACY } from "../src/rendering/art-style.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
+import { planPowerCells, powerCellsFor } from "../src/systems/exit-cells.js";
+import { setPieceFor } from "../src/data/campaign/set-pieces.js";
+import { Pickup } from "./entities.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -262,6 +265,17 @@ export class CampaignManager {
     );
     g.entities.push(...spawned);
     g.exitEntity = exitEntity || null;
+
+    // Power cells hold the exit shut on the plain corridor levels: placed in
+    // the side rooms off the direct route, the same every run (exit-cells.js).
+    const cellCount = powerCellsFor(level, setPieceFor(entry), this.act, index);
+    const cells = cellCount
+      ? planPowerCells(level.grid, level.playerStart, level.exit, cellCount, entry.seed ?? this.act * 100 + index)
+      : [];
+    for (const c of cells) g.entities.push(new Pickup(c.x, c.y, "powerCell"));
+    g.powerCells = cells.length ? { total: cells.length, found: 0 } : null;
+    if (g.exitEntity) g.exitEntity.sealed = !!g.powerCells;
+    if (g.powerCells) g.queueAriaMessage("powerCellsBrief");
 
     if (this.missedWeapons && this.missedWeapons.length > 0) {
       g.entities.push(

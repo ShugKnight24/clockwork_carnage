@@ -2,6 +2,7 @@ import { GameState } from "../game.js";
 import { ACTS, isLastAct, UPGRADES } from "../data.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
 import { powersFor } from "../../src/systems/chrono-powers.js";
+import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 
 const VALID_STATES = new Set(Object.values(GameState));
 const PLAYER_DEFS = {
@@ -278,6 +279,7 @@ export function createPlaytestGate(game, tools) {
 
     killEnemiesDirectly();
     if (!game.exitEntity) throw new Error(`Campaign level ${slot} has no exit`);
+    collectAllPowerCells(game); // the gate checks the level runs, not the cell hunt
     game.player.x = game.exitEntity.x;
     game.player.y = game.exitEntity.y;
     stepAndWatch(run, ctx, player, 5, `campaign ${slot} exit`);

@@ -26,6 +26,7 @@ import {
   drawAmmoPickup,
   drawWeaponPickup,
   drawExit,
+  drawPowerCell,
   drawProjectile,
   drawExoticPickup,
   drawGearPickup,
@@ -1515,7 +1516,8 @@ export class Renderer {
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].active === false && !entities[i].dissolving) continue;
       const distSq = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
-      if (distSq > maxDistSq && entities[i].type !== "exit") continue;
+      // The exit and power cells are where the player is headed: never culled.
+      if (distSq > maxDistSq && entities[i].type !== "exit" && entities[i].type !== "powerCell") continue;
       _spriteOrderBuf[_spriteOrderCount++] = i;
       _spriteDistBuf[i] = distSq;
     }
@@ -1710,6 +1712,8 @@ export class Renderer {
         fogFactor,
         entity.type,
       );
+    } else if (entity.type === "powerCell") {
+      drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
     } else if (entity.type === "exit") {
       drawExit(
         ctx,

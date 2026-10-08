@@ -11,6 +11,26 @@ import { drawPanel, pixelRatio, UI } from "./modern-ui-kit.js";
  * @param {number} h
  * @param {{ map: object, entities: Array, player: object, chronoBombs: Array|null, objectiveWaypoint: object|null }} state
  */
+/** A power cell on the map: an amber diamond, inked in Comic. */
+function cellMarker(ctx, x, y, r, fill, ink) {
+  const d = (k) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y - k);
+    ctx.lineTo(x + k, y);
+    ctx.lineTo(x, y + k);
+    ctx.lineTo(x - k, y);
+    ctx.closePath();
+  };
+  if (ink) {
+    ctx.fillStyle = ink;
+    d(r + 1.2);
+    ctx.fill();
+  }
+  ctx.fillStyle = fill;
+  d(r);
+  ctx.fill();
+}
+
 export function drawMinimap(ctx, x, y, w, h, { map, entities, player, chronoBombs, objectiveWaypoint }) {
   if (!map) return;
   if (isModernArt()) {
@@ -50,8 +70,10 @@ export function drawMinimap(ctx, x, y, w, h, { map, entities, player, chronoBomb
       ctx.fillStyle = e.def.color1;
       ctx.fillRect(ox + e.x * scale - 1.5, oy + e.y * scale - 1.5, 3, 3);
     } else if (e.type === "exit") {
-      ctx.fillStyle = "#00ff88";
+      ctx.fillStyle = e.sealed ? "#ff3355" : "#00ff88";
       ctx.fillRect(ox + e.x * scale - 2, oy + e.y * scale - 2, 4, 4);
+    } else if (e.type === "powerCell") {
+      cellMarker(ctx, ox + e.x * scale, oy + e.y * scale, 3, "#ffb028", null);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? "#00ff44" : "#ffaa00";
       ctx.fillRect(ox + e.x * scale - 1, oy + e.y * scale - 1, 2, 2);
@@ -200,8 +222,10 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
         ctx.fillStyle = UI.ink;
         ctx.fillRect(ex - 3.5, ey - 3.5, 7, 7);
       }
-      ctx.fillStyle = UI.green;
+      ctx.fillStyle = e.sealed ? UI.crimson : UI.green;
       ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+    } else if (e.type === "powerCell") {
+      cellMarker(ctx, ex, ey, 3.5, "#ffb028", real ? null : UI.ink);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? UI.green : UI.amber;
       ctx.fillRect(ex - 1, ey - 1, 2, 2);

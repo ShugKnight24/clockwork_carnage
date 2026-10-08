@@ -1127,3 +1127,84 @@ export function drawExoticPickup(
 
   ctx.globalAlpha = 1;
 }
+
+// ── Power cell ──────────────────────────────────────────────────────────────
+// What holds a level's exit shut (src/systems/exit-cells.js): an amber energy
+// cell floating at waist height in a side room, glowing so it reads from a
+// doorway. Procedural, so it looks the same in every art style.
+
+const CELL_CORE = [255, 236, 190];
+const CELL_HUE = [255, 176, 40];
+
+/** Draw a power cell at its sprite position (see drawExit for the geometry). */
+export function drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+  if (fog <= 0) return;
+  const t = time / 1000;
+  const unit = sprHeight;
+  const floorY = centerY + unit / 2;
+  const bob = Math.sin(t * 2.2) * unit * 0.03;
+  const cy = centerY + unit * 0.12 + bob; // waist height, bobbing
+  const r = unit * 0.12;
+  const pulse = 0.8 + 0.2 * Math.sin(t * 3.1);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  // Halo, and a pool of light on the floor below.
+  const halo = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, r * 3.2);
+  halo.addColorStop(0, beam(CELL_HUE, 0.5 * fog * pulse));
+  halo.addColorStop(1, beam(CELL_HUE, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(screenX - r * 3.2, cy - r * 3.2, r * 6.4, r * 6.4);
+  const near = centerY + (unit * dist) / (2 * Math.max(0.3, dist - 0.35));
+  const far = centerY + (unit * dist) / (2 * (dist + 0.35));
+  const py = (near + far) / 2;
+  const pr = 0.35 * unit;
+  const prY = Math.max(1, (near - far) / 2);
+  ctx.save();
+  ctx.translate(screenX, py);
+  ctx.scale(1, prY / pr);
+  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
+  pool.addColorStop(0, beam(CELL_HUE, 0.35 * fog));
+  pool.addColorStop(1, beam(CELL_HUE, 0));
+  ctx.fillStyle = pool;
+  ctx.beginPath();
+  ctx.arc(0, 0, pr, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+
+  // The cell: a hexagonal capsule with a bright core and end caps.
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const hw = r * 0.62;
+  const hh = r * 1.15;
+  const hex = (w, hgt) => {
+    ctx.beginPath();
+    ctx.moveTo(screenX - w, cy - hgt * 0.62);
+    ctx.lineTo(screenX, cy - hgt);
+    ctx.lineTo(screenX + w, cy - hgt * 0.62);
+    ctx.lineTo(screenX + w, cy + hgt * 0.62);
+    ctx.lineTo(screenX, cy + hgt);
+    ctx.lineTo(screenX - w, cy + hgt * 0.62);
+    ctx.closePath();
+  };
+  hex(hw, hh);
+  ctx.fillStyle = "#2a1a06";
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.strokeStyle = "#0b0703";
+  ctx.stroke();
+  ctx.globalCompositeOperation = "lighter";
+  hex(hw * 0.55, hh * 0.72);
+  const core = ctx.createLinearGradient(screenX, cy - hh, screenX, cy + hh);
+  core.addColorStop(0, beam(CELL_CORE, 0.9 * pulse));
+  core.addColorStop(0.5, beam(CELL_HUE, 0.95 * pulse));
+  core.addColorStop(1, beam(CELL_CORE, 0.9 * pulse));
+  ctx.fillStyle = core;
+  ctx.fill();
+  // A highlight sweeping down the core.
+  const k = (t * 0.6) % 1;
+  ctx.fillStyle = beam(CELL_CORE, 0.6 * (1 - Math.abs(k - 0.5) * 2));
+  ctx.fillRect(screenX - hw * 0.5, cy - hh * 0.7 + k * hh * 1.4, hw, Math.max(1, r * 0.12));
+  ctx.restore();
+}

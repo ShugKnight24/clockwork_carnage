@@ -2435,10 +2435,30 @@ export class Game {
   /**
    * The exit's own point light, teal when open and red while sealed, so the
    * extraction beacon (src/rendering/pickups.js drawExit) lights the deck and
-   * walls around it. One persistent light, re-added after a level reset
-   * clears the list.
+   * walls around it, and a small amber light on each power cell still to be
+   * found, so one reads from a doorway. Persistent lights, re-added after a
+   * level reset clears the list.
    */
   _syncExitLight() {
+    const cells = this.mode === "campaign" && this.powerCells
+      ? this.entities.filter((e) => e.type === "powerCell" && e.active)
+      : [];
+    this._cellLights ??= new Map();
+    for (const [cell, L] of this._cellLights) {
+      if (cells.includes(cell)) continue;
+      const i = this.lights.indexOf(L);
+      if (i >= 0) this.lights.splice(i, 1);
+      this._cellLights.delete(cell);
+    }
+    for (const cell of cells) {
+      let L = this._cellLights.get(cell);
+      if (!L) {
+        L = { x: cell.x, y: cell.y, color: [255, 176, 40], radius: 2.2, baseIntensity: 0.8, intensity: 0.8, life: 1e9, maxLife: 1e9 };
+        this._cellLights.set(cell, L);
+      }
+      L.life = L.maxLife = 1e9;
+      if (!this.lights.includes(L)) this.lights.unshift(L);
+    }
     const ex = this.mode === "campaign" ? this.exitEntity : null;
     let L = this._exitLight;
     if (!ex) {
@@ -2467,6 +2487,14 @@ export class Game {
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
       const dy = this.player.y - this.exitEntity.y;
+      if (this.exitEntity.sealed) {
+        // Held shut by the level's power cells: say so, not every frame.
+        if (dx * dx + dy * dy < 2.25 && performance.now() - (this._sealedNoticeAt || 0) > 8000) {
+          this._sealedNoticeAt = performance.now();
+          this.queueAriaMessage("exitSealed");
+        }
+        return;
+      }
       if (dx * dx + dy * dy < 1.0) {
         this.state = GameState.LEVEL_COMPLETE;
         this._levelCompleteTime = performance.now();
@@ -2818,6 +2846,24 @@ export class Game {
           }
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
+        }
+      } else if (e.type === "powerCell") {
+        // The level's power cells (src/systems/exit-cells.js): the last one
+        // unseals the exit.
+        e.active = false;
+        const pc = this.powerCells;
+        if (pc) pc.found = Math.min(pc.total, pc.found + 1);
+        this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
+        this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
+          _spawnEnergyBurst(ps, e.x, e.y, { count: 16, r: 255, g: 176, b: 40 }));
+        this.audio.pickup();
+        if (pc) this.showGearToast?.("Power cell", `${pc.found} / ${pc.total}`);
+        if (pc && pc.found >= pc.total) {
+          if (this.exitEntity) this.exitEntity.sealed = false;
+          this.audio.roundComplete?.();
+          this.queueAriaMessage("exitUnsealed");
+        } else {
+          this.queueAriaMessage("powerCellFound");
         }
       } else if (e.type === "gear") {
         // A battlefield drop grants the piece outright: it shows up unlocked

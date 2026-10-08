@@ -302,6 +302,39 @@ function drawBossNameCard(ctx, game, w, h) {
 }
 
 /**
+ * The level's power cells (src/systems/exit-cells.js), under the level timer
+ * on every HUD style: found / total in amber while the exit is sealed, then
+ * EXTRACTION LIVE. Nothing on a level without cells.
+ */
+function drawPowerCellChip(ctx, game) {
+  const pc = game.mode === "campaign" ? game.powerCells : null;
+  if (!pc) return;
+  const done = pc.found >= pc.total;
+  const label = done ? "EXTRACTION LIVE" : `POWER CELLS ${pc.found} / ${pc.total}`;
+  const color = done ? "#22e6c0" : "#ffb028";
+  const x = 12;
+  const y = 58;
+  ctx.save();
+  ctx.font = "700 12px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  const tw = ctx.measureText(label).width;
+  ctx.fillStyle = "rgba(4,8,12,0.72)";
+  ctx.fillRect(x, y, tw + 34, 22);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 3, 22);
+  // Diamond, as on the map.
+  ctx.beginPath();
+  ctx.moveTo(x + 14, y + 5);
+  ctx.lineTo(x + 20, y + 11);
+  ctx.lineTo(x + 14, y + 17);
+  ctx.lineTo(x + 8, y + 11);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillText(label, x + 26, y + 11.5);
+  ctx.restore();
+}
+
+/**
  * The crosshair, faded out as the sights come up. At full ADS the sights are
  * the reticle: the crosshair and an extra "ADS" ring drawn over them hid a
  * small or distant target right where the player was aiming.
@@ -475,6 +508,7 @@ if (isCompactMobile) {
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
   drawAimReticle(ctx, game, chx, chy);
+  drawPowerCellChip(ctx, game);
 
   // Hit marker
   drawHitMarker(ctx, game, chx, chy);
@@ -1319,6 +1353,7 @@ if (vanguard) drawVanguardThreatRing(game, ctx, w, h, 0);
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
 drawAimReticle(ctx, game, chx, chy);
+drawPowerCellChip(ctx, game);
 
 // ─── HIT MARKER ───
 drawHitMarker(ctx, game, chx, chy);
@@ -1856,6 +1891,7 @@ if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
 // ─── Crosshair (centered in viewport above bar) ───
 const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
 drawAimReticle(ctx, game, chx, chy);
+drawPowerCellChip(ctx, game);
 
 // ─── Hit marker ───
 drawHitMarker(ctx, game, chx, chy);

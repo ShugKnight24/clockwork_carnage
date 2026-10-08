@@ -233,6 +233,27 @@ export const ARIA_COMMS = {
     "That one's smarter than the rest. Don't trade hits.",
     "Elevated hostile. This one won't fold easy.",
   ],
+  // Power cells (src/systems/exit-cells.js): the exit stays sealed until the
+  // level's cells are recovered from its side rooms.
+  powerCellsBrief: [
+    "Extraction's locked down. The seal wants power cells — they're somewhere off this corridor.",
+    "The exit won't open on this floor's reserve. Find the power cells and bring the seal up.",
+    "Station dumped the cells when it locked down. Sweep the side rooms; the exit needs them.",
+  ],
+  powerCellFound: [
+    "Cell secured. Keep sweeping.",
+    "That's one. The seal's drinking it already.",
+    "Power cell recovered. More out there.",
+  ],
+  exitSealed: [
+    "Seal's still holding. It needs every cell on this floor.",
+    "Not enough charge yet. Check your map for the rest.",
+  ],
+  exitUnsealed: [
+    "Last cell's in. Extraction is live — go.",
+    "Seal's down. Get to the beacon.",
+  ],
+
   secretFound: [
     "Hidden cache. Good instincts, detective.",
     "Somebody hid this on purpose. Interesting.",
