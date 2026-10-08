@@ -17,6 +17,7 @@ import {
   VISOR_STYLES,
   SHOULDER_STYLES,
   LOADOUT_CLASSES,
+  CHARACTER_COLORS,
   TIER_UNLOCKS,
 } from "../data/cosmetics.js";
 import { FIELD_TABLES, getIndex } from "../core/character-fields.js";
@@ -33,6 +34,7 @@ export const LOCKABLE = {
   visorIndex: { table: VISOR_STYLES, kind: "Visor" },
   shoulderIndex: { table: SHOULDER_STYLES, kind: "Shoulders" },
   loadoutIndex: { table: LOADOUT_CLASSES, kind: "Loadout class" },
+  colorIndex: { table: CHARACTER_COLORS, kind: "Palette" },
 };
 
 const VIRTUAL_KINDS = {

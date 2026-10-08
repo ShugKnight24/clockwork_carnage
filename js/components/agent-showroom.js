@@ -101,10 +101,22 @@ const I = {
   turn: `<svg viewBox="0 0 24 24"><path d="M3 12c0-2.8 4-5 9-5s9 2.2 9 5-4 5-9 5"/><path d="m14 14.5-2.4 2.5 2.4 2.5"/></svg>`,
 };
 
+/** Stage lighting presets (host [light] attribute; studio is the default look). */
+const STAGE_LIGHTS = [
+  { id: "studio", name: "Studio" },
+  { id: "field", name: "Hangar" },
+  { id: "night", name: "Night ops" },
+  { id: "alert", name: "Red alert" },
+];
+/** Turntable sway: how far it turns (yaw units, ±1 max) and how fast (rad/s). */
+const SPIN_YAW = 0.85;
+const SPIN_RATE = 0.9;
+
 const CATEGORIES = [
   {
     id: "identity",
     label: "Identity",
+    short: "Agent",
     sections: [
       { type: "name", title: "Callsign" },
       { key: "backstoryIndex", title: "Origin", data: BACKSTORIES, kind: "origin" },
@@ -168,11 +180,13 @@ const CATEGORIES = [
   {
     id: "colors",
     label: "Colors",
+    short: "Color",
     sections: [{ key: "colorIndex", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
   },
   {
     id: "loadout",
     label: "Loadout",
+    short: "Kit",
     pose: "hero",
     sections: [
       { key: "loadoutIndex", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
@@ -394,6 +408,22 @@ svg { display: block; }
 .seg button:hover:not([aria-pressed="true"]) { color: var(--cc-text); }
 .hint-turn { display: inline-flex; align-items: center; gap: 6px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 2px; color: var(--cc-text-faint); text-transform: uppercase; }
 .hint-turn svg { width: 18px; height: 18px; }
+.seg [data-light] { display: inline-flex; align-items: center; gap: 6px; min-width: 128px; justify-content: center; }
+.seg [data-light] .lt { opacity: 0.6; }
+.seg [data-light] b { font-weight: 700; }
+.seg [data-spin] { display: inline-flex; align-items: center; gap: 6px; }
+.seg [data-spin] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+/* Lighting presets: a colour grade blended over the whole scene (works for
+   every art style, since it never touches the figure's own filters). */
+.grade { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.45s var(--cc-ease), background 0.45s var(--cc-ease); }
+:host([light]) .grade { opacity: 1; }
+:host([light="field"]) .grade { mix-blend-mode: soft-light; background: radial-gradient(70% 80% at 30% 15%, rgba(255, 226, 180, 0.85), rgba(255, 190, 130, 0.35) 70%); }
+:host([light="night"]) .grade { mix-blend-mode: multiply; background: radial-gradient(60% 70% at 50% 40%, rgba(120, 150, 255, 0.9), rgba(30, 45, 120, 0.95) 80%); }
+:host([light="alert"]) .grade { mix-blend-mode: multiply; background: radial-gradient(70% 80% at 50% 30%, rgba(255, 150, 140, 0.95), rgba(150, 20, 24, 0.95) 85%); animation: alertPulse 1.6s ease-in-out infinite; }
+:host([light="field"]) .shaft { background: linear-gradient(180deg, rgba(255, 236, 200, 0.26), rgba(255, 236, 200, 0) 85%); width: 34%; left: 15%; }
+:host([light="night"]) .shaft { opacity: 0.3; }
+:host([light="alert"]) .shaft { background: linear-gradient(180deg, rgba(255, 70, 60, 0.3), rgba(255, 70, 60, 0) 80%); }
+@keyframes alertPulse { 50% { opacity: 0.7; } }
 
 /* Tighter gap and a lower anchor so the "Presets" label clears the origin
    subtitle under the callsign (it sat on top of it at 1280x720). */
@@ -421,9 +451,8 @@ svg { display: block; }
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: color var(--cc-dur-fast), background var(--cc-dur-fast), box-shadow var(--cc-dur-fast); }
 .tab svg { width: 22px; height: 22px; }
-/* Icon-only by default so every category fits; the label shows for the active, hovered or focused tab. */
-.tab .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tab:hover .t, .tab:focus-visible .t, :host(.kbd) .tab:focus .t, .tab[aria-selected="true"] .t { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+/* Every tab is labelled (short names so all eight fit); the active one reads brightest. */
+.tab .t { font-size: 9.5px; letter-spacing: 0.6px; white-space: nowrap; }
 .tab:hover { color: var(--cc-text); background: rgba(130, 160, 188, 0.08); }
 /* Focused button (drawButton "focus"): raised steel, accent bar, centred accent underline. */
 .tab[aria-selected="true"] { color: #fff; background: var(--cc-panel-raised); box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.34), inset 0 0 0 1px var(--cc-ink); }
@@ -564,6 +593,10 @@ svg { display: block; }
 .card .lockprog { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-top: 4px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-amber); text-transform: uppercase; }
 .card .lockprog .bar i { background: var(--cc-amber); }
 .preset.locked .pthumb svg { filter: saturate(0.2) brightness(0.6); }
+.preset .ptext { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; text-align: left; }
+.preset .preq { display: flex; flex-direction: column; gap: 3px; max-width: 170px; font: 600 9.5px/1.25 var(--cc-font); letter-spacing: 0.4px; text-transform: none; color: var(--cc-amber); }
+.preset .preq .bar { width: 90px; height: 4px; }
+.preset .preq .bar i { background: var(--cc-amber); }
 .preset .lockbadge { top: auto; bottom: 2px; right: 2px; }
 .opt.shake { animation: shake 0.36s; }
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
@@ -992,10 +1025,10 @@ class AgentShowroom extends HTMLElement {
   template() {
     const tabs = CATEGORIES.map(
       (c, i) =>
-        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" tabindex="-1">${I[c.id]}<span class="t">${c.label}</span></button>`,
+        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" aria-label="${c.label}" tabindex="-1">${I[c.id]}<span class="t">${c.short ?? c.label}</span></button>`,
     ).join("");
     const presets = PRESETS.map(
-      (p, i) => `<button class="preset" data-preset="${i}" aria-label="Apply ${p.name} preset"><span class="pthumb"></span><span>${p.name}</span></button>`,
+      (p, i) => `<button class="preset" data-preset="${i}" aria-label="Apply ${p.name} preset"><span class="pthumb"></span><span class="ptext"><span class="pname">${p.name}</span><span class="preq" hidden></span></span></button>`,
     ).join("");
     return `
 <div class="root">
@@ -1004,6 +1037,7 @@ class AgentShowroom extends HTMLElement {
     <div class="rim r1"></div><div class="rim r2"></div>
     <div class="pedestal"><div class="ring"></div><div class="plate-disc"></div></div>
     <div class="figure-wrap"><div class="figure"></div><div class="sweep"></div></div>
+    <div class="grade" aria-hidden="true"></div>
   </section>
   <header class="hdr">
     <div class="kicker">Field Armory</div>
@@ -1028,7 +1062,9 @@ class AgentShowroom extends HTMLElement {
     <div class="seg" role="group" aria-label="Helmet">
       <button data-helmet-off aria-pressed="false">Helmet off</button>
     </div>
-    <span class="hint-turn" aria-hidden="true">${I.turn}Drag to turn</span>
+    <div class="seg" role="group" aria-label="Lighting and turntable">
+      <button data-light aria-label="Lighting: Studio" title="Cycle the lighting (L)"><span class="lt">Light</span><b>Studio</b></button><button data-spin aria-pressed="false" title="Spin the turntable (drag to turn by hand)">${I.turn}Spin</button>
+    </div>
   </div>
   <aside class="panel" aria-label="Customization">
     <div class="frame"><div class="body">
@@ -1093,6 +1129,8 @@ class AgentShowroom extends HTMLElement {
     this.category = 0;
     this.badgeMode = "library";
     this.yaw = this.yawTarget = 0;
+    this.spinning = false;
+    this.shadowRoot.querySelector("[data-spin]")?.setAttribute("aria-pressed", "false");
     this._yawRestore = null;
     this.poseChoice = "idle";
     this.cameraChoice = "full";
@@ -1133,7 +1171,6 @@ class AgentShowroom extends HTMLElement {
       this._realAdopted = true;
     }
     this.toggleAttribute("realistic", real);
-    (real ? this : this.el.stage).style.removeProperty("--yaw");
     this._stageKey = null;
     this._presetsBuilt = false;
     return true;
@@ -1230,6 +1267,7 @@ class AgentShowroom extends HTMLElement {
     st.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 && e.pointerType === "mouse") return;
       st.setPointerCapture(e.pointerId);
+      if (this.spinning) this.toggleSpin(false);
       this._drag = { x: e.clientX, yaw: this.yawTarget };
       st.classList.add("dragging");
     });
@@ -1284,6 +1322,8 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.camera) return this.setCamera(t.dataset.camera, true);
     if (t.dataset.pose) return this.setPose(t.dataset.pose, true);
     if (t.hasAttribute("data-helmet-off")) return this.toggleHelmet();
+    if (t.hasAttribute("data-light")) return this.cycleLight();
+    if (t.hasAttribute("data-spin")) return this.toggleSpin();
     if (t.dataset.confirm) return t.dataset.confirm === "discard" ? this.discard() : this.closeConfirm();
     if (t.classList.contains("handle")) return this.toggleSheet();
     if (t === this.el.save) return this.save();
@@ -1379,6 +1419,9 @@ class AgentShowroom extends HTMLElement {
         return consume();
       case "KeyZ":
         this.undo();
+        return consume();
+      case "KeyL":
+        this.cycleLight();
         return consume();
       case "KeyC":
         this.setCamera(CAMERAS[(CAMERAS.indexOf(this.cameraChoice) + 1) % CAMERAS.length], true);
@@ -1871,6 +1914,31 @@ class AgentShowroom extends HTMLElement {
     this.queueRender();
   }
 
+  /** Stage lighting: studio key light, hangar daylight, night ops, red alert. */
+  cycleLight() {
+    const i = (STAGE_LIGHTS.findIndex((l) => l.id === (this.getAttribute("light") || "studio")) + 1) % STAGE_LIGHTS.length;
+    this.setLight(STAGE_LIGHTS[i].id);
+    this.sfx("menuNav");
+  }
+
+  setLight(id) {
+    const light = STAGE_LIGHTS.find((l) => l.id === id) ?? STAGE_LIGHTS[0];
+    if (light.id === "studio") this.removeAttribute("light");
+    else this.setAttribute("light", light.id);
+    const b = this.shadowRoot.querySelector("[data-light]");
+    b.querySelector("b").textContent = light.name;
+    b.setAttribute("aria-label", `Lighting: ${light.name}`);
+  }
+
+  /** Turntable: sway the agent side to side until the player turns it by hand. */
+  toggleSpin(on = !this.spinning) {
+    this.spinning = on && !reducedMotion();
+    this._spinT0 = performance.now() - Math.asin(clamp(this.yaw / SPIN_YAW, -1, 1)) / SPIN_RATE * 1000;
+    this.shadowRoot.querySelector("[data-spin]").setAttribute("aria-pressed", String(this.spinning));
+    this.sfx("menuNav");
+    this.animate();
+  }
+
   toggleSheet() {
     const collapsed = this.getAttribute("sheet") === "collapsed";
     if (collapsed) this.removeAttribute("sheet");
@@ -1913,6 +1981,10 @@ class AgentShowroom extends HTMLElement {
           if (this._real) this.queueRender();
         }
       }
+      if (this.spinning) {
+        this.yawTarget = Math.sin(((now - this._spinT0) / 1000) * SPIN_RATE) * SPIN_YAW;
+        more = true;
+      }
       if (Math.abs(this.yaw - this.yawTarget) > 0.002) {
         this.yaw += (this.yawTarget - this.yaw) * 0.18;
         more = true;
@@ -1930,9 +2002,9 @@ class AgentShowroom extends HTMLElement {
   /** Turn parallax: back gear and cape slide against the body, head leads, light sweeps. */
   applyYaw() {
     const y = this.yaw;
-    // Modern (realistic) scopes the property to the stage: set on the host it
-    // restyles every tile, and each filtered thumbnail would re-rasterise per frame.
-    (this._real ? this.el.stage : this).style.setProperty("--yaw", y.toFixed(3));
+    // Scoped to the stage (everything that reads it lives there): set on the
+    // host it restyles every tile, and filtered thumbnails re-rasterise per frame.
+    this.el.stage.style.setProperty("--yaw", y.toFixed(3));
     if (this._real) {
       // Modern's figure carries lighting filters (diffuse + specular + noise).
       // Any change inside that SVG re-runs them — 100-200 ms at 2x DPR — so
@@ -2057,6 +2129,10 @@ class AgentShowroom extends HTMLElement {
       const thumb = btn.querySelector(".pthumb");
       thumb.querySelector(".lockbadge")?.remove();
       if (lock) thumb.insertAdjacentHTML("beforeend", `<span class="lockbadge" aria-hidden="true">${I.lock}</span>`);
+      // Say what earns it, with progress, instead of a bare padlock.
+      const req = btn.querySelector(".preq");
+      req.hidden = !lock;
+      if (lock) req.innerHTML = `<span>${esc(lock.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(lock.pct * 100)}%"></i></span>`;
     });
     this._presetsBuilt = true;
   }
@@ -2422,7 +2498,7 @@ class AgentShowroom extends HTMLElement {
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "palette":
-        return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span></button>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span>${prog}</button>`;
       case "origin":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="row"><span class="oname">${esc(item.name)}</span></span><span class="desc">${esc(item.desc)}</span><span class="perk caption cyan">${esc(item.perk)}</span></button>`;
       case "voice":
