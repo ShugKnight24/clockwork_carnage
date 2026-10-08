@@ -14,7 +14,8 @@
 import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
 import { createScene } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
-import { WEAPON_MODELS } from "./viewmodel/weapons.js";
+import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
+import { activeFinish, finishKey } from "../../data/weapon-skins.js";
 import { smoothDamp } from "../../systems/aim.js";
 import { isRealisticArt } from "../art-style.js";
 
@@ -23,7 +24,8 @@ const DEFS =
   `<linearGradient id="vmDepth" x1="0" y1="0" x2="0" y2="1">` +
   `<stop offset="0" stop-color="#02040a" stop-opacity=".4"/><stop offset=".55" stop-color="#02040a" stop-opacity=".08"/>` +
   `<stop offset="1" stop-color="#02040a" stop-opacity="0"/></linearGradient>` +
-  HAND_DEFS;
+  HAND_DEFS +
+  SKIN_PATTERN_DEFS();
 
 // Weapon bloom goes under the gloves so a hand covering an emitter hides it;
 // sleeve trim bloom goes on top.
@@ -34,15 +36,59 @@ const UNIT = 4;
 const LIMIT = { x0: -240, x1: 240, y0: -100, y1: 170 };
 const MAX_SIDE_PX = 1100;
 
-const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}` -> viewmodel
+const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}|${finish}` -> viewmodel
 
-function build(id, accent, pose, tier = "hi", real = false) {
-  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}`;
+/**
+ * Overlay patterns for weapon finishes, in viewmodel units, as tone only
+ * (black and white at low alpha) so they sit on any finish's colours.
+ */
+function SKIN_PATTERN_DEFS() {
+  const P = (id, w, h, body, extra = "") =>
+    `<pattern id="skp-${id}" patternUnits="userSpaceOnUse" width="${w}" height="${h}"${extra}>${body}</pattern>`;
+  return (
+    P("carbon", 3, 3,
+      `<rect width="1.5" height="1.5" fill="#fff" opacity=".08"/><rect x="1.5" y="1.5" width="1.5" height="1.5" fill="#fff" opacity=".08"/>` +
+      `<rect x="1.5" width="1.5" height="1.5" fill="#000" opacity=".2"/><rect y="1.5" width="1.5" height="1.5" fill="#000" opacity=".2"/>`) +
+    P("hex", 6, 10.392,
+      `<path d="M3,0 L6,1.732 L6,5.196 L3,6.928 L0,5.196 L0,1.732 Z M0,8.66 L3,10.392 M6,8.66 L3,10.392 M3,6.928 L3,10.392" fill="none" stroke="#fff" stroke-width=".35" opacity=".2"/>`) +
+    P("camo", 26, 26,
+      `<path d="M0,4 L9,1 L14,7 L8,12 L2,10 Z M15,14 L24,11 L26,19 L18,24 L13,20 Z M3,17 L9,15 L11,22 L5,25 Z" fill="#000" opacity=".28"/>` +
+      `<path d="M16,2 L22,3 L20,8 L15,7 Z M8,19 L12,18 L11,21 Z" fill="#fff" opacity=".1"/>`) +
+    P("stripes", 8, 8, `<rect width="2.6" height="8" fill="#000" opacity=".3"/>`, ` patternTransform="rotate(-32)"`) +
+    P("digital", 8, 8,
+      `<g fill="#000" opacity=".26"><rect x="0" y="0" width="2" height="2"/><rect x="2" y="0" width="2" height="2"/><rect x="4" y="4" width="2" height="2"/><rect x="6" y="6" width="2" height="2"/><rect x="2" y="6" width="2" height="2"/></g>` +
+      `<g fill="#fff" opacity=".1"><rect x="6" y="0" width="2" height="2"/><rect x="0" y="4" width="2" height="2"/><rect x="4" y="2" width="2" height="2"/></g>`)
+  );
+}
+
+const sceneSkins = new Map(); // finish key -> scene skin
+/** A weapon finish as the scene applies it: material ramps by role, and its pattern. */
+function sceneSkin(finish) {
+  if (!finish) return null;
+  const key = finishKey(finish);
+  let s = sceneSkins.get(key);
+  if (!s) {
+    const remap = new Map();
+    for (const m of MATERIALS.metal) remap.set(m, finish.primary);
+    for (const m of MATERIALS.trim) remap.set(m, finish.secondary);
+    for (const m of MATERIALS.grip) remap.set(m, finish.grip);
+    s = { remap, pattern: finish.pattern ? `skp-${finish.pattern}` : null };
+    sceneSkins.set(key, s);
+  }
+  return s;
+}
+
+/**
+ * The viewmodel for weapon `id` in `pose`, wearing `finish` (by default the
+ * one the player chose for that weapon; src/data/weapon-skins.js).
+ */
+function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id)) {
+  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}|${finishKey(finish)}`;
   let vm = built.get(key);
   if (vm) return vm;
   const model = WEAPON_MODELS[id];
   if (!model) return null;
-  const sc = createScene(model.cams[pose], accent, { real });
+  const sc = createScene(model.cams[pose], finish?.energy ?? accent, { real, skin: sceneSkin(finish) });
   sc.detailPx = tier === "lo" ? 2 : 4;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
@@ -543,15 +589,15 @@ const profiles = new Map(); // `${id}|${accent}` -> profile
  * the weapon's layers stay clean. Returns { defs, body, glow, box [x, y, w, h] }
  * in icon units, or null for an unknown id.
  */
-export function weaponProfile(id, accent) {
-  const key = `${id}|${accent}`;
+export function weaponProfile(id, accent, finish = activeFinish(id)) {
+  const key = `${id}|${accent}|${finishKey(finish)}`;
   let p = profiles.get(key);
   if (p !== undefined) return p;
   const model = WEAPON_MODELS[id];
   p = null;
   if (model) {
     const cam = { side: true, scale: PROFILE_SCALE };
-    const sc = createScene(cam, accent);
+    const sc = createScene(cam, accent, { skin: sceneSkin(finish) });
     sc.detailPx = 4;
     const hands = createScene(cam, accent);
     hands.detailPx = 4;

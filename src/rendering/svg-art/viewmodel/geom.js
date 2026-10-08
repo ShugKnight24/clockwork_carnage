@@ -106,13 +106,15 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
  *   or { side: true, scale } — an orthographic profile of the left flank, muzzle
  *   pointing right, at `scale` units per mm (HUD weapon icons)
  * @param {string} accent  character energy colour (emissives, rim light)
- * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges }
+ * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges;
+ *   skin: a weapon finish — { remap: Map(material ramp → ramp), pattern: SVG pattern id or null } }
  */
 export function createScene(cam, accent, opts = {}) {
   const { F, ox, oy, oz, kx = 0 } = cam;
   const side = !!cam.side;
   const S = cam.scale || 1;
   const real = !!opts.real;
+  const skin = opts.skin || null;
   // Side view: the eye far off the left flank, so painter order follows x.
   const eye = side ? [-1e5, 0, 0] : [-ox, -oy, -oz];
   const core = mix(accent, "#ffffff", 0.55);
@@ -170,6 +172,10 @@ export function createScene(cam, accent, opts = {}) {
    */
   function solid(faces, mat, o = {}) {
     const { smooth = false, amb = 0.2, spec = true, depth = true } = o;
+    // A weapon finish recolours the material, and may pattern its faces.
+    const skinned = skin?.remap.get(mat);
+    if (skinned) mat = skinned;
+    const pattern = skinned && skin.pattern ? `url(#${skin.pattern})` : null;
     // Realistic: materials over outlines — no ink silhouette, a faint seam, and
     // a cool neutral bounce instead of the character-coloured rim.
     const rim = real ? 0 : o.rim ?? 0.22;
@@ -199,6 +205,7 @@ export function createScene(cam, accent, opts = {}) {
       const p2 = face.map(P);
       const seam = smooth ? `stroke="${col}" stroke-width=".3"` : `stroke="${INK}" stroke-opacity="${edge}" stroke-width=".22"`;
       out += `<path d="${path(p2)}" fill="${col}" ${seam} stroke-linejoin="round"/>`;
+      if (pattern) out += `<path d="${path(p2)}" fill="${pattern}"/>`;
       const h = Math.max(...p2.map((p) => p[1])) - Math.min(...p2.map((p) => p[1]));
       if (depth && h > 14) out += `<path d="${path(p2)}" fill="url(#vmDepth)"/>`;
       // Machined specular strip on faces that catch the key light.

@@ -14,6 +14,8 @@
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { weaponProfile } from "../rendering/svg-art/viewmodels.js";
 import { WEAPON_MODELS } from "../rendering/svg-art/viewmodel/weapons.js";
+import { WEAPONS } from "../data/weapons.js";
+import { activeFinish, finishKey } from "../data/weapon-skins.js";
 
 export const SILHOUETTE_BOX = [0, 0, 160, 56];
 const PAD = 2;
@@ -35,12 +37,18 @@ export const hasSilhouette = (id) => id in WEAPON_MODELS;
 
 const fitted = new Map(); // `${id}|${color}` -> { defs, body, glow }
 
-/** The weapon's profile fitted and centred in SILHOUETTE_BOX. */
+/**
+ * The weapon's profile, wearing the player's finish for it, fitted and
+ * centred in SILHOUETTE_BOX. A finish with its own energy colour replaces the
+ * weapon's colour; any other colour asked for (the heat overlay) is kept.
+ */
 function fittedProfile(id, color) {
-  const key = `${id}|${color}`;
+  const finish = activeFinish(id);
+  const accent = finish?.energy && color === WEAPONS[id]?.color ? finish.energy : color;
+  const key = `${id}|${accent}|${finishKey(finish)}`;
   let p = fitted.get(key);
   if (p !== undefined) return p;
-  const prof = weaponProfile(id, color);
+  const prof = weaponProfile(id, accent, finish);
   p = null;
   if (prof) {
     const [x, y, w, h] = prof.box;
@@ -62,8 +70,9 @@ function fittedProfile(id, color) {
 export function silhouetteLayers(id, color, pxPerUnit) {
   const prof = fittedProfile(id, color);
   if (!prof) return null;
-  const body = getLayerImage(`wsil:${id}:body:${color}`, SILHOUETTE_BOX, prof.defs, prof.body, pxPerUnit);
-  const glowImg = prof.glow ? getLayerImage(`wsil:${id}:glow:${color}`, SILHOUETTE_BOX, prof.defs, prof.glow, pxPerUnit) : null;
+  const fk = finishKey(activeFinish(id));
+  const body = getLayerImage(`wsil:${id}:body:${color}:${fk}`, SILHOUETTE_BOX, prof.defs, prof.body, pxPerUnit);
+  const glowImg = prof.glow ? getLayerImage(`wsil:${id}:glow:${color}:${fk}`, SILHOUETTE_BOX, prof.defs, prof.glow, pxPerUnit) : null;
   return body ? { body, glow: glowImg } : null;
 }
 

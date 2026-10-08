@@ -8,7 +8,7 @@ import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../sr
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
-import { initUnlockToasts, showGearToast } from "../src/ui/unlock-toast.js";
+import { initUnlockToasts, showFinishToast, showGearToast } from "../src/ui/unlock-toast.js";
 import {
   FramePacer,
   frameCapFor,
@@ -52,6 +52,7 @@ initUnlockToasts(game);
 // The DOM toast lives in the UI layer; the game only needs to be able to ask
 // for one when a drop is collected.
 game.showGearToast = showGearToast;
+game.showFinishToast = showFinishToast;
 onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });

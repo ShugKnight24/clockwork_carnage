@@ -3,6 +3,7 @@
 // All functions are pure I/O: they read/write localStorage and return data.
 // Game-level side effects (startArenaRound, loadCampaignLevel, etc.) stay in Game.
 
+import { normalizeCustomSkins, normalizeWeaponFinishes } from "../data/weapon-skins.js";
 import {
   CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS,
   ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
@@ -144,7 +145,7 @@ export function loadCharacter(character) {
       voiceIndex: VOICE_PROFILES.length - 1,
       armorVariant: 1,
     };
-    const OBJECT_FIELDS = new Set(["badge", "accessories"]);
+    const OBJECT_FIELDS = new Set(["badge", "accessories", "weaponFinishes", "customSkins"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
       if (OBJECT_FIELDS.has(key)) continue;
       if (Object.prototype.hasOwnProperty.call(saved, key)) {
@@ -158,6 +159,8 @@ export function loadCharacter(character) {
       ? normalizeBadge(saved.badge)
       : migrateLegacyBadge(Number(saved.badgeIndex) || 0, Number(saved.shoulderIndex) || 0);
     character.accessories = normalizeAccessories(saved.accessories);
+    character.customSkins = normalizeCustomSkins(saved.customSkins);
+    character.weaponFinishes = normalizeWeaponFinishes(saved.weaponFinishes, character.customSkins);
   } catch (_) {}
 }
 

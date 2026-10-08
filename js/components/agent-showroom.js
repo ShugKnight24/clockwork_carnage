@@ -22,6 +22,9 @@ import {
   VOICE_PROFILES,
   WEAPON_SKINS,
 } from "../../src/data/cosmetics.js";
+import * as Skins from "../../src/data/weapon-skins.js";
+import { WEAPONS } from "../../src/data/weapons.js";
+import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
 
 /**
  * Modern-mode agent customizer: a full-screen "hero showroom" shown while the
@@ -173,7 +176,8 @@ const CATEGORIES = [
     pose: "hero",
     sections: [
       { key: "loadoutIndex", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
-      { key: "weaponSkinIndex", title: "Weapon finish", data: WEAPON_SKINS, kind: "rifle" },
+      // Per-weapon finishes and the finish maker (src/data/weapon-skins.js).
+      { type: "armory", title: "Weapon finishes" },
     ],
   },
 ];
@@ -433,6 +437,29 @@ svg { display: block; }
 .content::-webkit-scrollbar-thumb { background: #2e3f51; border: 1px solid var(--cc-ink); }
 .content.swap { animation: swapIn var(--cc-dur-base) var(--cc-ease); }
 @keyframes swapIn { from { opacity: 0; transform: translateX(var(--swap-dir, 12px)); } }
+/* Weapon finishes */
+.arm-weapons, .arm-patterns, .arm-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.arm-weapons .chip, .arm-patterns .chip { min-height: 30px; padding: 0 10px; font-size: 11px; }
+.arm-preview { margin: 10px 0; padding: 10px; background: var(--cc-panel-well); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55); }
+.arm-art { display: block; width: 100%; height: 120px; }
+.arm-meta { margin: 6px 0 0; font: 600 var(--cc-type-label)/1.3 var(--cc-font); color: var(--cc-text-dim); }
+.arm-finishes { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.arm-f { position: relative; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; min-height: 52px; }
+.arm-f.on { box-shadow: inset 0 0 0 2px var(--cc-cyan), var(--plate-bevel); }
+.arm-f.locked { opacity: 0.6; }
+.arm-sw { flex: none; width: 26px; height: 26px; border: 1.5px solid var(--cc-ink); background: linear-gradient(135deg, var(--a) 0 50%, var(--b) 50% 85%, var(--c) 85%); }
+.arm-n { flex: 1; min-width: 0; font: 700 12px/1.2 var(--cc-font); color: var(--cc-text); }
+.arm-lock { flex-basis: 100%; font: 600 10px/1 var(--cc-font); color: var(--cc-amber); }
+.arm-lock .bar { display: block; height: 3px; margin-bottom: 4px; background: linear-gradient(90deg, var(--cc-amber) calc(var(--p) * 100%), rgba(255, 255, 255, 0.12) 0); }
+.arm-del { position: absolute; top: 2px; right: 6px; font: 700 14px/1 var(--cc-font); color: var(--cc-text-dim); cursor: pointer; }
+.arm-del:hover { color: #fff; }
+.arm-maker { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(130, 160, 188, 0.2); }
+.arm-maker h4 { margin: 0 0 8px; font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--cc-text-dim); }
+.arm-colors { display: flex; gap: 12px; margin-bottom: 8px; }
+.arm-color { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 10px/1 var(--cc-font); color: var(--cc-text-dim); cursor: pointer; }
+.arm-color input { width: 44px; height: 32px; padding: 0; border: 1.5px solid var(--cc-ink); background: none; cursor: pointer; }
+.arm-name { margin: 8px 0; }
+.arm-save[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
 .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
@@ -1195,6 +1222,7 @@ class AgentShowroom extends HTMLElement {
     });
     root.addEventListener("input", (e) => {
       if (e.target?.name === "callsign") this.onName(e.target);
+      else if (e.target?.dataset?.skinColor || e.target?.name === "skinName") this.onSkinInput(e.target);
     });
 
     // Stage drag to turn.
@@ -1235,6 +1263,8 @@ class AgentShowroom extends HTMLElement {
   }
 
   onClick(e) {
+    const del = e.target.closest?.("[data-skin-del]");
+    if (del) return this.deleteCustomSkin(Number(del.dataset.skinDel));
     const t = e.target.closest?.("button, [data-idx]");
     if (!t) return;
     if (this._swallowClick) {
@@ -1245,6 +1275,9 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.voice != null) return this.playVoice(Number(t.dataset.voice), t);
     if (t.dataset.mode) return this.setBadgeMode(t.dataset.mode);
     if (t.dataset.placement) return this.togglePlacement(t.dataset.placement);
+    if (t.dataset.armWeapon != null) return this.setArmoryWeapon(Number(t.dataset.armWeapon));
+    if (t.dataset.finish) return this.chooseFinish(t.dataset.finish);
+    if (t.dataset.skinPattern) return this.setSkinPattern(t.dataset.skinPattern);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
     if (t.dataset.preset != null) return this.applyPreset(Number(t.dataset.preset));
@@ -1256,6 +1289,11 @@ class AgentShowroom extends HTMLElement {
     if (t === this.el.save) return this.save();
     if (t === this.el.back) return this.back();
     switch (t.dataset.act) {
+      case "skin-save":
+        return this.saveCustomSkin();
+      case "skin-preview":
+        this.skinPreviewing = true;
+        return this.renderArmory();
       case "undo":
         return this.undo();
       case "reset":
@@ -1951,6 +1989,7 @@ class AgentShowroom extends HTMLElement {
     });
     if (rebuildContent) this.renderContent(swapDir);
     else this.refreshContent();
+    this.renderArmory();
     this.renderPresets();
     this.renderStage();
     this.renderHeader();
@@ -2058,6 +2097,7 @@ class AgentShowroom extends HTMLElement {
       c.classList.add("swap");
     }
     this.refreshContent(true);
+    this.renderArmory();
   }
 
   sectionHtml(s) {
@@ -2069,6 +2109,7 @@ class AgentShowroom extends HTMLElement {
         <p class="err ${msg ? "" : "ok"}" id="callsign-err">${esc(msg || "Letters, numbers, space . _ ' -")}</p></div>`;
     }
     if (s.type === "badgeHero") return this.badgeHeroHtml();
+    if (s.type === "armory") return this.armoryHtml(s);
     if (s.type === "placement") {
       const on = this.character.badge.placements;
       const chips = PLACEMENTS.map(
@@ -2098,6 +2139,172 @@ class AgentShowroom extends HTMLElement {
     // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
     const locks = s.groupBy ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  // ── Weapon finishes (src/data/weapon-skins.js) ─────────────────────────────
+  // Each weapon wears its own finish, earned with kills with that weapon, or
+  // one the player mixes in the finish maker below the cards.
+
+  armoryHtml(s) {
+    const ch = this.character;
+    this.armoryWeapon ??= LOADOUT_CLASSES[ch.loadoutIndex]?.startWeapons?.[0] ?? 0;
+    this.skinDraft ??= { name: "", primary: "#c8102e", secondary: "#1a1a1a", energy: "#ffd23a", pattern: "camo" };
+    const weapons = WEAPONS.map(
+      (w) => `<button class="chip arm-w${w.id === this.armoryWeapon ? " on" : ""}" data-arm-weapon="${w.id}" aria-pressed="${w.id === this.armoryWeapon}" tabindex="-1">${esc(w.name)}</button>`,
+    ).join("");
+    const patterns = Skins.SKIN_PATTERNS.map(
+      (p) => `<button class="chip arm-p${p.id === this.skinDraft.pattern ? " on" : ""}" data-skin-pattern="${p.id}" aria-pressed="${p.id === this.skinDraft.pattern}" tabindex="-1">${esc(p.name)}</button>`,
+    ).join("");
+    const color = (key, label) =>
+      `<label class="arm-color"><input type="color" data-skin-color="${key}" value="${this.skinDraft[key] || "#000000"}"><span>${label}</span></label>`;
+    const full = (ch.customSkins?.length ?? 0) >= Skins.MAX_CUSTOM;
+    return `<div class="section armory" data-section="armory"><h3><span>${s.title}</span><span class="cur arm-cur"></span></h3>
+      <div class="arm-weapons" role="group" aria-label="Weapon">${weapons}</div>
+      <div class="arm-preview"><svg class="arm-art" aria-hidden="true"></svg><p class="arm-meta"></p></div>
+      <div class="grid arm-finishes" role="radiogroup" aria-label="Finish"></div>
+      <div class="arm-maker">
+        <h4>Finish maker</h4>
+        <div class="arm-colors">${color("primary", "Body")}${color("secondary", "Trim")}${color("energy", "Energy")}</div>
+        <div class="arm-patterns" role="group" aria-label="Pattern">${patterns}</div>
+        <label class="field arm-name"><input name="skinName" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Name your finish" value="${esc(this.skinDraft.name)}"></label>
+        <div class="arm-actions">
+          <button class="chip" data-act="skin-preview" tabindex="-1">Preview</button>
+          <button class="chip arm-save" data-act="skin-save" tabindex="-1"${full ? ` aria-disabled="true" title="${Skins.MAX_CUSTOM} custom finishes max: delete one first"` : ""}>Save &amp; wear</button>
+        </div>
+      </div></div>`;
+  }
+
+  /** The finish shown in the preview: the maker's draft while previewing it, else the one worn. */
+  armoryShown() {
+    if (this.skinPreviewing) return Skins.customFinish(this.skinDraft, 0);
+    return Skins.finishFor(this.character, this.armoryWeapon);
+  }
+
+  renderArmory() {
+    const sec = this.shadowRoot.querySelector(".section.armory");
+    if (!sec) return;
+    const ch = this.character;
+    const wid = this.armoryWeapon;
+    const w = WEAPONS[wid];
+    const stats = this.game.achievementStats;
+    const kills = Skins.killsWith(stats, wid);
+    const worn = ch.weaponFinishes?.[wid] ?? "default";
+    const shown = this.armoryShown();
+    // Preview: the weapon's side profile, from the same model as the viewmodel.
+    const prof = weaponProfile(wid, shown?.energy ?? w.color, shown);
+    if (prof) {
+      const [x, y, bw, bh] = prof.box;
+      const art = sec.querySelector(".arm-art");
+      art.setAttribute("viewBox", `${x - 4} ${y - 4} ${bw + 8} ${bh + 8}`);
+      art.innerHTML = `<defs>${prof.defs}</defs>${prof.body}${prof.glow}`;
+    }
+    const name = this.skinPreviewing ? `${this.skinDraft.name || "Your finish"} (preview)` : (Skins.finishById(ch, worn)?.name ?? "Factory");
+    sec.querySelector(".arm-meta").textContent = `${w.name} · ${name} · ${kills} kill${kills === 1 ? "" : "s"}`;
+    sec.querySelector(".arm-cur").textContent = name;
+    sec.querySelectorAll(".arm-w").forEach((b) => {
+      const on = Number(b.dataset.armWeapon) === wid;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    // Cards: swatch, name, and either worn / owned or the kills still to go.
+    const swatch = (f) => {
+      const c = f.primary ? [f.primary[3], f.secondary[2], f.energy || w.color] : ["#8fa0b2", "#2a333d", w.color];
+      return `<span class="arm-sw" style="--a:${c[0]};--b:${c[1]};--c:${c[2]}"></span>`;
+    };
+    sec.querySelector(".arm-finishes").innerHTML = Skins.finishesFor(ch)
+      .map((f) => {
+        const open = Skins.finishUnlocked(f, wid, stats);
+        const on = f.id === worn;
+        const lock = open ? "" : `<span class="arm-lock"><span class="bar" style="--p:${Math.min(1, kills / f.kills)}"></span>${kills} / ${f.kills} kills</span>`;
+        const del = f.custom ? `<span class="arm-del" role="button" data-skin-del="${f.id.slice(7)}" title="Delete this finish">×</span>` : "";
+        return `<button class="opt arm-f${on ? " on" : ""}${open ? "" : " locked"}" role="radio" aria-checked="${on}" aria-disabled="${!open}" data-finish="${f.id}" tabindex="-1">${swatch(f)}<span class="arm-n">${esc(f.name)}</span>${lock}${del}</button>`;
+      })
+      .join("");
+  }
+
+  chooseFinish(id) {
+    const ch = this.character;
+    const wid = this.armoryWeapon;
+    const f = Skins.finishById(ch, id);
+    if (!f) return;
+    const stats = this.game.achievementStats;
+    if (!Skins.finishUnlocked(f, wid, stats)) {
+      this.sfx("menuNav");
+      return this.toast(`${f.name}: ${f.kills - Skins.killsWith(stats, wid)} more kills with the ${WEAPONS[wid].name}`);
+    }
+    this.skinPreviewing = false;
+    const changes = { weaponFinishes: { ...ch.weaponFinishes, [wid]: id } };
+    // The agent carries the Phase Rifle in the showroom: keep that finish in step.
+    const legacy = WEAPON_SKINS.findIndex((s) => s.id === id);
+    if (wid === 2 && legacy >= 0) changes.weaponSkinIndex = legacy;
+    this.commit(changes);
+    this.sfx("menuSelect");
+    this.announce(`${WEAPONS[wid].name}: ${f.name}`);
+  }
+
+  setArmoryWeapon(id) {
+    if (id === this.armoryWeapon) return;
+    this.armoryWeapon = id;
+    this.skinPreviewing = false;
+    this.sfx("menuNav");
+    this.renderArmory();
+  }
+
+  onSkinInput(t) {
+    if (t.dataset.skinColor) this.skinDraft[t.dataset.skinColor] = t.value;
+    else if (t.name === "skinName") this.skinDraft.name = t.value.slice(0, 18);
+    this.skinPreviewing = true;
+    this.renderArmory();
+  }
+
+  setSkinPattern(id) {
+    this.skinDraft.pattern = id;
+    this.skinPreviewing = true;
+    this.shadowRoot.querySelectorAll(".arm-p").forEach((b) => {
+      const on = b.dataset.skinPattern === id;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    this.sfx("menuNav");
+    this.renderArmory();
+  }
+
+  saveCustomSkin() {
+    const ch = this.character;
+    const list = ch.customSkins ?? [];
+    if (list.length >= Skins.MAX_CUSTOM) {
+      this.sfx("menuNav");
+      return this.toast(`${Skins.MAX_CUSTOM} custom finishes max: delete one first`);
+    }
+    const draft = Skins.normalizeCustomSkins([{ ...this.skinDraft, name: this.skinDraft.name || `Custom ${list.length + 1}` }])[0];
+    if (!draft) return;
+    this.skinPreviewing = false;
+    this.commit({
+      customSkins: [...list.map((c) => ({ ...c })), draft],
+      weaponFinishes: { ...ch.weaponFinishes, [this.armoryWeapon]: `custom:${list.length}` },
+    });
+    this.renderContent();
+    this.sfx("menuSelect");
+    this.announce(`Saved ${draft.name}`);
+  }
+
+  deleteCustomSkin(i) {
+    const ch = this.character;
+    const list = (ch.customSkins ?? []).filter((_, k) => k !== i).map((c) => ({ ...c }));
+    // Weapons wearing it go back to Factory; later custom ids shift down one.
+    const finishes = {};
+    for (const [w, id] of Object.entries(ch.weaponFinishes ?? {})) {
+      if (!id.startsWith("custom:")) finishes[w] = id;
+      else {
+        const k = Number(id.slice(7));
+        if (k < i) finishes[w] = id;
+        else if (k > i) finishes[w] = `custom:${k - 1}`;
+      }
+    }
+    this.commit({ customSkins: list, weaponFinishes: finishes });
+    this.renderContent();
+    this.sfx("menuSelect");
+    this.announce("Finish deleted");
   }
 
   badgeHeroHtml() {

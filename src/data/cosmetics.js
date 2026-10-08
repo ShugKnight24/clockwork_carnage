@@ -378,6 +378,9 @@ export const DEFAULT_CHARACTER = {
   shoulderIndex: 0,
   badgeIndex: 0,
   weaponSkinIndex: 0,
+  // Per-weapon finishes and the player's own (src/data/weapon-skins.js).
+  weaponFinishes: {},
+  customSkins: [],
   loadoutIndex: 0,
   backstoryIndex: 0,
   voiceIndex: 0,

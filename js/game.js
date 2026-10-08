@@ -4,6 +4,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
 import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
+import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager } from "./input-manager.js";
@@ -1137,6 +1138,7 @@ export class Game {
     Object.assign(this.character, sanitizeLocked(this.character, gameUnlockContext(this, { fresh: true })));
     // Cutscenes and the comic draw the player's own build.
     setCastCharacter(this.character);
+    setSkinCharacter(this.character);
   }
 
   setAlwaysTutorial(on) {
@@ -1717,6 +1719,7 @@ export class Game {
     if (saved) {
       this.saveCharacter();
       setCastCharacter(this.character);
+      setSkinCharacter(this.character);
       trackEvent("character_create", {
         loadout_class: this.character.loadoutClass || "default",
       });

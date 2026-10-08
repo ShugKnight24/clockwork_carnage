@@ -198,6 +198,15 @@ export function showGearToast(kind, name) {
   toast().show({ kind: kind || "Gear", name: name || "Salvage", gear: true });
 }
 
+/**
+ * Announce a weapon finish earned with kills (src/data/weapon-skins.js).
+ * @param {string} finish e.g. "Chrome"
+ * @param {string} weapon e.g. "Chrono Pistol"
+ */
+export function showFinishToast(finish, weapon) {
+  toast().show({ kind: "Weapon finish", name: `${finish} · ${weapon}` });
+}
+
 /** Start listening for progression. Call once after the Game has loaded its saves. */
 export function initUnlockToasts(game) {
   // A second call would stack listeners and announce every unlock twice.

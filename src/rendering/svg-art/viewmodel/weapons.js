@@ -25,6 +25,17 @@ const BRASS = ["#0e0b04", "#29240f", "#4a4530", "#7d7449", "#c9bc86"];
 const TEAL = ["#040b0b", "#0f201f", "#1e3a3a", "#3e6765", "#8fbcb9"];
 const INDIGO = ["#06061a", "#15153a", "#2a2a52", "#4a4a80", "#9696c8"];
 
+/**
+ * The material ramps by role, for weapon finishes (src/data/weapon-skins.js):
+ * main metals take a finish's primary, gunmetal trim its secondary, polymer
+ * its grip.
+ */
+export const MATERIALS = {
+  metal: [STEEL, BRONZE, CRIMSON, PLUM, NAVY, BRASS, TEAL, INDIGO],
+  trim: [GUNMETAL],
+  grip: [POLYMER],
+};
+
 // Viewmodel focal length in units (4 px at 720p): a slightly wide lens exaggerates depth.
 const F = 230;
 

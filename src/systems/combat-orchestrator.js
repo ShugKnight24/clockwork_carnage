@@ -18,6 +18,8 @@ import {
 import { playerEyeZ } from "./physics.js";
 import { playerEyeZ3D } from "../world/voxel-physics.js";
 import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
+import { FINISHES } from "../data/weapon-skins.js";
+import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame } from "./aim.js";
 import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
@@ -335,6 +337,9 @@ export function onEnemyKill(game, enemy) {
   if (weaponId != null && stats) {
     if (!stats.weaponKills || typeof stats.weaponKills !== "object") stats.weaponKills = {};
     stats.weaponKills[weaponId] = (stats.weaponKills[weaponId] || 0) + 1;
+    // A weapon finish earned with this kill (src/data/weapon-skins.js).
+    const earned = FINISHES.find((f) => f.kills && f.kills === stats.weaponKills[weaponId]);
+    if (earned) game.showFinishToast?.(earned.name, WEAPONS[weaponId]?.name ?? "Weapon");
   }
 
   // Echo clone spawning
