@@ -374,128 +374,260 @@ function hair(c, under) {
       return shape("M-6.8,-87.6 L6.8,-87.6 L6.6,-85.4 C4.8,-85.6 2.6,-86.2 0.8,-87.2 L-0.8,-87.2 C-2.6,-86.2 -4.8,-85.6 -6.6,-85.4 Z", "url(#hair)", 0.6);
     return "";
   }
-  // Cap that follows the skull to a hairline: shared by the close cuts.
-  const cap = (top, line_, op = 1) =>
-    `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,${f(top)} 0,${f(top)} C4.4,${f(top)} 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,${f(line_ + 0.3)} 0,${f(line_)} C-4.4,${f(line_ + 0.3)} -6.8,-86.6 -7.4,-83.4 Z" fill="url(#hair)" opacity="${op}" stroke="${INK}" stroke-width=".5"/>`;
-  if (id === "fade")
-    return (
-      cap(-92.4, -88.4, 0.55) +
-      shape("M-6.2,-88 C-6.6,-91.6 -6.6,-94.2 -5.8,-95.6 C-3,-96.6 3,-96.6 5.8,-95.6 C6.6,-94.2 6.6,-91.6 6.2,-88 C3.8,-89 -3.8,-89 -6.2,-88 Z", "url(#hair)", 0.7) +
-      line("M-5,-95 C-2.4,-95.8 2.4,-95.8 5,-95", hl, 0.4, 0.5) +
-      line("M-3.6,-93.2 L-3.8,-90.2 M-1.2,-93.6 L-1.2,-90.6 M1.2,-93.6 L1.2,-90.6 M3.6,-93.2 L3.8,-90.2", lo, 0.3, 0.3)
-    );
-  if (id === "hawk")
-    return (
-      `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,-92.4 0,-92.4 C4.4,-92.4 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,-88.1 0,-88.4 C-4.4,-88.1 -6.8,-86.6 -7.4,-83.4 Z" fill="${lo}" opacity=".35"/>` +
-      shape("M-2.4,-88.4 C-3.2,-92 -3,-96 -1.6,-99 L-0.6,-97 L0,-101.4 L0.8,-97.2 L1.8,-99.4 C3,-96 3.2,-92 2.4,-88.4 C1.2,-89 -1.2,-89 -2.4,-88.4 Z", "url(#hair)", 0.7) +
-      line("M-0.9,-90 C-1.2,-93 -1,-95.6 -0.4,-97.6", hl, 0.4, 0.6)
-    );
-  if (id === "afro") {
-    let tex = "";
-    for (let i = 0; i < 14; i++) {
-      const a = Math.PI * (1.08 + (i / 13) * 0.84);
-      tex += `<circle cx="${f(Math.cos(a) * 9.4)}" cy="${f(-90.6 + Math.sin(a) * 7.6)}" r=".7" fill="${hl}" opacity=".35"/>`;
-    }
-    return (
-      shape("M-7.6,-82.6 C-11.8,-84 -12.6,-92.4 -9.2,-96.8 C-6,-100.8 6,-100.8 9.2,-96.8 C12.6,-92.4 11.8,-84 7.6,-82.6 C7,-86.6 4.4,-88.6 0,-88.8 C-4.4,-88.6 -7,-86.6 -7.6,-82.6 Z", "url(#hair)", 0.7) +
-      tex +
-      line("M-7.4,-96 C-4.6,-98.6 1.4,-99.4 5.6,-97.8", hl, 0.45, 0.4)
-    );
-  }
-  if (id === "topknot")
-    return (
-      cap(-92.8, -89, 1) +
-      line("M-5,-89.8 C-3,-91.8 -1,-92.2 0,-92.2 M1.6,-92 C3.6,-91.6 5.2,-90.4 5.8,-88.8", hl, 0.35, 0.55) +
-      `<circle cx="0" cy="-95.8" r="3.1" fill="url(#hair)" stroke="${INK}" stroke-width=".5"/>` +
-      line("M-1.8,-96.8 C-0.8,-97.8 0.8,-97.8 1.8,-96.8", hl, 0.35, 0.5) +
-      shape("M-1.6,-93.2 L1.6,-93.2 L1.4,-92.3 L-1.4,-92.3 Z", c.pal.primary, 0.4)
-    );
-  if (id === "slick")
-    return (
-      cap(-93, -89.6, 1) +
-      line("M-5.8,-88.8 C-4.8,-91.4 -2.6,-92.4 0,-92.6 M-3.4,-89.4 C-2.4,-91.4 -0.6,-92 1.6,-92.2 M0,-89.6 C1,-91.2 2.6,-91.8 4.4,-91.4", hl, 0.3, 0.5) +
-      line("M4.6,-89.6 C5.8,-89 6.6,-87.8 7,-86.6", lo, 0.35, 0.6)
-    );
-  if (id === "locs") {
-    let strands = "";
-    // Two locs frame each side of the face, hanging past the jaw.
-    for (const [x, len] of [[-8.3, 13], [-7.1, 10.5], [7.1, 10.5], [8.3, 13]]) {
-      const y1 = -86 + len;
-      const w = x < 0 ? -0.35 : 0.35;
-      strands += `<path d="M${f(x - 0.6)},-86 C${f(x - 0.6 + w)},${f(-86 + len * 0.5)} ${f(x - 0.5 - w)},${f(y1 - 1.5)} ${f(x - 0.4)},${f(y1)} C${f(x - 0.2)},${f(y1 + 0.7)} ${f(x + 0.2)},${f(y1 + 0.7)} ${f(x + 0.4)},${f(y1)} C${f(x + 0.5 - w)},${f(y1 - 1.5)} ${f(x + 0.6 + w)},${f(-86 + len * 0.5)} ${f(x + 0.6)},-86 Z" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
-    }
-    return (
-      shape("M-7.8,-82.6 C-8.4,-90.4 -4.6,-93.8 0,-93.8 C4.6,-93.8 8.4,-90.4 7.8,-82.6 C6.6,-86.2 3.6,-87.8 0,-88 C-3.6,-87.8 -6.6,-86.2 -7.8,-82.6 Z", "url(#hair)", 0.6) +
-      line("M-5.6,-90.6 L-4.6,-88 M-2.8,-92.4 L-2.2,-88.2 M0,-93 L0,-88.2 M2.8,-92.4 L2.2,-88.2 M5.6,-90.6 L4.6,-88", lo, 0.35, 0.55) +
-      strands
-    );
-  }
-  if (id === "ponytail")
-    return (
-      cap(-93, -89.2, 1) +
-      line("M-5.6,-89.4 C-3.6,-91.6 0,-92.4 3.4,-91.8 M-2.6,-89.2 C-0.8,-91 2.2,-91.4 5.2,-90.4", hl, 0.3, 0.5)
-    );
-  if (id === "curtain" || id === "long")
-    return (
-      shape("M-7.7,-82.8 C-8.4,-90 -4.8,-93.8 0,-93.8 C4.8,-93.8 8.4,-90 7.7,-82.8 C7.2,-85.4 5.8,-87 3.2,-87.6 C1.8,-87.8 0.6,-88.8 0,-90.4 C-0.6,-88.8 -1.8,-87.8 -3.2,-87.6 C-5.8,-87 -7.2,-85.4 -7.7,-82.8 Z", "url(#hair)", 0.7) +
-      line("M-0.3,-90.2 C-0.8,-92 -0.8,-93 -0.4,-93.6", lo, 0.35, 0.7) +
-      line("M-6.4,-86.2 C-5.4,-89.6 -3.4,-91.8 -1.2,-92.6 M1.2,-92.6 C3.4,-91.8 5.4,-89.6 6.4,-86.2", hl, 0.35, 0.45)
-    );
   if (id === "none")
     return `<ellipse cx="-2.6" cy="-89.4" rx="3.6" ry="1.6" fill="#fff" opacity=".18"/>` + line("M-6.4,-88.6 C-4,-91.4 2,-91.8 5.6,-89.4", c.skin.shadow, 0.4, 0.3);
-  if (id === "buzz")
-    return (
-      `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,-92.6 0,-92.6 C4.4,-92.6 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,-88.2 0,-88.5 C-4.4,-88.2 -6.8,-86.6 -7.4,-83.4 Z" fill="url(#hair)" opacity=".9" stroke="${INK}" stroke-width=".5"/>` +
-      line("M-5.2,-89.6 C-3,-91.4 1,-91.6 3.6,-90.6", hl, 0.35, 0.35)
-    );
-  if (id === "coil") {
-    let curls = "";
-    for (let i = 0; i <= 10; i++) {
-      const a = Math.PI * (1.06 + (i / 10) * 0.88);
-      const x = Math.cos(a) * 7.6;
-      const y = -85.2 + Math.sin(a) * 7.4;
-      curls += `<circle cx="${f(x)}" cy="${f(y)}" r="2.2" fill="url(#hair)" stroke="${INK}" stroke-width=".5"/>`;
-      curls += line(`M${pt(x - 1.1, y - 0.6)} Q${pt(x, y - 1.6)} ${pt(x + 1, y - 0.7)}`, hl, 0.35, 0.5);
-    }
-    return shape("M-7.6,-83 C-8.2,-90 -4.4,-93.6 0,-93.6 C4.4,-93.6 8.2,-90 7.6,-83 C6,-86 3,-87.4 0,-87.4 C-3,-87.4 -6,-86 -7.6,-83 Z", "url(#hair)", 0.6) + curls;
-  }
-  if (id === "braid")
-    return (
-      shape("M-7.5,-83.4 C-8,-89.8 -4.6,-93 0,-93 C4.6,-93 8,-89.8 7.5,-83.4 C6.6,-86.8 3.6,-88.4 0.6,-88.6 L-0.4,-87 C-3,-87.8 -6,-86.8 -7.5,-83.4 Z", "url(#hair)", 0.7) +
-      line("M0.6,-92.6 L0.6,-88.6", lo, 0.45, 0.8) +
-      line("M-5.6,-89.6 C-4,-91.4 -1.4,-92.2 0,-92.2 M2,-92 C4,-91.6 5.8,-90.2 6.6,-88", hl, 0.4, 0.5) +
-      braid(c)
-    );
-  // short sweep / white shock share the swept cut
-  const sweep =
-    shape(
-      "M-7.7,-83 C-8.4,-88.4 -6.6,-92.8 -1,-93.8 C3.8,-94.4 7.8,-92 8,-87.4 C8.1,-85.6 7.9,-84 7.4,-82.6 " +
-        "C7,-85 6.2,-87.2 4.6,-88.4 C2,-87.4 -1.4,-88 -3.4,-89.4 C-4.6,-88.6 -5.8,-87.8 -6.4,-86.6 C-6.8,-85.6 -7,-84.4 -7.1,-82.8 Z",
-      "url(#hair)",
-      1,
-    ) +
-    line("M-6.4,-88 C-4.6,-91.6 -1,-93 2.6,-92.6 M-3.8,-89.4 C-2.4,-91.4 0.6,-92.2 3.6,-91.6", hl, 0.45, 0.6) +
-    line("M4.6,-88.4 C5.8,-89.2 6.8,-90.6 7,-91.4 M1,-88.2 C2.6,-89.6 3.6,-90.8 3.8,-92", lo, 0.45, 0.6);
-  return id === "white" ? sweep + line("M-5,-89.8 C-3,-92.4 0,-93.2 3,-92.8", c.energy, 0.5, 0.75) : sweep;
+  return scalpHair(c, HAIR_CUTS[id] || HAIR_CUTS.short);
 }
 
-/** Hair that falls behind the face: long cuts, locs and the ponytail. */
-function hairBack(c) {
-  const id = c.hair.id;
-  if (id === "long")
-    return shape("M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z", mix(c.hair.color, "#000000", 0.25), 0.7);
-  if (id === "locs") {
-    let out = "";
-    // Roots follow the skull's curve so no loc starts in mid-air.
-    for (let x = -8.4; x <= 8.5; x += 2.1) {
-      const y0 = -91 + (x / 8.4) ** 2 * 4;
-      out += `<path d="M${f(x - 0.9)},${f(y0)} C${f(x - 1.1)},-80 ${f(x - 0.7)},-74 ${f(x - 0.9)},-67.4 C${f(x - 0.6)},-66 ${f(x + 0.6)},-66 ${f(x + 0.9)},-67.4 C${f(x + 0.7)},-74 ${f(x + 1.1)},-80 ${f(x + 0.9)},${f(y0)} Z" fill="${mix(c.hair.color, "#000000", 0.25)}" stroke="${INK}" stroke-width=".35"/>`;
+// ── Natural hair ────────────────────────────────────────────────────────────
+// Every cut is built on one scalp: a mass that wraps the skull past the
+// temples into sideburns in front of the ears, a real hairline (temples set
+// back, a soft centre) that feathers into the skin with no ink on it, a
+// shadow the hair casts on the forehead, and strands that follow the cut.
+// Only the outer silhouette is inked, so the hair reads as growing from the
+// head rather than a cap set on top of it. Cut-specific pieces (a fringe, a
+// bun, a crest, curls) are drawn over that base.
+
+/**
+ * Per-cut shape. `v` volume beyond the skull, `line` hairline height at the
+ * centre (lower = more forehead covered), `burn` sideburn depth, `part` the
+ * x of the parting (null = swept back), `flow` strand lean (-1 left .. 1
+ * right), `fade` how much skin shows through (close crops), `tex` texture.
+ */
+const HAIR_CUTS = {
+  buzz: { v: 0.15, line: -88.6, burn: -80.8, part: null, flow: 0, fade: 0.3, tex: "stipple" },
+  short: { v: 0.95, line: -88.4, burn: -80.4, part: -3, flow: 1, tex: "strand", extra: "sweep" },
+  white: { v: 0.95, line: -88.4, burn: -80.4, part: -3, flow: 1, tex: "strand", extra: "sweep" },
+  coil: { v: 1.5, line: -88.6, burn: -80.6, part: null, flow: 0, tex: "coil" },
+  braid: { v: 0.45, line: -88.8, burn: -80.8, part: 0.6, flow: 0, tex: "strand", extra: "braid" },
+  fade: { v: 0.12, line: -88.8, burn: -81.4, part: null, flow: 0, fade: 0.45, tex: "stipple", extra: "flattop" },
+  hawk: { v: 0.08, line: -88.8, burn: -81.6, part: null, flow: 0, fade: 0.6, tex: "stipple", extra: "crest" },
+  afro: { v: 3.4, line: -88.4, burn: -80.2, part: null, flow: 0, tex: "coil", round: true },
+  topknot: { v: 0.4, line: -88.9, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", extra: "bun" },
+  slick: { v: 0.7, line: -89, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", shine: true },
+  curtain: { v: 1.05, line: -88.2, burn: -80, part: 0, flow: 0, tex: "strand", extra: "curtain" },
+  long: { v: 1.1, line: -88.4, burn: -79.6, part: 0.8, flow: 0, tex: "strand", extra: "curtain" },
+  locs: { v: 0.9, line: -88.6, burn: -80.4, part: null, flow: 0, back: true, tex: "locs", extra: "locs" },
+  ponytail: { v: 0.5, line: -88.9, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", shine: true },
+};
+
+/** Hairline, right sideburn to left: temples set back, a soft dip at the centre. */
+function hairlinePath(cut) {
+  const y = cut.line;
+  const b = cut.burn;
+  return (
+    `L6.6,${f(b)} C6.4,${f(b - 1.8)} 6.4,-84.6 6.2,-85.6 ` +
+    `C6,-86.8 5.6,${f(y + 0.6)} 4.8,${f(y + 0.3)} ` +
+    `C3.4,${f(y - 0.1)} 1.4,${f(y)} 0,${f(y + 0.15)} ` +
+    `C-1.4,${f(y)} -3.4,${f(y - 0.1)} -4.8,${f(y + 0.3)} ` +
+    `C-5.6,${f(y + 0.6)} -6,-86.8 -6.2,-85.6 ` +
+    `C-6.4,-84.6 -6.4,${f(b - 1.8)} -6.6,${f(b)}`
+  );
+}
+
+/** Outer silhouette, left sideburn over the crown to the right one. */
+function crownPath(cut) {
+  const v = cut.v;
+  const b = cut.burn;
+  if (cut.round) {
+    // A full rounded mass: wider than tall, sitting down over the ears.
+    return (
+      `M-7.1,${f(b)} C-7.4,${f(b - 1.6)} -7.6,-82.6 -${f(8 + v * 0.5)},-84 C-${f(8.6 + v * 1.1)},-85.4 -${f(8.8 + v * 1.1)},-88.6 -${f(7.6 + v)},${f(-92 - v * 0.5)} ` +
+      `C-${f(6 + v * 0.6)},${f(-96 - v * 0.9)} -3,${f(-97 - v)} 0,${f(-97.2 - v)} ` +
+      `C3,${f(-97 - v)} ${f(6 + v * 0.6)},${f(-96 - v * 0.9)} ${f(7.6 + v)},${f(-92 - v * 0.5)} ` +
+      `C${f(8.8 + v * 1.1)},-88.6 ${f(8.6 + v * 1.1)},-85.4 ${f(8 + v * 0.5)},-84 C7.6,-82.6 7.4,${f(b - 1.6)} 7.1,${f(b)}`
+    );
+  }
+  return (
+    `M-7.1,${f(b)} C-7.3,${f(b - 1.6)} -7.4,-83 -${f(7.5 + v * 0.3)},-84.4 C-${f(7.7 + v * 0.55)},-85.8 -${f(7.7 + v * 0.6)},-87 -${f(7.6 + v * 0.6)},-88 ` +
+    `C-${f(7.2 + v * 0.5)},${f(-91.4 - v * 0.6)} -4.4,${f(-92.6 - v * 1.2)} 0,${f(-92.8 - v * 1.25)} ` +
+    `C4.4,${f(-92.6 - v * 1.2)} ${f(7.2 + v * 0.5)},${f(-91.4 - v * 0.6)} ${f(7.6 + v * 0.6)},-88 ` +
+    `C${f(7.7 + v * 0.6)},-87 ${f(7.7 + v * 0.55)},-85.8 ${f(7.5 + v * 0.3)},-84.4 C7.4,-83 7.3,${f(b - 1.6)} 7.1,${f(b)}`
+  );
+}
+
+/** Seeded 0..1 noise so a cut's texture is the same every render. */
+const hairRand = (i) => {
+  const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+function hairTexture(c, cut, hl, lo) {
+  let out = "";
+  const top = -92.6 - cut.v * 1.2;
+  if (cut.tex === "stipple") {
+    // Close crop: short flecks over the scalp, denser toward the crown.
+    for (let i = 0; i < 70; i++) {
+      const x = (hairRand(i) - 0.5) * 15;
+      const y = top + 0.6 + hairRand(i + 99) * (cut.line - top + 3 - Math.abs(x) * 0.1);
+      out += `<path d="M${pt(x, y)} l${f((hairRand(i + 7) - 0.5) * 0.4)},.45" stroke="${i % 3 ? lo : hl}" stroke-width=".22" stroke-opacity="${i % 3 ? 0.5 : 0.35}"/>`;
     }
     return out;
   }
+  if (cut.tex === "coil" || cut.tex === "locs") {
+    // Tight curls: small arcs scattered over the mass, light on the upper side.
+    const n = cut.round ? 90 : 46;
+    const w = cut.round ? 8.4 + cut.v : 7.6 + cut.v * 0.6;
+    for (let i = 0; i < n; i++) {
+      const x = (hairRand(i) - 0.5) * 2 * w;
+      const yTop = -92.6 - cut.v * (cut.round ? 1.3 : 1.1) + (x / w) ** 2 * (cut.round ? 4.2 : 3);
+      const y = yTop + 0.5 + hairRand(i + 50) * (cut.line + (Math.abs(x) > 5.6 ? 6 : 0) - yTop);
+      const r = 0.55 + hairRand(i + 21) * 0.4;
+      out += `<path d="M${pt(x - r, y)} a${f(r)},${f(r)} 0 0 1 ${f(r * 2)},0" fill="none" stroke="${hl}" stroke-width=".26" stroke-opacity=".42"/>`;
+      out += `<path d="M${pt(x - r, y + 0.15)} a${f(r)},${f(r)} 0 0 0 ${f(r * 2)},0" fill="none" stroke="${lo}" stroke-width=".26" stroke-opacity=".5"/>`;
+    }
+    return out;
+  }
+  // Strands: from the parting (or the crown, swept back) out to the hairline
+  // and down the sides, bowed in the direction of the cut's flow.
+  const n = 26;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const a = Math.PI * (1.02 + t * 0.96);
+    const ex = Math.cos(a) * 7.4;
+    const ey = Math.max(-91, cut.line + 0.4 + (1 - Math.abs(Math.sin(a))) * 6);
+    let sx;
+    let sy;
+    if (cut.back) {
+      // Swept back: strands run from the hairline up over the crown.
+      sx = ex * 0.35;
+      sy = top + 0.4;
+    } else {
+      sx = cut.part ?? 0;
+      sy = top + 0.9;
+      if ((cut.part ?? 0) !== 0 && Math.sign(ex - sx) !== Math.sign(cut.flow || 1) && Math.abs(ex - sx) > 2) sx += (ex - sx) * 0.15;
+    }
+    const bow = (cut.flow || (ex < (cut.part ?? 0) ? -0.6 : 0.6)) * 1.4;
+    const mx = (sx + ex) / 2 + bow;
+    const my = (sy + ey) / 2 - 0.6;
+    const col = i % 3 === 0 ? hl : lo;
+    out += `<path d="M${pt(sx, sy)} Q${pt(mx, my)} ${pt(ex, ey)}" fill="none" stroke="${col}" stroke-width="${i % 3 === 0 ? 0.24 : 0.26}" stroke-opacity="${(i % 3 === 0 ? 0.36 : 0.32) * (cut.shine ? 0.6 : 1)}" stroke-linecap="round"/>`;
+  }
+  if (cut.part != null) out += line(`M${pt(cut.part, top + 0.8)} L${pt(cut.part * 0.9, cut.line + 0.2)}`, lo, 0.4, 0.55);
+  return out;
+}
+
+function scalpHair(c, cut) {
+  // Shaved sides of a dyed cut (the mohawk) grow back the natural colour.
+  const root = cut.extra === "crest" && c.hair.brow ? c.hair.brow : c.hair.color;
+  const color = cut.fade ? mix(root, c.skin.color, cut.fade) : c.hair.color;
+  const hl = mix(root, "#ffffff", 0.42);
+  const lo = mix(root, "#000000", 0.62);
+  const crown = crownPath(cut);
+  const mass = `${crown} ${hairlinePath(cut)} Z`;
+  // The hairline alone, as an open path, for the feather and the cast shadow.
+  const hairline = `M6.6,${f(cut.burn)} ` + hairlinePath(cut).slice(1);
+  const shadowLine = hairline.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${x},${f(Number(y) + 0.7)}`);
+  const fill = cut.fade ? color : "url(#hair)";
+  let out =
+    // Shadow the hair casts on the forehead and temples.
+    line(shadowLine.replace(/^M/, "M"), c.skin.shadow, 1.6, 0.22) +
+    // Feather: a soft fringe of hair colour just past the edge.
+    line(hairline, color, 0.9, cut.fade ? 0.25 : 0.4) +
+    `<path d="${mass}" fill="${fill}"/>` +
+    `<clipPath id="hairClip"><path d="${mass}"/></clipPath>` +
+    `<g clip-path="url(#hairClip)">` +
+    // Light from the top left: a sheen band across the crown.
+    `<path d="M-7,${f(-90 - cut.v)} C-4,${f(-93 - cut.v * 1.2)} 2,${f(-93.4 - cut.v * 1.2)} 6,${f(-91.4 - cut.v)}" fill="none" stroke="${hl}" stroke-width="${cut.shine ? 1.6 : 1.1}" stroke-opacity="${cut.shine ? 0.35 : 0.2}" stroke-linecap="round"/>` +
+    hairTexture(c, cut, hl, lo) +
+    // Depth: the sides and the hair over the ears sit in shade.
+    `<path d="M7.8,-80 L7.8,-92 L4,-96 L10,-96 L10,-80 Z" fill="${lo}" opacity=".25"/>` +
+    `</g>` +
+    // Ink on the outer silhouette only.
+    `<path d="${crown}" fill="none" stroke="${INK}" stroke-width=".5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  out += hairExtra(c, cut, hl, lo);
+  return out;
+}
+
+function hairExtra(c, cut, hl, lo) {
+  switch (cut.extra) {
+    case "sweep": {
+      // A fringe lock swept from the parting across the forehead.
+      const lock =
+        "M-3,-92.4 C0.4,-92.8 4.8,-91.4 6.6,-87.8 C6.9,-87 7,-86.2 6.8,-85.4 C6,-86.6 4.8,-87.3 3.4,-87.4 " +
+        "C1.6,-87.5 -0.2,-88.1 -1.4,-89.2 C-2.2,-89.9 -2.8,-90.9 -3,-92.4 Z";
+      let s = `<path d="${lock}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+      s += line("M-2.4,-91.6 C0,-91.6 3.6,-90.4 5.8,-87.6 M-1.6,-90.4 C0.6,-89.8 3,-89.2 4.8,-88", hl, 0.3, 0.55);
+      s += line("M-0.6,-89.2 C1.4,-88.4 3.6,-88.2 5.4,-87.2", lo, 0.3, 0.5);
+      if (c.hair.id === "white") s += line("M-2.2,-91.8 C0.4,-91.8 3.6,-90.6 5.6,-88", c.energy, 0.45, 0.8);
+      return s;
+    }
+    case "curtain": {
+      // Two soft curtains from a centre parting, falling past the temples.
+      const L = "M-0.2,-92.6 C-2.6,-92.4 -5.4,-90.6 -6.6,-87.4 C-7.2,-85.8 -7.4,-84 -7.2,-82.2 C-6.6,-83.8 -5.8,-85.4 -4.6,-86.4 C-3.2,-87.4 -1.4,-88.6 -0.2,-92.6 Z";
+      const piece = (d) =>
+        `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>` +
+        line(d.split(" C")[0] + " C" + d.split(" C")[1], hl, 0.3, 0.5);
+      let s = piece(L) + piece(mirror(L));
+      if (c.hair.id === "long") {
+        // Locks in front of the ears, down to the collar.
+        const lock = "M-7.4,-84 C-8.2,-80 -8.4,-75 -8,-70.6 C-7.8,-68.8 -7,-67.6 -6.2,-67.2 C-6.8,-70.4 -6.8,-75 -6.4,-79.4 C-6.2,-81.4 -6.4,-83 -7.4,-84 Z";
+        s += `<path d="${lock}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>` + `<path d="${mirror(lock)}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+        s += line("M-7.6,-80 C-7.8,-76 -7.6,-72 -7,-69 M7.6,-80 C7.8,-76 7.6,-72 7,-69", hl, 0.25, 0.45);
+      }
+      return s;
+    }
+    case "flattop": {
+      // High-top: a squared block rising from the crown, softened corners.
+      const d = "M-6,-88.6 C-6.4,-91 -6.6,-94.2 -6.2,-96.4 C-6,-97.2 -5.4,-97.6 -4.6,-97.7 L4.6,-97.7 C5.4,-97.6 6,-97.2 6.2,-96.4 C6.6,-94.2 6.4,-91 6,-88.6 C4,-89.6 -4,-89.6 -6,-88.6 Z";
+      let s = `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>`;
+      for (let x = -5; x <= 5.1; x += 1.25) s += line(`M${pt(x, -97)} L${pt(x * 1.04, -90)}`, lo, 0.25, 0.35);
+      s += line("M-5.4,-96.8 L5.4,-96.8", hl, 0.4, 0.45);
+      return s;
+    }
+    case "crest": {
+      // Mohawk: a tapered crest rooted along the centre of the scalp.
+      const d = "M-1.8,-88.4 C-2.6,-91.6 -2.6,-95.2 -1.6,-98.4 L-0.7,-96.6 L0,-101 L0.8,-96.8 L1.8,-98.8 C2.8,-95.4 2.8,-91.6 1.8,-88.4 C1,-88.9 -1,-88.9 -1.8,-88.4 Z";
+      return `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>` + line("M-0.8,-90 C-1.1,-93 -0.9,-95.6 -0.3,-97.4", hl, 0.4, 0.6) + line("M0.9,-90 C1.1,-93 1,-95 0.6,-96.4", lo, 0.35, 0.5);
+    }
+    case "bun": {
+      const tie = shape("M-1.5,-93.4 L1.5,-93.4 L1.3,-92.5 L-1.3,-92.5 Z", c.pal.primary, 0.4);
+      return (
+        `<circle cx="0" cy="-96" r="3.1" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>` +
+        line("M-2.2,-96.6 C-1,-98.4 1,-98.4 2.2,-96.6 M-2,-95 C-0.6,-96.2 1,-96.2 2.4,-95.2", hl, 0.3, 0.5) +
+        tie
+      );
+    }
+    case "braid":
+      return braid(c);
+    case "locs": {
+      // Two locs frame each side of the face, hanging past the jaw.
+      let strands = "";
+      for (const [x, len] of [[-8.3, 13], [-7.1, 10.5], [7.1, 10.5], [8.3, 13]]) {
+        const y1 = -86 + len;
+        const w = x < 0 ? -0.35 : 0.35;
+        strands += `<path d="M${f(x - 0.6)},-86 C${f(x - 0.6 + w)},${f(-86 + len * 0.5)} ${f(x - 0.5 - w)},${f(y1 - 1.5)} ${f(x - 0.4)},${f(y1)} C${f(x - 0.2)},${f(y1 + 0.7)} ${f(x + 0.2)},${f(y1 + 0.7)} ${f(x + 0.4)},${f(y1)} C${f(x + 0.5 - w)},${f(y1 - 1.5)} ${f(x + 0.6 + w)},${f(-86 + len * 0.5)} ${f(x + 0.6)},-86 Z" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+      }
+      return strands;
+    }
+    default:
+      return "";
+  }
+}
+
+/** Hair that falls behind the face: volume at the back of the head, and long cuts. */
+function hairBack(c) {
+  const id = c.hair.id;
+  const back = mix(c.hair.color, "#000000", 0.3);
+  if (id === "none") return "";
+  const cut = HAIR_CUTS[id] || HAIR_CUTS.short;
+  // Back of the head, showing past the skull and behind the ears.
+  const v = cut.v;
+  const w = cut.round ? 8.4 + v * 1.05 : 7.6 + v * 0.55;
+  let out = cut.fade && !cut.round
+    ? ""
+    : `<path d="M-${f(w - 0.8)},-81.6 C-${f(w + 0.2)},-86 -${f(w - 0.4)},${f(-92 - v)} 0,${f(-93 - v * 1.1)} C${f(w - 0.4)},${f(-92 - v)} ${f(w + 0.2)},-86 ${f(w - 0.8)},-81.6 C${f(w - 2)},-80.6 -${f(w - 2)},-80.6 -${f(w - 0.8)},-81.6 Z" fill="${back}" stroke="${INK}" stroke-width=".45"/>`;
+  if (id === "long")
+    out += shape("M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z", back, 0.6);
+  if (id === "locs") {
+    for (let x = -8.4; x <= 8.5; x += 2.1) {
+      const y0 = -91 + (x / 8.4) ** 2 * 4;
+      out += `<path d="M${f(x - 0.9)},${f(y0)} C${f(x - 1.1)},-80 ${f(x - 0.7)},-74 ${f(x - 0.9)},-67.4 C${f(x - 0.6)},-66 ${f(x + 0.6)},-66 ${f(x + 0.9)},-67.4 C${f(x + 0.7)},-74 ${f(x + 1.1)},-80 ${f(x + 0.9)},${f(y0)} Z" fill="${back}" stroke="${INK}" stroke-width=".35"/>`;
+    }
+  }
   if (id === "ponytail")
-    return shape("M6.6,-90.6 C10.6,-90 11.4,-85.4 10.6,-80 C10,-75.4 10.8,-71.4 12,-68.4 C9.6,-69.4 8.2,-72.8 8,-77 C7.8,-81 8.4,-85.6 6.4,-88.2 Z", "url(#hair)", 0.6);
-  return "";
+    out += shape("M6.6,-90.6 C10.6,-90 11.4,-85.4 10.6,-80 C10,-75.4 10.8,-71.4 12,-68.4 C9.6,-69.4 8.2,-72.8 8,-77 C7.8,-81 8.4,-85.6 6.4,-88.2 Z", "url(#hair)", 0.6);
+  return out;
 }
 
 function braid(c) {
