@@ -35,6 +35,7 @@ import {
   standingCape,
   chronoRifle,
   STAND,
+  headScale,
   ARMED,
   RIFLE_AT,
   RIFLE_ROT,
@@ -1604,8 +1605,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     body,
     glow,
     collar,
-    head: h.front + helmBadge + acc.head,
-    headGlow: h.glow + acc.headGlow,
+    head: headScale(h.front + helmBadge + acc.head),
+    headGlow: headScale(h.glow + acc.headGlow),
     eyesVisible: showFace,
     look: c,
   };
@@ -1820,7 +1821,7 @@ function fallenParts(c) {
   const kit = gear(c, P);
   const showFace = OPEN_HELMETS.has(c.helmet);
   const h = head(c, false);
-  const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${inner}</g></g>`;
+  const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
   const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";

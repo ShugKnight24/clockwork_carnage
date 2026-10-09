@@ -157,6 +157,15 @@ export const energy = (inner, color = "#00e5ff") =>
   `<g filter="url(#glow)" fill="${color}" stroke="${color}">${inner}</g>` +
   `<g fill="#bffcff" stroke="#bffcff" opacity=".9">${inner}</g>`;
 
+/**
+ * The head sits on the neck at 88% of its drawn size, a unit up: the rig was
+ * built 5.7 heads tall, which read as a toy; this brings it to ~6.5 without
+ * moving any armour anchor. Everything in head coordinates (helmet, face,
+ * hair, helmet badge and gear) goes through it together.
+ */
+export const HEAD_SCALE = 0.88;
+export const headScale = (inner) => `<g transform="translate(0,-68) scale(${HEAD_SCALE}) translate(0,67)">${inner}</g>`;
+
 /** Visor glass outline of the standard helmet (unrotated rig coordinates). */
 export const HELM_GLASS = "M-10.2,-85.1 L-2.4,-83.8 L0,-82.3 L2.4,-83.8 L10.2,-85.1 L10,-79.3 L3.2,-77.7 L0,-76.9 L-3.2,-77.7 L-10,-79.3 Z";
 
@@ -218,18 +227,19 @@ export function armoredLeg({ hip, kn, an }, s) {
   const stripeA = lerp(kn, an, 0.3);
   const stripeB = lerp(kn, an, 0.68);
   const body =
-    part(hip, kn, 14.4, 10.4, { fill: "url(#suit)", bulge: 1.4, hi: 0.25, rim: 0.45 }) +
-    part(thighA, thighB, 11.2, 8.2, { bulge: 1.2 }) +
+    part(hip, kn, 15.4, 10.6, { fill: "url(#suit)", bulge: 1.6, hi: 0.25, rim: 0.45 }) +
+    part(thighA, thighB, 12, 8.4, { bulge: 1.4 }) +
     part(kn, an, 10.2, 6.8, { fill: "url(#suit)", bulge: 1.6, hi: 0.2, rim: 0.45 }) +
     part(shinA, shinB, 9.4, 6.8, { bulge: 1.3 }) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#05131a", 1.4) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#0a8aa0", 0.6) +
     // knee cop
     `<g transform="translate(${pt(...kn)}) rotate(${f(bootAng)})">` +
-    shape("M0,-5 C3.6,-5 5.4,-2.4 5.4,0.2 C5.4,3 3.2,4.8 0,4.8 C-3.2,4.8 -5.4,3 -5.4,0.2 C-5.4,-2.4 -3.6,-5 0,-5 Z", "url(#steel)") +
-    line("M-3.8,-1.4 C-2,-3.6 1.8,-3.8 3.6,-1.6", "#eaf4ff", 0.6, 0.6) +
-    line("M-4.2,1.6 C-1.6,3 1.6,3 4.2,1.6", INK, 0.45, 0.6) +
-    `<circle cx="0" cy="0.6" r="1" fill="#05131a"/>` +
+    shape("M-4.6,-6.2 C-1.6,-7 1.6,-7 4.6,-6.2 L4.2,-4.2 C1.4,-4.8 -1.4,-4.8 -4.2,-4.2 Z", "url(#steelDk)", 0.6) +
+    shape("M0,-4.8 C3.4,-4.6 5.4,-2.6 5.2,0.4 C5,3.2 2.8,5.8 0,7 C-2.8,5.8 -5,3.2 -5.2,0.4 C-5.4,-2.6 -3.4,-4.6 0,-4.8 Z", "url(#steel)") +
+    line("M0,-4.2 L0,6.2", INK, 0.45, 0.55) +
+    line("M-0.5,-3.8 L-0.5,5", "#eaf4ff", 0.35, 0.45) +
+    line("M-3.8,-1.8 C-2.4,-3.6 -1,-4 -0.8,-4", "#eaf4ff", 0.6, 0.6) +
     `</g>` +
     // boot
     `<g transform="translate(${pt(...an)}) rotate(${f(bootAng)})">` +
@@ -252,11 +262,14 @@ export function armoredLeg({ hip, kn, an }, s) {
  * Armored fist hanging or swinging at the end of a forearm. Local frame: origin at
  * the wrist, +y toward the knuckles; the thumb sits on the body side (-s).
  */
-function gauntlet(wr, el, s) {
+function gauntlet(wr, el, s, side = false) {
   const i = -s;
   const X = (x) => f(i * x);
+  // Side-on (a relaxed hang): narrower across, a touch longer, so the hand
+  // reads turned toward the thigh rather than punching at the camera.
+  const k = side ? "scale(.82 1.1)" : "scale(1.12)";
   return (
-    `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))}) scale(1.12) translate(0 -1)">` +
+    `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))}) ${k} translate(0 -1)">` +
     shape("M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z", "url(#steelDk)", 1) +
     shape("M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z", "url(#steel)", 0.5) +
     line("M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6", "#eaf4ff", 0.45, 0.6) +
@@ -346,9 +359,9 @@ export function armoredArm(arm, s, chrono) {
     // elbow cop capping the joint, with a fan on the outer side
     `<g transform="translate(${pt(...el)}) rotate(${f(copA)})">` +
     shape(`M${f(s * 2.6)},-3.2 C${f(s * 6.6)},-4.4 ${f(s * 8)},0 ${f(s * 6.6)},3.6 L${f(s * 3)},2.8 Z`, "url(#steelDk)", 0.7) +
-    shape("M0,-4.6 C3.4,-4.6 5,-2.2 5,0.2 C5,2.8 3,4.6 0,4.6 C-3,4.6 -5,2.8 -5,0.2 C-5,-2.2 -3.4,-4.6 0,-4.6 Z", "url(#steel)", 0.9) +
-    line("M-3.4,-1.8 C-1.8,-3.6 1.6,-3.8 3.2,-2", "#eaf4ff", 0.6, 0.65) +
-    `<circle cx="0" cy=".4" r="1.1" fill="#0a0f16"/>` +
+    shape("M0,-4.4 C3.2,-4.2 4.8,-2 4.6,0.6 C4.4,2.8 2.4,4.6 0,5.4 C-2.4,4.6 -4.4,2.8 -4.6,0.6 C-4.8,-2 -3.2,-4.2 0,-4.4 Z", "url(#steel)", 0.9) +
+    line("M0,-3.8 L0,4.6", INK, 0.4, 0.5) +
+    line("M-3.2,-1.6 C-1.8,-3.4 -0.8,-3.8 -0.6,-3.8", "#eaf4ff", 0.6, 0.65) +
     `</g>` +
     // wrist cuff
     `<g transform="translate(${pt(...wr)}) rotate(${f(foA)})">` +
@@ -363,7 +376,7 @@ export function armoredArm(arm, s, chrono) {
       `<rect x="-2.2" y="-1.7" width="4.4" height="3.4" rx=".4" fill="#0b6f80"/></g>`;
     glow += `<g transform="translate(${pt(...devAt)}) rotate(${f(foA)})">${energy(`<rect x="-1.9" y="-1.4" width="3.8" height="2.8" rx=".3"/>`)}</g>`;
   }
-  if (hand === "fist") body += gauntlet(wr, el, s);
+  if (hand === "fist") body += gauntlet(wr, el, s, arm.fist === "side");
   if (hand === "open") body += openHand(wr, el);
   return { body, glow };
 }
@@ -395,9 +408,9 @@ export function torso() {
     "M-14,-64.6 C-8,-66.2 8,-66.2 14,-64.6 C17,-60 17.6,-54 16.4,-49 C15.2,-44.5 12.5,-41 10,-39.6 " +
     "C6,-38.7 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.7 -10,-39.6 C-12.5,-41 -15.2,-44.5 -16.4,-49 C-17.6,-54 -17,-60 -14,-64.6 Z";
   const suit =
-    "M-9,-68 L9,-68 L16,-64 C19,-62 19.5,-57 18.5,-52 C17.5,-46 14.5,-40 12.8,-33 C12.3,-29 13.6,-24 14.6,-20 " +
-    "L15,-15 C10,-14 5,-13 0,-12 C-5,-13 -10,-14 -15,-15 L-14.6,-20 C-13.6,-24 -12.3,-29 -12.8,-33 " +
-    "C-14.5,-40 -17.5,-46 -18.5,-52 C-19.5,-57 -19,-62 -16,-64 Z";
+    "M-9,-68 L9,-68 L16,-64 C19,-62 19.5,-57 18.5,-52 C17.5,-46 15,-40 14,-33 C13.7,-29 14,-24 14.8,-20 " +
+    "L15,-15 C10,-14 5,-13 0,-12 C-5,-13 -10,-14 -15,-15 L-14.6,-20 C-14,-24 -13.7,-29 -14,-33 " +
+    "C-15,-40 -17.5,-46 -18.5,-52 C-19.5,-57 -19,-62 -16,-64 Z";
   let lames = "";
   for (let i = 2; i >= 0; i--) {
     const t = -39.4 + i * 4;
@@ -522,20 +535,22 @@ export function armorRig(pose, { cape = standingCape(), mid = "", front = "", da
     pauldron(1, tilt[1]) +
     front +
     gorget() +
-    helm.body;
+    headScale(helm.body);
   const glow = legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join("");
-  return { cape, body, glow, helmGlow: helm.glow };
+  return { cape, body, glow, helmGlow: headScale(helm.glow) };
 }
 
-// Relaxed heroic stance: arms hang a little clear of the tassets, elbows soft.
+// Relaxed stance with weight shift (contrapposto): the right leg takes the
+// weight, straight under the hip; the left knee eases out and its foot sets
+// wider. Arms hang easy and differ a little, so the figure is not a mirror.
 export const STAND = {
   arms: [
-    { sh: [-20, -59], rot: 10, bend: 15 },
-    { sh: [20, -59], rot: 8, bend: 19 },
+    { sh: [-20, -59.4], rot: 4.5, bend: 9, upper: 28.4, fist: "side" },
+    { sh: [20, -58.6], rot: 3.5, bend: 12, fore: 23.4, fist: "side" },
   ],
   legs: [
-    { hip: [-7.5, -19], kn: [-10.6, 19], an: [-13.6, 50] },
-    { hip: [7.5, -19], kn: [10.4, 19], an: [13.2, 50] },
+    { hip: [-7.6, -18.6], kn: [-11.8, 19.4], an: [-15.4, 49.6] },
+    { hip: [7.4, -19.4], kn: [9.4, 18.8], an: [10.2, 50] },
   ],
 };
 
