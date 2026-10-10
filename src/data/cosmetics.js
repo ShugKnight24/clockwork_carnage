@@ -176,46 +176,6 @@ export const BODY_FRAMES = [
   { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit on the hips" },
 ];
 
-/**
- * Suit skins: full-look themes over any armour and frame — plate material
- * (steel ramp: spec, light, mid, dark, deep), under-suit, energy colour and,
- * for the top tier, a signature effect. Earned, never bought. Index 0 wears
- * the suit's own finish. Appended, never inserted.
- */
-export const SUIT_SKINS = [
-  { id: "none", name: "Suit Finish", desc: "The armour's own plating", rarity: "standard" },
-  {
-    id: "glacier", name: "Glacier Ops", desc: "Arctic ceramic, ice-blue cells", rarity: "rare",
-    steel: ["#f2f8fc", "#c4d6e2", "#7f98aa", "#3e5262", "#1d2a34"], suit: ["#3a4a58", "#1c2630", "#0a0f14"], energy: "#9ff0ff",
-    unlock: { type: "campaignActs", count: 2, label: "Clear Act 2", unit: "acts" },
-  },
-  {
-    id: "hazard", name: "Hazard", desc: "Industrial yellow, toxic glow", rarity: "rare",
-    steel: ["#fff0a8", "#e2be3a", "#9a7a14", "#4a3a08", "#221a04"], suit: ["#2a2a26", "#141412", "#060605"], energy: "#7dff4a",
-    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
-  },
-  {
-    id: "chrome", name: "Midnight Chrome", desc: "Mirror plate that drinks the light", rarity: "epic",
-    steel: ["#ffffff", "#b8c4d0", "#38424e", "#0e1218", "#05070a"], suit: ["#1c2028", "#0a0c10", "#030405"], energy: "#e8f4ff",
-    unlock: { type: "achievement", id: "untouchable", label: "Earn Untouchable" },
-  },
-  {
-    id: "molten", name: "Molten Core", desc: "Cooling slag over a furnace heart", rarity: "epic", fx: "molten", matte: true,
-    steel: ["#4a3a34", "#2e2420", "#1a1411", "#0c0907", "#050403"], suit: ["#1e120c", "#0e0805", "#040201"], energy: "#ff6a00",
-    unlock: { type: "arenaRound", count: 10, label: "Survive arena round 10", unit: "rounds" },
-  },
-  {
-    id: "ronin", name: "Neon Ronin", desc: "White lacquer, magenta circuitry", rarity: "legendary", fx: "neon",
-    steel: ["#ffffff", "#e6e2ee", "#a8a2b8", "#4a4458", "#221e2a"], suit: ["#1a1420", "#0c0910", "#040305"], energy: "#ff2a8a",
-    unlock: { type: "dashes", count: 1000, label: "Dash 1000 times", unit: "dashes" },
-  },
-  {
-    id: "sovereign", name: "Sovereign Gold", desc: "Burnished gold for the one who restored the timeline", rarity: "legendary",
-    steel: ["#fff6c8", "#e8c060", "#a87a20", "#5a3c0a", "#2a1a04"], suit: ["#2a1e10", "#140e07", "#060402"], energy: "#7fd8ff",
-    unlock: { type: "achievement", id: "campaignClear", label: "Earn Timeline Restored" },
-  },
-];
-
 export const ARMOR_STYLES = [
   {
     id: "standard",
@@ -490,7 +450,6 @@ export const DEFAULT_CHARACTER = {
   eyeIndex: 0,
   armorIndex: 0,
   frameIndex: 0,
-  suitSkinIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
   shoulderIndex: 0,

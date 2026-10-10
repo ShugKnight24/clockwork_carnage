@@ -16,7 +16,6 @@ import {
   BACKSTORIES,
   VOICE_PROFILES,
   BODY_FRAMES,
-  SUIT_SKINS,
 } from "../../src/data/cosmetics.js";
 
 const store = {};
@@ -48,7 +47,6 @@ const OPTION_LISTS = {
   backstoryIndex: BACKSTORIES,
   voiceIndex: VOICE_PROFILES,
   frameIndex: BODY_FRAMES,
-  suitSkinIndex: SUIT_SKINS,
 };
 
 const indexFields = Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"));
