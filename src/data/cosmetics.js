@@ -165,6 +165,17 @@ export const EYE_COLORS = [
   { id: "silver", name: "Silver", color: "#ddeeff" },
 ];
 
+/**
+ * Body frames: the silhouette the suit is built on (src/rendering/svg-art/frames.js).
+ * Any armour style can be worn on any frame. Appended, never inserted.
+ */
+export const BODY_FRAMES = [
+  { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
+  { id: "sentinel", name: "Sentinel", desc: "Moulded one-piece plates, a heroic shell" },
+  { id: "bulwark", name: "Bulwark", desc: "Slabbed, stacked and wide: a walking wall" },
+  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit on the hips" },
+];
+
 export const ARMOR_STYLES = [
   {
     id: "standard",
@@ -438,6 +449,7 @@ export const DEFAULT_CHARACTER = {
   hairIndex: 0,
   eyeIndex: 0,
   armorIndex: 0,
+  frameIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
   shoulderIndex: 0,

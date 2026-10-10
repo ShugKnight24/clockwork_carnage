@@ -53,6 +53,7 @@ import {
   HAIR_STYLES,
   EYE_COLORS,
   ARMOR_STYLES,
+  BODY_FRAMES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -64,6 +65,7 @@ import { renderBadge, resolveTreatment } from "./insignia/compose.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../core/character-normalize.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
+import { FRAME_SHAPE, frameLayers } from "./frames.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 
 // ---------------------------------------------------------------------------
@@ -152,6 +154,7 @@ function resolve(ch) {
   const c = {
     pal,
     armor,
+    frame: pick(BODY_FRAMES, ch.frameIndex).id,
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
@@ -1572,16 +1575,24 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   }
 
   const collar = collarOf(c, showFace, map);
+  const fr = frameLayers(c.frame, P, c);
+  const fs = FRAME_SHAPE[c.frame] || FRAME_SHAPE.standard;
+  // Shoulders scale about their joint with the frame; a Strider leaves the
+  // right shoulder bare (soft cap) for its asymmetric kit.
+  const shoulderAt = (s, t) => {
+    const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
+    return fs.shoulder === 1 ? inner : `<g transform="translate(${f(s * 14)},-64) scale(${fs.shoulder}) translate(${f(-s * 14)},64)">${inner}</g>`;
+  };
   const body =
-    recolor(legs.map((l) => l.body).join("") + torso(), map) +
+    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs + torso() + fr.torso, map) +
     chestTrim(c) +
     variantTrim(c) +
     insignia(c) +
     kit.front +
     acc.front +
     rifle.body +
-    recolor(arms.map((a) => a.body).join("") + shoulderAO, map) +
-    recolor(shoulder(c, -1, tilt[0]) + shoulder(c, 1, tilt[1]), map) +
+    recolor(arms.map((a) => a.body).join("") + fr.arms + shoulderAO, map) +
+    recolor(shoulderAt(-1, tilt[0]) + shoulderAt(1, tilt[1]), map) +
     (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
@@ -1589,7 +1600,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     collar +
     acc.top;
 
-  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + kit.glow + rifle.glow + acc.glow;
+  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
@@ -1598,7 +1609,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   }
   return {
     defs: defs(c),
-    width: ARMOR_WIDTH[c.armor] || 1,
+    width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
     back: kit.back + acc.back,
     cape,

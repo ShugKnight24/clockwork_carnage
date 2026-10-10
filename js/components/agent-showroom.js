@@ -9,6 +9,7 @@ import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/dat
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
+  BODY_FRAMES,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -112,6 +113,9 @@ const STAGE_LIGHTS = [
 const SPIN_YAW = 0.85;
 const SPIN_RATE = 0.9;
 
+/** Whole-figure crop for frame tiles (the cape and boots inside the frame). */
+const FRAME_VIEW = [-46, -100, 92, 162];
+
 const CATEGORIES = [
   {
     id: "identity",
@@ -127,6 +131,7 @@ const CATEGORIES = [
     id: "suit",
     label: "Suit",
     sections: [
+      { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
       { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
       { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
     ],
@@ -492,6 +497,8 @@ svg { display: block; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
 .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
 .grid.finish, .grid.gear { grid-template-columns: repeat(5, 1fr); }
@@ -2549,6 +2556,10 @@ class AgentShowroom extends HTMLElement {
           break;
         case "torso":
           thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
+          break;
+        case "bodyFrame":
+          // The whole figure: a frame is a silhouette.
+          thumb.innerHTML = buildAgentSvg(variant, { view: FRAME_VIEW, idPrefix: id, lighting: "flat", realistic });
           break;
         case "rifle":
           thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });

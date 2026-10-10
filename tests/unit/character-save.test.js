@@ -15,6 +15,7 @@ import {
   LOADOUT_CLASSES,
   BACKSTORIES,
   VOICE_PROFILES,
+  BODY_FRAMES,
 } from "../../src/data/cosmetics.js";
 
 const store = {};
@@ -45,6 +46,7 @@ const OPTION_LISTS = {
   loadoutIndex: LOADOUT_CLASSES,
   backstoryIndex: BACKSTORIES,
   voiceIndex: VOICE_PROFILES,
+  frameIndex: BODY_FRAMES,
 };
 
 const indexFields = Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"));
