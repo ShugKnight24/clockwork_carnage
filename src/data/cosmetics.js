@@ -174,6 +174,12 @@ export const BODY_FRAMES = [
   { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
 ];
 
+/** Body type. Appended, never inserted. */
+export const BODY_TYPES = [
+  { id: "masc", name: "Masculine", desc: "Broad shoulders, straight frame" },
+  { id: "fem", name: "Feminine", desc: "Narrower shoulders, defined waist, fuller hips" },
+];
+
 /** Cape on or off (gear that replaces the cape still wins). Appended, never inserted. */
 export const CAPE_STYLES = [
   { id: "cape", name: "Cape", desc: "Your colours, down to the knees" },
@@ -454,6 +460,7 @@ export const DEFAULT_CHARACTER = {
   eyeIndex: 0,
   armorIndex: 0,
   frameIndex: 0,
+  bodyIndex: 0,
   capeIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,

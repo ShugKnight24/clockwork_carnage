@@ -55,6 +55,7 @@ import {
   ARMOR_STYLES,
   BODY_FRAMES,
   CAPE_STYLES,
+  BODY_TYPES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -157,6 +158,7 @@ function resolve(ch) {
     armor,
     frame: pick(BODY_FRAMES, ch.frameIndex).id,
     capeOff: pick(CAPE_STYLES, ch.capeIndex).id === "none",
+    fem: pick(BODY_TYPES, ch.bodyIndex).id === "fem",
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
@@ -828,12 +830,47 @@ function raisedVisor(c, y) {
  * Head assembly. Returns { back, front, glow }: `back` goes behind the body
  * (hoods, tool arms), `front` is the head itself, `glow` the lit parts.
  */
+/**
+ * Body-type reshape: scale every x by a factor that depends on height, so
+ * shoulders, waist and hips change width and everything at that height —
+ * plates, arms, gear, badges — follows the silhouette. Works on any markup
+ * whose coordinates are absolute "x,y" pairs (the whole rig).
+ */
+const warpX = (markup, k) => markup.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${f(Number(x) * k(Number(y)))},${y}`);
+const piecewise = (stops) => (y) => {
+  if (y <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++) {
+    const [y1, v1] = stops[i];
+    if (y <= y1) {
+      const [y0, v0] = stops[i - 1];
+      return v0 + ((v1 - v0) * (y - y0)) / (y1 - y0);
+    }
+  }
+  return stops[stops.length - 1][1];
+};
+/** Feminine frame: narrower shoulders and chest, a defined waist, fuller hips, slimmer legs. */
+const FEM_BODY = piecewise([[-80, 0.88], [-64, 0.86], [-54, 0.92], [-46, 0.88], [-36, 0.8], [-28, 0.9], [-18, 1.08], [-6, 1.08], [10, 1], [30, 0.95], [60, 0.93]]);
+/** Feminine jaw: the face narrows toward a softer chin. */
+const FEM_JAW = piecewise([[-84, 1], [-78, 0.95], [-71, 0.8]]);
+const femFace = (markup) =>
+  warpX(markup, FEM_JAW) +
+  // Lashes on the upper lids.
+  line("M-4.7,-81.8 Q-5.3,-82 -5.8,-82.6 M4.7,-81.8 Q5.3,-82 5.8,-82.6", "#1a100c", 0.32, 0.85) +
+  // Fuller lips.
+  `<path d="M-2.1,-74.2 C-1.2,-74.9 -0.4,-74.6 0,-74.3 C0.4,-74.6 1.2,-74.9 2.1,-74.2 C1.2,-72.9 -1.2,-72.9 -2.1,-74.2 Z" fill="#a85a58" opacity=".55"/>`;
+/** A moulded chest plate for the feminine frame (before the reshape narrows it). */
+const FEM_CHEST =
+  `<ellipse cx="-7" cy="-53" rx="6.4" ry="5" fill="url(#sheen)" opacity=".5"/>` +
+  `<ellipse cx="7" cy="-53" rx="6.4" ry="5" fill="#000" opacity=".12"/>` +
+  line("M-14.6,-51 C-13,-44.8 -5.2,-44 -1,-47.6 M14.6,-51 C13,-44.8 5.2,-44 1,-47.6", INK, 0.6, 0.55) +
+  line("M-13.4,-50.6 C-11.6,-45.8 -5.6,-45.2 -2,-47.8", "#eaf4ff", 0.45, 0.35);
+
 function head(c, peek) {
   const style = c.helmet;
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
-    return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
+    return { front: hairBack(c) + (c.fem ? femFace(face(c)) : face(c)) + hair(c, false), glow: eyeGlow(c, 0.45) };
   }
   const shell = SHELLS[style] || SHELLS.standard;
   const ears = EARLESS_HELMETS.has(style)
@@ -1587,7 +1624,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     return fs.shoulder === 1 ? inner : `<g transform="translate(${f(s * 14)},-64) scale(${fs.shoulder}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
   const body =
-    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs + torso() + fr.torso, map) +
+    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs + torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
     chestTrim(c) +
     variantTrim(c) +
     insignia(c) +
@@ -1610,17 +1647,19 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
+  const W = c.fem ? (m) => warpX(m, FEM_BODY) : (m) => m;
+  const headFem = (m) => (c.fem ? `<g transform="translate(0,-67) scale(.95) translate(0,67)">${m}</g>` : m);
   return {
     defs: defs(c),
     width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
-    back: kit.back + acc.back,
-    cape,
-    body,
-    glow,
-    collar,
-    head: headScale(h.front + helmBadge + acc.head),
-    headGlow: headScale(h.glow + acc.headGlow),
+    back: W(kit.back + acc.back),
+    cape: W(cape),
+    body: W(body),
+    glow: W(glow),
+    collar: W(collar),
+    head: headFem(headScale(h.front + helmBadge + acc.head)),
+    headGlow: headFem(headScale(h.glow + acc.headGlow)),
     eyesVisible: showFace,
     look: c,
   };

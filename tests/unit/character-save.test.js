@@ -17,6 +17,7 @@ import {
   VOICE_PROFILES,
   BODY_FRAMES,
   CAPE_STYLES,
+  BODY_TYPES,
 } from "../../src/data/cosmetics.js";
 
 const store = {};
@@ -49,6 +50,7 @@ const OPTION_LISTS = {
   voiceIndex: VOICE_PROFILES,
   frameIndex: BODY_FRAMES,
   capeIndex: CAPE_STYLES,
+  bodyIndex: BODY_TYPES,
 };
 
 const indexFields = Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"));

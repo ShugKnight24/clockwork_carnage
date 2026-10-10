@@ -87,7 +87,7 @@ export function cloneLook(ch) {
 const DRAWN = [
   "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
   "visorIndex", "shoulderIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex", "armorVariant",
-  "frameIndex", "capeIndex",
+  "frameIndex", "capeIndex", "bodyIndex",
 ];
 
 export function lookKey(ch) {

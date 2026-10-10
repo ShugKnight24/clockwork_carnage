@@ -11,6 +11,7 @@ import {
   ARMOR_STYLES,
   BODY_FRAMES,
   CAPE_STYLES,
+  BODY_TYPES,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -128,6 +129,7 @@ const CATEGORIES = [
     short: "Agent",
     sections: [
       { type: "name", title: "Callsign" },
+      { key: "bodyIndex", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
       { key: "backstoryIndex", title: "Origin", data: BACKSTORIES, kind: "origin" },
       { key: "voiceIndex", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
     ],
