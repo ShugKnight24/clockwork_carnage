@@ -171,9 +171,7 @@ export const EYE_COLORS = [
  */
 export const BODY_FRAMES = [
   { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
-  { id: "sentinel", name: "Sentinel", desc: "Moulded one-piece plates, a heroic shell" },
-  { id: "bulwark", name: "Bulwark", desc: "Slabbed, stacked and wide: a walking wall" },
-  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit on the hips" },
+  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
 ];
 
 export const ARMOR_STYLES = [
