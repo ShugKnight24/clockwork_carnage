@@ -54,6 +54,7 @@ import {
   EYE_COLORS,
   ARMOR_STYLES,
   BODY_FRAMES,
+  CAPE_STYLES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -155,6 +156,7 @@ function resolve(ch) {
     pal,
     armor,
     frame: pick(BODY_FRAMES, ch.frameIndex).id,
+    capeOff: pick(CAPE_STYLES, ch.capeIndex).id === "none",
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
@@ -1603,7 +1605,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
-  let cape = acc.replacesCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
+  let cape = acc.replacesCape || c.capeOff ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
@@ -1841,7 +1843,7 @@ function fallenParts(c) {
   const armBadge = wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "";
   return {
     width: ARMOR_WIDTH[c.armor] || 1,
-    pool: acc.replacesCape ? "" : recolor(fallenCape(), map),
+    pool: acc.replacesCape || c.capeOff ? "" : recolor(fallenCape(), map),
     under:
       kit.back +
       acc.back +
@@ -1856,7 +1858,7 @@ function fallenParts(c) {
       collarOf(c, showFace, map) +
       acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((acc.replacesCape ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
+    over: recolor((acc.replacesCape || c.capeOff ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
     glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),

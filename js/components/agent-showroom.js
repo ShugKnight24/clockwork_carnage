@@ -10,6 +10,7 @@ import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insig
 import {
   ARMOR_STYLES,
   BODY_FRAMES,
+  CAPE_STYLES,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -53,6 +54,10 @@ const APPEARANCE = [
   "armorVariant",
 ];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
+/** Saved looks: storage key, how many, and the appearance fields they keep. */
+const LOOKS_KEY = "cc_saved_looks";
+const MAX_LOOKS = 5;
+const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voiceIndex", "backstoryIndex", "loadoutIndex", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
 /** Camera toggle order (the C key cycles through them). */
@@ -161,7 +166,10 @@ const CATEGORIES = [
   {
     id: "gear",
     label: "Gear",
-    sections: ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
+    sections: [
+      { key: "capeIndex", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
+      ...ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
+    ],
   },
   {
     id: "badge",
@@ -434,6 +442,17 @@ svg { display: block; }
    subtitle under the callsign (it sat on top of it at 1280x720). */
 .presets { position: absolute; left: 30px; top: calc(50% + 18px); transform: translateY(-40%); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .presets .lbl { margin-bottom: 2px; }
+.presets .looks { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.presets .look { position: relative; }
+.presets .look .del { position: absolute; left: 40px; top: -4px; width: 16px; height: 16px; border-radius: 50%; display: none; place-items: center;
+  font: 700 11px/1 var(--cc-font); color: #fff; background: #3a1418; box-shadow: 0 0 0 1px var(--cc-ink); cursor: pointer; }
+.presets .look:hover .del { display: grid; }
+.presets .save-look { font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.5px; text-transform: uppercase; color: var(--cc-cyan); padding: 6px 0; }
+.presets .save-look:hover { color: #fff; }
+.presets .more-presets { font: 600 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-amber); padding: 4px 0; }
+.presets .more-presets:hover { color: #fff; }
+.presets .more-presets:empty { display: none; }
+.presets .preset[hidden] { display: none; }
 .preset { display: flex; align-items: center; gap: 10px; padding: 0; transition: transform var(--cc-dur-fast) var(--cc-ease); }
 .preset .pthumb { position: relative; width: 52px; height: 52px; overflow: hidden; background: radial-gradient(circle at 45% 38%, #1d2e44, #060a12); border: var(--cc-ink-outline) solid var(--cc-ink);
   clip-path: polygon(var(--cc-chamfer-sm) 0, 100% 0, 100% calc(100% - var(--cc-chamfer-sm)), calc(100% - var(--cc-chamfer-sm)) 100%, 0 100%, 0 var(--cc-chamfer-sm));
@@ -593,6 +612,11 @@ svg { display: block; }
 .lockbadge svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; }
 /* Unlock requirements under a section: lock, requirement, progress. */
 .lockinfo { display: grid; gap: 6px; margin-top: 8px; }
+.lockfold { margin-top: 8px; }
+.lockfold > summary { list-style: none; cursor: pointer; display: inline-flex; }
+.lockfold > summary::-webkit-details-marker { display: none; }
+.lockfold > summary .lock::after { content: "▸"; margin-left: 6px; opacity: 0.7; }
+.lockfold[open] > summary .lock::after { content: "▾"; }
 .lockrow { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; font: 600 var(--cc-type-label)/1.25 var(--cc-font); color: var(--cc-text-dim); }
 .lockrow .lock { grid-row: span 2; align-self: start; }
 .lockrow .bar { height: 5px; }
@@ -1058,7 +1082,10 @@ class AgentShowroom extends HTMLElement {
     <button class="tool" data-act="reset" aria-label="Reset appearance to standard issue">${I.reset}<span class="t">Reset</span></button>
     <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key in-kb">R</kbd><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span></button>
   </div>
-  <div class="presets" role="group" aria-label="Presets"><span class="lbl caption steel">Presets</span>${presets}</div>
+  <div class="presets" role="group" aria-label="Presets">
+    <span class="lbl caption steel looks-lbl">My looks</span><div class="looks"></div>
+    <span class="lbl caption steel">Presets</span>${presets}<button class="more-presets" data-act="more-presets" tabindex="-1"></button>
+  </div>
   <div class="stage-tools">
     <div class="seg" role="group" aria-label="Camera">
       <button data-camera="full" aria-pressed="true">Full</button><button data-camera="bust" aria-pressed="false">Bust</button><button data-camera="face" aria-pressed="false">Face</button>
@@ -1310,6 +1337,8 @@ class AgentShowroom extends HTMLElement {
   onClick(e) {
     const del = e.target.closest?.("[data-skin-del]");
     if (del) return this.deleteCustomSkin(Number(del.dataset.skinDel));
+    const lookDel = e.target.closest?.("[data-look-del]");
+    if (lookDel) return this.deleteLook(Number(lookDel.dataset.lookDel));
     const t = e.target.closest?.("button, [data-idx]");
     if (!t) return;
     if (this._swallowClick) {
@@ -1325,6 +1354,13 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.skinPattern) return this.setSkinPattern(t.dataset.skinPattern);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
+    if (t.dataset.look != null) return this.wearLook(Number(t.dataset.look));
+    if (t.dataset.act === "look-save") return this.saveLook();
+    if (t.dataset.act === "more-presets") {
+      this.showLockedPresets = !this.showLockedPresets;
+      this.sfx("menuNav");
+      return this.renderPresets();
+    }
     if (t.dataset.preset != null) return this.applyPreset(Number(t.dataset.preset));
     if (t.dataset.camera) return this.setCamera(t.dataset.camera, true);
     if (t.dataset.pose) return this.setPose(t.dataset.pose, true);
@@ -2124,13 +2160,14 @@ class AgentShowroom extends HTMLElement {
   }
 
   renderPresets() {
-    this.el.presets.querySelectorAll(".preset").forEach((btn, i) => {
+    this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
       if (!this._presetsBuilt) {
         const ch = { ...cloneLook(DEFAULT_CHARACTER), ...cloneLook(PRESETS[i].ch) };
         btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
       }
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
+      btn.hidden = !!lock && !this.showLockedPresets;
       btn.setAttribute("aria-label", `Apply ${PRESETS[i].name} preset${lock ? `. Locked: ${lock.hint}` : ""}`);
       btn.title = lock ? lock.hint : "";
       const thumb = btn.querySelector(".pthumb");
@@ -2142,6 +2179,82 @@ class AgentShowroom extends HTMLElement {
       if (lock) req.innerHTML = `<span>${esc(lock.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(lock.pct * 100)}%"></i></span>`;
     });
     this._presetsBuilt = true;
+    const lockedN = PRESETS.filter((_, i) => this.presetLock(i)).length;
+    const more = this.el.presets.querySelector(".more-presets");
+    more.textContent = lockedN ? (this.showLockedPresets ? "Hide locked presets" : `+ ${lockedN} more to earn`) : "";
+    // Locked presets sit after the toggle so earned ones lead the list.
+    if (!this._presetsOrdered) {
+      this._presetsOrdered = true;
+      this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
+        if (this.presetLock(i)) this.el.presets.appendChild(btn);
+      });
+    }
+    this.renderLooks();
+  }
+
+  // ── Saved looks ────────────────────────────────────────────────────────
+  // Up to MAX_LOOKS outfits the player names by saving; each restores the
+  // whole appearance (not callsign, origin, voice or class) with one click.
+
+  get looks() {
+    try {
+      const v = JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]");
+      return Array.isArray(v) ? v.slice(0, MAX_LOOKS) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  set looks(list) {
+    try {
+      localStorage.setItem(LOOKS_KEY, JSON.stringify(list.slice(0, MAX_LOOKS)));
+    } catch (_) {}
+  }
+
+  renderLooks() {
+    const box = this.el.presets.querySelector(".looks");
+    const list = this.looks;
+    const sig = JSON.stringify(list) + (this._real ? "r" : "");
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML =
+      list
+        .map(
+          (l, i) =>
+            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg({ ...cloneLook(DEFAULT_CHARACTER), ...l.look }, { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
+        )
+        .join("") +
+      (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+  }
+
+  saveLook() {
+    const list = this.looks;
+    if (list.length >= MAX_LOOKS) return this.toast(`${MAX_LOOKS} looks max: delete one first`);
+    const ch = this.character;
+    const look = Object.fromEntries(LOOK_FIELDS.map((k) => [k, ch[k]]));
+    const armor = ARMOR_STYLES[ch.armorIndex | 0]?.name || "Look";
+    const color = CHARACTER_COLORS[ch.colorIndex | 0]?.name || "";
+    this.looks = [...list, { name: `${armor} · ${color}`.slice(0, 28), look: cloneLook(look) }];
+    this.renderLooks();
+    this.sfx("menuConfirm");
+    this.toast("Look saved");
+  }
+
+  wearLook(i) {
+    const l = this.looks[i];
+    if (!l) return;
+    const next = cloneLook(l.look);
+    Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
+    this.commit(next);
+    this.sfx("menuConfirm");
+    this.flashStage();
+    this.toast(`${l.name} on`);
+  }
+
+  deleteLook(i) {
+    this.looks = this.looks.filter((_, k) => k !== i);
+    this.renderLooks();
+    this.sfx("menuNav");
   }
 
   /** Unlock context, refreshed each time the showroom opens. */
@@ -2465,7 +2578,8 @@ class AgentShowroom extends HTMLElement {
     const html = [...rows.values()]
       .map(({ st, names }) => `<div class="lockrow"><span class="lock caption amber">${I.lock}${esc(names.join(", "))}</span><span>${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></div>`)
       .join("");
-    return `<div class="lockinfo">${html}</div>`;
+    const n = [...rows.values()].reduce((k, r) => k + r.names.length, 0);
+    return `<details class="lockfold"><summary><span class="lock caption amber">${I.lock}How to unlock · ${n}</span></summary><div class="lockinfo">${html}</div></details>`;
   }
 
   optionHtml(s, item, i) {

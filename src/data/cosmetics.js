@@ -174,6 +174,12 @@ export const BODY_FRAMES = [
   { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
 ];
 
+/** Cape on or off (gear that replaces the cape still wins). Appended, never inserted. */
+export const CAPE_STYLES = [
+  { id: "cape", name: "Cape", desc: "Your colours, down to the knees" },
+  { id: "none", name: "No Cape", desc: "Nothing to snag on a door frame" },
+];
+
 export const ARMOR_STYLES = [
   {
     id: "standard",
@@ -448,6 +454,7 @@ export const DEFAULT_CHARACTER = {
   eyeIndex: 0,
   armorIndex: 0,
   frameIndex: 0,
+  capeIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
   shoulderIndex: 0,
