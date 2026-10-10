@@ -97,6 +97,89 @@ export function part(a, b, wa, wb, o = {}) {
   );
 }
 
+/** Smooth cubic segments (Catmull-Rom) through points; the path is already at pts[0]. */
+function through(pts) {
+  let d = "";
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += `C${pt(...c1)} ${pt(...c2)} ${pt(...p2)}`;
+  }
+  return d;
+}
+
+/**
+ * Anatomical limb segment from joint a to joint b. Each side follows its own
+ * half-width profile — [[t, w], ...] from a (t 0) to b (t 1) — so a thigh can
+ * taper into the knee, a calf swell high on the inside and narrow to the
+ * ankle. `outer` is the side away from the body's midline for a limb on side
+ * `s` (-1 left, 1 right). Returns the outline `d`, a highlight along the lit
+ * (left) edge and a rim along the right one.
+ */
+function muscleGeom(a, b, outer, inner, s) {
+  const len = dist(a, b) || 1;
+  const ux = (b[0] - a[0]) / len;
+  const uy = (b[1] - a[1]) / len;
+  const nx = uy;
+  const ny = -ux;
+  const at = (t, w, side) => [a[0] + ux * len * t + side * nx * w, a[1] + uy * len * t + side * ny * w];
+  const side = (prof, sign, inset = 0) => prof.map(([t, w]) => at(t, Math.max(0.2, w - inset), sign));
+  const leftProf = s < 0 ? outer : inner;
+  const rightProf = s < 0 ? inner : outer;
+  const L = side(leftProf, -1);
+  const R = side(rightProf, 1);
+  const wa = leftProf[0][1] + rightProf[0][1];
+  const wb = leftProf[leftProf.length - 1][1] + rightProf[rightProf.length - 1][1];
+  const ka = wa * 0.5;
+  const kb = wb * 0.5;
+  const Le = L[L.length - 1];
+  const Re = R[R.length - 1];
+  const d =
+    `M${pt(...L[0])}` +
+    through(L) +
+    `C${pt(Le[0] + ux * kb, Le[1] + uy * kb)} ${pt(Re[0] + ux * kb, Re[1] + uy * kb)} ${pt(...Re)}` +
+    through([...R].reverse()) +
+    `C${pt(R[0][0] - ux * ka, R[0][1] - uy * ka)} ${pt(L[0][0] - ux * ka, L[0][1] - uy * ka)} ${pt(...L[0])}Z`;
+  const edge = (prof, sign, inset, t0, t1) => {
+    const pts = side(prof.filter(([t]) => t >= t0 && t <= t1), sign, inset);
+    return pts.length > 1 ? `M${pt(...pts[0])}` + through(pts) : "";
+  };
+  return { d, hi: edge(leftProf, -1, Math.min(1.6, wa * 0.14), 0.1, 0.8), rim: edge(rightProf, 1, 0.4, 0.05, 0.95) };
+}
+
+/** A shaded anatomical segment: fill + ink, lit-edge highlight, rim light (like part()). */
+export function muscle(a, b, outer, inner, s, o = {}) {
+  const { fill = "url(#steel)", hi = 0.55, rim = 0.8, ink = 1.1, hiColor = "#eaf4ff", rimColor = RIM, weave = false } = o;
+  const g = muscleGeom(a, b, outer, inner, s);
+  return (
+    `<path d="${g.d}" fill="${fill}" stroke="${INK}" stroke-width="${ink}" stroke-linejoin="round"/>` +
+    (weave ? `<path d="${g.d}" fill="url(#weave)"/>` : "") +
+    (hi && g.hi ? `<path d="${g.hi}" fill="none" stroke="${hiColor}" stroke-opacity="${hi}" stroke-width="${f(Math.max(0.5, outer[0][1] * 0.16))}" stroke-linecap="round"/>` : "") +
+    (rim && g.rim ? `<path d="${g.rim}" fill="none" stroke="${rimColor}" stroke-opacity="${rim}" stroke-width=".6" stroke-linecap="round"/>` : "")
+  );
+}
+
+const scaleProf = (prof, k) => prof.map(([t, w]) => [t, w * k]);
+
+// Front-view profiles, half-widths in rig units, the side away from the
+// midline first. The under-suit is fabric, so it follows the body: thighs
+// full at the top tapering into the knee, calves swelling high on the inside
+// and narrowing to the ankle, a deltoid over a slimmer upper arm, forearms
+// full below the elbow. Plates sit inside those outlines.
+const THIGH = { out: [[0, 8.6], [0.2, 9.1], [0.48, 8.1], [0.78, 6.5], [1, 5.5]], in: [[0, 7.2], [0.16, 7.7], [0.42, 6.7], [0.78, 5.1], [1, 4.9]] };
+const CALF = { out: [[0, 5.3], [0.22, 6.2], [0.48, 5.5], [0.78, 4.1], [1, 3.7]], in: [[0, 5], [0.3, 6], [0.56, 5], [0.82, 3.9], [1, 3.6]] };
+const THIGH_PLATE = { out: [[0, 7.4], [0.4, 7.4], [0.8, 6.4], [1, 5.8]], in: [[0, 6], [0.4, 6], [0.8, 5.2], [1, 4.8]] };
+const SHIN_PLATE = { out: [[0, 4.6], [0.35, 4.9], [1, 4.1]], in: [[0, 4.3], [0.35, 4.6], [1, 3.8]] };
+const BOOT = { out: [[0, 4.6], [0.6, 4.3], [1, 4.5]], in: [[0, 4.4], [0.6, 4.1], [1, 4.3]] };
+const UPPER_ARM = { out: [[0, 6.4], [0.2, 6.6], [0.5, 5.5], [0.8, 4.6], [1, 4.3]], in: [[0, 5], [0.3, 4.8], [0.55, 5.2], [0.85, 4.3], [1, 4.1]] };
+const FOREARM = { out: [[0, 4.5], [0.25, 5.2], [0.6, 4.1], [1, 3.2]], in: [[0, 4.2], [0.3, 4.6], [0.7, 3.4], [1, 3.1]] };
+const REREBRACE = { out: [[0, 6.3], [0.5, 5.9], [1, 5]], in: [[0, 5.2], [0.5, 5], [1, 4.4]] };
+const VAMBRACE_PLATE = { out: [[0, 5.1], [0.35, 5.2], [1, 3.9]], in: [[0, 4.7], [0.35, 4.7], [1, 3.6]] };
+
 /** Capsule outline with a fixed winding, so several can be unioned in one path. */
 const seg = (a, b, wa, wb, bulge = 0) => capsule(a, b, wa, wb, bulge, false).d;
 
@@ -150,7 +233,8 @@ export const ARMOR_DEFS = `
   <stop offset="1" stop-color="#1a0f08" stop-opacity="0"/></radialGradient>
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
-<filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>`;
+<filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
+<pattern id="weave" width="1.6" height="1.6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="1.6" height=".55" fill="#000" opacity=".35"/><rect y=".8" width=".55" height=".8" fill="#fff" opacity=".06"/></pattern>`;
 
 /** Energy element drawn twice: blurred bloom then a bright core. */
 export const energy = (inner, color = "#00e5ff") =>
@@ -219,41 +303,45 @@ function helmet({ rot = 0, damaged = false }) {
 }
 
 export function armoredLeg({ hip, kn, an }, s) {
-  const thighA = lerp(hip, kn, 0.22);
-  const thighB = lerp(hip, kn, 0.84);
-  const shinA = lerp(kn, an, 0.14);
-  const shinB = lerp(kn, an, 0.8);
-  const bootAng = angle(kn, an);
-  const stripeA = lerp(kn, an, 0.3);
-  const stripeB = lerp(kn, an, 0.68);
+  const T = (t) => lerp(hip, kn, t);
+  const S = (t) => lerp(kn, an, t);
+  const legA = angle(kn, an);
+  const thighA = angle(hip, kn);
+  const at = (p, a, inner) => `<g transform="translate(${pt(...p)}) rotate(${f(a)})">${inner}</g>`;
+  const stripeA = S(0.3);
+  const stripeB = S(0.52);
   const body =
-    part(hip, kn, 15.4, 10.6, { fill: "url(#suit)", bulge: 1.6, hi: 0.25, rim: 0.45 }) +
-    part(thighA, thighB, 12, 8.4, { bulge: 1.4 }) +
-    part(kn, an, 10.2, 6.8, { fill: "url(#suit)", bulge: 1.6, hi: 0.2, rim: 0.45 }) +
-    part(shinA, shinB, 9.4, 6.8, { bulge: 1.3 }) +
+    // Under-suit: the body shows through the fabric.
+    muscle(hip, kn, THIGH.out, THIGH.in, s, { fill: "url(#suit)", hi: 0.14, rim: 0.3, weave: true }) +
+    muscle(kn, an, CALF.out, CALF.in, s, { fill: "url(#suit)", hi: 0.12, rim: 0.3, weave: true }) +
+    // Fabric gathering above the knee.
+    at(kn, legA, line("M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6", "#000000", 0.5, 0.4)) +
+    // Thigh plate on the front of the thigh, ending well clear of the knee, strapped.
+    muscle(T(0.12), T(0.62), THIGH_PLATE.out, THIGH_PLATE.in, s) +
+    at(T(0.72), thighA, shape("M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z", "#14181d", 0.5) + shape(`M${f(s * 2.4 - 1.5)},-1.7 L${f(s * 2.4 + 1.5)},-1.7 L${f(s * 2.4 + 1.5)},1.7 L${f(s * 2.4 - 1.5)},1.7 Z`, "url(#steelDk)", 0.4)) +
+    // Shin guard between the knee pad and the boot.
+    muscle(S(0.2), S(0.62), SHIN_PLATE.out, SHIN_PLATE.in, s) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#05131a", 1.4) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#0a8aa0", 0.6) +
-    // knee cop
-    `<g transform="translate(${pt(...kn)}) rotate(${f(bootAng)})">` +
-    shape("M-4.6,-6.2 C-1.6,-7 1.6,-7 4.6,-6.2 L4.2,-4.2 C1.4,-4.8 -1.4,-4.8 -4.2,-4.2 Z", "url(#steelDk)", 0.6) +
-    shape("M0,-4.8 C3.4,-4.6 5.4,-2.6 5.2,0.4 C5,3.2 2.8,5.8 0,7 C-2.8,5.8 -5,3.2 -5.2,0.4 C-5.4,-2.6 -3.4,-4.6 0,-4.8 Z", "url(#steel)") +
-    line("M0,-4.2 L0,6.2", INK, 0.45, 0.55) +
-    line("M-0.5,-3.8 L-0.5,5", "#eaf4ff", 0.35, 0.45) +
-    line("M-3.8,-1.8 C-2.4,-3.6 -1,-4 -0.8,-4", "#eaf4ff", 0.6, 0.6) +
-    `</g>` +
-    // boot
-    `<g transform="translate(${pt(...an)}) rotate(${f(bootAng)})">` +
-    shape(
-      `M-4.3,-8 L4.3,-8 L4.7,2 C${f(s * 1.2 + 6.2)},3 ${f(s * 1.2 + 6.4)},6.6 ${f(s * 1.2 + 5.6)},8 ` +
-        `L${f(s * 1.2 - 5.6)},8 C${f(s * 1.2 - 6.4)},6.6 ${f(s * 1.2 - 6.2)},3 -4.7,2 Z`,
-      "url(#steelDk)",
-    ) +
-    shape(`M${f(s * 1.2 - 5.9)},6.4 L${f(s * 1.2 + 5.9)},6.4 L${f(s * 1.2 + 5.6)},8 L${f(s * 1.2 - 5.6)},8 Z`, "#07090d", 0.5) +
-    shape(`M${f(s * 1.2 - 4.2)},2.2 C${f(s * 1.2 - 2)},0.8 ${f(s * 1.2 + 2)},0.8 ${f(s * 1.2 + 4.2)},2.2 L${f(s * 1.2 + 5)},5.6 L${f(s * 1.2 - 5)},5.6 Z`, "url(#steel)", 0.5) +
-    line("M-4.4,-3.4 L4.4,-3.4", INK, 0.5, 0.7) +
-    line(`M${f(s * 1.2 - 3)},2.6 C${f(s * 1.2 - 1)},1.8 ${f(s * 1.2 + 1)},1.8 ${f(s * 1.2 + 2.4)},2.4`, "#eaf4ff", 0.5, 0.6) +
-    line("M4.4,-7 L4.8,1.8", RIM, 0.5, 0.6) +
-    `</g>`;
+    // Tall tactical boot: a shaft up the lower shin with straps.
+    muscle(S(0.6), S(1.02), BOOT.out, BOOT.in, s, { fill: "url(#steelDk)", hi: 0.3, rim: 0.5 }) +
+    at(S(0.72), legA, line("M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8", "#05070a", 0.9, 0.85)) +
+    // Knee pad: below the kneecap, strapped round the leg.
+    at(S(0.1), legA,
+      line("M-5.4,0.2 L-6.2,0.4 M5.4,0.2 L6.2,0.4", "#14181d", 1.6, 1) +
+      shape("M0,-5.6 C3.6,-5.6 5.4,-3.4 5.4,-0.4 C5.4,2.8 3.2,5 0,5.6 C-3.2,5 -5.4,2.8 -5.4,-0.4 C-5.4,-3.4 -3.6,-5.6 0,-5.6 Z", "url(#steelDk)", 1) +
+      shape("M0,-3.8 C2.4,-3.8 3.6,-2.2 3.6,-0.2 C3.6,2 2,3.4 0,3.8 C-2,3.4 -3.6,2 -3.6,-0.2 C-3.6,-2.2 -2.4,-3.8 0,-3.8 Z", "url(#steel)", 0.5) +
+      line("M-2.6,-2.6 C-1.4,-3.4 0,-3.5 0.8,-3.4", "#eaf4ff", 0.6, 0.65)) +
+    // Foot.
+    at(an, legA,
+      shape(
+        `M-4.4,-1 L4.4,-1 L4.7,2 C${f(s * 1.2 + 6.2)},3 ${f(s * 1.2 + 6.4)},6.6 ${f(s * 1.2 + 5.6)},8 ` +
+          `L${f(s * 1.2 - 5.6)},8 C${f(s * 1.2 - 6.4)},6.6 ${f(s * 1.2 - 6.2)},3 -4.7,2 Z`,
+        "url(#steelDk)",
+      ) +
+      shape(`M${f(s * 1.2 - 5.9)},6.4 L${f(s * 1.2 + 5.9)},6.4 L${f(s * 1.2 + 5.6)},8 L${f(s * 1.2 - 5.6)},8 Z`, "#07090d", 0.5) +
+      shape(`M${f(s * 1.2 - 4.2)},2.2 C${f(s * 1.2 - 2)},0.8 ${f(s * 1.2 + 2)},0.8 ${f(s * 1.2 + 4.2)},2.2 L${f(s * 1.2 + 5)},5.6 L${f(s * 1.2 - 5)},5.6 Z`, "url(#steel)", 0.5) +
+      line(`M${f(s * 1.2 - 3)},2.6 C${f(s * 1.2 - 1)},1.8 ${f(s * 1.2 + 1)},1.8 ${f(s * 1.2 + 2.4)},2.4`, "#eaf4ff", 0.5, 0.6));
   const glow = energy(`<path d="M${pt(...stripeA)}L${pt(...stripeB)}" fill="none" stroke-width=".6" stroke-linecap="round"/>`);
   return { body, glow };
 }
@@ -270,15 +358,15 @@ function gauntlet(wr, el, s, side = false) {
   const k = side ? "scale(.82 1.1)" : "scale(1.12)";
   return (
     `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))}) ${k} translate(0 -1)">` +
-    shape("M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z", "url(#steelDk)", 1) +
+    shape("M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z", "url(#suit)", 1) +
     shape("M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z", "url(#steel)", 0.5) +
     line("M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6", "#eaf4ff", 0.45, 0.6) +
     // curled finger group with a lit knuckle ridge
-    shape("M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z", "url(#steelDk)", 1) +
+    shape("M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z", "url(#suit)", 1) +
     line("M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3", INK, 0.45, 0.8) +
     line("M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8", "#eaf4ff", 0.45, 0.55) +
     // thumb folded across the front of the fingers
-    shape(`M${X(3.6)},1.8 C${X(6)},3.4 ${X(6.1)},7.4 ${X(4.4)},10.4 C${X(3.6)},11.3 ${X(2.2)},11.1 ${X(2)},10 C${X(2.9)},7.8 ${X(3.1)},5.4 ${X(2.3)},3.4 Z`, "url(#steel)", 0.8) +
+    shape(`M${X(3.6)},1.8 C${X(6)},3.4 ${X(6.1)},7.4 ${X(4.4)},10.4 C${X(3.6)},11.3 ${X(2.2)},11.1 ${X(2)},10 C${X(2.9)},7.8 ${X(3.1)},5.4 ${X(2.3)},3.4 Z`, "url(#suit)", 0.8) +
     line(`M${X(4.6)},3.6 C${X(5.2)},5.6 ${X(5)},7.6 ${X(4.2)},9.4`, "#eaf4ff", 0.4, 0.5) +
     `</g>`
   );
@@ -339,7 +427,7 @@ export function armoredArm(arm, s, chrono) {
   const hand = arm.hand ?? "fist";
   const up = heading(sh, el);
   const top = polar(sh, up, -4);
-  const sleeve = seg(top, el, 11.8, 8.6, 1.2) + seg(el, wr, 8.6, 6.2, 0.7);
+  const sleeve = muscleGeom(top, el, UPPER_ARM.out, UPPER_ARM.in, s).d + muscleGeom(el, wr, FOREARM.out, FOREARM.in, s).d;
   const upA = angle(sh, el);
   const foA = angle(el, wr);
   let delta = foA - upA;
@@ -350,18 +438,17 @@ export function armoredArm(arm, s, chrono) {
   let body =
     `<path d="${sleeve}" fill="#000" opacity=".55" filter="url(#ao)" transform="translate(${f(-s * 1.8)},1.6)"/>` +
     merged(sleeve, "url(#suit)") +
+    `<path d="${sleeve}" fill="url(#weave)"/>` +
     // rerebrace: wide under the pauldron, bicep swell, narrowing to the elbow
-    part(polar(sh, up, 1), lerp(sh, el, 0.8), 12.4, 9.2, { bulge: 1.3, hi: 0.6 }) +
+    muscle(polar(sh, up, 1), lerp(sh, el, 0.64), REREBRACE.out, REREBRACE.in, s, { hi: 0.6 }) +
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
-    part(lerp(el, wr, foreLen < 14 ? 0.05 : 0.14), lerp(el, wr, 0.9), 10.2, 7.2, { bulge: 0.9, hi: 0.5 }) +
+    muscle(lerp(el, wr, foreLen < 14 ? 0.1 : 0.22), lerp(el, wr, 0.86), VAMBRACE_PLATE.out, VAMBRACE_PLATE.in, s, { hi: 0.5 }) +
     line(`M${pt(...lerp(el, wr, VAMBRACE.channel[0]))}L${pt(...lerp(el, wr, VAMBRACE.channel[1]))}`, "#05131a", VAMBRACE.seam, 0.8) +
-    // elbow cop capping the joint, with a fan on the outer side
+    // Soft elbow: fabric creases on the inside, a small pad on the outer point.
     `<g transform="translate(${pt(...el)}) rotate(${f(copA)})">` +
-    shape(`M${f(s * 2.6)},-3.2 C${f(s * 6.6)},-4.4 ${f(s * 8)},0 ${f(s * 6.6)},3.6 L${f(s * 3)},2.8 Z`, "url(#steelDk)", 0.7) +
-    shape("M0,-4.4 C3.2,-4.2 4.8,-2 4.6,0.6 C4.4,2.8 2.4,4.6 0,5.4 C-2.4,4.6 -4.4,2.8 -4.6,0.6 C-4.8,-2 -3.2,-4.2 0,-4.4 Z", "url(#steel)", 0.9) +
-    line("M0,-3.8 L0,4.6", INK, 0.4, 0.5) +
-    line("M-3.2,-1.6 C-1.8,-3.4 -0.8,-3.8 -0.6,-3.8", "#eaf4ff", 0.6, 0.65) +
+    line(`M${f(-s * 3.6)},-1.6 C${f(-s * 1.6)},-0.6 ${f(-s * 0.2)},-0.4 ${f(s * 1)},-0.8 M${f(-s * 3.2)},0.8 C${f(-s * 1.4)},1.6 ${f(-s * 0.2)},1.6 ${f(s * 0.8)},1.2`, "#000000", 0.45, 0.45) +
+    shape(`M${f(s * 2.8)},-3 C${f(s * 5.6)},-3.4 ${f(s * 6.6)},-0.6 ${f(s * 6)},2.4 C${f(s * 5)},3.6 ${f(s * 3.4)},3.4 ${f(s * 2.6)},2.6 Z`, "url(#steelDk)", 0.7) +
     `</g>` +
     // wrist cuff
     `<g transform="translate(${pt(...wr)}) rotate(${f(foA)})">` +

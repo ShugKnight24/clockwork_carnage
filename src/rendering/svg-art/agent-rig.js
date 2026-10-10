@@ -231,7 +231,7 @@ function defs(c) {
   const g = c.finish.stops;
   const skin = c.skin;
   const hair = c.hair.color;
-  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"];
+  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#262c33", "#13171c", "#050709"];
   const gun = c.finish.mirror
     ? `<stop offset="0" stop-color="${g[0]}"/><stop offset=".28" stop-color="${g[1]}"/><stop offset=".46" stop-color="#e8eef5"/><stop offset=".7" stop-color="#4a5664"/><stop offset="1" stop-color="${g[2]}"/>`
     : `<stop offset="0" stop-color="${g[0]}"/><stop offset=".3" stop-color="${g[1]}"/><stop offset="1" stop-color="${g[2]}"/>`;
@@ -276,6 +276,7 @@ function defs(c) {
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
 <filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
+<pattern id="weave" width="1.6" height="1.6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="1.6" height=".55" fill="#000" opacity=".35"/><rect y=".8" width=".55" height=".8" fill="#fff" opacity=".06"/></pattern>
 ${CAPE_HEM[c.armor] ? `<clipPath id="capeCut"><path d="${capeCut(CAPE_HEM[c.armor])}"/></clipPath>` : ""}`;
 }
 
