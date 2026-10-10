@@ -279,6 +279,11 @@ export const HELMET_STYLES = [
   { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
   { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
   { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
+  // Appended, never inserted: saves store the index.
+  {
+    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3,
+    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
+  },
 ];
 
 export const VISOR_STYLES = [

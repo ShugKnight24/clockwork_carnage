@@ -278,7 +278,7 @@ function defs(c) {
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
 <filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
-<pattern id="weave" width="1.6" height="1.6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="1.6" height=".55" fill="#000" opacity=".35"/><rect y=".8" width=".55" height=".8" fill="#fff" opacity=".06"/></pattern>
+<pattern id="weave" width=".9" height=".9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width=".9" height=".32" fill="#000" opacity=".3"/><rect y=".45" width=".32" height=".45" fill="#fff" opacity=".06"/></pattern>
 ${CAPE_HEM[c.armor] ? `<clipPath id="capeCut"><path d="${capeCut(CAPE_HEM[c.armor])}"/></clipPath>` : ""}`;
 }
 
@@ -865,8 +865,79 @@ const FEM_CHEST =
   line("M-14.6,-51 C-13,-44.8 -5.2,-44 -1,-47.6 M14.6,-51 C13,-44.8 5.2,-44 1,-47.6", INK, 0.6, 0.55) +
   line("M-13.4,-50.6 C-11.6,-45.8 -5.6,-45.2 -2,-47.8", "#eaf4ff", 0.45, 0.35);
 
+/**
+ * Reaper: a knit balaclava with a painted skull, the agent's own eyes looking
+ * out of the sockets, a comms headset and a field scarf bunched at the neck.
+ */
+function reaperHood(c) {
+  const knit = "#2a2d28";
+  const bone = "#d6cfbd";
+  const boneLo = "#9a917e";
+  const hood =
+    "M0,-95.6 C6.9,-95.6 10.1,-90.8 10.1,-84 C10.1,-78 9.4,-72.6 7,-68.6 L8.4,-64.8 L-8.4,-64.8 L-7,-68.6 " +
+    "C-9.4,-72.6 -10.1,-78 -10.1,-84 C-10.1,-90.8 -6.9,-95.6 0,-95.6 Z";
+  const cranium =
+    "M-6.8,-86.4 C-6.8,-91.6 -3.8,-93.4 0,-93.4 C3.8,-93.4 6.8,-91.6 6.8,-86.4 C6.8,-84.2 6,-82.8 5.6,-81.6 " +
+    "C3.6,-82.6 2,-82.4 0.9,-81.2 L0,-80.4 L-0.9,-81.2 C-2,-82.4 -3.6,-82.6 -5.6,-81.6 C-6,-82.8 -6.8,-84.2 -6.8,-86.4 Z";
+  const jaw =
+    "M-5.8,-81.2 L-6.6,-78 C-6,-75.6 -4.4,-74.8 -3.6,-73.4 L-3,-70.2 L3,-70.2 L3.6,-73.4 C4.4,-74.8 6,-75.6 6.6,-78 L5.8,-81.2 " +
+    "C4.8,-79.8 3.4,-79 2.2,-78.6 L-2.2,-78.6 C-3.4,-79 -4.8,-79.8 -5.8,-81.2 Z";
+  const socket = (x) => `<ellipse cx="${x}" cy="-82.1" rx="2.5" ry="2.05" fill="#0b0b0a"/>`;
+  // The agent's eyes, in shadow behind the mask.
+  const eye = (x) =>
+    `<ellipse cx="${x}" cy="-82" rx="1.25" ry=".62" fill="#cfc6b8" opacity=".85"/>` +
+    `<circle cx="${x}" cy="-82" r=".55" fill="${c.eyes}"/><circle cx="${x}" cy="-82" r=".24" fill="#050505"/>` +
+    `<circle cx="${f(x - 0.2)}" cy="-82.25" r=".14" fill="#fff"/>`;
+  let teeth = "";
+  // Teeth: slightly uneven, as if hand-painted.
+  for (let i = -2; i <= 2; i++) {
+    const h = [1.3, 1.5, 1.6, 1.45, 1.25][i + 2];
+    teeth += `<rect x="${f(i * 0.95 - 0.38)}" y="${f(-74.9 + (1.6 - h) / 2)}" width=".76" height="${f(h)}" rx=".25" fill="${bone}"/><rect x="${f(i * 0.95 - 0.36)}" y="-73.1" width=".72" height="${f(h * 0.85)}" rx=".25" fill="${boneLo}"/>`;
+  }
+  // Draped, not a collar: bunched at the throat with an uneven hem.
+  const scarf =
+    "M-9.8,-70.2 C-6,-67 6,-67 9.8,-70.2 C11.6,-68.4 12.8,-66.4 12.6,-64.6 C10.4,-63.4 8.6,-63.6 7,-62.4 " +
+    "C4.6,-61 2.4,-62.2 0,-61 C-2.4,-62.2 -4.6,-61 -7,-62.4 C-8.6,-63.6 -10.4,-63.4 -12.6,-64.6 C-12.8,-66.4 -11.6,-68.4 -9.8,-70.2 Z";
+  const front =
+    shape(hood, knit, 1) +
+    `<path d="${hood}" fill="url(#weave)"/>` +
+    `<ellipse cx="-4.4" cy="-90.6" rx="4" ry="2.4" fill="#fff" opacity=".07"/>` +
+    // Painted skull, a little worn.
+    `<path d="${cranium}" fill="${bone}"/>` +
+    `<path d="${jaw}" fill="${bone}"/>` +
+    `<path d="M-6.4,-86 C-6,-90 -3.4,-92 0,-92.4" fill="none" stroke="#fff" stroke-width=".7" stroke-opacity=".45"/>` +
+    line("M6.4,-87 C6.2,-84.4 5.6,-82.8 5,-81.8 M6.2,-78 C5.6,-76.2 4.6,-75.2 3.8,-74", boneLo, 0.7, 0.8) +
+    socket(-3.1) +
+    socket(3.1) +
+    eye(-3.1) +
+    eye(3.1) +
+    `<path d="M-0.95,-79.4 L0,-80.9 L0.95,-79.4 L0.55,-77.7 L-0.55,-77.7 Z" fill="#0b0b0a"/>` +
+    `<path d="M-2.8,-75.4 C-1,-75.9 1,-75.9 2.8,-75.4 L2.6,-71.6 C1,-71 -1,-71 -2.6,-71.6 Z" fill="#0b0b0a" opacity=".85"/>` +
+    teeth +
+    // The print sits in the knit: the weave runs over it.
+    `<g opacity=".3"><path d="${cranium}" fill="url(#weave)"/><path d="${jaw}" fill="url(#weave)"/></g>` +
+    line("M-5.4,-80.6 C-4.6,-79.4 -3.6,-78.9 -2.4,-78.7 M5.4,-80.6 C4.6,-79.4 3.6,-78.9 2.4,-78.7", boneLo, 0.45, 0.9) +
+    `<g fill="#3a3326" opacity=".28"><ellipse cx="4.6" cy="-89" rx="1.6" ry=".8"/><ellipse cx="-5.2" cy="-76.6" rx="1.2" ry=".7"/><ellipse cx="1.6" cy="-91.6" rx=".9" ry=".5"/></g>` +
+    // Comms headset: band over the top, cups over the ears, a boom mic.
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", INK, 1.8, 1) +
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", "#3c403a", 1.1, 1) +
+    shape("M-12,-84.6 C-12,-86.2 -10.8,-86.8 -9.6,-86.8 L-8.8,-86.8 L-8.8,-76.6 L-9.6,-76.6 C-10.8,-76.6 -12,-77.2 -12,-78.8 Z", "#33372f", 0.8) +
+    shape("M12,-84.6 C12,-86.2 10.8,-86.8 9.6,-86.8 L8.8,-86.8 L8.8,-76.6 L9.6,-76.6 C10.8,-76.6 12,-77.2 12,-78.8 Z", "#33372f", 0.8) +
+    line("M-11.4,-85 L-11.4,-78.4 M11.4,-85 L11.4,-78.4", "#5a6052", 0.5, 0.8) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -6.8,-74.6 -3.8,-74.2", INK, 1, 1) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -6.8,-74.6 -3.8,-74.2", "#4a5046", 0.55, 1) +
+    `<ellipse cx="-3.6" cy="-74.2" rx=".9" ry=".7" fill="#1a1c18" stroke="${INK}" stroke-width=".35"/>` +
+    // Field scarf bunched round the neck.
+    shape(scarf, "#4a4f3c", 1) +
+    `<path d="${scarf}" fill="url(#weave)"/>` +
+    line("M-8.8,-67.8 C-5,-65 5,-65 8.8,-67.8 M-10.6,-66 C-7.4,-63.8 -4,-64.4 -1.6,-63 M10.6,-66 C7.4,-63.8 4,-64.4 1.6,-63", "#2a2e22", 0.6, 0.8) +
+    line("M-10.4,-69.4 C-6,-66.2 -2,-65.6 1,-65.6", "#7a8064", 0.5, 0.6);
+  return { front, glow: eyeGlow(c, 0.25) };
+}
+
 function head(c, peek) {
   const style = c.helmet;
+  if (style === "reaper" && !peek) return reaperHood(c);
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
