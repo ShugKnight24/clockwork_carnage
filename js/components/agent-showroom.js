@@ -10,6 +10,7 @@ import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insig
 import {
   ARMOR_STYLES,
   BODY_FRAMES,
+  SUIT_SKINS,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -133,6 +134,7 @@ const CATEGORIES = [
     sections: [
       { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
       { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
+      { key: "suitSkinIndex", title: "Skin", data: SUIT_SKINS, kind: "suitSkin" },
       { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
     ],
   },
@@ -496,8 +498,10 @@ svg { display: block; }
 .arm-save[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
-.grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.torso, .grid.suitSkin, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Skins are the reward: locked ones keep their colour so you can see what you are earning. */
+.grid.suitSkin .locked .thumb svg { filter: none; opacity: 0.88; }
 .grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
@@ -535,7 +539,7 @@ svg { display: block; }
 .thumb { position: relative; aspect-ratio: 1; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); overflow: hidden; }
 .thumb svg { width: 100%; height: 100%; }
 .oname { font: 700 var(--cc-type-label)/1.1 var(--cc-font); letter-spacing: 0.6px; text-transform: uppercase; color: inherit; padding: 0 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.rifle .oname, .grid.gear .oname,
+.grid.torso .oname, .grid.suitSkin .oname, .grid.head .oname, .grid.hair .oname, .grid.rifle .oname, .grid.gear .oname,
 .grid.badgePreset .oname, .grid.symbol .oname, .grid.frame .oname, .grid.finish .oname { min-height: 2.2em; letter-spacing: 0.2px; }
 .card .oname { font-size: var(--cc-type-row); letter-spacing: var(--cc-track-row); }
 .tier { display: flex; gap: 2px; padding: 0 2px 2px; align-items: center; font: 700 var(--cc-type-micro)/1 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 1px; white-space: nowrap; }
@@ -769,7 +773,7 @@ button:focus-visible { outline: none; }
   .figure-wrap { bottom: 16%; height: 66%; }
   .pedestal { bottom: 12%; width: 70%; }
   .toast { bottom: 58px; }
-  .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .grid.torso, .grid.suitSkin, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .opt { min-height: 44px; }
   .hero-well { grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
   .hero-art { width: 96px; height: 96px; }
@@ -2555,6 +2559,7 @@ class AgentShowroom extends HTMLElement {
           thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, peek: true, idPrefix: id, realistic });
           break;
         case "torso":
+        case "suitSkin":
           thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
           break;
         case "bodyFrame":

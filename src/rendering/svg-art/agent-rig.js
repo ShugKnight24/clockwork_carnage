@@ -54,6 +54,7 @@ import {
   EYE_COLORS,
   ARMOR_STYLES,
   BODY_FRAMES,
+  SUIT_SKINS,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -148,6 +149,8 @@ const AMBER = "#ffae3a";
 function resolve(ch) {
   const pal = pick(CHARACTER_COLORS, ch.colorIndex);
   const armor = pick(ARMOR_STYLES, ch.armorIndex).id;
+  const theme = ch.suitSkinIndex ? SUIT_SKINS[ch.suitSkinIndex] || null : null;
+  const energy = theme?.energy || pal.accent;
   const weapon = pick(WEAPON_SKINS, ch.weaponSkinIndex).id;
   const finish = WEAPON_FINISH[weapon] || WEAPON_FINISH.default;
   const capeBase = mix(desat(pal.primary, 0.22), "#000000", 0.22);
@@ -169,10 +172,16 @@ function resolve(ch) {
     hair: pick(HAIR_STYLES, ch.hairIndex),
     eyes: pick(EYE_COLORS, ch.eyeIndex).color,
     variant: ch.armorVariant ? pick(ARMOR_STYLES, ch.armorIndex).variant || null : null,
-    energy: pal.accent,
-    core: mix(pal.accent, "#ffffff", 0.72),
-    hot: mix(pal.accent, "#ffffff", 0.88),
-    rim: mix(pal.accent, RIM, 0.3),
+    energy,
+    core: mix(energy, "#ffffff", 0.72),
+    hot: mix(energy, "#ffffff", 0.88),
+    rim: mix(energy, RIM, 0.3),
+    // Suit skin: plate ramp, under-suit, matte and signature effect.
+    theme: theme?.id || "none",
+    steel: theme?.steel || ARMOR_STEEL[armor] || ARMOR_STEEL.standard,
+    matte: theme ? !!theme.matte : MATTE.has(armor),
+    suitLo: theme?.suit || null,
+    fx: theme?.fx || null,
     housing: mix(pal.primary, "#000000", 0.35),
     channel: mix(pal.dark, "#000000", 0.62),
     cape: [mix(capeBase, "#ffffff", 0.14), capeBase, mix(capeBase, "#000000", 0.32), mix(capeBase, "#000000", 0.78)],
@@ -200,7 +209,7 @@ function bodyMap(c) {
     "#7a1818": c.cape[1],
     "#4a0e0e": c.cape[2],
   };
-  if (MATTE.has(c.armor)) {
+  if (c.matte) {
     // Matte plating: knock the painted-in speculars down.
     Object.assign(m, { "#eaf4ff": "#7d8996", "#f4faff": "#8a96a3", "#ffffff": "#8a96a3", "#b8cadb": "#56606c", "#dfe9f4": "#56606c" });
   }
@@ -225,11 +234,11 @@ function gunMap(c) {
 // ---------------------------------------------------------------------------
 
 function defs(c) {
-  const s = ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard;
+  const s = c.steel;
   const g = c.finish.stops;
   const skin = c.skin;
   const hair = c.hair.color;
-  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"];
+  const suitLo = c.suitLo || (c.matte ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"]);
   const gun = c.finish.mirror
     ? `<stop offset="0" stop-color="${g[0]}"/><stop offset=".28" stop-color="${g[1]}"/><stop offset=".46" stop-color="#e8eef5"/><stop offset=".7" stop-color="#4a5664"/><stop offset="1" stop-color="${g[2]}"/>`
     : `<stop offset="0" stop-color="${g[0]}"/><stop offset=".3" stop-color="${g[1]}"/><stop offset="1" stop-color="${g[2]}"/>`;
@@ -269,7 +278,7 @@ function defs(c) {
   <stop offset="1" stop-color="#080706"/></linearGradient>
 <radialGradient id="shade"><stop offset="0" stop-color="#000" stop-opacity=".7"/>
   <stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
-<radialGradient id="sheen"><stop offset="0" stop-color="#fff" stop-opacity="${MATTE.has(c.armor) ? 0.18 : 0.5}"/>
+<radialGradient id="sheen"><stop offset="0" stop-color="#fff" stop-opacity="${c.matte ? 0.18 : 0.5}"/>
   <stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
@@ -842,7 +851,7 @@ function head(c, peek) {
     : glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core);
   const dome =
     `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
-    line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, MATTE.has(c.armor) ? 0.3 : 0.8) +
+    line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, c.matte ? 0.3 : 0.8) +
     line(`M${f(w - 0.6)},-90 C${f(w + 0.4)},-87 ${f(w + 0.4)},-83 ${f(w - 0.2)},-78.6`, c.rim, 0.8, 0.85);
 
   if (OPEN_HELMETS.has(style)) {
@@ -1050,7 +1059,7 @@ function shoulder(c, s, tilt) {
 
 /** Origin insignia, engraved into the left tasset. */
 function insignia(c) {
-  const col = MATTE.has(c.armor) ? "#6e7a88" : "#cfdae6";
+  const col = c.matte ? "#6e7a88" : "#cfdae6";
   let d;
   switch (c.origin) {
     case "rift_scientist":
@@ -1545,6 +1554,27 @@ const collarOf = (c, showFace, map) =>
  * @param {object} character game.character-shaped record
  * @param {{ pose?: "idle"|"hero"|"bust", peek?: boolean }} opts
  */
+/**
+ * Signature effects of the top suit skins, drawn in the glow layer so they
+ * light up over the plates: molten seams glowing through cooling slag, and
+ * neon circuit traces.
+ */
+function skinFx(c, P) {
+  if (!c.fx) return "";
+  const legs = P.legs.map(({ hip, kn, an }) => [lerp(hip, kn, 0.2), lerp(hip, kn, 0.5), lerp(hip, kn, 0.8), lerp(kn, an, 0.25), lerp(kn, an, 0.7)]);
+  if (c.fx === "molten") {
+    const crack =
+      "M-12,-60 L-8.6,-55.4 L-10.4,-51 L-6.4,-47.6 M8.6,-62 L6,-57 L9.4,-52.4 L7,-48.6 L10.6,-44 M-4,-40 L-1.6,-36 L-3.4,-31.6 M3,-38.6 L5.4,-34.4" +
+      legs.map((p) => ` M${pt(p[0][0] - 1.6, p[0][1])} L${pt(p[1][0] + 1.4, p[1][1])} L${pt(p[2][0] - 1, p[2][1])} M${pt(p[3][0] + 1, p[3][1])} L${pt(p[4][0] - 1.2, p[4][1])}`).join("");
+    return glowOf(`<path d="${crack}" fill="none" stroke-width=".7" stroke-linecap="round" stroke-linejoin="round"/>`, c.energy, c.hot);
+  }
+  // neon: circuit traces along the plates
+  const trace =
+    "M-14,-58 L-9,-58 L-6,-55 L-6,-48 M14,-58 L9,-58 L6,-55 L6,-48 M-10,-36 L-4,-36 M10,-36 L4,-36" +
+    legs.map((p) => ` M${pt(p[0][0] + 2.6, p[0][1])} L${pt(p[2][0] + 2.6, p[2][1])} M${pt(p[3][0] - 2.2, p[3][1])} L${pt(p[4][0] - 2.2, p[4][1])}`).join("");
+  return glowOf(`<path d="${trace}" fill="none" stroke-width=".55" stroke-linecap="round" stroke-linejoin="round"/>`, c.energy, c.core);
+}
+
 export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
   const c = resolve(character || {});
   const armed = pose === "hero";
@@ -1600,7 +1630,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     collar +
     acc.top;
 
-  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
+  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + fr.glow + skinFx(c, P) + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
@@ -1715,8 +1745,8 @@ export function buildRifleSvg(character, { idPrefix = "", realistic = false } = 
  * the armor so every choice stays distinguishable.
  */
 function realAgentDefs(c) {
-  const s = (ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard).map((h) => realHex(h, 0.35));
-  const matte = MATTE.has(c.armor);
+  const s = c.steel.map((h) => realHex(h, 0.35));
+  const matte = c.matte;
   const spec = matte ? mix(s[1], s[0], 0.55) : mix(s[0], "#ffffff", 0.15);
   const base = mix(s[1], s[2], 0.4);
   const ramp = `x1="0" y1="0" x2="1" y2=".35"`;
@@ -1754,7 +1784,7 @@ function realOpts(c) {
   for (const e of ENAMELS) badgeKeep[e.color] = e.color;
   for (const m of METALS) for (const col of m.ramp) badgeKeep[col] = col;
   // Candy red is lacquer, not light: it darkens like paint under the key.
-  return { rims: [c.rim, RIM], desat: 0.4, keep: { ...badgeKeep, ...(MATTE.has(c.armor) ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
+  return { rims: [c.rim, RIM], desat: 0.4, keep: { ...badgeKeep, ...(c.matte ? {} : SOFT_HIGHLIGHTS), [CANDY]: "#962330", [CANDY_HI]: "#b3434c" } };
 }
 
 function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
@@ -1771,7 +1801,7 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
   const u = px ? Math.max(v[2] / px[0], v[3] / px[1]) : v[2] / (v[2] >= 140 ? 450 : 64);
   const pad = v[2] * 0.25;
   const box = [f(v[0] - pad), f(v[1] - pad), f(v[2] + pad * 2), f(v[3] + pad * 2)];
-  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true, smooth: px ? 4 : 1 });
+  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: c.matte ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true, smooth: px ? 4 : 1 });
   // A visible face gets skin shading; the cloth filter's blur and weave
   // smeared eyes and mouth into a grainy mask.
   const headFx = p.eyesVisible ? "rskin" : "rmat";
@@ -1909,7 +1939,7 @@ export function buildCastModel(character, key, { realistic = false } = {}) {
   const headFx = p.eyesVisible ? "rskin" : "rmat";
   return {
     box,
-    defs: realAgentDefs(c) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.26, seed: 5 }),
+    defs: realAgentDefs(c) + realFilters(box, { u: 0.45, spec: c.matte ? 0.18 : 0.55, grime: 0.26, seed: 5 }),
     anim: breathe,
     layers: [
       {
@@ -1955,7 +1985,7 @@ function castFallen(c, realistic) {
   const headFx = OPEN_HELMETS.has(c.helmet) ? "rcloth" : "rmat";
   return {
     box,
-    defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.5, grime: 0.32, seed: 9 }),
+    defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realFilters(box, { u: 0.45, spec: c.matte ? 0.18 : 0.5, grime: 0.32, seed: 9 }),
     layers: [
       { markup: contactShadow(-4, 48, 100, 16) + R(debris()) },
       {
