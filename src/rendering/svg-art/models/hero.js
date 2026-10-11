@@ -170,17 +170,17 @@ const scaleProf = (prof, k) => prof.map(([t, w]) => [t, w * k]);
 // full at the top tapering into the knee, calves swelling high on the inside
 // and narrowing to the ankle, a deltoid over a slimmer upper arm, forearms
 // full below the elbow. Plates sit inside those outlines.
-const THIGH = { out: [[0, 8.6], [0.2, 9.1], [0.48, 8.1], [0.78, 6.5], [1, 5.5]], in: [[0, 7.2], [0.16, 7.7], [0.42, 6.7], [0.78, 5.1], [1, 4.9]] };
-const CALF = { out: [[0, 5.3], [0.22, 6.2], [0.48, 5.5], [0.78, 4.1], [1, 3.7]], in: [[0, 5], [0.3, 6], [0.56, 5], [0.82, 3.9], [1, 3.6]] };
+const THIGH = { out: [[0, 8.6], [0.2, 9.2], [0.5, 8.2], [0.8, 6.3], [1, 5.2]], in: [[0, 7.2], [0.16, 7.9], [0.42, 6.8], [0.8, 4.8], [1, 4.6]] };
+const CALF = { out: [[0, 5.1], [0.2, 6.7], [0.44, 6.1], [0.74, 4.3], [1, 3.4]], in: [[0, 4.9], [0.3, 6.9], [0.52, 6], [0.8, 4], [1, 3.3]] };
 const THIGH_PLATE = { out: [[0, 7.4], [0.4, 7.4], [0.8, 6.4], [1, 5.8]], in: [[0, 6], [0.4, 6], [0.8, 5.2], [1, 4.8]] };
-const SHIN_PLATE = { out: [[0, 4.6], [0.35, 4.9], [1, 4.1]], in: [[0, 4.3], [0.35, 4.6], [1, 3.8]] };
-const BOOT = { out: [[0, 4.6], [0.6, 4.3], [1, 4.5]], in: [[0, 4.4], [0.6, 4.1], [1, 4.3]] };
-const UPPER_ARM = { out: [[0, 6.4], [0.2, 6.6], [0.5, 5.5], [0.8, 4.6], [1, 4.3]], in: [[0, 5], [0.3, 4.8], [0.55, 5.2], [0.85, 4.3], [1, 4.1]] };
+const SHIN_PLATE = { out: [[0, 4.8], [0.3, 5.5], [0.7, 4.6], [1, 3.9]], in: [[0, 4.6], [0.35, 5.6], [0.7, 4.5], [1, 3.6]] };
+const BOOT = { out: [[0, 4.8], [0.55, 4.1], [1, 4.4]], in: [[0, 4.6], [0.55, 3.9], [1, 4.2]] };
+const UPPER_ARM = { out: [[0, 6.6], [0.22, 7.6], [0.45, 6.4], [0.7, 5.2], [1, 4.4]], in: [[0, 5.2], [0.3, 4.9], [0.55, 5.4], [0.85, 4.4], [1, 4.1]] };
 const FOREARM = { out: [[0, 4.5], [0.25, 5.2], [0.6, 4.1], [1, 3.2]], in: [[0, 4.2], [0.3, 4.6], [0.7, 3.4], [1, 3.1]] };
 /** Limb profiles, for layers that dress a limb (frames). */
 export const LIMB = { THIGH, CALF, UPPER_ARM, FOREARM };
 
-const REREBRACE = { out: [[0, 6.3], [0.5, 5.9], [1, 5]], in: [[0, 5.2], [0.5, 5], [1, 4.4]] };
+const REREBRACE = { out: [[0, 7], [0.3, 7.2], [0.6, 6.2], [1, 5.1]], in: [[0, 5.3], [0.5, 5.1], [1, 4.5]] };
 const VAMBRACE_PLATE = { out: [[0, 5.1], [0.35, 5.2], [1, 3.9]], in: [[0, 4.7], [0.35, 4.7], [1, 3.6]] };
 
 /** Capsule outline with a fixed winding, so several can be unioned in one path. */

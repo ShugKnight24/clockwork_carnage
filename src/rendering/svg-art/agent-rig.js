@@ -1902,9 +1902,10 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const shoulderAt = (s, t) => {
     if (fs.noShoulders) return "";
     const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
-    const k = fs.shoulder * B.shoulder;
+    // A little smaller and lifted, so the deltoid swells out beneath the plate.
+    const k = fs.shoulder * B.shoulder * 0.9;
     const dx = s * 20 * (B.sh - 1);
-    return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
+    return `<g transform="translate(${f(s * 14.6 + dx)},-66.4) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
   // The torso and what sits on it take the build's shape; limbs already
   // carry it through their joints and thickness.
