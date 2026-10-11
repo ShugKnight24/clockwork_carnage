@@ -46,6 +46,7 @@ export const ACCESSORIES = {
     { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, perk: "+5 chrono energy" },
     { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1 },
     { id: "plume", name: "Plume", desc: "Parade crest", tier: 3, unlock: TIER3 },
+    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1 },
   ],
   arms: [
     NONE,

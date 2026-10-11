@@ -318,6 +318,8 @@ export const HELMET_STYLES = [
     id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3,
     unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
   },
+  { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1 },
 ];
 
 export const VISOR_STYLES = [
@@ -326,6 +328,7 @@ export const VISOR_STYLES = [
   { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3, bonuses: { armorAdd: 4, maxChronoEnergyAdd: 10 } },
   { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { maxStaminaAdd: 10 } },
   { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3, bonuses: { maxChronoEnergyAdd: 25 } },
+  { id: "goldwrap", name: "Gold Wrap", desc: "Wraparound tinted dome visor", tier: 2, bonuses: { maxChronoEnergyAdd: 6 } },
 ];
 
 export const SHOULDER_STYLES = [

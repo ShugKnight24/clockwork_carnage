@@ -31,6 +31,7 @@ import {
   pauldron,
   torso,
   TORSO_GLOW,
+  energy,
   gorget,
   standingCape,
   chronoRifle,
@@ -323,6 +324,9 @@ ${c.camo ? camoPattern(c.camo, "suit") : `<linearGradient id="suit" x1="0" y1="0
   <stop offset=".55" stop-color="${mix(c.energy, "#0b1119", 0.72)}"/><stop offset=".7" stop-color="#05080d"/>
   <stop offset="1" stop-color="#1a2330"/></linearGradient>
 <linearGradient id="gun" x1="0" y1="0" x2="0" y2="1">${gun}</linearGradient>
+<linearGradient id="goldGlass" x1="0" y1="0" x2=".25" y2="1">
+  <stop offset="0" stop-color="#3a2405"/><stop offset=".28" stop-color="#b47a16"/><stop offset=".42" stop-color="#ffe39a"/>
+  <stop offset=".56" stop-color="#c88a1c"/><stop offset="1" stop-color="#2a1803"/></linearGradient>
 <linearGradient id="skin" x1="0" y1="0" x2="1" y2=".3">
   <stop offset="0" stop-color="${mix(skin.color, "#ffffff", 0.22)}"/><stop offset=".42" stop-color="${skin.color}"/>
   <stop offset=".8" stop-color="${mix(skin.color, skin.shadow, 0.6)}"/><stop offset="1" stop-color="${skin.shadow}"/></linearGradient>
@@ -804,6 +808,21 @@ function helmetDetail(c, style, w) {
 function closedVisor(c) {
   const v = c.visor;
   const e = c.energy;
+  if (v === "goldwrap") {
+    // A big tinted dome visor wrapping the face: you see yourself, not them.
+    const glass = "M-10.8,-87.4 C-5,-89.6 5,-89.6 10.8,-87.4 L10.6,-80.4 C9.6,-77.4 6.8,-75.8 3.4,-75.6 L-3.4,-75.6 C-6.8,-75.8 -9.6,-77.4 -10.6,-80.4 Z";
+    return {
+      jaw: true,
+      body:
+        shape("M-11.6,-88.4 C-5,-90.8 5,-90.8 11.6,-88.4 L11.4,-79.8 C10.4,-76.4 7.2,-74.6 3.6,-74.4 L-3.6,-74.4 C-7.2,-74.6 -10.4,-76.4 -11.4,-79.8 Z", "#05070a", 0.6) +
+        shape(glass, "url(#goldGlass)", 0.4) +
+        line("M-9.2,-86 C-5,-87.8 -1,-88.2 2.4,-88", "#fff6d0", 0.9, 0.75) +
+        line("M-9.6,-83.4 L-6.4,-77.6 M-7,-84.6 L-4.4,-79.8", "#ffffff", 0.5, 0.3) +
+        line("M8.8,-86.4 C10.2,-84.6 10.4,-82.4 10,-80.4", "#fff6d0", 0.5, 0.5),
+      glow: line("M-8.6,-77.2 C-4,-75.8 4,-75.8 8.6,-77.2", e, 0.45, 0.6),
+      eyeGlints: false,
+    };
+  }
   if (v === "fullface") {
     const plate =
       "M-10.8,-88 C-4,-89.6 4,-89.6 10.8,-88 L10.6,-78.4 C9.8,-74.6 7.2,-71.6 3.8,-70.4 L-3.8,-70.4 C-7.2,-71.6 -9.8,-74.6 -10.6,-78.4 Z";
@@ -897,6 +916,8 @@ function raisedVisor(c, y) {
  * plates, arms, gear, badges — follows the silhouette. Works on any markup
  * whose coordinates are absolute "x,y" pairs (the whole rig).
  */
+/** The belt buckle light alone, for suits whose chest carries its own lights. */
+const BELT_GLOW = energy(`<rect x="-1.8" y="-26" width="3.6" height="2.2" rx=".3"/>`);
 const warpX = (markup, k) => markup.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${f(Number(x) * k(Number(y)))},${y}`);
 const piecewise = (stops) => (y) => {
   if (y <= stops[0][0]) return stops[0][1];
@@ -1006,9 +1027,62 @@ function reaperHood(c) {
   return { front, glow: eyeGlow(c, 0.12) };
 }
 
+/** Do-rag: a tied head wrap over the skull, the face bare. */
+function bandanaHead(c) {
+  const cloth = "#2c3036";
+  const wrap =
+    "M-7.8,-84.4 C-8.2,-91.2 -4.6,-94.6 0,-94.6 C4.6,-94.6 8.2,-91.2 7.8,-84.4 C6.6,-86.8 4,-87.8 0,-87.9 C-4,-87.8 -6.6,-86.8 -7.8,-84.4 Z";
+  const knot = "M7.2,-89.6 C9.6,-90.6 11,-89.4 10.4,-87.6 C9.8,-86.4 8.4,-86.6 7.6,-87.4 Z";
+  const tails = "M9.6,-87.6 C11.4,-85 12.4,-81 12,-77.4 L10.6,-77.8 C10.8,-81 10.2,-84.4 8.8,-86.8 Z M10.2,-88 C12.6,-86.8 14.2,-84 14.4,-81.2 L13.2,-81 C12.8,-83.4 11.6,-85.6 9.6,-86.8 Z";
+  let dots = "";
+  for (let i = 0; i < 16; i++) {
+    const x = -6.4 + (i % 8) * 1.8 + (i > 7 ? 0.9 : 0);
+    const y = i > 7 ? -89.6 : -92.2;
+    dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
+  }
+  const faceMarkup = c.fem ? femFace(face(c)) : face(c);
+  return {
+    front:
+      faceMarkup +
+      shape(tails, cloth, 0.7) +
+      shape(wrap, cloth, 0.8) +
+      `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
+      dots +
+      line("M-6.8,-86.6 C-3.6,-88.6 3.6,-88.6 6.8,-86.6", "#4a5058", 0.5, 0.8) +
+      line("M-6,-91 C-3.6,-93 0,-93.4 2.6,-93", "#ffffff", 0.5, 0.18) +
+      shape(knot, cloth, 0.7),
+    glow: eyeGlow(c, 0.3),
+  };
+}
+
+/** Pilot: a sealed shell with a dark face plate and three round optics. */
+function pilotHelmet(c) {
+  const e = c.energy;
+  const shell = SHELLS.standard;
+  const plate = "M-9.6,-87.2 C-4.6,-88.8 4.6,-88.8 9.6,-87.2 L9.4,-77.8 C8,-74 5,-71.6 0,-70.8 C-5,-71.6 -8,-74 -9.4,-77.8 Z";
+  const lenses = [[0, -82.6, 2.5], [-5, -83.2, 1.9], [5, -83.2, 1.9]];
+  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#visor)" stroke="${INK}" stroke-width=".35"/>`).join("");
+  return {
+    front:
+      shape(shell, "url(#steel)") +
+      `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
+      shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-88.6 L-1.5,-88.6 Z", "url(#steelDk)", 0.5) +
+      shape(plate, "#0c0f13", 0.8) +
+      ring +
+      line("M-2.6,-75.4 L2.6,-75.4 M-3,-73.8 L3,-73.8", "#2a3038", 0.6, 1) +
+      line("M-1.2,-84.2 C-0.6,-84.8 0.4,-84.9 1,-84.6", "#ffffff", 0.45, 0.8) +
+      `<circle cx="-11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`,
+    glow:
+      `<g fill="${e}" filter="url(#bloom)" opacity=".6">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>` +
+      `<g fill="${c.core}">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.45)}"/>`).join("")}</g>`,
+  };
+}
+
 function head(c, peek) {
   const style = c.helmet;
   if (style === "reaper" && !peek) return reaperHood(c);
+  if (style === "bandana" && !peek) return bandanaHead(c);
+  if (style === "pilot" && !peek) return pilotHelmet(c);
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
@@ -1283,16 +1357,40 @@ function gear(c, pose) {
             return `<g transform="translate(${pt(x, y)}) rotate(38)">${shape("M-2.6,-2.4 L2.6,-2.4 L2.4,2.8 L-2.4,2.8 Z", "#2c3326", 0.6)}${line("M-2.4,-1 L2.4,-1", "#6a7660", 0.4, 0.8)}</g>`;
           })
           .join("");
+      const sand = "#8a7c5c";
+      const shemagh =
+        "M-12,-70.4 C-6,-67.2 6,-67.2 12,-70.4 C15,-67.4 16.6,-63 15.8,-59 C12.2,-56.6 8.2,-58 4.8,-54.8 " +
+        "C2.2,-52.8 -2.2,-52.8 -4.8,-54.8 C-8.2,-58 -12.2,-56.6 -15.8,-59 C-16.6,-63 -15,-67.4 -12,-70.4 Z";
+      const tail = "M-14.6,-60 C-17,-55 -17.4,-49 -16.4,-44.6 L-13.8,-43.2 C-14.6,-48 -13.8,-53.4 -12,-57.6 Z";
+      front +=
+        shape(tail, mix(sand, "#000000", 0.15), 0.8) +
+        shape(shemagh, sand, 0.9) +
+        `<path d="${shemagh}" fill="url(#weave)" opacity=".7"/>` +
+        line("M-10.6,-67.6 C-5,-64.6 5,-64.6 10.6,-67.6 M-13.4,-63.6 C-8,-60.6 -3,-60.4 0,-59.4 M13.4,-63.6 C8,-60.6 3,-60.4 0,-59.4", "#5c5038", 0.6, 0.8) +
+        line("M-11.6,-69.2 C-6,-66.4 -2,-65.8 1,-65.8", "#c4b48c", 0.5, 0.6) +
+        line("M-15.4,-58 L-16,-45.6", "#5c5038", 0.5, 0.7) +
+        // Utility belt: a row of pouches round the waist.
+        [-13.8, -8.2, 3.4, 9].map((x) => shape(`M${f(x)},-29.2 L${f(x + 4.6)},-29.2 L${f(x + 4.4)},-21.4 L${f(x + 0.2)},-21.4 Z`, "#3a3f30", 0.7) + line(`M${f(x + 0.4)},-27.6 L${f(x + 4.2)},-27.6`, "#62684e", 0.45, 0.8)).join("");
       break;
     }
     case "heavy": {
       const collar = "M-15.4,-64.4 C-16,-69 -13,-72.8 -9.6,-74 L-7.6,-69.8 C-9.8,-68.8 -11.2,-67 -11.4,-64.2 Z";
       front += shape(collar, "url(#steel)", 0.9) + shape(mirror(collar), "url(#steelDk)", 0.9) + line("M-14.4,-66 C-14,-69.2 -12,-71.6 -9.8,-72.6", "#f4faff", 0.5, 0.7);
-      legs.forEach((leg, i) => {
-        const s = i === 0 ? -1 : 1;
-        front += part(lerp(leg.hip, leg.kn, 0.26), lerp(leg.hip, leg.kn, 0.7), 15, 12, { bulge: 1, hi: 0.5, rimColor: c.rim });
-        front += line(`M${pt(...lerp(leg.hip, leg.kn, 0.3))} l${f(s * 4.6)},1`, INK, 0.5, 0.6);
-      });
+      // Heavy chest plate carrying twin round lights.
+      front +=
+        shape("M-15.8,-64.6 C-8,-67 8,-67 15.8,-64.6 L16.8,-44.8 C8,-42.6 -8,-42.6 -16.8,-44.8 Z", "url(#steel)", 1.1) +
+        line("M-14.6,-62.6 C-8,-64.6 -2,-64.8 1,-64.8", "#f4faff", 0.7, 0.6) +
+        line("M-15.6,-50 C-8,-48.4 8,-48.4 15.6,-50", INK, 0.55, 0.5) +
+        line("M0,-64.6 L0,-60.6 M0,-49 L0,-43.6", INK, 0.55, 0.55);
+      for (const x of [-7.6, 7.6]) {
+        front +=
+          `<circle cx="${x}" cy="-56" r="5" fill="url(#steelDk)" stroke="${INK}" stroke-width=".9"/>` +
+          `<circle cx="${x}" cy="-56" r="3.6" fill="#05080b" stroke="${INK}" stroke-width=".5"/>` +
+          `<circle cx="${x}" cy="-56" r="1.2" fill="url(#steel)"/>`;
+        glow +=
+          `<circle cx="${x}" cy="-56" r="2.7" fill="none" stroke="${c.energy}" stroke-width="1.3" filter="url(#bloom)" opacity=".8"/>` +
+          `<circle cx="${x}" cy="-56" r="2.7" fill="none" stroke="${c.core}" stroke-width=".7"/>`;
+      }
       break;
     }
     case "stealth": {
@@ -1347,28 +1445,28 @@ function gear(c, pose) {
     }
     case "trencher": {
       // Squared gorget both sides, one heavy slab, webbing, knee plates.
-      const collar = "M-16.4,-63.6 L-17.2,-76.2 L-7.6,-79.4 L-6.2,-71 L-11.8,-68.8 L-11.6,-63.4 Z";
+      const carrier = "#3c4131";
+      const web = "#2a2e22";
       front +=
-        shape(collar, "url(#steelDk)", 0.9) +
-        shape(mirror(collar), "url(#steelDk)", 0.9) +
-        line("M-15.8,-65.4 L-16.4,-75.2 L-8.4,-77.8", "#f0f5ff", 0.55, 0.65) +
-        shape("M-14.6,-64.6 L14.6,-64.6 L16,-44.4 L-16,-44.4 Z", "url(#steel)", 1) +
-        line("M0,-64 L0,-44.8", INK, 0.7, 0.8) +
-        line("M-13.4,-62.8 L13.4,-62.8", "#f0f5ff", 0.6, 0.55) +
-        // Bolt rows along the slab edges.
-        `<g fill="#0c1013">` +
-        [-12.4, 12.4].flatMap((x) => [-59, -53, -47.6].map((y) => `<circle cx="${f(x)}" cy="${f(y)}" r=".75"/>`)).join("") +
-        `</g>` +
+        // Shoulder straps.
+        line("M-11.4,-63.4 L-12.6,-70.6 M11.4,-63.4 L12.6,-70.6", INK, 3.4) +
+        line("M-11.4,-63.4 L-12.6,-70.6 M11.4,-63.4 L12.6,-70.6", carrier, 2.4) +
+        // Carrier body with MOLLE rows.
+        shape("M-13.8,-64 C-7,-65.4 7,-65.4 13.8,-64 L14.6,-38.6 C7,-37.2 -7,-37.2 -14.6,-38.6 Z", carrier, 1) +
+        `<path d="M-13.8,-64 C-7,-65.4 7,-65.4 13.8,-64 L14.6,-38.6 C7,-37.2 -7,-37.2 -14.6,-38.6 Z" fill="url(#weave)" opacity=".6"/>` +
+        [-58.6, -54.2, -49.8].map((y) => line(`M-13.4,${y} L13.4,${y}`, web, 1.1, 0.95) + [-10, -5, 0, 5, 10].map((x) => line(`M${x},${f(y - 0.6)} L${x},${f(y + 0.6)}`, "#55593f", 0.4, 0.9)).join("")).join("") +
+        // Admin pouch high on the chest, a patch on it.
+        shape("M-5.2,-62.4 L5.2,-62.4 L5,-55.6 L-5,-55.6 Z", mix(carrier, "#000000", 0.18), 0.7) +
+        `<rect x="-3.2" y="-61.4" width="6.4" height="3.2" rx=".4" fill="#4e5440" stroke="${INK}" stroke-width=".35"/>` +
+        // Mag pouches.
+        [-11.6, -5.6, 0.4, 6.4].map((x) => shape(`M${f(x)},-48 L${f(x + 5.2)},-48 L${f(x + 5)},-39.8 L${f(x + 0.2)},-39.8 Z`, mix(carrier, "#000000", 0.1), 0.7) + line(`M${f(x + 0.4)},-46.4 L${f(x + 4.8)},-46.4`, "#62684e", 0.45, 0.8)).join("") +
+        // Radio on the left strap, aerial up past the shoulder.
+        shape("M-16.2,-66.4 L-12.6,-67 L-12.2,-58.6 L-15.8,-58.2 Z", "#22262a", 0.8) +
+        line("M-15.4,-66.6 L-16.6,-74.4", INK, 1.1) +
+        line("M-15.4,-66.6 L-16.6,-74.4", "#3c4147", 0.5) +
         // Webbing and pouches at the belt.
         line("M-15,-38.4 L15,-38.4", "#2b3024", 2.6) +
         [-10.4, -2.6, 6.2].map((x) => shape(`M${f(x)},-38 L${f(x + 5)},-38 L${f(x + 4.4)},-29.4 L${f(x + 0.6)},-29.4 Z`, "url(#steelDk)", 0.7)).join("");
-      legs.forEach((leg) => {
-        front += shape(
-          `M${pt(...lerp(leg.hip, leg.kn, 0.72))} l-5.2,1 l1,7.4 l8.4,-1 l-.6,-7 Z`,
-          "url(#steelDk)",
-          0.8,
-        );
-      });
       break;
     }
     case "reliquary": {
@@ -1403,7 +1501,15 @@ function gear(c, pose) {
       back += shape("M-11.6,-72 L11.6,-72 L13,-48 L-13,-48 Z", "url(#steelDk)", 0.9) +
         line("M-9.8,-70 L9.8,-70", "#eef6f4", 0.5, 0.45);
       front +=
+        // Moulded collar ring the helmet seats into.
+        shape("M-9.6,-72.6 C-4.6,-74.2 4.6,-74.2 9.6,-72.6 L13.8,-66.4 C7,-64.4 -7,-64.4 -13.8,-66.4 Z", "url(#steelDk)", 0.9) +
+        line("M-8.8,-72 C-4.4,-73.4 0,-73.6 2.4,-73.4", "#f4fbfa", 0.6, 0.6) +
         shape("M-14.4,-66.4 C-7.6,-70.4 7.6,-70.4 14.4,-66.4 L15,-40 C7,-37.4 -7,-37.4 -15,-40 Z", "url(#steel)", 1) +
+        // Sculpted abdominal plating under the chest shell.
+        shape("M-10.6,-39.4 C-6,-38.2 6,-38.2 10.6,-39.4 L9.8,-29.2 C5,-28.2 -5,-28.2 -9.8,-29.2 Z", "url(#steel)", 0.9) +
+        line("M0,-38.6 L0,-29", INK, 0.55, 0.6) +
+        line("M-9.8,-35.6 C-5,-34.6 5,-34.6 9.8,-35.6 M-9.6,-32.2 C-5,-31.2 5,-31.2 9.6,-32.2", INK, 0.45, 0.45) +
+        line("M-9.4,-38 C-5,-37.2 -2,-37.1 -0.6,-37.1", "#f4fbfa", 0.5, 0.5) +
         // One long seam is the only break in the shell.
         line("M-13.2,-55.6 C-6.4,-58 6.4,-58 13.2,-55.6", INK, 0.6, 0.55) +
         line("M-13.4,-63.8 C-7,-67 7,-67 13.4,-63.8", "#f4fbfa", 0.7, 0.6) +
@@ -1782,7 +1888,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     collar +
     acc.top;
 
-  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
+  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" ? BELT_GLOW : TORSO_GLOW;
+  const glow = recolor(legs.map((l) => l.glow).join("") + torsoGlow + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
