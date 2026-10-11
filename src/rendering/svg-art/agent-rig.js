@@ -1868,12 +1868,13 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   // Shoulders scale about their joint with the frame; a Strider leaves the
   // right shoulder bare (soft cap) for its asymmetric kit.
   const shoulderAt = (s, t) => {
+    if (fs.noShoulders) return "";
     const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
     return fs.shoulder === 1 ? inner : `<g transform="translate(${f(s * 14)},-64) scale(${fs.shoulder}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
   const body =
     recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs + torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
-    chestTrim(c) +
+    (fs.softTorso ? "" : chestTrim(c)) +
     variantTrim(c) +
     insignia(c) +
     kit.front +
@@ -1888,11 +1889,12 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     collar +
     acc.top;
 
-  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" ? BELT_GLOW : TORSO_GLOW;
-  const glow = recolor(legs.map((l) => l.glow).join("") + torsoGlow + arms.map((a) => a.glow).join(""), map) + fr.glow + kit.glow + rifle.glow + acc.glow;
+  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso ? BELT_GLOW : TORSO_GLOW;
+  const limbGlow = fs.noLimbGlow ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
+  const glow = recolor(limbGlow + torsoGlow, map) + fr.glow + kit.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
-  let cape = acc.replacesCape || c.capeOff ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
+  let cape = acc.replacesCape || c.capeOff || (FRAME_SHAPE[c.frame] || {}).noCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
