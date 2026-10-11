@@ -930,8 +930,39 @@ const piecewise = (stops) => (y) => {
   }
   return stops[stops.length - 1][1];
 };
-/** Feminine frame: narrower shoulders and chest, a defined waist, fuller hips, slimmer legs. */
-const FEM_BODY = piecewise([[-80, 0.88], [-64, 0.86], [-54, 0.92], [-46, 0.88], [-36, 0.8], [-28, 0.9], [-18, 1.08], [-6, 1.08], [10, 1], [30, 0.95], [60, 0.93]]);
+/**
+ * Body builds. Proportions move the joints (shoulder and hip spacing), so
+ * limbs keep their own shape and only get thicker or slimmer (armW, legW);
+ * the torso alone is reshaped by height (`torso`). `scale` grows the whole
+ * figure from the soles while the head keeps its size, so a taller build
+ * also reads more heroic; `shoulder` scales the pauldrons.
+ */
+const BUILDS = {
+  // Taller, broad through the chest and shoulders, a V down to the waist,
+  // heavier arms.
+  masc: {
+    sh: 1.07, hip: 1, armW: 1.12, legW: 1.04, shoulder: 1.08, scale: 1.05, head: 1,
+    torso: piecewise([[-80, 1.1], [-64, 1.1], [-52, 1.08], [-42, 1.03], [-34, 0.97], [-26, 1], [60, 1]]),
+  },
+  // Athletic: narrower shoulders, a defined waist, fuller hips; toned limbs,
+  // not thin ones.
+  fem: {
+    sh: 0.91, hip: 1.07, armW: 0.93, legW: 0.99, shoulder: 0.9, scale: 0.99, head: 0.95,
+    torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.9], [-36, 0.84], [-28, 0.94], [-20, 1.1], [-6, 1.12], [60, 1.12]]),
+  },
+};
+/** A pose with the build's shoulder and hip spacing. Explicit elbow/wrist points (a grip) stay put. */
+function buildPose(P, B) {
+  return {
+    ...P,
+    arms: P.arms.map((arm) => ({ ...arm, sh: [arm.sh[0] * B.sh, arm.sh[1]] })),
+    legs: P.legs.map((leg) => {
+      const dx = leg.hip[0] * (B.hip - 1);
+      const mv = (p) => [p[0] + dx, p[1]];
+      return { ...leg, hip: mv(leg.hip), kn: mv(leg.kn), an: mv(leg.an) };
+    }),
+  };
+}
 /** Feminine jaw: the face narrows toward a softer chin. */
 const FEM_JAW = piecewise([[-84, 1], [-78, 0.95], [-71, 0.8]]);
 const femFace = (markup) =>
@@ -1836,10 +1867,11 @@ const collarOf = (c, showFace, map) =>
 export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
   const c = resolve(character || {});
   const armed = pose === "hero";
-  const P = armed ? ARMED : STAND;
+  const B = c.fem ? BUILDS.fem : BUILDS.masc;
+  const P = buildPose(armed ? ARMED : STAND, B);
   const map = bodyMap(c);
-  const legs = P.legs.map((leg, i) => armoredLeg(leg, i === 0 ? -1 : 1));
-  const arms = P.arms.map((arm, i) => armoredArm(arm, i === 0 ? -1 : 1, !armed && i === 0));
+  const legs = P.legs.map((leg, i) => armoredLeg(leg, i === 0 ? -1 : 1, B.legW));
+  const arms = P.arms.map((arm, i) => armoredArm(arm, i === 0 ? -1 : 1, !armed && i === 0, B.armW));
   const tilt = P.arms.map((arm, i) => {
     const s = i === 0 ? -1 : 1;
     return -s * clamp((armSwing(arm, s) - 8) * 0.35, -4, 12);
@@ -1870,36 +1902,46 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const shoulderAt = (s, t) => {
     if (fs.noShoulders) return "";
     const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
-    return fs.shoulder === 1 ? inner : `<g transform="translate(${f(s * 14)},-64) scale(${fs.shoulder}) translate(${f(-s * 14)},64)">${inner}</g>`;
+    const k = fs.shoulder * B.shoulder;
+    const dx = s * 20 * (B.sh - 1);
+    return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
+  // The torso and what sits on it take the build's shape; limbs already
+  // carry it through their joints and thickness.
+  const TW = (m) => warpX(m, B.torso);
   const body =
-    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs + torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
-    (fs.softTorso ? "" : chestTrim(c)) +
-    variantTrim(c) +
-    insignia(c) +
-    kit.front +
-    acc.front +
+    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs, map) +
+    TW(
+      recolor(torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
+        (fs.softTorso ? "" : chestTrim(c)) +
+        variantTrim(c) +
+        insignia(c) +
+        kit.front +
+        acc.front,
+    ) +
     rifle.body +
     recolor(arms.map((a) => a.body).join("") + fr.arms + shoulderAO, map) +
     recolor(shoulderAt(-1, tilt[0]) + shoulderAt(1, tilt[1]), map) +
-    (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
+    (wears(c, "chest") ? TW(badgeAt(c, A.chest)) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
     rifle.hands +
-    collar +
+    TW(collar) +
     acc.top;
 
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = fs.noLimbGlow ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
-  const glow = recolor(limbGlow + torsoGlow, map) + fr.glow + kit.glow + rifle.glow + acc.glow;
+  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + kit.glow) + fr.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || (FRAME_SHAPE[c.frame] || {}).noCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
-  const W = c.fem ? (m) => warpX(m, FEM_BODY) : (m) => m;
-  const headFem = (m) => (c.fem ? `<g transform="translate(0,-67) scale(.95) translate(0,67)">${m}</g>` : m);
+  // Grow the figure from the soles; the head rides up on the neck at its own size.
+  const W = (m) => (B.scale === 1 || !m ? m : `<g transform="translate(0,58) scale(${B.scale}) translate(0,-58)">${m}</g>`);
+  const neckLift = f(-126 * (B.scale - 1));
+  const headFem = (m) => `<g transform="translate(0,${neckLift}) translate(0,-67) scale(${B.head}) translate(0,67)">${m}</g>`;
   return {
     defs: defs(c),
     width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
@@ -1908,7 +1950,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     cape: W(cape),
     body: W(body),
     glow: W(glow),
-    collar: W(collar),
+    collar: W(TW(collar)),
     head: headFem(headScale(h.front + helmBadge + acc.head)),
     headGlow: headFem(headScale(h.glow + acc.headGlow)),
     eyesVisible: showFace,

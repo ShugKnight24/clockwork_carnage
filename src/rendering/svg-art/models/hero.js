@@ -305,7 +305,8 @@ function helmet({ rot = 0, damaged = false }) {
   return { body, glow };
 }
 
-export function armoredLeg({ hip, kn, an }, s) {
+export function armoredLeg({ hip, kn, an }, s, kw = 1) {
+  const W = (p) => (kw === 1 ? p : scaleProf(p, kw));
   const T = (t) => lerp(hip, kn, t);
   const S = (t) => lerp(kn, an, t);
   const legA = angle(kn, an);
@@ -315,19 +316,19 @@ export function armoredLeg({ hip, kn, an }, s) {
   const stripeB = S(0.52);
   const body =
     // Under-suit: the body shows through the fabric.
-    muscle(hip, kn, THIGH.out, THIGH.in, s, { fill: "url(#suit)", hi: 0.14, rim: 0.3, weave: true }) +
-    muscle(kn, an, CALF.out, CALF.in, s, { fill: "url(#suit)", hi: 0.12, rim: 0.3, weave: true }) +
+    muscle(hip, kn, W(THIGH.out), W(THIGH.in), s, { fill: "url(#suit)", hi: 0.14, rim: 0.3, weave: true }) +
+    muscle(kn, an, W(CALF.out), W(CALF.in), s, { fill: "url(#suit)", hi: 0.12, rim: 0.3, weave: true }) +
     // Fabric gathering above the knee.
     at(kn, legA, line("M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6", "#000000", 0.5, 0.4)) +
     // Thigh plate on the front of the thigh, ending well clear of the knee, strapped.
-    muscle(T(0.12), T(0.62), THIGH_PLATE.out, THIGH_PLATE.in, s) +
+    muscle(T(0.12), T(0.62), W(THIGH_PLATE.out), W(THIGH_PLATE.in), s) +
     at(T(0.72), thighA, shape("M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z", "#14181d", 0.5) + shape(`M${f(s * 2.4 - 1.5)},-1.7 L${f(s * 2.4 + 1.5)},-1.7 L${f(s * 2.4 + 1.5)},1.7 L${f(s * 2.4 - 1.5)},1.7 Z`, "url(#steelDk)", 0.4)) +
     // Shin guard between the knee pad and the boot.
-    muscle(S(0.2), S(0.62), SHIN_PLATE.out, SHIN_PLATE.in, s) +
+    muscle(S(0.2), S(0.62), W(SHIN_PLATE.out), W(SHIN_PLATE.in), s) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#05131a", 1.4) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#0a8aa0", 0.6) +
     // Tall tactical boot: a shaft up the lower shin with straps.
-    muscle(S(0.6), S(1.02), BOOT.out, BOOT.in, s, { fill: "url(#steelDk)", hi: 0.3, rim: 0.5 }) +
+    muscle(S(0.6), S(1.02), W(BOOT.out), W(BOOT.in), s, { fill: "url(#steelDk)", hi: 0.3, rim: 0.5 }) +
     at(S(0.72), legA, line("M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8", "#05070a", 0.9, 0.85)) +
     // Knee pad: below the kneecap, strapped round the leg.
     at(S(0.1), legA,
@@ -425,12 +426,13 @@ export const armSwing = (arm, s) => {
  */
 export const VAMBRACE = { channel: [0.3, 0.82], seam: 1.1, device: 0.62, deviceHalf: [3.2, 2.7] };
 
-export function armoredArm(arm, s, chrono) {
+export function armoredArm(arm, s, chrono, kw = 1) {
+  const W = (p) => (kw === 1 ? p : scaleProf(p, kw));
   const { sh, el, wr } = armJoints(arm, s);
   const hand = arm.hand ?? "fist";
   const up = heading(sh, el);
   const top = polar(sh, up, -4);
-  const sleeve = muscleGeom(top, el, UPPER_ARM.out, UPPER_ARM.in, s).d + muscleGeom(el, wr, FOREARM.out, FOREARM.in, s).d;
+  const sleeve = muscleGeom(top, el, W(UPPER_ARM.out), W(UPPER_ARM.in), s).d + muscleGeom(el, wr, W(FOREARM.out), W(FOREARM.in), s).d;
   const upA = angle(sh, el);
   const foA = angle(el, wr);
   let delta = foA - upA;
@@ -443,10 +445,10 @@ export function armoredArm(arm, s, chrono) {
     merged(sleeve, "url(#suit)") +
     `<path d="${sleeve}" fill="url(#weave)"/>` +
     // rerebrace: wide under the pauldron, bicep swell, narrowing to the elbow
-    muscle(polar(sh, up, 1), lerp(sh, el, 0.64), REREBRACE.out, REREBRACE.in, s, { hi: 0.6 }) +
+    muscle(polar(sh, up, 1), lerp(sh, el, 0.64), W(REREBRACE.out), W(REREBRACE.in), s, { hi: 0.6 }) +
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
-    muscle(lerp(el, wr, foreLen < 14 ? 0.1 : 0.22), lerp(el, wr, 0.86), VAMBRACE_PLATE.out, VAMBRACE_PLATE.in, s, { hi: 0.5 }) +
+    muscle(lerp(el, wr, foreLen < 14 ? 0.1 : 0.22), lerp(el, wr, 0.86), W(VAMBRACE_PLATE.out), W(VAMBRACE_PLATE.in), s, { hi: 0.5 }) +
     line(`M${pt(...lerp(el, wr, VAMBRACE.channel[0]))}L${pt(...lerp(el, wr, VAMBRACE.channel[1]))}`, "#05131a", VAMBRACE.seam, 0.8) +
     // Soft elbow: fabric creases on the inside, a small pad on the outer point.
     `<g transform="translate(${pt(...el)}) rotate(${f(copA)})">` +
@@ -635,8 +637,11 @@ export function armorRig(pose, { cape = standingCape(), mid = "", front = "", da
 // wider. Arms hang easy and differ a little, so the figure is not a mirror.
 export const STAND = {
   arms: [
-    { sh: [-20, -59.4], rot: 4.5, bend: 9, upper: 28.4, fist: "side" },
-    { sh: [20, -58.6], rot: 3.5, bend: 12, fore: 23.4, fist: "side" },
+    // The upper arm hangs close; the forearm angles slightly out at the
+    // elbow (the carrying angle), so the hands hang clear of the hips rather
+    // than tucked against them at attention.
+    { sh: [-20, -59.4], rot: 3, bend: -7, upper: 28.4, fist: "side" },
+    { sh: [20, -58.6], rot: 2, bend: -4.5, fore: 23.4, fist: "side" },
   ],
   legs: [
     { hip: [-7.6, -18.6], kn: [-11.8, 19.4], an: [-15.4, 49.6] },
