@@ -18,6 +18,7 @@ import {
   BODY_FRAMES,
   CAPE_STYLES,
   BODY_TYPES,
+  CAMO_STYLES,
 } from "../../src/data/cosmetics.js";
 
 const store = {};
@@ -51,6 +52,7 @@ const OPTION_LISTS = {
   frameIndex: BODY_FRAMES,
   capeIndex: CAPE_STYLES,
   bodyIndex: BODY_TYPES,
+  camoIndex: CAMO_STYLES,
 };
 
 const indexFields = Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"));

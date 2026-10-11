@@ -5,7 +5,7 @@
 
 import { normalizeCustomSkins, normalizeWeaponFinishes } from "../data/weapon-skins.js";
 import {
-  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, BODY_FRAMES, CAPE_STYLES, BODY_TYPES,
+  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
   ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
   DEFAULT_CHARACTER,
@@ -147,6 +147,7 @@ export function loadCharacter(character) {
       frameIndex: BODY_FRAMES.length - 1,
       capeIndex: CAPE_STYLES.length - 1,
       bodyIndex: BODY_TYPES.length - 1,
+      camoIndex: CAMO_STYLES.length - 1,
     };
     const OBJECT_FIELDS = new Set(["badge", "accessories", "weaponFinishes", "customSkins"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {

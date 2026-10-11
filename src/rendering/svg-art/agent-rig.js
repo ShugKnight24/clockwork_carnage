@@ -56,6 +56,7 @@ import {
   BODY_FRAMES,
   CAPE_STYLES,
   BODY_TYPES,
+  CAMO_STYLES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -159,6 +160,7 @@ function resolve(ch) {
     frame: pick(BODY_FRAMES, ch.frameIndex).id,
     capeOff: pick(CAPE_STYLES, ch.capeIndex).id === "none",
     fem: pick(BODY_TYPES, ch.bodyIndex).id === "fem",
+    camo: ch.camoIndex ? CAMO_STYLES[ch.camoIndex] || null : null,
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
@@ -228,6 +230,65 @@ function gunMap(c) {
 // Defs
 // ---------------------------------------------------------------------------
 
+/** Seeded 0..1 noise for camo layouts (the same pattern every render). */
+const camoRand = (i) => {
+  const v = Math.sin(i * 91.7 + 47.3) * 43758.5453;
+  return v - Math.floor(v);
+};
+/** A smooth closed blob through jittered points around (cx, cy). */
+function blobPath(cx, cy, r, seed) {
+  const n = 7;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const rr = r * (0.6 + camoRand(seed + i) * 0.7);
+    pts.push([cx + Math.cos(a) * rr * 1.35, cy + Math.sin(a) * rr * 0.8]);
+  }
+  let d = `M${pt(...pts[0])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    d += `C${pt(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)} ${pt(p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)} ${pt(...p2)}`;
+  }
+  return d + "Z";
+}
+
+/**
+ * A seamless camo tile as an SVG <pattern> with the given id: organic blobs
+ * (drawn again across the tile edges so it wraps cleanly) or pixel blocks.
+ */
+export function camoPattern(camo, id, scale = 1) {
+  const T = 18;
+  let body = `<rect width="${T}" height="${T}" fill="${camo.base}"/>`;
+  if (camo.kind === "pixel") {
+    const q = 1.5;
+    for (let y = 0; y < T; y += q) {
+      for (let x = 0; x < T; x += q) {
+        const r = camoRand(x * 13.1 + y * 7.7);
+        if (r < 0.45) continue;
+        body += `<rect x="${f(x)}" y="${f(y)}" width="${q}" height="${q}" fill="${camo.blobs[Math.floor(r * 10) % camo.blobs.length]}"/>`;
+      }
+    }
+  } else {
+    camo.blobs.forEach((col, k) => {
+      for (let i = 0; i < 5; i++) {
+        const seed = k * 37 + i * 11;
+        const cx = camoRand(seed) * T;
+        const cy = camoRand(seed + 5) * T;
+        const r = 2 + camoRand(seed + 9) * 2.4;
+        for (const dx of [-T, 0, T]) for (const dy of [-T, 0, T]) {
+          if (cx + dx < -5 || cx + dx > T + 5 || cy + dy < -5 || cy + dy > T + 5) continue;
+          body += `<path d="${blobPath(cx + dx, cy + dy, r, seed)}" fill="${col}"/>`;
+        }
+      }
+    });
+  }
+  // A light shading wash so the fabric is not perfectly flat.
+  return `<pattern id="${id}" width="${T}" height="${T}" patternUnits="userSpaceOnUse" patternTransform="scale(${scale}) rotate(-12)">${body}</pattern>`;
+}
+
 function defs(c) {
   const s = ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard;
   const g = c.finish.stops;
@@ -245,9 +306,9 @@ function defs(c) {
 <linearGradient id="steelDk" x1="0" y1="0" x2="1" y2=".35">
   <stop offset="0" stop-color="${mix(s[1], s[2], 0.55)}"/><stop offset=".45" stop-color="${mix(s[2], s[3], 0.5)}"/>
   <stop offset="1" stop-color="${mix(s[4], "#000000", 0.3)}"/></linearGradient>
-<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25">
+${c.camo ? camoPattern(c.camo, "suit") : `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25">
   <stop offset="0" stop-color="${suitLo[0]}"/><stop offset=".45" stop-color="${suitLo[1]}"/>
-  <stop offset="1" stop-color="${suitLo[2]}"/></linearGradient>
+  <stop offset="1" stop-color="${suitLo[2]}"/></linearGradient>`}
 <linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">
   <stop offset="0" stop-color="${c.cape[0]}"/><stop offset=".3" stop-color="${c.cape[1]}"/>
   <stop offset=".62" stop-color="${c.cape[2]}"/><stop offset="1" stop-color="${c.cape[3]}"/></linearGradient>
@@ -1850,8 +1911,9 @@ function realAgentDefs(c) {
   const swap = {
     steel: sheen("steel", base, spec, s[3], s[4], 0.15, ramp),
     steelDk: sheen("steelDk", mix(base, s[3], 0.45), mix(base, spec, 0.4), s[3], mix(s[4], "#000000", 0.3), 0.16, ramp),
-    suit:
-      `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25"><stop offset="0" stop-color="${matte ? "#26292d" : "#3a3e43"}"/>` +
+    suit: c.camo
+      ? camoPattern(c.camo, "suit")
+      : `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25"><stop offset="0" stop-color="${matte ? "#26292d" : "#3a3e43"}"/>` +
       `<stop offset=".45" stop-color="${matte ? "#131517" : "#1d2024"}"/><stop offset="1" stop-color="#08090a"/></linearGradient>`,
     cape:
       `<linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">` +

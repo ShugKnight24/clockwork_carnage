@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
@@ -12,6 +12,7 @@ import {
   BODY_FRAMES,
   CAPE_STYLES,
   BODY_TYPES,
+  CAMO_STYLES,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -140,6 +141,7 @@ const CATEGORIES = [
     sections: [
       { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
       { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
+      { key: "camoIndex", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
       { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
     ],
   },
@@ -519,6 +521,10 @@ svg { display: block; }
 .grid { display: grid; gap: 8px; }
 .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.camo { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
+/* Camo is the reward: locked swatches keep their colour. */
+.grid.camo .locked .thumb svg { filter: none; opacity: 0.85; }
 .grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
@@ -2620,6 +2626,12 @@ class AgentShowroom extends HTMLElement {
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "camo": {
+        const sw = item.base
+          ? `<svg viewBox="0 0 24 24" aria-hidden="true"><defs>${camoPattern(item, `cm${i}`, 0.7)}</defs><rect width="24" height="24" fill="url(#cm${i})"/></svg>`
+          : `<svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" fill="#16191d"/></svg>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}<span class="thumb camo-sw">${sw}</span><span class="oname">${esc(item.name)}</span>${prog}</button>`;
+      }
       case "palette":
         return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span>${prog}</button>`;
       case "origin":

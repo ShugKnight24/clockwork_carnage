@@ -174,6 +174,40 @@ export const BODY_FRAMES = [
   { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
 ];
 
+/**
+ * Under-suit camouflage (the fabric between the plates). `base` and `blobs`
+ * colours; `kind` blob or pixel. Earned; Plain is always open. Appended,
+ * never inserted.
+ */
+export const CAMO_STYLES = [
+  { id: "none", name: "Plain", desc: "Issue black" },
+  {
+    id: "woodland", name: "Woodland", desc: "Greens and browns for the tree line", kind: "blob",
+    base: "#4a5236", blobs: ["#2f3a22", "#6b5a3a", "#1c1f16"],
+    unlock: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
+  },
+  {
+    id: "desert", name: "Desert", desc: "Sand, scrub and shadow", kind: "blob",
+    base: "#b3a07a", blobs: ["#8f7a52", "#d1c096", "#6e5a3c"],
+    unlock: { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
+  },
+  {
+    id: "urban", name: "Urban", desc: "Concrete greys", kind: "blob",
+    base: "#6a6f74", blobs: ["#44494e", "#959ba1", "#2a2e32"],
+    unlock: { type: "campaignActs", count: 1, label: "Clear Act 1", unit: "acts" },
+  },
+  {
+    id: "arctic", name: "Arctic", desc: "Snow and ice-shadow", kind: "blob",
+    base: "#d4d9de", blobs: ["#a6b0b9", "#eef2f5", "#7a848d"],
+    unlock: { type: "campaignActs", count: 3, label: "Clear Act 3", unit: "acts" },
+  },
+  {
+    id: "digital", name: "Night Digital", desc: "Pixelated blues for night ops", kind: "pixel",
+    base: "#283039", blobs: ["#171b21", "#3c4857", "#566373"],
+    unlock: { type: "achievement", id: "roundVeteran", label: "Earn Arena Veteran" },
+  },
+];
+
 /** Body type. Appended, never inserted. */
 export const BODY_TYPES = [
   { id: "masc", name: "Masculine", desc: "Broad shoulders, straight frame" },
@@ -466,6 +500,7 @@ export const DEFAULT_CHARACTER = {
   armorIndex: 0,
   frameIndex: 0,
   bodyIndex: 0,
+  camoIndex: 0,
   capeIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
