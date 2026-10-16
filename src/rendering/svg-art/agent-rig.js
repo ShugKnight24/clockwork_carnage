@@ -941,13 +941,13 @@ const BUILDS = {
   // Taller, broad through the chest and shoulders, a V down to the waist,
   // heavier arms.
   masc: {
-    sh: 1.07, hip: 1, armW: 1.12, legW: 1.04, shoulder: 1.08, scale: 1.05, head: 1,
-    torso: piecewise([[-80, 1.1], [-64, 1.1], [-52, 1.08], [-42, 1.03], [-34, 0.97], [-26, 1], [60, 1]]),
+    sh: 1.08, hip: 1, armW: 1.14, legW: 1.06, shoulder: 1.06, scale: 1.05, head: 1,
+    torso: piecewise([[-80, 1.12], [-64, 1.14], [-54, 1.12], [-44, 1.04], [-34, 0.95], [-26, 0.98], [60, 1]]),
   },
   // Athletic: narrower shoulders, a defined waist, fuller hips; toned limbs,
   // not thin ones.
   fem: {
-    sh: 0.91, hip: 1.07, armW: 0.93, legW: 0.99, shoulder: 0.9, scale: 0.99, head: 0.95,
+    sh: 0.92, hip: 1.06, armW: 0.97, legW: 1.01, shoulder: 0.92, scale: 0.99, head: 0.95,
     torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.9], [-36, 0.84], [-28, 0.94], [-20, 1.1], [-6, 1.12], [60, 1.12]]),
   },
 };

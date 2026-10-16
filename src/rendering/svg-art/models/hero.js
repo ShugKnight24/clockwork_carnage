@@ -175,13 +175,13 @@ const CALF = { out: [[0, 5.1], [0.2, 6.7], [0.44, 6.1], [0.74, 4.3], [1, 3.4]], 
 const THIGH_PLATE = { out: [[0, 7.4], [0.4, 7.4], [0.8, 6.4], [1, 5.8]], in: [[0, 6], [0.4, 6], [0.8, 5.2], [1, 4.8]] };
 const SHIN_PLATE = { out: [[0, 4.8], [0.3, 5.5], [0.7, 4.6], [1, 3.9]], in: [[0, 4.6], [0.35, 5.6], [0.7, 4.5], [1, 3.6]] };
 const BOOT = { out: [[0, 4.8], [0.55, 4.1], [1, 4.4]], in: [[0, 4.6], [0.55, 3.9], [1, 4.2]] };
-const UPPER_ARM = { out: [[0, 6.4], [0.2, 6.6], [0.5, 5.5], [0.8, 4.6], [1, 4.3]], in: [[0, 5], [0.3, 4.8], [0.55, 5.2], [0.85, 4.3], [1, 4.1]] };
-const FOREARM = { out: [[0, 4.5], [0.25, 5.2], [0.6, 4.1], [1, 3.2]], in: [[0, 4.2], [0.3, 4.6], [0.7, 3.4], [1, 3.1]] };
+const UPPER_ARM = { out: [[0, 6.8], [0.25, 7.2], [0.55, 6.8], [0.85, 5.8], [1, 5.3]], in: [[0, 5.4], [0.35, 6], [0.6, 6.1], [0.85, 5.3], [1, 5]] };
+const FOREARM = { out: [[0, 5.3], [0.22, 5.9], [0.55, 4.9], [1, 3.6]], in: [[0, 5], [0.25, 5.4], [0.6, 4.4], [1, 3.4]] };
 /** Limb profiles, for layers that dress a limb (frames). */
 export const LIMB = { THIGH, CALF, UPPER_ARM, FOREARM };
 
-const REREBRACE = { out: [[0, 6.3], [0.5, 5.9], [1, 5]], in: [[0, 5.2], [0.5, 5], [1, 4.4]] };
-const VAMBRACE_PLATE = { out: [[0, 5.1], [0.35, 5.2], [1, 3.9]], in: [[0, 4.7], [0.35, 4.7], [1, 3.6]] };
+const REREBRACE = { out: [[0, 6.6], [0.4, 6.7], [1, 5.6]], in: [[0, 5.4], [0.5, 5.6], [1, 4.9]] };
+const VAMBRACE_PLATE = { out: [[0, 5.4], [0.3, 5.6], [1, 4.1]], in: [[0, 5], [0.3, 5.1], [1, 3.8]] };
 
 /** Capsule outline with a fixed winding, so several can be unioned in one path. */
 const seg = (a, b, wa, wb, bulge = 0) => capsule(a, b, wa, wb, bulge, false).d;
@@ -445,16 +445,11 @@ export function armoredArm(arm, s, chrono, kw = 1) {
     merged(sleeve, "url(#suit)") +
     `<path d="${sleeve}" fill="url(#weave)"/>` +
     // rerebrace: wide under the pauldron, bicep swell, narrowing to the elbow
-    muscle(polar(sh, up, 1), lerp(sh, el, 0.64), W(REREBRACE.out), W(REREBRACE.in), s, { hi: 0.6 }) +
+    muscle(polar(sh, up, 1), lerp(sh, el, 0.86), W(REREBRACE.out), W(REREBRACE.in), s, { hi: 0.6 }) +
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
-    muscle(lerp(el, wr, foreLen < 14 ? 0.1 : 0.22), lerp(el, wr, 0.86), W(VAMBRACE_PLATE.out), W(VAMBRACE_PLATE.in), s, { hi: 0.5 }) +
+    muscle(lerp(el, wr, 0.1), lerp(el, wr, 0.86), W(VAMBRACE_PLATE.out), W(VAMBRACE_PLATE.in), s, { hi: 0.5 }) +
     line(`M${pt(...lerp(el, wr, VAMBRACE.channel[0]))}L${pt(...lerp(el, wr, VAMBRACE.channel[1]))}`, "#05131a", VAMBRACE.seam, 0.8) +
-    // Soft elbow: fabric creases on the inside, a small pad on the outer point.
-    `<g transform="translate(${pt(...el)}) rotate(${f(copA)})">` +
-    line(`M${f(-s * 3.6)},-1.6 C${f(-s * 1.6)},-0.6 ${f(-s * 0.2)},-0.4 ${f(s * 1)},-0.8 M${f(-s * 3.2)},0.8 C${f(-s * 1.4)},1.6 ${f(-s * 0.2)},1.6 ${f(s * 0.8)},1.2`, "#000000", 0.45, 0.45) +
-    shape(`M${f(s * 2.8)},-3 C${f(s * 5.6)},-3.4 ${f(s * 6.6)},-0.6 ${f(s * 6)},2.4 C${f(s * 5)},3.6 ${f(s * 3.4)},3.4 ${f(s * 2.6)},2.6 Z`, "url(#steelDk)", 0.7) +
-    `</g>` +
     // wrist cuff
     `<g transform="translate(${pt(...wr)}) rotate(${f(foA)})">` +
     shape("M-4.6,-2.6 L4.6,-2.6 L4.9,.6 L-4.9,.6 Z", "#0a0f16", 0.6) +
@@ -637,15 +632,15 @@ export function armorRig(pose, { cape = standingCape(), mid = "", front = "", da
 // wider. Arms hang easy and differ a little, so the figure is not a mirror.
 export const STAND = {
   arms: [
-    // The upper arm hangs close; the forearm angles slightly out at the
-    // elbow (the carrying angle), so the hands hang clear of the hips rather
-    // than tucked against them at attention.
-    { sh: [-20, -59.4], rot: 3, bend: -7, upper: 28.4, fist: "side" },
-    { sh: [20, -58.6], rot: 2, bend: -4.5, fore: 23.4, fist: "side" },
+    // Square and symmetric: arms hang straight down beside the body, the
+    // upper arm just clearing the lats, the forearm continuing the same line.
+    { sh: [-20, -59], rot: 5, bend: 5, fist: "side" },
+    { sh: [20, -59], rot: 5, bend: 5, fist: "side" },
   ],
+  // Feet level and shoulder-width apart, legs straight under the hips.
   legs: [
-    { hip: [-7.6, -18.6], kn: [-11.8, 19.4], an: [-15.4, 49.6] },
-    { hip: [7.4, -19.4], kn: [9.4, 18.8], an: [10.2, 50] },
+    { hip: [-8, -19], kn: [-10.4, 19], an: [-12.6, 50] },
+    { hip: [8, -19], kn: [10.4, 19], an: [12.6, 50] },
   ],
 };
 
