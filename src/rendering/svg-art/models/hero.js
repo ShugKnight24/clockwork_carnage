@@ -151,6 +151,24 @@ function muscleGeom(a, b, outer, inner, s) {
   return { d, hi: edge(leftProf, -1, Math.min(1.6, wa * 0.14), 0.1, 0.8), rim: edge(rightProf, 1, 0.4, 0.05, 0.95) };
 }
 
+/**
+ * A contour drawn along a limb from a to b: points are [t, o] with t along
+ * the limb and o the offset from its axis (positive = away from the body's
+ * midline for side s). Used to sculpt muscle separations into the plates.
+ */
+export function contour(a, b, pts, s, color, w, op) {
+  const len = dist(a, b) || 1;
+  const ux = (b[0] - a[0]) / len;
+  const uy = (b[1] - a[1]) / len;
+  const P = pts.map(([t, o]) => [a[0] + ux * len * t + uy * o * s, a[1] + uy * len * t - ux * o * s]);
+  return line(`M${pt(...P[0])}` + through(P), color, w, op);
+}
+/** A sculpted groove: a dark line with a lit edge beside it. */
+const groove = (a, b, pts, s, lit = 0.35) =>
+  contour(a, b, pts.map(([t, o]) => [t, o + 0.8]), s, "#000000", 2.4, 0.4) +
+  contour(a, b, pts, s, INK, 1, 0.95) +
+  contour(a, b, pts.map(([t, o]) => [t, o - 0.9]), s, "#eaf4ff", 0.7, lit + 0.3);
+
 /** A shaded anatomical segment: fill + ink, lit-edge highlight, rim light (like part()). */
 export function muscle(a, b, outer, inner, s, o = {}) {
   const { fill = "url(#steel)", hi = 0.55, rim = 0.8, ink = 1.1, hiColor = "#eaf4ff", rimColor = RIM, weave = false } = o;
@@ -170,18 +188,18 @@ const scaleProf = (prof, k) => prof.map(([t, w]) => [t, w * k]);
 // full at the top tapering into the knee, calves swelling high on the inside
 // and narrowing to the ankle, a deltoid over a slimmer upper arm, forearms
 // full below the elbow. Plates sit inside those outlines.
-const THIGH = { out: [[0, 8.6], [0.2, 9.2], [0.5, 8.2], [0.8, 6.3], [1, 5.2]], in: [[0, 7.2], [0.16, 7.9], [0.42, 6.8], [0.8, 4.8], [1, 4.6]] };
-const CALF = { out: [[0, 5.1], [0.2, 6.7], [0.44, 6.1], [0.74, 4.3], [1, 3.4]], in: [[0, 4.9], [0.3, 6.9], [0.52, 6], [0.8, 4], [1, 3.3]] };
-const THIGH_PLATE = { out: [[0, 7.4], [0.4, 7.4], [0.8, 6.4], [1, 5.8]], in: [[0, 6], [0.4, 6], [0.8, 5.2], [1, 4.8]] };
-const SHIN_PLATE = { out: [[0, 4.8], [0.3, 5.5], [0.7, 4.6], [1, 3.9]], in: [[0, 4.6], [0.35, 5.6], [0.7, 4.5], [1, 3.6]] };
+const THIGH = { out: [[0, 9], [0.22, 10], [0.45, 9.6], [0.75, 7.4], [1, 5.6]], in: [[0, 7.6], [0.2, 8], [0.5, 7.2], [0.78, 7], [0.92, 5.8], [1, 5]] };
+const CALF = { out: [[0, 5.4], [0.2, 7.4], [0.42, 6.8], [0.72, 4.6], [1, 3.6]], in: [[0, 5.2], [0.3, 7.8], [0.5, 7], [0.78, 4.4], [1, 3.5]] };
+const THIGH_PLATE = { out: [[0, 8], [0.3, 8.6], [0.7, 8.2], [1, 7]], in: [[0, 6.4], [0.4, 6.4], [0.8, 6], [1, 5.6]] };
+const SHIN_PLATE = { out: [[0, 5.2], [0.3, 6.1], [0.7, 5.1], [1, 4.2]], in: [[0, 5], [0.35, 6.3], [0.7, 5], [1, 3.9]] };
 const BOOT = { out: [[0, 4.8], [0.55, 4.1], [1, 4.4]], in: [[0, 4.6], [0.55, 3.9], [1, 4.2]] };
-const UPPER_ARM = { out: [[0, 6.8], [0.25, 7.2], [0.55, 6.8], [0.85, 5.8], [1, 5.3]], in: [[0, 5.4], [0.35, 6], [0.6, 6.1], [0.85, 5.3], [1, 5]] };
-const FOREARM = { out: [[0, 5.3], [0.22, 5.9], [0.55, 4.9], [1, 3.6]], in: [[0, 5], [0.25, 5.4], [0.6, 4.4], [1, 3.4]] };
+const UPPER_ARM = { out: [[0, 7.4], [0.2, 8.2], [0.45, 7.8], [0.75, 6.4], [1, 5.4]], in: [[0, 5.8], [0.35, 6.4], [0.58, 7], [0.85, 5.8], [1, 5.1]] };
+const FOREARM = { out: [[0, 5.5], [0.2, 6.6], [0.5, 5.4], [1, 3.7]], in: [[0, 5.1], [0.25, 5.8], [0.6, 4.6], [1, 3.5]] };
 /** Limb profiles, for layers that dress a limb (frames). */
 export const LIMB = { THIGH, CALF, UPPER_ARM, FOREARM };
 
-const REREBRACE = { out: [[0, 6.6], [0.4, 6.7], [1, 5.6]], in: [[0, 5.4], [0.5, 5.6], [1, 4.9]] };
-const VAMBRACE_PLATE = { out: [[0, 5.4], [0.3, 5.6], [1, 4.1]], in: [[0, 5], [0.3, 5.1], [1, 3.8]] };
+const REREBRACE = { out: [[0, 7.2], [0.25, 7.8], [0.55, 7.4], [1, 5.8]], in: [[0, 5.6], [0.45, 6.2], [0.65, 6.6], [1, 5.2]] };
+const VAMBRACE_PLATE = { out: [[0, 5.8], [0.22, 6.3], [0.6, 5.2], [1, 4.2]], in: [[0, 5.2], [0.28, 5.5], [1, 3.9]] };
 
 /** Capsule outline with a fixed winding, so several can be unioned in one path. */
 const seg = (a, b, wa, wb, bulge = 0) => capsule(a, b, wa, wb, bulge, false).d;
@@ -323,8 +341,14 @@ export function armoredLeg({ hip, kn, an }, s, kw = 1) {
     // Thigh plate on the front of the thigh, ending well clear of the knee, strapped.
     muscle(T(0.12), T(0.62), W(THIGH_PLATE.out), W(THIGH_PLATE.in), s) +
     at(T(0.72), thighA, shape("M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z", "#14181d", 0.5) + shape(`M${f(s * 2.4 - 1.5)},-1.7 L${f(s * 2.4 + 1.5)},-1.7 L${f(s * 2.4 + 1.5)},1.7 L${f(s * 2.4 - 1.5)},1.7 Z`, "url(#steelDk)", 0.4)) +
+    // Quads: the line between vastus lateralis and rectus femoris, and the
+    // teardrop of the vastus medialis.
+    groove(T(0.12), T(0.62), [[0.1, 3.4], [0.5, 2.6], [0.95, 1.2]], s) +
+    groove(T(0.4), T(0.98), [[0.1, -3.6], [0.55, -5.2], [0.95, -3.4]], s, 0.25) +
     // Shin guard between the knee pad and the boot.
     muscle(S(0.2), S(0.62), W(SHIN_PLATE.out), W(SHIN_PLATE.in), s) +
+    // Calves: the split between the two heads of the gastrocnemius.
+    groove(S(0.2), S(0.62), [[0.08, 1.4], [0.45, 0.6], [0.9, 0.2]], s, 0.3) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#05131a", 1.4) +
     line(`M${pt(...stripeA)}L${pt(...stripeB)}`, "#0a8aa0", 0.6) +
     // Tall tactical boot: a shaft up the lower shin with straps.
@@ -446,6 +470,9 @@ export function armoredArm(arm, s, chrono, kw = 1) {
     `<path d="${sleeve}" fill="url(#weave)"/>` +
     // rerebrace: wide under the pauldron, bicep swell, narrowing to the elbow
     muscle(polar(sh, up, 1), lerp(sh, el, 0.86), W(REREBRACE.out), W(REREBRACE.in), s, { hi: 0.6 }) +
+    // Biceps and triceps: the groove between them, and the biceps peak.
+    groove(polar(sh, up, 1), lerp(sh, el, 0.86), [[0.25, 0.8], [0.6, 0.2], [0.95, 0.4]], s) +
+    groove(polar(sh, up, 1), lerp(sh, el, 0.86), [[0.35, -2.8], [0.62, -4.4], [0.88, -3.4]], s, 0.25) +
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
     muscle(lerp(el, wr, 0.1), lerp(el, wr, 0.86), W(VAMBRACE_PLATE.out), W(VAMBRACE_PLATE.in), s, { hi: 0.5 }) +
@@ -492,8 +519,8 @@ export function pauldron(s, tilt = 0) {
 
 export function torso() {
   const chest =
-    "M-14,-64.6 C-8,-66.2 8,-66.2 14,-64.6 C17,-60 17.6,-54 16.4,-49 C15.2,-44.5 12.5,-41 10,-39.6 " +
-    "C6,-38.7 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.7 -10,-39.6 C-12.5,-41 -15.2,-44.5 -16.4,-49 C-17.6,-54 -17,-60 -14,-64.6 Z";
+    "M-15,-65 C-8,-66.8 8,-66.8 15,-65 C18.4,-60 18.8,-53.6 17.4,-48.4 C16,-43.8 13,-40.8 10.2,-39.4 " +
+    "C6,-38.6 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.6 -10.2,-39.4 C-13,-40.8 -16,-43.8 -17.4,-48.4 C-18.8,-53.6 -18.4,-60 -15,-65 Z";
   const suit =
     "M-9,-68 L9,-68 L16,-64 C19,-62 19.5,-57 18.5,-52 C17.5,-46 15,-40 14,-33 C13.7,-29 14,-24 14.8,-20 " +
     "L15,-15 C10,-14 5,-13 0,-12 C-5,-13 -10,-14 -15,-15 L-14.6,-20 C-14,-24 -13.7,-29 -14,-33 " +
@@ -520,6 +547,11 @@ export function torso() {
     `<ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#shade)"/>` +
     lames +
     shape(chest, "url(#steel)") +
+    // Pectorals: a lit upper mass on each side and a cast shadow along the
+    // lower edge, split at the sternum.
+    `<path d="M-1.2,-63.4 C-6,-64.4 -12,-63.6 -15.6,-60 C-17.2,-56 -16.8,-51.6 -15.4,-49.6 C-11,-45.6 -5,-45.6 -1.2,-48.2 Z" fill="#ffffff" opacity=".16"/>` +
+    `<path d="M1.2,-63.4 C6,-64.4 12,-63.6 15.6,-60 C17.2,-56 16.8,-51.6 15.4,-49.6 C11,-45.6 5,-45.6 1.2,-48.2 Z" fill="#000000" opacity=".22"/>` +
+    line("M-15.6,-49.2 C-11,-44.2 -5,-44.4 -0.8,-47.4 M15.6,-49.2 C11,-44.2 5,-44.4 0.8,-47.4", "#000000", 2.6, 0.5) +
     `<ellipse cx="-8" cy="-56" rx="7" ry="5" fill="url(#sheen)" opacity=".55"/>` +
     line("M0,-65.6 L0,-37.2", INK, 0.55, 0.7) +
     line("M-0.6,-65.2 L-0.6,-38", "#b8cadb", 0.35, 0.5) +

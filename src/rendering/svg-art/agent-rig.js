@@ -941,8 +941,8 @@ const BUILDS = {
   // Taller, broad through the chest and shoulders, a V down to the waist,
   // heavier arms.
   masc: {
-    sh: 1.08, hip: 1, armW: 1.14, legW: 1.06, shoulder: 1.06, scale: 1.05, head: 1,
-    torso: piecewise([[-80, 1.12], [-64, 1.14], [-54, 1.12], [-44, 1.04], [-34, 0.95], [-26, 0.98], [60, 1]]),
+    sh: 1.11, hip: 1, armW: 1.12, legW: 1.06, shoulder: 1.14, scale: 1.05, head: 1,
+    torso: piecewise([[-80, 1.16], [-66, 1.2], [-56, 1.18], [-46, 1.08], [-36, 0.94], [-28, 0.96], [60, 1]]),
   },
   // Athletic: narrower shoulders, a defined waist, fuller hips; toned limbs,
   // not thin ones.
