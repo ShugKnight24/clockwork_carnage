@@ -918,48 +918,7 @@ function raisedVisor(c, y) {
  */
 /** The belt buckle light alone, for suits whose chest carries its own lights. */
 const BELT_GLOW = energy(`<rect x="-1.8" y="-26" width="3.6" height="2.2" rx=".3"/>`);
-/**
- * Remap the x of every point in rig markup: "x,y" pairs (paths, polygons,
- * translate(x,y)), cx/cy (circles, ellipses) and x/y (rects, text).
- * fx(x, y) returns the new x; y is kept.
- */
-const NUM = String.raw`(-?\d*\.?\d+)`;
-const PAIR_RE = new RegExp(`${NUM},${NUM}`, "g");
-const CXY_RE = new RegExp(`cx="${NUM}" cy="${NUM}"`, "g");
-const XY_RE = new RegExp(`(<(?:rect|text)[^>]*?) x="${NUM}" y="${NUM}"`, "g");
-function mapX(markup, fx) {
-  const nx = (x, y) => f(fx(Number(x), Number(y)));
-  const mapTag = (tag) =>
-    tag
-      .replace(PAIR_RE, (_, x, y) => `${nx(x, y)},${y}`)
-      .replace(CXY_RE, (_, x, y) => `cx="${nx(x, y)}" cy="${y}"`)
-      .replace(XY_RE, (_, pre, x, y) => `${pre} x="${nx(x, y)}" y="${y}"`);
-  // A group drawn in its own rotated frame (rotate(a), no pivot) is local:
-  // its origin moves with the map, the shape inside it does not.
-  const out = [];
-  const local = [false];
-  for (const part of markup.split(/(<[^>]+>)/)) {
-    if (!part) continue;
-    if (part[0] !== "<") {
-      out.push(part);
-      continue;
-    }
-    const inLocal = local[local.length - 1];
-    if (part.startsWith("</g")) {
-      local.pop();
-      out.push(part);
-    } else if (part.startsWith("<g") && !part.endsWith("/>")) {
-      const rot = /rotate\(\s*-?[\d.]+\s*\)/.test(part);
-      out.push(inLocal ? part : mapTag(part));
-      local.push(inLocal || rot);
-    } else {
-      out.push(inLocal ? part : mapTag(part));
-    }
-  }
-  return out.join("");
-}
-
-const warpX = (markup, k) => mapX(markup, (x, y) => x * k(y));
+const warpX = (markup, k) => markup.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${f(Number(x) * k(Number(y)))},${y}`);
 const piecewise = (stops) => (y) => {
   if (y <= stops[0][0]) return stops[0][1];
   for (let i = 1; i < stops.length; i++) {
@@ -992,58 +951,6 @@ const BUILDS = {
     torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.9], [-36, 0.84], [-28, 0.94], [-20, 1.1], [-6, 1.12], [60, 1.12]]),
   },
 };
-/**
- * Three-quarter turn. The rig is drawn facing the camera; turning it projects
- * every point through a depth model of the body — an ellipse at each height
- * for the torso (half-width TURN_W, front depth TURN_D), a sphere for the
- * head — so features on the front slide toward the far side and the far side
- * compresses, the way a body turned ~22° reads. Layers behind the body (cape,
- * back gear) turn the other way. Limbs, outside the torso's ellipse, only
- * close up a little.
- */
-const TURN = (28 * Math.PI) / 180;
-const TURN_W = piecewise([[-76, 7], [-68, 15], [-60, 18.4], [-48, 18], [-36, 14.6], [-24, 15.6], [-10, 14.4], [-4, 6], [0, 0.01], [60, 0.01]]);
-const TURN_D = piecewise([[-76, 5], [-66, 9.4], [-54, 10.4], [-40, 8.6], [-24, 8.6], [-10, 6.4], [0, 3], [60, 2]]);
-/** Limbs and the outer body close up less than a true cosine would (they are round too). */
-const TURN_COS = piecewise([[-80, 0.9], [-10, 0.9], [10, 0.95], [60, 0.95]]);
-function turnBody(markup, dir = 1, limbs = [], a = TURN) {
-  const sn = Math.sin(a);
-  const cs = Math.cos(a);
-  return mapX(markup, (x, y) => {
-    const q = 1 - (x / TURN_W(y)) ** 2;
-    if (q > 0) return x * TURN_COS(y) + dir * sn * TURN_D(y) * Math.sqrt(q);
-    // Outside the torso, a point on a limb turns about that limb's own axis:
-    // its offset from the axis foreshortens and its depth carries it round,
-    // so detail stays inside the limb's outline.
-    for (const L of limbs) {
-      const [ax, ay] = L.a;
-      const [bx, by] = L.b;
-      const dx = bx - ax;
-      const dy = by - ay;
-      const t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1);
-      const cx = ax + dx * t;
-      const off = x - cx;
-      if (Math.abs(off) < L.r && Math.abs(y - (ay + dy * t)) < L.r) {
-        return cx * TURN_COS(y) + off * cs + dir * sn * L.r * 0.7 * Math.sqrt(1 - (off / L.r) ** 2);
-      }
-    }
-    return x * TURN_COS(y);
-  });
-}
-
-
-
-/** The head turns as a sphere about its centre (head coordinates). */
-function turnHead(markup, a = TURN) {
-  const sn = Math.sin(a);
-  const cs = Math.cos(a);
-  return mapX(markup, (x, y) => {
-    const q = 1 - (x / 12) ** 2 - ((y + 82) / 15) ** 2;
-    return x * cs + sn * (q > 0 ? 10.5 * Math.sqrt(q) : 0);
-  });
-}
-
-
 /** A pose with the build's shoulder and hip spacing. Explicit elbow/wrist points (a grip) stay put. */
 function buildPose(P, B) {
   return {
@@ -1957,7 +1864,7 @@ const collarOf = (c, showFace, map) =>
  * @param {object} character game.character-shaped record
  * @param {{ pose?: "idle"|"hero"|"bust", peek?: boolean }} opts
  */
-export function buildAgentParts(character, { pose = "idle", peek = false, turn = true } = {}) {
+export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
   const c = resolve(character || {});
   const armed = pose === "hero";
   const B = c.fem ? BUILDS.fem : BUILDS.masc;
@@ -1998,19 +1905,13 @@ export function buildAgentParts(character, { pose = "idle", peek = false, turn =
     // A little smaller and lifted, so the deltoid swells out beneath the plate.
     const k = fs.shoulder * B.shoulder * 0.9;
     const dx = s * 20 * (B.sh - 1);
-    // Space-separated: a pivot, not a point, so turns and reshapes leave it alone.
-    return `<g transform="translate(${f(s * 14.6 + dx)} -66.4) scale(${f(k)}) translate(${f(-s * 14)} 64)">${inner}</g>`;
+    return `<g transform="translate(${f(s * 14.6 + dx)},-66.4) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
   // The torso and what sits on it take the build's shape; limbs already
   // carry it through their joints and thickness.
   const TW = (m) => warpX(m, B.torso);
-  // Turned, the far arm (screen right) and its shoulder sit behind the torso.
-  // (Armed, both hands are on the rifle in front, so neither goes behind.)
-  const farBehind = turn && !armed;
-  const farArm = farBehind ? recolor(arms[1].body, map) + recolor(shoulderAt(1, tilt[1]), map) : "";
   const body =
     recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs, map) +
-    farArm +
     TW(
       recolor(torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
         (fs.softTorso ? "" : chestTrim(c)) +
@@ -2020,8 +1921,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false, turn =
         acc.front,
     ) +
     rifle.body +
-    recolor((farBehind ? arms[0].body : arms.map((a) => a.body).join("")) + fr.arms + shoulderAO, map) +
-    recolor(shoulderAt(-1, tilt[0]) + (farBehind ? "" : shoulderAt(1, tilt[1])), map) +
+    recolor(arms.map((a) => a.body).join("") + fr.arms + shoulderAO, map) +
+    recolor(shoulderAt(-1, tilt[0]) + shoulderAt(1, tilt[1]), map) +
     (wears(c, "chest") ? TW(badgeAt(c, A.chest)) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
@@ -2038,16 +1939,6 @@ export function buildAgentParts(character, { pose = "idle", peek = false, turn =
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
-  // Limb axes for the turn: each limb turns about its own cylinder.
-  const limbAxes = [
-    ...P.legs.flatMap((l) => [{ a: l.hip, b: l.kn, r: 8.6 }, { a: l.kn, b: l.an, r: 6.6 }]),
-    ...P.arms.flatMap((arm, i) => {
-      const { sh, el, wr } = armJoints(arm, i === 0 ? -1 : 1);
-      return [{ a: sh, b: el, r: 7.2 }, { a: el, b: wr, r: 5.6 }];
-    }),
-  ];
-  const TB = (m, dir = 1) => (turn && m ? turnBody(m, dir, dir > 0 ? limbAxes : []) : m);
-  const TH = (m) => (turn && m ? turnHead(m) : m);
   // Grow the figure from the soles; the head rides up on the neck at its own size.
   const W = (m) => (B.scale === 1 || !m ? m : `<g transform="translate(0,58) scale(${B.scale}) translate(0,-58)">${m}</g>`);
   const neckLift = f(-126 * (B.scale - 1));
@@ -2056,13 +1947,13 @@ export function buildAgentParts(character, { pose = "idle", peek = false, turn =
     defs: defs(c),
     width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
-    back: W(TB(kit.back + acc.back, -1)),
-    cape: W(TB(cape, -1)),
-    body: W(TB(body)),
-    glow: W(TB(glow)),
-    collar: W(TB(TW(collar))),
-    head: headFem(headScale(TH(h.front + helmBadge + acc.head))),
-    headGlow: headFem(headScale(TH(h.glow + acc.headGlow))),
+    back: W(kit.back + acc.back),
+    cape: W(cape),
+    body: W(body),
+    glow: W(glow),
+    collar: W(TW(collar)),
+    head: headFem(headScale(h.front + helmBadge + acc.head)),
+    headGlow: headFem(headScale(h.glow + acc.headGlow)),
     eyesVisible: showFace,
     look: c,
   };
