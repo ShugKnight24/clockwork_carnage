@@ -343,6 +343,8 @@ ${c.camo ? camoPattern(c.camo, "suit") : `<linearGradient id="suit" x1="0" y1="0
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
 <filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
+<linearGradient id="pecShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/><stop offset=".8" stop-color="#000000" stop-opacity=".18"/><stop offset="1" stop-color="#000000" stop-opacity=".38"/></linearGradient>
+<linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".05"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".14"/><stop offset=".5" stop-color="#000000" stop-opacity="0"/><stop offset=".82" stop-color="#000000" stop-opacity=".34"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></linearGradient>
 <pattern id="weave" width=".9" height=".9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width=".9" height=".32" fill="#000" opacity=".3"/><rect y=".45" width=".32" height=".45" fill="#fff" opacity=".06"/></pattern>
 ${CAPE_HEM[c.armor] ? `<clipPath id="capeCut"><path d="${capeCut(CAPE_HEM[c.armor])}"/></clipPath>` : ""}`;
 }
@@ -1912,7 +1914,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const body =
     recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs, map) +
     TW(
-      recolor(torso() + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
+      recolor(torso({ pecs: !c.fem }) + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
         (fs.softTorso ? "" : chestTrim(c)) +
         variantTrim(c) +
         insignia(c) +

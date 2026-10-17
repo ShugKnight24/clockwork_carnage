@@ -171,11 +171,15 @@ const groove = (a, b, pts, s, lit = 0.35) =>
 
 /** A shaded anatomical segment: fill + ink, lit-edge highlight, rim light (like part()). */
 export function muscle(a, b, outer, inner, s, o = {}) {
-  const { fill = "url(#steel)", hi = 0.55, rim = 0.8, ink = 1.1, hiColor = "#eaf4ff", rimColor = RIM, weave = false } = o;
+  const { fill = "url(#steel)", hi = 0.55, rim = 0.8, ink = 1.1, hiColor = "#eaf4ff", rimColor = RIM, weave = false, cast = !weave, cyl = true } = o;
   const g = muscleGeom(a, b, outer, inner, s);
   return (
+    // A plate casts a soft shadow down and away from the light onto what lies under it.
+    (cast ? `<path d="${g.d}" fill="#000" opacity=".45" filter="url(#ao)" transform="translate(.9,1.3)"/>` : "") +
     `<path d="${g.d}" fill="${fill}" stroke="${INK}" stroke-width="${ink}" stroke-linejoin="round"/>` +
     (weave ? `<path d="${g.d}" fill="url(#weave)"/>` : "") +
+    // Round it: lit on the left, a core shadow toward the right, bounce at the edge.
+    (cyl ? `<path d="${g.d}" fill="url(#cyl)"/>` : "") +
     (hi && g.hi ? `<path d="${g.hi}" fill="none" stroke="${hiColor}" stroke-opacity="${hi}" stroke-width="${f(Math.max(0.5, outer[0][1] * 0.16))}" stroke-linecap="round"/>` : "") +
     (rim && g.rim ? `<path d="${g.rim}" fill="none" stroke="${rimColor}" stroke-opacity="${rim}" stroke-width=".6" stroke-linecap="round"/>` : "")
   );
@@ -255,6 +259,8 @@ export const ARMOR_DEFS = `
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
 <filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
+<linearGradient id="pecShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/><stop offset=".8" stop-color="#000000" stop-opacity=".18"/><stop offset="1" stop-color="#000000" stop-opacity=".38"/></linearGradient>
+<linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".05"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".14"/><stop offset=".5" stop-color="#000000" stop-opacity="0"/><stop offset=".82" stop-color="#000000" stop-opacity=".34"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></linearGradient>
 <pattern id="weave" width=".9" height=".9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width=".9" height=".32" fill="#000" opacity=".3"/><rect y=".45" width=".32" height=".45" fill="#fff" opacity=".06"/></pattern>`;
 
 /** Energy element drawn twice: blurred bloom then a bright core. */
@@ -343,8 +349,11 @@ export function armoredLeg({ hip, kn, an }, s, kw = 1) {
     at(T(0.72), thighA, shape("M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z", "#14181d", 0.5) + shape(`M${f(s * 2.4 - 1.5)},-1.7 L${f(s * 2.4 + 1.5)},-1.7 L${f(s * 2.4 + 1.5)},1.7 L${f(s * 2.4 - 1.5)},1.7 Z`, "url(#steelDk)", 0.4)) +
     // Quads: the line between vastus lateralis and rectus femoris, and the
     // teardrop of the vastus medialis.
+    // Vastus lateralis: an outer lobe moulded on the plate.
+    muscle(T(0.14), T(0.6), W([[0, 6.4], [0.4, 7.6], [1, 6.2]]), [[0, 0.2], [1, 0.2]], s, { hi: 0.7, rim: 0.5, ink: 0.45, cast: false, cyl: false, fill: "none" }) +
     groove(T(0.12), T(0.62), [[0.1, 3.4], [0.5, 2.6], [0.95, 1.2]], s) +
-    groove(T(0.4), T(0.98), [[0.1, -3.6], [0.55, -5.2], [0.95, -3.4]], s, 0.25) +
+    // Vastus medialis: the teardrop above the knee, inside.
+    muscle(T(0.64), T(0.97), [[0, 0.8], [1, 0.6]], W([[0, 2.4], [0.4, 6], [0.75, 6.2], [1, 3.6]]), s, { hi: 0.6, rim: 0, ink: 0.45, cast: false, cyl: false, fill: "none" }) +
     // Shin guard between the knee pad and the boot.
     muscle(S(0.2), S(0.62), W(SHIN_PLATE.out), W(SHIN_PLATE.in), s) +
     // Calves: the split between the two heads of the gastrocnemius.
@@ -472,7 +481,8 @@ export function armoredArm(arm, s, chrono, kw = 1) {
     muscle(polar(sh, up, 1), lerp(sh, el, 0.86), W(REREBRACE.out), W(REREBRACE.in), s, { hi: 0.6 }) +
     // Biceps and triceps: the groove between them, and the biceps peak.
     groove(polar(sh, up, 1), lerp(sh, el, 0.86), [[0.25, 0.8], [0.6, 0.2], [0.95, 0.4]], s) +
-    groove(polar(sh, up, 1), lerp(sh, el, 0.86), [[0.35, -2.8], [0.62, -4.4], [0.88, -3.4]], s, 0.25) +
+    // Biceps: a moulded peak on the inner front of the upper arm.
+    muscle(lerp(sh, el, 0.38), lerp(sh, el, 0.86), [[0, 1.6], [1, 1.4]], [[0, 2.2], [0.45, 5.4], [0.75, 5.2], [1, 2.6]].map(([t, w]) => [t, w * kw]), s, { hi: 0.75, rim: 0, ink: 0.45, cast: false, cyl: false, fill: "none" }) +
     line(`M${pt(...polar(lerp(sh, el, 0.44), up + 90, 5.6))}Q${pt(...polar(lerp(sh, el, 0.48), up, 0.9))} ${pt(...polar(lerp(sh, el, 0.44), up - 90, 5.6))}`, INK, 0.5, 0.6) +
     // vambrace
     muscle(lerp(el, wr, 0.1), lerp(el, wr, 0.86), W(VAMBRACE_PLATE.out), W(VAMBRACE_PLATE.in), s, { hi: 0.5 }) +
@@ -517,7 +527,21 @@ export function pauldron(s, tilt = 0) {
   );
 }
 
-export function torso() {
+/** One pectoral plate (s -1 left, 1 right): fill, sculpted bevel, cylinder shade. */
+function PEC(s) {
+  const d = "M1,-63.8 C5.4,-65 12,-64.6 15.8,-60.8 C17.8,-56.8 17.6,-51.8 15.8,-48.8 C11.6,-44.4 5.2,-44.6 1,-47.6 C0.6,-52.8 0.6,-58.6 1,-63.8 Z";
+  const D = s < 0 ? mirror(d) : d;
+  const lit = s < 0;
+  return (
+    shape(D, "none", 0.9) +
+    // The lower curve rolls away from the light.
+    `<path d="${D}" fill="url(#pecShade)"/>` +
+    line(s < 0 ? "M-2.2,-62.6 C-6,-63.6 -11.6,-63.2 -14.6,-60" : "M2.2,-62.6 C6,-63.6 11.6,-63.2 14.6,-60", "#ffffff", 0.8, lit ? 0.7 : 0.35) +
+    line(s < 0 ? "M-15,-50 C-11.4,-46.2 -5.6,-46.2 -2,-48.6" : "M15,-50 C11.4,-46.2 5.6,-46.2 2,-48.6", "#000000", 0.9, 0.35)
+  );
+}
+
+export function torso({ pecs = true } = {}) {
   const chest =
     "M-15,-65 C-8,-66.8 8,-66.8 15,-65 C18.4,-60 18.8,-53.6 17.4,-48.4 C16,-43.8 13,-40.8 10.2,-39.4 " +
     "C6,-38.6 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.6 -10.2,-39.4 C-13,-40.8 -16,-43.8 -17.4,-48.4 C-18.8,-53.6 -18.4,-60 -15,-65 Z";
@@ -547,11 +571,10 @@ export function torso() {
     `<ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#shade)"/>` +
     lames +
     shape(chest, "url(#steel)") +
-    // Pectorals: a lit upper mass on each side and a cast shadow along the
-    // lower edge, split at the sternum.
-    `<path d="M-1.2,-63.4 C-6,-64.4 -12,-63.6 -15.6,-60 C-17.2,-56 -16.8,-51.6 -15.4,-49.6 C-11,-45.6 -5,-45.6 -1.2,-48.2 Z" fill="#ffffff" opacity=".16"/>` +
-    `<path d="M1.2,-63.4 C6,-64.4 12,-63.6 15.6,-60 C17.2,-56 16.8,-51.6 15.4,-49.6 C11,-45.6 5,-45.6 1.2,-48.2 Z" fill="#000000" opacity=".22"/>` +
-    line("M-15.6,-49.2 C-11,-44.2 -5,-44.4 -0.8,-47.4 M15.6,-49.2 C11,-44.2 5,-44.4 0.8,-47.4", "#000000", 2.6, 0.5) +
+    // Pectorals: two moulded plates, each a rounded mass that sweeps up into
+    // the shoulder, casting a shadow onto the abdomen beneath.
+    line("M-15.8,-48.6 C-11,-43.4 -5,-43.6 -0.8,-46.6 M15.8,-48.6 C11,-43.4 5,-43.6 0.8,-46.6", "#000000", 3, 0.45) +
+    (pecs ? PEC(-1) + PEC(1) : "") +
     `<ellipse cx="-8" cy="-56" rx="7" ry="5" fill="url(#sheen)" opacity=".55"/>` +
     line("M0,-65.6 L0,-37.2", INK, 0.55, 0.7) +
     line("M-0.6,-65.2 L-0.6,-38", "#b8cadb", 0.35, 0.5) +
