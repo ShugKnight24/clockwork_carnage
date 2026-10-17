@@ -376,7 +376,14 @@ svg { display: block; }
    ~100 ms GPU raster tasks several times a second. */
 .fig-breathe { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 100%; animation: breathe 3.8s ease-in-out infinite; }
 .figure .ag-fig { transform-box: fill-box; transform-origin: 50% 100%; }
-@keyframes breathe { 50% { transform: scaleY(1.009); } }
+/* A breath: the chest widens a touch and the shoulders and head lift. */
+@keyframes breathe { 0%, 100% { transform: none; } 45% { transform: translateY(-0.35%) scale(1.006, 1.012); } }
+/* Rim light from behind on the right, in the colour of the stage light. The
+   filter sits on the SVG, which the breath only moves, so it rasterises once. */
+.fig-breathe > svg { filter: drop-shadow(1.4px 0 0 rgba(140, 220, 255, 0.35)); }
+:host([light="field"]) .fig-breathe > svg { filter: drop-shadow(1.6px 0 0 rgba(255, 210, 150, 0.5)); }
+:host([light="night"]) .fig-breathe > svg { filter: drop-shadow(1.8px 0 0 rgba(90, 130, 255, 0.65)); }
+:host([light="alert"]) .fig-breathe > svg { filter: drop-shadow(1.8px 0 0 rgba(255, 60, 50, 0.7)); }
 /* Breathing is a compositor scale of the rastered figure, which resamples
    it: invisible at full height, a soft face in a close-up. */
 :host([camera="bust"]) .fig-breathe, :host([camera="face"]) .fig-breathe { animation: none; }

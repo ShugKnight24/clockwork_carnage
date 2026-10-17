@@ -342,6 +342,10 @@ export function armoredLeg({ hip, kn, an }, s, kw = 1) {
     // Under-suit: the body shows through the fabric.
     muscle(hip, kn, W(THIGH.out), W(THIGH.in), s, { fill: "url(#suit)", hi: 0.14, rim: 0.3, weave: true }) +
     muscle(kn, an, W(CALF.out), W(CALF.in), s, { fill: "url(#suit)", hi: 0.12, rim: 0.3, weave: true }) +
+    // Contact shadows: under the hip plates, above and below the knee pad.
+    `<ellipse cx="${f(hip[0])}" cy="${f(hip[1] + 6.4)}" rx="7.6" ry="3.2" fill="url(#shade)" opacity=".85"/>` +
+    `<ellipse cx="${f(T(0.66)[0])}" cy="${f(T(0.66)[1] + 1.6)}" rx="6.4" ry="2" fill="url(#shade)" opacity=".7"/>` +
+    `<ellipse cx="${f(S(0.22)[0])}" cy="${f(S(0.22)[1] + 0.8)}" rx="5.4" ry="1.8" fill="url(#shade)" opacity=".75"/>` +
     // Fabric gathering above the knee.
     at(kn, legA, line("M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6", "#000000", 0.5, 0.4)) +
     // Thigh plate on the front of the thigh, ending well clear of the knee, strapped.
@@ -377,6 +381,7 @@ export function armoredLeg({ hip, kn, an }, s, kw = 1) {
         "url(#steelDk)",
       ) +
       shape(`M${f(s * 1.2 - 5.9)},6.4 L${f(s * 1.2 + 5.9)},6.4 L${f(s * 1.2 + 5.6)},8 L${f(s * 1.2 - 5.6)},8 Z`, "#07090d", 0.5) +
+      `<path d="M-4.4,-1 L4.4,-1 L4.7,2 C${f(s * 1.2 + 6.2)},3 ${f(s * 1.2 + 6.4)},6.6 ${f(s * 1.2 + 5.6)},8 L${f(s * 1.2 - 5.6)},8 C${f(s * 1.2 - 6.4)},6.6 ${f(s * 1.2 - 6.2)},3 -4.7,2 Z" fill="url(#cyl)"/>` +
       shape(`M${f(s * 1.2 - 4.2)},2.2 C${f(s * 1.2 - 2)},0.8 ${f(s * 1.2 + 2)},0.8 ${f(s * 1.2 + 4.2)},2.2 L${f(s * 1.2 + 5)},5.6 L${f(s * 1.2 - 5)},5.6 Z`, "url(#steel)", 0.5) +
       line(`M${f(s * 1.2 - 3)},2.6 C${f(s * 1.2 - 1)},1.8 ${f(s * 1.2 + 1)},1.8 ${f(s * 1.2 + 2.4)},2.4`, "#eaf4ff", 0.5, 0.6));
   const glow = energy(`<path d="M${pt(...stripeA)}L${pt(...stripeB)}" fill="none" stroke-width=".6" stroke-linecap="round"/>`);
@@ -396,7 +401,9 @@ function gauntlet(wr, el, s, side = false) {
   return (
     `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))}) ${k} translate(0 -1)">` +
     shape("M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z", "#23272c", 1) +
+    `<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#cyl)"/>` +
     shape("M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z", "url(#steel)", 0.5) +
+    `<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#cyl)"/>` +
     line("M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6", "#eaf4ff", 0.45, 0.6) +
     // curled finger group with a lit knuckle ridge
     shape("M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z", "#23272c", 1) +
@@ -560,6 +567,7 @@ export function torso({ pecs = true } = {}) {
         "url(#steel)",
         0.7,
       ) +
+      `<path d="M${f(-w)},${f(t)} C${f(-w / 2)},${f(t + 0.8)} ${f(w / 2)},${f(t + 0.8)} ${f(w)},${f(t)} L${f(w - 0.3)},${f(t + 3.8)} C${f(w / 2)},${f(t + 4.6)} ${f(-w / 2)},${f(t + 4.6)} ${f(-w + 0.3)},${f(t + 3.8)} Z" fill="url(#cyl)"/>` +
       line(`M${f(-w + 1.2)},${f(t + 0.9)} C${f(-w / 2)},${f(t + 1.5)} -1,${f(t + 1.6)} -0.6,${f(t + 1.6)}`, "#eaf4ff", 0.45, 0.5) +
       line(`M0,${f(t + 0.8)} L0,${f(t + 4.4)}`, INK, 0.45, 0.6) +
       line(`M${f(w - 0.2)},${f(t + 0.6)} L${f(w - 0.4)},${f(t + 3.4)}`, RIM, 0.5, 0.7);
@@ -567,10 +575,12 @@ export function torso({ pecs = true } = {}) {
   const tasset = "M-4.8,-22.4 L-14.6,-23 C-15.8,-19 -16.2,-15 -15.8,-10.8 L-7.4,-9.2 C-6.1,-12.8 -5.3,-18 -4.8,-22.4 Z";
   return (
     shape(suit, "url(#suit)") +
+    `<path d="${suit}" fill="url(#cyl)"/>` +
     // ambient occlusion under the chest plate
     `<ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#shade)"/>` +
     lames +
     shape(chest, "url(#steel)") +
+    `<path d="${chest}" fill="url(#cyl)"/>` +
     // Pectorals: two moulded plates, each a rounded mass that sweeps up into
     // the shoulder, casting a shadow onto the abdomen beneath.
     line("M-15.8,-48.6 C-11,-43.4 -5,-43.6 -0.8,-46.6 M15.8,-48.6 C11,-43.4 5,-43.6 0.8,-46.6", "#000000", 3, 0.45) +
@@ -598,6 +608,7 @@ export function torso({ pecs = true } = {}) {
     // hip plates
     shape("M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z", "url(#steelDk)", 0.8) +
     shape(tasset, "url(#steel)") +
+    `<path d="${tasset}" fill="url(#cyl)"/>` +
     shape(mirror(tasset), "url(#steel)") +
     line("M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8", "#eaf4ff", 0.5, 0.6) +
     line("M-14.4,-17 L-6.2,-16", INK, 0.45, 0.55) +
