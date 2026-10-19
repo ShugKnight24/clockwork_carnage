@@ -1527,7 +1527,7 @@ export class Game {
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
       progress: this.tutorial.progressText(),
-      blackout: this.tutorial.blackout,
+      blackout: this.tutorial.dark,
     });
   }
 

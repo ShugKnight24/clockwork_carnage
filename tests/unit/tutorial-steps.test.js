@@ -78,8 +78,8 @@ describe("the prologue", () => {
   });
 
   it("captions each card with its beat", () => {
-    expect(beatCaption(1)).toBe("PROLOGUE · 2/7 · THE RANGE");
-    for (const card of desktop.slice(1)) expect(beatCaption(card.beat)).toMatch(/^PROLOGUE · \d\/7 · /);
+    expect(beatCaption(1)).toBe(`PROLOGUE · 2/${PROLOGUE_BEATS.length} · THE RANGE`);
+    for (const card of desktop.slice(1)) expect(beatCaption(card.beat)).toMatch(/^PROLOGUE · \d\/\d · /);
   });
 
   it("is told by ARIA and the Supervisor, in lines short enough to say", () => {
@@ -91,6 +91,26 @@ describe("the prologue", () => {
         if (emotion != null) expect(typeof emotion).toBe("string");
         expect(lineDuration(text)).toBeGreaterThanOrEqual(3.2);
       }
+    }
+  });
+
+  it("trains on harmless things first: targets, then holograms, then a simulation, then the real attack", () => {
+    const ids = PROLOGUE_STEPS.map((s) => s.id);
+    const at = (id) => ids.indexOf(id);
+    expect(at("fire")).toBeLessThan(at("lab"));
+    expect(at("lab")).toBeLessThan(at("sim"));
+    expect(at("sim")).toBeLessThan(at("alarm"));
+    // Nothing before the alarm is a real fight.
+    expect(ids.slice(0, at("alarm"))).not.toContain("cover");
+  });
+
+  it("builds the morning toward the breach with announcements, flickers and tremors", () => {
+    const events = PROLOGUE_STEPS.flatMap((s) => (s.events || []).map((e) => [s.id, ...e]));
+    expect(events.length).toBeGreaterThanOrEqual(6);
+    for (const [id, at, kind, text] of events) {
+      expect(["pa", "flicker", "tremor"], id).toContain(kind);
+      expect(at).toBeGreaterThanOrEqual(0);
+      if (kind === "pa") expect(text.length).toBeGreaterThan(10);
     }
   });
 

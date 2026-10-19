@@ -61,6 +61,12 @@ export function createDebugBridge(game) {
       };
     },
 
+    /** The prologue's live state: step, its counter, and the sim hall. */
+    tutorialState() {
+      const t = game.tutorial;
+      return { step: t.step, id: t.def?.id ?? null, progress: t.progressText(), sim: t.sim ? { ...t.sim } : null, health: game.player.health };
+    },
+
     /** Complete the next `n` prologue steps as if their goals were met; returns the step reached. */
     tutorialSkip(n = 1) {
       for (let i = 0; i < n; i++) game.tutorial.skipStep();

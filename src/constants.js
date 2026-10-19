@@ -128,7 +128,7 @@ export const COMPACT_PHONE_HEIGHT = 420;
  * has a card in `tutorialStepCopy`, so the overlay draws nothing there and the
  * completion menu takes over.
  */
-export const TUTORIAL_SANDBOX_STEP = 31; // PROLOGUE_STEPS.length (src/data/prologue.js)
+export const TUTORIAL_SANDBOX_STEP = 34; // PROLOGUE_STEPS.length (src/data/prologue.js)
 
 // ============================================================================
 // BUILDER MODE

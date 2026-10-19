@@ -22,7 +22,56 @@ import { spawnEnergyBurst } from "./particle-system.js";
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
   SUPERVISOR: { color: "#ffb028", voice: "supervisor" },
+  PA: { color: "#9fb4c8", voice: "system" },
 };
+
+/**
+ * The sim hall's exhibits (the "lab" step): holograms of what patrols have
+ * met, one at a time, each with its briefing.
+ */
+const EXHIBITS = [
+  {
+    type: "drone",
+    name: "GLITCHED DRONE",
+    lines: [["ARIA", "Glitched drone. Fast, fragile, and it circles while it shoots. Lead it a little.", "curious"]],
+  },
+  {
+    type: "henchman",
+    name: "SYNDICATE HENCHMAN",
+    lines: [
+      ["ARIA", "Syndicate muscle. Watch for the glint and the whine before it fires. That's your cue to step aside.", "curious"],
+      ["SUPERVISOR", "We keep finding their kit in sealed rooms. Nobody knows how they get in.", "worried"],
+    ],
+  },
+  {
+    type: "sentinel",
+    name: "CHRONO SENTINEL",
+    lines: [
+      ["ARIA", "Chrono Sentinel. The shield soaks most of what hits it. Go round it, or over it: the head is exposed.", "curious"],
+      ["ARIA", "Odd. Every one of these sightings is logged at the same minute. Six forty-seven.", "worried"],
+      ["SUPERVISOR", "Sensor fault. Shoot the hologram, Cadet.", "angry"],
+    ],
+  },
+];
+/** Where an exhibit stands in the arena, and where you stand to study it. */
+const EXHIBIT_AT = { x: 29.5, y: 4.5 };
+
+/** The simulation's waves, at the arena's ends. */
+const SIM_WAVES = [
+  [
+    [10.5, 4.5, "drone"],
+    [49.5, 4.5, "drone"],
+    [10.5, 9.5, "henchman"],
+    [49.5, 9.5, "drone"],
+  ],
+  [
+    [10.5, 6.5, "henchman"],
+    [49.5, 6.5, "henchman"],
+    [29.5, 3.5, "sentinel"],
+  ],
+];
+/** What a simulated hit costs: the sim hits harder than the real ones do in the prologue, but only its integrity. */
+const SIM_DAMAGE = { drone: 7, henchman: 9, sentinel: 14, glitchling: 6 };
 
 /** The steps after which ARIA may say a word of encouragement. */
 const ENCOURAGE_AFTER = new Set(["fire", "ads", "moving", "shotgun", "slide", "dash", "cover", "vents"]);
@@ -69,11 +118,23 @@ function makeTarget(x, y, { health = 20, track = null } = {}) {
   return e;
 }
 
+/**
+ * A hologram for the sim hall: a hostile in every way, drawn flickering, whose
+ * hits land on the sim's integrity instead of on you (TutorialSystem.simHit).
+ */
+function makeHolo(x, y, type) {
+  const e = makeHostile(x, y, type);
+  e._holo = true;
+  if (SIM_DAMAGE[type]) e.def = { ...e.def, damage: SIM_DAMAGE[type] };
+  return e;
+}
+
 /** A real hostile, tuned down for a cadet's first fights. */
 function makeHostile(x, y, type) {
   const e = new Enemy(x, y, type);
   const tune = {
     drone: { health: 20, damage: 4, speed: 0.6, attackRate: 1400 },
+    glitchling: { health: 18, damage: 4, speed: 0.9, attackRate: 700 },
     henchman: { health: 45, damage: 5, speed: 0.7, attackRate: 1400 },
     sentinel: { health: 80, damage: 8, speed: 0.85, attackRate: 2000 },
   }[type];
@@ -317,7 +378,113 @@ const LOGIC = {
     },
     exit(t, g) {
       t.gateLight(g, null);
-      if (t.c.best != null) t.say([["SUPERVISOR", `${t.c.best.toFixed(1)} seconds. Not bad, Cadet. Not good either. Come to my office, we need to talk about your—`, "calm"]]);
+      if (t.c.best != null) t.say([["SUPERVISOR", `${t.c.best.toFixed(1)} seconds. Not bad, Cadet. Not good either. Sim hall's next.`, "calm"]]);
+    },
+  },
+
+  toLab: {
+    waypoint: { x: 29.5, y: 10.5 },
+    enter(t, g) {
+      t.openDoors(g, "door5");
+    },
+    update: (t, g) => t.near(g, 29.5, 10.5, 1.8),
+  },
+
+  lab: {
+    waypoint: { x: 29.5, y: 9.5 },
+    enter(t, g) {
+      t.sim = { integrity: null }; // the exhibits cannot hurt you, and cannot fail you
+      t.c.i = -1;
+      t.c.wait = 0.8;
+    },
+    update(t, g) {
+      if (t.alive(g, "lab") > 0) return false;
+      t.c.wait -= g.deltaTime;
+      if (t.c.wait > 0) return false;
+      t.c.i++;
+      if (t.c.i >= EXHIBITS.length) return true;
+      const ex = EXHIBITS[t.c.i];
+      t.spawnHostiles(g, "lab", [[EXHIBIT_AT.x, EXHIBIT_AT.y, ex.type]], makeHolo, true);
+      g.audio.powerFlicker?.();
+      t.say(ex.lines);
+      t.c.wait = 1.4;
+      return false;
+    },
+    progress: (t) => {
+      const ex = EXHIBITS[Math.max(0, Math.min(EXHIBITS.length - 1, t.c.i))];
+      return `EXHIBIT ${Math.max(1, t.c.i + 1)} / ${EXHIBITS.length} · ${ex.name}`;
+    },
+    exit(t, g) {
+      t.sim = null;
+      t.clearTag(g, "lab");
+    },
+  },
+
+  sim: {
+    enter(t, g) {
+      t.sim = { integrity: 100, failed: false };
+      t.c.wave = 0;
+      t.c.delay = 2;
+      t.c.fails = 0;
+      t.c.glitchAt = null;
+    },
+    update(t, g) {
+      const sim = t.sim;
+      if (sim.failed) {
+        // Integrity gone: the sim resets, and so do you.
+        t.c.fails++;
+        t.clearTag(g, "sim");
+        t.clearTag(g, "glitch");
+        g.projectiles = [];
+        sim.integrity = 100;
+        sim.failed = false;
+        t.c.wave = 0;
+        t.c.spawned = false;
+        t.c.delay = 2.5;
+        t.c.glitchAt = null;
+        g.glitchEffect = 0.7;
+        t.say([["ARIA", t.c.fails === 1 ? "Simulation failed. You'd be dead twice over. Again, and use the pillars this time." : "Again. Pick a target, break line of sight, reload your nerve.", "worried"]], { cut: true });
+        return false;
+      }
+      if (t.c.wave < SIM_WAVES.length) {
+        if (!t.c.spawned) {
+          t.c.delay -= g.deltaTime;
+          if (t.c.delay <= 0) t.spawnHostiles(g, "sim", SIM_WAVES[t.c.wave], makeHolo, true);
+          return false;
+        }
+        if (t.alive(g, "sim") > 0) return false;
+        t.c.wave++;
+        t.c.spawned = false;
+        t.c.delay = 2.5;
+        if (t.c.wave < SIM_WAVES.length) t.say([["ARIA", "Wave down. Next one's heavier.", "excited"]]);
+        return false;
+      }
+      // Both waves down: something the sim did not load steps out of it.
+      if (t.c.glitchAt == null) {
+        t.c.glitchAt = t.clock;
+        t.spawnHostiles(g, "glitch", [[EXHIBIT_AT.x, EXHIBIT_AT.y, "glitchling"]], makeHolo, true);
+        for (const e of g.entities) if (e._tutTag === "glitch") e._corrupt = true;
+        g.glitchEffect = 1;
+        g.audio.powerFlicker?.();
+        t.flickerUntil = t.clock + 0.5;
+        t.say([
+          ["ARIA", "Wait. That one isn't in the library. Where did it come from?", "afraid"],
+          ["SUPERVISOR", "Cadet, end the sim. End it now.", "afraid"],
+        ], { cut: true });
+        return false;
+      }
+      return t.alive(g, "glitch") === 0 || t.clock - t.c.glitchAt > 10;
+    },
+    progress(t) {
+      if (t.c.glitchAt != null) return "SIM INTEGRITY ??%";
+      return `WAVE ${Math.min(t.c.wave + 1, SIM_WAVES.length)} / ${SIM_WAVES.length} · SIM INTEGRITY ${Math.max(0, Math.round(t.sim?.integrity ?? 0))}%`;
+    },
+    exit(t, g) {
+      t.sim = null;
+      t.clearTag(g, "sim");
+      t.clearTag(g, "glitch");
+      g.projectiles = [];
+      t.say([["SUPERVISOR", "...Sim's down. Not bad, Cadet. Come to my office. We need to talk about your—", "worried"]]);
     },
   },
 
@@ -558,6 +725,10 @@ export class TutorialSystem {
     this.pickupsOpen = false;
     // Set pieces.
     this.alert = false;
+    /** The sim hall: hits land here, not on you. { integrity: number|null, failed } */
+    this.sim = null;
+    this.flickerUntil = 0;
+    this._events = new Set();
     this.blackout = false;
     this.vents = null;
     this._gateLight = null;
@@ -672,6 +843,7 @@ export class TutorialSystem {
     this._postCard(index);
     this.doorOpened = false;
     this.pickedUp = false;
+    this._events = new Set();
     const def = this.def;
     if (!def) return;
     // A beat's first step is where you come back to (or its first that
@@ -748,9 +920,57 @@ export class TutorialSystem {
       this.dashed = false;
     }
 
+    this._updateEvents(g);
     const logic = this.logic;
     g.objectiveWaypoint = logic?.waypoint ?? null;
     if (logic?.update?.(this, g, dt)) this.advanceStep();
+  }
+
+  /**
+   * The morning going wrong around the drills (a step's `events`): station
+   * announcements, the lights stuttering, the floor shuddering.
+   */
+  _updateEvents(g) {
+    const events = this.def?.events;
+    if (!events) return;
+    events.forEach(([at, kind, text], i) => {
+      if (this._events.has(i) || this.clock < at) return;
+      this._events.add(i);
+      if (kind === "pa") this.say([["PA", text, "calm"]]);
+      else if (kind === "flicker") {
+        this.flickerUntil = this.clock + 0.45;
+        g.glitchEffect = Math.max(g.glitchEffect || 0, 0.35);
+        g.audio.powerFlicker?.();
+      } else if (kind === "tremor") {
+        g.screenShake = Math.max(g.screenShake || 0, 5);
+        g.audio.tremor?.();
+      }
+    });
+  }
+
+  /** Whether the station's lights are out or stuttering right now (the overlay's darkness). */
+  get dark() {
+    return this.blackout || this.clock < this.flickerUntil;
+  }
+
+  /**
+   * A hit taken in the sim hall: it lands on the sim, not on you. The damage
+   * indicator and the flinch still play, so it teaches what a hit feels
+   * like. Returns true when the sim took it.
+   */
+  simHit(amount, attacker) {
+    if (!this.sim) return false;
+    const g = this.game;
+    const p = g.player;
+    p.hurtTime = g.time;
+    if (attacker && typeof attacker.x === "number") p.lastDamageAngle = Math.atan2(attacker.y - p.y, attacker.x - p.x);
+    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.25);
+    g.screenShake = Math.max(g.screenShake || 0, 2);
+    if (this.sim.integrity != null) {
+      this.sim.integrity -= amount;
+      if (this.sim.integrity <= 0) this.sim.failed = true;
+    }
+    return true;
   }
 
   /** The card's live counter for the current step ("TARGETS 2 / 3"), or null. */
@@ -820,6 +1040,7 @@ export class TutorialSystem {
     this.pickupsOpen = cp.pickupsOpen;
     this.alert = false;
     this.blackout = false;
+    this.sim = null;
     this.script = [];
     g.ariaComms.message = null;
     g.audio.stopSpeech?.("comms");
@@ -914,16 +1135,29 @@ export class TutorialSystem {
     }
   }
 
-  /** A step's hostiles, once. Marks the step's `spawned` so its count can be checked. */
-  spawnHostiles(g, tag, spots) {
-    if (this.c.spawned) return;
+  /**
+   * A step's hostiles, once (or every time, with `again`). Marks the step's
+   * `spawned` so its count can be checked.
+   */
+  spawnHostiles(g, tag, spots, make = makeHostile, again = false) {
+    if (this.c.spawned && !again) return;
     this.c.spawned = true;
     for (const [x, y, type] of spots) {
-      const e = makeHostile(x, y, type);
+      const e = make(x, y, type);
       e._tutTag = tag;
+      // A scripted fight comes at you: hunting from the start (the AI's
+      // ctx.hunt keeps it on you), its first shot a beat away.
+      e.state = "chase";
+      e.lastAttackTime = g.time;
+      e._lastSeen = { x: g.player.x, y: g.player.y };
       g.entities.push(e);
     }
     g.totalEnemies = (g.totalEnemies || 0) + spots.length;
+  }
+
+  /** Everything a step put down with this tag goes. */
+  clearTag(g, tag) {
+    g.entities = g.entities.filter((e) => e._tutTag !== tag);
   }
 
   /** A finished drill's targets leave the range, so the next drill starts clean. */
@@ -962,9 +1196,14 @@ export class TutorialSystem {
 
   // ── Set pieces ──────────────────────────────────────────────────
 
-  /** Moving targets glide along their lane. */
+  /** Moving targets glide along their lane; holograms flicker. */
   _updateTargets(g) {
     for (const e of g.entities) {
+      if (e._holo && e.type === "enemy" && e.health > 0) {
+        e.renderAlpha = e._corrupt
+          ? 0.35 + Math.random() * 0.55
+          : 0.62 + 0.18 * Math.sin(this.clock * 9 + e.x * 3) - (Math.random() < 0.02 ? 0.3 : 0);
+      }
       const tr = e._track;
       if (!tr || e.type !== "enemy" || e.health <= 0) continue;
       const s = Math.sin(this.clock * tr.speed + (tr.phase || 0)) * tr.amp;
@@ -1105,6 +1344,7 @@ export class TutorialSystem {
     this._clearLights();
     this.alert = false;
     this.blackout = false;
+    this.sim = null;
     g.powerCells = null;
     g.exitEntity = null;
     g.entities = g.entities.filter((e) => e.type !== "exit");

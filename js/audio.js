@@ -851,6 +851,20 @@ export class AudioManager {
     this._blip("square", 220, 880, 0.7, 0.06, pan);
   }
 
+  /** The floor shudders: a long sub-bass roll with a growl on top (the prologue's tremors). */
+  tremor() {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("sine", 48, 30, 1.4, 0.38, 0);
+    this._blip("sawtooth", 62, 38, 1.0, 0.1, 0, 0.05);
+  }
+
+  /** The lights stutter: a short mains buzz. */
+  powerFlicker() {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("square", 118, 112, 0.22, 0.05, 0);
+    this._blip("square", 236, 230, 0.12, 0.025, 0, 0.12);
+  }
+
   /** A kill: a low thump under a bright two-note confirm. Heavier on headshots and crits. */
   killConfirm(pan = 0, heavy = false) {
     if (!this.ctx || !this.enabled) return;

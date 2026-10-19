@@ -16,6 +16,8 @@ export const PROLOGUE_BEATS = [
   { id: "clockingIn", title: "CLOCKING IN" },
   { id: "range", title: "THE RANGE" },
   { id: "course", title: "THE COURSE" },
+  { id: "lab", title: "KNOW YOUR ENEMY" },
+  { id: "sim", title: "SIMULATION" },
   { id: "breach", title: "BREACH" },
   { id: "borrowedTime", title: "BORROWED TIME" },
   { id: "lightsOut", title: "LIGHTS OUT" },
@@ -24,11 +26,17 @@ export const PROLOGUE_BEATS = [
 
 const ARIA = "ARIA";
 const SUP = "SUPERVISOR";
+/** The station's public address: announcements that say more than they mean to. */
+const PA = "PA";
 
 /**
  * Dialogue: [speaker, text, emotion?]. Lines play in order, one after the
  * other, from when their step begins; a step's lines wait for the last
  * step's to finish unless the step says `cut: true` (an alarm cuts in).
+ *
+ * Events: [seconds into the step, kind, text?], the morning going wrong a
+ * little at a time around the drills: "pa" (a station announcement),
+ * "flicker" (the lights stutter) and "tremor" (the floor shudders).
  *
  * Hints: `key` for keyboard and mouse, `touch` for touch (no key names),
  * `pad(b)` for a controller, where b(action) is that pad's button legend.
@@ -66,6 +74,7 @@ export const PROLOGUE_STEPS = [
       [ARIA, "Walk with me. The suit's a prototype. Servo assist, plating, and a module they wouldn't tell me about.", "curious"],
       [SUP, "Cadet. You're late, and you're wearing my prototype. Range. Now.", "angry"],
     ],
+    events: [[7, "pa", "Good morning, Chronos Station. Engineering reminds all staff that the Engine level is closed for today's calibration."]],
   },
   {
     id: "door",
@@ -90,6 +99,7 @@ export const PROLOGUE_STEPS = [
       [ARIA, "He likes you. That was him liking you.", "happy"],
       [SUP, "Engineering's been running something downstairs all night. If the lights flicker, ignore it. That's an order.", "worried"],
     ],
+    events: [[16, "flicker"]],
   },
 
   // ── 2. THE RANGE ─────────────────────────────────────────────────
@@ -112,6 +122,7 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `Pull ${b("fire")} to fire. Destroy the training drones at the end of the lane.`,
     },
     lines: [[ARIA, "Holo-drones. They can't shoot back. Enjoy that while it lasts.", "happy"]],
+    events: [[9, "tremor"]],
   },
   {
     id: "ads",
@@ -126,6 +137,7 @@ export const PROLOGUE_STEPS = [
     lines: [
       [SUP, "Long lane. Hip fire won't cut it. Use the sights.", "calm"],
       [ARIA, "Every kill counts while you're aimed in. Every miss, I'm writing down.", "happy"],
+      [ARIA, "Did you feel that, before? The floor. Probably the range's air handlers. Probably.", "curious"],
     ],
   },
   {
@@ -164,6 +176,7 @@ export const PROLOGUE_STEPS = [
       [ARIA, "Rounds don't grow on trees. They grow in crates. Take that one.", "warm"],
       [SUP, "Certified for shooting. Next, the gym. And Cadet: the suit's faster than you are. Try to keep up with it.", "calm"],
     ],
+    events: [[3, "pa", "Calibration cycle one, complete. Cycle two in five minutes."]],
   },
 
   // ── 3. THE COURSE ────────────────────────────────────────────────
@@ -236,12 +249,54 @@ export const PROLOGUE_STEPS = [
       [SUP, "Four gates. The clock starts when you leave the first. Fail it and you run it again. I've got all morning.", "calm"],
       [ARIA, "Off the record: there's an old evidence room off the gym's south side. One of its wall panels sounds hollow. Press it.", "curious"],
     ],
+    events: [
+      [14, "pa", "Calibration cycle two. Engine output at one hundred and forty percent."],
+      [15, "flicker"],
+    ],
   },
 
-  // ── 4. BREACH ────────────────────────────────────────────────────
+  // ── 4. KNOW YOUR ENEMY ───────────────────────────────────────────
+  {
+    id: "toLab",
+    beat: 3,
+    title: "THE SIM HALL",
+    color: "#7dfff0",
+    hint: "Head north up the corridor to the combat arena. Today it's running as a simulator.",
+    lines: [
+      [SUP, "Sim hall, Cadet. Targets don't shoot back. The things in there will. Holographically.", "calm"],
+      [ARIA, "The sim loads field profiles from patrol reports. Real things, recorded. Let's meet them.", "curious"],
+    ],
+  },
+  {
+    id: "lab",
+    beat: 3,
+    title: "KNOW YOUR ENEMY",
+    color: "#7dfff0",
+    hint: "Holograms of what our patrols have met. Study each one, then put it down. In here their shots can't hurt you.",
+    // Each exhibit's briefing plays when it appears (js/tutorial-system.js).
+  },
+
+  // ── 5. SIMULATION ────────────────────────────────────────────────
+  {
+    id: "sim",
+    beat: 4,
+    title: "SIMULATED BATTLE",
+    color: "#7dfff0",
+    hint: "Clear both waves. Hits drain SIM INTEGRITY, not your health; at zero the sim restarts. Use the pillars, keep moving, and go for heads.",
+    lines: [
+      [SUP, "Full sim. Two waves, everything you just met. Integrity hits zero, you run it again.", "calm"],
+      [ARIA, "It's only light. But fight it like it isn't, and the real thing won't surprise you.", "warm"],
+    ],
+    events: [
+      [6, "pa", "Calibration cycle three. All personnel stand clear of the Engine chamber."],
+      [20, "tremor"],
+    ],
+  },
+
+  // ── 6. BREACH ────────────────────────────────────────────────────
   {
     id: "alarm",
-    beat: 3,
+    beat: 5,
     title: "⚡ ALERT — INTRUSION DETECTED",
     color: "#ff2244",
     hint: "Something has gone very wrong. Listen.",
@@ -257,7 +312,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "cover",
-    beat: 3,
+    beat: 5,
     title: "TAKE COVER — FIGHT BACK",
     color: "#ff2244",
     hint: {
@@ -272,7 +327,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "patch",
-    beat: 3,
+    beat: 5,
     title: "PATCH UP",
     color: "#44ff88",
     hint: "Grab the med pack on the Supervisor's desk. Your suit also mends small wounds if you stay out of fire.",
@@ -283,7 +338,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "shield",
-    beat: 3,
+    beat: 5,
     title: "FLANK THE SHIELD",
     color: "#88aacc",
     hint: {
@@ -297,10 +352,10 @@ export const PROLOGUE_STEPS = [
     ],
   },
 
-  // ── 5. BORROWED TIME ─────────────────────────────────────────────
+  // ── 7. BORROWED TIME ─────────────────────────────────────────────
   {
     id: "chrono",
-    beat: 4,
+    beat: 6,
     title: "CHRONO SHIFT — BEND TIME",
     color: "#8844ff",
     hint: {
@@ -315,7 +370,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "vents",
-    beat: 4,
+    beat: 6,
     title: "PLASMA VENTS",
     color: "#ff7733",
     hint: {
@@ -330,7 +385,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "slowFire",
-    beat: 4,
+    beat: 6,
     title: "OUTPACE THE BULLETS",
     color: "#8844ff",
     hint: "Drones down the corridor. Shift, sidestep their shots while they crawl, and put them down.",
@@ -339,10 +394,10 @@ export const PROLOGUE_STEPS = [
     ],
   },
 
-  // ── 6. LIGHTS OUT ────────────────────────────────────────────────
+  // ── 8. LIGHTS OUT ────────────────────────────────────────────────
   {
     id: "cells",
-    beat: 5,
+    beat: 7,
     title: "LIGHTS OUT — RESTORE POWER",
     color: "#ffb028",
     hint: {
@@ -359,17 +414,17 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "toLift",
-    beat: 5,
+    beat: 7,
     title: "TO THE LIFT",
     color: "#22e6c0",
     hint: "Power's routed. Get to the evac lift in the arena at the north end of the corridor.",
     lines: [[ARIA, "That's both. The lift's charging. It'll need a minute, and they'll know we're here.", "urgent"]],
   },
 
-  // ── 7. EVAC ──────────────────────────────────────────────────────
+  // ── 9. EVAC ──────────────────────────────────────────────────────
   {
     id: "wave1",
-    beat: 6,
+    beat: 8,
     title: "HOLD THE LIFT — WAVE 1/3",
     color: "#ff2244",
     hint: "Hold the arena while the lift charges. Use the pillars for cover; health and ammo are by the south door.",
@@ -377,7 +432,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "wave2",
-    beat: 6,
+    beat: 8,
     title: "HOLD THE LIFT — WAVE 2/3",
     color: "#ff2244",
     hint: "Henchmen flank. Keep moving, keep cover between you, and Shift when they bunch up.",
@@ -385,7 +440,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "wave3",
-    beat: 6,
+    beat: 8,
     title: "HOLD THE LIFT — WAVE 3/3",
     color: "#ff2244",
     hint: "A shield and its escort. Thin the escort, then flank the shield.",
@@ -393,7 +448,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "extract",
-    beat: 6,
+    beat: 8,
     title: "EXTRACT",
     color: "#22e6c0",
     hint: "The lift is live. Get to the extraction beacon.",
@@ -401,7 +456,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "reveal",
-    beat: 6,
+    beat: 8,
     title: "SIGNAL TRACE",
     color: "#00ffcc",
     hint: "Extraction underway.",
