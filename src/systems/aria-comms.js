@@ -203,6 +203,26 @@ export class AriaCommsSystem {
     });
   }
 
+  /**
+   * Queue one line exactly as given (the prologue's script): its speaker,
+   * plate colour, voice, emotion and how long it stays up.
+   */
+  queueLine({ speaker = "ARIA", text, color = "#00ffdd", voice = null, emotion = null, duration = 4.5, prominent = true, ...extra }) {
+    if (!this.enabled || !text) return;
+    this.queue.push({
+      text,
+      color,
+      duration,
+      prominent,
+      speaker,
+      voice,
+      emotion,
+      category: "script",
+      queuedAt: this._clock,
+      ...extra,
+    });
+  }
+
   triggerOnce(key, category, arenaRound) {
     if (this.triggered[key]) return;
     this.triggered[key] = true;

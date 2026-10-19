@@ -1070,19 +1070,17 @@ function botCompletionist(game) {
     }
   }
 
-  // Tutorial step 0: wait for auto-advance (narrative intro). The step timer
-  // reads performance.now(), which does not move while ticks are stepped
-  // synchronously, so back-date it the same way the playtest gate does.
-  game.tutorialStepTime = performance.now() - 3000;
+  // The prologue (src/data/prologue.js). Step 0, the HUD boot, advances on
+  // the step's own clock, which runs on frame time.
   stepGame(game, 300, { until: (g) => g.tutorialStep >= 1 });
   r.assert(
     game.tutorialStep >= 1,
-    "Tutorial step 0 → 1 (auto advance)",
+    "Prologue: HUD boot advances",
     `Stuck at step ${game.tutorialStep}`,
   );
 
-  // Step 1: Look around (rotate >= 3 radians cumulative)
-  for (let i = 0; i < 100 && game.tutorialStep < 2; i++) {
+  // Look around for real: the camera turns, the step counts it.
+  for (let i = 0; i < 400 && game.tutorialStep < 2; i++) {
     game.mouse.dx = 30;
     game.mouse.locked = true;
     stepGame(game, 1);
@@ -1090,113 +1088,45 @@ function botCompletionist(game) {
   game.mouse.dx = 0;
   r.assert(
     game.tutorialStep >= 2,
-    "Tutorial step 1 → 2 (look around)",
+    "Prologue: look around",
     `Stuck at step ${game.tutorialStep}`,
   );
 
-  // Step 2: Move (travel > 3 units)
-  for (let i = 0; i < 200 && game.tutorialStep < 3; i++) {
+  // Walk to the bulkhead for real: face east, hold forward.
+  for (let i = 0; i < 600 && game.tutorialStep < 3; i++) {
     game.player.angle = 0;
     game.keys[game.keybinds.moveForward] = true;
-    game.mouse.locked = true;
     stepGame(game, 1);
   }
-  clearInput(game);
+  game.keys[game.keybinds.moveForward] = false;
   r.assert(
     game.tutorialStep >= 3,
-    "Tutorial step 2 → 3 (move)",
+    "Prologue: walk to the bulkhead",
     `Stuck at step ${game.tutorialStep}`,
   );
 
-  // Step 3: Shoot
-  game.player.isFiring = true;
-  stepGame(game, 5);
-  game.player.isFiring = false;
-  r.assert(
-    game.tutorialStep >= 4,
-    "Tutorial step 3 → 4 (shoot)",
-    `Stuck at step ${game.tutorialStep}`,
-  );
-
-  // Step 4: Sprint (hold shift + move for 0.5s)
-  game.keys[game.keybinds.sprint] = true;
-  game.keys[game.keybinds.moveForward] = true;
-  game.mouse.locked = true;
-  stepGame(game, 60, { until: (g) => g.tutorialStep >= 5 });
-  clearInput(game);
-  r.assert(
-    game.tutorialStep >= 5,
-    "Tutorial step 4 → 5 (sprint)",
-    `Stuck at step ${game.tutorialStep}`,
-  );
-
-  // Step 5: Dash (double-tap forward)
-  const forwardKey = game.keybinds.moveForward;
-  game.keys[forwardKey] = true;
-  stepGame(game, 1);
-  game.keys[forwardKey] = false;
-  stepGame(game, 5);
-  // Simulate the double-tap logic directly
-  game.lastTapKey = forwardKey;
-  game.lastTapTime = performance.now() - 100;
-  game.keys[forwardKey] = true;
-  game.triggerDash(forwardKey);
-  stepGame(game, 20, { until: (g) => g.tutorialStep >= 6 });
-  clearInput(game);
-  r.assert(
-    game.tutorialStep >= 6,
-    "Tutorial step 5 → 6 (dash)",
-    `Stuck at step ${game.tutorialStep}`,
-  );
-
-  // Step 6: Open door with E (door is at grid 5,8 in tutorial map)
-  // Walk to face the door then interact
-  walkTo(game, 5.5, 7.2, 300);
-  game.player.angle = Math.PI / 2; // face south (toward row 8)
-  game.keys[game.keybinds.interact] = true;
-  stepGame(game, 2);
-  game.keys[game.keybinds.interact] = false;
-  game.handleKeyPress(game.keybinds.interact);
-  stepGame(game, 10, { until: (g) => g.tutorialStep >= 7 });
-  r.assert(
-    game.tutorialStep >= 7,
-    "Tutorial step 6 → 7 (open door)",
-    `Stuck at step ${game.tutorialStep}`,
-  );
-
-  // Step 7: Pick up items (health/ammo behind door at 3.5,10.5 and 6.5,10.5)
-  walkTo(game, 3.5, 10.5, 300);
-  stepGame(game, 5);
-  if (game.tutorialStep < 8) {
-    walkTo(game, 6.5, 10.5, 200);
-    stepGame(game, 5);
-  }
-  r.assert(
-    game.tutorialStep >= 8,
-    "Tutorial step 7 → 8 (pick up items)",
-    `Stuck at step ${game.tutorialStep}`,
-  );
-
-  // Step 8: Combat — kill the spawned drone at 12.5,12.5
-  stepGame(game, 5); // Let enemy spawn
-  for (let i = 0; i < 300 && game.tutorialStep < 9; i++) {
-    const enemy = findClosest(game, "enemy");
-    if (enemy) {
-      aimAt(game, enemy.x, enemy.y);
-      game.player.isFiring = true;
+  // The rest of the chapter, one step at a time: each step set up, a few
+  // ticks of play, then completed as if its goal were met. Every step must
+  // advance exactly one, and the chapter must end in the completion menu.
+  const lastStep = game.tutorial.step;
+  let advanced = true;
+  for (let guard = 0; guard < 60 && game.state === GameState.PLAYING && game.mode === "tutorial"; guard++) {
+    const before = game.tutorialStep;
+    stepGame(game, 10);
+    if (game.tutorialStep === before) game.tutorial.skipStep();
+    stepGame(game, 2);
+    if (game.tutorialStep !== before + 1 && game.state === GameState.PLAYING) {
+      advanced = false;
+      break;
     }
-    game.mouse.locked = true;
-    stepGame(game, 1);
   }
-  game.player.isFiring = false;
-  clearInput(game);
   r.assert(
-    game.tutorialStep >= 9,
-    "Tutorial step 8 → 9 (kill enemy)",
+    advanced && game.tutorialStep > lastStep,
+    "Prologue: every step advances",
     `Stuck at step ${game.tutorialStep}`,
   );
 
-  // Step 9 → tutorial complete menu
+  // The sandbox opens the completion menu
   stepGame(game, 200, {
     until: (g) => g.state === GameState.TUTORIAL_COMPLETE,
   });

@@ -278,6 +278,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
       game.audio.enemyBark?.(target.enemyType, "death", pan2, dist2);
       game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2, hitHeightOf(game, target));
       game.glitchEffect = 0.3;
+      if (game.mode === "tutorial") game.tutorial?.noteKill?.(target, false);
       onEnemyKill(game, target);
     }
     if (killed.length >= 2) game.triggerAriaOnce("multiKillSplash", "multiKillSplash");
@@ -297,6 +298,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     game.audio.enemyBark?.(enemy.enemyType, "death", panDeath, distDeath);
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
     game.glitchEffect = 0.3;
+    if (game.mode === "tutorial") game.tutorial?.noteKill?.(enemy, zoneName === "head");
     onEnemyKill(game, enemy);
     // Hit-stop — freeze gameplay for a beat on kills (DOOM-like impact)
     game.hitStopMs = Math.max(game.hitStopMs || 0, (isCrit || isHead) ? 84 : 50);

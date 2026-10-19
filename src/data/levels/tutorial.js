@@ -82,11 +82,11 @@ hWall(37, 35, 56, 2); // top wall
 hWall(47, 35, 56, 2); // bottom wall
 vWall(37, 47, 35, 2); // left wall
 vWall(37, 47, 56, 2); // right wall
-// Range lane dividers (partial walls creating shooting lanes)
-for (let r = 39; r <= 44; r++) {
-  pillar(r, 40, 2); // lane 1/2 divider
-  pillar(r, 45, 2); // lane 2/3 divider
-  pillar(r, 50, 2); // lane 3/4 divider
+// Shooting booths: three east-facing lanes divided at the firing line, open
+// downrange so targets can cross the whole width.
+for (let c = 39; c <= 44; c++) {
+  pillar(40, c, 2);
+  pillar(44, c, 2);
 }
 // Target wall at far end (east)
 hWall(38, 53, 55, 2);
@@ -199,8 +199,9 @@ carve(22, 10, 25, 14);
 vWall(22, 25, 9, 1); // west wall
 hWall(22, 10, 14, 1); // north wall
 hWall(25, 10, 14, 1); // south wall — keep east open to fitness
-// Secret passage from fitness center
+// Secret passage from fitness center: the only way in.
 g[23][15] = 6; // secret wall tile
+g[24][15] = 1;
 
 // ── 13. OBSERVATION DECK — glass-walled overlook above arena ──
 carve(3, 3, 6, 7);
@@ -227,15 +228,14 @@ export const TUTORIAL_MAP = {
   height: H,
   grid: g,
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
+  // The range's weapons and the Supervisor's desk are put down by the
+  // prologue as their steps begin (js/tutorial-system.js).
   pickups: [
-    // Zone 2 — Firing Range: Chrono Pistol in lane 1, Temporal Shotgun in lane 2
-    { x: 38.5, y: 42.5, type: "weapon", weaponId: 0 },
-    { x: 43.5, y: 42.5, type: "weapon", weaponId: 1 },
-    // Armory — extra weapon
+    // Armory — extra weapon, found while restoring power
     { x: 36.5, y: 32.5, type: "weapon", weaponId: 2 },
-    // Zone 4 — Supervisor Office: Health + Ammo
-    { x: 44.5, y: 21.5, type: "health" },
-    { x: 48.5, y: 21.5, type: "ammo" },
+    // Evidence room (behind the gym's secret wall) — Ricochet Pistol and a med pack
+    { x: 12.5, y: 23.5, type: "weapon", weaponId: 6 },
+    { x: 11.5, y: 24.5, type: "health" },
     // Break room bonus
     { x: 22.5, y: 32.5, type: "health" },
     // Combat arena resupply

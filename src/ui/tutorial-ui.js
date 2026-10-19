@@ -18,6 +18,7 @@ import {
   inkText,
 } from "./modern-ui-kit.js";
 import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -174,130 +175,37 @@ function drawCinematicMenu(ctx, w, h, items, selection, now) {
 // ─── Tutorial step content (single source of truth) ────────────────────────
 
 /**
- * Step copy for in-game tutorial overlay (steps 1-17).
- * Step 0 is HUD boot animation, no copy. Step 18 is sandbox, no overlay.
+ * Step cards for the prologue (src/data/prologue.js): what to do, per input
+ * device. Step 0 is the HUD boot animation, no copy; the sandbox, one past
+ * the last step, has no overlay. The story is told by ARIA and the
+ * Supervisor over comms, not on the cards.
  *
- * Copy chosen to feel like a movie: ARIA narrates, sometimes the supervisor
- * cuts in. Mobile alternatives respect touch verbs; pad copy names the
- * buttons of the controller in use (src/ui/input-glyphs.js), and its cards
- * carry `pad` (the family) so the Modern card draws them as pad glyphs.
+ * Touch copy uses touch verbs; pad copy names the buttons of the controller
+ * in use (src/ui/input-glyphs.js), and its cards carry `pad` (the family) so
+ * the Modern card draws them as pad glyphs.
  * @param {"keyboard"|"gamepad"|"touch"|boolean} device  true: touch, false: keyboard
  * @param {object} [game] for the pad family and the keybinds
  */
 export function tutorialStepCopy(device, game = null) {
   if (device === true) device = "touch";
-  if (device === "gamepad") return padStepCopy(game);
-  const isMobile = device === "touch";
-  return [
-    null, // step 0 handled separately (HUD boot)
-    {
-      title: "SYSTEMS ONLINE — LOOK AROUND",
-      hint: isMobile
-        ? 'ARIA: "Morning, Cadet. Drag to look around. Get used to seeing the world through a weapon."'
-        : 'ARIA: "Morning, Cadet. Move the mouse to look around. Get used to seeing the world through a weapon."',
-      color: "#00ccff",
-    },
-    {
-      title: "MOVE — TEST THE SUIT",
-      hint: isMobile
-        ? 'ARIA: "Use the stick to walk. Head for the door ahead. Try not to hit the frame."'
-        : 'ARIA: "W A S D to walk. Head for the bulkhead ahead. Try not to hit the frame."',
-      color: "#00ccff",
-    },
-    {
-      title: "BREACH — OPEN THE DOOR",
-      hint: isMobile
-        ? 'ARIA: "Sealed bulkhead. Face it and tap USE. I\'ll crack the lock — you look confident."'
-        : 'ARIA: "Sealed bulkhead. Face it and press E. I\'ll crack the lock — you look confident."',
-      color: "#ff8844",
-    },
-    {
-      title: "ARM YOURSELF",
-      hint: 'ARIA: "Weapon crate ahead. Walk over it to pick it up. From here on, nothing\'s a drill."',
-      color: "#ff6600",
-    },
-    {
-      title: "CONFIRM TARGETING",
-      hint: isMobile
-        ? 'ARIA: "Tap FIRE. Let\'s confirm the dangerous end works."'
-        : 'ARIA: "CLICK to fire. Let\'s confirm the dangerous end works."',
-      color: "#ff8844",
-    },
-    {
-      title: "AIM DOWN SIGHTS — FOCUS FIRE",
-      hint: isMobile
-        ? 'ARIA: "Hold AIM to aim down sights. Slower feet, tighter shots."'
-        : 'ARIA: "Hold RIGHT MOUSE to aim down sights. Slower feet, tighter shots."',
-      color: "#66eeff",
-    },
-    {
-      title: "WEAPON SWITCH — GRAB THE SHOTGUN",
-      hint: isMobile
-        ? 'ARIA: "Shotgun on the range. Pick it up, then swipe to switch weapons. Right tool, right problem."'
-        : 'ARIA: "Shotgun on the range. Pick it up, then scroll or press 1/2 to switch. Right tool, right problem."',
-      color: "#ff6600",
-    },
-    {
-      title: "SPRINT — MOVE FAST",
-      hint: isMobile
-        ? 'ARIA: "Fitness center. Tap RUN to sprint. Yes, the Bureau has a gym. No, you\'ve never used it."'
-        : 'ARIA: "Fitness center. Hold SHIFT to sprint. Yes, the Bureau has a gym. No, you\'ve never used it."',
-      color: "#ff44ff",
-    },
-    {
-      title: "CROUCH — LOWER YOUR PROFILE",
-      hint: isMobile
-        ? 'ARIA: "Hold CROUCH. Smaller target, quieter feet."'
-        : 'ARIA: "Hold CTRL to crouch. Smaller target, quieter feet."',
-      color: "#66dd66",
-    },
-    {
-      title: "SLIDE — STAY MOVING",
-      hint: isMobile
-        ? 'ARIA: "While running, tap CROUCH to slide. Momentum is armor."'
-        : 'ARIA: "While sprinting, tap CTRL to slide. Momentum is armor."',
-      color: "#66ff99",
-    },
-    {
-      title: "PHASE DASH — BLINK FORWARD",
-      hint: isMobile
-        ? 'ARIA: "Double-tap a direction to phase-dash. Blink, and you\'re somewhere else."'
-        : 'ARIA: "Double-tap a movement key to phase-dash. Blink, and you\'re somewhere else."',
-      color: "#ff44ff",
-    },
-    {
-      title: "CHRONO SHIFT — BEND TIME",
-      hint: isMobile
-        ? 'ARIA: "Time-dilation module online. Hold SLOW. The world crawls. You don\'t."'
-        : 'ARIA: "Time-dilation module online. Hold Q and keep firing. The world crawls. You don\'t."',
-      color: "#8844ff",
-    },
-    {
-      title: "RESUPPLY — THE SUPERVISOR'S OFFICE",
-      hint: 'SUPERVISOR (radio): "Cadet. My desk. Health, ammo — take all of it. Leave the coffee. Something\'s wrong upstairs."',
-      color: "#44ff88",
-    },
-    {
-      title: "\u26A1 ALERT — INTRUSION DETECTED",
-      hint: 'SUPERVISOR: "Breach — every sector — they\'re already insi—" [STATIC] ARIA: "Lost him. Combat arena. Move."',
-      color: "#ff2244",
-    },
-    {
-      title: "WAVE 1 — FIRST CONTACT",
-      hint: 'ARIA: "Three drones in the arena. This isn\'t a sim, Cadet. Put them down."',
-      color: "#ff2244",
-    },
-    {
-      title: "WAVE 2 — REINFORCEMENTS",
-      hint: 'ARIA: "Two henchmen and a drone. These ones shoot back. Shoot first."',
-      color: "#ff2244",
-    },
-    {
-      title: "SYSTEMS ONLINE — CALIBRATION COMPLETE",
-      hint: 'ARIA: "Suit synced. You\'re officially dangerous. Proceeding to deployment."',
-      color: "#00ffcc",
-    },
-  ];
+  const kind = device === "gamepad" ? "pad" : device === "touch" ? "touch" : "key";
+  const b = (action) => glyph(game, action, "gamepad").text;
+  const pad = kind === "pad" ? padFamily(game) : null;
+  return PROLOGUE_STEPS.map((step, i) => {
+    if (i === 0 || !step.title) return null; // step 0 is the HUD boot
+    const h = step.hint;
+    const hint =
+      typeof h === "string" ? h : kind === "pad" ? (h.pad ? h.pad(b) : h.key) : kind === "touch" ? (h.touch ?? h.key) : h.key;
+    const card = { title: step.title, hint, color: step.color, beat: step.beat };
+    if (pad) card.pad = pad;
+    return card;
+  });
+}
+
+/** The card's caption: which beat of the prologue this is. */
+export function beatCaption(beat) {
+  const b = PROLOGUE_BEATS[beat];
+  return b ? `PROLOGUE · ${beat + 1}/${PROLOGUE_BEATS.length} · ${b.title}` : null;
 }
 
 // ─── HUD-boot animation (step 0) ────────────────────────────────────────────
@@ -369,9 +277,11 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
   const narrLines = narr ? wrapText(ctx, narrText, MAX_W - PAD_X * 2) : [];
   const narrH = narr ? Math.round((narrLines.length * HINT_LINE_H + 10) * narr.a) : 0;
 
+  const progress = place.progress || "";
+  const PROG_H = progress ? HINT_LINE_H + 4 : 0;
   const contentW = Math.max(titleW, hintW, narr ? Math.min(MAX_W - PAD_X * 2, ctx.measureText(narrText).width) : 0);
   const boxW = Math.min(MAX_W, contentW + PAD_X * 2);
-  const boxH = PAD_Y * 2 + titleSize + 2 /* title height */ + TITLE_HINT_GAP + hintLines.length * HINT_LINE_H + narrH;
+  const boxH = PAD_Y * 2 + titleSize + 2 /* title height */ + TITLE_HINT_GAP + hintLines.length * HINT_LINE_H + PROG_H + narrH;
   const bx = cx - boxW / 2;
   const by = place.top ?? 60;
 
@@ -399,12 +309,12 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
 
   ctx.globalAlpha = fadeIn;
 
-  // Step counter
-  if (stepNum > 0 && stepNum <= totalSteps) {
+  // Step counter (the prologue's beat, when it has one)
+  if (place.caption || (stepNum > 0 && stepNum <= totalSteps)) {
     ctx.fillStyle = "rgba(255,255,255,0.4)";
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
-    ctx.fillText(`${stepNum}/${totalSteps}`, bx + 14, by + 18);
+    ctx.fillText(place.caption || `${stepNum}/${totalSteps}`, bx + 14, by - 6);
   }
 
   // Title with subtle glow
@@ -426,6 +336,14 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
   for (const line of hintLines) {
     ctx.fillText(line, cx, hy);
     hy += HINT_LINE_H;
+  }
+  if (progress) {
+    ctx.save();
+    ctx.fillStyle = step.color;
+    ctx.font = compact ? "bold 11px monospace" : "bold 13px monospace";
+    ctx.fillText(progress, cx, hy + 2);
+    ctx.restore();
+    hy += PROG_H;
   }
 
   if (narr) {
@@ -459,25 +377,19 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-/** tutorialStepCopy for the pad: the keyboard cards with button names swapped in. */
-function padStepCopy(game) {
-  const copy = tutorialStepCopy("keyboard", game);
-  const b = (action) => glyph(game, action, "gamepad").text;
-  const pad = padFamily(game);
-  const hints = {
-    1: 'ARIA: "Morning, Cadet. Push the right stick to look around. Get used to seeing the world through a weapon."',
-    2: 'ARIA: "Left stick to walk. Head for the bulkhead ahead. Try not to hit the frame."',
-    3: `ARIA: "Sealed bulkhead. Face it and press ${b("interact")}. I'll crack the lock — you look confident."`,
-    5: `ARIA: "Pull ${b("fire")} to fire. Let's confirm the dangerous end works."`,
-    6: `ARIA: "Hold ${b("aim")} to aim down sights. Slower feet, tighter shots."`,
-    7: `ARIA: "Shotgun on the range. Pick it up, then press ${b("weaponNext")} to switch. Right tool, right problem."`,
-    8: `ARIA: "Fitness center. Hold ${b("sprint")} to sprint. Yes, the Bureau has a gym. No, you've never used it."`,
-    9: `ARIA: "Hold ${b("crouch")} to crouch. Smaller target, quieter feet."`,
-    10: `ARIA: "While sprinting, tap ${b("crouch")} to slide. Momentum is armor."`,
-    11: `ARIA: "Tap ${b("dash")} to phase-dash. Blink, and you're somewhere else."`,
-    12: `ARIA: "Time-dilation module online. Hold ${b("chronoShift")} and keep firing. The world crawls. You don't."`,
-  };
-  return copy.map((step, i) => (step ? { ...step, hint: hints[i] ?? step.hint, pad } : step));
+/**
+ * Station power is out: the world drops to emergency darkness, brightest
+ * where you are looking, with the odd flicker of the failing grid.
+ */
+function drawBlackout(ctx, w, h) {
+  const flicker = Math.random() < 0.025 ? 0.25 : 0;
+  const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.12, w / 2, h / 2, Math.max(w, h) * 0.72);
+  g.addColorStop(0, `rgba(0, 2, 10, ${0.3 + flicker})`);
+  g.addColorStop(1, `rgba(0, 2, 10, ${0.86 + flicker * 0.5})`);
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -505,6 +417,8 @@ export function renderTutorialOverlay(ctx, w, h, state) {
     return 0;
   }
 
+  if (state.blackout) drawBlackout(ctx, w, h);
+
   const device = state.input ? activeDevice(state.input) : isTouchDevice ? "touch" : "keyboard";
   const copy = tutorialStepCopy(device, state.input);
   const step = copy[tutorialStep];
@@ -512,10 +426,11 @@ export function renderTutorialOverlay(ctx, w, h, state) {
 
   const fadeIn = Math.min(1, elapsed / 0.4);
   const pulse = 0.85 + 0.15 * Math.sin(now / 300);
+  const place = { caption: beatCaption(step.beat), progress: state.progress || "", top: 66 };
   if (modern) {
-    return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
+    return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
   }
-  return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1);
+  return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
 }
 
 /**
@@ -846,9 +761,12 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const tabW = narr ? Math.ceil(measureSpaced(uiFont(10, 700), place.narration.speaker, 0.8)) + 22 : 0;
   const narrLines = narr ? wrapFont(narrFont, place.narration.text, MAX_W - PAD_X * 2 - tabW) : [];
   const narrH = narr ? Math.round((narrLines.length * narrLineH + 12) * narr.a) : 0;
-  const contentW = Math.max(titleW, lay.w, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
+  const progress = place.progress || "";
+  const progFont = uiFont(compact ? 10 : 12, 800);
+  const PROG_H = progress ? (compact ? 16 : 22) : 0;
+  const contentW = Math.max(titleW, lay.w, progress ? measureSpaced(progFont, progress, 1) : 0, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
   const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2));
-  const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PAD_Y - 4 + narrH;
+  const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PROG_H + PAD_Y - 4 + narrH;
   const bx = Math.round(cx - boxW / 2);
   const by = Math.round(place.top ?? 60);
 
@@ -860,8 +778,8 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   drawBrackets(ctx, bx - 5, by - 5, boxW + 10, boxH + 10, step.color, 12, 2);
   ctx.globalAlpha = fadeIn;
 
-  if (stepNum > 0 && stepNum <= totalSteps) {
-    drawCaption(ctx, bx + 16, by - 9, `${stepNum}/${totalSteps}`, { size: 9, scheme: "steel" });
+  if (place.caption || (stepNum > 0 && stepNum <= totalSteps)) {
+    drawCaption(ctx, bx + 16, by - 9, place.caption || `${stepNum}/${totalSteps}`, { size: 9, scheme: "steel" });
   }
 
   ctx.font = titleFont;
@@ -875,6 +793,16 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   for (const line of lay.lines) {
     drawRichLine(ctx, line, lay, Math.round(cx - line.w / 2), midY, hintFont, UI.text);
     midY += LINE_H;
+  }
+  if (progress) {
+    ctx.font = progFont;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.letterSpacing = "1px";
+    ctx.fillStyle = step.color;
+    ctx.fillText(progress, cx, midY - LINE_H / 2 + PROG_H / 2 + 2);
+    ctx.letterSpacing = "0px";
+    ctx.textBaseline = "alphabetic";
   }
 
   if (narr) {

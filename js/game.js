@@ -138,6 +138,7 @@ import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
 
 export { GAME_VERSION } from "../src/constants.js";
+import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
@@ -1522,6 +1523,8 @@ export class Game {
       input: this,
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
+      progress: this.tutorial.progressText(),
+      blackout: this.tutorial.blackout,
     });
   }
 
@@ -2272,6 +2275,11 @@ export class Game {
           this.exitBuilderPlayTest();
           return;
         }
+        // The prologue never ends in a game over: back to the beat's checkpoint.
+        if (this.mode === "tutorial" && this.tutorial.step < TUTORIAL_SANDBOX_STEP) {
+          this.tutorial.respawn();
+          return;
+        }
         this.checkAchievements(); // Sync final score/stats before game over
         this.state = GameState.GAME_OVER;
         this.audio.stopMusic();
@@ -2450,7 +2458,8 @@ export class Game {
    * level reset clears the list.
    */
   _syncExitLight() {
-    const cells = this.mode === "campaign" && this.powerCells
+    const gated = this.mode === "campaign" || this.mode === "tutorial";
+    const cells = gated && this.powerCells
       ? this.entities.filter((e) => e.type === "powerCell" && e.active)
       : [];
     this._cellLights ??= new Map();
@@ -2469,7 +2478,7 @@ export class Game {
       L.life = L.maxLife = 1e9;
       if (!this.lights.includes(L)) this.lights.unshift(L);
     }
-    const ex = this.mode === "campaign" ? this.exitEntity : null;
+    const ex = gated ? this.exitEntity : null;
     let L = this._exitLight;
     if (!ex) {
       if (L) {
@@ -2813,8 +2822,8 @@ export class Game {
       // from the floor below it.
       if (this.world && Math.abs((this.player.z || 0) - (e.z || 0)) >= 1.5) continue;
 
-      // In tutorial, block pickups until step 13 ("Resupply")
-      if (this.mode === "tutorial" && this.tutorialStep < 13) {
+      // The prologue keeps health and ammo shut until the range teaches them.
+      if (this.mode === "tutorial" && !this.tutorial.pickupsOpen) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -2828,17 +2837,19 @@ export class Game {
         this.spawnPickupBurst(e.x, e.y, "health", this.world ? e.z : null);
         this.audio.pickup();
         this.triggerAriaOnce("healthPickup", "healthPickup");
-        if (this.mode === "tutorial" && this.tutorialStep === 13)
+        if (this.mode === "tutorial") {
           this.tutorialPickedUp = true;
-        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
+          e._respawnAt = performance.now() + 8000;
+        }
       } else if (e.type === "ammo") {
         this.player.ammo = Math.min(999, this.player.ammo + 20);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "ammo", this.world ? e.z : null);
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep === 13)
+        if (this.mode === "tutorial") {
           this.tutorialPickedUp = true;
-        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
+          e._respawnAt = performance.now() + 8000;
+        }
       } else if (e.type === "weapon") {
         if (!this.player.weapons.includes(e.weaponId)) {
           this.player.weapons.push(e.weaponId);
@@ -2869,7 +2880,9 @@ export class Game {
           _spawnEnergyBurst(ps, e.x, e.y, { count: 16, r: 255, g: 176, b: 40 }));
         this.audio.pickup();
         if (pc) this.showGearToast?.("Power cell", `${pc.found} / ${pc.total}`);
-        if (pc && pc.found >= pc.total) {
+        if (this.mode === "tutorial") {
+          // The prologue scripts its own lines, and the lift opens on its own beat.
+        } else if (pc && pc.found >= pc.total) {
           if (this.exitEntity) this.exitEntity.sealed = false;
           this.audio.roundComplete?.();
           this.queueAriaMessage("exitUnsealed");

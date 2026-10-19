@@ -48,6 +48,12 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
+    /** Complete the next `n` prologue steps as if their goals were met; returns the step reached. */
+    tutorialSkip(n = 1) {
+      for (let i = 0; i < n; i++) game.tutorial.skipStep();
+      return game.tutorialStep;
+    },
+
     startArena() {
       game.audio.init();
       game.startArena();

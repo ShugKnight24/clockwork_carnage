@@ -3,6 +3,7 @@ import { ACTS, isLastAct, UPGRADES } from "../data.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
 import { powersFor } from "../../src/systems/chrono-powers.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
+import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
 
 const VALID_STATES = new Set(Object.values(GameState));
 const PLAYER_DEFS = {
@@ -144,7 +145,7 @@ export function createPlaytestGate(game, tools) {
 
   function playTutorial(run, ctx, player) {
     skipCutscenes(run, ctx, player);
-    for (let guard = 0; guard < 80 && game.state !== GameState.TUTORIAL_COMPLETE; guard++) {
+    for (let guard = 0; guard < 120 && game.state !== GameState.TUTORIAL_COMPLETE; guard++) {
       if (game.state === GameState.CUTSCENE) skipCutscenes(run, ctx, player);
       if (game.mode !== "tutorial") throw new Error(`Tutorial left tutorial mode: ${game.mode}`);
       driveTutorialStep(run, ctx, player);
@@ -160,85 +161,30 @@ export function createPlaytestGate(game, tools) {
     assertState(run, [GameState.PLAYING, GameState.CUTSCENE], "tutorial should hand off to campaign or story");
   }
 
+  /**
+   * The prologue (src/data/prologue.js): the opening steps played for real
+   * (boot, look, walk, open the bulkhead), then each later step set up, given
+   * a few ticks of play, and completed as if its goal were met. The sandbox
+   * one past the last step opens the completion menu by itself.
+   */
   function driveTutorialStep(run, ctx, player) {
     const step = game.tutorialStep;
-    if (step === 0) {
-      game.tutorialStepTime = performance.now() - 3000;
-      stepAndWatch(run, ctx, player, 5, "tutorial boot");
-    }
-    else if (step === 1) withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 120, "look around");
-    else if (step === 2) t.walkTo(game, 17, 43.5, 240);
+    if (step === 0) stepAndWatch(run, ctx, player, 180, "tutorial boot");
+    else if (step === 1) withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 240, "look around");
+    else if (step === 2) t.walkTo(game, 23.5, 43.5, 400);
     else if (step === 3) {
       openDoorAt(26, 41, 0);
       stepAndWatch(run, ctx, player, 5, "open door");
-    }
-    else if (step === 4) pathWalkTo(38.5, 42.5, 500);
-    else if (step === 5) {
-      game.tutorialStepTime = performance.now() - 500;
-      fireBurst(run, ctx, player, 30);
-    }
-    else if (step === 6) withInput(() => { game.player.isAiming = true; }, run, ctx, player, 10, "ads");
-    else if (step === 7) {
-      openDoorAt(33, 41, Math.PI);
-      pathWalkTo(43.5, 42.5, 700);
-      game.handleKeyPress(game.keybinds.weapon1);
-      game.handleKeyPress(game.keybinds.weapon2);
-      stepAndWatch(run, ctx, player, 5, "weapon switch");
-    } else if (step === 8) withInput(() => {
-      game.keys[game.keybinds.sprint] = true;
-      game.keys[game.keybinds.moveForward] = true;
-    }, run, ctx, player, 60, "sprint");
-    else if (step === 9) withInput(() => { game.keys[game.keybinds.crouch] = true; }, run, ctx, player, 20, "crouch");
-    else if (step === 10) withInput(() => {
-      game.playerUpdateSystem._prevCrouchKey = false;
-      game.keys[game.keybinds.sprint] = true;
-      game.keys[game.keybinds.moveForward] = true;
-      game.keys[game.keybinds.crouch] = true;
-    }, run, ctx, player, 30, "slide");
-    else if (step === 11) {
-      game.triggerDash(game.keybinds.moveForward, 0, -1);
-      stepAndWatch(run, ctx, player, 30, "dash");
-    } else if (step === 12) withInput(() => {
-      game.tutorialStepTime = performance.now() - 500;
-      game.player.chronoEnergy = game.player.maxChronoEnergy;
-      game.player.chronoActive = false;
-      game.keys[game.keybinds.chronoShift] = true;
-    }, run, ctx, player, 20, "chrono");
-    else if (step === 13) {
-      openDoorAt(46, 19, Math.PI / 2);
-      game.entityGrid.clear();
-      game.entityGrid.insertAll(game.entities);
-      pathWalkTo(44.5, 21.5, 800);
-      game.player.x = 44.5;
-      game.player.y = 21.5;
-      game.entityGrid.clear();
-      game.entityGrid.insertAll(game.entities);
-      stepAndWatch(run, ctx, player, 5, "resupply pickup");
-    }
-    else if (step === 14) {
-      t.clearInput(game);
-      game.player.chronoActive = false;
-      game.timeScale = 1;
-      game.tutorialStepTime = performance.now() - 3000;
-      stepAndWatch(run, ctx, player, 5, "alert");
-    }
-    else if (step === 15 || step === 16) {
-      t.clearInput(game);
+    } else if (step < TUTORIAL_SANDBOX_STEP) {
       game.player.chronoActive = false;
       game.timeScale = 1;
       preparePlayer(player);
-      stepAndWatch(run, ctx, player, 1, "tutorial wave spawn");
-      killEnemiesDirectly();
-      stepAndWatch(run, ctx, player, 20, "tutorial wave clear");
-    } else if (step === 17) {
-      t.clearInput(game);
-      game.player.chronoActive = false;
-      game.timeScale = 1;
-      game.tutorialStepTime = performance.now() - 3000;
-      stepAndWatch(run, ctx, player, 5, "tutorial completion");
+      stepAndWatch(run, ctx, player, 8, `prologue step ${step}`);
+      if (game.tutorialStep === step) game.tutorial.skipStep();
+      stepAndWatch(run, ctx, player, 2, `prologue step ${step} done`);
+    } else {
+      stepAndWatch(run, ctx, player, 2, "tutorial sandbox");
     }
-    else if (step === 18) game.state = GameState.TUTORIAL_COMPLETE;
-    else throw new Error(`Unhandled tutorial step ${step}`);
     t.clearInput(game);
     game.player.isAiming = false;
   }

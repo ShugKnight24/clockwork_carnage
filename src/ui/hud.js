@@ -307,7 +307,7 @@ function drawBossNameCard(ctx, game, w, h) {
  * EXTRACTION LIVE. Nothing on a level without cells.
  */
 function drawPowerCellChip(ctx, game) {
-  const pc = game.mode === "campaign" ? game.powerCells : null;
+  const pc = game.mode === "campaign" || game.mode === "tutorial" ? game.powerCells : null;
   if (!pc) return;
   const done = pc.found >= pc.total;
   const label = done ? "EXTRACTION LIVE" : `POWER CELLS ${pc.found} / ${pc.total}`;

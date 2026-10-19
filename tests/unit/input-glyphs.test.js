@@ -16,6 +16,7 @@ import { Game, GameState } from "../../js/game.js";
 import { Player } from "../../js/entities.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { tutorialStepCopy } from "../../src/ui/tutorial-ui.js";
+import { prologueStepIndex } from "../../src/data/prologue.js";
 import { powerKeys } from "../../src/ui/chrono-hud.js";
 
 const fakeGame = (over = {}) => ({
@@ -315,14 +316,17 @@ describe("prompt text", () => {
     const game = fakeGame();
     const pad = tutorialStepCopy("gamepad", game);
     expect(pad.length).toBe(tutorialStepCopy(false).length);
-    expect(pad[3].hint).toContain("press X");
-    expect(pad[7].hint).toContain("press Y");
-    expect(pad[9].hint).toContain("Hold B");
-    expect(pad[11].hint).toContain("Tap A");
-    expect(pad[12].hint).toContain("Hold LB");
-    expect(pad[3].pad).toBe("xbox");
+    const at = (id) => pad[prologueStepIndex(id)];
+    expect(at("door").hint).toContain("press X");
+    expect(at("shotgun").hint).toContain("press Y");
+    expect(at("crouch").hint).toContain("Hold B");
+    expect(at("dash").hint).toContain("Tap A");
+    expect(at("chrono").hint).toContain("Hold LB");
+    expect(at("door").pad).toBe("xbox");
     for (const step of pad.slice(1)) {
-      expect(step.hint).not.toMatch(/\b(mouse|click|press [EQ]\b|WASD|W A S D|SHIFT|CTRL|scroll)\b/i);
+      expect(step.hint).not.toMatch(/\b(mouse|click|press [EQ]\b|WASD|W A S D|scroll)\b/i);
+      // Case-sensitive: "Chrono Shift" is the power, SHIFT the key.
+      expect(step.hint).not.toMatch(/\b(SHIFT|CTRL)\b/);
     }
   });
 

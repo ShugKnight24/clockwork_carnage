@@ -1,38 +1,545 @@
 /**
- * TutorialSystem — owns all tutorial state and progression logic.
- * Extracted from game.js via strangler fig pattern.
+ * TutorialSystem — the prologue chapter (src/data/prologue.js): state,
+ * progression, set pieces and checkpoints.
  *
- * Receives a `game` reference for accessing shared state
- * (player, entities, audio, map, etc).
+ * Each step of PROLOGUE_STEPS has logic here, keyed by its id: `enter` sets
+ * the step up (opens doors, spawns targets or hostiles, starts a hazard) and
+ * `update` says when it is done. A beat's first step is a checkpoint: dying
+ * puts you back there with the beat set up again, never back to the start.
+ *
+ * Receives a `game` reference for the shared state (player, entities, audio,
+ * map, comms).
  */
 import { TUTORIAL_MAP } from "./data.js";
 import { Enemy, Pickup, Prop } from "./entities.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../src/data/prologue.js";
+import { ARIA_COMMS } from "../src/data/dialogue.js";
+import { spawnEnergyBurst } from "./particle-system.js";
+
+const SPEAKER_STYLE = {
+  ARIA: { color: "#00ffdd", voice: "aria" },
+  SUPERVISOR: { color: "#ffb028", voice: "supervisor" },
+};
+
+/** The steps after which ARIA may say a word of encouragement. */
+const ENCOURAGE_AFTER = new Set(["fire", "ads", "moving", "shotgun", "slide", "dash", "cover", "vents"]);
+
+const SHOTGUN = 1;
+const PISTOL = 0;
+
+/** The gym course's gates: the start, then four to hit in order. */
+const COURSE_GATES = [
+  { x: 21.5, y: 20.5 },
+  { x: 4.5, y: 16.5 },
+  { x: 5.5, y: 24.5 },
+  { x: 22.5, y: 24.5 },
+  { x: 22.5, y: 16.5 },
+];
+const COURSE_LIMIT = 20; // seconds; +3 for each failed run, up to +9
+const GATE_R = 1.25;
+
+/**
+ * The plasma vents across the main corridor (cols 27-32): two strips, two
+ * rows deep. Each is hot for VENT_ON of every VENT_CYCLE seconds of game
+ * time, offset so the gaps never line up. A quarter-second gap is too short
+ * to cross two rows even sprinting; under Chrono Shift it lasts most of a
+ * second.
+ */
+const VENT_STRIPS = [
+  { rows: [22, 23], phase: 0 },
+  { rows: [25, 26], phase: 0.85 },
+];
+const VENT_COLS = [27, 32];
+const VENT_CYCLE = 1.75;
+const VENT_ON = 1.5;
+const VENT_DAMAGE = 12;
+
+/** Training targets: no sight, no gun, no feet. */
+function makeTarget(x, y, { health = 20, track = null } = {}) {
+  const e = new Enemy(x, y, "drone");
+  e.health = e.maxHealth = health;
+  e.speed = 0;
+  e.def = { ...e.def, damage: 0, speed: 0, sightRange: 0, score: 25 };
+  e.state = "idle";
+  e._target = true;
+  if (track) e._track = { x0: x, y0: y, ...track };
+  return e;
+}
+
+/** A real hostile, tuned down for a cadet's first fights. */
+function makeHostile(x, y, type) {
+  const e = new Enemy(x, y, type);
+  const tune = {
+    drone: { health: 20, damage: 4, speed: 0.6, attackRate: 1400 },
+    henchman: { health: 45, damage: 5, speed: 0.7, attackRate: 1400 },
+    sentinel: { health: 80, damage: 8, speed: 0.85, attackRate: 2000 },
+  }[type];
+  if (tune) {
+    e.health = e.maxHealth = tune.health;
+    e.def = { ...e.def, damage: tune.damage, speed: e.def.speed * tune.speed, attackRate: tune.attackRate };
+  }
+  return e;
+}
+
+/**
+ * Per-step logic. `enter(t, g)` runs when the step begins (and again when a
+ * checkpoint puts you back into it); `update(t, g, dt)` returns true when the
+ * step is done. `t.c` is the step's own scratch state, fresh on every enter.
+ * `progress(t, g)` is the card's live counter, when it has one.
+ */
+const LOGIC = {
+  boot: {
+    update: (t) => t.clock > 2.4,
+  },
+
+  look: {
+    enter(t, g) {
+      t.c.prevAngle = g.player.angle;
+      t.c.turned = 0;
+    },
+    update(t, g) {
+      let d = g.player.angle - t.c.prevAngle;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      t.c.turned += Math.abs(d);
+      t.c.prevAngle = g.player.angle;
+      return t.c.turned > 2.5 && t.clock > 3;
+    },
+  },
+
+  walk: {
+    waypoint: { x: 24.5, y: 41.5 },
+    update: (t, g) => t.near(g, 23.5, 41.5, 2.2),
+  },
+
+  door: {
+    waypoint: { x: 26.5, y: 41.5 },
+    update: (t, g) => t.doorOpened || t.isOpen(g, TUTORIAL_MAP.doors.door1),
+  },
+
+  toRange: {
+    waypoint: { x: 36.5, y: 41.5 },
+    enter(t, g) {
+      t.openDoors(g, "door2");
+    },
+    update: (t, g) => t.near(g, 36.5, 41.5, 1.8),
+  },
+
+  pistol: {
+    waypoint: { x: 38.5, y: 42.5 },
+    enter(t, g) {
+      t.place(g, "pistol", new Pickup(38.5, 42.5, "weapon", { weaponId: PISTOL }));
+    },
+    update: (t, g) => g.player.weapons.includes(PISTOL),
+  },
+
+  fire: {
+    waypoint: { x: 52.5, y: 42.5 },
+    enter(t, g) {
+      t.spawnTargets(g, "fire", [
+        [51.5, 41.5],
+        [51.5, 42.5],
+        [51.5, 43.5],
+      ]);
+    },
+    update: (t) => t.c.kills >= 3,
+    progress: (t) => `TARGETS ${Math.min(3, t.c.kills)} / 3`,
+  },
+
+  ads: {
+    waypoint: { x: 53.5, y: 42.5 },
+    enter(t, g) {
+      t.spawnTargets(g, "ads", [
+        [53.5, 39.5],
+        [53.5, 42.5],
+        [53.5, 45.5],
+      ]);
+    },
+    update(t, g) {
+      // Missed with the hip? The drill re-racks until three fall to aimed fire.
+      if (t.alive(g, "ads") === 0 && t.c.aimedKills < 3) t.spawnTargets(g, "ads", [[53.5, 41.5], [53.5, 43.5]]);
+      return t.c.aimedKills >= 3;
+    },
+    progress: (t) => `AIMED KILLS ${Math.min(3, t.c.aimedKills)} / 3`,
+  },
+
+  moving: {
+    waypoint: { x: 52.5, y: 42.5 },
+    enter(t, g) {
+      t.c.wave = 0;
+    },
+    update(t, g) {
+      if (t.alive(g, "moving") === 0 && t.c.heads < 3) {
+        // A fresh pair each time both are down, sliding the length of the lane.
+        const phase = t.c.wave++;
+        t.spawnTargets(
+          g,
+          "moving",
+          [
+            [52.5, 42.5, { amp: 2.6, speed: 1.3, phase }],
+            [54.5, 42.5, { amp: 2.6, speed: 1.0, phase: phase + Math.PI }],
+          ],
+          45,
+        );
+      }
+      return t.c.heads >= 3;
+    },
+    progress: (t) => `HEADSHOT KILLS ${Math.min(3, t.c.heads)} / 3`,
+  },
+
+  shotgun: {
+    waypoint: { x: 43.5, y: 42.5 },
+    enter(t, g) {
+      t.place(g, "shotgun", new Pickup(43.5, 42.5, "weapon", { weaponId: SHOTGUN }));
+      t.c.racked = false;
+    },
+    update(t, g) {
+      const p = g.player;
+      const has = p.weapons.includes(SHOTGUN);
+      if (has && !t.c.racked) {
+        t.c.racked = true;
+        t.spawnTargets(g, "shotgun", [
+          [47.5, 41.5],
+          [47.5, 42.5],
+          [47.5, 43.5],
+        ]);
+      }
+      if (t.c.racked && t.alive(g, "shotgun") === 0 && t.c.shotgunKills < 3) {
+        t.spawnTargets(g, "shotgun", [[47.5, 41.5], [47.5, 43.5]]);
+      }
+      return t.c.shotgunKills >= 3;
+    },
+    progress: (t, g) =>
+      g.player.weapons.includes(SHOTGUN) ? `SHOTGUN KILLS ${Math.min(3, t.c.shotgunKills)} / 3` : "PICK UP THE SHOTGUN",
+  },
+
+  ammo: {
+    waypoint: { x: 37.5, y: 45.5 },
+    enter(t, g) {
+      t.pickupsOpen = true;
+      t.place(g, "ammo", new Pickup(37.5, 45.5, "ammo"));
+      t.pickedUp = false;
+    },
+    update: (t) => t.pickedUp,
+  },
+
+  toGym: {
+    waypoint: { x: 22.5, y: 20.5 },
+    enter(t, g) {
+      t.openDoors(g, "door3");
+    },
+    update: (t, g) => t.near(g, 22.0, 20.5, 1.8),
+  },
+
+  sprint: {
+    update(t, g, dt) {
+      if (g.player.isSprinting) t.c.sprint = (t.c.sprint || 0) + g.deltaTime;
+      return t.c.sprint > 2.5;
+    },
+    progress: (t) => `SPRINT ${Math.min(2.5, t.c.sprint || 0).toFixed(1)} / 2.5 s`,
+  },
+
+  crouch: {
+    enter(t, g) {
+      t.c.x = g.player.x;
+      t.c.y = g.player.y;
+      t.c.moved = 0;
+    },
+    update(t, g) {
+      const p = g.player;
+      const d = Math.hypot(p.x - t.c.x, p.y - t.c.y);
+      if (p.isCrouching) t.c.moved += d;
+      t.c.x = p.x;
+      t.c.y = p.y;
+      return t.c.moved > 2.5;
+    },
+    progress: (t) => `CROUCH-WALK ${Math.min(2.5, t.c.moved).toFixed(1)} / 2.5 m`,
+  },
+
+  slide: {
+    update: (t) => t.c.slides >= 2,
+    progress: (t) => `SLIDES ${Math.min(2, t.c.slides)} / 2`,
+  },
+
+  dash: {
+    update: (t) => t.c.dashes >= 2,
+    progress: (t) => `DASHES ${Math.min(2, t.c.dashes)} / 2`,
+  },
+
+  course: {
+    enter(t, g) {
+      t.c.gate = 0;
+      t.c.time = 0;
+      t.c.fails = t.c.fails ?? 0;
+      t.c.limit = COURSE_LIMIT;
+    },
+    get waypoint() {
+      return null; // set per gate in update
+    },
+    update(t, g) {
+      const c = t.c;
+      const gate = COURSE_GATES[c.gate];
+      g.objectiveWaypoint = gate;
+      t.gateLight(g, gate);
+      if (c.gate > 0) {
+        c.time += g.deltaTime;
+        if (c.time > c.limit) {
+          c.fails++;
+          c.limit = COURSE_LIMIT + Math.min(9, c.fails * 3);
+          c.gate = 0;
+          c.time = 0;
+          g.audio.menuBack?.();
+          t.say([["ARIA", c.fails === 1 ? "Too slow. Back to the start. Sprint the straights, dash the corners." : `Again. You've got ${c.limit} seconds this time. Don't tell him I gave you extra.`, "warm"]]);
+          return false;
+        }
+      }
+      if (t.near(g, gate.x, gate.y, GATE_R)) {
+        g.audio.menuConfirm?.();
+        if (c.gate === COURSE_GATES.length - 1) {
+          c.best = c.time;
+          return true;
+        }
+        c.gate++;
+      }
+      return false;
+    },
+    progress(t) {
+      const c = t.c;
+      if (c.gate === 0) return `GO TO THE START GATE · LIMIT ${c.limit} s`;
+      return `GATE ${c.gate} / ${COURSE_GATES.length - 1} · ${c.time.toFixed(1)} / ${c.limit} s`;
+    },
+    exit(t, g) {
+      t.gateLight(g, null);
+      if (t.c.best != null) t.say([["SUPERVISOR", `${t.c.best.toFixed(1)} seconds. Not bad, Cadet. Not good either. Come to my office, we need to talk about your—`, "calm"]]);
+    },
+  },
+
+  alarm: {
+    // The Supervisor finishes his line about your course time, and the
+    // klaxon is what cuts him off.
+    enter(t, g) {
+      t.c.armed = false;
+      t.openDoors(g, "door4");
+    },
+    update(t, g) {
+      if (!t.c.armed && t.clock > 1 && t.scriptIdle()) {
+        t.c.armed = true;
+        t.c.at = t.clock;
+        g.audio.alarmKlaxon?.();
+        g.screenShake = 4;
+        g.glitchEffect = 0.6;
+        t.alert = true;
+        t.say(t.def.lines, { cut: true });
+      }
+      return t.c.armed && t.clock - t.c.at > 4 && t.scriptIdle();
+    },
+  },
+
+  cover: {
+    waypoint: { x: 37.5, y: 20.5 },
+    enter(t, g) {
+      t.alert = true;
+      t.spawnHostiles(g, "cover", [
+        [53.5, 24.5, "henchman"],
+        [53.5, 16.5, "henchman"],
+        [48.5, 24.5, "henchman"],
+      ]);
+    },
+    update: (t, g) => t.c.spawned && t.alive(g, "cover") === 0,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "cover")}`,
+  },
+
+  patch: {
+    waypoint: { x: 44.5, y: 21.5 },
+    enter(t, g) {
+      t.alert = false;
+      t.pickupsOpen = true;
+      t.openDoors(g, "door6");
+      t.place(g, "patch", new Pickup(44.5, 21.5, "health"));
+      t.place(g, "patchAmmo", new Pickup(48.5, 21.5, "ammo"));
+      t.pickedUp = false;
+    },
+    update: (t) => t.pickedUp,
+  },
+
+  shield: {
+    enter(t, g) {
+      t.spawnHostiles(g, "shield", [[54.5, 20.5, "sentinel"]]);
+    },
+    update: (t, g) => t.c.spawned && t.alive(g, "shield") === 0,
+  },
+
+  chrono: {
+    enter(t, g) {
+      g.player.chronoEnergy = g.player.maxChronoEnergy;
+      t.c.held = 0;
+    },
+    update(t, g) {
+      if (g.player.chronoActive) t.c.held += g.deltaTime;
+      return t.c.held > 1.5;
+    },
+    progress: (t) => `SHIFT ${Math.min(1.5, t.c.held).toFixed(1)} / 1.5 s`,
+  },
+
+  vents: {
+    waypoint: { x: 29.5, y: 29.5 },
+    enter(t, g) {
+      t.vents = { clock: 0, cooldown: 0, puff: 0, lights: [] };
+    },
+    update(t, g, dt) {
+      t.updateVents(g, dt);
+      return g.player.y > 27.6 && g.player.x > 26.5 && g.player.x < 33.5;
+    },
+    exit(t, g) {
+      t.clearVents(g);
+    },
+  },
+
+  slowFire: {
+    waypoint: { x: 29.5, y: 36.5 },
+    enter(t, g) {
+      t.spawnHostiles(g, "slowFire", [
+        [29.5, 37.5, "drone"],
+        [30.5, 40.5, "drone"],
+        [28.5, 43.5, "drone"],
+      ]);
+    },
+    update: (t, g) => t.c.spawned && t.alive(g, "slowFire") === 0,
+    progress: (t, g) => `DRONES ${t.alive(g, "slowFire")}`,
+    exit(t) {
+      if (t.c.chronoKills > 0) t.say([["ARIA", "Did you see that? They never knew what time it was.", "excited"]]);
+    },
+  },
+
+  cells: {
+    enter(t, g) {
+      t.blackout = true;
+      g.audio.powerDown?.();
+      g.glitchEffect = 0.8;
+      t.place(g, "cell1", new Pickup(19.5, 30.5, "powerCell"));
+      t.place(g, "cell2", new Pickup(39.5, 30.5, "powerCell"));
+      g.powerCells = { total: 2, found: 0 };
+      t.ensureExit(g, true);
+      t.spawnHostiles(g, "cells", [
+        [22.5, 33.5, "henchman"],
+        [37.5, 31.5, "drone"],
+      ]);
+    },
+    get waypoint() {
+      return null;
+    },
+    update(t, g) {
+      // Point at the nearer cell still out there.
+      const left = g.entities.filter((e) => e.type === "powerCell" && e.active);
+      const p = g.player;
+      left.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+      g.objectiveWaypoint = left[0] ? { x: left[0].x, y: left[0].y } : null;
+      return (g.powerCells?.found ?? 0) >= 2;
+    },
+    progress: (t, g) => `POWER CELLS ${g.powerCells?.found ?? 0} / 2`,
+  },
+
+  toLift: {
+    waypoint: { x: 29.5, y: 10.5 },
+    enter(t, g) {
+      t.blackout = false;
+      t.ensureExit(g, true); // charging: live once the arena is held
+      // The cells are in (a skipped step leaves them lying about): their chip
+      // goes until the lift is live.
+      for (const e of g.entities) if (e.type === "powerCell") e.active = false;
+      g.powerCells = null;
+      t.openDoors(g, "door5");
+    },
+    update: (t, g) => t.near(g, 29.5, 10.0, 2.0),
+  },
+
+  wave1: {
+    enter(t, g) {
+      t.c.delay = 1.5;
+    },
+    update(t, g) {
+      return t.wave(g, "wave1", [
+        [10.5, 4.5, "drone"],
+        [10.5, 9.5, "drone"],
+        [49.5, 4.5, "drone"],
+        [49.5, 9.5, "drone"],
+      ]);
+    },
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1")} · LIFT 30%`,
+  },
+
+  wave2: {
+    enter(t, g) {
+      t.c.delay = 2.5;
+    },
+    update(t, g) {
+      return t.wave(g, "wave2", [
+        [10.5, 6.5, "henchman"],
+        [49.5, 6.5, "henchman"],
+        [20.5, 3.5, "drone"],
+        [39.5, 3.5, "drone"],
+      ]);
+    },
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2")} · LIFT 60%`,
+  },
+
+  wave3: {
+    enter(t, g) {
+      t.c.delay = 2.5;
+    },
+    update(t, g) {
+      return t.wave(g, "wave3", [
+        [49.5, 6.5, "sentinel"],
+        [10.5, 4.5, "henchman"],
+        [10.5, 9.5, "henchman"],
+      ]);
+    },
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3")} · LIFT 90%`,
+  },
+
+  extract: {
+    waypoint: { x: 29.5, y: 3.5 },
+    enter(t, g) {
+      t.ensureExit(g, false);
+      g.powerCells = { total: 2, found: 2 }; // the HUD chip: EXTRACTION LIVE
+      g.audio.roundComplete?.();
+    },
+    update: (t, g) => t.near(g, 29.5, 3.5, 1.1),
+  },
+
+  reveal: {
+    enter(t, g) {
+      g.player.chronoActive = false;
+      g.screenShake = 2;
+    },
+    update(t, g) {
+      // The lift rumbles while ARIA talks.
+      if (Math.random() < g.deltaTime * 0.6) g.screenShake = Math.max(g.screenShake || 0, 1.5);
+      return t.clock > 6 && t.scriptIdle() && t.clock - t.idleSince > 2;
+    },
+  },
+};
 
 export class TutorialSystem {
   constructor(game) {
     this.game = game;
-
-    // Step progression
     this.step = 0;
     this.stepTime = 0;
+    this._resetState();
+    this.menuSelection = 1; // Default to "Begin Campaign" for better funnel
+    this.showCompletionMenu = false;
+  }
 
-    // Look tracking
-    this.startAngle = 0;
-    this.cumulativeAngle = 0;
-    this.prevAngle = 0;
-
-    // Movement tracking
-    this.startX = 0;
-    this.startY = 0;
-
-    // Sprint tracking
-    this.sprintTime = 0;
-    this.sprintDone = false;
-
-    // Interaction flags
+  /** Every per-run field, as a new run starts it. */
+  _resetState() {
+    // Step progression: `clock` is the step's age in real seconds (it runs
+    // on the game's frame time, so it pauses with the game).
+    this.clock = 0;
+    this.c = {};
+    // Interaction flags, set by the game as they happen (game.tutorialX).
     this.pickedUp = false;
     this.weaponPickedUp = false;
     this.weaponSwapped = false;
@@ -43,17 +550,25 @@ export class TutorialSystem {
     this.slid = false;
     this.fired = false;
     this.chronoUsed = false;
-
-    // Wave tracking
-    this.wave1Spawned = false;
-    this.wave2Spawned = false;
-
-    // Post-combat
+    // Health and ammo pickups stay shut until the range teaches them.
+    this.pickupsOpen = false;
+    // Set pieces.
+    this.alert = false;
+    this.blackout = false;
+    this.vents = null;
+    this._gateLight = null;
+    this._alertLights = null;
+    // Dialogue still to play: { line: [speaker, text, emotion], step }.
+    this.script = [];
+    this._lineGap = 0;
+    this._ourLine = null;
+    this.idleSince = 0;
+    this.checkpoint = null;
+    this.deaths = 0;
+    // Post-chapter.
     this.sandboxInit = false;
-    this.menuSelection = 1; // Default to "Begin Campaign" for better funnel
     this.originPlayed = false;
     this.showCompletionMenu = false;
-    this.alarmPlayed = false;
   }
 
   /**
@@ -80,6 +595,7 @@ export class TutorialSystem {
         this.initLevel();
       });
     } else {
+      g.ariaEnabled = true;
       this.initLevel();
     }
   }
@@ -98,11 +614,9 @@ export class TutorialSystem {
     g.dustMotes = null;
     g.projectiles = [];
 
-    // Spawn tutorial pickups
     for (const p of TUTORIAL_MAP.pickups) {
       g.entities.push(new Pickup(p.x, p.y, p.type, p));
     }
-    // Spawn environmental props (with wall-intersection validation)
     if (TUTORIAL_MAP.props) {
       for (const p of TUTORIAL_MAP.props) {
         const pos = validatePropPosition(p.x, p.y, TUTORIAL_MAP.grid, TUTORIAL_MAP.width, TUTORIAL_MAP.height);
@@ -113,34 +627,12 @@ export class TutorialSystem {
     g.killedEnemies = 0;
     g.totalEnemies = 0;
     g.exitEntity = null;
+    g.powerCells = null;
 
-    // Reset all tutorial state
-    this.step = 0;
-    this.stepTime = performance.now();
-    this.startAngle = g.player.angle;
-    this.cumulativeAngle = 0;
-    this.prevAngle = g.player.angle;
-    this.startX = g.player.x;
-    this.startY = g.player.y;
-    this.sprintTime = 0;
-    this.sprintDone = false;
-    this.pickedUp = false;
-    this.weaponPickedUp = false;
-    this.weaponSwapped = false;
-    this.secondWeaponPickedUp = false;
-    this.doorOpened = false;
-    this.dashed = false;
-    this.crouched = false;
-    this.slid = false;
-    this.fired = false;
-    this.chronoUsed = false;
-    this.wave1Spawned = false;
-    this.wave2Spawned = false;
-    this.sandboxInit = false;
-    this.menuSelection = 1; // Default to "Begin Campaign" for better funnel
-    this.originPlayed = false;
-    this.showCompletionMenu = false;
-    this.alarmPlayed = false;
+    this._clearLights();
+    this._resetState();
+    this.menuSelection = 1;
+    this._enter(0);
 
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now() + 99999; // suppress controls overlay
@@ -149,49 +641,69 @@ export class TutorialSystem {
     g.lockPointer();
   }
 
+  // ── Step machinery ──────────────────────────────────────────────
+
+  /** The current step's definition (copy) and logic. */
+  get def() {
+    return PROLOGUE_STEPS[this.step] ?? null;
+  }
+
+  get logic() {
+    return LOGIC[this.def?.id] ?? null;
+  }
+
+  /** The beat the current step belongs to, and its index. */
+  get beat() {
+    const b = this.def?.beat ?? PROLOGUE_BEATS.length - 1;
+    return { index: b, ...PROLOGUE_BEATS[b] };
+  }
+
+  _enter(index) {
+    const g = this.game;
+    this.step = index;
+    this.stepTime = performance.now();
+    this.clock = 0;
+    this.c = { kills: 0, heads: 0, aimedKills: 0, shotgunKills: 0, chronoKills: 0, slides: 0, dashes: 0 };
+    this.doorOpened = false;
+    this.pickedUp = false;
+    const def = this.def;
+    if (!def) return;
+    // A beat's first step is where you come back to (or its first that
+    // allows it: nobody wants to sit through the alarm twice).
+    const first = PROLOGUE_STEPS.findIndex((s) => s.beat === def.beat && s.checkpoint !== false);
+    if (first === index && index > 0) this._saveCheckpoint();
+    this.logic?.enter?.(this, g);
+    if (def.lines && !def.defer) this.say(def.lines, { cut: def.cut });
+  }
+
   advanceStep() {
     const g = this.game;
-    this.step++;
-    this.stepTime = performance.now();
+    const prev = this.def;
+    this.logic?.exit?.(this, g);
     g.audio.menuConfirm();
-
-    // Auto-open doors for later zones
-    const doorMap = TUTORIAL_MAP.doors;
-    const autoOpenDoors = {
-      4: doorMap.door2,   // Step 4 (Arm) → open Firing Range
-      8: doorMap.door3,   // Step 8 (Sprint) → open Fitness Center
-      12: doorMap.door4,  // Step 12 (Chrono) → open Supervisor Office
-      13: doorMap.door6,  // Step 13 (Resupply) → open inner office supplies
-      14: doorMap.door5,  // Step 14 (Alert) → open Combat Arena
-    };
-    const doorsToOpen = autoOpenDoors[this.step];
-    if (doorsToOpen) {
-      for (const d of doorsToOpen) {
-        g.map.grid[d.y][d.x] = 0;
-      }
+    if (prev && ENCOURAGE_AFTER.has(prev.id) && this.script.length === 0 && Math.random() < 0.5) {
+      const pool = ARIA_COMMS.tutorialEncouragement || [];
+      if (pool.length) this.say([["ARIA", pool[Math.floor(Math.random() * pool.length)], "happy"]]);
     }
+    if (this.step + 1 >= TUTORIAL_SANDBOX_STEP) {
+      this._finish();
+      return;
+    }
+    this._enter(this.step + 1);
+  }
 
-    // Reset per-step interaction flags
-    this.sprintTime = 0;
-    this.sprintDone = false;
-    this.dashed = false;
-    this.crouched = false;
-    this.slid = false;
-    this.fired = false;
-    this.weaponSwapped = false;
-    this.doorOpened = false;
-    this.chronoUsed = false;
-    this.pickedUp = false;
-    // Note: weaponPickedUp and secondWeaponPickedUp remain true once done
+  /** Debug and test hook: complete the current step as if its goal were met. */
+  skipStep() {
+    if (this.step >= TUTORIAL_SANDBOX_STEP) return;
+    this.advanceStep();
   }
 
   update(dt) {
     const g = this.game;
-    const p = g.player;
     const now = performance.now();
-    const elapsed = (now - this.stepTime) / 1000;
+    this.clock += g.deltaTime || 0;
 
-    // Respawn collected pickups after delay
+    // Respawn collected pickups after a delay.
     for (const e of g.entities) {
       if (!e.active && e._respawnAt && now >= e._respawnAt) {
         e.active = true;
@@ -199,185 +711,403 @@ export class TutorialSystem {
       }
     }
 
-    // Clear waypoint by default
-    g.objectiveWaypoint = null;
+    this._updateScript(g.deltaTime || 0);
+    this._updateTargets(g);
+    this._updateAlert(g);
 
-    switch (this.step) {
-      case 0: // HUD CALIBRATION — auto 2.4s (cadet ID readout legibility)
-        if (elapsed > 2.4) this.advanceStep();
-        break;
-
-      case 1: // SYSTEMS ONLINE — look around (cumulative angle > 2 rad)
-        {
-          let delta = p.angle - this.prevAngle;
-          while (delta > Math.PI) delta -= Math.PI * 2;
-          while (delta < -Math.PI) delta += Math.PI * 2;
-          this.cumulativeAngle += Math.abs(delta);
-          this.prevAngle = p.angle;
-          if (this.cumulativeAngle > 2) this.advanceStep();
-        }
-        break;
-
-      case 2: // MOVE — walk > 2.5 units from start
-        g.objectiveWaypoint = { x: 25.5, y: 41.5 };
-        {
-          const dx = p.x - this.startX;
-          const dy = p.y - this.startY;
-          if (Math.sqrt(dx * dx + dy * dy) > 2.5) this.advanceStep();
-        }
-        break;
-
-      case 3: // BREACH DOOR
-        g.objectiveWaypoint = { x: 25.5, y: 41.5 };
-        if (this.doorOpened) this.advanceStep();
-        break;
-
-      case 4: // ARM YOURSELF
-        g.objectiveWaypoint = { x: 38.5, y: 42.5 };
-        if (this.weaponPickedUp) this.advanceStep();
-        break;
-
-      case 5: // CONFIRM TARGETING — fire
-        g.objectiveWaypoint = { x: 50, y: 42.5 };
-        if (elapsed > 0.1 && this.fired) this.advanceStep();
-        break;
-
-      case 6: // AIM DOWN SIGHTS
-        if (p.isAiming) this.advanceStep();
-        break;
-
-      case 7: // WEAPON SWITCH
-        g.objectiveWaypoint = { x: 43.5, y: 42.5 };
-        if (this.secondWeaponPickedUp && this.weaponSwapped)
-          this.advanceStep();
-        break;
-
-      case 8: // SPRINT
-        g.objectiveWaypoint = { x: 14, y: 20.5 };
-        if (p.isSprinting) this.sprintTime += dt;
-        if (this.sprintTime > 0.5) this.advanceStep();
-        break;
-
-      case 9: // CROUCH
-        g.objectiveWaypoint = { x: 14, y: 19.5 };
-        if (this.crouched) this.advanceStep();
-        break;
-
-      case 10: // SLIDE
-        g.objectiveWaypoint = { x: 14, y: 18.5 };
-        if (this.slid) this.advanceStep();
-        break;
-
-      case 11: // PHASE DASH
-        g.objectiveWaypoint = { x: 14, y: 18 };
-        if (this.dashed) this.advanceStep();
-        break;
-
-      case 12: // CHRONO SHIFT
-        g.objectiveWaypoint = { x: 44.5, y: 21.5 };
-        if (elapsed > 0.1 && this.chronoUsed) this.advanceStep();
-        break;
-
-      case 13: // RESUPPLY
-        g.objectiveWaypoint = { x: 44.5, y: 21.5 };
-        if (this.pickedUp) this.advanceStep();
-        break;
-
-      case 14: // ALERT
-        if (!this.alarmPlayed) {
-          this.alarmPlayed = true;
-          g.audio.alarmKlaxon();
-          g.screenShake = 3;
-        }
-        if (elapsed > 2.5) this.advanceStep();
-        break;
-
-      case 15: // WAVE 1 — kill 3 drones
-        if (!this.wave1Spawned) {
-          this.wave1Spawned = true;
-          const positions = [
-            { x: 20.5, y: 5.5 },
-            { x: 39.5, y: 5.5 },
-            { x: 29.5, y: 4.5 },
-          ];
-          for (const pos of positions) {
-            const enemy = new Enemy(pos.x, pos.y, "drone");
-            enemy.health = 15;
-            enemy.maxHealth = 15;
-            enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
-            g.entities.push(enemy);
-          }
-          g.totalEnemies = 3;
-          g.killedEnemies = 0;
-        }
-        g.objectiveWaypoint = { x: 29.5, y: 6.5 };
-        if (g.killedEnemies >= 3) this.advanceStep();
-        break;
-
-      case 16: // WAVE 2 — kill 2 henchmen + 1 drone
-        if (!this.wave2Spawned) {
-          this.wave2Spawned = true;
-          const wavePositions = [
-            { x: 15.5, y: 7.5, type: "henchman" },
-            { x: 44.5, y: 7.5, type: "henchman" },
-            { x: 29.5, y: 4.5, type: "drone" },
-          ];
-          for (const pos of wavePositions) {
-            const enemy = new Enemy(pos.x, pos.y, pos.type);
-            if (pos.type === "henchman") {
-              enemy.health = 25;
-              enemy.maxHealth = 25;
-              enemy.def = { ...enemy.def, damage: 5, speed: enemy.def.speed * 0.6 };
-            } else {
-              enemy.health = 15;
-              enemy.maxHealth = 15;
-              enemy.def = { ...enemy.def, damage: 3, speed: enemy.def.speed * 0.5 };
-            }
-            g.entities.push(enemy);
-          }
-          g.totalEnemies = 3;
-          g.killedEnemies = 0;
-        }
-        g.objectiveWaypoint = { x: 29.5, y: 6.5 };
-        if (g.killedEnemies >= 3) this.advanceStep();
-        break;
-
-      case 17: // CALIBRATION COMPLETE — creator already shown pre-tutorial
-        // (see js/main.js:playCreatorThen). Skip directly to completion sandbox.
-        if (elapsed > 2 && !this.originPlayed) {
-          g.achievementStats.tutorialComplete = true;
-          g.checkAchievements();
-          this.originPlayed = true;
-          g.audio.stopMusic();
-          this.advanceStep(); // into the sandbox + completion menu
-        }
-        break;
-
-      case TUTORIAL_SANDBOX_STEP: // Post-Creator Sandbox
-        {
-          if (!this.sandboxInit) {
-            this.sandboxInit = true;
-            this.spawnDummies();
-            this.showCompletionMenu = true;
-            g.state = GameState.TUTORIAL_COMPLETE;
-            g.unlockPointer();
-          }
-          const dummies = g.entities.filter(
-            (e) => e.type === "enemy" && e.active && e.state !== "dead",
-          );
-          if (dummies.length === 0 && this.sandboxInit) {
-            this.spawnDummies();
-          }
-        }
-        break;
+    if (this.step === TUTORIAL_SANDBOX_STEP) {
+      this._updateSandbox();
+      return;
     }
+
+    // Events the game reported since last frame become this step's counts.
+    if (this.slid) {
+      this.c.slides++;
+      this.slid = false;
+    }
+    if (this.dashed) {
+      this.c.dashes++;
+      this.dashed = false;
+    }
+
+    const logic = this.logic;
+    g.objectiveWaypoint = logic?.waypoint ?? null;
+    if (logic?.update?.(this, g, dt)) this.advanceStep();
+  }
+
+  /** The card's live counter for the current step ("TARGETS 2 / 3"), or null. */
+  progressText() {
+    try {
+      return this.logic?.progress?.(this, this.game) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Events from the game ────────────────────────────────────────
+
+  /** An enemy died: count it for the step's drill. */
+  noteKill(enemy, head = false) {
+    const p = this.game.player;
+    this.c.kills = (this.c.kills || 0) + 1;
+    if (head) this.c.heads = (this.c.heads || 0) + 1;
+    if (p.isAiming) this.c.aimedKills = (this.c.aimedKills || 0) + 1;
+    if (p.weapons[p.currentWeapon] === SHOTGUN) this.c.shotgunKills = (this.c.shotgunKills || 0) + 1;
+    if (p.chronoActive) this.c.chronoKills = (this.c.chronoKills || 0) + 1;
+  }
+
+  // ── Checkpoints ─────────────────────────────────────────────────
+
+  _saveCheckpoint() {
+    const p = this.game.player;
+    this.checkpoint = {
+      step: this.step,
+      x: p.x,
+      y: p.y,
+      angle: p.angle,
+      weapons: [...p.weapons],
+      currentWeapon: p.currentWeapon,
+      pickupsOpen: this.pickupsOpen,
+    };
+  }
+
+  /**
+   * The cadet died: back to the start of this beat, healed and re-armed,
+   * with the beat's set piece set up again. Never a game over in the prologue.
+   */
+  respawn() {
+    const g = this.game;
+    const p = g.player;
+    const cp = this.checkpoint ?? { step: 1, x: TUTORIAL_MAP.playerStart.x, y: TUTORIAL_MAP.playerStart.y, angle: TUTORIAL_MAP.playerStart.dir, weapons: [], currentWeapon: -1, pickupsOpen: false };
+    this.logic?.exit?.(this, g);
+    this.deaths++;
+    g.entities = g.entities.filter((e) => e.type !== "enemy" && !e._tutTag);
+    g.projectiles = [];
+    p.alive = true;
+    p.health = p.maxHealth;
+    p.stamina = p.maxStamina ?? p.stamina;
+    p.chronoEnergy = p.maxChronoEnergy;
+    p.chronoActive = false;
+    p.x = cp.x;
+    p.y = cp.y;
+    p.angle = cp.angle;
+    p.weapons = [...cp.weapons];
+    p.currentWeapon = cp.currentWeapon;
+    p.ammo = Math.max(p.ammo || 0, 60);
+    g.deathTimer = 0;
+    g.timeScale = 1;
+    g.slowMoTimer = 0;
+    g.killedEnemies = 0;
+    g.totalEnemies = 0;
+    this.pickupsOpen = cp.pickupsOpen;
+    this.alert = false;
+    this.blackout = false;
+    this.script = [];
+    g.ariaComms.message = null;
+    g.audio.stopSpeech?.("comms");
+    this._enter(cp.step);
+    // The beat's lines already played once; ARIA just picks you back up.
+    this.script = [];
+    this.say([["ARIA", this.deaths === 1 ? "Suit rebooted you. That's what it's for. Once more, from the top of this one." : "Back on your feet. Again. I'm not counting. I'm absolutely counting.", "worried"]]);
+  }
+
+  // ── Dialogue ────────────────────────────────────────────────────
+
+  /**
+   * Queue lines to play in order once the comms are free. `cut` drops what
+   * was still to come and cuts off the line in progress (an alarm).
+   */
+  say(lines, { cut = false } = {}) {
+    const g = this.game;
+    if (cut) {
+      this.script = [];
+      if (g.ariaComms?.message) g.ariaComms.message = null;
+      g.audio?.stopSpeech?.("comms");
+      this._lineGap = 0.2;
+    }
+    // Each line remembers its step: a fast player outruns the story, and a
+    // line about the range is no use in the gym (see _updateScript).
+    for (const line of lines) this.script.push({ line, step: this.step });
+  }
+
+  /** Whether every queued line has been said and the last has finished. */
+  scriptIdle() {
+    return this.script.length === 0 && !this._ourLine;
+  }
+
+  _updateScript(dt) {
+    const comms = this.game.ariaComms;
+    if (!comms) return;
+    if (this._ourLine && comms.message?._prologue !== this._ourLine) {
+      this._ourLine = null;
+      this.idleSince = this.clock;
+    }
+    if (this._lineGap > 0) this._lineGap -= dt;
+    // Lines from more than a step back are stale: drop them rather than play
+    // them over the step they no longer describe.
+    while (this.script.length && this.script[0].step < this.step - 1) this.script.shift();
+    if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
+    const [speaker, text, emotion] = this.script.shift().line;
+    const style = SPEAKER_STYLE[speaker] ?? SPEAKER_STYLE.ARIA;
+    const id = {};
+    comms.queueLine?.({
+      speaker,
+      text,
+      color: style.color,
+      voice: style.voice,
+      emotion: emotion ?? null,
+      duration: lineDuration(text),
+      prominent: true,
+      _prologue: id,
+    });
+    this._ourLine = id;
+    this._lineGap = 0.35;
+  }
+
+  // ── Helpers the steps use ───────────────────────────────────────
+
+  near(g, x, y, r) {
+    return Math.hypot(g.player.x - x, g.player.y - y) < r;
+  }
+
+  isOpen(g, doors) {
+    return doors.every((d) => g.map.grid[d.y][d.x] === 0);
+  }
+
+  openDoors(g, ...names) {
+    for (const n of names) {
+      for (const d of TUTORIAL_MAP.doors[n] || []) g.map.grid[d.y][d.x] = 0;
+    }
+  }
+
+  /** Put one of the step's pickups down, replacing an earlier copy. */
+  place(g, tag, pickup) {
+    g.entities = g.entities.filter((e) => e._tutTag !== tag);
+    pickup._tutTag = tag;
+    g.entities.push(pickup);
+  }
+
+  /** Training targets for a drill; `track` entries make them slide along the lane. */
+  spawnTargets(g, tag, spots, health = 20) {
+    for (const [x, y, track] of spots) {
+      const e = makeTarget(x, y, { health, track: track ? { axis: "y", ...track } : null });
+      e._tutTag = tag;
+      g.entities.push(e);
+    }
+  }
+
+  /** A step's hostiles, once. Marks the step's `spawned` so its count can be checked. */
+  spawnHostiles(g, tag, spots) {
+    if (this.c.spawned) return;
+    this.c.spawned = true;
+    for (const [x, y, type] of spots) {
+      const e = makeHostile(x, y, type);
+      e._tutTag = tag;
+      g.entities.push(e);
+    }
+    g.totalEnemies = (g.totalEnemies || 0) + spots.length;
+  }
+
+  /** How many of a step's enemies are still up. */
+  alive(g, tag) {
+    let n = 0;
+    for (const e of g.entities) if (e._tutTag === tag && e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0) n++;
+    return n;
+  }
+
+  /** An evac wave: a short breath, then the wave; done when it is down. */
+  wave(g, tag, spots) {
+    if (!this.c.spawned) {
+      this.c.delay -= g.deltaTime;
+      if (this.c.delay <= 0) {
+        this.spawnHostiles(g, tag, spots);
+        g.audio.alarmKlaxon?.();
+      }
+      return false;
+    }
+    return this.alive(g, tag) === 0;
+  }
+
+  /** The evac lift's extraction beacon, sealed until the cells are in. */
+  ensureExit(g, sealed) {
+    if (!g.exitEntity || !g.entities.includes(g.exitEntity)) {
+      g.exitEntity = { x: 29.5, y: 3.5, type: "exit", active: true, sealed, _tutTag: "exit" };
+      g.entities.push(g.exitEntity);
+    }
+    g.exitEntity.sealed = sealed;
+  }
+
+  // ── Set pieces ──────────────────────────────────────────────────
+
+  /** Moving targets glide along their lane. */
+  _updateTargets(g) {
+    for (const e of g.entities) {
+      const tr = e._track;
+      if (!tr || e.type !== "enemy" || e.health <= 0) continue;
+      const s = Math.sin(this.clock * tr.speed + (tr.phase || 0)) * tr.amp;
+      if (tr.axis === "x") e.x = tr.x0 + s;
+      else e.y = tr.y0 + s;
+    }
+  }
+
+  /** The alarm's red emergency lights, pulsing down the corridor and the office. */
+  _updateAlert(g) {
+    if (!this.alert) {
+      if (this._alertLights) this._clearLights("alert");
+      return;
+    }
+    if (!this._alertLights) {
+      const spots = [
+        [29.5, 24.5],
+        [29.5, 18.5],
+        [38.5, 20.5],
+        [46.5, 17.5],
+        [46.5, 24.5],
+      ];
+      this._alertLights = spots.map(([x, y]) => ({ x, y, color: [255, 30, 50], radius: 4, baseIntensity: 1, intensity: 1, life: 1e9, maxLife: 1e9 }));
+      for (const L of this._alertLights) g.lights?.unshift(L);
+    }
+    const pulse = 0.35 + 0.65 * Math.max(0, Math.sin(this.clock * 4));
+    for (const L of this._alertLights) {
+      L.intensity = L.baseIntensity = pulse;
+      L.life = L.maxLife = 1e9;
+      if (g.lights && !g.lights.includes(L)) g.lights.unshift(L);
+    }
+  }
+
+  /** A teal light on the course's next gate (null clears it). */
+  gateLight(g, gate) {
+    if (!gate) {
+      this._clearLights("gate");
+      return;
+    }
+    if (!this._gateLight) {
+      this._gateLight = { x: 0, y: 0, color: [0, 255, 200], radius: 2.4, baseIntensity: 1.2, intensity: 1.2, life: 1e9, maxLife: 1e9 };
+    }
+    const L = this._gateLight;
+    L.x = gate.x;
+    L.y = gate.y;
+    L.intensity = L.baseIntensity = 0.9 + 0.3 * Math.sin(this.clock * 6);
+    if (g.lights && !g.lights.includes(L)) g.lights.unshift(L);
+  }
+
+  /** Whether a vent strip is firing at its own phase of the cycle. */
+  ventHot(strip) {
+    const t = ((this.vents?.clock ?? 0) + strip.phase) % VENT_CYCLE;
+    return t < VENT_ON;
+  }
+
+  updateVents(g, dt) {
+    const v = this.vents;
+    if (!v) return;
+    v.clock += dt; // game time: Chrono Shift slows the vents, not you
+    v.cooldown -= g.deltaTime;
+    v.puff -= g.deltaTime;
+    if (!v.lights.length) {
+      for (const strip of VENT_STRIPS) {
+        for (const x of [28.5, 31.5]) {
+          const L = { x, y: strip.rows[0] + 1, color: [255, 110, 30], radius: 2.4, baseIntensity: 1, intensity: 1, life: 1e9, maxLife: 1e9, _strip: strip };
+          v.lights.push(L);
+          g.lights?.unshift(L);
+        }
+      }
+    }
+    const p = g.player;
+    const puff = v.puff <= 0;
+    if (puff) v.puff = 0.05;
+    for (const strip of VENT_STRIPS) {
+      const hot = this.ventHot(strip);
+      const [top, bottom] = strip.rows;
+      for (const L of v.lights) {
+        if (L._strip !== strip) continue;
+        L.intensity = L.baseIntensity = hot ? 1.5 : 0.12;
+        L.life = L.maxLife = 1e9;
+        if (g.lights && !g.lights.includes(L)) g.lights.unshift(L);
+      }
+      if (hot && puff) {
+        g._spawnParticlesAt?.(null, (ps) =>
+          spawnEnergyBurst(ps, VENT_COLS[0] + Math.random() * (VENT_COLS[1] - VENT_COLS[0] + 1), top + Math.random() * 2, { count: 2, r: 255, g: 120, b: 40 }),
+        );
+      }
+      const row = Math.floor(p.y);
+      const inStrip = row >= top && row <= bottom && p.x >= VENT_COLS[0] && p.x < VENT_COLS[1] + 1;
+      if (hot && inStrip && v.cooldown <= 0 && p.alive) {
+        v.cooldown = 0.6;
+        g.damagePlayer(VENT_DAMAGE, { x: p.x, y: bottom + 1.5 });
+        // Blown back to the near side of the strip.
+        p.y = top - 0.35;
+        g.screenShake = Math.max(g.screenShake || 0, 3);
+        if (!v.warned) {
+          v.warned = true;
+          this.say([["ARIA", "Ow. For both of us. Hold the Shift and time it.", "worried"]]);
+        }
+      }
+    }
+  }
+
+  clearVents(g) {
+    if (!this.vents) return;
+    for (const L of this.vents.lights) {
+      const i = g.lights?.indexOf(L) ?? -1;
+      if (i >= 0) g.lights.splice(i, 1);
+    }
+    this.vents = null;
+  }
+
+  _clearLights(which = null) {
+    const g = this.game;
+    const drop = (L) => {
+      const i = g.lights?.indexOf(L) ?? -1;
+      if (i >= 0) g.lights.splice(i, 1);
+    };
+    if (!which || which === "alert") {
+      for (const L of this._alertLights || []) drop(L);
+      this._alertLights = null;
+    }
+    if (!which || which === "gate") {
+      if (this._gateLight) drop(this._gateLight);
+      this._gateLight = null;
+    }
+    if (!which && this.vents) this.clearVents(g);
+  }
+
+  // ── The end of the chapter ──────────────────────────────────────
+
+  _finish() {
+    const g = this.game;
+    g.achievementStats.tutorialComplete = true;
+    g.checkAchievements();
+    this.originPlayed = true;
+    g.audio.stopMusic();
+    this._clearLights();
+    this.alert = false;
+    this.blackout = false;
+    g.powerCells = null;
+    g.exitEntity = null;
+    g.entities = g.entities.filter((e) => e.type !== "exit");
+    this.step = TUTORIAL_SANDBOX_STEP;
+    this.stepTime = performance.now();
+    this.clock = 0;
+    g.objectiveWaypoint = null;
+  }
+
+  _updateSandbox() {
+    const g = this.game;
+    g.objectiveWaypoint = null;
+    if (!this.sandboxInit) {
+      this.sandboxInit = true;
+      this.spawnDummies();
+      this.showCompletionMenu = true;
+      g.state = GameState.TUTORIAL_COMPLETE;
+      g.unlockPointer();
+    }
+    const dummies = g.entities.filter((e) => e.type === "enemy" && e.active && e.state !== "dead");
+    if (dummies.length === 0 && this.sandboxInit) this.spawnDummies();
   }
 
   spawnDummies() {
     const g = this.game;
-    g.entities = g.entities.filter(
-      (e) => e.type !== "enemy" || (e.active && e.state !== "dead"),
-    );
+    g.entities = g.entities.filter((e) => e.type !== "enemy" || (e.active && e.state !== "dead"));
     const positions = [
       { x: 20.5, y: 6.5 },
       { x: 39.5, y: 6.5 },
@@ -454,3 +1184,6 @@ export class TutorialSystem {
     return !g.achievementStats.tutorialComplete;
   }
 }
+
+/** Step logic ids, for the tests: every prologue step must have logic. */
+export const PROLOGUE_LOGIC_IDS = Object.keys(LOGIC);
