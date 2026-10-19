@@ -1,5 +1,10 @@
 // ─── AI System ──────────────────────────────────────────────────────────────
-// Enemy state machine: idle/patrol → chase → windup → attack.
+// Enemy state machine: idle/patrol → chase → windup → attack, and
+// chase → search → idle when the player is lost (src/systems/ai-nav.js).
+// Enemies path around walls (a shared distance field), call each other in
+// when one spots or is shot by the player, hear gunfire, go to where they
+// last saw you rather than where you are, and lead their shots. In arena,
+// meltdown and the prologue's scripted fights (ctx.hunt) they never lose you.
 // The windup is the attack telegraph: the enemy plants, faces the player and
 // renders a warning before the hit resolves (see renderer drawEnemy).
 // Sub-boss abilities: summon, chrono-bomb, teleport/leap, shield regen, HUD disrupt.
@@ -25,6 +30,7 @@
 import { isPassable, hasLineOfSight, EYE_Z, playerEyeZ } from "./physics.js";
 import { Enemy, Projectile } from "../../js/entities.js";
 import { updateForm2, recordShot } from "./boss-form2.js";
+import { NavFields, navAngle, navSteps, leadPoint } from "./ai-nav.js";
 import {
   ENEMY_MELEE_WINDUP_MS,
   ENEMY_RANGED_WINDUP_MS,
@@ -83,10 +89,79 @@ export function quillFan(q, aim) {
  * }} AIEffects
  */
 
+/** Seconds an enemy hunts for a player it has lost before it goes back to its post. */
+const SEARCH_SECONDS = 3.5;
+/** Seconds out of sight before a chaser stops and searches, even short of the last sighting. */
+const LOSE_AFTER = 8;
+/** How far a spotting (or shot) enemy's shout carries to idle allies, in cells. */
+const CALLOUT_RANGE = 10;
+/**
+ * How far ahead of a moving player ordinary enemies aim (0..1 of the way).
+ * A third: a steady strafe gets clipped, a change of direction still dodges.
+ * A def can set its own `lead` (a marksman leads more).
+ */
+const DEFAULT_LEAD = 0.3;
+/** How often (s) an enemy re-checks whether it can see its target. */
+const SIGHT_EVERY = 0.15;
+
+/**
+ * Move an enemy by `step` along `angle`, one axis at a time, keeping
+ * `margin` off the walls. Returns whether it got anywhere.
+ */
+function stepEnemy(e, angle, step, map, margin = 0.3) {
+  const x0 = e.x;
+  const y0 = e.y;
+  const newX = e.x + Math.cos(angle) * step;
+  const newY = e.y + Math.sin(angle) * step;
+  const mx = Math.cos(angle) >= 0 ? margin : -margin;
+  const my = Math.sin(angle) >= 0 ? margin : -margin;
+  if (
+    isPassable(map, Math.floor(newX + mx), Math.floor(e.y)) &&
+    isPassable(map, Math.floor(newX + mx), Math.floor(e.y + margin)) &&
+    isPassable(map, Math.floor(newX + mx), Math.floor(e.y - margin))
+  ) {
+    e.x = newX;
+  }
+  if (
+    isPassable(map, Math.floor(e.x), Math.floor(newY + my)) &&
+    isPassable(map, Math.floor(e.x + margin), Math.floor(newY + my)) &&
+    isPassable(map, Math.floor(e.x - margin), Math.floor(newY + my))
+  ) {
+    e.y = newY;
+  }
+  return Math.abs(e.x - x0) + Math.abs(e.y - y0) > step * 0.5;
+}
+
+/**
+ * The shout: idle (or searching) allies near `e` that can see it, or are
+ * close enough to hear, join in a beat later, heading for what it saw.
+ */
+export function callOut(e, entities, map, time, from) {
+  for (const o of entities) {
+    if (o === e || o.type !== "enemy" || !o.active || o.dissolving) continue;
+    if (o.state !== "idle" && o.state !== "search") continue;
+    if (o._alertAt != null || (o.alertRange ?? 1) <= 0) continue;
+    const d = Math.hypot(o.x - e.x, o.y - e.y);
+    if (d > CALLOUT_RANGE) continue;
+    if (d > 4 && !hasLineOfSight(map, o.x, o.y, e.x, e.y)) continue;
+    o._alertAt = time + 250 + Math.random() * 500;
+    o._alertFrom = from ? { x: from.x, y: from.y } : { x: e.x, y: e.y };
+  }
+}
+
 /** Radians per second a front-shielded enemy can turn its shield (~100°/s). */
 const SHIELD_TURN_RATE = 1.75;
 
 export class AISystem {
+  constructor() {
+    /** Shared paths to wherever enemies are heading (src/systems/ai-nav.js). */
+    this.nav = new NavFields();
+    this._clock = 0;
+    this._lastPlayer = null;
+    /** The player's velocity (units/s), smoothed, for leading shots. */
+    this.playerVel = { x: 0, y: 0 };
+  }
+
   /**
    * @param {AIContext} ctx
    * @param {number} dt
@@ -104,7 +179,22 @@ export class AISystem {
       damageNumbers,
       audio,
       chrono,
+      hunt = false,
+      noise = null,
     } = ctx;
+    this._clock += dt;
+    // The player's velocity, for leading shots: smoothed over a few frames
+    // so a single dash does not throw every aim across the room.
+    if (this._lastPlayer && dt > 0) {
+      const k = Math.min(1, dt * 8);
+      const vx = (player.x - this._lastPlayer.x) / dt;
+      const vy = (player.y - this._lastPlayer.y) / dt;
+      if (Math.hypot(vx, vy) < 30) {
+        this.playerVel.x += (vx - this.playerVel.x) * k;
+        this.playerVel.y += (vy - this.playerVel.y) * k;
+      }
+    }
+    this._lastPlayer = { x: player.x, y: player.y };
     const echo = chrono?.echo ?? null;
     const fx = {
       damagePlayerCalls: [],
@@ -167,6 +257,12 @@ export class AISystem {
       // Pain state. Ordinary hits pause a telegraphed attack; a crit, headshot
       // or EMP (which set _staggered) cancels it. Without that distinction any
       // weapon firing faster than the windup would stun-lock melee enemies.
+      if (e._hurtAlert) {
+        e._hurtAlert = false;
+        e._lastSeen = { x: player.x, y: player.y };
+        e._lostFor = 0;
+        callOut(e, entities, map, time, player);
+      }
       if (e.painTimer > 0) {
         e.painTimer -= enemyDt * 1000;
         if (e.painTimer <= 0) {
@@ -186,22 +282,74 @@ export class AISystem {
 
       e.stateTime += enemyDt;
 
-      // ── Idle ──
-      if (e.state === "idle") {
-        if (ai === "patrol") this._patrolWander(e, enemyDt, map);
+      // Gunfire carries: an idle or searching enemy in earshot comes to look.
+      if (
+        noise &&
+        (e.state === "idle" || e.state === "search") &&
+        (e.alertRange ?? 1) > 0 &&
+        e._alertAt == null &&
+        Math.hypot(noise.x - e.x, noise.y - e.y) < noise.radius
+      ) {
+        e._alertAt = time + 150 + Math.random() * 350;
+        e._alertFrom = { x: noise.x, y: noise.y };
+      }
+
+      // ── Idle / Search ──
+      if (e.state === "idle" || e.state === "search") {
+        if (e.state === "search") {
+          // Look around where it lost you, then give up and go back to watching.
+          e._searchT = (e._searchT ?? SEARCH_SECONDS) - enemyDt;
+          e.angle = (e.angle || 0) + 1.6 * enemyDt * (e._searchDir || 1);
+          if (e._searchT <= 0) {
+            e.state = "idle";
+            e._searchT = null;
+          }
+        } else if (ai === "patrol") {
+          this._patrolWander(e, enemyDt, map);
+        }
+        const sightRange = e.state === "search" ? e.alertRange * 1.25 : e.alertRange;
         if (
-          dist < e.alertRange &&
+          dist < sightRange &&
           hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))
         ) {
           e.state = "chase";
           e.stateTime = 0;
           e.lastAttackTime = time; // prevents instant first shot
+          e._lastSeen = { x: player.x, y: player.y };
+          e._lostFor = 0;
+          e._alertAt = null;
+          audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), dist);
+          callOut(e, entities, map, time, player);
+        } else if (e._alertAt != null && time >= e._alertAt) {
+          // Called in by an ally, or a shot heard: go and look.
+          e.state = "chase";
+          e.stateTime = 0;
+          e.lastAttackTime = time;
+          e._lastSeen = e._alertFrom ?? { x: player.x, y: player.y };
+          e._lostFor = 0;
+          e._alertAt = null;
           audio.enemyBark?.(e.enemyType, "alert", audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), dist);
         }
       }
 
       // ── Chase ──
       if (e.state === "chase") {
+        // Can it see what it is chasing? Checked a few times a second.
+        e._sightT = (e._sightT ?? 0) - enemyDt;
+        if (e._sightT <= 0) {
+          e._sightT = SIGHT_EVERY;
+          e._sees = hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player));
+        }
+        // Hunters (arena, meltdown, scripted fights, and anyone told to hunt
+        // with a huge alert range) always know where you are.
+        const omniscient = hunt || toEcho || (e.alertRange ?? 0) >= 50;
+        if (e._sees || omniscient) {
+          if (e._sees) e._lostFor = 0;
+          e._lastSeen = { x: target.x, y: target.y };
+        } else {
+          e._lostFor = (e._lostFor || 0) + enemyDt;
+        }
+        const goal = e._lastSeen ?? { x: target.x, y: target.y };
         const angle = Math.atan2(dy, dx);
         // A front-shielded enemy turns its shield slowly, so circling it, a
         // dash past it or a teammate's distraction opens its flank. Everyone
@@ -222,7 +370,8 @@ export class AISystem {
 
         // Movement gate: normally stop inside attackRange, but strafe_fire / erratic
         // keep moving to create combat dynamism. Charging beast is controlled separately.
-        const inAttackBand = dist <= e.def.attackRange * 0.8;
+        // In range only counts with a clear shot: through a wall, close is not close enough.
+        const inAttackBand = !!e._sees && dist <= e.def.attackRange * 0.8;
         const keepMoving = ai === "strafe_fire" || ai === "erratic";
         const charging = e._chargeState === "sprint";
         // The Hound plants its feet while its quills stand up, and while it
@@ -236,7 +385,10 @@ export class AISystem {
           let moveSpeed = e.speed;
 
           if (ai === "flanker") {
-            const strafeDir = Math.floor(e.x * 7 + e.y * 13) % 2 ? 1 : -1;
+            // Picked once: derived from the position every frame, it flipped
+            // as the enemy moved and left it jittering in place.
+            e._strafeDir ??= Math.floor(e.x * 7 + e.y * 13) % 2 ? 1 : -1;
+            const strafeDir = e._strafeDir;
             const strafeFactor = Math.min(1, dist / (e.def.attackRange * 1.5));
             moveAngle = angle + strafeDir * strafeFactor * 1.05;
             moveSpeed *= 1.1;
@@ -291,7 +443,8 @@ export class AISystem {
             }
           } else if (ai === "swarm") {
             // Orbit-strafe around player
-            const orbitDir = Math.floor(e.x * 3 + e.y * 7) % 2 ? 1 : -1;
+            e._swarmDir ??= Math.floor(e.x * 3 + e.y * 7) % 2 ? 1 : -1;
+            const orbitDir = e._swarmDir;
             moveAngle = angle + orbitDir * Math.PI * 0.45;
             moveSpeed *= 1.2;
           } else if (ai === "support") {
@@ -309,27 +462,43 @@ export class AISystem {
             moveSpeed *= 0.5;
           }
 
+          // Out of sight, or walled off from it: take the path, not the
+          // straight line. Guards hold their post either way.
+          const holding = ai === "guard" && moveSpeed === 0;
+          if (!holding && moveSpeed > 0 && (!e._sees || e._blocked)) {
+            const field = this.nav.get(map, goal.x, goal.y, this._clock);
+            const along = navAngle(field, e.x, e.y);
+            if (along != null) {
+              moveAngle = along;
+              moveSpeed = e.speed;
+            }
+          }
+
           e._moveAngle = moveAngle;
           e._moveSpeed = moveSpeed;
           const speed = moveSpeed * enemyDt;
-          const newX = e.x + Math.cos(moveAngle) * speed;
-          const newY = e.y + Math.sin(moveAngle) * speed;
-          const margin = 0.3;
-          const mx = Math.cos(moveAngle) >= 0 ? margin : -margin;
-          const my = Math.sin(moveAngle) >= 0 ? margin : -margin;
-          if (
-            isPassable(map, Math.floor(newX + mx), Math.floor(e.y)) &&
-            isPassable(map, Math.floor(newX + mx), Math.floor(e.y + margin)) &&
-            isPassable(map, Math.floor(newX + mx), Math.floor(e.y - margin))
-          ) {
-            e.x = newX;
+          const moved = speed > 0 ? stepEnemy(e, moveAngle, speed, map) : true;
+          // Getting nowhere for a moment (a wall in the way, a strafe into a
+          // corner) means: take the path for a while, even with you in sight.
+          e._stuckT = moved ? 0 : (e._stuckT || 0) + enemyDt;
+          if (e._stuckT > 0.3) {
+            e._stuckT = 0;
+            e._blocked = 1;
+          } else if (e._blocked) {
+            e._blocked = Math.max(0, e._blocked - enemyDt);
           }
-          if (
-            isPassable(map, Math.floor(e.x), Math.floor(newY + my)) &&
-            isPassable(map, Math.floor(e.x + margin), Math.floor(newY + my)) &&
-            isPassable(map, Math.floor(e.x - margin), Math.floor(newY + my))
-          ) {
-            e.y = newY;
+        }
+
+        // Lost: reached where it last saw you, or out of sight too long.
+        if (!e._sees && !omniscient && ai !== "guard") {
+          const atGoal = Math.hypot(goal.x - e.x, goal.y - e.y) < 0.9 ||
+            navSteps(this.nav.get(map, goal.x, goal.y, this._clock), e.x, e.y) < 0;
+          if (atGoal || e._lostFor > LOSE_AFTER) {
+            e.state = "search";
+            e.stateTime = 0;
+            e._searchT = SEARCH_SECONDS;
+            e._searchDir = Math.random() < 0.5 ? -1 : 1;
+            e._lostFor = 0;
           }
         }
 
@@ -365,7 +534,14 @@ export class AISystem {
       if (e.state === "attack") {
         if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
           if (e.def.attackType === "ranged") {
-            const angle = Math.atan2(target.y - e.y, target.x - e.x);
+            // Lead a moving player (not an echo, which stands still): part of
+            // the way, so strafing still dodges and standing still does not.
+            const speed = e.def.projectileSpeed || 6;
+            const aimAt = toEcho
+              ? target
+              : leadPoint(e.x, e.y, target.x, target.y, this.playerVel.x, this.playerVel.y, speed, e.def.lead ?? DEFAULT_LEAD);
+            const clear = aimAt === target || hasLineOfSight(map, e.x, e.y, aimAt.x, aimAt.y);
+            const angle = clear ? Math.atan2(aimAt.y - e.y, aimAt.x - e.x) : Math.atan2(target.y - e.y, target.x - e.x);
             const proj = new Projectile(
               e.x + Math.cos(angle) * 0.4,
               e.y + Math.sin(angle) * 0.4,
@@ -397,7 +573,7 @@ export class AISystem {
 
       // Summoner
       if (e.def.summonType && e.state !== "dead") {
-        e._summonTimer = (e._summonTimer || 0) + dt * 1000;
+        e._summonTimer = (e._summonTimer || 0) + enemyDt * 1000;
         if (e._summonTimer >= e.def.summonInterval) {
           e._summonTimer = 0;
           const summonCount = entities.filter(
@@ -423,7 +599,7 @@ export class AISystem {
 
       // Chrono-Bomber
       if (e.def.dropsBombs && e.state === "chase") {
-        e._bombTimer = (e._bombTimer || 0) + dt * 1000;
+        e._bombTimer = (e._bombTimer || 0) + enemyDt * 1000;
         if (e._bombTimer >= 4000) {
           e._bombTimer = 0;
           chronoBombs.push({
@@ -442,7 +618,7 @@ export class AISystem {
       if (e.state !== "dead") {
         if (e.def.teleportCooldown || e.def.leapDistance) {
           e._teleportTimer = e._teleportTimer || 0;
-          e._teleportTimer += dt * 1000;
+          e._teleportTimer += enemyDt * 1000;
           const cooldown = e.def.teleportCooldown || 3000;
           if (e._teleportTimer >= cooldown) {
             e._teleportTimer = 0;
@@ -484,13 +660,13 @@ export class AISystem {
           }
           e._shield = Math.min(
             e._shieldMax,
-            (e._shield || 0) + (e.def.shieldRegenRate || 2) * dt,
+            (e._shield || 0) + (e.def.shieldRegenRate || 2) * enemyDt,
           );
         }
 
         // HUD disrupt
         if (e.def.disablesHUD) {
-          e._supportTimer = (e._supportTimer || 0) + dt * 1000;
+          e._supportTimer = (e._supportTimer || 0) + enemyDt * 1000;
           if (e._supportTimer >= (e.def.supportInterval || 8500)) {
             e._supportTimer = 0;
             fx.hudDisabledUntil = time + (e.def.disableDuration || 3000);
@@ -806,30 +982,7 @@ export class AISystem {
       e._wanderTimer = 1.5 + Math.random() * 2;
     }
     const speed = e.speed * 0.35 * dt;
-    const newX = e.x + Math.cos(e._wanderAngle) * speed;
-    const newY = e.y + Math.sin(e._wanderAngle) * speed;
-    const margin = 0.3;
-    const mx = Math.cos(e._wanderAngle) >= 0 ? margin : -margin;
-    const my = Math.sin(e._wanderAngle) >= 0 ? margin : -margin;
-    if (
-      isPassable(map, Math.floor(newX + mx), Math.floor(e.y)) &&
-      isPassable(map, Math.floor(newX + mx), Math.floor(e.y + margin)) &&
-      isPassable(map, Math.floor(newX + mx), Math.floor(e.y - margin))
-    ) {
-      e.x = newX;
-    } else {
-      e._wanderAngle += Math.PI;
-    }
-
-    if (
-      isPassable(map, Math.floor(e.x), Math.floor(newY + my)) &&
-      isPassable(map, Math.floor(e.x + margin), Math.floor(newY + my)) &&
-      isPassable(map, Math.floor(e.x - margin), Math.floor(newY + my))
-    ) {
-      e.y = newY;
-    } else {
-      e._wanderAngle += Math.PI;
-    }
+    if (!stepEnemy(e, e._wanderAngle, speed, map)) e._wanderAngle += Math.PI;
 
     e.angle = e._wanderAngle;
   }

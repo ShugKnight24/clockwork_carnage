@@ -2765,9 +2765,15 @@ export class Game {
         audio: this.audio,
         // Time-Lock's slab and Rewind's echo decoy.
         chrono: this.chronoPowers,
+        // Arena, meltdown and the prologue's scripted fights come at you;
+        // the campaign's enemies have to find you, and can lose you.
+        hunt: this.mode === "arena" || this.mode === "meltdown" || this.mode === "tutorial",
+        // The shot fired this frame, which idle enemies in earshot hear.
+        noise: this._noise,
       },
       dt,
     );
+    this._noise = null;
     // Apply side effects
     for (const call of fx.damagePlayerCalls)
       this.damagePlayer(call.damage, call.attacker);

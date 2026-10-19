@@ -50,6 +50,8 @@ export function fireWeapon(game) {
   game.shotsFired++;
   game.achievementStats.totalShotsFired++;
   if (game.mode === "tutorial") game.tutorialFired = true;
+  // Gunfire carries (src/systems/ai.js): idle enemies in earshot come to look.
+  game._noise = { x: game.player.x, y: game.player.y, radius: wep.noise ?? (wep.id === 0 ? 9 : 12) }; // the sidearm is quieter
 
   game._spawnMuzzleFlash(wep);
 
@@ -220,6 +222,8 @@ export function damageEnemy(game, enemy, damage, zone = null) {
 
   enemy.health -= finalDamage;
   enemy.hitTime = game.time;
+  // Shot: it knows where from, and shouts about it (src/systems/ai.js).
+  enemy._hurtAlert = true;
   // A hit flinches the enemy, then it shrugs off further flinches for a
   // moment: without that, any weapon firing faster than the flinch froze its
   // target for good. Crits and headshots always land a (longer) stagger.
