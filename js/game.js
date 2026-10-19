@@ -199,6 +199,8 @@ function _safeCall(name, fn) {
 
 /** The agent's time scale during Chrono Shift: near real time while the world slows. */
 const CHRONO_PLAYER_SPEED = 0.85;
+/** ms a phase dash leaves you untouchable: the dash itself (150 ms) and a beat after. */
+const DASH_PHASE_MS = 250;
 
 export class Game {
   constructor(canvas, hudCanvas) {
@@ -2598,6 +2600,8 @@ export class Game {
       rawDirY,
     );
     if (triggered) {
+      // A phase dash is untouchable for its length and a beat after.
+      this.player._phaseUntil = this.time + DASH_PHASE_MS;
       if (this.mode === "tutorial") this.tutorialDashed = true;
       this.achievementStats.totalDashes++;
       this.triggerAriaOnce("dash", "dashUsed");
@@ -2607,6 +2611,27 @@ export class Game {
   }
 
   /** World direction of a double-tapped movement key. */
+  /**
+   * The dash key: phase-dash the way the movement keys are held, forward
+   * when none are.
+   */
+  dashFromKeys() {
+    if (this.state !== GameState.PLAYING || !this.player.alive) return;
+    // The Forge's voxel worlds keep C for crafting; double-tap still dashes there.
+    if (this.world) return;
+    const kb = this.keybinds;
+    const cos = Math.cos(this.player.angle);
+    const sin = Math.sin(this.player.angle);
+    let dx = 0;
+    let dy = 0;
+    if (this.keys[kb.moveForward]) { dx += cos; dy += sin; }
+    if (this.keys[kb.moveBack]) { dx -= cos; dy -= sin; }
+    if (this.keys[kb.moveLeft]) { dx += sin; dy -= cos; }
+    if (this.keys[kb.moveRight]) { dx -= sin; dy += cos; }
+    if (!dx && !dy) { dx = cos; dy = sin; }
+    this.triggerDash(kb.dash, dx, dy);
+  }
+
   _dashDirFor(code) {
     const cos = Math.cos(this.player.angle);
     const sin = Math.sin(this.player.angle);

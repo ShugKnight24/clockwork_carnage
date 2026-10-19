@@ -115,3 +115,13 @@ describe("Temporal Sniper", () => {
     expect(run(true)).toBeLessThan(run(false) * 0.5);
   });
 });
+
+describe("phase dash", () => {
+  it("lets a hit pass through mid-dash, and not after", async () => {
+    const { damagePlayer } = await import("../../src/systems/combat-orchestrator.js");
+    const game = { time: 1000, player: { alive: true, health: 100, maxHealth: 100, armor: 0, shield: 0, dodgeChance: 0, _phaseUntil: 1250 }, glitchEffect: 0 };
+    damagePlayer(game, 30, { x: 0, y: 0 });
+    expect(game.player.health).toBe(100);
+    expect(game.glitchEffect).toBeGreaterThan(0);
+  });
+});

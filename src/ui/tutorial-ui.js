@@ -571,7 +571,7 @@ function keycapW(text, size) {
 
 // Words in hint copy that name an input get drawn as keycaps.
 const KEY_WORDS = new Set([
-  "CLICK", "E", "Q", "SHIFT", "CTRL", "ENTER", "ESC", "TAB", "SPACE",
+  "CLICK", "C", "E", "Q", "SHIFT", "CTRL", "ENTER", "ESC", "TAB", "SPACE",
   "USE", "FIRE", "AIM", "RUN", "CROUCH", "SLOW", "DASH",
   // The Chronos powers' keys and touch buttons (teach cards). Pad buttons
   // come from the pad's own legends (padLabelGlyph), whatever they're bound to.

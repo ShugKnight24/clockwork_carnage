@@ -220,9 +220,9 @@ export const PROLOGUE_STEPS = [
     title: "PHASE DASH — BLINK",
     color: "#ff44ff",
     hint: {
-      key: "Double-tap a movement key to phase-dash. Dash twice. Dashing costs stamina too.",
-      touch: "Double-tap a direction on the stick to phase-dash. Dash twice. Dashing costs stamina too.",
-      pad: (b) => `Tap ${b("dash")} to phase-dash. Dash twice. Dashing costs stamina too.`,
+      key: "Press C, or double-tap a movement key, to phase-dash the way you are moving. Dash twice. Mid-dash, hits pass through you; it costs stamina.",
+      touch: "Double-tap a direction on the stick to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.",
+      pad: (b) => `Tap ${b("dash")} to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.`,
     },
     lines: [[ARIA, "The suit can skip you a few metres through space. Don't ask me how. I asked. They didn't say.", "curious"]],
   },

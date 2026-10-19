@@ -407,6 +407,11 @@ export const FLINCH_IMMUNITY_MS = 700;
 
 export function damagePlayer(game, amount, attacker) {
   if (!game.player.alive) return;
+  // Mid phase-dash: the hit passes through you.
+  if (game.player._phaseUntil > game.time) {
+    game.glitchEffect = Math.max(game.glitchEffect || 0, 0.15);
+    return;
+  }
 
   const { actualDamage, dodged } = calculatePlayerDamage(amount, game.player);
   if (dodged || actualDamage <= 0) return;

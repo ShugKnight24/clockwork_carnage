@@ -256,14 +256,16 @@ export function dispatchKeyPress(game, code, e) {
   }
 
   if (game.state === GameState.PLAYING) {
-    // Tutorial sandbox — ESC/Q returns to title, C starts campaign
+    // Tutorial sandbox — ESC returns to title, Enter starts the campaign
+    // (not Q or C: those are Chrono Shift and the dash)
     if (game.mode === "tutorial" && game.tutorialStep === TUTORIAL_SANDBOX_STEP) {
-      if (code === "Escape" || code === "KeyQ") {
+      if (code === "Escape") {
         game.audio.menuConfirm();
         game.executeTutorialMenuChoice(3); // Main menu
         return;
       }
-      if (code === "KeyC") {
+      // Enter, not C: C is the dash key.
+      if (code === "Enter") {
         game.audio.menuConfirm();
         game.executeTutorialCompletionChoice(1); // Begin Campaign
         return;
@@ -346,6 +348,7 @@ export function dispatchKeyPress(game, code, e) {
     }
 
     if (code === game.keybinds.interact) game.interact();
+    if (code === game.keybinds.dash && !e?.repeat) game.dashFromKeys?.();
     // Chronos powers on their own keys (spec decision 4: no double-taps).
     if (code === game.keybinds.chronoRewind && !e?.repeat) game.chronoRewind?.();
     if (code === game.keybinds.chronoLock && !e?.repeat) game.chronoLock?.();

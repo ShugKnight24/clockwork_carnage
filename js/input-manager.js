@@ -42,6 +42,9 @@ export const DEFAULT_KEYBINDS = {
   toggleFPS: "KeyF",
   chronoShift: "KeyQ",
   crouch: "ControlLeft",
+  // One key to phase-dash the way you are moving (double-tapping a
+  // direction still works).
+  dash: "KeyC",
   // Nova's Rewind and Kael's Time-Lock, once the campaign has granted them.
   chronoRewind: "KeyX",
   chronoLock: "KeyV",
