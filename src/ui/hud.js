@@ -1,4 +1,4 @@
-import { drawCrosshair } from "./crosshair.js";
+import { drawCrosshair, drawAdsSight } from "./crosshair.js";
 import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
@@ -335,17 +335,21 @@ function drawPowerCellChip(ctx, game) {
 }
 
 /**
- * The crosshair, faded out as the sights come up. At full ADS the sights are
- * the reticle: the crosshair and an extra "ADS" ring drawn over them hid a
- * small or distant target right where the player was aiming.
+ * The crosshair, faded out as the sights come up (the full crosshair over the
+ * sights hid a small or distant target right where the player was aiming),
+ * handing over to a small sight dot that stays while aimed: the gun alone
+ * did not show exactly where the round would go.
  */
 function drawAimReticle(ctx, game, cx, cy) {
-  const show = 1 - getAimBlend();
-  if (show <= 0.02) return;
-  const a = ctx.globalAlpha;
-  ctx.globalAlpha = a * show;
-  drawCrosshair(ctx, cx, cy, game.settings.crosshair);
-  ctx.globalAlpha = a;
+  const blend = getAimBlend();
+  const show = 1 - blend;
+  if (show > 0.02) {
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * show;
+    drawCrosshair(ctx, cx, cy, game.settings.crosshair);
+    ctx.globalAlpha = a;
+  }
+  drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6));
 }
 
 /**

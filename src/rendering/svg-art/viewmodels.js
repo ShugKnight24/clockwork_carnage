@@ -189,6 +189,12 @@ const rig = { t: 0, sx: 0, sy: 0, ox: 0, oy: 0, vsx: 0, vsy: 0, vox: 0, voy: 0 }
 const HIP_DROP = 12;
 // Blend at which the hip rig has swung onto the ADS anchors; the rest cross-fades art.
 const MORPH_END = 0.55;
+/**
+ * The aimed pose drawn smaller, about its sight (the pose's origin sits on
+ * the reticle, so the sight stays put): full size, the gun and gloves filled
+ * the middle of the screen below the aim point and hid what you shot at.
+ */
+const ADS_SCALE = 0.68;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const smoothstep = (t) => t * t * (3 - 2 * t);
@@ -475,14 +481,16 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const trace = globalThis.__ccViewmodelTrace;
   if (trace) {
     const [ax, ay] = map(hip.pivot); // continuous through the swap: lands on the ADS grip
-    trace.push({ t: now, x: cx, y: cy, tilt, blend: b, pose: dom === hip ? "hip" : "ads", mx: cx + ax * UNIT * vf, my: cy + ay * UNIT * vf });
+    const ks = UNIT * vf * lerp(1, ADS_SCALE, u);
+    trace.push({ t: now, x: cx, y: cy, tilt, blend: b, pose: dom === hip ? "hip" : "ads", mx: cx + ax * ks, my: cy + ay * ks });
   }
 
   ctx.save();
   ctx.globalAlpha *= alpha;
   const base = ctx.globalAlpha;
   ctx.translate(cx, cy);
-  ctx.scale(UNIT * vf, UNIT * vf);
+  const k = UNIT * vf * lerp(1, ADS_SCALE, u);
+  ctx.scale(k, k);
   if (b < 1) {
     ctx.globalAlpha = base * (1 - b);
     ctx.fillStyle = contactShadow(ctx);

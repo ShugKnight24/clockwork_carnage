@@ -240,3 +240,41 @@ function drawCrosshairRealistic(ctx, cx, cy, type) {
     ctx.fillRect(cx, cy, 1, 1);
   }
 }
+
+/**
+ * The aim point while aimed in: a small bright dot inside four short ticks,
+ * dark-edged so it reads on a lit wall and on a dark corridor alike. The
+ * full crosshair fades out as the sights come up (it covered small targets);
+ * this stays, so the shot always lands somewhere you can see.
+ * @param {number} alpha 0..1
+ */
+export function drawAdsSight(ctx, cx, cy, alpha = 1) {
+  if (alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  const color = isModernArt() || isRealisticArt() ? "#7dfff0" : "#ff4a4a";
+  const tick = (x0, y0, x1, y1) => {
+    ctx.moveTo(cx + x0, cy + y0);
+    ctx.lineTo(cx + x1, cy + y1);
+  };
+  ctx.lineCap = "round";
+  for (const [style, width] of [["rgba(0,0,0,0.65)", 3.5], [color, 1.5]]) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    tick(-9, 0, -5, 0);
+    tick(5, 0, 9, 0);
+    tick(0, -9, 0, -5);
+    tick(0, 5, 0, 9);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
