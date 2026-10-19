@@ -147,6 +147,7 @@ const LOGIC = {
     },
     update: (t) => t.c.kills >= 3,
     progress: (t) => `TARGETS ${Math.min(3, t.c.kills)} / 3`,
+    exit: (t, g) => t.clearTargets(g, "fire"),
   },
 
   ads: {
@@ -164,6 +165,7 @@ const LOGIC = {
       return t.c.aimedKills >= 3;
     },
     progress: (t) => `AIMED KILLS ${Math.min(3, t.c.aimedKills)} / 3`,
+    exit: (t, g) => t.clearTargets(g, "ads"),
   },
 
   moving: {
@@ -188,6 +190,7 @@ const LOGIC = {
       return t.c.heads >= 3;
     },
     progress: (t) => `HEADSHOT KILLS ${Math.min(3, t.c.heads)} / 3`,
+    exit: (t, g) => t.clearTargets(g, "moving"),
   },
 
   shotgun: {
@@ -214,6 +217,7 @@ const LOGIC = {
     },
     progress: (t, g) =>
       g.player.weapons.includes(SHOTGUN) ? `SHOTGUN KILLS ${Math.min(3, t.c.shotgunKills)} / 3` : "PICK UP THE SHOTGUN",
+    exit: (t, g) => t.clearTargets(g, "shotgun"),
   },
 
   ammo: {
@@ -906,6 +910,11 @@ export class TutorialSystem {
       g.entities.push(e);
     }
     g.totalEnemies = (g.totalEnemies || 0) + spots.length;
+  }
+
+  /** A finished drill's targets leave the range, so the next drill starts clean. */
+  clearTargets(g, tag) {
+    g.entities = g.entities.filter((e) => !(e._target && e._tutTag === tag));
   }
 
   /** How many of a step's enemies are still up. */
