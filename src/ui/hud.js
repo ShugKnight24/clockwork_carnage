@@ -349,7 +349,7 @@ function drawAimReticle(ctx, game, cx, cy) {
     drawCrosshair(ctx, cx, cy, game.settings.crosshair);
     ctx.globalAlpha = a;
   }
-  drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6));
+  drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6), (game.hudH || 900) / 900);
 }
 
 /**

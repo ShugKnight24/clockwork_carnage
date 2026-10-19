@@ -125,14 +125,16 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   // ── Viewmodel pose ───────────────────────────────────────────────────────
   // Hip-fire sits the weapon low and to the right and cants it inward, the way
   // a right-handed shooter actually holds it. ADS interpolates that pose to
-  // dead centre and upright so the sights line up with the reticle.
+  // dead centre and upright, and low: the suit projects the sight at the
+  // reticle (drawAdsSight), so the gun drops out of the line of fire rather
+  // than covering the target.
   // `ads` is 0 at the hip, 1 fully aimed: the eased blend when the caller has one.
   const ads = adsBlend ?? (isAiming ? 1 : 0);
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
   const restCant = lerp(-0.11, 0, ads);          // inward cant, upright on ADS
-  const sc = lerp(4.5, 4.35, ads) * viewportFactor;
+  const sc = lerp(4.5, 3.4, ads) * viewportFactor;
 
   // Sway is cosmetic lag from look/strafe input; it shrinks hard when aiming.
   const swayX = (opts.weaponSwayX || 0) * lerp(1, 0.22, ads) * viewportFactor;
@@ -146,7 +148,7 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
 
   const cx = w / 2 + restOffsetX + bobX + swayX - crouch * 11 * viewportFactor + followX;
-  const cy = h - hudOffset - lerp(196, 250, ads) * viewportFactor + bobY + swayY +
+  const cy = h - hudOffset - lerp(196, 150, ads) * viewportFactor + bobY + swayY +
     kickY * lerp(1, 0.45, ads) + crouch * 26 * viewportFactor + followY;
 
   // Contact shadow — the viewmodel is the nearest object in the scene, so it

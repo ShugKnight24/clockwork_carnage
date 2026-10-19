@@ -242,39 +242,77 @@ function drawCrosshairRealistic(ctx, cx, cy, type) {
 }
 
 /**
- * The aim point while aimed in: a small bright dot inside four short ticks,
- * dark-edged so it reads on a lit wall and on a dark corridor alike. The
- * full crosshair fades out as the sights come up (it covered small targets);
- * this stays, so the shot always lands somewhere you can see.
+ * The sight the suit projects while aimed in: a faint glass window with
+ * corner brackets, a ring and a centre dot, at the aim point. The gun drops
+ * below it (src/rendering/svg-art/viewmodels.js ADS_DROP), so the window
+ * frames the target instead of the gun's body covering it. Dark-edged so it
+ * reads on a lit wall and in a dark corridor alike.
  * @param {number} alpha 0..1
+ * @param {number} [scale] 1 at a 900 px tall view
  */
-export function drawAdsSight(ctx, cx, cy, alpha = 1) {
+export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
   if (alpha <= 0.01) return;
+  const k = Math.max(0.7, Math.min(2, scale));
+  const color = isModernArt() || isRealisticArt() ? "#7dfff0" : "#ff4a4a";
+  const glass = isModernArt() || isRealisticArt() ? "rgba(125,255,240," : "rgba(255,90,90,";
   ctx.save();
   ctx.globalAlpha *= alpha;
-  const color = isModernArt() || isRealisticArt() ? "#7dfff0" : "#ff4a4a";
-  const tick = (x0, y0, x1, y1) => {
-    ctx.moveTo(cx + x0, cy + y0);
-    ctx.lineTo(cx + x1, cy + y1);
-  };
   ctx.lineCap = "round";
-  for (const [style, width] of [["rgba(0,0,0,0.65)", 3.5], [color, 1.5]]) {
+  ctx.lineJoin = "round";
+  // The window: a faint pane, a hairline edge, brighter corners.
+  const ww = 92 * k;
+  const wh = 64 * k;
+  const x0 = cx - ww / 2;
+  const y0 = cy - wh / 2;
+  const r = 10 * k;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, ww, wh, r);
+  ctx.fillStyle = glass + "0.05)";
+  ctx.fill();
+  ctx.strokeStyle = glass + "0.28)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const c = 14 * k;
+  for (const [style, width] of [["rgba(0,0,0,0.55)", 3.5 * k], [color, 1.6 * k]]) {
     ctx.strokeStyle = style;
     ctx.lineWidth = width;
     ctx.beginPath();
-    tick(-9, 0, -5, 0);
-    tick(5, 0, 9, 0);
-    tick(0, -9, 0, -5);
-    tick(0, 5, 0, 9);
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const ex = cx + (sx * ww) / 2;
+      const ey = cy + (sy * wh) / 2;
+      ctx.moveTo(ex - sx * c, ey);
+      ctx.lineTo(ex, ey);
+      ctx.lineTo(ex, ey - sy * c);
+    }
     ctx.stroke();
   }
-  ctx.fillStyle = "rgba(0,0,0,0.65)";
+  // A glint across the glass.
+  ctx.strokeStyle = glass + "0.12)";
+  ctx.lineWidth = 6 * k;
   ctx.beginPath();
-  ctx.arc(cx, cy, 2.6, 0, Math.PI * 2);
+  ctx.moveTo(x0 + ww * 0.12, y0 + wh * 0.62);
+  ctx.lineTo(x0 + ww * 0.34, y0 + wh * 0.14);
+  ctx.stroke();
+  // The reticle: a ring, four ticks outside it, a dot.
+  const ring = 9 * k;
+  for (const [style, width] of [["rgba(0,0,0,0.6)", 3.2 * k], [color, 1.4 * k]]) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ring, 0, Math.PI * 2);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      ctx.moveTo(cx + dx * (ring + 3 * k), cy + dy * (ring + 3 * k));
+      ctx.lineTo(cx + dx * (ring + 8 * k), cy + dy * (ring + 8 * k));
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.6 * k, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 1.6 * k, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

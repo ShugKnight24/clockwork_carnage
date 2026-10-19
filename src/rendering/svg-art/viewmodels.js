@@ -194,7 +194,14 @@ const MORPH_END = 0.55;
  * the reticle, so the sight stays put): full size, the gun and gloves filled
  * the middle of the screen below the aim point and hid what you shot at.
  */
-const ADS_SCALE = 0.68;
+const ADS_SCALE = 0.58;
+/**
+ * Aimed in, the gun drops this fraction of the view below the aim point and
+ * the suit projects the sight there instead (drawAdsSight in
+ * src/ui/crosshair.js): with the sight on the reticle, the gun's body sat
+ * right under it and hid the target you were aiming at.
+ */
+const ADS_DROP = 0.2;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const smoothstep = (t) => t * t * (3 - 2 * t);
@@ -465,7 +472,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const crouch = (o.crouchBlend || 0) * (1 - b);
   const cx = w / 2 + Math.sin(weaponBob) * bobMulX * vf + rig.sx * swayK * vf + rig.ox * w * follow +
     Math.sin(breath * 1.1) * 1.6 * vf * calm - crouch * 11 * vf;
-  const cy = lerp(hipCy, viewH / 2, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
+  const cy = lerp(hipCy, viewH / 2 + ADS_DROP * viewH, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
     weaponKick * 40 * lerp(1, 0.45, b) * vf + rig.oy * viewH * follow + Math.sin(breath * 1.7) * 2.2 * vf * calm +
     crouch * 26 * vf;
   const tilt = (isSprinting ? Math.sin(weaponBob) * 0.06 * (1 - b) : 0) + rig.sx * -0.0022 * lerp(1, 0.2, b) +
