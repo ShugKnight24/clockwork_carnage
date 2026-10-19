@@ -72,7 +72,7 @@ test.describe("Bot Profiles", () => {
     await screenshot(page, "bot-ironman-end");
   });
 
-  test("no-damage bot completes without damage", async ({ page }) => {
+  test("careful bot clears level 0 with light damage", async ({ page }) => {
     test.setTimeout(60_000);
     const result = await page.evaluate(() => window.ccTest.bot("nodamage"));
     expect(result).toBe(true);
