@@ -14,7 +14,9 @@
 export const PIXEL_BUDGET = Object.freeze({
   low: 0.55e6, // ~ 990x555
   mid: 1.0e6, // ~ 1333x750
-  high: 3.7e6, // ~ 2560x1440 — native on a 1440p screen
+  // Native 4K (3840x2160 = 8.3 MP). A desktop GPU holds 60 fps there in
+  // Comic and Modern; the adaptive render scale trims anything that can't.
+  high: 8.4e6,
 });
 
 /**

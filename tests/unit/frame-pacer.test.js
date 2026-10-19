@@ -96,3 +96,24 @@ describe("qualityTargetFPS", () => {
     expect(qualityTargetFPS(90, 144)).toBe(55);
   });
 });
+
+describe("display refresh estimate", () => {
+  it("reads the panel, not the frame rate, when the GPU is the bottleneck", () => {
+    const pacer = new FramePacer();
+    let t = 1000;
+    // A cheap menu at 60 Hz, then a heavy scene the GPU only draws at 20 fps.
+    for (let i = 0; i < 120; i++) pacer.shouldRender((t += 1000 / 60), 0);
+    pacer.reset(); // a level load
+    for (let i = 0; i < 600; i++) pacer.shouldRender((t += 50), 0);
+    expect(pacer.displayHz).toBeGreaterThan(54);
+    expect(qualityTargetFPS(0, pacer.displayHz)).toBeGreaterThan(50);
+  });
+
+  it("eventually follows a move to a slower panel", () => {
+    const pacer = new FramePacer();
+    let t = 1000;
+    for (let i = 0; i < 120; i++) pacer.shouldRender((t += 1000 / 60), 0);
+    for (let i = 0; i < 20000; i++) pacer.shouldRender((t += 1000 / 30), 0);
+    expect(pacer.displayHz).toBeLessThan(31);
+  });
+});

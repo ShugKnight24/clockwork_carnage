@@ -105,7 +105,7 @@ function resizeCanvases() {
   hudCanvas.height = Math.round(cssH * dpr);
   game.hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Game canvas renders at quality-scaled res (no DPR — adaptive quality handles it)
+  // Game canvas renders at the budgeted device-pixel size times the adaptive scale.
   const s = quality.stableScale ?? quality.renderScale;
   gameCanvas.style.width = cssW + "px";
   gameCanvas.style.height = cssH + "px";
@@ -113,6 +113,11 @@ function resizeCanvases() {
   const gh = Math.round(renderH * s);
   gameCanvas.width = gw;
   gameCanvas.height = gh;
+  // Nearest-neighbour stretching is crisp only at a whole-number scale; at
+  // 1.5x it doubles every other pixel, which shimmers and stair-steps. Any
+  // other stretch is filtered smoothly instead.
+  const stretch = (cssW * dpr) / gw;
+  gameCanvas.style.imageRendering = Math.abs(stretch - Math.round(stretch)) < 0.02 ? "pixelated" : "auto";
   if (game.renderer) {
     game.renderer.resize(gw, gh);
   }
