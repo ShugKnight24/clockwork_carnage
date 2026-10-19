@@ -1,5 +1,10 @@
-// Weapon definitions
-// TODO: Add more weapons with unique mechanics (e.g. grenades, beam weapons, etc.)
+// Weapon definitions. Mechanics are flags the combat code reads:
+//   phasesShields  pellets pass front shields and energy shields
+//   slowOnHit      { ms, factor }: a hit that does not kill slows the target
+//   bounces        projectile rounds ricochet off walls this many times
+// Sustained damage (every round landing), for balance: pistol 50, ricochet
+// 48, shotgun 80, cannon 80 + splash, rifle 110, scattergun 114, sniper 117
+// (in 140-damage shots), EMP 29 + disable.
 export const WEAPONS = [
   {
     id: 0,
@@ -31,9 +36,9 @@ export const WEAPONS = [
   {
     id: 2,
     name: "Phase Rifle",
-    damage: 40,
-    fireRate: 150,
-    ammoPerShot: 2,
+    damage: 22,
+    fireRate: 200,
+    ammoPerShot: 1,
     maxAmmo: 100,
     spread: 0.01,
     range: 100,
@@ -57,8 +62,9 @@ export const WEAPONS = [
   {
     id: 4,
     name: "Phase Scattergun",
-    damage: 10,
+    damage: 8,
     pellets: 10,
+    phasesShields: true,
     fireRate: 700,
     ammoPerShot: 1,
     maxAmmo: 60,
@@ -72,6 +78,7 @@ export const WEAPONS = [
     id: 5,
     name: "Temporal Sniper",
     damage: 140,
+    slowOnHit: { ms: 2500, factor: 0.4 },
     fireRate: 1200,
     ammoPerShot: 1,
     maxAmmo: 20,
@@ -85,6 +92,7 @@ export const WEAPONS = [
     id: 6,
     name: "Ricochet Pistol",
     damage: 12,
+    bounces: 2,
     fireRate: 250,
     ammoPerShot: 1,
     maxAmmo: 200,

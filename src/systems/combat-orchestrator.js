@@ -69,9 +69,15 @@ export function fireWeapon(game) {
 
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
-    for (let p = 0; p < pellets; p++) {
-      const spread = pellets > 1 ? (Math.random() - 0.5) * wep.spread * 2 * spreadMul : 0;
-      hitscan(game, aimAngle + spread, damage, wep.range, aimPitch);
+    // damageEnemy reads the weapon's mechanics (shield phasing, slowing) off this.
+    game._shotWeapon = wep;
+    try {
+      for (let p = 0; p < pellets; p++) {
+        const spread = pellets > 1 ? (Math.random() - 0.5) * wep.spread * 2 * spreadMul : 0;
+        hitscan(game, aimAngle + spread, damage, wep.range, aimPitch);
+      }
+    } finally {
+      game._shotWeapon = null;
     }
   } else {
     const shots = game.player.multiShot || 1;
@@ -95,6 +101,7 @@ export function fireWeapon(game) {
       }
       proj.weaponId = wep.id;
       if (wep.id === 7) proj.emp = true;
+      if (wep.bounces) proj.bounces = wep.bounces;
       proj.color = game.getCharacterColor().accent || wep.color;
       game.projectiles.push(proj);
       game.entities.push(proj);
@@ -209,8 +216,10 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   const zoneDamage = damage * zoneMult;
   const isHead = zoneName === "head";
 
+  const shot = game._shotWeapon;
   const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
     zoneDamage, enemy, game.player.critChance, game.player,
+    { phasesShields: !!shot?.phasesShields },
   );
   if (shieldSpark) game.glitchEffect = Math.max(game.glitchEffect, 0.08);
 
@@ -222,6 +231,14 @@ export function damageEnemy(game, enemy, damage, zone = null) {
 
   enemy.health -= finalDamage;
   enemy.hitTime = game.time;
+  // The Temporal Sniper's bolt destabilises time around what it does not kill.
+  if (shot?.slowOnHit && enemy.health > 0) {
+    if (!(enemy._slowUntil > game.time)) {
+      game.damageNumbers.push({ x: enemy.x, y: enemy.y, value: "SLOWED", crit: false, life: 1.1, vx: 0 });
+    }
+    enemy._slowUntil = game.time + shot.slowOnHit.ms;
+    enemy._slowFactor = shot.slowOnHit.factor;
+  }
   // Shot: it knows where from, and shouts about it (src/systems/ai.js).
   enemy._hurtAlert = true;
   // A hit flinches the enemy, then it shrugs off further flinches for a

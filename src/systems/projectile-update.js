@@ -160,6 +160,24 @@ function stepProjectile(p, ctx, stepDt) {
     }
     if (map.grid[my][mx] > 0) {
       ctx.spawnWallSparks(p.x, p.y);
+      // A Ricochet Pistol round glances off: back out of the wall, mirror
+      // the heading across the face it crossed, and fly on a little weaker.
+      if (p.owner === "player" && p.bounces > 0) {
+        const fromX = Math.floor(prevX);
+        const fromY = Math.floor(prevY);
+        // Which move went into the wall: the step across x, the step
+        // across y, or (neither alone) a corner, which sends it back.
+        const hitX = fromX !== mx && map.grid[fromY]?.[mx] > 0;
+        const hitY = fromY !== my && map.grid[my]?.[fromX] > 0;
+        if (hitX || !hitY) p.dirX = -p.dirX;
+        if (hitY || !hitX) p.dirY = -p.dirY;
+        p.x = prevX;
+        p.y = prevY;
+        p.bounces--;
+        p.damage *= 0.85;
+        p._bounced = true;
+        return;
+      }
       p.active = false; return;
     }
   }

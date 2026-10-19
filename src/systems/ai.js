@@ -227,7 +227,9 @@ export class AISystem {
         : Number.isFinite(e.def?.chronoMultiplier)
           ? e.def.chronoMultiplier
           : 0.15;
-      const enemyDt = (player.chronoActive ? dt * chronoMult : dt) * (chrono?.enemyTimeScale(e) ?? 1);
+      // A Temporal Sniper hit slows its target for a while on top of everything else.
+      const slowed = e._slowUntil > time ? e._slowFactor ?? 0.4 : 1;
+      const enemyDt = (player.chronoActive ? dt * chronoMult : dt) * (chrono?.enemyTimeScale(e) ?? 1) * slowed;
 
       // The echo decoy pulls whoever is nearer to it than to the player.
       const toEcho =

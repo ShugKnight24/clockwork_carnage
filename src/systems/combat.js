@@ -22,7 +22,7 @@ import { ENEMY_TYPES } from "../data/enemies.js";
  *
  * @returns {{ finalDamage: number, isCrit: boolean, shieldSpark: boolean }}
  */
-export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos) {
+export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false } = {}) {
   let finalDamage = baseDamage;
   let isCrit = false;
   let shieldSpark = false;
@@ -33,8 +33,9 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     isCrit = true;
   }
 
-  // Front shield — shield commanders take 80% less from front
-  if (enemy.def.frontShield) {
+  // Front shield — shield commanders take 80% less from front (a phasing
+  // round, the Phase Scattergun's, passes straight through)
+  if (enemy.def.frontShield && !phasesShields) {
     const dx = playerPos.x - enemy.x;
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
@@ -47,7 +48,7 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
   }
 
   // Energy shield absorption
-  if (enemy._shield && enemy._shield > 0) {
+  if (enemy._shield && enemy._shield > 0 && !phasesShields) {
     const absorb = Math.min(enemy._shield, finalDamage);
     enemy._shield -= absorb;
     finalDamage -= absorb;
