@@ -569,6 +569,7 @@ export class TutorialSystem {
     this.idleSince = 0;
     this.checkpoint = null;
     this.deaths = 0;
+    this._cardSerial = this._cardSerial || 0;
     // Post-chapter.
     this.sandboxInit = false;
     this.originPlayed = false;
@@ -668,6 +669,7 @@ export class TutorialSystem {
     this.stepTime = performance.now();
     this.clock = 0;
     this.c = { kills: 0, heads: 0, aimedKills: 0, shotgunKills: 0, chronoKills: 0, slides: 0, dashes: 0 };
+    this._postCard(index);
     this.doorOpened = false;
     this.pickedUp = false;
     const def = this.def;
@@ -678,6 +680,18 @@ export class TutorialSystem {
     if (first === index && index > 0) this._saveCheckpoint();
     this.logic?.enter?.(this, g);
     if (def.lines && !def.defer) this.say(def.lines, { cut: def.cut });
+  }
+
+  /**
+   * The step's card holds the message director's headline lane (it never
+   * waits for ARIA: her lines move to the comms lane below it instead).
+   */
+  _postCard(index) {
+    const d = this.game.messages;
+    if (!d) return;
+    if (this.cardKey) d.done(this.cardKey);
+    this.cardKey = PROLOGUE_STEPS[index]?.title ? `prologue:${index}:${++this._cardSerial}` : null;
+    if (this.cardKey) d.post(this.cardKey, "teach", null, { top: false, minHold: 0, priority: 120 });
   }
 
   advanceStep() {
@@ -1097,6 +1111,7 @@ export class TutorialSystem {
     this.step = TUTORIAL_SANDBOX_STEP;
     this.stepTime = performance.now();
     this.clock = 0;
+    this._postCard(TUTORIAL_SANDBOX_STEP);
     g.objectiveWaypoint = null;
   }
 

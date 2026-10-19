@@ -418,16 +418,29 @@ export function renderTutorialOverlay(ctx, w, h, state) {
   }
 
   if (state.blackout) drawBlackout(ctx, w, h);
+  return 0;
+}
 
+/**
+ * The prologue's step card, on the HUD layer in the message director's
+ * headline lane (src/ui/message-lanes.js), like a campaign teach card: ARIA's
+ * plates take the comms lane below it, which is laid out never to overlap it
+ * at any screen size or HUD style. Returns the card's bottom edge (0: none).
+ * @param {{ top?: number, maxW?: number, cx?: number, compact?: boolean }} [lane]
+ */
+export function renderTutorialCard(ctx, w, h, state, lane = {}) {
+  const { mode, isTouchDevice, tutorialStepTime, tutorialStep } = state;
+  if (mode !== "tutorial" || tutorialStep === 0) return 0;
   const device = state.input ? activeDevice(state.input) : isTouchDevice ? "touch" : "keyboard";
   const copy = tutorialStepCopy(device, state.input);
   const step = copy[tutorialStep];
   if (!step) return 0; // sandbox/completion menu has no overlay
 
-  const fadeIn = Math.min(1, elapsed / 0.4);
+  const now = performance.now();
+  const fadeIn = Math.min(1, (now - tutorialStepTime) / 400);
   const pulse = 0.85 + 0.15 * Math.sin(now / 300);
-  const place = { caption: beatCaption(step.beat), progress: state.progress || "", top: 66 };
-  if (modern) {
+  const place = { caption: beatCaption(step.beat), progress: state.progress || "", top: 66, ...lane };
+  if (isModernArt()) {
     return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
   }
   return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);

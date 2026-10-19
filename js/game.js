@@ -119,6 +119,7 @@ import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaig
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
   renderTutorialOverlay as _renderTutorialOverlay,
+  renderTutorialCard as _renderTutorialCard,
   renderTeachCard as _renderTeachCard,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
 } from "../src/ui/tutorial-ui.js";
@@ -1517,9 +1518,9 @@ export class Game {
     return this.tutorial.shouldShow();
   }
 
+  /** The prologue's world layer: the HUD boot and the blackout. */
   renderTutorialOverlay(ctx, w, h) {
-    // Remembered so ARIA's toast can sit below the step card instead of over it.
-    this._tutorialCardBottom = _renderTutorialOverlay(ctx, w, h, {
+    _renderTutorialOverlay(ctx, w, h, {
       mode: this.mode,
       isTouchDevice: this.isTouchDevice,
       input: this,
@@ -1528,6 +1529,35 @@ export class Game {
       progress: this.tutorial.progressText(),
       blackout: this.tutorial.blackout,
     });
+  }
+
+  /**
+   * The prologue's step card, on the HUD in the director's headline lane, so
+   * ARIA's plates (the comms lane) never cover what to do next.
+   */
+  renderTutorialCard(ctx, w, h) {
+    const d = this.messages;
+    const key = this.tutorial.cardKey;
+    if (key && !d.showing(key)) {
+      this._tutorialCardBottom = 0;
+      return;
+    }
+    const lane = d.lanes?.headline;
+    this._tutorialCardBottom = _renderTutorialCard(
+      ctx,
+      w,
+      h,
+      {
+        mode: this.mode,
+        isTouchDevice: this.isTouchDevice,
+        input: this,
+        tutorialStepTime: this.tutorialStepTime,
+        tutorialStep: this.tutorialStep,
+        progress: this.tutorial.progressText(),
+      },
+      // A narrowed lane (a small window) takes the compact card, so it stays within the lane's height.
+      lane ? { top: lane.y + 6, maxW: lane.w, cx: lane.x + lane.w / 2, compact: d.lanes.kind === "compact" || lane.w < 520 } : {},
+    );
   }
 
   /**

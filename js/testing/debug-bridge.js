@@ -48,6 +48,19 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
+    /** The message director: its lanes, what holds each one, and the prologue card. */
+    messages() {
+      const d = game.messages;
+      const key = game.tutorial?.cardKey;
+      return {
+        lanes: d.lanes,
+        headline: d.current("headline")?.key ?? null,
+        queued: d.queues?.headline?.map((i) => i.key),
+        card: key ? { key, status: d.status(key) } : null,
+        comms: game.ariaComms?.message ? { place: game.ariaComms.message.place, text: game.ariaComms.message.text.slice(0, 40) } : null,
+      };
+    },
+
     /** Complete the next `n` prologue steps as if their goals were met; returns the step reached. */
     tutorialSkip(n = 1) {
       for (let i = 0; i < n; i++) game.tutorial.skipStep();

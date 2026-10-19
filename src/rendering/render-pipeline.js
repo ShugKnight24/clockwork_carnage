@@ -510,6 +510,7 @@ export function renderFrame(game) {
   // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
   if (game.mode === "tutorial") {
     game.renderTutorialOverlay(ctx, w, h);
+    game.renderTutorialCard(game.hudCtx, game.hudW, game.hudH);
   } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
     // A Chronos teach card, the tutorial's card, on the HUD layer in the
     // message director's headline lane (same coordinates as ARIA's plates).

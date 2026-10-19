@@ -144,3 +144,24 @@ describe("message lanes", () => {
     expect(hudReserved({ w: 1280, h: 720, hudStyle: 1 }).length).toBeGreaterThan(2);
   });
 });
+
+describe("small desktop windows", () => {
+  // A browser window, not a phone: 800x600 used to put the headline (the
+  // prologue's step card) below the bottom of the screen.
+  const SMALL = [
+    [800, 600],
+    [1024, 640],
+    [1024, 768],
+  ];
+  for (const [w, h] of SMALL) {
+    for (const s of STYLES) {
+      it(`${s.name} ${w}x${h}: the headline is on screen, above the bottom HUD, clear of the low comms`, () => {
+        const L = messageLanes({ ...s, w, h });
+        expect(L.headline.y).toBeGreaterThanOrEqual(0);
+        expect(L.headline.y + L.headline.h).toBeLessThanOrEqual(commsBottom({ ...s, w, h }) + 1);
+        expect(L.headline.w).toBeGreaterThanOrEqual(300);
+        expect(overlaps(L.headline, L.commsLow)).toBe(false);
+      });
+    }
+  }
+});
