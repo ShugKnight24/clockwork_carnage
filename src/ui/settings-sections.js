@@ -42,6 +42,7 @@ export const SECTION_OF = {
   musicVolume: at("audio", "Volume"),
   sfxVolume: at("audio", "Volume"),
   voiceVolume: at("audio", "Volume"),
+  voiceStyle: at("audio", "Volume"),
   // Controls
   sensitivity: at("controls", "Mouse"),
   invertX: at("controls", "Mouse"),

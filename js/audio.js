@@ -1,4 +1,5 @@
 import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine, inferEmotion } from "../src/audio/voice.js";
+import { Speech } from "../src/audio/speech.js";
 
 export class AudioManager {
   constructor() {
@@ -49,6 +50,10 @@ export class AudioManager {
     this._voice = null;
     this._speech = new Map();
     this._speechUntil = 0;
+    /** Browser text-to-speech for dialogue (src/audio/speech.js). */
+    this.tts = new Speech();
+    /** 0 Auto (speech when the browser has a natural voice), 1 always speech, 2 always babble. */
+    this.voiceStyle = 0;
     this._noiseClips = new Map();
     this._noiseLoop = null;
   }
@@ -1671,6 +1676,15 @@ export class AudioManager {
   setVoiceVolume(v) {
     this._voiceVolume = Math.max(0, Math.min(1, v));
     if (this.voiceGain) this.voiceGain.gain.value = this._voiceVolume;
+    if (this.tts) this.tts.volume = this._voiceVolume;
+  }
+
+  /** Whether dialogue should be spoken (text-to-speech) rather than babbled. */
+  get speaksWords() {
+    if (!this.tts?.synth) return false;
+    if (this.voiceStyle === 2) return false;
+    if (this.voiceStyle === 1) return true;
+    return this.tts.hasGoodVoice;
   }
 
   // ─── Voices ─────────────────────────────────────────────────────────────
@@ -1689,6 +1703,19 @@ export class AudioManager {
     if (!v) return null;
     this.stopSpeech(channel);
     const mood = emotion || inferEmotion(text, v.emotion || "neutral");
+    // Real words when the browser can say them well; machines and creatures
+    // (and the synthetic player voice) always keep their babble.
+    const castKey = voice === "player" ? `player:${profile?.id || "calm"}` : typeof voice === "string" ? voice : null;
+    if (castKey && this.speaksWords && this.tts.canSpeak(castKey)) {
+      const said = this.tts.say(text, castKey, { channel, emotion: mood });
+      if (said) {
+        const endTime = this.ctx.currentTime + (said.endTime - performance.now() / 1000);
+        const handle = { endTime, stop: said.stop };
+        this._speech.set(channel, handle);
+        this._speechUntil = Math.max(this._speechUntil, endTime);
+        return handle;
+      }
+    }
     const handle = this._voice.play(planUtterance(text, v, { charsPerSec, emotion: mood }), v, this.voiceGain, { pan });
     if (handle) {
       this._speech.set(channel, handle);

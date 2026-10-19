@@ -1039,6 +1039,7 @@ export class Game {
     this.audio.setMusicVolume(this.settings.musicVolume / 100);
     this.audio.setSfxVolume(this.settings.sfxVolume / 100);
     this.audio.setVoiceVolume(this.settings.voiceVolume / 100);
+    this.audio.voiceStyle = this.settings.voiceStyle | 0;
   }
 
   // Save / Load

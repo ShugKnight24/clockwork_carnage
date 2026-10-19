@@ -23,7 +23,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   minimapSize: 200,
   masterVolume: 100, // 0..100
   musicVolume: 80, // 0..100
-  voiceVolume: 80, // 0..100 — character babble voices and grunts
+  voiceVolume: 80, // 0..100 — character voices and grunts
+  voiceStyle: 0, // 0 Auto, 1 Spoken, 2 Stylised (babble)
   sfxVolume: 80, // 0..100
   sensitivity: 0.7, // 0.2..2.0
   fov: 70, // 50..120 degrees
@@ -446,6 +447,24 @@ export const SETTINGS_REGISTRY = [
     onChange: (g) => g.audio.setVoiceVolume(g.settings.voiceVolume / 100),
     platform: "all",
     height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "voiceStyle",
+    label: "Voice Style",
+    desc: "Spoken uses your browser's text-to-speech; Edge and Chrome have natural-sounding voices. Auto speaks when one is available and keeps the stylised voices otherwise.",
+    type: "enum",
+    values: ["Auto", "Spoken", "Stylised"],
+    colors: ["#00ccff", "#ff88cc", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    onChange: (g) => {
+      g.audio.voiceStyle = g.settings.voiceStyle | 0;
+      g.audio.speak?.("Systems nominal. Voice check.", "aria", { channel: "comms" });
+    },
+    platform: "all",
+    height: { compact: 30, normal: 44 },
   },
   // ─── Controls ───
   {
