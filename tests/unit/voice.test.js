@@ -34,6 +34,17 @@ describe("syllabify", () => {
 describe("planUtterance", () => {
   const text = "Stay on objective. Stay alive!";
 
+  it("times every syllable when a line ends in a closing quote", () => {
+    // A lone apostrophe used to divide by zero syllables: NaN times, which
+    // the audio graph rejects mid-line.
+    const { events, duration } = planUtterance("Update your file. 'Exceeds expectations.' Occasionally.", VOICES.aria);
+    expect(Number.isFinite(duration)).toBe(true);
+    for (const e of events) {
+      expect(Number.isFinite(e.t)).toBe(true);
+      expect(Number.isFinite(e.slot)).toBe(true);
+    }
+  });
+
   it("lasts as long as the text takes to type", () => {
     const { duration } = planUtterance(text, VOICES.aria, { charsPerSec: 18 });
     // Every character is 1/18 s; sentence ends add a short breath each.

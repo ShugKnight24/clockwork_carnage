@@ -314,6 +314,12 @@ export function planUtterance(text, voice, { charsPerSec = 18, seed = null, emot
       // Stress the first syllable of a content word; share time around it.
       const weights = sylls.map((s, i) => s.chars * (!weak && i === 0 && sylls.length > 1 ? 1.35 : 1));
       const wsum = weights.reduce((a, b) => a + b, 0);
+      // A lone apostrophe (a closing quote: "...expectations.'") has no
+      // letters to say: it only takes its typing time.
+      if (!(wsum > 0)) {
+        t += wordDur;
+        continue;
+      }
       sylls.forEach((s, i) => {
         const slot = wordDur * (weights[i] / wsum);
         const stressed = !weak && i === 0;
