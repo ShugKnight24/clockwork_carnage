@@ -196,6 +196,9 @@ function _safeCall(name, fn) {
 
 // TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
 
+/** The agent's time scale during Chrono Shift: near real time while the world slows. */
+const CHRONO_PLAYER_SPEED = 0.85;
+
 export class Game {
   constructor(canvas, hudCanvas) {
     this.canvas = canvas;
@@ -2132,7 +2135,10 @@ export class Game {
     // Player movement
     const _profilePlayerStart = this.profiling ? performance.now() : 0;
     // Form 2's Counter-shift holds you at half speed for a moment.
-    if (!frozen) this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
+    // Chrono Shift slows the world, not you: the agent keeps near full speed
+    // while everything else crawls. (A kill's slow-mo still slows everyone.)
+    const playerDt = this.player.chronoActive && !(this.slowMoTimer > 0) ? this.deltaTime * CHRONO_PLAYER_SPEED : dt;
+    if (!frozen) this.updatePlayer(playerDt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
 
@@ -2535,14 +2541,15 @@ export class Game {
     this.glitchEffect *= decay(0.95, this.deltaTime);
     if (this.glitchEffect < 0.01) this.glitchEffect = 0;
 
-    // Hit marker decay
+    // Hit marker decay. Feedback runs on real time: on slowed time it hung
+    // around three or four times too long during slow-mo and Chrono Shift.
     if (this.hitMarker > 0) {
-      this.hitMarker -= dt;
+      this.hitMarker -= this.deltaTime;
       if (this.hitMarker < 0) this.hitMarker = 0;
     }
 
-    // Damage numbers and hitscan tracers (short-lived bullet streaks)
-    expireByLife(this.damageNumbers, dt);
+    // Damage numbers on real time too; tracers stay in world time (they are bullets).
+    expireByLife(this.damageNumbers, this.deltaTime);
     expireByLife(this.tracers, dt);
 
     // Dynamic point lights — decay and prune. Intensity follows life ratio
@@ -2778,7 +2785,7 @@ export class Game {
         audio: this.audio,
         spawnWallSparks: (x, y, z) => this.spawnWallSparks(x, y, z),
         damageEnemy: (e, d, z) => this.damageEnemy(e, d, z),
-        damagePlayer: (d) => this.damagePlayer(d),
+        damagePlayer: (d, from) => this.damagePlayer(d, from),
         lights: this.lights,
         // Enemy rounds that cross a Time-Lock hang there.
         chronoPowers: this.chronoPowers,

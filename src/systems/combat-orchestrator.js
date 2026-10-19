@@ -220,17 +220,24 @@ export function damageEnemy(game, enemy, damage, zone = null) {
 
   enemy.health -= finalDamage;
   enemy.hitTime = game.time;
-  enemy.state = "pain";
-  enemy.painTimer = (isCrit || isHead) ? 250 : 150;
-  // A crit or headshot interrupts a telegraphed attack outright; ordinary hits
-  // only pause it (see the pain branch in ai.js).
-  if (isCrit || isHead) enemy._staggered = true;
+  // A hit flinches the enemy, then it shrugs off further flinches for a
+  // moment: without that, any weapon firing faster than the flinch froze its
+  // target for good. Crits and headshots always land a (longer) stagger.
+  const heavy = isCrit || isHead;
+  if (heavy || !(game.time < (enemy._flinchImmuneUntil ?? 0))) {
+    enemy.state = "pain";
+    enemy.painTimer = heavy ? 250 : 150;
+    enemy._flinchImmuneUntil = game.time + FLINCH_IMMUNITY_MS;
+    // A crit or headshot interrupts a telegraphed attack outright; ordinary
+    // hits only pause it (see the pain branch in ai.js).
+    if (heavy) enemy._staggered = true;
+  }
 
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
   const dist = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
   game.audio.enemyHit(pan, dist);
   game.audio.hitConfirm?.(pan); // Distinct metallic ding for hit feedback
-  if (isHead) game.audio.enemyHit?.(pan, dist); // double-tap for headshot ping
+  if (isHead) game.audio.headshotConfirm?.(pan);
 
   game.hitMarker = (isCrit || isHead) ? 0.22 : 0.15;
   game.hitMarkerCrit = isCrit;
@@ -286,6 +293,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
     const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
     game.audio.enemyDeath(panDeath, distDeath);
+    game.audio.killConfirm?.(panDeath, zoneName === "head" || game._lastHitWasCrit);
     game.audio.enemyBark?.(enemy.enemyType, "death", panDeath, distDeath);
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
     game.glitchEffect = 0.3;
@@ -370,6 +378,9 @@ export function onEnemyKill(game, enemy) {
     game.timeScale = 0.25;
   }
 }
+
+/** Milliseconds (game.time) after a flinch during which ordinary hits do not flinch again. */
+export const FLINCH_IMMUNITY_MS = 700;
 
 export function damagePlayer(game, amount, attacker) {
   if (!game.player.alive) return;

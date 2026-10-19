@@ -795,16 +795,84 @@ export class AudioManager {
     }
   }
 
+  /**
+   * One shaped tone into the SFX bus: a frequency sweep f0→f1 with a fast
+   * attack and exponential decay. The building block of the feedback cues.
+   */
+  _blip(type, f0, f1, dur, gain, pan = 0, delay = 0) {
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + Math.min(0.006, dur * 0.2));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    o.connect(g);
+    g.connect(p);
+    p.connect(this.sfxGain);
+    o.onended = () => { o.disconnect(); g.disconnect(); p.disconnect(); };
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  /**
+   * An attack is coming: a rising whine whose length matches the wind-up.
+   * "shot" is a short, quiet tick for ordinary ranged enemies; boss attacks
+   * ("charge", "stomp", "warp") are loud and long enough to react to.
+   */
+  telegraph(pan = 0, kind = "shot", distance = 0) {
+    if (!this.ctx || !this.enabled) return;
+    const near = distance > 0 ? Math.max(0.25, 1 - distance / 22) : 1;
+    if (kind === "shot") {
+      this._blip("triangle", 660, 1320, 0.18, 0.07 * near, pan);
+      return;
+    }
+    if (kind === "stomp") {
+      this._blip("sawtooth", 70, 140, 0.75, 0.22, pan);
+      this._blip("sine", 140, 280, 0.75, 0.12, pan);
+      return;
+    }
+    if (kind === "warp") {
+      this._blip("sine", 1600, 200, 0.6, 0.16, pan);
+      this._blip("triangle", 800, 100, 0.6, 0.1, -pan);
+      return;
+    }
+    // charge
+    this._blip("sawtooth", 110, 440, 0.7, 0.2, pan);
+    this._blip("square", 220, 880, 0.7, 0.06, pan);
+  }
+
+  /** A kill: a low thump under a bright two-note confirm. Heavier on headshots and crits. */
+  killConfirm(pan = 0, heavy = false) {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("sine", 160, 55, 0.18, heavy ? 0.42 : 0.32, pan);
+    this._blip("triangle", 1320, 1320, 0.07, 0.16, pan, 0.01);
+    this._blip("triangle", heavy ? 2200 : 1760, heavy ? 2200 : 1760, 0.09, 0.14, pan, 0.06);
+  }
+
+  /** A headshot: a sharp high crack on top of the hit confirm. */
+  headshotConfirm(pan = 0) {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("square", 2800, 2400, 0.05, 0.1, pan);
+    this._blip("triangle", 4200, 4200, 0.06, 0.07, pan, 0.02);
+  }
+
   hitConfirm(pan = 0) {
     if (!this.ctx || !this.enabled) return;
     const t = this.ctx.currentTime;
+    // A transient click so the hit reads through gunfire.
+    this._blip("square", 3200, 1200, 0.025, 0.09, pan);
 
     // Metallic ding — triangle wave at 1800Hz with fast decay
     const ding = this.ctx.createOscillator();
     ding.type = "triangle";
     ding.frequency.setValueAtTime(1800, t);
     const dg = this.ctx.createGain();
-    dg.gain.setValueAtTime(0.12, t);
+    dg.gain.setValueAtTime(0.18, t);
     dg.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
     const dp = this.ctx.createStereoPanner();
     dp.pan.value = Math.max(-1, Math.min(1, pan));

@@ -121,7 +121,8 @@ function tryHitPlayer(p, ctx) {
     const centre = (ctx.player.z || 0) + PLAYER.height * 0.5;
     if (Math.abs((p.z || 0) - centre) > PLAYER_HIT_HALF) return false;
   }
-  ctx.damagePlayer(p.damage);
+  // The hit indicator points back along the bolt's flight, toward the shooter.
+  ctx.damagePlayer(p.damage, { x: p.x - p.dirX * 4, y: p.y - p.dirY * 4 });
   p.active = false;
   return true;
 }

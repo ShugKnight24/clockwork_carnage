@@ -83,6 +83,9 @@ export function quillFan(q, aim) {
  * }} AIEffects
  */
 
+/** Radians per second a front-shielded enemy can turn its shield (~100°/s). */
+const SHIELD_TURN_RATE = 1.75;
+
 export class AISystem {
   /**
    * @param {AIContext} ctx
@@ -200,7 +203,17 @@ export class AISystem {
       // ── Chase ──
       if (e.state === "chase") {
         const angle = Math.atan2(dy, dx);
-        e.angle = angle;
+        // A front-shielded enemy turns its shield slowly, so circling it, a
+        // dash past it or a teammate's distraction opens its flank. Everyone
+        // else tracks the player at once.
+        if (e.def.frontShield) {
+          let d = angle - (e.angle ?? angle);
+          d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+          const step = SHIELD_TURN_RATE * enemyDt;
+          e.angle = (e.angle ?? angle) + Math.max(-step, Math.min(step, d));
+        } else {
+          e.angle = angle;
+        }
 
         // Beast charge ability (telegraph → sprint → impact)
         this._updateBeastCharge(e, enemyDt, dist, angle, player, map, fx);
@@ -331,6 +344,7 @@ export class AISystem {
         ) {
           if (hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
             beginWindup(e, time);
+            audio.telegraph?.(audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), "shot", dist);
           }
         }
       }
@@ -444,6 +458,7 @@ export class AISystem {
                 // Land into a telegraph. Striking the tick after teleporting
                 // gave the player no window to react to a 22-30 damage hit.
                 beginWindup(e, time);
+                audio.telegraph?.(audio.calculatePan(e.x, e.y, player.x, player.y, player.angle), "shot", dist);
                 fx.screenShake = Math.max(fx.screenShake, 2);
                 audio.enemyHit(
                   audio.calculatePan(
@@ -507,7 +522,7 @@ export class AISystem {
         const bdx = player.x - bomb.x;
         const bdy = player.y - bomb.y;
         if (bdx * bdx + bdy * bdy < bomb.radius * bomb.radius) {
-          fx.damagePlayerCalls.push({ damage: bomb.damage });
+          fx.damagePlayerCalls.push({ damage: bomb.damage, attacker: { x: bomb.x, y: bomb.y } });
         }
         bomb.active = false;
       }
@@ -546,14 +561,49 @@ export class AISystem {
     e._bossTeleportCD -= dt * 1000;
 
     const atp = Math.atan2(player.y - e.y, player.x - e.x);
+    const pan = audio.calculatePan(e.x, e.y, player.x, player.y, player.angle);
+    const callout = (value, life = 1.0) =>
+      damageNumbers.push({ x: e.x, y: e.y, value, crit: true, life, vx: (Math.random() - 0.5) * 20 });
+    // Every boss attack is telegraphed: a wind-up with a callout and a sound
+    // long enough to react to, then the attack. Nothing lands on the frame it
+    // is announced.
+    if (e._bossWindup) {
+      e._bossWindup.t -= dt;
+      if (e._bossWindup.kind === "charge") e._bossChargeAngle = atp; // tracks you until it commits
+      if (e._bossWindup.t > 0) return;
+      const kind = e._bossWindup.kind;
+      e._bossWindup = null;
+      if (kind === "charge") {
+        e._bossCharging = true;
+        e._bossChargeTimer = 0;
+        e._bossChargeDuration = 1.0;
+      } else if (kind === "stomp") {
+        if (dist < 4) fx.damagePlayerCalls.push({ damage: e.def.damage * 0.8, attacker: e });
+        fx.screenShake = Math.max(fx.screenShake, 12);
+      } else if (kind === "warp") {
+        const behind = player.angle + Math.PI;
+        const tx = player.x + Math.cos(behind) * 3;
+        const ty = player.y + Math.sin(behind) * 3;
+        if (isPassable(map, Math.floor(tx), Math.floor(ty))) {
+          e.x = tx;
+          e.y = ty;
+          fx.screenShake = Math.max(fx.screenShake, 5);
+        }
+      }
+      return;
+    }
+    const windup = (kind, seconds, label) => {
+      e._bossWindup = { kind, t: seconds };
+      callout(label, seconds + 0.4);
+      audio.telegraph?.(pan, kind, dist);
+    };
 
     // Form 1+: Charge
-    if (form >= 1 && e._bossChargeCD <= 0 && dist > 4 && dist < 20) {
+    if (!e._bossCharging && form >= 1 && e._bossChargeCD <= 0 && dist > 4 && dist < 20) {
       e._bossChargeCD = 6000;
-      e._bossCharging = true;
-      e._bossChargeTimer = 0;
-      e._bossChargeDuration = 1.0;
       e._bossChargeAngle = atp;
+      windup("charge", 0.7, "CHARGE!");
+      return;
     }
     if (e._bossCharging) {
       e._bossChargeTimer += dt;
@@ -578,20 +628,10 @@ export class AISystem {
     }
 
     // Form 2+: Stomp
-    if (form >= 2 && e._bossStompCD <= 0 && dist < 5) {
+    if (form >= 2 && !e._bossCharging && e._bossStompCD <= 0 && dist < 5) {
       e._bossStompCD = 5000;
-      if (dist < 4) {
-        fx.damagePlayerCalls.push({ damage: e.def.damage * 0.8, attacker: e });
-        fx.screenShake = Math.max(fx.screenShake, 12);
-      }
-      damageNumbers.push({
-        x: e.x,
-        y: e.y,
-        value: "STOMP!",
-        crit: true,
-        life: 1.2,
-        vx: (Math.random() - 0.5) * 20,
-      });
+      windup("stomp", 0.8, "STOMP!");
+      return;
     }
 
     // Form 2+: Missile spread
@@ -624,24 +664,9 @@ export class AISystem {
     }
 
     // Form 3: Teleport behind player
-    if (form >= 3 && e._bossTeleportCD <= 0 && dist > 8) {
+    if (form >= 3 && !e._bossCharging && e._bossTeleportCD <= 0 && dist > 8) {
       e._bossTeleportCD = 8000;
-      const behind = player.angle + Math.PI;
-      const tx = player.x + Math.cos(behind) * 3;
-      const ty = player.y + Math.sin(behind) * 3;
-      if (isPassable(map, Math.floor(tx), Math.floor(ty))) {
-        e.x = tx;
-        e.y = ty;
-        fx.screenShake = Math.max(fx.screenShake, 5);
-        damageNumbers.push({
-          x: e.x,
-          y: e.y,
-          value: "WARP!",
-          crit: true,
-          life: 1.0,
-          vx: (Math.random() - 0.5) * 20,
-        });
-      }
+      windup("warp", 0.6, "WARP!");
     }
   }
 
