@@ -1350,12 +1350,12 @@ function drawVoiceBars(ctx, x, midY, t, color, amp) {
  * The station's people, who wear a uniform and a cap, not a suit: the
  * Supervisor (gold cap band, moustache) and his officers, live or logged.
  */
-const STATION_SPEAKERS = new Set(["SUPERVISOR", "OFFICER", "LT. RASCZAK", "RASCZAK (LOG)"]);
+const STATION_SPEAKERS = new Set(["SUPERVISOR", "SIMON (LOG)", "OFFICER", "LT. RASCZAK", "SGT. KAEL", "RASCZAK (LOG)"]);
 
 /** Which portrait glyph a speaker gets. */
 function portraitKind(speaker) {
   if (speaker === "ARIA") return "ARIA";
-  if (speaker === "SUPERVISOR") return "CHIEF";
+  if (speaker === "SUPERVISOR" || speaker === "SIMON (LOG)") return "CHIEF";
   return STATION_SPEAKERS.has(speaker) ? "COP" : "SQUAD";
 }
 

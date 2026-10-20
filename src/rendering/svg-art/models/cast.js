@@ -1534,7 +1534,11 @@ function supervisorModel() {
     ).join("") +
     `<circle cx="-9" cy="-0.4" r="0.36" fill="#ffc060"/>` +
     `<path d="M8.9,-1.6 C9.8,-0.6 9.9,1.6 9.2,3" fill="none" stroke="#ffb454" stroke-width="0.3" opacity="0.8"/>`;
-  const head = face("sf", { ...SUPERVISOR_FACE, x: 0, y: -57, s: 2.1, front: hair, over: stubble + wear + headset });
+  // The grey moustache he wears in-world (src/rendering/svg-art/sprites/humanoids.js).
+  const moustache =
+    `<path d="M-3.9,7.4 C-3.4,5.6 -1.6,5 0,5.7 C1.6,5 3.4,5.6 3.9,7.4 C2.8,6.7 1.4,6.6 0,7 C-1.4,6.6 -2.8,6.7 -3.9,7.4Z" fill="#8f8a84" stroke="${INK}" stroke-width="0.35" stroke-linejoin="round"/>` +
+    `<path d="M-2.8,6.2 L-2.2,6.8 M-1.4,5.8 L-1,6.6 M1.4,5.8 L1,6.6 M2.8,6.2 L2.2,6.8" stroke="#d8d4cc" stroke-width="0.25" stroke-linecap="round" opacity="0.7"/>`;
+  const head = face("sf", { ...SUPERVISOR_FACE, x: 0, y: -57, s: 2.1, front: hair, over: stubble + moustache + wear + headset });
 
   const arm = "M-35.4,-25.4 C-48,-23 -54.4,-11 -54.8,5 C-55,21 -54,35 -53.2,48 L-39.4,48 L-39,10Z";
   const torso = "M-11,-35.6 C-20,-33.8 -31.4,-29.8 -39.6,-23.6 C-44.2,-18 -44.6,-7 -42.6,7 L-39.6,48 L39.6,48 L42.6,7 C44.6,-7 44.2,-18 39.6,-23.6 C31.4,-29.8 20,-33.8 11,-35.6 C6,-31.4 -6,-31.4 -11,-35.6Z";
@@ -1662,6 +1666,6 @@ export const MODELS = {
   portrait_miri: miriModel(),
   /** Kai the engineer: stocky bust in a burnt-orange jumpsuit, goggles on his forehead. */
   portrait_kai: kaiModel(),
-  /** The cadet's Bureau supervisor: tired, grey-stubbled bust in a rumpled uniform and radio headset. */
+  /** Supervisor Simon: tired, grey-moustached bust in a rumpled uniform and radio headset. */
   portrait_supervisor: supervisorModel(),
 };

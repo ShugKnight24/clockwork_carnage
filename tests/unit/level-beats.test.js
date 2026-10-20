@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { LEVEL_BEATS } from "../../src/data/campaign/beats.js";
-import { LevelBeats } from "../../src/systems/level-beats.js";
+import { LevelBeats, BEAT_MEMBERS } from "../../src/systems/level-beats.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 
-const SPEAKERS = ["ARIA", "PA", "RASCZAK (LOG)", "LAB LOG", "UNKNOWN"];
+const SPEAKERS = ["ARIA", "PA", "RASCZAK (LOG)", "LAB LOG", "UNKNOWN", "SIMON (LOG)", "ENCRYPTED", "LYRA", "ROOK", "NOVA", "KAEL", "PARADOX LORD"];
 const TRIGGERS = ["start", "time", "kills", "cell", "exit"];
 
 describe("the campaign's narrative beats", () => {
@@ -33,10 +33,29 @@ describe("the campaign's narrative beats", () => {
     }
   });
 
-  it("gives every Act I level before the boss a story to find", () => {
-    const act1 = ACTS.find((a) => a.id === 1);
-    for (const l of act1.levels.filter((l) => !l.boss && l.map !== "core")) {
-      expect(LEVEL_BEATS[1][l.map]?.length ?? 0, l.map).toBeGreaterThanOrEqual(3);
+  it("gives every level before each act's boss a story to find", () => {
+    for (const act of ACTS) {
+      for (const l of act.levels.filter((l) => !l.boss && l.map !== "core")) {
+        expect(LEVEL_BEATS[act.id]?.[l.map]?.length ?? 0, `act ${act.id} ${l.map}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("only lets the squad speak where they are, under the right name", () => {
+    for (const act of ACTS) {
+      for (const l of act.levels) {
+        for (const b of LEVEL_BEATS[act.id]?.[l.map] ?? []) {
+          for (const [speaker] of b.lines || []) {
+            const member = BEAT_MEMBERS[speaker];
+            if (!member) continue;
+            const here = [...l.squad, ...(b.guest || [])];
+            expect(here, `act ${act.id} ${l.map}: ${speaker}`).toContain(member);
+            // Lyra is ENCRYPTED until she has a name, and LYRA after.
+            const nameless = !!l.callsigns?.[member];
+            expect(speaker === "ENCRYPTED", `act ${act.id} ${l.map}: ${speaker}`).toBe(nameless);
+          }
+        }
+      }
     }
   });
 });

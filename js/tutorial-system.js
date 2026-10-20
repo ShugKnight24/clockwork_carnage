@@ -27,6 +27,7 @@ const SPEAKER_STYLE = {
   PA: { color: "#9fb4c8", voice: "system" },
   OFFICER: { color: "#6fb6ff", voice: "officer" },
   "LT. RASCZAK": { color: "#6fb6ff", voice: "officer" },
+  "SGT. KAEL": { color: "#4f9dff", voice: "kael" },
 };
 
 /**
@@ -202,7 +203,7 @@ const LOGIC = {
       g.player.angle = -0.1;
       // The squad at their lockers, turned toward each other and the cadet.
       t.squad = SQUAD_AT.map(([x, y], i) => {
-        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Rasczak" : null });
+        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Rasczak" : i === 1 ? "Sgt. Kael" : null });
         n.faceTo(g.player);
         g.entities.push(n);
         return n;

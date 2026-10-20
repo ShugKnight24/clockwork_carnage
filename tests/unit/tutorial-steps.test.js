@@ -86,7 +86,7 @@ describe("the prologue", () => {
   it("is told by ARIA and the Supervisor, in lines short enough to say", () => {
     for (const s of PROLOGUE_STEPS) {
       for (const [speaker, text, emotion] of s.lines || []) {
-        expect(["ARIA", "SUPERVISOR", "OFFICER", "LT. RASCZAK", "PA"]).toContain(speaker);
+        expect(["ARIA", "SUPERVISOR", "OFFICER", "LT. RASCZAK", "SGT. KAEL", "PA"]).toContain(speaker);
         expect(text.length).toBeGreaterThan(0);
         expect(text.length).toBeLessThan(170);
         if (emotion != null) expect(typeof emotion).toBe("string");

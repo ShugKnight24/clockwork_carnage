@@ -9,6 +9,7 @@
  * once.
  */
 import { LEVEL_BEATS } from "../data/campaign/beats.js";
+import { SQUAD_TAB_COLORS } from "./squad-comms.js";
 
 /** Plate colour and voice for each speaker a beat uses. */
 const SPEAKERS = {
@@ -17,7 +18,18 @@ const SPEAKERS = {
   "RASCZAK (LOG)": { color: "#6fb6ff", voice: "officer" },
   "LAB LOG": { color: "#c8b48a", voice: "system" },
   UNKNOWN: { color: "#ff5a6e", voice: "unknown" },
+  "SIMON (LOG)": { color: "#ccaa77", voice: "supervisor" },
+  // Lyra in II-1, on the channel she found you on, before she has a name.
+  ENCRYPTED: { color: "#4488ff", voice: "lyra" },
+  LYRA: { color: SQUAD_TAB_COLORS.LYRA, voice: "lyra" },
+  ROOK: { color: SQUAD_TAB_COLORS.ROOK, voice: "rook" },
+  NOVA: { color: SQUAD_TAB_COLORS.NOVA, voice: "nova" },
+  KAEL: { color: SQUAD_TAB_COLORS.KAEL, voice: "kael" },
+  "PARADOX LORD": { color: "#ff4466", voice: "lord" },
 };
+
+/** The squad member each squad speaker is, for who may speak where. */
+export const BEAT_MEMBERS = { LYRA: "lyra", ROOK: "rook", NOVA: "nova", KAEL: "kael", ENCRYPTED: "lyra" };
 
 /** Steps from the exit at which an "exit" beat fires. */
 const EXIT_NEAR = 7;

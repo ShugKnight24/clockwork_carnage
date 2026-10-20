@@ -31,6 +31,8 @@ const PA = "PA";
 /** The squad leaving for the Engine level, and its lieutenant. */
 const OFF = "OFFICER";
 const RASCZAK = "LT. RASCZAK";
+/** Sergeant Kael, on the squad that morning: Act II finds him holding the Precinct. */
+const KAEL = "SGT. KAEL";
 
 /**
  * Dialogue: [speaker, text, emotion?, { radio }?]. The Supervisor speaks in
@@ -59,6 +61,7 @@ export const PROLOGUE_STEPS = [
     lines: [
       [OFF, "Third alarm this week. Engineering's going to blow us all to the moon.", "calm"],
       [OFF, "Heard they ran the Engine all night. Calibration, they're calling it.", "curious"],
+      [KAEL, "Badge eleven-two-three-five. You're on his duty board, Cadet. Third row. Never once on time.", "calm"],
     ],
   },
   {
