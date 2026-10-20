@@ -395,3 +395,14 @@ describe("a front shield covers the body, not the head", () => {
     expect(calculateEnemyDamage(100, sentinel, 0, front, { zone: "head" }).finalDamage).toBeCloseTo(100);
   });
 });
+
+describe("a front shield stays in front however far the enemy has turned", () => {
+  // Facing winds past ±π as an enemy spins searching or circles the player.
+  const at = (angle) => ({ x: 5, y: 0, angle, def: { frontShield: true }, _shield: 0 });
+  const behind = { x: 10, y: 0 }; // the shield faces -x (angle π)
+  const front = { x: 0, y: 0 };
+  it.each([Math.PI, 3 * Math.PI, -Math.PI, 5 * Math.PI, -3 * Math.PI])("facing %f rad: shot from behind lands in full", (a) => {
+    expect(calculateEnemyDamage(100, at(a), 0, behind).finalDamage).toBeCloseTo(100);
+    expect(calculateEnemyDamage(100, at(a), 0, front).finalDamage).toBeCloseTo(20);
+  });
+});

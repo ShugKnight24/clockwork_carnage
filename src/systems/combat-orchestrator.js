@@ -40,7 +40,17 @@ export function fireWeapon(game) {
       wep.fireRate / (game.player.fireRateMultiplier || 1)
   )
     return;
-  if (game.player.ammo < wep.ammoPerShot && wep.id !== 0) return;
+  if (game.player.ammo < wep.ammoPerShot && wep.id !== 0) {
+    // Dry: fall back to the Chrono Pistol, which never runs out, rather than
+    // a trigger that silently does nothing.
+    const pistol = game.player.weapons.indexOf(0);
+    if (pistol >= 0) {
+      game.player.currentWeapon = pistol;
+      game.player.lastFireTime = now;
+      game.audio?.menuBack?.();
+    }
+    return;
+  }
 
   game.player.lastFireTime = now;
   if (wep.id !== 0) game.player.ammo -= wep.ammoPerShot;

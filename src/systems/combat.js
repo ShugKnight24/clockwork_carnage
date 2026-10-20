@@ -42,8 +42,10 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
     const facingAngle = enemy.angle || 0;
-    let angleDiff = Math.abs(angleToPlayer - facingAngle);
-    if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+    // Facing winds past ±π as an enemy turns (search spins, circling), so
+    // wrap the difference rather than fold it once.
+    const d = angleToPlayer - facingAngle;
+    const angleDiff = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
     if (angleDiff < Math.PI / 3) {
       finalDamage *= 0.2;
     }
