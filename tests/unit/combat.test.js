@@ -406,3 +406,16 @@ describe("a front shield stays in front however far the enemy has turned", () =>
     expect(calculateEnemyDamage(100, at(a), 0, front).finalDamage).toBeCloseTo(20);
   });
 });
+
+describe("a Sentinel can be worn down from the front", () => {
+  const sentinel = () => ({ x: 5, y: 0, angle: Math.PI, def: { frontShield: true }, _shield: 0 });
+  it("takes the armour plate's cut once, not stacked with the shield's", () => {
+    // Pistol 15 x plate 0.4: 6 a shot, not the 1.2 the two cuts stacked to.
+    expect(calculateEnemyDamage(15 * 0.4, sentinel(), 0, { x: 0, y: 0 }, { zone: "armor" }).finalDamage).toBeCloseTo(6);
+  });
+  it("holds off its energy shield's regeneration after a hit", () => {
+    const e = sentinel();
+    calculateEnemyDamage(10, e, 0, { x: 10, y: 0 });
+    expect(e._shieldRegenDelay).toBeGreaterThan(0);
+  });
+});

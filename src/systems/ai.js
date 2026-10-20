@@ -662,10 +662,12 @@ export class AISystem {
               e.def.shieldMax || Math.max(20, Math.floor(e.def.health * 0.25));
             e._shield = e._shieldMax;
           }
-          e._shield = Math.min(
-            e._shieldMax,
-            (e._shield || 0) + (e.def.shieldRegenRate || 2) * enemyDt,
-          );
+          if (e._shieldRegenDelay > 0) e._shieldRegenDelay -= enemyDt;
+          else
+            e._shield = Math.min(
+              e._shieldMax,
+              (e._shield || 0) + (e.def.shieldRegenRate || 2) * enemyDt,
+            );
         }
 
         // HUD disrupt

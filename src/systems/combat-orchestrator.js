@@ -231,7 +231,15 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     zoneDamage, enemy, game.player.critChance, game.player,
     { phasesShields: !!shot?.phasesShields, zone: zoneName },
   );
-  if (shieldSpark) game.glitchEffect = Math.max(game.glitchEffect, 0.08);
+  if (shieldSpark) {
+    game.glitchEffect = Math.max(game.glitchEffect, 0.08);
+    // Say so, now and then: a hit that the shield took reads as a gun that
+    // does nothing, and the answer (flank it, or aim for the head) is the lesson.
+    if (!(game.time < (enemy._shieldCalloutAt ?? 0))) {
+      enemy._shieldCalloutAt = game.time + 1500;
+      game.damageNumbers.push({ x: enemy.x, y: enemy.y, value: "SHIELDED", crit: false, life: 1.0, vx: 0 });
+    }
+  }
 
   // Sub-boss ARIA callout
   if (enemy.def.subBoss && !enemy._ariaTriggered) {

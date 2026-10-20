@@ -23,6 +23,9 @@ import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
  *
  * @returns {{ finalDamage: number, isCrit: boolean, shieldSpark: boolean }}
  */
+/** Seconds after a hit before an energy shield starts to regenerate. */
+export const SHIELD_REGEN_DELAY = 2.5;
+
 export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false, zone = null } = {}) {
   let finalDamage = baseDamage;
   let isCrit = false;
@@ -37,7 +40,10 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
   // Front shield — shield commanders take 80% less from front (a phasing
   // round, the Phase Scattergun's, passes straight through). The shield
   // covers the body: the head shows over it, and a headshot is a headshot.
-  if (enemy.def.frontShield && !phasesShields && zone !== "head") {
+  // A shot that landed on the armour plate zone already took the plate's own
+  // cut (hitZones), so the shield does not cut it a second time: stacked, a
+  // Sentinel took 8% from the front and out-regenerated a pistol.
+  if (enemy.def.frontShield && !phasesShields && zone !== "head" && zone !== "armor") {
     const dx = playerPos.x - enemy.x;
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
@@ -48,8 +54,14 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     const angleDiff = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
     if (angleDiff < Math.PI / 3) {
       finalDamage *= 0.2;
+      shieldSpark = true; // show the block, so the player knows to go round
     }
   }
+  if (zone === "armor") shieldSpark = true;
+
+  // Any hit holds off the energy shield's regeneration for a moment, so
+  // sustained fire wears it down instead of trading with it.
+  if (finalDamage > 0) enemy._shieldRegenDelay = SHIELD_REGEN_DELAY;
 
   // Energy shield absorption
   if (enemy._shield && enemy._shield > 0 && !phasesShields) {
