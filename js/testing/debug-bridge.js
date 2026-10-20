@@ -72,6 +72,19 @@ export function createDebugBridge(game) {
       };
     },
 
+    /** Put a line on the comms now, as a speaker (portraits, plates, voices). */
+    say(speaker, text, color = "#ffd24a") {
+      game.ariaComms.message = null;
+      game.ariaComms.queue.length = 0;
+      game.ariaComms.queueLine({ speaker, text, color, duration: 8, prominent: true });
+    },
+
+    /** The level's narrative beats: which have fired, and what is still to say. */
+    beats() {
+      const b = game.levelBeats;
+      return { count: b.beats.length, fired: [...b.fired], pending: b.lines.length, clock: b.clock };
+    },
+
     /** The prologue's live state: step, its counter, and the sim hall. */
     tutorialState() {
       const t = game.tutorial;

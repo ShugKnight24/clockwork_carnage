@@ -1347,13 +1347,29 @@ function drawVoiceBars(ctx, x, midY, t, color, amp) {
 }
 
 /**
- * Inked portrait glyph: ARIA (bob, headset, cyan eyes) or a squad helmet with
+ * The station's people, who wear a uniform and a cap, not a suit: the
+ * Supervisor (gold cap band, moustache) and his officers, live or logged.
+ */
+const STATION_SPEAKERS = new Set(["SUPERVISOR", "OFFICER", "LT. RASCZAK", "RASCZAK (LOG)"]);
+
+/** Which portrait glyph a speaker gets. */
+function portraitKind(speaker) {
+  if (speaker === "ARIA") return "ARIA";
+  if (speaker === "SUPERVISOR") return "CHIEF";
+  return STATION_SPEAKERS.has(speaker) ? "COP" : "SQUAD";
+}
+
+/**
+ * Inked portrait glyph: ARIA (bob, headset, cyan eyes), a station officer in
+ * a peaked cap, or a squad helmet with
  * a visor in the member's colour. 3-tone shading, key light upper-left, rim
  * light in the speaker colour on the right. Drawn in a 40-unit box.
  */
 function portraitSprite(speaker, color, size, dpr) {
-  const isAria = speaker === "ARIA";
-  return commsSprite(`port:${isAria ? "ARIA" : "SQUAD"}:${color}`, size, size, 2, dpr, (g, s) => {
+  const kind = portraitKind(speaker);
+  const isAria = kind === "ARIA";
+  const isCop = kind === "COP" || kind === "CHIEF";
+  return commsSprite(`port:${kind}:${color}`, size, size, 2, dpr, (g, s) => {
     const u = s / 40;
     const k = 6 * u;
     g.fillStyle = UI.ink;
@@ -1402,9 +1418,9 @@ function portraitSprite(speaker, color, size, dpr) {
     }
     g.closePath();
     const suit = g.createLinearGradient(6, 28, 30, 41);
-    suit.addColorStop(0, "#4a6680");
-    suit.addColorStop(0.45, "#26394b");
-    suit.addColorStop(1, "#0e1722");
+    suit.addColorStop(0, isCop ? "#3a5a8c" : "#4a6680");
+    suit.addColorStop(0.45, isCop ? "#1e3358" : "#26394b");
+    suit.addColorStop(1, isCop ? "#0b1428" : "#0e1722");
     g.fillStyle = suit;
     g.fill();
     ink();
@@ -1502,6 +1518,8 @@ function portraitSprite(speaker, color, size, dpr) {
       g.fillStyle = "#bfffff";
       for (let yy = 1; yy < 40; yy += 2.6) g.fillRect(0, yy, 40, 0.7);
       g.globalAlpha = 1;
+    } else if (isCop) {
+      drawCopHead(g, ink, kind === "CHIEF");
     } else {
       // Pauldrons.
       for (const sx of [1, -1]) {
@@ -1574,6 +1592,109 @@ function portraitSprite(speaker, color, size, dpr) {
     cutPath(g, 1.5, 1.5, s - 3, s - 3, k - 1);
     g.stroke();
   });
+}
+
+/**
+ * A station officer from the shoulders up, in the portrait's 40-unit box:
+ * collar and tie, face, and a peaked cap with the badge. The Supervisor's cap
+ * has a gold band, and he has gold on his shoulders and a grey moustache.
+ */
+function drawCopHead(g, ink, chief) {
+  const gold = "#e0b44a";
+  // Shirt collar and tie.
+  g.beginPath();
+  g.moveTo(15, 28.6);
+  g.lineTo(20, 34);
+  g.lineTo(25, 28.6);
+  g.closePath();
+  g.fillStyle = "#c9d4de";
+  g.fill();
+  ink();
+  g.beginPath();
+  g.moveTo(19, 30.2);
+  g.lineTo(21, 30.2);
+  g.lineTo(21.6, 36);
+  g.lineTo(20, 37.4);
+  g.lineTo(18.4, 36);
+  g.closePath();
+  g.fillStyle = "#0b1220";
+  g.fill();
+  if (chief) {
+    for (const sx of [1, -1]) {
+      g.beginPath();
+      g.ellipse(20 + sx * 11.5, 31, 5.4, 2, sx * 0.3, 0, Math.PI * 2);
+      g.fillStyle = gold;
+      g.fill();
+      ink();
+    }
+  }
+  // Neck and face.
+  g.fillStyle = "#b58c6c";
+  g.fillRect(17, 22, 6, 7);
+  g.beginPath();
+  g.ellipse(20, 18.5, 6.6, 8, 0, 0, Math.PI * 2);
+  g.fillStyle = "#dcb896";
+  g.fill();
+  g.save();
+  g.clip();
+  g.fillStyle = "#b58c6c";
+  g.beginPath();
+  g.ellipse(25, 20, 5, 10, 0, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+  g.beginPath();
+  g.ellipse(20, 18.5, 6.6, 8, 0, 0, Math.PI * 2);
+  ink();
+  // Eyes in the cap's shadow, and the mouth (under a moustache for him).
+  g.fillStyle = "#1a1410";
+  g.fillRect(16, 16.6, 2.6, 1.2);
+  g.fillRect(21.4, 16.6, 2.6, 1.2);
+  if (chief) {
+    g.beginPath();
+    g.moveTo(16.2, 22.6);
+    g.quadraticCurveTo(20, 20.4, 23.8, 22.6);
+    g.quadraticCurveTo(20, 22, 16.2, 22.6);
+    g.fillStyle = "#9aa0a8";
+    g.fill();
+    g.lineWidth = 1.4;
+    g.strokeStyle = "#9aa0a8";
+    g.stroke();
+  } else {
+    g.beginPath();
+    g.moveTo(18, 22.8);
+    g.lineTo(22, 22.8);
+    g.strokeStyle = "rgba(90,50,40,0.8)";
+    g.lineWidth = 0.7;
+    g.stroke();
+  }
+  // Peaked cap: crown, band, visor.
+  g.beginPath();
+  g.moveTo(11, 13.4);
+  g.quadraticCurveTo(10.4, 6.4, 20, 5.6);
+  g.quadraticCurveTo(29.6, 6.4, 29, 13.4);
+  g.closePath();
+  g.fillStyle = "#1c2c4c";
+  g.fill();
+  ink();
+  g.fillStyle = chief ? gold : "#0b1220";
+  g.fillRect(12, 12, 16, 2.6);
+  g.beginPath();
+  g.moveTo(11.6, 14.4);
+  g.lineTo(28.4, 14.4);
+  g.quadraticCurveTo(25, 17.2, 20, 17.2);
+  g.quadraticCurveTo(15, 17.2, 11.6, 14.4);
+  g.fillStyle = "#06090f";
+  g.fill();
+  ink();
+  // Cap badge.
+  g.beginPath();
+  g.moveTo(20, 7.6);
+  g.lineTo(22, 9.4);
+  g.lineTo(20, 11.6);
+  g.lineTo(18, 9.4);
+  g.closePath();
+  g.fillStyle = gold;
+  g.fill();
 }
 
 function hexA(hex, a) {
@@ -1688,8 +1809,7 @@ function drawSignal(ctx, x, baseY, t, tone, live) {
  * upper left and seated behind a hairline frame instead of the ink bezel.
  */
 function realPortraitSprite(speaker, tone, size, dpr) {
-  const isAria = speaker === "ARIA";
-  return commsSprite(`rport:${isAria ? "ARIA" : "SQUAD"}:${tone}`, size, size, 2, dpr, (g, s) => {
+  return commsSprite(`rport:${portraitKind(speaker)}:${tone}`, size, size, 2, dpr, (g, s) => {
     const src = portraitSprite(speaker, tone, size, dpr);
     const k = 6 * (s / 40);
     g.save();
