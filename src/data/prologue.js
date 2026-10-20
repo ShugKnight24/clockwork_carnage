@@ -82,7 +82,7 @@ export const PROLOGUE_STEPS = [
     title: "OPEN THE BULKHEAD",
     color: "#ff8844",
     hint: {
-      key: "Face the door and press E.",
+      key: (k) => `Face the door and press ${k("interact")}.`,
       touch: "Face the door and tap USE.",
       pad: (b) => `Face the door and press ${b("interact")}.`,
     },
@@ -197,7 +197,7 @@ export const PROLOGUE_STEPS = [
     title: "SPRINT — WATCH YOUR STAMINA",
     color: "#ff44ff",
     hint: {
-      key: "Hold SHIFT to sprint. Sprinting burns the stamina bar; stop and it refills.",
+      key: (k) => `Hold ${k("sprint")} to sprint. Sprinting burns the stamina bar; stop and it refills.`,
       touch: "Tap RUN to sprint. Sprinting burns the stamina bar; stop and it refills.",
       pad: (b) => `Hold ${b("sprint")} to sprint. Sprinting burns the stamina bar; stop and it refills.`,
     },
@@ -209,7 +209,7 @@ export const PROLOGUE_STEPS = [
     title: "CROUCH — STAY LOW",
     color: "#66dd66",
     hint: {
-      key: "Hold CTRL to crouch and move a few steps. Smaller target, quieter feet, steadier aim.",
+      key: (k) => `Hold ${k("crouch")} to crouch and move a few steps. Smaller target, quieter feet, steadier aim.`,
       touch: "Hold CROUCH and move a few steps. Smaller target, quieter feet, steadier aim.",
       pad: (b) => `Hold ${b("crouch")} and move a few steps. Smaller target, quieter feet, steadier aim.`,
     },
@@ -221,7 +221,7 @@ export const PROLOGUE_STEPS = [
     title: "SLIDE — KEEP YOUR MOMENTUM",
     color: "#66ff99",
     hint: {
-      key: "While sprinting, tap CTRL to slide. Slide twice.",
+      key: (k) => `While sprinting, tap ${k("crouch")} to slide. Slide twice.`,
       touch: "While running, tap CROUCH to slide. Slide twice.",
       pad: (b) => `While sprinting, tap ${b("crouch")} to slide. Slide twice.`,
     },
@@ -233,7 +233,7 @@ export const PROLOGUE_STEPS = [
     title: "PHASE DASH — BLINK",
     color: "#ff44ff",
     hint: {
-      key: "Press C, or double-tap a movement key, to phase-dash the way you are moving. Dash twice. Mid-dash, hits pass through you; it costs stamina.",
+      key: (k) => `Press ${k("dash")}, or double-tap a movement key, to phase-dash the way you are moving. Dash twice. Mid-dash, hits pass through you; it costs stamina.`,
       touch: "Double-tap a direction on the stick to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.",
       pad: (b) => `Tap ${b("dash")} to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.`,
     },
@@ -316,7 +316,7 @@ export const PROLOGUE_STEPS = [
     title: "TAKE COVER — FIGHT BACK",
     color: "#ff2244",
     hint: {
-      key: "They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold CTRL to crouch behind low cover.",
+      key: (k) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${k("crouch")} to crouch behind low cover.`,
       touch: "They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold CROUCH behind low cover.",
       pad: (b) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${b("crouch")} behind low cover.`,
     },

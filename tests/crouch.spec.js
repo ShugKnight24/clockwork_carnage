@@ -14,7 +14,7 @@ test("the stance blend eases in and out rather than snapping", async ({ page }) 
   await page.waitForTimeout(600);
   expect(await page.evaluate(stance)).toBe(0);
 
-  await debug(page, "keyDown", "ControlLeft");
+  await debug(page, "keyDown", "KeyC");
   await page.waitForTimeout(30);
   const early = await page.evaluate(stance);
   // Partway down after one or two frames — not already planted at 1.
@@ -25,7 +25,7 @@ test("the stance blend eases in and out rather than snapping", async ({ page }) 
   expect(await page.evaluate(stance)).toBe(1);
 
   // Standing back up is deliberately slower than dropping.
-  await debug(page, "keyUp", "ControlLeft");
+  await debug(page, "keyUp", "KeyC");
   await page.waitForTimeout(900);
   expect(await page.evaluate(stance)).toBe(0);
 });
@@ -36,10 +36,10 @@ test("crouching lowers the view and tightens the FOV", async ({ page }) => {
   await page.waitForTimeout(600);
 
   const standingFov = await debug(page, "getAimFov");
-  await debug(page, "keyDown", "ControlLeft");
+  await debug(page, "keyDown", "KeyC");
   await page.waitForTimeout(500);
   const crouchedFov = await debug(page, "getAimFov");
-  await debug(page, "keyUp", "ControlLeft");
+  await debug(page, "keyUp", "KeyC");
 
   const read = (v) => (typeof v === "number" ? v : (v?.fov ?? v?.effective ?? v?.current));
   expect(read(crouchedFov)).toBeLessThan(read(standingFov));

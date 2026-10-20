@@ -822,14 +822,15 @@ test("capture keeps the browser from acting on Tab, Space and arrows", async ({ 
     window.__prevented = {};
     document.addEventListener("keydown", (e) => { window.__prevented[e.code] = e.defaultPrevented; });
   });
-  for (const code of ["Tab", "Space", "ArrowDown"]) {
-    await focusRow(page, "remap:keyboard:chronoLock");
+  // Space is the dash key: binding the dash to it again needs no prompt.
+  for (const [code, action] of [["Tab", "chronoLock"], ["Space", "dash"], ["ArrowDown", "chronoLock"]]) {
+    await focusRow(page, `remap:keyboard:${action}`);
     await page.keyboard.press("Enter");
     await expect(dialog(page)).toBeVisible();
-    await page.keyboard.press(code); // a free key: binds without a prompt
+    await page.keyboard.press(code); // a free key (or its own): binds without a prompt
     await expect(dialog(page)).toBeHidden();
-    expect(await keybind(page, "chronoLock")).toBe(code);
-    expect(await activeInDeck(page)).toBe("remap:keyboard:chronoLock");
+    expect(await keybind(page, action)).toBe(code);
+    expect(await activeInDeck(page)).toBe(`remap:keyboard:${action}`);
   }
   expect(await page.evaluate(() => window.__prevented)).toEqual({ Tab: true, Space: true, ArrowDown: true, Enter: true });
 });

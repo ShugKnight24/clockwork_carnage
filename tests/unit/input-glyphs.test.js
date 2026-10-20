@@ -88,7 +88,7 @@ describe("binding table", () => {
     const game = fakeGame();
     expect(glyph(game, "interact", "keyboard")).toEqual({ text: "E", kind: "key" });
     expect(glyph(game, "sprint", "keyboard").text).toBe("SHIFT");
-    expect(glyph(game, "crouch", "keyboard").text).toBe("CTRL");
+    expect(glyph(game, "crouch", "keyboard").text).toBe("C"); // not Ctrl: Ctrl+W closes the tab
     expect(glyph(game, "confirm", "keyboard").text).toBe("ENTER");
     expect(glyph(game, "back", "keyboard").text).toBe("ESC");
     game.keybinds.interact = "KeyF";

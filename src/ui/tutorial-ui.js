@@ -19,6 +19,8 @@ import {
 } from "./modern-ui-kit.js";
 import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
+import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { formatKeyCode } from "./key-labels.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -190,16 +192,33 @@ export function tutorialStepCopy(device, game = null) {
   if (device === true) device = "touch";
   const kind = device === "gamepad" ? "pad" : device === "touch" ? "touch" : "key";
   const b = (action) => glyph(game, action, "gamepad").text;
+  // Keyboard hints name the key bound now ("Hold C to crouch"), in the
+  // capitals the card draws as keycaps.
+  const k = (action) => keyName((game?.keybinds ?? DEFAULT_KEYBINDS)[action] ?? DEFAULT_KEYBINDS[action]);
   const pad = kind === "pad" ? padFamily(game) : null;
   return PROLOGUE_STEPS.map((step, i) => {
     if (i === 0 || !step.title) return null; // step 0 is the HUD boot
     const h = step.hint;
     const hint =
-      typeof h === "string" ? h : kind === "pad" ? (h.pad ? h.pad(b) : h.key) : kind === "touch" ? (h.touch ?? h.key) : h.key;
+      typeof h === "string"
+        ? h
+        : kind === "pad"
+          ? h.pad ? h.pad(b) : keyHint(h.key, k)
+          : kind === "touch"
+            ? h.touch ?? keyHint(h.key, k)
+            : keyHint(h.key, k);
     const card = { title: step.title, hint, color: step.color, beat: step.beat };
     if (pad) card.pad = pad;
     return card;
   });
+}
+
+/** A keyboard hint: a string, or a function of the bound key names. */
+const keyHint = (key, k) => (typeof key === "function" ? key(k) : key);
+
+/** A key code as a hint names it: "C", "SHIFT", "SPACE", "CTRL". */
+export function keyName(code) {
+  return formatKeyCode(code || "").replace(/^[LR]-/, "").toUpperCase();
 }
 
 /** The card's caption: which beat of the prologue this is. */
@@ -638,7 +657,7 @@ function tokenizeHint(text, pad = null) {
     }
     const m = /^(\W*)([A-Z0-9/]+?)(\W*)$/.exec(wd);
     if (m) {
-      if (KEY_WORDS.has(m[2])) {
+      if (KEY_WORDS.has(m[2]) || /^[A-Z]$/.test(m[2])) {
         atoms.push({ kind: "keys", keys: [m[2]], pre: m[1], post: m[3] });
         continue;
       }

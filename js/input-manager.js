@@ -41,14 +41,37 @@ export const DEFAULT_KEYBINDS = {
   weapon8: "Digit8",
   toggleFPS: "KeyF",
   chronoShift: "KeyQ",
-  crouch: "ControlLeft",
+  // Not Ctrl: Ctrl+W (crouch while walking forward) is the browser's
+  // close-tab shortcut, and a page cannot stop it.
+  crouch: "KeyC",
   // One key to phase-dash the way you are moving (double-tapping a
-  // direction still works).
-  dash: "KeyC",
+  // direction still works). Space is free on grid levels; the Forge's voxel
+  // worlds keep it for jumping.
+  dash: "Space",
   // Nova's Rewind and Kael's Time-Lock, once the campaign has granted them.
   chronoRewind: "KeyX",
   chronoLock: "KeyV",
 };
+
+/** Saved keybinds older than this get the defaults that changed since. */
+export const KEYBINDS_VERSION = 2;
+
+/**
+ * Bring saved keybinds up to date. Version 2 moved crouch off Ctrl (Ctrl+W
+ * closes the tab mid-crouch) to C, and the dash from C to Space. A save from
+ * before then that still has crouch on Ctrl moves with the defaults; a save
+ * already at version 2 is left as the player set it.
+ */
+export function migrateKeybinds(saved) {
+  if (!saved || typeof saved !== "object") return {};
+  if (saved._v >= KEYBINDS_VERSION) return saved;
+  const out = { ...saved };
+  if (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null) {
+    out.crouch = "KeyC";
+    if (out.dash === "KeyC" || out.dash == null) out.dash = "Space";
+  }
+  return out;
+}
 
 /**
  * InputManager handles all keyboard and mouse input for the game.
@@ -125,7 +148,7 @@ export class InputManager {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_KEYBINDS);
       if (!raw) return;
-      const saved = JSON.parse(raw);
+      const saved = migrateKeybinds(JSON.parse(raw));
       for (const action of Object.keys(this.keybinds)) {
         if (
           Object.prototype.hasOwnProperty.call(saved, action) &&
@@ -134,6 +157,7 @@ export class InputManager {
           this.keybinds[action] = saved[action];
         }
       }
+      if (saved._v !== KEYBINDS_VERSION) this.saveKeybinds();
     } catch (_) {}
   }
 
@@ -142,7 +166,7 @@ export class InputManager {
    */
   saveKeybinds() {
     try {
-      localStorage.setItem(STORAGE_KEY_KEYBINDS, JSON.stringify(this.keybinds));
+      localStorage.setItem(STORAGE_KEY_KEYBINDS, JSON.stringify({ ...this.keybinds, _v: KEYBINDS_VERSION }));
     } catch (_) {}
   }
 
