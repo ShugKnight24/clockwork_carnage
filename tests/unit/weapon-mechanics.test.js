@@ -125,3 +125,30 @@ describe("phase dash", () => {
     expect(game.glitchEffect).toBeGreaterThan(0);
   });
 });
+
+describe("harmless things are harmless", () => {
+  it("a zero-damage hit does no damage (the damage floor used to make it 1)", async () => {
+    const { damagePlayer } = await import("../../src/systems/combat-orchestrator.js");
+    const game = { time: 0, player: { alive: true, health: 100, maxHealth: 100, armor: 0, shield: 0, dodgeChance: 0 } };
+    damagePlayer(game, 0, { x: 0, y: 0 });
+    expect(game.player.health).toBe(100);
+  });
+
+  it("an enemy with nothing to hit you with never fires", () => {
+    const map = { width: 20, height: 20, grid: Array.from({ length: 20 }, () => new Array(20).fill(0)) };
+    const e = new Enemy(5, 10, "henchman");
+    e.def = { ...e.def, damage: 0 };
+    e.state = "chase";
+    e.lastAttackTime = -1e9;
+    const player = { x: 9, y: 10, angle: 0, chronoActive: false };
+    const ai = new AISystem();
+    const audio = { calculatePan: () => 0, enemyShoot: () => {}, enemyHit: () => {}, enemyBark: () => {}, telegraph: () => {} };
+    const projectiles = [];
+    let time = 0;
+    for (let i = 0; i < 300; i++) {
+      time += 1000 / 60;
+      ai.update({ entities: [e], player, map, time, timeScale: 1, projectiles, chronoBombs: [], damageNumbers: [], audio }, 1 / 60);
+    }
+    expect(projectiles.length).toBe(0);
+  });
+});

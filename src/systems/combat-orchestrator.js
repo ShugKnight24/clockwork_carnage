@@ -407,6 +407,9 @@ export const FLINCH_IMMUNITY_MS = 700;
 
 export function damagePlayer(game, amount, attacker) {
   if (!game.player.alive) return;
+  // A harmless source (a training target) does no harm: the damage rule
+  // floors every hit at 1, which made a zero-damage shot sting.
+  if (!(amount > 0)) return;
   // The prologue's sim hall: holograms hit the sim, not you.
   if (game.mode === "tutorial" && game.tutorial?.simHit?.(amount, attacker)) return;
   // Mid phase-dash: the hit passes through you.

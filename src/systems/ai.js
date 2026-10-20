@@ -509,7 +509,9 @@ export class AISystem {
           player.chronoActive && chronoMult > 0 ? chronoMult : 1;
         const scaledAttackRate =
           e.def.attackRate / timeScale / chronoAttackScale;
+        // Nothing to hit you with (a training target), nothing to fire.
         if (
+          e.def.damage > 0 &&
           dist < e.def.attackRange &&
           time - e.lastAttackTime > scaledAttackRate
         ) {

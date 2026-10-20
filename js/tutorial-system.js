@@ -106,12 +106,19 @@ const VENT_CYCLE = 1.75;
 const VENT_ON = 1.5;
 const VENT_DAMAGE = 12;
 
-/** Training targets: no sight, no gun, no feet. */
-function makeTarget(x, y, { health = 20, track = null } = {}) {
-  const e = new Enemy(x, y, "drone");
+/**
+ * Training targets: no sight, no gun, no feet. Drones by default; a
+ * humanoid hologram where the drill needs a head to aim at.
+ */
+function makeTarget(x, y, { health = 20, track = null, type = "drone" } = {}) {
+  const e = new Enemy(x, y, type);
+  if (type !== "drone") e._holo = true;
   e.health = e.maxHealth = health;
   e.speed = 0;
   e.def = { ...e.def, damage: 0, speed: 0, sightRange: 0, score: 25 };
+  // The alert range was copied from the type before the def above blinded
+  // it: left alone, a "target" woke up and shot at you.
+  e.alertRange = 0;
   e.state = "idle";
   e._target = true;
   if (track) e._track = { x0: x, y0: y, ...track };
@@ -245,7 +252,10 @@ const LOGIC = {
             [52.5, 42.5, { amp: 2.6, speed: 1.3, phase }],
             [54.5, 42.5, { amp: 2.6, speed: 1.0, phase: phase + Math.PI }],
           ],
-          45,
+          // Humanoid holograms, so there is a head to aim at: one pistol
+          // headshot (37.5) drops one, a body shot (15) does not.
+          30,
+          "henchman",
         );
       }
       return t.c.heads >= 3;
@@ -1127,9 +1137,9 @@ export class TutorialSystem {
   }
 
   /** Training targets for a drill; `track` entries make them slide along the lane. */
-  spawnTargets(g, tag, spots, health = 20) {
+  spawnTargets(g, tag, spots, health = 20, type = "drone") {
     for (const [x, y, track] of spots) {
-      const e = makeTarget(x, y, { health, track: track ? { axis: "y", ...track } : null });
+      const e = makeTarget(x, y, { health, type, track: track ? { axis: "y", ...track } : null });
       e._tutTag = tag;
       g.entities.push(e);
     }
@@ -1383,6 +1393,7 @@ export class TutorialSystem {
       dummy.maxHealth = 20;
       dummy.speed = 0;
       dummy.def = { ...dummy.def, damage: 0, speed: 0, sightRange: 0 };
+      dummy.alertRange = 0;
       dummy.state = "idle";
       g.entities.push(dummy);
     }

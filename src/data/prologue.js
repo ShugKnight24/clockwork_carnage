@@ -145,7 +145,7 @@ export const PROLOGUE_STEPS = [
     beat: 1,
     title: "MOVING TARGETS — GO FOR THE HEAD",
     color: "#ffcc33",
-    hint: "These ones move. Lead them, and aim high: a headshot does over double damage and drops a target in one.",
+    hint: "Holo-dummies, and they move. Lead them, and aim for the head: a headshot does over double damage and drops one in a single round.",
     lines: [
       [SUP, "Real targets don't hold still and they don't fall over politely. Head shots.", "calm"],
       [ARIA, "Listen for the crack. That's the sound of a headshot. The thump after it is the kill.", "curious"],
