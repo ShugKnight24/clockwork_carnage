@@ -13,7 +13,7 @@ async function runBot(page, name) {
   const said = [];
   const listen = (m) => {
     const t = m.text();
-    if (/❌|Error/.test(t)) said.push(t.slice(0, 240));
+    if (/❌|Error/.test(t)) said.push(t.slice(0, 400));
   };
   const crashed = (e) => said.push(`page error: ${e.message}`);
   page.on("console", listen);
@@ -27,6 +27,9 @@ async function runBot(page, name) {
 test.describe("Bot Profiles", () => {
   test.beforeEach(async ({ page }) => {
     await loadGame(page);
+    // The test runner is imported after the debug bridge (js/main.js), so
+    // loadGame's ccDebug wait does not cover it.
+    await page.waitForFunction(() => window.ccTest != null, { timeout: 10_000 });
   });
 
   test("data validation suite passes", async ({ page }) => {
@@ -84,6 +87,12 @@ test.describe("Bot Profiles", () => {
     test.setTimeout(120_000);
     await runBot(page, "ironman");
     await screenshot(page, "bot-ironman-end");
+  });
+
+  test("cadet bot plays every prologue step to its goal", async ({ page }) => {
+    test.setTimeout(240_000);
+    await runBot(page, "cadet");
+    await screenshot(page, "bot-cadet-end");
   });
 
   test("careful bot clears level 0 with light damage", async ({ page }) => {

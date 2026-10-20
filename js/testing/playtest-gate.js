@@ -162,10 +162,11 @@ export function createPlaytestGate(game, tools) {
   }
 
   /**
-   * The prologue (src/data/prologue.js): the opening steps played for real
-   * (boot, look, walk, open the bulkhead), then each later step set up, given
-   * a few ticks of play, and completed as if its goal were met. The sandbox
-   * one past the last step opens the completion menu by itself.
+   * The prologue (src/data/prologue.js): boot, look and walk played for real,
+   * then each later step set up, given a few ticks of play, and completed as
+   * if its goal were met: the gate watches for crashes and stuck states, not
+   * goals (the Cadet bot in harness.js plays every goal). The sandbox one past
+   * the last step opens the completion menu by itself.
    */
   function driveTutorialStep(run, ctx, player) {
     const step = game.tutorialStep;

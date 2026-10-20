@@ -26,6 +26,7 @@ import {
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { createPlaytestGate } from "./playtest-gate.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
+import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
 import { hasLineOfSight } from "../../src/systems/physics.js";
 import { currentBarH } from "../../src/systems/aim.js";
@@ -1784,6 +1785,240 @@ function botArenaEndurance(game) {
   return r;
 }
 
+/**
+ * Cadet Bot: plays the whole prologue for real, one step at a time, with the
+ * keys a player has. No step is skipped on its behalf: a step whose goal the
+ * bot cannot meet in its budget fails by name (then is skipped, so one run
+ * reports every broken step, not just the first).
+ */
+function botCadet(game) {
+  const r = new TestResult("Bot: Cadet");
+  console.log("🤖 Cadet Bot");
+  const kb = game.keybinds;
+  const p = game.player;
+
+  game.audio.init();
+  game.startTutorial();
+  game.mouse.locked = true;
+
+  const skipScene = () => {
+    for (let i = 0; i < 200 && game.state === GameState.CUTSCENE; i++) {
+      game.handleKeyPress("Space");
+      stepGame(game, 5);
+    }
+  };
+  skipScene();
+
+  const t = game.tutorial;
+  const stepId = () => t.def?.id;
+  const live = (tag) => game.entities.filter((e) => liveEnemy(e) && (!tag || e._tutTag === tag));
+  const holdOnly = (...codes) => {
+    clearInput(game);
+    game.mouse.locked = true;
+    for (const c of codes) game.keys[c] = true;
+  };
+  const select = (weaponId) => {
+    const i = p.weapons.indexOf(weaponId);
+    if (i >= 0) p.currentWeapon = i;
+  };
+  // Shoot the nearest live hostile with this step's tag, from where we stand.
+  const shoot = (tag, { head = false, aimed = false } = {}) => {
+    const e = live(tag).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+    holdOnly();
+    if (!e) return stepGame(game, 1);
+    aimAt(game, e.x, e.y);
+    // On the reticle, as a player would put it (a drone hovers, a head is
+    // above the horizon): aimForHead takes the centre of zones with no head.
+    aimForHead(game, e);
+    p.isAiming = aimed || head;
+    // A semi-auto gun fires on the press: pull, release, pull.
+    pull = !pull;
+    p.isFiring = pull;
+    stepGame(game, 1);
+    p.isFiring = false;
+  };
+  let pull = false;
+  // Run the gates (or a straight) with sprint held.
+  const sprintTo = (x, y) => {
+    clearInput(game);
+    game.mouse.locked = true;
+    if (!stepToward(game, x, y)) aimAt(game, x, y);
+    game.keys[kb.sprint] = true;
+    stepGame(game, 1);
+  };
+  // Pace between two open points, so movement drills never run into a wall.
+  let leg = 0;
+  const pace = (a, b, codes = []) => {
+    const [x, y] = leg % 2 ? b : a;
+    if (Math.hypot(x - p.x, y - p.y) < 0.8) leg++;
+    clearInput(game);
+    game.mouse.locked = true;
+    stepToward(game, x, y);
+    for (const c of codes) game.keys[c] = true;
+    stepGame(game, 1);
+  };
+  let anchor = null;
+
+  // What a player does on each step, one tick at a time.
+  const play = {
+    arrive: () => stepGame(game, 1),
+    suitUp: () => {
+      const L = { x: 14.3, y: 46.9 };
+      if (Math.hypot(L.x - p.x, L.y - p.y) > 1.8) return walkTo(game, L.x, L.y, 1) || stepGame(game, 1);
+      clearInput(game);
+      aimAt(game, L.x, L.y);
+      game.interact();
+      stepGame(game, 1);
+      skipScene();
+    },
+    boot: () => stepGame(game, 1),
+    look: () => {
+      game.mouse.dx = 30;
+      stepGame(game, 1);
+    },
+    walk: () => walkTo(game, 24.5, 41.5, 1) || stepGame(game, 1),
+    toRange: () => walkTo(game, 36.5, 41.5, 1) || stepGame(game, 1),
+    pistol: () => walkTo(game, 38.5, 42.5, 1) || stepGame(game, 1),
+    fire: () => {
+      select(p.weapons[0]);
+      shoot("fire");
+    },
+    ads: () => shoot("ads", { aimed: true }),
+    moving: () => {
+      select(p.weapons[0]);
+      shoot("moving", { head: true });
+    },
+    shotgun: () => {
+      const gun = game.entities.find((e) => e.active && e.type === "weapon" && e._tutTag === "shotgun");
+      if (gun && !p.weapons.includes(gun.weaponId)) return walkTo(game, gun.x, gun.y, 1) || stepGame(game, 1);
+      select(p.weapons[p.weapons.length - 1]);
+      const e = live("shotgun")[0];
+      if (e && Math.hypot(e.x - p.x, e.y - p.y) > 2.5) return walkTo(game, e.x - 2, e.y, 1) || stepGame(game, 1);
+      shoot("shotgun");
+    },
+    ammo: () => walkTo(game, 37.5, 45.5, 1) || stepGame(game, 1),
+    toGym: () => walkTo(game, 22.5, 20.5, 1) || stepGame(game, 1),
+    sprint: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]], [kb.sprint]);
+    },
+    crouch: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.crouch]);
+    },
+    slide: () => {
+      anchor ??= [p.x, p.y];
+      // Sprint, then tap crouch: a fresh press each run.
+      // Winded, walk it off: a slide needs the stamina a sprint burns.
+      const fresh = p.stamina >= p.slideStaminaCost + 25;
+      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]], fresh ? [kb.sprint] : []);
+      if (fresh && p.isSprinting && !p.isSliding && p.slideCooldown <= 0) {
+        game.keys[kb.crouch] = true;
+        stepGame(game, 2);
+        game.keys[kb.crouch] = false;
+        stepGame(game, 1);
+      }
+    },
+    dash: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]]);
+      if (p.dashCooldown <= 0 && !p.isDashing) game.dashFromKeys();
+    },
+    course: () => {
+      const gate = game.objectiveWaypoint;
+      if (gate) sprintTo(gate.x, gate.y);
+      else stepGame(game, 1);
+    },
+    toLab: () => walkTo(game, 29.5, 10.5, 1) || stepGame(game, 1),
+    lab: () => shoot("lab"),
+    sim: () => (live("sim").length || live("glitch").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
+    alarm: () => stepGame(game, 1),
+    cover: () => (live("cover").length ? killAllEnemies(game, 30) : walkTo(game, 37.5, 20.5, 1) || stepGame(game, 1)),
+    patch: () => walkTo(game, 44.5, 21.5, 1) || stepGame(game, 1),
+    shield: () => (live("shield").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
+    chrono: () => {
+      holdOnly(kb.chronoShift);
+      stepGame(game, 1);
+    },
+    vents: () => walkTo(game, 29.5, 29.5, 1) || stepGame(game, 1),
+    slowFire: () => {
+      if (!live("slowFire").length) return walkTo(game, 29.5, 33.5, 1) || stepGame(game, 1);
+      if (p.chronoEnergy > 20) game.keys[kb.chronoShift] = true;
+      killAllEnemies(game, 30);
+    },
+    cells: () => {
+      if (live("cells").length && p.health < p.maxHealth * 0.6) return killAllEnemies(game, 30);
+      const cell = game.entities.find((e) => e.active && e.type === "powerCell");
+      if (cell) return walkTo(game, cell.x, cell.y, 1) || stepGame(game, 1);
+      killAllEnemies(game, 30) || stepGame(game, 1);
+    },
+    toLift: () => walkTo(game, 29.5, 10.0, 1) || stepGame(game, 1),
+    wave1: () => killAllEnemies(game, 30) || stepGame(game, 1),
+    wave2: () => killAllEnemies(game, 30) || stepGame(game, 1),
+    wave3: () => killAllEnemies(game, 30) || stepGame(game, 1),
+    extract: () => walkTo(game, 29.5, 3.5, 1) || stepGame(game, 1),
+    reveal: () => stepGame(game, 1),
+  };
+
+  // Per-step budget in ticks (60 a second). Scenes wait on dialogue.
+  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, course: 5400, cells: 4800 };
+  const stuck = [];
+  for (let guard = 0; guard < 80 && game.mode === "tutorial" && t.step < TUTORIAL_SANDBOX_STEP; guard++) {
+    const id = stepId();
+    const at = t.step;
+    const act = play[id];
+    if (!act) {
+      r.fail(`Prologue: no bot move for step "${id}"`);
+      t.skipStep();
+      continue;
+    }
+    anchor = null;
+    leg = 0;
+    const budget = BUDGET[id] ?? 3600;
+    let ticks = 0;
+    while (t.step === at && ticks < budget && game.mode === "tutorial") {
+      if (game.state === GameState.CUTSCENE) skipScene();
+      if (game.state !== GameState.PLAYING) {
+        stepGame(game, 1);
+        ticks++;
+        continue;
+      }
+      // A cadet who is about to die tops up: the bot tests the steps, not its own aim.
+      if (p.health < p.maxHealth * 0.25) p.health = p.maxHealth;
+      const before = game.lastFrameTime;
+      act();
+      ticks += Math.max(1, Math.round((game.lastFrameTime - before) / SIM_DT));
+    }
+    clearInput(game);
+    p.aimOffsetY = 0;
+    p.isAiming = false;
+    if (t.step === at) {
+      stuck.push(id);
+      const foe = live().sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+      const why = [
+        t.progressText() || "",
+        `at ${p.x.toFixed(1)},${p.y.toFixed(1)} hp ${Math.round(p.health)} gun ${p.weapons[p.currentWeapon]} ammo ${JSON.stringify(p.ammo?.[p.weapons[p.currentWeapon]] ?? p.ammo)}`,
+        foe ? `foe ${foe.enemyType}/${foe._tutTag} at ${foe.x.toFixed(1)},${foe.y.toFixed(1)} hp ${foe.health} los ${hasLineOfSight(game.map, p.x, p.y, foe.x, foe.y)}` : "no foe",
+        `script ${t.script?.length ?? "?"} idle ${t.scriptIdle?.()} comms "${game.ariaComms?.message?.text?.slice(0, 40) ?? ""}" queue ${game.ariaComms?.queue?.length ?? 0}`,
+      ].join(" | ");
+      r.fail(`Prologue: "${id}" goal not met in ${Math.round(budget / 60)} s`, why);
+      t.skipStep();
+    } else {
+      r.pass(`Prologue: ${id}`);
+    }
+  }
+  r.assert(!stuck.length, "Prologue: every goal met by play", `Prologue steps not playable: ${stuck.join(", ")}`);
+
+  stepGame(game, 200, { until: (g) => g.state === GameState.TUTORIAL_COMPLETE });
+  r.assert(
+    game.state === GameState.TUTORIAL_COMPLETE,
+    "Prologue ends in the completion menu",
+    `Prologue did not complete, state=${game.state}, step=${t.step}`,
+  );
+  r.finish();
+  return r;
+}
+
 // ─── Test Runner ────────────────────────────────────────────
 
 const SUITES = {
@@ -1815,6 +2050,7 @@ function seeded(seed, fn) {
 }
 
 const BOTS = {
+  cadet: botCadet,
   completionist: botCompletionist,
   speedrunner: botSpeedrunner,
   ironman: botIronMan,
