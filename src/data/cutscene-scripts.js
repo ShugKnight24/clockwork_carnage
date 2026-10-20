@@ -717,7 +717,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "\"Official status: DECEASED. Three years ago.\"",
+          text: "\"Official status: DECEASED. Three years ago. A lab fire. No body.\"",
           delay: 4600,
           color: "#ff4444",
           size: 16,
@@ -882,7 +882,7 @@ export const CUTSCENE_SCRIPTS = {
       voice: "aria",
       lines: [
         {
-          text: "\"The night of the incident, he ran it anyway.\"",
+          text: "\"Three years ago, the night of the 'lab fire', he ran it anyway.\"",
           delay: 0,
           color: "#cc44ff",
           size: 16,
@@ -895,7 +895,7 @@ export const CUTSCENE_SCRIPTS = {
         },
         { text: "\"Eleven seconds.\"", delay: 4000, color: "#8899aa", size: 14 },
         {
-          text: "\"You know the rest. You're standing in it.\"",
+          text: "\"This morning those same eleven seconds opened again. You're standing in them.\"",
           delay: 5300,
           color: "#ff2244",
           size: 17,
@@ -2398,7 +2398,7 @@ export const CUTSCENE_SCRIPTS = {
       bg: "locker_room",
       lines: [
         { text: "CHRONOS PD — TEMPORAL CRIMES DIVISION", delay: 0, color: "#00ccff", size: 20 },
-        { text: "Where you clocked in, three days ago.", delay: 1500, color: "#aabbcc", size: 16 },
+        { text: "The Bureau. Where you clocked in, three days ago.", delay: 1500, color: "#aabbcc", size: 16 },
       ],
       duration: 4500,
     },
@@ -3643,8 +3643,8 @@ export const CUTSCENE_SCRIPTS = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════
-  // ACT IV — THE SACRIFICE
-  // The hero realizes the cost. Sacrifices everything.
+  // ACT IV — THE LAST DOOR
+  // Everyone stays behind a door so the cadet can reach the Core's.
   // Gets the girl. Redeems himself. The act3_* keys kept their names when
   // the act moved (spec §11).
   // ═══════════════════════════════════════════════════════════════════
@@ -3653,7 +3653,7 @@ export const CUTSCENE_SCRIPTS = {
       bg: "deep_space",
       lines: [
         { text: "ACT IV", delay: 0, color: "#ff2244", size: 28 },
-        { text: "— THE SACRIFICE —", delay: 600, color: "#ff8866", size: 18 },
+        { text: "— THE LAST DOOR —", delay: 600, color: "#ff8866", size: 18 },
       ],
       duration: 4000,
     },
@@ -4505,7 +4505,7 @@ export const CUTSCENE_SCRIPTS = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════
-  // TRUE VICTORY — Sacrifice, redemption, the hero gets the girl
+  // TRUE VICTORY — the walk in alone, and everyone who held a door for it
   // ═══════════════════════════════════════════════════════════════════
   true_victory: [
     {
@@ -5783,7 +5783,7 @@ export const CUTSCENE_SCRIPTS = {
           h: 0.3,
           bg: "dark",
           art: "hero",
-          caption: "Badge 11235. Beat cop. Bad coffee.",
+          caption: "Badge 11235. Ex-beat cop. Bad coffee.",
           captionPos: "bottom",
           captionColor: "#00ccff",
           captionSize: 11,
@@ -6100,21 +6100,23 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "hero_human",
       lines: [
-        { text: "Three years at the Bureau. Still a cadet.", delay: 0, color: "#8899aa", size: 16 },
+        { text: "Six years on patrol for Chronos PD. Good at it. Bored stiff.", delay: 0, color: "#8899aa", size: 16 },
+        { text: "Then a transfer to Temporal Crimes. Everyone calls it the Bureau.", delay: 2200, color: "#aabbcc", size: 16 },
+        { text: "They took you. They took your stripes too. Back to cadet.", delay: 4500, color: "#aabbcc", size: 16 },
         {
           text: "Alpha exam: failed. Retook it. Failed faster.",
-          delay: 1900,
+          delay: 6800,
           color: "#aabbcc",
           size: 16,
         },
         {
           text: "\"Too slow. Too stubborn.\" Only one of those is fixable.",
-          delay: 4000,
+          delay: 8800,
           color: "#887766",
           size: 15,
         },
       ],
-      duration: 9000,
+      duration: 12500,
     },
     {
       bg: "locker_room",
@@ -6131,7 +6133,7 @@ export const CUTSCENE_SCRIPTS = {
           color: "#aabbcc",
           size: 16,
         },
-        { text: "Today, it's humming. And the squad is already in.", delay: 4300, color: "#00ccff", size: 17 },
+        { text: "Today, it's humming. And Rasczak's squads are already in.", delay: 4300, color: "#00ccff", size: 17 },
       ],
       duration: 7000,
     },
@@ -6326,7 +6328,7 @@ export const CUTSCENE_SCRIPTS = {
         },
         pages: [
           { hold: 1600, flipMs: 650, panel: { bg: "station", caption: "CHRONOS STATION — 06:47. One lab light never went off.", captionPos: "top", captionColor: "#1a1208", captionSize: 14, halftone: 0.18 } },
-          { hold: 1600, flipMs: 650, panel: { bg: "dark", art: "hero_at_desk", caption: "Badge 11235. Cadet. Third row on the duty board. Never once on time.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13 } },
+          { hold: 1600, flipMs: 650, panel: { bg: "dark", art: "hero_at_desk", caption: "Badge 11235. Six years on patrol. Now a cadet again: third row on the duty board.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13 } },
           { hold: 1700, flipMs: 650, panel: { bg: "locker_room", art: "portrait_supervisor", caption: "Supervisor Simon. Thirty years on the job. Never sent a cadet into a real fight.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.12 } },
           { hold: 1700, flipMs: 650, panel: { bg: "locker_room", caption: "\"Rasczak, take both squads down. Cadet... you stay with me.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
           { hold: 1500, flipMs: 650, panel: { bg: "deep_space", art: "rift", caption: "Then somebody broke the sky.", captionPos: "top", captionColor: "#a01010", captionSize: 16, sfx: "KRAA-KOOM", sfxColor: "#ffcc00", sfxSize: 36, sfxX: 0.7, sfxY: 0.45, sfxRot: -10, action: true, halftone: 0.12 } },
@@ -6407,7 +6409,7 @@ export const CUTSCENE_SCRIPTS = {
           { hold: 1100, flipMs: 500, panel: { bg: "deep_space", art: "villain_final", caption: "Not a monster. A mirror.", captionPos: "top", captionColor: "#ff4466", captionSize: 14, halftone: 0.18, action: true } },
           { hold: 1500, flipMs: 600, panel: { bg: "station", art: "portrait_supervisor", caption: "06:47. A badge in the chamber log. Simon saw who wore it.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.16 } },
           { hold: 1500, flipMs: 600, panel: { bg: "temporal_rift", art: "hero_armed", caption: "One way in. Only one of you goes.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
-          { hold: 2000, flipMs: 0, panel: { bg: "boss_lair", caption: "ACT IV — THE SACRIFICE", captionPos: "center", captionColor: "#ff2244", captionSize: 20, halftone: 0.12 } },
+          { hold: 2000, flipMs: 0, panel: { bg: "boss_lair", caption: "ACT IV — THE LAST DOOR", captionPos: "center", captionColor: "#ff2244", captionSize: 20, halftone: 0.12 } },
         ],
       },
       title: "ACT IV",

@@ -116,6 +116,7 @@ export const PROLOGUE_STEPS = [
     hint: "Follow the marker down the corridor to the firing range.",
     lines: [
       [SUP, "That suit cost more than this building. The Bureau wants it certified by noon. You want to keep your badge. So we certify it.", "calm"],
+      [SUP, "Six years on patrol and you never once froze. That's why I signed your transfer. Don't make me regret it.", "calm"],
       [ARIA, "He likes you. That was him liking you.", "happy"],
       [SUP, "Engineering's been running something downstairs all night. If the lights flicker, ignore it. That's an order.", "worried"],
     ],

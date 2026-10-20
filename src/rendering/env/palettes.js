@@ -55,7 +55,7 @@ export const ENV_PALETTES = {
     lampRGB: [255, 140, 175], accentRGB: [255, 42, 74],
   },
   4: {
-    // Act IV, the Sacrifice: the Act III violet bleached by white-hot rift
+    // Act IV, the Last Door: the Act III violet bleached by white-hot rift
     // light. Paler steel, hot white-pink accents, air that glows.
     s0: "#141018", s1: "#221c28", s2: "#342b3c", s3: "#4e4458", s4: "#b6a8c4",
     trim: "#2e2636",
@@ -278,7 +278,7 @@ export const LEVEL_ENVS = {
     energy: "#ff4df0", energyHot: "#ffd6fb",
     fogNear: [16, 3, 14], fogFar: [104, 10, 58],
   },
-  // ── Act IV: the Sacrifice (palette 4) ──
+  // ── Act IV: the Last Door (palette 4) ──
   entry_last: {
     // The lobby you started in, cold blue steel under a white rift.
     name: "Entry — Last Time",

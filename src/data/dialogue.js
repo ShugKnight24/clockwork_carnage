@@ -553,7 +553,7 @@ export const ARIA_COMMS = {
     "Ghost rounds. They fly where he fired them, not where you are. Move off the lines.",
   ],
 
-  // ── Act IV: the Sacrifice ──
+  // ── Act IV: the Last Door ──
   // The Loop's seam breaks on a rewind, not a shift.
   loopRewind: [
     "Same bench. Same plant. Same scuff on the rail. It's looping. Walk into the seam, then rewind back through it.",

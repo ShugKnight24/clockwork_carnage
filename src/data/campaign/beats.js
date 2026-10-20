@@ -87,6 +87,7 @@ export const LEVEL_BEATS = {
       { at: "cell", n: 1, lines: [
         [ARIA, "Got it. The Engine's access log for this morning. One session. It ran from six forty-seven and zero seconds...", "curious"],
         [ARIA, "...to six forty-seven and eleven. Eleven seconds, {AGENT}. Everything you've seen happened in eleven seconds.", "afraid"],
+        [ARIA, "The night Voss died, three years ago, his experiment ran eleven seconds too. Same seconds. To the hundredth.", "afraid"],
       ] },
       { at: "kills", frac: 0.7, lines: [
         [LOG, "Simon, if you're hearing this, don't come down. Don't bring anyone. It's not a breach, it's a door, and it's still op—", "afraid"],

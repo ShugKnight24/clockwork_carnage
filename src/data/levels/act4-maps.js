@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// ACT IV MAPS — The Sacrifice
+// ACT IV MAPS — The Last Door
 // Seven levels, one ally staying behind in each of the middle four, in the
 // reverse of the order they joined (spec docs/superpowers/specs/
 // 2026-09-22-campaign-story-restructure-design.md §7, Act IV):

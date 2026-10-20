@@ -340,7 +340,7 @@ export const ACTS = [
   },
   {
     id: 4,
-    title: "THE SACRIFICE",
+    title: "THE LAST DOOR",
     // The white-hot rift light bleaching the Act III violet.
     palette: 4,
     roster: [
