@@ -243,8 +243,8 @@ const LOGIC = {
             t.say([
               ["OFFICER", "Sir!", "calm"],
               ["SUPERVISOR", "As you were.", "calm"],
-              ["SUPERVISOR", "Engineering lost contact with the Engine level twenty minutes ago. Nobody down there is answering.", "worried"],
-              ["SUPERVISOR", "Lieutenant Rasczak, take both squads down. Full kit. Find out what's going on and report back to me.", "calm"],
+              ["SUPERVISOR", "Engineering's running the Engine hot again this morning. Calibration, they call it. The Bureau wants our people on the chamber door till it's done.", "calm"],
+              ["SUPERVISOR", "Lieutenant Rasczak, take both squads down. Full kit. Nobody goes in or out of that chamber without my say-so. Report in on the hour.", "calm"],
               ["LT. RASCZAK", "Sir. You heard him, people. Move out!", "urgent"],
             ], { cut: true });
           },
@@ -904,6 +904,7 @@ export class TutorialSystem {
   start() {
     const g = this.game;
     g.mode = "tutorial";
+    g.ariaComms?.flush();
     g.player.reset();
     if (!g.cutsceneEngine) {
       return g._ensureCutsceneEngine().then(() => this._begin());

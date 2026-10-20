@@ -231,6 +231,7 @@ export class Game {
     // otherwise hold the browser's speech queue shut).
     this._stateManager.onChange((next) => {
       if (next === GameState.TITLE || next === GameState.MODE_SELECT) {
+        this.ariaComms?.flush();
         this.audio?.stopSpeech?.();
         this.audio?.tts?.resume();
       }
@@ -1340,6 +1341,7 @@ export class Game {
 
   startArena() {
     this.mode = "arena";
+    this.ariaComms?.flush();
     this.arenaRound = 1;
     this.achievementStats.totalGamesPlayed++;
     this.player.reset();

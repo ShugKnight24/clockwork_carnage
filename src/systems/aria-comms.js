@@ -122,6 +122,18 @@ export class AriaCommsSystem {
     this.combatTimer = 0;
   }
 
+  /**
+   * Drop every line still waiting or on screen, and the voice saying it. A new
+   * level, the prologue or the menus start clean: a line queued in the last
+   * place is about the last place.
+   */
+  flush() {
+    this.game?.audio?.stopSpeech?.("comms");
+    this.queue = [];
+    this.message = null;
+    this.idleTimer = 0;
+  }
+
   resetAll() {
     this.game?.audio?.stopSpeech?.("comms");
     this.queue = [];

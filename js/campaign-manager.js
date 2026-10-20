@@ -239,6 +239,7 @@ export class CampaignManager {
   loadLevel(index) {
     const g = this.game;
     this._clearLevelTimers();
+    g.ariaComms?.flush();
     const entry = getActLevel(this.act, index);
     const level = campaignMap(entry);
     if (!level) {
