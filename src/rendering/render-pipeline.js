@@ -5,6 +5,7 @@
 // Caller: game.render() → renderFrame(game).
 
 import { renderPostFX as _renderPostFX } from "./postfx.js";
+import { drawBlackout } from "../ui/tutorial-ui.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
 import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
@@ -512,6 +513,8 @@ export function renderFrame(game) {
     game.renderTutorialOverlay(ctx, w, h);
     game.renderTutorialCard(game.hudCtx, game.hudW, game.hudH);
   } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
+    // A narrative beat's flicker: the lights stutter for a moment.
+    if (game.levelBeats?.dark) drawBlackout(ctx, w, h);
     // A Chronos teach card, the tutorial's card, on the HUD layer in the
     // message director's headline lane (same coordinates as ARIA's plates).
     game.renderTeachCard(game.hudCtx, game.hudW, game.hudH);

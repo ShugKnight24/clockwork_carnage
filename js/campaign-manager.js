@@ -278,6 +278,8 @@ export class CampaignManager {
       : [];
     for (const c of cells) g.entities.push(new Pickup(c.x, c.y, "powerCell"));
     g.powerCells = cells.length ? { total: cells.length, found: 0 } : null;
+    // The story told while the level is played (src/data/campaign/beats.js).
+    g.levelBeats?.start(this.act, entry.map);
     if (g.exitEntity) g.exitEntity.sealed = !!g.powerCells;
     if (g.powerCells) g.queueAriaMessage("powerCellsBrief");
 

@@ -104,6 +104,7 @@ export function createDebugBridge(game) {
       game.player.reset();
       game.player.alive = true;
       game.loadCampaignLevel(level);
+      game.ariaEnabled = true; // as a campaign started from the menu has her
       game.state = GameState.PLAYING;
       return game.state;
     },

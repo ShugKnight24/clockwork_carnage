@@ -140,6 +140,7 @@ import { decay } from "../src/utils/math.js";
 
 export { GAME_VERSION } from "../src/constants.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
+import { LevelBeats } from "../src/systems/level-beats.js";
 
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
@@ -382,6 +383,8 @@ export class Game {
     // set pieces. game.js only calls them.
     this.chronoPowers = new ChronoPowers();
     this.chronoHazards = new ChronoHazards();
+    /** A campaign level's narrative beats (src/systems/level-beats.js). */
+    this.levelBeats = new LevelBeats();
     this.voxelAiSystem = new VoxelAISystem();
 
     // Forge mode (extracted)
@@ -2180,6 +2183,7 @@ export class Game {
     if (!frozen) this.updatePlayer(playerDt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
+    if (this.mode === "campaign") this.levelBeats.update(this, this.deltaTime);
 
     if (this.mode === "meltdown" && this.meltdown.alive) {
       updateMeltdownRun(this, dt);

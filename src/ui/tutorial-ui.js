@@ -400,7 +400,7 @@ function wrapText(ctx, text, maxWidth) {
  * Station power is out: the world drops to emergency darkness, brightest
  * where you are looking, with the odd flicker of the failing grid.
  */
-function drawBlackout(ctx, w, h) {
+export function drawBlackout(ctx, w, h) {
   const flicker = Math.random() < 0.025 ? 0.25 : 0;
   const g = ctx.createRadialGradient(w / 2, h / 2, h * 0.12, w / 2, h / 2, Math.max(w, h) * 0.72);
   g.addColorStop(0, `rgba(0, 2, 10, ${0.3 + flicker})`);
