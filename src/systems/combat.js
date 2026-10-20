@@ -15,6 +15,7 @@ import {
 import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ } from "./physics.js";
 import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
+import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
 
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
@@ -22,7 +23,7 @@ import { ENEMY_TYPES } from "../data/enemies.js";
  *
  * @returns {{ finalDamage: number, isCrit: boolean, shieldSpark: boolean }}
  */
-export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false } = {}) {
+export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false, zone = null } = {}) {
   let finalDamage = baseDamage;
   let isCrit = false;
   let shieldSpark = false;
@@ -34,8 +35,9 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
   }
 
   // Front shield — shield commanders take 80% less from front (a phasing
-  // round, the Phase Scattergun's, passes straight through)
-  if (enemy.def.frontShield && !phasesShields) {
+  // round, the Phase Scattergun's, passes straight through). The shield
+  // covers the body: the head shows over it, and a headshot is a headshot.
+  if (enemy.def.frontShield && !phasesShields && zone !== "head") {
     const dx = playerPos.x - enemy.x;
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
@@ -131,11 +133,45 @@ export function isBossEnemy(enemy) {
   return ENEMY_TYPES[enemy.enemyType]?.boss === true;
 }
 
-export function aimHitsTargetHeight(aimHeight, enemy) {
+/**
+ * The heights an enemy can be hit between, [bottom, top], in the shot's own
+ * frame. A grid level measures a shot from the eye line, as its renderer
+ * draws, so the span is the figure as drawn (src/data/enemy-art.js): a shot
+ * at a drawn head is at the head. A voxel level measures from the world, so
+ * the span is the hit volume around the enemy's feet.
+ */
+export function hitSpan(enemy, grid = true) {
+  const z = enemy.z || 0;
+  // A def that names its own hit volume (hitCenter) keeps it, on either kind.
+  if (grid && enemy.def?.hitCenter == null) {
+    const [top, bottom] = ENEMY_ART_SPAN[enemy.enemyType] ?? DEFAULT_ART_SPAN;
+    return [bottom + z, top + z];
+  }
   const center = enemy.def?.hitCenter ?? 0.35;
-  const halfHeight = (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD;
-  return Math.abs(aimHeight - center - (enemy.z || 0)) <= halfHeight;
+  const half = enemy.def?.hitHeight ?? 0.55;
+  return [z + center - half, z + center + half];
 }
+
+export function aimHitsTargetHeight(aimHeight, enemy, grid = true) {
+  const [bottom, top] = hitSpan(enemy, grid);
+  return Math.abs(aimHeight - (bottom + top) / 2) <= (top - bottom) / 2 + ENEMY_HIT_HEIGHT_PAD;
+}
+
+/** The height a shot must reach to land in a named zone (its middle), or the figure's middle. */
+export function zoneAimHeight(enemy, zoneName, grid = true) {
+  const [bottom, top] = hitSpan(enemy, grid);
+  const zones = enemy.def?.hitZones;
+  const zone = zones?.find((z) => z.name === zoneName);
+  if (!zone) return (bottom + top) / 2;
+  const mid = (zone.top + zone.bottom) / 2;
+  return grid ? bottom + (mid / zonesTop(zones)) * (top - bottom) : bottom + mid;
+}
+
+/** How far over a drawn figure's crown a shot still touches it. */
+const CROWN_PAD = 0.03;
+
+/** The top of the highest zone: on a grid level, the top of the drawn figure. */
+const zonesTop = (zones) => zones.reduce((m, z) => Math.max(m, z.top), 0) || 1;
 
 export function enemyHitRadius(enemy) {
   return Math.max(ENEMY_HIT_RADIUS_MIN, (enemy.def?.radius || 0) + ENEMY_HIT_RADIUS_PAD);
@@ -212,7 +248,7 @@ export function voxelShotReach(world, player, dirX, dirY, pitch, range) {
  *   has real block heights, and passes the eye's world z so the volume is
  *   compared in the same space as `enemy.z`.
  */
-export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
+export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0, grid = true) {
   if (enemy.type !== "enemy" || !enemy.active || enemy.state === "dead") return null;
   // The Hound out of phase: rounds pass through until the player shifts.
   if (enemy._phased) return null;
@@ -226,7 +262,14 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
 
   // Resolve which zone the bullet would land in (head/core/legs/armor/body).
   // Tight zones (heads) get a smaller angular pad so headshots reward precision.
-  const zone = resolveHitZone(enemy, aimHeight, dirX, dirY);
+  const zone = resolveHitZone(enemy, aimHeight, dirX, dirY, grid);
+  // The forgiveness pad goes round the volume, except over a drawn figure's
+  // crown: a shot over the head is a miss, not a body hit.
+  const [spanBottom, spanTop] = hitSpan(enemy, grid);
+  const lo = spanBottom - ENEMY_HIT_HEIGHT_PAD;
+  const hi = spanTop + (grid && enemy.def?.hitCenter == null ? CROWN_PAD : ENEMY_HIT_HEIGHT_PAD);
+  const center = (lo + hi) / 2;
+  const halfHeight = Math.max((hi - lo) / 2, along * ENEMY_HIT_VERTICAL_ANGLE_MIN);
   const angleScale = zone.tight ? HEADSHOT_PRECISION_PAD : 1;
 
   const lateralX = ex - dirX * along;
@@ -242,21 +285,11 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
       const bodyRadius = Math.max(enemyHitRadius(enemy), along * ENEMY_HIT_ANGLE_MIN);
       if (lateralX * lateralX + lateralY * lateralY > bodyRadius * bodyRadius) return null;
       // Demote zone to body for damage purposes.
-      const center = (enemy.def?.hitCenter ?? 0.35) + (enemy.z || 0);
-      const halfHeight = Math.max(
-        (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD,
-        along * ENEMY_HIT_VERTICAL_ANGLE_MIN,
-      );
       if (Math.abs(aimHeight - center) > halfHeight) return null;
       return { enemy, dist: along, zone: { name: "body", mult: 1, tight: false } };
     }
     return null;
   }
-  const center = (enemy.def?.hitCenter ?? 0.35) + (enemy.z || 0);
-  const halfHeight = Math.max(
-    (enemy.def?.hitHeight ?? 0.55) + ENEMY_HIT_HEIGHT_PAD,
-    along * ENEMY_HIT_VERTICAL_ANGLE_MIN,
-  );
   if (Math.abs(aimHeight - center) > halfHeight) return null;
 
   return { enemy, dist: along, zone };
@@ -268,6 +301,8 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
  * Zone schema (per-enemy `def.hitZones[]`):
  *   { name, top, bottom, mult, tight?, frontOnly?, rearOnly? }
  * top/bottom are in enemy-local Y (0 = feet of hitbox, 2*hitHeight = top).
+ * On a grid level the zones are stretched over the figure as drawn (hitSpan),
+ * the highest zone's top at the top of the figure.
  *
  * Returns { name, mult, tight }. Falls back to { body, 1, false } when no
  * zones defined or no zone matches the ray.
@@ -276,15 +311,15 @@ export function rayEnemyHit(player, dirX, dirY, range, pitch, enemy, eyeZ = 0) {
  * against `enemy.angle`. Front = bullet hits enemy from the side it's
  * facing (within ±60°). Used for armor plates / rear weak points.
  */
-export function resolveHitZone(enemy, aimHeight, dirX, dirY) {
+export function resolveHitZone(enemy, aimHeight, dirX, dirY, grid = true) {
   const zones = enemy.def?.hitZones;
   if (!zones || !zones.length) return { name: "body", mult: 1, tight: false };
 
-  const hitCenter = enemy.def?.hitCenter ?? 0.35;
-  const hitHeight = enemy.def?.hitHeight ?? 0.55;
-  const z = enemy.z || 0;
-  // Local Y = aim height relative to feet of hitbox.
-  const localY = aimHeight - (z + hitCenter - hitHeight);
+  const [bottom, top] = hitSpan(enemy, grid);
+  // Local Y = aim height above the feet, in the zones' own units.
+  const localY = grid
+    ? (Math.min(aimHeight, top) - bottom) / (top - bottom) * zonesTop(zones) // the crown pad is head
+    : aimHeight - bottom;
 
   for (const zone of zones) {
     if (localY > zone.top || localY < zone.bottom) continue;
@@ -327,7 +362,7 @@ export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, ma
       : range;
   let best = null;
   for (const enemy of entities) {
-    const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy, eyeZ);
+    const hit = rayEnemyHit(player, dirX, dirY, maxDist, pitch, enemy, eyeZ, !reach);
     if (hit && (!best || hit.dist < best.dist)) best = hit;
   }
   return best;
@@ -380,6 +415,7 @@ export function projectileHitsEnemy(p, enemy, prevX, prevY, in3D = false) {
     in3D ? 0 : p.pitch || 0,
     enemy,
     in3D ? p.z || 0 : 0,
+    !in3D,
   );
   if (!hit) return null;
 

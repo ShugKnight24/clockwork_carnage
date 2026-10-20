@@ -29,6 +29,7 @@ import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
 import { hasLineOfSight } from "../../src/systems/physics.js";
 import { currentBarH } from "../../src/systems/aim.js";
+import { zoneAimHeight } from "../../src/systems/combat.js";
 
 // ─── Harness core ──────────────────────────────────────────
 
@@ -334,14 +335,11 @@ const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" &&
 function aimForHead(game, e) {
   const p = game.player;
   const d = Math.max(0.5, Math.hypot(e.x - p.x, e.y - p.y));
-  const def = e.def || {};
-  const feet = (e.z || 0) + (def.hitCenter ?? 0.35) - (def.hitHeight ?? 0.55);
-  const head = def.hitZones?.find((z) => z.name === "head");
-  const y = feet + (head ? (head.top + head.bottom) / 2 : def.hitHeight ?? 0.55);
-  const h = game.canvas?.height || 1;
-  const barH = currentBarH(game);
   // A grid level measures the shot from height 0 at the player, as its
   // renderer projects sprites (pickHitscanTarget in src/systems/combat.js).
+  const y = zoneAimHeight(e, "head", !game.world);
+  const h = game.canvas?.height || 1;
+  const barH = currentBarH(game);
   const tanPitch = y / d;
   p.aimOffsetX = 0;
   p.aimOffsetY = (barH / (2 * h) - tanPitch) / ((h - barH) / h);

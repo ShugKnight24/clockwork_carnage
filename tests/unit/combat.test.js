@@ -11,8 +11,11 @@ import {
   pickHitscanTarget,
   rayEnemyHit,
   voxelShotReach,
+  zoneAimHeight,
 } from "../../src/systems/combat.js";
 import { aimAngles } from "../../src/systems/aim.js";
+import { ENEMY_TYPES } from "../../src/data/enemies.js";
+import { ENEMY_ART_SPAN } from "../../src/data/enemy-art.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { PLAYER } from "../../src/world/voxel-physics.js";
 
@@ -355,5 +358,40 @@ describe("hitscan in a voxel world", () => {
     const enemy = drone(26.5);
     enemy.z = eyeZ + 3 - 0.35;
     expect(shoot(world, pitch, [enemy])?.enemy).toBe(enemy);
+  });
+});
+
+// ── A grid level's shot lands where the figure is drawn ──
+
+describe("hit zones on a grid level follow the drawn figure", () => {
+  const hench = () => ({
+    x: 6, y: 0, angle: Math.PI, state: "idle", active: true, type: "enemy",
+    enemyType: "henchman", def: { ...ENEMY_TYPES.henchman },
+  });
+  const [top, bottom] = ENEMY_ART_SPAN.henchman;
+  const shotAt = (height) => rayEnemyHit({ x: 0, y: 0 }, 1, 0, 20, Math.atan(height / 6), hench());
+
+  it("is a headshot at the drawn head, and a miss over it", () => {
+    expect(shotAt(top - 0.08)?.zone.name).toBe("head");
+    expect(shotAt(top + 0.4)).toBeNull();
+  });
+
+  it("is a leg shot at the drawn legs, and a body shot at the chest", () => {
+    expect(shotAt(bottom + 0.15)?.zone.name).toBe("legs");
+    expect(shotAt((top + bottom) / 2 + 0.1)?.zone.name).toBe("body");
+  });
+
+  it("gives the bots the same head to aim at", () => {
+    const h = zoneAimHeight(hench(), "head", true);
+    expect(shotAt(h)?.zone.name).toBe("head");
+  });
+});
+
+describe("a front shield covers the body, not the head", () => {
+  const sentinel = { x: 5, y: 0, angle: Math.PI, def: { frontShield: true }, _shield: 0 };
+  it("cuts a body shot from the front, and not a headshot", () => {
+    const front = { x: 0, y: 0 };
+    expect(calculateEnemyDamage(100, sentinel, 0, front).finalDamage).toBeCloseTo(20);
+    expect(calculateEnemyDamage(100, sentinel, 0, front, { zone: "head" }).finalDamage).toBeCloseTo(100);
   });
 });

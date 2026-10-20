@@ -43,7 +43,12 @@ const HIT_POSE_MS = 160;
 const FLASH_MS = 150;
 const SPARK_MS = 220;
 // `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
-const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point"];
+// The back* poses are the station's people seen from behind (an NPC walking
+// away); an enemy always faces you, and its back* fall back to idle.
+const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point", "backIdle", "backA", "backB"];
+/** An NPC facing within this of straight away from the camera shows its back. */
+const BACK_DOT = 0.25;
+const BACK_OF = { idle: "backIdle", moveA: "backA", moveB: "backB" };
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
@@ -463,7 +468,20 @@ function updateBlock(enemy, m, model, time, camRightX, camRightY, newHit) {
   if (-(Math.cos(enemy.angle || 0) * fx + Math.sin(enemy.angle || 0) * fy) > 0.5) m.blockAt = time;
 }
 
-function pickPose(enemy, m, time, model) {
+/**
+ * The pose to draw. The station's people (type "npc") turn their back on the
+ * camera when they face away from it: walking off down a corridor, they are
+ * seen from behind, not walking backwards toward you.
+ */
+function pickPose(enemy, m, time, model, camRightX = null, camRightY = null) {
+  const pose = pickFrontPose(enemy, m, time, model);
+  if (enemy.type !== "npc" || camRightX == null || !BACK_OF[pose]) return pose;
+  // Camera forward is the right vector turned back 90°.
+  const away = Math.cos(enemy.angle) * camRightY - Math.sin(enemy.angle) * camRightX;
+  return away > BACK_DOT ? BACK_OF[pose] : pose;
+}
+
+function pickFrontPose(enemy, m, time, model) {
   // A scripted gesture (an NPC's salute or pointing) holds while it is set.
   if (enemy.gesture && !(m.speed > 0.2)) return enemy.gesture;
   if (enemy.dissolving) return "hurt";
@@ -507,7 +525,7 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
   const m = motionOf(enemy, time, model);
   const newHit = m.hitAt === time;
   updateBlock(enemy, m, model, time, camRightX, camRightY, newHit);
-  const pose = pickPose(enemy, m, time, model);
+  const pose = pickPose(enemy, m, time, model, camRightX, camRightY);
   if (model.boss) {
     frame.parts.length = model.refs.length;
     let solid = false;

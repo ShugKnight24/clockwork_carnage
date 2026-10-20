@@ -219,7 +219,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   const shot = game._shotWeapon;
   const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
     zoneDamage, enemy, game.player.critChance, game.player,
-    { phasesShields: !!shot?.phasesShields },
+    { phasesShields: !!shot?.phasesShields, zone: zoneName },
   );
   if (shieldSpark) game.glitchEffect = Math.max(game.glitchEffect, 0.08);
 

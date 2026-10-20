@@ -79,6 +79,27 @@ export function createDebugBridge(game) {
       game.ariaComms.queueLine({ speaker, text, color, duration: 8, prominent: true });
     },
 
+    /**
+     * Each enemy's drawn height on a grid level, [top, bottom] from the eye
+     * line: the table in src/data/enemy-art.js, measured afresh.
+     */
+    async measureEnemyArt() {
+      const { prepareEnemySprite } = await import("../../src/rendering/svg-art/sprites/enemies.js");
+      const ctx = document.createElement("canvas").getContext("2d");
+      const out = {};
+      for (const [type, def] of Object.entries(ENEMY_TYPES)) {
+        const e = { type: "enemy", enemyType: type, def, x: 0, y: 0, angle: Math.PI, state: "idle" };
+        let f = null;
+        for (let i = 0; i < 40 && !f; i++) {
+          f = prepareEnemySprite(ctx, e, 100, 1, 0, 1);
+          if (!f) await new Promise((r) => setTimeout(r, 50));
+        }
+        // halfH 100: one world unit is 200 px. Less the sprite's ink margin.
+        if (f) out[type] = [+(-f.y0 / 200 - 0.02).toFixed(2), Math.max(-0.5, +(-f.y1 / 200 + 0.03).toFixed(2))];
+      }
+      return out;
+    },
+
     /** The level's narrative beats: which have fired, and what is still to say. */
     beats() {
       const b = game.levelBeats;

@@ -181,6 +181,10 @@ function makeHostile(x, y, type) {
     e.health = e.maxHealth = tune.health;
     e.def = { ...e.def, damage: tune.damage, speed: e.def.speed * tune.speed, attackRate: tune.attackRate };
   }
+  // A cadet's Sentinel has its front shield, not the energy shield over it:
+  // regenerating, that out-healed a pistol at the front, and the evac's
+  // Sentinel comes straight at you, so there was no getting round it.
+  if (type === "sentinel") e.def = { ...e.def, shieldRegen: false };
   return e;
 }
 
