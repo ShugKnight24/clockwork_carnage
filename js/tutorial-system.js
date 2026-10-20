@@ -1043,12 +1043,14 @@ export class TutorialSystem {
     const now = performance.now();
     this.clock += g.deltaTime || 0;
 
-    // Respawn collected pickups after a delay.
+    // Respawn collected pickups after a delay. Health and ammo stay shut
+    // (and off the map) until the range teaches them.
     for (const e of g.entities) {
       if (!e.active && e._respawnAt && now >= e._respawnAt) {
         e.active = true;
         e._respawnAt = 0;
       }
+      if (e.type === "health" || e.type === "ammo") e._shut = !this.pickupsOpen;
     }
 
     this._updateScript(g.deltaTime || 0);
