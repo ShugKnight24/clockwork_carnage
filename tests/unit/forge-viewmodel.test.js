@@ -38,9 +38,9 @@ describe("Forge hand", () => {
     const y0 = hand.chips[0].y;
     step(hand, 0.3, { mining: false, moving: false, held: null });
     expect(hand.chips.every((c) => c.vy > -1000)).toBe(true);
+    expect(hand.chips[0].y).not.toBe(y0); // they fall
     step(hand, 1, { mining: false, moving: false, held: null });
     expect(hand.chips).toHaveLength(0);
-    expect(typeof y0).toBe("number");
   });
 
   it("holds what the mode has selected", () => {

@@ -188,6 +188,7 @@ export class CutsceneEngine {
       return false;
     }
     this.cutscene = {
+      key: scriptKey,
       script,
       frame: 0,
       frameStart: performance.now(),

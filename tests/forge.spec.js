@@ -1372,11 +1372,18 @@ test.describe("Voxel Forge", () => {
 
   test("survival: the inventory grid is clickable where it is actually drawn", async ({ page }) => {
     test.setTimeout(90_000);
-    // A large window makes the game canvas smaller than the CSS size, which is
-    // exactly when a hudW-based hit test drifts. At 1280x720 the two spaces
-    // coincide and this test cannot tell a correct fix from a broken one.
+    // A game canvas smaller than its CSS size is exactly when a hudW-based
+    // hit test drifts. High-tier screens now render at native resolution, so
+    // a large window alone no longer does it: halve the render scale too.
+    // With the two spaces equal this test cannot tell a fix from a bug.
     await page.setViewportSize({ width: 2400, height: 1350 });
     await loadGame(page);
+    await page.evaluate(async () => {
+      const g = window.ccDebug.game;
+      const { SETTINGS_REGISTRY } = await import("/js/settings-registry.js");
+      g.settings.renderScale = 50;
+      SETTINGS_REGISTRY.find((d) => d.key === "renderScale")?.onChange?.(g);
+    });
     await debug(page, "startBuilder");
     await waitForForge(page);
 

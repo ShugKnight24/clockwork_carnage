@@ -481,7 +481,7 @@ async function freshCampaign(page) {
   await page.locator("#btnCampaign").click();
   // The comic opens every new campaign and hands over to the creator.
   await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
-  expect((await page.evaluate(() => window.ccDebug.game.cutsceneKey ?? null)) ?? "intro_flipbook").toBe("intro_flipbook");
+  expect(await page.evaluate(() => window.ccDebug.game.cutsceneEngine?.cutscene?.key ?? null)).toBe("intro_flipbook");
   await page.evaluate(() => window.ccDebug.skipCutscene());
   await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
   await page.waitForTimeout(400);
