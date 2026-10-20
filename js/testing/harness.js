@@ -1391,40 +1391,31 @@ function botCompletionist(game) {
     }
   }
 
-  // The prologue (src/data/prologue.js). Step 0, the HUD boot, advances on
-  // the step's own clock, which runs on frame time.
-  stepGame(game, 300, { until: (g) => g.tutorialStep >= 1 });
-  r.assert(
-    game.tutorialStep >= 1,
-    "Prologue: HUD boot advances",
-    `Stuck at step ${game.tutorialStep}`,
-  );
+  // The prologue (src/data/prologue.js), by step id. The opening scene (the
+  // squad, the Supervisor, the locker) is skipped: it is a scene, not play.
+  const stepId = () => game.tutorial.def?.id;
+  for (let i = 0; i < 4 && (stepId() === "arrive" || stepId() === "suitUp"); i++) game.tutorial.skipStep();
+  // The HUD boot advances on the step's own clock, which runs on frame time.
+  stepGame(game, 300, { until: () => stepId() !== "boot" });
+  r.assert(stepId() === "look", "Prologue: HUD boot advances", `Stuck at ${stepId()}`);
 
   // Look around for real: the camera turns, the step counts it.
-  for (let i = 0; i < 400 && game.tutorialStep < 2; i++) {
+  for (let i = 0; i < 400 && stepId() === "look"; i++) {
     game.mouse.dx = 30;
     game.mouse.locked = true;
     stepGame(game, 1);
   }
   game.mouse.dx = 0;
-  r.assert(
-    game.tutorialStep >= 2,
-    "Prologue: look around",
-    `Stuck at step ${game.tutorialStep}`,
-  );
+  r.assert(stepId() === "walk", "Prologue: look around", `Stuck at ${stepId()}`);
 
-  // Walk to the bulkhead for real: face east, hold forward.
-  for (let i = 0; i < 600 && game.tutorialStep < 3; i++) {
+  // Walk out of the locker room for real: face east, hold forward.
+  for (let i = 0; i < 600 && stepId() === "walk"; i++) {
     game.player.angle = 0;
     game.keys[game.keybinds.moveForward] = true;
     stepGame(game, 1);
   }
   game.keys[game.keybinds.moveForward] = false;
-  r.assert(
-    game.tutorialStep >= 3,
-    "Prologue: walk to the bulkhead",
-    `Stuck at step ${game.tutorialStep}`,
-  );
+  r.assert(stepId() === "toRange", "Prologue: walk out of the locker room", `Stuck at ${stepId()}`);
 
   // The rest of the chapter, one step at a time: each step set up, a few
   // ticks of play, then completed as if its goal were met. Every step must

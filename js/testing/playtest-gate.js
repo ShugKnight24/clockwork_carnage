@@ -169,19 +169,18 @@ export function createPlaytestGate(game, tools) {
    */
   function driveTutorialStep(run, ctx, player) {
     const step = game.tutorialStep;
-    if (step === 0) stepAndWatch(run, ctx, player, 180, "tutorial boot");
-    else if (step === 1) withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 240, "look around");
-    else if (step === 2) t.walkTo(game, 23.5, 43.5, 400);
-    else if (step === 3) {
-      openDoorAt(26, 41, 0);
-      stepAndWatch(run, ctx, player, 5, "open door");
-    } else if (step < TUTORIAL_SANDBOX_STEP) {
+    const id = game.tutorial.def?.id;
+    if (id === "arrive" || id === "suitUp") game.tutorial.skipStep(); // the opening scene
+    else if (id === "boot") stepAndWatch(run, ctx, player, 180, "tutorial boot");
+    else if (id === "look") withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 240, "look around");
+    else if (id === "walk") t.walkTo(game, 23.5, 43.5, 400);
+    else if (step < TUTORIAL_SANDBOX_STEP) {
       game.player.chronoActive = false;
       game.timeScale = 1;
       preparePlayer(player);
-      stepAndWatch(run, ctx, player, 8, `prologue step ${step}`);
+      stepAndWatch(run, ctx, player, 8, `prologue step ${id}`);
       if (game.tutorialStep === step) game.tutorial.skipStep();
-      stepAndWatch(run, ctx, player, 2, `prologue step ${step} done`);
+      stepAndWatch(run, ctx, player, 2, `prologue step ${id} done`);
     } else {
       stepAndWatch(run, ctx, player, 2, "tutorial sandbox");
     }

@@ -1526,6 +1526,7 @@ export class Game {
       input: this,
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
+      boot: this.tutorial.def?.id === "boot",
       progress: this.tutorial.progressText(),
       blackout: this.tutorial.dark,
     });
@@ -1937,6 +1938,8 @@ export class Game {
   }
 
   interact() {
+    // The prologue's own things to open (the cadet's locker) come first.
+    if (this.mode === "tutorial" && this.tutorial?.onInteract?.()) return;
     // Doors and secret walls are grid tiles; the voxel Forge has neither yet.
     if (this.world) return;
     // Check for doors/secrets at multiple distances in front of player
@@ -2871,6 +2874,7 @@ export class Game {
     for (const e of nearby) {
       if (
         e.type === "enemy" ||
+        e.type === "npc" ||
         e.type === "exit" ||
         e.type === "projectile" ||
         !e.active

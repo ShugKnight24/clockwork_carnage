@@ -27,6 +27,8 @@ export const SPEECH_CAST = {
   voss: { gender: "m", pitch: 0.94, rate: 0.95, prefer: ["ryan", "thomas", "george", "guy"] },
   lord: { gender: "m", pitch: 0.6, rate: 0.86, prefer: ["christopher", "guy", "davis", "david"] },
   supervisor: { gender: "m", pitch: 0.98, rate: 1.1, prefer: ["guy", "eric", "brian", "mark"] },
+  supervisorLive: { gender: "m", pitch: 0.98, rate: 1.04, prefer: ["guy", "eric", "brian", "mark"] },
+  officer: { gender: "m", pitch: 1.06, rate: 1.08, prefer: ["eric", "andrew", "brian", "ryan"] },
   unknown: { gender: "m", pitch: 0.78, rate: 0.9, prefer: ["roger", "steffan", "thomas"] },
 };
 

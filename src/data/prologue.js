@@ -28,9 +28,14 @@ const ARIA = "ARIA";
 const SUP = "SUPERVISOR";
 /** The station's public address: announcements that say more than they mean to. */
 const PA = "PA";
+/** The squad leaving for the Engine level, and its lieutenant. */
+const OFF = "OFFICER";
+const REYES = "LT. REYES";
 
 /**
- * Dialogue: [speaker, text, emotion?]. Lines play in order, one after the
+ * Dialogue: [speaker, text, emotion?, { radio }?]. The Supervisor speaks in
+ * person while he is with you, and over the radio (`radio: true`) when not.
+ * Lines play in order, one after the
  * other, from when their step begins; a step's lines wait for the last
  * step's to finish unless the step says `cut: true` (an alarm cuts in).
  *
@@ -44,6 +49,30 @@ const PA = "PA";
  */
 export const PROLOGUE_STEPS = [
   // ── 1. CLOCKING IN ───────────────────────────────────────────────
+  // The locker room before the suit goes on: no HUD, no ARIA, the morning
+  // shift. The scene (officers, the Supervisor walking in, the salute, the
+  // squads sent down) is played by the logic; these are its words.
+  {
+    id: "arrive",
+    beat: 0,
+    preSuit: true,
+    lines: [
+      [OFF, "Third alarm this week. Engineering's going to blow us all to the moon.", "calm"],
+      [OFF, "Heard they ran the Engine all night. Calibration, they're calling it.", "curious"],
+    ],
+  },
+  {
+    id: "suitUp",
+    beat: 0,
+    preSuit: true,
+    title: "SUIT UP",
+    color: "#ffb028",
+    hint: {
+      key: (k) => `Your locker is the one with the light on. Face it and press ${k("interact")}.`,
+      touch: "Your locker is the one with the light on. Face it and tap USE.",
+      pad: (b) => `Your locker is the one with the light on. Face it and press ${b("interact")}.`,
+    },
+  },
   { id: "boot", beat: 0 }, // the HUD boot animation; no card
   {
     id: "look",
@@ -63,30 +92,18 @@ export const PROLOGUE_STEPS = [
   {
     id: "walk",
     beat: 0,
-    title: "MOVE — TEST THE SUIT",
+    title: "MOVE — FOLLOW THE SUPERVISOR",
     color: "#00ccff",
     hint: {
-      key: "W A S D to walk. Head for the bulkhead at the end of the room.",
-      touch: "Use the left stick to walk. Head for the bulkhead at the end of the room.",
-      pad: () => "Left stick to walk. Head for the bulkhead at the end of the room.",
+      key: "W A S D to walk. Follow the Supervisor out of the locker room.",
+      touch: "Use the left stick to walk. Follow the Supervisor out of the locker room.",
+      pad: () => "Left stick to walk. Follow the Supervisor out of the locker room.",
     },
     lines: [
-      [ARIA, "Walk with me. The suit's a prototype. Servo assist, plating, and a module they wouldn't tell me about.", "curious"],
-      [SUP, "Cadet. You're late, and you're wearing my prototype. Range. Now.", "angry"],
+      [SUP, "It suits you. Don't let it go to your head. Walk with me, Cadet: the range.", "calm"],
+      [ARIA, "The suit's a prototype. Servo assist, plating, and a module they wouldn't tell me about.", "curious"],
     ],
     events: [[7, "pa", "Good morning, Chronos Station. Engineering reminds all staff that the Engine level is closed for today's calibration."]],
-  },
-  {
-    id: "door",
-    beat: 0,
-    title: "OPEN THE BULKHEAD",
-    color: "#ff8844",
-    hint: {
-      key: (k) => `Face the door and press ${k("interact")}.`,
-      touch: "Face the door and tap USE.",
-      pad: (b) => `Face the door and press ${b("interact")}.`,
-    },
-    lines: [[ARIA, "Doors, lockers, the odd hollow wall: if it opens, you open it.", "warm"]],
   },
   {
     id: "toRange",
@@ -305,9 +322,10 @@ export const PROLOGUE_STEPS = [
     defer: true,
     checkpoint: false,
     lines: [
-      [SUP, "All units, all units, we have a breach on the lower levels. They're coming out of the Engine chamber. They're not, they're not human, they—", "afraid"],
-      [SUP, "Breach, every sector, they're already insi—", "afraid"],
-      [ARIA, "Lost him. I've lost the whole network. Cadet, his office. Now. Weapon up.", "urgent"],
+      [SUP, "Reyes, report. Reyes! ...All units, all units: breach on the Engine level. Something is coming up out of the chamber.", "afraid"],
+      [SUP, "Cadet, you stay here. That's an order. Those are my people down there.", "urgent"],
+      [SUP, "Breach, every sector, they're already insi—", "afraid", { radio: true }],
+      [ARIA, "Lost him. I've lost the whole network. We are not staying here. His office has the armory key. Move. Weapon up.", "urgent"],
     ],
   },
   {
@@ -332,7 +350,7 @@ export const PROLOGUE_STEPS = [
     color: "#44ff88",
     hint: "Grab the med pack on the Supervisor's desk. Your suit also mends small wounds if you stay out of fire.",
     lines: [
-      [ARIA, "His desk. Coffee's still warm. He left in a hurry, or something took him.", "worried"],
+      [ARIA, "His desk. Coffee's still warm. He went down there for his people, and he went alone.", "worried"],
       [ARIA, "Med pack. Take it. I like you with all your blood inside.", "tender"],
     ],
   },
@@ -410,6 +428,8 @@ export const PROLOGUE_STEPS = [
       [ARIA, "And there go the lights. Whatever's downstairs just drank the whole grid.", "worried"],
       [ARIA, "The evac lift's in the arena, north end. It's dead without power. Two backup cells, break room and armory. I've marked them.", "urgent"],
       [ARIA, "Every level of this station runs on cells. Get used to finding them. Exits stay sealed until you do.", "calm"],
+      [ARIA, "Cadet. The station roll call just came through. Reyes' squads aren't answering.", "sad"],
+      [ARIA, "And the Supervisor's beacon... it's gone flat. I'm sorry.", "sad"],
     ],
   },
   {

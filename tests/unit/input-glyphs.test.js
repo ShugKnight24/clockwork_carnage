@@ -317,13 +317,13 @@ describe("prompt text", () => {
     const pad = tutorialStepCopy("gamepad", game);
     expect(pad.length).toBe(tutorialStepCopy(false).length);
     const at = (id) => pad[prologueStepIndex(id)];
-    expect(at("door").hint).toContain("press X");
+    expect(at("suitUp").hint).toContain("press X");
     expect(at("shotgun").hint).toContain("press Y");
     expect(at("crouch").hint).toContain("Hold B");
     expect(at("dash").hint).toContain("Tap A");
     expect(at("chrono").hint).toContain("Hold LB");
-    expect(at("door").pad).toBe("xbox");
-    for (const step of pad.slice(1)) {
+    expect(at("suitUp").pad).toBe("xbox");
+    for (const step of pad.filter(Boolean)) {
       expect(step.hint).not.toMatch(/\b(mouse|click|press [EQ]\b|WASD|W A S D|scroll)\b/i);
       // Case-sensitive: "Chrono Shift" is the power, SHIFT the key.
       expect(step.hint).not.toMatch(/\b(SHIFT|CTRL)\b/);

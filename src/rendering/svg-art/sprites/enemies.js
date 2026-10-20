@@ -28,6 +28,7 @@
 
 import { getLayerImage, layerBaked, onRasterRelease } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
+import { NPC_TYPES } from "../../../data/npcs.js";
 import { isRealisticArt } from "../../art-style.js";
 import {
   baseDefs, BASE_MATERIALS, paletteMaterials, lit, withRealisticBuild, realDefs, REAL_BASE_MATERIALS, realPaletteMaterials,
@@ -42,7 +43,7 @@ const HIT_POSE_MS = 160;
 const FLASH_MS = 150;
 const SPARK_MS = 220;
 // `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
-const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle"];
+const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point"];
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
@@ -81,7 +82,8 @@ function buildModel(type, real = false) {
 function buildModelIn(type, real) {
   if (BOSSES[type]) return buildBoss(type, real);
   const spec = HUMANOIDS[type] || CREATURES[type];
-  const def = ENEMY_TYPES[type];
+  // Friendly characters (src/data/npcs.js) draw on the same rig as enemies.
+  const def = ENEMY_TYPES[type] || NPC_TYPES[type];
   if (!spec || !def) return null;
   const box = spec.box;
   const extra = HUMANOID_DEFS[type] || CREATURE_DEFS[type] || "";
@@ -462,6 +464,8 @@ function updateBlock(enemy, m, model, time, camRightX, camRightY, newHit) {
 }
 
 function pickPose(enemy, m, time, model) {
+  // A scripted gesture (an NPC's salute or pointing) holds while it is set.
+  if (enemy.gesture && !(m.speed > 0.2)) return enemy.gesture;
   if (enemy.dissolving) return "hurt";
   if (enemy.painTimer > 0 || (enemy.hitTime && time - enemy.hitTime < HIT_POSE_MS)) return "hurt";
   if (enemy.state === "windup" || enemy._chargeState === "windup") return "windup";

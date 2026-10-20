@@ -430,7 +430,7 @@ export function renderTutorialOverlay(ctx, w, h, state) {
 
   const modern = isModernArt();
 
-  if (tutorialStep === 0) {
+  if (state.boot ?? tutorialStep === 0) {
     if (modern) renderModernHudBoot(ctx, w, h, elapsed);
     else renderHudBoot(ctx, w, h, elapsed);
     return 0;
@@ -449,7 +449,7 @@ export function renderTutorialOverlay(ctx, w, h, state) {
  */
 export function renderTutorialCard(ctx, w, h, state, lane = {}) {
   const { mode, isTouchDevice, tutorialStepTime, tutorialStep } = state;
-  if (mode !== "tutorial" || tutorialStep === 0) return 0;
+  if (mode !== "tutorial") return 0;
   const device = state.input ? activeDevice(state.input) : isTouchDevice ? "touch" : "keyboard";
   const copy = tutorialStepCopy(device, state.input);
   const step = copy[tutorialStep];

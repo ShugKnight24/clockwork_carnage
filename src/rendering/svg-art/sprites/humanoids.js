@@ -374,6 +374,114 @@ function corruptCop(v = 0) {
   return { poses, fx: antennaFx("radio", 18, "#ff3344", false) };
 }
 
+/* ── Chronos PD: officers and the Supervisor (friendly NPCs) ──────────────── */
+
+/**
+ * A face under a peaked police cap: no visor, no glow, eyes you can meet.
+ * `older` adds the Supervisor's lines and moustache; `band` is the cap band.
+ */
+function officerHead(R, { band = "#1b2a48", older = false, cap = "url(#armorDk)" } = {}) {
+  const [x, y] = R.head;
+  let body = ao(x, y + 12, 9, 3, 0.55);
+  // Ears, face, jaw.
+  body += circ(x - 10.5, y + 2, 2.6, "url(#skin)", 0.9) + circ(x + 10.5, y + 2, 2.6, "url(#skin)", 0.9);
+  body += sh(`M${P(x - 10, y - 4)}Q${P(x - 11, y + 8)} ${P(x - 6, y + 12)}Q${P(x, y + 15)} ${P(x + 6, y + 12)}Q${P(x + 11, y + 8)} ${P(x + 10, y - 4)}Z`, "url(#skin)", 1.2);
+  // Brows, eyes, nose, mouth.
+  body += ln(`M${P(x - 7, y - 1)}l4 -0.8M${P(x + 7, y - 1)}l-4 -0.8`, older ? "#9a9488" : "#2a1a10", 1.3, 0.95);
+  body += circ(x - 4.5, y + 2, 1.15, "#16100c", 0) + circ(x + 4.5, y + 2, 1.15, "#16100c", 0);
+  body += ln(`M${P(x, y + 2.5)}l-1 4.5h2`, "#5a3424", 0.8, 0.6);
+  if (older) {
+    body += sh(`M${P(x - 5, y + 8.2)}Q${P(x, y + 6.8)} ${P(x + 5, y + 8.2)}Q${P(x + 3, y + 10.2)} ${P(x, y + 9.2)}Q${P(x - 3, y + 10.2)} ${P(x - 5, y + 8.2)}Z`, "#a8a29a", 0.6);
+    body += ln(`M${P(x - 8, y + 5)}q1 3 3 4M${P(x + 8, y + 5)}q-1 3 -3 4`, "#7a4a34", 0.6, 0.5);
+  } else {
+    body += ln(`M${P(x - 3, y + 9)}Q${P(x, y + 10)} ${P(x + 3, y + 9)}`, "#5a3424", 0.8, 0.7);
+  }
+  // Peaked cap: crown, band, badge, brim.
+  body += sh(`M${P(x - 12, y - 5)}Q${P(x - 14, y - 17)} ${P(x, y - 18)}Q${P(x + 14, y - 17)} ${P(x + 12, y - 5)}Z`, cap, 1.3);
+  body += sh(`M${P(x - 12, y - 8)}H${f(x + 12)}V${f(y - 4)}H${f(x - 12)}Z`, band, 0.9);
+  body += sh(`M${P(x - 2.6, y - 15)}l2.6 -2.4 2.6 2.4 -1 3.4h-3.2Z`, "url(#brass)", 0.7);
+  body += sh(`M${P(x - 13, y - 4.5)}Q${P(x, y - 1.5)} ${P(x + 13, y - 4.5)}L${P(x + 11, y - 2.5)}Q${P(x, y + 0.5)} ${P(x - 11, y - 2.5)}Z`, "#06080c", 0.9);
+  body += spec(`M${P(x - 10, y - 9)}Q${P(x - 10, y - 15)} ${P(x - 3, y - 16.5)}`, 0.5, 1.1);
+  return { body, glow: "" };
+}
+
+/** The salute: right hand at the cap brim, elbow out. */
+const SALUTE = { armR: { sh: 120, el: 130, kf: 0.9 } };
+/** Pointing the way: right arm out ahead. */
+const POINT = { armR: { sh: 104, el: -8 } };
+
+/** A Chronos PD officer: navy uniform under a light vest, sidearm holstered. */
+function officer(v = 0) {
+  const vest = v % 2 === 0;
+  const table = {
+    idle: { armL: { sh: 8, el: 6 }, armR: { sh: 8, el: 6 } },
+    moveA: pose(WALK_A, { armL: { sh: -10, el: 10 }, armR: { sh: 22, el: 8 } }),
+    moveB: pose(WALK_B, { armL: { sh: 22, el: 8 }, armR: { sh: -10, el: 10 } }),
+    salute: pose({ armL: { sh: 4, el: 2 } }, SALUTE),
+    point: pose({ armL: { sh: 8, el: 6 } }, POINT),
+  };
+  const poses = build(HUMAN, table, (R, name) => {
+    const { shY, hipY } = R;
+    let body = legsOf(R, { under: "url(#armorDk)", pad: "", boot: "url(#gun)", plate: "" });
+    let upper = torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armor)", w: 22, plates: false });
+    // Collar, buttons, chest badge, name bar.
+    upper += sh(`M${P(-6, shY - 9)}L${P(0, shY - 2)}L${P(6, shY - 9)}L${P(3, shY - 11)}H${f(-3)}Z`, "#c9d4e6", 0.7);
+    for (let i = 0; i < 3; i++) upper += circ(0, shY + 4 + i * 8, 1, "url(#brass)", 0.4);
+    upper += sh(`M${P(-12, shY + 4)}l3 -3 3 3 -1 4h-4Z`, "url(#brass)", 0.6);
+    upper += sh(`M${P(5, shY + 6)}h8v2.4h-8Z`, "#d8dee8", 0.5);
+    if (vest) {
+      upper += plate([[-17, shY + 1], [17, shY + 1], [15, hipY - 9], [-15, hipY - 9]], "url(#cloth)", 1.1, 0.4);
+      upper += sh(`M${P(-9, shY + 8)}h18v3.5h-18Z`, "#e8edf5", 0.4);
+    }
+    // Holstered sidearm on the right hip.
+    upper += sh(`M${P(15, hipY - 8)}h6v11h-6Z`, "url(#gun)", 1);
+    const head = officerHead(R, { band: "#141d33" });
+    upper += armOf(R, -1, { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "" });
+    upper += armOf(R, 1, { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "" });
+    // The saluting hand goes over the face, so the head draws first then.
+    upper = name === "salute" ? head.body + upper : upper + head.body;
+    body += up(R, upper);
+    return { body, glow: "", at: {} };
+  });
+  return { poses, fx: [] };
+}
+
+/** The Supervisor: older, a long coat with gold boards, a gold-banded cap. */
+function supervisor() {
+  const table = {
+    idle: { armL: { sh: 6, el: 18 }, armR: { sh: 6, el: 18 } },
+    moveA: pose(WALK_A, { armL: { sh: -8, el: 14 }, armR: { sh: 18, el: 10 } }),
+    moveB: pose(WALK_B, { armL: { sh: 18, el: 10 }, armR: { sh: -8, el: 14 } }),
+    salute: pose({ armL: { sh: 4, el: 4 } }, SALUTE),
+    point: pose({ armL: { sh: 6, el: 18 } }, POINT),
+  };
+  const poses = build(HUMAN, table, (R, name) => {
+    const { shY, hipY } = R;
+    let body = legsOf(R, { under: "url(#armorDk)", pad: "", boot: "url(#gun)", plate: "" });
+    let upper = "";
+    // Long coat to the knee, over the legs.
+    const kneeY = R.legs[1].K[1];
+    upper += sh(`M${P(-23, shY - 2)}Q${P(0, shY - 10)} ${P(23, shY - 2)}L${P(21, kneeY + 4)}H${f(-21)}Z`, "url(#armor)", 1.3);
+    upper += ln(`M0 ${f(shY - 2)}V${f(kneeY + 4)}`, INK, 0.9, 0.6);
+    // Lapels, shirt, tie.
+    upper += sh(`M${P(-7, shY - 9)}L${P(0, shY + 16)}L${P(7, shY - 9)}Z`, "#d9dee6", 0.6);
+    upper += sh(`M${P(-2, shY - 6)}h4l1.5 18 -3.5 4 -3.5 -4Z`, "#5a1a1a", 0.6);
+    upper += sh(`M${P(-14, shY - 6)}L${P(-4, shY + 20)}L${P(-9, shY + 20)}Z`, "url(#armorDk)", 0.8);
+    upper += sh(`M${P(14, shY - 6)}L${P(4, shY + 20)}L${P(9, shY + 20)}Z`, "url(#armorDk)", 0.8);
+    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) upper += circ(s * 8, shY + 26 + i * 9, 1.1, "url(#brass)", 0.4);
+    upper += sh(`M${P(-22, hipY - 6)}H22V${f(hipY - 2)}H-22Z`, "url(#gun)", 0.9);
+    // Ribbons.
+    upper += sh(`M${P(-15, shY + 6)}h8v2.2h-8Z`, "#c23a3a", 0.4) + sh(`M${P(-15, shY + 8.6)}h8v2.2h-8Z`, "#2a6ac2", 0.4);
+    const head = officerHead(R, { band: "#c9a03a", older: true });
+    const arm = (s) => armOf(R, s, { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "url(#armorDk)", padR: 8, trim: "#e0b84a" });
+    upper += arm(-1) + arm(1);
+    upper = name === "salute" ? head.body + upper : upper + head.body;
+    body += up(R, upper);
+    return { body, glow: "", at: {} };
+  });
+  return { poses, fx: [] };
+}
+
 /* ── Chrono Sentinel ────────────────────────────────────────────────────── */
 
 const SENTINEL = { hipY: 10, hipW: 13, stance: 4, thigh: 34, shin: 30, foot: 10, shY: -46, shW: 32, ua: 28, fa: 26, headY: -70 };
@@ -903,6 +1011,8 @@ const EXTRA_DEFS = {
   chronoBomber: `<radialGradient id="dialA" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#5a3406"/><stop offset="1" stop-color="#1a0c02"/></radialGradient>`,
   temporalEngineer: `<linearGradient id="apron" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#6e4a22"/><stop offset=".5" stop-color="#4a2e12"/><stop offset="1" stop-color="#1e1206"/></linearGradient>` +
     `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#d9a37c"/><stop offset=".5" stop-color="#a06a48"/><stop offset="1" stop-color="#4a2a1a"/></linearGradient>`,
+  officer: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  supervisor: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   corruptCop: `<linearGradient id="skinD" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#c89070"/><stop offset=".5" stop-color="#8a5a40"/><stop offset="1" stop-color="#3a2216"/></linearGradient>`,
   sentinel: `<linearGradient id="tabard" x1="0" y1="0" x2="1" y2=".3"><stop offset="0" stop-color="#3a4f78"/><stop offset=".5" stop-color="#1c2a48"/><stop offset="1" stop-color="#0a1020"/></linearGradient>`,
   phaseStalker: `<linearGradient id="scarf" x1="0" y1="0" x2="1" y2=".3"><stop offset="0" stop-color="#2f8a74"/><stop offset=".5" stop-color="#155244"/><stop offset="1" stop-color="#05201a"/></linearGradient>`,
@@ -915,6 +1025,8 @@ const EXTRA_DEFS = {
 export const HUMANOIDS = {
   henchman: { build: henchman, variants: 3, box: HUMANOID_BOX, rim: "#ff9a4a", size: 1.1 },
   corruptCop: { build: corruptCop, variants: 3, box: [-72, -92, 142, 186], rim: "#ffd35a", size: 1.08, shield: [-18, -30] },
+  officer: { build: officer, variants: 2, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.05 },
+  supervisor: { build: supervisor, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.08 },
   sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30] },
   shieldCommander: { build: shieldCommander, box: [-74, -90, 148, 184], rim: "#7fb8ff", aura: "#3f7fe0", size: 1.08, shield: [-30, -30] },
   timeWarden: { build: timeWarden, box: [-80, -92, 170, 186], rim: "#7fb0ff", size: 1.05, shield: [52, -20] },

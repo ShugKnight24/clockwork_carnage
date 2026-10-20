@@ -6131,10 +6131,14 @@ export const CUTSCENE_SCRIPTS = {
           color: "#aabbcc",
           size: 16,
         },
-        { text: "Today, it's humming.", delay: 4300, color: "#00ccff", size: 17 },
+        { text: "Today, it's humming. And the squad is already in.", delay: 4300, color: "#00ccff", size: 17 },
       ],
       duration: 7000,
     },
+  ],
+  // Played in the prologue when the cadet opens the locker (js/tutorial-system.js),
+  // and straight after clocking_in when the campaign starts without it.
+  suit_up: [
     {
       bg: "locker_room",
       art: "armor_crate",
@@ -6152,7 +6156,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 18,
         },
         {
-          text: "Supervisor's note: \"You're up. Don't ask who built it.\"",
+          text: "The Supervisor watches you open it. \"You're up. Don't ask who built it.\"",
           delay: 3900,
           color: "#ccaa77",
           size: 16,

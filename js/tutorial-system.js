@@ -18,11 +18,42 @@ import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { spawnEnergyBurst } from "./particle-system.js";
+import { Npc } from "./npc.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
-  SUPERVISOR: { color: "#ffb028", voice: "supervisor" },
+  // In the room he sounds like a man; on the radio, like a radio.
+  SUPERVISOR: { color: "#ffb028", voice: "supervisorLive", radioVoice: "supervisor" },
   PA: { color: "#9fb4c8", voice: "system" },
+  OFFICER: { color: "#6fb6ff", voice: "officer" },
+  "LT. REYES": { color: "#6fb6ff", voice: "officer" },
+};
+
+/**
+ * The locker room on the morning of the breach (cols 4-23, rows 38-46): the
+ * squad at their lockers, the cadet's own locker (the one with the light),
+ * and the routes people take through it.
+ */
+const SQUAD_AT = [
+  [9.5, 40.5],
+  [16.5, 39.8],
+  [7.5, 44.5],
+  [21.5, 44.8],
+];
+const MY_LOCKER = { x: 14.5, y: 45.5 };
+/** Out of the locker room's door and up the main corridor, toward the Engine level. */
+const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5]];
+/** The Supervisor's marks, step by step: where he walks to and waits. */
+const SUP_ROUTES = {
+  // In at the door, round the benches, to where the cadet can see him (the
+  // bench blocks on row 42 hide anyone standing behind them).
+  enter: [[27.5, 41.5], [24.5, 41.5], [23.0, 43.5], [18.5, 44.3]],
+  walk: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5]],
+  toRange: [[29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
+  toGym: [[34.5, 41.5], [29.5, 41.5], [29.5, 21.5], [25.5, 20.8], [23.2, 17.5]],
+  toLab: [[25.5, 20.8], [29.5, 20.5], [29.5, 12.5], [33.5, 10.0]],
+  // At the alarm he runs for the Engine level, down the corridor past the gym.
+  leave: [[29.5, 10.5], [29.5, 12.5], [29.5, 30.5]],
 };
 
 /**
@@ -152,6 +183,11 @@ function makeHostile(x, y, type) {
   return e;
 }
 
+/** Run `fn` `seconds` from now on the prologue's clock (it stops when the game does). */
+function setTimeoutGame(t, seconds, fn) {
+  t._timers.push({ at: t.clock + seconds, fn });
+}
+
 /**
  * Per-step logic. `enter(t, g)` runs when the step begins (and again when a
  * checkpoint puts you back into it); `update(t, g, dt)` returns true when the
@@ -159,6 +195,81 @@ function makeHostile(x, y, type) {
  * `progress(t, g)` is the card's live counter, when it has one.
  */
 const LOGIC = {
+  arrive: {
+    enter(t, g) {
+      t.c.phase = "chatter";
+      // Facing the door, so the Supervisor walks in where you can see him.
+      g.player.angle = -0.1;
+      // The squad at their lockers, turned toward each other and the cadet.
+      t.squad = SQUAD_AT.map(([x, y], i) => {
+        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Reyes" : null });
+        n.faceTo(g.player);
+        g.entities.push(n);
+        return n;
+      });
+      if (!t.sup) {
+        t.sup = new Npc(SUP_ROUTES.enter[0][0], SUP_ROUTES.enter[0][1], "supervisor", { name: "Supervisor Hale" });
+        // Out in the corridor behind the shut door until he comes in. (An
+        // inactive entity is swept from the world, so he waits active.)
+        t.sup.faceTo({ x: 20, y: 41.5 });
+        g.entities.push(t.sup);
+      }
+    },
+    update(t, g) {
+      const c = t.c;
+      if (c.phase === "chatter" && t.clock > 5) {
+        // The Supervisor comes in. Everyone straightens up.
+        c.phase = "enter";
+        t.openDoors(g, "door1");
+        g.audio.doorOpen?.();
+        t.sup.active = true;
+        t.sup.walk(SUP_ROUTES.enter.slice(1), {
+          then: (sup) => {
+            sup.faceTo(g.player);
+            for (const o of t.squad) {
+              o.faceTo(sup);
+              o.pose("salute", 2.4);
+            }
+            sup.pose("salute", 1.2);
+            c.phase = "orders";
+            t.say([
+              ["OFFICER", "Sir!", "calm"],
+              ["SUPERVISOR", "As you were.", "calm"],
+              ["SUPERVISOR", "Engineering lost contact with the Engine level twenty minutes ago. Nobody down there is answering.", "worried"],
+              ["SUPERVISOR", "Lieutenant Reyes, take both squads down. Full kit. Find out what's going on and report back to me.", "calm"],
+              ["LT. REYES", "Sir. You heard him, people. Move out!", "urgent"],
+            ], { cut: true });
+          },
+        });
+      }
+      if (c.phase === "orders" && t.scriptIdle()) {
+        // The squads leave for the Engine level, one after another.
+        c.phase = "leave";
+        t.squad.forEach((o, i) => {
+          o.faceTo(null);
+          setTimeoutGame(t, i * 0.45, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { leave: true, speed: 2.2 }));
+        });
+        t.say([
+          ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
+          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Open it.", "calm"],
+        ]);
+      }
+      return c.phase === "leave" && t.scriptIdle();
+    },
+  },
+
+  suitUp: {
+    waypoint: MY_LOCKER,
+    enter(t, g) {
+      t.lockerLight(g, true);
+      t.c.suited = false;
+    },
+    update: (t) => t.c.suited,
+    exit(t, g) {
+      t.lockerLight(g, false);
+    },
+  },
+
   boot: {
     update: (t) => t.clock > 2.4,
   },
@@ -180,18 +291,18 @@ const LOGIC = {
 
   walk: {
     waypoint: { x: 24.5, y: 41.5 },
+    enter(t, g) {
+      t.openDoors(g, "door1");
+      t.supWalk(g, "walk");
+    },
     update: (t, g) => t.near(g, 23.5, 41.5, 2.2),
-  },
-
-  door: {
-    waypoint: { x: 26.5, y: 41.5 },
-    update: (t, g) => t.doorOpened || t.isOpen(g, TUTORIAL_MAP.doors.door1),
   },
 
   toRange: {
     waypoint: { x: 36.5, y: 41.5 },
     enter(t, g) {
       t.openDoors(g, "door2");
+      t.supWalk(g, "toRange");
     },
     update: (t, g) => t.near(g, 36.5, 41.5, 1.8),
   },
@@ -305,6 +416,7 @@ const LOGIC = {
     waypoint: { x: 22.5, y: 20.5 },
     enter(t, g) {
       t.openDoors(g, "door3");
+      t.supWalk(g, "toGym");
     },
     update: (t, g) => t.near(g, 22.0, 20.5, 1.8),
   },
@@ -396,6 +508,7 @@ const LOGIC = {
     waypoint: { x: 29.5, y: 10.5 },
     enter(t, g) {
       t.openDoors(g, "door5");
+      t.supWalk(g, "toLab");
     },
     update: (t, g) => t.near(g, 29.5, 10.5, 1.8),
   },
@@ -514,6 +627,11 @@ const LOGIC = {
         g.glitchEffect = 0.6;
         t.alert = true;
         t.say(t.def.lines, { cut: true });
+      }
+      // He tells you to stay, and goes: down the corridor, at a run.
+      if (t.c.armed && !t.c.gone && t.clock - t.c.at > 8 && t.sup?.active) {
+        t.c.gone = true;
+        t.sup.walk(SUP_ROUTES.leave, { leave: true, speed: 3.4 });
       }
       return t.c.armed && t.clock - t.c.at > 4 && t.scriptIdle();
     },
@@ -733,6 +851,10 @@ export class TutorialSystem {
     this.chronoUsed = false;
     // Health and ammo pickups stay shut until the range teaches them.
     this.pickupsOpen = false;
+    // People: the squad in the locker room, and the Supervisor (js/npc.js).
+    this.squad = [];
+    this.sup = null;
+    this._timers = [];
     // Set pieces.
     this.alert = false;
     /** The sim hall: hits land here, not on you. { integrity: number|null, failed } */
@@ -914,6 +1036,10 @@ export class TutorialSystem {
     this._updateScript(g.deltaTime || 0);
     this._updateTargets(g);
     this._updateAlert(g);
+    for (const e of g.entities) if (e.type === "npc") e.update(g.deltaTime || 0);
+    for (let i = this._timers.length - 1; i >= 0; i--) {
+      if (this.clock >= this._timers[i].at) this._timers.splice(i, 1)[0].fn();
+    }
 
     if (this.step === TUTORIAL_SANDBOX_STEP) {
       this._updateSandbox();
@@ -980,6 +1106,70 @@ export class TutorialSystem {
       this.sim.integrity -= amount;
       if (this.sim.integrity <= 0) this.sim.failed = true;
     }
+    return true;
+  }
+
+  /** Before the suit goes on: no HUD, no ARIA (the step's `preSuit`). */
+  get preSuit() {
+    return !!this.def?.preSuit;
+  }
+
+  /** Whether the Supervisor is with you (in person) rather than on the radio. */
+  get supPresent() {
+    return !!this.sup?.active;
+  }
+
+  /** Send the Supervisor along his route for this step, then have him wait for you. */
+  supWalk(g, route) {
+    const sup = this.sup;
+    if (!sup) return;
+    if (!sup.active || !g.entities.includes(sup)) {
+      // A checkpoint (or a skipped scene) put you past his entrance: he is
+      // simply there.
+      const [x, y] = SUP_ROUTES[route][0];
+      sup.x = x;
+      sup.y = y;
+      sup.active = true;
+      if (!g.entities.includes(sup)) g.entities.push(sup);
+    }
+    sup.walk(SUP_ROUTES[route], { then: (s) => s.faceTo(g.player) });
+  }
+
+  /** The light on the cadet's locker, so you know which one is yours. */
+  lockerLight(g, on) {
+    if (on && !this._lockerLight) {
+      this._lockerLight = { x: MY_LOCKER.x, y: MY_LOCKER.y - 0.4, color: [255, 190, 90], radius: 1.8, baseIntensity: 1.3, intensity: 1.3, life: 1e9, maxLife: 1e9 };
+      g.lights?.unshift(this._lockerLight);
+    } else if (!on && this._lockerLight) {
+      const i = g.lights?.indexOf(this._lockerLight) ?? -1;
+      if (i >= 0) g.lights.splice(i, 1);
+      this._lockerLight = null;
+    }
+  }
+
+  /**
+   * The interact key, before the game's own doors and secret walls: the
+   * locker during "Suit Up". Returns true when it was used here.
+   */
+  onInteract() {
+    const g = this.game;
+    if (this.def?.id !== "suitUp" || this.c.opening) return false;
+    const p = g.player;
+    const dx = MY_LOCKER.x - p.x;
+    const dy = MY_LOCKER.y - p.y;
+    if (Math.hypot(dx, dy) > 2.8) return false;
+    let diff = Math.atan2(dy, dx) - p.angle;
+    diff -= 2 * Math.PI * Math.round(diff / (2 * Math.PI));
+    if (Math.abs(diff) > 1.1) return false;
+    this.c.opening = true;
+    g.audio.doorOpen?.();
+    const done = () => {
+      this.c.suited = true;
+      g.state = GameState.PLAYING;
+      g.lockPointer?.();
+    };
+    if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", done);
+    else done();
     return true;
   }
 
@@ -1096,14 +1286,15 @@ export class TutorialSystem {
     // them over the step they no longer describe.
     while (this.script.length && this.script[0].step < this.step - 1) this.script.shift();
     if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
-    const [speaker, text, emotion] = this.script.shift().line;
+    const [speaker, text, emotion, opts] = this.script.shift().line;
     const style = SPEAKER_STYLE[speaker] ?? SPEAKER_STYLE.ARIA;
+    const radio = style.radioVoice && (opts?.radio || !this.supPresent);
     const id = {};
     comms.queueLine?.({
       speaker,
       text,
       color: style.color,
-      voice: style.voice,
+      voice: radio ? style.radioVoice : style.voice,
       emotion: emotion ?? null,
       duration: lineDuration(text),
       prominent: true,
@@ -1357,7 +1548,10 @@ export class TutorialSystem {
     this.sim = null;
     g.powerCells = null;
     g.exitEntity = null;
-    g.entities = g.entities.filter((e) => e.type !== "exit");
+    g.entities = g.entities.filter((e) => e.type !== "exit" && e.type !== "npc");
+    this.sup = null;
+    this.squad = [];
+    this.lockerLight(g, false);
     this.step = TUTORIAL_SANDBOX_STEP;
     this.stepTime = performance.now();
     this.clock = 0;

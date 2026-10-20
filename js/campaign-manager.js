@@ -192,9 +192,13 @@ export class CampaignManager {
       const afterFlipbook = () => {
         if (!fromTutorial && g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
-            g.ariaEnabled = true;
-            g.queueAriaMessage("campaignStart");
-            premise(playMemory);
+            const suited = () => {
+              g.ariaEnabled = true;
+              g.queueAriaMessage("campaignStart");
+              premise(playMemory);
+            };
+            if (g.hasCutsceneScript("suit_up")) g.startCutscene("suit_up", suited);
+            else suited();
           });
         } else {
           premise(playMemory);

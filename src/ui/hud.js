@@ -452,6 +452,13 @@ if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
 
 _checkDirty(game);
 
+// The prologue's opening, before the suit goes on: no HUD yet, only what
+// people say.
+if (game.mode === "tutorial" && game.tutorial?.preSuit) {
+  game.renderAriaComms(ctx, w, h);
+  return;
+}
+
 // HUD disruption effect (disabled by enemy support abilities)
 if (game._hudDisabledUntil && game.time < game._hudDisabledUntil) {
   ctx.save();

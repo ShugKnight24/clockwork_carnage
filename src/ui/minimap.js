@@ -74,6 +74,9 @@ export function drawMinimap(ctx, x, y, w, h, { map, entities, player, chronoBomb
       ctx.fillRect(ox + e.x * scale - 2, oy + e.y * scale - 2, 4, 4);
     } else if (e.type === "powerCell") {
       cellMarker(ctx, ox + e.x * scale, oy + e.y * scale, 3, "#ffb028", null);
+    } else if (e.type === "npc") {
+      ctx.fillStyle = "#6fb6ff";
+      ctx.fillRect(ox + e.x * scale - 1.5, oy + e.y * scale - 1.5, 3, 3);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? "#00ff44" : "#ffaa00";
       ctx.fillRect(ox + e.x * scale - 1, oy + e.y * scale - 1, 2, 2);
@@ -226,6 +229,14 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
       ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
     } else if (e.type === "powerCell") {
       cellMarker(ctx, ex, ey, 3.5, "#ffb028", real ? null : UI.ink);
+    } else if (e.type === "npc") {
+      // A friend: blue, the colour of the station's uniforms.
+      if (!real) {
+        ctx.fillStyle = UI.ink;
+        ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+      }
+      ctx.fillStyle = "#6fb6ff";
+      ctx.fillRect(ex - 1.5, ey - 1.5, 3, 3);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? UI.green : UI.amber;
       ctx.fillRect(ex - 1, ey - 1, 2, 2);

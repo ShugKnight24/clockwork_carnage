@@ -9,6 +9,7 @@
  */
 
 import { GameState } from "../game.js";
+import { Npc } from "../npc.js";
 import {
   WEAPONS,
   getAct,
@@ -48,6 +49,16 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
+    /** Put one of the station's people down (js/npc.js), optionally holding a pose. */
+    spawnNpc(kind = "officer", x, y, gesture = null) {
+      const p = game.player;
+      const n = new Npc(x ?? p.x + Math.cos(p.angle) * 3, y ?? p.y + Math.sin(p.angle) * 3, kind);
+      n.faceTo(p);
+      if (gesture) n.pose(gesture, Infinity);
+      game.entities.push(n);
+      return n.id;
+    },
+
     /** The message director: its lanes, what holds each one, and the prologue card. */
     messages() {
       const d = game.messages;
@@ -64,7 +75,7 @@ export function createDebugBridge(game) {
     /** The prologue's live state: step, its counter, and the sim hall. */
     tutorialState() {
       const t = game.tutorial;
-      return { step: t.step, id: t.def?.id ?? null, progress: t.progressText(), sim: t.sim ? { ...t.sim } : null, health: game.player.health };
+      return { step: t.step, id: t.def?.id ?? null, progress: t.progressText(), sim: t.sim ? { ...t.sim } : null, health: game.player.health, clock: +t.clock.toFixed(2), phase: t.c?.phase ?? null, sup: t.sup ? { x: +t.sup.x.toFixed(2), y: +t.sup.y.toFixed(2), active: t.sup.active, walking: t.sup.walking } : null, script: t.script.length, line: !!t._ourLine, comms: game.ariaComms?.enabled, message: game.ariaComms?.message?.text?.slice(0, 30) ?? null };
     },
 
     /** Complete the next `n` prologue steps as if their goals were met; returns the step reached. */

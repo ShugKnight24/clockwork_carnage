@@ -53,6 +53,9 @@ export const VOICES = {
   voss:      { pitch: 106, range: 3,   formant: 0.93, tilt: 1.1,  breath: 0.3,  consonant: 0.4,  legato: 0.84, accent: 2,   vibrato: [5, 0.1],    jitter: 0.15, brightness: 4200, gain: 1.0 },
   lord:      { pitch: 74,  range: 2.5, formant: 0.8,  tilt: 0.8,  breath: 0.35, consonant: 0.45, legato: 0.9,  accent: 2,   vibrato: [4.5, 0.3],  jitter: 0.12, brightness: 3200, sub: true, drive: 0.28, emotion: "menacing", gain: 0.5 },
   supervisor:{ pitch: 114, range: 4.5, formant: 0.95, tilt: 1.0,  breath: 0.25, consonant: 0.45, legato: 0.74, accent: 3,   vibrato: [0, 0],      jitter: 0.25, brightness: 5000, radio: true, emotion: "urgent", gain: 1.42 },
+  // The Supervisor in the room with you (no radio band), and the officers.
+  supervisorLive: { pitch: 112, range: 4.5, formant: 0.95, tilt: 1.0, breath: 0.28, consonant: 0.45, legato: 0.76, accent: 3, vibrato: [0, 0], jitter: 0.25, brightness: 5200, emotion: "calm", gain: 1.3 },
+  officer:   { pitch: 122, range: 4,   formant: 0.98, tilt: 1.0,  breath: 0.3,  consonant: 0.5,  legato: 0.78, accent: 2.6, vibrato: [0, 0],      jitter: 0.25, brightness: 5200, emotion: "calm", gain: 1.1 },
   unknown:   { pitch: 118, range: 2,   formant: 0.95, tilt: 1.0,  breath: 0.5,  consonant: 0.45, legato: 0.84, accent: 1.5, vibrato: [0, 0],      jitter: 0.2,  brightness: 4000, radio: true, drive: 0.15, gain: 0.6 },
   system:    { pitch: 180, range: 1.5, formant: 1.1,  tilt: 0.9,  breath: 0.05, consonant: 0.25, legato: 0.7,  accent: 1,   vibrato: [0, 0],      jitter: 0.04, brightness: 4200, wave: "square", scale: [0, 5], am: 30, amDepth: 0.12, emotion: "neutral", gain: 0.9 },
   henchman:  { pitch: 94,  range: 3,   formant: 0.88, tilt: 0.9,  breath: 0.4,  consonant: 0.55, legato: 0.76, accent: 3,   vibrato: [0, 0],      jitter: 0.3,  brightness: 4000, drive: 0.12, emotion: "angry", gain: 0.85 },
@@ -82,7 +85,7 @@ const SPEAKER_VOICES = {
   ARIA: "aria", SYSTEMS: "system", SISTEMA: "system", WARNING: "system", AVISO: "system", ERROR: "system",
   "FINAL TIMELINE": "system", UNKNOWN: "unknown", LYRA: "lyra", KAEL: "kael", NOVA: "nova", ROOK: "rook",
   VOSS: "voss", "DR. VOSS": "voss", "PARADOX LORD": "lord", LORD: "lord", MIRI: "miri", KAI: "kai",
-  SUPERVISOR: "supervisor", SQUAD: "kael",
+  SUPERVISOR: "supervisor", SQUAD: "kael", OFFICER: "officer", "LT. REYES": "officer",
 };
 
 /** Cutscene art keys whose quoted lines belong to that character. */
