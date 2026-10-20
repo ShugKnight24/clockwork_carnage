@@ -4,7 +4,7 @@
  * Upgraded to 256x256 resolution for sharper visuals.
  */
 import { WALL_COLORS } from "../../js/data.js";
-import { buildWallSet } from "./env/wall-art.js";
+import { buildWallSet, extendWallSet } from "./env/wall-art.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
@@ -510,6 +510,19 @@ function bakeContactShadow(mips) {
   }
 }
 
+/**
+ * Add a map's own wall faces (the station's lockers, say) to an env built
+ * without them, finished as the env's were. True when it painted any.
+ */
+export function ensureEnvWalls(env, ids, realistic = false) {
+  const added = extendWallSet(env.walls, ids, env.act, env.palette, env.salt ?? 0, realistic);
+  for (const id of added) {
+    if (realistic) bakeContactShadow(env.walls[id]);
+    averageColor(env.walls[id][env.walls[id].length - 1]);
+  }
+  return added.length > 0;
+}
+
 export function generateModernEnv(act, brutal, level = null, { realistic = false } = {}) {
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
@@ -577,6 +590,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
   return {
     act: a,
     level,
+    salt,
     brutal: !!brutal,
     palette: p,
     walls,

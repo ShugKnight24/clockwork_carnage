@@ -11,6 +11,7 @@
  * map, comms).
  */
 import { TUTORIAL_MAP } from "./data.js";
+import { STATION_WALLS } from "../src/data/walls.js";
 import { Enemy, Pickup, Prop } from "./entities.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
@@ -41,13 +42,14 @@ const SQUAD_AT = [
   [7.5, 44.5],
   [21.5, 44.8],
 ];
-const MY_LOCKER = { x: 14.5, y: 45.5 };
+/** The cadet's locker: the left of the pair in the south wall's cell (14, 47), and where to face it from. */
+const MY_LOCKER = { x: 14.3, y: 46.9 };
+const MY_LOCKER_CELL = { x: 14, y: 47 };
 /** Out of the locker room's door and up the main corridor, toward the Engine level. */
 const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5]];
 /** The Supervisor's marks, step by step: where he walks to and waits. */
 const SUP_ROUTES = {
-  // In at the door, round the benches, to where the cadet can see him (the
-  // bench blocks on row 42 hide anyone standing behind them).
+  // In at the door and round the benches, to where the cadet can see him.
   enter: [[27.5, 41.5], [24.5, 41.5], [23.0, 43.5], [18.5, 44.3]],
   walk: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5]],
   toRange: [[29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
@@ -113,7 +115,7 @@ const PISTOL = 0;
 
 /** The gym course's gates: the start, then four to hit in order. */
 const COURSE_GATES = [
-  { x: 21.5, y: 20.5 },
+  { x: 22.5, y: 20.5 }, // the start, by the door (21.5 was inside a column)
   { x: 4.5, y: 16.5 },
   { x: 5.5, y: 24.5 },
   { x: 22.5, y: 24.5 },
@@ -203,6 +205,7 @@ const LOGIC = {
   arrive: {
     enter(t, g) {
       t.c.phase = "chatter";
+      t.lockerShut(g);
       // Facing the door, so the Supervisor walks in where you can see him.
       g.player.angle = -0.1;
       // The squad at their lockers, turned toward each other and the cadet.
@@ -467,6 +470,14 @@ const LOGIC = {
       t.c.time = 0;
       t.c.fails = t.c.fails ?? 0;
       t.c.limit = COURSE_LIMIT;
+      // The gates themselves, numbered, on the floor (src/rendering/props.js).
+      t.c.gates = COURSE_GATES.map(({ x, y }, i) => {
+        const gate = new Prop(x, y, "course_gate");
+        gate.gate = { num: i, state: "ahead" };
+        gate._tutTag = "gates";
+        g.entities.push(gate);
+        return gate;
+      });
     },
     get waypoint() {
       return null; // set per gate in update
@@ -475,7 +486,9 @@ const LOGIC = {
       const c = t.c;
       const gate = COURSE_GATES[c.gate];
       g.objectiveWaypoint = gate;
-      t.gateLight(g, gate);
+      t.c.gates?.forEach((p, i) => {
+        p.gate.state = i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
+      });
       if (c.gate > 0) {
         c.time += g.deltaTime;
         if (c.time > c.limit) {
@@ -504,7 +517,7 @@ const LOGIC = {
       return `GATE ${c.gate} / ${COURSE_GATES.length - 1} · ${c.time.toFixed(1)} / ${c.limit} s`;
     },
     exit(t, g) {
-      t.gateLight(g, null);
+      t.clearTag(g, "gates");
       if (t.c.best != null) t.say([["SUPERVISOR", `${t.c.best.toFixed(1)} seconds. Not bad, Cadet. Not good either. Sim hall's next.`, "calm"]]);
     },
   },
@@ -868,7 +881,6 @@ export class TutorialSystem {
     this._events = new Set();
     this.blackout = false;
     this.vents = null;
-    this._gateLight = null;
     this._alertLights = null;
     // Dialogue still to play: { line: [speaker, text, emotion], step }.
     this.script = [];
@@ -1141,15 +1153,24 @@ export class TutorialSystem {
   }
 
   /** The light on the cadet's locker, so you know which one is yours. */
+  /**
+   * The cadet's locker, as the morning has it: shut, then lit while it calls
+   * you (its seams glow, its status light is on), then open on your things
+   * once the suit is out. The locker is the wall cell, painted three ways
+   * (src/rendering/env/locker-art.js), so this swaps the cell.
+   */
   lockerLight(g, on) {
-    if (on && !this._lockerLight) {
-      this._lockerLight = { x: MY_LOCKER.x, y: MY_LOCKER.y - 0.4, color: [255, 190, 90], radius: 1.8, baseIntensity: 1.3, intensity: 1.3, life: 1e9, maxLife: 1e9 };
-      g.lights?.unshift(this._lockerLight);
-    } else if (!on && this._lockerLight) {
-      const i = g.lights?.indexOf(this._lockerLight) ?? -1;
-      if (i >= 0) g.lights.splice(i, 1);
-      this._lockerLight = null;
-    }
+    const row = g.map?.grid?.[MY_LOCKER_CELL.y];
+    if (!row) return;
+    const x = MY_LOCKER_CELL.x;
+    if (on) row[x] = STATION_WALLS.LOCKERS_MINE_LIT;
+    else if (row[x] === STATION_WALLS.LOCKERS_MINE_LIT) row[x] = this.c?.suited ? STATION_WALLS.LOCKERS_MINE_OPEN : STATION_WALLS.LOCKERS_MINE;
+  }
+
+  /** The cadet's locker shut, as it is first thing. */
+  lockerShut(g) {
+    const row = g.map?.grid?.[MY_LOCKER_CELL.y];
+    if (row) row[MY_LOCKER_CELL.x] = STATION_WALLS.LOCKERS_MINE;
   }
 
   /**
@@ -1443,22 +1464,6 @@ export class TutorialSystem {
     }
   }
 
-  /** A teal light on the course's next gate (null clears it). */
-  gateLight(g, gate) {
-    if (!gate) {
-      this._clearLights("gate");
-      return;
-    }
-    if (!this._gateLight) {
-      this._gateLight = { x: 0, y: 0, color: [0, 255, 200], radius: 2.4, baseIntensity: 1.2, intensity: 1.2, life: 1e9, maxLife: 1e9 };
-    }
-    const L = this._gateLight;
-    L.x = gate.x;
-    L.y = gate.y;
-    L.intensity = L.baseIntensity = 0.9 + 0.3 * Math.sin(this.clock * 6);
-    if (g.lights && !g.lights.includes(L)) g.lights.unshift(L);
-  }
-
   /** Whether a vent strip is firing at its own phase of the cycle. */
   ventHot(strip) {
     const t = ((this.vents?.clock ?? 0) + strip.phase) % VENT_CYCLE;
@@ -1531,10 +1536,6 @@ export class TutorialSystem {
     if (!which || which === "alert") {
       for (const L of this._alertLights || []) drop(L);
       this._alertLights = null;
-    }
-    if (!which || which === "gate") {
-      if (this._gateLight) drop(this._gateLight);
-      this._gateLight = null;
     }
     if (!which && this.vents) this.clearVents(g);
   }

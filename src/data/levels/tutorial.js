@@ -63,17 +63,21 @@ carve(48, 27, 49, 32);
 // ── 3. LOCKER ROOM — Zone 1 (rows 37-47, cols 3-24) ──
 // Room walls are default metal (3). Carve interior.
 carve(38, 4, 46, 23);
-// Locker bay dividers (pillars creating alcoves along walls)
-for (let c = 5; c <= 21; c += 4) {
-  pillar(38, c); // top row lockers
-  pillar(46, c); // bottom row lockers
+// The lockers line the north and south walls, full height, two to a cell,
+// each with its officer's name (src/rendering/env/locker-art.js). The
+// cadet's is on the south wall: LOCKERS_MINE, swapped for its lit and open
+// twins by the prologue. Benches down the middle are props.
+const LOCKER_ROW = [10, 11, 12, 13];
+for (let c = 4; c <= 23; c++) {
+  if (g[37][c] === 3) g[37][c] = LOCKER_ROW[c % 4];
+  if (g[47][c] === 3) g[47][c] = LOCKER_ROW[(c + 2) % 4];
 }
-// Central bench row
-pillar(42, 8); pillar(42, 12); pillar(42, 16); pillar(42, 20);
 // Connecting corridor east (row 41-42)
 carve(41, 24, 42, 26);
 // Door from corridor to locker room
 door(41, 26); door(42, 26);
+
+g[47][14] = 14; // the cadet's locker (and ABARA's beside it)
 
 // ── 4. FIRING RANGE — Zone 2 (rows 37-47, cols 35-56) ──
 // Tech walls
@@ -93,6 +97,10 @@ hWall(38, 53, 55, 2);
 // Glass observation window at south
 hWall(46, 38, 44, 8);
 hWall(46, 48, 54, 8);
+// Acoustic baffles round the range (the target wall and booths stay tech).
+for (let c = 35; c <= 56; c++) for (const r of [37, 47]) if (g[r][c] === 2) g[r][c] = 18;
+for (let r = 38; r <= 46; r++) for (const c of [35, 56]) if (g[r][c] === 2) g[r][c] = 18;
+g[37][45] = 22; // EYES & EARS, on the north wall
 // Connecting corridor west (row 41-42)
 carve(41, 33, 42, 35);
 door(41, 33); door(42, 33);
@@ -112,6 +120,14 @@ pillar(24, 7, 1); pillar(24, 12, 1); pillar(24, 17, 1);
 // Punching bag pillars
 pillar(18, 18, 1); pillar(18, 21, 1);
 pillar(20, 18, 1); pillar(20, 21, 1);
+// Padded walls and the mirror round the gym.
+for (let c = 3; c <= 24; c++) for (const r of [15, 26]) if (g[r][c] === 1) g[r][c] = 17;
+for (let r = 16; r <= 25; r++) for (const c of [3, 24]) if (g[r][c] === 1) g[r][c] = 17;
+g[15][13] = 19; // the PT board, over the north wall
+// The weight racks, and padded columns for the track's markers and the bags.
+for (const c of [6, 8, 10]) for (const r of [17, 19]) g[r][c] = 20;
+for (const c of [7, 12, 17]) g[24][c] = 21;
+for (const c of [18, 21]) for (const r of [18, 20]) g[r][c] = 21;
 // Connecting corridor east (row 20-21)
 carve(20, 24, 21, 26);
 door(20, 24); door(21, 24);
@@ -227,6 +243,9 @@ export const TUTORIAL_MAP = {
   width: W,
   height: H,
   grid: g,
+  // The station's own walls, painted for this map (js/renderer.js
+  // _ensureMapWalls): every locker type, lit and open twins included.
+  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
   // The range's weapons and the Supervisor's desk are put down by the
   // prologue as their steps begin (js/tutorial-system.js).
@@ -270,11 +289,7 @@ export const TUTORIAL_MAP = {
   // Props for environmental decoration (consumed by Track 2B props system)
   props: [
     // Locker Room
-    { x: 6, y: 39, type: "locker" }, { x: 10, y: 39, type: "locker" },
-    { x: 14, y: 39, type: "locker" }, { x: 18, y: 39, type: "locker" },
-    { x: 6, y: 45, type: "locker" }, { x: 10, y: 45, type: "locker" },
-    { x: 14, y: 45, type: "locker" }, { x: 18, y: 45, type: "locker" },
-    { x: 9, y: 42, type: "bench" }, { x: 13, y: 42, type: "bench" },
+    { x: 6, y: 42, type: "bench" }, { x: 13, y: 42, type: "bench" },
     { x: 17, y: 42, type: "bench" }, { x: 21, y: 42, type: "bench" },
     // Firing Range
     { x: 54, y: 39, type: "target" }, { x: 54, y: 42, type: "target" },

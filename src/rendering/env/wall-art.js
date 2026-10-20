@@ -11,6 +11,7 @@
  */
 
 import { INK, getEnvPalette } from "./palettes.js";
+import { STATION_PAINTERS } from "./locker-art.js";
 import {
   T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, buildMips,
   material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
@@ -691,7 +692,12 @@ const PAINTERS = {
   7: paintParadox,
   8: paintGlass,
   9: paintRift,
+  // The station's own (lockers, gym, range): built only for a map that has them.
+  ...STATION_PAINTERS,
 };
+
+/** The wall types every level gets; the rest are added for the maps that use them. */
+const COMMON_WALLS = Object.keys(PAINTERS).filter((id) => +id < 10);
 
 /**
  * Paint one wall face at 512×512. With `mat` (from beginMaterial) the same
@@ -723,10 +729,19 @@ export function paintWall(id, act, pal, salt = 0, mat = null) {
  */
 export function buildWallSet(act, pal, salt = 0, realistic = false) {
   const set = {};
-  const ids = Object.keys(PAINTERS);
+  extendWallSet(set, COMMON_WALLS, act, pal, salt, realistic);
+  return set;
+}
+
+/**
+ * Paint the faces in `ids` that `set` lacks into it (a map's own walls,
+ * added the first time it is drawn). Returns the ids it painted.
+ */
+export function extendWallSet(set, wanted, act, pal, salt = 0, realistic = false) {
+  const ids = wanted.map(String).filter((id) => PAINTERS[id] && !set[id]);
   if (!realistic) {
     for (const id of ids) set[id] = buildMips(paintWall(+id, act, pal, salt));
-    return set;
+    return ids;
   }
   const p = pal || getEnvPalette(act);
   // Paint every face before reading any back, so the GPU rasterises the
@@ -741,5 +756,5 @@ export function buildWallSet(act, pal, salt = 0, realistic = false) {
     // Relief normals for the GPU wall pass's dynamic lights (WallPass).
     set[id].normals = buildMips(normals);
   }
-  return set;
+  return ids;
 }

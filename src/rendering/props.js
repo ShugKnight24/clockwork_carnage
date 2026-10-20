@@ -47,7 +47,7 @@ export function drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dis
   if (fog <= 0) return;
   if (isModernArt() && drawModernProp(ctx, entity.propType, screenX, centerY, sprWidth, sprHeight, time, fog)) return;
   const fn = PROP_RENDERERS[entity.propType];
-  if (fn) fn(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog);
+  if (fn) fn(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog, entity);
 }
 
 // ── Modern (SVG sprite) path ────────────────────────────────────
@@ -961,3 +961,64 @@ function renderBarrier(ctx, sx, cy, sw, sh, dist, t, fog) {
 
   ctx.globalAlpha = 1;
 }
+
+/**
+ * A gate on the gym's course: two posts and a bar over head height, its
+ * number on a sign. The one to run for next is lit (a scanning curtain of
+ * light between the posts, the number glowing); the rest wait dim; the ones
+ * you have run turn green. `entity.gate` = { num, state: "next"|"ahead"|"done" }.
+ */
+function renderCourseGate(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const st = entity?.gate?.state ?? "ahead";
+  const num = entity?.gate?.num ?? 0;
+  const ground = groundY(cy, sh);
+  const halfW = sw * 0.42;
+  const top = ground - sh * 0.62; // ≈ 2 m
+  const postW = Math.max(2, sw * 0.045);
+  const col = st === "next" ? [0, 255, 210] : st === "done" ? [80, 255, 120] : [120, 140, 170];
+  const rgb = (a) => `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  if (st === "next") {
+    // The curtain: a soft sheet of light, scanned by a bright line.
+    const g = ctx.createLinearGradient(0, top, 0, ground);
+    g.addColorStop(0, rgb(0.28));
+    g.addColorStop(1, rgb(0.06));
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - halfW, top, halfW * 2, ground - top);
+    const scan = top + ((t * 0.0012) % 1) * (ground - top);
+    ctx.fillStyle = rgb(0.55);
+    ctx.fillRect(sx - halfW, scan, halfW * 2, Math.max(1, sh * 0.006));
+    // Floor strip between the posts.
+    ctx.fillStyle = rgb(0.5);
+    ctx.fillRect(sx - halfW, ground - Math.max(1, sh * 0.006), halfW * 2, Math.max(2, sh * 0.012));
+  }
+  // Posts and the bar: dark steel, edged in the gate's colour.
+  ctx.fillStyle = "#1a2230";
+  for (const s of [-1, 1]) ctx.fillRect(sx + s * halfW - postW / 2, top, postW, ground - top);
+  ctx.fillRect(sx - halfW - postW / 2, top - postW, halfW * 2 + postW, postW * 1.6);
+  ctx.fillStyle = rgb(st === "ahead" ? 0.35 : 0.9);
+  for (const s of [-1, 1]) ctx.fillRect(sx + s * halfW - postW * 0.15, top, postW * 0.3, ground - top);
+  // The sign: the gate's number, or a tick once it is run.
+  const signW = Math.max(10, sw * 0.26);
+  const signH = signW * 0.62;
+  const sy = top - postW - signH;
+  ctx.fillStyle = "#0b1018";
+  ctx.fillRect(sx - signW / 2, sy, signW, signH);
+  ctx.strokeStyle = rgb(st === "ahead" ? 0.5 : 1);
+  ctx.lineWidth = Math.max(1, signW * 0.05);
+  ctx.strokeRect(sx - signW / 2, sy, signW, signH);
+  if (st !== "ahead") {
+    ctx.shadowColor = rgb(1);
+    ctx.shadowBlur = signW * 0.3;
+  }
+  ctx.fillStyle = rgb(st === "ahead" ? 0.6 : 1);
+  if (signH >= 6) {
+    ctx.font = `900 ${Math.round(signH * 0.7)}px Arial, Helvetica, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(st === "done" ? "✓" : num === 0 ? "GO" : String(num), sx, sy + signH * 0.55);
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.course_gate = renderCourseGate;

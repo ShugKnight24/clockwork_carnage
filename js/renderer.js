@@ -1,6 +1,6 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
 
@@ -279,6 +279,33 @@ export class Renderer {
    */
   offerEnv(env) {
     if (env) this._prewarmedEnv = env;
+  }
+
+  /**
+   * A map with walls of its own (the station's lockers, gym and range,
+   * ids 10+) has them painted into the env the first time it is drawn, and
+   * the GPU wall pass re-uploads its texture array to take them.
+   */
+  _ensureMapWalls(env, map) {
+    if (map._ownWalls === undefined) {
+      const ids = new Set();
+      for (const row of map.grid) for (const v of row) if (v >= 10) ids.add(v);
+      map._ownWalls = map.ownWalls ?? [...ids];
+    }
+    if (!map._ownWalls.length) return;
+    let added = false;
+    try {
+      added = ensureEnvWalls(env, map._ownWalls, !!env.realistic);
+    } catch (err) {
+      // A face that will not paint must not fail every frame: those cells
+      // draw with the common walls instead.
+      console.warn("[renderer] map walls failed to paint", err);
+      map._ownWalls = [];
+    }
+    if (added) {
+      const wp = this.glRenderer?._wallPass;
+      if (wp) wp.env = null;
+    }
   }
 
   /** Build (or reuse) the Modern environment bundle for the current act. */
@@ -837,6 +864,7 @@ export class Renderer {
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
     const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
+    if (menv && map) this._ensureMapWalls(menv, map);
     // Realistic reuses the Modern wall art and swaps the lighting: no ink
     // lines, darker ambient, contact shadows, inverse-square lights.
     const real = !!menv && isRealisticArt();
