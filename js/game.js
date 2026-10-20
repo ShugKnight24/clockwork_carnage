@@ -227,6 +227,14 @@ export class Game {
     /** Voxel level (Forge + play-test). Null in every grid-map mode. */
     this.world = null;
     this._stateManager = new StateManager(GameState.TITLE);
+    // Quitting to the menus leaves no one mid-sentence (a paused line would
+    // otherwise hold the browser's speech queue shut).
+    this._stateManager.onChange((next) => {
+      if (next === GameState.TITLE || next === GameState.MODE_SELECT) {
+        this.audio?.stopSpeech?.();
+        this.audio?.tts?.resume();
+      }
+    });
     this.assetEditor = new AssetEditor(this);
     this.mode = null; // 'arena', 'campaign', or 'meltdown'
     this.meltdown = null; // Lazy-loaded on first meltdown
@@ -535,6 +543,7 @@ export class Game {
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
+    this.audio.tts?.pause();
     this.unlockPointer();
   }
 
@@ -543,6 +552,7 @@ export class Game {
    */
   resumeGame() {
     this._stateManager.resume();
+    this.audio.tts?.resume();
     // Settings may have changed the art style while we were paused, and a
     // first bake of Modern's materials costs ~220 ms. Pay it here rather than
     // in the first frame back.

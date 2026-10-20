@@ -174,7 +174,7 @@ export class Speech {
     u.rate = Math.max(0.5, Math.min(1.6, r.rate * mr));
     u.volume = Math.max(0, Math.min(1, this.volume));
     this._current.set(channel, u);
-    u.onend = () => {
+    u.onend = u.onerror = () => {
       if (this._current.get(channel) === u) this._current.delete(channel);
     };
     this.synth.speak(u);
@@ -190,5 +190,14 @@ export class Speech {
     if (channel && !this._current.has(channel)) return;
     this._current.clear();
     this.synth.cancel();
+  }
+
+  /** Hold the line mid-word (the game paused), and pick it up again. */
+  pause() {
+    if (this._current.size) this.synth?.pause();
+  }
+
+  resume() {
+    this.synth?.resume();
   }
 }

@@ -1721,6 +1721,10 @@ export class AudioManager {
     // (and the synthetic player voice) always keep their babble.
     const castKey = voice === "player" ? `player:${profile?.id || "calm"}` : typeof voice === "string" ? voice : null;
     if (castKey && this.speaksWords && this.tts.canSpeak(castKey)) {
+      // The browser speaks outside the mixer, so master volume and mute (the
+      // muted reel, the attract loop) are applied here by hand. Silent, say()
+      // declines and the line falls to babble, which the master gain mutes.
+      this.tts.volume = this._muted ? 0 : (this._voiceVolume ?? 0.8) * this._masterVolume;
       const said = this.tts.say(text, castKey, { channel, emotion: mood });
       if (said) {
         const endTime = this.ctx.currentTime + (said.endTime - performance.now() / 1000);
