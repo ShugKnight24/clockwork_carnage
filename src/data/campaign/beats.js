@@ -14,14 +14,14 @@
  *
  * Act I follows the morning of the prologue down through the station: the
  * squads the Supervisor sent to the Engine level went this way first, and
- * their trail (Reyes' radio logs, the insignia on the officers firing at you,
- * Hale's badge) is how you learn what the Engine did at 06:47, and to whom.
+ * their trail (Rasczak's radio logs, the insignia on the officers firing at you,
+ * Simon's badge) is how you learn what the Engine did at 06:47, and to whom.
  * Keyed by act id, then by the level's map id (src/data/campaign/acts.js).
  */
 
 const ARIA = "ARIA";
 const PA = "PA";
-const LOG = "REYES (LOG)";
+const LOG = "RASCZAK (LOG)";
 const LAB = "LAB LOG";
 const WHISPER = "UNKNOWN";
 
@@ -29,20 +29,20 @@ export const LEVEL_BEATS = {
   1: {
     entry: [
       { at: "start", delay: 4, lines: [[ARIA, "The Engine level is four floors down. Everything between us and it is quiet. I don't like quiet.", "worried"]] },
-      { at: "kills", frac: 0.3, lines: [[LOG, "Reyes, unit four, entry stair. Lights are doing something strange down here. The clocks are... wrong. All of them.", "worried"]] },
+      { at: "kills", frac: 0.3, lines: [[LOG, "Rasczak, unit four, entry stair. Lights are doing something strange down here. The clocks are... wrong. All of them.", "worried"]] },
       { at: "cell", n: 1, lines: [[PA, "Good morning, Chronos Station. Good morning, Chronos Station. Good morning, Chron—", "calm"]] },
       { at: "kills", frac: 0.7, event: "tremor", lines: [[ARIA, "Feel that? The Engine is pulling power in waves. Every wave, it gets worse up here.", "worried"]] },
-      { at: "exit", lines: [[ARIA, "Stairwell down to Security. Reyes' squads went this way. So do we.", "calm"]] },
+      { at: "exit", lines: [[ARIA, "Stairwell down to Security. Rasczak's squads went this way. So do we.", "calm"]] },
     ],
     checkpoint: [
-      { at: "start", delay: 3, lines: [[ARIA, "Security wing. If Reyes made it to the Engine level, he came through here first.", "calm"]] },
+      { at: "start", delay: 3, lines: [[ARIA, "Security wing. If Rasczak made it to the Engine level, he came through here first.", "calm"]] },
       { at: "kills", frac: 0.25, lines: [
         [ARIA, "Cadet... those officers. Look at the shoulder patches. Unit four.", "afraid"],
-        [ARIA, "They're Reyes' people. Whatever came up out of that chamber, it turned them around.", "afraid"],
+        [ARIA, "They're Rasczak's people. Whatever came up out of that chamber, it turned them around.", "afraid"],
       ] },
       { at: "kills", frac: 0.6, event: "flicker", lines: [[LOG, "Something walked out of the Engine chamber. It spoke to us. It asked us to stand still. Some of us... stood still.", "afraid"]] },
       { at: "exit", lines: [
-        [ARIA, "There. By the turnstile, on the floor. A badge. Hale's.", "sad"],
+        [ARIA, "There. By the turnstile, on the floor. A badge. Simon's.", "sad"],
         [ARIA, "He got this far. Further than his people did. I'm keeping it on file, {AGENT}. Someone should.", "tender"],
       ] },
     ],
@@ -56,7 +56,7 @@ export const LEVEL_BEATS = {
     containment: [
       { at: "start", delay: 3, lines: [[ARIA, "Detention. Every cell on this level opened at the same second. Six forty-seven.", "worried"]] },
       { at: "kills", frac: 0.5, event: "flicker", lines: [[LOG, "I can hear it in the walls. It knows our names. It keeps counting to eleven.", "afraid"]] },
-      { at: "exit", lines: [[ARIA, "Reyes' beacon was last seen two floors down. The server farm. If anyone wrote down what happened, it's there.", "calm"]] },
+      { at: "exit", lines: [[ARIA, "Rasczak's beacon was last seen two floors down. The server farm. If anyone wrote down what happened, it's there.", "calm"]] },
     ],
     server_farm: [
       { at: "start", delay: 3, lines: [[ARIA, "The data center. Every system on the station logs here. Let me look while you shoot.", "curious"]] },
@@ -65,8 +65,8 @@ export const LEVEL_BEATS = {
         [ARIA, "...to six forty-seven and eleven. Eleven seconds, {AGENT}. Everything you've seen happened in eleven seconds.", "afraid"],
       ] },
       { at: "kills", frac: 0.7, lines: [
-        [LOG, "Hale, if you're hearing this, don't come down. Don't bring anyone. It's not a breach, it's a door, and it's still op—", "afraid"],
-        [ARIA, "That's the last thing Reyes logged.", "sad"],
+        [LOG, "Simon, if you're hearing this, don't come down. Don't bring anyone. It's not a breach, it's a door, and it's still op—", "afraid"],
+        [ARIA, "That's the last thing Rasczak logged.", "sad"],
       ] },
     ],
     reactor: [

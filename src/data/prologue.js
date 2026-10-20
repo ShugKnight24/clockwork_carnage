@@ -30,7 +30,7 @@ const SUP = "SUPERVISOR";
 const PA = "PA";
 /** The squad leaving for the Engine level, and its lieutenant. */
 const OFF = "OFFICER";
-const REYES = "LT. REYES";
+const RASCZAK = "LT. RASCZAK";
 
 /**
  * Dialogue: [speaker, text, emotion?, { radio }?]. The Supervisor speaks in
@@ -322,7 +322,7 @@ export const PROLOGUE_STEPS = [
     defer: true,
     checkpoint: false,
     lines: [
-      [SUP, "Reyes, report. Reyes! ...All units, all units: breach on the Engine level. Something is coming up out of the chamber.", "afraid"],
+      [SUP, "Rasczak, report. Rasczak! ...All units, all units: breach on the Engine level. Something is coming up out of the chamber.", "afraid"],
       [SUP, "Cadet, you stay here. That's an order. Those are my people down there.", "urgent"],
       [SUP, "Breach, every sector, they're already insi—", "afraid", { radio: true }],
       [ARIA, "Lost him. I've lost the whole network. We are not staying here. His office has the armory key. Move. Weapon up.", "urgent"],
@@ -428,7 +428,7 @@ export const PROLOGUE_STEPS = [
       [ARIA, "And there go the lights. Whatever's downstairs just drank the whole grid.", "worried"],
       [ARIA, "The evac lift's in the arena, north end. It's dead without power. Two backup cells, break room and armory. I've marked them.", "urgent"],
       [ARIA, "Every level of this station runs on cells. Get used to finding them. Exits stay sealed until you do.", "calm"],
-      [ARIA, "Cadet. The station roll call just came through. Reyes' squads aren't answering.", "sad"],
+      [ARIA, "Cadet. The station roll call just came through. Rasczak's squads aren't answering.", "sad"],
       [ARIA, "And the Supervisor's beacon... it's gone flat. I'm sorry.", "sad"],
     ],
   },

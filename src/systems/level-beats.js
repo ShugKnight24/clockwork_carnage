@@ -14,7 +14,7 @@ import { LEVEL_BEATS } from "../data/campaign/beats.js";
 const SPEAKERS = {
   ARIA: { color: "#00ffdd", voice: "aria" },
   PA: { color: "#9fb4c8", voice: "system" },
-  "REYES (LOG)": { color: "#6fb6ff", voice: "officer" },
+  "RASCZAK (LOG)": { color: "#6fb6ff", voice: "officer" },
   "LAB LOG": { color: "#c8b48a", voice: "system" },
   UNKNOWN: { color: "#ff5a6e", voice: "unknown" },
 };

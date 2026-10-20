@@ -3,7 +3,7 @@ import { LEVEL_BEATS } from "../../src/data/campaign/beats.js";
 import { LevelBeats } from "../../src/systems/level-beats.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 
-const SPEAKERS = ["ARIA", "PA", "REYES (LOG)", "LAB LOG", "UNKNOWN"];
+const SPEAKERS = ["ARIA", "PA", "RASCZAK (LOG)", "LAB LOG", "UNKNOWN"];
 const TRIGGERS = ["start", "time", "kills", "cell", "exit"];
 
 describe("the campaign's narrative beats", () => {
@@ -75,7 +75,7 @@ describe("LevelBeats", () => {
     g.ariaComms.message = null;
     g.killedEnemies = 3; // 30% down
     step(b, g, 1);
-    expect(g.queued.at(-1).speaker).toBe("REYES (LOG)");
+    expect(g.queued.at(-1).speaker).toBe("RASCZAK (LOG)");
     g.ariaComms.message = null;
     step(b, g, 5);
     expect(g.queued.length).toBe(2); // nothing fires twice

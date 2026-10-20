@@ -958,14 +958,17 @@ function armorCrateModel() {
 
   const helm = propHelmet();
   const helmT = `transform="translate(-4 170.4) rotate(-6 0 -80) scale(2.4)"`;
+  // The rim goes behind the helmet: it sits up out of the foam, proud of the
+  // back edge, and only the front lip is drawn over it (in the shell).
   const helmet =
+    path("M-88,4 L64,4 L84,-26 L-68,-26Z M-81,0 L58,0 L76,-21 L-62,-21Z", `fill="url(#cRim)" fill-rule="evenodd" ${ink(0.8)}`) +
     `<ellipse cx="-4" cy="-2" rx="30" ry="6" fill="#000" opacity="0.7" filter="url(#cAO)"/>` +
     `<g ${helmT}>${helm.body}</g>`;
 
   // Crate shell drawn over the foam: rim, front face, right side, hardware.
   let shell = "";
   shell += poly([[64, 4], [84, -26], [84, 26], [64, 56]], `fill="url(#cSide)" ${ink()}`);
-  shell += path("M-88,4 L64,4 L84,-26 L-68,-26Z M-81,0 L58,0 L76,-21 L-62,-21Z", `fill="url(#cRim)" fill-rule="evenodd" ${ink(0.8)}`);
+  shell += poly([[-88, 4], [64, 4], [58, 0], [-81, 0]], `fill="url(#cRim)" ${ink(0.8)}`);
   shell += poly([[-88, 4], [64, 4], [64, 56], [-88, 56]], `fill="url(#cFront)" ${ink()}`);
   shell += `<g clip-path="url(#cHazClip)"><rect x="-84" y="13" width="144" height="8" fill="#e8a23c"/>`;
   for (let x = -90; x < 64; x += 9) shell += poly([[x, 21], [x + 4.5, 21], [x + 12.5, 13], [x + 8, 13]], `fill="#15100a"`);

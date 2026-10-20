@@ -15,7 +15,7 @@ export const NPC_TYPES = {
     speed: 1.6,
   },
   supervisor: {
-    name: "Supervisor Hale",
+    name: "Supervisor Simon",
     color1: "#3b4150",
     color2: "#1a1d24",
     speed: 1.4,

@@ -26,7 +26,7 @@ const SPEAKER_STYLE = {
   SUPERVISOR: { color: "#ffb028", voice: "supervisorLive", radioVoice: "supervisor" },
   PA: { color: "#9fb4c8", voice: "system" },
   OFFICER: { color: "#6fb6ff", voice: "officer" },
-  "LT. REYES": { color: "#6fb6ff", voice: "officer" },
+  "LT. RASCZAK": { color: "#6fb6ff", voice: "officer" },
 };
 
 /**
@@ -202,13 +202,13 @@ const LOGIC = {
       g.player.angle = -0.1;
       // The squad at their lockers, turned toward each other and the cadet.
       t.squad = SQUAD_AT.map(([x, y], i) => {
-        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Reyes" : null });
+        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Rasczak" : null });
         n.faceTo(g.player);
         g.entities.push(n);
         return n;
       });
       if (!t.sup) {
-        t.sup = new Npc(SUP_ROUTES.enter[0][0], SUP_ROUTES.enter[0][1], "supervisor", { name: "Supervisor Hale" });
+        t.sup = new Npc(SUP_ROUTES.enter[0][0], SUP_ROUTES.enter[0][1], "supervisor", { name: "Supervisor Simon" });
         // Out in the corridor behind the shut door until he comes in. (An
         // inactive entity is swept from the world, so he waits active.)
         t.sup.faceTo({ x: 20, y: 41.5 });
@@ -236,8 +236,8 @@ const LOGIC = {
               ["OFFICER", "Sir!", "calm"],
               ["SUPERVISOR", "As you were.", "calm"],
               ["SUPERVISOR", "Engineering lost contact with the Engine level twenty minutes ago. Nobody down there is answering.", "worried"],
-              ["SUPERVISOR", "Lieutenant Reyes, take both squads down. Full kit. Find out what's going on and report back to me.", "calm"],
-              ["LT. REYES", "Sir. You heard him, people. Move out!", "urgent"],
+              ["SUPERVISOR", "Lieutenant Rasczak, take both squads down. Full kit. Find out what's going on and report back to me.", "calm"],
+              ["LT. RASCZAK", "Sir. You heard him, people. Move out!", "urgent"],
             ], { cut: true });
           },
         });

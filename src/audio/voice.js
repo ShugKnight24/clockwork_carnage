@@ -85,7 +85,7 @@ const SPEAKER_VOICES = {
   ARIA: "aria", SYSTEMS: "system", SISTEMA: "system", WARNING: "system", AVISO: "system", ERROR: "system",
   "FINAL TIMELINE": "system", UNKNOWN: "unknown", LYRA: "lyra", KAEL: "kael", NOVA: "nova", ROOK: "rook",
   VOSS: "voss", "DR. VOSS": "voss", "PARADOX LORD": "lord", LORD: "lord", MIRI: "miri", KAI: "kai",
-  SUPERVISOR: "supervisor", SQUAD: "kael", OFFICER: "officer", "LT. REYES": "officer",
+  SUPERVISOR: "supervisor", SQUAD: "kael", OFFICER: "officer", "LT. RASCZAK": "officer",
 };
 
 /** Cutscene art keys whose quoted lines belong to that character. */
