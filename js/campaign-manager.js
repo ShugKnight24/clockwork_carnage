@@ -278,11 +278,33 @@ export class CampaignManager {
       ? planPowerCells(level.grid, level.playerStart, level.exit, cellCount, entry.seed ?? this.act * 100 + index)
       : [];
     for (const c of cells) g.entities.push(new Pickup(c.x, c.y, "powerCell"));
+    // Last level's notice card does not carry over.
+    if (g._noticeCard) {
+      g.messages?.done(g._noticeCard.key);
+      g._noticeCard = null;
+    }
     g.powerCells = cells.length ? { total: cells.length, found: 0 } : null;
     // The story told while the level is played (src/data/campaign/beats.js).
     g.levelBeats?.start(this.act, entry.map);
     if (g.exitEntity) g.exitEntity.sealed = !!g.powerCells;
-    if (g.powerCells) g.queueAriaMessage("powerCellsBrief");
+    if (g.powerCells) {
+      g.queueAriaMessage("powerCellsBrief");
+      // The first gated level explains the rule; later ones just remind.
+      let seen = false;
+      try {
+        seen = !!localStorage.getItem("cc_seen_power_cells");
+        localStorage.setItem("cc_seen_power_cells", "1");
+      } catch (_) {}
+      const n = g.powerCells.total;
+      g.showNotice?.(
+        "cells",
+        `EXTRACTION SEALED — FIND ${n} POWER CELL${n === 1 ? "" : "S"}`,
+        seen
+          ? "Amber diamonds on your map. Collect them all to open the exit."
+          : `The exit beacon stays locked until you recover this floor's ${n} power cell${n === 1 ? "" : "s"}. They're off the main corridor, in the side rooms: look for the amber glow, or the amber diamonds on your map. The count is under your timer.`,
+        seen ? 6 : 11,
+      );
+    }
 
     if (this.missedWeapons && this.missedWeapons.length > 0) {
       g.entities.push(

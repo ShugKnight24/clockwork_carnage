@@ -1583,6 +1583,7 @@ export class Game {
    * inside it as its narration.
    */
   renderTeachCard(ctx, w, h) {
+    if (this._noticeCard && this._renderNoticeCard(ctx, w, h)) return;
     const hint = this.chronoHazards.hint;
     const t0 = this.chronoHazards.teach ?? this.chronoHazards.objective;
     if ((!t0?.card || t0.done) && hint) {
@@ -2550,6 +2551,41 @@ export class Game {
     if (!this.lights.includes(L)) this.lights.unshift(L);
   }
 
+  /**
+   * A short card in the headline lane that explains a level rule as it comes
+   * up (the power cells that hold the exit shut). One at a time; a newer
+   * notice replaces the last. `id` keeps repeats of the same notice apart.
+   */
+  showNotice(id, title, hint, seconds = 6, color = "#ffb028") {
+    if (this._noticeCard) this.messages?.done(this._noticeCard.key);
+    this._noticeCard = { key: `notice:${id}:${(this._noticeSerial = (this._noticeSerial || 0) + 1)}`, title, hint, seconds, color, at: this.time, posted: false };
+  }
+
+  _renderNoticeCard(ctx, w, h) {
+    const c = this._noticeCard;
+    const d = this.messages;
+    const age = (this.time - c.at) / 1000;
+    if (age > c.seconds) {
+      d?.done(c.key);
+      this._noticeCard = null;
+      return false;
+    }
+    if (!c.posted) {
+      c.posted = true;
+      d?.post(c.key, "teach", null);
+    }
+    if (d && !d.showing(c.key)) return false;
+    const step = { title: c.title, hint: c.hint, color: c.color, pad: padFor(this) };
+    const lane = d?.lanes?.headline;
+    _renderTeachCard(ctx, w, h, step, age + 1, Math.min(1, (c.seconds - age) / 1.2), {
+      top: lane ? lane.y + 6 : 60,
+      maxW: lane?.w,
+      cx: lane ? lane.x + lane.w / 2 : w / 2,
+      compact: d?.lanes?.kind === "compact",
+    });
+    return true;
+  }
+
   /** Campaign exit completes the level; playtest exit arms the end timer. */
   _checkExitReached() {
     this._syncExitLight();
@@ -2562,6 +2598,12 @@ export class Game {
         if (dx * dx + dy * dy < 2.25 && performance.now() - (this._sealedNoticeAt || 0) > 8000) {
           this._sealedNoticeAt = performance.now();
           this.queueAriaMessage("exitSealed");
+          const pc = this.powerCells;
+          if (pc) {
+            const left = pc.total - pc.found;
+            this.showNotice("sealed", `EXTRACTION SEALED — ${pc.found} / ${pc.total} POWER CELLS`,
+              `${left} more power cell${left === 1 ? "" : "s"} to find. They glow amber in the side rooms, and show as amber diamonds on your map.`, 6);
+          }
         }
         return;
       }
@@ -2967,6 +3009,7 @@ export class Game {
           if (this.exitEntity) this.exitEntity.sealed = false;
           this.audio.roundComplete?.();
           this.queueAriaMessage("exitUnsealed");
+          this.showNotice("live", "EXTRACTION LIVE", "Every power cell is in. The exit is open: get to the beacon.", 5, "#22e6c0");
         } else {
           this.queueAriaMessage("powerCellFound");
         }
