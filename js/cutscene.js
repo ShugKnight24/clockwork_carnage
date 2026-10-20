@@ -240,6 +240,7 @@ export class CutsceneEngine {
       cs.autoFrom = 60000;
       // The text jumped to the end; the voice goes quiet rather than racing.
       cs.spoken = frame?.lines?.length ?? 0;
+      cs._said = null;
       this.audio.stopSpeech?.("cutscene");
       return;
     }
@@ -248,6 +249,7 @@ export class CutsceneEngine {
     cs.frame++;
     cs.frameStart = performance.now();
     cs.spoken = 0;
+    cs._said = null;
     this.audio.stopSpeech?.("cutscene");
     cs.particles = [];
     cs.readyToAdvance = false;
@@ -407,7 +409,9 @@ export class CutsceneEngine {
           autoFrom: cs.autoFrom,
         });
         this._autoClock(cs, Math.max(typingDoneAt, cs.autoFrom), at);
-        if (elapsed >= at) {
+        // Auto-play waits for the last voiced line to be said, too.
+        const talking = cs.spoken < (frame.lines?.length ?? 0) || this.audio.isSpeaking?.(cs._said);
+        if (elapsed >= at && !talking) {
           this.advance();
           return;
         }
@@ -591,7 +595,9 @@ export class CutsceneEngine {
    */
   _voiceLines(cs, frame, elapsed, charsPerSec) {
     const lines = frame.lines;
-    while (cs.spoken < lines.length && elapsed >= lines[cs.spoken].delay) {
+    // A voice runs slower than the text types: the next line waits for the
+    // last to finish instead of cutting it off.
+    while (cs.spoken < lines.length && elapsed >= lines[cs.spoken].delay && !this.audio.isSpeaking?.(cs._said)) {
       const line = lines[cs.spoken++];
       const cls = classifyLine(this._resolve(line.text));
       const key = voiceKeyFor({
@@ -602,7 +608,7 @@ export class CutsceneEngine {
         art: frame.art,
       });
       if (!key) continue;
-      this.audio.speak?.(cls.text, key, {
+      cs._said = this.audio.speak?.(cls.text, key, {
         channel: "cutscene",
         charsPerSec,
         profile: this.getVoiceProfile(),

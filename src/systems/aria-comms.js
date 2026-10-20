@@ -21,6 +21,8 @@ const PROJECTED_CATEGORIES = new Set([
 
 /** Seconds between projections, so her showing up stays an event. */
 const PROJECTION_COOLDOWN = 75;
+/** Seconds a line may outstay its reading time while its voice finishes. */
+const SPEECH_GRACE = 8;
 
 /**
  * How ARIA sounds for each kind of line. She is warm by default; these are
@@ -250,8 +252,15 @@ export class AriaCommsSystem {
       }
     }
     if (this.message) {
-      this.message.life += dt;
-      if (this.message.life >= this.message.duration) this.message = null;
+      const m = this.message;
+      m.life += dt;
+      // A voice slower than the line's reading time keeps it up until the
+      // sentence ends, so the next line never cuts it off mid-word. Capped,
+      // in case a browser voice never reports its end.
+      if (m.life >= m.duration - 0.3 && m.life < (m._dur0 ??= m.duration) + SPEECH_GRACE && this.game?.audio?.isSpeaking?.(m._said)) {
+        m.duration = m.life + 0.3;
+      }
+      if (m.life >= m.duration) this.message = null;
     }
 
     if (!isPlaying) return;
@@ -286,7 +295,7 @@ export class AriaCommsSystem {
     const key = msg.voice ?? voiceKeyFor({ speaker: msg.speaker || "ARIA" });
     const text = String(msg.text).replace(/\{AGENT\}/g, this.game?.character?.name || "Agent");
     const charsPerSec = Math.max(16, text.length / Math.max(1, msg.duration * 0.8));
-    audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
+    msg._said = audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
   }
 
   /**

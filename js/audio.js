@@ -1728,7 +1728,14 @@ export class AudioManager {
       const said = this.tts.say(text, castKey, { channel, emotion: mood });
       if (said) {
         const endTime = this.ctx.currentTime + (said.endTime - performance.now() / 1000);
-        const handle = { endTime, stop: said.stop };
+        const handle = {
+          endTime,
+          stop: said.stop,
+          // Finished when the browser says so, not when the estimate runs out.
+          get done() {
+            return said.done;
+          },
+        };
         this._speech.set(channel, handle);
         this._speechUntil = Math.max(this._speechUntil, endTime);
         return handle;
@@ -1740,6 +1747,17 @@ export class AudioManager {
       this._speechUntil = Math.max(this._speechUntil, handle.endTime);
     }
     return handle;
+  }
+
+  /**
+   * Whether a line handed out by speak() is still being said. A spoken line
+   * reports its own end; babble ends when its last syllable is scheduled to.
+   */
+  isSpeaking(handle) {
+    if (!handle) return false;
+    // A browser voice that never reports its end counts as done 8 s past its estimate.
+    if (typeof handle.done === "boolean") return !handle.done && (!this.ctx || this.ctx.currentTime < handle.endTime + 8);
+    return !!this.ctx && this.ctx.currentTime < handle.endTime;
   }
 
   /** Cut a channel's line short (frame skipped), or every channel. */

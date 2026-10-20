@@ -174,13 +174,16 @@ export class Speech {
     u.rate = Math.max(0.5, Math.min(1.6, r.rate * mr));
     u.volume = Math.max(0, Math.min(1, this.volume));
     this._current.set(channel, u);
+    // ~14 characters a second at rate 1. Only an estimate: real voices run
+    // slower or faster, so `done` is what says the line has finished.
+    const seconds = line.length / (14 * u.rate) + 0.3;
+    const handle = { endTime: performance.now() / 1000 + seconds, done: false, stop: () => this.stop(channel) };
     u.onend = u.onerror = () => {
+      handle.done = true;
       if (this._current.get(channel) === u) this._current.delete(channel);
     };
     this.synth.speak(u);
-    // ~14 characters a second at rate 1.
-    const seconds = line.length / (14 * u.rate) + 0.3;
-    return { endTime: performance.now() / 1000 + seconds, stop: () => this.stop(channel) };
+    return handle;
   }
 
   stop(channel = null) {
