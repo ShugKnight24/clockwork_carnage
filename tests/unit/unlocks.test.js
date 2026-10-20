@@ -201,6 +201,17 @@ describe("badge and accessory unlocks", () => {
     expect(changes.armorVariant).toBe(0);
   });
 
+  it("sanitizeLocked resets a locked flat pick to the first earned one, and keeps an owned one", () => {
+    const ctx = unlockContext();
+    const locked = ARMOR_STYLES.findIndex((_, i) => !unlockState("armorIndex", i, ctx).unlocked);
+    expect(locked).toBeGreaterThan(0);
+    const ch = { ...cloneLook(DEFAULT_CHARACTER), armorIndex: locked };
+    expect(sanitizeLocked(ch, ctx).armorIndex).toBe(0);
+    const owned = unlockContext({ owned: { [ownedKey("armorIndex", locked)]: true } });
+    expect(sanitizeLocked(ch, owned).armorIndex).toBeUndefined();
+    expect(sanitizeLocked(cloneLook(DEFAULT_CHARACTER), ctx)).toEqual({});
+  });
+
   it("every virtual key is lockable", () => {
     for (const k of ["badge.preset", "badge.symbol", "badge.finish", "acc.back", "acc.legs"]) expect(LOCK[k]).toBeTruthy();
   });

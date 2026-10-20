@@ -413,7 +413,15 @@ export function sanitizeLocked(ch, ctx) {
       changes.badge = { ...b, layers, finish, placements: [...b.placements] };
     }
   }
-  if (ch.armorVariant && !variantState(ch.armorIndex | 0, ctx).unlocked) changes.armorVariant = 0;
+  // The flat picks too (palette, camo, armour, helmet...): a saved look worn
+  // after its unlock was cleared falls back to the first one still earned.
+  for (const [key, { table, byId }] of Object.entries(LOCKABLE)) {
+    const i = ch[key];
+    if (byId || i == null || unlockState(key, i, ctx).unlocked) continue;
+    const free = table.findIndex((_, j) => unlockState(key, j, ctx).unlocked);
+    if (free >= 0) changes[key] = free;
+  }
+  if (ch.armorVariant && !variantState((changes.armorIndex ?? ch.armorIndex) | 0, ctx).unlocked) changes.armorVariant = 0;
   return changes;
 }
 
