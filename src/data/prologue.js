@@ -178,7 +178,7 @@ export const PROLOGUE_STEPS = [
     title: "RIGHT TOOL — THE SHOTGUN",
     color: "#ff6600",
     hint: {
-      key: "Pick up the Temporal Shotgun, switch to it with 1/2 or the scroll wheel, and clear the close targets.",
+      key: (k) => `Pick up the Temporal Shotgun, switch to it with ${k("weapon1")}/${k("weapon2")} or the scroll wheel, and clear the close targets.`,
       touch: "Pick up the Temporal Shotgun, swipe the weapon panel to switch to it, and clear the close targets.",
       pad: (b) => `Pick up the Temporal Shotgun, press ${b("weaponNext")} to switch to it, and clear the close targets.`,
     },
@@ -381,7 +381,7 @@ export const PROLOGUE_STEPS = [
     title: "CHRONO SHIFT — BEND TIME",
     color: "#8844ff",
     hint: {
-      key: "Hold Q to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.",
+      key: (k) => `Hold ${k("chronoShift")} to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.`,
       touch: "Hold SLOW to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.",
       pad: (b) => `Hold ${b("chronoShift")} to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.`,
     },
@@ -396,7 +396,7 @@ export const PROLOGUE_STEPS = [
     title: "PLASMA VENTS",
     color: "#ff7733",
     hint: {
-      key: "The vents burst faster than you can cross. Hold Q to slow them, then go through the gaps.",
+      key: (k) => `The vents burst faster than you can cross. Hold ${k("chronoShift")} to slow them, then go through the gaps.`,
       touch: "The vents burst faster than you can cross. Hold SLOW to slow them, then go through the gaps.",
       pad: (b) => `The vents burst faster than you can cross. Hold ${b("chronoShift")} to slow them, then go through the gaps.`,
     },
@@ -488,7 +488,7 @@ export const PROLOGUE_STEPS = [
     lines: [
       [ARIA, "Doors sealed. We're moving. You did it, {AGENT}. You actually did it.", "tender"],
       [ARIA, "While we ride: I traced the Supervisor's last call. It didn't come from his office. It came from the Engine chamber.", "curious"],
-      [ARIA, "The chamber logged one entry this morning. Eleven seconds before the breach. No clearance. No name.", "worried"],
+      [ARIA, "The chamber logged one entry this morning. Eleven seconds long, at the minute of the breach. No clearance. No name.", "worried"],
       [ARIA, "Just a badge number. Eleven, two, three, five.", "worried"],
       [ARIA, "{AGENT}... that's your badge. And you were with me the whole time.", "afraid"],
     ],

@@ -140,7 +140,7 @@ export const LEVEL_BEATS = {
       { at: "exit", lines: [[ROOK, "Precinct's right above us. Whoever's holding it, he's going to need more than one door.", "worried"]] },
     ],
     precinct: [
-      { at: "start", delay: 4, lines: [[ARIA, "Your locker room. Your range. I taught you to shoot in that gym. Three days ago.", "sad"]] },
+      { at: "start", delay: 4, lines: [[ARIA, "Your locker room. Your range. I taught you to shoot in there. This morning.", "sad"]] },
       { at: "kills", frac: 0.25, lines: [[ARIA, "Unit four's patches again. Rasczak's people. Simon's people. They've come home.", "afraid"]] },
       { at: "kills", frac: 0.5, guest: ["kael"], lines: [[KAEL, "Don't look at their faces, Cadet. I did, the first day. You won't make the door if you look.", "sad"]] },
       { at: "kills", frac: 0.8, event: "flicker", guest: ["kael"], lines: [
