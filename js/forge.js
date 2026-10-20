@@ -575,9 +575,10 @@ export class ForgeMode {
       return true;
     }
 
-    // Survival crafting. The menu only ever exists behind `survival`, and only
-    // claims keys the Forge itself does not use, so creative keeps every key.
-    if (this.survival && code === "KeyC" && !ctrl) {
+    // Survival crafting. The menu only ever exists behind `survival`, so
+    // creative keeps every key. C is also the crouch key, which dives in
+    // water: under water it dives and leaves the menu alone.
+    if (this.survival && code === "KeyC" && !ctrl && !(this._walker?.submersion > 0)) {
       this.craftOpen = !this.craftOpen;
       this.craftIndex = 0;
       if (this.craftOpen) {

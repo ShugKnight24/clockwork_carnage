@@ -66,9 +66,16 @@ export function migrateKeybinds(saved) {
   if (!saved || typeof saved !== "object") return {};
   if (saved._v >= KEYBINDS_VERSION) return saved;
   const out = { ...saved };
+  // The new home for a moved action: the default if nothing else of the
+  // player's sits on it, else the first free spare, so no key ends up doing
+  // two things.
+  const taken = (code, self) =>
+    Object.entries({ ...DEFAULT_KEYBINDS, ...out }).some(([a, c]) => a !== self && a !== "_v" && c === code);
+  const home = (self, keys) => keys.find((k) => !taken(k, self)) ?? null;
   if (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null) {
-    out.crouch = "KeyC";
-    if (out.dash === "KeyC" || out.dash == null) out.dash = "Space";
+    if (out.dash === "KeyC" || out.dash == null) out.dash = null;
+    out.crouch = home("crouch", ["KeyC", "KeyZ", "KeyB", "KeyG"]) ?? out.crouch ?? "KeyC";
+    if (out.dash == null) out.dash = home("dash", ["Space", "KeyB", "KeyG"]);
   }
   return out;
 }

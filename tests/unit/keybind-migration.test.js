@@ -22,4 +22,13 @@ describe("keybind migration", () => {
   it("leaves an old save's own crouch key alone", () => {
     expect(migrateKeybinds({ crouch: "KeyZ", dash: "KeyC" })).toEqual({ crouch: "KeyZ", dash: "KeyC" });
   });
+
+  it("never moves an action onto a key the save already uses for another", () => {
+    const m = migrateKeybinds({ crouch: "ControlLeft", dash: "KeyC", interact: "Space", toggleFPS: "KeyC" });
+    expect(m.toggleFPS).toBe("KeyC");
+    expect(m.crouch).toBe("KeyZ");
+    expect(m.dash).toBe("KeyB");
+    const used = Object.entries({ ...DEFAULT_KEYBINDS, ...m }).map(([, c]) => c).filter(Boolean);
+    expect(new Set(used).size).toBe(used.length);
+  });
 });
