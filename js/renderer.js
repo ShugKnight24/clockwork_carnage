@@ -161,6 +161,21 @@ export class Renderer {
     // Try to initialize WebGL (auto or explicit 3D)
     this.glRenderer = GLRenderer.create(this.width, this.height);
     if (this.glRenderer) {
+      // A lost context (GPU reset, driver update, too many contexts) draws
+      // nothing, and walls now go through it too: drop to Canvas2D until the
+      // browser hands the context back, then rebuild on a fresh one.
+      const gl = this.glRenderer;
+      gl.canvas.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        if (this.glRenderer !== gl) return;
+        console.warn('[Renderer] WebGL context lost — drawing with Canvas2D');
+        this.glRenderer = null;
+        this.useWebGL = false;
+      });
+      gl.canvas.addEventListener('webglcontextrestored', () => {
+        if (this.glRenderer || this.useWebGL) return;
+        this._initGL(this._renderMode);
+      });
       this.useWebGL = true;
       this._envMapGLVersion = -1;
       this._uploadFloorCeilToGL();

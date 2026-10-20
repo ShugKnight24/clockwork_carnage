@@ -62,6 +62,14 @@ function SKIN_PATTERN_DEFS() {
 }
 
 const sceneSkins = new Map(); // finish key -> scene skin
+
+/**
+ * Keep a cache to its newest `max` entries. A finish maker's colour drag
+ * makes a new finish on every input event, and each would stay forever.
+ */
+function capCache(map, max = 48) {
+  while (map.size > max) map.delete(map.keys().next().value);
+}
 /** A weapon finish as the scene applies it: material ramps by role, and its pattern. */
 function sceneSkin(finish) {
   if (!finish) return null;
@@ -74,6 +82,7 @@ function sceneSkin(finish) {
     for (const m of MATERIALS.grip) remap.set(m, finish.grip);
     s = { remap, pattern: finish.pattern ? `skp-${finish.pattern}` : null };
     sceneSkins.set(key, s);
+    capCache(sceneSkins);
   }
   return s;
 }
@@ -626,6 +635,7 @@ export function weaponProfile(id, accent, finish = activeFinish(id)) {
     p = { defs: DEFS, body: body.svg, glow: glow?.svg ?? "", box: [x0, y0, x1 - x0, y1 - y0] };
   }
   profiles.set(key, p);
+  capCache(profiles, 96);
   return p;
 }
 

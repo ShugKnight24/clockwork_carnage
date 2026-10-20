@@ -199,7 +199,7 @@ export class WallPass {
 
     const vao = (this.vao = gl.createVertexArray());
     gl.bindVertexArray(vao);
-    const corners = gl.createBuffer();
+    const corners = (this.corners = gl.createBuffer());
     gl.bindBuffer(gl.ARRAY_BUFFER, corners);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
     const loc = (n) => gl.getAttribLocation(prog, n);
@@ -410,6 +410,8 @@ export class WallPass {
     if (this.tex) gl.deleteTexture(this.tex);
     if (this.normalTex) gl.deleteTexture(this.normalTex);
     if (this.buf) gl.deleteBuffer(this.buf);
+    if (this.corners) gl.deleteBuffer(this.corners);
+    if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.prog) gl.deleteProgram(this.prog);
   }
 }

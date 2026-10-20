@@ -592,6 +592,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     level,
     salt,
     brutal: !!brutal,
+    realistic: !!realistic,
     palette: p,
     walls,
     deck,
