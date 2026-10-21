@@ -12,7 +12,7 @@
  */
 
 import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
-import { createScene } from "./viewmodel/geom.js";
+import { createScene, mix, INK } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
 import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
 import { activeFinish, finishKey } from "../../data/weapon-skins.js";
@@ -24,6 +24,15 @@ const DEFS =
   `<linearGradient id="vmDepth" x1="0" y1="0" x2="0" y2="1">` +
   `<stop offset="0" stop-color="#02040a" stop-opacity=".4"/><stop offset=".55" stop-color="#02040a" stop-opacity=".08"/>` +
   `<stop offset="1" stop-color="#02040a" stop-opacity="0"/></linearGradient>` +
+  // Brushed sweep over a lit metal face: a soft highlight band near its lit
+  // corner, falling to shade at the far one.
+  `<linearGradient id="vmSheen" x1="0" y1="0" x2="1" y2="1">` +
+  `<stop offset="0" stop-color="#ffffff" stop-opacity=".06"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".2"/>` +
+  `<stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".3"/></linearGradient>` +
+  // Polymer grain: a fine stipple of tone, in viewmodel units.
+  `<pattern id="vmGrain" patternUnits="userSpaceOnUse" width="1.6" height="1.6">` +
+  `<rect width=".4" height=".4" fill="#fff" opacity=".06"/><rect x=".8" y=".8" width=".4" height=".4" fill="#fff" opacity=".05"/>` +
+  `<rect x=".8" width=".4" height=".4" fill="#000" opacity=".16"/><rect y=".8" x=".2" width=".4" height=".4" fill="#000" opacity=".12"/></pattern>` +
   HAND_DEFS +
   SKIN_PATTERN_DEFS();
 
@@ -133,10 +142,16 @@ let warmReal = false;
  * art. Queued, as any prefetch: on an art style change they used to decode
  * at once, a weapon a frame, each frame 50-80 ms.
  */
-function warmStep(accent, px, tier, real) {
+function warmStep(accent, px, tier, real, owned = null) {
   if (!warmQueue || warmReal !== real) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
     warmReal = real;
+  }
+  // The guns in hand first: a weapon just picked up, or one the player can
+  // switch to now, jumps the queue ahead of the rest of the arsenal.
+  if (owned?.length && !owned.includes(warmQueue[0]?.[0])) {
+    const i = warmQueue.findIndex(([id]) => owned.includes(id));
+    if (i > 0) warmQueue.unshift(...warmQueue.splice(i, 1));
   }
   const next = warmQueue[0];
   if (!next) return;
@@ -420,6 +435,46 @@ function realisticFlash(ctx, x, y, fk, alpha) {
   ctx.restore();
 }
 
+// Comic flash burst outline, reused: a star of 2n points (unit radius).
+const burst = [];
+/**
+ * Comic muzzle flash for a single frame: an inked star burst of uneven rays
+ * (new every shot) in the suit's energy colour, a pale inner star and a
+ * white-hot core, over a soft accent glow. In viewmodel units around (x, y).
+ */
+function comicFlash(ctx, x, y, fk, accent, drawGlow) {
+  drawGlow(ctx, x, y, 34 * fk, accent, 0.45);
+  const n = 6 + ((Math.random() * 3) | 0);
+  const spin = Math.random() * Math.PI * 2;
+  burst.length = 0;
+  for (let i = 0; i < n * 2; i++) {
+    const a = spin + (i / (n * 2)) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+    const r = i % 2 ? 0.38 + Math.random() * 0.08 : 0.72 + Math.random() * 0.36;
+    burst.push(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const star = (R) => {
+    ctx.beginPath();
+    for (let i = 0; i < burst.length; i += 2) ctx[i ? "lineTo" : "moveTo"](burst[i] * R, burst[i + 1] * R);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineJoin = "round";
+  star(24 * fk);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+  star(15 * fk);
+  ctx.fillStyle = mix(accent, "#ffffff", 0.6);
+  ctx.fill();
+  star(7.5 * fk);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.restore();
+}
+
 /**
  * Draw the modern viewmodel with its own pose, driven by the same bob / sway /
  * kick / recoil inputs as the procedural one plus the eased aim blend.
@@ -446,7 +501,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   // Both poses stay decoded so the blend never has to fall back mid-motion.
   const hipImgs = request(hip, px);
   const aimImgs = request(aim, px);
-  warmStep(accent, px, tier, real);
+  warmStep(accent, px, tier, real, o.owned);
   const b = clamp01(blend);
   const s = smoothstep(clamp01(b / MORPH_END));
   const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
@@ -529,18 +584,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   if (frame === 1 && real) {
     realisticFlash(ctx, mx, my - 2, fk, base);
   } else if (frame === 1) {
-    drawGlow(ctx, mx, my - 2, 32 * fk, accent, 0.4);
-    drawGlow(ctx, mx, my - 2, 12 * fk, "#ffffff", 0.8);
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2 * fk;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + time * 0.05;
-      const len = (15 + Math.random() * 20) * fk;
-      ctx.beginPath();
-      ctx.moveTo(mx + Math.cos(a) * 8 * fk, my - 2 + Math.sin(a) * 8 * fk);
-      ctx.lineTo(mx + Math.cos(a) * len, my - 2 + Math.sin(a) * len);
-      ctx.stroke();
-    }
+    comicFlash(ctx, mx, my - 2, fk, accent, drawGlow);
   }
 
   const since = time - (lastFireTime || 0);

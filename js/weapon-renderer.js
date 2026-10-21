@@ -237,6 +237,9 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
     ctx.restore();
   }
 
+  // The hands' far side goes under the weapon, which then covers most of it.
+  drawHandsUnder(ctx, wep, energyColor);
+
   if (wep.id === 0) {
     // Chrono Pistol
     // Barrel
@@ -1122,18 +1125,37 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   // ── Hands ────────────────────────────────────────────────────────────────
   // Drawn last so they wrap over the weapon. Gloves pick up the character
   // accent so the viewmodel matches the chosen loadout palette.
-  drawHands(ctx, wep, energyColor, opts.skinTone || "#c9956a", ads);
+  drawHands(ctx, wep, energyColor);
 
   ctx.restore();
 }
 
 /**
- * Procedural gloved hands gripping the weapon. Weapons all share the same local
- * space — grip around y≈22, receiver around y≈-5 — so one firing hand reads
- * across the whole arsenal, with a per-weapon support-hand grip:
- * sidearms get a cupping hand under the grip, long guns clamp the pump /
- * handguard, heavy weapons grab the left flank.
+ * Procedural gloved hands, seen as the weapon is: from above and behind, the
+ * muzzle up the screen. A hand wraps what it holds, so most of each finger
+ * lies on the far side of it. drawHandsUnder paints that part before the
+ * weapon, which then covers it: the fingers round the front of the grip and
+ * the support palm under the handguard, so only the tips that curl past an
+ * edge show. drawHands paints what lies on top: the back of the firing hand
+ * on the right flank of the grip, its index along the frame and its thumb
+ * over the back strap to the left side; on a long gun the support thumb along
+ * the handguard's near edge; on a sidearm the back of the support hand on the
+ * left of the grip with its thumb forward under the firing thumb.
+ *
+ * Firing grips (or the stock wrist) by weapon: left/right edge and top/bottom.
+ * Support grips: the handguard span x0..x1 from y (forward) over `rows`
+ * fingers; heavy weapons take the left flank of the body.
  */
+const FIRING_GRIPS = {
+  0: { l: -7, r: 9, top: 15 },
+  1: { l: -11, r: 13, top: 14 },
+  2: { l: -7, r: 9, top: 20 },
+  3: { l: -12, r: 14, top: 20 },
+  4: { l: -10, r: 12, top: 18 },
+  5: { l: -7, r: 9, top: 12 },
+  6: { l: -6, r: 8, top: 12 },
+  7: { l: -10, r: 12, top: 20 },
+};
 const SUPPORT_GRIPS = {
   0: { cup: true },
   6: { cup: true },
@@ -1141,8 +1163,8 @@ const SUPPORT_GRIPS = {
   4: { x0: -13, x1: 12, y: -1, rows: 3, gap: 3.4 },
   2: { x0: -11, x1: 10, y: -24, rows: 3, gap: 3.8 },
   5: { x0: -9, x1: 8, y: -22, rows: 3, gap: 3.8 },
-  3: { x0: -25, x1: -11, y: -9, rows: 4, gap: 3.8 },
-  7: { x0: -23, x1: -9, y: -7, rows: 4, gap: 3.8 },
+  3: { x0: -19, x1: -9, y: -9, rows: 4, gap: 3.8 },
+  7: { x0: -17, x1: -7, y: -7, rows: 4, gap: 3.8 },
 };
 
 const HAND_INK = "#04060b";
@@ -1245,98 +1267,128 @@ function handForearm(ctx, paints, accent, x0, x1, bottom, wx0, wy0, wx1, wy1) {
   ctx.stroke();
 }
 
-function drawHands(ctx, wep, accent, skin, ads) {
+/** Knuckle plate: a small rounded pad with a lit upper edge. */
+function knuckle(ctx, x, y) {
+  ctx.fillStyle = "#4d5d6e";
+  ctx.beginPath();
+  ctx.ellipse(x, y, 1.6, 1.25, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(230,240,250,0.32)";
+  ctx.fillRect(x - 0.8, y - 0.9, 1.4, 0.45);
+}
+
+/** Back of a hand: a padded glove mass through [x, y, ...] with a stitched panel. */
+function handBack(ctx, paints, pts, panel) {
+  ctx.fillStyle = paints.glove;
+  ctx.beginPath();
+  ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) {
+    const nx = pts[(i + 2) % pts.length];
+    const ny = pts[(i + 3) % pts.length];
+    ctx.quadraticCurveTo(pts[i], pts[i + 1], (pts[i] + nx) / 2, (pts[i + 1] + ny) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  if (panel) {
+    ctx.save();
+    ctx.fillStyle = "rgba(90,104,120,0.35)";
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.ellipse(panel[0], panel[1], panel[2], panel[3], panel[4] || 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** The far side of the grip: what the weapon drawn next mostly covers. */
+function drawHandsUnder(ctx, wep, accent) {
   const paints = getHandPaints(ctx);
-  const grip = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
-  const gx = 1;
-  const gy = 22;
+  const g = FIRING_GRIPS[wep.id] || FIRING_GRIPS[0];
+  const sup = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
+  ctx.save();
+  ctx.strokeStyle = HAND_INK;
+  ctx.lineWidth = 0.55;
+  ctx.lineJoin = "round";
+  ctx.fillStyle = paints.glove;
+  // Middle, ring and little fingers round the front of the grip: knuckles on
+  // the right flank, tips curling out past its left edge.
+  for (const [dy, w] of [[16.5, 3.4], [11.5, 3.8], [6.5, 3.9]]) {
+    const y = g.top + dy;
+    handFinger(ctx, [g.r + 1, y, (g.l + g.r) / 2 + 2, y + 0.6, g.l + 1, y + 1.4, g.l - 2.4, y + 2.8], [w, w * 0.95, w * 0.88, w * 0.8]);
+  }
+  if (sup.cup) {
+    // Support fingers wrapped over the firing fingers, tips out on the right
+    // below the firing hand.
+    for (const [dy, w] of [[24, 3.2], [20.2, 3.6]]) {
+      const y = g.top + dy;
+      handFinger(ctx, [g.l - 1, y, (g.l + g.r) / 2, y - 0.4, g.r + 1, y + 0.2, g.r + 3.6, y + 1.8], [w, w * 0.95, w * 0.88, w * 0.8]);
+    }
+  } else {
+    // Support palm under the handguard, forearm in from the lower left.
+    const { x0, x1, y, rows, gap } = sup;
+    const yb = y + rows * gap;
+    handForearm(ctx, paints, accent, x0 - 26, x0 - 8, 64, x0 - 6, yb + 3, x0 + 6, yb + 8);
+    ctx.fillStyle = paints.glove;
+    ctx.beginPath();
+    ctx.ellipse((x0 + x1) / 2, (y + yb) / 2 + 1, (x1 - x0) / 2 + 1.5, (yb - y) / 2 + 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Fingers curl up the far flank; on a slim handguard the tips show past its right edge.
+    for (let i = rows - 1; i >= 0; i--) {
+      const fy = y + i * gap;
+      const w = 3.7 - i * 0.12;
+      handFinger(ctx, [x0 + 2, fy + 0.4, (x0 + x1) / 2, fy - 0.2, x1 - 0.5, fy, x1 + 2.4, fy + 1.4], [w, w * 0.95, w * 0.88, w * 0.8]);
+    }
+  }
+  ctx.restore();
+}
+
+function drawHands(ctx, wep, accent) {
+  const paints = getHandPaints(ctx);
+  const g = FIRING_GRIPS[wep.id] || FIRING_GRIPS[0];
+  const sup = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
+  const { l, r, top } = g;
+  const mid = (l + r) / 2;
 
   ctx.save();
   ctx.strokeStyle = HAND_INK;
   ctx.lineWidth = 0.55;
   ctx.lineJoin = "round";
 
-  // ── Support hand: forearm and palm (fingers come after the firing hand) ──
-  if (grip.cup) {
-    handForearm(ctx, paints, accent, -34, -16, 64, -15, 32, -5, 38);
+  if (sup.cup) {
+    // ── Support hand: back of the left hand on the left of the grip ──
+    handForearm(ctx, paints, accent, l - 24, l - 6, 64, l - 6.5, top + 22, l + 2.5, top + 26);
+    handBack(ctx, paints, [l + 1.5, top + 5, l - 4.2, top + 7, l - 6, top + 15, l - 5.5, top + 24, l + 2.5, top + 26.5, l + 2.5, top + 14], [l - 1.8, top + 16, 2.2, 5.5, 0.08]);
+    for (let i = 0; i < 4; i++) knuckle(ctx, l - 4.6 - (i === 0 ? 0 : 0.6), top + 8 + i * 4.2);
+    // Its thumb forward along the left of the frame, under the firing thumb.
     ctx.fillStyle = paints.glove;
-    ctx.beginPath();
-    ctx.moveTo(-10, 18);
-    ctx.quadraticCurveTo(-4, 26, -3, 38);
-    ctx.lineTo(-6, 41);
-    ctx.quadraticCurveTo(-14, 40, -16, 33);
-    ctx.quadraticCurveTo(-15, 24, -10, 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Support thumb along the left of the frame.
-    handFinger(ctx, [-10, 24, -10.5, 16, -9.5, 9], [4.4, 3.9, 3.4]);
-  } else {
-    const { x0, y, rows, gap } = grip;
+    handFinger(ctx, [l + 0.5, top + 7, l - 1.6, top - 1, l - 2.2, top - 7.5, l - 2, top - 12.5], [4.6, 4.1, 3.7, 3.3]);
+  }
+
+  // ── Firing hand: forearm in from the lower right, back of the hand on the
+  // right flank of the grip ──
+  handForearm(ctx, paints, accent, r + 6, r + 26, 64, r - 3, top + 21, r + 9.5, top + 15);
+  handBack(ctx, paints, [r - 4.5, top - 0.5, r + 3.6, top + 1.6, r + 6, top + 9, r + 5.2, top + 17.5, r + 9, top + 16, r - 2.5, top + 21.5, r - 5.5, top + 9], [r + 0.8, top + 9.5, 2.4, 5.2, -0.1]);
+  // Knuckles of the fingers that wrap the grip, down its right edge.
+  for (const dy of [6.5, 11.5, 16.5]) knuckle(ctx, r + 4.6 - (dy > 15 ? 0.4 : 0), top + dy);
+  // Index laid forward along the frame, off the trigger.
+  ctx.fillStyle = paints.glove;
+  handFinger(ctx, [r + 3.2, top + 2.5, r + 2.4, top - 5, r + 1.8, top - 11, r + 1.5, top - 15], [3.9, 3.7, 3.4, 3]);
+  knuckle(ctx, r + 3.4, top + 2.4);
+  // Thumb from the web over the back strap, forward along the left side.
+  ctx.fillStyle = paints.glove;
+  handFinger(ctx, [r - 3.5, top + 1.5, mid, top - 1.2, l + 0.4, top - 4.5, l - 0.6, top - 10.5], [4.8, 4.3, 3.9, 3.4]);
+
+  if (!sup.cup) {
+    // ── Support thumb along the near (left) edge of the handguard ──
+    const { x0, y, rows, gap } = sup;
     const yb = y + rows * gap;
-    handForearm(ctx, paints, accent, x0 - 26, x0 - 8, 64, x0 - 9, yb + 4, x0 + 1, yb + 8);
     ctx.fillStyle = paints.glove;
-    ctx.beginPath();
-    ctx.moveTo(x0 - 3.5, y - 3);
-    ctx.quadraticCurveTo(x0 + 3, y - 2, x0 + 3.5, yb);
-    ctx.quadraticCurveTo(x0 + 2, yb + 7, x0 - 3, yb + 8);
-    ctx.quadraticCurveTo(x0 - 9, yb + 5, x0 - 8, yb - 2);
-    ctx.quadraticCurveTo(x0 - 7, y, x0 - 3.5, y - 3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Thumb up the near edge.
-    handFinger(ctx, [x0 - 5, yb, x0 - 4.5, y + 1, x0 - 3, y - 5], [4.4, 3.9, 3.4]);
-  }
-
-  // ── Firing hand (enters from lower right) ──
-  handForearm(ctx, paints, accent, gx + 10, gx + 30, 64, gx + 5, gy + 18, gx + 16, gy + 12);
-  ctx.fillStyle = paints.glove;
-  // Back of the hand on the right flank of the grip.
-  ctx.beginPath();
-  ctx.moveTo(gx + 2, gy - 9);
-  ctx.quadraticCurveTo(gx + 10, gy - 10, gx + 12, gy - 2);
-  ctx.quadraticCurveTo(gx + 16, gy + 8, gx + 16, gy + 13);
-  ctx.lineTo(gx + 5, gy + 19);
-  ctx.quadraticCurveTo(gx + 3, gy + 8, gx + 2, gy - 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  // Fingers wrapping the front strap: index at the trigger, then middle/ring/pinky.
-  const rows = [gy - 10, gy - 4.5, gy, gy + 4.4];
-  const fw = [3.9, 3.9, 3.7, 3.3];
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const y = rows[i];
-    const reach = i === 0 ? 1.5 : 0;
-    handFinger(ctx, [gx + 9.5, y + 0.6, gx + 2.5 + reach, y - 0.2, gx - 3.5 + reach, y + 0.4, gx - 6 + reach, y + 2.2], [fw[i], fw[i] * 0.95, fw[i] * 0.88, fw[i] * 0.78]);
-  }
-  // Knuckle plates across the back of the fingers.
-  ctx.fillStyle = "#5d7185";
-  for (let i = 0; i < rows.length; i++) {
-    ctx.beginPath();
-    ctx.ellipse(gx + 9.3, rows[i] + 0.4, 1.5, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.fillStyle = "rgba(230,240,250,0.35)";
-  for (let i = 0; i < rows.length; i++) ctx.fillRect(gx + 8.6, rows[i] - 0.4, 1.1, 0.5);
-  // Thumb over the top of the grip.
-  ctx.fillStyle = paints.glove;
-  handFinger(ctx, [gx + 7, gy - 8, gx + 1, gy - 12, gx - 5, gy - 13], [4.8, 4.2, 3.6]);
-
-  // ── Support fingers ──
-  if (grip.cup) {
-    // Wrapped round the front below the firing hand's pinky.
-    for (const [y, w] of [[31.5, 3.8], [35.8, 3.6], [39.8, 3.2]]) {
-      handFinger(ctx, [-9, y + 1, -2, y - 0.4, 5, y, 8.5, y + 1.8], [w, w * 0.95, w * 0.88, w * 0.78]);
-    }
-  } else {
-    const { x0, x1, y, rows: n, gap } = grip;
-    for (let i = n - 1; i >= 0; i--) {
-      const fy = y + i * gap;
-      const w = 3.7 - i * 0.12;
-      handFinger(ctx, [x0 + 1, fy + 0.4, x0 + (x1 - x0) * 0.45, fy - 0.4, x1 - 2, fy, x1 + 0.5, fy + 1.6], [w, w * 0.95, w * 0.88, w * 0.78]);
-    }
+    handFinger(ctx, [x0 - 2, yb + 2.5, x0 - 1.4, y + 4, x0 - 0.6, y - 2, x0 + 0.2, y - 6], [4.6, 4.1, 3.7, 3.2]);
   }
 
   ctx.restore();

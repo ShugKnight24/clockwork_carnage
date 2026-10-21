@@ -31,6 +31,8 @@ export const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]
 // Key light upper-left and slightly behind the camera; rim light behind-right.
 const KEY = norm([-0.55, 0.78, -0.3]);
 const RIM = norm([0.8, 0.2, 0.55]);
+// The key light's direction on screen (y down), for the worn-edge catch.
+const KEY_2D = [-0.55, -0.83];
 
 function hex(c) {
   const n = parseInt(c.slice(1), 16);
@@ -171,7 +173,8 @@ export function createScene(cam, accent, opts = {}) {
    * against the virtual eye, the rest are painter-sorted, lit and inked.
    */
   function solid(faces, mat, o = {}) {
-    const { smooth = false, amb = 0.2, spec = true, depth = true } = o;
+    // `matte`: polymer — grained, no machined specular, a faint edge catch.
+    const { smooth = false, amb = 0.2, matte = false, spec = !matte, depth = true } = o;
     // A weapon finish recolours the material, and may pattern its faces.
     const skinned = skin?.remap.get(mat);
     if (skinned) mat = skinned;
@@ -206,6 +209,10 @@ export function createScene(cam, accent, opts = {}) {
       const seam = smooth ? `stroke="${col}" stroke-width=".3"` : `stroke="${INK}" stroke-opacity="${edge}" stroke-width=".22"`;
       out += `<path d="${path(p2)}" fill="${col}" ${seam} stroke-linejoin="round"/>`;
       if (pattern) out += `<path d="${path(p2)}" fill="${pattern}"/>`;
+      // Surface finish, from shared defs: polymer gets a fine grain, a lit
+      // metal face a soft brushed sweep that darkens toward its far corner.
+      if (matte) out += `<path d="${path(p2)}" fill="url(#vmGrain)"/>`;
+      else if (!smooth && lit > 0.2) out += `<path d="${path(p2)}" fill="url(#vmSheen)"/>`;
       const h = Math.max(...p2.map((p) => p[1])) - Math.min(...p2.map((p) => p[1]));
       if (depth && h > 14) out += `<path d="${path(p2)}" fill="url(#vmDepth)"/>`;
       // Machined specular strip on faces that catch the key light.
@@ -215,27 +222,38 @@ export function createScene(cam, accent, opts = {}) {
         out += `<path d="${path(band)}" fill="#e8f4ff" fill-opacity="${f(Math.min(0.42, (lit - 0.62) * 1.6 + 0.12))}"/>`;
       }
       if (smooth && lit > 0.8) {
-        out += `<path d="${path(p2)}" fill="#e8f4ff" fill-opacity="${f((lit - 0.8) * 2.2)}"/>`;
+        out += `<path d="${path(p2)}" fill="#e8f4ff" fill-opacity="${f((lit - 0.8) * (matte ? 0.8 : 2.2))}"/>`;
       }
     }
-    // Silhouette ink plus accent rim on the right-facing outline edges.
+    // Silhouette ink, the accent rim on the right-facing outline edges, and a
+    // worn-edge catch where the outline faces the key light: machined corners
+    // wear bright first, which reads as metal far more than flat fills do.
     const hp = hull(all.map(P));
     if (ink) out += `<path d="${path(hp)}" fill="none" stroke="${INK}" stroke-width="${ink}" stroke-linejoin="round"/>`;
-    if (rim) {
-      const hc = hp.reduce((a, p) => [a[0] + p[0] / hp.length, a[1] + p[1] / hp.length], [0, 0]);
-      let d = "";
-      for (let i = 0; i < hp.length; i++) {
-        const a = hp[i];
-        const b = hp[(i + 1) % hp.length];
-        let nx = b[1] - a[1];
-        let ny = -(b[0] - a[0]);
-        const mx = (a[0] + b[0]) / 2 - hc[0];
-        const my = (a[1] + b[1]) / 2 - hc[1];
-        if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
-        const l = Math.hypot(nx, ny) || 1;
-        if (nx / l > 0.55) d += `M${pt(a)}L${pt(b)}`;
+    const hc = hp.reduce((a, p) => [a[0] + p[0] / hp.length, a[1] + p[1] / hp.length], [0, 0]);
+    let rd = "";
+    let wd = "";
+    for (let i = 0; i < hp.length; i++) {
+      const a = hp[i];
+      const b = hp[(i + 1) % hp.length];
+      let nx = b[1] - a[1];
+      let ny = -(b[0] - a[0]);
+      const mx = (a[0] + b[0]) / 2 - hc[0];
+      const my = (a[1] + b[1]) / 2 - hc[1];
+      if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+      const l = Math.hypot(nx, ny) || 1;
+      if (nx / l > 0.55) rd += `M${pt(a)}L${pt(b)}`;
+      if ((nx * KEY_2D[0] + ny * KEY_2D[1]) / l > 0.45) {
+        // Inset half a stroke so the catch sits on the part, inside the ink.
+        const ix = (-nx / l) * 0.28;
+        const iy = (-ny / l) * 0.28;
+        wd += `M${pt([a[0] + ix, a[1] + iy])}L${pt([b[0] + ix, b[1] + iy])}`;
       }
-      if (d) out += `<path d="${d}" fill="none" stroke="${accent}" stroke-opacity=".55" stroke-width=".32" stroke-linecap="round"/>`;
+    }
+    if (rim && rd) out += `<path d="${rd}" fill="none" stroke="${accent}" stroke-opacity=".55" stroke-width=".32" stroke-linecap="round"/>`;
+    if (wd && o.wear !== 0) {
+      const wop = (matte ? 0.18 : real ? 0.4 : 0.55) * (o.wear ?? 1);
+      out += `<path d="${wd}" fill="none" stroke="#eef6ff" stroke-opacity="${f(wop)}" stroke-width="${smooth ? 0.32 : 0.48}" stroke-linecap="round"/>`;
     }
     emit(out);
   }
