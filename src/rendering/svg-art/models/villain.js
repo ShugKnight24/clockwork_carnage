@@ -110,6 +110,7 @@ function lit(content, rim, strength = 0.8) {
     `<use href="#c" filter="url(#toBlack)" transform="translate(-1.8 1.3)"/></mask></defs>` +
     `<use href="#c"/>` +
     `<rect ${R} fill="url(#shade)" mask="url(#sil)"/>` +
+    `<rect ${R} fill="url(#bounce)" mask="url(#sil)"/>` +
     `<rect ${R} fill="${rim}" opacity="${strength}" mask="url(#rim)"/>`
   );
 }
@@ -177,7 +178,14 @@ function villainDefs(p) {
     `<radialGradient id="dial" cx="0.4" cy="0.35" r="0.75"><stop offset="0" stop-color="${p.dial[0]}"/><stop offset="1" stop-color="${p.dial[1]}"/></radialGradient>` +
     `<radialGradient id="glowR"><stop offset="0" stop-color="${p.core}"/><stop offset="0.25" stop-color="${p.glow}" stop-opacity="0.85"/><stop offset="1" stop-color="${p.glow}" stop-opacity="0"/></radialGradient>` +
     `<radialGradient id="auraR"><stop offset="0" stop-color="${p.aura}" stop-opacity="0.5"/><stop offset="0.5" stop-color="${p.aura}" stop-opacity="0.16"/><stop offset="1" stop-color="${p.aura}" stop-opacity="0"/></radialGradient>` +
-    `<linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="-110" y1="-130" x2="110" y2="120"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="0.38" stop-color="#fff" stop-opacity="0"/><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></linearGradient>` +
+    `<linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="-70" y1="-140" x2="60" y2="150"><stop offset="0" stop-color="#fff" stop-opacity="0.26"/><stop offset="0.28" stop-color="#fff" stop-opacity="0"/><stop offset="0.45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.74"/></linearGradient>` +
+    // The core's own light thrown up the jaw and down the thighs.
+    `<radialGradient id="bounce" gradientUnits="userSpaceOnUse" cx="0" cy="-40" r="84"><stop offset="0" stop-color="${p.glow}" stop-opacity="0.3"/><stop offset="0.4" stop-color="${p.glow}" stop-opacity="0.08"/><stop offset="1" stop-color="${p.glow}" stop-opacity="0"/></radialGradient>` +
+    `<linearGradient id="flare" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${p.glow}" stop-opacity="0"/><stop offset="0.5" stop-color="${p.core}" stop-opacity="0.9"/><stop offset="1" stop-color="${p.glow}" stop-opacity="0"/></linearGradient>` +
+    `<radialGradient id="ground"><stop offset="0" stop-color="#000" stop-opacity="0.85"/><stop offset="0.6" stop-color="#000" stop-opacity="0.4"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
+    `<radialGradient id="groundGlow"><stop offset="0" stop-color="${p.glow}" stop-opacity="0.45"/><stop offset="0.5" stop-color="${p.aura}" stop-opacity="0.14"/><stop offset="1" stop-color="${p.aura}" stop-opacity="0"/></radialGradient>` +
+    `<linearGradient id="ray" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${p.glow}" stop-opacity="0.7"/><stop offset="1" stop-color="${p.aura}" stop-opacity="0"/></linearGradient>` +
+    `<filter id="smoke" filterUnits="userSpaceOnUse" x="-220" y="-240" width="440" height="480"><feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="2" seed="${p.glow.length * 7}" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="24" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation="5"/></filter>` +
     `<filter id="toWhite" filterUnits="userSpaceOnUse" x="-220" y="-240" width="440" height="480"><feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/></filter>` +
     `<filter id="toBlack" filterUnits="userSpaceOnUse" x="-220" y="-240" width="440" height="480"><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0"/></filter>` +
     `<filter id="blur1" filterUnits="userSpaceOnUse" x="-220" y="-240" width="440" height="480"><feGaussianBlur stdDeviation="1.2"/></filter>` +
@@ -204,6 +212,26 @@ function backLayer(ph, p) {
     hands += `<g transform="translate(0 -60) rotate(${a})">${clockHand(lens[i], 3.4, a < 0 ? "url(#plate_L)" : "url(#plate_R)", p.glow)}</g>`;
   });
   return lit(`<g stroke="${INK}" stroke-width="0.9" stroke-linejoin="round">${hands}</g>`, p.rim, 0.6);
+}
+
+/** Dark smoke pouring off the shoulders and crown: weight and menace behind the silhouette. */
+function smokeMantle(ph, p) {
+  const rnd = rng(ph * 13 + 5);
+  let m = "";
+  const puffs = [[0, -108, 60, 30], [-96, -90, 46, 38], [96, -90, 46, 38], [-116, -36, 28, 56], [116, -36, 28, 56], [-54, -120, 30, 16], [54, -120, 30, 16], [0, -60, 100, 64]];
+  for (const [x, y, rx, ry] of puffs) {
+    m += `<ellipse cx="${f(x + (rnd() - 0.5) * 10)}" cy="${f(y + (rnd() - 0.5) * 10)}" rx="${rx}" ry="${ry}" fill="#020104" opacity="${f(0.55 + rnd() * 0.25)}"/>`;
+  }
+  // Tendrils curling up from the shoulders.
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const x0 = sx * (66 + i * 20);
+      m += `<path d="M${x0} -76 C${f(x0 + sx * 18)} -104 ${f(x0 - sx * 14)} -124 ${f(x0 + sx * 10)} ${f(-136 + i * 8)}" fill="none" stroke="#020104" stroke-width="${16 - i * 3}" stroke-linecap="round" opacity="0.7"/>`;
+    }
+  }
+  // Their lit edges: the aura's colour catching the smoke.
+  const edge = `<path d="M-128 -50 C-136 -92 -112 -120 -74 -128 M128 -50 C136 -92 112 -120 74 -128" fill="none" stroke="${p.aura}" stroke-width="6" opacity="0.35"/>`;
+  return `<g filter="url(#smoke)">${m}${edge}</g>`;
 }
 
 function haloRing(ph, p) {
@@ -299,7 +327,8 @@ function legsLayer(ph, p) {
     `<path d="M-46 2C-20 10 20 10 46 2L45 16C20 22 -20 22 -45 16Z" fill="url(#brass_L)"/>` +
     `<path d="M-44 6C-20 13 20 13 44 6" stroke="${p.brass[3]}" stroke-width="0.6" opacity="0.6" fill="none"/>` +
     [-38, -26, 26, 38].map((x) => `<circle cx="${x}" cy="${f(10 + Math.abs(x) * -0.08)}" r="1.1" fill="${p.brass[0]}" stroke="none"/>`).join("");
-  return lit(`<g stroke="${INK}" stroke-width="1.1" stroke-linejoin="round">${pelvis}${both(leg)}${belt}</g>`, p.rim);
+  const shadow = `<ellipse cx="0" cy="153" rx="118" ry="11" fill="url(#ground)"/><ellipse cx="-50" cy="153" rx="34" ry="4" fill="#000" opacity="0.7"/><ellipse cx="50" cy="153" rx="34" ry="4" fill="#000" opacity="0.7"/>`;
+  return shadow + lit(`<g stroke="${INK}" stroke-width="1.1" stroke-linejoin="round">${pelvis}${both(leg)}${belt}</g>`, p.rim);
 }
 
 function pendulumLayer(p) {
@@ -427,7 +456,14 @@ function glowLayer(ph, p) {
     : `<path d="M-9 -66L9 -66L7 -59L0 -57L-7 -59Z" fill="${p.glow}" opacity="0.3"/>`;
   const inner = both(eyes + veins + cracks) + third + maw;
   const coreR = ph === 3 ? 42 : 34;
+  const flares =
+    `<g filter="url(#blur3)"><ellipse cx="0" cy="-87" rx="${ph === 3 ? 92 : 78}" ry="3.4" fill="url(#flare)"/><ellipse cx="0" cy="-40" rx="${coreR * 2.6}" ry="2.6" fill="url(#flare)" opacity="0.7"/></g>` +
+    `<ellipse cx="0" cy="-87" rx="${ph === 3 ? 60 : 50}" ry="0.6" fill="url(#flare)"/>` +
+    both(`<circle cx="-12" cy="-88" r="11" fill="url(#glowR)"/>`) +
+    // Luminous mist pooling round the feet, the core's light caught in it.
+    `<g filter="url(#blur8)"><ellipse cx="0" cy="150" rx="140" ry="12" fill="${p.aura}" opacity="0.5"/><ellipse cx="-70" cy="144" rx="60" ry="9" fill="${p.glow}" opacity="0.35"/><ellipse cx="74" cy="146" rx="56" ry="8" fill="${p.glow}" opacity="0.3"/></g>`;
   return (
+    flares +
     `<circle cx="0" cy="-40" r="${coreR}" fill="url(#glowR)" opacity="0.8"/>` +
     `<circle cx="0" cy="-40" r="6" fill="${p.core}" filter="url(#blur1)"/>` +
     `<ellipse cx="0" cy="-86" rx="22" ry="9" fill="url(#glowR)" opacity="0.3"/>` +
@@ -527,8 +563,21 @@ function paradoxLord(ph) {
   const k = ph === 3 ? 1.1 : ph === 2 ? 1.06 : 1;
   const S = (m) => `<g transform="scale(${k})">${m}</g>`;
   const pv = (x, y) => [f(x * k), f(y * k)];
+  let back = "";
+  if (ph < 3) {
+    for (let i = 0; i < 9; i++) {
+      const a = -72 + i * 18;
+      const len = 52 + (i % 3) * 5;
+      back += `<path transform="rotate(${a} 0 -96)" d="M-6 -96L6 -96L${f(18 + (i % 2) * 8)} ${f(-96 - len)}L${f(-18 - (i % 2) * 8)} ${f(-96 - len)}Z" fill="url(#ray)" opacity="${f(0.6 + (i % 3) * 0.2)}"/>`;
+    }
+    back = `<g filter="url(#blur8)">${back}</g>`;
+  }
   const layers = [
-    { markup: S(`<ellipse cx="0" cy="-30" rx="150" ry="170" fill="url(#auraR)"/>`), anim: { type: "pulse", min: 0.6, max: 1, speed: 1.3 }, blend: "screen" },
+    {
+      // Normal blend, not screen: the smoke mantle in here has to darken.
+      markup: S(`<ellipse cx="0" cy="-30" rx="150" ry="170" fill="url(#auraR)"/>` + smokeMantle(ph, p) + back + `<ellipse cx="0" cy="150" rx="150" ry="22" fill="url(#groundGlow)"/>`),
+      anim: { type: "pulse", min: 0.75, max: 1, speed: 1.3 },
+    },
   ];
   if (ph === 3) {
     layers.push({ markup: S(raysLayer(p)), anim: { type: "spin", speed: 0.05, pivot: pv(0, -80) }, blend: "lighter", opacity: 0.8 });

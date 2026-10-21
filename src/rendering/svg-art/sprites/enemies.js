@@ -79,6 +79,13 @@ function buildBoss(type, real) {
   return m;
 }
 
+// Readability overrides on top of the art spec. The glitchling's swarm
+// fragment is a third of a humanoid's width and read as a green speck at
+// a few tiles, so it draws larger and carries a halo of its own green.
+const READABILITY = {
+  glitchling: { scale: 1.45, aura: "#5dff8a" },
+};
+
 function buildModel(type, real = false) {
   if (real) return withRealisticBuild(() => buildModelIn(type, true));
   return buildModelIn(type, false);
@@ -129,13 +136,15 @@ function buildModelIn(type, real) {
     }));
     variants.push({ poses, fx });
   }
+  const boost = READABILITY[type] || {};
   return {
     type,
     key: type + sfx,
     def,
     boss: false,
+    real,
     box,
-    scale: spec.size || 1,
+    scale: (spec.size || 1) * (boost.scale || 1),
     anchor: 100,
     pivot: spec.floater ? 0 : SOLE,
     floater: !!spec.floater,
@@ -144,7 +153,7 @@ function buildModelIn(type, real) {
     shield: spec.shield || null,
     rim: spec.rim,
     variants,
-    aura: spec.aura ? ref(auraMarkup(box, spec.aura, real), "aura") : null,
+    aura: spec.aura || boost.aura ? ref(auraMarkup(box, spec.aura || boost.aura, real), "aura") : null,
     all: [...refs.values()],
   };
 }
@@ -335,6 +344,40 @@ function tintOf(src, color = "#ffffff") {
     g.globalCompositeOperation = "source-in";
     g.fillStyle = color;
     g.fillRect(0, 0, c.width, c.height);
+    byColor.set(color, c);
+  }
+  return c;
+}
+
+const rims = new WeakMap(); // canvas -> Map(color -> canvas)
+
+/**
+ * Rim-light ring for a layer: its silhouette spread a few pixels in eight
+ * directions, minus the silhouette itself, in one colour. Realistic draws it
+ * with "lighter" so dark figures separate from dark walls. Built once per
+ * bitmap by compositing (no pixel reads), like tintOf.
+ */
+function rimOf(src, color) {
+  let byColor = rims.get(src);
+  if (!byColor) {
+    byColor = new Map();
+    rims.set(src, byColor);
+  }
+  let c = byColor.get(color);
+  if (!c) {
+    const solid = tintOf(src, color);
+    c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext("2d");
+    const d = Math.max(1.5, src.width / 150);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      // Lean the ring upward: the station's light comes from the ceiling.
+      g.drawImage(solid, Math.cos(a) * d, Math.sin(a) * d - d * 0.5);
+    }
+    g.globalCompositeOperation = "destination-out";
+    g.drawImage(src, 0, 0);
     byColor.set(color, c);
   }
   return c;
@@ -838,6 +881,15 @@ function drawRegular(ctx, fr, alpha, time, dissolve, windupT, flashK, hitFlash) 
   drawFx(ctx, fr, "front", alpha, time);
   if (m.filter) ctx.filter = "none";
   ctx.globalCompositeOperation = "lighter";
+  if (model.real && fr.body.width > 0) {
+    // Rim light, outside the caller's shade filter so a figure between lamps
+    // still has an edge against the wall behind it.
+    const shade = ctx.filter;
+    ctx.filter = "none";
+    ctx.globalAlpha = alpha * 0.42;
+    drawBox(ctx, rimOf(fr.body, model.rim || "#cfe6ff"), box);
+    ctx.filter = shade;
+  }
   if (fr.glow) {
     const pulse = 0.72 + 0.28 * Math.sin((time + ph) * 0.006);
     ctx.globalAlpha = alpha * pulse;

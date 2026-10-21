@@ -23,28 +23,6 @@ import {
   wrapText,
 } from "../src/ui/cutscene-text.js";
 
-// Art keys that only exist as vector models. In Legacy they map to the closest
-// procedural key, or to none so the frame uses the text-only layout instead of
-// leaving an empty stage above the text box.
-const LEGACY_ART_FALLBACK = {
-  armor_crate: "hero_human",
-  voss_recording: "portrait_voss",
-  unknown_recording: null,
-  redacted_file: null,
-  portrait_supervisor: null,
-};
-const _legacyFrames = new WeakMap();
-
-function legacyFrame(frame) {
-  if (!frame || isModernArt() || !(frame.art in LEGACY_ART_FALLBACK)) return frame;
-  let f = _legacyFrames.get(frame);
-  if (!f) {
-    f = { ...frame, art: LEGACY_ART_FALLBACK[frame.art] || undefined };
-    _legacyFrames.set(frame, f);
-  }
-  return f;
-}
-
 // A party frame draws only the members it names (`party: ["lyra", "you"]`),
 // or, naming nobody, whoever is with you in this slot; both renderers read
 // the member set from the art key (src/rendering/party.js).
@@ -124,6 +102,142 @@ function paperGrain(ph) {
 const FB_COVER_IDLE_MS = 1200;
 const FB_COVER_OPEN_MS = 1100;
 
+// ── Flipbook page bakes ──
+// A printed page does not move, so each page (paper, panels, art, inks,
+// screens) is painted once into a bitmap and a settled page costs one blit;
+// a turn blits the two pages. Art still decoding paints late, so a bake is
+// redone (at most every FB_REBAKE_MS) until two in a row draw the same.
+const FB_BAKE_T = 2.4; // art clock for a bake: past every model's entrance fade
+const FB_REBAKE_MS = 260;
+const FB_MAX_BAKES = 5; // bitmaps kept: cover, book block, the open page, the next
+const FB_MAX_BACKDROPS = 6; // flattened backdrops shared across pages
+const FB_MAX_PX = 2600; // bake resolution cap (lettering stays on the crisp text layer)
+
+/** Seeded 0..1 generator, so paper and inks are the same every bake. */
+function fbRand(seed) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+// Paper stock as a repeating tile: newsprint fibres and specks for Comic
+// (multiplied over the inks), fine film grain for Modern.
+const _paperTiles = new Map();
+function paperTile(kind) {
+  let c = _paperTiles.get(kind);
+  if (c) return c;
+  const n = 256;
+  c = document.createElement("canvas");
+  c.width = c.height = n;
+  const g = c.getContext("2d");
+  const rand = fbRand(kind === "news" ? 4711 : 1931);
+  const img = g.createImageData(n, n);
+  const d = img.data;
+  for (let i = 0; i < n * n; i++) {
+    const r = rand();
+    let v;
+    if (kind === "news") v = 255 - Math.round(r * r * r * 34);
+    else v = 128 + Math.round((r - 0.5) * 70);
+    d[i * 4] = v;
+    d[i * 4 + 1] = v - (kind === "news" ? 2 : 0);
+    d[i * 4 + 2] = v - (kind === "news" ? 6 : 0);
+    d[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  if (kind === "news") {
+    // Fibres: short soft strokes, a few darker, a few lighter than the stock.
+    g.lineCap = "round";
+    for (let i = 0; i < 140; i++) {
+      const x = rand() * n;
+      const y = rand() * n;
+      const a = rand() * Math.PI * 2;
+      const l = 3 + rand() * 11;
+      g.strokeStyle = rand() < 0.7 ? `rgba(120,96,60,${0.05 + rand() * 0.09})` : "rgba(255,255,255,0.35)";
+      g.lineWidth = 0.5 + rand() * 0.7;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + Math.cos(a + 0.6) * l * 0.5, y + Math.sin(a + 0.6) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = `rgba(40,30,20,${0.12 + rand() * 0.2})`;
+      g.beginPath();
+      g.arc(rand() * n, rand() * n, 0.4 + rand() * 0.8, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  _paperTiles.set(kind, c);
+  return c;
+}
+
+const polyPath = (g, poly) => {
+  g.beginPath();
+  g.moveTo(poly[0][0], poly[0][1]);
+  for (let i = 1; i < poly.length; i++) g.lineTo(poly[i][0], poly[i][1]);
+  g.closePath();
+};
+
+const polyBox = (poly) => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of poly) {
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x);
+    y1 = Math.max(y1, y);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+};
+
+/**
+ * A hand-inked panel border: the brush line, swelling on the edges that face
+ * away from the light (down and right), with slightly ragged corners.
+ */
+function inkBorder(g, poly, lw, color, rand) {
+  g.save();
+  g.lineJoin = "miter";
+  g.strokeStyle = color;
+  g.fillStyle = color;
+  g.lineWidth = lw;
+  polyPath(g, poly);
+  g.stroke();
+  const n = poly.length;
+  let cx = 0, cy = 0;
+  for (const [x, y] of poly) {
+    cx += x / n;
+    cy += y / n;
+  }
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = poly[i];
+    const [bx, by] = poly[(i + 1) % n];
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    let nx = (by - ay) / len;
+    let ny = -(bx - ax) / len;
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    if ((mx - cx) * nx + (my - cy) * ny < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    // Shadow side: a tapered swell along the outside of the line.
+    const heavy = Math.max(0, nx * 0.6 + ny * 0.8);
+    if (heavy > 0.2) {
+      const sw = lw * (0.45 + 0.5 * heavy) * (0.85 + rand() * 0.3);
+      const t0 = 0.04 + rand() * 0.06;
+      const t1 = 0.96 - rand() * 0.06;
+      const ox = nx * lw * 0.5;
+      const oy = ny * lw * 0.5;
+      g.beginPath();
+      g.moveTo(ax + (bx - ax) * t0 + ox, ay + (by - ay) * t0 + oy);
+      g.quadraticCurveTo(mx + ox + nx * sw * 1.6, my + oy + ny * sw * 1.6, ax + (bx - ax) * t1 + ox, ay + (by - ay) * t1 + oy);
+      g.closePath();
+      g.fill();
+    }
+  }
+  g.restore();
+}
+
 export class CutsceneEngine {
   constructor({
     audio,
@@ -179,6 +293,39 @@ export class CutsceneEngine {
   hasScript(key) {
     const s = CUTSCENE_SCRIPTS[key];
     return s && s.length > 0;
+  }
+
+  /** Queue the bitmaps a script draws: its cast, panels, pages and backdrops. */
+  _warmScript(script, ctx, w, h, { backdrops = true } = {}) {
+    const arts = new Set();
+    const bgs = new Set();
+    const collect = (f) => {
+      if (f.art) arts.add(this._artKey(f));
+      if (f.bg) bgs.add(f.bg);
+    };
+    for (const raw of script) {
+      const f = this._resolveFrame(raw) ?? raw;
+      collect(f);
+      f.panels?.forEach(collect);
+      f.flipbook?.pages?.forEach((p) => {
+        if (p.panel) collect(p.panel);
+        p.insets?.forEach(collect);
+      });
+      if (f.flipbook?.cover) collect(this._flipbookCover(f.flipbook));
+    }
+    warmSvgArt(arts, backdrops ? bgs : [], ctx, w, h);
+  }
+
+  /**
+   * Warm a cutscene before it is asked for (the comic, while the title
+   * waits for a click), so its first frame is the art and not a black frame,
+   * an empty cover, or one figure standing in for another. Characters only:
+   * a backdrop is a multi-megapixel bake that cannot be split, and on a
+   * CPU-rendered canvas it held the title for two seconds.
+   */
+  prewarm(scriptKey, ctx, w, h) {
+    const script = CUTSCENE_SCRIPTS[scriptKey];
+    if (script?.length) this._warmScript(script, ctx, w, h, { backdrops: false });
   }
 
   start(scriptKey, onComplete) {
@@ -351,6 +498,7 @@ export class CutsceneEngine {
   }
 
   end() {
+    this._fbRelease();
     this.audio.stopSpeech?.("cutscene");
     const cb = this.cutscene?.onComplete;
     this.cutscene = null;
@@ -527,7 +675,9 @@ export class CutsceneEngine {
   // ── Text layer ──────────────────────────────────────────────────
   /** "legacy" | "comic" (player-facing Comic) | "cine" (player-facing Modern). */
   _look() {
-    if (!isModernArt()) return "legacy";
+    // A comic book is printed as one in every style: Legacy's full-bleed
+    // pages dropped the layouts, insets and readouts the book is written for.
+    if (!isModernArt()) return this._inFlipbook ? "comic" : "legacy";
     return isRealisticArt() ? "cine" : "comic";
   }
 
@@ -623,9 +773,8 @@ export class CutsceneEngine {
     return partyKey(frame.party ?? this.getParty() ?? undefined);
   }
 
-  /** The frame as drawn: Legacy stand-ins, and a party frame's lineup. */
-  _resolveFrame(raw) {
-    const frame = legacyFrame(raw);
+  /** The frame as drawn: a party frame's lineup. */
+  _resolveFrame(frame) {
     if (frame?.art !== "party") return frame;
     const art = this._artKey(frame);
     if (art === "party") return frame;
@@ -674,19 +823,7 @@ export class CutsceneEngine {
 
     if (!cs.svgWarmed) {
       cs.svgWarmed = true;
-      const arts = new Set();
-      const bgs = new Set();
-      const collect = (f) => {
-        if (f.art) arts.add(this._artKey(f));
-        if (f.bg) bgs.add(f.bg);
-      };
-      for (const f of cs.script) {
-        collect(f);
-        f.panels?.forEach(collect);
-        f.flipbook?.pages?.forEach((p) => p.panel && collect(p.panel));
-        if (f.flipbook?.cover) collect(this._flipbookCover(f.flipbook));
-      }
-      warmSvgArt(arts, bgs, ctx, w, h);
+      this._warmScript(cs.script, ctx, w, h);
     }
 
     const elapsed = performance.now() - cs.frameStart;
@@ -2177,6 +2314,15 @@ export class CutsceneEngine {
    * it ends the frame.
    */
   renderFlipbook(ctx, w, h, frame, elapsed /* ms */, t /* sec */) {
+    this._inFlipbook = true;
+    try {
+      this._renderFlipbook(ctx, w, h, frame, elapsed, t);
+    } finally {
+      this._inFlipbook = false;
+    }
+  }
+
+  _renderFlipbook(ctx, w, h, frame, elapsed, t) {
     const fb = frame.flipbook;
     if (!fb || !fb.pages || !fb.pages.length) return;
     const cs = this.cutscene;
@@ -2194,17 +2340,24 @@ export class CutsceneEngine {
     const px = (w - pw) / 2;
     const py = (h - ph) / 2;
 
-    // Backdrop — deep velvet
-    const backdrop = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.7);
-    backdrop.addColorStop(0, "#0a0814");
-    backdrop.addColorStop(1, "#020108");
-    ctx.fillStyle = backdrop;
-    ctx.fillRect(0, 0, w, h);
-
     const spineRight = (fb.spineSide ?? "right") === "right";
     const paperTint = fb.paperTint ?? "#0a0814";
+    // One page bake a frame beyond what must show now (the next page,
+    // a rebake of art that was still decoding).
+    this._fbBakeLeft = 1;
 
-    if (cs.fbPhase === "cover") {
+    // Backdrop, the book's stack of pages and the vignette: one cached blit.
+    const cover = cs.fbPhase === "cover";
+    ctx.drawImage(this._fbStage(ctx, w, h, px, py, pw, ph, s, spineRight, cover), 0, 0, w, h);
+    if (cover && cs.fbOpenStart) {
+      // The open book's page block settles in as the cover swings.
+      const open = Math.min(1, (now - cs.fbOpenStart) / FB_COVER_OPEN_MS);
+      ctx.globalAlpha = Math.min(1, open * 1.6) ** 2;
+      ctx.drawImage(this._fbStage(ctx, w, h, px, py, pw, ph, s, spineRight, false), 0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
+
+    if (cover) {
       this._renderFlipbookCover(ctx, w, h, px, py, pw, ph, fb, cs, now, t, s, paperTint, spineRight);
     } else {
       const idx = cs.fbPage;
@@ -2215,60 +2368,28 @@ export class CutsceneEngine {
       const flipT = cs.fbFlipStart && nextPage
         ? (flipMs > 0 ? Math.min(1, (now - cs.fbFlipStart) / flipMs) : 1)
         : 0;
+      const cur = this._fbPageBitmap(ctx, fb, idx, pw, ph, s, paperTint, spineRight, now, true);
 
-      // Draw the next page underneath (revealed as current page flips away)
-      if (nextPage && flipT > 0) {
-        this._drawFlipbookPage(ctx, px, py, pw, ph, nextPage.panel, t, s, paperTint, 1, 0);
-      }
-
-      // Draw current page with horizontal page-flip transform
       if (flipT === 0) {
+        ctx.drawImage(cur, px, py, pw, ph);
         // Lettering settles onto the page just after it lands.
         const textIn = Math.min(1, (now - cs.fbPageStart) / 220);
-        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1, textIn);
+        this._drawFbLettering(ctx, curPage, px, py, pw, ph, t, s, textIn);
+        // Bake the next page while this one is read.
+        if (nextPage) this._fbPageBitmap(ctx, fb, idx + 1, pw, ph, s, paperTint, spineRight, now, false);
       } else {
+        const next = this._fbPageBitmap(ctx, fb, idx + 1, pw, ph, s, paperTint, spineRight, now, true);
+        ctx.drawImage(next, px, py, pw, ph);
         // Ease in-out for natural flip motion
         const eased = flipT < 0.5
           ? 2 * flipT * flipT
           : 1 - Math.pow(-2 * flipT + 2, 2) / 2;
-        // Horizontal "page lifting" — scaleX from 1 → 0 over the spine
-        const sx = Math.max(0.001, 1 - eased);
-        // Slight perspective skew to suggest 3D
-        const skewY = (spineRight ? -1 : 1) * eased * 0.18;
-
-        ctx.save();
-        // Pivot at spine edge
-        const spineX = spineRight ? px + pw : px;
-        ctx.translate(spineX, py + ph / 2);
-        ctx.transform(sx, skewY * sx, 0, 1, 0, 0);
-        ctx.translate(-spineX, -(py + ph / 2));
-        this._drawFlipbookPage(ctx, px, py, pw, ph, curPage.panel, t, s, paperTint, 1, Math.max(0, 1 - flipT * 2.5));
-        ctx.restore();
-
-        // Shadow cast by the lifting page on the next page
-        ctx.save();
-        const shadow = ctx.createLinearGradient(
-          spineRight ? px + pw - pw * (1 - eased) : px,
-          0,
-          spineRight ? px + pw : px + pw * (1 - eased),
-          0,
-        );
-        shadow.addColorStop(0, "rgba(0,0,0,0)");
-        shadow.addColorStop(1, `rgba(0,0,0,${0.45 * eased})`);
-        ctx.fillStyle = shadow;
-        ctx.fillRect(px, py, pw, ph);
-        ctx.restore();
+        this._drawPageTurn(ctx, cur, px, py, pw, ph, eased, spineRight);
+        // The lettering lifts off with the page's first movement.
+        const textOut = Math.max(0, 1 - flipT * 5);
+        if (textOut > 0) this._drawFbLettering(ctx, curPage, px, py, pw, ph, t, s, textOut);
       }
-
-      this._drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, 1);
     }
-
-    // Vignette over whole composition
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.55)");
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
 
     // Page indicator (subtle, bottom-right). The cover is not a page.
     if (cs.fbPhase === "pages") {
@@ -2279,20 +2400,688 @@ export class CutsceneEngine {
     this._drawSkipPrompt(ctx, w, h, (py + ph + h) / 2, s, elapsed, "bottom");
   }
 
-  /** Page binding shadow along the spine edge. */
-  _drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, alpha) {
+  /** Device pixels per art pixel for a bake on this context, capped. */
+  _fbScale(ctx, pw) {
+    const m = ctx.getTransform();
+    return Math.max(0.5, Math.min(Math.hypot(m.a, m.b) || 1, 2, FB_MAX_PX / Math.max(1, pw)));
+  }
+
+  /**
+   * A bitmap painted by `paint(g)` in art pixels, kept under `key`. Returns
+   * null only when it was never painted and `need` is false (or no budget
+   * is left this frame). Repainted every FB_REBAKE_MS until a paint draws
+   * the same images as the one before and none is still an SVG <img>.
+   */
+  _fbBake(key, wArt, hArt, k, paint, now, need, shared = false) {
+    const bakes = (this._fbBakes ??= new Map());
+    let e = bakes.get(key);
+    if (e) {
+      e.used = now;
+      if (e.final || now - e.at < FB_REBAKE_MS || this._fbBakeLeft <= 0) return e.c;
+    } else if (!need && this._fbBakeLeft <= 0) return null;
+    if (!e) {
+      let c = null;
+      if ([...bakes.values()].filter((v) => v.shared === shared).length >= (shared ? FB_MAX_BACKDROPS : FB_MAX_BAKES)) {
+        // Reuse the least recently shown bitmap's canvas.
+        let old = null;
+        for (const [k2, v] of bakes) if (v.shared === shared && (!old || v.used < old[1].used)) old = [k2, v];
+        bakes.delete(old[0]);
+        c = old[1].c;
+      }
+      e = { c: c || document.createElement("canvas"), n: -1, at: 0, tries: 0, used: now, final: false, shared };
+      bakes.set(key, e);
+    }
+    const W = Math.max(1, Math.ceil(wArt * k));
+    const H = Math.max(1, Math.ceil(hArt * k));
+    // Count what a paint draws: a layer that has not decoded draws nothing,
+    // and one not yet baked to a bitmap is an <img>.
+    const run = (g, real) => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = "source-over";
+      if (real) g.clearRect(0, 0, W, H);
+      g.setTransform(W / wArt, 0, 0, H / hArt, 0, 0);
+      const probe = { n: 0, svg: 0 };
+      const draw = CanvasRenderingContext2D.prototype.drawImage;
+      g.drawImage = function (img, ...a) {
+        probe.n++;
+        if (typeof HTMLImageElement !== "undefined" && img instanceof HTMLImageElement) probe.svg++;
+        // A dry run only counts: the art it asks for is what matters.
+        return real ? draw.call(this, img, ...a) : undefined;
+      };
+      const prevPending = this._fbPending;
+      const prevNeed = this._fbNeed;
+      this._fbPending = false;
+      this._fbNeed = need;
+      try {
+        paint(g);
+      } finally {
+        delete g.drawImage;
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        // A flattened backdrop still settling keeps this bake open too.
+        if (this._fbPending) probe.svg++;
+        this._fbPending = prevPending;
+        this._fbNeed = prevNeed;
+      }
+      return probe;
+    };
+    if (e.tries > 0) {
+      // Rebake only when a dry run (counting, drawing nothing) finds the art
+      // changed since the last bake: a full bake is a long frame on a slow CPU.
+      const dry = (this._fbDry ??= document.createElement("canvas").getContext("2d"));
+      const p = run(dry, false);
+      if (p.svg === 0 && p.n === e.n) {
+        e.final = true;
+        return e.c;
+      }
+      e.at = now;
+      // The dry run may have spent the frame baking a backdrop.
+      if (this._fbBakeLeft <= 0) return e.c;
+    }
+    this._fbBakeLeft--;
+    if (e.c.width !== W || e.c.height !== H) {
+      e.c.width = W;
+      e.c.height = H;
+    }
+    const probe = run(e.c.getContext("2d"), true);
+    e.final = e.tries >= 12;
+    e.n = probe.n;
+    e.at = now;
+    e.tries++;
+    return e.c;
+  }
+
+  /** Drop every flipbook bitmap (the comic ended). */
+  _fbRelease() {
+    if (!this._fbBakes) return;
+    for (const e of this._fbBakes.values()) e.c.width = e.c.height = 0;
+    this._fbBakes.clear();
+    this._fbStageC = null;
+  }
+
+  /**
+   * The table the book lies on: backdrop, the stack of pages under the open
+   * page (or nothing under a closed book) and the vignette, as one bitmap.
+   */
+  _fbStage(ctx, w, h, px, py, pw, ph, s, spineRight, closed) {
+    const look = this._look();
+    const k = Math.min(1, this._fbScale(ctx, w)); // soft by nature: never above 1:1
+    const key = `${look}|${w}|${h}|${k}|${closed ? 1 : 0}|${spineRight ? 1 : 0}|${this.isTouchDevice ? 1 : 0}`;
+    const st = (this._fbStageC ??= {});
+    if (st[key]) return st[key];
+    for (const kk of Object.keys(st)) {
+      if (kk.split("|").slice(0, 4).join("|") !== key.split("|").slice(0, 4).join("|")) delete st[kk];
+    }
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * k));
+    c.height = Math.max(1, Math.round(h * k));
+    const g = c.getContext("2d");
+    g.scale(c.width / w, c.height / h);
+    const comic = look === "comic";
+    const cine = look === "cine";
+    // Backdrop: deep velvet (Comic, Legacy), near-black under a soft key light (Modern).
+    const backdrop = g.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h / 2, w * 0.72);
+    backdrop.addColorStop(0, cine ? "#15161a" : comic ? "#1a1222" : "#0a0814");
+    backdrop.addColorStop(0.55, cine ? "#08090b" : comic ? "#0b0812" : "#06040e");
+    backdrop.addColorStop(1, cine ? "#020203" : "#020108");
+    g.fillStyle = backdrop;
+    g.fillRect(0, 0, w, h);
+    if (look !== "legacy") {
+      // Cloth weave on the table.
+      g.save();
+      g.globalAlpha = cine ? 0.05 : 0.06;
+      g.globalCompositeOperation = "overlay";
+      g.fillStyle = g.createPattern(paperTile("grain"), "repeat");
+      g.fillRect(0, 0, w, h);
+      g.restore();
+    }
+    if (!closed) {
+      // The book: a soft contact shadow, then the page block under the open
+      // page, its edges stepping out on the free side and the foot.
+      const dir = spineRight ? -1 : 1;
+      g.save();
+      g.shadowColor = "rgba(0,0,0,0.75)";
+      g.shadowBlur = 40 * s * k;
+      g.shadowOffsetY = 16 * s * k;
+      g.fillStyle = "#000";
+      g.fillRect(px + 4 * s, py + 6 * s, pw, ph);
+      g.restore();
+      const layers = 5;
+      const step = 1.6 * s;
+      for (let i = layers; i >= 1; i--) {
+        const tone = cine ? (i % 2 ? "#2a2b2f" : "#1d1e21") : i % 2 ? "#d4c7a8" : "#b5a682";
+        g.fillStyle = tone;
+        g.fillRect(px + dir * i * step, py + i * step * 0.8, pw, ph);
+      }
+      // Binding: a cloth spine strip outside the bound edge.
+      const sx = spineRight ? px + pw : px - 10 * s;
+      const bind = g.createLinearGradient(sx, 0, sx + 10 * s, 0);
+      bind.addColorStop(0, spineRight ? "#3a1016" : "#14060a");
+      bind.addColorStop(1, spineRight ? "#14060a" : "#3a1016");
+      g.fillStyle = cine ? "#111214" : bind;
+      g.fillRect(sx, py - 3 * s, 10 * s, ph + 6 * s + layers * step);
+    }
+    const vignette = g.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.55)");
+    g.fillStyle = vignette;
+    g.fillRect(0, 0, w, h);
+    st[key] = c;
+    return c;
+  }
+
+  /** A page's printed bitmap (null only while it is not yet needed on screen). */
+  _fbPageBitmap(ctx, fb, idx, pw, ph, s, paperTint, spineRight, now, need) {
+    const look = this._look();
+    const k = this._fbScale(ctx, pw);
+    const ids = (this._fbIds ??= new WeakMap());
+    let id = ids.get(fb);
+    if (!id) ids.set(fb, (id = `fb${(this._fbIdN = (this._fbIdN || 0) + 1)}`));
+    const key = `${id}|${idx}|${look}|${Math.round(pw)}|${Math.round(ph)}|${k.toFixed(3)}|${spineRight ? 1 : 0}`;
+    const page = fb.pages[idx];
+    this._fbFrame = { pw, ph, k, now };
+    return this._fbBake(key, pw, ph, k, (g) => this._paintPrintedPage(g, page, idx, pw, ph, s, look, spineRight), now, need);
+  }
+
+  /**
+   * Panel geometry for a page in page pixels, cached on the page: the main
+   * panel first, then the others. `page.layout`:
+   *   "splash"   one panel inside the margins (default)
+   *   "bleed"    one panel to the trim, no margins
+   *   "tiers"    the main panel over a row of `insets` (slot "low")
+   *   "diagonal" the main panel and an inset (slot "cut") split by a slanted gutter
+   * Insets with slot tl/tr/bl/br sit over the main panel as framed inserts.
+   */
+  _fbLayout(page, pw, ph, look) {
+    const key = `${look}|${Math.round(pw)}|${Math.round(ph)}`;
+    const lays = (this._fbLayouts ??= new WeakMap());
+    const hit = lays.get(page);
+    if (hit?.key === key) return hit;
+    const R = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    const legacy = look === "legacy";
+    const kind = legacy ? "bleed" : page.layout || "splash";
+    const u = Math.min(pw, ph);
+    const m = kind === "bleed" ? 0 : Math.round(u * 0.045);
+    const gut = Math.max(4, Math.round(u * 0.02));
+    const F = { x: m, y: m, w: pw - m * 2, h: ph - m * 2 };
+    const insets = legacy ? [] : page.insets || [];
+    const panels = [];
+    let main;
+    let cap = null;
+    if (kind === "tiers") {
+      const mh = Math.round(F.h * (page.split ?? 0.64));
+      main = R(F.x, F.y, F.w, mh);
+      const row = insets.filter((i) => (i.slot ?? "low") === "low");
+      const n = Math.max(1, row.length);
+      const cw = (F.w - gut * (n - 1)) / n;
+      row.forEach((src, i) => panels.push({ src, poly: R(F.x + i * (cw + gut), F.y + mh + gut, cw, F.h - mh - gut) }));
+    } else if (kind === "diagonal") {
+      const a = F.x + F.w * (page.cutTop ?? 0.68);
+      const b = F.x + F.w * (page.cutBottom ?? 0.56);
+      main = [[F.x, F.y], [a, F.y], [b, F.y + F.h], [F.x, F.y + F.h]];
+      const src = insets.find((i) => i.slot === "cut");
+      if (src) panels.push({ src, poly: [[a + gut, F.y], [F.x + F.w, F.y], [F.x + F.w, F.y + F.h], [b + gut, F.y + F.h]] });
+      cap = { x: F.x, y: F.y, w: Math.min(a, b) - F.x - gut, h: F.h };
+    } else {
+      main = R(F.x, F.y, F.w, F.h);
+    }
+    panels.unshift({ src: page.panel, poly: main, main: true });
+    for (const src of insets) {
+      const sl = src.slot;
+      if (!["tl", "tr", "bl", "br"].includes(sl)) continue;
+      const iw = F.w * (src.w ?? 0.26);
+      const ih = F.h * (src.h ?? 0.26);
+      const pad = gut * 1.8 + (kind === "bleed" ? u * 0.03 : 0);
+      const x = sl[1] === "l" ? F.x + pad : F.x + F.w - iw - pad;
+      const y = sl[0] === "t" ? F.y + pad : F.y + F.h - ih - pad;
+      panels.push({ src, poly: R(x, y, iw, ih), inset: true });
+    }
+    for (const p of panels) p.box = polyBox(p.poly);
+    const out = { key, panels, cap: cap || panels[0].box, gut, m };
+    lays.set(page, out);
+    return out;
+  }
+
+  /**
+   * A backdrop flattened once at page size and shared by every panel that
+   * shows it (its layers composited every bake cost a long frame each on a
+   * slow CPU), cover-fitted into the panel.
+   */
+  _drawFbBackdrop(g, bg, w, h) {
+    const F = this._fbFrame;
+    if (!F) {
+      this.drawCutsceneBg(g, w, h, bg, FB_BAKE_T);
+      return;
+    }
+    const k = Math.min(F.k, 1.25);
+    const key = `bg|${bg}|${this._look()}|${Math.round(F.pw)}|${Math.round(F.ph)}|${k.toFixed(3)}`;
+    const c = this._fbBake(key, F.pw, F.ph, k, (b) => this.drawCutsceneBg(b, F.pw, F.ph, bg, FB_BAKE_T), F.now, this._fbNeed, true);
+    const e = this._fbBakes.get(key);
+    if (!e?.final) this._fbPending = true;
+    if (!c) return;
+    const sc = Math.max(w / F.pw, h / F.ph);
+    g.drawImage(c, (w - F.pw * sc) / 2, (h - F.ph * sc) / 2, F.pw * sc, F.ph * sc);
+  }
+
+  /** A page as printed: paper, panels (art, screens, inks), stock and binding. */
+  _paintPrintedPage(g, page, idx, pw, ph, s, look, spineRight) {
+    const comic = look === "comic";
+    const L = this._fbLayout(page, pw, ph, look);
+    const rand = fbRand(9173 + idx * 131);
+    const u = Math.min(pw, ph);
+    // Paper.
+    g.fillStyle = comic ? "#efe6cd" : "#0d0e11";
+    g.fillRect(0, 0, pw, ph);
+    for (const P of L.panels) {
+      if (P.inset) {
+        // Inserts lift off the panel under them: a soft drop and a paper rim.
+        g.save();
+        g.shadowColor = comic ? "rgba(20,10,0,0.45)" : "rgba(0,0,0,0.7)";
+        g.shadowBlur = u * 0.025;
+        g.shadowOffsetX = u * 0.006;
+        g.shadowOffsetY = u * 0.01;
+        g.fillStyle = comic ? "#f4ecd6" : "#0d0e11";
+        const r = L.gut * 0.6;
+        g.fillRect(P.box.x - r, P.box.y - r, P.box.w + r * 2, P.box.h + r * 2);
+        g.restore();
+      }
+      this._paintPanel(g, P, s, look, rand, u);
+    }
+    if (comic) {
+      // Newsprint: the stock's fibres multiplied through ink and paper alike.
+      g.save();
+      g.globalCompositeOperation = "multiply";
+      g.globalAlpha = 0.85;
+      g.fillStyle = g.createPattern(paperTile("news"), "repeat");
+      g.fillRect(0, 0, pw, ph);
+      g.restore();
+      // Age toning creeping in from the trim.
+      g.save();
+      g.globalCompositeOperation = "multiply";
+      const edge = (x0, y0, x1, y1, a) => {
+        const gr = g.createLinearGradient(x0, y0, x1, y1);
+        gr.addColorStop(0, `rgba(176,140,80,${a})`);
+        gr.addColorStop(1, "rgba(176,140,80,0)");
+        return gr;
+      };
+      const d = u * 0.05;
+      g.fillStyle = edge(0, 0, 0, d, 0.35);
+      g.fillRect(0, 0, pw, d);
+      g.fillStyle = edge(0, ph, 0, ph - d, 0.4);
+      g.fillRect(0, ph - d, pw, d);
+      g.fillStyle = edge(spineRight ? 0 : pw, 0, spineRight ? d : pw - d, 0, 0.45);
+      g.fillRect(spineRight ? 0 : pw - d, 0, d, ph);
+      g.restore();
+    } else {
+      // Modern: a matte stock with a fine grain over the art.
+      g.save();
+      g.globalCompositeOperation = "overlay";
+      g.globalAlpha = 0.16;
+      g.fillStyle = g.createPattern(paperTile("grain"), "repeat");
+      g.fillRect(0, 0, pw, ph);
+      g.restore();
+    }
+    // Gutter of the binding: the page curves down into the spine.
+    const gw = pw * 0.07;
+    const sx = spineRight ? pw : 0;
+    const spine = g.createLinearGradient(sx, 0, spineRight ? pw - gw : gw, 0);
+    spine.addColorStop(0, "rgba(0,0,0,0.5)");
+    spine.addColorStop(0.18, "rgba(0,0,0,0.22)");
+    spine.addColorStop(0.3, comic ? "rgba(255,248,230,0.08)" : "rgba(255,255,255,0.03)");
+    spine.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = spine;
+    g.fillRect(spineRight ? pw - gw : 0, 0, gw, ph);
+    // Light falls off toward the corners.
+    const fall = g.createRadialGradient(pw * 0.5, ph * 0.42, u * 0.3, pw * 0.5, ph * 0.5, Math.hypot(pw, ph) * 0.62);
+    fall.addColorStop(0, "rgba(0,0,0,0)");
+    fall.addColorStop(1, comic ? "rgba(30,16,0,0.28)" : "rgba(0,0,0,0.35)");
+    g.fillStyle = fall;
+    g.fillRect(0, 0, pw, ph);
+    // Trim edge.
+    g.strokeStyle = comic ? "rgba(90,70,40,0.55)" : "rgba(255,255,255,0.06)";
+    g.lineWidth = Math.max(1, u * 0.0015);
+    g.strokeRect(0.5, 0.5, pw - 1, ph - 1);
+  }
+
+  /** One panel into its shape: backdrop, figure, screens, speed lines, border. */
+  _paintPanel(g, P, s, look, rand, u) {
+    const comic = look === "comic";
+    const src = P.src || {};
+    const { x, y, w, h } = P.box;
+    g.save();
+    polyPath(g, P.poly);
+    g.clip();
+    g.translate(x, y);
+    if (src.readout) this._paintReadout(g, src.readout, w, h, look);
+    else if (src.bg) this._drawFbBackdrop(g, src.bg, w, h);
+    else {
+      g.fillStyle = comic ? "#14101c" : "#0a0b0e";
+      g.fillRect(0, 0, w, h);
+    }
+    if (src.art) {
+      g.save();
+      // Art sizes itself to the rect it is given; artZoom scales past that.
+      const artScale = Math.min(w, h) / 200;
+      const zoom = src.artZoom ?? 1;
+      const artCx = w * (src.artX ?? 0.5);
+      const artCy = h * (src.artY ?? 0.42);
+      g.translate(artCx, artCy);
+      g.scale(artScale * zoom, artScale * zoom);
+      g.translate(-w / 2 / artScale, -artCy / artScale);
+      this.drawCutsceneArt(g, w / artScale, h / artScale, src.art, FB_BAKE_T);
+      g.restore();
+    }
+    if (src.tint) {
+      g.save();
+      g.globalCompositeOperation = "multiply";
+      g.fillStyle = src.tint;
+      g.fillRect(0, 0, w, h);
+      g.restore();
+    }
+    if (src.glow) {
+      // A light source spilling into the panel (screen blend).
+      g.save();
+      g.globalCompositeOperation = "screen";
+      const [gx, gy, gr, gc] = src.glow;
+      const rg = g.createRadialGradient(w * gx, h * gy, 0, w * gx, h * gy, Math.max(w, h) * gr);
+      rg.addColorStop(0, gc);
+      rg.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = rg;
+      g.fillRect(0, 0, w, h);
+      g.restore();
+    }
+    if (src.action) this._paintSpeedLines(g, w, h, src, look, rand);
+    if (comic && !src.readout) {
+      // Ben-Day screen: dots that swell toward the bottom of the panel, the
+      // way a printer's shading screen fills a shadow, multiplied over the art.
+      const amt = Math.min(1, 0.28 + (src.halftone ?? 0.08) * 2.4);
+      const dot = Math.max(2.2, u * 0.0062);
+      const bands = 6;
+      const top = h * 0.5;
+      g.save();
+      g.globalCompositeOperation = "multiply";
+      for (let b = 0; b < bands; b++) {
+        const y0 = top + ((h - top) * b) / bands;
+        g.globalAlpha = amt * (0.5 + 0.5 * (b / (bands - 1)));
+        g.fillStyle = halftonePattern(g, dot, dot * (0.16 + 0.07 * b), true);
+        g.fillRect(0, y0, w, (h - top) / bands + 1);
+      }
+      g.restore();
+    }
+    // Panel lighting: a soft inner vignette gives every panel its own depth.
+    const vg = g.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.25, w / 2, h / 2, Math.hypot(w, h) * 0.6);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, comic ? "rgba(10,4,0,0.35)" : "rgba(0,0,0,0.5)");
+    g.fillStyle = vg;
+    g.fillRect(0, 0, w, h);
+    g.restore();
+    // Border: brush ink for Comic, a hairline frame for Modern.
+    if (comic) inkBorder(g, P.poly, Math.max(2, u * (P.inset ? 0.0055 : 0.0048)), INK, rand);
+    else {
+      g.save();
+      g.strokeStyle = "rgba(0,0,0,0.9)";
+      g.lineWidth = Math.max(1.5, u * 0.004);
+      polyPath(g, P.poly);
+      g.stroke();
+      g.strokeStyle = "rgba(232,226,212,0.55)";
+      g.lineWidth = Math.max(1, u * 0.0012);
+      polyPath(g, P.poly);
+      g.stroke();
+      g.restore();
+    }
+  }
+
+  /** Speed lines toward a focus: tapered ink wedges (Comic), light streaks (Modern). */
+  _paintSpeedLines(g, w, h, src, look, rand) {
+    const fx = w * (src.sfxX ?? 0.5);
+    const fy = h * (src.actionY ?? 0.45);
+    const n = 46;
+    const R = Math.hypot(w, h);
+    g.save();
+    g.fillStyle = look === "comic" ? "rgba(13,10,8,0.55)" : "rgba(220,235,255,0.07)";
+    if (look !== "comic") g.globalCompositeOperation = "screen";
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.12;
+      const r0 = Math.min(w, h) * (0.3 + rand() * 0.18);
+      const da = 0.006 + rand() * 0.012;
+      g.moveTo(fx + Math.cos(a) * r0, fy + Math.sin(a) * r0);
+      g.lineTo(fx + Math.cos(a - da) * R, fy + Math.sin(a - da) * R);
+      g.lineTo(fx + Math.cos(a + da) * R, fy + Math.sin(a + da) * R);
+      g.closePath();
+    }
+    g.fill();
+    g.restore();
+  }
+
+  /**
+   * A small screen panel: a clock, a badge readout, a board of rows. Drawn
+   * as a lit display so a page can cut to a detail the art has no model for.
+   * readout = { text, label, color, rows: [[left, right, hot]] }
+   */
+  _paintReadout(g, r, w, h, look) {
+    const col = r.color || "#ff4a3a";
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "#0c1016");
+    bg.addColorStop(1, "#040507");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+    // Bezel light and scanlines.
+    g.save();
+    g.globalAlpha = 0.22;
+    g.fillStyle = "#000";
+    for (let yy = 0; yy < h; yy += 3) g.fillRect(0, yy, w, 1);
+    g.restore();
+    const glow = g.createRadialGradient(w / 2, h * 0.55, 0, w / 2, h * 0.55, Math.max(w, h) * 0.7);
+    glow.addColorStop(0, col + "40");
+    glow.addColorStop(1, col + "00");
+    g.fillStyle = glow;
+    g.fillRect(0, 0, w, h);
+    const mono = '"SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+    g.textBaseline = "middle";
+    const lab = Math.max(8, h * 0.11);
+    if (r.label) {
+      g.font = `700 ${lab}px ${mono}`;
+      g.textAlign = "left";
+      g.fillStyle = "rgba(200,214,230,0.7)";
+      g.fillText(r.label, w * 0.07, h * 0.16);
+    }
+    if (r.rows) {
+      const rh = Math.min(h * 0.17, (h * 0.72) / r.rows.length);
+      g.font = `700 ${rh * 0.62}px ${mono}`;
+      r.rows.forEach(([left, right, hot], i) => {
+        const yy = h * 0.3 + rh * (i + 0.5);
+        if (hot) {
+          g.fillStyle = col + "33";
+          g.fillRect(w * 0.05, yy - rh * 0.45, w * 0.9, rh * 0.9);
+        }
+        g.fillStyle = hot ? col : "rgba(190,205,220,0.55)";
+        g.textAlign = "left";
+        g.fillText(left, w * 0.08, yy);
+        g.textAlign = "right";
+        g.fillText(right, w * 0.92, yy);
+      });
+    } else if (r.text) {
+      let sz = h * (r.label ? 0.5 : 0.6);
+      g.font = `800 ${sz}px ${mono}`;
+      const mw = g.measureText(r.text).width;
+      if (mw > w * 0.86) {
+        sz *= (w * 0.86) / mw;
+        g.font = `800 ${sz}px ${mono}`;
+      }
+      g.textAlign = "center";
+      const ty = h * (r.label ? 0.6 : 0.52);
+      // Unlit segments behind the lit ones, then the glow.
+      g.fillStyle = "rgba(255,255,255,0.05)";
+      g.fillText(r.text.replace(/[0-9]/g, "8"), w / 2, ty);
+      g.save();
+      g.shadowColor = col;
+      g.shadowBlur = sz * 0.35 * (g.getTransform().a || 1);
+      g.fillStyle = col;
+      g.fillText(r.text, w / 2, ty);
+      g.restore();
+      g.fillStyle = "rgba(255,255,255,0.35)";
+      g.fillText(r.text, w / 2, ty - sz * 0.02);
+      g.fillStyle = col;
+      g.globalAlpha = 0.85;
+      g.fillText(r.text, w / 2, ty);
+      g.globalAlpha = 1;
+    }
+    // Glass sheen.
+    const sh = g.createLinearGradient(0, 0, w, h);
+    sh.addColorStop(0, "rgba(255,255,255,0.08)");
+    sh.addColorStop(0.4, "rgba(255,255,255,0)");
+    g.fillStyle = sh;
+    g.fillRect(0, 0, w, h);
+  }
+
+  /** A page's lettering, live on the text layer: captions, sfx, prompt. */
+  _drawFbLettering(ctx, page, px, py, pw, ph, t, s, alpha) {
+    if (alpha <= 0) return;
+    const look = this._look();
+    const panel = page.panel;
     ctx.save();
-    const spineGrad = ctx.createLinearGradient(
-      spineRight ? px + pw - 30 * s : px + 30 * s,
-      0,
-      spineRight ? px + pw : px,
-      0,
-    );
-    spineGrad.addColorStop(0, "rgba(0,0,0,0)");
-    spineGrad.addColorStop(1, `rgba(0,0,0,${0.55 * alpha})`);
-    ctx.fillStyle = spineGrad;
-    ctx.fillRect(spineRight ? px + pw - 30 * s : px, py, 30 * s, ph);
+    ctx.translate(px, py);
+    if (look === "legacy") {
+      this._drawPageText(ctx, pw, ph, panel, t, s, alpha);
+      ctx.restore();
+      return;
+    }
+    ctx.globalAlpha *= alpha;
+    const L = this._fbLayout(page, pw, ph, look);
+    // Inset captions first, so the page's own caption reads on top.
+    for (const P of L.panels) {
+      if (P.main || !P.src.caption) continue;
+      ctx.save();
+      ctx.translate(P.box.x, P.box.y);
+      this._drawCaption(ctx, P.src, P.box.w, P.box.h, "panel", 1e9);
+      ctx.restore();
+    }
+    if (panel.caption) {
+      const c = L.cap;
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      this._drawCaption(ctx, panel, c.w, c.h, "page", 1e9);
+      ctx.restore();
+    }
+    if (panel.sfx) this._drawSfx(ctx, panel, pw, ph, s, "page");
+    if (panel.prompt) this._drawPagePrompt(ctx, panel, pw, ph, t, s);
     ctx.restore();
+  }
+
+  /**
+   * The turning page: it rotates about the spine and curls, the free edge
+   * leading, drawn as strips of the page bitmap projected with perspective.
+   * Each strip is shaded by how far it faces away from the light; the far
+   * side shows the back of the sheet. Under it, the shadow it throws.
+   * `p` is the eased turn 0..1.
+   */
+  _drawPageTurn(ctx, img, px, py, pw, ph, p, spineRight) {
+    const look = this._look();
+    const dir = spineRight ? -1 : 1;
+    const spineX = spineRight ? px + pw : px;
+    const cx = px + pw / 2;
+    const cy = py + ph / 2;
+    const A = Math.PI * p ** 1.25; // the sheet's angle at the spine
+    const B = 0.75 * Math.sin(Math.PI * p); // extra turn at the free edge (the curl)
+    const N = 40;
+    const camD = pw * 6;
+    const pts = [];
+    let x = 0;
+    let z = 0;
+    for (let i = 0; i <= N; i++) {
+      const uu = i / N;
+      const th = Math.min(Math.PI, A + B * uu * uu);
+      if (i > 0) {
+        const um = (i - 0.5) / N;
+        const tm = Math.min(Math.PI, A + B * um * um);
+        x += (Math.cos(tm) * pw) / N;
+        z += (Math.sin(tm) * pw) / N;
+      }
+      const f = camD / (camD - z);
+      pts.push({ X: cx + (spineX + dir * x - cx) * f, f, z, th });
+    }
+    const top = (f) => cy + (py - cy) * f;
+    const bot = (f) => cy + (py + ph - cy) * f;
+
+    // Shadow thrown on the page below, reaching past the free edge.
+    const lift = Math.sin(Math.min(Math.PI, A + B * 0.5));
+    const far = pts[N].X;
+    const reach = spineX + dir * Math.max(0, Math.min(pw, dir * (far - spineX) + pw * 0.12 * lift));
+    if (lift > 0.01 && dir * (reach - spineX) > 1) {
+      const sh = ctx.createLinearGradient(spineX, 0, reach, 0);
+      sh.addColorStop(0, `rgba(0,0,0,${0.55 * lift})`);
+      sh.addColorStop(0.8, `rgba(0,0,0,${0.3 * lift})`);
+      sh.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = sh;
+      ctx.fillRect(Math.min(spineX, reach), py, Math.abs(reach - spineX), ph);
+    }
+
+    // Strips far to near, so the curl's near side covers its far side.
+    // Each side of the sheet is one contiguous run of strips.
+    const front = (i) => dir * (pts[i + 1].X - pts[i].X) > 0;
+    const runs = [];
+    for (let i = 0; i < N; i++) {
+      const r = runs[runs.length - 1];
+      if (r && r.front === front(i)) r.i1 = i + 1;
+      else runs.push({ front: front(i), i0: i, i1: i + 1, z: 0 });
+    }
+    for (const r of runs) for (let i = r.i0; i <= r.i1; i++) r.z = Math.max(r.z, pts[i].z);
+    runs.sort((a, b) => a.z - b.z);
+    const sw = img.width / N;
+    const back = look === "comic" ? "#e6dbbf" : look === "cine" ? "#18191c" : "#1a1424";
+    const outline = (r) => {
+      ctx.beginPath();
+      ctx.moveTo(pts[r.i0].X, top(pts[r.i0].f));
+      for (let i = r.i0 + 1; i <= r.i1; i++) ctx.lineTo(pts[i].X, top(pts[i].f));
+      for (let i = r.i1; i >= r.i0; i--) ctx.lineTo(pts[i].X, bot(pts[i].f));
+      ctx.closePath();
+    };
+    // Light on the sheet by how far each point faces the viewer, as one
+    // gradient per side (strip-by-strip fills left seams).
+    const shadeRun = (r, fn) => {
+      const xa = pts[r.i0].X;
+      const xb = pts[r.i1].X;
+      if (Math.abs(xb - xa) < 0.5) return;
+      const gr = ctx.createLinearGradient(xa, 0, xb, 0);
+      for (let i = r.i0; i <= r.i1; i++) gr.addColorStop((i - r.i0) / (r.i1 - r.i0), fn(pts[i].th));
+      ctx.fillStyle = gr;
+      outline(r);
+      ctx.fill();
+    };
+    for (const r of runs) {
+      ctx.save();
+      outline(r);
+      ctx.clip();
+      if (!r.front) {
+        ctx.fillStyle = back;
+        ctx.fill();
+        ctx.globalAlpha = 0.08; // the print showing through the sheet
+      }
+      for (let i = r.i0; i < r.i1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        const x0 = Math.min(a.X, b.X);
+        const f = Math.max(a.f, b.f);
+        const sx = dir > 0 ? i * sw : img.width - (i + 1) * sw;
+        ctx.drawImage(img, sx, 0, sw, img.height, x0, top(f), Math.abs(b.X - a.X) + 0.75, bot(f) - top(f));
+      }
+      ctx.restore();
+      const fr = r.front;
+      shadeRun(r, (th) => `rgba(0,0,0,${(0.62 * (1 - Math.max(0, fr ? Math.cos(th) : -Math.cos(th)))).toFixed(3)})`);
+      shadeRun(r, (th) => {
+        const sp = fr ? 0.2 * Math.exp(-(((th - 0.8) / 0.28) ** 2)) : 0.12 * Math.exp(-(((th - 2.3) / 0.3) ** 2));
+        return `rgba(255,250,236,${sp.toFixed(3)})`;
+      });
+    }
+    // The free edge catches a line of light.
+    const e = pts[N];
+    ctx.strokeStyle = `rgba(255,246,225,${(0.3 * lift).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, 1.5 * e.f);
+    ctx.beginPath();
+    ctx.moveTo(e.X, top(e.f));
+    ctx.lineTo(e.X, bot(e.f));
+    ctx.stroke();
   }
 
   /** Cover config with defaults filled in (`cover: true` = all defaults). */
@@ -2359,27 +3148,16 @@ export class CutsceneEngine {
 
     // Book block: back board + page edges peeking out right and bottom
     if (closed > 0) {
+      const { c: block, pad } = this._coverBlock(ctx, pw, ph, s, now);
       ctx.save();
       ctx.globalAlpha = closed;
-      ctx.shadowColor = "rgba(0,0,0,0.7)";
-      ctx.shadowBlur = 36 * s;
-      ctx.shadowOffsetY = 18 * s;
-      const layers = 6;
-      const step = 1.7 * s;
-      ctx.fillStyle = "#15101c";
-      ctx.fillRect(px + (layers + 1) * step, py + (layers + 1) * step, pw, ph);
-      ctx.shadowColor = "transparent";
-      for (let i = layers; i >= 1; i--) {
-        ctx.fillStyle = i % 2 ? "#d9ceb4" : "#b8aa8c";
-        ctx.fillRect(px + i * step, py + i * step, pw, ph);
-      }
+      ctx.drawImage(block, px - pad, py - pad, pw + pad * 2, ph + pad * 2);
       ctx.restore();
     }
 
     // Page 1 waits under the cover
     if (open > 0) {
-      this._drawFlipbookPage(ctx, px, py, pw, ph, fb.pages[0].panel, t, s, paperTint, 1, 0);
-      this._drawFlipbookSpine(ctx, px, py, pw, ph, s, spineRight, e);
+      ctx.drawImage(this._fbPageBitmap(ctx, fb, 0, pw, ph, s, paperTint, spineRight, now, true), px, py, pw, ph);
     }
 
     // Project the cover's free edge after rotating `theta` about the spine.
@@ -2418,7 +3196,7 @@ export class CutsceneEngine {
 
     if (cos > 0.002) {
       // Front face
-      const face = this._renderCoverFace(ctx, pw, ph, fb, t, s, paperTint);
+      const face = this._coverFace(ctx, pw, ph, fb, s, paperTint, now);
       if (open === 0) {
         ctx.drawImage(face, px, py, pw, ph);
       } else {
@@ -2489,25 +3267,40 @@ export class CutsceneEngine {
     ctx.restore();
   }
 
-  /**
-   * Draw the comic's front cover into a reusable offscreen canvas at device
-   * resolution so the swing can resample it with perspective.
-   */
-  _renderCoverFace(ctx, pw, ph, fb, t, s, paperTint) {
-    const m = ctx.getTransform();
-    const dpr = Math.max(1, Math.hypot(m.a, m.b));
-    const cw = Math.max(1, Math.ceil(pw * dpr));
-    const chh = Math.max(1, Math.ceil(ph * dpr));
-    let cv = this._coverCanvas;
-    if (!cv) cv = this._coverCanvas = document.createElement("canvas");
-    if (cv.width !== cw || cv.height !== chh) {
-      cv.width = cw;
-      cv.height = chh;
-    }
-    const c = cv.getContext("2d");
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    c.clearRect(0, 0, pw, ph);
+  /** The front cover, baked once (art still decoding is rebaked). */
+  _coverFace(ctx, pw, ph, fb, s, paperTint, now) {
+    const k = this._fbScale(ctx, pw);
+    const key = `cover|${this._look()}|${Math.round(pw)}|${Math.round(ph)}|${k.toFixed(3)}`;
+    return this._fbBake(key, pw, ph, k, (g) => this._paintCoverFace(g, pw, ph, fb, s, paperTint), now, true);
+  }
 
+  /** The closed book under its cover: back board and page edges, with its shadow. */
+  _coverBlock(ctx, pw, ph, s, now) {
+    const k = Math.min(1, this._fbScale(ctx, pw));
+    const pad = 80 * s;
+    const key = `block|${this._look()}|${Math.round(pw)}|${Math.round(ph)}|${k.toFixed(3)}`;
+    const c = this._fbBake(key, pw + pad * 2, ph + pad * 2, k, (g) => {
+      g.translate(pad, pad);
+      g.save();
+      g.shadowColor = "rgba(0,0,0,0.7)";
+      g.shadowBlur = 36 * s * k;
+      g.shadowOffsetY = 18 * s * k;
+      const layers = 6;
+      const step = 1.7 * s;
+      g.fillStyle = "#15101c";
+      g.fillRect((layers + 1) * step, (layers + 1) * step, pw, ph);
+      g.restore();
+      for (let i = layers; i >= 1; i--) {
+        g.fillStyle = i % 2 ? "#d9ceb4" : "#b8aa8c";
+        g.fillRect(i * step, i * step, pw, ph);
+      }
+    }, now, true);
+    return { c, pad };
+  }
+
+  /** Paint the comic's front cover in page pixels at the context origin. */
+  _paintCoverFace(c, pw, ph, fb, s, paperTint) {
+    const t = FB_BAKE_T;
     const cover = this._flipbookCover(fb);
     const r = Math.max(2, 6 * s);
     c.save();
@@ -2526,7 +3319,7 @@ export class CutsceneEngine {
       c.scale(zoom, zoom);
       c.translate(-pw / 2, -ph / 2);
       // Offset past the art's 1.2s entrance fade: cover ink is already printed.
-      this.drawCutsceneArt(c, pw, ph, cover.art, t + 2);
+      this.drawCutsceneArt(c, pw, ph, cover.art, t);
       c.restore();
     }
 
@@ -2668,6 +3461,64 @@ export class CutsceneEngine {
     c.fillStyle = spine;
     c.fillRect(0, 0, spineW * 1.6, ph);
 
+    const look = this._look();
+    if (look === "comic") {
+      // Starburst blurb, the newsstand shout.
+      const bx = pw * 0.84;
+      const by = ph * 0.4;
+      const R = ph * 0.12;
+      c.save();
+      c.translate(bx, by);
+      c.rotate(-0.18);
+      c.beginPath();
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2;
+        const r = i % 2 ? R * 0.74 : R;
+        c.lineTo(Math.cos(a) * r * 1.15, Math.sin(a) * r);
+      }
+      c.closePath();
+      c.shadowColor = "rgba(0,0,0,0.55)";
+      c.shadowOffsetX = R * 0.06;
+      c.shadowOffsetY = R * 0.08;
+      c.fillStyle = "#ffd21a";
+      c.fill();
+      c.shadowColor = "transparent";
+      c.lineWidth = Math.max(2, R * 0.05);
+      c.strokeStyle = "#0b0b0b";
+      c.stroke();
+      c.fillStyle = "#c8141e";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = `900 italic ${Math.round(R * 0.36)}px Impact, "Arial Black", sans-serif`;
+      c.fillText("ORIGIN", 0, -R * 0.2);
+      c.font = `900 italic ${Math.round(R * 0.42)}px Impact, "Arial Black", sans-serif`;
+      c.fillText("ISSUE!", 0, R * 0.22);
+      c.restore();
+      // Dateline under the masthead.
+      c.font = `900 ${Math.round(ph * 0.03)}px Impact, "Arial Black", sans-serif`;
+      c.textAlign = "left";
+      c.textBaseline = "top";
+      c.fillStyle = "#f4ead2";
+      c.fillText("CHRONOS STATION · 06:47", boxX + boxW + pad, boxY + boxH + pad * 0.3);
+      // Printed on newsprint: the stock through every ink.
+      c.save();
+      c.globalCompositeOperation = "multiply";
+      c.globalAlpha = 0.7;
+      c.fillStyle = c.createPattern(paperTile("news"), "repeat");
+      c.fillRect(0, 0, pw, ph);
+      c.restore();
+    } else if (look === "cine") {
+      c.save();
+      c.strokeStyle = "rgba(244,236,214,0.35)";
+      c.lineWidth = Math.max(1, s);
+      c.strokeRect(spineW + pad * 0.3, pad * 0.5, pw - spineW - pad * 0.8, ph - pad);
+      c.globalCompositeOperation = "overlay";
+      c.globalAlpha = 0.18;
+      c.fillStyle = c.createPattern(paperTile("grain"), "repeat");
+      c.fillRect(0, 0, pw, ph);
+      c.restore();
+    }
+
     // Glossy stock: faint diagonal sheen
     const sheen = c.createLinearGradient(0, 0, pw, ph);
     sheen.addColorStop(0.3, "rgba(255,255,255,0)");
@@ -2677,7 +3528,6 @@ export class CutsceneEngine {
     c.fillRect(0, 0, pw, ph);
 
     c.restore();
-    return cv;
   }
 
   /** Render a single flipbook page (panel) into the given rect. */

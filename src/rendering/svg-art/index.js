@@ -96,7 +96,7 @@ export function setCastCharacter(character) {
   if (castLook && typeof requestIdleCallback === "function") {
     const hash = castHash;
     requestIdleCallback(() => {
-      if (hash !== castHash || !isModernArt()) return;
+      if (hash !== castHash) return;
       for (const key of CAST_KEYS) modelEntry(key);
     });
   }
@@ -274,9 +274,30 @@ function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale, trim = false) 
  * Adds the standard entrance: 1.2s fade with a 0.9→1 scale settle.
  * @returns {boolean} true if drawn
  */
+const lastDrawn = new Map(); // art key -> the entry it last drew with
+
+// Cutscene and comic art draws in every style, Legacy included: Legacy's
+// procedural set never had most of the cast or backdrops (the Supervisor, the
+// locker room), so its pages and scenes came up empty. In-world sprites, the
+// viewmodel and the HUD keep their own Legacy drawing.
 export function drawSvgArt(ctx, key, t) {
-  if (!isModernArt() || !isModel(key)) return false;
-  const { id, model } = modelEntry(key);
+  if (!isModel(key)) return false;
+  const entry = modelEntry(key);
+  if (drawEntry(ctx, key, entry, t)) {
+    lastDrawn.set(key, entry);
+    return true;
+  }
+  // Still decoding (a new look, a new style): keep showing the last bitmap
+  // this key drew. Comic and Modern never show the procedural Legacy figure,
+  // which read as a different character flashing in before the real one;
+  // Legacy, on a slow machine, shows its own figure until the bitmaps land.
+  const prev = lastDrawn.get(key);
+  if (prev && prev !== entry) drawEntry(ctx, key, prev, t);
+  else if (!isModernArt()) return false;
+  return true;
+}
+
+function drawEntry(ctx, key, { id, model }, t) {
   const [bx, by, bw, bh] = model.box;
   ctx.save();
   const display = displayScale(key);
@@ -314,7 +335,7 @@ export function drawSvgModelAt(ctx, key, x, y, w, h, t) {
  */
 export function drawSvgBg(ctx, w, h, key, t) {
   const model = BACKGROUNDS[key];
-  if (!model || !isModernArt()) return false;
+  if (!model) return false;
   const [, , bw, bh] = model.box;
   const k = Math.max(w / bw, h / bh);
   const dw = bw * k;
@@ -335,7 +356,6 @@ export function drawSvgBg(ctx, w, h, key, t) {
  * draws jumps the queue, so it still is not procedural.
  */
 export function warmSvgArt(artKeys, bgKeys, ctx, w, h) {
-  if (!isModernArt()) return;
   refreshCast();
   const base = pixelScale(ctx) * 2 * (h / 900);
   for (const key of artKeys) {

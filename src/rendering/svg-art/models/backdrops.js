@@ -461,7 +461,38 @@ function deepSpace() {
     band(26, ...violet, 200, [40, 120], ["#c070ff", "#ff7ad8", "#9a6aff"], 0.12) +
     band(20, ...teal, 160, [40, 110], ["#40e0d8", "#60f0ff"], 0.1);
 
+  // Depth: a far spiral galaxy (small, cool, soft) and near rock silhouettes
+  // in the lower corners, rim-lit by the planet's fracture light.
+  const GX = [600, 110];
+  let galaxy = `<g transform="rotate(-24 ${GX[0]} ${GX[1]})" filter="url(#dsB2)">`;
+  galaxy += `<ellipse cx="${GX[0]}" cy="${GX[1]}" rx="64" ry="18" fill="url(#dsGal)"/>`;
+  for (let arm = 0; arm < 2; arm++) {
+    let d = "";
+    for (let i = 0; i <= 16; i++) {
+      const a = arm * Math.PI + i * 0.32;
+      const r = 6 + i * 3.6;
+      const [x, y] = [GX[0] + Math.cos(a) * r, GX[1] + Math.sin(a) * r * 0.32];
+      d += `${i ? "L" : "M"}${f(x)} ${f(y)}`;
+    }
+    galaxy += `<path d="${d}" fill="none" stroke="#b8c8ff" stroke-width="3" opacity=".22"/>`;
+  }
+  galaxy += `<circle cx="${GX[0]}" cy="${GX[1]}" r="4" fill="#fff6e8" opacity=".9"/></g>`;
+  const rockRand = rng(7741); // its own stream: the starfields keep their layout
+  const silhouette = (cx, cy, r, rot) => {
+    const pts = rockPts(rockRand, cx, cy, r, 11, 0.62, rot);
+    const d = pathOf(pts, true);
+    return `<path d="${d}" fill="#020107"/>` +
+      `<path d="${d}" fill="none" stroke="#c07aff" stroke-width="3" opacity=".35" transform="translate(2 -3)"/>` +
+      `<path d="${d}" fill="#020107" transform="translate(-3 4)"/>`;
+  };
+  const foreground =
+    `<rect y="700" width="1600" height="200" fill="url(#dsHaze)"/>` +
+    silhouette(90, 880, 170, 0.3) + silhouette(300, 905, 90, 1.1) +
+    silhouette(1530, 870, 150, 2.2) + silhouette(1360, 910, 70, 0.7);
+
   const defs =
+    `<radialGradient id="dsGal">${stops([[0, "#fff4e0", 0.8], [0.3, "#a8b8ff", 0.35], [1, "#5a6aff", 0]])}</radialGradient>` +
+    `<linearGradient id="dsHaze" x1="0" y1="0" x2="0" y2="1">${stops([[0, "#3a1a6a", 0], [0.6, "#2a0e4a", 0.22], [1, "#120628", 0.3]])}</linearGradient>` +
     `<radialGradient id="dsBg" gradientUnits="userSpaceOnUse" cx="820" cy="360" r="1000">${stops([[0, "#0d0b30"], [0.45, "#070618"], [1, "#010006"]])}</radialGradient>` +
     `<linearGradient id="dsShade" x1="0" y1="0" x2="0" y2="1">${stops([[0, "#010006", 0], [0.5, "#010006", 0.55], [1, "#010006", 0.92]])}</linearGradient>` +
     `<radialGradient id="dsPlanet" gradientUnits="userSpaceOnUse" cx="1200" cy="160" r="260">${stops([[0, "#a898c4"], [0.22, "#6a5a88"], [0.5, "#33284e"], [0.78, "#140e26"], [1, "#05030c"]])}</radialGradient>` +
@@ -503,7 +534,9 @@ function deepSpace() {
     `<path d="${crackD}" fill="none" stroke="#05030c" stroke-width="5" stroke-linejoin="round" clip-path="url(#dsPlanetClip)"/>` +
     `<path d="${arcPath(PC[0], PC[1], PR - 1, 170 * DEG, 260 * DEG)}" fill="none" stroke="#e0d4ff" stroke-width="2" opacity=".4"/>` +
     `<path d="${arcPath(PC[0], PC[1], PR - 1, 0, 95 * DEG)}" fill="none" stroke="#b07aff" stroke-width="3" opacity=".6"/>` +
-    `<rect y="560" width="1600" height="340" fill="url(#dsShade)"/>`;
+    `<rect y="560" width="1600" height="340" fill="url(#dsShade)"/>` +
+    galaxy +
+    foreground;
 
   const chunks =
     `<g transform="${chunkT}">` +
@@ -646,6 +679,7 @@ function bossLair() {
     `<path d="${opening}" fill="url(#lArch)"/>` +
     `<path d="${opening}" fill="none" stroke="#07020b" stroke-width="14"/>` +
     `<path d="M437 600V330C437 160 622 22 800 -18" fill="none" stroke="#5a3a5a" stroke-width="2" opacity=".45"/>` +
+    `<rect y="300" width="1600" height="320" fill="url(#lFog)"/>` +
     lairPillar(398, 30, 250, 590) + lairPillar(1172, 30, 250, 590) +
     `<path d="M0 560H1600V900H0Z" fill="url(#lFloor)"/>` +
     `<path d="${floorLines}" stroke="#2a0a26" stroke-width="1.5" opacity=".45"/>` +
@@ -752,6 +786,10 @@ function bossLair() {
     `<path d="M270 150L318 150L640 900L420 900Z" fill="url(#lShaftR)" filter="url(#lB8)"/>` +
     `<path d="M1290 150L1338 150L1180 900L960 900Z" fill="url(#lShaftV)" filter="url(#lB8)"/>` +
     `<path d="M700 -20L900 -20L1080 640L520 640Z" fill="url(#lShaftV)" opacity=".35" filter="url(#lB20)"/>` +
+    `<path d="M650 318L658 318L426 900L334 900Z" fill="url(#lShaftR)" opacity=".32" filter="url(#lB8)"/>` +
+    `<path d="M740 318L748 318L696 900L604 900Z" fill="url(#lShaftR)" opacity=".26" filter="url(#lB8)"/>` +
+    `<path d="M840 318L848 318L966 900L874 900Z" fill="url(#lShaftR)" opacity=".24" filter="url(#lB8)"/>` +
+    `<path d="M930 318L938 318L1246 900L1154 900Z" fill="url(#lShaftR)" opacity=".3" filter="url(#lB8)"/>` +
     `<ellipse cx="800" cy="600" rx="360" ry="46" fill="#ff2a4a" opacity=".22" filter="url(#lB20)"/>` +
     `<path d="M470 566H1130" stroke="#ff4a6a" stroke-width="2" opacity=".5"/>`;
 
@@ -783,6 +821,7 @@ function bossLair() {
     `<linearGradient id="lShaftV" x1="0" y1="0" x2="0" y2="1">${stops([[0, "#9b5cff", 0.3], [0.5, "#9b5cff", 0.1], [1, "#9b5cff", 0]])}</linearGradient>` +
     `<radialGradient id="lEmber">${stops([[0, "#ffe0b0"], [0.2, "#ff6a3a", 0.9], [0.5, "#ff2a4a", 0.3], [1, "#ff2a4a", 0]])}</radialGradient>` +
     `<radialGradient id="lVig" gradientUnits="userSpaceOnUse" cx="780" cy="300" r="270">${stops([[0, "#0a0210", 0], [0.55, "#0a0210", 0.1], [1, "#0a0210", 0.6]])}</radialGradient>` +
+    `<linearGradient id="lFog" x1="0" y1="0" x2="0" y2="1">${stops([[0, "#3a1040", 0], [0.55, "#4a1244", 0.42], [1, "#1a0620", 0]])}</linearGradient>` +
     `<radialGradient id="lSmokeR">${stops([[0, "#4a0c2a", 0.5], [0.6, "#3a0a22", 0.22], [1, "#3a0a22", 0]])}</radialGradient>` +
     `<radialGradient id="lSmokeV">${stops([[0, "#3a1048", 0.4], [0.6, "#2a0a34", 0.18], [1, "#2a0a34", 0]])}</radialGradient>` +
     blur("lB8", 8) + blur("lB20", 20);

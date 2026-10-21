@@ -1557,33 +1557,72 @@ template.innerHTML = `
 `;
 
 // Modern art: the armored agent from the cutscene models (hero_armed), feet on
-// the deck where the legacy figure stood.
+// the deck where the legacy figure stood. Once the player has saved an agent,
+// it is that agent, dressed the way cutscenes dress the cast.
 const HERO_PLACEMENT = { x: 138, y: 214, scale: 2.1 };
 
 export class TitleHero extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._look = null; // saved agent's look, or null for the stock hero
+    this._lookHash = "";
+    this._gen = 0;
   }
 
   connectedCallback() {
-    this._unsubscribe ??= attachArtSwitch(
-      this,
-      template,
-      async () => {
-        const { MODELS } = await import("../../src/rendering/svg-art/models/hero.js");
-        return modelHtml("hero", MODELS.hero_armed, HERO_PLACEMENT);
-      },
-      async () => {
-        const { realHeroArmed } = await import("../../src/rendering/svg-art/models/realistic-title.js");
-        return modelHtml("hero-real", realHeroArmed(), HERO_PLACEMENT);
-      },
-    );
+    this._attach();
   }
 
   disconnectedCallback() {
     this._unsubscribe?.();
     this._unsubscribe = null;
+  }
+
+  /**
+   * Dress the title agent as a saved character (game.character-shaped), or
+   * pass null for the stock hero. Rebuilds only when the look changed.
+   */
+  async setCharacter(character) {
+    const { lookKey, cloneLook } = await import("../../src/core/character-fields.js");
+    const hash = character ? lookKey(character) : "";
+    if (hash === this._lookHash) return;
+    this._lookHash = hash;
+    this._look = character ? cloneLook(character) : null;
+    if (!this.isConnected) return;
+    this._unsubscribe?.();
+    this._unsubscribe = null;
+    this._attach();
+  }
+
+  _attach() {
+    if (this._unsubscribe) return;
+    const gen = ++this._gen;
+    const look = this._look;
+    const id = look ? `hero@${this._lookHash}` : "hero";
+    // A build that a newer look superseded never resolves, so its stage
+    // cannot land on top of the newer one.
+    const fresh = (html) => (gen === this._gen ? html : new Promise(() => {}));
+    this._unsubscribe = attachArtSwitch(
+      this,
+      template,
+      async () => {
+        if (look) {
+          const { buildCastModel } = await import("../../src/rendering/svg-art/agent-rig.js");
+          return fresh(modelHtml(id, buildCastModel(look, "hero_armed"), HERO_PLACEMENT));
+        }
+        const { MODELS } = await import("../../src/rendering/svg-art/models/hero.js");
+        return fresh(modelHtml("hero", MODELS.hero_armed, HERO_PLACEMENT));
+      },
+      async () => {
+        if (look) {
+          const { buildCastModel } = await import("../../src/rendering/svg-art/agent-rig.js");
+          return fresh(modelHtml(`${id}-real`, buildCastModel(look, "hero_armed", { realistic: true }), HERO_PLACEMENT));
+        }
+        const { realHeroArmed } = await import("../../src/rendering/svg-art/models/realistic-title.js");
+        return fresh(modelHtml("hero-real", realHeroArmed(), HERO_PLACEMENT));
+      },
+    );
   }
 }
 

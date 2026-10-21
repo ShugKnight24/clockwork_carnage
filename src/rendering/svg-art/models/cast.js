@@ -6,61 +6,8 @@
  */
 
 import { FULL_PARTY, orderParty, partyLayout } from "../../party.js";
-
-const INK = "#04060b";
-
-/** Round to one decimal so the markup stays compact. */
-const r1 = (n) => Math.round(n * 10) / 10;
-
-function stops(list) {
-  return list
-    .map(([o, c, a]) => `<stop offset="${o}" stop-color="${c}"${a === undefined ? "" : ` stop-opacity="${a}"`}/>`)
-    .join("");
-}
-
-const lin = (id, list, x1 = 0, y1 = 0, x2 = 0, y2 = 1) =>
-  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops(list)}</linearGradient>`;
-
-const rad = (id, list, cx = 0.5, cy = 0.5, r = 0.5) =>
-  `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops(list)}</radialGradient>`;
-
-const blur = (id, sd) =>
-  `<filter id="${id}" filterUnits="userSpaceOnUse" x="-300" y="-300" width="600" height="600"><feGaussianBlur stdDeviation="${sd}"/></filter>`;
-
-const at = (x, y, s, markup) => `<g transform="translate(${x} ${y}) scale(${s})">${markup}</g>`;
-
-/** Mirror an absolute M/L/C/Q path across x = 0. */
-function mir(d) {
-  let i = 0;
-  return d.replace(/-?\d*\.?\d+/g, (n) => (i++ % 2 === 0 ? String(r1(-parseFloat(n))) : n));
-}
-
-/** Smooth tapered limb through [x, y, width] points, as a closed path. */
-function limb(pts) {
-  const n = pts.length;
-  const L = [];
-  const R = [];
-  for (let i = 0; i < n; i++) {
-    const [x, y, w] = pts[i];
-    const a = pts[Math.max(0, i - 1)];
-    const b = pts[Math.min(n - 1, i + 1)];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-    const nx = -(b[1] - a[1]) / len;
-    const ny = (b[0] - a[0]) / len;
-    L.push([x + (nx * w) / 2, y + (ny * w) / 2]);
-    R.push([x - (nx * w) / 2, y - (ny * w) / 2]);
-  }
-  const P = (q) => `${r1(q[0])},${r1(q[1])}`;
-  const run = (Q) => {
-    let d = "";
-    for (let i = 1; i < Q.length - 1; i++) {
-      d += ` Q${P(Q[i])} ${r1((Q[i][0] + Q[i + 1][0]) / 2)},${r1((Q[i][1] + Q[i + 1][1]) / 2)}`;
-    }
-    return `${d} L${P(Q[Q.length - 1])}`;
-  };
-  R.reverse();
-  return `M${P(L[0])}${run(L)} L${P(R[0])}${run(R)}Z`;
-}
+import { INK, r1, lin, rad, blur, at, mir, limb, headPath, faceDefs, face, lightDefs, formLight, fold } from "./cast/kit.js";
+import { ariaModel } from "./cast/aria.js";
 
 // ── Arm rig ───────────────────────────────────────────────────────────────
 // Headings are degrees off straight down (positive swings toward screen right);
@@ -217,160 +164,6 @@ function bareHand(wr, fo, inner, skin, lo) {
   );
 }
 
-// ── Faces ─────────────────────────────────────────────────────────────────
-// Local head units: crown y -10, chin y +10, eye line y 0. Front view, key light
-// upper-left, rim light on the right cheek.
-
-function headPath(o) {
-  const w = o.w ?? (o.male ? 7.3 : 6.9);
-  const jx = o.jaw ?? (o.male ? 6.1 : 5);
-  const cy = o.male ? 10.2 : 9.8;
-  const cw = o.chin ?? (o.male ? 2.8 : 1.9);
-  return (
-    `M0,-10 C${r1(w * 0.66)},-10 ${w},-6.8 ${w},-2.4 C${w},1.8 ${r1(jx + 0.9)},4.4 ${jx},6.6 ` +
-    `C${r1(jx - 1.3)},8.8 ${cw},${cy} 0,${cy} C${-cw},${cy} ${r1(1.3 - jx)},8.8 ${-jx},6.6 ` +
-    `C${r1(-jx - 0.9)},4.4 ${-w},1.8 ${-w},-2.4 C${-w},-6.8 ${r1(-w * 0.66)},-10 0,-10Z`
-  );
-}
-
-function faceDefs(p, o) {
-  const [hi, mid, lo] = o.skin;
-  return (
-    rad(`${p}sk`, [[0, hi], [0.5, mid], [1, lo]], 0.36, 0.32, 0.8) +
-    lin(`${p}sh`, [[0, lo, 0], [0.52, lo, 0], [1, lo, 0.85]], 0, 0, 1, 0) +
-    lin(`${p}nk`, [[0, lo], [0.5, mid], [1, mid]], 0, 0, 0.4, 1) +
-    `<clipPath id="${p}hc"><path d="${headPath(o)}"/></clipPath>`
-  );
-}
-
-function eye(p, sx, o) {
-  const X = (x) => r1(sx * x);
-  const lid = o.lid ?? "#1a0f0a";
-  const lo = o.skin[2];
-  const id = `${p}e${sx < 0 ? "l" : "r"}`;
-  const almond = `M${X(1.4)},0 Q${X(3)},-1.3 ${X(4.7)},-0.15 Q${X(3)},0.95 ${X(1.4)},0Z`;
-  let s = `<clipPath id="${id}"><path d="${almond}"/></clipPath>`;
-  s += `<path d="${almond}" fill="${o.white ?? "#e4dbd2"}"/>`;
-  s += `<g clip-path="url(#${id})"><circle cx="${X(3)}" cy="-0.1" r="0.74" fill="${o.iris}"/>`;
-  s += `<circle cx="${X(3)}" cy="-0.1" r="0.34" fill="#0a0806"/>`;
-  s += `<path d="${almond}" fill="none" stroke="${lo}" stroke-width="0.6" opacity="0.35"/></g>`;
-  s += `<circle cx="${r1(sx * 3 - 0.3)}" cy="-0.42" r="0.2" fill="#fff" opacity="0.9"/>`;
-  s += `<path d="M${X(1.2)},0.1 Q${X(3)},-1.5 ${X(4.9)},-0.1" fill="none" stroke="${lid}" stroke-width="0.45" stroke-linecap="round"/>`;
-  if (o.lashes) {
-    s += `<path d="M${X(4.4)},-0.4 L${X(5.4)},-0.95" stroke="${lid}" stroke-width="0.35" stroke-linecap="round"/>`;
-  }
-  s += `<path d="M${X(1.6)},0.35 Q${X(3)},1.15 ${X(4.5)},0.15" fill="none" stroke="${lo}" stroke-width="0.22" opacity="0.7"/>`;
-  s += `<path d="M${X(1.5)},-1 Q${X(3)},-2.15 ${X(4.8)},-0.9" fill="none" stroke="${lo}" stroke-width="0.25" opacity="0.55"/>`;
-  return s;
-}
-
-function brow(sx, o) {
-  const X = (x) => r1(sx * x);
-  const k = o.brows ?? "soft";
-  const d =
-    k === "stern"
-      ? [[1, -1.3], [3, -3.1], [5.5, -2.9], [3, -2.1], [1, -0.6]]
-      : k === "raised"
-        ? [[1.1, -2.6], [3, -4.2], [5.3, -3], [3, -3.3], [1.1, -2]]
-        : [[1.1, -2.1], [3, -3.35], [5.3, -2.3], [3, -2.75], [1.1, -1.6]];
-  return `<path d="M${X(d[0][0])},${d[0][1]} Q${X(d[1][0])},${d[1][1]} ${X(d[2][0])},${d[2][1]} Q${X(d[3][0])},${d[3][1]} ${X(d[4][0])},${d[4][1]}Z" fill="${o.browC}"/>`;
-}
-
-function mouth(o) {
-  const [li, ld] = o.lip;
-  const [hi, , lo] = o.skin;
-  const line = o.lipLine ?? "#3a1a14";
-  switch (o.mouth) {
-    case "smile":
-      return (
-        `<path d="M-2.7,6.2 Q-1.2,6 -0.4,6.2 Q0,6.35 0.4,6.2 Q1.2,6 2.7,6.2 Q0,7.4 -2.7,6.2Z" fill="${ld}"/>` +
-        `<path d="M-2.3,6.6 Q0,7.5 2.3,6.6 Q1.4,8.2 0,8.3 Q-1.4,8.2 -2.3,6.6Z" fill="${li}"/>` +
-        `<path d="M-2.8,6.1 Q0,7.6 2.8,6.1" fill="none" stroke="${line}" stroke-width="0.32" stroke-linecap="round"/>` +
-        `<path d="M-3.4,5.2 Q-3.8,6.2 -3.1,7.1 M3.4,5.2 Q3.8,6.2 3.1,7.1" fill="none" stroke="${lo}" stroke-width="0.25" opacity="0.6"/>` +
-        `<ellipse cx="-0.5" cy="7.6" rx="0.8" ry="0.28" fill="${hi}" opacity="0.4"/>`
-      );
-    case "stern":
-      return (
-        `<path d="M-2.5,7 Q0,6.4 2.5,7 Q0,7.1 -2.5,7Z" fill="${ld}"/>` +
-        `<path d="M-2.1,7.1 Q0,7.3 2.1,7.1 Q0,8.1 -2.1,7.1Z" fill="${li}"/>` +
-        `<path d="M-2.6,7.15 Q0,6.8 2.6,7.15" fill="none" stroke="${line}" stroke-width="0.38" stroke-linecap="round"/>` +
-        `<path d="M-2.6,7.15 L-2.9,7.6 M2.6,7.15 L2.9,7.6" stroke="${lo}" stroke-width="0.22" opacity="0.6"/>`
-      );
-    case "grin":
-      return (
-        `<path d="M-2.5,6.6 Q0,6.5 3,5.8 Q1.7,8.4 -0.2,8.4 Q-1.9,8.2 -2.5,6.6Z" fill="#3a1a14"/>` +
-        `<path d="M-2.1,6.7 Q0,6.6 2.6,6 Q2.1,6.9 0,7.3 Q-1.5,7.3 -2.1,6.7Z" fill="#ebe3d4"/>` +
-        `<path d="M-2.5,6.6 Q0,6.5 3,5.8 Q1.7,8.4 -0.2,8.4 Q-1.9,8.2 -2.5,6.6Z" fill="none" stroke="${ld}" stroke-width="0.45"/>` +
-        `<path d="M3.5,4.7 Q4.1,6 3.4,7.2 M-3.1,5.6 Q-3.4,6.5 -2.9,7.2" fill="none" stroke="${lo}" stroke-width="0.28" opacity="0.65"/>` +
-        `<ellipse cx="0.2" cy="8.9" rx="1.4" ry="0.35" fill="${lo}" opacity="0.35"/>`
-      );
-    default: {
-      const k = o.mouth === "smirk" ? 0.4 : 0;
-      return (
-        `<path d="M-2.4,6.8 Q-1.2,6.1 -0.4,6.3 Q0,6.45 0.4,6.3 Q1.2,6.1 2.4,${r1(6.8 - k)} Q0,7 -2.4,6.8Z" fill="${ld}"/>` +
-        `<path d="M-2.2,6.9 Q0,7.1 2.2,${r1(6.9 - k)} Q1.4,8.2 0,8.3 Q-1.4,8.2 -2.2,6.9Z" fill="${li}"/>` +
-        `<path d="M-2.5,6.85 Q0,7.15 2.5,${r1(6.85 - k)}" fill="none" stroke="${line}" stroke-width="0.3" stroke-linecap="round"/>` +
-        (k ? `<path d="M2.9,5.9 Q3.3,6.5 2.9,7" fill="none" stroke="${lo}" stroke-width="0.22" opacity="0.6"/>` : "") +
-        `<ellipse cx="-0.5" cy="7.55" rx="0.8" ry="0.3" fill="${hi}" opacity="0.4"/>` +
-        `<ellipse cx="0" cy="8.95" rx="1.3" ry="0.35" fill="${lo}" opacity="0.3"/>`
-      );
-    }
-  }
-}
-
-/**
- * A believable adult head + neck at (o.x, o.y) scaled by o.s. `back` is drawn
- * behind the head, `front` over it (hair), `over` last (goggles, scars).
- */
-function face(p, o) {
-  const [hi, mid, lo] = o.skin;
-  const ink = o.ink ?? INK;
-  const w = o.w ?? (o.male ? 7.3 : 6.9);
-  const jx = o.jaw ?? (o.male ? 6.1 : 5);
-  const nw = o.neck ?? 3.5;
-  let s = `<g transform="translate(${o.x} ${o.y}) scale(${o.s})">`;
-  s += o.back ?? "";
-  s += `<path d="M${-nw},4 L${r1(-nw - 0.6)},${o.neckLen ?? 18} L${r1(nw + 0.6)},${o.neckLen ?? 18} L${nw},4Z" fill="url(#${p}nk)" stroke="${ink}" stroke-width="0.4"/>`;
-  s += `<path d="M${-nw},7 C-2,10.8 2,10.8 ${nw},7 L${nw},12 C2,13.4 -2,13.4 ${-nw},12Z" fill="${lo}" opacity="0.6"/>`;
-  s += `<path d="M${r1(nw * 0.3)},9 L${r1(nw * 0.6)},17" stroke="${lo}" stroke-width="0.5" opacity="0.35"/>`;
-  for (const sx of [-1, 1]) {
-    const X = (x) => r1(sx * x);
-    s += `<path d="M${X(w - 0.3)},-1.8 C${X(w + 1.4)},-2.8 ${X(w + 1.7)},1.6 ${X(w + 0.6)},3.6 C${X(w)},4.2 ${X(w - 0.4)},3.4 ${X(w - 0.4)},2.8Z" fill="${sx < 0 ? mid : lo}" stroke="${ink}" stroke-width="0.35"/>`;
-    s += `<path d="M${X(w + 0.2)},-0.8 C${X(w + 1)},-0.8 ${X(w + 1)},1.6 ${X(w + 0.3)},2.4" fill="none" stroke="${lo}" stroke-width="0.3" opacity="0.7"/>`;
-  }
-  s += `<path d="${headPath(o)}" fill="url(#${p}sk)" stroke="${ink}" stroke-width="${o.inkW ?? 0.5}" stroke-linejoin="round"/>`;
-  s += `<g clip-path="url(#${p}hc)">`;
-  s += `<rect x="-9" y="-11" width="18" height="23" fill="url(#${p}sh)"/>`;
-  s += `<ellipse cx="-3" cy="-0.9" rx="2.7" ry="1.6" fill="${lo}" opacity="0.26"/>`;
-  s += `<ellipse cx="3" cy="-0.9" rx="2.7" ry="1.6" fill="${lo}" opacity="0.38"/>`;
-  s += `<ellipse cx="-4.3" cy="2.5" rx="2.1" ry="1.1" fill="${hi}" opacity="0.35"/>`;
-  s += `<ellipse cx="-2" cy="-6.4" rx="3.2" ry="1.7" fill="${hi}" opacity="0.3"/>`;
-  s += `<path d="M${r1(jx - 1.8)},2.6 C${r1(jx - 0.2)},3.2 ${r1(jx + 0.6)},4.8 ${r1(jx + 0.2)},6.6 C${r1(jx - 0.9)},5.2 ${r1(jx - 1.4)},4 ${r1(jx - 1.8)},2.6Z" fill="${lo}" opacity="0.35"/>`;
-  s += `<ellipse cx="0" cy="9.6" rx="${r1(jx * 0.7)}" ry="1.2" fill="${lo}" opacity="0.3"/>`;
-  s += `</g>`;
-  s += eye(p, -1, o) + eye(p, 1, o) + brow(-1, o) + brow(1, o);
-  // Nose: shadow plane on the right, lit tip, nostrils.
-  s += `<path d="M0.6,-0.6 C1,1.6 1.6,3 2,4.2 C1.4,4.7 0.8,4.8 0.3,4.6Z" fill="${lo}" opacity="0.38"/>`;
-  s += `<path d="M-0.4,-0.6 C-0.55,1 -0.6,2.2 -0.5,2.9" fill="none" stroke="${hi}" stroke-width="0.35" opacity="0.4"/>`;
-  s += `<ellipse cx="-0.25" cy="3.55" rx="0.65" ry="0.55" fill="${hi}" opacity="0.5"/>`;
-  s += `<ellipse cx="0" cy="4.95" rx="1.5" ry="0.45" fill="${lo}" opacity="0.45"/>`;
-  s += `<path d="M-1.9,4.4 Q-1.3,5.3 -0.45,5 M1.9,4.4 Q1.3,5.3 0.45,5" fill="none" stroke="${lo}" stroke-width="0.35" opacity="0.8"/>`;
-  s += `<path d="M-1.5,3.4 Q-2.2,4.2 -1.8,4.9 M1.5,3.4 Q2.2,4.2 1.8,4.9" fill="none" stroke="${lo}" stroke-width="0.25" opacity="0.55"/>`;
-  s += `<ellipse cx="0" cy="5.8" rx="0.5" ry="0.45" fill="${lo}" opacity="0.2"/>`;
-  if (o.male) {
-    s += `<path d="M-2.1,3.9 Q-3.3,5.4 -3.1,7.1 M2.1,3.9 Q3.3,5.4 3.1,7.1" fill="none" stroke="${lo}" stroke-width="0.25" opacity="0.4"/>`;
-  }
-  s += mouth(o);
-  if (o.rim) {
-    // clipped to the head so the light never spills past the jaw onto the neck
-    s += `<path d="M${r1(w - 1.8)},-8.2 C${r1(w + 0.1)},-5.6 ${r1(w + 0.2)},-1 ${r1(w - 0.2)},2.4 C${r1(jx + 0.7)},4.4 ${r1(jx + 0.4)},5.6 ${r1(jx - 0.2)},6.8" fill="none" stroke="${o.rim}" stroke-width="0.8" stroke-linecap="round" opacity="0.85" clip-path="url(#${p}hc)"/>`;
-  }
-  s += o.front ?? "";
-  s += o.over ?? "";
-  s += `</g>`;
-  return s;
-}
-
 // ── Lyra ──────────────────────────────────────────────────────────────────
 
 const LYRA_FACE = {
@@ -400,6 +193,7 @@ const LYRA_STRANDS =
 function lyraDefs() {
   return (
     faceDefs("lf", LYRA_FACE) +
+    lightDefs("ll", { bounce: "#ffae3a", ks: 0.3, ss: 0.75, bs: 0.24 }) +
     lin("lyhr", [[0, "#4e3822"], [0.45, "#22160a"], [1, "#0b0703"]], 0, 0, 1, 1) +
     lin("lyct", [[0, "#3c3c5a"], [0.42, "#1f1f34"], [1, "#0a0a13"]], 0, 0, 1, 0.3) +
     lin("lypt", [[0, "#2c2c3c"], [0.5, "#16161f"], [1, "#07070b"]], 0, 0, 1, 0) +
@@ -423,6 +217,12 @@ function lyraFigure({ pose, visor }) {
   // Coat front panels.
   const panel = "M0,-58 L-6,-67.4 C-11,-67 -15,-66 -16.6,-62.6 C-17.6,-57 -16.6,-48 -14.6,-40 C-13,-34 -11.6,-30 -11.6,-27 C-13.6,-14 -16,2 -17.8,19 C-12.2,21.4 -7.2,21.8 -5,21.2 L0,-27Z";
   body += `<path d="${panel}" fill="url(#lyct)" ${ink}/><path d="${mir(panel)}" fill="url(#lyct)" ${ink}/>`;
+  body += formLight("ll", `llc${pose}`, panel + mir(panel), [-20, -70, 40, 92]);
+  // the coat hangs from the belt in long folds and breaks over the hips
+  body += fold("M-14.4,-22 C-15.4,-10 -16.2,2 -16.6,16", { lit: "#5a5a84", op: 0.5 });
+  body += fold("M-8.4,-18 C-9,-6 -9.4,6 -9.2,19", { lit: "#5a5a84", op: 0.45 });
+  body += fold("M13.6,-20 C14.6,-8 15.6,4 16.4,16", { lit: "#4a4a70", op: 0.45 });
+  body += fold("M-13.6,-50 C-12.4,-44 -11,-38 -11.2,-32 M12.8,-52 C12,-46 11,-40 11.4,-33", { lit: "#5a5a84", op: 0.35, w: 0.8 });
   body += `<path d="M-5,-67.4 L0,-58 L5,-67.4 C2,-68.8 -2,-68.8 -5,-67.4Z" fill="#241a18" stroke="${INK}" stroke-width="0.6"/>`;
   body += `<path d="M-9.4,-62 C-8.6,-50 -8.4,-40 -7.4,-30 M9.4,-62 C8.6,-50 8.4,-40 7.4,-30 M-9,-20 C-10.6,-6 -11.4,6 -12,20 M9,-20 C10.6,-6 11.4,6 12,20" fill="none" stroke="${INK}" stroke-width="0.4" opacity="0.6"/>`;
   body += `<path d="M-15.6,-60 C-16,-54 -15.4,-48 -14,-42" fill="none" stroke="#6a6a90" stroke-width="0.5" opacity="0.6"/>`;
@@ -666,6 +466,9 @@ function trooper(c) {
     `M${-(S - 3)},-65 C-7,-68.6 7,-68.6 ${S - 3},-65 L${r1(S - 1.4)},-52 C${r1(S - 2.4)},-45 ${r1(S * 0.66)},-41.4 ${r1(S * 0.62)},-37.6 ` +
     `L${r1(-S * 0.62)},-37.6 C${r1(-S * 0.66)},-41.4 ${r1(-(S - 2.4))},-45 ${r1(-(S - 1.4))},-52Z`;
   body += `<path d="${chest}" fill="url(#st)" ${ink}/>`;
+  const tag = col.slice(1);
+  body += formLight("tl", `tlc${tag}`, chest, [-S - 2, -70, 2 * S + 4, 34]);
+  body += `<ellipse cx="${r1(-S * 0.38)}" cy="-60.4" rx="${r1(S * 0.34)}" ry="3.4" fill="url(#tsp)"/>`;
   body += `<path d="M0,-67 L0,-46 M${-(S - 5)},-54 C-8,-49.6 -3,-49.6 0,-51.6 C3,-49.6 8,-49.6 ${S - 5},-54 M-7,-44.6 L7,-44.6" fill="none" stroke="${INK}" stroke-width="0.6" opacity="0.55"/>`;
   body += `<path d="M${-(S - 5)},-63 C-9,-65.6 -4.6,-66 -1.6,-65.8" fill="none" stroke="#d6e6f4" stroke-width="0.9" opacity="0.7" stroke-linecap="round"/>`;
   body += `<path d="M${r1(S - 1.6)},-53 C${r1(S - 2.4)},-46 ${r1(S * 0.68)},-42 ${r1(S * 0.64)},-38.4" fill="none" stroke="${c.rim}" stroke-width="0.8" opacity="0.7"/>`;
@@ -684,6 +487,7 @@ function trooper(c) {
     body += `<path d="M${X(S - 7)},-68.4 C${X(S + 1 + P)},-70 ${X(S + 5.6 + P)},${-65 - P / 2} ${X(S + 5.6 + P)},-57 C${X(S + 5 + P)},${-53.4 + P / 3} ${X(S + 2)},${-52 + P / 2} ${X(S - 2)},-54 C${X(S - 3)},-58.6 ${X(S - 5)},-63 ${X(S - 7)},-68.4Z" fill="url(#st)" ${ink}/>`;
     body += `<path d="M${X(S + 5.3 + P)},-57 C${X(S + 4.8 + P)},${-53.6 + P / 3} ${X(S + 2)},${-52.4 + P / 2} ${X(S - 2)},-54.4" fill="none" stroke="${col}" stroke-width="1" opacity="0.95"/>`;
     body += `<path d="M${X(S - 4.6)},-66.4 C${X(S + 0.4)},-67.6 ${X(S + 3.4)},-65 ${X(S + 4)},-61" fill="none" stroke="#d6e6f4" stroke-width="0.7" opacity="${sx < 0 ? 0.75 : 0.35}"/>`;
+    body += `<ellipse cx="${X(S + 0.6 + P / 2)}" cy="${r1(-63.6 - P / 3)}" rx="2.8" ry="1.5" fill="url(#tsp)" opacity="${sx < 0 ? 1 : 0.45}"/>`;
   }
   // Neck and helmet, head cocked a little.
   body += `<rect x="-3.8" y="-72" width="7.6" height="7" fill="url(#su)" ${fine}/>`;
@@ -692,8 +496,12 @@ function trooper(c) {
   const headTf = `rotate(${c.head ?? 0} 0 -70) translate(0 -81) scale(${hs}) translate(0 81)`;
   let helm = "";
   helm += `<path d="M-8.6,-80 C-9,-90 -5,-94.2 0,-94.2 C5,-94.2 9,-90 8.6,-80 C8.6,-74.4 6.5,-70.4 3.6,-68.8 L-3.6,-68.8 C-6.5,-70.4 -8.6,-74.4 -8.6,-80Z" fill="url(#hm)" ${ink}/>`;
+  helm += formLight("tl", `thc${tag}`, "M-8.6,-80 C-9,-90 -5,-94.2 0,-94.2 C5,-94.2 9,-90 8.6,-80 C8.6,-74.4 6.5,-70.4 3.6,-68.8 L-3.6,-68.8 C-6.5,-70.4 -8.6,-74.4 -8.6,-80Z", [-9, -95, 18, 27]);
+  helm += `<ellipse cx="-3.4" cy="-90" rx="3.2" ry="1.7" fill="url(#tsp)"/>`;
   helm += `<path d="M-7.9,-85 C-3,-86.6 3,-86.6 7.9,-85 L7.3,-79.4 C3,-77.8 -3,-77.8 -7.3,-79.4Z" fill="#03070c" ${fine}/>`;
   helm += `<path d="M-6.8,-83.6 C-3,-84.8 3,-84.8 6.8,-83.6 L6.5,-81.4 C3,-80.4 -3,-80.4 -6.5,-81.4Z" fill="${col}"/>`;
+  helm += `<path d="M-6.8,-83.6 C-3,-84.8 3,-84.8 6.8,-83.6 L6.6,-82.6 C3,-83.6 -3,-83.6 -6.6,-82.6Z" fill="#ffffff" opacity="0.35"/>`;
+  helm += `<path d="M-4.6,-84.4 L-3.2,-80.6 M-3.4,-84.6 L-2.6,-82.4" stroke="#ffffff" stroke-width="0.4" opacity="0.45"/>`;
   helm += `<path d="M-5,-74.4 L0,-71.8 L5,-74.4 M-3.6,-77 L-3.6,-73.6 M3.6,-77 L3.6,-73.6" fill="none" stroke="${INK}" stroke-width="0.5" opacity="0.7"/>`;
   helm += `<path d="M-6,-89.6 C-3.4,-92.4 1.4,-93 4,-92.2" fill="none" stroke="#e2eef8" stroke-width="0.8" opacity="0.75" stroke-linecap="round"/>`;
   helm += `<path d="M8,-86 C8.9,-82 8.6,-77 6.4,-72.4" fill="none" stroke="${c.rim}" stroke-width="0.8" opacity="0.7"/>`;
@@ -848,6 +656,8 @@ function squadDefs() {
     lin("nv", [[0, "#2c4058"], [1, "#0a121c"]], 0, 0, 1, 0) +
     lin("pk", [[0, "#ff5a96"], [0.5, "#b82a60"], [1, "#4a0c24"]], 0, 0, 1, 0.3) +
     lin("pkb", [[0, "#3a4858"], [1, "#10161e"]], 0, 0, 1, 0) +
+    lightDefs("tl", { key: "#f4f8ff", bounce: "#3a7cff", ks: 0.3, ss: 0.75, bs: 0.24 }) +
+    rad("tsp", [[0, "#ffffff", 0.5], [1, "#ffffff", 0]]) +
     blur("gl", 1.6) +
     blur("fl", 1.2) +
     blur("ao", 1.5)
@@ -1067,6 +877,13 @@ function vossModel() {
   body += `<path d="M22,-32.4 L40,-27.6 L47.6,-15 L45.6,-5.4" fill="none" stroke="#22e6ff" stroke-width="0.8" opacity="0.75"/>`;
   body += `<path d="M40.6,-2 C41.4,10 40,24 38.6,40" fill="none" stroke="#22e6ff" stroke-width="0.9" opacity="0.5"/>`;
   body += `<path d="M-50.2,0 C-50.6,14 -50.2,28 -49.8,44" fill="none" stroke="#5a6a88" stroke-width="0.6" opacity="0.6"/>`;
+  // the jacket pulls from the pads toward the closure and breaks at the elbows
+  const vf = { lit: "#4a5a7c", op: 0.55 };
+  body += fold("M-34,-4 C-30.6,2 -29,9 -29.4,16", vf) + fold("M33.6,-2 C30.6,4 29.4,10 29.8,17", { ...vf, op: 0.45 });
+  body += fold("M-26,-21 C-21,-18 -16,-17.4 -10,-18.6", { ...vf, op: 0.4, w: 0.8 }) + fold("M26,-20 C21,-16.6 16,-15.4 11,-16", { ...vf, op: 0.35, w: 0.8 });
+  body += fold("M-50.6,16 C-47,18.4 -43,19.4 -39.4,22.6", vf) + fold("M-51,30 C-47.4,31.6 -43.6,33 -40.6,36.4", { ...vf, op: 0.45 });
+  body += fold("M50.4,14 C47,16.4 43.4,17.4 40.4,20.6", { ...vf, op: 0.45 }) + fold("M-4,22 C0,26 3,30 4.4,36", { ...vf, op: 0.3 });
+  body += formLight("vl", "vlc", torso + arm + mir(arm), [-54, -40, 108, 90]);
   let col = "";
   col += `<path d="M-6,-40 C-3,-36.6 3,-36.6 6,-40 L7,-33 C3,-31 -3,-31 -7,-33Z" fill="#070a10" opacity="0.7"/>`;
   col += `<path d="${collar}" fill="url(#vcl)" stroke="${INK}" stroke-width="0.9" stroke-linejoin="round"/><path d="${mir(collar)}" fill="url(#vcl)" stroke="${INK}" stroke-width="0.9" stroke-linejoin="round"/>`;
@@ -1094,6 +911,7 @@ function vossModel() {
     box: [-92, -98, 184, 146],
     defs:
       faceDefs("vf", VOSS_FACE) +
+      lightDefs("vl", { bounce: "#2a8cff", ks: 0.3, ss: 0.75, bs: 0.24 }) +
       lin("vhr", [[0, "#d4dce4"], [0.45, "#8e9cac"], [1, "#46505e"]], 0, 0, 1, 1) +
       lin("vjk", [[0, "#36425c"], [0.42, "#1c2334"], [1, "#090c14"]], 0, 0, 1, 0.3) +
       lin("vja", [[0, "#26304a"], [1, "#080a12"]], 0, 0, 1, 0) +
@@ -1154,6 +972,12 @@ function miriModel() {
   }
   body += `<path d="M33,-24 C36.6,-19 36.8,-8 35,6 L33,40" fill="none" stroke="#7affc8" stroke-width="0.8" opacity="0.5"/>`;
   body += `<path d="M-30.6,-25.4 C-24,-30.4 -15,-34 -8,-36" fill="none" stroke="#6aa6a0" stroke-width="0.5" opacity="0.7"/>`;
+  const mf = { lit: "#3c7470", dark: "#020a0a", op: 0.55 };
+  body += fold("M-31,-14 C-28,-6 -27,4 -27.6,14", mf) + fold("M30.6,-12 C28,-4 27.4,6 28,16", { ...mf, op: 0.45 });
+  body += fold("M-24,-26 C-20,-22.6 -16.6,-21 -13.4,-21", { ...mf, op: 0.35, w: 0.8 }) + fold("M44.2,12 C41,14.6 37.6,15.6 34.6,18.4", { ...mf, op: 0.45 });
+  // the white apron front creases where it is tied
+  body += fold("M-8,-2 C-6.6,8 -7.2,20 -6,34 M7.6,0 C6.4,10 7,22 6,36", { lit: "#ffffff", dark: "#5a625c", op: 0.4, w: 0.8 });
+  body += formLight("ml", "mlc", torso + arm + mir(arm), [-48, -38, 96, 88]);
   // Raised forearm and hand holding the med-scanner.
   const grip = "translate(-24 10) rotate(30)";
   let hand = "";
@@ -1187,6 +1011,7 @@ function miriModel() {
     box: [-94, -96, 180, 144],
     defs:
       faceDefs("mf", MIRI_FACE) +
+      lightDefs("ml", { bounce: "#3affc0", ks: 0.3, ss: 0.75, bs: 0.24 }) +
       lin("mhr", [[0, "#6e4628"], [0.4, "#3a2414"], [1, "#120a05"]], 0, 0, 1, 1) +
       lin("mtl", [[0, "#34645f"], [0.45, "#1a3a3a"], [1, "#081818"]], 0, 0, 1, 0.3) +
       lin("mta", [[0, "#24504c"], [1, "#061414"]], 0, 0, 1, 0) +
@@ -1281,6 +1106,19 @@ function kaiModel() {
     [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path d="M0,${r1(-r)} L0,${r1(-r * 1.3)}" transform="rotate(${a})"/>`).join("") +
     `</g>`;
   body += gear(39, -17, 3.4, 0.7);
+  // a jumpsuit lives in its folds: stress lines from the shoulders, a belly
+  // crease, sleeves bunched above the elbow, stitching on every pocket
+  const kf = { lit: "#d88a48", dark: "#1a0a02", op: 0.55 };
+  body += fold("M-38,-12 C-34,-4 -32.6,6 -33,16", kf) + fold("M37.6,-10 C34,-2 32.6,8 33.4,18", { ...kf, op: 0.45 });
+  body += fold("M-30,6 C-22,9 -12,9.6 -3,8.4 M4,9 C12,10 22,9 30,6.4", { ...kf, op: 0.4, w: 0.9 });
+  body += fold("M-31,22 C-24,24.6 -16,25 -8,24 M8,25 C16,26 24,25 31,22", { ...kf, op: 0.35, w: 0.9 });
+  body += fold("M-55.4,12 C-51.6,14.6 -47,15.6 -42.4,18.4 M-56,26 C-52,27.6 -47.4,29 -43,32.4", kf);
+  body += fold("M55.4,10 C51.6,12.6 47,13.6 42.6,16.6 M55.6,24 C51.8,26 47.6,27 43.4,30.4", { ...kf, op: 0.45 });
+  for (const sx of [-1, 1]) {
+    const X = (x) => r1(sx * x);
+    body += `<path d="M${X(30.2)},-8.8 L${X(14.8)},-8.8 M${X(30.2)},-14.8 L${X(30.2)},1.2 M${X(14.8)},-14.8 L${X(14.8)},1.2" fill="none" stroke="#e8a46a" stroke-width="0.3" stroke-dasharray="0.8 0.6" opacity="0.6"/>`;
+  }
+  body += formLight("kl", "klc", torso + arm + mir(arm), [-58, -36, 116, 86]);
 
   const schem =
     `<g transform="translate(70 -64) rotate(6)">` +
@@ -1297,6 +1135,7 @@ function kaiModel() {
     box: [-98, -100, 196, 148],
     defs:
       faceDefs("kf", KAI_FACE) +
+      lightDefs("kl", { bounce: "#ffae3a", ks: 0.3, ss: 0.75, bs: 0.24 }) +
       lin("khr", [[0, "#54402a"], [0.45, "#22190c"], [1, "#080603"]], 0, 0, 1, 1) +
       rad("klens", [[0, "#fff2c4"], [0.35, "#ffaa44"], [1, "#7a3e0c"]], 0.38, 0.35, 0.7) +
       lin("kor", [[0, "#c2732e"], [0.45, "#8a4a1a"], [1, "#321804"]], 0, 0, 1, 0.3) +
@@ -1313,154 +1152,6 @@ function kaiModel() {
       { markup: schem, anim: { type: "flicker", min: 0.55, max: 0.95, speed: 0.8 }, blend: "lighter" },
       { markup: `<g mask="url(#km)">${body}</g>${head}` },
       { markup: lights, anim: { type: "pulse", min: 0.35, max: 0.9, speed: 2.2 }, blend: "lighter" },
-    ],
-  };
-}
-
-// ── ARIA ──────────────────────────────────────────────────────────────────
-
-const ARIA_FACE = {
-  skin: ["#dcfcff", "#62cce4", "#0e4a66"],
-  ink: "#0a3a52",
-  inkW: 0.45,
-  lid: "#063048",
-  white: "#e4ffff",
-  iris: "#40f0ff",
-  browC: "#0a4a64",
-  lip: ["#6cc4dc", "#3a8eac"],
-  lipLine: "#0a3a52",
-  lashes: true,
-  mouth: "neutral",
-  rim: "#b4ffff",
-  neck: 3.3,
-};
-
-function ariaModel() {
-  // Hair: a short asymmetric bob rather than a shapeless fall, so the head
-  // reads as a designed silhouette at portrait size.
-  const back =
-    `<path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L4.6,5 L4.6,0 L-4.6,0 L-5,7.6 C-6.2,9.2 -7.6,10 -8.4,10.4 C-8.2,6.6 -7.8,2.4 -7.4,-1.6Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>`;
-  const front =
-    `<path d="M-7,0.6 C-8,-8 -3.8,-11.2 1,-11 C5.4,-10.8 8,-8 7.6,-1.4 C6.8,-4.2 5.6,-5.8 3.2,-6.4 C0.6,-6.6 -3.2,-5.4 -5.4,-3 C-6.2,-1.8 -6.7,-0.6 -7,0.6Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.45"/>` +
-    `<path d="M-7.2,-2.2 C-8.2,2.4 -8.4,6.6 -8.8,10.4 C-7.6,9.8 -6.4,8.8 -5.6,7.4 C-6,4 -6.2,1.2 -5.8,-3Z" fill="url(#ahr)" stroke="#0a3a52" stroke-width="0.4"/>` +
-    `<path d="M-6.2,-5.2 C-7.2,-0.6 -7.4,4.6 -7.8,9" fill="none" stroke="#6ff6ff" stroke-width="0.5" opacity="0.75"/>` +
-    `<path d="M-3.4,-8.6 C-0.4,-10.2 3.2,-9.8 5.8,-7.4 M-5.6,-5.2 C-3.2,-7.8 0.4,-8.6 4.2,-8 M-1.4,-6.2 C1.4,-7.8 4.4,-7.6 6.6,-5.4" fill="none" stroke="#9ffaff" stroke-width="0.28" opacity="0.6"/>`;
-  // Slim earpiece and a temple lead instead of the old headband.
-  const headset =
-    [-1, 1].map((sx) => `<rect x="${r1(sx * 7.4 - 0.9)}" y="-2.4" width="1.8" height="4.2" rx="0.9" fill="url(#ast)" stroke="#0a3a52" stroke-width="0.3"/>`).join("") +
-    `<path d="M-7.6,1.4 C-7,5.2 -5,6.6 -3,6.8" fill="none" stroke="#2a8eae" stroke-width="0.45"/><circle cx="-2.8" cy="6.8" r="0.5" fill="#8ff8ff"/>`;
-  const head = face("af", { ...ARIA_FACE, x: 0, y: -52, s: 1.5, back, front: front + headset });
-
-  // ── Frame ────────────────────────────────────────────────────────────────
-  // Slim and petite: shoulders pulled in from +-31 to +-19, a narrow waist and
-  // thin arms, so the head reads larger against the body and the whole figure
-  // is a slender vertical rather than a broad slab.
-  const arm =
-    "M-17.6,-27.2 C-22.6,-26 -25.4,-21.4 -26,-12.4 C-26.4,-3.6 -26,6.4 -25.2,16.6 L-21.4,17.6 C-21.8,9 -21.9,1 -21.6,-6.4Z";
-  const torso =
-    "M-5.4,-33.2 C-10.2,-32.4 -15.4,-30 -18.4,-25.6 C-21,-21.2 -20.8,-13.6 -19.4,-5.4 " +
-    "L-17.6,4.4 C-18.4,14 -18.8,23 -18.6,30 L18.6,30 C18.8,23 18.4,14 17.6,4.4 " +
-    "L19.4,-5.4 C20.8,-13.6 21,-21.2 18.4,-25.6 C15.4,-30 10.2,-32.4 5.4,-33.2Z";
-
-  let suit = "";
-  suit += `<path d="${arm}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.7"/><path d="${mir(arm)}" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.7"/>`;
-  suit += `<path d="${torso}" fill="url(#asu)" stroke="#0a3a52" stroke-width="0.7"/>`;
-  // High collar, standing away from a long neck.
-  suit += `<path d="M-5,-41.4 C-2.8,-39.8 2.8,-39.8 5,-41.4 L6.2,-31.6 C2.8,-30.2 -2.8,-30.2 -6.2,-31.6Z" fill="url(#asa)" stroke="#0a3a52" stroke-width="0.55"/>`;
-  suit += `<path d="M-4.8,-40.4 C-2.6,-39 2.6,-39 4.8,-40.4" fill="none" stroke="#b4ffff" stroke-width="0.4"/>`;
-  // Panel seams: a centre spine, a chest yoke and waist banding. The body is
-  // the interface, so the lines are data channels rather than tailoring.
-  suit += `<path d="M0,-30.6 L0,26 M-5.4,-30 L-2.4,-16 L2.4,-16 L5.4,-30 M-13.6,-24.4 C-16.6,-21.4 -18,-17 -18.2,-11 M13.6,-24.4 C16.6,-21.4 18,-17 18.2,-11" fill="none" stroke="#7ff6ff" stroke-width="0.45" opacity="0.8"/>`;
-  suit += `<path d="M-16.4,2.4 L16.4,2.4 M-17.2,10 L17.2,10 M-17.8,17.6 L17.8,17.6" fill="none" stroke="#5fe4ff" stroke-width="0.38" opacity="0.5"/>`;
-  // Data ribbon running the length of the torso — the one motif that says
-  // "this is rendered light, not cloth".
-  suit += `<path d="M-2.6,-14 C4.6,-9 -4.6,-2 2.6,3 C-3.4,8 3,14 -1.6,20" fill="none" stroke="#9ffaff" stroke-width="0.4" opacity="0.55"/>`;
-  suit += `<circle cx="0" cy="-9.6" r="1.6" fill="#062536" stroke="#7ff6ff" stroke-width="0.45"/>`;
-  suit += `<path d="M-20.2,-12 C-20.8,-4 -20.6,6 -19.8,16 M20.2,-12 C20.8,-4 20.6,6 19.8,16" fill="none" stroke="#041a26" stroke-width="1.1" opacity="0.5"/>`;
-  suit += `<path d="M18.8,-24 C21.2,-19 21.2,-11 19.8,-3" fill="none" stroke="#b4ffff" stroke-width="0.55" opacity="0.6"/>`;
-
-  const silhouette =
-    `<path d="${torso}"/><path d="${arm}"/><path d="${mir(arm)}"/>` +
-    at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L-8.4,10.4Z"/><rect x="-3.2" y="4" width="6.4" height="14"/>`);
-  const figure = `<g mask="url(#afm)">${suit}${head}</g>`;
-  const shimmer =
-    `<clipPath id="aslc"><rect x="-80" y="-58" width="160" height="3" /><rect x="-80" y="-22" width="160" height="1.8"/></clipPath>` +
-    `<g clip-path="url(#aslc)" transform="translate(2.6 0)" fill="#9ffaff" opacity="0.4">${silhouette}</g>`;
-  const scan =
-    `<g mask="url(#asm)" stroke="#bfffff" stroke-width="0.26" opacity="0.2">` +
-    Array.from({ length: 76 }, (_, i) => `<path d="M-30,${r1(-72 + i * 1.4)} L30,${r1(-72 + i * 1.4)}"/>`).join("") +
-    `</g>`;
-  const cone =
-    `<path d="M-12,40 L-46,-86 L46,-86 L12,40Z" fill="url(#acn)"/>` +
-    `<ellipse cx="0" cy="40" rx="13" ry="2.2" fill="#8ff8ff" opacity="0.65" filter="url(#agl)"/>`;
-  const frame =
-    `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="#22e6ff" fill-opacity="0.02" stroke="#22e6ff" stroke-width="0.7" stroke-opacity="0.3"/>` +
-    `<path d="M-50,-90 L-58,-90 L-61.4,-76.4 M50,-90 L58,-90 L61.4,-76.4 M-50,24 L-58,24 L-61.4,10.4 M50,24 L58,24 L61.4,10.4" fill="none" stroke="#8ff8ff" stroke-width="1"/>` +
-    `<g transform="translate(-64 -12)" fill="#7ff6ff">` +
-    [0, 1, 2, 3, 4].map((i) => `<rect x="0" y="${i * 3}" width="${[9, 14, 6, 11, 8][i]}" height="1.2" opacity="0.5"/>`).join("") +
-    `</g>` +
-    `<path d="M40,12 L44,12 L45.4,6 L47.4,17 L49.4,3 L51.4,15 L53.4,8 L55,12 L62,12" fill="none" stroke="#8ff8ff" stroke-width="0.6" opacity="0.7"/>`;
-  const ring =
-    `<circle cx="0" cy="-52" r="26" fill="none" stroke="#5ff0ff" stroke-width="0.55" stroke-dasharray="14 5 3 5" opacity="0.4"/>` +
-    `<circle cx="0" cy="-52" r="29.6" fill="none" stroke="#5ff0ff" stroke-width="1.4" stroke-dasharray="0.5 3.1" opacity="0.28"/>` +
-    `<path d="M-2,-82.4 L2,-82.4 L0,-79.4Z" fill="#8ff8ff" opacity="0.7"/>`;
-  const projector =
-    `<path d="M-19,41 L19,41 L23,47.6 L-23,47.6Z" fill="url(#ast)" stroke="${INK}" stroke-width="1"/>` +
-    `<path d="M-23,47.6 L23,47.6 L21.6,50 L-21.6,50Z" fill="#0a1018" stroke="${INK}" stroke-width="0.8"/>` +
-    `<ellipse cx="0" cy="40.6" rx="14.4" ry="2.6" fill="#041620" stroke="#22e6ff" stroke-width="0.7"/>` +
-    `<path d="M-18,42.4 L18,42.4" stroke="#b8d8ee" stroke-width="0.4" opacity="0.6"/>` +
-    `<circle cx="-16" cy="45" r="0.7" fill="#22e6ff"/><circle cx="16" cy="45" r="0.7" fill="#22e6ff"/>`;
-  const eyes =
-    [-1, 1].map((sx) => `<circle cx="${r1(sx * 4.5)}" cy="-52.2" r="1.15" fill="#8ffcff" filter="url(#agl2)"/>`).join("") +
-    `<circle cx="-11.2" cy="-51.2" r="0.9" fill="#8ffcff" filter="url(#agl2)"/>` +
-    `<circle cx="0" cy="-9.6" r="1.7" fill="#7ff6ff" filter="url(#agl2)"/>`;
-  const float = { type: "float", amp: 1.2, speed: 1.1 };
-  const backing =
-    `<path d="M-58,-90 L-72,-34 L-58,24 L58,24 L72,-34 L58,-90Z" fill="url(#abk)" filter="url(#agl)"/>` +
-    `<path d="M-54,-86 L-67,-34 L-54,20 L54,20 L67,-34 L54,-86Z" fill="#02070c" opacity="0.55"/>` +
-    `<path d="M-19,41 L19,41 L23,50 L-23,50Z" fill="#000" opacity="0.5" filter="url(#agl)"/>`;
-  // One thin rim, not a glowing outline: the old pass stacked a 2.2-wide
-  // additive stroke under a 0.6 one and buried every interior line.
-  const outline =
-    `<g mask="url(#afm)" fill="none" stroke="#5ff0ff" stroke-width="1.1" stroke-linejoin="round" opacity="0.5" filter="url(#agl2)">${silhouette}</g>` +
-    `<g mask="url(#afm)" fill="none" stroke="#c8ffff" stroke-width="0.5" stroke-linejoin="round" opacity="0.7">${silhouette}</g>`;
-
-  return {
-    box: [-76, -96, 152, 148],
-    defs:
-      faceDefs("af", ARIA_FACE) +
-      lin("ahr", [[0, "#2a8aa8"], [0.5, "#0c4460"], [1, "#04202e"]], 0, 0, 1, 1) +
-      lin("asu", [[0, "#58c8e4"], [0.45, "#1e7a9e"], [1, "#0a3448"]], 0, 0, 1, 0.3) +
-      lin("asa", [[0, "#3a9cbc"], [1, "#072634"]], 0, 0, 1, 0) +
-      lin("ast", [[0, "#6f8aa3"], [0.4, "#3a4d61"], [1, "#141c26"]], 0, 0, 1, 0.5) +
-      lin("acn", [[0, "#22e6ff", 0], [0.6, "#22e6ff", 0.05], [1, "#22e6ff", 0.18]]) +
-      rad("abg", [[0, "#22e6ff", 0.1], [1, "#22e6ff", 0]]) +
-      rad("abk", [[0, "#01060b", 0.82], [0.75, "#01060b", 0.7], [1, "#01060b", 0.35]]) +
-      `<linearGradient id="afg" gradientUnits="userSpaceOnUse" x1="0" y1="-2" x2="0" y2="28"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
-      `<mask id="afm" maskUnits="userSpaceOnUse" x="-100" y="-120" width="200" height="200"><rect x="-100" y="-120" width="200" height="200" fill="url(#afg)"/>` +
-      `<rect x="-100" y="8" width="200" height="0.8" fill="#000"/><rect x="-100" y="13" width="200" height="1.4" fill="#000"/><rect x="-100" y="18.4" width="200" height="0.8" fill="#000"/><rect x="-100" y="-26" width="200" height="0.5" fill="#000"/></mask>` +
-      `<mask id="asm" maskUnits="userSpaceOnUse" x="-100" y="-120" width="200" height="200"><g mask="url(#afm)" fill="#fff"><path d="${torso}"/><path d="${arm}"/><path d="${mir(arm)}"/>` +
-      at(0, -52, 1.5, `<path d="${headPath(ARIA_FACE)}"/><path d="M-7.4,-1.6 C-8.6,-9.8 -4.8,-12.2 0,-12.2 C5.2,-12.2 8.4,-9.2 7.6,-2.2 C8,0.6 7.6,3.4 7,5 L-8.4,10.4Z"/><rect x="-3.2" y="4" width="6.4" height="14"/>`) +
-      `</g></mask>` +
-      blur("agl", 2) +
-      blur("agl2", 1.2),
-    layers: [
-      { markup: backing },
-      { markup: `<ellipse cx="0" cy="-40" rx="76" ry="82" fill="url(#abg)"/>`, anim: { type: "pulse", min: 0.6, max: 1, speed: 1.3 } },
-      { markup: cone, anim: { type: "pulse", min: 0.55, max: 1, speed: 2.1 }, blend: "lighter" },
-      { markup: ring, anim: { type: "spin", speed: 0.25, pivot: [0, -52] }, blend: "lighter" },
-      { markup: frame, anim: { type: "flicker", min: 0.5, max: 0.9, speed: 0.7 }, blend: "lighter" },
-      // Dark core first, then the figure drawn normally: the interior art has
-      // to survive, or she is a white cut-out. The additive pass that follows
-      // is what makes her read as projected light.
-      { markup: `<g mask="url(#afm)" fill="#01080e">${silhouette}</g>`, anim: float, opacity: 0.66 },
-      { markup: figure, anim: float, opacity: 0.95 },
-      { markup: figure, anim: float, blend: "lighter", opacity: 0.42 },
-      { markup: outline, anim: float, blend: "lighter", opacity: 0.6 },
-      { markup: shimmer, anim: { type: "flicker", min: 0, max: 0.6, speed: 1.6 }, blend: "lighter" },
-      { markup: scan, anim: { type: "drift", amp: 0.6, speed: 5 }, blend: "lighter", opacity: 0.4 },
-      { markup: eyes, anim: float, blend: "lighter" },
-      { markup: projector },
     ],
   };
 }
@@ -1485,9 +1176,7 @@ const SUPERVISOR_FACE = {
 };
 
 /** Crease drawn as a dark fold with a lit edge above it. */
-const crease = (d, op = 0.6) =>
-  `<path d="${d}" fill="none" stroke="#06080e" stroke-width="0.8" stroke-linecap="round" opacity="${op}"/>` +
-  `<path d="${d}" transform="translate(-0.8 -0.7)" fill="none" stroke="#7a8aa0" stroke-width="0.35" stroke-linecap="round" opacity="${r1(op * 0.7)}"/>`;
+const crease = (d, op = 0.6) => fold(d, { dark: "#06080e", lit: "#7a8aa0", op });
 
 function supervisorModel() {
   const hair =
@@ -1565,6 +1254,11 @@ function supervisorModel() {
   body += crease("M-51.6,6 C-47.4,9 -43.8,9.6 -41.2,13.4", 0.55);
   body += crease("M-52.4,21 C-48.4,23 -44.6,25 -41.6,29.4", 0.45);
   body += crease("M51.6,4 C47.6,7 44.4,8 42,11.4", 0.5);
+  // rumpled: the jacket sags off the strap and bunches over the belly
+  body += crease("M-20,-27 C-24,-22 -27,-16 -28.6,-10", 0.4) + crease("M21,-27 C25,-21 27.4,-15 28.4,-9", 0.35);
+  body += crease("M-37,30 C-31,32 -26,36 -24,42", 0.45) + crease("M36.6,30 C31,32.6 27,37 25.6,42.4", 0.4);
+  body += crease("M10,20 C13,24 13.6,30 12.6,36", 0.3) + crease("M-9,16 C-11.4,22 -11.6,28 -10.4,34", 0.3);
+  body += formLight("sl", "slc", torso + arm + mir(arm), [-56, -38, 112, 88]);
   // Name tape, chest badge, pen in the pocket.
   body += `<path d="M20,-16.6 L35.4,-15.8 L35.2,-10.6 L20,-11.4Z" fill="#141a24" stroke="${INK}" stroke-width="0.5"/>`;
   body += `<path d="M22,-14.2 L26.4,-14 M27.6,-14 L33,-13.6 M22,-12.6 L29,-12.3" stroke="#8a96a6" stroke-width="0.7" opacity="0.7"/>`;
@@ -1620,6 +1314,7 @@ function supervisorModel() {
     box: [-96, -98, 190, 146],
     defs:
       faceDefs("sf", SUPERVISOR_FACE) +
+      lightDefs("sl", { bounce: "#ffa040", ks: 0.3, ss: 0.75, bs: 0.24 }) +
       lin("shr", [[0, "#a8a49c"], [0.45, "#6e6a64"], [1, "#2e2b28"]], 0, 0, 1, 1) +
       lin("sjk", [[0, "#48546a"], [0.42, "#272f3e"], [1, "#0a0d14"]], 0, 0, 1, 0.3) +
       lin("sja", [[0, "#343e52"], [1, "#0a0c14"]], 0, 0, 1, 0) +
