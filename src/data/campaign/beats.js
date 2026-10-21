@@ -61,13 +61,13 @@ export const LEVEL_BEATS = {
     checkpoint: [
       { at: "start", delay: 3, lines: [[ARIA, "Security wing. If Rasczak made it to the Engine level, he came through here first.", "calm"]] },
       { at: "kills", frac: 0.25, lines: [
-        [ARIA, "Cadet... those officers. Look at the shoulder patches. Unit four.", "afraid"],
+        [ARIA, "{AGENT}... that one. Unit four. He told you to mind the coffee this morning.", "afraid"],
         [ARIA, "They're Rasczak's people. Whatever came up out of that chamber, it turned them around.", "afraid"],
       ] },
       { at: "kills", frac: 0.6, event: "flicker", lines: [[LOG, "Something walked out of the Engine chamber. It spoke to us. It asked us to stand still. Some of us... stood still.", "afraid"]] },
       { at: "exit", lines: [
         [ARIA, "There. By the turnstile, on the floor. A badge. Simon's.", "sad"],
-        [ARIA, "He came through here running. Down, toward his people. He didn't stop to pick it up. I'm keeping it on file, {AGENT}.", "tender"],
+        [ARIA, "He told you he had all morning. He didn't stop to pick it up. I'm keeping it on file, {AGENT}.", "tender"],
       ] },
     ],
     research: [
@@ -123,7 +123,7 @@ export const LEVEL_BEATS = {
       { at: "exit", lines: [[LYRA, "There's a man on the hangar deck who can fix that suit. He'll say no first. Let him.", "calm"]] },
     ],
     maintenance_spine: [
-      { at: "start", delay: 3, lines: [[ROOK, "My spine. I kept these fans turning for six years. Try not to shoot the fans.", "calm"]] },
+      { at: "start", delay: 3, lines: [[ROOK, "My spine. I kept these fans turning for eight years. Try not to shoot the fans.", "calm"]] },
       { at: "kills", frac: 0.35, lines: [[LYRA, "Sixteen suits before yours. I've been looking for the people who wore them. There's no one to find.", "sad"]] },
       { at: "kills", frac: 0.7, event: "tremor", lines: [[ROOK, "Feel that? Not the station settling. Something heavy is walking the duct above us. Keeping pace.", "worried"]] },
       { at: "exit", lines: [[ARIA, "Sixteen candidates, sixteen drifted. Seventeen is still here, and she'd like that noted.", "warm"]] },
@@ -178,7 +178,7 @@ export const LEVEL_BEATS = {
       { at: "kills", frac: 0.8, event: "flicker", lines: [[WHISPER, "Eleven, two, three, five. You're early. You're always early.", "menacing"]] },
     ],
     engine: [
-      { at: "start", delay: 3, lines: [[ROOK, "The Chronos Engine. Six years I opened these doors every morning. It's never been this quiet.", "worried"]] },
+      { at: "start", delay: 3, lines: [[ROOK, "The Chronos Engine. Eight years I opened these doors every morning. It's never been this quiet.", "worried"]] },
       { at: "kills", frac: 0.4, lines: [
         [ARIA, "The chamber recorder. It kept the whole of Simon's last call. The part we never heard.", "worried"],
         [SIMON, "Simon, Engine chamber. Rasczak's down. They're all just standing still. There's a man at the controls.", "afraid"],
@@ -214,7 +214,7 @@ export const LEVEL_BEATS = {
       { at: "exit", lines: [[ARIA, "Nova's beacon is moving. Fast. Away from us. That's her. That's her winning.", "tender"]] },
     ],
     archive_burns: [
-      { at: "start", delay: 3, lines: [[ROOK, "Six years I kept his machines running. Let's see how fast they burn.", "calm"]] },
+      { at: "start", delay: 3, lines: [[ROOK, "Eight years I kept his machines running. Let's see how fast they burn.", "calm"]] },
       { at: "kills", frac: 0.5, event: "flicker", lines: [[LORD, "That archive is all that's left of them. Burn it, and they're mine to rewrite.", "menacing"]] },
       { at: "kills", frac: 0.8, lines: [
         [LYRA, "Rook. Kai's math. Tell me it's right.", "worried"],

@@ -175,7 +175,7 @@ export const CUTSCENE_SCRIPTS = {
       lines: [
         { text: "SYSTEMS: Rebooting...", delay: 0, color: "#8899aa", size: 14 },
         {
-          text: "WARNING: MEMORY CORRUPTED — FRAGMENTS ONLY",
+          text: "WARNING: UNREGISTERED MEMORY — 3 FRAGMENTS",
           delay: 1100,
           color: "#ff4444",
           size: 12,
@@ -188,9 +188,9 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "aria",
       lines: [
-        { text: "ARIA: You're back online. Mostly.", delay: 0, color: "#00ffdd", size: 18 },
+        { text: "ARIA: Lift jolted. You were gone for eleven seconds.", delay: 0, color: "#00ffdd", size: 18 },
         {
-          text: "Your memory's in pieces. I'm sweeping up what I can.",
+          text: "Your vitals never moved. Your memory did. There's things in there I didn't put.",
           delay: 1600,
           color: "#88ccff",
           size: 15,
@@ -208,13 +208,7 @@ export const CUTSCENE_SCRIPTS = {
           delay: 0,
           color: "#4488cc",
           size: 15,
-        },
-        {
-          text: "[MEMORY CORRUPTED — IDENTITY UNRESOLVED]",
-          delay: 2500,
-          color: "#334466",
-          size: 12,
-        },
+        }
       ],
       particles: "sparks",
       duration: 2000,
@@ -228,13 +222,7 @@ export const CUTSCENE_SCRIPTS = {
           delay: 0,
           color: "#66ccaa",
           size: 15,
-        },
-        {
-          text: "[MEMORY CORRUPTED — IDENTITY UNRESOLVED]",
-          delay: 2400,
-          color: "#336644",
-          size: 12,
-        },
+        }
       ],
       particles: "sparks",
       duration: 2000,
@@ -270,13 +258,13 @@ export const CUTSCENE_SCRIPTS = {
           size: 16,
         },
         {
-          text: "Your service record says no squad. Your memory disagrees.",
+          text: "Three voices. Not one of them on any roster I can find.",
           delay: 2400,
           color: "#88ccff",
           size: 15,
         },
         {
-          text: "One of them is lying. We'll find out which.",
+          text: "Either the files are wrong or you are. I'm betting files.",
           delay: 4900,
           color: "#88ccff",
           size: 15,
@@ -301,7 +289,7 @@ export const CUTSCENE_SCRIPTS = {
       lines: [
         { text: "SYSTEMS: Rebooting...", delay: 0, color: "#8899aa", size: 14 },
         {
-          text: "WARNING: MEMORY CORRUPTED — 88% DATA LOSS",
+          text: "WARNING: UNREGISTERED MEMORY — 3 FRAGMENTS",
           delay: 1100,
           color: "#ff4444",
           size: 12,
@@ -315,13 +303,13 @@ export const CUTSCENE_SCRIPTS = {
       art: "aria",
       lines: [
         {
-          text: "ARIA: Welcome back. Vitals stable. I checked twice.",
+          text: "ARIA: Lift jolted. You were gone for eleven seconds.",
           delay: 0,
           color: "#00ffdd",
           size: 18,
         },
         {
-          text: "Your memory core took a beating. I'm salvaging what I can.",
+          text: "Vitals never moved. I checked twice. Your memory did.",
           delay: 2300,
           color: "#88ccff",
           size: 15,
@@ -437,7 +425,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 14,
         },
         {
-          text: "AVISO: Bancos de memoria corruptos",
+          text: "AVISO: Memoria no registrada — 3 fragmentos",
           delay: 800,
           color: "#ff4444",
           size: 12,
@@ -451,13 +439,13 @@ export const CUTSCENE_SCRIPTS = {
       art: "aria",
       lines: [
         {
-          text: "ARIA: Estás de vuelta. Apenas.",
+          text: "ARIA: El ascensor dio un tirón. Estuviste fuera once segundos.",
           delay: 0,
           color: "#00ffdd",
           size: 18,
         },
         {
-          text: "Tu memoria está fragmentada. Recuperaré lo que pueda.",
+          text: "Tus constantes no se movieron. Tu memoria sí. Hay cosas ahí que yo no puse.",
           delay: 1600,
           color: "#88ccff",
           size: 15,
@@ -722,7 +710,7 @@ export const CUTSCENE_SCRIPTS = {
           color: "#ff4444",
           size: 16,
         },
-        { text: "\"Somebody forgot to tell him.\"", delay: 6800, color: "#ff8844", size: 16 },
+        { text: "\"Simon never took his poster down.\"", delay: 6800, color: "#ff8844", size: 16 },
       ],
       duration: 10500,
     },
@@ -770,13 +758,13 @@ export const CUTSCENE_SCRIPTS = {
           size: 15,
         },
         {
-          text: "\"Voss built a suit that drinks temporal energy. Ring a bell?\"",
+          text: "\"PARADOX ordered one suit that drinks temporal energy. One. A prototype.\"",
           delay: 2300,
           color: "#ffcc00",
           size: 16,
         },
         {
-          text: "\"Your suit. Serial C-0017. His design.\"",
+          text: "\"Serial C-0017. Same as yours. Designer field's blank.\"",
           delay: 5000,
           color: "#ff4444",
           size: 16,
@@ -832,26 +820,6 @@ export const CUTSCENE_SCRIPTS = {
     },
     {
       bg: "dark",
-      art: "portrait_voss",
-      lines: [
-        { text: "\"Three doctorates by twenty-eight.\"", delay: 0, color: "#8899aa", size: 14 },
-        {
-          text: "\"Temporal physics. Quantum engineering. Xenobiology.\"",
-          delay: 1700,
-          color: "#8899aa",
-          size: 14,
-        },
-        {
-          text: "\"Smartest man on the station. Made sure everyone knew it.\"",
-          delay: 4100,
-          color: "#aaddff",
-          size: 15,
-        },
-      ],
-      duration: 9000,
-    },
-    {
-      bg: "dark",
       art: "aria",
       lines: [
         {
@@ -866,15 +834,8 @@ export const CUTSCENE_SCRIPTS = {
           color: "#cc44ff",
           size: 14,
         },
-        {
-          text: "\"Command called it reckless. Buried the proposal.\"",
-          delay: 4900,
-          color: "#ff8844",
-          size: 14,
-        },
-        { text: "\"Twice.\"", delay: 7600, color: "#ff4422", size: 18 },
       ],
-      duration: 10000,
+      duration: 5500,
     },
     {
       bg: "dark",
@@ -949,13 +910,11 @@ export const CUTSCENE_SCRIPTS = {
       bg: "boss_lair",
       art: "villain",
       lines: [
-        { text: "Elias Voss didn't die.", delay: 0, color: "#cc44ff", size: 18 },
-        { text: "He climbed into the storm he made.", delay: 1200, color: "#cc44ff", size: 18 },
-        { text: "He became the Paradox Lord.", delay: 3100, color: "#ff2244", size: 22 },
+        { text: "Elias Voss didn't die.", delay: 0, color: "#cc44ff", size: 20 },
       ],
       particles: "embers",
       shake: 2,
-      duration: 6500,
+      duration: 3500,
     },
     {
       bg: "dark",
@@ -1146,7 +1105,7 @@ export const CUTSCENE_SCRIPTS = {
       bg: "boss_lair",
       lines: [
         { text: "THE PARADOX CORE", delay: 0, color: "#ff2244", size: 22 },
-        { text: "Where Elias Voss stopped being a man.", delay: 900, color: "#cc4466", size: 16 },
+        { text: "Where the eleven seconds started.", delay: 900, color: "#cc4466", size: 16 },
       ],
       particles: "embers",
       shake: 2,
@@ -3553,7 +3512,7 @@ export const CUTSCENE_SCRIPTS = {
           emotion: "calm",
         },
         {
-          text: "\"Your Voss and the Lord. The same man. One of them made a different choice.\"",
+          text: "\"Your tactician. The voice in your memories. That's him. He made the other choice.\"",
           delay: 3200,
           color: "#ffcc00",
           size: 15,
@@ -4153,7 +4112,7 @@ export const CUTSCENE_SCRIPTS = {
         },
         { text: "\"For once, he won't see us coming.\"", delay: 4500, color: "#44ff88", size: 16 },
         {
-          text: "\"Kept his machines running for six years. Time I unbuilt some.\"",
+          text: "\"Kept his machines running for eight years. Time I unbuilt some.\"",
           delay: 6400,
           color: "#44ff88",
           size: 15,
@@ -4727,7 +4686,7 @@ export const CUTSCENE_SCRIPTS = {
       lines: [
         { text: "WEEKS LATER", delay: 0, color: "#aaddff", size: 20 },
         {
-          text: "The Chronos Engine, cold for the first time in six years.",
+          text: "The Chronos Engine, cold for the first time since they switched it on.",
           delay: 1500,
           color: "#8899aa",
           size: 15,
@@ -6075,7 +6034,7 @@ export const CUTSCENE_SCRIPTS = {
       bg: "station",
       art: "station",
       lines: [
-        { text: "06:47. Chronos Station.", delay: 0, color: "#556677", size: 14 },
+        { text: "06:31. Chronos Station.", delay: 0, color: "#556677", size: 14 },
         { text: "Coffee's burnt. Lift's busted.", delay: 1200, color: "#8899aa", size: 16 },
         {
           text: "The night-shift log has a page torn out.",
@@ -6100,23 +6059,21 @@ export const CUTSCENE_SCRIPTS = {
       bg: "dark",
       art: "hero_human",
       lines: [
-        { text: "Six years on patrol for Chronos PD. Good at it. Bored stiff.", delay: 0, color: "#8899aa", size: 16 },
-        { text: "Then a transfer to Temporal Crimes. Everyone calls it the Bureau.", delay: 2200, color: "#aabbcc", size: 16 },
-        { text: "They took you. They took your stripes too. Back to cadet.", delay: 4500, color: "#aabbcc", size: 16 },
+        { text: "Transfer to Temporal Crimes. Everyone calls it the Bureau.", delay: 0, color: "#aabbcc", size: 16 },
         {
           text: "Alpha exam: failed. Retook it. Failed faster.",
-          delay: 6800,
+          delay: 2300,
           color: "#aabbcc",
           size: 16,
         },
         {
           text: "\"Too slow. Too stubborn.\" Only one of those is fixable.",
-          delay: 8800,
+          delay: 4300,
           color: "#887766",
           size: 15,
         },
       ],
-      duration: 12500,
+      duration: 8000,
     },
     {
       bg: "locker_room",
@@ -6326,16 +6283,37 @@ export const CUTSCENE_SCRIPTS = {
           issue: "#1",
           tagline: "ONE CADET. NO BACKUP.",
         },
+        // Layouts (js/cutscene.js _fbLayout): splash, bleed, tiers, diagonal;
+        // insets are extra panels — a readout is a lit screen detail.
         pages: [
-          { hold: 1600, flipMs: 650, panel: { bg: "station", caption: "CHRONOS STATION — 06:47. One lab light never went off.", captionPos: "top", captionColor: "#1a1208", captionSize: 14, halftone: 0.18 } },
-          { hold: 1600, flipMs: 650, panel: { bg: "dark", art: "hero_at_desk", caption: "Badge 11235. Six years on patrol. Now a cadet again: third row on the duty board.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13 } },
-          { hold: 1700, flipMs: 650, panel: { bg: "locker_room", art: "portrait_supervisor", caption: "Supervisor Simon. Thirty years on the job. Never sent a cadet into a real fight.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.12 } },
-          { hold: 1700, flipMs: 650, panel: { bg: "locker_room", caption: "\"Rasczak, take both squads down. Cadet... you stay with me.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
-          { hold: 1500, flipMs: 650, panel: { bg: "deep_space", art: "rift", caption: "Then somebody broke the sky.", captionPos: "top", captionColor: "#a01010", captionSize: 16, sfx: "KRAA-KOOM", sfxColor: "#ffcc00", sfxSize: 36, sfxX: 0.7, sfxY: 0.45, sfxRot: -10, action: true, halftone: 0.12 } },
-          { hold: 1500, flipMs: 650, panel: { bg: "boss_lair", art: "villain", caption: "Something came up out of the chamber. It asked them to stand still.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, action: true } },
-          { hold: 1600, flipMs: 650, panel: { bg: "dark", art: "portrait_supervisor", caption: "Simon went down after his people. Alone.", captionPos: "top", captionColor: "#a01010", captionSize: 15, halftone: 0.2 } },
-          { hold: 1700, flipMs: 650, panel: { bg: "deep_space", art: "villain_final", caption: "They called it the Paradox Lord. Survivors stopped talking.", captionPos: "top", captionColor: "#a01010", captionSize: 13, halftone: 0.18 } },
-          { hold: 2000, flipMs: 0, panel: { bg: "dark", art: "hero_armed", caption: "One cadet. One suit. Eleven seconds to answer for.", captionPos: "center", captionColor: "#1a1208", captionSize: 16, prompt: "PRESS SPACE / CLICK TO SUIT UP", promptColor: "#00ffcc", promptSize: 18, promptY: 0.78, halftone: 0.15 } },
+          { hold: 1600, flipMs: 650, layout: "splash",
+            panel: { bg: "station", caption: "CHRONOS STATION — 06:47. One lab light never went off.", captionPos: "top", captionColor: "#1a1208", captionSize: 14, halftone: 0.18 },
+            insets: [{ slot: "br", w: 0.24, h: 0.22, readout: { label: "STATION TIME", text: "06:47", color: "#ff4a3a" } }] },
+          { hold: 1600, flipMs: 650, layout: "tiers", split: 0.66,
+            panel: { bg: "dark", art: "hero_at_desk", artY: 0.4, artZoom: 1.45, caption: "Badge 11235. Third row on the duty board. Nobody's betting on row three.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, glow: [0.56, 0.3, 0.55, "rgba(40,120,200,0.35)"] },
+            insets: [
+              { readout: { label: "BADGE", text: "11235", color: "#5ad8ff" } },
+              { readout: { label: "DUTY BOARD · CADETS", color: "#ffc23a", rows: [["01  10984", "SIM"], ["02  11102", "GYM"], ["03  11235", "DESK"], ["04  11307", "RANGE"]].map((r, i) => [...r, i === 2]) } },
+            ] },
+          { hold: 1700, flipMs: 650, layout: "diagonal", cutTop: 0.7, cutBottom: 0.58,
+            panel: { bg: "locker_room", art: "portrait_supervisor", artX: 0.4, caption: "Supervisor Simon. Thirty years on the job. Never sent a cadet into a real fight.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.12 },
+            insets: [{ slot: "cut", bg: "station", tint: "rgba(120,150,190,0.9)", halftone: 0.2 }] },
+          { hold: 1700, flipMs: 650, layout: "splash",
+            panel: { bg: "locker_room", caption: "Every clock on the station agreed. For one more minute.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 },
+            insets: [{ slot: "tl", w: 0.24, h: 0.34, bg: "dark", art: "portrait_supervisor", artY: 0.5, artZoom: 1.25 }] },
+          { hold: 1500, flipMs: 650, layout: "bleed",
+            panel: { bg: "deep_space", art: "rift", caption: "Then somebody broke the sky.", captionPos: "top", captionColor: "#a01010", captionSize: 16, sfx: "KRAA-KOOM", sfxColor: "#ffcc00", sfxSize: 36, sfxX: 0.7, sfxY: 0.45, sfxRot: -10, action: true, halftone: 0.12 } },
+          { hold: 1500, flipMs: 650, layout: "diagonal", cutTop: 0.74, cutBottom: 0.64,
+            panel: { bg: "boss_lair", art: "villain", artX: 0.44, caption: "Something came up out of the chamber. It was very polite about it.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, action: true, sfxX: 0.44 },
+            insets: [{ slot: "cut", bg: "station", tint: "rgba(255,70,60,0.85)", halftone: 0.25 }] },
+          { hold: 1600, flipMs: 650, layout: "splash",
+            panel: { bg: "dark", art: "portrait_supervisor", artX: 0.42, artZoom: 1.3, caption: "Lift B went down. It didn't come back up.", captionPos: "top", captionColor: "#a01010", captionSize: 15, halftone: 0.2, glow: [0.42, 0.2, 0.5, "rgba(255,90,60,0.22)"] },
+            insets: [{ slot: "br", w: 0.26, h: 0.2, readout: { label: "LIFT B · CORE ACCESS", text: "▼ DOWN", color: "#ff7a3a" } }] },
+          { hold: 1700, flipMs: 650, layout: "bleed",
+            panel: { bg: "deep_space", art: "villain", caption: "They called it the Paradox Lord. The survivors stopped talking.", captionPos: "top", captionColor: "#a01010", captionSize: 13, halftone: 0.18 } },
+          { hold: 2000, flipMs: 0, layout: "splash",
+            panel: { bg: "dark", art: "hero_armed", artZoom: 1.3, artY: 0.4, caption: "One cadet. One suit nobody signed for.", captionPos: "center", captionColor: "#1a1208", captionSize: 16, prompt: "PRESS SPACE / CLICK TO SUIT UP", promptColor: "#00ffcc", promptSize: 18, promptY: 0.78, halftone: 0.15, glow: [0.5, 0.38, 0.5, "rgba(0,255,204,0.18)"] },
+            insets: [{ slot: "tr", w: 0.22, h: 0.2, readout: { label: "SUIT C-0017", text: "UNSIGNED", color: "#00ffcc" } }] },
         ],
       },
       title: "ISSUE #1",
@@ -6357,7 +6335,7 @@ export const CUTSCENE_SCRIPTS = {
           { hold: 1400, flipMs: 600, panel: { bg: "station", caption: "Static. Then a heartbeat. The Core is still falling.", captionPos: "top", captionColor: "#ff8844", captionSize: 13, halftone: 0.12 } },
           { hold: 1200, flipMs: 500, panel: { bg: "reactor", art: "rift", caption: "Below decks, the rift keeps widening. Nobody's patching it.", captionPos: "bottom", captionColor: "#ffaa00", captionSize: 13, sfx: "BREACH", sfxColor: "#ff6622", sfxSize: 32, sfxX: 0.7, sfxY: 0.35, sfxRot: -8, action: true } },
           { hold: 1300, flipMs: 550, panel: { bg: "reactor", caption: "ARIA: \"Vitals back. Suit's wrecked. You're alive. Don't waste it.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
-          { hold: 1300, flipMs: 550, panel: { bg: "station", caption: "Simon's beacon is flat. Rasczak's squads came back up wearing his colours.", captionPos: "top", captionColor: "#1a1208", captionSize: 12, halftone: 0.14 } },
+          { hold: 1300, flipMs: 550, panel: { bg: "station", caption: "Somebody pulled you out of the Core. They didn't leave a name.", captionPos: "top", captionColor: "#1a1208", captionSize: 12, halftone: 0.14 } },
           { hold: 1100, flipMs: 500, panel: { bg: "boss_lair", art: "villain", caption: "He let you live. He wants an audience.", captionPos: "bottom", captionColor: "#a01010", captionSize: 13, action: true, halftone: 0.16 } },
           { hold: 1400, flipMs: 550, panel: { bg: "reactor", art: "hero_armed", caption: "This time, you don't walk back in alone.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
           { hold: 1800, flipMs: 0, panel: { bg: "reactor", caption: "ACT II — THE GATHERING", captionPos: "center", captionColor: "#ff8844", captionSize: 20 } },
@@ -6405,7 +6383,6 @@ export const CUTSCENE_SCRIPTS = {
           { hold: 1500, flipMs: 650, panel: { bg: "temporal_rift", art: "rift", caption: "The Final Form tears the Core wide open.", captionPos: "top", captionColor: "#ff2244", captionSize: 14, action: true, halftone: 0.14 } },
           { hold: 1200, flipMs: 550, panel: { bg: "deep_space", caption: "Every timeline he's stolen starts pulling toward one point.", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
           { hold: 1300, flipMs: 600, panel: { bg: "boss_lair", art: "villain_form2", sfx: "CRACK", sfxColor: "#ff0066", sfxSize: 36, sfxX: 0.65, sfxY: 0.4, sfxRot: -10, caption: "The Paradox Lord sheds his skin.", captionPos: "bottom", captionColor: "#a01010", captionSize: 13, action: true } },
-          { hold: 1400, flipMs: 550, panel: { bg: "temporal_rift", caption: "ARIA: \"Your Voss and the Lord. Same signature. 94 percent.\"", captionPos: "center", captionColor: "#1a1208", captionSize: 12 } },
           { hold: 1100, flipMs: 500, panel: { bg: "deep_space", art: "villain_final", caption: "Not a monster. A mirror.", captionPos: "top", captionColor: "#ff4466", captionSize: 14, halftone: 0.18, action: true } },
           { hold: 1500, flipMs: 600, panel: { bg: "station", art: "portrait_supervisor", caption: "06:47. A badge in the chamber log. Simon saw who wore it.", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.16 } },
           { hold: 1500, flipMs: 600, panel: { bg: "temporal_rift", art: "hero_armed", caption: "One way in. Only one of you goes.", captionPos: "center", captionColor: "#1a1208", captionSize: 14 } },
@@ -6413,7 +6390,7 @@ export const CUTSCENE_SCRIPTS = {
         ],
       },
       title: "ACT IV",
-      duration: 11800,
+      duration: 10400,
     },
   ],
 };

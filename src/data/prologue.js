@@ -60,8 +60,8 @@ export const PROLOGUE_STEPS = [
     preSuit: true,
     lines: [
       [OFF, "Third alarm this week. Engineering's going to blow us all to the moon.", "calm"],
-      [OFF, "Heard they ran the Engine all night. Calibration, they're calling it.", "curious"],
-      [KAEL, "Badge eleven-two-three-five. You're on his duty board, Cadet. Third row. Never once on time.", "calm"],
+      [OFF, "Lift B's been up and down all night. Log says nobody's on it.", "curious"],
+      [KAEL, "Board says Simon wants you at seven, Cadet. You're early. Don't make it a habit.", "calm"],
     ],
   },
   {
@@ -88,7 +88,7 @@ export const PROLOGUE_STEPS = [
       pad: () => "Push the right stick to look around.",
     },
     lines: [
-      [ARIA, "Neural link's holding. Hello, Cadet. I'm ARIA. I live in your suit now. Sorry about the cold hands.", "warm"],
+      [ARIA, "Link's holding. Sorry about the cold hands.", "warm"],
       [ARIA, "Have a look around. Everything you see, I see. Try not to look at anything embarrassing.", "warm"],
     ],
   },
@@ -116,9 +116,9 @@ export const PROLOGUE_STEPS = [
     hint: "Follow the marker down the corridor to the firing range.",
     lines: [
       [SUP, "That suit cost more than this building. The Bureau wants it certified by noon. You want to keep your badge. So we certify it.", "calm"],
-      [SUP, "Six years on patrol and you never once froze. That's why I signed your transfer. Don't make me regret it.", "calm"],
+      [SUP, "You never froze on patrol. That's why I signed your transfer. Don't make me regret it.", "calm"],
       [ARIA, "He likes you. That was him liking you.", "happy"],
-      [SUP, "Engineering's been running something downstairs all night. If the lights flicker, ignore it. That's an order.", "worried"],
+      [SUP, "If the lights flicker, ignore it. That's an order.", "worried"],
     ],
     events: [[16, "flicker"]],
   },
@@ -151,7 +151,7 @@ export const PROLOGUE_STEPS = [
     title: "AIM DOWN SIGHTS",
     color: "#66eeff",
     hint: {
-      key: "Hold RIGHT MOUSE to aim down sights, then fire. Slower feet, tighter shots.",
+      key: (k) => `Hold RIGHT MOUSE or ${k("aim")} to aim down sights, then fire. Slower feet, tighter shots. (Settings > Controls > Toggle Aim if holding is awkward.)`,
       touch: "Hold AIM to aim down sights, then fire. Slower feet, tighter shots.",
       pad: (b) => `Hold ${b("aim")} to aim down sights, then fire. Slower feet, tighter shots.`,
     },
@@ -432,7 +432,7 @@ export const PROLOGUE_STEPS = [
       [ARIA, "And there go the lights. Whatever's downstairs just drank the whole grid.", "worried"],
       [ARIA, "The evac lift's in the arena, north end. It's dead without power. Two backup cells, break room and armory. I've marked them.", "urgent"],
       [ARIA, "Every level of this station runs on cells. Get used to finding them. Exits stay sealed until you do.", "calm"],
-      [ARIA, "Cadet. The station roll call just came through. Rasczak's squads aren't answering.", "sad"],
+      [ARIA, "{AGENT}. The station roll call just came through. Rasczak's squads aren't answering.", "sad"],
       [ARIA, "And the Supervisor's beacon... it's gone flat. I'm sorry.", "sad"],
     ],
   },
@@ -452,7 +452,7 @@ export const PROLOGUE_STEPS = [
     title: "HOLD THE LIFT — WAVE 1/3",
     color: "#ff2244",
     hint: "Hold the arena while the lift charges. Use the pillars for cover; health and ammo are by the south door.",
-    lines: [[ARIA, "Here they come. Everything I taught you, Cadet. All of it, at once.", "urgent"]],
+    lines: [[ARIA, "Here they come. Everything I taught you, {AGENT}. All of it, at once.", "urgent"]],
   },
   {
     id: "wave2",

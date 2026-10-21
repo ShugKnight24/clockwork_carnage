@@ -160,9 +160,7 @@ export const ARIA_COMMS = {
     "Quiet means we're winning. Or something terrible is about to happen. Fifty-fifty.",
     "The Bureau vault holds every chrono-device ever confiscated. Some of them whisper.",
     "Somebody wiped the station logs before we got here. You don't wipe logs by accident.",
-    "Whoever's behind this is spreading himself across timelines. The Bureau calls them anchors. I call them loose ends.",
     "Bureau HQ has a floor that isn't on the elevator. Nobody who works there will say which.",
-    "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
 
   // ── Personality moments — ARIA being ARIA ──
@@ -321,6 +319,7 @@ export const ARIA_COMMS = {
     "Squad's stretched thin. Nova's covering three corridors. Rook's rigged two more.",
     "The closer we get to him, the steadier your signature gets. You're the anchor, {AGENT}.",
     "I keep replaying the Research Wing tape. 'Three steps ahead.' Your Voss said it. So does the Lord.",
+    "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
 
   // ── Act 3 ARIA gameplay lines (Sprint E 4.8) ──
@@ -343,6 +342,7 @@ export const ARIA_COMMS = {
     "That module's running raw now. Keep the shifts short, {AGENT}. I don't like what might be listening.",
     "Survivor chatter on the maintenance bands. Not many. Enough to be worth finding.",
     "Three days since the Core, give or take. Time's being generous with its estimates.",
+    "Whoever's behind this is spreading himself across timelines. The Bureau calls them anchors. I call them loose ends.",
   ],
 
   // ── Act II boss: the Hound (suit C-0016) ──
@@ -452,10 +452,10 @@ export const ARIA_COMMS = {
   // ── Act 1 ambient chatter ──
   act1Ambient: [
     "First deployment and it's a temporal apocalypse. The Bureau really knows how to welcome a cadet.",
-    "This wing was full of researchers six hours ago. Now it's us, and whatever did this.",
+    "This wing was full of researchers an hour ago. Now it's us, and whatever did this.",
     "Faint comms chatter. Station staff, maybe. Too degraded to read. We might not be alone. Could go either way.",
     "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
-    "Every wing's a crime scene. Somebody scrubbed his name off every one of them.",
+    "Every wing's a crime scene. Nobody left to take statements. That's us now.",
   ],
 
   // ── Chronos (story restructure §3-§5) ──

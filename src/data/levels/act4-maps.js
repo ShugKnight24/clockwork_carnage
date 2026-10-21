@@ -729,7 +729,7 @@ function buildArchiveBurns() {
       {
         wallX: 6,
         wallY: 11,
-        description: "A workbench with ROOK scratched into the vice. Six years of his tools, laid out for a job he never wanted.",
+        description: "A workbench with ROOK scratched into the vice. Eight years of his tools, laid out for a job he never wanted.",
       },
       {
         wallX: 6,

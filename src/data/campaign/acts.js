@@ -327,13 +327,16 @@ export const ACTS = [
       // III-4 The Lord's Laboratory: the one surviving take.
       { ...level("voss_lab", ["act2_level7", "voss_confrontation", "act2_level3"], [...ALL], { setPiece: "surviving_take" }),
         map: "lords_lab", env: "lords_lab", rotation: 0, seed: 31004 },
-      // III-5 The Archive of Rewinds (new).
+      // III-5 The Archive of Rewinds (new). Its briefing is where ARIA ties the
+      // tactician in your memories to the Lord; it must play before III-7's
+      // level3_briefing, where the Lord calls that man "the good doctor".
       { ...level("research", ["archive_briefing"], [...ALL], { setPiece: "archive_takes" }),
         map: "archive", env: "archive", rotation: 0, seed: 31005 },
       // III-6 The Chronos Engine (new).
       { ...level("nexus", ["engine_briefing"], [...ALL], { setPiece: "engine_stasis" }),
         map: "engine", env: "engine", rotation: 90, seed: 31006 },
-      // III-7 The Paradox Core, second visit: broken rings, Form 2.
+      // III-7 The Paradox Core, second visit: broken rings, Form 2. Keep it
+      // after III-5 (see there).
       { ...level("core", ["level3_briefing", "act2_level9"], [...ALL]),
         map: "core_broken", env: "core_broken", rotation: 0, seed: 31007 },
     ]),
