@@ -93,11 +93,26 @@ describe("sizzle reel", () => {
     expect(shot("finale").scene.art).toBe("villain_final");
   });
 
-  it("opens on lore art: deep space, the Act I reactor, the rift with the Paradox Lord in silhouette", () => {
-    const [a, b, c] = SIZZLE.shots;
+  it("opens on lore: deep space, the station's range, lockers and office, the rift with the Paradox Lord in silhouette", () => {
+    const [a, ...rest] = SIZZLE.shots;
     expect(a.scene).toMatchObject({ kind: "art", bg: "deep_space" });
-    expect(b.scene).toMatchObject({ kind: "campaign", act: 1, level: 5 });
-    expect(c.scene).toMatchObject({ kind: "art", bg: "temporal_rift", art: "villain", silhouette: true });
+    expect(rest.slice(0, 3).map((s) => [s.id, s.scene.kind])).toEqual([["range", "station"], ["lockers", "station"], ["office", "station"]]);
+    expect(rest[3].scene).toMatchObject({ kind: "art", bg: "temporal_rift", art: "villain", silhouette: true });
+    // ARIA's line lands over the station, before it breaks.
+    const [line] = SIZZLE.narration;
+    expect(line.at).toBeGreaterThanOrEqual(shot("range").at);
+    expect(line.at + line.len).toBeLessThanOrEqual(shot("rift").at);
+  });
+
+  it("glides each station shot through the prologue rooms on a curve of its own", () => {
+    const stations = SIZZLE.shots.filter((s) => s.scene.kind === "station");
+    expect(stations.map((s) => s.id)).toEqual(["range", "lockers", "office", "squad", "squad-lift"]);
+    for (const s of stations) {
+      const keys = s.scene.camera.keys;
+      expect(keys.length).toBeGreaterThanOrEqual(2);
+      expect(keys[0][0]).toBe(0);
+      expect(keys.at(-1)[0]).toBe(s.len);
+    }
   });
 
   it("plays the montage the spec lists, each shot with something happening in it", () => {
@@ -142,10 +157,10 @@ describe("sizzle reel", () => {
 const loreShot = (id) => CAMPAIGN_LORE.shots.find((s) => s.id === id);
 
 describe("campaign lore video", () => {
-  it("is a valid reel of 48–58 s, cut on whole beats", () => {
+  it("is a valid reel of 50–58 s, cut on whole beats", () => {
     expect(validateReel(CAMPAIGN_LORE)).toEqual([]);
     const d = reelDuration(CAMPAIGN_LORE);
-    expect(d).toBeGreaterThanOrEqual(48);
+    expect(d).toBeGreaterThanOrEqual(50);
     expect(d).toBeLessThanOrEqual(58);
     for (const s of CAMPAIGN_LORE.shots) expect(Number.isInteger(s.at) && Number.isInteger(s.len)).toBe(true);
   });
@@ -156,29 +171,36 @@ describe("campaign lore video", () => {
     expect(CAMPAIGN_LORE.music.every((c) => c.bpm === undefined)).toBe(true);
   });
 
-  it("carries ARIA's briefing in order, each line over its own shot", () => {
+  it("carries the encrypted briefing in order, each line over its own shot", () => {
     // The background the comic skips: the station, the Chronos Engine and its
     // eleven seconds, what came through, the wings it took, the agent.
     expect(CAMPAIGN_LORE.narration.map((n) => n.text)).toEqual([
       "Chronos Station. Humanity's last anchor in time.",
       "Chrono-Corp built a door through time.",
       "They said it was safe.",
-      "Then someone fired the Chronos Engine. No clearance. No name.",
+      // "No clearance. No name." is ARIA's, in the prologue's lift (prologue.js).
+      "Then someone fired the Chronos Engine.",
       "Eleven seconds. Past, present and future hit the same wall.",
       "And something walked through.",
       "Security. Research. Containment. Every wing's a crime scene.",
       "You're the last agent still standing.",
-      "Let's take our station back.",
+      "Get up, Agent. Somebody has to.",
     ]);
-    for (const n of CAMPAIGN_LORE.narration) expect(n.voice ?? "aria").toBe("aria");
+    // Lyra's voice, unnamed: ARIA speaks first when the visor comes down.
+    for (const n of CAMPAIGN_LORE.narration) expect(n.voice).toBe("lyra");
     const owners = CAMPAIGN_LORE.narration.map((n) => CAMPAIGN_LORE.shots.find((s) => n.at >= s.at && n.at + n.len <= s.at + s.len)?.id);
-    expect(owners).toEqual(["station", "station", "engine", "engine", "engine", "rift", "labs", "agent", "agent"]);
+    // The wings line runs over its three wings, one to a word.
+    expect(owners).toEqual(["station", "station", "engine", "engine", "engine", "rift", undefined, "locker", "agent"]);
+    const wings = CAMPAIGN_LORE.narration[6];
+    expect(wings.at).toBeGreaterThanOrEqual(loreShot("security").at);
+    expect(wings.at + wings.len).toBeLessThanOrEqual(loreShot("containment").at + loreShot("containment").len);
   });
 
-  it("follows the briefing's shot list: boot, station, engine, rift, labs, the player's agent, the clock", () => {
-    expect(CAMPAIGN_LORE.shots.map((s) => s.id)).toEqual(["boot", "station", "engine", "rift", "labs", "agent", "clock"]);
+  it("follows the briefing's shot list: boot, station, engine, rift, the wings, the locker, the player's agent, the clock", () => {
+    expect(CAMPAIGN_LORE.shots.map((s) => s.id)).toEqual(["boot", "station", "engine", "rift", "security", "research", "containment", "locker", "agent", "clock"]);
+    for (const id of ["security", "research", "containment", "locker"]) expect(loreShot(id).scene.kind).toBe("station");
     expect(loreShot("engine").scene).toMatchObject({ kind: "art", bg: "deep_space", art: "rift" });
-    expect(loreShot("boot").scene).toMatchObject({ kind: "loreBoot", text: "ARIA online" });
+    expect(loreShot("boot").scene).toMatchObject({ kind: "loreBoot", text: "[ ENCRYPTED CHANNEL ]" });
     expect(loreShot("station").scene).toMatchObject({ kind: "art", bg: "deep_space", art: "station" });
     expect(loreShot("rift").scene).toMatchObject({ kind: "loreRift", bg: "temporal_rift", art: "villain" });
     expect(loreShot("rift").events.filter((e) => e.type === "glitch").length).toBeGreaterThanOrEqual(2);
@@ -200,8 +222,8 @@ describe("campaign lore video", () => {
       expect(s.scene.art ?? "").not.toMatch(LATE_BOSSES);
       for (const e of s.events ?? []) expect(e.type).not.toBe("spawn");
     }
-    // The research labs.
-    expect(loreShot("labs").scene).toMatchObject({ kind: "campaign", act: 1, level: 2 });
+    // The wings are the prologue's own station, nothing past it.
+    for (const s of CAMPAIGN_LORE.shots) expect(s.scene.kind).not.toBe("campaign");
   });
 
   it("ends on the clock landing the act title, and fades out for the flipbook", () => {

@@ -3,9 +3,10 @@
  * by films.js. None of them borrows a game field; the agent close-up reads
  * game.character through the creator scene, which never writes it.
  *
- *   loreBoot   black; ARIA's wake-up line typed under her sigil, a clock
- *              ticking on the beat (`tick` events).
- *              spec: { text }
+ *   loreBoot   black; a wake-up line typed under a comms sigil (ARIA's
+ *              colour unless `tint`, an "r,g,b" string), a clock ticking
+ *              on the beat (`tick` events).
+ *              spec: { text, tint? }
  *   loreRift   the rift tears open down the middle of the frame, then the
  *              figure steps through it: a silhouette that comes into the
  *              light on the shot's last glitch.
@@ -53,7 +54,7 @@ const TYPE_RATE = 0.075; // s a character
 
 export const loreBoot = {
   build(game, spec, rng, { handle }) {
-    handle.boot = { text: spec.text ?? "" };
+    handle.boot = { text: spec.text ?? "", tint: spec.tint ?? null };
   },
   update() {},
   event(game, ev) {
@@ -66,7 +67,7 @@ export const loreBoot = {
   hud(ctx, w, h, local, { handle, profile, fontScale = 1 }) {
     const st = handle.boot;
     if (!st) return;
-    const rgb = ARIA[profile] ?? ARIA.modern;
+    const rgb = st.tint ?? ARIA[profile] ?? ARIA.modern;
     const cx = w / 2;
     const cy = h * 0.5;
     const wake = smooth(local / 0.6);

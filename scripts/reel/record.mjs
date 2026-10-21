@@ -5,7 +5,7 @@
  *   node scripts/reel/record.mjs [sizzle|lore] [--frames N] [--out docs/media]
  *     [--crf N] [--webm-crf N] [--audio-latency S]
  *
- * 1. Video pass: Chromium (GPU flags) at 1920x1080, DPR 1, Ultra, on
+ * 1. Video pass: Chromium (GPU flags) at 1920x1080, DPR 1, Ultra, Modern art, on
  *    ?record=<id>. The director runs on its fixed clock; each frame steps
  *    1/60 s, the page composites the game and HUD canvases, and the PNG goes
  *    to ffmpeg over a pipe.
@@ -86,8 +86,9 @@ async function ensureServer() {
 async function openPage(browser, query) {
   const context = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   await context.addInitScript(() => {
-    // Ultra (preset 5); the art style stays the game's default.
-    localStorage.setItem("cc_settings", JSON.stringify({ graphicsPreset: 5, renderScale: 100, batterySaver: false }));
+    // Ultra (preset 5), in the Modern (realistic) art style: the export shows
+    // the game at its best; the styles shot still flips through all three.
+    localStorage.setItem("cc_settings", JSON.stringify({ graphicsPreset: 5, renderScale: 100, batterySaver: false, artStyle: 2 }));
     localStorage.setItem("cc_analytics_consent", "declined");
   });
   // Cut Vite's HMR socket off: an edit saved mid-take would otherwise reload
