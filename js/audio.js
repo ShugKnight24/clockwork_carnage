@@ -1014,6 +1014,13 @@ export class AudioManager {
     this.playTone(100, 0.3, "sawtooth", 0.2);
   }
 
+  /** Armour plates buckled on at a locker: a metal knock and the latch. */
+  armorClank(pan = 0) {
+    this.playNoise(0.12, 0.16, 2600, "bandpass", pan);
+    this.playTone(210, 0.1, "triangle", 0.1, 0, pan);
+    setTimeout(() => this.playNoise(0.06, 0.12, 4200, "highpass", pan), 140);
+  }
+
   secretFound() {
     this.playTone(440, 0.1, "sine", 0.3);
     setTimeout(() => this.playTone(554, 0.1, "sine", 0.3), 100);

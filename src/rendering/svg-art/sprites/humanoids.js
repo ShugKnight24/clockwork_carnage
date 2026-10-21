@@ -412,19 +412,30 @@ function officerHead(R, { band = "#1b2a48", older = false, cap = "url(#armorDk)"
 }
 
 /**
- * The squad's helmet, open-faced: an older C-series shell with cheek guards,
- * its visor pushed up on the brow, the suit's cyan a generation dimmer.
+ * The squad's helmet: an older C-series shell with cheek guards, the suit's
+ * cyan a generation dimmer. Open-faced, its visor pushed up on the brow; or,
+ * kitted for the Engine level, the visor down and a faceplate over the jaw.
  */
-function kitHead(R) {
+function kitHead(R, { down = false } = {}) {
   const [x, y] = R.head;
   let body = ao(x, y + 12, 9, 3, 0.55) + officerFace(x, y, false);
   // Shell over the crown and down the cheeks, framing the face.
   body += sh(`M${P(x - 14, y + 9)}L${P(x - 15, y - 4)}Q${P(x - 15, y - 19)} ${P(x, y - 20)}Q${P(x + 15, y - 19)} ${P(x + 15, y - 4)}L${P(x + 14, y + 9)}L${P(x + 10, y + 10)}L${P(x + 10.5, y - 4)}Q${P(x, y - 7)} ${P(x - 10.5, y - 4)}L${P(x - 10, y + 10)}Z`, "url(#armor)", 1.4);
-  // Visor, raised: a dark glass band on the brow.
-  body += sh(`M${P(x - 12, y - 14)}Q${P(x, y - 18)} ${P(x + 12, y - 14)}L${P(x + 11, y - 9)}Q${P(x, y - 12)} ${P(x - 11, y - 9)}Z`, "url(#glass)", 1.1, ` fill-opacity=".9"`);
+  let glowM;
+  if (down) {
+    // Visor down over the eyes, the faceplate's vents over the mouth.
+    body += sh(`M${P(x - 11.5, y - 5)}Q${P(x, y - 8)} ${P(x + 11.5, y - 5)}L${P(x + 11, y + 4)}Q${P(x, y + 2)} ${P(x - 11, y + 4)}Z`, "url(#glass)", 1.2, ` fill-opacity=".96"`);
+    body += sh(`M${P(x - 10.5, y + 4)}Q${P(x, y + 2)} ${P(x + 10.5, y + 4)}L${P(x + 8, y + 12)}Q${P(x, y + 15)} ${P(x - 8, y + 12)}Z`, "url(#armorDk)", 1.2);
+    body += ln(`M${P(x - 4, y + 7)}h8M${P(x - 3.5, y + 9.5)}h7M${P(x - 3, y + 12)}h6`, "#05070a", 1, 0.8);
+    body += spec(`M${P(x - 9, y - 4)}Q${P(x - 4, y - 6.5)} ${P(x + 2, y - 6)}`, 0.5, 1);
+    glowM = bar(x, y - 0.8, 17, 1.8, "#5fd8ff");
+  } else {
+    // Visor, raised: a dark glass band on the brow.
+    body += sh(`M${P(x - 12, y - 14)}Q${P(x, y - 18)} ${P(x + 12, y - 14)}L${P(x + 11, y - 9)}Q${P(x, y - 12)} ${P(x - 11, y - 9)}Z`, "url(#glass)", 1.1, ` fill-opacity=".9"`);
+    glowM = bar(x, y - 12.2, 14, 1.4, "#5fd8ff");
+  }
   body += circ(x - 14, y - 2, 2.2, "url(#armorDk)", 0.9) + circ(x + 14, y - 2, 2.2, "url(#armorDk)", 0.9);
   body += spec(`M${P(x - 12, y - 6)}Q${P(x - 13, y - 16)} ${P(x - 4, y - 18.5)}`, 0.55, 1.2);
-  const glowM = bar(x, y - 12.2, 14, 1.4, "#5fd8ff");
   return { body, glow: glowM };
 }
 
@@ -466,8 +477,22 @@ function torsoBack(R, { w = 22, waist = 16, mat = "url(#armor)", belt = "url(#gu
 }
 
 /** Stencilled lettering across a back panel. */
-const backLettering = (y, text, color = "#e8edf5", size = 6) =>
-  `<text x="0" y="${f(y)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${size}" letter-spacing="0.6" fill="${color}" opacity=".92">${text}</text>`;
+const backLettering = (y, text, color = "#e8edf5", size = 6, { spacing = 0.6, opacity = 0.92 } = {}) =>
+  `<text x="0" y="${f(y)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${size}" letter-spacing="${spacing}" fill="${color}" opacity="${opacity}">${text}</text>`;
+
+/**
+ * The squad's back placard, under the power pack: a black patch with the
+ * unit's name small over a big PD, in worn silver, the way tactical teams
+ * mark their backs. It reads as police from across a room without the
+ * glare of white paint on dark plate.
+ */
+function backPlacard(y) {
+  let m = sh(`M${P(-13, y)}h26v13h-26Z`, "#0b0f16", 0.8);
+  m += ln(`M${P(-12, y + 12)}h24`, "#5fd8ff", 0.5, 0.45);
+  m += backLettering(y + 4.2, "CHRONOS", "#9aa6b8", 3.2, { spacing: 1.1, opacity: 0.8 });
+  m += backLettering(y + 10.6, "PD", "#c3ccd8", 7.2, { opacity: 0.9 });
+  return m;
+}
 
 /** The salute: right hand at the cap brim, elbow out. */
 const SALUTE = { armR: { sh: 120, el: 130, kf: 0.9 } };
@@ -483,53 +508,98 @@ function npcTable(idle, moveA, moveB, salute, point) {
 }
 
 /**
- * The squad in full kit: plate over the PD navy, pauldrons, a rifle slung
- * across the chest, and the open-faced helmet. The armour of a few C-series
- * generations ago; what the cadet puts on is the one after all of it.
+ * The squad on duty, before the call: PD navy shirt and trousers, the peaked
+ * cap, a sidearm on the belt. `officerKit` is the same people kitted up.
  */
-function officer(v = 0) {
+function officer() {
+  const table = npcTable(
+    { armL: { sh: 8, el: 10 }, armR: { sh: 8, el: 10 } },
+    pose(WALK_A, { armL: { sh: -10, el: 12 }, armR: { sh: 20, el: 10 } }),
+    pose(WALK_B, { armL: { sh: 22, el: 10 }, armR: { sh: -8, el: 12 } }),
+    pose({ armL: { sh: 4, el: 2 } }, SALUTE),
+    pose({ armL: { sh: 8, el: 6 } }, POINT),
+  );
+  const sleeve = { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "", upW: 11, foreW: 9.5 };
+  const poses = build(HUMAN, table, (R, name) => {
+    const { shY, hipY } = R;
+    let body = legsOf(R, { under: "url(#armorDk)", pad: "", plate: "", thighW: 14, kneeW: 11.5, ankleW: 9.5, bootW: 13 });
+    let upper = "";
+    if (name.startsWith("back")) {
+      upper += armOf(R, -1, sleeve) + armOf(R, 1, sleeve);
+      upper += torsoBack(R, { w: 21, waist: 15, mat: "url(#armor)" });
+      upper += backLettering(shY + 14, "CHRONOS PD", "#6f86ab", 3.6, { opacity: 0.7 });
+      upper += headBack(R, { gear: "cap" }).body;
+    } else {
+      upper += torsoOf(R, { mat: "url(#armor)", under: "url(#armor)", w: 21, waist: 15, plates: false });
+      // Collar, placket and pockets; the badge over the heart, the name bar.
+      upper += ln(`M${P(-7, shY - 4)}L0 ${f(shY + 3)}L7 ${f(shY - 4)}`, "#0c1424", 1.2, 0.8);
+      upper += ln(`M0 ${f(shY + 3)}V${f(hipY - 8)}`, "#0c1424", 0.8, 0.6);
+      for (const s of [-1, 1]) upper += sh(`M${P(s * 5, shY + 5)}h${f(s * 10)}v9h${f(-s * 10)}Z`, "url(#armorDk)", 0.6);
+      upper += sh(`M${P(-12, shY + 1)}l3 -3 3 3 -1 4h-4Z`, "url(#brass)", 0.7);
+      upper += sh(`M${P(5, shY + 1.5)}h9v2.4h-9Z`, "#d8dee8", 0.5);
+      // The sidearm, holstered on the right hip.
+      upper += sh(`M${P(15, hipY - 8)}h6v13h-6Z`, "#0b0d12", 0.8);
+      const head = officerHead(R);
+      upper += armOf(R, -1, sleeve) + head.body + armOf(R, 1, sleeve);
+    }
+    body += up(R, upper);
+    return { body, glow: "", at: {} };
+  });
+  return { poses, fx: [] };
+}
+
+/**
+ * The squad in heavy armour: plate over the PD navy, broad pauldrons, a
+ * gorget, the visor down, a rifle slung across the chest. The armour of a
+ * few C-series generations ago; what the cadet puts on is the one after all
+ * of it.
+ */
+function officerKit() {
   const slung = { sh: 14, el: -64, kf: 0.85 };
   const table = npcTable(
-    { armL: { sh: 8, el: 6 }, armR: slung },
-    pose(WALK_A, { armL: { sh: -10, el: 10 }, armR: { sh: 18, el: -60, kf: 0.85 } }),
-    pose(WALK_B, { armL: { sh: 22, el: 8 }, armR: { sh: 10, el: -68, kf: 0.85 } }),
+    { armL: { sh: 10, el: 6 }, armR: slung },
+    pose(WALK_A, { armL: { sh: -8, el: 10 }, armR: { sh: 18, el: -60, kf: 0.85 } }),
+    pose(WALK_B, { armL: { sh: 24, el: 8 }, armR: { sh: 10, el: -68, kf: 0.85 } }),
     pose({ armL: { sh: 4, el: 2 } }, SALUTE),
     pose({ armL: { sh: 8, el: 6 } }, POINT),
   );
   const poses = build(HUMAN, table, (R, name) => {
     const { shY, hipY } = R;
-    let body = legsOf(R, { under: "url(#armorDk)", pad: "url(#armorDk)" });
+    let body = legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17, kneeW: 14, bootW: 16, trim: "#5fd8ff" });
     const back = name.startsWith("back");
-    const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 12 };
+    const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 15, upW: 13, foreW: 12.5 };
     let upper = "";
     let glowUp = "";
     if (back) {
       upper += armOf(R, -1, pad) + armOf(R, 1, pad);
-      upper += torsoBack(R, { w: 24, waist: 17, mat: "url(#armor)" });
+      upper += torsoBack(R, { w: 26, waist: 18, mat: "url(#armor)" });
+      // The rifle's stock and sling across the back, under the pack and placard.
+      upper += ln(`M${P(-20, shY - 2)}L${P(17, hipY - 4)}`, "#141a24", 2.6, 0.9);
       // Power pack between the shoulder blades, and the unit's lettering.
-      upper += plate([[-11, shY - 1], [11, shY - 1], [10, shY + 17], [-10, shY + 17]], "url(#armorDk)", 1.2, 0.4);
-      for (const s of [-1, 1]) upper += sh(`M${P(s * 7 - 1.5, shY + 2)}h3v12h-3Z`, "url(#gun)", 0.6);
-      upper += backLettering(shY + 27, "CHRONOS PD");
-      glowUp += bar(-7, shY + 8, 2.2, 10, "#5fd8ff") + bar(7, shY + 8, 2.2, 10, "#5fd8ff");
-      // The rifle's stock and sling across the back.
-      upper += ln(`M${P(-18, shY - 2)}L${P(16, hipY - 4)}`, "#141a24", 2.4, 0.9);
-      const head = headBack(R, { gear: "helmet" });
-      upper += head.body;
+      upper += plate([[-13, shY - 2], [13, shY - 2], [12, shY + 19], [-12, shY + 19]], "url(#armorDk)", 1.3, 0.4);
+      for (const s of [-1, 1]) upper += sh(`M${P(s * 8 - 1.5, shY + 2)}h3v13h-3Z`, "url(#gun)", 0.6);
+      upper += backPlacard(shY + 21);
+      glowUp += bar(-8, shY + 8.5, 2.4, 11, "#5fd8ff") + bar(8, shY + 8.5, 2.4, 11, "#5fd8ff");
+      upper += headBack(R, { gear: "helmet" }).body;
     } else {
-      upper += torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armorDk)", w: 24, waist: 17 });
+      upper += torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armorDk)", w: 26, waist: 18 });
+      // Gorget over the collar, and the breastplate's ballistic insert.
+      upper += plate([[-11, shY - 9], [11, shY - 9], [13, shY - 2], [0, shY + 1], [-13, shY - 2]], "url(#armorDk)", 1.2, 0.45);
+      upper += plate([[-17, shY + 1], [17, shY + 1], [15, shY + 21], [0, shY + 24], [-15, shY + 21]], "url(#armor)", 1.3, 0.5);
       // Chest rig: the PD shield, a name bar, the C-series power cells.
-      upper += sh(`M${P(-14, shY + 2)}l3.5 -3.5 3.5 3.5 -1.2 4.6h-4.6Z`, "url(#brass)", 0.7);
-      upper += sh(`M${P(5, shY + 3)}h10v2.6h-10Z`, "#d8dee8", 0.5);
-      for (let i = 0; i < 3; i++) upper += sh(`M${P(-9 + i * 6.5, shY + 22)}h5v8h-5Z`, "url(#armorDk)", 0.7);
-      glowUp += bar(-13, shY + 11, 6, 1.4, "#5fd8ff") + bar(13, shY + 11, 6, 1.4, "#5fd8ff");
-      const head = kitHead(R);
+      upper += sh(`M${P(-12, shY + 5)}l3.5 -3.5 3.5 3.5 -1.2 4.6h-4.6Z`, "url(#brass)", 0.7);
+      upper += sh(`M${P(4, shY + 5)}h10v2.6h-10Z`, "#d8dee8", 0.5);
+      for (let i = 0; i < 3; i++) upper += sh(`M${P(-10 + i * 7, shY + 26)}h5.5v8h-5.5Z`, "url(#armorDk)", 0.7);
+      glowUp += bar(0, shY + 16, 16, 1.6, "#5fd8ff");
+      glowUp += bar(-16, shY + 11, 4, 1.4, "#5fd8ff") + bar(16, shY + 11, 4, 1.4, "#5fd8ff");
+      const head = kitHead(R, { down: true });
       glowUp += head.glow;
       upper += armOf(R, -1, pad);
       if (name === "salute") {
-        upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, "rifle", 40);
+        upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, "rifle", 42);
       } else {
         // Rifle slung across the chest, the right hand on its grip.
-        upper += head.body + gunSide(R.arms[1].W, 210, "rifle", 42) + armOf(R, 1, pad);
+        upper += head.body + gunSide(R.arms[1].W, 210, "rifle", 44) + armOf(R, 1, pad);
       }
     }
     body += up(R, upper);
@@ -1115,6 +1185,7 @@ const EXTRA_DEFS = {
   chronoBomber: `<radialGradient id="dialA" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#5a3406"/><stop offset="1" stop-color="#1a0c02"/></radialGradient>`,
   temporalEngineer: `<linearGradient id="apron" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#6e4a22"/><stop offset=".5" stop-color="#4a2e12"/><stop offset="1" stop-color="#1e1206"/></linearGradient>` +
     `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#d9a37c"/><stop offset=".5" stop-color="#a06a48"/><stop offset="1" stop-color="#4a2a1a"/></linearGradient>`,
+  officerKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
   officer: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
   supervisor: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   corruptCop: `<linearGradient id="skinD" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#c89070"/><stop offset=".5" stop-color="#8a5a40"/><stop offset="1" stop-color="#3a2216"/></linearGradient>`,
@@ -1129,7 +1200,8 @@ const EXTRA_DEFS = {
 export const HUMANOIDS = {
   henchman: { build: henchman, variants: 3, box: HUMANOID_BOX, rim: "#ff9a4a", size: 1.1 },
   corruptCop: { build: corruptCop, variants: 3, box: [-72, -92, 142, 186], rim: "#ffd35a", size: 1.08, shield: [-18, -30] },
-  officer: { build: officer, variants: 2, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.05 },
+  officer: { build: officer, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
+  officerKit: { build: officerKit, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.08 },
   supervisor: { build: supervisor, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.08 },
   sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30] },
   shieldCommander: { build: shieldCommander, box: [-74, -90, 148, 184], rim: "#7fb8ff", aura: "#3f7fe0", size: 1.08, shield: [-30, -30] },

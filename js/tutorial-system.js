@@ -20,6 +20,8 @@ import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../src/data/prolog
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { spawnEnergyBurst } from "./particle-system.js";
 import { Npc } from "./npc.js";
+import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
+import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -41,6 +43,26 @@ const SQUAD_AT = [
   [16.5, 39.8],
   [7.5, 44.5],
   [21.5, 44.8],
+  [12.2, 39.4],
+  [19.6, 39.9],
+  [10.8, 45.6],
+  [5.0, 40.6],
+];
+/** Who is who in the squads: the lieutenant, the sergeant, and the two who rib the cadet. */
+const SQUAD_NAMES = { 1: "Sgt. Kael", 3: "Lt. Rasczak", 4: "Ofc. Brandt", 6: "Ofc. Okafor" };
+/**
+ * Where each officer kits up: in front of their own locker, on the north
+ * bank (row 37) or the south (row 47), clear of the benches and the cadet's.
+ */
+const KIT_AT = [
+  [8.5, 38.6],
+  [15.2, 38.6],
+  [8.5, 46.3],
+  [22.5, 46.3],
+  [10.2, 38.6],
+  [19.0, 38.6],
+  [10.6, 46.3],
+  [4.6, 38.6],
 ];
 /** The cadet's locker: the left of the pair in the south wall's cell (14, 47), and where to face it from. */
 const MY_LOCKER = { x: 14.3, y: 46.9 };
@@ -210,11 +232,12 @@ const LOGIC = {
       g.player.angle = -0.1;
       // The squad at their lockers, turned toward each other and the cadet.
       t.squad = SQUAD_AT.map(([x, y], i) => {
-        const n = new Npc(x, y, "officer", { name: i === 3 ? "Lt. Rasczak" : i === 1 ? "Sgt. Kael" : null });
+        const n = new Npc(x, y, "officer", { name: SQUAD_NAMES[i] ?? null });
         n.faceTo(g.player);
         g.entities.push(n);
         return n;
       });
+      t.warmNpc(g, "officerKit");
       if (!t.sup) {
         t.sup = new Npc(SUP_ROUTES.enter[0][0], SUP_ROUTES.enter[0][1], "supervisor", { name: "Supervisor Simon" });
         // Out in the corridor behind the shut door until he comes in. (An
@@ -233,25 +256,59 @@ const LOGIC = {
         t.sup.active = true;
         t.sup.walk(SUP_ROUTES.enter.slice(1), {
           then: (sup) => {
-            sup.faceTo(g.player);
+            // He returns the lieutenant's salute, then turns and returns the
+            // cadet's, held a half-beat longer than anyone's. Nothing is
+            // said about it; it reads only after he's gone.
+            sup.faceTo(t.squad[3]);
             for (const o of t.squad) {
               o.faceTo(sup);
               o.pose("salute", 2.4);
             }
-            sup.pose("salute", 1.2);
+            sup.pose("salute", 1.1);
+            setTimeoutGame(t, 1.4, () => {
+              sup.faceTo(g.player);
+              sup.pose("salute", 1.9);
+            });
             c.phase = "orders";
             t.say([
               ["OFFICER", "Sir!", "calm"],
               ["SUPERVISOR", "As you were.", "calm"],
               ["SUPERVISOR", "Engineering's running the Engine hot again this morning. Calibration, they call it. The Bureau wants our people on the chamber door till it's done.", "calm"],
-              ["SUPERVISOR", "Lieutenant Rasczak, take both squads down. Full kit. Nobody goes in or out of that chamber without my say-so. Report in on the hour.", "calm"],
-              ["LT. RASCZAK", "Sir. You heard him, people. Move out!", "urgent"],
+              ["SUPERVISOR", "Lieutenant Rasczak, take both squads down. Kit up. Nobody goes in or out of that chamber without my say-so. Report in on the hour.", "calm"],
+              ["LT. RASCZAK", "You heard the man. Everyone in their heavy armor.", "urgent"],
+              ["LT. RASCZAK", "We likely won't need it. Keep your heads on a swivel until this thing is done.", "calm"],
             ], { cut: true });
           },
         });
       }
       if (c.phase === "orders" && t.scriptIdle()) {
-        // The squads leave for the Engine level, one after another.
+        // Each to their locker, back to the room; the heavy plate goes on.
+        c.phase = "kit";
+        c.kitted = 0;
+        t.squad.forEach((o, i) => {
+          const [kx, ky] = KIT_AT[i];
+          setTimeoutGame(t, i * 0.2, () =>
+            o.walk([[kx, ky]], {
+              speed: 2.0,
+              then: (n) => {
+                n.faceTo({ x: kx, y: ky < 42 ? ky - 2 : ky + 2 });
+                setTimeoutGame(t, 1.6 + (i % 3) * 0.45, () => {
+                  n.dress("officerKit");
+                  g.audio.armorClank?.(g.audio.calculatePan?.(n.x, n.y, g.player.x, g.player.y, g.player.angle) ?? 0);
+                  setTimeoutGame(t, 0.5, () => {
+                    n.faceTo(t.sup);
+                    c.kitted++;
+                  });
+                });
+              },
+            }),
+          );
+        });
+      }
+      if (c.phase === "kit" && c.kitted >= t.squad.length && t.scriptIdle()) {
+        // The squads leave for the Engine level, one after another. The
+        // Supervisor keeps the cadet back, and two of them have a word for
+        // the cadet about it on the way past.
         c.phase = "leave";
         t.squad.forEach((o, i) => {
           o.faceTo(null);
@@ -259,6 +316,8 @@ const LOGIC = {
         });
         t.say([
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
+          ["OFFICER", "Six years and you're still a cadet. Ugh.", "calm"],
+          ["OFFICER", "Hold the fort, Cadet. Somebody's got to mind the coffee.", "happy"],
           ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Open it.", "calm"],
         ]);
       }
@@ -1056,6 +1115,7 @@ export class TutorialSystem {
     this._updateScript(g.deltaTime || 0);
     this._updateTargets(g);
     this._updateAlert(g);
+    this._syncRoomLights(g);
     for (const e of g.entities) if (e.type === "npc") e.update(g.deltaTime || 0);
     for (let i = this._timers.length - 1; i >= 0; i--) {
       if (this.clock >= this._timers[i].at) this._timers.splice(i, 1)[0].fn();
@@ -1171,6 +1231,24 @@ export class TutorialSystem {
   }
 
   /** The cadet's locker shut, as it is first thing. */
+  /**
+   * Rasterise an NPC look now, a few layers a frame, before a scene changes
+   * someone into it: left to the swap, the new sprite blinked out while its
+   * layers decoded.
+   */
+  warmNpc(g, kind) {
+    const ctx = g.renderer?.ctx;
+    const viewH = g.renderer?.height;
+    if (!ctx || !viewH || getArtStyle() === ART_LEGACY || typeof requestAnimationFrame !== "function") return;
+    const halfHeights = [viewH / 2.4, viewH / 5];
+    const until = performance.now() + 8000;
+    const step = () => {
+      if (performance.now() > until || prefetchEnemyModel(ctx, kind, halfHeights, undefined, 2)) return;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   lockerShut(g) {
     const row = g.map?.grid?.[MY_LOCKER_CELL.y];
     if (row) row[MY_LOCKER_CELL.x] = STATION_WALLS.LOCKERS_MINE;
@@ -1439,6 +1517,33 @@ export class TutorialSystem {
       const s = Math.sin(this.clock * tr.speed + (tr.phase || 0)) * tr.amp;
       if (tr.axis === "x") e.x = tr.x0 + s;
       else e.y = tr.y0 + s;
+    }
+  }
+
+  /**
+   * A room's own lamps (TUTORIAL_MAP.roomLights), lit while the player is in
+   * or beside the room and dropped when they leave: the wall pass lights at
+   * most 16 at once, and the station has more lamps than that.
+   */
+  _syncRoomLights(g) {
+    if (!g.lights) return;
+    this._roomLights ??= (TUTORIAL_MAP.roomLights || []).map((d) => ({
+      room: d.room, x: d.x, y: d.y, color: d.color, radius: d.radius,
+      baseIntensity: d.intensity, intensity: d.intensity, life: 1e9, maxLife: 1e9,
+    }));
+    const p = g.player;
+    const near = (b) => p.x > b.x0 - 3 && p.x < b.x1 + 3 && p.y > b.y0 - 3 && p.y < b.y1 + 3;
+    // The blackout puts the room lamps out with the rest of the station.
+    const dark = this.blackout;
+    for (const L of this._roomLights) {
+      const box = TUTORIAL_MAP.rooms?.[L.room];
+      const on = !dark && box && near(box);
+      const i = g.lights.indexOf(L);
+      if (on) {
+        L.life = L.maxLife = 1e9;
+        L.intensity = L.baseIntensity * (this.clock < this.flickerUntil ? 0.35 : 1);
+        if (i < 0) g.lights.unshift(L);
+      } else if (i >= 0) g.lights.splice(i, 1);
     }
   }
 

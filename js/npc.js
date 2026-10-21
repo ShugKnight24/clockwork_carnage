@@ -16,7 +16,7 @@ export class Npc {
   /**
    * @param {number} x
    * @param {number} y
-   * @param {"officer"|"supervisor"} kind
+   * @param {"officer"|"officerKit"|"supervisor"} kind
    * @param {{ angle?: number, name?: string }} [opts]
    */
   constructor(x, y, kind, { angle = Math.PI / 2, name = null } = {}) {
@@ -61,6 +61,12 @@ export class Npc {
   pose(name, seconds = 2) {
     this.gesture = name;
     this._gestureLeft = seconds;
+  }
+
+  /** Change into another look (an officer into heavy armour): same person, new sprite. */
+  dress(kind) {
+    this.enemyType = kind;
+    this.def = NPC_TYPES[kind] ?? this.def;
   }
 
   /** Keep turned toward someone (the player) while standing. */

@@ -14,6 +14,13 @@ export const NPC_TYPES = {
     color2: "#121d36",
     speed: 1.6,
   },
+  /** The same officers in heavy armour, kitted up for the Engine level. */
+  officerKit: {
+    name: "Chronos PD Officer",
+    color1: "#4b5568",
+    color2: "#161b24",
+    speed: 1.6,
+  },
   supervisor: {
     name: "Supervisor Simon",
     color1: "#3b4150",
