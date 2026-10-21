@@ -30,7 +30,7 @@ import {
   blitSprite,
 } from "./hud-skin.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
-import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar } from "./hud-modern.js";
+import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar, hudAnchors } from "./hud-modern.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
@@ -63,7 +63,8 @@ const wrapPi = (a) => {
 };
 
 function elapsed(game) {
-  const s = Math.floor((performance.now() - game.roundStartTime) / 1000);
+  // The prologue starts its clock a beat ahead; never print a negative time.
+  const s = Math.max(0, Math.floor((performance.now() - game.roundStartTime) / 1000));
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
@@ -451,9 +452,9 @@ function drawWeaponSilhouette(ctx, wep, x, y, W, H, alpha, heat) {
   if (!layers) return;
   ctx.globalAlpha = alpha * (HT.realistic ? 0.82 : 1);
   ctx.drawImage(layers.body, x, y, W, H);
-  // Realistic: no neon emissive channel, only the heat build-up below.
-  if (layers.glow && !HT.realistic) {
-    ctx.globalAlpha = alpha * (0.75 + 0.25 * Math.sin(M.now * 0.004));
+  // Realistic: the energy parts sit steady and dim, no neon breathing.
+  if (layers.glow) {
+    ctx.globalAlpha = alpha * (HT.realistic ? 0.5 : 0.75 + 0.25 * Math.sin(M.now * 0.004));
     ctx.drawImage(layers.glow, x, y, W, H);
   }
   // Sustained fire: the emissive channels run hot orange.
@@ -1011,6 +1012,7 @@ export function renderVanguardPanels(game, ctx, w, h, f, portraitState, minimapS
   ctx.scale(k, k);
   layoutVanguardPanels(game, ctx, w / k, h / k, f, portraitState, minimapState);
   ctx.restore();
+  hudAnchors.stackBottom *= k;
 }
 
 function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
@@ -1042,6 +1044,7 @@ function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
     if (game.mode === "campaign" && game.ngPlusCycle > 0) {
       drawCaption(ctx, x, y + 1, game.ngPlusCycle >= 3 ? "NG+3 FINAL" : `NG+${game.ngPlusCycle}`, { size: Math.round(9 * fs), scheme: game.ngPlusCycle >= 3 ? "amber" : "violet" });
     }
+    hudAnchors.stackBottom = y + 26;
   }
 
   // Top-centre compass + boss.
@@ -1115,6 +1118,7 @@ export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   ctx.fillStyle = UI.textDim;
   ctx.textAlign = "left";
   ctx.fillText(`${clock}${clock ? "  ·  " : ""}${diff}`, g.right, by + 8);
+  hudAnchors.stackBottom = Math.max(by + 14, gcy + R + tw + 12);
 
   const cw = Math.round(w * 0.24);
   drawCompass(game, ctx, w / 2 - w * 0.04, 6, cw, true);

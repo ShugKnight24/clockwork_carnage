@@ -11,7 +11,7 @@ import {
 } from "../../js/data.js";
 import { getWeaponSprite } from "../assets/loader.js";
 import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
-import { HT as SKIN, drawPanel as skinPanel, cachedSprite, blitSprite } from "./hud-skin.js";
+import { HT as SKIN, drawPanel as skinPanel, uiFont as skinFont, cachedSprite, blitSprite } from "./hud-skin.js";
 import {
   renderModernMinimalPanels,
   renderModernClassic,
@@ -23,6 +23,7 @@ import {
   drawModernTimerPill,
   renderModernTacticalPanels,
   renderModernCustomPanels,
+  hudAnchors,
 } from "./hud-modern.js";
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
@@ -304,24 +305,33 @@ function drawBossNameCard(ctx, game, w, h) {
 /**
  * The level's power cells (src/systems/exit-cells.js), under the level timer
  * on every HUD style: found / total in amber while the exit is sealed, then
- * EXTRACTION LIVE. Nothing on a level without cells.
+ * EXTRACTION LIVE. Nothing on a level without cells. It hangs under the
+ * layout's top-left stack (hudAnchors), so it never prints over the clock.
  */
 function drawPowerCellChip(ctx, game) {
   const pc = game.mode === "campaign" || game.mode === "tutorial" ? game.powerCells : null;
   if (!pc) return;
   const done = pc.found >= pc.total;
   const label = done ? "EXTRACTION LIVE" : `POWER CELLS ${pc.found} / ${pc.total}`;
-  const color = done ? "#22e6c0" : "#ffb028";
   const x = 12;
-  const y = 58;
+  const y = hudAnchors.stackBottom ? Math.round(hudAnchors.stackBottom) + 2 : 58;
+  const modern = isModernArt();
+  const color = !modern ? (done ? "#22e6c0" : "#ffb028") : done ? (SKIN.realistic ? SKIN.accent : "#22e6c0") : SKIN.amber;
   ctx.save();
-  ctx.font = "700 12px system-ui, sans-serif";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
+  ctx.font = modern ? skinFont(11, 700) : "700 12px system-ui, sans-serif";
+  if (modern) ctx.letterSpacing = "1px";
   const tw = ctx.measureText(label).width;
-  ctx.fillStyle = "rgba(4,8,12,0.72)";
-  ctx.fillRect(x, y, tw + 34, 22);
+  if (modern) {
+    skinPanel(ctx, x, y, tw + 36, 22, { accent: color, chamfer: 6 });
+  } else {
+    ctx.fillStyle = "rgba(4,8,12,0.72)";
+    ctx.fillRect(x, y, tw + 34, 22);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 3, 22);
+  }
   ctx.fillStyle = color;
-  ctx.fillRect(x, y, 3, 22);
   // Diamond, as on the map.
   ctx.beginPath();
   ctx.moveTo(x + 14, y + 5);
@@ -331,6 +341,7 @@ function drawPowerCellChip(ctx, game) {
   ctx.closePath();
   ctx.fill();
   ctx.fillText(label, x + 26, y + 11.5);
+  ctx.letterSpacing = "0px";
   ctx.restore();
 }
 
@@ -451,6 +462,7 @@ if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
   return;
 
 _checkDirty(game);
+hudAnchors.stackBottom = 0;
 
 // The prologue's opening, before the suit goes on: no HUD yet, only what
 // people say.
@@ -959,6 +971,7 @@ if (isModernArt()) {
     ctx.fillText(heatText, tlX + 10, tlY + 16);
     tlY += 24 + pillGap;
   }
+  hudAnchors.stackBottom = tlY;
 }
 
 // ─── TOP-RIGHT: Kills counter ───
@@ -1642,7 +1655,13 @@ ctx.textAlign = "center";
 ctx.fillText("AMMO", pad + ammoPanelW / 2, panelY + 22);
 ctx.fillStyle = "#ffaa00";
 ctx.font = game.scaledFont(64, "bold");
-ctx.fillText(`${game.player.ammo}`, pad + ammoPanelW / 2, panelY + panelH - 24);
+{
+  // Shrink a long count (god mode) to the panel rather than spill out of it.
+  const ammoStr = `${game.player.ammo}`;
+  const tw = ctx.measureText(ammoStr).width;
+  if (tw > ammoPanelW - 20) ctx.font = game.scaledFont(Math.floor(64 * (ammoPanelW - 20) / tw), "bold");
+  ctx.fillText(ammoStr, pad + ammoPanelW / 2, panelY + panelH - 24);
+}
 
 // ─── HEALTH (Left Center) ───
 const healthPanelW = portraitX - ammoPanelW - pad * 2.5;
