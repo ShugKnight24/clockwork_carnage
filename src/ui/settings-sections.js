@@ -47,6 +47,7 @@ export const SECTION_OF = {
   sensitivity: at("controls", "Mouse"),
   invertX: at("controls", "Mouse"),
   invertY: at("controls", "Mouse"),
+  aimToggle: at("controls", "Mouse"),
   gamepadStatus: at("controls", "Controller"),
   gamepadCalibrate: at("controls", "Controller"),
   gamepadEnabled: at("controls", "Controller"),

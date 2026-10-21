@@ -51,16 +51,20 @@ export const DEFAULT_KEYBINDS = {
   // Nova's Rewind and Kael's Time-Lock, once the campaign has granted them.
   chronoRewind: "KeyX",
   chronoLock: "KeyV",
+  // Aim down sights from the keyboard. Right mouse still aims; this is for a
+  // trackpad or a Magic Mouse, where a held right-click is hard or absent.
+  aim: "KeyZ",
 };
 
 /** Saved keybinds older than this get the defaults that changed since. */
-export const KEYBINDS_VERSION = 2;
+export const KEYBINDS_VERSION = 3;
 
 /**
  * Bring saved keybinds up to date. Version 2 moved crouch off Ctrl (Ctrl+W
  * closes the tab mid-crouch) to C, and the dash from C to Space. A save from
- * before then that still has crouch on Ctrl moves with the defaults; a save
- * already at version 2 is left as the player set it.
+ * before then that still has crouch on Ctrl moves with the defaults. Version
+ * 3 added a keyboard aim key. A save already at a version keeps what the
+ * player set for it.
  */
 export function migrateKeybinds(saved) {
   if (!saved || typeof saved !== "object") return {};
@@ -72,11 +76,13 @@ export function migrateKeybinds(saved) {
   const taken = (code, self) =>
     Object.entries({ ...DEFAULT_KEYBINDS, ...out }).some(([a, c]) => a !== self && a !== "_v" && c === code);
   const home = (self, keys) => keys.find((k) => !taken(k, self)) ?? null;
-  if (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null) {
+  if (!(saved._v >= 2) && (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null)) {
     if (out.dash === "KeyC" || out.dash == null) out.dash = null;
-    out.crouch = home("crouch", ["KeyC", "KeyZ", "KeyB", "KeyG"]) ?? out.crouch ?? "KeyC";
-    if (out.dash == null) out.dash = home("dash", ["Space", "KeyB", "KeyG"]);
+    out.aim ??= null; // not placed yet: it must not hold the spare crouch wants
+    out.crouch = home("crouch", ["KeyC", "KeyB", "KeyG", "KeyH"]) ?? out.crouch ?? "KeyC";
+    if (out.dash == null) out.dash = home("dash", ["Space", "KeyG", "KeyH"]);
   }
+  if (out.aim == null) out.aim = home("aim", ["KeyZ", "KeyR", "KeyT", "KeyY"]);
   return out;
 }
 

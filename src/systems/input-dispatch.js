@@ -348,6 +348,7 @@ export function dispatchKeyPress(game, code, e) {
     }
 
     if (code === game.keybinds.interact) game.interact();
+    if (code === game.keybinds.aim && !e?.repeat) game.aimPress?.();
     if (code === game.keybinds.dash && !e?.repeat) game.dashFromKeys?.();
     // Chronos powers on their own keys (spec decision 4: no double-taps).
     if (code === game.keybinds.chronoRewind && !e?.repeat) game.chronoRewind?.();
@@ -674,7 +675,7 @@ export function dispatchKeyPress(game, code, e) {
       game.fadeTransition(() => {
         if (game.mode === "arena") game.startArena();
         else if (game.mode === "meltdown") game.startMeltdown();
-        else if (game.mode === "campaign") game.startCampaign();
+        else if (game.mode === "campaign") game.campaign.retryLevel();
       });
     }
     if (code === "KeyS") {

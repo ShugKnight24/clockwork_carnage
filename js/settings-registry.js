@@ -33,6 +33,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   viewMode: 0, // 0=first-person, 1=third-person
   invertX: false,
   invertY: false,
+  aimToggle: false,
   fontScale: 100, // 100, 125, 150 percent
   colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
   visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
@@ -549,6 +550,15 @@ export const SETTINGS_REGISTRY = [
     // Pad look runs through the same aim path as the mouse, which applies
     // the inversion; re-sync the pad so it never inverts a second time.
     onChange: (g) => g.applyGamepadSettings?.(),
+  },
+  {
+    key: "aimToggle",
+    label: "Toggle Aim",
+    desc: "Press aim once to aim in and again to aim out, instead of holding it. Easier on a trackpad.",
+    type: "toggle",
+    onColor: "#ff8844",
+    platform: "desktop",
+    height: { compact: 30, normal: 44 },
   },
   // ─── Gamepad ───
   {

@@ -101,6 +101,9 @@ export class CampaignManager {
       this.ngPlusCycle = data.ngPlusCycle || 0;
       g.settings.difficulty = data.difficulty ?? g.settings.difficulty;
       g.player.reset();
+      // Stats the save does not carry (stamina) come from the class and
+      // gear; everything it does carry is overwritten just below.
+      g.applyLoadoutBonuses?.();
       this.loadLevel(this.level);
       g.player.deserialize(data);
       if (data.playerX !== undefined) {
@@ -127,6 +130,15 @@ export class CampaignManager {
         g.killedEnemies = data.killedEnemies ?? 0;
       }
       this._noteMigration(raw);
+      // The level's tally restarts on resume; secret walls already opened in
+      // the saved map still count as this level's finds.
+      if (g._levelLog) {
+        let shut = 0;
+        for (const row of g.map.grid) for (const t of row) if (t === 6) shut++;
+        const opened = Math.max(0, g._levelLog.secretsTotal - shut);
+        g._levelLog.secretsAtStart = Math.max(0, (g.player.secretsFound || 0) - opened);
+      }
+      this._levelStart = this._snapshotPlayer();
       return true;
     } catch (err) {
       // A save this build cannot apply: restart its level rather than leave
@@ -391,6 +403,7 @@ export class CampaignManager {
 
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
+    g.beginLevelLog?.();
     g.renderer.applyActPalette(act.palette, entry.env);
     if (hasBoss) {
       g.audio.startTrack("boss");
@@ -399,7 +412,44 @@ export class CampaignManager {
     }
     g.audio.startAmbient("industrial");
     this.save();
+    this._levelStart = this._snapshotPlayer();
     g.lockPointer();
+  }
+
+  /**
+   * The player as a level began, for Retry Level: the saved stats, plus the
+   * stamina the save leaves out and the gear bonuses already applied, so a
+   * piece picked up during the failed attempt goes back on exactly once.
+   */
+  _snapshotPlayer() {
+    const p = this.game.player;
+    if (!p.serialize) return null;
+    return structuredClone({ ...p.serialize(), maxStamina: p.maxStamina, gearApplied: p._gearApplied ?? null });
+  }
+
+  /**
+   * After a death: play this level again from its start, with the kit the
+   * player brought into it and full health. Restart used to begin a new
+   * campaign, overwriting the save — one death in Act I level 7 cost all of it.
+   */
+  retryLevel() {
+    const g = this.game;
+    const start = this._levelStart;
+    g.mode = "campaign";
+    g.player.reset();
+    this.loadLevel(this.level);
+    if (start) {
+      g.player.deserialize(structuredClone(start));
+      if (start.maxStamina) g.player.maxStamina = start.maxStamina;
+      g.player._gearApplied = structuredClone(start.gearApplied ?? null);
+      if (g._levelLog) g._levelLog.secretsAtStart = g.player.secretsFound || 0;
+    }
+    g.syncGearBonuses?.();
+    g.player.health = g.player.maxHealth;
+    g.player.stamina = g.player.maxStamina;
+    g.player.alive = true;
+    this._levelStart = this._snapshotPlayer();
+    this.save();
   }
 
   nextLevel() {
