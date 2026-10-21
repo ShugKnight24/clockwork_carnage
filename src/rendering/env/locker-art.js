@@ -26,7 +26,7 @@ const NAVY = ["#3b5684", "#2a4068", "#1a2a48", "#0f1a30"];
 const WALL = ["#5d6876", "#4a5462", "#353d48"];
 
 /** Lettering, mirrored so the raycaster lays it the right way round. */
-function letter(ctx, text, x, y, size, color, weight = 900) {
+export function letter(ctx, text, x, y, size, color, weight = 900) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(-1, 1);

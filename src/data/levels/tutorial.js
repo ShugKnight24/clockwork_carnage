@@ -2,6 +2,11 @@
 // 0 = empty, 1 = stone, 2 = tech, 3 = metal, 4 = energy, 5 = door, 6 = secret
 // 7 = boss wall, 8 = glass, 9 = temporal rift wall
 
+import { room as corridorRoom } from "./rooms/corridor.js";
+import { room as gymRoom } from "./rooms/gym.js";
+import { room as officeRoom } from "./rooms/office.js";
+import { room as arenaRoom } from "./rooms/arena.js";
+
 // ── Build 60x60 police station grid programmatically ──
 const W = 60, H = 60;
 const g = Array.from({ length: H }, () => Array(W).fill(3)); // default: metal walls
@@ -101,6 +106,19 @@ hWall(46, 48, 54, 8);
 for (let c = 35; c <= 56; c++) for (const r of [37, 47]) if (g[r][c] === 2) g[r][c] = 18;
 for (let r = 38; r <= 46; r++) for (const c of [35, 56]) if (g[r][c] === 2) g[r][c] = 18;
 g[37][45] = 22; // EYES & EARS, on the north wall
+// The range as a range (src/rendering/env/range-art.js): the bullet trap
+// across the east wall with a numbered lane and HOT lamp over each lane,
+// felt booth partitions with the target controllers at the firing line,
+// the rules and the ear defenders by the door, distance markers down the
+// north wall, and the target store in the far corner.
+for (let r = 38; r <= 46; r++) g[r][56] = 23;
+g[39][56] = 24; g[42][56] = 25; g[45][56] = 26;
+for (let c = 39; c <= 44; c++) { g[40][c] = 27; g[44][c] = 27; }
+g[40][44] = 28; g[44][44] = 29;
+g[38][35] = 30; g[39][35] = 31; g[40][35] = 30;
+g[43][35] = 31; g[44][35] = 30; g[45][35] = 31; g[46][35] = 30;
+g[37][50] = 32; g[37][55] = 33;
+for (let c = 53; c <= 55; c++) g[38][c] = 34;
 // Connecting corridor west (row 41-42)
 carve(41, 33, 42, 35);
 door(41, 33); door(42, 33);
@@ -238,6 +256,10 @@ carve(7, 53, 14, 55);
 vWall(7, 14, 52, 4); vWall(7, 14, 56, 4);
 door(14, 54);
 
+// The rooms dress themselves on the finished floor plan (src/data/levels/rooms/).
+const ROOMS = [corridorRoom, gymRoom, officeRoom, arenaRoom];
+for (const r of ROOMS) r.dress(g, { carve, hWall, vWall, pillar, door });
+
 export const TUTORIAL_MAP = {
   name: "Chronos PD — Temporal Crimes Division HQ",
   width: W,
@@ -245,8 +267,19 @@ export const TUTORIAL_MAP = {
   grid: g,
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
-  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...ROOMS.flatMap((r) => r.ownWalls)],
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
+  // Each room's own lamps (js/tutorial-system.js _syncRoomLights), on while
+  // you are near enough to see them: the range's floods on the bullet trap,
+  // one over each lane, and the cooler task light along the booths.
+  roomLights: [
+    { room: "range", x: 54.5, y: 39.5, color: [255, 226, 186], radius: 4, intensity: 0.55 },
+    { room: "range", x: 54.5, y: 42.5, color: [255, 226, 186], radius: 4, intensity: 0.55 },
+    { room: "range", x: 54.5, y: 45.5, color: [255, 226, 186], radius: 4, intensity: 0.55 },
+    { room: "range", x: 42.5, y: 42.5, color: [200, 220, 255], radius: 5, intensity: 0.7 },
+    ...ROOMS.flatMap((r) => r.lights),
+  ],
+  rooms: { range: { x0: 35, y0: 37, x1: 56, y1: 47 }, ...Object.assign({}, ...ROOMS.map((r) => r.boxes)) },
   // The range's weapons and the Supervisor's desk are put down by the
   // prologue as their steps begin (js/tutorial-system.js).
   pickups: [
@@ -320,5 +353,7 @@ export const TUTORIAL_MAP = {
     // Combat Arena
     { x: 30, y: 6, type: "ammo_crate" },
     { x: 15, y: 8, type: "barrier" }, { x: 44, y: 8, type: "barrier" },
-  ],
+  ]
+    .filter((p) => !ROOMS.some((r) => r.dropProps.some((d) => d.x === p.x && d.y === p.y)))
+    .concat(ROOMS.flatMap((r) => r.props)),
 };

@@ -13,6 +13,19 @@ export const STATION_WALLS = {
   GYM_RACK: 20,
   GYM_PAD: 21,
   RANGE_SIGN: 22,
+  // The firing range (src/rendering/env/range-art.js).
+  RANGE_BACKSTOP: 23,
+  RANGE_LANE_1: 24,
+  RANGE_LANE_2: 25,
+  RANGE_LANE_3: 26,
+  RANGE_BOOTH: 27,
+  RANGE_BOOTH_CTRL_1: 28,
+  RANGE_BOOTH_CTRL_2: 29,
+  RANGE_RULES: 30,
+  RANGE_PPE: 31,
+  RANGE_DIST_5: 32,
+  RANGE_DIST_10: 33,
+  RANGE_TARGETS: 34,
 };
 
 export const WALL_COLORS = {
@@ -40,7 +53,32 @@ export const WALL_COLORS = {
   20: { r: 54, g: 60, b: 70 },
   21: { r: 60, g: 90, b: 150 },
   22: { r: 46, g: 52, b: 62 },
+  23: { r: 52, g: 58, b: 66 },
+  24: { r: 52, g: 58, b: 66 },
+  25: { r: 52, g: 58, b: 66 },
+  26: { r: 52, g: 58, b: 66 },
+  27: { r: 70, g: 84, b: 100 },
+  28: { r: 70, g: 84, b: 100 },
+  29: { r: 70, g: 84, b: 100 },
+  30: { r: 90, g: 92, b: 96 },
+  31: { r: 90, g: 92, b: 96 },
+  32: { r: 46, g: 52, b: 62 },
+  33: { r: 46, g: 52, b: 62 },
+  34: { r: 90, g: 92, b: 96 },
 };
+
+// The station's rooms paint their own walls (src/rendering/env/rooms/, ids
+// 40-119); the minimap and the Legacy fallback texture see them as station
+// grey, a shade per room.
+for (let id = 40; id <= 119; id++) {
+  const room = Math.floor((id - 40) / 20); // corridor, gym, office, sim hall
+  WALL_COLORS[id] ??= [
+    { r: 78, g: 82, b: 90 },
+    { r: 52, g: 64, b: 92 },
+    { r: 92, g: 72, b: 56 },
+    { r: 40, g: 70, b: 96 },
+  ][room];
+}
 
 // Entity types for map placement
 // E = enemy spawn, P = player start, H = health, A = ammo, W = weapon pickup

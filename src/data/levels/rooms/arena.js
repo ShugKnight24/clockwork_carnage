@@ -1,0 +1,92 @@
+/**
+ * The station's arena, dressed on the prologue map after the floor plan is
+ * built (src/data/levels/tutorial.js): its own wall ids (painted by
+ * src/rendering/env/rooms/arena.js), lamps, props and room boxes.
+ *
+ * The prologue uses it as R&D's holo sim hall and exhibit floor: emitter
+ * panels and holo-grid walls, the observation window onto the deck, R&D's
+ * crates, SIM IN PROGRESS over the way in, the cover pillars as sim columns
+ * round the exhibit projector, and at the north end the extraction lift
+ * (its doors, shaft frame, call panel and floor indicator) behind the beacon.
+ * Every cover pillar stays solid: the sim and the lift waves are fought round
+ * them.
+ */
+
+/** Wall ids, painted by src/rendering/env/rooms/arena.js. */
+export const ARENA_WALLS = {
+  GRID: 100,
+  EMITTER: 101,
+  CRATES: 102,
+  SIM_SIGN: 103,
+  OBS_WINDOW: 104,
+  COLUMN_A: 105,
+  COLUMN_B: 106,
+  COLUMN_C: 107,
+  PROJECTOR: 108,
+  SHAFT_L: 109,
+  CALL_PANEL: 110,
+  LIFT_DOOR_L: 111,
+  LIFT_DOOR_R: 112,
+  LIFT_JAMB: 113,
+  SHAFT_R: 114,
+  GALLERY: 115,
+};
+
+const W = ARENA_WALLS;
+
+export const room = {
+  /** Wall ids this room paints (the map's ownWalls). */
+  ownWalls: Object.values(ARENA_WALLS),
+  /** Lamps, on while the player is in one of `boxes` (TutorialSystem._syncRoomLights). */
+  lights: [
+    { room: "arena", x: 15.5, y: 6.5, color: [190, 230, 255], radius: 5, intensity: 0.6 },
+    { room: "arena", x: 44.5, y: 6.5, color: [190, 230, 255], radius: 5, intensity: 0.6 },
+    { room: "arena", x: 29.5, y: 4.6, color: [255, 214, 150], radius: 4, intensity: 0.4 },
+    { room: "arena", x: 29.5, y: 9.4, color: [220, 236, 255], radius: 4.5, intensity: 0.5 },
+  ],
+  /** Room boxes by name: { x0, y0, x1, y1 } in cells. */
+  boxes: {
+    arena: { x0: 8, y0: 2, x1: 51, y1: 11 },
+  },
+  /** Props to add, and cells whose existing props to drop. */
+  props: [
+    // R&D's crates in the corners, clear of the waves' spawn points.
+    { x: 9, y: 3, type: "crate" }, { x: 9, y: 10, type: "crate" },
+    { x: 50, y: 3, type: "crate" }, { x: 50, y: 10, type: "crate" },
+    { x: 50, y: 9, type: "ammo_crate" },
+    // The resupply crate stood inside the exhibit projector.
+    { x: 26, y: 10, type: "ammo_crate" },
+  ],
+  dropProps: [{ x: 30, y: 6 }],
+  /** Rewrite the room's cells. `h` has the floor plan's carve/hWall/vWall/pillar/door. */
+  dress(g) {
+    // North wall: emitters between holo-grid panels; the lift in the middle.
+    const NORTH = [W.GRID, W.EMITTER, W.GRID, W.GRID, W.CRATES];
+    for (let c = 9; c <= 50; c++) if (g[2][c] === 2) g[2][c] = NORTH[c % NORTH.length];
+    g[2][27] = W.SHAFT_L;
+    g[2][28] = W.CALL_PANEL;
+    g[2][29] = W.LIFT_DOOR_L;
+    g[2][30] = W.LIFT_DOOR_R;
+    g[2][31] = W.LIFT_JAMB;
+    g[2][32] = W.SHAFT_R;
+    // South wall: the gallery glass over the way in, emitters along it.
+    const SOUTH = [W.GALLERY, W.GRID, W.EMITTER, W.GALLERY, W.GRID];
+    for (let c = 9; c <= 50; c++) if (g[11][c] === 2) g[11][c] = SOUTH[c % SOUTH.length];
+    g[11][27] = W.SIM_SIGN;
+    g[11][32] = W.SIM_SIGN;
+    // West wall: the observation deck's window; east wall: R&D's store.
+    for (let r = 3; r <= 10; r++) {
+      if (g[r][8] === 2) g[r][8] = r <= 6 ? W.OBS_WINDOW : r === 8 ? W.SIM_SIGN : W.GRID;
+      if (g[r][51] === 2) g[r][51] = r === 6 ? W.SIM_SIGN : r % 2 ? W.CRATES : W.EMITTER;
+    }
+    // Corners take the panel either side of them.
+    for (const [r, c] of [[2, 8], [2, 51], [11, 8], [11, 51]]) g[r][c] = W.GRID;
+    // The cover pillars become sim columns (still solid), the centre one the
+    // exhibit projector.
+    const COLS = [W.COLUMN_A, W.COLUMN_B, W.COLUMN_C];
+    [[5, 15], [5, 25], [5, 35], [5, 44], [8, 20], [8, 30], [8, 40]].forEach(([r, c], i) => {
+      if (g[r][c] === 2) g[r][c] = COLS[i % COLS.length];
+    });
+    if (g[6][30] === 3) g[6][30] = W.PROJECTOR;
+  },
+};

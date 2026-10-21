@@ -12,6 +12,8 @@
 
 import { INK, getEnvPalette } from "./palettes.js";
 import { STATION_PAINTERS } from "./locker-art.js";
+import { rangePainters } from "./range-art.js";
+import { ROOM_PAINTERS } from "./rooms/index.js";
 import {
   T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, buildMips,
   material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
@@ -694,7 +696,14 @@ const PAINTERS = {
   9: paintRift,
   // The station's own (lockers, gym, range): built only for a map that has them.
   ...STATION_PAINTERS,
+  // The range's bullet trap, booths, rules and stores (src/rendering/env/range-art.js).
+  ...rangePainters(STATION_PAINTERS[18]),
+  // The rest of the station, a file per room (src/rendering/env/rooms/).
+  ...ROOM_PAINTERS,
 };
+
+/** True for a wall type with painted art of its own (Legacy borrows the station's). */
+export const hasWallPainter = (id) => id in PAINTERS;
 
 /** The wall types every level gets; the rest are added for the maps that use them. */
 const COMMON_WALLS = Object.keys(PAINTERS).filter((id) => +id < 10);
