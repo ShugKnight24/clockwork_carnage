@@ -452,7 +452,7 @@ function buildCheckpoint() {
       { x: 45.5, y: 35.5, type: "health" },
       { x: 9.5, y: 22.5, type: "health" }, // observation deck
       { x: 49.5, y: 22.5, type: "ammo" }, // armory vault
-      { x: 50.5, y: 22.5, type: "weapon", weaponId: 1 }, // in front of the rack, not on it
+      { x: 50.5, y: 22.5, type: "weapon", weaponId: 6 }, // Ricochet Pistol, in front of the rack, not on it
       { x: 29.5, y: 16.5, type: "health" },
       // Secret
       { x: 1.5, y: 21.5, type: "health" },
@@ -693,7 +693,7 @@ function buildResearchWing() {
       { x: 8.5, y: 25.5, type: "ammo" },
       { x: 50.5, y: 25.5, type: "health" },
       { x: 30.5, y: 18.5, type: "ammo" },
-      { x: 10.5, y: 7.5, type: "weapon", weaponId: 1 },
+      { x: 10.5, y: 7.5, type: "weapon", weaponId: 2 }, // Phase Rifle
       // Secrets
       { x: 1.5, y: 25.5, type: "health" },
       { x: 57.5, y: 9.5, type: "ammo" },
@@ -904,7 +904,7 @@ function buildContainment() {
       { x: 29.5, y: 24.5, type: "health" },
       { x: 29.5, y: 15.5, type: "ammo" },
       { x: 7.5, y: 7.5, type: "weapon", weaponId: 5 }, // Temporal Sniper
-      { x: 51.5, y: 7.5, type: "weapon", weaponId: 1 },
+      { x: 51.5, y: 7.5, type: "ammo" },
       { x: 29.5, y: 8.5, type: "ammo" }, // in front of the centre column, not on it
       // Secrets
       { x: 1.5, y: 37.5, type: "health" },
@@ -1090,9 +1090,9 @@ function buildServerFarm() {
       { x: 50.5, y: 39.5, type: "health" },
       { x: 29.5, y: 25.5, type: "health" },
       { x: 29.5, y: 15.5, type: "ammo" },
-      { x: 29.5, y: 7.5, type: "weapon", weaponId: 4 }, // Experimental Rail
+      { x: 29.5, y: 7.5, type: "weapon", weaponId: 4 }, // Phase Scattergun
       { x: 9.5, y: 7.5, type: "ammo" },
-      { x: 50.5, y: 7.5, type: "weapon", weaponId: 2 },
+      { x: 50.5, y: 7.5, type: "ammo" },
       { x: 1.5, y: 27.5, type: "health" },
       { x: 58.5, y: 27.5, type: "ammo" },
     ],
@@ -1513,8 +1513,8 @@ function buildVossLab() {
       { x: 48.5, y: 40.5, type: "ammo" },
       { x: 29.5, y: 36.5, type: "health" },
       { x: 11.5, y: 24.5, type: "ammo" },
-      { x: 48.5, y: 24.5, type: "weapon", weaponId: 6 }, // Ricochet Pistol
-      { x: 29.5, y: 7.5, type: "weapon", weaponId: 2 },
+      { x: 48.5, y: 24.5, type: "weapon", weaponId: 3 }, // Quantum Cannon, Voss' prototype
+      { x: 29.5, y: 7.5, type: "ammo" },
       { x: 7.5, y: 7.5, type: "health" },
       { x: 51.5, y: 7.5, type: "ammo" },
       // Secrets
@@ -1822,7 +1822,7 @@ function buildParadoxCore() {
       { x: 53.5, y: 29.5, type: "ammo" },
       { x: 14.5, y: 15.5, type: "health" },
       { x: 44.5, y: 15.5, type: "health" },
-      { x: 29.5, y: 6.5, type: "weapon", weaponId: 3 },
+      { x: 29.5, y: 6.5, type: "ammo" }, // the Cannon came from Voss' lab; a missed one is carried in
       { x: 25.5, y: 5.5, type: "ammo" },
       { x: 33.5, y: 5.5, type: "ammo" },
     ],

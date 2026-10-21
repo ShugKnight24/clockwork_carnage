@@ -355,9 +355,9 @@ export const TIER_UNLOCKS = {
   2: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
   3: {
     type: "anyOf",
-    label: "Clear Act 1 or survive arena round 5",
+    label: "Clear 3 campaign levels or survive arena round 5",
     rules: [
-      { type: "campaignLevels", count: 3, label: "Clear Act 1", unit: "levels" },
+      { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
       { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
     ],
   },
@@ -404,7 +404,7 @@ export const LOADOUT_CLASSES = [
     id: "enforcer",
     name: "Enforcer",
     desc: "Heavy armor, heavy hits",
-    unlock: { type: "campaignLevels", count: 3, label: "Clear Act 1 of the campaign", unit: "levels" },
+    unlock: { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
     startWeapons: [0],
     bonuses: { maxHealth: 125, moveSpeed: -0.3 },
   },

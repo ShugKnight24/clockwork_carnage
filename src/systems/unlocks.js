@@ -141,7 +141,7 @@ export function evaluateRule(rule, ctx) {
   }
 }
 
-/** "Clear Act 1 of the campaign · 2/3 levels" (count rules) or just the label. */
+/** "Clear 3 campaign levels · 2/3 levels" (count rules) or just the label. */
 export function progressText(rule, evaluation) {
   if (!rule) return "";
   const shown = evaluation.branch || rule;

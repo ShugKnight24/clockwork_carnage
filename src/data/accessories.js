@@ -8,9 +8,9 @@
 const TIER2 = { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" };
 const TIER3 = {
   type: "anyOf",
-  label: "Clear Act 1 or survive arena round 5",
+  label: "Clear 3 campaign levels or survive arena round 5",
   rules: [
-    { type: "campaignLevels", count: 3, label: "Clear Act 1", unit: "levels" },
+    { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
     { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
   ],
 };

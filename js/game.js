@@ -27,6 +27,7 @@ import {
 } from "./vfx.js";
 import {
   WEAPONS,
+  ACHIEVEMENTS,
   ENEMY_TYPES,
   ARENA_MAPS,
   UPGRADES,
@@ -64,7 +65,7 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
-import { cloneLook } from "../src/core/character-fields.js";
+import { cloneLook, getIndex, withIndex } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -162,7 +163,23 @@ import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
-import { gameUnlockContext, grantOwned, sanitizeLocked } from "../src/systems/unlocks.js";
+import {
+  gameUnlockContext,
+  grantOwned,
+  sanitizeLocked,
+  earnedIds,
+  announcements,
+  LOCKABLE,
+} from "../src/systems/unlocks.js";
+import { GEAR_SLOTS } from "../src/data/cosmetics.js";
+import { syncGearStats } from "../src/systems/gear-sync.js";
+import { getAct, levelsBefore } from "../src/data/campaign/acts.js";
+import {
+  parSeconds,
+  gradeLevel,
+  finishesEarned,
+  surveyGrid,
+} from "../src/systems/level-debrief.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -203,6 +220,12 @@ function _safeCall(name, fn) {
 const CHRONO_PLAYER_SPEED = 0.85;
 /** ms a phase dash leaves you untouchable: the dash itself (150 ms) and a beat after. */
 const DASH_PHASE_MS = 250;
+
+/** Ammo from a weapon pickup the player already carries (a new one gives 30). */
+const DUPLICATE_WEAPON_AMMO = 60;
+
+/** A Mac, where Control-click is the right-click a one-button mouse lacks. */
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
 
 export class Game {
   constructor(canvas, hudCanvas) {
@@ -339,6 +362,7 @@ export class Game {
         // (the lore video's hold to skip).
         if (this.state === GameState.SETTINGS) this.settingsDeck?.handleKeyUp(code);
         if (this.state === GameState.CINEMATIC) directorInput(this, "key", { down: false, code });
+        if (code === this.keybinds.aim) this.aimRelease();
       },
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
@@ -349,8 +373,11 @@ export class Game {
         // release and leave the Forge thinking the button is still down.
         this.builder?.handleMouseUp(e.button);
         if (this.state === GameState.CINEMATIC) directorInput(this, "pointer", { down: false });
-        if (e.button === 0) this.player.isFiring = false;
-        if (e.button === 2) this.player.isAiming = false;
+        if (e.button === 0 && this._ctrlClickAim) {
+          this._ctrlClickAim = false;
+          this.aimRelease();
+        } else if (e.button === 0) this.player.isFiring = false;
+        if (e.button === 2) this.aimRelease();
       },
       onWheel: (deltaY) => this._inputWheel(deltaY),
       onLockChange: (locked, wasLocked) =>
@@ -544,6 +571,7 @@ export class Game {
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
+    this._pausedAt = performance.now();
     this.audio.tts?.pause();
     this.unlockPointer();
   }
@@ -553,6 +581,11 @@ export class Game {
    */
   resumeGame() {
     this._stateManager.resume();
+    // The level clock (the debrief's time against par) stops while paused.
+    if (this._pausedAt) {
+      this.roundStartTime += performance.now() - this._pausedAt;
+      this._pausedAt = 0;
+    }
     this.audio.tts?.resume();
     // Settings may have changed the art style while we were paused, and a
     // first bake of Modern's materials costs ~220 ms. Pay it here rather than
@@ -738,6 +771,14 @@ export class Game {
       this.builder?.handleMouseDown(e.button, e.shiftKey);
       return;
     }
+    // A Mac with secondary click off (a Magic Mouse's default): Control-click
+    // is its right-click, so it aims rather than fires.
+    if (e.button === 0 && e.ctrlKey && IS_MAC && this.state === GameState.PLAYING) {
+      this._ctrlClickAim = true;
+      this.aimPress();
+      if (!this.mouse.locked) this.lockPointer();
+      return;
+    }
     if (e.button === 0) {
       if (this.state === GameState.PLAYING) {
         this.player.isFiring = true;
@@ -746,7 +787,7 @@ export class Game {
         this.lockPointer();
       }
     } else if (e.button === 2 && this.state === GameState.PLAYING) {
-      this.player.isAiming = true;
+      this.aimPress();
       if (!this.mouse.locked) this.lockPointer();
     }
   }
@@ -1715,23 +1756,40 @@ export class Game {
   /**
    * Stat bonuses from the equipped armour, helmet, visor and shoulders. Gear
    * uses the same bonus vocabulary as origins, and stacks additively with
-   * them; the character is the only source of truth, so this is recomputed
-   * from scratch every run rather than persisted on the player.
+   * them; the character is the only source of truth. A run starts from none
+   * applied, so the whole set goes on.
    */
   applyGearBonuses() {
-    const g = gearBonuses(this.character);
-    if (g.maxHealthAdd) {
-      this.player.maxHealth += g.maxHealthAdd;
-      this.player.health = Math.min(this.player.maxHealth, this.player.health + g.maxHealthAdd);
-    }
-    if (g.maxChronoEnergyAdd) this.player.maxChronoEnergy += g.maxChronoEnergyAdd;
-    if (g.maxStaminaAdd) {
-      this.player.maxStamina += g.maxStaminaAdd;
-      this.player.stamina = this.player.maxStamina;
-    }
-    if (g.dashCostAdd) this.player.dashStaminaCost = Math.max(8, this.player.dashStaminaCost + g.dashCostAdd);
-    if (g.armorAdd) this.player.armor = Math.max(this.player.armor, g.armorAdd);
-    if (g.moveSpeedAdd) this.player.moveSpeed += g.moveSpeedAdd;
+    this.player._gearApplied = null;
+    this.syncGearBonuses();
+  }
+
+  /**
+   * Bring the player's stats in line with the gear worn now, mid-run: a piece
+   * picked up and put on, or a change saved in the creator from the pause
+   * menu. Safe to call again — only the difference goes on (gear-sync.js).
+   */
+  syncGearBonuses() {
+    syncGearStats(this.player, gearBonuses(this.character));
+  }
+
+  /**
+   * Put on a battlefield drop if its slot holds nothing with stats (standard
+   * issue, or a purely cosmetic pick): the piece then works this run. A slot
+   * already carrying a stat piece is left as the player chose it.
+   * @returns {boolean} true when it was equipped
+   */
+  _equipDroppedGear(key, index) {
+    const isGear = GEAR_SLOTS.some(([k]) => k === key) || key?.startsWith("acc.");
+    const table = LOCKABLE[key]?.table;
+    if (!isGear || !table?.[index]?.bonuses) return false;
+    if (table[getIndex(this.character, key)]?.bonuses) return false;
+    Object.assign(this.character, withIndex(this.character, key, index));
+    this.saveCharacter();
+    setCastCharacter(this.character);
+    setSkinCharacter(this.character);
+    this.syncGearBonuses();
+    return true;
   }
 
   getCharacterColor() {
@@ -1776,6 +1834,8 @@ export class Game {
       this.saveCharacter();
       setCastCharacter(this.character);
       setSkinCharacter(this.character);
+      // Opened from the pause menu: gear changed mid-run works from now on.
+      this.syncGearBonuses();
       trackEvent("character_create", {
         loadout_class: this.character.loadoutClass || "default",
       });
@@ -2054,6 +2114,7 @@ export class Game {
     if (this.chronoPowers.isInvulnerable(this.player)) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
+    if (this._levelLog) this._levelLog.damageTaken += Math.max(0, prevHp - this.player.health);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
     if (this.squadComms && this.player.alive && this.player.maxHealth > 0) {
       const prevRatio = prevHp / this.player.maxHealth;
@@ -2586,6 +2647,100 @@ export class Game {
     return true;
   }
 
+  /**
+   * Start the tally the level-complete card reads (_buildDebrief): called by
+   * CampaignManager.loadLevel once the level's map and enemies are in place.
+   */
+  beginLevelLog() {
+    const { openCells, secrets } = surveyGrid(this.map?.grid);
+    const stats = this.achievementStats || {};
+    let earned = [];
+    try {
+      earned = earnedIds(gameUnlockContext(this, { fresh: true }));
+    } catch (_) {}
+    this._levelLog = {
+      par: parSeconds({ openCells, enemies: this.totalEnemies, powerCells: this.powerCells?.total || 0 }),
+      secretsTotal: secrets,
+      secretsAtStart: this.player.secretsFound || 0,
+      damageTaken: 0,
+      weaponKills: { ...(stats.weaponKills || {}) },
+      earned: new Set(earned),
+      achievements: new Set(Object.keys(this.unlockedAchievements || {})),
+      gear: [],
+    };
+    this._debrief = null;
+    // Fragments are announced on the card of the level that found them, so
+    // anything left from an abandoned level is not carried in.
+    this.archive?.drainPending();
+  }
+
+  /**
+   * What the level-complete card shows: the level, its grade against par,
+   * and everything the level paid out — unlocks (counting this clear),
+   * achievements, gear picked up, weapon finishes and memory fragments.
+   */
+  _buildDebrief() {
+    const log = this._levelLog;
+    const c = this.campaign;
+    const seconds = Math.max(0, (performance.now() - this.roundStartTime) / 1000);
+    const secretsFound = Math.max(0, (this.player.secretsFound || 0) - (log?.secretsAtStart || 0));
+    const secretsTotal = Math.max(log?.secretsTotal || 0, secretsFound);
+    const par = log?.par ?? parSeconds({});
+    const grade = gradeLevel({
+      shotsFired: this.shotsFired,
+      shotsHit: this.shotsHit,
+      seconds,
+      par,
+      damageTaken: log?.damageTaken || 0,
+      maxHealth: this.player.maxHealth,
+      secretsFound,
+      secretsTotal,
+    });
+    const stats = this.achievementStats;
+    if (grade.letter === "S") stats.levelsAced = (stats.levelsAced || 0) + 1;
+    if (secretsTotal > 0 && secretsFound >= secretsTotal) stats.levelsFullySearched = (stats.levelsFullySearched || 0) + 1;
+    this.checkAchievements();
+
+    // What the player did first (pickups, finishes, memories), then what it
+    // opened up: the card shows the first few.
+    const earned = [];
+    const opened = [];
+    if (log) {
+      earned.push(...log.gear);
+      for (const { weaponId, finish } of finishesEarned(log.weaponKills, stats.weaponKills)) {
+        earned.push({ kind: "Weapon finish", name: `${finish.name} · ${WEAPONS[weaponId]?.name ?? "Weapon"}` });
+      }
+      try {
+        // Clearing this level counts now, though the stat moves on Continue.
+        const ctx = gameUnlockContext(this, { fresh: true });
+        const cleared = levelsBefore(c.act) + c.level + 1;
+        const after = earnedIds({ ...ctx, campaignLevelsCleared: Math.max(ctx.campaignLevelsCleared, cleared) });
+        opened.push(...announcements(after.filter((id) => !log.earned.has(id))));
+      } catch (_) {}
+      for (const id of Object.keys(this.unlockedAchievements || {})) {
+        const ach = ACHIEVEMENTS[id];
+        if (!log.achievements.has(id) && ach) opened.push({ kind: "Achievement", name: ach.name });
+      }
+    }
+    for (const frag of this.archive?.drainPending() ?? []) {
+      earned.push({ kind: "Memory fragment", name: frag.title });
+    }
+    earned.push(...opened);
+    return {
+      act: c.act,
+      levelNumber: c.level + 1,
+      actTitle: getAct(c.act)?.title ?? "",
+      levelName: this.map?.name ?? "",
+      seconds,
+      par,
+      grade,
+      secretsFound,
+      secretsTotal,
+      damageTaken: Math.round(log?.damageTaken || 0),
+      earned,
+    };
+  }
+
   /** Campaign exit completes the level; playtest exit arms the end timer. */
   _checkExitReached() {
     this._syncExitLight();
@@ -2618,6 +2773,7 @@ export class Game {
           this.campaign.act,
           this.campaign.level + 1, // fragment data is 1-based
         );
+        this._debrief = this._buildDebrief();
         this.queueAriaMessage("levelComplete");
       }
     }
@@ -2706,6 +2862,19 @@ export class Game {
    * The dash key: phase-dash the way the movement keys are held, forward
    * when none are.
    */
+  /**
+   * Aim down sights from any aim input (right mouse, the aim key, Control-
+   * click on a Mac). Held by default; with Toggle Aim on, a press flips it.
+   */
+  aimPress() {
+    if (this.state !== GameState.PLAYING) return;
+    this.player.isAiming = this.settings.aimToggle ? !this.player.isAiming : true;
+  }
+
+  aimRelease() {
+    if (!this.settings.aimToggle) this.player.isAiming = false;
+  }
+
   dashFromKeys() {
     if (this.state !== GameState.PLAYING || !this.player.alive) return;
     // The Forge's voxel worlds keep C for crafting; double-tap still dashes there.
@@ -2979,8 +3148,21 @@ export class Game {
           this.player.currentWeapon = this.player.weapons.length - 1;
           this.audio.pickup();
           this.queueAriaMessage("weaponPickup");
+          this.player.ammo = Math.min(999, this.player.ammo + 30);
+          // Every gun in the armoury carried at once (achievement "Full Arsenal").
+          if (WEAPONS.every((w) => this.player.weapons.includes(w.id))) {
+            this.achievementStats.fullArsenal = true;
+            this.checkAchievements();
+          }
+        } else {
+          // One already carried (a class's starting gun, or a missed pickup
+          // brought forward) is stripped for rounds: double the ammo.
+          this.player.ammo = Math.min(999, this.player.ammo + DUPLICATE_WEAPON_AMMO);
+          this.audio.pickup();
+          if (this.mode !== "tutorial") {
+            this.showGearToast?.("Ammo cache", `${WEAPONS[e.weaponId]?.name ?? "Weapon"} stripped · +${DUPLICATE_WEAPON_AMMO} ammo`);
+          }
         }
-        this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
@@ -3015,8 +3197,8 @@ export class Game {
         }
       } else if (e.type === "gear") {
         // A battlefield drop grants the piece outright: it shows up unlocked
-        // in both creators, and its bonuses apply from the next run. Nothing
-        // is persisted on the player — the character stays the source of truth.
+        // in both creators, and is put on at once when its slot is free of
+        // stats, so its bonuses work this run (_equipDroppedGear).
         const granted = grantOwned(e.slot, e.slotIndex);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
@@ -3024,8 +3206,10 @@ export class Game {
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
           _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
-          this.showGearToast?.(e.kind, e.label);
+          const worn = this._equipDroppedGear(e.slot, e.slotIndex);
+          this.showGearToast?.(e.kind, worn ? `${e.label} · equipped` : e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
+          this._levelLog?.gear.push({ kind: e.kind || "Gear", name: e.label || "Salvage" });
         }
       } else if (
         (e.type === "damage2x" || e.type === "invuln") &&
@@ -3129,6 +3313,7 @@ export class Game {
     const wep = this.player.getWeaponDef();
     renderWeapon(ctx, w, h, {
       wep,
+      owned: this.player.weapons,
       energyColor: charColor ? charColor.accent : wep?.color,
       isAiming: this.player.isAiming,
       isSprinting: this.player.isSprinting,
@@ -3357,13 +3542,18 @@ export class Game {
   }
 
   renderLevelComplete(ctx, w, h) {
+    const debrief = this._debrief;
+    const stats = this._statsCardData();
+    // The clock stops at the exit, not while the card is up.
+    if (debrief) stats.roundStartTime = performance.now() - debrief.seconds * 1000;
     _renderLevelComplete(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
       input: this,
       levelCompleteTime: this._levelCompleteTime,
-      playerSecretsFound: this.player.secretsFound,
-      statsCardData: this._statsCardData(),
+      playerSecretsFound: debrief ? debrief.secretsFound : this.player.secretsFound,
+      statsCardData: stats,
+      debrief,
     });
   }
 
