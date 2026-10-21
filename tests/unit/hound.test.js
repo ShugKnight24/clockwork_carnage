@@ -230,7 +230,9 @@ describe("the Hound in the cutscenes", () => {
     setArtStyle(ART_LEGACY);
     const grad = { addColorStop() {} };
     const ctx = new Proxy({}, {
-      get: (_t, prop) => (prop === "createRadialGradient" || prop === "createLinearGradient" ? () => grad : () => {}),
+      // Legacy asks the vector models first (they draw once decoded), which read the transform.
+      get: (_t, prop) =>
+        prop === "createRadialGradient" || prop === "createLinearGradient" ? () => grad : prop === "getTransform" ? () => ({ a: 1, b: 0, c: 0, d: 1 }) : () => {},
       set: () => true,
     });
     try {

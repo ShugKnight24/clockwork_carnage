@@ -472,13 +472,15 @@ export class AriaCommsSystem {
     ctx.globalAlpha = alpha;
 
     const pBoxW = Math.min(460, a?.maxW ?? 460);
-    const cx = a ? a.cx : w / 2;
-    const pBx = cx - pBoxW / 2;
+    const pBx = (a ? a.cx : w / 2) - pBoxW / 2;
+    // The speaker's glyph takes the left edge; the text centres in the rest.
+    const icon = 30;
+    const cx = pBx + icon + (pBoxW - icon) / 2;
 
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);
     ctx.font = "14px monospace";
-    const maxTextW = pBoxW - 32;
+    const maxTextW = pBoxW - icon - 32;
     const lines = this._wordWrap(ctx, ariaText, maxTextW);
     const lineH = 17;
     const pBoxH = 64 + Math.max(0, lines.length - 1) * lineH;
@@ -502,11 +504,11 @@ export class AriaCommsSystem {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    const tone = msg.speaker && msg.speaker !== "ARIA" ? msg.color || "#ffcc66" : "#00ccff";
+    this._drawLegacyGlyph(ctx, msg.speaker || "ARIA", pBx + 12 + icon / 2, pBy + pBoxH / 2, icon / 2, tone, t);
+
     // ARIA label centered
-    ctx.fillStyle =
-      msg.speaker && msg.speaker !== "ARIA"
-        ? msg.color || "#ffcc66"
-        : "#00ccff";
+    ctx.fillStyle = tone;
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(msg.speaker || "ARIA", cx, pBy + 18);
@@ -520,6 +522,43 @@ export class AriaCommsSystem {
     }
 
     ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  /**
+   * Legacy's speaker glyph: ARIA's ring (as she boots on the title), or a
+   * head-and-shoulders bust in the speaker's colour for the station's people.
+   */
+  _drawLegacyGlyph(ctx, speaker, x, y, r, color, t) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha *= 0.9;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (speaker === "ARIA") {
+      const a0 = t * 2.4;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.62, a0, a0 + Math.PI * 1.3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.globalAlpha *= 0.75;
+      ctx.beginPath();
+      ctx.arc(x, y - r * 0.2, r * 0.36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(x, y + r * 0.85, r * 0.72, r * 0.6, 0, Math.PI, 0);
+      ctx.fill();
+    }
     ctx.restore();
   }
 

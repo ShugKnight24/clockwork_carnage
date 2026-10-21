@@ -15,6 +15,7 @@ import { renderEchoDrone } from "./echo-drone.js";
 import { renderRiftLeaper } from "./rift-leaper.js";
 import { renderTemporalEngineer } from "./temporal-engineer.js";
 import { renderHound } from "./hound.js";
+import { renderStationPerson } from "./station-people.js";
 
 export const ENEMY_RENDERERS = {
   drone: renderDrone,
@@ -36,4 +37,8 @@ export const ENEMY_RENDERERS = {
   riftLeaper: renderRiftLeaper,
   temporalEngineer: renderTemporalEngineer,
   hound: renderHound,
+  // The station's people (js/npc.js) share the rig; they are not enemies.
+  officer: renderStationPerson,
+  officerKit: renderStationPerson,
+  supervisor: renderStationPerson,
 };

@@ -5,17 +5,14 @@
  * of the picture, eased across the shot. `artAt: [x, y, scale]` places the
  * art alone (x/y fractions of the picture, scale about its centre), for a
  * figure drawn larger than a letterboxed frame; it can be keyed by art
- * profile, `{ legacy: [...], default: [...] }`, since Legacy's pixel figures
- * stand smaller and lower in their picture. `silhouette: true` paints the art as
+ * profile, `{ realistic: [...], default: [...] }`. `silhouette: true` paints the art as
  * a black shape with a red rim (late-game bosses are never shown in full).
  * Borrows no game fields.
  *
  * The cutscene chunk is loaded on demand (it is large and most sessions never
- * play a reel); the build also waits, a few frames at most, for the Modern
+ * play a reel); the build also waits, a few frames at most, for the vector
  * backdrop bitmaps so the shot does not open on the procedural fallback.
  */
-
-import { isModernArt } from "../../rendering/art-style.js";
 
 const WARM_FRAMES = 30;
 
@@ -42,8 +39,7 @@ export const art = {
       cs = { drawCutsceneBg: cut.drawCutsceneBg, drawCutsceneArt: artMod.drawCutsceneArt, drawSvgBg: svg.drawSvgBg, hasSvgBg: svg.hasSvgBg, warmSvgArt: svg.warmSvgArt };
     }
     const ctx = game.renderer?.ctx;
-    // Legacy draws every backdrop procedurally: nothing to decode.
-    if (!ctx || !live() || !isModernArt() || !cs.hasSvgBg(spec.bg)) return;
+    if (!ctx || !live() || !cs.hasSvgBg(spec.bg)) return;
     const w = game.renderer.width;
     const h = game.renderer.height;
     cs.warmSvgArt(spec.art ? [spec.art] : [], [spec.bg], ctx, w, h);

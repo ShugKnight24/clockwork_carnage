@@ -104,6 +104,8 @@ describe("Legacy art", () => {
           if (prop === "fillText") return (t) => text.push(t);
           if (prop === "createRadialGradient" || prop === "createLinearGradient") return () => grad;
           if (prop === "measureText") return () => ({ width: 10 });
+          // Legacy asks the vector models first (they draw once decoded).
+          if (prop === "getTransform") return () => ({ a: 1, b: 0, c: 0, d: 1 });
           return () => {};
         },
         set() {
