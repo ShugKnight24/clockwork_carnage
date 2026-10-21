@@ -21,6 +21,22 @@ describe("device tier", () => {
     expect(classifyDevice({ renderer: "Mali-G52", cores: 8, memoryGB: 3, touch: true })).toBe("low");
     expect(classifyDevice({ renderer: "Apple A16 GPU", cores: 6, touch: true })).toBe("mid");
   });
+
+  it("rates modern phones mid from the strings their browsers report", () => {
+    // iOS Safari: masked chip, 4 cores, no deviceMemory.
+    expect(classifyDevice({ renderer: "Apple GPU", cores: 4, touch: true })).toBe("mid");
+    // Chrome on Android buckets deviceMemory, so a flagship can read as 4 GB.
+    expect(classifyDevice({ renderer: "Adreno (TM) 650", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Adreno (TM) 740", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Mali-G710", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Mali-G610 MC6", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+  });
+
+  it("leaves an unknown or empty renderer to the CPU signals", () => {
+    expect(classifyDevice({ renderer: "", cores: 8, memoryGB: 8, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "WebKit WebGL", cores: 8 })).toBe("mid");
+    expect(classifyDevice({ renderer: "", cores: 2, memoryGB: 2, touch: true })).toBe("low");
+  });
 });
 
 describe("render pixel budget", () => {

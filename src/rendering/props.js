@@ -2,7 +2,7 @@
 // Signature: (ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog)
 // Ground convention: floor plane = groundY(cy, sh). Anchor bottom edge there.
 
-import { getLayerImage, layerBaked, onRasterRelease, scaleBucket } from "./svg-art/raster.js";
+import { getLayerImage, layerBaked, onRasterRelease, scaleBucket, touchLayer } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
@@ -84,7 +84,9 @@ onRasterRelease(() => {
 
 /** Cached bitmap lookup: skip the string-keyed cache while the bucket is steady. */
 function layerBitmap(slot, id, box, defs, markup, scale) {
-  if (slot.scale === scale && slot.img && slot.epoch === slotEpoch) return slot.img;
+  if (slot.scale === scale && slot.img && slot.epoch === slotEpoch && touchLayer(id, scale, slot.img)) {
+    return slot.img;
+  }
   const img = getLayerImage(id, box, defs, markup, scale);
   // drawImage throws on a 0x0 bitmap; skip the layer rather than the frame.
   if (img && !(img.naturalWidth ?? img.width)) return null;

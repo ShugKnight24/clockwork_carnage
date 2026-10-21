@@ -81,7 +81,7 @@ vec3 wallLight(vec3 albedo) {
   vec3 n = n0;
   float gloss = 0.0;
   if (u_hasNormals) {
-    vec3 m = textureLod(u_normals, v_uvl, v_lod).rgb;
+    vec3 m = textureLod(u_normals, v_uvl, max(v_lod - 1.0, 0.0)).rgb; // stored at half size
     vec2 nxy = m.rg * 2.0 - 1.0;
     float nz = sqrt(max(0.0, 1.0 - dot(nxy, nxy)));
     // Texture u runs along the face normal turned +90 degrees; texture y runs
@@ -251,8 +251,12 @@ export class WallPass {
     if (this.normalTex) gl.deleteTexture(this.normalTex);
     this.tex = null;
     this.normalTex = null;
-    const ids = Object.keys(env.walls).map(Number);
-    const layers = Math.max(...ids);
+    // One array layer per wall type the env has, packed: indexed by the raw
+    // id, a station's ids (10-120) cost a layer for every unused id below.
+    const ids = Object.keys(env.walls).map(Number).sort((a, b) => a - b);
+    const layers = ids.length;
+    this.layerOf = new Int16Array(ids[ids.length - 1] + 1);
+    ids.forEach((id, i) => (this.layerOf[id] = i));
     for (const id of ids) {
       const mips = env.walls[id];
       if (mips.length < LEVELS || mips[0].width !== SIZE || mips[0].height !== SIZE) return false;
@@ -266,7 +270,7 @@ export class WallPass {
       const mips = env.walls[id];
       for (let l = 0; l < LEVELS; l++) {
         const s = SIZE >> l;
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, id - 1, s, s, 1, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, this.layerOf[id], s, s, 1, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
       }
     }
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
@@ -281,24 +285,29 @@ export class WallPass {
     return true;
   }
 
-  /** A texture array of each wall type's mip chain from `chainOf(id)`. */
+  /**
+   * The relief normals as a texture array: RGB565 (they are R, G normal and
+   * B gloss, no alpha) at half size, mips 1.. of each chain. An eighth of a
+   * full RGBA8 array: a station's hundred wall types cost ~145 MB of normals
+   * at full size, ~18 MB like this. The shader samples them a level lower.
+   */
   _uploadArray(ids, chainOf, layers) {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, layers);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS - 1, gl.RGB565, SIZE >> 1, SIZE >> 1, layers);
     for (const id of ids) {
       const mips = chainOf(id);
-      for (let l = 0; l < LEVELS; l++) {
+      for (let l = 1; l < LEVELS; l++) {
         const s = SIZE >> l;
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, id - 1, s, s, 1, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - 1, 0, 0, this.layerOf[id], s, s, 1, gl.RGB, gl.UNSIGNED_BYTE, mips[l]);
       }
     }
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 2);
     return tex;
   }
 
@@ -336,7 +345,7 @@ export class WallPass {
    * [r, g, b, a255] source-over overlays; light/accent additive.
    */
   wall(x, y0, y1, layer, lod, u, v0, v1, face, fog, light, accent, hitX = 0, hitY = 0, nX = 0, nY = 0) {
-    this._put(x, y0, y1, layer - 1, u, v0, v1, lod, face, fog, light, accent);
+    this._put(x, y0, y1, this.layerOf?.[layer] ?? 0, u, v0, v1, lod, face, fog, light, accent);
     const i = (this.n - 1) * 16 + 12;
     this.f32[i] = hitX;
     this.f32[i + 1] = hitY;

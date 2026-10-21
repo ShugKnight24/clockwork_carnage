@@ -115,9 +115,8 @@ export class Renderer {
     this.gpuWallNormals = true;
     this._glLight = [0, 0, 0, 0];
     this._glAccent = [0, 0, 0, 0];
+    // Painted per wall type on first use (it reads its cap colour back then).
     this.textures = generateWallTextures();
-    // Cap colours read each texture back once; do it now rather than mid-level.
-    for (const tex of Object.values(this.textures)) averageColor(tex);
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
     // Modern art style environment: 512px wall/deck art per act, built lazily
@@ -1877,7 +1876,9 @@ export class Renderer {
 
     const renderFn = ENEMY_RENDERERS[enemy.enemyType];
     if (renderFn) {
-      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash);
+      // The station's people turn their back on the camera when facing away.
+      const away = enemy.type === "npc" && Math.cos(enemy.angle) * this._camRightY - Math.sin(enemy.angle) * this._camRightX > 0.3;
+      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash, away);
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
@@ -1910,7 +1911,10 @@ export class Renderer {
    * rect, and a sprite with nothing in front is drawn unclipped.
    */
   _drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog) {
-    const alpha = fog;
+    // Fog fades the sprite only over the last stretch of the fog range.
+    // Scaling alpha with distance throughout left a near enemy see-through
+    // (90% opaque at 3 tiles), the corridor showing through a pale body.
+    const alpha = Math.min(1, fog * 2.5);
     if (alpha <= 0) return;
     const x0 = Math.max(0, Math.floor(screenX + frame.x0));
     const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + frame.x1));
@@ -1968,7 +1972,8 @@ export class Renderer {
     // drew each sprite into a scratch canvas and blitted it back, and every
     // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
     // frame with a room full of enemies and props.
-    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
+    // Enemies shade at most 35% (props 65%): a threat must stay readable.
+    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.35);
     drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
     ctx.filter = "none";
   }

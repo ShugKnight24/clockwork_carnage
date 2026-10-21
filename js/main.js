@@ -57,6 +57,16 @@ onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });
 
+// The title agent is the player's own once one is saved (stock hero until then).
+const dressTitleHero = () => {
+  let saved = false;
+  try { saved = !!localStorage.getItem("cc_character"); } catch (_) {}
+  customElements.whenDefined("title-hero").then(() => {
+    document.querySelector("title-hero")?.setCharacter?.(saved ? game.character : null);
+  });
+};
+dressTitleHero();
+
 // The title logotype wears the active art style's finish: Legacy's neon,
 // Comic's ink, or Modern's steel (assets/brand, built by scripts/brand).
 const titleLogo = document.getElementById("titleLogo");
@@ -158,13 +168,20 @@ function updateContinueButtons() {
   }
 }
 
+let _firstInteraction = false;
+
 function enterModeSelect() {
   titleScreen.classList.add("hidden");
   modeSelect.classList.remove("hidden");
   updateContinueButtons();
   game.state = GameState.MODE_SELECT;
-  window.dispatchEvent(new Event("cc:first-interaction"));
-  requestAnimationFrame(() => document.getElementById("btnCampaign")?.focus());
+  _firstInteraction = true;
+  // Listeners (the consent modal) run after the menu's first paint, not in
+  // the click's task.
+  requestAnimationFrame(() => {
+    document.getElementById("btnCampaign")?.focus();
+    setTimeout(() => window.dispatchEvent(new Event("cc:first-interaction")), 0);
+  });
 }
 
 function initAudio() {
@@ -595,6 +612,8 @@ let prevState = null;
 let _errCount = 0;
 let _loopRecoveries = 0;
 let _lastQualityTimestamp = 0;
+let _qualitySide = null;
+const _sideScales = { play: null, screens: null };
 const pacer = new FramePacer();
 
 // rAF stops while the tab is hidden. Drop the timing history on the way back in
@@ -624,6 +643,7 @@ function gameLoop(timestamp) {
     if (game.state !== prevState) {
       prevState = game.state;
       if (game.state === GameState.TITLE) {
+        dressTitleHero();
         titleScreen.classList.remove("hidden");
         modeSelect.classList.add("hidden");
         gameCanvas.style.display = "none";
@@ -669,6 +689,28 @@ function gameLoop(timestamp) {
     // — otherwise Battery Saver reads as a slow machine and the render scale
     // spirals down to the floor.
     quality.targetFPS = qualityTargetFPS(cap, pacer.displayHz);
+    // Play and the screens around it (the comic, the creator, the films)
+    // each keep their own render scale. They were one: the comic's
+    // first-sight decodes pulled the scale to its floor, and a slow laptop
+    // then started the prologue at a blurry 0.35. Switching side restores
+    // that side's last scale and starts its sample window fresh.
+    const side = game.state === GameState.PLAYING || game.state === GameState.BUILDER ? "play" : "screens";
+    if (!quality.auto) {
+      // A preset or a fixed scale from Settings: one scale everywhere, as set.
+      _sideScales.play = _sideScales.screens = null;
+      _qualitySide = side;
+    } else if (side !== _qualitySide) {
+      if (_qualitySide) _sideScales[_qualitySide] = quality.stableScale ?? quality.renderScale;
+      const back = _sideScales[side] ?? quality.maxScale;
+      _qualitySide = side;
+      quality.history.length = 0;
+      _lastQualityTimestamp = 0;
+      if (Math.abs(back - (quality.stableScale ?? quality.renderScale)) > 0.01) {
+        quality.renderScale = quality.stableScale = back;
+        game.applyPerformanceSettings();
+        resizeCanvases();
+      }
+    }
     const frameMs = _lastQualityTimestamp ? timestamp - _lastQualityTimestamp : 1000 / 60;
     _lastQualityTimestamp = timestamp;
     quality.recordFPS(1000 / Math.max(frameMs, 1));
@@ -724,6 +766,36 @@ function gameLoop(timestamp) {
 }
 
 requestAnimationFrame(gameLoop);
+
+// While the title waits for a click, queue the comic's art: it opens every new
+// campaign, and cold it showed a black frame, an empty cover, then one agent
+// swapping for another as the bitmaps landed. Idle time only, after the boot.
+setTimeout(() => {
+  const warm = () => {
+    if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) return;
+    game._ensureCutsceneEngine()
+      .then(() => game.cutsceneEngine?.prewarm?.("intro_flipbook", game.renderer.ctx, gameCanvas.width, gameCanvas.height))
+      .catch(() => {});
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(warm, { timeout: 3000 });
+  else warm();
+}, 1500);
+
+// Opening the audio device (new AudioContext) cost ~260 ms of the title
+// click on a 4x-throttled laptop. Create it suspended while the title idles,
+// so the click only resumes it. A browser that would let it start running
+// without a gesture is held suspended too: nothing plays before the click.
+setTimeout(() => {
+  const open = () => {
+    if (game.audio.ctx || game.state !== GameState.TITLE) return;
+    try {
+      game.audio.init();
+      if (game.audio.ctx?.state === "running" && !_firstInteraction) game.audio.ctx.suspend();
+    } catch (_) {}
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(open, { timeout: 4000 });
+  else open();
+}, 1000);
 
 // Auto-save on tab close / navigate away
 window.addEventListener("beforeunload", (e) => {

@@ -4,7 +4,7 @@
  * Upgraded to 256x256 resolution for sharper visuals.
  */
 import { WALL_COLORS } from "../../js/data.js";
-import { buildWallSet, extendWallSet } from "./env/wall-art.js";
+import { buildWallSet, extendWallSet, hasWallPainter, paintWall } from "./env/wall-art.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
@@ -63,10 +63,27 @@ export function averageColor(tex) {
   return avg;
 }
 
-export function generateWallTextures() {
-  const textures = {};
+/**
+ * The station's own walls (lockers, range, gym, office, sim hall: ids 10+)
+ * are pictures, not materials: Legacy's flat noise left those rooms bare. It
+ * borrows the painted face, downscaled once to its 256px texture size.
+ */
+function stationWallTexture(id) {
+  const art = paintWall(+id, 1);
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(art, 0, 0, 256, 256);
+  art.width = art.height = 0;
+  return c;
+}
+
+/** One wall type's 256px Legacy texture. */
+function legacyWallTexture(id, color) {
   const size = 256;
-  for (const [id, color] of Object.entries(WALL_COLORS)) {
+  if (+id >= 10 && hasWallPainter(id)) return stationWallTexture(id);
+  {
     const c = document.createElement("canvas");
     c.width = size;
     c.height = size;
@@ -273,7 +290,29 @@ export function generateWallTextures() {
       }
     }
     ctx.putImageData(imgData, 0, 0);
-    textures[id] = c;
+    return c;
+  }
+}
+
+/**
+ * The Legacy wall textures, by wall id, each painted the first time it is
+ * read (and its cap colour read back then too). Painting all of them up
+ * front was most of the boot's long task — 1.3 s on a slow laptop — for a
+ * set that Comic and Modern mostly never draw.
+ */
+export function generateWallTextures() {
+  const textures = {};
+  for (const [id, color] of Object.entries(WALL_COLORS)) {
+    Object.defineProperty(textures, id, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        const c = legacyWallTexture(id, color);
+        averageColor(c);
+        Object.defineProperty(textures, id, { value: c, enumerable: true, writable: true, configurable: true });
+        return c;
+      },
+    });
   }
   return textures;
 }

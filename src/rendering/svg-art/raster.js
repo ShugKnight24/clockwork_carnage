@@ -204,6 +204,18 @@ function buildDocument(box, defs, markup, pxW, pxH) {
 }
 
 /**
+ * The fast path for a caller that cached a layer's bitmap: marks it used so
+ * idle eviction keeps it, and says whether it is still the live bitmap
+ * (eviction frees a baked canvas to 0x0, and drawImage throws on that).
+ */
+export function touchLayer(id, scale, img) {
+  const e = layers.get(id)?.get(scaleBucket(scale));
+  if (!e || e.img !== img || !e.ready) return false;
+  e.lastUsed = performance.now();
+  return true;
+}
+
+/**
  * Request a layer bitmap. Returns the best ready image for this layer — the
  * requested bucket when decoded, otherwise any other decoded bucket — or null
  * while nothing has decoded yet.
@@ -216,6 +228,7 @@ function buildDocument(box, defs, markup, pxW, pxH) {
  * @param {boolean} prefetch  warming ahead of use: decode when the per-frame budget allows
  */
 export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
+  if (typeof Image === "undefined") return null; // no DOM (unit tests): nothing decodes
   const bucket = scaleBucket(scale);
   const now = performance.now();
   pumpDecodes();
