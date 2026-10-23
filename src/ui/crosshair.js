@@ -316,3 +316,127 @@ export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
   ctx.fill();
   ctx.restore();
 }
+
+/**
+ * The weapon's cone as four corner brackets round the reticle, `r` pixels
+ * out: wide at the hip with a scattergun, closing in as the sights come up
+ * (currentSpread in src/systems/aim.js). Every round lands inside it.
+ */
+export function drawSpreadBrackets(ctx, cx, cy, r, alpha = 1) {
+  if (!(r >= 6) || alpha <= 0.01) return;
+  const color = isModernArt() || isRealisticArt() ? "rgba(125,255,240," : "rgba(255,90,90,";
+  const span = Math.min(0.42, 9 / r); // each bracket's half-angle, about 9 px of arc
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.lineCap = "round";
+  for (const [style, width] of [["rgba(0,0,0,0.45)", 3], [color + "0.75)", 1.4]]) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + (i * Math.PI) / 2;
+      ctx.moveTo(cx + Math.cos(a - span) * r, cy + Math.sin(a - span) * r);
+      ctx.arc(cx, cy, r, a - span, a + span);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The sniper's scope, centred on the reticle: everything outside the lens
+ * blacked out, a dark rim and a glass tint, a duplex reticle with mil-dots,
+ * and a glint that slides across the glass. `steady` (0…1, how settled the
+ * breath is) draws as a ring under the lens that closes and brightens; a
+ * shot (`kick`, 1 just fired … 0) flares the rim.
+ */
+export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, kick = 0 } = {}) {
+  if (alpha <= 0.01) return;
+  const comic = isModernArt() || isRealisticArt();
+  const ink = comic ? "#0b1114" : "#000000";
+  const line = comic ? "rgba(10,14,16,0.92)" : "rgba(20,0,0,0.9)";
+  const hot = comic ? "#ff3b3b" : "#ff2020";
+  const tint = comic ? "125,255,240" : "255,90,90";
+  const R = Math.min(w, h) * 0.44;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  // The tube: black outside the lens.
+  ctx.fillStyle = ink;
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.arc(cx, cy, R, 0, Math.PI * 2, true);
+  ctx.fill("evenodd");
+  // The glass: a faint tint, and the rim darkening into the tube.
+  const vig = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+  vig.addColorStop(0, `rgba(${tint},0.03)`);
+  vig.addColorStop(0.8, "rgba(0,0,0,0.25)");
+  vig.addColorStop(1, "rgba(0,0,0,0.92)");
+  ctx.fillStyle = vig;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fill();
+  // Chromatic fringe on the rim, flaring on a shot.
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(255,80,60,${0.18 + 0.5 * kick})`;
+  ctx.beginPath();
+  ctx.arc(cx + 1, cy, R - 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(${tint},${0.22 + 0.5 * kick})`;
+  ctx.beginPath();
+  ctx.arc(cx - 1, cy, R - 3, 0, Math.PI * 2);
+  ctx.stroke();
+  // The glint: a curved highlight drifting round the upper glass.
+  const g = -2.2 + 0.25 * Math.sin(time * 0.0007);
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = R * 0.06;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * 0.82, g, g + 0.55);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = R * 0.015;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * 0.86, g + 0.08, g + 0.4);
+  ctx.stroke();
+  // Duplex reticle: heavy posts from the rim, fine wire across the middle.
+  const gap = R * 0.3;
+  ctx.fillStyle = line;
+  const post = Math.max(3, R * 0.022);
+  ctx.fillRect(cx - R, cy - post / 2, R - gap, post);
+  ctx.fillRect(cx + gap, cy - post / 2, R - gap, post);
+  ctx.fillRect(cx - post / 2, cy + gap, post, R - gap);
+  ctx.fillRect(cx - post / 2, cy - R, post, R - gap);
+  ctx.fillRect(cx - gap, cy - 0.6, gap * 2, 1.2);
+  ctx.fillRect(cx - 0.6, cy - gap, 1.2, gap * 2);
+  // Mil-dots: across, and down for holdover.
+  const mil = gap / 5;
+  for (let i = 1; i <= 4; i++) {
+    for (const [dx, dy] of [[i, 0], [-i, 0], [0, i], [0, -i]]) {
+      ctx.beginPath();
+      ctx.arc(cx + dx * mil, cy + dy * mil, i === 4 ? 2.2 : 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // The aim point: a lit dot that brightens as the breath settles.
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha *= 0.55 + 0.45 * steady;
+  ctx.fillStyle = hot;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Breath: an arc under the lens that closes as you hold still.
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 12, Math.PI / 2 - 0.62, Math.PI / 2 + 0.62);
+  ctx.stroke();
+  ctx.strokeStyle = steady >= 1 ? `rgb(${tint})` : `rgba(${tint},0.6)`;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 12, Math.PI / 2 - 0.12 - 0.5 * steady, Math.PI / 2 + 0.12 + 0.5 * steady);
+  ctx.stroke();
+  ctx.restore();
+}

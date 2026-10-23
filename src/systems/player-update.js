@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
 import { clamp, decay } from "../utils/math.js";
-import { applyAimDelta, recenterAim } from "./aim.js";
+import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom } from "./aim.js";
 import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
 import {
   PLAYER_ADS_MOVE_MULT,
@@ -33,7 +33,10 @@ function applyMouseAim(p, mouse, settings) {
 
   const { overflowX } = applyAimDelta(p, mouse.dx, mouse.dy, settings);
   if (overflowX !== 0) {
-    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX;
+    // The turn slows with the sights like the reticle does (whose angle per
+    // pixel already shrinks with the zoom): a flick that reaches the edge
+    // through a 4x scope must not sweep the magnified view at hip speed.
+    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX * (aimSensitivityScale() / aimZoom());
   }
   mouse.dx = 0;
   mouse.dy = 0;
@@ -134,9 +137,11 @@ export class PlayerUpdateSystem {
     // drops with it and the step itself is quieter. The tutorial promises
     // "quieter feet"; this is what makes that true.
     audio.setFootstepCadence(p.isSprinting ? 1.6 : p.isCrouching ? 0.55 : 1.0);
+    // On the game clock: the wall clock made the number of steps (and the
+    // dice each one rolls) depend on how fast the machine ran a seeded bot.
     audio.updateFootsteps(
       isMoving && !p.isDashing && !p.isSliding,
-      performance.now(),
+      ctx.time ?? performance.now(),
       p.isCrouching ? 0.35 : 1,
     );
 

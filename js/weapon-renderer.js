@@ -1,4 +1,5 @@
 import { isModernArt } from "../src/rendering/art-style.js";
+import { isCompactPhone } from "./layout.js";
 import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
 import { getAimBlend } from "../src/systems/aim.js";
 import { GameState } from "../src/types.js";
@@ -31,16 +32,22 @@ import { GameState } from "../src/types.js";
  * @param {string} [opts.pausedFromState]
  * @param {string} [opts.mode]         - game mode; "showcase" (the menu's settings backdrop) counts as live
  * @param {boolean} [opts.alive]
+ * @param {number} [opts.hudH]        - HUD height (CSS px), for the reticle's row under a HUD bar
  */
 export function drawWeapon(ctx, w, h, opts) {
   if (!opts.wep) return;
-  const alpha = viewmodelFade(opts);
-  if (alpha <= 0) return;
   // In-game callers pass `state` and get the eased aim blend; tools and tests use isAiming directly.
   const blend = opts.state === undefined ? (opts.isAiming ? 1 : 0) : getAimBlend();
+  // A scoped weapon hands the view to its scope (drawScope in src/ui/crosshair.js).
+  const scoped = opts.wep.scope ? Math.max(0, Math.min(1, (blend - 0.35) / 0.45)) : 0;
+  const alpha = viewmodelFade(opts) * (1 - scoped);
+  if (alpha <= 0) return;
   if (isModernArt() && drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+  // Aimed, the procedural model sits over the reticle: look through it.
+  const sight = blend > 0.01 && typeof document !== "undefined" && typeof ctx.getTransform === "function";
   if (alpha >= 1) {
-    drawProceduralWeapon(ctx, w, h, opts, blend);
+    if (sight) drawThroughWindow(ctx, w, h, opts, blend);
+    else drawProceduralWeapon(ctx, w, h, opts, blend);
     return;
   }
   // Fading out/in: the procedural model resets globalAlpha as it draws, so
@@ -51,11 +58,112 @@ export function drawWeapon(ctx, w, h, opts) {
   octx.clearRect(0, 0, off.width, off.height);
   octx.setTransform(ctx.getTransform());
   drawProceduralWeapon(octx, w, h, opts, blend);
+  if (sight) {
+    const m = ctx.getTransform();
+    const [rx, ry] = reticleAt(w, h, opts);
+    cutWindow(octx, rx * m.a + m.e, ry * m.d + m.f, WINDOW_EDGE * (h / 720) * m.d, blend);
+  }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha *= alpha;
   ctx.drawImage(off, 0, 0);
   ctx.restore();
+}
+
+/**
+ * The Legacy model stays where it is aimed in (its sight below the aim
+ * point, its body over it), and a soft window opens in it round the
+ * reticle instead: clear within WINDOW_CLEAR px (at 720p) of the point the
+ * rounds go, feathered back to the gun's full opacity by WINDOW_EDGE, its
+ * strength eased by the aim blend. The muzzle flash is cut the same way.
+ */
+// 43 px clears the whole 60 px square round the reticle, corners included.
+const WINDOW_CLEAR = 43;
+const WINDOW_EDGE = 78;
+let windowCanvas = null;
+const windowGrads = new WeakMap();
+// The model's random flash rays, replayed so both passes draw the same burst.
+const rolls = [];
+
+/** The HUD reticle (src/systems/aim.js reticlePoint) in the weapon pass's w/h units. */
+function reticleAt(w, h, opts) {
+  const hudH = opts.hudH || h;
+  const factor = (opts.hudScale || 100) / 100;
+  const bar = opts.isTouchDevice && isCompactPhone(hudH) ? 60 * factor : opts.hudStyle === 1 ? 160 * factor : 0;
+  const viewH = h - (Math.round(bar) / hudH) * h;
+  return [w / 2 + (opts.aimOffsetX || 0) * w, viewH / 2 + (opts.aimOffsetY || 0) * viewH];
+}
+
+/** Punch the window into `c` round device pixel (x, y), `r` device px to its feathered edge. */
+function cutWindow(c, x, y, r, strength) {
+  let g = windowGrads.get(c);
+  if (!g) {
+    g = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(WINDOW_CLEAR / WINDOW_EDGE, "rgba(0,0,0,1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    windowGrads.set(c, g);
+  }
+  c.save();
+  c.setTransform(r, 0, 0, r, x, y);
+  c.globalCompositeOperation = "destination-out";
+  c.globalAlpha = Math.min(1, strength);
+  c.fillStyle = g;
+  c.fillRect(-1, -1, 2, 2);
+  c.restore();
+}
+
+/**
+ * Draw the procedural model with the window cut round the reticle. Outside
+ * the window's square the model goes straight onto ctx (clipped off the
+ * square); the square alone is drawn into a small reused layer, cut, and
+ * blitted, so the extra pass costs a ~140 px tile, not the screen.
+ */
+function drawThroughWindow(ctx, w, h, opts, blend) {
+  const m = ctx.getTransform();
+  const [rx, ry] = reticleAt(w, h, opts);
+  const r = WINDOW_EDGE * (h / 720) * m.d;
+  const x0 = Math.floor(rx * m.a + m.e - r);
+  const y0 = Math.floor(ry * m.d + m.f - r);
+  const side = Math.ceil(2 * r) + 2;
+  // One set of random rolls for both passes, so the flash matches at the seam.
+  const random = Math.random;
+  let roll = 0;
+  rolls.length = 0;
+  Math.random = () => {
+    if (roll === rolls.length) rolls.push(random());
+    return rolls[roll++];
+  };
+  try {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.rect(x0, y0, side, side);
+    ctx.clip("evenodd");
+    ctx.setTransform(m);
+    drawProceduralWeapon(ctx, w, h, opts, blend);
+    ctx.restore();
+
+    if (!windowCanvas) windowCanvas = document.createElement("canvas");
+    if (windowCanvas.width !== side || windowCanvas.height !== side) {
+      windowCanvas.width = side;
+      windowCanvas.height = side;
+    }
+    const c = windowCanvas.getContext("2d");
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, side, side);
+    c.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
+    roll = 0;
+    drawProceduralWeapon(c, w, h, opts, blend);
+    cutWindow(c, rx * m.a + m.e - x0, ry * m.d + m.f - y0, r, blend);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(windowCanvas, x0, y0);
+    ctx.restore();
+  } finally {
+    Math.random = random;
+  }
 }
 
 // States where the first-person view is live, and overlays that freeze it in place.
@@ -185,16 +293,18 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
     ctx.rotate(-0.01);
   }
 
-  // Muzzle flash (Enhanced 'Sharp' version)
+  // Muzzle flash (Enhanced 'Sharp' version). Aimed it shrinks, so the burst
+  // stays round the muzzle instead of washing over the target.
   if (weaponAnimFrame === 1) {
-    drawGlow(ctx, 0, -42, 32, energyColor, 0.4);
-    drawGlow(ctx, 0, -42, 12, "#ffffff", 0.8);
+    const fk = lerp(1, 0.4, ads);
+    drawGlow(ctx, 0, -42, 32 * fk, energyColor, 0.4);
+    drawGlow(ctx, 0, -42, 12 * fk, "#ffffff", 0.8);
 
     ctx.strokeStyle = energyColor;
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + time * 0.05;
-      const len = 15 + Math.random() * 20;
+      const len = (15 + Math.random() * 20) * fk;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * 8, -42 + Math.sin(a) * 8);
       ctx.lineTo(Math.cos(a) * len, -42 + Math.sin(a) * len);

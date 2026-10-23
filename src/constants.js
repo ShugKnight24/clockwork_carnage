@@ -93,10 +93,14 @@ export const HEADSHOT_MULT = 2.5;
 export const HEADSHOT_PRECISION_PAD = 0.4; // multiplier on body angular pad
 export const ZONE_RADIUS_PAD = 0.02;
 
-/** Aim-down-sights: same effective FOV must drive both rendering and bullets. */
-export const PLAYER_ADS_FOV_MULT = 0.72;
+/**
+ * Aim-down-sights: same effective FOV must drive both rendering and bullets.
+ * Zoom and look speed for a weapon that sets no adsZoom / adsSens of its own
+ * (src/data/weapons.js).
+ */
+export const PLAYER_ADS_ZOOM = 1.3;
+export const PLAYER_ADS_SENS = 0.8;
 export const PLAYER_ADS_MOVE_MULT = 0.75;
-export const PLAYER_ADS_SPREAD_MULT = 0.45;
 
 /**
  * Enemy attack telegraph. Every attack now passes through a windup state so the

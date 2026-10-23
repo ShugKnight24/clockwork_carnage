@@ -579,7 +579,9 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   if (tilt + recoil) ctx.rotate(tilt + recoil);
   ctx.translate(-pvx, -pvy);
 
-  const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4));
+  // Aimed, the flash shrinks to a spark round the muzzle, so the burst never
+  // washes over the target under the reticle.
+  const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4)) * lerp(1, 0.4, b);
   // Muzzle flash sits behind the barrel so the crown occludes its base.
   if (frame === 1 && real) {
     realisticFlash(ctx, mx, my - 2, fk, base);

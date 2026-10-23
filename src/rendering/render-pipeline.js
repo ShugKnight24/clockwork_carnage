@@ -8,7 +8,7 @@ import { renderPostFX as _renderPostFX } from "./postfx.js";
 import { drawBlackout } from "../ui/tutorial-ui.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
-import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
+import { effectiveAimFov, updateSprintFov, sceneShiftPx, aimZoom, reticlePoint, currentBarH } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
@@ -598,11 +598,10 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   const _tRay0 = profiling ? performance.now() : 0;
   // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;
-  // Camera punch converts to vertical pixel offset (negative = kick upward)
-  const punchPx = (p.cameraPunch || 0) * -h * 0.12;
-  const stanceShift = (p.isSliding ? 40 : 28) * (p.crouchBlend || 0);
+  // Stance and camera punch (negative = kick upward) shift the view; the fire
+  // path aims with the same shift (sceneShiftPx in aim.js).
   // The menu showcase lifts its horizon above the settings bottom sheet.
-  const yShift = stanceShift + punchPx + Math.round((game.showcasePitch || 0) * h);
+  const yShift = sceneShiftPx(p, h) + Math.round((game.showcasePitch || 0) * h);
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
@@ -658,6 +657,7 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   }
 
   ctx.restore();
+  if (flat2D && game.map?.grid) magnifyRows(game, ctx, w, h);
   if (profiling) {
     // The voxel pass reports itself as `voxel` (drawVoxelScene); counting it in
     // `raycast` as well would show the same milliseconds twice. Each branch
@@ -817,6 +817,26 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
     });
   }
   if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
+}
+
+/**
+ * The raycaster's zoom is horizontal only: a narrower FOV squeezes the view
+ * plane, but wall and sprite heights stay h / distance. Aimed in, stretch the
+ * rows by the same magnification about the reticle's row, so the sight
+ * magnifies evenly (a 4x scope is 4x both ways) on the GPU wall pass and the
+ * Canvas2D path alike, and whatever sat under the reticle stays under it:
+ * the vertical aim math is unchanged by the zoom.
+ */
+function magnifyRows(game, ctx, w, h) {
+  const zoom = aimZoom();
+  if (!(zoom > 1.001)) return;
+  const ry = reticlePoint(w, h, currentBarH(game), game.player).y;
+  const sy = ry - ry / zoom;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(ctx.canvas, 0, sy, ctx.canvas.width, ctx.canvas.height / zoom, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
 }
 
 /**
