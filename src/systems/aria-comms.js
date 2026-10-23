@@ -25,6 +25,69 @@ const PROJECTION_COOLDOWN = 75;
 const SPEECH_GRACE = 8;
 
 /**
+ * Chatter: what ARIA volunteers, as against what the game needs said (cells,
+ * the exit, the boss, a death). Chatter is rate-limited, by kind and in all.
+ * An act's ambient pool counts as idle chatter (see chatterKind).
+ */
+const CHATTER_KINDS = {
+  idle: "idle",
+  ariaPersonality: "idle",
+  ngPlusAriaLoop: "idle",
+  killStreak3: "streak",
+  killStreak5: "streak",
+  killStreak7: "streak",
+  multiKillSplash: "streak",
+  highAccuracy: "streak",
+  noHitRound: "streak",
+  longSurvival: "streak",
+  dashUsed: "move",
+  weaponSwitch: "move",
+  pauseResume: "move",
+  healthPickup: "pickup",
+  weaponPickup: "pickup",
+  upgradeChosen: "pickup",
+};
+/** Seconds before the same kind of chatter again. */
+export const CHATTER_COOLDOWN = 45;
+/** At most this many chatter lines in any minute. */
+export const CHATTER_PER_MINUTE = 2;
+/** Seconds of quiet before an idle line, at least, plus up to as much again. */
+const IDLE_MIN = 50;
+
+/** The chatter kind of `category`, or null when the line has to be said. */
+export function chatterKind(category) {
+  return CHATTER_KINDS[category] ?? (/Ambient$/.test(category) ? "idle" : null);
+}
+
+/**
+ * Lines left to say this session, per pool: a pool is dealt like a deck, so
+ * no line comes round again until every other one in it has been said, and a
+ * new round never opens on the line that closed the last.
+ */
+const bags = new Map();
+
+/** A line from `pool` (keyed `key`) that hasn't been said since it was last dealt. */
+export function drawLine(key, pool, rand = Math.random) {
+  if (!pool?.length) return null;
+  let bag = bags.get(key);
+  if (!bag || bag.size !== pool.length) {
+    bag = { left: [], last: -1, size: pool.length };
+    bags.set(key, bag);
+  }
+  if (!bag.left.length) bag.left = pool.map((_, i) => i);
+  let j = Math.floor(rand() * bag.left.length);
+  if (bag.left[j] === bag.last && bag.left.length > 1) j = (j + 1) % bag.left.length;
+  const [i] = bag.left.splice(j, 1);
+  bag.last = i;
+  return pool[i];
+}
+
+/** Forget what has been said (tests; a fresh session). */
+export function resetLineBags() {
+  bags.clear();
+}
+
+/**
  * How ARIA sounds for each kind of line. She is warm by default; these are
  * the beats where she should sound like she means it.
  */
@@ -39,6 +102,11 @@ const CATEGORY_EMOTIONS = {
   powerCellFound: "warm",
   exitSealed: "worried",
   exitUnsealed: "excited",
+  powerCellsReactor: "urgent",
+  powerCellsEngine: "urgent",
+  lockdownBrief: "urgent",
+  lockdownHeld: "worried",
+  lockdownLifted: "excited",
   bossEncounter: "urgent",
   bossForm2: "urgent",
   idle: "warm",
@@ -101,13 +169,15 @@ export class AriaCommsSystem {
     this.triggered = {}; // one-shot triggers per level/round
     this.enabled = false;
     this.idleTimer = 0;
-    this.idleThreshold = 30;
+    this.idleThreshold = IDLE_MIN;
     this.combatTimer = 0;
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
     this._clock = 0;
     this._lastProjection = -Infinity;
+    this._chatterAt = {}; // chatter kind -> when it was last said
+    this._chatterTimes = []; // when each chatter line in the last minute was said
   }
 
   enable() {
@@ -141,20 +211,40 @@ export class AriaCommsSystem {
     this.triggered = {};
     this.enabled = false;
     this.idleTimer = 0;
-    this.idleThreshold = 30;
+    this.idleThreshold = IDLE_MIN;
     this.combatTimer = 0;
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
     this._clock = 0;
     this._lastProjection = -Infinity;
+    this._chatterAt = {};
+    this._chatterTimes = [];
+  }
+
+  /**
+   * Whether chatter of `category` may be said now, and if so, count it: not
+   * the same kind within CHATTER_COOLDOWN, and no more than
+   * CHATTER_PER_MINUTE of any kind. Lines the game needs said always pass.
+   */
+  _allowChatter(category) {
+    const kind = chatterKind(category);
+    if (!kind) return true;
+    const now = this._clock;
+    if (now - (this._chatterAt[kind] ?? -Infinity) < CHATTER_COOLDOWN) return false;
+    this._chatterTimes = this._chatterTimes.filter((t) => now - t < 60);
+    if (this._chatterTimes.length >= CHATTER_PER_MINUTE) return false;
+    this._chatterAt[kind] = now;
+    this._chatterTimes.push(now);
+    return true;
   }
 
   queueMessage(category, arenaRound) {
     if (!this.enabled) return;
     const pool = ARIA_COMMS[category];
     if (!pool || pool.length === 0) return;
-    let text = pool[Math.floor(Math.random() * pool.length)];
+    if (!this._allowChatter(category)) return;
+    let text = drawLine(category, pool);
     text = text.replace("{ROUNDS}", String(arenaRound || 0));
     const prominent = !["idle", "ariaPersonality"].includes(category);
     const projected = this._shouldProject(category);
@@ -201,7 +291,7 @@ export class AriaCommsSystem {
     if (!this.enabled) return;
     const pool = ARIA_COMMS[category];
     if (!line && (!pool || pool.length === 0)) return;
-    const text = line ?? pool[Math.floor(Math.random() * pool.length)];
+    const text = line ?? drawLine(category, pool);
     this.queue.push({
       text,
       color: color || "#ffcc66",
@@ -291,7 +381,7 @@ export class AriaCommsSystem {
     ) {
       const pool = this._pickIdlePool();
       this.queueMessage(pool);
-      this.idleThreshold = 25 + Math.random() * 25;
+      this.idleThreshold = IDLE_MIN + Math.random() * IDLE_MIN;
       this.idleTimer = 0;
     }
   }

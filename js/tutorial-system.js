@@ -18,8 +18,13 @@ import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
+import { drawLine } from "../src/systems/aria-comms.js";
 import { spawnEnergyBurst } from "./particle-system.js";
+import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
+import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { Npc } from "./npc.js";
+import { NPC_TYPES } from "../src/data/npcs.js";
+import { ARENA_WALLS } from "../src/data/levels/rooms/arena.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 
@@ -77,9 +82,67 @@ const SUP_ROUTES = {
   toRange: [[29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
   toGym: [[34.5, 41.5], [29.5, 41.5], [29.5, 21.5], [25.5, 20.8], [23.2, 17.5]],
   toLab: [[25.5, 20.8], [29.5, 20.5], [29.5, 12.5], [33.5, 10.0]],
-  // At the alarm he runs for the Engine level, down the corridor past the gym.
-  leave: [[29.5, 10.5], [29.5, 12.5], [29.5, 30.5]],
+  // At the alarm he goes down to his people the only way there is: Lift B,
+  // the car the thing came up in. He turns in it to look at you.
+  leave: [[33.5, 4.4], [30.0, 3.6], [30.0, 2.45]],
 };
+
+/**
+ * Lift B, in the sim hall's north wall: the service lift down to the Engine
+ * level. Its doors are the two wall cells (2, 29) and (2, 30); open, they
+ * leave the car, one cell deep, behind them. The breach comes up in it, the
+ * Supervisor goes down in it, and the evac calls it back up.
+ */
+const LIFT_DOORS = [
+  { x: 29, y: 2, shut: ARENA_WALLS.LIFT_DOOR_L },
+  { x: 30, y: 2, shut: ARENA_WALLS.LIFT_DOOR_R },
+];
+/** Inside the car, and where the open car's beacon stands. */
+const LIFT_CAR = { x: 30.0, y: 2.6 };
+
+/**
+ * The floor's people that morning, who aren't police on the Engine detail:
+ * the front desk, an admin clerk, two off-duty officers, R&D's sim techs.
+ * `at` is where the morning has them, `face` what they're turned to; after
+ * the breach (TutorialSystem.aftermath) some are frozen where they stood,
+ * one is slumped, the rest are simply gone. Kinds the NPC rig doesn't have
+ * yet stand in as officers.
+ */
+const PEOPLE = {
+  pike: { kind: "clerk", name: "Dana Pike", look: 1, at: [29.0, 52.4], face: [29.0, 56] }, // front desk
+  nand: { kind: "clerk", name: "Priya Nand", look: 0, at: [39.5, 17.3], face: [39.5, 15] }, // the office's clerk, at her cabinets
+  brooks: { kind: "clerk", name: "Hal Brooks", look: 1, at: [20.5, 30.5], face: [20.5, 29] }, // at the coffee
+  mendez: { kind: "officer", name: "Ofc. Mendez", at: [22.0, 30.8], face: [20.5, 30.5] }, // off shift, talking to Hal
+  varga: { kind: "officer", name: "Ofc. Varga", at: [20.6, 19.2], face: [19.5, 18.5] }, // off shift, at the bags
+  orr: { kind: "staff", name: "Dr. Nadia Orr", look: 0, at: [36.5, 9.7], face: [29.5, 4.5] }, // R&D, running the sim
+  lin: { kind: "staff", name: "Teo Lin", look: 1, at: [22.5, 9.7], face: [29.5, 4.5] },
+};
+/** Up the corridor from the front desk to her cabinets, while you cross to the range. */
+const NAND_ROUTE = [[29.5, 46.5], [29.5, 20.6], [34.6, 20.6], [37.5, 18.6], [39.5, 17.3]];
+
+/**
+ * What ARIA says, once, when you come near someone the breach caught: on the
+ * way past, never a stop.
+ */
+const NOTICES = [
+  {
+    id: "nand",
+    steps: ["cover", "patch", "shield", "chrono"],
+    who: "nand",
+    r: 3.4,
+    lines: [["ARIA", "The clerk from the corridor this morning. She isn't breathing. She isn't dead, either. She's stuck at six forty-seven.", "afraid"]],
+  },
+  {
+    id: "breakroom",
+    steps: ["cells", "toLift"],
+    who: "mendez",
+    r: 3.2,
+    lines: [
+      ["ARIA", "Mendez. Off shift. He only came in for the coffee.", "sad"],
+      ["ARIA", "There were two of them in here this morning. One cup's still on the counter.", "sad"],
+    ],
+  },
+];
 
 /**
  * The sim hall's exhibits (the "lab" step): holograms of what patrols have
@@ -103,7 +166,7 @@ const EXHIBITS = [
     type: "sentinel",
     name: "CHRONO SENTINEL",
     lines: [
-      ["ARIA", "Chrono Sentinel. The shield soaks most of what hits it. Go round it, or over it: the head is exposed.", "curious"],
+      ["ARIA", "Chrono Sentinel. The shield soaks most of what hits it. Go round it: from the side or behind, the head and the core on its back are exposed.", "curious"],
       ["ARIA", "Odd. Every one of these sightings is logged at the same minute. Six forty-seven.", "worried"],
       ["SUPERVISOR", "Sensor fault. Shoot the hologram, Cadet.", "angry"],
     ],
@@ -148,18 +211,21 @@ const GATE_R = 1.25;
 
 /**
  * The plasma vents across the main corridor (cols 27-32): two strips, two
- * rows deep. Each is hot for VENT_ON of every VENT_CYCLE seconds of game
- * time, offset so the gaps never line up. A quarter-second gap is too short
- * to cross two rows even sprinting; under Chrono Shift it lasts most of a
- * second.
+ * rows deep. Each is hot for VENT_ON of every VENT_CYCLE seconds, offset so
+ * the second strip's gap opens just after the first's. A 0.35 s gap is too
+ * short to cross two rows even sprinting. Under Chrono Shift the cycle runs
+ * at VENT_CHRONO of real time (as the campaign's vents do), so each gap lasts
+ * over a second: walk through the first as it opens and the second opens
+ * as you reach it. (On the world's clock alone a shift stretched the gap to
+ * 0.8 s, which a walk across two rows did not fit.)
  */
 const VENT_STRIPS = [
   { rows: [22, 23], phase: 0 },
-  { rows: [25, 26], phase: 0.85 },
+  { rows: [25, 26], phase: 1.52 },
 ];
 const VENT_COLS = [27, 32];
 const VENT_CYCLE = 1.75;
-const VENT_ON = 1.5;
+const VENT_ON = 1.4;
 const VENT_DAMAGE = 12;
 
 /**
@@ -204,6 +270,8 @@ function makeHostile(x, y, type) {
   if (tune) {
     e.health = e.maxHealth = tune.health;
     e.def = { ...e.def, damage: tune.damage, speed: e.def.speed * tune.speed, attackRate: tune.attackRate };
+    // The AI moves on e.speed, copied from the def at construction.
+    e.speed = e.def.speed;
   }
   // A cadet's Sentinel has its front shield, not the energy shield over it:
   // regenerating, that out-healed a pistol at the front, and the evac's
@@ -238,6 +306,8 @@ const LOGIC = {
         return n;
       });
       t.warmNpc(g, "officerKit");
+      t.warmNpc(g, "staff");
+      t.warmNpc(g, "clerk");
       if (!t.sup) {
         t.sup = new Npc(SUP_ROUTES.enter[0][0], SUP_ROUTES.enter[0][1], "supervisor", { name: "Supervisor Simon" });
         // Out in the corridor behind the shut door until he comes in. (An
@@ -312,7 +382,7 @@ const LOGIC = {
         c.phase = "leave";
         t.squad.forEach((o, i) => {
           o.faceTo(null);
-          setTimeoutGame(t, i * 0.45, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { leave: true, speed: 2.2 }));
+          setTimeoutGame(t, i * 0.6, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { leave: true, speed: 2.2 }));
         });
         t.say([
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
@@ -359,8 +429,14 @@ const LOGIC = {
   walk: {
     waypoint: { x: 24.5, y: 41.5 },
     enter(t, g) {
-      t.openDoors(g, "door1");
+      t.openDoors(g, "door1", "door4");
       t.supWalk(g, "walk");
+      // The office's clerk, up from the front desk with the post, crossing
+      // the corridor ahead of you.
+      const nand = t.person(g, "nand");
+      nand.x = NAND_ROUTE[0][0];
+      nand.y = NAND_ROUTE[0][1] + 1.5;
+      setTimeoutGame(t, 1.5, () => nand.walk(NAND_ROUTE, { then: (n) => n.faceTo({ x: 39.5, y: 15 }) }));
     },
     update: (t, g) => t.near(g, 23.5, 41.5, 2.2),
   },
@@ -482,7 +558,8 @@ const LOGIC = {
   toGym: {
     waypoint: { x: 22.5, y: 20.5 },
     enter(t, g) {
-      t.openDoors(g, "door3");
+      // The break room's door stands open: two of the off-shift, at the coffee.
+      t.openDoors(g, "door3", "door9");
       t.supWalk(g, "toGym");
     },
     update: (t, g) => t.near(g, 22.0, 20.5, 1.8),
@@ -605,6 +682,7 @@ const LOGIC = {
       if (t.c.i >= EXHIBITS.length) return true;
       const ex = EXHIBITS[t.c.i];
       t.spawnHostiles(g, "lab", [[EXHIBIT_AT.x, EXHIBIT_AT.y, ex.type]], makeHolo, true);
+      t.people.orr?.pose("point", 1.6);
       g.audio.powerFlicker?.();
       t.say(ex.lines);
       t.c.wait = 1.4;
@@ -659,16 +737,31 @@ const LOGIC = {
         if (t.c.wave < SIM_WAVES.length) t.say([["ARIA", "Wave down. Next one's heavier.", "excited"]]);
         return false;
       }
-      // Both waves down: something the sim did not load steps out of it.
+      // Both waves down: Lift B opens on its own, and something the sim did
+      // not load steps out of it. Orr goes to look, and stops: mid-step,
+      // for good. Lin gets down behind the crates.
       if (t.c.glitchAt == null) {
         t.c.glitchAt = t.clock;
-        t.spawnHostiles(g, "glitch", [[EXHIBIT_AT.x, EXHIBIT_AT.y, "glitchling"]], makeHolo, true);
+        t.lift(g, true);
+        g.audio.doorOpen?.();
+        t.spawnHostiles(g, "glitch", [[LIFT_CAR.x, LIFT_CAR.y, "glitchling"]], makeHolo, true);
         for (const e of g.entities) if (e._tutTag === "glitch") e._corrupt = true;
         g.glitchEffect = 1;
         g.audio.powerFlicker?.();
         t.flickerUntil = t.clock + 0.5;
+        const orr = t.people.orr;
+        orr?.walk([[33.0, 6.5], [31.6, 4.3]], { speed: 1.2, then: (n) => n.faceTo(LIFT_CAR) });
+        setTimeoutGame(t, 3.2, () => {
+          if (!orr?.active) return;
+          orr.path = [];
+          orr.faceTo(LIFT_CAR);
+          orr.pose("frozen", Infinity);
+          g.glitchEffect = Math.max(g.glitchEffect || 0, 0.6);
+          g.audio.powerFlicker?.();
+        });
+        t.people.lin?.pose("cower", Infinity);
         t.say([
-          ["ARIA", "Wait. That one isn't in the library. Where did it come from?", "afraid"],
+          ["ARIA", "Lift B just opened. Nobody called it. And that one isn't in the library.", "afraid"],
           ["SUPERVISOR", "Cadet, end the sim. End it now.", "afraid"],
         ], { cut: true });
         return false;
@@ -684,7 +777,7 @@ const LOGIC = {
       t.clearTag(g, "sim");
       t.clearTag(g, "glitch");
       g.projectiles = [];
-      t.say([["SUPERVISOR", "...Sim's down. Not bad, Cadet. Come to my office. We need to talk about your—", "worried"]]);
+      t.say([["SUPERVISOR", "Doctor Orr? ...Orr. Cadet, don't touch her. Don't anybody touch her.", "afraid"]]);
     },
   },
 
@@ -705,10 +798,27 @@ const LOGIC = {
         t.alert = true;
         t.say(t.def.lines, { cut: true });
       }
-      // He tells you to stay, and goes: down the corridor, at a run.
+      // He tells you to stay, and goes: into Lift B, at a run. He turns in
+      // the car to look at you, and the doors close on him.
       if (t.c.armed && !t.c.gone && t.clock - t.c.at > 8 && t.sup?.active) {
         t.c.gone = true;
-        t.sup.walk(SUP_ROUTES.leave, { leave: true, speed: 3.4 });
+        t.lift(g, true);
+        t.sup.walk(SUP_ROUTES.leave, {
+          speed: 3.4,
+          then: (sup) => {
+            sup.faceTo(g.player);
+            setTimeoutGame(t, 1.6, () => {
+              t.liftWant = false;
+              t.c.supDown = true;
+            });
+          },
+        });
+      }
+      // The doors shut on him; then he is gone down the shaft.
+      if (t.c.supDown && !t.liftOpen && t.sup?.active) {
+        t.sup.active = false;
+        g.audio.doorOpen?.();
+        g.screenShake = Math.max(g.screenShake || 0, 2);
       }
       return t.c.armed && t.clock - t.c.at > 4 && t.scriptIdle();
     },
@@ -718,6 +828,7 @@ const LOGIC = {
     waypoint: { x: 37.5, y: 20.5 },
     enter(t, g) {
       t.alert = true;
+      t.lift(g, false);
       t.spawnHostiles(g, "cover", [
         [53.5, 24.5, "henchman"],
         [53.5, 16.5, "henchman"],
@@ -835,6 +946,8 @@ const LOGIC = {
   wave1: {
     enter(t, g) {
       t.c.delay = 1.5;
+      // The first of them is someone you saw this morning.
+      setTimeoutGame(t, 0.6, () => t.turn(g, "orr", "wave1", "glitchling"));
     },
     update(t, g) {
       return t.wave(g, "wave1", [
@@ -844,7 +957,7 @@ const LOGIC = {
         [49.5, 9.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1")} · LIFT 30%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1")} · LIFT ▲ 30%`,
   },
 
   wave2: {
@@ -859,7 +972,7 @@ const LOGIC = {
         [39.5, 3.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2")} · LIFT 60%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2")} · LIFT ▲ 60%`,
   },
 
   wave3: {
@@ -873,17 +986,22 @@ const LOGIC = {
         [10.5, 9.5, "henchman"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3")} · LIFT 90%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3")} · LIFT ▲ 90%`,
   },
 
   extract: {
-    waypoint: { x: 29.5, y: 3.5 },
+    waypoint: LIFT_CAR,
     enter(t, g) {
+      // Lift B is back up, and the doors open on an empty car. The beacon
+      // goes inside it.
+      t.lift(g, true);
+      g.audio.doorOpen?.();
       t.ensureExit(g, false);
+      g.exitEntity.x = LIFT_CAR.x;
+      g.exitEntity.y = LIFT_CAR.y;
       g.powerCells = { total: 2, found: 2 }; // the HUD chip: EXTRACTION LIVE
-      g.audio.roundComplete?.();
     },
-    update: (t, g) => t.near(g, 29.5, 3.5, 1.1),
+    update: (t, g) => t.near(g, LIFT_CAR.x, LIFT_CAR.y + 0.3, 1.2),
   },
 
   reveal: {
@@ -931,6 +1049,12 @@ export class TutorialSystem {
     // People: the squad in the locker room, and the Supervisor (js/npc.js).
     this.squad = [];
     this.sup = null;
+    /** The floor's other people, by PEOPLE key, and who ARIA has noticed. */
+    this.people = {};
+    this._noticed = new Set();
+    /** Lift B's doors: wanted open, and open now. */
+    this.liftWant = false;
+    this.liftOpen = false;
     this._timers = [];
     // Set pieces.
     this.alert = false;
@@ -1060,6 +1184,7 @@ export class TutorialSystem {
     const first = PROLOGUE_STEPS.findIndex((s) => s.beat === def.beat && s.checkpoint !== false);
     if (first === index && index > 0) this._saveCheckpoint();
     this.logic?.enter?.(this, g);
+    this._stagePeople(g);
     if (def.lines && !def.defer) this.say(def.lines, { cut: def.cut });
   }
 
@@ -1081,8 +1206,8 @@ export class TutorialSystem {
     this.logic?.exit?.(this, g);
     g.audio.menuConfirm();
     if (prev && ENCOURAGE_AFTER.has(prev.id) && this.script.length === 0 && Math.random() < 0.5) {
-      const pool = ARIA_COMMS.tutorialEncouragement || [];
-      if (pool.length) this.say([["ARIA", pool[Math.floor(Math.random() * pool.length)], "happy"]]);
+      const line = drawLine("tutorialEncouragement", ARIA_COMMS.tutorialEncouragement);
+      if (line) this.say([["ARIA", line, "happy"]]);
     }
     if (this.step + 1 >= TUTORIAL_SANDBOX_STEP) {
       this._finish();
@@ -1116,6 +1241,8 @@ export class TutorialSystem {
     this._updateTargets(g);
     this._updateAlert(g);
     this._syncRoomLights(g);
+    this._updateLift(g);
+    this._updateNotices(g);
     for (const e of g.entities) if (e.type === "npc") e.update(g.deltaTime || 0);
     for (let i = this._timers.length - 1; i >= 0; i--) {
       if (this.clock >= this._timers[i].at) this._timers.splice(i, 1)[0].fn();
@@ -1459,8 +1586,135 @@ export class TutorialSystem {
       e.lastAttackTime = g.time;
       e._lastSeen = { x: g.player.x, y: g.player.y };
       g.entities.push(e);
+      // The real ones don't come through doors: they step out of the air.
+      if (!e._holo) this.tear(g, x, y);
     }
     g.totalEnemies = (g.totalEnemies || 0) + spots.length;
+  }
+
+  /** Where one of them steps out of the minute: a violet burst, the lights catching. */
+  tear(g, x, y) {
+    g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 14, r: 190, g: 90, b: 255 }));
+    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.25);
+  }
+
+  // ── The floor's people ──────────────────────────────────────────
+
+  /** One of PEOPLE, put in the world where the morning has them if they aren't there yet. */
+  person(g, id) {
+    let n = this.people[id];
+    if (!n) {
+      const d = PEOPLE[id];
+      n = new Npc(d.at[0], d.at[1], NPC_TYPES[d.kind] ? d.kind : "officer", { name: d.name, look: d.look ?? null });
+      n.faceTo({ x: d.face[0], y: d.face[1] });
+      this.people[id] = n;
+    }
+    n.active = true;
+    if (!g.entities.includes(n)) g.entities.push(n);
+    return n;
+  }
+
+  /** Someone gone: no body, no trace but what they left. */
+  gone(g, id) {
+    const n = this.people[id];
+    if (!n) return;
+    n.active = false;
+    g.entities = g.entities.filter((e) => e !== n);
+  }
+
+  /**
+   * Someone as the breach left them, held in a pose for good: at (x, y), or
+   * with `stay` where they already stood when it caught them.
+   */
+  hold(g, id, x, y, pose, face = null, { stay = false } = {}) {
+    const was = this.people[id]?.active && g.entities.includes(this.people[id]);
+    const n = this.person(g, id);
+    n.path = [];
+    if (!(stay && was)) {
+      n.x = x;
+      n.y = y;
+    }
+    if (face) n.faceTo(face);
+    n.pose(pose, Infinity);
+    return n;
+  }
+
+  /**
+   * A person the breach caught comes apart, and what steps out of where they
+   * stood is one of the things you fight: tagged into the step's count.
+   */
+  turn(g, id, tag, type) {
+    const n = this.people[id];
+    if (!n?.active) return;
+    const { x, y } = n;
+    this.gone(g, id);
+    const e = makeHostile(x, y, type);
+    e._tutTag = tag;
+    e.state = "chase";
+    e.lastAttackTime = g.time;
+    e._lastSeen = { x: g.player.x, y: g.player.y };
+    g.entities.push(e);
+    g.totalEnemies = (g.totalEnemies || 0) + 1;
+    this.tear(g, x, y);
+    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.7);
+    g.audio.powerFlicker?.();
+  }
+
+  /**
+   * The people, as the step finds them (and as a checkpoint puts them back):
+   * the morning's routine from the walk to the range until the breach, its
+   * aftermath from the office on.
+   */
+  _stagePeople(g) {
+    const at = (s) => PROLOGUE_STEPS.findIndex((d) => d.id === s);
+    if (this.step >= at("cover")) this.aftermath(g);
+    else if (this.step >= at("walk") && this.step < at("alarm")) for (const k of Object.keys(PEOPLE)) this.person(g, k);
+  }
+
+  /**
+   * The floor after the wave came up through it: the clerk frozen mid-step at
+   * her cabinets, an off-duty officer slumped by the vending machine, Orr
+   * still standing at the lift until the evac, and everyone else (the front
+   * desk, the other at the coffee, the one at the bags, Lin) gone.
+   */
+  aftermath(g) {
+    for (const k of ["pike", "brooks", "varga", "lin"]) this.gone(g, k);
+    this.hold(g, "nand", 40.1, 17.6, "frozen", { x: 38.5, y: 15 }, { stay: true });
+    this.hold(g, "mendez", 19.6, 33.3, "slumped", { x: 22, y: 33 });
+    if (this.step <= PROLOGUE_STEPS.findIndex((d) => d.id === "wave1")) this.hold(g, "orr", 32.4, 5.6, "frozen", LIFT_CAR, { stay: true });
+    else this.gone(g, "orr");
+    // Gone down the shaft, whatever the alarm got to show.
+    if (this.sup?.active && this.sup.x < 34 && this.sup.y < 12) this.sup.active = false;
+  }
+
+  /** Lift B's doors: open now, or shut as soon as nobody stands in them. */
+  lift(g, open) {
+    this.liftWant = open;
+    this._updateLift(g);
+  }
+
+  _updateLift(g) {
+    const grid = g.map?.grid;
+    if (!grid || this.liftWant === this.liftOpen) return;
+    if (!this.liftWant) {
+      // Never shut on someone: the player, or a person stepping out.
+      const inDoor = (e) => Math.floor(e.y) === LIFT_DOORS[0].y && e.x >= LIFT_DOORS[0].x - 0.3 && e.x < LIFT_DOORS[1].x + 1.3;
+      if (inDoor(g.player) || g.entities.some((e) => e.type === "enemy" && e.active && e.health > 0 && inDoor(e))) return;
+    }
+    for (const d of LIFT_DOORS) grid[d.y][d.x] = this.liftWant ? 0 : d.shut;
+    this.liftOpen = this.liftWant;
+  }
+
+  /** ARIA, once, as you pass someone the breach caught (NOTICES). */
+  _updateNotices(g) {
+    const id = this.def?.id;
+    for (const n of NOTICES) {
+      if (this._noticed.has(n.id) || !n.steps.includes(id)) continue;
+      const who = this.people[n.who];
+      if (!who?.active || !this.near(g, who.x, who.y, n.r)) continue;
+      this._noticed.add(n.id);
+      this.say(n.lines);
+    }
   }
 
   /** Everything a step put down with this tag goes. */
@@ -1493,7 +1747,7 @@ export class TutorialSystem {
     return this.alive(g, tag) === 0;
   }
 
-  /** The evac lift's extraction beacon, sealed until the cells are in. */
+  /** Lift B's beacon, in front of its doors: sealed until the cells are in and the car is back up. */
   ensureExit(g, sealed) {
     if (!g.exitEntity || !g.entities.includes(g.exitEntity)) {
       g.exitEntity = { x: 29.5, y: 3.5, type: "exit", active: true, sealed, _tutTag: "exit" };
@@ -1581,9 +1835,12 @@ export class TutorialSystem {
   updateVents(g, dt) {
     const v = this.vents;
     if (!v) return;
-    v.clock += dt; // game time: Chrono Shift slows the vents, not you
+    // Chrono Shift slows the vents, not you; the puffs thin out with them.
+    const step = g.player.chronoActive ? g.deltaTime * VENT_CHRONO : dt;
+    const wasHot = VENT_STRIPS.map((strip) => this.ventHot(strip));
+    v.clock += step;
     v.cooldown -= g.deltaTime;
-    v.puff -= g.deltaTime;
+    v.puff -= step;
     if (!v.lights.length) {
       for (const strip of VENT_STRIPS) {
         for (const x of [28.5, 31.5]) {
@@ -1596,12 +1853,18 @@ export class TutorialSystem {
     const p = g.player;
     const puff = v.puff <= 0;
     if (puff) v.puff = 0.05;
-    for (const strip of VENT_STRIPS) {
+    for (const [i, strip] of VENT_STRIPS.entries()) {
       const hot = this.ventHot(strip);
       const [top, bottom] = strip.rows;
+      if (hot && !wasHot[i]) {
+        playChronoSound(g.audio, g.player.chronoActive ? "ventSlow" : "ventIgnite", { x: 29.5, y: top + 1, player: p });
+      }
+      // The glow sinks over a burn's last moments: the cue to go.
+      const left = VENT_ON - ((v.clock + strip.phase) % VENT_CYCLE);
+      const sink = Math.max(0.3, Math.min(1, left / 0.4));
       for (const L of v.lights) {
         if (L._strip !== strip) continue;
-        L.intensity = L.baseIntensity = hot ? 1.5 : 0.12;
+        L.intensity = L.baseIntensity = hot ? 1.5 * sink : 0.12;
         L.life = L.maxLife = 1e9;
         if (g.lights && !g.lights.includes(L)) g.lights.unshift(L);
       }
@@ -1665,6 +1928,7 @@ export class TutorialSystem {
     g.entities = g.entities.filter((e) => e.type !== "exit" && e.type !== "npc");
     this.sup = null;
     this.squad = [];
+    this.people = {};
     this.lockerLight(g, false);
     this.step = TUTORIAL_SANDBOX_STEP;
     this.stepTime = performance.now();

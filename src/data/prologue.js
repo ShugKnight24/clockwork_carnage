@@ -21,7 +21,7 @@ export const PROLOGUE_BEATS = [
   { id: "breach", title: "BREACH" },
   { id: "borrowedTime", title: "BORROWED TIME" },
   { id: "lightsOut", title: "LIGHTS OUT" },
-  { id: "evac", title: "EVAC" },
+  { id: "evac", title: "LIFT B" },
 ];
 
 const ARIA = "ARIA";
@@ -61,7 +61,7 @@ export const PROLOGUE_STEPS = [
     lines: [
       [OFF, "Third alarm this week. Engineering's going to blow us all to the moon.", "calm"],
       [OFF, "Lift B's been up and down all night. Log says nobody's on it.", "curious"],
-      [KAEL, "Board says Simon wants you at seven, Cadet. You're early. Don't make it a habit.", "calm"],
+      [KAEL, "You're early, Cadet. Don't make it a habit.", "calm"],
     ],
   },
   {
@@ -116,7 +116,7 @@ export const PROLOGUE_STEPS = [
     hint: "Follow the marker down the corridor to the firing range.",
     lines: [
       [SUP, "That suit cost more than this building. The Bureau wants it certified by noon. You want to keep your badge. So we certify it.", "calm"],
-      [SUP, "You never froze on patrol. That's why I signed your transfer. Don't make me regret it.", "calm"],
+      [SUP, "You never froze on patrol. Don't make me regret it.", "calm"],
       [ARIA, "He likes you. That was him liking you.", "happy"],
       [SUP, "If the lights flicker, ignore it. That's an order.", "worried"],
     ],
@@ -329,7 +329,7 @@ export const PROLOGUE_STEPS = [
       [SUP, "Rasczak, report. Rasczak! ...All units, all units: breach on the Engine level. Something is coming up out of the chamber.", "afraid"],
       [SUP, "Cadet, you stay here. That's an order. Those are my people down there.", "urgent"],
       [SUP, "Breach, every sector, they're already insi—", "afraid", { radio: true }],
-      [ARIA, "Lost him. I've lost the whole network. We are not staying here. His office has the armory key. Move. Weapon up.", "urgent"],
+      [ARIA, "Lost him. Lost the whole network. Whatever came up that shaft, more will follow. His office has the lift override. Move.", "urgent"],
     ],
   },
   {
@@ -343,9 +343,11 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${b("crouch")} behind low cover.`,
     },
     lines: [
-      [ARIA, "Hostiles in the Supervisor's office. These are not drills. Use the inner office walls.", "urgent"],
+      [ARIA, "They didn't come through the door. They stepped out of the air. Use the inner office walls.", "urgent"],
       [ARIA, "They pause before they fire. That glint and whine is your cue to duck.", "urgent"],
     ],
+    // How it reached this floor: up from the Engine level, a floor at a time.
+    events: [[2, "pa", "Containment breach, Engine level. Temporal wavefront rising. All floors, shelter in place. Do not use the lifts."]],
   },
   {
     id: "patch",
@@ -354,8 +356,8 @@ export const PROLOGUE_STEPS = [
     color: "#44ff88",
     hint: "Grab the med pack on the Supervisor's desk. Your suit also mends small wounds if you stay out of fire.",
     lines: [
-      [ARIA, "His desk. Coffee's still warm. He went down there for his people, and he went alone.", "worried"],
-      [ARIA, "Med pack. Take it. I like you with all your blood inside.", "tender"],
+      [ARIA, "Your transfer's on top of his pile. Only signature on it is his.", "sad"],
+      [ARIA, "Med pack. Take it. Please.", "tender"],
     ],
   },
   {
@@ -412,7 +414,7 @@ export const PROLOGUE_STEPS = [
     color: "#8844ff",
     hint: "Drones down the corridor. Shift, sidestep their shots while they crawl, and put them down.",
     lines: [
-      [ARIA, "Incoming. Shift, and watch their shots hang in the air. Step aside. Rude, but effective.", "urgent"],
+      [ARIA, "Incoming. Shift, and watch their shots hang in the air. Then step out of their way.", "urgent"],
     ],
   },
 
@@ -430,19 +432,20 @@ export const PROLOGUE_STEPS = [
     cut: true,
     lines: [
       [ARIA, "And there go the lights. Whatever's downstairs just drank the whole grid.", "worried"],
-      [ARIA, "The evac lift's in the arena, north end. It's dead without power. Two backup cells, break room and armory. I've marked them.", "urgent"],
-      [ARIA, "Every level of this station runs on cells. Get used to finding them. Exits stay sealed until you do.", "calm"],
-      [ARIA, "{AGENT}. The station roll call just came through. Rasczak's squads aren't answering.", "sad"],
-      [ARIA, "And the Supervisor's beacon... it's gone flat. I'm sorry.", "sad"],
+      [ARIA, "I've got his override. But Lift B's at the bottom with him, and the shaft's dead. Two backup cells, break room and armory.", "urgent"],
+      [ARIA, "{AGENT}. Roll call just came through. Rasczak's squads aren't answering.", "sad"],
+      [ARIA, "The Supervisor's beacon. It's gone flat. ...I'm sorry, {AGENT}.", "sad"],
     ],
+    // Every clock on the floor stopped at the breach. So did the announcer.
+    events: [[24, "pa", "Good morning, Chronos Station. The time is six forty-seven. The time is six forty-seven."]],
   },
   {
     id: "toLift",
     beat: 7,
     title: "TO THE LIFT",
     color: "#22e6c0",
-    hint: "Power's routed. Get to the evac lift in the arena at the north end of the corridor.",
-    lines: [[ARIA, "That's both. The lift's charging. It'll need a minute, and they'll know we're here.", "urgent"]],
+    hint: "Power's routed. Back to the lift, in the sim hall at the north end of the corridor.",
+    lines: [[ARIA, "That's both. Calling Lift B back up. It'll take a minute, and it won't be quiet.", "urgent"]],
   },
 
   // ── 9. EVAC ──────────────────────────────────────────────────────
@@ -451,8 +454,8 @@ export const PROLOGUE_STEPS = [
     beat: 8,
     title: "HOLD THE LIFT — WAVE 1/3",
     color: "#ff2244",
-    hint: "Hold the arena while the lift charges. Use the pillars for cover; health and ammo are by the south door.",
-    lines: [[ARIA, "Here they come. Everything I taught you, {AGENT}. All of it, at once.", "urgent"]],
+    hint: "Hold the sim hall while the lift climbs back up. Use the pillars for cover; health and ammo are by the south door.",
+    lines: [[ARIA, "Orr's moving. {AGENT}, that isn't Orr any more. Don't let it close.", "afraid"]],
   },
   {
     id: "wave2",
@@ -473,21 +476,21 @@ export const PROLOGUE_STEPS = [
   {
     id: "extract",
     beat: 8,
-    title: "EXTRACT",
+    title: "GET IN",
     color: "#22e6c0",
-    hint: "The lift is live. Get to the extraction beacon.",
-    lines: [[ARIA, "Lift's live! The beacon, go, go!", "excited"]],
+    hint: "The lift is back up and open. Step inside.",
+    lines: [[ARIA, "Lift's here. Empty. Get in, {AGENT}.", "sad"]],
   },
   {
     id: "reveal",
     beat: 8,
     title: "SIGNAL TRACE",
     color: "#00ffcc",
-    hint: "Extraction underway.",
+    hint: "Going down.",
     cut: true,
     lines: [
-      [ARIA, "Doors sealed. We're moving. You did it, {AGENT}. You actually did it.", "tender"],
-      [ARIA, "While we ride: I traced the Supervisor's last call. It didn't come from his office. It came from the Engine chamber.", "curious"],
+      [ARIA, "Doors sealed. Going down. Same car he took.", "sad"],
+      [ARIA, "I traced his last call. He never stopped at the chamber door. He called from inside the Engine chamber.", "worried"],
       [ARIA, "The chamber logged one entry this morning. Eleven seconds long, at the minute of the breach. No clearance. No name.", "worried"],
       [ARIA, "Just a badge number. Eleven, two, three, five.", "worried"],
       [ARIA, "{AGENT}... that's your badge. And you were with me the whole time.", "afraid"],

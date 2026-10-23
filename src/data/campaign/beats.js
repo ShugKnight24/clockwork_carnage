@@ -55,7 +55,7 @@ export const LEVEL_BEATS = {
       { at: "start", delay: 4, lines: [[ARIA, "The Engine level is four floors down. Everything between us and it is quiet. I don't like quiet.", "worried"]] },
       { at: "kills", frac: 0.3, lines: [[LOG, "Rasczak, unit four, entry stair. Lights are doing something strange down here. The clocks are... wrong. All of them.", "worried"]] },
       { at: "cell", n: 1, lines: [[PA, "Good morning, Chronos Station. Good morning, Chronos Station. Good morning, Chron—", "calm"]] },
-      { at: "kills", frac: 0.7, event: "tremor", lines: [[ARIA, "Feel that? The Engine is pulling power in waves. Every wave, it gets worse up here.", "worried"]] },
+      { at: "kills", frac: 0.7, event: "tremor", lines: [[ARIA, "Terminal's still logged in. Last message out: 'Lift's coming back up. I'll wait for it.'", "sad"]] },
       { at: "exit", lines: [[ARIA, "Stairwell down to Security. Rasczak's squads went this way. So do we.", "calm"]] },
     ],
     checkpoint: [
@@ -72,7 +72,7 @@ export const LEVEL_BEATS = {
     ],
     research: [
       { at: "start", delay: 3, lines: [[PA, "Containment protocols engaged. Please remain calm. Containment protocols engaged. Please remain c—", "calm"]] },
-      { at: "kills", frac: 0.4, lines: [[ARIA, "The phantoms. Research staff, I think. Some of them still have their badges clipped on.", "sad"]] },
+      { at: "kills", frac: 0.4, lines: [[ARIA, "Research staff. Some of them still have their badges clipped on. Orr had hers on.", "sad"]] },
       { at: "cell", n: 1, lines: [[LAB, "Six forty-six. Engine at one hundred and forty percent. The Doctor's proxy is running the sequence and we cannot lock it out. Someone stop—", "afraid"]] },
       { at: "time", s: 150, event: "tremor" },
       { at: "exit", lines: [[ARIA, "Six forty-six. One minute before the breach. They saw it coming, and they couldn't stop it.", "worried"]] },

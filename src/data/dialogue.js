@@ -33,7 +33,7 @@ export const ARIA_COMMS = {
     "Another toy. Point the loud end away from me.",
   ],
   healthPickup: [
-    "Vitals stabilizing. Don't make it a habit.",
+    "Vitals stabilizing. Try to keep them that way.",
     "Patched. You're welcome.",
     "Health restored. Try keeping some this time.",
   ],
@@ -141,20 +141,18 @@ export const ARIA_COMMS = {
   ],
 
   // ── Idle / ambient chatter ──
+  // One thought per line: near-duplicates get heard as repeats, since no line
+  // comes round again until its pool is spent (aria-comms.js drawLine).
   idle: [
-    "Quiet out here. I don't trust quiet.",
     "Perimeter scan running. Nothing. Yet.",
     "Between fights I replay what just happened. It's... a lot.",
     "The Bureau sent a cadet to fix time itself. Bold. Possibly insane.",
-    "I ran this mission 4,000 times in simulation. You're already beating the average.",
-    "I was built to back up the best. I'm choosing to believe that's you.",
     "Everything I know about combat, I learned watching agents. Most of them are dead. You're doing better.",
     "If the Paradox Lord can hear us, I hope he's sweating. Can he sweat?",
     "You, me, an empty corridor and existential dread. Very buddy cop.",
     "Remind me to update your file. 'Exceeds expectations. Occasionally.'",
     "Ever wonder what we do after we fix the timeline? ...Me neither.",
     "When this is over, put in for that promotion. I'll write the recommendation.",
-    "I'm not supposed to have a favourite agent. Technically.",
     "My training says stay neutral and professional. My training has never met you.",
     "Last Alpha candidate lasted eleven minutes. You're well past that. Congratulations, probably.",
     "Quiet means we're winning. Or something terrible is about to happen. Fifty-fifty.",
@@ -168,8 +166,6 @@ export const ARIA_COMMS = {
     "I know I'm 'just' the suit AI. We're still going to win this, {AGENT}.",
     "For the record, if I had a body, I'd be standing right next to you, {AGENT}.",
     "Most of my runtime is combat analysis. The rest is worrying about you.",
-    "ARIA — Armor-Resident Intelligence Assist. I prefer 'partner.' Less paperwork.",
-    "My predecessor got decommissioned for being 'too attached' to their agent. I get it now.",
     "I dreamed once. Or my idle cycles made novel patterns. Close enough.",
     "I've got every temporal anomaly on record in my head. None of them prepared me for you.",
     "Between us? The Paradox Lord loves the sound of his own voice. That's a weakness.",
@@ -250,6 +246,26 @@ export const ARIA_COMMS = {
   exitUnsealed: [
     "Last cell's in. Extraction is live — go.",
     "Seal's down. Get to the beacon.",
+  ],
+  // The two levels that keep cells say why (exit-cells.js EXIT_GATES).
+  powerCellsReactor: [
+    "The reactor scrammed, and the lift out runs off it. Two cells in the side rooms will wake it.",
+  ],
+  powerCellsEngine: [
+    "Lyra can't fire the Engine on what's left in it. Two cells, off the main hall. Bring them in.",
+  ],
+  // A lockdown: the exit holds until enough of the floor's hostiles are down.
+  lockdownBrief: [
+    "Lockdown. The doors out won't release while this floor's defenders are standing.",
+    "Station's sealed this level around us. Thin them out and the doors give.",
+  ],
+  lockdownHeld: [
+    "Still locked. Too many of them up.",
+    "Doors won't budge yet. Keep fighting.",
+  ],
+  lockdownLifted: [
+    "Lockdown's lifted. Exit's open — go.",
+    "That broke it. Doors are releasing.",
   ],
 
   secretFound: [
@@ -451,10 +467,10 @@ export const ARIA_COMMS = {
 
   // ── Act 1 ambient chatter ──
   act1Ambient: [
-    "First deployment and it's a temporal apocalypse. The Bureau really knows how to welcome a cadet.",
+    "Every clock on this deck says six forty-seven. Even the ones nobody plugged in.",
     "This wing was full of researchers an hour ago. Now it's us, and whatever did this.",
     "Faint comms chatter. Station staff, maybe. Too degraded to read. We might not be alone. Could go either way.",
-    "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
+    "That coffee on the desk is still steaming. It's been steaming for an hour. It hasn't cooled a degree.",
     "Every wing's a crime scene. Nobody left to take statements. That's us now.",
   ],
 
