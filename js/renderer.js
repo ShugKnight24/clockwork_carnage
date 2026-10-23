@@ -1842,7 +1842,10 @@ export class Renderer {
 
     // Only draw columns not occluded by walls, and only above low cover.
     // The clip also crops the art to its sprite box, so it always applies.
-    if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+    // A boss is drawn bigger than its column (src/rendering/enemies/boss.js).
+    const tall = def.boss ? Math.ceil((endY - startY) * 0.8) : 0;
+    const wide = def.boss ? Math.ceil((endX - startX) * 0.4) : 0;
+    if (!this._spriteClipPath(ctx, startX - wide, endX + wide, startY - tall, endY, dist)) return;
     ctx.save();
     ctx.clip();
 

@@ -31,6 +31,9 @@ describe("the station's people in Legacy", () => {
         [true, () => {}],
         [false, () => npc.pose("salute", 5)],
         [false, () => npc.pose("point", 5)],
+        [false, () => npc.pose("cower", 5)],
+        [false, () => npc.pose("frozen", 5)],
+        [false, () => npc.pose("slumped", 5)],
         [false, () => npc.walk([[9, 5]])],
       ]) {
         setup();

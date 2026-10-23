@@ -44,11 +44,22 @@ const FLASH_MS = 150;
 const SPARK_MS = 220;
 // `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
 // The back* poses are the station's people seen from behind (an NPC walking
-// away); an enemy always faces you, and its back* fall back to idle.
-const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point", "backIdle", "backA", "backB"];
+// away); an enemy always faces you, and its back* fall back to idle. The
+// people also walk on four frames (step A/B: both feet down, move A/B: a leg
+// swinging through), ease into a gesture through its *In frame, and the
+// civilians have their horror-beat poses (cower, frozen, slumped). A type
+// without one of these falls back to idle, which costs no extra bitmap.
+const POSES = [
+  "idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point", "backIdle", "backA", "backB",
+  "stepA", "stepB", "backStepA", "backStepB", "saluteIn", "pointIn", "cower", "frozen", "slumped",
+];
 /** An NPC facing within this of straight away from the camera shows its back. */
 const BACK_DOT = 0.25;
-const BACK_OF = { idle: "backIdle", moveA: "backA", moveB: "backB" };
+const BACK_OF = { idle: "backIdle", moveA: "backA", moveB: "backB", stepA: "backStepA", stepB: "backStepB" };
+/** An NPC's walk, one frame per quarter of its step cycle (js/npc.js `stride`). */
+const NPC_WALK = ["stepA", "moveB", "stepB", "moveA"];
+/** Seconds an NPC's arm takes to come up into a gesture, or down out of it. */
+const GESTURE_EASE = 0.16;
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
@@ -467,6 +478,8 @@ function motionOf(enemy, time, model) {
     };
     motion.set(enemy, m);
   }
+  // One of the station's people may be given a look (js/npc.js `look`).
+  if (m.variant < 0 && !model.boss && Number.isInteger(enemy.look)) m.variant = Math.abs(enemy.look) % model.variants.length;
   if (m.variant < 0 && !model.boss) m.variant = Math.floor(hash(m.seed + 0.5) * model.variants.length) % model.variants.length;
   if (m.filter === undefined) m.filter = model.boss ? null : jitterFilter(enemy, model.def);
   const dt = time - m.t;
@@ -525,6 +538,7 @@ function pickPose(enemy, m, time, model, camRightX = null, camRightY = null) {
 }
 
 function pickFrontPose(enemy, m, time, model) {
+  if (enemy.type === "npc") return pickNpcPose(enemy, model);
   // A scripted gesture (an NPC's salute or pointing) holds while it is set.
   if (enemy.gesture && !(m.speed > 0.2)) return enemy.gesture;
   if (enemy.dissolving) return "hurt";
@@ -537,6 +551,63 @@ function pickFrontPose(enemy, m, time, model) {
     return ["moveA", "idle", "moveB", "idle"][Math.floor((time + m.phase) / stepMs) % 4];
   }
   return "idle";
+}
+
+/**
+ * The station's people (js/npc.js): the walk frame from how far through its
+ * step the person is, so the feet keep time with the ground they cover; a
+ * gesture eased in and out through its half-raised frame.
+ */
+function pickNpcPose(npc, model) {
+  const variant = model.variants[0];
+  if (npc.gesture && !npc.walking) {
+    const g = npc.gesture;
+    const left = Number.isFinite(npc._gestureLeft) ? npc._gestureLeft : Infinity;
+    const easing = (npc.gestureT ?? 1) < GESTURE_EASE || left < GESTURE_EASE;
+    const half = `${g}In`;
+    if (easing && variant.poses[half]) return half;
+    return variant.poses[g] ? g : "idle";
+  }
+  if (npc.walking || npc.settling) {
+    const s = npc.stride ?? 0;
+    return NPC_WALK[Math.floor(s * 4 + 0.5) % 4];
+  }
+  return "idle";
+}
+
+/**
+ * Canvas motion for one of the station's people, in sprite units: the body's
+ * rise and fall over each step (lowest with both feet down), its weight over
+ * the planted foot, the lean into a turn; standing, slow breathing and now
+ * and then a shift of weight. Someone caught in a time freeze does none of it.
+ */
+function npcMotion(npc, pose, time, ph, away) {
+  const out = { tx: 0, ty: 0, rot: 0, sy: 1 };
+  if (pose === "frozen") return out;
+  const walking = npc.walking || npc.settling;
+  const k = walking ? Math.min(1, (npc.moveSpeed ?? 0) / 1.2) : 0;
+  const s = (npc.stride ?? 0) * Math.PI * 2;
+  if (walking) {
+    out.ty = Math.cos(s * 2) * 1.6 * k;
+    out.tx = Math.sin(s) * 1.1 * k;
+    out.rot = Math.sin(s) * 0.012 * k;
+  }
+  // Leaning into a turn: to their right is screen left when they face us.
+  out.rot += (npc.lean ?? 0) * (away ? 1 : -1);
+  if (pose === "slumped" || pose === "cower") {
+    // Shallow, quick breaths.
+    out.sy += Math.sin((time + ph) * (pose === "cower" ? 0.011 : 0.0042)) * 0.008;
+    return out;
+  }
+  if (!walking) {
+    out.sy += Math.sin((time + ph) * 0.0028) * 0.012;
+    // A shift of weight from foot to foot every several seconds.
+    const w = Math.sin((time + ph * 7) * 0.00042);
+    const shift = Math.sign(w) * Math.min(1, Math.abs(w) * 3);
+    out.tx += shift * 0.9;
+    out.rot += shift * 0.01;
+  }
+  return out;
 }
 
 /* ── Frame preparation ──────────────────────────────────────────────────── */
@@ -790,12 +861,19 @@ export function drawEnemySprite(ctx, fr, screenX, centerY, alpha, time, hitFlash
   let tx = 0;
   let ty = 0;
   let rotA = 0;
-  let sx = 1;
-  let sy = 1;
+  // A boss that changes size mid-fight (the Shell, once it cracks) sets this.
+  let sx = enemy._spriteScale ?? 1;
+  let sy = sx;
   if (model.floater) {
     ty += Math.sin((time + ph) * 0.004) * 4;
     rotA += Math.sin((time + ph) * 0.0023) * 0.05;
     if (model.jitter) tx += (hash(Math.floor((time + ph) / 90)) - 0.5) * 7;
+  } else if (enemy.type === "npc") {
+    const mo = npcMotion(enemy, pose, time, ph, pose.startsWith("back"));
+    tx += mo.tx;
+    ty += mo.ty;
+    rotA += mo.rot;
+    sy *= mo.sy;
   } else if (pose === "idle" && m.speed <= 0.2) {
     sy += Math.sin((time + ph) * 0.003) * 0.012;
   }
@@ -921,8 +999,14 @@ function armAngle(role, pose, time, m, windupT) {
   }
 }
 
+/** Seconds the Shell's casing takes to fall away once it cracks. */
+const SHED_S = 0.7;
+
 function drawBoss(ctx, fr, alpha, time, dissolve, windupT, flashK) {
-  const { model, m, pose } = fr;
+  const { model, m, pose, enemy } = fr;
+  // The Shell: casing on until it cracks, then falling away, then seams of light.
+  const cracked = !!enemy._shellCracked;
+  const shed = cracked ? Math.min(1, (enemy._crackT ?? SHED_S) / SHED_S) : 0;
   const box = model.box;
   const imgs = fr.parts;
   const refs = model.refs;
@@ -955,9 +1039,17 @@ function drawBoss(ctx, fr, alpha, time, dissolve, windupT, flashK) {
     const ref = refs[i];
     const img = imgs[i];
     if (!img) continue;
+    if (ref.role === "shell" && shed >= 1) continue;
+    if (ref.role === "cracks" && !cracked) continue;
     ctx.save();
     place(ref);
-    if (ref.role === "aura") {
+    if (ref.role === "shell" && shed > 0) {
+      ctx.translate(Math.sin(i * 2.1) * 30 * shed, 90 * shed * shed);
+      ctx.globalAlpha = alpha * dissolve * (1 - shed);
+    } else if (ref.role === "cracks") {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = alpha * dissolve * (0.6 + 0.4 * Math.sin(t * 0.009) + windupT * 0.4);
+    } else if (ref.role === "aura") {
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = alpha * dissolve * (0.6 + 0.25 * Math.sin(t * 0.0026) + 0.3 * windupT);
     } else if (ref.blend) {
