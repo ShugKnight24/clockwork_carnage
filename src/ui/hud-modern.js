@@ -30,6 +30,7 @@ import { drawWeaponIcon, SILHOUETTE_BOX } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { touchZones, BUTTON_KEYS } from "./touch-layout.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
+import { activeDamageCues, lowHealthSeverity, lowHealthVignetteAlpha, heartPulse } from "../systems/player-feedback.js";
 
 const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
 const DIFF_SCHEMES = ["steel", "cyan", "amber", "crimson"];
@@ -292,11 +293,15 @@ function drawKillsPill(game, ctx, w, fs) {
 }
 
 function findBoss(game) {
+  let sub = null;
   for (const e of game.entities) {
+    if (e.type !== "enemy" || !e.active || !(e.health > 0)) continue;
     // Any campaign boss (the def flag): the Lord's forms and the Hound.
-    if (e.type === "enemy" && e.active && e.health > 0 && e.def?.boss) return e;
+    if (e.def?.boss) return e;
+    // A mini-boss gets the bar once it has engaged you.
+    if (!sub && e.def?.subBoss && e.state !== "idle" && e.state !== "search") sub = e;
   }
-  return null;
+  return sub;
 }
 
 export function drawBossBar(game, ctx, w, fs, py = 18) {
@@ -319,7 +324,11 @@ export function drawBossBar(game, ctx, w, fs, py = 18) {
   ctx.fillText(`${Math.ceil(boss.health)} / ${boss.maxHealth}`, px + pw - 14, py + ph - 5);
   // A boss with no forms says whether it can be hit: the Hound is only solid
   // while you shift.
-  const tag = boss.def.form ? `FORM ${form}` : boss.def.phased ? (boss._phased ? "PHASED - SHIFT TO HIT" : "SOLID") : "";
+  const tag = boss.def.form
+    ? (boss._shellCracked ? "SHELL CRACKED" : `FORM ${form}`)
+    : boss.def.phased
+      ? (boss._phased ? "PHASED - SHIFT TO HIT" : "SOLID")
+      : boss._shield > 0 ? `SHIELD ${Math.ceil(boss._shield)}` : boss.def.subBoss ? "MINI-BOSS" : "";
   if (tag) label(ctx, tag, px + 14, py + ph - 5, Math.round(8 * fs), boss._phased ? UI.textDim : UI.critSoft);
 }
 
@@ -456,7 +465,7 @@ function drawAmmo(game, ctx, w, h, f, fs) {
   const p = game.player;
   const wep = p.getWeaponDef();
   const ammo = p.ammo;
-  const low = ammo <= 10;
+  const low = p.ammoLow ?? ammo <= 10;
   const corner = cornerLayout(game);
   const numSize = Math.round(38 * fs);
   // Corner layout: the gun in hand sits in the plate beside its count.
@@ -481,7 +490,7 @@ function drawAmmo(game, ctx, w, h, f, fs) {
   } else {
     label(ctx, low ? "LOW" : "AMMO", px + 12, py + ph - 10, Math.round(9 * fs), lowTone);
   }
-  kickNumber(ctx, `${ammo}`, px + pw - 12, py + ph - 8, numSize, low ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo, "right");
+  kickNumber(ctx, `${p.ammoLabel ?? ammo}`, px + pw - 12, py + ph - 8, numSize, low ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo, "right");
 
   // The weapon bays sit right over the plate they feed.
   if (corner && game.settings.showWeapons) {
@@ -496,27 +505,38 @@ function drawAmmo(game, ctx, w, h, f, fs) {
 // ─── Combat cues (all layouts) ──────────────────────────────────────────────
 
 /**
- * Crimson inked chevron pointing toward the last damage source, plus pulsing
- * crimson corner frames at low health. The legacy post-FX arc and vignette
- * still run underneath; these are the HUD-layer reads.
+ * Crimson inked chevrons out toward the edge of the view, one for each side
+ * the player was hit from in the last second, bigger with a crimson edge
+ * band for a heavy hit, plus pulsing corner frames at low health. The post-FX
+ * vignette runs underneath; these are the HUD-layer reads.
  */
 export function drawModernCombatCues(game, ctx, w, h, barH = 0) {
   const p = game.player;
   const viewH = h - barH;
-  const age = game.time - (p.hurtTime || 0);
-  if (p.hurtTime && age < 700 && p.lastDamageAngle != null) {
-    let rel = p.lastDamageAngle - p.angle;
-    while (rel > Math.PI) rel -= Math.PI * 2;
-    while (rel < -Math.PI) rel += Math.PI * 2;
-    const a = rel - Math.PI / 2;
-    const k = age / 700;
-    const r = Math.min(w, viewH) * (0.2 + k * 0.03);
-    const cx = w / 2 + Math.cos(a) * r;
-    const cy = viewH / 2 + Math.sin(a) * r;
+  for (const cue of activeDamageCues(p, game.time)) {
+    const a = cue.rel - Math.PI / 2;
+    const k = cue.age;
+    // Out near the edge of the view, drifting a touch further as it fades.
+    const rx = w * (0.4 + k * 0.02);
+    const ry = viewH * (0.38 + k * 0.02);
+    const cx = w / 2 + Math.cos(a) * rx;
+    const cy = viewH / 2 + Math.sin(a) * ry;
+    const size = 0.85 + 0.6 * cue.weight;
+    if (cue.weight > 0.6) {
+      // A heavy hit also lights that edge of the frame.
+      ctx.globalAlpha = cue.alpha * 0.45 * cue.weight;
+      ctx.lineWidth = 10 + 16 * cue.weight;
+      ctx.strokeStyle = `rgba(${UI.critRGB},0.6)`;
+      ctx.beginPath();
+      ctx.ellipse(w / 2, viewH / 2, w * 0.47, viewH * 0.45, 0, a - 0.22, a + 0.22);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.save();
-    ctx.globalAlpha = 1 - k * k;
+    ctx.globalAlpha = cue.alpha;
     ctx.translate(cx, cy);
     ctx.rotate(a + Math.PI / 2);
+    ctx.scale(size, size);
     ctx.beginPath();
     ctx.moveTo(0, -16);
     ctx.lineTo(22, 6);
@@ -534,7 +554,7 @@ export function drawModernCombatCues(game, ctx, w, h, barH = 0) {
       ctx.fill();
     } else {
       // Realistic: a translucent wedge with a hairline edge, no ink.
-      ctx.fillStyle = `rgba(${UI.critRGB},0.35)`;
+      ctx.fillStyle = `rgba(${UI.critRGB},${(0.3 + 0.25 * cue.weight).toFixed(2)})`;
       ctx.fill();
       ctx.lineJoin = "miter";
       ctx.lineWidth = 1.25;
@@ -544,10 +564,10 @@ export function drawModernCombatCues(game, ctx, w, h, barH = 0) {
     ctx.restore();
   }
 
-  const hp = p.health / p.maxHealth;
-  if (p.alive && hp > 0 && hp < 0.25) {
-    const sev = 1 - hp / 0.25;
-    const a = (0.35 + 0.5 * sev) * (0.55 + 0.45 * pulse(game, 0.006 * (1 + sev)));
+  // Low health (under 30%): the frames beat with the heartbeat.
+  const sev = p.alive ? lowHealthSeverity(p.health, p.maxHealth) : 0;
+  if (sev > 0) {
+    const a = Math.min(1, 0.2 + lowHealthVignetteAlpha(sev, heartPulse(game.time, sev)));
     const m = 14;
     const len = Math.round(Math.min(w, viewH) * 0.09);
     ctx.globalAlpha = a;
@@ -824,14 +844,14 @@ function drawClassicArms(game, ctx, L, fs, f) {
   const wep = p.getWeaponDef();
   const sidearm = wep && wep.id === 0; // the pistol never spends ammo
   const empty = !!wep && !sidearm && p.ammo < (wep.ammoPerShot || 1);
-  const low = !sidearm && p.ammo <= 10;
+  const low = !sidearm && (p.ammoLow ?? p.ammo <= 10);
   const bottom = y + ph - 10;
   const areaH = bottom - top;
   const inner = w - 30;
 
   // Count, right-aligned; a long one (999999 in god mode) shrinks to fit.
   // 1.1x covers the shot kick's scale-up.
-  const ammoStr = `${p.ammo}`;
+  const ammoStr = `${p.ammoLabel ?? p.ammo}`;
   const ammoSize = fitFontSize(ctx, ammoStr, Math.round(Math.min(56, areaH * 0.92) * fs), (inner * 0.5) / 1.1);
   ctx.font = uiFont(ammoSize, 800);
   const ammoTW = ctx.measureText(ammoStr).width * 1.1;
@@ -1042,11 +1062,11 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
     drawWeaponIcon(ctx, wep.id, wep.color, x, midY - 12, gw, barH - 20);
     x += gw + 8;
   }
-  const lowAmmo = p.ammo <= 10;
+  const lowAmmo = p.ammoLow ?? p.ammo <= 10;
   if (wep) label(ctx, wep.name.toUpperCase(), x, midY - 10, 8, HT.realistic ? UI.textDim : wep.color, "left", 0);
-  number(ctx, `${p.ammo}`, x, midY + 13, 20, lowAmmo ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo);
+  number(ctx, `${p.ammoLabel ?? p.ammo}`, x, midY + 13, 20, lowAmmo ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo);
   ctx.font = uiFont(20, 800);
-  x += Math.max(ctx.measureText(`${p.ammo}`).width, 60) + 16;
+  x += Math.max(ctx.measureText(`${p.ammoLabel ?? p.ammo}`).width, 60) + 16;
 
   // Kills / score, right after the weapon and short of the fire button.
   const cols = [];
@@ -1132,7 +1152,7 @@ export function renderModernTacticalPanels(game, ctx, w, h, f) {
   // Right wing: ammo.
   const rx = Math.round(cx + gap);
   const wep = p.getWeaponDef();
-  const lowAmmo = p.ammo <= 10;
+  const lowAmmo = p.ammoLow ?? p.ammo <= 10;
   ctx.save();
   ctx.translate(rx, wy);
   ctx.transform(1, 0, -0.35, 1, 0, 0);
@@ -1140,7 +1160,7 @@ export function renderModernTacticalPanels(game, ctx, w, h, f) {
   ctx.restore();
   label(ctx, lowAmmo ? "LOW AMMO" : "AMMO", rx + wingW - 16, wy + 16, Math.round(9 * fs),
     lowAmmo ? (pulse(game, 0.01) > 0.5 ? UI.crimson : "#ff8a96") : UI.textDim, "right");
-  kickNumber(ctx, `${p.ammo}`, rx + 18, wy + wingH - 12, Math.round(30 * fs), lowAmmo ? "#ff5a6e" : "#ffe3a3", "left");
+  kickNumber(ctx, `${p.ammoLabel ?? p.ammo}`, rx + 18, wy + wingH - 12, Math.round(30 * fs), lowAmmo ? "#ff5a6e" : "#ffe3a3", "left");
   if (wep) {
     ctx.fillStyle = wep.color;
     ctx.fillRect(rx + wingW - 18, wy + 26, 3, 12);
@@ -1202,7 +1222,7 @@ export function renderModernCustomPanels(game, ctx, w, h, f, portraitState) {
   if (layout.ammo) {
     const x = layout.ammo.x * w;
     const y = layout.ammo.y * h;
-    customReadout(ctx, x, y, "AMMO", `${p.ammo}`, p.ammo <= 10 ? UI.crimson : UI.amber, fs, p.ammo <= 10 ? "#ff5a6e" : "#ffe3a3");
+    customReadout(ctx, x, y, "AMMO", `${p.ammoLabel ?? p.ammo}`, (p.ammoLow ?? p.ammo <= 10) ? UI.crimson : UI.amber, fs, (p.ammoLow ?? p.ammo <= 10) ? "#ff5a6e" : "#ffe3a3");
   }
   if (layout.shield && p.maxShield > 0) {
     customReadout(ctx, layout.shield.x * w, layout.shield.y * h, "SHIELD",

@@ -9,7 +9,9 @@ import {
   syllabify,
   planUtterance,
   planBark,
+  enemyVoiceKey,
 } from "../../src/audio/voice.js";
+import { ENEMY_TYPES } from "../../src/data/enemies.js";
 
 describe("syllabify", () => {
   it("gives one syllable per vowel group", () => {
@@ -151,5 +153,16 @@ describe("emotions", () => {
     expect(a.am).toBeUndefined();
     expect(a.scale).toBeUndefined();
     expect(a.tilt).toBeGreaterThanOrEqual(1.5);
+  });
+});
+
+describe("enemyVoiceKey", () => {
+  it("finds a voice for every enemy type, camelCase as the game names them", () => {
+    for (const type of Object.keys(ENEMY_TYPES)) {
+      expect(enemyVoiceKey(type), type).toBeTruthy();
+    }
+    expect(enemyVoiceKey("corruptCop")).toBe("henchman");
+    expect(enemyVoiceKey("temporalSummoner")).toBe("phantom");
+    expect(enemyVoiceKey(undefined)).toBe(null);
   });
 });

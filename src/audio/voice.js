@@ -364,7 +364,7 @@ export function planUtterance(text, voice, { charsPerSec = 18, seed = null, emot
 const ENEMY_VOICES = {
   henchman: "henchman", corrupt_cop: "henchman", shield_commander: "henchman", temporal_engineer: "henchman",
   drone: "drone", echo_drone: "drone", glitchling: "drone", chrono_bomber: "drone",
-  beast: "beast", rift_leaper: "beast", phase_stalker: "beast",
+  beast: "beast", hound: "beast", rift_leaper: "beast", phase_stalker: "beast",
   phantom: "phantom", temporal_summoner: "phantom",
   sentinel: "system", time_warden: "system",
   boss: "lord", boss_form2: "lord", boss_form3: "lord",
@@ -379,7 +379,9 @@ const ENEMY_LINES = {
 };
 
 export function enemyVoiceKey(type) {
-  return ENEMY_VOICES[type] || null;
+  if (!type) return null;
+  // Enemy types are camelCase ("corruptCop"); the table is snake_case.
+  return ENEMY_VOICES[type] || ENEMY_VOICES[type.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] || null;
 }
 
 /** An alert line for an enemy voice, picked by a 0..1 roll. */
@@ -641,7 +643,9 @@ export class VoiceSynth {
     }
 
     for (const s of sources) {
-      if (s === noise) s.start(t0, Math.random() * 1.5);
+      // A different stretch of the noise loop each line, stepped (golden
+      // ratio) rather than rolled: audio leaves the game's dice alone.
+      if (s === noise) s.start(t0, (this._noiseAt = ((this._noiseAt ?? 0) + 0.618034) % 1) * 1.5);
       else s.start(t0);
       s.stop(end);
     }

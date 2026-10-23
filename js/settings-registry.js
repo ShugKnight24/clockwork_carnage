@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   masterVolume: 100, // 0..100
   musicVolume: 80, // 0..100
   voiceVolume: 80, // 0..100 — character voices and grunts
+  voices: false, // spoken dialogue; off shows subtitles with a comms blip
   voiceStyle: 0, // 0 Auto, 1 Spoken, 2 Stylised (babble)
   sfxVolume: 80, // 0..100
   sensitivity: 0.7, // 0.2..2.0
@@ -448,6 +449,19 @@ export const SETTINGS_REGISTRY = [
     onChange: (g) => g.audio.setVoiceVolume(g.settings.voiceVolume / 100),
     platform: "all",
     height: { compact: 42, normal: 60 },
+  },
+  {
+    key: "voices",
+    label: "Spoken Dialogue",
+    desc: "Voice the story's lines, in the style below. Off, every line is still shown as text, with a soft blip on comms.",
+    type: "toggle",
+    onColor: "#ff88cc",
+    onChange: (g) => {
+      g.audio.voicesOn = !!g.settings.voices;
+      g.audio.speak?.("Systems nominal. Voice check.", "aria", { channel: "comms" });
+    },
+    platform: "all",
+    height: { compact: 30, normal: 44 },
   },
   {
     key: "voiceStyle",

@@ -39,4 +39,22 @@ describe("applyDefaultsMigration", () => {
     applyDefaultsMigration(true, s, () => {});
     expect(s.hudStyle).toBe(4);
   });
+
+  it("turns spoken dialogue off once, then keeps a deliberate re-enable", () => {
+    const s = { sensitivity: 0.7, hudStyle: 1, voices: true };
+    const save = vi.fn();
+    applyDefaultsMigration(false, s, save);
+    expect(s.voices).toBe(false);
+    expect(save).toHaveBeenCalledOnce();
+    s.voices = true;
+    applyDefaultsMigration(false, s, save);
+    expect(s.voices).toBe(true);
+  });
+
+  it("turns voices off for players who already had the v1 defaults", () => {
+    localStorage.setItem("cc_defaults_v1", "1");
+    const s = { sensitivity: 1.0, voices: true };
+    applyDefaultsMigration(false, s, () => {});
+    expect(s).toEqual({ sensitivity: 1.0, voices: false });
+  });
 });

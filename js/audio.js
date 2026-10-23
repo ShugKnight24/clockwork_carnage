@@ -1,5 +1,26 @@
 import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine, inferEmotion } from "../src/audio/voice.js";
 import { Speech } from "../src/audio/speech.js";
+import { heartbeatInterval, muffleCutoff, streakNotes } from "../src/systems/player-feedback.js";
+
+/** Which death sound an enemy type gets (enemyDeath); the rest are "body". */
+export const DEATH_KINDS = {
+  phantom: "phase", phaseStalker: "phase", temporalSummoner: "phase",
+  drone: "machine", echoDrone: "machine", glitchling: "machine", chronoBomber: "machine", sentinel: "machine",
+};
+
+/**
+ * Audio's own dice (xorshift32). Sound picks pitches and timings on the audio
+ * clock, which runs on wall time; drawing those from Math.random() shifted a
+ * seeded run's shared stream by however many sounds wall time let through,
+ * and the same seed played a different fight.
+ */
+let _audioSeed = 0x9e3779b9;
+function audioRandom() {
+  _audioSeed ^= _audioSeed << 13;
+  _audioSeed ^= _audioSeed >>> 17;
+  _audioSeed ^= _audioSeed << 5;
+  return (_audioSeed >>> 0) / 4294967296;
+}
 
 export class AudioManager {
   constructor() {
@@ -54,6 +75,8 @@ export class AudioManager {
     this.tts = new Speech();
     /** 0 Auto (speech when the browser has a natural voice), 1 always speech, 2 always babble. */
     this.voiceStyle = 0;
+    /** Whether dialogue is voiced at all (settings: Spoken Dialogue, off by default). */
+    this.voicesOn = false;
     this._noiseClips = new Map();
     this._noiseLoop = null;
   }
@@ -74,18 +97,32 @@ export class AudioManager {
     this.masterGain.connect(this.limiter);
     this.limiter.connect(this.ctx.destination);
 
+    // Low health closes the mix in: effects, music and ambience run through
+    // one low-pass that stands wide open while healthy (updateLowHealth).
+    // Voices and the heartbeat go round it, so the warning sits on top.
+    this.lowHpFilter = this.ctx.createBiquadFilter();
+    this.lowHpFilter.type = "lowpass";
+    this.lowHpFilter.frequency.value = 20000;
+    this.lowHpFilter.Q.value = 0.5;
+    this.lowHpFilter.connect(this.masterGain);
+
     this.sfxGain = this.ctx.createGain();
     this.sfxGain.gain.value = 1.0;
-    this.sfxGain.connect(this.masterGain);
+    this.sfxGain.connect(this.lowHpFilter);
+
+    // The heartbeat: the effects level, outside the muffle.
+    this.heartGain = this.ctx.createGain();
+    this.heartGain.gain.value = 1.0;
+    this.heartGain.connect(this.masterGain);
 
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = 0.15;
     this._musicBaseGain = 0.15;
-    this.musicGain.connect(this.masterGain);
+    this.musicGain.connect(this.lowHpFilter);
 
     this.ambientGain = this.ctx.createGain();
     this.ambientGain.gain.value = 0.12;
-    this.ambientGain.connect(this.masterGain);
+    this.ambientGain.connect(this.lowHpFilter);
 
     this.voiceGain = this.ctx.createGain();
     this.voiceGain.gain.value = this._voiceVolume ?? 0.8;
@@ -105,7 +142,15 @@ export class AudioManager {
       const n = Math.max(1, Math.round(this.ctx.sampleRate * key / 1000));
       buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      // Its own generator, not Math.random(): which clip lengths are already
+      // cached depends on what played before, so drawing tens of thousands of
+      // numbers from the shared stream on a cache miss knocked a seeded run
+      // (the arena bots) onto a different fight.
+      let s = (key * 2654435761) >>> 0 || 1;
+      for (let i = 0; i < n; i++) {
+        s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+        d[i] = ((s >>> 0) / 4294967296) * 2 - 1;
+      }
       if (this._noiseClips.size > 64) this._noiseClips.clear();
       this._noiseClips.set(key, buf);
     }
@@ -262,14 +307,57 @@ export class AudioManager {
     if (!this.ctx || !this.enabled || !this._voice) return;
     const key = enemyVoiceKey(type);
     if (!key) return;
+    // A phantom's death is the dissolve in enemyDeath, not a wail; and an
+    // alert is a spoken line, so it waits on Spoken Dialogue.
+    if (kind === "death" && key === "phantom") return;
     const now = this.ctx.currentTime;
     if (now - (this._lastBark ?? -1) < (kind === "death" ? 0.15 : 0.5)) return;
     this._lastBark = now;
+    const volume = Math.max(0.15, 1 - Math.min(1, distance / 20) * 0.85);
+    // Without Spoken Dialogue an alert is a sound, not a word.
+    if (kind !== "death" && !this.voicesOn) {
+      this.alertCue(key, pan, volume);
+      return;
+    }
     const plan = kind === "death"
       ? planBark("death")
-      : planUtterance(enemyAlertLine(key, Math.random()) || "Hey!", VOICES[key], { charsPerSec: 16 });
-    const volume = Math.max(0.15, 1 - Math.min(1, distance / 20) * 0.85);
+      : planUtterance(enemyAlertLine(key, audioRandom()) || "Hey!", VOICES[key], { charsPerSec: 16 });
     this._voice.play(plan, VOICES[key], this.sfxGain, { pan, volume: volume * 1.6 });
+  }
+
+  /**
+   * An enemy has seen you, as a short sound per family: a radio squelch for
+   * the station's turned people, a chirp for machines, a growl for beasts, a
+   * breath for phantoms, two beeps for sentinels, a low swell for the Lord.
+   */
+  alertCue(key, pan = 0, volume = 1) {
+    const v = 0.5 * volume;
+    const later = (s, fn) => setTimeout(fn, s * 1000);
+    switch (key) {
+      case "henchman":
+        this.playNoise(0.07, 0.18 * v, 2400, "bandpass", pan);
+        later(0.08, () => this.playTone(1450, 0.05, "square", 0.05 * v, 0, pan));
+        break;
+      case "drone":
+        this.playTone(1320, 0.06, "sine", 0.14 * v, 0, pan);
+        later(0.07, () => this.playTone(1760, 0.07, "sine", 0.12 * v, 0, pan));
+        break;
+      case "beast":
+        this.playNoise(0.32, 0.22 * v, 320, "lowpass", pan);
+        this.playTone(70, 0.3, "sawtooth", 0.08 * v, 0, pan);
+        break;
+      case "phantom":
+        this.playNoise(0.45, 0.1 * v, 1800, "bandpass", pan);
+        break;
+      case "system":
+        this.playTone(880, 0.05, "square", 0.06 * v, 0, pan);
+        later(0.1, () => this.playTone(880, 0.05, "square", 0.06 * v, 0, pan));
+        break;
+      case "lord":
+        this.playTone(55, 0.7, "sine", 0.22 * v, 0, pan);
+        this.playNoise(0.6, 0.06 * v, 220, "lowpass", pan);
+        break;
+    }
   }
 
   /** Effort, pain and death sounds in the voice picked in the creator. */
@@ -287,7 +375,7 @@ export class AudioManager {
 
   /** Return a random detune value between -50 and +50 cents for shot variation */
   _randomDetune() {
-    const base = (Math.random() - 0.5) * 100; // ±50 cents
+    const base = (audioRandom() - 0.5) * 100; // ±50 cents
     // During slow-mo, detune downward for dramatic pitch drop
     const chronoShift = this._timeScale < 0.8 ? -600 * (1 - this._timeScale) : 0;
     return base + chronoShift;
@@ -310,9 +398,30 @@ export class AudioManager {
     this._duckTarget *= Math.max(0, 1 - 2 * dt);
     // While someone is speaking, hold the music down so the voice sits on top.
     if (this.ctx.currentTime < this._speechUntil) this._duckTarget = Math.max(this._duckTarget, 0.55);
+    // Low health pulls the music back too (updateLowHealth).
+    if (this._lowHpDuck > 0) this._duckTarget = Math.max(this._duckTarget, this._lowHpDuck);
     // Apply: duck to 30% at full duck
     const gain = this._musicBaseGain * (1 - this._duckLevel * 0.7);
     this.musicGain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.05);
+  }
+
+  /**
+   * The low-health state, once a frame: `severity` 0 (healthy, or not in
+   * play) to 1 (nearly dead), from lowHealthSeverity. Muffles effects, music
+   * and ambience behind a closing low-pass, ducks the music, and beats the
+   * heart faster as it climbs. Severity 0 opens everything back up.
+   */
+  updateLowHealth(severity = 0) {
+    if (!this.ctx || !this.lowHpFilter) return;
+    const sev = Math.max(0, Math.min(1, severity || 0));
+    this._lowHpDuck = sev > 0 ? 0.35 + 0.4 * sev : 0;
+    // Only schedule when the target moves: this runs every frame.
+    const cutoff = Math.round(muffleCutoff(sev));
+    if (cutoff !== this._lowHpCutoff) {
+      this._lowHpCutoff = cutoff;
+      this.lowHpFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, sev > 0 ? 0.25 : 0.4);
+    }
+    if (sev > 0) this.heartbeat(sev);
   }
 
   // ─── Spatial audio filtering ──────────────────────────────────────────
@@ -836,6 +945,13 @@ export class AudioManager {
       this._blip("triangle", 660, 1320, 0.18, 0.07 * near, pan);
       return;
     }
+    // A shooter outside your view: the same whine, louder and longer (its
+    // windup is too), with a low pulse under it so the side it is on reads.
+    if (kind === "unseen") {
+      this._blip("triangle", 520, 1320, 0.36, 0.16 * Math.max(0.5, near), pan);
+      this._blip("square", 180, 240, 0.3, 0.05, pan);
+      return;
+    }
     if (kind === "stomp") {
       this._blip("sawtooth", 70, 140, 0.75, 0.22, pan);
       this._blip("sine", 140, 280, 0.75, 0.12, pan);
@@ -919,53 +1035,68 @@ export class AudioManager {
     harm.stop(t + 0.04);
   }
 
-  enemyDeath(pan = 0, distance = 0) {
+  /**
+   * The body of a kill, under the kill-confirm tick: kept round and short,
+   * since kills are frequent and sit under the gunfire. Flesh and armour get
+   * a soft low thump and a puff of air, machines a small falling clink, and
+   * the phase-born (phantoms, stalkers, summoners) a temporal dissolve: a
+   * filtered whoosh that falls away under a faint glassy glide. No square or
+   * sawtooth: those were the harsh buzz on every death.
+   */
+  enemyDeath(pan = 0, distance = 0, type = null) {
     if (!this.ctx || !this.enabled) return;
-    if (distance > 0) {
-      const spatial = this._spatialNode(distance, pan);
-      const t = this.ctx.currentTime;
-      // Tone 1: 400Hz square
-      const osc1 = this.ctx.createOscillator();
-      osc1.type = "square";
-      osc1.frequency.setValueAtTime(400, t);
-      const g1 = this.ctx.createGain();
-      g1.gain.setValueAtTime(0.3, t);
-      g1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-      osc1.connect(g1);
-      g1.connect(spatial.gain);
-      spatial.connect(this.sfxGain);
-      osc1.onended = () => { osc1.disconnect(); g1.disconnect(); };
-      osc1.start(t);
-      osc1.stop(t + 0.1);
-      // Tone 2: 200Hz sawtooth
-      const osc2 = this.ctx.createOscillator();
-      osc2.type = "sawtooth";
-      osc2.frequency.setValueAtTime(200, t);
-      const g2 = this.ctx.createGain();
-      g2.gain.setValueAtTime(0.3, t);
-      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-      osc2.connect(g2);
-      g2.connect(spatial.gain);
-      osc2.onended = () => { osc2.disconnect(); g2.disconnect(); };
-      osc2.start(t);
-      osc2.stop(t + 0.15);
-      // Tone 3: 100Hz sawtooth
-      const osc3 = this.ctx.createOscillator();
-      osc3.type = "sawtooth";
-      osc3.frequency.setValueAtTime(100, t);
-      const g3 = this.ctx.createGain();
-      g3.gain.setValueAtTime(0.2, t);
-      g3.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-      osc3.connect(g3);
-      g3.connect(spatial.gain);
-      osc3.onended = () => { osc3.disconnect(); g3.disconnect(); };
-      osc3.start(t);
-      osc3.stop(t + 0.2);
+    const t = this.ctx.currentTime;
+    const spatial = this._spatialNode(distance, pan);
+    spatial.connect(this.sfxGain);
+    const kind = DEATH_KINDS[type] || "body";
+    const tone = (wave, f0, f1, peak, attack, len) => {
+      const osc = this.ctx.createOscillator();
+      osc.type = wave;
+      osc.frequency.setValueAtTime(f0, t);
+      osc.frequency.exponentialRampToValueAtTime(f1, t + len);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      osc.connect(g);
+      g.connect(spatial.gain);
+      osc.onended = () => { osc.disconnect(); g.disconnect(); };
+      osc.start(t);
+      osc.stop(t + len + 0.02);
+      return osc;
+    };
+    const air = (f0, f1, q, peak, attack, len) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this._noiseClip(len + 0.02);
+      const f = this.ctx.createBiquadFilter();
+      f.type = "bandpass";
+      f.Q.value = q;
+      f.frequency.setValueAtTime(f0, t);
+      f.frequency.exponentialRampToValueAtTime(f1, t + len);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      src.connect(f);
+      f.connect(g);
+      g.connect(spatial.gain);
+      src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
+      src.start(t);
+      return src;
+    };
+    let last;
+    if (kind === "phase") {
+      air(2600, 380, 1.4, 0.22, 0.05, 0.42);
+      tone("sine", 1180, 590, 0.045, 0.04, 0.38);
+      last = tone("sine", 1770, 880, 0.02, 0.06, 0.34);
+    } else if (kind === "machine") {
+      tone("triangle", 900, 260, 0.12, 0.004, 0.14);
+      last = air(3200, 1400, 2, 0.1, 0.004, 0.09);
     } else {
-      this.playTone(400, 0.1, "square", 0.3, 0, pan);
-      this.playTone(200, 0.15, "sawtooth", 0.3, 0, pan);
-      this.playTone(100, 0.2, "sawtooth", 0.2, 0, pan);
+      tone("sine", 150, 62, 0.32, 0.006, 0.2);
+      last = air(900, 300, 0.8, 0.12, 0.004, 0.12);
     }
+    last.addEventListener("ended", () => setTimeout(() => spatial.gain.disconnect(), 400));
   }
 
   dashSound() {
@@ -1039,6 +1170,50 @@ export class AudioManager {
     });
   }
 
+  /**
+   * A kill-streak tier (1 Double Kill … 6 Godlike): a quick rising run, a
+   * note longer and a step higher each tier, with a sub thump from Overkill
+   * up. Its own sound, so the level-complete jingle only means the level.
+   */
+  streakSting(tier = 1) {
+    if (!this.ctx || !this.enabled) return;
+    const notes = streakNotes(tier);
+    const gap = 0.055;
+    notes.forEach((f, i) => this._blip("triangle", f, f * 1.02, 0.08, 0.13, 0, i * gap));
+    const top = notes[notes.length - 1];
+    this._blip("square", top * 2, top * 2, 0.05, 0.035, 0, (notes.length - 1) * gap);
+    if (tier >= 3) this._blip("sine", 120, 50, 0.24, 0.26, 0);
+  }
+
+  /** Lockdown lifted: the door bolts throw back with a heavy clank, then a rising release tone. */
+  lockdownLifted() {
+    if (!this.ctx || !this.enabled) return;
+    this.playNoise(0.12, 0.3, 900, "lowpass");
+    this._blip("square", 150, 70, 0.18, 0.12, 0);
+    this._blip("square", 110, 60, 0.14, 0.09, 0, 0.13);
+    this._blip("triangle", 330, 660, 0.32, 0.12, 0, 0.22);
+    this._blip("sine", 660, 990, 0.3, 0.07, 0, 0.3);
+  }
+
+  /** The exit opens (the last power cell): a bright beacon chime, rising and left to ring. */
+  exitOpen() {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("sine", 784, 784, 0.55, 0.15, 0);
+    this._blip("sine", 1175, 1175, 0.6, 0.12, 0, 0.11);
+    this._blip("triangle", 1568, 1568, 0.75, 0.06, 0, 0.22);
+  }
+
+  /**
+   * A round the shield took: a dry metallic ping that glances off, high and
+   * inharmonic, with none of the hit ding's body. Tells you to go round.
+   */
+  shieldBlock(pan = 0) {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("square", 2600, 3400, 0.03, 0.05, pan);
+    this._blip("triangle", 5200, 4700, 0.16, 0.07, pan, 0.005);
+    this._blip("sine", 3730, 3520, 0.2, 0.05, pan, 0.005);
+  }
+
   /** A short phrase on the music bus, so the Music Volume slider has something to preview. */
   musicSting() {
     [392, 523, 659].forEach((n, i) => {
@@ -1064,19 +1239,21 @@ export class AudioManager {
   /**
    * Call every frame with current movement state.
    * @param {boolean} isMoving - whether the player is moving
-   * @param {number} now - performance.now() timestamp
+   * @param {number} now - game time in ms (sim time, so a seeded run steps
+   *   the same and slow-mo slows the stride)
    */
   /** @param {number} gain - 1 = normal stride, lower for a crouched step. */
   updateFootsteps(isMoving, now, gain = 1) {
     if (!this.ctx || !this.enabled || !isMoving) return;
-    if (now - this._lastFootstepTime < this._footstepCadence) return;
+    // A clock that jumped back (a reel scrubbing game time) restarts the stride.
+    if (now >= this._lastFootstepTime && now - this._lastFootstepTime < this._footstepCadence) return;
     this._lastFootstepTime = now;
     this._footstepSide ^= 1;
     const pan = this._footstepSide ? -0.15 : 0.15;
     // Low thud — a crouched boot also loses its top end, not just volume.
     this.playNoise(0.06, 0.15 * gain, gain < 1 ? 260 : 400, "lowpass", pan);
     // Metallic tap (boot on metal floor)
-    this.playTone(90 + Math.random() * 30, 0.04, "triangle", 0.07 * gain, 0, pan);
+    this.playTone(90 + audioRandom() * 30, 0.04, "triangle", 0.07 * gain, 0, pan);
   }
 
   /** Adjust footstep cadence based on player speed multiplier */
@@ -1088,18 +1265,23 @@ export class AudioManager {
 
   /**
    * Heartbeat audio cue — "lub-dub" low-frequency pulse.
-   * Call every frame; self-throttles to the correct interval.
-   * @param {number} severity - 0 (25% HP) to 1 (near 0% HP)
+   * Call every frame (updateLowHealth does); self-throttles to the interval,
+   * which shortens as severity climbs (heartbeatInterval).
+   * @param {number} severity - 0 (30% HP) to 1 (near 0% HP)
    */
   heartbeat(severity = 0.5) {
     if (!this.ctx || !this.enabled) return;
     const now = this.ctx.currentTime;
-    const interval = 0.8 - severity * 0.4; // 0.8s at low severity, 0.4s at high
+    const interval = heartbeatInterval(severity);
     if (this._lastHeartbeat && now - this._lastHeartbeat < interval) return;
     this._lastHeartbeat = now;
 
-    const vol = 0.08 + severity * 0.15; // louder as more critical
+    const vol = 0.2 + severity * 0.2; // louder as more critical
     const t = now;
+    // The beats live round the muffle (heartGain), and a soft knock an octave
+    // up carries the "lub" on speakers with no bass.
+    const bus = this.heartGain || this.sfxGain;
+    this._blip("triangle", 120, 80, 0.07, vol * 0.25, 0);
 
     // First beat ("lub") — 60Hz sine, fast attack, 100ms sustain
     const lub = this.ctx.createOscillator();
@@ -1111,7 +1293,7 @@ export class AudioManager {
     lubG.gain.linearRampToValueAtTime(vol, t + 0.01);
     lubG.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
     lub.connect(lubG);
-    lubG.connect(this.sfxGain);
+    lubG.connect(bus);
     lub.onended = () => { lub.disconnect(); lubG.disconnect(); };
     lub.start(t);
     lub.stop(t + 0.1);
@@ -1127,7 +1309,7 @@ export class AudioManager {
     dubG.gain.linearRampToValueAtTime(vol * 0.7, dubStart + 0.01);
     dubG.gain.exponentialRampToValueAtTime(0.001, dubStart + 0.08);
     dub.connect(dubG);
-    dubG.connect(this.sfxGain);
+    dubG.connect(bus);
     dub.onended = () => { dub.disconnect(); dubG.disconnect(); };
     dub.start(dubStart);
     dub.stop(dubStart + 0.08);
@@ -1508,7 +1690,7 @@ export class AudioManager {
       if (!this.enabled || this._ambientType !== type) return;
       this._ambientPulse(type);
       const base = type === "menu" ? 3000 : 2000;
-      this._ambientTimer = setTimeout(pulse, base + Math.random() * 1000);
+      this._ambientTimer = setTimeout(pulse, base + audioRandom() * 1000);
     };
     pulse();
   }
@@ -1551,12 +1733,12 @@ export class AudioManager {
     src.start();
 
     // Random metallic clank (30% chance)
-    if (Math.random() < 0.3) {
-      const delay = Math.random() * 1500;
+    if (audioRandom() < 0.3) {
+      const delay = audioRandom() * 1500;
       setTimeout(() => {
         if (!this.ctx || !this.enabled) return;
-        const pan = (Math.random() - 0.5) * 1.6;
-        const freq = 800 + Math.random() * 600;
+        const pan = (audioRandom() - 0.5) * 1.6;
+        const freq = 800 + audioRandom() * 600;
         const clank = this.ctx.createOscillator();
         clank.type = "triangle";
         clank.frequency.setValueAtTime(freq, this.ctx.currentTime);
@@ -1592,7 +1774,7 @@ export class AudioManager {
     src.start();
 
     // Distant siren sweep (20% chance)
-    if (Math.random() < 0.2) {
+    if (audioRandom() < 0.2) {
       setTimeout(() => {
         if (!this.ctx || !this.enabled) return;
         const siren = this.ctx.createOscillator();
@@ -1607,7 +1789,7 @@ export class AudioManager {
         siren.onended = () => { siren.disconnect(); sg.disconnect(); };
         siren.start();
         siren.stop(this.ctx.currentTime + 1.8);
-      }, Math.random() * 1000);
+      }, audioRandom() * 1000);
     }
   }
 
@@ -1659,13 +1841,13 @@ export class AudioManager {
     osc.stop(this.ctx.currentTime + 3);
 
     // Soft wind (50% chance)
-    if (Math.random() < 0.5) {
+    if (audioRandom() < 0.5) {
       const buf = this._noiseClip(3);
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       const f = this.ctx.createBiquadFilter();
       f.type = "bandpass";
-      f.frequency.value = 200 + Math.random() * 200;
+      f.frequency.value = 200 + audioRandom() * 200;
       f.Q.value = 2;
       const wg = this.ctx.createGain();
       wg.gain.setValueAtTime(0.001, this.ctx.currentTime);
@@ -1720,6 +1902,12 @@ export class AudioManager {
    */
   speak(text, voice, { channel = "comms", charsPerSec = 18, pan = 0, profile = null, emotion = null } = {}) {
     if (!this.ctx || !this.enabled || !this._voice || !text) return null;
+    // Dialogue unvoiced (the default): the line stays text, timed by its
+    // reading length, and comms get a soft blip so a new one is noticed.
+    if (!this.voicesOn) {
+      if (channel === "comms") this.commsBlip();
+      return null;
+    }
     const v = typeof voice === "object" ? voice : voice === "player" ? playerVoice(profile) : VOICES[voice];
     if (!v) return null;
     this.stopSpeech(channel);
@@ -1756,6 +1944,16 @@ export class AudioManager {
     return handle;
   }
 
+  /** A soft two-note chirp for a comms line shown without a voice. */
+  commsBlip() {
+    if (!this.ctx || !this.enabled) return;
+    const now = this.ctx.currentTime;
+    if (now - (this._lastBlip ?? -1) < 0.3) return;
+    this._lastBlip = now;
+    this._blip("sine", 1320, 1320, 0.05, 0.045);
+    this._blip("sine", 1760, 1760, 0.07, 0.035, 0, 0.055);
+  }
+
   /**
    * Whether a line handed out by speak() is still being said. A spoken line
    * reports its own end; babble ends when its last syllable is scheduled to.
@@ -1787,6 +1985,7 @@ export class AudioManager {
   setSfxVolume(v) {
     if (this.sfxGain) {
       this.sfxGain.gain.value = Math.max(0, Math.min(1, v));
+      if (this.heartGain) this.heartGain.gain.value = this.sfxGain.gain.value;
     }
   }
 

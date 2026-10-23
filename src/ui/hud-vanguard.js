@@ -36,6 +36,7 @@ import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { reticlePoint } from "../systems/aim.js";
+import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 
 const TAU = Math.PI * 2;
@@ -508,7 +509,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   const ammo = p.ammo;
   const sidearm = wep && wep.id === 0; // the pistol never spends ammo
   const empty = !!wep && !sidearm && ammo < (wep.ammoPerShot || 1);
-  const low = !sidearm && ammo <= 10;
+  const low = !sidearm && (p.ammoLow ?? ammo <= 10);
   const numSize = Math.round((compact ? 30 : 56) * fs);
   const blink = Math.sin(M.now * 0.012) > 0;
 
@@ -516,7 +517,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   const shot = since(M.shotAt, 160);
   const kick = shot >= 0 ? 1 - shot : 0;
   const lowPulse = low ? 0.5 + 0.5 * Math.sin(M.now * 0.009) : 0;
-  const numStr = `${ammo}`;
+  const numStr = `${p.ammoLabel ?? ammo}`;
   ctx.font = uiFont(numSize, 800);
   const nw = ctx.measureText(numStr).width;
   if (low && !compact) {
@@ -804,8 +805,9 @@ function drawCompass(game, ctx, cx, y, W, compact) {
   const exit = game.objectiveWaypoint ? null : findExit(game);
   const wp = game.objectiveWaypoint || exit;
   if (wp) {
-    // The exit reads dim until the level is cleared, then lights up.
-    const cleared = !exit || (game.totalEnemies > 0 && game.killedEnemies >= game.totalEnemies);
+    // The exit reads dim while it is sealed (power cells, a lockdown) and
+    // lights up once it is open, which on an ungated level is from the start.
+    const open = !exit || exitIsOpen(exit);
     const rel = bearingTo(wp.x, wp.y);
     const clamped = Math.max(-RANGE, Math.min(RANGE, rel));
     const x = cx + clamped * ppd;
@@ -816,7 +818,7 @@ function drawCompass(game, ctx, cx, y, W, compact) {
       ctx.moveTo(x, mid - r - 2); ctx.lineTo(x + r + 2, mid); ctx.lineTo(x, mid + r + 2); ctx.lineTo(x - r - 2, mid);
       ctx.fill();
     }
-    const pulse = cleared ? 0.7 + 0.3 * Math.sin(M.now * 0.008) : 0.35;
+    const pulse = open ? 0.7 + 0.3 * Math.sin(M.now * 0.008) : 0.35;
     ctx.fillStyle = `rgba(${UI.objectiveRGB},${(real ? pulse * 0.35 : pulse).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(x, mid - r); ctx.lineTo(x + r, mid); ctx.lineTo(x, mid + r); ctx.lineTo(x - r, mid);
@@ -831,7 +833,7 @@ function drawCompass(game, ctx, cx, y, W, compact) {
     if (!compact) {
       const dist = Math.round(Math.hypot(wp.x - p.x, wp.y - p.y) * 2);
       const tag = exit ? `EXIT ${dist}m` : `${dist}m`;
-      ctx.globalAlpha = cleared ? 1 : 0.55;
+      ctx.globalAlpha = open ? 1 : 0.55;
       text(ctx, Math.abs(rel) > RANGE ? (rel < 0 ? `◀ ${tag}` : `${tag} ▶`) : tag, x, y + H + 18, 10, UI.energy, "center", 700, 1);
       ctx.globalAlpha = 1;
     }
@@ -870,8 +872,9 @@ export function drawVanguardThreatRing(game, ctx, w, h, barH = 0) {
   if (hit >= 0) {
     const kill = since(M.killConfirmAt, 420);
     const rr = r * (0.34 - 0.06 * easeOut(hit));
-    ctx.globalAlpha = 1 - hit;
-    const col = M.hitCrit ? UI.gold : UI.flash;
+    // A shield-blocked round flashes them grey and faint: it did not land.
+    ctx.globalAlpha = (1 - hit) * (M.hitBlocked ? 0.6 : 1);
+    const col = M.hitBlocked ? "#9aa3ad" : M.hitCrit ? UI.gold : UI.flash;
     for (let i = 0; i < 4; i++) {
       const a = Math.PI / 4 + (i * Math.PI) / 2;
       if (ink) arc(ctx, cx, cy, rr, a - 0.2, a + 0.2, 4, UI.ink);

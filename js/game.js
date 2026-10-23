@@ -151,6 +151,7 @@ import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
 import { TutorialSystem } from "./tutorial-system.js";
+import { setNpcWorld } from "./npc.js";
 import { dispatchKeyPress } from "../src/systems/input-dispatch.js";
 import { renderFrame } from "../src/rendering/render-pipeline.js";
 import {
@@ -180,6 +181,10 @@ import {
   finishesEarned,
   surveyGrid,
 } from "../src/systems/level-debrief.js";
+import { liftLockdown } from "../src/systems/exit-cells.js";
+import { lowHealthSeverity } from "../src/systems/player-feedback.js";
+import { LevelClock } from "../src/systems/level-clock.js";
+import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -221,13 +226,22 @@ const CHRONO_PLAYER_SPEED = 0.85;
 /** ms a phase dash leaves you untouchable: the dash itself (150 ms) and a beat after. */
 const DASH_PHASE_MS = 250;
 
-/** Ammo from a weapon pickup the player already carries (a new one gives 30). */
-const DUPLICATE_WEAPON_AMMO = 60;
+/** Crates' worth of that gun's rounds from a weapon pickup the player already carries. */
+const DUPLICATE_WEAPON_PACKS = 2;
 
 /** A Mac, where Control-click is the right-click a one-button mouse lacks. */
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
 
 export class Game {
+  /** When the level clock started, as performance.now() reads it (LevelClock). */
+  get roundStartTime() {
+    return this.levelClock.start;
+  }
+
+  set roundStartTime(v) {
+    this.levelClock.start = v;
+  }
+
   constructor(canvas, hudCanvas) {
     this.canvas = canvas;
     this.hudCanvas = hudCanvas;
@@ -277,6 +291,8 @@ export class Game {
     this.achievementSystem = new AchievementSystem(this);
     this.archive = new ArchiveSystem(this);
     this.tutorial = new TutorialSystem(this);
+    // The station's people keep out of each other's way and the player's (js/npc.js).
+    setNpcWorld(this);
     this.campaign = new CampaignManager(this);
     this.hudEditor = new HudEditor(this);
     this.isTouchDevice = isPrimaryTouchDevice();
@@ -326,6 +342,8 @@ export class Game {
     this.exitEntity = null;
     this.weaponAnimFrame = 0;
     this.weaponAnimTime = 0;
+    // roundStartTime reads and writes this: it stops while paused or dead.
+    this.levelClock = new LevelClock();
     this.roundStartTime = 0;
     this.deathTimer = 0;
     this.pauseSaveFlash = 0;
@@ -571,7 +589,7 @@ export class Game {
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
-    this._pausedAt = performance.now();
+    this.levelClock.hold("pause");
     this.audio.tts?.pause();
     this.unlockPointer();
   }
@@ -582,10 +600,7 @@ export class Game {
   resumeGame() {
     this._stateManager.resume();
     // The level clock (the debrief's time against par) stops while paused.
-    if (this._pausedAt) {
-      this.roundStartTime += performance.now() - this._pausedAt;
-      this._pausedAt = 0;
-    }
+    this.levelClock.hold("pause", false);
     this.audio.tts?.resume();
     // Settings may have changed the art style while we were paused, and a
     // first bake of Modern's materials costs ~220 ms. Pay it here rather than
@@ -1099,6 +1114,7 @@ export class Game {
     this.audio.setSfxVolume(this.settings.sfxVolume / 100);
     this.audio.setVoiceVolume(this.settings.voiceVolume / 100);
     this.audio.voiceStyle = this.settings.voiceStyle | 0;
+    this.audio.voicesOn = !!this.settings.voices;
   }
 
   // Save / Load
@@ -1473,6 +1489,8 @@ export class Game {
     this.player.angle = this.map.playerStart.dir;
     this.player.alive = true;
     resetAdsFov();
+    // Each round restocks the guns you hold, more as the rounds get longer.
+    this.player.addAmmoPacks(arenaRoundPacks(this.arenaRound));
     this.arenaTimer = 60;
     this.arenaClearTimer = null;
     this.entities = [];
@@ -2147,6 +2165,11 @@ export class Game {
     // Sync audio with time scale (chrono shift pitch-down + ducking)
     this.audio.setTimeScale?.(this.timeScale);
     this.audio.updateDucking?.(this.deltaTime);
+    // Low health (under 30%): heartbeat, muffled mix, ducked music. Off in
+    // menus and pauses, so the muffle opens with the pause screen.
+    this.audio.updateLowHealth?.(
+      this.state === GameState.PLAYING ? lowHealthSeverity(this.player?.health, this.player?.maxHealth) : 0,
+    );
 
     // FPS counter
     this.frameCount++;
@@ -2223,10 +2246,14 @@ export class Game {
     }
     if (this.assetEditor.active) return; // Pause game logic but keep rendering
 
+    // Down, and on the game-over screen after, the level clock stands still;
+    // a retry or a respawn starts it again.
     if (!this.player.alive) {
+      this.levelClock.hold("dead");
       this._updateDeathTimer();
       return;
     }
+    this.levelClock.hold("dead", false);
 
     const dt = this.deltaTime * this.timeScale;
     // The Final Form's first stop holds you too: no move, look, shot or shift.
@@ -2257,6 +2284,7 @@ export class Game {
     if (!frozen) this.updatePlayer(playerDt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
+    updateAmmoEconomy(this);
     if (this.mode === "campaign") this.levelBeats.update(this, this.deltaTime);
 
     if (this.mode === "meltdown" && this.meltdown.alive) {
@@ -2748,11 +2776,23 @@ export class Game {
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
       const dy = this.player.y - this.exitEntity.y;
+      // A lockdown lifts once enough of the floor's hostiles are down.
+      if (liftLockdown(this)) {
+        this.audio.lockdownLifted?.();
+        this.queueAriaMessage("lockdownLifted");
+        this.showNotice("live", "LOCKDOWN LIFTED", "The exit is open: get to the beacon.", 5, "#22e6c0");
+      }
       if (this.exitEntity.sealed) {
-        // Held shut by the level's power cells: say so, not every frame.
+        // Held shut by the level's power cells or lockdown: say so, not every frame.
         if (dx * dx + dy * dy < 2.25 && performance.now() - (this._sealedNoticeAt || 0) > 8000) {
           this._sealedNoticeAt = performance.now();
-          this.queueAriaMessage("exitSealed");
+          this.queueAriaMessage(this.lockdown ? "lockdownHeld" : "exitSealed");
+          const ld = this.lockdown;
+          if (ld) {
+            const left = Math.max(0, ld.need - this.killedEnemies);
+            this.showNotice("sealed", `LOCKDOWN — ${Math.min(ld.need, this.killedEnemies)} / ${ld.need} DOWN`,
+              `${left} more hostile${left === 1 ? "" : "s"} to put down before the doors release.`, 6);
+          }
           const pc = this.powerCells;
           if (pc) {
             const left = pc.total - pc.found;
@@ -2937,6 +2977,7 @@ export class Game {
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
         noclip: !!this._noclip,
+        time: this.time,
       },
       dt,
     );
@@ -3066,6 +3107,7 @@ export class Game {
     if (fx.hudDisabledUntil != null)
       this._hudDisabledUntil = fx.hudDisabledUntil;
     for (const msg of fx.ariaMessages) this.queueAriaMessage(msg);
+    for (const line of fx.lines ?? []) this.ariaComms.queueLine(line);
     this.totalEnemies += fx.totalEnemiesAdded;
     // Filter detonated chrono-bombs
     this._chronoBombs = this._chronoBombs.filter((b) => b.active);
@@ -3134,7 +3176,9 @@ export class Game {
           e._respawnAt = performance.now() + 8000;
         }
       } else if (e.type === "ammo") {
-        this.player.ammo = Math.min(999, this.player.ammo + 20);
+        // A crate is a few rounds for every gun carried (pickupAmmo each).
+        this.player.addAmmoPacks(1);
+        noteCrateTaken(this, e);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "ammo", this.world ? e.z : null);
         this.audio.pickup();
@@ -3148,7 +3192,7 @@ export class Game {
           this.player.currentWeapon = this.player.weapons.length - 1;
           this.audio.pickup();
           this.queueAriaMessage("weaponPickup");
-          this.player.ammo = Math.min(999, this.player.ammo + 30);
+          this.player.reserveOf(e.weaponId); // comes loaded with its startAmmo
           // Every gun in the armoury carried at once (achievement "Full Arsenal").
           if (WEAPONS.every((w) => this.player.weapons.includes(w.id))) {
             this.achievementStats.fullArsenal = true;
@@ -3156,11 +3200,11 @@ export class Game {
           }
         } else {
           // One already carried (a class's starting gun, or a missed pickup
-          // brought forward) is stripped for rounds: double the ammo.
-          this.player.ammo = Math.min(999, this.player.ammo + DUPLICATE_WEAPON_AMMO);
+          // brought forward) is stripped for rounds: that gun's, two crates' worth.
+          const got = this.player.addAmmo(e.weaponId, DUPLICATE_WEAPON_PACKS * (WEAPONS[e.weaponId]?.pickupAmmo ?? 0));
           this.audio.pickup();
           if (this.mode !== "tutorial") {
-            this.showGearToast?.("Ammo cache", `${WEAPONS[e.weaponId]?.name ?? "Weapon"} stripped · +${DUPLICATE_WEAPON_AMMO} ammo`);
+            this.showGearToast?.("Ammo cache", `${WEAPONS[e.weaponId]?.name ?? "Weapon"} stripped · +${got} rounds`);
           }
         }
         e.active = false;
@@ -3189,7 +3233,7 @@ export class Game {
           // The prologue scripts its own lines, and the lift opens on its own beat.
         } else if (pc && pc.found >= pc.total) {
           if (this.exitEntity) this.exitEntity.sealed = false;
-          this.audio.roundComplete?.();
+          this.audio.exitOpen?.();
           this.queueAriaMessage("exitUnsealed");
           this.showNotice("live", "EXTRACTION LIVE", "Every power cell is in. The exit is open: get to the beacon.", 5, "#22e6c0");
         } else {
@@ -3330,6 +3374,7 @@ export class Game {
       isTouchDevice: this.isTouchDevice,
       hudStyle: this.settings.hudStyle,
       hudScale: this.settings.hudScale,
+      hudH: this.hudH,
       aimOffsetX: this.player.aimOffsetX || 0,
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,
@@ -3702,7 +3747,7 @@ export class Game {
     this.player.aimOffsetY = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
-    this.player.ammo = 50;
+    this.player.reserves = {};
     this.player.angle = spawn.yaw;
     this.player.weapons = [0, 1]; // pistol + shotgun
     this.player.currentWeapon = 0;

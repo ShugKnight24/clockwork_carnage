@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { AriaCommsSystem } from "../../src/systems/aria-comms.js";
+import { AudioManager } from "../../js/audio.js";
 
 // A voice that runs as long as the test says: speak() hands back a handle,
 // isSpeaking() reads it.
@@ -37,5 +38,37 @@ describe("a comms line and its voice", () => {
     comms.queueLine({ text: "Stuck voice.", duration: 3 });
     run(comms, 3 + 8 + 1);
     expect(comms.message).toBeNull();
+  });
+});
+
+describe("unvoiced dialogue (Spoken Dialogue off, the default)", () => {
+  const unvoiced = () => {
+    const a = new AudioManager();
+    a.ctx = { currentTime: 0 };
+    a._voice = { play: vi.fn(() => ({ endTime: 5, stop() {} })) };
+    a.commsBlip = vi.fn();
+    return a;
+  };
+
+  it("says nothing, blips on comms, and hands back no handle to wait on", () => {
+    const a = unvoiced();
+    expect(a.voicesOn).toBe(false);
+    expect(a.speak("Hello.", "aria", { channel: "comms" })).toBeNull();
+    expect(a.speak("Hello.", "aria", { channel: "cutscene" })).toBeNull();
+    expect(a._voice.play).not.toHaveBeenCalled();
+    expect(a.commsBlip).toHaveBeenCalledOnce();
+    expect(a.isSpeaking(null)).toBe(false);
+    a.voicesOn = true;
+    expect(a.speak("Hello.", "aria", { channel: "comms" })).not.toBeNull();
+  });
+
+  it("lets a comms line go on its reading time", () => {
+    const a = unvoiced();
+    const comms = new AriaCommsSystem({ audio: a, character: { name: "Agent" } });
+    comms.enabled = true;
+    comms.queueLine({ text: "A line nobody voices.", duration: 3 });
+    comms.queueLine({ text: "The next line.", duration: 3 });
+    run(comms, 3.5);
+    expect(comms.message?.text).toBe("The next line.");
   });
 });
