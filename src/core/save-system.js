@@ -91,12 +91,19 @@ export function applyMobileMigration(isTouchDevice, settings, saveFn) {
  */
 export function applyDefaultsMigration(isTouchDevice, settings, saveFn) {
   try {
-    if (localStorage.getItem("cc_defaults_v1")) return;
-    let changed = false;
-    if (settings.sensitivity === 1.0) { settings.sensitivity = 0.7; changed = true; }
-    if (!isTouchDevice && settings.hudStyle === 4) { settings.hudStyle = 1; changed = true; }
-    if (changed) saveFn();
-    localStorage.setItem("cc_defaults_v1", "1");
+    if (!localStorage.getItem("cc_defaults_v1")) {
+      let changed = false;
+      if (settings.sensitivity === 1.0) { settings.sensitivity = 0.7; changed = true; }
+      if (!isTouchDevice && settings.hudStyle === 4) { settings.hudStyle = 1; changed = true; }
+      if (changed) saveFn();
+      localStorage.setItem("cc_defaults_v1", "1");
+    }
+    // Spoken dialogue went off by default until the voices sound right:
+    // everyone gets it off once, and a later re-enable is theirs to keep.
+    if (!localStorage.getItem("cc_voices_off_v1")) {
+      if (settings.voices) { settings.voices = false; saveFn(); }
+      localStorage.setItem("cc_voices_off_v1", "1");
+    }
   } catch (_) {}
 }
 
@@ -291,6 +298,10 @@ export function sanitizeCampaignSave(data, level) {
     if (v === null && k !== "mapGrid") delete out[k];
   }
   if (!(out.health > 0)) delete out.health;
+  // Rounds per weapon: finite, non-negative counts for real weapon ids only.
+  if (data.reserves && typeof data.reserves === "object") {
+    out.reserves = Object.fromEntries(Object.entries(data.reserves).filter(([id, n]) => WEAPONS[id] && fin(n) && n >= 0));
+  } else delete out.reserves;
 
   if (Array.isArray(data.weapons)) {
     const ids = [...new Set(data.weapons.filter((w) => Number.isInteger(w) && w >= 0 && w < WEAPONS.length))];

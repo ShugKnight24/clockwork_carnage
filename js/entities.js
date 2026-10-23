@@ -37,7 +37,10 @@ export class Player {
     this.health = PLAYER_MAX_HP;
     this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;
-    this.ammo = 50;
+    // Rounds carried per weapon id, each up to its maxAmmo × ammoCap. A gun
+    // is stocked with its startAmmo the first time it is held (reserveOf).
+    this.reserves = {};
+    this.ammoCap = 1;
     this.moveSpeed = 3.5;
     this.rotSpeed = 3.0;
     this.weapons = [0]; // weapon IDs owned
@@ -126,6 +129,67 @@ export class Player {
     return WEAPONS[this.weapons[this.currentWeapon]];
   }
 
+  /** Rounds carried for weapon `id`; a gun never held before comes with its startAmmo. */
+  reserveOf(id) {
+    if (this.reserves[id] === undefined) this.reserves[id] = WEAPONS[id]?.startAmmo ?? 0;
+    return this.reserves[id];
+  }
+
+  /** The most weapon `id` can carry. */
+  ammoCapOf(id) {
+    return Math.round((WEAPONS[id]?.maxAmmo ?? 0) * (this.ammoCap || 1));
+  }
+
+  /**
+   * Add `n` rounds to weapon `id`, up to its cap. Never lowers a reserve that
+   * is already over it (a debug fill, a cap upgrade lost on retry). Returns
+   * the rounds actually added.
+   */
+  addAmmo(id, n) {
+    const have = this.reserveOf(id);
+    const next = Math.max(have, Math.min(this.ammoCapOf(id), have + Math.round(n)));
+    this.reserves[id] = next;
+    return next - have;
+  }
+
+  /**
+   * An ammo crate's worth (`packs` of them) for every gun carried: each takes
+   * its own pickupAmmo, so a crate is a few shells or one sniper round, not a
+   * pool any gun can drain. Returns the rounds added in all.
+   */
+  addAmmoPacks(packs = 1) {
+    let added = 0;
+    for (const id of this.weapons) {
+      if (WEAPONS[id]?.infiniteAmmo) continue;
+      added += this.addAmmo(id, (WEAPONS[id]?.pickupAmmo ?? 0) * packs);
+    }
+    return added;
+  }
+
+  /** The held gun's rounds. The sidearm never spends any. */
+  get ammo() {
+    const id = this.weapons?.[this.currentWeapon];
+    return id === undefined ? 0 : this.reserveOf(id);
+  }
+
+  set ammo(v) {
+    const id = this.weapons?.[this.currentWeapon];
+    if (id !== undefined && this.reserves) this.reserves[id] = v;
+  }
+
+  /** A quarter of the held gun's cap or less (never for the sidearm): the HUD's LOW AMMO. */
+  get ammoLow() {
+    const wep = this.getWeaponDef();
+    if (!wep || wep.infiniteAmmo) return false;
+    return this.ammo <= Math.max(wep.ammoPerShot || 1, Math.ceil(this.ammoCapOf(wep.id) * 0.25));
+  }
+
+  /** The held gun's count as the HUD prints it: the sidearm's is endless. */
+  get ammoLabel() {
+    const wep = this.getWeaponDef();
+    return wep?.infiniteAmmo ? "\u221e" : `${this.ammo}`;
+  }
+
   /**
    * Serializable player stats for save/load.
    * List of property names that should be persisted.
@@ -134,7 +198,8 @@ export class Player {
     "health",
     "maxHealth",
     "armor",
-    "ammo",
+    "reserves",
+    "ammoCap",
     "weapons",
     "currentWeapon",
     "moveSpeed",

@@ -8,6 +8,7 @@ import { attachProjectileLight, syncProjectileLight } from "../../js/vfx.js";
 import { isSolid } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { PLAYER, hasLineOfSight3D } from "../world/voxel-physics.js";
+import { hasLineOfSight } from "./physics.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -16,6 +17,10 @@ const SPLASH_RADIUS = 2;
 const SPLASH_DAMAGE_FACTOR = 0.5;
 const HEAVY_SPLASH_THRESHOLD = 50;
 const PLAYER_HIT_RADIUS_SQ = 0.25;
+/** A Ricochet round off a wall hits this much harder: the bank shot is the gun's point. */
+export const BANK_DAMAGE_MULT = 1.5;
+/** How far a chaining round looks for its next enemy (tiles). */
+const CHAIN_RANGE = 6;
 /** Half the standing body, plus a little: the z band a voxel bolt must reach to hit the player. */
 const PLAYER_HIT_HALF = PLAYER.height * 0.5 + 0.1;
 
@@ -88,6 +93,7 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
   const candidates = ctx.entityGrid.query(p.x, p.y, queryR);
   let best = null;
   for (const e of candidates) {
+    if (p._chained?.has(e)) continue; // a chaining round has done with this one
     const hit = projectileHitsEnemy(p, e, prevX, prevY, in3D);
     if (hit && (!best || hit.dist < best.dist)) best = hit;
   }
@@ -107,8 +113,37 @@ function tryHitEnemies(p, ctx, prevX, prevY) {
   }
 
   ctx.damageEnemy(e, p.damage, best.zone);
+  if (p.chains && p.bounces > 0 && chainOn(p, e, ctx)) return true;
   p.active = false;
   if (p.damage > HEAVY_SPLASH_THRESHOLD) applySplash(p, e, ctx);
+  return true;
+}
+
+/**
+ * A Ricochet round that hits with a bounce left glances on to the nearest
+ * other enemy it can see within CHAIN_RANGE, spending the bounce. Returns
+ * false (the round stops) when there is none.
+ */
+function chainOn(p, hit, ctx) {
+  (p._chained ??= new Set()).add(hit);
+  let next = null;
+  let best = CHAIN_RANGE * CHAIN_RANGE;
+  for (const e of ctx.entityGrid.query(p.x, p.y, CHAIN_RANGE)) {
+    if (!isAliveEnemy(e) || p._chained.has(e)) continue;
+    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    if (d2 >= best || (ctx.map && !hasLineOfSight(ctx.map, p.x, p.y, e.x, e.y))) continue;
+    best = d2;
+    next = e;
+  }
+  if (!next) return false;
+  const d = Math.sqrt(best) || 1;
+  p.dirX = (next.x - p.x) / d;
+  p.dirY = (next.y - p.y) / d;
+  // The hit test measures along the flight from its origin: start a new one here.
+  p.originX = p.x;
+  p.originY = p.y;
+  p.pitch = 0;
+  p.bounces--;
   return true;
 }
 
@@ -173,8 +208,10 @@ function stepProjectile(p, ctx, stepDt) {
         if (hitY || !hitX) p.dirY = -p.dirY;
         p.x = prevX;
         p.y = prevY;
+        p.originX = prevX;
+        p.originY = prevY;
         p.bounces--;
-        p.damage *= 0.85;
+        p.damage *= BANK_DAMAGE_MULT;
         p._bounced = true;
         return;
       }

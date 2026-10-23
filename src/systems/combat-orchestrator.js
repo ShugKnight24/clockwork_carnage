@@ -21,12 +21,39 @@ import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../../js/entities.js";
-import { aimAnglesForGame } from "./aim.js";
-import { PLAYER_ADS_SPREAD_MULT } from "../constants.js";
+import { aimAnglesForGame, currentSpread } from "./aim.js";
+import { KILL_DROP_CHANCE } from "./ammo-economy.js";
+import { noteDamageCue } from "./player-feedback.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
 const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
 const WEAPON_SOUNDS = ["shootPistol", "shootShotgun", "shootPlasma", "shootCannon", "shootScattergun", "shootSniper", "shootRicochet", "shootEMP"];
+/** Multishot's fan of rounds narrows to this with the sights up. */
+const ADS_FAN_MULT = 0.45;
+
+/**
+ * Where one round goes inside a weapon's cone: a uniform point on the disc of
+ * radius `cone` (radians) round the aim, as [yaw, pitch] offsets. The cone is
+ * the one the crosshair's spread brackets draw (currentSpread in aim.js).
+ */
+export function scatter(cone, rand = Math.random) {
+  if (!(cone > 0)) return [0, 0];
+  const r = cone * Math.sqrt(rand());
+  const a = rand() * Math.PI * 2;
+  return [r * Math.cos(a), r * Math.sin(a)];
+}
+
+/**
+ * A weapon's damage multiplier at `dist` tiles: 1 out to falloff[0], easing
+ * to falloff[2] at falloff[1] and beyond (src/data/weapons.js). 1 without one.
+ */
+export function falloffMult(wep, dist) {
+  const f = wep?.falloff;
+  if (!f || !(dist > f[0])) return 1;
+  const t = Math.min(1, (dist - f[0]) / (f[1] - f[0]));
+  return 1 + (f[2] - 1) * t;
+}
+
 /** Vertical recoil in radians. */
 const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
 const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
@@ -75,7 +102,12 @@ export function fireWeapon(game) {
 
   const damage = wep.damage * game.player.damageMultiplier;
   const { yaw: aimAngle, pitch: aimPitch } = aimAnglesForGame(game);
-  const spreadMul = game.player.isAiming ? PLAYER_ADS_SPREAD_MULT : 1;
+  // Every round scatters inside the weapon's cone: the hip `spread`, easing
+  // to its `adsSpread` as the sights come up. Single rounds used to ignore
+  // the cone and pellets spread only sideways, so the sights and the
+  // crosshair said nothing about where a weapon's rounds actually went.
+  const cone = currentSpread(wep);
+  const fanMul = game.player.isAiming ? ADS_FAN_MULT : 1;
 
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
@@ -83,8 +115,8 @@ export function fireWeapon(game) {
     game._shotWeapon = wep;
     try {
       for (let p = 0; p < pellets; p++) {
-        const spread = pellets > 1 ? (Math.random() - 0.5) * wep.spread * 2 * spreadMul : 0;
-        hitscan(game, aimAngle + spread, damage, wep.range, aimPitch);
+        const [dy, dp] = scatter(cone);
+        hitscan(game, aimAngle + dy, damage, wep.range, aimPitch + dp);
       }
     } finally {
       game._shotWeapon = null;
@@ -92,16 +124,17 @@ export function fireWeapon(game) {
   } else {
     const shots = game.player.multiShot || 1;
     for (let ms = 0; ms < shots; ms++) {
-      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 * spreadMul : 0;
-      const shotAngle = aimAngle + spreadAngle;
+      const [dy, dp] = scatter(cone);
+      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 * fanMul : 0;
+      const shotAngle = aimAngle + spreadAngle + dy;
       const dirX = Math.cos(shotAngle);
       const dirY = Math.sin(shotAngle);
       const proj = new Projectile(
         game.player.x,
         game.player.y,
-        dirX, dirY, damage, 12, "player",
+        dirX, dirY, damage, wep.projectileSpeed ?? 12, "player",
       );
-      proj.pitch = aimPitch;
+      proj.pitch = aimPitch + dp;
       if (game.world) {
         // A voxel bolt flies in three dimensions: it leaves the eye on the
         // camera's own pitch and keeps its world height as it travels.
@@ -112,6 +145,7 @@ export function fireWeapon(game) {
       proj.weaponId = wep.id;
       if (wep.id === 7) proj.emp = true;
       if (wep.bounces) proj.bounces = wep.bounces;
+      if (wep.chains) proj.chains = true;
       proj.color = game.getCharacterColor().accent || wep.color;
       game.projectiles.push(proj);
       game.entities.push(proj);
@@ -162,7 +196,17 @@ export function hitscan(game, angle, damage, range, pitch = 0) {
   let endDist;
   if (hit) {
     endDist = hit.dist;
-    damageEnemy(game, hit.enemy, damage, hit.zone);
+    const shot = game._shotWeapon;
+    damageEnemy(game, hit.enemy, damage * falloffMult(shot, hit.dist), hit.zone);
+    // An armour-piercing bolt carries on into the next enemy in line.
+    if (shot?.piercesArmor) {
+      const rest = game.entities.filter((e) => e !== hit.enemy);
+      const next = pickHitscanTarget(game.player, dirX, dirY, pitch, range, rest, game.map, reach);
+      if (next) {
+        endDist = next.dist;
+        damageEnemy(game, next.enemy, damage * (shot.pierceMult ?? 1) * falloffMult(shot, next.dist), next.zone);
+      }
+    }
   } else if (reach) {
     endDist = reach.dist;
     if (reach.blocked) game.spawnWallSparks(reach.x, reach.y, reach.z);
@@ -222,14 +266,18 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   // Apply zone multiplier before crit/shield. Crit + zone stack multiplicatively
   // (a headshot crit does HEADSHOT_MULT * 2 = 5x base damage).
   const zoneName = zone?.name || "body";
-  const zoneMult = zone?.mult ?? 1;
-  const zoneDamage = damage * zoneMult;
-  const isHead = zoneName === "head";
-
   const shot = game._shotWeapon;
+  // An armour-piercing bolt (the sniper's) takes no cut from a plate zone.
+  const zoneMult = shot?.piercesArmor && zoneName === "armor" ? 1 : zone?.mult ?? 1;
+  const isHead = zoneName === "head";
+  // A precision weapon pays more for the head (the sniper's headshotMult).
+  const zoneDamage = damage * zoneMult * (isHead ? shot?.headshotMult ?? 1 : 1);
+
   const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
     zoneDamage, enemy, game.player.critChance, game.player,
-    { phasesShields: !!shot?.phasesShields, zone: zoneName },
+    // Piercing goes through front and energy shields as phasing does; a
+    // boss's carapace (def.armor) still caps it.
+    { phasesShields: !!(shot?.phasesShields || shot?.piercesArmor), zone: zoneName, capScale: stopScale },
   );
   if (shieldSpark) {
     game.glitchEffect = Math.max(game.glitchEffect, 0.08);
@@ -248,9 +296,17 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   }
 
   enemy.health -= finalDamage;
+  // A headshot from a heavy bolt staggers what it does not drop: the
+  // telegraphed attack is cancelled and it reels. Never a boss.
+  if (isHead && shot?.headStagger && enemy.health > 0 && !isBossEnemy(enemy)) {
+    enemy._staggered = true;
+    enemy.state = "pain";
+    enemy.painTimer = Math.max(enemy.painTimer || 0, shot.headStagger);
+  }
   enemy.hitTime = game.time;
-  // The Temporal Sniper's bolt destabilises time around what it does not kill.
-  if (shot?.slowOnHit && enemy.health > 0) {
+  // The Temporal Sniper's bolt destabilises time around what it does not
+  // kill (a boss shrugs it off: slowed, the Shell was a 3-round fight).
+  if (shot?.slowOnHit && enemy.health > 0 && !enemy.def.boss) {
     if (!(enemy._slowUntil > game.time)) {
       game.damageNumbers.push({ x: enemy.x, y: enemy.y, value: "SLOWED", crit: false, life: 1.1, vx: 0 });
     }
@@ -274,13 +330,22 @@ export function damageEnemy(game, enemy, damage, zone = null) {
 
   const pan = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
   const dist = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
-  game.audio.enemyHit(pan, dist);
-  game.audio.hitConfirm?.(pan); // Distinct metallic ding for hit feedback
+  // A round the shield took (front plate, Commander's shield, a ward) pings
+  // off and gets its own grey deflect tick, not the hit ding and marker: the
+  // player should hear that the shot did little and go round.
+  const blocked = shieldSpark && enemy.health > 0;
+  if (blocked) {
+    game.audio.shieldBlock?.(pan);
+  } else {
+    game.audio.enemyHit(pan, dist);
+    game.audio.hitConfirm?.(pan); // Distinct metallic ding for hit feedback
+  }
   if (isHead) game.audio.headshotConfirm?.(pan);
 
   game.hitMarker = (isCrit || isHead) ? 0.22 : 0.15;
   game.hitMarkerCrit = isCrit;
   game.hitMarkerHead = isHead;
+  game.hitMarkerBlocked = blocked;
   game.hitMarkerKill = enemy.health <= 0;
   game._lastHitWasCrit = isCrit || isHead;
   game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead, hitHeightOf(game, enemy));
@@ -313,7 +378,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
       game.achievementStats.totalKills++;
       const pan2 = game.audio.calculatePan(target.x, target.y, game.player.x, game.player.y, game.player.angle);
       const dist2 = Math.hypot(target.x - game.player.x, target.y - game.player.y);
-      game.audio.enemyDeath(pan2, dist2);
+      game.audio.enemyDeath(pan2, dist2, target.enemyType);
       game.audio.enemyBark?.(target.enemyType, "death", pan2, dist2);
       game.spawnDeathParticles(target.x, target.y, target.def.color1, target.def.color2, hitHeightOf(game, target));
       game.glitchEffect = 0.3;
@@ -332,7 +397,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     game.achievementStats.totalKills++;
     const panDeath = game.audio.calculatePan(enemy.x, enemy.y, game.player.x, game.player.y, game.player.angle);
     const distDeath = Math.hypot(enemy.x - game.player.x, enemy.y - game.player.y);
-    game.audio.enemyDeath(panDeath, distDeath);
+    game.audio.enemyDeath(panDeath, distDeath, enemy.enemyType);
     game.audio.killConfirm?.(panDeath, zoneName === "head" || game._lastHitWasCrit);
     game.audio.enemyBark?.(enemy.enemyType, "death", panDeath, distDeath);
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
@@ -359,8 +424,8 @@ export function onEnemyKill(game, enemy) {
     game.queueAriaMessage?.("bestiaryUnlocked");
   }
 
-  // Campaign ammo drops
-  if (enemy && game.mode === "campaign" && Math.random() < 0.18) {
+  // Ammo drops: the campaign's, and the arena's (where every round is a fight).
+  if (enemy && Math.random() < (KILL_DROP_CHANCE[game.mode] ?? 0)) {
     game.entities.push(new Pickup(enemy.x, enemy.y, "ammo"));
   }
 
@@ -374,7 +439,9 @@ export function onEnemyKill(game, enemy) {
   );
 
   if (fx.screenShake) game.screenShake = Math.max(game.screenShake, fx.screenShake);
-  if (fx.playAudio) game.audio.roundComplete();
+  // Streaks have their own escalating sting; the round-complete jingle is
+  // kept for finishing a level.
+  if (fx.playAudio) game.audio.streakSting?.(fx.tier);
   if (fx.glitchEffect) game.glitchEffect = Math.max(game.glitchEffect, fx.glitchEffect);
   if (fx.ariaCategory) game.queueAriaMessage(fx.ariaCategory);
 
@@ -443,6 +510,11 @@ export function damagePlayer(game, amount, attacker) {
   game.player.hurtTime = game.time;
   if (attacker && typeof attacker.x === "number") {
     game.player.lastDamageAngle = Math.atan2(attacker.y - game.player.y, attacker.x - game.player.x);
+    // The HUD's damage-direction cue (every HUD and art style) points here.
+    noteDamageCue(game.player, attacker.x, attacker.y, actualDamage, game.time);
+  } else {
+    // No source (a fall, a hazard): no direction, not the last hit's.
+    game.player.lastDamageAngle = null;
   }
   game.screenShake = Math.max(game.screenShake, 4);
   game.audio.playerHit();
@@ -470,7 +542,7 @@ export function damagePlayer(game, amount, attacker) {
       game.player.kills++;
       const panThorns = game.audio.calculatePan(attacker.x, attacker.y, game.player.x, game.player.y, game.player.angle);
       const distThorns = Math.hypot(attacker.x - game.player.x, attacker.y - game.player.y);
-      game.audio.enemyDeath(panThorns, distThorns);
+      game.audio.enemyDeath(panThorns, distThorns, attacker.enemyType);
       game.audio.enemyBark?.(attacker.enemyType, "death", panThorns, distThorns);
       game.spawnDeathParticles(attacker.x, attacker.y, attacker.def.color1, attacker.def.color2, hitHeightOf(game, attacker));
       game.glitchEffect = 0.3;

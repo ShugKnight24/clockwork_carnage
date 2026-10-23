@@ -33,12 +33,13 @@ export const UPGRADES = {
   },
   ammo: {
     name: "Ammo Synthesizer",
-    description: "+20 Ammo Capacity",
+    description: "+15% Ammo Capacity, and a crate",
     baseCost: 150,
     costScale: 1.4,
     maxLevel: 8,
     apply: (player) => {
-      player.ammo = Math.min(player.ammo + 20, 999);
+      player.ammoCap = (player.ammoCap || 1) + 0.15;
+      player.addAmmoPacks?.(1);
     },
   },
   regen: {

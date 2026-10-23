@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { calculateEnemyDamage } from "../../src/systems/combat.js";
-import { updateProjectiles } from "../../src/systems/projectile-update.js";
+import { updateProjectiles, BANK_DAMAGE_MULT } from "../../src/systems/projectile-update.js";
 import { AISystem } from "../../src/systems/ai.js";
 import { Enemy, Projectile } from "../../js/entities.js";
 
@@ -71,7 +71,7 @@ describe("Ricochet Pistol", () => {
     expect(p.active).toBe(true);
     expect(p.dirX).toBe(-1); // mirrored off the east wall
     expect(p.bounces).toBe(1);
-    expect(p.damage).toBeCloseTo(12 * 0.85);
+    expect(p.damage).toBeCloseTo(12 * BANK_DAMAGE_MULT); // a bank shot hits harder
   });
 
   it("stops once its bounces are spent", () => {
