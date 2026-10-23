@@ -21,7 +21,7 @@ import {
   hasLineOfSight3D,
   playerEyeZ3D,
 } from "../world/voxel-physics.js";
-import { beginWindup } from "./ai.js";
+import { beginWindup, enemyTimeRate } from "./ai.js";
 import { AIR, isWater } from "../world/blocks.js";
 import { Projectile } from "../../js/entities.js";
 import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
@@ -119,13 +119,9 @@ export class VoxelAISystem {
       if (world.unloadedAt(Math.floor(e.x), Math.floor(e.y))) continue;
       const def = e.def || {};
 
-      // Enemy-specific chrono scale
-      const chronoMult = Number.isFinite(e.chronoMultiplier)
-        ? e.chronoMultiplier
-        : Number.isFinite(def.chronoMultiplier)
-          ? def.chronoMultiplier
-          : 0.15;
-      const enemyDt = player.chronoActive ? dt * chronoMult : dt;
+      // The enemy's own clock: a shift applies its chronoMultiplier once.
+      const rate = enemyTimeRate(e, player, timeScale);
+      const enemyDt = (dt / timeScale) * rate;
 
       // A spawn that never set one starts on the floor under it.
       if (!Number.isFinite(e.z)) e.z = groundHeight(world, e.x, e.y, bodyOf(e).half);
@@ -197,8 +193,7 @@ export class VoxelAISystem {
 
       // ── Attack cadence ──
       if (e.state === "chase") {
-        const chronoAttackScale = player.chronoActive && chronoMult > 0 ? chronoMult : 1;
-        const scaledAttackRate = (def.attackRate || 1000) / timeScale / chronoAttackScale;
+        const scaledAttackRate = rate > 0 ? (def.attackRate || 1000) / rate : Infinity;
         if (dist < (def.attackRange || 0) && time - e.lastAttackTime > scaledAttackRate && los) {
           beginWindup(e, time);
         }

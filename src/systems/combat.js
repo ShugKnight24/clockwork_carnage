@@ -26,7 +26,7 @@ import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
 /** Seconds after a hit before an energy shield starts to regenerate. */
 export const SHIELD_REGEN_DELAY = 2.5;
 
-export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false, zone = null } = {}) {
+export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, playerPos, { phasesShields = false, zone = null, capScale = 1 } = {}) {
   let finalDamage = baseDamage;
   let isCrit = false;
   let shieldSpark = false;
@@ -37,13 +37,33 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     isCrit = true;
   }
 
+  // A form that is softer than it looks (the Shell, cracked) takes more.
+  if (enemy._takenMul) finalDamage *= enemy._takenMul;
+
+  // A boss's armour (`def.armor`), until its shell cracks: everything but an
+  // opening (stuck after a charge, `_stagger`) takes `mul`, and no single
+  // round takes more than `cap`, so a sniper bolt glances off. Shown as a
+  // block, like a shield.
+  const armor = enemy.def.armor;
+  if (armor && !enemy._shellCracked) {
+    const before = finalDamage;
+    if (!enemy._stagger) finalDamage *= armor.mul ?? 1;
+    // (A window that doubles every hit, Eleven Seconds', doubles the cap.)
+    if (armor.cap) finalDamage = Math.min(finalDamage, armor.cap * capScale);
+    if (finalDamage < before * 0.75) shieldSpark = true;
+  } else if (armor?.crackedCap) {
+    // The core under it: full damage, but no round takes more than this.
+    finalDamage = Math.min(finalDamage, armor.crackedCap * capScale);
+  }
+
   // Front shield — shield commanders take 80% less from front (a phasing
   // round, the Phase Scattergun's, passes straight through). The shield
-  // covers the body: the head shows over it, and a headshot is a headshot.
+  // covers the body: a head shot (or, face on, a graze through the visor
+  // slit) is not cut by it.
   // A shot that landed on the armour plate zone already took the plate's own
   // cut (hitZones), so the shield does not cut it a second time: stacked, a
   // Sentinel took 8% from the front and out-regenerated a pistol.
-  if (enemy.def.frontShield && !phasesShields && zone !== "head" && zone !== "armor") {
+  if (enemy.def.frontShield && !phasesShields && zone !== "head" && zone !== "armor" && zone !== "visor") {
     const dx = playerPos.x - enemy.x;
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
@@ -159,7 +179,10 @@ export function hitSpan(enemy, grid = true) {
   // A def that names its own hit volume (hitCenter) keeps it, on either kind.
   if (grid && enemy.def?.hitCenter == null) {
     const [top, bottom] = ENEMY_ART_SPAN[enemy.enemyType] ?? DEFAULT_ART_SPAN;
-    return [bottom + z, top + z];
+    // A figure drawn smaller than its art (the Shell once it cracks) stands
+    // on the same floor, shorter.
+    const s = enemy._spriteScale ?? 1;
+    return [bottom + z, bottom + (top - bottom) * s + z];
   }
   const center = enemy.def?.hitCenter ?? 0.35;
   const half = enemy.def?.hitHeight ?? 0.55;

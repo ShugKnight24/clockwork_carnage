@@ -41,7 +41,9 @@ function meleeSetup(type = "sentinel") {
   const e = new Enemy(10, 10, type);
   e.state = "chase";
   e.lastAttackTime = -1e9;
-  const player = { x: 10 + e.def.attackRange * 0.5, y: 10, angle: 0, chronoActive: false };
+  e.angle = 0; // squared up to the player (a shield bearer swings only to its front)
+  // Facing it: a swing from out of view winds up longer (its own test).
+  const player = { x: 10 + e.def.attackRange * 0.5, y: 10, angle: Math.PI, chronoActive: false };
   return { e, player };
 }
 
@@ -162,6 +164,9 @@ describe("ranged windup", () => {
     const e = new Enemy(10, 10, "drone");
     e.state = "chase";
     e.lastAttackTime = -1e9;
+    // Already has its aim (the acquire delay is its own test).
+    e._acquire = 1;
+    e._acquireNeed = 0.5;
     const player = { x: 13, y: 10, angle: 0, chronoActive: false };
     const ctx0 = ctxFor(e, player, 16);
     ai.update(ctx0, DT);

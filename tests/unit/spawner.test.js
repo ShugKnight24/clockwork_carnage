@@ -10,6 +10,7 @@ import {
   createMeltdownEnemies,
   createMeltdownPickups,
   applyActEnemyRoster,
+  ARENA_GUARD,
 } from "../../src/systems/spawner.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 
@@ -427,6 +428,28 @@ describe("createMeltdownPickups", () => {
   });
 });
 
+describe("arena shield bearers", () => {
+  it("fields one a round (two late), lighter, slower and softer than the campaign's", () => {
+    const spawns = Array.from({ length: 40 }, (_, i) => ({ x: 2 + i, y: 2 }));
+    const diff = getDifficultyMultipliers(1);
+    for (let round = 4; round <= 12; round++) {
+      for (let k = 0; k < 10; k++) {
+        const enemies = createArenaEnemies(round, spawns, diff);
+        const guards = enemies.filter((e) => e.def.ai === "guard");
+        expect(guards.length).toBeLessThanOrEqual(round >= ARENA_GUARD.twoFrom ? 2 : 1);
+        for (const g of guards) {
+          expect(g.def.shove).toBe(0);
+          expect(g.def.damage).toBe(Math.floor(ENEMY_TYPES[g.enemyType].damage * ARENA_GUARD.damage));
+          expect(g.speed).toBeCloseTo(ENEMY_TYPES[g.enemyType].speed * ARENA_GUARD.speed);
+        }
+        for (const e of enemies) {
+          expect(e.chronoMultiplier).toBeLessThanOrEqual(1); // beasts shrug a shift off here
+        }
+      }
+    }
+  });
+});
+
 // ── applyActEnemyRoster ─────────────────────────────────────────────────────
 
 describe("applyActEnemyRoster", () => {
@@ -499,4 +522,65 @@ describe("applyActEnemyRoster", () => {
     expect(entities[0].health).toBeGreaterThan(0);
     expect(entities[0].maxHealth).toBe(entities[0].health);
   });
+
+  it("applies a level's holdBack swaps first, even to roster types", () => {
+    const entities = [makeEnemy("phantom"), makeEnemy("corruptCop"), makeEnemy("henchman")];
+    applyActEnemyRoster(entities, 1, diff, { phantom: "glitchling" });
+    expect(entities.map((e) => e.enemyType)).toEqual(["glitchling", "corruptCop", "corruptCop"]);
+    expect(entities[0].def.name).toBe(ENEMY_TYPES.glitchling.name);
+  });
+
+  it("scales a swapped enemy exactly like one spawned as that type", () => {
+    // Act II has a scale; NG+ 2 on Nightmare stacks everything.
+    for (const [act, ng, d] of [[1, 0, 0], [1, 0, 3], [2, 2, 3], [2, 1, 2]]) {
+      const df = getDifficultyMultipliers(d);
+      const level = { entities: [{ type: "enemy", enemyType: "beast", x: 1.5, y: 1.5 }, { type: "enemy", enemyType: "sentinel", x: 2.5, y: 1.5 }] };
+      const { entities } = createCampaignEntities(level, act, ng, df);
+      applyActEnemyRoster(entities, act, df, { beast: "sentinel" }, ng);
+      const [swapped, native] = entities;
+      expect(swapped.enemyType).toBe("sentinel");
+      for (const k of ["health", "maxHealth", "speed"]) expect(swapped[k], `${k} act ${act} ng ${ng} d ${d}`).toBe(native[k]);
+      expect(swapped.def.damage).toBe(native.def.damage);
+      expect(swapped.def.speed).toBe(native.def.speed);
+    }
+  });
+
+  it("a swap on Easy hits as softly as Easy's own enemies", () => {
+    const easy = getDifficultyMultipliers(0);
+    const { entities } = createCampaignEntities({ entities: [{ type: "enemy", enemyType: "henchman", x: 1.5, y: 1.5 }] }, 1, 0, easy);
+    applyActEnemyRoster(entities, 1, easy);
+    expect(entities[0].enemyType).toBe("corruptCop");
+    expect(entities[0].def.damage).toBe(Math.floor(ENEMY_TYPES.corruptCop.damage * easy.damageMul));
+  });
 });
+
+// ── Act I: an enemy is seen first where the story first names it ───────────
+
+describe("Act I first sightings", async () => {
+  const { ACTS } = await import("../../src/data/campaign/acts.js");
+  const { campaignMap } = await import("../../src/data/levels/campaign.js");
+  const diff = getDifficultyMultipliers(1);
+  const act1 = ACTS[0];
+  const met = (i) => {
+    const level = campaignMap(act1.levels[i]);
+    const enemies = level.entities
+      .filter((s) => s.type === "enemy")
+      .map((s) => ({ type: "enemy", enemyType: s.enemyType, health: 1, maxHealth: 1, speed: 1, damage: 1 }));
+    applyActEnemyRoster(enemies, 1, diff, act1.levels[i].holdBack);
+    return new Set(enemies.map((e) => e.enemyType));
+  };
+  const first = (type) => act1.levels.findIndex((_, i) => met(i).has(type));
+
+  it("no phantom before research_briefing names them", () => {
+    expect(act1.levels[first("phantom")].briefing).toContain("research_briefing");
+  });
+
+  it("no turned officer before security_briefing names them", () => {
+    expect(act1.levels[first("corruptCop")].briefing).toContain("security_briefing");
+  });
+
+  it("no Shield Commander before containment_briefing names it", () => {
+    expect(act1.levels[first("shieldCommander")].briefing).toContain("containment_briefing");
+  });
+});
+
