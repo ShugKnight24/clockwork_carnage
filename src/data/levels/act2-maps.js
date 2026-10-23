@@ -286,7 +286,9 @@ function buildSalvageDeck() {
       item(5, 17, "health"),
       item(27, 5, "ammo"),
       item(55, 17, "health"),
-      item(34, 17, "weapon", { weaponId: 2 }),
+      // The Phase Scattergun: new here, not in Act I, so Act II still hands
+      // you something (the Quantum Cannon follows in the Maintenance Spine).
+      item(34, 17, "weapon", { weaponId: 4 }),
       // Looter stash.
       item(58, 15, "ammo"),
       item(58, 14, "health"),

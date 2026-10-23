@@ -80,9 +80,12 @@ const NG_PLUS_BARK = { aria: "ngPlusDeadSquad", delay: 5000, minNgPlus: 1 };
  * @param {string[]|null} briefing
  * @param {SquadMember[]} squad
  * @param {{ onStart?: object[], callsigns?: Record<string, string>,
- *   grants?: string[], setPiece?: string, seed?: number, boss?: boolean }} [extra]
+ *   grants?: string[], setPiece?: string, seed?: number, boss?: boolean,
+ *   holdBack?: Record<string, string> }} [extra] - holdBack: enemy types
+ *   this level swaps for ones already met, until a briefing names them
+ *   (spawner.js applyActEnemyRoster)
  */
-function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null, seed = 0, boss = false } = {}) {
+function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null, seed = 0, boss = false, holdBack = null } = {}) {
   return {
     ...(STATION[map] ?? { map, env: map, rotation: 0, seed, boss }),
     briefing,
@@ -91,6 +94,7 @@ function level(map, briefing, squad, { onStart = [], callsigns = null, grants = 
     onStart,
     grants,
     ...(setPiece ? { setPiece } : {}),
+    ...(holdBack ? { holdBack } : {}),
   };
 }
 
@@ -181,8 +185,12 @@ export const ACTS = [
     outro: ["false_victory"],
     // The Temporal Nexus moved to Act IV (spec decision 8).
     levels: levels([
-      level("entry", null, []),
-      level("checkpoint", ["security_briefing"], []),
+      // Nothing the briefings name before they name it: the turned officers
+      // come with security_briefing (I-2), the phantoms with
+      // research_briefing (I-3). Until then they stand in as what the
+      // prologue already showed you.
+      level("entry", null, [], { holdBack: { corruptCop: "drone", phantom: "glitchling" } }),
+      level("checkpoint", ["security_briefing"], [], { holdBack: { phantom: "glitchling" } }),
       level("research", ["research_briefing"], []),
       level("containment", ["containment_briefing"], []),
       level("server_farm", ["server_briefing"], []),

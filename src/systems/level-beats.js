@@ -76,7 +76,9 @@ export class LevelBeats {
       case "kills":
         return game.totalEnemies > 0 && game.killedEnemies / game.totalEnemies >= beat.frac;
       case "cell":
-        return (game.powerCells?.found ?? 0) >= (beat.n ?? 1);
+        // Most levels hold no cells now: the line comes with the fighting.
+        if (!game.powerCells) return game.totalEnemies > 0 && game.killedEnemies / game.totalEnemies >= 0.2 * (beat.n ?? 1);
+        return game.powerCells.found >= (beat.n ?? 1);
       case "exit": {
         const ex = game.exitEntity;
         return !!ex && Math.hypot(ex.x - game.player.x, ex.y - game.player.y) < EXIT_NEAR;

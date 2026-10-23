@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { planPowerCells, powerCellsFor, stepsFrom } from "../../src/systems/exit-cells.js";
+import {
+  collectAllPowerCells,
+  liftLockdown,
+  lockdownFor,
+  planLockdown,
+  planPowerCells,
+  powerCellsFor,
+  stepsFrom,
+} from "../../src/systems/exit-cells.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 import { campaignMap } from "../../src/data/levels/campaign.js";
 import { setPieceFor } from "../../src/data/campaign/set-pieces.js";
@@ -9,27 +17,44 @@ const slots = ACTS.flatMap((act) => act.levels.map((entry, i) => ({ act: act.id,
 function plan({ act, level, entry }) {
   const map = campaignMap(entry);
   const piece = setPieceFor(entry);
-  const n = powerCellsFor(map, piece, act, level);
+  const n = powerCellsFor(map, piece, entry.map);
   const cells = n ? planPowerCells(map.grid, map.playerStart, map.exit, n, entry.seed ?? act * 100 + level) : [];
   return { map, n, cells };
 }
 
 describe("power cells", () => {
-  it("gates the plain corridor levels and leaves boss arenas and self-gated levels alone", () => {
-    const report = slots.map((s) => {
-      const { map, n } = plan(s);
-      return `${s.act}-${s.level + 1} ${s.entry.map}: ${n}`;
+  it("holds cells only on the reactor and the Engine, and locks down three fights", () => {
+    const gates = slots.map((s) => {
+      const map = campaignMap(s.entry);
+      const piece = setPieceFor(s.entry);
+      return [s.entry.map, plan(s).n, lockdownFor(map, piece, s.entry.map)];
     });
-    // The Act I corridor maps are the ones the survey found most linear.
-    for (const name of ["entry", "research", "containment", "server_farm", "reactor"]) {
-      const s = slots.find((x) => x.act === 1 && x.entry.map === name);
-      expect(plan(s).n, name).toBeGreaterThan(0);
-    }
+    // The power is the story only where the reactor or the Engine is down.
+    expect(gates.filter(([, n]) => n).map(([id, n]) => `${id}:${n}`)).toEqual(["reactor:2", "engine_firing:2"]);
+    expect(gates.filter(([, , ld]) => ld).map(([id]) => id)).toEqual(["checkpoint", "containment", "engine"]);
+    // Never both on one level, and the rest are a run for the exit.
+    for (const [id, n, ld] of gates) expect(n && ld, id).toBeFalsy();
     for (const s of slots) {
       const { map, n } = plan(s);
       if (!map?.exit) expect(n, `${s.entry.map} has no exit`).toBe(0);
     }
-    expect(report.length).toBe(slots.length);
+  });
+
+  it("lifts a lockdown once its share of the hostiles is down", () => {
+    expect(planLockdown(0, 10)).toBe(null);
+    expect(planLockdown(0.7, 0)).toBe(null);
+    const game = { lockdown: planLockdown(0.7, 10), killedEnemies: 6, exitEntity: { sealed: true } };
+    expect(game.lockdown.need).toBe(7);
+    expect(liftLockdown(game)).toBe(false);
+    expect(game.exitEntity.sealed).toBe(true);
+    game.killedEnemies = 7;
+    expect(liftLockdown(game)).toBe(true);
+    expect(game.exitEntity.sealed).toBe(false);
+    expect(liftLockdown(game)).toBe(false); // once
+
+    const jumped = { lockdown: planLockdown(0.7, 3), killedEnemies: 0, exitEntity: { sealed: true }, entities: [] };
+    collectAllPowerCells(jumped);
+    expect([jumped.lockdown.done, jumped.exitEntity.sealed]).toEqual([true, false]);
   });
 
   it("places every cell reachable, off the direct route, apart, and the same every run", () => {

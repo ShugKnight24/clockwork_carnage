@@ -1,12 +1,12 @@
 /**
- * Power cells: the campaign's reason to leave the main corridor.
+ * What holds a campaign level's exit shut, if anything.
  *
- * Most campaign maps run a spine from the start straight to the exit, and
- * about two thirds of each floor — offices, cell rows, supply rooms — never
- * has to be entered. On a gated level the exit's extraction beacon stays
- * sealed until the player recovers the level's power cells, which are placed
- * here, off the direct route: every map gets them without hand-editing, the
- * same cells every run (seeded by the level's own seed).
+ * Power cells only where the power is the story (EXIT_GATES): the exit's
+ * extraction beacon stays sealed until the player recovers the cells, which
+ * are placed here, off the direct start→exit route, the same cells every
+ * run (seeded by the level's own seed). A lockdown holds the doors until a
+ * share of the level's hostiles is down. Every other level is a run for the
+ * exit.
  *
  * Pure: grids in, cell positions out.
  */
@@ -120,26 +120,88 @@ export function planPowerCells(grid, start, exit, count, seed = 1) {
 }
 
 /**
- * How many cells a campaign level holds shut, or 0 when it is not gated:
- * no exit (a boss arena), or the level already gates itself — an objective,
- * a teach room's seal, a collapse chase or a loop.
+ * The campaign levels whose exit is held, by map. `cells` levels have a
+ * reason in-world for the hunt (`brief` is ARIA's line for it, `why` the
+ * notice card's); a `lockdown` share of the hostiles must be down first.
  */
-export function powerCellsFor(map, setPiece, act, level) {
-  if (!map?.exit || !map.playerStart) return 0;
-  if (map.objective || setPiece?.objective) return 0;
-  if (setPiece?.teach) return 0;
+export const EXIT_GATES = {
+  // I-6: the reactor scrammed, and the lift out runs off it.
+  reactor: {
+    cells: 2,
+    brief: "powerCellsReactor",
+    why: "The reactor scrammed and the exit lift runs off it. Two cells from the side rooms will restart the lift.",
+  },
+  // IV-6: Lyra needs the charge to fire the Engine once.
+  engine_firing: {
+    cells: 2,
+    brief: "powerCellsEngine",
+    why: "Lyra can't fire the Engine on what's left in it. Bring her two cells from the side halls, then get out.",
+  },
+  // I-2: the checkpoint's doors hold while its officers are up.
+  checkpoint: { lockdown: 0.7 },
+  // I-4: detention seals itself around a fight.
+  containment: { lockdown: 0.7 },
+  // III-6: the Wardens keep the Engine hall shut.
+  engine: { lockdown: 0.7 },
+};
+
+/**
+ * Whether a gate may hold this level at all: not with no exit (a boss
+ * arena), nor when the level already gates itself — an objective, a teach
+ * room's seal, a collapse chase or a loop.
+ */
+function gateable(map, setPiece) {
+  if (!map?.exit || !map.playerStart) return false;
+  if (map.objective || setPiece?.objective) return false;
+  if (setPiece?.teach) return false;
   const hazards = [...(setPiece?.hazards ?? []), ...(map.hazards ?? [])];
-  if (hazards.some((hz) => hz.type === "collapse" || hz.type === "loop")) return 0;
-  // Two in the opening levels, three after.
-  return act === 1 && level < 3 ? 2 : 3;
+  return !hazards.some((hz) => hz.type === "collapse" || hz.type === "loop");
+}
+
+/** How many cells a campaign level (by map id) holds shut, or 0. */
+export function powerCellsFor(map, setPiece, mapId) {
+  return gateable(map, setPiece) ? EXIT_GATES[mapId]?.cells ?? 0 : 0;
+}
+
+/** The share of a level's hostiles a lockdown wants down, or 0. */
+export function lockdownFor(map, setPiece, mapId) {
+  return gateable(map, setPiece) ? EXIT_GATES[mapId]?.lockdown ?? 0 : 0;
+}
+
+/** A lockdown for a level of `total` hostiles: `share` of them, at least one. */
+export function planLockdown(share, total) {
+  if (!(share > 0) || !(total > 0)) return null;
+  return { need: Math.max(1, Math.ceil(total * share)), total, done: false };
 }
 
 /**
- * Collect every power cell on the level and unseal the exit, as if the player
- * had found them all. Test tooling that walks or jumps to the exit uses it.
+ * Lift the level's lockdown once enough hostiles are down, unsealing the
+ * exit: true on the call that lifts it.
+ */
+export function liftLockdown(game) {
+  const ld = game.lockdown;
+  if (!ld || ld.done || (game.killedEnemies ?? 0) < ld.need) return false;
+  ld.done = true;
+  if (game.exitEntity) game.exitEntity.sealed = false;
+  return true;
+}
+
+/**
+ * Is this exit open to walk into: there, and not held shut by power cells or
+ * a lockdown? An ungated level's exit is open from the first frame.
+ */
+export function exitIsOpen(exit) {
+  return !!exit && exit.active !== false && !exit.sealed;
+}
+
+/**
+ * Collect every power cell on the level, lift any lockdown and unseal the
+ * exit, as if the player had done it all. Test tooling that walks or jumps
+ * to the exit uses it.
  */
 export function collectAllPowerCells(game) {
   for (const e of game.entities ?? []) if (e.type === "powerCell") e.active = false;
   if (game.powerCells) game.powerCells.found = game.powerCells.total;
+  if (game.lockdown) game.lockdown.done = true;
   if (game.exitEntity) game.exitEntity.sealed = false;
 }

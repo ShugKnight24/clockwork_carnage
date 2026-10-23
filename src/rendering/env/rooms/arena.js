@@ -342,8 +342,8 @@ function shaftFrame(ctx, p, r, sign) {
   plate(ctx, 50, 50, T - 100, 128, p, { tones: DARK, bevel: 5, ink: 3 });
   if (sign === "lift") {
     lightStrip(ctx, 70, 66, T - 140, 44, "#1fd06a", { blur: 18, core: "rgba(220,255,230,0.35)" });
-    letter(ctx, "EXTRACTION", T / 2, 89, 26, "#04200c");
-    letter(ctx, "LIFT 2 · EVAC ONLY", T / 2, 144, 15, "#e8e4d8");
+    letter(ctx, "LIFT B", T / 2, 89, 26, "#04200c");
+    letter(ctx, "ENGINE LEVEL · B2", T / 2, 144, 15, "#e8e4d8");
   } else {
     // The floors it serves.
     const floors = [["L1", "STATION", "#e8e4d8"], ["B1", "STORES", "#e8e4d8"], ["B2", "ENGINE", RED]];

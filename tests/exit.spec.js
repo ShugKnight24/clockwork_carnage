@@ -1,13 +1,13 @@
 /**
- * The level exit: an extraction beacon, held sealed on gated levels until the
- * level's power cells are found (src/systems/exit-cells.js).
+ * The level exit: an extraction beacon, held sealed on the reactor level until
+ * its power cells are found (src/systems/exit-cells.js EXIT_GATES).
  */
 import { test, expect } from "@playwright/test";
 import { loadGame, debug } from "./helpers.js";
 
 test("the exit stays sealed until the power cells are found, then completes the level", async ({ page }) => {
   await loadGame(page);
-  await debug(page, "startCampaign", 0);
+  await debug(page, "startCampaign", 5); // I-6 Reactor Access
   await debug(page, "godMode", true);
   await debug(page, "killAll");
 
@@ -16,7 +16,7 @@ test("the exit stays sealed until the power cells are found, then completes the 
     const cells = g.entities.filter((x) => x.type === "powerCell");
     return { cells: cells.length, sealed: !!g.exitEntity.sealed, total: g.powerCells?.total ?? 0 };
   });
-  // Act I's first level is gated: two cells off the main corridor.
+  // The reactor scrammed: two cells off the main corridor restart the lift.
   expect(start).toEqual({ cells: 2, sealed: true, total: 2 });
 
   // Facing the beacon from a few cells away.

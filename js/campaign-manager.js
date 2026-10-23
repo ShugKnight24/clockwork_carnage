@@ -26,7 +26,7 @@ import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
 import { getArtStyle, ART_LEGACY } from "../src/rendering/art-style.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
-import { planPowerCells, powerCellsFor } from "../src/systems/exit-cells.js";
+import { EXIT_GATES, lockdownFor, planLockdown, planPowerCells, powerCellsFor } from "../src/systems/exit-cells.js";
 import { setPieceFor } from "../src/data/campaign/set-pieces.js";
 import { Pickup } from "./entities.js";
 
@@ -283,9 +283,11 @@ export class CampaignManager {
     g.entities.push(...spawned);
     g.exitEntity = exitEntity || null;
 
-    // Power cells hold the exit shut on the plain corridor levels: placed in
-    // the side rooms off the direct route, the same every run (exit-cells.js).
-    const cellCount = powerCellsFor(level, setPieceFor(entry), this.act, index);
+    // Power cells hold the exit shut where the power is the story (the
+    // reactor, the Engine): placed in the side rooms off the direct route,
+    // the same every run (exit-cells.js EXIT_GATES).
+    const gate = EXIT_GATES[entry.map];
+    const cellCount = powerCellsFor(level, setPieceFor(entry), entry.map);
     const cells = cellCount
       ? planPowerCells(level.grid, level.playerStart, level.exit, cellCount, entry.seed ?? this.act * 100 + index)
       : [];
@@ -296,11 +298,12 @@ export class CampaignManager {
       g._noticeCard = null;
     }
     g.powerCells = cells.length ? { total: cells.length, found: 0 } : null;
+    g.lockdown = null;
     // The story told while the level is played (src/data/campaign/beats.js).
     g.levelBeats?.start(this.act, entry.map);
     if (g.exitEntity) g.exitEntity.sealed = !!g.powerCells;
     if (g.powerCells) {
-      g.queueAriaMessage("powerCellsBrief");
+      g.queueAriaMessage(gate?.brief ?? "powerCellsBrief");
       // The first gated level explains the rule; later ones just remind.
       let seen = false;
       try {
@@ -312,8 +315,8 @@ export class CampaignManager {
         "cells",
         `EXTRACTION SEALED — FIND ${n} POWER CELL${n === 1 ? "" : "S"}`,
         seen
-          ? "Amber diamonds on your map. Collect them all to open the exit."
-          : `The exit beacon stays locked until you recover this floor's ${n} power cell${n === 1 ? "" : "s"}. They're off the main corridor, in the side rooms: look for the amber glow, or the amber diamonds on your map. The count is under your timer.`,
+          ? `${gate?.why ?? "The exit needs them."} Amber diamonds on your map.`
+          : `${gate?.why ?? "The exit beacon stays locked until you recover them."} They're off the main corridor: look for the amber glow, or the amber diamonds on your map. The count is under your timer.`,
         seen ? 6 : 11,
       );
     }
@@ -336,6 +339,20 @@ export class CampaignManager {
 
     g.killedEnemies = 0;
     g.totalEnemies = g.entities.filter((e) => e.type === "enemy").length;
+    // A lockdown holds the exit until a share of those hostiles is down.
+    if (!g.powerCells) {
+      g.lockdown = planLockdown(lockdownFor(level, setPieceFor(entry), entry.map), g.totalEnemies);
+      if (g.lockdown && g.exitEntity) {
+        g.exitEntity.sealed = true;
+        g.queueAriaMessage("lockdownBrief");
+        g.showNotice?.(
+          "lockdown",
+          `LOCKDOWN — DROP ${g.lockdown.need} HOSTILES`,
+          "The doors out are held while this floor's defenders stand. Put them down and the exit opens. The count is under your timer.",
+          8,
+        );
+      }
+    }
     g.killStreakSystem.reset();
     g.shotsFired = 0;
     g.shotsHit = 0;
@@ -356,7 +373,7 @@ export class CampaignManager {
       });
     }
 
-    this._applyActEnemyRoster();
+    this._applyActEnemyRoster(entry);
     this._warmRoster();
 
     const act = getAct(this.act);
@@ -490,7 +507,7 @@ export class CampaignManager {
     } else {
       g.player.health = Math.min(g.player.health + healAmt, g.player.maxHealth);
     }
-    g.player.ammo = Math.min(g.player.ammo + 20, 999);
+    g.player.addAmmoPacks?.(1);
 
     // The level's briefing, then the level.
     const entry = getActLevel(this.act, this.level);
@@ -523,7 +540,7 @@ export class CampaignManager {
         this.act = next.id;
         this.level = 0;
         g.player.health = g.player.maxHealth;
-        g.player.ammo = Math.min(g.player.ammo + 50, 999);
+        g.player.addAmmoPacks?.(2);
         this._prewarmLevel(next.id, 0);
         this._playScenes(next.intro, () => {
           this.loadLevel(0);
@@ -568,7 +585,7 @@ export class CampaignManager {
     this.missedWeapons = [];
     g.player.health = g.player.maxHealth;
     g.player.shield = g.player.maxShield || 0;
-    g.player.ammo = Math.min(g.player.ammo + 100, 999);
+    g.player.addAmmoPacks?.(4);
     g.player.alive = true;
 
     const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
@@ -629,11 +646,13 @@ export class CampaignManager {
     requestAnimationFrame(step);
   }
 
-  _applyActEnemyRoster() {
+  _applyActEnemyRoster(entry = getActLevel(this.act, this.level)) {
     applyActEnemyRoster(
       this.game.entities,
       this.act,
       this.game.getDifficultyMultipliers(),
+      entry?.holdBack,
+      this.ngPlusCycle,
     );
   }
 

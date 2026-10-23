@@ -135,8 +135,21 @@ describe("Act I weapon cadence", () => {
         seen.add(id);
       }
     });
-    // Every gun is handed out by the boss.
-    expect(seen.size).toBe(8);
+    // Act I hands out six; the Phase Scattergun and Quantum Cannon wait for
+    // Act II, so the arsenal keeps growing past the first boss.
+    expect(seen.size).toBe(6);
+    expect(seen.has(4) || seen.has(3)).toBe(false);
+  });
+
+  it("Act II hands out the rest, each in its first three levels", () => {
+    const firstAt = (id) =>
+      ACTS[1].levels.findIndex((_, i) =>
+        campaignLevelMap(2, i).entities.some((e) => e.type === "weapon" && e.weaponId === id),
+      );
+    for (const id of [4, 3]) {
+      expect(firstAt(id), `weapon ${id}`).toBeGreaterThanOrEqual(0);
+      expect(firstAt(id), `weapon ${id}`).toBeLessThan(3);
+    }
   });
 
   it("no more than one level in a row goes without a new weapon", () => {
