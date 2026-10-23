@@ -454,7 +454,8 @@ export function createDebugBridge(game) {
       if (on) {
         game.player.health = 999999;
         game.player.maxHealth = 999999;
-        game.player.ammo = 999999;
+        // Every gun, carried now or later, has rounds to spare.
+        for (const w of WEAPONS) game.player.reserves[w.id] = 999999;
       }
       return on;
     },
@@ -707,11 +708,16 @@ export function createDebugBridge(game) {
       }));
     },
 
-    /** Kill all enemies instantly */
+    /** Kill all enemies instantly; they count toward the level, as a lockdown reads. */
     killAll() {
       let killed = 0;
       for (const e of game.entities) {
-        if (e.type === "enemy" && e.active) { e.active = false; e.health = 0; killed++; }
+        if (e.type === "enemy" && e.active) {
+          e.active = false;
+          e.health = 0;
+          killed++;
+          if (!e._hunter) game.killedEnemies++;
+        }
       }
       return killed;
     },

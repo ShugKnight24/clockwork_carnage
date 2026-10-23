@@ -101,6 +101,13 @@ function resetGame(game) {
   game.mouse.dx = 0;
   game.mouse.dy = 0;
   game.player.isFiring = false;
+  // Fixed clocks. stepGame steps on from lastFrameTime, which the live rAF
+  // loop left at the page's wall-clock age: the float dt then rounded
+  // differently run to run, a position drifted in the fourth decimal and a
+  // seeded fight (ironman) went another way. Game time starts fixed for the
+  // same reason (cooldowns compare against it).
+  game.lastFrameTime = 1000; // not 0: stepGame reads 0 as "no clock yet"
+  game.time = 60000;
 }
 
 class TestResult {
@@ -356,13 +363,12 @@ function shieldFacing(e, p) {
 }
 
 /**
- * Fight a shield that faces you. Its shield takes 80% off and covers the
- * body, but not the head above it, and its owner hits hard up close: so
- * keep it at arm's length plus a stride and put rounds in the head
- * (aimForHead), giving ground as it comes on, under Chrono Shift if it
- * gets too near.
+ * Fight a shield that faces you. Its plate covers it, head included, from
+ * the front, and it turns slower than you run: so circle it just outside
+ * its bash, running, and shoot the head as it comes round (aimForHead),
+ * turning back when a wall stops the circle.
  */
-function flank(game, e, face) {
+function flank(game, e, face, st = flank) {
   const p = game.player;
   const kb = game.keybinds;
   const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -371,10 +377,19 @@ function flank(game, e, face) {
     stepToward(game, e.x, e.y, face);
     return;
   }
-  if (d < 5.5) {
-    if (d < 3.5 && (p.chronoActive ? p.chronoEnergy > 5 : p.chronoEnergy >= 40)) game.keys[kb.chronoShift] = true;
-    kite(game, [e], face) || (game.keys[kb.moveBack] = true);
+  st.circ ??= 1;
+  const moved = Math.hypot(p.x - (st.lx ?? p.x), p.y - (st.ly ?? p.y));
+  st.lx = p.x;
+  st.ly = p.y;
+  st.still = moved < 0.01 ? (st.still || 0) + 1 : 0;
+  if (st.still > 10) {
+    st.still = 0;
+    st.circ = -st.circ;
   }
+  if (d > 4) game.keys[kb.moveForward] = true;
+  else if (d < 2.9) game.keys[kb.moveBack] = true;
+  game.keys[st.circ > 0 ? kb.moveRight : kb.moveLeft] = true;
+  if (kb.sprint) game.keys[kb.sprint] = true;
 }
 
 /** Damage per second a weapon puts out when every pellet lands. */
@@ -388,7 +403,8 @@ function pickWeapon(game, dist) {
   p.weapons.forEach((id, i) => {
     const w = WEAPONS.find((x) => x.id === id);
     if (!w || w.range < dist + 1) return;
-    if (id !== 0 && p.ammo < (w.ammoPerShot || 1)) return;
+    // Each gun carries its own rounds: ask for this one's, not the held gun's.
+    if (id !== 0 && (p.reserveOf?.(id) ?? p.ammo) < (w.ammoPerShot || 1)) return;
     const dps = weaponDps(w);
     if (dps > bestDps) {
       bestDps = dps;
@@ -493,10 +509,13 @@ function killAllEnemies(game, maxTicks = 5000, { weapon = null } = {}) {
       aimForHead(game, target);
       p.isFiring = true;
       const close = enemies.filter((e) => dist(e) < 4);
+      // A swing winding up within reach: step out of it, as its tell asks.
+      const swing = enemies.find((e) => e.state === "windup" && e.def.attackType === "melee" && dist(e) < e.def.attackRange * 1.3);
       if (reposition > 0) {
         reposition--;
         stepToward(game, target.x, target.y, face);
-      } else if (!open.length) flank(game, target, face);
+      } else if (swing) kite(game, [swing], face) || (game.keys[game.keybinds.moveBack] = true);
+      else if (!open.length) flank(game, target, face);
       else if (close.length) kite(game, close, face) || (p.angle = face); // too close: give ground
       else if (hurt && !med) kite(game, seen, face) || (p.angle = face); // hurt, nothing to heal: back out of their sight
       else if (med) stepToward(game, med.x, med.y, face);
@@ -1956,7 +1975,7 @@ function botCadet(game) {
     wave1: () => killAllEnemies(game, 30) || stepGame(game, 1),
     wave2: () => killAllEnemies(game, 30) || stepGame(game, 1),
     wave3: () => killAllEnemies(game, 30) || stepGame(game, 1),
-    extract: () => walkTo(game, 29.5, 3.5, 1) || stepGame(game, 1),
+    extract: () => walkTo(game, 30.0, 2.9, 0.5) || stepGame(game, 1),
     reveal: () => stepGame(game, 1),
   };
 
