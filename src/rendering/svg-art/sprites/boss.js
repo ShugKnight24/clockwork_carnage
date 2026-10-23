@@ -31,8 +31,10 @@ function regroup(model) {
   model.layers.forEach((layer, i) => {
     const m = scopeIds(layer.markup, i);
     const a = layer.anim;
-    let role = null;
-    if (i === 0 && layer.blend) role = "aura";
+    let role = layer.role ?? (layer.shell ? "shell" : null);
+    if (role) {
+      // An arm or a piece of the Shell, named by the model: kept on its own.
+    } else if (i === 0 && layer.blend) role = "aura";
     else if (layer.blend) role = "glow";
     else if (a?.type === "sway" && a.pivot && Math.abs(a.pivot[0]) > 50) role = a.pivot[0] < 0 ? "armL" : "armR";
     else if (a && (a.type === "spin" || a.type === "float" || (a.type === "sway" && (a.amp ?? 0) >= 0.05))) role = "anim";
@@ -99,10 +101,32 @@ function realPart(part) {
   return { ...part, markup };
 }
 
+/**
+ * The Shell broken (enemies.js draws this part once the boss is `_shellCracked`,
+ * and stops drawing its "shell" parts): the core's light pouring out through
+ * the seams of a body that was mostly casing. Phase-1 units, widened like the
+ * Shell's body.
+ */
+function shellCracks() {
+  const seams =
+    "M0 -40L-14 -62L-10 -78L-24 -96M0 -40L18 -60L14 -74L30 -90M0 -40L-22 -30L-40 -36L-58 -24L-76 -30" +
+    "M0 -40L24 -26L44 -34L60 -20L80 -28M0 -40L-6 -14L4 4L-4 24L6 48M-40 40L-48 62L-42 84L-52 110" +
+    "M42 44L50 66L44 88L54 112M-104 -60L-116 -36L-108 -14L-120 8M104 -60L116 -36L108 -14L120 8";
+  const line = `<path d="${seams}" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  return (
+    `<g transform="scale(1.22 1)">` +
+    `<g filter="url(#blur3)">${line} stroke="#22e6ff" stroke-width="7" opacity="0.8"/></g>` +
+    `${line} stroke="#eaffff" stroke-width="1.8"/>` +
+    `<circle cx="0" cy="-40" r="46" fill="url(#glowR)"/>` +
+    `</g>`
+  );
+}
+
 function bossModel(key, scale, real = false) {
   const model = VILLAIN[key];
   const k = key === "villain_final" ? 1.1 : key === "villain_form2" ? 1.06 : 1;
   const parts = regroup(model);
+  if (key === "villain") parts.push({ role: "cracks", markup: shellCracks(), anim: null, blend: "lighter", opacity: 1 });
   return {
     boss: true,
     box: model.box,
@@ -115,8 +139,10 @@ function bossModel(key, scale, real = false) {
   };
 }
 
+// The Shell towers over the room, the Brute fills it, and the Final Form is
+// smaller than you are.
 export const BOSSES = {
-  boss: (real) => bossModel("villain", 0.64, real),
-  boss_form2: (real) => bossModel("villain_form2", 0.64, real),
-  boss_form3: (real) => bossModel("villain_final", 0.66, real),
+  boss: (real) => bossModel("villain", 1.15, real),
+  boss_form2: (real) => bossModel("villain_form2", 0.72, real),
+  boss_form3: (real) => bossModel("villain_final", 0.5, real),
 };

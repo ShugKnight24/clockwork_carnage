@@ -2,10 +2,17 @@
  * SVG models for the Paradox Lord ("Older than time. Hungrier than gods.") and
  * the space-time rift he tears open. See ../index.js for the format.
  *
- * All three villain forms share one armored biomechanical body built from
- * horology parts: a crown of clocks, clock-hand spines, gears in the joints and
- * a clock-faced core in the chest. Each form swaps the palette and bolts on
- * extra parts, and is scaled up a little from the last.
+ * The forms are built to mislead, each about what the last one promised:
+ *   1  The Shell. The armored biomechanical body built from horology parts (a
+ *      crown of clocks, clock-hand spines, gears in the joints, a clock-faced
+ *      core) under a riveted carapace and belly plate, widened into a towering
+ *      hulk. The carapace is hairline-cracked from the start; the in-world
+ *      sprite drops it when it breaks (sprites/boss.js, role "shell").
+ *   2  The Brute. The same frame with the plating torn off: red, broad and
+ *      corded with muscle.
+ *   3  The Remainder. What is left: a thin, small man of brass struts and a
+ *      porcelain clock-face mask in a tattered mantle, under an arch of
+ *      shattered clocks. The weakest-looking of the three.
  */
 
 const f = (n) => Math.round(n * 10) / 10;
@@ -292,6 +299,15 @@ function armLayer(ph, p) {
     `<path d="M-128 27L-128 37M-120 27L-120 37M-112 27L-112 37" stroke="${p.glow}" stroke-width="1.6" stroke-linecap="round"/>` +
     clockFace(-119, 56, 7.5, 4, 9) +
     gear(-118, 10, 12, 12) +
+    // Form 2: the upper arm is all muscle now, a bicep and deltoid bulging
+    // through what is left of the bands.
+    (ph === 2
+      ? `<path d="M-86 -58C-74 -40 -78 -10 -96 8L-134 10C-154 -8 -156 -44 -130 -66C-114 -74 -96 -70 -86 -58Z" fill="url(#flesh_L)"/>` +
+        `<path d="M-128 -60C-118 -50 -104 -48 -92 -52M-140 -30C-128 -20 -110 -20 -94 -26M-118 -8C-112 -2 -104 0 -96 -2" stroke="${p.flesh[2]}" stroke-width="1" fill="none" opacity="0.85"/>` +
+        `<path d="M-132 -54C-140 -40 -140 -20 -134 -6" stroke="#ffd0c8" stroke-width="1.4" fill="none" opacity="0.4" stroke-linecap="round"/>` +
+        `<path d="M-108 -40C-112 -28 -106 -18 -110 -6" stroke="${p.glow}" stroke-width="0.9" fill="none" opacity="0.7"/>` +
+        `<path d="M-136 -12C-120 -6 -106 -6 -97 -10L-98 -2C-108 1 -122 1 -134 -2Z" fill="url(#brass_L)"/>`
+      : "") +
     // hand
     `<path d="M-142 68C-151 76 -149 90 -139 96L-101 96C-95 88 -95 76 -101 68Z" fill="url(#plate_L)"/>` +
     `<path d="M-137 80L-131 80M-127 82L-121 82M-117 82L-111 82M-107 80L-103 80" stroke="${p.plate[3]}" stroke-width="0.6" opacity="0.5"/>` +
@@ -343,7 +359,14 @@ function pendulumLayer(p) {
 }
 
 function torsoLayer(ph, p) {
-  const side =
+  // Form 2 has torn its pauldrons off: a bare deltoid and one snapped spike.
+  const deltoid =
+    `<path d="M-56 -74C-70 -94 -112 -100 -136 -80C-148 -64 -146 -44 -132 -32C-114 -46 -92 -56 -70 -58Z" fill="url(#flesh_L)"/>` +
+    `<path d="M-64 -80C-84 -88 -108 -88 -128 -76M-70 -70C-90 -76 -112 -74 -132 -62M-118 -50C-110 -58 -96 -62 -80 -64" stroke="${p.flesh[2]}" stroke-width="0.9" fill="none" opacity="0.8"/>` +
+    `<path d="M-74 -90C-94 -96 -116 -92 -130 -80" stroke="#ffd6cc" stroke-width="1.6" fill="none" opacity="0.3" stroke-linecap="round"/>` +
+    `<path d="M-104 -96L-112 -112L-98 -98Z" fill="url(#horn_L)"/>` +
+    `<path d="M-132 -36C-116 -48 -96 -56 -76 -58L-78 -50C-98 -48 -114 -40 -126 -28Z" fill="url(#brass_L)"/>`;
+  const pauldron =
     // pauldron: gear crest, blade spikes, faceted dome and lames
     gear(-100, -96, 17, 16) +
     `<path d="M-84 -94L-90 -126L-76 -98Z" fill="url(#horn_L)"/>` +
@@ -357,7 +380,9 @@ function torsoLayer(ph, p) {
     `<path d="M-70 -64L-100 -70L-132 -64M-82 -84L-86 -76M-104 -88L-104 -80M-122 -84L-120 -77" stroke="${INK}" stroke-width="0.5" opacity="0.6" fill="none"/>` +
     `<path d="M-132 -36C-116 -48 -96 -56 -76 -58L-78 -50C-98 -48 -114 -40 -126 -28Z" fill="url(#brass_L)"/>` +
     `<path d="M-126 -28C-112 -38 -98 -44 -82 -46L-84 -37C-98 -35 -110 -29 -120 -19Z" fill="url(#plate_L)"/>` +
-    [-120, -108, -96, -84].map((x) => `<circle cx="${x}" cy="${f(-46 - (x + 132) * 0.12)}" r="1" fill="${p.brass[3]}" stroke="none"/>`).join("") +
+    [-120, -108, -96, -84].map((x) => `<circle cx="${x}" cy="${f(-46 - (x + 132) * 0.12)}" r="1" fill="${p.brass[3]}" stroke="none"/>`).join("");
+  const side =
+    (ph === 2 ? deltoid : pauldron) +
     // pectoral plate with specular strip
     `<path d="M-17 -66C-36 -76 -68 -74 -82 -58C-86 -44 -72 -26 -48 -22C-30 -20 -20 -28 -17 -42Z" fill="url(#plate_L)"/>` +
     `<path d="M-24 -66C-42 -71 -62 -68 -74 -58" stroke="#fff" stroke-width="1" opacity="0.35" fill="none" stroke-linecap="round"/>` +
@@ -525,28 +550,6 @@ function motesLayer(ph, p) {
   return glowCopy(m, "blur1");
 }
 
-/** Final form: starfield visible through the torn abdomen. */
-function voidBellyLayer(p) {
-  const rnd = rng(77);
-  let stars = "";
-  for (let i = 0; i < 22; i++) {
-    stars += `<circle cx="${f(-20 + rnd() * 40)}" cy="${f(-22 + rnd() * 38)}" r="${f(0.3 + rnd() * 0.8)}" fill="#fff" opacity="${f(0.5 + rnd() * 0.5)}"/>`;
-  }
-  let hole = "";
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 2;
-    const j = 0.84 + Math.sin(a * 3 + 1) * 0.14 + rnd() * 0.1;
-    hole += `${i ? "L" : "M"}${f(Math.cos(a) * 19 * j)} ${f(-3 + Math.sin(a) * 15 * j)}`;
-  }
-  hole += "Z";
-  return (
-    `<defs><clipPath id="vb"><path d="${hole}"/></clipPath><radialGradient id="neb" cx="0.45" cy="0.4" r="0.7"><stop offset="0" stop-color="${p.glow}" stop-opacity="0.9"/><stop offset="0.5" stop-color="#2a0e60"/><stop offset="1" stop-color="#05020c"/></radialGradient></defs>` +
-    `<path d="${hole}" fill="url(#neb)" stroke="${INK}" stroke-width="1.1" stroke-linejoin="round"/>` +
-    `<g clip-path="url(#vb)">${stars}</g>` +
-    `<path d="${hole}" fill="none" stroke="${p.core}" stroke-width="0.6" opacity="0.8"/>`
-  );
-}
-
 /** Broken armor shards drifting off the shoulders (form 2 and final form). */
 function shardsLayer(ph, p) {
   const shard = (x, y, rot, s) =>
@@ -558,52 +561,240 @@ function shardsLayer(ph, p) {
   return list.map((s) => shard(...s)).join("");
 }
 
-function paradoxLord(ph) {
-  const p = PALETTES[ph];
-  const k = ph === 3 ? 1.1 : ph === 2 ? 1.06 : 1;
+/** The hairline cracks in the Shell's carapace: there from the start, if you look. */
+const SHELL_CRACKS = "M-40 -168L-34 -150L-42 -138L-33 -120M64 -150L58 -132L68 -118L60 -100M-122 -96L-110 -84L-118 -70M24 -36L32 -24L26 -12L34 4";
+
+/** Form 1: the carapace, a riveted dome hunched over the shoulders, taller than the head. */
+function carapaceLayer(p) {
+  const dome = `M-176 -18C-188 -96 -150 -176 -74 -204C-30 -218 30 -218 74 -204C150 -176 188 -96 176 -18C150 -34 118 -40 92 -36L-92 -36C-118 -40 -150 -34 -176 -18Z`;
+  let m =
+    `<path d="${dome}" fill="url(#plate_L)"/>` +
+    // two segment bands with rivets, and the ridge of spikes
+    `<path d="M-160 -64C-120 -148 120 -148 160 -64L148 -54C112 -130 -112 -130 -148 -54Z" fill="url(#brass_L)"/>` +
+    `<path d="M-120 -150C-60 -196 60 -196 120 -150L110 -140C56 -182 -56 -182 -110 -140Z" fill="url(#brass_L)"/>`;
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI * (1.08 + (i / 8) * 0.84);
+    m += `<circle cx="${f(Math.cos(a) * 150)}" cy="${f(-50 + Math.sin(a) * 92)}" r="2.4" fill="${p.brass[3]}" stroke="${INK}" stroke-width="0.5"/>`;
+  }
+  for (const x of [-96, -48, 0, 48, 96]) {
+    const y = -206 + Math.abs(x) * 0.22 + (x ? 0 : -4);
+    m += `<path d="M${x - 9} ${f(y + 10)}L${x} ${f(y - 22)}L${x + 9} ${f(y + 10)}Z" fill="url(#horn_L)"/>`;
+  }
+  // portholes onto the works inside
+  m += clockFace(-112, -110, 11, 2, 7) + clockFace(112, -110, 11, 10, 4);
+  m += `<path d="M-150 -60C-110 -112 -70 -132 -30 -140" stroke="#fff" stroke-width="1.6" opacity="0.18" fill="none" stroke-linecap="round"/>`;
+  m += `<path d="${SHELL_CRACKS}" stroke="${INK}" stroke-width="1" fill="none"/>`;
+  return lit(`<g stroke="${INK}" stroke-width="1.2" stroke-linejoin="round">${m}</g>`, p.rim, 0.7);
+}
+
+/** Form 1: the belly plate, a slab of riveted armor round a port onto the core. */
+function shellPlateLayer(p) {
+  const port = `M30 -40A30 30 0 1 0 -30 -40A30 30 0 1 0 30 -40Z`;
+  const plate = `M-58 -74C-20 -84 20 -84 58 -74C66 -40 60 -4 44 22L-44 22C-60 -4 -66 -40 -58 -74Z`;
+  let m = `<path d="${plate}${port}" fill="url(#plate_L)" fill-rule="evenodd"/>`;
+  m += `<circle cx="0" cy="-40" r="33" fill="none" stroke="url(#brass_L)" stroke-width="5"/>`;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    m += `<circle cx="${f(Math.cos(a) * 33)}" cy="${f(-40 + Math.sin(a) * 33)}" r="1.4" fill="${p.brass[3]}"/>`;
+  }
+  m += `<path d="M-50 4C-20 12 20 12 50 4M-56 -54L-40 -56M56 -54L40 -56" stroke="${p.plate[3]}" stroke-width="0.8" opacity="0.5" fill="none"/>`;
+  m += `<path d="M-48 -70C-24 -78 6 -78 28 -74" stroke="#fff" stroke-width="1.2" opacity="0.3" fill="none" stroke-linecap="round"/>`;
+  m += `<path d="M-38 -6L-30 4L-36 14" stroke="${INK}" stroke-width="0.8" fill="none"/>`;
+  return lit(`<g stroke="${INK}" stroke-width="1.1" stroke-linejoin="round">${m}</g>`, p.rim);
+}
+
+/** Form 2: the plating is off; pecs, traps and abs corded over the frame. */
+function musclesLayer(p) {
+  const side =
+    // trapezius rising to the jaw
+    `<path d="M-12 -86C-30 -96 -58 -96 -78 -82C-60 -76 -36 -72 -14 -70Z" fill="url(#flesh_L)"/>` +
+    // pectoral, heavy and squared, with its fibres fanning to the shoulder
+    `<path d="M-3 -72C-28 -84 -78 -82 -96 -60C-104 -40 -86 -16 -54 -12C-26 -10 -8 -22 -3 -40Z" fill="url(#flesh_L)"/>` +
+    `<path d="M-8 -60C-30 -64 -60 -66 -86 -58M-8 -48C-30 -50 -58 -50 -84 -44M-10 -34C-30 -34 -52 -32 -72 -28" stroke="${p.flesh[2]}" stroke-width="0.9" fill="none" opacity="0.8"/>` +
+    `<path d="M-30 -78C-52 -78 -76 -72 -88 -60" stroke="#ffd6cc" stroke-width="1.6" fill="none" opacity="0.32" stroke-linecap="round"/>` +
+    `<path d="M-6 -16C-30 -12 -50 -14 -62 -22" stroke="#000" stroke-width="3" opacity="0.35" fill="none"/>` +
+    // serratus fingers down the flank
+    [-24, -14, -4].map((y, i) => `<path d="M${-62 + i * 2} ${y}C${-52 + i * 2} ${y - 4} ${-44 + i * 2} ${y - 2} ${-40 + i * 2} ${y + 3}C${-48 + i * 2} ${y + 5} ${-56 + i * 2} ${y + 5} ${-62 + i * 2} ${y}Z" fill="url(#flesh_L)"/>`).join("") +
+    // abdominals, three rows
+    [-8, 4, 15].map((y) => `<path d="M-2 ${y}L-17 ${y - 1}C-20 ${y + 3} -19 ${y + 8} -16 ${y + 10}L-2 ${y + 10}Z" fill="url(#flesh_L)"/>`).join("") +
+    `<path d="M-14 -4L-5 -4M-14 8L-5 8" stroke="#ffd6cc" stroke-width="0.8" opacity="0.35"/>`;
+  const veins = `<path d="M-40 -66C-46 -54 -42 -44 -50 -32M-70 -60C-74 -50 -70 -42 -76 -34" stroke="${p.glow}" stroke-width="0.9" fill="none" opacity="0.75"/>`;
+  return lit(`<g stroke="${INK}" stroke-width="1.1" stroke-linejoin="round">${both(side + veins)}</g>`, p.rim);
+}
+
+/* ── Form 3: the Remainder ──
+ * Phase-3 units with the feet at y = 150, like the others, but half their
+ * width: thin legs, a narrow ribcage of clock-hand ribs, a long neck and a
+ * cracked porcelain mask. One hand hangs; the other is raised, two fingers
+ * out. Everything heavy is gone; the arch of clocks behind him is not.
+ */
+
+function remainderMantle(p) {
+  const hem = [[-30, -70], [-40, -20], [-50, 40], [-58, 104], [-48, 96], [-46, 128], [-36, 112], [-30, 140], [-22, 118], [-14, 132], [-10, 60], [-12, -62]];
+  const d = hem.map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join("") + "Z";
+  return `<g opacity="0.92"><path d="${d}" fill="url(#plate_L)" stroke="${INK}" stroke-width="0.9"/>` +
+    `<path d="${d}" transform="scale(-1 1)" fill="url(#plate_R)" stroke="${INK}" stroke-width="0.9"/>` +
+    `<path d="M-26 -60L-40 60M-20 -40L-28 100" stroke="${p.plate[3]}" stroke-width="0.6" opacity="0.35" fill="none"/></g>`;
+}
+
+function remainderLegs(p) {
+  const leg =
+    `<path d="M-6 22L-15 84L-14 144L-7 144L-8 86L2 24Z" fill="url(#plate_L)"/>` +
+    `<path d="M-13 30L-15 80M-12 92L-12 140" stroke="${p.plate[3]}" stroke-width="0.7" opacity="0.5" fill="none"/>` +
+    gear(-11.5, 85, 5, 8, "url(#brass_L)", 3) +
+    `<path d="M-17 143L-26 151L-3 151L-5 143Z" fill="url(#plate_L)"/>`;
+  const pelvis = `<path d="M-16 8C-18 22 -10 30 0 32C10 30 18 22 16 8Z" fill="url(#brass_L)"/>`;
+  const shadow = `<ellipse cx="0" cy="153" rx="46" ry="6" fill="url(#ground)"/>`;
+  return shadow + lit(`<g stroke="${INK}" stroke-width="1" stroke-linejoin="round">${both(leg)}${pelvis}</g>`, p.rim);
+}
+
+function remainderTorso(p) {
+  const chest = `<path d="M-30 -68C-34 -42 -24 -12 -12 12L12 12C24 -12 34 -42 30 -68C18 -76 -18 -76 -30 -68Z" fill="url(#plate_L)"/>`;
+  let ribs = "";
+  for (let i = 0; i < 4; i++) {
+    const y = -58 + i * 13;
+    const w = 24 - i * 3;
+    ribs += `<path d="M-2 ${y}C${-w * 0.6} ${y - 3} ${-w} ${y + 1} ${-w} ${y + 6}" stroke="url(#brass_L)" stroke-width="2.2" fill="none"/>`;
+  }
+  const side =
+    ribs +
+    `<circle cx="-30" cy="-66" r="6.5" fill="url(#brass_L)"/>` +
+    `<path d="M-28 -70C-20 -76 -10 -78 -4 -78" stroke="${p.plate[3]}" stroke-width="0.8" opacity="0.5" fill="none"/>`;
+  const spine = `<path d="M-2 -76L2 -76L1.4 14L-1.4 14Z" fill="url(#brass_L)"/>`;
+  const neck = `<path d="M-4.5 -90L-3.5 -70L3.5 -70L4.5 -90Z" fill="url(#plate_L)"/>`;
+  return lit(`<g stroke="${INK}" stroke-width="1" stroke-linejoin="round">${neck}${chest}${spine}${both(side)}</g>`, p.rim);
+}
+
+/** The hanging arm: shoulder to long-fingered hand, along the flank. */
+function remainderArmHang(p) {
+  return lit(
+    `<g stroke="${INK}" stroke-width="1" stroke-linejoin="round">` +
+      `<path d="M-34 -66L-44 -12L-42 40L-36 40L-37 -12L-26 -64Z" fill="url(#plate_L)"/>` +
+      gear(-40.5, -12, 4, 8, "url(#brass_L)", 3) +
+      `<path d="M-43 38L-45 50L-44 70M-41 40L-41 72M-38 40L-37 68" stroke="url(#claw_L)" stroke-width="1.8" stroke-linecap="round" fill="none"/>` +
+      `</g>`,
+    p.rim,
+  );
+}
+
+/** The raised arm: forearm up and forward, two fingers out. */
+function remainderArmRaised(p) {
+  return lit(
+    `<g stroke="${INK}" stroke-width="1" stroke-linejoin="round">` +
+      `<path d="M26 -64L54 -30L60 -34L34 -68Z" fill="url(#plate_R)"/>` +
+      gear(56.5, -32, 4, 8, "url(#brass_R)", 3) +
+      `<path d="M54 -30L66 -78L71 -76L60 -32Z" fill="url(#plate_R)"/>` +
+      `<path d="M67 -78L66 -100M70 -77L72 -98" stroke="url(#claw_R)" stroke-width="1.9" stroke-linecap="round" fill="none"/>` +
+      `<path d="M66 -76L61 -84M71 -76L74 -83" stroke="url(#claw_R)" stroke-width="1.6" stroke-linecap="round" fill="none"/>` +
+      `</g>`,
+    p.rim,
+  );
+}
+
+function remainderHead(p) {
+  const skull = `<path d="M-15 -122C-19 -106 -15 -96 -9 -90C-5 -86 5 -86 9 -90C15 -96 19 -106 15 -122C10 -132 -10 -132 -15 -122Z" fill="url(#plate_L)"/>`;
+  // The mask: a porcelain dial, cracked from the brow to the jaw.
+  const mask =
+    `<path d="M-12 -120C-15 -108 -12 -98 -7 -93C-3 -90 3 -90 7 -93C12 -98 15 -108 12 -120C8 -127 -8 -127 -12 -120Z" fill="#ece8f6"/>` +
+    [0, 1, 2, 3, 4, 5].map((i) => {
+      const a = -Math.PI / 2 + (i - 2.5) * 0.42;
+      return `<path d="M${f(Math.cos(a) * 10)} ${f(-108 + Math.sin(a) * 14)}L${f(Math.cos(a) * 12)} ${f(-108 + Math.sin(a) * 16.5)}" stroke="#6b6488" stroke-width="0.6"/>`;
+    }).join("") +
+    `<path d="M-9 -110L-3 -108M9 -110L3 -108" stroke="#0b0618" stroke-width="2" stroke-linecap="round"/>` +
+    `<path d="M4 -126L1 -116L5 -108L0 -98L3 -91" stroke="${INK}" stroke-width="0.8" fill="none"/>` +
+    `<path d="M-3 -98L3 -98" stroke="#6b6488" stroke-width="0.6"/>`;
+  let crown = "";
+  [[-9, -138, 3.6, 2, 9], [0, -146, 4.4, 11, 1], [9, -138, 3.6, 7, 4]].forEach(([x, y, r, h, m]) => {
+    crown += `<path d="M${f(x * 0.5 - 1)} -126L${f(x - 0.6)} ${y}L${f(x + 0.6)} ${y}L${f(x * 0.5 + 1)} -126Z" fill="url(#brass_L)"/>` + clockFace(x, y, r, h, m, { tick: "#f0e2bc" });
+  });
+  return lit(`<g stroke="${INK}" stroke-width="0.9" stroke-linejoin="round">${skull}${mask}${crown}</g>`, p.rim, 0.9);
+}
+
+function remainderGlow(p) {
+  const eyes = `<path d="M-8.6 -110.4L-3.6 -108.6L-3.4 -107.6L-8.4 -109.2ZM8.6 -110.4L3.6 -108.6L3.4 -107.6L8.4 -109.2Z" fill="${p.core}"/>`;
+  const crack = `<path d="M4 -126L1 -116L5 -108L0 -98" stroke="${p.glow}" stroke-width="0.8" fill="none"/>`;
+  const fingers = `<circle cx="66" cy="-100" r="2" fill="${p.core}"/><circle cx="72" cy="-98" r="2" fill="${p.core}"/>`;
+  return (
+    `<circle cx="0" cy="-40" r="20" fill="url(#glowR)" opacity="0.9"/>` +
+    `<circle cx="69" cy="-99" r="9" fill="url(#glowR)" opacity="0.8"/>` +
+    `<g filter="url(#blur8)"><ellipse cx="0" cy="150" rx="70" ry="7" fill="${p.aura}" opacity="0.45"/></g>` +
+    glowCopy(eyes + crack + fingers, "blur3")
+  );
+}
+
+/** Form 3, assembled. Same layer contract as paradoxLord(). */
+function remainder() {
+  const p = PALETTES[3];
+  const k = 1.1;
   const S = (m) => `<g transform="scale(${k})">${m}</g>`;
   const pv = (x, y) => [f(x * k), f(y * k)];
+  const layers = [
+    { markup: S(`<ellipse cx="0" cy="-20" rx="120" ry="150" fill="url(#auraR)" opacity="0.7"/><ellipse cx="0" cy="150" rx="90" ry="14" fill="url(#groundGlow)"/>`), anim: { type: "pulse", min: 0.7, max: 1, speed: 0.9 } },
+    { markup: S(raysLayer(p)), anim: { type: "spin", speed: 0.05, pivot: pv(0, -80) }, blend: "lighter", opacity: 0.6 },
+    { markup: S(archHalo(p)), anim: { type: "float", amp: 2.5, speed: 0.7 } },
+    { markup: S(remainderMantle(p)), anim: { type: "sway", amp: 0.02, speed: 0.8, pivot: pv(0, -70) } },
+    { markup: S(remainderLegs(p)) },
+    { markup: S(remainderArmHang(p)), role: "armL", anim: { type: "sway", amp: 0.03, speed: 1, pivot: pv(-30, -66) } },
+    { markup: S(remainderTorso(p)) },
+    { markup: S(`<path d="${gearPath(0, -40, 11, 9, 14, 6)}" fill="url(#brass_L)" fill-rule="evenodd" stroke="${INK}" stroke-width="0.7"/>`), anim: { type: "spin", speed: -1.2, pivot: pv(0, -40) } },
+    { markup: S(clockFace(0, -40, 7, 11.2, 11.9, { dial: "url(#dial)", tick: "#e8ddc0" })) },
+    { markup: S(remainderArmRaised(p)), role: "armR", anim: { type: "sway", amp: 0.02, speed: 0.9, phase: 1.3, pivot: pv(30, -66) } },
+    { markup: S(remainderHead(p)) },
+    { markup: S(remainderGlow(p)), anim: { type: "pulse", min: 0.6, max: 1, speed: 2 }, blend: "lighter" },
+    { markup: S(motesLayer(3, p)), anim: { type: "flicker", min: 0.4, max: 1, speed: 1.5 }, blend: "lighter" },
+  ];
+  return {
+    box: [f(-168 * k), f(-158 * k), f(336 * k), f(320 * k)],
+    defs: villainDefs(p),
+    anim: { type: "breathe", amp: 0.004, speed: 1.1, pivot: pv(0, 152) },
+    layers,
+  };
+}
+
+function paradoxLord(ph) {
+  if (ph === 3) return remainder();
+  const p = PALETTES[ph];
+  const k = ph === 2 ? 1.06 : 1;
+  // The body is widened past the head: the Shell is a hulk, the Brute broad.
+  const W = ph === 1 ? 1.22 : 1.12;
+  const S = (m) => `<g transform="scale(${k})">${m}</g>`;
+  const B = (m) => `<g transform="scale(${f(k * W * 100) / 100} ${k})">${m}</g>`;
+  const pv = (x, y) => [f(x * k), f(y * k)];
+  const pvB = (x, y) => [f(x * k * W), f(y * k)];
   let back = "";
-  if (ph < 3) {
-    for (let i = 0; i < 9; i++) {
-      const a = -72 + i * 18;
-      const len = 52 + (i % 3) * 5;
-      back += `<path transform="rotate(${a} 0 -96)" d="M-6 -96L6 -96L${f(18 + (i % 2) * 8)} ${f(-96 - len)}L${f(-18 - (i % 2) * 8)} ${f(-96 - len)}Z" fill="url(#ray)" opacity="${f(0.6 + (i % 3) * 0.2)}"/>`;
-    }
-    back = `<g filter="url(#blur8)">${back}</g>`;
+  for (let i = 0; i < 9; i++) {
+    const a = -72 + i * 18;
+    const len = 52 + (i % 3) * 5;
+    back += `<path transform="rotate(${a} 0 -96)" d="M-6 -96L6 -96L${f(18 + (i % 2) * 8)} ${f(-96 - len)}L${f(-18 - (i % 2) * 8)} ${f(-96 - len)}Z" fill="url(#ray)" opacity="${f(0.6 + (i % 3) * 0.2)}"/>`;
   }
+  back = `<g filter="url(#blur8)">${back}</g>`;
   const layers = [
     {
       // Normal blend, not screen: the smoke mantle in here has to darken.
-      markup: S(`<ellipse cx="0" cy="-30" rx="150" ry="170" fill="url(#auraR)"/>` + smokeMantle(ph, p) + back + `<ellipse cx="0" cy="150" rx="150" ry="22" fill="url(#groundGlow)"/>`),
+      markup: B(`<ellipse cx="0" cy="-30" rx="150" ry="170" fill="url(#auraR)"/>` + smokeMantle(ph, p) + back + `<ellipse cx="0" cy="150" rx="150" ry="22" fill="url(#groundGlow)"/>`),
       anim: { type: "pulse", min: 0.75, max: 1, speed: 1.3 },
     },
   ];
-  if (ph === 3) {
-    layers.push({ markup: S(raysLayer(p)), anim: { type: "spin", speed: 0.05, pivot: pv(0, -80) }, blend: "lighter", opacity: 0.8 });
-    layers.push({ markup: S(archHalo(p)), anim: { type: "float", amp: 2.5, speed: 0.7 } });
-  }
-  if (ph < 3) layers.push({ markup: S(haloRing(ph, p)), anim: { type: "spin", speed: ph === 2 ? 0.35 : 0.18, pivot: pv(0, -96) } });
-  layers.push({ markup: S(backLayer(ph, p)), anim: { type: "sway", amp: 0.025, speed: 0.9, pivot: pv(0, -60) } });
-  layers.push({ markup: S(lit(armLayer(ph, p), p.rim)), anim: { type: "sway", amp: 0.03, speed: 1.1, pivot: pv(-104, -52) } });
-  layers.push({ markup: S(lit(mirror(armLayer(ph, p)), p.rim)), anim: { type: "sway", amp: 0.03, speed: 1.1, phase: 1.7, pivot: pv(104, -52) } });
-  layers.push({ markup: S(legsLayer(ph, p)) });
-  layers.push({ markup: S(pendulumLayer(p)), anim: { type: "sway", amp: 0.12, speed: 2.2, pivot: pv(0, 18) } });
-  layers.push({ markup: S(torsoLayer(ph, p)) });
-  if (ph === 3) layers.push({ markup: S(voidBellyLayer(p)) });
+  // `shell` marks what the Shell sheds in-world when it cracks (sprites/boss.js).
+  if (ph === 1) layers.push({ markup: B(carapaceLayer(p)), shell: true });
+  layers.push({ markup: S(haloRing(ph, p)), anim: { type: "spin", speed: ph === 2 ? 0.35 : 0.18, pivot: pv(0, -96) } });
+  layers.push({ markup: B(backLayer(ph, p)), anim: { type: "sway", amp: 0.025, speed: 0.9, pivot: pvB(0, -60) } });
+  layers.push({ markup: B(lit(armLayer(ph, p), p.rim)), anim: { type: "sway", amp: 0.03, speed: 1.1, pivot: pvB(-104, -52) } });
+  layers.push({ markup: B(lit(mirror(armLayer(ph, p)), p.rim)), anim: { type: "sway", amp: 0.03, speed: 1.1, phase: 1.7, pivot: pvB(104, -52) } });
+  layers.push({ markup: B(legsLayer(ph, p)) });
+  layers.push({ markup: B(pendulumLayer(p)), anim: { type: "sway", amp: 0.12, speed: 2.2, pivot: pvB(0, 18) } });
+  layers.push({ markup: B(torsoLayer(ph, p)) });
+  if (ph === 2) layers.push({ markup: B(musclesLayer(p)) });
+  if (ph === 1) layers.push({ markup: B(shellPlateLayer(p)), shell: true });
   layers.push({ markup: S(coreGearLayer(p)), anim: { type: "spin", speed: ph === 2 ? -0.9 : -0.5, pivot: pv(0, -40) } });
   layers.push({ markup: S(coreFaceLayer(ph)) });
   layers.push({ markup: S(headLayer(ph, p)) });
-  layers.push({ markup: S(glowLayer(ph, p)), anim: { type: "pulse", min: 0.55, max: 1, speed: ph === 2 ? 4.2 : 3 }, blend: "lighter" });
-  if (ph >= 2) {
-    layers.push({ markup: S(shardsLayer(ph, p)), anim: { type: "float", amp: 3, speed: 1.2 } });
-  }
-  if (ph === 3) {
-    layers.push({ markup: S(motesLayer(ph, p)), anim: { type: "flicker", min: 0.4, max: 1, speed: 1.5 }, blend: "lighter" });
-  }
-  const [bx, by, bw, bh] = ph === 3 ? [-168, -158, 336, 320] : [-162, -162, 324, 326];
+  layers.push({ markup: B(glowLayer(ph, p)), anim: { type: "pulse", min: 0.55, max: 1, speed: ph === 2 ? 4.2 : 3 }, blend: "lighter" });
+  if (ph === 2) layers.push({ markup: B(shardsLayer(ph, p)), anim: { type: "float", amp: 3, speed: 1.2 } });
+  // The carapace stands well above the crown.
+  const [bx, by, bw, bh] = ph === 1 ? [-170, -222, 340, 386] : [-162, -162, 324, 326];
   return {
-    box: [f(bx * k), f(by * k), f(bw * k), f(bh * k)],
+    box: [f(bx * k * W), f(by * k), f(bw * k * W), f(bh * k)],
     defs: villainDefs(p),
     anim: { type: "breathe", amp: 0.006, speed: 1.4, pivot: pv(0, 152) },
     layers,

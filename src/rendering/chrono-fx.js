@@ -23,6 +23,7 @@ import { predictEnemy, windupLine, projectilePath } from "../systems/chrono-powe
 import { hazardState } from "../systems/chrono-hazards.js";
 import { pendingReplay, FORM2 } from "../systems/boss-form2.js";
 import { quillFan } from "../systems/ai.js";
+import { FORMS } from "../systems/paradox-forms.js";
 
 const FLOOR = 0.5;
 const WAIST = 0.12;
@@ -234,7 +235,7 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
   const shifting = game.player.chronoActive;
   ctx.save();
   for (const h of hz.hazards) {
-    const st = hazardState(h, hz.clock, hz.triggers[h.id]);
+    const st = hazardState(h, hz.clockFor?.(h) ?? hz.clock, hz.triggers[h.id]);
     if (h.type === "blade") {
       // Waist-high rotor: a faint disc, the hub, and bright arms with a
       // smear behind them that shortens when time slows.
@@ -271,12 +272,19 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
       const glow = h.blast ? "235,210,255" : "255,170,60";
       const seen = h.blast && shifting && game.chronoPowers?.has("foresight");
       const t = h.blast ? ((((hz.clock + (h.phase ?? 0)) % h.period) + h.period) % h.period) / h.period : 0;
+      // A plasma vent flickers on its own clock, so a shift visibly slows the
+      // flames too, and they sink over the last moments of a burn: the cue
+      // for when to go.
+      const vc = hz.clockFor?.(h) ?? hz.clock;
+      const ft = h.blast ? now : vc;
+      const left = h.on - ((((vc + (h.phase ?? 0)) % h.period) + h.period) % h.period);
+      const sink = h.blast ? 1 : Math.max(0.3, Math.min(1, left / 0.4));
       for (let row = r1; row <= r2; row++) {
         for (let col = c1; col <= c2; col++) {
           if (game.map.grid[row]?.[col] !== 0) continue;
           const x = col + 0.5, y = row + 0.5;
           if (st.on) {
-            const flick = 0.75 + 0.25 * Math.sin(now * 20 + col * 1.7 + row);
+            const flick = (0.75 + 0.25 * Math.sin(ft * 20 + col * 1.7 + row)) * sink;
             ctx.globalCompositeOperation = "lighter";
             worldPane(ctx, r, game, planeMul, yShift, x - 0.45, y, x + 0.45, y, (h.blast ? -0.6 : -0.25) * flick, `rgba(${hot},0.22)`, 2);
             ctx.globalCompositeOperation = "source-over";
@@ -573,14 +581,17 @@ function drawRifts(ctx, r, game, planeMul, yShift) {
  * The Hound's tells, for everyone, shifting or not (Foresight adds its thin
  * red line on top): a scorched lane burning brighter along the floor where
  * its lunge will run, and the fan its quills will fly while its ridge stands.
+ * The mini-bosses' charges and volleys draw the same way, and the Paradox
+ * Lord's slams and charges draw theirs (bossTell).
  */
 function houndTells(ctx, r, game, planeMul, yShift) {
   const open = (x, y) => game.map.grid[Math.floor(y)]?.[Math.floor(x)] === 0;
   const now = performance.now() / 1000;
   ctx.save();
   for (const e of game.entities) {
-    if (e.type !== "enemy" || !e.active || e.dissolving || !e.def?.phased) continue;
+    if (e.type !== "enemy" || !e.active || e.dissolving || !(e.def?.phased || e.def?.subBoss || e.def?.form)) continue;
     const d = e.def;
+    if (e._bossWindup) bossTell(ctx, r, game, planeMul, yShift, e, open, now);
     if (e._chargeState === "windup") {
       const t = 1 - Math.max(0, e._chargeTimer ?? 0) / (d.chargeWindup ?? 0.6);
       const a = e._chargeAngle ?? 0;
@@ -610,6 +621,48 @@ function houndTells(ctx, r, game, planeMul, yShift) {
     }
   }
   ctx.restore();
+}
+
+/**
+ * The Paradox Lord's tells: a slam's reach burning on the floor round him,
+ * and a charge's lane, both brightening as the tell runs out.
+ */
+function bossTell(ctx, r, game, planeMul, yShift, e, open, now) {
+  const w = e._bossWindup;
+  const t = 1 - Math.max(0, w.t) / (w.total || 1);
+  const F = FORMS[e.def.form] ?? FORMS[1];
+  const pulse = 0.75 + 0.25 * Math.sin(now * (10 + 20 * t));
+  if (w.kind === "slam" && F.slam) {
+    const rad = F.slam.radius;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const x = e.x + Math.cos(a) * rad * (0.4 + 0.6 * t);
+      const y = e.y + Math.sin(a) * rad * (0.4 + 0.6 * t);
+      if (open(x, y)) floorMark(ctx, r, game, planeMul, yShift, x, y, 0.22, `rgba(255,${Math.round(180 - 120 * t)},60,${(0.2 + 0.5 * t) * pulse})`);
+    }
+  } else if (w.kind === "charge" && F.charge) {
+    const a = e._bossChargeAngle ?? 0;
+    const reach = (e.speed ?? e.def.speed) * F.charge.speedMul * F.charge.duration;
+    let len = 0;
+    while (len < reach && open(e.x + Math.cos(a) * (len + 0.25), e.y + Math.sin(a) * (len + 0.25))) len += 0.25;
+    for (let s = 0.6; s < len; s += 0.45) {
+      floorMark(ctx, r, game, planeMul, yShift, e.x + Math.cos(a) * s, e.y + Math.sin(a) * s, 0.3 + 0.12 * t,
+        `rgba(255,${Math.round(150 - 110 * t)},40,${(0.12 + 0.45 * t) * (1 - s / (len + 1)) * pulse})`);
+    }
+    // Rails down the lane's edges at knee height. Coming straight at you,
+    // the lane runs up the middle of the screen behind the gun (Legacy's
+    // sits dead centre) and the near floor is under the HUD; raised rails
+    // splay out either side of the gun, above it.
+    const nx = -Math.sin(a) * 0.45;
+    const ny = Math.cos(a) * 0.45;
+    const ex = e.x + Math.cos(a) * len;
+    const ey = e.y + Math.sin(a) * len;
+    ctx.strokeStyle = `rgba(255,${Math.round(200 - 150 * t)},80,${(0.35 + 0.5 * t) * pulse})`;
+    ctx.lineWidth = 1.5 + 2.5 * t;
+    const knee = (FLOOR + WAIST) / 2;
+    worldLine(ctx, r, game, planeMul, yShift, e.x + nx, e.y + ny, ex + nx, ey + ny, knee, true);
+    worldLine(ctx, r, game, planeMul, yShift, e.x - nx, e.y - ny, ex - nx, ey - ny, knee, true);
+  }
 }
 
 /**

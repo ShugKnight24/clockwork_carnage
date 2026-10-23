@@ -1,8 +1,48 @@
 // ── Boss Form Dispatcher ──
+// Each form's size, about its feet: the Shell towers, the Final Form is
+// smaller than you. A cracked Shell shrinks to what was inside (_spriteScale).
+const FORM_SIZE = { 1: 1.3, 2: 1.1, 3: 0.9 };
+
 export function renderBoss(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash) {
   const form = enemy.def.form || 1;
-  const renderers = { 1: renderBehemoth, 2: renderVolcanicTitan, 3: renderCosmicEntity };
+  const renderers = { 1: renderBehemoth, 2: renderVolcanicTitan, 3: renderRemainder };
+  const size = (FORM_SIZE[form] ?? 1) * (enemy._spriteScale ?? 1);
+  const feet = centerY + halfH;
+  ctx.save();
+  ctx.translate(screenX, feet);
+  ctx.scale(size, size);
+  ctx.translate(-screenX, -feet);
   (renderers[form] || renderBehemoth)(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, alpha, time, enemy, hitFlash);
+  if (form === 1 && enemy._shellCracked) renderShellCracks(ctx, screenX, halfH, bodyTop, bodyBottom, bodyWidth, time, enemy);
+  ctx.restore();
+}
+
+/** The Shell broken open: the core's light through the seams. */
+function renderShellCracks(ctx, screenX, halfH, bodyTop, bodyBottom, bodyWidth, time, enemy) {
+  const bW = bodyWidth * 1.5;
+  const cy = bodyTop + (bodyBottom - bodyTop) * 0.35;
+  const seams = [
+    [[0, 0], [-0.25, -0.35], [-0.18, -0.6], [-0.4, -0.85]],
+    [[0, 0], [0.3, -0.3], [0.22, -0.55], [0.5, -0.8]],
+    [[0, 0], [-0.4, 0.15], [-0.7, 0.05], [-1.0, 0.25]],
+    [[0, 0], [0.45, 0.2], [0.75, 0.08], [1.05, 0.3]],
+    [[0, 0], [-0.08, 0.45], [0.06, 0.8], [-0.05, 1.3]],
+  ];
+  const shed = Math.min(1, (enemy._crackT ?? 1) / 0.7);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const [w, col, a] of [[halfH * 0.06, "rgba(34,230,255,", 0.45], [halfH * 0.018, "rgba(234,255,255,", 0.95]]) {
+    ctx.strokeStyle = `${col}${a * (0.65 + 0.35 * Math.sin(time * 0.009)) * shed})`;
+    ctx.lineWidth = Math.max(1, w);
+    ctx.beginPath();
+    for (const seam of seams) {
+      seam.forEach(([x, y], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, screenX + x * bW, cy + y * halfH * 0.5));
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -912,379 +952,123 @@ function renderVolcanicTitan(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyB
 
 
 // ════════════════════════════════════════════════════════════════════
-// FORM 3 — THE COSMIC ENTITY
-// Transcended all physical form. A void-body filled with swirling
-// starfield, orbited by floating armor fragments, dimensional tears
-// ripping space around it, cosmic crown/halo, tendrils of pure energy.
-// Eldritch horror meets cosmic god.
+// FORM 3 — THE REMAINDER
+// What is left of him: a thin man of brass struts in a tattered mantle,
+// a porcelain clock-face mask, one hand raised with two fingers out, and
+// an arch of small clocks behind. The weakest-looking thing in the Core.
 // ════════════════════════════════════════════════════════════════════
-function renderCosmicEntity(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, alpha, time, enemy, hitFlash) {
-  const bW = bodyWidth * 1.7;
-  const bTop = bodyTop - halfH * 0.3;
-  const bBot = bodyBottom + halfH * 0.15;
-  const torsoH = bBot - bTop;
-  const breathe = Math.sin(time * 0.001) * halfH * 0.01;
-  const pulse = (Math.sin(time * 0.005) + 1) * 0.5;
-  const cosmicPulse = (Math.sin(time * 0.002) + 1) * 0.5;
-
-  const voidBlack = "#0a0010";
-  const deepVoid = "#050008";
-  const cosmicPurple = `rgba(120, 40, 200, `;
-  const cosmicBlue = `rgba(60, 120, 255, `;
-  const cosmicWhite = `rgba(200, 200, 255, `;
-
-  // ── Reality distortion field ──
+function renderRemainder(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, alpha, time, enemy, hitFlash) {
+  const u = halfH / 100;
+  const X = (x) => screenX + x * u;
+  const Y = (y) => centerY + y * u;
+  const pulse = (Math.sin(time * 0.004) + 1) * 0.5;
+  const sway = Math.sin(time * 0.0016) * 2;
+  const violet = hitFlash ? "#ffffff" : "#b98aff";
+  const strut = hitFlash ? "#ffffff" : "#b4aee6";
+  const plate = hitFlash ? "#ffdddd" : "#2a1a50";
+  const line = (pts, w, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, w * u);
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))));
+    ctx.stroke();
+  };
   ctx.save();
-  const distR = bW * 3.0 + cosmicPulse * bW * 0.3;
-  const distGrad = ctx.createRadialGradient(screenX, centerY, bW * 0.2, screenX, centerY, distR);
-  distGrad.addColorStop(0, `rgba(40, 0, 80, 0.3)`);
-  distGrad.addColorStop(0.3, `rgba(20, 0, 60, 0.15)`);
-  distGrad.addColorStop(0.6, `rgba(10, 0, 40, 0.08)`);
-  distGrad.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = distGrad;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Arch of small clocks behind him.
+  ctx.strokeStyle = `rgba(185, 138, 255, ${0.35 + pulse * 0.2})`;
+  ctx.lineWidth = Math.max(1, 1.5 * u);
   ctx.beginPath();
-  ctx.arc(screenX, centerY, distR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // ── Dimensional rift tears ──
-  ctx.save();
-  for (let r = 0; r < 4; r++) {
-    const rAng = time * 0.001 + r * Math.PI * 0.5;
-    const rDist = bW * 1.8 + Math.sin(time * 0.003 + r) * bW * 0.3;
-    const rx = screenX + Math.cos(rAng) * rDist;
-    const ry = centerY + Math.sin(rAng) * rDist * 0.5;
-    const rLen = bW * 0.3 + Math.sin(time * 0.004 + r * 2) * bW * 0.1;
-    const rRot = time * 0.002 + r;
-    // Rift tear — jagged line with glow
-    ctx.save();
-    ctx.translate(rx, ry);
-    ctx.rotate(rRot);
-    // Outer glow
-    ctx.strokeStyle = cosmicPurple + (0.15 + pulse * 0.1) + ")";
-    ctx.lineWidth = 8;
+  ctx.ellipse(X(0), Y(-34), 58 * u, 40 * u, 0, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.stroke();
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI * (1.1 + (i / 6) * 0.8);
+    const cx = X(Math.cos(a) * 58);
+    const cy = Y(-34 + Math.sin(a) * 40);
+    ctx.fillStyle = "#140a2c";
+    ctx.strokeStyle = violet;
+    ctx.lineWidth = Math.max(1, u);
     ctx.beginPath();
-    ctx.moveTo(-rLen, 0);
-    ctx.lineTo(-rLen * 0.3, -3);
-    ctx.lineTo(rLen * 0.3, 3);
-    ctx.lineTo(rLen, 0);
+    ctx.arc(cx, cy, 5 * u, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
-    // Inner bright tear
-    ctx.strokeStyle = cosmicWhite + (0.4 + pulse * 0.3) + ")";
-    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(-rLen, 0);
-    ctx.lineTo(-rLen * 0.3, -3);
-    ctx.lineTo(rLen * 0.3, 3);
-    ctx.lineTo(rLen, 0);
-    ctx.stroke();
-    ctx.restore();
-  }
-  ctx.restore();
-
-  // ── Orbiting reality rings ──
-  ctx.save();
-  ctx.globalAlpha = alpha * (0.15 + cosmicPulse * 0.1);
-  for (let ring = 0; ring < 4; ring++) {
-    const ringR = bW * (1.4 + ring * 0.35) + Math.sin(time * 0.002 + ring) * bW * 0.08;
-    const ringRot = time * 0.001 * (ring % 2 === 0 ? 1 : -1) + ring * 0.8;
-    ctx.strokeStyle = ring % 2 === 0
-      ? `rgba(120, 60, 200, 0.5)`
-      : `rgba(60, 140, 255, 0.4)`;
-    ctx.lineWidth = 1.5 + ring * 0.3;
-    ctx.beginPath();
-    ctx.ellipse(screenX, centerY, ringR, ringR * 0.25, ringRot, 0, Math.PI * 2);
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(time * 0.001 + i) * 3.5 * u, cy + Math.sin(time * 0.001 + i) * 3.5 * u);
     ctx.stroke();
   }
-  ctx.globalAlpha = alpha;
-  ctx.restore();
 
-  // ── Void body — humanoid silhouette filled with starfield ──
-  ctx.save();
-  // Clip to body shape
+  // Mantle: thin, tattered, hanging off the shoulders.
+  ctx.fillStyle = hitFlash ? "rgba(255,255,255,0.6)" : "rgba(20, 10, 40, 0.85)";
   ctx.beginPath();
-  // Head
-  ctx.arc(screenX, bTop - torsoH * 0.08 + breathe, bW * 0.38, 0, Math.PI * 2);
-  // Torso
-  ctx.moveTo(screenX - bW * 0.7, bTop + torsoH * 0.05 + breathe);
-  ctx.quadraticCurveTo(screenX - bW * 0.85, centerY + breathe, screenX - bW * 0.75, bBot);
-  ctx.lineTo(screenX + bW * 0.75, bBot);
-  ctx.quadraticCurveTo(screenX + bW * 0.85, centerY + breathe, screenX + bW * 0.7, bTop + torsoH * 0.05 + breathe);
+  ctx.moveTo(X(-14), Y(-30));
+  for (const [x, y] of [[-24, 20], [-30, 84], [-22, 76], [-18, 92], [-10, 80], [0, 90], [10, 80], [18, 92], [22, 76], [30, 84], [24, 20], [14, -30]]) {
+    ctx.lineTo(X(x + (y > 60 ? sway : 0)), Y(y));
+  }
   ctx.closePath();
-  // Arms
-  for (const side of [-1, 1]) {
-    ctx.moveTo(screenX + side * bW * 0.7, bTop + torsoH * 0.08 + breathe);
-    ctx.quadraticCurveTo(
-      screenX + side * bW * 1.3, centerY + breathe,
-      screenX + side * bW * 0.9, bBot + halfH * 0.15
-    );
-    ctx.lineTo(screenX + side * bW * 0.75, bBot + halfH * 0.15);
-    ctx.quadraticCurveTo(
-      screenX + side * bW * 1.1, centerY + breathe,
-      screenX + side * bW * 0.55, bTop + torsoH * 0.12 + breathe
-    );
-  }
-  // Legs
-  for (const side of [-1, 1]) {
-    ctx.moveTo(screenX + side * bW * 0.1, bBot);
-    ctx.lineTo(screenX + side * bW * 0.45, bBot);
-    ctx.lineTo(screenX + side * bW * 0.5, bBot + halfH * 0.45);
-    ctx.lineTo(screenX + side * bW * 0.05, bBot + halfH * 0.45);
-    ctx.closePath();
-  }
-  ctx.clip();
+  ctx.fill();
 
-  // Fill clipped area with void black
-  ctx.fillStyle = voidBlack;
-  ctx.fillRect(screenX - bW * 1.5, bTop - halfH * 0.5, bW * 3, torsoH + halfH);
+  // Legs, and the hanging arm.
+  line([[-4, 30], [-8, 64], [-7, 98]], 3, strut);
+  line([[4, 30], [8, 64], [7, 98]], 3, strut);
+  line([[-14, -28], [-20, 0], [-21, 26]], 2.6, strut);
+  line([[-21, 26], [-22, 36]], 1, strut);
+  line([[-20, 26], [-19, 37]], 1, strut);
 
-  // Starfield inside the body
-  const starSeed = 42;
-  for (let s = 0; s < 60; s++) {
-    // Pseudo-random using seed
-    const sx = screenX + Math.sin(s * 127.1 + starSeed) * bW * 0.9;
-    const sy = bTop + Math.sin(s * 311.7 + starSeed) * torsoH * 0.4 + torsoH * 0.5 + breathe;
-    const sBright = 0.3 + Math.sin(time * 0.003 + s * 0.7) * 0.3;
-    const sSize = 1 + Math.sin(s * 73.1) * 0.8;
-    ctx.fillStyle = s % 5 === 0
-      ? `rgba(180, 140, 255, ${sBright})`
-      : s % 3 === 0
-        ? `rgba(100, 180, 255, ${sBright})`
-        : `rgba(220, 220, 255, ${sBright})`;
-    ctx.beginPath();
-    ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Swirling nebula inside body
-  for (let n = 0; n < 3; n++) {
-    const nx = screenX + Math.sin(time * 0.0008 + n * 2) * bW * 0.3;
-    const ny = centerY + Math.cos(time * 0.0006 + n * 3) * torsoH * 0.2 + breathe;
-    const nR = bW * (0.25 + n * 0.1);
-    const nebGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, nR);
-    const nebColors = [
-      [`rgba(100, 30, 160, 0.15)`, `rgba(60, 10, 120, 0)`],
-      [`rgba(30, 80, 160, 0.12)`, `rgba(10, 40, 100, 0)`],
-      [`rgba(160, 40, 80, 0.1)`, `rgba(100, 10, 40, 0)`],
-    ];
-    nebGrad.addColorStop(0, nebColors[n][0]);
-    nebGrad.addColorStop(1, nebColors[n][1]);
-    ctx.fillStyle = nebGrad;
-    ctx.beginPath();
-    ctx.arc(nx, ny, nR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore(); // end body clip
-
-  // ── Body edge glow ──
-  ctx.save();
-  ctx.strokeStyle = cosmicPurple + (0.25 + pulse * 0.15) + ")";
-  ctx.lineWidth = 3;
-  // Torso outline
+  // Torso: a narrow cage.
+  ctx.fillStyle = plate;
   ctx.beginPath();
-  ctx.moveTo(screenX - bW * 0.7, bTop + torsoH * 0.05 + breathe);
-  ctx.quadraticCurveTo(screenX - bW * 0.85, centerY + breathe, screenX - bW * 0.75, bBot);
-  ctx.lineTo(screenX + bW * 0.75, bBot);
-  ctx.quadraticCurveTo(screenX + bW * 0.85, centerY + breathe, screenX + bW * 0.7, bTop + torsoH * 0.05 + breathe);
+  ctx.moveTo(X(-14), Y(-32));
+  ctx.lineTo(X(14), Y(-32));
+  ctx.lineTo(X(6), Y(28));
+  ctx.lineTo(X(-6), Y(28));
   ctx.closePath();
-  ctx.stroke();
+  ctx.fill();
+  for (let i = 0; i < 4; i++) line([[-11 + i * 1.5, -24 + i * 9], [0, -22 + i * 9], [11 - i * 1.5, -24 + i * 9]], 1.2, "#8f86c8");
+  line([[0, -32], [0, 28]], 1.4, strut);
+
+  // The raised arm: two fingers out.
+  line([[14, -28], [26, -12], [30, -42]], 2.6, strut);
+  line([[30, -42], [29, -54]], 1.1, strut);
+  line([[31, -42], [33, -53]], 1.1, strut);
+
+  // Core.
+  const coreG = ctx.createRadialGradient(X(0), Y(-12), 0, X(0), Y(-12), 12 * u);
+  coreG.addColorStop(0, "rgba(246, 240, 255, 0.95)");
+  coreG.addColorStop(0.35, `rgba(155, 92, 255, ${0.5 + pulse * 0.3})`);
+  coreG.addColorStop(1, "rgba(155, 92, 255, 0)");
+  ctx.fillStyle = coreG;
+  ctx.beginPath();
+  ctx.arc(X(0), Y(-12), 12 * u, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Neck, mask and crown.
+  line([[0, -32], [0, -38]], 1.6, strut);
+  ctx.fillStyle = hitFlash ? "#ffffff" : "#ece8f6";
+  ctx.beginPath();
+  ctx.ellipse(X(0), Y(-47), 6.5 * u, 9 * u, 0, 0, Math.PI * 2);
+  ctx.fill();
+  line([[1.5, -56], [0.5, -50], [2, -46], [0, -40]], 0.8, "#4a2a8a");
+  ctx.fillStyle = violet;
+  ctx.fillRect(X(-4.5), Y(-49), 3 * u, 1.2 * u);
+  ctx.fillRect(X(1.5), Y(-49), 3 * u, 1.2 * u);
+  for (const [x, y] of [[-4, -60], [0, -64], [4, -60]]) {
+    line([[x * 0.5, -55], [x, y]], 0.9, "#b4aee6");
+    ctx.strokeStyle = violet;
+    ctx.beginPath();
+    ctx.arc(X(x), Y(y - 1.5), 1.6 * u, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Glow: fingertips and eyes.
+  ctx.globalCompositeOperation = "lighter";
+  ctx.fillStyle = `rgba(185, 138, 255, ${0.5 + pulse * 0.4})`;
+  for (const [x, y] of [[29, -55], [33, -54], [-3, -48.5], [3, -48.5]]) {
+    ctx.beginPath();
+    ctx.arc(X(x), Y(y), 2.2 * u, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
-
-  // ── Cosmic crown / halo ──
-  const haloY = bTop - torsoH * 0.12 + breathe;
-  const haloR = bW * 0.6;
-  // Outer halo ring
-  ctx.strokeStyle = cosmicWhite + (0.2 + cosmicPulse * 0.15) + ")";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(screenX, haloY - bW * 0.35, haloR, haloR * 0.15, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  // Inner halo glow
-  ctx.strokeStyle = `rgba(200, 160, 255, ${0.3 + cosmicPulse * 0.2})`;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.ellipse(screenX, haloY - bW * 0.35, haloR * 0.85, haloR * 0.12, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  // Crown spikes — cosmic geometry
-  const crownY = bTop - torsoH * 0.08 + breathe - bW * 0.38;
-  for (let sp = 0; sp < 7; sp++) {
-    const spAng = -Math.PI * 0.8 + (Math.PI * 1.6 * sp) / 6;
-    const spBase = bW * 0.38;
-    const spTip = bW * 0.65 + Math.sin(time * 0.004 + sp) * bW * 0.05;
-    const bx = screenX + Math.cos(spAng) * spBase;
-    const by = crownY + Math.sin(spAng) * spBase * 0.35;
-    const tx = screenX + Math.cos(spAng) * spTip;
-    const ty = crownY + Math.sin(spAng) * spTip * 0.35;
-    // Spike outer glow
-    ctx.strokeStyle = cosmicPurple + (0.15 + pulse * 0.1) + ")";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    // Spike bright core
-    ctx.strokeStyle = cosmicWhite + (0.4 + pulse * 0.3) + ")";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    // Tip orb
-    ctx.fillStyle = cosmicWhite + (0.5 + pulse * 0.3) + ")";
-    ctx.beginPath();
-    ctx.arc(tx, ty, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ── Face — void with cosmic eyes ──
-  const headY = bTop - torsoH * 0.08 + breathe;
-  // Eyes — cosmic void with bright pupils
-  for (const side of [-1, 1]) {
-    const eyeX = screenX + side * bW * 0.15;
-    const eyeY = headY - bW * 0.02;
-    // Eye socket glow
-    const eyeGrad = ctx.createRadialGradient(eyeX, eyeY, 0, eyeX, eyeY, bW * 0.12);
-    eyeGrad.addColorStop(0, `rgba(255, 255, 255, ${0.8 + pulse * 0.2})`);
-    eyeGrad.addColorStop(0.3, cosmicPurple + (0.6) + ")");
-    eyeGrad.addColorStop(1, cosmicPurple + "0)");
-    ctx.fillStyle = eyeGrad;
-    ctx.beginPath();
-    ctx.ellipse(eyeX, eyeY, bW * 0.12, bW * 0.07, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Third eye — center forehead
-  const thirdEyeY = headY - bW * 0.2;
-  const teGrad = ctx.createRadialGradient(screenX, thirdEyeY, 0, screenX, thirdEyeY, bW * 0.08);
-  teGrad.addColorStop(0, `rgba(255, 200, 255, ${0.9})`);
-  teGrad.addColorStop(0.5, cosmicPurple + "0.5)");
-  teGrad.addColorStop(1, cosmicPurple + "0)");
-  ctx.fillStyle = teGrad;
-  ctx.beginPath();
-  ctx.arc(screenX, thirdEyeY, bW * 0.08, 0, Math.PI * 2);
-  ctx.fill();
-
-  // ── Floating armor fragments orbiting the body ──
-  for (let f = 0; f < 8; f++) {
-    const fAng = time * 0.0015 + f * Math.PI * 0.25;
-    const fDist = bW * (1.1 + Math.sin(f * 1.3) * 0.2) + Math.sin(time * 0.002 + f) * bW * 0.1;
-    const fx = screenX + Math.cos(fAng) * fDist;
-    const fy = centerY + Math.sin(fAng) * fDist * 0.5 + breathe;
-    const fSize = bW * (0.06 + Math.sin(f * 2.7) * 0.03);
-    const fRot = time * 0.003 + f * 1.5;
-
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.rotate(fRot);
-    // Fragment body
-    ctx.fillStyle = `rgba(30, 10, 50, ${0.5 + Math.sin(time * 0.004 + f) * 0.2})`;
-    ctx.fillRect(-fSize, -fSize * 0.6, fSize * 2, fSize * 1.2);
-    // Fragment edge glow
-    ctx.strokeStyle = cosmicPurple + (0.3 + pulse * 0.15) + ")";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-fSize, -fSize * 0.6, fSize * 2, fSize * 1.2);
-    ctx.restore();
-  }
-
-  // ── Energy tendrils extending from hands ──
-  for (const side of [-1, 1]) {
-    const handX = screenX + side * bW * 0.9;
-    const handY = bBot + halfH * 0.15;
-    // Multiple tendrils per hand
-    for (let t = 0; t < 3; t++) {
-      const tAng = side * (0.3 + t * 0.4) + Math.sin(time * 0.003 + t) * 0.2;
-      const tLen = bW * (0.3 + t * 0.15) + Math.sin(time * 0.004 + t * 2) * bW * 0.1;
-      const tx = handX + Math.cos(tAng) * tLen;
-      const ty = handY + Math.sin(tAng) * tLen * 0.7;
-      const mx = (handX + tx) * 0.5 + Math.sin(time * 0.005 + t + side) * 10;
-      const my = (handY + ty) * 0.5;
-
-      // Tendril glow
-      ctx.strokeStyle = cosmicPurple + (0.1 + pulse * 0.08) + ")";
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(handX, handY);
-      ctx.quadraticCurveTo(mx, my, tx, ty);
-      ctx.stroke();
-      // Tendril core
-      ctx.strokeStyle = cosmicWhite + (0.3 + pulse * 0.2) + ")";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(handX, handY);
-      ctx.quadraticCurveTo(mx, my, tx, ty);
-      ctx.stroke();
-      // Tendril tip spark
-      ctx.fillStyle = cosmicWhite + (0.4 + Math.sin(time * 0.006 + t) * 0.2) + ")";
-      ctx.beginPath();
-      ctx.arc(tx, ty, 2 + Math.sin(time * 0.008 + t) * 1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // ── Central void singularity ──
-  const singY = centerY + breathe;
-  const singR = bW * 0.15 + cosmicPulse * bW * 0.03;
-  // Event horizon
-  const singGrad = ctx.createRadialGradient(screenX, singY, 0, screenX, singY, singR * 2);
-  singGrad.addColorStop(0, `rgba(0, 0, 0, 0.9)`);
-  singGrad.addColorStop(0.3, `rgba(40, 0, 80, 0.5)`);
-  singGrad.addColorStop(0.6, cosmicPurple + "0.2)");
-  singGrad.addColorStop(1, cosmicPurple + "0)");
-  ctx.fillStyle = singGrad;
-  ctx.beginPath();
-  ctx.arc(screenX, singY, singR * 2, 0, Math.PI * 2);
-  ctx.fill();
-  // Accretion disk
-  ctx.strokeStyle = `rgba(200, 160, 255, ${0.3 + pulse * 0.2})`;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(screenX, singY, singR * 1.8, singR * 0.3, time * 0.001, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = cosmicBlue + (0.2 + pulse * 0.15) + ")";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.ellipse(screenX, singY, singR * 2.2, singR * 0.4, -time * 0.0008, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // ── Cosmic particle field ──
-  for (let p = 0; p < 12; p++) {
-    const pAng = time * 0.001 + p * Math.PI * (2 / 12);
-    const pDist = bW * 1.5 + Math.sin(time * 0.003 + p * 1.5) * bW * 0.3;
-    const px = screenX + Math.cos(pAng) * pDist;
-    const py = centerY + Math.sin(pAng) * pDist * 0.6;
-    const pBright = 0.2 + Math.sin(time * 0.005 + p) * 0.15;
-    ctx.fillStyle = p % 3 === 0
-      ? cosmicPurple + pBright + ")"
-      : p % 3 === 1
-        ? cosmicBlue + pBright + ")"
-        : cosmicWhite + pBright + ")";
-    ctx.beginPath();
-    ctx.arc(px, py, 2 + Math.sin(p * 4.1) * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // ── Temporal lightning ──
-  ctx.strokeStyle = cosmicWhite + (0.15 + pulse * 0.12) + ")";
-  ctx.lineWidth = 1;
-  for (let l = 0; l < 3; l++) {
-    const lAng = time * 0.002 + l * Math.PI * 0.67;
-    const lR = bW * 1.2;
-    const lx1 = screenX + Math.cos(lAng) * bW * 0.3;
-    const ly1 = centerY + Math.sin(lAng) * bW * 0.2;
-    const lx2 = screenX + Math.cos(lAng + 0.8) * lR;
-    const ly2 = centerY + Math.sin(lAng + 0.8) * lR * 0.6;
-    // Multi-segment lightning
-    ctx.beginPath();
-    ctx.moveTo(lx1, ly1);
-    let cx = lx1, cy = ly1;
-    const segs = 4;
-    for (let s = 1; s <= segs; s++) {
-      const t2 = s / segs;
-      const nx = lx1 + (lx2 - lx1) * t2 + Math.sin(time * 0.01 + l + s) * 8;
-      const ny = ly1 + (ly2 - ly1) * t2 + Math.cos(time * 0.012 + l + s) * 5;
-      ctx.lineTo(nx, ny);
-      cx = nx; cy = ny;
-    }
-    ctx.stroke();
-  }
 }

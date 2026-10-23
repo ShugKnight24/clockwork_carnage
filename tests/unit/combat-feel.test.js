@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AISystem } from "../../src/systems/ai.js";
 import { Enemy } from "../../js/entities.js";
+import { FORMS } from "../../src/systems/paradox-forms.js";
 
 const DT = 1 / 60;
 const openMap = () => ({ width: 30, height: 30, grid: Array.from({ length: 30 }, () => new Array(30).fill(0)) });
@@ -35,7 +36,10 @@ describe("boss attacks are telegraphed", () => {
     step();
     expect(sounds).toContain("charge");
     expect(e._bossCharging).toBeFalsy();
-    for (let i = 0; i < 50; i++) step(); // ~0.85 s
+    const tell = FORMS[1].charge.windup;
+    for (let i = 0; i < Math.round((tell * 0.8) / DT); i++) step();
+    expect(e._bossCharging).toBeFalsy();
+    for (let i = 0; i < Math.round((tell * 0.3) / DT); i++) step();
     expect(e._bossCharging || e._bossChargeTimer > 0).toBeTruthy();
   });
 });
