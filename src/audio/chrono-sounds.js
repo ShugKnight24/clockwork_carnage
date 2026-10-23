@@ -23,6 +23,10 @@ export const CHRONO_SOUNDS = {
   // The Hound: a dry clock tick with a metallic ring under it.
   tick: [[0, "noise", 0.03, 0.22, 3200, "bandpass"], [0, "tone", 2100, 0.05, "square", 0.05]],
   vent: [[0, "noise", 0.4, 0.12, 1200, "lowpass"]],
+  // A vent lighting: a hiss and a low roar. In a shift the same burst comes
+  // dragged down and drawn out, so the slowed cycle is heard as well as seen.
+  ventIgnite: [[0, "noise", 0.35, 0.14, 2200, "bandpass"], [0, "tone", 90, 0.3, "sawtooth", 0.05]],
+  ventSlow: [[0, "noise", 1.1, 0.12, 700, "lowpass"], [0, "tone", 45, 1.1, "sawtooth", 0.06]],
   collapse: [[0, "noise", 0.5, 0.25, 300, "lowpass"], [0, "tone", 48, 0.5, "sine", 0.18]],
   blade: [[0, "noise", 0.06, 0.12, 1800, "bandpass"]],
   seal: [[0, "tone", 196, 0.3, "triangle", 0.12], [0.12, "tone", 294, 0.4, "triangle", 0.12]],

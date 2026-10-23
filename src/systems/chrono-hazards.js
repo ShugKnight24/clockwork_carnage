@@ -14,7 +14,9 @@
  *             if the front reaches you it catches you once (one hit, never
  *             lethal) and sets you down on the last landing you passed
  *   blade     a rotor: arms sweep a disc (dashable: a Chrono Dash goes through)
- *   vent      a zone that burns for `on` seconds out of every `period`
+ *   vent      a zone that burns for `on` seconds out of every `period`, on
+ *             its own clock that a shift slows to VENT_CHRONO, not the 0.045
+ *             the level clock crawls at
  *   gate      a laser line on the same cycle, or a turret firing real rounds
  *             a Time-Lock can catch
  *   piston    cells that slam shut for `on` seconds of every `period`: they
@@ -47,6 +49,16 @@ import { playChronoSound } from "../audio/chrono-sounds.js";
 
 /** The level clock's rate while the player shifts. */
 export const HAZARD_CHRONO = 0.15;
+/**
+ * How fast a vent's cycle runs while the player shifts, against real time.
+ * On the level clock a shift (0.15 on top of the world's 0.3) all but froze
+ * the vents: a burning one stayed lit for the whole shift, and with offset
+ * vents one always was. A quarter speed stretches each gap four times over
+ * while the cycle still turns, so a shift is how you get through.
+ */
+export const VENT_CHRONO = 0.25;
+/** Within this many tiles a vent lighting up is heard. */
+const VENT_HEARING = 9;
 /** The player's body, for hazard contact. */
 const BODY = 0.3;
 /** Seconds between two hits from the same hazard (sim time). */
@@ -113,6 +125,14 @@ const cellIn = ([c1, r1, c2, r2], x, y) => x >= c1 && x < c2 + 1 && y >= r1 && y
 const bodyIn = ([c1, r1, c2, r2], x, y, r = BODY) => x + r > c1 && x - r < c2 + 1 && y + r > r1 && y - r < r2 + 1;
 
 /** `on` seconds out of every `period`, starting `phase` in. */
+/** Whether the player is close enough to a vent's strip to hear it light. */
+function ventNear(h, p) {
+  const [c1, r1, c2, r2] = h.rect;
+  const dx = Math.max(c1 - p.x, 0, p.x - (c2 + 1));
+  const dy = Math.max(r1 - p.y, 0, p.y - (r2 + 1));
+  return dx * dx + dy * dy < VENT_HEARING * VENT_HEARING;
+}
+
 export function cycleOn(h, clock) {
   const t = (((clock + (h.phase ?? 0)) % h.period) + h.period) % h.period;
   return t < h.on;
@@ -295,6 +315,7 @@ export class ChronoHazards {
     this.piece = null;
     this.hazards = [];
     this.clock = 0;
+    this.ventClock = 0;
     this.triggers = {};
     this.teach = null;
     this.objective = null;
@@ -406,6 +427,8 @@ export class ChronoHazards {
     const p = game.player;
     const prevClock = this.clock;
     this.clock += dt * (p.chronoActive ? HAZARD_CHRONO : 1);
+    const prevVent = this.ventClock;
+    this.ventClock += p.chronoActive ? (game.deltaTime ?? dt) * VENT_CHRONO : dt;
     this._simTime += dt;
     this.inStasis = false;
 
@@ -415,7 +438,12 @@ export class ChronoHazards {
       else if (h.type === "blade") {
         if (bladeHits(h, this.clock, p.x, p.y)) this._hit(game, h);
       } else if (h.type === "vent") {
-        if (cycleOn(h, this.clock) && bodyIn(h.rect, p.x, p.y)) this._hit(game, h);
+        const c = this.clockFor(h);
+        if (cycleOn(h, c) && bodyIn(h.rect, p.x, p.y)) this._hit(game, h);
+        // A vent lighting up near you roars, dragged low in a shift.
+        if (!h.blast && cycleOn(h, c) && !cycleOn(h, c - (this.ventClock - prevVent)) && ventNear(h, p)) {
+          playChronoSound(game.audio, p.chronoActive ? "ventSlow" : "ventIgnite", { x: (h.rect[0] + h.rect[2] + 1) / 2, y: (h.rect[1] + h.rect[3] + 1) / 2, player: p });
+        }
       } else if (h.type === "gate" && h.kind === "turret") this._turret(game, h, prevClock);
       else if (h.type === "gate") {
         if (cycleOn(h, this.clock) && segDist(h.a, h.b, p.x, p.y) < BODY + 0.1) this._hit(game, h);
@@ -454,6 +482,15 @@ export class ChronoHazards {
       }
     }
     this._prev = { x: p.x, y: p.y };
+  }
+
+  /**
+   * The clock a hazard runs on: vents cycle on their own clock, which a
+   * shift slows (VENT_CHRONO) rather than stops; the Archive's replaying
+   * blast and everything else keep the level clock.
+   */
+  clockFor(h) {
+    return h.type === "vent" && !h.blast ? this.ventClock : this.clock;
   }
 
   _hit(game, h) {
@@ -881,6 +918,7 @@ export class ChronoHazards {
     const o = this.objective;
     return {
       clock: this.clock,
+      ventClock: this.ventClock,
       triggers: { ...this.triggers },
       ...(o ? { objective: { cleared: [...o.cleared], heat: o.heat, heatOn: o.heatOn } } : {}),
     };
@@ -889,6 +927,7 @@ export class ChronoHazards {
   restore(state) {
     if (!state) return;
     this.clock = state.clock ?? 0;
+    this.ventClock = state.ventClock ?? this.clock;
     this.triggers = { ...(state.triggers ?? {}) };
     const o = this.objective;
     if (o && state.objective) {
