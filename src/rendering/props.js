@@ -1024,3 +1024,159 @@ function renderCourseGate(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   ctx.restore();
 }
 PROP_RENDERERS.course_gate = renderCourseGate;
+
+// ── Certification Day (the station's east wing, js/tutorial-system.js) ──
+
+/**
+ * A security shutter stuck half down across a corridor: corrugated slats
+ * from the ceiling to just above the knee, a hazard bar on its lip. You
+ * slide (or crouch) under it. One per cell of the corridor's width.
+ */
+function renderShutter(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const top = cy - sh * 0.55;
+  const lip = ground - sh * 0.27;
+  const halfW = sw * 0.5;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const g = ctx.createLinearGradient(0, top, 0, lip);
+  g.addColorStop(0, "#5c646e");
+  g.addColorStop(1, "#8a929c");
+  ctx.fillStyle = g;
+  ctx.fillRect(sx - halfW, top, halfW * 2, lip - top);
+  // The slats.
+  const slat = Math.max(2, sh * 0.035);
+  ctx.fillStyle = "rgba(20,24,30,0.45)";
+  for (let y = top + slat; y < lip; y += slat * 2) ctx.fillRect(sx - halfW, y, halfW * 2, Math.max(1, slat * 0.35));
+  // The lip: hazard stripes, the gap's shadow under it.
+  const barH = Math.max(2, sh * 0.05);
+  ctx.fillStyle = "#e8c23a";
+  ctx.fillRect(sx - halfW, lip - barH, halfW * 2, barH);
+  ctx.fillStyle = "#1a1a1a";
+  const stripe = Math.max(3, barH * 1.2);
+  for (let x = sx - halfW; x < sx + halfW; x += stripe * 2) ctx.fillRect(x, lip - barH, stripe, barH);
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(sx - halfW, lip, halfW * 2, Math.max(1, sh * 0.03));
+  // Its fault lamp, blinking.
+  if (sw > 24 && Math.floor(t / 400) % 2) {
+    ctx.fillStyle = "#ff3a2a";
+    ctx.beginPath();
+    ctx.arc(sx, lip - barH * 2.2, Math.max(1.5, sw * 0.025), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.shutter = renderShutter;
+
+/**
+ * A section of catwalk that is not there: a dark gap in the deck with
+ * hazard paint on its far lip and the floor below lit far down. Drawn flat
+ * on the ground plane from the near edge of its cell to the far one.
+ */
+function renderFloorGap(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const k = 0.45 * sh * dist; // ground offset × distance: constant along the floor
+  const dn = Math.max(0.35, dist - 0.5);
+  const df = dist + 0.5;
+  const yN = cy + k / dn;
+  const yF = cy + k / df;
+  const wN = ((sw * dist) / dn) * 0.5;
+  const wF = ((sw * dist) / df) * 0.5;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.beginPath();
+  ctx.moveTo(sx - wF, yF);
+  ctx.lineTo(sx + wF, yF);
+  ctx.lineTo(sx + wN, yN);
+  ctx.lineTo(sx - wN, yN);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, yF, 0, yN);
+  g.addColorStop(0, "#020305");
+  g.addColorStop(0.6, "#05080c");
+  g.addColorStop(1, "#0c121a");
+  ctx.fillStyle = g;
+  ctx.fill();
+  // Light from the concourse far below.
+  ctx.globalAlpha = fog * (0.25 + 0.05 * Math.sin(t * 0.002));
+  ctx.fillStyle = "#4a7ab0";
+  ctx.fillRect(sx - wF * 0.5, yF + (yN - yF) * 0.4, wF, Math.max(1, (yN - yF) * 0.15));
+  // Hazard paint on the far lip.
+  ctx.globalAlpha = fog;
+  const lipH = Math.max(1, (yN - yF) * 0.12);
+  ctx.fillStyle = "#e8c23a";
+  ctx.fillRect(sx - wF, yF - lipH, wF * 2, lipH);
+  ctx.fillStyle = "#1a1a1a";
+  const st = Math.max(2, wF * 0.18);
+  for (let x = sx - wF; x < sx + wF; x += st * 2) ctx.fillRect(x, yF - lipH, st, lipH);
+  ctx.restore();
+}
+PROP_RENDERERS.floor_gap = renderFloorGap;
+
+/**
+ * R&D's telemetry rig: a floor pad and a ring gantry over it on two posts.
+ * `entity.scan` (set while a reading runs) sweeps a sheet of light down
+ * through the ring.
+ */
+function renderTelemetryRig(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const ground = groundY(cy, sh);
+  const top = ground - sh * 0.78;
+  const halfW = sw * 0.46;
+  const post = Math.max(2, sw * 0.05);
+  const scanning = entity?.scan > 0;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  // The pad.
+  ctx.fillStyle = scanning ? "rgba(70,224,255,0.55)" : "rgba(70,224,255,0.25)";
+  ctx.beginPath();
+  ctx.ellipse(sx, ground, halfW, Math.max(2, sh * 0.05), 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Posts and the ring.
+  ctx.fillStyle = "#3a4048";
+  for (const s of [-1, 1]) ctx.fillRect(sx + s * halfW - post / 2, top, post, ground - top);
+  ctx.strokeStyle = "#6a7480";
+  ctx.lineWidth = Math.max(2, sw * 0.04);
+  ctx.beginPath();
+  ctx.ellipse(sx, top, halfW, Math.max(2, sh * 0.06), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = scanning ? "#46e0ff" : "rgba(70,224,255,0.5)";
+  ctx.lineWidth = Math.max(1, sw * 0.015);
+  ctx.stroke();
+  if (scanning) {
+    const y = top + ((t * 0.0009) % 1) * (ground - top);
+    ctx.fillStyle = "rgba(70,224,255,0.18)";
+    ctx.fillRect(sx - halfW, top, halfW * 2, ground - top);
+    ctx.fillStyle = "rgba(180,250,255,0.75)";
+    ctx.fillRect(sx - halfW, y, halfW * 2, Math.max(1, sh * 0.008));
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.telemetry_rig = renderTelemetryRig;
+
+/** The booking camera on its tripod, the ring light round the lens. */
+function renderBookingCamera(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const s = propMinSize(6, sw, 0.35);
+  const head = ground - sh * 0.42;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.strokeStyle = "#2a2e34";
+  ctx.lineWidth = Math.max(1, s * 0.06);
+  ctx.beginPath();
+  for (const dx of [-0.35, 0, 0.35]) {
+    ctx.moveTo(sx, head + s * 0.2);
+    ctx.lineTo(sx + dx * s, ground);
+  }
+  ctx.stroke();
+  ctx.fillStyle = "#1a1c20";
+  ctx.fillRect(sx - s * 0.28, head - s * 0.2, s * 0.56, s * 0.36);
+  ctx.strokeStyle = "rgba(255,250,230,0.9)";
+  ctx.lineWidth = Math.max(1, s * 0.05);
+  ctx.beginPath();
+  ctx.arc(sx, head - s * 0.02, s * 0.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "#46e0ff";
+  ctx.beginPath();
+  ctx.arc(sx, head - s * 0.02, s * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+PROP_RENDERERS.booking_camera = renderBookingCamera;

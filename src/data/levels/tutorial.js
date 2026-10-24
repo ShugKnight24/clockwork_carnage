@@ -6,9 +6,20 @@ import { room as corridorRoom } from "./rooms/corridor.js";
 import { room as gymRoom } from "./rooms/gym.js";
 import { room as officeRoom } from "./rooms/office.js";
 import { room as arenaRoom } from "./rooms/arena.js";
+import { room as hallsRoom } from "./rooms/halls.js";
+import { room as rndRoom } from "./rooms/rnd.js";
+import { room as dispatchRoom } from "./rooms/dispatch.js";
+import { room as atriumRoom } from "./rooms/atrium.js";
+import { room as holdingRoom } from "./rooms/holding.js";
+import { room as interviewRoom } from "./rooms/interview.js";
+import { createHeights, lowWall, LAYER } from "./map-helpers.js";
 
-// ── Build 60x60 police station grid programmatically ──
-const W = 60, H = 60;
+// ── Build the police station grid programmatically ──
+// The station proper is the 60x60 it always was (the Precinct, in Act II,
+// is built from that: STATION_CORE). Certification Day added the east wing
+// beyond it, so the floor is wider and a little deeper.
+const CORE = 60;
+const W = 86, H = 62;
 const g = Array.from({ length: H }, () => Array(W).fill(3)); // default: metal walls
 
 // Helpers
@@ -260,6 +271,110 @@ door(14, 54);
 const ROOMS = [corridorRoom, gymRoom, officeRoom, arenaRoom];
 for (const r of ROOMS) r.dress(g, { carve, hWall, vWall, pillar, door });
 
+// The station as it stood before the east wing: the Precinct (Act II) is
+// this floor three days on, and keeps its own 60x60 plan.
+const CORE_GRID = g.slice(0, CORE).map((row) => row.slice(0, CORE));
+
+// ════════════════════════════════════════════════════════════════
+// THE EAST WING — added for Certification Day
+//
+//  sim hall ═ NORTH HALL (rows 8-9) ═╗
+//                                    ║ ┌ R&D BAY (rows 2-13, cols 62-79) ┐
+//  office ═══ east door (rows 20-21) ╣ ├ DISPATCH (rows 16-30, cols 62-83)
+//                                SPINE ├ ATRIUM (rows 33-50, cols 62-84):
+//                         (cols 58-59, │   a catwalk ring round a two-storey
+//                          rows 8-57)  │   void, and a bridge across it
+//  lobby ═ SOUTH HALL (rows 49-50) ════╣ └ HOLDING (rows 53-63, cols 62-84)
+//          └ INTERVIEW SUITE (rows 53-57, cols 43-55)    (cells behind, row 60)
+//
+// Rooms sit behind walls two cells thick, so each side of a wall can carry
+// its own room's art (a cell is painted the same from both sides).
+// ════════════════════════════════════════════════════════════════
+
+// ── 15. THE HALLS ──
+// North hall: out of the sim hall's east wall, across the Captain's passage.
+carve(8, 51, 9, 57);
+door(8, 51); door(9, 51);
+// The spine, down the east side of the old station.
+carve(8, 58, 57, 59);
+// The office's east door onto it, and the gym's second door (the course
+// goes in at the south door and out at the north one).
+carve(20, 56, 21, 57);
+door(20, 56); door(21, 56);
+carve(16, 24, 17, 26);
+door(16, 24); door(17, 24);
+// South hall: from the lobby's east alcove along under the range.
+carve(49, 41, 50, 57);
+
+// ── 16. R&D BAY (rows 2-13, cols 62-79), off the north end of the spine ──
+carve(2, 62, 13, 79);
+carve(10, 60, 11, 61);
+
+// ── 17. DISPATCH / BULLPEN (rows 16-30, cols 62-83) ──
+carve(16, 62, 30, 83);
+carve(19, 60, 20, 61);
+carve(27, 60, 28, 61);
+
+// ── 18. ATRIUM (rows 33-50, cols 62-84) ──
+carve(33, 62, 50, 84);
+carve(34, 60, 35, 61);
+carve(47, 60, 48, 61);
+
+// ── 19. HOLDING (rows 53-63, cols 62-84): processing, property, the cells ──
+carve(53, 62, 59, 84);
+carve(55, 60, 56, 61);
+
+// ── 20. INTERVIEW SUITE (rows 53-57): two rooms either side of observation ──
+carve(53, 43, 57, 46); // interview 1
+carve(53, 48, 57, 51); // observation
+carve(53, 53, 57, 55); // interview 2
+for (const c of [44, 50, 54]) carve(51, c, 52, c);
+
+// Low walls (src/data/levels/map-helpers.js): the atrium's glass
+// balustrade, and the sim hall's holo cover, which the prologue raises.
+const hm = createHeights(W, H);
+const EAST_ROOMS = [hallsRoom, rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom];
+for (const r of EAST_ROOMS) r.dress(g, { carve, hWall, vWall, pillar, door, hm, lowWall, LAYER });
+const ALL_ROOMS = [...ROOMS, ...EAST_ROOMS];
+
+/** Props for environmental decoration (consumed by Track 2B props system). */
+const CORE_PROPS = [
+  // Locker Room
+  { x: 6, y: 42, type: "bench" }, { x: 13, y: 42, type: "bench" },
+  { x: 17, y: 42, type: "bench" }, { x: 21, y: 42, type: "bench" },
+  // Firing Range
+  { x: 54, y: 39, type: "target" }, { x: 54, y: 42, type: "target" },
+  { x: 54, y: 45, type: "target" },
+  { x: 37, y: 38, type: "ammo_crate" },
+  // Fitness Center
+  { x: 7, y: 17, type: "weight_rack" }, { x: 9, y: 17, type: "weight_rack" },
+  { x: 7, y: 19, type: "dumbbell" }, { x: 9, y: 19, type: "dumbbell" },
+  { x: 19, y: 18, type: "punching_bag" }, { x: 22, y: 18, type: "punching_bag" },
+  { x: 19, y: 20, type: "punching_bag" }, { x: 22, y: 20, type: "punching_bag" },
+  { x: 12, y: 23, type: "bench" },
+  // Supervisor Office
+  { x: 46, y: 21, type: "desk" }, { x: 47, y: 21, type: "desk" },
+  { x: 39, y: 17, type: "filing_cabinet" }, { x: 41, y: 17, type: "filing_cabinet" },
+  { x: 53, y: 17, type: "filing_cabinet" }, { x: 55, y: 17, type: "filing_cabinet" },
+  { x: 44, y: 17, type: "monitor_bank" },
+  // Break Room
+  { x: 21, y: 32, type: "table" }, { x: 23, y: 32, type: "table" },
+  { x: 20, y: 31, type: "chair" }, { x: 24, y: 31, type: "chair" },
+  { x: 20, y: 33, type: "vending_machine" },
+  // Armory
+  { x: 36, y: 33, type: "weapon_rack" }, { x: 38, y: 33, type: "weapon_rack" },
+  { x: 40, y: 33, type: "weapon_rack" },
+  // Entrance Lobby
+  { x: 29, y: 53, type: "desk" }, { x: 30, y: 53, type: "desk" },
+  { x: 24, y: 55, type: "chair" }, { x: 35, y: 55, type: "chair" },
+  { x: 29, y: 56, type: "potted_plant" }, { x: 30, y: 56, type: "potted_plant" },
+  // Combat Arena
+  { x: 30, y: 6, type: "ammo_crate" },
+  { x: 15, y: 8, type: "barrier" }, { x: 44, y: 8, type: "barrier" },
+]
+  .filter((p) => !ROOMS.some((r) => r.dropProps.some((d) => d.x === p.x && d.y === p.y)))
+  .concat(ROOMS.flatMap((r) => r.props));
+
 export const TUTORIAL_MAP = {
   name: "Chronos PD — Temporal Crimes Division HQ",
   width: W,
@@ -267,7 +382,7 @@ export const TUTORIAL_MAP = {
   grid: g,
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
-  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...ROOMS.flatMap((r) => r.ownWalls)],
+  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
   // Each room's own lamps (js/tutorial-system.js _syncRoomLights), on while
   // you are near enough to see them: the range's floods on the bullet trap,
@@ -277,9 +392,9 @@ export const TUTORIAL_MAP = {
     { room: "range", x: 54.5, y: 42.5, color: [255, 226, 186], radius: 4, intensity: 0.55 },
     { room: "range", x: 54.5, y: 45.5, color: [255, 226, 186], radius: 4, intensity: 0.55 },
     { room: "range", x: 42.5, y: 42.5, color: [200, 220, 255], radius: 5, intensity: 0.7 },
-    ...ROOMS.flatMap((r) => r.lights),
+    ...ALL_ROOMS.flatMap((r) => r.lights),
   ],
-  rooms: { range: { x0: 35, y0: 37, x1: 56, y1: 47 }, ...Object.assign({}, ...ROOMS.map((r) => r.boxes)) },
+  rooms: { range: { x0: 35, y0: 37, x1: 56, y1: 47 }, ...Object.assign({}, ...ALL_ROOMS.map((r) => r.boxes)) },
   // The range's weapons and the Supervisor's desk are put down by the
   // prologue as their steps begin (js/tutorial-system.js).
   pickups: [
@@ -318,42 +433,21 @@ export const TUTORIAL_MAP = {
     // Side corridor doors
     door11: [{ x: 12, y: 37 }],
     door12: [{ x: 48, y: 37 }],
+    // Sim hall → north hall (the east wing, R&D)
+    door13: [{ x: 51, y: 8 }, { x: 51, y: 9 }],
+    // Supervisor office → the spine
+    door15: [{ x: 56, y: 20 }, { x: 56, y: 21 }],
+    // The gym's north door, onto the corridor (the course's way out)
+    door16: [{ x: 24, y: 16 }, { x: 24, y: 17 }],
   },
-  // Props for environmental decoration (consumed by Track 2B props system)
-  props: [
-    // Locker Room
-    { x: 6, y: 42, type: "bench" }, { x: 13, y: 42, type: "bench" },
-    { x: 17, y: 42, type: "bench" }, { x: 21, y: 42, type: "bench" },
-    // Firing Range
-    { x: 54, y: 39, type: "target" }, { x: 54, y: 42, type: "target" },
-    { x: 54, y: 45, type: "target" },
-    { x: 37, y: 38, type: "ammo_crate" },
-    // Fitness Center
-    { x: 7, y: 17, type: "weight_rack" }, { x: 9, y: 17, type: "weight_rack" },
-    { x: 7, y: 19, type: "dumbbell" }, { x: 9, y: 19, type: "dumbbell" },
-    { x: 19, y: 18, type: "punching_bag" }, { x: 22, y: 18, type: "punching_bag" },
-    { x: 19, y: 20, type: "punching_bag" }, { x: 22, y: 20, type: "punching_bag" },
-    { x: 12, y: 23, type: "bench" },
-    // Supervisor Office
-    { x: 46, y: 21, type: "desk" }, { x: 47, y: 21, type: "desk" },
-    { x: 39, y: 17, type: "filing_cabinet" }, { x: 41, y: 17, type: "filing_cabinet" },
-    { x: 53, y: 17, type: "filing_cabinet" }, { x: 55, y: 17, type: "filing_cabinet" },
-    { x: 44, y: 17, type: "monitor_bank" },
-    // Break Room
-    { x: 21, y: 32, type: "table" }, { x: 23, y: 32, type: "table" },
-    { x: 20, y: 31, type: "chair" }, { x: 24, y: 31, type: "chair" },
-    { x: 20, y: 33, type: "vending_machine" },
-    // Armory
-    { x: 36, y: 33, type: "weapon_rack" }, { x: 38, y: 33, type: "weapon_rack" },
-    { x: 40, y: 33, type: "weapon_rack" },
-    // Entrance Lobby
-    { x: 29, y: 53, type: "desk" }, { x: 30, y: 53, type: "desk" },
-    { x: 24, y: 55, type: "chair" }, { x: 35, y: 55, type: "chair" },
-    { x: 29, y: 56, type: "potted_plant" }, { x: 30, y: 56, type: "potted_plant" },
-    // Combat Arena
-    { x: 30, y: 6, type: "ammo_crate" },
-    { x: 15, y: 8, type: "barrier" }, { x: 44, y: 8, type: "barrier" },
-  ]
-    .filter((p) => !ROOMS.some((r) => r.dropProps.some((d) => d.x === p.x && d.y === p.y)))
-    .concat(ROOMS.flatMap((r) => r.props)),
+  props: CORE_PROPS
+    .filter((p) => !EAST_ROOMS.some((r) => r.dropProps.some((d) => d.x === p.x && d.y === p.y)))
+    .concat(EAST_ROOMS.flatMap((r) => r.props)),
+  heightMap: hm,
 };
+
+/**
+ * The station's 60x60 plan as it was before the east wing, and its props:
+ * what the Precinct (src/data/levels/act2-maps.js) is built from.
+ */
+export const STATION_CORE = { width: CORE, height: CORE, grid: CORE_GRID, props: CORE_PROPS };

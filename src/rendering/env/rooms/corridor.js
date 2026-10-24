@@ -24,11 +24,11 @@ const RAIL = 292; // chair rail
 const KICKY = 456; // rubber base
 const FONT = "Arial, Helvetica, sans-serif";
 
-const PAPER = ["#f4f2ea", "#e8e6dc", "#d0cec4"];
-const NAVY = ["#2e4a7a", "#22385e", "#16243e"];
-const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
-const BLACK = ["#1e2126", "#15171b", "#0b0c0e"];
-const BRASS = "#d8b25a";
+export const PAPER = ["#f4f2ea", "#e8e6dc", "#d0cec4"];
+export const NAVY = ["#2e4a7a", "#22385e", "#16243e"];
+export const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
+export const BLACK = ["#1e2126", "#15171b", "#0b0c0e"];
+export const BRASS = "#d8b25a";
 
 /** Text size that fits `maxW` (canvas px). */
 function fit(ctx, text, size, maxW, weight) {
@@ -40,12 +40,12 @@ function fit(ctx, text, size, maxW, weight) {
 }
 
 /** Mirrored lettering, shrunk to fit `maxW`. */
-function say(ctx, text, x, y, size, color, weight = 900, maxW = 1e9) {
+export function say(ctx, text, x, y, size, color, weight = 900, maxW = 1e9) {
   letter(ctx, text, x, y, fit(ctx, text, size, maxW, weight), color, weight);
 }
 
 /** Lettering that gives light (an LED readout): unlit by the bake. */
-function glow(ctx, text, x, y, size, color, weight = 900) {
+export function glow(ctx, text, x, y, size, color, weight = 900) {
   ctx.save();
   ctx.shadowColor = color;
   ctx.shadowBlur = size * 0.6;
@@ -62,7 +62,7 @@ function glow(ctx, text, x, y, size, color, weight = 900) {
 }
 
 /** A sheet of paper on a board (a thin raised plate), with its pin. */
-function paper(ctx, p, x, y, w, h, pin = "#c23a2a", tones = PAPER) {
+export function paper(ctx, p, x, y, w, h, pin = "#c23a2a", tones = PAPER) {
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(x + 3, y + 4, w, h);
   plate(ctx, x, y, w, h, p, { tones: [tones[0], tones[1], tones[2]], bevel: 2, ink: 1.5, spec: false });
@@ -76,7 +76,7 @@ function paper(ctx, p, x, y, w, h, pin = "#c23a2a", tones = PAPER) {
 }
 
 /** Ruled lines of handwriting/typing on a sheet. */
-function lines(ctx, r, x, y, w, n, gap = 9, color = "rgba(30,34,44,0.6)") {
+export function lines(ctx, r, x, y, w, n, gap = 9, color = "rgba(30,34,44,0.6)") {
   for (let i = 0; i < n; i++) {
     ctx.fillStyle = color;
     ctx.fillRect(x, y + i * gap, w * (0.55 + r() * 0.45), 2);
@@ -90,7 +90,7 @@ function lines(ctx, r, x, y, w, n, gap = 9, color = "rgba(30,34,44,0.6)") {
  * paint, the blue-and-gold wayfinding stripe, a chair rail, the navy
  * wainscot and the rubber base. `tone` warms it for the break room.
  */
-function stationWall(ctx, p, r, o = {}) {
+export function stationWall(ctx, p, r, o = {}) {
   const paint = o.paint || ["#b8b7ae", "#a9a79e", "#94928a"];
   ctx.fillStyle = lin(ctx, 0, 0, 0, BAND, [[0, "#3c4450"], [1, "#56606c"]]);
   ctx.fillRect(0, 0, T, BAND);
@@ -134,12 +134,12 @@ function stationWall(ctx, p, r, o = {}) {
   base(ctx, p);
 }
 
-function base(ctx, p) {
+export function base(ctx, p) {
   plate(ctx, 0, KICKY, T, T - KICKY, p, { tones: ["#24272d", "#17191e", "#0c0d10"], bevel: 3, ink: 2, spec: false });
 }
 
 /** Concrete block (the armory's): two-tone, courses, scuffs. */
-function blockWall(ctx, r) {
+export function blockWall(ctx, r) {
   ctx.fillStyle = lin(ctx, 0, 0, 0, KICKY, [[0, "#4a4e54"], [0.5, "#5e6268"], [1, "#6c7076"]]);
   ctx.fillRect(0, 0, T, KICKY);
   ctx.fillStyle = "rgba(0,0,0,0.16)";
@@ -159,7 +159,7 @@ function blockWall(ctx, r) {
 
 // ── Corridor ─────────────────────────────────────────────────────
 
-function paintWall(ctx, p, r) {
+export function paintWall(ctx, p, r) {
   stationWall(ctx, p, r);
   // A wall sconce's bracket over the rail: the corridor's lamps hang off them.
   plate(ctx, T / 2 - 40, 150, 80, 22, p, { tones: STEEL, bevel: 3, ink: 2 });
@@ -354,7 +354,7 @@ function paintFire(ctx, p, r) {
  * is where the arrow points on screen ("left"/"right"); canvas x runs
  * against the screen, so the disc is painted on the opposite side.
  */
-function paintSign(label, dir, sub, warn = false) {
+export function paintSign(label, dir, sub, warn = false) {
   return (ctx, p, r) => {
     stationWall(ctx, p, r);
     // Two hanging rods.

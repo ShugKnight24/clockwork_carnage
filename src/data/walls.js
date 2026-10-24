@@ -79,6 +79,19 @@ for (let id = 40; id <= 119; id++) {
     { r: 40, g: 70, b: 96 },
   ][room];
 }
+// The east wing's rooms (ids 120-176): the halls, R&D, dispatch, the
+// atrium, holding and interview, each its own shade on the minimap.
+for (const [from, to, colour] of [
+  [120, 131, { r: 78, g: 82, b: 90 }],
+  [132, 143, { r: 150, g: 160, b: 172 }],
+  [144, 151, { r: 96, g: 84, b: 70 }],
+  [152, 157, { r: 120, g: 128, b: 138 }],
+  [158, 167, { r: 112, g: 124, b: 110 }],
+  [168, 172, { r: 52, g: 54, b: 62 }],
+  [173, 176, { r: 110, g: 100, b: 88 }],
+]) {
+  for (let id = from; id <= to; id++) WALL_COLORS[id] ??= colour;
+}
 
 // Entity types for map placement
 // E = enemy spawn, P = player start, H = health, A = ammo, W = weapon pickup

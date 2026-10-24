@@ -1,0 +1,94 @@
+/**
+ * R&D's suit lab, dressed on the prologue map after the floor plan is built
+ * (src/data/levels/tutorial.js): its own wall ids (painted by
+ * src/rendering/env/rooms/rnd.js), lamps, props and room boxes.
+ *
+ * The bay (rows 2-13, cols 62-79) at the north end of the spine, the side
+ * of the station nearest the Engine. Lift A, R&D's freight car to the
+ * Engine level, is in its east wall, locked out for the calibration. In the
+ * middle, the telemetry rig the cadet stands in; along the north wall the
+ * suits it came from: three C-series heavy frames, the plate the squads
+ * still wear, and the empty cradle the D-series prototype left this
+ * morning. Orr's whiteboard, the rig's consoles, the tool wall, and on the
+ * south wall the bay's main breaker (the prologue's power step).
+ */
+export const RND_WALLS = {
+  WALL: 132,
+  CONSOLE: 133,
+  SUIT_RACK: 134,
+  SUIT_CRADLE: 135,
+  WHITEBOARD: 136,
+  LIFT_A: 137,
+  LIFT_A_PANEL: 138,
+  BREAKER: 139,
+  /** The breaker thrown, its bus lit (swapped in by the prologue). */
+  BREAKER_LIVE: 140,
+  TOOLS: 141,
+  SIGN: 142,
+  VENT: 143,
+  /** A workbench: a low wall (heightMap WAIST). */
+  BENCH: 173,
+};
+const W = RND_WALLS;
+
+/** Where the cadet stands to be read, and the breaker's cell. */
+export const RIG_AT = { x: 70.5, y: 7.5 };
+export const BREAKER_CELL = { x: 76, y: 14 };
+
+const COOL = [214, 234, 255];
+
+export const room = {
+  /** Wall ids this room paints (the map's ownWalls). */
+  ownWalls: Object.values(W),
+  /** Lamps, on while the player is in one of `boxes` (TutorialSystem._syncRoomLights). */
+  lights: [
+    { room: "rnd", x: 65.5, y: 4.5, color: COOL, radius: 5, intensity: 0.6 },
+    { room: "rnd", x: 75.5, y: 4.5, color: COOL, radius: 5, intensity: 0.6 },
+    { room: "rnd", x: 66.5, y: 11.0, color: COOL, radius: 4.5, intensity: 0.5 },
+    { room: "rnd", x: 70.5, y: 7.5, color: [90, 230, 255], radius: 3, intensity: 0.7 },
+  ],
+  /** Room boxes by name: { x0, y0, x1, y1 } in cells. */
+  boxes: {
+    rnd: { x0: 60, y0: 1, x1: 80, y1: 14 },
+  },
+  /** Props to add, and cells whose existing props to drop. */
+  props: [
+    // The rig, and Orr's console beside it.
+    { x: 70, y: 7, type: "telemetry_rig" },
+    { x: 72, y: 9, type: "monitor_bank" }, { x: 73, y: 9, type: "desk" },
+    // Stools at the workbenches, a cabinet, crates by the lift.
+    { x: 65, y: 6, type: "chair" }, { x: 65, y: 8, type: "chair" },
+    { x: 63, y: 8, type: "monitor_bank" }, { x: 63, y: 12, type: "filing_cabinet" },
+    { x: 78, y: 3, type: "crate" }, { x: 78, y: 11, type: "crate" }, { x: 77, y: 12, type: "crate" },
+    { x: 66, y: 12, type: "chair" },
+  ],
+  dropProps: [],
+  /** Rewrite the room's cells. `h` has the floor plan's helpers, and its heightMap. */
+  dress(g, { hm, lowWall, LAYER }) {
+    for (let c = 61; c <= 80; c++) for (const r of [1, 14]) g[r][c] = W.WALL;
+    for (let r = 1; r <= 14; r++) for (const c of [61, 80]) if (g[r][c] === 3) g[r][c] = W.WALL;
+    // North wall: the C-series rack, the empty cradle, the whiteboard.
+    for (let c = 63; c <= 66; c++) g[1][c] = W.SUIT_RACK;
+    g[1][69] = W.SUIT_CRADLE;
+    g[1][73] = W.WHITEBOARD;
+    g[1][74] = W.WHITEBOARD;
+    g[1][77] = W.VENT;
+    // East wall: Lift A to the Engine level, its locked call panel.
+    g[6][80] = W.LIFT_A;
+    g[7][80] = W.LIFT_A;
+    g[5][80] = W.LIFT_A_PANEL;
+    g[9][80] = W.SIGN;
+    // South wall: the rig's consoles, the breaker, the tool wall.
+    for (let c = 68; c <= 71; c++) g[14][c] = W.CONSOLE;
+    g[14][BREAKER_CELL.x] = W.BREAKER;
+    for (const c of [63, 64]) g[14][c] = W.TOOLS;
+    // West wall inside: the tool wall, the lab's sign by the door.
+    for (const r of [3, 4, 5]) g[r][61] = W.TOOLS;
+    g[9][61] = W.SIGN;
+    // The workbenches, waist-high islands down the west half, and the
+    // rig's console island south of it.
+    lowWall(g, hm, 4, 64, 5, 67, LAYER.WAIST, W.BENCH);
+    lowWall(g, hm, 9, 64, 10, 67, LAYER.WAIST, W.BENCH);
+    lowWall(g, hm, 11, 70, 11, 73, LAYER.WAIST, W.BENCH);
+  },
+};

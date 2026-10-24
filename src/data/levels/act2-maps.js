@@ -23,7 +23,7 @@ import {
   lowTile,
   LAYER,
 } from "./map-helpers.js";
-import { TUTORIAL_MAP } from "./tutorial.js";
+import { STATION_CORE } from "./tutorial.js";
 
 const W = 60;
 const H = 60;
@@ -765,7 +765,8 @@ function buildGreenhouse() {
 // Pacing: locker room (teach) 0.5 → corridor 0.3 → the lobby line 0.9 →
 // range 0.6 → east corridor 0.4 → the Captain 1.0 → mezzanine 0.2.
 function buildPrecinct() {
-  const src = TUTORIAL_MAP;
+  // The station as it was, without the east wing the prologue added.
+  const src = STATION_CORE;
   const g = src.grid.map((row) => [...row]);
   const hm = createHeights(W, H);
 
