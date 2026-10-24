@@ -68,7 +68,7 @@ export class Npc {
   /**
    * @param {number} x
    * @param {number} y
-   * @param {"officer"|"officerKit"|"supervisor"|"staff"|"clerk"} kind
+   * @param {"officer"|"officerKit"|"supervisor"|"supervisorKit"|"staff"|"clerk"} kind
    * @param {{ angle?: number, name?: string, look?: number }} [opts]
    *   `look` picks one of the kind's variants (a staff member in a lab coat
    *   or in coveralls); left out, the person gets one from their id.

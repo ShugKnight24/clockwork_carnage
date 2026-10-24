@@ -30,6 +30,19 @@ const LOOKS = {
     trim: "#8fd8ff",
     hat: "helmet",
   },
+  // The Supervisor in his own plate after 06:47: the squads' kit, gold
+  // trim and rank boards, the visor up so his face shows.
+  supervisorKit: {
+    coat: "#4f5a6e",
+    coatDark: "#323a48",
+    legs: "#262c37",
+    trim: "#e0b84a",
+    hat: "helmet",
+    visorUp: true,
+    rank: true,
+    skin: "#d8a982",
+    hair: "#9a9a9a",
+  },
   supervisor: {
     coat: "#41475a",
     coatDark: "#2b2f3c",
@@ -274,6 +287,11 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.ellipse(x + side * sh * 0.95, y(-0.42), sh * 0.32, H * 0.06, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    if (look.rank) {
+      // His rank boards on the pauldrons.
+      ctx.fillStyle = look.trim;
+      for (const side of [-1, 1]) for (const k of [0, 1]) ctx.fillRect(x + side * sh * 0.95 - sh * 0.14, y(-0.45) + k * H * 0.025, sh * 0.28, H * 0.014);
+    }
     if (!away) {
       ctx.save();
       ctx.translate(x, y(-0.04));
@@ -492,6 +510,24 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.fill();
       ctx.fillStyle = look.coatDark;
       ctx.fillRect(hx - hr * 0.7, hy + hr * 0.55, hr * 1.4, hr * 0.4);
+    } else if (look.visorUp) {
+      // Visor pushed up on the brow: his eyes, and the grey moustache.
+      ctx.fillStyle = skin;
+      ctx.fillRect(hx - hr * 0.7, hy - hr * 0.1, hr * 1.4, hr * 0.9);
+      ctx.fillStyle = "#1a1410";
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(hx + side * hr * 0.34, hy + hr * 0.12, Math.max(0.8, hr * 0.09), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = look.hair;
+      ctx.fillRect(hx - hr * 0.3, hy + hr * 0.44, hr * 0.6, Math.max(1, hr * 0.12));
+      ctx.fillStyle = "#10141a";
+      ctx.fillRect(hx - hr * 0.86, hy - hr * 0.42, hr * 1.72, hr * 0.26);
+      ctx.fillStyle = look.trim;
+      ctx.globalAlpha *= 0.75 + Math.sin(time * 0.004) * 0.15;
+      ctx.fillRect(hx - hr * 0.7, hy - hr * 0.36, hr * 1.4, hr * 0.08);
+      ctx.globalAlpha = alpha;
     } else {
       ctx.fillStyle = "#10141a";
       ctx.fillRect(hx - hr * 0.86, hy - hr * 0.08, hr * 1.72, hr * 0.38);

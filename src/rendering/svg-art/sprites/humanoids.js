@@ -416,9 +416,9 @@ function officerHead(R, { band = "#1b2a48", older = false, cap = "url(#armorDk)"
  * cyan a generation dimmer. Open-faced, its visor pushed up on the brow; or,
  * kitted for the Engine level, the visor down and a faceplate over the jaw.
  */
-function kitHead(R, { down = false } = {}) {
+function kitHead(R, { down = false, older = false, trim = "#5fd8ff" } = {}) {
   const [x, y] = R.head;
-  let body = ao(x, y + 12, 9, 3, 0.55) + officerFace(x, y, false);
+  let body = ao(x, y + 12, 9, 3, 0.55) + officerFace(x, y, older);
   // Shell over the crown and down the cheeks, framing the face.
   body += sh(`M${P(x - 14, y + 9)}L${P(x - 15, y - 4)}Q${P(x - 15, y - 19)} ${P(x, y - 20)}Q${P(x + 15, y - 19)} ${P(x + 15, y - 4)}L${P(x + 14, y + 9)}L${P(x + 10, y + 10)}L${P(x + 10.5, y - 4)}Q${P(x, y - 7)} ${P(x - 10.5, y - 4)}L${P(x - 10, y + 10)}Z`, "url(#armor)", 1.4);
   let glowM;
@@ -428,11 +428,11 @@ function kitHead(R, { down = false } = {}) {
     body += sh(`M${P(x - 10.5, y + 4)}Q${P(x, y + 2)} ${P(x + 10.5, y + 4)}L${P(x + 8, y + 12)}Q${P(x, y + 15)} ${P(x - 8, y + 12)}Z`, "url(#armorDk)", 1.2);
     body += ln(`M${P(x - 4, y + 7)}h8M${P(x - 3.5, y + 9.5)}h7M${P(x - 3, y + 12)}h6`, "#05070a", 1, 0.8);
     body += spec(`M${P(x - 9, y - 4)}Q${P(x - 4, y - 6.5)} ${P(x + 2, y - 6)}`, 0.5, 1);
-    glowM = bar(x, y - 0.8, 17, 1.8, "#5fd8ff");
+    glowM = bar(x, y - 0.8, 17, 1.8, trim);
   } else {
     // Visor, raised: a dark glass band on the brow.
     body += sh(`M${P(x - 12, y - 14)}Q${P(x, y - 18)} ${P(x + 12, y - 14)}L${P(x + 11, y - 9)}Q${P(x, y - 12)} ${P(x - 11, y - 9)}Z`, "url(#glass)", 1.1, ` fill-opacity=".9"`);
-    glowM = bar(x, y - 12.2, 14, 1.4, "#5fd8ff");
+    glowM = bar(x, y - 12.2, 14, 1.4, trim);
   }
   body += circ(x - 14, y - 2, 2.2, "url(#armorDk)", 0.9) + circ(x + 14, y - 2, 2.2, "url(#armorDk)", 0.9);
   body += spec(`M${P(x - 12, y - 6)}Q${P(x - 13, y - 16)} ${P(x - 4, y - 18.5)}`, 0.55, 1.2);
@@ -588,6 +588,20 @@ function officer() {
  * of it.
  */
 function officerKit() {
+  return heavyKit();
+}
+
+/**
+ * The Supervisor in his own heavy plate, after 06:47 (js/tutorial-system.js):
+ * the squads' C-series, but with his gold where their cyan is, rank boards
+ * on the pauldrons, and the visor up, so it is still his face.
+ */
+function supervisorKit() {
+  return heavyKit({ trim: "#e0b84a", rank: true, visorDown: false, older: true });
+}
+
+/** C-series heavy plate on the NPC rig, in a squad's trim or the Supervisor's. */
+function heavyKit({ trim = "#5fd8ff", rank = false, visorDown = true, older = false } = {}) {
   const slung = { sh: 14, el: -64, kf: 0.85 };
   const table = npcTable(
     { armL: { sh: 10, el: 6 }, armR: slung },
@@ -596,9 +610,11 @@ function officerKit() {
     pose({ armL: { sh: 8, el: 6 } }, POINT),
     { frozen: { ...CIV_POSES.frozen, armR: slung } },
   );
+  // Gold boards on each pauldron, two bars: the rank the squads salute.
+  const boards = (shY) => [-1, 1].map((s) => sh(`M${P(s * 22 - 4, shY - 4)}h8v3h-8Z`, "url(#brass)", 0.6) + sh(`M${P(s * 22 - 4, shY + 0.5)}h8v3h-8Z`, "url(#brass)", 0.6)).join("");
   const poses = build(HUMAN, table, (R, name) => {
     const { shY, hipY } = R;
-    let body = legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17, kneeW: 14, bootW: 16, trim: "#5fd8ff" });
+    let body = legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17, kneeW: 14, bootW: 16, trim });
     const back = name.startsWith("back");
     const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 15, upW: 13, foreW: 12.5 };
     let upper = "";
@@ -612,8 +628,9 @@ function officerKit() {
       upper += plate([[-13, shY - 2], [13, shY - 2], [12, shY + 19], [-12, shY + 19]], "url(#armorDk)", 1.3, 0.4);
       for (const s of [-1, 1]) upper += sh(`M${P(s * 8 - 1.5, shY + 2)}h3v13h-3Z`, "url(#gun)", 0.6);
       upper += backPlacard(shY + 21);
-      glowUp += bar(-8, shY + 8.5, 2.4, 11, "#5fd8ff") + bar(8, shY + 8.5, 2.4, 11, "#5fd8ff");
-      upper += headBack(R, { gear: "helmet" }).body;
+      if (rank) upper += boards(shY);
+      glowUp += bar(-8, shY + 8.5, 2.4, 11, trim) + bar(8, shY + 8.5, 2.4, 11, trim);
+      upper += headBack(R, { gear: "helmet", older }).body;
     } else {
       upper += torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armorDk)", w: 26, waist: 18 });
       // Gorget over the collar, and the breastplate's ballistic insert.
@@ -623,9 +640,9 @@ function officerKit() {
       upper += sh(`M${P(-12, shY + 5)}l3.5 -3.5 3.5 3.5 -1.2 4.6h-4.6Z`, "url(#brass)", 0.7);
       upper += sh(`M${P(4, shY + 5)}h10v2.6h-10Z`, "#d8dee8", 0.5);
       for (let i = 0; i < 3; i++) upper += sh(`M${P(-10 + i * 7, shY + 26)}h5.5v8h-5.5Z`, "url(#armorDk)", 0.7);
-      glowUp += bar(0, shY + 16, 16, 1.6, "#5fd8ff");
-      glowUp += bar(-16, shY + 11, 4, 1.4, "#5fd8ff") + bar(16, shY + 11, 4, 1.4, "#5fd8ff");
-      const head = kitHead(R, { down: true });
+      glowUp += bar(0, shY + 16, 16, 1.6, trim);
+      glowUp += bar(-16, shY + 11, 4, 1.4, trim) + bar(16, shY + 11, 4, 1.4, trim);
+      const head = kitHead(R, { down: visorDown, older, trim });
       glowUp += head.glow;
       upper += armOf(R, -1, pad);
       if (name.startsWith("salute")) {
@@ -634,6 +651,7 @@ function officerKit() {
         // Rifle slung across the chest, the right hand on its grip.
         upper += head.body + gunSide(R.arms[1].W, 210, "rifle", 44) + armOf(R, 1, pad);
       }
+      if (rank) upper += boards(shY);
     }
     body += up(R, upper);
     return { body, glow: glowUp ? up(R, glow(glowUp)) : "", at: {} };
@@ -1404,6 +1422,7 @@ const EXTRA_DEFS = {
   temporalEngineer: `<linearGradient id="apron" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#6e4a22"/><stop offset=".5" stop-color="#4a2e12"/><stop offset="1" stop-color="#1e1206"/></linearGradient>` +
     `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#d9a37c"/><stop offset=".5" stop-color="#a06a48"/><stop offset="1" stop-color="#4a2a1a"/></linearGradient>`,
   officerKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  supervisorKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   officer: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
   supervisor: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   staff: CIV_DEFS.staff,
@@ -1423,6 +1442,7 @@ export const HUMANOIDS = {
   officer: { build: officer, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
   officerKit: { build: officerKit, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.08 },
   supervisor: { build: supervisor, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.08 },
+  supervisorKit: { build: supervisorKit, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.1 },
   staff: { build: civilian("staff"), variants: 2, box: HUMANOID_BOX, rim: "#bfe8e0", size: 1.0 },
   clerk: { build: civilian("clerk"), variants: 2, box: HUMANOID_BOX, rim: "#ffd6b8", size: 0.98 },
   sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30] },
