@@ -11,6 +11,12 @@
  * still wear, and the empty cradle the D-series prototype left this
  * morning. Orr's whiteboard, the rig's consoles, the tool wall, and on the
  * south wall the bay's main breaker (the prologue's power step).
+ *
+ * It is a working lab, not a showroom: sample fridges, a server rack and
+ * the window onto the cleanroom next door, scopes on the benches, cables
+ * run across the floor to the rig, and screens reading the cadet's body
+ * and nerves live (the rig calibrates the suit to them: the prologue's
+ * first trial).
  */
 export const RND_WALLS = {
   WALL: 192,
@@ -28,6 +34,11 @@ export const RND_WALLS = {
   VENT: 203,
   /** A workbench: a low wall (heightMap WAIST). */
   BENCH: 233,
+  FRIDGE: 153,
+  CLEANROOM: 154,
+  /** The cadet's live readouts: heart, breath, the neural match. */
+  BIOMON: 155,
+  RACK: 156,
 };
 const W = RND_WALLS;
 
@@ -61,6 +72,15 @@ export const room = {
     { x: 63, y: 8, type: "monitor_bank" }, { x: 63, y: 12, type: "filing_cabinet" },
     { x: 78, y: 3, type: "crate" }, { x: 78, y: 11, type: "crate" }, { x: 77, y: 12, type: "crate" },
     { x: 66, y: 12, type: "chair" },
+    // Scopes on their stands by the benches, the vitals cart at the rig,
+    // and the cables from the rig to its consoles.
+    { x: 68, y: 4, type: "lab_scope" }, { x: 68, y: 10, type: "lab_scope" },
+    { x: 72, y: 6, type: "vitals_cart" }, { x: 75, y: 10, type: "vitals_cart" },
+    { x: 70, y: 8, type: "cable_run" }, { x: 70, y: 9, type: "cable_run" }, { x: 69, y: 10, type: "cable_run" }, { x: 69, y: 12, type: "cable_run" },
+    // The east bench under the cleanroom window: two more scopes, a stool,
+    // a monitor reading the anchor module on the stand.
+    { x: 75, y: 4, type: "lab_scope" }, { x: 77, y: 4, type: "chair" }, { x: 74, y: 4, type: "monitor_bank" },
+    { x: 66, y: 7, type: "vitals_cart" }, { x: 63, y: 4, type: "monitor_bank" },
   ],
   dropProps: [],
   /** Rewrite the room's cells. `h` has the floor plan's helpers, and its heightMap. */
@@ -81,13 +101,28 @@ export const room = {
     for (let c = 68; c <= 71; c++) g[14][c] = W.CONSOLE;
     g[14][BREAKER_CELL.x] = W.BREAKER;
     for (const c of [63, 64]) g[14][c] = W.TOOLS;
-    // West wall inside: the tool wall, the lab's sign by the door.
+    // West wall inside: the tool wall, the sample fridges, the lab's sign by the door.
     for (const r of [3, 4, 5]) g[r][61] = W.TOOLS;
+    g[6][61] = W.FRIDGE;
+    g[7][61] = W.FRIDGE;
     g[9][61] = W.SIGN;
+    // The cleanroom's window and its rack, either end of the east wall; a
+    // fridge and the rack in the south-west.
+    g[2][80] = W.RACK;
+    g[3][80] = W.RACK;
+    g[11][80] = W.CLEANROOM;
+    g[12][80] = W.CLEANROOM;
+    g[1][75] = W.CLEANROOM;
+    g[14][66] = W.FRIDGE;
+    g[14][73] = W.RACK;
+    // Two of the rig's consoles read the cadet: the body, then the mind.
+    g[14][69] = W.BIOMON;
+    g[14][70] = W.BIOMON;
     // The workbenches, waist-high islands down the west half, and the
     // rig's console island south of it.
     lowWall(g, hm, 4, 64, 5, 67, LAYER.WAIST, W.BENCH);
     lowWall(g, hm, 9, 64, 10, 67, LAYER.WAIST, W.BENCH);
     lowWall(g, hm, 11, 70, 11, 73, LAYER.WAIST, W.BENCH);
+    lowWall(g, hm, 3, 74, 3, 77, LAYER.WAIST, W.BENCH);
   },
 };

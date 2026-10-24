@@ -26,6 +26,10 @@ export const STATION_WALLS = {
   RANGE_DIST_5: 32,
   RANGE_DIST_10: 33,
   RANGE_TARGETS: 34,
+  // The Supervisor's locker, shut and then open on his coat (the prologue,
+  // after 06:47): Certification Day's, in the free range below the east wing.
+  LOCKERS_SUP: 160,
+  LOCKERS_SUP_OPEN: 161,
 };
 
 export const WALL_COLORS = {
@@ -95,6 +99,12 @@ for (const [from, to, colour] of [
   [218, 227, { r: 112, g: 124, b: 110 }],
   [228, 232, { r: 52, g: 54, b: 62 }],
   [233, 236, { r: 110, g: 100, b: 88 }],
+  // Certification Day's later rooms (147-179): the training hall, R&D's
+  // labs, Lin's booth and the Supervisor's locker.
+  [147, 152, { r: 70, g: 86, b: 104 }],
+  [153, 156, { r: 150, g: 160, b: 172 }],
+  [157, 158, { r: 40, g: 70, b: 96 }],
+  [160, 161, { r: 44, g: 64, b: 104 }],
 ]) {
   for (let id = from; id <= to; id++) WALL_COLORS[id] ??= colour;
 }

@@ -10,7 +10,7 @@
  */
 import { RND_WALLS as W } from "../../../data/levels/rooms/rnd.js";
 import { letter } from "../locker-art.js";
-import { T, plate, rivet, lightStrip, led, vents, sink, raise, hazard, ink } from "../paint.js";
+import { T, lin, plate, rivet, lightStrip, led, vents, sink, raise, hazard, ink } from "../paint.js";
 import { onScreen, text, screen, heavyFrame, lit } from "./east-kit.js";
 
 const PANEL = ["#e4e8ec", "#d2d8de", "#aeb6be"];
@@ -249,7 +249,123 @@ function paintBench(ctx, p, r) {
   led(ctx, T / 2, top + 10, 3, CYAN);
 }
 
+/** A sample fridge: glass door, racks of vials and sealed trays, the temperature lit. */
+function paintFridge(ctx, p, r) {
+  labWall(ctx, p, r);
+  plate(ctx, 60, TOP + 10, T - 120, KICK - TOP - 14, p, { tones: ["#e8ecf0", "#cfd6dc", "#9aa2aa"], bevel: 5, ink: 2 });
+  plate(ctx, 80, TOP + 40, T - 160, 330, p, { tones: ["#2a3c48", "#1e2e38", "#0e161c"], bevel: 3, ink: 2, recess: true });
+  for (let i = 0; i < 5; i++) {
+    const y = TOP + 70 + i * 62;
+    ctx.fillStyle = "#9aa8b4";
+    ctx.fillRect(84, y + 40, T - 168, 4);
+    for (let k = 0; k < 10; k++) {
+      const x = 96 + k * 32;
+      ctx.fillStyle = ["#e04a5a", "#46e0ff", "#f2d64a", "#5aff9a"][(k + i) % 4];
+      ctx.fillRect(x, y + 10 + r() * 6, 10, 30);
+      ctx.fillStyle = "#f2f4f6";
+      ctx.fillRect(x, y + 6, 10, 6);
+    }
+  }
+  ctx.fillStyle = "rgba(200,240,255,0.12)";
+  ctx.fillRect(80, TOP + 40, T - 160, 330);
+  lit(80, TOP + 40, T - 160, 330, 0.35, 8);
+  plate(ctx, T / 2 - 60, TOP + 384, 120, 26, p, { tones: DARK, bevel: 2, ink: 1.5 });
+  letter(ctx, "+4°C · SAMPLES", T / 2, TOP + 397, 12, "#5aff9a", 900);
+  lit(T / 2 - 56, TOP + 386, 112, 22, 0.6, 4);
+}
+
+/**
+ * The window onto the cleanroom next door: white light, a tech in a bunny
+ * suit at a bench, the airlock's sign beside it.
+ */
+function paintCleanroom(ctx, p, r) {
+  labWall(ctx, p, r);
+  plate(ctx, 30, TOP + 30, T - 60, 280, p, { tones: STEEL, bevel: 5, ink: 2 });
+  ctx.fillStyle = lin(ctx, 0, TOP + 44, 0, TOP + 296, [[0, "#f4f8fc"], [1, "#cfdae4"]]);
+  ctx.fillRect(44, TOP + 44, T - 88, 252);
+  // The room beyond: its benches, a hood, a suited tech.
+  ctx.fillStyle = "#b8c4ce";
+  ctx.fillRect(44, TOP + 220, T - 88, 76);
+  ctx.fillStyle = "#9aa6b2";
+  ctx.fillRect(80, TOP + 120, 120, 100);
+  ctx.fillStyle = "#e8eef4";
+  ctx.beginPath();
+  ctx.arc(330, TOP + 150, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(304, TOP + 172, 52, 90);
+  ctx.fillStyle = "#46a0d8";
+  ctx.fillRect(316, TOP + 142, 28, 12);
+  lit(44, TOP + 44, T - 88, 252, 0.55, 10);
+  // The glass: reflections across it.
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  for (const x0 of [90, 280]) {
+    ctx.beginPath();
+    ctx.moveTo(x0, TOP + 44);
+    ctx.lineTo(x0 + 40, TOP + 44);
+    ctx.lineTo(x0 - 30, TOP + 296);
+    ctx.lineTo(x0 - 70, TOP + 296);
+    ctx.closePath();
+    ctx.fill();
+  }
+  plate(ctx, T / 2 - 90, TOP + 330, 180, 30, p, { tones: ["#e8e4d8", "#d0ccc0", "#9a968a"], bevel: 2, ink: 1 });
+  letter(ctx, "CLEANROOM 2 · SUITS ONLY", T / 2, TOP + 345, 12, "#1a1c20", 900);
+}
+
+/**
+ * The cadet on two screens: heart and breath on one, the neural traces and
+ * the match the suit was cut to on the other, under their badge number.
+ */
+function paintBiomon(ctx, p, r) {
+  labWall(ctx, p, r);
+  screen(ctx, p, 40, 84, T - 80, 210, (x, y, w, h) => {
+    onScreen(ctx, () => {
+      const L = T - x - w;
+      text(ctx, "SUBJECT 11235 · CALIBRATION", L + 16, y + 18, 14, "#46e0ff", 900, "left");
+      text(ctx, "MATCH 98.7%", L + w - 16, y + 18, 16, "#5aff9a", 900, "right");
+      // Heart: an ECG strip; the brain: three slow bands and a fast one.
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#5aff9a";
+      ctx.beginPath();
+      for (let px = 0; px < w - 32; px += 4) {
+        const k = px % 72;
+        const py = y + 66 - (k > 30 && k < 36 ? 30 : k > 36 && k < 40 ? -12 : Math.sin(px / 9) * 2);
+        px === 0 ? ctx.moveTo(L + 16 + px, py) : ctx.lineTo(L + 16 + px, py);
+      }
+      ctx.stroke();
+      text(ctx, "HR 92", L + w - 16, y + 50, 13, "#5aff9a", 800, "right");
+      ["#46e0ff", "#9a8aff", "#ffb038", "#ff6a8a"].forEach((c, i) => {
+        ctx.strokeStyle = c;
+        ctx.beginPath();
+        for (let px = 0; px < w - 32; px += 4) {
+          const py = y + 106 + i * 24 + Math.sin(px / (18 - i * 4) + i + r() * 0.2) * (8 - i);
+          px === 0 ? ctx.moveTo(L + 16 + px, py) : ctx.lineTo(L + 16 + px, py);
+        }
+        ctx.stroke();
+      });
+      text(ctx, "α  θ  β  γ", L + 16, y + h - 12, 12, "#9fb4c8", 800, "left");
+    });
+  });
+  plate(ctx, 60, 320, T - 120, 100, p, { tones: DARK, bevel: 4, ink: 2 });
+  for (let i = 0; i < 10; i++) led(ctx, 88 + i * 34, 350, 5, i % 3 ? CYAN : "#3aff6a");
+}
+
+/** A server rack: the rig's compute, its drive lights, a patch panel. */
+function paintRack(ctx, p, r) {
+  labWall(ctx, p, r);
+  plate(ctx, 70, TOP + 8, T - 140, KICK - TOP - 10, p, { tones: DARK, bevel: 4, ink: 2 });
+  for (let i = 0; i < 9; i++) {
+    const y = TOP + 26 + i * 42;
+    plate(ctx, 86, y, T - 172, 34, p, { tones: ["#3a4048", "#2a3036", "#16191e"], bevel: 2, ink: 1.5 });
+    for (let k = 0; k < 8; k++) led(ctx, 110 + k * 16, y + 17, 2.5, r() < 0.7 ? "#3aff6a" : r() < 0.5 ? AMBER : CYAN);
+    ink(ctx, T - 180, y + 10, 70, 14, 20);
+  }
+}
+
 export const PAINTERS = {
+  [W.FRIDGE]: paintFridge,
+  [W.CLEANROOM]: paintCleanroom,
+  [W.BIOMON]: paintBiomon,
+  [W.RACK]: paintRack,
   [W.BENCH]: paintBench,
   [W.WALL]: paintWall,
   [W.CONSOLE]: paintConsole,

@@ -32,6 +32,9 @@ export const ARENA_WALLS = {
   GALLERY: 115,
   /** A holo cover block, raised waist-high by the sim (js/tutorial-system.js). */
   HOLO_BLOCK: 116,
+  /** Lin's control booth (`booth`, below): its desk, a low wall (heightMap WAIST), and the screens behind it. */
+  BOOTH_DESK: 157,
+  BOOTH_CONSOLE: 158,
 };
 
 /**
@@ -106,5 +109,34 @@ export const room = {
       if (g[r][c] === 2) g[r][c] = COLS[i % COLS.length];
     });
     if (g[6][30] === 3) g[6][30] = W.PROJECTOR;
+  },
+};
+
+/**
+ * Lin's control booth, let into the sim hall's south wall west of the way
+ * in (rows 12-13, cols 19-23): a waist-high desk across its mouth with the
+ * sim's controls on it, the screens on the back wall, a gap at the west end
+ * to walk round. Lin runs the sim from behind the desk; you talk to her
+ * across it (js/tutorial-system.js). Dressed with the east wing, after the
+ * Precinct's copy of the floor is taken, so the Precinct keeps its plain wall.
+ */
+export const BOOTH_AT = { x: 21.5, y: 12.6 };
+/** Where you stand at the desk to talk to her. */
+export const BOOTH_FRONT = { x: 21.5, y: 10.3 };
+
+export const booth = {
+  ownWalls: [W.BOOTH_DESK, W.BOOTH_CONSOLE],
+  lights: [{ room: "booth", x: 21.5, y: 12.8, color: [120, 230, 255], radius: 3, intensity: 0.6 }],
+  boxes: { booth: { x0: 18, y0: 11, x1: 24, y1: 14 } },
+  props: [{ x: 23, y: 13, type: "chair" }],
+  dropProps: [],
+  dress(g, { carve, hm, lowWall, LAYER }) {
+    carve(11, 19, 13, 23);
+    lowWall(g, hm, 11, 20, 11, 23, LAYER.WAIST, W.BOOTH_DESK);
+    for (let c = 19; c <= 23; c++) g[14][c] = W.BOOTH_CONSOLE;
+    for (const r of [12, 13]) {
+      g[r][18] = W.GRID;
+      g[r][24] = W.GRID;
+    }
   },
 };
