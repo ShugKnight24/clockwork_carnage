@@ -313,6 +313,10 @@ const inRnd = (p) => p.x > 61.6 && p.y < 14;
  * the start gate in the lobby round the floor and back to it. Each step of
  * the trial runs to its last gate: SEGMENT_END.
  */
+/** The mobility warm-up's goals: seconds sprinted, metres crouch-walked. */
+const WARM_SPRINT = 2;
+const WARM_CROUCH = 1.5;
+
 const RUN_GATES = [
   { x: 29.5, y: 49.5 }, // start, in the lobby
   { x: 29.5, y: 22.5 }, // the top of the corridor: a straight longer than a sprint
@@ -857,7 +861,45 @@ const LOGIC = {
     update: (t) => t.pickedUp,
   },
 
-  // ── Trial: mobility (the run) ──────────────────────────────────
+  // ── Trial: mobility (the warm-up, then the run) ────────────────
+
+  warmSprint: {
+    update(t, g) {
+      if (g.player.isSprinting) t.c.sprint = (t.c.sprint || 0) + g.deltaTime;
+      return t.c.sprint > WARM_SPRINT;
+    },
+    progress: (t) => `SPRINT ${Math.min(WARM_SPRINT, t.c.sprint || 0).toFixed(1)} / ${WARM_SPRINT.toFixed(1)} s`,
+  },
+
+  warmCrouch: {
+    enter(t, g) {
+      t.c.x = g.player.x;
+      t.c.y = g.player.y;
+      t.c.moved = 0;
+    },
+    update(t, g) {
+      const p = g.player;
+      if (p.isCrouching) t.c.moved += Math.hypot(p.x - t.c.x, p.y - t.c.y);
+      t.c.x = p.x;
+      t.c.y = p.y;
+      return t.c.moved > WARM_CROUCH;
+    },
+    progress: (t) => `CROUCH-WALK ${Math.min(WARM_CROUCH, t.c.moved || 0).toFixed(1)} / ${WARM_CROUCH.toFixed(1)} m`,
+  },
+
+  warmSlide: {
+    update: (t) => t.c.slides >= 1,
+    progress: (t) => `SLIDES ${Math.min(1, t.c.slides)} / 1`,
+  },
+
+  warmDash: {
+    update: (t) => t.c.dashes >= 1,
+    progress: (t) => `DASHES ${Math.min(1, t.c.dashes)} / 1`,
+    exit(t, g) {
+      // The run starts where the warm-up ended: back on the start gate.
+      g.objectiveWaypoint = RUN_GATES[0];
+    },
+  },
 
   sprint: {
     get waypoint() {
@@ -1683,7 +1725,7 @@ export class TutorialSystem {
     const now = performance.now();
     this.clock += g.deltaTime || 0;
     this.runClock += g.deltaTime || 0;
-    if (this.cert.run) this.cert.run.clock += g.deltaTime || 0;
+    if (this.cert.run && !this.def?.untimed) this.cert.run.clock += g.deltaTime || 0;
     if (this.firstShotAt == null && this.suitedAt != null && g.shotsFired > 0) this.firstShotAt = this.runClock;
 
     // Respawn collected pickups after a delay. Health and ammo stay shut

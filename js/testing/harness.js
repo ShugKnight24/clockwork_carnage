@@ -1942,6 +1942,19 @@ function botCadet(game) {
     stepGame(game, 1);
   };
 
+  // Back and forth between two points, holding `codes` (the warm-up's moves).
+  let anchor = null;
+  let leg = 0;
+  const pace = (a, b, codes = []) => {
+    const [x, y] = leg % 2 ? b : a;
+    if (Math.hypot(x - p.x, y - p.y) < 0.8) leg++;
+    clearInput(game);
+    game.mouse.locked = true;
+    stepToward(game, x, y);
+    for (const c of codes) game.keys[c] = true;
+    stepGame(game, 1);
+  };
+
   // What a player does on each step, one tick at a time.
   const play = {
     arrive: () => stepGame(game, 1),
@@ -1999,6 +2012,32 @@ function botCadet(game) {
       stepGame(game, 1);
     },
     ammo: () => walkTo(game, 37.5, 45.5, 1) || stepGame(game, 1),
+    // The warm-up at the start gate, off the clock: each move once.
+    warmSprint: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.sprint]);
+    },
+    warmCrouch: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.crouch]);
+    },
+    warmSlide: () => {
+      anchor ??= [p.x, p.y];
+      // Sprint, then tap crouch; winded, walk it off first.
+      const fresh = p.stamina >= p.slideStaminaCost + 25;
+      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], fresh ? [kb.sprint] : []);
+      if (fresh && p.isSprinting && !p.isSliding && p.slideCooldown <= 0) {
+        game.keys[kb.crouch] = true;
+        stepGame(game, 2);
+        game.keys[kb.crouch] = false;
+        stepGame(game, 1);
+      }
+    },
+    warmDash: () => {
+      anchor ??= [p.x, p.y];
+      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]]);
+      if (p.dashCooldown <= 0 && !p.isDashing) game.dashFromKeys();
+    },
     sprint: run,
     slide: run,
     dash: run,
@@ -2086,6 +2125,8 @@ function botCadet(game) {
       t.skipStep();
       continue;
     }
+    anchor = null;
+    leg = 0;
     const budget = BUDGET[id] ?? 3600;
     let ticks = 0;
     while (t.step === at && ticks < budget && game.mode === "tutorial") {

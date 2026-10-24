@@ -145,7 +145,7 @@ export function createPlaytestGate(game, tools) {
 
   function playTutorial(run, ctx, player) {
     skipCutscenes(run, ctx, player);
-    for (let guard = 0; guard < 120 && game.state !== GameState.TUTORIAL_COMPLETE; guard++) {
+    for (let guard = 0; guard < 200 && game.state !== GameState.TUTORIAL_COMPLETE; guard++) {
       if (game.state === GameState.CUTSCENE) skipCutscenes(run, ctx, player);
       if (game.mode !== "tutorial") throw new Error(`Tutorial left tutorial mode: ${game.mode}`);
       driveTutorialStep(run, ctx, player);

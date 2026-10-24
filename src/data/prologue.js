@@ -274,6 +274,69 @@ export const PROLOGUE_STEPS = [
   },
 
   // ── 4. TRIAL: MOBILITY (a marked run across the floor) ───────────
+  // First the moves, one at a time and off the clock, at the start gate;
+  // then the run uses them. (`untimed`: the trial's clock waits.)
+  {
+    id: "warmSprint",
+    beat: 3,
+    trial: "mobility",
+    untimed: true,
+    title: "WARM-UP — SPRINT",
+    color: "#ff44ff",
+    hint: {
+      key: (k) => `Before the clock: hold ${k("sprint")} while you walk to sprint. The bar under your health is stamina; it drains while you sprint and comes back when you ease off.`,
+      touch: "Before the clock: tap RUN while you walk to sprint. The bar under your health is stamina; it drains while you sprint and comes back when you ease off.",
+      pad: (b) => `Before the clock: hold ${b("sprint")} while you walk to sprint. The bar under your health is stamina; it drains while you sprint and comes back when you ease off.`,
+    },
+    lines: [
+      [VALE, "Clock's not running yet. Loosen up first. Sprint a lap of the lobby.", "happy"],
+      [ARIA, "Watch the bar under your health. That's your lungs.", "warm"],
+    ],
+  },
+  {
+    id: "warmCrouch",
+    beat: 3,
+    trial: "mobility",
+    untimed: true,
+    title: "WARM-UP — CROUCH",
+    color: "#66ff99",
+    hint: {
+      key: (k) => `Hold ${k("crouch")} and walk: you go low and slow, under things and behind low cover.`,
+      touch: "Hold CROUCH and walk: you go low and slow, under things and behind low cover.",
+      pad: (b) => `Hold ${b("crouch")} and walk: you go low and slow, under things and behind low cover.`,
+    },
+    lines: [[VALE, "Get low. Walk it.", "calm"]],
+  },
+  {
+    id: "warmSlide",
+    beat: 3,
+    trial: "mobility",
+    untimed: true,
+    title: "WARM-UP — SLIDE",
+    color: "#66ff99",
+    hint: {
+      key: (k) => `Sprint, then tap ${k("crouch")}: you slide, low and fast. That's how you get under the shutters on the run.`,
+      touch: "Run, then tap CROUCH: you slide, low and fast. That's how you get under the shutters on the run.",
+      pad: (b) => `Sprint, then tap ${b("crouch")}: you slide, low and fast. That's how you get under the shutters on the run.`,
+    },
+    lines: [[VALE, "Now from a sprint. Drop into it.", "excited"]],
+  },
+  {
+    id: "warmDash",
+    beat: 3,
+    trial: "mobility",
+    untimed: true,
+    title: "WARM-UP — PHASE DASH",
+    color: "#ff44ff",
+    hint: {
+      key: (k) => `Press ${k("dash")} (or double-tap a direction) to phase-dash the way you're moving. It jumps a gap a run can't.`,
+      touch: "Double-tap a direction on the stick to phase-dash that way. It jumps a gap a run can't.",
+      pad: (b) => `Press ${b("dash")} to phase-dash the way you're moving. It jumps a gap a run can't.`,
+    },
+    lines: [
+      [ARIA, "That one's the suit, not your legs. A short phase. Try it.", "curious"],
+    ],
+  },
   // One run, timed from the start gate in the lobby to the same gate:
   // up the corridor, through the gym, the office, down the spine, across
   // the atrium's bridge and home. Each step is a stretch of it with the
@@ -290,7 +353,7 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `Run the gates in order. Hold ${b("sprint")} to sprint: it drains the stamina bar under your health. Ease off before it's empty and it comes back.`,
     },
     lines: [
-      [VALE, "Clock's running. The next gate lights up.", "happy"],
+      [VALE, "That's all of it. Now for time. Clock's running; the next gate lights up.", "happy"],
       [ARIA, "Long straight. Don't spend it all at once.", "warm"],
     ],
   },
