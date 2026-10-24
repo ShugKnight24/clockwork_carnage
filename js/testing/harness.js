@@ -31,7 +31,8 @@ import { SeededRNG } from "../../src/utils/seeded-rng.js";
 import { hasLineOfSight } from "../../src/systems/physics.js";
 import { currentBarH } from "../../src/systems/aim.js";
 import { zoneAimHeight } from "../../src/systems/combat.js";
-import { DRILL_COVER } from "../../src/data/levels/rooms/arena.js";
+import { DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../../src/data/levels/rooms/arena.js";
+import { TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, LANES } from "../../src/data/levels/rooms/track.js";
 
 // ─── Harness core ──────────────────────────────────────────
 
@@ -1450,13 +1451,8 @@ function botCompletionist(game) {
   game.mouse.dx = 0;
   r.assert(stepId() === "walk", "Prologue: look around", `Stuck at ${stepId()}`);
 
-  // Walk out of the locker room for real: face east, hold forward.
-  for (let i = 0; i < 600 && stepId() === "walk"; i++) {
-    game.player.angle = 0;
-    game.keys[game.keybinds.moveForward] = true;
-    stepGame(game, 1);
-  }
-  game.keys[game.keybinds.moveForward] = false;
+  // Walk out of the locker room for real, by its door.
+  for (let i = 0; i < 600 && stepId() === "walk"; i++) walkTo(game, 25.0, 41.5, 1) || stepGame(game, 1);
   r.assert(stepId() === "toRange", "Prologue: walk out of the locker room", `Stuck at ${stepId()}`);
 
   // The rest of the chapter, one step at a time: each step set up, a few
@@ -1887,48 +1883,74 @@ function botCadet(game) {
   };
   let pull = false;
 
-  // The mobility run: follow the lit gate, sprint while the bar lasts and
-  // walk to get it back, slide (or crouch) under the shutters, and dash the
-  // bridge's gap at its edge.
-  const SHUTTERS = [[25, 16], [25, 17], [58, 27], [59, 27]];
+  // The mobility run, in the training hall: follow the lit gate, sprint
+  // while the bar lasts and walk to get it back, slide under the bars (or
+  // crouch), crouch through the tunnel, and dash the pit at its edge.
+  const BARS = TRACK_BARS;
+  const TUNNEL = new Set(TRACK_TUNNEL.map(([x, y]) => `${x},${y}`));
   let winded = false;
   const run = () => {
     const gate = game.objectiveWaypoint;
     clearInput(game);
     game.mouse.locked = true;
     if (!gate) return stepGame(game, 1);
-    // The bridge's gap (col 73), from either side: wait for the bar (a dash
-    // needs it), then dash across at the edge.
-    const onBridge = Math.floor(p.y) >= 41 && Math.floor(p.y) <= 42;
-    // Which side we're on, heading for the other (the gate is east of the
-    // gap on the way out, west of it on the way home).
-    const west = onBridge && p.x > 70.4 && p.x < 72.6 && gate.x > 73;
-    const east = onBridge && p.x > 74.4 && p.x < 76.6 && gate.x < 73;
-    const atGap = west || east;
-    if (atGap && p.stamina < p.dashStaminaCost + 4) return stepGame(game, 1);
+    // The pit across lane three, heading south: wait for the bar (a dash
+    // needs it), then dash at the edge.
+    const inLane3 = p.x >= TRACK_PIT.x0 && p.x < TRACK_PIT.x1 + 1;
+    const atPit = inLane3 && p.y > TRACK_PIT.y0 - 2.2 && p.y < TRACK_PIT.y0 && gate.y > TRACK_PIT.y1;
+    if (atPit && p.stamina < p.dashStaminaCost + 4) return stepGame(game, 1);
     if (!stepToward(game, gate.x, gate.y)) aimAt(game, gate.x, gate.y);
     if (p.stamina < 12) winded = true;
     if (p.stamina > 55) winded = false;
     if (!winded) game.keys[kb.sprint] = true;
-    const shutter = SHUTTERS.find(([x, y]) => Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) < 1.9);
-    if (shutter && !p.isSliding) {
+    // The tunnel: low all the way through, from a cell before it.
+    const ahead = [Math.floor(p.x), Math.floor(p.y + Math.sign(gate.y - p.y) * 1.2)];
+    if (TUNNEL.has(`${Math.floor(p.x)},${Math.floor(p.y)}`) || TUNNEL.has(ahead.join())) {
+      game.keys[kb.sprint] = false;
+      game.keys[kb.crouch] = true;
+    }
+    const bar = BARS.find(([x, y]) => Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) < 1.9);
+    if (bar && !p.isSliding) {
       if (p.isSprinting && p.stamina >= p.slideStaminaCost + 2 && p.slideCooldown <= 0) {
         game.keys[kb.crouch] = true;
         stepGame(game, 1);
         game.keys[kb.crouch] = false;
         return stepGame(game, 1);
       }
-      if (Math.hypot(shutter[0] + 0.5 - p.x, shutter[1] + 0.5 - p.y) < 1.4) {
+      if (Math.hypot(bar[0] + 0.5 - p.x, bar[1] + 0.5 - p.y) < 1.4) {
         game.keys[kb.sprint] = false;
         game.keys[kb.crouch] = true;
       }
     }
-    const edge = (west && p.x > 71.5) || (east && p.x < 75.5);
-    if (edge && p.dashCooldown <= 0 && !p.isDashing) {
-      aimAt(game, west ? 80 : 66, p.y);
+    if (atPit && p.y > TRACK_PIT.y0 - 0.7 && p.dashCooldown <= 0 && !p.isDashing) {
+      aimAt(game, p.x, TRACK_PIT.y1 + 4);
+      game.keys[kb.crouch] = false;
       game.keys[kb.moveForward] = true;
       game.dashFromKeys();
     }
+    stepGame(game, 1);
+  };
+  // Onto the middle of the range's first bench: true while still getting there.
+  const toBench = () => {
+    const d = Math.hypot(38.5 - p.x, 42.6 - p.y);
+    if (d < 0.2) return false;
+    clearInput(game);
+    game.mouse.locked = true;
+    if (d > 1) return !!(walkTo(game, 38.5, 42.6, 1) || stepGame(game, 1));
+    p.angle = Math.atan2(42.6 - p.y, 38.5 - p.x);
+    game.keys[kb.moveForward] = true;
+    stepGame(game, 1);
+    return true;
+  };
+  // Walk with someone: close the gap when they get ahead, keep a pace back.
+  const follow = (n, gap = 2.2) => {
+    if (!n || Math.hypot(n.x - p.x, n.y - p.y) < gap) {
+      clearInput(game);
+      return stepGame(game, 1);
+    }
+    clearInput(game);
+    game.mouse.locked = true;
+    if (!stepToward(game, n.x, n.y)) aimAt(game, n.x, n.y);
     stepGame(game, 1);
   };
   // Throw R&D's breaker: stand in front of it, face it, interact.
@@ -1973,19 +1995,40 @@ function botCadet(game) {
       stepGame(game, 1);
     },
     walk: () => walkTo(game, 24.5, 41.5, 1) || stepGame(game, 1),
-    toRange: () => walkTo(game, 36.5, 41.5, 1) || stepGame(game, 1),
-    // The sheet: to the nearest trial still to do (the marker).
+    toRange: () => walkTo(game, 37.5, 41.5, 1) || stepGame(game, 1),
+    // Walk with Orr to R&D; once she's in the bay, on in.
+    toLab: () => {
+      const orr = t.people.orr;
+      if (orr?.walking) return follow(orr);
+      return walkTo(game, 64.5, 10.5, 1) || stepGame(game, 1);
+    },
+    // On the rig's pad, standing still.
+    calibrate: () => (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.4 ? walkTo(game, 70.5, 7.5, 1) || stepGame(game, 1) : (clearInput(game), stepGame(game, 1))),
+    // The sheet: to the nearest trial still to do (the marker). At Lin's
+    // booth, hear her out, then tell her to go.
     certify: () => {
       const w = game.objectiveWaypoint;
+      const atBooth = w && Math.hypot(w.x - BOOTH_FRONT.x, w.y - BOOTH_FRONT.y) < 0.1;
+      if (atBooth && Math.hypot(BOOTH_FRONT.x - p.x, BOOTH_FRONT.y - p.y) < 0.6) {
+        clearInput(game);
+        aimAt(game, BOOTH_AT.x, BOOTH_AT.y);
+        // Hear her out: once her briefing is said, tell her to go.
+        if (t.cert.linBriefed && !t.script.some((l) => l.line[0] === "LIN") && game.ariaComms?.message?.speaker !== "LIN") game.interact();
+        return stepGame(game, 1);
+      }
       return w ? walkTo(game, w.x, w.y, 1) || stepGame(game, 1) : stepGame(game, 1);
     },
     pistol: () => walkTo(game, 38.5, 42.5, 1) || stepGame(game, 1),
+    // The range's drills are shot from the middle of the first bench, where
+    // the lanes are open past the booths.
     fire: () => {
+      if (toBench()) return;
       select(p.weapons[0]);
       shoot("fire");
     },
-    ads: () => shoot("ads", { aimed: true }),
+    ads: () => toBench() || shoot("ads", { aimed: true }),
     moving: () => {
+      if (toBench()) return;
       select(p.weapons[0]);
       shoot("moving", { head: true });
     },
@@ -2012,20 +2055,21 @@ function botCadet(game) {
       stepGame(game, 1);
     },
     ammo: () => walkTo(game, 37.5, 45.5, 1) || stepGame(game, 1),
-    // The warm-up at the start gate, off the clock: each move once.
+    // The warm-up in lane four with Vale, off the clock: each move once,
+    // up and down the lane.
     warmSprint: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.sprint]);
+      anchor ??= [LANES[4], 56];
+      pace([anchor[0], anchor[1] - 3], [anchor[0], anchor[1] + 3], [kb.sprint]);
     },
     warmCrouch: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.crouch]);
+      anchor ??= [LANES[4], 56];
+      pace([anchor[0], anchor[1] - 2], [anchor[0], anchor[1] + 2], [kb.crouch]);
     },
     warmSlide: () => {
-      anchor ??= [p.x, p.y];
+      anchor ??= [LANES[4], 56];
       // Sprint, then tap crouch; winded, walk it off first.
       const fresh = p.stamina >= p.slideStaminaCost + 25;
-      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], fresh ? [kb.sprint] : []);
+      pace([anchor[0], anchor[1] - 3], [anchor[0], anchor[1] + 3], fresh ? [kb.sprint] : []);
       if (fresh && p.isSprinting && !p.isSliding && p.slideCooldown <= 0) {
         game.keys[kb.crouch] = true;
         stepGame(game, 2);
@@ -2034,12 +2078,13 @@ function botCadet(game) {
       }
     },
     warmDash: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]]);
+      anchor ??= [LANES[4], 56];
+      pace([anchor[0], anchor[1] - 3], [anchor[0], anchor[1] + 3]);
       if (p.dashCooldown <= 0 && !p.isDashing) game.dashFromKeys();
     },
     sprint: run,
     slide: run,
+    tunnel: run,
     dash: run,
     runHome: run,
     lab: () => shoot("lab"),
@@ -2076,13 +2121,15 @@ function botCadet(game) {
       p.isFiring = false;
     },
     sim: () => (live("sim").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
-    // On the rig's pad, standing still.
-    telemetry: () => (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.4 ? walkTo(game, 70.5, 7.5, 1) || stepGame(game, 1) : (clearInput(game), stepGame(game, 1))),
     signOff: () => {
       const w = game.objectiveWaypoint;
       return w && Math.hypot(w.x - p.x, w.y - p.y) > 1.6 ? walkTo(game, w.x, w.y + 1, 1) || stepGame(game, 1) : stepGame(game, 1);
     },
     sixFortySeven: () => (live("glitch").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
+    // Walk the Supervisor down: whatever comes through first, then at his side.
+    escort: () => (live("escort").length ? killAllEnemies(game, 30) : follow(t.sup)),
+    kitUp: () => stepGame(game, 1),
+    escortBack: () => (t.sup && Math.hypot(t.sup.x - 33.5, t.sup.y - 6.0) < 0.8 ? walkTo(game, 31.5, 7.5, 1) || stepGame(game, 1) : follow(t.sup)),
     // Watch him go, then make for his office when the marker says.
     alarm: () => {
       const w = game.objectiveWaypoint;
@@ -2102,7 +2149,7 @@ function botCadet(game) {
       killAllEnemies(game, 30);
     },
     breaker,
-    toLift: () => walkTo(game, 29.5, 10.0, 1) || stepGame(game, 1),
+    toLift: () => walkTo(game, 29.5, 9.5, 1) || stepGame(game, 1),
     wave1: () => killAllEnemies(game, 30) || stepGame(game, 1),
     wave2: () => killAllEnemies(game, 30) || stepGame(game, 1),
     wave3: () => killAllEnemies(game, 30) || stepGame(game, 1),
@@ -2111,7 +2158,7 @@ function botCadet(game) {
   };
 
   // Per-step budget in ticks (60 a second). Scenes wait on dialogue.
-  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800 };
+  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800, toLab: 4800, escort: 6000 };
   // Pacing, as the plan measures it: seconds from the creator to the first
   // shot, and the longest the cadet stands still while someone talks.
   const pacing = { standing: {}, time: {}, stood: 0, lastX: p.x, lastY: p.y, shots: 0 };

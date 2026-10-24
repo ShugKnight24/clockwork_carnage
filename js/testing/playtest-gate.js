@@ -175,7 +175,7 @@ export function createPlaytestGate(game, tools) {
     if (id === "arrive" || id === "suitUp") game.tutorial.skipStep(); // the opening scene
     else if (id === "boot") stepAndWatch(run, ctx, player, 180, "tutorial boot");
     else if (id === "look") withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 240, "look around");
-    else if (id === "walk") t.walkTo(game, 23.5, 43.5, 400);
+    else if (id === "walk") t.walkTo(game, 25.0, 41.5, 400); // out of the locker room, by its door
     else if (step < TUTORIAL_SANDBOX_STEP) {
       game.player.chronoActive = false;
       game.timeScale = 1;
