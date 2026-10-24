@@ -124,6 +124,22 @@ void main() {
   outColor = vec4(c, 1.0 - bg);
 }`;
 
+// The staging blit (WallPass._fill): one triangle over the layer, each pixel
+// fetching the same texel of the staged mip. Row 0 is the canvas's top row in
+// both, as texSubImage3D left it.
+const BLIT_VERT = `#version 300 es
+void main() {
+  gl_Position = vec4(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0, 0.0, 1.0);
+}`;
+
+const BLIT_FRAG = `#version 300 es
+precision highp float;
+uniform highp sampler2D u_src;
+out vec4 outColor;
+void main() {
+  outColor = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+}`;
+
 // Per instance: 8 floats (rect, tex), 4 × RGBA8 (face, fog, light, accent),
 // then 4 floats (world hit point and face normal).
 const STRIDE = 64;
@@ -266,13 +282,8 @@ export class WallPass {
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, layers);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    for (const id of ids) {
-      const mips = env.walls[id];
-      for (let l = 0; l < LEVELS; l++) {
-        const s = SIZE >> l;
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l, 0, 0, this.layerOf[id], s, s, 1, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
-      }
-    }
+    this._fill(tex, ids, (id) => env.walls[id], 0, gl.RGBA);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -296,19 +307,91 @@ export class WallPass {
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS - 1, gl.RGB565, SIZE >> 1, SIZE >> 1, layers);
-    for (const id of ids) {
-      const mips = chainOf(id);
-      for (let l = 1; l < LEVELS; l++) {
-        const s = SIZE >> l;
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - 1, 0, 0, this.layerOf[id], s, s, 1, gl.RGB, gl.UNSIGNED_BYTE, mips[l]);
-      }
-    }
+    this._fill(tex, ids, chainOf, 1, gl.RGB);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 2);
     return tex;
+  }
+
+  /**
+   * Copy mips `from`.. of each wall's chain into its layer of `tex` (mip
+   * `from` lands in the array's level 0). A canvas handed to texSubImage3D is
+   * read back to the CPU first, as Chrome copies canvases GPU-to-GPU only
+   * into 2D textures: ~0.8 ms a mip, and a dressed floor's thirty wall types
+   * are ~350 of them in its first frame. Here each mip goes into a 2D
+   * staging texture on that GPU path and one triangle draws it into the
+   * layer, which also writes the RGB565 normals a framebuffer copy from RGBA8
+   * may not. Without the blit program it uploads as before.
+   */
+  _fill(tex, ids, chainOf, from, format) {
+    const gl = this.gl;
+    if (!this._blitReady()) {
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+      for (const id of ids) {
+        const mips = chainOf(id);
+        for (let l = from; l < LEVELS; l++) {
+          const s = SIZE >> l;
+          gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, this.layerOf[id], s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
+        }
+      }
+      return;
+    }
+    const fb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this._blitFB);
+    gl.useProgram(this._blitProg);
+    gl.bindVertexArray(this._blitVAO);
+    gl.disable(gl.BLEND);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this._stage);
+    for (const id of ids) {
+      const mips = chainOf(id);
+      for (let l = from; l < LEVELS; l++) {
+        const s = SIZE >> l;
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
+        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, this.layerOf[id]);
+        gl.viewport(0, 0, s, s);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+    }
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, null, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  }
+
+  /** The staging blit (see _fill), built on first use; false if it will not link. */
+  _blitReady() {
+    if (this._blitProg !== undefined) return !!this._blitProg;
+    const gl = this.gl;
+    this._blitProg = null;
+    const vs = compile(gl, gl.VERTEX_SHADER, BLIT_VERT);
+    const fs = compile(gl, gl.FRAGMENT_SHADER, BLIT_FRAG);
+    if (!vs || !fs) return false;
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.warn("[GL] Wall blit program:", gl.getProgramInfoLog(prog));
+      return false;
+    }
+    gl.useProgram(prog);
+    gl.uniform1i(gl.getUniformLocation(prog, "u_src"), 0);
+    this._blitProg = prog;
+    this._blitVAO = gl.createVertexArray();
+    this._blitFB = gl.createFramebuffer();
+    this._stage = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this._stage);
+    // texelFetch ignores filtering, but a one-level texture with mip
+    // filtering is incomplete and reads as black.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return true;
   }
 
   /**
@@ -422,5 +505,9 @@ export class WallPass {
     if (this.corners) gl.deleteBuffer(this.corners);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.prog) gl.deleteProgram(this.prog);
+    if (this._blitProg) gl.deleteProgram(this._blitProg);
+    if (this._blitVAO) gl.deleteVertexArray(this._blitVAO);
+    if (this._blitFB) gl.deleteFramebuffer(this._blitFB);
+    if (this._stage) gl.deleteTexture(this._stage);
   }
 }
