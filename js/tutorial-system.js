@@ -17,7 +17,7 @@
  */
 import { TUTORIAL_MAP } from "./data.js";
 import { STATION_WALLS } from "../src/data/walls.js";
-import { Enemy, Pickup, Prop } from "./entities.js";
+import { Enemy, Pickup, Prop, Projectile } from "./entities.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
@@ -29,7 +29,7 @@ import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { Npc } from "./npc.js";
 import { NPC_TYPES } from "../src/data/npcs.js";
-import { ARENA_WALLS, COVER_LAYOUTS } from "../src/data/levels/rooms/arena.js";
+import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER } from "../src/data/levels/rooms/arena.js";
 import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
 import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
 import { ATRIUM_GAP } from "../src/data/levels/rooms/atrium.js";
@@ -336,8 +336,27 @@ const READ_LINES = [
   [0.65, ["DR. ORR", "Same frame as the squads' heavy plate. The C-series. Theirs only half takes the module.", "curious"]],
 ];
 
+/**
+ * The cover drill (the "coverDrill" step): its holo targets at the hall's
+ * north end, the one up close for blind fire, and how often the targets
+ * put a round into your cover while you are down behind it.
+ */
+const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5]];
+const DRILL_BLIND_AT = [43.5, 6.5];
+const DRILL_VOLLEY = 1.1;
+/** Blind shots that earn the blind-fire part without a kill: it's about keeping heads down. */
+const DRILL_BLIND_SHOTS = 8;
+
 /** How long a telegraphed arrival glows before it opens (seconds). */
 const ARRIVE_LEAD = 1.5;
+
+/** The range's reload drill: active reloads it wants, and the Supervisor's word on a jam. */
+const RELOAD_GOAL = 2;
+const JAM_LINES = [
+  "Jammed. The band, Cadet, not near it. Again.",
+  "That's a jam. It happens out there too. Clear it and go.",
+  "Again.",
+];
 
 /**
  * The plasma vents across the main corridor (cols 27-32): two strips, two
@@ -771,12 +790,47 @@ const LOGIC = {
   },
 
   /**
-   * Hook: the armorer's active-reload drill (another builder's system). Its
-   * step sits between the shotgun and the resupply; until the drill exists
-   * it completes at once.
+   * The active reload, on the pistol (src/systems/reload.js): two landed in
+   * the band and the trial goes on. Targets stay up down the lane to empty
+   * the mag on; a jam gets a word from the Supervisor and another go. The
+   * counts are the game's (activeReload.stats), taken from here on.
    */
   reloadDrill: {
-    update: () => true,
+    enter(t, g) {
+      const p = g.player;
+      // Shotgun away: the drill is the sidearm's.
+      if (p.weapons.includes(PISTOL)) p.currentWeapon = p.weapons.indexOf(PISTOL);
+      const s = g.activeReload?.stats ?? {};
+      t.c.seen = { hits: s.hits ?? 0, jams: s.jams ?? 0 };
+      t.c.landed = 0;
+      t.c.jammed = 0;
+    },
+    update(t, g) {
+      const ar = g.activeReload;
+      if (!ar) return true;
+      const s = ar.stats;
+      if (s.hits > t.c.seen.hits) {
+        if (ar.last?.weaponId === PISTOL) t.c.landed += s.hits - t.c.seen.hits;
+        t.c.seen.hits = s.hits;
+      }
+      if (s.jams > t.c.seen.jams) {
+        t.c.seen.jams = s.jams;
+        t.say([["SUPERVISOR", JAM_LINES[t.c.jammed++ % JAM_LINES.length], "calm"]]);
+      }
+      if (t.alive(g, "reloadDrill") === 0) {
+        t.spawnTargets(g, "reloadDrill", [
+          [51.5, 41.5],
+          [51.5, 42.5],
+          [51.5, 43.5],
+        ], 30);
+      }
+      return t.c.landed >= RELOAD_GOAL;
+    },
+    progress: (t) => `ACTIVE RELOADS ${Math.min(RELOAD_GOAL, t.c.landed ?? 0)} / ${RELOAD_GOAL}${t.c.jammed ? ` · JAMS ${t.c.jammed}` : ""}`,
+    exit(t, g) {
+      t.clearTargets(g, "reloadDrill");
+      t.say([["SUPERVISOR", "That's the rhythm. Keep it.", "calm"]]);
+    },
   },
 
   ammo: {
@@ -878,12 +932,88 @@ const LOGIC = {
   },
 
   /**
-   * Hook: the cover lesson (another builder's cover system), taught here in
-   * the sim hall before the waves. Until it exists the step completes at
-   * once; the waves already raise holo cover (TutorialSystem.raiseCover).
+   * Cover (src/systems/cover-play.js), on two holo blocks before the waves:
+   * take the first, pop up and drop two targets, blind-fire one more, then
+   * slide to the second. The targets fire into the block while you are down
+   * behind it, so a stopped round is felt, and a hit while you're up lands
+   * on the sim, not you. The counts are the game's (coverStats), taken from
+   * here on.
    */
   coverDrill: {
-    update: () => true,
+    enter(t, g) {
+      t.sim = { integrity: null };
+      t.raiseCover(g, "drill");
+      t.c.stage = "take";
+      t.c.base = { ...g.coverStats };
+      t.c.blindShots = 0;
+      t.c.shots = g.shotsFired || 0;
+      t.c.volley = DRILL_VOLLEY;
+      t.c.retry = 1;
+    },
+    update(t, g) {
+      const p = g.player;
+      const c = t.c;
+      const got = (k) => (g.coverStats?.[k] ?? 0) - (c.base[k] ?? 0);
+      // Someone stood where a block wanted to rise: try again once they move.
+      if (t._cover.length < COVER_LAYOUTS.drill.length && (c.retry -= g.deltaTime) <= 0) {
+        c.retry = 1;
+        t.raiseCover(g, "drill");
+      }
+      // Rounds fired from cover without the sights up: blind fire.
+      const fired = (g.shotsFired || 0) - c.shots;
+      c.shots = g.shotsFired || 0;
+      if (fired > 0 && p.cover && !p.isAiming) c.blindShots += fired;
+      if (got("shotsBlocked") > 0 && !c.feltIt) {
+        c.feltIt = true;
+        t.say([["ARIA", "Hear that? That one had your name on it.", "happy"]]);
+      }
+      if (c.stage === "take") {
+        g.objectiveWaypoint = DRILL_COVER.first;
+        if (got("tookCover") + got("coverDashes") < 1) return false;
+        c.stage = "peek";
+        t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
+        t.say([["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"]]);
+      } else if (c.stage === "peek") {
+        if (got("peekKills") < 2) {
+          if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
+        } else {
+          c.stage = "blind";
+          t.clearTargets(g, "coverDrill");
+          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
+          c.blindShots = 0;
+          t.say([["LIN", "Now don't aim. Fire over the top. It's wild, but it keeps their heads down.", "excited"]]);
+        }
+      } else if (c.stage === "blind") {
+        if (got("blindFireKills") >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
+          c.stage = "dash";
+          t.say([["LIN", "Next block, on your left. Look at it and go. Stay low.", "calm"]]);
+        } else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
+      } else if (c.stage === "dash") {
+        g.objectiveWaypoint = DRILL_COVER.second;
+        if (got("coverDashes") >= 1) return true;
+      }
+      t.drillVolley(g);
+      return false;
+    },
+    progress: (t, g) => {
+      const c = t.c;
+      if (!c.base) return "";
+      const got = (k) => (g.coverStats?.[k] ?? 0) - (c.base[k] ?? 0);
+      const at = ["take", "peek", "blind", "dash"].indexOf(c.stage);
+      const n = (i, have, of) => `${at > i ? of : Math.min(of, have)}/${of}`;
+      return [
+        `COVER ${n(0, got("tookCover") + got("coverDashes"), 1)}`,
+        `PEEK KILLS ${n(1, got("peekKills"), 2)}`,
+        `BLIND FIRE ${n(2, got("blindFireKills"), 1)}`,
+        `COVER DASH ${n(3, got("coverDashes"), 1)}`,
+      ].join(" · ");
+    },
+    exit(t, g) {
+      t.sim = null;
+      t.clearTag(g, "coverDrill");
+      g.projectiles = [];
+      t.say([["ARIA", "Like you've been doing it all your life.", "warm"]]);
+    },
   },
 
   sim: {
@@ -1901,10 +2031,10 @@ export class TutorialSystem {
 
   // ── Certification Day ───────────────────────────────────────────
 
-  /** A trial starts from the hub: its clock and its shot count from now. */
+  /** A trial starts from the hub: its clock, its shot count and its active reloads from now. */
   _beginTrial(id) {
     const g = this.game;
-    this.cert.run = { trial: id, clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0 };
+    this.cert.run = { trial: id, clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0, reloads: g.activeReload?.stats.hits ?? 0 };
   }
 
   /**
@@ -1913,12 +2043,14 @@ export class TutorialSystem {
    */
   _finishTrial(id) {
     const g = this.game;
-    const run = this.cert.run?.trial === id ? this.cert.run : { clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0 };
+    const landed = g.activeReload?.stats.hits ?? 0;
+    const run = this.cert.run?.trial === id ? this.cert.run : { clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0, reloads: landed };
     const shots = (g.shotsFired || 0) - run.shots;
     const hits = (g.shotsHit || 0) - run.hits;
     const acc = shots > 0 ? Math.min(1, hits / shots) : null;
     const trial = PROLOGUE_TRIALS.find((tr) => tr.id === id);
-    const result = { time: run.clock, acc, grade: gradeTrial(trial, run.clock, acc) };
+    const reloads = trial?.reloads ? landed - (run.reloads ?? landed) : 0;
+    const result = { time: run.clock, acc, reloads, grade: gradeTrial(trial, run.clock, acc, { reloads }) };
     this.cert.done[id] = result;
     this.cert.order.push(id);
     this.cert.run = null;
@@ -1999,6 +2131,7 @@ export class TutorialSystem {
       const bits = [`${tr.name} ✓ ${r.grade}`];
       if (tr.par != null) bits.push(`${Math.round(r.time)} s`);
       if (r.acc != null) bits.push(`${Math.round(r.acc * 100)}%`);
+      if (r.reloads) bits.push(`${r.reloads} ACTIVE`);
       return bits.join(" · ");
     }).join("\n");
   }
@@ -2348,6 +2481,26 @@ export class TutorialSystem {
   /** A step's arrivals have all come, and all are down. */
   cleared(g, tag) {
     return !!this.c.spawned && !(this.c.pending > 0) && this.alive(g, tag) === 0;
+  }
+
+  /**
+   * The cover drill's targets put a round into the player every
+   * DRILL_VOLLEY seconds: down behind the block it stops there (and
+   * cover-play counts it), stood up over it it lands on the sim.
+   */
+  drillVolley(g) {
+    if ((this.c.volley -= g.deltaTime || 0) > 0) return;
+    this.c.volley = DRILL_VOLLEY;
+    const p = g.player;
+    if (!inSimHall(p)) return;
+    const from = g.entities.find((e) => e._tutTag === "coverDrill" && e.type === "enemy" && e.health > 0);
+    if (!from) return;
+    const a = Math.atan2(p.y - from.y, p.x - from.x);
+    const bolt = new Projectile(from.x + Math.cos(a) * 0.4, from.y + Math.sin(a) * 0.4, Math.cos(a), Math.sin(a), 5, 7, "enemy");
+    bolt.color = "#7dfff0";
+    g.projectiles.push(bolt);
+    g.entities.push(bolt);
+    g.audio.enemyShoot?.(g.audio.calculatePan?.(from.x, from.y, p.x, p.y, p.angle) ?? 0);
   }
 
   /** Where one of them steps out of the minute: a violet burst, the lights catching. */

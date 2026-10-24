@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { tutorialStepCopy, beatCaption } from "../../src/ui/tutorial-ui.js";
 import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
-import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, gradeTrial, lineDuration, trialStart } from "../../src/data/prologue.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, RELOAD_CREDIT, gradeTrial, lineDuration, trialStart } from "../../src/data/prologue.js";
 
 const desktop = tutorialStepCopy(false);
 const mobile = tutorialStepCopy(true);
@@ -175,5 +175,15 @@ describe("certification day", () => {
     expect(gradeTrial(weapons, weapons.par * 1.2, 0.9)).toBe("A");
     expect(gradeTrial(weapons, weapons.par, 0.3)).toBe("B");
     expect(gradeTrial(PROLOGUE_TRIALS.find((tr) => tr.id === "telemetry"), 30, null)).toBe("PASS");
+  });
+
+  it("counts the active reloads landed on the range toward the weapons grade, and only there", () => {
+    const weapons = PROLOGUE_TRIALS.find((tr) => tr.id === "weapons");
+    const combat = PROLOGUE_TRIALS.find((tr) => tr.id === "combat");
+    // Just over par: a B, unless the reloads buy the seconds back.
+    const t = weapons.par + RELOAD_CREDIT;
+    expect(gradeTrial(weapons, t, 0.7)).toBe("B");
+    expect(gradeTrial(weapons, t, 0.7, { reloads: 1 })).toBe("A");
+    expect(gradeTrial(combat, combat.par + RELOAD_CREDIT, 0.7, { reloads: 1 })).toBe("B");
   });
 });

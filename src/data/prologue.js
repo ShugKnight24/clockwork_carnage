@@ -36,10 +36,11 @@ export const PROLOGUE_BEATS = [
 /**
  * The certification sheet: the four trials, where each starts, and the time
  * that earns each grade (`par`, seconds; null: graded pass or fail). Done in
- * any order from the hub.
+ * any order from the hub. A trial with `reloads` counts its active reloads
+ * toward the grade (gradeTrial).
  */
 export const PROLOGUE_TRIALS = [
-  { id: "weapons", name: "WEAPONS", where: "THE RANGE", par: 75 },
+  { id: "weapons", name: "WEAPONS", where: "THE RANGE", par: 75, reloads: true },
   { id: "mobility", name: "MOBILITY", where: "LOBBY START GATE", par: 55 },
   { id: "combat", name: "COMBAT", where: "SIM HALL", par: 110 },
   { id: "telemetry", name: "TELEMETRY", where: "R&D BAY", par: null },
@@ -249,9 +250,19 @@ export const PROLOGUE_STEPS = [
     },
     lines: [[SUP, "Shotgun's for when they're close enough to smell. Which, in this job, is often.", "calm"]],
   },
-  // The armorer's reload drill goes here (active reload): a hook, no card
-  // yet. It completes as soon as it starts.
-  { id: "reloadDrill", beat: 2, trial: "weapons" },
+  {
+    id: "reloadDrill",
+    beat: 2,
+    trial: "weapons",
+    title: "ACTIVE RELOAD",
+    color: "#ffd24a",
+    hint: {
+      key: (k) => `Pistol. Empty it, or press ${k("reload")} to reload. Press ${k("reload")} again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.`,
+      touch: "Pistol. Empty it, or tap USE to reload. Tap USE again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.",
+      pad: (b) => `Pistol. Empty it, or press ${b("reload")} to reload. Press ${b("reload")} again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.`,
+    },
+    lines: [[SUP, "Reload, then hit it again in the band. Quicker, and the next mag bites harder.", "calm"]],
+  },
   {
     id: "ammo",
     beat: 2,
@@ -330,9 +341,19 @@ export const PROLOGUE_STEPS = [
     // Each exhibit's briefing plays when it appears (js/tutorial-system.js).
     lines: [[LIN, "Sim hall. Field profiles from patrol reports: real things, recorded. One at a time first.", "calm"]],
   },
-  // The cover lesson goes here (cover system): a hook, no card yet. It
-  // completes as soon as it starts.
-  { id: "coverDrill", beat: 4, trial: "combat" },
+  {
+    id: "coverDrill",
+    beat: 4,
+    trial: "combat",
+    title: "COVER — DOWN, UP, MOVE",
+    color: "#7dfff0",
+    hint: {
+      key: (k) => `Face the holo block and press ${k("cover")}. Hold RIGHT MOUSE to pop up and fire; fire without it to shoot blind. Look at the next block and press ${k("dash")} to slide to it.`,
+      touch: "Face the holo block and tap DASH (it reads COVER). Hold AIM to pop up and fire; fire without it to shoot blind. Look at the next block and tap DASH to slide to it.",
+      pad: (b) => `Face the holo block and press ${b("dash")}. Hold ${b("aim")} to pop up and fire; fire without it to shoot blind. Look at the next block and press ${b("dash")} to slide to it.`,
+    },
+    lines: [[LIN, "Before the full sim: cover. Get on that block.", "calm"]],
+  },
   {
     id: "sim",
     beat: 4,
@@ -571,14 +592,19 @@ export const PROLOGUE_STEPS = [
 /** Grades, best first ("PASS": a trial graded pass or fail). */
 export const TRIAL_GRADES = ["S", "A", "B", "C", "PASS"];
 
+/** Seconds off a trial's graded time for each active reload landed in it (a trial with `reloads`). */
+export const RELOAD_CREDIT = 2;
+
 /**
  * A trial's grade from its time against par, nudged by accuracy where shots
  * were fired: S under 80% of par, A at par, B within a third over, C after;
- * under half the shots landing drops a grade, four in five lifts one.
+ * under half the shots landing drops a grade, four in five lifts one. In a
+ * trial that counts them, each active reload landed takes RELOAD_CREDIT
+ * seconds off the time.
  */
-export function gradeTrial(trial, time, acc) {
+export function gradeTrial(trial, time, acc, { reloads = 0 } = {}) {
   if (trial?.par == null) return "PASS";
-  const k = time / trial.par;
+  const k = Math.max(0, time - (trial.reloads ? reloads * RELOAD_CREDIT : 0)) / trial.par;
   let i = k <= 0.8 ? 0 : k <= 1 ? 1 : k <= 1.33 ? 2 : 3;
   if (acc != null && acc < 0.5) i = Math.min(3, i + 1);
   if (acc != null && acc >= 0.8) i = Math.max(0, i - 1);

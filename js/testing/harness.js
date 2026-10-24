@@ -31,6 +31,7 @@ import { SeededRNG } from "../../src/utils/seeded-rng.js";
 import { hasLineOfSight } from "../../src/systems/physics.js";
 import { currentBarH } from "../../src/systems/aim.js";
 import { zoneAimHeight } from "../../src/systems/combat.js";
+import { DRILL_COVER } from "../../src/data/levels/rooms/arena.js";
 
 // ─── Harness core ──────────────────────────────────────────
 
@@ -1979,14 +1980,58 @@ function botCadet(game) {
       if (e && Math.hypot(e.x - p.x, e.y - p.y) > 2.5) return walkTo(game, e.x - 2, e.y, 1) || stepGame(game, 1);
       shoot("shotgun");
     },
-    reloadDrill: () => stepGame(game, 1),
+    // A few rounds down the lane, then reload before it's dry, pressing
+    // again in the middle of the band (botReload).
+    reloadDrill: () => {
+      select(0);
+      if (game.activeReload?.active) {
+        holdOnly();
+        botReload(game, true);
+        return stepGame(game, 1);
+      }
+      if (p.loadedOf(0) > 8) return shoot("reloadDrill");
+      holdOnly();
+      game.reloadPress();
+      stepGame(game, 1);
+    },
     ammo: () => walkTo(game, 37.5, 45.5, 1) || stepGame(game, 1),
     sprint: run,
     slide: run,
     dash: run,
     runHome: run,
     lab: () => shoot("lab"),
-    coverDrill: () => stepGame(game, 1),
+    coverDrill: () => {
+      const stage = t.c.stage;
+      holdOnly();
+      p.isAiming = false;
+      // Mid-slide to the next block: let it carry.
+      if (p._coverDash || p.isSliding) return stepGame(game, 1);
+      if (!p.cover) {
+        // On the first block, facing the hall's north end, and take it.
+        const A = DRILL_COVER.first;
+        if (Math.hypot(A.x - p.x, A.y - p.y) > 1.1) return walkTo(game, A.x, A.y, 0.5) || stepGame(game, 1);
+        p.angle = -Math.PI / 2;
+        game.coverPress();
+        return stepGame(game, 1);
+      }
+      if (stage === "dash") {
+        // The second block is west, along the wall: look at it and go.
+        p.angle = Math.PI;
+        if (p.coverDashTarget) game.dashFromKeys();
+        return stepGame(game, 1);
+      }
+      const e = live("coverDrill")[0];
+      if (!e) return stepGame(game, 1);
+      aimAt(game, e.x, e.y);
+      aimForHead(game, e);
+      // Peek: sights up stands the cadet over the block; fire once up.
+      // Blind: sights down, fire over the top.
+      p.isAiming = stage === "peek";
+      pull = !pull;
+      p.isFiring = pull && (stage !== "peek" || p.coverPeeking);
+      stepGame(game, 1);
+      p.isFiring = false;
+    },
     sim: () => (live("sim").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
     // On the rig's pad, standing still.
     telemetry: () => (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.4 ? walkTo(game, 70.5, 7.5, 1) || stepGame(game, 1) : (clearInput(game), stepGame(game, 1))),

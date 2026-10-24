@@ -183,11 +183,23 @@ export function createPlaytestGate(game, tools) {
       stepAndWatch(run, ctx, player, 8, `prologue step ${id}`);
       if (game.tutorialStep === step) game.tutorial.skipStep();
       stepAndWatch(run, ctx, player, 2, `prologue step ${id} done`);
+      assertTutorialLeftovers(run, id);
     } else {
       stepAndWatch(run, ctx, player, 2, "tutorial sandbox");
     }
     t.clearInput(game);
     game.player.isAiming = false;
+  }
+
+  /**
+   * A step skipped mid-way leaves nothing behind for the next: the sim's
+   * "hits land on the sim" only while a sim-hall step runs.
+   */
+  function assertTutorialLeftovers(run, prevId) {
+    const now = game.tutorial.def?.id;
+    if (game.tutorial.sim && !["lab", "coverDrill", "sim"].includes(now)) {
+      run.issues.push({ severity: "major", reason: `prologue: the sim still takes hits in "${now}" after "${prevId}"`, snapshot: snapshotGame(game) });
+    }
   }
 
   function playCampaign(run, ctx, player) {
