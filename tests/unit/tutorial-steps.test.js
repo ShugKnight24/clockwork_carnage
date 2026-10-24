@@ -79,7 +79,7 @@ describe("the prologue", () => {
   });
 
   it("captions each card with its beat", () => {
-    expect(beatCaption(2)).toBe(`PROLOGUE · 3/${PROLOGUE_BEATS.length} · TRIAL · WEAPONS`);
+    expect(beatCaption(3)).toBe(`PROLOGUE · 4/${PROLOGUE_BEATS.length} · TRIAL · WEAPONS`);
     for (const card of desktop.filter(Boolean)) expect(beatCaption(card.beat)).toMatch(/^PROLOGUE · \d+\/\d+ · /);
   });
 
@@ -122,7 +122,7 @@ describe("the prologue", () => {
 
   it("teaches what the old tutorial never did", () => {
     const ids = PROLOGUE_STEPS.map((s) => s.id);
-    for (const id of ["breaker", "sprint", "slide", "dash", "chrono", "cover", "shield", "shotgun", "moving", "vents", "telemetry"]) {
+    for (const id of ["breaker", "sprint", "slide", "tunnel", "dash", "chrono", "cover", "shield", "shotgun", "moving", "vents", "calibrate"]) {
       expect(ids).toContain(id);
     }
   });
@@ -132,14 +132,30 @@ describe("certification day", () => {
   const ids = PROLOGUE_STEPS.map((s) => s.id);
   const at = (id) => ids.indexOf(id);
 
-  it("hands out the sheet after the walk to the range, and signs it off before 06:47", () => {
-    expect(at("toRange")).toBeLessThan(at("certify"));
-    for (const tr of PROLOGUE_TRIALS) {
+  it("calibrates the suit first, hands out the sheet, and signs it off before 06:47", () => {
+    // Calibration is the first trial, from the range to R&D, before the sheet.
+    expect(PROLOGUE_TRIALS[0].id).toBe("calibration");
+    expect(at("toRange")).toBeLessThan(trialStart("calibration"));
+    expect(trialStart("calibration")).toBeLessThan(at("certify"));
+    for (const tr of PROLOGUE_TRIALS.slice(1)) {
       expect(trialStart(tr.id), tr.id).toBeGreaterThan(at("certify"));
       expect(trialStart(tr.id), tr.id).toBeLessThan(at("signOff"));
     }
     expect(at("signOff")).toBeLessThan(at("sixFortySeven"));
-    expect(at("sixFortySeven")).toBeLessThan(at("alarm"));
+    // After the minute, the Supervisor to his armour and back, then down.
+    expect(at("sixFortySeven")).toBeLessThan(at("escort"));
+    expect(at("escort")).toBeLessThan(at("kitUp"));
+    expect(at("kitUp")).toBeLessThan(at("escortBack"));
+    expect(at("escortBack")).toBeLessThan(at("alarm"));
+  });
+
+  it("has each trial run in person by the one who owns it", () => {
+    for (const tr of PROLOGUE_TRIALS) expect(["DR. ORR", "SUPERVISOR", "VALE", "LIN"], tr.id).toContain(tr.lead);
+    // The trial's first step has its lead speaking (Lin briefs from the hub, before the sim starts).
+    for (const tr of PROLOGUE_TRIALS.filter((d) => d.id !== "combat")) {
+      const first = PROLOGUE_STEPS[trialStart(tr.id)];
+      expect(first.lines.some(([who]) => who === tr.lead), tr.id).toBe(true);
+    }
   });
 
   it("keeps each trial's steps together, in its own beat", () => {
@@ -174,7 +190,7 @@ describe("certification day", () => {
     // Aim moves it a grade either way.
     expect(gradeTrial(weapons, weapons.par * 1.2, 0.9)).toBe("A");
     expect(gradeTrial(weapons, weapons.par, 0.3)).toBe("B");
-    expect(gradeTrial(PROLOGUE_TRIALS.find((tr) => tr.id === "telemetry"), 30, null)).toBe("PASS");
+    expect(gradeTrial(PROLOGUE_TRIALS.find((tr) => tr.id === "calibration"), 30, null)).toBe("PASS");
   });
 
   it("counts the active reloads landed on the range toward the weapons grade, and only there", () => {

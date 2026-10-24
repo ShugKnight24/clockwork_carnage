@@ -7,10 +7,17 @@
  * `update` says when it is done. A beat's first step is a checkpoint: dying
  * puts you back there with the beat set up again, never back to the start.
  *
- * Certification Day runs as a hub: the "certify" step holds the sheet and
- * starts whichever trial you walk into; a trial's last step hands back to
- * it, and each trial finished makes the calibration a little stranger
- * (escalate). After the fourth, the sign-off at Lift B, and 06:47.
+ * Certification Day starts with the suit's calibration in R&D, Orr walking
+ * the cadet there from the range; then the "certify" step holds the sheet
+ * and starts whichever trial you take up with the one who runs it (the
+ * Supervisor at the range, Vale on the track, Lin at her booth). A trial's
+ * last step hands back to it, and each trial finished makes the Engine's
+ * calibration a little stranger (escalate). After the last, the sign-off at
+ * Lift B, and 06:47. The Supervisor tears free of the minute; the cadet
+ * walks him to his armour in the locker room and back to the lift.
+ *
+ * What moves the story on is being in a room (AREAS), never crossing a
+ * particular doorway: any way in counts.
  *
  * Receives a `game` reference for the shared state (player, entities, audio,
  * map, comms).
@@ -29,7 +36,8 @@ import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { Npc } from "./npc.js";
 import { NPC_TYPES } from "../src/data/npcs.js";
-import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER } from "../src/data/levels/rooms/arena.js";
+import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../src/data/levels/rooms/arena.js";
+import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, TRACK_WALLS, LANES } from "../src/data/levels/rooms/track.js";
 import { arrive as startArrival, pendingArrivals, clearArrivals } from "../src/systems/arrival.js";
 import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
 import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
@@ -109,6 +117,25 @@ const SUP_ROUTES = {
 };
 /** Where the Supervisor waits for the sheet: by Lift B, in the sim hall. */
 const SUP_AT_LIFT = { x: 33.5, y: 6.0 };
+/**
+ * The Supervisor's locker (the north bank, by the door: src/data/levels/
+ * tutorial.js), where he stands to kit up, and what he faces.
+ */
+const SUP_LOCKER_CELL = { x: 22, y: 37 };
+const SUP_LOCKER = { x: 22.5, y: 38.6 };
+/**
+ * The escort to the locker room: how fast he can walk with the minute still
+ * in his legs, how often it catches him (a half-second stop), how far ahead
+ * he'll go without you, and where things come through on the way (each when
+ * he is past `after`, his y down the corridor).
+ */
+const ESCORT_SPEED = 1.25;
+const ESCORT_STUTTER = 2.8;
+const ESCORT_LEASH = 6.5;
+const ESCORT_WAVES = [
+  { after: 14, spots: [[29.5, 25.5, "henchman"]] },
+  { after: 30, spots: [[27.5, 36.5, "drone", "vent"], [32.5, 43.5, "drone", "vent"]] },
+];
 
 /**
  * Lift B, in the sim hall's north wall: the service lift down to the Engine
@@ -137,10 +164,11 @@ const PEOPLE = {
   brooks: { kind: "clerk", name: "Hal Brooks", look: 1, at: [21.6, 31.4], face: [20.2, 30.6], caught: "talking" }, // at the coffee
   mendez: { kind: "officer", name: "Ofc. Mendez", at: [20.2, 30.6], face: [20.2, 29], caught: "pouring" }, // off shift, the coffee
   varga: { kind: "officer", name: "Ofc. Varga", at: [17.2, 24.0], face: [16.5, 25.5], caught: "punching" }, // PT, at the bags
-  // R&D meet you at the range, then go to their trials.
+  // R&D: Orr meets you at the range to walk you to the rig; Lin and Vale
+  // are at their trials all morning, in the sim hall's booth and the track.
   orr: { kind: "staff", name: "Dr. Nadia Orr", look: 0, at: [37.2, 38.8], face: [34.5, 41.5], caught: "stepping" },
-  lin: { kind: "staff", name: "Teo Lin", look: 1, at: [38.8, 38.7], face: [34.5, 41.5], caught: "watching" },
-  vale: { kind: "staff", name: "Ines Vale", look: 1, at: [36.2, 39.7], face: [34.5, 41.5], caught: "timing" },
+  lin: { kind: "staff", name: "Teo Lin", look: 1, at: [BOOTH_AT.x, BOOTH_AT.y], face: [BOOTH_AT.x, 9], caught: "watching" },
+  vale: { kind: "staff", name: "Ines Vale", look: 1, at: [LANES[4], 52.5], face: [LANES[1], 51.5], caught: "timing" },
   // The east wing.
   booker: { kind: "clerk", name: "Clerk Ruiz", look: 0, at: [68.5, 53.4], face: [68.5, 56], caught: "stamping" },
   detainee: { kind: "clerk", name: "Detainee", look: 1, at: [63.5, 53.4], face: [63.5, 57], caught: "posing" },
@@ -157,12 +185,34 @@ const FROZEN_POUR = { x: 19.5, y: 30.5 };
 const FROZEN_PAPER = { x: 69.4, y: 53.7, lift: 0.85 };
 /** Up the corridor from the front desk to her cabinets, while you cross to the range. */
 const NAND_ROUTE = [[29.5, 46.5], [29.5, 20.6], [34.6, 20.6], [37.5, 18.6], [39.5, 17.3]];
-/** Where R&D go when they've handed you the sheet: to run their trials. */
+/** Where R&D run their trials from. */
 const STATIONS = {
   orr: { x: 73.5, y: 8.5, face: RIG_AT },
-  lin: { x: 22.5, y: 9.7, face: { x: 29.5, y: 4.5 } },
-  vale: { x: 31.2, y: 50.6, face: { x: 29.5, y: 49.5 } },
+  lin: { x: BOOTH_AT.x, y: BOOTH_AT.y, face: { x: BOOTH_AT.x, y: 9 } },
+  vale: { x: LANES[4], y: 52.5, face: { x: LANES[1], y: 51.5 } },
 };
+/** How fast Orr walks you to R&D: a little under your own walk, so you keep together. */
+const ORR_WALK = 2.7;
+
+/**
+ * The rooms the story asks you to be in, as their floors are carved
+ * (src/data/levels/tutorial.js and its rooms): any door into one counts.
+ * x1 and y1 are exclusive.
+ */
+const AREAS = {
+  lockers: { x0: 4, y0: 38, x1: 24, y1: 47 },
+  range: { x0: 36, y0: 38, x1: 56, y1: 47 },
+  rnd: { x0: 62, y0: 2, x1: 80, y1: 14 },
+  arena: { x0: 9, y0: 3, x1: 51, y1: 11 },
+  track: TRACK_AREA,
+};
+const inArea = (p, name) => {
+  const a = AREAS[name];
+  return p.x >= a.x0 && p.x < a.x1 && p.y >= a.y0 && p.y < a.y1;
+};
+/** R&D's people by the name their lines go under, and how far a voice carries outside its room. */
+const EARSHOT_OF = { "DR. ORR": "orr", LIN: "lin", VALE: "vale" };
+const EARSHOT = 14;
 
 /**
  * What the floor's people say if you talk to them (press interact facing
@@ -175,9 +225,9 @@ const TALK = {
   brooks: [["STAFF_M", "Mendez says you won't pass. I've got five on you."]],
   mendez: [["OFFICER", "Coffee's terrible. I came in on my day off for it anyway."]],
   varga: [["OFFICER", "Pace the run. Everyone sprints the first straight and walks the last."]],
-  orr: [["DR. ORR", "Telemetry's the easy one. You stand there and I worry."]],
+  orr: [["DR. ORR", "Calibration's the one I lose sleep over. You stand there and I worry."]],
   lin: [["LIN", "The sim's only light. It still hurts your pride."]],
-  vale: [["VALE", "The clock starts the moment you cross the gate. No pressure."]],
+  vale: [["VALE", "Everyone sprints lane one and walks lane three. Don't be everyone."]],
   booker: [["STAFF_M", "Booking's quiet till nine. Unless you've brought me someone."]],
   detainee: [["STAFF", "What time is it? No, really. What time is it?"]],
   haas: [["OFFICER", "Close the door, Cadet. We're nearly there with this one."]],
@@ -197,8 +247,8 @@ const FROZEN_TALK = [
  * story; it never blocks a step.
  */
 const READABLE = {
-  [HALL_WALLS.CERT_BOARD]: [["ARIA", "R&D's board. Four trials, your badge at the top. Somebody drew a smiley next to telemetry.", "happy"]],
-  [HALL_WALLS.DIRECTORY]: [["ARIA", "Floor plan. R&D's up the east side, past dispatch. Holding's at the bottom.", "calm"]],
+  [HALL_WALLS.CERT_BOARD]: [["ARIA", "R&D's board. Four trials, your badge at the top. Somebody drew a smiley next to calibration.", "happy"]],
+  [HALL_WALLS.DIRECTORY]: [["ARIA", "Floor plan. R&D's up the east side, past dispatch. The training hall's through the gym. Holding's at the bottom.", "calm"]],
   [HALL_WALLS.MEMORIAL]: [["ARIA", "The heavy squads, in C-series plate. The suit before yours. Rasczak's in the middle.", "calm"]],
   [HALL_WALLS.PT_POSTER]: [["ARIA", "Varga's poster. 'Pace yourself.' Annoyingly good advice.", "warm"]],
   [CORRIDOR_WALLS.NOTICE]: [["ARIA", "Softball against the fire department, Saturday. You're not on the team sheet. Yet.", "warm"]],
@@ -206,6 +256,10 @@ const READABLE = {
   [RND_WALLS.LIFT_A]: [["ARIA", "Lift A. R&D's freight car to the Engine level. Locked out for the calibration.", "calm"]],
   [RND_WALLS.SUIT_RACK]: [["ARIA", "C-series. The squads' heavy plate. Same frame as yours, two generations back.", "curious"]],
   [RND_WALLS.BREAKER]: [["ARIA", "R&D's main breaker. It feeds Lift B, apparently.", "calm"]],
+  [RND_WALLS.BIOMON]: [["ARIA", "That's you. Heart, breath, and something Orr calls a neural match. Ninety-eight point seven.", "warm"]],
+  [RND_WALLS.CLEANROOM]: [["ARIA", "Their cleanroom. Someone in a bunny suit is pretending not to watch you.", "happy"]],
+  [RND_WALLS.FRIDGE]: [["ARIA", "Samples. I'm choosing not to ask whose.", "curious"]],
+  [TRACK_WALLS.BOARD]: [["ARIA", "Vale's board. Her name's on top. Yours is the blank line.", "warm"]],
   [DISPATCH_WALLS.DUTY_BOARD]: [["ARIA", "Both heavy squads on the Engine level. And you: trials.", "calm"]],
   [DISPATCH_WALLS.CITY_MAP]: [["ARIA", "Every unit in the city. One red one hasn't checked in.", "worried"]],
   [HOLDING_WALLS.RIGHTS]: [["ARIA", "'You may know the time of your arrest.' Funny thing to promise.", "curious"]],
@@ -267,6 +321,16 @@ const EXHIBITS = [
     ],
   },
 ];
+/**
+ * Lin's briefing from her booth, the first time you come into the sim hall
+ * with the combat trial still on the sheet. She starts it when you tell her
+ * (interact with her or her desk), never before.
+ */
+const LIN_BRIEF = [
+  ["LIN", "Over here, the booth. Teo Lin. I run the sim; it's all light.", "happy"],
+  ["LIN", "Its rounds hit the sim, not you. Exhibits, cover, then the real thing. Say when.", "calm"],
+];
+
 /** Where an exhibit stands in the arena, and where you stand to study it. */
 const EXHIBIT_AT = { x: 29.5, y: 4.5 };
 
@@ -295,57 +359,77 @@ const SHOTGUN = 1;
 const PISTOL = 0;
 
 /**
- * Where each trial starts from the hub, and what starts it: the pistol on
- * the range's first bench, the start gate in the lobby, walking into the
- * sim hall, walking into R&D.
+ * Where the marker sends you for each trial still on the sheet: to the
+ * person who runs it (the range's first bench, for the Supervisor's).
+ * What starts each is in the "certify" step: being on the range; reaching
+ * Vale in the training hall; telling Lin you're ready.
  */
 const TRIAL_START = {
   weapons: { x: 38.5, y: 42.5 },
-  mobility: { x: 29.5, y: 49.5 },
-  combat: { x: 29.5, y: 10.0 },
-  telemetry: { x: 63.5, y: 10.5 },
+  mobility: { x: LANES[4], y: 52.5 },
+  combat: BOOTH_FRONT,
 };
-const inSimHall = (p) => p.x > 9 && p.x < 51 && p.y > 3 && p.y < 10.6;
-const inRnd = (p) => p.x > 61.6 && p.y < 14;
+/** How close to Vale starts her warm-up, and to Lin (or her desk) to tell her to go. */
+const VALE_REACH = 3.2;
+const LIN_REACH = 2.8;
 
-/**
- * The mobility run (src/data/prologue.js, beat 3): its gates in order, from
- * the start gate in the lobby round the floor and back to it. Each step of
- * the trial runs to its last gate: SEGMENT_END.
- */
 /** The mobility warm-up's goals: seconds sprinted, metres crouch-walked. */
 const WARM_SPRINT = 2;
 const WARM_CROUCH = 1.5;
 
+/**
+ * The mobility run, in the training hall (src/data/levels/rooms/track.js):
+ * its gates in order, each a line across a lane (x0..x1 exclusive, at y).
+ * The start line at the top of lane one; down it, up lane two under the
+ * bars (a gate halfway, so the bars are the way), down lane three through
+ * the tunnel and over the pit, to the finish. Each step of the trial runs
+ * to its last gate: SEGMENT_END.
+ */
 const RUN_GATES = [
-  { x: 29.5, y: 49.5 }, // start, in the lobby
-  { x: 29.5, y: 22.5 }, // the top of the corridor: a straight longer than a sprint
-  { x: 5.5, y: 20.5 }, // the gym's far wall
-  { x: 29.5, y: 16.5 }, // out of the gym's north door, under its shutter
-  { x: 58.5, y: 21.0 }, // through the office into the spine
-  { x: 62.9, y: 41.5 }, // down the spine, under its shutter, to the bridge
-  { x: 83.5, y: 41.5 }, // across the bridge, over the gap
-  { x: 29.5, y: 49.5 }, // home: the start gate
+  { x: LANES[1], y: 51.5, x0: 1, x1: 4 }, // the start line
+  { x: LANES[1], y: 78.0, x0: 1, x1: 4 }, // the bottom of lane one: 27 cells, more than a bar of sprint
+  { x: LANES[2], y: 67.0, x0: 5, x1: 8 }, // halfway up lane two, between the bars
+  { x: LANES[2], y: 51.5, x0: 5, x1: 8 }, // the top of lane two
+  { x: LANES[3], y: 59.5, x0: 9, x1: 12 }, // out of the tunnel
+  { x: LANES[3], y: 68.5, x0: 9, x1: 12 }, // over the pit
+  { x: LANES[3], y: 78.0, x0: 9, x1: 12 }, // the finish line
 ];
-const SEGMENT_END = { sprint: 2, slide: 5, dash: 6, runHome: 7 };
-const RUN_GATE_R = 1.25;
-/** The shutters stuck half down across the run, one prop per cell. */
-const SHUTTERS = [
-  { x: 25, y: 16 },
-  { x: 25, y: 17 },
-  { x: 58, y: 27 },
-  { x: 59, y: 27 },
+const SEGMENT_END = { sprint: 1, slide: 3, tunnel: 4, dash: 5, runHome: 6 };
+/** How far either side of its line a gate counts you through. */
+const RUN_GATE_DY = 0.9;
+/** Every cell with something at 0.9 m across it, the bars and the tunnel: only low gets through. */
+const LOW_CELLS = new Set([...TRACK_BARS, ...TRACK_TUNNEL].map(([x, y]) => `${x},${y}`));
+/**
+ * Floor you only cross mid-dash: the atrium bridge's missing section
+ * (crossed east-west) and the training hall's foam pit (north-south).
+ */
+const GAPS = [
+  { x0: ATRIUM_GAP.x, x1: ATRIUM_GAP.x, y0: ATRIUM_GAP.y0, y1: ATRIUM_GAP.y1, axis: "x", pit: false },
+  { ...TRACK_PIT, axis: "y", pit: true },
 ];
-/** After a dash ends you still carry over the gap for this long. */
+/** After a dash ends you still carry over a gap for this long. */
 const DASH_CARRY = 0.3;
 
-/** Seconds the rig takes to read the suit, standing still on its pad. */
-const READ_TIME = 7;
-/** Orr's commentary as the reading goes: [fraction read, line]. */
-const READ_LINES = [
-  [0.3, ["DR. ORR", "Servo load nominal. Plating nominal. Pulse... a bit high.", "calm"]],
-  [0.65, ["DR. ORR", "Same frame as the squads' heavy plate. The C-series. Theirs only half takes the module.", "curious"]],
+/** Orr at the sign-off: the suit's anchor reading what it shouldn't. */
+const ANCHOR_LINES = [
+  ["DR. ORR", "Before he signs. Your suit's anchor is reading the Engine.", "worried"],
+  ["DR. ORR", "It shouldn't be able to see the Engine from here.", "worried"],
 ];
+
+/** Seconds the rig takes to calibrate the suit, standing still on its pad. */
+const READ_TIME = 9;
+/**
+ * Orr's commentary as the calibration goes: [fraction read, line]. Said
+ * only if nothing else is being said by then (her walk's lines can run
+ * long): the reading itself is on the card.
+ */
+const READ_LINES = [
+  [0.15, ["DR. ORR", "Body's in. Pulse is up. Fair enough.", "calm"]],
+  [0.45, ["DR. ORR", "Same frame as the squads' plate. Theirs only half takes the anchor.", "curious"]],
+  [0.75, ["DR. ORR", "Now your head. Neural lock... come on.", "worried"]],
+];
+/** What the card says the rig is reading, by how far it has got. */
+const READ_STAGES = [[0.4, "BODY"], [0.75, "NERVES"], [1, "MIND"]];
 
 /**
  * The cover drill (the "coverDrill" step): its holo targets at the hall's
@@ -641,6 +725,7 @@ const LOGIC = {
   },
 
   walk: {
+    // The marker is the corridor door; any way out of the locker room counts.
     waypoint: { x: 24.5, y: 41.5 },
     enter(t, g) {
       t.openDoors(g, "door1", "door4");
@@ -651,7 +736,7 @@ const LOGIC = {
       nand.y = NAND_ROUTE[0][1] + 1.5;
       setTimeoutGame(t, 1.5, () => nand.walk(NAND_ROUTE, { then: (n) => n.faceTo({ x: 39.5, y: 15 }) }));
     },
-    update: (t, g) => t.near(g, 23.5, 41.5, 2.2),
+    update: (t, g) => !inArea(g.player, "lockers"),
   },
 
   toRange: {
@@ -661,11 +746,87 @@ const LOGIC = {
       // He went on ahead from the locker room; a checkpoint puts him there.
       if (!t.sup?.path?.length) t.supWalk(g, "atRange");
     },
-    update: (t, g) => t.near(g, 36.5, 41.5, 1.8),
+    update: (t, g) => inArea(g.player, "range"),
+  },
+
+  // ── Trial: calibration (R&D, first) ────────────────────────────
+
+  /**
+   * The Supervisor hands you to Orr, and she walks you to R&D the long way
+   * round, talking: what calibration does, that it might not take, and why
+   * it's you. Done when you're in the bay, by whichever way you came.
+   */
+  toLab: {
+    waypoint: { x: 62.5, y: 10.5 },
+    enter(t, g) {
+      t.openDoors(g, "door2", "door4", "door15");
+      if (t.cert.run?.trial !== "calibration") t._beginTrial("calibration");
+      if (!t.sup?.path?.length) t.supWalk(g, "atRange");
+      const orr = t.person(g, "orr");
+      orr.faceTo(g.player);
+      // She lets him say his piece, then sets off.
+      setTimeoutGame(t, 3.2, () => {
+        orr.speed = ORR_WALK;
+        t.toStation(g, "orr");
+      });
+    },
+    update: (t, g) => inArea(g.player, "rnd"),
+  },
+
+  /**
+   * The rig tunes the suit to the cadet: stand on its pad, in the lit ring,
+   * and hold still while Orr reads body, nerves and mind. Off the pad, or
+   * moving on it, the reading waits; it never resets.
+   */
+  calibrate: {
+    waypoint: RIG_AT,
+    enter(t, g) {
+      t.c.read = 0;
+      t.c.said = 0;
+      t.c.lastX = g.player.x;
+      t.c.lastY = g.player.y;
+      t.toStation(g, "orr", { snap: true });
+      t.c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
+      if (t.c.rig) t.c.rig.wait = 1;
+    },
+    update(t, g) {
+      const p = g.player;
+      const still = Math.hypot(p.x - t.c.lastX, p.y - t.c.lastY) < 0.02;
+      t.c.lastX = p.x;
+      t.c.lastY = p.y;
+      const on = t.near(g, RIG_AT.x, RIG_AT.y, 0.75);
+      if (on && still) t.c.read += g.deltaTime;
+      if (t.c.rig) {
+        t.c.rig.scan = on ? 1 : 0;
+        t.c.rig.wait = on ? 0 : 1;
+      }
+      const k = t.c.read / READ_TIME;
+      while (t.c.said < READ_LINES.length && k >= READ_LINES[t.c.said][0]) {
+        const line = READ_LINES[t.c.said++][1];
+        if (t.scriptIdle()) t.say([line]);
+      }
+      return k >= 1;
+    },
+    progress: (t, g) => {
+      if (!t.near(g, RIG_AT.x, RIG_AT.y, 0.75)) return t.c.read > 0 ? "BACK ON THE PAD · THE READING WAITS" : "STAND ON THE PAD · INSIDE THE LIT RING";
+      const k = t.c.read / READ_TIME;
+      const stage = READ_STAGES.find(([at]) => k < at)?.[1] ?? "MIND";
+      return `CALIBRATING ${Math.min(100, Math.round(k * 100))}% · ${stage} · HOLD STILL`;
+    },
+    exit(t) {
+      if (t.c.rig) t.c.rig.scan = t.c.rig.wait = 0;
+      t.say([["DR. ORR", "There. It took. It's yours now.", "happy"]], { keep: true });
+    },
   },
 
   // ── Certification Day: the hub ─────────────────────────────────
 
+  /**
+   * The sheet, with three trials on it, each started with the one who runs
+   * it: the Supervisor when you're on his range; Vale when you reach her in
+   * the training hall; Lin when you tell her you're ready (interact, at her
+   * booth), after she has told you what the sim is.
+   */
   certify: {
     get waypoint() {
       return null; // the nearest trial still to do, set in update
@@ -677,28 +838,37 @@ const LOGIC = {
       if (!cert.done.weapons && !g.player.weapons.includes(PISTOL)) {
         t.place(g, "pistol", new Pickup(TRIAL_START.weapons.x, TRIAL_START.weapons.y, "weapon", { weaponId: PISTOL }));
       }
-      if (!cert.done.mobility) t.startGate(g);
       if (!cert.briefed) {
         cert.briefed = true;
         t.say(t.def.brief, { keep: true });
-        // R&D hand over the sheet and go to their trials as they talk.
-        setTimeoutGame(t, 5, () => t.toStation(g, "vale"));
-        setTimeoutGame(t, 8, () => t.toStation(g, "lin"));
-        setTimeoutGame(t, 11, () => t.toStation(g, "orr"));
       }
     },
     update(t, g) {
       const p = g.player;
-      const todo = PROLOGUE_TRIALS.filter((tr) => !t.cert.done[tr.id]);
+      const cert = t.cert;
+      const todo = PROLOGUE_TRIALS.filter((tr) => !cert.done[tr.id] && TRIAL_START[tr.id]);
       const nearest = todo
         .map((tr) => ({ id: tr.id, ...TRIAL_START[tr.id] }))
         .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
       g.objectiveWaypoint = nearest ? { x: nearest.x, y: nearest.y } : null;
+      const vale = t.people.vale;
+      const lin = t.people.lin;
+      // Into the hall, Vale calls you over; into the sim hall, Lin briefs you from her booth.
+      if (!cert.done.mobility && inArea(p, "track") && !cert.valeCalled && vale && !t.near(g, vale.x, vale.y, VALE_REACH + 2)) {
+        cert.valeCalled = true;
+        vale.faceTo(p);
+        t.say([["VALE", "Cadet! Over here, lane four. Warm up first.", "happy"]]);
+      }
+      if (!cert.done.combat && inArea(p, "arena") && !cert.linBriefed) {
+        cert.linBriefed = true;
+        lin?.faceTo(p);
+        // She's in front of you: ahead of whatever the station has to say.
+        t.say(LIN_BRIEF, { first: true });
+      }
       const starts = {
-        weapons: () => t.near(g, TRIAL_START.weapons.x, TRIAL_START.weapons.y, 1.3),
-        mobility: () => t.near(g, TRIAL_START.mobility.x, TRIAL_START.mobility.y, RUN_GATE_R),
-        combat: () => inSimHall(p),
-        telemetry: () => inRnd(p),
+        weapons: () => inArea(p, "range"),
+        mobility: () => inArea(p, "track") && !!vale && t.near(g, vale.x, vale.y, VALE_REACH),
+        combat: () => !!t.c.simGo,
       };
       for (const tr of todo) {
         if (starts[tr.id]()) {
@@ -708,7 +878,7 @@ const LOGIC = {
       }
       return false;
     },
-    progress: (t) => t.sheetText(),
+    progress: (t, g) => t.sheetText() + (t.cert.linBriefed && !t.cert.done.combat && inArea(g.player, "arena") ? "\nLIN · READY WHEN YOU ARE" : ""),
   },
 
   // ── Trial: weapons (the range) ─────────────────────────────────
@@ -861,9 +1031,12 @@ const LOGIC = {
     update: (t) => t.pickedUp,
   },
 
-  // ── Trial: mobility (the warm-up, then the run) ────────────────
+  // ── Trial: mobility (the training hall: Vale's warm-up, then the run) ──
 
   warmSprint: {
+    enter(t, g) {
+      t.people.vale?.faceTo(g.player);
+    },
     update(t, g) {
       if (g.player.isSprinting) t.c.sprint = (t.c.sprint || 0) + g.deltaTime;
       return t.c.sprint > WARM_SPRINT;
@@ -895,19 +1068,15 @@ const LOGIC = {
   warmDash: {
     update: (t) => t.c.dashes >= 1,
     progress: (t) => `DASHES ${Math.min(1, t.c.dashes)} / 1`,
-    exit(t, g) {
-      // The run starts where the warm-up ended: back on the start gate.
-      g.objectiveWaypoint = RUN_GATES[0];
-    },
   },
 
+  // The run: the clock waits for the start line (startCourse's `held`).
   sprint: {
     get waypoint() {
       return null;
     },
     enter(t, g) {
-      t.openDoors(g, "door3", "door4", "door15", "door16");
-      t.startCourse(g);
+      t.startCourse(g, 0);
     },
     update: (t, g) => t.runCourse(g, SEGMENT_END.sprint),
     progress: (t) => t.courseText(),
@@ -918,9 +1087,21 @@ const LOGIC = {
       return null;
     },
     enter(t, g) {
-      if (!t.course) t.startCourse(g, SEGMENT_END.sprint + 1);
+      // Picked up past the start (a checkpoint, a skip): the clock's running.
+      if (!t.course || t.course.held) t.startCourse(g, SEGMENT_END.sprint + 1);
     },
     update: (t, g) => t.runCourse(g, SEGMENT_END.slide),
+    progress: (t) => t.courseText(),
+  },
+
+  tunnel: {
+    get waypoint() {
+      return null;
+    },
+    enter(t, g) {
+      if (!t.course || t.course.held) t.startCourse(g, SEGMENT_END.slide + 1);
+    },
+    update: (t, g) => t.runCourse(g, SEGMENT_END.tunnel),
     progress: (t) => t.courseText(),
   },
 
@@ -929,7 +1110,7 @@ const LOGIC = {
       return null;
     },
     enter(t, g) {
-      if (!t.course) t.startCourse(g, SEGMENT_END.slide + 1);
+      if (!t.course || t.course.held) t.startCourse(g, SEGMENT_END.tunnel + 1);
     },
     update: (t, g) => t.runCourse(g, SEGMENT_END.dash),
     progress: (t) => t.courseText(),
@@ -940,7 +1121,7 @@ const LOGIC = {
       return null;
     },
     enter(t, g) {
-      if (!t.course) t.startCourse(g, SEGMENT_END.dash + 1);
+      if (!t.course || t.course.held) t.startCourse(g, SEGMENT_END.dash + 1);
     },
     update: (t, g) => t.runCourse(g, SEGMENT_END.runHome),
     progress: (t) => t.courseText(),
@@ -957,6 +1138,7 @@ const LOGIC = {
       t.c.wait = 0.8;
       t.toStation(g, "lin", { snap: true });
       // Combat before the range: the sim needs something to point.
+      // (Lin already said what it is, from the booth: the hub's LIN_BRIEF.)
       const p = g.player;
       if (!p.weapons.includes(PISTOL)) {
         t.place(g, "simPistol", new Pickup(p.x, p.y, "weapon", { weaponId: PISTOL }));
@@ -1124,42 +1306,6 @@ const LOGIC = {
     },
   },
 
-  // ── Trial: telemetry (R&D's rig) ───────────────────────────────
-
-  telemetry: {
-    waypoint: RIG_AT,
-    enter(t, g) {
-      t.c.read = 0;
-      t.c.said = 0;
-      t.c.lastX = g.player.x;
-      t.c.lastY = g.player.y;
-      t.toStation(g, "orr", { snap: true });
-      t.c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
-    },
-    update(t, g) {
-      const p = g.player;
-      const still = Math.hypot(p.x - t.c.lastX, p.y - t.c.lastY) < 0.02;
-      t.c.lastX = p.x;
-      t.c.lastY = p.y;
-      const on = t.near(g, RIG_AT.x, RIG_AT.y, 0.75);
-      // Off the pad, or walking about on it, the reading waits; it never resets.
-      if (on && still) t.c.read += g.deltaTime;
-      if (t.c.rig) t.c.rig.scan = on ? 1 : 0;
-      const k = t.c.read / READ_TIME;
-      while (t.c.said < READ_LINES.length && k >= READ_LINES[t.c.said][0]) t.say([READ_LINES[t.c.said++][1]]);
-      return k >= 1;
-    },
-    progress: (t, g) => (t.near(g, RIG_AT.x, RIG_AT.y, 0.75) ? `READING ${Math.min(100, Math.round((t.c.read / READ_TIME) * 100))}% · HOLD STILL` : "STAND ON THE RIG'S PAD"),
-    exit(t) {
-      if (t.c.rig) t.c.rig.scan = 0;
-      // The setup for the minute to come: the anchor sees what it shouldn't.
-      t.say([
-        ["DR. ORR", "That's odd. Your suit's anchor is reading the Engine.", "worried"],
-        ["DR. ORR", "It shouldn't be able to see the Engine from here.", "worried"],
-      ], { keep: true });
-    },
-  },
-
   // ── Six forty-seven ────────────────────────────────────────────
 
   signOff: {
@@ -1172,17 +1318,25 @@ const LOGIC = {
       t.supTo(g, SUP_AT_LIFT.x, SUP_AT_LIFT.y);
       t.toStation(g, "orr", { at: { x: 31.4, y: 7.2, face: LIFT_CAR } });
       t.toStation(g, "lin", { at: { x: 26.5, y: 8.6, face: LIFT_CAR } });
+      // He noticed the best of the trials, and says so while you walk over.
+      const line = t.bestTrialLine();
+      if (line) setTimeoutGame(t, 0.1, () => t.say([["SUPERVISOR", line, "calm"]]));
     },
     update(t, g) {
       const sup = t.sup;
       g.objectiveWaypoint = sup ? { x: sup.x, y: sup.y } : SUP_AT_LIFT;
+      // In the sim hall, Orr checks the suit one last time as you cross to
+      // him: the anchor sees what it shouldn't. The setup for the minute.
+      if (!t.c.orrSaid && inArea(g.player, "arena")) {
+        t.c.orrSaid = true;
+        t.say(ANCHOR_LINES);
+      }
       if (!sup) return t.near(g, SUP_AT_LIFT.x, SUP_AT_LIFT.y, 2.6);
-      return t.near(g, sup.x, sup.y, 2.6) && inSimHall(g.player);
+      return t.near(g, sup.x, sup.y, 2.6) && inArea(g.player, "arena");
     },
     exit(t) {
-      // He noticed the best of the four.
-      const line = t.bestTrialLine();
-      if (line) t.say([["SUPERVISOR", line, "calm"]], { keep: true });
+      // Straight to him (or a skip): she still says it, before the doors open.
+      if (!t.c.orrSaid) t._anchorLate = true;
     },
   },
 
@@ -1190,10 +1344,12 @@ const LOGIC = {
     enter(t, g) {
       t.c.phase = "wait";
       t.c.at = 0;
+      if (t._anchorLate) t.say(ANCHOR_LINES);
+      t._anchorLate = false;
     },
     update(t, g) {
       const c = t.c;
-      if (c.phase === "wait" && t.clock > 2 && (t.scriptIdle() || t.clock > 7)) {
+      if (c.phase === "wait" && t.clock > 1.5 && (t.scriptIdle() || t.clock > 8)) {
         // Lift B opens on its own. What steps out of it isn't the courier.
         c.phase = "lift";
         c.at = t.clock;
@@ -1227,6 +1383,134 @@ const LOGIC = {
       t.clearTag(g, "glitch");
       if (t.c.phase !== "stopped") t.minute(g);
       t.say([["SUPERVISOR", "Doctor Orr? ...Orr. Cadet, don't touch her. Don't anybody touch her.", "afraid"]]);
+    },
+  },
+
+  // ── The vest: the Supervisor to his armour, and back ───────────
+
+  /**
+   * He can barely walk: slow, the minute catching him every few steps. He
+   * won't go far ahead of you, and stops while anything that came through
+   * is still up. Done when he's at his locker and you're in the room.
+   */
+  escort: {
+    get waypoint() {
+      return null; // on him, set in update
+    },
+    enter(t, g) {
+      t.warmNpc(g, "supervisorKit");
+      t.supLocker(g, false);
+      const sup = t.supFree(g);
+      // Put back at the lift by a checkpoint, or found there after the minute.
+      if (t._respawning || !sup.active) {
+        sup.x = SUP_AT_LIFT.x;
+        sup.y = SUP_AT_LIFT.y;
+      }
+      sup.dress("supervisor");
+      t.c.wave = 0;
+      t.c.stutter = ESCORT_STUTTER;
+      t.c.rest = route(g.map, sup.x, sup.y, SUP_LOCKER.x, SUP_LOCKER.y);
+      sup.walk(t.c.rest, { speed: ESCORT_SPEED });
+    },
+    update(t, g, dt) {
+      const sup = t.sup;
+      if (!sup) return true;
+      const c = t.c;
+      const p = g.player;
+      // Things come through ahead of him as he gets down the corridor.
+      const next = ESCORT_WAVES[c.wave];
+      if (next && sup.y > next.after) {
+        c.wave++;
+        t.arrive(g, "escort", next.spots, { again: true });
+        if (c.wave === 1) t.say([["ARIA", "Tear, ahead of him. Keep it off him.", "urgent"]]);
+      }
+      const foes = t.alive(g, "escort");
+      const there = Math.hypot(sup.x - SUP_LOCKER.x, sup.y - SUP_LOCKER.y) < 0.45;
+      // The minute catches at him: half a second stopped, then he goes on.
+      if (!sup.frozen && !there && (c.stutter -= g.deltaTime || 0) <= 0) {
+        c.stutter = ESCORT_STUTTER;
+        t.supHold(sup);
+        sup.freeze();
+        g.glitchEffect = Math.max(g.glitchEffect || 0, 0.2);
+        setTimeoutGame(t, 0.5, () => sup.frozen && sup.thaw());
+      }
+      const wait = foes > 0 || t.leftBehind(sup, SUP_LOCKER);
+      if (wait && sup.walking) {
+        t.supHold(sup);
+        sup.faceTo(foes ? g.entities.find((e) => e._tutTag === "escort" && e.type === "enemy" && e.health > 0) ?? p : p);
+        if (!foes && !c.called) {
+          c.called = true;
+          t.say([["SUPERVISOR", "Cadet. With me.", "calm"]]);
+        }
+      } else if (!wait && !sup.walking && !sup.frozen && !there) {
+        if (!c.rest?.length) c.rest = route(g.map, sup.x, sup.y, SUP_LOCKER.x, SUP_LOCKER.y);
+        sup.walk(c.rest, { speed: ESCORT_SPEED });
+      }
+      g.objectiveWaypoint = { x: sup.x, y: sup.y };
+      return there && c.wave >= ESCORT_WAVES.length && foes === 0 && inArea(p, "lockers");
+    },
+    progress: (t, g) => (t.alive(g, "escort") ? `HOSTILES ${t.alive(g, "escort")} · KEEP THEM OFF HIM` : "STAY WITH THE SUPERVISOR"),
+  },
+
+  /**
+   * At his locker: the door open, his coat off, the plate on. One line, and
+   * he's himself again. A moment to watch, not a fight.
+   */
+  kitUp: {
+    enter(t, g) {
+      const sup = t.supFree(g);
+      if (Math.hypot(sup.x - SUP_LOCKER.x, sup.y - SUP_LOCKER.y) > 0.6) {
+        sup.x = SUP_LOCKER.x;
+        sup.y = SUP_LOCKER.y;
+      }
+      sup.path = [];
+      sup.faceTo({ x: SUP_LOCKER.x, y: SUP_LOCKER_CELL.y - 1 });
+      t.c.dressed = false;
+      setTimeoutGame(t, 0.6, () => {
+        t.supLocker(g, true);
+        g.audio.doorOpen?.();
+        // He says it to the locker, getting the plate out.
+        t.say([["SUPERVISOR", "If Rasczak's people couldn't hold in that plate, I'm not going down there without mine.", "calm"]], { cut: true });
+      });
+      setTimeoutGame(t, 2.6, () => {
+        sup.dress("supervisorKit");
+        g.audio.armorClank?.(g.audio.calculatePan?.(sup.x, sup.y, g.player.x, g.player.y, g.player.angle) ?? 0);
+        g.screenShake = Math.max(g.screenShake || 0, 1);
+      });
+      setTimeoutGame(t, 3.2, () => {
+        sup.faceTo(g.player);
+        t.c.dressed = true;
+      });
+    },
+    update: (t) => t.c.dressed && t.scriptIdle() && t.clock > 4,
+  },
+
+  /** Back to Lift B, at his pace now: the suit carries him. Done when he's at the lift and you're in the sim hall. */
+  escortBack: {
+    get waypoint() {
+      return null;
+    },
+    enter(t, g) {
+      const sup = t.supFree(g);
+      sup.dress("supervisorKit");
+      t.supLocker(g, true);
+      t.c.rest = route(g.map, sup.x, sup.y, SUP_AT_LIFT.x, SUP_AT_LIFT.y);
+      sup.walk(t.c.rest, { speed: NPC_TYPES.supervisorKit.speed });
+    },
+    update(t, g) {
+      const sup = t.sup;
+      if (!sup) return true;
+      const p = g.player;
+      const there = Math.hypot(sup.x - SUP_AT_LIFT.x, sup.y - SUP_AT_LIFT.y) < 0.6;
+      const far = t.leftBehind(sup, SUP_AT_LIFT, 2);
+      if (far && sup.walking) t.supHold(sup);
+      else if (!far && !sup.walking && !there) {
+        if (!t.c.rest?.length) t.c.rest = route(g.map, sup.x, sup.y, SUP_AT_LIFT.x, SUP_AT_LIFT.y);
+        sup.walk(t.c.rest, { speed: NPC_TYPES.supervisorKit.speed });
+      }
+      if (there && !sup.walking) sup.faceTo(p);
+      g.objectiveWaypoint = { x: sup.x, y: sup.y };
+      return there && inArea(p, "arena");
     },
   },
 
@@ -1385,7 +1669,7 @@ const LOGIC = {
       if (grid) grid[BREAKER_CELL.y][BREAKER_CELL.x] = RND_WALLS.BREAKER_LIVE;
       t.openDoors(g, "door5", "door13");
     },
-    update: (t, g) => t.near(g, 29.5, 10.0, 2.0),
+    update: (t, g) => inArea(g.player, "arena"),
   },
 
   // ── Evac ───────────────────────────────────────────────────────
@@ -1513,8 +1797,9 @@ export class TutorialSystem {
      * grade }), the order they were done in, and the trial running now.
      */
     this.cert = { done: {}, order: [], briefed: false, run: null };
-    /** The mobility run while it lasts: its gates, shutters and clock. */
+    /** The mobility run while it lasts: its gates, and whether the clock still waits for the start line. */
     this.course = null;
+    this._lowSafe = null;
     /** The holo cover standing in the sim hall: [row, col] cells. */
     this._cover = [];
     /** Lift B's doors: wanted open, and open now. */
@@ -1598,7 +1883,10 @@ export class TutorialSystem {
     if (TUTORIAL_MAP.props) {
       for (const p of TUTORIAL_MAP.props) {
         const pos = validatePropPosition(p.x, p.y, TUTORIAL_MAP.grid, TUTORIAL_MAP.width, TUTORIAL_MAP.height);
-        if (pos) g.entities.push(new Prop(pos.x + 0.5, pos.y + 0.5, p.type));
+        if (!pos) continue;
+        const prop = new Prop(pos.x + 0.5, pos.y + 0.5, p.type);
+        if (p.variant) prop.variant = p.variant;
+        g.entities.push(prop);
       }
     }
 
@@ -1725,7 +2013,7 @@ export class TutorialSystem {
     const now = performance.now();
     this.clock += g.deltaTime || 0;
     this.runClock += g.deltaTime || 0;
-    if (this.cert.run && !this.def?.untimed) this.cert.run.clock += g.deltaTime || 0;
+    if (this.cert.run && !this.def?.untimed && !this.course?.held) this.cert.run.clock += g.deltaTime || 0;
     if (this.firstShotAt == null && this.suitedAt != null && g.shotsFired > 0) this.firstShotAt = this.runClock;
 
     // Respawn collected pickups after a delay. Health and ammo stay shut
@@ -1745,6 +2033,7 @@ export class TutorialSystem {
     this._updateLift(g);
     this._updateNotices(g);
     this._updateGap(g);
+    this._updateBars(g);
     for (const e of g.entities) if (e.type === "npc") e.update(g.deltaTime || 0);
     for (let i = this._timers.length - 1; i >= 0; i--) {
       if (this.clock >= this._timers[i].at) this._timers.splice(i, 1)[0].fn();
@@ -1895,6 +2184,42 @@ export class TutorialSystem {
     n.walk(route(g.map, n.x, n.y, x, y), { then: (m) => face && m.faceTo(face) });
   }
 
+  /**
+   * The Supervisor after 06:47: torn free, in the world, moving again
+   * (for the escort steps, and a checkpoint into them).
+   */
+  supFree(g) {
+    if (!this.sup) this.sup = new Npc(SUP_AT_LIFT.x, SUP_AT_LIFT.y, "supervisor", { name: "Supervisor Simon" });
+    const sup = this.sup;
+    if (!g.entities.includes(sup)) g.entities.push(sup);
+    sup.active = true;
+    sup.thaw();
+    return sup;
+  }
+
+  /**
+   * Whether the Supervisor has got ahead of you on the way to `goal`: you
+   * are further from it than he is, and more than the leash from him. (You
+   * ahead of him is fine: he keeps coming.)
+   */
+  leftBehind(sup, goal, slack = 0) {
+    const p = this.game.player;
+    const behind = Math.hypot(goal.x - p.x, goal.y - p.y) > Math.hypot(goal.x - sup.x, goal.y - sup.y) + 1;
+    return behind && Math.hypot(sup.x - p.x, sup.y - p.y) > ESCORT_LEASH + slack;
+  }
+
+  /** Stop him where he is, keeping the rest of his route for when he goes on. */
+  supHold(sup) {
+    if (sup.path.length) this.c.rest = sup.path.map((q) => [q.x, q.y]);
+    sup.path = [];
+  }
+
+  /** His locker: shut, or open with his coat in it. */
+  supLocker(g, open) {
+    const row = g.map?.grid?.[SUP_LOCKER_CELL.y];
+    if (row) row[SUP_LOCKER_CELL.x] = open ? STATION_WALLS.LOCKERS_SUP_OPEN : STATION_WALLS.LOCKERS_SUP;
+  }
+
   /** One of R&D to their trial's station (or `at`), walking or already there. */
   toStation(g, id, { snap = false, at = null } = {}) {
     if (this.frozen) return;
@@ -1953,6 +2278,7 @@ export class TutorialSystem {
     const id = this.def?.id;
     if (id === "suitUp") return this._openLocker();
     if (id === "breaker" && this._throwBreaker()) return true;
+    if (id === "certify" && this._tellLin()) return true;
     // A door or a secret panel in front of you is the game's to open.
     const ahead = this._cellAhead(1.5);
     if (ahead && (ahead.v === 5 || ahead.v === 6)) return false;
@@ -1988,6 +2314,31 @@ export class TutorialSystem {
     };
     if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", fitting);
     else fitting();
+    return true;
+  }
+
+  /**
+   * At Lin's booth, facing her or her desk, once she has briefed you: the
+   * sim starts (the hub picks the combat trial).
+   */
+  _tellLin() {
+    const g = this.game;
+    if (!this.cert.linBriefed || this.cert.done.combat) return false;
+    const lin = this.people.lin;
+    const p = g.player;
+    const ahead = this._cellAhead(LIN_REACH);
+    const atDesk = ahead && (ahead.v === ARENA_WALLS.BOOTH_DESK || ahead.v === ARENA_WALLS.BOOTH_CONSOLE);
+    let facing = false;
+    if (lin && Math.hypot(lin.x - p.x, lin.y - p.y) < LIN_REACH) {
+      let diff = Math.atan2(lin.y - p.y, lin.x - p.x) - p.angle;
+      diff -= 2 * Math.PI * Math.round(diff / (2 * Math.PI));
+      facing = Math.abs(diff) < 0.7;
+    }
+    if (!atDesk && !facing) return false;
+    this.c.simGo = true;
+    // Whatever was left of her briefing, she skips.
+    this.say([["LIN", "Going live.", "excited"]], { cut: true });
+    g.audio.menuConfirm?.();
     return true;
   }
 
@@ -2117,7 +2468,8 @@ export class TutorialSystem {
     this.cert.run = null;
     const n = this.cert.order.length;
     if (n < PROLOGUE_TRIALS.length) {
-      this.say([["SUPERVISOR", trialComment(trial, result), "calm"]], { keep: true });
+      // The one who ran it grades it, in person (calibration has no grade to give).
+      if (trial?.par != null) this.say([[trial.lead, trialComment(trial, result), "calm"]], { keep: true });
       this.escalate(n);
     }
   }
@@ -2177,7 +2529,8 @@ export class TutorialSystem {
       g.entities.push(e);
       setTimeoutGame(this, 14, () => this.clearTag(g, "oddity"));
       for (const k of [0, 0.9, 1.8]) setTimeoutGame(this, k, () => this.flicker(g, 0.3));
-      setTimeoutGame(this, 1.2, () => !this.frozen && this.say(odd.lines, { keep: true }));
+      // Lin says it if you're in her hall; anywhere else, ARIA hears it on the floor channel.
+      setTimeoutGame(this, 1.2, () => !this.frozen && this.say(inArea(g.player, "arena") ? odd.lines : odd.away, { keep: true }));
     }
   }
 
@@ -2216,35 +2569,21 @@ export class TutorialSystem {
     return `${name} was your best. It'll do. The Bureau grades on a curve.`;
   }
 
-  /** The hub's start gate in the lobby, lit, until the run is done. */
-  startGate(g) {
-    if (g.entities.some((e) => e._tutTag === "startGate")) return;
-    const gate = new Prop(RUN_GATES[0].x, RUN_GATES[0].y, "course_gate");
-    gate.gate = { num: 0, state: "next" };
-    gate._tutTag = "startGate";
-    g.entities.push(gate);
-  }
-
-  /** The run begins (or picks up at gate `from` after a checkpoint): its gates and shutters go up. */
+  /** The run begins (or picks up at gate `from` after a checkpoint): its gates go up. */
   startCourse(g, from = 1) {
     this.endCourse(g);
-    this.clearTag(g, "startGate");
-    const gates = RUN_GATES.slice(0, -1).map(({ x, y }, i) => {
+    const gates = RUN_GATES.map(({ x, y }, i) => {
       const gate = new Prop(x, y, "course_gate");
       gate.gate = { num: i, state: "ahead" };
       gate._tutTag = "gates";
       g.entities.push(gate);
       return gate;
     });
-    for (const s of SHUTTERS) {
-      const sh = new Prop(s.x + 0.5, s.y + 0.5, "shutter");
-      sh._tutTag = "gates";
-      g.entities.push(sh);
-    }
-    this.course = { gate: from, gates, safe: { x: g.player.x, y: g.player.y }, warned: {} };
+    // Until the start line, the clock holds (update()).
+    this.course = { gate: from, gates, held: from === 0 };
   }
 
-  /** The run is over: gates and shutters come down. */
+  /** The run is over: its gates come down. */
   endCourse(g) {
     this.clearTag(g, "gates");
     this.course = null;
@@ -2252,7 +2591,8 @@ export class TutorialSystem {
 
   /**
    * One tick of the run, up to gate `last`: the next gate lit and pointed
-   * at, the shutters only gone under low. Returns true once `last` is run.
+   * at. A gate is a line across its lane; you are through it anywhere on
+   * that line. Returns true once `last` is run.
    */
   runCourse(g, last) {
     const c = this.course;
@@ -2261,32 +2601,17 @@ export class TutorialSystem {
     const gate = RUN_GATES[c.gate];
     g.objectiveWaypoint = gate;
     c.gates.forEach((prop, i) => {
-      const finish = c.gate === RUN_GATES.length - 1 && i === 0;
-      prop.gate.state = finish ? "next" : i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
-      prop.gate.label = finish ? "END" : undefined;
+      prop.gate.state = i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
+      prop.gate.label = i === RUN_GATES.length - 1 && i >= c.gate ? "END" : undefined;
     });
-    // A shutter stops you unless you go under it: sliding, or crouched.
-    const low = p.isSliding || p.isCrouching || p.crouchBlend > 0.6;
-    const under = SHUTTERS.find((s) => Math.floor(p.x) === s.x && Math.floor(p.y) === s.y);
-    if (under && !low) {
-      p.x = c.safe.x;
-      p.y = c.safe.y;
-      g.screenShake = Math.max(g.screenShake || 0, 1.5);
-      g.audio.menuBack?.();
-      if (!c.warned.shutter) {
-        c.warned.shutter = true;
-        this.say([["ARIA", "Under it, not through it. Slide, or crouch and walk.", "warm"]]);
-      }
-    } else if (!under) {
-      c.safe = { x: p.x, y: p.y };
-    }
-    if (this.near(g, gate.x, gate.y, RUN_GATE_R)) {
+    if (p.x >= gate.x0 && p.x < gate.x1 && Math.abs(p.y - gate.y) < RUN_GATE_DY) {
       g.audio.menuConfirm?.();
-      if (c.gate >= last) {
-        c.gate++;
-        return true;
+      if (c.gate === 0) {
+        c.held = false;
+        this.say([["VALE", "Go!", "excited"]], { cut: true });
       }
       c.gate++;
+      if (c.gate > last) return true;
     }
     return false;
   }
@@ -2296,31 +2621,69 @@ export class TutorialSystem {
     const c = this.course;
     const time = (this.cert.run?.clock ?? 0).toFixed(1);
     if (!c) return `${time} s`;
+    if (c.held) return "TO THE START LINE · TOP OF LANE ONE";
     const n = Math.min(c.gate, RUN_GATES.length - 1);
     return `GATE ${n} / ${RUN_GATES.length - 1} · ${time} s · PAR ${PROLOGUE_TRIALS.find((tr) => tr.id === "mobility").par} s`;
   }
 
   /**
-   * The atrium bridge's missing section: walk into it and you are set back
-   * on the near side. Mid-dash (or carried by one just ended) you are over.
+   * The training hall's bars and tunnel: only low gets under them (sliding,
+   * or crouched). Standing in one, you are back where you last were clear,
+   * or low: stand up in the tunnel and you stay put until you crouch again.
+   */
+  _updateBars(g) {
+    const p = g.player;
+    const under = LOW_CELLS.has(`${Math.floor(p.x)},${Math.floor(p.y)}`);
+    const low = p.isSliding || p.isCrouching || p.crouchBlend > 0.6;
+    if (!under || low) {
+      this._lowSafe = { x: p.x, y: p.y };
+      return;
+    }
+    if (!this._lowSafe) return;
+    p.x = this._lowSafe.x;
+    p.y = this._lowSafe.y;
+    g.screenShake = Math.max(g.screenShake || 0, 1.5);
+    g.audio.menuBack?.();
+    if (!this._barWarned) {
+      this._barWarned = true;
+      this.say([["VALE", "Under it, not through it. Slide, or crouch and walk.", "warm"]]);
+    }
+  }
+
+  /**
+   * Floor you only cross mid-dash (GAPS): walk into it and you are set back
+   * on the side you came from. Mid-dash, or carried by one just ended, you
+   * are over.
    */
   _updateGap(g) {
     const p = g.player;
-    if (p.isDashing) this._dashAt = this.clock;
-    const inGap = Math.floor(p.x) === ATRIUM_GAP.x && Math.floor(p.y) >= ATRIUM_GAP.y0 && Math.floor(p.y) <= ATRIUM_GAP.y1;
-    if (!inGap) {
-      this._gapSide = p.x < ATRIUM_GAP.x ? -1 : 1;
-      return;
-    }
-    if (p.isDashing || this.clock - (this._dashAt ?? -9) < DASH_CARRY) return;
-    // Back to the edge you came from, a beat to collect yourself.
-    p.x = this._gapSide > 0 ? ATRIUM_GAP.x + 1.4 : ATRIUM_GAP.x - 0.4;
-    g.screenShake = Math.max(g.screenShake || 0, 3);
-    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.3);
-    g.audio.menuBack?.();
-    if (!this._gapWarned) {
-      this._gapWarned = true;
-      this.say([["ARIA", "Caught you. Don't walk it: dash it, right at the edge.", "worried"]]);
+    if (p.isDashing) this._dashAt = this.runClock;
+    const cx = Math.floor(p.x);
+    const cy = Math.floor(p.y);
+    this._gapSide ??= {};
+    for (const [i, gap] of GAPS.entries()) {
+      const inGap = cx >= gap.x0 && cx <= gap.x1 && cy >= gap.y0 && cy <= gap.y1;
+      const lo = gap.axis === "x" ? gap.x0 : gap.y0;
+      const hi = gap.axis === "x" ? gap.x1 : gap.y1;
+      const at = gap.axis === "x" ? p.x : p.y;
+      if (!inGap) {
+        this._gapSide[i] = at < lo ? -1 : 1;
+        continue;
+      }
+      if (p.isDashing || this.runClock - (this._dashAt ?? -9) < DASH_CARRY) continue;
+      // Back to the edge you came from, a beat to collect yourself.
+      const back = this._gapSide[i] > 0 ? hi + 1.4 : lo - 0.4;
+      if (gap.axis === "x") p.x = back;
+      else p.y = back;
+      g.screenShake = Math.max(g.screenShake || 0, 3);
+      g.glitchEffect = Math.max(g.glitchEffect || 0, 0.3);
+      g.audio.menuBack?.();
+      const key = gap.pit ? "pit" : "gap";
+      this._gapWarned ??= {};
+      if (!this._gapWarned[key]) {
+        this._gapWarned[key] = true;
+        this.say([gap.pit ? ["VALE", "Into the foam. That's time. Dash it, right at the edge.", "calm"] : ["ARIA", "Caught you. Don't walk it: dash it, right at the edge.", "worried"]]);
+      }
     }
   }
 
@@ -2379,7 +2742,10 @@ export class TutorialSystem {
     // A trial run from its first step again is timed from there.
     const trial = PROLOGUE_STEPS[cp.step]?.trial;
     if (trial) this._beginTrial(trial);
+    // A step that stages people (the escort) puts them back where it starts.
+    this._respawning = true;
     this._enter(cp.step);
+    this._respawning = false;
     // The beat's lines already played once; ARIA just picks you back up.
     this.script = [];
     this.say([["ARIA", this.deaths === 1 ? "Suit rebooted you. That's what it's for. Once more, from the top of this one." : "Back on your feet. Again. I'm not counting. I'm absolutely counting.", "worried"]]);
@@ -2391,7 +2757,7 @@ export class TutorialSystem {
    * Queue lines to play in order once the comms are free. `cut` drops what
    * was still to come and cuts off the line in progress (an alarm).
    */
-  say(lines, { cut = false, keep = false } = {}) {
+  say(lines, { cut = false, keep = false, first = false } = {}) {
     const g = this.game;
     if (!lines) return;
     if (cut) {
@@ -2403,7 +2769,10 @@ export class TutorialSystem {
     // Each line remembers its step: a fast player outruns the story, and a
     // line about the range is no use in the gym (see _updateScript). A
     // `keep` line (the sheet, the calibration's oddities) is never stale.
-    for (const line of lines) this.script.push({ line, step: keep ? null : this.step });
+    // `first`: someone in front of you, ahead of the queue (not over the line being said).
+    const queued = lines.map((line) => ({ line, step: keep ? null : this.step }));
+    if (first) this.script.unshift(...queued);
+    else this.script.push(...queued);
   }
 
   /** Whether every queued line has been said and the last has finished. */
@@ -2425,7 +2794,7 @@ export class TutorialSystem {
     // play, not two places in it.)
     const recent = this._recentSteps ?? [];
     const stale = (s) => s !== null && s !== this.step && !recent.includes(s);
-    while (this.script.length && stale(this.script[0].step)) this.script.shift();
+    while (this.script.length && (stale(this.script[0].step) || !this._audible(this.script[0].line[0]))) this.script.shift();
     if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
     const [speaker, text, emotion, opts] = this.script.shift().line;
     const style = SPEAKER_STYLE[speaker] ?? SPEAKER_STYLE.ARIA;
@@ -2444,6 +2813,20 @@ export class TutorialSystem {
     });
     this._ourLine = id;
     this._lineGap = 0.35;
+  }
+
+  /**
+   * Whether you can hear R&D's people from where you are: they talk in
+   * person, with no suit channel, so a line of theirs you have walked away
+   * from (out of their room, and out of earshot) goes unsaid.
+   */
+  _audible(speaker) {
+    const id = EARSHOT_OF[speaker];
+    const n = id && this.people[id];
+    if (!n?.active) return true;
+    const p = this.game.player;
+    if (Math.hypot(n.x - p.x, n.y - p.y) < EARSHOT) return true;
+    return Object.keys(AREAS).some((a) => inArea(p, a) && inArea(n, a));
   }
 
   // ── Helpers the steps use ───────────────────────────────────────
@@ -2509,10 +2892,11 @@ export class TutorialSystem {
    * it drops). Spots are [x, y, type, via?]; `lead` overrides how long the
    * warning runs. Each joins the world as it steps out, unable to fire for
    * a moment; until then it is pending, and alive() counts it, so a step
-   * can't be cleared while any are still coming.
+   * can't be cleared while any are still coming. `again`: another lot for a
+   * step that has had one (the escort's, as he gets down the corridor).
    */
-  arrive(g, tag, spots, { lead = null, make = makeHostile, via = "tear" } = {}) {
-    if (this.c.spawned) return;
+  arrive(g, tag, spots, { lead = null, make = makeHostile, via = "tear", again = false } = {}) {
+    if (this.c.spawned && !again) return;
     this.c.spawned = true;
     for (const [x, y, type, how = via] of spots) {
       const e = make(x, y, type);
@@ -2545,7 +2929,7 @@ export class TutorialSystem {
     if ((this.c.volley -= g.deltaTime || 0) > 0) return;
     this.c.volley = DRILL_VOLLEY;
     const p = g.player;
-    if (!inSimHall(p)) return;
+    if (!inArea(p, "arena")) return;
     const from = g.entities.find((e) => e._tutTag === "coverDrill" && e.type === "enemy" && e.health > 0);
     if (!from) return;
     const a = Math.atan2(p.y - from.y, p.x - from.x);
@@ -2674,9 +3058,9 @@ export class TutorialSystem {
     // Mid-step, mid-stamp, mid-pour: each stops in the instant, not after it.
     for (const id of Object.keys(PEOPLE)) this.person(g, id).freeze();
     this._stillLife(g);
-    // The Supervisor stops with them, then tears free: his old C-series
-    // plate, like the squads', half takes the anchor. It's why he can go
-    // down to them, and the first sign of what "half held" means.
+    // The Supervisor stops with them, then tears free: he wore one of R&D's
+    // resist vests under his shirt, not trusting the calibration, and it
+    // barely held. The first sign of what "half held" means.
     const sup = this.sup;
     if (sup?.active) {
       sup.freeze();
@@ -2687,7 +3071,8 @@ export class TutorialSystem {
         g.audio.powerFlicker?.();
         this.say([
           ["ARIA", "The Supervisor's moving. Barely.", "afraid"],
-          ["SUPERVISOR", "Old plate under the coat. C-series. Half of it still takes.", "afraid"],
+          ["SUPERVISOR", "Resist vest. One of Orr's, under the shirt. I didn't trust their calibration.", "afraid"],
+          ["SUPERVISOR", "It barely held.", "afraid"],
         ]);
       });
     }
@@ -3081,11 +3466,13 @@ export class TutorialSystem {
   }
 }
 
-/** The Supervisor's word on a trial just finished, after its grade. */
+/** The word on a trial just finished, from whoever ran it, after its grade. */
 function trialComment(trial, r) {
   const name = trial.name.charAt(0) + trial.name.slice(1).toLowerCase();
-  if (r.grade === "PASS") return `${name}: pass. Orr's happy, which is a first.`;
-  if (r.grade === "S" || r.grade === "A") return `${name}: ${r.grade}. Don't let it go to your head.`;
+  const good = r.grade === "S" || r.grade === "A";
+  if (trial.lead === "VALE") return good ? `That's an ${r.grade}. I'm putting you on the board.` : `${r.grade}. You'll get faster. Everyone does.`;
+  if (trial.lead === "LIN") return good ? `Combat: ${r.grade}. The sim's sulking.` : `Combat: ${r.grade}. It's on the sheet. Go on.`;
+  if (good) return `${name}: ${r.grade}. Don't let it go to your head.`;
   return `${name}: ${r.grade}. It's on the sheet now, Cadet. Next.`;
 }
 
