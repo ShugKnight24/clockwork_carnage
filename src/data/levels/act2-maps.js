@@ -24,6 +24,7 @@ import {
   LAYER,
 } from "./map-helpers.js";
 import { TUTORIAL_MAP } from "./tutorial.js";
+import { dressStation } from "./station-dressing.js";
 
 const W = 60;
 const H = 60;
@@ -998,8 +999,8 @@ function buildFoundry() {
   };
 }
 
-/** Every Act II map, built once, keyed by the id its level entry names. */
-export const ACT2_MAPS = {
+/** Every Act II map's floor plan as built, before it is dressed. */
+export const ACT2_FLOOR_PLANS = {
   evac_shafts: buildEvacShafts(),
   salvage_deck: buildSalvageDeck(),
   maintenance_spine: buildMaintenanceSpine(),
@@ -1008,3 +1009,12 @@ export const ACT2_MAPS = {
   precinct: buildPrecinct(),
   foundry: buildFoundry(),
 };
+
+/**
+ * Every Act II map, dressed for the place it is (station-dressing.js; the
+ * Precinct is the prologue's rooms already), keyed by the id its level
+ * entry names.
+ */
+export const ACT2_MAPS = Object.fromEntries(
+  Object.entries(ACT2_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);

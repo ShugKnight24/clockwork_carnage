@@ -21,6 +21,7 @@ import {
   lowTile,
   LAYER,
 } from "./map-helpers.js";
+import { dressStation } from "./station-dressing.js";
 
 // ── LEVEL 1: Chronos Station — Entry ─────────────────────────────
 // Stone walls (1). Player breaches via south airlock, pushes north
@@ -1874,8 +1875,8 @@ function buildParadoxCore() {
   };
 }
 
-/** Every station map, built once, keyed by the id levels name it by. */
-export const STATION_MAPS = {
+/** Every station map's floor plan as built, before it is dressed. */
+export const STATION_FLOOR_PLANS = {
   entry: buildEntry(),
   checkpoint: buildCheckpoint(),
   research: buildResearchWing(),
@@ -1886,3 +1887,11 @@ export const STATION_MAPS = {
   nexus: buildNexus(),
   core: buildParadoxCore(),
 };
+
+/**
+ * Every station map, dressed for the floor the story says it is
+ * (station-dressing.js), keyed by the id levels name it by.
+ */
+export const STATION_MAPS = Object.fromEntries(
+  Object.entries(STATION_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);

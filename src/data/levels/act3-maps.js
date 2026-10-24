@@ -15,6 +15,7 @@
 // coordinates before the level's rotation.
 // ═══════════════════════════════════════════════════════════════════
 import { STATION_MAPS } from "./station-maps.js";
+import { dressStation } from "./station-dressing.js";
 import {
   createGrid,
   createHeights,
@@ -956,8 +957,8 @@ function buildCoreBroken() {
   return m;
 }
 
-/** Every Act III map, built once, keyed by the id its level names it by. */
-export const ACT3_MAPS = {
+/** Every Act III map's floor plan as built, before it is dressed. */
+export const ACT3_FLOOR_PLANS = {
   rewritten_wing: buildRewrittenWing(),
   server_siege: buildServerSiege(),
   reactor_overload: buildReactorOverload(),
@@ -966,3 +967,8 @@ export const ACT3_MAPS = {
   engine: buildEngine(),
   core_broken: buildCoreBroken(),
 };
+
+/** Every Act III map, dressed for the place it is (station-dressing.js). */
+export const ACT3_MAPS = Object.fromEntries(
+  Object.entries(ACT3_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);

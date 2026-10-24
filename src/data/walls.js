@@ -79,6 +79,11 @@ for (let id = 40; id <= 119; id++) {
     { r: 40, g: 70, b: 96 },
   ][room];
 }
+// The campaign floors' rooms (src/data/levels/rooms/precinct.js, 120-146):
+// the custody rooms in the station's blue-grey, the labs and plant warmer.
+for (let id = 120; id <= 146; id++) {
+  WALL_COLORS[id] ??= (id >= 129 && id <= 134) || id === 146 ? { r: 70, g: 84, b: 96 } : { r: 60, g: 66, b: 80 };
+}
 
 // Entity types for map placement
 // E = enemy spawn, P = player start, H = health, A = ammo, W = weapon pickup

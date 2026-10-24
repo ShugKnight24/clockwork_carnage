@@ -248,7 +248,11 @@ export class CampaignManager {
     const act = getAct(actId);
     const entry = act && getActLevel(actId, index);
     if (!r?.prewarmEnv || !entry) return;
-    const run = () => r.prewarmEnv(act.palette, entry.env);
+    // The map's own walls too (its dressed rooms): a floor with thirty of
+    // them otherwise bakes them all in its first frame.
+    const walls = new Set();
+    for (const row of campaignMap(entry)?.grid ?? []) for (const v of row) if (v >= 10) walls.add(v);
+    const run = () => r.prewarmEnv(act.palette, entry.env, [...walls]);
     if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1500 });
     else setTimeout(run, 300);
   }
