@@ -1019,7 +1019,7 @@ function renderCourseGate(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
     ctx.font = `900 ${Math.round(signH * 0.7)}px Arial, Helvetica, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(st === "done" ? "✓" : num === 0 ? "GO" : String(num), sx, sy + signH * 0.55);
+    ctx.fillText(entity?.gate?.label ?? (st === "done" ? "✓" : num === 0 ? "GO" : String(num)), sx, sy + signH * 0.55);
   }
   ctx.restore();
 }

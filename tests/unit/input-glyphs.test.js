@@ -319,7 +319,7 @@ describe("prompt text", () => {
     const at = (id) => pad[prologueStepIndex(id)];
     expect(at("suitUp").hint).toContain("press X");
     expect(at("shotgun").hint).toContain("press Y");
-    expect(at("crouch").hint).toContain("Hold B");
+    expect(at("slide").hint).toContain("tap B");
     expect(at("dash").hint).toContain("Tap A");
     expect(at("chrono").hint).toContain("Hold LB");
     expect(at("suitUp").pad).toBe("xbox");

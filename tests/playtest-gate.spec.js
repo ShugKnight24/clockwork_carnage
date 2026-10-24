@@ -15,6 +15,9 @@ test.describe("Three-Player Playtest Gate", () => {
     page.on("pageerror", (err) => pageErrors.push(err.message));
 
     await loadGame(page);
+    // The test runner is imported after the debug bridge (js/main.js), so
+    // loadGame's ccDebug wait does not cover it.
+    await page.waitForFunction(() => window.ccTest != null, { timeout: 10_000 });
     const report = await page.evaluate(() =>
       window.ccTest.gate({
         players: ["scout", "striker", "gremlin"],

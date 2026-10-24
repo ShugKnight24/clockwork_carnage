@@ -1,11 +1,18 @@
 /**
  * The prologue: the tutorial as the game's first chapter.
  *
- * Seven beats across Chronos Station HQ on the morning of the breach, one or
- * two mechanics each with room to practise them in a real fight before the
- * next arrives. Each step has its instruction card (title + hint, per input
- * device) and the dialogue that carries the story while you play; the logic
- * that drives each step lives in js/tutorial-system.js, keyed by `id`.
+ * Certification Day at Chronos Station HQ, the morning of the breach. After
+ * the locker room, R&D hands the cadet four trials for the new suit, done in
+ * any order from a certification sheet (the hub): weapons at the range, a
+ * mobility run across the floor, combat in the sim hall, telemetry in R&D's
+ * rig. Each finished trial makes the Engine's calibration a little stranger;
+ * after the fourth, 06:47. Then the breach, and the way out.
+ *
+ * Each step has its instruction card (title + hint, per input device) and
+ * the dialogue that carries the story while you play; the logic that drives
+ * each step lives in js/tutorial-system.js, keyed by `id`. A trial's steps
+ * carry its `trial` id: the hub starts a trial at its first step, and its
+ * last step hands back to the hub.
  *
  * Pure data: the copy is read by the card renderer (src/ui/tutorial-ui.js)
  * and the unit tests, neither of which should pull in the game.
@@ -14,14 +21,28 @@
 /** The chapter's beats, in order. A beat's first step is its checkpoint. */
 export const PROLOGUE_BEATS = [
   { id: "clockingIn", title: "CLOCKING IN" },
-  { id: "range", title: "THE RANGE" },
-  { id: "course", title: "THE COURSE" },
-  { id: "lab", title: "KNOW YOUR ENEMY" },
-  { id: "sim", title: "SIMULATION" },
+  { id: "certify", title: "CERTIFICATION DAY" },
+  { id: "weapons", title: "TRIAL · WEAPONS" },
+  { id: "mobility", title: "TRIAL · MOBILITY" },
+  { id: "combat", title: "TRIAL · COMBAT" },
+  { id: "telemetry", title: "TRIAL · TELEMETRY" },
+  { id: "sixFortySeven", title: "SIX FORTY-SEVEN" },
   { id: "breach", title: "BREACH" },
   { id: "borrowedTime", title: "BORROWED TIME" },
   { id: "lightsOut", title: "LIGHTS OUT" },
   { id: "evac", title: "LIFT B" },
+];
+
+/**
+ * The certification sheet: the four trials, where each starts, and the time
+ * that earns each grade (`par`, seconds; null: graded pass or fail). Done in
+ * any order from the hub.
+ */
+export const PROLOGUE_TRIALS = [
+  { id: "weapons", name: "WEAPONS", where: "THE RANGE", par: 75 },
+  { id: "mobility", name: "MOBILITY", where: "LOBBY START GATE", par: 55 },
+  { id: "combat", name: "COMBAT", where: "SIM HALL", par: 110 },
+  { id: "telemetry", name: "TELEMETRY", where: "R&D BAY", par: null },
 ];
 
 const ARIA = "ARIA";
@@ -33,17 +54,41 @@ const OFF = "OFFICER";
 const RASCZAK = "LT. RASCZAK";
 /** Sergeant Kael, on the squad that morning: Act II finds him holding the Precinct. */
 const KAEL = "SGT. KAEL";
+/** R&D: Dr. Orr runs the suit programme, Lin the sim hall, Vale the timing. */
+const ORR = "DR. ORR";
+const LIN = "LIN";
+const VALE = "VALE";
+
+/**
+ * The calibration going wrong, one oddity for each trial you finish (not on
+ * a timer), wherever you happen to be. `pa` is what the station announces;
+ * the logic stages the rest (js/tutorial-system.js escalate()). The fourth
+ * trial's is the breach itself.
+ */
+export const PROLOGUE_ODDITIES = [
+  // 1: the corridor clocks read 06:47 for a moment, then right again. Nobody notices.
+  { pa: "Engineering: calibration thirty-one percent. Thank you for your patience." },
+  // 2: the PA says it again, word for word; Mendez pours the same coffee twice.
+  { repeat: true, lines: [[ARIA, "Did he just...?", "curious"]], away: [[ARIA, "Did the PA just say that twice?", "curious"]] },
+  // 3: a hologram the sim hall never loaded; the lights stutter on the Engine's beat.
+  {
+    lines: [
+      [LIN, "Uh. Sim hall just loaded a profile nobody asked for.", "worried"],
+      [SUP, "Sensor fault.", "worried", { radio: true }],
+    ],
+  },
+];
 
 /**
  * Dialogue: [speaker, text, emotion?, { radio }?]. The Supervisor speaks in
- * person while he is with you, and over the radio (`radio: true`) when not.
- * Lines play in order, one after the
- * other, from when their step begins; a step's lines wait for the last
- * step's to finish unless the step says `cut: true` (an alarm cuts in).
+ * person while he is near you, and over the suit channel when not (or with
+ * `radio: true`). Lines play in order, one after the other, from when their
+ * step begins; a step's lines wait for the last step's to finish unless the
+ * step says `cut: true` (an alarm cuts in).
  *
- * Events: [seconds into the step, kind, text?], the morning going wrong a
- * little at a time around the drills: "pa" (a station announcement),
- * "flicker" (the lights stutter) and "tremor" (the floor shudders).
+ * Events: [seconds into the step, kind, text?]: "pa" (a station
+ * announcement), "flicker" (the lights stutter) and "tremor" (the floor
+ * shudders).
  *
  * Hints: `key` for keyboard and mouse, `touch` for touch (no key names),
  * `pad(b)` for a controller, where b(action) is that pad's button legend.
@@ -123,10 +168,28 @@ export const PROLOGUE_STEPS = [
     events: [[16, "flicker"]],
   },
 
-  // ── 2. THE RANGE ─────────────────────────────────────────────────
+  // ── 2. CERTIFICATION DAY: the hub ────────────────────────────────
+  {
+    id: "certify",
+    beat: 1,
+    title: "CERTIFICATION DAY",
+    color: "#22e6c0",
+    hint: "Four trials, any order. The sheet keeps your grades; the marker shows the nearest trial you haven't done.",
+    // R&D's welcome, said once (the first time the sheet comes up), while
+    // you are free to start: the pistol is on the first bench.
+    brief: [
+      [ORR, "Cadet. Nadia Orr, R&D. That suit is mine, so be nice to it.", "warm"],
+      [ORR, "Four trials by noon. Weapons here, a run from the lobby, the sim hall with Lin, then telemetry with me. Any order.", "calm"],
+      [VALE, "I'm timing your run. Start gate's in the lobby.", "happy"],
+      [SUP, "Range is right here, Cadet. Pistol's on the first bench.", "calm"],
+    ],
+  },
+
+  // ── 3. TRIAL: WEAPONS (the range) ────────────────────────────────
   {
     id: "pistol",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "ARM YOURSELF",
     color: "#ff6600",
     hint: "Walk over the Chrono Pistol on the first bench to pick it up.",
@@ -134,7 +197,8 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "fire",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "PUT ROUNDS ON TARGET",
     color: "#ff8844",
     hint: {
@@ -143,11 +207,11 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `Pull ${b("fire")} to fire. Destroy the training drones at the end of the lane.`,
     },
     lines: [[ARIA, "Holo-drones. They can't shoot back. Enjoy that while it lasts.", "happy"]],
-    events: [[9, "tremor"]],
   },
   {
     id: "ads",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "AIM DOWN SIGHTS",
     color: "#66eeff",
     hint: {
@@ -158,23 +222,24 @@ export const PROLOGUE_STEPS = [
     lines: [
       [SUP, "Long lane. Hip fire won't cut it. Use the sights.", "calm"],
       [ARIA, "Every kill counts while you're aimed in. Every miss, I'm writing down.", "happy"],
-      [ARIA, "Did you feel that, before? The floor. Probably the range's air handlers. Probably.", "curious"],
     ],
   },
   {
     id: "moving",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "MOVING TARGETS — GO FOR THE HEAD",
     color: "#ffcc33",
     hint: "Holo-dummies, and they move. Lead them, and aim for the head: a headshot does over double damage and drops one in a single round.",
     lines: [
       [SUP, "Real targets don't hold still and they don't fall over politely. Head shots.", "calm"],
-      [ARIA, "Listen for the crack. That's the sound of a headshot. The thump after it is the kill.", "curious"],
+      [ARIA, "Listen for the crack. That's the sound of a headshot.", "curious"],
     ],
   },
   {
     id: "shotgun",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "RIGHT TOOL — THE SHOTGUN",
     color: "#ff6600",
     hint: {
@@ -182,142 +247,142 @@ export const PROLOGUE_STEPS = [
       touch: "Pick up the Temporal Shotgun, swipe the weapon panel to switch to it, and clear the close targets.",
       pad: (b) => `Pick up the Temporal Shotgun, press ${b("weaponNext")} to switch to it, and clear the close targets.`,
     },
-    lines: [
-      [SUP, "Shotgun's for when they're close enough to smell. Which, in this job, is often.", "calm"],
-      [ARIA, "Pistol for reach, shotgun for faces. You'll find more on the way. I'll tell you which end is which.", "happy"],
-    ],
+    lines: [[SUP, "Shotgun's for when they're close enough to smell. Which, in this job, is often.", "calm"]],
   },
+  // The armorer's reload drill goes here (active reload): a hook, no card
+  // yet. It completes as soon as it starts.
+  { id: "reloadDrill", beat: 2, trial: "weapons" },
   {
     id: "ammo",
-    beat: 1,
+    beat: 2,
+    trial: "weapons",
     title: "RESUPPLY",
     color: "#44ff88",
     hint: "Your ammo is under the weapon readout. Grab the ammo crate by the window before you leave.",
-    lines: [
-      [ARIA, "Rounds don't grow on trees. They grow in crates. Take that one.", "warm"],
-      [SUP, "Certified for shooting. Next, the gym. And Cadet: the suit's faster than you are. Try to keep up with it.", "calm"],
-    ],
-    events: [[3, "pa", "Calibration cycle one, complete. Cycle two in five minutes."]],
+    lines: [[ARIA, "Rounds don't grow on trees. They grow in crates. Take that one.", "warm"]],
   },
 
-  // ── 3. THE COURSE ────────────────────────────────────────────────
-  {
-    id: "toGym",
-    beat: 2,
-    title: "THE GYM",
-    color: "#ff44ff",
-    hint: "Head up the corridor to the fitness centre.",
-    lines: [
-      [ARIA, "The Bureau has a gym. Your file says you know where it is. Your file is generous.", "happy"],
-      [ARIA, "Funny. The station's drawing twice its normal power. Everything's going downstairs.", "curious"],
-    ],
-  },
+  // ── 4. TRIAL: MOBILITY (a marked run across the floor) ───────────
+  // One run, timed from the start gate in the lobby to the same gate:
+  // up the corridor, through the gym, the office, down the spine, across
+  // the atrium's bridge and home. Each step is a stretch of it with the
+  // move it needs; the clock runs across all four.
   {
     id: "sprint",
-    beat: 2,
-    title: "SPRINT — WATCH YOUR STAMINA",
+    beat: 3,
+    trial: "mobility",
+    title: "SPRINT — PACE THE STRAIGHTS",
     color: "#ff44ff",
     hint: {
-      key: (k) => `Hold ${k("sprint")} to sprint. Sprinting burns the stamina bar; stop and it refills.`,
-      touch: "Tap RUN to sprint. Sprinting burns the stamina bar; stop and it refills.",
-      pad: (b) => `Hold ${b("sprint")} to sprint. Sprinting burns the stamina bar; stop and it refills.`,
+      key: (k) => `Run the gates in order. Hold ${k("sprint")} to sprint: it drains the stamina bar under your health. Ease off before it's empty and it comes back.`,
+      touch: "Run the gates in order. Tap RUN to sprint: it drains the stamina bar under your health. Ease off before it's empty and it comes back.",
+      pad: (b) => `Run the gates in order. Hold ${b("sprint")} to sprint: it drains the stamina bar under your health. Ease off before it's empty and it comes back.`,
     },
-    lines: [[ARIA, "Run until you feel it. Stamina's the bar under your health. Empty, and you're walking.", "warm"]],
-  },
-  {
-    id: "crouch",
-    beat: 2,
-    title: "CROUCH — STAY LOW",
-    color: "#66dd66",
-    hint: {
-      key: (k) => `Hold ${k("crouch")} to crouch and move a few steps. Smaller target, quieter feet, steadier aim.`,
-      touch: "Hold CROUCH and move a few steps. Smaller target, quieter feet, steadier aim.",
-      pad: (b) => `Hold ${b("crouch")} and move a few steps. Smaller target, quieter feet, steadier aim.`,
-    },
-    lines: [[ARIA, "Low and slow. When it's raining bullets, be shorter than the rain.", "calm"]],
+    lines: [
+      [VALE, "Clock's running. The next gate lights up.", "happy"],
+      [ARIA, "Long straight. Don't spend it all at once.", "warm"],
+    ],
   },
   {
     id: "slide",
-    beat: 2,
-    title: "SLIDE — KEEP YOUR MOMENTUM",
+    beat: 3,
+    trial: "mobility",
+    title: "SLIDE UNDER THE SHUTTERS",
     color: "#66ff99",
     hint: {
-      key: (k) => `While sprinting, tap ${k("crouch")} to slide. Slide twice.`,
-      touch: "While running, tap CROUCH to slide. Slide twice.",
-      pad: (b) => `While sprinting, tap ${b("crouch")} to slide. Slide twice.`,
+      key: (k) => `The calibration has the shutters half down. Sprint at one and tap ${k("crouch")} to slide under it, or hold ${k("crouch")} and walk it, slower.`,
+      touch: "The calibration has the shutters half down. Run at one and tap CROUCH to slide under it, or hold CROUCH and walk it, slower.",
+      pad: (b) => `The calibration has the shutters half down. Sprint at one and tap ${b("crouch")} to slide under it, or hold ${b("crouch")} and walk it, slower.`,
     },
-    lines: [[ARIA, "Momentum is armour. A sliding target is a missed target.", "excited"]],
+    lines: [[VALE, "Shutters are stuck for the calibration. Go under.", "calm"]],
   },
   {
     id: "dash",
-    beat: 2,
-    title: "PHASE DASH — BLINK",
+    beat: 3,
+    trial: "mobility",
+    title: "PHASE DASH — CROSS THE GAP",
     color: "#ff44ff",
     hint: {
-      key: (k) => `Press ${k("dash")}, or double-tap a movement key, to phase-dash the way you are moving. Dash twice. Mid-dash, hits pass through you; it costs stamina.`,
-      touch: "Double-tap a direction on the stick to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.",
-      pad: (b) => `Tap ${b("dash")} to phase-dash. Dash twice. Mid-dash, hits pass through you; it costs stamina.`,
+      key: (k) => `The bridge is out in the middle. Run at the gap and press ${k("dash")}, or double-tap forward, at the edge: the dash carries you over.`,
+      touch: "The bridge is out in the middle. Run at the gap and double-tap forward on the stick at the edge: the dash carries you over.",
+      pad: (b) => `The bridge is out in the middle. Tap ${b("dash")} at its edge as you run at it: the dash carries you over.`,
     },
-    lines: [[ARIA, "The suit can skip you a few metres through space. Don't ask me how. I asked. They didn't say.", "curious"]],
+    lines: [[ARIA, "Don't look down. I'm looking down. Don't look down.", "excited"]],
   },
   {
-    id: "course",
-    beat: 2,
-    title: "THE COURSE — BEAT THE CLOCK",
+    id: "runHome",
+    beat: 3,
+    trial: "mobility",
+    title: "HOME STRETCH",
     color: "#ffcc33",
-    hint: "Hit every gate before the clock runs out. Sprint the straights, slide and dash the corners, and save stamina for the last stretch.",
-    lines: [
-      [SUP, "Four gates. The clock starts when you leave the first. Fail it and you run it again. I've got all morning.", "calm"],
-      [ARIA, "Off the record: there's an old evidence room off the gym's south side. One of its wall panels sounds hollow. Press it.", "curious"],
-    ],
-    events: [
-      [14, "pa", "Calibration cycle two. Engine output at one hundred and forty percent."],
-      [15, "flicker"],
-    ],
+    hint: "The last gate is the start gate, back in the lobby. The clock's still running.",
+    lines: [[VALE, "Home stretch. Don't coast.", "excited"]],
   },
 
-  // ── 4. KNOW YOUR ENEMY ───────────────────────────────────────────
-  {
-    id: "toLab",
-    beat: 3,
-    title: "THE SIM HALL",
-    color: "#7dfff0",
-    hint: "Head north up the corridor to the combat arena. Today it's running as a simulator.",
-    lines: [
-      [SUP, "Sim hall, Cadet. Targets don't shoot back. The things in there will. Holographically.", "calm"],
-      [ARIA, "The sim loads field profiles from patrol reports. Real things, recorded. Let's meet them.", "curious"],
-    ],
-  },
+  // ── 5. TRIAL: COMBAT (the sim hall) ──────────────────────────────
   {
     id: "lab",
-    beat: 3,
+    beat: 4,
+    trial: "combat",
     title: "KNOW YOUR ENEMY",
     color: "#7dfff0",
     hint: "Holograms of what our patrols have met. Study each one, then put it down. In here their shots can't hurt you.",
     // Each exhibit's briefing plays when it appears (js/tutorial-system.js).
+    lines: [[LIN, "Sim hall. Field profiles from patrol reports: real things, recorded. One at a time first.", "calm"]],
   },
-
-  // ── 5. SIMULATION ────────────────────────────────────────────────
+  // The cover lesson goes here (cover system): a hook, no card yet. It
+  // completes as soon as it starts.
+  { id: "coverDrill", beat: 4, trial: "combat" },
   {
     id: "sim",
     beat: 4,
+    trial: "combat",
     title: "SIMULATED BATTLE",
     color: "#7dfff0",
-    hint: "Clear both waves. Hits drain SIM INTEGRITY, not your health; at zero the sim restarts. Use the pillars, keep moving, and go for heads.",
+    hint: "Clear both waves. Holo blocks rise out of the floor: get behind them, then lean out to fire. Hits drain SIM INTEGRITY, not your health; at zero the sim restarts.",
     lines: [
-      [SUP, "Full sim. Two waves, everything you just met. Integrity hits zero, you run it again.", "calm"],
-      [ARIA, "It's only light. But fight it like it isn't, and the real thing won't surprise you.", "warm"],
-    ],
-    events: [
-      [6, "pa", "Calibration cycle three. All personnel stand clear of the Engine chamber."],
-      [20, "tremor"],
+      [LIN, "Full sim. Two waves. Cover comes up out of the floor; use it.", "calm"],
+      [ARIA, "It's only light. Fight it like it isn't, and the real thing won't surprise you.", "warm"],
     ],
   },
 
-  // ── 6. BREACH ────────────────────────────────────────────────────
+  // ── 6. TRIAL: TELEMETRY (R&D's rig) ──────────────────────────────
+  {
+    id: "telemetry",
+    beat: 5,
+    trial: "telemetry",
+    title: "SUIT TELEMETRY",
+    color: "#46e0ff",
+    hint: "Stand on the rig's pad in the middle of the bay and hold still while Dr. Orr reads the suit.",
+    lines: [[ORR, "On the pad. Arms down. It's a suit, not a confessional.", "warm"]],
+  },
+
+  // ── 7. SIX FORTY-SEVEN ───────────────────────────────────────────
+  {
+    id: "signOff",
+    beat: 6,
+    title: "SIGN-OFF AT LIFT B",
+    color: "#22e6c0",
+    hint: "Take your sheet to the Supervisor, at Lift B in the sim hall.",
+    lines: [[SUP, "That's four. Bring me the sheet, Cadet. Lift B. The Bureau's sending someone up for it.", "calm"]],
+  },
+  {
+    id: "sixFortySeven",
+    beat: 6,
+    title: "06:47",
+    color: "#ff2244",
+    hint: "Lift B opened by itself. Whatever came up in it, put it down.",
+    // The logic plays the minute itself (the lift, the pulse, the floor
+    // stopping): these lines are its words, said as the doors open.
+    defer: true,
+    lines: [
+      [ARIA, "Lift B just opened. Nobody called it.", "afraid"],
+      [SUP, "Cadet. Put it down.", "afraid"],
+    ],
+  },
   {
     id: "alarm",
-    beat: 5,
+    beat: 6,
     title: "⚡ ALERT — INTRUSION DETECTED",
     color: "#ff2244",
     hint: "Something has gone very wrong. Listen.",
@@ -332,9 +397,11 @@ export const PROLOGUE_STEPS = [
       [ARIA, "Lost him. Lost the whole network. Whatever came up that shaft, more will follow. His office has the lift override. Move.", "urgent"],
     ],
   },
+
+  // ── 8. BREACH ────────────────────────────────────────────────────
   {
     id: "cover",
-    beat: 5,
+    beat: 7,
     title: "TAKE COVER — FIGHT BACK",
     color: "#ff2244",
     hint: {
@@ -343,7 +410,7 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${b("crouch")} behind low cover.`,
     },
     lines: [
-      [ARIA, "They didn't come through the door. They stepped out of the air. Use the inner office walls.", "urgent"],
+      [ARIA, "Watch the air. Where it cracks and glows, something's coming through.", "urgent"],
       [ARIA, "They pause before they fire. That glint and whine is your cue to duck.", "urgent"],
     ],
     // How it reached this floor: up from the Engine level, a floor at a time.
@@ -351,7 +418,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "patch",
-    beat: 5,
+    beat: 7,
     title: "PATCH UP",
     color: "#44ff88",
     hint: "Grab the med pack on the Supervisor's desk. Your suit also mends small wounds if you stay out of fire.",
@@ -362,7 +429,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "shield",
-    beat: 5,
+    beat: 7,
     title: "FLANK THE SHIELD",
     color: "#88aacc",
     hint: {
@@ -376,10 +443,10 @@ export const PROLOGUE_STEPS = [
     ],
   },
 
-  // ── 7. BORROWED TIME ─────────────────────────────────────────────
+  // ── 9. BORROWED TIME ─────────────────────────────────────────────
   {
     id: "chrono",
-    beat: 6,
+    beat: 8,
     title: "CHRONO SHIFT — BEND TIME",
     color: "#8844ff",
     hint: {
@@ -388,13 +455,13 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `Hold ${b("chronoShift")} to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.`,
     },
     lines: [
-      [ARIA, "Found it. The module they wouldn't tell me about. It's a time-dilation core. In a suit. Who builds that?", "excited"],
+      [ARIA, "The anchor Orr found. It does more than hold. It's a time-dilation core. In a suit. Who builds that?", "excited"],
       [ARIA, "Hold it, and the world crawls. Let go before it runs dry, or it runs dry for you.", "excited"],
     ],
   },
   {
     id: "vents",
-    beat: 6,
+    beat: 8,
     title: "PLASMA VENTS",
     color: "#ff7733",
     hint: {
@@ -409,57 +476,60 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "slowFire",
-    beat: 6,
+    beat: 8,
     title: "OUTPACE THE BULLETS",
     color: "#8844ff",
-    hint: "Drones down the corridor. Shift, sidestep their shots while they crawl, and put them down.",
+    hint: "Drones dropping out of the vents. Shift, sidestep their shots while they crawl, and put them down.",
     lines: [
-      [ARIA, "Incoming. Shift, and watch their shots hang in the air. Then step out of their way.", "urgent"],
+      [ARIA, "The grilles. Something's in the ducts.", "urgent"],
+      [ARIA, "Shift, and watch their shots hang in the air. Then step out of their way.", "urgent"],
     ],
   },
 
-  // ── 8. LIGHTS OUT ────────────────────────────────────────────────
+  // ── 10. LIGHTS OUT ───────────────────────────────────────────────
   {
-    id: "cells",
-    beat: 7,
-    title: "LIGHTS OUT — RESTORE POWER",
+    id: "breaker",
+    beat: 9,
+    title: "LIGHTS OUT — THE BREAKER",
     color: "#ffb028",
     hint: {
-      key: "Main power is gone. Find the two power cells, marked amber on your minimap, in the break room and the armory. Press E to open doors.",
-      touch: "Main power is gone. Find the two power cells, marked amber on your minimap, in the break room and the armory. Tap USE to open doors.",
-      pad: (b) => `Main power is gone. Find the two power cells, marked amber on your minimap, in the break room and the armory. Press ${b("interact")} to open doors.`,
+      key: (k) => `Main power's gone. Lift B runs off R&D's main breaker: get to the R&D bay, at the north end of the east wing, face the breaker and press ${k("interact")}.`,
+      touch: "Main power's gone. Lift B runs off R&D's main breaker: get to the R&D bay, at the north end of the east wing, face the breaker and tap USE.",
+      pad: (b) => `Main power's gone. Lift B runs off R&D's main breaker: get to the R&D bay, at the north end of the east wing, face the breaker and press ${b("interact")}.`,
     },
     cut: true,
     lines: [
       [ARIA, "And there go the lights. Whatever's downstairs just drank the whole grid.", "worried"],
-      [ARIA, "I've got his override. But Lift B's at the bottom with him, and the shaft's dead. Two backup cells, break room and armory.", "urgent"],
+      [ARIA, "I've got his override. Lift B runs off R&D's breaker. Throw it and I can call the car.", "urgent"],
       [ARIA, "{AGENT}. Roll call just came through. Rasczak's squads aren't answering.", "sad"],
+      [ARIA, "Everyone on this floor stopped at six forty-seven. You didn't.", "sad"],
+      [ARIA, "Your anchor held. Theirs... half held.", "afraid"],
       [ARIA, "The Supervisor's beacon. It's gone flat. ...I'm sorry, {AGENT}.", "sad"],
     ],
     // Every clock on the floor stopped at the breach. So did the announcer.
-    events: [[24, "pa", "Good morning, Chronos Station. The time is six forty-seven. The time is six forty-seven."]],
+    events: [[30, "pa", "Good morning, Chronos Station. The time is six forty-seven. The time is six forty-seven."]],
   },
   {
     id: "toLift",
-    beat: 7,
+    beat: 9,
     title: "TO THE LIFT",
     color: "#22e6c0",
-    hint: "Power's routed. Back to the lift, in the sim hall at the north end of the corridor.",
-    lines: [[ARIA, "That's both. Calling Lift B back up. It'll take a minute, and it won't be quiet.", "urgent"]],
+    hint: "Power's on. Back to Lift B, through the north hall into the sim hall.",
+    lines: [[ARIA, "That's it. Calling Lift B back up. It'll take a minute, and it won't be quiet.", "urgent"]],
   },
 
-  // ── 9. EVAC ──────────────────────────────────────────────────────
+  // ── 11. EVAC ─────────────────────────────────────────────────────
   {
     id: "wave1",
-    beat: 8,
+    beat: 10,
     title: "HOLD THE LIFT — WAVE 1/3",
     color: "#ff2244",
-    hint: "Hold the sim hall while the lift climbs back up. Use the pillars for cover; health and ammo are by the south door.",
+    hint: "Hold the sim hall while the lift climbs back up. The holo blocks are still up: use them. Health and ammo are by the south door.",
     lines: [[ARIA, "Orr's moving. {AGENT}, that isn't Orr any more. Don't let it close.", "afraid"]],
   },
   {
     id: "wave2",
-    beat: 8,
+    beat: 10,
     title: "HOLD THE LIFT — WAVE 2/3",
     color: "#ff2244",
     hint: "Henchmen flank. Keep moving, keep cover between you, and Shift when they bunch up.",
@@ -467,7 +537,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "wave3",
-    beat: 8,
+    beat: 10,
     title: "HOLD THE LIFT — WAVE 3/3",
     color: "#ff2244",
     hint: "A shield and its escort. Thin the escort, then flank the shield.",
@@ -475,7 +545,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "extract",
-    beat: 8,
+    beat: 10,
     title: "GET IN",
     color: "#22e6c0",
     hint: "The lift is back up and open. Step inside.",
@@ -483,7 +553,7 @@ export const PROLOGUE_STEPS = [
   },
   {
     id: "reveal",
-    beat: 8,
+    beat: 10,
     title: "SIGNAL TRACE",
     color: "#00ffcc",
     hint: "Going down.",
@@ -498,9 +568,31 @@ export const PROLOGUE_STEPS = [
   },
 ];
 
+/** Grades, best first ("PASS": a trial graded pass or fail). */
+export const TRIAL_GRADES = ["S", "A", "B", "C", "PASS"];
+
+/**
+ * A trial's grade from its time against par, nudged by accuracy where shots
+ * were fired: S under 80% of par, A at par, B within a third over, C after;
+ * under half the shots landing drops a grade, four in five lifts one.
+ */
+export function gradeTrial(trial, time, acc) {
+  if (trial?.par == null) return "PASS";
+  const k = time / trial.par;
+  let i = k <= 0.8 ? 0 : k <= 1 ? 1 : k <= 1.33 ? 2 : 3;
+  if (acc != null && acc < 0.5) i = Math.min(3, i + 1);
+  if (acc != null && acc >= 0.8) i = Math.max(0, i - 1);
+  return TRIAL_GRADES[i];
+}
+
 /** The step index of `id`, or -1. */
 export function prologueStepIndex(id) {
   return PROLOGUE_STEPS.findIndex((s) => s.id === id);
+}
+
+/** A trial's first step's index (where the hub starts it), or -1. */
+export function trialStart(trial) {
+  return PROLOGUE_STEPS.findIndex((s) => s.trial === trial);
 }
 
 /** How long a line stays up: long enough to be read and spoken. */

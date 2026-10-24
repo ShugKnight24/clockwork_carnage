@@ -7,6 +7,11 @@
  * `update` says when it is done. A beat's first step is a checkpoint: dying
  * puts you back there with the beat set up again, never back to the start.
  *
+ * Certification Day runs as a hub: the "certify" step holds the sheet and
+ * starts whichever trial you walk into; a trial's last step hands back to
+ * it, and each trial finished makes the calibration a little stranger
+ * (escalate). After the fourth, the sign-off at Lift B, and 06:47.
+ *
  * Receives a `game` reference for the shared state (player, entities, audio,
  * map, comms).
  */
@@ -16,7 +21,7 @@ import { Enemy, Pickup, Prop } from "./entities.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
-import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../src/data/prologue.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, TRIAL_GRADES, gradeTrial, lineDuration, trialStart } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { drawLine } from "../src/systems/aria-comms.js";
 import { spawnEnergyBurst } from "./particle-system.js";
@@ -24,7 +29,17 @@ import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { Npc } from "./npc.js";
 import { NPC_TYPES } from "../src/data/npcs.js";
-import { ARENA_WALLS } from "../src/data/levels/rooms/arena.js";
+import { ARENA_WALLS, COVER_LAYOUTS } from "../src/data/levels/rooms/arena.js";
+import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
+import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
+import { ATRIUM_GAP } from "../src/data/levels/rooms/atrium.js";
+import { CORRIDOR_WALLS } from "../src/data/levels/rooms/corridor.js";
+import { DISPATCH_WALLS } from "../src/data/levels/rooms/dispatch.js";
+import { HOLDING_WALLS } from "../src/data/levels/rooms/holding.js";
+import { INTERVIEW_WALLS } from "../src/data/levels/rooms/interview.js";
+import { buildNavField } from "../src/systems/ai-nav.js";
+import { hasLineOfSight } from "../src/systems/physics.js";
+import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 
@@ -36,6 +51,12 @@ const SPEAKER_STYLE = {
   OFFICER: { color: "#6fb6ff", voice: "officer" },
   "LT. RASCZAK": { color: "#6fb6ff", voice: "officer" },
   "SGT. KAEL": { color: "#4f9dff", voice: "kael" },
+  // R&D, and the floor's people when you talk to them.
+  "DR. ORR": { color: "#9ff0d8", voice: "miri" },
+  LIN: { color: "#9fd8f0", voice: "kai" },
+  VALE: { color: "#f0d89f", voice: "nova" },
+  STAFF: { color: "#c8d0dc", voice: "lyra" },
+  STAFF_M: { color: "#c8d0dc", voice: "kai" },
 };
 
 /**
@@ -81,12 +102,12 @@ const SUP_ROUTES = {
   // He leaves you to the suit and goes on ahead to the range.
   ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
   atRange: [[37.5, 44.8]],
-  toGym: [[34.5, 41.5], [29.5, 41.5], [29.5, 21.5], [25.5, 20.8], [23.2, 17.5]],
-  toLab: [[25.5, 20.8], [29.5, 20.5], [29.5, 12.5], [33.5, 10.0]],
   // At the alarm he goes down to his people the only way there is: Lift B,
   // the car the thing came up in. He turns in it to look at you.
   leave: [[33.5, 4.4], [30.0, 3.6], [30.0, 2.45]],
 };
+/** Where the Supervisor waits for the sheet: by Lift B, in the sim hall. */
+const SUP_AT_LIFT = { x: 33.5, y: 6.0 };
 
 /**
  * Lift B, in the sim hall's north wall: the service lift down to the Engine
@@ -102,24 +123,86 @@ const LIFT_DOORS = [
 const LIFT_CAR = { x: 30.0, y: 2.6 };
 
 /**
- * The floor's people that morning, who aren't police on the Engine detail:
- * the front desk, an admin clerk, two off-duty officers, R&D's sim techs.
- * `at` is where the morning has them, `face` what they're turned to; after
- * the breach (TutorialSystem.aftermath) some are frozen where they stood,
- * one is slumped, the rest are simply gone. Kinds the NPC rig doesn't have
- * yet stand in as officers.
+ * The floor's people that morning, who aren't police on the Engine detail.
+ * `at` is where the morning has them, `face` what they're turned to, and
+ * `caught` what they were doing when 06:47 stopped them (for the stopped
+ * look: src/rendering/enemies/station-people.js). After the breach
+ * (TutorialSystem.aftermath) every one of them stands where it caught them.
+ * Kinds the NPC rig doesn't have yet stand in as officers.
  */
 const PEOPLE = {
-  pike: { kind: "clerk", name: "Dana Pike", look: 1, at: [29.0, 52.4], face: [29.0, 56] }, // front desk
-  nand: { kind: "clerk", name: "Priya Nand", look: 0, at: [39.5, 17.3], face: [39.5, 15] }, // the office's clerk, at her cabinets
-  brooks: { kind: "clerk", name: "Hal Brooks", look: 1, at: [20.5, 30.5], face: [20.5, 29] }, // at the coffee
-  mendez: { kind: "officer", name: "Ofc. Mendez", at: [22.0, 30.8], face: [20.5, 30.5] }, // off shift, talking to Hal
-  varga: { kind: "officer", name: "Ofc. Varga", at: [20.6, 19.2], face: [19.5, 18.5] }, // off shift, at the bags
-  orr: { kind: "staff", name: "Dr. Nadia Orr", look: 0, at: [36.5, 9.7], face: [29.5, 4.5] }, // R&D, running the sim
-  lin: { kind: "staff", name: "Teo Lin", look: 1, at: [22.5, 9.7], face: [29.5, 4.5] },
+  pike: { kind: "clerk", name: "Dana Pike", look: 1, at: [29.0, 52.4], face: [29.0, 56], caught: "typing" }, // front desk
+  nand: { kind: "clerk", name: "Priya Nand", look: 0, at: [39.5, 17.3], face: [39.5, 15], caught: "filing" }, // the office's clerk, at her cabinets
+  brooks: { kind: "clerk", name: "Hal Brooks", look: 1, at: [21.6, 31.4], face: [20.2, 30.6], caught: "talking" }, // at the coffee
+  mendez: { kind: "officer", name: "Ofc. Mendez", at: [20.2, 30.6], face: [20.2, 29], caught: "pouring" }, // off shift, the coffee
+  varga: { kind: "officer", name: "Ofc. Varga", at: [17.2, 24.0], face: [16.5, 25.5], caught: "punching" }, // PT, at the bags
+  // R&D meet you at the range, then go to their trials.
+  orr: { kind: "staff", name: "Dr. Nadia Orr", look: 0, at: [37.2, 38.8], face: [34.5, 41.5], caught: "stepping" },
+  lin: { kind: "staff", name: "Teo Lin", look: 1, at: [38.8, 38.7], face: [34.5, 41.5], caught: "watching" },
+  vale: { kind: "staff", name: "Ines Vale", look: 1, at: [36.2, 39.7], face: [34.5, 41.5], caught: "timing" },
+  // The east wing.
+  booker: { kind: "clerk", name: "Clerk Ruiz", look: 0, at: [68.5, 53.4], face: [68.5, 56], caught: "stamping" },
+  detainee: { kind: "clerk", name: "Detainee", look: 1, at: [63.5, 53.4], face: [63.5, 57], caught: "posing" },
+  haas: { kind: "officer", name: "Det. Haas", at: [44.5, 53.9], face: [44.5, 56.6], caught: "asking" },
+  suspect: { kind: "clerk", name: "Suspect", look: 1, at: [44.5, 56.6], face: [44.5, 53.9], caught: "answering" },
+  cole: { kind: "clerk", name: "Dispatcher Cole", look: 0, at: [78.8, 21.5], face: [84, 21.5], caught: "radio" },
+  imani: { kind: "staff", name: "Dispatcher Imani", look: 0, at: [78.8, 23.5], face: [84, 23.5], caught: "radio" },
 };
 /** Up the corridor from the front desk to her cabinets, while you cross to the range. */
 const NAND_ROUTE = [[29.5, 46.5], [29.5, 20.6], [34.6, 20.6], [37.5, 18.6], [39.5, 17.3]];
+/** Where R&D go when they've handed you the sheet: to run their trials. */
+const STATIONS = {
+  orr: { x: 73.5, y: 8.5, face: RIG_AT },
+  lin: { x: 22.5, y: 9.7, face: { x: 29.5, y: 4.5 } },
+  vale: { x: 31.2, y: 50.6, face: { x: 29.5, y: 49.5 } },
+};
+
+/**
+ * What the floor's people say if you talk to them (press interact facing
+ * them): a line each, in turn. Never a stop; nobody waits on it.
+ */
+const TALK = {
+  pike: [["STAFF", "Front desk. If it's lost property, it's Thursday's problem."], ["STAFF", "Lift B again? The log says nobody's on it. It's said that all night."]],
+  nand: [["STAFF", "Post for the Supervisor. Mostly the Bureau, wanting things by noon."]],
+  brooks: [["STAFF_M", "Mendez says you won't pass. I've got five on you."]],
+  mendez: [["OFFICER", "Coffee's terrible. I came in on my day off for it anyway."]],
+  varga: [["OFFICER", "Pace the run. Everyone sprints the first straight and walks the last."]],
+  orr: [["DR. ORR", "Telemetry's the easy one. You stand there and I worry."]],
+  lin: [["LIN", "The sim's only light. It still hurts your pride."]],
+  vale: [["VALE", "The clock starts the moment you cross the gate. No pressure."]],
+  booker: [["STAFF_M", "Booking's quiet till nine. Unless you've brought me someone."]],
+  detainee: [["STAFF", "What time is it? No, really. What time is it?"]],
+  haas: [["OFFICER", "Close the door, Cadet. We're nearly there with this one."]],
+  suspect: [["STAFF", "I told him already. I keep losing the same minute."]],
+  cole: [["STAFF_M", "Engine level's not answering check-ins. They say it's the calibration."]],
+  imani: [["STAFF", "Heavy A and B, both on the chamber door. Quiet morning, apart from that."]],
+};
+/** ARIA, once, if you try to talk to someone the minute caught. */
+const FROZEN_TALK = [
+  ["ARIA", "Nothing. Not a blink. They're in the minute and we're not.", "sad"],
+  ["ARIA", "Stopped mid-word. Breathing? No. Dead? Also no.", "afraid"],
+  ["ARIA", "Leave them be, {AGENT}. We'll get them back.", "tender"],
+];
+
+/**
+ * Walls worth reading (press interact facing one): ARIA reads it out. Optional
+ * story; it never blocks a step.
+ */
+const READABLE = {
+  [HALL_WALLS.CERT_BOARD]: [["ARIA", "R&D's board. Four trials, your badge at the top. Somebody drew a smiley next to telemetry.", "happy"]],
+  [HALL_WALLS.DIRECTORY]: [["ARIA", "Floor plan. R&D's up the east side, past dispatch. Holding's at the bottom.", "calm"]],
+  [HALL_WALLS.MEMORIAL]: [["ARIA", "The heavy squads, in C-series plate. The suit before yours. Rasczak's in the middle.", "calm"]],
+  [HALL_WALLS.PT_POSTER]: [["ARIA", "Varga's poster. 'Pace yourself.' Annoyingly good advice.", "warm"]],
+  [CORRIDOR_WALLS.NOTICE]: [["ARIA", "Softball against the fire department, Saturday. You're not on the team sheet. Yet.", "warm"]],
+  [RND_WALLS.WHITEBOARD]: [["ARIA", "Orr's maths. 'C: a half. D: one?' And six forty-seven, circled twice.", "curious"]],
+  [RND_WALLS.LIFT_A]: [["ARIA", "Lift A. R&D's freight car to the Engine level. Locked out for the calibration.", "calm"]],
+  [RND_WALLS.SUIT_RACK]: [["ARIA", "C-series. The squads' heavy plate. Same frame as yours, two generations back.", "curious"]],
+  [RND_WALLS.BREAKER]: [["ARIA", "R&D's main breaker. It feeds Lift B, apparently.", "calm"]],
+  [DISPATCH_WALLS.DUTY_BOARD]: [["ARIA", "Both heavy squads on the Engine level. And you: trials.", "calm"]],
+  [DISPATCH_WALLS.CITY_MAP]: [["ARIA", "Every unit in the city. One red one hasn't checked in.", "worried"]],
+  [HOLDING_WALLS.RIGHTS]: [["ARIA", "'You may know the time of your arrest.' Funny thing to promise.", "curious"]],
+  [INTERVIEW_WALLS.ONE_WAY]: [["ARIA", "One-way glass. From in there it's a mirror. They still wave at it.", "warm"]],
+};
 
 /**
  * What ARIA says, once, when you come near someone the breach caught: on the
@@ -135,13 +218,17 @@ const NOTICES = [
   },
   {
     id: "breakroom",
-    steps: ["cells", "toLift"],
+    steps: ["vents", "slowFire", "breaker", "toLift"],
     who: "mendez",
     r: 3.2,
-    lines: [
-      ["ARIA", "Mendez. Off shift. He only came in for the coffee.", "sad"],
-      ["ARIA", "There were two of them in here this morning. One cup's still on the counter.", "sad"],
-    ],
+    lines: [["ARIA", "Mendez. Off shift. He only came in for the coffee. He's still pouring it.", "sad"]],
+  },
+  {
+    id: "dispatch",
+    steps: ["breaker", "toLift"],
+    who: "cole",
+    r: 4,
+    lines: [["ARIA", "Dispatch. Headsets on, mid-call. The whole city's waiting on a minute that won't end.", "sad"]],
   },
 ];
 
@@ -160,7 +247,7 @@ const EXHIBITS = [
     name: "SYNDICATE HENCHMAN",
     lines: [
       ["ARIA", "Syndicate muscle. Watch for the glint and the whine before it fires. That's your cue to step aside.", "curious"],
-      ["SUPERVISOR", "We keep finding their kit in sealed rooms. Nobody knows how they get in.", "worried"],
+      ["LIN", "We keep finding their kit in sealed rooms. Nobody knows how they get in.", "worried"],
     ],
   },
   {
@@ -169,14 +256,13 @@ const EXHIBITS = [
     lines: [
       ["ARIA", "Chrono Sentinel. The shield soaks most of what hits it. Go round it: from the side or behind, the head and the core on its back are exposed.", "curious"],
       ["ARIA", "Odd. Every one of these sightings is logged at the same minute. Six forty-seven.", "worried"],
-      ["SUPERVISOR", "Sensor fault. Shoot the hologram, Cadet.", "angry"],
     ],
   },
 ];
 /** Where an exhibit stands in the arena, and where you stand to study it. */
 const EXHIBIT_AT = { x: 29.5, y: 4.5 };
 
-/** The simulation's waves, at the arena's ends. */
+/** The simulation's waves, at the arena's ends, and the cover each raises. */
 const SIM_WAVES = [
   [
     [10.5, 4.5, "drone"],
@@ -190,6 +276,7 @@ const SIM_WAVES = [
     [29.5, 3.5, "sentinel"],
   ],
 ];
+const SIM_COVER = ["lanes", "scatter"];
 /** What a simulated hit costs: the sim hits harder than the real ones do in the prologue, but only its integrity. */
 const SIM_DAMAGE = { drone: 7, henchman: 9, sentinel: 14, glitchling: 6 };
 
@@ -199,16 +286,57 @@ const ENCOURAGE_AFTER = new Set(["fire", "ads", "moving", "shotgun", "slide", "d
 const SHOTGUN = 1;
 const PISTOL = 0;
 
-/** The gym course's gates: the start, then four to hit in order. */
-const COURSE_GATES = [
-  { x: 22.5, y: 20.5 }, // the start, by the door (21.5 was inside a column)
-  { x: 4.5, y: 16.5 },
-  { x: 5.5, y: 24.5 },
-  { x: 22.5, y: 24.5 },
-  { x: 22.5, y: 16.5 },
+/**
+ * Where each trial starts from the hub, and what starts it: the pistol on
+ * the range's first bench, the start gate in the lobby, walking into the
+ * sim hall, walking into R&D.
+ */
+const TRIAL_START = {
+  weapons: { x: 38.5, y: 42.5 },
+  mobility: { x: 29.5, y: 49.5 },
+  combat: { x: 29.5, y: 10.0 },
+  telemetry: { x: 63.5, y: 10.5 },
+};
+const inSimHall = (p) => p.x > 9 && p.x < 51 && p.y > 3 && p.y < 10.6;
+const inRnd = (p) => p.x > 61.6 && p.y < 14;
+
+/**
+ * The mobility run (src/data/prologue.js, beat 3): its gates in order, from
+ * the start gate in the lobby round the floor and back to it. Each step of
+ * the trial runs to its last gate: SEGMENT_END.
+ */
+const RUN_GATES = [
+  { x: 29.5, y: 49.5 }, // start, in the lobby
+  { x: 29.5, y: 22.5 }, // the top of the corridor: a straight longer than a sprint
+  { x: 5.5, y: 20.5 }, // the gym's far wall
+  { x: 29.5, y: 16.5 }, // out of the gym's north door, under its shutter
+  { x: 58.5, y: 21.0 }, // through the office into the spine
+  { x: 62.9, y: 41.5 }, // down the spine, under its shutter, to the bridge
+  { x: 83.5, y: 41.5 }, // across the bridge, over the gap
+  { x: 29.5, y: 49.5 }, // home: the start gate
 ];
-const COURSE_LIMIT = 20; // seconds; +3 for each failed run, up to +9
-const GATE_R = 1.25;
+const SEGMENT_END = { sprint: 2, slide: 5, dash: 6, runHome: 7 };
+const RUN_GATE_R = 1.25;
+/** The shutters stuck half down across the run, one prop per cell. */
+const SHUTTERS = [
+  { x: 25, y: 16 },
+  { x: 25, y: 17 },
+  { x: 58, y: 27 },
+  { x: 59, y: 27 },
+];
+/** After a dash ends you still carry over the gap for this long. */
+const DASH_CARRY = 0.3;
+
+/** Seconds the rig takes to read the suit, standing still on its pad. */
+const READ_TIME = 7;
+/** Orr's commentary as the reading goes: [fraction read, line]. */
+const READ_LINES = [
+  [0.3, ["DR. ORR", "Servo load nominal. Plating nominal. Pulse... a bit high.", "calm"]],
+  [0.65, ["DR. ORR", "Same frame as the squads' heavy plate. The C-series. Theirs only half takes the module.", "curious"]],
+];
+
+/** How long a telegraphed arrival glows before it opens (seconds). */
+const ARRIVE_LEAD = 1.5;
 
 /**
  * The plasma vents across the main corridor (cols 27-32): two strips, two
@@ -284,6 +412,50 @@ function makeHostile(x, y, type) {
 /** Run `fn` `seconds` from now on the prologue's clock (it stops when the game does). */
 function setTimeoutGame(t, seconds, fn) {
   t._timers.push({ at: t.clock + seconds, fn });
+}
+
+/**
+ * A walking route over open floor from (x, y) to (tx, ty): the BFS field the
+ * enemies steer by (src/systems/ai-nav.js), followed downhill, kept only at
+ * its turns. Falls back to the straight line when there is no way.
+ */
+function route(map, x, y, tx, ty) {
+  const f = buildNavField(map, tx, ty);
+  let cx = Math.floor(x);
+  let cy = Math.floor(y);
+  let d = f.dist[cy * f.w + cx];
+  if (!(d >= 0)) return [[tx, ty]];
+  const cells = [];
+  for (let guard = 0; d > 0 && guard < 600; guard++) {
+    let best = null;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        if (!ox && !oy) continue;
+        const nx = cx + ox;
+        const ny = cy + oy;
+        const nd = f.dist[ny * f.w + nx];
+        if (!(nd >= 0) || nd >= (best?.d ?? d)) continue;
+        // No corner cutting: both side cells of a diagonal must be open.
+        if (ox && oy && (!(f.dist[cy * f.w + nx] >= 0) || !(f.dist[ny * f.w + cx] >= 0))) continue;
+        best = { x: nx, y: ny, d: nd };
+      }
+    }
+    if (!best) break;
+    cx = best.x;
+    cy = best.y;
+    d = best.d;
+    cells.push([cx + 0.5, cy + 0.5]);
+  }
+  // Keep the turns: a point where the direction changes.
+  const out = [];
+  for (let i = 0; i < cells.length - 1; i++) {
+    const [ax, ay] = i ? cells[i - 1] : [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
+    const [bx, by] = cells[i];
+    const [nx, ny] = cells[i + 1];
+    if (Math.sign(bx - ax) !== Math.sign(nx - bx) || Math.sign(by - ay) !== Math.sign(ny - by)) out.push(cells[i]);
+  }
+  out.push([tx, ty]);
+  return out;
 }
 
 /**
@@ -406,6 +578,8 @@ const LOGIC = {
     update: (t) => t.c.suited,
     exit(t, g) {
       t.lockerLight(g, false);
+      // The clock the first-shot target is measured from.
+      t.suitedAt = t.runClock;
     },
   },
 
@@ -452,10 +626,60 @@ const LOGIC = {
     update: (t, g) => t.near(g, 36.5, 41.5, 1.8),
   },
 
+  // ── Certification Day: the hub ─────────────────────────────────
+
+  certify: {
+    get waypoint() {
+      return null; // the nearest trial still to do, set in update
+    },
+    enter(t, g) {
+      // The floor opens up: every trial's way in.
+      t.openDoors(g, "door2", "door3", "door4", "door5", "door9", "door13", "door15", "door16");
+      const cert = t.cert;
+      if (!cert.done.weapons && !g.player.weapons.includes(PISTOL)) {
+        t.place(g, "pistol", new Pickup(TRIAL_START.weapons.x, TRIAL_START.weapons.y, "weapon", { weaponId: PISTOL }));
+      }
+      if (!cert.done.mobility) t.startGate(g);
+      if (!cert.briefed) {
+        cert.briefed = true;
+        t.say(t.def.brief, { keep: true });
+        // R&D hand over the sheet and go to their trials as they talk.
+        setTimeoutGame(t, 5, () => t.toStation(g, "vale"));
+        setTimeoutGame(t, 8, () => t.toStation(g, "lin"));
+        setTimeoutGame(t, 11, () => t.toStation(g, "orr"));
+      }
+    },
+    update(t, g) {
+      const p = g.player;
+      const todo = PROLOGUE_TRIALS.filter((tr) => !t.cert.done[tr.id]);
+      const nearest = todo
+        .map((tr) => ({ id: tr.id, ...TRIAL_START[tr.id] }))
+        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+      g.objectiveWaypoint = nearest ? { x: nearest.x, y: nearest.y } : null;
+      const starts = {
+        weapons: () => t.near(g, TRIAL_START.weapons.x, TRIAL_START.weapons.y, 1.3),
+        mobility: () => t.near(g, TRIAL_START.mobility.x, TRIAL_START.mobility.y, RUN_GATE_R),
+        combat: () => inSimHall(p),
+        telemetry: () => inRnd(p),
+      };
+      for (const tr of todo) {
+        if (starts[tr.id]()) {
+          t.c.pick = tr.id;
+          return true;
+        }
+      }
+      return false;
+    },
+    progress: (t) => t.sheetText(),
+  },
+
+  // ── Trial: weapons (the range) ─────────────────────────────────
+
   pistol: {
     waypoint: { x: 38.5, y: 42.5 },
     enter(t, g) {
-      t.place(g, "pistol", new Pickup(38.5, 42.5, "weapon", { weaponId: PISTOL }));
+      if (!g.player.weapons.includes(PISTOL)) t.place(g, "pistol", new Pickup(38.5, 42.5, "weapon", { weaponId: PISTOL }));
+      if (!t.sup?.path?.length) t.supWalk(g, "atRange");
     },
     update: (t, g) => g.player.weapons.includes(PISTOL),
   },
@@ -479,16 +703,15 @@ const LOGIC = {
     enter(t, g) {
       t.spawnTargets(g, "ads", [
         [53.5, 39.5],
-        [53.5, 42.5],
         [53.5, 45.5],
       ]);
     },
     update(t, g) {
-      // Missed with the hip? The drill re-racks until three fall to aimed fire.
-      if (t.alive(g, "ads") === 0 && t.c.aimedKills < 3) t.spawnTargets(g, "ads", [[53.5, 41.5], [53.5, 43.5]]);
-      return t.c.aimedKills >= 3;
+      // Missed with the hip? The drill re-racks until two fall to aimed fire.
+      if (t.alive(g, "ads") === 0 && t.c.aimedKills < 2) t.spawnTargets(g, "ads", [[53.5, 41.5], [53.5, 43.5]]);
+      return t.c.aimedKills >= 2;
     },
-    progress: (t) => `AIMED KILLS ${Math.min(3, t.c.aimedKills)} / 3`,
+    progress: (t) => `AIMED KILLS ${Math.min(2, t.c.aimedKills)} / 2`,
     exit: (t, g) => t.clearTargets(g, "ads"),
   },
 
@@ -498,7 +721,7 @@ const LOGIC = {
       t.c.wave = 0;
     },
     update(t, g) {
-      if (t.alive(g, "moving") === 0 && t.c.heads < 3) {
+      if (t.alive(g, "moving") === 0 && t.c.heads < 2) {
         // A fresh pair each time both are down, sliding the length of the lane.
         const phase = t.c.wave++;
         t.spawnTargets(
@@ -514,16 +737,16 @@ const LOGIC = {
           "henchman",
         );
       }
-      return t.c.heads >= 3;
+      return t.c.heads >= 2;
     },
-    progress: (t) => `HEADSHOT KILLS ${Math.min(3, t.c.heads)} / 3`,
+    progress: (t) => `HEADSHOT KILLS ${Math.min(2, t.c.heads)} / 2`,
     exit: (t, g) => t.clearTargets(g, "moving"),
   },
 
   shotgun: {
     waypoint: { x: 43.5, y: 42.5 },
     enter(t, g) {
-      t.place(g, "shotgun", new Pickup(43.5, 42.5, "weapon", { weaponId: SHOTGUN }));
+      if (!g.player.weapons.includes(SHOTGUN)) t.place(g, "shotgun", new Pickup(43.5, 42.5, "weapon", { weaponId: SHOTGUN }));
       t.c.racked = false;
     },
     update(t, g) {
@@ -533,18 +756,26 @@ const LOGIC = {
         t.c.racked = true;
         t.spawnTargets(g, "shotgun", [
           [47.5, 41.5],
-          [47.5, 42.5],
           [47.5, 43.5],
         ]);
       }
-      if (t.c.racked && t.alive(g, "shotgun") === 0 && t.c.shotgunKills < 3) {
-        t.spawnTargets(g, "shotgun", [[47.5, 41.5], [47.5, 43.5]]);
+      if (t.c.racked && t.alive(g, "shotgun") === 0 && t.c.shotgunKills < 2) {
+        t.spawnTargets(g, "shotgun", [[47.5, 42.5]]);
       }
-      return t.c.shotgunKills >= 3;
+      return t.c.shotgunKills >= 2;
     },
     progress: (t, g) =>
-      g.player.weapons.includes(SHOTGUN) ? `SHOTGUN KILLS ${Math.min(3, t.c.shotgunKills)} / 3` : "PICK UP THE SHOTGUN",
+      g.player.weapons.includes(SHOTGUN) ? `SHOTGUN KILLS ${Math.min(2, t.c.shotgunKills)} / 2` : "PICK UP THE SHOTGUN",
     exit: (t, g) => t.clearTargets(g, "shotgun"),
+  },
+
+  /**
+   * Hook: the armorer's active-reload drill (another builder's system). Its
+   * step sits between the shotgun and the resupply; until the drill exists
+   * it completes at once.
+   */
+  reloadDrill: {
+    update: () => true,
   },
 
   ammo: {
@@ -557,117 +788,55 @@ const LOGIC = {
     update: (t) => t.pickedUp,
   },
 
-  toGym: {
-    waypoint: { x: 22.5, y: 20.5 },
-    enter(t, g) {
-      // The break room's door stands open: two of the off-shift, at the coffee.
-      t.openDoors(g, "door3", "door9");
-      t.supWalk(g, "toGym");
-    },
-    update: (t, g) => t.near(g, 22.0, 20.5, 1.8),
-  },
+  // ── Trial: mobility (the run) ──────────────────────────────────
 
   sprint: {
-    update(t, g, dt) {
-      if (g.player.isSprinting) t.c.sprint = (t.c.sprint || 0) + g.deltaTime;
-      return t.c.sprint > 2.5;
+    get waypoint() {
+      return null;
     },
-    progress: (t) => `SPRINT ${Math.min(2.5, t.c.sprint || 0).toFixed(1)} / 2.5 s`,
-  },
-
-  crouch: {
     enter(t, g) {
-      t.c.x = g.player.x;
-      t.c.y = g.player.y;
-      t.c.moved = 0;
+      t.openDoors(g, "door3", "door4", "door15", "door16");
+      t.startCourse(g);
     },
-    update(t, g) {
-      const p = g.player;
-      const d = Math.hypot(p.x - t.c.x, p.y - t.c.y);
-      if (p.isCrouching) t.c.moved += d;
-      t.c.x = p.x;
-      t.c.y = p.y;
-      return t.c.moved > 2.5;
-    },
-    progress: (t) => `CROUCH-WALK ${Math.min(2.5, t.c.moved).toFixed(1)} / 2.5 m`,
+    update: (t, g) => t.runCourse(g, SEGMENT_END.sprint),
+    progress: (t) => t.courseText(),
   },
 
   slide: {
-    update: (t) => t.c.slides >= 2,
-    progress: (t) => `SLIDES ${Math.min(2, t.c.slides)} / 2`,
+    get waypoint() {
+      return null;
+    },
+    enter(t, g) {
+      if (!t.course) t.startCourse(g, SEGMENT_END.sprint + 1);
+    },
+    update: (t, g) => t.runCourse(g, SEGMENT_END.slide),
+    progress: (t) => t.courseText(),
   },
 
   dash: {
-    update: (t) => t.c.dashes >= 2,
-    progress: (t) => `DASHES ${Math.min(2, t.c.dashes)} / 2`,
-  },
-
-  course: {
-    enter(t, g) {
-      t.c.gate = 0;
-      t.c.time = 0;
-      t.c.fails = t.c.fails ?? 0;
-      t.c.limit = COURSE_LIMIT;
-      // The gates themselves, numbered, on the floor (src/rendering/props.js).
-      t.c.gates = COURSE_GATES.map(({ x, y }, i) => {
-        const gate = new Prop(x, y, "course_gate");
-        gate.gate = { num: i, state: "ahead" };
-        gate._tutTag = "gates";
-        g.entities.push(gate);
-        return gate;
-      });
-    },
     get waypoint() {
-      return null; // set per gate in update
+      return null;
     },
-    update(t, g) {
-      const c = t.c;
-      const gate = COURSE_GATES[c.gate];
-      g.objectiveWaypoint = gate;
-      t.c.gates?.forEach((p, i) => {
-        p.gate.state = i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
-      });
-      if (c.gate > 0) {
-        c.time += g.deltaTime;
-        if (c.time > c.limit) {
-          c.fails++;
-          c.limit = COURSE_LIMIT + Math.min(9, c.fails * 3);
-          c.gate = 0;
-          c.time = 0;
-          g.audio.menuBack?.();
-          t.say([["ARIA", c.fails === 1 ? "Too slow. Back to the start. Sprint the straights, dash the corners." : `Again. You've got ${c.limit} seconds this time. Don't tell him I gave you extra.`, "warm"]]);
-          return false;
-        }
-      }
-      if (t.near(g, gate.x, gate.y, GATE_R)) {
-        g.audio.menuConfirm?.();
-        if (c.gate === COURSE_GATES.length - 1) {
-          c.best = c.time;
-          return true;
-        }
-        c.gate++;
-      }
-      return false;
+    enter(t, g) {
+      if (!t.course) t.startCourse(g, SEGMENT_END.slide + 1);
     },
-    progress(t) {
-      const c = t.c;
-      if (c.gate === 0) return `GO TO THE START GATE · LIMIT ${c.limit} s`;
-      return `GATE ${c.gate} / ${COURSE_GATES.length - 1} · ${c.time.toFixed(1)} / ${c.limit} s`;
-    },
-    exit(t, g) {
-      t.clearTag(g, "gates");
-      if (t.c.best != null) t.say([["SUPERVISOR", `${t.c.best.toFixed(1)} seconds. Not bad, Cadet. Not good either. Sim hall's next.`, "calm"]]);
-    },
+    update: (t, g) => t.runCourse(g, SEGMENT_END.dash),
+    progress: (t) => t.courseText(),
   },
 
-  toLab: {
-    waypoint: { x: 29.5, y: 10.5 },
-    enter(t, g) {
-      t.openDoors(g, "door5");
-      t.supWalk(g, "toLab");
+  runHome: {
+    get waypoint() {
+      return null;
     },
-    update: (t, g) => t.near(g, 29.5, 10.5, 1.8),
+    enter(t, g) {
+      if (!t.course) t.startCourse(g, SEGMENT_END.dash + 1);
+    },
+    update: (t, g) => t.runCourse(g, SEGMENT_END.runHome),
+    progress: (t) => t.courseText(),
+    exit: (t, g) => t.endCourse(g),
   },
+
+  // ── Trial: combat (the sim hall) ───────────────────────────────
 
   lab: {
     waypoint: { x: 29.5, y: 9.5 },
@@ -675,6 +844,13 @@ const LOGIC = {
       t.sim = { integrity: null }; // the exhibits cannot hurt you, and cannot fail you
       t.c.i = -1;
       t.c.wait = 0.8;
+      t.toStation(g, "lin", { snap: true });
+      // Combat before the range: the sim needs something to point.
+      const p = g.player;
+      if (!p.weapons.includes(PISTOL)) {
+        t.place(g, "simPistol", new Pickup(p.x, p.y, "weapon", { weaponId: PISTOL }));
+        t.say([["LIN", "Range first, usually. Here: standard issue. Point the loud end at the holograms.", "happy"]]);
+      }
     },
     update(t, g) {
       if (t.alive(g, "lab") > 0) return false;
@@ -684,7 +860,7 @@ const LOGIC = {
       if (t.c.i >= EXHIBITS.length) return true;
       const ex = EXHIBITS[t.c.i];
       t.spawnHostiles(g, "lab", [[EXHIBIT_AT.x, EXHIBIT_AT.y, ex.type]], makeHolo, true);
-      t.people.orr?.pose("point", 1.6);
+      t.people.lin?.pose("point", 1.6);
       g.audio.powerFlicker?.();
       t.say(ex.lines);
       t.c.wait = 1.4;
@@ -700,13 +876,22 @@ const LOGIC = {
     },
   },
 
+  /**
+   * Hook: the cover lesson (another builder's cover system), taught here in
+   * the sim hall before the waves. Until it exists the step completes at
+   * once; the waves already raise holo cover (TutorialSystem.raiseCover).
+   */
+  coverDrill: {
+    update: () => true,
+  },
+
   sim: {
     enter(t, g) {
       t.sim = { integrity: 100, failed: false };
       t.c.wave = 0;
       t.c.delay = 2;
       t.c.fails = 0;
-      t.c.glitchAt = null;
+      t.raiseCover(g, SIM_COVER[0]);
     },
     update(t, g) {
       const sim = t.sim;
@@ -714,16 +899,15 @@ const LOGIC = {
         // Integrity gone: the sim resets, and so do you.
         t.c.fails++;
         t.clearTag(g, "sim");
-        t.clearTag(g, "glitch");
         g.projectiles = [];
         sim.integrity = 100;
         sim.failed = false;
         t.c.wave = 0;
         t.c.spawned = false;
         t.c.delay = 2.5;
-        t.c.glitchAt = null;
+        t.raiseCover(g, SIM_COVER[0]);
         g.glitchEffect = 0.7;
-        t.say([["ARIA", t.c.fails === 1 ? "Simulation failed. You'd be dead twice over. Again, and use the pillars this time." : "Again. Pick a target, break line of sight, reload your nerve.", "worried"]], { cut: true });
+        t.say([["ARIA", t.c.fails === 1 ? "Simulation failed. You'd be dead twice over. Again, and use the cover this time." : "Again. Pick a target, break line of sight, reload your nerve.", "worried"]], { cut: true });
         return false;
       }
       if (t.c.wave < SIM_WAVES.length) {
@@ -736,62 +920,141 @@ const LOGIC = {
         t.c.wave++;
         t.c.spawned = false;
         t.c.delay = 2.5;
-        if (t.c.wave < SIM_WAVES.length) t.say([["ARIA", "Wave down. Next one's heavier.", "excited"]]);
+        if (t.c.wave < SIM_WAVES.length) {
+          // The floor rearranges itself for the next wave.
+          t.raiseCover(g, SIM_COVER[t.c.wave]);
+          t.say([["LIN", "Wave down. New layout coming up. Next one's heavier.", "excited"]]);
+        }
         return false;
       }
-      // Both waves down: Lift B opens on its own, and something the sim did
-      // not load steps out of it. Orr goes to look, and stops: mid-step,
-      // for good. Lin gets down behind the crates.
-      if (t.c.glitchAt == null) {
-        t.c.glitchAt = t.clock;
-        t.lift(g, true);
-        g.audio.doorOpen?.();
-        t.spawnHostiles(g, "glitch", [[LIFT_CAR.x, LIFT_CAR.y, "glitchling"]], makeHolo, true);
-        for (const e of g.entities) if (e._tutTag === "glitch") e._corrupt = true;
-        g.glitchEffect = 1;
-        g.audio.powerFlicker?.();
-        t.flickerUntil = t.clock + 0.5;
-        const orr = t.people.orr;
-        orr?.walk([[33.0, 6.5], [31.6, 4.3]], { speed: 1.2, then: (n) => n.faceTo(LIFT_CAR) });
-        setTimeoutGame(t, 3.2, () => {
-          if (!orr?.active) return;
-          orr.path = [];
-          orr.faceTo(LIFT_CAR);
-          orr.pose("frozen", Infinity);
-          g.glitchEffect = Math.max(g.glitchEffect || 0, 0.6);
-          g.audio.powerFlicker?.();
-        });
-        t.people.lin?.pose("cower", Infinity);
-        t.say([
-          ["ARIA", "Lift B just opened. Nobody called it. And that one isn't in the library.", "afraid"],
-          ["SUPERVISOR", "Cadet, end the sim. End it now.", "afraid"],
-        ], { cut: true });
-        return false;
-      }
-      return t.alive(g, "glitch") === 0 || t.clock - t.c.glitchAt > 10;
+      return true;
     },
-    progress(t) {
-      if (t.c.glitchAt != null) return "SIM INTEGRITY ??%";
-      return `WAVE ${Math.min(t.c.wave + 1, SIM_WAVES.length)} / ${SIM_WAVES.length} · SIM INTEGRITY ${Math.max(0, Math.round(t.sim?.integrity ?? 0))}%`;
-    },
+    progress: (t) => `WAVE ${Math.min(t.c.wave + 1, SIM_WAVES.length)} / ${SIM_WAVES.length} · SIM INTEGRITY ${Math.max(0, Math.round(t.sim?.integrity ?? 0))}%`,
     exit(t, g) {
       t.sim = null;
       t.clearTag(g, "sim");
-      t.clearTag(g, "glitch");
       g.projectiles = [];
+    },
+  },
+
+  // ── Trial: telemetry (R&D's rig) ───────────────────────────────
+
+  telemetry: {
+    waypoint: RIG_AT,
+    enter(t, g) {
+      t.c.read = 0;
+      t.c.said = 0;
+      t.c.lastX = g.player.x;
+      t.c.lastY = g.player.y;
+      t.toStation(g, "orr", { snap: true });
+      t.c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
+    },
+    update(t, g) {
+      const p = g.player;
+      const still = Math.hypot(p.x - t.c.lastX, p.y - t.c.lastY) < 0.02;
+      t.c.lastX = p.x;
+      t.c.lastY = p.y;
+      const on = t.near(g, RIG_AT.x, RIG_AT.y, 0.75);
+      // Off the pad, or walking about on it, the reading waits; it never resets.
+      if (on && still) t.c.read += g.deltaTime;
+      if (t.c.rig) t.c.rig.scan = on ? 1 : 0;
+      const k = t.c.read / READ_TIME;
+      while (t.c.said < READ_LINES.length && k >= READ_LINES[t.c.said][0]) t.say([READ_LINES[t.c.said++][1]]);
+      return k >= 1;
+    },
+    progress: (t, g) => (t.near(g, RIG_AT.x, RIG_AT.y, 0.75) ? `READING ${Math.min(100, Math.round((t.c.read / READ_TIME) * 100))}% · HOLD STILL` : "STAND ON THE RIG'S PAD"),
+    exit(t) {
+      if (t.c.rig) t.c.rig.scan = 0;
+      // The setup for the minute to come: the anchor sees what it shouldn't.
+      t.say([
+        ["DR. ORR", "That's odd. Your suit's anchor is reading the Engine.", "worried"],
+        ["DR. ORR", "It shouldn't be able to see the Engine from here.", "worried"],
+      ], { keep: true });
+    },
+  },
+
+  // ── Six forty-seven ────────────────────────────────────────────
+
+  signOff: {
+    get waypoint() {
+      return null;
+    },
+    enter(t, g) {
+      t.openDoors(g, "door5", "door13");
+      // The Supervisor, Orr and Lin by Lift B, waiting on the courier.
+      t.supTo(g, SUP_AT_LIFT.x, SUP_AT_LIFT.y);
+      t.toStation(g, "orr", { at: { x: 31.4, y: 7.2, face: LIFT_CAR } });
+      t.toStation(g, "lin", { at: { x: 26.5, y: 8.6, face: LIFT_CAR } });
+    },
+    update(t, g) {
+      const sup = t.sup;
+      g.objectiveWaypoint = sup ? { x: sup.x, y: sup.y } : SUP_AT_LIFT;
+      if (!sup) return t.near(g, SUP_AT_LIFT.x, SUP_AT_LIFT.y, 2.6);
+      return t.near(g, sup.x, sup.y, 2.6) && inSimHall(g.player);
+    },
+    exit(t) {
+      // He noticed the best of the four.
+      const line = t.bestTrialLine();
+      if (line) t.say([["SUPERVISOR", line, "calm"]], { keep: true });
+    },
+  },
+
+  sixFortySeven: {
+    enter(t, g) {
+      t.c.phase = "wait";
+      t.c.at = 0;
+    },
+    update(t, g) {
+      const c = t.c;
+      if (c.phase === "wait" && t.clock > 2 && (t.scriptIdle() || t.clock > 7)) {
+        // Lift B opens on its own. What steps out of it isn't the courier.
+        c.phase = "lift";
+        c.at = t.clock;
+        t.lift(g, true);
+        g.audio.doorOpen?.();
+        t.say(t.def.lines, { cut: true });
+        const e = makeHostile(LIFT_CAR.x, LIFT_CAR.y + 0.2, "glitchling");
+        e._tutTag = "glitch";
+        e._corrupt = true;
+        e.state = "chase";
+        e.lastAttackTime = g.time + 1500;
+        e._lastSeen = { x: g.player.x, y: g.player.y };
+        g.entities.push(e);
+        g.totalEnemies = (g.totalEnemies || 0) + 1;
+        g.audio.powerFlicker?.();
+        t.flickerUntil = t.clock + 0.5;
+        // Orr goes to look.
+        t.people.orr?.walk([[32.4, 5.6]], { speed: 1.2, then: (n) => n.faceTo(LIFT_CAR) });
+      }
+      if (c.phase === "lift" && t.clock - c.at > 3) {
+        // 06:47. The Engine pulses, and everyone on the floor without an
+        // anchor stops where they stand. The cadet doesn't.
+        c.phase = "stopped";
+        t.minute(g);
+      }
+      if (c.phase === "wait") return false;
+      return t.alive(g, "glitch") === 0 || t.clock - c.at > 12;
+    },
+    exit(t, g) {
+      t.clearTag(g, "glitch");
+      if (t.c.phase !== "stopped") t.minute(g);
       t.say([["SUPERVISOR", "Doctor Orr? ...Orr. Cadet, don't touch her. Don't anybody touch her.", "afraid"]]);
     },
   },
 
   alarm: {
-    // The Supervisor finishes his line about your course time, and the
-    // klaxon is what cuts him off.
+    // Once he's on his way down, the marker points at his office: the
+    // override, and the fight. (Until then you watch him go.)
+    get waypoint() {
+      return null;
+    },
+    // The klaxon cuts in under the Supervisor.
     enter(t, g) {
       t.c.armed = false;
       t.openDoors(g, "door4");
     },
     update(t, g) {
-      if (!t.c.armed && t.clock > 1 && t.scriptIdle()) {
+      if (!t.c.armed && t.clock > 1 && (t.scriptIdle() || t.clock > 3)) {
         t.c.armed = true;
         t.c.at = t.clock;
         g.audio.alarmKlaxon?.();
@@ -801,8 +1064,8 @@ const LOGIC = {
         t.say(t.def.lines, { cut: true });
       }
       // He tells you to stay, and goes: into Lift B, at a run. He turns in
-      // the car to look at you, and the doors close on him.
-      if (t.c.armed && !t.c.gone && t.clock - t.c.at > 8 && t.sup?.active) {
+      // the car to look at you, and the doors close on him (_updateLift).
+      if (t.c.armed && !t.c.gone && t.clock - t.c.at > 6 && t.sup?.active) {
         t.c.gone = true;
         t.lift(g, true);
         t.sup.walk(SUP_ROUTES.leave, {
@@ -811,34 +1074,33 @@ const LOGIC = {
             sup.faceTo(g.player);
             setTimeoutGame(t, 1.6, () => {
               t.liftWant = false;
-              t.c.supDown = true;
+              t.supDown = true;
             });
           },
         });
       }
-      // The doors shut on him; then he is gone down the shaft.
-      if (t.c.supDown && !t.liftOpen && t.sup?.active) {
-        t.sup.active = false;
-        g.audio.doorOpen?.();
-        g.screenShake = Math.max(g.screenShake || 0, 2);
-      }
-      return t.c.armed && t.clock - t.c.at > 4 && t.scriptIdle();
+      if (t.c.armed && t.clock - t.c.at > 5) g.objectiveWaypoint = { x: 37.5, y: 20.5 };
+      // Once he's gone the fight is on; his last lines play over it.
+      return t.c.armed && t.clock - t.c.at > 9;
     },
   },
+
+  // ── The breach ─────────────────────────────────────────────────
 
   cover: {
     waypoint: { x: 37.5, y: 20.5 },
     enter(t, g) {
       t.alert = true;
       t.lift(g, false);
-      t.spawnHostiles(g, "cover", [
+      // Through tears in the office: each glows and crackles before it opens.
+      t.arrive(g, "cover", [
         [53.5, 24.5, "henchman"],
         [53.5, 16.5, "henchman"],
         [48.5, 24.5, "henchman"],
       ]);
     },
-    update: (t, g) => t.c.spawned && t.alive(g, "cover") === 0,
-    progress: (t, g) => `HOSTILES ${t.alive(g, "cover")}`,
+    update: (t, g) => t.cleared(g, "cover"),
+    progress: (t, g) => `HOSTILES ${t.alive(g, "cover") + (t.c.pending || 0)}`,
   },
 
   patch: {
@@ -856,9 +1118,9 @@ const LOGIC = {
 
   shield: {
     enter(t, g) {
-      t.spawnHostiles(g, "shield", [[54.5, 20.5, "sentinel"]]);
+      t.arrive(g, "shield", [[54.5, 20.5, "sentinel"]]);
     },
-    update: (t, g) => t.c.spawned && t.alive(g, "shield") === 0,
+    update: (t, g) => t.cleared(g, "shield"),
   },
 
   chrono: {
@@ -890,45 +1152,39 @@ const LOGIC = {
   slowFire: {
     waypoint: { x: 29.5, y: 36.5 },
     enter(t, g) {
-      t.spawnHostiles(g, "slowFire", [
-        [29.5, 37.5, "drone"],
-        [30.5, 40.5, "drone"],
-        [28.5, 43.5, "drone"],
+      // Out of the corridor's grilles: each bangs before the drone drops.
+      t.arrive(g, "slowFire", [
+        [27.5, 36.5, "drone", "vent"],
+        [32.5, 43.5, "drone", "vent"],
+        [29.5, 40.5, "drone"],
       ]);
     },
-    update: (t, g) => t.c.spawned && t.alive(g, "slowFire") === 0,
-    progress: (t, g) => `DRONES ${t.alive(g, "slowFire")}`,
+    update: (t, g) => t.cleared(g, "slowFire"),
+    progress: (t, g) => `DRONES ${t.alive(g, "slowFire") + (t.c.pending || 0)}`,
     exit(t) {
       if (t.c.chronoKills > 0) t.say([["ARIA", "Did you see that? They never knew what time it was.", "excited"]]);
     },
   },
 
-  cells: {
+  // ── Lights out ─────────────────────────────────────────────────
+
+  breaker: {
+    waypoint: { x: BREAKER_CELL.x + 0.5, y: BREAKER_CELL.y - 0.8 },
     enter(t, g) {
       t.blackout = true;
       g.audio.powerDown?.();
       g.glitchEffect = 0.8;
-      t.place(g, "cell1", new Pickup(19.5, 30.5, "powerCell"));
-      t.place(g, "cell2", new Pickup(39.5, 30.5, "powerCell"));
-      g.powerCells = { total: 2, found: 0 };
+      t.openDoors(g, "door5", "door13", "door15");
       t.ensureExit(g, true);
-      t.spawnHostiles(g, "cells", [
-        [22.5, 33.5, "henchman"],
-        [37.5, 31.5, "drone"],
-      ]);
+      t.c.thrown = false;
+      // The dark brings them out of the ducts by the north hall and R&D.
+      t.arrive(g, "breaker", [
+        [56.5, 9.5, "henchman", "vent"],
+        [77.5, 2.5, "drone", "vent"],
+      ], { lead: 2 });
     },
-    get waypoint() {
-      return null;
-    },
-    update(t, g) {
-      // Point at the nearer cell still out there.
-      const left = g.entities.filter((e) => e.type === "powerCell" && e.active);
-      const p = g.player;
-      left.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
-      g.objectiveWaypoint = left[0] ? { x: left[0].x, y: left[0].y } : null;
-      return (g.powerCells?.found ?? 0) >= 2;
-    },
-    progress: (t, g) => `POWER CELLS ${g.powerCells?.found ?? 0} / 2`,
+    update: (t) => t.c.thrown,
+    progress: (t, g) => (t.alive(g, "breaker") ? `BREAKER · R&D BAY · HOSTILES ${t.alive(g, "breaker")}` : "BREAKER · R&D BAY"),
   },
 
   toLift: {
@@ -936,14 +1192,14 @@ const LOGIC = {
     enter(t, g) {
       t.blackout = false;
       t.ensureExit(g, true); // charging: live once the arena is held
-      // The cells are in (a skipped step leaves them lying about): their chip
-      // goes until the lift is live.
-      for (const e of g.entities) if (e.type === "powerCell") e.active = false;
-      g.powerCells = null;
-      t.openDoors(g, "door5");
+      const grid = g.map?.grid;
+      if (grid) grid[BREAKER_CELL.y][BREAKER_CELL.x] = RND_WALLS.BREAKER_LIVE;
+      t.openDoors(g, "door5", "door13");
     },
     update: (t, g) => t.near(g, 29.5, 10.0, 2.0),
   },
+
+  // ── Evac ───────────────────────────────────────────────────────
 
   wave1: {
     enter(t, g) {
@@ -959,7 +1215,7 @@ const LOGIC = {
         [49.5, 9.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1")} · LIFT ▲ 30%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1") + (t.c.pending || 0)} · LIFT ▲ 30%`,
   },
 
   wave2: {
@@ -967,14 +1223,15 @@ const LOGIC = {
       t.c.delay = 2.5;
     },
     update(t, g) {
+      // In from both ends: through the north hall's door, and the air.
       return t.wave(g, "wave2", [
         [10.5, 6.5, "henchman"],
-        [49.5, 6.5, "henchman"],
+        [49.5, 8.5, "henchman"],
         [20.5, 3.5, "drone"],
         [39.5, 3.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2")} · LIFT ▲ 60%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2") + (t.c.pending || 0)} · LIFT ▲ 60%`,
   },
 
   wave3: {
@@ -988,7 +1245,7 @@ const LOGIC = {
         [10.5, 9.5, "henchman"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3")} · LIFT ▲ 90%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3") + (t.c.pending || 0)} · LIFT ▲ 90%`,
   },
 
   extract: {
@@ -1032,8 +1289,12 @@ export class TutorialSystem {
   /** Every per-run field, as a new run starts it. */
   _resetState() {
     // Step progression: `clock` is the step's age in real seconds (it runs
-    // on the game's frame time, so it pauses with the game).
+    // on the game's frame time, so it pauses with the game). `runClock` is
+    // the whole chapter's, for the pacing measures.
     this.clock = 0;
+    this.runClock = 0;
+    this.suitedAt = null;
+    this.firstShotAt = null;
     this.c = {};
     // Interaction flags, set by the game as they happen (game.tutorialX).
     this.pickedUp = false;
@@ -1054,9 +1315,24 @@ export class TutorialSystem {
     /** The floor's other people, by PEOPLE key, and who ARIA has noticed. */
     this.people = {};
     this._noticed = new Set();
+    this._talked = {};
+    this._read = new Set();
+    /** True from 06:47: the floor's people are stopped where they stood. */
+    this.frozen = false;
+    /**
+     * The certification sheet: each finished trial's result ({ time, acc,
+     * grade }), the order they were done in, and the trial running now.
+     */
+    this.cert = { done: {}, order: [], briefed: false, run: null };
+    /** The mobility run while it lasts: its gates, shutters and clock. */
+    this.course = null;
+    /** The holo cover standing in the sim hall: [row, col] cells. */
+    this._cover = [];
     /** Lift B's doors: wanted open, and open now. */
     this.liftWant = false;
     this.liftOpen = false;
+    /** The Supervisor is in Lift B, going down: gone when its doors shut. */
+    this.supDown = false;
     this._timers = [];
     // Set pieces.
     this.alert = false;
@@ -1067,6 +1343,7 @@ export class TutorialSystem {
     this.blackout = false;
     this.vents = null;
     this._alertLights = null;
+    this._lastPA = null;
     // Dialogue still to play: { line: [speaker, text, emotion], step }.
     this.script = [];
     this._lineGap = 0;
@@ -1171,6 +1448,8 @@ export class TutorialSystem {
 
   _enter(index) {
     const g = this.game;
+    // The two steps before this one: their lines may still finish.
+    this._recentSteps = [this.step, ...(this._recentSteps ?? [])].slice(0, 2);
     this.step = index;
     this.stepTime = performance.now();
     this.clock = 0;
@@ -1202,6 +1481,26 @@ export class TutorialSystem {
     if (this.cardKey) d.post(this.cardKey, "teach", null, { top: false, minHold: 0, priority: 120 });
   }
 
+  /**
+   * Where the chapter goes from the step just finished: on through a trial,
+   * from the hub into the trial picked (or the first not done, when a step
+   * is skipped), from a trial's last step back to the hub, and after the
+   * fourth trial on to the sign-off.
+   */
+  _nextIndex() {
+    const def = this.def;
+    const signOff = PROLOGUE_STEPS.findIndex((s) => s.id === "signOff");
+    if (def?.id === "certify") {
+      const pick = this.c.pick ?? PROLOGUE_TRIALS.find((tr) => !this.cert.done[tr.id])?.id;
+      return pick ? trialStart(pick) : signOff;
+    }
+    if (def?.trial && PROLOGUE_STEPS[this.step + 1]?.trial !== def.trial) {
+      const left = PROLOGUE_TRIALS.some((tr) => !this.cert.done[tr.id]);
+      return left ? PROLOGUE_STEPS.findIndex((s) => s.id === "certify") : signOff;
+    }
+    return this.step + 1;
+  }
+
   advanceStep() {
     const g = this.game;
     const prev = this.def;
@@ -1215,7 +1514,12 @@ export class TutorialSystem {
       this._finish();
       return;
     }
-    this._enter(this.step + 1);
+    // A trial is timed from leaving the hub to its last step's end.
+    const pick = prev?.id === "certify" ? (this.c.pick ?? PROLOGUE_TRIALS.find((tr) => !this.cert.done[tr.id])?.id) : null;
+    if (prev?.trial && PROLOGUE_STEPS[this.step + 1]?.trial !== prev.trial) this._finishTrial(prev.trial);
+    const next = this._nextIndex();
+    if (pick) this._beginTrial(pick);
+    this._enter(next);
   }
 
   /** Debug and test hook: complete the current step as if its goal were met. */
@@ -1228,6 +1532,9 @@ export class TutorialSystem {
     const g = this.game;
     const now = performance.now();
     this.clock += g.deltaTime || 0;
+    this.runClock += g.deltaTime || 0;
+    if (this.cert.run) this.cert.run.clock += g.deltaTime || 0;
+    if (this.firstShotAt == null && this.suitedAt != null && g.shotsFired > 0) this.firstShotAt = this.runClock;
 
     // Respawn collected pickups after a delay. Health and ammo stay shut
     // (and off the map) until the range teaches them.
@@ -1245,6 +1552,7 @@ export class TutorialSystem {
     this._syncRoomLights(g);
     this._updateLift(g);
     this._updateNotices(g);
+    this._updateGap(g);
     for (const e of g.entities) if (e.type === "npc") e.update(g.deltaTime || 0);
     for (let i = this._timers.length - 1; i >= 0; i--) {
       if (this.clock >= this._timers[i].at) this._timers.splice(i, 1)[0].fn();
@@ -1281,16 +1589,26 @@ export class TutorialSystem {
     events.forEach(([at, kind, text], i) => {
       if (this._events.has(i) || this.clock < at) return;
       this._events.add(i);
-      if (kind === "pa") this.say([["PA", text, "calm"]]);
-      else if (kind === "flicker") {
-        this.flickerUntil = this.clock + 0.45;
-        g.glitchEffect = Math.max(g.glitchEffect || 0, 0.35);
-        g.audio.powerFlicker?.();
-      } else if (kind === "tremor") {
+      if (kind === "pa") this.announce(text);
+      else if (kind === "flicker") this.flicker(g);
+      else if (kind === "tremor") {
         g.screenShake = Math.max(g.screenShake || 0, 5);
         g.audio.tremor?.();
       }
     });
+  }
+
+  /** A station announcement (remembered: the calibration makes the PA repeat itself). */
+  announce(text) {
+    this._lastPA = text;
+    this.say([["PA", text, "calm"]], { keep: true });
+  }
+
+  /** The lights stutter. */
+  flicker(g, seconds = 0.45) {
+    this.flickerUntil = this.clock + seconds;
+    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.35);
+    g.audio.powerFlicker?.();
   }
 
   /** Whether the station's lights are out or stuttering right now (the overlay's darkness). */
@@ -1323,9 +1641,14 @@ export class TutorialSystem {
     return !!this.def?.preSuit;
   }
 
-  /** Whether the Supervisor is with you (in person) rather than on the radio. */
+  /**
+   * Whether the Supervisor is with you (in person, within earshot) rather
+   * than on the suit channel.
+   */
   get supPresent() {
-    return !!this.sup?.active;
+    const s = this.sup;
+    const p = this.game.player;
+    return !!s?.active && Math.hypot(s.x - p.x, s.y - p.y) < 9;
   }
 
   /** Send the Supervisor along his route for this step, then have him wait for you. */
@@ -1344,6 +1667,50 @@ export class TutorialSystem {
     sup.walk(SUP_ROUTES[route], { then: (s) => s.faceTo(g.player) });
   }
 
+  /**
+   * Send the Supervisor to (x, y) by the floor's own corridors; if he is out
+   * of your sight and far off, he is simply there already.
+   */
+  supTo(g, x, y) {
+    if (!this.sup) {
+      this.sup = new Npc(x, y, "supervisor", { name: "Supervisor Simon" });
+      g.entities.push(this.sup);
+    }
+    this.goTo(g, this.sup, x, y, g.player);
+  }
+
+  /** Walk someone to (x, y) by the floor's corridors, or put them there if you can't see them. */
+  goTo(g, n, x, y, face = null, { snap = false } = {}) {
+    n.active = true;
+    if (!g.entities.includes(n)) g.entities.push(n);
+    const p = g.player;
+    const far = Math.hypot(n.x - p.x, n.y - p.y) > 12 || !hasLineOfSight(g.map, p.x, p.y, n.x, n.y);
+    const there = Math.hypot(n.x - x, n.y - y) < 0.4;
+    if (there) {
+      n.path = [];
+      if (face) n.faceTo(face);
+      return;
+    }
+    // Snapping is only allowed where nobody sees it happen.
+    const unseenAt = Math.hypot(x - p.x, y - p.y) > 12 || !hasLineOfSight(g.map, p.x, p.y, x, y);
+    if ((snap || far) && far && unseenAt) {
+      n.x = x;
+      n.y = y;
+      n.path = [];
+      if (face) n.faceTo(face);
+      return;
+    }
+    n.walk(route(g.map, n.x, n.y, x, y), { then: (m) => face && m.faceTo(face) });
+  }
+
+  /** One of R&D to their trial's station (or `at`), walking or already there. */
+  toStation(g, id, { snap = false, at = null } = {}) {
+    if (this.frozen) return;
+    const n = this.person(g, id);
+    const s = at ?? STATIONS[id];
+    this.goTo(g, n, s.x, s.y, s.face, { snap });
+  }
+
   /** The light on the cadet's locker, so you know which one is yours. */
   /**
    * The cadet's locker, as the morning has it: shut, then lit while it calls
@@ -1359,7 +1726,6 @@ export class TutorialSystem {
     else if (row[x] === STATION_WALLS.LOCKERS_MINE_LIT) row[x] = this.c?.suited ? STATION_WALLS.LOCKERS_MINE_OPEN : STATION_WALLS.LOCKERS_MINE;
   }
 
-  /** The cadet's locker shut, as it is first thing. */
   /**
    * Rasterise an NPC look now, a few layers a frame, before a scene changes
    * someone into it: left to the swap, the new sprite blinked out while its
@@ -1378,6 +1744,7 @@ export class TutorialSystem {
     requestAnimationFrame(step);
   }
 
+  /** The cadet's locker shut, as it is first thing. */
   lockerShut(g) {
     const row = g.map?.grid?.[MY_LOCKER_CELL.y];
     if (row) row[MY_LOCKER_CELL.x] = STATION_WALLS.LOCKERS_MINE;
@@ -1385,11 +1752,26 @@ export class TutorialSystem {
 
   /**
    * The interact key, before the game's own doors and secret walls: the
-   * locker during "Suit Up". Returns true when it was used here.
+   * locker during "Suit Up", the breaker in the blackout, and otherwise
+   * whoever you are facing (talk) or what is on the wall in front of you
+   * (read). Returns true when it was used here.
    */
   onInteract() {
     const g = this.game;
-    if (this.def?.id !== "suitUp" || this.c.opening) return false;
+    const id = this.def?.id;
+    if (id === "suitUp") return this._openLocker();
+    if (id === "breaker" && this._throwBreaker()) return true;
+    // A door or a secret panel in front of you is the game's to open.
+    const ahead = this._cellAhead(1.5);
+    if (ahead && (ahead.v === 5 || ahead.v === 6)) return false;
+    if (this._talk()) return true;
+    if (ahead && READABLE[ahead.v]) return this._readWall(ahead.v);
+    return false;
+  }
+
+  _openLocker() {
+    const g = this.game;
+    if (this.c.opening) return false;
     const p = g.player;
     const dx = MY_LOCKER.x - p.x;
     const dy = MY_LOCKER.y - p.y;
@@ -1417,6 +1799,82 @@ export class TutorialSystem {
     return true;
   }
 
+  /** The first wall cell within `reach` straight ahead, as { x, y, v }. */
+  _cellAhead(reach) {
+    const g = this.game;
+    const p = g.player;
+    const grid = g.map?.grid;
+    if (!grid) return null;
+    for (let d = 0.4; d <= reach; d += 0.2) {
+      const x = Math.floor(p.x + Math.cos(p.angle) * d);
+      const y = Math.floor(p.y + Math.sin(p.angle) * d);
+      const v = grid[y]?.[x];
+      if (v == null) return null;
+      if (v !== 0) return { x, y, v };
+    }
+    return null;
+  }
+
+  /** The breaker, if you are at it and facing it: thrown, and the lights come back. */
+  _throwBreaker() {
+    const g = this.game;
+    if (this.c.thrown) return false;
+    const p = g.player;
+    const bx = BREAKER_CELL.x + 0.5;
+    const by = BREAKER_CELL.y + 0.5;
+    if (Math.hypot(bx - p.x, by - p.y) > 2.3) return false;
+    let diff = Math.atan2(by - p.y, bx - p.x) - p.angle;
+    diff -= 2 * Math.PI * Math.round(diff / (2 * Math.PI));
+    if (Math.abs(diff) > 1.2) return false;
+    this.c.thrown = true;
+    g.map.grid[BREAKER_CELL.y][BREAKER_CELL.x] = RND_WALLS.BREAKER_LIVE;
+    g.audio.armorClank?.(0);
+    g.screenShake = Math.max(g.screenShake || 0, 2);
+    return true;
+  }
+
+  /**
+   * Talk to whoever you are facing, close by: their next line, or before
+   * anything else is being said. After 06:47, ARIA says a word instead.
+   */
+  _talk() {
+    const g = this.game;
+    const p = g.player;
+    let who = null;
+    for (const [id, n] of Object.entries(this.people)) {
+      if (!n?.active || !g.entities.includes(n)) continue;
+      const d = Math.hypot(n.x - p.x, n.y - p.y);
+      if (d > 2.4) continue;
+      let diff = Math.atan2(n.y - p.y, n.x - p.x) - p.angle;
+      diff -= 2 * Math.PI * Math.round(diff / (2 * Math.PI));
+      if (Math.abs(diff) > 0.6) continue;
+      if (!who || d < who.d) who = { id, n, d };
+    }
+    if (!who) return false;
+    // Never over the story: a busy channel just swallows the press.
+    if (!this.scriptIdle()) return true;
+    if (this.frozen) {
+      const k = (this._talked.__frozen = (this._talked.__frozen ?? -1) + 1);
+      if (k < FROZEN_TALK.length) this.say([FROZEN_TALK[k]]);
+      return true;
+    }
+    const lines = TALK[who.id];
+    if (!lines) return false;
+    const k = this._talked[who.id] ?? 0;
+    this._talked[who.id] = k + 1;
+    who.n.faceTo(p);
+    this.say([lines[k % lines.length]]);
+    return true;
+  }
+
+  /** ARIA reads out something on the wall (a board, a poster), once each. */
+  _readWall(v) {
+    if (!this.scriptIdle() || this._read.has(v)) return true;
+    this._read.add(v);
+    this.say(READABLE[v]);
+    return true;
+  }
+
   /** The card's live counter for the current step ("TARGETS 2 / 3"), or null. */
   progressText() {
     try {
@@ -1436,6 +1894,231 @@ export class TutorialSystem {
     if (p.isAiming) this.c.aimedKills = (this.c.aimedKills || 0) + 1;
     if (p.weapons[p.currentWeapon] === SHOTGUN) this.c.shotgunKills = (this.c.shotgunKills || 0) + 1;
     if (p.chronoActive) this.c.chronoKills = (this.c.chronoKills || 0) + 1;
+  }
+
+  // ── Certification Day ───────────────────────────────────────────
+
+  /** A trial starts from the hub: its clock and its shot count from now. */
+  _beginTrial(id) {
+    const g = this.game;
+    this.cert.run = { trial: id, clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0 };
+  }
+
+  /**
+   * A trial's last step is done: grade it onto the sheet, then make the
+   * calibration a little stranger for it.
+   */
+  _finishTrial(id) {
+    const g = this.game;
+    const run = this.cert.run?.trial === id ? this.cert.run : { clock: 0, shots: g.shotsFired || 0, hits: g.shotsHit || 0 };
+    const shots = (g.shotsFired || 0) - run.shots;
+    const hits = (g.shotsHit || 0) - run.hits;
+    const acc = shots > 0 ? Math.min(1, hits / shots) : null;
+    const trial = PROLOGUE_TRIALS.find((tr) => tr.id === id);
+    const result = { time: run.clock, acc, grade: gradeTrial(trial, run.clock, acc) };
+    this.cert.done[id] = result;
+    this.cert.order.push(id);
+    this.cert.run = null;
+    const n = this.cert.order.length;
+    if (n < PROLOGUE_TRIALS.length) {
+      this.say([["SUPERVISOR", trialComment(trial, result), "calm"]], { keep: true });
+      this.escalate(n);
+    }
+  }
+
+  /**
+   * The calibration's oddity for the nth trial finished (src/data/prologue.js
+   * PROLOGUE_ODDITIES), staged wherever you are.
+   */
+  escalate(n) {
+    const g = this.game;
+    const odd = PROLOGUE_ODDITIES[n - 1];
+    if (!odd) return;
+    if (n === 1) {
+      // The corridor clocks read 06:47 for a moment, then right again.
+      this.announce(odd.pa);
+      setTimeoutGame(this, 2.5, () => {
+        this.setClocks(g, true);
+        setTimeoutGame(this, 1.6, () => {
+          if (!this.frozen) this.setClocks(g, false);
+        });
+      });
+    } else if (n === 2) {
+      // The PA says its last again, word for word; Mendez pours the same
+      // coffee twice.
+      if (this._lastPA) this.say([["PA", this._lastPA, "calm"]], { keep: true });
+      const mendez = this.person(g, "mendez");
+      const at = PEOPLE.mendez.at;
+      const pour = () => {
+        mendez.x = at[0] + 0.9;
+        mendez.y = at[1] + 0.6;
+        mendez.walk([at], { speed: 1.1, then: (m) => {
+          m.faceTo({ x: PEOPLE.mendez.face[0], y: PEOPLE.mendez.face[1] });
+          m.pose("point", 1.4);
+        } });
+      };
+      pour();
+      setTimeoutGame(this, 2.6, pour);
+      const p = g.player;
+      const sees = Math.hypot(at[0] - p.x, at[1] - p.y) < 10 && hasLineOfSight(g.map, p.x, p.y, at[0], at[1]);
+      setTimeoutGame(this, 4, () => this.say(sees ? odd.lines : odd.away, { keep: true }));
+    } else if (n === 3) {
+      // A hologram the sim never loaded, by Lift B; the lights stutter on
+      // the Engine's beat.
+      const e = makeTarget(EXHIBIT_AT.x + 2, EXHIBIT_AT.y, { type: "glitchling", health: 999 });
+      e._holo = true;
+      e._corrupt = true;
+      // A projection the sim never loaded: shots go through it.
+      e._phased = true;
+      e._oddity = true;
+      e._tutTag = "oddity";
+      g.entities.push(e);
+      setTimeoutGame(this, 14, () => this.clearTag(g, "oddity"));
+      for (const k of [0, 0.9, 1.8]) setTimeoutGame(this, k, () => this.flicker(g, 0.3));
+      setTimeoutGame(this, 1.2, () => this.say(odd.lines, { keep: true }));
+    }
+  }
+
+  /** Every station clock on the floor: stopped at 06:47, or right. */
+  setClocks(g, stopped) {
+    const grid = g.map?.grid;
+    if (!grid) return;
+    const from = stopped ? HALL_WALLS.CLOCK : HALL_WALLS.CLOCK_STOPPED;
+    const to = stopped ? HALL_WALLS.CLOCK_STOPPED : HALL_WALLS.CLOCK;
+    for (const row of grid) for (let x = 0; x < row.length; x++) if (row[x] === from) row[x] = to;
+  }
+
+  /** The certification sheet, one line per trial, for the hub's card. */
+  sheetText() {
+    return PROLOGUE_TRIALS.map((tr) => {
+      const r = this.cert.done[tr.id];
+      if (!r) return `${tr.name} — ${tr.where}`;
+      const bits = [`${tr.name} ✓ ${r.grade}`];
+      if (tr.par != null) bits.push(`${Math.round(r.time)} s`);
+      if (r.acc != null) bits.push(`${Math.round(r.acc * 100)}%`);
+      return bits.join(" · ");
+    }).join("\n");
+  }
+
+  /** The Supervisor's word on the best of the four, for the sign-off. */
+  bestTrialLine() {
+    const best = PROLOGUE_TRIALS.filter((tr) => tr.par != null && this.cert.done[tr.id])
+      .map((tr) => ({ tr, r: this.cert.done[tr.id] }))
+      .sort((a, b) => TRIAL_GRADES.indexOf(a.r.grade) - TRIAL_GRADES.indexOf(b.r.grade) || a.r.time / a.tr.par - b.r.time / b.tr.par)[0];
+    if (!best) return null;
+    const name = best.tr.name.charAt(0) + best.tr.name.slice(1).toLowerCase();
+    const time = `${Math.round(best.r.time)} seconds`;
+    if (best.r.grade === "S") return `${name}, ${time}. I've seen instructors do worse. I'll be putting that in writing.`;
+    if (best.r.grade === "A") return `${name}, ${time}. Somebody upstairs is going to notice that.`;
+    return `${name} was your best. It'll do. The Bureau grades on a curve.`;
+  }
+
+  /** The hub's start gate in the lobby, lit, until the run is done. */
+  startGate(g) {
+    if (g.entities.some((e) => e._tutTag === "startGate")) return;
+    const gate = new Prop(RUN_GATES[0].x, RUN_GATES[0].y, "course_gate");
+    gate.gate = { num: 0, state: "next" };
+    gate._tutTag = "startGate";
+    g.entities.push(gate);
+  }
+
+  /** The run begins (or picks up at gate `from` after a checkpoint): its gates and shutters go up. */
+  startCourse(g, from = 1) {
+    this.endCourse(g);
+    this.clearTag(g, "startGate");
+    const gates = RUN_GATES.slice(0, -1).map(({ x, y }, i) => {
+      const gate = new Prop(x, y, "course_gate");
+      gate.gate = { num: i, state: "ahead" };
+      gate._tutTag = "gates";
+      g.entities.push(gate);
+      return gate;
+    });
+    for (const s of SHUTTERS) {
+      const sh = new Prop(s.x + 0.5, s.y + 0.5, "shutter");
+      sh._tutTag = "gates";
+      g.entities.push(sh);
+    }
+    this.course = { gate: from, gates, safe: { x: g.player.x, y: g.player.y }, warned: {} };
+  }
+
+  /** The run is over: gates and shutters come down. */
+  endCourse(g) {
+    this.clearTag(g, "gates");
+    this.course = null;
+  }
+
+  /**
+   * One tick of the run, up to gate `last`: the next gate lit and pointed
+   * at, the shutters only gone under low. Returns true once `last` is run.
+   */
+  runCourse(g, last) {
+    const c = this.course;
+    if (!c) return true;
+    const p = g.player;
+    const gate = RUN_GATES[c.gate];
+    g.objectiveWaypoint = gate;
+    c.gates.forEach((prop, i) => {
+      const finish = c.gate === RUN_GATES.length - 1 && i === 0;
+      prop.gate.state = finish ? "next" : i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
+      prop.gate.label = finish ? "END" : undefined;
+    });
+    // A shutter stops you unless you go under it: sliding, or crouched.
+    const low = p.isSliding || p.isCrouching || p.crouchBlend > 0.6;
+    const under = SHUTTERS.find((s) => Math.floor(p.x) === s.x && Math.floor(p.y) === s.y);
+    if (under && !low) {
+      p.x = c.safe.x;
+      p.y = c.safe.y;
+      g.screenShake = Math.max(g.screenShake || 0, 1.5);
+      g.audio.menuBack?.();
+      if (!c.warned.shutter) {
+        c.warned.shutter = true;
+        this.say([["ARIA", "Under it, not through it. Slide, or crouch and walk.", "warm"]]);
+      }
+    } else if (!under) {
+      c.safe = { x: p.x, y: p.y };
+    }
+    if (this.near(g, gate.x, gate.y, RUN_GATE_R)) {
+      g.audio.menuConfirm?.();
+      if (c.gate >= last) {
+        c.gate++;
+        return true;
+      }
+      c.gate++;
+    }
+    return false;
+  }
+
+  /** The run's line on the card: the gate, and the clock. */
+  courseText() {
+    const c = this.course;
+    const time = (this.cert.run?.clock ?? 0).toFixed(1);
+    if (!c) return `${time} s`;
+    const n = Math.min(c.gate, RUN_GATES.length - 1);
+    return `GATE ${n} / ${RUN_GATES.length - 1} · ${time} s · PAR ${PROLOGUE_TRIALS.find((tr) => tr.id === "mobility").par} s`;
+  }
+
+  /**
+   * The atrium bridge's missing section: walk into it and you are set back
+   * on the near side. Mid-dash (or carried by one just ended) you are over.
+   */
+  _updateGap(g) {
+    const p = g.player;
+    if (p.isDashing) this._dashAt = this.clock;
+    const inGap = Math.floor(p.x) === ATRIUM_GAP.x && Math.floor(p.y) >= ATRIUM_GAP.y0 && Math.floor(p.y) <= ATRIUM_GAP.y1;
+    if (!inGap) {
+      this._gapSide = p.x < ATRIUM_GAP.x ? -1 : 1;
+      return;
+    }
+    if (p.isDashing || this.clock - (this._dashAt ?? -9) < DASH_CARRY) return;
+    // Back to the edge you came from, a beat to collect yourself.
+    p.x = this._gapSide > 0 ? ATRIUM_GAP.x + 1.4 : ATRIUM_GAP.x - 0.4;
+    g.screenShake = Math.max(g.screenShake || 0, 3);
+    g.glitchEffect = Math.max(g.glitchEffect || 0, 0.3);
+    g.audio.menuBack?.();
+    if (!this._gapWarned) {
+      this._gapWarned = true;
+      this.say([["ARIA", "Caught you. Don't walk it: dash it, right at the edge.", "worried"]]);
+    }
   }
 
   // ── Checkpoints ─────────────────────────────────────────────────
@@ -1465,6 +2148,7 @@ export class TutorialSystem {
     this.deaths++;
     g.entities = g.entities.filter((e) => e.type !== "enemy" && !e._tutTag);
     g.projectiles = [];
+    this.course = null;
     p.alive = true;
     p.health = p.maxHealth;
     p.stamina = p.maxStamina ?? p.stamina;
@@ -1488,6 +2172,9 @@ export class TutorialSystem {
     this.script = [];
     g.ariaComms.message = null;
     g.audio.stopSpeech?.("comms");
+    // A trial run from its first step again is timed from there.
+    const trial = PROLOGUE_STEPS[cp.step]?.trial;
+    if (trial) this._beginTrial(trial);
     this._enter(cp.step);
     // The beat's lines already played once; ARIA just picks you back up.
     this.script = [];
@@ -1500,8 +2187,9 @@ export class TutorialSystem {
    * Queue lines to play in order once the comms are free. `cut` drops what
    * was still to come and cuts off the line in progress (an alarm).
    */
-  say(lines, { cut = false } = {}) {
+  say(lines, { cut = false, keep = false } = {}) {
     const g = this.game;
+    if (!lines) return;
     if (cut) {
       this.script = [];
       if (g.ariaComms?.message) g.ariaComms.message = null;
@@ -1509,8 +2197,9 @@ export class TutorialSystem {
       this._lineGap = 0.2;
     }
     // Each line remembers its step: a fast player outruns the story, and a
-    // line about the range is no use in the gym (see _updateScript).
-    for (const line of lines) this.script.push({ line, step: this.step });
+    // line about the range is no use in the gym (see _updateScript). A
+    // `keep` line (the sheet, the calibration's oddities) is never stale.
+    for (const line of lines) this.script.push({ line, step: keep ? null : this.step });
   }
 
   /** Whether every queued line has been said and the last has finished. */
@@ -1526,16 +2215,20 @@ export class TutorialSystem {
       this.idleSince = this.clock;
     }
     if (this._lineGap > 0) this._lineGap -= dt;
-    // Lines from more than a step back are stale: drop them rather than play
-    // them over the step they no longer describe.
-    while (this.script.length && this.script[0].step < this.step - 1) this.script.shift();
+    // Lines from steps long gone are stale: drop them rather than play them
+    // over a step they no longer describe. (The hub sends you back and forth
+    // between steps far apart in the list, so "long gone" is two steps of
+    // play, not two places in it.)
+    const recent = this._recentSteps ?? [];
+    const stale = (s) => s !== null && s !== this.step && !recent.includes(s);
+    while (this.script.length && stale(this.script[0].step)) this.script.shift();
     if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
     const [speaker, text, emotion, opts] = this.script.shift().line;
     const style = SPEAKER_STYLE[speaker] ?? SPEAKER_STYLE.ARIA;
     const radio = style.radioVoice && (opts?.radio || !this.supPresent);
     const id = {};
     comms.queueLine?.({
-      speaker,
+      speaker: speaker === "STAFF" || speaker === "STAFF_M" ? "STATION" : speaker,
       text,
       color: style.color,
       voice: radio ? style.radioVoice : style.voice,
@@ -1581,31 +2274,107 @@ export class TutorialSystem {
   }
 
   /**
-   * A step's hostiles, once (or every time, with `again`). Marks the step's
-   * `spawned` so its count can be checked.
+   * A step's holograms, once (or every time, with `again`). Marks the step's
+   * `spawned` so its count can be checked. Real hostiles go through arrive().
    */
-  spawnHostiles(g, tag, spots, make = makeHostile, again = false) {
+  spawnHostiles(g, tag, spots, make = makeHolo, again = false) {
     if (this.c.spawned && !again) return;
+    if (make !== makeHolo) return this.arrive(g, tag, spots, { make });
     this.c.spawned = true;
-    for (const [x, y, type] of spots) {
-      const e = make(x, y, type);
-      e._tutTag = tag;
-      // A scripted fight comes at you: hunting from the start (the AI's
-      // ctx.hunt keeps it on you), its first shot a beat away.
-      e.state = "chase";
-      e.lastAttackTime = g.time;
-      e._lastSeen = { x: g.player.x, y: g.player.y };
-      g.entities.push(e);
-      // The real ones don't come through doors: they step out of the air.
-      if (!e._holo) this.tear(g, x, y);
+    for (const [x, y, type] of spots) this._spawn(g, tag, x, y, type, make);
+  }
+
+  _spawn(g, tag, x, y, type, make) {
+    const e = make(x, y, type);
+    e._tutTag = tag;
+    // A scripted fight comes at you: hunting from the start (the AI's
+    // ctx.hunt keeps it on you), its first shot a beat away.
+    e.state = "chase";
+    e.lastAttackTime = g.time;
+    e._lastSeen = { x: g.player.x, y: g.player.y };
+    g.entities.push(e);
+    g.totalEnemies = (g.totalEnemies || 0) + 1;
+    return e;
+  }
+
+  /**
+   * Real hostiles, each coming in through a way you can see coming: a tear
+   * (the air cracks, glows and crackles for `lead` seconds, then opens) or
+   * a vent ("vent": the grille bangs, dust, and it drops). Spots are
+   * [x, y, type, via?]. The step's `pending` counts the ones still on the
+   * way; `cleared` waits for them. This is the one door every post-breach
+   * arrival goes through, so a telegraphed-arrival system can replace it.
+   */
+  arrive(g, tag, spots, { lead = ARRIVE_LEAD, make = makeHostile, via = "tear" } = {}) {
+    if (this.c.spawned) return;
+    this.c.spawned = true;
+    this.c.pending = (this.c.pending || 0) + spots.length;
+    const step = this.step;
+    for (const [x, y, type, how = via] of spots) {
+      const ticks = Math.ceil(lead / 0.25);
+      for (let k = 0; k < ticks; k++) setTimeoutGame(this, k * 0.25, () => this.step === step && this._telegraph(g, x, y, how, k / ticks));
+      setTimeoutGame(this, lead, () => {
+        if (this.step !== step) return;
+        this.c.pending = Math.max(0, (this.c.pending || 0) - 1);
+        this._spawn(g, tag, x, y, type, make);
+        if (how === "vent") {
+          g.screenShake = Math.max(g.screenShake || 0, 2);
+          playChronoSound(g.audio, "collapse", { x, y, player: g.player });
+        } else {
+          this.tear(g, x, y);
+          playChronoSound(g.audio, "rift", { x, y, player: g.player });
+        }
+      });
     }
-    g.totalEnemies = (g.totalEnemies || 0) + spots.length;
+  }
+
+  /** One beat of an arrival's warning: the tear brightening, or the vent rattling. */
+  _telegraph(g, x, y, how, k) {
+    if (how === "vent") {
+      g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 3, r: 150, g: 150, b: 150 }));
+      if (k > 0.5) playChronoSound(g.audio, "tick", { x, y, player: g.player });
+      return;
+    }
+    g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 3 + Math.round(k * 8), r: 190, g: 90, b: 255 }));
+    playChronoSound(g.audio, "tick", { x, y, player: g.player });
+    const L = { x, y, color: [190, 90, 255], radius: 2 + k * 2, baseIntensity: 0.4 + k, intensity: 0.4 + k, life: 0.3, maxLife: 0.3 };
+    g.lights?.push(L);
+  }
+
+  /** A step's arrivals have all come, and all are down. */
+  cleared(g, tag) {
+    return !!this.c.spawned && !(this.c.pending > 0) && this.alive(g, tag) === 0;
   }
 
   /** Where one of them steps out of the minute: a violet burst, the lights catching. */
   tear(g, x, y) {
     g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 14, r: 190, g: 90, b: 255 }));
     g.glitchEffect = Math.max(g.glitchEffect || 0, 0.25);
+  }
+
+  /**
+   * The sim hall's holo cover in `layout` (COVER_LAYOUTS): the last layout's
+   * blocks sink, the new ones rise waist-high, never on top of anyone.
+   */
+  raiseCover(g, layout) {
+    const map = g.map;
+    if (!map?.grid || !map.heightMap) return;
+    for (const [r, c] of this._cover) {
+      if (map.grid[r][c] === ARENA_WALLS.HOLO_BLOCK) {
+        map.grid[r][c] = 0;
+        map.heightMap[r][c] = LAYER.FULL;
+      }
+    }
+    this._cover = [];
+    const bodies = [g.player, ...g.entities.filter((e) => e.active && (e.type === "enemy" || e.type === "npc"))];
+    for (const [r, c] of COVER_LAYOUTS[layout] ?? []) {
+      if (map.grid[r][c] !== 0) continue;
+      if (bodies.some((e) => Math.abs(e.x - (c + 0.5)) < 0.9 && Math.abs(e.y - (r + 0.5)) < 0.9)) continue;
+      map.grid[r][c] = ARENA_WALLS.HOLO_BLOCK;
+      map.heightMap[r][c] = LAYER.WAIST;
+      this._cover.push([r, c]);
+      g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, c + 0.5, r + 0.5, { count: 6, r: 70, g: 240, b: 255 }));
+    }
   }
 
   // ── The floor's people ──────────────────────────────────────────
@@ -1617,6 +2386,7 @@ export class TutorialSystem {
       const d = PEOPLE[id];
       n = new Npc(d.at[0], d.at[1], NPC_TYPES[d.kind] ? d.kind : "officer", { name: d.name, look: d.look ?? null });
       n.faceTo({ x: d.face[0], y: d.face[1] });
+      n.caught = d.caught;
       this.people[id] = n;
     }
     n.active = true;
@@ -1671,30 +2441,52 @@ export class TutorialSystem {
   }
 
   /**
-   * The people, as the step finds them (and as a checkpoint puts them back):
-   * the morning's routine from the walk to the range until the breach, its
-   * aftermath from the office on.
+   * 06:47: the Engine pulses. Everyone on the floor without an anchor is
+   * caught where they stand, mid-whatever; every clock stops on the minute.
    */
-  _stagePeople(g) {
-    const at = (s) => PROLOGUE_STEPS.findIndex((d) => d.id === s);
-    if (this.step >= at("cover")) this.aftermath(g);
-    else if (this.step >= at("walk") && this.step < at("alarm")) for (const k of Object.keys(PEOPLE)) this.person(g, k);
+  minute(g) {
+    if (this.frozen) return;
+    this.frozen = true;
+    this.say([["PA", "The time is six forty-seven.", "calm"]]);
+    g.screenShake = Math.max(g.screenShake || 0, 6);
+    g.glitchEffect = 1;
+    g.audio.tremor?.();
+    playChronoSound(g.audio, "timeStop");
+    this.flicker(g, 0.6);
+    this.setClocks(g, true);
+    for (const id of Object.keys(PEOPLE)) {
+      const n = this.person(g, id);
+      n.path = [];
+      n.pose("frozen", Infinity);
+    }
   }
 
   /**
-   * The floor after the wave came up through it: the clerk frozen mid-step at
-   * her cabinets, an off-duty officer slumped by the vending machine, Orr
-   * still standing at the lift until the evac, and everyone else (the front
-   * desk, the other at the coffee, the one at the bags, Lin) gone.
+   * The people, as the step finds them (and as a checkpoint puts them back):
+   * the morning's routine from the walk until 06:47, stopped from then on.
+   */
+  _stagePeople(g) {
+    const at = (s) => PROLOGUE_STEPS.findIndex((d) => d.id === s);
+    if (this.step >= at("alarm") || this.frozen) this.aftermath(g);
+    else if (this.step >= at("walk")) for (const k of Object.keys(PEOPLE)) this.person(g, k);
+  }
+
+  /**
+   * The floor after 06:47: everyone where it caught them, mid-stamp,
+   * mid-sentence, mid-pour; Orr at Lift B until the evac turns her. (A
+   * checkpoint puts back anyone who wasn't on the floor at their spot.)
    */
   aftermath(g) {
-    for (const k of ["pike", "brooks", "varga", "lin"]) this.gone(g, k);
-    this.hold(g, "nand", 40.1, 17.6, "frozen", { x: 38.5, y: 15 }, { stay: true });
-    this.hold(g, "mendez", 19.6, 33.3, "slumped", { x: 22, y: 33 });
+    this.frozen = true;
+    this.setClocks(g, true);
+    for (const [id, d] of Object.entries(PEOPLE)) {
+      if (id === "orr") continue;
+      this.hold(g, id, d.at[0], d.at[1], "frozen", { x: d.face[0], y: d.face[1] }, { stay: true });
+    }
     if (this.step <= PROLOGUE_STEPS.findIndex((d) => d.id === "wave1")) this.hold(g, "orr", 32.4, 5.6, "frozen", LIFT_CAR, { stay: true });
     else this.gone(g, "orr");
     // Gone down the shaft, whatever the alarm got to show.
-    if (this.sup?.active && this.sup.x < 34 && this.sup.y < 12) this.sup.active = false;
+    if (this.step > PROLOGUE_STEPS.findIndex((d) => d.id === "alarm") && this.sup?.active && this.sup.x < 36 && this.sup.y < 12) this.sup.active = false;
   }
 
   /** Lift B's doors: open now, or shut as soon as nobody stands in them. */
@@ -1713,6 +2505,12 @@ export class TutorialSystem {
     }
     for (const d of LIFT_DOORS) grid[d.y][d.x] = this.liftWant ? 0 : d.shut;
     this.liftOpen = this.liftWant;
+    // The doors shut on the Supervisor; then he is gone down the shaft.
+    if (this.supDown && !this.liftOpen && this.sup?.active) {
+      this.sup.active = false;
+      g.audio.doorOpen?.();
+      g.screenShake = Math.max(g.screenShake || 0, 2);
+    }
   }
 
   /** ARIA, once, as you pass someone the breach caught (NOTICES). */
@@ -1744,20 +2542,20 @@ export class TutorialSystem {
     return n;
   }
 
-  /** An evac wave: a short breath, then the wave; done when it is down. */
+  /** An evac wave: a short breath, then the wave through its tears; done when it is down. */
   wave(g, tag, spots) {
     if (!this.c.spawned) {
       this.c.delay -= g.deltaTime;
       if (this.c.delay <= 0) {
-        this.spawnHostiles(g, tag, spots);
+        this.arrive(g, tag, spots);
         g.audio.alarmKlaxon?.();
       }
       return false;
     }
-    return this.alive(g, tag) === 0;
+    return this.cleared(g, tag);
   }
 
-  /** Lift B's beacon, in front of its doors: sealed until the cells are in and the car is back up. */
+  /** Lift B's beacon, in front of its doors: sealed until the power's on and the car is back up. */
   ensureExit(g, sealed) {
     if (!g.exitEntity || !g.entities.includes(g.exitEntity)) {
       g.exitEntity = { x: 29.5, y: 3.5, type: "exit", active: true, sealed, _tutTag: "exit" };
@@ -2040,6 +2838,14 @@ export class TutorialSystem {
     if (g.alwaysShowTutorial) return true;
     return !g.achievementStats.tutorialComplete;
   }
+}
+
+/** The Supervisor's word on a trial just finished, after its grade. */
+function trialComment(trial, r) {
+  const name = trial.name.charAt(0) + trial.name.slice(1).toLowerCase();
+  if (r.grade === "PASS") return `${name}: pass. Orr's happy, which is a first.`;
+  if (r.grade === "S" || r.grade === "A") return `${name}, ${r.grade}. Don't let it go to your head.`;
+  return `${name}, ${r.grade}. It's on the sheet now, Cadet. Next.`;
 }
 
 /** Step logic ids, for the tests: every prologue step must have logic. */
