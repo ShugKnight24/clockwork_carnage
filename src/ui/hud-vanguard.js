@@ -38,6 +38,7 @@ import { WEAPONS } from "../../js/data.js";
 import { reticlePoint } from "../systems/aim.js";
 import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
+import { ammoTint } from "./reload-hud.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -411,7 +412,7 @@ function drawVitalsReadout(game, ctx, x, cy, f, fs, low, compact) {
   // Angled stamina / chrono bars.
   const bw = Math.round((compact ? 92 : 150) * f);
   const bh = Math.max(3, Math.round((compact ? 4 : 5) * f));
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
   const active = p.isSprinting || p.isDashing;
   const stColor = p.isDashing ? UI.dash : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson;
@@ -539,7 +540,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
     ctx.strokeText(numStr, 0, 0);
   }
   // Realistic: running low is a warning (amber); only an empty mag goes red.
-  ctx.fillStyle = kick > 0.55 ? UI.flash : empty ? UI.crimson : low ? (HT.realistic ? (lowPulse > 0.5 ? UI.amber : UI.ammoLowPale) : lowPulse > 0.5 ? UI.critText : UI.ammoLowPale) : UI.ammo;
+  ctx.fillStyle = kick > 0.55 ? UI.flash : ammoTint(game, empty ? UI.crimson : low ? (HT.realistic ? (lowPulse > 0.5 ? UI.amber : UI.ammoLowPale) : lowPulse > 0.5 ? UI.critText : UI.ammoLowPale) : UI.ammo);
   ctx.fillText(numStr, 0, 0);
   ctx.restore();
 
@@ -550,25 +551,27 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
       empty || low ? (blink ? (warn ? UI.amber : UI.crimson) : warn ? UI.ammoLowPale : UI.critSoft) : UI.textDim, "right", 800, 2);
   }
 
-  // Round pips (last 30) with the spent round dropping out.
+  // The magazine's rounds as pips (up to 30), the spent round dropping out.
   if (!compact) {
-    const pips = Math.min(ammo, 30);
+    const slots = Math.min(30, wep ? p.magSizeOf?.(wep.id) ?? 30 : 30);
+    const loaded = wep && p.loadedOf ? p.loadedOf(wep.id) : ammo;
+    const pips = Math.min(loaded, slots);
     const pw = 3;
     const gap = 2;
     const py = bottom + 10;
     const ph = HT.outline ? 7 : 5;
     if (HT.outline) {
       ctx.fillStyle = UI.ink;
-      ctx.fillRect(right - 30 * (pw + gap) - 1, py - 1, 30 * (pw + gap) + 1, 9);
+      ctx.fillRect(right - slots * (pw + gap) - 1, py - 1, slots * (pw + gap) + 1, 9);
     }
     const pipColor = low
       ? (HT.realistic ? UI.amber : `rgba(255,42,74,${(0.55 + 0.45 * lowPulse).toFixed(3)})`)
-      : UI.pip;
-    for (let i = 0; i < 30; i++) {
+      : ammoTint(game, UI.pip);
+    for (let i = 0; i < slots; i++) {
       ctx.fillStyle = i < pips ? pipColor : UI.pipEmpty;
       ctx.fillRect(right - (i + 1) * (pw + gap), py, pw, ph);
     }
-    if (shot >= 0 && ammo < 30 && !sidearm) {
+    if (shot >= 0 && pips < slots) {
       const x = right - (pips + 1) * (pw + gap);
       ctx.globalAlpha = 1 - shot;
       ctx.fillStyle = UI.pipSpent;

@@ -20,7 +20,7 @@ describe("keybind migration", () => {
   });
 
   it("leaves an old save's own crouch key alone", () => {
-    expect(migrateKeybinds({ crouch: "KeyZ", dash: "KeyC" })).toEqual({ crouch: "KeyZ", dash: "KeyC", aim: "KeyR" });
+    expect(migrateKeybinds({ crouch: "KeyZ", dash: "KeyC" })).toEqual({ crouch: "KeyZ", dash: "KeyC", aim: "KeyT", reload: "KeyR" });
   });
 
   it("never moves an action onto a key the save already uses for another", () => {
@@ -35,6 +35,19 @@ describe("keybind migration", () => {
 
   it("gives a version-2 save the new aim key, unless Z is already taken", () => {
     expect(migrateKeybinds({ _v: 2, crouch: "ControlLeft" })).toMatchObject({ crouch: "ControlLeft", aim: "KeyZ" });
-    expect(migrateKeybinds({ _v: 2, interact: "KeyZ" }).aim).toBe("KeyR");
+    expect(migrateKeybinds({ _v: 2, interact: "KeyZ" }).aim).toBe("KeyT");
+  });
+
+  it("gives a version-3 save the reload key on R, or the next spare if its aim sat there", () => {
+    expect(DEFAULT_KEYBINDS.reload).toBe("KeyR");
+    expect(migrateKeybinds({ _v: 3, aim: "KeyZ" }).reload).toBe("KeyR");
+    const m = migrateKeybinds({ _v: 3, aim: "KeyR" });
+    expect(m.aim).toBe("KeyR");
+    expect(m.reload).toBe("KeyT");
+  });
+
+  it("never leaves the default binds sharing a key", () => {
+    const used = Object.values(DEFAULT_KEYBINDS);
+    expect(new Set(used).size).toBe(used.length);
   });
 });

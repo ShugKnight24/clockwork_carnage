@@ -154,7 +154,9 @@ export class PlayerUpdateSystem {
       if (p.staminaRegenDelay > 0) {
         p.staminaRegenDelay -= dt;
       } else {
-        p.stamina = Math.min(p.maxStamina, p.stamina + 15 * p.staminaRegenRate * dt);
+        // Conditioning's Stamina: a faster regen up to a higher cap (staminaCap).
+        const cap = p.staminaCap ?? p.maxStamina;
+        p.stamina = Math.min(cap, p.stamina + 15 * p.staminaRegenRate * (p.condRegenMult || 1) * dt);
       }
     }
 

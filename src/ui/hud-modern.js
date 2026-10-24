@@ -26,6 +26,7 @@ import {
 import { drawPortrait } from "./portrait.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { glyph } from "./input-glyphs.js";
+import { ammoTint } from "./reload-hud.js";
 import { drawWeaponIcon, SILHOUETTE_BOX } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { touchZones, BUTTON_KEYS } from "./touch-layout.js";
@@ -393,7 +394,7 @@ function drawVitals(game, ctx, w, h, f, fs) {
   healSweep(ctx, bx, by, bw, hpBarH);
   by += hpBarH + 6;
 
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
   const showChrono = chronoPct > 0.005 || p.chronoActive;
   const active = p.isSprinting || p.isDashing;
@@ -490,7 +491,7 @@ function drawAmmo(game, ctx, w, h, f, fs) {
   } else {
     label(ctx, low ? "LOW" : "AMMO", px + 12, py + ph - 10, Math.round(9 * fs), lowTone);
   }
-  kickNumber(ctx, `${p.ammoLabel ?? ammo}`, px + pw - 12, py + ph - 8, numSize, low ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo, "right");
+  kickNumber(ctx, `${p.ammoLabel ?? ammo}`, px + pw - 12, py + ph - 8, numSize, ammoTint(game, low ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo), "right");
 
   // The weapon bays sit right over the plate they feed.
   if (corner && game.settings.showWeapons) {
@@ -772,7 +773,7 @@ function drawClassicVitals(game, ctx, L, fs, f) {
   by += hpH + 8;
 
   // Stamina and chrono share a row under health.
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
   const showChrono = chronoPct > 0.005 || p.chronoActive;
   const active = p.isSprinting || p.isDashing;
@@ -857,7 +858,7 @@ function drawClassicArms(game, ctx, L, fs, f) {
   const ammoTW = ctx.measureText(ammoStr).width * 1.1;
   const numX = x + w - 16;
   const warn = HT.realistic ? UI.amber : UI.critText;
-  kickNumber(ctx, ammoStr, numX, bottom, ammoSize, empty ? UI.crimson : low ? warn : UI.ammo, "right");
+  kickNumber(ctx, ammoStr, numX, bottom, ammoSize, ammoTint(game, empty ? UI.crimson : low ? warn : UI.ammo), "right");
   const tag = empty ? "EMPTY" : low ? "LOW AMMO" : sidearm ? "SIDEARM" : "AMMO";
   label(ctx, tag, numX, bottom - Math.round(ammoSize * 0.76) - 6, Math.round(9 * fs),
     empty || low ? (pulse(game, 0.01) > 0.5 ? warn : HT.realistic ? UI.ammoLowPale : UI.critSoft) : UI.textDim, "right");
@@ -1039,7 +1040,7 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
   drawBar(ctx, bx, by, bw, 6, hpPct, tone, { segments: 5, ghost: ghostFor(hpPct), glow: low ? 0.6 : 0.2 });
   healSweep(ctx, bx, by, bw, 6);
   by += 10;
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
   const showChrono = chronoPct > 0.005 || p.chronoActive;
   const active = p.isSprinting || p.isDashing;
@@ -1064,7 +1065,7 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
   }
   const lowAmmo = p.ammoLow ?? p.ammo <= 10;
   if (wep) label(ctx, wep.name.toUpperCase(), x, midY - 10, 8, HT.realistic ? UI.textDim : wep.color, "left", 0);
-  number(ctx, `${p.ammoLabel ?? p.ammo}`, x, midY + 13, 20, lowAmmo ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo);
+  number(ctx, `${p.ammoLabel ?? p.ammo}`, x, midY + 13, 20, ammoTint(game, lowAmmo ? (HT.realistic ? UI.amber : UI.critText) : UI.ammo));
   ctx.font = uiFont(20, 800);
   x += Math.max(ctx.measureText(`${p.ammoLabel ?? p.ammo}`).width, 60) + 16;
 
@@ -1160,7 +1161,7 @@ export function renderModernTacticalPanels(game, ctx, w, h, f) {
   ctx.restore();
   label(ctx, lowAmmo ? "LOW AMMO" : "AMMO", rx + wingW - 16, wy + 16, Math.round(9 * fs),
     lowAmmo ? (pulse(game, 0.01) > 0.5 ? UI.crimson : "#ff8a96") : UI.textDim, "right");
-  kickNumber(ctx, `${p.ammoLabel ?? p.ammo}`, rx + 18, wy + wingH - 12, Math.round(30 * fs), lowAmmo ? "#ff5a6e" : "#ffe3a3", "left");
+  kickNumber(ctx, `${p.ammoLabel ?? p.ammo}`, rx + 18, wy + wingH - 12, Math.round(30 * fs), ammoTint(game, lowAmmo ? "#ff5a6e" : "#ffe3a3"), "left");
   if (wep) {
     ctx.fillStyle = wep.color;
     ctx.fillRect(rx + wingW - 18, wy + 26, 3, 12);
@@ -1168,7 +1169,7 @@ export function renderModernTacticalPanels(game, ctx, w, h, f) {
   }
 
   // Stamina / chrono under the arc.
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const active = p.isSprinting || p.isDashing;
   drawBar(ctx, cx - 70 * f, cy + 10, 140 * f, 4, staminaPct,
     p.isDashing ? "#7ff6ff" : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson, { glow: active ? 0.5 : 0, edge: false });
@@ -1222,7 +1223,7 @@ export function renderModernCustomPanels(game, ctx, w, h, f, portraitState) {
   if (layout.ammo) {
     const x = layout.ammo.x * w;
     const y = layout.ammo.y * h;
-    customReadout(ctx, x, y, "AMMO", `${p.ammoLabel ?? p.ammo}`, (p.ammoLow ?? p.ammo <= 10) ? UI.crimson : UI.amber, fs, (p.ammoLow ?? p.ammo <= 10) ? "#ff5a6e" : "#ffe3a3");
+    customReadout(ctx, x, y, "AMMO", `${p.ammoLabel ?? p.ammo}`, (p.ammoLow ?? p.ammo <= 10) ? UI.crimson : UI.amber, fs, ammoTint(game, (p.ammoLow ?? p.ammo <= 10) ? "#ff5a6e" : "#ffe3a3"));
   }
   if (layout.shield && p.maxShield > 0) {
     customReadout(ctx, layout.shield.x * w, layout.shield.y * h, "SHIELD",

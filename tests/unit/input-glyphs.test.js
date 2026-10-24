@@ -228,6 +228,14 @@ describe("default pad layout in play", () => {
     frame(game, []);
   };
 
+  it("X reloads when there is nothing in front of you to use", () => {
+    const game = padGame();
+    game.interact = () => (game.calls.push("interact"), false);
+    game.reloadPress = () => game.calls.push("reload");
+    press(game, PAD.X);
+    expect(game.calls).toEqual(["interact", "reload"]);
+  });
+
   it("A dashes, X interacts, B holds crouch, R3 locks, Start pauses", () => {
     const game = padGame();
     press(game, PAD.A);

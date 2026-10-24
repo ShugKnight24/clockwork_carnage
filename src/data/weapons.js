@@ -15,6 +15,11 @@
 // Ammo: each gun carries its own rounds, up to `maxAmmo`; it comes with
 // `startAmmo`, and an ammo crate adds `pickupAmmo` to every gun carried. The
 // sidearm (`infiniteAmmo`) never spends any.
+// Magazines: a gun fires from the `magSize` rounds loaded out of what it
+// carries (rounds, not shots: the cannon's 15 is three), and reloads for
+// `reloadMs`. `reloadZone: [start, width]` is the active reload's sweet zone
+// along that bar (src/systems/active-reload.js): generous on the sidearms,
+// tight on the sniper, whose reload is the one a fight turns on.
 // Aim: `spread` is the hip-fire cone (radians, half-angle) every round is
 // scattered across, drawn as the crosshair's spread brackets; `adsSpread` is
 // the cone with the sights up. `adsZoom` is the sight's magnification and
@@ -33,6 +38,9 @@ export const WEAPONS = [
     damage: 15,
     fireRate: 300, // ms between shots
     ammoPerShot: 1,
+    magSize: 12,
+    reloadMs: 1100,
+    reloadZone: [0.4, 0.24],
     maxAmmo: 999,
     startAmmo: 999,
     infiniteAmmo: true,
@@ -51,6 +59,9 @@ export const WEAPONS = [
     pellets: 6,
     fireRate: 650,
     ammoPerShot: 1,
+    magSize: 6,
+    reloadMs: 2000,
+    reloadZone: [0.5, 0.16],
     maxAmmo: 40,
     startAmmo: 20,
     pickupAmmo: 10,
@@ -71,6 +82,9 @@ export const WEAPONS = [
     damage: 22,
     fireRate: 200,
     ammoPerShot: 1,
+    magSize: 30,
+    reloadMs: 1700,
+    reloadZone: [0.5, 0.15],
     maxAmmo: 120,
     startAmmo: 60,
     pickupAmmo: 30,
@@ -88,6 +102,9 @@ export const WEAPONS = [
     damage: 80,
     fireRate: 1000,
     ammoPerShot: 5,
+    magSize: 15,
+    reloadMs: 2400,
+    reloadZone: [0.55, 0.12],
     maxAmmo: 40,
     startAmmo: 20,
     pickupAmmo: 10,
@@ -107,6 +124,9 @@ export const WEAPONS = [
     phasesShields: true,
     fireRate: 750,
     ammoPerShot: 1,
+    magSize: 4,
+    reloadMs: 1900,
+    reloadZone: [0.5, 0.15],
     maxAmmo: 24,
     startAmmo: 12,
     pickupAmmo: 6,
@@ -135,6 +155,9 @@ export const WEAPONS = [
     slowOnHit: { ms: 2500, factor: 0.4 },
     fireRate: 1500,
     ammoPerShot: 1,
+    magSize: 4,
+    reloadMs: 2600,
+    reloadZone: [0.62, 0.08],
     maxAmmo: 8,
     startAmmo: 4,
     pickupAmmo: 1,
@@ -159,6 +182,9 @@ export const WEAPONS = [
     chains: true,
     fireRate: 250,
     ammoPerShot: 1,
+    magSize: 15,
+    reloadMs: 1200,
+    reloadZone: [0.42, 0.2],
     maxAmmo: 240,
     startAmmo: 90,
     pickupAmmo: 40,
@@ -179,6 +205,9 @@ export const WEAPONS = [
     damage: 40,
     fireRate: 1400,
     ammoPerShot: 2,
+    magSize: 6,
+    reloadMs: 2200,
+    reloadZone: [0.55, 0.12],
     maxAmmo: 16,
     startAmmo: 8,
     pickupAmmo: 4,

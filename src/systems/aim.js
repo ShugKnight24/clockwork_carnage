@@ -57,6 +57,11 @@ let _breathT = 0;
 let _breathX = 0;
 let _breathY = 0;
 let _lastPos = null;
+/**
+ * Conditioning's Steadiness (src/systems/conditioning.js): scales the aimed
+ * end of every cone and the scope's breath. 1 is untrained.
+ */
+let _steadyMult = 1;
 
 /** Smooth sprint/dash/slide FOV boost (degrees to add). */
 let _sprintFovLerp = 0;
@@ -101,7 +106,12 @@ export const aimZoom = () => 1 + (_adsZoom - 1) * _adsBlend;
 export function currentSpread(wep) {
   if (!wep) return 0;
   const hip = wep.spread || 0;
-  return hip + ((wep.adsSpread ?? hip) - hip) * _adsBlend;
+  return hip + ((wep.adsSpread ?? hip) * _steadyMult - hip) * _adsBlend;
+}
+
+/** Set Steadiness's multiplier on aimed spread and scope sway (1 = none). */
+export function setAdsSteadiness(mult) {
+  _steadyMult = Number.isFinite(mult) ? Math.max(0, Math.min(1, mult)) : 1;
 }
 
 /**
@@ -249,7 +259,7 @@ function scopeBreath(player, wep, dt) {
   _steady = moved || player.isSprinting ? 0 : _steady + d;
   _breathT += d;
   const settle = Math.min(1, _steady / BREATH_SETTLE);
-  const amp = wep?.scope ? _adsBlend * (BREATH_MOVING + (BREATH_STILL - BREATH_MOVING) * settle) : 0;
+  const amp = wep?.scope ? _adsBlend * _steadyMult * (BREATH_MOVING + (BREATH_STILL - BREATH_MOVING) * settle) : 0;
   const bx = amp * Math.sin(_breathT * 0.9);
   const by = amp * 0.7 * Math.sin(_breathT * 1.8 + 0.6);
   if (Number.isFinite(player.aimOffsetX)) player.aimOffsetX += bx - _breathX;

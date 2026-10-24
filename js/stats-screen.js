@@ -3,10 +3,11 @@
  *
  * Usage:
  *   import { drawStatsScreen } from "./stats-screen.js";
- *   drawStatsScreen(ctx, w, h, achievementStats);
+ *   drawStatsScreen(ctx, w, h, achievementStats, conditioning);
  *
  * Pure drawing function — no game state references.
  */
+import { SKILL_IDS, SKILLS, MAX_LEVEL, levelOf, progressOf } from "../src/systems/conditioning.js";
 
 /**
  * Render the full-screen lifetime stats overlay.
@@ -15,8 +16,9 @@
  * @param {number} w  Canvas width
  * @param {number} h  Canvas height
  * @param {object} achievementStats  The game's achievementStats object
+ * @param {object} [conditioning]  The agent's Conditioning XP (game.conditioning)
  */
-export function drawStatsScreen(ctx, w, h, achievementStats) {
+export function drawStatsScreen(ctx, w, h, achievementStats, conditioning = null) {
   const s = achievementStats;
 
   ctx.fillStyle = "rgba(0,0,0,0.92)";
@@ -90,15 +92,34 @@ export function drawStatsScreen(ctx, w, h, achievementStats) {
   }
 
   // Campaign complete badge
+  let belowY = startY + Math.ceil(stats.length / cols) * rowH + 20;
   if (s.campaignComplete) {
     ctx.fillStyle = "#ffcc00";
     ctx.font = "bold 14px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(
-      "★ CAMPAIGN COMPLETED ★",
-      w / 2,
-      startY + Math.ceil(stats.length / cols) * rowH + 20
-    );
+    ctx.fillText("★ CAMPAIGN COMPLETED ★", w / 2, belowY);
+    belowY += 24;
+  }
+
+  // Conditioning: each skill's level and the way to the next.
+  if (conditioning) {
+    ctx.fillStyle = "rgba(180,190,200,0.6)";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("CONDITIONING", startX + 10, belowY);
+    const cw = totalW / SKILL_IDS.length;
+    SKILL_IDS.forEach((id, i) => {
+      const x = startX + i * cw + 10;
+      const lv = levelOf(conditioning, id);
+      ctx.fillStyle = "#88ffcc";
+      ctx.font = "bold 14px monospace";
+      ctx.fillText(`${SKILLS[id].label} ${lv}/${MAX_LEVEL}`, x, belowY + 22);
+      const bw = cw - 30;
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(x, belowY + 30, bw, 4);
+      ctx.fillStyle = "#88ffcc";
+      ctx.fillRect(x, belowY + 30, Math.round(bw * progressOf(conditioning, id)), 4);
+    });
   }
 
   // Footer

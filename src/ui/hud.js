@@ -29,6 +29,7 @@ import { updateHudMotion } from "./hud-motion.js";
 import { drawCombatCues } from "./combat-cues.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
+import { drawReloadHud, drawConditioningChip, ammoTint } from "./reload-hud.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -575,6 +576,7 @@ if (isCompactMobile) {
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
   drawAimReticle(ctx, game, chx, chy, barH);
+  drawReloadHud(ctx, game, chx, chy);
   drawPowerCellChip(ctx, game);
 
   // Hit marker
@@ -609,6 +611,7 @@ if (isCompactMobile) {
 
   // Achievement toast
   game.renderAchievementToast(ctx, w, h);
+  drawConditioningChip(ctx, game, w, h);
 
   // Arena timer (compact)
   if (vanguard) {
@@ -1134,7 +1137,7 @@ if (game.settings.showKills) {
   const sBarY = hBarY - sBarH - 3;
 
   // Stamina + Chrono bars (thin 6px, above shield/health)
-  const staminaPct = game.player.stamina / game.player.maxStamina;
+  const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
   const chronoPct = game.player.chronoEnergy / game.player.maxChronoEnergy;
   const showChrono = chronoPct > 0.005 || game.player.chronoActive;
   const isActive = game.player.isSprinting || game.player.isDashing;
@@ -1393,7 +1396,7 @@ if (game.settings.showKills) {
   const brY = h - 14;
   // Ammo (large number, right-aligned)
   ctx.textAlign = "right";
-  ctx.fillStyle = "#ffcc00";
+  ctx.fillStyle = ammoTint(game, "#ffcc00");
   ctx.font = game.scaledFont(38, "bold");
   ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, brX, brY - 18);
   // Weapon name (below ammo)
@@ -1421,6 +1424,7 @@ if (vanguard) drawVanguardThreatRing(game, ctx, w, h, 0);
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
 drawAimReticle(ctx, game, chx, chy);
+drawReloadHud(ctx, game, chx, chy);
 drawPowerCellChip(ctx, game);
 
 // ─── HIT MARKER ───
@@ -1495,6 +1499,7 @@ if (game.slowMoTimer > 0) {
 
 // Achievement toast (above minimap area)
 game.renderAchievementToast(ctx, w, h);
+drawConditioningChip(ctx, game, w, h);
 
 // Meltdown upgrade selection overlay
 if (game._meltdownUpgradeChoices) {
@@ -1525,7 +1530,7 @@ if (isModernArt()) {
 } else {
 // ─── Stamina + Chrono bars (side-by-side above bottom bar) ───
 const staminaFactor = game.settings.staminaBarSize / 100;
-const staminaPct = game.player.stamina / game.player.maxStamina;
+const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
 const chronoPct = game.player.chronoEnergy / game.player.maxChronoEnergy;
 const showChrono = chronoPct > 0.005 || game.player.chronoActive;
 const isActive = game.player.isSprinting || game.player.isDashing;
@@ -1697,7 +1702,7 @@ ctx.fillStyle = "#ffcc00";
 ctx.font = "bold 16px monospace";
 ctx.textAlign = "center";
 ctx.fillText("AMMO", pad + ammoPanelW / 2, panelY + 22);
-ctx.fillStyle = "#ffaa00";
+ctx.fillStyle = ammoTint(game, "#ffaa00");
 ctx.font = game.scaledFont(64, "bold");
 {
   // Shrink a long count (god mode) to the panel rather than spill out of it.
@@ -1965,6 +1970,7 @@ drawCombatCues(game, ctx, w, h, barH);
 // ─── Crosshair (centered in viewport above bar) ───
 const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
 drawAimReticle(ctx, game, chx, chy, barH);
+drawReloadHud(ctx, game, chx, chy);
 drawPowerCellChip(ctx, game);
 
 // ─── Hit marker ───
@@ -2037,6 +2043,7 @@ if (game.showFPS) {
 
 // Achievement toast
 game.renderAchievementToast(ctx, w, h);
+drawConditioningChip(ctx, game, w, h);
 
 // Meltdown upgrade overlay
 if (game._meltdownUpgradeChoices) {
@@ -2166,7 +2173,7 @@ const healthColor =
       : game.cbColor("#ff2200");
 
 // Stamina bar (slim, above the bar)
-const staminaPct = game.player.stamina / game.player.maxStamina;
+const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
 const stBarH = Math.round(8 * hudFactor);
 const stBarW = Math.round(220 * hudFactor);
 const stBarX = Math.floor(w / 2 - stBarW / 2);
@@ -2255,7 +2262,7 @@ if (game.player.maxShield > 0) {
 
 // Center-left: AMMO
 const ammoX = hpW + pad * 2;
-ctx.fillStyle = "#ffcc00";
+ctx.fillStyle = ammoTint(game, "#ffcc00");
 ctx.font = "bold 22px monospace";
 ctx.textAlign = "center";
 ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, ammoX + 30, midY + 3);
@@ -2361,7 +2368,7 @@ function _renderTacticalDesktopHUD(game, ctx, w, h, barH, hudFactor) {
   ctx.lineTo(cx + 200, cy + 40);
   ctx.fill();
   
-  ctx.fillStyle = "#ffcc00";
+  ctx.fillStyle = ammoTint(game, "#ffcc00");
   ctx.textAlign = "left";
   ctx.fillText(`AMMO ${game.player.ammoLabel ?? game.player.ammo}`, cx + 210, cy + 28);
   
@@ -2413,7 +2420,7 @@ function _renderCustomDesktopHUD(game, ctx, w, h, barH, hudFactor) {
   if (layout.ammo) {
     const px = layout.ammo.x * w;
     const py = layout.ammo.y * h;
-    ctx.fillStyle = "#ffcc00";
+    ctx.fillStyle = ammoTint(game, "#ffcc00");
     ctx.font = "bold 32px monospace";
     ctx.textAlign = "center";
     ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, px, py);

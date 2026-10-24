@@ -211,6 +211,35 @@ export function loadArchive(seenEnemies, fragments) {
   } catch (_) {}
 }
 
+// ── Conditioning ─────────────────────────────────────────
+
+const CONDITIONING_KEY = "cc_conditioning";
+
+/**
+ * The agent's Conditioning XP (src/systems/conditioning.js). Kept apart from
+ * the campaign save so it carries from one campaign into the next, and a
+ * cleared campaign does not take it along.
+ */
+export function saveConditioning(xp) {
+  try { localStorage.setItem(CONDITIONING_KEY, JSON.stringify(xp)); }
+  catch (_) {}
+}
+
+/** The saved XP record, unvalidated, or null (normalizeConditioning makes it safe). */
+export function loadConditioning() {
+  try {
+    const raw = localStorage.getItem(CONDITIONING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function clearConditioning() {
+  try { localStorage.removeItem(CONDITIONING_KEY); }
+  catch (_) {}
+}
+
 // ── Achievements ─────────────────────────────────────────
 
 export function saveAchievements(unlocked, stats) {

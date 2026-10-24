@@ -153,10 +153,10 @@ describe("rounds per gun", () => {
   it("the sidearm never runs dry and reads as endless", () => {
     const p = new Player();
     expect(pistol.infiniteAmmo).toBe(true);
-    expect(p.ammoLabel).toBe("∞");
+    expect(p.ammoLabel).toBe(`${pistol.magSize}/∞`);
     p.weapons = [0, 1];
     p.currentWeapon = 1;
-    expect(p.ammoLabel).toBe(`${shotgun.startAmmo}`);
+    expect(p.ammoLabel).toBe(`${shotgun.magSize}/${shotgun.startAmmo - shotgun.magSize}`);
   });
 
   it("LOW AMMO is a quarter of the held gun's cap, never the sidearm", () => {

@@ -120,13 +120,13 @@ describe("remap rules", () => {
     expect(({}).dash).toBeUndefined();
   });
 
-  it("a loaded table never puts two actions on one button, except the RB pair", () => {
+  it("a loaded table never puts two actions on one button, except the shared pairs", () => {
     const raw = JSON.stringify({ dash: PAD.X, crouch: PAD.X, sprint: PAD.RB, fire: PAD.LT, aim: PAD.RT });
     const t = { ...DEFAULT_GAMEPAD_ACTIONS, ...loadPadBinds(raw) };
     const seen = new Map();
     for (const a of REMAPPABLE_PAD_ACTIONS) {
       const other = seen.get(t[a]);
-      if (other) expect([other, a].sort()).toEqual(["chronoRewind", "weaponPrev"]);
+      if (other) expect([["chronoRewind", "weaponPrev"], ["interact", "reload"]]).toContainEqual([other, a].sort());
       seen.set(t[a], a);
     }
     expect(t.fire).toBe(PAD.LT);

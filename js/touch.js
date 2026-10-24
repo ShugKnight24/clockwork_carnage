@@ -419,7 +419,8 @@ export class TouchControls {
         this.triggerDirectionalDash(g, true);
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
-        g.interact();
+        // USE reloads when there is nothing to use, as the pad's X does.
+        if (!g.interact()) g.reloadPress?.();
       } else if (zone === "chrono" && this.chronoTouch === null) {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;

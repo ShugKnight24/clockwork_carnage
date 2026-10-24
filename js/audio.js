@@ -1214,6 +1214,49 @@ export class AudioManager {
     this._blip("sine", 3730, 3520, 0.2, 0.05, pan, 0.005);
   }
 
+  /** The magazine drops out: a dry slide and a light knock. */
+  reloadStart() {
+    if (!this.ctx || !this.enabled) return;
+    this.playNoise(0.07, 0.1, 3200, "bandpass");
+    this._blip("square", 420, 300, 0.05, 0.05, 0, 0.03);
+  }
+
+  /** An ordinary reload seats: the magazine clicks home and the slide racks. */
+  reloadDone() {
+    if (!this.ctx || !this.enabled) return;
+    this.playNoise(0.05, 0.14, 2400, "bandpass");
+    this._blip("square", 900, 760, 0.04, 0.06, 0);
+    this._blip("square", 620, 520, 0.05, 0.06, 0, 0.08);
+  }
+
+  /**
+   * An active-reload hit: the rack, then a bright charged rising chime that
+   * says the next magazine is hot. A perfect rings a fifth higher and longer.
+   */
+  reloadHit(perfect = false) {
+    if (!this.ctx || !this.enabled) return;
+    this.playNoise(0.05, 0.16, 2600, "bandpass");
+    this._blip("square", 980, 820, 0.035, 0.07, 0);
+    const f = perfect ? 1320 : 880;
+    this._blip("triangle", f, f * 1.5, perfect ? 0.22 : 0.16, 0.13, 0, 0.03);
+    this._blip("sine", f * 2, f * 2, perfect ? 0.3 : 0.18, 0.06, 0, 0.07);
+  }
+
+  /** A jam: a low dead clunk with a scrape, nothing that rings. */
+  reloadJam() {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("square", 140, 80, 0.14, 0.16, 0);
+    this.playNoise(0.16, 0.14, 700, "lowpass");
+    this._blip("sawtooth", 95, 70, 0.1, 0.07, 0, 0.09);
+  }
+
+  /** A Conditioning level: a warm three-note lift with a soft pulse under it. */
+  conditioningUp() {
+    if (!this.ctx || !this.enabled) return;
+    [587, 740, 988].forEach((f, i) => this._blip("triangle", f, f, 0.16, 0.1, 0, i * 0.07));
+    this._blip("sine", 196, 294, 0.36, 0.1, 0);
+  }
+
   /** A short phrase on the music bus, so the Music Volume slider has something to preview. */
   musicSting() {
     [392, 523, 659].forEach((n, i) => {

@@ -55,7 +55,7 @@ export function keyLabel(code) {
 
 /** Keybind actions (js/input-manager.js DEFAULT_KEYBINDS names). */
 const KEYBIND_ACTIONS = new Set([
-  "interact", "sprint", "crouch", "dash", "chronoShift", "chronoRewind", "chronoLock", "pause", "toggleFPS",
+  "interact", "reload", "sprint", "crouch", "dash", "chronoShift", "chronoRewind", "chronoLock", "pause", "toggleFPS",
 ]);
 
 /** Fixed keyboard legends: mouse buttons and the menu keys every screen shares. */

@@ -185,6 +185,8 @@ import { liftLockdown } from "../src/systems/exit-cells.js";
 import { lowHealthSeverity } from "../src/systems/player-feedback.js";
 import { LevelClock } from "../src/systems/level-clock.js";
 import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
+import { activeReloadOf, reloadPress, updateReloads } from "../src/systems/reload.js";
+import { loadConditioning, resetConditioning, updateConditioning } from "../src/systems/conditioning-play.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -290,6 +292,11 @@ export class Game {
     this.squadComms = new SquadCommsController(this);
     this.achievementSystem = new AchievementSystem(this);
     this.archive = new ArchiveSystem(this);
+    // Magazines' active reload (src/systems/reload.js) and the agent's
+    // Conditioning XP, which outlives any one campaign.
+    activeReloadOf(this);
+    this.conditioning = loadConditioning();
+    this.conditioningChip = null;
     this.tutorial = new TutorialSystem(this);
     // The station's people keep out of each other's way and the player's (js/npc.js).
     setNpcWorld(this);
@@ -1018,7 +1025,11 @@ export class Game {
         this.triggerDash(this.keybinds.moveForward, rawX, rawY);
         this.gamepad.vibrateLight();
       }
-      if (jp.interact) this.interact();
+      // Reload shares X with Use, as it does in most shooters: X opens what
+      // is in front of you, and reloads when there is nothing to open.
+      const reloadOnUse = GAMEPAD_ACTIONS.reload === GAMEPAD_ACTIONS.interact;
+      if (jp.interact && !this.interact() && reloadOnUse) this.reloadPress();
+      if (jp.reload && !reloadOnUse) this.reloadPress();
       // Rewind shares its bumper with previous weapon: while shifting with
       // Nova's power it rewinds (spec decision 4), otherwise it cycles.
       const rewind = jp.chronoRewind && p.chronoActive && this.chronoPowers.has("rewind");
@@ -2031,11 +2042,12 @@ export class Game {
     this.campaign.nextLevel();
   }
 
+  /** Use what is in front of the agent. Returns whether anything was there (the pad's X reloads otherwise). */
   interact() {
     // The prologue's own things to open (the cadet's locker) come first.
-    if (this.mode === "tutorial" && this.tutorial?.onInteract?.()) return;
+    if (this.mode === "tutorial" && this.tutorial?.onInteract?.()) return true;
     // Doors and secret walls are grid tiles; the voxel Forge has neither yet.
-    if (this.world) return;
+    if (this.world) return false;
     // Check for doors/secrets at multiple distances in front of player
     const cos = Math.cos(this.player.angle);
     const sin = Math.sin(this.player.angle);
@@ -2064,7 +2076,7 @@ export class Game {
         this.map.grid[checkY][checkX] = 0;
         this.audio.doorOpen();
         if (this.mode === "tutorial") this.tutorialDoorOpened = true;
-        return;
+        return true;
       } else if (tile === 6) {
         // Secret wall
         this.map.grid[checkY][checkX] = 0;
@@ -2085,9 +2097,10 @@ export class Game {
             : null;
         if (frag) this.queueAriaMessage("memoryFragment");
         else this.queueAriaMessage("secretFound");
-        return;
+        return true;
       }
     }
+    return false;
   }
 
   // Arena Upgrades
@@ -2111,6 +2124,17 @@ export class Game {
 
   fireWeapon() {
     _fireWeapon(this);
+  }
+
+  /** The reload key: starts a reload, or during one, is the active-reload press. */
+  reloadPress() {
+    if (this.state !== GameState.PLAYING || !this.player?.alive) return false;
+    return reloadPress(this);
+  }
+
+  /** A new agent: Conditioning back to level 0 in every skill. */
+  resetConditioning() {
+    resetConditioning(this);
   }
 
   _onEnemyKill(enemy) {
@@ -2285,6 +2309,8 @@ export class Game {
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
     updateAmmoEconomy(this);
+    updateReloads(this);
+    updateConditioning(this);
     if (this.mode === "campaign") this.levelBeats.update(this, this.deltaTime);
 
     if (this.mode === "meltdown" && this.meltdown.alive) {
@@ -3505,7 +3531,7 @@ export class Game {
   }
 
   renderStatsScreen(ctx, w, h) {
-    this.achievementSystem.renderStats(ctx, w, h);
+    this.achievementSystem.renderStats(ctx, w, h, this.conditioning);
   }
 
   renderArchiveScreen(ctx, w, h) {

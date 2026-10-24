@@ -11,8 +11,11 @@ import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 export const STORAGE_KEY_PADBINDS = "cc_padbinds";
 
 export const REMAPPABLE_KEY_ACTIONS = Object.keys(DEFAULT_KEYBINDS).filter((a) => a !== "pause");
-/** RB rewinds while shifting and is previous weapon otherwise, so these two may share a button. */
-export const SHARED_PAD = [["chronoRewind", "weaponPrev"]];
+/**
+ * RB rewinds while shifting and is previous weapon otherwise, and X uses what
+ * is in front of you or else reloads, so each pair may share a button.
+ */
+export const SHARED_PAD = [["chronoRewind", "weaponPrev"], ["interact", "reload"]];
 
 // input-dispatch pauses on P as well as the pause binding, so P bound to an
 // action would pause the game every time it was used.

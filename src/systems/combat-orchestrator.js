@@ -24,6 +24,8 @@ import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame, currentSpread } from "./aim.js";
 import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
+import { readyToFire, spendShot } from "./reload.js";
+import { noteConditioningKill } from "./conditioning-play.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
 const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
@@ -78,9 +80,13 @@ export function fireWeapon(game) {
     }
     return;
   }
+  // The magazine: mid-reload, or empty with rounds to load (which starts the
+  // reload the trigger asked for).
+  if (!readyToFire(game, wep)) return;
 
   game.player.lastFireTime = now;
-  if (wep.id !== 0) game.player.ammo -= wep.ammoPerShot;
+  // An active-reload hit's magazine hits harder until it is spent.
+  const boost = spendShot(game, wep);
   game.player.weaponKick = 1;
   game.weaponAnimFrame = 1;
   game.weaponAnimTime = now;
@@ -100,7 +106,7 @@ export function fireWeapon(game) {
   const soundMethod = WEAPON_SOUNDS[wep.id];
   if (soundMethod) game.audio[soundMethod]();
 
-  const damage = wep.damage * game.player.damageMultiplier;
+  const damage = wep.damage * game.player.damageMultiplier * boost;
   const { yaw: aimAngle, pitch: aimPitch } = aimAnglesForGame(game);
   // Every round scatters inside the weapon's cone: the hip `spread`, easing
   // to its `adsSpread` as the sights come up. Single rounds used to ignore
@@ -403,6 +409,7 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     game.spawnDeathParticles(enemy.x, enemy.y, enemy.def.color1, enemy.def.color2, hitHeightOf(game, enemy));
     game.glitchEffect = 0.3;
     if (game.mode === "tutorial") game.tutorial?.noteKill?.(enemy, zoneName === "head");
+    noteConditioningKill(game, isHead);
     onEnemyKill(game, enemy);
     // Hit-stop — freeze gameplay for a beat on kills (DOOM-like impact)
     game.hitStopMs = Math.max(game.hitStopMs || 0, (isCrit || isHead) ? 84 : 50);

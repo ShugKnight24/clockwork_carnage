@@ -397,6 +397,9 @@ export function createDebugBridge(game) {
         maxHealth: game.player.maxHealth,
         armor: game.player.armor,
         ammo: game.player.ammo,
+        // Rounds in the held gun's magazine (out of `ammo`), and its reload.
+        loaded: game.player.loaded,
+        reloading: !!game.activeReload?.active,
         score: game.player.score,
         kills: game.player.kills,
         alive: game.player.alive,

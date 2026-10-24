@@ -47,7 +47,7 @@ const RESET_DESC = "Put every setting in this section back to its default.";
 
 // Remap rows: what each action is called, and the two columns.
 const REMAP_LABELS = {
-  dash: "Dash", crouch: "Crouch", interact: "Interact", weaponNext: "Next weapon", weaponPrev: "Previous weapon",
+  dash: "Dash", crouch: "Crouch", interact: "Interact", reload: "Reload", weaponNext: "Next weapon", weaponPrev: "Previous weapon",
   chronoShift: "Chrono Shift", chronoRewind: "Chrono Rewind", chronoLock: "Chrono Lock", aim: "Aim", fire: "Fire",
   sprint: "Sprint", minimap: "Map", weaponCyclePrev: "Cycle weapon back", weaponCycleNext: "Cycle weapon forward",
   weaponLast: "Last weapon", weaponFirst: "First weapon", moveForward: "Move forward", moveBack: "Move back",

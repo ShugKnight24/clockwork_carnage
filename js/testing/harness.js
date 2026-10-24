@@ -415,6 +415,23 @@ function pickWeapon(game, dist) {
 }
 
 /**
+ * Reload as a player would. Between fights, top up a magazine under half
+ * (an empty one in a fight reloads on the trigger by itself); during any
+ * reload, press again in the middle of the sweet zone, the active reload.
+ */
+function botReload(game, inFight) {
+  const p = game.player;
+  const wep = p.getWeaponDef?.();
+  if (!wep || !p.loadedOf || !game.reloadPress) return;
+  const a = game.activeReload?.active;
+  if (a) {
+    if (!a.pressed && (game.time - a.start) / a.duration >= (a.zoneStart + a.zoneEnd) / 2) game.reloadPress();
+    return;
+  }
+  if (!inFight && p.loadedOf(wep.id) < p.magSizeOf(wep.id) / 2 && p.canReload(wep.id)) game.reloadPress();
+}
+
+/**
  * Give ground: of eight directions, the open one that ends farthest from
  * the enemies closing in. Moves with the movement keys while still aiming.
  */
@@ -545,6 +562,7 @@ function killAllEnemies(game, maxTicks = 5000, { weapon = null } = {}) {
       }
     }
 
+    botReload(game, seen.length > 0);
     stepGame(game, 1);
     totalTicks++;
 

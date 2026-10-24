@@ -33,6 +33,7 @@ export const MESSAGE_KINDS = {
   levelTitle: { lane: "headline", priority: 80, duration: 3, ttl: 6, preempts: true, top: true },
   achievement: { lane: "chip", priority: 50, duration: 3.5, maxDefer: 25 },
   unlock: { lane: "chip", priority: 40, duration: 3.2, maxDefer: 25 },
+  conditioning: { lane: "chip", priority: 45, duration: 3, maxDefer: 25 },
   gear: { lane: "chip", priority: 30, duration: 3.2, ttl: 12 },
 };
 
