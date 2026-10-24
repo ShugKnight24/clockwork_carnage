@@ -241,9 +241,10 @@ export class CampaignManager {
   /**
    * Bake the next level's environment while its briefing plays: an idle
    * callback during the scenes, so the level's first frame is not a ~200 ms
-   * freeze. Harmless if the level starts first (the renderer bakes as before).
+   * freeze. Harmless if the level starts first (loadLevel bakes it then).
+   * `now` bakes it at once instead.
    */
-  _prewarmLevel(actId, index) {
+  _prewarmLevel(actId, index, now = false) {
     const r = this.game.renderer;
     const act = getAct(actId);
     const entry = act && getActLevel(actId, index);
@@ -253,6 +254,7 @@ export class CampaignManager {
     const walls = new Set();
     for (const row of campaignMap(entry)?.grid ?? []) for (const v of row) if (v >= 10) walls.add(v);
     const run = () => r.prewarmEnv(act.palette, entry.env, [...walls]);
+    if (now) return run();
     if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1500 });
     else setTimeout(run, 300);
   }
@@ -429,6 +431,12 @@ export class CampaignManager {
       this._afterLevelStart(line.delay ?? 0, () => g.queueAriaMessage(line.aria));
     }
 
+    // The level's environment and its own walls, baked as part of loading
+    // when no briefing did it (Continue, a fresh campaign): with a dressed
+    // floor's twenty-odd wall faces that is ~0.6 s on a fast laptop, which
+    // otherwise lands in the first frame of play with the clock running.
+    // A no-op when the briefing's prewarm already ran, or on a retry.
+    this._prewarmLevel(this.act, index, true);
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
     g.beginLevelLog?.();
