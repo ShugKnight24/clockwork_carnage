@@ -149,6 +149,12 @@ const PEOPLE = {
   cole: { kind: "clerk", name: "Dispatcher Cole", look: 0, at: [78.8, 21.5], face: [84, 21.5], caught: "radio" },
   imani: { kind: "staff", name: "Dispatcher Imani", look: 0, at: [78.8, 23.5], face: [84, 23.5], caught: "radio" },
 };
+/**
+ * What 06:47 caught in the air (src/rendering/props.js): Mendez's coffee
+ * mid-pour beside him, and a form falling off the booking desk by Ruiz.
+ */
+const FROZEN_POUR = { x: 19.5, y: 30.5 };
+const FROZEN_PAPER = { x: 69.4, y: 53.7, lift: 0.85 };
 /** Up the corridor from the front desk to her cabinets, while you cross to the range. */
 const NAND_ROUTE = [[29.5, 46.5], [29.5, 20.6], [34.6, 20.6], [37.5, 18.6], [39.5, 17.3]];
 /** Where R&D go when they've handed you the sheet: to run their trials. */
@@ -2559,8 +2565,12 @@ export class TutorialSystem {
       n.x = x;
       n.y = y;
     }
-    if (face) n.faceTo(face);
-    n.pose(pose, Infinity);
+    // Stopped by the pulse: the instant itself, no turn or settle after.
+    if (pose === "frozen") n.freeze({ face });
+    else {
+      if (face) n.faceTo(face);
+      n.pose(pose, Infinity);
+    }
     return n;
   }
 
@@ -2599,11 +2609,17 @@ export class TutorialSystem {
     playChronoSound(g.audio, "timeStop");
     this.flicker(g, 0.6);
     this.setClocks(g, true);
-    for (const id of Object.keys(PEOPLE)) {
-      const n = this.person(g, id);
-      n.path = [];
-      n.pose("frozen", Infinity);
-    }
+    // Mid-step, mid-stamp, mid-pour: each stops in the instant, not after it.
+    for (const id of Object.keys(PEOPLE)) this.person(g, id).freeze();
+    this._stillLife(g);
+  }
+
+  /** What the pulse caught in the air, put back where it hangs. */
+  _stillLife(g) {
+    this.place(g, "frozenPour", new Prop(FROZEN_POUR.x, FROZEN_POUR.y, "frozen_pour"));
+    const paper = new Prop(FROZEN_PAPER.x, FROZEN_PAPER.y, "frozen_paper");
+    paper.lift = FROZEN_PAPER.lift;
+    this.place(g, "frozenPaper", paper);
   }
 
   /**
@@ -2624,6 +2640,7 @@ export class TutorialSystem {
   aftermath(g) {
     this.frozen = true;
     this.setClocks(g, true);
+    this._stillLife(g);
     for (const [id, d] of Object.entries(PEOPLE)) {
       if (id === "orr") continue;
       this.hold(g, id, d.at[0], d.at[1], "frozen", { x: d.face[0], y: d.face[1] }, { stay: true });
