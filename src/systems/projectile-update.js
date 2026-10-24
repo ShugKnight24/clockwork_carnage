@@ -9,7 +9,7 @@ import { isSolid } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { PLAYER, hasLineOfSight3D } from "../world/voxel-physics.js";
 import { hasLineOfSight } from "./physics.js";
-import { boltClearsCover } from "./cover.js";
+import { boltClearsCover, inRun } from "./cover.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -204,6 +204,9 @@ function stepProjectile(p, ctx, stepDt) {
     // fired at a player standing up over it (src/systems/cover.js).
     if (map.grid[my][mx] > 0 && !boltClearsCover(p, map, mx, my, ctx.player)) {
       ctx.spawnWallSparks(p.x, p.y);
+      // A round that dies on the block the player is down behind was meant
+      // for them: their cover stopped it (counted when it hides them).
+      if (p.owner === "enemy" && inRun(ctx.player?.cover?.face, mx, my)) ctx.coverBlock?.(p);
       // A Ricochet Pistol round glances off: back out of the wall, mirror
       // the heading across the face it crossed, and fly on a little weaker.
       if (p.owner === "player" && p.bounces > 0) {
