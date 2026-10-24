@@ -496,7 +496,65 @@ function paintHoloBlock(ctx, p, r) {
   for (const x of [16, T - 16]) rivet(ctx, x, KICK + 40, 5, p);
 }
 
+/**
+ * Lin's desk across the booth's mouth, a low wall: its face is the bottom
+ * two fifths. The desk's lip, the sim's big run key and its rows of keys.
+ */
+function paintBoothDesk(ctx, p, r) {
+  ctx.fillStyle = GUN[2];
+  ctx.fillRect(0, 0, T, T);
+  const top = 306;
+  plate(ctx, 0, top, T, 22, p, { tones: STEEL, bevel: 3, ink: 2 });
+  plate(ctx, 0, top + 22, T, KICK - top - 22, p, { tones: GUN, bevel: 3, ink: 2 });
+  plate(ctx, T / 2 - 120, top + 36, 240, 30, p, { tones: STENCIL, bevel: 2, ink: 1 });
+  letter(ctx, "SIM CONTROL · T. LIN", T / 2, top + 51, 13, "#1a1c20", 900);
+  for (let i = 0; i < 10; i++) led(ctx, 48 + i * 46, top + 90, 5, i % 3 ? CYAN : i % 2 ? AMBER : "#3aff6a");
+  plate(ctx, T / 2 - 34, top + 104, 68, 30, p, { tones: ["#2a8a4a", "#1f6a38", "#103a1e"], bevel: 3, ink: 2 });
+  glow(T / 2 - 30, top + 108, 60, 22, 0.6, 4);
+  plate(ctx, 0, KICK, T, T - KICK, p, { tones: DARK, bevel: 3, ink: 2, spec: false });
+  lightStrip(ctx, 0, KICK + 6, T, 4, CYAN, { blur: 14, alpha: 0.8 });
+}
+
+/** The booth's back wall: the sim's screens (profiles, layout, integrity) over a console. */
+function paintBoothConsole(ctx, p, r) {
+  ctx.fillStyle = GUN[1];
+  ctx.fillRect(0, 0, T, T);
+  frameBands(ctx, p);
+  const scr = (x, y, w, h) => {
+    plate(ctx, x - 8, y - 8, w + 16, h + 16, p, { tones: DARK, bevel: 3, ink: 2 });
+    ctx.fillStyle = "#061218";
+    ctx.fillRect(x, y, w, h);
+    sink(x, y, w, h, 10);
+    glow(x, y, w, h, 0.75, 6);
+  };
+  scr(40, 70, 200, 150);
+  scr(272, 70, 200, 150);
+  // Left (as you look at it, the texture's right): the profiles library.
+  ctx.fillStyle = "rgba(70,240,255,0.85)";
+  for (let i = 0; i < 6; i++) ctx.fillRect(290, 88 + i * 20, 70 + ((i * 37) % 90), 8);
+  letter(ctx, "PROFILES", 372, 206, 12, CYAN, 900);
+  // Right: the hall's floor plan with the cover blocks, and the integrity bar.
+  ctx.strokeStyle = "rgba(70,240,255,0.7)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(60, 90, 160, 70);
+  ctx.fillStyle = "rgba(255,176,56,0.85)";
+  for (const [x, y] of [[80, 120], [110, 140], [150, 110], [190, 130], [130, 100]]) ctx.fillRect(x, y, 10, 6);
+  plate(ctx, 60, 176, 160, 18, p, { tones: DARK, bevel: 2, ink: 1, recess: true });
+  lightStrip(ctx, 64, 180, 150, 10, "#3aff6a", { blur: 8, alpha: 0.85, housing: false });
+  letter(ctx, "SIM INTEGRITY", 140, 206, 11, "#3aff6a", 900);
+  // The console under the screens, its keys and faders.
+  plate(ctx, 30, 250, T - 60, 170, p, { tones: GUN, bevel: 4, ink: 2 });
+  for (let i = 0; i < 8; i++) plate(ctx, 52 + i * 52, 276, 40, 30, p, { tones: STEEL, bevel: 2, ink: 1.5 });
+  for (let i = 0; i < 6; i++) {
+    plate(ctx, 70 + i * 66, 330, 12, 70, p, { tones: DARK, bevel: 1, ink: 1, recess: true });
+    plate(ctx, 64 + i * 66, 340 + ((i * 23) % 40), 24, 12, p, { tones: STEEL, bevel: 2, ink: 1 });
+  }
+  for (let i = 0; i < 12; i++) led(ctx, 48 + i * 36, 236, 4, i % 4 ? CYAN : AMBER);
+}
+
 export const PAINTERS = {
+  [W.BOOTH_DESK]: paintBoothDesk,
+  [W.BOOTH_CONSOLE]: paintBoothConsole,
   [W.HOLO_BLOCK]: paintHoloBlock,
   [W.GRID]: paintGrid,
   [W.EMITTER]: paintEmitter,

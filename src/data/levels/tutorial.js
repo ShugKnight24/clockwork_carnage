@@ -5,21 +5,24 @@
 import { room as corridorRoom } from "./rooms/corridor.js";
 import { room as gymRoom } from "./rooms/gym.js";
 import { room as officeRoom } from "./rooms/office.js";
-import { room as arenaRoom } from "./rooms/arena.js";
+import { room as arenaRoom, booth as boothRoom } from "./rooms/arena.js";
 import { room as hallsRoom } from "./rooms/halls.js";
 import { room as rndRoom } from "./rooms/rnd.js";
 import { room as dispatchRoom } from "./rooms/dispatch.js";
 import { room as atriumRoom } from "./rooms/atrium.js";
 import { room as holdingRoom } from "./rooms/holding.js";
 import { room as interviewRoom } from "./rooms/interview.js";
+import { room as trackRoom } from "./rooms/track.js";
+import { STATION_WALLS } from "../walls.js";
 import { createHeights, lowWall, LAYER } from "./map-helpers.js";
 
 // ── Build the police station grid programmatically ──
 // The station proper is the 60x60 it always was (the Precinct, in Act II,
 // is built from that: STATION_CORE). Certification Day added the east wing
-// beyond it, so the floor is wider and a little deeper.
+// beyond it, so the floor is wider, and the training hall below the locker
+// room and the lobby's west side, so it is deeper.
 const CORE = 60;
-const W = 86, H = 62;
+const W = 86, H = 82;
 const g = Array.from({ length: H }, () => Array(W).fill(3)); // default: metal walls
 
 // Helpers
@@ -330,12 +333,22 @@ carve(53, 48, 57, 51); // observation
 carve(53, 53, 57, 55); // interview 2
 for (const c of [44, 50, 54]) carve(51, c, 52, c);
 
+// ── 21. THE TRAINING HALL (rows 50-79, cols 1-16), off the gym ──
+// Its passage leaves the gym's west wall and runs south past the locker
+// room; it also opens on the lobby's west alcove (src/data/levels/rooms/track.js).
+// Lin's control booth goes into the sim hall's south wall with it, and the
+// Supervisor gets his locker: Certification Day's, not the Precinct's.
+
 // Low walls (src/data/levels/map-helpers.js): the atrium's glass
-// balustrade, and the sim hall's holo cover, which the prologue raises.
+// balustrade, the sim hall's holo cover (the prologue raises it), the
+// booth's desk and the track's rails.
 const hm = createHeights(W, H);
-const EAST_ROOMS = [hallsRoom, rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom];
+const EAST_ROOMS = [hallsRoom, rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom, boothRoom];
 for (const r of EAST_ROOMS) r.dress(g, { carve, hWall, vWall, pillar, door, hm, lowWall, LAYER });
 const ALL_ROOMS = [...ROOMS, ...EAST_ROOMS];
+// The Supervisor's locker, on the north bank nearest the door: his heavy
+// plate is in it (js/tutorial-system.js, after 06:47).
+g[37][22] = STATION_WALLS.LOCKERS_SUP;
 
 /** Props for environmental decoration (consumed by Track 2B props system). */
 const CORE_PROPS = [
@@ -382,10 +395,11 @@ export const TUTORIAL_MAP = {
   grid: g,
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
-  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
-  // The east wing's rooms can't be seen from the locker room: the renderer
-  // paints their walls a few a frame once the rest are up.
-  lateWalls: [rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom].flatMap((r) => r.ownWalls),
+  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, STATION_WALLS.LOCKERS_SUP, STATION_WALLS.LOCKERS_SUP_OPEN, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
+  // The east wing's rooms and the training hall can't be seen from the
+  // locker room: the renderer paints their walls a few a frame once the
+  // rest are up.
+  lateWalls: [rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom].flatMap((r) => r.ownWalls),
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
   // Each room's own lamps (js/tutorial-system.js _syncRoomLights), on while
   // you are near enough to see them: the range's floods on the bullet trap,

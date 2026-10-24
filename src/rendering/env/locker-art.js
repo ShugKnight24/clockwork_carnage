@@ -680,6 +680,13 @@ export const STATION_PAINTERS = {
     { name: "11235", num: 412, open: ["patrol", "photos", "shirt", "boots"] },
     { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } },
   ),
+  // The Supervisor's, by the door: shut all morning; after 06:47 his heavy
+  // plate comes out of it and his coat goes in (js/tutorial-system.js).
+  [STATION_WALLS.LOCKERS_SUP]: lockerPair({ name: "SIMON", num: 400, deco: { note: "SUPV" } }, { name: "HALE", num: 409 }),
+  [STATION_WALLS.LOCKERS_SUP_OPEN]: lockerPair(
+    { name: "SIMON", num: 400, open: ["cap", "photos", "shirt", "medal"] },
+    { name: "HALE", num: 409 },
+  ),
   [STATION_WALLS.GYM]: paintGym,
   [STATION_WALLS.GYM_BOARD]: paintGymBoard,
   [STATION_WALLS.GYM_RACK]: paintGymRack,

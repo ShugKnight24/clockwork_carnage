@@ -3,6 +3,7 @@ import { TUTORIAL_MAP, STATION_CORE } from "../../src/data/levels/tutorial.js";
 import { ATRIUM_GAP } from "../../src/data/levels/rooms/atrium.js";
 import { RIG_AT, BREAKER_CELL } from "../../src/data/levels/rooms/rnd.js";
 import { COVER_LAYOUTS } from "../../src/data/levels/rooms/arena.js";
+import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT } from "../../src/data/levels/rooms/track.js";
 import { HALL_WALLS } from "../../src/data/levels/rooms/halls.js";
 import { PRECINCT_WALLS } from "../../src/data/levels/rooms/precinct.js";
 import { MAPS } from "../../src/data/levels/campaign.js";
@@ -52,13 +53,29 @@ describe("the station floor", () => {
       rig: RIG_AT,
       breakerFront: { x: BREAKER_CELL.x + 0.5, y: BREAKER_CELL.y - 0.8 },
       liftMouth: { x: 29.5, y: 10.0 },
-      startGate: { x: 29.5, y: 49.5 },
+      trackStart: { x: 2.5, y: 51.5 },
+      trackFinish: { x: 10.5, y: 78.0 },
+      linsDesk: { x: 21.5, y: 10.3 },
+      supLocker: { x: 22.5, y: 38.6 },
       bridgeWest: { x: 62.9, y: 41.5 },
       bridgeEast: { x: 83.5, y: 41.5 },
     };
     for (const [name, p] of Object.entries(marks)) expect(at(p.x, p.y), name).toBe(true);
     // The bridge's gap is floor (anyone can walk round it; only the run dashes it).
     for (let y = ATRIUM_GAP.y0; y <= ATRIUM_GAP.y1; y++) expect(g[y][ATRIUM_GAP.x]).toBe(0);
+  });
+
+  it("builds the training hall off the gym, with its bars, tunnel and pit on open floor", () => {
+    // Two ways in: the gym's west door and the lobby's west alcove.
+    expect(g[23][3]).toBe(0);
+    expect(g[52][18]).toBe(0);
+    for (const [x, y] of [...TRACK_BARS, ...TRACK_TUNNEL]) expect(g[y][x], `${x},${y}`).toBe(0);
+    for (let y = TRACK_PIT.y0; y <= TRACK_PIT.y1; y++) for (let x = TRACK_PIT.x0; x <= TRACK_PIT.x1; x++) expect(g[y][x]).toBe(0);
+    // Lane one is a straight longer than a full bar of sprint covers
+    // (100 stamina at 25 a second, at 1.6 x 3.5 cells a second: 22.4 cells).
+    let run = 0;
+    for (let y = TRACK_AREA.y0; y < TRACK_AREA.y1 && g[y][2] === 0; y++) run++;
+    expect(run).toBeGreaterThan(22.4);
   });
 
   it("raises the sim hall's holo cover only on its open floor", () => {
@@ -81,9 +98,14 @@ describe("the station floor", () => {
   it("keeps the Precinct's plan as the station was", () => {
     expect(STATION_CORE.grid).toHaveLength(60);
     for (const row of STATION_CORE.grid) expect(row).toHaveLength(60);
-    // The core is the full map's top-left, but for the doors the wing cut through.
+    // The core is the full map's top-left, but for the doors the wing cut
+    // through, and the rooms Certification Day added inside it (the training
+    // hall and its passage off the gym, Lin's booth), which the Precinct
+    // never had.
+    const added = ["track", "trackPassage", "booth"].map((n) => map.rooms[n]);
+    const inAdded = (x, y) => added.some((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
     let diff = 0;
-    for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) if (STATION_CORE.grid[y][x] !== g[y][x]) diff++;
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) if (!inAdded(x, y) && STATION_CORE.grid[y][x] !== g[y][x]) diff++;
     expect(diff).toBeGreaterThan(0);
     expect(diff).toBeLessThan(400);
   });

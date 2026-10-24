@@ -1200,28 +1200,67 @@ const SHUTTER_LIP = 0.4;
  * from the ceiling to SHUTTER_LIP of a wall above the floor, a hazard bar on
  * its lip. You slide (or crouch) under it. One per cell of the corridor's
  * width.
+ *
+ * `entity.variant` dresses the same height for the training hall
+ * (src/data/levels/rooms/track.js): "bar", a padded slide bar on two posts
+ * with nothing above it; "tunnel", a dark padded ceiling panel with a strip
+ * light along its lip, a row of them making the crouch tunnel. Only low goes
+ * under (js/tutorial-system.js enforces it).
  */
-function renderShutter(ctx, sx, cy, sw, sh, dist, t, fog) {
+function renderShutter(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const ground = groundY(cy, sh);
   const top = cy - sh * 0.55;
   // Measured from the floor the walls stand on (half a wall under the
   // standing eye), so the lip is over a crouched or sliding eye
   // (CROUCH_EYE_Z, SLIDE_EYE_Z in src/systems/physics.js) and under a
   // standing one: from a slide it visibly passes overhead.
   const lip = cy + sh * (0.5 - SHUTTER_LIP);
-  const halfW = sw * 0.5;
+  const variant = entity?.variant;
   ctx.save();
   ctx.globalAlpha = fog;
+  if (variant === "bar") {
+    const halfW = sw * 0.5;
+    // Two posts to the floor, a foam-wrapped bar from 0.9 m to 1.2 m.
+    const barTop = lip - sh * 0.09;
+    const post = Math.max(2, sw * 0.05);
+    ctx.fillStyle = "#2a2e34";
+    for (const s of [-1, 1]) ctx.fillRect(sx + s * (halfW - post) - post / 2, barTop - sh * 0.02, post, ground - barTop + sh * 0.02);
+    const g = ctx.createLinearGradient(0, barTop, 0, lip);
+    g.addColorStop(0, "#f08a3a");
+    g.addColorStop(1, "#b0541a");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - halfW, barTop, halfW * 2, lip - barTop);
+    ctx.fillStyle = "#f2f2ee";
+    const band = Math.max(3, sw * 0.12);
+    for (let x = sx - halfW + band * 0.5; x < sx + halfW; x += band * 2) ctx.fillRect(x, barTop, band, lip - barTop);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(sx - halfW, lip, halfW * 2, Math.max(1, sh * 0.012));
+    ctx.restore();
+    return;
+  }
+  const tunnel = variant === "tunnel";
+  // The tunnel's panels meet their neighbours: a ceiling, not a row of signs.
+  const halfW = tunnel ? sw * 0.62 : sw * 0.5;
   const g = ctx.createLinearGradient(0, top, 0, lip);
-  g.addColorStop(0, "#5c646e");
-  g.addColorStop(1, "#8a929c");
+  g.addColorStop(0, tunnel ? "#1a2232" : "#5c646e");
+  g.addColorStop(1, tunnel ? "#2c4f8a" : "#8a929c");
   ctx.fillStyle = g;
   ctx.fillRect(sx - halfW, top, halfW * 2, lip - top);
-  // The slats.
-  const slat = Math.max(2, sh * 0.035);
+  // The slats (the tunnel's padding seams).
+  const slat = Math.max(2, sh * (tunnel ? 0.07 : 0.035));
   ctx.fillStyle = "rgba(20,24,30,0.45)";
   for (let y = top + slat; y < lip; y += slat * 2) ctx.fillRect(sx - halfW, y, halfW * 2, Math.max(1, slat * 0.35));
-  // The lip: hazard stripes, the gap's shadow under it.
   const barH = Math.max(2, sh * 0.05);
+  if (tunnel) {
+    // A strip light along the lip: you see where the ceiling ends.
+    ctx.fillStyle = "#9fe8ff";
+    ctx.fillRect(sx - halfW, lip - barH * 0.5, halfW * 2, barH * 0.5);
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(sx - halfW, lip, halfW * 2, Math.max(1, sh * 0.03));
+    ctx.restore();
+    return;
+  }
+  // The lip: hazard stripes, the gap's shadow under it.
   ctx.fillStyle = "#e8c23a";
   ctx.fillRect(sx - halfW, lip - barH, halfW * 2, barH);
   ctx.fillStyle = "#1a1a1a";
@@ -1245,7 +1284,7 @@ PROP_RENDERERS.shutter = renderShutter;
  * hazard paint on its far lip and the floor below lit far down. Drawn flat
  * on the ground plane from the near edge of its cell to the far one.
  */
-function renderFloorGap(ctx, sx, cy, sw, sh, dist, t, fog) {
+function renderFloorGap(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   const k = 0.45 * sh * dist; // ground offset × distance: constant along the floor
   const dn = Math.max(0.35, dist - 0.5);
   const df = dist + 0.5;
@@ -1261,6 +1300,34 @@ function renderFloorGap(ctx, sx, cy, sw, sh, dist, t, fog) {
   ctx.lineTo(sx + wN, yN);
   ctx.lineTo(sx - wN, yN);
   ctx.closePath();
+  if (entity?.variant === "pit") {
+    // The training hall's pit (src/data/levels/rooms/track.js): a well of
+    // foam cubes a metre down, lit warm from inside, hazard paint on its lip.
+    const g = ctx.createLinearGradient(0, yF, 0, yN);
+    g.addColorStop(0, "#2a1406");
+    g.addColorStop(1, "#5a2c10");
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    const rows = 3;
+    for (let i = 0; i < rows; i++) {
+      const y = yF + ((yN - yF) * (i + 0.3)) / rows;
+      const w = wF + ((wN - wF) * (i + 0.3)) / rows;
+      const n = 4;
+      for (let k = 0; k < n; k++) {
+        ctx.fillStyle = ["#e07a2a", "#2f6ec8", "#f2d64a", "#c84a3a"][(i + k) % 4];
+        const cw = (w * 2) / n;
+        ctx.fillRect(sx - w + k * cw + cw * 0.08, y, cw * 0.84, Math.max(1, ((yN - yF) / rows) * 0.7));
+      }
+    }
+    ctx.restore();
+    const lipH = Math.max(1, (yN - yF) * 0.12);
+    ctx.fillStyle = "#e8c23a";
+    ctx.fillRect(sx - wF, yF - lipH, wF * 2, lipH);
+    ctx.restore();
+    return;
+  }
   const g = ctx.createLinearGradient(0, yF, 0, yN);
   g.addColorStop(0, "#020305");
   g.addColorStop(0.6, "#05080c");
@@ -1294,13 +1361,32 @@ function renderTelemetryRig(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   const halfW = sw * 0.46;
   const post = Math.max(2, sw * 0.05);
   const scanning = entity?.scan > 0;
+  // Waiting for someone to stand in it (`entity.wait`): the ring on the
+  // floor pulses and a column of light stands in it, to be seen across the bay.
+  const waiting = !scanning && entity?.wait > 0;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.005);
   ctx.save();
   ctx.globalAlpha = fog;
-  // The pad.
-  ctx.fillStyle = scanning ? "rgba(70,224,255,0.55)" : "rgba(70,224,255,0.25)";
+  if (waiting) {
+    const beam = ctx.createLinearGradient(0, cy - sh * 0.55, 0, ground);
+    beam.addColorStop(0, "rgba(70,224,255,0)");
+    beam.addColorStop(0.5, `rgba(70,224,255,${0.1 + 0.08 * pulse})`);
+    beam.addColorStop(1, `rgba(120,236,255,${0.38 + 0.2 * pulse})`);
+    ctx.fillStyle = beam;
+    ctx.fillRect(sx - halfW * 0.7, cy - sh * 0.55, halfW * 1.4, ground - (cy - sh * 0.55));
+    ctx.fillStyle = `rgba(200,250,255,${0.5 + 0.3 * pulse})`;
+    ctx.fillRect(sx - halfW * 0.04, cy - sh * 0.55, halfW * 0.08, ground - (cy - sh * 0.55));
+  }
+  // The pad, and the ring round it.
+  ctx.fillStyle = scanning ? "rgba(70,224,255,0.55)" : `rgba(70,224,255,${waiting ? 0.3 + 0.25 * pulse : 0.25})`;
   ctx.beginPath();
   ctx.ellipse(sx, ground, halfW, Math.max(2, sh * 0.05), 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = waiting || scanning ? "#9ff4ff" : "rgba(160,244,255,0.5)";
+  ctx.lineWidth = Math.max(1.5, sw * (waiting ? 0.025 + 0.015 * pulse : 0.02));
+  ctx.beginPath();
+  ctx.ellipse(sx, ground, halfW * 1.15, Math.max(2.5, sh * 0.06), 0, 0, Math.PI * 2);
+  ctx.stroke();
   // Posts and the ring.
   ctx.fillStyle = "#3a4048";
   for (const s of [-1, 1]) ctx.fillRect(sx + s * halfW - post / 2, top, post, ground - top);
@@ -1352,3 +1438,140 @@ function renderBookingCamera(ctx, sx, cy, sw, sh, dist, t, fog) {
   ctx.restore();
 }
 PROP_RENDERERS.booking_camera = renderBookingCamera;
+
+/**
+ * Paint on the training hall's floor: the start line (white) or the
+ * chequered finish. Drawn flat on the ground plane, like the floor gap,
+ * across the middle of its cell.
+ */
+function renderLaneMark(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const k = 0.45 * sh * dist;
+  const dn = Math.max(0.35, dist - 0.12);
+  const df = dist + 0.12;
+  const yN = cy + k / dn;
+  const yF = cy + k / df;
+  const wN = ((sw * dist) / dn) * 0.5;
+  const wF = ((sw * dist) / df) * 0.5;
+  ctx.save();
+  ctx.globalAlpha = fog * 0.9;
+  ctx.beginPath();
+  ctx.moveTo(sx - wF, yF);
+  ctx.lineTo(sx + wF, yF);
+  ctx.lineTo(sx + wN, yN);
+  ctx.lineTo(sx - wN, yN);
+  ctx.closePath();
+  if (entity?.variant === "finish") {
+    ctx.clip();
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < 2; j++) {
+        ctx.fillStyle = (i + j) % 2 ? "#f2f2ee" : "#141618";
+        ctx.fillRect(sx - wN + ((wN * 2) / n) * i, yF + ((yN - yF) / 2) * j, (wN * 2) / n + 1, (yN - yF) / 2 + 1);
+      }
+    }
+  } else {
+    ctx.fillStyle = "#f2f2ee";
+    ctx.fill();
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.lane_mark = renderLaneMark;
+
+/** A lab microscope on its steel stand: the head, its eyepieces, a lit stage. */
+function renderLabScope(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  ctx.save();
+  ctx.globalAlpha = fog;
+  // The stand, to bench height (0.9 m), and its shelf.
+  const benchY = ground - m * 0.9;
+  ctx.fillStyle = "#6a727c";
+  ctx.fillRect(sx - m * 0.3, benchY, m * 0.6, m * 0.05);
+  ctx.fillStyle = "#3a4048";
+  ctx.fillRect(sx - m * 0.27, benchY + m * 0.05, m * 0.04, m * 0.85);
+  ctx.fillRect(sx + m * 0.23, benchY + m * 0.05, m * 0.04, m * 0.85);
+  ctx.fillRect(sx - m * 0.27, ground - m * 0.32, m * 0.54, m * 0.03);
+  // The scope.
+  ctx.fillStyle = "#e8ecf0";
+  ctx.fillRect(sx - m * 0.14, benchY - m * 0.05, m * 0.28, m * 0.05);
+  ctx.fillStyle = "#cfd6dc";
+  ctx.fillRect(sx + m * 0.04, benchY - m * 0.42, m * 0.07, m * 0.37);
+  ctx.fillStyle = "#1a1c20";
+  ctx.fillRect(sx - m * 0.1, benchY - m * 0.46, m * 0.22, m * 0.08);
+  ctx.fillRect(sx - m * 0.12, benchY - m * 0.56, m * 0.04, m * 0.12);
+  ctx.fillRect(sx - m * 0.05, benchY - m * 0.58, m * 0.04, m * 0.14);
+  ctx.fillStyle = "#cfd6dc";
+  ctx.fillRect(sx - m * 0.08, benchY - m * 0.2, m * 0.16, m * 0.03);
+  ctx.fillStyle = "#9ff4ff";
+  ctx.fillRect(sx - m * 0.04, benchY - m * 0.17, m * 0.08, m * 0.02);
+  ctx.restore();
+}
+PROP_RENDERERS.lab_scope = renderLabScope;
+
+/**
+ * The vitals cart: a monitor on a rolling pole, the cadet's heart trace and
+ * breathing running across it.
+ */
+function renderVitalsCart(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#3a4048";
+  ctx.fillRect(sx - m * 0.02, ground - m * 1.25, m * 0.04, m * 1.25);
+  ctx.fillRect(sx - m * 0.24, ground - m * 0.04, m * 0.48, m * 0.04);
+  const w = m * 0.5;
+  const h = m * 0.34;
+  const top = ground - m * 1.55;
+  ctx.fillStyle = "#1a1d22";
+  ctx.fillRect(sx - w / 2 - m * 0.02, top - m * 0.02, w + m * 0.04, h + m * 0.04);
+  ctx.fillStyle = "#061016";
+  ctx.fillRect(sx - w / 2, top, w, h);
+  ctx.lineWidth = Math.max(1, m * 0.008);
+  ctx.strokeStyle = "#5aff9a";
+  ctx.beginPath();
+  const scroll = (t * 0.0004) % 1;
+  for (let i = 0; i <= 40; i++) {
+    const u = i / 40;
+    const k = (u + scroll) % 0.25;
+    const y = top + h * 0.45 - (k > 0.1 && k < 0.12 ? h * 0.3 : k > 0.12 && k < 0.135 ? -h * 0.12 : 0);
+    if (i) ctx.lineTo(sx - w / 2 + u * w, y);
+    else ctx.moveTo(sx - w / 2, y);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = "#46e0ff";
+  ctx.beginPath();
+  for (let i = 0; i <= 40; i++) {
+    const u = i / 40;
+    const y = top + h * 0.78 + Math.sin(u * 18 + t * 0.003) * h * 0.06;
+    if (i) ctx.lineTo(sx - w / 2 + u * w, y);
+    else ctx.moveTo(sx - w / 2, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+PROP_RENDERERS.vitals_cart = renderVitalsCart;
+
+/** Cables taped across the floor from the rig to its consoles: flat on the ground, like the gap. */
+function renderCableRun(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const k = 0.45 * sh * dist;
+  const yN = cy + k / Math.max(0.35, dist - 0.5);
+  const yF = cy + k / (dist + 0.5);
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.lineCap = "round";
+  for (const [dx, c] of [[-0.12, "#1a1c20"], [0, "#2a6ac2"], [0.12, "#1a1c20"]]) {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = Math.max(1, (yN - yF) * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(sx + dx * sw * 0.6, yF);
+    ctx.quadraticCurveTo(sx + dx * sw * 1.4, (yF + yN) / 2, sx + dx * sw, yN);
+    ctx.stroke();
+  }
+  // The tape holding them down.
+  ctx.fillStyle = "rgba(232,194,58,0.85)";
+  ctx.fillRect(sx - sw * 0.25, yF + (yN - yF) * 0.45, sw * 0.5, Math.max(1, (yN - yF) * 0.08));
+  ctx.restore();
+}
+PROP_RENDERERS.cable_run = renderCableRun;
+

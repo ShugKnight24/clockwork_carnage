@@ -41,6 +41,7 @@ export const ENEMY_RENDERERS = {
   officer: renderStationPerson,
   officerKit: renderStationPerson,
   supervisor: renderStationPerson,
+  supervisorKit: renderStationPerson,
   staff: renderStationPerson,
   clerk: renderStationPerson,
 };

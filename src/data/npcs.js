@@ -27,6 +27,13 @@ export const NPC_TYPES = {
     color2: "#1a1d24",
     speed: 1.4,
   },
+  /** The Supervisor in his own heavy plate, after 06:47: the squads' C-series, his gold trim. */
+  supervisorKit: {
+    name: "Supervisor Simon",
+    color1: "#4b5568",
+    color2: "#161b24",
+    speed: 1.8,
+  },
   /**
    * The office floor's civilians, two looks each (js/npc.js `look`): a lab
    * tech in a white coat or an engineer in coveralls; a clerk in a cardigan
