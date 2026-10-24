@@ -38,6 +38,7 @@ import {
   LAYER,
 } from "./map-helpers.js";
 import { STATION_MAPS } from "./station-maps.js";
+import { dressStation } from "./station-dressing.js";
 
 const W = 60;
 const H = 60;
@@ -986,8 +987,8 @@ function buildCoreEndgame() {
   };
 }
 
-/** Every Act IV map, built once, keyed by the id levels name it by. */
-export const ACT4_MAPS = {
+/** Every Act IV map's floor plan as built, before it is dressed. */
+export const ACT4_FLOOR_PLANS = {
   entry_last: buildEntryLast(),
   the_loop: buildLoop(),
   containment_last: buildContainmentLast(),
@@ -996,6 +997,11 @@ export const ACT4_MAPS = {
   engine_firing: buildEngineFiring(),
   core_endgame: buildCoreEndgame(),
 };
+
+/** Every Act IV map, dressed for the place it is (station-dressing.js). */
+export const ACT4_MAPS = Object.fromEntries(
+  Object.entries(ACT4_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);
 
 // ── Set pieces ───────────────────────────────────────────────────────────────
 

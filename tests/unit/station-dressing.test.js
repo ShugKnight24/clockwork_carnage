@@ -8,6 +8,8 @@
 import { describe, it, expect } from "vitest";
 import { STATION_FLOOR_PLANS, STATION_MAPS } from "../../src/data/levels/station-maps.js";
 import { ACT2_FLOOR_PLANS, ACT2_MAPS } from "../../src/data/levels/act2-maps.js";
+import { ACT3_FLOOR_PLANS, ACT3_MAPS } from "../../src/data/levels/act3-maps.js";
+import { ACT4_FLOOR_PLANS, ACT4_MAPS } from "../../src/data/levels/act4-maps.js";
 import { hasWallPainter } from "../../src/rendering/env/wall-art.js";
 import { LAYER } from "../../src/data/levels/map-helpers.js";
 import { repaintable } from "../../src/data/levels/station-dressing.js";
@@ -25,8 +27,8 @@ function pillars(level) {
   return out;
 }
 
-const PLANS = { ...STATION_FLOOR_PLANS, ...ACT2_FLOOR_PLANS };
-const DRESSED = { ...STATION_MAPS, ...ACT2_MAPS };
+const PLANS = { ...STATION_FLOOR_PLANS, ...ACT2_FLOOR_PLANS, ...ACT3_FLOOR_PLANS, ...ACT4_FLOOR_PLANS };
+const DRESSED = { ...STATION_MAPS, ...ACT2_MAPS, ...ACT3_MAPS, ...ACT4_MAPS };
 
 describe.each(Object.keys(DRESSED))("station dressing — %s", (id) => {
   const bare = PLANS[id];

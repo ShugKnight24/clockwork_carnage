@@ -92,9 +92,9 @@ function toolkit(level, plain = PLAIN) {
 
 // The corridor runs: the station's painted block with what hangs in a
 // police building's halls, a lamp bracket between each.
-const HALL = [S.CORRIDOR, S.PHOTOS, S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.WANTED, S.CORRIDOR, S.FIRE];
+const HALL = [S.CORRIDOR, S.PHOTOS, S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.WANTED];
 const HALL_QUIET = [S.CORRIDOR, S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.CORRIDOR, S.PHOTOS];
-const OFFICE = [S.BLIND, S.BINDERS, S.COMMENDATIONS, S.BLIND, S.OFFICE_NOTICES];
+const OFFICE = [S.BLIND, S.BINDERS, S.BLIND, S.OFFICE_NOTICES];
 const LOCKERS = [S.LOCKERS_A, S.LOCKERS_B, S.LOCKERS_C];
 const EVIDENCE = [S.SHELVES_A, S.CAGE, S.SHELVES_B, S.CAGE];
 const CELL_FRONT = [P.CELL_BARS, P.CELL_BARS, P.CELL_DOOR, P.CELL_BARS, P.CELL_BARS];
@@ -111,7 +111,7 @@ const LAB_HALL = [P.LAB_WALL, P.LAB_WALL, P.LAB_BOARD, P.LAB_WALL, P.LAB_WALL, P
 function dressEntry(level) {
   const d = toolkit(level);
   // Airlock and lobby: the division's crest facing you as the door opens.
-  d.walls({ r1: 53, c1: 25, r2: 57, c2: 34 }, { w: [S.NOTICE, S.FIRE, S.CORRIDOR], e: [S.CORRIDOR, S.WANTED, S.NOTICE] });
+  d.walls({ r1: 53, c1: 25, r2: 57, c2: 34 }, { w: [S.NOTICE, S.CORRIDOR], e: [S.CORRIDOR, S.WANTED, S.NOTICE] });
   d.walls({ r1: 44, c1: 17, r2: 51, c2: 42 }, { n: HALL, s: [S.PHOTOS, S.CORRIDOR, S.WANTED, S.CORRIDOR], w: [S.CREST], e: [S.CREST] });
   d.at(43, 26, S.CREST);
   d.at(43, 33, S.CREST);
@@ -124,7 +124,7 @@ function dressEntry(level) {
   d.prop(36, 8, "bench");
   d.prop(43, 8, "bench");
   // Dispatch: the ring board along the north wall, the console under it.
-  d.walls({ r1: 35, c1: 45, r2: 37, c2: 55 }, { n: [P.DISPATCH, S.MONITORS, P.DISPATCH, S.MONITORS_CASE], e: [S.STATION_MAP], w: [S.MONITORS] });
+  d.walls({ r1: 35, c1: 45, r2: 37, c2: 55 }, { n: [P.DISPATCH, S.MONITORS, P.DISPATCH, S.MONITORS_CASE], e: [S.MONITORS_CASE], w: [S.MONITORS] });
   d.walls({ r1: 42, c1: 45, r2: 44, c2: 55 }, { s: [S.COFFEE, S.SINK, S.FRIDGE, S.ROSTER, S.CORRIDOR] });
   d.prop(36, 46, "chair");
   d.prop(36, 54, "chair");
@@ -134,13 +134,10 @@ function dressEntry(level) {
   d.walls({ r1: 40, c1: 5, r2: 41, c2: 54 }, { n: HALL, s: HALL_QUIET });
   d.walls({ r1: 18, c1: 5, r2: 19, c2: 54 }, { n: HALL_QUIET, s: HALL });
   d.at(39, 12, S.SIGN_LOCKERS);
-  d.at(39, 48, P.SIGN_DISPATCH);
   d.at(24, 16, P.SIGN_INTERVIEW);
-  d.at(24, 43, P.SIGN_BRIEFING);
-  d.at(30, 43, P.SIGN_RECORDS);
   // The squad room: the main corridor runs through it, desks either side.
   d.walls({ r1: 22, c1: 17, r2: 38, c2: 26 }, { s: OFFICE, w: [S.CLOCK, ...OFFICE] });
-  d.walls({ r1: 22, c1: 33, r2: 38, c2: 42 }, { s: OFFICE, e: [S.STATION_MAP, ...OFFICE] });
+  d.walls({ r1: 22, c1: 33, r2: 38, c2: 42 }, { s: OFFICE, e: [S.CLOCK, ...OFFICE] });
   d.walls({ r1: 13, c1: 27, r2: 43, c2: 32 }, { w: HALL_QUIET, e: HALL_QUIET });
   d.low(23, 18, 23, 19);
   d.low(32, 18, 32, 19);
@@ -169,12 +166,10 @@ function dressEntry(level) {
   d.prop(30, 47, "filing_cabinet");
   d.prop(30, 53, "filing_cabinet");
   // The watch commander's floor, where the level ends.
-  d.walls({ r1: 3, c1: 18, r2: 12, c2: 41 }, { w: [S.STATION_MAP, P.DISPATCH, S.MONITORS], e: [P.CASE_BOARD, S.MONITORS, S.MONITORS_CASE] });
+  d.walls({ r1: 3, c1: 18, r2: 12, c2: 41 }, { w: [P.CASE_BOARD, P.DISPATCH, S.MONITORS], e: [P.CASE_BOARD, S.MONITORS, S.MONITORS_CASE] });
   // The evidence store and the armoury.
   d.walls({ r1: 5, c1: 4, r2: 9, c2: 13 }, { n: EVIDENCE, w: [S.SHELVES_A, S.CUSTODY_LOG], e: [S.SHELVES_B], s: [P.INTAKE] });
-  d.at(10, 7, P.SIGN_EVIDENCE);
-  d.walls({ r1: 5, c1: 46, r2: 9, c2: 55 }, { n: [S.ARMORY_CAGE, S.ARMORY_AMMO], e: [S.ARMORY_SIGNOUT, S.ARMORY_CAGE], w: [S.ARMORY_CAGE] });
-  d.at(10, 52, S.SIGN_ARMORY);
+  d.walls({ r1: 5, c1: 46, r2: 9, c2: 55 }, { n: [S.ARMORY_CAGE, S.ARMORY_AMMO], e: [S.ARMORY_AMMO, S.ARMORY_CAGE], w: [S.ARMORY_CAGE] });
   return d.done();
 }
 
@@ -184,9 +179,9 @@ function dressEntry(level) {
 // the briefing room and the evidence room.
 function dressCheckpoint(level) {
   const d = toolkit(level);
-  d.walls({ r1: 52, c1: 20, r2: 57, c2: 39 }, { w: [S.FIRE, S.NOTICE, S.CORRIDOR], e: [S.CORRIDOR, S.WANTED, S.CREST], s: HALL_QUIET });
+  d.walls({ r1: 52, c1: 20, r2: 57, c2: 39 }, { w: [S.NOTICE, S.CORRIDOR], e: [S.CORRIDOR, S.WANTED], s: HALL_QUIET });
   // Booking: height charts down the plaza's sides, the sign over the lanes.
-  d.walls({ r1: 45, c1: 14, r2: 51, c2: 45 }, { w: [P.BOOKING, S.CORRIDOR], e: [P.BOOKING, S.CORRIDOR], s: [S.CORRIDOR, S.NOTICE, S.CORRIDOR, P.SIGN_BOOKING] });
+  d.walls({ r1: 45, c1: 14, r2: 51, c2: 45 }, { w: [P.BOOKING, S.CORRIDOR], e: [P.BOOKING, S.CORRIDOR], s: [S.CORRIDOR, S.NOTICE] });
   d.prop(50, 16, "bench");
   d.prop(50, 43, "bench");
   // Holding, west and east: bars to the walkway, the bunk wall at the back.
@@ -203,26 +198,23 @@ function dressCheckpoint(level) {
   d.walls({ r1: 27, c1: 27, r2: 32, c2: 32 }, { w: HALL_QUIET, e: HALL_QUIET });
   // Security office: the monitor wall is already there; dispatch either side.
   d.row(19, 24, 35, [S.MONITORS, S.MONITORS_CASE]);
-  d.walls({ r1: 20, c1: 21, r2: 25, c2: 38 }, { w: [P.DISPATCH, S.STATION_MAP], e: [P.DISPATCH, S.MONITORS], s: [S.CLOCK, ...OFFICE] });
+  d.walls({ r1: 20, c1: 21, r2: 25, c2: 38 }, { w: [P.DISPATCH, S.MONITORS], e: [P.DISPATCH, S.MONITORS], s: OFFICE });
   d.prop(24, 24, "chair");
   d.prop(24, 35, "chair");
   // The observation deck over the west cells.
-  d.walls({ r1: 20, c1: 4, r2: 23, c2: 15 }, { w: [S.ACOUSTIC, S.MONITORS], e: [S.ACOUSTIC] });
+  d.walls({ r1: 20, c1: 4, r2: 23, c2: 15 }, { w: [S.MONITORS, S.MONITORS_CASE], e: [S.MONITORS_CASE] });
   // Armoury vault.
-  d.walls({ r1: 20, c1: 44, r2: 23, c2: 55 }, { n: [S.ARMORY_CAGE, S.ARMORY_AMMO, S.ARMORY_CAGE], e: [S.ARMORY_SIGNOUT], s: [S.ARMORY_AMMO, S.ARMORY_CAGE] });
-  d.at(18, 43, S.SIGN_ARMORY);
+  d.walls({ r1: 20, c1: 44, r2: 23, c2: 55 }, { n: [S.ARMORY_CAGE, S.ARMORY_AMMO, S.ARMORY_CAGE], e: [S.ARMORY_AMMO], s: [S.ARMORY_AMMO, S.ARMORY_CAGE] });
   // The north patrol corridor.
   d.walls({ r1: 13, c1: 5, r2: 18, c2: 54 }, { n: HALL, s: HALL_QUIET });
-  d.at(12, 8, P.SIGN_BRIEFING);
-  d.at(12, 51, P.SIGN_EVIDENCE);
   // Briefing room: the case board, the blinds, rows of chairs to it.
-  d.walls({ r1: 4, c1: 4, r2: 10, c2: 17 }, { n: [S.BLIND, P.CASE_BOARD, P.CASE_BOARD, S.BLIND], w: [S.OFFICE_NOTICES, S.CLOCK], e: OFFICE });
+  d.walls({ r1: 4, c1: 4, r2: 10, c2: 17 }, { n: [S.BLIND, P.CASE_BOARD, P.CASE_BOARD, S.BLIND], w: [S.OFFICE_NOTICES, S.BLIND], e: OFFICE });
   for (const c of [6, 8, 11, 14, 16]) d.prop(9, c, "chair");
   // Evidence: the cage along the north, intake by the door.
   d.at(11, 47, P.INTAKE);
-  d.walls({ r1: 4, c1: 42, r2: 10, c2: 55 }, { n: [...EVIDENCE, S.CAGE_DOOR], e: [S.SHELVES_A, S.CUSTODY_LOG], w: [S.SHELVES_B], s: [S.SHELVES_B, S.SHELVES_A] });
+  d.walls({ r1: 4, c1: 42, r2: 10, c2: 55 }, { n: EVIDENCE, e: [S.SHELVES_A, S.CUSTODY_LOG], w: [S.SHELVES_B], s: [S.SHELVES_B, S.SHELVES_A] });
   // The sally port out: the crest over the last door.
-  d.walls({ r1: 4, c1: 23, r2: 10, c2: 36 }, { n: [S.CORRIDOR, S.CREST, S.CORRIDOR], w: [S.STATION_MAP], e: [S.WANTED] });
+  d.walls({ r1: 4, c1: 23, r2: 10, c2: 36 }, { n: [S.CORRIDOR, S.WANTED, S.CORRIDOR], w: [P.CASE_BOARD], e: [S.WANTED] });
   return d.done();
 }
 
@@ -263,9 +255,8 @@ function dressResearch(level) {
 // Commander's floor, the warden's office and the evidence locker.
 function dressContainment(level) {
   const d = toolkit(level);
-  d.walls({ r1: 53, c1: 26, r2: 57, c2: 33 }, { w: [S.NOTICE, S.FIRE], e: [S.WANTED, S.CORRIDOR] });
+  d.walls({ r1: 53, c1: 26, r2: 57, c2: 33 }, { w: [S.NOTICE, S.CORRIDOR], e: [S.WANTED, S.CORRIDOR] });
   d.walls({ r1: 44, c1: 13, r2: 52, c2: 46 }, { s: [P.BOOKING, S.CORRIDOR, P.INTAKE, S.CORRIDOR], w: [P.BOOKING, S.CORRIDOR], e: [P.BOOKING, S.CORRIDOR] });
-  d.at(43, 26, P.SIGN_BOOKING);
   d.prop(46, 16, "bench");
   d.prop(46, 43, "bench");
   // The cell banks: bars to the walkway, bunks at the back.
@@ -277,15 +268,14 @@ function dressContainment(level) {
   d.walls({ r1: 28, c1: 43, r2: 43, c2: 46 }, { w: [S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.CUSTODY_LOG] });
   d.walls({ r1: 28, c1: 27, r2: 43, c2: 32 }, { w: HALL_QUIET, e: HALL_QUIET });
   // The guard station.
-  d.walls({ r1: 21, c1: 21, r2: 26, c2: 38 }, { n: [S.MONITORS, S.MONITORS_CASE, P.DISPATCH], w: [S.STATION_MAP, S.CLOCK], e: [P.DISPATCH, S.MONITORS] });
+  d.walls({ r1: 21, c1: 21, r2: 26, c2: 38 }, { n: [S.MONITORS, S.MONITORS_CASE, P.DISPATCH], w: [P.DISPATCH, S.MONITORS], e: [P.DISPATCH, S.MONITORS] });
   // The north corridor, and the gallery of cells round the arena.
   d.walls({ r1: 13, c1: 5, r2: 19, c2: 54 }, { n: HALL_QUIET, s: HALL });
   d.at(12, 6, P.SIGN_DETENTION);
   d.walls({ r1: 3, c1: 18, r2: 12, c2: 41 }, { w: CELL_FRONT, e: CELL_FRONT });
   // The warden's office and the evidence locker.
-  d.walls({ r1: 5, c1: 4, r2: 10, c2: 13 }, { n: [S.COMMENDATIONS, S.BLIND, S.BINDERS], w: [S.CLOCK, S.BOOKCASE], e: OFFICE });
-  d.walls({ r1: 5, c1: 46, r2: 10, c2: 55 }, { n: [...EVIDENCE, S.CAGE_DOOR], w: [S.SHELVES_A, S.CUSTODY_LOG], e: [S.SHELVES_B] });
-  d.at(12, 53, P.SIGN_EVIDENCE);
+  d.walls({ r1: 5, c1: 4, r2: 10, c2: 13 }, { n: [S.COMMENDATIONS, S.BLIND, S.BINDERS], w: [S.BLIND, S.BINDERS], e: OFFICE });
+  d.walls({ r1: 5, c1: 46, r2: 10, c2: 55 }, { n: EVIDENCE, w: [S.SHELVES_A, S.CUSTODY_LOG], e: [S.SHELVES_B] });
   return d.done();
 }
 
@@ -425,6 +415,62 @@ function dressFoundry(level) {
   return d.done();
 }
 
+// ── Acts III and IV ──────────────────────────────────────────────
+// The remixes of the Act I floors are built on the dressed station maps, so
+// they come back to the same rooms. These are the places that are new: the
+// Archive (twice), the Engine (twice) and Habitat Ring C.
+
+const STACKS = [S.SHELVES_A, S.SHELVES_B, S.BINDERS, S.SHELVES_B];
+
+// III-5: the stacks halls are archive shelving, the vestibule the desk.
+function dressArchive(level) {
+  const d = toolkit(level);
+  d.area(50, 22, 58, 38, [S.BINDERS, P.SIGN_RECORDS, S.BINDERS, S.CLOCK]);
+  d.area(40, 3, 50, 56, STACKS);
+  d.area(18, 3, 29, 56, STACKS);
+  return d.done();
+}
+
+// III-6: the maintenance lift's notices and the arcades' pipework; the
+// processional itself is left as the hall it is.
+function dressEngine(level) {
+  const d = toolkit(level);
+  d.area(51, 18, 58, 41, [S.NOTICE, null, S.FIRE, null]);
+  d.area(17, 0, 47, 20, PIPES);
+  d.area(17, 39, 47, 59, PIPES);
+  return d.done();
+}
+
+// IV-2: Habitat Ring C. The tenements' halls, the market's stalls and
+// stores, the transit gate's notices. The boulevard's own walls (cols 24-35)
+// stay bare: its blocks have to repeat tile for tile for the loop to read.
+function dressLoop(level) {
+  const d = toolkit(level);
+  d.area(14, 8, 46, 21, [S.CORRIDOR, S.PHOTOS, S.CORRIDOR, S.NOTICE]);
+  d.area(14, 36, 46, 57, [S.CORRIDOR, S.CRATES, S.NOTICE, S.CORRIDOR, S.WANTED]);
+  d.area(2, 15, 13, 45, PUBLIC);
+  d.area(46, 7, 51, 53, PUBLIC);
+  return d.done();
+}
+
+// IV-5: the Archive again, burning: the same stacks.
+function dressArchiveBurns(level) {
+  const d = toolkit(level);
+  d.area(0, 0, 59, 59, [S.SHELVES_A, null, S.SHELVES_B, S.BINDERS, null]);
+  return d.done();
+}
+
+// IV-6: Lyra's control booth, the stores, the gantry and the Engine hall's
+// plant.
+function dressEngineFiring(level) {
+  const d = toolkit(level);
+  d.area(3, 4, 11, 17, CONTROL);
+  d.area(3, 42, 11, 55, [S.CRATES, S.ARMORY_AMMO, null]);
+  d.area(49, 21, 58, 38, [S.NOTICE, S.FIRE, null]);
+  d.area(12, 4, 49, 55, [P.GAUGES, null, null, null, null, null]);
+  return d.done();
+}
+
 const DRESSERS = {
   entry: dressEntry,
   checkpoint: dressCheckpoint,
@@ -439,6 +485,11 @@ const DRESSERS = {
   transit_loop: dressTransitLoop,
   greenhouse: dressGreenhouse,
   foundry: dressFoundry,
+  archive: dressArchive,
+  engine: dressEngine,
+  the_loop: dressLoop,
+  archive_burns: dressArchiveBurns,
+  engine_firing: dressEngineFiring,
 };
 
 /** Whether a dresser may repaint a wall tile on this map. */
