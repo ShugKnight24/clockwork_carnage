@@ -63,6 +63,14 @@ function toolkit(level, plain = PLAIN) {
       if (w) col(c1 - 1, r1, r2, w);
       if (e) col(c2 + 1, r1, r2, e);
     },
+    /**
+     * Every plain wall someone can see inside a rectangle, the ids laid
+     * along it on the diagonal (null leaves the wall as it was): for the
+     * big halls and shafts, where a room is its whole area.
+     */
+    area(r1, c1, r2, c2, ids) {
+      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) at(r, c, ids[(r + c) % ids.length]);
+    },
     /** Waist-high furniture you can crouch behind and shoot over. */
     low(r1, c1, r2, c2, id = 3, layers = LAYER.WAIST) {
       for (let r = r1; r <= r2; r++) {
@@ -343,6 +351,80 @@ function dressVossLab(level) {
   return d.done();
 }
 
+// ── Act II: the outer rings ──────────────────────────────────────
+// Nothing here is police but the Precinct, which is the prologue's own
+// rooms already. The rest are the station's plant and its public decks, so
+// they get its pipework, crates, notices and lockers, sparsely: a hall of
+// one picture over and over reads as wallpaper, not a place.
+
+const PIPES = [P.GAUGES, null, null, null];
+const SCRAP = [S.CRATES, null, S.CRATES, null, null];
+const PUBLIC = [S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.WANTED, S.CORRIDOR, S.PHOTOS];
+const CONTROL = [S.MONITORS, S.MONITORS_CASE, P.DISPATCH];
+
+// II-1: the crash bay's wreckage, the shafts' and pump hall's pipework,
+// the control room's screens, the lift lobby's notices.
+function dressEvacShafts(level) {
+  const d = toolkit(level);
+  d.area(2, 31, 8, 37, CONTROL);
+  d.area(2, 3, 13, 31, PIPES);
+  d.area(12, 5, 48, 10, PIPES);
+  d.area(48, 2, 57, 18, SCRAP);
+  d.area(28, 41, 41, 57, [S.NOTICE, null, S.FIRE, null, S.CORRIDOR]);
+  return d.done();
+}
+
+// II-2: the hangar's racked salvage, Rook's armoury on the east side, the
+// receiving hall's notices, the dock ring's plant.
+function dressSalvageDeck(level) {
+  const d = toolkit(level);
+  d.area(21, 44, 38, 56, [S.ARMORY_CAGE, S.ARMORY_AMMO, null]);
+  d.area(19, 5, 44, 44, SCRAP);
+  d.area(44, 15, 56, 44, [S.NOTICE, S.CRATES, null, S.FIRE, null]);
+  d.area(0, 2, 19, 57, PIPES);
+  return d.done();
+}
+
+// II-3: the spine's plant, and Kai's drafting office.
+function dressMaintenanceSpine(level) {
+  const d = toolkit(level);
+  d.area(3, 3, 10, 17, [S.BINDERS, P.LAB_BOARD, S.BOOKCASE, S.BLIND]);
+  d.area(49, 2, 57, 14, [S.NOTICE, S.FIRE, null]);
+  d.area(14, 3, 24, 31, [S.CRATES, null, P.GAUGES, null]);
+  d.area(0, 0, 59, 59, PIPES);
+  return d.done();
+}
+
+// II-4: the stations' public walls, and the transit police post at the
+// south-east station.
+function dressTransitLoop(level) {
+  const d = toolkit(level);
+  d.area(35, 34, 49, 49, [S.WANTED, S.CORRIDOR, S.NOTICE, S.CORRIDOR, P.CELL_DOOR, S.CORRIDOR]);
+  d.area(10, 10, 23, 25, PUBLIC);
+  d.area(39, 10, 50, 25, PUBLIC);
+  d.area(9, 34, 20, 49, PUBLIC);
+  return d.done();
+}
+
+// II-5: the lounge's kitchenette, the seed vault's shelving, the
+// glasshouse's clean white panels.
+function dressGreenhouse(level) {
+  const d = toolkit(level);
+  d.area(47, 21, 57, 38, [S.COFFEE, null, S.NOTICE, null, S.FRIDGE, null]);
+  d.area(3, 15, 20, 42, [P.LAB_SHELVES, null, P.LAB_SHELVES, P.LAB_WALL]);
+  d.area(19, 2, 37, 16, [P.LAB_WALL, null]);
+  return d.done();
+}
+
+// II-7: the rack hall's suit lockers and the casting floor's plant.
+function dressFoundry(level) {
+  const d = toolkit(level);
+  d.area(50, 21, 57, 38, [S.NOTICE, S.FIRE, null]);
+  d.area(29, 7, 43, 52, [S.LOCKERS_A, S.LOCKERS_B, null, S.LOCKERS_C]);
+  d.area(3, 7, 29, 52, PIPES);
+  return d.done();
+}
+
 const DRESSERS = {
   entry: dressEntry,
   checkpoint: dressCheckpoint,
@@ -351,6 +433,12 @@ const DRESSERS = {
   server_farm: dressServerFarm,
   reactor: dressReactor,
   voss_lab: dressVossLab,
+  evac_shafts: dressEvacShafts,
+  salvage_deck: dressSalvageDeck,
+  maintenance_spine: dressMaintenanceSpine,
+  transit_loop: dressTransitLoop,
+  greenhouse: dressGreenhouse,
+  foundry: dressFoundry,
 };
 
 /** Whether a dresser may repaint a wall tile on this map. */

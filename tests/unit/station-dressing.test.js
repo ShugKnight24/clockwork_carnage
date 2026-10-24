@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { STATION_FLOOR_PLANS, STATION_MAPS } from "../../src/data/levels/station-maps.js";
+import { ACT2_FLOOR_PLANS, ACT2_MAPS } from "../../src/data/levels/act2-maps.js";
 import { hasWallPainter } from "../../src/rendering/env/wall-art.js";
 import { LAYER } from "../../src/data/levels/map-helpers.js";
 import { repaintable } from "../../src/data/levels/station-dressing.js";
@@ -24,9 +25,12 @@ function pillars(level) {
   return out;
 }
 
-describe.each(Object.keys(STATION_MAPS))("station dressing — %s", (id) => {
-  const bare = STATION_FLOOR_PLANS[id];
-  const dressed = STATION_MAPS[id];
+const PLANS = { ...STATION_FLOOR_PLANS, ...ACT2_FLOOR_PLANS };
+const DRESSED = { ...STATION_MAPS, ...ACT2_MAPS };
+
+describe.each(Object.keys(DRESSED))("station dressing — %s", (id) => {
+  const bare = PLANS[id];
+  const dressed = DRESSED[id];
 
   it("only repaints plain walls, and only stands low furniture on the floor", () => {
     const wrong = [];
