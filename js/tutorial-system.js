@@ -159,7 +159,8 @@ const STATIONS = {
 
 /**
  * What the floor's people say if you talk to them (press interact facing
- * them): a line each, in turn. Never a stop; nobody waits on it.
+ * them): a line each, in turn, in the voice named (SPEAKER_STYLE) and under
+ * their own name. Never a stop; nobody waits on it.
  */
 const TALK = {
   pike: [["STAFF", "Front desk. If it's lost property, it's Thursday's problem."], ["STAFF", "Lift B again? The log says nobody's on it. It's said that all night."]],
@@ -1863,7 +1864,9 @@ export class TutorialSystem {
     const k = this._talked[who.id] ?? 0;
     this._talked[who.id] = k + 1;
     who.n.faceTo(p);
-    this.say([lines[k % lines.length]]);
+    // Said in their own voice, under their own name.
+    const [voice, text] = lines[k % lines.length];
+    this.say([[voice, text, "calm", { as: who.n.name.toUpperCase() }]]);
     return true;
   }
 
@@ -2228,7 +2231,8 @@ export class TutorialSystem {
     const radio = style.radioVoice && (opts?.radio || !this.supPresent);
     const id = {};
     comms.queueLine?.({
-      speaker: speaker === "STAFF" || speaker === "STAFF_M" ? "STATION" : speaker,
+      // `as`: a voice speaking under someone's own name (the floor's people).
+      speaker: opts?.as ?? speaker,
       text,
       color: style.color,
       voice: radio ? style.radioVoice : style.voice,
