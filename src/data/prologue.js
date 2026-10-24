@@ -95,16 +95,16 @@ export const PROLOGUE_STEPS = [
   {
     id: "walk",
     beat: 0,
-    title: "MOVE — FOLLOW THE SUPERVISOR",
+    title: "MOVE — GET USED TO THE SUIT",
     color: "#00ccff",
     hint: {
-      key: "W A S D to walk. Follow the Supervisor out of the locker room.",
-      touch: "Use the left stick to walk. Follow the Supervisor out of the locker room.",
-      pad: () => "Left stick to walk. Follow the Supervisor out of the locker room.",
+      key: "W A S D to walk. Head out of the locker room.",
+      touch: "Use the left stick to walk. Head out of the locker room.",
+      pad: () => "Left stick to walk. Head out of the locker room.",
     },
     lines: [
-      [SUP, "It suits you. Don't let it go to your head. Walk with me, Cadet: the range.", "calm"],
       [ARIA, "The suit's a prototype. Servo assist, plating, and a module they wouldn't tell me about.", "curious"],
+      [ARIA, "The Supervisor's on the suit channel, by the way. He can hear you breathing.", "warm"],
     ],
     events: [[7, "pa", "Good morning, Chronos Station. Engineering reminds all staff that the Engine level is closed for today's calibration."]],
   },
@@ -115,7 +115,7 @@ export const PROLOGUE_STEPS = [
     color: "#00ccff",
     hint: "Follow the marker down the corridor to the firing range.",
     lines: [
-      [SUP, "That suit cost more than this building. The Bureau wants it certified by noon. You want to keep your badge. So we certify it.", "calm"],
+      [SUP, "It suits you. Don't let it go to your head. That suit cost more than this building. The Bureau wants it certified by noon. You want to keep your badge. So we certify it.", "calm"],
       [SUP, "You never froze on patrol. Don't make me regret it.", "calm"],
       [ARIA, "He likes you. That was him liking you.", "happy"],
       [SUP, "If the lights flicker, ignore it. That's an order.", "worried"],

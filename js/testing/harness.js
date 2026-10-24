@@ -1825,6 +1825,8 @@ function botCadet(game) {
       game.handleKeyPress("Space");
       stepGame(game, 5);
     }
+    // Suited up, the prologue opens the creator: deploy as the saved agent.
+    if (game.state === GameState.CHARACTER_CREATE) game._exitCreator(false);
   };
   skipScene();
 

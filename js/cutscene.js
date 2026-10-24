@@ -4,7 +4,7 @@ import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
 import { voiceKeyFor } from "../src/audio/voice.js";
 import { partyKey } from "../src/rendering/party.js";
-import { autoAdvanceAt, countWords, pageHoldMs } from "../src/systems/cutscene-pacing.js";
+import { autoAdvanceAt, countWords, pageHoldMs, pageWaits } from "../src/systems/cutscene-pacing.js";
 import { activeDevice, drawPrompt, glyph } from "../src/ui/input-glyphs.js";
 import {
   CS_FONT,
@@ -438,7 +438,8 @@ export class CutsceneEngine {
 
   /**
    * Advance the flipbook clock: cover idle → swing → page holds → flips.
-   * Under auto-play a captioned page holds long enough to read.
+   * Under auto-play a captioned page holds long enough to read; otherwise it
+   * waits for the press (its 1.5 s hold turned pages mid-sentence).
    */
   _stepFlipbook(cs, fb, now, auto = false) {
     this._flipbookState(cs, fb);
@@ -458,6 +459,7 @@ export class CutsceneEngine {
       }
     } else if (
       cs.fbPage < fb.pages.length - 1 &&
+      (auto || !pageWaits(pg)) &&
       now - (auto ? this._pageClockStart(cs) : cs.fbPageStart) >=
         (auto ? pageHoldMs(pg) : (pg.hold ?? 1400))
     ) {
@@ -574,7 +576,9 @@ export class CutsceneEngine {
         cs.fbPhase === "pages" &&
         cs.fbPage === fb.pages.length - 1 &&
         !cs.fbFlipStart;
-      cs.readyToAdvance = onLast;
+      // A captioned page waits for the press unless auto-play is on.
+      cs.readyToAdvance =
+        onLast || (!auto && cs.fbPhase === "pages" && !cs.fbFlipStart && pageWaits(fb.pages[cs.fbPage]));
       // The page clock: settled pages count down to their flip; the settled
       // last page to the end, unless the book waits for a press
       // (requireAction books wait on the last page for press/click/tap).

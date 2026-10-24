@@ -78,8 +78,9 @@ const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5],
 const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
   enter: [[27.5, 41.5], [24.5, 41.5], [23.0, 43.5], [18.5, 44.3]],
-  walk: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5]],
-  toRange: [[29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
+  // He leaves you to the suit and goes on ahead to the range.
+  ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
+  atRange: [[37.5, 44.8]],
   toGym: [[34.5, 41.5], [29.5, 41.5], [29.5, 21.5], [25.5, 20.8], [23.2, 17.5]],
   toLab: [[25.5, 20.8], [29.5, 20.5], [29.5, 12.5], [33.5, 10.0]],
   // At the alarm he goes down to his people the only way there is: Lift B,
@@ -388,7 +389,7 @@ const LOGIC = {
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
           ["OFFICER", "Six years and you're still a cadet. Ugh.", "calm"],
           ["OFFICER", "Hold the fort, Cadet. Somebody's got to mind the coffee.", "happy"],
-          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Open it.", "calm"],
+          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Put it on, get used to it, and meet me at the range.", "calm"],
         ]);
       }
       return c.phase === "leave" && t.scriptIdle();
@@ -400,6 +401,7 @@ const LOGIC = {
     enter(t, g) {
       t.lockerLight(g, true);
       t.c.suited = false;
+      setTimeoutGame(t, 0.8, () => t.supWalk(g, "ahead"));
     },
     update: (t) => t.c.suited,
     exit(t, g) {
@@ -430,7 +432,6 @@ const LOGIC = {
     waypoint: { x: 24.5, y: 41.5 },
     enter(t, g) {
       t.openDoors(g, "door1", "door4");
-      t.supWalk(g, "walk");
       // The office's clerk, up from the front desk with the post, crossing
       // the corridor ahead of you.
       const nand = t.person(g, "nand");
@@ -445,7 +446,8 @@ const LOGIC = {
     waypoint: { x: 36.5, y: 41.5 },
     enter(t, g) {
       t.openDoors(g, "door2");
-      t.supWalk(g, "toRange");
+      // He went on ahead from the locker room; a checkpoint puts him there.
+      if (!t.sup?.path?.length) t.supWalk(g, "atRange");
     },
     update: (t, g) => t.near(g, 36.5, 41.5, 1.8),
   },
@@ -1402,8 +1404,16 @@ export class TutorialSystem {
       g.state = GameState.PLAYING;
       g.lockPointer?.();
     };
-    if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", done);
-    else done();
+    // Dressed, the cadet gets a look at themself: the creator, pre-filled
+    // with the saved agent, then back to the locker room.
+    const fitting = () => {
+      g.unlockPointer?.();
+      g.creatorCategory = 0;
+      g._creatorSaveCallback = done;
+      g.state = GameState.CHARACTER_CREATE;
+    };
+    if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", fitting);
+    else fitting();
     return true;
   }
 

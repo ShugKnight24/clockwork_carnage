@@ -29,6 +29,7 @@ import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js"
 import { EXIT_GATES, lockdownFor, planLockdown, planPowerCells, powerCellsFor } from "../src/systems/exit-cells.js";
 import { setPieceFor } from "../src/data/campaign/set-pieces.js";
 import { Pickup } from "./entities.js";
+import { playLoreThen } from "../src/cinematic/films.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -201,7 +202,10 @@ export class CampaignManager {
         if (Save.hasSeenIntroMemory("cc_seen_lore_video")) next();
         else g.startCutscene("intro", next);
       };
-      const afterFlipbook = () => {
+      // Out of the prologue, the lore film plays first (once per browser):
+      // the prologue is what it would have spoiled.
+      const afterFlipbook = () => (fromTutorial ? playLoreThen(g, afterLore) : afterLore());
+      const afterLore = () => {
         if (!fromTutorial && g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
             const suited = () => {
@@ -662,9 +666,16 @@ export class CampaignManager {
   }
 
   executePromptChoice(choice) {
-    // The customizer already ran at the start of this campaign (main.js
-    // playCreatorThen), so the prompt goes straight to the chosen start.
-    if (choice === 0) this.game.startTutorial();
-    else this.start();
+    // The prologue opens the customizer at the locker, once the suit is on
+    // (TutorialSystem.onInteract), and the lore film after it. Skipping the
+    // prologue does both here, then starts Act I.
+    const g = this.game;
+    if (choice === 0) {
+      g.startTutorial();
+      return;
+    }
+    g.creatorCategory = 0;
+    g._creatorSaveCallback = () => playLoreThen(g, () => this.start());
+    g.state = GameState.CHARACTER_CREATE;
   }
 }

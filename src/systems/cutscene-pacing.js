@@ -57,3 +57,8 @@ export function pageHoldMs(page) {
   if (!words) return hold;
   return Math.max(hold, Math.min(p.max, p.pageBase + p.pagePerWord * words));
 }
+
+/** Whether a flipbook page has words on it, so manual play waits for the press. */
+export function pageWaits(page) {
+  return countWords(page?.panel?.caption) > 0;
+}

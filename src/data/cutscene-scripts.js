@@ -6114,7 +6114,7 @@ export const CUTSCENE_SCRIPTS = {
           size: 18,
         },
         {
-          text: "The Supervisor watches you open it. \"You're up. Don't ask who built it.\"",
+          text: "A note taped inside the lid, in the Supervisor's hand: \"You're up. Don't ask who built it.\"",
           delay: 3900,
           color: "#ccaa77",
           size: 16,

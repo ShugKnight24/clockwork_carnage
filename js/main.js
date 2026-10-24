@@ -17,7 +17,7 @@ import {
 import { playReel, stepFixed, directorState } from "../src/cinematic/director.js";
 import { beatsToSec, reelDuration } from "../src/cinematic/timeline.js";
 import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
-import { playLoreThen, filmById } from "../src/cinematic/films.js";
+import { filmById } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
@@ -211,39 +211,18 @@ async function playIntroFlipbookThen(cb) {
   });
 }
 
-// The comic hands over to the agent customizer ("Suit up."), pre-filled with
-// the saved agent. Returning players deploy with one keypress; saving or
-// backing out both continue the campaign. The seen flag is still written on
-// save for anything that reads it.
-function playCreatorThen(cb) {
-  showGameCanvases();
-  game.creatorCategory = 0;
-  game._creatorSaveCallback = (saved) => {
-    if (saved) {
-      try { localStorage.setItem("cc_seen_creator_intro", "1"); } catch (_) {}
-    }
-    cb();
-  };
-  game.state = GameState.CHARACTER_CREATE;
-}
-
 document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  // Order: the comic (who the cadet is, the sky breaking, "Suit up.") →
-  // Creator → ARIA's briefing, the lore film (the station, the Chronos Engine,
-  // the eleven seconds, the player's own agent; first new campaign only) →
-  // Prologue prompt (locker room or skip) → Level 1. The creator used to come
-  // first and the film and comic then told the invasion twice in a row.
-  playIntroFlipbookThen(() => {
-    playCreatorThen(() => {
-      // Every new campaign offers the locker-room prologue (default choice) so
-      // the station training and its narrative stay reachable after the first run.
-      playLoreThen(game, () => game.showCampaignPrompt());
-    });
-  });
+  // Order: the comic (the cadet's past, ending on "Report 07:00") → Prologue
+  // prompt. The prologue opens the creator at the locker, once the suit is
+  // on, and the lore film (the station, the Chronos Engine, the eleven
+  // seconds) plays after it, before Act I: before it, the film spoiled what
+  // the prologue reveals. Skipping the prologue goes creator → film → Act I
+  // (CampaignManager.executePromptChoice).
+  playIntroFlipbookThen(() => game.showCampaignPrompt());
 });
 
 document.getElementById("btnTutorial").addEventListener("click", () => {

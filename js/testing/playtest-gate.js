@@ -158,7 +158,8 @@ export function createPlaytestGate(game, tools) {
     skipCutscenes(run, ctx, player);
     if (game.state === GameState.CUTSCENE) game.endCutscene();
     stepAndWatch(run, ctx, player, 30, "tutorial campaign handoff");
-    assertState(run, [GameState.PLAYING, GameState.CUTSCENE], "tutorial should hand off to campaign or story");
+    // The lore film plays out of the prologue (first campaign per browser).
+    assertState(run, [GameState.PLAYING, GameState.CUTSCENE, GameState.CINEMATIC], "tutorial should hand off to campaign or story");
   }
 
   /**
