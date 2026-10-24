@@ -273,17 +273,24 @@ export class Renderer {
    * ~200 ms bake lands while its briefing is on screen instead of in the
    * level's first frame. _getModernEnv adopts it if the level matches.
    */
-  prewarmEnv(act, level = null) {
+  prewarmEnv(act, level = null, walls = []) {
     if (!isModernArt()) return;
     const a = act || 1;
     const lv = level ?? null;
     const brutal = this._visualStyle === 1;
     const realistic = isRealisticArt();
     const same = (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic;
-    if (same(this._modernEnv) || same(this._altModernEnv) || same(this._prewarmedEnv)) return;
-    const env = generateModernEnv(a, brutal, lv, { realistic });
-    env.realistic = realistic;
-    this._prewarmedEnv = env;
+    let env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(same);
+    if (!env) {
+      env = generateModernEnv(a, brutal, lv, { realistic });
+      env.realistic = realistic;
+      this._prewarmedEnv = env;
+    }
+    // The map's own walls (`walls`, ids 10+) as well, so its dressed rooms
+    // bake here too rather than in the level's first frame.
+    if (walls.length && ensureEnvWalls(env, walls, realistic) && this.glRenderer?._wallPass?.env === env) {
+      this.glRenderer._wallPass.env = null;
+    }
   }
 
   /**
