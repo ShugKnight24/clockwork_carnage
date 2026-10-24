@@ -155,6 +155,10 @@ function stepGame(game, ticks, opts = {}) {
   let stepped = 0;
   for (let i = 0; i < ticks; i++) {
     t += SIM_DT;
+    // Bots pulse the trigger every tick; mid-reload each pull would be an
+    // active-reload press out of the band (a jam). They hold fire instead,
+    // and land the reload on R (botReload).
+    if (game.activeReload?.active && game.player) game.player.isFiring = false;
     game.update(t);
     if (!skipRender) game.render();
     stepped++;

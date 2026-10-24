@@ -21,6 +21,9 @@ import {
 import { conditioningBonuses, RELOAD_XP } from "./conditioning.js";
 import { awardConditioning } from "./conditioning-play.js";
 
+/** A pull this soon after the reload began is the one that began it. */
+const TRIGGER_GRACE_MS = 60;
+
 /** The game's tracker, made on first use. */
 export function activeReloadOf(game) {
   return (game.activeReload ??= createActiveReload());
@@ -75,6 +78,13 @@ export function updateReloads(game) {
   const ar = activeReloadOf(game);
   const a = ar.active;
   if (a && (a.weaponId !== held(game)?.id || a.map !== game.map)) cancelReload(ar);
+  // A fresh pull of the trigger mid-reload is the active-reload press too
+  // (mouse, touch and pad alike): a held trigger, or the pull that started
+  // an empty gun's reload, is not.
+  const firing = !!game.player?.isFiring;
+  const b = ar.active;
+  if (firing && !ar.fireWas && b && !b.pressed && game.time - b.start > TRIGGER_GRACE_MS) reloadPress(game);
+  ar.fireWas = firing;
   const done = updateReload(ar, game.time);
   if (done == null) return;
   game.player.refillMag(done);

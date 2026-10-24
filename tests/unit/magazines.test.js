@@ -43,6 +43,26 @@ function shoot(game) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("magazines", () => {
+  it("a fresh trigger pull mid-reload is the active-reload press; a held trigger is not", () => {
+    const g = makeGame([0, 1]);
+    shoot(g);
+    expect(reloadPress(g)).toBe(true); // R starts the reload
+    const a = g.activeReload.active;
+    g.player.isFiring = true; // held from before: no press
+    g.activeReload.fireWas = true;
+    g.time = a.start + a.duration * ((a.zoneStart + a.zoneEnd) / 2);
+    updateReloads(g);
+    expect(g.activeReload.active?.pressed).toBeFalsy();
+    g.player.isFiring = false;
+    updateReloads(g);
+    g.player.isFiring = true; // a new pull, in the zone
+    updateReloads(g);
+    expect(isReloading(g)).toBe(false);
+    expect(g.activeReload.stats.hits).toBe(1);
+    expect(g.player.loaded).toBe(shotgun.magSize);
+  });
+
+
   it("a gun comes loaded out of what it carries, and the HUD reads loaded/rest", () => {
     const p = new Player();
     p.weapons = [0, 1];
