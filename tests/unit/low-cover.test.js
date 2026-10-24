@@ -4,8 +4,10 @@ import {
   hasLineOfSight,
   isPassable,
   playerEyeZ,
+  eyeOffsetZ,
   EYE_Z,
   CROUCH_EYE_Z,
+  SLIDE_EYE_Z,
 } from "../../src/systems/physics.js";
 import { distanceToWall } from "../../src/systems/combat.js";
 import { createGrid, createHeights, lowWall, LAYER } from "../../src/data/levels/map-helpers.js";
@@ -90,6 +92,16 @@ describe("playerEyeZ", () => {
     expect(playerEyeZ({ crouchBlend: 0 })).toBe(EYE_Z);
     expect(playerEyeZ({ crouchBlend: 1 })).toBe(CROUCH_EYE_Z);
     expect(playerEyeZ({ crouchBlend: 0.5 })).toBeCloseTo((EYE_Z + CROUCH_EYE_Z) / 2);
+  });
+
+  it("drops to roughly 58% of standing crouched and 42% sliding", () => {
+    expect(CROUCH_EYE_Z / EYE_Z).toBeGreaterThanOrEqual(0.55);
+    expect(CROUCH_EYE_Z / EYE_Z).toBeLessThanOrEqual(0.6);
+    expect(SLIDE_EYE_Z / EYE_Z).toBeGreaterThanOrEqual(0.4);
+    expect(SLIDE_EYE_Z / EYE_Z).toBeLessThanOrEqual(0.45);
+    expect(playerEyeZ({ crouchBlend: 1, slideBlend: 1 })).toBeCloseTo(SLIDE_EYE_Z);
+    expect(eyeOffsetZ({ crouchBlend: 1 })).toBeCloseTo(CROUCH_EYE_Z - EYE_Z);
+    expect(eyeOffsetZ({})).toBe(0);
   });
 
   it("treats a missing blend as standing", () => {

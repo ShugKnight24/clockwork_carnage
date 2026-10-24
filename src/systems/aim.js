@@ -188,16 +188,21 @@ export function effectiveAimFov(player, settings = {}) {
   return (Math.atan(Math.tan((baseFov * Math.PI) / 360) / zoom) * 360) / Math.PI;
 }
 
+/** How far a slide pitches the view forward (tan of the angle). */
+const SLIDE_PITCH = 0.035;
+
 /**
- * Vertical shift (canvas px) the raycaster draws the world with: the crouch
- * or slide stance and the recoil punch. render-pipeline.js draws with it and
- * the fire path aims with it, so a crouched shot lands where the reticle sits
- * on the lowered view rather than a stance height above it.
+ * Vertical shift (canvas px) the raycaster draws the world with: the recoil
+ * punch, and the slight forward pitch of a slide. render-pipeline.js draws
+ * with it and the fire path aims with it, so a shot lands where the reticle
+ * sits on the shifted view. The stance itself is not a shift: the renderer
+ * draws a crouch or a slide from a lower eye (playerEyeZ in physics.js).
  */
 export function sceneShiftPx(player, h) {
   const punch = (player?.cameraPunch || 0) * -h * 0.12;
-  const stance = (player?.isSliding ? 40 : 28) * (player?.crouchBlend || 0);
-  return stance + punch;
+  // Pitching forward into a slide lifts the horizon a little.
+  const lean = (player?.slideBlend || 0) * -h * SLIDE_PITCH;
+  return punch + lean;
 }
 
 // How fast aiming in pulls a free-aim reticle back to centre (per second).

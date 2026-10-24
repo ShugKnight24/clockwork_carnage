@@ -16,13 +16,36 @@
  */
 export const EYE_Z = 0.5;
 
-/** Crouched eye height. Low enough that waist-high cover actually covers. */
-export const CROUCH_EYE_Z = 0.3;
+/**
+ * Crouched eye height, a little under 60% of standing. Low enough that
+ * waist-high cover actually covers, and the raycaster draws the crouched
+ * view from here.
+ */
+export const CROUCH_EYE_Z = 0.29;
 
-/** Eye height for a player, following the eased crouch blend. */
+/**
+ * Sliding eye height, about 42% of standing: low enough that the prologue's
+ * half-down shutters pass overhead.
+ */
+export const SLIDE_EYE_Z = 0.21;
+
+/**
+ * Eye height for a player: the eased crouch blend takes it from standing to
+ * crouched, and the slide blend on top of that takes it lower still.
+ */
 export function playerEyeZ(player) {
   const t = player?.crouchBlend || 0;
-  return EYE_Z + (CROUCH_EYE_Z - EYE_Z) * t;
+  const s = player?.slideBlend || 0;
+  return EYE_Z + (CROUCH_EYE_Z - EYE_Z) * t + (SLIDE_EYE_Z - CROUCH_EYE_Z) * s;
+}
+
+/**
+ * How far a player's eye sits above (positive) or below the standing eye.
+ * A grid level measures shots and drawn figures from the standing eye line,
+ * so a crouched shot starts this far down it.
+ */
+export function eyeOffsetZ(player) {
+  return playerEyeZ(player) - EYE_Z;
 }
 
 /**

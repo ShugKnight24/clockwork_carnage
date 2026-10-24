@@ -36,6 +36,7 @@ uniform vec2 u_camPos;         // camera world position
 uniform vec2 u_dir;            // camera direction
 uniform vec2 u_plane;          // camera plane (FOV)
 uniform float u_yShift;        // pitch offset
+uniform float u_eyeZ;          // eye height in wall units (0.5 standing)
 uniform sampler2D u_floorTex;  // 256x256 floor texture
 uniform sampler2D u_ceilTex;   // 256x256 ceiling texture
 uniform vec3 u_fogColor;       // act-tinted fog RGB (0-1)
@@ -78,7 +79,9 @@ void main() {
     return;
   }
 
-  float rowDist = projH / p;
+  // The floor is eyeZ below the eye and the ceiling 1 - eyeZ above it, so a
+  // crouch brings the floor in and pushes the ceiling away.
+  float rowDist = (isFloor ? u_eyeZ : 1.0 - u_eyeZ) * 2.0 * projH / p;
 
   // Ray direction for this pixel's column
   float cameraX = (2.0 * uv.x / w) - 1.0;
@@ -136,6 +139,7 @@ uniform vec2 u_camPos;
 uniform vec2 u_dir;
 uniform vec2 u_plane;
 uniform float u_yShift;
+uniform float u_eyeZ;          // eye height in wall units (0.5 standing)
 uniform sampler2D u_floorTex;
 uniform sampler2D u_ceilTex;
 uniform sampler2D u_envMap;    // RGBA8 per cell: R wall bits, G glow bits, B glow index
@@ -173,7 +177,8 @@ void main() {
   float screenY = h - 1.0 - gl_FragCoord.y;
   bool isFloor = screenY > halfH;
   float p = max(abs(screenY - halfH), 0.5);
-  float rowDist = projH / p;
+  // Floor eyeZ below the eye, ceiling 1 - eyeZ above it (see FLOOR_FRAG).
+  float rowDist = (isFloor ? u_eyeZ : 1.0 - u_eyeZ) * 2.0 * projH / p;
 
   float cameraX = (2.0 * gl_FragCoord.x / w) - 1.0;
   vec2 ray = u_dir + u_plane * cameraX;
@@ -240,9 +245,9 @@ void main() {
     // Floor roughness from the texture itself: bright plating is polished,
     // dark grime is matte, which breaks the specular up across the deck.
     float gloss = mix(6.0, 48.0, smoothstep(0.08, 0.45, lum));
-    // Schlick Fresnel against a camera ~0.5 units above the deck: grazing
-    // rows far away reflect far more than the floor at the player's feet.
-    float cosV = 0.5 / sqrt(rowDist * rowDist + 0.25);
+    // Schlick Fresnel against a camera eyeZ above the deck: grazing rows far
+    // away reflect far more than the floor at the player's feet.
+    float cosV = u_eyeZ / sqrt(rowDist * rowDist + u_eyeZ * u_eyeZ);
     float fres = 0.04 + 0.96 * pow(1.0 - cosV, 5.0);
     vec2 toCamR = normalize(u_camPos - wp);
     for (int i = 0; i < 16; i++) {
@@ -510,6 +515,7 @@ export class GLRenderer {
       dir: gl.getUniformLocation(fp, 'u_dir'),
       plane: gl.getUniformLocation(fp, 'u_plane'),
       yShift: gl.getUniformLocation(fp, 'u_yShift'),
+      eyeZ: gl.getUniformLocation(fp, 'u_eyeZ'),
       floorTex: gl.getUniformLocation(fp, 'u_floorTex'),
       ceilTex: gl.getUniformLocation(fp, 'u_ceilTex'),
       fogColor: gl.getUniformLocation(fp, 'u_fogColor'),
@@ -627,7 +633,7 @@ export class GLRenderer {
    * Render floor and ceiling to the WebGL canvas.
    * Call this, then draw the result onto the main Canvas2D via drawImage.
    */
-  renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift, fogColor, fogMax, lights) {
+  renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift, fogColor, fogMax, lights, eyeZ = 0.5) {
     const gl = this.gl;
     const w = this.width;
     const h = this.height;
@@ -642,6 +648,7 @@ export class GLRenderer {
     gl.uniform2f(this.u_floor.dir, dirX, dirY);
     gl.uniform2f(this.u_floor.plane, planeX, planeY);
     gl.uniform1f(this.u_floor.yShift, yShift);
+    gl.uniform1f(this.u_floor.eyeZ, eyeZ);
     gl.uniform3f(this.u_floor.fogColor, fogColor[0], fogColor[1], fogColor[2]);
     gl.uniform1f(this.u_floor.fogMax, fogMax);
 
@@ -694,7 +701,7 @@ export class GLRenderer {
     const u = (n) => gl.getUniformLocation(prog, n);
     this.u_modern = {
       resolution: u('u_resolution'), camPos: u('u_camPos'), dir: u('u_dir'), plane: u('u_plane'),
-      yShift: u('u_yShift'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
+      yShift: u('u_yShift'), eyeZ: u('u_eyeZ'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
       mapSize: u('u_mapSize'), fogNear: u('u_fogNear'), fogFar: u('u_fogFar'), fogMax: u('u_fogMax'),
       fogDensity: u('u_fogDensity'), numLights: u('u_numLights'), lights: u('u_lights'),
       lightColors: u('u_lightColors'), glowColors: u('u_glowColors'), realistic: u('u_realistic'),
@@ -763,7 +770,7 @@ export class GLRenderer {
    * generateModernEnv(); lights are game.lights ({x, y, color 0-255, radius,
    * intensity}). Returns false when the Modern program/textures aren't ready.
    */
-  renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, lights) {
+  renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, lights, eyeZ = 0.5) {
     if (!this._ensureModernFloor() || !this.modernFloorTex || !this.envMapTex) return false;
     const gl = this.gl;
     const u = this.u_modern;
@@ -775,6 +782,7 @@ export class GLRenderer {
     gl.uniform2f(u.dir, dirX, dirY);
     gl.uniform2f(u.plane, planeX, planeY);
     gl.uniform1f(u.yShift, yShift);
+    gl.uniform1f(u.eyeZ, eyeZ);
     gl.uniform3fv(u.fogNear, env.fogNearGL);
     gl.uniform3fv(u.fogFar, env.fogFarGL);
     gl.uniform1f(u.fogMax, env.fogMax);

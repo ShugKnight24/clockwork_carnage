@@ -9,9 +9,9 @@
  * until a full-height wall, the map edge, or short walls that already cover
  * the whole column.
  *
- * Screen rows grow downward and the eye sits halfway up a wall, so a short
- * wall at perpendicular distance `d` covers the rows from its top edge down to
- * the floor. Walls further along only show above the lowest top edge seen so
+ * Screen rows grow downward and the eye sits `eye` up a wall (half of it
+ * standing, lower crouched or sliding), so a short wall at perpendicular
+ * distance `d` covers the rows from its top edge down to the floor. Walls further along only show above the lowest top edge seen so
  * far: `clip` below. A wall under the eye also shows its top face, whose far
  * edge (at the distance the ray leaves the cell) is what hides things behind
  * it; a wall over the eye hides everything behind it below its near top edge.
@@ -45,17 +45,18 @@ export function createColumnHits(max = MAX_COLUMN_HITS) {
   };
 }
 
-/** Screen Y of a wall's top edge `frac` high at distance `d`. */
-export function wallTopY(frac, d, h, horizon) {
-  return horizon + ((0.5 - frac) * h) / d;
+/** Screen Y of a wall's top edge `frac` high at distance `d`, seen from eye height `eye`. */
+export function wallTopY(frac, d, h, horizon, eye = 0.5) {
+  return horizon + ((eye - frac) * h) / d;
 }
 
 /**
  * March one screen column from (camX, camY) along (rayDirX, rayDirY).
- * `h` is the screen height and `horizon` the eye-level row (h/2 + yShift).
+ * `h` is the screen height, `horizon` the eye-level row (h/2 + yShift) and
+ * `eye` the eye's height in wall units (0.5 standing).
  * Fills `hits` front to back; the last hit is the one that closes the column.
  */
-export function castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits) {
+export function castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits, eye = 0.5) {
   const grid = map.grid;
   const hm = map.heightMap;
   const W = map.width;
@@ -134,7 +135,7 @@ export function castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits) 
 
     // Under the eye the top face's far edge is the silhouette; over it, the
     // near top edge is.
-    const top = frac < 0.5 ? wallTopY(frac, exit, h, horizon) : wallTopY(frac, d, h, horizon);
+    const top = frac < eye ? wallTopY(frac, exit, h, horizon, eye) : wallTopY(frac, d, h, horizon, eye);
     if (top < clip) clip = top;
     hits.clip[n] = clip;
     n++;

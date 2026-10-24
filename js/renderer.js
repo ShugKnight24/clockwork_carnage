@@ -46,6 +46,7 @@ const _litFilters = new Map();
 import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
 import { drawFrozenPerson } from "../src/rendering/frozen-look.js";
 import { isFrozen } from "../src/systems/stillness.js";
+import { EYE_Z, playerEyeZ } from "../src/systems/physics.js";
 
 // Short-wall records kept per screen column (one per wall the ray crosses).
 const COVER_STRIDE = MAX_COLUMN_HITS;
@@ -106,6 +107,14 @@ export class Renderer {
     // Ray-march scratch for the wall pass; short-wall records for sprites are
     // sized per frame (_ensureCoverBufs).
     this._colHits = createColumnHits();
+    // The eye's height in wall units this frame (0.5 standing) and how far it
+    // sits under the standing eye. Sprites, particles and _projectWorld place
+    // things relative to the standing eye line and lift them by `_eyeDrop`.
+    this._eyeZ = EYE_Z;
+    this._eyeDrop = 0;
+    // Added to the low-cover silhouettes while a sprite is drawn lifted by the
+    // eye drop, so its clip stays in the sprite's own (translated) space.
+    this._clipBias = 0;
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this._envLevel = null; // campaign level env id, for the per-level palette
@@ -462,7 +471,7 @@ export class Renderer {
    */
   coverClipY(x, depth) {
     if (!this._occN) return Infinity; // no wall pass yet at this size
-    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity);
+    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity) + this._clipBias;
   }
 
   /** Is a projected point (unshifted screen Y) hidden by a wall or low cover? */
@@ -589,8 +598,13 @@ export class Renderer {
    * Modern Canvas2D floor/ceiling (no-WebGL fallback). Same mip-filtered deck
    * art, contact AO and emissive spill as the shader, at half vertical
    * resolution like the legacy loop.
+   *
+   * A row `p` px from the horizon is floor `eye·h/p` away and ceiling
+   * `(1 - eye)·h/p` away. Standing those match, so one pass fills each floor
+   * row and the ceiling row mirrored across the horizon; from a lower eye they
+   * differ, and the ceiling gets a pass of its own.
    */
-  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env) {
+  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, eye = 0.5) {
     const w = this.width;
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
@@ -606,19 +620,9 @@ export class Renderer {
     }
     const buf32 = this._floorCeilBuf32;
 
-    const rayDirX0 = dirX - planeX;
-    const rayDirY0 = dirY - planeY;
-    const rayDirX1 = dirX + planeX;
-    const rayDirY1 = dirY + planeY;
-
     const [fn0, fn1, fn2] = env.fogNear;
     const [ff0, ff1, ff2] = env.fogFar;
     const fogMax = env.fogMax;
-    const fogDensity = env.fogDensity;
-    const floorMips = env.deck.floorMips;
-    const ceilMips = env.deck.ceilMips;
-    const maxLvl = floorMips.length - 1;
-    const glow = env.glowRGB;
 
     // Horizon = the thickest air.
     const hr = (fn0 + (ff0 - fn0) * fogMax) | 0;
@@ -626,121 +630,164 @@ export class Renderer {
     const hb = (fn2 + (ff2 - fn2) * fogMax) | 0;
     buf32.fill((255 << 24) | (hb << 16) | (hg << 8) | hr);
 
-    const em = this._envMap;
-    const cells = em.rgba;
-    const mw = em.w;
-    const mh = em.h;
-    const planeLen = Math.hypot(planeX, planeY) * 2;
+    // The frame's constants for _deckRowModern, in one reused record.
+    const R = this._deckRow || (this._deckRow = {});
+    R.buf32 = buf32;
+    R.w = w;
+    R.h = h;
+    R.projH = projH;
+    R.camX = camX;
+    R.camY = camY;
+    R.rayDirX0 = dirX - planeX;
+    R.rayDirY0 = dirY - planeY;
+    R.rayDirX1 = dirX + planeX;
+    R.rayDirY1 = dirY + planeY;
+    R.planeLen = Math.hypot(planeX, planeY) * 2;
+    R.env = env;
+    R.cells = this._envMap.rgba;
+    R.mw = this._envMap.w;
+    R.mh = this._envMap.h;
+
+    const mirrored = Math.abs(eye - 0.5) < 1e-4;
+    const floorK = 2 * eye * projH;
+    const ceilK = 2 * (1 - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
     for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
       if (p <= 0) continue;
-      const rowDist = projH / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
-      let fx = camX + rowDist * rayDirX0;
-      let fy = camY + rowDist * rayDirY0;
-
-      const fog = fogMax * (1 - Math.exp(-rowDist * fogDensity));
-      const invFog = 1 - fog;
-      const fR = (fn0 + (ff0 - fn0) * fog) * fog;
-      const fG = (fn1 + (ff1 - fn1) * fog) * fog;
-      const fB = (fn2 + (ff2 - fn2) * fog) * fog;
-
-      // Pick the mip whose texels are about screen-pixel sized: kills the
-      // shimmer the 256px nearest-sampled deck had at distance.
-      const foot = Math.max((512 * rowDist * planeLen) / w, (512 * rowDist * rowDist) / projH);
-      let lvl = 0;
-      while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
-      const floorTex = floorMips[lvl];
-      const ceilTex = ceilMips[lvl];
-      const size = 512 >> lvl;
-      const mask = size - 1;
-
-      const rowOff = y * w;
-      const rowOff1 = (y - 1) * w;
-      const cy = 2 * halfH - 1 - y;
-      const cy2 = cy + 1;
-      const ceilVisible = cy >= 0 && cy < h;
-
-      for (let x = 0; x < w; x++) {
-        const tx = ((fx * size) | 0) & mask;
-        const ty = ((fy * size) | 0) & mask;
-        const ti = (ty * size + tx) * 4;
-
-        let ao = 1;
-        let gr = 0, gg = 0, gb = 0;
-        if (cells && fx >= 0 && fy >= 0) {
-          const cxI = fx | 0;
-          const cyI = fy | 0;
-          if (cxI < mw && cyI < mh) {
-            const o = (cyI * mw + cxI) * 4;
-            const m = cells[o];
-            const gbits = cells[o + 1];
-            if (m !== 0) {
-              const dx = fx - cxI;
-              const dy = fy - cyI;
-              if (m & 1) ao = Math.min(ao, aoAt(dx));
-              if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
-              if (m & 4) ao = Math.min(ao, aoAt(dy));
-              if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
-              if (m & 240) {
-                if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
-                if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
-                if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
-                if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
-              }
-            }
-            if (gbits !== 0) {
-              const dx = fx - cxI;
-              const dy = fy - cyI;
-              let g = 0;
-              if (gbits & 1) g = Math.max(g, glowAt(dx));
-              if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
-              if (gbits & 4) g = Math.max(g, glowAt(dy));
-              if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
-              const c = glow[cells[o + 2]];
-              if (c) {
-                gr = c[0] * g;
-                gg = c[1] * g;
-                gb = c[2] * g;
-              }
-            }
-          }
-        }
-
-        if (y < h) {
-          let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
-          let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
-          let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
-          if (fr > 255) fr = 255;
-          if (fg > 255) fg = 255;
-          if (fb > 255) fb = 255;
-          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
-          buf32[rowOff + x] = packed;
-          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
-        }
-
-        if (ceilVisible) {
-          let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
-          let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
-          let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
-          if (cr > 255) cr = 255;
-          if (cg > 255) cg = 255;
-          if (cb > 255) cb = 255;
-          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
-          buf32[cy * w + x] = cPacked;
-          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
-        }
-
-        fx += stepX;
-        fy += stepY;
-      }
+      this._deckRowModern(R, floorK / p, y, mirrored ? 2 * halfH - 1 - y : -2);
+    }
+    if (!mirrored) {
+      // The ceiling rows on their own: row pairs (halfH - 1 - p, halfH - p).
+      let p = 1;
+      if (halfH - p > h - 1) p = halfH - (h - 1);
+      for (; halfH - p >= 0; p += 2) this._deckRowModern(R, ceilK / p, -1, halfH - 1 - p);
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * One row pair of the Modern deck at `rowDist`: the floor rows (y - 1, y)
+   * when `y` is not -1, and the ceiling rows (cy, cy + 1) when `cy` is not -2.
+   * Rows off the screen are skipped.
+   */
+  _deckRowModern(R, rowDist, y, cy) {
+    const { buf32, w, h, env, cells, mw, mh } = R;
+    const fn = env.fogNear;
+    const ff = env.fogFar;
+    const fn0 = fn[0], fn1 = fn[1], fn2 = fn[2];
+    const ff0 = ff[0], ff1 = ff[1], ff2 = ff[2];
+    const fogMax = env.fogMax;
+    const floorMips = env.deck.floorMips;
+    const ceilMips = env.deck.ceilMips;
+    const maxLvl = floorMips.length - 1;
+    const glow = env.glowRGB;
+
+    const stepX = (rowDist * (R.rayDirX1 - R.rayDirX0)) / w;
+    const stepY = (rowDist * (R.rayDirY1 - R.rayDirY0)) / w;
+    let fx = R.camX + rowDist * R.rayDirX0;
+    let fy = R.camY + rowDist * R.rayDirY0;
+
+    const fog = fogMax * (1 - Math.exp(-rowDist * env.fogDensity));
+    const invFog = 1 - fog;
+    const fR = (fn0 + (ff0 - fn0) * fog) * fog;
+    const fG = (fn1 + (ff1 - fn1) * fog) * fog;
+    const fB = (fn2 + (ff2 - fn2) * fog) * fog;
+
+    // Pick the mip whose texels are about screen-pixel sized: kills the
+    // shimmer the 256px nearest-sampled deck had at distance.
+    const foot = Math.max((512 * rowDist * R.planeLen) / w, (512 * rowDist * rowDist) / R.projH);
+    let lvl = 0;
+    while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
+    const floorTex = floorMips[lvl];
+    const ceilTex = ceilMips[lvl];
+    const size = 512 >> lvl;
+    const mask = size - 1;
+
+    const floorVisible = y >= 0 && y < h;
+    const rowOff = y * w;
+    const rowOff1 = (y - 1) * w;
+    const cy2 = cy + 1;
+    const ceilVisible = cy >= 0 && cy < h;
+    const ceil2Visible = cy2 >= 0 && cy2 < h;
+    if (!floorVisible && !ceilVisible && !ceil2Visible) return;
+
+    for (let x = 0; x < w; x++) {
+      const tx = ((fx * size) | 0) & mask;
+      const ty = ((fy * size) | 0) & mask;
+      const ti = (ty * size + tx) * 4;
+
+      let ao = 1;
+      let gr = 0, gg = 0, gb = 0;
+      if (cells && fx >= 0 && fy >= 0) {
+        const cxI = fx | 0;
+        const cyI = fy | 0;
+        if (cxI < mw && cyI < mh) {
+          const o = (cyI * mw + cxI) * 4;
+          const m = cells[o];
+          const gbits = cells[o + 1];
+          if (m !== 0) {
+            const dx = fx - cxI;
+            const dy = fy - cyI;
+            if (m & 1) ao = Math.min(ao, aoAt(dx));
+            if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
+            if (m & 4) ao = Math.min(ao, aoAt(dy));
+            if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
+            if (m & 240) {
+              if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
+              if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
+              if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
+              if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
+            }
+          }
+          if (gbits !== 0) {
+            const dx = fx - cxI;
+            const dy = fy - cyI;
+            let g = 0;
+            if (gbits & 1) g = Math.max(g, glowAt(dx));
+            if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
+            if (gbits & 4) g = Math.max(g, glowAt(dy));
+            if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
+            const c = glow[cells[o + 2]];
+            if (c) {
+              gr = c[0] * g;
+              gg = c[1] * g;
+              gb = c[2] * g;
+            }
+          }
+        }
+      }
+
+      if (floorVisible) {
+        let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
+        let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
+        let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
+        if (fr > 255) fr = 255;
+        if (fg > 255) fg = 255;
+        if (fb > 255) fb = 255;
+        const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+        buf32[rowOff + x] = packed;
+        if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+      }
+
+      if (ceilVisible || ceil2Visible) {
+        let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
+        let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
+        let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
+        if (cr > 255) cr = 255;
+        if (cg > 255) cg = 255;
+        if (cb > 255) cb = 255;
+        const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+        if (ceilVisible) buf32[cy * w + x] = cPacked;
+        if (ceil2Visible) buf32[cy2 * w + x] = cPacked;
+      }
+
+      fx += stepX;
+      fy += stepY;
+    }
   }
 
   /**
@@ -785,7 +832,12 @@ export class Renderer {
     this._ceilTexPixels = ceilPixels;
   }
 
-  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0) {
+  /**
+   * Legacy Canvas2D floor/ceiling. Like the Modern loop, a lower eye puts the
+   * floor and ceiling rows at different distances, so the ceiling gets its
+   * own pass instead of mirroring the floor.
+   */
+  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0, eye = 0.5) {
     const w = this.width;
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
@@ -832,60 +884,38 @@ export class Renderer {
     // Fill entire buffer with fog (single 32-bit writes)
     buf32.fill(fogPacked);
 
+    const R = this._legacyRow || (this._legacyRow = {});
+    R.buf32 = buf32;
+    R.w = w;
+    R.h = h;
+    R.camX = camX;
+    R.camY = camY;
+    R.rayDirX0 = rayDirX0;
+    R.rayDirY0 = rayDirY0;
+    R.rayDirX1 = rayDirX1;
+    R.rayDirY1 = rayDirY1;
+    R.floorTex = floorTex;
+    R.ceilTex = ceilTex;
+    R.fogR = fogR;
+    R.fogG = fogG;
+    R.fogB = fogB;
+    R.fogMaxOpacity = fogMaxOpacity;
+
+    const mirrored = Math.abs(eye - 0.5) < 1e-4;
+    const floorK = 2 * eye * projH;
+    const ceilK = 2 * (1 - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
-    // Pre-compute per-row fog LUT to avoid redundant math per-pixel
     for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
       if (p <= 0) continue;
-      const rowDist = projH / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
-      let fx = camX + rowDist * rayDirX0;
-      let fy = camY + rowDist * rayDirY0;
-
-      const fog = Math.min(fogMaxOpacity, rowDist / 12);
-      const invFog = 1 - fog;
-      const fR = fogR * fog,
-        fG = fogG * fog,
-        fB = fogB * fog;
-
-      const rowOff = y * w;
-      const rowOff1 = (y - 1) * w;
-
-      for (let x = 0; x < w; x++) {
-        const tx = ((fx * 256) | 0) & 255;
-        const ty = ((fy * 256) | 0) & 255;
-        const ti = (ty * 256 + tx) * 4;
-
-        // Floor pixel — single 32-bit write
-        if (y < h) {
-          const fr = (floorTex[ti] * invFog + fR) | 0;
-          const fg = (floorTex[ti + 1] * invFog + fG) | 0;
-          const fb = (floorTex[ti + 2] * invFog + fB) | 0;
-          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
-          buf32[rowOff + x] = packed;
-          // Copy to skipped row
-          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
-        }
-
-        // Ceiling pixel (mirrored around shifted horizon)
-        const cy = 2 * halfH - 1 - y;
-        if (cy >= 0 && cy < h) {
-          const cr = (ceilTex[ti] * invFog + fR) | 0;
-          const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
-          const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
-          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
-          buf32[cy * w + x] = cPacked;
-          // Copy ceiling skipped row
-          const cy2 = cy + 1;
-          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
-        }
-
-        fx += stepX;
-        fy += stepY;
-      }
+      this._deckRowLegacy(R, floorK / p, y, mirrored ? 2 * halfH - 1 - y : -2);
+    }
+    if (!mirrored) {
+      let p = 1;
+      if (halfH - p > h - 1) p = halfH - (h - 1);
+      for (; halfH - p >= 0; p += 2) this._deckRowLegacy(R, ceilK / p, -1, halfH - 1 - p);
     }
 
     // Horizon line (at shifted position, if visible)
@@ -895,6 +925,61 @@ export class Renderer {
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * One row pair of the Legacy deck at `rowDist`: floor rows (y - 1, y) unless
+   * `y` is -1, ceiling rows (cy, cy + 1) unless `cy` is -2.
+   */
+  _deckRowLegacy(R, rowDist, y, cy) {
+    const { buf32, w, h, floorTex, ceilTex } = R;
+    const stepX = (rowDist * (R.rayDirX1 - R.rayDirX0)) / w;
+    const stepY = (rowDist * (R.rayDirY1 - R.rayDirY0)) / w;
+    let fx = R.camX + rowDist * R.rayDirX0;
+    let fy = R.camY + rowDist * R.rayDirY0;
+
+    const fog = Math.min(R.fogMaxOpacity, rowDist / 12);
+    const invFog = 1 - fog;
+    const fR = R.fogR * fog,
+      fG = R.fogG * fog,
+      fB = R.fogB * fog;
+
+    const floorVisible = y >= 0 && y < h;
+    const rowOff = y * w;
+    const rowOff1 = (y - 1) * w;
+    const cy2 = cy + 1;
+    const ceilVisible = cy >= 0 && cy < h;
+    const ceil2Visible = cy2 >= 0 && cy2 < h;
+    if (!floorVisible && !ceilVisible && !ceil2Visible) return;
+
+    for (let x = 0; x < w; x++) {
+      const tx = ((fx * 256) | 0) & 255;
+      const ty = ((fy * 256) | 0) & 255;
+      const ti = (ty * 256 + tx) * 4;
+
+      // Floor pixel — single 32-bit write
+      if (floorVisible) {
+        const fr = (floorTex[ti] * invFog + fR) | 0;
+        const fg = (floorTex[ti + 1] * invFog + fG) | 0;
+        const fb = (floorTex[ti + 2] * invFog + fB) | 0;
+        const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+        buf32[rowOff + x] = packed;
+        // Copy to skipped row
+        if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+      }
+
+      if (ceilVisible || ceil2Visible) {
+        const cr = (ceilTex[ti] * invFog + fR) | 0;
+        const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
+        const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
+        const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+        if (ceilVisible) buf32[cy * w + x] = cPacked;
+        if (ceil2Visible) buf32[cy2 * w + x] = cPacked;
+      }
+
+      fx += stepX;
+      fy += stepY;
+    }
   }
 
   renderScene(
@@ -913,6 +998,13 @@ export class Renderer {
 
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
+
+    // Crouching and sliding draw the whole frame from a lower eye: walls,
+    // floor, ceiling and sprites all project from it. The horizon row stays
+    // where the view looks; what moves is where the floor and ceiling meet it.
+    const eye = Math.min(0.9, Math.max(0.1, playerEyeZ(player)));
+    this._eyeZ = eye;
+    this._eyeDrop = EYE_Z - eye;
 
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
@@ -976,6 +1068,7 @@ export class Renderer {
           Math.round(yShift),
           menv,
           this.lights || [],
+          eye,
         );
         if (drawn) {
           // Walls join the floor in the GL canvas when they can (see
@@ -992,6 +1085,7 @@ export class Renderer {
               camX, camY,
               WALL_SPEC_GAIN * ambientKeep,
             );
+            wp.camZ = eye;
           } else {
             this.glRenderer.blitTo(ctx);
           }
@@ -1003,6 +1097,7 @@ export class Renderer {
           -dirY * planeMul, dirX * planeMul,
           yShift,
           menv,
+          eye,
         );
       }
     } else if (!skipFloorCeil) {
@@ -1024,6 +1119,7 @@ export class Renderer {
           Math.round(yShift),
           actFog, fogMax,
           this.lights || [],
+          eye,
         );
         // Composite WebGL result onto Canvas2D
         this.glRenderer.blitTo(ctx);
@@ -1036,6 +1132,7 @@ export class Renderer {
           -dirY * planeMul,
           dirX * planeMul,
           yShift,
+          eye,
         );
       }
     } else {
@@ -1072,7 +1169,7 @@ export class Renderer {
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits);
+      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits, eye);
       const stepX = hits.stepX;
       const stepY = hits.stepY;
       const nHits = hits.n;
@@ -1091,9 +1188,11 @@ export class Renderer {
         // Variable height: 5 layers = full wall, 1 layer = 20% (from the floor up).
         const heightFrac = hits.frac[hi];
 
+        // A full wall runs from `1 - eye` of its height above the horizon to
+        // `eye` of it below: halfway each way standing, mostly above crouched.
         const lineHeight = (h / perpWallDist) | 0;
-        const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
-        const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
+        const fullDrawStart = (horizon - lineHeight * (1 - eye)) | 0;
+        const fullDrawEnd = (horizon + lineHeight * eye) | 0;
 
         const faceTop = heightFrac < 1
           ? (fullDrawEnd - (fullDrawEnd - fullDrawStart) * heightFrac) | 0
@@ -1390,8 +1489,8 @@ export class Renderer {
         // Short wall under the eye: its top face shows, out to where the ray
         // leaves the cell. That far edge is the silhouette behind it.
         let top = faceTop;
-        if (heightFrac < 0.5) {
-          let capTop = (horizon + ((0.5 - heightFrac) * h) / hits.exit[hi]) | 0;
+        if (heightFrac < eye) {
+          let capTop = (horizon + ((eye - heightFrac) * h) / hits.exit[hi]) | 0;
           if (capTop < 0) capTop = 0;
           const capBot = faceTop < openBot ? faceTop : openBot;
           if (capBot > capTop) {
@@ -1484,7 +1583,7 @@ export class Renderer {
 
       const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
-      const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
+      const screenY = (halfH + ((p.z || 0) - this._eyeDrop) * (h / transformY)) | 0;
       // Low cover in front hides motes below its top edge.
       if (screenY - yShift >= this.coverClipY(screenX, transformY)) continue;
       if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
@@ -1522,7 +1621,7 @@ export class Renderer {
     const ty = invDet * (-planeY * sx + planeX * sy);
     if (ty <= 0.1) return null;
     const screenX = (w / 2) * (1 + tx / ty);
-    const screenY = h / 2 + yShift + zHeight * (h / ty);
+    const screenY = h / 2 + yShift + (zHeight - this._eyeDrop) * (h / ty);
     // baseY: the same point without the scene's vertical shift, the space the
     // low-cover records (coverClipY) are kept in.
     return { x: screenX, y: screenY, baseY: screenY - yShift, depth: ty };
@@ -1623,8 +1722,14 @@ export class Renderer {
       const spriteHeight = (Math.abs(h / transformY)) | 0;
       const spriteWidth = spriteHeight;
 
-      const drawStartY = Math.max(0, (-spriteHeight / 2 + h / 2) | 0);
-      const drawEndY = Math.min(h - 1, (spriteHeight / 2 + h / 2) | 0);
+      // Sprites are drawn about the standing eye line (h/2). From a lower eye
+      // everything stands higher in the view, nearer things more so: the
+      // whole sprite is drawn `eyeLift` px up, and its cuts by low cover are
+      // measured in that lifted space (_clipBias).
+      const eyeLift = (this._eyeDrop * h) / transformY;
+      this._clipBias = eyeLift;
+      const drawStartY = Math.max(eyeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min((h - 1 + eyeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
         (-spriteWidth / 2 + spriteScreenX) | 0,
@@ -1644,6 +1749,7 @@ export class Renderer {
         }
       }
       if (!visible) continue;
+      if (eyeLift) ctx.translate(0, -eyeLift);
 
       // Ground shadow — dark ellipse at entity's feet. A phased Hound, a
       // Foresight ghost and an afterimage cast none.
@@ -1690,7 +1796,9 @@ export class Renderer {
         time,
       );
       if (lift) ctx.restore();
+      if (eyeLift) ctx.translate(0, eyeLift);
     }
+    this._clipBias = 0;
   }
 
   drawEntity(

@@ -200,6 +200,9 @@ export class WallPass {
     this.uCam = gl.getUniformLocation(prog, "u_cam");
     this.uSpecGain = gl.getUniformLocation(prog, "u_specGain");
     this.cam = [0, 0];
+    // Eye height (wall units) the specular view vector leaves from; the
+    // renderer lowers it with a crouch or a slide.
+    this.camZ = 0.5;
     this.specGain = 0;
     this.normalTex = null;
     this.useNormals = true;
@@ -475,7 +478,7 @@ export class WallPass {
     gl.uniform1i(this.uWalls, 0);
     gl.uniform1f(this.uLightGain, this.lightGain);
     gl.uniform1f(this.uSpecGain, this.specGain);
-    gl.uniform3f(this.uCam, this.cam[0], this.cam[1], 0.5);
+    gl.uniform3f(this.uCam, this.cam[0], this.cam[1], this.camZ);
     const normals = this.lightGain > 0 && this.useNormals && this.normalTex;
     gl.uniform1i(this.uHasNormals, normals ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);

@@ -3,7 +3,7 @@
  *
  * Pins, per weapon in src/data/weapons.js:
  *   1. the hit ray projects back onto the reticle / ADS sight pixel through
- *      the frame the renderer draws (zoomed FOV, magnified rows, stance and
+ *      the frame the renderer draws (zoomed FOV, magnified rows, eye height and
  *      recoil shift, HUD bar), hip and aimed, standing and crouched
  *   2. rounds scatter inside the cone the spread brackets draw, which closes
  *      to the weapon's adsSpread aimed (none for the sniper)
@@ -30,6 +30,7 @@ import { rayEnemyHit } from "../../src/systems/combat.js";
 import { drawWeapon } from "../../js/weapon-renderer.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { hitSpan, zoneAimHeight } from "../../src/systems/combat.js";
+import { eyeOffsetZ } from "../../src/systems/physics.js";
 
 const W = 1280;
 const H = 720;
@@ -85,20 +86,24 @@ describe("the hit ray lands on the sight", () => {
     }
   }
 
-  it("a crouched round on the reticle hits the figure drawn there", () => {
-    resetAdsFov();
-    const p = playerWith(WEAPONS[5], { crouchBlend: 1 });
-    settle(p);
-    const { yaw, pitch } = aimAngles(p, effectiveAimFov(p, settings), { h: H, yShift: sceneShiftPx(p, H) });
-    // A head-sized target at 25 m, exactly where the crouched view draws the reticle's point.
-    const dist = 25;
-    const head = { type: "enemy", active: true, state: "idle", x: p.x + Math.cos(yaw) * dist, y: p.y + Math.sin(yaw) * dist,
-      def: { radius: 0.2, hitCenter: Math.tan(pitch) * dist, hitHeight: 0.1 } };
-    expect(rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 60, pitch, head)?.enemy).toBe(head);
-    // The old pitch, without the stance shift, sails over it.
-    const old = aimAngles(p, effectiveAimFov(p, settings), { h: H });
-    expect(Math.tan(old.pitch) * dist - head.def.hitCenter).toBeLessThan(-0.3);
-  });
+  for (const [stance, over, dist] of [["crouched", { crouchBlend: 1 }, 25], ["sliding", { crouchBlend: 1, slideBlend: 1, isSliding: true }, 5]]) {
+    it(`a ${stance} round on the reticle hits the figure drawn there`, () => {
+      resetAdsFov();
+      const p = playerWith(WEAPONS[5], over);
+      settle(p);
+      const { yaw, pitch } = aimAngles(p, effectiveAimFov(p, settings), { h: H, yShift: sceneShiftPx(p, H) });
+      // A head-sized target exactly where the lowered view draws the reticle's
+      // point: the renderer lifts a figure by the eye's drop, so a point z up
+      // the standing eye line is under the reticle when z - offset = tan·dist.
+      const off = eyeOffsetZ(p);
+      expect(off).toBeLessThan(-0.2);
+      const head = { type: "enemy", active: true, state: "idle", x: p.x + Math.cos(yaw) * dist, y: p.y + Math.sin(yaw) * dist,
+        def: { radius: 0.2, hitCenter: off + Math.tan(pitch) * dist, hitHeight: 0.1 } };
+      expect(rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 60, pitch, head, off)?.enemy).toBe(head);
+      // From the standing eye the same round passes over it.
+      if (stance === "sliding") expect(rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 60, pitch, head, 0)).toBeNull();
+    });
+  }
 });
 
 describe("rounds scatter inside the drawn cone", () => {
@@ -216,10 +221,12 @@ describe("the reticle on a head is a headshot", () => {
                   const yaw0 = aimAngles(p, effectiveAimFov(p, settings), { h: H, barH }).yaw;
                   const e = humanoid(type, p, yaw0, dist);
                   // The reticle on the drawn point.
-                  const row = H / 2 + sceneShiftPx(p, H) - (height(e) / dist) * H;
+                  // Drawn from the player's eye: lifted by its drop under the standing eye line.
+                  const off = eyeOffsetZ(p);
+                  const row = H / 2 + sceneShiftPx(p, H) - ((height(e) - off) / dist) * H;
                   p.aimOffsetY = (row - viewH / 2) / viewH;
                   const { yaw, pitch } = aimAngles(p, effectiveAimFov(p, settings), { h: H, barH, yShift: sceneShiftPx(p, H) });
-                  const hit = rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 60, pitch, e);
+                  const hit = rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 60, pitch, e, off);
                   // Face on, the Sentinel's plate covers its chest and its
                   // head shows only through the visor slit.
                   const want = type === "sentinel" ? (zone === "head" ? "visor" : "armor") : zone;

@@ -5,11 +5,9 @@
  * exposed or blind-firing. Nothing here is drawn near the reticle: the sights
  * stay clear (src/systems/aim.js).
  *
- * Down behind low cover, the near edge of the cover also rises into the
- * bottom of the view (drawCoverLip, drawn under the gun). The raycaster's eye
- * stays at half a wall whatever the stance, so without it a waist-high block
- * a third of a tile away sits almost out of frame and crouching behind it
- * looks like standing in the open.
+ * Down behind low cover there is nothing to fake: the raycaster draws the
+ * crouched view from the crouched eye (playerEyeZ in src/systems/physics.js),
+ * so the block itself rises across the bottom of the view.
  *
  * Legacy draws neon strokes in monospace, Comic an inked glyph, and Modern
  * (the realistic profile) a thin helmet-HUD line with a tracked label.
@@ -18,7 +16,6 @@ import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { HT } from "./hud-skin.js";
 import { uiFont } from "./modern-ui-kit.js";
 import { activeDevice, drawPrompt } from "./input-glyphs.js";
-import { currentBarH } from "../systems/aim.js";
 
 /** In cover this long, the peek / leave hints fade out. */
 const HINT_MS = 3500;
@@ -116,63 +113,6 @@ function drawGlyph(ctx, x, y, low, label, state) {
     ctx.textBaseline = "top";
     if ("letterSpacing" in ctx) ctx.letterSpacing = "2px";
     ctx.fillText(label, x, y + 6);
-  }
-  ctx.restore();
-}
-
-/**
- * The top of the low cover the player is crouched behind, across the bottom
- * of the view. It rises with the stance and sinks as the sights stand the
- * player up, and fades as the view turns away from the cover.
- */
-export function drawCoverLip(game, ctx, w, h) {
-  const p = game.player;
-  const f = p?.cover?.face;
-  if (!f?.low) return;
-  const k = p.crouchBlend || 0;
-  if (k < 0.01) return;
-  const facing = Math.cos(p.angle) * -f.nx + Math.sin(p.angle) * -f.ny;
-  const fade = Math.max(0, Math.min(1, (facing - 0.35) / 0.45));
-  if (fade <= 0) return;
-  // The bar is measured on the canvas, which the world may render under at a lower resolution.
-  const viewH = h - currentBarH(game) * (h / (game.canvas?.height || h));
-  const top = Math.round(viewH * (1.04 - 0.4 * k));
-  ctx.save();
-  ctx.globalAlpha = fade;
-  // Its shadow on the view just above it.
-  const shade = ctx.createLinearGradient(0, top - viewH * 0.06, 0, top);
-  shade.addColorStop(0, "rgba(0,0,0,0)");
-  shade.addColorStop(1, "rgba(0,0,0,0.28)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, top - viewH * 0.06, w, viewH * 0.06);
-  if (!isModernArt()) {
-    // Legacy: a dark slab with a neon rim, like the level's own wireframe.
-    ctx.fillStyle = "rgba(6,12,22,0.94)";
-    ctx.fillRect(0, top, w, h - top);
-    ctx.fillStyle = "rgba(0,229,255,0.07)";
-    for (let y = top + 6; y < h; y += 6) ctx.fillRect(0, y, w, 1);
-    ctx.shadowColor = "#00e5ff";
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = "#00e5ff";
-    ctx.fillRect(0, top, w, 2);
-  } else if (!isRealisticArt()) {
-    // Comic: flat steel under a heavy ink line, with one bevel highlight.
-    ctx.fillStyle = "#2b3542";
-    ctx.fillRect(0, top, w, h - top);
-    ctx.fillStyle = "#3f4c5c";
-    ctx.fillRect(0, top + 4, w, 5);
-    ctx.fillStyle = HT.ink;
-    ctx.fillRect(0, top - 2, w, 5);
-  } else {
-    // Modern: a lit top face falling into shadow, no line work.
-    const g = ctx.createLinearGradient(0, top, 0, h);
-    g.addColorStop(0, "rgba(58,62,66,0.97)");
-    g.addColorStop(0.08, "rgba(34,37,40,0.98)");
-    g.addColorStop(1, "rgba(10,11,13,0.99)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, top, w, h - top);
-    ctx.fillStyle = "rgba(255,255,255,0.10)";
-    ctx.fillRect(0, top, w, 1);
   }
   ctx.restore();
 }

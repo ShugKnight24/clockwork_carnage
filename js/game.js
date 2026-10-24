@@ -3429,6 +3429,7 @@ export class Game {
       isSprinting: this.player.isSprinting,
       isDashing: this.player.isDashing,
       crouchBlend: this.player.crouchBlend || 0,
+      slideBlend: this.player.slideBlend || 0,
       weaponBob: this.settings.weaponBob ? this.player.weaponBob : 0,
       weaponKick: this.player.weaponKick,
       weaponSwayX: this.settings.weaponBob ? this.player.weaponSwayX : 0,

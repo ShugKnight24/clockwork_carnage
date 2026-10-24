@@ -15,7 +15,7 @@ import {
   pickHitscanTarget,
   voxelShotReach,
 } from "./combat.js";
-import { playerEyeZ } from "./physics.js";
+import { playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { playerEyeZ3D } from "../world/voxel-physics.js";
 import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
@@ -145,6 +145,8 @@ export function fireWeapon(game) {
         dirX, dirY, damage, wep.projectileSpeed ?? 12, "player",
       );
       proj.pitch = aimPitch + dp;
+      // Fired from a crouch or a slide, the bolt leaves the lowered eye.
+      proj.eyeOffset = eyeOffsetZ(game.player);
       if (game.world) {
         // A voxel bolt flies in three dimensions: it leaves the eye on the
         // camera's own pitch and keeps its world height as it travels.

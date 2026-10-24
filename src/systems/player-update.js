@@ -21,6 +21,9 @@ import {
   PLAYER_FALL_DAMAGE_PER_BLOCK,
 } from "../constants.js";
 
+/** Camera roll held through a slide (radians). */
+const SLIDE_ROLL = 0.05;
+
 /**
  * Halo-style hybrid aim: mouse moves the reticle freely; on clamp, the
  * leftover input pushes the camera. One sensitivity value drives both the
@@ -177,6 +180,12 @@ export class PlayerUpdateSystem {
     // blend leaves the FOV and the weapon fractionally off forever.
     if (p.crouchBlend < 0.004) p.crouchBlend = 0;
     if (p.crouchBlend > 0.996) p.crouchBlend = 1;
+    // A slide takes the eye lower than a crouch (SLIDE_EYE_Z), dropping into
+    // it fast and rising out of it a little slower, onto the crouch blend.
+    const slideRate = p.isSliding ? 20 : 8;
+    p.slideBlend += ((p.isSliding ? 1 : 0) - (p.slideBlend || 0)) * Math.min(1, slideRate * dt);
+    if (p.slideBlend < 0.004) p.slideBlend = 0;
+    if (p.slideBlend > 0.996) p.slideBlend = 1;
 
     // Start slide
     if (
@@ -210,8 +219,10 @@ export class PlayerUpdateSystem {
         // Collision (slide)
         flags = this._applyMove(ctx, moveX, moveY, dt, flags);
 
-        // Camera tilt during slide — lean into the turn
-        p.cameraTilt = (p.cameraTilt || 0) + (0.08 - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
+        // Camera tilt during slide — lean into the turn. A few degrees: the
+        // frame scales up to hide its corners (render-pipeline.js), so more
+        // roll would cost view.
+        p.cameraTilt = (p.cameraTilt || 0) + (SLIDE_ROLL - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
 
         p.weaponBob += dt * 18;
         p.staminaRegenDelay = 0.5;

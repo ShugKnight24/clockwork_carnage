@@ -12,7 +12,7 @@ import {
   HEADSHOT_PRECISION_PAD,
   ZONE_RADIUS_PAD,
 } from "../constants.js";
-import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ } from "./physics.js";
+import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
 import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
@@ -281,7 +281,9 @@ export function voxelShotReach(world, player, dirX, dirY, pitch, range) {
 
 /**
  * @param {number} [eyeZ] height the ray starts at. A grid level measures a
- *   hit volume from the shooter's eye, so it leaves this at 0; a voxel level
+ *   hit volume from the standing eye line, so it passes how far the
+ *   shooter's eye sits off it (0 standing, below it crouched: eyeOffsetZ in
+ *   physics.js), the same lift the renderer draws figures with; a voxel level
  *   has real block heights, and passes the eye's world z so the volume is
  *   compared in the same space as `enemy.z`.
  */
@@ -391,7 +393,9 @@ export function resolveHitZone(enemy, aimHeight, dirX, dirY, grid = true) {
  *   and its presence is what makes the enemy tests 3D.
  */
 export function pickHitscanTarget(player, dirX, dirY, pitch, range, entities, map, reach = null) {
-  const eyeZ = reach ? playerEyeZ3D(player) : 0;
+  // A grid shot leaves from the player's eye, which a crouch or slide lowers
+  // under the standing eye line the drawn figures are measured from.
+  const eyeZ = reach ? playerEyeZ3D(player) : eyeOffsetZ(player);
   const maxDist = reach
     ? reach.dist
     : map
@@ -451,7 +455,7 @@ export function projectileHitsEnemy(p, enemy, prevX, prevY, in3D = false) {
     travelDist,
     in3D ? 0 : p.pitch || 0,
     enemy,
-    in3D ? p.z || 0 : 0,
+    in3D ? p.z || 0 : p.eyeOffset || 0,
     !in3D,
   );
   if (!hit) return null;

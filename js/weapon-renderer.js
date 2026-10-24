@@ -226,7 +226,9 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   // Crouching rides the weapon lower and cants it in; it fades out on ADS so
   // the sights still reach the reticle.
   const crouch = (opts.crouchBlend || 0) * (isAiming ? 0 : 1);
-  const tiltAngle = (isSprinting ? Math.sin(weaponBob) * 0.06 : 0) + crouch * 0.05;
+  // A slide drops it further and rolls it with the camera.
+  const slide = (opts.slideBlend || 0) * (isAiming ? 0 : 1);
+  const tiltAngle = (isSprinting ? Math.sin(weaponBob) * 0.06 : 0) + crouch * 0.05 + slide * 0.09;
 
   const viewportFactor = h / 720;
 
@@ -255,9 +257,9 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const followX = (opts.aimOffsetX || 0) * w * ads;
   const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
 
-  const cx = w / 2 + restOffsetX + bobX + swayX - crouch * 11 * viewportFactor + followX;
+  const cx = w / 2 + restOffsetX + bobX + swayX - (crouch * 11 + slide * 10) * viewportFactor + followX;
   const cy = h - hudOffset - lerp(196, 150, ads) * viewportFactor + bobY + swayY +
-    kickY * lerp(1, 0.45, ads) + crouch * 26 * viewportFactor + followY;
+    kickY * lerp(1, 0.45, ads) + (crouch * 26 + slide * 20) * viewportFactor + followY;
 
   // Contact shadow — the viewmodel is the nearest object in the scene, so it
   // occludes ambient light behind itself. Without this the gun floats.

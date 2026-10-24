@@ -54,6 +54,23 @@ describe("castColumn", () => {
     expect(wallTopY(1, hits.dist[1], H, HORIZON)).toBeLessThan(hits.clip[0]);
   });
 
+  it("crouched, waist cover rises over the eye and hides what is behind it", () => {
+    // Waist (0.4) is under a standing eye but over a crouched one (0.29):
+    // from down there its near top edge is above the horizon.
+    const eye = 0.29;
+    const hits = castColumn(corridor([[5, LAYER.WAIST]]), 1.5, 1.5, 1, 0, H, HORIZON, createColumnHits(), eye);
+    expect(hits.clip[0]).toBeCloseTo(wallTopY(0.4, 3.5, H, HORIZON, eye));
+    expect(hits.clip[0]).toBeLessThan(HORIZON);
+    // The far wall's foot is hidden; only its upper part shows over the cover.
+    expect(HORIZON + (eye * H) / hits.dist[1]).toBeGreaterThan(hits.clip[0]);
+  });
+
+  it("a lower eye puts a wall's top further above the horizon", () => {
+    expect(wallTopY(1, 4, H, HORIZON, 0.5)).toBeCloseTo(HORIZON - H / 8);
+    expect(wallTopY(1, 4, H, HORIZON, 0.21)).toBeCloseTo(HORIZON - (0.79 * H) / 4);
+    expect(wallTopY(0, 4, H, HORIZON, 0.21)).toBeCloseTo(HORIZON + (0.21 * H) / 4);
+  });
+
   it("uses the near top edge of cover taller than the eye", () => {
     const hits = cast(corridor([[5, LAYER.SHOULDER]]));
     expect(hits.n).toBe(2);
