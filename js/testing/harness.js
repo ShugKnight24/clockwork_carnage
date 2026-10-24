@@ -333,7 +333,8 @@ function findClosest(game, type) {
   return best;
 }
 
-const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0;
+// The prologue's stray hologram (an oddity, not a target) is not a fight.
+const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0 && !e._oddity;
 
 /**
  * Put the reticle on an enemy's head, as a good player does: the vertical
@@ -1455,15 +1456,18 @@ function botCompletionist(game) {
 
   // The rest of the chapter, one step at a time: each step set up, a few
   // ticks of play, then completed as if its goal were met. Every step must
-  // advance exactly one, and the chapter must end in the completion menu.
+  // move on (forward, or from a trial's last step back to the sheet), and
+  // the chapter must end in the completion menu.
   const lastStep = game.tutorial.step;
   let advanced = true;
-  for (let guard = 0; guard < 60 && game.state === GameState.PLAYING && game.mode === "tutorial"; guard++) {
+  for (let guard = 0; guard < 80 && game.state === GameState.PLAYING && game.mode === "tutorial"; guard++) {
     const before = game.tutorialStep;
+    const hub = stepId() === "certify" || game.tutorial.def?.trial;
     stepGame(game, 10);
     if (game.tutorialStep === before) game.tutorial.skipStep();
     stepGame(game, 2);
-    if (game.tutorialStep !== before + 1 && game.state === GameState.PLAYING) {
+    const moved = hub ? game.tutorialStep !== before : game.tutorialStep === before + 1;
+    if (!moved && game.state === GameState.PLAYING) {
       advanced = false;
       break;
     }
@@ -1877,26 +1881,61 @@ function botCadet(game) {
     p.isFiring = false;
   };
   let pull = false;
-  // Run the gates (or a straight) with sprint held.
-  const sprintTo = (x, y) => {
+
+  // The mobility run: follow the lit gate, sprint while the bar lasts and
+  // walk to get it back, slide (or crouch) under the shutters, and dash the
+  // bridge's gap at its edge.
+  const SHUTTERS = [[25, 16], [25, 17], [58, 27], [59, 27]];
+  let winded = false;
+  const run = () => {
+    const gate = game.objectiveWaypoint;
     clearInput(game);
     game.mouse.locked = true;
-    if (!stepToward(game, x, y)) aimAt(game, x, y);
-    game.keys[kb.sprint] = true;
+    if (!gate) return stepGame(game, 1);
+    // The bridge's gap (col 73), from either side: wait for the bar (a dash
+    // needs it), then dash across at the edge.
+    const onBridge = Math.floor(p.y) >= 41 && Math.floor(p.y) <= 42;
+    // Which side we're on, heading for the other (the gate is east of the
+    // gap on the way out, west of it on the way home).
+    const west = onBridge && p.x > 70.4 && p.x < 72.6 && gate.x > 73;
+    const east = onBridge && p.x > 74.4 && p.x < 76.6 && gate.x < 73;
+    const atGap = west || east;
+    if (atGap && p.stamina < p.dashStaminaCost + 4) return stepGame(game, 1);
+    if (!stepToward(game, gate.x, gate.y)) aimAt(game, gate.x, gate.y);
+    if (p.stamina < 12) winded = true;
+    if (p.stamina > 55) winded = false;
+    if (!winded) game.keys[kb.sprint] = true;
+    const shutter = SHUTTERS.find(([x, y]) => Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y) < 1.9);
+    if (shutter && !p.isSliding) {
+      if (p.isSprinting && p.stamina >= p.slideStaminaCost + 2 && p.slideCooldown <= 0) {
+        game.keys[kb.crouch] = true;
+        stepGame(game, 1);
+        game.keys[kb.crouch] = false;
+        return stepGame(game, 1);
+      }
+      if (Math.hypot(shutter[0] + 0.5 - p.x, shutter[1] + 0.5 - p.y) < 1.4) {
+        game.keys[kb.sprint] = false;
+        game.keys[kb.crouch] = true;
+      }
+    }
+    const edge = (west && p.x > 71.5) || (east && p.x < 75.5);
+    if (edge && p.dashCooldown <= 0 && !p.isDashing) {
+      aimAt(game, west ? 80 : 66, p.y);
+      game.keys[kb.moveForward] = true;
+      game.dashFromKeys();
+    }
     stepGame(game, 1);
   };
-  // Pace between two open points, so movement drills never run into a wall.
-  let leg = 0;
-  const pace = (a, b, codes = []) => {
-    const [x, y] = leg % 2 ? b : a;
-    if (Math.hypot(x - p.x, y - p.y) < 0.8) leg++;
+  // Throw R&D's breaker: stand in front of it, face it, interact.
+  const breaker = () => {
+    const near = live("breaker").filter((e) => Math.hypot(e.x - p.x, e.y - p.y) < 9);
+    if (near.length) return killAllEnemies(game, 30);
+    if (Math.hypot(76.5 - p.x, 13.0 - p.y) > 0.8) return walkTo(game, 76.5, 13.0, 1) || stepGame(game, 1);
     clearInput(game);
-    game.mouse.locked = true;
-    stepToward(game, x, y);
-    for (const c of codes) game.keys[c] = true;
+    aimAt(game, 76.5, 14.5);
+    game.interact();
     stepGame(game, 1);
   };
-  let anchor = null;
 
   // What a player does on each step, one tick at a time.
   const play = {
@@ -1917,6 +1956,11 @@ function botCadet(game) {
     },
     walk: () => walkTo(game, 24.5, 41.5, 1) || stepGame(game, 1),
     toRange: () => walkTo(game, 36.5, 41.5, 1) || stepGame(game, 1),
+    // The sheet: to the nearest trial still to do (the marker).
+    certify: () => {
+      const w = game.objectiveWaypoint;
+      return w ? walkTo(game, w.x, w.y, 1) || stepGame(game, 1) : stepGame(game, 1);
+    },
     pistol: () => walkTo(game, 38.5, 42.5, 1) || stepGame(game, 1),
     fire: () => {
       select(p.weapons[0]);
@@ -1935,43 +1979,27 @@ function botCadet(game) {
       if (e && Math.hypot(e.x - p.x, e.y - p.y) > 2.5) return walkTo(game, e.x - 2, e.y, 1) || stepGame(game, 1);
       shoot("shotgun");
     },
+    reloadDrill: () => stepGame(game, 1),
     ammo: () => walkTo(game, 37.5, 45.5, 1) || stepGame(game, 1),
-    toGym: () => walkTo(game, 22.5, 20.5, 1) || stepGame(game, 1),
-    sprint: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]], [kb.sprint]);
-    },
-    crouch: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 2, anchor[1]], [anchor[0] + 2, anchor[1]], [kb.crouch]);
-    },
-    slide: () => {
-      anchor ??= [p.x, p.y];
-      // Sprint, then tap crouch: a fresh press each run.
-      // Winded, walk it off: a slide needs the stamina a sprint burns.
-      const fresh = p.stamina >= p.slideStaminaCost + 25;
-      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]], fresh ? [kb.sprint] : []);
-      if (fresh && p.isSprinting && !p.isSliding && p.slideCooldown <= 0) {
-        game.keys[kb.crouch] = true;
-        stepGame(game, 2);
-        game.keys[kb.crouch] = false;
-        stepGame(game, 1);
-      }
-    },
-    dash: () => {
-      anchor ??= [p.x, p.y];
-      pace([anchor[0] - 3, anchor[1]], [anchor[0] + 3, anchor[1]]);
-      if (p.dashCooldown <= 0 && !p.isDashing) game.dashFromKeys();
-    },
-    course: () => {
-      const gate = game.objectiveWaypoint;
-      if (gate) sprintTo(gate.x, gate.y);
-      else stepGame(game, 1);
-    },
-    toLab: () => walkTo(game, 29.5, 10.5, 1) || stepGame(game, 1),
+    sprint: run,
+    slide: run,
+    dash: run,
+    runHome: run,
     lab: () => shoot("lab"),
-    sim: () => (live("sim").length || live("glitch").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
-    alarm: () => stepGame(game, 1),
+    coverDrill: () => stepGame(game, 1),
+    sim: () => (live("sim").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
+    // On the rig's pad, standing still.
+    telemetry: () => (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.4 ? walkTo(game, 70.5, 7.5, 1) || stepGame(game, 1) : (clearInput(game), stepGame(game, 1))),
+    signOff: () => {
+      const w = game.objectiveWaypoint;
+      return w && Math.hypot(w.x - p.x, w.y - p.y) > 1.6 ? walkTo(game, w.x, w.y + 1, 1) || stepGame(game, 1) : stepGame(game, 1);
+    },
+    sixFortySeven: () => (live("glitch").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
+    // Watch him go, then make for his office when the marker says.
+    alarm: () => {
+      const w = game.objectiveWaypoint;
+      return w ? walkTo(game, w.x, w.y, 1) || stepGame(game, 1) : stepGame(game, 1);
+    },
     cover: () => (live("cover").length ? killAllEnemies(game, 30) : walkTo(game, 37.5, 20.5, 1) || stepGame(game, 1)),
     patch: () => walkTo(game, 44.5, 21.5, 1) || stepGame(game, 1),
     shield: () => (live("shield").length ? killAllEnemies(game, 30) : stepGame(game, 1)),
@@ -1985,12 +2013,7 @@ function botCadet(game) {
       if (p.chronoEnergy > 20) game.keys[kb.chronoShift] = true;
       killAllEnemies(game, 30);
     },
-    cells: () => {
-      if (live("cells").length && p.health < p.maxHealth * 0.6) return killAllEnemies(game, 30);
-      const cell = game.entities.find((e) => e.active && e.type === "powerCell");
-      if (cell) return walkTo(game, cell.x, cell.y, 1) || stepGame(game, 1);
-      killAllEnemies(game, 30) || stepGame(game, 1);
-    },
+    breaker,
     toLift: () => walkTo(game, 29.5, 10.0, 1) || stepGame(game, 1),
     wave1: () => killAllEnemies(game, 30) || stepGame(game, 1),
     wave2: () => killAllEnemies(game, 30) || stepGame(game, 1),
@@ -2000,7 +2023,10 @@ function botCadet(game) {
   };
 
   // Per-step budget in ticks (60 a second). Scenes wait on dialogue.
-  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, course: 5400, cells: 4800 };
+  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800 };
+  // Pacing, as the plan measures it: seconds from the creator to the first
+  // shot, and the longest the cadet stands still while someone talks.
+  const pacing = { standing: {}, time: {}, stood: 0, lastX: p.x, lastY: p.y, shots: 0 };
   const stuck = [];
   for (let guard = 0; guard < 80 && game.mode === "tutorial" && t.step < TUTORIAL_SANDBOX_STEP; guard++) {
     const id = stepId();
@@ -2011,8 +2037,6 @@ function botCadet(game) {
       t.skipStep();
       continue;
     }
-    anchor = null;
-    leg = 0;
     const budget = BUDGET[id] ?? 3600;
     let ticks = 0;
     while (t.step === at && ticks < budget && game.mode === "tutorial") {
@@ -2026,7 +2050,16 @@ function botCadet(game) {
       if (p.health < p.maxHealth * 0.25) p.health = p.maxHealth;
       const before = game.lastFrameTime;
       act();
-      ticks += Math.max(1, Math.round((game.lastFrameTime - before) / SIM_DT));
+      const n = Math.max(1, Math.round((game.lastFrameTime - before) / SIM_DT));
+      ticks += n;
+      // Standing still while the story is talking, not shooting: listening.
+      const still = Math.hypot(p.x - pacing.lastX, p.y - pacing.lastY) < 0.01 && game.shotsFired === pacing.shots;
+      pacing.stood = still && !t.scriptIdle() ? pacing.stood + n : 0;
+      pacing.standing[id] = Math.max(pacing.standing[id] ?? 0, pacing.stood);
+      pacing.time[id] = (pacing.time[id] ?? 0) + n;
+      pacing.lastX = p.x;
+      pacing.lastY = p.y;
+      pacing.shots = game.shotsFired;
     }
     clearInput(game);
     p.aimOffsetY = 0;
@@ -2047,6 +2080,11 @@ function botCadet(game) {
     }
   }
   r.assert(!stuck.length, "Prologue: every goal met by play", `Prologue steps not playable: ${stuck.join(", ")}`);
+  const firstShot = t.firstShotAt != null && t.suitedAt != null ? t.firstShotAt - t.suitedAt : null;
+  const standing = Object.entries(pacing.standing).map(([k, v]) => [k, +(v / 60).toFixed(1)]).sort((a, b) => b[1] - a[1]);
+  const time = Object.fromEntries(Object.entries(pacing.time).map(([k, v]) => [k, +(v / 60).toFixed(1)]));
+  game._cadetPacing = { firstShot, standing, time, cert: t.cert?.done, order: t.cert?.order, chapter: +t.runClock.toFixed(1) };
+  console.log(`Cadet pacing: first shot ${firstShot?.toFixed(1)} s after the creator; longest standing: ${standing.slice(0, 6).map(([k, v]) => `${k} ${v}s`).join(", ")}; sheet ${JSON.stringify(t.cert?.done)}`);
 
   stepGame(game, 200, { until: (g) => g.state === GameState.TUTORIAL_COMPLETE });
   r.assert(

@@ -38,6 +38,9 @@ const W = {
   DECK_SIGN: 76,
 };
 
+/** Wall ids, painted by src/rendering/env/rooms/gym.js (holding reuses the cage). */
+export const GYM_WALLS = W;
+
 const LAMP = [236, 242, 255];
 
 export const room = {

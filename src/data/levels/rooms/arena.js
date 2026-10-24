@@ -30,6 +30,18 @@ export const ARENA_WALLS = {
   LIFT_JAMB: 113,
   SHAFT_R: 114,
   GALLERY: 115,
+  /** A holo cover block, raised waist-high by the sim (js/tutorial-system.js). */
+  HOLO_BLOCK: 116,
+};
+
+/**
+ * The sim hall as a cover arena: where its holo blocks rise, [row, col],
+ * one layout per wave (the last stays up for the evac). Clear of the
+ * columns, the exhibit pad, the lift's mouth and the waves' spawn points.
+ */
+export const COVER_LAYOUTS = {
+  lanes: [[9, 24], [9, 25], [9, 34], [9, 35], [7, 12], [7, 13], [7, 46], [7, 47], [4, 20], [4, 21], [4, 38], [4, 39]],
+  scatter: [[6, 17], [6, 18], [9, 27], [9, 32], [7, 23], [7, 36], [4, 12], [4, 47], [9, 15], [9, 44]],
 };
 
 const W = ARENA_WALLS;
