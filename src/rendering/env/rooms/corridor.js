@@ -24,11 +24,11 @@ const RAIL = 292; // chair rail
 const KICKY = 456; // rubber base
 const FONT = "Arial, Helvetica, sans-serif";
 
-const PAPER = ["#f4f2ea", "#e8e6dc", "#d0cec4"];
-const NAVY = ["#2e4a7a", "#22385e", "#16243e"];
-const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
-const BLACK = ["#1e2126", "#15171b", "#0b0c0e"];
-const BRASS = "#d8b25a";
+export const PAPER = ["#f4f2ea", "#e8e6dc", "#d0cec4"];
+export const NAVY = ["#2e4a7a", "#22385e", "#16243e"];
+export const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
+export const BLACK = ["#1e2126", "#15171b", "#0b0c0e"];
+export const BRASS = "#d8b25a";
 
 /** Text size that fits `maxW` (canvas px). */
 function fit(ctx, text, size, maxW, weight) {
@@ -161,7 +161,7 @@ export function blockWall(ctx, r) {
 
 // ── Corridor ─────────────────────────────────────────────────────
 
-function paintWall(ctx, p, r) {
+export function paintWall(ctx, p, r) {
   stationWall(ctx, p, r);
   // A wall sconce's bracket over the rail: the corridor's lamps hang off them.
   plate(ctx, T / 2 - 40, 150, 80, 22, p, { tones: STEEL, bevel: 3, ink: 2 });

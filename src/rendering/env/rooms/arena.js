@@ -477,7 +477,27 @@ function paintLiftJamb(ctx, p, r) {
   led(ctx, T / 2 - 34, 256, 4, "#3aff6a");
 }
 
+/**
+ * A holo cover block: a waist-high slab of hard light on its floor emitter.
+ * It stands as a low wall, which shows the bottom two fifths of the face,
+ * so that is where it is painted.
+ */
+function paintHoloBlock(ctx, p, r) {
+  ctx.fillStyle = GUN[2];
+  ctx.fillRect(0, 0, T, T);
+  const top = 306;
+  holoGrid(ctx, p, r, 0, top, T, KICK - top + 20, 26);
+  ctx.fillStyle = "rgba(70,240,255,0.22)";
+  ctx.fillRect(0, top, T, KICK - top);
+  lightStrip(ctx, 0, top, T, 6, CYAN, { blur: 16, alpha: 0.95, core: "rgba(230,255,255,0.9)" });
+  glow(0, top, T, 8, 0.95, 8);
+  plate(ctx, 0, KICK, T, T - KICK, p, { tones: DARK, bevel: 3, ink: 2, spec: false });
+  hazard(ctx, 0, KICK + 8, T, 14, "#e8c23a");
+  for (const x of [16, T - 16]) rivet(ctx, x, KICK + 40, 5, p);
+}
+
 export const PAINTERS = {
+  [W.HOLO_BLOCK]: paintHoloBlock,
   [W.GRID]: paintGrid,
   [W.EMITTER]: paintEmitter,
   [W.CRATES]: paintCrates,

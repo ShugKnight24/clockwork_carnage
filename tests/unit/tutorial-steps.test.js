@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { tutorialStepCopy, beatCaption } from "../../src/ui/tutorial-ui.js";
 import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
-import { PROLOGUE_STEPS, PROLOGUE_BEATS, lineDuration } from "../../src/data/prologue.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, RELOAD_CREDIT, gradeTrial, lineDuration, trialStart } from "../../src/data/prologue.js";
 
 const desktop = tutorialStepCopy(false);
 const mobile = tutorialStepCopy(true);
@@ -79,14 +79,15 @@ describe("the prologue", () => {
   });
 
   it("captions each card with its beat", () => {
-    expect(beatCaption(1)).toBe(`PROLOGUE · 2/${PROLOGUE_BEATS.length} · THE RANGE`);
-    for (const card of desktop.filter(Boolean)) expect(beatCaption(card.beat)).toMatch(/^PROLOGUE · \d\/\d · /);
+    expect(beatCaption(2)).toBe(`PROLOGUE · 3/${PROLOGUE_BEATS.length} · TRIAL · WEAPONS`);
+    for (const card of desktop.filter(Boolean)) expect(beatCaption(card.beat)).toMatch(/^PROLOGUE · \d+\/\d+ · /);
   });
 
-  it("is told by ARIA and the Supervisor, in lines short enough to say", () => {
-    for (const s of PROLOGUE_STEPS) {
-      for (const [speaker, text, emotion] of s.lines || []) {
-        expect(["ARIA", "SUPERVISOR", "OFFICER", "LT. RASCZAK", "SGT. KAEL", "PA"]).toContain(speaker);
+  it("is told by ARIA, the Supervisor and R&D, in lines short enough to say", () => {
+    const oddities = PROLOGUE_ODDITIES.flatMap((o) => [...(o.lines || []), ...(o.away || [])]);
+    for (const lines of [...PROLOGUE_STEPS.map((s) => [...(s.lines || []), ...(s.brief || [])]), oddities]) {
+      for (const [speaker, text, emotion] of lines) {
+        expect(["ARIA", "SUPERVISOR", "OFFICER", "LT. RASCZAK", "SGT. KAEL", "PA", "DR. ORR", "LIN", "VALE"]).toContain(speaker);
         expect(text.length).toBeGreaterThan(0);
         expect(text.length).toBeLessThan(170);
         if (emotion != null) expect(typeof emotion).toBe("string");
@@ -105,9 +106,13 @@ describe("the prologue", () => {
     expect(ids.slice(0, at("alarm"))).not.toContain("cover");
   });
 
-  it("builds the morning toward the breach with announcements, flickers and tremors", () => {
+  it("builds the morning toward the breach a trial at a time, not on a timer", () => {
+    // One oddity for each trial before the last; the last trial's is 06:47.
+    expect(PROLOGUE_ODDITIES).toHaveLength(PROLOGUE_TRIALS.length - 1);
+    for (const o of PROLOGUE_ODDITIES) expect(o.pa || o.lines || o.repeat).toBeTruthy();
+    // The trials themselves keep no timed oddities.
+    for (const s of PROLOGUE_STEPS.filter((d) => d.trial)) expect(s.events ?? []).toEqual([]);
     const events = PROLOGUE_STEPS.flatMap((s) => (s.events || []).map((e) => [s.id, ...e]));
-    expect(events.length).toBeGreaterThanOrEqual(6);
     for (const [id, at, kind, text] of events) {
       expect(["pa", "flicker", "tremor"], id).toContain(kind);
       expect(at).toBeGreaterThanOrEqual(0);
@@ -117,8 +122,68 @@ describe("the prologue", () => {
 
   it("teaches what the old tutorial never did", () => {
     const ids = PROLOGUE_STEPS.map((s) => s.id);
-    for (const id of ["cells", "sprint", "chrono", "cover", "shield", "shotgun", "moving", "course", "vents"]) {
+    for (const id of ["breaker", "sprint", "slide", "dash", "chrono", "cover", "shield", "shotgun", "moving", "vents", "telemetry"]) {
       expect(ids).toContain(id);
     }
+  });
+});
+
+describe("certification day", () => {
+  const ids = PROLOGUE_STEPS.map((s) => s.id);
+  const at = (id) => ids.indexOf(id);
+
+  it("hands out the sheet after the walk to the range, and signs it off before 06:47", () => {
+    expect(at("toRange")).toBeLessThan(at("certify"));
+    for (const tr of PROLOGUE_TRIALS) {
+      expect(trialStart(tr.id), tr.id).toBeGreaterThan(at("certify"));
+      expect(trialStart(tr.id), tr.id).toBeLessThan(at("signOff"));
+    }
+    expect(at("signOff")).toBeLessThan(at("sixFortySeven"));
+    expect(at("sixFortySeven")).toBeLessThan(at("alarm"));
+  });
+
+  it("keeps each trial's steps together, in its own beat", () => {
+    for (const tr of PROLOGUE_TRIALS) {
+      const steps = PROLOGUE_STEPS.map((s, i) => [s, i]).filter(([s]) => s.trial === tr.id);
+      expect(steps.length, tr.id).toBeGreaterThan(0);
+      const first = steps[0][1];
+      steps.forEach(([s, i], k) => {
+        expect(i).toBe(first + k);
+        expect(s.beat).toBe(steps[0][0].beat);
+      });
+      // A trial's first step is its beat's checkpoint: dying puts you back at its start.
+      expect(PROLOGUE_STEPS.findIndex((s) => s.beat === steps[0][0].beat)).toBe(first);
+    }
+  });
+
+  it("leaves hooks for the reload drill and the cover lesson", () => {
+    for (const [id, trial] of [["reloadDrill", "weapons"], ["coverDrill", "combat"]]) {
+      const s = PROLOGUE_STEPS[at(id)];
+      expect(s?.trial).toBe(trial);
+    }
+    expect(at("reloadDrill")).toBeGreaterThan(at("shotgun"));
+    expect(at("coverDrill")).toBeLessThan(at("sim"));
+  });
+
+  it("grades a trial on its time and its aim", () => {
+    const weapons = PROLOGUE_TRIALS.find((tr) => tr.id === "weapons");
+    expect(gradeTrial(weapons, weapons.par * 0.7, 0.7)).toBe("S");
+    expect(gradeTrial(weapons, weapons.par, 0.7)).toBe("A");
+    expect(gradeTrial(weapons, weapons.par * 1.2, 0.7)).toBe("B");
+    expect(gradeTrial(weapons, weapons.par * 2, 0.7)).toBe("C");
+    // Aim moves it a grade either way.
+    expect(gradeTrial(weapons, weapons.par * 1.2, 0.9)).toBe("A");
+    expect(gradeTrial(weapons, weapons.par, 0.3)).toBe("B");
+    expect(gradeTrial(PROLOGUE_TRIALS.find((tr) => tr.id === "telemetry"), 30, null)).toBe("PASS");
+  });
+
+  it("counts the active reloads landed on the range toward the weapons grade, and only there", () => {
+    const weapons = PROLOGUE_TRIALS.find((tr) => tr.id === "weapons");
+    const combat = PROLOGUE_TRIALS.find((tr) => tr.id === "combat");
+    // Just over par: a B, unless the reloads buy the seconds back.
+    const t = weapons.par + RELOAD_CREDIT;
+    expect(gradeTrial(weapons, t, 0.7)).toBe("B");
+    expect(gradeTrial(weapons, t, 0.7, { reloads: 1 })).toBe("A");
+    expect(gradeTrial(combat, combat.par + RELOAD_CREDIT, 0.7, { reloads: 1 })).toBe("B");
   });
 });

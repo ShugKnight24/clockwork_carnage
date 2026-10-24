@@ -296,9 +296,14 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
   const narrLines = narr ? wrapText(ctx, narrText, MAX_W - PAD_X * 2) : [];
   const narrH = narr ? Math.round((narrLines.length * HINT_LINE_H + 10) * narr.a) : 0;
 
+  // The live counter; the certification sheet is one line per trial.
   const progress = place.progress || "";
-  const PROG_H = progress ? HINT_LINE_H + 4 : 0;
-  const contentW = Math.max(titleW, hintW, narr ? Math.min(MAX_W - PAD_X * 2, ctx.measureText(narrText).width) : 0);
+  const progLines = progress ? progress.split("\n") : [];
+  const PROG_H = progLines.length * (HINT_LINE_H + 4);
+  ctx.font = compact ? "bold 11px monospace" : "bold 13px monospace";
+  const progW = progLines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+  ctx.font = HINT_FONT;
+  const contentW = Math.max(titleW, hintW, progW, narr ? Math.min(MAX_W - PAD_X * 2, ctx.measureText(narrText).width) : 0);
   const boxW = Math.min(MAX_W, contentW + PAD_X * 2);
   const boxH = PAD_Y * 2 + titleSize + 2 /* title height */ + TITLE_HINT_GAP + hintLines.length * HINT_LINE_H + PROG_H + narrH;
   const bx = cx - boxW / 2;
@@ -356,13 +361,13 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
     ctx.fillText(line, cx, hy);
     hy += HINT_LINE_H;
   }
-  if (progress) {
+  for (const line of progLines) {
     ctx.save();
     ctx.fillStyle = step.color;
     ctx.font = compact ? "bold 11px monospace" : "bold 13px monospace";
-    ctx.fillText(progress, cx, hy + 2);
+    ctx.fillText(line, cx, hy + 2);
     ctx.restore();
-    hy += PROG_H;
+    hy += HINT_LINE_H + 4;
   }
 
   if (narr) {
@@ -793,10 +798,14 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const tabW = narr ? Math.ceil(measureSpaced(uiFont(10, 700), place.narration.speaker, 0.8)) + 22 : 0;
   const narrLines = narr ? wrapFont(narrFont, place.narration.text, MAX_W - PAD_X * 2 - tabW) : [];
   const narrH = narr ? Math.round((narrLines.length * narrLineH + 12) * narr.a) : 0;
+  // The live counter; the certification sheet is one line per trial.
   const progress = place.progress || "";
+  const progLines = progress ? progress.split("\n") : [];
   const progFont = uiFont(compact ? 10 : 12, 800);
-  const PROG_H = progress ? (compact ? 16 : 22) : 0;
-  const contentW = Math.max(titleW, lay.w, progress ? measureSpaced(progFont, progress, 1) : 0, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
+  const PROG_LINE = compact ? 16 : 22;
+  const PROG_H = progLines.length * PROG_LINE;
+  const progW = progLines.reduce((m, l) => Math.max(m, measureSpaced(progFont, l, 1)), 0);
+  const contentW = Math.max(titleW, lay.w, progW, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
   const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2));
   const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PROG_H + PAD_Y - 4 + narrH;
   const bx = Math.round(cx - boxW / 2);
@@ -826,13 +835,13 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
     drawRichLine(ctx, line, lay, Math.round(cx - line.w / 2), midY, hintFont, UI.text);
     midY += LINE_H;
   }
-  if (progress) {
+  if (progLines.length) {
     ctx.font = progFont;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.letterSpacing = "1px";
     ctx.fillStyle = step.color;
-    ctx.fillText(progress, cx, midY - LINE_H / 2 + PROG_H / 2 + 2);
+    progLines.forEach((line, i) => ctx.fillText(line, cx, midY - LINE_H / 2 + PROG_LINE * (i + 0.5) + 2));
     ctx.letterSpacing = "0px";
     ctx.textBaseline = "alphabetic";
   }

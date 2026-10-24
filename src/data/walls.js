@@ -84,6 +84,20 @@ for (let id = 40; id <= 119; id++) {
 for (let id = 120; id <= 146; id++) {
   WALL_COLORS[id] ??= (id >= 129 && id <= 134) || id === 146 ? { r: 70, g: 84, b: 96 } : { r: 60, g: 66, b: 80 };
 }
+// The prologue's east wing (src/data/levels/rooms/, ids 180-236, clear of
+// the campaign floors' so either can grow): the halls, R&D, dispatch, the
+// atrium, holding and interview, each its own shade on the minimap.
+for (const [from, to, colour] of [
+  [180, 191, { r: 78, g: 82, b: 90 }],
+  [192, 203, { r: 150, g: 160, b: 172 }],
+  [204, 211, { r: 96, g: 84, b: 70 }],
+  [212, 217, { r: 120, g: 128, b: 138 }],
+  [218, 227, { r: 112, g: 124, b: 110 }],
+  [228, 232, { r: 52, g: 54, b: 62 }],
+  [233, 236, { r: 110, g: 100, b: 88 }],
+]) {
+  for (let id = from; id <= to; id++) WALL_COLORS[id] ??= colour;
+}
 
 // Entity types for map placement
 // E = enemy spawn, P = player start, H = health, A = ammo, W = weapon pickup

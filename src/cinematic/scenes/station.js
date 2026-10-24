@@ -187,7 +187,9 @@ function stationEnv(game) {
     const realistic = isRealisticArt();
     env = generateModernEnv(PALETTE, game.renderer?._visualStyle === 1, ENTRY.env, { realistic });
     env.realistic = realistic;
-    ensureEnvWalls(env, TUTORIAL_MAP.ownWalls, realistic);
+    // The east wing (lateWalls) is never in shot: the game paints it later.
+    const late = TUTORIAL_MAP.lateWalls ?? [];
+    ensureEnvWalls(env, TUTORIAL_MAP.ownWalls.filter((id) => !late.includes(id)), realistic);
     envCache.set(key, env);
   }
   return env;
