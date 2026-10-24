@@ -10,9 +10,9 @@
  * and blitted after that: the main image, the double and the echo are three
  * drawImage calls and the motes a dozen fillRects, with nothing allocated
  * per frame. The bitmap is remade when their on-screen size moves a bucket,
- * the style changes, they turn their back, or once a second, which also
- * picks up a sharper SVG raster once it has decoded and keeps that raster's
- * layers in use (raster.js evicts idle ones).
+ * the style changes, or they turn their back; in Comic and Modern also about
+ * once a second, which picks up a sharper SVG raster once it has decoded and
+ * keeps that raster's layers in use (raster.js evicts idle ones).
  *
  * Who counts as stopped is src/systems/stillness.js `isFrozen`.
  */
@@ -25,7 +25,11 @@ import { echoAt, ECHO_STEP } from "../systems/stillness.js";
 const BUCKET = 1.15;
 /** Past this half-height the bitmap is scaled up rather than remade larger (a person at arm's length). */
 const MAX_HALF = 320;
-/** Remake the bitmap this often while drawn, ms. */
+/**
+ * Comic and Modern remake the bitmap about this often while drawn, ms, a
+ * little apart per person so a roomful do not all bake in one frame.
+ * Legacy draws from code, not the raster cache: it has nothing to refresh.
+ */
 const REFRESH_MS = 1000;
 /** Motes of dust hanging round each person. */
 const MOTES = 12;
@@ -165,7 +169,8 @@ export function drawFrozenPerson(r, ctx, npc, screenX, centerY, halfH, dist, tim
   const away = Math.cos(npc.angle) * cry - Math.sin(npc.angle) * crx > 0.3;
   const style = getArtStyle();
   const bucket = Math.round(Math.log(Math.min(halfH, MAX_HALF)) / Math.log(BUCKET));
-  if (e.bucket !== bucket || e.style !== style || e.away !== away || time - e.at > REFRESH_MS || time < e.at) {
+  const stale = isModernArt() && (time - e.at > REFRESH_MS + (e.seed % 8) * 60 || time < e.at);
+  if (e.bucket !== bucket || e.style !== style || e.away !== away || stale) {
     const m = ctx.getTransform();
     const k = Math.hypot(m.a, m.b) || 1;
     if (bake(e, npc, BUCKET ** bucket, away, time, crx, cry, k)) {
