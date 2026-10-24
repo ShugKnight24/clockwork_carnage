@@ -30,6 +30,7 @@ import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { Npc } from "./npc.js";
 import { NPC_TYPES } from "../src/data/npcs.js";
 import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER } from "../src/data/levels/rooms/arena.js";
+import { arrive as startArrival, pendingArrivals, clearArrivals } from "../src/systems/arrival.js";
 import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
 import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
 import { ATRIUM_GAP } from "../src/data/levels/rooms/atrium.js";
@@ -346,9 +347,6 @@ const DRILL_BLIND_AT = [43.5, 6.5];
 const DRILL_VOLLEY = 1.1;
 /** Blind shots that earn the blind-fire part without a kill: it's about keeping heads down. */
 const DRILL_BLIND_SHOTS = 8;
-
-/** How long a telegraphed arrival glows before it opens (seconds). */
-const ARRIVE_LEAD = 1.5;
 
 /** The range's reload drill: active reloads it wants, and the Supervisor's word on a jam. */
 const RELOAD_GOAL = 2;
@@ -1150,7 +1148,8 @@ const LOGIC = {
         e.state = "chase";
         e.lastAttackTime = g.time + 1500;
         e._lastSeen = { x: g.player.x, y: g.player.y };
-        g.entities.push(e);
+        // The open doors are its telegraph: there at once, held from firing a moment.
+        startArrival(g, { x: e.x, y: e.y, enemy: e, via: "lift", tag: "glitch" });
         g.totalEnemies = (g.totalEnemies || 0) + 1;
         g.audio.powerFlicker?.();
         t.flickerUntil = t.clock + 0.5;
@@ -1231,7 +1230,7 @@ const LOGIC = {
       ]);
     },
     update: (t, g) => t.cleared(g, "cover"),
-    progress: (t, g) => `HOSTILES ${t.alive(g, "cover") + (t.c.pending || 0)}`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "cover")}`,
   },
 
   patch: {
@@ -1291,7 +1290,7 @@ const LOGIC = {
       ]);
     },
     update: (t, g) => t.cleared(g, "slowFire"),
-    progress: (t, g) => `DRONES ${t.alive(g, "slowFire") + (t.c.pending || 0)}`,
+    progress: (t, g) => `DRONES ${t.alive(g, "slowFire")}`,
     exit(t) {
       if (t.c.chronoKills > 0) t.say([["ARIA", "Did you see that? They never knew what time it was.", "excited"]]);
     },
@@ -1346,7 +1345,7 @@ const LOGIC = {
         [49.5, 9.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1") + (t.c.pending || 0)} · LIFT ▲ 30%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave1")} · LIFT ▲ 30%`,
   },
 
   wave2: {
@@ -1362,7 +1361,7 @@ const LOGIC = {
         [39.5, 3.5, "drone"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2") + (t.c.pending || 0)} · LIFT ▲ 60%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave2")} · LIFT ▲ 60%`,
   },
 
   wave3: {
@@ -1376,7 +1375,7 @@ const LOGIC = {
         [10.5, 9.5, "henchman"],
       ]);
     },
-    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3") + (t.c.pending || 0)} · LIFT ▲ 90%`,
+    progress: (t, g) => `HOSTILES ${t.alive(g, "wave3")} · LIFT ▲ 90%`,
   },
 
   extract: {
@@ -1532,6 +1531,7 @@ export class TutorialSystem {
     g.entities = [];
     g.dustMotes = null;
     g.projectiles = [];
+    clearArrivals(g);
 
     for (const p of TUTORIAL_MAP.pickups) {
       g.entities.push(new Pickup(p.x, p.y, p.type, p));
@@ -1585,6 +1585,8 @@ export class TutorialSystem {
     this.stepTime = performance.now();
     this.clock = 0;
     this.c = { kills: 0, heads: 0, aimedKills: 0, shotgunKills: 0, chronoKills: 0, slides: 0, dashes: 0 };
+    // What the last step called in and hasn't come yet stays away.
+    this._dropArrivals(g);
     this._postCard(index);
     this.doorOpened = false;
     this.pickedUp = false;
@@ -2284,6 +2286,7 @@ export class TutorialSystem {
     this.deaths++;
     g.entities = g.entities.filter((e) => e.type !== "enemy" && !e._tutTag);
     g.projectiles = [];
+    clearArrivals(g);
     this.course = null;
     p.alive = true;
     p.health = p.maxHealth;
@@ -2435,52 +2438,37 @@ export class TutorialSystem {
   }
 
   /**
-   * Real hostiles, each coming in through a way you can see coming: a tear
-   * (the air cracks, glows and crackles for `lead` seconds, then opens) or
-   * a vent ("vent": the grille bangs, dust, and it drops). Spots are
-   * [x, y, type, via?]. The step's `pending` counts the ones still on the
-   * way; `cleared` waits for them. This is the one door every post-breach
-   * arrival goes through, so a telegraphed-arrival system can replace it.
+   * Real hostiles, each coming in through a way you can see coming
+   * (src/systems/arrival.js): a tear (the air cracks, glows and crackles,
+   * then opens and it steps out) or a vent ("vent": the grille bangs, and
+   * it drops). Spots are [x, y, type, via?]; `lead` overrides how long the
+   * warning runs. Each joins the world as it steps out, unable to fire for
+   * a moment; until then it is pending, and alive() counts it, so a step
+   * can't be cleared while any are still coming.
    */
-  arrive(g, tag, spots, { lead = ARRIVE_LEAD, make = makeHostile, via = "tear" } = {}) {
+  arrive(g, tag, spots, { lead = null, make = makeHostile, via = "tear" } = {}) {
     if (this.c.spawned) return;
     this.c.spawned = true;
-    this.c.pending = (this.c.pending || 0) + spots.length;
-    const step = this.step;
     for (const [x, y, type, how = via] of spots) {
-      const ticks = Math.ceil(lead / 0.25);
-      for (let k = 0; k < ticks; k++) setTimeoutGame(this, k * 0.25, () => this.step === step && this._telegraph(g, x, y, how, k / ticks));
-      setTimeoutGame(this, lead, () => {
-        if (this.step !== step) return;
-        this.c.pending = Math.max(0, (this.c.pending || 0) - 1);
-        this._spawn(g, tag, x, y, type, make);
-        if (how === "vent") {
-          g.screenShake = Math.max(g.screenShake || 0, 2);
-          playChronoSound(g.audio, "collapse", { x, y, player: g.player });
-        } else {
-          this.tear(g, x, y);
-          playChronoSound(g.audio, "rift", { x, y, player: g.player });
-        }
-      });
+      const e = make(x, y, type);
+      e._tutTag = tag;
+      // A scripted fight comes at you: hunting from the moment it's out.
+      e.state = "chase";
+      e._lastSeen = { x: g.player.x, y: g.player.y };
+      g.totalEnemies = (g.totalEnemies || 0) + 1;
+      startArrival(g, { x, y, enemy: e, via: how, telegraph: lead, tag });
     }
   }
 
-  /** One beat of an arrival's warning: the tear brightening, or the vent rattling. */
-  _telegraph(g, x, y, how, k) {
-    if (how === "vent") {
-      g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 3, r: 150, g: 150, b: 150 }));
-      if (k > 0.5) playChronoSound(g.audio, "tick", { x, y, player: g.player });
-      return;
-    }
-    g._spawnParticlesAt?.(null, (ps) => spawnEnergyBurst(ps, x, y, { count: 3 + Math.round(k * 8), r: 190, g: 90, b: 255 }));
-    playChronoSound(g.audio, "tick", { x, y, player: g.player });
-    const L = { x, y, color: [190, 90, 255], radius: 2 + k * 2, baseIntensity: 0.4 + k, intensity: 0.4 + k, life: 0.3, maxLife: 0.3 };
-    g.lights?.push(L);
+  /** Drop what is still on its way from a step that's over (or a checkpoint's restart). */
+  _dropArrivals(g) {
+    if (!g.arrivals) return;
+    g.arrivals = g.arrivals.filter((a) => !(a.enemy?._tutTag && (a.phase === "wait" || a.phase === "telegraph")));
   }
 
   /** A step's arrivals have all come, and all are down. */
   cleared(g, tag) {
-    return !!this.c.spawned && !(this.c.pending > 0) && this.alive(g, tag) === 0;
+    return !!this.c.spawned && this.alive(g, tag) === 0;
   }
 
   /**
@@ -2692,9 +2680,9 @@ export class TutorialSystem {
     g.entities = g.entities.filter((e) => !(e._target && e._tutTag === tag));
   }
 
-  /** How many of a step's enemies are still up. */
+  /** How many of a step's enemies are still up, or still on their way in (arrive()). */
   alive(g, tag) {
-    let n = 0;
+    let n = pendingArrivals(g, (e) => e._tutTag === tag);
     for (const e of g.entities) if (e._tutTag === tag && e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0) n++;
     return n;
   }
