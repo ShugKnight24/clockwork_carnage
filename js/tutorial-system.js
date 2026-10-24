@@ -433,6 +433,16 @@ function makeHostile(x, y, type) {
   return e;
 }
 
+/**
+ * Every round in the air gone. Shots live in the entity list as well as
+ * g.projectiles: clearing only the latter left a sim's last rounds hanging,
+ * drawn and stopped, after it ended.
+ */
+function clearShots(g) {
+  g.projectiles = [];
+  g.entities = g.entities.filter((e) => !(e instanceof Projectile));
+}
+
 /** Run `fn` `seconds` from now on the prologue's clock (it stops when the game does). */
 function setTimeoutGame(t, seconds, fn) {
   t._timers.push({ at: t.clock + seconds, fn });
@@ -1015,7 +1025,7 @@ const LOGIC = {
     exit(t, g) {
       t.sim = null;
       t.clearTag(g, "coverDrill");
-      g.projectiles = [];
+      clearShots(g);
       t.say([["ARIA", "Like you've been doing it all your life.", "warm"]]);
     },
   },
@@ -1034,7 +1044,7 @@ const LOGIC = {
         // Integrity gone: the sim resets, and so do you.
         t.c.fails++;
         t.clearTag(g, "sim");
-        g.projectiles = [];
+        clearShots(g);
         sim.integrity = 100;
         sim.failed = false;
         t.c.wave = 0;
@@ -1068,7 +1078,7 @@ const LOGIC = {
     exit(t, g) {
       t.sim = null;
       t.clearTag(g, "sim");
-      g.projectiles = [];
+      clearShots(g);
     },
   },
 
@@ -1204,6 +1214,7 @@ const LOGIC = {
       if (t.c.armed && !t.c.gone && t.clock - t.c.at > 6 && t.sup?.active) {
         t.c.gone = true;
         t.lift(g, true);
+        t.sup.thaw?.(); // torn free of 06:47 by now, however fast you got here
         t.sup.walk(SUP_ROUTES.leave, {
           speed: 3.4,
           then: (sup) => {
@@ -1536,7 +1547,7 @@ export class TutorialSystem {
     g.player.currentWeapon = -1;
     g.entities = [];
     g.dustMotes = null;
-    g.projectiles = [];
+    clearShots(g);
     clearArrivals(g);
 
     for (const p of TUTORIAL_MAP.pickups) {
@@ -2089,7 +2100,13 @@ export class TutorialSystem {
     } else if (n === 2) {
       // The PA says its last again, word for word; Mendez pours the same
       // coffee twice.
-      if (this._lastPA) this.say([["PA", this._lastPA, "calm"]], { keep: true });
+      // It skips, too, so it reads as the station and not as a repeat.
+      if (this._lastPA) {
+        const cut = this._lastPA.slice(0, Math.floor(this._lastPA.length * 0.7)).trimEnd();
+        this.say([["PA", `${cut}— ${this._lastPA}`, "calm"]], { keep: true });
+        g.glitchEffect = Math.max(g.glitchEffect || 0, 0.4);
+        g.audio.powerFlicker?.();
+      }
       const mendez = this.person(g, "mendez");
       const at = PEOPLE.mendez.at;
       const pour = () => {
@@ -2104,7 +2121,7 @@ export class TutorialSystem {
       setTimeoutGame(this, 2.6, pour);
       const p = g.player;
       const sees = Math.hypot(at[0] - p.x, at[1] - p.y) < 10 && hasLineOfSight(g.map, p.x, p.y, at[0], at[1]);
-      setTimeoutGame(this, 4, () => this.say(sees ? odd.lines : odd.away, { keep: true }));
+      setTimeoutGame(this, 4, () => !this.frozen && this.say(sees ? odd.lines : odd.away, { keep: true }));
     } else if (n === 3) {
       // A hologram the sim never loaded, by Lift B; the lights stutter on
       // the Engine's beat.
@@ -2118,7 +2135,7 @@ export class TutorialSystem {
       g.entities.push(e);
       setTimeoutGame(this, 14, () => this.clearTag(g, "oddity"));
       for (const k of [0, 0.9, 1.8]) setTimeoutGame(this, k, () => this.flicker(g, 0.3));
-      setTimeoutGame(this, 1.2, () => this.say(odd.lines, { keep: true }));
+      setTimeoutGame(this, 1.2, () => !this.frozen && this.say(odd.lines, { keep: true }));
     }
   }
 
@@ -2291,7 +2308,7 @@ export class TutorialSystem {
     this.logic?.exit?.(this, g);
     this.deaths++;
     g.entities = g.entities.filter((e) => e.type !== "enemy" && !e._tutTag);
-    g.projectiles = [];
+    clearShots(g);
     clearArrivals(g);
     this.course = null;
     p.alive = true;
@@ -2602,6 +2619,9 @@ export class TutorialSystem {
   minute(g) {
     if (this.frozen) return;
     this.frozen = true;
+    // What the morning still had to say (an oddity's lines, a trial's
+    // comment) is stale now: the people who'd say it are stopped.
+    this.script = this.script.filter((s) => s.step !== null);
     this.say([["PA", "The time is six forty-seven.", "calm"]]);
     g.screenShake = Math.max(g.screenShake || 0, 6);
     g.glitchEffect = 1;
@@ -2612,6 +2632,23 @@ export class TutorialSystem {
     // Mid-step, mid-stamp, mid-pour: each stops in the instant, not after it.
     for (const id of Object.keys(PEOPLE)) this.person(g, id).freeze();
     this._stillLife(g);
+    // The Supervisor stops with them, then tears free: his old C-series
+    // plate, like the squads', half takes the anchor. It's why he can go
+    // down to them, and the first sign of what "half held" means.
+    const sup = this.sup;
+    if (sup?.active) {
+      sup.freeze();
+      setTimeoutGame(this, 2.4, () => {
+        if (!sup.active) return;
+        sup.thaw();
+        g.glitchEffect = Math.max(g.glitchEffect || 0, 0.5);
+        g.audio.powerFlicker?.();
+        this.say([
+          ["ARIA", "The Supervisor's moving. Barely.", "afraid"],
+          ["SUPERVISOR", "Old plate under the coat. C-series. Half of it still takes.", "afraid"],
+        ]);
+      });
+    }
   }
 
   /** What the pulse caught in the air, put back where it hangs. */

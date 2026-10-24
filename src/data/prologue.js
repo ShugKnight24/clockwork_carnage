@@ -70,7 +70,7 @@ export const PROLOGUE_ODDITIES = [
   // 1: the corridor clocks read 06:47 for a moment, then right again. Nobody notices.
   { pa: "Engineering: calibration thirty-one percent. Thank you for your patience." },
   // 2: the PA says it again, word for word; Mendez pours the same coffee twice.
-  { repeat: true, lines: [[ARIA, "Did he just...?", "curious"]], away: [[ARIA, "Did the PA just say that twice?", "curious"]] },
+  { repeat: true, lines: [[ARIA, "The PA just said that twice. And Mendez... did he just pour that again?", "curious"]], away: [[ARIA, "Did the PA just say that twice?", "curious"]] },
   // 3: a hologram the sim hall never loaded; the lights stutter on the Engine's beat.
   {
     lines: [
@@ -412,7 +412,7 @@ export const PROLOGUE_STEPS = [
     defer: true,
     checkpoint: false,
     lines: [
-      [SUP, "Rasczak, report. Rasczak! ...All units, all units: breach on the Engine level. Something is coming up out of the chamber.", "afraid"],
+      [SUP, "Rasczak, report. Rasczak! ...All units, all units: breach, sim hall, Lift B. It came up the shaft from the Engine level.", "afraid"],
       [SUP, "Cadet, you stay here. That's an order. Those are my people down there.", "urgent"],
       [SUP, "Breach, every sector, they're already insi—", "afraid", { radio: true }],
       [ARIA, "Lost him. Lost the whole network. Whatever came up that shaft, more will follow. His office has the lift override. Move.", "urgent"],
@@ -426,9 +426,9 @@ export const PROLOGUE_STEPS = [
     title: "TAKE COVER — FIGHT BACK",
     color: "#ff2244",
     hint: {
-      key: (k) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${k("crouch")} to crouch behind low cover.`,
-      touch: "They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold CROUCH behind low cover.",
-      pad: (b) => `They shoot back. Put walls between you and them, then lean out to fire. The red arc shows where you're hit from. Hold ${b("crouch")} behind low cover.`,
+      key: (k) => `These ones are real. Press ${k("cover")} at a wall or a low block to take cover, aim to pop out and fire. The red arc shows where you're hit from.`,
+      touch: "These ones are real. Tap COVER at a wall or a low block to take cover, aim to pop out and fire. The red arc shows where you're hit from.",
+      pad: (b) => `These ones are real. Push into a wall or a low block and press ${b("dash")} to take cover, aim to pop out and fire. The red arc shows where you're hit from.`,
     },
     lines: [
       [ARIA, "Watch the air. Where it cracks and glows, something's coming through.", "urgent"],
