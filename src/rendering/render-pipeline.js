@@ -13,7 +13,7 @@ import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
-import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
+import { renderChronoWorld, renderChronoScreen, renderArrivals } from "./chrono-fx.js";
 import { renderDirector } from "../cinematic/director.js";
 import { drawCoverLip } from "../ui/cover-hud.js";
 
@@ -637,6 +637,8 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
     );
     // Chronos: Foresight, the Time-Lock, the echo, set pieces, the Hound.
     renderChronoWorld(game, game.renderer, renderPlaneMul, yShift);
+    // Tears and vents enemies are coming through, in every mode (arrival.js).
+    if (game.arrivals?.length) renderArrivals(game, game.renderer, renderPlaneMul, yShift);
   } else {
     ctx.fillStyle = "#020610";
     ctx.fillRect(0, 0, w, h);

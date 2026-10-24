@@ -190,6 +190,8 @@ import {
 } from "../src/systems/level-debrief.js";
 import { liftLockdown } from "../src/systems/exit-cells.js";
 import { lowHealthSeverity } from "../src/systems/player-feedback.js";
+import { stillnessAt } from "../src/systems/stillness.js";
+import { arrive, updateArrivals, pendingArrivals, QUICK_TEAR } from "../src/systems/arrival.js";
 import { LevelClock } from "../src/systems/level-clock.js";
 import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
 import { activeReloadOf, reloadPress, updateReloads } from "../src/systems/reload.js";
@@ -266,6 +268,12 @@ export class Game {
     /** Cover counters since boot, for the prologue to teach with (src/systems/cover-play.js). */
     this.coverStats = createCoverStats();
     this.entities = [];
+    // Enemies on their way in through a tear or a vent (src/systems/arrival.js).
+    this.arrivals = [];
+    // The AI's summons arrive through a short tear in the campaign; made
+    // once, so the per-frame AI context allocates nothing for them.
+    this._aiArrive = (e) => arrive(this, { enemy: e, x: e.x, y: e.y, telegraph: QUICK_TEAR });
+    this._aiArriving = (pred) => pendingArrivals(this, pred);
     this.entityGrid = new SpatialGrid(2);
     this.dustMotes = null;
     this.projectiles = [];
@@ -2203,6 +2211,10 @@ export class Game {
     this.audio.updateLowHealth?.(
       this.state === GameState.PLAYING ? lowHealthSeverity(this.player?.health, this.player?.maxHealth) : 0,
     );
+    // Beside someone the pulse stopped the mix hushes and a hum comes up.
+    this.audio.updateStillness?.(
+      this.state === GameState.PLAYING && this.player ? stillnessAt(this.entities, this.player.x, this.player.y) : 0,
+    );
 
     // FPS counter
     this.frameCount++;
@@ -2357,6 +2369,8 @@ export class Game {
 
     // Update enemies
     const _profileEnemiesStart = this.profiling ? performance.now() : 0;
+    // Arrivals first: one that steps out this frame is in the world for the AI.
+    _safeCall("Arrivals", () => updateArrivals(this, dt));
     _safeCall("AI", () => this.updateEnemies(dt));
     if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
@@ -3022,6 +3036,8 @@ export class Game {
         voiceProfile: this.getVoiceProfile(),
         noclip: !!this._noclip,
         time: this.time,
+        // The people the pulse stopped are solid: the player goes round them.
+        entities: this.entities,
       },
       dt,
     );
@@ -3141,6 +3157,9 @@ export class Game {
         hunt: this.mode === "arena" || this.mode === "meltdown" || this.mode === "tutorial",
         // The shot fired this frame, which idle enemies in earshot hear.
         noise: this._noise,
+        // A summons in the campaign comes through a tear, not out of the air.
+        arrive: this.mode === "campaign" ? this._aiArrive : null,
+        arriving: this._aiArriving,
       },
       dt,
     );

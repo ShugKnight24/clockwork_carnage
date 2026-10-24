@@ -265,6 +265,8 @@ export class AISystem {
       chrono,
       hunt = false,
       noise = null,
+      arrive = null,
+      arriving = null,
     } = ctx;
     this._clock += dt;
     // The player's velocity, for leading shots: smoothed over a few frames
@@ -306,6 +308,15 @@ export class AISystem {
       if (e.type !== "enemy" || !e.active || e.dissolving) continue;
       // The Final Form's stopped time holds everyone else, and drives him.
       if (chrono?.frozen?.(e)) continue;
+      // Still stepping out of a tear or dropping from a vent (arrival.js),
+      // or just out: it gets its bearings, facing you, before it does
+      // anything (fire, charge, bristle), so an arrival in front of you
+      // cannot land a hit before you have seen it land.
+      if (e._arriving) continue;
+      if (e._armedAt > time) {
+        e.angle = Math.atan2(player.y - e.y, player.x - e.x);
+        continue;
+      }
 
       // The enemy's own clock: a shift applies its chronoMultiplier once.
       const rate = enemyTimeRate(e, player, timeScale);
@@ -806,7 +817,10 @@ export class AISystem {
           summon._summoned = true;
           summon._summoner = e;
           if (channelled) summon.alertRange = 99;
-          entities.push(summon);
+          // Where the game shows arrivals (the campaign), a summons comes
+          // through a tear (arrival.js); elsewhere it is simply there.
+          if (arrive) arrive(summon);
+          else entities.push(summon);
           fx.totalEnemiesAdded++;
         };
         if (e._channel > 0) {
@@ -826,7 +840,9 @@ export class AISystem {
                 s._summoned &&
                 (!channelled || s._summoner === e) &&
                 s.state !== "dead",
-            ).length;
+            ).length +
+              // Still on their way through a tear: they count against the cap.
+              (arriving?.((s) => s._summoned && (!channelled || s._summoner === e)) ?? 0);
             if (summonCount < (e.def.summonMax || 3)) {
               if (channelled) {
                 e._channel = e.def.summonChannel;

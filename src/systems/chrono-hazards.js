@@ -46,6 +46,7 @@ import { Enemy, Projectile } from "../../js/entities.js";
 import { getAct } from "../data/campaign/acts.js";
 import { SEAL_TILE, setPieceFor } from "../data/campaign/set-pieces.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
+import { arrive, pendingArrivals } from "./arrival.js";
 
 /** The level clock's rate while the player shifts. */
 export const HAZARD_CHRONO = 0.15;
@@ -365,7 +366,12 @@ export class ChronoHazards {
     }
   }
 
-  _spawnTeach(game) {
+  /**
+   * The teach room's enemies. At load they are simply there; `visibly` (the
+   * lesson come round again, with the player in the room) they come back
+   * through tears (arrival.js) instead of appearing in front of you.
+   */
+  _spawnTeach(game, visibly = false) {
     const t = this.teach;
     if (!t?.spawn) return 0;
     const diff = game.getDifficultyMultipliers?.() ?? { healthMul: 1, damageMul: 1, speedMul: 1 };
@@ -376,7 +382,8 @@ export class ChronoHazards {
       e.maxHealth = e.health;
       e.def = { ...e.def, damage: Math.floor(e.def.damage * diff.damageMul * scale), speed: e.def.speed * diff.speedMul };
       e._teach = true;
-      game.entities.push(e);
+      if (visibly) arrive(game, { enemy: e, x: s.x, y: s.y, via: "tear", tag: "teach" });
+      else game.entities.push(e);
     }
     return t.spawn.length;
   }
@@ -476,9 +483,13 @@ export class ChronoHazards {
       if (t.goal.kind === "reach" && cellIn(t.goal.rect, p.x, p.y)) this.notify("reach");
       if (t.goal.kind === "catches") t.progress = game.chronoPowers?.caughtTotal ?? t.progress;
       if (this._goalMet()) this._completeTeach(game);
-      else if (t.goal.kind === "shiftKills" && t.spawn && !game.entities.some((e) => e._teach && e.active && e.state !== "dead")) {
+      else if (
+        t.goal.kind === "shiftKills" && t.spawn &&
+        !game.entities.some((e) => e._teach && e.active && e.state !== "dead") &&
+        !pendingArrivals(game, (e) => e._teach)
+      ) {
         // Killed them all without shifting: the lesson comes round again.
-        game.totalEnemies = (game.totalEnemies ?? 0) + this._spawnTeach(game);
+        game.totalEnemies = (game.totalEnemies ?? 0) + this._spawnTeach(game, true);
       }
     }
     this._prev = { x: p.x, y: p.y };

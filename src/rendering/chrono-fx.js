@@ -16,6 +16,10 @@
  *               of afterimages and scorched footprints; solid while you shift;
  *               its tells (the lunge's lane, the quills' fan) for everyone
  *
+ * `renderArrivals` draws the ways enemies come in (src/systems/arrival.js):
+ * a tear's crackling crack and the lens it splits into, a ceiling vent's
+ * shaking grille and the panel hanging open, in every mode.
+ *
  * `renderChronoScreen` adds the screen-space parts: the stasis room's
  * desaturation and a crimson edge when Resonance is high.
  */
@@ -24,6 +28,7 @@ import { hazardState } from "../systems/chrono-hazards.js";
 import { pendingReplay, FORM2 } from "../systems/boss-form2.js";
 import { quillFan } from "../systems/ai.js";
 import { FORMS } from "../systems/paradox-forms.js";
+import { telegraphK, LINGER, VENT_BANGS, ARRIVALS } from "../systems/arrival.js";
 
 const FLOOR = 0.5;
 const WAIST = 0.12;
@@ -558,6 +563,8 @@ function drawRifts(ctx, r, game, planeMul, yShift) {
   const cp = game.chronoPowers;
   for (const rift of cp?.rifts ?? []) {
     const age = cp.clock - rift.born;
+    // Not open yet: its hunters' tears are still cracking (arrival.js).
+    if (age < 0) continue;
     const open = Math.min(1, age / 0.4) * Math.min(1, (2.5 - age) / 0.6);
     const foot = proj(r, game, planeMul, yShift, rift.x, rift.y, FLOOR);
     const top = proj(r, game, planeMul, yShift, rift.x, rift.y, -0.6);
@@ -746,6 +753,230 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
     ctx.restore();
   }
 }
+
+// ── Arrivals (src/systems/arrival.js) ─────────────────────────────────────
+
+/** A stable 0..1 from an integer, for the crack's jags and the vent's dust. */
+function hash01(n) {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+const TEAR_TOP = -0.42;
+const CEILING = -0.5;
+const VENT_HALF = 0.26;
+const CRACK_JOINTS = 10;
+
+/**
+ * A tear: a jagged crack of violet-white light standing in the air, taller
+ * and brighter as its telegraph runs and re-jagged twenty times a second so
+ * it crackles; it splits into a lens while the enemy steps through, and
+ * leaves a fading scar.
+ */
+function drawTear(ctx, r, game, planeMul, yShift, a, now) {
+  const foot = proj(r, game, planeMul, yShift, a.tx, a.ty, FLOOR);
+  const head = proj(r, game, planeMul, yShift, a.tx, a.ty, TEAR_TOP);
+  if (!foot || !head || !visible(r, foot)) return;
+  const hgt = foot.y - head.y;
+  const k = telegraphK(a);
+  let glow = 0.25 + 0.75 * k * k;
+  let open = 0;
+  let span = (0.2 + 0.8 * k) * hgt * 0.5;
+  if (a.phase === "step") {
+    const s = Math.min(1, (a.t - a.telegraph) / a.step);
+    open = Math.sin(Math.PI * Math.min(1, s * 1.2));
+    glow = 1;
+    span = hgt * 0.5;
+  } else if (a.phase === "done") {
+    const s = 1 - Math.min(1, (a.t - a.doneAt) / LINGER);
+    glow = 0.45 * s;
+    span = hgt * 0.5 * s;
+    if (glow <= 0.01) return;
+  }
+  const midY = (foot.y + head.y) / 2;
+  const x = foot.x;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  // The air round it catching its light, soft-edged.
+  const rx = hgt * 0.22 * (0.6 + glow);
+  const halo = ctx.createRadialGradient(x, midY, 0, x, midY, rx);
+  halo.addColorStop(0, "rgba(150,100,255,0.55)");
+  halo.addColorStop(1, "rgba(150,100,255,0)");
+  ctx.globalAlpha = 0.25 + 0.6 * glow;
+  ctx.fillStyle = halo;
+  ctx.save();
+  ctx.translate(x, midY);
+  ctx.scale(1, (span * 1.2) / rx);
+  ctx.translate(-x, -midY);
+  ctx.fillRect(x - rx, midY - rx, rx * 2, rx * 2);
+  ctx.restore();
+  if (open > 0.01) {
+    // Split open: the lens it comes through.
+    ctx.globalAlpha = 0.85 * open;
+    ctx.fillStyle = "#c9a8ff";
+    ctx.beginPath();
+    ctx.ellipse(x, midY, hgt * 0.14 * open, span, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = open;
+    ctx.fillStyle = "#fff4ff";
+    ctx.beginPath();
+    ctx.ellipse(x, midY, hgt * 0.05 * open, span * 0.92, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The crack: a wide violet stroke and a white-hot core along the same jags.
+  const seed = Math.floor(now * 20) + a.id * 97;
+  const jag = hgt * 0.06 * (0.4 + glow);
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.globalAlpha = pass ? 0.55 + 0.45 * glow : 0.3 + 0.5 * glow;
+    ctx.strokeStyle = pass ? "#f6ecff" : "#a06cff";
+    ctx.lineWidth = Math.max(1, hgt * (pass ? 0.012 : 0.04) * (0.6 + 0.6 * glow));
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for (let i = 0; i <= CRACK_JOINTS; i++) {
+      const yy = midY - span + (2 * span * i) / CRACK_JOINTS;
+      const end = i === 0 || i === CRACK_JOINTS;
+      const xx = x + (end ? 0 : (hash01(seed * 13 + i) - 0.5) * jag);
+      if (i) ctx.lineTo(xx, yy);
+      else ctx.moveTo(xx, yy);
+    }
+    ctx.stroke();
+  }
+  // Sparks spitting off it as it comes apart.
+  if (a.phase === "telegraph" && k > 0.35) {
+    ctx.fillStyle = "#f2e6ff";
+    const n = Math.floor(2 + 6 * k);
+    for (let i = 0; i < n; i++) {
+      const sx = x + (hash01(seed * 7 + i * 3) - 0.5) * hgt * 0.35 * k;
+      const sy = midY + (hash01(seed * 5 + i * 11) - 0.5) * span * 2;
+      const sz = Math.max(1, hgt * 0.008);
+      ctx.globalAlpha = 0.5 + 0.5 * hash01(seed + i);
+      ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
+    }
+  }
+  ctx.restore();
+}
+
+/** A ceiling vent: the grille, shaken by each bang and shedding dust, then hanging open. */
+function drawVent(ctx, r, game, planeMul, yShift, a, now) {
+  const c = proj(r, game, planeMul, yShift, a.tx, a.ty, CEILING);
+  if (!c || !visible(r, c)) return;
+  const open = a.phase === "step" || a.phase === "done";
+  if (a.phase === "done" && a.t - a.doneAt > LINGER) return;
+  // Each bang knocks the panel about for a moment.
+  let shake = 0;
+  for (const b of VENT_BANGS) {
+    const since = a.t - b * (a.telegraph / ARRIVALS.vent.telegraph);
+    if (since >= 0 && since < 0.18) shake = Math.max(shake, 1 - since / 0.18);
+  }
+  const jx = shake ? (hash01(Math.floor(now * 60)) - 0.5) * 0.05 * shake : 0;
+  const jy = shake ? (hash01(Math.floor(now * 60) + 7) - 0.5) * 0.05 * shake : 0;
+  const x0 = a.tx - VENT_HALF + jx;
+  const x1 = a.tx + VENT_HALF + jx;
+  const y0 = a.ty - VENT_HALF + jy;
+  const y1 = a.ty + VENT_HALF + jy;
+  const p00 = proj(r, game, planeMul, yShift, x0, y0, CEILING);
+  const p10 = proj(r, game, planeMul, yShift, x1, y0, CEILING);
+  const p11 = proj(r, game, planeMul, yShift, x1, y1, CEILING);
+  const p01 = proj(r, game, planeMul, yShift, x0, y1, CEILING);
+  if (!p00 || !p10 || !p11 || !p01) return;
+  const quad = (a0, b0, c0, d0) => {
+    ctx.beginPath();
+    ctx.moveTo(a0.x, a0.y);
+    ctx.lineTo(b0.x, b0.y);
+    ctx.lineTo(c0.x, c0.y);
+    ctx.lineTo(d0.x, d0.y);
+    ctx.closePath();
+  };
+  ctx.save();
+  quad(p00, p10, p11, p01);
+  ctx.fillStyle = open ? "#050608" : "#20262f";
+  ctx.fill();
+  ctx.strokeStyle = "#4a5361";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  if (!open) {
+    // The grille's slats.
+    ctx.strokeStyle = "#11151b";
+    for (let i = 1; i < 5; i++) {
+      const t = i / 5;
+      ctx.beginPath();
+      ctx.moveTo(p00.x + (p01.x - p00.x) * t, p00.y + (p01.y - p00.y) * t);
+      ctx.lineTo(p10.x + (p11.x - p10.x) * t, p10.y + (p11.y - p10.y) * t);
+      ctx.stroke();
+    }
+  } else {
+    // The panel, swung down on its hinge along the far edge, so it hangs
+    // behind what drops rather than in front of it.
+    const p = game.player;
+    const alongX = Math.abs(a.tx - p.x) >= Math.abs(a.ty - p.y);
+    const sx = Math.sign(a.tx - p.x) || 1;
+    const sy = Math.sign(a.ty - p.y) || 1;
+    const hx0 = alongX ? a.tx + sx * VENT_HALF : x0;
+    const hy0 = alongX ? y0 : a.ty + sy * VENT_HALF;
+    const hx1 = alongX ? hx0 : x1;
+    const hy1 = alongX ? y1 : hy0;
+    const ox = alongX ? sx * 0.07 : 0;
+    const oy = alongX ? 0 : sy * 0.07;
+    const h0 = proj(r, game, planeMul, yShift, hx0, hy0, CEILING);
+    const h1 = proj(r, game, planeMul, yShift, hx1, hy1, CEILING);
+    const d0 = proj(r, game, planeMul, yShift, hx0 + ox, hy0 + oy, CEILING + 0.26);
+    const d1 = proj(r, game, planeMul, yShift, hx1 + ox, hy1 + oy, CEILING + 0.26);
+    if (h0 && h1 && d0 && d1) {
+      quad(h0, h1, d1, d0);
+      ctx.fillStyle = "#2b323d";
+      ctx.fill();
+      ctx.strokeStyle = "#4a5361";
+      ctx.stroke();
+    }
+  }
+  // Dust shaken loose, falling under it from the first bang on.
+  const since = a.t - VENT_BANGS[0] * (a.telegraph / ARRIVALS.vent.telegraph);
+  if (since > 0) {
+    ctx.fillStyle = "#b9b2a4";
+    for (let i = 0; i < 9; i++) {
+      const fall = (since * 0.9 + hash01(a.id * 17 + i)) % 1;
+      const pt = proj(r, game, planeMul, yShift, a.tx + (hash01(i * 5 + a.id) - 0.5) * 0.45, a.ty + (hash01(i * 9 + a.id) - 0.5) * 0.45, CEILING + fall);
+      if (!pt) continue;
+      const sz = Math.min(3, Math.max(1, (r.height / pt.depth) * 0.005));
+      ctx.globalAlpha = 0.65 * (1 - fall);
+      ctx.fillRect(pt.x - sz / 2, pt.y - sz / 2, sz, sz);
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * The ways in enemies are taking (arrival.js): every arrival's tear or vent,
+ * through the raycaster's camera and occluded by its walls. Runs in every
+ * mode, not only the campaign: the prologue's fights arrive this way too.
+ */
+export function renderArrivals(game, r, planeMul, yShift) {
+  const list = game.arrivals;
+  if (!list?.length || !game.map?.grid || !r?.ctx) return;
+  const ctx = r.ctx;
+  const now = performance.now() / 1000;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    if (a.phase === "wait" || a.map !== game.map) continue;
+    if (a.via === "tear") drawTear(ctx, r, game, planeMul, yShift, a, now);
+    else if (a.via === "vent") drawVent(ctx, r, game, planeMul, yShift, a, now);
+    // The tear or the vent is drawn after the scene's sprites, so the one
+    // that came through is drawn again over it while it lingers: it steps
+    // out of the light, or drops past the panel, in front of either.
+    if ((a.phase === "step" || a.phase === "done") && a.enemy.active !== false && !a.enemy.dissolving) {
+      _stepping[0] = a.enemy;
+      const shift = yShift | 0;
+      ctx.save();
+      if (shift) ctx.translate(0, shift);
+      r.renderSprites(game.player, _stepping, game.time, planeMul, undefined, undefined, game.player._drawDistance);
+      ctx.restore();
+      _stepping[0] = null;
+    }
+  }
+}
+
+const _stepping = [null];
 
 /** Screen-space Chronos: stasis desaturation, a crimson edge at high Resonance, the rewind flash. */
 export function renderChronoScreen(game, ctx, w, h) {

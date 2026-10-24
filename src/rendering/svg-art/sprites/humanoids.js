@@ -549,6 +549,8 @@ function officer() {
     npcWalk(),
     pose({ armL: { sh: 4, el: 2 } }, SALUTE),
     pose({ armL: { sh: 8, el: 6 } }, POINT),
+    // The pulse catches officers too: the civilians' mid-stride stop.
+    { frozen: CIV_POSES.frozen },
   );
   const sleeve = { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "", upW: 11, foreW: 9.5 };
   const poses = build(HUMAN, table, (R, name) => {
@@ -592,6 +594,7 @@ function officerKit() {
     npcWalk({ fwd: { sh: 5, el: 28, kf: 0.84 }, back: { sh: 20, el: 4 }, mid: { sh: 12, el: 12 }, armR: slung }),
     pose({ armL: { sh: 4, el: 2 } }, SALUTE),
     pose({ armL: { sh: 8, el: 6 } }, POINT),
+    { frozen: { ...CIV_POSES.frozen, armR: slung } },
   );
   const poses = build(HUMAN, table, (R, name) => {
     const { shY, hipY } = R;
@@ -646,6 +649,7 @@ function supervisor() {
     npcWalk({ fwd: { sh: 4, el: 26, kf: 0.86 }, back: { sh: 12, el: 8 }, mid: { sh: 7, el: 16 } }),
     pose({ armL: { sh: 4, el: 4 } }, SALUTE),
     pose({ armL: { sh: 6, el: 18 } }, POINT),
+    { frozen: CIV_POSES.frozen },
   );
   const poses = build(HUMAN, table, (R, name) => {
     const { shY, hipY } = R;

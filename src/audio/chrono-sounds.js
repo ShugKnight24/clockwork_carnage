@@ -20,6 +20,16 @@ export const CHRONO_SOUNDS = {
   catch: [[0, "tone", 2400, 0.06, "sine", 0.06]],
   whisper: [[0, "noise", 0.9, 0.06, 400, "lowpass"], [0, "tone", 55, 0.9, "sine", 0.1]],
   rift: [[0, "tone", 70, 0.8, "sawtooth", 0.14], [0.1, "noise", 0.7, 0.18, 900, "lowpass"], [0.25, "tone", 104, 0.6, "square", 0.06]],
+  // A tear coming (src/systems/arrival.js): a rising hum under a crackle
+  // that quickens and brightens, then the split and the step through.
+  tearRise: [[0, "tone", 98, 0.5, "sine", 0.05], [0.5, "tone", 131, 0.5, "sine", 0.06], [1.0, "tone", 175, 0.5, "sine", 0.07]],
+  crackle: [[0, "noise", 0.025, 0.1, 3800, "highpass"]],
+  crackleHot: [[0, "noise", 0.03, 0.16, 5200, "highpass"], [0, "tone", 2600, 0.02, "square", 0.025]],
+  tearOpen: [[0, "noise", 0.09, 0.22, 2600, "bandpass"], [0, "tone", 220, 0.2, "sawtooth", 0.07], [0.04, "tone", 82, 0.5, "sine", 0.14]],
+  // Something in the ceiling: a bang on a panel, another, the drop and the landing.
+  ventBang: [[0, "noise", 0.08, 0.3, 700, "lowpass"], [0, "tone", 140, 0.12, "square", 0.06], [0.03, "tone", 96, 0.18, "triangle", 0.08]],
+  ventDrop: [[0, "noise", 0.12, 0.22, 1600, "bandpass"], [0, "tone", 180, 0.1, "square", 0.05]],
+  ventLand: [[0, "noise", 0.18, 0.32, 380, "lowpass"], [0, "tone", 55, 0.25, "sine", 0.16]],
   // The Hound: a dry clock tick with a metallic ring under it.
   tick: [[0, "noise", 0.03, 0.22, 3200, "bandpass"], [0, "tone", 2100, 0.05, "square", 0.05]],
   vent: [[0, "noise", 0.4, 0.12, 1200, "lowpass"]],
