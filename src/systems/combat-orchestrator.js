@@ -24,6 +24,7 @@ import { Projectile, Enemy, Pickup } from "../../js/entities.js";
 import { aimAnglesForGame, currentSpread } from "./aim.js";
 import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
+import { arrive, QUICK_TEAR } from "./arrival.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
 const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
@@ -470,7 +471,10 @@ export function onEnemyKill(game, enemy) {
         clone._isClone = true;
         clone.health = Math.max(6, Math.floor(clone.health * 0.5));
         clone.maxHealth = clone.health;
-        game.entities.push(clone);
+        // In the campaign it splits off through a short tear where you can
+        // see it (arrival.js), rather than popping up beside the body.
+        if (game.mode === "campaign") arrive(game, { enemy: clone, x: sx, y: sy, telegraph: QUICK_TEAR });
+        else game.entities.push(clone);
         game.totalEnemies++;
       }
     }

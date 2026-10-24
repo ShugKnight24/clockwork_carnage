@@ -1632,7 +1632,13 @@ export class Renderer {
         }
       }
 
-      // Draw the entity
+      // Draw the entity. One dropping out of a ceiling vent (arrival.js
+      // liftZ, a share of its height) is drawn that far up.
+      const lift = entity.liftZ > 0 ? entity.liftZ * spriteHeight : 0;
+      if (lift) {
+        ctx.save();
+        ctx.translate(0, -lift);
+      }
       this.drawEntity(
         ctx,
         entity,
@@ -1646,6 +1652,7 @@ export class Renderer {
         transformY,
         time,
       );
+      if (lift) ctx.restore();
     }
   }
 

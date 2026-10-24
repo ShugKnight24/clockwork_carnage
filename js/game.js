@@ -184,6 +184,7 @@ import {
 import { liftLockdown } from "../src/systems/exit-cells.js";
 import { lowHealthSeverity } from "../src/systems/player-feedback.js";
 import { stillnessAt } from "../src/systems/stillness.js";
+import { arrive, updateArrivals, pendingArrivals, QUICK_TEAR } from "../src/systems/arrival.js";
 import { LevelClock } from "../src/systems/level-clock.js";
 import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
 export { GameState };
@@ -256,6 +257,12 @@ export class Game {
     this.cutsceneEngine = null; // Lazy-loaded on first cutscene
     this.player = new Player();
     this.entities = [];
+    // Enemies on their way in through a tear or a vent (src/systems/arrival.js).
+    this.arrivals = [];
+    // The AI's summons arrive through a short tear in the campaign; made
+    // once, so the per-frame AI context allocates nothing for them.
+    this._aiArrive = (e) => arrive(this, { enemy: e, x: e.x, y: e.y, telegraph: QUICK_TEAR });
+    this._aiArriving = (pred) => pendingArrivals(this, pred);
     this.entityGrid = new SpatialGrid(2);
     this.dustMotes = null;
     this.projectiles = [];
@@ -2327,6 +2334,8 @@ export class Game {
 
     // Update enemies
     const _profileEnemiesStart = this.profiling ? performance.now() : 0;
+    // Arrivals first: one that steps out this frame is in the world for the AI.
+    _safeCall("Arrivals", () => updateArrivals(this, dt));
     _safeCall("AI", () => this.updateEnemies(dt));
     if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
@@ -3103,6 +3112,9 @@ export class Game {
         hunt: this.mode === "arena" || this.mode === "meltdown" || this.mode === "tutorial",
         // The shot fired this frame, which idle enemies in earshot hear.
         noise: this._noise,
+        // A summons in the campaign comes through a tear, not out of the air.
+        arrive: this.mode === "campaign" ? this._aiArrive : null,
+        arriving: this._aiArriving,
       },
       dt,
     );

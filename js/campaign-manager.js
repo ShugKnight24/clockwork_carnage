@@ -30,6 +30,7 @@ import { EXIT_GATES, lockdownFor, planLockdown, planPowerCells, powerCellsFor } 
 import { setPieceFor } from "../src/data/campaign/set-pieces.js";
 import { Pickup } from "./entities.js";
 import { playLoreThen } from "../src/cinematic/films.js";
+import { clearArrivals } from "../src/systems/arrival.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -273,6 +274,8 @@ export class CampaignManager {
     g.player.angle = level.playerStart.dir;
     g.player.alive = true;
     g.entities = [];
+    // Nothing half-way through a tear carries over from the last level.
+    clearArrivals(g);
     g.dustMotes = null;
     g.projectiles = [];
     g._chronoBombs = [];

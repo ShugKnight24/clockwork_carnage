@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { updateArrivals, pendingArrivals } from "../../src/systems/arrival.js";
 import {
   HAZARD_CHRONO,
   cycleOn,
@@ -286,12 +287,19 @@ describe("ChronoHazards runtime", () => {
     for (const [c, r] of piece.teach.seal) expect(game.map.grid[r][c]).toBe(0);
   });
 
-  it("brings the stalkers back if they all die without a shift", () => {
+  it("brings the stalkers back if they all die without a shift, through tears", () => {
     const { game, hz } = levelGame(2, 1, { totalEnemies: 10 });
     for (const e of game.entities.filter((e) => e._teach)) e.active = false;
     hz.update(game, 0.016);
-    expect(game.entities.filter((e) => e._teach && e.active).length).toBe(3);
+    // Counted at once, but on their way in, not standing there.
     expect(game.totalEnemies).toBe(13);
+    expect(pendingArrivals(game, (e) => e._teach)).toBe(3);
+    expect(game.entities.filter((e) => e._teach && e.active).length).toBe(0);
+    // Still coming: the lesson does not come round again on top of them.
+    hz.update(game, 0.016);
+    expect(game.totalEnemies).toBe(13);
+    for (let i = 0; i < 40; i++) updateArrivals(game, 0.05);
+    expect(game.entities.filter((e) => e._teach && e.active).length).toBe(3);
   });
 
   it("opens the Precinct after a rewind that undid 20 or more", () => {
