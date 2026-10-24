@@ -1192,15 +1192,22 @@ PROP_RENDERERS.frozen_paper = renderFrozenPaper;
 
 // ── Certification Day (the station's east wing, js/tutorial-system.js) ──
 
+/** Height of a stuck shutter's lip above the floor, in walls. */
+const SHUTTER_LIP = 0.4;
+
 /**
  * A security shutter stuck half down across a corridor: corrugated slats
- * from the ceiling to just above the knee, a hazard bar on its lip. You
- * slide (or crouch) under it. One per cell of the corridor's width.
+ * from the ceiling to SHUTTER_LIP of a wall above the floor, a hazard bar on
+ * its lip. You slide (or crouch) under it. One per cell of the corridor's
+ * width.
  */
 function renderShutter(ctx, sx, cy, sw, sh, dist, t, fog) {
-  const ground = groundY(cy, sh);
   const top = cy - sh * 0.55;
-  const lip = ground - sh * 0.27;
+  // Measured from the floor the walls stand on (half a wall under the
+  // standing eye), so the lip is over a crouched or sliding eye
+  // (CROUCH_EYE_Z, SLIDE_EYE_Z in src/systems/physics.js) and under a
+  // standing one: from a slide it visibly passes overhead.
+  const lip = cy + sh * (0.5 - SHUTTER_LIP);
   const halfW = sw * 0.5;
   ctx.save();
   ctx.globalAlpha = fog;
