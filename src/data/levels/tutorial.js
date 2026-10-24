@@ -383,6 +383,9 @@ export const TUTORIAL_MAP = {
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
   ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
+  // The east wing's rooms can't be seen from the locker room: the renderer
+  // paints their walls a few a frame once the rest are up.
+  lateWalls: [rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom].flatMap((r) => r.ownWalls),
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
   // Each room's own lamps (js/tutorial-system.js _syncRoomLights), on while
   // you are near enough to see them: the range's floods on the bullet trap,

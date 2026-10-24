@@ -71,7 +71,6 @@ export const room = {
     for (let c = 63; c <= 66; c++) g[1][c] = W.SUIT_RACK;
     g[1][69] = W.SUIT_CRADLE;
     g[1][73] = W.WHITEBOARD;
-    g[1][74] = W.WHITEBOARD;
     g[1][77] = W.VENT;
     // East wall: Lift A to the Engine level, its locked call panel.
     g[6][80] = W.LIFT_A;

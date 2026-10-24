@@ -64,7 +64,7 @@ export const room = {
       g[r][84] = W.WALL;
     }
     // The duty board where the squads come in from the spine.
-    for (const c of [66, 67, 68]) g[15][c] = W.DUTY_BOARD;
+    g[15][67] = W.DUTY_BOARD;
     g[15][72] = W.SIGN;
     // The far wall: the map, the call board either side, the radios.
     for (let r = 19; r <= 25; r++) g[r][84] = W.CITY_MAP;

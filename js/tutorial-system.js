@@ -2844,8 +2844,8 @@ export class TutorialSystem {
 function trialComment(trial, r) {
   const name = trial.name.charAt(0) + trial.name.slice(1).toLowerCase();
   if (r.grade === "PASS") return `${name}: pass. Orr's happy, which is a first.`;
-  if (r.grade === "S" || r.grade === "A") return `${name}, ${r.grade}. Don't let it go to your head.`;
-  return `${name}, ${r.grade}. It's on the sheet now, Cadet. Next.`;
+  if (r.grade === "S" || r.grade === "A") return `${name}: ${r.grade}. Don't let it go to your head.`;
+  return `${name}: ${r.grade}. It's on the sheet now, Cadet. Next.`;
 }
 
 /** Step logic ids, for the tests: every prologue step must have logic. */

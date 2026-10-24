@@ -106,7 +106,9 @@ function paintBalustrade(ctx, p, r) {
   // Above the rail (never seen on a low wall): the concrete, for a far view.
   concrete(ctx, p, r, 0, 300);
   const top = 312;
-  ctx.fillStyle = lin(ctx, 0, top, 0, T, [[0, "rgba(160,200,230,0.55)"], [1, "rgba(90,120,150,0.75)"]]);
+  // The panes on a plate of their own: Realistic's bake repaints a flat face.
+  plate(ctx, 0, top, T, T - top, p, { tones: ["#b4d4ea", "#8cb0cc", "#5a7c98"], bevel: 2, ink: 0, spec: false });
+  ctx.fillStyle = lin(ctx, 0, top, 0, T, [[0, "rgba(160,200,230,0.35)"], [1, "rgba(90,120,150,0.45)"]]);
   ctx.fillRect(0, top, T, T - top);
   ctx.fillStyle = "rgba(230,245,255,0.25)";
   for (const [a, b] of [[40, 110], [300, 340]]) {

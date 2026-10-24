@@ -307,9 +307,14 @@ export class Renderer {
       map._ownWalls = map.ownWalls ?? [...ids];
     }
     if (!map._ownWalls.length) return;
+    // Walls the map can't show from where it starts (`lateWalls`: the
+    // station's east wing) are painted a few a frame after the rest, so the
+    // first frame doesn't wait on them, and go up together.
+    const late = map.lateWalls ?? [];
     let added = false;
     try {
-      added = ensureEnvWalls(env, map._ownWalls, !!env.realistic);
+      added = ensureEnvWalls(env, late.length ? map._ownWalls.filter((id) => !late.includes(id)) : map._ownWalls, !!env.realistic);
+      if (late.length && !added) added = this._paintLateWalls(env, late);
     } catch (err) {
       // A face that will not paint must not fail every frame: those cells
       // draw with the common walls instead.
@@ -320,6 +325,27 @@ export class Renderer {
       const wp = this.glRenderer?._wallPass;
       if (wp) wp.env = null;
     }
+  }
+
+  /**
+   * Paint `late` wall faces into a staging set for ~6 ms a frame; true once
+   * they are all done and handed to `env` in one go (one texture upload).
+   */
+  _paintLateWalls(env, late) {
+    let st = env._late;
+    if (!st || st.ids !== late) {
+      st = env._late = {
+        ids: late,
+        stage: { walls: {}, act: env.act, palette: env.palette, salt: env.salt },
+        left: late.filter((id) => !env.walls[id]),
+      };
+    }
+    if (!st.left.length) return false;
+    const t0 = performance.now();
+    while (st.left.length && performance.now() - t0 < 6) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic);
+    if (st.left.length) return false;
+    Object.assign(env.walls, st.stage.walls);
+    return true;
   }
 
   /** Build (or reuse) the Modern environment bundle for the current act. */
