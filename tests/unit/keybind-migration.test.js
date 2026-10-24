@@ -20,7 +20,7 @@ describe("keybind migration", () => {
   });
 
   it("leaves an old save's own crouch key alone", () => {
-    expect(migrateKeybinds({ crouch: "KeyZ", dash: "KeyC" })).toEqual({ crouch: "KeyZ", dash: "KeyC", aim: "KeyT", reload: "KeyR" });
+    expect(migrateKeybinds({ crouch: "KeyZ", dash: "KeyC" })).toEqual({ crouch: "KeyZ", dash: "KeyC", aim: "KeyT", reload: "KeyR", cover: "KeyG" });
   });
 
   it("never moves an action onto a key the save already uses for another", () => {
@@ -29,6 +29,7 @@ describe("keybind migration", () => {
     expect(m.crouch).toBe("KeyB");
     expect(m.dash).toBe("KeyG");
     expect(m.aim).toBe("KeyZ");
+    expect(m.cover).toBe("KeyH"); // G went to the dash
     const used = Object.entries({ ...DEFAULT_KEYBINDS, ...m }).map(([, c]) => c).filter(Boolean);
     expect(new Set(used).size).toBe(used.length);
   });
@@ -49,5 +50,13 @@ describe("keybind migration", () => {
   it("never leaves the default binds sharing a key", () => {
     const used = Object.values(DEFAULT_KEYBINDS);
     expect(new Set(used).size).toBe(used.length);
+  });
+
+  it("gives a version-3 save the cover key on G, unless G is already taken", () => {
+    expect(DEFAULT_KEYBINDS.cover).toBe("KeyG");
+    expect(migrateKeybinds({ _v: 3, interact: "KeyF" })).toMatchObject({ interact: "KeyF", cover: "KeyG" });
+    expect(migrateKeybinds({ _v: 3, interact: "KeyG" })).toMatchObject({ interact: "KeyG", cover: "KeyH" });
+    const m = migrateKeybinds({ _v: 3, interact: "KeyG", crouch: "KeyH" });
+    expect(m.cover).toBe("KeyB");
   });
 });

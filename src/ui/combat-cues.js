@@ -8,9 +8,12 @@
 import { isModernArt } from "../rendering/art-style.js";
 import { drawModernCombatCues } from "./hud-modern.js";
 import { activeDamageCues } from "../systems/player-feedback.js";
+import { drawCoverHud } from "./cover-hud.js";
 
 /** The damage-direction cues (and Modern's low-health frames) over a view `h - barH` tall. */
 export function drawCombatCues(game, ctx, w, h, barH = 0) {
+  // Every layout draws these cues, so cover's prompt and indicator ride along.
+  drawCoverHud(game, ctx, w, h, barH);
   if (isModernArt()) {
     drawModernCombatCues(game, ctx, w, h, barH);
     return;

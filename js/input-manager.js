@@ -56,6 +56,10 @@ export const DEFAULT_KEYBINDS = {
   aim: "KeyZ",
   // Reload; pressed again during a reload, the active reload.
   reload: "KeyR",
+  // Hug the wall or low block in front (src/systems/cover-play.js). G is
+  // under the left hand's index finger and was free on grid levels; the
+  // Forge's own G is a different screen.
+  cover: "KeyG",
 };
 
 /** Saved keybinds older than this get the defaults that changed since. */
@@ -65,8 +69,8 @@ export const KEYBINDS_VERSION = 4;
  * Bring saved keybinds up to date. Version 2 moved crouch off Ctrl (Ctrl+W
  * closes the tab mid-crouch) to C, and the dash from C to Space. A save from
  * before then that still has crouch on Ctrl moves with the defaults. Version
- * 3 added a keyboard aim key, version 4 the reload key. A save already at a
- * version keeps what the player set for it.
+ * 3 added a keyboard aim key, version 4 the reload and cover keys. A save
+ * already at a version keeps what the player set for it.
  */
 export function migrateKeybinds(saved) {
   if (!saved || typeof saved !== "object") return {};
@@ -81,14 +85,16 @@ export function migrateKeybinds(saved) {
   if (!(saved._v >= 2) && (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null)) {
     if (out.dash === "KeyC" || out.dash == null) out.dash = null;
     out.aim ??= null; // not placed yet: it must not hold the spare crouch wants
+    out.cover ??= null; // nor the cover key, which is placed last
     out.crouch = home("crouch", ["KeyC", "KeyB", "KeyG", "KeyH"]) ?? out.crouch ?? "KeyC";
     if (out.dash == null) out.dash = home("dash", ["Space", "KeyG", "KeyH"]);
   }
   // R is reload's now: aim's spares skip it, and a save whose aim already sat
   // on R (an older migration's spare) keeps it and sends reload to the next.
   out.reload ??= null;
-  if (out.aim == null) out.aim = home("aim", ["KeyZ", "KeyT", "KeyY", "KeyG"]);
-  if (out.reload == null) out.reload = home("reload", ["KeyR", "KeyT", "KeyG", "KeyH"]);
+  if (out.aim == null) out.aim = home("aim", ["KeyZ", "KeyT", "KeyY"]);
+  if (out.reload == null) out.reload = home("reload", ["KeyR", "KeyT", "KeyY", "KeyH"]);
+  if (out.cover == null) out.cover = home("cover", ["KeyG", "KeyH", "KeyB", "KeyT"]);
   return out;
 }
 

@@ -15,6 +15,7 @@ import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
 import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
 import { renderDirector } from "../cinematic/director.js";
+import { drawCoverLip } from "../ui/cover-hud.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
 let deckLoad = "idle"; // same states, for <settings-deck>
@@ -718,6 +719,9 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   }
   if (profiling) game.profiler.currentPhases.vignette = performance.now() - _tVig0;
   renderChronoScreen(game, ctx, w, h);
+
+  // Crouched behind low cover: its top edge, under the gun.
+  if (weapon && game.settings.viewMode === 0) drawCoverLip(game, ctx, w, h);
 
   // Draw weapon (hidden in third person)
   const _tWpn0 = profiling ? performance.now() : 0;

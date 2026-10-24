@@ -9,6 +9,7 @@ import { isSolid } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { PLAYER, hasLineOfSight3D } from "../world/voxel-physics.js";
 import { hasLineOfSight } from "./physics.js";
+import { boltClearsCover } from "./cover.js";
 
 const EMP_DURATION_MS = 3000;
 const EMP_PAIN_MS = 500;
@@ -156,6 +157,12 @@ function tryHitPlayer(p, ctx) {
     const centre = (ctx.player.z || 0) + PLAYER.height * 0.5;
     if (Math.abs((p.z || 0) - centre) > PLAYER_HIT_HALF) return false;
   }
+  // Down behind cover, a round from beyond it hits the cover instead.
+  if (ctx.coverBlock?.(p)) {
+    ctx.spawnWallSparks(p.x, p.y);
+    p.active = false;
+    return true;
+  }
   // The hit indicator points back along the bolt's flight, toward the shooter.
   ctx.damagePlayer(p.damage, { x: p.x - p.dirX * 4, y: p.y - p.dirY * 4 });
   p.active = false;
@@ -193,7 +200,9 @@ function stepProjectile(p, ctx, stepDt) {
     if (mx < 0 || my < 0 || mx >= map.width || my >= map.height) {
       p.active = false; return;
     }
-    if (map.grid[my][mx] > 0) {
+    // Low cover stops a bolt, except one fired over it from cover and one
+    // fired at a player standing up over it (src/systems/cover.js).
+    if (map.grid[my][mx] > 0 && !boltClearsCover(p, map, mx, my, ctx.player)) {
       ctx.spawnWallSparks(p.x, p.y);
       // A Ricochet Pistol round glances off: back out of the wall, mirror
       // the heading across the face it crossed, and fly on a little weaker.

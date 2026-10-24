@@ -38,6 +38,7 @@ import { Enemy, Projectile } from "../../js/entities.js";
 import { updateForm2, recordShot } from "./boss-form2.js";
 import { updateBossForm, tickBossForm } from "./paradox-forms.js";
 import { NavFields, navAngle, navSteps, leadPoint } from "./ai-nav.js";
+import { flankSpot, coverHides } from "./cover.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import {
   ENEMY_MELEE_WINDUP_MS,
@@ -409,7 +410,8 @@ export class AISystem {
         const sightRange = e.state === "search" ? e.alertRange * 1.25 : e.alertRange;
         if (
           dist < sightRange &&
-          hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player))
+          hasLineOfSight(map, e.x, e.y, player.x, player.y, EYE_Z, playerEyeZ(player)) &&
+          !coverHides(player, e.x, e.y)
         ) {
           e.state = "chase";
           e.stateTime = 0;
@@ -437,7 +439,10 @@ export class AISystem {
         e._sightT = (e._sightT ?? 0) - enemyDt;
         if (e._sightT <= 0) {
           e._sightT = SIGHT_EVERY;
-          e._sees = hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player));
+          // A player down behind cover is hidden from anyone whose line to
+          // them crosses it, even where the line grazes over a corner.
+          e._sees = hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player)) &&
+            (target !== player || !coverHides(player, e.x, e.y));
         }
         // Hunters (arena, meltdown, scripted fights, and anyone told to hunt
         // with a huge alert range) always know where you are.
@@ -448,7 +453,12 @@ export class AISystem {
         } else {
           e._lostFor = (e._lostFor || 0) + enemyDt;
         }
-        const goal = e._lastSeen ?? { x: target.x, y: target.y };
+        let goal = e._lastSeen ?? { x: target.x, y: target.y };
+        // Gone to ground behind cover it cannot see past: rather than walk up
+        // to where it last saw you and stand at your cover, it heads for a
+        // spot with an angle on you. Bosses keep their own patterns.
+        const flanking = !e._sees && !toEcho && !big && player.inCover ? this._flankGoal(e, player, map) : null;
+        if (flanking) goal = flanking;
         const angle = Math.atan2(dy, dx);
         // A front-shielded enemy turns its shield slowly, so circling it, a
         // dash past it or a teammate's distraction opens its flank. Everyone
@@ -626,10 +636,11 @@ export class AISystem {
           }
         }
 
-        // Lost: reached where it last saw you, or out of sight too long.
+        // Lost: reached where it last saw you, or out of sight too long. A
+        // flanker short of its spot is not lost, only on its way.
         if (!e._sees && !omniscient && ai !== "guard") {
-          const atGoal = Math.hypot(goal.x - e.x, goal.y - e.y) < 0.9 ||
-            navSteps(this.nav.get(map, goal.x, goal.y, this._clock), e.x, e.y) < 0;
+          const atGoal = !flanking && (Math.hypot(goal.x - e.x, goal.y - e.y) < 0.9 ||
+            navSteps(this.nav.get(map, goal.x, goal.y, this._clock), e.x, e.y) < 0);
           if (atGoal || e._lostFor > LOSE_AFTER) {
             e.state = "search";
             e.stateTime = 0;
@@ -681,7 +692,9 @@ export class AISystem {
           // A shield bearer attacks only what is in front of its shield: one
           // still turning to face a flanker holds its fire.
           const squared = !e.def.frontShield || inFrontArc(e, target);
-          if (squared && hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player))) {
+          const clearShot = hasLineOfSight(map, e.x, e.y, target.x, target.y, EYE_Z, playerEyeZ(player)) &&
+            (target !== player || !coverHides(player, e.x, e.y));
+          if (squared && clearShot) {
             beginWindup(e, time);
             const pan = audio.calculatePan(e.x, e.y, player.x, player.y, player.angle);
             if ((!big || e.def.frontShield) && !toEcho && !inView(player, e)) {
@@ -1179,6 +1192,21 @@ export class AISystem {
     }
     e._quillState = "ready";
     e._quillCD = q.cooldown;
+  }
+
+  /**
+   * A tile with sight of a player in cover (src/systems/cover.js flankSpot),
+   * picked again every couple of seconds or once reached. Null when there is
+   * no such tile.
+   */
+  _flankGoal(e, player, map) {
+    const f = e._flank;
+    const stale = !f || this._clock - f.at > 2 || (f.x != null && Math.hypot(f.x - e.x, f.y - e.y) < 0.6);
+    if (stale) {
+      const spot = flankSpot(map, player, playerEyeZ(player), e, player.cover?.face);
+      e._flank = spot ? { x: spot.x, y: spot.y, at: this._clock } : { x: null, y: null, at: this._clock };
+    }
+    return e._flank.x == null ? null : e._flank;
   }
 
   /** Patrol wander: pick a random direction and drift slowly */

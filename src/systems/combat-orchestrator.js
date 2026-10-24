@@ -26,6 +26,7 @@ import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
 import { readyToFire, spendShot } from "./reload.js";
 import { noteConditioningKill } from "./conditioning-play.js";
+import { coverCone, beginCoverShot, endCoverShot, shotClearsCover, noteCoverKill } from "./cover-play.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
 const MUZZLE_COLORS = { 2: "80,220,255", 7: "80,220,255", 3: "255,160,40", 6: "100,255,120" };
@@ -112,9 +113,11 @@ export function fireWeapon(game) {
   // to its `adsSpread` as the sights come up. Single rounds used to ignore
   // the cone and pellets spread only sideways, so the sights and the
   // crosshair said nothing about where a weapon's rounds actually went.
-  const cone = currentSpread(wep);
+  // Blind fire from cover sprays far wider (src/systems/cover-play.js).
+  const cone = coverCone(game.player, currentSpread(wep));
   const fanMul = game.player.isAiming ? ADS_FAN_MULT : 1;
 
+  const coverShot = beginCoverShot(game);
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
     // damageEnemy reads the weapon's mechanics (shield phasing, slowing) off this.
@@ -153,10 +156,12 @@ export function fireWeapon(game) {
       if (wep.bounces) proj.bounces = wep.bounces;
       if (wep.chains) proj.chains = true;
       proj.color = game.getCharacterColor().accent || wep.color;
+      if (shotClearsCover(game.player)) proj._overCover = true;
       game.projectiles.push(proj);
       game.entities.push(proj);
     }
   }
+  endCoverShot(game, coverShot);
 
   game.screenShake = Math.max(
     game.screenShake,
@@ -453,6 +458,7 @@ export function onEnemyKill(game, enemy) {
   if (fx.ariaCategory) game.queueAriaMessage(fx.ariaCategory);
 
   game.triggerAriaOnce("firstKill", "firstKill");
+  noteCoverKill(game);
 
   // Per-weapon kills feed class unlocks (e.g. Gunslinger: pistol kills).
   const weaponId = game.player.weapons?.[game.player.currentWeapon];

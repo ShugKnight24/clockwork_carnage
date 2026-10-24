@@ -167,8 +167,10 @@ export class PlayerUpdateSystem {
 
     // Ease the stance. Dropping is quicker than standing back up — going down
     // is gravity, getting up is work — and a slide drops fastest of all.
-    const lowered = p.isSliding || p.isCrouching;
-    const stanceRate = p.isSliding ? 22 : lowered ? 14 : 9;
+    // Behind low cover the stance is down until the sights pop you up over
+    // it, and both ways are quick: a slow pop-up is a shot into the cover.
+    const lowered = p.isSliding || p.isCrouching || !!p.coverDown;
+    const stanceRate = p.isSliding ? 22 : p.cover ? 18 : lowered ? 14 : 9;
     p.crouchBlend += ((lowered ? 1 : 0) - p.crouchBlend) * Math.min(1, stanceRate * dt);
     // Snap the tail. An exponential ease never quite lands, and a residual
     // blend leaves the FOV and the weapon fractionally off forever.
@@ -282,8 +284,14 @@ export class PlayerUpdateSystem {
     if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
     if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
 
-    // Collision detection and movement
-    flags = this._applyMove(ctx, moveX, moveY, dt, flags);
+    // Collision detection and movement. In cover the intent goes to the cover
+    // system instead, which slides the player along the face it is on.
+    if (p.cover && !world) {
+      p.coverIntentX = moveX;
+      p.coverIntentY = moveY;
+    } else {
+      flags = this._applyMove(ctx, moveX, moveY, dt, flags);
+    }
 
     this._prevCrouchKey = crouchHeld;
     return flags;

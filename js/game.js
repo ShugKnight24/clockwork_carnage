@@ -101,6 +101,13 @@ import { updateMeltdownRun } from "../src/systems/meltdown-run.js";
 import { SeededRNG } from "../src/utils/seeded-rng.js";
 import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
 import {
+  createCoverStats,
+  updateCover as _updateCover,
+  coverPress as _coverPress,
+  coverDash as _coverDash,
+  coverShields as _coverShields,
+} from "../src/systems/cover-play.js";
+import {
   fireWeapon as _fireWeapon,
   hitscan as _hitscan,
   damageEnemy as _damageEnemy,
@@ -256,6 +263,8 @@ export class Game {
     this.audio = new AudioManager();
     this.cutsceneEngine = null; // Lazy-loaded on first cutscene
     this.player = new Player();
+    /** Cover counters since boot, for the prologue to teach with (src/systems/cover-play.js). */
+    this.coverStats = createCoverStats();
     this.entities = [];
     this.entityGrid = new SpatialGrid(2);
     this.dustMotes = null;
@@ -2901,6 +2910,9 @@ export class Game {
     }
     // While shifting, once Rook has tuned the shard: a Chrono Dash instead.
     const dir = rawDirX !== undefined ? [rawDirX, rawDirY] : this._dashDirFor(code);
+    // From cover, a dash slides to the next cover; on a pad or touch it also
+    // takes the cover in front.
+    if (_coverDash(this, dir[0], dir[1])) return;
     if (this.chronoPowers.tryChronoDash(this, dir[0], dir[1])) {
       this.achievementStats.totalDashes++;
       this.gamepad?.vibrateLight?.();
@@ -2939,6 +2951,12 @@ export class Game {
 
   aimRelease() {
     if (!this.settings.aimToggle) this.player.isAiming = false;
+  }
+
+  /** The cover key: hug the wall or block in front, or step out of cover. */
+  coverPress() {
+    if (this.state !== GameState.PLAYING) return false;
+    return _coverPress(this);
   }
 
   dashFromKeys() {
@@ -3012,6 +3030,7 @@ export class Game {
       if (flags.tutorialCrouched) this.tutorialCrouched = true;
       if (flags.fallDamage > 0) this.damagePlayer(flags.fallDamage);
     }
+    _updateCover(this, dt);
     // Smooth ADS FOV transition — must run every frame
     updateAdsFov(this.player, dt, this.settings);
   }
@@ -3158,6 +3177,8 @@ export class Game {
         lights: this.lights,
         // Enemy rounds that cross a Time-Lock hang there.
         chronoPowers: this.chronoPowers,
+        // Rounds the player's cover stops before they land.
+        coverBlock: (proj) => _coverShields(this, proj.originX, proj.originY),
       },
       dt,
     );
