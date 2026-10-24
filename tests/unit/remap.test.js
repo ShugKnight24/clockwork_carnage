@@ -163,7 +163,7 @@ describe("remap rules", () => {
       { action: "weaponPrev", from: PAD.RB, to: PAD.Y },
     ]);
     expect(t).toEqual(DEFAULT_GAMEPAD_ACTIONS); // a preview changes nothing
-    expect(previewBind(keys(), "interact", "KeyG")).toEqual([{ action: "interact", from: "KeyE", to: "KeyG" }]);
+    expect(previewBind(keys(), "interact", "KeyH")).toEqual([{ action: "interact", from: "KeyE", to: "KeyH" }]);
   });
 
   it("prompts follow a rebind: the live table is what glyphs read", () => {

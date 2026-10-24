@@ -54,17 +54,21 @@ export const DEFAULT_KEYBINDS = {
   // Aim down sights from the keyboard. Right mouse still aims; this is for a
   // trackpad or a Magic Mouse, where a held right-click is hard or absent.
   aim: "KeyZ",
+  // Hug the wall or low block in front (src/systems/cover-play.js). G is
+  // under the left hand's index finger and was free on grid levels; the
+  // Forge's own G is a different screen.
+  cover: "KeyG",
 };
 
 /** Saved keybinds older than this get the defaults that changed since. */
-export const KEYBINDS_VERSION = 3;
+export const KEYBINDS_VERSION = 4;
 
 /**
  * Bring saved keybinds up to date. Version 2 moved crouch off Ctrl (Ctrl+W
  * closes the tab mid-crouch) to C, and the dash from C to Space. A save from
  * before then that still has crouch on Ctrl moves with the defaults. Version
- * 3 added a keyboard aim key. A save already at a version keeps what the
- * player set for it.
+ * 3 added a keyboard aim key and version 4 the cover key. A save already at
+ * a version keeps what the player set for it.
  */
 export function migrateKeybinds(saved) {
   if (!saved || typeof saved !== "object") return {};
@@ -79,10 +83,12 @@ export function migrateKeybinds(saved) {
   if (!(saved._v >= 2) && (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null)) {
     if (out.dash === "KeyC" || out.dash == null) out.dash = null;
     out.aim ??= null; // not placed yet: it must not hold the spare crouch wants
+    out.cover ??= null; // nor the cover key, which is placed last
     out.crouch = home("crouch", ["KeyC", "KeyB", "KeyG", "KeyH"]) ?? out.crouch ?? "KeyC";
     if (out.dash == null) out.dash = home("dash", ["Space", "KeyG", "KeyH"]);
   }
   if (out.aim == null) out.aim = home("aim", ["KeyZ", "KeyR", "KeyT", "KeyY"]);
+  if (out.cover == null) out.cover = home("cover", ["KeyG", "KeyH", "KeyB", "KeyT"]);
   return out;
 }
 

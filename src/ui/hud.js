@@ -27,6 +27,7 @@ import {
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawCombatCues } from "./combat-cues.js";
+import { coverCone } from "../systems/cover-play.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
 
@@ -394,7 +395,8 @@ function drawAimReticle(ctx, game, cx, cy, barH = 0) {
   }
   // The cone in screen pixels, through the same (zoomed) view the world is drawn with.
   const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
-  const cone = (Math.tan(currentSpread(wep)) / Math.tan(fov / 2)) * (w / 2);
+  // Blind fire from cover sprays wider, and the brackets say so.
+  const cone = (Math.tan(coverCone(game.player, currentSpread(wep))) / Math.tan(fov / 2)) * (w / 2);
   drawSpreadBrackets(ctx, cx, cy, cone, 1 - scoped);
   drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6) * (1 - scoped), (game.hudH || 900) / 900);
   if (scoped > 0) {

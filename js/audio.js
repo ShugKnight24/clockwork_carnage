@@ -1121,6 +1121,29 @@ export class AudioManager {
     this.playNoise(0.05, 0.2, 3000, "bandpass");
   }
 
+  /**
+   * Back into cover: a body thump on the wall and the clack of the suit's
+   * plates. Low cover is a crate under the elbows, a shade higher and drier.
+   */
+  coverSnap(low = false) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const thump = this.ctx.createOscillator();
+    thump.type = "sine";
+    thump.frequency.setValueAtTime(low ? 120 : 95, t);
+    thump.frequency.exponentialRampToValueAtTime(low ? 70 : 48, t + 0.12);
+    const tg = this.ctx.createGain();
+    tg.gain.setValueAtTime(0.42, t);
+    tg.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    thump.connect(tg);
+    tg.connect(this.sfxGain);
+    thump.onended = () => { thump.disconnect(); tg.disconnect(); };
+    thump.start(t);
+    thump.stop(t + 0.17);
+    this.playNoise(0.07, 0.22, low ? 1900 : 1400, "bandpass");
+    this.playNoise(0.12, 0.16, 380, "lowpass");
+  }
+
   playerHit() {
     this.playTone(200, 0.15, "sawtooth", 0.4);
     this.playNoise(0.1, 0.3, 1000, "lowpass");

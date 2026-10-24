@@ -797,9 +797,9 @@ test("a rebound key works in play at once", async ({ page }) => {
   await expect(deck(page)).toHaveAttribute("open", "");
   await focusRow(page, "remap:keyboard:interact");
   await page.keyboard.press("Enter");
-  await page.keyboard.press("KeyG"); // free: no swap prompt
+  await page.keyboard.press("KeyH"); // free: no swap prompt
   await expect(dialog(page)).toBeHidden();
-  expect(await keybind(page, "interact")).toBe("KeyG");
+  expect(await keybind(page, "interact")).toBe("KeyH");
   expect(await page.evaluate(() => window.ccDebug.game.input.keybinds === window.ccDebug.game.keybinds)).toBe(true);
   await page.keyboard.press("Escape"); // deck → pause
   await page.evaluate(() => {
@@ -812,7 +812,7 @@ test("a rebound key works in play at once", async ({ page }) => {
   expect(await state(page)).toBe("playing");
   await page.keyboard.press("KeyE");
   expect(await page.evaluate(() => window.__interacts)).toBe(0);
-  await page.keyboard.press("KeyG");
+  await page.keyboard.press("KeyH");
   expect(await page.evaluate(() => window.__interacts)).toBe(1);
 });
 

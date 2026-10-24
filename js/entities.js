@@ -94,6 +94,8 @@ export class Player {
     this.slideDuration = 0.6; // seconds
     this.slideSpeedMult = 3.0; // multiplier of base moveSpeed at start
     this.slideStaminaCost = 18;
+    // In cover: the face and where along it (src/systems/cover-play.js).
+    this.cover = null;
     this.dashTime = 0;
     this.dashDirX = 0;
     this.dashDirY = 0;
@@ -109,6 +111,11 @@ export class Player {
     this.maxChronoEnergy = PLAYER_MAX_HP;
     this.chronoActive = false;
     this.particles = [];
+  }
+
+  /** Hugging a wall or a low block (src/systems/cover-play.js). */
+  get inCover() {
+    return !!this.cover;
   }
 
   /**

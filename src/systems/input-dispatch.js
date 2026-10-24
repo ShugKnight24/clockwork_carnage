@@ -350,6 +350,7 @@ export function dispatchKeyPress(game, code, e) {
     if (code === game.keybinds.interact) game.interact();
     if (code === game.keybinds.aim && !e?.repeat) game.aimPress?.();
     if (code === game.keybinds.dash && !e?.repeat) game.dashFromKeys?.();
+    if (code === game.keybinds.cover && !e?.repeat) game.coverPress?.();
     // Chronos powers on their own keys (spec decision 4: no double-taps).
     if (code === game.keybinds.chronoRewind && !e?.repeat) game.chronoRewind?.();
     if (code === game.keybinds.chronoLock && !e?.repeat) game.chronoLock?.();

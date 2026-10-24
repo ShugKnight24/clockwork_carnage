@@ -897,7 +897,8 @@ export class TouchControls {
       z.dashBtn.x,
       z.dashBtn.y,
       z.dashBtn.r,
-      "DASH",
+      // Facing cover, the dash button takes it (src/systems/cover-play.js).
+      this.game.player?.coverAvailable ? "COVER" : "DASH",
       this.activeButtons.has("dash") ? "#44ffff" : "#00cccc",
     );
 

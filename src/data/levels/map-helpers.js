@@ -48,6 +48,21 @@ export function lowTile(g, hm, r, c, layers = LAYER.WAIST, v = 3) {
 }
 
 /**
+ * Low cover blocks at a list of cells, for a room laid out around cover
+ * (src/systems/cover.js takes any block from waist height up as cover; a
+ * waist block is the one you stand up over to shoot). `cells` are [row, col]
+ * pairs, or `{ x, y }` objects with x the column. Returns the cells as
+ * `{ x, y }`, so a caller can place props or spawns beside them.
+ */
+export function coverBlocks(g, hm, cells, layers = LAYER.WAIST, v = 3) {
+  return cells.map((cell) => {
+    const [r, c] = Array.isArray(cell) ? cell : [cell.y, cell.x];
+    lowTile(g, hm, r, c, layers, v);
+    return { x: c, y: r };
+  });
+}
+
+/**
  * Scatter low cover through a room on a spacing, the way `coverGrid` places
  * full pillars — but shootable over, so a firefight has angles instead of
  * blind corners.
