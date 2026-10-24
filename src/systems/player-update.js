@@ -9,6 +9,7 @@
 // real, and the mouse drives yaw and pitch directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
+import { holdOffFrozen } from "./stillness.js";
 import { clamp, decay } from "../utils/math.js";
 import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom } from "./aim.js";
 import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
@@ -298,10 +299,18 @@ export class PlayerUpdateSystem {
     if (world) return this._applyVoxelMove(ctx, moveX, moveY, dt, flags);
 
     const margin = 0.2;
+    const fromX = p.x;
+    const fromY = p.y;
     const newX = p.x + moveX;
     const newY = p.y + moveY;
     if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
     if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+    // Someone stopped in time does not give way: the player slides round
+    // them. If that would put the player in a wall, the step is not taken.
+    if (!noclip && holdOffFrozen(ctx.entities, p, fromX, fromY) && !isPassable(map, Math.floor(p.x), Math.floor(p.y))) {
+      p.x = fromX;
+      p.y = fromY;
+    }
     return flags;
   }
 

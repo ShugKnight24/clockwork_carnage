@@ -183,6 +183,7 @@ import {
 } from "../src/systems/level-debrief.js";
 import { liftLockdown } from "../src/systems/exit-cells.js";
 import { lowHealthSeverity } from "../src/systems/player-feedback.js";
+import { stillnessAt } from "../src/systems/stillness.js";
 import { LevelClock } from "../src/systems/level-clock.js";
 import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
 export { GameState };
@@ -2170,6 +2171,10 @@ export class Game {
     this.audio.updateLowHealth?.(
       this.state === GameState.PLAYING ? lowHealthSeverity(this.player?.health, this.player?.maxHealth) : 0,
     );
+    // Beside someone the pulse stopped the mix hushes and a hum comes up.
+    this.audio.updateStillness?.(
+      this.state === GameState.PLAYING && this.player ? stillnessAt(this.entities, this.player.x, this.player.y) : 0,
+    );
 
     // FPS counter
     this.frameCount++;
@@ -2978,6 +2983,8 @@ export class Game {
         voiceProfile: this.getVoiceProfile(),
         noclip: !!this._noclip,
         time: this.time,
+        // The people the pulse stopped are solid: the player goes round them.
+        entities: this.entities,
       },
       dt,
     );

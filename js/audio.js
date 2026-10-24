@@ -1,6 +1,7 @@
 import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey, enemyAlertLine, inferEmotion } from "../src/audio/voice.js";
 import { Speech } from "../src/audio/speech.js";
 import { heartbeatInterval, muffleCutoff, streakNotes } from "../src/systems/player-feedback.js";
+import { hushCutoff } from "../src/systems/stillness.js";
 
 /** Which death sound an enemy type gets (enemyDeath); the rest are "body". */
 export const DEATH_KINDS = {
@@ -415,13 +416,65 @@ export class AudioManager {
     if (!this.ctx || !this.lowHpFilter) return;
     const sev = Math.max(0, Math.min(1, severity || 0));
     this._lowHpDuck = sev > 0 ? 0.35 + 0.4 * sev : 0;
-    // Only schedule when the target moves: this runs every frame.
-    const cutoff = Math.round(muffleCutoff(sev));
-    if (cutoff !== this._lowHpCutoff) {
-      this._lowHpCutoff = cutoff;
-      this.lowHpFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, sev > 0 ? 0.25 : 0.4);
-    }
+    this._lowHpSev = sev;
+    this._applyMuffle(sev > 0 ? 0.25 : 0.4);
     if (sev > 0) this.heartbeat(sev);
+  }
+
+  /**
+   * Near someone the pulse stopped, once a frame: `k` 0 (no one within a
+   * couple of tiles) to 1 (beside them), from stillnessAt. The same low-pass
+   * the low-health state uses closes in (whichever is lower wins), and a
+   * faint hum with no tick in it comes up over the muffle: the sound of a
+   * clock that has stopped.
+   */
+  updateStillness(k = 0) {
+    if (!this.ctx || !this.lowHpFilter) return;
+    const s = Math.max(0, Math.min(1, k || 0));
+    // Steps of a twentieth: the filter and hum are rescheduled only when it moves.
+    const q = Math.round(s * 20) / 20;
+    if (q === this._stillK) return;
+    this._stillK = q;
+    this._applyMuffle(0.3);
+    if (q > 0 && !this._hum) this._startHum();
+    if (this._hum) this._hum.gain.gain.setTargetAtTime(0.045 * q, this.ctx.currentTime, 0.35);
+  }
+
+  /** The muffle's cutoff: the lower of the low-health muffle and the stillness hush. */
+  _applyMuffle(tc) {
+    const cutoff = Math.round(Math.min(muffleCutoff(this._lowHpSev ?? 0), hushCutoff(this._stillK ?? 0)));
+    // Only schedule when the target moves: this runs every frame.
+    if (cutoff === this._lowHpCutoff) return;
+    this._lowHpCutoff = cutoff;
+    this.lowHpFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, tc);
+  }
+
+  /**
+   * The hum: two low sines a fifth apart, a slow beat between them and
+   * nothing that ticks. Started the first time someone stopped is near, and
+   * left running at zero gain after that rather than rebuilt each time.
+   */
+  _startHum() {
+    const ctx = this.ctx;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 420;
+    const oscs = [];
+    for (const [f, detune] of [[73.4, 0], [110, 4], [146.8, -3]]) {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f;
+      o.detune.value = detune;
+      o.connect(lp);
+      o.start();
+      oscs.push(o);
+    }
+    lp.connect(gain);
+    // Over the muffle, with the voices: it is what is left to hear.
+    gain.connect(this.masterGain);
+    this._hum = { gain, oscs };
   }
 
   // ─── Spatial audio filtering ──────────────────────────────────────────

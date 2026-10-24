@@ -44,6 +44,8 @@ import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
 const _litOut = { r: 0, g: 0, b: 0 };
 const _litFilters = new Map();
 import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+import { drawFrozenPerson } from "../src/rendering/frozen-look.js";
+import { isFrozen } from "../src/systems/stillness.js";
 
 // Short-wall records kept per screen column (one per wall the ray crosses).
 const COVER_STRIDE = MAX_COLUMN_HITS;
@@ -1545,6 +1547,8 @@ export class Renderer {
     // Camera right vector, so side-on enemy sprites can face their heading.
     this._camRightX = -dirY;
     this._camRightY = dirX;
+    // The stopped people's echo steps through the same camera (frozen-look.js).
+    this._spritePlaneMul = planeMul;
     if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
@@ -1823,6 +1827,9 @@ export class Renderer {
 
     const def = enemy.def;
     if (!def) return;
+
+    // Someone the pulse caught: drained, doubled, echoing, in any style.
+    if (enemy.type === "npc" && isFrozen(enemy) && drawFrozenPerson(this, ctx, enemy, screenX, centerY, halfH, dist, time, fog)) return;
 
     // Modern art: SVG pose sprites. Falls through to the procedural sprite
     // until the type's bitmaps have decoded.

@@ -1024,3 +1024,168 @@ function renderCourseGate(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   ctx.restore();
 }
 PROP_RENDERERS.course_gate = renderCourseGate;
+
+// ── Stopped by the pulse ────────────────────────────────────────
+//
+// Things the 06:47 pulse caught partway through happening, for rooms where
+// people stand frozen: one procedural drawing for every art style (there is
+// no SVG set for them, so Comic and Modern fall through to these; Modern's
+// light still falls on them through _drawPropLit). Place one as
+//   new Prop(x, y, "frozen_pour")      a mug knocked off a counter, its
+//                                      coffee hanging in the air below it
+//   new Prop(x, y, "frozen_paper")     a sheet of paper stopped mid-fall
+// `prop.lift` (metres above the floor) moves the paper; `prop.bare` drops the
+// pour's counter, to stand it beside a desk or table already there. Both
+// count for the hush near stopped things (src/systems/stillness.js).
+
+/** Small, still motes over a stopped thing; positions fixed per prop. */
+function stillMotes(ctx, sx, y, spanX, spanY, m, seed, t, fog) {
+  ctx.fillStyle = "#d8e4ff";
+  for (let i = 0; i < 7; i++) {
+    const a = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+    const b = Math.sin(seed * 39.3468 + i * 11.135) * 24634.6345;
+    const fx = a - Math.floor(a) - 0.5;
+    const fy = b - Math.floor(b) - 0.5;
+    const sz = Math.max(1, m * (0.006 + 0.006 * ((i * 7) % 3)));
+    ctx.globalAlpha = fog * (0.35 + 0.2 * Math.sin(t * 0.0011 + i * 1.7));
+    ctx.fillRect(sx + fx * spanX - sz / 2, y + fy * spanY - sz / 2, sz, sz);
+  }
+}
+
+/** The pour's drops, [dx, dy, r] in metres from the mug's lip. */
+const POUR_DROPS = [[-0.096, 0.35, 0.011], [-0.1, 0.41, 0.009], [-0.084, 0.46, 0.007], [-0.106, 0.5, 0.006], [-0.092, 0.56, 0.005], [-0.06, 0.12, 0.006], [-0.13, 0.28, 0.005]];
+
+function renderFrozenPour(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const floor = groundY(cy, sh);
+  const seed = (entity?.x ?? 0) * 3.1 + (entity?.y ?? 0) * 1.7;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const counterX = sx - m * 0.16;
+  const top = floor - m * 0.92;
+  if (!entity?.bare) {
+    // A break-room counter: laminate top, cupboard doors under it.
+    ctx.fillStyle = "#4b5260";
+    ctx.fillRect(counterX - m * 0.3, top + m * 0.04, m * 0.6, m * 0.88);
+    ctx.fillStyle = "#3a404c";
+    ctx.fillRect(counterX - m * 0.27, top + m * 0.1, m * 0.26, m * 0.76);
+    ctx.fillRect(counterX + m * 0.01, top + m * 0.1, m * 0.26, m * 0.76);
+    ctx.fillStyle = "#b9b2a4";
+    ctx.fillRect(counterX - m * 0.33, top, m * 0.66, m * 0.05);
+    // The carafe it came from, still on its plate.
+    ctx.fillStyle = "#1a1c22";
+    ctx.fillRect(counterX - m * 0.2, top - m * 0.03, m * 0.14, m * 0.03);
+    ctx.fillStyle = "rgba(160,190,210,0.55)";
+    ctx.beginPath();
+    ctx.roundRect(counterX - m * 0.19, top - m * 0.2, m * 0.12, m * 0.17, m * 0.03);
+    ctx.fill();
+    ctx.fillStyle = "#3b2414";
+    ctx.fillRect(counterX - m * 0.185, top - m * 0.1, m * 0.11, m * 0.07);
+  }
+  // The mug, knocked off the edge, tipped over and caught a hand's width
+  // below the top: it never reaches the floor. Drawn a little larger than
+  // life (u) so it reads from across a room.
+  const u = m * 1.5;
+  const mx = counterX + m * 0.44;
+  const my = top + m * 0.14;
+  ctx.translate(mx, my);
+  ctx.rotate(1.05);
+  ctx.fillStyle = "#e9e4da";
+  ctx.beginPath();
+  ctx.roundRect(-u * 0.045, -u * 0.06, u * 0.09, u * 0.11, u * 0.012);
+  ctx.fill();
+  ctx.strokeStyle = "#e9e4da";
+  ctx.lineWidth = Math.max(1, u * 0.014);
+  ctx.beginPath();
+  ctx.arc(u * 0.05, -u * 0.005, u * 0.025, -1.3, 1.3);
+  ctx.stroke();
+  ctx.fillStyle = "#c23a3a";
+  ctx.fillRect(-u * 0.045, -u * 0.02, u * 0.09, u * 0.018);
+  ctx.restore();
+  ctx.save();
+  // The coffee: a ribbon leaving the lip, thinning as it falls, breaking
+  // into drops that hang where they were. Nothing moves.
+  const lipX = mx - u * 0.05;
+  const lipY = my + u * 0.03;
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#6b3a17";
+  ctx.beginPath();
+  ctx.moveTo(lipX + u * 0.012, lipY - u * 0.02);
+  ctx.bezierCurveTo(lipX - u * 0.08, lipY + u * 0.0, lipX - u * 0.12, lipY + u * 0.14, lipX - u * 0.105, lipY + u * 0.3);
+  ctx.lineTo(lipX - u * 0.085, lipY + u * 0.3);
+  ctx.bezierCurveTo(lipX - u * 0.085, lipY + u * 0.16, lipX - u * 0.04, lipY + u * 0.07, lipX + u * 0.03, lipY + u * 0.02);
+  ctx.closePath();
+  ctx.fill();
+  // A sheen down the ribbon, catching the room's light.
+  ctx.strokeStyle = "rgba(235,185,130,0.6)";
+  ctx.lineWidth = Math.max(1, u * 0.006);
+  ctx.beginPath();
+  ctx.moveTo(lipX, lipY);
+  ctx.bezierCurveTo(lipX - u * 0.07, lipY + u * 0.03, lipX - u * 0.1, lipY + u * 0.14, lipX - u * 0.098, lipY + u * 0.27);
+  ctx.stroke();
+  ctx.fillStyle = "#6b3a17";
+  for (const [dx, dy, r] of POUR_DROPS) {
+    ctx.beginPath();
+    ctx.ellipse(lipX + dx * u, lipY + dy * u, Math.max(1, r * u), Math.max(1.2, r * u * 1.3), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Where it would have landed: a faint shadow on the floor, no stain yet.
+  ctx.globalAlpha = fog * 0.25;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(lipX - u * 0.09, floor, u * 0.09, u * 0.018, 0, 0, Math.PI * 2);
+  ctx.fill();
+  stillMotes(ctx, lipX - m * 0.05, lipY + m * 0.2, m * 0.5, m * 0.6, m, seed, t, fog);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function renderFrozenPaper(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const floor = groundY(cy, sh);
+  const lift = entity?.lift ?? 1.05;
+  const seed = (entity?.x ?? 0) * 2.3 + (entity?.y ?? 0) * 4.1;
+  const tilt = 0.5 + (Math.abs(seed) % 0.4);
+  const py = floor - m * lift;
+  ctx.save();
+  // Its shadow, far below it on the floor.
+  ctx.globalAlpha = fog * 0.18;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(sx, floor, m * 0.15, m * 0.025, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // The sheet, side-slipping as paper falls, one corner curled up.
+  ctx.translate(sx, py);
+  ctx.rotate(tilt);
+  // A little larger than a real sheet, so it reads from across the room.
+  const w = m * 0.3;
+  const h = m * 0.21;
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#eef0ea";
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2);
+  ctx.lineTo(w / 2, -h / 2 + h * 0.08);
+  ctx.quadraticCurveTo(w / 2 + w * 0.06, h * 0.1, w / 2 - w * 0.04, h / 2);
+  ctx.lineTo(-w / 2 + w * 0.05, h / 2 - h * 0.06);
+  ctx.quadraticCurveTo(-w / 2 - w * 0.03, 0, -w / 2, -h / 2);
+  ctx.closePath();
+  ctx.fill();
+  // The underside of the curl, in shade.
+  ctx.fillStyle = "#b8bcb4";
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - w * 0.04, h / 2);
+  ctx.quadraticCurveTo(w / 2 - w * 0.2, h * 0.38, w / 2 - w * 0.12, h * 0.18);
+  ctx.quadraticCurveTo(w / 2 + w * 0.02, h * 0.2, w / 2 - w * 0.04, h / 2);
+  ctx.fill();
+  // Lines of type.
+  ctx.fillStyle = "rgba(40,48,60,0.45)";
+  const lh = Math.max(1, h * 0.05);
+  for (let i = 0; i < 6; i++) ctx.fillRect(-w * 0.36, -h * 0.3 + i * h * 0.1, w * (i === 5 ? 0.4 : 0.66), lh);
+  ctx.restore();
+  ctx.save();
+  stillMotes(ctx, sx, py, m * 0.45, m * 0.4, m, seed, t, fog);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+PROP_RENDERERS.frozen_pour = renderFrozenPour;
+PROP_RENDERERS.frozen_paper = renderFrozenPaper;

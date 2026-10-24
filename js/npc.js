@@ -113,6 +113,8 @@ export class Npc {
     this._waitT = 0;
     /** Where the last route segment started, for the lane's side. */
     this._from = null;
+    /** Stopped by the pulse (freeze()): the "frozen" pose for good, and nothing moves them. */
+    this.frozen = false;
   }
 
   /**
@@ -120,6 +122,8 @@ export class Npc {
    * is gone when it gets there (out of the door, off down the corridor).
    */
   walk(points, { then = null, leave = false, speed = null } = {}) {
+    // A stopped person goes nowhere until thawed.
+    if (this.frozen) return;
     this.path = points.map((p) => (Array.isArray(p) ? { x: p[0], y: p[1] } : { ...p }));
     this._onArrive = then;
     this._leave = leave;
@@ -134,6 +138,32 @@ export class Npc {
     if (name !== this.gesture) this.gestureT = 0;
     this.gesture = name;
     this._gestureLeft = seconds;
+  }
+
+  /**
+   * Caught by the pulse: stopped where they stand, in the "frozen" pose, for
+   * good. They do not turn, settle a step or give way to anyone; the
+   * renderer drains their colour and gives them the echo (src/rendering/
+   * frozen-look.js), and walking into them stops the player, not them
+   * (src/systems/stillness.js). `face` turns them once, before the stop.
+   */
+  freeze({ face = null } = {}) {
+    if (face) this.angle = Math.atan2(face.y - this.y, face.x - this.x);
+    this.path = [];
+    this._onArrive = null;
+    this._face = null;
+    this.moveSpeed = 0;
+    this.waiting = false;
+    this.frozen = true;
+    this.pose("frozen", Infinity);
+    // Caught at once, not eased into: the pose is whole from the first frame.
+    this.gestureT = 1;
+  }
+
+  /** Let go of the instant: they stand as they were, and the scene may move them again. */
+  thaw() {
+    this.frozen = false;
+    if (this.gesture === "frozen") this.gesture = null;
   }
 
   /** Change into another look (an officer into heavy armour): same person, new sprite. */
@@ -167,6 +197,9 @@ export class Npc {
         if (this._gestureLeft <= 0) this.gesture = null;
       }
     }
+    // Held in the instant: no turn toward anyone, no last half-step, no sway.
+    // (A bare pose("frozen") still finishes turning to whoever it faces.)
+    if (this.frozen) return;
     if (!this.path.length) {
       this._stand(dt);
       return;
