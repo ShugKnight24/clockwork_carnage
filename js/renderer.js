@@ -309,7 +309,7 @@ export class Renderer {
    * ids 10+) has them painted into the env the first time it is drawn, and
    * the GPU wall pass re-uploads its texture array to take them.
    */
-  _ensureMapWalls(env, map) {
+  _ensureMapWalls(env, map, player = null) {
     if (map._ownWalls === undefined) {
       const ids = new Set();
       for (const row of map.grid) for (const v of row) if (v >= 10) ids.add(v);
@@ -323,7 +323,7 @@ export class Renderer {
     let added = false;
     try {
       added = ensureEnvWalls(env, late.length ? map._ownWalls.filter((id) => !late.includes(id)) : map._ownWalls, !!env.realistic);
-      if (late.length && !added) added = this._paintLateWalls(env, late);
+      if (late.length && !added) added = this._paintLateWalls(env, late, () => nearWalls(map, player, late));
     } catch (err) {
       // A face that will not paint must not fail every frame: those cells
       // draw with the common walls instead.
@@ -338,9 +338,10 @@ export class Renderer {
 
   /**
    * Paint `late` wall faces into a staging set for ~6 ms a frame; true once
-   * they are all done and handed to `env` in one go (one texture upload).
+   * they are all done and handed to `env` in one go (one texture upload),
+   * or all at once when `inView()` says the player is among them.
    */
-  _paintLateWalls(env, late) {
+  _paintLateWalls(env, late, inView = () => false) {
     let st = env._late;
     if (!st || st.ids !== late) {
       st = env._late = {
@@ -350,8 +351,11 @@ export class Renderer {
       };
     }
     if (!st.left.length) return false;
+    const now = inView();
     const t0 = performance.now();
-    while (st.left.length && performance.now() - t0 < 6) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic);
+    // Standing in the wing (an art-style switch rebuilds the env there), the
+    // walls in view would draw as nothing while they wait: paint them all now.
+    while (st.left.length && (now || performance.now() - t0 < 6)) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic);
     if (st.left.length) return false;
     Object.assign(env.walls, st.stage.walls);
     return true;
@@ -913,7 +917,7 @@ export class Renderer {
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
     const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
-    if (menv && map) this._ensureMapWalls(menv, map);
+    if (menv && map) this._ensureMapWalls(menv, map, player);
     // Realistic reuses the Modern wall art and swaps the lighting: no ink
     // lines, darker ambient, contact shadows, inverse-square lights.
     const real = !!menv && isRealisticArt();
@@ -2125,4 +2129,19 @@ export class Renderer {
     ctx.restore();
   }
 
+}
+
+/** Whether any of `ids` stands within a dozen tiles of the player. */
+function nearWalls(map, player, ids) {
+  if (!player || !map?.grid) return false;
+  const R = 12;
+  const px = Math.floor(player.x);
+  const py = Math.floor(player.y);
+  for (let y = Math.max(0, py - R); y <= Math.min(map.grid.length - 1, py + R); y++) {
+    const row = map.grid[y];
+    for (let x = Math.max(0, px - R); x <= Math.min(row.length - 1, px + R); x++) {
+      if (row[x] >= 10 && ids.includes(row[x])) return true;
+    }
+  }
+  return false;
 }
