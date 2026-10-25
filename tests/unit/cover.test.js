@@ -14,6 +14,7 @@ import {
   boltClearsCover,
   COVER_OFFSET,
   BLIND_FIRE_MIN_CONE,
+  BLIND_FIRE_SPREAD_MULT,
 } from "../../src/systems/cover.js";
 import {
   createCoverStats,
@@ -24,7 +25,7 @@ import {
   coverDash,
   beginCoverShot,
   endCoverShot,
-  coverShotPitch,
+  coverShotAim,
   noteCoverKill,
   leaveCover,
 } from "../../src/systems/cover-play.js";
@@ -308,7 +309,7 @@ describe("firing from cover", () => {
     frames(game, 12);
     game.player.crouchBlend = 1;
     expect(coverCone(game.player, 0.01)).toBeGreaterThanOrEqual(BLIND_FIRE_MIN_CONE);
-    expect(coverCone(game.player, 0.05)).toBeCloseTo(0.05 * 3.5);
+    expect(coverCone(game.player, 0.05)).toBeCloseTo(0.05 * BLIND_FIRE_SPREAD_MULT);
     const saved = beginCoverShot(game);
     expect(game.player.crouchBlend).toBe(0);
     endCoverShot(game, saved);
@@ -325,15 +326,25 @@ describe("firing from cover", () => {
     game.player.crouchBlend = 1;
     const enemy = { type: "enemy", active: true, state: "chase", x: game.player.x, y: game.player.y - 6 };
     game.entities = [enemy];
-    const eye = CROUCH_EYE_Z;
     const pitch = Math.atan(0.3 / 6); // the reticle on a point 0.3 over the crouched eye, 6 out
     const saved = beginCoverShot(game);
-    expect(saved.lift).toBeCloseTo(STAND_EYE_Z - CROUCH_EYE_Z);
-    const sent = coverShotPitch(game, saved, -Math.PI / 2, pitch);
+    expect(saved.eye).toBeCloseTo(CROUCH_EYE_Z);
+    const sent = coverShotAim(game, saved, -Math.PI / 2, pitch);
     // From the standing eye it still meets that point, not 0.45 over it.
-    expect(STAND_EYE_Z + Math.tan(sent) * 6).toBeCloseTo(eye + 0.3);
+    expect(STAND_EYE_Z + Math.tan(sent.pitch) * 6).toBeCloseTo(CROUCH_EYE_Z + 0.3);
+    expect(sent.yaw).toBeCloseTo(-Math.PI / 2);
     endCoverShot(game, saved);
-    expect(coverShotPitch(game, null, 0, pitch)).toBe(pitch);
+    expect(coverShotAim(game, null, 0, pitch)).toEqual({ yaw: 0, pitch });
+  });
+
+  it("sends a round blind-fired round the end of high cover back across to the reticle", () => {
+    // The camera stays behind the wall at (5, 5); the round leaves 0.7 east of it.
+    const game = { player: { x: 5.7, y: 5, crouchBlend: 0 }, entities: [{ type: "enemy", active: true, state: "chase", x: 5, y: -1 }] };
+    const saved = { x: 5, y: 5, eye: STAND_EYE_Z };
+    const sent = coverShotAim(game, saved, -Math.PI / 2, 0);
+    // Six cells north of the camera, not 0.7 east of it.
+    expect(5.7 + Math.cos(sent.yaw) * Math.hypot(0.7, 6)).toBeCloseTo(5, 1);
+    expect(sent.pitch).toBeCloseTo(0);
   });
 
   it("counts peeked and blind-fired kills", () => {

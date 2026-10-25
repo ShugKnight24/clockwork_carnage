@@ -264,13 +264,10 @@ export function beginCoverShot(game) {
   const p = game.player;
   if (!isBlindFiring(p)) return null;
   p._blindFireAt = game.time;
-  const saved = { x: p.x, y: p.y, crouchBlend: p.crouchBlend, lift: 0 };
+  const saved = { x: p.x, y: p.y, crouchBlend: p.crouchBlend, eye: playerEyeZ(p) };
   const f = p.cover.face;
-  if (f.low) {
-    const eye = playerEyeZ(p);
-    p.crouchBlend = 0;
-    saved.lift = playerEyeZ(p) - eye;
-  } else {
+  if (f.low) p.crouchBlend = 0;
+  else {
     const edge = edgeAt(f, p.cover.s);
     if (edge) {
       const pt = facePoint(f, leanS(f, edge));
@@ -282,24 +279,29 @@ export function beginCoverShot(game) {
 }
 
 /**
- * The pitch a blind-fired round leaves at. It leaves from the standing eye,
- * `saved.lift` over the crouched camera; flown on the camera's own pitch it
- * passed that far over whatever the reticle was on (a head and more since
- * the eye stood level with everyone's). It is sent instead at the point the
- * reticle sits on: the nearest enemy close to the aim line, or a few cells
- * out when there is none.
+ * Where a blind-fired round is sent: from where it leaves (beginCoverShot's
+ * standing eye over low cover, or the lean point round the end of high
+ * cover) at the point under the reticle, as the camera behind the cover sees
+ * it. Flown on the camera's own yaw and pitch it passed beside or over what
+ * the reticle was on, by the whole lean or lift. That point is on the
+ * nearest enemy close to the aim line, or a few cells out with none.
+ * @returns {{ yaw: number, pitch: number }}
  */
-export function coverShotPitch(game, saved, yaw, pitch) {
-  if (!saved?.lift) return pitch;
+export function coverShotAim(game, saved, yaw, pitch) {
+  if (!saved) return { yaw, pitch };
   const p = game.player;
   let dist = BLIND_AIM_FALLBACK;
   for (const e of game.entities) {
     if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
-    const d = Math.hypot(e.x - p.x, e.y - p.y);
-    const off = Math.atan2(e.y - p.y, e.x - p.x) - yaw;
+    const d = Math.hypot(e.x - saved.x, e.y - saved.y);
+    const off = Math.atan2(e.y - saved.y, e.x - saved.x) - yaw;
     if (d > 0.5 && d < dist && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < BLIND_AIM_CONE) dist = d;
   }
-  return Math.atan(Math.tan(pitch) - saved.lift / dist);
+  const tx = saved.x + Math.cos(yaw) * dist - p.x;
+  const ty = saved.y + Math.sin(yaw) * dist - p.y;
+  const along = Math.max(0.5, Math.hypot(tx, ty));
+  const rise = saved.eye + Math.tan(pitch) * dist - playerEyeZ(p);
+  return { yaw: Math.atan2(ty, tx), pitch: Math.atan(rise / along) };
 }
 
 export function endCoverShot(game, saved) {

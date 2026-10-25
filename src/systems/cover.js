@@ -30,9 +30,9 @@ export const COVER_LEAN = 0.7;
 /** Cover-to-cover: the furthest face a slide will carry you to. */
 export const COVER_DASH_RANGE = 4.5;
 /** Blind fire scatters this many times wider than the weapon's hip cone... */
-export const BLIND_FIRE_SPREAD_MULT = 3.5;
+export const BLIND_FIRE_SPREAD_MULT = 2;
 /** ...and never tighter than this (radians), even for a precise rifle. */
-export const BLIND_FIRE_MIN_CONE = 0.06;
+export const BLIND_FIRE_MIN_CONE = 0.03;
 
 // Doors open and secret walls slide away: neither is something to stand behind.
 const NOT_COVER = new Set([5, 6]);
