@@ -26,6 +26,7 @@ import {
   beginCoverShot,
   endCoverShot,
   coverShotAim,
+  blindFireNow,
   noteCoverKill,
   leaveCover,
 } from "../../src/systems/cover-play.js";
@@ -317,6 +318,19 @@ describe("firing from cover", () => {
     game.player.isAiming = true;
     expect(coverCone(game.player, 0.01)).toBe(0.01);
     expect(beginCoverShot(game)).toBeNull();
+  });
+
+  it("is blind fire only when the cover is in the shot's way", () => {
+    const game = fakeGame(5.5, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    game.player.crouchBlend = 1;
+    // Level from the crouch: into the block.
+    expect(blindFireNow(game, NORTH, 0)).toBe(true);
+    // Up over it, at something you can see: an ordinary hip shot.
+    expect(blindFireNow(game, NORTH, Math.atan(0.6))).toBe(false);
+    game.player.isAiming = true;
+    expect(blindFireNow(game, NORTH, 0)).toBe(false);
   });
 
   it("sends a blind-fired round over low cover at what the reticle is on", () => {

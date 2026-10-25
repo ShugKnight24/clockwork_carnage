@@ -30,6 +30,7 @@ import {
 } from "./cover.js";
 import { activeDevice } from "../ui/input-glyphs.js";
 import { playerEyeZ } from "./physics.js";
+import { distanceToWall } from "./combat.js";
 
 /** The ease onto the face. */
 const SNAP_SECONDS = 0.16;
@@ -244,12 +245,27 @@ export function updateCover(game, dt) {
   p.coverDashTarget = c.snap ? null : coverDashTarget(map, p.x, p.y, p.angle, f);
 }
 
-/** Firing from cover without the sights up: blind fire. */
+/** Firing from cover without the sights up: blind fire, if the cover is in the shot's way. */
 export const isBlindFiring = (p) => !!p?.cover && !p.isAiming;
 
+/** How near the cover must stop a shot for it to be fired blind (cells). */
+const BLIND_REACH = 1.6;
+
+/**
+ * Whether a shot from cover along (yaw, pitch) is blind fire: no sights up,
+ * and the cover itself in the way of it. With a clear line from the eye to
+ * what the reticle is on (over low cover you can see over, past the end of
+ * high cover) it is an ordinary hip-fire shot, from the eye, at hip spread.
+ */
+export function blindFireNow(game, yaw, pitch) {
+  const p = game.player;
+  if (!isBlindFiring(p) || !game.map) return false;
+  return distanceToWall(p, Math.cos(yaw), Math.sin(yaw), game.map, BLIND_REACH, pitch, playerEyeZ(p)) < BLIND_REACH;
+}
+
 /** The shot cone from cover: blind fire sprays. */
-export function coverCone(p, cone) {
-  if (!isBlindFiring(p)) return cone;
+export function coverCone(p, cone, blind = isBlindFiring(p)) {
+  if (!blind) return cone;
   return Math.max(cone * BLIND_FIRE_SPREAD_MULT, BLIND_FIRE_MIN_CONE);
 }
 
@@ -260,9 +276,9 @@ export function coverCone(p, cone) {
  * when this is not blind fire. Even if a shot threw between the two, the next
  * frame's updateCover puts the player back on the face.
  */
-export function beginCoverShot(game) {
+export function beginCoverShot(game, blind = isBlindFiring(game.player)) {
   const p = game.player;
-  if (!isBlindFiring(p)) return null;
+  if (!blind) return null;
   p._blindFireAt = game.time;
   const saved = { x: p.x, y: p.y, crouchBlend: p.crouchBlend, eye: playerEyeZ(p) };
   const f = p.cover.face;

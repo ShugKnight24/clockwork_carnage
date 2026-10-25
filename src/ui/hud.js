@@ -2,7 +2,7 @@ import { drawCrosshair, drawAdsSight, drawSpreadBrackets, drawScope } from "./cr
 import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
-import { effectiveAimFov, reticlePoint, getAimBlend, currentSpread, scopeSteadiness } from "../systems/aim.js";
+import { effectiveAimFov, reticlePoint, getAimBlend, currentSpread, scopeSteadiness, aimAnglesForGame } from "../systems/aim.js";
 import { isCompactPhone } from "../../js/layout.js";
 import {
   CHARACTER_COLORS,
@@ -27,7 +27,7 @@ import {
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawCombatCues } from "./combat-cues.js";
-import { coverCone } from "../systems/cover-play.js";
+import { coverCone, blindFireNow } from "../systems/cover-play.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
 import { drawReloadHud, drawConditioningChip, ammoTint } from "./reload-hud.js";
@@ -408,7 +408,9 @@ function drawAimReticle(ctx, game, cx, cy, barH = 0) {
   // The cone in screen pixels, through the same (zoomed) view the world is drawn with.
   const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
   // Blind fire from cover sprays wider, and the brackets say so.
-  const cone = (Math.tan(coverCone(game.player, currentSpread(wep))) / Math.tan(fov / 2)) * (w / 2);
+  const aim = game.player?.cover ? aimAnglesForGame(game) : null;
+  const blind = !!aim && blindFireNow(game, aim.yaw, aim.pitch);
+  const cone = (Math.tan(coverCone(game.player, currentSpread(wep), blind)) / Math.tan(fov / 2)) * (w / 2);
   drawSpreadBrackets(ctx, cx, cy, cone, 1 - scoped);
   drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6) * (1 - scoped), (game.hudH || 900) / 900);
   if (scoped > 0) {

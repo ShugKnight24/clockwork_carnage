@@ -26,7 +26,7 @@ import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
 import { readyToFire, spendShot } from "./reload.js";
 import { noteConditioningKill } from "./conditioning-play.js";
-import { coverCone, beginCoverShot, endCoverShot, coverShotAim, shotClearsCover, noteCoverKill } from "./cover-play.js";
+import { coverCone, blindFireNow, beginCoverShot, endCoverShot, coverShotAim, shotClearsCover, noteCoverKill } from "./cover-play.js";
 import { arrive, QUICK_TEAR } from "./arrival.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
@@ -114,11 +114,13 @@ export function fireWeapon(game) {
   // to its `adsSpread` as the sights come up. Single rounds used to ignore
   // the cone and pellets spread only sideways, so the sights and the
   // crosshair said nothing about where a weapon's rounds actually went.
-  // Blind fire from cover sprays far wider (src/systems/cover-play.js).
-  const cone = coverCone(game.player, currentSpread(wep));
+  // Blind fire from cover sprays wider (src/systems/cover-play.js); a hip
+  // shot from cover with a clear line is an ordinary one.
+  const blind = blindFireNow(game, camera.yaw, camera.pitch);
+  const cone = coverCone(game.player, currentSpread(wep), blind);
   const fanMul = game.player.isAiming ? ADS_FAN_MULT : 1;
 
-  const coverShot = beginCoverShot(game);
+  const coverShot = beginCoverShot(game, blind);
   const { yaw: aimAngle, pitch: aimPitch } = coverShotAim(game, coverShot, camera.yaw, camera.pitch);
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
