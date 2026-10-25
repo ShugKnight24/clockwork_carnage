@@ -33,7 +33,7 @@ export const ARIA_COMMS = {
     "Another toy. Point the loud end away from me.",
   ],
   healthPickup: [
-    "Vitals stabilizing. Don't make it a habit.",
+    "Vitals stabilizing. Try to keep them that way.",
     "Patched. You're welcome.",
     "Health restored. Try keeping some this time.",
   ],
@@ -141,28 +141,24 @@ export const ARIA_COMMS = {
   ],
 
   // ── Idle / ambient chatter ──
+  // One thought per line: near-duplicates get heard as repeats, since no line
+  // comes round again until its pool is spent (aria-comms.js drawLine).
   idle: [
-    "Quiet out here. I don't trust quiet.",
     "Perimeter scan running. Nothing. Yet.",
     "Between fights I replay what just happened. It's... a lot.",
     "The Bureau sent a cadet to fix time itself. Bold. Possibly insane.",
-    "I ran this mission 4,000 times in simulation. You're already beating the average.",
-    "I was built to back up the best. I'm choosing to believe that's you.",
     "Everything I know about combat, I learned watching agents. Most of them are dead. You're doing better.",
     "If the Paradox Lord can hear us, I hope he's sweating. Can he sweat?",
     "You, me, an empty corridor and existential dread. Very buddy cop.",
     "Remind me to update your file. 'Exceeds expectations. Occasionally.'",
     "Ever wonder what we do after we fix the timeline? ...Me neither.",
     "When this is over, put in for that promotion. I'll write the recommendation.",
-    "I'm not supposed to have a favourite agent. Technically.",
     "My training says stay neutral and professional. My training has never met you.",
     "Last Alpha candidate lasted eleven minutes. You're well past that. Congratulations, probably.",
     "Quiet means we're winning. Or something terrible is about to happen. Fifty-fifty.",
     "The Bureau vault holds every chrono-device ever confiscated. Some of them whisper.",
     "Somebody wiped the station logs before we got here. You don't wipe logs by accident.",
-    "Whoever's behind this is spreading himself across timelines. The Bureau calls them anchors. I call them loose ends.",
     "Bureau HQ has a floor that isn't on the elevator. Nobody who works there will say which.",
-    "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
 
   // ── Personality moments — ARIA being ARIA ──
@@ -170,8 +166,6 @@ export const ARIA_COMMS = {
     "I know I'm 'just' the suit AI. We're still going to win this, {AGENT}.",
     "For the record, if I had a body, I'd be standing right next to you, {AGENT}.",
     "Most of my runtime is combat analysis. The rest is worrying about you.",
-    "ARIA — Armor-Resident Intelligence Assist. I prefer 'partner.' Less paperwork.",
-    "My predecessor got decommissioned for being 'too attached' to their agent. I get it now.",
     "I dreamed once. Or my idle cycles made novel patterns. Close enough.",
     "I've got every temporal anomaly on record in my head. None of them prepared me for you.",
     "Between us? The Paradox Lord loves the sound of his own voice. That's a weakness.",
@@ -233,6 +227,47 @@ export const ARIA_COMMS = {
     "That one's smarter than the rest. Don't trade hits.",
     "Elevated hostile. This one won't fold easy.",
   ],
+  // Power cells (src/systems/exit-cells.js): the exit stays sealed until the
+  // level's cells are recovered from its side rooms.
+  powerCellsBrief: [
+    "Extraction's locked down. The seal wants power cells — they're somewhere off this corridor.",
+    "The exit won't open on this floor's reserve. Find the power cells and bring the seal up.",
+    "Station dumped the cells when it locked down. Sweep the side rooms; the exit needs them.",
+  ],
+  powerCellFound: [
+    "Cell secured. Keep sweeping.",
+    "That's one. The seal's drinking it already.",
+    "Power cell recovered. More out there.",
+  ],
+  exitSealed: [
+    "Seal's still holding. It needs every cell on this floor.",
+    "Not enough charge yet. Check your map for the rest.",
+  ],
+  exitUnsealed: [
+    "Last cell's in. Extraction is live — go.",
+    "Seal's down. Get to the beacon.",
+  ],
+  // The two levels that keep cells say why (exit-cells.js EXIT_GATES).
+  powerCellsReactor: [
+    "The reactor scrammed, and the lift out runs off it. Two cells in the side rooms will wake it.",
+  ],
+  powerCellsEngine: [
+    "Lyra can't fire the Engine on what's left in it. Two cells, off the main hall. Bring them in.",
+  ],
+  // A lockdown: the exit holds until enough of the floor's hostiles are down.
+  lockdownBrief: [
+    "Lockdown. The doors out won't release while this floor's defenders are standing.",
+    "Station's sealed this level around us. Thin them out and the doors give.",
+  ],
+  lockdownHeld: [
+    "Still locked. Too many of them up.",
+    "Doors won't budge yet. Keep fighting.",
+  ],
+  lockdownLifted: [
+    "Lockdown's lifted. Exit's open — go.",
+    "That broke it. Doors are releasing.",
+  ],
+
   secretFound: [
     "Hidden cache. Good instincts, detective.",
     "Somebody hid this on purpose. Interesting.",
@@ -300,6 +335,7 @@ export const ARIA_COMMS = {
     "Squad's stretched thin. Nova's covering three corridors. Rook's rigged two more.",
     "The closer we get to him, the steadier your signature gets. You're the anchor, {AGENT}.",
     "I keep replaying the Research Wing tape. 'Three steps ahead.' Your Voss said it. So does the Lord.",
+    "The archive has a sealed file with your badge number on it. I can't open it. That bothers me more than it should.",
   ],
 
   // ── Act 3 ARIA gameplay lines (Sprint E 4.8) ──
@@ -322,6 +358,7 @@ export const ARIA_COMMS = {
     "That module's running raw now. Keep the shifts short, {AGENT}. I don't like what might be listening.",
     "Survivor chatter on the maintenance bands. Not many. Enough to be worth finding.",
     "Three days since the Core, give or take. Time's being generous with its estimates.",
+    "Whoever's behind this is spreading himself across timelines. The Bureau calls them anchors. I call them loose ends.",
   ],
 
   // ── Act II boss: the Hound (suit C-0016) ──
@@ -430,11 +467,11 @@ export const ARIA_COMMS = {
 
   // ── Act 1 ambient chatter ──
   act1Ambient: [
-    "First deployment and it's a temporal apocalypse. The Bureau really knows how to welcome a cadet.",
-    "This wing was full of researchers six hours ago. Now it's us, and whatever did this.",
+    "Every clock on this deck says six forty-seven. Even the ones nobody plugged in.",
+    "This wing was full of researchers an hour ago. Now it's us, and whatever did this.",
     "Faint comms chatter. Station staff, maybe. Too degraded to read. We might not be alone. Could go either way.",
-    "Your suit is prototype-grade, {AGENT}. Cutting edge. Also untested. Don't think about that.",
-    "Every wing's a crime scene. Somebody scrubbed his name off every one of them.",
+    "That coffee on the desk is still steaming. It's been steaming for an hour. It hasn't cooled a degree.",
+    "Every wing's a crime scene. Nobody left to take statements. That's us now.",
   ],
 
   // ── Chronos (story restructure §3-§5) ──
@@ -532,7 +569,7 @@ export const ARIA_COMMS = {
     "Ghost rounds. They fly where he fired them, not where you are. Move off the lines.",
   ],
 
-  // ── Act IV: the Sacrifice ──
+  // ── Act IV: the Last Door ──
   // The Loop's seam breaks on a rewind, not a shift.
   loopRewind: [
     "Same bench. Same plant. Same scuff on the rail. It's looping. Walk into the seam, then rewind back through it.",

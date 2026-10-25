@@ -6,6 +6,7 @@
  */
 
 import { isModernArt, isRealisticArt } from "./art-style.js";
+import { lowHealthSeverity, heartPulse, lowHealthVignetteAlpha } from "../systems/player-feedback.js";
 
 /**
  * Render all post-processing effects in order.
@@ -44,29 +45,28 @@ export function renderPostFX(ctx, w, h, state) {
     }
   }
 
-  // Modern HUD draws its own inked damage chevron and low-HP corner frames
-  // (hud-modern.js drawModernCombatCues); the arc would double that read.
+  // The damage-direction cues are HUD work now (src/ui/combat-cues.js), so
+  // every HUD and art style gets them, with post-processing off too.
   const modern = isModernArt();
 
-  // Damage direction indicator — red arc on screen edge
-  if (!modern && postProcessing && player.hurtTime && time - player.hurtTime < 500 && player.lastDamageAngle != null) {
-    drawDamageDirection(ctx, w, h, time, player);
-  }
-
-  // Low-health warning pulse — red vignette + heartbeat audio
+  // Low-health state: a vignette that is plainly there from 30% health down
+  // and beats with the heartbeat (the sound and the muffle are in the audio
+  // mix, driven from the game loop). src/systems/player-feedback.js.
   const hpRatio = player.health / player.maxHealth;
-  if (player.alive && hpRatio < 0.25 && hpRatio > 0) {
-    const severity = 1 - (hpRatio / 0.25); // 0 at 25%, 1 at 0%
-    const pulse = 0.5 + 0.5 * Math.sin(time * 0.006 * (1 + severity)); // faster at lower health
-    const alpha = severity * pulse * 0.35;
+  const severity = player.alive ? lowHealthSeverity(player.health, player.maxHealth) : 0;
+  if (severity > 0) {
+    const pulse = heartPulse(time, severity);
+    const alpha = lowHealthVignetteAlpha(severity, pulse);
 
     if (modern) {
       // Same pulse as the HUD's crimson corner frames so they breathe together.
-      drawModernLowHealthVignette(ctx, w, h, severity, pulse);
+      drawModernLowHealthVignette(ctx, w, h, alpha);
     } else {
-      const grd = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.7);
-      grd.addColorStop(0, "rgba(180,0,0,0)");
-      grd.addColorStop(1, `rgba(180,0,0,${alpha})`);
+      // Full strength by the frame's corners, so the edges read at a glance.
+      const grd = ctx.createRadialGradient(w / 2, h / 2, w * 0.16, w / 2, h / 2, Math.hypot(w, h) / 2);
+      grd.addColorStop(0, "rgba(170,0,0,0)");
+      grd.addColorStop(0.5, `rgba(170,0,0,${(alpha * 0.45).toFixed(3)})`);
+      grd.addColorStop(1, `rgba(150,0,0,${Math.min(1, alpha * 1.25).toFixed(3)})`);
       ctx.fillStyle = grd;
       ctx.fillRect(0, 0, w, h);
     }
@@ -79,9 +79,6 @@ export function renderPostFX(ctx, w, h, state) {
       ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "source-over";
     }
-
-    // Heartbeat audio — driven from the same place as the visual pulse
-    state.audio?.heartbeat?.(severity);
   }
 
   // Glitch slice effect
@@ -200,33 +197,11 @@ function getLowHpVignette() {
   return c;
 }
 
-function drawModernLowHealthVignette(ctx, w, h, severity, pulse) {
+function drawModernLowHealthVignette(ctx, w, h, alpha) {
   const prev = ctx.globalAlpha;
-  ctx.globalAlpha = Math.min(1, 0.25 + severity * (0.45 + 0.55 * pulse) * 0.75);
+  ctx.globalAlpha = Math.min(1, 0.15 + alpha);
   ctx.drawImage(getLowHpVignette(), 0, 0, w, h);
   ctx.globalAlpha = prev;
-}
-
-function drawDamageDirection(ctx, w, h, time, player) {
-  const elapsed = (time - player.hurtTime) / 500;
-  const dirAlpha = 0.6 * (1 - elapsed);
-  let relAngle = player.lastDamageAngle - player.angle;
-  while (relAngle > Math.PI) relAngle -= Math.PI * 2;
-  while (relAngle < -Math.PI) relAngle += Math.PI * 2;
-  const cx = w / 2;
-  const cy = h / 2;
-  const outerR = Math.min(w, h) * 0.48;
-  const innerR = outerR * 0.85;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(relAngle);
-  ctx.beginPath();
-  ctx.arc(0, 0, outerR, -0.35, 0.35);
-  ctx.arc(0, 0, innerR, 0.35, -0.35, true);
-  ctx.closePath();
-  ctx.fillStyle = `rgba(255,20,0,${dirAlpha})`;
-  ctx.fill();
-  ctx.restore();
 }
 
 export function drawGlitch(ctx, w, h, canvas, intensity) {

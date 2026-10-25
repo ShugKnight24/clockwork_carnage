@@ -63,6 +63,7 @@ test("locked preset shows a toast and leaves the character unchanged", async ({ 
   const before = await snapshot();
   // Juggernaut (preset 1) needs the tier-3 "heavy" armour, which a fresh save
   // (no campaign progress, no arena survival) has not earned.
+  await room(page).locator(".more-presets").click(); // locked presets are folded away
   await room(page).locator('.preset[data-preset="1"]').click();
   await expect(room(page).locator(".toast")).toHaveText(/Juggernaut locked/);
   expect(await snapshot()).toBe(before);
@@ -280,3 +281,30 @@ for (const [style, name] of [[0, "legacy"], [1, "comic"], [2, "modern"]]) {
     await page.screenshot({ path: `screenshots/custom-${name}.png` });
   });
 }
+
+test("saved looks restore an outfit; the cape comes off; locked presets fold away", async ({ page }) => {
+  await openCreator(page);
+  const ch = () => page.evaluate(() => ({ ...window.ccDebug.game.character }));
+  // A fresh save has earned one preset; the rest wait behind the toggle.
+  await expect(room(page).locator(".more-presets")).toHaveText(/more to earn/);
+  const shown = await room(page).locator(".preset[data-preset]:visible").count();
+  await room(page).locator(".more-presets").click();
+  expect(await room(page).locator(".preset[data-preset]:visible").count()).toBeGreaterThan(shown);
+
+  await tab(page, "colors").click();
+  await opt(page, "colorIndex", 3).click();
+  await room(page).locator(".save-look").click();
+  await opt(page, "colorIndex", 1).click();
+  expect((await ch()).colorIndex).toBe(1);
+  await room(page).locator(".look .preset").first().click();
+  expect((await ch()).colorIndex).toBe(3);
+
+  await tab(page, "gear").click();
+  await opt(page, "capeIndex", 1).click();
+  expect((await ch()).capeIndex).toBe(1);
+  await expect(room(page).locator(".figure .ag-cape path")).toHaveCount(0);
+
+  await room(page).locator(".look").first().hover();
+  await room(page).locator(".look .del").first().click();
+  await expect(room(page).locator(".look")).toHaveCount(0);
+});

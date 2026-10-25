@@ -23,7 +23,8 @@ import {
   lowTile,
   LAYER,
 } from "./map-helpers.js";
-import { TUTORIAL_MAP } from "./tutorial.js";
+import { STATION_CORE } from "./tutorial.js";
+import { dressStation } from "./station-dressing.js";
 
 const W = 60;
 const H = 60;
@@ -286,7 +287,9 @@ function buildSalvageDeck() {
       item(5, 17, "health"),
       item(27, 5, "ammo"),
       item(55, 17, "health"),
-      item(34, 17, "weapon", { weaponId: 2 }),
+      // The Phase Scattergun: new here, not in Act I, so Act II still hands
+      // you something (the Quantum Cannon follows in the Maintenance Spine).
+      item(34, 17, "weapon", { weaponId: 4 }),
       // Looter stash.
       item(58, 15, "ammo"),
       item(58, 14, "health"),
@@ -535,9 +538,9 @@ function buildTransitLoop() {
   for (const [r, c] of [[39, 38], [39, 45], [45, 38], [45, 45]]) tile(g, r, c, 2);
   lowWall(g, hm, 42, 40, 42, 43, LAYER.WAIST);
   // Derailed car on the south loop: cover on the long straight.
-  lowWall(g, hm, 52, 30, 53, 36, LAYER.SHOULDER);
+  lowWall(g, hm, 52, 30, 53, 36, LAYER.TALL);
   // A dead train on the north loop, half across the track.
-  lowWall(g, hm, 5, 20, 6, 27, LAYER.SHOULDER);
+  lowWall(g, hm, 5, 20, 6, 27, LAYER.TALL);
   // Secret: a signal box off the west loop.
   carve(g, 35, 1, 37, 3);
   g[36][4] = 6;
@@ -763,7 +766,8 @@ function buildGreenhouse() {
 // Pacing: locker room (teach) 0.5 → corridor 0.3 → the lobby line 0.9 →
 // range 0.6 → east corridor 0.4 → the Captain 1.0 → mezzanine 0.2.
 function buildPrecinct() {
-  const src = TUTORIAL_MAP;
+  // The station as it was, without the east wing the prologue added.
+  const src = STATION_CORE;
   const g = src.grid.map((row) => [...row]);
   const hm = createHeights(W, H);
 
@@ -996,8 +1000,8 @@ function buildFoundry() {
   };
 }
 
-/** Every Act II map, built once, keyed by the id its level entry names. */
-export const ACT2_MAPS = {
+/** Every Act II map's floor plan as built, before it is dressed. */
+export const ACT2_FLOOR_PLANS = {
   evac_shafts: buildEvacShafts(),
   salvage_deck: buildSalvageDeck(),
   maintenance_spine: buildMaintenanceSpine(),
@@ -1006,3 +1010,12 @@ export const ACT2_MAPS = {
   precinct: buildPrecinct(),
   foundry: buildFoundry(),
 };
+
+/**
+ * Every Act II map, dressed for the place it is (station-dressing.js; the
+ * Precinct is the prologue's rooms already), keyed by the id its level
+ * entry names.
+ */
+export const ACT2_MAPS = Object.fromEntries(
+  Object.entries(ACT2_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);

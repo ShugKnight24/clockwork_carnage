@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { updateArrivals } from "../../src/systems/arrival.js";
 import {
   POWER_IDS,
   POWERS,
@@ -513,6 +514,10 @@ describe("ChronoPowers runtime", () => {
     game.player.chronoActive = true;
     cp.res.value = 99.9;
     cp.update(game, 0.1, 0.1);
+    // They come through tears: none is standing there yet.
+    expect(game.entities.filter((e) => e._hunter)).toEqual([]);
+    expect(game.arrivals.every((a) => a.via === "tear")).toBe(true);
+    for (let i = 0; i < 50; i++) updateArrivals(game, 0.05);
     const pack = game.entities.filter((e) => e._hunter);
     expect(pack.length).toBeGreaterThanOrEqual(2);
     expect(pack.length).toBeLessThanOrEqual(4);
@@ -529,6 +534,7 @@ describe("ChronoPowers runtime", () => {
       game.player.chronoActive = true;
       for (let i = 0; i < 400; i++) cp.update(game, 0.05, 0.05);
       expect(game.entities.filter((e) => e._hunter)).toEqual([]);
+      expect(game.arrivals ?? []).toEqual([]);
     }
   });
 
@@ -594,7 +600,7 @@ describe("Chronos in the combat systems", () => {
 
   it("sends the swing at the echo instead of the player", () => {
     const ai = new AISystem();
-    const e = Object.assign(new Enemy(10, 10, "sentinel"), { state: "chase", lastAttackTime: -1e9 });
+    const e = Object.assign(new Enemy(10, 10, "sentinel"), { state: "chase", lastAttackTime: -1e9, angle: 0 });
     const player = { x: 16, y: 10, angle: 0, chronoActive: false };
     const chrono = { echo: { x: 11, y: 10 }, enemyTimeScale: () => 1 };
     let hits = 0;

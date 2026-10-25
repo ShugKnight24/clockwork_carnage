@@ -78,6 +78,8 @@ export function cloneLook(ch) {
   const out = { ...ch };
   if (ch.badge) out.badge = structuredClone(ch.badge);
   if (ch.accessories) out.accessories = { ...ch.accessories };
+  if (ch.weaponFinishes) out.weaponFinishes = { ...ch.weaponFinishes };
+  if (ch.customSkins) out.customSkins = ch.customSkins.map((s) => ({ ...s }));
   return out;
 }
 
@@ -85,6 +87,7 @@ export function cloneLook(ch) {
 const DRAWN = [
   "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
   "visorIndex", "shoulderIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex", "armorVariant",
+  "frameIndex", "capeIndex", "bodyIndex", "camoIndex",
 ];
 
 export function lookKey(ch) {

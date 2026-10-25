@@ -17,6 +17,21 @@ const stroke = (d, color, w) => `<path d="${d}" fill="none" stroke="${color}" st
 const inked = (d, color, w) => stroke(d, INK, w + 1) + stroke(d, color, w);
 
 export const PAINTERS = {
+  // Comms headset: a band over the crown, cups over both ears, a boom mic.
+  comms: (A) => {
+    const { x, y } = A.sideL;
+    const top = A.crown.y - 0.6;
+    const band = `M${f(x - 0.4)},${f(y - 1)} C${f(x - 0.6)},${f(top - 1.6)} ${f(-x + 0.6)},${f(top - 1.6)} ${f(-x + 0.4)},${f(y - 1)}`;
+    const cup = (cx) => rect(cx - 1.6, y - 3.4, 3.2, 7, 1.2, "#22262b", 0.9) + stroke(`M${f(cx)},${f(y - 2.6)} L${f(cx)},${f(y + 2.6)}`, "#3d434a", 0.5);
+    return {
+      head:
+        inked(band, "#2a2e33", 1.1) +
+        cup(x - 0.6) +
+        cup(-x + 0.6) +
+        inked(`M${f(x - 0.4)},${f(y + 2.4)} C${f(x + 0.4)},${f(y + 6)} ${f(x + 3)},${f(y + 8.4)} ${f(x + 6.6)},${f(y + 8.8)}`, "#30353b", 0.55) +
+        `<ellipse cx="${f(x + 6.8)}" cy="${f(y + 8.8)}" rx=".9" ry=".7" fill="#141618" stroke="${INK}" stroke-width=".4"/>`,
+    };
+  },
   nvg: (A) => {
     const { x, y } = A.browL;
     const body = "#1c1f24";

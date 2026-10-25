@@ -11,6 +11,80 @@ import { drawPanel, pixelRatio, UI } from "./modern-ui-kit.js";
  * @param {number} h
  * @param {{ map: object, entities: Array, player: object, chronoBombs: Array|null, objectiveWaypoint: object|null }} state
  */
+/** Entities a player can pick up; anything else (props, decor) stays off the map. */
+const PICKUP_MARKS = new Set(["health", "ammo", "weapon", "invuln", "gear"]);
+
+const reachCache = new WeakMap(); // map -> { walkable, w, open: Uint8Array }
+
+/**
+ * Cells the player can walk to from where they stand, over floor and doors
+ * but not through a secret wall still shut. Rebuilt when the walkable area
+ * changes (a secret found, a prologue door opened).
+ */
+function reachable(map, player) {
+  const { grid } = map;
+  const h = grid.length;
+  const w = grid[0]?.length ?? 0;
+  let walkable = 0;
+  for (const row of grid) for (const v of row) if (v === 0 || v === 5) walkable++;
+  let c = reachCache.get(map);
+  if (c && c.walkable === walkable && c.w === w) return c;
+  const open = new Uint8Array(w * h);
+  const sx = Math.floor(player.x);
+  const sy = Math.floor(player.y);
+  const walk = (x, y) => x >= 0 && y >= 0 && x < w && y < h && (grid[y][x] === 0 || grid[y][x] === 5);
+  if (walk(sx, sy)) {
+    const q = [sy * w + sx];
+    open[q[0]] = 1;
+    for (let i = 0; i < q.length; i++) {
+      const x = q[i] % w;
+      const y = (q[i] / w) | 0;
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const j = ny * w + nx;
+        if (walk(nx, ny) && !open[j]) {
+          open[j] = 1;
+          q.push(j);
+        }
+      }
+    }
+  } else {
+    open.fill(1); // standing somewhere odd (noclip, a cutscene spot): show everything
+  }
+  c = { walkable, w, open };
+  reachCache.set(map, c);
+  return c;
+}
+
+/**
+ * Whether a pickup earns a marker: something you can collect, open to you
+ * now, and not behind a secret wall you have not found.
+ */
+function marked(e, reach) {
+  if (e.type !== "powerCell" && !PICKUP_MARKS.has(e.type)) return false;
+  if (e._shut) return false;
+  return !!reach.open[Math.floor(e.y) * reach.w + Math.floor(e.x)];
+}
+
+/** A power cell on the map: an amber diamond, inked in Comic. */
+function cellMarker(ctx, x, y, r, fill, ink) {
+  const d = (k) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y - k);
+    ctx.lineTo(x + k, y);
+    ctx.lineTo(x, y + k);
+    ctx.lineTo(x - k, y);
+    ctx.closePath();
+  };
+  if (ink) {
+    ctx.fillStyle = ink;
+    d(r + 1.2);
+    ctx.fill();
+  }
+  ctx.fillStyle = fill;
+  d(r);
+  ctx.fill();
+}
+
 export function drawMinimap(ctx, x, y, w, h, { map, entities, player, chronoBombs, objectiveWaypoint }) {
   if (!map) return;
   if (isModernArt()) {
@@ -44,14 +118,21 @@ export function drawMinimap(ctx, x, y, w, h, { map, entities, player, chronoBomb
   }
 
   // Draw entities
+  const reach = reachable(map, player);
   for (const e of entities) {
     if (!e.active) continue;
+    if (e.type !== "enemy" && e.type !== "exit" && e.type !== "npc" && !marked(e, reach)) continue;
     if (e.type === "enemy") {
       ctx.fillStyle = e.def.color1;
       ctx.fillRect(ox + e.x * scale - 1.5, oy + e.y * scale - 1.5, 3, 3);
     } else if (e.type === "exit") {
-      ctx.fillStyle = "#00ff88";
+      ctx.fillStyle = e.sealed ? "#ff3355" : "#00ff88";
       ctx.fillRect(ox + e.x * scale - 2, oy + e.y * scale - 2, 4, 4);
+    } else if (e.type === "powerCell") {
+      cellMarker(ctx, ox + e.x * scale, oy + e.y * scale, 3, "#ffb028", null);
+    } else if (e.type === "npc") {
+      ctx.fillStyle = "#6fb6ff";
+      ctx.fillRect(ox + e.x * scale - 1.5, oy + e.y * scale - 1.5, 3, 3);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? "#00ff44" : "#ffaa00";
       ctx.fillRect(ox + e.x * scale - 1, oy + e.y * scale - 1, 2, 2);
@@ -184,8 +265,10 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
   const oy = y + (h - map.height * scale) / 2;
   ctx.drawImage(wallLayer(ctx, map, w, h, scale), x, y, w, h);
 
+  const reach = reachable(map, player);
   for (const e of entities) {
     if (!e.active) continue;
+    if (e.type !== "enemy" && e.type !== "exit" && e.type !== "npc" && !marked(e, reach)) continue;
     const ex = ox + e.x * scale;
     const ey = oy + e.y * scale;
     if (e.type === "enemy") {
@@ -200,8 +283,18 @@ function drawMinimapModern(ctx, x, y, w, h, { map, entities, player, chronoBombs
         ctx.fillStyle = UI.ink;
         ctx.fillRect(ex - 3.5, ey - 3.5, 7, 7);
       }
-      ctx.fillStyle = UI.green;
+      ctx.fillStyle = e.sealed ? UI.crimson : UI.green;
       ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+    } else if (e.type === "powerCell") {
+      cellMarker(ctx, ex, ey, 3.5, "#ffb028", real ? null : UI.ink);
+    } else if (e.type === "npc") {
+      // A friend: blue, the colour of the station's uniforms.
+      if (!real) {
+        ctx.fillStyle = UI.ink;
+        ctx.fillRect(ex - 2.5, ey - 2.5, 5, 5);
+      }
+      ctx.fillStyle = "#6fb6ff";
+      ctx.fillRect(ex - 1.5, ey - 1.5, 3, 3);
     } else if (e.type !== "projectile") {
       ctx.fillStyle = e.type === "health" ? UI.green : UI.amber;
       ctx.fillRect(ex - 1, ey - 1, 2, 2);

@@ -111,6 +111,20 @@ export function getDifficultyMultipliers(difficulty) {
   }
 }
 
+/** Arena types that lead a round: at most one of each is fielded. */
+const ARENA_MINI_BOSSES = new Set(["shieldCommander", "temporalSummoner"]);
+/**
+ * Health an arena enemy gains per round. 0.15 was tuned when a Chrono Shift
+ * all but stopped every enemy (ai.js applied it twice); with the shift
+ * applied once, rounds ramp a little gentler.
+ */
+const ARENA_HEALTH_PER_ROUND = 0.12;
+/**
+ * Sentinels and Time Wardens in the arena: one a round (two from round
+ * `twoFrom`), and their health, damage and pace against the campaign's.
+ */
+export const ARENA_GUARD = { twoFrom: 8, health: 0.7, damage: 0.5, speed: 0.7 };
+
 /**
  * Build the arena enemy type pool for a given round.
  * @param {number} round
@@ -140,18 +154,45 @@ export function createArenaEnemies(round, validSpawns, diff, rng) {
     validSpawns.length,
     Math.floor((4 + round * 3) * diff.spawnMul),
   );
+  // Mini-bosses lead a round, one of each at most: drawn evenly from the
+  // pool, a late round fielded three Commanders and three Summoners at once.
+  const rank = types.filter((t) => !ARENA_MINI_BOSSES.has(t));
+  const fielded = new Set();
+  let guards = 0;
   const enemies = [];
   for (let i = 0; i < count; i++) {
     const spawn = validSpawns[i % validSpawns.length];
-    const type = rng ? rng.pick(types) : types[Math.floor(Math.random() * types.length)];
+    const pick = (pool) => (rng ? rng.pick(pool) : pool[Math.floor(Math.random() * pool.length)]);
+    let type = pick(types);
+    if (ARENA_MINI_BOSSES.has(type)) {
+      if (fielded.has(type)) type = pick(rank);
+      else fielded.add(type);
+    }
+    // One shield bearer a round, two from round ARENA_GUARD.twoFrom: four
+    // walking in from every side left nowhere to get round any of them.
+    const maxGuards = round >= ARENA_GUARD.twoFrom ? 2 : 1;
+    if (ENEMY_TYPES[type]?.ai === "guard" && guards++ >= maxGuards) {
+      type = pick(rank.filter((t) => ENEMY_TYPES[t]?.ai !== "guard"));
+    }
     const e = new Enemy(spawn.x, spawn.y, type);
-    e.health = Math.floor(e.health * (1 + (round - 1) * 0.15) * diff.healthMul);
+    // An arena is an open pit with enemies on every side: a shield bearer
+    // that walks in and bashes (ai.js guard) is one more thing at your back
+    // while you get round it, so here it is lighter, slower and bashes softer, and does not shove.
+    const guard = e.def.ai === "guard";
+    e.health = Math.floor(e.health * (1 + (round - 1) * ARENA_HEALTH_PER_ROUND) * diff.healthMul * (guard ? ARENA_GUARD.health : 1));
     e.maxHealth = e.health;
     e.def = {
       ...e.def,
-      damage: Math.floor(e.def.damage * diff.damageMul),
+      damage: Math.floor(e.def.damage * diff.damageMul * (guard ? ARENA_GUARD.damage : 1)),
       speed: e.def.speed * diff.speedMul,
+      // No shove: in a crowd it only pushed you into the next enemy.
+      ...(guard ? { shove: 0 } : {}),
     };
+    if (guard) e.speed *= ARENA_GUARD.speed;
+    // A shift speeds a beast up in the campaign (its lesson: don't shift on
+    // it). In the arena's crowd, where a shift is how you survive the guns,
+    // it only shrugs the shift off.
+    if (e.chronoMultiplier > 1) e.chronoMultiplier = 1;
     enemies.push(e);
   }
   return enemies;
@@ -206,6 +247,32 @@ export function filterArenaSpawns(spawns, px, py, grid, rng) {
 }
 
 /**
+ * Scale a campaign enemy from its type's base stats: difficulty, the act's
+ * scale (not for a boss) and New Game+. Health, damage (on a copy of the
+ * def, which the AI reads) and speed. A roster swap calls it again, so a
+ * swapped enemy is as tough as the one it replaced.
+ * @param {Enemy} enemy - `enemyType` set; its def is replaced
+ * @param {number} act
+ * @param {number} ngPlusCycle
+ * @param {ReturnType<getDifficultyMultipliers>} diff
+ */
+export function scaleCampaignEnemy(enemy, act, ngPlusCycle, diff) {
+  const base = ENEMY_TYPES[enemy.enemyType];
+  const ngScale = 1 + (ngPlusCycle || 0) * 0.3;
+  const actScale = base?.boss ? 1 : (getAct(act)?.scale ?? 1);
+  enemy.health = Math.floor(base.health * diff.healthMul * actScale * ngScale);
+  enemy.maxHealth = enemy.health;
+  const speed = base.speed * diff.speedMul * (1 + (ngPlusCycle || 0) * 0.1);
+  enemy.def = {
+    ...base,
+    damage: Math.floor(base.damage * diff.damageMul * actScale * ngScale),
+    speed,
+  };
+  enemy.speed = speed;
+  enemy.damage = enemy.def.damage;
+}
+
+/**
  * Create scaled entities for a campaign level.
  * @param {{ entities: Array, exit?: { x: number, y: number } }} level
  * @param {number} act - ACTS id: its boss type replaces the map's "boss", and
@@ -216,7 +283,6 @@ export function filterArenaSpawns(spawns, px, py, grid, rng) {
  */
 export function createCampaignEntities(level, act, ngPlusCycle, diff) {
   const actDef = getAct(act);
-  const ngScale = 1 + (ngPlusCycle || 0) * 0.3;
   const result = [];
   const gW = level.width ?? level.grid?.[0]?.length ?? 0;
   const gH = level.height ?? level.grid?.length ?? 0;
@@ -234,18 +300,7 @@ export function createCampaignEntities(level, act, ngPlusCycle, diff) {
       let enemyType = e.enemyType;
       if (enemyType === "boss") enemyType = actDef?.boss.type ?? "boss";
       const enemy = new Enemy(safe.x, safe.y, enemyType);
-      const actScale = ENEMY_TYPES[enemyType]?.boss ? 1 : (actDef?.scale ?? 1);
-      enemy.health = Math.floor(
-        enemy.health * diff.healthMul * actScale * ngScale,
-      );
-      enemy.maxHealth = enemy.health;
-      enemy.def = {
-        ...enemy.def,
-        damage: Math.floor(
-          enemy.def.damage * diff.damageMul * actScale * ngScale,
-        ),
-        speed: enemy.def.speed * diff.speedMul * (1 + (ngPlusCycle || 0) * 0.1),
-      };
+      scaleCampaignEnemy(enemy, act, ngPlusCycle, diff);
       result.push(enemy);
     } else {
       result.push(new Pickup(safe.x, safe.y, e.type, { weaponId: e.weaponId }));
@@ -350,31 +405,37 @@ export function createMeltdownPickups(pickupSpawns) {
  * Remap enemy types to act-appropriate roster. Mutates entities in place.
  * The roster and substitutes are the act's row in ACTS; an unknown act
  * keeps Act 1's roster and swaps nothing.
+ *
+ * `holdBack` is the level's own swaps (acts.js `holdBack`), applied first and
+ * to roster types too: an enemy the story hasn't named yet stands in as one
+ * the player has already met, so the first sighting comes with its briefing.
  * @param {Enemy[]} entities
  * @param {number} act
  * @param {ReturnType<getDifficultyMultipliers>} diff
+ * @param {Record<string, string>|null} [holdBack]
+ * @param {number} [ngPlusCycle]
  */
-export function applyActEnemyRoster(entities, act, diff) {
+export function applyActEnemyRoster(entities, act, diff, holdBack = null, ngPlusCycle = 0) {
   const actDef = getAct(act);
   const roster = actDef?.roster ?? ACTS[0].roster;
   const subs = actDef?.substitutes ?? {};
+  const swap = (e, replacement) => {
+    const def = ENEMY_TYPES[replacement];
+    e.enemyType = replacement;
+    // The same difficulty, act and NG+ scaling the spawn gave the original.
+    scaleCampaignEnemy(e, act, ngPlusCycle, diff);
+    e.alertRange = def.sightRange;
+    e.chronoMultiplier = Number.isFinite(def.chronoMultiplier) ? def.chronoMultiplier : 0.15;
+    const [bc2, dc2] = jitterPalette(def.color1 || "#ff0000", def.color2 || "#880000", e.enemyType);
+    e.baseColor = bc2;
+    e.darkColor = dc2;
+  };
   for (const e of entities) {
     if (e.type !== "enemy") continue;
     if (ENEMY_TYPES[e.enemyType]?.boss) continue;
-    if (e.enemyType && !roster.includes(e.enemyType)) {
-      const replacement = subs[e.enemyType];
-      if (replacement && ENEMY_TYPES[replacement]) {
-        const def = ENEMY_TYPES[replacement];
-        e.enemyType = replacement;
-        e.health = def.health * diff.healthMul;
-        e.maxHealth = e.health;
-        e.speed = def.speed * diff.speedMul;
-        e.damage = (def.damage || 10) * diff.damageMul;
-        const [bc2, dc2] = jitterPalette(def.color1 || "#ff0000", def.color2 || "#880000", e.enemyType);
-        e.baseColor = bc2;
-        e.darkColor = dc2;
-      }
-    }
+    let replacement = holdBack?.[e.enemyType];
+    if (!replacement && e.enemyType && !roster.includes(e.enemyType)) replacement = subs[e.enemyType];
+    if (replacement && ENEMY_TYPES[replacement]) swap(e, replacement);
   }
 }
 

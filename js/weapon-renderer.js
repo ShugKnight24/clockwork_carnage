@@ -1,5 +1,6 @@
 import { isModernArt } from "../src/rendering/art-style.js";
-import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
+import { isCompactPhone } from "./layout.js";
+import { drawViewmodel, hasViewmodel } from "../src/rendering/svg-art/viewmodels.js";
 import { getAimBlend } from "../src/systems/aim.js";
 import { GameState } from "../src/types.js";
 
@@ -31,16 +32,27 @@ import { GameState } from "../src/types.js";
  * @param {string} [opts.pausedFromState]
  * @param {string} [opts.mode]         - game mode; "showcase" (the menu's settings backdrop) counts as live
  * @param {boolean} [opts.alive]
+ * @param {number} [opts.hudH]        - HUD height (CSS px), for the reticle's row under a HUD bar
  */
 export function drawWeapon(ctx, w, h, opts) {
   if (!opts.wep) return;
-  const alpha = viewmodelFade(opts);
-  if (alpha <= 0) return;
   // In-game callers pass `state` and get the eased aim blend; tools and tests use isAiming directly.
   const blend = opts.state === undefined ? (opts.isAiming ? 1 : 0) : getAimBlend();
-  if (isModernArt() && drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+  // A scoped weapon hands the view to its scope (drawScope in src/ui/crosshair.js).
+  const scoped = opts.wep.scope ? Math.max(0, Math.min(1, (blend - 0.35) / 0.45)) : 0;
+  const alpha = viewmodelFade(opts) * (1 - scoped);
+  if (alpha <= 0) return;
+  if (isModernArt()) {
+    if (drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+    // Still decoding: no gun for a frame or two rather than the Legacy one
+    // (mock contexts in tests have no transform and keep the procedural one).
+    if (hasViewmodel(opts.wep.id) && typeof Image !== "undefined" && typeof ctx.getTransform === "function") return;
+  }
+  // Aimed, the procedural model sits over the reticle: look through it.
+  const sight = blend > 0.01 && typeof document !== "undefined" && typeof ctx.getTransform === "function";
   if (alpha >= 1) {
-    drawProceduralWeapon(ctx, w, h, opts);
+    if (sight) drawThroughWindow(ctx, w, h, opts, blend);
+    else drawProceduralWeapon(ctx, w, h, opts, blend);
     return;
   }
   // Fading out/in: the procedural model resets globalAlpha as it draws, so
@@ -50,12 +62,113 @@ export function drawWeapon(ctx, w, h, opts) {
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.clearRect(0, 0, off.width, off.height);
   octx.setTransform(ctx.getTransform());
-  drawProceduralWeapon(octx, w, h, opts);
+  drawProceduralWeapon(octx, w, h, opts, blend);
+  if (sight) {
+    const m = ctx.getTransform();
+    const [rx, ry] = reticleAt(w, h, opts);
+    cutWindow(octx, rx * m.a + m.e, ry * m.d + m.f, WINDOW_EDGE * (h / 720) * m.d, blend);
+  }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha *= alpha;
   ctx.drawImage(off, 0, 0);
   ctx.restore();
+}
+
+/**
+ * The Legacy model stays where it is aimed in (its sight below the aim
+ * point, its body over it), and a soft window opens in it round the
+ * reticle instead: clear within WINDOW_CLEAR px (at 720p) of the point the
+ * rounds go, feathered back to the gun's full opacity by WINDOW_EDGE, its
+ * strength eased by the aim blend. The muzzle flash is cut the same way.
+ */
+// 43 px clears the whole 60 px square round the reticle, corners included.
+const WINDOW_CLEAR = 43;
+const WINDOW_EDGE = 78;
+let windowCanvas = null;
+const windowGrads = new WeakMap();
+// The model's random flash rays, replayed so both passes draw the same burst.
+const rolls = [];
+
+/** The HUD reticle (src/systems/aim.js reticlePoint) in the weapon pass's w/h units. */
+function reticleAt(w, h, opts) {
+  const hudH = opts.hudH || h;
+  const factor = (opts.hudScale || 100) / 100;
+  const bar = opts.isTouchDevice && isCompactPhone(hudH) ? 60 * factor : opts.hudStyle === 1 ? 160 * factor : 0;
+  const viewH = h - (Math.round(bar) / hudH) * h;
+  return [w / 2 + (opts.aimOffsetX || 0) * w, viewH / 2 + (opts.aimOffsetY || 0) * viewH];
+}
+
+/** Punch the window into `c` round device pixel (x, y), `r` device px to its feathered edge. */
+function cutWindow(c, x, y, r, strength) {
+  let g = windowGrads.get(c);
+  if (!g) {
+    g = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(WINDOW_CLEAR / WINDOW_EDGE, "rgba(0,0,0,1)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    windowGrads.set(c, g);
+  }
+  c.save();
+  c.setTransform(r, 0, 0, r, x, y);
+  c.globalCompositeOperation = "destination-out";
+  c.globalAlpha = Math.min(1, strength);
+  c.fillStyle = g;
+  c.fillRect(-1, -1, 2, 2);
+  c.restore();
+}
+
+/**
+ * Draw the procedural model with the window cut round the reticle. Outside
+ * the window's square the model goes straight onto ctx (clipped off the
+ * square); the square alone is drawn into a small reused layer, cut, and
+ * blitted, so the extra pass costs a ~140 px tile, not the screen.
+ */
+function drawThroughWindow(ctx, w, h, opts, blend) {
+  const m = ctx.getTransform();
+  const [rx, ry] = reticleAt(w, h, opts);
+  const r = WINDOW_EDGE * (h / 720) * m.d;
+  const x0 = Math.floor(rx * m.a + m.e - r);
+  const y0 = Math.floor(ry * m.d + m.f - r);
+  const side = Math.ceil(2 * r) + 2;
+  // One set of random rolls for both passes, so the flash matches at the seam.
+  const random = Math.random;
+  let roll = 0;
+  rolls.length = 0;
+  Math.random = () => {
+    if (roll === rolls.length) rolls.push(random());
+    return rolls[roll++];
+  };
+  try {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.rect(x0, y0, side, side);
+    ctx.clip("evenodd");
+    ctx.setTransform(m);
+    drawProceduralWeapon(ctx, w, h, opts, blend);
+    ctx.restore();
+
+    if (!windowCanvas) windowCanvas = document.createElement("canvas");
+    if (windowCanvas.width !== side || windowCanvas.height !== side) {
+      windowCanvas.width = side;
+      windowCanvas.height = side;
+    }
+    const c = windowCanvas.getContext("2d");
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, side, side);
+    c.setTransform(m.a, m.b, m.c, m.d, m.e - x0, m.f - y0);
+    roll = 0;
+    drawProceduralWeapon(c, w, h, opts, blend);
+    cutWindow(c, rx * m.a + m.e - x0, ry * m.d + m.f - y0, r, blend);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(windowCanvas, x0, y0);
+    ctx.restore();
+  } finally {
+    Math.random = random;
+  }
 }
 
 // States where the first-person view is live, and overlays that freeze it in place.
@@ -92,7 +205,7 @@ function fadeLayer(cw, ch) {
 }
 
 /** The original procedural viewmodel (Legacy art, and Modern while SVG bitmaps decode). */
-function drawProceduralWeapon(ctx, w, h, opts) {
+function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const {
     wep,
     energyColor,
@@ -118,32 +231,40 @@ function drawProceduralWeapon(ctx, w, h, opts) {
   // Crouching rides the weapon lower and cants it in; it fades out on ADS so
   // the sights still reach the reticle.
   const crouch = (opts.crouchBlend || 0) * (isAiming ? 0 : 1);
-  const tiltAngle = (isSprinting ? Math.sin(weaponBob) * 0.06 : 0) + crouch * 0.05;
+  // A slide drops it further and rolls it with the camera.
+  const slide = (opts.slideBlend || 0) * (isAiming ? 0 : 1);
+  const tiltAngle = (isSprinting ? Math.sin(weaponBob) * 0.06 : 0) + crouch * 0.05 + slide * 0.09;
 
   const viewportFactor = h / 720;
 
   // ── Viewmodel pose ───────────────────────────────────────────────────────
   // Hip-fire sits the weapon low and to the right and cants it inward, the way
   // a right-handed shooter actually holds it. ADS interpolates that pose to
-  // dead centre and upright so the sights line up with the reticle.
-  // `ads` is 0 at the hip, 1 fully aimed.
-  const ads = isAiming ? 1 : 0;
+  // dead centre and upright, and low: the suit projects the sight at the
+  // reticle (drawAdsSight), so the gun drops out of the line of fire rather
+  // than covering the target.
+  // `ads` is 0 at the hip, 1 fully aimed: the eased blend when the caller has one.
+  const ads = adsBlend ?? (isAiming ? 1 : 0);
   const lerp = (a, b, t) => a + (b - a) * t;
 
   const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
   const restCant = lerp(-0.11, 0, ads);          // inward cant, upright on ADS
-  const sc = lerp(4.5, 4.35, ads) * viewportFactor;
+  const sc = lerp(4.5, 3.4, ads) * viewportFactor;
 
   // Sway is cosmetic lag from look/strafe input; it shrinks hard when aiming.
   const swayX = (opts.weaponSwayX || 0) * lerp(1, 0.22, ads) * viewportFactor;
   const swayY = (opts.weaponSwayY || 0) * lerp(1, 0.22, ads) * viewportFactor;
 
-  const cx = w / 2 + restOffsetX + bobX + swayX - crouch * 11 * viewportFactor;
-
   // If we have a big HUD bar at the bottom, push the weapon up so it isn't hidden
   const hudOffset = opts.hudStyle === 1 ? (160 * viewportFactor) : 0;
-  const cy = h - hudOffset - lerp(196, 250, ads) * viewportFactor + bobY + swayY +
-    kickY * lerp(1, 0.45, ads) + crouch * 26 * viewportFactor;
+  // Aimed, the sights sit on the free-aim reticle (where shots go), not the
+  // screen centre: with the crosshair faded out at ADS they are the reticle.
+  const followX = (opts.aimOffsetX || 0) * w * ads;
+  const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
+
+  const cx = w / 2 + restOffsetX + bobX + swayX - (crouch * 11 + slide * 10) * viewportFactor + followX;
+  const cy = h - hudOffset - lerp(196, 150, ads) * viewportFactor + bobY + swayY +
+    kickY * lerp(1, 0.45, ads) + (crouch * 26 + slide * 20) * viewportFactor + followY;
 
   // Contact shadow — the viewmodel is the nearest object in the scene, so it
   // occludes ambient light behind itself. Without this the gun floats.
@@ -179,16 +300,18 @@ function drawProceduralWeapon(ctx, w, h, opts) {
     ctx.rotate(-0.01);
   }
 
-  // Muzzle flash (Enhanced 'Sharp' version)
+  // Muzzle flash (Enhanced 'Sharp' version). Aimed it shrinks, so the burst
+  // stays round the muzzle instead of washing over the target.
   if (weaponAnimFrame === 1) {
-    drawGlow(ctx, 0, -42, 32, energyColor, 0.4);
-    drawGlow(ctx, 0, -42, 12, "#ffffff", 0.8);
+    const fk = lerp(1, 0.4, ads);
+    drawGlow(ctx, 0, -42, 32 * fk, energyColor, 0.4);
+    drawGlow(ctx, 0, -42, 12 * fk, "#ffffff", 0.8);
 
     ctx.strokeStyle = energyColor;
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + time * 0.05;
-      const len = 15 + Math.random() * 20;
+      const len = (15 + Math.random() * 20) * fk;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * 8, -42 + Math.sin(a) * 8);
       ctx.lineTo(Math.cos(a) * len, -42 + Math.sin(a) * len);
@@ -230,6 +353,9 @@ function drawProceduralWeapon(ctx, w, h, opts) {
     ctx.stroke();
     ctx.restore();
   }
+
+  // The hands' far side goes under the weapon, which then covers most of it.
+  drawHandsUnder(ctx, wep, energyColor);
 
   if (wep.id === 0) {
     // Chrono Pistol
@@ -1116,18 +1242,37 @@ function drawProceduralWeapon(ctx, w, h, opts) {
   // ── Hands ────────────────────────────────────────────────────────────────
   // Drawn last so they wrap over the weapon. Gloves pick up the character
   // accent so the viewmodel matches the chosen loadout palette.
-  drawHands(ctx, wep, energyColor, opts.skinTone || "#c9956a", ads);
+  drawHands(ctx, wep, energyColor);
 
   ctx.restore();
 }
 
 /**
- * Procedural gloved hands gripping the weapon. Weapons all share the same local
- * space — grip around y≈22, receiver around y≈-5 — so one firing hand reads
- * across the whole arsenal, with a per-weapon support-hand grip:
- * sidearms get a cupping hand under the grip, long guns clamp the pump /
- * handguard, heavy weapons grab the left flank.
+ * Procedural gloved hands, seen as the weapon is: from above and behind, the
+ * muzzle up the screen. A hand wraps what it holds, so most of each finger
+ * lies on the far side of it. drawHandsUnder paints that part before the
+ * weapon, which then covers it: the fingers round the front of the grip and
+ * the support palm under the handguard, so only the tips that curl past an
+ * edge show. drawHands paints what lies on top: the back of the firing hand
+ * on the right flank of the grip, its index along the frame and its thumb
+ * over the back strap to the left side; on a long gun the support thumb along
+ * the handguard's near edge; on a sidearm the back of the support hand on the
+ * left of the grip with its thumb forward under the firing thumb.
+ *
+ * Firing grips (or the stock wrist) by weapon: left/right edge and top/bottom.
+ * Support grips: the handguard span x0..x1 from y (forward) over `rows`
+ * fingers; heavy weapons take the left flank of the body.
  */
+const FIRING_GRIPS = {
+  0: { l: -7, r: 9, top: 15 },
+  1: { l: -11, r: 13, top: 14 },
+  2: { l: -7, r: 9, top: 20 },
+  3: { l: -12, r: 14, top: 20 },
+  4: { l: -10, r: 12, top: 18 },
+  5: { l: -7, r: 9, top: 12 },
+  6: { l: -6, r: 8, top: 12 },
+  7: { l: -10, r: 12, top: 20 },
+};
 const SUPPORT_GRIPS = {
   0: { cup: true },
   6: { cup: true },
@@ -1135,8 +1280,8 @@ const SUPPORT_GRIPS = {
   4: { x0: -13, x1: 12, y: -1, rows: 3, gap: 3.4 },
   2: { x0: -11, x1: 10, y: -24, rows: 3, gap: 3.8 },
   5: { x0: -9, x1: 8, y: -22, rows: 3, gap: 3.8 },
-  3: { x0: -25, x1: -11, y: -9, rows: 4, gap: 3.8 },
-  7: { x0: -23, x1: -9, y: -7, rows: 4, gap: 3.8 },
+  3: { x0: -19, x1: -9, y: -9, rows: 4, gap: 3.8 },
+  7: { x0: -17, x1: -7, y: -7, rows: 4, gap: 3.8 },
 };
 
 const HAND_INK = "#04060b";
@@ -1239,98 +1384,128 @@ function handForearm(ctx, paints, accent, x0, x1, bottom, wx0, wy0, wx1, wy1) {
   ctx.stroke();
 }
 
-function drawHands(ctx, wep, accent, skin, ads) {
+/** Knuckle plate: a small rounded pad with a lit upper edge. */
+function knuckle(ctx, x, y) {
+  ctx.fillStyle = "#4d5d6e";
+  ctx.beginPath();
+  ctx.ellipse(x, y, 1.6, 1.25, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(230,240,250,0.32)";
+  ctx.fillRect(x - 0.8, y - 0.9, 1.4, 0.45);
+}
+
+/** Back of a hand: a padded glove mass through [x, y, ...] with a stitched panel. */
+function handBack(ctx, paints, pts, panel) {
+  ctx.fillStyle = paints.glove;
+  ctx.beginPath();
+  ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) {
+    const nx = pts[(i + 2) % pts.length];
+    const ny = pts[(i + 3) % pts.length];
+    ctx.quadraticCurveTo(pts[i], pts[i + 1], (pts[i] + nx) / 2, (pts[i + 1] + ny) / 2);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  if (panel) {
+    ctx.save();
+    ctx.fillStyle = "rgba(90,104,120,0.35)";
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 0.35;
+    ctx.beginPath();
+    ctx.ellipse(panel[0], panel[1], panel[2], panel[3], panel[4] || 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** The far side of the grip: what the weapon drawn next mostly covers. */
+function drawHandsUnder(ctx, wep, accent) {
   const paints = getHandPaints(ctx);
-  const grip = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
-  const gx = 1;
-  const gy = 22;
+  const g = FIRING_GRIPS[wep.id] || FIRING_GRIPS[0];
+  const sup = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
+  ctx.save();
+  ctx.strokeStyle = HAND_INK;
+  ctx.lineWidth = 0.55;
+  ctx.lineJoin = "round";
+  ctx.fillStyle = paints.glove;
+  // Middle, ring and little fingers round the front of the grip: knuckles on
+  // the right flank, tips curling out past its left edge.
+  for (const [dy, w] of [[16.5, 3.4], [11.5, 3.8], [6.5, 3.9]]) {
+    const y = g.top + dy;
+    handFinger(ctx, [g.r + 1, y, (g.l + g.r) / 2 + 2, y + 0.6, g.l + 1, y + 1.4, g.l - 2.4, y + 2.8], [w, w * 0.95, w * 0.88, w * 0.8]);
+  }
+  if (sup.cup) {
+    // Support fingers wrapped over the firing fingers, tips out on the right
+    // below the firing hand.
+    for (const [dy, w] of [[24, 3.2], [20.2, 3.6]]) {
+      const y = g.top + dy;
+      handFinger(ctx, [g.l - 1, y, (g.l + g.r) / 2, y - 0.4, g.r + 1, y + 0.2, g.r + 3.6, y + 1.8], [w, w * 0.95, w * 0.88, w * 0.8]);
+    }
+  } else {
+    // Support palm under the handguard, forearm in from the lower left.
+    const { x0, x1, y, rows, gap } = sup;
+    const yb = y + rows * gap;
+    handForearm(ctx, paints, accent, x0 - 26, x0 - 8, 64, x0 - 6, yb + 3, x0 + 6, yb + 8);
+    ctx.fillStyle = paints.glove;
+    ctx.beginPath();
+    ctx.ellipse((x0 + x1) / 2, (y + yb) / 2 + 1, (x1 - x0) / 2 + 1.5, (yb - y) / 2 + 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Fingers curl up the far flank; on a slim handguard the tips show past its right edge.
+    for (let i = rows - 1; i >= 0; i--) {
+      const fy = y + i * gap;
+      const w = 3.7 - i * 0.12;
+      handFinger(ctx, [x0 + 2, fy + 0.4, (x0 + x1) / 2, fy - 0.2, x1 - 0.5, fy, x1 + 2.4, fy + 1.4], [w, w * 0.95, w * 0.88, w * 0.8]);
+    }
+  }
+  ctx.restore();
+}
+
+function drawHands(ctx, wep, accent) {
+  const paints = getHandPaints(ctx);
+  const g = FIRING_GRIPS[wep.id] || FIRING_GRIPS[0];
+  const sup = SUPPORT_GRIPS[wep.id] || SUPPORT_GRIPS[0];
+  const { l, r, top } = g;
+  const mid = (l + r) / 2;
 
   ctx.save();
   ctx.strokeStyle = HAND_INK;
   ctx.lineWidth = 0.55;
   ctx.lineJoin = "round";
 
-  // ── Support hand: forearm and palm (fingers come after the firing hand) ──
-  if (grip.cup) {
-    handForearm(ctx, paints, accent, -34, -16, 64, -15, 32, -5, 38);
+  if (sup.cup) {
+    // ── Support hand: back of the left hand on the left of the grip ──
+    handForearm(ctx, paints, accent, l - 24, l - 6, 64, l - 6.5, top + 22, l + 2.5, top + 26);
+    handBack(ctx, paints, [l + 1.5, top + 5, l - 4.2, top + 7, l - 6, top + 15, l - 5.5, top + 24, l + 2.5, top + 26.5, l + 2.5, top + 14], [l - 1.8, top + 16, 2.2, 5.5, 0.08]);
+    for (let i = 0; i < 4; i++) knuckle(ctx, l - 4.6 - (i === 0 ? 0 : 0.6), top + 8 + i * 4.2);
+    // Its thumb forward along the left of the frame, under the firing thumb.
     ctx.fillStyle = paints.glove;
-    ctx.beginPath();
-    ctx.moveTo(-10, 18);
-    ctx.quadraticCurveTo(-4, 26, -3, 38);
-    ctx.lineTo(-6, 41);
-    ctx.quadraticCurveTo(-14, 40, -16, 33);
-    ctx.quadraticCurveTo(-15, 24, -10, 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Support thumb along the left of the frame.
-    handFinger(ctx, [-10, 24, -10.5, 16, -9.5, 9], [4.4, 3.9, 3.4]);
-  } else {
-    const { x0, y, rows, gap } = grip;
+    handFinger(ctx, [l + 0.5, top + 7, l - 1.6, top - 1, l - 2.2, top - 7.5, l - 2, top - 12.5], [4.6, 4.1, 3.7, 3.3]);
+  }
+
+  // ── Firing hand: forearm in from the lower right, back of the hand on the
+  // right flank of the grip ──
+  handForearm(ctx, paints, accent, r + 6, r + 26, 64, r - 3, top + 21, r + 9.5, top + 15);
+  handBack(ctx, paints, [r - 4.5, top - 0.5, r + 3.6, top + 1.6, r + 6, top + 9, r + 5.2, top + 17.5, r + 9, top + 16, r - 2.5, top + 21.5, r - 5.5, top + 9], [r + 0.8, top + 9.5, 2.4, 5.2, -0.1]);
+  // Knuckles of the fingers that wrap the grip, down its right edge.
+  for (const dy of [6.5, 11.5, 16.5]) knuckle(ctx, r + 4.6 - (dy > 15 ? 0.4 : 0), top + dy);
+  // Index laid forward along the frame, off the trigger.
+  ctx.fillStyle = paints.glove;
+  handFinger(ctx, [r + 3.2, top + 2.5, r + 2.4, top - 5, r + 1.8, top - 11, r + 1.5, top - 15], [3.9, 3.7, 3.4, 3]);
+  knuckle(ctx, r + 3.4, top + 2.4);
+  // Thumb from the web over the back strap, forward along the left side.
+  ctx.fillStyle = paints.glove;
+  handFinger(ctx, [r - 3.5, top + 1.5, mid, top - 1.2, l + 0.4, top - 4.5, l - 0.6, top - 10.5], [4.8, 4.3, 3.9, 3.4]);
+
+  if (!sup.cup) {
+    // ── Support thumb along the near (left) edge of the handguard ──
+    const { x0, y, rows, gap } = sup;
     const yb = y + rows * gap;
-    handForearm(ctx, paints, accent, x0 - 26, x0 - 8, 64, x0 - 9, yb + 4, x0 + 1, yb + 8);
     ctx.fillStyle = paints.glove;
-    ctx.beginPath();
-    ctx.moveTo(x0 - 3.5, y - 3);
-    ctx.quadraticCurveTo(x0 + 3, y - 2, x0 + 3.5, yb);
-    ctx.quadraticCurveTo(x0 + 2, yb + 7, x0 - 3, yb + 8);
-    ctx.quadraticCurveTo(x0 - 9, yb + 5, x0 - 8, yb - 2);
-    ctx.quadraticCurveTo(x0 - 7, y, x0 - 3.5, y - 3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Thumb up the near edge.
-    handFinger(ctx, [x0 - 5, yb, x0 - 4.5, y + 1, x0 - 3, y - 5], [4.4, 3.9, 3.4]);
-  }
-
-  // ── Firing hand (enters from lower right) ──
-  handForearm(ctx, paints, accent, gx + 10, gx + 30, 64, gx + 5, gy + 18, gx + 16, gy + 12);
-  ctx.fillStyle = paints.glove;
-  // Back of the hand on the right flank of the grip.
-  ctx.beginPath();
-  ctx.moveTo(gx + 2, gy - 9);
-  ctx.quadraticCurveTo(gx + 10, gy - 10, gx + 12, gy - 2);
-  ctx.quadraticCurveTo(gx + 16, gy + 8, gx + 16, gy + 13);
-  ctx.lineTo(gx + 5, gy + 19);
-  ctx.quadraticCurveTo(gx + 3, gy + 8, gx + 2, gy - 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  // Fingers wrapping the front strap: index at the trigger, then middle/ring/pinky.
-  const rows = [gy - 10, gy - 4.5, gy, gy + 4.4];
-  const fw = [3.9, 3.9, 3.7, 3.3];
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const y = rows[i];
-    const reach = i === 0 ? 1.5 : 0;
-    handFinger(ctx, [gx + 9.5, y + 0.6, gx + 2.5 + reach, y - 0.2, gx - 3.5 + reach, y + 0.4, gx - 6 + reach, y + 2.2], [fw[i], fw[i] * 0.95, fw[i] * 0.88, fw[i] * 0.78]);
-  }
-  // Knuckle plates across the back of the fingers.
-  ctx.fillStyle = "#5d7185";
-  for (let i = 0; i < rows.length; i++) {
-    ctx.beginPath();
-    ctx.ellipse(gx + 9.3, rows[i] + 0.4, 1.5, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.fillStyle = "rgba(230,240,250,0.35)";
-  for (let i = 0; i < rows.length; i++) ctx.fillRect(gx + 8.6, rows[i] - 0.4, 1.1, 0.5);
-  // Thumb over the top of the grip.
-  ctx.fillStyle = paints.glove;
-  handFinger(ctx, [gx + 7, gy - 8, gx + 1, gy - 12, gx - 5, gy - 13], [4.8, 4.2, 3.6]);
-
-  // ── Support fingers ──
-  if (grip.cup) {
-    // Wrapped round the front below the firing hand's pinky.
-    for (const [y, w] of [[31.5, 3.8], [35.8, 3.6], [39.8, 3.2]]) {
-      handFinger(ctx, [-9, y + 1, -2, y - 0.4, 5, y, 8.5, y + 1.8], [w, w * 0.95, w * 0.88, w * 0.78]);
-    }
-  } else {
-    const { x0, x1, y, rows: n, gap } = grip;
-    for (let i = n - 1; i >= 0; i--) {
-      const fy = y + i * gap;
-      const w = 3.7 - i * 0.12;
-      handFinger(ctx, [x0 + 1, fy + 0.4, x0 + (x1 - x0) * 0.45, fy - 0.4, x1 - 2, fy, x1 + 0.5, fy + 1.6], [w, w * 0.95, w * 0.88, w * 0.78]);
-    }
+    handFinger(ctx, [x0 - 2, yb + 2.5, x0 - 1.4, y + 4, x0 - 0.6, y - 2, x0 + 0.2, y - 6], [4.6, 4.1, 3.7, 3.2]);
   }
 
   ctx.restore();

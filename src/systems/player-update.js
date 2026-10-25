@@ -9,8 +9,9 @@
 // real, and the mouse drives yaw and pitch directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
+import { holdOffFrozen } from "./stillness.js";
 import { clamp, decay } from "../utils/math.js";
-import { applyAimDelta, recenterAim } from "./aim.js";
+import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom } from "./aim.js";
 import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
 import {
   PLAYER_ADS_MOVE_MULT,
@@ -19,6 +20,9 @@ import {
   PLAYER_VOXEL_LOOK_SENSITIVITY,
   PLAYER_FALL_DAMAGE_PER_BLOCK,
 } from "../constants.js";
+
+/** Camera roll held through a slide (radians). */
+const SLIDE_ROLL = 0.05;
 
 /**
  * Halo-style hybrid aim: mouse moves the reticle freely; on clamp, the
@@ -33,7 +37,10 @@ function applyMouseAim(p, mouse, settings) {
 
   const { overflowX } = applyAimDelta(p, mouse.dx, mouse.dy, settings);
   if (overflowX !== 0) {
-    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX;
+    // The turn slows with the sights like the reticle does (whose angle per
+    // pixel already shrinks with the zoom): a flick that reaches the edge
+    // through a 4x scope must not sweep the magnified view at hip speed.
+    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX * (aimSensitivityScale() / aimZoom());
   }
   mouse.dx = 0;
   mouse.dy = 0;
@@ -134,9 +141,11 @@ export class PlayerUpdateSystem {
     // drops with it and the step itself is quieter. The tutorial promises
     // "quieter feet"; this is what makes that true.
     audio.setFootstepCadence(p.isSprinting ? 1.6 : p.isCrouching ? 0.55 : 1.0);
+    // On the game clock: the wall clock made the number of steps (and the
+    // dice each one rolls) depend on how fast the machine ran a seeded bot.
     audio.updateFootsteps(
       isMoving && !p.isDashing && !p.isSliding,
-      performance.now(),
+      ctx.time ?? performance.now(),
       p.isCrouching ? 0.35 : 1,
     );
 
@@ -149,24 +158,42 @@ export class PlayerUpdateSystem {
       if (p.staminaRegenDelay > 0) {
         p.staminaRegenDelay -= dt;
       } else {
-        p.stamina = Math.min(p.maxStamina, p.stamina + 15 * p.staminaRegenRate * dt);
+        // Conditioning's Stamina: a faster regen up to a higher cap (staminaCap).
+        const cap = p.staminaCap ?? p.maxStamina;
+        p.stamina = Math.min(cap, p.stamina + 15 * p.staminaRegenRate * (p.condRegenMult || 1) * dt);
       }
     }
 
     // Crouch & Slide handling
     const crouchHeld = !!keys[kb.crouch];
     const crouchJustPressed = crouchHeld && !this._prevCrouchKey;
-    p.isCrouching = crouchHeld && !p.isSliding;
+    // Under something low (the map's lowCells: the prologue's bars and
+    // tunnel), a slide running out or crouch let go does not stand you up
+    // into it: you stay down (lowHold) until you are out from under it.
+    const lowCells = ctx.map?.lowCells;
+    const inLow = !!lowCells?.has(`${Math.floor(p.x)},${Math.floor(p.y)}`);
+    // However you came to be under it (a slide, a shove, a respawn), you
+    // cannot stand up in it.
+    p.lowHold = inLow;
+    p.isCrouching = (crouchHeld || p.lowHold) && !p.isSliding;
 
     // Ease the stance. Dropping is quicker than standing back up — going down
     // is gravity, getting up is work — and a slide drops fastest of all.
-    const lowered = p.isSliding || p.isCrouching;
-    const stanceRate = p.isSliding ? 22 : lowered ? 14 : 9;
+    // Behind low cover the stance is down until the sights pop you up over
+    // it, and both ways are quick: a slow pop-up is a shot into the cover.
+    const lowered = p.isSliding || p.isCrouching || !!p.coverDown;
+    const stanceRate = p.isSliding ? 22 : p.cover ? 18 : lowered ? 14 : 9;
     p.crouchBlend += ((lowered ? 1 : 0) - p.crouchBlend) * Math.min(1, stanceRate * dt);
     // Snap the tail. An exponential ease never quite lands, and a residual
     // blend leaves the FOV and the weapon fractionally off forever.
     if (p.crouchBlend < 0.004) p.crouchBlend = 0;
     if (p.crouchBlend > 0.996) p.crouchBlend = 1;
+    // A slide takes the eye lower than a crouch (SLIDE_EYE_Z), dropping into
+    // it fast and rising out of it a little slower, onto the crouch blend.
+    const slideRate = p.isSliding ? 20 : 8;
+    p.slideBlend += ((p.isSliding ? 1 : 0) - (p.slideBlend || 0)) * Math.min(1, slideRate * dt);
+    if (p.slideBlend < 0.004) p.slideBlend = 0;
+    if (p.slideBlend > 0.996) p.slideBlend = 1;
 
     // Start slide
     if (
@@ -200,8 +227,10 @@ export class PlayerUpdateSystem {
         // Collision (slide)
         flags = this._applyMove(ctx, moveX, moveY, dt, flags);
 
-        // Camera tilt during slide — lean into the turn
-        p.cameraTilt = (p.cameraTilt || 0) + (0.08 - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
+        // Camera tilt during slide — lean into the turn. A few degrees: the
+        // frame scales up to hide its corners (render-pipeline.js), so more
+        // roll would cost view.
+        p.cameraTilt = (p.cameraTilt || 0) + (SLIDE_ROLL - (p.cameraTilt || 0)) * Math.min(1, 8 * dt);
 
         p.weaponBob += dt * 18;
         p.staminaRegenDelay = 0.5;
@@ -275,8 +304,14 @@ export class PlayerUpdateSystem {
     if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
     if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
 
-    // Collision detection and movement
-    flags = this._applyMove(ctx, moveX, moveY, dt, flags);
+    // Collision detection and movement. In cover the intent goes to the cover
+    // system instead, which slides the player along the face it is on.
+    if (p.cover && !world) {
+      p.coverIntentX = moveX;
+      p.coverIntentY = moveY;
+    } else {
+      flags = this._applyMove(ctx, moveX, moveY, dt, flags);
+    }
 
     this._prevCrouchKey = crouchHeld;
     return flags;
@@ -293,10 +328,30 @@ export class PlayerUpdateSystem {
     if (world) return this._applyVoxelMove(ctx, moveX, moveY, dt, flags);
 
     const margin = 0.2;
+    const fromX = p.x;
+    const fromY = p.y;
     const newX = p.x + moveX;
     const newY = p.y + moveY;
-    if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
-    if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+    // A low cell (map.lowCells) is a wall to anyone upright: only sliding or
+    // crouched gets under it. Never the cell you are in, so nothing can
+    // leave you boxed inside one.
+    const upright = map.lowCells && !(p.isSliding || p.isCrouching || p.lowHold);
+    const cx = Math.floor(fromX);
+    const cy = Math.floor(fromY);
+    const open = (mx, my) => {
+      if (!isPassable(map, mx, my)) return false;
+      if (!upright || (mx === cx && my === cy) || !map.lowCells.has(`${mx},${my}`)) return true;
+      p.lowBlocked = true;
+      return false;
+    };
+    if (noclip || open(Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
+    if (noclip || open(Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+    // Someone stopped in time does not give way: the player slides round
+    // them. If that would put the player in a wall, the step is not taken.
+    if (!noclip && holdOffFrozen(ctx.entities, p, fromX, fromY) && !isPassable(map, Math.floor(p.x), Math.floor(p.y))) {
+      p.x = fromX;
+      p.y = fromY;
+    }
     return flags;
   }
 

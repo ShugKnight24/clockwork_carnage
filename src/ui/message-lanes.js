@@ -253,7 +253,15 @@ export function messageLanes(o) {
 
   const hw = Math.min(HEADLINE_MAX_W, w - 80);
   const headlineAt = { x: cx - hw / 2, y: compact ? 6 : HEADLINE_TOP, w: hw, h: compact ? HEADLINE_H_COMPACT : HEADLINE_H };
-  let headline = fit(headlineAt, reserved, { minW: compact ? 260 : 600, dir: 1, gap });
+  // A narrow screen narrows the card rather than pushing it down past the
+  // minimap and the console, which at 800x600 put it below the screen.
+  const minHead = compact ? 260 : Math.round(Math.min(600, Math.max(320, w * 0.42)));
+  let headline = fit(headlineAt, reserved, { minW: minHead, dir: 1, gap });
+  if (!compact && headline.y + headline.h > commsBottom(o)) {
+    // Still no room above the console: the card covers the minimap's corner
+    // before it leaves the screen.
+    headline = fit(headlineAt, reserved.filter((q) => q.name !== "minimap" && q.name !== "killFeed"), { minW: 300, dir: 1, gap });
+  }
   if (compact && headline.y > headlineAt.y + 60) {
     // A small phone has no gap at the top wide enough for a card: let it
     // cover the kill feed (entries last three seconds) rather than drop onto
@@ -281,7 +289,7 @@ export function messageLanes(o) {
   const commsLow = fit(
     { x: cx - lw / 2, y: commsBottom(o) - lh, w: lw, h: lh },
     [...reserved, chips],
-    { minW: compact ? 300 : 360, dir: -1, gap },
+    { minW: compact ? 300 : Math.round(Math.min(360, Math.max(300, w * 0.38))), dir: -1, gap },
   );
 
   // Top comms: ARIA's prominent anchor (0.135 h), below the top-centre strip.
@@ -291,5 +299,20 @@ export function messageLanes(o) {
     ? commsLow
     : fit({ x: cx - lw / 2, y: Math.round(h * 0.135) - 12, w: lw, h: COMMS_H }, [...reserved, chips], { minW: 440, dir: 1, gap });
 
-  return { headline, comms, commsLow, chips, reserved, kind, chipsShareHeadline: compact };
+  // A crowded small window (Vanguard at 800x600) can push the low comms up
+  // into the headline. A card and ARIA's line are on screen together all
+  // through the prologue, so put the line under the card where that is clear
+  // of the HUD, and let the chips (they can wait) find room around both.
+  let low = commsLow;
+  if (!compact && overlaps(low, headline)) {
+    const under = { ...low, y: headline.y + headline.h + gap };
+    if (under.y + under.h <= commsBottom(o) && !reserved.some((q) => overlaps(under, q))) {
+      low = under;
+      if (overlaps(chips, low) || overlaps(chips, headline)) {
+        chips = fit(chipAt, [...reserved, headline, low], { minW: chipW, dir: 1, gap });
+      }
+    }
+  }
+
+  return { headline, comms, commsLow: low, chips, reserved, kind, chipsShareHeadline: compact };
 }

@@ -1,8 +1,8 @@
-import { drawCrosshair } from "./crosshair.js";
+import { drawCrosshair, drawAdsSight, drawSpreadBrackets, drawScope } from "./crosshair.js";
 import { drawScanlines } from "./scanlines.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
-import { effectiveAimFov, reticlePoint } from "../systems/aim.js";
+import { effectiveAimFov, reticlePoint, getAimBlend, currentSpread, scopeSteadiness, aimAnglesForGame } from "../systems/aim.js";
 import { isCompactPhone } from "../../js/layout.js";
 import {
   CHARACTER_COLORS,
@@ -11,23 +11,26 @@ import {
 } from "../../js/data.js";
 import { getWeaponSprite } from "../assets/loader.js";
 import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
-import { HT as SKIN, drawPanel as skinPanel, cachedSprite, blitSprite } from "./hud-skin.js";
+import { HT as SKIN, drawPanel as skinPanel, uiFont as skinFont, cachedSprite, blitSprite } from "./hud-skin.js";
 import {
   renderModernMinimalPanels,
   renderModernClassic,
   renderModernCompact,
-  drawModernCombatCues,
   drawModernDamageNumber,
   drawModernBossNameCard,
   drawModernStageCleared,
   drawModernTimerPill,
   renderModernTacticalPanels,
   renderModernCustomPanels,
+  hudAnchors,
 } from "./hud-modern.js";
 import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
+import { drawCombatCues } from "./combat-cues.js";
+import { coverCone, blindFireNow } from "../systems/cover-play.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
+import { drawReloadHud, drawConditioningChip, ammoTint } from "./reload-hud.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -109,6 +112,29 @@ function drawHitMarker(ctx, game, cx, cy) {
   const kill = game.hitMarkerKill;
   const crit = game.hitMarkerCrit;
   const head = game.hitMarkerHead;
+  // A round a shield took (game.hitMarkerBlocked): a small grey deflect tick,
+  // the round glancing off a flat plate, so it never reads as a hit.
+  if (game.hitMarkerBlocked && !kill) {
+    const s = scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx, cy);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 3;
+    ctx.strokeStyle = "#cfd6de";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-8 * s, 7 * s);
+    ctx.lineTo(8 * s, 7 * s);
+    ctx.moveTo(-7 * s, -6 * s);
+    ctx.lineTo(0, 4 * s);
+    ctx.lineTo(7 * s, -6 * s);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   // Headshots get the warmest highlight (orange→red), crit stays gold,
   // normal hits red, kill flash is white. Headshot+crit stacks visually
   // toward orange-gold so player can read both at a glance.
@@ -170,6 +196,7 @@ function drawHitMarker(ctx, game, cx, cy) {
  * Floating damage number sprite. Style varies with hit category:
  *   crit  → gold, bold, with stroke shadow
  *   head  → orange, bold, with "HEAD!" tag above
+ *   flank → amber, bold, with "FLANK!" tag above (past a shield bearer's shield)
  *   else  → white outlined number
  *
  * Caller controls font scale via `large` flag (true = HUD/builder paths,
@@ -205,6 +232,16 @@ function drawDamageNumber(ctx, dn, x, y, large) {
     ctx.font = `bold ${large ? 10 : 9}px monospace`;
     ctx.fillStyle = "#ffaa44";
     ctx.fillText("HEAD!", x, y - (large ? 16 : 13));
+  } else if (dn.flank) {
+    ctx.font = `bold ${f}px monospace`;
+    ctx.shadowColor = "#ff9a2a";
+    ctx.shadowBlur = large ? 8 : 6;
+    ctx.fillStyle = "#ffc04a";
+    ctx.fillText(dn.value, x, y);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${large ? 10 : 9}px monospace`;
+    ctx.fillStyle = "#ffd27a";
+    ctx.fillText("FLANK!", x, y - (large ? 16 : 13));
   } else {
     ctx.font = `bold ${fSmall}px monospace`;
     ctx.strokeStyle = "rgba(0,0,0,0.6)";
@@ -301,33 +338,89 @@ function drawBossNameCard(ctx, game, w, h) {
   ctx.restore();
 }
 
-function drawAdsReticle(ctx, game, cx, cy) {
-  if (!game.player?.isAiming) return;
-  const t = game.time * 0.006;
-  const r = 22 + Math.sin(t) * 1.5;
+/**
+ * The level's power cells or lockdown (src/systems/exit-cells.js), under the
+ * level timer on every HUD style: progress in amber while the exit is
+ * sealed, then EXTRACTION LIVE. Nothing on an open level. It hangs under the
+ * layout's top-left stack (hudAnchors), so it never prints over the clock.
+ */
+function drawPowerCellChip(ctx, game) {
+  const pc = game.mode === "campaign" || game.mode === "tutorial" ? game.powerCells : null;
+  const ld = game.mode === "campaign" && !pc ? game.lockdown : null;
+  if (!pc && !ld) return;
+  const done = pc ? pc.found >= pc.total : ld.done;
+  const label = done
+    ? "EXTRACTION LIVE"
+    : pc
+      ? `POWER CELLS ${pc.found} / ${pc.total}`
+      : `LOCKDOWN ${Math.min(ld.need, game.killedEnemies || 0)} / ${ld.need} DOWN`;
+  const x = 12;
+  const y = hudAnchors.stackBottom ? Math.round(hudAnchors.stackBottom) + 2 : 58;
+  const modern = isModernArt();
+  const color = !modern ? (done ? "#22e6c0" : "#ffb028") : done ? (SKIN.realistic ? SKIN.accent : "#22e6c0") : SKIN.amber;
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  ctx.strokeStyle = "rgba(120,220,255,0.75)";
-  ctx.lineWidth = 1.5;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = modern ? skinFont(11, 700) : "700 12px system-ui, sans-serif";
+  if (modern) ctx.letterSpacing = "1px";
+  const tw = ctx.measureText(label).width;
+  if (modern) {
+    skinPanel(ctx, x, y, tw + 36, 22, { accent: color, chamfer: 6 });
+  } else {
+    ctx.fillStyle = "rgba(4,8,12,0.72)";
+    ctx.fillRect(x, y, tw + 34, 22);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 3, 22);
+  }
+  ctx.fillStyle = color;
+  // Diamond, as on the map.
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.beginPath();
-  ctx.moveTo(cx - r - 7, cy);
-  ctx.lineTo(cx - r + 6, cy);
-  ctx.moveTo(cx + r - 6, cy);
-  ctx.lineTo(cx + r + 7, cy);
-  ctx.moveTo(cx, cy - r - 7);
-  ctx.lineTo(cx, cy - r + 6);
-  ctx.moveTo(cx, cy + r - 6);
-  ctx.lineTo(cx, cy + r + 7);
-  ctx.stroke();
-  ctx.font = "bold 10px monospace";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(120,220,255,0.75)";
-  ctx.fillText("ADS", cx, cy + r + 20);
+  ctx.moveTo(x + 14, y + 5);
+  ctx.lineTo(x + 20, y + 11);
+  ctx.lineTo(x + 14, y + 17);
+  ctx.lineTo(x + 8, y + 11);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillText(label, x + 26, y + 11.5);
+  ctx.letterSpacing = "0px";
   ctx.restore();
+}
+
+/**
+ * The crosshair, faded out as the sights come up (the full crosshair over the
+ * sights hid a small or distant target right where the player was aiming),
+ * handing over to a small sight dot that stays while aimed: the gun alone
+ * did not show exactly where the round would go. Spread brackets show the
+ * weapon's cone at this blend; a scoped weapon hands over to its scope.
+ */
+function drawAimReticle(ctx, game, cx, cy, barH = 0) {
+  const blend = getAimBlend();
+  const show = 1 - blend;
+  const wep = game.player.getWeaponDef?.();
+  const w = game.hudW || ctx.canvas.width;
+  const scoped = wep?.scope ? Math.max(0, Math.min(1, (blend - 0.35) / 0.45)) : 0;
+  if (show > 0.02) {
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * show;
+    drawCrosshair(ctx, cx, cy, game.settings.crosshair);
+    ctx.globalAlpha = a;
+  }
+  // The cone in screen pixels, through the same (zoomed) view the world is drawn with.
+  const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
+  // Blind fire from cover sprays wider, and the brackets say so.
+  const aim = game.player?.cover ? aimAnglesForGame(game) : null;
+  const blind = !!aim && blindFireNow(game, aim.yaw, aim.pitch);
+  const cone = (Math.tan(coverCone(game.player, currentSpread(wep), blind)) / Math.tan(fov / 2)) * (w / 2);
+  drawSpreadBrackets(ctx, cx, cy, cone, 1 - scoped);
+  drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6) * (1 - scoped), (game.hudH || 900) / 900);
+  if (scoped > 0) {
+    const since = game.time - (game.player.lastFireTime || -1e9);
+    drawScope(ctx, cx, cy, w, (game.hudH || ctx.canvas.height) - barH, scoped, {
+      time: game.time,
+      steady: scopeSteadiness(),
+      kick: since >= 0 && since < 250 ? 1 - since / 250 : 0,
+    });
+  }
 }
 
 /**
@@ -424,11 +517,24 @@ const ctx = game.hudCtx;
 const w = game.hudW;
 const h = game.hudH;
 ctx.clearRect(0, 0, w, h);
+// The HUD canvas keeps its state from frame to frame: a panel that left the
+// baseline at "top" or "middle" dropped next frame's ammo count off the
+// bottom of the screen, until something (the reload bar) set it back.
+ctx.textBaseline = "alphabetic";
+ctx.textAlign = "left";
 
 if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
   return;
 
 _checkDirty(game);
+hudAnchors.stackBottom = 0;
+
+// The prologue's opening, before the suit goes on: no HUD yet, only what
+// people say.
+if (game.mode === "tutorial" && game.tutorial?.preSuit) {
+  game.renderAriaComms(ctx, w, h);
+  return;
+}
 
 // HUD disruption effect (disabled by enemy support abilities)
 if (game._hudDisabledUntil && game.time < game._hudDisabledUntil) {
@@ -484,13 +590,14 @@ if (isCompactMobile) {
   let mmSize = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
   _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
 
-  if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
+  drawCombatCues(game, ctx, w, h, barH);
   if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH);
 
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
-  drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-  drawAdsReticle(ctx, game, chx, chy);
+  drawAimReticle(ctx, game, chx, chy, barH);
+  drawReloadHud(ctx, game, chx, chy);
+  drawPowerCellChip(ctx, game);
 
   // Hit marker
   drawHitMarker(ctx, game, chx, chy);
@@ -524,6 +631,7 @@ if (isCompactMobile) {
 
   // Achievement toast
   game.renderAchievementToast(ctx, w, h);
+  drawConditioningChip(ctx, game, w, h);
 
   // Arena timer (compact)
   if (vanguard) {
@@ -930,6 +1038,7 @@ if (isModernArt()) {
     ctx.fillText(heatText, tlX + 10, tlY + 16);
     tlY += 24 + pillGap;
   }
+  hudAnchors.stackBottom = tlY;
 }
 
 // ─── TOP-RIGHT: Kills counter ───
@@ -1048,7 +1157,7 @@ if (game.settings.showKills) {
   const sBarY = hBarY - sBarH - 3;
 
   // Stamina + Chrono bars (thin 6px, above shield/health)
-  const staminaPct = game.player.stamina / game.player.maxStamina;
+  const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
   const chronoPct = game.player.chronoEnergy / game.player.maxChronoEnergy;
   const showChrono = chronoPct > 0.005 || game.player.chronoActive;
   const isActive = game.player.isSprinting || game.player.isDashing;
@@ -1307,9 +1416,10 @@ if (game.settings.showKills) {
   const brY = h - 14;
   // Ammo (large number, right-aligned)
   ctx.textAlign = "right";
-  ctx.fillStyle = "#ffcc00";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = ammoTint(game, "#ffcc00");
   ctx.font = game.scaledFont(38, "bold");
-  ctx.fillText(`${game.player.ammo}`, brX, brY - 18);
+  ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, brX, brY - 18);
   // Weapon name (below ammo)
   if (wep) {
     ctx.fillStyle = wep.color;
@@ -1329,13 +1439,14 @@ if (!vanguard) {
   _drawHudMinimap(ctx, w - mmSize - 10, mmY, mmSize, _minimapState(game));
 }
 
-if (isModernArt()) drawModernCombatCues(game, ctx, w, h, 0);
+drawCombatCues(game, ctx, w, h, 0);
 if (vanguard) drawVanguardThreatRing(game, ctx, w, h, 0);
 
 // ─── CROSSHAIR (center of full screen, barH is 0) ───
 const { x: chx, y: chy } = reticlePoint(w, h, 0, game.player);
-drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-drawAdsReticle(ctx, game, chx, chy);
+drawAimReticle(ctx, game, chx, chy);
+drawReloadHud(ctx, game, chx, chy);
+drawPowerCellChip(ctx, game);
 
 // ─── HIT MARKER ───
 drawHitMarker(ctx, game, chx, chy);
@@ -1409,6 +1520,7 @@ if (game.slowMoTimer > 0) {
 
 // Achievement toast (above minimap area)
 game.renderAchievementToast(ctx, w, h);
+drawConditioningChip(ctx, game, w, h);
 
 // Meltdown upgrade selection overlay
 if (game._meltdownUpgradeChoices) {
@@ -1439,7 +1551,7 @@ if (isModernArt()) {
 } else {
 // ─── Stamina + Chrono bars (side-by-side above bottom bar) ───
 const staminaFactor = game.settings.staminaBarSize / 100;
-const staminaPct = game.player.stamina / game.player.maxStamina;
+const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
 const chronoPct = game.player.chronoEnergy / game.player.maxChronoEnergy;
 const showChrono = chronoPct > 0.005 || game.player.chronoActive;
 const isActive = game.player.isSprinting || game.player.isDashing;
@@ -1610,10 +1722,17 @@ drawPanel(pad, panelY, ammoPanelW, panelH);
 ctx.fillStyle = "#ffcc00";
 ctx.font = "bold 16px monospace";
 ctx.textAlign = "center";
+ctx.textBaseline = "alphabetic";
 ctx.fillText("AMMO", pad + ammoPanelW / 2, panelY + 22);
-ctx.fillStyle = "#ffaa00";
+ctx.fillStyle = ammoTint(game, "#ffaa00");
 ctx.font = game.scaledFont(64, "bold");
-ctx.fillText(`${game.player.ammo}`, pad + ammoPanelW / 2, panelY + panelH - 24);
+{
+  // Shrink a long count (god mode) to the panel rather than spill out of it.
+  const ammoStr = `${game.player.ammoLabel ?? game.player.ammo}`;
+  const tw = ctx.measureText(ammoStr).width;
+  if (tw > ammoPanelW - 20) ctx.font = game.scaledFont(Math.floor(64 * (ammoPanelW - 20) / tw), "bold");
+  ctx.fillText(ammoStr, pad + ammoPanelW / 2, panelY + panelH - 24);
+}
 
 // ─── HEALTH (Left Center) ───
 const healthPanelW = portraitX - ammoPanelW - pad * 2.5;
@@ -1868,12 +1987,13 @@ ctx.textAlign = "left";
 let mmSize = game.settings.minimapSize;
 _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
 
-if (isModernArt()) drawModernCombatCues(game, ctx, w, h, barH);
+drawCombatCues(game, ctx, w, h, barH);
 
 // ─── Crosshair (centered in viewport above bar) ───
 const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
-drawCrosshair(ctx, chx, chy, game.settings.crosshair);
-drawAdsReticle(ctx, game, chx, chy);
+drawAimReticle(ctx, game, chx, chy, barH);
+drawReloadHud(ctx, game, chx, chy);
+drawPowerCellChip(ctx, game);
 
 // ─── Hit marker ───
 drawHitMarker(ctx, game, chx, chy);
@@ -1945,6 +2065,7 @@ if (game.showFPS) {
 
 // Achievement toast
 game.renderAchievementToast(ctx, w, h);
+drawConditioningChip(ctx, game, w, h);
 
 // Meltdown upgrade overlay
 if (game._meltdownUpgradeChoices) {
@@ -2074,7 +2195,7 @@ const healthColor =
       : game.cbColor("#ff2200");
 
 // Stamina bar (slim, above the bar)
-const staminaPct = game.player.stamina / game.player.maxStamina;
+const staminaPct = game.player.stamina / (game.player.staminaCap ?? game.player.maxStamina);
 const stBarH = Math.round(8 * hudFactor);
 const stBarW = Math.round(220 * hudFactor);
 const stBarX = Math.floor(w / 2 - stBarW / 2);
@@ -2163,10 +2284,10 @@ if (game.player.maxShield > 0) {
 
 // Center-left: AMMO
 const ammoX = hpW + pad * 2;
-ctx.fillStyle = "#ffcc00";
+ctx.fillStyle = ammoTint(game, "#ffcc00");
 ctx.font = "bold 22px monospace";
 ctx.textAlign = "center";
-ctx.fillText(`${game.player.ammo}`, ammoX + 30, midY + 3);
+ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, ammoX + 30, midY + 3);
 ctx.fillStyle = "rgba(255,204,0,0.5)";
 ctx.font = "bold 8px monospace";
 ctx.fillText("AMMO", ammoX + 30, midY - 12);
@@ -2269,9 +2390,9 @@ function _renderTacticalDesktopHUD(game, ctx, w, h, barH, hudFactor) {
   ctx.lineTo(cx + 200, cy + 40);
   ctx.fill();
   
-  ctx.fillStyle = "#ffcc00";
+  ctx.fillStyle = ammoTint(game, "#ffcc00");
   ctx.textAlign = "left";
-  ctx.fillText(`AMMO ${game.player.ammo}`, cx + 210, cy + 28);
+  ctx.fillText(`AMMO ${game.player.ammoLabel ?? game.player.ammo}`, cx + 210, cy + 28);
   
   // Center weapon icon
   if (wep) {
@@ -2321,10 +2442,10 @@ function _renderCustomDesktopHUD(game, ctx, w, h, barH, hudFactor) {
   if (layout.ammo) {
     const px = layout.ammo.x * w;
     const py = layout.ammo.y * h;
-    ctx.fillStyle = "#ffcc00";
+    ctx.fillStyle = ammoTint(game, "#ffcc00");
     ctx.font = "bold 32px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`${game.player.ammo}`, px, py);
+    ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, px, py);
     ctx.fillStyle = "#ffffff";
     ctx.font = "12px monospace";
     ctx.fillText("AMMO", px, py + 16);

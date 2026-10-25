@@ -5,14 +5,15 @@
 // Caller: game.render() → renderFrame(game).
 
 import { renderPostFX as _renderPostFX } from "./postfx.js";
+import { drawBlackout } from "../ui/tutorial-ui.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
-import { effectiveAimFov, updateSprintFov } from "../systems/aim.js";
+import { effectiveAimFov, updateSprintFov, sceneShiftPx, aimZoom, reticlePoint, currentBarH } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
 import { prepareEnemySprite } from "./svg-art/sprites/enemies.js";
-import { renderChronoWorld, renderChronoScreen } from "./chrono-fx.js";
+import { renderChronoWorld, renderChronoScreen, renderArrivals } from "./chrono-fx.js";
 import { renderDirector } from "../cinematic/director.js";
 
 let showroomLoad = "idle"; // idle | loading | ready | failed
@@ -300,7 +301,7 @@ function drawVoxelScene(game, ctx, w, h, cam, sprites, lights, fx = null, segmen
   }
   ctx.drawImage(vr.canvas, 0, 0, w, h);
   // Streaming is part of the voxel phase: it is what the long flight costs.
-  if (game.showFPS) game.profiler.currentPhases.voxel = vr.stats.ms + (stream?.ms || 0);
+  if (game.profiling) game.profiler.currentPhases.voxel = vr.stats.ms + (stream?.ms || 0);
   return true;
 }
 
@@ -501,7 +502,7 @@ export function renderFrame(game) {
   }
 
   renderWorld(game, ctx, w, h);
-  const profiling = !!game.showFPS;
+  const profiling = !!game.profiling;
 
   // Render HUD on overlay canvas
   const _tHud0 = profiling ? performance.now() : 0;
@@ -510,7 +511,10 @@ export function renderFrame(game) {
   // Tutorial overlay (rendered on game canvas, above HUD, below pause menus)
   if (game.mode === "tutorial") {
     game.renderTutorialOverlay(ctx, w, h);
+    game.renderTutorialCard(game.hudCtx, game.hudW, game.hudH);
   } else if (game.mode === "campaign" && game.state === GameState.PLAYING) {
+    // A narrative beat's flicker: the lights stutter for a moment.
+    if (game.levelBeats?.dark) drawBlackout(ctx, w, h);
     // A Chronos teach card, the tutorial's card, on the HUD layer in the
     // message director's headline lane (same coordinates as ARIA's plates).
     game.renderTeachCard(game.hudCtx, game.hudW, game.hudH);
@@ -584,21 +588,25 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   // Camera tilt (slide lean)
   const tilt = game.player.cameraTilt || 0;
   if (Math.abs(tilt) > 0.001) {
+    // Rolled, the frame's corners would swing in and show the canvas past the
+    // picture's edge; scaling up just enough keeps them covered.
+    const a = Math.abs(tilt);
+    const fill = Math.cos(a) + (Math.max(w, h) / Math.min(w, h)) * Math.sin(a);
     ctx.translate(w / 2, h / 2);
     ctx.rotate(tilt);
+    ctx.scale(fill, fill);
     ctx.translate(-w / 2, -h / 2);
   }
 
   // Render 3D scene — timed: raycast phase
-  const profiling = !!game.showFPS;
+  const profiling = !!game.profiling;
   const _tRay0 = profiling ? performance.now() : 0;
   // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;
-  // Camera punch converts to vertical pixel offset (negative = kick upward)
-  const punchPx = (p.cameraPunch || 0) * -h * 0.12;
-  const stanceShift = (p.isSliding ? 40 : 28) * (p.crouchBlend || 0);
+  // Stance and camera punch (negative = kick upward) shift the view; the fire
+  // path aims with the same shift (sceneShiftPx in aim.js).
   // The menu showcase lifts its horizon above the settings bottom sheet.
-  const yShift = stanceShift + punchPx + Math.round((game.showcasePitch || 0) * h);
+  const yShift = sceneShiftPx(p, h) + Math.round((game.showcasePitch || 0) * h);
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
@@ -633,6 +641,8 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
     );
     // Chronos: Foresight, the Time-Lock, the echo, set pieces, the Hound.
     renderChronoWorld(game, game.renderer, renderPlaneMul, yShift);
+    // Tears and vents enemies are coming through, in every mode (arrival.js).
+    if (game.arrivals?.length) renderArrivals(game, game.renderer, renderPlaneMul, yShift);
   } else {
     ctx.fillStyle = "#020610";
     ctx.fillRect(0, 0, w, h);
@@ -654,6 +664,7 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   }
 
   ctx.restore();
+  if (flat2D && game.map?.grid) magnifyRows(game, ctx, w, h);
   if (profiling) {
     // The voxel pass reports itself as `voxel` (drawVoxelScene); counting it in
     // `raycast` as well would show the same milliseconds twice. Each branch
@@ -787,7 +798,7 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
       if (src) {
         _glr.renderPostFXFromCanvas(src, game.time, _fxBloom, _fxCA, _fxGrain, _gc);
         // Draw GL result back to main Canvas2D
-        ctx.drawImage(_glr.canvas, 0, 0);
+        _glr.blitTo(ctx);
       }
     } catch (_e) {
       // Shader failure — fall through silently, Canvas 2D already applied overlays
@@ -813,6 +824,26 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
     });
   }
   if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
+}
+
+/**
+ * The raycaster's zoom is horizontal only: a narrower FOV squeezes the view
+ * plane, but wall and sprite heights stay h / distance. Aimed in, stretch the
+ * rows by the same magnification about the reticle's row, so the sight
+ * magnifies evenly (a 4x scope is 4x both ways) on the GPU wall pass and the
+ * Canvas2D path alike, and whatever sat under the reticle stays under it:
+ * the vertical aim math is unchanged by the zoom.
+ */
+function magnifyRows(game, ctx, w, h) {
+  const zoom = aimZoom();
+  if (!(zoom > 1.001)) return;
+  const ry = reticlePoint(w, h, currentBarH(game), game.player).y;
+  const sy = ry - ry / zoom;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(ctx.canvas, 0, sy, ctx.canvas.width, ctx.canvas.height / zoom, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
 }
 
 /**

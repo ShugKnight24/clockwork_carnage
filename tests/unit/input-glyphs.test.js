@@ -16,6 +16,7 @@ import { Game, GameState } from "../../js/game.js";
 import { Player } from "../../js/entities.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { tutorialStepCopy } from "../../src/ui/tutorial-ui.js";
+import { prologueStepIndex } from "../../src/data/prologue.js";
 import { powerKeys } from "../../src/ui/chrono-hud.js";
 
 const fakeGame = (over = {}) => ({
@@ -87,7 +88,7 @@ describe("binding table", () => {
     const game = fakeGame();
     expect(glyph(game, "interact", "keyboard")).toEqual({ text: "E", kind: "key" });
     expect(glyph(game, "sprint", "keyboard").text).toBe("SHIFT");
-    expect(glyph(game, "crouch", "keyboard").text).toBe("CTRL");
+    expect(glyph(game, "crouch", "keyboard").text).toBe("C"); // not Ctrl: Ctrl+W closes the tab
     expect(glyph(game, "confirm", "keyboard").text).toBe("ENTER");
     expect(glyph(game, "back", "keyboard").text).toBe("ESC");
     game.keybinds.interact = "KeyF";
@@ -227,6 +228,14 @@ describe("default pad layout in play", () => {
     frame(game, []);
   };
 
+  it("X reloads when there is nothing in front of you to use", () => {
+    const game = padGame();
+    game.interact = () => (game.calls.push("interact"), false);
+    game.reloadPress = () => game.calls.push("reload");
+    press(game, PAD.X);
+    expect(game.calls).toEqual(["interact", "reload"]);
+  });
+
   it("A dashes, X interacts, B holds crouch, R3 locks, Start pauses", () => {
     const game = padGame();
     press(game, PAD.A);
@@ -315,14 +324,17 @@ describe("prompt text", () => {
     const game = fakeGame();
     const pad = tutorialStepCopy("gamepad", game);
     expect(pad.length).toBe(tutorialStepCopy(false).length);
-    expect(pad[3].hint).toContain("press X");
-    expect(pad[7].hint).toContain("press Y");
-    expect(pad[9].hint).toContain("Hold B");
-    expect(pad[11].hint).toContain("Tap A");
-    expect(pad[12].hint).toContain("Hold LB");
-    expect(pad[3].pad).toBe("xbox");
-    for (const step of pad.slice(1)) {
-      expect(step.hint).not.toMatch(/\b(mouse|click|press [EQ]\b|WASD|W A S D|SHIFT|CTRL|scroll)\b/i);
+    const at = (id) => pad[prologueStepIndex(id)];
+    expect(at("suitUp").hint).toContain("press X");
+    expect(at("shotgun").hint).toContain("press Y");
+    expect(at("slide").hint).toContain("tap B");
+    expect(at("dash").hint).toContain("Tap A");
+    expect(at("chrono").hint).toContain("Hold LB");
+    expect(at("suitUp").pad).toBe("xbox");
+    for (const step of pad.filter(Boolean)) {
+      expect(step.hint).not.toMatch(/\b(mouse|click|press [EQ]\b|WASD|W A S D|scroll)\b/i);
+      // Case-sensitive: "Chrono Shift" is the power, SHIFT the key.
+      expect(step.hint).not.toMatch(/\b(SHIFT|CTRL)\b/);
     }
   });
 

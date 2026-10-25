@@ -11,8 +11,11 @@ import {
   pickHitscanTarget,
   rayEnemyHit,
   voxelShotReach,
+  zoneAimHeight,
 } from "../../src/systems/combat.js";
 import { aimAngles } from "../../src/systems/aim.js";
+import { ENEMY_TYPES } from "../../src/data/enemies.js";
+import { ENEMY_ART_SPAN } from "../../src/data/enemy-art.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { PLAYER } from "../../src/world/voxel-physics.js";
 
@@ -355,5 +358,64 @@ describe("hitscan in a voxel world", () => {
     const enemy = drone(26.5);
     enemy.z = eyeZ + 3 - 0.35;
     expect(shoot(world, pitch, [enemy])?.enemy).toBe(enemy);
+  });
+});
+
+// ── A grid level's shot lands where the figure is drawn ──
+
+describe("hit zones on a grid level follow the drawn figure", () => {
+  const hench = () => ({
+    x: 6, y: 0, angle: Math.PI, state: "idle", active: true, type: "enemy",
+    enemyType: "henchman", def: { ...ENEMY_TYPES.henchman },
+  });
+  const [top, bottom] = ENEMY_ART_SPAN.henchman;
+  const shotAt = (height) => rayEnemyHit({ x: 0, y: 0 }, 1, 0, 20, Math.atan(height / 6), hench());
+
+  it("is a headshot at the drawn head, and a miss over it", () => {
+    expect(shotAt(top - 0.08)?.zone.name).toBe("head");
+    expect(shotAt(top + 0.4)).toBeNull();
+  });
+
+  it("is a leg shot at the drawn legs, and a body shot at the chest", () => {
+    expect(shotAt(bottom + 0.15)?.zone.name).toBe("legs");
+    expect(shotAt((top + bottom) / 2 + 0.1)?.zone.name).toBe("body");
+  });
+
+  it("gives the bots the same head to aim at", () => {
+    const h = zoneAimHeight(hench(), "head", true);
+    expect(shotAt(h)?.zone.name).toBe("head");
+  });
+});
+
+describe("a front shield covers the body, not the head", () => {
+  const sentinel = { x: 5, y: 0, angle: Math.PI, def: { frontShield: true }, _shield: 0 };
+  it("cuts a body shot from the front, and not a headshot", () => {
+    const front = { x: 0, y: 0 };
+    expect(calculateEnemyDamage(100, sentinel, 0, front).finalDamage).toBeCloseTo(20);
+    expect(calculateEnemyDamage(100, sentinel, 0, front, { zone: "head" }).finalDamage).toBeCloseTo(100);
+  });
+});
+
+describe("a front shield stays in front however far the enemy has turned", () => {
+  // Facing winds past ±π as an enemy spins searching or circles the player.
+  const at = (angle) => ({ x: 5, y: 0, angle, def: { frontShield: true }, _shield: 0 });
+  const behind = { x: 10, y: 0 }; // the shield faces -x (angle π)
+  const front = { x: 0, y: 0 };
+  it.each([Math.PI, 3 * Math.PI, -Math.PI, 5 * Math.PI, -3 * Math.PI])("facing %f rad: shot from behind lands in full", (a) => {
+    expect(calculateEnemyDamage(100, at(a), 0, behind).finalDamage).toBeCloseTo(100);
+    expect(calculateEnemyDamage(100, at(a), 0, front).finalDamage).toBeCloseTo(20);
+  });
+});
+
+describe("a Sentinel can be worn down from the front", () => {
+  const sentinel = () => ({ x: 5, y: 0, angle: Math.PI, def: { frontShield: true }, _shield: 0 });
+  it("takes the armour plate's cut once, not stacked with the shield's", () => {
+    // Pistol 15 x plate 0.4: 6 a shot, not the 1.2 the two cuts stacked to.
+    expect(calculateEnemyDamage(15 * 0.4, sentinel(), 0, { x: 0, y: 0 }, { zone: "armor" }).finalDamage).toBeCloseTo(6);
+  });
+  it("holds off its energy shield's regeneration after a hit", () => {
+    const e = sentinel();
+    calculateEnemyDamage(10, e, 0, { x: 10, y: 0 });
+    expect(e._shieldRegenDelay).toBeGreaterThan(0);
   });
 });

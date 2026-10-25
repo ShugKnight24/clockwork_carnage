@@ -71,6 +71,7 @@ export const CUTSCENE_KEYS = new Set([
   "origin_panels",
   "the_hunt_begins",
   "clocking_in",
+  "suit_up",
   "intro_flipbook",
   "act2_transition_fb",
   "hunt_transition_fb",

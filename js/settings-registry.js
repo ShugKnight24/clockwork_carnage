@@ -23,7 +23,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   minimapSize: 200,
   masterVolume: 100, // 0..100
   musicVolume: 80, // 0..100
-  voiceVolume: 80, // 0..100 — character babble voices and grunts
+  voiceVolume: 80, // 0..100 — character voices and grunts
+  voices: false, // spoken dialogue; off shows subtitles with a comms blip
+  voiceStyle: 0, // 0 Auto, 1 Spoken, 2 Stylised (babble)
   sfxVolume: 80, // 0..100
   sensitivity: 0.7, // 0.2..2.0
   fov: 70, // 50..120 degrees
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   viewMode: 0, // 0=first-person, 1=third-person
   invertX: false,
   invertY: false,
+  aimToggle: false,
   fontScale: 100, // 100, 125, 150 percent
   colorblind: 0, // 0=off, 1=deuteranopia, 2=protanopia, 3=tritanopia
   visualStyle: 0, // 0=Clockwork (cartoony), 1=Brutal
@@ -447,6 +450,37 @@ export const SETTINGS_REGISTRY = [
     platform: "all",
     height: { compact: 42, normal: 60 },
   },
+  {
+    key: "voices",
+    label: "Spoken Dialogue",
+    desc: "Voice the story's lines, in the style below. Off, every line is still shown as text, with a soft blip on comms.",
+    type: "toggle",
+    onColor: "#ff88cc",
+    onChange: (g) => {
+      g.audio.voicesOn = !!g.settings.voices;
+      g.audio.speak?.("Systems nominal. Voice check.", "aria", { channel: "comms" });
+    },
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "voiceStyle",
+    label: "Voice Style",
+    desc: "Spoken uses your browser's text-to-speech; Edge and Chrome have natural-sounding voices. Auto speaks when one is available and keeps the stylised voices otherwise.",
+    type: "enum",
+    values: ["Auto", "Spoken", "Stylised"],
+    colors: ["#00ccff", "#ff88cc", "#ffaa00"],
+    min: 0,
+    max: 2,
+    step: 1,
+    wrap: true,
+    onChange: (g) => {
+      g.audio.voiceStyle = g.settings.voiceStyle | 0;
+      g.audio.speak?.("Systems nominal. Voice check.", "aria", { channel: "comms" });
+    },
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+  },
   // ─── Controls ───
   {
     key: "sensitivity",
@@ -530,6 +564,15 @@ export const SETTINGS_REGISTRY = [
     // Pad look runs through the same aim path as the mouse, which applies
     // the inversion; re-sync the pad so it never inverts a second time.
     onChange: (g) => g.applyGamepadSettings?.(),
+  },
+  {
+    key: "aimToggle",
+    label: "Toggle Aim",
+    desc: "Press aim once to aim in and again to aim out, instead of holding it. Easier on a trackpad.",
+    type: "toggle",
+    onColor: "#ff8844",
+    platform: "desktop",
+    height: { compact: 30, normal: 44 },
   },
   // ─── Gamepad ───
   {
@@ -664,6 +707,17 @@ export const SETTINGS_REGISTRY = [
     wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
+  },
+  {
+    key: "editAgent",
+    label: "Agent & Suit",
+    desc: "Change your suit, colours, badge, gear and loadout. New unlocks show up here as you earn them.",
+    type: "action",
+    buttonLabel: "OPEN CREATOR",
+    color: "#22e6ff",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: (game) => game.openCreatorFromSettings(),
   },
   {
     key: "editCustomHud",

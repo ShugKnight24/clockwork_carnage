@@ -246,35 +246,23 @@ export class Profiler {
     if (this.historyLen > 1) {
       const step = graphW / (HISTORY_SIZE - 1);
 
-      // Render phase bars (stacked bottom-up)
-      for (let i = 0; i < this.historyLen; i++) {
-        const hIdx =
-          (this.historyIdx - this.historyLen + i + HISTORY_SIZE) % HISTORY_SIZE;
-        let stackH = 0;
-        for (const p of RENDER_PHASES) {
-          const ms = this.phaseHistory[p.key][hIdx];
-          const barH = (ms / this.frameBudgetMs) * graphH;
-          ctx.fillStyle = p.color;
-          ctx.fillRect(
-            gx + i * step,
-            graphY + graphH - stackH - barH,
-            Math.max(step - 1, 1),
-            barH,
-          );
-          stackH += barH;
-        }
-        // Update phase bars on top
-        for (const p of UPDATE_PHASES) {
-          const ms = this.phaseHistory[p.key][hIdx];
-          const barH = (ms / this.frameBudgetMs) * graphH;
-          ctx.fillStyle = p.color;
-          ctx.fillRect(
-            gx + i * step,
-            graphY + graphH - stackH - barH,
-            Math.max(step - 1, 1),
-            barH,
-          );
-          stackH += barH;
+      // Phase bars, stacked bottom-up: render phases, then update phases on
+      // top. Drawn a phase at a time so each colour is one batch, skipping
+      // empty bars — sample by sample it was ~1,400 rects a frame, most of
+      // them zero-height, and the overlay became a cost of its own.
+      const stack = this._stackBuf || (this._stackBuf = new Float32Array(HISTORY_SIZE));
+      stack.fill(0, 0, this.historyLen);
+      const barW = Math.max(step - 1, 1);
+      for (const p of ALL_PHASES) {
+        const hist = this.phaseHistory[p.key];
+        ctx.fillStyle = p.color;
+        for (let i = 0; i < this.historyLen; i++) {
+          const hIdx =
+            (this.historyIdx - this.historyLen + i + HISTORY_SIZE) % HISTORY_SIZE;
+          const barH = (hist[hIdx] / this.frameBudgetMs) * graphH;
+          if (barH < 0.25) continue;
+          ctx.fillRect(gx + i * step, graphY + graphH - stack[i] - barH, barW, barH);
+          stack[i] += barH;
         }
       }
 

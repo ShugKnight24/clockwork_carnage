@@ -3,8 +3,9 @@
 // All functions are pure I/O: they read/write localStorage and return data.
 // Game-level side effects (startArenaRound, loadCampaignLevel, etc.) stay in Game.
 
+import { normalizeCustomSkins, normalizeWeaponFinishes } from "../data/weapon-skins.js";
 import {
-  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS,
+  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
   ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
   DEFAULT_CHARACTER,
@@ -90,12 +91,19 @@ export function applyMobileMigration(isTouchDevice, settings, saveFn) {
  */
 export function applyDefaultsMigration(isTouchDevice, settings, saveFn) {
   try {
-    if (localStorage.getItem("cc_defaults_v1")) return;
-    let changed = false;
-    if (settings.sensitivity === 1.0) { settings.sensitivity = 0.7; changed = true; }
-    if (!isTouchDevice && settings.hudStyle === 4) { settings.hudStyle = 1; changed = true; }
-    if (changed) saveFn();
-    localStorage.setItem("cc_defaults_v1", "1");
+    if (!localStorage.getItem("cc_defaults_v1")) {
+      let changed = false;
+      if (settings.sensitivity === 1.0) { settings.sensitivity = 0.7; changed = true; }
+      if (!isTouchDevice && settings.hudStyle === 4) { settings.hudStyle = 1; changed = true; }
+      if (changed) saveFn();
+      localStorage.setItem("cc_defaults_v1", "1");
+    }
+    // Spoken dialogue went off by default until the voices sound right:
+    // everyone gets it off once, and a later re-enable is theirs to keep.
+    if (!localStorage.getItem("cc_voices_off_v1")) {
+      if (settings.voices) { settings.voices = false; saveFn(); }
+      localStorage.setItem("cc_voices_off_v1", "1");
+    }
   } catch (_) {}
 }
 
@@ -143,8 +151,12 @@ export function loadCharacter(character) {
       backstoryIndex: BACKSTORIES.length - 1,
       voiceIndex: VOICE_PROFILES.length - 1,
       armorVariant: 1,
+      frameIndex: BODY_FRAMES.length - 1,
+      capeIndex: CAPE_STYLES.length - 1,
+      bodyIndex: BODY_TYPES.length - 1,
+      camoIndex: CAMO_STYLES.length - 1,
     };
-    const OBJECT_FIELDS = new Set(["badge", "accessories"]);
+    const OBJECT_FIELDS = new Set(["badge", "accessories", "weaponFinishes", "customSkins"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
       if (OBJECT_FIELDS.has(key)) continue;
       if (Object.prototype.hasOwnProperty.call(saved, key)) {
@@ -158,6 +170,8 @@ export function loadCharacter(character) {
       ? normalizeBadge(saved.badge)
       : migrateLegacyBadge(Number(saved.badgeIndex) || 0, Number(saved.shoulderIndex) || 0);
     character.accessories = normalizeAccessories(saved.accessories);
+    character.customSkins = normalizeCustomSkins(saved.customSkins);
+    character.weaponFinishes = normalizeWeaponFinishes(saved.weaponFinishes, character.customSkins);
   } catch (_) {}
 }
 
@@ -195,6 +209,35 @@ export function loadArchive(seenEnemies, fragments) {
       }
     }
   } catch (_) {}
+}
+
+// ── Conditioning ─────────────────────────────────────────
+
+const CONDITIONING_KEY = "cc_conditioning";
+
+/**
+ * The agent's Conditioning XP (src/systems/conditioning.js). Kept apart from
+ * the campaign save so it carries from one campaign into the next, and a
+ * cleared campaign does not take it along.
+ */
+export function saveConditioning(xp) {
+  try { localStorage.setItem(CONDITIONING_KEY, JSON.stringify(xp)); }
+  catch (_) {}
+}
+
+/** The saved XP record, unvalidated, or null (normalizeConditioning makes it safe). */
+export function loadConditioning() {
+  try {
+    const raw = localStorage.getItem(CONDITIONING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function clearConditioning() {
+  try { localStorage.removeItem(CONDITIONING_KEY); }
+  catch (_) {}
 }
 
 // ── Achievements ─────────────────────────────────────────
@@ -284,6 +327,10 @@ export function sanitizeCampaignSave(data, level) {
     if (v === null && k !== "mapGrid") delete out[k];
   }
   if (!(out.health > 0)) delete out.health;
+  // Rounds per weapon: finite, non-negative counts for real weapon ids only.
+  if (data.reserves && typeof data.reserves === "object") {
+    out.reserves = Object.fromEntries(Object.entries(data.reserves).filter(([id, n]) => WEAPONS[id] && fin(n) && n >= 0));
+  } else delete out.reserves;
 
   if (Array.isArray(data.weapons)) {
     const ids = [...new Set(data.weapons.filter((w) => Number.isInteger(w) && w >= 0 && w < WEAPONS.length))];

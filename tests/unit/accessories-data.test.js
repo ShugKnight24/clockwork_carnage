@@ -17,9 +17,9 @@ describe("accessory tables", () => {
     }
   });
 
-  it("launch counts: 4 each for back/waist/helmet, 3 each for arms/neck/legs", () => {
+  it("counts: 4 each for back/waist, 5 helmet (with the comms headset), 3 each for arms/neck/legs", () => {
     const n = (s) => ACCESSORIES[s].length - 1;
-    expect([n("back"), n("waist"), n("helmet")]).toEqual([4, 4, 4]);
+    expect([n("back"), n("waist"), n("helmet")]).toEqual([4, 4, 5]);
     expect([n("arms"), n("neck"), n("legs")]).toEqual([3, 3, 3]);
   });
 

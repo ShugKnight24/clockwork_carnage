@@ -112,6 +112,13 @@ export class AdaptiveQuality {
     this.adjustInterval = 1500; // ms between adjustments
     this.lastAdjust = 0;
     this.lastResize = 0;
+    // A step down taken for hitches alone (the average is fine) is a trial:
+    // hitches from a first-sight bake or a GPU stall don't go away at a lower
+    // resolution, and stepping down for them only left the game soft. See
+    // _judgeHitchTrial.
+    this._hitchTrial = null;
+    this._hitchHoldUntil = 0;
+    this.hitchHoldMs = 30000;
 
     // What the player and preset allow. The governor only scales within
     // these; it never turns on something the player turned off.
@@ -177,22 +184,46 @@ export class AdaptiveQuality {
     if (now - this.lastAdjust < this.adjustInterval) return false;
     this.lastAdjust = now;
 
-    // Warmup guard — skip until FPS history is full to avoid cold-start oscillation
-    if (this.history.length < this.historySize) return false;
+    // Warmup guard — skip until FPS history is full to avoid cold-start
+    // oscillation. A machine far under target fills 90 frames slowly (nine
+    // seconds at 10 fps, all of them bad ones), so 20 such frames will do.
+    const crawling = this.history.length >= 20 && this.averageFPS < this.targetFPS * 0.5;
+    if (this.history.length < this.historySize && !crawling) return false;
 
     const avg = this.averageFPS;
     const low = this.lowFPS;
     // Frequent hitches: roughly one frame in twelve below 60% of target.
     const hitchy = low < this.targetFPS * 0.6;
+    const slow = avg < this.targetFPS - 10;
+    this._judgeHitchTrial(now, avg, low, hitchy);
+    // Hitch-only steps accumulate until one moves the canvases (a single step
+    // can be under the resize threshold), then wait for the verdict.
+    const trial = this._hitchTrial;
+    const hitchStep =
+      hitchy && !slow && now >= this._hitchHoldUntil && (!trial || this.stableScale === trial.stable);
 
-    if (avg < this.targetFPS - 10 || hitchy) {
+    if (crawling) {
+      // Far under target: go most of the way in one step. Frame cost follows
+      // the pixel count, the square of the scale, so the scale that should
+      // reach target is this one times sqrt(avg / target).
+      this.renderScale *= Math.max(0.7, Math.min(0.93, Math.sqrt(avg / this.targetFPS) * 1.05));
+      this.renderScale = clamp(this.renderScale, this.minScale, this.maxScale);
+      this._applyTier();
+      this.history.length = 0; // judge the new scale on its own frames
+      if (Math.abs(this.renderScale - this.stableScale) < 0.06) return false;
+      this.lastResize = now;
+      return true;
+    } else if (slow || hitchStep) {
+      if (!slow && !trial) this._hitchTrial = { scale: this.renderScale, stable: this.stableScale, low };
       // Significant drop — scale down aggressively
       this.renderScale *= 0.93;
     } else if (avg < this.targetFPS - 5) {
       // Moderate drop — scale down gently
       this.renderScale *= 0.98;
-    } else if (avg > this.targetFPS + 5 && low > this.targetFPS * 0.8 && this.renderScale < this.maxScale) {
-      // Headroom — scale up slowly
+    } else if (avg > this.targetFPS + 3 && low > this.targetFPS * 0.8 && this.renderScale < this.maxScale) {
+      // Headroom — scale up slowly. The target sits 5 under what the panel
+      // delivers, so asking for more than target + 5 meant a 60 Hz display
+      // (vsync-locked at ~59.9) never scaled back up after a single step down.
       this.renderScale *= 1.02;
     }
 
@@ -204,12 +235,29 @@ export class AdaptiveQuality {
     // Resize when the target has drifted far enough from what the canvases
     // use. Comparing one step against the previous one meant 2% up-steps never
     // qualified: after a single downscale the game stayed soft for the rest
-    // of the session. A resize reallocates the GL canvas and framebuffer
-    // (~60 ms measured), so it stays rare.
+    // of the session. A resize reallocates the 2D canvases (the GL buffer
+    // only grows; see GLRenderer.resize), so it stays rare.
     if (Math.abs(this.renderScale - this.stableScale) < 0.06) return false;
     if (now - this.lastResize < 3000) return false;
     this.lastResize = now;
     return true;
+  }
+
+  /**
+   * Judge a hitch-only step down once the canvases are at the new size and a
+   * full window of frames has run there. If the hitches did not ease, the
+   * resolution was not their cause: go back, and take no more hitch-only
+   * steps for hitchHoldMs. A slow average still scales down meanwhile.
+   */
+  _judgeHitchTrial(now, avg, low, hitchy) {
+    const t = this._hitchTrial;
+    if (!t || this.stableScale === t.stable) return;
+    // Wait until the FPS window holds only frames at the new size.
+    if (now - this.lastResize < (this.historySize / Math.max(avg, 1)) * 1000) return;
+    this._hitchTrial = null;
+    if (!hitchy || low >= t.low * 1.2) return;
+    this.renderScale = t.scale;
+    this._hitchHoldUntil = now + this.hitchHoldMs;
   }
 
   /**
@@ -266,6 +314,7 @@ export class AdaptiveQuality {
 
   useAuto() {
     this.auto = true;
+    this._hitchTrial = null;
     // Auto mode scales resolution rather than gating post-FX; restore the
     // ceilings in case a lighter preset lowered them earlier.
     this.enableBloom = true;
@@ -282,6 +331,7 @@ export class AdaptiveQuality {
   resetScale() {
     this.renderScale = this.stableScale = this.maxScale;
     this.history.length = 0;
+    this._hitchTrial = null;
     this._tier = 2;
     this._applyTier();
   }

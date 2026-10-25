@@ -29,9 +29,9 @@
 const ALLOWED_TRANSITIONS = {
   title: ['modeSelect', 'playing', 'builder', 'cutscene', 'tutorial', 'characterCreate', 'settings', 'achievements', 'stats', 'cinematic'],
   modeSelect: ['title', 'playing', 'builder', 'cutscene', 'tutorial', 'campaignPrompt', 'characterCreate', 'settings', 'cinematic'],
-  playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder'],
+  playing: ['paused', 'settings', 'upgrade', 'gameOver', 'victory', 'levelComplete', 'cutscene', 'campaignPrompt', 'tutorialComplete', 'builder', 'characterCreate'],
   paused: ['playing', 'settings', 'title', 'modeSelect', 'achievements', 'stats', 'archive'],
-  settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor'],
+  settings: ['paused', 'playing', 'title', 'modeSelect', 'hudEditor', 'characterCreate'],
   // The deck's "Edit custom HUD" row opens the editor; leaving it returns there.
   hudEditor: ['settings', 'paused', 'playing', 'title', 'modeSelect'],
   upgrade: ['playing'],
@@ -41,14 +41,17 @@ const ALLOWED_TRANSITIONS = {
   levelComplete: ['playing', 'title', 'modeSelect', 'cutscene', 'upgrade', 'campaignPrompt', 'victory'],
   tutorial: ['playing', 'paused', 'settings', 'tutorialComplete', 'title'],
   cutscene: ['playing', 'title', 'modeSelect', 'gameOver', 'victory', 'campaignPrompt', 'tutorial', 'characterCreate'],
-  campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene'],
-  tutorialComplete: ['title', 'modeSelect', 'playing'],
-  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory', 'cinematic'],
+  // Skipping the prologue opens the creator, then the lore video.
+  campaignPrompt: ['playing', 'title', 'modeSelect', 'cutscene', 'characterCreate'],
+  // Out of the prologue the lore video plays before Act I.
+  tutorialComplete: ['title', 'modeSelect', 'playing', 'cutscene', 'cinematic', 'characterCreate'],
+  // The deck's "Agent & Suit" row opens the creator; leaving it returns there.
+  characterCreate: ['title', 'modeSelect', 'playing', 'cutscene', 'gameOver', 'victory', 'cinematic', 'settings', 'campaignPrompt'],
   achievements: ['title', 'modeSelect', 'paused'],
   stats: ['title', 'modeSelect', 'paused'],
   archive: ['title', 'modeSelect', 'paused', 'cinematic'],
-  // A reel returns to whatever played it; the lore video hands off to the flipbook.
-  cinematic: ['title', 'modeSelect', 'characterCreate', 'archive', 'cutscene'],
+  // A reel returns to whatever played it; the lore video hands off to Act I.
+  cinematic: ['title', 'modeSelect', 'characterCreate', 'archive', 'cutscene', 'playing'],
 };
 
 export class StateManager {

@@ -5,7 +5,8 @@
  * AO where deck/ceiling meet a wall) and which side neighbours are emissive
  * wall types (coloured light spill onto the deck). The Canvas2D floor loop
  * reads the typed arrays directly; the WebGL shader gets the same bytes as a
- * tiny RGBA8 texture (R = wall bits, G = glow side bits, B = glow colour index).
+ * tiny RGBA8 texture (R = wall bits, G = glow side bits, B = glow colour index,
+ * A = the room's own deck from `map.decks`, 0 for the act's).
  *
  * sync() diffs the live grid against a snapshot each frame (3600 byte compares
  * on a 60×60 map), so doors opening update the shading without a level hook.
@@ -91,6 +92,16 @@ export class EnvMap {
         out[o] = m;
         out[o + 1] = g;
         out[o + 2] = gi;
+      }
+    }
+    // Rooms with a deck of their own ({ x0, y0, x1, y1, kind, ceil }, cells):
+    // the floor shader draws it in place of the act's (gl-renderer deckFloor,
+    // deckCeil). `kind` is the floor (0 the act's), `ceil` the ceiling (0 the
+    // floor's kind), packed in a byte; later decks win where they overlap.
+    for (const d of map.decks ?? []) {
+      const v = ((d.kind ?? 0) & 15) | (((d.ceil ?? 0) & 15) << 4);
+      for (let y = Math.max(0, d.y0); y <= Math.min(h - 1, d.y1); y++) {
+        for (let x = Math.max(0, d.x0); x <= Math.min(w - 1, d.x1); x++) out[(y * w + x) * 4 + 3] = v;
       }
     }
     this.version++;

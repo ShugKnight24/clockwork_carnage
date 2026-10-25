@@ -8,7 +8,7 @@ import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../sr
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
 import { injectDesignTokens } from "../src/ui/design-tokens.js";
-import { initUnlockToasts, showGearToast } from "../src/ui/unlock-toast.js";
+import { initUnlockToasts, showFinishToast, showGearToast } from "../src/ui/unlock-toast.js";
 import {
   FramePacer,
   frameCapFor,
@@ -17,7 +17,7 @@ import {
 import { playReel, stepFixed, directorState } from "../src/cinematic/director.js";
 import { beatsToSec, reelDuration } from "../src/cinematic/timeline.js";
 import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
-import { playLoreThen, filmById } from "../src/cinematic/films.js";
+import { filmById } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
@@ -52,9 +52,20 @@ initUnlockToasts(game);
 // The DOM toast lives in the UI layer; the game only needs to be able to ask
 // for one when a drop is collected.
 game.showGearToast = showGearToast;
+game.showFinishToast = showFinishToast;
 onArtStyleChange(() => {
   if (isModernArt()) preloadShowroom(game);
 });
+
+// The title agent is the player's own once one is saved (stock hero until then).
+const dressTitleHero = () => {
+  let saved = false;
+  try { saved = !!localStorage.getItem("cc_character"); } catch (_) {}
+  customElements.whenDefined("title-hero").then(() => {
+    document.querySelector("title-hero")?.setCharacter?.(saved ? game.character : null);
+  });
+};
+dressTitleHero();
 
 // The title logotype wears the active art style's finish: Legacy's neon,
 // Comic's ink, or Modern's steel (assets/brand, built by scripts/brand).
@@ -88,7 +99,7 @@ function resizeCanvases() {
   // Render at a per-device pixel budget, not the raw window size: a 4K monitor
   // is 6x the pixels of a laptop, and a phone GPU a fraction of a desktop's.
   // (This replaces a flat 1280px cap that only applied to touch devices.)
-  const { w: renderW, h: renderH } = budgetedRenderSize(cssW, cssH, detectDeviceTier());
+  const { w: renderW, h: renderH } = budgetedRenderSize(cssW, cssH, detectDeviceTier(), dpr);
   nativeW = renderW;
   nativeH = renderH;
 
@@ -104,7 +115,7 @@ function resizeCanvases() {
   hudCanvas.height = Math.round(cssH * dpr);
   game.hudCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Game canvas renders at quality-scaled res (no DPR — adaptive quality handles it)
+  // Game canvas renders at the budgeted device-pixel size times the adaptive scale.
   const s = quality.stableScale ?? quality.renderScale;
   gameCanvas.style.width = cssW + "px";
   gameCanvas.style.height = cssH + "px";
@@ -112,6 +123,11 @@ function resizeCanvases() {
   const gh = Math.round(renderH * s);
   gameCanvas.width = gw;
   gameCanvas.height = gh;
+  // Nearest-neighbour stretching is crisp only at a whole-number scale; at
+  // 1.5x it doubles every other pixel, which shimmers and stair-steps. Any
+  // other stretch is filtered smoothly instead.
+  const stretch = (cssW * dpr) / gw;
+  gameCanvas.style.imageRendering = Math.abs(stretch - Math.round(stretch)) < 0.02 ? "pixelated" : "auto";
   if (game.renderer) {
     game.renderer.resize(gw, gh);
   }
@@ -152,13 +168,20 @@ function updateContinueButtons() {
   }
 }
 
+let _firstInteraction = false;
+
 function enterModeSelect() {
   titleScreen.classList.add("hidden");
   modeSelect.classList.remove("hidden");
   updateContinueButtons();
   game.state = GameState.MODE_SELECT;
-  window.dispatchEvent(new Event("cc:first-interaction"));
-  requestAnimationFrame(() => document.getElementById("btnCampaign")?.focus());
+  _firstInteraction = true;
+  // Listeners (the consent modal) run after the menu's first paint, not in
+  // the click's task.
+  requestAnimationFrame(() => {
+    document.getElementById("btnCampaign")?.focus();
+    setTimeout(() => window.dispatchEvent(new Event("cc:first-interaction")), 0);
+  });
 }
 
 function initAudio() {
@@ -188,35 +211,18 @@ async function playIntroFlipbookThen(cb) {
   });
 }
 
-// Every new campaign opens on the agent customizer, pre-filled with the saved
-// agent, so the name and look the flipbook references ({AGENT}) are confirmed
-// first. Returning players deploy with one keypress; saving or backing out both
-// continue the campaign. The seen flag is still written on save for anything
-// that reads it.
-function playCreatorThen(cb) {
-  showGameCanvases();
-  game.creatorCategory = 0;
-  game._creatorSaveCallback = (saved) => {
-    if (saved) {
-      try { localStorage.setItem("cc_seen_creator_intro", "1"); } catch (_) {}
-    }
-    cb();
-  };
-  game.state = GameState.CHARACTER_CREATE;
-}
-
 document.getElementById("btnCampaign").addEventListener("click", () => {
   initAudio();
   game.audio.menuConfirm();
   showGameCanvases();
   trackEvent("mode_start", { mode: "campaign" });
-  // Order: Creator → lore video (first new campaign only) → Flipbook →
-  // Prologue prompt (locker room or skip) → Level 1
-  playCreatorThen(() => {
-    // Every new campaign offers the locker-room prologue (default choice) so
-    // the station training and its narrative stay reachable after the first run.
-    playLoreThen(game, () => playIntroFlipbookThen(() => game.showCampaignPrompt()));
-  });
+  // Order: the comic (the cadet's past, ending on "Report 07:00") → Prologue
+  // prompt. The prologue opens the creator at the locker, once the suit is
+  // on, and the lore film (the station, the Chronos Engine, the eleven
+  // seconds) plays after it, before Act I: before it, the film spoiled what
+  // the prologue reveals. Skipping the prologue goes creator → film → Act I
+  // (CampaignManager.executePromptChoice).
+  playIntroFlipbookThen(() => game.showCampaignPrompt());
 });
 
 document.getElementById("btnTutorial").addEventListener("click", () => {
@@ -585,6 +591,8 @@ let prevState = null;
 let _errCount = 0;
 let _loopRecoveries = 0;
 let _lastQualityTimestamp = 0;
+let _qualitySide = null;
+const _sideScales = { play: null, screens: null };
 const pacer = new FramePacer();
 
 // rAF stops while the tab is hidden. Drop the timing history on the way back in
@@ -598,7 +606,7 @@ document.addEventListener("visibilitychange", () => {
 
 function gameLoop(timestamp) {
   try {
-    const updateStart = devToolsEnabled || game.showFPS ? performance.now() : 0;
+    const updateStart = devToolsEnabled || game.profiling ? performance.now() : 0;
     game.update(timestamp);
     attract.tick();
     // The attract loop runs unattended on the title: 30 fps is plenty.
@@ -614,6 +622,7 @@ function gameLoop(timestamp) {
     if (game.state !== prevState) {
       prevState = game.state;
       if (game.state === GameState.TITLE) {
+        dressTitleHero();
         titleScreen.classList.remove("hidden");
         modeSelect.classList.add("hidden");
         gameCanvas.style.display = "none";
@@ -636,7 +645,7 @@ function gameLoop(timestamp) {
 
     let renderMs = 0;
     if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) {
-      const _tRnd0 = devToolsEnabled || game.showFPS ? performance.now() : 0;
+      const _tRnd0 = devToolsEnabled || game.profiling ? performance.now() : 0;
       game.render();
       renderMs = _tRnd0 ? performance.now() - _tRnd0 : 0;
 
@@ -650,7 +659,7 @@ function gameLoop(timestamp) {
       }
     }
 
-    if (devToolsEnabled || game.showFPS) {
+    if (devToolsEnabled || game.profiling) {
       game.profiler.recordFrame(updateMs, renderMs, game.entities.length);
     }
 
@@ -659,6 +668,28 @@ function gameLoop(timestamp) {
     // — otherwise Battery Saver reads as a slow machine and the render scale
     // spirals down to the floor.
     quality.targetFPS = qualityTargetFPS(cap, pacer.displayHz);
+    // Play and the screens around it (the comic, the creator, the films)
+    // each keep their own render scale. They were one: the comic's
+    // first-sight decodes pulled the scale to its floor, and a slow laptop
+    // then started the prologue at a blurry 0.35. Switching side restores
+    // that side's last scale and starts its sample window fresh.
+    const side = game.state === GameState.PLAYING || game.state === GameState.BUILDER ? "play" : "screens";
+    if (!quality.auto) {
+      // A preset or a fixed scale from Settings: one scale everywhere, as set.
+      _sideScales.play = _sideScales.screens = null;
+      _qualitySide = side;
+    } else if (side !== _qualitySide) {
+      if (_qualitySide) _sideScales[_qualitySide] = quality.stableScale ?? quality.renderScale;
+      const back = _sideScales[side] ?? quality.maxScale;
+      _qualitySide = side;
+      quality.history.length = 0;
+      _lastQualityTimestamp = 0;
+      if (Math.abs(back - (quality.stableScale ?? quality.renderScale)) > 0.01) {
+        quality.renderScale = quality.stableScale = back;
+        game.applyPerformanceSettings();
+        resizeCanvases();
+      }
+    }
     const frameMs = _lastQualityTimestamp ? timestamp - _lastQualityTimestamp : 1000 / 60;
     _lastQualityTimestamp = timestamp;
     quality.recordFPS(1000 / Math.max(frameMs, 1));
@@ -715,12 +746,47 @@ function gameLoop(timestamp) {
 
 requestAnimationFrame(gameLoop);
 
+// While the title waits for a click, queue the comic's art: it opens every new
+// campaign, and cold it showed a black frame, an empty cover, then one agent
+// swapping for another as the bitmaps landed. Idle time only, after the boot.
+setTimeout(() => {
+  const warm = () => {
+    if (game.state !== GameState.TITLE && game.state !== GameState.MODE_SELECT) return;
+    game._ensureCutsceneEngine()
+      .then(() => game.cutsceneEngine?.prewarm?.("intro_flipbook", game.renderer.ctx, gameCanvas.width, gameCanvas.height))
+      .catch(() => {});
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(warm, { timeout: 3000 });
+  else warm();
+}, 1500);
+
+// Opening the audio device (new AudioContext) cost ~260 ms of the title
+// click on a 4x-throttled laptop. Create it suspended while the title idles,
+// so the click only resumes it. A browser that would let it start running
+// without a gesture is held suspended too: nothing plays before the click.
+setTimeout(() => {
+  const open = () => {
+    if (game.audio.ctx || game.state !== GameState.TITLE) return;
+    try {
+      game.audio.init();
+      if (game.audio.ctx?.state === "running" && !_firstInteraction) game.audio.ctx.suspend();
+    } catch (_) {}
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(open, { timeout: 4000 });
+  else open();
+}, 1000);
+
 // Auto-save on tab close / navigate away
-window.addEventListener("beforeunload", () => {
+window.addEventListener("beforeunload", (e) => {
   if (game.state === GameState.PLAYING && game.mode === "arena")
     game.saveArena();
   if (game.state === GameState.PLAYING && game.mode === "campaign")
     game.saveCampaign();
+  // Mid-game, the browser asks before the tab closes (a stray Ctrl+W).
+  if (game.state === GameState.PLAYING || game.state === GameState.PAUSED) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
 });
 window.__ccBeforeUnloadRegistered = true;
 

@@ -15,8 +15,9 @@ export function createGrid(w, h, fill = 1) {
 
 /**
  * Named layer counts, so level data reads as heights rather than integers.
- * The eye sits at half a wall, so only KNEE and WAIST can be seen over
- * standing; SHOULDER and TALL block sight while still showing the ceiling.
+ * A standing player's eye is at 0.74 (STAND_EYE_Z), so KNEE, WAIST and
+ * SHOULDER can be seen over standing; TALL blocks sight while still showing
+ * the ceiling. Crouched (0.29), WAIST and up hide you.
  */
 export const LAYER = { KNEE: 1, WAIST: 2, SHOULDER: 3, TALL: 4, FULL: 5 };
 
@@ -45,6 +46,21 @@ export function lowWall(g, hm, r1, c1, r2, c2, layers = LAYER.WAIST, v = 3) {
 export function lowTile(g, hm, r, c, layers = LAYER.WAIST, v = 3) {
   g[r][c] = v;
   hm[r][c] = layers;
+}
+
+/**
+ * Low cover blocks at a list of cells, for a room laid out around cover
+ * (src/systems/cover.js takes any block from waist height up as cover; a
+ * waist block is the one you stand up over to shoot). `cells` are [row, col]
+ * pairs, or `{ x, y }` objects with x the column. Returns the cells as
+ * `{ x, y }`, so a caller can place props or spawns beside them.
+ */
+export function coverBlocks(g, hm, cells, layers = LAYER.WAIST, v = 3) {
+  return cells.map((cell) => {
+    const [r, c] = Array.isArray(cell) ? cell : [cell.y, cell.x];
+    lowTile(g, hm, r, c, layers, v);
+    return { x: c, y: r };
+  });
 }
 
 /**

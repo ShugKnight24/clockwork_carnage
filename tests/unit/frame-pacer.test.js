@@ -78,6 +78,13 @@ describe("frameCapFor", () => {
 describe("qualityTargetFPS", () => {
   it("keeps the uncapped target", () => {
     expect(qualityTargetFPS(0, 60)).toBe(55);
+    expect(qualityTargetFPS(0, 144)).toBe(55);
+    expect(qualityTargetFPS(0, 0)).toBe(55);
+  });
+
+  it("aims under a slow panel even uncapped", () => {
+    // A 50 Hz panel can never deliver 55 fps; aiming there scaled down forever.
+    expect(qualityTargetFPS(0, 50)).toBe(45);
   });
 
   it("follows a low cap so battery saver is not read as a slow machine", () => {
@@ -87,5 +94,26 @@ describe("qualityTargetFPS", () => {
   it("never asks for more than the uncapped target", () => {
     expect(qualityTargetFPS(120, 60)).toBe(55);
     expect(qualityTargetFPS(90, 144)).toBe(55);
+  });
+});
+
+describe("display refresh estimate", () => {
+  it("reads the panel, not the frame rate, when the GPU is the bottleneck", () => {
+    const pacer = new FramePacer();
+    let t = 1000;
+    // A cheap menu at 60 Hz, then a heavy scene the GPU only draws at 20 fps.
+    for (let i = 0; i < 120; i++) pacer.shouldRender((t += 1000 / 60), 0);
+    pacer.reset(); // a level load
+    for (let i = 0; i < 600; i++) pacer.shouldRender((t += 50), 0);
+    expect(pacer.displayHz).toBeGreaterThan(54);
+    expect(qualityTargetFPS(0, pacer.displayHz)).toBeGreaterThan(50);
+  });
+
+  it("eventually follows a move to a slower panel", () => {
+    const pacer = new FramePacer();
+    let t = 1000;
+    for (let i = 0; i < 120; i++) pacer.shouldRender((t += 1000 / 60), 0);
+    for (let i = 0; i < 20000; i++) pacer.shouldRender((t += 1000 / 30), 0);
+    expect(pacer.displayHz).toBeLessThan(31);
   });
 });

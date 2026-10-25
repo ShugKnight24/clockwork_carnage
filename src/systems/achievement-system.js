@@ -290,7 +290,7 @@ export class AchievementSystem {
     ctx.textAlign = "left";
   }
 
-  renderStats(ctx, w, h) {
-    drawStatsScreen(ctx, w, h, this.achievementStats);
+  renderStats(ctx, w, h, conditioning = null) {
+    drawStatsScreen(ctx, w, h, this.achievementStats, conditioning);
   }
 }

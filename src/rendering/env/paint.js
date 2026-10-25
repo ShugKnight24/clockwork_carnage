@@ -695,15 +695,23 @@ const BUMP = 0.085;
  * The albedo is never read back. JS turns the (CPU-side) height and emissive
  * maps into four layers and the canvas composites them onto the paint:
  * desaturate → wear/grime over-paint → multiply by light → add specular.
+ *
+ * Returns the face's normal map: the relief normals the bake lit with (R, G:
+ * x, y with 0.5 flat; z = sqrt(1 - x² - y²)) and its gloss (B, 0 on
+ * emitters), so the wall shader can light the relief with dynamic lights.
+ * `floor: false` leaves out the grime rising from the floor line, for a face
+ * whose foot is not on the floor (the upper band).
  */
-export function bakeMaterial(canvas, m, p, act, seed) {
+export function bakeMaterial(canvas, m, p, act, seed, { floor = true } = {}) {
   const L = layers();
   bakeLayers(
     m.h.getImageData(0, 0, T, T).data,
     m.e.getImageData(0, 0, T, T).data,
     L.desat.data, L.paint.data, L.light.data, L.spec.data,
-    p, act, seed,
+    p, act, seed, L.normal.data, floor,
   );
+  const normals = makeCanvas(T);
+  normals.getContext("2d").putImageData(L.normal, 0, 0);
   const ctx = canvas.getContext("2d");
   ctx.save();
   const put = (img, op, alpha = 1) => {
@@ -722,6 +730,7 @@ export function bakeMaterial(canvas, m, p, act, seed) {
   ctx.drawImage(canvas, 0, 0);
   put(L.spec, "lighter");
   ctx.restore();
+  return normals;
 }
 
 const LIGHT_RANGE = 1.5;
@@ -732,7 +741,7 @@ function layers() {
   const canvas = makeCanvas(T);
   const ctx = canvas.getContext("2d");
   const img = () => ctx.createImageData(T, T);
-  _layers = { canvas, ctx, desat: img(), paint: img(), light: img(), spec: img() };
+  _layers = { canvas, ctx, desat: img(), paint: img(), light: img(), spec: img(), normal: img() };
   _layers.desat.data.fill(128);
   return _layers;
 }
@@ -742,8 +751,11 @@ const [kx, ky, kz] = KEY;
 const [fx, fy, fz] = FILL;
 const [hx, hy, hz] = HALF;
 
-/** The bake on raw RGBA buffers: height `hd` + emissive alpha `ed` in, four layers out. */
-export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed) {
+/**
+ * The bake on raw RGBA buffers: height `hd` + emissive alpha `ed` in, four
+ * layers out, and the relief normals + gloss into `normal` when given.
+ */
+export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed, normal = null, floorLine = true) {
   const { blotch, fine } = noiseFields();
   const { hs, hl, tmp, wet, acc, row, col } = buffers();
   const r = rng(seed ^ 0x5bd1e995);
@@ -767,14 +779,14 @@ export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed) {
   C[9] = act === 2 ? 0.85 : act >= 3 ? 0.6 : 0.55;
 
   // One call per row keeps the hot loop small for the optimising compiler.
-  for (let y = 0; y < T; y++) shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, row[y], ofs);
+  for (let y = 0; y < T; y++) shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, row[y], ofs, normal, floorLine);
 }
 
-function shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, brushRow, ofs) {
+function shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, brushRow, ofs, normal, floorLine) {
   const yu = (y > 0 ? y - 1 : 0) * T;
   const yd = (y < MASK ? y + 1 : MASK) * T;
   const rowI = y * T;
-  const floor = y > 360 ? ((y - 360) / 152) ** 1.5 : 0;
+  const floor = floorLine && y > 360 ? ((y - 360) / 152) ** 1.5 : 0;
   const ceil = y < 48 ? (48 - y) / 48 : 0;
   const rustAmt = C[9];
   const lightScale = 255 / LIGHT_RANGE;
@@ -849,5 +861,14 @@ function shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col,
     const sv = s > 0 ? s * gloss * 150 * ao * k : 0;
     spec[o] = spec[o + 1] = spec[o + 2] = sv;
     spec[o + 3] = 255;
+
+    if (normal) {
+      // Opaque on purpose: a canvas stores colour premultiplied, so gloss in
+      // alpha would wipe the normal wherever it is 0. z is rebuilt from x, y.
+      normal[o] = nx * 127.5 + 127.5;
+      normal[o + 1] = ny * 127.5 + 127.5;
+      normal[o + 2] = (gloss > 1 ? 1 : gloss) * k * 255;
+      normal[o + 3] = 255;
+    }
   }
 }

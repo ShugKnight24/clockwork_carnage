@@ -167,13 +167,13 @@ async function mineTarget(page) {
   return page.evaluate(() => {
     const b = window.ccDebug.game.builder;
     const t = { ...b.target };
-    b.handleMouseDown(2);
+    b.handleMouseDown(0);
     let ticks = 0;
     while (ticks < 1200 && b.world.get(t.x, t.y, t.z) !== 0) {
       b.update(1 / 60);
       ticks++;
     }
-    b.handleMouseUp(2);
+    b.handleMouseUp(0);
     return { cell: t, ticks, block: b.world.get(t.x, t.y, t.z) };
   });
 }
@@ -330,7 +330,7 @@ test.describe("Voxel Forge", () => {
       Object.assign(b.player, { x: ex, y: ey, z, angle: Math.atan2(ty - ey, tx - ex), pitch: Math.atan2(29.9 - (z + 1.6), 2) });
       b.velZ = 0;
       b.update(0);
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       const v = b.world.meta.vessels?.[0];
       return v ? { kind: v.kind, x: v.x, y: v.y, z: v.z } : null;
     }, shore);
@@ -429,7 +429,7 @@ test.describe("Voxel Forge", () => {
     const target = await page.evaluate(() => window.ccDebug.game.builder.target);
     expect(target).toMatchObject({ x: 55, y: 64, z: 49 });
 
-    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(0));
+    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(2));
     expect(await page.evaluate(() => window.ccDebug.game.world.get(54, 64, 49))).toBe(1);
 
     // Simulated aim + click — break: a separate target block, right-click
@@ -439,7 +439,7 @@ test.describe("Voxel Forge", () => {
     const breakTarget = await page.evaluate(() => window.ccDebug.game.builder.target);
     expect(breakTarget).toMatchObject({ x: 45, y: 64, z: 49 });
 
-    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(2));
+    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(0));
     expect(await page.evaluate(() => window.ccDebug.game.world.get(45, 64, 49))).toBe(0);
   });
 
@@ -540,7 +540,7 @@ test.describe("Voxel Forge", () => {
       for (let i = 0; i < 2; i++) {
         Object.assign(b.player, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
         b.update(0);
-        b.handleMouseDown(0);
+        b.handleMouseDown(2);
       }
       return { a: b.world.get(44, 64, 49), b: b.world.get(43, 64, 49), dirty: b._dirty };
     });
@@ -588,7 +588,7 @@ test.describe("Voxel Forge", () => {
 
     await layOutSightLine(page, [[45, 1]]);
     await aimAndUpdate(page, { x: 40.5, y: 64.5, z: 48, angle: 0, pitch: 0 });
-    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(0));
+    await page.evaluate(() => window.ccDebug.game.builder.handleMouseDown(2));
     expect(
       await page.evaluate(() => {
         const b = window.ccDebug.game.builder;
@@ -956,10 +956,10 @@ test.describe("Voxel Forge", () => {
     // Rock is gated at Mining 5, so bare hands at level 1 must refuse it.
     const refusal = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
-      b.handleMouseDown(2);
+      b.handleMouseDown(0);
       b.update(1 / 60);
       const out = { notice: b.notice?.text ?? null, block: b.world.get(45, 64, 49) };
-      b.handleMouseUp(2);
+      b.handleMouseUp(0);
       return out;
     });
     expect(refusal.notice).toBe("Requires Mining 5");
@@ -969,7 +969,7 @@ test.describe("Voxel Forge", () => {
     const mined = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
       b.survival.skills.grant("mining", 200); // Mining 6
-      b.handleMouseDown(2);
+      b.handleMouseDown(0);
       b.update(1 / 60);
       const first = { progress: b.survival.progress, block: b.world.get(45, 64, 49) };
       let ticks = 1;
@@ -977,7 +977,7 @@ test.describe("Voxel Forge", () => {
         b.update(1 / 60);
         ticks++;
       }
-      b.handleMouseUp(2);
+      b.handleMouseUp(0);
       return {
         first,
         ticks,
@@ -1020,7 +1020,7 @@ test.describe("Voxel Forge", () => {
       const b = window.ccDebug.game.builder;
       b.heldItem = "stone";
       const target = b.target;
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       return {
         target,
         block: b.world.get(45, 64, 49),
@@ -1050,7 +1050,7 @@ test.describe("Voxel Forge", () => {
 
     const broken = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
-      b.handleMouseDown(2); // one click, no hold
+      b.handleMouseDown(0); // one click, no hold
       return { survival: b.survival, block: b.world.get(45, 64, 49), notice: b.notice };
     });
     // Rock would need Mining 5 in survival; creative has no gate and no hold.
@@ -1153,7 +1153,7 @@ test.describe("Voxel Forge", () => {
       const b = window.ccDebug.game.builder;
       b.heldItem = "workbench";
       const target = b.target;
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       return {
         target,
         block: b.world.get(45, 64, 49),
@@ -1180,7 +1180,7 @@ test.describe("Voxel Forge", () => {
       const b = window.ccDebug.game.builder;
       b.heldItem = "anvil";
       const target = b.target;
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       return { target, block: b.world.get(44, 64, 49) };
     });
     expect(anvil.target).toMatchObject({ x: 45, y: 64, z: 49 }); // the bench itself
@@ -1351,7 +1351,7 @@ test.describe("Voxel Forge", () => {
     const placed = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
       const cell = b.target;
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       return {
         left: b.survival.inventory.count("workbench"),
         blockAtFace: cell ? b.world.get(cell.x - 1, cell.y, cell.z) : null,
@@ -1372,11 +1372,18 @@ test.describe("Voxel Forge", () => {
 
   test("survival: the inventory grid is clickable where it is actually drawn", async ({ page }) => {
     test.setTimeout(90_000);
-    // A large window makes the game canvas smaller than the CSS size, which is
-    // exactly when a hudW-based hit test drifts. At 1280x720 the two spaces
-    // coincide and this test cannot tell a correct fix from a broken one.
+    // A game canvas smaller than its CSS size is exactly when a hudW-based
+    // hit test drifts. High-tier screens now render at native resolution, so
+    // a large window alone no longer does it: halve the render scale too.
+    // With the two spaces equal this test cannot tell a fix from a bug.
     await page.setViewportSize({ width: 2400, height: 1350 });
     await loadGame(page);
+    await page.evaluate(async () => {
+      const g = window.ccDebug.game;
+      const { SETTINGS_REGISTRY } = await import("/js/settings-registry.js");
+      g.settings.renderScale = 50;
+      SETTINGS_REGISTRY.find((d) => d.key === "renderScale")?.onChange?.(g);
+    });
     await debug(page, "startBuilder");
     await waitForForge(page);
 
@@ -1478,7 +1485,7 @@ test.describe("Voxel Forge", () => {
     const placed = await page.evaluate(() => {
       const b = window.ccDebug.game.builder;
       const before = b.survival.inventory.count("stone");
-      b.handleMouseDown(0);
+      b.handleMouseDown(2);
       return { before, after: b.survival.inventory.count("stone") };
     });
     expect(placed.after).toBe(placed.before - 1);

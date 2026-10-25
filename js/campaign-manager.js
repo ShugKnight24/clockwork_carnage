@@ -26,6 +26,11 @@ import { trackEvent } from "./analytics.js";
 import { GameState } from "../src/types.js";
 import { getArtStyle, ART_LEGACY } from "../src/rendering/art-style.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
+import { EXIT_GATES, lockdownFor, planLockdown, planPowerCells, powerCellsFor } from "../src/systems/exit-cells.js";
+import { setPieceFor } from "../src/data/campaign/set-pieces.js";
+import { Pickup } from "./entities.js";
+import { playLoreThen } from "../src/cinematic/films.js";
+import { clearArrivals } from "../src/systems/arrival.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -93,11 +98,15 @@ export class CampaignManager {
     try {
       const data = Save.sanitizeCampaignSave(raw, level);
       g.mode = "campaign";
+      if (g.ariaComms) g.ariaComms.introduced = true;
       this.level = index;
       this.act = data.act || 1;
       this.ngPlusCycle = data.ngPlusCycle || 0;
       g.settings.difficulty = data.difficulty ?? g.settings.difficulty;
       g.player.reset();
+      // Stats the save does not carry (stamina) come from the class and
+      // gear; everything it does carry is overwritten just below.
+      g.applyLoadoutBonuses?.();
       this.loadLevel(this.level);
       g.player.deserialize(data);
       if (data.playerX !== undefined) {
@@ -124,6 +133,15 @@ export class CampaignManager {
         g.killedEnemies = data.killedEnemies ?? 0;
       }
       this._noteMigration(raw);
+      // The level's tally restarts on resume; secret walls already opened in
+      // the saved map still count as this level's finds.
+      if (g._levelLog) {
+        let shut = 0;
+        for (const row of g.map.grid) for (const t of row) if (t === 6) shut++;
+        const opened = Math.max(0, g._levelLog.secretsTotal - shut);
+        g._levelLog.secretsAtStart = Math.max(0, (g.player.secretsFound || 0) - opened);
+      }
+      this._levelStart = this._snapshotPlayer();
       return true;
     } catch (err) {
       // A save this build cannot apply: restart its level rather than leave
@@ -156,6 +174,7 @@ export class CampaignManager {
     // The locker-room prologue already played "clocking_in"; don't repeat it.
     const fromTutorial = g.mode === "tutorial";
     g.mode = "campaign";
+    if (g.ariaComms) g.ariaComms.introduced = true;
     this.level = 0;
     this.act = 1;
     this.ngPlusCycle = 0;
@@ -179,19 +198,29 @@ export class CampaignManager {
           this.loadLevel(0);
         }
       };
-      const afterFlipbook = () => {
+      // ARIA's briefing film (src/cinematic/films.js, LORE_SEEN_KEY) tells the
+      // premise — 2181, the Chronos Engine, the eleven seconds, the last
+      // anchor — so once it has played, "intro" would only say it again.
+      const premise = (next) => {
+        if (Save.hasSeenIntroMemory("cc_seen_lore_video")) next();
+        else g.startCutscene("intro", next);
+      };
+      // Out of the prologue, the lore film plays first (once per browser):
+      // the prologue is what it would have spoiled.
+      const afterFlipbook = () => (fromTutorial ? playLoreThen(g, afterLore) : afterLore());
+      const afterLore = () => {
         if (!fromTutorial && g.hasCutsceneScript("clocking_in")) {
           g.startCutscene("clocking_in", () => {
-            g.ariaEnabled = true;
-            g.queueAriaMessage("campaignStart");
-            g.startCutscene("intro", () => {
-              playMemory();
-            });
+            const suited = () => {
+              g.ariaEnabled = true;
+              g.queueAriaMessage("campaignStart");
+              premise(playMemory);
+            };
+            if (g.hasCutsceneScript("suit_up")) g.startCutscene("suit_up", suited);
+            else suited();
           });
         } else {
-          g.startCutscene("intro", () => {
-            playMemory();
-          });
+          premise(playMemory);
         }
       };
       // First-play: show Marvel-style flipbook intro before the rest.
@@ -214,14 +243,20 @@ export class CampaignManager {
   /**
    * Bake the next level's environment while its briefing plays: an idle
    * callback during the scenes, so the level's first frame is not a ~200 ms
-   * freeze. Harmless if the level starts first (the renderer bakes as before).
+   * freeze. Harmless if the level starts first (loadLevel bakes it then).
+   * `now` bakes it at once instead.
    */
-  _prewarmLevel(actId, index) {
+  _prewarmLevel(actId, index, now = false) {
     const r = this.game.renderer;
     const act = getAct(actId);
     const entry = act && getActLevel(actId, index);
     if (!r?.prewarmEnv || !entry) return;
-    const run = () => r.prewarmEnv(act.palette, entry.env);
+    // The map's own walls too (its dressed rooms): a floor with thirty of
+    // them otherwise bakes them all in its first frame.
+    const walls = new Set();
+    for (const row of campaignMap(entry)?.grid ?? []) for (const v of row) if (v >= 10) walls.add(v);
+    const run = () => r.prewarmEnv(act.palette, entry.env, [...walls]);
+    if (now) return run();
     if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1500 });
     else setTimeout(run, 300);
   }
@@ -229,6 +264,7 @@ export class CampaignManager {
   loadLevel(index) {
     const g = this.game;
     this._clearLevelTimers();
+    g.ariaComms?.flush();
     const entry = getActLevel(this.act, index);
     const level = campaignMap(entry);
     if (!level) {
@@ -246,6 +282,8 @@ export class CampaignManager {
     g.player.angle = level.playerStart.dir;
     g.player.alive = true;
     g.entities = [];
+    // Nothing half-way through a tear carries over from the last level.
+    clearArrivals(g);
     g.dustMotes = null;
     g.projectiles = [];
     g._chronoBombs = [];
@@ -259,6 +297,44 @@ export class CampaignManager {
     );
     g.entities.push(...spawned);
     g.exitEntity = exitEntity || null;
+
+    // Power cells hold the exit shut where the power is the story (the
+    // reactor, the Engine): placed in the side rooms off the direct route,
+    // the same every run (exit-cells.js EXIT_GATES).
+    const gate = EXIT_GATES[entry.map];
+    const cellCount = powerCellsFor(level, setPieceFor(entry), entry.map);
+    const cells = cellCount
+      ? planPowerCells(level.grid, level.playerStart, level.exit, cellCount, entry.seed ?? this.act * 100 + index)
+      : [];
+    for (const c of cells) g.entities.push(new Pickup(c.x, c.y, "powerCell"));
+    // Last level's notice card does not carry over.
+    if (g._noticeCard) {
+      g.messages?.done(g._noticeCard.key);
+      g._noticeCard = null;
+    }
+    g.powerCells = cells.length ? { total: cells.length, found: 0 } : null;
+    g.lockdown = null;
+    // The story told while the level is played (src/data/campaign/beats.js).
+    g.levelBeats?.start(this.act, entry.map);
+    if (g.exitEntity) g.exitEntity.sealed = !!g.powerCells;
+    if (g.powerCells) {
+      g.queueAriaMessage(gate?.brief ?? "powerCellsBrief");
+      // The first gated level explains the rule; later ones just remind.
+      let seen = false;
+      try {
+        seen = !!localStorage.getItem("cc_seen_power_cells");
+        localStorage.setItem("cc_seen_power_cells", "1");
+      } catch (_) {}
+      const n = g.powerCells.total;
+      g.showNotice?.(
+        "cells",
+        `EXTRACTION SEALED — FIND ${n} POWER CELL${n === 1 ? "" : "S"}`,
+        seen
+          ? `${gate?.why ?? "The exit needs them."} Amber diamonds on your map.`
+          : `${gate?.why ?? "The exit beacon stays locked until you recover them."} They're off the main corridor: look for the amber glow, or the amber diamonds on your map. The count is under your timer.`,
+        seen ? 6 : 11,
+      );
+    }
 
     if (this.missedWeapons && this.missedWeapons.length > 0) {
       g.entities.push(
@@ -278,6 +354,20 @@ export class CampaignManager {
 
     g.killedEnemies = 0;
     g.totalEnemies = g.entities.filter((e) => e.type === "enemy").length;
+    // A lockdown holds the exit until a share of those hostiles is down.
+    if (!g.powerCells) {
+      g.lockdown = planLockdown(lockdownFor(level, setPieceFor(entry), entry.map), g.totalEnemies);
+      if (g.lockdown && g.exitEntity) {
+        g.exitEntity.sealed = true;
+        g.queueAriaMessage("lockdownBrief");
+        g.showNotice?.(
+          "lockdown",
+          `LOCKDOWN — DROP ${g.lockdown.need} HOSTILES`,
+          "The doors out are held while this floor's defenders stand. Put them down and the exit opens. The count is under your timer.",
+          8,
+        );
+      }
+    }
     g.killStreakSystem.reset();
     g.shotsFired = 0;
     g.shotsHit = 0;
@@ -298,7 +388,7 @@ export class CampaignManager {
       });
     }
 
-    this._applyActEnemyRoster();
+    this._applyActEnemyRoster(entry);
     this._warmRoster();
 
     const act = getAct(this.act);
@@ -343,8 +433,15 @@ export class CampaignManager {
       this._afterLevelStart(line.delay ?? 0, () => g.queueAriaMessage(line.aria));
     }
 
+    // The level's environment and its own walls, baked as part of loading
+    // when no briefing did it (Continue, a fresh campaign): with a dressed
+    // floor's twenty-odd wall faces that is ~0.6 s on a fast laptop, which
+    // otherwise lands in the first frame of play with the clock running.
+    // A no-op when the briefing's prewarm already ran, or on a retry.
+    this._prewarmLevel(this.act, index, true);
     g.state = GameState.PLAYING;
     g.roundStartTime = performance.now();
+    g.beginLevelLog?.();
     g.renderer.applyActPalette(act.palette, entry.env);
     if (hasBoss) {
       g.audio.startTrack("boss");
@@ -353,7 +450,44 @@ export class CampaignManager {
     }
     g.audio.startAmbient("industrial");
     this.save();
+    this._levelStart = this._snapshotPlayer();
     g.lockPointer();
+  }
+
+  /**
+   * The player as a level began, for Retry Level: the saved stats, plus the
+   * stamina the save leaves out and the gear bonuses already applied, so a
+   * piece picked up during the failed attempt goes back on exactly once.
+   */
+  _snapshotPlayer() {
+    const p = this.game.player;
+    if (!p.serialize) return null;
+    return structuredClone({ ...p.serialize(), maxStamina: p.maxStamina, gearApplied: p._gearApplied ?? null });
+  }
+
+  /**
+   * After a death: play this level again from its start, with the kit the
+   * player brought into it and full health. Restart used to begin a new
+   * campaign, overwriting the save — one death in Act I level 7 cost all of it.
+   */
+  retryLevel() {
+    const g = this.game;
+    const start = this._levelStart;
+    g.mode = "campaign";
+    g.player.reset();
+    this.loadLevel(this.level);
+    if (start) {
+      g.player.deserialize(structuredClone(start));
+      if (start.maxStamina) g.player.maxStamina = start.maxStamina;
+      g.player._gearApplied = structuredClone(start.gearApplied ?? null);
+      if (g._levelLog) g._levelLog.secretsAtStart = g.player.secretsFound || 0;
+    }
+    g.syncGearBonuses?.();
+    g.player.health = g.player.maxHealth;
+    g.player.stamina = g.player.maxStamina;
+    g.player.alive = true;
+    this._levelStart = this._snapshotPlayer();
+    this.save();
   }
 
   nextLevel() {
@@ -394,7 +528,7 @@ export class CampaignManager {
     } else {
       g.player.health = Math.min(g.player.health + healAmt, g.player.maxHealth);
     }
-    g.player.ammo = Math.min(g.player.ammo + 20, 999);
+    g.player.addAmmoPacks?.(1);
 
     // The level's briefing, then the level.
     const entry = getActLevel(this.act, this.level);
@@ -427,7 +561,7 @@ export class CampaignManager {
         this.act = next.id;
         this.level = 0;
         g.player.health = g.player.maxHealth;
-        g.player.ammo = Math.min(g.player.ammo + 50, 999);
+        g.player.addAmmoPacks?.(2);
         this._prewarmLevel(next.id, 0);
         this._playScenes(next.intro, () => {
           this.loadLevel(0);
@@ -472,7 +606,7 @@ export class CampaignManager {
     this.missedWeapons = [];
     g.player.health = g.player.maxHealth;
     g.player.shield = g.player.maxShield || 0;
-    g.player.ammo = Math.min(g.player.ammo + 100, 999);
+    g.player.addAmmoPacks?.(4);
     g.player.alive = true;
 
     const cutsceneKey = `ng_plus_cycle_${this.ngPlusCycle}`;
@@ -533,11 +667,13 @@ export class CampaignManager {
     requestAnimationFrame(step);
   }
 
-  _applyActEnemyRoster() {
+  _applyActEnemyRoster(entry = getActLevel(this.act, this.level)) {
     applyActEnemyRoster(
       this.game.entities,
       this.act,
       this.game.getDifficultyMultipliers(),
+      entry?.holdBack,
+      this.ngPlusCycle,
     );
   }
 
@@ -547,9 +683,16 @@ export class CampaignManager {
   }
 
   executePromptChoice(choice) {
-    // The customizer already ran at the start of this campaign (main.js
-    // playCreatorThen), so the prompt goes straight to the chosen start.
-    if (choice === 0) this.game.startTutorial();
-    else this.start();
+    // The prologue opens the customizer at the locker, once the suit is on
+    // (TutorialSystem.onInteract), and the lore film after it. Skipping the
+    // prologue does both here, then starts Act I.
+    const g = this.game;
+    if (choice === 0) {
+      g.startTutorial();
+      return;
+    }
+    g.creatorCategory = 0;
+    g._creatorSaveCallback = () => playLoreThen(g, () => this.start());
+    g.state = GameState.CHARACTER_CREATE;
   }
 }

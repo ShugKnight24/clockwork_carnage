@@ -124,14 +124,28 @@ function fragmentModel(pal) {
     "C -26 -12 -26 0 -26 8 L 28 8 C 28 0 28 -12 25 -17 C 21 -23 13 -25 7 -27 L 7 -31 " +
     "C 9 -33 12 -37 12 -43 C 13 -50 9 -56 2 -56 Z";
 
+  // Light refracted out through the facets: thin god-rays from the core.
+  let rays = "";
+  [[-160, 70], [-128, 52], [-96, 64], [-62, 58], [-28, 70], [16, 60], [58, 66], [104, 54], [140, 62]].forEach(([deg, len], i) => {
+    const a = (deg * Math.PI) / 180;
+    const w = 0.05 + (i % 3) * 0.02;
+    const pt = (k, da) => [2 + Math.cos(a + da) * len * k, -30 + Math.sin(a + da) * len * k];
+    rays += poly([pt(0.15, 0), pt(1, -w), pt(1, w)], `fill="${pal.light}" opacity="${n1(0.16 + (i % 2) * 0.1)}"`);
+  });
   const aura =
     bloom(2, -28, 78, 92, "fAura") +
-    bloom(2, 56, 44, 7, "fHalo", 0.35);
+    bloom(2, 56, 44, 7, "fHalo", 0.35) +
+    `<g filter="url(#fBlur2)">${rays}</g>` +
+    // Caustic light thrown on the ground below it.
+    `<g filter="url(#fBlur1)">` + [[-14, 57, 10], [8, 59, 14], [22, 56, 7], [-28, 59, 6]].map(([x, y, rx]) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="1.4" fill="${pal.pale}" opacity="0.3"/>`).join("") + `</g>`;
 
   const orbit =
     MINI_SHARDS.map(([x, y, s, r]) => miniShard(x, y, s, r)).join("") +
     [[-38, -84], [34, -100], [60, -30], [-60, -10], [40, 44], [-24, 50]]
       .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${0.8 + (i % 3) * 0.4}" fill="${pal.pale}" opacity="0.8"/>`)
+      .join("") +
+    [[-30, -96, 5], [44, -60, 4], [-52, 12, 3.5], [30, 30, 3]]
+      .map(([x, y, r]) => `<path d="M${x} ${y - r}L${x + r * 0.16} ${y - r * 0.16}L${x + r} ${y}L${x + r * 0.16} ${y + r * 0.16}L${x} ${y + r}L${x - r * 0.16} ${y + r * 0.16}L${x - r} ${y}L${x - r * 0.16} ${y - r * 0.16}Z" fill="${pal.core}" opacity="0.85"/>`)
       .join("");
 
   const crystal =
@@ -150,6 +164,12 @@ function fragmentModel(pal) {
     // specular strip along the lit upper-left edges
     poly([[-17, -55], [2, -89], [4, -84], [-13, -53]], `fill="${pal.core}" opacity="0.75"`) +
     poly([[-27, -15], [-18, -53], [-16, -50], [-24, -15]], `fill="${pal.pale}" opacity="0.45"`) +
+    // Internal refraction planes and a chromatic fringe on the lit edge.
+    `<g clip-path="url(#fClip)" opacity="0.5">` +
+    poly([[-20, -40], [14, -70], [22, -60], [-12, -30]], `fill="${pal.pale}" opacity="0.18"`) +
+    poly([[-24, 0], [20, -30], [24, -20], [-16, 8]], `fill="${pal.core}" opacity="0.12"`) +
+    seg([-26, -10], [18, -64], `stroke="${pal.core}" stroke-width="0.4" opacity="0.6"`) + `</g>` +
+    `<polyline points="${pts([SHARD[7], SHARD[0], SHARD[1]])}" fill="none" stroke="#ff7ad0" stroke-width="0.5" opacity="0.35" transform="translate(-0.8 0.3)"/>` +
     `<polygon points="${pts(SHARD)}" fill="none" stroke="${INK}" stroke-width="1.1" stroke-linejoin="round"/>` +
     // front-left shard
     poly(SIDE_SHARD, `fill="url(#fMid)" stroke="${INK}" stroke-width="1" stroke-linejoin="round"`) +
@@ -207,7 +227,11 @@ function stationModel() {
     fadeGrad("stGlow", "#7ff4ff", 0.8, 0.25) +
     fadeGrad("stBeacon", "#00ffcc", 0.9, 0.2) +
     `<radialGradient id="stGround"><stop offset="0" stop-color="#000" stop-opacity="0.7"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
-    `<filter id="stBlur" x="-0.3" y="-0.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation="1.6"/></filter>`;
+    `<filter id="stBlur" x="-0.3" y="-0.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation="1.6"/></filter>` +
+    `<filter id="stSoft" filterUnits="userSpaceOnUse" x="-130" y="-142" width="260" height="196"><feGaussianBlur stdDeviation="4"/></filter>` +
+    `<linearGradient id="stBeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#bff8ff" stop-opacity="0.5"/><stop offset="0.5" stop-color="#5cf0ff" stop-opacity="0.12"/><stop offset="1" stop-color="#5cf0ff" stop-opacity="0"/></linearGradient>` +
+    `<linearGradient id="stFog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fb8d8" stop-opacity="0"/><stop offset="0.5" stop-color="#8fb8d8" stop-opacity="0.22"/><stop offset="1" stop-color="#8fb8d8" stop-opacity="0.05"/></linearGradient>` +
+    `<linearGradient id="stRim" x1="0" y1="0" x2="1" y2="0"><stop offset="0.6" stop-color="#22e6ff" stop-opacity="0"/><stop offset="1" stop-color="#22e6ff" stop-opacity="0.28"/></linearGradient>`;
 
   const rand = rng(31);
   const windowRows = [-15, -3, 9];
@@ -241,9 +265,13 @@ function stationModel() {
     ticks.push([52 * Math.cos(a), -52 + 11 * Math.sin(a)]);
   }
 
+  // Searchlights raking up off the plinth into the night haze.
+  const beam = (x, ang, w) =>
+    `<path transform="rotate(${ang} ${x} 40)" d="M${x - 1.5} 40 L${x + 1.5} 40 L${x + w} -140 L${x - w} -140 Z" fill="url(#stBeam)"/>`;
   const aura =
     bloom(0, -38, 132, 100, "stAura") +
-    bloom(0, -121, 18, 18, "stBeacon", 0.3);
+    bloom(0, -121, 18, 18, "stBeacon", 0.3) +
+    `<g filter="url(#stSoft)">${beam(-100, -14, 14)}${beam(100, 16, 14)}${beam(-56, -4, 9)}${beam(60, 6, 9)}</g>`;
 
   const tier = (y) =>
     `<rect x="-86" y="${y + 6.2}" width="172" height="1.2" fill="#0a111a"/>` +
@@ -310,6 +338,10 @@ function stationModel() {
     `<path d="${ringFront}" fill="none" stroke="url(#stRing)" stroke-width="4.2"/>`;
 
   const lights =
+    // Low fog rolling across the plinth, lit from the entrance.
+    `<g filter="url(#stSoft)"><rect x="-128" y="26" width="256" height="24" fill="url(#stFog)"/><ellipse cx="0" cy="40" rx="70" ry="9" fill="#5cf0ff" opacity="0.25"/></g>` +
+    // Cyan rim down the right-hand faces (the station's own glow behind it).
+    `<rect x="-90" y="-23" width="180" height="57" fill="url(#stRim)" opacity="0.8"/>` +
     windows +
     `<g filter="url(#stBlur)" opacity="0.8">${windows}</g>` +
     bloom(0, 30, 30, 16, "stGlow", 0.7) +
@@ -340,224 +372,244 @@ function stationModel() {
 
 // ── Station corridor background ─────────────────────────────────────────────
 
+/**
+ * The Chronos PD station's main corridor, painted to match the playable rooms
+ * (src/rendering/env/rooms/corridor.js): dark band under a tiled ceiling of
+ * fluorescent troffers, cream upper wall with the blue wayfinding stripe,
+ * steel chair rail, navy lower panels, black kick base, glossy steel floor.
+ * Notice board and wanted posters on the left, the armory door and the alarm
+ * beacon on the right, the lobby's frosted doors glowing at the far end.
+ */
 function stationBackground() {
-  const S = camera(800, 340, 800);
-  const W = 1;
-  const C = -1.1;
+  const VX = 800;
+  const VY = 400;
+  const FL = 760;
+  const S = camera(VX, VY, FL);
+  const W = 1.1;
+  const C = -1.05;
   const F = 1;
   const NEAR = 0.7;
   const FAR = 7;
-  const T = 0.08; // rib thickness
-  const CH = 0.14; // rib chamfer
-  const D = 0.07; // rib depth
-  const ribs = [1.1, 1.45, 1.95, 2.6, 3.5, 4.7, 6.1];
-  const bays = ribs.map((z, i) => [(z + D) / (1 - T) + 0.02, (ribs[i + 1] ?? FAR) - 0.03]);
+  const BAND = -0.62; // bottom of the dark band under the ceiling
+  const RAIL = 0.12; // chair rail
+  const KICK = 0.8; // rubber base
+  const r = rng(77);
+  const side = (X, z, Y) => sideFrame(VX, VY, FL, X, z, Y);
 
   const defs =
     SHADE_DEFS +
-    `<linearGradient id="ceil" x1="0" y1="0" x2="0" y2="220" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#03060b"/><stop offset="1" stop-color="#0e1a2b"/></linearGradient>` +
-    `<linearGradient id="floor" x1="0" y1="455" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#16283c"/><stop offset="0.35" stop-color="#0a1522"/><stop offset="1" stop-color="#020409"/></linearGradient>` +
-    `<linearGradient id="wallL" x1="0" y1="0" x2="686" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#03060c"/><stop offset="0.55" stop-color="#0b1626"/><stop offset="1" stop-color="#162a40"/></linearGradient>` +
-    `<linearGradient id="wallR" x1="1600" y1="0" x2="914" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#02050a"/><stop offset="0.55" stop-color="#0a1422"/><stop offset="1" stop-color="#14263a"/></linearGradient>` +
-    `<linearGradient id="panelL" x1="0" y1="0" x2="686" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#060b14"/><stop offset="1" stop-color="#1c3048"/></linearGradient>` +
-    `<linearGradient id="panelR" x1="1600" y1="0" x2="914" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#04080f"/><stop offset="1" stop-color="#192b40"/></linearGradient>` +
-    `<linearGradient id="guide" x1="0" y1="455" x2="0" y2="760" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ff" stop-opacity="0.75"/><stop offset="1" stop-color="#22e6ff" stop-opacity="0"/></linearGradient>` +
-    `<linearGradient id="doorLight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2fdff"/><stop offset="0.45" stop-color="#8ff0ff"/><stop offset="1" stop-color="#1a90ad"/></linearGradient>` +
+    `<linearGradient id="ceil" x1="0" y1="0" x2="0" y2="300" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#05070b"/><stop offset="1" stop-color="#1a212b"/></linearGradient>` +
+    `<linearGradient id="floor" x1="0" y1="510" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2a3442"/><stop offset="0.3" stop-color="#18202c"/><stop offset="1" stop-color="#080b10"/></linearGradient>` +
+    `<linearGradient id="paintL" x1="0" y1="0" x2="690" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2a2a28"/><stop offset="0.5" stop-color="#5e5d57"/><stop offset="1" stop-color="#9a988e"/></linearGradient>` +
+    `<linearGradient id="paintR" x1="1600" y1="0" x2="910" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#232322"/><stop offset="0.5" stop-color="#55544e"/><stop offset="1" stop-color="#8e8c84"/></linearGradient>` +
+    `<linearGradient id="navyL" x1="0" y1="0" x2="690" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#070d18"/><stop offset="0.5" stop-color="#14233e"/><stop offset="1" stop-color="#243c64"/></linearGradient>` +
+    `<linearGradient id="navyR" x1="1600" y1="0" x2="910" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#060b15"/><stop offset="0.5" stop-color="#12203a"/><stop offset="1" stop-color="#20365c"/></linearGradient>` +
+    `<linearGradient id="bandG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1f27"/><stop offset="1" stop-color="#3a424e"/></linearGradient>` +
+    `<linearGradient id="diff" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d8e6f2"/></linearGradient>` +
+    `<linearGradient id="frost" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4fbff"/><stop offset="0.5" stop-color="#bfe4f2"/><stop offset="1" stop-color="#5aa8c4"/></linearGradient>` +
+    `<linearGradient id="cork" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c49a64"/><stop offset="1" stop-color="#7a5832"/></linearGradient>` +
+    `<linearGradient id="poster" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0e8d0"/><stop offset="1" stop-color="#c8bc9a"/></linearGradient>` +
+    `<linearGradient id="steelG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8dee6"/><stop offset="0.5" stop-color="#8c949e"/><stop offset="1" stop-color="#4a5058"/></linearGradient>` +
+    `<linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff4e0" stop-opacity="0.16"/><stop offset="0.7" stop-color="#fff4e0" stop-opacity="0.03"/><stop offset="1" stop-color="#fff4e0" stop-opacity="0"/></linearGradient>` +
     `<linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff4455" stop-opacity="0.9"/><stop offset="1" stop-color="#ff2a3a" stop-opacity="0"/></linearGradient>` +
-    fadeGrad("gCyan", "#8feaff", 0.55, 0.3) +
-    fadeGrad("gPanel", "#bdf3ff", 0.5, 0.3) +
-    fadeGrad("gHaze", "#3b7fb0", 0.22, 0.45) +
+    `<linearGradient id="fall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6e6" stop-opacity="0.12"/><stop offset="0.4" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.45"/></linearGradient>` +
+    fadeGrad("gTube", "#fff6e8", 0.6, 0.25) +
+    fadeGrad("gPool", "#e8eef6", 0.34, 0.4) +
+    fadeGrad("gStreak", "#f4f8ff", 0.5, 0.3) +
+    fadeGrad("gDoor", "#bfeaff", 0.55, 0.3) +
+    fadeGrad("gHaze", "#6a88a8", 0.18, 0.45) +
     fadeGrad("gRed", "#ff2a3a", 0.55, 0.25) +
-    fadeGrad("gDot", "#ffffff", 0.9, 0.2) +
+    fadeGrad("gGreen", "#44ff88", 0.7, 0.25) +
     BG_BLUR("blur6", 6) +
-    BG_BLUR("blur2", 2);
+    BG_BLUR("blur2", 2) +
+    BG_BLUR("blur14", 14);
 
-  let base = `<rect width="1600" height="900" fill="#03060b"/>`;
+  // ── Shell ──
+  let base = `<rect width="1600" height="900" fill="#05070b"/>`;
   base += poly(flatQuad(S, C, -W, W, NEAR, FAR), `fill="url(#ceil)"`);
   base += poly(flatQuad(S, F, -W, W, NEAR, FAR), `fill="url(#floor)"`);
-  base += poly(wallQuad(S, -W, C, F, NEAR, FAR), `fill="url(#wallL)"`);
-  base += poly(wallQuad(S, W, C, F, NEAR, FAR), `fill="url(#wallR)"`);
-
-  // Far bulkhead with a lit, half-open blast door.
-  base += poly(faceQuad(S, FAR, -W, W, C, F), `fill="#101d2e"`);
-  base += poly(faceQuad(S, FAR, -0.62, 0.62, -0.8, F), `fill="#1b2b3e" stroke="${INK}" stroke-width="1.5"`);
-  base += poly(faceQuad(S, FAR, -0.46, 0.46, -0.66, F), `fill="url(#doorLight)"`);
-  base += poly(faceQuad(S, FAR, -0.46, -0.2, -0.66, F), `fill="#0d1826"`);
-  base += poly(faceQuad(S, FAR, 0.2, 0.46, -0.66, F), `fill="#0b1522"`);
-  base += seg(S(-0.2, -0.66, FAR), S(-0.2, F, FAR), `stroke="#8ff0ff" stroke-width="1.6"`);
-  base += seg(S(0.2, -0.66, FAR), S(0.2, F, FAR), `stroke="#8ff0ff" stroke-width="1.6"`);
-  base += poly(faceQuad(S, FAR, -0.62, 0.62, -0.92, -0.84), `fill="#ffaa44" opacity="0.8"`);
-  for (let i = 0; i < 12; i++) {
-    const x = -0.6 + i * 0.1;
-    base += poly([S(x, -0.92, FAR), S(x + 0.05, -0.92, FAR), S(x + 0.02, -0.84, FAR), S(x - 0.03, -0.84, FAR)], `fill="#120c05"`);
+  for (const [X, paint, navy] of [[-W, "paintL", "navyL"], [W, "paintR", "navyR"]]) {
+    base += poly(wallQuad(S, X, C, BAND, NEAR, FAR), `fill="url(#bandG)"`);
+    base += poly(wallQuad(S, X, BAND, RAIL, NEAR, FAR), `fill="url(#${paint})"`);
+    base += poly(wallQuad(S, X, BAND, BAND + 0.012, NEAR, FAR), `fill="#d6aa3e" opacity="0.85"`);
+    base += poly(wallQuad(S, X, BAND + 0.05, BAND + 0.09, NEAR, FAR), `fill="#2f5c9e"`);
+    base += poly(wallQuad(S, X, RAIL, KICK, NEAR, FAR), `fill="url(#${navy})"`);
+    base += poly(wallQuad(S, X, RAIL - 0.02, RAIL + 0.03, NEAR, FAR), `fill="url(#steelG)"`);
+    base += seg(S(X, RAIL + 0.03, NEAR), S(X, RAIL + 0.03, FAR), `stroke="#000" stroke-width="2" opacity="0.5"`);
+    base += poly(wallQuad(S, X, KICK, F, NEAR, FAR), `fill="#0d0f12"`);
+    base += seg(S(X, KICK, NEAR), S(X, KICK, FAR), `stroke="#3a3e46" stroke-width="1.4"`);
+    // Lower panel seams and their screw heads.
+    for (let z = 1.0; z < FAR; z += 0.6) {
+      base += seg(S(X, RAIL + 0.03, z), S(X, KICK, z), `stroke="#060a14" stroke-width="${n1(Math.max(0.7, 3 / z))}"`);
+      base += seg(S(X, RAIL + 0.03, z + 0.012), S(X, KICK, z + 0.012), `stroke="#5a78a8" stroke-width="${n1(Math.max(0.5, 1.4 / z))}" opacity="0.35"`);
+    }
+    // Scuffs on the paint at trolley height.
+    for (let i = 0; i < 10; i++) {
+      const z = 1 + r() * 5;
+      const y = -0.1 + r() * 0.15;
+      base += poly(wallQuad(S, X, y, y + 0.006, z, z + 0.05 + r() * 0.2), `fill="#000" opacity="${n1(0.08 + r() * 0.1)}"`);
+    }
+    base += poly(wallQuad(S, X, BAND, KICK, NEAR, FAR), `fill="url(#fall)"`);
   }
 
-  // Floor: panel seams, centre grating and guide strips.
-  for (const X of [-0.5, 0.5]) base += seg(S(X, F, NEAR), S(X, F, FAR), `stroke="#1d3148" stroke-width="1.2" opacity="0.7"`);
-  base += poly(flatQuad(S, F, -0.2, 0.2, NEAR, FAR), `fill="#0a1522"`);
-  for (let z = 1.6; z < FAR; z += 0.22) base += seg(S(-0.2, F, z), S(0.2, F, z), `stroke="#03070d" stroke-width="${n1(Math.max(0.6, 5 / z))}"`);
-  base += poly(flatQuad(S, F, -0.66, -0.61, NEAR, FAR), `fill="url(#guide)"`);
-  base += poly(flatQuad(S, F, 0.61, 0.66, NEAR, FAR), `fill="url(#guide)"`);
-  for (const z of ribs) base += poly(flatQuad(S, F, -W, W, z, z + D), `fill="#0d1826"`);
+  // Ceiling grid and troffers.
+  for (const X of [-0.66, -0.22, 0.22, 0.66]) base += seg(S(X, C, NEAR), S(X, C, FAR), `stroke="#262e3a" stroke-width="1.6"`);
+  for (let z = 0.9; z < FAR; z += 0.45) base += seg(S(-W, C, z), S(W, C, z), `stroke="#262e3a" stroke-width="${n1(Math.max(0.6, 2.4 / z))}"`);
+  const TROFFERS = [];
+  for (let z = 1.15; z < FAR - 0.4; z += 0.9) TROFFERS.push([-0.2, 0.2, z, z + 0.3]);
+  for (const [a, b, z0, z1] of TROFFERS) {
+    base += poly(flatQuad(S, C + 0.004, a - 0.025, b + 0.025, z0 - 0.04, z1 + 0.04), `fill="#0b0e13" stroke="${INK}" stroke-width="1"`);
+    base += poly(flatQuad(S, C + 0.006, a, b, z0, z1), `fill="url(#diff)"`);
+    base += seg(S(0, C + 0.006, z0), S(0, C + 0.006, z1), `stroke="#a8b8c8" stroke-width="${n1(Math.max(0.6, 2 / z0))}" opacity="0.7"`);
+  }
+  // Sprinkler main along the ceiling's right side.
+  base += poly(wallQuad(S, 0.8, C + 0.02, C + 0.06, NEAR, FAR), `fill="#3a1414"`);
+  base += poly(wallQuad(S, 0.8, C + 0.02, C + 0.03, NEAR, FAR), `fill="#8a4a44" opacity="0.5"`);
 
-  // Wall panels, ceiling lights and practical wall strips per bay.
-  bays.forEach(([z0, z1], i) => {
-    if (z1 - z0 < 0.15) return;
-    const a = z0 + 0.03;
-    const b = z1 - 0.03;
-    base += poly(wallQuad(S, -W, -0.8, 0.62, a, b), `fill="url(#panelL)" stroke="${INK}" stroke-width="1.2"`);
-    base += poly(wallQuad(S, W, -0.8, 0.62, a, b), `fill="url(#panelR)" stroke="${INK}" stroke-width="1.2"`);
-    base += seg(S(-W, -0.8, a), S(-W, -0.8, b), `stroke="#4d6a86" stroke-width="1" opacity="0.5"`);
-    base += seg(S(W, -0.8, a), S(W, -0.8, b), `stroke="#3a5670" stroke-width="1" opacity="0.4"`);
-    base += poly(flatQuad(S, C, -0.3, 0.3, a + 0.04, b - 0.04), `fill="#dff8ff"`);
-    base += poly(flatQuad(S, C, -0.34, 0.34, a, b), `fill="none" stroke="#1d2e42" stroke-width="2"`);
-    // vertical light strip at the far end of each bay
-    base += poly(wallQuad(S, -W, -0.55, 0.35, b - 0.07, b - 0.03), `fill="#aef0ff"`);
-    base += poly(wallQuad(S, W, -0.55, 0.35, b - 0.07, b - 0.03), `fill="#aef0ff"`);
-    // kick plate
-    base += poly(wallQuad(S, -W, 0.8, F, a, b), `fill="#060b13"`);
-    base += poly(wallQuad(S, W, 0.8, F, a, b), `fill="#050a11"`);
-    base += seg(S(-W, 0.8, a), S(-W, 0.8, b), `stroke="#22e6ff" stroke-width="1" opacity="${i > 2 ? 0.35 : 0.15}"`);
-    base += seg(S(W, 0.8, a), S(W, 0.8, b), `stroke="#22e6ff" stroke-width="1" opacity="${i > 2 ? 0.3 : 0.12}"`);
+  // Floor: glossy steel tiles with dark seams and rivets.
+  for (let X = -W; X < W - 0.01; X += 0.55) {
+    for (let z = NEAR; z < FAR - 0.01; z += 0.55) {
+      const v = r();
+      base += poly(flatQuad(S, F, X + 0.008, X + 0.55 - 0.008, z + 0.008, Math.min(FAR, z + 0.55) - 0.008), `fill="${v < 0.3 ? "#222b38" : v < 0.7 ? "#1c2430" : "#171e29"}"`);
+    }
+  }
+  for (const X of [-0.55, 0, 0.55]) base += seg(S(X, F, NEAR), S(X, F, FAR), `stroke="#06080c" stroke-width="2"`);
+  for (let z = NEAR; z < FAR; z += 0.55) base += seg(S(-W, F, z), S(W, F, z), `stroke="#06080c" stroke-width="${n1(Math.max(0.6, 3 / z))}"`);
+
+  // ── Far end: the lobby's frosted double doors, an EXIT sign over them ──
+  base += poly(faceQuad(S, FAR, -W, W, C, BAND), `fill="#252b34"`);
+  base += poly(faceQuad(S, FAR, -W, W, BAND, F), `fill="#8a887e"`);
+  base += poly(faceQuad(S, FAR, -W, W, RAIL, F), `fill="#1a2a48"`);
+  base += poly(faceQuad(S, FAR, -0.62, 0.62, -0.68, F), `fill="#1c2a34" stroke="${INK}" stroke-width="1.5"`);
+  for (const [a, b] of [[-0.56, -0.03], [0.03, 0.56]]) {
+    base += poly(faceQuad(S, FAR, a, b, -0.62, F), `fill="#2a3a46" stroke="${INK}" stroke-width="1"`);
+    base += poly(faceQuad(S, FAR, a + 0.08, b - 0.08, -0.5, 0.25), `fill="url(#frost)"`);
+    base += poly(faceQuad(S, FAR, a + 0.08, b - 0.08, 0.02, 0.04), `fill="#2a3a46"`);
+  }
+  base += poly(faceQuad(S, FAR, -0.24, 0.24, -0.9, -0.76), `fill="#0a1a10" stroke="${INK}" stroke-width="1"`);
+  base += `<g transform="translate(${VX} ${n1(VY - 0.8 * FL / FAR)}) scale(${n1(FL / FAR * 100) / 100})"><text x="0" y="0" ${FONT} font-weight="900" font-size="0.1" text-anchor="middle" fill="#6aff9a">EXIT</text></g>`;
+
+  // ── Left wall: notice board, wanted posters, fire point ──
+  const XL = -W + 0.004;
+  const board = [2.0, 2.75];
+  base += poly(wallQuad(S, XL, -0.5, 0.0, board[0], board[1]), `fill="#2a1e14" stroke="${INK}" stroke-width="1.5"`);
+  base += poly(wallQuad(S, XL, -0.47, -0.03, board[0] + 0.025, board[1] - 0.025), `fill="url(#cork)"`);
+  const papers = [[2.08, 2.3, -0.44, -0.2, "#f4f2ea"], [2.34, 2.52, -0.42, -0.26, "#f6e68c"], [2.36, 2.62, -0.22, -0.06, "#e2ecf6"], [2.1, 2.28, -0.16, -0.05, "#f4f2ea"], [2.56, 2.7, -0.44, -0.3, "#f4c2b0"]];
+  for (const [z0, z1, y0, y1, c] of papers) {
+    base += poly(wallQuad(S, XL + 0.002, y0, y1, z0, z1), `fill="${c}"`);
+    for (let k = 1; k < 4; k++) base += poly(wallQuad(S, XL + 0.003, lerp(y0, y1, k / 4.5), lerp(y0, y1, k / 4.5) + 0.008, z0 + 0.02, z1 - 0.03), `fill="#3a3a40" opacity="0.6"`);
+    const [px, py] = S(XL, y0 + 0.01, (z0 + z1) / 2);
+    base += `<circle cx="${n1(px)}" cy="${n1(py)}" r="${n1(5 / z0)}" fill="#c23a2a"/>`;
+  }
+  base += `<g transform="${side(XL, 2.375, -0.555)}"><text x="0" y="0.025" ${FONT} font-weight="900" font-size="0.07" text-anchor="middle" fill="#e8e4d8">NOTICES</text></g>`;
+  // Three wanted posters.
+  [[3.15, "V. KESSLER"], [3.55, "UNKNOWN"], [3.95, "T. MORALES"]].forEach(([z, name]) => {
+    const z1 = z + 0.3;
+    base += poly(wallQuad(S, XL, -0.48, -0.02, z, z1), `fill="url(#poster)" stroke="${INK}" stroke-width="1"`);
+    base += poly(wallQuad(S, XL + 0.002, -0.46, -0.38, z + 0.02, z1 - 0.02), `fill="#b8221c"`);
+    base += `<g transform="${side(XL, z + 0.15, -0.415)}"><text x="0" y="0.025" ${FONT} font-weight="900" font-size="0.06" text-anchor="middle" fill="#f8f0e0">WANTED</text></g>`;
+    base += `<g transform="${side(XL, z + 0.15, -0.22)}"><circle cx="0" cy="-0.05" r="0.05" fill="#3a3a42"/><path d="M-0.1 0.08 C-0.1 0.0 -0.06 -0.01 0 -0.01 C0.06 -0.01 0.1 0 0.1 0.08Z" fill="#3a3a42"/></g>`;
+    base += `<g transform="${side(XL, z + 0.15, -0.075)}"><text x="0" y="0.015" ${FONT} font-weight="800" font-size="0.04" text-anchor="middle" fill="#2a1a10">${name}</text></g>`;
   });
+  // Fire point: red cabinet, extinguisher.
+  base += poly(wallQuad(S, XL, -0.35, 0.05, 4.7, 4.95), `fill="#a01e14" stroke="${INK}" stroke-width="1"`);
+  base += poly(wallQuad(S, XL + 0.002, -0.3, 0.0, 4.74, 4.91), `fill="#5a0c08"`);
+  base += poly(wallQuad(S, XL + 0.003, -0.25, -0.02, 4.79, 4.86), `fill="#e8402a"`);
 
-  // Wall display on the left, side door on the right.
-  const [dz0, dz1] = bays[2];
-  base += poly(wallQuad(S, -W, -0.52, 0.06, dz0 + 0.06, dz1 - 0.12), `fill="#040b14" stroke="#2b4b68" stroke-width="2"`);
-  const [rz0, rz1] = bays[3];
-  base += poly(wallQuad(S, W, -0.66, F, rz0 + 0.08, rz1 - 0.2), `fill="#081220" stroke="#2c4560" stroke-width="2"`);
-  base += seg(S(W, -0.66, lerp(rz0, rz1, 0.42)), S(W, F, lerp(rz0, rz1, 0.42)), `stroke="#02050a" stroke-width="2"`);
-  base += poly(wallQuad(S, W, -0.2, 0.05, rz1 - 0.17, rz1 - 0.1), `fill="#0c1a28" stroke="#2c4560" stroke-width="1"`);
+  // ── Right wall: armory door, its sign, the alarm beacon ──
+  const XR = W - 0.004;
+  const [dz0, dz1] = [2.3, 2.95];
+  base += poly(wallQuad(S, XR, -0.72, F - 0.004, dz0 - 0.05, dz1 + 0.05), `fill="#1d8a96" stroke="${INK}" stroke-width="1.5"`);
+  base += poly(wallQuad(S, XR - 0.002, -0.68, F - 0.004, dz0, dz1), `fill="#2a3038"`);
+  base += poly(wallQuad(S, XR - 0.003, -0.6, -0.25, dz0 + 0.18, dz1 - 0.18), `fill="#9ed8e8" opacity="0.6"`);
+  base += poly(wallQuad(S, XR - 0.003, -0.6, -0.25, lerp(dz0, dz1, 0.48), lerp(dz0, dz1, 0.52)), `fill="#1a2028"`);
+  for (let k = 0; k < 7; k++) {
+    const z0 = lerp(dz0, dz1, k / 7);
+    base += poly([S(XR - 0.003, 0.82, z0), S(XR - 0.003, 0.82, z0 + 0.04), S(XR - 0.003, 0.92, z0 + 0.08), S(XR - 0.003, 0.92, z0 + 0.04)], `fill="#e8b23a" opacity="0.85"`);
+  }
+  base += poly(wallQuad(S, XR - 0.003, 0.05, 0.12, dz0 + 0.04, dz0 + 0.1), `fill="url(#steelG)"`);
+  base += poly(wallQuad(S, XR, -0.92, -0.78, dz0 - 0.02, dz1 + 0.02), `fill="#22385e" stroke="${INK}" stroke-width="1"`);
+  base += `<g transform="${side(XR, (dz0 + dz1) / 2, -0.85)}"><text x="0" y="0.035" ${FONT} font-weight="900" font-size="0.09" text-anchor="middle" fill="#f2f2ee">ARMORY</text></g>`;
+  // Keypad beside the door.
+  base += poly(wallQuad(S, XR, -0.15, 0.05, dz1 + 0.1, dz1 + 0.18), `fill="#1a1e24" stroke="${INK}" stroke-width="1"`);
+  // Second door further down, then a crest plate.
+  base += poly(wallQuad(S, XR, -0.7, F - 0.004, 4.3, 4.75), `fill="#1d8a96" stroke="${INK}" stroke-width="1"`);
+  base += poly(wallQuad(S, XR - 0.002, -0.66, F - 0.004, 4.33, 4.72), `fill="#2a3038"`);
+  base += poly(wallQuad(S, XR, -0.5, -0.1, 3.4, 3.8), `fill="#14243e" stroke="#d8b25a" stroke-width="1.5"`);
+  base += `<g transform="${side(XR, 3.6, -0.3)}"><path d="M-0.09 -0.12 L0.09 -0.12 L0.09 0.02 C0.09 0.09 0.03 0.13 0 0.15 C-0.03 0.13 -0.09 0.09 -0.09 0.02Z" fill="#d8b25a"/><path d="M-0.06 -0.09 L0.06 -0.09 L0.06 0.02 C0.06 0.07 0.02 0.1 0 0.11 C-0.02 0.1 -0.06 0.07 -0.06 0.02Z" fill="#22385e"/><circle cx="0" cy="0" r="0.03" fill="#d8b25a"/></g>`;
 
-  // Pipes along the left wall, cable tray on the right.
-  const pipe = (X, Y, r) => {
-    let s = poly(wallQuad(S, X, Y - r, Y + r, NEAR, FAR), `fill="#132131"`);
-    s += poly(wallQuad(S, X, Y - r * 0.8, Y - r * 0.15, NEAR, FAR), `fill="#4a637c" opacity="0.6"`);
-    s += poly(wallQuad(S, X, Y - r * 0.6, Y - r * 0.4, NEAR, FAR), `fill="#cfe6f5" opacity="0.45"`);
-    s += poly(wallQuad(S, X, Y + r * 0.5, Y + r, NEAR, FAR), `fill="#02050a" opacity="0.7"`);
-    return s;
+  // Hanging wayfinding sign mid-corridor.
+  const signZ = 3.3;
+  for (const X of [-0.3, 0.3]) base += seg(S(X, C, signZ), S(X, -0.9, signZ), `stroke="#1a2028" stroke-width="2"`);
+  base += poly(faceQuad(S, signZ, -0.42, 0.42, -0.9, -0.74), `fill="#22385e" stroke="${INK}" stroke-width="1.5"`);
+  base += `<g transform="translate(${VX} ${n1(VY - 0.82 * FL / signZ)}) scale(${n1(FL / signZ * 100) / 100})"><text x="-0.05" y="0.03" ${FONT} font-weight="900" font-size="0.07" text-anchor="middle" fill="#f2f2ee">LOBBY · BRIEFING</text><path d="M0.31 -0.03 L0.37 0 L0.31 0.03" fill="none" stroke="#d6aa3e" stroke-width="0.016"/></g>`;
+
+  // Alarm beacon housing (right wall, high).
+  const beaconZ = 1.7;
+  const [bx, by] = S(W, -0.75, beaconZ);
+  base += `<rect x="${n1(bx - 26)}" y="${n1(by - 4)}" width="22" height="34" rx="3" fill="#141e2a" stroke="${INK}" stroke-width="1.5"/>`;
+  base += `<path d="M ${n1(bx - 34)} ${n1(by + 6)} A 19 22 0 0 1 ${n1(bx + 4)} ${n1(by + 6)} Z" fill="#5a0d14" stroke="${INK}" stroke-width="1.5"/>`;
+  base += `<path d="M ${n1(bx - 27)} ${n1(by - 6)} A 12 11 0 0 1 ${n1(bx - 13)} ${n1(by - 12)}" fill="none" stroke="#ff8a90" stroke-width="2" opacity="0.6"/>`;
+  base += `<rect x="${n1(bx - 38)}" y="${n1(by + 6)}" width="46" height="7" rx="1" fill="#1c2733" stroke="${INK}" stroke-width="1.2"/>`;
+  const [ox, oy] = [bx - 15, by - 4];
+
+  // ── Light ──
+  const tube = ([a, b, z0, z1], k = 1) => {
+    const zc = (z0 + z1) / 2;
+    const [cx, cy] = S(0, C, zc);
+    const s = FL / zc;
+    let m = bloom(cx, cy + 3, (b - a) * s * 1.4, (z1 - z0) * s * 0.35 + 6, "gTube", k);
+    const [px, py] = S(0, F, zc + 0.15);
+    m += bloom(px, py, s * 0.6, s * 0.08, "gPool", k);
+    // Its reflection in the glossy floor.
+    const [rx, ry] = S(0, 2 * F - C, zc);
+    if (ry < 900) m += bloom(rx, ry, s * 0.12, s * 0.5, "gStreak", 0.7 * k);
+    return m;
   };
-  base += pipe(-0.95, -0.95, 0.05) + pipe(-0.96, -0.83, 0.035) + pipe(-0.965, -0.74, 0.03) + pipe(-0.96, 0.7, 0.045);
-  base += poly(wallQuad(S, 0.93, -0.98, -0.9, NEAR, FAR), `fill="#0e1826"`);
-  base += poly(wallQuad(S, 0.93, -0.91, -0.89, NEAR, FAR), `fill="#5a7690" opacity="0.5"`);
-  base += pipe(0.965, 0.45, 0.03);
-  for (let z = 1.2; z < FAR; z += 0.5) {
-    base += poly(faceQuad(S, z, -W, -0.9, -1.01, -0.68), `fill="#08101a"`);
-    base += poly(faceQuad(S, z, 0.9, W, -1.0, -0.86), `fill="#08101a"`);
-  }
-
-  // Structural ribs, far to near.
-  for (const z of [...ribs].reverse()) {
-    const k = Math.min(1, (z - 1) / 5);
-    const ix = W - T;
-    const iy = C + T;
-    const inner = [[-ix, F], [-ix, iy + CH], [-ix + CH, iy], [ix - CH, iy], [ix, iy + CH], [ix, F]];
-    base += poly(wallQuad(S, -ix, iy + CH, F, z, z + D), `fill="#1c2e42"`);
-    base += poly(wallQuad(S, ix, iy + CH, F, z, z + D), `fill="#243a52"`);
-    base += poly(flatQuad(S, iy, -ix + CH, ix - CH, z, z + D), `fill="#15243a"`);
-    base += poly([S(-ix, iy + CH, z), S(-ix + CH, iy, z), S(-ix + CH, iy, z + D), S(-ix, iy + CH, z + D)], `fill="#223650"`);
-    base += poly([S(ix, iy + CH, z), S(ix - CH, iy, z), S(ix - CH, iy, z + D), S(ix, iy + CH, z + D)], `fill="#1a2c42"`);
-    const outer = [S(-W - 0.05, F + 0.01, z), S(-W - 0.05, C - 0.05, z), S(W + 0.05, C - 0.05, z), S(W + 0.05, F + 0.01, z)];
-    const hole = inner.map(([x, y]) => S(x, y, z));
-    const r = Math.round(lerp(8, 26, k));
-    const g = Math.round(lerp(14, 40, k));
-    const bl = Math.round(lerp(22, 58, k));
-    base += `<path fill-rule="evenodd" d="M${pts(outer).replace(/ /g, " L")} Z M${pts(hole).replace(/ /g, " L")} Z" fill="rgb(${r},${g},${bl})" stroke="${INK}" stroke-width="${n1(2 / z + 0.5)}"/>`;
-    base += `<polyline points="${pts(hole)}" fill="none" stroke="#22e6ff" stroke-width="${n1(2.4 / z)}" opacity="${n1(0.12 + 0.3 * k)}"/>`;
-    base += `<polyline points="${pts([S(-W, F, z), S(-W, C, z), S(W, C, z)])}" fill="none" stroke="#6f8aa3" stroke-width="${n1(1.6 / z)}" opacity="${n1(0.1 + 0.25 * k)}"/>`;
-    for (const Y of [-0.5, 0.1, 0.7]) {
-      for (const X of [-W + T / 2, W - T / 2]) {
-        const [bx, by] = S(X, Y, z);
-        base += `<circle cx="${n1(bx)}" cy="${n1(by)}" r="${n1(2.6 / z)}" fill="#3a4d61"/>`;
-      }
-    }
-  }
-
-  // Hanging wayfinding sign (shapes only) and emergency beacon housing.
-  const signZ = 3.95;
-  for (const X of [0.2, 0.62]) base += seg(S(X, C, signZ), S(X, -1.02, signZ), `stroke="#1a2838" stroke-width="2"`);
-  base += poly(faceQuad(S, signZ, 0.12, 0.7, -1.02, -0.86), `fill="#07111c" stroke="#2c4560" stroke-width="1.5"`);
-  for (let i = 0; i < 3; i++) {
-    const x = 0.2 + i * 0.07;
-    base += `<polyline points="${pts([S(x, -0.99, signZ), S(x + 0.04, -0.94, signZ), S(x, -0.89, signZ)])}" fill="none" stroke="#22e6ff" stroke-width="2.4" stroke-linejoin="round" opacity="${0.5 + i * 0.2}"/>`;
-  }
-  base += poly(faceQuad(S, signZ, 0.45, 0.66, -0.955, -0.925), `fill="#22e6ff" opacity="0.55"`);
-  base += poly(faceQuad(S, 5.3, -0.8, -0.42, -0.62, -0.5), `fill="#1a1206" stroke="#ffaa44" stroke-width="1" opacity="0.85"`);
-  base += poly(faceQuad(S, 5.3, -0.76, -0.64, -0.6, -0.52), `fill="#ffaa44" opacity="0.5"`);
-
-  const beaconZ = bays[2][0] + 0.12;
-  const [bx, by] = S(W, -0.62, beaconZ);
-  base += `<rect x="${n1(bx - 4)}" y="${n1(by - 2)}" width="14" height="22" rx="2" fill="#141e2a" stroke="${INK}" stroke-width="1.5"/>`;
-  base += `<path d="M ${n1(bx - 13)} ${n1(by + 4)} A 13 15 0 0 1 ${n1(bx + 13)} ${n1(by + 4)} Z" fill="#5a0d14" stroke="${INK}" stroke-width="1.5"/>`;
-  base += `<path d="M ${n1(bx - 8)} ${n1(by - 6)} A 9 8 0 0 1 ${n1(bx + 2)} ${n1(by - 10)}" fill="none" stroke="#ff8a90" stroke-width="1.6" opacity="0.6"/>`;
-  base += `<rect x="${n1(bx - 16)}" y="${n1(by + 4)}" width="32" height="5" rx="1" fill="#1c2733" stroke="${INK}" stroke-width="1.2"/>`;
-
-  // Static light: blooms, door wash, floor reflections.
-  let lights = bloom(800, 380, 190, 150, "gCyan", 0.9);
-  lights += bloom(800, 560, 70, 150, "gCyan", 0.4);
-  lights += poly(faceQuad(S, FAR, -0.46, 0.46, -0.66, F), `fill="#ffffff" opacity="0.35" filter="url(#blur6)"`);
-  bays.forEach(([z0, z1]) => {
-    if (z1 - z0 < 0.15) return;
-    const [cx, cy] = S(0, C, (z0 + z1) / 2);
-    const s = 800 / ((z0 + z1) / 2);
-    lights += bloom(cx, cy + 6, s * 0.42, s * 0.14, "gPanel");
+  const FLICK = 1;
+  const cone = ([a, b, z0, z1]) => poly([S(a, C + 0.01, z0), S(b, C + 0.01, z0), S(b + 0.3, F, z1 + 0.2), S(a - 0.3, F, z1 + 0.2)], `fill="url(#cone)"`);
+  let lights = `<g filter="url(#blur14)">${TROFFERS.filter((_, i) => i !== FLICK).map(cone).join("")}</g>`;
+  lights += TROFFERS.filter((_, i) => i !== FLICK).map((t) => tube(t)).join("");
+  // Paint lit by the tubes: soft vertical washes down both walls.
+  TROFFERS.forEach(([, , z0, z1]) => {
+    const zc = (z0 + z1) / 2;
     for (const X of [-W, W]) {
-      const [lx, ly] = S(X, -0.1, z1 - 0.08);
-      lights += bloom(lx, ly, 70 * (s / 400), 260 * (s / 400), "gCyan", 0.55);
-      const [rx, ry] = S(X * 0.92, 2.1, z1 - 0.08);
-      if (ry < 900) lights += bloom(rx, ry, 30 * (s / 400), 150 * (s / 400), "gCyan", 0.22);
+      const [wx, wy] = S(X, -0.3, zc);
+      lights += bloom(wx, wy, 34 * (FL / zc) / 300, 140 * (FL / zc) / 300, "gPool", 0.35);
     }
   });
-  lights += poly(flatQuad(S, F, -0.66, -0.61, NEAR, FAR), `fill="#22e6ff" opacity="0.4" filter="url(#blur2)"`);
-  lights += poly(flatQuad(S, F, 0.61, 0.66, NEAR, FAR), `fill="#22e6ff" opacity="0.4" filter="url(#blur2)"`);
+  // The lobby's daylight through the frosted doors, and its spill on the floor.
+  lights += bloom(VX, S(0, -0.1, FAR)[1], 150, 120, "gDoor", 0.9);
+  lights += poly(faceQuad(S, FAR, -0.48, 0.48, -0.5, 0.25), `fill="#ffffff" opacity="0.3" filter="url(#blur6)"`);
+  lights += bloom(VX, S(0, F, FAR - 0.6)[1], 160, 26, "gDoor", 0.8);
+  lights += bloom(VX, 690, 50, 180, "gStreak", 0.35);
+  const flicker = tube(TROFFERS[FLICK]) + `<g filter="url(#blur14)">${cone(TROFFERS[FLICK])}</g>` + poly(flatQuad(S, C + 0.006, -0.2, 0.2, TROFFERS[FLICK][2], TROFFERS[FLICK][3]), `fill="#ffffff"`);
 
-  // Slow cool haze hanging in the corridor.
+  // Atmospheric haze, thicker toward the far end.
   const haze =
-    bloom(560, 330, 460, 140, "gHaze") +
-    bloom(1080, 300, 420, 120, "gHaze", 0.8) +
-    bloom(820, 470, 520, 90, "gHaze", 0.7) +
-    bloom(300, 180, 300, 110, "gHaze", 0.5) +
-    bloom(1330, 200, 280, 120, "gHaze", 0.5);
+    bloom(800, 400, 360, 200, "gHaze") +
+    bloom(800, 380, 700, 160, "gHaze", 0.7) +
+    bloom(500, 520, 420, 100, "gHaze", 0.5) +
+    bloom(1150, 330, 380, 120, "gHaze", 0.5);
 
-  // Data display bars and the running LED strip along the left wall.
-  let data = "";
-  const rd = rng(11);
-  for (let row = 0; row < 7; row++) {
-    const Y = -0.46 + row * 0.075;
-    const len = 0.1 + rd() * 0.2;
-    data += poly(wallQuad(S, -W + 0.005, Y, Y + 0.035, dz0 + 0.1, dz0 + 0.1 + len), `fill="${row === 2 ? "#ffaa44" : "#22e6ff"}" opacity="0.8"`);
-  }
-  for (let z = 1.2; z < FAR; z += 0.12) {
-    if (rd() < 0.35) continue;
-    data += poly(wallQuad(S, -W + 0.005, -0.66, -0.64, z, z + 0.05), `fill="#5cf0ff"`);
-  }
-  data = data + `<g filter="url(#blur2)">${data}</g>`;
-
-  // Indicator lights (two sets so they blink out of sync).
+  // EXIT sign glow and small status lights.
+  const [ex, ey] = S(0, -0.83, FAR);
   const dot = (X, Y, z, color, size = 1) => {
     const [x, y] = S(X, Y, z);
-    const r = (9 / z) * size;
-    return `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r * 3.5)}" fill="${color}" opacity="0.25" filter="url(#blur2)"/>` +
-      `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(Math.max(1, r))}" fill="${color}"/>`;
+    const rr = (9 / z) * size;
+    return `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(rr * 3.5)}" fill="${color}" opacity="0.3" filter="url(#blur2)"/>` +
+      `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(Math.max(1, rr))}" fill="${color}"/>`;
   };
-  let indA = "";
-  let indB = "";
-  bays.forEach(([z0, z1], i) => {
-    if (z1 - z0 < 0.15) return;
-    const m = (z0 + z1) / 2;
-    indA += dot(-W, 0.3, m, "#22e6ff") + dot(W, 0.25, m + 0.05, i % 2 ? "#44ff99" : "#22e6ff");
-    indB += dot(-W, 0.4, m + 0.06, i % 2 ? "#ff3344" : "#ffaa44") + dot(W, 0.35, m - 0.04, "#ffaa44", 0.8);
-  });
-  indA += dot(W, -0.12, rz1 - 0.14, "#44ff99", 1.4) + dot(-0.55, -0.72, FAR, "#44ff99", 1.2);
-  indB += dot(W, -0.02, rz1 - 0.14, "#ff3344", 1.2) + dot(0.55, -0.72, FAR, "#ff3344", 1.2);
+  const indA = bloom(ex, ey, 70, 26, "gGreen", 0.8) + dot(XR, -0.08, dz1 + 0.14, "#44ff99", 1.2);
+  const indB = dot(XR, -0.02, dz1 + 0.14, "#ff3344", 1.1) + dot(XR, -0.05, 4.8, "#ffaa44", 1);
 
-  const wash = bloom(bx, by, 320, 240, "gRed", 0.55) + bloom(bx, by - 4, 34, 30, "gRed") +
-    `<circle cx="${n1(bx)}" cy="${n1(by - 2)}" r="6" fill="#ff8a90"/>`;
-  const L = 560;
+  const wash = bloom(ox, oy, 360, 260, "gRed", 0.5) + bloom(ox, oy, 40, 34, "gRed") +
+    `<circle cx="${n1(ox)}" cy="${n1(oy)}" r="7" fill="#ff8a90"/>`;
+  const BL = 620;
   const beam = `<g filter="url(#blur6)">` +
-    poly([[bx, by], [bx + L, by - 90], [bx + L, by + 90]], `fill="url(#beamGrad)"`) +
-    `<g transform="rotate(180 ${n1(bx)} ${n1(by)})">` +
-    poly([[bx, by], [bx + L, by - 90], [bx + L, by + 90]], `fill="url(#beamGrad)"`) +
+    poly([[ox, oy], [ox + BL, oy - 100], [ox + BL, oy + 100]], `fill="url(#beamGrad)"`) +
+    `<g transform="rotate(180 ${n1(ox)} ${n1(oy)})">` +
+    poly([[ox, oy], [ox + BL, oy - 100], [ox + BL, oy + 100]], `fill="url(#beamGrad)"`) +
     `</g></g>`;
 
   return {
@@ -565,13 +617,13 @@ function stationBackground() {
     defs,
     layers: [
       { markup: base },
-      { markup: haze, anim: { type: "drift", amp: 40, speed: 0.12 }, blend: "screen", opacity: 0.8 },
+      { markup: haze, anim: { type: "drift", amp: 40, speed: 0.12 }, blend: "screen", opacity: 0.7 },
       { markup: lights, blend: "lighter", opacity: 0.8 },
-      { markup: data, anim: { type: "flicker", min: 0.35, max: 1, speed: 0.8 }, blend: "lighter" },
-      { markup: indA, anim: { type: "flicker", min: 0.1, max: 1, speed: 1.7 }, blend: "lighter" },
+      { markup: flicker, anim: { type: "flicker", min: 0.15, max: 1, speed: 0.8 }, blend: "lighter" },
+      { markup: indA, anim: { type: "flicker", min: 0.6, max: 1, speed: 1.7 }, blend: "lighter" },
       { markup: indB, anim: { type: "flicker", min: 0.1, max: 1, speed: 1.1, phase: 2.3 }, blend: "lighter" },
       { markup: wash, anim: { type: "pulse", min: 0.15, max: 0.8, speed: 5 }, blend: "lighter" },
-      { markup: beam, anim: { type: "spin", speed: 2.5, pivot: [n1(bx), n1(by)] }, blend: "lighter", opacity: 0.45 },
+      { markup: beam, anim: { type: "spin", speed: 2.5, pivot: [n1(ox), n1(oy)] }, blend: "lighter", opacity: 0.4 },
       shadeLayer(),
     ],
   };
@@ -579,211 +631,391 @@ function stationBackground() {
 
 // ── Locker room background ──────────────────────────────────────────────────
 
+/**
+ * Local affine frame on a side wall (constant X) around (z, Y): maps local
+ * (dz, dY) world offsets to the screen, so small details (name cards, text,
+ * handles) can be drawn flat and still sit in the wall's perspective.
+ */
+const sideFrame = (vx, vy, f, X, z, Y) => {
+  // Text runs toward the vanishing point on the left wall, away from it on the right.
+  const s = X < 0 ? 1 : -1;
+  const q = (v) => n1(v * 100) / 100;
+  return `matrix(${q((-s * X * f) / (z * z))} ${q((-s * Y * f) / (z * z))} 0 ${q(f / z)} ${n1(vx + (X * f) / z)} ${n1(vy + (Y * f) / z)})`;
+};
+
+const FONT = `font-family="Arial, Helvetica, sans-serif"`;
+
+/** One navy locker door in world units, top-left (x, y), w × h: louvres, name card, number, handle, dial. */
+function navyDoor(x, y, w, h, name, num, r, o = {}) {
+  const s = w / 0.32; // detail scale relative to a standard door
+  let m = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#lkDoor)" stroke="${INK}" stroke-width="${0.005 * s}"/>`;
+  // Pressed-steel bevel: lit top/left edge, shadowed bottom/right.
+  m += `<path d="M${x + 0.006} ${y + h - 0.006}V${y + 0.006}H${x + w - 0.006}" fill="none" stroke="#7d9cc8" stroke-width="${0.004 * s}" opacity="0.55"/>`;
+  m += `<path d="M${x + w - 0.006} ${y + 0.008}V${y + h - 0.006}H${x + 0.008}" fill="none" stroke="#050912" stroke-width="${0.005 * s}" opacity="0.7"/>`;
+  // Louvres, top and bottom.
+  for (const [ly, n] of [[y + 0.05 * s, 6], [y + h - 0.17 * s, 5]]) {
+    for (let i = 0; i < n; i++) {
+      const yy = ly + i * 0.024 * s;
+      m += `<rect x="${x + w * 0.22}" y="${n1(yy * 1000) / 1000}" width="${w * 0.56}" height="${0.009 * s}" fill="#060a14"/>`;
+      m += `<rect x="${x + w * 0.22}" y="${n1((yy + 0.009 * s) * 1000) / 1000}" width="${w * 0.56}" height="${0.003 * s}" fill="#9bb6dc" opacity="0.32"/>`;
+    }
+  }
+  // Name card in a brass holder, locker number under it.
+  const cy = y + 0.25 * s;
+  m += `<rect x="${x + w * 0.15}" y="${cy - 0.036 * s}" width="${w * 0.7}" height="${0.07 * s}" fill="url(#lkBrass)" stroke="${INK}" stroke-width="${0.003 * s}"/>`;
+  m += `<rect x="${x + w * 0.175}" y="${cy - 0.027 * s}" width="${w * 0.65}" height="${0.052 * s}" fill="#ebe4d2"/>`;
+  m += `<text x="${x + w / 2}" y="${cy + 0.013 * s}" ${FONT} font-weight="900" font-size="${(name.length > 7 ? 0.034 : 0.04) * s}" text-anchor="middle" fill="#141820">${name}</text>`;
+  m += `<text x="${x + w / 2}" y="${cy + 0.08 * s}" ${FONT} font-weight="700" font-size="${0.03 * s}" text-anchor="middle" fill="#a8bcd8" opacity="0.8">${num}</text>`;
+  // Recessed pull handle and the combination dial on the latch side.
+  const hx = x + w - 0.075 * s;
+  m += `<rect x="${hx}" y="${y + 0.4 * s}" width="${0.032 * s}" height="${0.19 * s}" rx="${0.006 * s}" fill="#05080f"/>`;
+  m += `<rect x="${hx + 0.006 * s}" y="${y + 0.405 * s}" width="${0.02 * s}" height="${0.18 * s}" fill="url(#lkSteel)"/>`;
+  m += `<circle cx="${hx + 0.016 * s}" cy="${y + 0.64 * s}" r="${0.018 * s}" fill="url(#lkDial)" stroke="${INK}" stroke-width="${0.003 * s}"/>`;
+  // Boot scuffs low on the door.
+  for (let i = 0; i < 4; i++) {
+    m += `<rect x="${n1((x + 0.02 + r() * (w - 0.1)) * 1000) / 1000}" y="${n1((y + h - 0.2 + r() * 0.16) * 1000) / 1000}" width="${n1((0.02 + r() * 0.05) * 1000) / 1000}" height="0.003" fill="#c8d8f0" opacity="${n1(0.08 + r() * 0.1)}"/>`;
+  }
+  if (o.note) {
+    m += `<g transform="translate(${x + w * 0.42} ${y + 0.52 * s}) rotate(5)"><rect x="-0.045" y="-0.04" width="0.09" height="0.08" fill="#f2e07e"/>` +
+      `<rect x="-0.045" y="0.03" width="0.09" height="0.01" fill="#000" opacity="0.12"/>` +
+      `<text x="0" y="0.004" ${FONT} font-weight="700" font-size="0.017" text-anchor="middle" fill="#1a2440">${o.note}</text></g>`;
+  }
+  if (o.sticker) m += `<circle cx="${x + w * 0.4}" cy="${y + 0.56 * s}" r="${0.03 * s}" fill="${o.sticker}" stroke="#f0f0f0" stroke-width="${0.006 * s}"/>`;
+  if (o.photo) {
+    m += `<g transform="translate(${x + w * 0.42} ${y + 0.55 * s}) rotate(-4)"><rect x="-0.04" y="-0.05" width="0.08" height="0.1" fill="#e8e4da"/>` +
+      `<rect x="-0.032" y="-0.042" width="0.064" height="0.066" fill="${o.photo}"/><circle cx="0" cy="-0.016" r="0.014" fill="#1c2638" opacity="0.7"/></g>`;
+  }
+  if (o.rnd) {
+    m += `<g transform="translate(${x + w * 0.42} ${y + 0.5 * s}) rotate(-5)"><rect x="-0.07" y="-0.034" width="0.14" height="0.068" fill="#f2d64a"/>` +
+      `<rect x="-0.07" y="-0.034" width="0.14" height="0.016" fill="#1a1a1a"/>` +
+      `<text x="0" y="0.024" ${FONT} font-weight="900" font-size="0.034" text-anchor="middle" fill="#1a1a1a">R&amp;D</text></g>`;
+  }
+  return m;
+}
+
+/** An open locker's interior (world units): back wall, shelf, a uniform on its hanger, boots, a taped photo. */
+function lockerInside(x, y, w, h, kit) {
+  let m = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#lkInside)" stroke="${INK}" stroke-width="0.005"/>`;
+  m += `<rect x="${x}" y="${y + 0.16}" width="${w}" height="0.018" fill="#2a3a56"/><rect x="${x}" y="${y + 0.178}" width="${w}" height="0.01" fill="#000" opacity="0.5"/>`;
+  m += `<rect x="${x + 0.03}" y="${y + 0.09}" width="0.1" height="0.07" rx="0.01" fill="${kit.cap || "#1c2a48"}"/>`;
+  const cx = x + w / 2;
+  const ty = y + 0.22;
+  m += `<path d="M${cx} ${ty}v0.025M${cx - 0.08} ${ty + 0.06}L${cx} ${ty + 0.025}L${cx + 0.08} ${ty + 0.06}" fill="none" stroke="#8a96a8" stroke-width="0.006"/>`;
+  m += `<path d="M${cx - 0.1} ${ty + 0.07}L${cx - 0.03} ${ty + 0.035}L${cx + 0.03} ${ty + 0.035}L${cx + 0.1} ${ty + 0.07}L${cx + 0.09} ${ty + 0.5}L${cx - 0.09} ${ty + 0.5}Z" fill="${kit.shirt || "#22385e"}" stroke="${INK}" stroke-width="0.004"/>`;
+  m += `<path d="M${cx} ${ty + 0.04}V${ty + 0.5}" stroke="#0a1220" stroke-width="0.004"/>`;
+  m += `<rect x="${cx + 0.025}" y="${ty + 0.11}" width="0.04" height="0.03" fill="#d8b25a" opacity="0.8"/>`;
+  m += `<path d="M${cx - 0.1} ${ty + 0.07}L${cx - 0.13} ${ty + 0.3}L${cx - 0.09} ${ty + 0.3}" fill="${kit.shirt || "#22385e"}" stroke="${INK}" stroke-width="0.004"/>`;
+  m += `<rect x="${x + 0.04}" y="${y + h - 0.1}" width="0.09" height="0.09" rx="0.012" fill="#0b0d12"/><rect x="${x + 0.14}" y="${y + h - 0.1}" width="0.09" height="0.09" rx="0.012" fill="#0e1016"/>`;
+  if (kit.photo) m += `<g transform="translate(${x + w - 0.06} ${y + 0.3}) rotate(6)"><rect x="-0.035" y="-0.045" width="0.07" height="0.09" fill="#e4e0d4"/><rect x="-0.028" y="-0.038" width="0.056" height="0.06" fill="${kit.photo}"/></g>`;
+  // Inside shadow cast by the cabinet's own top and hinge side.
+  m += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#lkInShade)"/>`;
+  return m;
+}
+
 function lockerRoomBackground() {
-  const L = camera(800, 380, 800);
+  const VX = 800;
+  const VY = 430;
+  const FL = 700;
+  const L = camera(VX, VY, FL);
   const W = 1.3;
   const C = -1;
   const F = 1;
   const NEAR = 0.9;
-  const FAR = 3.2;
-  const TOP = -0.8;
-  const BASE = 0.9;
+  const FAR = 2.4;
+  const TOP = -0.42; // top of the locker banks (~2.1 m of a 3 m wall)
+  const BASE = 0.9; // plinth
+  const K = FL / FAR;
+  const r = rng(412);
 
   const defs =
     SHADE_DEFS +
-    `<linearGradient id="lCeil" x1="0" y1="0" x2="0" y2="130" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#03060b"/><stop offset="1" stop-color="#0c1726"/></linearGradient>` +
-    `<linearGradient id="lFloor" x1="0" y1="630" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#132337"/><stop offset="0.4" stop-color="#08111c"/><stop offset="1" stop-color="#020409"/></linearGradient>` +
-    `<linearGradient id="lWallL" x1="0" y1="0" x2="475" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#03060b"/><stop offset="1" stop-color="#0f1c2c"/></linearGradient>` +
-    `<linearGradient id="lWallR" x1="1600" y1="0" x2="1125" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#03060b"/><stop offset="1" stop-color="#0f1c2c"/></linearGradient>` +
-    `<linearGradient id="lockF" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a6179"/><stop offset="0.35" stop-color="#2c3e52"/><stop offset="1" stop-color="#141e2a"/></linearGradient>` +
-    `<linearGradient id="lockL" x1="0" y1="0" x2="475" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0c131d"/><stop offset="1" stop-color="#2e4258"/></linearGradient>` +
-    `<linearGradient id="lockR" x1="1600" y1="0" x2="1125" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a1119"/><stop offset="1" stop-color="#2a3c50"/></linearGradient>` +
-    `<linearGradient id="doorOpen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1c2733"/><stop offset="0.8" stop-color="#34495e"/><stop offset="1" stop-color="#7fdcec"/></linearGradient>` +
-    `<radialGradient id="inside" cx="0.55" cy="0.3" r="0.8"><stop offset="0" stop-color="#c8faff"/><stop offset="0.18" stop-color="#3fd8ee"/><stop offset="0.55" stop-color="#0a4b5a"/><stop offset="1" stop-color="#021219"/></radialGradient>` +
-    `<linearGradient id="crateF" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f5163"/><stop offset="0.5" stop-color="#232f3b"/><stop offset="1" stop-color="#10171f"/></linearGradient>` +
-    `<linearGradient id="bench" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f4052"/><stop offset="1" stop-color="#4f6780"/></linearGradient>` +
-    `<linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cff4ff" stop-opacity="0.16"/><stop offset="1" stop-color="#cff4ff" stop-opacity="0"/></linearGradient>` +
-    `<linearGradient id="spill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22e6ff" stop-opacity="0.45"/><stop offset="1" stop-color="#22e6ff" stop-opacity="0"/></linearGradient>` +
-    fadeGrad("gTube", "#d6f6ff", 0.6, 0.25) +
+    `<linearGradient id="lCeil" x1="0" y1="0" x2="0" y2="160" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#05080d"/><stop offset="1" stop-color="#151c26"/></linearGradient>` +
+    `<linearGradient id="lFloor" x1="0" y1="722" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#222c3c"/><stop offset="0.5" stop-color="#161e2b"/><stop offset="1" stop-color="#0a0e15"/></linearGradient>` +
+    `<linearGradient id="lkDoor" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#46639a"/><stop offset="0.3" stop-color="#2f4a78"/><stop offset="0.75" stop-color="#1e3054"/><stop offset="1" stop-color="#121e36"/></linearGradient>` +
+    `<linearGradient id="lkSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#121d34"/><stop offset="1" stop-color="#2c4674"/></linearGradient>` +
+    `<linearGradient id="lkSideR" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#0e182c"/><stop offset="1" stop-color="#28406a"/></linearGradient>` +
+    `<linearGradient id="lkBrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9b866"/><stop offset="0.5" stop-color="#8a6a2a"/><stop offset="1" stop-color="#4a3612"/></linearGradient>` +
+    `<linearGradient id="lkSteel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c8d4e4"/><stop offset="0.4" stop-color="#7a8aa0"/><stop offset="1" stop-color="#3a4658"/></linearGradient>` +
+    `<radialGradient id="lkDial" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#e2e8f0"/><stop offset="0.5" stop-color="#7a8698"/><stop offset="1" stop-color="#1a2030"/></radialGradient>` +
+    `<linearGradient id="lkInside" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#18233a"/><stop offset="1" stop-color="#0a101c"/></linearGradient>` +
+    `<linearGradient id="lkInShade" x1="0" y1="0" x2="1" y2="0.4"><stop offset="0" stop-color="#000" stop-opacity="0.75"/><stop offset="0.4" stop-color="#000" stop-opacity="0.2"/><stop offset="1" stop-color="#000" stop-opacity="0.05"/></linearGradient>` +
+    `<linearGradient id="lkBand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#181d24"/><stop offset="0.55" stop-color="#262d36"/><stop offset="1" stop-color="#323b46"/></linearGradient>` +
+    // Overhead light falling down the lockers: lit caps, darker toward the plinth.
+    `<linearGradient id="lkFall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dfeaff" stop-opacity="0.14"/><stop offset="0.35" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.5"/></linearGradient>` +
+    `<linearGradient id="lkRefl" x1="0" y1="722" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.12"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
+    `<mask id="lkReflM" maskUnits="userSpaceOnUse" x="0" y="700" width="1600" height="200"><rect x="0" y="722" width="1600" height="178" fill="url(#lkRefl)"/></mask>` +
+    `<linearGradient id="inside" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9ff8ff"/><stop offset="0.35" stop-color="#2bc8e2"/><stop offset="1" stop-color="#05303c"/></linearGradient>` +
+    `<linearGradient id="doorOpen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1a2a48"/><stop offset="0.85" stop-color="#2e4a78"/><stop offset="1" stop-color="#8ee8f4"/></linearGradient>` +
+    `<linearGradient id="lkWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0b866"/><stop offset="1" stop-color="#a87c3a"/></linearGradient>` +
+    `<linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6f2ff" stop-opacity="0.16"/><stop offset="0.6" stop-color="#e6f2ff" stop-opacity="0.035"/><stop offset="1" stop-color="#e6f2ff" stop-opacity="0"/></linearGradient>` +
+    `<linearGradient id="spill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22e6ff" stop-opacity="0.5"/><stop offset="1" stop-color="#22e6ff" stop-opacity="0"/></linearGradient>` +
+    `<linearGradient id="lkDiff" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe2f4"/></linearGradient>` +
+    fadeGrad("gTube", "#e8f4ff", 0.6, 0.25) +
+    fadeGrad("gPool", "#c8dcf4", 0.4, 0.4) +
     fadeGrad("gCyan", "#22e6ff", 0.55, 0.3) +
-    fadeGrad("gHaze", "#3b7fb0", 0.2, 0.45) +
+    fadeGrad("gHaze", "#5a7ea4", 0.18, 0.45) +
+    fadeGrad("gAmber", "#ffb24a", 0.7, 0.25) +
     BG_BLUR("blur2", 2) +
-    BG_BLUR("blur5", 5);
+    BG_BLUR("blur5", 5) +
+    BG_BLUR("blur14", 14);
 
-  let base = `<rect width="1600" height="900" fill="#03060b"/>`;
+  // ── Shell: ceiling, floor, walls ──
+  let base = `<rect width="1600" height="900" fill="#05080d"/>`;
   base += poly(flatQuad(L, C, -W, W, NEAR, FAR), `fill="url(#lCeil)"`);
   base += poly(flatQuad(L, F, -W, W, NEAR, FAR), `fill="url(#lFloor)"`);
-  base += poly(wallQuad(L, -W, C, F, NEAR, FAR), `fill="url(#lWallL)"`);
-  base += poly(wallQuad(L, W, C, F, NEAR, FAR), `fill="url(#lWallR)"`);
-  base += poly(faceQuad(L, FAR, -W, W, C, F), `fill="#0d1929"`);
+  base += poly(wallQuad(L, -W, C, F, NEAR, FAR), `fill="#0c121c"`);
+  base += poly(wallQuad(L, W, C, F, NEAR, FAR), `fill="#0a1019"`);
 
-  // Floor tiles.
-  for (let X = -1.2; X <= 1.21; X += 0.4) base += seg(L(X, F, NEAR), L(X, F, FAR), `stroke="#16283c" stroke-width="1.2" opacity="0.8"`);
-  for (let z = 1.3; z < FAR; z += 0.35) base += seg(L(-W, F, z), L(W, F, z), `stroke="#16283c" stroke-width="${n1(2 / z)}" opacity="0.8"`);
+  // Ceiling: acoustic tile grid and recessed troffers (three rows).
+  for (let X = -1.2; X <= 1.21; X += 0.4) base += seg(L(X, C, NEAR), L(X, C, FAR), `stroke="#232c38" stroke-width="2"`);
+  for (let z = 1.0; z < FAR; z += 0.3) base += seg(L(-W, C, z), L(W, C, z), `stroke="#232c38" stroke-width="${n1(2.4 / z)}"`);
+  const TROFFERS = [];
+  for (const z of [1.72, 2.12]) for (const [a, b] of [[-1.15, -0.45], [-0.32, 0.32], [0.45, 1.15]]) TROFFERS.push([a, b, z]);
+  for (const [a, b, z] of TROFFERS) {
+    base += poly(flatQuad(L, C + 0.003, a - 0.03, b + 0.03, z - 0.03, z + 0.13), `fill="#0a0e14" stroke="${INK}" stroke-width="1"`);
+    base += poly(flatQuad(L, C + 0.005, a, b, z, z + 0.1), `fill="url(#lkDiff)"`);
+    for (let k = 1; k < 4; k++) base += seg(L(lerp(a, b, k / 4), C + 0.005, z), L(lerp(a, b, k / 4), C + 0.005, z + 0.1), `stroke="#9fb2c8" stroke-width="1" opacity="0.6"`);
+  }
+  // A ceiling vent and a sprinkler head or two.
+  base += poly(flatQuad(L, C + 0.004, -0.15, 0.15, 2.18, 2.3), `fill="#10161e" stroke="#2a3442" stroke-width="1"`);
+  for (let i = 1; i < 6; i++) base += seg(L(-0.14, C + 0.004, 2.18 + i * 0.02), L(0.14, C + 0.004, 2.18 + i * 0.02), `stroke="#05080c" stroke-width="1.2"`);
 
-  // Side-wall lockers.
-  const sideLocker = (X, z, grad, rim) => {
-    const w = 0.3;
-    let s = poly(wallQuad(L, X, TOP - 0.02, BASE, z, z + w), `fill="#04080e"`);
-    s += poly(wallQuad(L, X, TOP, BASE - 0.02, z + 0.012, z + w - 0.012), `fill="url(#${grad})"`);
-    for (let j = 0; j < 5; j++) {
-      const y = TOP + 0.1 + j * 0.04;
-      s += poly(wallQuad(L, X, y, y + 0.018, z + 0.06, z + w - 0.06), `fill="#070c13"`);
+  // Floor: dark steel tiles, each a slightly different tone, with worn seams.
+  for (let X = -W; X < W - 0.01; X += 0.4) {
+    for (let z = NEAR; z < FAR - 0.01; z += 0.3) {
+      const v = r();
+      base += poly(flatQuad(L, F, X + 0.006, Math.min(W, X + 0.4) - 0.006, z + 0.006, Math.min(FAR, z + 0.3) - 0.006), `fill="${v < 0.3 ? "#232d3e" : v < 0.7 ? "#1d2534" : "#18202d"}"`);
     }
-    s += poly(wallQuad(L, X, -0.42, -0.35, z + 0.08, z + 0.2), `fill="#5a7088" opacity="0.5"`);
-    s += poly(wallQuad(L, X, -0.02, 0.14, z + w - 0.06, z + w - 0.04), `fill="#8aa2b8"`);
-    s += seg(L(X, TOP, z + 0.012), L(X, TOP, z + w - 0.012), `stroke="${rim}" stroke-width="1.2" opacity="0.5"`);
+  }
+  for (let X = -1.3; X <= 1.31; X += 0.4) base += seg(L(X, F, NEAR), L(X, F, FAR), `stroke="#070a10" stroke-width="2"`);
+  for (let z = NEAR; z <= FAR; z += 0.3) base += seg(L(-W, F, z), L(W, F, z), `stroke="#070a10" stroke-width="${n1(3 / z)}"`);
+  // Tread plates: rivets at the tile corners.
+  for (let X = -0.9; X <= 0.91; X += 0.4) for (let z = 1.2; z < FAR; z += 0.3) {
+    const [x, y] = L(X, F, z);
+    base += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(3 / z)}" fill="#2c3646"/>`;
+  }
+
+  // ── Far wall: wall-above band, then a bank of eight navy lockers ──
+  let far = `<g transform="translate(${VX} ${VY}) scale(${n1(K * 100) / 100})">`;
+  far += `<rect x="${-W}" y="${C}" width="${2 * W}" height="${TOP - C}" fill="url(#lkBand)"/>`;
+  far += `<rect x="${-W}" y="-0.9" width="${2 * W}" height="0.022" fill="#1a2028"/><rect x="${-W}" y="-0.878" width="${2 * W}" height="0.005" fill="#fff" opacity="0.08"/>`;
+  for (let i = 0; i < 12; i++) far += `<rect x="${n1((-W + r() * 2.5) * 1000) / 1000}" y="${n1((-0.85 + r() * 0.35) * 1000) / 1000}" width="${n1((0.01 + r() * 0.12) * 1000) / 1000}" height="0.004" fill="#000" opacity="${n1(0.08 + r() * 0.12)}"/>`;
+  far += `<text x="0.62" y="-0.6" ${FONT} font-weight="900" font-size="0.085" letter-spacing="0.02" text-anchor="middle" fill="#8a96a4" opacity="0.2">UNIT 4</text>`;
+  far += `<text x="-0.62" y="-0.6" ${FONT} font-weight="900" font-size="0.085" letter-spacing="0.02" text-anchor="middle" fill="#8a96a4" opacity="0.2">UNIT 4</text>`;
+  // Water stain running down from the vent line.
+  far += `<path d="M-0.95 -0.9 C-0.94 -0.78 -0.97 -0.66 -0.95 -0.48 L-0.91 -0.48 C-0.92 -0.66 -0.9 -0.78 -0.9 -0.9Z" fill="#000" opacity="0.12"/>`;
+  far += `<rect x="${-W}" y="${TOP - 0.02}" width="${2 * W}" height="0.02" fill="#000" opacity="0.5"/>`;
+  far += `<rect x="${-W}" y="${TOP}" width="${2 * W}" height="0.04" fill="#2f4a78" stroke="${INK}" stroke-width="0.005"/><rect x="${-W}" y="${TOP}" width="${2 * W}" height="0.006" fill="#9ab8e4" opacity="0.5"/>`;
+  const LW = (2 * W) / 8;
+  const doorY = TOP + 0.04;
+  const doorH = BASE - doorY;
+  const BANK = [
+    ["RASCZAK", 401, { note: "BRIEF 0600" }],
+    ["11235", 412, { rnd: true, ajar: true }],
+    ["KAEL", 402, { open: { shirt: "#22385e", photo: "#7aa0c8" } }],
+    ["OKAFOR", 403, { sticker: "#c23a3a" }],
+    ["LINDQVIST", 404, {}],
+    ["DUARTE", 405, { open: { shirt: "#3a3a32", cap: "#2a2a24" } }],
+    ["MBEKI", 406, { photo: "#7aa0c8" }],
+    ["PRICE", 407, { note: "OWE U 1" }],
+  ];
+  BANK.forEach(([name, num, o], i) => {
+    const x = -W + i * LW + 0.008;
+    const w = LW - 0.016;
+    if (o.open) far += lockerInside(x, doorY, w, doorH, o.open);
+    else if (o.ajar) far += `<rect x="${x}" y="${doorY}" width="${w}" height="${doorH}" fill="url(#inside)" stroke="${INK}" stroke-width="0.005"/>`;
+    else far += navyDoor(x, doorY, w, doorH, name, num, r, o);
+    // Brass name rail along the cap.
+    far += `<rect x="${x + w * 0.3}" y="${TOP + 0.01}" width="${w * 0.4}" height="0.02" fill="url(#lkBrass)" opacity="0.8"/>`;
+  });
+  // The ajar locker: a suit on its hook, backlit.
+  {
+    const x = -W + LW + 0.008;
+    const cx = x + (LW - 0.016) * 0.58;
+    far += `<path d="M${cx} ${doorY + 0.12}v0.04" stroke="#021219" stroke-width="0.008"/>`;
+    far += `<path d="M${cx - 0.11} ${doorY + 0.22} Q${cx} ${doorY + 0.13} ${cx + 0.11} ${doorY + 0.22} L${cx + 0.1} ${doorY + 0.95} L${cx + 0.03} ${doorY + 0.92} L${cx} ${doorY + 0.5} L${cx - 0.03} ${doorY + 0.92} L${cx - 0.1} ${doorY + 0.95} Z" fill="#031a22" opacity="0.88"/>`;
+    far += `<rect x="${x}" y="${doorY + 0.16}" width="${LW - 0.016}" height="0.016" fill="#063040"/>`;
+  }
+  far += `<rect x="${-W}" y="${doorY}" width="${2 * W}" height="${doorH}" fill="url(#lkFall)"/>`;
+  far += `<rect x="${-W}" y="${BASE}" width="${2 * W}" height="${F - BASE}" fill="#14171d" stroke="${INK}" stroke-width="0.005"/><rect x="${-W}" y="${BASE}" width="${2 * W}" height="0.006" fill="#6a7484" opacity="0.5"/>`;
+  far += `</g>`;
+  // Swung-open doors of the two open lockers (hinged on their left edge, swung ~80° toward the viewer).
+  const swung = (i, ang, grad) => {
+    const ha = -W + i * LW + 0.008;
+    const w = LW - 0.016;
+    const fx = ha + w * Math.cos(ang) * 0.92;
+    const fz = FAR - w * Math.sin(ang) * 0.92;
+    let s = poly([L(ha, doorY, FAR), L(fx, doorY, fz), L(fx, BASE - 0.005, fz), L(ha, BASE - 0.005, FAR)], `fill="url(#${grad})" stroke="${INK}" stroke-width="1.3"`);
+    for (let j = 0; j < 6; j++) {
+      const y = doorY + 0.05 + j * 0.024;
+      s += poly([L(lerp(ha, fx, 0.25), y, lerp(FAR, fz, 0.25)), L(lerp(ha, fx, 0.75), y, lerp(FAR, fz, 0.75)), L(lerp(ha, fx, 0.75), y + 0.009, lerp(FAR, fz, 0.75)), L(lerp(ha, fx, 0.25), y + 0.009, lerp(FAR, fz, 0.25))], `fill="#060a14"`);
+    }
     return s;
   };
-  for (let z = 3.2 - 0.3 * 7; z < FAR - 0.1; z += 0.3) {
-    base += sideLocker(-W, z, "lockL", "#8fb0cc");
-    base += sideLocker(W, z, "lockR", "#6f8aa3");
+  far += swung(2, 1.25, "lkSideR") + swung(5, 1.3, "lkSideR") + swung(1, 0.95, "doorOpen");
+  // R&D tag on the ajar door's face, seen at an angle.
+  {
+    const ha = -W + LW + 0.008;
+    const w = LW - 0.016;
+    const p = (t, Y) => L(ha + w * Math.cos(0.95) * 0.92 * t, Y, FAR - w * Math.sin(0.95) * 0.92 * t);
+    far += poly([p(0.25, 0.02), p(0.75, 0.02), p(0.75, 0.09), p(0.25, 0.09)], `fill="#f2d64a" opacity="0.9"`);
+    far += poly([p(0.25, 0.02), p(0.75, 0.02), p(0.75, 0.036), p(0.25, 0.036)], `fill="#1a1a1a"`);
+  }
+
+  // ── Side walls: the same banks running toward the camera ──
+  let side = "";
+  const SIDE_NAMES = ["TANAKA", "ABARA", "REYES", "HALE"];
+  for (const [X, grad] of [[-W, "lkSide"], [W, "lkSideR"]]) {
+    side += poly(wallQuad(L, X, C, TOP, NEAR, FAR), `fill="url(#lkBand)"`);
+    side += poly(wallQuad(L, X, -0.9, -0.878, NEAR, FAR), `fill="#1a2028"`);
+    side += poly(wallQuad(L, X, TOP, TOP + 0.04, NEAR, FAR), `fill="#2f4a78" stroke="${INK}" stroke-width="1"`);
+    side += poly(wallQuad(L, X, BASE, F, NEAR, FAR), `fill="#111419"`);
+    side += seg(L(X, BASE, NEAR), L(X, BASE, FAR), `stroke="#6a7484" stroke-width="1.2" opacity="0.4"`);
+    let i = 0;
+    for (let z = FAR - 0.32; z > NEAR + 0.05; z -= 0.32, i++) {
+      const a = z + 0.008;
+      const b = z + 0.312;
+      // A door into the corridor on the right wall, teal frame and hazard foot.
+      if (X > 0 && i === 1) {
+        side += poly(wallQuad(L, X, doorY - 0.06, BASE, a - 0.04, b + 0.04), `fill="#1d8a96" stroke="${INK}" stroke-width="1.5"`);
+        side += poly(wallQuad(L, X, doorY - 0.03, BASE, a - 0.01, b + 0.01), `fill="#1a1e24"`);
+        side += poly(wallQuad(L, X, doorY - 0.03, BASE, (a + b) / 2 - 0.004, (a + b) / 2 + 0.004), `fill="#050608"`);
+        for (let k = 0; k < 6; k++) {
+          const z0 = lerp(a, b, k / 6);
+          side += poly([L(X, 0.72, z0), L(X, 0.72, z0 + 0.025), L(X, 0.8, z0 + 0.05), L(X, 0.8, z0 + 0.025)], `fill="#e8b23a" opacity="0.85"`);
+        }
+        side += poly(wallQuad(L, X, -0.12, 0.02, (a + b) / 2 - 0.05, (a + b) / 2 - 0.012), `fill="#2a3442" opacity="0.8"`);
+        continue;
+      }
+      side += poly(wallQuad(L, X, doorY, BASE - 0.005, a, b), `fill="url(#${grad})" stroke="${INK}" stroke-width="1.2"`);
+      for (const [ly, n] of [[doorY + 0.05, 6], [BASE - 0.17, 5]]) {
+        for (let j = 0; j < n; j++) {
+          const y = ly + j * 0.024;
+          side += poly(wallQuad(L, X, y, y + 0.009, lerp(a, b, 0.22), lerp(a, b, 0.78)), `fill="#060a14"`);
+        }
+      }
+      const zc = (a + b) / 2;
+      const nm = SIDE_NAMES[i % SIDE_NAMES.length];
+      side += `<g transform="${sideFrame(VX, VY, FL, X, zc, doorY + 0.25)}">` +
+        `<rect x="-0.11" y="-0.036" width="0.22" height="0.07" fill="url(#lkBrass)"/><rect x="-0.102" y="-0.027" width="0.204" height="0.052" fill="#ebe4d2"/>` +
+        `<text x="0" y="0.013" ${FONT} font-weight="900" font-size="0.038" text-anchor="middle" fill="#141820">${nm}</text></g>`;
+      const hz = X < 0 ? lerp(a, b, 0.82) : lerp(a, b, 0.18);
+      side += `<g transform="${sideFrame(VX, VY, FL, X, hz, doorY + 0.4)}"><rect x="-0.016" y="0" width="0.032" height="0.19" fill="#05080f"/><rect x="-0.01" y="0.005" width="0.02" height="0.18" fill="url(#lkSteel)"/></g>`;
+    }
+    side += poly(wallQuad(L, X, doorY, BASE, NEAR, FAR), `fill="url(#lkFall)"`);
+  }
+
+  // Floor reflection of the far bank (glossy sealed steel), and contact shadows.
+  // Glossy floor: the bank's cool sheen and each open locker's light, smeared toward the camera.
+  let refl = `<g mask="url(#lkReflM)"><rect x="${n1(VX - W * K)}" y="${n1(VY + F * K)}" width="${n1(2 * W * K)}" height="120" fill="#2f4a78" opacity="0.35"/>`;
+  for (let i = 0; i < 8; i++) {
+    const x = VX + (-W + (i + 0.5) * LW) * K;
+    refl += `<rect x="${n1(x - LW * K * 0.4)}" y="${n1(VY + F * K)}" width="${n1(LW * K * 0.8)}" height="90" fill="${i === 1 ? "#22e6ff" : "#4a6a9a"}" opacity="${i === 1 ? 0.35 : 0.18}"/>`;
+  }
+  refl += `</g>`;
+  // Contact shadows along the plinths and under the bench, one blur for all.
+  let shadows = poly(flatQuad(L, F, -W, W, FAR - 0.06, FAR), `fill="#000" opacity="0.45"`);
+  for (const X of [-W, W]) shadows += poly(flatQuad(L, F, X > 0 ? W - 0.06 : -W, X > 0 ? W : -W + 0.06, NEAR, FAR), `fill="#000" opacity="0.5"`);
+
+  // Bench: slatted wood seat on steel legs, a towel left on it.
+  const B0 = 0.12;
+  const B1 = 1.02;
+  const BZ0 = 1.62;
+  const BZ1 = 1.76;
+  const SY = 0.7;
+  shadows += poly(flatQuad(L, F, B0 - 0.05, B1 + 0.05, BZ0 - 0.03, BZ1 + 0.06), `fill="#000" opacity="0.85"`);
+  refl += `<g filter="url(#blur5)">${shadows}</g>`;
+  let bench = "";
+  for (const X of [B0 + 0.06, B1 - 0.06]) {
+    for (const z of [BZ0 + 0.02, BZ1 - 0.02]) bench += poly(faceQuad(L, z, X - 0.012, X + 0.012, SY + 0.03, F), `fill="url(#lkSteel)" stroke="${INK}" stroke-width="1"`);
+    bench += poly(faceQuad(L, BZ0 + 0.02, X - 0.012, X + 0.012, SY + 0.22, SY + 0.24), `fill="#3a4658"`);
+    for (const z of [BZ0 + 0.02, BZ1 - 0.02]) {
+      const [fx2, fy2] = L(X, F, z);
+      bench += `<ellipse cx="${n1(fx2)}" cy="${n1(fy2)}" rx="${n1(30 / z)}" ry="${n1(6 / z)}" fill="#000" opacity="0.7"/>`;
+    }
+  }
+  bench += poly(flatQuad(L, SY, B0, B1, BZ0, BZ1), `fill="url(#lkWood)" stroke="${INK}" stroke-width="1.2"`);
+  for (let k = 1; k < 4; k++) bench += seg(L(B0, SY, lerp(BZ0, BZ1, k / 4)), L(B1, SY, lerp(BZ0, BZ1, k / 4)), `stroke="#5a3e18" stroke-width="1.6"`);
+  bench += poly(faceQuad(L, BZ0, B0, B1, SY, SY + 0.03), `fill="#8a6430" stroke="${INK}" stroke-width="1.2"`);
+  bench += seg(L(B0, SY, BZ0), L(B1, SY, BZ0), `stroke="#ffe0a0" stroke-width="1.4" opacity="0.7"`);
+  bench += poly([L(0.72, SY - 0.012, BZ0 + 0.025), L(0.88, SY - 0.012, BZ0 + 0.025), L(0.88, SY - 0.012, BZ1 - 0.025), L(0.72, SY - 0.012, BZ1 - 0.025)], `fill="#c8ccd4" stroke="${INK}" stroke-width="0.8"`);
+  // Gym bag on the floor by the far bank.
+  bench += `<ellipse cx="${n1(L(-0.62, F, 2.2)[0])}" cy="${n1(L(-0.62, F, 2.2)[1])}" rx="58" ry="8" fill="#000" opacity="0.55"/>`;
+  bench += `<path d="M${n1(L(-0.82, F, 2.2)[0])} ${n1(L(-0.82, F, 2.2)[1])} C${n1(L(-0.84, 0.82, 2.2)[0])} ${n1(L(-0.84, 0.82, 2.2)[1])} ${n1(L(-0.4, 0.82, 2.2)[0])} ${n1(L(-0.4, 0.82, 2.2)[1])} ${n1(L(-0.42, F, 2.2)[0])} ${n1(L(-0.42, F, 2.2)[1])}Z" fill="#1a1e26" stroke="${INK}" stroke-width="1.2"/>`;
+  bench += `<path d="M${n1(L(-0.72, 0.86, 2.2)[0])} ${n1(L(-0.72, 0.86, 2.2)[1])} Q${n1(L(-0.62, 0.74, 2.2)[0])} ${n1(L(-0.62, 0.74, 2.2)[1])} ${n1(L(-0.52, 0.86, 2.2)[0])} ${n1(L(-0.52, 0.86, 2.2)[1])}" fill="none" stroke="#2a3040" stroke-width="3"/>`;
+
+  base += far + side + refl + bench;
+
+  // ── Light: troffer blooms, volumetric cones, pools on floor and lockers ──
+  const FLICK = 4; // index of the flickering troffer (front row, centre)
+  const lit = (i) => {
+    const [a, b, z] = TROFFERS[i];
+    const zc = z + 0.05;
+    const [cx, cy] = L((a + b) / 2, C, zc);
+    const s = FL / zc;
+    return bloom(cx, cy + 4, (b - a) * s * 0.8, s * 0.12, "gTube") +
+      bloom(cx, cy + 2, (b - a) * s * 0.5, s * 0.04, "gTube");
+  };
+  const cone = (i) => {
+    const [a, b, z] = TROFFERS[i];
+    return poly([L(a, C + 0.01, z), L(b, C + 0.01, z), L(b + 0.12, F, z + 0.1), L(a - 0.12, F, z + 0.1)], `fill="url(#cone)"`);
+  };
+  let lights = `<g filter="url(#blur14)">${TROFFERS.map((_, i) => (i !== FLICK ? cone(i) : "")).join("")}</g>`;
+  TROFFERS.forEach((_, i) => { if (i !== FLICK) lights += lit(i); });
+  for (const X of [-0.75, 0, 0.75]) {
+    const [px, py] = L(X, F, 1.75);
+    lights += bloom(px, py, 210, 34, "gPool", 0.9);
+    const [qx, qy] = L(X, F, 2.15);
+    lights += bloom(qx, qy, 130, 18, "gPool", 0.8);
   }
   for (const X of [-W, W]) {
-    base += poly(wallQuad(L, X, BASE, F, NEAR, FAR), `fill="#060a11"`);
-    base += poly(wallQuad(L, X, C, TOP - 0.02, NEAR, FAR), `fill="#08101a"`);
+    const [wx, wy] = L(X, -0.25, 1.9);
+    lights += bloom(wx, wy, 50, 160, "gPool", 0.25);
   }
-
-  // Far wall: frontal locker row, second from the left is ajar.
-  const LW = 0.36;
-  const x0 = -LW * 3.5;
-  base += poly(faceQuad(L, FAR, x0 - 0.02, -x0 + 0.02, TOP - 0.02, BASE), `fill="#04080e"`);
-  base += poly(faceQuad(L, FAR, -W, W, BASE, F), `fill="#060a11"`);
-  for (let i = 0; i < 7; i++) {
-    const a = x0 + i * LW + 0.012;
-    const b = a + LW - 0.024;
-    if (i === 1) {
-      base += poly(faceQuad(L, FAR, a, b, TOP, BASE - 0.02), `fill="url(#inside)"`);
-      base += poly(faceQuad(L, FAR, a + 0.02, b - 0.02, -0.52, -0.49), `fill="#0a3a48"`);
-      const jk = (dx, y) => pts([L(a + dx, y, FAR)]);
-      // hanging suit on a hook
-      base += seg(L(a + 0.23, -0.55, FAR), L(a + 0.23, -0.47, FAR), `stroke="#021219" stroke-width="2"`);
-      base += `<path d="M ${jk(0.11, -0.39)} Q ${jk(0.23, -0.5)} ${jk(0.35, -0.39)} L ${jk(0.33, 0.3)} L ${jk(0.24, 0.27)} L ${jk(0.23, -0.2)} L ${jk(0.22, 0.27)} L ${jk(0.13, 0.3)} Z" fill="#031a22" opacity="0.85"/>`;
-      base += poly(faceQuad(L, FAR, a + 0.02, b - 0.02, 0.45, 0.5), `fill="#06303c"`);
-      continue;
-    }
-    base += poly(faceQuad(L, FAR, a, b, TOP, BASE - 0.02), `fill="url(#lockF)"`);
-    for (let j = 0; j < 5; j++) {
-      const y = TOP + 0.1 + j * 0.04;
-      base += poly(faceQuad(L, FAR, a + 0.07, b - 0.07, y, y + 0.018), `fill="#070c13"`);
-    }
-    base += poly(faceQuad(L, FAR, a + 0.09, b - 0.09, -0.42, -0.36), `fill="#5a7088" opacity="0.55"`);
-    base += poly(faceQuad(L, FAR, b - 0.07, b - 0.045, -0.04, 0.14), `fill="#8aa2b8"`);
-    base += seg(L(a, TOP, FAR), L(a, BASE - 0.02, FAR), `stroke="#8fb0cc" stroke-width="1" opacity="0.35"`);
-    base += seg(L(a, TOP, FAR), L(b, TOP, FAR), `stroke="#a9c3d8" stroke-width="1" opacity="0.4"`);
-  }
-  // The ajar door, swung ~38° toward the viewer on its left hinge.
-  const ha = x0 + LW + 0.012;
-  const hb = ha + LW - 0.024;
-  const ang = 0.96;
-  const fx = ha + (hb - ha) * Math.cos(ang);
-  const fz = FAR - (hb - ha) * Math.sin(ang);
-  base += poly([L(ha, TOP, FAR), L(fx, TOP, fz), L(fx, BASE - 0.02, fz), L(ha, BASE - 0.02, FAR)], `fill="url(#doorOpen)" stroke="${INK}" stroke-width="1.2"`);
-  for (let j = 0; j < 5; j++) {
-    const y = TOP + 0.1 + j * 0.04;
-    const p = (t) => [lerp(ha, fx, t), lerp(FAR, fz, t)];
-    const [ax, az] = p(0.2);
-    const [cx, cz] = p(0.8);
-    base += poly([L(ax, y, az), L(cx, y, cz), L(cx, y + 0.018, cz), L(ax, y + 0.018, az)], `fill="#070c13"`);
-  }
-
-  // R&D crate in front of the open locker.
-  const cx0 = -1.24;
-  const cx1 = -0.76;
-  const cy = 0.52;
-  const cz0 = 2.72;
-  const cz1 = 3.08;
-  base += poly(wallQuad(L, cx1, cy, F, cz0, cz1), `fill="#18222d" stroke="${INK}" stroke-width="1.5"`);
-  base += poly(flatQuad(L, cy, cx0, cx1, cz0, cz1), `fill="#4a5f74" stroke="${INK}" stroke-width="1.5"`);
-  base += poly(faceQuad(L, cz0, cx0, cx1, cy, F), `fill="url(#crateF)" stroke="${INK}" stroke-width="1.5"`);
-  base += poly(faceQuad(L, cz0, cx0, cx1, 0.6, 0.67), `fill="#ffaa44" opacity="0.85"`);
-  for (let i = 0; i < 7; i++) {
-    const x = cx0 + 0.02 + i * 0.075;
-    base += poly([L(x, 0.6, cz0), L(x + 0.035, 0.6, cz0), L(x + 0.01, 0.67, cz0), L(x - 0.025, 0.67, cz0)], `fill="#140d04"`);
-  }
-  base += seg(L(cx0, 0.58, cz0), L(cx1, 0.58, cz0), `stroke="${INK}" stroke-width="1.5"`);
-  base += seg(L(cx1, 0.58, cz0), L(cx1, 0.58, cz1), `stroke="${INK}" stroke-width="1.2"`);
-  base += seg(L(cx0, cy, cz0), L(cx1, cy, cz0), `stroke="#a9c3d8" stroke-width="1.2" opacity="0.6"`);
-  for (const [a, b] of [[cx0, cx0 + 0.06], [cx1 - 0.06, cx1]]) base += poly(faceQuad(L, cz0, a, b, cy, F), `fill="#0c131b" opacity="0.8"`);
-  base += poly(faceQuad(L, cz0, cx0 + 0.14, cx0 + 0.3, 0.76, 0.8), `fill="#a9c3d8" opacity="0.3"`);
-  base += poly(faceQuad(L, cz0, cx0 + 0.14, cx0 + 0.24, 0.83, 0.86), `fill="#a9c3d8" opacity="0.25"`);
-
-  // Bench down the aisle.
-  const bz0 = 1.95;
-  const bz1 = 2.9;
-  const BW = 0.15;
-  for (const z of [2.7, 2.12]) {
-    for (const X of [-BW + 0.02, BW - 0.05]) base += poly(faceQuad(L, z, X, X + 0.03, 0.55, F), `fill="#0a1119" stroke="${INK}" stroke-width="1"`);
-    base += poly(faceQuad(L, z, -BW + 0.02, BW - 0.02, 0.8, 0.83), `fill="#0a1119"`);
-  }
-  base += poly(wallQuad(L, -BW, 0.5, 0.55, bz0, bz1), `fill="#131d28"`);
-  base += poly(wallQuad(L, BW, 0.5, 0.55, bz0, bz1), `fill="#1a2633"`);
-  base += poly(flatQuad(L, 0.5, -BW, BW, bz0, bz1), `fill="url(#bench)" stroke="${INK}" stroke-width="1.2"`);
-  for (let X = -BW + 0.05; X < BW - 0.02; X += 0.05) base += seg(L(X, 0.5, bz0), L(X, 0.5, bz1), `stroke="#0e1620" stroke-width="1" opacity="0.7"`);
-  base += poly(faceQuad(L, bz0, -BW, BW, 0.5, 0.55), `fill="#1c2733" stroke="${INK}" stroke-width="1.2"`);
-  base += seg(L(-BW, 0.5, bz0), L(BW, 0.5, bz0), `stroke="#a9c3d8" stroke-width="1.4" opacity="0.7"`);
-
-  // Ceiling fixtures (middle one is the flickering tube).
-  const tubes = [2.3, 2.65, 3.02];
-  for (const z of tubes) {
-    base += poly(flatQuad(L, C + 0.01, -0.78, 0.78, z, z + 0.1), `fill="#141e2a"`);
-    base += poly(faceQuad(L, z, -0.78, 0.78, C, C + 0.05), `fill="#1c2733" stroke="${INK}" stroke-width="1"`);
-    base += poly(faceQuad(L, z + 0.01, -0.72, 0.72, C + 0.05, C + 0.08), `fill="${z === tubes[1] ? "#3a4a58" : "#e8fbff"}"`);
-  }
-
-  let lights = "";
-  for (const z of [tubes[0], tubes[2]]) {
-    const [cx, ty] = L(0, C + 0.065, z);
-    const s = 800 / z;
-    lights += bloom(cx, ty, s * 0.9, s * 0.12, "gTube");
-    lights += poly([L(-0.72, C + 0.08, z), L(0.72, C + 0.08, z), L(1.1, 0.4, z + 0.2), L(-1.1, 0.4, z + 0.2)], `fill="url(#cone)"`);
-  }
-  lights += bloom(800, 700, 360, 60, "gTube", 0.25);
-
   const flickerTube = (() => {
-    const z = tubes[1];
-    const [cx, ty] = L(0, C + 0.065, z);
-    const s = 800 / z;
-    return poly(faceQuad(L, z + 0.01, -0.72, 0.72, C + 0.05, C + 0.08), `fill="#f2fdff"`) +
-      bloom(cx, ty, s * 0.95, s * 0.14, "gTube") +
-      poly([L(-0.72, C + 0.08, z), L(0.72, C + 0.08, z), L(1.1, 0.4, z + 0.2), L(-1.1, 0.4, z + 0.2)], `fill="url(#cone)"`);
+    const [a, b, z] = TROFFERS[FLICK];
+    return poly(flatQuad(L, C + 0.005, a, b, z, z + 0.1), `fill="#ffffff"`) + lit(FLICK) + `<g filter="url(#blur14)">${cone(FLICK)}</g>`;
   })();
 
-  // Cyan glow spilling from the open locker.
-  const gapTop = L(fx, TOP, fz);
-  const gapBot = L(fx, BASE - 0.02, fz);
-  const frameTop = L(hb, TOP, FAR);
-  const frameBot = L(hb, BASE - 0.02, FAR);
+  // Cyan glow spilling out of the ajar locker.
+  const ha = -W + LW + 0.008;
+  const hb = ha + LW - 0.016;
+  const fx = ha + (hb - ha) * Math.cos(0.95) * 0.92;
+  const fz = FAR - (hb - ha) * Math.sin(0.95) * 0.92;
+  const gapTop = L(fx, doorY, fz);
+  const gapBot = L(fx, BASE - 0.005, fz);
+  const frameTop = L(hb, doorY, FAR);
+  const frameBot = L(hb, BASE - 0.005, FAR);
   const glow =
-    poly([gapTop, frameTop, frameBot, gapBot], `fill="#9ff6ff" opacity="0.18"`) +
-    poly([gapTop, frameTop, frameBot, gapBot], `fill="#22e6ff" opacity="0.3" filter="url(#blur5)"`) +
-    bloom(frameTop[0], 400, 70, 230, "gCyan", 0.7) +
-    poly([gapBot, frameBot, L(0.25, F, 2.3), L(-0.48, F, 2.3)], `fill="url(#spill)" filter="url(#blur5)"`) +
+    poly([gapTop, frameTop, frameBot, gapBot], `fill="#9ff6ff" opacity="0.16"`) +
+    poly([gapTop, frameTop, frameBot, gapBot], `fill="#22e6ff" opacity="0.32" filter="url(#blur5)"`) +
+    bloom((frameTop[0] + gapTop[0]) / 2, (frameTop[1] + frameBot[1]) / 2, 110, 260, "gCyan", 0.55) +
+    poly([gapBot, frameBot, L(hb + 0.35, F, FAR - 0.8), L(fx - 0.2, F, FAR - 0.8)], `fill="url(#spill)" filter="url(#blur5)"`) +
     seg(gapTop, gapBot, `stroke="#c8fbff" stroke-width="2"`) +
-    seg(L(hb + 0.024, TOP, FAR), L(hb + 0.024, BASE - 0.02, FAR), `stroke="#22e6ff" stroke-width="1.6" opacity="0.7"`) +
-    seg(L(cx1, cy, cz0), L(cx1, cy, cz1), `stroke="#5cefff" stroke-width="1.6" opacity="0.6"`) +
-    seg(L(cx1, cy, cz0), L(cx1, F, cz0), `stroke="#5cefff" stroke-width="1.2" opacity="0.35"`);
+    seg(L(hb + 0.01, doorY, FAR), L(hb + 0.01, BASE, FAR), `stroke="#22e6ff" stroke-width="1.6" opacity="0.6"`);
 
-  const [ledX, ledY] = L(cx1 - 0.1, 0.72, cz0);
+  // Status LEDs: the cadet's locker light and the door's keypad.
+  const [lx, ly] = L(hb - 0.05, doorY + 0.1, FAR);
+  const [dx, dy] = L(W, -0.05, FAR - 0.64 + 0.15);
   const leds =
-    `<circle cx="${n1(ledX)}" cy="${n1(ledY)}" r="10" fill="#22e6ff" opacity="0.35" filter="url(#blur2)"/>` +
-    `<circle cx="${n1(ledX)}" cy="${n1(ledY)}" r="3" fill="#c8fbff"/>` +
-    `<circle cx="${n1(ledX - 14)}" cy="${n1(ledY)}" r="2.4" fill="#ffaa44"/>` +
-    `<circle cx="${n1(ledX - 14)}" cy="${n1(ledY)}" r="8" fill="#ffaa44" opacity="0.3" filter="url(#blur2)"/>`;
+    `<circle cx="${n1(lx)}" cy="${n1(ly)}" r="12" fill="#ffb24a" opacity="0.4" filter="url(#blur2)"/><circle cx="${n1(lx)}" cy="${n1(ly)}" r="2.6" fill="#ffe2b0"/>` +
+    `<circle cx="${n1(dx)}" cy="${n1(dy)}" r="14" fill="#44ff99" opacity="0.35" filter="url(#blur2)"/><circle cx="${n1(dx)}" cy="${n1(dy)}" r="3" fill="#c8ffe0"/>`;
 
+  // Haze hanging under the lights (atmospheric depth over the far bank).
   const haze =
-    bloom(700, 330, 520, 150, "gHaze") +
-    bloom(1150, 250, 380, 120, "gHaze", 0.7) +
-    bloom(620, 380, 200, 220, "gCyan", 0.12);
+    bloom(800, 470, 620, 160, "gHaze") +
+    bloom(560, 420, 380, 200, "gHaze", 0.7) +
+    bloom(1100, 380, 420, 180, "gHaze", 0.6) +
+    bloom(620, 420, 160, 260, "gCyan", 0.1);
 
   return {
     box: [0, 0, 1600, 900],
     defs,
     layers: [
       { markup: base },
-      { markup: haze, anim: { type: "drift", amp: 30, speed: 0.1 }, blend: "screen", opacity: 0.8 },
-      { markup: lights, blend: "lighter", opacity: 0.85 },
-      { markup: flickerTube, anim: { type: "flicker", min: 0.08, max: 1, speed: 1.4 }, blend: "lighter" },
+      { markup: haze, anim: { type: "drift", amp: 30, speed: 0.1 }, blend: "screen", opacity: 0.6 },
+      { markup: lights, blend: "lighter", opacity: 0.75 },
+      { markup: flickerTube, anim: { type: "flicker", min: 0.12, max: 1, speed: 1.4 }, blend: "lighter" },
       { markup: glow, anim: { type: "pulse", min: 0.7, max: 1, speed: 1.3 }, blend: "lighter" },
       { markup: leds, anim: { type: "flicker", min: 0.2, max: 1, speed: 1.6 }, blend: "lighter" },
       shadeLayer(),
@@ -797,30 +1029,69 @@ function darkBackground() {
   const defs =
     SHADE_DEFS +
     `<radialGradient id="void" cx="800" cy="340" r="960" gradientUnits="userSpaceOnUse" gradientTransform="translate(800 340) scale(1 0.7) translate(-800 -340)">` +
-    `<stop offset="0" stop-color="#0b1320"/><stop offset="0.45" stop-color="#060a12"/><stop offset="1" stop-color="#020306"/></radialGradient>` +
-    fadeGrad("gHaze", "#1f3b5c", 0.2, 0.45) +
-    fadeGrad("gMote", "#9fc4e8", 0.5, 0.3);
+    `<stop offset="0" stop-color="#0d1624"/><stop offset="0.45" stop-color="#060a12"/><stop offset="1" stop-color="#020306"/></radialGradient>` +
+    // A single overhead key light: a soft shaft onto the spot where the speaker stands.
+    `<linearGradient id="dShaft" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc2e8" stop-opacity="0.22"/><stop offset="0.55" stop-color="#7aa4d0" stop-opacity="0.08"/><stop offset="1" stop-color="#7aa4d0" stop-opacity="0"/></linearGradient>` +
+    `<radialGradient id="dPool"><stop offset="0" stop-color="#8ab4e0" stop-opacity="0.26"/><stop offset="0.5" stop-color="#5a84b4" stop-opacity="0.08"/><stop offset="1" stop-color="#5a84b4" stop-opacity="0"/></radialGradient>` +
+    `<linearGradient id="dFloor" x1="0" y1="480" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a1018" stop-opacity="0"/><stop offset="0.25" stop-color="#0a1018" stop-opacity="0.8"/><stop offset="1" stop-color="#020306"/></linearGradient>` +
+    // Film grain: a tile of faint light and dark specks.
+    (() => {
+      const rand = rng(97);
+      let lt = "";
+      let dk = "";
+      for (let i = 0; i < 260; i++) {
+        const x = n1(rand() * 96);
+        const y = n1(rand() * 96);
+        if (rand() < 0.5) lt += `M${x},${y}h0.9v0.9h-0.9Z`;
+        else dk += `M${x},${y}h1.1v1.1h-1.1Z`;
+      }
+      return `<pattern id="dGrain" patternUnits="userSpaceOnUse" width="96" height="96"><path d="${lt}" fill="#c8d8ec" opacity="0.07"/><path d="${dk}" fill="#000" opacity="0.18"/></pattern>`;
+    })() +
+    fadeGrad("gHaze", "#22405f", 0.22, 0.45) +
+    fadeGrad("gHazeW", "#3a5878", 0.16, 0.45) +
+    fadeGrad("gMote", "#b4d2f0", 0.5, 0.3) +
+    BG_BLUR("dBlur", 26) +
+    BG_BLUR("dBlur3", 3);
 
-  const haze1 = bloom(540, 300, 560, 170, "gHaze") + bloom(1180, 390, 460, 140, "gHaze", 0.8);
-  const haze2 = bloom(860, 210, 600, 120, "gHaze", 0.7) + bloom(260, 470, 320, 100, "gHaze", 0.5);
+  let base = `<rect width="1600" height="900" fill="url(#void)"/>`;
+  // Far wall of darkness: faint vertical structure so the void has depth.
+  for (const [x, w, a] of [[180, 90, 0.05], [420, 40, 0.04], [1180, 60, 0.05], [1390, 110, 0.04]]) {
+    base += `<rect x="${x}" y="0" width="${w}" height="640" fill="#1a2a40" opacity="${a}" filter="url(#dBlur)"/>`;
+  }
+  base += `<g filter="url(#dBlur)"><path d="M700 -20 L900 -20 L1060 560 L540 560 Z" fill="url(#dShaft)"/>` +
+    `<path d="M760 -20 L840 -20 L920 540 L680 540 Z" fill="url(#dShaft)" opacity="0.8"/></g>` +
+    `<rect x="0" y="480" width="1600" height="420" fill="url(#dFloor)"/>` +
+    `<ellipse cx="800" cy="520" rx="340" ry="46" fill="url(#dPool)"/>` +
+    `<ellipse cx="800" cy="518" rx="140" ry="16" fill="url(#dPool)"/>` +
+    `<rect width="1600" height="900" fill="url(#dGrain)"/>`;
+
+  // Two banks of slow fog: a cool far one and a warmer, nearer one.
+  const haze1 = bloom(540, 300, 560, 170, "gHaze") + bloom(1180, 390, 460, 140, "gHaze", 0.8) + bloom(800, 520, 700, 90, "gHazeW", 0.8);
+  const haze2 = bloom(860, 210, 600, 120, "gHaze", 0.7) + bloom(260, 470, 320, 100, "gHaze", 0.5) + bloom(1300, 600, 380, 80, "gHazeW", 0.7);
 
   const rand = rng(7);
   let dust = "";
-  for (let i = 0; i < 44; i++) {
-    const x = 40 + rand() * 1520;
-    const y = 30 + rand() * 580;
-    const r = 0.8 + rand() * 1.4;
-    dust += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r)}" fill="#a9cbe8" opacity="${n1(0.06 + rand() * 0.2)}"/>`;
+  // Motes lit in the shaft, fine and sharp...
+  for (let i = 0; i < 60; i++) {
+    const y = 20 + rand() * 640;
+    const spread = 110 + (y / 760) * 220;
+    const x = 800 + (rand() - 0.5) * 2 * spread;
+    const r = 0.7 + rand() * 1.2;
+    dust += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r)}" fill="#cfe2f6" opacity="${n1(0.12 + rand() * 0.3)}"/>`;
   }
-  for (let i = 0; i < 7; i++) {
-    dust += bloom(100 + rand() * 1400, 60 + rand() * 500, 8 + rand() * 10, 8 + rand() * 10, "gMote", 0.12);
+  // ...faint ones in the dark, and a few big out-of-focus specks close to the lens.
+  for (let i = 0; i < 30; i++) {
+    dust += `<circle cx="${n1(40 + rand() * 1520)}" cy="${n1(30 + rand() * 580)}" r="${n1(0.8 + rand() * 1.2)}" fill="#a9cbe8" opacity="${n1(0.05 + rand() * 0.14)}"/>`;
   }
+  let bokeh = "";
+  for (let i = 0; i < 7; i++) bokeh += `<circle cx="${n1(80 + rand() * 1440)}" cy="${n1(60 + rand() * 520)}" r="${n1(9 + rand() * 16)}" fill="#8fb4dc" opacity="${n1(0.025 + rand() * 0.03)}"/>`;
+  dust += `<g filter="url(#dBlur3)">${bokeh}</g>`;
 
   return {
     box: [0, 0, 1600, 900],
     defs,
     layers: [
-      { markup: `<rect width="1600" height="900" fill="url(#void)"/>` },
+      { markup: base },
       { markup: haze1, anim: { type: "drift", amp: 36, speed: 0.07 }, blend: "screen", opacity: 0.7 },
       { markup: haze2, anim: { type: "drift", amp: 28, speed: 0.05, phase: 9 }, blend: "screen", opacity: 0.6 },
       { markup: dust, anim: { type: "float", amp: 9, speed: 0.22 } },
@@ -879,6 +1150,7 @@ function armorCrateModel() {
     `<radialGradient id="chSheen"><stop offset="0" stop-color="#fff" stop-opacity="0.45"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>` +
     linGrad("cFront", [[0, "#4a5f74"], [0.45, "#2a3a4a"], [1, "#111922"]], 1, 0.6) +
     linGrad("cSide", [[0, "#1c2733"], [1, "#0a1016"]], 0, 1) +
+    linGrad("cKey", [[0, "#ffffff", 0.12], [0.45, "#ffffff", 0], [0.7, "#000000", 0], [1, "#000000", 0.35]], 1, 1) +
     linGrad("cRim", [[0, "#8aa2b8"], [0.5, "#566c82"], [1, "#2a3a4a"]], 1, 0) +
     linGrad("cLid", [[0, "#2e3c4c"], [0.5, "#1c2733"], [1, "#0c1219"]], 1, 0.4) +
     linGrad("cFoam", [[0, "#2a2e36"], [0.5, "#181b21"], [1, "#0a0b0e"]], 0.4, 1) +
@@ -886,9 +1158,12 @@ function armorCrateModel() {
     `<radialGradient id="cBump" cx="0.35" cy="0.3" r="0.7"><stop offset="0" stop-color="#3a3f48"/><stop offset="1" stop-color="#0e1014"/></radialGradient>` +
     `<radialGradient id="cHum"><stop offset="0" stop-color="#22e6ff" stop-opacity="0.35"/><stop offset="0.5" stop-color="#22e6ff" stop-opacity="0.1"/><stop offset="1" stop-color="#22e6ff" stop-opacity="0"/></radialGradient>` +
     `<radialGradient id="cShadow"><stop offset="0" stop-color="#000" stop-opacity="0.8"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
-    linGrad("cBench", [[0, "#1a2430"], [0.6, "#2a3846"], [1, "#3a4a5a"]]) +
-    `<linearGradient id="cBenchFadeG" x1="-134" y1="0" x2="130" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#000"/><stop offset="0.3" stop-color="#fff"/><stop offset="0.7" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
-    `<mask id="cBenchFade" maskUnits="userSpaceOnUse" x="-140" y="20" width="280" height="60"><rect x="-140" y="20" width="280" height="60" fill="url(#cBenchFadeG)"/></mask>` +
+    linGrad("cBench", [[0, "#7a5626"], [0.5, "#b08446"], [1, "#d8b066"]]) +
+    linGrad("cLeg", [[0, "#c8d4e4"], [0.5, "#6a7688"], [1, "#2a3240"]], 1, 0) +
+    linGrad("cLegFade", [[0, "#fff"], [0.6, "#fff"], [1, "#000"]]) +
+    `<mask id="cLegM" maskUnits="userSpaceOnUse" x="-140" y="60" width="280" height="40"><rect x="-140" y="60" width="280" height="40" fill="url(#cLegFade)"/></mask>` +
+    `<linearGradient id="cBenchFadeG" x1="-134" y1="0" x2="130" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#000"/><stop offset="0.16" stop-color="#fff"/><stop offset="0.84" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
+    `<mask id="cBenchFade" maskUnits="userSpaceOnUse" x="-140" y="20" width="280" height="80"><rect x="-140" y="20" width="280" height="80" fill="url(#cBenchFadeG)"/></mask>` +
     `<clipPath id="cHazClip"><polygon points="-84,13 60,13 60,21 -84,21"/></clipPath>` +
     `<clipPath id="cLidClip"><polygon points="-61,-31 78,-31 83.6,-89 -55.4,-89"/></clipPath>` +
     glowFilter("chBlur", 1.3) +
@@ -898,9 +1173,17 @@ function armorCrateModel() {
   // Locker-room bench the crate rests on, fading out at both ends.
   let lid = `<g mask="url(#cBenchFade)">`;
   lid += poly([[-132, 66], [128, 66], [112, 30], [-116, 30]], `fill="url(#cBench)" ${ink(0.8)}`);
-  for (let i = 1; i < 6; i++) lid += seg([lerp(-116, -132, i / 6), lerp(30, 66, i / 6)], [lerp(112, 128, i / 6), lerp(30, 66, i / 6)], `stroke="#0a1016" stroke-width="0.7" opacity="0.6"`);
-  lid += poly([[-132, 66], [128, 66], [128, 74], [-132, 74]], `fill="#0e151d" ${ink(0.8)}`);
-  lid += seg([-130, 66.6], [126, 66.6], `stroke="#a9c3d8" stroke-width="0.8" opacity="0.5"`);
+  for (let i = 1; i < 4; i++) lid += seg([lerp(-116, -132, i / 4), lerp(30, 66, i / 4)], [lerp(112, 128, i / 4), lerp(30, 66, i / 4)], `stroke="#3a2610" stroke-width="1.4" opacity="0.85"`);
+  // Wood grain along the slats.
+  for (let i = 0; i < 14; i++) {
+    const v = 0.06 + (i / 14) * 0.9;
+    const y = lerp(30, 66, v);
+    lid += seg([lerp(-116, -132, v) + 10 + (i * 37) % 60, y + 1.2], [lerp(-116, -132, v) + 60 + (i * 53) % 120, y + 1.2], `stroke="#5a3e18" stroke-width="0.4" opacity="0.5"`);
+  }
+  lid += poly([[-132, 66], [128, 66], [128, 72], [-132, 72]], `fill="#7a5626" ${ink(0.8)}`);
+  lid += seg([-130, 66.6], [126, 66.6], `stroke="#ffe0a0" stroke-width="0.8" opacity="0.6"`);
+  // Steel legs running out of frame.
+  lid += `<g mask="url(#cLegM)">` + [-100, -90, 84, 94].map((x) => `<rect x="${x}" y="72" width="5" height="28" fill="url(#cLeg)" ${ink(0.5)}/>`).join("") + `</g>`;
   lid += `</g>`;
   lid += `<ellipse cx="-2" cy="52" rx="100" ry="11" fill="url(#cShadow)"/>`;
   // Lid, hinged along the back edge and leaning back.
@@ -958,14 +1241,17 @@ function armorCrateModel() {
 
   const helm = propHelmet();
   const helmT = `transform="translate(-4 170.4) rotate(-6 0 -80) scale(2.4)"`;
+  // The rim goes behind the helmet: it sits up out of the foam, proud of the
+  // back edge, and only the front lip is drawn over it (in the shell).
   const helmet =
+    path("M-88,4 L64,4 L84,-26 L-68,-26Z M-81,0 L58,0 L76,-21 L-62,-21Z", `fill="url(#cRim)" fill-rule="evenodd" ${ink(0.8)}`) +
     `<ellipse cx="-4" cy="-2" rx="30" ry="6" fill="#000" opacity="0.7" filter="url(#cAO)"/>` +
     `<g ${helmT}>${helm.body}</g>`;
 
   // Crate shell drawn over the foam: rim, front face, right side, hardware.
   let shell = "";
   shell += poly([[64, 4], [84, -26], [84, 26], [64, 56]], `fill="url(#cSide)" ${ink()}`);
-  shell += path("M-88,4 L64,4 L84,-26 L-68,-26Z M-81,0 L58,0 L76,-21 L-62,-21Z", `fill="url(#cRim)" fill-rule="evenodd" ${ink(0.8)}`);
+  shell += poly([[-88, 4], [64, 4], [58, 0], [-81, 0]], `fill="url(#cRim)" ${ink(0.8)}`);
   shell += poly([[-88, 4], [64, 4], [64, 56], [-88, 56]], `fill="url(#cFront)" ${ink()}`);
   shell += `<g clip-path="url(#cHazClip)"><rect x="-84" y="13" width="144" height="8" fill="#e8a23c"/>`;
   for (let x = -90; x < 64; x += 9) shell += poly([[x, 21], [x + 4.5, 21], [x + 12.5, 13], [x + 8, 13]], `fill="#15100a"`);
@@ -998,6 +1284,22 @@ function armorCrateModel() {
   shell += seg([84.6, -25], [84.6, 25], `stroke="#22e6ff" stroke-width="1" opacity="0.6"`);
   shell += seg([65, 55], [85, 25.6], `stroke="#22e6ff" stroke-width="0.6" opacity="0.35"`);
   shell += poly([[-88, 46], [64, 46], [64, 56], [-88, 56]], `fill="#000" opacity="0.3"`);
+  {
+    const rs = rng(61);
+    let sc = "";
+    for (let i = 0; i < 26; i++) {
+      const x = -86 + rs() * 146;
+      const y = 6 + rs() * 48;
+      if (y > 12 && y < 22) continue;
+      const l = 3 + rs() * 12;
+      sc += `M${n1(x)},${n1(y)} l${n1(l)},${n1((rs() - 0.5) * 2)} `;
+    }
+    shell += path(sc, `fill="none" stroke="#c8dcec" stroke-width="0.3" opacity="0.16"`);
+    // Paint worn to bare metal along the top lip and the corners.
+    shell += path("M-80,4.6 L-62,4.6 M-30,4.6 L-18,4.6 M20,4.6 L40,4.6", `fill="none" stroke="#e8f0f8" stroke-width="0.9" opacity="0.55"`);
+    // Key light from the upper left falling across the face.
+    shell += `<polygon points="-88,4 64,4 64,56 -88,56" fill="url(#cKey)"/>`;
+  }
 
   const hum =
     bloom(-4, -30, 70, 44, "cHum") +
@@ -1009,7 +1311,7 @@ function armorCrateModel() {
     `<rect x="-2" y="30" width="18" height="6" fill="#22e6ff" opacity="0.4" filter="url(#chBlur)"/>`;
 
   return {
-    box: [-136, -106, 268, 184],
+    box: [-136, -106, 268, 206],
     defs,
     layers: [
       { markup: lid },
@@ -1074,6 +1376,8 @@ function monitorRecordingModel({ defs: footageDefs = "", footage, hud = "", extr
     fadeGrad("vrSpark", "#ffe0a0", 0.9, 0.25) +
     `<radialGradient id="vrWall"><stop offset="0" stop-color="#000" stop-opacity="0.75"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
     `<clipPath id="vrClip"><rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="${SY1 - SY0}"/></clipPath>` +
+    `<linearGradient id="vrSheen" x1="0" y1="0" x2="1" y2="0.6"><stop offset="0.18" stop-color="#e8f6ff" stop-opacity="0"/><stop offset="0.3" stop-color="#e8f6ff" stop-opacity="0.13"/><stop offset="0.42" stop-color="#e8f6ff" stop-opacity="0.02"/><stop offset="0.5" stop-color="#e8f6ff" stop-opacity="0.07"/><stop offset="0.56" stop-color="#e8f6ff" stop-opacity="0"/></linearGradient>` +
+    `<radialGradient id="vrCurve" cx="0.5" cy="0.5" r="0.62"><stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.6"/></radialGradient>` +
     glowFilter("vrGlow", 1.4) +
     glowFilter("vrSoft", 3);
 
@@ -1144,6 +1448,10 @@ function monitorRecordingModel({ defs: footageDefs = "", footage, hud = "", extr
     });
     crack += path(d, `fill="none" stroke="#dff4ff" stroke-width="0.35" opacity="${ring === 1 ? 0.6 : 0.35}"`);
   }
+  // Curved glass: dark corners, a window's reflection slanting across it.
+  crack += `<rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="${SY1 - SY0}" fill="url(#vrCurve)"/>`;
+  crack += `<rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="${SY1 - SY0}" fill="url(#vrSheen)"/>`;
+  crack += `<rect x="${SX0}" y="${SY0}" width="${SX1 - SX0}" height="1.6" fill="#000" opacity="0.5"/>`;
   crack += `</g>`;
 
   // Bezel with a chipped lower-right corner and torn wiring.
@@ -1385,6 +1693,7 @@ function redactedFileModel() {
     linGrad("rfClip", [[0, "#e8f0f8"], [0.5, "#8a9aaa"], [1, "#3a4654"]], 1, 1) +
     `<radialGradient id="rfShadow"><stop offset="0" stop-color="#000" stop-opacity="0.8"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>` +
     fadeGrad("rfGlow", "#3aa8ff", 0.35, 0.4) +
+    `<radialGradient id="rfLamp" cx="0.18" cy="0.1" r="1.05"><stop offset="0" stop-color="#ffe6b0" stop-opacity="0.26"/><stop offset="0.45" stop-color="#ffd890" stop-opacity="0.05"/><stop offset="0.75" stop-color="#000" stop-opacity="0.12"/><stop offset="1" stop-color="#000" stop-opacity="0.42"/></radialGradient>` +
     `<mask id="rfGrunge" maskUnits="userSpaceOnUse" x="-60" y="-30" width="120" height="60"><rect x="-60" y="-30" width="120" height="60" fill="#fff"/>` +
     Array.from({ length: 70 }, () => `<circle cx="${n1((rand() - 0.5) * 80)}" cy="${n1((rand() - 0.5) * 30)}" r="${n1(0.3 + rand() * 1.3)}" fill="#000"/>`).join("") +
     `<rect x="-40" y="4" width="26" height="12" fill="#000" opacity="0.5"/></mask>` +
@@ -1425,6 +1734,16 @@ function redactedFileModel() {
         ? `<rect x="${x0 + dx}" y="${y - 2.4}" width="${w}" height="4.6" fill="#07080a" transform="rotate(${n1((rand() - 0.5) * 0.8)} ${x0 + dx} ${y})"/>`
         : `<rect x="${x0 + dx}" y="${y - 0.8}" width="${w}" height="1.6" fill="#6a6e76" opacity="0.8"/>`;
     }
+  }
+  // Paper tooth: faint fibres across the sheet.
+  {
+    let fib = "";
+    for (let i = 0; i < 40; i++) {
+      const x = -86 + rand() * 160;
+      const y = -64 + rand() * 110;
+      fib += `M${n1(x)},${n1(y)} l${n1(2 + rand() * 6)},${n1((rand() - 0.5) * 1.5)} `;
+    }
+    page += path(fib, `fill="none" stroke="#8a8476" stroke-width="0.25" opacity="0.35"`);
   }
   page += `<circle cx="-62" cy="30" r="13" fill="none" stroke="#6a4a2a" stroke-width="1.6" opacity="0.2"/>`;
   page += `<path d="M-74,27 A13,13 0 0 1 -56,18" fill="none" stroke="#6a4a2a" stroke-width="0.8" opacity="0.25"/>`;
@@ -1477,6 +1796,8 @@ function redactedFileModel() {
   glyphs.forEach((d, i) => (stamp += `<path d="${d}" fill-rule="evenodd" transform="translate(${n1(-33.4 + i * 6.9)} -5)"/>`));
   stamp += `</g></g>`;
   page += stamp;
+  // A desk lamp off to the upper left: warm pool, falling off into shadow.
+  page += `<rect x="-88" y="-66" width="168" height="114" fill="url(#rfLamp)"/>`;
   page += `</g>`;
 
   const glow =

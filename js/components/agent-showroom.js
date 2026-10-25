@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
@@ -9,6 +9,10 @@ import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/dat
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
+  BODY_FRAMES,
+  CAPE_STYLES,
+  BODY_TYPES,
+  CAMO_STYLES,
   BACKSTORIES,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
@@ -22,6 +26,9 @@ import {
   VOICE_PROFILES,
   WEAPON_SKINS,
 } from "../../src/data/cosmetics.js";
+import * as Skins from "../../src/data/weapon-skins.js";
+import { WEAPONS } from "../../src/data/weapons.js";
+import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
 
 /**
  * Modern-mode agent customizer: a full-screen "hero showroom" shown while the
@@ -49,6 +56,10 @@ const APPEARANCE = [
   "armorVariant",
 ];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
+/** Saved looks: storage key, how many, and the appearance fields they keep. */
+const LOOKS_KEY = "cc_saved_looks";
+const MAX_LOOKS = 5;
+const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voiceIndex", "backstoryIndex", "loadoutIndex", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
 /** Camera toggle order (the C key cycles through them). */
@@ -98,12 +109,28 @@ const I = {
   turn: `<svg viewBox="0 0 24 24"><path d="M3 12c0-2.8 4-5 9-5s9 2.2 9 5-4 5-9 5"/><path d="m14 14.5-2.4 2.5 2.4 2.5"/></svg>`,
 };
 
+/** Stage lighting presets (host [light] attribute; studio is the default look). */
+const STAGE_LIGHTS = [
+  { id: "studio", name: "Studio" },
+  { id: "field", name: "Hangar" },
+  { id: "night", name: "Night ops" },
+  { id: "alert", name: "Red alert" },
+];
+/** Turntable sway: how far it turns (yaw units, ±1 max) and how fast (rad/s). */
+const SPIN_YAW = 0.85;
+const SPIN_RATE = 0.9;
+
+/** Whole-figure crop for frame tiles (the cape and boots inside the frame). */
+const FRAME_VIEW = [-46, -100, 92, 162];
+
 const CATEGORIES = [
   {
     id: "identity",
     label: "Identity",
+    short: "Agent",
     sections: [
       { type: "name", title: "Callsign" },
+      { key: "bodyIndex", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
       { key: "backstoryIndex", title: "Origin", data: BACKSTORIES, kind: "origin" },
       { key: "voiceIndex", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
     ],
@@ -112,7 +139,9 @@ const CATEGORIES = [
     id: "suit",
     label: "Suit",
     sections: [
+      { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
       { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
+      { key: "camoIndex", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
       { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
     ],
   },
@@ -141,7 +170,10 @@ const CATEGORIES = [
   {
     id: "gear",
     label: "Gear",
-    sections: ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
+    sections: [
+      { key: "capeIndex", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
+      ...ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
+    ],
   },
   {
     id: "badge",
@@ -165,15 +197,18 @@ const CATEGORIES = [
   {
     id: "colors",
     label: "Colors",
+    short: "Color",
     sections: [{ key: "colorIndex", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
   },
   {
     id: "loadout",
     label: "Loadout",
+    short: "Kit",
     pose: "hero",
     sections: [
       { key: "loadoutIndex", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
-      { key: "weaponSkinIndex", title: "Weapon finish", data: WEAPON_SKINS, kind: "rifle" },
+      // Per-weapon finishes and the finish maker (src/data/weapon-skins.js).
+      { type: "armory", title: "Weapon finishes" },
     ],
   },
 ];
@@ -341,7 +376,14 @@ svg { display: block; }
    ~100 ms GPU raster tasks several times a second. */
 .fig-breathe { position: absolute; inset: 0; will-change: transform; transform-origin: 50% 100%; animation: breathe 3.8s ease-in-out infinite; }
 .figure .ag-fig { transform-box: fill-box; transform-origin: 50% 100%; }
-@keyframes breathe { 50% { transform: scaleY(1.009); } }
+/* A breath: the chest widens a touch and the shoulders and head lift. */
+@keyframes breathe { 0%, 100% { transform: none; } 45% { transform: translateY(-0.35%) scale(1.006, 1.012); } }
+/* Rim light from behind on the right, in the colour of the stage light. The
+   filter sits on the SVG, which the breath only moves, so it rasterises once. */
+.fig-breathe > svg { filter: drop-shadow(1.4px 0 0 rgba(140, 220, 255, 0.35)); }
+:host([light="field"]) .fig-breathe > svg { filter: drop-shadow(1.6px 0 0 rgba(255, 210, 150, 0.5)); }
+:host([light="night"]) .fig-breathe > svg { filter: drop-shadow(1.8px 0 0 rgba(90, 130, 255, 0.65)); }
+:host([light="alert"]) .fig-breathe > svg { filter: drop-shadow(1.8px 0 0 rgba(255, 60, 50, 0.7)); }
 /* Breathing is a compositor scale of the rastered figure, which resamples
    it: invisible at full height, a soft face in a close-up. */
 :host([camera="bust"]) .fig-breathe, :host([camera="face"]) .fig-breathe { animation: none; }
@@ -390,11 +432,38 @@ svg { display: block; }
 .seg button:hover:not([aria-pressed="true"]) { color: var(--cc-text); }
 .hint-turn { display: inline-flex; align-items: center; gap: 6px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 2px; color: var(--cc-text-faint); text-transform: uppercase; }
 .hint-turn svg { width: 18px; height: 18px; }
+.seg [data-light] { display: inline-flex; align-items: center; gap: 6px; min-width: 128px; justify-content: center; }
+.seg [data-light] .lt { opacity: 0.6; }
+.seg [data-light] b { font-weight: 700; }
+.seg [data-spin] { display: inline-flex; align-items: center; gap: 6px; }
+.seg [data-spin] svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+/* Lighting presets: a colour grade blended over the whole scene (works for
+   every art style, since it never touches the figure's own filters). */
+.grade { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.45s var(--cc-ease), background 0.45s var(--cc-ease); }
+:host([light]) .grade { opacity: 1; }
+:host([light="field"]) .grade { mix-blend-mode: soft-light; background: radial-gradient(70% 80% at 30% 15%, rgba(255, 226, 180, 0.85), rgba(255, 190, 130, 0.35) 70%); }
+:host([light="night"]) .grade { mix-blend-mode: multiply; background: radial-gradient(60% 70% at 50% 40%, rgba(120, 150, 255, 0.9), rgba(30, 45, 120, 0.95) 80%); }
+:host([light="alert"]) .grade { mix-blend-mode: multiply; background: radial-gradient(70% 80% at 50% 30%, rgba(255, 150, 140, 0.95), rgba(150, 20, 24, 0.95) 85%); animation: alertPulse 1.6s ease-in-out infinite; }
+:host([light="field"]) .shaft { background: linear-gradient(180deg, rgba(255, 236, 200, 0.26), rgba(255, 236, 200, 0) 85%); width: 34%; left: 15%; }
+:host([light="night"]) .shaft { opacity: 0.3; }
+:host([light="alert"]) .shaft { background: linear-gradient(180deg, rgba(255, 70, 60, 0.3), rgba(255, 70, 60, 0) 80%); }
+@keyframes alertPulse { 50% { opacity: 0.7; } }
 
 /* Tighter gap and a lower anchor so the "Presets" label clears the origin
    subtitle under the callsign (it sat on top of it at 1280x720). */
 .presets { position: absolute; left: 30px; top: calc(50% + 18px); transform: translateY(-40%); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .presets .lbl { margin-bottom: 2px; }
+.presets .looks { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.presets .look { position: relative; }
+.presets .look .del { position: absolute; left: 40px; top: -4px; width: 16px; height: 16px; border-radius: 50%; display: none; place-items: center;
+  font: 700 11px/1 var(--cc-font); color: #fff; background: #3a1418; box-shadow: 0 0 0 1px var(--cc-ink); cursor: pointer; }
+.presets .look:hover .del { display: grid; }
+.presets .save-look { font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.5px; text-transform: uppercase; color: var(--cc-cyan); padding: 6px 0; }
+.presets .save-look:hover { color: #fff; }
+.presets .more-presets { font: 600 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-amber); padding: 4px 0; }
+.presets .more-presets:hover { color: #fff; }
+.presets .more-presets:empty { display: none; }
+.presets .preset[hidden] { display: none; }
 .preset { display: flex; align-items: center; gap: 10px; padding: 0; transition: transform var(--cc-dur-fast) var(--cc-ease); }
 .preset .pthumb { position: relative; width: 52px; height: 52px; overflow: hidden; background: radial-gradient(circle at 45% 38%, #1d2e44, #060a12); border: var(--cc-ink-outline) solid var(--cc-ink);
   clip-path: polygon(var(--cc-chamfer-sm) 0, 100% 0, 100% calc(100% - var(--cc-chamfer-sm)), calc(100% - var(--cc-chamfer-sm)) 100%, 0 100%, 0 var(--cc-chamfer-sm));
@@ -417,9 +486,8 @@ svg { display: block; }
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: color var(--cc-dur-fast), background var(--cc-dur-fast), box-shadow var(--cc-dur-fast); }
 .tab svg { width: 22px; height: 22px; }
-/* Icon-only by default so every category fits; the label shows for the active, hovered or focused tab. */
-.tab .t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tab:hover .t, .tab:focus-visible .t, :host(.kbd) .tab:focus .t, .tab[aria-selected="true"] .t { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+/* Every tab is labelled (short names so all eight fit); the active one reads brightest. */
+.tab .t { font-size: 9.5px; letter-spacing: 0.6px; white-space: nowrap; }
 .tab:hover { color: var(--cc-text); background: rgba(130, 160, 188, 0.08); }
 /* Focused button (drawButton "focus"): raised steel, accent bar, centred accent underline. */
 .tab[aria-selected="true"] { color: #fff; background: var(--cc-panel-raised); box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.34), inset 0 0 0 1px var(--cc-ink); }
@@ -433,9 +501,38 @@ svg { display: block; }
 .content::-webkit-scrollbar-thumb { background: #2e3f51; border: 1px solid var(--cc-ink); }
 .content.swap { animation: swapIn var(--cc-dur-base) var(--cc-ease); }
 @keyframes swapIn { from { opacity: 0; transform: translateX(var(--swap-dir, 12px)); } }
+/* Weapon finishes */
+.arm-weapons, .arm-patterns, .arm-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.arm-weapons .chip, .arm-patterns .chip { min-height: 30px; padding: 0 10px; font-size: 11px; }
+.arm-preview { margin: 10px 0; padding: 10px; background: var(--cc-panel-well); border: var(--cc-ink-outline) solid var(--cc-ink); box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.55); }
+.arm-art { display: block; width: 100%; height: 120px; }
+.arm-meta { margin: 6px 0 0; font: 600 var(--cc-type-label)/1.3 var(--cc-font); color: var(--cc-text-dim); }
+.arm-finishes { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.arm-f { position: relative; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; min-height: 52px; }
+.arm-f.on { box-shadow: inset 0 0 0 2px var(--cc-cyan), var(--plate-bevel); }
+.arm-f.locked { opacity: 0.6; }
+.arm-sw { flex: none; width: 26px; height: 26px; border: 1.5px solid var(--cc-ink); background: linear-gradient(135deg, var(--a) 0 50%, var(--b) 50% 85%, var(--c) 85%); }
+.arm-n { flex: 1; min-width: 0; font: 700 12px/1.2 var(--cc-font); color: var(--cc-text); }
+.arm-lock { flex-basis: 100%; font: 600 10px/1 var(--cc-font); color: var(--cc-amber); }
+.arm-lock .bar { display: block; height: 3px; margin-bottom: 4px; background: linear-gradient(90deg, var(--cc-amber) calc(var(--p) * 100%), rgba(255, 255, 255, 0.12) 0); }
+.arm-del { position: absolute; top: 2px; right: 6px; font: 700 14px/1 var(--cc-font); color: var(--cc-text-dim); cursor: pointer; }
+.arm-del:hover { color: #fff; }
+.arm-maker { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(130, 160, 188, 0.2); }
+.arm-maker h4 { margin: 0 0 8px; font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--cc-text-dim); }
+.arm-colors { display: flex; gap: 12px; margin-bottom: 8px; }
+.arm-color { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 10px/1 var(--cc-font); color: var(--cc-text-dim); cursor: pointer; }
+.arm-color input { width: 44px; height: 32px; padding: 0; border: 1.5px solid var(--cc-ink); background: none; cursor: pointer; }
+.arm-name { margin: 8px 0; }
+.arm-save[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
 .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.camo { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
+/* Camo is the reward: locked swatches keep their colour. */
+.grid.camo .locked .thumb svg { filter: none; opacity: 0.85; }
+.grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
 .grid.finish, .grid.gear { grid-template-columns: repeat(5, 1fr); }
@@ -530,6 +627,11 @@ svg { display: block; }
 .lockbadge svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; }
 /* Unlock requirements under a section: lock, requirement, progress. */
 .lockinfo { display: grid; gap: 6px; margin-top: 8px; }
+.lockfold { margin-top: 8px; }
+.lockfold > summary { list-style: none; cursor: pointer; display: inline-flex; }
+.lockfold > summary::-webkit-details-marker { display: none; }
+.lockfold > summary .lock::after { content: "▸"; margin-left: 6px; opacity: 0.7; }
+.lockfold[open] > summary .lock::after { content: "▾"; }
 .lockrow { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; font: 600 var(--cc-type-label)/1.25 var(--cc-font); color: var(--cc-text-dim); }
 .lockrow .lock { grid-row: span 2; align-self: start; }
 .lockrow .bar { height: 5px; }
@@ -537,6 +639,10 @@ svg { display: block; }
 .card .lockprog { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-top: 4px; font: 700 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 1px; color: var(--cc-amber); text-transform: uppercase; }
 .card .lockprog .bar i { background: var(--cc-amber); }
 .preset.locked .pthumb svg { filter: saturate(0.2) brightness(0.6); }
+.preset .ptext { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; text-align: left; }
+.preset .preq { display: flex; flex-direction: column; gap: 3px; max-width: 170px; font: 600 9.5px/1.25 var(--cc-font); letter-spacing: 0.4px; text-transform: none; color: var(--cc-amber); }
+.preset .preq .bar { width: 90px; height: 4px; }
+.preset .preq .bar i { background: var(--cc-amber); }
 .preset .lockbadge { top: auto; bottom: 2px; right: 2px; }
 .opt.shake { animation: shake 0.36s; }
 @keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
@@ -965,10 +1071,10 @@ class AgentShowroom extends HTMLElement {
   template() {
     const tabs = CATEGORIES.map(
       (c, i) =>
-        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" tabindex="-1">${I[c.id]}<span class="t">${c.label}</span></button>`,
+        `<button class="tab" role="tab" id="tab-${c.id}" aria-controls="panel" aria-selected="false" data-cat="${i}" aria-label="${c.label}" tabindex="-1">${I[c.id]}<span class="t">${c.short ?? c.label}</span></button>`,
     ).join("");
     const presets = PRESETS.map(
-      (p, i) => `<button class="preset" data-preset="${i}" aria-label="Apply ${p.name} preset"><span class="pthumb"></span><span>${p.name}</span></button>`,
+      (p, i) => `<button class="preset" data-preset="${i}" aria-label="Apply ${p.name} preset"><span class="pthumb"></span><span class="ptext"><span class="pname">${p.name}</span><span class="preq" hidden></span></span></button>`,
     ).join("");
     return `
 <div class="root">
@@ -977,6 +1083,7 @@ class AgentShowroom extends HTMLElement {
     <div class="rim r1"></div><div class="rim r2"></div>
     <div class="pedestal"><div class="ring"></div><div class="plate-disc"></div></div>
     <div class="figure-wrap"><div class="figure"></div><div class="sweep"></div></div>
+    <div class="grade" aria-hidden="true"></div>
   </section>
   <header class="hdr">
     <div class="kicker">Field Armory</div>
@@ -990,7 +1097,10 @@ class AgentShowroom extends HTMLElement {
     <button class="tool" data-act="reset" aria-label="Reset appearance to standard issue">${I.reset}<span class="t">Reset</span></button>
     <button class="tool" data-act="random" aria-label="Randomize appearance">${I.dice}<span class="t">Randomize</span><kbd class="key in-kb">R</kbd><span class="in-pad" data-glyph="randomize" data-glyph-device="gamepad"></span></button>
   </div>
-  <div class="presets" role="group" aria-label="Presets"><span class="lbl caption steel">Presets</span>${presets}</div>
+  <div class="presets" role="group" aria-label="Presets">
+    <span class="lbl caption steel looks-lbl">My looks</span><div class="looks"></div>
+    <span class="lbl caption steel">Presets</span>${presets}<button class="more-presets" data-act="more-presets" tabindex="-1"></button>
+  </div>
   <div class="stage-tools">
     <div class="seg" role="group" aria-label="Camera">
       <button data-camera="full" aria-pressed="true">Full</button><button data-camera="bust" aria-pressed="false">Bust</button><button data-camera="face" aria-pressed="false">Face</button>
@@ -1001,7 +1111,9 @@ class AgentShowroom extends HTMLElement {
     <div class="seg" role="group" aria-label="Helmet">
       <button data-helmet-off aria-pressed="false">Helmet off</button>
     </div>
-    <span class="hint-turn" aria-hidden="true">${I.turn}Drag to turn</span>
+    <div class="seg" role="group" aria-label="Lighting and turntable">
+      <button data-light aria-label="Lighting: Studio" title="Cycle the lighting (L)"><span class="lt">Light</span><b>Studio</b></button><button data-spin aria-pressed="false" title="Spin the turntable (drag to turn by hand)">${I.turn}Spin</button>
+    </div>
   </div>
   <aside class="panel" aria-label="Customization">
     <div class="frame"><div class="body">
@@ -1066,6 +1178,8 @@ class AgentShowroom extends HTMLElement {
     this.category = 0;
     this.badgeMode = "library";
     this.yaw = this.yawTarget = 0;
+    this.spinning = false;
+    this.shadowRoot.querySelector("[data-spin]")?.setAttribute("aria-pressed", "false");
     this._yawRestore = null;
     this.poseChoice = "idle";
     this.cameraChoice = "full";
@@ -1106,7 +1220,6 @@ class AgentShowroom extends HTMLElement {
       this._realAdopted = true;
     }
     this.toggleAttribute("realistic", real);
-    (real ? this : this.el.stage).style.removeProperty("--yaw");
     this._stageKey = null;
     this._presetsBuilt = false;
     return true;
@@ -1195,6 +1308,7 @@ class AgentShowroom extends HTMLElement {
     });
     root.addEventListener("input", (e) => {
       if (e.target?.name === "callsign") this.onName(e.target);
+      else if (e.target?.dataset?.skinColor || e.target?.name === "skinName") this.onSkinInput(e.target);
     });
 
     // Stage drag to turn.
@@ -1202,6 +1316,7 @@ class AgentShowroom extends HTMLElement {
     st.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 && e.pointerType === "mouse") return;
       st.setPointerCapture(e.pointerId);
+      if (this.spinning) this.toggleSpin(false);
       this._drag = { x: e.clientX, yaw: this.yawTarget };
       st.classList.add("dragging");
     });
@@ -1235,6 +1350,10 @@ class AgentShowroom extends HTMLElement {
   }
 
   onClick(e) {
+    const del = e.target.closest?.("[data-skin-del]");
+    if (del) return this.deleteCustomSkin(Number(del.dataset.skinDel));
+    const lookDel = e.target.closest?.("[data-look-del]");
+    if (lookDel) return this.deleteLook(Number(lookDel.dataset.lookDel));
     const t = e.target.closest?.("button, [data-idx]");
     if (!t) return;
     if (this._swallowClick) {
@@ -1245,17 +1364,34 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.voice != null) return this.playVoice(Number(t.dataset.voice), t);
     if (t.dataset.mode) return this.setBadgeMode(t.dataset.mode);
     if (t.dataset.placement) return this.togglePlacement(t.dataset.placement);
+    if (t.dataset.armWeapon != null) return this.setArmoryWeapon(Number(t.dataset.armWeapon));
+    if (t.dataset.finish) return this.chooseFinish(t.dataset.finish);
+    if (t.dataset.skinPattern) return this.setSkinPattern(t.dataset.skinPattern);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
+    if (t.dataset.look != null) return this.wearLook(Number(t.dataset.look));
+    if (t.dataset.act === "look-save") return this.saveLook();
+    if (t.dataset.act === "more-presets") {
+      this.showLockedPresets = !this.showLockedPresets;
+      this.sfx("menuNav");
+      return this.renderPresets();
+    }
     if (t.dataset.preset != null) return this.applyPreset(Number(t.dataset.preset));
     if (t.dataset.camera) return this.setCamera(t.dataset.camera, true);
     if (t.dataset.pose) return this.setPose(t.dataset.pose, true);
     if (t.hasAttribute("data-helmet-off")) return this.toggleHelmet();
+    if (t.hasAttribute("data-light")) return this.cycleLight();
+    if (t.hasAttribute("data-spin")) return this.toggleSpin();
     if (t.dataset.confirm) return t.dataset.confirm === "discard" ? this.discard() : this.closeConfirm();
     if (t.classList.contains("handle")) return this.toggleSheet();
     if (t === this.el.save) return this.save();
     if (t === this.el.back) return this.back();
     switch (t.dataset.act) {
+      case "skin-save":
+        return this.saveCustomSkin();
+      case "skin-preview":
+        this.skinPreviewing = true;
+        return this.renderArmory();
       case "undo":
         return this.undo();
       case "reset":
@@ -1341,6 +1477,9 @@ class AgentShowroom extends HTMLElement {
         return consume();
       case "KeyZ":
         this.undo();
+        return consume();
+      case "KeyL":
+        this.cycleLight();
         return consume();
       case "KeyC":
         this.setCamera(CAMERAS[(CAMERAS.indexOf(this.cameraChoice) + 1) % CAMERAS.length], true);
@@ -1833,6 +1972,31 @@ class AgentShowroom extends HTMLElement {
     this.queueRender();
   }
 
+  /** Stage lighting: studio key light, hangar daylight, night ops, red alert. */
+  cycleLight() {
+    const i = (STAGE_LIGHTS.findIndex((l) => l.id === (this.getAttribute("light") || "studio")) + 1) % STAGE_LIGHTS.length;
+    this.setLight(STAGE_LIGHTS[i].id);
+    this.sfx("menuNav");
+  }
+
+  setLight(id) {
+    const light = STAGE_LIGHTS.find((l) => l.id === id) ?? STAGE_LIGHTS[0];
+    if (light.id === "studio") this.removeAttribute("light");
+    else this.setAttribute("light", light.id);
+    const b = this.shadowRoot.querySelector("[data-light]");
+    b.querySelector("b").textContent = light.name;
+    b.setAttribute("aria-label", `Lighting: ${light.name}`);
+  }
+
+  /** Turntable: sway the agent side to side until the player turns it by hand. */
+  toggleSpin(on = !this.spinning) {
+    this.spinning = on && !reducedMotion();
+    this._spinT0 = performance.now() - Math.asin(clamp(this.yaw / SPIN_YAW, -1, 1)) / SPIN_RATE * 1000;
+    this.shadowRoot.querySelector("[data-spin]").setAttribute("aria-pressed", String(this.spinning));
+    this.sfx("menuNav");
+    this.animate();
+  }
+
   toggleSheet() {
     const collapsed = this.getAttribute("sheet") === "collapsed";
     if (collapsed) this.removeAttribute("sheet");
@@ -1875,6 +2039,10 @@ class AgentShowroom extends HTMLElement {
           if (this._real) this.queueRender();
         }
       }
+      if (this.spinning) {
+        this.yawTarget = Math.sin(((now - this._spinT0) / 1000) * SPIN_RATE) * SPIN_YAW;
+        more = true;
+      }
       if (Math.abs(this.yaw - this.yawTarget) > 0.002) {
         this.yaw += (this.yawTarget - this.yaw) * 0.18;
         more = true;
@@ -1892,9 +2060,9 @@ class AgentShowroom extends HTMLElement {
   /** Turn parallax: back gear and cape slide against the body, head leads, light sweeps. */
   applyYaw() {
     const y = this.yaw;
-    // Modern (realistic) scopes the property to the stage: set on the host it
-    // restyles every tile, and each filtered thumbnail would re-rasterise per frame.
-    (this._real ? this.el.stage : this).style.setProperty("--yaw", y.toFixed(3));
+    // Scoped to the stage (everything that reads it lives there): set on the
+    // host it restyles every tile, and filtered thumbnails re-rasterise per frame.
+    this.el.stage.style.setProperty("--yaw", y.toFixed(3));
     if (this._real) {
       // Modern's figure carries lighting filters (diffuse + specular + noise).
       // Any change inside that SVG re-runs them — 100-200 ms at 2x DPR — so
@@ -1951,6 +2119,7 @@ class AgentShowroom extends HTMLElement {
     });
     if (rebuildContent) this.renderContent(swapDir);
     else this.refreshContent();
+    this.renderArmory();
     this.renderPresets();
     this.renderStage();
     this.renderHeader();
@@ -2006,20 +2175,101 @@ class AgentShowroom extends HTMLElement {
   }
 
   renderPresets() {
-    this.el.presets.querySelectorAll(".preset").forEach((btn, i) => {
+    this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
       if (!this._presetsBuilt) {
         const ch = { ...cloneLook(DEFAULT_CHARACTER), ...cloneLook(PRESETS[i].ch) };
         btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
       }
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
+      btn.hidden = !!lock && !this.showLockedPresets;
       btn.setAttribute("aria-label", `Apply ${PRESETS[i].name} preset${lock ? `. Locked: ${lock.hint}` : ""}`);
       btn.title = lock ? lock.hint : "";
       const thumb = btn.querySelector(".pthumb");
       thumb.querySelector(".lockbadge")?.remove();
       if (lock) thumb.insertAdjacentHTML("beforeend", `<span class="lockbadge" aria-hidden="true">${I.lock}</span>`);
+      // Say what earns it, with progress, instead of a bare padlock.
+      const req = btn.querySelector(".preq");
+      req.hidden = !lock;
+      if (lock) req.innerHTML = `<span>${esc(lock.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(lock.pct * 100)}%"></i></span>`;
     });
     this._presetsBuilt = true;
+    const lockedN = PRESETS.filter((_, i) => this.presetLock(i)).length;
+    const more = this.el.presets.querySelector(".more-presets");
+    more.textContent = lockedN ? (this.showLockedPresets ? "Hide locked presets" : `+ ${lockedN} more to earn`) : "";
+    // Locked presets sit after the toggle so earned ones lead the list.
+    if (!this._presetsOrdered) {
+      this._presetsOrdered = true;
+      this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
+        if (this.presetLock(i)) this.el.presets.appendChild(btn);
+      });
+    }
+    this.renderLooks();
+  }
+
+  // ── Saved looks ────────────────────────────────────────────────────────
+  // Up to MAX_LOOKS outfits the player names by saving; each restores the
+  // whole appearance (not callsign, origin, voice or class) with one click.
+
+  get looks() {
+    try {
+      const v = JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]");
+      return Array.isArray(v) ? v.slice(0, MAX_LOOKS) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  set looks(list) {
+    try {
+      localStorage.setItem(LOOKS_KEY, JSON.stringify(list.slice(0, MAX_LOOKS)));
+    } catch (_) {}
+  }
+
+  renderLooks() {
+    const box = this.el.presets.querySelector(".looks");
+    const list = this.looks;
+    const sig = JSON.stringify(list) + (this._real ? "r" : "");
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML =
+      list
+        .map(
+          (l, i) =>
+            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg({ ...cloneLook(DEFAULT_CHARACTER), ...l.look }, { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
+        )
+        .join("") +
+      (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+  }
+
+  saveLook() {
+    const list = this.looks;
+    if (list.length >= MAX_LOOKS) return this.toast(`${MAX_LOOKS} looks max: delete one first`);
+    const ch = this.character;
+    const look = Object.fromEntries(LOOK_FIELDS.map((k) => [k, ch[k]]));
+    const armor = ARMOR_STYLES[ch.armorIndex | 0]?.name || "Look";
+    const color = CHARACTER_COLORS[ch.colorIndex | 0]?.name || "";
+    this.looks = [...list, { name: `${armor} · ${color}`.slice(0, 28), look: cloneLook(look) }];
+    this.renderLooks();
+    this.sfx("menuConfirm");
+    this.toast("Look saved");
+  }
+
+  wearLook(i) {
+    const l = this.looks[i];
+    if (!l) return;
+    const next = cloneLook(l.look);
+    Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
+    this.commit(next);
+    this.sfx("menuConfirm");
+    this.flashStage();
+    this.toast(`${l.name} on`);
+  }
+
+  deleteLook(i) {
+    this.looks = this.looks.filter((_, k) => k !== i);
+    this.renderLooks();
+    this.sfx("menuNav");
   }
 
   /** Unlock context, refreshed each time the showroom opens. */
@@ -2058,6 +2308,7 @@ class AgentShowroom extends HTMLElement {
       c.classList.add("swap");
     }
     this.refreshContent(true);
+    this.renderArmory();
   }
 
   sectionHtml(s) {
@@ -2069,6 +2320,7 @@ class AgentShowroom extends HTMLElement {
         <p class="err ${msg ? "" : "ok"}" id="callsign-err">${esc(msg || "Letters, numbers, space . _ ' -")}</p></div>`;
     }
     if (s.type === "badgeHero") return this.badgeHeroHtml();
+    if (s.type === "armory") return this.armoryHtml(s);
     if (s.type === "placement") {
       const on = this.character.badge.placements;
       const chips = PLACEMENTS.map(
@@ -2098,6 +2350,172 @@ class AgentShowroom extends HTMLElement {
     // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
     const locks = s.groupBy ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  // ── Weapon finishes (src/data/weapon-skins.js) ─────────────────────────────
+  // Each weapon wears its own finish, earned with kills with that weapon, or
+  // one the player mixes in the finish maker below the cards.
+
+  armoryHtml(s) {
+    const ch = this.character;
+    this.armoryWeapon ??= LOADOUT_CLASSES[ch.loadoutIndex]?.startWeapons?.[0] ?? 0;
+    this.skinDraft ??= { name: "", primary: "#c8102e", secondary: "#1a1a1a", energy: "#ffd23a", pattern: "camo" };
+    const weapons = WEAPONS.map(
+      (w) => `<button class="chip arm-w${w.id === this.armoryWeapon ? " on" : ""}" data-arm-weapon="${w.id}" aria-pressed="${w.id === this.armoryWeapon}" tabindex="-1">${esc(w.name)}</button>`,
+    ).join("");
+    const patterns = Skins.SKIN_PATTERNS.map(
+      (p) => `<button class="chip arm-p${p.id === this.skinDraft.pattern ? " on" : ""}" data-skin-pattern="${p.id}" aria-pressed="${p.id === this.skinDraft.pattern}" tabindex="-1">${esc(p.name)}</button>`,
+    ).join("");
+    const color = (key, label) =>
+      `<label class="arm-color"><input type="color" data-skin-color="${key}" value="${this.skinDraft[key] || "#000000"}"><span>${label}</span></label>`;
+    const full = (ch.customSkins?.length ?? 0) >= Skins.MAX_CUSTOM;
+    return `<div class="section armory" data-section="armory"><h3><span>${s.title}</span><span class="cur arm-cur"></span></h3>
+      <div class="arm-weapons" role="group" aria-label="Weapon">${weapons}</div>
+      <div class="arm-preview"><svg class="arm-art" aria-hidden="true"></svg><p class="arm-meta"></p></div>
+      <div class="grid arm-finishes" role="radiogroup" aria-label="Finish"></div>
+      <div class="arm-maker">
+        <h4>Finish maker</h4>
+        <div class="arm-colors">${color("primary", "Body")}${color("secondary", "Trim")}${color("energy", "Energy")}</div>
+        <div class="arm-patterns" role="group" aria-label="Pattern">${patterns}</div>
+        <label class="field arm-name"><input name="skinName" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Name your finish" value="${esc(this.skinDraft.name)}"></label>
+        <div class="arm-actions">
+          <button class="chip" data-act="skin-preview" tabindex="-1">Preview</button>
+          <button class="chip arm-save" data-act="skin-save" tabindex="-1"${full ? ` aria-disabled="true" title="${Skins.MAX_CUSTOM} custom finishes max: delete one first"` : ""}>Save &amp; wear</button>
+        </div>
+      </div></div>`;
+  }
+
+  /** The finish shown in the preview: the maker's draft while previewing it, else the one worn. */
+  armoryShown() {
+    if (this.skinPreviewing) return Skins.customFinish(this.skinDraft, 0);
+    return Skins.finishFor(this.character, this.armoryWeapon);
+  }
+
+  renderArmory() {
+    const sec = this.shadowRoot.querySelector(".section.armory");
+    if (!sec) return;
+    const ch = this.character;
+    const wid = this.armoryWeapon;
+    const w = WEAPONS[wid];
+    const stats = this.game.achievementStats;
+    const kills = Skins.killsWith(stats, wid);
+    const worn = ch.weaponFinishes?.[wid] ?? "default";
+    const shown = this.armoryShown();
+    // Preview: the weapon's side profile, from the same model as the viewmodel.
+    const prof = weaponProfile(wid, shown?.energy ?? w.color, shown);
+    if (prof) {
+      const [x, y, bw, bh] = prof.box;
+      const art = sec.querySelector(".arm-art");
+      art.setAttribute("viewBox", `${x - 4} ${y - 4} ${bw + 8} ${bh + 8}`);
+      art.innerHTML = `<defs>${prof.defs}</defs>${prof.body}${prof.glow}`;
+    }
+    const name = this.skinPreviewing ? `${this.skinDraft.name || "Your finish"} (preview)` : (Skins.finishById(ch, worn)?.name ?? "Factory");
+    sec.querySelector(".arm-meta").textContent = `${w.name} · ${name} · ${kills} kill${kills === 1 ? "" : "s"}`;
+    sec.querySelector(".arm-cur").textContent = name;
+    sec.querySelectorAll(".arm-w").forEach((b) => {
+      const on = Number(b.dataset.armWeapon) === wid;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    // Cards: swatch, name, and either worn / owned or the kills still to go.
+    const swatch = (f) => {
+      const c = f.primary ? [f.primary[3], f.secondary[2], f.energy || w.color] : ["#8fa0b2", "#2a333d", w.color];
+      return `<span class="arm-sw" style="--a:${c[0]};--b:${c[1]};--c:${c[2]}"></span>`;
+    };
+    sec.querySelector(".arm-finishes").innerHTML = Skins.finishesFor(ch)
+      .map((f) => {
+        const open = Skins.finishUnlocked(f, wid, stats);
+        const on = f.id === worn;
+        const lock = open ? "" : `<span class="arm-lock"><span class="bar" style="--p:${Math.min(1, kills / f.kills)}"></span>${kills} / ${f.kills} kills</span>`;
+        const del = f.custom ? `<span class="arm-del" role="button" data-skin-del="${f.id.slice(7)}" title="Delete this finish">×</span>` : "";
+        return `<button class="opt arm-f${on ? " on" : ""}${open ? "" : " locked"}" role="radio" aria-checked="${on}" aria-disabled="${!open}" data-finish="${f.id}" tabindex="-1">${swatch(f)}<span class="arm-n">${esc(f.name)}</span>${lock}${del}</button>`;
+      })
+      .join("");
+  }
+
+  chooseFinish(id) {
+    const ch = this.character;
+    const wid = this.armoryWeapon;
+    const f = Skins.finishById(ch, id);
+    if (!f) return;
+    const stats = this.game.achievementStats;
+    if (!Skins.finishUnlocked(f, wid, stats)) {
+      this.sfx("menuNav");
+      return this.toast(`${f.name}: ${f.kills - Skins.killsWith(stats, wid)} more kills with the ${WEAPONS[wid].name}`);
+    }
+    this.skinPreviewing = false;
+    const changes = { weaponFinishes: { ...ch.weaponFinishes, [wid]: id } };
+    // The agent carries the Phase Rifle in the showroom: keep that finish in step.
+    const legacy = WEAPON_SKINS.findIndex((s) => s.id === id);
+    if (wid === 2 && legacy >= 0) changes.weaponSkinIndex = legacy;
+    this.commit(changes);
+    this.sfx("menuSelect");
+    this.announce(`${WEAPONS[wid].name}: ${f.name}`);
+  }
+
+  setArmoryWeapon(id) {
+    if (id === this.armoryWeapon) return;
+    this.armoryWeapon = id;
+    this.skinPreviewing = false;
+    this.sfx("menuNav");
+    this.renderArmory();
+  }
+
+  onSkinInput(t) {
+    if (t.dataset.skinColor) this.skinDraft[t.dataset.skinColor] = t.value;
+    else if (t.name === "skinName") this.skinDraft.name = t.value.slice(0, 18);
+    this.skinPreviewing = true;
+    this.renderArmory();
+  }
+
+  setSkinPattern(id) {
+    this.skinDraft.pattern = id;
+    this.skinPreviewing = true;
+    this.shadowRoot.querySelectorAll(".arm-p").forEach((b) => {
+      const on = b.dataset.skinPattern === id;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    this.sfx("menuNav");
+    this.renderArmory();
+  }
+
+  saveCustomSkin() {
+    const ch = this.character;
+    const list = ch.customSkins ?? [];
+    if (list.length >= Skins.MAX_CUSTOM) {
+      this.sfx("menuNav");
+      return this.toast(`${Skins.MAX_CUSTOM} custom finishes max: delete one first`);
+    }
+    const draft = Skins.normalizeCustomSkins([{ ...this.skinDraft, name: this.skinDraft.name || `Custom ${list.length + 1}` }])[0];
+    if (!draft) return;
+    this.skinPreviewing = false;
+    this.commit({
+      customSkins: [...list.map((c) => ({ ...c })), draft],
+      weaponFinishes: { ...ch.weaponFinishes, [this.armoryWeapon]: `custom:${list.length}` },
+    });
+    this.renderContent();
+    this.sfx("menuSelect");
+    this.announce(`Saved ${draft.name}`);
+  }
+
+  deleteCustomSkin(i) {
+    const ch = this.character;
+    const list = (ch.customSkins ?? []).filter((_, k) => k !== i).map((c) => ({ ...c }));
+    // Weapons wearing it go back to Factory; later custom ids shift down one.
+    const finishes = {};
+    for (const [w, id] of Object.entries(ch.weaponFinishes ?? {})) {
+      if (!id.startsWith("custom:")) finishes[w] = id;
+      else {
+        const k = Number(id.slice(7));
+        if (k < i) finishes[w] = id;
+        else if (k > i) finishes[w] = `custom:${k - 1}`;
+      }
+    }
+    this.commit({ customSkins: list, weaponFinishes: finishes });
+    this.renderContent();
+    this.sfx("menuSelect");
+    this.announce("Finish deleted");
   }
 
   badgeHeroHtml() {
@@ -2175,7 +2593,8 @@ class AgentShowroom extends HTMLElement {
     const html = [...rows.values()]
       .map(({ st, names }) => `<div class="lockrow"><span class="lock caption amber">${I.lock}${esc(names.join(", "))}</span><span>${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></div>`)
       .join("");
-    return `<div class="lockinfo">${html}</div>`;
+    const n = [...rows.values()].reduce((k, r) => k + r.names.length, 0);
+    return `<details class="lockfold"><summary><span class="lock caption amber">${I.lock}How to unlock · ${n}</span></summary><div class="lockinfo">${html}</div></details>`;
   }
 
   optionHtml(s, item, i) {
@@ -2214,8 +2633,14 @@ class AgentShowroom extends HTMLElement {
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "camo": {
+        const sw = item.base
+          ? `<svg viewBox="0 0 24 24" aria-hidden="true"><defs>${camoPattern(item, `cm${i}`, 0.7)}</defs><rect width="24" height="24" fill="url(#cm${i})"/></svg>`
+          : `<svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" fill="#16191d"/></svg>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}<span class="thumb camo-sw">${sw}</span><span class="oname">${esc(item.name)}</span>${prog}</button>`;
+      }
       case "palette":
-        return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span></button>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}<span class="pal" aria-hidden="true"><i style="background:linear-gradient(135deg, ${item.primary}, ${item.dark})"></i><i style="background:${item.accent}"></i><i style="background:${item.dark}"></i></span><span class="oname">${esc(item.name)}</span>${prog}</button>`;
       case "origin":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="row"><span class="oname">${esc(item.name)}</span></span><span class="desc">${esc(item.desc)}</span><span class="perk caption cyan">${esc(item.perk)}</span></button>`;
       case "voice":
@@ -2266,6 +2691,10 @@ class AgentShowroom extends HTMLElement {
           break;
         case "torso":
           thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
+          break;
+        case "bodyFrame":
+          // The whole figure: a frame is a silhouette.
+          thumb.innerHTML = buildAgentSvg(variant, { view: FRAME_VIEW, idPrefix: id, lighting: "flat", realistic });
           break;
         case "rifle":
           thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });

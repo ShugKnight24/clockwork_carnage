@@ -286,13 +286,14 @@ describe("Eleven Seconds in the systems", () => {
       // Everything else damageEnemy touches (particles, markers) is a no-op here.
       const g = new Proxy(game, { get: (t, k) => (k in t ? t[k] : () => {}) });
       const before = boss.health;
-      damageEnemy(g, boss, 100, { name: "body", mult: 1 });
+      damageEnemy(g, boss, 30, { name: "body", mult: 1 });
       return before - boss.health;
     };
     const window = hitFor(false);
     const scripted = hitFor(true);
     expect(scripted).toBe(0);
-    expect(window).toBeGreaterThan(150);
+    // Under his per-round cap (def.armor), doubled.
+    expect(window).toBe(60);
   });
 
   it("holds you still, and your powers with you, in the first stop", () => {

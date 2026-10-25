@@ -60,6 +60,71 @@ export const CHARACTER_COLORS = [
     accent: "#ff8844",
     dark: "#552211",
   },
+  // Earned palettes: each carries the rule that unlocks it (src/systems/unlocks.js).
+  {
+    id: "gunmetal",
+    name: "Gunmetal",
+    primary: "#4a5560",
+    accent: "#9fd0ff",
+    dark: "#1c2229",
+    unlock: { type: "dashes", count: 300, label: "Dash 300 times", unit: "dashes" },
+  },
+  {
+    id: "glacier",
+    name: "Glacier",
+    primary: "#3f8fb0",
+    accent: "#a8f4ff",
+    dark: "#123a4a",
+    unlock: { type: "arenaRound", count: 10, label: "Survive arena round 10", unit: "rounds" },
+  },
+  {
+    id: "copper_patina",
+    name: "Copper Patina",
+    primary: "#2f7a68",
+    accent: "#ffa860",
+    dark: "#143a31",
+    unlock: { type: "campaignActs", count: 2, label: "Clear Act 2", unit: "acts" },
+  },
+  {
+    id: "sakura",
+    name: "Sakura",
+    primary: "#b04c7a",
+    accent: "#ff9ed0",
+    dark: "#4a1a33",
+    unlock: { type: "achievement", id: "speedDemon", label: "Earn Speed Demon" },
+  },
+  {
+    id: "toxic_lime",
+    name: "Toxic Lime",
+    primary: "#5c7a12",
+    accent: "#d4ff3a",
+    dark: "#243306",
+    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
+  },
+  {
+    id: "obsidian_gold",
+    name: "Obsidian Gold",
+    primary: "#2e2a25",
+    accent: "#ffc94a",
+    dark: "#12100d",
+    unlock: { type: "achievement", id: "lordSlayer", label: "Earn Lord Slayer" },
+  },
+  {
+    id: "abyssal",
+    name: "Abyssal",
+    primary: "#0f2d50",
+    accent: "#3dffb0",
+    dark: "#06142a",
+    unlock: { type: "campaignActs", count: 3, label: "Clear Act 3", unit: "acts" },
+  },
+  {
+    id: "eclipse",
+    name: "Eclipse",
+    primary: "#24143f",
+    accent: "#ff4df2",
+    dark: "#0c0717",
+    unlock: { type: "achievement", id: "campaignClear", label: "Earn Timeline Restored" },
+  },
 ];
 
 export const SKIN_TONES = [
@@ -98,6 +163,65 @@ export const EYE_COLORS = [
   { id: "violet", name: "Violet", color: "#bb88ff" },
   { id: "red", name: "Chrono Red", color: "#ff5566" },
   { id: "silver", name: "Silver", color: "#ddeeff" },
+];
+
+/**
+ * Body frames: the silhouette the suit is built on (src/rendering/svg-art/frames.js).
+ * Any armour style can be worn on any frame. Appended, never inserted.
+ */
+export const BODY_FRAMES = [
+  { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
+  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
+  { id: "vanguard", name: "Vanguard", desc: "Sleek sculpted plate, panel lines and glowing seams" },
+  { id: "operator", name: "Operator", desc: "Soft kit: fabric sleeves and trousers, chest rig, elbow pads" },
+  { id: "wraith", name: "Wraith", desc: "Hooded long coat, wrapped forearms and shins" },
+  { id: "breacher", name: "Breacher", desc: "Ballistic chest plate, riot vambrace, grenade belt, heavy boots" },
+];
+
+/**
+ * Under-suit camouflage (the fabric between the plates). `base` and `blobs`
+ * colours; `kind` blob or pixel. Earned; Plain is always open. Appended,
+ * never inserted.
+ */
+export const CAMO_STYLES = [
+  { id: "none", name: "Plain", desc: "Issue black" },
+  {
+    id: "woodland", name: "Woodland", desc: "Greens and browns for the tree line", kind: "blob",
+    base: "#4a5236", blobs: ["#2f3a22", "#6b5a3a", "#1c1f16"],
+    unlock: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
+  },
+  {
+    id: "desert", name: "Desert", desc: "Sand, scrub and shadow", kind: "blob",
+    base: "#b3a07a", blobs: ["#8f7a52", "#d1c096", "#6e5a3c"],
+    unlock: { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
+  },
+  {
+    id: "urban", name: "Urban", desc: "Concrete greys", kind: "blob",
+    base: "#6a6f74", blobs: ["#44494e", "#959ba1", "#2a2e32"],
+    unlock: { type: "campaignActs", count: 1, label: "Clear Act 1", unit: "acts" },
+  },
+  {
+    id: "arctic", name: "Arctic", desc: "Snow and ice-shadow", kind: "blob",
+    base: "#d4d9de", blobs: ["#a6b0b9", "#eef2f5", "#7a848d"],
+    unlock: { type: "campaignActs", count: 3, label: "Clear Act 3", unit: "acts" },
+  },
+  {
+    id: "digital", name: "Night Digital", desc: "Pixelated blues for night ops", kind: "pixel",
+    base: "#283039", blobs: ["#171b21", "#3c4857", "#566373"],
+    unlock: { type: "achievement", id: "roundVeteran", label: "Earn Arena Veteran" },
+  },
+];
+
+/** Body type. Appended, never inserted. */
+export const BODY_TYPES = [
+  { id: "masc", name: "Masculine", desc: "Broad shoulders, straight frame" },
+  { id: "fem", name: "Feminine", desc: "Narrower shoulders, defined waist, fuller hips" },
+];
+
+/** Cape on or off (gear that replaces the cape still wins). Appended, never inserted. */
+export const CAPE_STYLES = [
+  { id: "cape", name: "Cape", desc: "Your colours, down to the knees" },
+  { id: "none", name: "No Cape", desc: "Nothing to snag on a door frame" },
 ];
 
 export const ARMOR_STYLES = [
@@ -193,6 +317,13 @@ export const HELMET_STYLES = [
   { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
   { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
   { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
+  // Appended, never inserted: saves store the index.
+  {
+    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3,
+    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
+  },
+  { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1 },
 ];
 
 export const VISOR_STYLES = [
@@ -201,6 +332,7 @@ export const VISOR_STYLES = [
   { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3, bonuses: { armorAdd: 4, maxChronoEnergyAdd: 10 } },
   { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { maxStaminaAdd: 10 } },
   { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3, bonuses: { maxChronoEnergyAdd: 25 } },
+  { id: "goldwrap", name: "Gold Wrap", desc: "Wraparound tinted dome visor", tier: 2, bonuses: { maxChronoEnergyAdd: 6 } },
 ];
 
 export const SHOULDER_STYLES = [
@@ -223,9 +355,9 @@ export const TIER_UNLOCKS = {
   2: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
   3: {
     type: "anyOf",
-    label: "Clear Act 1 or survive arena round 5",
+    label: "Clear 3 campaign levels or survive arena round 5",
     rules: [
-      { type: "campaignLevels", count: 3, label: "Clear Act 1", unit: "levels" },
+      { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
       { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
     ],
   },
@@ -272,7 +404,7 @@ export const LOADOUT_CLASSES = [
     id: "enforcer",
     name: "Enforcer",
     desc: "Heavy armor, heavy hits",
-    unlock: { type: "campaignLevels", count: 3, label: "Clear Act 1 of the campaign", unit: "levels" },
+    unlock: { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
     startWeapons: [0],
     bonuses: { maxHealth: 125, moveSpeed: -0.3 },
   },
@@ -373,11 +505,18 @@ export const DEFAULT_CHARACTER = {
   hairIndex: 0,
   eyeIndex: 0,
   armorIndex: 0,
+  frameIndex: 0,
+  bodyIndex: 0,
+  camoIndex: 0,
+  capeIndex: 0,
   helmetIndex: 0,
   visorIndex: 0,
   shoulderIndex: 0,
   badgeIndex: 0,
   weaponSkinIndex: 0,
+  // Per-weapon finishes and the player's own (src/data/weapon-skins.js).
+  weaponFinishes: {},
+  customSkins: [],
   loadoutIndex: 0,
   backstoryIndex: 0,
   voiceIndex: 0,

@@ -21,6 +21,22 @@ describe("device tier", () => {
     expect(classifyDevice({ renderer: "Mali-G52", cores: 8, memoryGB: 3, touch: true })).toBe("low");
     expect(classifyDevice({ renderer: "Apple A16 GPU", cores: 6, touch: true })).toBe("mid");
   });
+
+  it("rates modern phones mid from the strings their browsers report", () => {
+    // iOS Safari: masked chip, 4 cores, no deviceMemory.
+    expect(classifyDevice({ renderer: "Apple GPU", cores: 4, touch: true })).toBe("mid");
+    // Chrome on Android buckets deviceMemory, so a flagship can read as 4 GB.
+    expect(classifyDevice({ renderer: "Adreno (TM) 650", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Adreno (TM) 740", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Mali-G710", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "Mali-G610 MC6", cores: 8, memoryGB: 4, touch: true })).toBe("mid");
+  });
+
+  it("leaves an unknown or empty renderer to the CPU signals", () => {
+    expect(classifyDevice({ renderer: "", cores: 8, memoryGB: 8, touch: true })).toBe("mid");
+    expect(classifyDevice({ renderer: "WebKit WebGL", cores: 8 })).toBe("mid");
+    expect(classifyDevice({ renderer: "", cores: 2, memoryGB: 2, touch: true })).toBe("low");
+  });
 });
 
 describe("render pixel budget", () => {
@@ -32,6 +48,14 @@ describe("render pixel budget", () => {
     const { w, h } = budgetedRenderSize(3840, 2160, "high");
     expect(w * h).toBeLessThanOrEqual(PIXEL_BUDGET.high * 1.01);
     expect(Math.abs(w / h - 16 / 9)).toBeLessThan(0.01);
+  });
+
+  it("renders a high-DPI window at device pixels while the budget allows", () => {
+    // A 1440p screen at 150%: 1251x1286 CSS px is 1877x1929 device px.
+    expect(budgetedRenderSize(1251, 1286, "high", 1.5)).toEqual({ w: 1877, h: 1929 });
+    // The same window on a weaker tier still stops at its budget.
+    const { w, h } = budgetedRenderSize(1251, 1286, "mid", 1.5);
+    expect(w * h).toBeLessThanOrEqual(PIXEL_BUDGET.mid * 1.01);
   });
 
   it("gives lower tiers fewer pixels", () => {
@@ -76,6 +100,18 @@ describe("adaptive quality", () => {
     expect(q.renderScale).toBeGreaterThanOrEqual(0.86);
   });
 
+  it("recovers resolution on a 60 Hz display, where vsync holds frames at ~59.9", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55, maxScale: 1 });
+    q.renderScale = q.stableScale = 0.8;
+    let resized = false;
+    for (let t = 10_000; t < 60_000 && !resized; t += 1500) {
+      feed(q, [59.9, 60.1, 59.8, 60]);
+      resized = q.adjust(t);
+    }
+    expect(resized).toBe(true);
+    expect(q.renderScale).toBeGreaterThanOrEqual(0.86);
+  });
+
   it("treats a lone long stall as a pause, not a slow machine", () => {
     const q = new AdaptiveQuality({ targetFPS: 55 });
     feed(q, [120]);
@@ -83,6 +119,56 @@ describe("adaptive quality", () => {
     expect(q.history.length).toBe(0);
     expect(q.adjust(10_000)).toBe(false);
     expect(q.renderScale).toBe(1);
+  });
+
+  // One governor tick, applying a resize the way main.js does.
+  const tick = (q, t, fpsList) => {
+    feed(q, fpsList);
+    const resized = q.adjust(t);
+    if (resized) q.stableScale = q.renderScale;
+    return resized;
+  };
+  const HITCHY = [120, 120, 120, 120, 120, 120, 120, 120, 120, 25];
+
+  it("undoes a hitch-only step down that did not ease the hitches, then holds off", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55 });
+    expect(tick(q, 10_000, HITCHY)).toBe(true);
+    expect(q.stableScale).toBeLessThan(1);
+    // Same hitches at the lower size: the step is taken back.
+    tick(q, 11_500, HITCHY);
+    expect(q.renderScale).toBe(1);
+    // And the hitches no longer push the scale down while the hold lasts.
+    for (let t = 13_000; t < 38_000; t += 1500) tick(q, t, HITCHY);
+    expect(q.stableScale).toBe(1);
+    expect(q.renderScale).toBe(1);
+  });
+
+  it("keeps a hitch-only step down that cured the hitches", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55 });
+    tick(q, 10_000, HITCHY);
+    const lowered = q.stableScale;
+    tick(q, 11_500, [60]);
+    // Not undone: at most the usual slow climb from the lower size.
+    expect(q.renderScale).toBeGreaterThanOrEqual(lowered);
+    expect(q.renderScale).toBeLessThan(0.96);
+  });
+
+  it("still scales down for a slow average during a hitch hold", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55 });
+    tick(q, 10_000, HITCHY);
+    tick(q, 11_500, HITCHY); // undone, hold starts
+    expect(q.renderScale).toBe(1);
+    tick(q, 13_000, [30]);
+    expect(q.renderScale).toBeLessThan(1);
+  });
+
+  it("keeps stepping for hitches until a step reaches the canvases", () => {
+    const q = new AdaptiveQuality({ targetFPS: 55 });
+    // At 0.8 one 7% step is under the resize threshold.
+    q.renderScale = q.stableScale = 0.8;
+    expect(tick(q, 10_000, HITCHY)).toBe(false);
+    expect(tick(q, 11_500, HITCHY)).toBe(true);
+    expect(q.stableScale).toBeLessThan(0.7);
   });
 
   it("leaves a smooth run alone", () => {

@@ -4,7 +4,8 @@
  * Upgraded to 256x256 resolution for sharper visuals.
  */
 import { WALL_COLORS } from "../../js/data.js";
-import { buildWallSet } from "./env/wall-art.js";
+import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand } from "./env/wall-art.js";
+import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
@@ -24,10 +25,66 @@ const add = (v, n) => Math.max(0, Math.min(255, v + n));
  * Generate 256x256 wall textures for each wall type.
  * Returns { [wallId]: HTMLCanvasElement } map.
  */
-export function generateWallTextures() {
-  const textures = {};
+const _avgCache = new WeakMap();
+let _avgCanvas = null;
+
+/**
+ * Average colour of a wall texture, from a smoothed 4x4 downsample. Cached
+ * per texture: reading a GPU-backed canvas back waits for the GPU to finish
+ * everything queued (~100 ms measured mid-level on Chrome's D3D11 backend),
+ * so textures are read while they are built, at load, not at first sight.
+ */
+export function averageColor(tex) {
+  if (!tex) return [90, 96, 108]; // no art: neutral steel
+  const hit = _avgCache.get(tex);
+  if (hit) return hit;
+  let avg;
+  try {
+    if (!_avgCanvas) {
+      _avgCanvas = document.createElement("canvas");
+      _avgCanvas.width = _avgCanvas.height = 4;
+    }
+    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
+    c.clearRect(0, 0, 4, 4);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(tex, 0, 0, 4, 4);
+    const d = c.getImageData(0, 0, 4, 4).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < 64; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+    avg = [r / 16, g / 16, b / 16];
+  } catch (_) {
+    avg = [90, 96, 108]; // unreadable: neutral steel
+  }
+  _avgCache.set(tex, avg);
+  return avg;
+}
+
+/**
+ * The station's own walls (lockers, range, gym, office, sim hall: ids 10+)
+ * are pictures, not materials: Legacy's flat noise left those rooms bare. It
+ * borrows the painted face, downscaled once to its 256px texture size.
+ */
+function stationWallTexture(id) {
+  const art = paintWall(+id, 1);
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(art, 0, 0, 256, 256);
+  art.width = art.height = 0;
+  return c;
+}
+
+/** One wall type's 256px Legacy texture. */
+function legacyWallTexture(id, color) {
   const size = 256;
-  for (const [id, color] of Object.entries(WALL_COLORS)) {
+  if (+id >= 10 && hasWallPainter(id)) return stationWallTexture(id);
+  {
     const c = document.createElement("canvas");
     c.width = size;
     c.height = size;
@@ -234,9 +291,75 @@ export function generateWallTextures() {
       }
     }
     ctx.putImageData(imgData, 0, 0);
-    textures[id] = c;
+    return c;
+  }
+}
+
+/**
+ * The Legacy wall textures, by wall id, each painted the first time it is
+ * read (and its cap colour read back then too). Painting all of them up
+ * front was most of the boot's long task — 1.3 s on a slow laptop — for a
+ * set that Comic and Modern mostly never draw.
+ */
+export function generateWallTextures() {
+  const textures = {};
+  for (const [id, color] of Object.entries(WALL_COLORS)) {
+    Object.defineProperty(textures, id, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        const c = legacyWallTexture(id, color);
+        averageColor(c);
+        Object.defineProperty(textures, id, { value: c, enumerable: true, writable: true, configurable: true });
+        return c;
+      },
+    });
   }
   return textures;
+}
+
+const _legacyUpper = {};
+
+/** Legacy's upper band in `style` (BAND_STYLES): the Modern one, downscaled once to 256px. */
+export function legacyUpperBand(style = "bulkhead") {
+  if (!_legacyUpper[style]) {
+    const mips = buildUpperBand(1, null, CEILING_Z - 1, false, style);
+    _legacyUpper[style] = mips[1];
+    mips[0].width = mips[0].height = 0;
+  }
+  return _legacyUpper[style];
+}
+
+/**
+ * The upper band `band` tinted to a wall's average colour `avg` for the
+ * Canvas2D paths: band × avg × 2, as the GL wall pass multiplies it, so its
+ * mid-grey becomes the wall's own colour. Cached per band canvas and colour.
+ */
+const _tintCache = new WeakMap();
+export function tintUpperBand(band, avg) {
+  let byKey = _tintCache.get(band);
+  if (!byKey) _tintCache.set(band, (byKey = new Map()));
+  const key = `${avg[0] | 0},${avg[1] | 0},${avg[2] | 0}`;
+  let c = byKey.get(key);
+  if (c) return c;
+  const half = document.createElement("canvas");
+  half.width = band.width;
+  half.height = band.height;
+  const h = half.getContext("2d");
+  h.drawImage(band, 0, 0);
+  h.globalCompositeOperation = "multiply";
+  h.fillStyle = `rgb(${key})`;
+  h.fillRect(0, 0, half.width, half.height);
+  c = document.createElement("canvas");
+  c.width = band.width;
+  c.height = band.height;
+  const g = c.getContext("2d");
+  g.drawImage(half, 0, 0);
+  g.globalCompositeOperation = "lighter";
+  g.drawImage(half, 0, 0);
+  half.width = half.height = 0;
+  byKey.set(key, c);
+  return c;
 }
 
 /** Act-based floor/ceiling palettes (3 acts x 2 visual styles) */
@@ -435,12 +558,92 @@ export function generateFloorCeilTextures(act, visualStyle) {
  *        (relief, wear, grime) for the Realistic art style
  * @returns {object} env bundle consumed by Renderer + GLRenderer
  */
+/**
+ * Realistic's low ambient: this colour at this alpha over every wall and cap.
+ * It was a fill of its own per column; it is now folded into the fog fill
+ * (fogAmbientLUT), the cap colours, and — scaled by 1 - alpha — the additive
+ * lights drawn after the fog, which is exactly what the later fill did.
+ */
+export const REAL_AMBIENT = { rgb: [3, 4, 7], alpha: 0.16 };
+
+// Mip levels 0-3 are drawn for walls 48px and taller; the contact shadow was
+// only ever drawn on walls over 40px, so the two smallest levels stay clean.
+const CONTACT_SHADOW_LEVELS = 4;
+
+/**
+ * Realistic's soft contact shadow — dark at the ceiling and deck joints,
+ * clear through the middle — painted into the wall mips once. It was a
+ * per-column blit of a 1x64 ramp with a fractional source rect, which Skia
+ * cannot draw on its fast texture path: on Chrome's D3D11 backend that one
+ * blit took Realistic from vsync to ~30 fps. It spans the wall's full height
+ * exactly as the texture does, so baking it changes nothing on screen.
+ */
+function bakeContactShadow(mips, stops = WALL_SHADOW) {
+  for (let i = 0; i < CONTACT_SHADOW_LEVELS && i < mips.length; i++) {
+    const c = mips[i];
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, c.height);
+    for (const [o, a] of stops) grad.addColorStop(o, `rgba(0,0,0,${a})`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, c.width, c.height);
+  }
+}
+
+// The art's top meets the upper band's trim rail now, not the ceiling: a
+// light shadow under the rail there, and the ceiling joint's dark one at the
+// top of the band (which is CEILING_Z - 1 of a wall tall, so the same fall-off
+// covers more of it).
+const WALL_SHADOW = [[0, 0.24], [0.06, 0.06], [0.14, 0], [0.74, 0], [0.9, 0.22], [1, 0.62]];
+const BAND_SHADOW = [[0, 0.55], [0.1 / (CEILING_Z - 1), 0.14], [Math.min(0.9, 0.22 / (CEILING_Z - 1)), 0], [1, 0]];
+
+/**
+ * Add a map's own wall faces (the station's lockers, say) to an env built
+ * without them, finished as the env's were. True when it painted any.
+ * `average` false leaves their cap colours (averageColor) to the caller, to
+ * read many faces back at once: each readback waits on the GPU's whole
+ * queue, and later ones in the same task cost ~1 ms.
+ */
+export function ensureEnvWalls(env, ids, realistic = false, average = true) {
+  const added = extendWallSet(env.walls, ids, env.act, env.palette, env.salt ?? 0, realistic);
+  for (const id of added) {
+    if (realistic) bakeContactShadow(env.walls[id]);
+    if (average) averageColor(env.walls[id][env.walls[id].length - 1]);
+  }
+  return added.length > 0;
+}
+
+/**
+ * Add the upper bands in `styles` (BAND_STYLES names: a map's room finishes,
+ * map.bands) to an env, finished as its bulkhead band is. They live in
+ * env.bands by name; true when it painted any.
+ */
+export function ensureEnvBands(env, styles, realistic = false) {
+  env.bands ??= {};
+  let added = false;
+  for (const style of styles) {
+    if (env.bands[style] || style === "bulkhead") continue;
+    const mips = buildUpperBand(env.act, env.palette, CEILING_Z - 1, realistic, style);
+    if (realistic) bakeContactShadow(mips, BAND_SHADOW);
+    averageColor(mips[mips.length - 1]);
+    env.bands[style] = mips;
+    added = true;
+  }
+  return added;
+}
+
 export function generateModernEnv(act, brutal, level = null, { realistic = false } = {}) {
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
   const p = resolveEnvPalette(a, level);
   const salt = envSalt(level);
   const walls = buildWallSet(a, p, salt, realistic);
+  if (realistic) for (const mips of Object.values(walls)) bakeContactShadow(mips);
+  // The upper band over every full wall's art (the renderer tints it).
+  const upper = buildUpperBand(a, p, CEILING_Z - 1, realistic);
+  if (realistic) bakeContactShadow(upper, BAND_SHADOW);
+  averageColor(upper[upper.length - 1]);
+  // The raycaster's cap colours come from each wall's smallest mip.
+  for (const mips of Object.values(walls)) averageColor(mips[mips.length - 1]);
   const deck = buildDeckSet(a, brutal, p, salt);
   const fogMax = brutal ? 0.94 : 0.86;
   const fogDensity = brutal ? FOG_DENSITY * 1.3 : FOG_DENSITY;
@@ -456,6 +659,25 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     const g = (n1 + (f1 - n1) * t) | 0;
     const b = (n2 + (f2 - n2) * t) | 0;
     fogLUT[i] = `rgba(${r},${g},${b},${(t * fogMax).toFixed(3)})`;
+  }
+
+  // Fog then Realistic's ambient, as one fill. Two source-over fills of
+  // constant colours compose into one: fog (F, a) then ambient (A, k) leaves
+  // (1 - k)(1 - a) of the wall, so the combined alpha is 1 - (1 - k)(1 - a)
+  // and its colour the weighted mix of F and A.
+  const fogAmbientLUT = new Array(65);
+  const [a0, a1, a2] = REAL_AMBIENT.rgb;
+  const ka = REAL_AMBIENT.alpha;
+  for (let i = 0; i <= 64; i++) {
+    const t = i / 64;
+    const fa = t * fogMax;
+    const beta = 1 - (1 - ka) * (1 - fa);
+    const wf = ((1 - ka) * fa) / beta;
+    const wa = ka / beta;
+    const r = Math.round((n0 + (f0 - n0) * t) * wf + a0 * wa);
+    const g = Math.round((n1 + (f1 - n1) * t) * wf + a1 * wa);
+    const b = Math.round((n2 + (f2 - n2) * t) * wf + a2 * wa);
+    fogAmbientLUT[i] = `rgba(${r},${g},${b},${beta.toFixed(3)})`;
   }
 
   // Key light sits up and to the world's -x/-y; faces turned away fall to ink.
@@ -480,11 +702,16 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
   return {
     act: a,
     level,
+    salt,
     brutal: !!brutal,
+    realistic: !!realistic,
     palette: p,
     walls,
+    upper,
+    bands: {},
     deck,
     fogLUT,
+    fogAmbientLUT,
     fogMax,
     fogDensity,
     fogNear: p.fogNear,

@@ -55,14 +55,13 @@ export function keyLabel(code) {
 
 /** Keybind actions (js/input-manager.js DEFAULT_KEYBINDS names). */
 const KEYBIND_ACTIONS = new Set([
-  "interact", "sprint", "crouch", "chronoShift", "chronoRewind", "chronoLock", "pause", "toggleFPS",
+  "interact", "reload", "sprint", "crouch", "dash", "chronoShift", "chronoRewind", "chronoLock", "pause", "toggleFPS", "cover",
 ]);
 
 /** Fixed keyboard legends: mouse buttons and the menu keys every screen shares. */
 const KEYBOARD_FIXED = {
   fire: "CLICK",
   aim: "RIGHT MOUSE",
-  dash: "2× DIR",
   weaponPrev: "WHEEL",
   weaponNext: "WHEEL",
   weaponCycle: "1-8",
@@ -99,7 +98,7 @@ const KEYBOARD_FIXED = {
 /** Touch verbs, for the few prompts that name an on-screen button. */
 const TOUCH_LABELS = {
   interact: "USE", fire: "FIRE", aim: "AIM", sprint: "RUN", crouch: "CROUCH", dash: "DASH",
-  chronoShift: "SLOW", chronoRewind: "REWIND", chronoLock: "LOCK", pause: "PAUSE",
+  chronoShift: "SLOW", chronoRewind: "REWIND", chronoLock: "LOCK", pause: "PAUSE", cover: "COVER",
   confirm: "TAP", advance: "TAP", start: "TAP", skipAll: "HOLD",
 };
 

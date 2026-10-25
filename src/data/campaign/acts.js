@@ -80,9 +80,12 @@ const NG_PLUS_BARK = { aria: "ngPlusDeadSquad", delay: 5000, minNgPlus: 1 };
  * @param {string[]|null} briefing
  * @param {SquadMember[]} squad
  * @param {{ onStart?: object[], callsigns?: Record<string, string>,
- *   grants?: string[], setPiece?: string, seed?: number, boss?: boolean }} [extra]
+ *   grants?: string[], setPiece?: string, seed?: number, boss?: boolean,
+ *   holdBack?: Record<string, string> }} [extra] - holdBack: enemy types
+ *   this level swaps for ones already met, until a briefing names them
+ *   (spawner.js applyActEnemyRoster)
  */
-function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null, seed = 0, boss = false } = {}) {
+function level(map, briefing, squad, { onStart = [], callsigns = null, grants = [], setPiece = null, seed = 0, boss = false, holdBack = null } = {}) {
   return {
     ...(STATION[map] ?? { map, env: map, rotation: 0, seed, boss }),
     briefing,
@@ -91,6 +94,7 @@ function level(map, briefing, squad, { onStart = [], callsigns = null, grants = 
     onStart,
     grants,
     ...(setPiece ? { setPiece } : {}),
+    ...(holdBack ? { holdBack } : {}),
   };
 }
 
@@ -181,8 +185,12 @@ export const ACTS = [
     outro: ["false_victory"],
     // The Temporal Nexus moved to Act IV (spec decision 8).
     levels: levels([
-      level("entry", null, []),
-      level("checkpoint", ["security_briefing"], []),
+      // Nothing the briefings name before they name it: the turned officers
+      // come with security_briefing (I-2), the phantoms with
+      // research_briefing (I-3). Until then they stand in as what the
+      // prologue already showed you.
+      level("entry", null, [], { holdBack: { corruptCop: "drone", phantom: "glitchling" } }),
+      level("checkpoint", ["security_briefing"], [], { holdBack: { phantom: "glitchling" } }),
       level("research", ["research_briefing"], []),
       level("containment", ["containment_briefing"], []),
       level("server_farm", ["server_briefing"], []),
@@ -327,20 +335,23 @@ export const ACTS = [
       // III-4 The Lord's Laboratory: the one surviving take.
       { ...level("voss_lab", ["act2_level7", "voss_confrontation", "act2_level3"], [...ALL], { setPiece: "surviving_take" }),
         map: "lords_lab", env: "lords_lab", rotation: 0, seed: 31004 },
-      // III-5 The Archive of Rewinds (new).
+      // III-5 The Archive of Rewinds (new). Its briefing is where ARIA ties the
+      // tactician in your memories to the Lord; it must play before III-7's
+      // level3_briefing, where the Lord calls that man "the good doctor".
       { ...level("research", ["archive_briefing"], [...ALL], { setPiece: "archive_takes" }),
         map: "archive", env: "archive", rotation: 0, seed: 31005 },
       // III-6 The Chronos Engine (new).
       { ...level("nexus", ["engine_briefing"], [...ALL], { setPiece: "engine_stasis" }),
         map: "engine", env: "engine", rotation: 90, seed: 31006 },
-      // III-7 The Paradox Core, second visit: broken rings, Form 2.
+      // III-7 The Paradox Core, second visit: broken rings, Form 2. Keep it
+      // after III-5 (see there).
       { ...level("core", ["level3_briefing", "act2_level9"], [...ALL]),
         map: "core_broken", env: "core_broken", rotation: 0, seed: 31007 },
     ]),
   },
   {
     id: 4,
-    title: "THE SACRIFICE",
+    title: "THE LAST DOOR",
     // The white-hot rift light bleaching the Act III violet.
     palette: 4,
     roster: [

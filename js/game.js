@@ -4,6 +4,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
 import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
+import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager } from "./input-manager.js";
@@ -26,6 +27,7 @@ import {
 } from "./vfx.js";
 import {
   WEAPONS,
+  ACHIEVEMENTS,
   ENEMY_TYPES,
   ARENA_MAPS,
   UPGRADES,
@@ -63,7 +65,7 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
-import { cloneLook } from "../src/core/character-fields.js";
+import { cloneLook, getIndex, withIndex } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -99,6 +101,13 @@ import { updateMeltdownRun } from "../src/systems/meltdown-run.js";
 import { SeededRNG } from "../src/utils/seeded-rng.js";
 import { updateProjectiles as _updateProjectiles } from "../src/systems/projectile-update.js";
 import {
+  createCoverStats,
+  updateCover as _updateCover,
+  coverPress as _coverPress,
+  coverDash as _coverDash,
+  coverShields as _coverShields,
+} from "../src/systems/cover-play.js";
+import {
   fireWeapon as _fireWeapon,
   hitscan as _hitscan,
   damageEnemy as _damageEnemy,
@@ -118,6 +127,7 @@ import { renderCampaignPrompt as _renderCampaignPrompt } from "../src/ui/campaig
 import { renderUpgradeScreen as _renderUpgradeScreen } from "../src/ui/upgrade-screen.js";
 import {
   renderTutorialOverlay as _renderTutorialOverlay,
+  renderTutorialCard as _renderTutorialCard,
   renderTeachCard as _renderTeachCard,
   renderTutorialCompletionMenu as _renderTutorialCompletionMenu,
 } from "../src/ui/tutorial-ui.js";
@@ -137,6 +147,8 @@ import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
 
 export { GAME_VERSION } from "../src/constants.js";
+import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
+import { LevelBeats } from "../src/systems/level-beats.js";
 
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
@@ -146,6 +158,7 @@ import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
 import { CampaignManager } from "./campaign-manager.js";
 import { TutorialSystem } from "./tutorial-system.js";
+import { setNpcWorld } from "./npc.js";
 import { dispatchKeyPress } from "../src/systems/input-dispatch.js";
 import { renderFrame } from "../src/rendering/render-pipeline.js";
 import {
@@ -158,7 +171,31 @@ import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
 import * as Persistence from "../src/core/persistence.js";
-import { gameUnlockContext, grantOwned, sanitizeLocked } from "../src/systems/unlocks.js";
+import {
+  gameUnlockContext,
+  grantOwned,
+  sanitizeLocked,
+  earnedIds,
+  announcements,
+  LOCKABLE,
+} from "../src/systems/unlocks.js";
+import { GEAR_SLOTS } from "../src/data/cosmetics.js";
+import { syncGearStats } from "../src/systems/gear-sync.js";
+import { getAct, levelsBefore } from "../src/data/campaign/acts.js";
+import {
+  parSeconds,
+  gradeLevel,
+  finishesEarned,
+  surveyGrid,
+} from "../src/systems/level-debrief.js";
+import { liftLockdown } from "../src/systems/exit-cells.js";
+import { lowHealthSeverity } from "../src/systems/player-feedback.js";
+import { stillnessAt } from "../src/systems/stillness.js";
+import { arrive, updateArrivals, pendingArrivals, QUICK_TEAR } from "../src/systems/arrival.js";
+import { LevelClock } from "../src/systems/level-clock.js";
+import { arenaRoundPacks, noteCrateTaken, updateAmmoEconomy } from "../src/systems/ammo-economy.js";
+import { activeReloadOf, reloadPress, updateReloads } from "../src/systems/reload.js";
+import { loadConditioning, resetConditioning, updateConditioning } from "../src/systems/conditioning-play.js";
 export { GameState };
 
 // Lazy-loaded heavy modules — populated on first use via dynamic import()
@@ -195,7 +232,27 @@ function _safeCall(name, fn) {
 
 // TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
 
+/** The agent's time scale during Chrono Shift: near real time while the world slows. */
+const CHRONO_PLAYER_SPEED = 0.85;
+/** ms a phase dash leaves you untouchable: the dash itself (150 ms) and a beat after. */
+const DASH_PHASE_MS = 250;
+
+/** Crates' worth of that gun's rounds from a weapon pickup the player already carries. */
+const DUPLICATE_WEAPON_PACKS = 2;
+
+/** A Mac, where Control-click is the right-click a one-button mouse lacks. */
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+
 export class Game {
+  /** When the level clock started, as performance.now() reads it (LevelClock). */
+  get roundStartTime() {
+    return this.levelClock.start;
+  }
+
+  set roundStartTime(v) {
+    this.levelClock.start = v;
+  }
+
   constructor(canvas, hudCanvas) {
     this.canvas = canvas;
     this.hudCanvas = hudCanvas;
@@ -208,7 +265,15 @@ export class Game {
     this.audio = new AudioManager();
     this.cutsceneEngine = null; // Lazy-loaded on first cutscene
     this.player = new Player();
+    /** Cover counters since boot, for the prologue to teach with (src/systems/cover-play.js). */
+    this.coverStats = createCoverStats();
     this.entities = [];
+    // Enemies on their way in through a tear or a vent (src/systems/arrival.js).
+    this.arrivals = [];
+    // The AI's summons arrive through a short tear in the campaign; made
+    // once, so the per-frame AI context allocates nothing for them.
+    this._aiArrive = (e) => arrive(this, { enemy: e, x: e.x, y: e.y, telegraph: QUICK_TEAR });
+    this._aiArriving = (pred) => pendingArrivals(this, pred);
     this.entityGrid = new SpatialGrid(2);
     this.dustMotes = null;
     this.projectiles = [];
@@ -218,6 +283,15 @@ export class Game {
     /** Voxel level (Forge + play-test). Null in every grid-map mode. */
     this.world = null;
     this._stateManager = new StateManager(GameState.TITLE);
+    // Quitting to the menus leaves no one mid-sentence (a paused line would
+    // otherwise hold the browser's speech queue shut).
+    this._stateManager.onChange((next) => {
+      if (next === GameState.TITLE || next === GameState.MODE_SELECT) {
+        this.ariaComms?.flush();
+        this.audio?.stopSpeech?.();
+        this.audio?.tts?.resume();
+      }
+    });
     this.assetEditor = new AssetEditor(this);
     this.mode = null; // 'arena', 'campaign', or 'meltdown'
     this.meltdown = null; // Lazy-loaded on first meltdown
@@ -235,7 +309,14 @@ export class Game {
     this.squadComms = new SquadCommsController(this);
     this.achievementSystem = new AchievementSystem(this);
     this.archive = new ArchiveSystem(this);
+    // Magazines' active reload (src/systems/reload.js) and the agent's
+    // Conditioning XP, which outlives any one campaign.
+    activeReloadOf(this);
+    this.conditioning = loadConditioning();
+    this.conditioningChip = null;
     this.tutorial = new TutorialSystem(this);
+    // The station's people keep out of each other's way and the player's (js/npc.js).
+    setNpcWorld(this);
     this.campaign = new CampaignManager(this);
     this.hudEditor = new HudEditor(this);
     this.isTouchDevice = isPrimaryTouchDevice();
@@ -258,6 +339,9 @@ export class Game {
     this.frameCount = 0;
     this.fpsTime = 0;
     this.showFPS = false;
+    // Phase timings without the overlay: the benchmark and perf tests read
+    // them, and drawing the overlay's graph would add to what they measure.
+    this.perfCapture = false;
     this.profiler = new Profiler();
     this.glitchEffect = 0;
     this.hitMarker = 0;
@@ -282,6 +366,8 @@ export class Game {
     this.exitEntity = null;
     this.weaponAnimFrame = 0;
     this.weaponAnimTime = 0;
+    // roundStartTime reads and writes this: it stops while paused or dead.
+    this.levelClock = new LevelClock();
     this.roundStartTime = 0;
     this.deathTimer = 0;
     this.pauseSaveFlash = 0;
@@ -318,6 +404,7 @@ export class Game {
         // (the lore video's hold to skip).
         if (this.state === GameState.SETTINGS) this.settingsDeck?.handleKeyUp(code);
         if (this.state === GameState.CINEMATIC) directorInput(this, "key", { down: false, code });
+        if (code === this.keybinds.aim) this.aimRelease();
       },
       onDashTrigger: (code) => this.triggerDash(code),
       onMouseDown: (e) => this._inputMouseDown(e),
@@ -328,8 +415,11 @@ export class Game {
         // release and leave the Forge thinking the button is still down.
         this.builder?.handleMouseUp(e.button);
         if (this.state === GameState.CINEMATIC) directorInput(this, "pointer", { down: false });
-        if (e.button === 0) this.player.isFiring = false;
-        if (e.button === 2) this.player.isAiming = false;
+        if (e.button === 0 && this._ctrlClickAim) {
+          this._ctrlClickAim = false;
+          this.aimRelease();
+        } else if (e.button === 0) this.player.isFiring = false;
+        if (e.button === 2) this.aimRelease();
       },
       onWheel: (deltaY) => this._inputWheel(deltaY),
       onLockChange: (locked, wasLocked) =>
@@ -371,6 +461,8 @@ export class Game {
     // set pieces. game.js only calls them.
     this.chronoPowers = new ChronoPowers();
     this.chronoHazards = new ChronoHazards();
+    /** A campaign level's narrative beats (src/systems/level-beats.js). */
+    this.levelBeats = new LevelBeats();
     this.voxelAiSystem = new VoxelAISystem();
 
     // Forge mode (extracted)
@@ -483,6 +575,11 @@ export class Game {
    * continue to work unchanged.  Internally everything goes through
    * StateManager so transitions are observable and pause logic is centralised.
    */
+  /** Collect per-phase timings: the overlay is showing, or a benchmark asked. */
+  get profiling() {
+    return this.showFPS || this.perfCapture;
+  }
+
   get state() {
     return this._stateManager.current;
   }
@@ -516,6 +613,8 @@ export class Game {
     this.player.isAiming = false;
     this.player.isFiring = false;
     this._stateManager.pause(from ?? this.state);
+    this.levelClock.hold("pause");
+    this.audio.tts?.pause();
     this.unlockPointer();
   }
 
@@ -524,6 +623,9 @@ export class Game {
    */
   resumeGame() {
     this._stateManager.resume();
+    // The level clock (the debrief's time against par) stops while paused.
+    this.levelClock.hold("pause", false);
+    this.audio.tts?.resume();
     // Settings may have changed the art style while we were paused, and a
     // first bake of Modern's materials costs ~220 ms. Pay it here rather than
     // in the first frame back.
@@ -708,6 +810,14 @@ export class Game {
       this.builder?.handleMouseDown(e.button, e.shiftKey);
       return;
     }
+    // A Mac with secondary click off (a Magic Mouse's default): Control-click
+    // is its right-click, so it aims rather than fires.
+    if (e.button === 0 && e.ctrlKey && IS_MAC && this.state === GameState.PLAYING) {
+      this._ctrlClickAim = true;
+      this.aimPress();
+      if (!this.mouse.locked) this.lockPointer();
+      return;
+    }
     if (e.button === 0) {
       if (this.state === GameState.PLAYING) {
         this.player.isFiring = true;
@@ -716,7 +826,7 @@ export class Game {
         this.lockPointer();
       }
     } else if (e.button === 2 && this.state === GameState.PLAYING) {
-      this.player.isAiming = true;
+      this.aimPress();
       if (!this.mouse.locked) this.lockPointer();
     }
   }
@@ -741,7 +851,7 @@ export class Game {
     // Alt-tabbing away swallows the mouseup, so the Forge would keep mining a
     // block with the button already released.
     if (wasLocked && !locked && this.state === GameState.BUILDER) {
-      this.builder?.handleMouseUp(2);
+      this.builder?.handleMouseUp(0);
     }
     // Only auto-pause if we lost lock without ESC (e.g. alt-tab)
     if (wasLocked && !locked && this.state === GameState.PLAYING) {
@@ -932,7 +1042,11 @@ export class Game {
         this.triggerDash(this.keybinds.moveForward, rawX, rawY);
         this.gamepad.vibrateLight();
       }
-      if (jp.interact) this.interact();
+      // Reload shares X with Use, as it does in most shooters: X opens what
+      // is in front of you, and reloads when there is nothing to open.
+      const reloadOnUse = GAMEPAD_ACTIONS.reload === GAMEPAD_ACTIONS.interact;
+      if (jp.interact && !this.interact() && reloadOnUse) this.reloadPress();
+      if (jp.reload && !reloadOnUse) this.reloadPress();
       // Rewind shares its bumper with previous weapon: while shifting with
       // Nova's power it rewinds (spec decision 4), otherwise it cycles.
       const rewind = jp.chronoRewind && p.chronoActive && this.chronoPowers.has("rewind");
@@ -1027,6 +1141,8 @@ export class Game {
     this.audio.setMusicVolume(this.settings.musicVolume / 100);
     this.audio.setSfxVolume(this.settings.sfxVolume / 100);
     this.audio.setVoiceVolume(this.settings.voiceVolume / 100);
+    this.audio.voiceStyle = this.settings.voiceStyle | 0;
+    this.audio.voicesOn = !!this.settings.voices;
   }
 
   // Save / Load
@@ -1129,6 +1245,7 @@ export class Game {
     Object.assign(this.character, sanitizeLocked(this.character, gameUnlockContext(this, { fresh: true })));
     // Cutscenes and the comic draw the player's own build.
     setCastCharacter(this.character);
+    setSkinCharacter(this.character);
   }
 
   setAlwaysTutorial(on) {
@@ -1309,12 +1426,14 @@ export class Game {
 
   startArena() {
     this.mode = "arena";
+    this.ariaComms?.flush();
     this.arenaRound = 1;
     this.achievementStats.totalGamesPlayed++;
     this.player.reset();
     this.applyLoadoutBonuses();
     this.upgradeLevels = {};
     this.ariaEnabled = true;
+    this.ariaComms.introduced = true;
     this.ariaTriggered = {};
     this.queueAriaMessage("arenaStart");
     this.queueAriaMessage("arenaIntro");
@@ -1349,6 +1468,7 @@ export class Game {
     this.player.reset();
     this.applyLoadoutBonuses();
     this.ariaEnabled = true;
+    this.ariaComms.introduced = true;
     this.ariaTriggered = {};
 
     // Generate the meltdown corridor
@@ -1399,6 +1519,8 @@ export class Game {
     this.player.angle = this.map.playerStart.dir;
     this.player.alive = true;
     resetAdsFov();
+    // Each round restocks the guns you hold, more as the rounds get longer.
+    this.player.addAmmoPacks(arenaRoundPacks(this.arenaRound));
     this.arenaTimer = 60;
     this.arenaClearTimer = null;
     this.entities = [];
@@ -1500,15 +1622,47 @@ export class Game {
     return this.tutorial.shouldShow();
   }
 
+  /** The prologue's world layer: the HUD boot and the blackout. */
   renderTutorialOverlay(ctx, w, h) {
-    // Remembered so ARIA's toast can sit below the step card instead of over it.
-    this._tutorialCardBottom = _renderTutorialOverlay(ctx, w, h, {
+    _renderTutorialOverlay(ctx, w, h, {
       mode: this.mode,
       isTouchDevice: this.isTouchDevice,
       input: this,
       tutorialStepTime: this.tutorialStepTime,
       tutorialStep: this.tutorialStep,
+      boot: this.tutorial.def?.id === "boot",
+      progress: this.tutorial.progressText(),
+      blackout: this.tutorial.dark,
     });
+  }
+
+  /**
+   * The prologue's step card, on the HUD in the director's headline lane, so
+   * ARIA's plates (the comms lane) never cover what to do next.
+   */
+  renderTutorialCard(ctx, w, h) {
+    const d = this.messages;
+    const key = this.tutorial.cardKey;
+    if (key && !d.showing(key)) {
+      this._tutorialCardBottom = 0;
+      return;
+    }
+    const lane = d.lanes?.headline;
+    this._tutorialCardBottom = _renderTutorialCard(
+      ctx,
+      w,
+      h,
+      {
+        mode: this.mode,
+        isTouchDevice: this.isTouchDevice,
+        input: this,
+        tutorialStepTime: this.tutorialStepTime,
+        tutorialStep: this.tutorialStep,
+        progress: this.tutorial.progressText(),
+      },
+      // A narrowed lane (a small window) takes the compact card, so it stays within the lane's height.
+      lane ? { top: lane.y + 6, maxW: lane.w, cx: lane.x + lane.w / 2, compact: d.lanes.kind === "compact" || lane.w < 520 } : {},
+    );
   }
 
   /**
@@ -1518,6 +1672,7 @@ export class Game {
    * inside it as its narration.
    */
   renderTeachCard(ctx, w, h) {
+    if (this._noticeCard && this._renderNoticeCard(ctx, w, h)) return;
     const hint = this.chronoHazards.hint;
     const t0 = this.chronoHazards.teach ?? this.chronoHazards.objective;
     if ((!t0?.card || t0.done) && hint) {
@@ -1649,23 +1804,40 @@ export class Game {
   /**
    * Stat bonuses from the equipped armour, helmet, visor and shoulders. Gear
    * uses the same bonus vocabulary as origins, and stacks additively with
-   * them; the character is the only source of truth, so this is recomputed
-   * from scratch every run rather than persisted on the player.
+   * them; the character is the only source of truth. A run starts from none
+   * applied, so the whole set goes on.
    */
   applyGearBonuses() {
-    const g = gearBonuses(this.character);
-    if (g.maxHealthAdd) {
-      this.player.maxHealth += g.maxHealthAdd;
-      this.player.health = Math.min(this.player.maxHealth, this.player.health + g.maxHealthAdd);
-    }
-    if (g.maxChronoEnergyAdd) this.player.maxChronoEnergy += g.maxChronoEnergyAdd;
-    if (g.maxStaminaAdd) {
-      this.player.maxStamina += g.maxStaminaAdd;
-      this.player.stamina = this.player.maxStamina;
-    }
-    if (g.dashCostAdd) this.player.dashStaminaCost = Math.max(8, this.player.dashStaminaCost + g.dashCostAdd);
-    if (g.armorAdd) this.player.armor = Math.max(this.player.armor, g.armorAdd);
-    if (g.moveSpeedAdd) this.player.moveSpeed += g.moveSpeedAdd;
+    this.player._gearApplied = null;
+    this.syncGearBonuses();
+  }
+
+  /**
+   * Bring the player's stats in line with the gear worn now, mid-run: a piece
+   * picked up and put on, or a change saved in the creator from the pause
+   * menu. Safe to call again — only the difference goes on (gear-sync.js).
+   */
+  syncGearBonuses() {
+    syncGearStats(this.player, gearBonuses(this.character));
+  }
+
+  /**
+   * Put on a battlefield drop if its slot holds nothing with stats (standard
+   * issue, or a purely cosmetic pick): the piece then works this run. A slot
+   * already carrying a stat piece is left as the player chose it.
+   * @returns {boolean} true when it was equipped
+   */
+  _equipDroppedGear(key, index) {
+    const isGear = GEAR_SLOTS.some(([k]) => k === key) || key?.startsWith("acc.");
+    const table = LOCKABLE[key]?.table;
+    if (!isGear || !table?.[index]?.bonuses) return false;
+    if (table[getIndex(this.character, key)]?.bonuses) return false;
+    Object.assign(this.character, withIndex(this.character, key, index));
+    this.saveCharacter();
+    setCastCharacter(this.character);
+    setSkinCharacter(this.character);
+    this.syncGearBonuses();
+    return true;
   }
 
   getCharacterColor() {
@@ -1693,10 +1865,25 @@ export class Game {
     );
   }
 
+  /**
+   * The settings deck's "Agent & Suit" row: the full creator, then back to
+   * the deck where it was opened (and to whatever opened the deck), so a
+   * player can wear what they unlock without starting a new campaign.
+   */
+  openCreatorFromSettings() {
+    const returnTo = this._settingsReturnTo ?? "pause";
+    this.creatorCategory = 0;
+    this._creatorSaveCallback = () => this.openSettings({ returnTo, section: "gameplay" });
+    this.state = GameState.CHARACTER_CREATE;
+  }
+
   _exitCreator(saved) {
     if (saved) {
       this.saveCharacter();
       setCastCharacter(this.character);
+      setSkinCharacter(this.character);
+      // Opened from the pause menu: gear changed mid-run works from now on.
+      this.syncGearBonuses();
       trackEvent("character_create", {
         loadout_class: this.character.loadoutClass || "default",
       });
@@ -1874,9 +2061,12 @@ export class Game {
     this.campaign.nextLevel();
   }
 
+  /** Use what is in front of the agent. Returns whether anything was there (the pad's X reloads otherwise). */
   interact() {
+    // The prologue's own things to open (the cadet's locker) come first.
+    if (this.mode === "tutorial" && this.tutorial?.onInteract?.()) return true;
     // Doors and secret walls are grid tiles; the voxel Forge has neither yet.
-    if (this.world) return;
+    if (this.world) return false;
     // Check for doors/secrets at multiple distances in front of player
     const cos = Math.cos(this.player.angle);
     const sin = Math.sin(this.player.angle);
@@ -1905,7 +2095,7 @@ export class Game {
         this.map.grid[checkY][checkX] = 0;
         this.audio.doorOpen();
         if (this.mode === "tutorial") this.tutorialDoorOpened = true;
-        return;
+        return true;
       } else if (tile === 6) {
         // Secret wall
         this.map.grid[checkY][checkX] = 0;
@@ -1926,9 +2116,10 @@ export class Game {
             : null;
         if (frag) this.queueAriaMessage("memoryFragment");
         else this.queueAriaMessage("secretFound");
-        return;
+        return true;
       }
     }
+    return false;
   }
 
   // Arena Upgrades
@@ -1954,6 +2145,17 @@ export class Game {
     _fireWeapon(this);
   }
 
+  /** The reload key: starts a reload, or during one, is the active-reload press. */
+  reloadPress() {
+    if (this.state !== GameState.PLAYING || !this.player?.alive) return false;
+    return reloadPress(this);
+  }
+
+  /** A new agent: Conditioning back to level 0 in every skill. */
+  resetConditioning() {
+    resetConditioning(this);
+  }
+
   _onEnemyKill(enemy) {
     _onEnemyKill(this, enemy);
   }
@@ -1973,6 +2175,7 @@ export class Game {
     if (this.chronoPowers.isInvulnerable(this.player)) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
+    if (this._levelLog) this._levelLog.damageTaken += Math.max(0, prevHp - this.player.health);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
     if (this.squadComms && this.player.alive && this.player.maxHealth > 0) {
       const prevRatio = prevHp / this.player.maxHealth;
@@ -2005,6 +2208,15 @@ export class Game {
     // Sync audio with time scale (chrono shift pitch-down + ducking)
     this.audio.setTimeScale?.(this.timeScale);
     this.audio.updateDucking?.(this.deltaTime);
+    // Low health (under 30%): heartbeat, muffled mix, ducked music. Off in
+    // menus and pauses, so the muffle opens with the pause screen.
+    this.audio.updateLowHealth?.(
+      this.state === GameState.PLAYING ? lowHealthSeverity(this.player?.health, this.player?.maxHealth) : 0,
+    );
+    // Beside someone the pulse stopped the mix hushes and a hum comes up.
+    this.audio.updateStillness?.(
+      this.state === GameState.PLAYING && this.player ? stillnessAt(this.entities, this.player.x, this.player.y) : 0,
+    );
 
     // FPS counter
     this.frameCount++;
@@ -2081,10 +2293,14 @@ export class Game {
     }
     if (this.assetEditor.active) return; // Pause game logic but keep rendering
 
+    // Down, and on the game-over screen after, the level clock stands still;
+    // a retry or a respawn starts it again.
     if (!this.player.alive) {
+      this.levelClock.hold("dead");
       this._updateDeathTimer();
       return;
     }
+    this.levelClock.hold("dead", false);
 
     const dt = this.deltaTime * this.timeScale;
     // The Final Form's first stop holds you too: no move, look, shot or shift.
@@ -2107,11 +2323,18 @@ export class Game {
     this._regenPlayer(dt);
 
     // Player movement
-    const _profilePlayerStart = this.showFPS ? performance.now() : 0;
+    const _profilePlayerStart = this.profiling ? performance.now() : 0;
     // Form 2's Counter-shift holds you at half speed for a moment.
-    if (!frozen) this.updatePlayer(dt * counterShiftScale(this.player, this.deltaTime));
+    // Chrono Shift slows the world, not you: the agent keeps near full speed
+    // while everything else crawls. (A kill's slow-mo still slows everyone.)
+    const playerDt = this.player.chronoActive && !(this.slowMoTimer > 0) ? this.deltaTime * CHRONO_PLAYER_SPEED : dt;
+    if (!frozen) this.updatePlayer(playerDt * counterShiftScale(this.player, this.deltaTime));
     this.chronoPowers.update(this, dt, this.deltaTime);
     this.chronoHazards.update(this, dt);
+    updateAmmoEconomy(this);
+    updateReloads(this);
+    updateConditioning(this);
+    if (this.mode === "campaign") this.levelBeats.update(this, this.deltaTime);
 
     if (this.mode === "meltdown" && this.meltdown.alive) {
       updateMeltdownRun(this, dt);
@@ -2147,25 +2370,27 @@ export class Game {
     this.entityGrid.insertAll(this.entities);
 
     // Update enemies
-    const _profileEnemiesStart = this.showFPS ? performance.now() : 0;
+    const _profileEnemiesStart = this.profiling ? performance.now() : 0;
+    // Arrivals first: one that steps out this frame is in the world for the AI.
+    _safeCall("Arrivals", () => updateArrivals(this, dt));
     _safeCall("AI", () => this.updateEnemies(dt));
     if (_profileEnemiesStart) this.profiler.currentPhases.enemies =
       performance.now() - _profileEnemiesStart;
 
     // Update projectiles
-    const _profileProjectilesStart = this.showFPS ? performance.now() : 0;
+    const _profileProjectilesStart = this.profiling ? performance.now() : 0;
     _safeCall("Projectiles", () => this.updateProjectiles(dt));
     if (_profileProjectilesStart) this.profiler.currentPhases.projectiles =
       performance.now() - _profileProjectilesStart;
 
     // Check pickups
-    const _profilePickupsStart = this.showFPS ? performance.now() : 0;
+    const _profilePickupsStart = this.profiling ? performance.now() : 0;
     this.checkPickups();
     if (_profilePickupsStart) this.profiler.currentPhases.pickups =
       performance.now() - _profilePickupsStart;
 
     // Misc: exit check, decay, achievements
-    const _tMisc0 = this.showFPS ? performance.now() : 0;
+    const _tMisc0 = this.profiling ? performance.now() : 0;
 
     this._checkExitReached();
 
@@ -2240,6 +2465,11 @@ export class Game {
       if (this.deathTimer <= 0) {
         if (this.mode === "playtest") {
           this.exitBuilderPlayTest();
+          return;
+        }
+        // The prologue never ends in a game over: back to the beat's checkpoint.
+        if (this.mode === "tutorial" && this.tutorial.step < TUTORIAL_SANDBOX_STEP) {
+          this.tutorial.respawn();
           return;
         }
         this.checkAchievements(); // Sync final score/stats before game over
@@ -2412,12 +2642,217 @@ export class Game {
     }
   }
 
+  /**
+   * The exit's own point light, teal when open and red while sealed, so the
+   * extraction beacon (src/rendering/pickups.js drawExit) lights the deck and
+   * walls around it, and a small amber light on each power cell still to be
+   * found, so one reads from a doorway. Persistent lights, re-added after a
+   * level reset clears the list.
+   */
+  _syncExitLight() {
+    const gated = this.mode === "campaign" || this.mode === "tutorial";
+    const cells = gated && this.powerCells
+      ? this.entities.filter((e) => e.type === "powerCell" && e.active)
+      : [];
+    this._cellLights ??= new Map();
+    for (const [cell, L] of this._cellLights) {
+      if (cells.includes(cell)) continue;
+      const i = this.lights.indexOf(L);
+      if (i >= 0) this.lights.splice(i, 1);
+      this._cellLights.delete(cell);
+    }
+    for (const cell of cells) {
+      let L = this._cellLights.get(cell);
+      if (!L) {
+        L = { x: cell.x, y: cell.y, color: [255, 176, 40], radius: 2.2, baseIntensity: 0.8, intensity: 0.8, life: 1e9, maxLife: 1e9 };
+        this._cellLights.set(cell, L);
+      }
+      L.life = L.maxLife = 1e9;
+      if (!this.lights.includes(L)) this.lights.unshift(L);
+    }
+    const ex = gated ? this.exitEntity : null;
+    let L = this._exitLight;
+    if (!ex) {
+      if (L) {
+        const i = this.lights.indexOf(L);
+        if (i >= 0) this.lights.splice(i, 1);
+        this._exitLight = null;
+      }
+      return;
+    }
+    if (!L) {
+      L = this._exitLight = { x: 0, y: 0, color: [0, 255, 170], radius: 3.4, baseIntensity: 1.1, intensity: 1.1, life: 1e9, maxLife: 1e9 };
+    }
+    L.x = ex.x;
+    L.y = ex.y;
+    L.life = L.maxLife = 1e9;
+    L.color = ex.sealed ? [255, 51, 85] : [0, 255, 170];
+    L.baseIntensity = ex.sealed ? 0.55 : 1.1;
+    if (!this.lights.includes(L)) this.lights.unshift(L);
+  }
+
+  /**
+   * A short card in the headline lane that explains a level rule as it comes
+   * up (the power cells that hold the exit shut). One at a time; a newer
+   * notice replaces the last. `id` keeps repeats of the same notice apart.
+   */
+  showNotice(id, title, hint, seconds = 6, color = "#ffb028") {
+    if (this._noticeCard) this.messages?.done(this._noticeCard.key);
+    this._noticeCard = { key: `notice:${id}:${(this._noticeSerial = (this._noticeSerial || 0) + 1)}`, title, hint, seconds, color, at: this.time, posted: false };
+  }
+
+  _renderNoticeCard(ctx, w, h) {
+    const c = this._noticeCard;
+    const d = this.messages;
+    const age = (this.time - c.at) / 1000;
+    if (age > c.seconds) {
+      d?.done(c.key);
+      this._noticeCard = null;
+      return false;
+    }
+    if (!c.posted) {
+      c.posted = true;
+      d?.post(c.key, "teach", null);
+    }
+    if (d && !d.showing(c.key)) return false;
+    const step = { title: c.title, hint: c.hint, color: c.color, pad: padFor(this) };
+    const lane = d?.lanes?.headline;
+    _renderTeachCard(ctx, w, h, step, age + 1, Math.min(1, (c.seconds - age) / 1.2), {
+      top: lane ? lane.y + 6 : 60,
+      maxW: lane?.w,
+      cx: lane ? lane.x + lane.w / 2 : w / 2,
+      compact: d?.lanes?.kind === "compact",
+    });
+    return true;
+  }
+
+  /**
+   * Start the tally the level-complete card reads (_buildDebrief): called by
+   * CampaignManager.loadLevel once the level's map and enemies are in place.
+   */
+  beginLevelLog() {
+    const { openCells, secrets } = surveyGrid(this.map?.grid);
+    const stats = this.achievementStats || {};
+    let earned = [];
+    try {
+      earned = earnedIds(gameUnlockContext(this, { fresh: true }));
+    } catch (_) {}
+    this._levelLog = {
+      par: parSeconds({ openCells, enemies: this.totalEnemies, powerCells: this.powerCells?.total || 0 }),
+      secretsTotal: secrets,
+      secretsAtStart: this.player.secretsFound || 0,
+      damageTaken: 0,
+      weaponKills: { ...(stats.weaponKills || {}) },
+      earned: new Set(earned),
+      achievements: new Set(Object.keys(this.unlockedAchievements || {})),
+      gear: [],
+    };
+    this._debrief = null;
+    // Fragments are announced on the card of the level that found them, so
+    // anything left from an abandoned level is not carried in.
+    this.archive?.drainPending();
+  }
+
+  /**
+   * What the level-complete card shows: the level, its grade against par,
+   * and everything the level paid out — unlocks (counting this clear),
+   * achievements, gear picked up, weapon finishes and memory fragments.
+   */
+  _buildDebrief() {
+    const log = this._levelLog;
+    const c = this.campaign;
+    const seconds = Math.max(0, (performance.now() - this.roundStartTime) / 1000);
+    const secretsFound = Math.max(0, (this.player.secretsFound || 0) - (log?.secretsAtStart || 0));
+    const secretsTotal = Math.max(log?.secretsTotal || 0, secretsFound);
+    const par = log?.par ?? parSeconds({});
+    const grade = gradeLevel({
+      shotsFired: this.shotsFired,
+      shotsHit: this.shotsHit,
+      seconds,
+      par,
+      damageTaken: log?.damageTaken || 0,
+      maxHealth: this.player.maxHealth,
+      secretsFound,
+      secretsTotal,
+    });
+    const stats = this.achievementStats;
+    if (grade.letter === "S") stats.levelsAced = (stats.levelsAced || 0) + 1;
+    if (secretsTotal > 0 && secretsFound >= secretsTotal) stats.levelsFullySearched = (stats.levelsFullySearched || 0) + 1;
+    this.checkAchievements();
+
+    // What the player did first (pickups, finishes, memories), then what it
+    // opened up: the card shows the first few.
+    const earned = [];
+    const opened = [];
+    if (log) {
+      earned.push(...log.gear);
+      for (const { weaponId, finish } of finishesEarned(log.weaponKills, stats.weaponKills)) {
+        earned.push({ kind: "Weapon finish", name: `${finish.name} · ${WEAPONS[weaponId]?.name ?? "Weapon"}` });
+      }
+      try {
+        // Clearing this level counts now, though the stat moves on Continue.
+        const ctx = gameUnlockContext(this, { fresh: true });
+        const cleared = levelsBefore(c.act) + c.level + 1;
+        const after = earnedIds({ ...ctx, campaignLevelsCleared: Math.max(ctx.campaignLevelsCleared, cleared) });
+        opened.push(...announcements(after.filter((id) => !log.earned.has(id))));
+      } catch (_) {}
+      for (const id of Object.keys(this.unlockedAchievements || {})) {
+        const ach = ACHIEVEMENTS[id];
+        if (!log.achievements.has(id) && ach) opened.push({ kind: "Achievement", name: ach.name });
+      }
+    }
+    for (const frag of this.archive?.drainPending() ?? []) {
+      earned.push({ kind: "Memory fragment", name: frag.title });
+    }
+    earned.push(...opened);
+    return {
+      act: c.act,
+      levelNumber: c.level + 1,
+      actTitle: getAct(c.act)?.title ?? "",
+      levelName: this.map?.name ?? "",
+      seconds,
+      par,
+      grade,
+      secretsFound,
+      secretsTotal,
+      damageTaken: Math.round(log?.damageTaken || 0),
+      earned,
+    };
+  }
+
   /** Campaign exit completes the level; playtest exit arms the end timer. */
   _checkExitReached() {
+    this._syncExitLight();
     // Check exit (campaign)
     if (this.mode === "campaign" && this.exitEntity && this.exitEntity.active) {
       const dx = this.player.x - this.exitEntity.x;
       const dy = this.player.y - this.exitEntity.y;
+      // A lockdown lifts once enough of the floor's hostiles are down.
+      if (liftLockdown(this)) {
+        this.audio.lockdownLifted?.();
+        this.queueAriaMessage("lockdownLifted");
+        this.showNotice("live", "LOCKDOWN LIFTED", "The exit is open: get to the beacon.", 5, "#22e6c0");
+      }
+      if (this.exitEntity.sealed) {
+        // Held shut by the level's power cells or lockdown: say so, not every frame.
+        if (dx * dx + dy * dy < 2.25 && performance.now() - (this._sealedNoticeAt || 0) > 8000) {
+          this._sealedNoticeAt = performance.now();
+          this.queueAriaMessage(this.lockdown ? "lockdownHeld" : "exitSealed");
+          const ld = this.lockdown;
+          if (ld) {
+            const left = Math.max(0, ld.need - this.killedEnemies);
+            this.showNotice("sealed", `LOCKDOWN — ${Math.min(ld.need, this.killedEnemies)} / ${ld.need} DOWN`,
+              `${left} more hostile${left === 1 ? "" : "s"} to put down before the doors release.`, 6);
+          }
+          const pc = this.powerCells;
+          if (pc) {
+            const left = pc.total - pc.found;
+            this.showNotice("sealed", `EXTRACTION SEALED — ${pc.found} / ${pc.total} POWER CELLS`,
+              `${left} more power cell${left === 1 ? "" : "s"} to find. They glow amber in the side rooms, and show as amber diamonds on your map.`, 6);
+          }
+        }
+        return;
+      }
       if (dx * dx + dy * dy < 1.0) {
         this.state = GameState.LEVEL_COMPLETE;
         this._levelCompleteTime = performance.now();
@@ -2429,6 +2864,7 @@ export class Game {
           this.campaign.act,
           this.campaign.level + 1, // fragment data is 1-based
         );
+        this._debrief = this._buildDebrief();
         this.queueAriaMessage("levelComplete");
       }
     }
@@ -2455,14 +2891,15 @@ export class Game {
     this.glitchEffect *= decay(0.95, this.deltaTime);
     if (this.glitchEffect < 0.01) this.glitchEffect = 0;
 
-    // Hit marker decay
+    // Hit marker decay. Feedback runs on real time: on slowed time it hung
+    // around three or four times too long during slow-mo and Chrono Shift.
     if (this.hitMarker > 0) {
-      this.hitMarker -= dt;
+      this.hitMarker -= this.deltaTime;
       if (this.hitMarker < 0) this.hitMarker = 0;
     }
 
-    // Damage numbers and hitscan tracers (short-lived bullet streaks)
-    expireByLife(this.damageNumbers, dt);
+    // Damage numbers on real time too; tracers stay in world time (they are bullets).
+    expireByLife(this.damageNumbers, this.deltaTime);
     expireByLife(this.tracers, dt);
 
     // Dynamic point lights — decay and prune. Intensity follows life ratio
@@ -2489,6 +2926,9 @@ export class Game {
     }
     // While shifting, once Rook has tuned the shard: a Chrono Dash instead.
     const dir = rawDirX !== undefined ? [rawDirX, rawDirY] : this._dashDirFor(code);
+    // From cover, a dash slides to the next cover; on a pad or touch it also
+    // takes the cover in front.
+    if (_coverDash(this, dir[0], dir[1])) return;
     if (this.chronoPowers.tryChronoDash(this, dir[0], dir[1])) {
       this.achievementStats.totalDashes++;
       this.gamepad?.vibrateLight?.();
@@ -2501,6 +2941,8 @@ export class Game {
       rawDirY,
     );
     if (triggered) {
+      // A phase dash is untouchable for its length and a beat after.
+      this.player._phaseUntil = this.time + DASH_PHASE_MS;
       if (this.mode === "tutorial") this.tutorialDashed = true;
       this.achievementStats.totalDashes++;
       this.triggerAriaOnce("dash", "dashUsed");
@@ -2510,6 +2952,46 @@ export class Game {
   }
 
   /** World direction of a double-tapped movement key. */
+  /**
+   * The dash key: phase-dash the way the movement keys are held, forward
+   * when none are.
+   */
+  /**
+   * Aim down sights from any aim input (right mouse, the aim key, Control-
+   * click on a Mac). Held by default; with Toggle Aim on, a press flips it.
+   */
+  aimPress() {
+    if (this.state !== GameState.PLAYING) return;
+    this.player.isAiming = this.settings.aimToggle ? !this.player.isAiming : true;
+  }
+
+  aimRelease() {
+    if (!this.settings.aimToggle) this.player.isAiming = false;
+  }
+
+  /** The cover key: hug the wall or block in front, or step out of cover. */
+  coverPress() {
+    if (this.state !== GameState.PLAYING) return false;
+    return _coverPress(this);
+  }
+
+  dashFromKeys() {
+    if (this.state !== GameState.PLAYING || !this.player.alive) return;
+    // The Forge's voxel worlds keep C for crafting; double-tap still dashes there.
+    if (this.world) return;
+    const kb = this.keybinds;
+    const cos = Math.cos(this.player.angle);
+    const sin = Math.sin(this.player.angle);
+    let dx = 0;
+    let dy = 0;
+    if (this.keys[kb.moveForward]) { dx += cos; dy += sin; }
+    if (this.keys[kb.moveBack]) { dx -= cos; dy -= sin; }
+    if (this.keys[kb.moveLeft]) { dx += sin; dy -= cos; }
+    if (this.keys[kb.moveRight]) { dx -= sin; dy += cos; }
+    if (!dx && !dy) { dx = cos; dy = sin; }
+    this.triggerDash(kb.dash, dx, dy);
+  }
+
   _dashDirFor(code) {
     const cos = Math.cos(this.player.angle);
     const sin = Math.sin(this.player.angle);
@@ -2555,6 +3037,9 @@ export class Game {
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
         noclip: !!this._noclip,
+        time: this.time,
+        // The people the pulse stopped are solid: the player goes round them.
+        entities: this.entities,
       },
       dt,
     );
@@ -2563,8 +3048,9 @@ export class Game {
       if (flags.tutorialCrouched) this.tutorialCrouched = true;
       if (flags.fallDamage > 0) this.damagePlayer(flags.fallDamage);
     }
+    _updateCover(this, dt);
     // Smooth ADS FOV transition — must run every frame
-    updateAdsFov(this.player, dt);
+    updateAdsFov(this.player, dt, this.settings);
   }
 
   /**
@@ -2668,9 +3154,18 @@ export class Game {
         audio: this.audio,
         // Time-Lock's slab and Rewind's echo decoy.
         chrono: this.chronoPowers,
+        // Arena, meltdown and the prologue's scripted fights come at you;
+        // the campaign's enemies have to find you, and can lose you.
+        hunt: this.mode === "arena" || this.mode === "meltdown" || this.mode === "tutorial",
+        // The shot fired this frame, which idle enemies in earshot hear.
+        noise: this._noise,
+        // A summons in the campaign comes through a tear, not out of the air.
+        arrive: this.mode === "campaign" ? this._aiArrive : null,
+        arriving: this._aiArriving,
       },
       dt,
     );
+    this._noise = null;
     // Apply side effects
     for (const call of fx.damagePlayerCalls)
       this.damagePlayer(call.damage, call.attacker);
@@ -2678,6 +3173,7 @@ export class Game {
     if (fx.hudDisabledUntil != null)
       this._hudDisabledUntil = fx.hudDisabledUntil;
     for (const msg of fx.ariaMessages) this.queueAriaMessage(msg);
+    for (const line of fx.lines ?? []) this.ariaComms.queueLine(line);
     this.totalEnemies += fx.totalEnemiesAdded;
     // Filter detonated chrono-bombs
     this._chronoBombs = this._chronoBombs.filter((b) => b.active);
@@ -2698,10 +3194,12 @@ export class Game {
         audio: this.audio,
         spawnWallSparks: (x, y, z) => this.spawnWallSparks(x, y, z),
         damageEnemy: (e, d, z) => this.damageEnemy(e, d, z),
-        damagePlayer: (d) => this.damagePlayer(d),
+        damagePlayer: (d, from) => this.damagePlayer(d, from),
         lights: this.lights,
         // Enemy rounds that cross a Time-Lock hang there.
         chronoPowers: this.chronoPowers,
+        // Rounds the player's cover stops before they land.
+        coverBlock: (proj) => _coverShields(this, proj.originX, proj.originY),
       },
       dt,
     );
@@ -2713,6 +3211,7 @@ export class Game {
     for (const e of nearby) {
       if (
         e.type === "enemy" ||
+        e.type === "npc" ||
         e.type === "exit" ||
         e.type === "projectile" ||
         !e.active
@@ -2725,8 +3224,8 @@ export class Game {
       // from the floor below it.
       if (this.world && Math.abs((this.player.z || 0) - (e.z || 0)) >= 1.5) continue;
 
-      // In tutorial, block pickups until step 13 ("Resupply")
-      if (this.mode === "tutorial" && this.tutorialStep < 13) {
+      // The prologue keeps health and ammo shut until the range teaches them.
+      if (this.mode === "tutorial" && !this.tutorial.pickupsOpen) {
         if (e.type === "health" || e.type === "ammo") continue;
       }
 
@@ -2740,25 +3239,42 @@ export class Game {
         this.spawnPickupBurst(e.x, e.y, "health", this.world ? e.z : null);
         this.audio.pickup();
         this.triggerAriaOnce("healthPickup", "healthPickup");
-        if (this.mode === "tutorial" && this.tutorialStep === 13)
+        if (this.mode === "tutorial") {
           this.tutorialPickedUp = true;
-        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
+          e._respawnAt = performance.now() + 8000;
+        }
       } else if (e.type === "ammo") {
-        this.player.ammo = Math.min(999, this.player.ammo + 20);
+        // A crate is a few rounds for every gun carried (pickupAmmo each).
+        this.player.addAmmoPacks(1);
+        noteCrateTaken(this, e);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "ammo", this.world ? e.z : null);
         this.audio.pickup();
-        if (this.mode === "tutorial" && this.tutorialStep === 13)
+        if (this.mode === "tutorial") {
           this.tutorialPickedUp = true;
-        if (this.mode === "tutorial") e._respawnAt = performance.now() + 8000;
+          e._respawnAt = performance.now() + 8000;
+        }
       } else if (e.type === "weapon") {
         if (!this.player.weapons.includes(e.weaponId)) {
           this.player.weapons.push(e.weaponId);
           this.player.currentWeapon = this.player.weapons.length - 1;
           this.audio.pickup();
           this.queueAriaMessage("weaponPickup");
+          this.player.reserveOf(e.weaponId); // comes loaded with its startAmmo
+          // Every gun in the armoury carried at once (achievement "Full Arsenal").
+          if (WEAPONS.every((w) => this.player.weapons.includes(w.id))) {
+            this.achievementStats.fullArsenal = true;
+            this.checkAchievements();
+          }
+        } else {
+          // One already carried (a class's starting gun, or a missed pickup
+          // brought forward) is stripped for rounds: that gun's, two crates' worth.
+          const got = this.player.addAmmo(e.weaponId, DUPLICATE_WEAPON_PACKS * (WEAPONS[e.weaponId]?.pickupAmmo ?? 0));
+          this.audio.pickup();
+          if (this.mode !== "tutorial") {
+            this.showGearToast?.("Ammo cache", `${WEAPONS[e.weaponId]?.name ?? "Weapon"} stripped · +${got} rounds`);
+          }
         }
-        this.player.ammo = Math.min(999, this.player.ammo + 30);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
@@ -2770,10 +3286,31 @@ export class Game {
           this.tutorialWeaponPickedUp = true;
           e._respawnAt = performance.now() + 8000;
         }
+      } else if (e.type === "powerCell") {
+        // The level's power cells (src/systems/exit-cells.js): the last one
+        // unseals the exit.
+        e.active = false;
+        const pc = this.powerCells;
+        if (pc) pc.found = Math.min(pc.total, pc.found + 1);
+        this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
+        this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
+          _spawnEnergyBurst(ps, e.x, e.y, { count: 16, r: 255, g: 176, b: 40 }));
+        this.audio.pickup();
+        if (pc) this.showGearToast?.("Power cell", `${pc.found} / ${pc.total}`);
+        if (this.mode === "tutorial") {
+          // The prologue scripts its own lines, and the lift opens on its own beat.
+        } else if (pc && pc.found >= pc.total) {
+          if (this.exitEntity) this.exitEntity.sealed = false;
+          this.audio.exitOpen?.();
+          this.queueAriaMessage("exitUnsealed");
+          this.showNotice("live", "EXTRACTION LIVE", "Every power cell is in. The exit is open: get to the beacon.", 5, "#22e6c0");
+        } else {
+          this.queueAriaMessage("powerCellFound");
+        }
       } else if (e.type === "gear") {
         // A battlefield drop grants the piece outright: it shows up unlocked
-        // in both creators, and its bonuses apply from the next run. Nothing
-        // is persisted on the player — the character stays the source of truth.
+        // in both creators, and is put on at once when its slot is free of
+        // stats, so its bonuses work this run (_equipDroppedGear).
         const granted = grantOwned(e.slot, e.slotIndex);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
@@ -2781,8 +3318,10 @@ export class Game {
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
           _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
-          this.showGearToast?.(e.kind, e.label);
+          const worn = this._equipDroppedGear(e.slot, e.slotIndex);
+          this.showGearToast?.(e.kind, worn ? `${e.label} · equipped` : e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
+          this._levelLog?.gear.push({ kind: e.kind || "Gear", name: e.label || "Salvage" });
         }
       } else if (
         (e.type === "damage2x" || e.type === "invuln") &&
@@ -2815,11 +3354,22 @@ export class Game {
 
   // Third-person player silhouette (back view)
   drawThirdPersonModel(ctx, w, h) {
-    const bobX = Math.sin(this.player.weaponBob) * 3;
-    const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 4;
-    const cx = w / 2 + bobX;
-    const cy = h - 160 + bobY;
-    const sc = 2.8;
+    // Projected like any sprite at the camera's distance behind the player
+    // (js/renderer.js): a box h/dist tall standing on the floor, which a
+    // person fills to about 90%. A fixed size drew the cadet a third the
+    // height of everyone else. The model is 55 units, helmet to boots.
+    const r = this.renderer;
+    const dist = Math.max(0.6, r?.thirdPersonDist || 1.8);
+    const box = h / dist;
+    const sc = (box * 0.9) / 55;
+    const eyeLift = ((r?._eyeDrop || 0) * h) / dist;
+    const bobX = Math.sin(this.player.weaponBob) * 0.06 * sc;
+    const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 0.08 * sc;
+    const feetY = h / 2 + box / 2 + eyeLift;
+    // Off-centre with the camera over the shoulder; the renderer's x is in
+    // its own (render-scaled) pixels.
+    const cx = (r?.thirdPersonX != null && r.width ? (r.thirdPersonX * w) / r.width : w / 2) + bobX;
+    const cy = feetY - 20 * sc + bobY;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -2886,11 +3436,13 @@ export class Game {
     const wep = this.player.getWeaponDef();
     renderWeapon(ctx, w, h, {
       wep,
+      owned: this.player.weapons,
       energyColor: charColor ? charColor.accent : wep?.color,
       isAiming: this.player.isAiming,
       isSprinting: this.player.isSprinting,
       isDashing: this.player.isDashing,
       crouchBlend: this.player.crouchBlend || 0,
+      slideBlend: this.player.slideBlend || 0,
       weaponBob: this.settings.weaponBob ? this.player.weaponBob : 0,
       weaponKick: this.player.weaponKick,
       weaponSwayX: this.settings.weaponBob ? this.player.weaponSwayX : 0,
@@ -2902,6 +3454,7 @@ export class Game {
       isTouchDevice: this.isTouchDevice,
       hudStyle: this.settings.hudStyle,
       hudScale: this.settings.hudScale,
+      hudH: this.hudH,
       aimOffsetX: this.player.aimOffsetX || 0,
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,
@@ -3032,7 +3585,7 @@ export class Game {
   }
 
   renderStatsScreen(ctx, w, h) {
-    this.achievementSystem.renderStats(ctx, w, h);
+    this.achievementSystem.renderStats(ctx, w, h, this.conditioning);
   }
 
   renderArchiveScreen(ctx, w, h) {
@@ -3114,13 +3667,18 @@ export class Game {
   }
 
   renderLevelComplete(ctx, w, h) {
+    const debrief = this._debrief;
+    const stats = this._statsCardData();
+    // The clock stops at the exit, not while the card is up.
+    if (debrief) stats.roundStartTime = performance.now() - debrief.seconds * 1000;
     _renderLevelComplete(ctx, w, h, {
       time: this.time,
       isTouchDevice: this.isTouchDevice,
       input: this,
       levelCompleteTime: this._levelCompleteTime,
-      playerSecretsFound: this.player.secretsFound,
-      statsCardData: this._statsCardData(),
+      playerSecretsFound: debrief ? debrief.secretsFound : this.player.secretsFound,
+      statsCardData: stats,
+      debrief,
     });
   }
 
@@ -3194,6 +3752,8 @@ export class Game {
       this.builder.onShareMap = (hash) => this._shareBuilderMap(hash);
       this.builder.onPlayTest = () => this.startBuilderPlayTest();
     }
+    // The first-person glove wears the agent's suit colour.
+    this.builder.accent = this.getCharacterColor().accent;
     // A ForgeMode whose last `start()` failed to produce a world gets another
     // go, rather than leaving the Forge silently unopenable.
     if (!this.builder.world) await this.builder.start();
@@ -3267,7 +3827,7 @@ export class Game {
     this.player.aimOffsetY = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
-    this.player.ammo = 50;
+    this.player.reserves = {};
     this.player.angle = spawn.yaw;
     this.player.weapons = [0, 1]; // pistol + shotgun
     this.player.currentWeapon = 0;

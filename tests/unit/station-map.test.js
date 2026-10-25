@@ -1,0 +1,137 @@
+import { describe, it, expect } from "vitest";
+import { TUTORIAL_MAP, STATION_CORE } from "../../src/data/levels/tutorial.js";
+import { ATRIUM_GAP } from "../../src/data/levels/rooms/atrium.js";
+import { RIG_AT, BREAKER_CELL } from "../../src/data/levels/rooms/rnd.js";
+import { COVER_LAYOUTS } from "../../src/data/levels/rooms/arena.js";
+import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT } from "../../src/data/levels/rooms/track.js";
+import { HALL_WALLS } from "../../src/data/levels/rooms/halls.js";
+import { PRECINCT_WALLS } from "../../src/data/levels/rooms/precinct.js";
+import { CIVIC_WALLS, CIVIC_HALL, CIVIC_RECORDS, CIVIC_BUREAU, CIVIC_BEDS, CIVIC_FOUNTAIN, CIVIC_LINE } from "../../src/data/levels/rooms/civic.js";
+import { MAPS } from "../../src/data/levels/campaign.js";
+
+const map = TUTORIAL_MAP;
+const g = map.grid;
+
+/** Every cell reachable from the start over floor and doors (the prologue opens them all in time). */
+function reachable() {
+  const seen = new Set();
+  const q = [[Math.floor(map.playerStart.x), Math.floor(map.playerStart.y)]];
+  seen.add(q[0].join());
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      const v = g[ny]?.[nx];
+      if ((v === 0 || v === 5) && !seen.has(`${nx},${ny}`)) {
+        seen.add(`${nx},${ny}`);
+        q.push([nx, ny]);
+      }
+    }
+  }
+  return seen;
+}
+const open = reachable();
+const at = (x, y) => open.has(`${Math.floor(x)},${Math.floor(y)}`);
+
+describe("the station floor", () => {
+  it("is sealed at its edges and matches its declared size", () => {
+    expect(g.length).toBe(map.height);
+    for (const row of g) expect(row.length).toBe(map.width);
+    for (let x = 0; x < map.width; x++) expect(g[0][x] && g[map.height - 1][x]).toBeTruthy();
+    for (let y = 0; y < map.height; y++) expect(g[y][0] && g[y][map.width - 1]).toBeTruthy();
+  });
+
+  it("lets you walk into every room it has", () => {
+    // The observation deck over the sim hall is only ever looked into.
+    for (const [name, b] of Object.entries(map.rooms).filter(([n]) => n !== "obsDeck")) {
+      let any = false;
+      for (let y = b.y0; y <= b.y1 && !any; y++) for (let x = b.x0; x <= b.x1 && !any; x++) any = open.has(`${x},${y}`);
+      expect(any, name).toBe(true);
+    }
+  });
+
+  it("puts the prologue's marks on reachable floor", () => {
+    const marks = {
+      rig: RIG_AT,
+      breakerFront: { x: BREAKER_CELL.x + 0.5, y: BREAKER_CELL.y - 0.8 },
+      liftMouth: { x: 29.5, y: 10.0 },
+      trackStart: { x: 2.5, y: 51.5 },
+      trackFinish: { x: 10.5, y: 78.0 },
+      linsDesk: { x: 21.5, y: 10.3 },
+      supLocker: { x: 22.5, y: 38.6 },
+      bridgeWest: { x: 62.9, y: 41.5 },
+      bridgeEast: { x: 83.5, y: 41.5 },
+    };
+    for (const [name, p] of Object.entries(marks)) expect(at(p.x, p.y), name).toBe(true);
+    // The bridge's gap is floor (anyone can walk round it; only the run dashes it).
+    for (let y = ATRIUM_GAP.y0; y <= ATRIUM_GAP.y1; y++) expect(g[y][ATRIUM_GAP.x]).toBe(0);
+  });
+
+  it("builds the training hall off the gym, with its bars, tunnel and pit on open floor", () => {
+    // Two ways in: the gym's west door and the lobby's west alcove.
+    expect(g[23][3]).toBe(0);
+    expect(g[52][18]).toBe(0);
+    for (const [x, y] of [...TRACK_BARS, ...TRACK_TUNNEL]) expect(g[y][x], `${x},${y}`).toBe(0);
+    for (let y = TRACK_PIT.y0; y <= TRACK_PIT.y1; y++) for (let x = TRACK_PIT.x0; x <= TRACK_PIT.x1; x++) expect(g[y][x]).toBe(0);
+    // Lane one is a straight longer than a full bar of sprint covers
+    // (100 stamina at 25 a second, at 1.6 x 3.5 cells a second: 22.4 cells).
+    let run = 0;
+    for (let y = TRACK_AREA.y0; y < TRACK_AREA.y1 && g[y][2] === 0; y++) run++;
+    expect(run).toBeGreaterThan(22.4);
+  });
+
+  it("raises the sim hall's holo cover only on its open floor", () => {
+    for (const cells of Object.values(COVER_LAYOUTS)) {
+      for (const [r, c] of cells) {
+        expect(g[r][c], `${r},${c}`).toBe(0);
+        expect(r >= 3 && r <= 10 && c >= 9 && c <= 50).toBe(true);
+      }
+    }
+  });
+
+  it("gives every short wall a height and every tall one none", () => {
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (map.heightMap[y][x] < 5) expect(g[y][x], `${x},${y}`).not.toBe(0);
+      }
+    }
+  });
+
+  it("keeps the Precinct's plan as the station was", () => {
+    expect(STATION_CORE.grid).toHaveLength(60);
+    for (const row of STATION_CORE.grid) expect(row).toHaveLength(60);
+    // The core is the full map's top-left, but for the doors the wing cut
+    // through, and the rooms Certification Day added inside it (the training
+    // hall and its passage off the gym, Lin's booth), which the Precinct
+    // never had.
+    const added = ["track", "trackPassage", "booth"].map((n) => map.rooms[n]);
+    const inAdded = (x, y) => added.some((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1);
+    let diff = 0;
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) if (!inAdded(x, y) && STATION_CORE.grid[y][x] !== g[y][x]) diff++;
+    expect(diff).toBeGreaterThan(0);
+    expect(diff).toBeLessThan(400);
+  });
+
+  it("opens the civic wing off the spine's south end, its props on open floor", () => {
+    // Down the passage from the spine, and through to records and the Bureau.
+    for (const [x, y] of [[58, 58], [59, 61], [58, 62], [44, 70], [75, 71]]) expect(at(x + 0.5, y + 0.5), `${x},${y}`).toBe(true);
+    for (const b of [CIVIC_HALL, CIVIC_RECORDS, CIVIC_BUREAU]) expect(at(b.x0 + 0.5, b.y1 + 0.5)).toBe(true);
+    // The trees, the fountain's jets and the security gates stand on floor.
+    for (const { r, c } of CIVIC_BEDS) expect(g[r + 1][c + 1]).toBe(0);
+    for (const dr of [1, 2]) for (const dc of [1, 2]) expect(g[CIVIC_FOUNTAIN.r + dr][CIVIC_FOUNTAIN.c + dc]).toBe(0);
+    for (const c of CIVIC_LINE.gates) expect(at(c + 0.5, CIVIC_LINE.r + 0.5), `gate ${c}`).toBe(true);
+    // Every wall id it paints is its own.
+    for (const id of Object.values(CIVIC_WALLS)) expect(map.lateWalls).toContain(id);
+  });
+
+  it("gives the east wing wall ids no campaign floor uses", () => {
+    // Two builders once both took 120 onward: the floors' cells painted as
+    // the wing's walls. A shared id is a wrong wall somewhere.
+    const wing = new Set([...Object.values(HALL_WALLS), ...map.lateWalls]);
+    const floors = new Set(Object.values(PRECINCT_WALLS));
+    for (const m of Object.values(MAPS)) for (const row of m.grid) for (const v of row) floors.add(v);
+    for (const id of wing) {
+      expect(floors.has(id)).toBe(false);
+      expect(id).toBeLessThan(256);
+    }
+  });
+});

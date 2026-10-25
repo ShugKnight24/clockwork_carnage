@@ -9,6 +9,7 @@
  */
 
 import { GameState } from "../game.js";
+import { Npc } from "../npc.js";
 import {
   WEAPONS,
   getAct,
@@ -48,6 +49,90 @@ export function createDebugBridge(game) {
       return game.state;
     },
 
+    /** Put one of the station's people down (js/npc.js), optionally holding a pose. */
+    spawnNpc(kind = "officer", x, y, gesture = null) {
+      const p = game.player;
+      const n = new Npc(x ?? p.x + Math.cos(p.angle) * 3, y ?? p.y + Math.sin(p.angle) * 3, kind);
+      n.faceTo(p);
+      if (gesture) n.pose(gesture, Infinity);
+      game.entities.push(n);
+      return n.id;
+    },
+
+    /** The message director: its lanes, what holds each one, and the prologue card. */
+    messages() {
+      const d = game.messages;
+      const key = game.tutorial?.cardKey;
+      return {
+        lanes: d.lanes,
+        headline: d.current("headline")?.key ?? null,
+        queued: d.queues?.headline?.map((i) => i.key),
+        card: key ? { key, status: d.status(key) } : null,
+        comms: game.ariaComms?.message ? { place: game.ariaComms.message.place, text: game.ariaComms.message.text.slice(0, 40) } : null,
+      };
+    },
+
+    /** Put a line on the comms now, as a speaker (portraits, plates, voices). */
+    say(speaker, text, color = "#ffd24a") {
+      game.ariaComms.message = null;
+      game.ariaComms.queue.length = 0;
+      game.ariaComms.queueLine({ speaker, text, color, duration: 8, prominent: true });
+    },
+
+    /**
+     * Each enemy's drawn height on a grid level, [top, bottom] from the eye
+     * line, in the current art style: the tables in src/data/enemy-art.js,
+     * measured afresh. Each figure is drawn alone by the renderer onto a clear
+     * canvas, idle and facing the camera, over a few animation frames, and
+     * its inked rows (alpha over 110) are kept: not the sprite's padded box.
+     */
+    async measureEnemyArt() {
+      const { prepareEnemySprite } = await import("../../src/rendering/svg-art/sprites/enemies.js");
+      const r = game.renderer;
+      const W = r.width, H = r.height, D = 3, sh = H / D;
+      const c = document.createElement("canvas");
+      c.width = W;
+      c.height = H;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      const out = {};
+      for (const [type, def] of Object.entries(ENEMY_TYPES)) {
+        if (def.boss) continue;
+        const e = new Enemy(D, 0, type);
+        Object.assign(e, { angle: Math.PI, state: "idle", hitTime: 0 });
+        for (let i = 0; i < 40 && !prepareEnemySprite(ctx, e, 100, 1); i++) await new Promise((q) => setTimeout(q, 50));
+        let top = Infinity, bot = -Infinity;
+        for (const time of [100, 700, 1300, 1900, 2500]) {
+          r.zBuffer.fill(Infinity);
+          ctx.clearRect(0, 0, W, H);
+          r.drawEntity(ctx, e, W / 2, (H - sh) / 2 | 0, (H + sh) / 2 | 0, (W - sh) / 2 | 0, (W + sh) / 2 | 0, sh, sh, D, time);
+          const d = ctx.getImageData(0, 0, W, H).data;
+          const inked = (y) => { for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 110) return true; return false; };
+          for (let y = 0; y < H; y++) if (inked(y)) { top = Math.min(top, y); break; }
+          for (let y = H - 1; y >= 0; y--) if (inked(y)) { bot = Math.max(bot, y); break; }
+        }
+        if (top <= bot) out[type] = [+((H / 2 - top) / sh).toFixed(2), +((H / 2 - bot) / sh).toFixed(2)];
+      }
+      return out;
+    },
+
+    /** The level's narrative beats: which have fired, and what is still to say. */
+    beats() {
+      const b = game.levelBeats;
+      return { count: b.beats.length, fired: [...b.fired], pending: b.lines.length, clock: b.clock };
+    },
+
+    /** The prologue's live state: step, its counter, and the sim hall. */
+    tutorialState() {
+      const t = game.tutorial;
+      return { step: t.step, id: t.def?.id ?? null, progress: t.progressText(), sim: t.sim ? { ...t.sim } : null, health: game.player.health, clock: +t.clock.toFixed(2), phase: t.c?.phase ?? null, sup: t.sup ? { x: +t.sup.x.toFixed(2), y: +t.sup.y.toFixed(2), active: t.sup.active, walking: t.sup.walking } : null, script: t.script.length, line: !!t._ourLine, comms: game.ariaComms?.enabled, message: game.ariaComms?.message?.text?.slice(0, 30) ?? null };
+    },
+
+    /** Complete the next `n` prologue steps as if their goals were met; returns the step reached. */
+    tutorialSkip(n = 1) {
+      for (let i = 0; i < n; i++) game.tutorial.skipStep();
+      return game.tutorialStep;
+    },
+
     startArena() {
       game.audio.init();
       game.startArena();
@@ -68,6 +153,7 @@ export function createDebugBridge(game) {
       game.player.reset();
       game.player.alive = true;
       game.loadCampaignLevel(level);
+      game.ariaEnabled = true; // as a campaign started from the menu has her
       game.state = GameState.PLAYING;
       return game.state;
     },
@@ -326,6 +412,9 @@ export function createDebugBridge(game) {
         maxHealth: game.player.maxHealth,
         armor: game.player.armor,
         ammo: game.player.ammo,
+        // Rounds in the held gun's magazine (out of `ammo`), and its reload.
+        loaded: game.player.loaded,
+        reloading: !!game.activeReload?.active,
         score: game.player.score,
         kills: game.player.kills,
         alive: game.player.alive,
@@ -364,10 +453,11 @@ export function createDebugBridge(game) {
 
     /**
      * Enable per-phase profiling and return the profiler's rolling averages.
-     * Phase timings are only collected while game.showFPS is on.
+     * Phase timings are only collected while profiling is on; this turns it on
+     * without the overlay, whose graph would add to the frame being measured.
      */
     getPerf(enable = true) {
-      if (enable) game.showFPS = true;
+      if (enable) game.perfCapture = true;
       return game.profiler?.getSnapshot?.() ?? null;
     },
 
@@ -382,7 +472,8 @@ export function createDebugBridge(game) {
       if (on) {
         game.player.health = 999999;
         game.player.maxHealth = 999999;
-        game.player.ammo = 999999;
+        // Every gun, carried now or later, has rounds to spare.
+        for (const w of WEAPONS) game.player.reserves[w.id] = 999999;
       }
       return on;
     },
@@ -635,11 +726,16 @@ export function createDebugBridge(game) {
       }));
     },
 
-    /** Kill all enemies instantly */
+    /** Kill all enemies instantly; they count toward the level, as a lockdown reads. */
     killAll() {
       let killed = 0;
       for (const e of game.entities) {
-        if (e.type === "enemy" && e.active) { e.active = false; e.health = 0; killed++; }
+        if (e.type === "enemy" && e.active) {
+          e.active = false;
+          e.health = 0;
+          killed++;
+          if (!e._hunter) game.killedEnemies++;
+        }
       }
       return killed;
     },

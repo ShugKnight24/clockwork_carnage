@@ -271,26 +271,27 @@ export const ACHIEVEMENTS = {
     category: "arena",
     check: (stats) => stats.flawlessRounds >= 1,
   },
-  // Placeholder achievements — more coming soon
-  _comingSoon1: {
-    name: "???",
-    description: "More achievements coming soon...",
-    icon: "lock",
-    category: "hidden",
-    check: () => false,
+  // Earned on the level-complete debrief (js/game.js _buildDebrief) and on
+  // weapon pickup; each is checked the moment its stat is set.
+  topMarks: {
+    name: "Top Marks",
+    description: "Earn an S grade on a campaign level",
+    icon: "crown",
+    category: "campaign",
+    check: (stats) => stats.levelsAced >= 1,
   },
-  _comingSoon2: {
-    name: "???",
-    description: "More achievements coming soon...",
-    icon: "lock",
-    category: "hidden",
-    check: () => false,
+  treasureHunter: {
+    name: "Treasure Hunter",
+    description: "Find every secret on a campaign level",
+    icon: "target",
+    category: "campaign",
+    check: (stats) => stats.levelsFullySearched >= 1,
   },
-  _comingSoon3: {
-    name: "???",
-    description: "More achievements coming soon...",
-    icon: "lock",
-    category: "hidden",
-    check: () => false,
+  fullArsenal: {
+    name: "Full Arsenal",
+    description: "Carry every weapon at once",
+    icon: "bolt",
+    category: "combat",
+    check: (stats) => !!stats.fullArsenal,
   },
 };

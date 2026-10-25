@@ -5,9 +5,31 @@
 import { test, expect } from "@playwright/test";
 import { loadGame, debug, screenshot } from "./helpers.js";
 
+/**
+ * Run a bot and fail with what it said went wrong (its ❌ lines and any page
+ * error), not just "expected true".
+ */
+async function runBot(page, name) {
+  const said = [];
+  const listen = (m) => {
+    const t = m.text();
+    if (/❌|Error/.test(t)) said.push(t.slice(0, 400));
+  };
+  const crashed = (e) => said.push(`page error: ${e.message}`);
+  page.on("console", listen);
+  page.on("pageerror", crashed);
+  const result = await page.evaluate((n) => window.ccTest.bot(n), name);
+  page.off("console", listen);
+  page.off("pageerror", crashed);
+  expect(result, `${name} bot:\n${said.slice(0, 10).join("\n")}`).toBe(true);
+}
+
 test.describe("Bot Profiles", () => {
   test.beforeEach(async ({ page }) => {
     await loadGame(page);
+    // The test runner is imported after the debug bridge (js/main.js), so
+    // loadGame's ccDebug wait does not cover it.
+    await page.waitForFunction(() => window.ccTest != null, { timeout: 10_000 });
   });
 
   test("data validation suite passes", async ({ page }) => {
@@ -51,38 +73,37 @@ test.describe("Bot Profiles", () => {
 
   test("completionist bot completes tutorial + campaign", async ({ page }) => {
     test.setTimeout(120_000);
-    const result = await page.evaluate(() =>
-      window.ccTest.bot("completionist"),
-    );
-    expect(result).toBe(true);
+    await runBot(page, "completionist");
     await screenshot(page, "bot-completionist-end");
   });
 
   test("speedrunner bot completes campaign level 0", async ({ page }) => {
     test.setTimeout(60_000);
-    const result = await page.evaluate(() => window.ccTest.bot("speedrunner"));
-    expect(result).toBe(true);
+    await runBot(page, "speedrunner");
     await screenshot(page, "bot-speedrunner-end");
   });
 
   test("iron man bot survives 5 arena rounds", async ({ page }) => {
     test.setTimeout(120_000);
-    const result = await page.evaluate(() => window.ccTest.bot("ironman"));
-    expect(result).toBe(true);
+    await runBot(page, "ironman");
     await screenshot(page, "bot-ironman-end");
   });
 
-  test("no-damage bot completes without damage", async ({ page }) => {
+  test("cadet bot plays every prologue step to its goal", async ({ page }) => {
+    test.setTimeout(240_000);
+    await runBot(page, "cadet");
+    await screenshot(page, "bot-cadet-end");
+  });
+
+  test("careful bot clears level 0 with light damage", async ({ page }) => {
     test.setTimeout(60_000);
-    const result = await page.evaluate(() => window.ccTest.bot("nodamage"));
-    expect(result).toBe(true);
+    await runBot(page, "nodamage");
     await screenshot(page, "bot-nodamage-end");
   });
 
   test("arena endurance bot survives 10 rounds", async ({ page }) => {
     test.setTimeout(180_000);
-    const result = await page.evaluate(() => window.ccTest.bot("endurance"));
-    expect(result).toBe(true);
+    await runBot(page, "endurance");
     await screenshot(page, "bot-endurance-end");
   });
 });

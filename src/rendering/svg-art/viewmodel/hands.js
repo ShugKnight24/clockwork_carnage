@@ -574,8 +574,12 @@ function gripFinger(g, { y, back, L, d, side = 1, drop = 1.6, lift = 2.2 }) {
   return { j3, near: nearSegments(pts, RIGHT_FLANK) };
 }
 
-/** Back of the right glove, knuckles and fingers on a pistol grip; `between` paints after the wrapped fingers. */
-function firingGlove(A, g, between, ads = false, thumb = true) {
+/**
+ * Back of the right glove, knuckles and fingers on a pistol grip; `between`
+ * paints after the wrapped fingers. `ads` picks the hand geometry seen from
+ * behind; `sleeveAds` the arm (straight down at ADS, in from the right at hip).
+ */
+function firingGlove(A, g, between, ads = false, thumb = true, sleeveAds = ads) {
   const { hw, yTop: yT } = g;
   const fr = (y) => gz(g, y, "front");
   const bk = (y) => gz(g, y, "back");
@@ -587,7 +591,7 @@ function firingGlove(A, g, between, ads = false, thumb = true) {
   const WR = ads ? [hw + 2, yT - 74, bk(yT) - 66] : [hw + 30, yT - 76, bk(yT) - 50];
 
   // At ADS the arm drops straight down so the sleeve stays inside the weapon's silhouette.
-  if (ads) A.sleeve(WR, WU, [hw + 50, yT - 340, bk(yT) - 190], { flare: 1.5 });
+  if (sleeveAds) A.sleeve(WR, WU, [hw + 50, yT - 340, bk(yT) - 190], { flare: 1.5 });
   else A.sleeve(WR, WU, [hw + 150, yT - 260, bk(yT) - 330], { flare: 2.1 });
 
   // Middle, ring, little: along the right flank, round the front strap, tips on the left.
@@ -666,14 +670,23 @@ export function firingHand(A, g, ads = false) {
  * its fingers wrap the front over the firing fingers — tucked beneath the
  * firing glove's knuckles — while both thumbs lie forward along the left of
  * the frame (painted under the slide by `supportThumb`).
+ *
+ * Both poses use the hands as seen from behind: the hip eye sits left of the
+ * pistol, looking at its left flank, so the back of the LEFT hand faces it,
+ * knuckles proud of the left flank. The hip pose used to swing the right
+ * wrist out to show the back of the right hand instead — fingers toward the
+ * muzzle, index on top — which is a left hand's back, on the right arm.
+ * Only the sleeves differ by pose.
  */
-export function sidearmGrip(A, g, ads = false) {
+export function sidearmGrip(A, g, pose = false) {
+  const sleeveAds = pose;
+  const ads = true;
   A.use("handR");
   const { hw, yTop: yT, yBot: yB } = g;
   const fr = (y) => gz(g, Math.max(yB, y), "front");
   const WA = [-hw - 14, yB + 4, g.zbB - 36];
   const WB = [hw - 2, yB - 14, g.zbB - 44];
-  if (ads) A.sleeve(WA, WB, [-hw - 30, yB - 340, g.zbB - 180], { flare: 1.5 });
+  if (sleeveAds) A.sleeve(WA, WB, [-hw - 30, yB - 340, g.zbB - 180], { flare: 1.5 });
   else A.sleeve(WA, WB, [-hw - 110, yB - 240, g.zbB - 320], { flare: 2 });
   // Support fingers: knuckles at the front-left corner, across the front
   // strap riding over the firing fingers, tips round onto the right side.
@@ -742,7 +755,7 @@ export function sidearmGrip(A, g, ads = false) {
   firingGlove(A, g, () => {
     // The fingertips come round the right side over the firing fingers.
     if (!ads) for (const { j3, w, near } of support) A.finger(j3, w, { near, onlyNear: true });
-  }, ads, false);
+  }, ads, false, sleeveAds);
 }
 
 /** Both thumbs forward along the left of a sidearm frame; paint before the slide. */

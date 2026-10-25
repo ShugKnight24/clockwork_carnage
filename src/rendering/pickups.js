@@ -1,6 +1,7 @@
 // Pickup, exit, and projectile rendering — extracted from Renderer class
 
 import { isModernArt, isRealisticArt } from "./art-style.js";
+import { CEILING_Z } from "../systems/physics.js";
 import { projectileKind } from "../../js/vfx.js";
 import { drawSvgSprite, warmSvgSprites } from "./props.js";
 import { DEFS as PICKUP_DEFS, PICKUP_SPRITES } from "./svg-art/sprites/pickups.js";
@@ -381,133 +382,147 @@ export function drawWeaponPickup(
   ctx.globalAlpha = 1;
 }
 
-export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+// ── Extraction beacon ───────────────────────────────────────────────────────
+// The level exit used to be a door billboard floating mid-corridor: it turned
+// to face the player, stood on nothing and lit nothing. A column of light is
+// the same from every side, so a billboard draws it honestly; a ring is laid
+// on the floor in perspective and the exit's point light (game.js
+// _syncExitLight) spills onto the deck and walls around it.
+
+const BEACON = {
+  open: { core: [214, 255, 240], hue: [0, 255, 170] },
+  sealed: { core: [255, 214, 214], hue: [255, 51, 85] },
+};
+const beam = ([r, g, b], a) => `rgba(${r},${g},${b},${a})`;
+
+// Column texture: bright at the floor, fading up to the ceiling, soft at the
+// sides. Built once per colour and stretched to the column's screen size.
+const _beamTex = new Map();
+function beamTexture(state) {
+  let c = _beamTex.get(state);
+  if (c) return c;
+  const { core, hue } = BEACON[state];
+  c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 256;
+  const g = c.getContext("2d");
+  for (let x = 0; x < 64; x++) {
+    const u = Math.abs(x - 31.5) / 32;
+    const side = Math.max(0, 1 - u * u) ** 2.2;
+    const grad = g.createLinearGradient(0, 256, 0, 0);
+    grad.addColorStop(0, beam(core, 0.95 * side));
+    grad.addColorStop(0.18, beam(hue, 0.55 * side));
+    grad.addColorStop(0.65, beam(hue, 0.18 * side));
+    grad.addColorStop(1, beam(hue, 0));
+    g.fillStyle = grad;
+    g.fillRect(x, 0, 1, 256);
+  }
+  _beamTex.set(state, c);
+  return c;
+}
+
+// World sizes, in cells.
+const RING_R = 0.62;
+const BEAM_R = 0.34;
+
+/**
+ * Draw the exit at its sprite position. `sprHeight` is a wall's art height at
+ * `dist`, so the floor is `centerY + sprHeight / 2` and the ceiling CEILING_Z
+ * walls over it. `sealed` turns it red and dim (an objective still holds the
+ * exit shut).
+ */
+export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog, sealed = false) {
   if (fog <= 0) return;
-  const size = Math.max(8, sprWidth * 0.5);
-  // Modern art draws the airlock as a layered SVG blast door; the legacy
-  // canvas drawing below stays as the fallback, same as every other pickup.
-  if (drawModernPickup(ctx, "exit", screenX, centerY, size, time, fog)) return;
-  const t = time * 0.003;
-  const pulse = 0.7 + Math.sin(t * 1.4) * 0.3;
+  const state = sealed ? "sealed" : "open";
+  const { core, hue } = BEACON[state];
+  const t = time / 1000;
+  const unit = sprHeight; // screen px per cell at this distance
+  const floorY = centerY + unit / 2;
+  const ceilY = floorY - unit * CEILING_Z;
+  // Sealed: a slow, uneven flicker. Open: a steady breathing pulse.
+  const pulse = sealed
+    ? 0.55 + 0.25 * Math.sin(t * 2.1) * Math.sin(t * 7.3)
+    : 0.85 + 0.15 * Math.sin(t * 2.4);
+  const a = fog * pulse;
 
   ctx.save();
-  ctx.translate(screenX, centerY);
+  ctx.globalCompositeOperation = "lighter";
 
-  // ── Airlock door frame ──────────────────────────────────────────
-  const dW = size * 1.4; // door half-width
-  const dH = size * 2.0; // door half-height
-  const frameThick = Math.max(2, size * 0.12);
-
-  // Ambient glow behind door
-  ctx.globalAlpha = fog * pulse * 0.18;
-  const grd = ctx.createRadialGradient(0, 0, size * 0.2, 0, 0, size * 2.4);
-  grd.addColorStop(0, "#00ffaa");
-  grd.addColorStop(1, "transparent");
-  ctx.fillStyle = grd;
-  ctx.fillRect(-size * 2.4, -size * 2.4, size * 4.8, size * 4.8);
-
-  // Door panel (dark interior)
-  ctx.globalAlpha = fog * 0.7;
-  ctx.fillStyle = "#0a1a12";
-  ctx.fillRect(-dW, -dH, dW * 2, dH * 2);
-
-  // Scan-line shimmer inside door
-  ctx.globalAlpha = fog * 0.08;
-  ctx.fillStyle = "#00ff88";
-  const scanOff = (time * 0.04) % (dH * 2);
-  ctx.fillRect(-dW, -dH + scanOff, dW * 2, 2);
-
-  // Outer frame
-  ctx.globalAlpha = fog * pulse * 0.85;
-  ctx.strokeStyle = "#00cc88";
-  ctx.lineWidth = frameThick;
-  ctx.strokeRect(-dW, -dH, dW * 2, dH * 2);
-
-  // Inner frame bevel
-  ctx.globalAlpha = fog * 0.4;
-  ctx.strokeStyle = "#005533";
-  ctx.lineWidth = frameThick * 0.5;
-  ctx.strokeRect(
-    -dW + frameThick,
-    -dH + frameThick,
-    (dW - frameThick) * 2,
-    (dH - frameThick) * 2,
-  );
-
-  // Hazard stripes — top bar
-  ctx.globalAlpha = fog * 0.55;
-  const stripeH = Math.max(3, size * 0.18);
-  const stripeCount = 6;
-  const stripeW = (dW * 2) / stripeCount;
-  for (let s = 0; s < stripeCount; s++) {
-    ctx.fillStyle = s % 2 === 0 ? "#ffcc00" : "#111111";
-    ctx.fillRect(-dW + s * stripeW, -dH, stripeW, stripeH);
-    ctx.fillRect(-dW + s * stripeW, dH - stripeH, stripeW, stripeH);
-  }
-
-  // Status indicator lights (left frame)
-  const lightR = Math.max(2, size * 0.1);
-  const lightSpacing = dH * 0.4;
-  const greenPulse = 0.8 + Math.sin(t * 2.2) * 0.2;
-  for (let li = 0; li < 3; li++) {
-    const ly = -dH * 0.35 + li * lightSpacing;
-    // Glow
-    ctx.globalAlpha = fog * greenPulse * 0.4;
-    ctx.fillStyle = "#00ff88";
-    ctx.beginPath();
-    ctx.arc(-dW - lightR * 0.5, ly, lightR * 2, 0, Math.PI * 2);
-    ctx.fill();
-    // Core
-    ctx.globalAlpha = fog * greenPulse * 0.9;
-    ctx.fillStyle = "#00ff88";
-    ctx.beginPath();
-    ctx.arc(-dW - lightR * 0.5, ly, lightR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  
-  // Rotating energy arcs
-  for (let i = 0; i < 4; i++) {
-    const a = t * 2 + (i * Math.PI) / 2;
-    const rx = Math.cos(a) * size * 0.9;
-    const ry = Math.sin(a) * size * 1.3;
-    ctx.globalAlpha = fog * 0.6;
-    ctx.fillStyle = i % 2 === 0 ? "#00ffcc" : "#88ffdd";
-    ctx.beginPath();
-    ctx.arc(rx, ry, Math.max(2, size * 0.12), 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Door centre seam (vertical split line)
-  ctx.globalAlpha = fog * pulse * 0.5;
-  ctx.strokeStyle = "#00ffaa";
-  ctx.lineWidth = 1.5;
+  // Floor ring, projected: a circle of radius R at distance d spans floor rows
+  // h/2(d-R) to h/2(d+R) ahead of the eye, so it flattens with distance.
+  const d = Math.max(dist, RING_R + 0.15);
+  const near = centerY + (unit * dist) / (2 * (d - RING_R));
+  const far = centerY + (unit * dist) / (2 * (d + RING_R));
+  const ry = Math.max(1, (near - far) / 2);
+  const rx = RING_R * unit;
+  const cy = (near + far) / 2;
+  ctx.lineWidth = Math.max(1, unit * 0.025);
+  ctx.strokeStyle = beam(hue, 0.85 * a);
   ctx.beginPath();
-  ctx.moveTo(0, -dH + stripeH);
-  ctx.lineTo(0, dH - stripeH);
+  ctx.ellipse(screenX, cy, rx, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
-
-  // Horizontal locking bolt indicator (recessed)
-  ctx.globalAlpha = fog * 0.3;
-  ctx.fillStyle = "#004422";
-  ctx.fillRect(-dW * 0.6, -size * 0.08, dW * 1.2, size * 0.16);
-  ctx.globalAlpha = fog * pulse * 0.7;
-  ctx.strokeStyle = "#00cc88";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(-dW * 0.6, -size * 0.08, dW * 1.2, size * 0.16);
-
-  // "AIRLOCK" label above door
-  if (size > 14) {
-    const fontSize = Math.max(7, size * 0.22);
-    ctx.globalAlpha = fog * pulse * 0.75;
-    ctx.fillStyle = "#00ffcc";
-    ctx.font = `bold ${fontSize}px monospace`;
-    ctx.textAlign = "center";
-    ctx.fillText("AIRLOCK", 0, -dH - fontSize * 0.3);
+  // Pool of light inside the ring.
+  const pool = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, rx);
+  pool.addColorStop(0, beam(core, 0.45 * a));
+  pool.addColorStop(0.6, beam(hue, 0.18 * a));
+  pool.addColorStop(1, beam(hue, 0));
+  ctx.fillStyle = pool;
+  ctx.save();
+  ctx.translate(screenX, cy);
+  ctx.scale(1, ry / rx);
+  ctx.beginPath();
+  ctx.arc(0, 0, rx, 0, Math.PI * 2);
+  ctx.restore();
+  ctx.fill();
+  // Turning segments on the ring (open only): it reads as active.
+  if (!sealed) {
+    ctx.lineWidth = Math.max(1.5, unit * 0.05);
+    ctx.strokeStyle = beam(core, 0.9 * fog);
+    for (let i = 0; i < 3; i++) {
+      const s = t * 1.4 + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.ellipse(screenX, cy, rx * 0.86, ry * 0.86, 0, s, s + 0.7);
+      ctx.stroke();
+    }
   }
 
+  // The column, floor to ceiling.
+  const bw = BEAM_R * 2 * unit;
+  ctx.globalAlpha = a;
+  ctx.drawImage(beamTexture(state), screenX - bw / 2, ceilY, bw, floorY - ceilY);
   ctx.globalAlpha = 1;
-  ctx.textAlign = "left";
+
+  // Motes rising through the column.
+  const motes = sealed ? 3 : 7;
+  for (let i = 0; i < motes; i++) {
+    const k = (t * (sealed ? 0.12 : 0.32) + i / motes) % 1;
+    const y = floorY - k * (floorY - ceilY);
+    const x = screenX + Math.sin(i * 2.3 + t * 1.7) * bw * 0.22;
+    const r = Math.max(1, unit * 0.022) * (1 - k * 0.6);
+    ctx.fillStyle = beam(core, (1 - k) * 0.9 * fog);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
+
+  // Label at eye level when close enough to read.
+  if (dist < 9) {
+    const la = fog * Math.min(1, (9 - dist) / 3);
+    const size = Math.max(10, Math.min(28, unit * 0.11));
+    ctx.save();
+    ctx.font = `700 ${Math.round(size)}px "Bebas Neue", "Oswald", system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = sealed ? "SEALED" : "EXTRACTION";
+    const ly = centerY - unit * 0.18;
+    ctx.fillStyle = `rgba(4,8,12,${0.55 * la})`;
+    const tw = ctx.measureText(label).width;
+    ctx.fillRect(screenX - tw / 2 - size * 0.5, ly - size * 0.7, tw + size, size * 1.4);
+    ctx.fillStyle = beam(sealed ? hue : core, la);
+    ctx.fillText(label, screenX, ly);
+    ctx.restore();
+  }
 }
 
 // ── Realistic FX: projectiles and impact particles ──────────────────────────
@@ -1113,4 +1128,85 @@ export function drawExoticPickup(
   ctx.textAlign = "left";
 
   ctx.globalAlpha = 1;
+}
+
+// ── Power cell ──────────────────────────────────────────────────────────────
+// What holds a level's exit shut (src/systems/exit-cells.js): an amber energy
+// cell floating at waist height in a side room, glowing so it reads from a
+// doorway. Procedural, so it looks the same in every art style.
+
+const CELL_CORE = [255, 236, 190];
+const CELL_HUE = [255, 176, 40];
+
+/** Draw a power cell at its sprite position (see drawExit for the geometry). */
+export function drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
+  if (fog <= 0) return;
+  const t = time / 1000;
+  const unit = sprHeight;
+  const floorY = centerY + unit / 2;
+  const bob = Math.sin(t * 2.2) * unit * 0.03;
+  const cy = centerY + unit * 0.12 + bob; // waist height, bobbing
+  const r = unit * 0.12;
+  const pulse = 0.8 + 0.2 * Math.sin(t * 3.1);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  // Halo, and a pool of light on the floor below.
+  const halo = ctx.createRadialGradient(screenX, cy, 0, screenX, cy, r * 3.2);
+  halo.addColorStop(0, beam(CELL_HUE, 0.5 * fog * pulse));
+  halo.addColorStop(1, beam(CELL_HUE, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(screenX - r * 3.2, cy - r * 3.2, r * 6.4, r * 6.4);
+  const near = centerY + (unit * dist) / (2 * Math.max(0.3, dist - 0.35));
+  const far = centerY + (unit * dist) / (2 * (dist + 0.35));
+  const py = (near + far) / 2;
+  const pr = 0.35 * unit;
+  const prY = Math.max(1, (near - far) / 2);
+  ctx.save();
+  ctx.translate(screenX, py);
+  ctx.scale(1, prY / pr);
+  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, pr);
+  pool.addColorStop(0, beam(CELL_HUE, 0.35 * fog));
+  pool.addColorStop(1, beam(CELL_HUE, 0));
+  ctx.fillStyle = pool;
+  ctx.beginPath();
+  ctx.arc(0, 0, pr, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+
+  // The cell: a hexagonal capsule with a bright core and end caps.
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const hw = r * 0.62;
+  const hh = r * 1.15;
+  const hex = (w, hgt) => {
+    ctx.beginPath();
+    ctx.moveTo(screenX - w, cy - hgt * 0.62);
+    ctx.lineTo(screenX, cy - hgt);
+    ctx.lineTo(screenX + w, cy - hgt * 0.62);
+    ctx.lineTo(screenX + w, cy + hgt * 0.62);
+    ctx.lineTo(screenX, cy + hgt);
+    ctx.lineTo(screenX - w, cy + hgt * 0.62);
+    ctx.closePath();
+  };
+  hex(hw, hh);
+  ctx.fillStyle = "#2a1a06";
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.strokeStyle = "#0b0703";
+  ctx.stroke();
+  ctx.globalCompositeOperation = "lighter";
+  hex(hw * 0.55, hh * 0.72);
+  const core = ctx.createLinearGradient(screenX, cy - hh, screenX, cy + hh);
+  core.addColorStop(0, beam(CELL_CORE, 0.9 * pulse));
+  core.addColorStop(0.5, beam(CELL_HUE, 0.95 * pulse));
+  core.addColorStop(1, beam(CELL_CORE, 0.9 * pulse));
+  ctx.fillStyle = core;
+  ctx.fill();
+  // A highlight sweeping down the core.
+  const k = (t * 0.6) % 1;
+  ctx.fillStyle = beam(CELL_CORE, 0.6 * (1 - Math.abs(k - 0.5) * 2));
+  ctx.fillRect(screenX - hw * 0.5, cy - hh * 0.7 + k * hh * 1.4, hw, Math.max(1, r * 0.12));
+  ctx.restore();
 }

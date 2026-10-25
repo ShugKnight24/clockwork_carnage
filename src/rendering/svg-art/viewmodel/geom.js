@@ -31,6 +31,8 @@ export const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]
 // Key light upper-left and slightly behind the camera; rim light behind-right.
 const KEY = norm([-0.55, 0.78, -0.3]);
 const RIM = norm([0.8, 0.2, 0.55]);
+// The key light's direction on screen (y down), for the worn-edge catch.
+const KEY_2D = [-0.55, -0.83];
 
 function hex(c) {
   const n = parseInt(c.slice(1), 16);
@@ -102,14 +104,21 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
 }
 
 /**
- * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) }
+ * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) },
+ *   or { side: true, scale } — an orthographic profile of the left flank, muzzle
+ *   pointing right, at `scale` units per mm (HUD weapon icons)
  * @param {string} accent  character energy colour (emissives, rim light)
- * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges }
+ * @param {object} [opts]  { real: Realistic art — no ink silhouettes or accent rim, soft edges;
+ *   skin: a weapon finish — { remap: Map(material ramp → ramp), pattern: SVG pattern id or null } }
  */
 export function createScene(cam, accent, opts = {}) {
   const { F, ox, oy, oz, kx = 0 } = cam;
+  const side = !!cam.side;
+  const S = cam.scale || 1;
   const real = !!opts.real;
-  const eye = [-ox, -oy, -oz];
+  const skin = opts.skin || null;
+  // Side view: the eye far off the left flank, so painter order follows x.
+  const eye = side ? [-1e5, 0, 0] : [-ox, -oy, -oz];
   const core = mix(accent, "#ffffff", 0.55);
 
   const layers = {};
@@ -128,13 +137,16 @@ export function createScene(cam, accent, opts = {}) {
   };
 
   /** Units per millimetre at a gun-space point's depth. */
-  const k = ([, , z]) => F / Math.max(20, z + oz);
+  const k = side ? () => S : ([, , z]) => F / Math.max(20, z + oz);
   /** Project a gun-space point (mm) to viewmodel units. */
-  const P = (p) => {
-    const q = k(p);
-    return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
-  };
-  // Which screen winding means "facing the camera"? Probe with a floor-facing quad below the eye.
+  const P = side
+    ? (p) => [p[2] * S, -p[1] * S]
+    : (p) => {
+      const q = k(p);
+      return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
+    };
+  // Which screen winding means "facing the camera"? Probe with a quad facing the
+  // eye: a floor below it, or for the side view the left flank.
   const area2 = (p2) => {
     let a = 0;
     for (let i = 0; i < p2.length; i++) {
@@ -143,8 +155,11 @@ export function createScene(cam, accent, opts = {}) {
     }
     return a;
   };
-  const probe = [[-5, -oy - 60, 200], [5, -oy - 60, 200], [5, -oy - 60, 210], [-5, -oy - 60, 210]];
-  const VIS = Math.sign(area2((dot(newell(probe), [0, 1, 0]) < 0 ? probe.slice().reverse() : probe).map(P))) || 1;
+  const probe = side
+    ? [[0, 0, 0], [0, 0, 10], [0, 10, 10], [0, 10, 0]]
+    : [[-5, -oy - 60, 200], [5, -oy - 60, 200], [5, -oy - 60, 210], [-5, -oy - 60, 210]];
+  const toEye = side ? [-1, 0, 0] : [0, 1, 0];
+  const VIS = Math.sign(area2((dot(newell(probe), toEye) < 0 ? probe.slice().reverse() : probe).map(P))) || 1;
   const path = (pts2, close = true) => {
     for (const p of pts2) grow(cur, p);
     return "M" + pts2.map(pt).join("L") + (close ? "Z" : "");
@@ -158,7 +173,12 @@ export function createScene(cam, accent, opts = {}) {
    * against the virtual eye, the rest are painter-sorted, lit and inked.
    */
   function solid(faces, mat, o = {}) {
-    const { smooth = false, amb = 0.2, spec = true, depth = true } = o;
+    // `matte`: polymer — grained, no machined specular, a faint edge catch.
+    const { smooth = false, amb = 0.2, matte = false, spec = !matte, depth = true } = o;
+    // A weapon finish recolours the material, and may pattern its faces.
+    const skinned = skin?.remap.get(mat);
+    if (skinned) mat = skinned;
+    const pattern = skinned && skin.pattern ? `url(#${skin.pattern})` : null;
     // Realistic: materials over outlines — no ink silhouette, a faint seam, and
     // a cool neutral bounce instead of the character-coloured rim.
     const rim = real ? 0 : o.rim ?? 0.22;
@@ -188,6 +208,11 @@ export function createScene(cam, accent, opts = {}) {
       const p2 = face.map(P);
       const seam = smooth ? `stroke="${col}" stroke-width=".3"` : `stroke="${INK}" stroke-opacity="${edge}" stroke-width=".22"`;
       out += `<path d="${path(p2)}" fill="${col}" ${seam} stroke-linejoin="round"/>`;
+      if (pattern) out += `<path d="${path(p2)}" fill="${pattern}"/>`;
+      // Surface finish, from shared defs: polymer gets a fine grain, a lit
+      // metal face a soft brushed sweep that darkens toward its far corner.
+      if (matte) out += `<path d="${path(p2)}" fill="url(#vmGrain)"/>`;
+      else if (!smooth && lit > 0.2) out += `<path d="${path(p2)}" fill="url(#vmSheen)"/>`;
       const h = Math.max(...p2.map((p) => p[1])) - Math.min(...p2.map((p) => p[1]));
       if (depth && h > 14) out += `<path d="${path(p2)}" fill="url(#vmDepth)"/>`;
       // Machined specular strip on faces that catch the key light.
@@ -197,27 +222,38 @@ export function createScene(cam, accent, opts = {}) {
         out += `<path d="${path(band)}" fill="#e8f4ff" fill-opacity="${f(Math.min(0.42, (lit - 0.62) * 1.6 + 0.12))}"/>`;
       }
       if (smooth && lit > 0.8) {
-        out += `<path d="${path(p2)}" fill="#e8f4ff" fill-opacity="${f((lit - 0.8) * 2.2)}"/>`;
+        out += `<path d="${path(p2)}" fill="#e8f4ff" fill-opacity="${f((lit - 0.8) * (matte ? 0.8 : 2.2))}"/>`;
       }
     }
-    // Silhouette ink plus accent rim on the right-facing outline edges.
+    // Silhouette ink, the accent rim on the right-facing outline edges, and a
+    // worn-edge catch where the outline faces the key light: machined corners
+    // wear bright first, which reads as metal far more than flat fills do.
     const hp = hull(all.map(P));
     if (ink) out += `<path d="${path(hp)}" fill="none" stroke="${INK}" stroke-width="${ink}" stroke-linejoin="round"/>`;
-    if (rim) {
-      const hc = hp.reduce((a, p) => [a[0] + p[0] / hp.length, a[1] + p[1] / hp.length], [0, 0]);
-      let d = "";
-      for (let i = 0; i < hp.length; i++) {
-        const a = hp[i];
-        const b = hp[(i + 1) % hp.length];
-        let nx = b[1] - a[1];
-        let ny = -(b[0] - a[0]);
-        const mx = (a[0] + b[0]) / 2 - hc[0];
-        const my = (a[1] + b[1]) / 2 - hc[1];
-        if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
-        const l = Math.hypot(nx, ny) || 1;
-        if (nx / l > 0.55) d += `M${pt(a)}L${pt(b)}`;
+    const hc = hp.reduce((a, p) => [a[0] + p[0] / hp.length, a[1] + p[1] / hp.length], [0, 0]);
+    let rd = "";
+    let wd = "";
+    for (let i = 0; i < hp.length; i++) {
+      const a = hp[i];
+      const b = hp[(i + 1) % hp.length];
+      let nx = b[1] - a[1];
+      let ny = -(b[0] - a[0]);
+      const mx = (a[0] + b[0]) / 2 - hc[0];
+      const my = (a[1] + b[1]) / 2 - hc[1];
+      if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+      const l = Math.hypot(nx, ny) || 1;
+      if (nx / l > 0.55) rd += `M${pt(a)}L${pt(b)}`;
+      if ((nx * KEY_2D[0] + ny * KEY_2D[1]) / l > 0.45) {
+        // Inset half a stroke so the catch sits on the part, inside the ink.
+        const ix = (-nx / l) * 0.28;
+        const iy = (-ny / l) * 0.28;
+        wd += `M${pt([a[0] + ix, a[1] + iy])}L${pt([b[0] + ix, b[1] + iy])}`;
       }
-      if (d) out += `<path d="${d}" fill="none" stroke="${accent}" stroke-opacity=".55" stroke-width=".32" stroke-linecap="round"/>`;
+    }
+    if (rim && rd) out += `<path d="${rd}" fill="none" stroke="${accent}" stroke-opacity=".55" stroke-width=".32" stroke-linecap="round"/>`;
+    if (wd && o.wear !== 0) {
+      const wop = (matte ? 0.18 : real ? 0.4 : 0.55) * (o.wear ?? 1);
+      out += `<path d="${wd}" fill="none" stroke="#eef6ff" stroke-opacity="${f(wop)}" stroke-width="${smooth ? 0.32 : 0.48}" stroke-linecap="round"/>`;
     }
     emit(out);
   }

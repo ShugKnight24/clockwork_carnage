@@ -40,11 +40,17 @@ async function setupArena(page) {
 async function fireOneShotAt(page, dist, aimOffsetX, ads) {
   const result = await page.evaluate(
     async ({ dist, aimOffsetX, ads }) => {
-      window.ccDebug.setPlayer({
-        aimOffsetX,
-        aimOffsetY: 0,
-        isAiming: ads,
-      });
+      // Put the reticle on the middle of the figure as drawn, as a player
+      // would: with a HUD bar, a centred reticle looks slightly up, and over
+      // a beast's back at range (src/data/enemy-art.js).
+      const { ENEMY_ART_SPAN } = await import("/src/data/enemy-art.js");
+      const { currentBarH } = await import("/src/systems/aim.js");
+      const game = window.ccDebug.game;
+      const [top, bottom] = ENEMY_ART_SPAN.beast;
+      const h = game.canvas.height;
+      const barH = currentBarH(game);
+      const aimOffsetY = (barH / (2 * h) - (top + bottom) / 2 / dist) / ((h - barH) / h);
+      window.ccDebug.setPlayer({ aimOffsetX, aimOffsetY: 0, isAiming: ads });
       // ADS eases the FOV in (rate 8/s) rather than snapping. Let it settle,
       // then place the dummy using the FOV the renderer is actually drawing
       // with. Assuming the fully-zoomed value and firing 80ms later put the
@@ -54,12 +60,14 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       const player = window.ccDebug.getPlayer();
       const fov = window.ccDebug.getAimFov();
       const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
-      const yaw = player.angle + Math.atan(2 * aimOffsetX * planeMul);
+      // The reticle as it is now: aiming in eases it to centre, turning the view.
+      const yaw = player.angle + Math.atan(2 * (player.aimOffsetX || 0) * planeMul);
 
-      // Target on the yaw ray, at world height 0 (vertical centred).
+      // Target on the yaw ray.
       const tx = player.x + Math.cos(yaw) * dist;
       const ty = player.y + Math.sin(yaw) * dist;
 
+      window.ccDebug.setPlayer({ aimOffsetY });
       const spawn = window.ccDebug.spawn("beast", tx, ty);
 
       window.ccDebug.fire(true);

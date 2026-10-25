@@ -25,18 +25,21 @@ export function frameCapFor(settings) {
 
 /**
  * FPS that adaptive quality should aim for under a given cap.
- * Uncapped keeps the historical 55 fps target. Capped aims just under whatever
- * the cap and the panel can actually deliver, and never asks for more than the
- * uncapped target — so turning a cap on cannot start a render-scale spiral.
+ * Aims just under whatever the cap and the panel can actually deliver, and
+ * never asks for more than 55 fps — so a cap, or a panel under 60 Hz, cannot
+ * start a render-scale spiral. Uncapped on an unmeasured panel keeps 55.
  */
 export function qualityTargetFPS(cap, displayHz) {
-  if (!cap) return 55;
-  const achievable = displayHz > 0 ? Math.min(cap, displayHz) : cap;
+  const achievable = cap ? (displayHz > 0 ? Math.min(cap, displayHz) : cap) : displayHz;
+  if (!achievable) return 55;
   return clamp(achievable - 5, 20, 55);
 }
 
 export class FramePacer {
   constructor() {
+    // The panel's refresh outlives a level load or a hidden tab, so the
+    // learned floor is kept across reset().
+    this.floor = 0;
     this.reset();
   }
 
@@ -47,9 +50,16 @@ export class FramePacer {
     this.deadline = 0;
   }
 
-  /** Measured display refresh in Hz, or 0 before enough frames have run. */
+  /**
+   * Measured display refresh in Hz, or 0 before enough frames have run.
+   * Frames can never come faster than the panel refreshes, so the refresh is
+   * the floor of the frame interval, not its average: a GPU-bound game at
+   * 20 fps must not read as a 20 Hz panel, or adaptive quality would aim for
+   * 20 fps and never scale down. The floor is the fastest recent interval,
+   * creeping up very slowly so a move to a slower panel is eventually seen.
+   */
   get displayHz() {
-    return this.period > 0 ? 1000 / this.period : 0;
+    return this.floor > 0 ? 1000 / this.floor : 0;
   }
 
   /**
@@ -64,6 +74,8 @@ export class FramePacer {
     // one long frame does not skew the display estimate.
     if (this.lastFrame > 0 && delta > 0 && delta < 100) {
       this.period = this.period > 0 ? this.period * 0.9 + delta * 0.1 : delta;
+      // Ignore sub-4 ms deltas (two callbacks in one vsync).
+      if (delta >= 4) this.floor = this.floor > 0 ? Math.min(this.floor * 1.0001, delta) : delta;
     }
     this.lastFrame = now;
 

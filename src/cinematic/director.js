@@ -24,6 +24,7 @@ import { meltdown } from "./scenes/meltdown.js";
 import { forge } from "./scenes/forge.js";
 import { creator } from "./scenes/creator.js";
 import { title } from "./scenes/title.js";
+import { station } from "./scenes/station.js";
 
 /**
  * Scene adapters by `scene.kind`:
@@ -58,7 +59,7 @@ import { title } from "./scenes/title.js";
  *     letterbox, fontScale, reducedMotion }) paints the HUD canvas under the
  *     overlay, at full resolution (type, logos, the agent).
  */
-export const SCENES = { art, campaign, meltdown, forge, creator, title };
+export const SCENES = { art, campaign, station, meltdown, forge, creator, title };
 
 export function registerScene(kind, adapter) {
   SCENES[kind] = adapter;

@@ -89,7 +89,7 @@ export function updateHudMotion(game) {
   if (p.weapons.length > M.weaponCount) {
     const wep = p.getWeaponDef?.();
     toast(now, wep ? `Weapon acquired · ${wep.name}` : "Weapon acquired", "cyan");
-  } else if (p.ammo >= M.ammo + 5) {
+  } else if (p.currentWeapon === M.weapon && p.ammo >= M.ammo + 5) {
     toast(now, `+${p.ammo - M.ammo} ammo`, "amber");
   }
   if (p.currentWeapon !== M.weapon) {
@@ -109,6 +109,7 @@ export function updateHudMotion(game) {
   if (hm > M.prevHitMarker + 0.01) {
     M.hitMarkerAt = now;
     M.hitCrit = !!(game.hitMarkerCrit || game.hitMarkerHead);
+    M.hitBlocked = !!game.hitMarkerBlocked && !game.hitMarkerKill;
     if (game.hitMarkerKill) M.killConfirmAt = now;
   }
   M.prevHitMarker = hm;

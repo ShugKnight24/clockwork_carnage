@@ -17,6 +17,8 @@ import {
   VISOR_STYLES,
   SHOULDER_STYLES,
   LOADOUT_CLASSES,
+  CHARACTER_COLORS,
+  CAMO_STYLES,
   TIER_UNLOCKS,
 } from "../data/cosmetics.js";
 import { FIELD_TABLES, getIndex } from "../core/character-fields.js";
@@ -33,6 +35,8 @@ export const LOCKABLE = {
   visorIndex: { table: VISOR_STYLES, kind: "Visor" },
   shoulderIndex: { table: SHOULDER_STYLES, kind: "Shoulders" },
   loadoutIndex: { table: LOADOUT_CLASSES, kind: "Loadout class" },
+  colorIndex: { table: CHARACTER_COLORS, kind: "Palette" },
+  camoIndex: { table: CAMO_STYLES, kind: "Camo" },
 };
 
 const VIRTUAL_KINDS = {
@@ -137,7 +141,7 @@ export function evaluateRule(rule, ctx) {
   }
 }
 
-/** "Clear Act 1 of the campaign · 2/3 levels" (count rules) or just the label. */
+/** "Clear 3 campaign levels · 2/3 levels" (count rules) or just the label. */
 export function progressText(rule, evaluation) {
   if (!rule) return "";
   const shown = evaluation.branch || rule;
@@ -409,7 +413,15 @@ export function sanitizeLocked(ch, ctx) {
       changes.badge = { ...b, layers, finish, placements: [...b.placements] };
     }
   }
-  if (ch.armorVariant && !variantState(ch.armorIndex | 0, ctx).unlocked) changes.armorVariant = 0;
+  // The flat picks too (palette, camo, armour, helmet...): a saved look worn
+  // after its unlock was cleared falls back to the first one still earned.
+  for (const [key, { table, byId }] of Object.entries(LOCKABLE)) {
+    const i = ch[key];
+    if (byId || i == null || unlockState(key, i, ctx).unlocked) continue;
+    const free = table.findIndex((_, j) => unlockState(key, j, ctx).unlocked);
+    if (free >= 0) changes[key] = free;
+  }
+  if (ch.armorVariant && !variantState((changes.armorIndex ?? ch.armorIndex) | 0, ctx).unlocked) changes.armorVariant = 0;
   return changes;
 }
 

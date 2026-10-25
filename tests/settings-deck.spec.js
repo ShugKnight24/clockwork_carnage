@@ -797,9 +797,9 @@ test("a rebound key works in play at once", async ({ page }) => {
   await expect(deck(page)).toHaveAttribute("open", "");
   await focusRow(page, "remap:keyboard:interact");
   await page.keyboard.press("Enter");
-  await page.keyboard.press("KeyG"); // free: no swap prompt
+  await page.keyboard.press("KeyH"); // free: no swap prompt
   await expect(dialog(page)).toBeHidden();
-  expect(await keybind(page, "interact")).toBe("KeyG");
+  expect(await keybind(page, "interact")).toBe("KeyH");
   expect(await page.evaluate(() => window.ccDebug.game.input.keybinds === window.ccDebug.game.keybinds)).toBe(true);
   await page.keyboard.press("Escape"); // deck → pause
   await page.evaluate(() => {
@@ -812,7 +812,7 @@ test("a rebound key works in play at once", async ({ page }) => {
   expect(await state(page)).toBe("playing");
   await page.keyboard.press("KeyE");
   expect(await page.evaluate(() => window.__interacts)).toBe(0);
-  await page.keyboard.press("KeyG");
+  await page.keyboard.press("KeyH");
   expect(await page.evaluate(() => window.__interacts)).toBe(1);
 });
 
@@ -822,14 +822,15 @@ test("capture keeps the browser from acting on Tab, Space and arrows", async ({ 
     window.__prevented = {};
     document.addEventListener("keydown", (e) => { window.__prevented[e.code] = e.defaultPrevented; });
   });
-  for (const code of ["Tab", "Space", "ArrowDown"]) {
-    await focusRow(page, "remap:keyboard:chronoLock");
+  // Space is the dash key: binding the dash to it again needs no prompt.
+  for (const [code, action] of [["Tab", "chronoLock"], ["Space", "dash"], ["ArrowDown", "chronoLock"]]) {
+    await focusRow(page, `remap:keyboard:${action}`);
     await page.keyboard.press("Enter");
     await expect(dialog(page)).toBeVisible();
-    await page.keyboard.press(code); // a free key: binds without a prompt
+    await page.keyboard.press(code); // a free key (or its own): binds without a prompt
     await expect(dialog(page)).toBeHidden();
-    expect(await keybind(page, "chronoLock")).toBe(code);
-    expect(await activeInDeck(page)).toBe("remap:keyboard:chronoLock");
+    expect(await keybind(page, action)).toBe(code);
+    expect(await activeInDeck(page)).toBe(`remap:keyboard:${action}`);
   }
   expect(await page.evaluate(() => window.__prevented)).toEqual({ Tab: true, Space: true, ArrowDown: true, Enter: true });
 });
@@ -967,4 +968,17 @@ test("controller: B can be bound (it swaps with crouch)", async ({ page }) => {
   await tapPad(page, 0); // A confirms the swap
   expect(await padBind(page, "dash")).toBe(1);
   expect(await padBind(page, "crouch")).toBe(0);
+});
+
+test("Agent & Suit opens the creator and comes back to the Gameplay section", async ({ page }) => {
+  await openDeck(page);
+  // Through the game, as the menu does, so it knows where the deck returns to.
+  await page.evaluate(() => window.ccDebug.game.openSettings({ returnTo: "menu" }));
+  await deck(page).locator('[role="tab"]', { hasText: "Gameplay" }).click();
+  await deck(page).getByText("OPEN CREATOR").click();
+  await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
+  await page.waitForTimeout(500);
+  await page.keyboard.press("Escape"); // back out: nothing changed, so no discard prompt
+  await page.waitForFunction(() => window.ccDebug.game.state === "settings");
+  expect(await page.evaluate(() => [window.ccDebug.game._settingsReturnTo, window.ccDebug.game._settingsSection])).toEqual(["menu", "gameplay"]);
 });

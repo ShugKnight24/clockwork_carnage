@@ -1,7 +1,10 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures, generateModernEnv } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, ensureEnvBands, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
+import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
+import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
+import { BAND_UNTINTED } from "../src/rendering/env/wall-art.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
  *  floor/ceiling loop: both only read module constants, so rebuilding the
@@ -25,6 +28,7 @@ import {
   drawAmmoPickup,
   drawWeaponPickup,
   drawExit,
+  drawPowerCell,
   drawProjectile,
   drawExoticPickup,
   drawGearPickup,
@@ -41,7 +45,10 @@ import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
 // quantised ctx.filter strings, so lighting sprites allocates nothing per frame.
 const _litOut = { r: 0, g: 0, b: 0 };
 const _litFilters = new Map();
-import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+import { prepareEnemySprite, drawEnemySprite, hasEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+import { drawFrozenPerson } from "../src/rendering/frozen-look.js";
+import { isFrozen } from "../src/systems/stillness.js";
+import { EYE_Z, CEILING_Z, playerEyeZ, wallHeight } from "../src/systems/physics.js";
 
 // Short-wall records kept per screen column (one per wall the ray crosses).
 const COVER_STRIDE = MAX_COLUMN_HITS;
@@ -52,32 +59,33 @@ const CAP_FOG_STEPS = 32;
 const CAP_SHADE = 0.28;
 const _capCache = new WeakMap();
 const _noTexture = {}; // cache slot for a wall type with no art
-let _avgCanvas = null;
+const NO_RGBA = [0, 0, 0, 0];
+// Upper bands (Renderer._bandTint and friends): the GL tint and the tinted
+// Canvas2D canvases, per wall art. Glass is the one common wall whose art
+// runs to the ceiling (see _tallWalls).
+const _bandTints = new WeakMap();
+const _bandChains = new WeakMap();
+const TALL_ART_WALLS = [8];
+// A band tint that leaves a finish in its own colours (128 × 2 = 1).
+const NEUTRAL_TINT = [128, 128, 128, 255];
+const hexToRGB = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 
-/** Average colour of a wall texture, from a smoothed 4x4 downsample. */
-function _averageColor(tex) {
-  try {
-    if (!_avgCanvas) {
-      _avgCanvas = document.createElement("canvas");
-      _avgCanvas.width = _avgCanvas.height = 4;
-    }
-    const c = _avgCanvas.getContext("2d", { willReadFrequently: true });
-    c.clearRect(0, 0, 4, 4);
-    c.imageSmoothingEnabled = true;
-    c.imageSmoothingQuality = "high";
-    c.drawImage(tex, 0, 0, 4, 4);
-    const d = c.getImageData(0, 0, 4, 4).data;
-    let r = 0, g = 0, b = 0;
-    for (let i = 0; i < 64; i += 4) {
-      r += d[i];
-      g += d[i + 1];
-      b += d[i + 2];
-    }
-    return [r / 16, g / 16, b / 16];
-  } catch (_) {
-    return [90, 96, 108]; // no texture or unreadable: neutral steel
-  }
+/**
+ * The tint that makes an upper band (`band`, a mip chain) average out to a
+ * wall's colour `avg` once multiplied by twice it: the wall's colour, scaled
+ * by how far the band's own grey (lit and worn, in Realistic) sits from mid.
+ */
+function bandTint(avg, band) {
+  const [r, g, b] = averageColor(band[band.length - 1]);
+  const k = 128 / Math.max(24, 0.299 * r + 0.587 * g + 0.114 * b);
+  return [Math.min(255, avg[0] * k) | 0, Math.min(255, avg[1] * k) | 0, Math.min(255, avg[2] * k) | 0, 255];
 }
+// Realistic per-pixel wall light: multiplies the wall's own colour, so it
+// needs more gain than the old additive fill to read as bright up close.
+const WALL_LIGHT_GAIN = 12;
+const WALL_TEX = 512; // Modern wall art, mip 0
+// Glint of dynamic lights on polished wall relief (Realistic, with normals).
+const WALL_SPEC_GAIN = 0.6;
 
 // --- Performance: Pre-computed fog rgba string LUT ---
 // Quantize fog alpha to 64 discrete steps to avoid per-column string creation
@@ -99,12 +107,18 @@ function _getFogString(r, g, b, alpha) {
   return lut[step];
 }
 
+// A shield bearer's floor arc, projected (x, y pairs): its rim, then its centre.
+const _arcPts = new Float64Array(28);
+
 // --- Performance: Pre-allocated sprite sort arrays ---
 // Reused each frame to avoid per-frame allocation + GC pressure.
 let _spriteDistBuf = new Float64Array(256);
 let _spriteOrderBuf = new Int32Array(256);
 let _spriteOrderCount = 0;
 const _byDistanceDesc = (a, b) => _spriteDistBuf[b] - _spriteDistBuf[a];
+/** The third-person camera: how far behind the cadet, and how far off to their right. */
+const TP_CAM_BACK = 2.4;
+const TP_CAM_SIDE = 0.6;
 
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
@@ -121,9 +135,28 @@ export class Renderer {
     // Ray-march scratch for the wall pass; short-wall records for sprites are
     // sized per frame (_ensureCoverBufs).
     this._colHits = createColumnHits();
+    // The camera a Legacy shield bearer is drawn turned toward (renderSprites).
+    this._facingCam = { rx: null, ry: null, x: 0, y: 0 };
+    // The eye's height in wall units this frame (0.5 standing) and how far it
+    // sits under the standing eye. Sprites, particles and _projectWorld place
+    // things relative to the standing eye line and lift them by `_eyeDrop`.
+    this._eyeZ = EYE_Z;
+    this._eyeDrop = 0;
+    // Added to the low-cover silhouettes while a sprite is drawn lifted by the
+    // eye drop, so its clip stays in the sprite's own (translated) space.
+    this._clipBias = 0;
     this._visualStyle = 0; // 0 = Clockwork (cartoony), 1 = Brutal
     this._actPalette = 1;  // 1 = Act1 (teal), 2 = Act2 (amber), 3 = Act3 (crimson)
     this._envLevel = null; // campaign level env id, for the per-level palette
+    // Modern walls drawn by the GL wall pass when it is available; false
+    // forces the Canvas2D path (debugging, A/B timing).
+    this.gpuWalls = true;
+    this.gpuWallLights = true;
+    this.gpuWallTrilinear = true;
+    this.gpuWallNormals = true;
+    this._glLight = [0, 0, 0, 0];
+    this._glAccent = [0, 0, 0, 0];
+    // Painted per wall type on first use (it reads its cap colour back then).
     this.textures = generateWallTextures();
     this._regenerateFloorCeil();
     this._floorCeilBuffer = null;
@@ -139,29 +172,6 @@ export class Renderer {
     this.useWebGL = false;
     this._renderMode = renderMode;
     this._initGL(renderMode);
-  }
-
-  /**
-   * 1x64 vertical contact-shadow ramp for Realistic walls: dark at the ceiling
-   * and deck joints, clear through the middle. Built once, blitted per column.
-   */
-  _contactShadowStrip() {
-    if (this._aoStrip) return this._aoStrip;
-    const c = document.createElement("canvas");
-    c.width = 1;
-    c.height = 64;
-    const g = c.getContext("2d");
-    const grad = g.createLinearGradient(0, 0, 0, 64);
-    grad.addColorStop(0, "rgba(0,0,0,0.55)");
-    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
-    grad.addColorStop(0.22, "rgba(0,0,0,0)");
-    grad.addColorStop(0.74, "rgba(0,0,0,0)");
-    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
-    grad.addColorStop(1, "rgba(0,0,0,0.62)");
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 1, 64);
-    this._aoStrip = c;
-    return c;
   }
 
   /**
@@ -191,6 +201,21 @@ export class Renderer {
     // Try to initialize WebGL (auto or explicit 3D)
     this.glRenderer = GLRenderer.create(this.width, this.height);
     if (this.glRenderer) {
+      // A lost context (GPU reset, driver update, too many contexts) draws
+      // nothing, and walls now go through it too: drop to Canvas2D until the
+      // browser hands the context back, then rebuild on a fresh one.
+      const gl = this.glRenderer;
+      gl.canvas.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        if (this.glRenderer !== gl) return;
+        console.warn('[Renderer] WebGL context lost — drawing with Canvas2D');
+        this.glRenderer = null;
+        this.useWebGL = false;
+      });
+      gl.canvas.addEventListener('webglcontextrestored', () => {
+        if (this.glRenderer || this.useWebGL) return;
+        this._initGL(this._renderMode);
+      });
       this.useWebGL = true;
       this._envMapGLVersion = -1;
       this._uploadFloorCeilToGL();
@@ -289,17 +314,49 @@ export class Renderer {
    * ~200 ms bake lands while its briefing is on screen instead of in the
    * level's first frame. _getModernEnv adopts it if the level matches.
    */
-  prewarmEnv(act, level = null) {
+  prewarmEnv(act, level = null, walls = []) {
     if (!isModernArt()) return;
     const a = act || 1;
     const lv = level ?? null;
     const brutal = this._visualStyle === 1;
     const realistic = isRealisticArt();
     const same = (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic;
-    if (same(this._modernEnv) || same(this._altModernEnv) || same(this._prewarmedEnv)) return;
-    const env = generateModernEnv(a, brutal, lv, { realistic });
-    env.realistic = realistic;
-    this._prewarmedEnv = env;
+    let env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(same);
+    if (!env) {
+      env = generateModernEnv(a, brutal, lv, { realistic });
+      env.realistic = realistic;
+      this._prewarmedEnv = env;
+    }
+    // The map's own walls (`walls`, ids 10+) as well, so its dressed rooms
+    // bake here too rather than in the level's first frame.
+    // Names in `walls` are room finishes (map.bands' styles), baked the same way.
+    const ids = walls.filter((w) => typeof w === "number");
+    const styles = walls.filter((w) => typeof w === "string");
+    const walled = ids.length > 0 && ensureEnvWalls(env, ids, realistic);
+    const banded = styles.length > 0 && ensureEnvBands(env, styles, realistic);
+    if ((walled || banded) && this.glRenderer?._wallPass?.env === env) {
+      this.glRenderer._wallPass.env = null;
+    }
+  }
+
+  /**
+   * Upload a prewarmed env's walls to the GPU wall pass ahead of its first
+   * frame, `count` walls a call, once they are all painted (a wall added
+   * later re-uploads). The station's two hundred faces are ~1200 mip blits:
+   * left to the first frame in the station, a ~400 ms stall. Call once a
+   * frame until true.
+   */
+  prewarmWallPass(act, level = null, count = Infinity) {
+    if (!isModernArt() || !this.useWebGL || !this.gpuWalls || !this.glRenderer) return true;
+    const a = act || 1;
+    const lv = level ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    const env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(
+      (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic,
+    );
+    const wp = env && this.glRenderer.wallPass();
+    return !wp || wp.prepareEnv(env, count);
   }
 
   /**
@@ -309,6 +366,75 @@ export class Renderer {
    */
   offerEnv(env) {
     if (env) this._prewarmedEnv = env;
+  }
+
+  /**
+   * A map with walls of its own (the station's lockers, gym and range,
+   * ids 10+) has them painted into the env the first time it is drawn, and
+   * the GPU wall pass re-uploads its texture array to take them.
+   */
+  _ensureMapWalls(env, map, player = null) {
+    if (map._ownWalls === undefined) {
+      const ids = new Set();
+      for (const row of map.grid) for (const v of row) if (v >= 10) ids.add(v);
+      map._ownWalls = map.ownWalls ?? [...ids];
+    }
+    if (!map._ownWalls.length) return;
+    // Walls the map can't show from where it starts (`lateWalls`: the
+    // station's east wing) are painted a few a frame after the rest, so the
+    // first frame doesn't wait on them, and go up together.
+    const late = map.lateWalls ?? [];
+    let added = false;
+    let wing = false;
+    try {
+      added = ensureEnvWalls(env, late.length ? map._ownWalls.filter((id) => !late.includes(id)) : map._ownWalls, !!env.realistic);
+      if (late.length && !added) added = wing = this._paintLateWalls(env, late, () => nearWalls(map, player, late));
+    } catch (err) {
+      // A face that will not paint must not fail every frame: those cells
+      // draw with the common walls instead.
+      console.warn("[renderer] map walls failed to paint", err);
+      map._ownWalls = [];
+    }
+    // The civic wing's glass, cut out once the city behind it is painted.
+    if (map._ownWalls.length && prepareCityView(env, map._ownWalls)) added = true;
+    // The rooms' finishes over their art (map.bands): a lookup outside the
+    // map builds the map's table of them.
+    this._finishAt(map, -1, -1);
+    if (map._finishes && ensureEnvBands(env, map._finishes.styles, !!env.realistic)) added = true;
+    const wp = this.glRenderer?._wallPass;
+    // The wing, out of sight, goes up a few faces a frame while the array
+    // without it keeps drawing: re-uploading the whole station in one frame
+    // was a ~700 ms stall.
+    if (wing && wp && !nearWalls(map, player, late)) this._restage = env;
+    else if (added && wp) wp.env = null;
+    if (this._restage === env && (!wp || wp.prepareEnv(env, 16))) this._restage = null;
+  }
+
+  /**
+   * Paint `late` wall faces into a staging set for ~6 ms a frame; true once
+   * they are all done and handed to `env` in one go (one texture upload),
+   * or all at once when `inView()` says the player is among them.
+   */
+  _paintLateWalls(env, late, inView = () => false) {
+    let st = env._late;
+    if (!st || st.ids !== late) {
+      st = env._late = {
+        ids: late,
+        stage: { walls: {}, act: env.act, palette: env.palette, salt: env.salt },
+        left: late.filter((id) => !env.walls[id]),
+      };
+    }
+    if (!st.left.length) return false;
+    const now = inView();
+    const t0 = performance.now();
+    // Standing in the wing (an art-style switch rebuilds the env there), the
+    // walls in view would draw as nothing while they wait: paint them all now.
+    while (st.left.length && (now || performance.now() - t0 < 6)) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic, false);
+    if (st.left.length) return false;
+    // Their cap colours in one go: one wait on the GPU, not one a frame.
+    for (const mips of Object.values(st.stage.walls)) averageColor(mips[mips.length - 1]);
+    Object.assign(env.walls, st.stage.walls);
+    return true;
   }
 
   /** Build (or reuse) the Modern environment bundle for the current act. */
@@ -355,6 +481,36 @@ export class Renderer {
     return this._modernEnv;
   }
 
+  /**
+   * One-pixel-wide column spans filled in one colour after the wall loop: the
+   * Comic contact lines. They were rect()s on one path, filled once — but a
+   * path of thousands of disjoint rects is beyond Skia's fast GPU path
+   * renderers, and on Chrome's D3D11 backend (every Windows Chromium browser
+   * by default) that one fill cost 50-70 ms a frame. Plain fillRects in one
+   * colour batch into a single draw op.
+   */
+  _addSpan(x, y, h) {
+    let b = this._spans;
+    const i = this._spanN * 3;
+    if (!b || i + 3 > b.length) {
+      const grown = new Float32Array(Math.max(6144, b ? b.length * 2 : 0));
+      if (b) grown.set(b);
+      b = this._spans = grown;
+    }
+    b[i] = x;
+    b[i + 1] = y;
+    b[i + 2] = h;
+    this._spanN++;
+  }
+
+  _fillSpans(ctx, style) {
+    const b = this._spans;
+    const n = this._spanN * 3;
+    this._spanN = 0;
+    ctx.fillStyle = style;
+    for (let i = 0; i < n; i += 3) ctx.fillRect(b[i], b[i + 1], 1, b[i + 2]);
+  }
+
   _ensureColBufs(w) {
     if (this._colKey && this._colKey.length === w) return;
     this._colKey = new Int32Array(w);
@@ -382,7 +538,7 @@ export class Renderer {
    */
   coverClipY(x, depth) {
     if (!this._occN) return Infinity; // no wall pass yet at this size
-    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity);
+    return coverClipY(this._occN, this._occDist, this._occY, COVER_STRIDE, x, depth, Infinity) + this._clipBias;
   }
 
   /** Is a projected point (unshifted screen Y) hidden by a wall or low cover? */
@@ -438,10 +594,10 @@ export class Renderer {
    * fogged at the far edge's distance. Caps are a pixel or two tall except up
    * close, so a texture blit there bought nothing and cost a draw call.
    */
-  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real) {
+  _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real, glWalls = null) {
     const mmips = menv ? menv.walls[wallType] : null;
     const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
-    const lut = this._capLUT(tex, menv);
+    const lut = this._capLUT(tex, menv, real);
     let s;
     if (menv) {
       s = 1 - Math.exp(-dist * menv.fogDensity);
@@ -449,14 +605,132 @@ export class Renderer {
       s = dist / 20 / (this._visualStyle === 1 ? 0.85 : 0.6);
       if (s > 1) s = 1;
     }
-    ctx.fillStyle = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
-    ctx.fillRect(x, top, 1, bot - top);
-    // Batched with the frame's column path: Realistic's ambient fill, or the
-    // Comic ink line along the far edge.
-    if (menv) {
-      if (real) ctx.rect(x, top, 1, bot - top);
-      else ctx.rect(x, top, 1, 1);
+    const color = lut[(s * CAP_FOG_STEPS + 0.5) | 0];
+    if (glWalls) {
+      glWalls.flat(x, top, bot, rgbaBytes(color));
+    } else {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, top, 1, bot - top);
     }
+    // The Comic ink line along the far edge, batched with the frame's column
+    // spans (_addSpan). Realistic's ambient is already in the cap colour.
+    if (menv && !real) this._addSpan(x, top, 1);
+  }
+
+  /**
+   * Wall types whose art runs floor to ceiling instead of under an upper band:
+   * reinforced glass, and a map's own `tallWalls` (windows onto a view).
+   */
+  _tallWalls(map) {
+    if (!map._tallWalls) map._tallWalls = new Set([...TALL_ART_WALLS, ...(map.tallWalls ?? [])]);
+    return map._tallWalls;
+  }
+
+  /**
+   * The room finish (an entry of map.bands: { style, rgb }) whose band runs
+   * over a wall seen from open cell (cx, cy), or null for the bulkhead tinted
+   * to the wall. Looked up by the cell in front of the face, so each side of
+   * a wall between two rooms takes its own room's finish.
+   */
+  _finishAt(map, cx, cy) {
+    let f = map._finishes;
+    if (f === undefined) {
+      f = map._finishes = null;
+      if (map.bands?.length) {
+        const w = map.width;
+        const cells = new Uint8Array(w * map.height);
+        const entries = map.bands.map((b) => ({ style: b.style, rgb: BAND_UNTINTED.has(b.style) || !b.color ? null : hexToRGB(b.color) }));
+        // Later boxes win where they overlap (a room inside another's box).
+        map.bands.forEach((b, i) => {
+          for (let y = Math.max(0, b.y0); y <= Math.min(map.height - 1, b.y1); y++) {
+            for (let x = Math.max(0, b.x0); x <= Math.min(w - 1, b.x1); x++) cells[y * w + x] = i + 1;
+          }
+        });
+        f = map._finishes = { cells, entries, styles: [...new Set(entries.map((e) => e.style))] };
+      }
+    }
+    if (!f || cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) return null;
+    const i = f.cells[cy * map.width + cx];
+    return i ? f.entries[i - 1] : null;
+  }
+
+  /**
+   * The GL tint for a band: a room finish's colour (bandTint against that
+   * finish's band), neutral for a finish in its own colours, or the wall's.
+   */
+  _finishTint(menv, mmips, finish) {
+    const chain = finish && menv.bands?.[finish.style];
+    if (!chain) return this._bandTint(menv, mmips);
+    let byFinish = _bandTints.get(chain);
+    if (!byFinish) _bandTints.set(chain, (byFinish = new Map()));
+    let t = byFinish.get(finish);
+    if (!t) {
+      t = finish.rgb ? bandTint(finish.rgb, chain) : NEUTRAL_TINT;
+      byFinish.set(finish, t);
+    }
+    return t;
+  }
+
+  /** A wall's tint for the GL upper band (bandTint), as bytes. */
+  _bandTint(menv, mmips) {
+    let t = _bandTints.get(mmips);
+    if (!t) {
+      t = bandTint(averageColor(mmips[mmips.length - 1]), menv.upper);
+      _bandTints.set(mmips, t);
+    }
+    return t;
+  }
+
+  /**
+   * The env's upper band tinted to one wall's colour, per mip (Canvas2D path),
+   * or a room finish's band tinted to the room.
+   */
+  _bandMips(menv, mmips, finish = null) {
+    const own = finish && menv.bands?.[finish.style];
+    if (own) {
+      let byFinish = _bandChains.get(own);
+      if (!byFinish) _bandChains.set(own, (byFinish = new Map()));
+      let tinted = byFinish.get(finish);
+      if (!tinted) {
+        const tint = this._finishTint(menv, mmips, finish);
+        tinted = own.map((m) => tintUpperBand(m, tint));
+        byFinish.set(finish, tinted);
+      }
+      return tinted;
+    }
+    let chain = _bandChains.get(mmips);
+    if (!chain) {
+      const tint = this._bandTint(menv, mmips);
+      chain = menv.upper.map((m) => tintUpperBand(m, tint));
+      _bandChains.set(mmips, chain);
+    }
+    return chain;
+  }
+
+  /**
+   * A Legacy wall texture with the upper band, tinted to it, stacked on top:
+   * 256 wide, the band (CEILING_Z - 1 of a wall) over the 256px art, so the
+   * wall pass draws a full wall in one blit at the art's own scale.
+   */
+  _legacyBanded(tex, finish = null) {
+    let byFinish = _bandChains.get(tex);
+    if (!byFinish) _bandChains.set(tex, (byFinish = new Map()));
+    let c = byFinish.get(finish);
+    if (!c) {
+      // A room finish's band in the room's colour, as the Modern styles draw it.
+      const band = legacyUpperBand(finish?.style);
+      const tint = !finish ? bandTint(averageColor(tex), [band]) : finish.rgb ? bandTint(finish.rgb, [band]) : NEUTRAL_TINT;
+      const bandH = Math.round(256 * (CEILING_Z - 1));
+      c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 256 + bandH;
+      const g = c.getContext("2d");
+      g.imageSmoothingQuality = "high";
+      g.drawImage(tintUpperBand(band, tint), 0, 0, 256, bandH);
+      g.drawImage(tex, 0, bandH);
+      byFinish.set(finish, c);
+    }
+    return c;
   }
 
   /**
@@ -464,12 +738,12 @@ export class Renderer {
    * clear to fully fogged, using the same fog colour and ceiling as the wall
    * pass of the active style. Built once per texture and fog setting.
    */
-  _capLUT(tex, menv) {
+  _capLUT(tex, menv, real = false) {
     const key = menv ? menv : this._visualStyle;
     const slot = tex || _noTexture;
     let e = _capCache.get(slot);
-    if (e && e.key === key) return e.lut;
-    const avg = _averageColor(tex);
+    if (e && e.key === key && e.real === real) return e.lut;
+    const avg = averageColor(tex);
     const lut = new Array(CAP_FOG_STEPS + 1);
     for (let i = 0; i <= CAP_FOG_STEPS; i++) {
       const t = i / CAP_FOG_STEPS;
@@ -486,9 +760,20 @@ export class Renderer {
         a = t * (brutal ? 0.85 : 0.6);
       }
       const k = (1 - CAP_SHADE) * (1 - a);
-      lut[i] = `rgb(${(avg[0] * k + fr * a) | 0},${(avg[1] * k + fg * a) | 0},${(avg[2] * k + fb * a) | 0})`;
+      let r = avg[0] * k + fr * a;
+      let g = avg[1] * k + fg * a;
+      let b = avg[2] * k + fb * a;
+      if (real) {
+        // Realistic's ambient over the opaque cap colour.
+        const ka = REAL_AMBIENT.alpha;
+        const [ar, ag, ab] = REAL_AMBIENT.rgb;
+        r = r * (1 - ka) + ar * ka;
+        g = g * (1 - ka) + ag * ka;
+        b = b * (1 - ka) + ab * ka;
+      }
+      lut[i] = `rgb(${r | 0},${g | 0},${b | 0})`;
     }
-    _capCache.set(slot, { key, lut });
+    _capCache.set(slot, { key, real, lut });
     return lut;
   }
 
@@ -496,8 +781,14 @@ export class Renderer {
    * Modern Canvas2D floor/ceiling (no-WebGL fallback). Same mip-filtered deck
    * art, contact AO and emissive spill as the shader, at half vertical
    * resolution like the legacy loop.
+   *
+   * A row `p` px from the horizon is floor `eye·h/p` away and ceiling
+   * `(CEILING_Z - eye)·h/p` away. With the eye halfway up the room those
+   * match, so one pass fills each floor row and the ceiling row mirrored
+   * across the horizon; from any other eye (standing is above halfway, a
+   * crouch below) they differ, and the ceiling gets a pass of its own.
    */
-  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env) {
+  _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, eye = 0.5) {
     const w = this.width;
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
@@ -513,19 +804,9 @@ export class Renderer {
     }
     const buf32 = this._floorCeilBuf32;
 
-    const rayDirX0 = dirX - planeX;
-    const rayDirY0 = dirY - planeY;
-    const rayDirX1 = dirX + planeX;
-    const rayDirY1 = dirY + planeY;
-
     const [fn0, fn1, fn2] = env.fogNear;
     const [ff0, ff1, ff2] = env.fogFar;
     const fogMax = env.fogMax;
-    const fogDensity = env.fogDensity;
-    const floorMips = env.deck.floorMips;
-    const ceilMips = env.deck.ceilMips;
-    const maxLvl = floorMips.length - 1;
-    const glow = env.glowRGB;
 
     // Horizon = the thickest air.
     const hr = (fn0 + (ff0 - fn0) * fogMax) | 0;
@@ -533,121 +814,164 @@ export class Renderer {
     const hb = (fn2 + (ff2 - fn2) * fogMax) | 0;
     buf32.fill((255 << 24) | (hb << 16) | (hg << 8) | hr);
 
-    const em = this._envMap;
-    const cells = em.rgba;
-    const mw = em.w;
-    const mh = em.h;
-    const planeLen = Math.hypot(planeX, planeY) * 2;
+    // The frame's constants for _deckRowModern, in one reused record.
+    const R = this._deckRow || (this._deckRow = {});
+    R.buf32 = buf32;
+    R.w = w;
+    R.h = h;
+    R.projH = projH;
+    R.camX = camX;
+    R.camY = camY;
+    R.rayDirX0 = dirX - planeX;
+    R.rayDirY0 = dirY - planeY;
+    R.rayDirX1 = dirX + planeX;
+    R.rayDirY1 = dirY + planeY;
+    R.planeLen = Math.hypot(planeX, planeY) * 2;
+    R.env = env;
+    R.cells = this._envMap.rgba;
+    R.mw = this._envMap.w;
+    R.mh = this._envMap.h;
+
+    const mirrored = Math.abs(eye - CEILING_Z / 2) < 1e-4;
+    const floorK = 2 * eye * projH;
+    const ceilK = 2 * (CEILING_Z - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
     for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
       if (p <= 0) continue;
-      const rowDist = projH / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
-      let fx = camX + rowDist * rayDirX0;
-      let fy = camY + rowDist * rayDirY0;
-
-      const fog = fogMax * (1 - Math.exp(-rowDist * fogDensity));
-      const invFog = 1 - fog;
-      const fR = (fn0 + (ff0 - fn0) * fog) * fog;
-      const fG = (fn1 + (ff1 - fn1) * fog) * fog;
-      const fB = (fn2 + (ff2 - fn2) * fog) * fog;
-
-      // Pick the mip whose texels are about screen-pixel sized: kills the
-      // shimmer the 256px nearest-sampled deck had at distance.
-      const foot = Math.max((512 * rowDist * planeLen) / w, (512 * rowDist * rowDist) / projH);
-      let lvl = 0;
-      while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
-      const floorTex = floorMips[lvl];
-      const ceilTex = ceilMips[lvl];
-      const size = 512 >> lvl;
-      const mask = size - 1;
-
-      const rowOff = y * w;
-      const rowOff1 = (y - 1) * w;
-      const cy = 2 * halfH - 1 - y;
-      const cy2 = cy + 1;
-      const ceilVisible = cy >= 0 && cy < h;
-
-      for (let x = 0; x < w; x++) {
-        const tx = ((fx * size) | 0) & mask;
-        const ty = ((fy * size) | 0) & mask;
-        const ti = (ty * size + tx) * 4;
-
-        let ao = 1;
-        let gr = 0, gg = 0, gb = 0;
-        if (cells && fx >= 0 && fy >= 0) {
-          const cxI = fx | 0;
-          const cyI = fy | 0;
-          if (cxI < mw && cyI < mh) {
-            const o = (cyI * mw + cxI) * 4;
-            const m = cells[o];
-            const gbits = cells[o + 1];
-            if (m !== 0) {
-              const dx = fx - cxI;
-              const dy = fy - cyI;
-              if (m & 1) ao = Math.min(ao, aoAt(dx));
-              if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
-              if (m & 4) ao = Math.min(ao, aoAt(dy));
-              if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
-              if (m & 240) {
-                if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
-                if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
-                if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
-                if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
-              }
-            }
-            if (gbits !== 0) {
-              const dx = fx - cxI;
-              const dy = fy - cyI;
-              let g = 0;
-              if (gbits & 1) g = Math.max(g, glowAt(dx));
-              if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
-              if (gbits & 4) g = Math.max(g, glowAt(dy));
-              if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
-              const c = glow[cells[o + 2]];
-              if (c) {
-                gr = c[0] * g;
-                gg = c[1] * g;
-                gb = c[2] * g;
-              }
-            }
-          }
-        }
-
-        if (y < h) {
-          let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
-          let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
-          let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
-          if (fr > 255) fr = 255;
-          if (fg > 255) fg = 255;
-          if (fb > 255) fb = 255;
-          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
-          buf32[rowOff + x] = packed;
-          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
-        }
-
-        if (ceilVisible) {
-          let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
-          let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
-          let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
-          if (cr > 255) cr = 255;
-          if (cg > 255) cg = 255;
-          if (cb > 255) cb = 255;
-          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
-          buf32[cy * w + x] = cPacked;
-          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
-        }
-
-        fx += stepX;
-        fy += stepY;
-      }
+      this._deckRowModern(R, floorK / p, y, mirrored ? 2 * halfH - 1 - y : -2);
+    }
+    if (!mirrored) {
+      // The ceiling rows on their own: row pairs (halfH - 1 - p, halfH - p).
+      let p = 1;
+      if (halfH - p > h - 1) p = halfH - (h - 1);
+      for (; halfH - p >= 0; p += 2) this._deckRowModern(R, ceilK / p, -1, halfH - 1 - p);
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * One row pair of the Modern deck at `rowDist`: the floor rows (y - 1, y)
+   * when `y` is not -1, and the ceiling rows (cy, cy + 1) when `cy` is not -2.
+   * Rows off the screen are skipped.
+   */
+  _deckRowModern(R, rowDist, y, cy) {
+    const { buf32, w, h, env, cells, mw, mh } = R;
+    const fn = env.fogNear;
+    const ff = env.fogFar;
+    const fn0 = fn[0], fn1 = fn[1], fn2 = fn[2];
+    const ff0 = ff[0], ff1 = ff[1], ff2 = ff[2];
+    const fogMax = env.fogMax;
+    const floorMips = env.deck.floorMips;
+    const ceilMips = env.deck.ceilMips;
+    const maxLvl = floorMips.length - 1;
+    const glow = env.glowRGB;
+
+    const stepX = (rowDist * (R.rayDirX1 - R.rayDirX0)) / w;
+    const stepY = (rowDist * (R.rayDirY1 - R.rayDirY0)) / w;
+    let fx = R.camX + rowDist * R.rayDirX0;
+    let fy = R.camY + rowDist * R.rayDirY0;
+
+    const fog = fogMax * (1 - Math.exp(-rowDist * env.fogDensity));
+    const invFog = 1 - fog;
+    const fR = (fn0 + (ff0 - fn0) * fog) * fog;
+    const fG = (fn1 + (ff1 - fn1) * fog) * fog;
+    const fB = (fn2 + (ff2 - fn2) * fog) * fog;
+
+    // Pick the mip whose texels are about screen-pixel sized: kills the
+    // shimmer the 256px nearest-sampled deck had at distance.
+    const foot = Math.max((512 * rowDist * R.planeLen) / w, (512 * rowDist * rowDist) / R.projH);
+    let lvl = 0;
+    while (lvl < maxLvl && foot > (1 << lvl) * 1.3) lvl++;
+    const floorTex = floorMips[lvl];
+    const ceilTex = ceilMips[lvl];
+    const size = 512 >> lvl;
+    const mask = size - 1;
+
+    const floorVisible = y >= 0 && y < h;
+    const rowOff = y * w;
+    const rowOff1 = (y - 1) * w;
+    const cy2 = cy + 1;
+    const ceilVisible = cy >= 0 && cy < h;
+    const ceil2Visible = cy2 >= 0 && cy2 < h;
+    if (!floorVisible && !ceilVisible && !ceil2Visible) return;
+
+    for (let x = 0; x < w; x++) {
+      const tx = ((fx * size) | 0) & mask;
+      const ty = ((fy * size) | 0) & mask;
+      const ti = (ty * size + tx) * 4;
+
+      let ao = 1;
+      let gr = 0, gg = 0, gb = 0;
+      if (cells && fx >= 0 && fy >= 0) {
+        const cxI = fx | 0;
+        const cyI = fy | 0;
+        if (cxI < mw && cyI < mh) {
+          const o = (cyI * mw + cxI) * 4;
+          const m = cells[o];
+          const gbits = cells[o + 1];
+          if (m !== 0) {
+            const dx = fx - cxI;
+            const dy = fy - cyI;
+            if (m & 1) ao = Math.min(ao, aoAt(dx));
+            if (m & 2) ao = Math.min(ao, aoAt(1 - dx));
+            if (m & 4) ao = Math.min(ao, aoAt(dy));
+            if (m & 8) ao = Math.min(ao, aoAt(1 - dy));
+            if (m & 240) {
+              if (m & 16) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + dy * dy)));
+              if (m & 32) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + dy * dy)));
+              if (m & 64) ao = Math.min(ao, aoAt(Math.sqrt(dx * dx + (1 - dy) * (1 - dy))));
+              if (m & 128) ao = Math.min(ao, aoAt(Math.sqrt((1 - dx) * (1 - dx) + (1 - dy) * (1 - dy))));
+            }
+          }
+          if (gbits !== 0) {
+            const dx = fx - cxI;
+            const dy = fy - cyI;
+            let g = 0;
+            if (gbits & 1) g = Math.max(g, glowAt(dx));
+            if (gbits & 2) g = Math.max(g, glowAt(1 - dx));
+            if (gbits & 4) g = Math.max(g, glowAt(dy));
+            if (gbits & 8) g = Math.max(g, glowAt(1 - dy));
+            const c = glow[cells[o + 2]];
+            if (c) {
+              gr = c[0] * g;
+              gg = c[1] * g;
+              gb = c[2] * g;
+            }
+          }
+        }
+      }
+
+      if (floorVisible) {
+        let fr = ((floorTex[ti] * ao + gr) * invFog + fR) | 0;
+        let fg = ((floorTex[ti + 1] * ao + gg) * invFog + fG) | 0;
+        let fb = ((floorTex[ti + 2] * ao + gb) * invFog + fB) | 0;
+        if (fr > 255) fr = 255;
+        if (fg > 255) fg = 255;
+        if (fb > 255) fb = 255;
+        const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+        buf32[rowOff + x] = packed;
+        if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+      }
+
+      if (ceilVisible || ceil2Visible) {
+        let cr = ((ceilTex[ti] * ao + gr * 0.45) * invFog + fR) | 0;
+        let cg = ((ceilTex[ti + 1] * ao + gg * 0.45) * invFog + fG) | 0;
+        let cb = ((ceilTex[ti + 2] * ao + gb * 0.45) * invFog + fB) | 0;
+        if (cr > 255) cr = 255;
+        if (cg > 255) cg = 255;
+        if (cb > 255) cb = 255;
+        const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+        if (ceilVisible) buf32[cy * w + x] = cPacked;
+        if (ceil2Visible) buf32[cy2 * w + x] = cPacked;
+      }
+
+      fx += stepX;
+      fy += stepY;
+    }
   }
 
   /**
@@ -662,8 +986,7 @@ export class Renderer {
     const bot = this._colBot;
     // Depth of the nearest surface per column (the one the key describes).
     const zb = this._colZ;
-    ctx.fillStyle = "rgba(4,6,11,0.9)";
-    ctx.fill(); // top/bottom contact lines accumulated as rects in the loop
+    this._fillSpans(ctx, "rgba(4,6,11,0.9)"); // top/bottom contact lines recorded in the loop
     for (let x = 1; x < w; x++) {
       const k = key[x];
       const kp = key[x - 1];
@@ -693,7 +1016,12 @@ export class Renderer {
     this._ceilTexPixels = ceilPixels;
   }
 
-  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0) {
+  /**
+   * Legacy Canvas2D floor/ceiling. Like the Modern loop, an eye off the room's
+   * middle puts the floor and ceiling rows at different distances, so the
+   * ceiling gets its own pass instead of mirroring the floor.
+   */
+  _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0, eye = 0.5) {
     const w = this.width;
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
@@ -740,60 +1068,38 @@ export class Renderer {
     // Fill entire buffer with fog (single 32-bit writes)
     buf32.fill(fogPacked);
 
+    const R = this._legacyRow || (this._legacyRow = {});
+    R.buf32 = buf32;
+    R.w = w;
+    R.h = h;
+    R.camX = camX;
+    R.camY = camY;
+    R.rayDirX0 = rayDirX0;
+    R.rayDirY0 = rayDirY0;
+    R.rayDirX1 = rayDirX1;
+    R.rayDirY1 = rayDirY1;
+    R.floorTex = floorTex;
+    R.ceilTex = ceilTex;
+    R.fogR = fogR;
+    R.fogG = fogG;
+    R.fogB = fogB;
+    R.fogMaxOpacity = fogMaxOpacity;
+
+    const mirrored = Math.abs(eye - CEILING_Z / 2) < 1e-4;
+    const floorK = 2 * eye * projH;
+    const ceilK = 2 * (CEILING_Z - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
-    // Pre-compute per-row fog LUT to avoid redundant math per-pixel
     for (let y = floorStart; y < loopEnd; y += 2) {
       const p = y - halfH;
       if (p <= 0) continue;
-      const rowDist = projH / p;
-      const stepX = (rowDist * (rayDirX1 - rayDirX0)) / w;
-      const stepY = (rowDist * (rayDirY1 - rayDirY0)) / w;
-      let fx = camX + rowDist * rayDirX0;
-      let fy = camY + rowDist * rayDirY0;
-
-      const fog = Math.min(fogMaxOpacity, rowDist / 12);
-      const invFog = 1 - fog;
-      const fR = fogR * fog,
-        fG = fogG * fog,
-        fB = fogB * fog;
-
-      const rowOff = y * w;
-      const rowOff1 = (y - 1) * w;
-
-      for (let x = 0; x < w; x++) {
-        const tx = ((fx * 256) | 0) & 255;
-        const ty = ((fy * 256) | 0) & 255;
-        const ti = (ty * 256 + tx) * 4;
-
-        // Floor pixel — single 32-bit write
-        if (y < h) {
-          const fr = (floorTex[ti] * invFog + fR) | 0;
-          const fg = (floorTex[ti + 1] * invFog + fG) | 0;
-          const fb = (floorTex[ti + 2] * invFog + fB) | 0;
-          const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
-          buf32[rowOff + x] = packed;
-          // Copy to skipped row
-          if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
-        }
-
-        // Ceiling pixel (mirrored around shifted horizon)
-        const cy = 2 * halfH - 1 - y;
-        if (cy >= 0 && cy < h) {
-          const cr = (ceilTex[ti] * invFog + fR) | 0;
-          const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
-          const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
-          const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
-          buf32[cy * w + x] = cPacked;
-          // Copy ceiling skipped row
-          const cy2 = cy + 1;
-          if (cy2 >= 0 && cy2 < h) buf32[cy2 * w + x] = cPacked;
-        }
-
-        fx += stepX;
-        fy += stepY;
-      }
+      this._deckRowLegacy(R, floorK / p, y, mirrored ? 2 * halfH - 1 - y : -2);
+    }
+    if (!mirrored) {
+      let p = 1;
+      if (halfH - p > h - 1) p = halfH - (h - 1);
+      for (; halfH - p >= 0; p += 2) this._deckRowLegacy(R, ceilK / p, -1, halfH - 1 - p);
     }
 
     // Horizon line (at shifted position, if visible)
@@ -803,6 +1109,61 @@ export class Renderer {
     }
 
     this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+  }
+
+  /**
+   * One row pair of the Legacy deck at `rowDist`: floor rows (y - 1, y) unless
+   * `y` is -1, ceiling rows (cy, cy + 1) unless `cy` is -2.
+   */
+  _deckRowLegacy(R, rowDist, y, cy) {
+    const { buf32, w, h, floorTex, ceilTex } = R;
+    const stepX = (rowDist * (R.rayDirX1 - R.rayDirX0)) / w;
+    const stepY = (rowDist * (R.rayDirY1 - R.rayDirY0)) / w;
+    let fx = R.camX + rowDist * R.rayDirX0;
+    let fy = R.camY + rowDist * R.rayDirY0;
+
+    const fog = Math.min(R.fogMaxOpacity, rowDist / 12);
+    const invFog = 1 - fog;
+    const fR = R.fogR * fog,
+      fG = R.fogG * fog,
+      fB = R.fogB * fog;
+
+    const floorVisible = y >= 0 && y < h;
+    const rowOff = y * w;
+    const rowOff1 = (y - 1) * w;
+    const cy2 = cy + 1;
+    const ceilVisible = cy >= 0 && cy < h;
+    const ceil2Visible = cy2 >= 0 && cy2 < h;
+    if (!floorVisible && !ceilVisible && !ceil2Visible) return;
+
+    for (let x = 0; x < w; x++) {
+      const tx = ((fx * 256) | 0) & 255;
+      const ty = ((fy * 256) | 0) & 255;
+      const ti = (ty * 256 + tx) * 4;
+
+      // Floor pixel — single 32-bit write
+      if (floorVisible) {
+        const fr = (floorTex[ti] * invFog + fR) | 0;
+        const fg = (floorTex[ti + 1] * invFog + fG) | 0;
+        const fb = (floorTex[ti + 2] * invFog + fB) | 0;
+        const packed = (255 << 24) | (fb << 16) | (fg << 8) | fr;
+        buf32[rowOff + x] = packed;
+        // Copy to skipped row
+        if (y - 1 >= 0) buf32[rowOff1 + x] = packed;
+      }
+
+      if (ceilVisible || ceil2Visible) {
+        const cr = (ceilTex[ti] * invFog + fR) | 0;
+        const cg = (ceilTex[ti + 1] * invFog + fG) | 0;
+        const cb = (ceilTex[ti + 2] * invFog + fB) | 0;
+        const cPacked = (255 << 24) | (cb << 16) | (cg << 8) | cr;
+        if (ceilVisible) buf32[cy * w + x] = cPacked;
+        if (ceil2Visible) buf32[cy2 * w + x] = cPacked;
+      }
+
+      fx += stepX;
+      fy += stepY;
+    }
   }
 
   renderScene(
@@ -822,13 +1183,21 @@ export class Renderer {
     // Clear z-buffer
     this.zBuffer.fill(Infinity);
 
+    // Crouching and sliding draw the whole frame from a lower eye: walls,
+    // floor, ceiling and sprites all project from it. The horizon row stays
+    // where the view looks; what moves is where the floor and ceiling meet it.
+    const eye = Math.min(0.9, Math.max(0.1, playerEyeZ(player)));
+    this._eyeZ = eye;
+    this._eyeDrop = EYE_Z - eye;
+
     // Modern art style environment. Gated off for Legacy and for the low
     // presets that already drop floor textures — those keep the old look.
     const menv = !skipFloorCeil && isModernArt() ? this._getModernEnv() : null;
+    if (menv && map) this._ensureMapWalls(menv, map, player);
     // Realistic reuses the Modern wall art and swaps the lighting: no ink
     // lines, darker ambient, contact shadows, inverse-square lights.
     const real = !!menv && isRealisticArt();
-    const aoStrip = real ? this._contactShadowStrip() : null;
+    const ambientKeep = real ? 1 - REAL_AMBIENT.alpha : 1;
     if (menv) {
       this._ensureColBufs(w);
       this._colKey.fill(-1);
@@ -845,30 +1214,42 @@ export class Renderer {
     let camY = player.y;
 
     if (viewMode === 1) {
-      const offset = 1.8;
-      let tryX = player.x - dirX * offset;
-      let tryY = player.y - dirY * offset;
-      // Push camera forward if it would be inside a wall
-      for (let step = 0; step < 6; step++) {
+      // Over the right shoulder: back and to the side, so the cadet stands
+      // left of the reticle instead of over it. Pulled in toward them, a
+      // step at a time, if that would be inside a wall.
+      const back = TP_CAM_BACK;
+      const side = TP_CAM_SIDE;
+      const wantX = player.x - dirX * back - dirY * side;
+      const wantY = player.y - dirY * back + dirX * side;
+      camX = player.x;
+      camY = player.y;
+      for (let k = 8; k >= 0; k--) {
+        const tryX = player.x + ((wantX - player.x) * k) / 8;
+        const tryY = player.y + ((wantY - player.y) * k) / 8;
         const mx = Math.floor(tryX);
         const my = Math.floor(tryY);
-        if (
-          mx >= 0 &&
-          my >= 0 &&
-          mx < map.width &&
-          my < map.height &&
-          map.grid[my][mx] === 0
-        ) {
+        if (mx >= 0 && my >= 0 && mx < map.width && my < map.height && map.grid[my][mx] === 0) {
+          camX = tryX;
+          camY = tryY;
           break;
         }
-        tryX += dirX * 0.3;
-        tryY += dirY * 0.3;
       }
-      camX = tryX;
-      camY = tryY;
     }
+    // Where the cadet stands in the third-person view, projected like any
+    // sprite (renderSprites): depth and screen x (game.drawThirdPersonModel).
+    if (viewMode === 1) {
+      const relX = player.x - camX;
+      const relY = player.y - camY;
+      const pX = -dirY * planeMul;
+      const pY = dirX * planeMul;
+      const invDet = 1 / (pX * dirY - dirX * pY);
+      const tx = invDet * (dirY * relX - dirX * relY);
+      this.thirdPersonDist = Math.max(0.6, invDet * (-pY * relX + pX * relY));
+      this.thirdPersonX = (w / 2) * (1 + tx / this.thirdPersonDist);
+    } else this.thirdPersonDist = 0;
 
     // Draw textured floor and ceiling (with yShift for pitch support)
+    let glWalls = null;
     if (menv) {
       let drawn = false;
       if (this.useWebGL && this.glRenderer) {
@@ -882,8 +1263,28 @@ export class Renderer {
           Math.round(yShift),
           menv,
           this.lights || [],
+          eye,
         );
-        if (drawn) ctx.drawImage(this.glRenderer.canvas, 0, 0);
+        if (drawn) {
+          // Walls join the floor in the GL canvas when they can (see
+          // WallPass); the canvas is copied over once they are drawn.
+          const wp = this.gpuWalls ? this.glRenderer.wallPass() : null;
+          if (wp && wp.useEnv(menv)) {
+            glWalls = wp;
+            // Realistic lights the walls per pixel in the pass (see
+            // WallPass wallLight); Comic keeps its flat per-column light.
+            wp.useNormals = this.gpuWallNormals;
+            wp.begin(
+              this.lights,
+              real && this.gpuWallLights ? WALL_LIGHT_GAIN * ambientKeep : 0,
+              camX, camY,
+              WALL_SPEC_GAIN * ambientKeep,
+            );
+            wp.camZ = eye;
+          } else {
+            this.glRenderer.blitTo(ctx);
+          }
+        }
       }
       if (!drawn) {
         this._renderFloorCeilingModern(
@@ -891,6 +1292,7 @@ export class Renderer {
           -dirY * planeMul, dirX * planeMul,
           yShift,
           menv,
+          eye,
         );
       }
     } else if (!skipFloorCeil) {
@@ -912,9 +1314,10 @@ export class Renderer {
           Math.round(yShift),
           actFog, fogMax,
           this.lights || [],
+          eye,
         );
         // Composite WebGL result onto Canvas2D
-        ctx.drawImage(this.glRenderer.canvas, 0, 0);
+        this.glRenderer.blitTo(ctx);
       } else {
         this._renderFloorCeiling(
           camX,
@@ -924,6 +1327,7 @@ export class Renderer {
           -dirY * planeMul,
           dirX * planeMul,
           yShift,
+          eye,
         );
       }
     } else {
@@ -952,15 +1356,16 @@ export class Renderer {
     const occN = this._occN;
     const occDist = this._occDist;
     const occY = this._occY;
+    const tallWalls = this._tallWalls(map);
 
-    if (menv) ctx.beginPath();
+    this._spanN = 0;
 
     for (let x = 0; x < w; x++) {
       const cameraX = (2 * x) / w - 1;
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits);
+      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits, eye);
       const stepX = hits.stepX;
       const stepY = hits.stepY;
       const nHits = hits.n;
@@ -979,13 +1384,27 @@ export class Renderer {
         // Variable height: 5 layers = full wall, 1 layer = 20% (from the floor up).
         const heightFrac = hits.frac[hi];
 
+        // A wall's art runs from `1 - eye` of a wall above the horizon to
+        // `eye` of one below; short walls are fractions of that. A full wall
+        // goes on up to the ceiling, `CEILING_Z - eye` above: a tall-art type
+        // (glass onto a view) stretches its art over the whole height, the
+        // rest keep their art's scale and show the upper band over it.
         const lineHeight = (h / perpWallDist) | 0;
-        const fullDrawStart = (-lineHeight / 2 + h / 2 + yShift) | 0;
-        const fullDrawEnd = (lineHeight / 2 + h / 2 + yShift) | 0;
+        const fullDrawStart = (horizon - lineHeight * (1 - eye)) | 0;
+        const fullDrawEnd = (horizon + lineHeight * eye) | 0;
+        const full = heightFrac >= 1;
+        const ceilDrawStart = full ? (horizon - lineHeight * (CEILING_Z - eye)) | 0 : fullDrawStart;
+        const tallArt = full && tallWalls.has(wallType);
+        const banded = full && !tallArt;
+        // The room's finish over the art (map.bands), from the cell in front.
+        const finish = banded ? this._finishAt(map, side === 0 ? mapX - stepX : mapX, side === 0 ? mapY : mapY - stepY) : null;
+        // Where the art's top row lands, and its height on screen.
+        const artTop = tallArt ? ceilDrawStart : fullDrawStart;
+        const artH = tallArt ? lineHeight * CEILING_Z : lineHeight;
 
         const faceTop = heightFrac < 1
           ? (fullDrawEnd - (fullDrawEnd - fullDrawStart) * heightFrac) | 0
-          : fullDrawStart;
+          : ceilDrawStart;
         let drawStart = faceTop;
         let drawEnd = fullDrawEnd;
         // A nearer short wall hides the lower part of this one.
@@ -994,6 +1413,9 @@ export class Renderer {
 
         if (drawStart < 0) drawStart = 0;
         if (drawEnd >= h) drawEnd = h - 1;
+        // The band's rows (none unless banded), then the art's under them.
+        const bandEnd = banded ? Math.min(fullDrawStart, drawEnd) : drawStart;
+        const artStart = banded ? Math.max(drawStart, fullDrawStart) : drawStart;
 
         if (drawEnd > drawStart) {
           // Texture coordinate
@@ -1021,49 +1443,39 @@ export class Renderer {
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
               texX = S - 1 - texX;
             }
-            const mstep = S / lineHeight;
-            const srcY = (drawStart - fullDrawStart) * mstep;
+            const mstep = S / artH;
+            const srcY = (artStart - artTop) * mstep;
             const colH = drawEnd - drawStart;
-            const srcH = Math.min(S - srcY, colH * mstep);
-            if (srcH > 0 && colH > 0) {
-              ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
-            }
+            const artRows = drawEnd - artStart;
+            const srcH = Math.min(S - srcY, artRows * mstep);
+            // The upper band, mapped onto the rows from the ceiling down to
+            // the art's top (texX as the art's: its seams line up).
+            const bandRows = bandEnd - drawStart;
+            const bandPx = fullDrawStart - ceilDrawStart;
+            const bandV0 = bandRows > 0 ? (drawStart - ceilDrawStart) / bandPx : 0;
+            const bandV1 = bandRows > 0 ? (bandEnd - ceilDrawStart) / bandPx : 0;
 
             // Directional key light: faces turned away from it fall toward ink.
             const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
-            if (face !== 0) {
-              ctx.fillStyle = menv.faceShade[face];
-              ctx.fillRect(x, drawStart, 1, colH);
-            }
-            if (real) {
-              // Low ambient, batched into the frame's column path (Realistic has
-              // no ink lines to share it with) and filled once after the loop.
-              ctx.rect(x, drawStart, 1, colH);
-              // Soft contact shadow where the wall meets the deck and ceiling,
-              // stretched over the wall's full height so it stays on the joints
-              // when the column is clipped. Walls under ~40px tall are too far
-              // away for it to show, so they skip the blit.
-              if (lineHeight >= 40) {
-                const fullH = fullDrawEnd - fullDrawStart;
-                ctx.drawImage(aoStrip, 0, ((drawStart - fullDrawStart) / fullH) * 64, 1, (colH / fullH) * 64, x, drawStart, 1, colH);
-              }
-            }
+            // Realistic's soft contact shadow at the deck and ceiling joints is
+            // painted into the wall mips (bakeContactShadow in textures.js).
 
             // Act fog with atmospheric perspective (colour and density from the
             // same ramp the deck shader uses, so wall and floor air agree).
             const fogK = menv.fogMax * (1 - Math.exp(-perpWallDist * menv.fogDensity));
             const fogAmount = fogK;
             const fi = ((fogK / menv.fogMax) * 64 + 0.5) | 0;
-            if (fi > 0) {
-              ctx.fillStyle = menv.fogLUT[fi];
-              ctx.fillRect(x, drawStart, 1, colH);
-            }
+            // Realistic's low ambient rides on this fill (fogAmbientLUT), so
+            // it needs no fill of its own; everything drawn on the wall after
+            // it is scaled by ambientKeep, as the separate fill used to do.
+            const fogCss = real ? menv.fogAmbientLUT[fi] : fi > 0 ? menv.fogLUT[fi] : null;
 
             // Dynamic lights, with a hot rim where they catch an exposed corner.
-            if (this.lights && this.lights.length > 0) {
+            let lightA = 0;
+            let lr = 0, lg = 0, lb = 0;
+            if (this.lights && this.lights.length > 0 && !(glWalls && glWalls.lightGain > 0)) {
               const hitWX = camX + perpWallDist * rayDirX;
               const hitWY = camY + perpWallDist * rayDirY;
-              let lr = 0, lg = 0, lb = 0;
               for (let li = 0; li < this.lights.length; li++) {
                 const L = this.lights[li];
                 const ldx = L.x - hitWX;
@@ -1102,38 +1514,109 @@ export class Renderer {
                   }
                 }
                 const peak = Math.max(lr, lg, lb);
-                const a = Math.min(0.9, peak / 255);
-                const prev = ctx.globalCompositeOperation;
-                ctx.globalCompositeOperation = "lighter";
-                ctx.fillStyle = _getFogString(
-                  Math.min(255, lr | 0), Math.min(255, lg | 0), Math.min(255, lb | 0), a,
-                );
-                ctx.fillRect(x, drawStart, 1, colH);
-                ctx.globalCompositeOperation = prev;
+                lightA = Math.min(0.9, peak / 255) * ambientKeep;
+                lr = Math.min(255, lr | 0);
+                lg = Math.min(255, lg | 0);
+                lb = Math.min(255, lb | 0);
               }
             }
 
             // Door-frame spill onto the walls flanking a door tile.
+            let accentA = 0;
             if (wallType !== 5 && perpWallDist < 15 && (wallX < 0.1 || wallX > 0.9)) {
               const low = wallX < 0.1;
               const nx = side === 0 ? mapX : mapX + (low ? -1 : 1);
               const ny = side === 0 ? mapY + (low ? -1 : 1) : mapY;
               if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && map.grid[ny][nx] === 5) {
+                accentA = Math.max(0, (1 - fogAmount) * 0.3) * ambientKeep;
+              }
+            }
+
+            // Glass onto the city: the view behind the pane goes down first.
+            if (CITY_GLASS[wallType] && menv.cityView) {
+              drawCityView(glWalls || ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+            }
+
+            if (glWalls) {
+              const lt = this._glLight;
+              lt[0] = lr; lt[1] = lg; lt[2] = lb; lt[3] = Math.round(lightA * 255);
+              const ac = menv.accentRGB;
+              const at = this._glAccent;
+              at[0] = ac[0]; at[1] = ac[1]; at[2] = ac[2]; at[3] = Math.round(accentA * 255);
+              // Trilinear: a continuous u and a fractional mip (one texel a
+              // pixel) blend the levels, instead of the Canvas2D path's hard
+              // step at each half-octave of wall height.
+              const tri = this.gpuWallTrilinear;
+              const flip = (side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0);
+              const u = tri ? (flip ? 1 - wallX : wallX) : (texX + 0.5) / S;
+              const lod = srcH <= 0 ? -1 : tri ? Math.min(5, Math.max(0, Math.log2(WALL_TEX / lineHeight))) : lvl;
+              const faceRGBA = face !== 0 ? rgbaBytes(menv.faceShade[face]) : NO_RGBA;
+              const fogRGBA = fogCss ? rgbaBytes(fogCss) : NO_RGBA;
+              const hitX = camX + perpWallDist * rayDirX;
+              const hitY = camY + perpWallDist * rayDirY;
+              const nX = side === 0 ? -stepX : 0;
+              const nY = side === 1 ? -stepY : 0;
+              // Heights at the segments' ends, for the per-pixel lights.
+              const zTop = eye - (drawStart - horizon) / lineHeight;
+              const zArt = eye - (artStart - horizon) / lineHeight;
+              const zBot = eye - (drawEnd - horizon) / lineHeight;
+              if (artRows > 0) {
+                glWalls.wall(
+                  x, artStart, drawEnd, wallType, lod, u, srcY / S, (srcY + srcH) / S,
+                  faceRGBA, fogRGBA, lt, at, hitX, hitY, nX, nY, zArt, zBot,
+                );
+              }
+              if (bandRows > 0 && glWalls.bandLayer >= 0) {
+                // A finish not uploaded yet draws as the bulkhead meanwhile.
+                const fLayer = finish ? glWalls.bandLayers[finish.style] : undefined;
+                glWalls.upper(
+                  x, drawStart, bandEnd, lod < 0 ? lvl : lod, u, bandV0, bandV1,
+                  faceRGBA, fogRGBA, lt, this._finishTint(menv, mmips, fLayer === undefined ? null : finish), hitX, hitY, nX, nY, zTop,
+                  eye - (bandEnd - horizon) / lineHeight, fLayer ?? glWalls.bandLayer,
+                );
+              }
+            } else {
+              if (srcH > 0) {
+                ctx.drawImage(mtex, texX, srcY, 1, srcH, x, artStart, 1, artRows);
+              }
+              if (bandRows > 0) {
+                const band = this._bandMips(menv, mmips, finish)[lvl];
+                const B = band.width;
+                ctx.drawImage(band, (texX * B) / S, bandV0 * B, 1, (bandV1 - bandV0) * B, x, drawStart, 1, bandRows);
+              }
+              if (face !== 0) {
+                ctx.fillStyle = menv.faceShade[face];
+                ctx.fillRect(x, drawStart, 1, colH);
+              }
+              if (fogCss) {
+                ctx.fillStyle = fogCss;
+                ctx.fillRect(x, drawStart, 1, colH);
+              }
+              if (lightA > 0) {
+                const prev = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = "lighter";
+                ctx.fillStyle = _getFogString(lr, lg, lb, lightA);
+                ctx.fillRect(x, drawStart, 1, colH);
+                ctx.globalCompositeOperation = prev;
+              }
+              if (accentA > 0) {
                 const ac = menv.accentRGB;
                 const prev = ctx.globalCompositeOperation;
                 ctx.globalCompositeOperation = "lighter";
-                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], Math.max(0, (1 - fogAmount) * 0.3));
+                ctx.fillStyle = _getFogString(ac[0], ac[1], ac[2], accentA);
                 ctx.fillRect(x, drawStart, 1, colH);
                 ctx.globalCompositeOperation = prev;
               }
             }
 
-            // Inked contact lines at the ceiling and deck joints, batched into one
-            // path that the silhouette pass fills after the loop.
+            // Inked contact lines at the ceiling and deck joints, batched as column
+            // spans that the silhouette pass fills after the loop.
             const inkT = lineHeight > 900 ? 3 : lineHeight > 300 ? 2 : 1;
             if (!real && colH > inkT * 2) {
-              if (drawStart > 0) ctx.rect(x, drawStart, 1, inkT);
-              if (drawEnd < h - 1 && !clipped) ctx.rect(x, drawEnd - inkT, 1, inkT);
+              if (drawStart > 0) this._addSpan(x, drawStart, inkT);
+              if (drawEnd < h - 1 && !clipped) this._addSpan(x, drawEnd - inkT, inkT);
+              // The art's top edge, under the band's trim rail.
+              if (bandRows > 0 && artRows > 0) this._addSpan(x, artStart - 1, 1);
             }
             if (hi === 0) {
               // The silhouette pass outlines the nearest surface in each column.
@@ -1143,7 +1626,10 @@ export class Renderer {
               this._colZ[x] = perpWallDist;
             }
           } else if (this.textures[wallType]) {
-            const tex = this.textures[wallType];
+            const art = this.textures[wallType];
+            // A banded wall samples its art with the upper band stacked on
+            // top (_legacyBanded): one blit a column, as before the band.
+            const tex = banded ? this._legacyBanded(art, finish) : art;
             let texX = (wallX * 256) | 0;
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
               texX = 255 - texX;
@@ -1151,12 +1637,15 @@ export class Renderer {
 
             // Draw textured wall strip
             const texHeight = 256;
-            const step = texHeight / lineHeight;
-            let texPos = (drawStart - fullDrawStart) * step;
+            const step = texHeight / artH;
+            let texPos = (drawStart - (banded ? ceilDrawStart : artTop)) * step;
 
             // Use drawImage for textured columns
             const srcY = Math.max(0, texPos);
-            const srcH = Math.min(256, (drawEnd - drawStart) * step);
+            const srcH = Math.min(tex.height, (drawEnd - drawStart) * step);
+            if (CITY_GLASS[wallType] && glazeLegacyGlass(art, wallType)) {
+              drawCityView(ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+            }
             if (srcH > 0 && drawEnd > drawStart) {
               ctx.drawImage(
                 tex,
@@ -1253,12 +1742,12 @@ export class Renderer {
         // Short wall under the eye: its top face shows, out to where the ray
         // leaves the cell. That far edge is the silhouette behind it.
         let top = faceTop;
-        if (heightFrac < 0.5) {
-          let capTop = (horizon + ((0.5 - heightFrac) * h) / hits.exit[hi]) | 0;
+        if (heightFrac < eye) {
+          let capTop = (horizon + ((eye - heightFrac) * h) / hits.exit[hi]) | 0;
           if (capTop < 0) capTop = 0;
           const capBot = faceTop < openBot ? faceTop : openBot;
           if (capBot > capTop) {
-            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real);
+            this._drawWallCap(ctx, x, capTop, capBot, menv, wallType, hits.exit[hi], real, glWalls);
           }
           top = capTop;
         }
@@ -1279,11 +1768,11 @@ export class Renderer {
       this.zBuffer[x] = closeDist;
     }
 
-    if (menv && !real) this._drawModernInk(w, h);
-    if (real) {
-      ctx.fillStyle = "rgba(3,4,7,0.16)";
-      ctx.fill();
+    if (glWalls) {
+      glWalls.draw(w, h);
+      this.glRenderer.blitTo(ctx);
     }
+    if (menv && !real) this._drawModernInk(w, h);
 
     // Set FOV scale for prop minimum-size floors
     setFovScale(fov);
@@ -1347,7 +1836,7 @@ export class Renderer {
 
       const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
-      const screenY = (halfH + (p.z || 0) * (h / transformY)) | 0;
+      const screenY = (halfH + ((p.z || 0) - this._eyeDrop) * (h / transformY)) | 0;
       // Low cover in front hides motes below its top edge.
       if (screenY - yShift >= this.coverClipY(screenX, transformY)) continue;
       if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
@@ -1385,7 +1874,7 @@ export class Renderer {
     const ty = invDet * (-planeY * sx + planeX * sy);
     if (ty <= 0.1) return null;
     const screenX = (w / 2) * (1 + tx / ty);
-    const screenY = h / 2 + yShift + zHeight * (h / ty);
+    const screenY = h / 2 + yShift + (zHeight - this._eyeDrop) * (h / ty);
     // baseY: the same point without the scene's vertical shift, the space the
     // low-cover records (coverClipY) are kept in.
     return { x: screenX, y: screenY, baseY: screenY - yShift, depth: ty };
@@ -1447,6 +1936,15 @@ export class Renderer {
     // Camera right vector, so side-on enemy sprites can face their heading.
     this._camRightX = -dirY;
     this._camRightY = dirX;
+    // …and where it stands, so a shield bearer is drawn from the side you see.
+    this._camX = cx;
+    this._camY = cy;
+    this._facingCam.rx = this._camRightX;
+    this._facingCam.ry = this._camRightY;
+    this._facingCam.x = cx;
+    this._facingCam.y = cy;
+    // The stopped people's echo steps through the same camera (frozen-look.js).
+    this._spritePlaneMul = planeMul;
     if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
@@ -1460,7 +1958,8 @@ export class Renderer {
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].active === false && !entities[i].dissolving) continue;
       const distSq = (cx - entities[i].x) ** 2 + (cy - entities[i].y) ** 2;
-      if (distSq > maxDistSq && entities[i].type !== "exit") continue;
+      // The exit and power cells are where the player is headed: never culled.
+      if (distSq > maxDistSq && entities[i].type !== "exit" && entities[i].type !== "powerCell") continue;
       _spriteOrderBuf[_spriteOrderCount++] = i;
       _spriteDistBuf[i] = distSq;
     }
@@ -1483,8 +1982,14 @@ export class Renderer {
       const spriteHeight = (Math.abs(h / transformY)) | 0;
       const spriteWidth = spriteHeight;
 
-      const drawStartY = Math.max(0, (-spriteHeight / 2 + h / 2) | 0);
-      const drawEndY = Math.min(h - 1, (spriteHeight / 2 + h / 2) | 0);
+      // Sprites are drawn about the standing eye line (h/2). From a lower eye
+      // everything stands higher in the view, nearer things more so: the
+      // whole sprite is drawn `eyeLift` px up, and its cuts by low cover are
+      // measured in that lifted space (_clipBias).
+      const eyeLift = (this._eyeDrop * h) / transformY;
+      this._clipBias = eyeLift;
+      const drawStartY = Math.max(eyeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min((h - 1 + eyeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
         (-spriteWidth / 2 + spriteScreenX) | 0,
@@ -1504,10 +2009,11 @@ export class Renderer {
         }
       }
       if (!visible) continue;
+      if (eyeLift) ctx.translate(0, -eyeLift);
 
       // Ground shadow — dark ellipse at entity's feet. A phased Hound, a
       // Foresight ghost and an afterimage cast none.
-      if (entity.type === "enemy" && !entity.dissolving && !entity._phased && !(entity.renderAlpha < 1)) {
+      if ((entity.type === "enemy" || entity.type === "npc") && !entity.dissolving && !entity._phased && !(entity.renderAlpha < 1)) {
         const shadowW = spriteWidth * 0.6;
         const shadowH = spriteHeight * 0.12;
         const shadowY = Math.floor(spriteHeight / 2 + h / 2) - shadowH * 0.5;
@@ -1529,7 +2035,18 @@ export class Renderer {
         }
       }
 
-      // Draw the entity
+      // A shield bearer's front arc, faint on the floor under it.
+      if (entity.type === "enemy" && entity.def?.frontShield) {
+        this._drawShieldArc(ctx, entity, cx, cy, dirX, dirY, planeX, planeY, transformY, eyeLift, time);
+      }
+
+      // Draw the entity. One dropping out of a ceiling vent (arrival.js
+      // liftZ, a share of its height) is drawn that far up.
+      const lift = entity.liftZ > 0 ? entity.liftZ * spriteHeight : 0;
+      if (lift) {
+        ctx.save();
+        ctx.translate(0, -lift);
+      }
       this.drawEntity(
         ctx,
         entity,
@@ -1543,7 +2060,85 @@ export class Renderer {
         transformY,
         time,
       );
+      if (lift) ctx.restore();
+      if (eyeLift) ctx.translate(0, eyeLift);
     }
+    this._clipBias = 0;
+  }
+
+  /**
+   * A shield bearer's front arc (±60°, combat.js), drawn faintly on the floor
+   * around its feet in every art style: a fan the way its shield faces, its
+   * two edges a little brighter, since past them your shots land. Brighter
+   * while you stand in it (it is blocking you), dimmer once you are round it.
+   * Points project as the sprite's feet do (h/2 + h/2ty, lifted by the eye
+   * drop); the caller has already lifted the canvas by the enemy's own.
+   */
+  _drawShieldArc(ctx, e, cx, cy, dirX, dirY, planeX, planeY, depth, eyeLift, time) {
+    if (e.dissolving || e.state === "dead" || e._phased || e._arriving || e.renderAlpha < 1) return;
+    const w = this.width;
+    const h = this.height;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    const R = 0.95;
+    const N = 12;
+    const a0 = e.angle || 0;
+    const pts = _arcPts;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i <= N + 1; i++) {
+      // The fan's points round the rim, then its centre at the feet.
+      const a = a0 - Math.PI / 3 + ((2 * Math.PI) / 3) * (i / N);
+      const wx = i > N ? e.x : e.x + Math.cos(a) * R;
+      const wy = i > N ? e.y : e.y + Math.sin(a) * R;
+      const sx = wx - cx;
+      const sy = wy - cy;
+      const tx = invDet * (dirY * sx - dirX * sy);
+      const ty = invDet * (-planeY * sx + planeX * sy);
+      if (ty <= 0.2) return;
+      const px = (w / 2) * (1 + tx / ty);
+      const py = h / 2 + h / (2 * ty) - (this._eyeDrop * h) / ty + eyeLift;
+      pts[i * 2] = px;
+      pts[i * 2 + 1] = py;
+      if (px < x0) x0 = px;
+      if (px > x1) x1 = px;
+      if (py < y0) y0 = py;
+      if (py > y1) y1 = py;
+    }
+    if (x1 < 0 || x0 > w) return;
+    const fade = Math.max(0, Math.min(1, 2.6 / depth)) * Math.max(0, 1 - depth / 16);
+    if (fade <= 0.02) return;
+    const vis = this._spriteClipPath(ctx, Math.floor(x0), Math.ceil(x1), y0 - 2, y1 + 2, depth);
+    if (!vis) return;
+    const da = Math.atan2(cy - e.y, cx - e.x) - a0;
+    const facingYou = Math.abs(Math.atan2(Math.sin(da), Math.cos(da))) < Math.PI / 3;
+    const k = fade * (facingYou ? 1 : 0.55) * (0.85 + 0.15 * Math.sin(time * 0.004));
+    const cxp = pts[(N + 1) * 2];
+    const cyp = pts[(N + 1) * 2 + 1];
+    ctx.save();
+    if (vis === 1) ctx.clip();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(cxp, cyp);
+    for (let i = 0; i <= N; i++) ctx.lineTo(pts[i * 2], pts[i * 2 + 1]);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(110,170,255,${(0.14 * k).toFixed(3)})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pts[0], pts[1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(pts[i * 2], pts[i * 2 + 1]);
+    ctx.strokeStyle = `rgba(150,205,255,${(0.55 * k).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, 3 / depth);
+    ctx.stroke();
+    // Its edges: where the flank starts.
+    ctx.beginPath();
+    ctx.moveTo(cxp, cyp);
+    ctx.lineTo(pts[0], pts[1]);
+    ctx.moveTo(cxp, cyp);
+    ctx.lineTo(pts[N * 2], pts[N * 2 + 1]);
+    ctx.strokeStyle = `rgba(190,225,255,${(0.6 * k).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, 4 / depth);
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawEntity(
@@ -1582,8 +2177,9 @@ export class Renderer {
       }
     }
 
-    if (entity.type === "enemy") {
+    if (entity.type === "enemy" || entity.type === "npc") {
       // Out of phase, the Hound is drawn as a shimmer by src/rendering/chrono-fx.js.
+      // People of the station (js/npc.js) draw on the same sprite rig.
       if (entity._phased) return;
       this.drawEnemy(
         ctx,
@@ -1655,6 +2251,8 @@ export class Renderer {
         fogFactor,
         entity.type,
       );
+    } else if (entity.type === "powerCell") {
+      drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fogFactor);
     } else if (entity.type === "exit") {
       drawExit(
         ctx,
@@ -1665,6 +2263,7 @@ export class Renderer {
         dist,
         time,
         fogFactor,
+        !!entity.sealed,
       );
     } else if (entity.type === "projectile") {
       // The player's own shots spawn inches from the camera, where the billboard
@@ -1685,8 +2284,10 @@ export class Renderer {
       // Z-buffer clipping — same pattern as enemies so props behind walls
       // and low cover don't bleed through
       // The clip also crops the art to its sprite box, so it applies even
-      // when nothing is in front.
-      if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+      // when nothing is in front. The box runs up to the ceiling: a tree
+      // taller than a wall's art is cut there, not at the art's top.
+      const propTop = startY - (CEILING_Z - 1) * sprHeight;
+      if (!this._spriteClipPath(ctx, startX, endX, propTop, endY, dist)) return;
       ctx.save();
       ctx.clip();
       if (isRealisticArt()) {
@@ -1721,14 +2322,19 @@ export class Renderer {
     const def = enemy.def;
     if (!def) return;
 
-    // Modern art: SVG pose sprites. Falls through to the procedural sprite
-    // until the type's bitmaps have decoded.
+    // Someone the pulse caught: drained, doubled, echoing, in any style.
+    if (enemy.type === "npc" && isFrozen(enemy) && drawFrozenPerson(this, ctx, enemy, screenX, centerY, halfH, dist, time, fog)) return;
+
+    // Modern art: SVG pose sprites. A type with art draws nothing until its
+    // bitmaps have decoded: its procedural Legacy sprite flashed in first,
+    // a different figure standing there. Types without art fall through.
     if (isModernArt()) {
-      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY);
+      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY, this._camX, this._camY);
       if (frame) {
         this._drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog);
         return;
       }
+      if (hasEnemySprite(enemy.enemyType)) return;
     }
 
     // Prefer per-instance palette (set at spawn with slight HSL jitter so
@@ -1739,7 +2345,10 @@ export class Renderer {
 
     // Only draw columns not occluded by walls, and only above low cover.
     // The clip also crops the art to its sprite box, so it always applies.
-    if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+    // A boss is drawn bigger than its column (src/rendering/enemies/boss.js).
+    const tall = def.boss ? Math.ceil((endY - startY) * 0.8) : 0;
+    const wide = def.boss ? Math.ceil((endX - startX) * 0.4) : 0;
+    if (!this._spriteClipPath(ctx, startX - wide, endX + wide, startY - tall, endY, dist)) return;
     ctx.save();
     ctx.clip();
 
@@ -1773,7 +2382,9 @@ export class Renderer {
 
     const renderFn = ENEMY_RENDERERS[enemy.enemyType];
     if (renderFn) {
-      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash);
+      // The station's people turn their back on the camera when facing away.
+      const away = enemy.type === "npc" && Math.cos(enemy.angle) * this._camRightY - Math.sin(enemy.angle) * this._camRightX > 0.3;
+      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash, away, this._facingCam);
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
@@ -1806,7 +2417,10 @@ export class Renderer {
    * rect, and a sprite with nothing in front is drawn unclipped.
    */
   _drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog) {
-    const alpha = fog;
+    // Fog fades the sprite only over the last stretch of the fog range.
+    // Scaling alpha with distance throughout left a near enemy see-through
+    // (90% opaque at 3 tiles), the corridor showing through a pale body.
+    const alpha = Math.min(1, fog * 2.5);
     if (alpha <= 0) return;
     const x0 = Math.max(0, Math.floor(screenX + frame.x0));
     const x1 = Math.min(this.zBuffer.length - 1, Math.ceil(screenX + frame.x1));
@@ -1864,7 +2478,8 @@ export class Renderer {
     // drew each sprite into a scratch canvas and blitted it back, and every
     // one of those cross-canvas copies forced a GPU flush: ~10% of Modern's
     // frame with a room full of enemies and props.
-    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.5);
+    // Enemies shade at most 35% (props 65%): a threat must stay readable.
+    ctx.filter = this._litFilter(enemy.x, enemy.y, 0.35);
     drawEnemySprite(ctx, frame, screenX, centerY, alpha, time, hitFlash, dissolve, windupT);
     ctx.filter = "none";
   }
@@ -1966,4 +2581,33 @@ export class Renderer {
     ctx.restore();
   }
 
+}
+
+/**
+ * Whether any of `ids` faces floor the player can see, within a dozen steps:
+ * a walk over open cells (and over short walls), checking the walls each one
+ * touches. A plain radius counted the track room's walls through the solid
+ * wall behind the locker room, so the prologue's first frames painted the
+ * whole east wing at once (~900 ms) instead of a few a frame.
+ */
+function nearWalls(map, player, ids) {
+  if (!player || !map?.grid) return false;
+  const R = 12;
+  const grid = map.grid;
+  const seen = new Set();
+  let ring = [[Math.floor(player.x), Math.floor(player.y)]];
+  for (let step = 0; step <= R && ring.length; step++) {
+    const next = [];
+    for (const [x, y] of ring) {
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const v = grid[ny]?.[nx];
+        if (v === undefined || seen.has(ny * 4096 + nx)) continue;
+        seen.add(ny * 4096 + nx);
+        if (v >= 10 && ids.includes(v)) return true;
+        if (wallHeight(map, nx, ny) < 1) next.push([nx, ny]);
+      }
+    }
+    ring = next;
+  }
+  return false;
 }

@@ -5,17 +5,14 @@
  * of the picture, eased across the shot. `artAt: [x, y, scale]` places the
  * art alone (x/y fractions of the picture, scale about its centre), for a
  * figure drawn larger than a letterboxed frame; it can be keyed by art
- * profile, `{ legacy: [...], default: [...] }`, since Legacy's pixel figures
- * stand smaller and lower in their picture. `silhouette: true` paints the art as
+ * profile, `{ realistic: [...], default: [...] }`. `silhouette: true` paints the art as
  * a black shape with a red rim (late-game bosses are never shown in full).
  * Borrows no game fields.
  *
  * The cutscene chunk is loaded on demand (it is large and most sessions never
- * play a reel); the build also waits, a few frames at most, for the Modern
+ * play a reel); the build also waits, a few frames at most, for the vector
  * backdrop bitmaps so the shot does not open on the procedural fallback.
  */
-
-import { isModernArt } from "../../rendering/art-style.js";
 
 const WARM_FRAMES = 30;
 
@@ -39,11 +36,10 @@ export const art = {
         import("../../rendering/cutscene-art.js"),
         import("../../rendering/svg-art/index.js"),
       ]);
-      cs = { drawCutsceneBg: cut.drawCutsceneBg, drawCutsceneArt: artMod.drawCutsceneArt, drawSvgBg: svg.drawSvgBg, hasSvgBg: svg.hasSvgBg, warmSvgArt: svg.warmSvgArt };
+      cs = { drawCutsceneBg: cut.drawCutsceneBg, drawCutsceneArt: artMod.drawCutsceneArt, cutsceneArtRect: artMod.cutsceneArtRect, drawSvgBg: svg.drawSvgBg, hasSvgBg: svg.hasSvgBg, warmSvgArt: svg.warmSvgArt };
     }
     const ctx = game.renderer?.ctx;
-    // Legacy draws every backdrop procedurally: nothing to decode.
-    if (!ctx || !live() || !isModernArt() || !cs.hasSvgBg(spec.bg)) return;
+    if (!ctx || !live() || !cs.hasSvgBg(spec.bg)) return;
     const w = game.renderer.width;
     const h = game.renderer.height;
     cs.warmSvgArt(spec.art ? [spec.art] : [], [spec.bg], ctx, w, h);
@@ -71,7 +67,7 @@ export const art = {
     }
     cs.drawCutsceneBg(ctx, w, h, spec.bg, local);
     if (spec.art) {
-      const at = artPlacement(spec.artAt);
+      const at = artPlacement(spec.artAt) ?? frameArt(w, h, spec.art, !!game.isTouchDevice);
       if (at) {
         ctx.translate(w / 2 + (at[0] ?? 0) * w, h / 2 + (at[1] ?? 0) * h);
         ctx.scale(at[2] ?? 1, at[2] ?? 1);
@@ -83,6 +79,21 @@ export const art = {
     ctx.restore();
   },
 };
+
+/**
+ * An `artAt` for vector art placed without one: centred in the picture and
+ * fitted inside the letterbox. Its cutscene anchor sits high, over where the
+ * subtitles go, which cut the station's tower off under the top bar.
+ * Procedural art has no known bounds and stays where it draws.
+ */
+function frameArt(w, h, art, touch) {
+  const r = cs.cutsceneArtRect?.(w, h, art, touch);
+  if (!r) return null;
+  const k = Math.min(1, (h * 0.6) / r.h, (w * 0.92) / r.w);
+  // artAt scales about the picture's centre: the offset that lands the
+  // rect's middle there.
+  return [0, (k * (h / 2 - (r.y + r.h / 2))) / h, k];
+}
 
 /** `artAt` for the current art profile: an array, or one keyed by profile with a default. */
 function artPlacement(at) {

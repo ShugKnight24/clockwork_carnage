@@ -8,9 +8,9 @@
 const TIER2 = { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" };
 const TIER3 = {
   type: "anyOf",
-  label: "Clear Act 1 or survive arena round 5",
+  label: "Clear 3 campaign levels or survive arena round 5",
   rules: [
-    { type: "campaignLevels", count: 3, label: "Clear Act 1", unit: "levels" },
+    { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
     { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
   ],
 };
@@ -46,6 +46,7 @@ export const ACCESSORIES = {
     { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, perk: "+5 chrono energy" },
     { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1 },
     { id: "plume", name: "Plume", desc: "Parade crest", tier: 3, unlock: TIER3 },
+    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1 },
   ],
   arms: [
     NONE,

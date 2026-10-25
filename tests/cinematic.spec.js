@@ -207,7 +207,9 @@ test("before any gesture the attract loop is silent and still captioned", async 
   expect(audio.ctx === null || audio.ctx !== "running").toBe(true);
   expect(audio.muted).toBe(true);
   // "Chrono-Corp Station." is up from 0.5 s to 3 s: bright pixels in the caption lane.
-  await expect.poll(async () => (await reelState(page))?.t ?? 0).toBeGreaterThan(1.2);
+  // The opening shot waits up to 3 s (showcase.js PREWARM_MS) for the
+  // station's props to decode before its clock starts.
+  await expect.poll(async () => (await reelState(page))?.t ?? 0, { timeout: 10_000 }).toBeGreaterThan(1.2);
   const bright = await page.evaluate(() => {
     const c = document.getElementById("hudCanvas");
     const g = c.getContext("2d");
@@ -345,7 +347,7 @@ test("skipping in the middle of a Chrono Shift puts time and the music back (Rev
 // One shot of every scene kind, with a style flip, a card over a live level
 // and the Meltdown swarm, short enough to play in each art style.
 const scenesReel = {
-  id: "scenes", bpm: 120, bars: 11, music: [], narration: [], captions: [],
+  id: "scenes", bpm: 120, bars: 12, music: [], narration: [], captions: [],
   letterbox: { in: 1, out: 1 },
   shots: [
     { id: "art", at: 0, len: 2, scene: { kind: "art", bg: "deep_space" } },
@@ -354,15 +356,19 @@ const scenesReel = {
       events: [{ at: 1, type: "fire", weapon: 0, dur: 2 }, { at: 3, type: "card", title: "The Hound", sub: "SUIT C-0016. NOBODY INSIDE.", len: 2 }],
     },
     {
-      id: "meltdown", at: 8, len: 8, scene: { kind: "meltdown", pickBeats: 3 },
+      id: "station", at: 8, len: 4, scene: { kind: "station", weapon: false, camera: { keys: [[0, 36.6, 42.5, 0], [4, 44, 42.5, 0]] } },
+      events: [{ at: 2, type: "flicker", len: 1 }],
+    },
+    {
+      id: "meltdown", at: 12, len: 8, scene: { kind: "meltdown", pickBeats: 3 },
       events: [{ at: 3, type: "spawn", enemy: "drone", count: 3 }, { at: 4, type: "fire", weapon: 0, dur: 3 }],
     },
-    { id: "forge", at: 16, len: 10, scene: { kind: "forge", build: "tower" } },
+    { id: "forge", at: 20, len: 10, scene: { kind: "forge", build: "tower" } },
     {
-      id: "creator", at: 26, len: 10, scene: { kind: "creator", looks: "curated" },
+      id: "creator", at: 30, len: 10, scene: { kind: "creator", looks: "curated" },
       events: [{ at: 2, type: "look" }, { at: 4, type: "look" }, { at: 5, type: "artStyle", style: 0 }, { at: 6, type: "look" }, { at: 7, type: "artStyle", style: 2 }, { at: 8, type: "visor" }],
     },
-    { id: "title", at: 36, len: 8, scene: { kind: "title" } },
+    { id: "title", at: 40, len: 8, scene: { kind: "title" } },
   ],
 };
 
@@ -479,13 +485,21 @@ async function freshCampaign(page) {
     tick();
   });
   await page.locator("#btnCampaign").click();
+  // The comic opens every new campaign and hands over to the prologue prompt;
+  // skipping the prologue opens the creator (the prologue opens it at the locker).
+  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
+  expect(await page.evaluate(() => window.ccDebug.game.cutsceneEngine?.cutscene?.key ?? null)).toBe("intro_flipbook");
+  await page.evaluate(() => window.ccDebug.skipCutscene());
+  // The state log samples once a frame: let it see the prompt before leaving it.
+  await page.waitForFunction(() => window.__states.at(-1) === "campaignPrompt");
+  await page.evaluate(() => window.ccDebug.game.executeCampaignPromptChoice(1));
   await page.waitForFunction(() => window.ccDebug.game.state === "characterCreate");
   await page.waitForTimeout(400);
 }
 
 const seenLore = (page) => page.evaluate(() => localStorage.getItem("cc_seen_lore_video"));
 
-test("a first new campaign plays the lore video between the creator and the flipbook; the next goes straight on", async ({ page }) => {
+test("a first new campaign runs comic, prompt; skipping the prologue runs creator, lore video, Act I; the next skips the video", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await freshCampaign(page);
@@ -499,20 +513,20 @@ test("a first new campaign plays the lore video between the creator and the flip
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.ccDebug.game.state)).toBe("cinematic");
   await page.keyboard.down("Space");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.waitForFunction(() => window.ccDebug.game.state !== "cinematic", null, { timeout: 5000 });
   await page.keyboard.up("Space");
   expect(await seenLore(page)).toBe("1");
-  // The cutscene is the flipbook: finishing it writes its own seen flag, then the prologue prompt.
-  await page.evaluate(() => window.ccDebug.skipCutscene());
-  await page.waitForFunction(() => window.ccDebug.game.state === "campaignPrompt");
   expect(await page.evaluate(() => localStorage.getItem("cc_seen_intro_flipbook"))).toBe("1");
-  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cinematic", "cutscene", "campaignPrompt"]);
+  await page.waitForFunction(() => window.__states.at(-1) === "cutscene");
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "cutscene", "campaignPrompt", "characterCreate", "cinematic", "cutscene"]);
+  expect(await page.evaluate(() => window.ccDebug.game.cutsceneEngine?.cutscene?.key ?? null)).toBe("clocking_in");
 
-  // A second new campaign: creator, then the flipbook, no lore.
+  // A second new campaign: the comic, the prompt, the creator, then straight into Act I.
   await freshCampaign(page);
   await page.keyboard.press("Shift+Enter");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene");
-  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "characterCreate", "cutscene"]);
+  // The state log samples once a frame: wait for it to catch up.
+  await page.waitForFunction(() => window.__states.at(-1) === "cutscene");
+  expect(await page.evaluate(() => window.__states)).toEqual(["modeSelect", "cutscene", "campaignPrompt", "characterCreate", "cutscene"]);
   expect(errors).toEqual([]);
 });
 
@@ -550,7 +564,7 @@ test("backing out of the creator still plays the lore video, with the default ag
   });
   expect(lit).toBeGreaterThan(500);
   await page.keyboard.down("Space");
-  await page.waitForFunction(() => window.ccDebug.game.state === "cutscene", null, { timeout: 5000 });
+  await page.waitForFunction(() => window.ccDebug.game.state !== "cinematic", null, { timeout: 5000 });
   await page.keyboard.up("Space");
   expect(await seenLore(page)).toBe("1");
   expect(await page.evaluate(() => localStorage.getItem("cc_character"))).toBeNull();

@@ -21,6 +21,71 @@ const PROJECTED_CATEGORIES = new Set([
 
 /** Seconds between projections, so her showing up stays an event. */
 const PROJECTION_COOLDOWN = 75;
+/** Seconds a line may outstay its reading time while its voice finishes. */
+const SPEECH_GRACE = 8;
+
+/**
+ * Chatter: what ARIA volunteers, as against what the game needs said (cells,
+ * the exit, the boss, a death). Chatter is rate-limited, by kind and in all.
+ * An act's ambient pool counts as idle chatter (see chatterKind).
+ */
+const CHATTER_KINDS = {
+  idle: "idle",
+  ariaPersonality: "idle",
+  ngPlusAriaLoop: "idle",
+  killStreak3: "streak",
+  killStreak5: "streak",
+  killStreak7: "streak",
+  multiKillSplash: "streak",
+  highAccuracy: "streak",
+  noHitRound: "streak",
+  longSurvival: "streak",
+  dashUsed: "move",
+  weaponSwitch: "move",
+  pauseResume: "move",
+  healthPickup: "pickup",
+  weaponPickup: "pickup",
+  upgradeChosen: "pickup",
+};
+/** Seconds before the same kind of chatter again. */
+export const CHATTER_COOLDOWN = 45;
+/** At most this many chatter lines in any minute. */
+export const CHATTER_PER_MINUTE = 2;
+/** Seconds of quiet before an idle line, at least, plus up to as much again. */
+const IDLE_MIN = 50;
+
+/** The chatter kind of `category`, or null when the line has to be said. */
+export function chatterKind(category) {
+  return CHATTER_KINDS[category] ?? (/Ambient$/.test(category) ? "idle" : null);
+}
+
+/**
+ * Lines left to say this session, per pool: a pool is dealt like a deck, so
+ * no line comes round again until every other one in it has been said, and a
+ * new round never opens on the line that closed the last.
+ */
+const bags = new Map();
+
+/** A line from `pool` (keyed `key`) that hasn't been said since it was last dealt. */
+export function drawLine(key, pool, rand = Math.random) {
+  if (!pool?.length) return null;
+  let bag = bags.get(key);
+  if (!bag || bag.size !== pool.length) {
+    bag = { left: [], last: -1, size: pool.length };
+    bags.set(key, bag);
+  }
+  if (!bag.left.length) bag.left = pool.map((_, i) => i);
+  let j = Math.floor(rand() * bag.left.length);
+  if (bag.left[j] === bag.last && bag.left.length > 1) j = (j + 1) % bag.left.length;
+  const [i] = bag.left.splice(j, 1);
+  bag.last = i;
+  return pool[i];
+}
+
+/** Forget what has been said (tests; a fresh session). */
+export function resetLineBags() {
+  bags.clear();
+}
 
 /**
  * How ARIA sounds for each kind of line. She is warm by default; these are
@@ -33,6 +98,15 @@ const CATEGORY_EMOTIONS = {
   levelComplete: "happy",
   tutorialComplete: "tender",
   secretFound: "curious",
+  powerCellsBrief: "urgent",
+  powerCellFound: "warm",
+  exitSealed: "worried",
+  exitUnsealed: "excited",
+  powerCellsReactor: "urgent",
+  powerCellsEngine: "urgent",
+  lockdownBrief: "urgent",
+  lockdownHeld: "worried",
+  lockdownLifted: "excited",
   bossEncounter: "urgent",
   bossForm2: "urgent",
   idle: "warm",
@@ -84,6 +158,7 @@ import {
   pixelRatio,
 } from "../ui/modern-ui-kit.js";
 import * as skin from "../ui/hud-skin.js";
+import { drawCommsPortrait, isRadioLine } from "../ui/comms-portraits.js";
 
 export class AriaCommsSystem {
   constructor(game = null) {
@@ -92,16 +167,22 @@ export class AriaCommsSystem {
     this.game = game;
     this.queue = [];
     this.message = null; // { text, color, life, duration, prominent }
+    // Whether the player has met her yet: the prologue clears it until she
+    // first speaks (its "look" step), so nothing of hers, a quip on
+    // unpausing included, comes before her introduction.
+    this.introduced = true;
     this.triggered = {}; // one-shot triggers per level/round
     this.enabled = false;
     this.idleTimer = 0;
-    this.idleThreshold = 30;
+    this.idleThreshold = IDLE_MIN;
     this.combatTimer = 0;
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
     this._clock = 0;
     this._lastProjection = -Infinity;
+    this._chatterAt = {}; // chatter kind -> when it was last said
+    this._chatterTimes = []; // when each chatter line in the last minute was said
   }
 
   enable() {
@@ -116,6 +197,18 @@ export class AriaCommsSystem {
     this.combatTimer = 0;
   }
 
+  /**
+   * Drop every line still waiting or on screen, and the voice saying it. A new
+   * level, the prologue or the menus start clean: a line queued in the last
+   * place is about the last place.
+   */
+  flush() {
+    this.game?.audio?.stopSpeech?.("comms");
+    this.queue = [];
+    this.message = null;
+    this.idleTimer = 0;
+  }
+
   resetAll() {
     this.game?.audio?.stopSpeech?.("comms");
     this.queue = [];
@@ -123,20 +216,43 @@ export class AriaCommsSystem {
     this.triggered = {};
     this.enabled = false;
     this.idleTimer = 0;
-    this.idleThreshold = 30;
+    this.idleThreshold = IDLE_MIN;
     this.combatTimer = 0;
     this.messageLog = [];
     this.showLog = false;
     this.logScroll = 0;
     this._clock = 0;
     this._lastProjection = -Infinity;
+    this._chatterAt = {};
+    this._chatterTimes = [];
+  }
+
+  /**
+   * Whether chatter of `category` may be said now, and if so, count it: not
+   * the same kind within CHATTER_COOLDOWN, and no more than
+   * CHATTER_PER_MINUTE of any kind. Lines the game needs said always pass.
+   */
+  _allowChatter(category) {
+    const kind = chatterKind(category);
+    if (!kind) return true;
+    const now = this._clock;
+    if (now - (this._chatterAt[kind] ?? -Infinity) < CHATTER_COOLDOWN) return false;
+    this._chatterTimes = this._chatterTimes.filter((t) => now - t < 60);
+    if (this._chatterTimes.length >= CHATTER_PER_MINUTE) return false;
+    this._chatterAt[kind] = now;
+    this._chatterTimes.push(now);
+    return true;
   }
 
   queueMessage(category, arenaRound) {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.introduced) return;
+    // The prologue writes every word she says (js/tutorial-system.js): her
+    // stock chatter there only cut into the story and held up instructions.
+    if (this.game?.mode === "tutorial") return;
     const pool = ARIA_COMMS[category];
     if (!pool || pool.length === 0) return;
-    let text = pool[Math.floor(Math.random() * pool.length)];
+    if (!this._allowChatter(category)) return;
+    let text = drawLine(category, pool);
     text = text.replace("{ROUNDS}", String(arenaRound || 0));
     const prominent = !["idle", "ariaPersonality"].includes(category);
     const projected = this._shouldProject(category);
@@ -183,7 +299,7 @@ export class AriaCommsSystem {
     if (!this.enabled) return;
     const pool = ARIA_COMMS[category];
     if (!line && (!pool || pool.length === 0)) return;
-    const text = line ?? pool[Math.floor(Math.random() * pool.length)];
+    const text = line ?? drawLine(category, pool);
     this.queue.push({
       text,
       color: color || "#ffcc66",
@@ -199,7 +315,30 @@ export class AriaCommsSystem {
     });
   }
 
+  /**
+   * Queue one line exactly as given (the prologue's script): its speaker,
+   * plate colour, voice, emotion and how long it stays up.
+   */
+  queueLine({ speaker = "ARIA", text, color = "#00ffdd", voice = null, emotion = null, duration = 4.5, prominent = true, ...extra }) {
+    if (!this.enabled || !text) return;
+    if (speaker === "ARIA") this.introduced = true;
+    this.queue.push({
+      text,
+      color,
+      duration,
+      prominent,
+      speaker,
+      voice,
+      emotion,
+      category: "script",
+      queuedAt: this._clock,
+      ...extra,
+    });
+  }
+
   triggerOnce(key, category, arenaRound) {
+    // Muted in the prologue and before she is met (queueMessage): don't spend the one-shot there.
+    if (this.game?.mode === "tutorial" || !this.introduced) return;
     if (this.triggered[key]) return;
     this.triggered[key] = true;
     this.queueMessage(category, arenaRound);
@@ -226,8 +365,15 @@ export class AriaCommsSystem {
       }
     }
     if (this.message) {
-      this.message.life += dt;
-      if (this.message.life >= this.message.duration) this.message = null;
+      const m = this.message;
+      m.life += dt;
+      // A voice slower than the line's reading time keeps it up until the
+      // sentence ends, so the next line never cuts it off mid-word. Capped,
+      // in case a browser voice never reports its end.
+      if (m.life >= m.duration - 0.3 && m.life < (m._dur0 ??= m.duration) + SPEECH_GRACE && this.game?.audio?.isSpeaking?.(m._said)) {
+        m.duration = m.life + 0.3;
+      }
+      if (m.life >= m.duration) this.message = null;
     }
 
     if (!isPlaying) return;
@@ -246,7 +392,7 @@ export class AriaCommsSystem {
     ) {
       const pool = this._pickIdlePool();
       this.queueMessage(pool);
-      this.idleThreshold = 25 + Math.random() * 25;
+      this.idleThreshold = IDLE_MIN + Math.random() * IDLE_MIN;
       this.idleTimer = 0;
     }
   }
@@ -262,7 +408,7 @@ export class AriaCommsSystem {
     const key = msg.voice ?? voiceKeyFor({ speaker: msg.speaker || "ARIA" });
     const text = String(msg.text).replace(/\{AGENT\}/g, this.game?.character?.name || "Agent");
     const charsPerSec = Math.max(16, text.length / Math.max(1, msg.duration * 0.8));
-    audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
+    msg._said = audio.speak(text, key, { channel: "comms", charsPerSec, emotion: msg.emotion ?? null });
   }
 
   /**
@@ -427,13 +573,15 @@ export class AriaCommsSystem {
     ctx.globalAlpha = alpha;
 
     const pBoxW = Math.min(460, a?.maxW ?? 460);
-    const cx = a ? a.cx : w / 2;
-    const pBx = cx - pBoxW / 2;
+    const pBx = (a ? a.cx : w / 2) - pBoxW / 2;
+    // The speaker's bust takes the left edge; the text centres in the rest.
+    const icon = 40;
+    const cx = pBx + icon + (pBoxW - icon) / 2;
 
     // Word wrap
     const ariaText = msg.text.replace(/\{AGENT\}/g, agentName);
     ctx.font = "14px monospace";
-    const maxTextW = pBoxW - 32;
+    const maxTextW = pBoxW - icon - 32;
     const lines = this._wordWrap(ctx, ariaText, maxTextW);
     const lineH = 17;
     const pBoxH = 64 + Math.max(0, lines.length - 1) * lineH;
@@ -457,11 +605,11 @@ export class AriaCommsSystem {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    const tone = msg.speaker && msg.speaker !== "ARIA" ? msg.color || "#ffcc66" : "#00ccff";
+    this._portrait(ctx, msg, pBx + 10, Math.round(pBy + (pBoxH - icon) / 2), icon, t, "legacy", tone);
+
     // ARIA label centered
-    ctx.fillStyle =
-      msg.speaker && msg.speaker !== "ARIA"
-        ? msg.color || "#ffcc66"
-        : "#00ccff";
+    ctx.fillStyle = tone;
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "center";
     ctx.fillText(msg.speaker || "ARIA", cx, pBy + 18);
@@ -514,8 +662,9 @@ export class AriaCommsSystem {
     ctx.roundRect(bx, by, boxW, boxH, 6);
     ctx.stroke();
 
-    // ARIA Mini Portrait
-    this._renderPortrait(ctx, bx + 7, by + 5, 40, 44, t);
+    // The speaker's bust.
+    const tone = msg.speaker && msg.speaker !== "ARIA" ? msg.color || "#ffcc66" : "#00ccff";
+    this._portrait(ctx, msg, bx + 7, by + 6, 42, t, "legacy", tone);
 
     // Text area
     const tx = bx + 54;
@@ -555,155 +704,6 @@ export class AriaCommsSystem {
     }
 
     ctx.restore();
-  }
-
-  _renderPortrait(ctx, px, py, pw, ph, t) {
-    // Portrait background
-    ctx.fillStyle = "rgba(0, 30, 50, 0.9)";
-    ctx.beginPath();
-    ctx.roundRect(px, py, pw, ph, 4);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,200,255,0.5)";
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.roundRect(px, py, pw, ph, 4);
-    ctx.stroke();
-
-    const cx = px + pw / 2;
-    const cy = py + ph / 2 - 1;
-    const breathe = Math.sin(t * 2) * 0.5;
-
-    // Neck
-    ctx.fillStyle = "rgba(180, 220, 240, 0.7)";
-    ctx.fillRect(cx - 3, cy + 8, 6, 7);
-
-    // High-collar suit
-    ctx.fillStyle = "rgba(20, 50, 70, 0.95)";
-    ctx.beginPath();
-    ctx.moveTo(cx - 14, cy + 14 + breathe);
-    ctx.lineTo(cx - 6, cy + 9);
-    ctx.lineTo(cx - 3, cy + 13);
-    ctx.lineTo(cx + 3, cy + 13);
-    ctx.lineTo(cx + 6, cy + 9);
-    ctx.lineTo(cx + 14, cy + 14 + breathe);
-    ctx.lineTo(cx + 14, cy + 22);
-    ctx.lineTo(cx - 14, cy + 22);
-    ctx.closePath();
-    ctx.fill();
-    // Collar trim
-    ctx.strokeStyle = "#00ddff";
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(cx - 6, cy + 9);
-    ctx.lineTo(cx - 14, cy + 14 + breathe);
-    ctx.moveTo(cx + 6, cy + 9);
-    ctx.lineTo(cx + 14, cy + 14 + breathe);
-    ctx.stroke();
-    // Center line
-    ctx.strokeStyle = "rgba(0,200,255,0.4)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy + 13);
-    ctx.lineTo(cx, cy + 22);
-    ctx.stroke();
-
-    // Face
-    ctx.fillStyle = "rgba(190, 225, 245, 0.8)";
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 2, 9, 11, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Holographic grid
-    ctx.strokeStyle = "rgba(0,200,255,0.12)";
-    ctx.lineWidth = 0.3;
-    for (let gy = cy - 12; gy < cy + 9; gy += 3) {
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, gy);
-      ctx.lineTo(cx + 9, gy);
-      ctx.stroke();
-    }
-
-    // Hair — asymmetric bob
-    ctx.fillStyle = "rgba(40, 50, 70, 0.9)";
-    ctx.beginPath();
-    ctx.moveTo(cx - 3, cy - 14);
-    ctx.quadraticCurveTo(cx - 13, cy - 10, cx - 12, cy + 3);
-    ctx.lineTo(cx - 9, cy + 2);
-    ctx.quadraticCurveTo(cx - 10, cy - 8, cx - 3, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(cx + 3, cy - 14);
-    ctx.quadraticCurveTo(cx + 12, cy - 10, cx + 10, cy - 1);
-    ctx.lineTo(cx + 8, cy - 2);
-    ctx.quadraticCurveTo(cx + 9, cy - 8, cx + 3, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(cx - 5, cy - 13);
-    ctx.quadraticCurveTo(cx, cy - 16, cx + 5, cy - 13);
-    ctx.quadraticCurveTo(cx, cy - 11, cx - 5, cy - 13);
-    ctx.fill();
-
-    // Cyan highlight streak
-    ctx.strokeStyle = "#00eeff";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(cx - 5, cy - 13);
-    ctx.quadraticCurveTo(cx - 12, cy - 7, cx - 11, cy + 1);
-    ctx.stroke();
-
-    // Eyes — glowing cyan
-    const eyeGlow = 0.7 + Math.sin(t * 3) * 0.3;
-    ctx.fillStyle = `rgba(0, 230, 255, ${eyeGlow})`;
-    ctx.beginPath();
-    ctx.ellipse(cx - 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 4, cy - 3, 1.8, 1.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `rgba(0, 200, 255, ${eyeGlow * 0.15})`;
-    ctx.beginPath();
-    ctx.ellipse(cx - 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + 4, cy - 3, 4, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Slight smile
-    ctx.strokeStyle = "rgba(100, 160, 200, 0.5)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy + 1, 3, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-
-    // Tech headset
-    ctx.strokeStyle = "rgba(80, 100, 120, 0.9)";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(cx, cy - 3, 11, -0.65 * Math.PI, -0.15 * Math.PI);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(30, 50, 70, 0.9)";
-    ctx.beginPath();
-    ctx.ellipse(cx + 10, cy - 1, 2.5, 4, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-    // Boom mic
-    ctx.strokeStyle = "rgba(80, 100, 120, 0.7)";
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(cx + 9, cy + 2);
-    ctx.quadraticCurveTo(cx + 8, cy + 6, cx + 3, cy + 7);
-    ctx.stroke();
-    ctx.fillStyle = "#00ddff";
-    ctx.beginPath();
-    ctx.arc(cx + 3, cy + 7, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Scanlines
-    ctx.fillStyle = `rgba(0, 200, 255, ${0.03 + Math.sin(t * 8) * 0.02})`;
-    for (let sy = 0; sy < ph; sy += 2) {
-      ctx.fillRect(px, py + sy, pw, 1);
-    }
   }
 
   // ── Modern (graphic-novel) rendering ──
@@ -801,8 +801,7 @@ export class AriaCommsSystem {
     ctx.drawImage(card, x - CARD_PAD, y - CARD_PAD, boxW + CARD_PAD * 2, boxH + CARD_PAD * 2);
 
     const py = y + Math.round((boxH - port) / 2);
-    ctx.drawImage(portraitSprite(speaker, color, port, dpr), x + 14 - 2, py - 2, port + 4, port + 4);
-    this._drawPortraitLive(ctx, speaker, x + 14, py, port, t);
+    this._portrait(ctx, msg, x + 14, py, port, t, "comic", color, dpr);
 
     const tab = speakerTabSprite(speaker, color, 11, dpr);
     ctx.drawImage(tab.c, tx - 3, y - 11 - 3, tab.w + 6, tab.h + 6);
@@ -919,8 +918,7 @@ export class AriaCommsSystem {
     drawPanel(ctx, bx, by, boxW, boxH, { variant: "hud", accent: color, bar: true, chamfer: 10 });
     const dpr = pixelRatio(ctx);
     const py = by + Math.round((boxH - port) / 2);
-    ctx.drawImage(portraitSprite(speaker, color, port, dpr), bx + 12 - 2, py - 2, port + 4, port + 4);
-    this._drawPortraitLive(ctx, speaker, bx + 12, py, port, t);
+    this._portrait(ctx, msg, bx + 12, py, port, t, "comic", color, dpr);
 
     const tab = speakerTabSprite(speaker, color, 10, dpr);
     ctx.drawImage(tab.c, bx + tx - 3, by - 9 - 3, tab.w + 6, tab.h + 6);
@@ -932,18 +930,15 @@ export class AriaCommsSystem {
     ctx.restore();
   }
 
-  /** Per-frame life on the cached portrait: ARIA's eyes pulse. */
-  _drawPortraitLive(ctx, speaker, px, py, size, t) {
-    if (speaker !== "ARIA") return;
-    const u = size / 40;
-    const cx = px + size / 2;
-    const cy = py + size * 0.47;
-    const a = ctx.globalAlpha;
-    ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin(t * 3));
-    ctx.fillStyle = "#b8fbff";
-    ctx.fillRect(cx - 5.4 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
-    ctx.fillRect(cx + 2.2 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
-    ctx.globalAlpha = a;
+  /**
+   * The speaker's bust in its well at (x, y): cached per speaker, finish and
+   * size, and alive per frame — the mouth moves while the line is being said
+   * (typed or still spoken), static over a radio line, ARIA's feed flickers.
+   */
+  _portrait(ctx, msg, x, y, size, t, style, tone, dpr = pixelRatio(ctx)) {
+    const speaking = this._speaking(msg, t) || !!this.game?.audio?.isSpeaking?.(msg._said);
+    msg._radio ??= isRadioLine(msg);
+    drawCommsPortrait(ctx, { speaker: msg.speaker || "ARIA", x, y, size, style, tone, t, speaking, radio: msg._radio, dpr });
   }
 
   // ─── Realistic comms plate ───────────────────────────────────────────────
@@ -1009,19 +1004,7 @@ export class AriaCommsSystem {
     if (port > 0) {
       const px = x + REAL_PAD;
       const py = y + Math.round((boxH - port) / 2);
-      ctx.drawImage(realPortraitSprite(speaker, tone, port, dpr), px - 2, py - 2, port + 4, port + 4);
-      if (speaker === "ARIA") {
-        // Her eyes still breathe, in the plate's neutral light.
-        const u = port / 40;
-        const cx = px + port / 2;
-        const cy = py + port * 0.47;
-        const a = ctx.globalAlpha;
-        ctx.globalAlpha = a * (0.3 + 0.25 * Math.sin(t * 3));
-        ctx.fillStyle = "#dcebec";
-        ctx.fillRect(cx - 5.4 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
-        ctx.fillRect(cx + 2.2 * u, cy - 3.6 * u, 3.2 * u, 1.5 * u);
-        ctx.globalAlpha = a;
-      }
+      this._portrait(ctx, msg, px, py, port, t, "real", tone, dpr);
     }
 
     const tx = x + realTextX(port);
@@ -1322,236 +1305,6 @@ function drawVoiceBars(ctx, x, midY, t, color, amp) {
   }
 }
 
-/**
- * Inked portrait glyph: ARIA (bob, headset, cyan eyes) or a squad helmet with
- * a visor in the member's colour. 3-tone shading, key light upper-left, rim
- * light in the speaker colour on the right. Drawn in a 40-unit box.
- */
-function portraitSprite(speaker, color, size, dpr) {
-  const isAria = speaker === "ARIA";
-  return commsSprite(`port:${isAria ? "ARIA" : "SQUAD"}:${color}`, size, size, 2, dpr, (g, s) => {
-    const u = s / 40;
-    const k = 6 * u;
-    g.fillStyle = UI.ink;
-    cutPath(g, -1.5, -1.5, s + 3, s + 3, k + 1);
-    g.fill();
-    g.save();
-    cutPath(g, 0, 0, s, s, k);
-    g.clip();
-    const bg = g.createLinearGradient(0, 0, 0, s);
-    bg.addColorStop(0, "#1a2c40");
-    bg.addColorStop(1, "#060a11");
-    g.fillStyle = bg;
-    g.fillRect(0, 0, s, s);
-    const glow = g.createRadialGradient(s * 0.62, s * 0.4, 0, s * 0.62, s * 0.4, s * 0.62);
-    glow.addColorStop(0, hexA(color, 0.32));
-    glow.addColorStop(1, hexA(color, 0));
-    g.fillStyle = glow;
-    g.fillRect(0, 0, s, s);
-
-    g.scale(u, u);
-    g.lineJoin = "round";
-    g.lineCap = "round";
-    const ink = () => {
-      g.lineWidth = 1.1;
-      g.strokeStyle = UI.ink;
-      g.stroke();
-    };
-
-    // Shoulders / suit. ARIA's frame is slimmer than the squad's, matching the
-    // hologram in src/rendering/svg-art/models/cast.js.
-    g.beginPath();
-    if (isAria) {
-      g.moveTo(6, 41);
-      g.lineTo(8.5, 33.5);
-      g.quadraticCurveTo(11, 30, 16, 29);
-      g.lineTo(24, 29);
-      g.quadraticCurveTo(29, 30, 31.5, 33.5);
-      g.lineTo(34, 41);
-    } else {
-      g.moveTo(3, 41);
-      g.lineTo(6, 33);
-      g.quadraticCurveTo(9, 29.5, 15, 28.5);
-      g.lineTo(25, 28.5);
-      g.quadraticCurveTo(31, 29.5, 34, 33);
-      g.lineTo(37, 41);
-    }
-    g.closePath();
-    const suit = g.createLinearGradient(6, 28, 30, 41);
-    suit.addColorStop(0, "#4a6680");
-    suit.addColorStop(0.45, "#26394b");
-    suit.addColorStop(1, "#0e1722");
-    g.fillStyle = suit;
-    g.fill();
-    ink();
-
-    if (isAria) {
-      // Neck.
-      g.beginPath();
-      g.moveTo(16.5, 22);
-      g.lineTo(23.5, 22);
-      g.lineTo(23, 29);
-      g.lineTo(17, 29);
-      g.closePath();
-      g.fillStyle = "#8fa9ba";
-      g.fill();
-      ink();
-      // High collar V in the speaker colour.
-      g.beginPath();
-      g.moveTo(13.5, 29);
-      g.lineTo(20, 34.5);
-      g.lineTo(26.5, 29);
-      g.strokeStyle = UI.ink;
-      g.lineWidth = 2.4;
-      g.stroke();
-      g.strokeStyle = color;
-      g.lineWidth = 1.1;
-      g.stroke();
-      // Face: base, shadow side, AO under the jaw.
-      g.beginPath();
-      g.ellipse(20, 16.5, 7, 8.8, 0, 0, Math.PI * 2);
-      g.fillStyle = "#cdf6ff";
-      g.fill();
-      g.save();
-      g.clip();
-      g.fillStyle = "#62cce4";
-      g.beginPath();
-      g.ellipse(24.5, 18.5, 6, 10, 0, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#2f88a6";
-      g.fillRect(12, 23.2, 16, 3);
-      g.restore();
-      g.beginPath();
-      g.ellipse(20, 16.5, 7, 8.8, 0, 0, Math.PI * 2);
-      ink();
-      // Eye sockets (live glow drawn on top per frame) + mouth.
-      g.fillStyle = "#2a3a4a";
-      g.fillRect(14.3, 14.9, 3.8, 2.1);
-      g.fillRect(21.9, 14.9, 3.8, 2.1);
-      g.strokeStyle = "rgba(60,80,96,0.8)";
-      g.lineWidth = 0.7;
-      g.beginPath();
-      g.moveTo(18.2, 21.3);
-      g.quadraticCurveTo(20, 22.2, 21.8, 21.2);
-      g.stroke();
-      // Asymmetric bob with a sweeping fringe.
-      g.beginPath();
-      g.moveTo(11.2, 23.5);
-      g.quadraticCurveTo(9.2, 12, 13.5, 8.2);
-      g.quadraticCurveTo(20, 4.2, 26.5, 8);
-      g.quadraticCurveTo(29.6, 11.5, 28.4, 18.5);
-      g.lineTo(26.6, 13.2);
-      g.quadraticCurveTo(21, 12.4, 16.5, 10.8);
-      g.quadraticCurveTo(13.8, 14.5, 13.8, 23.5);
-      g.closePath();
-      const hair = g.createLinearGradient(10, 5, 28, 22);
-      hair.addColorStop(0, "#3a4a63");
-      hair.addColorStop(0.5, "#1b2435");
-      hair.addColorStop(1, "#0b111b");
-      g.fillStyle = hair;
-      g.fill();
-      ink();
-      g.beginPath();
-      g.moveTo(15.2, 8.6);
-      g.quadraticCurveTo(11.4, 13, 12, 21.5);
-      g.strokeStyle = color;
-      g.lineWidth = 1.2;
-      g.stroke();
-      // Earpiece and temple lead — no headset band, matching the model.
-      g.beginPath();
-      g.ellipse(28.2, 17.5, 1.6, 3.2, 0.15, 0, Math.PI * 2);
-      g.fillStyle = "#2e4255";
-      g.fill();
-      ink();
-      g.beginPath();
-      g.moveTo(28, 20.5);
-      g.quadraticCurveTo(27, 24.5, 22.8, 24.6);
-      g.strokeStyle = "#6f8aa3";
-      g.lineWidth = 0.9;
-      g.stroke();
-      g.beginPath();
-      g.arc(22.6, 24.6, 1.1, 0, Math.PI * 2);
-      g.fillStyle = color;
-      g.fill();
-      // Feed scanlines across the whole tile.
-      g.globalAlpha = 0.18;
-      g.fillStyle = "#bfffff";
-      for (let yy = 1; yy < 40; yy += 2.6) g.fillRect(0, yy, 40, 0.7);
-      g.globalAlpha = 1;
-    } else {
-      // Pauldrons.
-      for (const sx of [1, -1]) {
-        g.beginPath();
-        g.ellipse(20 + sx * 12, 31.5, 6.5, 3.8, sx * 0.35, 0, Math.PI * 2);
-        g.fillStyle = sx > 0 ? "#1d2b39" : "#3b5268";
-        g.fill();
-        ink();
-      }
-      // Helmet dome.
-      g.beginPath();
-      g.moveTo(11, 21);
-      g.quadraticCurveTo(10, 6.5, 20, 6);
-      g.quadraticCurveTo(30, 6.5, 29, 21);
-      g.lineTo(26.5, 27.5);
-      g.lineTo(13.5, 27.5);
-      g.closePath();
-      const helm = g.createLinearGradient(11, 6, 29, 27);
-      helm.addColorStop(0, "#7d97ad");
-      helm.addColorStop(0.45, "#3e556a");
-      helm.addColorStop(1, "#16212c");
-      g.fillStyle = helm;
-      g.fill();
-      ink();
-      // Crest stripe.
-      g.fillStyle = color;
-      g.fillRect(19, 6.8, 2, 5.5);
-      // Visor.
-      g.beginPath();
-      g.moveTo(12.2, 14);
-      g.lineTo(27.8, 14);
-      g.lineTo(26.8, 19.6);
-      g.lineTo(20, 21.2);
-      g.lineTo(13.2, 19.6);
-      g.closePath();
-      g.fillStyle = color;
-      g.fill();
-      const vis = g.createLinearGradient(0, 14, 0, 21);
-      vis.addColorStop(0, "rgba(255,255,255,0.55)");
-      vis.addColorStop(0.35, "rgba(255,255,255,0)");
-      vis.addColorStop(1, "rgba(0,0,0,0.35)");
-      g.fillStyle = vis;
-      g.fill();
-      ink();
-      // Chin guard vents.
-      g.strokeStyle = "rgba(4,6,11,0.8)";
-      g.lineWidth = 0.8;
-      for (const vx of [17.5, 20, 22.5]) {
-        g.beginPath();
-        g.moveTo(vx, 23);
-        g.lineTo(vx, 26);
-        g.stroke();
-      }
-    }
-
-    // Rim light on the right, in the speaker colour.
-    g.beginPath();
-    g.arc(20, 16.5, isAria ? 9.6 : 10.6, -0.9, 0.7);
-    g.strokeStyle = hexA(color, 0.75);
-    g.lineWidth = 0.9;
-    g.stroke();
-
-    g.setTransform(dpr, 0, 0, dpr, 2 * dpr, 2 * dpr);
-    // Faint scanlines + inner hairline.
-    g.fillStyle = "rgba(0,0,0,0.12)";
-    for (let yy = 0; yy < s; yy += 2) g.fillRect(0, yy, s, 1);
-    g.restore();
-    g.strokeStyle = hexA(color, 0.55);
-    g.lineWidth = 1;
-    cutPath(g, 1.5, 1.5, s - 3, s - 3, k - 1);
-    g.stroke();
-  });
-}
-
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -1657,37 +1410,6 @@ function drawSignal(ctx, x, baseY, t, tone, live) {
     ctx.fillRect(Math.round(x + i * 3), Math.round(baseY - bh), 1, bh);
   }
   ctx.globalAlpha = a;
-}
-
-/**
- * The Modern portrait glyph, graded down to near-monochrome, lit from the
- * upper left and seated behind a hairline frame instead of the ink bezel.
- */
-function realPortraitSprite(speaker, tone, size, dpr) {
-  const isAria = speaker === "ARIA";
-  return commsSprite(`rport:${isAria ? "ARIA" : "SQUAD"}:${tone}`, size, size, 2, dpr, (g, s) => {
-    const src = portraitSprite(speaker, tone, size, dpr);
-    const k = 6 * (s / 40);
-    g.save();
-    cutPath(g, 1, 1, s - 2, s - 2, k - 1);
-    g.clip();
-    g.fillStyle = "#0b0e11";
-    g.fillRect(0, 0, s, s);
-    g.filter = "saturate(0.3) brightness(0.9)";
-    g.drawImage(src, -2, -2, s + 4, s + 4);
-    g.filter = "none";
-    const key = g.createLinearGradient(0, 0, s, s);
-    key.addColorStop(0, "rgba(255,244,230,0.1)");
-    key.addColorStop(0.5, "rgba(0,0,0,0)");
-    key.addColorStop(1, "rgba(0,0,0,0.4)");
-    g.fillStyle = key;
-    g.fillRect(0, 0, s, s);
-    g.restore();
-    g.strokeStyle = "rgba(222,230,228,0.34)";
-    g.lineWidth = 1;
-    cutPath(g, 0.5, 0.5, s - 1, s - 1, k - 0.5);
-    g.stroke();
-  });
 }
 
 /** Hairline keycap for the Realistic log footer; same width as drawKeycap. */

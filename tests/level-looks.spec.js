@@ -18,7 +18,8 @@ for (let i = 0; i < NAMES.length; i++) {
 }
 
 // Low cover used to end the ray: the view over level 1's waist-high counter
-// (row 49, six blocks ahead of the spawn) showed only floor and ceiling.
+// (row 49) showed only floor and ceiling. Viewed from just inside the
+// airlock door (row 52), which shuts the spawn off from the lobby.
 test("level 1 spawn: walls and enemies show over low cover", async ({ page }) => {
   await loadGame(page);
   await debug(page, "startCampaign", 0);
@@ -29,7 +30,7 @@ test("level 1 spawn: walls and enemies show over low cover", async ({ page }) =>
     const g = d.game;
     const R = g.renderer;
     d.slowmo(0.01);
-    d.teleport(29.5, 55.5);
+    d.teleport(29.5, 51.5);
     g.player.angle = -Math.PI / 2;
     g.player.crouchBlend = 0;
     // Park an enemy behind the counter, dead ahead.
@@ -43,8 +44,8 @@ test("level 1 spawn: walls and enemies show over low cover", async ({ page }) =>
       counterRow: g.map.heightMap[49].slice(27, 33),
       shortWalls: R._occN[x],
       depth: R.zBuffer[x],
-      enemyDepth: 55.5 - 47.5,
-      enemyClip: R.coverClipY(x, 55.5 - 47.5),
+      enemyDepth: 51.5 - 47.5,
+      enemyClip: R.coverClipY(x, 51.5 - 47.5),
       height: R.height,
     };
   });

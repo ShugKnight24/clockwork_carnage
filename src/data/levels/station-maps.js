@@ -21,6 +21,7 @@ import {
   lowTile,
   LAYER,
 } from "./map-helpers.js";
+import { dressStation } from "./station-dressing.js";
 
 // ── LEVEL 1: Chronos Station — Entry ─────────────────────────────
 // Stone walls (1). Player breaches via south airlock, pushes north
@@ -34,11 +35,15 @@ function buildEntry() {
 
   // ── ENTRY AIRLOCK (rows 53-57, cols 25-34) ──
   carve(g, 53, 25, 57, 34);
-  door(g, 52, 29);
-  door(g, 52, 30);
 
   // ── MAIN LOBBY (rows 44-52, cols 17-42) ──
   carve(g, 44, 17, 52, 42);
+  // The airlock's inner bulkhead. The lobby used to be carved over it, so
+  // you arrived with the lobby's drones already firing; now you open the
+  // door onto them.
+  hWall(g, 52, 25, 34, 1);
+  door(g, 52, 29);
+  door(g, 52, 30);
   // Reception desk — waist high, so the lobby fight has an angle over it
   // instead of a blind wall across the middle of the room.
   lowWall(g, hm, 49, 27, 49, 32, LAYER.WAIST, 3);
@@ -179,29 +184,34 @@ function buildEntry() {
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // ── Enemies (15) — intro difficulty ──
-      // Lobby
-      { x: 25.5, y: 47.5, type: "enemy", enemyType: "drone" },
-      { x: 35.5, y: 47.5, type: "enemy", enemyType: "drone" },
-      { x: 30.5, y: 45.5, type: "enemy", enemyType: "glitchling" },
+      // Lobby: across the room from the airlock door, in front of you
+      // when it opens. The shotgun lies just inside, for what comes next.
+      { x: 26.5, y: 46.5, type: "enemy", enemyType: "drone" },
+      { x: 33.5, y: 46.5, type: "enemy", enemyType: "drone" },
+      // South cross corridor: a glitchling pack waits in its arms, either
+      // side of the main corridor, and closes in as you step through
+      { x: 22.5, y: 40.5, type: "enemy", enemyType: "glitchling" },
+      { x: 20.5, y: 41.5, type: "enemy", enemyType: "glitchling" },
+      { x: 37.5, y: 40.5, type: "enemy", enemyType: "glitchling" },
       // West crew quarters
-      { x: 9.5, y: 36.5, type: "enemy", enemyType: "corruptCop" },
       { x: 9.5, y: 43.5, type: "enemy", enemyType: "drone" },
       // East comms
-      { x: 50.5, y: 36.5, type: "enemy", enemyType: "corruptCop" },
       { x: 50.5, y: 43.5, type: "enemy", enemyType: "drone" },
       // Central atrium
-      { x: 22.5, y: 27.5, type: "enemy", enemyType: "glitchling" },
-      { x: 37.5, y: 27.5, type: "enemy", enemyType: "glitchling" },
       { x: 30.5, y: 32.5, type: "enemy", enemyType: "sentinel" },
-      // West offices
-      { x: 9.5, y: 22.5, type: "enemy", enemyType: "corruptCop" },
-      // East operations
-      { x: 50.5, y: 23.5, type: "enemy", enemyType: "phantom" },
-      // Command bridge
+      // North cross corridor: two more either side of where the main
+      // corridor comes out, a crossfire on the way to the bridge door
+      { x: 19.5, y: 18.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 40.5, y: 18.5, type: "enemy", enemyType: "corruptCop" },
+      // Command bridge: the exit is behind its door, and the level's main
+      // fight is the room you open it onto
       { x: 25.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
       { x: 35.5, y: 7.5, type: "enemy", enemyType: "corruptCop" },
       { x: 30.5, y: 5.5, type: "enemy", enemyType: "phantom" },
+      { x: 23.5, y: 10.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 36.5, y: 10.5, type: "enemy", enemyType: "phantom" },
       // ── Pickups ──
+      { x: 24.5, y: 50.5, type: "weapon", weaponId: 1 },
       { x: 20.5, y: 48.5, type: "health" },
       { x: 39.5, y: 48.5, type: "ammo" },
       { x: 8.5, y: 38.5, type: "ammo" },
@@ -209,7 +219,7 @@ function buildEntry() {
       { x: 22.5, y: 22.5, type: "health" },
       { x: 37.5, y: 35.5, type: "ammo" },
       { x: 30.5, y: 9.5, type: "ammo" },
-      { x: 50.5, y: 7.5, type: "weapon", weaponId: 1 },
+      { x: 50.5, y: 7.5, type: "ammo" },
       // Secret supplies
       { x: 1.5, y: 26.5, type: "health" },
       { x: 57.5, y: 28.5, type: "ammo" },
@@ -422,10 +432,12 @@ function buildCheckpoint() {
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // ── Enemies (17) — checkpoint theme ──
-      // Checkpoint hall
+      // Checkpoint hall. The two middle lanes' officers stand back past the
+      // booths, out of the entry hall's sight and beyond a turned officer's
+      // eyes: you see them as you cross the plaza, not as you arrive.
       { x: 18.5, y: 42.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 26.5, y: 42.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 34.5, y: 42.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 21.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 39.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
       { x: 41.5, y: 42.5, type: "enemy", enemyType: "corruptCop" },
       { x: 30.5, y: 39.5, type: "enemy", enemyType: "drone" },
       // West cells
@@ -452,7 +464,10 @@ function buildCheckpoint() {
       { x: 45.5, y: 35.5, type: "health" },
       { x: 9.5, y: 22.5, type: "health" }, // observation deck
       { x: 49.5, y: 22.5, type: "ammo" }, // armory vault
-      { x: 50.5, y: 22.5, type: "weapon", weaponId: 1 }, // in front of the rack, not on it
+      { x: 50.5, y: 22.5, type: "ammo" }, // in front of the rack, not on it
+      // Ricochet Pistol in the plaza, before the lanes: the booth walls are
+      // what it banks off
+      { x: 29.5, y: 50.5, type: "weapon", weaponId: 6 },
       { x: 29.5, y: 16.5, type: "health" },
       // Secret
       { x: 1.5, y: 21.5, type: "health" },
@@ -654,27 +669,31 @@ function buildResearchWing() {
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
       // ── Enemies (18) — phantoms heavy, glass-themed ──
-      // South corridor
-      { x: 22.5, y: 49.5, type: "enemy", enemyType: "drone" },
-      { x: 37.5, y: 49.5, type: "enemy", enemyType: "drone" },
+      // The south corridor is empty: a walk to the central hallway, where
+      // the first phantom waits alone at the far end. The hallway is the
+      // only way north, and the level's main fight holds its head, where it
+      // meets the cross corridor: in range of the rifle you pick up below.
       // West bio-lab
       { x: 8.5, y: 38.5, type: "enemy", enemyType: "phantom" },
-      { x: 14.5, y: 42.5, type: "enemy", enemyType: "glitchling" },
-      { x: 21.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
       // East physics lab
-      { x: 40.5, y: 38.5, type: "enemy", enemyType: "phantom" },
       { x: 46.5, y: 42.5, type: "enemy", enemyType: "phantom" },
-      { x: 53.5, y: 38.5, type: "enemy", enemyType: "drone" },
       // Central hallway
-      { x: 29.5, y: 35.5, type: "enemy", enemyType: "phantom" },
+      { x: 29.5, y: 34.5, type: "enemy", enemyType: "phantom" },
+      // Cross corridor, at the hallway's head
+      { x: 24.5, y: 31.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 29.5, y: 31.5, type: "enemy", enemyType: "drone" },
+      { x: 34.5, y: 31.5, type: "enemy", enemyType: "phantom" },
+      { x: 40.5, y: 31.5, type: "enemy", enemyType: "sentinel" },
       { x: 29.5, y: 25.5, type: "enemy", enemyType: "glitchling" },
-      // Data archive
-      { x: 11.5, y: 25.5, type: "enemy", enemyType: "drone" },
-      // Containment
-      { x: 47.5, y: 25.5, type: "enemy", enemyType: "corruptCop" },
-      // North corridor
+      { x: 27.5, y: 23.5, type: "enemy", enemyType: "glitchling" },
+      // North corridor: the hall opens into it below the office door, and
+      // the rest of the wing's guard holds it, the archive's and
+      // containment's watch among them
       { x: 20.5, y: 18.5, type: "enemy", enemyType: "phantom" },
       { x: 39.5, y: 18.5, type: "enemy", enemyType: "phantom" },
+      { x: 24.5, y: 16.5, type: "enemy", enemyType: "drone" },
+      { x: 33.5, y: 17.5, type: "enemy", enemyType: "drone" },
+      { x: 35.5, y: 16.5, type: "enemy", enemyType: "corruptCop" },
       // Server room
       { x: 10.5, y: 9.5, type: "enemy", enemyType: "drone" },
       // Experiment chamber
@@ -693,7 +712,10 @@ function buildResearchWing() {
       { x: 8.5, y: 25.5, type: "ammo" },
       { x: 50.5, y: 25.5, type: "health" },
       { x: 30.5, y: 18.5, type: "ammo" },
-      { x: 10.5, y: 7.5, type: "weapon", weaponId: 1 },
+      { x: 10.5, y: 7.5, type: "ammo" },
+      // Phase Rifle at the foot of the central hallway: the fight it is
+      // for is up the hall, at range
+      { x: 29.5, y: 47.5, type: "weapon", weaponId: 2 },
       // Secrets
       { x: 1.5, y: 25.5, type: "health" },
       { x: 57.5, y: 9.5, type: "ammo" },
@@ -866,36 +888,30 @@ function buildContainment() {
     grid: g,
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
-      // Intake processing
-      { x: 22.5, y: 47.5, type: "enemy", enemyType: "sentinel" },
-      { x: 37.5, y: 47.5, type: "enemy", enemyType: "sentinel" },
-      { x: 29.5, y: 45.5, type: "enemy", enemyType: "henchman" },
+      // The Commander's level: three Sentinels and the Commander are its
+      // weight, so the rest is light. Intake processing is empty, a walk
+      // up to the spine; the hostiles start in the corridors beyond it.
       // Cell corridors
       { x: 14.5, y: 35.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 14.5, y: 42.5, type: "enemy", enemyType: "drone" },
+      { x: 14.5, y: 38.5, type: "enemy", enemyType: "drone" },
       { x: 44.5, y: 35.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 44.5, y: 42.5, type: "enemy", enemyType: "drone" },
+      { x: 44.5, y: 38.5, type: "enemy", enemyType: "drone" },
       // Cells (some occupied by escaped hostiles)
       { x: 7.5, y: 42.5, type: "enemy", enemyType: "glitchling" },
       { x: 51.5, y: 42.5, type: "enemy", enemyType: "glitchling" },
-      // Spine corridor patrols
-      { x: 29.5, y: 38.5, type: "enemy", enemyType: "drone" },
-      { x: 29.5, y: 30.5, type: "enemy", enemyType: "phantom" },
+      // Spine corridor patrol, at the far end as you come up from intake
+      { x: 29.5, y: 34.5, type: "enemy", enemyType: "drone" },
       // Guard station
       { x: 24.5, y: 24.5, type: "enemy", enemyType: "sentinel" },
       { x: 35.5, y: 24.5, type: "enemy", enemyType: "sentinel" },
       // North corridor
       { x: 10.5, y: 16.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 49.5, y: 16.5, type: "enemy", enemyType: "corruptCop" },
-      // Sub-boss arena: the Shield Commander ARIA warns about, flanked
+      // Sub-boss arena: the Shield Commander ARIA warns about, one Sentinel
+      // at its side
       { x: 25.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
-      { x: 34.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
       { x: 29.5, y: 5.5, type: "enemy", enemyType: "shieldCommander" },
-      { x: 30.5, y: 5.5, type: "enemy", enemyType: "phantom" },
       // Warden's office — Voss docs guarded
       { x: 7.5, y: 7.5, type: "enemy", enemyType: "henchman" },
-      // Evidence locker
-      { x: 50.5, y: 7.5, type: "enemy", enemyType: "henchman" },
       // ── Pickups ──
       { x: 20.5, y: 48.5, type: "health" },
       { x: 39.5, y: 48.5, type: "ammo" },
@@ -903,8 +919,11 @@ function buildContainment() {
       { x: 52.5, y: 30.5, type: "ammo" },
       { x: 29.5, y: 24.5, type: "health" },
       { x: 29.5, y: 15.5, type: "ammo" },
-      { x: 7.5, y: 7.5, type: "weapon", weaponId: 5 }, // Temporal Sniper
-      { x: 51.5, y: 7.5, type: "weapon", weaponId: 1 },
+      { x: 7.5, y: 7.5, type: "ammo" },
+      // Temporal Sniper in intake, before the long spine sightline and well
+      // before the Commander it answers
+      { x: 29.5, y: 50.5, type: "weapon", weaponId: 5 },
+      { x: 51.5, y: 7.5, type: "ammo" },
       { x: 29.5, y: 8.5, type: "ammo" }, // in front of the centre column, not on it
       // Secrets
       { x: 1.5, y: 37.5, type: "health" },
@@ -1055,34 +1074,40 @@ function buildServerFarm() {
     grid: g,
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
-      // Main hall drones
-      { x: 21.5, y: 47.5, type: "enemy", enemyType: "drone" }, // beside the pillar, not on it
-      { x: 38.5, y: 47.5, type: "enemy", enemyType: "drone" },
-      { x: 29.5, y: 49.5, type: "enemy", enemyType: "henchman" },
-      // Server pod A
-      { x: 7.5, y: 37.5, type: "enemy", enemyType: "drone" },
-      { x: 13.5, y: 40.5, type: "enemy", enemyType: "glitchling" },
-      { x: 9.5, y: 42.5, type: "enemy", enemyType: "phantom" },
-      // Server pod B
+      // Main hall: empty as you come in. Its drones keep the far ends,
+      // by the pod doors, out of the entry hall's sight.
+      { x: 10.5, y: 44.5, type: "enemy", enemyType: "drone" },
+      { x: 49.5, y: 44.5, type: "enemy", enemyType: "drone" },
+      // Server pod A (off the route)
+      { x: 11.5, y: 38.5, type: "enemy", enemyType: "sentinel" },
+      // Server pod B (off the route)
       { x: 52.5, y: 37.5, type: "enemy", enemyType: "drone" },
-      { x: 46.5, y: 40.5, type: "enemy", enemyType: "glitchling" },
-      { x: 50.5, y: 42.5, type: "enemy", enemyType: "phantom" },
-      // Spine & cross corridor
-      { x: 29.5, y: 38.5, type: "enemy", enemyType: "drone" },
+      { x: 48.5, y: 38.5, type: "enemy", enemyType: "sentinel" },
+      // Spine & cross corridor: a drone at the spine's far end; an officer
+      // round the west corner of the cross corridor and glitchlings in its
+      // corners, ahead of the chamber door
+      { x: 29.5, y: 34.5, type: "enemy", enemyType: "drone" },
       { x: 20.5, y: 32.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 39.5, y: 32.5, type: "enemy", enemyType: "corruptCop" },
-      // Mainframe chamber
+      { x: 24.5, y: 32.5, type: "enemy", enemyType: "glitchling" },
+      { x: 35.5, y: 33.5, type: "enemy", enemyType: "glitchling" },
+      // Mainframe chamber: the room between the spine and the north
+      // corridor, a door at each end and no way round it.
       { x: 25.5, y: 25.5, type: "enemy", enemyType: "sentinel" },
       { x: 34.5, y: 25.5, type: "enemy", enemyType: "sentinel" },
       { x: 29.5, y: 28.5, type: "enemy", enemyType: "chronoBomber" },
-      // North corridor
-      { x: 10.5, y: 16.5, type: "enemy", enemyType: "phantom" },
-      { x: 49.5, y: 16.5, type: "enemy", enemyType: "phantom" },
+      { x: 22.5, y: 22.5, type: "enemy", enemyType: "phantom" },
+      { x: 36.5, y: 29.5, type: "enemy", enemyType: "phantom" },
+      // North corridor: you come out of the chamber into the middle of it,
+      // with an officer and a phantom at each end. A crossfire, one side
+      // at a time if you're quick.
+      { x: 10.5, y: 14.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 14.5, y: 17.5, type: "enemy", enemyType: "phantom" },
+      { x: 49.5, y: 14.5, type: "enemy", enemyType: "henchman" },
+      { x: 44.5, y: 17.5, type: "enemy", enemyType: "phantom" },
       // NW archive
       { x: 9.5, y: 7.5, type: "enemy", enemyType: "henchman" },
       // NE archive (Voss dossier)
       { x: 50.5, y: 7.5, type: "enemy", enemyType: "sentinel" },
-      { x: 50.5, y: 9.5, type: "enemy", enemyType: "henchman" },
       // ── Pickups ──
       { x: 20.5, y: 48.5, type: "health" },
       { x: 39.5, y: 48.5, type: "ammo" },
@@ -1090,9 +1115,9 @@ function buildServerFarm() {
       { x: 50.5, y: 39.5, type: "health" },
       { x: 29.5, y: 25.5, type: "health" },
       { x: 29.5, y: 15.5, type: "ammo" },
-      { x: 29.5, y: 7.5, type: "weapon", weaponId: 4 }, // Experimental Rail
+      { x: 29.5, y: 7.5, type: "ammo" }, // the Phase Scattergun is Act II's now
       { x: 9.5, y: 7.5, type: "ammo" },
-      { x: 50.5, y: 7.5, type: "weapon", weaponId: 2 },
+      { x: 50.5, y: 7.5, type: "ammo" },
       { x: 1.5, y: 27.5, type: "health" },
       { x: 58.5, y: 27.5, type: "ammo" },
     ],
@@ -1239,27 +1264,29 @@ function buildReactor() {
     grid: g,
     playerStart: { x: 29.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
-      // Outer ring — chrono bombers near conduits
-      { x: 13.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" }, // beside the pillar, not on it
-      { x: 46.5, y: 47.5, type: "enemy", enemyType: "chronoBomber" },
-      { x: 22.5, y: 48.5, type: "enemy", enemyType: "drone" },
-      { x: 37.5, y: 48.5, type: "enemy", enemyType: "drone" },
+      // Reactor chamber flanks: two bombers either side of the core, so the
+      // chamber fight comes from both sides as well as from the north
+      { x: 23.5, y: 28.5, type: "enemy", enemyType: "chronoBomber" },
+      { x: 36.5, y: 28.5, type: "enemy", enemyType: "chronoBomber" },
+      // South hall: drones hang back by the walls, out of the entry hall's sight
+      { x: 12.5, y: 45.5, type: "enemy", enemyType: "drone" },
+      { x: 47.5, y: 45.5, type: "enemy", enemyType: "drone" },
       // West conduit — beasts
       { x: 8.5, y: 28.5, type: "enemy", enemyType: "beast" },
       { x: 8.5, y: 38.5, type: "enemy", enemyType: "glitchling" },
       // East conduit — beasts
       { x: 51.5, y: 28.5, type: "enemy", enemyType: "beast" },
       { x: 51.5, y: 38.5, type: "enemy", enemyType: "glitchling" },
-      // Central reactor chamber
-      { x: 25.5, y: 40.5, type: "enemy", enemyType: "sentinel" },
-      { x: 34.5, y: 40.5, type: "enemy", enemyType: "sentinel" },
+      // Central reactor chamber: its guards flank the core, back from the
+      // open south side, so you walk in under them rather than arrive
+      { x: 24.5, y: 33.5, type: "enemy", enemyType: "sentinel" },
+      { x: 35.5, y: 33.5, type: "enemy", enemyType: "sentinel" },
       { x: 25.5, y: 22.5, type: "enemy", enemyType: "phantom" },
       { x: 34.5, y: 22.5, type: "enemy", enemyType: "phantom" },
       // Reactor core — elite
       { x: 29.5, y: 31.5, type: "enemy", enemyType: "beast" },
       // North approach
       { x: 10.5, y: 16.5, type: "enemy", enemyType: "henchman" },
-      { x: 49.5, y: 16.5, type: "enemy", enemyType: "henchman" },
       { x: 29.5, y: 15.5, type: "enemy", enemyType: "chronoBomber" },
       // Control room
       { x: 22.5, y: 8.5, type: "enemy", enemyType: "sentinel" }, // guard in front of the pillar
@@ -1271,7 +1298,9 @@ function buildReactor() {
       { x: 51.5, y: 48.5, type: "health" },
       { x: 29.5, y: 32.5, type: "health" }, // in reactor core
       { x: 29.5, y: 25.5, type: "ammo" },
-      { x: 29.5, y: 7.5, type: "weapon", weaponId: 7 }, // EMP Launcher
+      { x: 29.5, y: 7.5, type: "ammo" },
+      // EMP Launcher in the south hall, under the drones it stops
+      { x: 29.5, y: 50.5, type: "weapon", weaponId: 7 },
       { x: 7.5, y: 7.5, type: "ammo" },
       { x: 52.5, y: 7.5, type: "health" },
       // Secrets
@@ -1478,16 +1507,18 @@ function buildVossLab() {
     grid: g,
     playerStart: { x: 6.5, y: 55.5, dir: -Math.PI / 2 },
     entities: [
-      // SW lab wing
-      { x: 8.5, y: 37.5, type: "enemy", enemyType: "henchman" },
-      { x: 14.5, y: 41.5, type: "enemy", enemyType: "chronoBomber" },
+      // SW lab wing: both at the far wall, ahead of you as the wing door opens
+      { x: 8.5, y: 35.5, type: "enemy", enemyType: "henchman" },
+      { x: 11.5, y: 35.5, type: "enemy", enemyType: "chronoBomber" },
       // SE lab wing
       { x: 51.5, y: 37.5, type: "enemy", enemyType: "henchman" },
       { x: 45.5, y: 41.5, type: "enemy", enemyType: "chronoBomber" },
       // Central rift chamber — TEMPORAL SUMMONER centerpiece
       // Summoner in front of the altar and phantoms beside the rift clusters —
-      // all five were placed on the altar and rift tiles themselves.
-      { x: 29.5, y: 35.5, type: "enemy", enemyType: "temporalSummoner" },
+      // all five were placed on the altar and rift tiles themselves. The
+      // way to the exit crosses the chamber's south side, so the Summoner
+      // stands over it: you walk in through the west door with it ahead.
+      { x: 29.5, y: 37.5, type: "enemy", enemyType: "temporalSummoner" },
       { x: 25.5, y: 29.5, type: "enemy", enemyType: "phantom" },
       { x: 34.5, y: 29.5, type: "enemy", enemyType: "phantom" },
       { x: 25.5, y: 38.5, type: "enemy", enemyType: "phantom" },
@@ -1495,26 +1526,30 @@ function buildVossLab() {
       // Cross corridor
       { x: 15.5, y: 32.5, type: "enemy", enemyType: "drone" },
       { x: 44.5, y: 32.5, type: "enemy", enemyType: "drone" },
+      { x: 40.5, y: 32.5, type: "enemy", enemyType: "henchman" },
       // NW lab — Voss journals
       { x: 10.5, y: 24.5, type: "enemy", enemyType: "sentinel" },
-      { x: 14.5, y: 27.5, type: "enemy", enemyType: "henchman" },
       // NE lab — suit prototype
       { x: 48.5, y: 24.5, type: "enemy", enemyType: "sentinel" },
-      { x: 45.5, y: 27.5, type: "enemy", enemyType: "henchman" }, // mirrors x 14.5 beside its table
-      // North approach
-      { x: 10.5, y: 15.5, type: "enemy", enemyType: "drone" },
-      { x: 49.5, y: 15.5, type: "enemy", enemyType: "drone" },
+      // Their guards are on the way through: one in each south wing
+      { x: 14.5, y: 36.5, type: "enemy", enemyType: "henchman" },
+      { x: 44.5, y: 38.5, type: "enemy", enemyType: "henchman" },
+      // SE lab wing: two of the study's phantoms came down to hold the way
+      // out of the chamber
+      { x: 47.5, y: 36.5, type: "enemy", enemyType: "phantom" },
+      { x: 52.5, y: 42.5, type: "enemy", enemyType: "phantom" },
+      // The exit: its drones wait in the last room, in front of the door
+      { x: 51.5, y: 51.5, type: "enemy", enemyType: "drone" },
+      { x: 54.5, y: 55.5, type: "enemy", enemyType: "drone" },
       // Voss' private study
-      { x: 25.5, y: 7.5, type: "enemy", enemyType: "phantom" },
-      { x: 34.5, y: 7.5, type: "enemy", enemyType: "phantom" },
       { x: 29.5, y: 6.5, type: "enemy", enemyType: "sentinel" }, // guarding the desk, not standing on it
       // ── Pickups ──
       { x: 11.5, y: 40.5, type: "health" },
       { x: 48.5, y: 40.5, type: "ammo" },
       { x: 29.5, y: 36.5, type: "health" },
       { x: 11.5, y: 24.5, type: "ammo" },
-      { x: 48.5, y: 24.5, type: "weapon", weaponId: 6 }, // Ricochet Pistol
-      { x: 29.5, y: 7.5, type: "weapon", weaponId: 2 },
+      { x: 48.5, y: 24.5, type: "ammo" }, // the Quantum Cannon is Act II's now
+      { x: 29.5, y: 7.5, type: "ammo" },
       { x: 7.5, y: 7.5, type: "health" },
       { x: 51.5, y: 7.5, type: "ammo" },
       // Secrets
@@ -1790,15 +1825,16 @@ function buildParadoxCore() {
       // THE BOSS — in front of the rift pedestal, facing the arena entrance.
       // It was placed on the 2x2 pedestal tiles themselves.
       { x: 29.5, y: 24.5, type: "enemy", enemyType: "boss" },
-      // Antechamber guards
+      // Antechamber guards: the drones keep the corners; the Sentinel holds
+      // the passage to the arena, across the outer ring from you
       { x: 15.5, y: 48.5, type: "enemy", enemyType: "drone" },
       { x: 43.5, y: 48.5, type: "enemy", enemyType: "drone" },
-      { x: 29.5, y: 47.5, type: "enemy", enemyType: "sentinel" },
+      { x: 29.5, y: 34.5, type: "enemy", enemyType: "sentinel" },
       // Outer ring
       { x: 12.5, y: 38.5, type: "enemy", enemyType: "beast" },
       { x: 46.5, y: 38.5, type: "enemy", enemyType: "beast" },
-      { x: 22.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
-      { x: 36.5, y: 38.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 22.5, y: 35.5, type: "enemy", enemyType: "corruptCop" },
+      { x: 36.5, y: 35.5, type: "enemy", enemyType: "corruptCop" },
       // Flanks
       { x: 6.5, y: 25.5, type: "enemy", enemyType: "phantom" },
       { x: 53.5, y: 25.5, type: "enemy", enemyType: "phantom" },
@@ -1822,7 +1858,7 @@ function buildParadoxCore() {
       { x: 53.5, y: 29.5, type: "ammo" },
       { x: 14.5, y: 15.5, type: "health" },
       { x: 44.5, y: 15.5, type: "health" },
-      { x: 29.5, y: 6.5, type: "weapon", weaponId: 3 },
+      { x: 29.5, y: 6.5, type: "ammo" }, // the Cannon came from Voss' lab; a missed one is carried in
       { x: 25.5, y: 5.5, type: "ammo" },
       { x: 33.5, y: 5.5, type: "ammo" },
     ],
@@ -1839,8 +1875,8 @@ function buildParadoxCore() {
   };
 }
 
-/** Every station map, built once, keyed by the id levels name it by. */
-export const STATION_MAPS = {
+/** Every station map's floor plan as built, before it is dressed. */
+export const STATION_FLOOR_PLANS = {
   entry: buildEntry(),
   checkpoint: buildCheckpoint(),
   research: buildResearchWing(),
@@ -1851,3 +1887,11 @@ export const STATION_MAPS = {
   nexus: buildNexus(),
   core: buildParadoxCore(),
 };
+
+/**
+ * Every station map, dressed for the floor the story says it is
+ * (station-dressing.js), keyed by the id levels name it by.
+ */
+export const STATION_MAPS = Object.fromEntries(
+  Object.entries(STATION_FLOOR_PLANS).map(([id, map]) => [id, dressStation(id, structuredClone(map))]),
+);

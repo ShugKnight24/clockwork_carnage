@@ -31,10 +31,12 @@ import {
   pauldron,
   torso,
   TORSO_GLOW,
+  energy,
   gorget,
   standingCape,
   chronoRifle,
   STAND,
+  headScale,
   ARMED,
   RIFLE_AT,
   RIFLE_ROT,
@@ -52,6 +54,10 @@ import {
   HAIR_STYLES,
   EYE_COLORS,
   ARMOR_STYLES,
+  BODY_FRAMES,
+  CAPE_STYLES,
+  BODY_TYPES,
+  CAMO_STYLES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -63,6 +69,7 @@ import { renderBadge, resolveTreatment } from "./insignia/compose.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../core/character-normalize.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
+import { FRAME_SHAPE, frameLayers } from "./frames.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 
 // ---------------------------------------------------------------------------
@@ -151,6 +158,10 @@ function resolve(ch) {
   const c = {
     pal,
     armor,
+    frame: pick(BODY_FRAMES, ch.frameIndex).id,
+    capeOff: pick(CAPE_STYLES, ch.capeIndex).id === "none",
+    fem: pick(BODY_TYPES, ch.bodyIndex).id === "fem",
+    camo: ch.camoIndex ? CAMO_STYLES[ch.camoIndex] || null : null,
     helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
     visor: pick(VISOR_STYLES, ch.visorIndex).id,
     shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
@@ -220,12 +231,71 @@ function gunMap(c) {
 // Defs
 // ---------------------------------------------------------------------------
 
+/** Seeded 0..1 noise for camo layouts (the same pattern every render). */
+const camoRand = (i) => {
+  const v = Math.sin(i * 91.7 + 47.3) * 43758.5453;
+  return v - Math.floor(v);
+};
+/** A smooth closed blob through jittered points around (cx, cy). */
+function blobPath(cx, cy, r, seed) {
+  const n = 7;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const rr = r * (0.6 + camoRand(seed + i) * 0.7);
+    pts.push([cx + Math.cos(a) * rr * 1.35, cy + Math.sin(a) * rr * 0.8]);
+  }
+  let d = `M${pt(...pts[0])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    d += `C${pt(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)} ${pt(p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)} ${pt(...p2)}`;
+  }
+  return d + "Z";
+}
+
+/**
+ * A seamless camo tile as an SVG <pattern> with the given id: organic blobs
+ * (drawn again across the tile edges so it wraps cleanly) or pixel blocks.
+ */
+export function camoPattern(camo, id, scale = 1) {
+  const T = 18;
+  let body = `<rect width="${T}" height="${T}" fill="${camo.base}"/>`;
+  if (camo.kind === "pixel") {
+    const q = 1.5;
+    for (let y = 0; y < T; y += q) {
+      for (let x = 0; x < T; x += q) {
+        const r = camoRand(x * 13.1 + y * 7.7);
+        if (r < 0.45) continue;
+        body += `<rect x="${f(x)}" y="${f(y)}" width="${q}" height="${q}" fill="${camo.blobs[Math.floor(r * 10) % camo.blobs.length]}"/>`;
+      }
+    }
+  } else {
+    camo.blobs.forEach((col, k) => {
+      for (let i = 0; i < 5; i++) {
+        const seed = k * 37 + i * 11;
+        const cx = camoRand(seed) * T;
+        const cy = camoRand(seed + 5) * T;
+        const r = 2 + camoRand(seed + 9) * 2.4;
+        for (const dx of [-T, 0, T]) for (const dy of [-T, 0, T]) {
+          if (cx + dx < -5 || cx + dx > T + 5 || cy + dy < -5 || cy + dy > T + 5) continue;
+          body += `<path d="${blobPath(cx + dx, cy + dy, r, seed)}" fill="${col}"/>`;
+        }
+      }
+    });
+  }
+  // A light shading wash so the fabric is not perfectly flat.
+  return `<pattern id="${id}" width="${T}" height="${T}" patternUnits="userSpaceOnUse" patternTransform="scale(${scale}) rotate(-12)">${body}</pattern>`;
+}
+
 function defs(c) {
   const s = ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard;
   const g = c.finish.stops;
   const skin = c.skin;
   const hair = c.hair.color;
-  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#2e4058", "#162232", "#070b12"];
+  const suitLo = MATTE.has(c.armor) ? ["#1a222c", "#0c1118", "#040609"] : ["#262c33", "#13171c", "#050709"];
   const gun = c.finish.mirror
     ? `<stop offset="0" stop-color="${g[0]}"/><stop offset=".28" stop-color="${g[1]}"/><stop offset=".46" stop-color="#e8eef5"/><stop offset=".7" stop-color="#4a5664"/><stop offset="1" stop-color="${g[2]}"/>`
     : `<stop offset="0" stop-color="${g[0]}"/><stop offset=".3" stop-color="${g[1]}"/><stop offset="1" stop-color="${g[2]}"/>`;
@@ -237,9 +307,9 @@ function defs(c) {
 <linearGradient id="steelDk" x1="0" y1="0" x2="1" y2=".35">
   <stop offset="0" stop-color="${mix(s[1], s[2], 0.55)}"/><stop offset=".45" stop-color="${mix(s[2], s[3], 0.5)}"/>
   <stop offset="1" stop-color="${mix(s[4], "#000000", 0.3)}"/></linearGradient>
-<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25">
+${c.camo ? camoPattern(c.camo, "suit") : `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25">
   <stop offset="0" stop-color="${suitLo[0]}"/><stop offset=".45" stop-color="${suitLo[1]}"/>
-  <stop offset="1" stop-color="${suitLo[2]}"/></linearGradient>
+  <stop offset="1" stop-color="${suitLo[2]}"/></linearGradient>`}
 <linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">
   <stop offset="0" stop-color="${c.cape[0]}"/><stop offset=".3" stop-color="${c.cape[1]}"/>
   <stop offset=".62" stop-color="${c.cape[2]}"/><stop offset="1" stop-color="${c.cape[3]}"/></linearGradient>
@@ -254,6 +324,9 @@ function defs(c) {
   <stop offset=".55" stop-color="${mix(c.energy, "#0b1119", 0.72)}"/><stop offset=".7" stop-color="#05080d"/>
   <stop offset="1" stop-color="#1a2330"/></linearGradient>
 <linearGradient id="gun" x1="0" y1="0" x2="0" y2="1">${gun}</linearGradient>
+<linearGradient id="goldGlass" x1="0" y1="0" x2=".25" y2="1">
+  <stop offset="0" stop-color="#3a2405"/><stop offset=".28" stop-color="#b47a16"/><stop offset=".42" stop-color="#ffe39a"/>
+  <stop offset=".56" stop-color="#c88a1c"/><stop offset="1" stop-color="#2a1803"/></linearGradient>
 <linearGradient id="skin" x1="0" y1="0" x2="1" y2=".3">
   <stop offset="0" stop-color="${mix(skin.color, "#ffffff", 0.22)}"/><stop offset=".42" stop-color="${skin.color}"/>
   <stop offset=".8" stop-color="${mix(skin.color, skin.shadow, 0.6)}"/><stop offset="1" stop-color="${skin.shadow}"/></linearGradient>
@@ -270,6 +343,9 @@ function defs(c) {
 <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="1.3"/></filter>
 <filter id="bloom" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>
 <filter id="ao" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="1.5"/></filter>
+<linearGradient id="pecShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/><stop offset=".8" stop-color="#000000" stop-opacity=".18"/><stop offset="1" stop-color="#000000" stop-opacity=".38"/></linearGradient>
+<linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".05"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".14"/><stop offset=".5" stop-color="#000000" stop-opacity="0"/><stop offset=".82" stop-color="#000000" stop-opacity=".34"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></linearGradient>
+<pattern id="weave" width=".9" height=".9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width=".9" height=".32" fill="#000" opacity=".3"/><rect y=".45" width=".32" height=".45" fill="#fff" opacity=".06"/></pattern>
 ${CAPE_HEM[c.armor] ? `<clipPath id="capeCut"><path d="${capeCut(CAPE_HEM[c.armor])}"/></clipPath>` : ""}`;
 }
 
@@ -374,128 +450,260 @@ function hair(c, under) {
       return shape("M-6.8,-87.6 L6.8,-87.6 L6.6,-85.4 C4.8,-85.6 2.6,-86.2 0.8,-87.2 L-0.8,-87.2 C-2.6,-86.2 -4.8,-85.6 -6.6,-85.4 Z", "url(#hair)", 0.6);
     return "";
   }
-  // Cap that follows the skull to a hairline: shared by the close cuts.
-  const cap = (top, line_, op = 1) =>
-    `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,${f(top)} 0,${f(top)} C4.4,${f(top)} 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,${f(line_ + 0.3)} 0,${f(line_)} C-4.4,${f(line_ + 0.3)} -6.8,-86.6 -7.4,-83.4 Z" fill="url(#hair)" opacity="${op}" stroke="${INK}" stroke-width=".5"/>`;
-  if (id === "fade")
-    return (
-      cap(-92.4, -88.4, 0.55) +
-      shape("M-6.2,-88 C-6.6,-91.6 -6.6,-94.2 -5.8,-95.6 C-3,-96.6 3,-96.6 5.8,-95.6 C6.6,-94.2 6.6,-91.6 6.2,-88 C3.8,-89 -3.8,-89 -6.2,-88 Z", "url(#hair)", 0.7) +
-      line("M-5,-95 C-2.4,-95.8 2.4,-95.8 5,-95", hl, 0.4, 0.5) +
-      line("M-3.6,-93.2 L-3.8,-90.2 M-1.2,-93.6 L-1.2,-90.6 M1.2,-93.6 L1.2,-90.6 M3.6,-93.2 L3.8,-90.2", lo, 0.3, 0.3)
-    );
-  if (id === "hawk")
-    return (
-      `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,-92.4 0,-92.4 C4.4,-92.4 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,-88.1 0,-88.4 C-4.4,-88.1 -6.8,-86.6 -7.4,-83.4 Z" fill="${lo}" opacity=".35"/>` +
-      shape("M-2.4,-88.4 C-3.2,-92 -3,-96 -1.6,-99 L-0.6,-97 L0,-101.4 L0.8,-97.2 L1.8,-99.4 C3,-96 3.2,-92 2.4,-88.4 C1.2,-89 -1.2,-89 -2.4,-88.4 Z", "url(#hair)", 0.7) +
-      line("M-0.9,-90 C-1.2,-93 -1,-95.6 -0.4,-97.6", hl, 0.4, 0.6)
-    );
-  if (id === "afro") {
-    let tex = "";
-    for (let i = 0; i < 14; i++) {
-      const a = Math.PI * (1.08 + (i / 13) * 0.84);
-      tex += `<circle cx="${f(Math.cos(a) * 9.4)}" cy="${f(-90.6 + Math.sin(a) * 7.6)}" r=".7" fill="${hl}" opacity=".35"/>`;
-    }
-    return (
-      shape("M-7.6,-82.6 C-11.8,-84 -12.6,-92.4 -9.2,-96.8 C-6,-100.8 6,-100.8 9.2,-96.8 C12.6,-92.4 11.8,-84 7.6,-82.6 C7,-86.6 4.4,-88.6 0,-88.8 C-4.4,-88.6 -7,-86.6 -7.6,-82.6 Z", "url(#hair)", 0.7) +
-      tex +
-      line("M-7.4,-96 C-4.6,-98.6 1.4,-99.4 5.6,-97.8", hl, 0.45, 0.4)
-    );
-  }
-  if (id === "topknot")
-    return (
-      cap(-92.8, -89, 1) +
-      line("M-5,-89.8 C-3,-91.8 -1,-92.2 0,-92.2 M1.6,-92 C3.6,-91.6 5.2,-90.4 5.8,-88.8", hl, 0.35, 0.55) +
-      `<circle cx="0" cy="-95.8" r="3.1" fill="url(#hair)" stroke="${INK}" stroke-width=".5"/>` +
-      line("M-1.8,-96.8 C-0.8,-97.8 0.8,-97.8 1.8,-96.8", hl, 0.35, 0.5) +
-      shape("M-1.6,-93.2 L1.6,-93.2 L1.4,-92.3 L-1.4,-92.3 Z", c.pal.primary, 0.4)
-    );
-  if (id === "slick")
-    return (
-      cap(-93, -89.6, 1) +
-      line("M-5.8,-88.8 C-4.8,-91.4 -2.6,-92.4 0,-92.6 M-3.4,-89.4 C-2.4,-91.4 -0.6,-92 1.6,-92.2 M0,-89.6 C1,-91.2 2.6,-91.8 4.4,-91.4", hl, 0.3, 0.5) +
-      line("M4.6,-89.6 C5.8,-89 6.6,-87.8 7,-86.6", lo, 0.35, 0.6)
-    );
-  if (id === "locs") {
-    let strands = "";
-    // Two locs frame each side of the face, hanging past the jaw.
-    for (const [x, len] of [[-8.3, 13], [-7.1, 10.5], [7.1, 10.5], [8.3, 13]]) {
-      const y1 = -86 + len;
-      const w = x < 0 ? -0.35 : 0.35;
-      strands += `<path d="M${f(x - 0.6)},-86 C${f(x - 0.6 + w)},${f(-86 + len * 0.5)} ${f(x - 0.5 - w)},${f(y1 - 1.5)} ${f(x - 0.4)},${f(y1)} C${f(x - 0.2)},${f(y1 + 0.7)} ${f(x + 0.2)},${f(y1 + 0.7)} ${f(x + 0.4)},${f(y1)} C${f(x + 0.5 - w)},${f(y1 - 1.5)} ${f(x + 0.6 + w)},${f(-86 + len * 0.5)} ${f(x + 0.6)},-86 Z" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
-    }
-    return (
-      shape("M-7.8,-82.6 C-8.4,-90.4 -4.6,-93.8 0,-93.8 C4.6,-93.8 8.4,-90.4 7.8,-82.6 C6.6,-86.2 3.6,-87.8 0,-88 C-3.6,-87.8 -6.6,-86.2 -7.8,-82.6 Z", "url(#hair)", 0.6) +
-      line("M-5.6,-90.6 L-4.6,-88 M-2.8,-92.4 L-2.2,-88.2 M0,-93 L0,-88.2 M2.8,-92.4 L2.2,-88.2 M5.6,-90.6 L4.6,-88", lo, 0.35, 0.55) +
-      strands
-    );
-  }
-  if (id === "ponytail")
-    return (
-      cap(-93, -89.2, 1) +
-      line("M-5.6,-89.4 C-3.6,-91.6 0,-92.4 3.4,-91.8 M-2.6,-89.2 C-0.8,-91 2.2,-91.4 5.2,-90.4", hl, 0.3, 0.5)
-    );
-  if (id === "curtain" || id === "long")
-    return (
-      shape("M-7.7,-82.8 C-8.4,-90 -4.8,-93.8 0,-93.8 C4.8,-93.8 8.4,-90 7.7,-82.8 C7.2,-85.4 5.8,-87 3.2,-87.6 C1.8,-87.8 0.6,-88.8 0,-90.4 C-0.6,-88.8 -1.8,-87.8 -3.2,-87.6 C-5.8,-87 -7.2,-85.4 -7.7,-82.8 Z", "url(#hair)", 0.7) +
-      line("M-0.3,-90.2 C-0.8,-92 -0.8,-93 -0.4,-93.6", lo, 0.35, 0.7) +
-      line("M-6.4,-86.2 C-5.4,-89.6 -3.4,-91.8 -1.2,-92.6 M1.2,-92.6 C3.4,-91.8 5.4,-89.6 6.4,-86.2", hl, 0.35, 0.45)
-    );
   if (id === "none")
     return `<ellipse cx="-2.6" cy="-89.4" rx="3.6" ry="1.6" fill="#fff" opacity=".18"/>` + line("M-6.4,-88.6 C-4,-91.4 2,-91.8 5.6,-89.4", c.skin.shadow, 0.4, 0.3);
-  if (id === "buzz")
-    return (
-      `<path d="M-7.4,-83.4 C-7.8,-89.6 -4.4,-92.6 0,-92.6 C4.4,-92.6 7.8,-89.6 7.4,-83.4 C6.8,-86.6 4.4,-88.2 0,-88.5 C-4.4,-88.2 -6.8,-86.6 -7.4,-83.4 Z" fill="url(#hair)" opacity=".9" stroke="${INK}" stroke-width=".5"/>` +
-      line("M-5.2,-89.6 C-3,-91.4 1,-91.6 3.6,-90.6", hl, 0.35, 0.35)
-    );
-  if (id === "coil") {
-    let curls = "";
-    for (let i = 0; i <= 10; i++) {
-      const a = Math.PI * (1.06 + (i / 10) * 0.88);
-      const x = Math.cos(a) * 7.6;
-      const y = -85.2 + Math.sin(a) * 7.4;
-      curls += `<circle cx="${f(x)}" cy="${f(y)}" r="2.2" fill="url(#hair)" stroke="${INK}" stroke-width=".5"/>`;
-      curls += line(`M${pt(x - 1.1, y - 0.6)} Q${pt(x, y - 1.6)} ${pt(x + 1, y - 0.7)}`, hl, 0.35, 0.5);
-    }
-    return shape("M-7.6,-83 C-8.2,-90 -4.4,-93.6 0,-93.6 C4.4,-93.6 8.2,-90 7.6,-83 C6,-86 3,-87.4 0,-87.4 C-3,-87.4 -6,-86 -7.6,-83 Z", "url(#hair)", 0.6) + curls;
-  }
-  if (id === "braid")
-    return (
-      shape("M-7.5,-83.4 C-8,-89.8 -4.6,-93 0,-93 C4.6,-93 8,-89.8 7.5,-83.4 C6.6,-86.8 3.6,-88.4 0.6,-88.6 L-0.4,-87 C-3,-87.8 -6,-86.8 -7.5,-83.4 Z", "url(#hair)", 0.7) +
-      line("M0.6,-92.6 L0.6,-88.6", lo, 0.45, 0.8) +
-      line("M-5.6,-89.6 C-4,-91.4 -1.4,-92.2 0,-92.2 M2,-92 C4,-91.6 5.8,-90.2 6.6,-88", hl, 0.4, 0.5) +
-      braid(c)
-    );
-  // short sweep / white shock share the swept cut
-  const sweep =
-    shape(
-      "M-7.7,-83 C-8.4,-88.4 -6.6,-92.8 -1,-93.8 C3.8,-94.4 7.8,-92 8,-87.4 C8.1,-85.6 7.9,-84 7.4,-82.6 " +
-        "C7,-85 6.2,-87.2 4.6,-88.4 C2,-87.4 -1.4,-88 -3.4,-89.4 C-4.6,-88.6 -5.8,-87.8 -6.4,-86.6 C-6.8,-85.6 -7,-84.4 -7.1,-82.8 Z",
-      "url(#hair)",
-      1,
-    ) +
-    line("M-6.4,-88 C-4.6,-91.6 -1,-93 2.6,-92.6 M-3.8,-89.4 C-2.4,-91.4 0.6,-92.2 3.6,-91.6", hl, 0.45, 0.6) +
-    line("M4.6,-88.4 C5.8,-89.2 6.8,-90.6 7,-91.4 M1,-88.2 C2.6,-89.6 3.6,-90.8 3.8,-92", lo, 0.45, 0.6);
-  return id === "white" ? sweep + line("M-5,-89.8 C-3,-92.4 0,-93.2 3,-92.8", c.energy, 0.5, 0.75) : sweep;
+  return scalpHair(c, HAIR_CUTS[id] || HAIR_CUTS.short);
 }
 
-/** Hair that falls behind the face: long cuts, locs and the ponytail. */
-function hairBack(c) {
-  const id = c.hair.id;
-  if (id === "long")
-    return shape("M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z", mix(c.hair.color, "#000000", 0.25), 0.7);
-  if (id === "locs") {
-    let out = "";
-    // Roots follow the skull's curve so no loc starts in mid-air.
-    for (let x = -8.4; x <= 8.5; x += 2.1) {
-      const y0 = -91 + (x / 8.4) ** 2 * 4;
-      out += `<path d="M${f(x - 0.9)},${f(y0)} C${f(x - 1.1)},-80 ${f(x - 0.7)},-74 ${f(x - 0.9)},-67.4 C${f(x - 0.6)},-66 ${f(x + 0.6)},-66 ${f(x + 0.9)},-67.4 C${f(x + 0.7)},-74 ${f(x + 1.1)},-80 ${f(x + 0.9)},${f(y0)} Z" fill="${mix(c.hair.color, "#000000", 0.25)}" stroke="${INK}" stroke-width=".35"/>`;
+// ── Natural hair ────────────────────────────────────────────────────────────
+// Every cut is built on one scalp: a mass that wraps the skull past the
+// temples into sideburns in front of the ears, a real hairline (temples set
+// back, a soft centre) that feathers into the skin with no ink on it, a
+// shadow the hair casts on the forehead, and strands that follow the cut.
+// Only the outer silhouette is inked, so the hair reads as growing from the
+// head rather than a cap set on top of it. Cut-specific pieces (a fringe, a
+// bun, a crest, curls) are drawn over that base.
+
+/**
+ * Per-cut shape. `v` volume beyond the skull, `line` hairline height at the
+ * centre (lower = more forehead covered), `burn` sideburn depth, `part` the
+ * x of the parting (null = swept back), `flow` strand lean (-1 left .. 1
+ * right), `fade` how much skin shows through (close crops), `tex` texture.
+ */
+const HAIR_CUTS = {
+  buzz: { v: 0.15, line: -88.6, burn: -80.8, part: null, flow: 0, fade: 0.3, tex: "stipple" },
+  short: { v: 0.95, line: -88.4, burn: -80.4, part: -3, flow: 1, tex: "strand", extra: "sweep" },
+  white: { v: 0.95, line: -88.4, burn: -80.4, part: -3, flow: 1, tex: "strand", extra: "sweep" },
+  coil: { v: 1.5, line: -88.6, burn: -80.6, part: null, flow: 0, tex: "coil" },
+  braid: { v: 0.45, line: -88.8, burn: -80.8, part: 0.6, flow: 0, tex: "strand", extra: "braid" },
+  fade: { v: 0.12, line: -88.8, burn: -81.4, part: null, flow: 0, fade: 0.45, tex: "stipple", extra: "flattop" },
+  hawk: { v: 0.08, line: -88.8, burn: -81.6, part: null, flow: 0, fade: 0.6, tex: "stipple", extra: "crest" },
+  afro: { v: 3.4, line: -88.4, burn: -80.2, part: null, flow: 0, tex: "coil", round: true },
+  topknot: { v: 0.4, line: -88.9, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", extra: "bun" },
+  slick: { v: 0.7, line: -89, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", shine: true },
+  curtain: { v: 1.05, line: -88.2, burn: -80, part: 0, flow: 0, tex: "strand", extra: "curtain" },
+  long: { v: 1.1, line: -88.4, burn: -79.6, part: 0.8, flow: 0, tex: "strand", extra: "curtain" },
+  locs: { v: 0.9, line: -88.6, burn: -80.4, part: null, flow: 0, back: true, tex: "locs", extra: "locs" },
+  ponytail: { v: 0.5, line: -88.9, burn: -80.8, part: null, flow: 0, back: true, tex: "strand", shine: true },
+};
+
+/** Hairline, right sideburn to left: temples set back, a soft dip at the centre. */
+function hairlinePath(cut) {
+  const y = cut.line;
+  const b = cut.burn;
+  return (
+    `L6.6,${f(b)} C6.4,${f(b - 1.8)} 6.4,-84.6 6.2,-85.6 ` +
+    `C6,-86.8 5.6,${f(y + 0.6)} 4.8,${f(y + 0.3)} ` +
+    `C3.4,${f(y - 0.1)} 1.4,${f(y)} 0,${f(y + 0.15)} ` +
+    `C-1.4,${f(y)} -3.4,${f(y - 0.1)} -4.8,${f(y + 0.3)} ` +
+    `C-5.6,${f(y + 0.6)} -6,-86.8 -6.2,-85.6 ` +
+    `C-6.4,-84.6 -6.4,${f(b - 1.8)} -6.6,${f(b)}`
+  );
+}
+
+/** Outer silhouette, left sideburn over the crown to the right one. */
+function crownPath(cut) {
+  const v = cut.v;
+  const b = cut.burn;
+  if (cut.round) {
+    // A full rounded mass: wider than tall, sitting down over the ears.
+    return (
+      `M-7.1,${f(b)} C-7.4,${f(b - 1.6)} -7.6,-82.6 -${f(8 + v * 0.5)},-84 C-${f(8.6 + v * 1.1)},-85.4 -${f(8.8 + v * 1.1)},-88.6 -${f(7.6 + v)},${f(-92 - v * 0.5)} ` +
+      `C-${f(6 + v * 0.6)},${f(-96 - v * 0.9)} -3,${f(-97 - v)} 0,${f(-97.2 - v)} ` +
+      `C3,${f(-97 - v)} ${f(6 + v * 0.6)},${f(-96 - v * 0.9)} ${f(7.6 + v)},${f(-92 - v * 0.5)} ` +
+      `C${f(8.8 + v * 1.1)},-88.6 ${f(8.6 + v * 1.1)},-85.4 ${f(8 + v * 0.5)},-84 C7.6,-82.6 7.4,${f(b - 1.6)} 7.1,${f(b)}`
+    );
+  }
+  return (
+    `M-7.1,${f(b)} C-7.3,${f(b - 1.6)} -7.4,-83 -${f(7.5 + v * 0.3)},-84.4 C-${f(7.7 + v * 0.55)},-85.8 -${f(7.7 + v * 0.6)},-87 -${f(7.6 + v * 0.6)},-88 ` +
+    `C-${f(7.2 + v * 0.5)},${f(-91.4 - v * 0.6)} -4.4,${f(-92.6 - v * 1.2)} 0,${f(-92.8 - v * 1.25)} ` +
+    `C4.4,${f(-92.6 - v * 1.2)} ${f(7.2 + v * 0.5)},${f(-91.4 - v * 0.6)} ${f(7.6 + v * 0.6)},-88 ` +
+    `C${f(7.7 + v * 0.6)},-87 ${f(7.7 + v * 0.55)},-85.8 ${f(7.5 + v * 0.3)},-84.4 C7.4,-83 7.3,${f(b - 1.6)} 7.1,${f(b)}`
+  );
+}
+
+/** Seeded 0..1 noise so a cut's texture is the same every render. */
+const hairRand = (i) => {
+  const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+function hairTexture(c, cut, hl, lo) {
+  let out = "";
+  const top = -92.6 - cut.v * 1.2;
+  if (cut.tex === "stipple") {
+    // Close crop: short flecks over the scalp, denser toward the crown.
+    for (let i = 0; i < 70; i++) {
+      const x = (hairRand(i) - 0.5) * 15;
+      const y = top + 0.6 + hairRand(i + 99) * (cut.line - top + 3 - Math.abs(x) * 0.1);
+      out += `<path d="M${pt(x, y)} l${f((hairRand(i + 7) - 0.5) * 0.4)},.45" stroke="${i % 3 ? lo : hl}" stroke-width=".22" stroke-opacity="${i % 3 ? 0.5 : 0.35}"/>`;
     }
     return out;
   }
+  if (cut.tex === "coil" || cut.tex === "locs") {
+    // Tight curls: small arcs scattered over the mass, light on the upper side.
+    const n = cut.round ? 90 : 46;
+    const w = cut.round ? 8.4 + cut.v : 7.6 + cut.v * 0.6;
+    for (let i = 0; i < n; i++) {
+      const x = (hairRand(i) - 0.5) * 2 * w;
+      const yTop = -92.6 - cut.v * (cut.round ? 1.3 : 1.1) + (x / w) ** 2 * (cut.round ? 4.2 : 3);
+      const y = yTop + 0.5 + hairRand(i + 50) * (cut.line + (Math.abs(x) > 5.6 ? 6 : 0) - yTop);
+      const r = 0.55 + hairRand(i + 21) * 0.4;
+      out += `<path d="M${pt(x - r, y)} a${f(r)},${f(r)} 0 0 1 ${f(r * 2)},0" fill="none" stroke="${hl}" stroke-width=".26" stroke-opacity=".42"/>`;
+      out += `<path d="M${pt(x - r, y + 0.15)} a${f(r)},${f(r)} 0 0 0 ${f(r * 2)},0" fill="none" stroke="${lo}" stroke-width=".26" stroke-opacity=".5"/>`;
+    }
+    return out;
+  }
+  // Strands: from the parting (or the crown, swept back) out to the hairline
+  // and down the sides, bowed in the direction of the cut's flow.
+  const n = 26;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const a = Math.PI * (1.02 + t * 0.96);
+    const ex = Math.cos(a) * 7.4;
+    const ey = Math.max(-91, cut.line + 0.4 + (1 - Math.abs(Math.sin(a))) * 6);
+    let sx;
+    let sy;
+    if (cut.back) {
+      // Swept back: strands run from the hairline up over the crown.
+      sx = ex * 0.35;
+      sy = top + 0.4;
+    } else {
+      sx = cut.part ?? 0;
+      sy = top + 0.9;
+      if ((cut.part ?? 0) !== 0 && Math.sign(ex - sx) !== Math.sign(cut.flow || 1) && Math.abs(ex - sx) > 2) sx += (ex - sx) * 0.15;
+    }
+    const bow = (cut.flow || (ex < (cut.part ?? 0) ? -0.6 : 0.6)) * 1.4;
+    const mx = (sx + ex) / 2 + bow;
+    const my = (sy + ey) / 2 - 0.6;
+    const col = i % 3 === 0 ? hl : lo;
+    out += `<path d="M${pt(sx, sy)} Q${pt(mx, my)} ${pt(ex, ey)}" fill="none" stroke="${col}" stroke-width="${i % 3 === 0 ? 0.24 : 0.26}" stroke-opacity="${(i % 3 === 0 ? 0.36 : 0.32) * (cut.shine ? 0.6 : 1)}" stroke-linecap="round"/>`;
+  }
+  if (cut.part != null) out += line(`M${pt(cut.part, top + 0.8)} L${pt(cut.part * 0.9, cut.line + 0.2)}`, lo, 0.4, 0.55);
+  return out;
+}
+
+function scalpHair(c, cut) {
+  // Shaved sides of a dyed cut (the mohawk) grow back the natural colour.
+  const root = cut.extra === "crest" && c.hair.brow ? c.hair.brow : c.hair.color;
+  const color = cut.fade ? mix(root, c.skin.color, cut.fade) : c.hair.color;
+  const hl = mix(root, "#ffffff", 0.42);
+  const lo = mix(root, "#000000", 0.62);
+  const crown = crownPath(cut);
+  const mass = `${crown} ${hairlinePath(cut)} Z`;
+  // The hairline alone, as an open path, for the feather and the cast shadow.
+  const hairline = `M6.6,${f(cut.burn)} ` + hairlinePath(cut).slice(1);
+  const shadowLine = hairline.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${x},${f(Number(y) + 0.7)}`);
+  const fill = cut.fade ? color : "url(#hair)";
+  let out =
+    // Shadow the hair casts on the forehead and temples.
+    line(shadowLine.replace(/^M/, "M"), c.skin.shadow, 1.6, 0.22) +
+    // Feather: a soft fringe of hair colour just past the edge.
+    line(hairline, color, 0.9, cut.fade ? 0.25 : 0.4) +
+    `<path d="${mass}" fill="${fill}"/>` +
+    `<clipPath id="hairClip"><path d="${mass}"/></clipPath>` +
+    `<g clip-path="url(#hairClip)">` +
+    // Light from the top left: a sheen band across the crown.
+    `<path d="M-7,${f(-90 - cut.v)} C-4,${f(-93 - cut.v * 1.2)} 2,${f(-93.4 - cut.v * 1.2)} 6,${f(-91.4 - cut.v)}" fill="none" stroke="${hl}" stroke-width="${cut.shine ? 1.6 : 1.1}" stroke-opacity="${cut.shine ? 0.35 : 0.2}" stroke-linecap="round"/>` +
+    hairTexture(c, cut, hl, lo) +
+    // Depth: the sides and the hair over the ears sit in shade.
+    `<path d="M7.8,-80 L7.8,-92 L4,-96 L10,-96 L10,-80 Z" fill="${lo}" opacity=".25"/>` +
+    `</g>` +
+    // Ink on the outer silhouette only.
+    `<path d="${crown}" fill="none" stroke="${INK}" stroke-width=".5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  out += hairExtra(c, cut, hl, lo);
+  return out;
+}
+
+function hairExtra(c, cut, hl, lo) {
+  switch (cut.extra) {
+    case "sweep": {
+      // A fringe lock swept from the parting across the forehead.
+      const lock =
+        "M-3,-92.4 C0.4,-92.8 4.8,-91.4 6.6,-87.8 C6.9,-87 7,-86.2 6.8,-85.4 C6,-86.6 4.8,-87.3 3.4,-87.4 " +
+        "C1.6,-87.5 -0.2,-88.1 -1.4,-89.2 C-2.2,-89.9 -2.8,-90.9 -3,-92.4 Z";
+      let s = `<path d="${lock}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+      s += line("M-2.4,-91.6 C0,-91.6 3.6,-90.4 5.8,-87.6 M-1.6,-90.4 C0.6,-89.8 3,-89.2 4.8,-88", hl, 0.3, 0.55);
+      s += line("M-0.6,-89.2 C1.4,-88.4 3.6,-88.2 5.4,-87.2", lo, 0.3, 0.5);
+      if (c.hair.id === "white") s += line("M-2.2,-91.8 C0.4,-91.8 3.6,-90.6 5.6,-88", c.energy, 0.45, 0.8);
+      return s;
+    }
+    case "curtain": {
+      // Two soft curtains from a centre parting, falling past the temples.
+      const L = "M-0.2,-92.6 C-2.6,-92.4 -5.4,-90.6 -6.6,-87.4 C-7.2,-85.8 -7.4,-84 -7.2,-82.2 C-6.6,-83.8 -5.8,-85.4 -4.6,-86.4 C-3.2,-87.4 -1.4,-88.6 -0.2,-92.6 Z";
+      const piece = (d) =>
+        `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>` +
+        line(d.split(" C")[0] + " C" + d.split(" C")[1], hl, 0.3, 0.5);
+      let s = piece(L) + piece(mirror(L));
+      if (c.hair.id === "long") {
+        // Locks in front of the ears, down to the collar.
+        const lock = "M-7.4,-84 C-8.2,-80 -8.4,-75 -8,-70.6 C-7.8,-68.8 -7,-67.6 -6.2,-67.2 C-6.8,-70.4 -6.8,-75 -6.4,-79.4 C-6.2,-81.4 -6.4,-83 -7.4,-84 Z";
+        s += `<path d="${lock}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>` + `<path d="${mirror(lock)}" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+        s += line("M-7.6,-80 C-7.8,-76 -7.6,-72 -7,-69 M7.6,-80 C7.8,-76 7.6,-72 7,-69", hl, 0.25, 0.45);
+      }
+      return s;
+    }
+    case "flattop": {
+      // High-top: a squared block rising from the crown, softened corners.
+      const d = "M-6,-88.6 C-6.4,-91 -6.6,-94.2 -6.2,-96.4 C-6,-97.2 -5.4,-97.6 -4.6,-97.7 L4.6,-97.7 C5.4,-97.6 6,-97.2 6.2,-96.4 C6.6,-94.2 6.4,-91 6,-88.6 C4,-89.6 -4,-89.6 -6,-88.6 Z";
+      let s = `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>`;
+      for (let x = -5; x <= 5.1; x += 1.25) s += line(`M${pt(x, -97)} L${pt(x * 1.04, -90)}`, lo, 0.25, 0.35);
+      s += line("M-5.4,-96.8 L5.4,-96.8", hl, 0.4, 0.45);
+      return s;
+    }
+    case "crest": {
+      // Mohawk: a tapered crest rooted along the centre of the scalp.
+      const d = "M-1.8,-88.4 C-2.6,-91.6 -2.6,-95.2 -1.6,-98.4 L-0.7,-96.6 L0,-101 L0.8,-96.8 L1.8,-98.8 C2.8,-95.4 2.8,-91.6 1.8,-88.4 C1,-88.9 -1,-88.9 -1.8,-88.4 Z";
+      return `<path d="${d}" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>` + line("M-0.8,-90 C-1.1,-93 -0.9,-95.6 -0.3,-97.4", hl, 0.4, 0.6) + line("M0.9,-90 C1.1,-93 1,-95 0.6,-96.4", lo, 0.35, 0.5);
+    }
+    case "bun": {
+      const tie = shape("M-1.5,-93.4 L1.5,-93.4 L1.3,-92.5 L-1.3,-92.5 Z", c.pal.primary, 0.4);
+      return (
+        `<circle cx="0" cy="-96" r="3.1" fill="url(#hair)" stroke="${INK}" stroke-width=".45"/>` +
+        line("M-2.2,-96.6 C-1,-98.4 1,-98.4 2.2,-96.6 M-2,-95 C-0.6,-96.2 1,-96.2 2.4,-95.2", hl, 0.3, 0.5) +
+        tie
+      );
+    }
+    case "braid":
+      return braid(c);
+    case "locs": {
+      // Two locs frame each side of the face, hanging past the jaw.
+      let strands = "";
+      for (const [x, len] of [[-8.3, 13], [-7.1, 10.5], [7.1, 10.5], [8.3, 13]]) {
+        const y1 = -86 + len;
+        const w = x < 0 ? -0.35 : 0.35;
+        strands += `<path d="M${f(x - 0.6)},-86 C${f(x - 0.6 + w)},${f(-86 + len * 0.5)} ${f(x - 0.5 - w)},${f(y1 - 1.5)} ${f(x - 0.4)},${f(y1)} C${f(x - 0.2)},${f(y1 + 0.7)} ${f(x + 0.2)},${f(y1 + 0.7)} ${f(x + 0.4)},${f(y1)} C${f(x + 0.5 - w)},${f(y1 - 1.5)} ${f(x + 0.6 + w)},${f(-86 + len * 0.5)} ${f(x + 0.6)},-86 Z" fill="url(#hair)" stroke="${INK}" stroke-width=".35"/>`;
+      }
+      return strands;
+    }
+    default:
+      return "";
+  }
+}
+
+/** Hair that falls behind the face: volume at the back of the head, and long cuts. */
+function hairBack(c) {
+  const id = c.hair.id;
+  const back = mix(c.hair.color, "#000000", 0.3);
+  if (id === "none") return "";
+  const cut = HAIR_CUTS[id] || HAIR_CUTS.short;
+  // Back of the head, showing past the skull and behind the ears.
+  const v = cut.v;
+  const w = cut.round ? 8.4 + v * 1.05 : 7.6 + v * 0.55;
+  let out = cut.fade && !cut.round
+    ? ""
+    : `<path d="M-${f(w - 0.8)},-81.6 C-${f(w + 0.2)},-86 -${f(w - 0.4)},${f(-92 - v)} 0,${f(-93 - v * 1.1)} C${f(w - 0.4)},${f(-92 - v)} ${f(w + 0.2)},-86 ${f(w - 0.8)},-81.6 C${f(w - 2)},-80.6 -${f(w - 2)},-80.6 -${f(w - 0.8)},-81.6 Z" fill="${back}" stroke="${INK}" stroke-width=".45"/>`;
+  if (id === "long")
+    out += shape("M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z", back, 0.6);
+  if (id === "locs") {
+    for (let x = -8.4; x <= 8.5; x += 2.1) {
+      const y0 = -91 + (x / 8.4) ** 2 * 4;
+      out += `<path d="M${f(x - 0.9)},${f(y0)} C${f(x - 1.1)},-80 ${f(x - 0.7)},-74 ${f(x - 0.9)},-67.4 C${f(x - 0.6)},-66 ${f(x + 0.6)},-66 ${f(x + 0.9)},-67.4 C${f(x + 0.7)},-74 ${f(x + 1.1)},-80 ${f(x + 0.9)},${f(y0)} Z" fill="${back}" stroke="${INK}" stroke-width=".35"/>`;
+    }
+  }
   if (id === "ponytail")
-    return shape("M6.6,-90.6 C10.6,-90 11.4,-85.4 10.6,-80 C10,-75.4 10.8,-71.4 12,-68.4 C9.6,-69.4 8.2,-72.8 8,-77 C7.8,-81 8.4,-85.6 6.4,-88.2 Z", "url(#hair)", 0.6);
-  return "";
+    out += shape("M6.6,-90.6 C10.6,-90 11.4,-85.4 10.6,-80 C10,-75.4 10.8,-71.4 12,-68.4 C9.6,-69.4 8.2,-72.8 8,-77 C7.8,-81 8.4,-85.6 6.4,-88.2 Z", "url(#hair)", 0.6);
+  return out;
 }
 
 function braid(c) {
@@ -602,6 +810,21 @@ function helmetDetail(c, style, w) {
 function closedVisor(c) {
   const v = c.visor;
   const e = c.energy;
+  if (v === "goldwrap") {
+    // A big tinted dome visor wrapping the face: you see yourself, not them.
+    const glass = "M-10.8,-87.4 C-5,-89.6 5,-89.6 10.8,-87.4 L10.6,-80.4 C9.6,-77.4 6.8,-75.8 3.4,-75.6 L-3.4,-75.6 C-6.8,-75.8 -9.6,-77.4 -10.6,-80.4 Z";
+    return {
+      jaw: true,
+      body:
+        shape("M-11.6,-88.4 C-5,-90.8 5,-90.8 11.6,-88.4 L11.4,-79.8 C10.4,-76.4 7.2,-74.6 3.6,-74.4 L-3.6,-74.4 C-7.2,-74.6 -10.4,-76.4 -11.4,-79.8 Z", "#05070a", 0.6) +
+        shape(glass, "url(#goldGlass)", 0.4) +
+        line("M-9.2,-86 C-5,-87.8 -1,-88.2 2.4,-88", "#fff6d0", 0.9, 0.75) +
+        line("M-9.6,-83.4 L-6.4,-77.6 M-7,-84.6 L-4.4,-79.8", "#ffffff", 0.5, 0.3) +
+        line("M8.8,-86.4 C10.2,-84.6 10.4,-82.4 10,-80.4", "#fff6d0", 0.5, 0.5),
+      glow: line("M-8.6,-77.2 C-4,-75.8 4,-75.8 8.6,-77.2", e, 0.45, 0.6),
+      eyeGlints: false,
+    };
+  }
   if (v === "fullface") {
     const plate =
       "M-10.8,-88 C-4,-89.6 4,-89.6 10.8,-88 L10.6,-78.4 C9.8,-74.6 7.2,-71.6 3.8,-70.4 L-3.8,-70.4 C-7.2,-71.6 -9.8,-74.6 -10.6,-78.4 Z";
@@ -689,12 +912,214 @@ function raisedVisor(c, y) {
  * Head assembly. Returns { back, front, glow }: `back` goes behind the body
  * (hoods, tool arms), `front` is the head itself, `glow` the lit parts.
  */
+/**
+ * Body-type reshape: scale every x by a factor that depends on height, so
+ * shoulders, waist and hips change width and everything at that height —
+ * plates, arms, gear, badges — follows the silhouette. Works on any markup
+ * whose coordinates are absolute "x,y" pairs (the whole rig).
+ */
+/** The belt buckle light alone, for suits whose chest carries its own lights. */
+const BELT_GLOW = energy(`<rect x="-1.8" y="-26" width="3.6" height="2.2" rx=".3"/>`);
+const warpX = (markup, k) => markup.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${f(Number(x) * k(Number(y)))},${y}`);
+const piecewise = (stops) => (y) => {
+  if (y <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++) {
+    const [y1, v1] = stops[i];
+    if (y <= y1) {
+      const [y0, v0] = stops[i - 1];
+      return v0 + ((v1 - v0) * (y - y0)) / (y1 - y0);
+    }
+  }
+  return stops[stops.length - 1][1];
+};
+/**
+ * Body builds. Proportions move the joints (shoulder and hip spacing), so
+ * limbs keep their own shape and only get thicker or slimmer (armW, legW);
+ * the torso alone is reshaped by height (`torso`). `scale` grows the whole
+ * figure from the soles while the head keeps its size, so a taller build
+ * also reads more heroic; `shoulder` scales the pauldrons.
+ */
+const BUILDS = {
+  // Taller, broad through the chest and shoulders, a V down to the waist,
+  // heavier arms.
+  masc: {
+    sh: 1.11, hip: 1, armW: 1.12, legW: 1.06, shoulder: 1.14, scale: 1.05, head: 1,
+    torso: piecewise([[-80, 1.16], [-66, 1.2], [-56, 1.18], [-46, 1.08], [-36, 0.94], [-28, 0.96], [60, 1]]),
+  },
+  // Athletic: narrower shoulders, a defined waist, fuller hips; toned limbs,
+  // not thin ones.
+  fem: {
+    sh: 0.92, hip: 1.06, armW: 0.97, legW: 1.01, shoulder: 0.92, scale: 0.99, head: 0.95,
+    torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.9], [-36, 0.84], [-28, 0.94], [-20, 1.1], [-6, 1.12], [60, 1.12]]),
+  },
+};
+/** A pose with the build's shoulder and hip spacing. Explicit elbow/wrist points (a grip) stay put. */
+function buildPose(P, B) {
+  return {
+    ...P,
+    arms: P.arms.map((arm) => ({ ...arm, sh: [arm.sh[0] * B.sh, arm.sh[1]] })),
+    legs: P.legs.map((leg) => {
+      const dx = leg.hip[0] * (B.hip - 1);
+      const mv = (p) => [p[0] + dx, p[1]];
+      return { ...leg, hip: mv(leg.hip), kn: mv(leg.kn), an: mv(leg.an) };
+    }),
+  };
+}
+/** Feminine jaw: the face narrows toward a softer chin. */
+const FEM_JAW = piecewise([[-84, 1], [-78, 0.95], [-71, 0.8]]);
+const femFace = (markup) =>
+  warpX(markup, FEM_JAW) +
+  // Lashes on the upper lids.
+  line("M-4.7,-81.8 Q-5.3,-82 -5.8,-82.6 M4.7,-81.8 Q5.3,-82 5.8,-82.6", "#1a100c", 0.32, 0.85) +
+  // Fuller lips.
+  `<path d="M-2.1,-74.2 C-1.2,-74.9 -0.4,-74.6 0,-74.3 C0.4,-74.6 1.2,-74.9 2.1,-74.2 C1.2,-72.9 -1.2,-72.9 -2.1,-74.2 Z" fill="#a85a58" opacity=".55"/>`;
+/** A moulded chest plate for the feminine frame (before the reshape narrows it). */
+const FEM_CHEST =
+  `<ellipse cx="-7" cy="-53" rx="6.4" ry="5" fill="url(#sheen)" opacity=".5"/>` +
+  `<ellipse cx="7" cy="-53" rx="6.4" ry="5" fill="#000" opacity=".12"/>` +
+  line("M-14.6,-51 C-13,-44.8 -5.2,-44 -1,-47.6 M14.6,-51 C13,-44.8 5.2,-44 1,-47.6", INK, 0.6, 0.55) +
+  line("M-13.4,-50.6 C-11.6,-45.8 -5.6,-45.2 -2,-47.8", "#eaf4ff", 0.45, 0.35);
+
+/**
+ * Reaper: a knit balaclava with a painted skull, the agent's own eyes looking
+ * out of the sockets, a comms headset and a field scarf bunched at the neck.
+ */
+function reaperHood(c) {
+  const knit = "#141513";
+  const bone = "#cfc8b6";
+  const boneLo = "#8f8776";
+  const hood =
+    "M0,-95.6 C6.9,-95.6 10.1,-90.8 10.1,-84 C10.1,-78 9.4,-72.6 7,-68.6 L8.4,-64.8 L-8.4,-64.8 L-7,-68.6 " +
+    "C-9.4,-72.6 -10.1,-78 -10.1,-84 C-10.1,-90.8 -6.9,-95.6 0,-95.6 Z";
+  // Gaunt, angular skull: sharp temples, a brow that cuts down toward the
+  // nose (a scowl), hollow cheeks, a long grimace from cheek to cheek.
+  const cranium =
+    "M-7,-85.6 C-7.2,-90.6 -4.2,-93.6 0,-93.6 C4.2,-93.6 7.2,-90.6 7,-85.6 L6.4,-81.6 C5.2,-82.6 3.4,-83.4 1.2,-82 " +
+    "L0,-80.6 L-1.2,-82 C-3.4,-83.4 -5.2,-82.6 -6.4,-81.6 Z";
+  const jaw =
+    "M-6.2,-81 L-6.8,-77.6 L-5.4,-74.8 L-4,-72.4 L-2.6,-69.8 L2.6,-69.8 L4,-72.4 L5.4,-74.8 L6.8,-77.6 L6.2,-81 " +
+    "C5,-79.8 3.6,-79.2 2.4,-79 L-2.4,-79 C-3.6,-79.2 -5,-79.8 -6.2,-81 Z";
+  // Sockets slant down toward the nose; the top edge is the scowl.
+  const socket = "M-6.2,-84.6 C-4.6,-84.4 -2.6,-83.4 -1.1,-81.8 C-1.2,-80.2 -2.4,-79.2 -3.8,-79.2 C-5.6,-79.4 -6.6,-81.4 -6.2,-84.6 Z";
+  // Eyes behind the mask: black eye paint, only a cold glint shows.
+  const eye = (x) =>
+    `<ellipse cx="${x}" cy="-81.4" rx="1.05" ry=".42" fill="#2a2620" opacity=".9"/>` +
+    `<circle cx="${x}" cy="-81.4" r=".42" fill="${mix(c.eyes, "#000000", 0.35)}"/><circle cx="${x}" cy="-81.4" r=".2" fill="#020202"/>` +
+    `<circle cx="${f(x - 0.16)}" cy="-81.6" r=".11" fill="#fff"/>`;
+  let teeth = "";
+  // A long grimace: narrow teeth across the whole jaw, dark gaps between.
+  for (let i = -4; i <= 4; i++) {
+    const x = i * 0.78;
+    const h = 1.9 - Math.abs(i) * 0.14;
+    const y = -75.6 + Math.abs(i) * Math.abs(i) * 0.05;
+    teeth +=
+      `<rect x="${f(x - 0.3)}" y="${f(y)}" width=".6" height="${f(h)}" rx=".22" fill="${bone}"/>` +
+      `<rect x="${f(x - 0.28)}" y="${f(y + h + 0.35)}" width=".56" height="${f(h * 0.85)}" rx=".22" fill="${boneLo}"/>`;
+  }
+  const mouth = "M-3.9,-75.8 C-2,-76.4 2,-76.4 3.9,-75.8 L3.4,-72.2 C1.6,-71.4 -1.6,-71.4 -3.4,-72.2 Z";
+  const scarf =
+    "M-9.8,-70.2 C-6,-67 6,-67 9.8,-70.2 C11.6,-68.4 12.8,-66.4 12.6,-64.6 C10.4,-63.4 8.6,-63.6 7,-62.4 " +
+    "C4.6,-61 2.4,-62.2 0,-61 C-2.4,-62.2 -4.6,-61 -7,-62.4 C-8.6,-63.6 -10.4,-63.4 -12.6,-64.6 C-12.8,-66.4 -11.6,-68.4 -9.8,-70.2 Z";
+  const front =
+    shape(hood, knit, 1) +
+    `<path d="${hood}" fill="url(#weave)" opacity=".6"/>` +
+    `<ellipse cx="-4.4" cy="-90.6" rx="4" ry="2.4" fill="#fff" opacity=".05"/>` +
+    // The print, worn into the knit.
+    `<path d="${cranium}" fill="${bone}"/>` +
+    `<path d="${jaw}" fill="${bone}"/>` +
+    `<path d="M-6.6,-85.6 C-6.4,-89.8 -3.6,-92.4 0,-92.8" fill="none" stroke="#fff" stroke-width=".55" stroke-opacity=".35"/>` +
+    // Temple and cheek hollows.
+    `<path d="M6.8,-87.6 C6.2,-85.6 5.8,-84.4 5.2,-83.6 L6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
+    `<path d="M-6.8,-87.6 C-6.2,-85.6 -5.8,-84.4 -5.2,-83.6 L-6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
+    `<path d="M-6.4,-79.6 C-5.6,-78.4 -4.6,-77.4 -3.4,-76.8 L-5.2,-75.4 C-5.8,-76.6 -6.4,-78 -6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
+    `<path d="M6.4,-79.6 C5.6,-78.4 4.6,-77.4 3.4,-76.8 L5.2,-75.4 C5.8,-76.6 6.4,-78 6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
+    `<path d="${socket}" fill="#070707"/><path d="${mirror(socket)}" fill="#070707"/>` +
+    eye(-3.4) +
+    eye(3.4) +
+    // Grime running down from the sockets.
+    line("M-4.6,-79.2 C-4.8,-77.6 -4.6,-76.6 -4.9,-75.6 M-3.2,-79.2 L-3.3,-77.8 M4.4,-79.2 C4.6,-77.8 4.4,-77 4.6,-76.2", "#3a352a", 0.45, 0.55) +
+    `<path d="M-0.75,-79.2 L0,-81 L0.75,-79.2 L0.45,-77 L-0.45,-77 Z" fill="#070707"/>` +
+    `<path d="${mouth}" fill="#070707"/>` +
+    teeth +
+    `<g opacity=".25"><path d="${cranium}" fill="url(#weave)"/><path d="${jaw}" fill="url(#weave)"/></g>` +
+    `<g fill="#2e2a22" opacity=".3"><ellipse cx="4.8" cy="-89.4" rx="1.6" ry=".8"/><ellipse cx="-5.4" cy="-73.6" rx="1.1" ry=".6"/><ellipse cx="1.4" cy="-92" rx=".9" ry=".45"/></g>` +
+    // Comms headset.
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", INK, 1.8, 1) +
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", "#25282a", 1.1, 1) +
+    shape("M-12,-84.6 C-12,-86.2 -10.8,-86.8 -9.6,-86.8 L-8.8,-86.8 L-8.8,-76.6 L-9.6,-76.6 C-10.8,-76.6 -12,-77.2 -12,-78.8 Z", "#202326", 0.8) +
+    shape("M12,-84.6 C12,-86.2 10.8,-86.8 9.6,-86.8 L8.8,-86.8 L8.8,-76.6 L9.6,-76.6 C10.8,-76.6 12,-77.2 12,-78.8 Z", "#202326", 0.8) +
+    line("M-11.4,-85 L-11.4,-78.4 M11.4,-85 L11.4,-78.4", "#3a3f44", 0.5, 0.8) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", INK, 1, 1) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", "#30353a", 0.55, 1) +
+    `<ellipse cx="-4.8" cy="-74.2" rx=".8" ry=".65" fill="#111" stroke="${INK}" stroke-width=".35"/>` +
+    // Field scarf, drab and worn.
+    shape(scarf, "#34392a", 1) +
+    `<path d="${scarf}" fill="url(#weave)"/>` +
+    line("M-8.8,-67.8 C-5,-65 5,-65 8.8,-67.8 M-10.6,-66 C-7.4,-63.8 -4,-64.4 -1.6,-63 M10.6,-66 C7.4,-63.8 4,-64.4 1.6,-63", "#1c1f16", 0.6, 0.8) +
+    line("M-10.4,-69.4 C-6,-66.2 -2,-65.6 1,-65.6", "#5c624a", 0.5, 0.55);
+  return { front, glow: eyeGlow(c, 0.12) };
+}
+
+/** Do-rag: a tied head wrap over the skull, the face bare. */
+function bandanaHead(c) {
+  const cloth = "#2c3036";
+  const wrap =
+    "M-7.8,-84.4 C-8.2,-91.2 -4.6,-94.6 0,-94.6 C4.6,-94.6 8.2,-91.2 7.8,-84.4 C6.6,-86.8 4,-87.8 0,-87.9 C-4,-87.8 -6.6,-86.8 -7.8,-84.4 Z";
+  const knot = "M7.2,-89.6 C9.6,-90.6 11,-89.4 10.4,-87.6 C9.8,-86.4 8.4,-86.6 7.6,-87.4 Z";
+  const tails = "M9.6,-87.6 C11.4,-85 12.4,-81 12,-77.4 L10.6,-77.8 C10.8,-81 10.2,-84.4 8.8,-86.8 Z M10.2,-88 C12.6,-86.8 14.2,-84 14.4,-81.2 L13.2,-81 C12.8,-83.4 11.6,-85.6 9.6,-86.8 Z";
+  let dots = "";
+  for (let i = 0; i < 16; i++) {
+    const x = -6.4 + (i % 8) * 1.8 + (i > 7 ? 0.9 : 0);
+    const y = i > 7 ? -89.6 : -92.2;
+    dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
+  }
+  const faceMarkup = c.fem ? femFace(face(c)) : face(c);
+  return {
+    front:
+      faceMarkup +
+      shape(tails, cloth, 0.7) +
+      shape(wrap, cloth, 0.8) +
+      `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
+      dots +
+      line("M-6.8,-86.6 C-3.6,-88.6 3.6,-88.6 6.8,-86.6", "#4a5058", 0.5, 0.8) +
+      line("M-6,-91 C-3.6,-93 0,-93.4 2.6,-93", "#ffffff", 0.5, 0.18) +
+      shape(knot, cloth, 0.7),
+    glow: eyeGlow(c, 0.3),
+  };
+}
+
+/** Pilot: a sealed shell with a dark face plate and three round optics. */
+function pilotHelmet(c) {
+  const e = c.energy;
+  const shell = SHELLS.standard;
+  const plate = "M-9.6,-87.2 C-4.6,-88.8 4.6,-88.8 9.6,-87.2 L9.4,-77.8 C8,-74 5,-71.6 0,-70.8 C-5,-71.6 -8,-74 -9.4,-77.8 Z";
+  const lenses = [[0, -82.6, 2.5], [-5, -83.2, 1.9], [5, -83.2, 1.9]];
+  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#visor)" stroke="${INK}" stroke-width=".35"/>`).join("");
+  return {
+    front:
+      shape(shell, "url(#steel)") +
+      `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
+      shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-88.6 L-1.5,-88.6 Z", "url(#steelDk)", 0.5) +
+      shape(plate, "#0c0f13", 0.8) +
+      ring +
+      line("M-2.6,-75.4 L2.6,-75.4 M-3,-73.8 L3,-73.8", "#2a3038", 0.6, 1) +
+      line("M-1.2,-84.2 C-0.6,-84.8 0.4,-84.9 1,-84.6", "#ffffff", 0.45, 0.8) +
+      `<circle cx="-11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`,
+    glow:
+      `<g fill="${e}" filter="url(#bloom)" opacity=".6">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>` +
+      `<g fill="${c.core}">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.45)}"/>`).join("")}</g>`,
+  };
+}
+
 function head(c, peek) {
   const style = c.helmet;
+  if (style === "reaper" && !peek) return reaperHood(c);
+  if (style === "bandana" && !peek) return bandanaHead(c);
+  if (style === "pilot" && !peek) return pilotHelmet(c);
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
-    return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
+    return { front: hairBack(c) + (c.fem ? femFace(face(c)) : face(c)) + hair(c, false), glow: eyeGlow(c, 0.45) };
   }
   const shell = SHELLS[style] || SHELLS.standard;
   const ears = EARLESS_HELMETS.has(style)
@@ -965,16 +1390,40 @@ function gear(c, pose) {
             return `<g transform="translate(${pt(x, y)}) rotate(38)">${shape("M-2.6,-2.4 L2.6,-2.4 L2.4,2.8 L-2.4,2.8 Z", "#2c3326", 0.6)}${line("M-2.4,-1 L2.4,-1", "#6a7660", 0.4, 0.8)}</g>`;
           })
           .join("");
+      const sand = "#8a7c5c";
+      const shemagh =
+        "M-12,-70.4 C-6,-67.2 6,-67.2 12,-70.4 C15,-67.4 16.6,-63 15.8,-59 C12.2,-56.6 8.2,-58 4.8,-54.8 " +
+        "C2.2,-52.8 -2.2,-52.8 -4.8,-54.8 C-8.2,-58 -12.2,-56.6 -15.8,-59 C-16.6,-63 -15,-67.4 -12,-70.4 Z";
+      const tail = "M-14.6,-60 C-17,-55 -17.4,-49 -16.4,-44.6 L-13.8,-43.2 C-14.6,-48 -13.8,-53.4 -12,-57.6 Z";
+      front +=
+        shape(tail, mix(sand, "#000000", 0.15), 0.8) +
+        shape(shemagh, sand, 0.9) +
+        `<path d="${shemagh}" fill="url(#weave)" opacity=".7"/>` +
+        line("M-10.6,-67.6 C-5,-64.6 5,-64.6 10.6,-67.6 M-13.4,-63.6 C-8,-60.6 -3,-60.4 0,-59.4 M13.4,-63.6 C8,-60.6 3,-60.4 0,-59.4", "#5c5038", 0.6, 0.8) +
+        line("M-11.6,-69.2 C-6,-66.4 -2,-65.8 1,-65.8", "#c4b48c", 0.5, 0.6) +
+        line("M-15.4,-58 L-16,-45.6", "#5c5038", 0.5, 0.7) +
+        // Utility belt: a row of pouches round the waist.
+        [-13.8, -8.2, 3.4, 9].map((x) => shape(`M${f(x)},-29.2 L${f(x + 4.6)},-29.2 L${f(x + 4.4)},-21.4 L${f(x + 0.2)},-21.4 Z`, "#3a3f30", 0.7) + line(`M${f(x + 0.4)},-27.6 L${f(x + 4.2)},-27.6`, "#62684e", 0.45, 0.8)).join("");
       break;
     }
     case "heavy": {
       const collar = "M-15.4,-64.4 C-16,-69 -13,-72.8 -9.6,-74 L-7.6,-69.8 C-9.8,-68.8 -11.2,-67 -11.4,-64.2 Z";
       front += shape(collar, "url(#steel)", 0.9) + shape(mirror(collar), "url(#steelDk)", 0.9) + line("M-14.4,-66 C-14,-69.2 -12,-71.6 -9.8,-72.6", "#f4faff", 0.5, 0.7);
-      legs.forEach((leg, i) => {
-        const s = i === 0 ? -1 : 1;
-        front += part(lerp(leg.hip, leg.kn, 0.26), lerp(leg.hip, leg.kn, 0.7), 15, 12, { bulge: 1, hi: 0.5, rimColor: c.rim });
-        front += line(`M${pt(...lerp(leg.hip, leg.kn, 0.3))} l${f(s * 4.6)},1`, INK, 0.5, 0.6);
-      });
+      // Heavy chest plate carrying twin round lights.
+      front +=
+        shape("M-15.8,-64.6 C-8,-67 8,-67 15.8,-64.6 L16.8,-44.8 C8,-42.6 -8,-42.6 -16.8,-44.8 Z", "url(#steel)", 1.1) +
+        line("M-14.6,-62.6 C-8,-64.6 -2,-64.8 1,-64.8", "#f4faff", 0.7, 0.6) +
+        line("M-15.6,-50 C-8,-48.4 8,-48.4 15.6,-50", INK, 0.55, 0.5) +
+        line("M0,-64.6 L0,-60.6 M0,-49 L0,-43.6", INK, 0.55, 0.55);
+      for (const x of [-7.6, 7.6]) {
+        front +=
+          `<circle cx="${x}" cy="-56" r="5" fill="url(#steelDk)" stroke="${INK}" stroke-width=".9"/>` +
+          `<circle cx="${x}" cy="-56" r="3.6" fill="#05080b" stroke="${INK}" stroke-width=".5"/>` +
+          `<circle cx="${x}" cy="-56" r="1.2" fill="url(#steel)"/>`;
+        glow +=
+          `<circle cx="${x}" cy="-56" r="2.7" fill="none" stroke="${c.energy}" stroke-width="1.3" filter="url(#bloom)" opacity=".8"/>` +
+          `<circle cx="${x}" cy="-56" r="2.7" fill="none" stroke="${c.core}" stroke-width=".7"/>`;
+      }
       break;
     }
     case "stealth": {
@@ -1029,28 +1478,28 @@ function gear(c, pose) {
     }
     case "trencher": {
       // Squared gorget both sides, one heavy slab, webbing, knee plates.
-      const collar = "M-16.4,-63.6 L-17.2,-76.2 L-7.6,-79.4 L-6.2,-71 L-11.8,-68.8 L-11.6,-63.4 Z";
+      const carrier = "#3c4131";
+      const web = "#2a2e22";
       front +=
-        shape(collar, "url(#steelDk)", 0.9) +
-        shape(mirror(collar), "url(#steelDk)", 0.9) +
-        line("M-15.8,-65.4 L-16.4,-75.2 L-8.4,-77.8", "#f0f5ff", 0.55, 0.65) +
-        shape("M-14.6,-64.6 L14.6,-64.6 L16,-44.4 L-16,-44.4 Z", "url(#steel)", 1) +
-        line("M0,-64 L0,-44.8", INK, 0.7, 0.8) +
-        line("M-13.4,-62.8 L13.4,-62.8", "#f0f5ff", 0.6, 0.55) +
-        // Bolt rows along the slab edges.
-        `<g fill="#0c1013">` +
-        [-12.4, 12.4].flatMap((x) => [-59, -53, -47.6].map((y) => `<circle cx="${f(x)}" cy="${f(y)}" r=".75"/>`)).join("") +
-        `</g>` +
+        // Shoulder straps.
+        line("M-11.4,-63.4 L-12.6,-70.6 M11.4,-63.4 L12.6,-70.6", INK, 3.4) +
+        line("M-11.4,-63.4 L-12.6,-70.6 M11.4,-63.4 L12.6,-70.6", carrier, 2.4) +
+        // Carrier body with MOLLE rows.
+        shape("M-13.8,-64 C-7,-65.4 7,-65.4 13.8,-64 L14.6,-38.6 C7,-37.2 -7,-37.2 -14.6,-38.6 Z", carrier, 1) +
+        `<path d="M-13.8,-64 C-7,-65.4 7,-65.4 13.8,-64 L14.6,-38.6 C7,-37.2 -7,-37.2 -14.6,-38.6 Z" fill="url(#weave)" opacity=".6"/>` +
+        [-58.6, -54.2, -49.8].map((y) => line(`M-13.4,${y} L13.4,${y}`, web, 1.1, 0.95) + [-10, -5, 0, 5, 10].map((x) => line(`M${x},${f(y - 0.6)} L${x},${f(y + 0.6)}`, "#55593f", 0.4, 0.9)).join("")).join("") +
+        // Admin pouch high on the chest, a patch on it.
+        shape("M-5.2,-62.4 L5.2,-62.4 L5,-55.6 L-5,-55.6 Z", mix(carrier, "#000000", 0.18), 0.7) +
+        `<rect x="-3.2" y="-61.4" width="6.4" height="3.2" rx=".4" fill="#4e5440" stroke="${INK}" stroke-width=".35"/>` +
+        // Mag pouches.
+        [-11.6, -5.6, 0.4, 6.4].map((x) => shape(`M${f(x)},-48 L${f(x + 5.2)},-48 L${f(x + 5)},-39.8 L${f(x + 0.2)},-39.8 Z`, mix(carrier, "#000000", 0.1), 0.7) + line(`M${f(x + 0.4)},-46.4 L${f(x + 4.8)},-46.4`, "#62684e", 0.45, 0.8)).join("") +
+        // Radio on the left strap, aerial up past the shoulder.
+        shape("M-16.2,-66.4 L-12.6,-67 L-12.2,-58.6 L-15.8,-58.2 Z", "#22262a", 0.8) +
+        line("M-15.4,-66.6 L-16.6,-74.4", INK, 1.1) +
+        line("M-15.4,-66.6 L-16.6,-74.4", "#3c4147", 0.5) +
         // Webbing and pouches at the belt.
         line("M-15,-38.4 L15,-38.4", "#2b3024", 2.6) +
         [-10.4, -2.6, 6.2].map((x) => shape(`M${f(x)},-38 L${f(x + 5)},-38 L${f(x + 4.4)},-29.4 L${f(x + 0.6)},-29.4 Z`, "url(#steelDk)", 0.7)).join("");
-      legs.forEach((leg) => {
-        front += shape(
-          `M${pt(...lerp(leg.hip, leg.kn, 0.72))} l-5.2,1 l1,7.4 l8.4,-1 l-.6,-7 Z`,
-          "url(#steelDk)",
-          0.8,
-        );
-      });
       break;
     }
     case "reliquary": {
@@ -1085,7 +1534,15 @@ function gear(c, pose) {
       back += shape("M-11.6,-72 L11.6,-72 L13,-48 L-13,-48 Z", "url(#steelDk)", 0.9) +
         line("M-9.8,-70 L9.8,-70", "#eef6f4", 0.5, 0.45);
       front +=
+        // Moulded collar ring the helmet seats into.
+        shape("M-9.6,-72.6 C-4.6,-74.2 4.6,-74.2 9.6,-72.6 L13.8,-66.4 C7,-64.4 -7,-64.4 -13.8,-66.4 Z", "url(#steelDk)", 0.9) +
+        line("M-8.8,-72 C-4.4,-73.4 0,-73.6 2.4,-73.4", "#f4fbfa", 0.6, 0.6) +
         shape("M-14.4,-66.4 C-7.6,-70.4 7.6,-70.4 14.4,-66.4 L15,-40 C7,-37.4 -7,-37.4 -15,-40 Z", "url(#steel)", 1) +
+        // Sculpted abdominal plating under the chest shell.
+        shape("M-10.6,-39.4 C-6,-38.2 6,-38.2 10.6,-39.4 L9.8,-29.2 C5,-28.2 -5,-28.2 -9.8,-29.2 Z", "url(#steel)", 0.9) +
+        line("M0,-38.6 L0,-29", INK, 0.55, 0.6) +
+        line("M-9.8,-35.6 C-5,-34.6 5,-34.6 9.8,-35.6 M-9.6,-32.2 C-5,-31.2 5,-31.2 9.6,-32.2", INK, 0.45, 0.45) +
+        line("M-9.4,-38 C-5,-37.2 -2,-37.1 -0.6,-37.1", "#f4fbfa", 0.5, 0.5) +
         // One long seam is the only break in the shell.
         line("M-13.2,-55.6 C-6.4,-58 6.4,-58 13.2,-55.6", INK, 0.6, 0.55) +
         line("M-13.4,-63.8 C-7,-67 7,-67 13.4,-63.8", "#f4fbfa", 0.7, 0.6) +
@@ -1412,10 +1869,11 @@ const collarOf = (c, showFace, map) =>
 export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
   const c = resolve(character || {});
   const armed = pose === "hero";
-  const P = armed ? ARMED : STAND;
+  const B = c.fem ? BUILDS.fem : BUILDS.masc;
+  const P = buildPose(armed ? ARMED : STAND, B);
   const map = bodyMap(c);
-  const legs = P.legs.map((leg, i) => armoredLeg(leg, i === 0 ? -1 : 1));
-  const arms = P.arms.map((arm, i) => armoredArm(arm, i === 0 ? -1 : 1, !armed && i === 0));
+  const legs = P.legs.map((leg, i) => armoredLeg(leg, i === 0 ? -1 : 1, B.legW));
+  const arms = P.arms.map((arm, i) => armoredArm(arm, i === 0 ? -1 : 1, !armed && i === 0, B.armW));
   const tilt = P.arms.map((arm, i) => {
     const s = i === 0 ? -1 : 1;
     return -s * clamp((armSwing(arm, s) - 8) * 0.35, -4, 12);
@@ -1439,41 +1897,64 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   }
 
   const collar = collarOf(c, showFace, map);
+  const fr = frameLayers(c.frame, P, c);
+  const fs = FRAME_SHAPE[c.frame] || FRAME_SHAPE.standard;
+  // Shoulders scale about their joint with the frame; a Strider leaves the
+  // right shoulder bare (soft cap) for its asymmetric kit.
+  const shoulderAt = (s, t) => {
+    if (fs.noShoulders) return "";
+    const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
+    const k = fs.shoulder * B.shoulder;
+    const dx = s * 20 * (B.sh - 1);
+    return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
+  };
+  // The torso and what sits on it take the build's shape; limbs already
+  // carry it through their joints and thickness.
+  const TW = (m) => warpX(m, B.torso);
   const body =
-    recolor(legs.map((l) => l.body).join("") + torso(), map) +
-    chestTrim(c) +
-    variantTrim(c) +
-    insignia(c) +
-    kit.front +
-    acc.front +
+    recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs, map) +
+    TW(
+      recolor(torso({ pecs: !c.fem }) + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
+        (fs.softTorso ? "" : chestTrim(c)) +
+        variantTrim(c) +
+        insignia(c) +
+        kit.front +
+        acc.front,
+    ) +
     rifle.body +
-    recolor(arms.map((a) => a.body).join("") + shoulderAO, map) +
-    recolor(shoulder(c, -1, tilt[0]) + shoulder(c, 1, tilt[1]), map) +
-    (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
+    recolor(arms.map((a) => a.body).join("") + fr.arms + shoulderAO, map) +
+    recolor(shoulderAt(-1, tilt[0]) + shoulderAt(1, tilt[1]), map) +
+    (wears(c, "chest") ? TW(badgeAt(c, A.chest)) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
     rifle.hands +
-    collar +
+    TW(collar) +
     acc.top;
 
-  const glow = recolor(legs.map((l) => l.glow).join("") + TORSO_GLOW + arms.map((a) => a.glow).join(""), map) + kit.glow + rifle.glow + acc.glow;
+  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso ? BELT_GLOW : TORSO_GLOW;
+  const limbGlow = fs.noLimbGlow ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
+  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + kit.glow) + fr.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
-  let cape = acc.replacesCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
+  let cape = acc.replacesCape || c.capeOff || (FRAME_SHAPE[c.frame] || {}).noCape ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
   }
+  // Grow the figure from the soles; the head rides up on the neck at its own size.
+  const W = (m) => (B.scale === 1 || !m ? m : `<g transform="translate(0,58) scale(${B.scale}) translate(0,-58)">${m}</g>`);
+  const neckLift = f(-126 * (B.scale - 1));
+  const headFem = (m) => `<g transform="translate(0,${neckLift}) translate(0,-67) scale(${B.head}) translate(0,67)">${m}</g>`;
   return {
     defs: defs(c),
-    width: ARMOR_WIDTH[c.armor] || 1,
+    width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
-    back: kit.back + acc.back,
-    cape,
-    body,
-    glow,
-    collar,
-    head: h.front + helmBadge + acc.head,
-    headGlow: h.glow + acc.headGlow,
+    back: W(kit.back + acc.back),
+    cape: W(cape),
+    body: W(body),
+    glow: W(glow),
+    collar: W(TW(collar)),
+    head: headFem(headScale(h.front + helmBadge + acc.head)),
+    headGlow: headFem(headScale(h.glow + acc.headGlow)),
     eyesVisible: showFace,
     look: c,
   };
@@ -1583,8 +2064,9 @@ function realAgentDefs(c) {
   const swap = {
     steel: sheen("steel", base, spec, s[3], s[4], 0.15, ramp),
     steelDk: sheen("steelDk", mix(base, s[3], 0.45), mix(base, spec, 0.4), s[3], mix(s[4], "#000000", 0.3), 0.16, ramp),
-    suit:
-      `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25"><stop offset="0" stop-color="${matte ? "#26292d" : "#3a3e43"}"/>` +
+    suit: c.camo
+      ? camoPattern(c.camo, "suit")
+      : `<linearGradient id="suit" x1="0" y1="0" x2="1" y2=".25"><stop offset="0" stop-color="${matte ? "#26292d" : "#3a3e43"}"/>` +
       `<stop offset=".45" stop-color="${matte ? "#131517" : "#1d2024"}"/><stop offset="1" stop-color="#08090a"/></linearGradient>`,
     cape:
       `<linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">` +
@@ -1688,7 +2170,7 @@ function fallenParts(c) {
   const kit = gear(c, P);
   const showFace = OPEN_HELMETS.has(c.helmet);
   const h = head(c, false);
-  const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${inner}</g></g>`;
+  const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
   const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";
@@ -1697,7 +2179,7 @@ function fallenParts(c) {
   const armBadge = wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "";
   return {
     width: ARMOR_WIDTH[c.armor] || 1,
-    pool: acc.replacesCape ? "" : recolor(fallenCape(), map),
+    pool: acc.replacesCape || c.capeOff ? "" : recolor(fallenCape(), map),
     under:
       kit.back +
       acc.back +
@@ -1712,7 +2194,7 @@ function fallenParts(c) {
       collarOf(c, showFace, map) +
       acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((acc.replacesCape ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
+    over: recolor((acc.replacesCape || c.capeOff ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
     glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),

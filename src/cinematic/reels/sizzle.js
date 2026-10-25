@@ -1,6 +1,7 @@
 /**
- * The sizzle reel (spec §2): a lore opening, the logo slam, then a montage
- * cut to the music, ending on the logo card. 120 bpm, so a beat is 0.5 s and
+ * The sizzle reel (spec §2): a lore opening (the station's prologue rooms
+ * under their own lamps, then the rift), the logo slam, then a montage cut
+ * to the music, ending on the logo card. 120 bpm, so a beat is 0.5 s and
  * a bar 2 s; every time below is in beats (the spec's seconds × 2), and
  * every cut lands on a whole beat.
  *
@@ -11,7 +12,8 @@
  *
  * Montage cameras are keyed (`keys: [[beat, x, y, angle], ...]`) against
  * each level's own layout, so every shot looks down a lit hall at whatever
- * the shot spawns in front of it, not at a wall.
+ * the shot spawns in front of it, not at a wall. The station shots
+ * (scenes/station.js) glide one curve through their keys instead.
  */
 
 const keys = (...k) => ({ kind: "keys", keys: k });
@@ -29,10 +31,10 @@ export const SIZZLE = {
     // Silence under the end card's cut, and one last hit on it.
     { at: 138, stop: true, sting: true },
   ],
-  narration: [{ at: 7, len: 7, text: "Someone broke time.", voice: "aria" }],
+  narration: [{ at: 8, len: 7, text: "Someone broke time.", voice: "aria" }],
   captions: [
     { at: 1, len: 5, text: "Chrono-Corp Station." },
-    { at: 20, len: 11, text: "And he keeps coming back." },
+    { at: 25, len: 6, text: "And he keeps coming back." },
     { at: 39, len: 10, text: "Four acts. Twenty-nine levels." },
     { at: 51, len: 8, text: "Bend time." },
     { at: 61, len: 8, text: "Rewind it. Lock it." },
@@ -47,23 +49,36 @@ export const SIZZLE = {
   shots: [
     // 0:00 — the station out in the dark, ARIA's boot line.
     { id: "boot", at: 0, len: 6, scene: { kind: "art", bg: "deep_space", art: "station", pan: { from: [0, 0, 1], to: [0.01, 0, 1.12] } }, transitionOut: "fade" },
-    // 0:03 — slow flight down the Act I reactor, the lights stuttering, a
-    // vent sparking by the core and someone standing in the dark past it.
+    // 0:03 — the station before it broke, in three glides under its own
+    // lamps: down lane 2 past the booth partitions to the lit bullet trap...
     {
-      id: "reactor", at: 6, len: 12,
+      id: "range", at: 6, len: 7,
+      scene: { kind: "station", weapon: false, camera: { keys: [[0, 36.6, 42.55, 0.03], [7, 49.6, 42.45, -0.01]], ease: 0.3 } },
+    },
+    // ...along the locker room's south bank, the cadet's among them...
+    {
+      id: "lockers", at: 13, len: 4,
       scene: {
-        kind: "campaign", act: 1, level: 5, enemies: false, weapon: false, camera: keys([0, 25.5, 55, N + 0.04], [12, 25.5, 45, N + 0.1]),
-        figures: [{ enemy: "henchman", pos: [24.8, 33.5], facing: Math.PI / 2 }],
-        vents: [{ kind: "spark", pos: [27.5, 37.1] }, { kind: "steam", pos: [22.1, 40.5] }],
+        kind: "station", weapon: false, doors: "shut", camera: { keys: [[0, 5.4, 45.5, 0.24], [4, 10.4, 45.7, 0.14]], ease: 0.2 },
+        lamps: [{ x: 9.5, y: 46.0, radius: 5, intensity: 0.45 }, { x: 15.5, y: 46.0, radius: 5, intensity: 0.45 }],
       },
-      events: [{ at: 5, type: "glitch" }, { at: 9.5, type: "glitch" }],
+    },
+    // ...and round the corner into the Supervisor's office, the station map
+    // over his glass office, as the lights stutter and time breaks.
+    {
+      id: "office", at: 17, len: 7,
+      scene: {
+        kind: "station", weapon: false,
+        camera: { keys: [[0, 30.2, 24.4, -1.5], [2.5, 32.4, 21.0, -0.12], [4.5, 38.8, 18.9, -0.5], [7, 46.5, 18.5, -1.57]], ease: 0.35 },
+      },
+      events: [{ at: 4.5, type: "flicker", len: 1.5 }, { at: 5.5, type: "glitch" }],
       transitionOut: "glitch",
     },
-    // 0:09 — the rift, and who comes through it.
+    // 0:12 — the rift, and who comes through it.
     {
-      id: "rift", at: 18, len: 14,
+      id: "rift", at: 24, len: 8,
       scene: { kind: "art", bg: "temporal_rift", art: "villain", silhouette: true, artAt: [0, 0.14, 0.7], pan: { from: [0, 0, 1], to: [0, 0.01, 1.06] } },
-      events: [{ at: 2, type: "glitch" }, { at: 8, type: "glitch" }, { at: 12, type: "glitch" }],
+      events: [{ at: 1, type: "glitch" }, { at: 4, type: "glitch" }, { at: 7, type: "glitch" }],
     },
     // 0:16 — logo slam out of a white flash, on bar 8.
     { id: "logo", at: 32, len: 6, scene: { kind: "title", lines: [] }, events: [{ at: 0, type: "flash" }, { at: 0, type: "shake", amount: 0.6 }] },
@@ -121,16 +136,21 @@ export const SIZZLE = {
         { at: 2, type: "freeze", target: "nearest" },
       ],
     },
-    // 0:35 — the squad, one a bar-half, over the Act I core.
+    // 0:35 — the squad, one a bar-half: along the gym's mirror wall, then
+    // across the sim hall to the extraction lift.
     {
-      id: "squad", at: 70, len: 8,
-      scene: { kind: "campaign", act: 1, level: 7, enemies: false, weapon: false, camera: keys([0, 26, 31, N + 0.25], [8, 27, 29, N + 0.1]) },
+      id: "squad", at: 70, len: 4,
+      scene: { kind: "station", weapon: false, camera: { keys: [[0, 17.5, 18.6, N - 0.55], [4, 11.5, 18.4, N - 0.35]], ease: 0.2 } },
       events: [{ at: 0, type: "squad", members: ["lyra", "rook", "nova", "kael"], len: 8 }],
+    },
+    {
+      id: "squad-lift", at: 74, len: 4,
+      scene: { kind: "station", weapon: false, camera: { keys: [[0, 44.0, 6.6, Math.PI], [4, 36.0, 7.4, -2.6]], ease: 0.2 } },
     },
     // 0:39 — the Hound: its card, then the charge.
     {
       id: "hound", at: 78, len: 10,
-      scene: { kind: "art", bg: "boss_lair", art: "hound", silhouette: true, artAt: { legacy: [0, 0.1, 1.1], default: [0, 0.22, 0.78] }, pan: { from: [0, 0, 1], to: [0, -0.03, 1.22] } },
+      scene: { kind: "art", bg: "boss_lair", art: "hound", silhouette: true, artAt: [0, 0.22, 0.78], pan: { from: [0, 0, 1], to: [0, -0.03, 1.22] } },
       events: [{ at: 0, type: "shake", amount: 0.8 }, { at: 6, type: "shake", amount: 1 }, { at: 8, type: "shake", amount: 1.2 }],
     },
     // 0:44 — Meltdown: pick an upgrade on the beat, then the swarm.
@@ -173,7 +193,7 @@ export const SIZZLE = {
     // 1:04 — the Paradox Lord's final form: silhouette and card only.
     {
       id: "finale", at: 128, len: 10,
-      scene: { kind: "art", bg: "temporal_rift", art: "villain_final", silhouette: true, artAt: { legacy: [0, 0.155, 0.5], default: [0, 0.3, 0.6] }, pan: { from: [0, 0, 1], to: [0, 0.01, 1.08] } },
+      scene: { kind: "art", bg: "temporal_rift", art: "villain_final", silhouette: true, artAt: [0, 0.3, 0.6], pan: { from: [0, 0, 1], to: [0, 0.01, 1.08] } },
       events: [{ at: 0, type: "glitch" }, { at: 4, type: "shake", amount: 0.5 }, { at: 8, type: "glitch" }],
       transitionOut: "flash",
     },

@@ -62,9 +62,9 @@ describe("unlock rules", () => {
     expect(unlockState("loadoutIndex", GUN, unlockContext({ stats: { weaponKills: { 0: 30, 6: 10 } } })).unlocked).toBe(true);
   });
 
-  it("Enforcer needs Act 1 cleared, from stats, an in-progress save or a finished campaign", () => {
+  it("Enforcer needs three campaign levels cleared, from stats, an in-progress save or a finished campaign", () => {
     const st = unlockState("loadoutIndex", ENF, unlockContext({ stats: { campaignLevelsCleared: 2 } }));
-    expect(st.hint).toBe("Clear Act 1 of the campaign · 2/3 levels");
+    expect(st.hint).toBe("Clear 3 campaign levels · 2/3 levels");
     expect(st.unlocked).toBe(false);
     expect(unlockState("loadoutIndex", ENF, unlockContext({ campaignSaveLevel: 4 })).unlocked).toBe(true);
     expect(unlockState("loadoutIndex", ENF, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
@@ -77,7 +77,7 @@ describe("unlock rules", () => {
     expect(st.value).toBe(50);
   });
 
-  it("tier II needs the tutorial; tier III takes Act 1 or arena round 5", () => {
+  it("tier II needs the tutorial; tier III takes three campaign levels or arena round 5", () => {
     expect(unlockState("helmetIndex", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(true);
     const arena = unlockContext({ stats: { highestArenaRound: 5 } });
     expect(unlockState("armorIndex", MK3, arena).unlocked).toBe(true);
@@ -85,7 +85,7 @@ describe("unlock rules", () => {
     const st = unlockState("armorIndex", MK3, close);
     expect(st.unlocked).toBe(false);
     // Reports the branch closest to done (4/5 rounds beats 1/3 levels).
-    expect(st.hint).toBe("Clear Act 1 or survive arena round 5 · 4/5 rounds");
+    expect(st.hint).toBe("Clear 3 campaign levels or survive arena round 5 · 4/5 rounds");
   });
 
   it("grandfathered gear stays usable", () => {
@@ -199,6 +199,17 @@ describe("badge and accessory unlocks", () => {
     expect(changes.badge.layers[0].symbol).toBe("clock");
     expect(changes.badge.finish).toBe("auto");
     expect(changes.armorVariant).toBe(0);
+  });
+
+  it("sanitizeLocked resets a locked flat pick to the first earned one, and keeps an owned one", () => {
+    const ctx = unlockContext();
+    const locked = ARMOR_STYLES.findIndex((_, i) => !unlockState("armorIndex", i, ctx).unlocked);
+    expect(locked).toBeGreaterThan(0);
+    const ch = { ...cloneLook(DEFAULT_CHARACTER), armorIndex: locked };
+    expect(sanitizeLocked(ch, ctx).armorIndex).toBe(0);
+    const owned = unlockContext({ owned: { [ownedKey("armorIndex", locked)]: true } });
+    expect(sanitizeLocked(ch, owned).armorIndex).toBeUndefined();
+    expect(sanitizeLocked(cloneLook(DEFAULT_CHARACTER), ctx)).toEqual({});
   });
 
   it("every virtual key is lockable", () => {

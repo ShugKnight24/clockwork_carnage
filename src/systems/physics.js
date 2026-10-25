@@ -11,18 +11,58 @@
  * @returns {boolean}
  */
 /**
- * Eye height in wall units: the floor is 0, the ceiling 1, and the horizon —
- * where a standing agent looks — is halfway up.
+ * Eye height in wall units: the floor is 0, the top of the wall art 1, and the
+ * horizon — where a standing agent looks — is halfway up.
  */
 export const EYE_Z = 0.5;
 
-/** Crouched eye height. Low enough that waist-high cover actually covers. */
-export const CROUCH_EYE_Z = 0.3;
+/**
+ * Height of the ceiling plane, and of a full wall, as drawn. The figures and
+ * the wall art keep their scale (art on 0..1, see wallHeight); the raycaster
+ * runs each full wall on up to here with an upper band above its art, so a
+ * room has headroom over people drawn about a wall tall. Drawing only: line
+ * of sight, shots and cover still measure against 1.
+ */
+export const CEILING_Z = 1.4;
 
-/** Eye height for a player, following the eased crouch blend. */
+/**
+ * Where the player's own eye sits standing. People are drawn about 0.9 of a
+ * wall tall with their eyes near 0.8, so a camera at EYE_Z looked up at
+ * everyone from their chest, a head shorter than the room. EYE_Z stays the
+ * line the art and the hit zones are measured from (sprites are drawn
+ * `EYE_Z - eye` lower from a higher eye; shots start `eyeOffsetZ` above it).
+ */
+export const STAND_EYE_Z = 0.74;
+
+/**
+ * Crouched eye height: under the top of waist-high cover (LAYER.WAIST, 0.4),
+ * so it actually covers, and the raycaster draws the crouched view from here.
+ */
+export const CROUCH_EYE_Z = 0.29;
+
+/**
+ * Sliding eye height: low enough that the prologue's half-down shutters
+ * pass overhead.
+ */
+export const SLIDE_EYE_Z = 0.21;
+
+/**
+ * Eye height for a player: the eased crouch blend takes it from standing to
+ * crouched, and the slide blend on top of that takes it lower still.
+ */
 export function playerEyeZ(player) {
   const t = player?.crouchBlend || 0;
-  return EYE_Z + (CROUCH_EYE_Z - EYE_Z) * t;
+  const s = player?.slideBlend || 0;
+  return STAND_EYE_Z + (CROUCH_EYE_Z - STAND_EYE_Z) * t + (SLIDE_EYE_Z - CROUCH_EYE_Z) * s;
+}
+
+/**
+ * How far a player's eye sits above (positive) or below the standing eye.
+ * A grid level measures shots and drawn figures from the standing eye line,
+ * so a crouched shot starts this far down it.
+ */
+export function eyeOffsetZ(player) {
+  return playerEyeZ(player) - EYE_Z;
 }
 
 /**

@@ -25,6 +25,7 @@ export const GAMEPAD_ACTIONS = {
   dash: PAD.A,
   crouch: PAD.B,
   interact: PAD.X,
+  reload: PAD.X, // when there is nothing in front of you to use (js/game.js)
   weaponNext: PAD.Y,
   chronoShift: PAD.LB, // held, like the keyboard key
   chronoRewind: PAD.RB, // only while shifting, with Nova's power
@@ -68,7 +69,7 @@ export const DEFAULT_GAMEPAD_ACTIONS = Object.freeze({ ...GAMEPAD_ACTIONS });
 
 /** Gameplay actions a player may rebind. Menu, cutscene and showroom buttons stay fixed. */
 export const REMAPPABLE_PAD_ACTIONS = [
-  "dash", "crouch", "interact", "weaponNext", "chronoShift", "chronoRewind", "weaponPrev",
+  "dash", "crouch", "interact", "reload", "weaponNext", "chronoShift", "chronoRewind", "weaponPrev",
   "aim", "fire", "sprint", "chronoLock", "minimap", "weaponCyclePrev", "weaponCycleNext", "weaponLast", "weaponFirst",
 ];
 

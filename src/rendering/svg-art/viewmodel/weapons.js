@@ -25,6 +25,17 @@ const BRASS = ["#0e0b04", "#29240f", "#4a4530", "#7d7449", "#c9bc86"];
 const TEAL = ["#040b0b", "#0f201f", "#1e3a3a", "#3e6765", "#8fbcb9"];
 const INDIGO = ["#06061a", "#15153a", "#2a2a52", "#4a4a80", "#9696c8"];
 
+/**
+ * The material ramps by role, for weapon finishes (src/data/weapon-skins.js):
+ * main metals take a finish's primary, gunmetal trim its secondary, polymer
+ * its grip.
+ */
+export const MATERIALS = {
+  metal: [STEEL, BRONZE, CRIMSON, PLUM, NAVY, BRASS, TEAL, INDIGO],
+  trim: [GUNMETAL],
+  grip: [POLYMER],
+};
+
 // Viewmodel focal length in units (4 px at 720p): a slightly wide lens exaggerates depth.
 const F = 230;
 
@@ -114,12 +125,73 @@ const sideRect = (x, y0, y1, z0, z1) => [[x, y0, z0], [x, y1, z0], [x, y1, z1], 
 /** Flat rectangle on a top face (y const). */
 const topRect = (y, x0, x1, z0, z1) => [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]];
 
+/**
+ * Emissive chrono coil: `turns` of wire wound round a barrel at (cx, cy) from
+ * z0 to z1, each turn's visible arc (a0..a1 degrees, as `arc`) laid in a dark
+ * groove so it reads as wound into the metal rather than floating on it.
+ */
+function coil(sc, cx, cy, r, z0, z1, turns, { w = 0.42, a0 = -70, a1 = 190 } = {}) {
+  const dz = (z1 - z0) / turns;
+  for (let t = 0; t < turns; t++) {
+    const pts = [];
+    for (let i = 0; i <= 12; i++) {
+      const u = i / 12;
+      const a = ((a0 + (a1 - a0) * u) * Math.PI) / 180;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r, z0 + dz * (t + u * 0.7)]);
+    }
+    sc.line(pts, INK, w * 2.4, 0.85);
+    sc.glowLine(pts, w, { bloom: 0.7 });
+  }
+}
+
+/** Muzzle brake: a collar with vent ports cut through its flank and top, and a dark crown. */
+function brake(sc, cx, cy, r, z0, z1, ports = 2, mat = GUNMETAL) {
+  sc.cylZ(cx, cy, r, z0, z1, mat, { n: 16 });
+  const len = (z1 - z0) / (ports * 2 + 1);
+  for (let i = 0; i < ports; i++) {
+    const z = z0 + len * (1 + i * 2);
+    sc.poly(sideRect(cx + r + 0.1, cy - r * 0.42, cy + r * 0.42, z, z + len), "#020305", { stroke: INK, sw: 0.2 });
+    sc.poly(topRect(cy + r + 0.1, cx - r * 0.3, cx + r * 0.3, z, z + len), "#020305", { stroke: INK, sw: 0.2 });
+  }
+  sc.poly(sc.disc([cx, cy, z1 + 0.2], r * 0.55, "z", 12), "#010203", { stroke: "#4a5866", sw: 0.3 });
+}
+
+/**
+ * Recessed panel on the right flank: a dark inset whose lower lip catches the
+ * key light, optionally slotted into a grille, with the department's accent
+ * ID stripe (paint, not emissive) along its top.
+ */
+function flankPanel(sc, x, y0, y1, z0, z1, { grill = 0, stripe = true } = {}) {
+  sc.poly(sideRect(x + 0.05, y0, y1, z0, z1), "#000000", { op: 0.32, stroke: INK, sw: 0.3, sop: 0.7 });
+  sc.line([[x + 0.1, y0 + 0.5, z0 + 1.5], [x + 0.1, y0 + 0.5, z1 - 1.5]], "#eef6ff", 0.35, 0.32);
+  for (let i = 1; i <= grill; i++) {
+    const y = y0 + ((y1 - y0) * i) / (grill + 1);
+    sc.line([[x + 0.1, y, z0 + 4], [x + 0.1, y, z1 - 4]], INK, 0.7, 0.85);
+    sc.line([[x + 0.12, y - 0.6, z0 + 4], [x + 0.12, y - 0.6, z1 - 4]], "#eef6ff", 0.22, 0.2);
+  }
+  if (stripe) sc.poly(sideRect(x + 0.08, y1 + 1.2, y1 + 2.6, z0, z0 + (z1 - z0) * 0.45), sc.accent, { op: 0.7, stroke: INK, sw: 0.15 });
+}
+
+/** Slotted cap screws on a face (axis as `disc`). */
+function screws(sc, pts, r = 2, axis = "x") {
+  for (const p of pts) {
+    sc.poly(sc.disc(p, r, axis, 8), "#7d8b99", { stroke: INK, sw: 0.25 });
+    const [a, b] = axis === "x" ? [[p[0] + 0.1, p[1] - r * 0.6, p[2]], [p[0] + 0.1, p[1] + r * 0.6, p[2]]] : [[p[0] - r * 0.6, p[1] + 0.1, p[2]], [p[0] + r * 0.6, p[1] + 0.1, p[2]]];
+    sc.line([a, b], INK, 0.3, 0.8);
+  }
+}
+
 function pistolGrip(sc, g, mat = POLYMER) {
   sc.post({
     yTop: g.yTop, yBot: g.yBot,
     top: rrect(-g.hw, g.hw, g.zbT, g.zfT, 5),
     bot: rrect(-g.hw - 1, g.hw + 1, g.zbB, g.zfB, 6),
-  }, mat, { rim: 0.3 });
+  }, mat, { rim: 0.3, matte: mat === POLYMER });
+  // Stippled panel on the right flank where the palm sits.
+  const t = (y) => (g.yTop - y) / (g.yTop - g.yBot);
+  const z = (y, side) => (side ? g.zfT + (g.zfB - g.zfT) * t(y) : g.zbT + (g.zbB - g.zbT) * t(y));
+  const [ya, yb] = [g.yTop - 14, g.yBot + 10];
+  sc.poly([[g.hw + 0.1, ya, z(ya, 0) + 8], [g.hw + 0.1, ya, z(ya, 1) - 8], [g.hw + 1.1, yb, z(yb, 1) - 8], [g.hw + 1.1, yb, z(yb, 0) + 8]], "#000000", { op: 0.22, stroke: "#56636f", sw: 0.25, sop: 0.35 });
   return g;
 }
 
@@ -153,18 +225,29 @@ export const WEAPON_MODELS = {
     hipDrop: 3,
     cams: { hip: hipCam({ top: 22, oz: 320, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
     build(sc, A, pose) {
-      sc.cylZ(0, 11, 7, 186, 196, GUNMETAL, { n: 16 });
-      glowArc(sc, 0, 11, 8.5, 195.8, 0.5);
+      // Ported compensator ahead of the slide, the chrono crown glowing at its lip.
+      brake(sc, 0, 11, 10, 192, 214, 2);
+      glowArc(sc, 0, 11, 10.6, 213.8, 0.5);
+      sc.cylZ(0, 11, 7, 184, 194, GUNMETAL, { n: 16 });
       const g = pistolGrip(sc, { yTop: -12, yBot: -92, zfT: 55, zbT: 5, zfB: 6, zbB: -40, hw: 14.5 });
-      sc.boxZ(-13, 13, -14, 0.5, 5, 175, POLYMER, { ch: 2.5 });
+      // Magazine base plate under the grip.
+      sc.boxZ(-16, 16, -98, -91, -44, 10, GUNMETAL, { ch: 2 });
+      sc.boxZ(-13, 13, -14, 0.5, 5, 175, POLYMER, { ch: 2.5, matte: true });
       triggerGuard(sc, -14, 70, 125, 26);
       for (const z of [140, 152, 164]) sc.poly(sideRect(13.05, -11, -3, z, z + 8), "#07090d", { stroke: INK, sw: 0.2 });
+      screws(sc, [[13.1, -6, 38], [13.1, -6, 118]], 1.6);
       supportThumb(A, g);
       // Slide.
       sc.prismZ([[-15, 0], [15, 0], [15, 17], [11, 22], [-11, 22], [-15, 17]], 0, 190, STEEL);
       sc.boxZ(-5, 5, 6, 14, -3, 0.5, STEEL, { ch: 2 });
       grooves(sc, 15.05, 3, 15, range(8, 50, 7));
-      grooves(sc, 15.05, 3.5, 14.5, range(152, 180, 7));
+      // Lightening cuts in the slide's nose, the coiled barrel glowing through them.
+      for (const z of [128, 150]) {
+        sc.poly(sideRect(15.06, 5, 15, z, z + 16), "#020305", { stroke: INK, sw: 0.3 });
+        sc.glowLine([[15.1, 6.5, z + 3], [15.1, 13.5, z + 8]], 0.4, { bloom: 0.6 });
+        sc.glowLine([[15.1, 6.5, z + 9], [15.1, 13.5, z + 14]], 0.4, { bloom: 0.6 });
+      }
+      grooves(sc, 15.05, 3.5, 14.5, range(170, 184, 7));
       // Ejection port with a casing peeking out.
       sc.poly(sideRect(15.06, 6, 16.5, 70, 115), "#05070a", { stroke: INK, sw: 0.3 });
       sc.poly(sideRect(15.1, 8, 14.5, 82, 102), "#b0893c", { stroke: "#4a3510", sw: 0.25 });
@@ -180,7 +263,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sc.disc([0, 25, 171.5], 1.6, "z", 10), { inner: false });
 
       sidearmGrip(A, g, pose === "ads");
-      return { muzzle: [0, 11, 198], eject: [15, 16, 92], pivot: [0, -12, 20], sight: [0, 28, 8] };
+      return { muzzle: [0, 11, 216], eject: [15, 16, 92], pivot: [0, -12, 20], sight: [0, 28, 8] };
     },
   },
 
@@ -196,6 +279,9 @@ export const WEAPON_MODELS = {
       grooves(sc, 21.05, -13, 1, range(300, 410, 11));
       for (const x of [-11.5, 11.5]) sc.cylZ(x, 16, 11, 225, 560, GUNMETAL, { n: 16 });
       for (const x of [-11.5, 11.5]) glowArc(sc, x, 16, 11.8, 559.5, 0.5);
+      // Temporal coils wound round the muzzle end; the left barrel's inner side hides behind the right.
+      coil(sc, -11.5, 16, 11.4, 494, 552, 3, { a0: 70, a1: 190 });
+      coil(sc, 11.5, 16, 11.4, 494, 552, 3);
       sc.boxZ(-24, 24, 3, 29, 470, 486, STEEL, { ch: 4 });
       sc.boxZ(-3, 3, 26, 30.5, 230, 556, STEEL, { rim: 0.2 });
       sc.boxZ(-2.5, 2.5, 30.5, 35, 540, 552, BRASS);
@@ -212,7 +298,8 @@ export const WEAPON_MODELS = {
         sc.glowLine([[x, 30.1, 22], [x, 30.1, 208]], 0.6);
       }
       nodes(sc, [[14.5, 30.2, 60], [14.5, 30.2, 115], [14.5, 30.2, 170]], 2.2);
-      for (const [y, z] of [[22, 30], [22, 200], [-6, 30], [-6, 200]]) sc.poly(sc.disc([20.1, y, z], 2.2, "x", 8), "#d2ad7a", { stroke: INK, sw: 0.25 });
+      flankPanel(sc, 20.05, -11, -1, 18, 196, { grill: 1 });
+      screws(sc, [[20.1, 22, 30], [20.1, 22, 200], [20.1, -6, 30], [20.1, -6, 200]], 2.2);
 
       for (const x of [-8, 3]) sc.boxZ(x, x + 5, 30, 36, 6, 16, GUNMETAL, { rim: 0.3 });
       if (pose === "ads") ghostRing(sc, 30, 30.5, 20, 530, 85);
@@ -231,8 +318,8 @@ export const WEAPON_MODELS = {
       clampThumb(A, hg);
       if (pose === "ads") clampHand(A, hg, "body", true);
       sc.cylZ(0, 12, 8, 440, 630, GUNMETAL, { n: 14 });
-      sc.cylZ(0, 12, 12, 610, 652, STEEL, { n: 16 });
-      for (const z of [620, 634]) sc.poly(sideRect(12.2, 8, 16, z, z + 8), "#05070a", { stroke: INK, sw: 0.2 });
+      coil(sc, 0, 12, 8.4, 462, 604, 5);
+      brake(sc, 0, 12, 12, 610, 652, 3, STEEL);
       glowArc(sc, 0, 12, 12.6, 651.5, 0.55);
       sc.boxZ(-12, 12, -62, -14, 150, 205, GUNMETAL, { ch: 3 });
       sc.glowPoly(sideRect(12.05, -52, -24, 160, 195));
@@ -242,6 +329,8 @@ export const WEAPON_MODELS = {
       for (const z of range(262, 432, 34)) sc.poly(sideRect(22.05, -6, 22, z + 8, z + 24), "#07071a", { stroke: INK, sw: 0.25 });
       for (const z of range(258, 428, 34)) sc.glowLine(sectionArc(-22, 22, -14, 32, 8, z), 0.55);
       sc.boxZ(-20, 20, -16, 30, 0, 240, GUNMETAL, { ch: 5 });
+      flankPanel(sc, 20.05, -13, -5, 70, 222);
+      screws(sc, [[20.1, 24, 80], [20.1, -10, 64], [20.1, -10, 230]], 1.8);
       // Plasma chamber window on the right flank.
       sc.poly(sideRect(20.05, -2, 22, 140, 226), "#05050f", { stroke: INK, sw: 0.3 });
       sc.glowPoly(sideRect(20.1, 3, 17, 148, 218));
@@ -275,6 +364,7 @@ export const WEAPON_MODELS = {
         sc.glowLine(sectionArc(-30 * t, 30 * t, 10 - 30 * t, 10 + 30 * t, 10 * t, z, 1), 0.6);
       }
       sc.cylZ(0, 10, 20, 468, 500, GUNMETAL, { n: 18 });
+      coil(sc, 0, 10, 20.5, 472, 496, 2, { w: 0.55 });
       glowArc(sc, 0, 10, 21.5, 499.5, 0.8);
       const g = pistolGrip(sc, { yTop: -28, yBot: -94, zfT: 95, zbT: 45, zfB: 68, zbB: 18, hw: 15 });
       triggerGuard(sc, -30, 100, 150, 22);
@@ -293,7 +383,9 @@ export const WEAPON_MODELS = {
       sc.line([[0, 44.2, 128], [0, 44.2, 222]], INK, 0.3, 0.6);
       sc.poly(topRect(44.05, -38, 38, 284, 296), "#ff3344", { op: 0.55 });
       for (const x of [-34, -18, -2, 14, 30]) sc.poly([[x, 44.1, 284], [x + 7, 44.1, 284], [x + 12, 44.1, 296], [x + 5, 44.1, 296]], "#12030a", { op: 0.8 });
-      for (const [y, z] of [[36, 12], [36, 288], [-22, 12], [-22, 288]]) sc.poly(sc.disc([40.1, y, z], 2.6, "x", 8), "#d0798f", { stroke: INK, sw: 0.25 });
+      flankPanel(sc, 40.05, -24, 0, 150, 280, { grill: 3 });
+      flankPanel(sc, 40.05, -24, 0, 20, 136, { stripe: false });
+      screws(sc, [[40.1, 36, 12], [40.1, 36, 288], [40.1, -22, 12], [40.1, -22, 288]], 2.6);
       rearPanel(sc, 30, -22, 36, "#d0798f");
 
       // Aperture sights: on top at the hip, swung out to a side mount when aiming.
@@ -322,6 +414,7 @@ export const WEAPON_MODELS = {
       sc.boxZ(-26, 26, -22, 6, 300, 420, PLUM, { ch: 6 });
       grooves(sc, 26.05, -17, 1, range(310, 410, 11));
       for (const x of [-16, 0, 16]) sc.cylZ(x, 18, 9.5, 250, 515, GUNMETAL, { n: 14 });
+      coil(sc, 16, 18, 9.9, 424, 468, 2);
       sc.boxZ(-30, 30, 4, 32, 470, 522, PLUM, { ch: 7 });
       for (const z of [480, 494]) {
         sc.poly(sideRect(30.05, 10, 26, z, z + 8), "#0a0409", { stroke: INK, sw: 0.25 });
@@ -339,6 +432,8 @@ export const WEAPON_MODELS = {
       sc.poly(sideRect(30.05, 4, 12, 20, 245), "#0a0409", { stroke: INK, sw: 0.25 });
       sc.glowLine([[30.1, 8, 26], [30.1, 8, 238]], 0.55);
       nodes(sc, [[30.2, 8, 70], [30.2, 8, 130], [30.2, 8, 190]], 2.6, "x");
+      flankPanel(sc, 30.05, 16, 28, 34, 226, { grill: 2 });
+      screws(sc, [[30.1, 26, 20], [30.1, 26, 240], [30.1, -8, 20], [30.1, -8, 240]], 2.2);
 
       for (const x of [-9, 4]) sc.boxZ(x, x + 5, 34, 40, 6, 16, GUNMETAL, { rim: 0.3 });
       sc.boxZ(-2.5, 2.5, 32, 40, 500, 512, GUNMETAL, { rim: 0.3 });
@@ -360,8 +455,8 @@ export const WEAPON_MODELS = {
       if (pose === "ads") clampHand(A, hg, "body", true);
       sc.cylZ(0, 12, 9, 380, 870, NAVY, { n: 14 });
       for (const z of range(640, 820, 60)) sc.line([[9.2, 12, z], [9.2, 12, z + 40]], INK, 0.3, 0.6);
-      for (const z of [520, 560, 600]) glowArc(sc, 0, 12, 10, z, 0.55);
-      sc.cylZ(0, 12, 13, 860, 905, GUNMETAL, { n: 16 });
+      coil(sc, 0, 12, 9.4, 524, 616, 5);
+      brake(sc, 0, 12, 13, 860, 905, 3);
       glowArc(sc, 0, 12, 13.6, 904.5, 0.6);
       sc.boxZ(-10, 10, -52, -14, 120, 170, GUNMETAL, { ch: 3 });
       sc.glowPoly(sideRect(10.05, -44, -22, 128, 162));
@@ -371,6 +466,8 @@ export const WEAPON_MODELS = {
       for (const z of range(250, 490, 40)) sc.poly(sideRect(19.05, -4, 18, z, z + 24), "#050b13", { stroke: INK, sw: 0.25 });
       sc.boxZ(-19, 19, -14, 28, 0, 220, NAVY, { ch: 4 });
       sc.poly(sideRect(19.05, 2, 10, 60, 214), "#03070c", { stroke: INK, sw: 0.25 });
+      flankPanel(sc, 19.05, 13, 22, 54, 206, { grill: 1 });
+      screws(sc, [[19.1, -8, 40], [19.1, -8, 200]], 1.8);
       sc.glowLine([[19.1, 6, 66], [19.1, 6, 208]], 0.55);
       nodes(sc, [[19.2, 6, 100], [19.2, 6, 150], [19.2, 6, 196]], 2.2, "x");
       // Bolt handle (it would loom in front of the eye at ADS).
@@ -399,10 +496,13 @@ export const WEAPON_MODELS = {
     hipDrop: 3,
     cams: { hip: hipCam({ top: 22, oz: 310, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
     build(sc, A, pose) {
+      // Hex compensator, its crown ringed in a ricochet glow.
+      brake(sc, 0, 11, 8.5, 180, 200, 2);
+      sc.glowLine(arc(0, 11, 9, 199.6, -60, 240, 6), 0.55);
       sc.cylZ(0, 11, 6.5, 168, 184, GUNMETAL, { n: 6, rot: Math.PI / 6 });
-      sc.glowLine(arc(0, 11, 8, 183.5, -60, 240, 6), 0.55);
       for (const s of [-1, 1]) sc.prismZ([[s * 15, 3], [s * 25, 8], [s * 15, 17]], 128, 176, BRASS, { taper: 0.7, pivot: [s * 15, 10] });
       const g = pistolGrip(sc, { yTop: -12, yBot: -90, zfT: 55, zbT: 5, zfB: 8, zbB: -38, hw: 14.5 });
+      sc.boxZ(-16, 16, -97, -90, -42, 12, GUNMETAL, { ch: 2 });
       sc.boxZ(-13, 13, -14, 0.5, 5, 160, GUNMETAL, { ch: 2.5 });
       triggerGuard(sc, -14, 70, 122, 24);
       supportThumb(A, g);
@@ -421,7 +521,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sc.disc([0, 24.5, 159.5], 1.5, "z", 6), { inner: false });
 
       sidearmGrip(A, g, pose === "ads");
-      return { muzzle: [0, 11, 188], eject: [15, 14, 90], pivot: [0, -12, 20], sight: [0, 29, 8] };
+      return { muzzle: [0, 11, 202], eject: [15, 14, 90], pivot: [0, -12, 20], sight: [0, 29, 8] };
     },
   },
 
@@ -454,7 +554,8 @@ export const WEAPON_MODELS = {
         sc.poly(topRect(46.05, -34, 34, z0, z0 + 14), "#ffaa44", { op: 0.7 });
         for (const x of [-30, -14, 2, 18]) sc.poly([[x, 46.1, z0], [x + 7, 46.1, z0], [x + 13, 46.1, z0 + 14], [x + 6, 46.1, z0 + 14]], "#0f201f", { op: 0.85 });
       }
-      for (const [y, z] of [[38, 12], [38, 278], [-18, 12], [-18, 278]]) sc.poly(sc.disc([38.1, y, z], 2.8, "x", 8), "#8fbcb9", { stroke: INK, sw: 0.25 });
+      flankPanel(sc, 38.05, 18, 38, 30, 270, { grill: 3 });
+      screws(sc, [[38.1, 38, 12], [38.1, 38, 278], [38.1, -18, 12], [38.1, -18, 278]], 2.8);
       rearPanel(sc, 28, -18, 38, "#8fbcb9");
 
       if (pose === "ads") {

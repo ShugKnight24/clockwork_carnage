@@ -154,7 +154,7 @@ export function handleGameOverClick(game, e) {
           game.fadeTransition(() => {
             if (game.mode === "arena") game.startArena();
             else if (game.mode === "meltdown") game.startMeltdown();
-            else if (game.mode === "campaign") game.startCampaign();
+            else if (game.mode === "campaign") game.campaign.retryLevel();
           });
         } else if (i === 1) {
           // QUIT — return to title

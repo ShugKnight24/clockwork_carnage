@@ -29,9 +29,16 @@ const BAKE_MS_PER_FRAME = 6;
 let bakeLeft = BAKE_BUDGET_PX;
 let bakeMsLeft = BAKE_MS_PER_FRAME;
 let bakeReset = false;
-/** Take `px` from this frame's raster budget; false if it does not fit. */
+/**
+ * Take `px` from this frame's raster budget; false if it does not fit. A
+ * layer larger than the whole budget bakes alone, in a frame nothing else has
+ * baked in yet. It used to never fit, so a full-frame background (a 3200×1800
+ * flipbook backdrop is 5.8 MP) stayed an SVG <img> forever — and the browser
+ * re-rendered the vector art on every draw, every frame.
+ */
 function spendBake(px) {
-  if (px > bakeLeft || bakeMsLeft <= 0) return false;
+  if (bakeMsLeft <= 0) return false;
+  if (px > bakeLeft && bakeLeft < BAKE_BUDGET_PX) return false;
   bakeLeft -= px;
   if (!bakeReset && typeof requestAnimationFrame === "function") {
     bakeReset = true;
@@ -197,6 +204,18 @@ function buildDocument(box, defs, markup, pxW, pxH) {
 }
 
 /**
+ * The fast path for a caller that cached a layer's bitmap: marks it used so
+ * idle eviction keeps it, and says whether it is still the live bitmap
+ * (eviction frees a baked canvas to 0x0, and drawImage throws on that).
+ */
+export function touchLayer(id, scale, img) {
+  const e = layers.get(id)?.get(scaleBucket(scale));
+  if (!e || e.img !== img || !e.ready) return false;
+  e.lastUsed = performance.now();
+  return true;
+}
+
+/**
  * Request a layer bitmap. Returns the best ready image for this layer — the
  * requested bucket when decoded, otherwise any other decoded bucket — or null
  * while nothing has decoded yet.
@@ -209,6 +228,7 @@ function buildDocument(box, defs, markup, pxW, pxH) {
  * @param {boolean} prefetch  warming ahead of use: decode when the per-frame budget allows
  */
 export function getLayerImage(id, box, defs, markup, scale, prefetch = false) {
+  if (typeof Image === "undefined") return null; // no DOM (unit tests): nothing decodes
   const bucket = scaleBucket(scale);
   const now = performance.now();
   pumpDecodes();

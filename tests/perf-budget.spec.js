@@ -21,15 +21,19 @@
  * Run: npx playwright test tests/perf-budget.spec.js
  */
 import { test, expect, chromium } from "@playwright/test";
+import { PIXEL_BUDGET } from "../src/utils/device-tier.js";
 
 const PORT = Number(process.env.CC_TEST_PORT ?? 3100);
 const URL = `http://localhost:${PORT}`;
 
 // Budgets carry headroom over measured values (M1 Pro, 2026-09-21), so they
-// catch regressions rather than machine noise.
+// catch regressions rather than machine noise. A high-tier screen renders at
+// its device pixels up to the tier budget, never past them: the cap is the
+// smaller of the two, so drawing above native resolution still fails.
+const nativeCap = (w, h, dpr) => Math.min(PIXEL_BUDGET.high, w * h * dpr * dpr);
 const PROFILES = [
-  { name: "laptop-hidpi", viewport: { width: 1440, height: 900 }, dpr: 2, cpu: 1, renderMs: 6, pixelCap: 1.8e6 },
-  { name: "4k-monitor", viewport: { width: 3840, height: 2160 }, dpr: 1, cpu: 1, renderMs: 8, pixelCap: 1.8e6 },
+  { name: "laptop-hidpi", viewport: { width: 1440, height: 900 }, dpr: 2, cpu: 1, renderMs: 6, pixelCap: nativeCap(1440, 900, 2) },
+  { name: "4k-monitor", viewport: { width: 3840, height: 2160 }, dpr: 1, cpu: 1, renderMs: 8, pixelCap: nativeCap(3840, 2160, 1) },
   { name: "slow-laptop", viewport: { width: 1280, height: 800 }, dpr: 1, cpu: 4, renderMs: 22, pixelCap: 1.8e6 },
   { name: "phone", viewport: { width: 780, height: 360 }, dpr: 3, cpu: 4, touch: true, renderMs: 22, pixelCap: 1.0e6 },
 ];

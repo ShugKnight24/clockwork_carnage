@@ -182,7 +182,7 @@ export function renderGameOver(ctx, w, h, state) {
   const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
 
   const btnDefs = [
-    { label: 'RESTART', color: '#ff8844', bg: 'rgba(255,136,68,0.15)' },
+    { label: mode === 'campaign' ? 'RETRY LEVEL' : 'RESTART', color: '#ff8844', bg: 'rgba(255,136,68,0.15)' },
     { label: 'QUIT', color: '#aaaaaa', bg: 'rgba(170,170,170,0.1)' },
     { label: 'SHARE', color: '#00ccff', bg: 'rgba(0,204,255,0.12)' },
   ];
@@ -415,6 +415,38 @@ export function renderVictory(ctx, w, h, state) {
 }
 
 // ── renderLevelComplete ─────────────────────────────────────────────
+
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+const GRADE_COLORS = { S: '#ffd24a', A: '#3dff8a', B: '#22e6ff', C: '#ffae3a', D: '#ff6a5a' };
+export const gradeColor = (letter) => GRADE_COLORS[letter] || '#aaddff';
+
+/** "ACT I · LEVEL 3 — RESEARCH WING" */
+export function debriefHeading(d) {
+  const where = `Act ${ROMAN[d.act] || d.act} · Level ${d.levelNumber}`;
+  return d.levelName ? `${where} — ${d.levelName}` : where;
+}
+
+/**
+ * The "Earned this level" lines, at most `max` of them; past that the last
+ * line says how many more.
+ */
+export function earnedLines(earned, max) {
+  const list = (earned || []).map((e) => (e.kind ? `${e.kind}: ${e.name}` : e.name));
+  if (list.length <= max) return list;
+  return [...list.slice(0, max - 1), `+${list.length - max + 1} more`];
+}
+
+/** "1/2 secrets · 45 damage taken" */
+function debriefFootnote(d, secretVal) {
+  const secrets = d.secretsTotal > 0 ? `Secrets ${secretVal}/${d.secretsTotal}` : 'No secrets here';
+  return `${secrets} · ${d.damageTaken} damage taken`;
+}
+
+const clock = (sec) => {
+  const s = Math.max(0, Math.round(sec || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
 export function renderLevelComplete(ctx, w, h, state) {
   const {
     time, isTouchDevice, levelCompleteTime,
@@ -458,7 +490,13 @@ export function renderLevelComplete(ctx, w, h, state) {
   const promptT = ease((t - 1.0) / 0.3);
   const countUp = Math.min(1, (t - 0.3) / 0.8);
 
-  const titleY = compact ? h * 0.12 : h / 2 - 100;
+  const { debrief } = state;
+  const gradeT = ease((t - 0.45) / 0.35);
+  const earnedT = ease((t - 0.8) / 0.3);
+  // With a debrief the title sits higher to make room for the heading and
+  // grade above the card, and the earned list below it.
+  const lift = debrief ? (compact ? 0 : 50) : 0;
+  const titleY = compact ? h * 0.12 : h / 2 - 100 - lift;
   const titleOffset = (1 - titleT) * -30;
 
   if (!compact && titleT > 0) {
@@ -466,8 +504,8 @@ export function renderLevelComplete(ctx, w, h, state) {
     ctx.strokeStyle = 'rgba(0,255,200,0.2)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.2, h / 2 - 130 + titleOffset);
-    ctx.lineTo(w * 0.8, h / 2 - 130 + titleOffset);
+    ctx.moveTo(w * 0.2, titleY - 30 + titleOffset);
+    ctx.lineTo(w * 0.8, titleY - 30 + titleOffset);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -485,7 +523,36 @@ export function renderLevelComplete(ctx, w, h, state) {
     ctx.globalAlpha = 1;
   }
 
-  if (!compact && titleT > 0) {
+  // Level name, then the grade against par
+  if (debrief && titleT > 0) {
+    ctx.globalAlpha = titleT;
+    ctx.fillStyle = '#aaddff';
+    ctx.font = `${compact ? 10 : 14}px monospace`;
+    ctx.textAlign = 'center';
+    const heading = debriefHeading(debrief).toUpperCase();
+    ctx.fillText(compact ? `${heading} · ${debrief.grade.letter}` : heading, w / 2, titleY + (compact ? 14 : 26) + titleOffset);
+    ctx.globalAlpha = 1;
+  }
+  if (debrief && !compact && gradeT > 0) {
+    ctx.globalAlpha = gradeT;
+    const gc = gradeColor(debrief.grade.letter);
+    ctx.textAlign = 'center';
+    ctx.shadowColor = gc;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = gc;
+    ctx.font = 'bold 40px monospace';
+    ctx.fillText(debrief.grade.letter, w / 2, titleY + 76);
+    ctx.shadowBlur = 0;
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#7fa8c0';
+    ctx.textAlign = 'right';
+    ctx.fillText('GRADE', w / 2 - 34, titleY + 70);
+    ctx.textAlign = 'left';
+    ctx.fillText(`PAR ${clock(debrief.par)}`, w / 2 + 34, titleY + 70);
+    ctx.globalAlpha = 1;
+  }
+
+  if (!compact && titleT > 0 && !debrief) {
     ctx.globalAlpha = titleT;
     ctx.strokeStyle = 'rgba(0,255,200,0.15)';
     ctx.beginPath();
@@ -496,7 +563,7 @@ export function renderLevelComplete(ctx, w, h, state) {
   }
 
   // Stats card — fades in with count-up
-  const lcCardY = compact ? titleY + 18 : h / 2 - 55;
+  const lcCardY = compact ? titleY + (debrief ? 26 : 18) : debrief ? titleY + 96 : h / 2 - 55;
   const lcCardBottom = lcCardY + statsCardHeight(statsCardData);
   if (statsT > 0) {
     ctx.globalAlpha = statsT;
@@ -508,21 +575,40 @@ export function renderLevelComplete(ctx, w, h, state) {
   }
 
   // Secrets — fades in
+  let below = lcCardBottom + (compact ? 18 : 24);
   if (secretsT > 0) {
     ctx.globalAlpha = secretsT;
     ctx.fillStyle = '#aaddff';
     ctx.font = `${compact ? 12 : 16}px monospace`;
     ctx.textAlign = 'center';
     const secretVal = Math.round((playerSecretsFound || 0) * Math.min(1, countUp));
-    ctx.fillText(`Secrets: ${secretVal}`, w / 2, lcCardBottom + (compact ? 18 : 24));
+    ctx.fillText(debrief ? debriefFootnote(debrief, secretVal) : `Secrets: ${secretVal}`, w / 2, below);
     ctx.globalAlpha = 1;
+  }
+
+  // Earned this level
+  const lines = debrief ? earnedLines(debrief.earned, compact ? 2 : h >= 700 ? 5 : 4) : [];
+  if (lines.length) {
+    const step = compact ? 13 : 18;
+    if (earnedT > 0) {
+      ctx.globalAlpha = earnedT;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcc00';
+      ctx.font = `bold ${compact ? 10 : 13}px monospace`;
+      ctx.fillText('EARNED THIS LEVEL', w / 2, below + step + 2);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.font = `${compact ? 10 : 13}px monospace`;
+      lines.forEach((line, i) => ctx.fillText(line, w / 2, below + step * (i + 2) + 2));
+      ctx.globalAlpha = 1;
+    }
+    below += step * (lines.length + 1) + 4;
   }
 
   // Continue prompt — fades in last
   if (promptT > 0) {
     const promptA = promptT * (0.4 + Math.sin(time * 0.004) * 0.3);
     keyPrompt(ctx, state, [['confirm', 'continue']], 'Tap to continue',
-      w / 2, lcCardBottom + (compact ? 40 : 52), compact ? 12 : 14, promptA, 'rgb(170,170,170)', false);
+      w / 2, below + (compact ? 22 : 28), compact ? 12 : 14, promptA, 'rgb(170,170,170)', false);
   }
   ctx.textAlign = 'left';
 
@@ -561,8 +647,8 @@ export function renderBuilderOnboarding(ctx, w, h, state) {
 
   const lines = [
     { key: 'WASD / Mouse', action: 'Move and look' },
-    { key: 'Left Click', action: 'Place block' },
-    { key: 'Right Click', action: 'Break block' },
+    { key: 'Left Click', action: 'Mine block (hold)' },
+    { key: 'Right Click', action: 'Place block' },
     { key: '1 – 9 / Wheel', action: 'Choose block' },
     { key: 'Space', action: 'Jump' },
     { key: 'T', action: 'Tool cycle (5 modes)' },
@@ -645,7 +731,7 @@ function renderGameOverModern(ctx, w, h, state, compact) {
   const btnY = h - 70;
   const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
   const btnDefs = [
-    { label: 'Restart', color: UI.amber, focus: true },
+    { label: state.mode === 'campaign' ? 'Retry Level' : 'Restart', color: UI.amber, focus: true },
     { label: 'Quit', color: UI.textDim },
     { label: 'Share', color: UI.cyan },
   ];
@@ -793,39 +879,92 @@ function renderVictoryModern(ctx, w, h, state, compact) {
 }
 
 function renderLevelCompleteModern(ctx, w, h, state, compact, t) {
-  const { time, isTouchDevice, playerSecretsFound, statsCardData } = state;
+  const { time, isTouchDevice, playerSecretsFound, statsCardData, debrief } = state;
   drawBackdrop(ctx, w, h, 'cyan', 0.96);
 
   const ease = (v) => (v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v));
   const titleT = ease(t / 0.4);
   const statsT = ease((t - 0.3) / 0.4);
+  const gradeT = ease((t - 0.45) / 0.35);
   const secretsT = ease((t - 0.6) / 0.3);
+  const earnedT = ease((t - 0.8) / 0.3);
   const promptT = ease((t - 1.0) / 0.3);
   const countUp = Math.min(1, (t - 0.3) / 0.8);
 
-  const titleY = compact ? h * 0.12 : h / 2 - 100;
+  const lift = debrief ? (compact ? 0 : 50) : 0;
+  const titleY = compact ? h * 0.12 : h / 2 - 100 - lift;
   const titleOffset = (1 - titleT) * -30;
   if (titleT > 0) {
     ctx.globalAlpha = titleT;
     drawTitle(ctx, 'Level complete', w / 2, titleY + titleOffset, compact ? 24 : 44, UI.energy);
+    if (debrief) {
+      const heading = debriefHeading(debrief);
+      drawCaption(ctx, w / 2, titleY + (compact ? 8 : 16) + titleOffset,
+        compact ? `${heading} · ${debrief.grade.letter}` : heading,
+        { size: compact ? 9 : 12, scheme: 'steel', align: 'center' });
+    }
     ctx.globalAlpha = 1;
   }
 
-  const lcCardY = compact ? titleY + 18 : h / 2 - 55;
+  // The grade against par, between the heading and the card.
+  if (debrief && !compact && gradeT > 0) {
+    ctx.globalAlpha = gradeT;
+    const gc = gradeColor(debrief.grade.letter);
+    const cy = titleY + 66;
+    drawPanel(ctx, w / 2 - 26, cy - 26, 52, 52, { variant: 'raised', accent: gc, glow: true, chamfer: 10 });
+    ctx.textAlign = 'center';
+    ctx.font = uiFont(34, 900);
+    ctx.fillStyle = gc;
+    ctx.fillText(debrief.grade.letter, w / 2, cy + 12);
+    ctx.font = uiFont(12, 700);
+    ctx.fillStyle = UI.textDim;
+    ctx.letterSpacing = '1px';
+    ctx.textAlign = 'right';
+    ctx.fillText('GRADE', w / 2 - 38, cy + 5);
+    ctx.textAlign = 'left';
+    ctx.fillText(`PAR ${clock(debrief.par)}`, w / 2 + 38, cy + 5);
+    ctx.letterSpacing = '0px';
+    ctx.globalAlpha = 1;
+  }
+
+  const lcCardY = compact ? titleY + (debrief ? 30 : 18) : debrief ? titleY + 100 : h / 2 - 55;
   const lcCardBottom = lcCardY + statsCardHeight(statsCardData);
   if (statsT > 0) {
     ctx.globalAlpha = statsT;
     renderStatsCard(ctx, w, lcCardY, UI.energy, '#dfe9f3', countUp, statsCardData);
     ctx.globalAlpha = 1;
   }
+  let below = lcCardBottom + (compact ? 6 : 10);
   if (secretsT > 0) {
     ctx.globalAlpha = secretsT;
     const secretVal = Math.round((playerSecretsFound || 0) * Math.min(1, countUp));
-    drawCaption(ctx, w / 2, lcCardBottom + (compact ? 6 : 10), `Secrets found: ${secretVal}`, { size: compact ? 10 : 12, scheme: 'steel', align: 'center' });
+    drawCaption(ctx, w / 2, below, debrief ? debriefFootnote(debrief, secretVal) : `Secrets found: ${secretVal}`,
+      { size: compact ? 10 : 12, scheme: 'steel', align: 'center' });
     ctx.globalAlpha = 1;
   }
+  below += compact ? 18 : 24;
+
+  const lines = debrief ? earnedLines(debrief.earned, compact ? 2 : h >= 700 ? 5 : 4) : [];
+  if (lines.length) {
+    const step = compact ? 13 : 18;
+    if (earnedT > 0) {
+      ctx.globalAlpha = earnedT;
+      ctx.textAlign = 'center';
+      ctx.font = uiFont(compact ? 9 : 11, 800);
+      ctx.letterSpacing = '2px';
+      ctx.fillStyle = UI.gold;
+      ctx.fillText('EARNED THIS LEVEL', w / 2, below + step - 2);
+      ctx.letterSpacing = '0px';
+      ctx.font = uiFont(compact ? 10 : 13, 600);
+      ctx.fillStyle = '#f4e6bf';
+      lines.forEach((line, i) => ctx.fillText(line, w / 2, below + step * (i + 2) - 2));
+      ctx.globalAlpha = 1;
+    }
+    below += step * (lines.length + 1) + 2;
+  }
+
   if (promptT > 0) {
-    keyPrompt(ctx, state, [['confirm', 'continue']], 'Tap to continue', w / 2, lcCardBottom + (compact ? 40 : 56),
+    keyPrompt(ctx, state, [['confirm', 'continue']], 'Tap to continue', w / 2, below + (compact ? 18 : 26),
       compact ? 11 : 13, promptT * (0.55 + Math.sin(time * 0.004) * 0.3), HINT_COLOR, true);
   }
   ctx.textAlign = 'left';

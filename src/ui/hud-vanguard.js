@@ -30,13 +30,15 @@ import {
   blitSprite,
 } from "./hud-skin.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
-import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar } from "./hud-modern.js";
+import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar, hudAnchors } from "./hud-modern.js";
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../../js/data.js";
 import { reticlePoint } from "../systems/aim.js";
+import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
+import { ammoTint } from "./reload-hud.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -63,7 +65,8 @@ const wrapPi = (a) => {
 };
 
 function elapsed(game) {
-  const s = Math.floor((performance.now() - game.roundStartTime) / 1000);
+  // The prologue starts its clock a beat ahead; never print a negative time.
+  const s = Math.max(0, Math.floor((performance.now() - game.roundStartTime) / 1000));
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
@@ -409,7 +412,7 @@ function drawVitalsReadout(game, ctx, x, cy, f, fs, low, compact) {
   // Angled stamina / chrono bars.
   const bw = Math.round((compact ? 92 : 150) * f);
   const bh = Math.max(3, Math.round((compact ? 4 : 5) * f));
-  const staminaPct = p.stamina / p.maxStamina;
+  const staminaPct = p.stamina / (p.staminaCap ?? p.maxStamina);
   const chronoPct = p.chronoEnergy / p.maxChronoEnergy;
   const active = p.isSprinting || p.isDashing;
   const stColor = p.isDashing ? UI.dash : p.isSprinting ? UI.amber : staminaPct > 0.3 ? UI.cyan : UI.crimson;
@@ -451,9 +454,9 @@ function drawWeaponSilhouette(ctx, wep, x, y, W, H, alpha, heat) {
   if (!layers) return;
   ctx.globalAlpha = alpha * (HT.realistic ? 0.82 : 1);
   ctx.drawImage(layers.body, x, y, W, H);
-  // Realistic: no neon emissive channel, only the heat build-up below.
-  if (layers.glow && !HT.realistic) {
-    ctx.globalAlpha = alpha * (0.75 + 0.25 * Math.sin(M.now * 0.004));
+  // Realistic: the energy parts sit steady and dim, no neon breathing.
+  if (layers.glow) {
+    ctx.globalAlpha = alpha * (HT.realistic ? 0.5 : 0.75 + 0.25 * Math.sin(M.now * 0.004));
     ctx.drawImage(layers.glow, x, y, W, H);
   }
   // Sustained fire: the emissive channels run hot orange.
@@ -507,7 +510,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   const ammo = p.ammo;
   const sidearm = wep && wep.id === 0; // the pistol never spends ammo
   const empty = !!wep && !sidearm && ammo < (wep.ammoPerShot || 1);
-  const low = !sidearm && ammo <= 10;
+  const low = !sidearm && (p.ammoLow ?? ammo <= 10);
   const numSize = Math.round((compact ? 30 : 56) * fs);
   const blink = Math.sin(M.now * 0.012) > 0;
 
@@ -515,7 +518,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   const shot = since(M.shotAt, 160);
   const kick = shot >= 0 ? 1 - shot : 0;
   const lowPulse = low ? 0.5 + 0.5 * Math.sin(M.now * 0.009) : 0;
-  const numStr = `${ammo}`;
+  const numStr = `${p.ammoLabel ?? ammo}`;
   ctx.font = uiFont(numSize, 800);
   const nw = ctx.measureText(numStr).width;
   if (low && !compact) {
@@ -530,6 +533,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   ctx.scale(sc, sc);
   ctx.translate(0, -kick * 2);
   ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
   if (HT.outline) {
     ctx.lineJoin = "round";
     ctx.lineWidth = 4;
@@ -537,7 +541,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
     ctx.strokeText(numStr, 0, 0);
   }
   // Realistic: running low is a warning (amber); only an empty mag goes red.
-  ctx.fillStyle = kick > 0.55 ? UI.flash : empty ? UI.crimson : low ? (HT.realistic ? (lowPulse > 0.5 ? UI.amber : UI.ammoLowPale) : lowPulse > 0.5 ? UI.critText : UI.ammoLowPale) : UI.ammo;
+  ctx.fillStyle = kick > 0.55 ? UI.flash : ammoTint(game, empty ? UI.crimson : low ? (HT.realistic ? (lowPulse > 0.5 ? UI.amber : UI.ammoLowPale) : lowPulse > 0.5 ? UI.critText : UI.ammoLowPale) : UI.ammo);
   ctx.fillText(numStr, 0, 0);
   ctx.restore();
 
@@ -548,25 +552,27 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
       empty || low ? (blink ? (warn ? UI.amber : UI.crimson) : warn ? UI.ammoLowPale : UI.critSoft) : UI.textDim, "right", 800, 2);
   }
 
-  // Round pips (last 30) with the spent round dropping out.
+  // The magazine's rounds as pips (up to 30), the spent round dropping out.
   if (!compact) {
-    const pips = Math.min(ammo, 30);
+    const slots = Math.min(30, wep ? p.magSizeOf?.(wep.id) ?? 30 : 30);
+    const loaded = wep && p.loadedOf ? p.loadedOf(wep.id) : ammo;
+    const pips = Math.min(loaded, slots);
     const pw = 3;
     const gap = 2;
     const py = bottom + 10;
     const ph = HT.outline ? 7 : 5;
     if (HT.outline) {
       ctx.fillStyle = UI.ink;
-      ctx.fillRect(right - 30 * (pw + gap) - 1, py - 1, 30 * (pw + gap) + 1, 9);
+      ctx.fillRect(right - slots * (pw + gap) - 1, py - 1, slots * (pw + gap) + 1, 9);
     }
     const pipColor = low
       ? (HT.realistic ? UI.amber : `rgba(255,42,74,${(0.55 + 0.45 * lowPulse).toFixed(3)})`)
-      : UI.pip;
-    for (let i = 0; i < 30; i++) {
+      : ammoTint(game, UI.pip);
+    for (let i = 0; i < slots; i++) {
       ctx.fillStyle = i < pips ? pipColor : UI.pipEmpty;
       ctx.fillRect(right - (i + 1) * (pw + gap), py, pw, ph);
     }
-    if (shot >= 0 && ammo < 30 && !sidearm) {
+    if (shot >= 0 && pips < slots) {
       const x = right - (pips + 1) * (pw + gap);
       ctx.globalAlpha = 1 - shot;
       ctx.fillStyle = UI.pipSpent;
@@ -803,8 +809,9 @@ function drawCompass(game, ctx, cx, y, W, compact) {
   const exit = game.objectiveWaypoint ? null : findExit(game);
   const wp = game.objectiveWaypoint || exit;
   if (wp) {
-    // The exit reads dim until the level is cleared, then lights up.
-    const cleared = !exit || (game.totalEnemies > 0 && game.killedEnemies >= game.totalEnemies);
+    // The exit reads dim while it is sealed (power cells, a lockdown) and
+    // lights up once it is open, which on an ungated level is from the start.
+    const open = !exit || exitIsOpen(exit);
     const rel = bearingTo(wp.x, wp.y);
     const clamped = Math.max(-RANGE, Math.min(RANGE, rel));
     const x = cx + clamped * ppd;
@@ -815,7 +822,7 @@ function drawCompass(game, ctx, cx, y, W, compact) {
       ctx.moveTo(x, mid - r - 2); ctx.lineTo(x + r + 2, mid); ctx.lineTo(x, mid + r + 2); ctx.lineTo(x - r - 2, mid);
       ctx.fill();
     }
-    const pulse = cleared ? 0.7 + 0.3 * Math.sin(M.now * 0.008) : 0.35;
+    const pulse = open ? 0.7 + 0.3 * Math.sin(M.now * 0.008) : 0.35;
     ctx.fillStyle = `rgba(${UI.objectiveRGB},${(real ? pulse * 0.35 : pulse).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(x, mid - r); ctx.lineTo(x + r, mid); ctx.lineTo(x, mid + r); ctx.lineTo(x - r, mid);
@@ -830,7 +837,7 @@ function drawCompass(game, ctx, cx, y, W, compact) {
     if (!compact) {
       const dist = Math.round(Math.hypot(wp.x - p.x, wp.y - p.y) * 2);
       const tag = exit ? `EXIT ${dist}m` : `${dist}m`;
-      ctx.globalAlpha = cleared ? 1 : 0.55;
+      ctx.globalAlpha = open ? 1 : 0.55;
       text(ctx, Math.abs(rel) > RANGE ? (rel < 0 ? `◀ ${tag}` : `${tag} ▶`) : tag, x, y + H + 18, 10, UI.energy, "center", 700, 1);
       ctx.globalAlpha = 1;
     }
@@ -869,8 +876,9 @@ export function drawVanguardThreatRing(game, ctx, w, h, barH = 0) {
   if (hit >= 0) {
     const kill = since(M.killConfirmAt, 420);
     const rr = r * (0.34 - 0.06 * easeOut(hit));
-    ctx.globalAlpha = 1 - hit;
-    const col = M.hitCrit ? UI.gold : UI.flash;
+    // A shield-blocked round flashes them grey and faint: it did not land.
+    ctx.globalAlpha = (1 - hit) * (M.hitBlocked ? 0.6 : 1);
+    const col = M.hitBlocked ? "#9aa3ad" : M.hitCrit ? UI.gold : UI.flash;
     for (let i = 0; i < 4; i++) {
       const a = Math.PI / 4 + (i * Math.PI) / 2;
       if (ink) arc(ctx, cx, cy, rr, a - 0.2, a + 0.2, 4, UI.ink);
@@ -1011,6 +1019,7 @@ export function renderVanguardPanels(game, ctx, w, h, f, portraitState, minimapS
   ctx.scale(k, k);
   layoutVanguardPanels(game, ctx, w / k, h / k, f, portraitState, minimapState);
   ctx.restore();
+  hudAnchors.stackBottom *= k;
 }
 
 function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
@@ -1042,6 +1051,7 @@ function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
     if (game.mode === "campaign" && game.ngPlusCycle > 0) {
       drawCaption(ctx, x, y + 1, game.ngPlusCycle >= 3 ? "NG+3 FINAL" : `NG+${game.ngPlusCycle}`, { size: Math.round(9 * fs), scheme: game.ngPlusCycle >= 3 ? "amber" : "violet" });
     }
+    hudAnchors.stackBottom = y + 26;
   }
 
   // Top-centre compass + boss.
@@ -1115,6 +1125,7 @@ export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   ctx.fillStyle = UI.textDim;
   ctx.textAlign = "left";
   ctx.fillText(`${clock}${clock ? "  ·  " : ""}${diff}`, g.right, by + 8);
+  hudAnchors.stackBottom = Math.max(by + 14, gcy + R + tw + 12);
 
   const cw = Math.round(w * 0.24);
   drawCompass(game, ctx, w / 2 - w * 0.04, 6, cw, true);

@@ -12,9 +12,10 @@
  */
 
 import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
-import { createScene } from "./viewmodel/geom.js";
+import { createScene, mix, INK } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
-import { WEAPON_MODELS } from "./viewmodel/weapons.js";
+import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
+import { activeFinish, finishKey } from "../../data/weapon-skins.js";
 import { smoothDamp } from "../../systems/aim.js";
 import { isRealisticArt } from "../art-style.js";
 
@@ -23,7 +24,17 @@ const DEFS =
   `<linearGradient id="vmDepth" x1="0" y1="0" x2="0" y2="1">` +
   `<stop offset="0" stop-color="#02040a" stop-opacity=".4"/><stop offset=".55" stop-color="#02040a" stop-opacity=".08"/>` +
   `<stop offset="1" stop-color="#02040a" stop-opacity="0"/></linearGradient>` +
-  HAND_DEFS;
+  // Brushed sweep over a lit metal face: a soft highlight band near its lit
+  // corner, falling to shade at the far one.
+  `<linearGradient id="vmSheen" x1="0" y1="0" x2="1" y2="1">` +
+  `<stop offset="0" stop-color="#ffffff" stop-opacity=".06"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".2"/>` +
+  `<stop offset=".5" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".3"/></linearGradient>` +
+  // Polymer grain: a fine stipple of tone, in viewmodel units.
+  `<pattern id="vmGrain" patternUnits="userSpaceOnUse" width="1.6" height="1.6">` +
+  `<rect width=".4" height=".4" fill="#fff" opacity=".06"/><rect x=".8" y=".8" width=".4" height=".4" fill="#fff" opacity=".05"/>` +
+  `<rect x=".8" width=".4" height=".4" fill="#000" opacity=".16"/><rect y=".8" x=".2" width=".4" height=".4" fill="#000" opacity=".12"/></pattern>` +
+  HAND_DEFS +
+  SKIN_PATTERN_DEFS();
 
 // Weapon bloom goes under the gloves so a hand covering an emitter hides it;
 // sleeve trim bloom goes on top.
@@ -34,15 +45,68 @@ const UNIT = 4;
 const LIMIT = { x0: -240, x1: 240, y0: -100, y1: 170 };
 const MAX_SIDE_PX = 1100;
 
-const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}` -> viewmodel
+const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}|${finish}` -> viewmodel
 
-function build(id, accent, pose, tier = "hi", real = false) {
-  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}`;
+/**
+ * Overlay patterns for weapon finishes, in viewmodel units, as tone only
+ * (black and white at low alpha) so they sit on any finish's colours.
+ */
+function SKIN_PATTERN_DEFS() {
+  const P = (id, w, h, body, extra = "") =>
+    `<pattern id="skp-${id}" patternUnits="userSpaceOnUse" width="${w}" height="${h}"${extra}>${body}</pattern>`;
+  return (
+    P("carbon", 3, 3,
+      `<rect width="1.5" height="1.5" fill="#fff" opacity=".08"/><rect x="1.5" y="1.5" width="1.5" height="1.5" fill="#fff" opacity=".08"/>` +
+      `<rect x="1.5" width="1.5" height="1.5" fill="#000" opacity=".2"/><rect y="1.5" width="1.5" height="1.5" fill="#000" opacity=".2"/>`) +
+    P("hex", 6, 10.392,
+      `<path d="M3,0 L6,1.732 L6,5.196 L3,6.928 L0,5.196 L0,1.732 Z M0,8.66 L3,10.392 M6,8.66 L3,10.392 M3,6.928 L3,10.392" fill="none" stroke="#fff" stroke-width=".35" opacity=".2"/>`) +
+    P("camo", 26, 26,
+      `<path d="M0,4 L9,1 L14,7 L8,12 L2,10 Z M15,14 L24,11 L26,19 L18,24 L13,20 Z M3,17 L9,15 L11,22 L5,25 Z" fill="#000" opacity=".28"/>` +
+      `<path d="M16,2 L22,3 L20,8 L15,7 Z M8,19 L12,18 L11,21 Z" fill="#fff" opacity=".1"/>`) +
+    P("stripes", 8, 8, `<rect width="2.6" height="8" fill="#000" opacity=".3"/>`, ` patternTransform="rotate(-32)"`) +
+    P("digital", 8, 8,
+      `<g fill="#000" opacity=".26"><rect x="0" y="0" width="2" height="2"/><rect x="2" y="0" width="2" height="2"/><rect x="4" y="4" width="2" height="2"/><rect x="6" y="6" width="2" height="2"/><rect x="2" y="6" width="2" height="2"/></g>` +
+      `<g fill="#fff" opacity=".1"><rect x="6" y="0" width="2" height="2"/><rect x="0" y="4" width="2" height="2"/><rect x="4" y="2" width="2" height="2"/></g>`)
+  );
+}
+
+const sceneSkins = new Map(); // finish key -> scene skin
+
+/**
+ * Keep a cache to its newest `max` entries. A finish maker's colour drag
+ * makes a new finish on every input event, and each would stay forever.
+ */
+function capCache(map, max = 48) {
+  while (map.size > max) map.delete(map.keys().next().value);
+}
+/** A weapon finish as the scene applies it: material ramps by role, and its pattern. */
+function sceneSkin(finish) {
+  if (!finish) return null;
+  const key = finishKey(finish);
+  let s = sceneSkins.get(key);
+  if (!s) {
+    const remap = new Map();
+    for (const m of MATERIALS.metal) remap.set(m, finish.primary);
+    for (const m of MATERIALS.trim) remap.set(m, finish.secondary);
+    for (const m of MATERIALS.grip) remap.set(m, finish.grip);
+    s = { remap, pattern: finish.pattern ? `skp-${finish.pattern}` : null };
+    sceneSkins.set(key, s);
+    capCache(sceneSkins);
+  }
+  return s;
+}
+
+/**
+ * The viewmodel for weapon `id` in `pose`, wearing `finish` (by default the
+ * one the player chose for that weapon; src/data/weapon-skins.js).
+ */
+function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id)) {
+  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}|${finishKey(finish)}`;
   let vm = built.get(key);
   if (vm) return vm;
   const model = WEAPON_MODELS[id];
   if (!model) return null;
-  const sc = createScene(model.cams[pose], accent, { real });
+  const sc = createScene(model.cams[pose], finish?.energy ?? accent, { real, skin: sceneSkin(finish) });
   sc.detailPx = tier === "lo" ? 2 : 4;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
@@ -78,15 +142,30 @@ let warmReal = false;
  * art. Queued, as any prefetch: on an art style change they used to decode
  * at once, a weapon a frame, each frame 50-80 ms.
  */
-function warmStep(accent, px, tier, real) {
+function warmStep(accent, px, tier, real, owned = null) {
   if (!warmQueue || warmReal !== real) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
     warmReal = real;
   }
-  const next = warmQueue.shift();
+  // The guns in hand first: a weapon just picked up, or one the player can
+  // switch to now, jumps the queue ahead of the rest of the arsenal.
+  if (owned?.length && !owned.includes(warmQueue[0]?.[0])) {
+    const i = warmQueue.findIndex(([id]) => owned.includes(id));
+    if (i > 0) warmQueue.unshift(...warmQueue.splice(i, 1));
+  }
+  const next = warmQueue[0];
   if (!next) return;
   const vm = build(next[0], accent, next[1], tier, real);
-  if (vm) request(vm, px, true);
+  // Stay on a weapon until every layer is baked, not just decoded: the bake
+  // is the costly part (the GPU rasterises the SVG), and left to the first
+  // frame a weapon was drawn it made switching to it a 60-110 ms hitch.
+  let baked = true;
+  for (const L of vm?.layers ?? []) {
+    const scale = layerScale(px, L.box);
+    getLayerImage(L.id, L.box, DEFS, L.markup, scale, true);
+    if (!layerBaked(L.id, scale)) baked = false;
+  }
+  if (baked) warmQueue.shift();
 }
 
 /**
@@ -134,6 +213,19 @@ const rig = { t: 0, sx: 0, sy: 0, ox: 0, oy: 0, vsx: 0, vsy: 0, vox: 0, voy: 0 }
 const HIP_DROP = 12;
 // Blend at which the hip rig has swung onto the ADS anchors; the rest cross-fades art.
 const MORPH_END = 0.55;
+/**
+ * The aimed pose drawn smaller, about its sight (the pose's origin sits on
+ * the reticle, so the sight stays put): full size, the gun and gloves filled
+ * the middle of the screen below the aim point and hid what you shot at.
+ */
+const ADS_SCALE = 0.58;
+/**
+ * Aimed in, the gun drops this fraction of the view below the aim point and
+ * the suit projects the sight there instead (drawAdsSight in
+ * src/ui/crosshair.js): with the sight on the reticle, the gun's body sat
+ * right under it and hid the target you were aiming at.
+ */
+const ADS_DROP = 0.2;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const smoothstep = (t) => t * t * (3 - 2 * t);
@@ -343,6 +435,49 @@ function realisticFlash(ctx, x, y, fk, alpha) {
   ctx.restore();
 }
 
+// Comic flash burst outline, reused: a star of 2n points (unit radius).
+const burst = [];
+/**
+ * Comic muzzle flash for a single frame: an inked star burst of uneven rays
+ * (new every shot) in the suit's energy colour, a pale inner star and a
+ * white-hot core, over a soft accent glow. In viewmodel units around (x, y).
+ */
+function comicFlash(ctx, x, y, fk, accent, drawGlow) {
+  drawGlow(ctx, x, y, 34 * fk, accent, 0.45);
+  const n = 6 + ((Math.random() * 3) | 0);
+  const spin = Math.random() * Math.PI * 2;
+  burst.length = 0;
+  for (let i = 0; i < n * 2; i++) {
+    const a = spin + (i / (n * 2)) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+    const r = i % 2 ? 0.38 + Math.random() * 0.08 : 0.72 + Math.random() * 0.36;
+    burst.push(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const star = (R) => {
+    ctx.beginPath();
+    for (let i = 0; i < burst.length; i += 2) ctx[i ? "lineTo" : "moveTo"](burst[i] * R, burst[i + 1] * R);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineJoin = "round";
+  star(24 * fk);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+  star(15 * fk);
+  ctx.fillStyle = mix(accent, "#ffffff", 0.6);
+  ctx.fill();
+  star(7.5 * fk);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.restore();
+}
+
+/** True when weapon `id` has a vector viewmodel (decoded or not). */
+export const hasViewmodel = (id) => !!WEAPON_MODELS[id];
+
 /**
  * Draw the modern viewmodel with its own pose, driven by the same bob / sway /
  * kick / recoil inputs as the procedural one plus the eased aim blend.
@@ -351,7 +486,7 @@ function realisticFlash(ctx, x, y, fk, alpha) {
  *
  * @param {number} alpha   viewmodel visibility (fades out off-gameplay screens)
  * @param {number} blend   aim-down-sights blend, 0 hip … 1 aimed
- * @returns {boolean} false while bitmaps decode or without a DOM (caller draws procedural art)
+ * @returns {boolean} false while bitmaps decode (caller draws nothing, see hasViewmodel) or without a DOM (caller draws procedural art)
  */
 export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 0) {
   // Headless/mock contexts (unit tests, no DOM) keep the procedural model.
@@ -369,7 +504,7 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   // Both poses stay decoded so the blend never has to fall back mid-motion.
   const hipImgs = request(hip, px);
   const aimImgs = request(aim, px);
-  warmStep(accent, px, tier, real);
+  warmStep(accent, px, tier, real, o.owned);
   const b = clamp01(blend);
   const s = smoothstep(clamp01(b / MORPH_END));
   const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
@@ -402,13 +537,15 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   // Crouching drops the weapon and tucks it toward the chest. It fades out as
   // the sights come up, or a crouched ADS shot would no longer meet the reticle.
   const crouch = (o.crouchBlend || 0) * (1 - b);
+  // A slide drops it further and rolls it with the camera, also gone aimed.
+  const slide = (o.slideBlend || 0) * (1 - b);
   const cx = w / 2 + Math.sin(weaponBob) * bobMulX * vf + rig.sx * swayK * vf + rig.ox * w * follow +
-    Math.sin(breath * 1.1) * 1.6 * vf * calm - crouch * 11 * vf;
-  const cy = lerp(hipCy, viewH / 2, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
+    Math.sin(breath * 1.1) * 1.6 * vf * calm - (crouch * 11 + slide * 10) * vf;
+  const cy = lerp(hipCy, viewH / 2 + ADS_DROP * viewH, b) + Math.abs(Math.cos(weaponBob)) * bobMulY * vf + rig.sy * swayK * vf +
     weaponKick * 40 * lerp(1, 0.45, b) * vf + rig.oy * viewH * follow + Math.sin(breath * 1.7) * 2.2 * vf * calm +
-    crouch * 26 * vf;
+    (crouch * 26 + slide * 20) * vf;
   const tilt = (isSprinting ? Math.sin(weaponBob) * 0.06 * (1 - b) : 0) + rig.sx * -0.0022 * lerp(1, 0.2, b) +
-    rig.ox * 0.5 * (1 - b) + Math.sin(breath * 0.9) * 0.006 * calm + crouch * 0.05;
+    rig.ox * 0.5 * (1 - b) + Math.sin(breath * 0.9) * 0.006 * calm + crouch * 0.05 + slide * 0.09;
 
   const map = morph(hip, aim, s);
   const dom = u < 0.5 ? hip : aim;
@@ -420,14 +557,16 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const trace = globalThis.__ccViewmodelTrace;
   if (trace) {
     const [ax, ay] = map(hip.pivot); // continuous through the swap: lands on the ADS grip
-    trace.push({ t: now, x: cx, y: cy, tilt, blend: b, pose: dom === hip ? "hip" : "ads", mx: cx + ax * UNIT * vf, my: cy + ay * UNIT * vf });
+    const ks = UNIT * vf * lerp(1, ADS_SCALE, u);
+    trace.push({ t: now, x: cx, y: cy, tilt, blend: b, pose: dom === hip ? "hip" : "ads", mx: cx + ax * ks, my: cy + ay * ks });
   }
 
   ctx.save();
   ctx.globalAlpha *= alpha;
   const base = ctx.globalAlpha;
   ctx.translate(cx, cy);
-  ctx.scale(UNIT * vf, UNIT * vf);
+  const k = UNIT * vf * lerp(1, ADS_SCALE, u);
+  ctx.scale(k, k);
   if (b < 1) {
     ctx.globalAlpha = base * (1 - b);
     ctx.fillStyle = contactShadow(ctx);
@@ -445,23 +584,14 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   if (tilt + recoil) ctx.rotate(tilt + recoil);
   ctx.translate(-pvx, -pvy);
 
-  const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4));
+  // Aimed, the flash shrinks to a spark round the muzzle, so the burst never
+  // washes over the target under the reticle.
+  const fk = Math.min(1, Math.max(0.45, dom.muzzleK * 4)) * lerp(1, 0.4, b);
   // Muzzle flash sits behind the barrel so the crown occludes its base.
   if (frame === 1 && real) {
     realisticFlash(ctx, mx, my - 2, fk, base);
   } else if (frame === 1) {
-    drawGlow(ctx, mx, my - 2, 32 * fk, accent, 0.4);
-    drawGlow(ctx, mx, my - 2, 12 * fk, "#ffffff", 0.8);
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2 * fk;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + time * 0.05;
-      const len = (15 + Math.random() * 20) * fk;
-      ctx.beginPath();
-      ctx.moveTo(mx + Math.cos(a) * 8 * fk, my - 2 + Math.sin(a) * 8 * fk);
-      ctx.lineTo(mx + Math.cos(a) * len, my - 2 + Math.sin(a) * len);
-      ctx.stroke();
-    }
+    comicFlash(ctx, mx, my - 2, fk, accent, drawGlow);
   }
 
   const since = time - (lastFireTime || 0);
@@ -520,6 +650,44 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   }
   ctx.restore();
   return true;
+}
+
+// Side profiles: millimetres to icon units; a pistol (~200 mm) comes out ~140 wide.
+const PROFILE_SCALE = 0.7;
+const profiles = new Map(); // `${id}|${accent}` -> profile
+
+/**
+ * A weapon's side profile from the same model the viewmodel is built from —
+ * left flank, muzzle right, orthographic, no hands — so a HUD icon is the gun
+ * in hand rather than separate art. The gloves paint into a scene of their
+ * own that is thrown away: the builders interleave hand and weapon calls, and
+ * the weapon's layers stay clean. Returns { defs, body, glow, box [x, y, w, h] }
+ * in icon units, or null for an unknown id.
+ */
+export function weaponProfile(id, accent, finish = activeFinish(id)) {
+  const key = `${id}|${accent}|${finishKey(finish)}`;
+  let p = profiles.get(key);
+  if (p !== undefined) return p;
+  const model = WEAPON_MODELS[id];
+  p = null;
+  if (model) {
+    const cam = { side: true, scale: PROFILE_SCALE };
+    const sc = createScene(cam, accent, { skin: sceneSkin(finish) });
+    sc.detailPx = 4;
+    const hands = createScene(cam, accent);
+    hands.detailPx = 4;
+    model.build(sc, createHandArt(hands), "hip");
+    const body = sc.layers.body;
+    const glow = sc.layers.glow;
+    const x0 = Math.min(body.min[0], glow?.min[0] ?? Infinity);
+    const y0 = Math.min(body.min[1], glow?.min[1] ?? Infinity);
+    const x1 = Math.max(body.max[0], glow?.max[0] ?? -Infinity);
+    const y1 = Math.max(body.max[1], glow?.max[1] ?? -Infinity);
+    p = { defs: DEFS, body: body.svg, glow: glow?.svg ?? "", box: [x0, y0, x1 - x0, y1 - y0] };
+  }
+  profiles.set(key, p);
+  capCache(profiles, 96);
+  return p;
 }
 
 /** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose. */

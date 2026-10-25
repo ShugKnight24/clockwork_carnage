@@ -96,7 +96,7 @@ export function setCastCharacter(character) {
   if (castLook && typeof requestIdleCallback === "function") {
     const hash = castHash;
     requestIdleCallback(() => {
-      if (hash !== castHash || !isModernArt()) return;
+      if (hash !== castHash) return;
       for (const key of CAST_KEYS) modelEntry(key);
     });
   }
@@ -135,11 +135,31 @@ function modelEntry(key) {
 const isModel = (key) => key in MODELS || partyMembers(key) !== null;
 
 export const hasSvgArt = isModel;
+
+/**
+ * A model's box as drawSvgArt draws it, display scale included, in art units
+ * about the anchor: [x, y, w, h], or null for keys with no model. Callers
+ * use it to frame the figure (cutscenes fit it above their text).
+ */
+export function svgArtBox(key) {
+  if (!isModel(key)) return null;
+  const e = modelEntry(key);
+  if (!e) return null;
+  const d = displayScale(key);
+  const [bx, by, bw, bh] = e.model.box;
+  return [bx * d, by * d, bw * d, bh * d];
+}
 export const hasSvgBg = (key) => key in BACKGROUNDS;
 
+/**
+ * Device pixels per art unit: the larger axis, so a squash on one axis (the
+ * flipbook's page turn shrinks x toward 0) keeps the bitmap size instead of
+ * stepping down through a new size bucket — a fresh downscale or SVG decode
+ * — every few frames of every turn.
+ */
 function pixelScale(ctx) {
   const m = ctx.getTransform();
-  return Math.hypot(m.a, m.b) || 1;
+  return Math.max(Math.hypot(m.a, m.b), Math.hypot(m.c, m.d)) || 1;
 }
 
 function applyAnim(ctx, anim, t) {
@@ -185,14 +205,60 @@ function applyAnim(ctx, anim, t) {
 }
 
 /**
+ * Each layer's bitmap box: its content's bounds (plus room for blur), not the
+ * model's whole box. Background layers are mostly one glow, beam or spinning
+ * part on an otherwise empty full-frame layer, and each was rasterised and
+ * blended at full frame — ~8 full-screen blits a frame in the flipbook, two
+ * pages' worth during a turn. Transparent pixels add nothing under these
+ * blends (source-over, lighter, screen), so drawing only the content's box
+ * looks the same. Measured once per layer through the SVG DOM.
+ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+const TRIM_PAD = 48; // art units: the widest blur (σ 8) reaches ~24 past the geometry
+const _trim = new Map(); // layer id -> [x, y, w, h]
+function layerBox(lid, model, layer) {
+  let box = _trim.get(lid);
+  if (box) return box;
+  box = model.box;
+  if (typeof document !== "undefined" && document.body) {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    try {
+      const [bx, by, bw, bh] = model.box;
+      svg.setAttribute("viewBox", `${bx} ${by} ${bw} ${bh}`);
+      svg.setAttribute("width", "1");
+      svg.setAttribute("height", "1");
+      svg.style.cssText = "position:absolute;left:-10000px;top:0;visibility:hidden";
+      svg.innerHTML = `<defs>${model.defs || ""}</defs><g>${layer.markup}</g>`;
+      document.body.appendChild(svg);
+      const r = svg.lastElementChild.getBBox();
+      if (r.width > 0 && r.height > 0) {
+        const x0 = Math.max(bx, r.x - TRIM_PAD);
+        const y0 = Math.max(by, r.y - TRIM_PAD);
+        const x1 = Math.min(bx + bw, r.x + r.width + TRIM_PAD);
+        const y1 = Math.min(by + bh, r.y + r.height + TRIM_PAD);
+        // Not worth a box of its own when it already fills most of the frame.
+        if ((x1 - x0) * (y1 - y0) < bw * bh * 0.8) box = [x0, y0, x1 - x0, y1 - y0];
+      }
+    } catch (_) {
+      // Unmeasurable markup keeps the full box.
+    }
+    svg.remove();
+  }
+  _trim.set(lid, box);
+  return box;
+}
+
+/**
  * Draw every layer of a model into its box. Returns false if no layer has a
  * decoded bitmap yet, so the caller can fall back to procedural art.
+ * `trim` draws each layer from its content's box (layerBox).
  */
-function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale) {
+function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale, trim = false) {
   const [bx, by, bw, bh] = model.box;
   const scale = pixelScale(ctx) * unitScale;
+  const boxes = model.layers.map((layer, i) => (trim ? layerBox(`${id}:${i}`, model, layer) : model.box));
   const images = model.layers.map((layer, i) =>
-    getLayerImage(`${id}:${i}`, model.box, model.defs || "", layer.markup, scale),
+    getLayerImage(`${id}:${i}`, boxes[i], model.defs || "", layer.markup, scale),
   );
   if (!images[0]) return false;
 
@@ -209,7 +275,8 @@ function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale) {
     const a = layer.anim ? applyAnim(ctx, layer.anim, t) : 1;
     ctx.globalAlpha = groupAlpha * a * (layer.opacity ?? 1);
     if (layer.blend) ctx.globalCompositeOperation = layer.blend;
-    ctx.drawImage(img, bx, by, bw, bh);
+    const [lx, ly, lw, lh] = boxes[i];
+    ctx.drawImage(img, lx, ly, lw, lh);
     ctx.restore();
   });
   ctx.restore();
@@ -221,9 +288,30 @@ function drawLayers(ctx, id, model, t, dx, dy, dw, dh, unitScale) {
  * Adds the standard entrance: 1.2s fade with a 0.9→1 scale settle.
  * @returns {boolean} true if drawn
  */
+const lastDrawn = new Map(); // art key -> the entry it last drew with
+
+// Cutscene and comic art draws in every style, Legacy included: Legacy's
+// procedural set never had most of the cast or backdrops (the Supervisor, the
+// locker room), so its pages and scenes came up empty. In-world sprites, the
+// viewmodel and the HUD keep their own Legacy drawing.
 export function drawSvgArt(ctx, key, t) {
-  if (!isModernArt() || !isModel(key)) return false;
-  const { id, model } = modelEntry(key);
+  if (!isModel(key)) return false;
+  const entry = modelEntry(key);
+  if (drawEntry(ctx, key, entry, t)) {
+    lastDrawn.set(key, entry);
+    return true;
+  }
+  // Still decoding (a new look, a new style): keep showing the last bitmap
+  // this key drew. Comic and Modern never show the procedural Legacy figure,
+  // which read as a different character flashing in before the real one;
+  // Legacy, on a slow machine, shows its own figure until the bitmaps land.
+  const prev = lastDrawn.get(key);
+  if (prev && prev !== entry) drawEntry(ctx, key, prev, t);
+  else if (!isModernArt()) return false;
+  return true;
+}
+
+function drawEntry(ctx, key, { id, model }, t) {
   const [bx, by, bw, bh] = model.box;
   ctx.save();
   const display = displayScale(key);
@@ -261,7 +349,7 @@ export function drawSvgModelAt(ctx, key, x, y, w, h, t) {
  */
 export function drawSvgBg(ctx, w, h, key, t) {
   const model = BACKGROUNDS[key];
-  if (!model || !isModernArt()) return false;
+  if (!model) return false;
   const [, , bw, bh] = model.box;
   const k = Math.max(w / bw, h / bh);
   const dw = bw * k;
@@ -270,26 +358,30 @@ export function drawSvgBg(ctx, w, h, key, t) {
   ctx.beginPath();
   ctx.rect(0, 0, w, h);
   ctx.clip();
-  const drawn = drawLayers(ctx, `bg:${key}`, model, t, (w - dw) / 2, (h - dh) / 2, dw, dh, k);
+  const drawn = drawLayers(ctx, `bg:${key}`, model, t, (w - dw) / 2, (h - dh) / 2, dw, dh, k, true);
   ctx.restore();
   return drawn;
 }
 
-/** Start decoding the bitmaps a script will need so the first frame is not procedural. */
+/**
+ * Queue the bitmaps a script will need. Queued, not started: a script's whole
+ * cast and every backdrop (~90 layers for the intro flipbook) decoded at once
+ * held the main thread for ~600 ms as it opened. Whatever the first frame
+ * draws jumps the queue, so it still is not procedural.
+ */
 export function warmSvgArt(artKeys, bgKeys, ctx, w, h) {
-  if (!isModernArt()) return;
   refreshCast();
   const base = pixelScale(ctx) * 2 * (h / 900);
   for (const key of artKeys) {
     if (!isModel(key)) continue;
     const { id, model: m } = modelEntry(key);
     const k = base * displayScale(key);
-    m.layers.forEach((l, i) => getLayerImage(`${id}:${i}`, m.box, m.defs || "", l.markup, k));
+    m.layers.forEach((l, i) => getLayerImage(`${id}:${i}`, m.box, m.defs || "", l.markup, k, true));
   }
   for (const key of bgKeys) {
     const m = BACKGROUNDS[key];
     if (!m) continue;
     const k = pixelScale(ctx) * Math.max(w / m.box[2], h / m.box[3]);
-    m.layers.forEach((l, i) => getLayerImage(`bg:${key}:${i}`, m.box, m.defs || "", l.markup, k));
+    m.layers.forEach((l, i) => getLayerImage(`bg:${key}:${i}`, layerBox(`bg:${key}:${i}`, m, l), m.defs || "", l.markup, k, true));
   }
 }

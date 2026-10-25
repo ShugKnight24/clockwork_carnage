@@ -41,11 +41,62 @@ export const DEFAULT_KEYBINDS = {
   weapon8: "Digit8",
   toggleFPS: "KeyF",
   chronoShift: "KeyQ",
-  crouch: "ControlLeft",
+  // Not Ctrl: Ctrl+W (crouch while walking forward) is the browser's
+  // close-tab shortcut, and a page cannot stop it.
+  crouch: "KeyC",
+  // One key to phase-dash the way you are moving (double-tapping a
+  // direction still works). Space is free on grid levels; the Forge's voxel
+  // worlds keep it for jumping.
+  dash: "Space",
   // Nova's Rewind and Kael's Time-Lock, once the campaign has granted them.
   chronoRewind: "KeyX",
   chronoLock: "KeyV",
+  // Aim down sights from the keyboard. Right mouse still aims; this is for a
+  // trackpad or a Magic Mouse, where a held right-click is hard or absent.
+  aim: "KeyZ",
+  // Reload; pressed again during a reload, the active reload.
+  reload: "KeyR",
+  // Hug the wall or low block in front (src/systems/cover-play.js). G is
+  // under the left hand's index finger and was free on grid levels; the
+  // Forge's own G is a different screen.
+  cover: "KeyG",
 };
+
+/** Saved keybinds older than this get the defaults that changed since. */
+export const KEYBINDS_VERSION = 4;
+
+/**
+ * Bring saved keybinds up to date. Version 2 moved crouch off Ctrl (Ctrl+W
+ * closes the tab mid-crouch) to C, and the dash from C to Space. A save from
+ * before then that still has crouch on Ctrl moves with the defaults. Version
+ * 3 added a keyboard aim key, version 4 the reload and cover keys. A save
+ * already at a version keeps what the player set for it.
+ */
+export function migrateKeybinds(saved) {
+  if (!saved || typeof saved !== "object") return {};
+  if (saved._v >= KEYBINDS_VERSION) return saved;
+  const out = { ...saved };
+  // The new home for a moved action: the default if nothing else of the
+  // player's sits on it, else the first free spare, so no key ends up doing
+  // two things.
+  const taken = (code, self) =>
+    Object.entries({ ...DEFAULT_KEYBINDS, ...out }).some(([a, c]) => a !== self && a !== "_v" && c === code);
+  const home = (self, keys) => keys.find((k) => !taken(k, self)) ?? null;
+  if (!(saved._v >= 2) && (out.crouch === "ControlLeft" || out.crouch === "ControlRight" || out.crouch == null)) {
+    if (out.dash === "KeyC" || out.dash == null) out.dash = null;
+    out.aim ??= null; // not placed yet: it must not hold the spare crouch wants
+    out.cover ??= null; // nor the cover key, which is placed last
+    out.crouch = home("crouch", ["KeyC", "KeyB", "KeyG", "KeyH"]) ?? out.crouch ?? "KeyC";
+    if (out.dash == null) out.dash = home("dash", ["Space", "KeyG", "KeyH"]);
+  }
+  // R is reload's now: aim's spares skip it, and a save whose aim already sat
+  // on R (an older migration's spare) keeps it and sends reload to the next.
+  out.reload ??= null;
+  if (out.aim == null) out.aim = home("aim", ["KeyZ", "KeyT", "KeyY"]);
+  if (out.reload == null) out.reload = home("reload", ["KeyR", "KeyT", "KeyY", "KeyH"]);
+  if (out.cover == null) out.cover = home("cover", ["KeyG", "KeyH", "KeyB", "KeyT"]);
+  return out;
+}
 
 /**
  * InputManager handles all keyboard and mouse input for the game.
@@ -122,7 +173,7 @@ export class InputManager {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_KEYBINDS);
       if (!raw) return;
-      const saved = JSON.parse(raw);
+      const saved = migrateKeybinds(JSON.parse(raw));
       for (const action of Object.keys(this.keybinds)) {
         if (
           Object.prototype.hasOwnProperty.call(saved, action) &&
@@ -131,6 +182,7 @@ export class InputManager {
           this.keybinds[action] = saved[action];
         }
       }
+      if (saved._v !== KEYBINDS_VERSION) this.saveKeybinds();
     } catch (_) {}
   }
 
@@ -139,7 +191,7 @@ export class InputManager {
    */
   saveKeybinds() {
     try {
-      localStorage.setItem(STORAGE_KEY_KEYBINDS, JSON.stringify(this.keybinds));
+      localStorage.setItem(STORAGE_KEY_KEYBINDS, JSON.stringify({ ...this.keybinds, _v: KEYBINDS_VERSION }));
     } catch (_) {}
   }
 

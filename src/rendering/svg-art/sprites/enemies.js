@@ -17,22 +17,27 @@
  *   id                      stable variant choice (falls back to spawn point)
  *   elite / champion / isElite
  *                           gold glow trim
+ *   lastFlankAt (ms)        a hit past a shield bearer's shield: the core on
+ *                           its back flares
  *   lastBlockedAt (ms) or blockFlash (> 0)
  *                           armour spark on a blocked hit; without them a hit
  *                           on the shielded front arc of a frontShield type is
  *                           treated as blocked
  *
- * `prepareEnemySprite` returns null until the bitmaps it needs have decoded, so
- * the renderer can fall back to the procedural sprite for that frame.
+ * `prepareEnemySprite` returns null until the bitmaps it needs have decoded.
+ * The renderer then draws nothing for a type `hasEnemySprite` knows, rather
+ * than flash its procedural Legacy sprite, and the procedural one otherwise.
  */
 
 import { getLayerImage, layerBaked, onRasterRelease } from "../raster.js";
 import { ENEMY_TYPES } from "../../../data/enemies.js";
+import { NPC_TYPES } from "../../../data/npcs.js";
 import { isRealisticArt } from "../../art-style.js";
 import {
   baseDefs, BASE_MATERIALS, paletteMaterials, lit, withRealisticBuild, realDefs, REAL_BASE_MATERIALS, realPaletteMaterials,
 } from "./kit.js";
-import { HUMANOIDS, HUMANOID_DEFS, SOLE } from "./humanoids.js";
+import { HUMANOIDS, HUMANOID_DEFS, SOLE, TURNED_POSES, TURNED_VIEWS } from "./humanoids.js";
+import { facingView } from "../../facing-view.js";
 import { CREATURES, CREATURE_DEFS } from "./creatures.js";
 import { BOSSES } from "./boss.js";
 
@@ -41,8 +46,31 @@ const ATTACK_MS = 240;
 const HIT_POSE_MS = 160;
 const FLASH_MS = 150;
 const SPARK_MS = 220;
+const FLANK_MS = 280;
 // `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
-const POSES = ["idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle"];
+// The back* poses are the station's people seen from behind (an NPC walking
+// away); an enemy's back* fall back to idle (a shield bearer has its own
+// turned views, below). The
+// people also walk on four frames (step A/B: both feet down, move A/B: a leg
+// swinging through), ease into a gesture through its *In frame, and the
+// civilians have their horror-beat poses (cower, frozen, slumped). A type
+// without one of these falls back to idle, which costs no extra bitmap.
+// A shield bearer's turned views (`idle@side`, `hurt@back`…, see
+// src/rendering/facing-view.js) are poses too; a type drawn from one side only
+// falls back to the front pose, which costs no extra bitmap.
+const POSES = [
+  "idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point", "backIdle", "backA", "backB",
+  "stepA", "stepB", "backStepA", "backStepB", "saluteIn", "pointIn", "cower", "frozen", "slumped",
+  ...TURNED_POSES.flatMap((p) => TURNED_VIEWS.map((v) => `${p}@${v}`)),
+];
+const TURNABLE = new Set(TURNED_POSES);
+/** An NPC facing within this of straight away from the camera shows its back. */
+const BACK_DOT = 0.25;
+const BACK_OF = { idle: "backIdle", moveA: "backA", moveB: "backB", stepA: "backStepA", stepB: "backStepB" };
+/** An NPC's walk, one frame per quarter of its step cycle (js/npc.js `stride`). */
+const NPC_WALK = ["stepA", "moveB", "stepB", "moveA"];
+/** Seconds an NPC's arm takes to come up into a gesture, or down out of it. */
+const GESTURE_EASE = 0.16;
 
 /* ── Models ─────────────────────────────────────────────────────────────── */
 
@@ -73,6 +101,13 @@ function buildBoss(type, real) {
   return m;
 }
 
+// Readability overrides on top of the art spec. The glitchling's swarm
+// fragment is a third of a humanoid's width and read as a green speck at
+// a few tiles, so it draws larger and carries a halo of its own green.
+const READABILITY = {
+  glitchling: { scale: 1.45, aura: "#5dff8a" },
+};
+
 function buildModel(type, real = false) {
   if (real) return withRealisticBuild(() => buildModelIn(type, true));
   return buildModelIn(type, false);
@@ -81,7 +116,8 @@ function buildModel(type, real = false) {
 function buildModelIn(type, real) {
   if (BOSSES[type]) return buildBoss(type, real);
   const spec = HUMANOIDS[type] || CREATURES[type];
-  const def = ENEMY_TYPES[type];
+  // Friendly characters (src/data/npcs.js) draw on the same rig as enemies.
+  const def = ENEMY_TYPES[type] || NPC_TYPES[type];
   if (!spec || !def) return null;
   const box = spec.box;
   const extra = HUMANOID_DEFS[type] || CREATURE_DEFS[type] || "";
@@ -109,11 +145,13 @@ function buildModelIn(type, real) {
     const built = spec.build(v);
     const poses = {};
     for (const name of POSES) {
-      const p = built.poses[name] || built.poses.idle;
+      const p = built.poses[name] || built.poses[name.split("@")[0]] || built.poses.idle;
       poses[name] = {
         body: ref(lit(p.body, box, spec.rim), `v${v}:${name}:body`),
         glow: ref(glowOf(p.glow), `v${v}:${name}:glow`),
         at: p.at || {},
+        // A turned view may hang its back layers (a cape) in front, or hide its fx.
+        fx: p.fx || null,
       };
     }
     const fx = (built.fx || []).map((l, i) => ({
@@ -122,22 +160,26 @@ function buildModelIn(type, real) {
     }));
     variants.push({ poses, fx });
   }
+  const boost = READABILITY[type] || {};
   return {
     type,
     key: type + sfx,
     def,
     boss: false,
+    real,
     box,
-    scale: spec.size || 1,
+    scale: (spec.size || 1) * (boost.scale || 1),
     anchor: 100,
     pivot: spec.floater ? 0 : SOLE,
     floater: !!spec.floater,
     jitter: !!spec.jitter,
     sideOn: type === "beast" || type === "hound",
+    // Drawn from five sides (facing-view.js); the shield on this side of the front view.
+    views: spec.views ? { shieldSide: spec.shieldSide ?? -1, core: spec.core || [0, -28] } : null,
     shield: spec.shield || null,
     rim: spec.rim,
     variants,
-    aura: spec.aura ? ref(auraMarkup(box, spec.aura, real), "aura") : null,
+    aura: spec.aura || boost.aura ? ref(auraMarkup(box, spec.aura || boost.aura, real), "aura") : null,
     all: [...refs.values()],
   };
 }
@@ -151,6 +193,9 @@ function modelFor(type, real = isRealisticArt()) {
   }
   return m;
 }
+
+/** True when `type` has vector art in the style showing, decoded or not (never without a DOM, where nothing decodes). */
+export const hasEnemySprite = (type) => typeof Image !== "undefined" && !!modelFor(type);
 
 /**
  * Build (uncached) one enemy's model for the given style. For tests and
@@ -333,6 +378,40 @@ function tintOf(src, color = "#ffffff") {
   return c;
 }
 
+const rims = new WeakMap(); // canvas -> Map(color -> canvas)
+
+/**
+ * Rim-light ring for a layer: its silhouette spread a few pixels in eight
+ * directions, minus the silhouette itself, in one colour. Realistic draws it
+ * with "lighter" so dark figures separate from dark walls. Built once per
+ * bitmap by compositing (no pixel reads), like tintOf.
+ */
+function rimOf(src, color) {
+  let byColor = rims.get(src);
+  if (!byColor) {
+    byColor = new Map();
+    rims.set(src, byColor);
+  }
+  let c = byColor.get(color);
+  if (!c) {
+    const solid = tintOf(src, color);
+    c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext("2d");
+    const d = Math.max(1.5, src.width / 150);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      // Lean the ring upward: the station's light comes from the ceiling.
+      g.drawImage(solid, Math.cos(a) * d, Math.sin(a) * d - d * 0.5);
+    }
+    g.globalCompositeOperation = "destination-out";
+    g.drawImage(src, 0, 0);
+    byColor.set(color, c);
+  }
+  return c;
+}
+
 let sparkCanvas = null;
 
 function spark() {
@@ -414,9 +493,12 @@ function motionOf(enemy, time, model) {
       seed, variant: -1, filter: undefined,
       hitSeen: enemy.hitTime || 0, hitAt: -1e9, impact: null, impactPending: false,
       blockAt: -1e9, blockSeen: enemy.lastBlockedAt || 0,
+      facing: null, flankAt: -1e9, flankSeen: enemy.lastFlankAt || 0,
     };
     motion.set(enemy, m);
   }
+  // One of the station's people may be given a look (js/npc.js `look`).
+  if (m.variant < 0 && !model.boss && Number.isInteger(enemy.look)) m.variant = Math.abs(enemy.look) % model.variants.length;
   if (m.variant < 0 && !model.boss) m.variant = Math.floor(hash(m.seed + 0.5) * model.variants.length) % model.variants.length;
   if (m.filter === undefined) m.filter = model.boss ? null : jitterFilter(enemy, model.def);
   const dt = time - m.t;
@@ -431,6 +513,10 @@ function motionOf(enemy, time, model) {
     const recentlyHit = enemy.hitTime && time - enemy.hitTime < 300;
     if (m.prev === "windup" && enemy.state !== "windup" && enemy.state !== "pain" && !recentlyHit && !enemy.dissolving) m.attackAt = time;
     m.prev = enemy.state;
+  }
+  if (enemy.lastFlankAt && enemy.lastFlankAt !== m.flankSeen) {
+    m.flankSeen = enemy.lastFlankAt;
+    m.flankAt = time;
   }
   if (enemy.hitTime && enemy.hitTime !== m.hitSeen) {
     m.hitSeen = enemy.hitTime;
@@ -461,7 +547,41 @@ function updateBlock(enemy, m, model, time, camRightX, camRightY, newHit) {
   if (-(Math.cos(enemy.angle || 0) * fx + Math.sin(enemy.angle || 0) * fy) > 0.5) m.blockAt = time;
 }
 
-function pickPose(enemy, m, time, model) {
+/**
+ * The pose to draw. The station's people (type "npc") turn their back on the
+ * camera when they face away from it: walking off down a corridor, they are
+ * seen from behind, not walking backwards toward you.
+ */
+function pickPose(enemy, m, time, model, camRightX = null, camRightY = null, camX = null, camY = null) {
+  const pose = pickFrontPose(enemy, m, time, model);
+  if (model.views) return turnedPose(enemy, m, pose, model, camRightX, camRightY, camX, camY);
+  if (enemy.type !== "npc" || camRightX == null || !BACK_OF[pose]) return pose;
+  // Camera forward is the right vector turned back 90°.
+  const away = Math.cos(enemy.angle) * camRightY - Math.sin(enemy.angle) * camRightX;
+  return away > BACK_DOT ? BACK_OF[pose] : pose;
+}
+
+/**
+ * A shield bearer's pose as seen from the camera: the front pose, or one of
+ * its turned views of it (facing-view.js), mirrored when the view says so.
+ * The line to the camera is from the camera's position when the renderer
+ * gives it, else straight back along the camera's forward.
+ */
+function turnedPose(enemy, m, pose, model, camRightX, camRightY, camX, camY) {
+  m.flip = false;
+  if (camRightX == null) return pose;
+  const toX = camX != null ? camX - enemy.x : -camRightY;
+  const toY = camY != null ? camY - enemy.y : camRightX;
+  m.facing = facingView(enemy.angle, toX, toY, camRightX, camRightY, model.views.shieldSide, m.facing, m.facing || {});
+  if (m.facing.view === "front" || !TURNABLE.has(pose)) return pose;
+  m.flip = m.facing.flip;
+  return `${pose}@${m.facing.view}`;
+}
+
+function pickFrontPose(enemy, m, time, model) {
+  if (enemy.type === "npc") return pickNpcPose(enemy, model);
+  // A scripted gesture (an NPC's salute or pointing) holds while it is set.
+  if (enemy.gesture && !(m.speed > 0.2)) return enemy.gesture;
   if (enemy.dissolving) return "hurt";
   if (enemy.painTimer > 0 || (enemy.hitTime && time - enemy.hitTime < HIT_POSE_MS)) return "hurt";
   if (enemy.state === "windup" || enemy._chargeState === "windup") return "windup";
@@ -472,6 +592,63 @@ function pickPose(enemy, m, time, model) {
     return ["moveA", "idle", "moveB", "idle"][Math.floor((time + m.phase) / stepMs) % 4];
   }
   return "idle";
+}
+
+/**
+ * The station's people (js/npc.js): the walk frame from how far through its
+ * step the person is, so the feet keep time with the ground they cover; a
+ * gesture eased in and out through its half-raised frame.
+ */
+function pickNpcPose(npc, model) {
+  const variant = model.variants[0];
+  if (npc.gesture && !npc.walking) {
+    const g = npc.gesture;
+    const left = Number.isFinite(npc._gestureLeft) ? npc._gestureLeft : Infinity;
+    const easing = (npc.gestureT ?? 1) < GESTURE_EASE || left < GESTURE_EASE;
+    const half = `${g}In`;
+    if (easing && variant.poses[half]) return half;
+    return variant.poses[g] ? g : "idle";
+  }
+  if (npc.walking || npc.settling) {
+    const s = npc.stride ?? 0;
+    return NPC_WALK[Math.floor(s * 4 + 0.5) % 4];
+  }
+  return "idle";
+}
+
+/**
+ * Canvas motion for one of the station's people, in sprite units: the body's
+ * rise and fall over each step (lowest with both feet down), its weight over
+ * the planted foot, the lean into a turn; standing, slow breathing and now
+ * and then a shift of weight. Someone caught in a time freeze does none of it.
+ */
+function npcMotion(npc, pose, time, ph, away) {
+  const out = { tx: 0, ty: 0, rot: 0, sy: 1 };
+  if (pose === "frozen") return out;
+  const walking = npc.walking || npc.settling;
+  const k = walking ? Math.min(1, (npc.moveSpeed ?? 0) / 1.2) : 0;
+  const s = (npc.stride ?? 0) * Math.PI * 2;
+  if (walking) {
+    out.ty = Math.cos(s * 2) * 1.6 * k;
+    out.tx = Math.sin(s) * 1.1 * k;
+    out.rot = Math.sin(s) * 0.012 * k;
+  }
+  // Leaning into a turn: to their right is screen left when they face us.
+  out.rot += (npc.lean ?? 0) * (away ? 1 : -1);
+  if (pose === "slumped" || pose === "cower") {
+    // Shallow, quick breaths.
+    out.sy += Math.sin((time + ph) * (pose === "cower" ? 0.011 : 0.0042)) * 0.008;
+    return out;
+  }
+  if (!walking) {
+    out.sy += Math.sin((time + ph) * 0.0028) * 0.012;
+    // A shift of weight from foot to foot every several seconds.
+    const w = Math.sin((time + ph * 7) * 0.00042);
+    const shift = Math.sign(w) * Math.min(1, Math.abs(w) * 3);
+    out.tx += shift * 0.9;
+    out.rot += shift * 0.01;
+  }
+  return out;
 }
 
 /* ── Frame preparation ──────────────────────────────────────────────────── */
@@ -488,7 +665,7 @@ const frame = {
  * relative to (screenX, centerY), or null when the type has no sprite or its
  * bitmaps are still decoding.
  */
-export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, camRightY = null) {
+export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, camRightY = null, camX = null, camY = null) {
   const model = modelFor(enemy.enemyType);
   if (!model) return null;
   if (time !== budgetTime) {
@@ -503,7 +680,7 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
   const m = motionOf(enemy, time, model);
   const newHit = m.hitAt === time;
   updateBlock(enemy, m, model, time, camRightX, camRightY, newHit);
-  const pose = pickPose(enemy, m, time, model);
+  const pose = pickPose(enemy, m, time, model, camRightX, camRightY, camX, camY);
   if (model.boss) {
     frame.parts.length = model.refs.length;
     let solid = false;
@@ -521,6 +698,7 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
     frame.aura = layer(model.aura, px);
     frame.fx = variant.fx;
     frame.at = p.at;
+    frame.fxMode = p.fx;
     frame.fxImg.length = variant.fx.length;
     for (let i = 0; i < variant.fx.length; i++) frame.fxImg[i] = layer(variant.fx[i].ref, px);
   }
@@ -687,6 +865,36 @@ function drawDissolve(ctx, img, box, dissolve, time, alpha, rim, seed) {
   ctx.globalCompositeOperation = "source-over";
 }
 
+/**
+ * A hit past a shield bearer's shield: the power core on its back flares
+ * amber and throws a starburst, where the block throws its grey-gold spark
+ * off the shield. Drawn where the core shows in the view (its back, or the
+ * back edge of a profile).
+ */
+function drawFlankBurst(ctx, fr, time, alpha) {
+  const { model, m } = fr;
+  const age = time - m.flankAt;
+  if (!model.views || age < 0 || age > FLANK_MS) return;
+  const k = 1 - age / FLANK_MS;
+  const side = m.facing?.view === "side";
+  const x = side ? -model.views.shieldSide * 19 : model.views.core[0];
+  const y = model.views.core[1];
+  const s = 58 * (0.7 + 0.6 * (1 - k));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = alpha * k;
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 0.5);
+  g.addColorStop(0, "rgba(255,240,200,1)");
+  g.addColorStop(0.35, "rgba(255,150,50,0.85)");
+  g.addColorStop(1, "rgba(255,90,20,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(-s / 2, -s / 2, s, s);
+  ctx.rotate(hash(m.flankAt) * Math.PI);
+  ctx.drawImage(spark(), -s * 0.45, -s * 0.45, s * 0.9, s * 0.9);
+  ctx.restore();
+}
+
 function drawSpark(ctx, fr, time, alpha) {
   const { model, m } = fr;
   const age = time - m.blockAt;
@@ -725,12 +933,19 @@ export function drawEnemySprite(ctx, fr, screenX, centerY, alpha, time, hitFlash
   let tx = 0;
   let ty = 0;
   let rotA = 0;
-  let sx = 1;
-  let sy = 1;
+  // A boss that changes size mid-fight (the Shell, once it cracks) sets this.
+  let sx = enemy._spriteScale ?? 1;
+  let sy = sx;
   if (model.floater) {
     ty += Math.sin((time + ph) * 0.004) * 4;
     rotA += Math.sin((time + ph) * 0.0023) * 0.05;
     if (model.jitter) tx += (hash(Math.floor((time + ph) / 90)) - 0.5) * 7;
+  } else if (enemy.type === "npc") {
+    const mo = npcMotion(enemy, pose, time, ph, pose.startsWith("back"));
+    tx += mo.tx;
+    ty += mo.ty;
+    rotA += mo.rot;
+    sy *= mo.sy;
   } else if (pose === "idle" && m.speed <= 0.2) {
     sy += Math.sin((time + ph) * 0.003) * 0.012;
   }
@@ -810,12 +1025,23 @@ function drawRegular(ctx, fr, alpha, time, dissolve, windupT, flashK, hitFlash) 
     ctx.globalCompositeOperation = "source-over";
   }
   if (m.filter) ctx.filter = m.filter;
-  drawFx(ctx, fr, "back", alpha, time);
+  const fxOn = fr.fxMode !== "none";
+  if (fxOn && fr.fxMode !== "over") drawFx(ctx, fr, "back", alpha, time);
   ctx.globalAlpha = alpha;
   drawBox(ctx, fr.body, box);
-  drawFx(ctx, fr, "front", alpha, time);
+  if (fr.fxMode === "over") drawFx(ctx, fr, "back", alpha, time);
+  if (fxOn) drawFx(ctx, fr, "front", alpha, time);
   if (m.filter) ctx.filter = "none";
   ctx.globalCompositeOperation = "lighter";
+  if (model.real && fr.body.width > 0) {
+    // Rim light, outside the caller's shade filter so a figure between lamps
+    // still has an edge against the wall behind it.
+    const shade = ctx.filter;
+    ctx.filter = "none";
+    ctx.globalAlpha = alpha * 0.42;
+    drawBox(ctx, rimOf(fr.body, model.rim || "#cfe6ff"), box);
+    ctx.filter = shade;
+  }
   if (fr.glow) {
     const pulse = 0.72 + 0.28 * Math.sin((time + ph) * 0.006);
     ctx.globalAlpha = alpha * pulse;
@@ -825,10 +1051,11 @@ function drawRegular(ctx, fr, alpha, time, dissolve, windupT, flashK, hitFlash) 
       drawBox(ctx, fr.glow, box);
     }
   }
-  drawFx(ctx, fr, "glow", alpha, time);
+  if (fxOn) drawFx(ctx, fr, "glow", alpha, time);
   ctx.globalCompositeOperation = "source-over";
   if (flashK > 0 || hitFlash) drawHitFlash(ctx, fr.body, box, m.impact, Math.max(flashK, hitFlash ? 0.6 : 0), alpha);
   drawSpark(ctx, fr, time, alpha);
+  drawFlankBurst(ctx, fr, time, alpha);
 }
 
 function armAngle(role, pose, time, m, windupT) {
@@ -847,8 +1074,14 @@ function armAngle(role, pose, time, m, windupT) {
   }
 }
 
+/** Seconds the Shell's casing takes to fall away once it cracks. */
+const SHED_S = 0.7;
+
 function drawBoss(ctx, fr, alpha, time, dissolve, windupT, flashK) {
-  const { model, m, pose } = fr;
+  const { model, m, pose, enemy } = fr;
+  // The Shell: casing on until it cracks, then falling away, then seams of light.
+  const cracked = !!enemy._shellCracked;
+  const shed = cracked ? Math.min(1, (enemy._crackT ?? SHED_S) / SHED_S) : 0;
   const box = model.box;
   const imgs = fr.parts;
   const refs = model.refs;
@@ -881,9 +1114,17 @@ function drawBoss(ctx, fr, alpha, time, dissolve, windupT, flashK) {
     const ref = refs[i];
     const img = imgs[i];
     if (!img) continue;
+    if (ref.role === "shell" && shed >= 1) continue;
+    if (ref.role === "cracks" && !cracked) continue;
     ctx.save();
     place(ref);
-    if (ref.role === "aura") {
+    if (ref.role === "shell" && shed > 0) {
+      ctx.translate(Math.sin(i * 2.1) * 30 * shed, 90 * shed * shed);
+      ctx.globalAlpha = alpha * dissolve * (1 - shed);
+    } else if (ref.role === "cracks") {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = alpha * dissolve * (0.6 + 0.4 * Math.sin(t * 0.009) + windupT * 0.4);
+    } else if (ref.role === "aura") {
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = alpha * dissolve * (0.6 + 0.25 * Math.sin(t * 0.0026) + 0.3 * windupT);
     } else if (ref.blend) {

@@ -86,6 +86,9 @@ saves the JSON in `bench-results/`.
 | `--url <url>` | Any deployment |
 | `--chrome` | Installed Google Chrome instead of Playwright's Chromium: closest to what a player runs |
 | `--art 0\|1\|2`, `--fixed` | As the query options above |
+| `--angle d3d11\|vulkan\|gl` | Chrome's graphics backend. Windows Chromium browsers use D3D11 by default; comparing it with Vulkan on the same machine separates browser-backend cost from game cost |
+| `--uncapped` | No vsync or frame-rate limit, so fps shows how much headroom the machine has rather than the display's refresh rate |
+| `--size <W>x<H>` | Fixed viewport, e.g. `1296x653`, to compare two machines at the same pixel count |
 | `--headless` | No window. CPU figures only: a headless browser may render on the CPU |
 | `--out <file>` | Where to write the report |
 

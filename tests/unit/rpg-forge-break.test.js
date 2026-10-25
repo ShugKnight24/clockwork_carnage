@@ -77,14 +77,14 @@ function forge(mode) {
 describe("ForgeMode hold to break", () => {
   it("does not break on the click alone in survival", () => {
     const f = forge("survival");
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     expect(f.holdingBreak).toBe(true);
     expect(f.world.get(5, 5, 32)).toBe(10);
   });
 
   it("breaks once the button has been held for the full time", () => {
     const f = forge("survival");
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     f.update(1); // seconds — 1000ms, past dirt's break time
     expect(f.world.get(5, 5, 32)).toBe(0);
     expect(f.survival.inventory.count("dirt")).toBe(1);
@@ -93,29 +93,32 @@ describe("ForgeMode hold to break", () => {
 
   it("discards progress when the button is released", () => {
     const f = forge("survival");
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     f.update(0.1); // 100ms of a 500ms break
     expect(f.breakProgress).toBeGreaterThan(0);
-    f.handleMouseUp(2);
+    f.handleMouseUp(0);
     expect(f.holdingBreak).toBe(false);
     expect(f.survival.breaking).toBe(null);
     expect(f.breakProgress).toBe(0);
     expect(f.world.get(5, 5, 32)).toBe(10);
   });
 
-  it("releases on any non-left button, and never on left", () => {
+  it("only the left button breaks and releases; middle does nothing", () => {
     const f = forge("survival");
     f.handleMouseDown(1);
+    expect(f.holdingBreak).toBe(false);
+    f.handleMouseDown(0);
     expect(f.holdingBreak).toBe(true);
-    f.handleMouseUp(0);
-    expect(f.holdingBreak).toBe(true); // left is place; it must not release
+    f.handleMouseUp(2);
     f.handleMouseUp(1);
+    expect(f.holdingBreak).toBe(true); // right places; it must not release
+    f.handleMouseUp(0);
     expect(f.holdingBreak).toBe(false);
   });
 
   it("still breaks instantly on one click in creative", () => {
     const f = forge(null);
-    f.handleMouseDown(2);
+    f.handleMouseDown(0);
     expect(f.world.get(5, 5, 32)).toBe(0);
   });
 });
@@ -133,7 +136,7 @@ describe("release outside the Forge state", () => {
     f.holdingBreak = true;
     // handleMouseUp is called unconditionally by the host now, so the Forge
     // itself must tolerate a release it never saw the press for.
-    f.handleMouseUp(2);
+    f.handleMouseUp(0);
     expect(f.holdingBreak).toBe(false);
     expect(f.breakProgress).toBe(0);
   });

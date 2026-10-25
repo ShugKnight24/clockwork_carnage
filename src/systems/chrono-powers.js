@@ -27,6 +27,7 @@ import { ENEMY_TYPES } from "../data/enemies.js";
 import { Enemy } from "../../js/entities.js";
 import { hasLineOfSight, isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
+import { arrive, ARRIVALS } from "./arrival.js";
 import { ElevenSeconds } from "./eleven-seconds.js";
 
 /** In the order they are granted, which is also the HUD's order. */
@@ -758,10 +759,13 @@ export class ChronoPowers {
       e.state = "chase";
       e.alertRange = 99;
       e._hunter = true;
-      game.entities.push(e);
+      // Each one comes through its own tear round the rift, a beat apart,
+      // and steps out toward you (arrival.js); the pack is theirs at once.
+      arrive(game, { enemy: e, x, y, via: "tear", delay: i * 0.15 });
       pack.push(e);
     }
-    this.rifts.push({ x: cell.x, y: cell.y, born: this.clock });
+    // The rift itself opens as the first of them steps through.
+    this.rifts.push({ x: cell.x, y: cell.y, born: this.clock + ARRIVALS.tear.telegraph - 0.4 });
     game.queueAriaMessage?.("hunterResponse");
     playChronoSound(game.audio, "rift", { x: cell.x, y: cell.y, player: game.player });
     return pack;
