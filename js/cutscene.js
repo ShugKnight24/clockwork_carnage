@@ -1,5 +1,5 @@
 import { CUTSCENE_SCRIPTS } from "../src/data/cutscene-scripts.js";
-import { drawCutsceneArt } from "../src/rendering/cutscene-art.js";
+import { cutsceneArtRect, drawCutsceneArt } from "../src/rendering/cutscene-art.js";
 import { drawSvgBg, warmSvgArt } from "../src/rendering/svg-art/index.js";
 import { isModernArt, isRealisticArt } from "../src/rendering/art-style.js";
 import { voiceKeyFor } from "../src/audio/voice.js";
@@ -885,7 +885,10 @@ export class CutsceneEngine {
 
     // === Art ===
     if (frame.art) {
+      ctx.save();
+      this._fitArt(ctx, w, h, frame.art, this._artZone(ctx, w, h, frame, s));
       this.drawCutsceneArt(ctx, w, h, frame.art, t);
+      ctx.restore();
     }
 
     // === Scanner effect ===
@@ -1041,6 +1044,65 @@ export class CutsceneEngine {
     this._drawSkipPrompt(ctx, w, h, h - barHeight / 2, s, elapsed, "bottom");
   }
 
+  /**
+   * The band a lines frame leaves its figure: below the letterbox (and
+   * Legacy's centred title plate), above the first line of text.
+   */
+  _artZone(ctx, w, h, frame, s) {
+    const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
+    let top = barH + h * 0.02;
+    let bottom = h - barH - h * 0.02;
+    const look = this._look();
+    if (frame.lines?.length) {
+      const g = this._tx(ctx);
+      if (look === "comic") {
+        for (const it of this._comicLayout(g, frame, w, h).items) bottom = Math.min(bottom, it.y - it.top);
+      } else if (look === "cine") {
+        bottom = Math.min(bottom, this._cineLayout(g, frame, w, h).items[0].y);
+      } else {
+        bottom = Math.min(bottom, this._legacyLayout(g, frame, w, h, s).boxTop);
+      }
+    }
+    if (frame.title && look === "legacy") top = Math.max(top, h * 0.11 + 18 * s);
+    return { top, bottom: bottom - h * 0.015 };
+  }
+
+  /**
+   * Frame a vector figure inside `zone` (y range in the coordinates
+   * drawCutsceneArt is about to draw in): scaled down about its anchor, to
+   * no less than half, until it fits the band and the width, then moved the
+   * least that keeps its feet off the text and its head out of the letterbox.
+   * A figure that already fits is left as drawn.
+   */
+  _fitArt(ctx, w, h, art, zone, touch = this.isTouchDevice) {
+    const r = cutsceneArtRect(w, h, art, touch);
+    if (!r) return;
+    const k = Math.max(0.5, Math.min(1, (zone.bottom - zone.top) / r.h, (w * 0.96) / r.w));
+    const top = r.ay + (r.y - r.ay) * k;
+    const bottom = top + r.h * k;
+    let dy = 0;
+    if (bottom > zone.bottom) dy = zone.bottom - bottom;
+    if (top + dy < zone.top) dy = zone.top - top;
+    if (k === 1 && dy === 0) return;
+    ctx.translate(r.ax, r.ay + dy);
+    ctx.scale(k, k);
+    ctx.translate(-r.ax, -r.ay);
+  }
+
+  /** A comic panel's band for its figure: clear of a top or bottom caption. */
+  _panelArtZone(ctx, panel, pw, ph) {
+    let top = ph * 0.04;
+    let bottom = ph * 0.96;
+    if (panel.caption) {
+      const L = this._panelCaptionLayout(this._tx(ctx), panel, pw, ph, "panel");
+      const ch = (L.look === "legacy" ? L.rows.length * L.lineH + L.padY * 2 : L.h) + ph * 0.06;
+      const pos = panel.captionPos || "bottom";
+      if (pos === "bottom") bottom = ph - ch;
+      else if (pos === "top") top = ch;
+    }
+    return { top, bottom };
+  }
+
   // ── Lines frames: Legacy (terminal typewriter) ──────────────────
   /** Cached per frame/size/name: wrapped rows and baselines, measured once. */
   _legacyLayout(g, frame, w, h, s) {
@@ -1051,8 +1113,11 @@ export class CutsceneEngine {
     const barH = h * (this.isTouchDevice ? 0.035 : 0.08);
     const lines = (frame.lines || []).map((line) => {
       const text = this._resolve(line.text);
-      const sz = Math.round((line.size || 16) * s);
+      const sz = Math.max(14, Math.round((line.size || 16) * s));
       const font = `bold ${sz}px monospace`;
+      // About 70 characters a row at most: a full-width row on a wide screen
+      // was too long to follow back to the next one.
+      const rowW = Math.min(maxW, sz * 42);
       const sm = text.match(/^([A-Z\s]+):(.*)/);
       let speaker = null;
       let rest = text;
@@ -1067,7 +1132,7 @@ export class CutsceneEngine {
         g.restore();
         gap = Math.round(8 * s);
       }
-      const lay = wrapText(g, rest, font, maxW - pillW - gap);
+      const lay = wrapText(g, rest, font, rowW - pillW - gap);
       return {
         line, text, sz, font, speaker, pillW, gap,
         prefixLen: text.length - rest.length,
@@ -1431,7 +1496,8 @@ export class CutsceneEngine {
       y += it.h + gapOf(cz);
     }
     // Tails: the first balloon points at the figure; a balloon right after
-    // another joins it with a connector; others point sideways at the figure.
+    // another joins it with a connector; others point sideways at the figure
+    // (a splash above the first included: a tail up through it cut its letters).
     const spk = { x: w / 2, y: h * 0.4 };
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
@@ -1439,7 +1505,7 @@ export class CutsceneEngine {
       const prev = items[i - 1];
       if (prev && prev.kind === "balloon") {
         it.connect = prev;
-      } else if (!items.slice(0, i).some((p) => p.kind === "balloon" || p.kind === "caption" || p.kind === "radio")) {
+      } else if (i === 0) {
         const ax = it.x + it.w / 2;
         const dx = spk.x - ax;
         const dy = spk.y - it.y;
@@ -1689,6 +1755,21 @@ export class CutsceneEngine {
       band.addColorStop(1, `rgba(0,0,0,${0.72 * a})`);
       ctx.fillStyle = band;
       ctx.fillRect(0, lay.bandTop, w, h - lay.bandTop);
+    }
+    // A title card over a lit backdrop (a corridor, the reactor) reads on a
+    // soft band of its own; over the dark stage it needs none.
+    if (lay.card && frame.bg && frame.bg !== "dark" && first > 0 && lay.items.length) {
+      const last = lay.items[lay.items.length - 1];
+      const top = lay.items[0].y - sz * 1.4;
+      const bot = last.y + last.h + sz * 1.4;
+      const a = 0.7 * Math.min(1, first / 400);
+      const band = ctx.createLinearGradient(0, top, 0, bot);
+      band.addColorStop(0, "rgba(0,0,0,0)");
+      band.addColorStop(0.25, `rgba(0,0,0,${a})`);
+      band.addColorStop(0.75, `rgba(0,0,0,${a})`);
+      band.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = band;
+      ctx.fillRect(0, top, w, bot - top);
     }
 
     const g = this._tx(ctx);
@@ -1993,8 +2074,9 @@ export class CutsceneEngine {
     return this.isTouchDevice ? Math.max(0.82, raw) : raw;
   }
 
-  /** Box top for a caption of height `bh` in a `ph`-tall area. */
+  /** Box top for a caption of height `bh` in a `ph`-tall area (a number: its centre, as a fraction). */
   _captionY(pos, ph, bh, inset) {
+    if (typeof pos === "number") return Math.max(inset, Math.min(ph - bh - inset, ph * pos - bh / 2));
     if (pos === "top") return inset;
     if (pos === "center") return (ph - bh) / 2;
     return ph - bh - inset;
@@ -2772,7 +2854,7 @@ export class CutsceneEngine {
       g.translate(artCx, artCy);
       g.scale(artScale * zoom, artScale * zoom);
       g.translate(-w / 2 / artScale, -artCy / artScale);
-      this.drawCutsceneArt(g, w / artScale, h / artScale, src.art, FB_BAKE_T);
+      drawCutsceneArt(g, w / artScale, h / artScale, src.art, FB_BAKE_T);
       g.restore();
     }
     if (src.tint) {
@@ -3323,7 +3405,7 @@ export class CutsceneEngine {
       c.scale(zoom, zoom);
       c.translate(-pw / 2, -ph / 2);
       // Offset past the art's 1.2s entrance fade: cover ink is already printed.
-      this.drawCutsceneArt(c, pw, ph, cover.art, t);
+      drawCutsceneArt(c, pw, ph, cover.art, t);
       c.restore();
     }
 
@@ -3562,7 +3644,7 @@ export class CutsceneEngine {
       ctx.translate(artCx, artCy);
       ctx.scale(artScale, artScale);
       ctx.translate(-artCx / artScale, -artCy / artScale);
-      this.drawCutsceneArt(ctx, pw / artScale, ph / artScale, panel.art, t);
+      drawCutsceneArt(ctx, pw / artScale, ph / artScale, panel.art, t);
       ctx.restore();
     }
 
@@ -3717,13 +3799,11 @@ export class CutsceneEngine {
         ctx.translate(artCx, artCy);
         ctx.scale(artScale, artScale);
         ctx.translate(-artCx / artScale, -artCy / artScale);
-        this.drawCutsceneArt(
-          ctx,
-          pw / artScale,
-          ph / artScale,
-          panel.art,
-          artT,
-        );
+        // Kept inside the panel and off its caption; the phone's larger
+        // full-screen figure would overflow a panel, so it is not applied.
+        const zone = this._panelArtZone(ctx, panel, pw, ph);
+        this._fitArt(ctx, pw / artScale, ph / artScale, panel.art, { top: zone.top / artScale, bottom: zone.bottom / artScale }, false);
+        drawCutsceneArt(ctx, pw / artScale, ph / artScale, panel.art, artT);
         ctx.restore();
       }
 
@@ -4691,6 +4771,11 @@ export class CutsceneEngine {
     }
   }
 
+  /**
+   * Full-screen art: a phone keeps a floor on the figure's scale. Panels,
+   * pages and covers call the module function without it, since the floor
+   * is in screen terms and blew a panel's figure up past its borders.
+   */
   drawCutsceneArt(ctx, w, h, art, t) {
     drawCutsceneArt(ctx, w, h, art, t, this.isTouchDevice);
   }

@@ -4,7 +4,7 @@
  * Split out of js/cutscene.js, which keeps timing, text and panel layout.
  */
 
-import { drawSvgArt } from "./svg-art/index.js";
+import { drawSvgArt, svgArtBox } from "./svg-art/index.js";
 import { orderParty, partyMembers } from "./party.js";
 import { renderHound } from "./enemies/hound.js";
 
@@ -17,18 +17,31 @@ const LEGACY_PARTY = {
   rook: { color: "#44ff88", visor: "#44ff88", label: "ROOK" }, // Engineer
 };
 
-export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
-  const cx = w / 2;
-  const cy = h * 0.38;
-  ctx.save();
-  ctx.translate(cx, cy);
-
+/** Where drawCutsceneArt anchors its art in a w×h area, and at what scale. */
+function artAnchor(w, h, isTouchDevice) {
   // Base scale: proportional to screen — characters fill the scene
   const rawBaseScale = 2.0 * (h / 900);
-  const baseScale = isTouchDevice
-    ? Math.max(1.64, rawBaseScale)
-    : rawBaseScale;
-  ctx.scale(baseScale, baseScale);
+  const scale = isTouchDevice ? Math.max(1.64, rawBaseScale) : rawBaseScale;
+  return { x: w / 2, y: h * 0.38, scale };
+}
+
+/**
+ * The rect a vector model covers when drawCutsceneArt draws it into w×h, as
+ * { x, y, w, h, ax, ay } (ax/ay the anchor it scales about), or null for art
+ * drawn procedurally (its bounds are not known).
+ */
+export function cutsceneArtRect(w, h, art, isTouchDevice = false) {
+  const box = svgArtBox(art);
+  if (!box) return null;
+  const a = artAnchor(w, h, isTouchDevice);
+  return { x: a.x + box[0] * a.scale, y: a.y + box[1] * a.scale, w: box[2] * a.scale, h: box[3] * a.scale, ax: a.x, ay: a.y };
+}
+
+export function drawCutsceneArt(ctx, w, h, art, t, isTouchDevice = false) {
+  const anchor = artAnchor(w, h, isTouchDevice);
+  ctx.save();
+  ctx.translate(anchor.x, anchor.y);
+  ctx.scale(anchor.scale, anchor.scale);
 
   // Vector models win when one exists and has decoded; procedural art below
   // stays as the fallback for the first frames and for keys without a model.

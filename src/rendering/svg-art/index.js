@@ -135,6 +135,20 @@ function modelEntry(key) {
 const isModel = (key) => key in MODELS || partyMembers(key) !== null;
 
 export const hasSvgArt = isModel;
+
+/**
+ * A model's box as drawSvgArt draws it, display scale included, in art units
+ * about the anchor: [x, y, w, h], or null for keys with no model. Callers
+ * use it to frame the figure (cutscenes fit it above their text).
+ */
+export function svgArtBox(key) {
+  if (!isModel(key)) return null;
+  const e = modelEntry(key);
+  if (!e) return null;
+  const d = displayScale(key);
+  const [bx, by, bw, bh] = e.model.box;
+  return [bx * d, by * d, bw * d, bh * d];
+}
 export const hasSvgBg = (key) => key in BACKGROUNDS;
 
 /**

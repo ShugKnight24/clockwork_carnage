@@ -36,7 +36,7 @@ export const art = {
         import("../../rendering/cutscene-art.js"),
         import("../../rendering/svg-art/index.js"),
       ]);
-      cs = { drawCutsceneBg: cut.drawCutsceneBg, drawCutsceneArt: artMod.drawCutsceneArt, drawSvgBg: svg.drawSvgBg, hasSvgBg: svg.hasSvgBg, warmSvgArt: svg.warmSvgArt };
+      cs = { drawCutsceneBg: cut.drawCutsceneBg, drawCutsceneArt: artMod.drawCutsceneArt, cutsceneArtRect: artMod.cutsceneArtRect, drawSvgBg: svg.drawSvgBg, hasSvgBg: svg.hasSvgBg, warmSvgArt: svg.warmSvgArt };
     }
     const ctx = game.renderer?.ctx;
     if (!ctx || !live() || !cs.hasSvgBg(spec.bg)) return;
@@ -67,7 +67,7 @@ export const art = {
     }
     cs.drawCutsceneBg(ctx, w, h, spec.bg, local);
     if (spec.art) {
-      const at = artPlacement(spec.artAt);
+      const at = artPlacement(spec.artAt) ?? frameArt(w, h, spec.art, !!game.isTouchDevice);
       if (at) {
         ctx.translate(w / 2 + (at[0] ?? 0) * w, h / 2 + (at[1] ?? 0) * h);
         ctx.scale(at[2] ?? 1, at[2] ?? 1);
@@ -79,6 +79,21 @@ export const art = {
     ctx.restore();
   },
 };
+
+/**
+ * An `artAt` for vector art placed without one: centred in the picture and
+ * fitted inside the letterbox. Its cutscene anchor sits high, over where the
+ * subtitles go, which cut the station's tower off under the top bar.
+ * Procedural art has no known bounds and stays where it draws.
+ */
+function frameArt(w, h, art, touch) {
+  const r = cs.cutsceneArtRect?.(w, h, art, touch);
+  if (!r) return null;
+  const k = Math.min(1, (h * 0.6) / r.h, (w * 0.92) / r.w);
+  // artAt scales about the picture's centre: the offset that lands the
+  // rect's middle there.
+  return [0, (k * (h / 2 - (r.y + r.h / 2))) / h, k];
+}
 
 /** `artAt` for the current art profile: an array, or one keyed by profile with a default. */
 function artPlacement(at) {

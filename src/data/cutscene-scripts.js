@@ -6314,7 +6314,7 @@ export const CUTSCENE_SCRIPTS = {
           { hold: 1700, flipMs: 650, layout: "bleed",
             panel: { bg: "dark", art: "hero_at_desk", caption: "23:40, end of shift. A message from Simon: \"Report 07:00. Don't be late.\"", captionPos: "bottom", captionColor: "#1a1208", captionSize: 13, halftone: 0.18, glow: [0.56, 0.3, 0.55, "rgba(40,120,200,0.35)"] } },
           { hold: 2000, flipMs: 0, layout: "splash",
-            panel: { bg: "deep_space", art: "station", artZoom: 1.1, artY: 0.42, caption: "Every clock on the station agreed it was night. Except one.", captionPos: "center", captionColor: "#1a1208", captionSize: 16, prompt: "PRESS SPACE / CLICK TO SUIT UP", promptColor: "#00ffcc", promptSize: 18, promptY: 0.78, halftone: 0.15, glow: [0.8, 0.2, 0.4, "rgba(255,74,58,0.18)"] },
+            panel: { bg: "deep_space", art: "station", artZoom: 0.85, artY: 0.45, caption: "Every clock on the station agreed it was night. Except one.", captionPos: 0.64, captionColor: "#1a1208", captionSize: 16, prompt: "PRESS SPACE / CLICK TO SUIT UP", promptColor: "#00ffcc", promptSize: 18, promptY: 0.78, halftone: 0.15, glow: [0.8, 0.2, 0.4, "rgba(255,74,58,0.18)"] },
             insets: [{ slot: "tr", w: 0.22, h: 0.2, readout: { label: "ENGINE LAB", text: "06:47", color: "#ff4a3a" } }] },
         ],
       },
