@@ -47,6 +47,7 @@ import { CORRIDOR_WALLS } from "../src/data/levels/rooms/corridor.js";
 import { DISPATCH_WALLS } from "../src/data/levels/rooms/dispatch.js";
 import { HOLDING_WALLS } from "../src/data/levels/rooms/holding.js";
 import { INTERVIEW_WALLS } from "../src/data/levels/rooms/interview.js";
+import { CIVIC_WALLS } from "../src/data/levels/rooms/civic.js";
 import { buildNavField } from "../src/systems/ai-nav.js";
 import { hasLineOfSight } from "../src/systems/physics.js";
 import { LAYER } from "../src/data/levels/map-helpers.js";
@@ -211,6 +212,15 @@ const PEOPLE = {
   suspect: { kind: "clerk", name: "Suspect", look: 1, at: [44.5, 56.6], face: [44.5, 53.9], caught: "answering" },
   cole: { kind: "clerk", name: "Dispatcher Cole", look: 0, at: [78.8, 21.5], face: [84, 21.5], caught: "radio" },
   imani: { kind: "staff", name: "Dispatcher Imani", look: 0, at: [78.8, 23.5], face: [84, 23.5], caught: "radio" },
+  // The civic wing: the public side of the station, before its doors open.
+  okafor: { kind: "officer", name: "Ofc. Okafor", at: [64.5, 73.4], face: [64.5, 77], caught: "checking" }, // the security desk
+  visitor: { kind: "clerk", name: "Visitor", look: 1, at: [56.5, 77.3], face: [56.5, 74], caught: "stepping" }, // first through the scanner
+  mott: { kind: "staff", name: "Groundsman Mott", look: 1, at: [51.6, 67.4], face: [49.5, 65.5], caught: "watering" }, // the beds
+  wisher: { kind: "clerk", name: "Visitor", look: 0, at: [57.4, 72.5], face: [59.5, 70.0], caught: "tossing" }, // a coin for the fountain
+  bell: { kind: "clerk", name: "Archivist Bell", look: 0, at: [38.4, 69.5], face: [36.0, 69.5], caught: "reaching" }, // the stacks
+  reader: { kind: "clerk", name: "Reader", look: 1, at: [27.5, 76.4], face: [27.0, 77.5], caught: "reading" }, // the reading room
+  sato: { kind: "clerk", name: "Agent Sato", look: 1, at: [80.5, 64.2], face: [80.5, 62], caught: "reading" }, // the Bureau's board
+  adeyemi: { kind: "staff", name: "Bureau Clerk Adeyemi", look: 0, at: [80.4, 68.3], face: [80.4, 67.0], caught: "typing" }, // the Bureau's desk
 };
 /**
  * What 06:47 caught in the air (src/rendering/props.js): Mendez's coffee
@@ -278,6 +288,14 @@ const TALK = {
   suspect: [["STAFF", "I told him already. I keep losing the same minute."]],
   cole: [["STAFF_M", "Engine level's not answering check-ins. They say it's the calibration."]],
   imani: [["STAFF", "Heavy A and B, both on the chamber door. Quiet morning, apart from that."]],
+  okafor: [["OFFICER", "Public doors open at eight. Till then it's staff, deliveries and the Bureau."], ["OFFICER", "Queue's round the corner already. Parking appeals, mostly."]],
+  visitor: [["STAFF_M", "They let me in early for the records. I've been waiting on this form since spring."]],
+  mott: [["STAFF_M", "The ficus gets watered at a quarter to seven. Every morning. It knows."]],
+  wisher: [["STAFF", "You throw a coin in and wish for more time. Everyone in this city wishes for more time."]],
+  bell: [["STAFF", "Every case since the Engine was lit, filed to the minute. Ask me for any minute you like."]],
+  reader: [["STAFF_M", "Family history. My grandmother was arrested here once. Twice, it turns out."]],
+  sato: [["STAFF", "The Bureau's regional desk, Cadet. We sign your plate off at noon, once R&D have."]],
+  adeyemi: [["STAFF", "Forms for the certification. In triplicate. The Bureau likes a copy of the copy."]],
 };
 /** ARIA, once, if you try to talk to someone the minute caught. */
 const FROZEN_TALK = [
@@ -308,6 +326,15 @@ const READABLE = {
   [DISPATCH_WALLS.CITY_MAP]: [["ARIA", "Every unit in the city. One red one hasn't checked in.", "worried"]],
   [HOLDING_WALLS.RIGHTS]: [["ARIA", "'You may know the time of your arrest.' Funny thing to promise.", "curious"]],
   [INTERVIEW_WALLS.ONE_WAY]: [["ARIA", "One-way glass. From in there it's a mirror. They still wave at it.", "warm"]],
+  [CIVIC_WALLS.PLAQUE]: [["ARIA", "The cornerstone. 'Built by the city, kept by the hour.' They laid it the year the Engine was lit.", "calm"]],
+  [CIVIC_WALLS.DIRECTORY]: [["ARIA", "Great hall, records west, the Bureau's desk east. The station's back up the passage. Lost property: Thursdays.", "calm"]],
+  [CIVIC_WALLS.SEAL]: [["ARIA", "The department's seal. A clock and a key. Somebody polishes it every morning.", "warm"]],
+  [CIVIC_WALLS.WINDOW_A]: [["ARIA", "The old town, and the clock spire. Every clock in the city is set from the one under our feet.", "curious"]],
+  [CIVIC_WALLS.WINDOW_B]: [["ARIA", "The morning airship, coming in to the towers. Right on time. Everything here is.", "warm"]],
+  [CIVIC_WALLS.WINDOW_C]: [["ARIA", "The river road. First tram of the day. The city doesn't know we're up yet.", "calm"]],
+  [CIVIC_WALLS.ENTRANCE]: [["ARIA", "The public doors. Locked till eight, and there's already a queue on the steps.", "happy"]],
+  [CIVIC_WALLS.STACKS]: [["ARIA", "Case files, boxed by the minute they closed. Every label's a time.", "curious"]],
+  [CIVIC_WALLS.BUREAU_BOARD]: [["ARIA", "The Bureau's board. Your plate's on it, signed off by noon. 'Time reveals all.' Their motto. Not a threat. Probably.", "warm"]],
 };
 
 /**

@@ -142,7 +142,7 @@ uniform float u_yShift;
 uniform float u_eyeZ;          // eye height in wall units (0.5 standing)
 uniform sampler2D u_floorTex;
 uniform sampler2D u_ceilTex;
-uniform sampler2D u_envMap;    // RGBA8 per cell: R wall bits, G glow bits, B glow index
+uniform sampler2D u_envMap;    // RGBA8 per cell: R wall bits, G glow bits, B glow index, A deck
 uniform ivec2 u_mapSize;
 uniform vec3 u_fogNear;
 uniform vec3 u_fogFar;
@@ -169,6 +169,46 @@ float glowSide(float d) {
   return t * t;
 }
 
+// A room's own deck (map.decks, the envMap's A byte): drawn here instead of
+// the act's art. 1: polished marble laid on the diagonal under a skylight's
+// glazing grid; 2: oak boards under a coffered plaster ceiling.
+vec3 deckFloor(vec2 wp, int kind) {
+  if (kind == 1) {
+    vec2 q = vec2(wp.x + wp.y, wp.x - wp.y) * 0.7071;
+    vec2 fq = fract(q);
+    float chk = mod(floor(q.x) + floor(q.y), 2.0);
+    float vein = 0.035 * sin(wp.x * 5.3 + sin(wp.y * 2.7) * 2.5) * sin(wp.y * 3.9);
+    vec3 c = mix(vec3(0.70, 0.66, 0.58), vec3(0.28, 0.33, 0.31), chk) + vein;
+    float e = min(min(fq.x, 1.0 - fq.x), min(fq.y, 1.0 - fq.y));
+    return mix(c, vec3(0.62, 0.50, 0.30), (1.0 - smoothstep(0.0, 0.025, e)) * 0.8);
+  }
+  float row = floor(wp.y * 5.0);
+  float off = fract(row * 0.37);
+  float plank = floor(wp.x * 1.25 + off);
+  float tone = fract(sin(row * 12.9898 + plank * 78.233) * 43758.5453);
+  vec3 c = mix(vec3(0.36, 0.22, 0.12), vec3(0.52, 0.34, 0.19), tone) + 0.025 * sin(wp.x * 55.0 + row * 3.0);
+  float seam = max(1.0 - smoothstep(0.0, 0.06, fract(wp.y * 5.0)), 1.0 - smoothstep(0.0, 0.015, fract(wp.x * 1.25 + off)));
+  return mix(c, vec3(0.10, 0.06, 0.04), seam * 0.6);
+}
+vec3 deckCeil(vec2 wp, int kind) {
+  if (kind == 1) {
+    vec2 f = fract(wp);
+    float bar = 1.0 - smoothstep(0.012, 0.03, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
+    vec2 g4 = fract(wp * 0.25);
+    float beam = 1.0 - smoothstep(0.012, 0.022, min(min(g4.x, 1.0 - g4.x), min(g4.y, 1.0 - g4.y)));
+    // Morning sky through the panes, a cloud or two drifting in it.
+    float cloud = smoothstep(0.55, 0.95, sin(wp.x * 0.41 + 1.3) * sin(wp.y * 0.29 + 0.4) * 0.5 + 0.5);
+    vec3 sky = mix(vec3(0.50, 0.64, 0.82), vec3(0.70, 0.76, 0.84), cloud);
+    return mix(sky, vec3(0.42, 0.33, 0.20), max(bar * 0.85, beam * 0.7));
+  }
+  vec2 f = fract(wp);
+  float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+  vec3 c = vec3(0.50, 0.47, 0.41) * (0.75 + 0.25 * smoothstep(0.02, 0.16, e));
+  float lamp = 1.0 - smoothstep(0.08, 0.11, length(f - 0.5));
+  float on = mod(floor(wp.x) + floor(wp.y), 2.0) < 0.5 ? 1.0 : 0.0;
+  return mix(c, vec3(1.0, 0.94, 0.80), lamp * on);
+}
+
 void main() {
   float w = u_resolution.x;
   float h = u_resolution.y;
@@ -190,9 +230,11 @@ void main() {
 
   float ao = 1.0;
   vec3 glow = vec3(0.0);
+  int deck = 0;
   ivec2 cell = ivec2(floor(wp));
   if (cell.x >= 0 && cell.y >= 0 && cell.x < u_mapSize.x && cell.y < u_mapSize.y) {
     vec4 m = texelFetch(u_envMap, cell, 0);
+    deck = int(m.a * 255.0 + 0.5);
     int mask = int(m.r * 255.0 + 0.5);
     int gbits = int(m.g * 255.0 + 0.5);
     int gi = int(m.b * 255.0 + 0.5);
@@ -216,6 +258,7 @@ void main() {
       glow = u_glowColors[gi] * g;
     }
   }
+  if (deck > 0) color = isFloor ? deckFloor(wp, deck) : deckCeil(wp, deck);
   if (u_realistic) {
     // Lights multiply the surface colour instead of adding over it, so a
     // light pool reads as illuminated concrete rather than a coloured decal.
@@ -241,6 +284,8 @@ void main() {
         + texture(u_ceilTex, wp - vec2(0.0, 0.3), 3.5).rgb * 0.15;
       float emit = smoothstep(0.18, 0.6, dot(over, vec3(0.2126, 0.7152, 0.0722)));
       lit += albedo * over * emit * 1.0 * occl;
+      // Under a skylight the deck has the day on it, not a lamp's pool.
+      if (deck == 1) lit += albedo * vec3(0.16, 0.17, 0.18) * occl;
     }
     // Floor roughness from the texture itself: bright plating is polished,
     // dark grime is matte, which breaks the specular up across the deck.

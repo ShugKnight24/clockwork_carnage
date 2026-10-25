@@ -112,6 +112,14 @@ for (const [from, to, colour] of [
   [170, 172, { r: 150, g: 160, b: 172 }],
   [173, 173, { r: 40, g: 70, b: 96 }],
   [174, 174, { r: 52, g: 54, b: 62 }],
+  // The civic wing (src/data/levels/rooms/civic.js, 237-255): marble, the
+  // glass onto the city, the gardens green, records and the Bureau in oak.
+  [237, 243, { r: 176, g: 168, b: 150 }],
+  [244, 247, { r: 120, g: 160, b: 190 }],
+  [248, 249, { r: 70, g: 120, b: 76 }],
+  [250, 251, { r: 90, g: 100, b: 112 }],
+  [252, 253, { r: 112, g: 82, b: 56 }],
+  [254, 255, { r: 84, g: 92, b: 110 }],
 ]) {
   for (let id = from; id <= to; id++) WALL_COLORS[id] ??= colour;
 }

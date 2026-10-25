@@ -1575,3 +1575,146 @@ function renderCableRun(ctx, sx, cy, sw, sh, dist, t, fog) {
 }
 PROP_RENDERERS.cable_run = renderCableRun;
 
+// ── The civic wing (src/data/levels/rooms/civic.js) ─────────────
+// The great hall's gardens and fountain, its security line and flags. Drawn
+// in metres off the floor, like the lab scope (1 m = SH_PER_METRE of a wall).
+
+/** A garden bed's tree: a grey-brown trunk, a canopy in clumps that sways a little. */
+function renderGardenTree(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const sway = Math.sin(t * 0.0006 + sx * 0.01) * m * 0.04;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#5a4630";
+  ctx.beginPath();
+  ctx.moveTo(sx - m * 0.09, ground);
+  ctx.lineTo(sx - m * 0.05, ground - m * 1.9);
+  ctx.lineTo(sx + m * 0.05, ground - m * 1.9);
+  ctx.lineTo(sx + m * 0.09, ground);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#5a4630";
+  ctx.lineWidth = Math.max(1, m * 0.05);
+  ctx.beginPath();
+  ctx.moveTo(sx, ground - m * 1.4);
+  ctx.lineTo(sx - m * 0.45 + sway, ground - m * 2.2);
+  ctx.moveTo(sx, ground - m * 1.6);
+  ctx.lineTo(sx + m * 0.5 + sway, ground - m * 2.3);
+  ctx.stroke();
+  const clumps = [[0, 2.75, 0.75], [-0.55, 2.35, 0.55], [0.6, 2.45, 0.55], [-0.2, 2.15, 0.5], [0.3, 3.15, 0.5], [-0.35, 3.0, 0.45]];
+  const tones = ["#2e5a28", "#3e7232", "#4f8a3e"];
+  for (let pass = 0; pass < 3; pass++) {
+    ctx.fillStyle = tones[pass];
+    const k = 1 - pass * 0.22;
+    for (const [dx, h, r] of clumps) {
+      ctx.beginPath();
+      ctx.arc(sx + dx * m + sway - pass * m * 0.06, ground - h * m - pass * m * 0.08, r * m * k, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Light through the leaves from the skylight.
+  ctx.fillStyle = "rgba(220,255,180,0.18)";
+  ctx.beginPath();
+  ctx.arc(sx + m * 0.1 + sway, ground - m * 3.05, m * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+PROP_RENDERERS.garden_tree = renderGardenTree;
+
+/** One of the fountain's jets: a column of water falling back in an arc. */
+function renderFountain(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const top = ground - m * (2.6 + 0.1 * Math.sin(t * 0.004 + sx));
+  const pool = ground - m * 1.1;
+  ctx.save();
+  ctx.globalAlpha = fog * 0.85;
+  const g = ctx.createLinearGradient(0, top, 0, pool);
+  g.addColorStop(0, "rgba(230,246,255,0.9)");
+  g.addColorStop(1, "rgba(140,200,240,0.5)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(sx - m * 0.05, pool);
+  ctx.quadraticCurveTo(sx - m * 0.02, top, sx, top);
+  ctx.quadraticCurveTo(sx + m * 0.02, top, sx + m * 0.05, pool);
+  ctx.closePath();
+  ctx.fill();
+  // The fall either side, and the drops in it.
+  ctx.strokeStyle = "rgba(210,236,255,0.6)";
+  ctx.lineWidth = Math.max(1, m * 0.025);
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(sx, top + m * 0.05);
+    ctx.quadraticCurveTo(sx + s * m * 0.5, top - m * 0.05, sx + s * m * 0.7, pool);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(240,250,255,0.8)";
+  const d = Math.max(1, m * 0.03);
+  for (let i = 0; i < 10; i++) {
+    const ph = (t * 0.0012 + i * 0.1) % 1;
+    const s = i % 2 ? 1 : -1;
+    ctx.fillRect(sx + s * m * 0.7 * ph, top + (pool - top) * ph * ph, d, d);
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.fountain = renderFountain;
+
+/** A walk-through scanner: two posts and a header, the lamp green for go. */
+function renderScannerArch(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const half = m * 0.45;
+  const top = ground - m * 2.1;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#c8ccd2";
+  ctx.fillRect(sx - half - m * 0.12, top, m * 0.12, ground - top);
+  ctx.fillRect(sx + half, top, m * 0.12, ground - top);
+  ctx.fillStyle = "#9aa0a8";
+  ctx.fillRect(sx - half - m * 0.12, top - m * 0.14, half * 2 + m * 0.24, m * 0.16);
+  ctx.fillStyle = "#2a4472";
+  ctx.fillRect(sx - half - m * 0.1, top + m * 0.4, m * 0.08, m * 0.8);
+  ctx.fillRect(sx + half + m * 0.02, top + m * 0.4, m * 0.08, m * 0.8);
+  ctx.fillStyle = `rgba(90,255,140,${0.6 + 0.4 * Math.sin(t * 0.004)})`;
+  ctx.shadowColor = "#5aff8a";
+  ctx.shadowBlur = Math.max(2, m * 0.15);
+  ctx.beginPath();
+  ctx.arc(sx, top - m * 0.06, Math.max(1.5, m * 0.05), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+PROP_RENDERERS.scanner_arch = renderScannerArch;
+
+/** A flag on a bronze stand: navy, the seal's ring in gold, stirring in the air off the doors. */
+function renderFlagStand(ctx, sx, cy, sw, sh, dist, t, fog) {
+  const ground = groundY(cy, sh);
+  const m = Math.max(sh * SH_PER_METRE, 8 * _fovScale);
+  const top = ground - m * 2.6;
+  const fw = m * 0.9, fh = m * 0.6;
+  const wave = (u) => Math.sin(u * 4 + t * 0.002) * m * 0.04 * u;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#8e6a36";
+  ctx.fillRect(sx - m * 0.25, ground - m * 0.08, m * 0.5, m * 0.08);
+  ctx.fillRect(sx - m * 0.025, top, m * 0.05, ground - top);
+  ctx.fillStyle = "#e0bc62";
+  ctx.beginPath();
+  ctx.arc(sx, top - m * 0.05, m * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1c3058";
+  ctx.beginPath();
+  ctx.moveTo(sx + m * 0.03, top + m * 0.05);
+  for (let i = 0; i <= 8; i++) ctx.lineTo(sx + m * 0.03 + (i / 8) * fw, top + m * 0.05 + wave(i / 8));
+  for (let i = 8; i >= 0; i--) ctx.lineTo(sx + m * 0.03 + (i / 8) * fw, top + m * 0.05 + fh + wave(i / 8) + (i / 8) * m * 0.1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#e0bc62";
+  ctx.lineWidth = Math.max(1, m * 0.02);
+  ctx.beginPath();
+  ctx.arc(sx + m * 0.03 + fw * 0.45, top + m * 0.05 + fh * 0.5 + wave(0.45), fh * 0.26, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+PROP_RENDERERS.flag_stand = renderFlagStand;
+

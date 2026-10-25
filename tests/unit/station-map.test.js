@@ -6,6 +6,7 @@ import { COVER_LAYOUTS } from "../../src/data/levels/rooms/arena.js";
 import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT } from "../../src/data/levels/rooms/track.js";
 import { HALL_WALLS } from "../../src/data/levels/rooms/halls.js";
 import { PRECINCT_WALLS } from "../../src/data/levels/rooms/precinct.js";
+import { CIVIC_WALLS, CIVIC_HALL, CIVIC_RECORDS, CIVIC_BUREAU, CIVIC_BEDS, CIVIC_FOUNTAIN, CIVIC_LINE } from "../../src/data/levels/rooms/civic.js";
 import { MAPS } from "../../src/data/levels/campaign.js";
 
 const map = TUTORIAL_MAP;
@@ -108,6 +109,18 @@ describe("the station floor", () => {
     for (let y = 0; y < 60; y++) for (let x = 0; x < 60; x++) if (!inAdded(x, y) && STATION_CORE.grid[y][x] !== g[y][x]) diff++;
     expect(diff).toBeGreaterThan(0);
     expect(diff).toBeLessThan(400);
+  });
+
+  it("opens the civic wing off the spine's south end, its props on open floor", () => {
+    // Down the passage from the spine, and through to records and the Bureau.
+    for (const [x, y] of [[58, 58], [59, 61], [58, 62], [44, 70], [75, 71]]) expect(at(x + 0.5, y + 0.5), `${x},${y}`).toBe(true);
+    for (const b of [CIVIC_HALL, CIVIC_RECORDS, CIVIC_BUREAU]) expect(at(b.x0 + 0.5, b.y1 + 0.5)).toBe(true);
+    // The trees, the fountain's jets and the security gates stand on floor.
+    for (const { r, c } of CIVIC_BEDS) expect(g[r + 1][c + 1]).toBe(0);
+    for (const dr of [1, 2]) for (const dc of [1, 2]) expect(g[CIVIC_FOUNTAIN.r + dr][CIVIC_FOUNTAIN.c + dc]).toBe(0);
+    for (const c of CIVIC_LINE.gates) expect(at(c + 0.5, CIVIC_LINE.r + 0.5), `gate ${c}`).toBe(true);
+    // Every wall id it paints is its own.
+    for (const id of Object.values(CIVIC_WALLS)) expect(map.lateWalls).toContain(id);
   });
 
   it("gives the east wing wall ids no campaign floor uses", () => {

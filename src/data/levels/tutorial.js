@@ -13,6 +13,7 @@ import { room as atriumRoom } from "./rooms/atrium.js";
 import { room as holdingRoom } from "./rooms/holding.js";
 import { room as interviewRoom } from "./rooms/interview.js";
 import { room as trackRoom } from "./rooms/track.js";
+import { room as civicRoom } from "./rooms/civic.js";
 import { STATION_WALLS } from "../walls.js";
 import { createHeights, lowWall, LAYER } from "./map-helpers.js";
 
@@ -339,11 +340,17 @@ for (const c of [44, 50, 54]) carve(51, c, 52, c);
 // Lin's control booth goes into the sim hall's south wall with it, and the
 // Supervisor gets his locker: Certification Day's, not the Precinct's.
 
+// ── 22. THE CIVIC WING (rows 58-80, cols 21-85), the station's public front ──
+// Down a passage from the spine's south end: the great hall under its
+// skylight, records to the west, the Bureau's desk to the east, and glass
+// onto the city along the south side (src/data/levels/rooms/civic.js).
+// Off the prologue's path: nothing in the morning sends you there.
+
 // Low walls (src/data/levels/map-helpers.js): the atrium's glass
 // balustrade, the sim hall's holo cover (the prologue raises it), the
 // booth's desk and the track's rails.
 const hm = createHeights(W, H);
-const EAST_ROOMS = [hallsRoom, rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom, boothRoom];
+const EAST_ROOMS = [hallsRoom, rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom, boothRoom, civicRoom];
 for (const r of EAST_ROOMS) r.dress(g, { carve, hWall, vWall, pillar, door, hm, lowWall, LAYER });
 const ALL_ROOMS = [...ROOMS, ...EAST_ROOMS];
 // The Supervisor's locker, on the north bank nearest the door: his heavy
@@ -396,10 +403,10 @@ export const TUTORIAL_MAP = {
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
   ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, STATION_WALLS.LOCKERS_SUP, STATION_WALLS.LOCKERS_SUP_OPEN, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
-  // The east wing's rooms and the training hall can't be seen from the
-  // locker room: the renderer paints their walls a few a frame once the
+  // The east wing's rooms, the training hall and the civic wing can't be
+  // seen from the locker room: the renderer paints their walls a few a frame once the
   // rest are up.
-  lateWalls: [rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom].flatMap((r) => r.ownWalls),
+  lateWalls: [rndRoom, dispatchRoom, atriumRoom, holdingRoom, interviewRoom, trackRoom, civicRoom].flatMap((r) => r.ownWalls),
   playerStart: { x: 13.5, y: 43.5, dir: -1.5708 }, // Center of locker room, facing north
   // Each room's own lamps (js/tutorial-system.js _syncRoomLights), on while
   // you are near enough to see them: the range's floods on the bullet trap,
@@ -412,6 +419,9 @@ export const TUTORIAL_MAP = {
     ...ALL_ROOMS.flatMap((r) => r.lights),
   ],
   rooms: { range: { x0: 35, y0: 37, x1: 56, y1: 47 }, ...Object.assign({}, ...ALL_ROOMS.map((r) => r.boxes)) },
+  // Rooms with floors and ceilings of their own (the WebGL deck shader):
+  // the civic wing's marble and skylight, its oak and plaster.
+  decks: ALL_ROOMS.flatMap((r) => r.decks ?? []),
   // The range's weapons and the Supervisor's desk are put down by the
   // prologue as their steps begin (js/tutorial-system.js).
   pickups: [
