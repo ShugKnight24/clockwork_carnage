@@ -28,9 +28,9 @@ import { createPlaytestGate } from "./playtest-gate.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
-import { hasLineOfSight, eyeOffsetZ } from "../../src/systems/physics.js";
-import { currentBarH } from "../../src/systems/aim.js";
-import { zoneAimHeight } from "../../src/systems/combat.js";
+import { hasLineOfSight, eyeOffsetZ, playerEyeZ } from "../../src/systems/physics.js";
+import { currentBarH, sceneShiftPx } from "../../src/systems/aim.js";
+import { zoneAimHeight, distanceToWall } from "../../src/systems/combat.js";
 import { DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../../src/data/levels/rooms/arena.js";
 import { TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, LANES } from "../../src/data/levels/rooms/track.js";
 
@@ -357,8 +357,22 @@ function aimForHead(game, e) {
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;
+  // Through the recoil's kick too (sceneShiftPx): the view a player aims at
+  // is the kicked one.
+  const shift = game.world ? 0 : sceneShiftPx(p, h);
   p.aimOffsetX = 0;
-  p.aimOffsetY = (barH / (2 * h) - tanPitch) / ((h - barH) / h);
+  p.aimOffsetY = (barH / (2 * h) + shift / h - tanPitch) / ((h - barH) / h);
+}
+
+/**
+ * Whether a shot at an enemy gets to it: hasLineOfSight samples the line, and
+ * can slip past a wall corner the shot's own cell walk hits.
+ */
+function shotReaches(game, e) {
+  const p = game.player;
+  if (game.world || !game.map) return true;
+  const d = Math.hypot(e.x - p.x, e.y - p.y);
+  return distanceToWall(p, (e.x - p.x) / d, (e.y - p.y) / d, game.map, d, 0, playerEyeZ(p)) >= d - 0.4;
 }
 
 /** Whether an enemy's front shield is turned toward the player. */
@@ -493,7 +507,7 @@ function killAllEnemies(game, maxTicks = 5000, { weapon = null } = {}) {
     clearInput(game);
 
     const dist = (e) => Math.hypot(e.x - p.x, e.y - p.y);
-    const seen = enemies.filter((e) => dist(e) < 20 && hasLineOfSight(game.map, p.x, p.y, e.x, e.y)).sort((a, b) => dist(a) - dist(b));
+    const seen = enemies.filter((e) => dist(e) < 20 && hasLineOfSight(game.map, p.x, p.y, e.x, e.y) && shotReaches(game, e)).sort((a, b) => dist(a) - dist(b));
     const hurt = p.health < p.maxHealth * 0.35;
     const med = hurt ? game.entities.find((e) => e.active && e.type === "health" && pathSteps(game, e.x, e.y) >= 0 && pathSteps(game, e.x, e.y) < 30) : null;
 
