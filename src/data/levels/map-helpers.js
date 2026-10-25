@@ -15,8 +15,9 @@ export function createGrid(w, h, fill = 1) {
 
 /**
  * Named layer counts, so level data reads as heights rather than integers.
- * The eye sits at half a wall, so only KNEE and WAIST can be seen over
- * standing; SHOULDER and TALL block sight while still showing the ceiling.
+ * A standing player's eye is at 0.74 (STAND_EYE_Z), so KNEE, WAIST and
+ * SHOULDER can be seen over standing; TALL blocks sight while still showing
+ * the ceiling. Crouched (0.29), WAIST and up hide you.
  */
 export const LAYER = { KNEE: 1, WAIST: 2, SHOULDER: 3, TALL: 4, FULL: 5 };
 

@@ -104,6 +104,22 @@ test("peeks over low cover and kills a target", async ({ page }) => {
   });
   await page.waitForTimeout(500);
   expect((await player(page)).peeking).toBe(true);
+  // Put the reticle on it, as a player would: from the standing eye a level
+  // shot passes over a drone this low.
+  await page.evaluate(async () => {
+    const { zoneAimHeight } = await import("/src/systems/combat.js");
+    const { eyeOffsetZ } = await import("/src/systems/physics.js");
+    const { currentBarH } = await import("/src/systems/aim.js");
+    const g = window.ccDebug.game;
+    const p = g.player;
+    const t = g.entities.filter((e) => e.type === "enemy").at(-1);
+    const d = Math.hypot(t.x - p.x, t.y - p.y);
+    const h = g.canvas.height;
+    const barH = currentBarH(g);
+    const tanPitch = (zoneAimHeight(t, "body") - eyeOffsetZ(p)) / d;
+    p.aimOffsetX = 0;
+    p.aimOffsetY = (barH / (2 * h) - tanPitch) / ((h - barH) / h);
+  });
   await page.evaluate(() => window.ccDebug.fire(true));
   await page.waitForFunction(() => window.ccDebug.game.coverStats.peekKills > 0, null, { timeout: 8000 });
   await page.evaluate(() => window.ccDebug.fire(false));

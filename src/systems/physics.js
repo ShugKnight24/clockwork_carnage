@@ -17,15 +17,23 @@
 export const EYE_Z = 0.5;
 
 /**
- * Crouched eye height, a little under 60% of standing. Low enough that
- * waist-high cover actually covers, and the raycaster draws the crouched
- * view from here.
+ * Where the player's own eye sits standing. People are drawn about 0.9 of a
+ * wall tall with their eyes near 0.8, so a camera at EYE_Z looked up at
+ * everyone from their chest, a head shorter than the room. EYE_Z stays the
+ * line the art and the hit zones are measured from (sprites are drawn
+ * `EYE_Z - eye` lower from a higher eye; shots start `eyeOffsetZ` above it).
+ */
+export const STAND_EYE_Z = 0.74;
+
+/**
+ * Crouched eye height: under the top of waist-high cover (LAYER.WAIST, 0.4),
+ * so it actually covers, and the raycaster draws the crouched view from here.
  */
 export const CROUCH_EYE_Z = 0.29;
 
 /**
- * Sliding eye height, about 42% of standing: low enough that the prologue's
- * half-down shutters pass overhead.
+ * Sliding eye height: low enough that the prologue's half-down shutters
+ * pass overhead.
  */
 export const SLIDE_EYE_Z = 0.21;
 
@@ -36,7 +44,7 @@ export const SLIDE_EYE_Z = 0.21;
 export function playerEyeZ(player) {
   const t = player?.crouchBlend || 0;
   const s = player?.slideBlend || 0;
-  return EYE_Z + (CROUCH_EYE_Z - EYE_Z) * t + (SLIDE_EYE_Z - CROUCH_EYE_Z) * s;
+  return STAND_EYE_Z + (CROUCH_EYE_Z - STAND_EYE_Z) * t + (SLIDE_EYE_Z - CROUCH_EYE_Z) * s;
 }
 
 /**

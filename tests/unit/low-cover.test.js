@@ -6,6 +6,7 @@ import {
   playerEyeZ,
   eyeOffsetZ,
   EYE_Z,
+  STAND_EYE_Z,
   CROUCH_EYE_Z,
   SLIDE_EYE_Z,
 } from "../../src/systems/physics.js";
@@ -89,23 +90,25 @@ describe("hitscan over low cover", () => {
 
 describe("playerEyeZ", () => {
   it("follows the crouch blend between standing and crouched", () => {
-    expect(playerEyeZ({ crouchBlend: 0 })).toBe(EYE_Z);
+    expect(playerEyeZ({ crouchBlend: 0 })).toBe(STAND_EYE_Z);
     expect(playerEyeZ({ crouchBlend: 1 })).toBe(CROUCH_EYE_Z);
-    expect(playerEyeZ({ crouchBlend: 0.5 })).toBeCloseTo((EYE_Z + CROUCH_EYE_Z) / 2);
+    expect(playerEyeZ({ crouchBlend: 0.5 })).toBeCloseTo((STAND_EYE_Z + CROUCH_EYE_Z) / 2);
   });
 
-  it("drops to roughly 58% of standing crouched and 42% sliding", () => {
-    expect(CROUCH_EYE_Z / EYE_Z).toBeGreaterThanOrEqual(0.55);
-    expect(CROUCH_EYE_Z / EYE_Z).toBeLessThanOrEqual(0.6);
-    expect(SLIDE_EYE_Z / EYE_Z).toBeGreaterThanOrEqual(0.4);
-    expect(SLIDE_EYE_Z / EYE_Z).toBeLessThanOrEqual(0.45);
+  it("stands at people's eye line, ducks under waist cover crouched, and lower sliding", () => {
+    // People are drawn about 0.9 tall, eyes near 0.75: you meet them level.
+    expect(STAND_EYE_Z).toBeGreaterThan(0.7);
+    expect(STAND_EYE_Z).toBeLessThan(0.8);
+    expect(CROUCH_EYE_Z).toBeLessThan(LAYER.WAIST / 5);
+    expect(SLIDE_EYE_Z).toBeLessThan(CROUCH_EYE_Z);
     expect(playerEyeZ({ crouchBlend: 1, slideBlend: 1 })).toBeCloseTo(SLIDE_EYE_Z);
+    // Shots and drawn figures are measured from the art's eye line, EYE_Z.
     expect(eyeOffsetZ({ crouchBlend: 1 })).toBeCloseTo(CROUCH_EYE_Z - EYE_Z);
-    expect(eyeOffsetZ({})).toBe(0);
+    expect(eyeOffsetZ({})).toBeCloseTo(STAND_EYE_Z - EYE_Z);
   });
 
   it("treats a missing blend as standing", () => {
-    expect(playerEyeZ({})).toBe(EYE_Z);
-    expect(playerEyeZ(null)).toBe(EYE_Z);
+    expect(playerEyeZ({})).toBe(STAND_EYE_Z);
+    expect(playerEyeZ(null)).toBe(STAND_EYE_Z);
   });
 });

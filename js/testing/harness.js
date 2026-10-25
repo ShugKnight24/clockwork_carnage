@@ -28,7 +28,7 @@ import { createPlaytestGate } from "./playtest-gate.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
-import { hasLineOfSight } from "../../src/systems/physics.js";
+import { hasLineOfSight, eyeOffsetZ } from "../../src/systems/physics.js";
 import { currentBarH } from "../../src/systems/aim.js";
 import { zoneAimHeight } from "../../src/systems/combat.js";
 import { DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../../src/data/levels/rooms/arena.js";
@@ -350,9 +350,10 @@ const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" &&
 function aimForHead(game, e) {
   const p = game.player;
   const d = Math.max(0.5, Math.hypot(e.x - p.x, e.y - p.y));
-  // A grid level measures the shot from height 0 at the player, as its
-  // renderer projects sprites (pickHitscanTarget in src/systems/combat.js).
-  const y = zoneAimHeight(e, "head", !game.world);
+  // A grid level measures heights from the standing eye line the figures
+  // are drawn about; the shot leaves from the player's own eye, eyeOffsetZ
+  // above it (pickHitscanTarget in src/systems/combat.js).
+  const y = zoneAimHeight(e, "head", !game.world) - (game.world ? 0 : eyeOffsetZ(p));
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;

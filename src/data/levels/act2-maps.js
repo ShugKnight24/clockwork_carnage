@@ -538,9 +538,9 @@ function buildTransitLoop() {
   for (const [r, c] of [[39, 38], [39, 45], [45, 38], [45, 45]]) tile(g, r, c, 2);
   lowWall(g, hm, 42, 40, 42, 43, LAYER.WAIST);
   // Derailed car on the south loop: cover on the long straight.
-  lowWall(g, hm, 52, 30, 53, 36, LAYER.SHOULDER);
+  lowWall(g, hm, 52, 30, 53, 36, LAYER.TALL);
   // A dead train on the north loop, half across the track.
-  lowWall(g, hm, 5, 20, 6, 27, LAYER.SHOULDER);
+  lowWall(g, hm, 5, 20, 6, 27, LAYER.TALL);
   // Secret: a signal box off the west loop.
   carve(g, 35, 1, 37, 3);
   g[36][4] = 6;
