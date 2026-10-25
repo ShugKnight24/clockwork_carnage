@@ -95,7 +95,9 @@ function toolkit(level, plain = PLAIN) {
 const HALL = [S.CORRIDOR, S.PHOTOS, S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.WANTED];
 const HALL_QUIET = [S.CORRIDOR, S.CORRIDOR, S.NOTICE, S.CORRIDOR, S.CORRIDOR, S.PHOTOS];
 const OFFICE = [S.BLIND, S.BINDERS, S.BLIND, S.OFFICE_NOTICES];
-const LOCKERS = [S.LOCKERS_A, S.LOCKERS_B, S.LOCKERS_C];
+// Spare banks mostly, a named pair now and then: the same names round a
+// room read as one locker pasted down the wall.
+const LOCKERS = [S.LOCKERS_SPARE_1, S.LOCKERS_A, S.LOCKERS_SPARE_2, S.LOCKERS_SPARE_3, S.LOCKERS_B, S.LOCKERS_SPARE_1, S.LOCKERS_SPARE_2, S.LOCKERS_E, S.LOCKERS_SPARE_3, S.LOCKERS_C, S.LOCKERS_SPARE_2, S.LOCKERS_G];
 const EVIDENCE = [S.SHELVES_A, S.CAGE, S.SHELVES_B, S.CAGE];
 const CELL_FRONT = [P.CELL_BARS, P.CELL_BARS, P.CELL_DOOR, P.CELL_BARS, P.CELL_BARS];
 const LAB = [P.LAB_SHELVES, S.SIM_GRID, P.FUME_HOOD, S.SIM_GRID, P.LAB_BOARD, S.SIM_GRID];
@@ -410,7 +412,7 @@ function dressGreenhouse(level) {
 function dressFoundry(level) {
   const d = toolkit(level);
   d.area(50, 21, 57, 38, [S.NOTICE, S.FIRE, null]);
-  d.area(29, 7, 43, 52, [S.LOCKERS_A, S.LOCKERS_B, null, S.LOCKERS_C]);
+  d.area(29, 7, 43, 52, [S.LOCKERS_SPARE_1, S.LOCKERS_SPARE_2, null, S.LOCKERS_SPARE_3]);
   d.area(3, 7, 29, 52, PIPES);
   return d.done();
 }

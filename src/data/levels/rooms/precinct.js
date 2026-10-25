@@ -65,6 +65,11 @@ export const SHARED_WALLS = {
   LOCKERS_A: 10,
   LOCKERS_B: 11,
   LOCKERS_C: 12,
+  LOCKERS_E: 35,
+  LOCKERS_G: 37,
+  LOCKERS_SPARE_1: 39,
+  LOCKERS_SPARE_2: 175,
+  LOCKERS_SPARE_3: 176,
   // src/rendering/env/rooms/gym.js: the evidence cage behind the gym.
   CAGE: 70,
   CAGE_DOOR: 71,

@@ -79,14 +79,22 @@ function closedDoor(ctx, p, r, x, w, name, num, { lit = false, sticker = null, d
       ctx.fillRect(x + w * 0.22, yy + 3, w * 0.56, 1);
     }
   }
-  // Name card in its brass holder, and the locker number.
+  // Name card in its brass holder, and the locker number. A spare has an
+  // empty holder, a strip of old tape where a card was.
   const cy = y + 92;
   ctx.fillStyle = "#8a6a2a";
   ctx.fillRect(x + w * 0.16 - 3, cy - 13, w * 0.68 + 6, 26);
-  ctx.fillStyle = "#efe9da";
-  ctx.fillRect(x + w * 0.16, cy - 10, w * 0.68, 20);
-  letter(ctx, name, x + w / 2, cy + 1, name.length > 8 ? 14 : 16, "#141820");
-  letter(ctx, String(num), x + w / 2, cy + 26, 12, "#9fb2cc", 700);
+  if (name) {
+    ctx.fillStyle = "#efe9da";
+    ctx.fillRect(x + w * 0.16, cy - 10, w * 0.68, 20);
+    letter(ctx, name, x + w / 2, cy + 1, name.length > 8 ? 14 : 16, "#141820");
+  } else {
+    ctx.fillStyle = "#1a1e26";
+    ctx.fillRect(x + w * 0.16, cy - 10, w * 0.68, 20);
+    ctx.fillStyle = "rgba(220,210,170,0.35)";
+    ctx.fillRect(x + w * 0.16 + w * 0.68 * r(), cy - 8 + r() * 10, 10 + r() * 14, 5);
+  }
+  if (num != null) letter(ctx, String(num), x + w / 2, cy + 26, 12, "#9fb2cc", 700);
   // Recessed pull handle and the combination dial, on the latch side.
   const hx = x + w - 30;
   ink(ctx, hx, y + 150, 12, 70, 34);
@@ -674,6 +682,27 @@ export const STATION_PAINTERS = {
     { name: "PRICE", num: 407, deco: { note: "OWE U 1" } },
     { name: "TANAKA", num: 408, open: ["cap", "photos", "jacket", "charm", "boots"] },
   ),
+  [STATION_WALLS.LOCKERS_E]: lockerPair(
+    { name: "BRANDT", num: 414, deco: { photo: "#c89a7a" } },
+    { name: "REYES", num: 415 },
+    "UNIT 4",
+  ),
+  [STATION_WALLS.LOCKERS_F]: lockerPair(
+    { name: "NAKAMURA", num: 416, open: ["cap", "drawing", "shirt", "boots"] },
+    { name: "IBARRA", num: 417, deco: { note: "GYM 1800" } },
+  ),
+  [STATION_WALLS.LOCKERS_G]: lockerPair(
+    { name: "FISCHER", num: 418, deco: { sticker: "#3aa060" } },
+    { name: "OYELARAN", num: 419, deco: { photo: "#9a7ac8" } },
+    "UNIT 7",
+  ),
+  [STATION_WALLS.LOCKERS_H]: lockerPair(
+    { name: "HOLM", num: 420 },
+    { name: "SANTOS", num: 421, open: ["helmet", "photos", "jacket", "boots"] },
+  ),
+  [STATION_WALLS.LOCKERS_SPARE_1]: lockerPair({ name: null, num: null }, { name: null, num: null, deco: { sticker: "#c2a03a" } }),
+  [STATION_WALLS.LOCKERS_SPARE_2]: lockerPair({ name: null, num: null, deco: { note: "SPARE" } }, { name: null, num: null }),
+  [STATION_WALLS.LOCKERS_SPARE_3]: lockerPair({ name: null, num: null }, { name: null, num: null }),
   [STATION_WALLS.LOCKERS_MINE]: lockerPair({ name: "11235", num: 412, sticker: "rnd" }, { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } }),
   [STATION_WALLS.LOCKERS_MINE_LIT]: lockerPair({ name: "11235", num: 412, sticker: "rnd", lit: true }, { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } }),
   [STATION_WALLS.LOCKERS_MINE_OPEN]: lockerPair(

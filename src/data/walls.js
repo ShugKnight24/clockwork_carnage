@@ -30,6 +30,17 @@ export const STATION_WALLS = {
   // after 06:47): Certification Day's, in the free range below the east wing.
   LOCKERS_SUP: 160,
   LOCKERS_SUP_OPEN: 161,
+  // More of the squads' lockers, each pair of names on one cell only, and
+  // three banks with no names on them (spare, or between officers) to run
+  // between them: four pairs repeated down both walls read the same names
+  // over and over.
+  LOCKERS_E: 35,
+  LOCKERS_F: 36,
+  LOCKERS_G: 37,
+  LOCKERS_H: 38,
+  LOCKERS_SPARE_1: 39,
+  LOCKERS_SPARE_2: 175,
+  LOCKERS_SPARE_3: 176,
 };
 
 export const WALL_COLORS = {
@@ -51,6 +62,14 @@ export const WALL_COLORS = {
   14: { r: 44, g: 64, b: 104 },
   15: { r: 120, g: 90, b: 50 },
   16: { r: 44, g: 64, b: 104 },
+  // The rest of the squads' lockers and the spare banks (STATION_WALLS).
+  35: { r: 44, g: 64, b: 104 },
+  36: { r: 44, g: 64, b: 104 },
+  37: { r: 44, g: 64, b: 104 },
+  38: { r: 44, g: 64, b: 104 },
+  39: { r: 44, g: 64, b: 104 },
+  175: { r: 44, g: 64, b: 104 },
+  176: { r: 44, g: 64, b: 104 },
   17: { r: 50, g: 62, b: 90 },
   18: { r: 46, g: 52, b: 62 },
   19: { r: 50, g: 62, b: 90 },

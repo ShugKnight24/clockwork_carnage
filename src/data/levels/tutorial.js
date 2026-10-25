@@ -86,11 +86,18 @@ carve(38, 4, 46, 23);
 // The lockers line the north and south walls, full height, two to a cell,
 // each with its officer's name (src/rendering/env/locker-art.js). The
 // cadet's is on the south wall: LOCKERS_MINE, swapped for its lit and open
-// twins by the prologue. Benches down the middle are props.
-const LOCKER_ROW = [10, 11, 12, 13];
-for (let c = 4; c <= 23; c++) {
-  if (g[37][c] === 3) g[37][c] = LOCKER_ROW[c % 4];
-  if (g[47][c] === 3) g[47][c] = LOCKER_ROW[(c + 2) % 4];
+// twins by the prologue. Benches down the middle are props. Every named
+// pair is on one cell only, the spare banks (no names) between them.
+const LW = STATION_WALLS;
+const LOCKER_SPARES = [LW.LOCKERS_SPARE_1, LW.LOCKERS_SPARE_2, LW.LOCKERS_SPARE_3];
+const LOCKERS_NAMED = {
+  37: { 6: LW.LOCKERS_A, 10: LW.LOCKERS_B, 14: LW.LOCKERS_E, 18: LW.LOCKERS_F },
+  47: { 7: LW.LOCKERS_C, 11: LW.LOCKERS_D, 17: LW.LOCKERS_G, 21: LW.LOCKERS_H },
+};
+for (const row of [37, 47]) {
+  for (let c = 4; c <= 23; c++) {
+    if (g[row][c] === 3) g[row][c] = LOCKERS_NAMED[row][c] ?? LOCKER_SPARES[(c + row) % 3];
+  }
 }
 // Connecting corridor east (row 41-42)
 carve(41, 24, 42, 26);
@@ -402,7 +409,7 @@ export const TUTORIAL_MAP = {
   grid: g,
   // The station's own walls, painted for this map (js/renderer.js
   // _ensureMapWalls): every locker type, lit and open twins included.
-  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, STATION_WALLS.LOCKERS_SUP, STATION_WALLS.LOCKERS_SUP_OPEN, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
+  ownWalls: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...LOCKER_SPARES, LW.LOCKERS_E, LW.LOCKERS_F, LW.LOCKERS_G, LW.LOCKERS_H, STATION_WALLS.LOCKERS_SUP, STATION_WALLS.LOCKERS_SUP_OPEN, ...ALL_ROOMS.flatMap((r) => r.ownWalls)],
   // The east wing's rooms, the training hall and the civic wing can't be
   // seen from the locker room: the renderer paints their walls a few a frame once the
   // rest are up.
