@@ -4,9 +4,8 @@
  * inked panels, Modern's thin helmet-HUD lines (HT from hud-skin.js is the
  * live theme for the two vector styles).
  *
- * The bar sits under the reticle, where the eye already is in a fight. With
- * the sights up it drops further away and fades back, so nothing covers the
- * reticle or the sight picture while aiming.
+ * The bar sits under the reticle, where the eye already is in a fight, and
+ * stays there with the sights up (it fades back), clear of the reticle.
  */
 import { HT, uiFont, inkText, track } from "./hud-skin.js";
 import { isModernArt } from "../rendering/art-style.js";
@@ -64,9 +63,11 @@ export function drawReloadHud(ctx, game, cx, cy) {
   const now = game.time;
   const blend = getAimBlend();
   const m = metrics(game);
-  // Aimed: further from the reticle and quieter, never over the sight.
+  // One place, aimed or not: it used to slide further down with the sights
+  // up, which read as the ammo jumping about. The gap already keeps it off
+  // the reticle; aimed, it only goes quieter.
   let mid = cx;
-  let y = Math.round(cy + m.gap + blend * 64 * m.s);
+  let y = Math.round(cy + m.gap);
   // Through a scope the whole circle is the sight: the bar moves out to the
   // black beside it, where there is room.
   if (wep.scope && blend > 0.6) {

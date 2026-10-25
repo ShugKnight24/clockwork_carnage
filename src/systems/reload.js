@@ -77,13 +77,22 @@ export function isReloading(game) {
 export function updateReloads(game) {
   const ar = activeReloadOf(game);
   const a = ar.active;
-  if (a && (a.weaponId !== held(game)?.id || a.map !== game.map)) cancelReload(ar);
+  if (a && (a.weaponId !== held(game)?.id || a.map !== game.map)) {
+    cancelReload(ar);
+    // The pull that pressed the reload was that gun's, not the next one's.
+    ar.holdFire = false;
+  }
   // A fresh pull of the trigger mid-reload is the active-reload press too
   // (mouse, touch and pad alike): a held trigger, or the pull that started
   // an empty gun's reload, is not.
   const firing = !!game.player?.isFiring;
   const b = ar.active;
-  if (firing && !ar.fireWas && b && !b.pressed && game.time - b.start > TRIGGER_GRACE_MS) reloadPress(game);
+  if (firing && !ar.fireWas && b && !b.pressed && game.time - b.start > TRIGGER_GRACE_MS) {
+    reloadPress(game);
+    // That pull was the reload's, not a shot: the gun waits for the next one.
+    ar.holdFire = true;
+  }
+  if (!firing) ar.holdFire = false;
   ar.fireWas = firing;
   const done = updateReload(ar, game.time);
   if (done == null) return;
@@ -99,7 +108,7 @@ export function updateReloads(game) {
 export function readyToFire(game, wep) {
   const p = game.player;
   if (!p.loadedOf) return true; // a bare player (tests) has no magazines
-  if (isReloading(game)) return false;
+  if (isReloading(game) || game.activeReload?.holdFire) return false;
   if (p.loadedOf(wep.id) >= (wep.ammoPerShot || 1)) return true;
   // Empty: reload when there is something to load.
   beginReload(game);

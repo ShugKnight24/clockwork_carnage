@@ -60,6 +60,16 @@ describe("magazines", () => {
     expect(isReloading(g)).toBe(false);
     expect(g.activeReload.stats.hits).toBe(1);
     expect(g.player.loaded).toBe(shotgun.magSize);
+    // The pull that landed it fires nothing, held; the next pull does.
+    const shots = g.shotsFired;
+    g.time += 5000;
+    fireWeapon(g);
+    expect(g.shotsFired).toBe(shots);
+    g.player.isFiring = false;
+    updateReloads(g);
+    g.player.isFiring = true;
+    shoot(g);
+    expect(g.shotsFired).toBe(shots + 1);
   });
 
 
