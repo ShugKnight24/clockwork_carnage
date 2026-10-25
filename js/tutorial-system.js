@@ -34,6 +34,7 @@ import { drawLine } from "../src/systems/aria-comms.js";
 import { spawnEnergyBurst } from "./particle-system.js";
 import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
+import { aimAnglesForGame } from "../src/systems/aim.js";
 import { Npc } from "./npc.js";
 import { NPC_TYPES } from "../src/data/npcs.js";
 import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../src/data/levels/rooms/arena.js";
@@ -152,17 +153,38 @@ const LIFT_DOORS = [
 /** Inside the car, and where the open car's beacon stands. */
 const LIFT_CAR = { x: 30.0, y: 2.6 };
 /**
- * The alarm at Lift B: how close you get to the car before he puts you out
- * of it (or how long he waits for you), and how long after that the doors
- * shut. What he says when he does.
+ * The alarm at Lift B: how close you get to the car before he steps out
+ * into its doorway to stop you (or how long he waits for you), and how long
+ * after that the doors shut. Stand in his way and he puts you back: a palm
+ * in the chest plate, a shove of `ALARM_SHOVE_SPEED` cells/s for
+ * `ALARM_SHOVE_TIME`. What he says when he does.
  */
-const ALARM_REFUSE_AT = 2.2;
+const ALARM_REFUSE_AT = 3.6;
 const ALARM_REFUSE_WAIT = 6;
-const ALARM_DOORS_AFTER = 4.5;
+const ALARM_DOORS_AFTER = 5.5;
+/** Where he stands in the doorway to stop you, and how near you get before he shoves. */
+const LIFT_BLOCK = { x: LIFT_CAR.x, y: LIFT_CAR.y + 0.7 };
+const ALARM_SHOVE_AT = 1.5;
+const ALARM_SHOVE_SPEED = 5.5;
+const ALARM_SHOVE_TIME = 0.3;
 const ALARM_REFUSAL = [
   ["SUPERVISOR", "No. Not you.", "urgent"],
-  ["SUPERVISOR", "Bureau property doesn't go down there uncertified. Neither do you. Hold this floor, Cadet. That's an order.", "urgent"],
+  ["SUPERVISOR", "You've had that suit four hours, Cadet. You passed drills. What's down there isn't a drill, and you're not ready for it.", "urgent"],
+  ["SUPERVISOR", "Hold this floor. That's an order.", "urgent"],
   ["ARIA", "He's keyed the car to his badge. I can't call it back.", "afraid"],
+];
+/** Shoved back a second time. */
+const ALARM_AGAIN = [["SUPERVISOR", "I said no. I'm not losing a cadet down that shaft.", "urgent"]];
+/**
+ * After 06:47, with the thing from the lift down: the Supervisor, at Orr,
+ * then turning to Lin in her booth, then to you. Who he faces as each is said.
+ */
+const LOOK_AROUND = [
+  ["orr", ["SUPERVISOR", "Doctor Orr? ...Orr. Cadet, don't touch her. Don't anybody touch her.", "afraid"]],
+  ["lin", ["SUPERVISOR", "Lin. Lin! ...She's the same.", "afraid"]],
+  ["lin", ["ARIA", "Every badge on the station just went flat, sir. Heartbeats, but slow. One beat a minute.", "afraid"]],
+  ["cadet", ["SUPERVISOR", "The whole floor. Everyone but us.", "afraid"]],
+  ["cadet", ["SUPERVISOR", "Your suit, my vest. Orr's work, both of them. That's the only reason we're standing.", "calm"]],
 ];
 /**
  * The breach on this floor: up through the sim hall as the lift shuts on
@@ -238,9 +260,13 @@ const STATIONS = {
 };
 /** How fast Orr walks you to R&D: a little under your own walk, so you keep together. */
 const ORR_WALK = 2.7;
-/** How far ahead of you she'll get before she stops for you, and the longest she waits to start. */
+/**
+ * How far ahead of you she'll get before she stops for you, and the longest
+ * she waits to start. The wait runs only once the morning's lines before
+ * hers are said: the Supervisor's at the range can take longer than this.
+ */
 const ORR_LEASH = 4;
-const ORR_WAIT_MAX = 20;
+const ORR_WAIT_MAX = 12;
 
 /**
  * The rooms the story asks you to be in, as their floors are carved
@@ -492,20 +518,41 @@ const ANCHOR_LINES = [
   ["DR. ORR", "It shouldn't be able to see the Engine from here.", "worried"],
 ];
 
-/** Seconds the rig takes to calibrate the suit, standing still on its pad. */
-const READ_TIME = 9;
 /**
- * Orr's commentary as the calibration goes: [fraction read, line]. Said
- * only if nothing else is being said by then (her walk's lines can run
- * long): the reading itself is on the card.
+ * The rig tunes the suit to the cadet in three parts, all from its pad:
+ * the frame (stand still while the servos learn your weight and reach), the
+ * eyes (look at each beacon round the bay as it lights, and hold on it, so
+ * the HUD learns where you look: where you look is where the suit aims),
+ * and the anchor (stand still through the jolt: the module they didn't tell
+ * you about, and the second the room skips when it holds you).
  */
-const READ_LINES = [
-  [0.15, ["DR. ORR", "Body's in. Pulse is up. Fair enough.", "calm"]],
-  [0.45, ["DR. ORR", "Same frame as the squads' plate. Theirs only half takes the anchor.", "curious"]],
-  [0.75, ["DR. ORR", "Now your head. Neural lock... come on.", "worried"]],
-];
-/** What the card says the rig is reading, by how far it has got. */
-const READ_STAGES = [[0.4, "BODY"], [0.75, "NERVES"], [1, "MIND"]];
+const CALIB_FRAME_TIME = 3.5;
+const CALIB_ANCHOR_TIME = 4;
+/** Into the anchor's hold, when the jolt goes through; and the longest it waits for her warning first. */
+const CALIB_JOLT_AT = 1.4;
+const CALIB_WARN_WAIT = 6;
+/** The beacons, in the order they light: north, west, then east of the pad. */
+const CALIB_BEACONS = [[70.5, 4.6], [67.2, 8.0], [74.6, 6.2]];
+/** How near the reticle must be to a beacon (radians), and how long held there. */
+const CALIB_LOOK_CONE = 0.1;
+const CALIB_LOOK_HOLD = 0.45;
+const CALIB_LINES = {
+  frame: [["DR. ORR", "Frame first. Stand easy: the servos are learning your weight, and your reach.", "calm"]],
+  eyes: [
+    ["DR. ORR", "Body's in. Now your eyes.", "calm"],
+    ["ARIA", "Follow the lights. Each one you hold, I learn where you look. That's where your shots go.", "curious"],
+  ],
+  anchor: [
+    ["DR. ORR", "Good. Where you look, the suit aims.", "warm"],
+    ["DR. ORR", "Last one. The anchor: the module nobody told you about. Hold still. You'll feel this.", "worried"],
+  ],
+  jolt: [
+    ["ARIA", "What was that? The room just skipped. A whole second, gone.", "afraid"],
+    ["DR. ORR", "That was the anchor holding you while the world didn't. You'll never need it.", "calm"],
+  ],
+};
+/** What the card says, by part. */
+const CALIB_STAGES = { frame: "FRAME", eyes: "EYES", anchor: "ANCHOR" };
 
 /**
  * The cover drill (the "coverDrill" step): its holo targets at the hall's
@@ -870,10 +917,11 @@ const LOGIC = {
       const p = g.player;
       const orr = t.person(g, "orr");
       // She lets him say his piece and waits for you: she sets off once she
-      // is talking (or, if the comms never free up, after a while).
+      // is talking (or, if her lines never come, a while after his are done).
       if (!c.go) {
         orr.faceTo(p);
-        c.waited += g.deltaTime || 0;
+        const before = t.script.some((q) => q.line[0] !== "DR. ORR" && q.line[0] !== "ARIA") || (t._ourLine && g.ariaComms?.message?.speaker !== "DR. ORR");
+        if (!before) c.waited += g.deltaTime || 0;
         if (g.ariaComms?.message?.speaker === "DR. ORR" || c.waited > ORR_WAIT_MAX) c.go = true;
         return inArea(p, "rnd");
       }
@@ -901,47 +949,107 @@ const LOGIC = {
   },
 
   /**
-   * The rig tunes the suit to the cadet: stand on its pad, in the lit ring,
-   * and hold still while Orr reads body, nerves and mind. Off the pad, or
-   * moving on it, the reading waits; it never resets.
+   * The rig tunes the suit to the cadet (CALIB_*): the frame, the eyes and
+   * the anchor, each from its pad, in the lit ring. Off the pad, or moving on
+   * it, the reading waits; it never resets.
    */
   calibrate: {
     waypoint: RIG_AT,
     enter(t, g) {
-      t.c.read = 0;
-      t.c.said = 0;
-      t.c.lastX = g.player.x;
-      t.c.lastY = g.player.y;
+      const c = t.c;
+      c.part = "frame";
+      c.read = 0;
+      c.beacon = 0;
+      c.hold = 0;
+      c.lastX = g.player.x;
+      c.lastY = g.player.y;
       t.toStation(g, "orr", { snap: true });
-      t.c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
-      if (t.c.rig) t.c.rig.wait = 1;
+      c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
+      if (c.rig) c.rig.wait = 1;
+      CALIB_BEACONS.forEach(([x, y], i) => {
+        const b = new Prop(x, y, "calib_beacon");
+        b.state = "off";
+        t.place(g, `calib${i}`, b);
+      });
     },
     update(t, g) {
+      const c = t.c;
       const p = g.player;
-      const still = Math.hypot(p.x - t.c.lastX, p.y - t.c.lastY) < 0.02;
-      t.c.lastX = p.x;
-      t.c.lastY = p.y;
+      const dt = g.deltaTime || 0;
+      const still = Math.hypot(p.x - c.lastX, p.y - c.lastY) < 0.02;
+      c.lastX = p.x;
+      c.lastY = p.y;
       const on = t.near(g, RIG_AT.x, RIG_AT.y, 0.75);
-      if (on && still) t.c.read += g.deltaTime;
-      if (t.c.rig) {
-        t.c.rig.scan = on ? 1 : 0;
-        t.c.rig.wait = on ? 0 : 1;
+      if (c.rig) {
+        c.rig.scan = on ? 1 : 0;
+        c.rig.wait = on ? 0 : 1;
       }
-      const k = t.c.read / READ_TIME;
-      while (t.c.said < READ_LINES.length && k >= READ_LINES[t.c.said][0]) {
-        const line = READ_LINES[t.c.said++][1];
-        if (t.scriptIdle()) t.say([line]);
+      if (on && !c.started) {
+        c.started = true;
+        t.say(CALIB_LINES.frame);
       }
-      return k >= 1;
+      const beacons = CALIB_BEACONS.map((_, i) => g.entities.find((e) => e._tutTag === `calib${i}`));
+      if (c.part === "frame") {
+        if (on && still) c.read += dt;
+        if (c.read >= CALIB_FRAME_TIME) {
+          c.part = "eyes";
+          // What she hadn't got to about the last part is behind you now.
+          t.script = t.script.filter((q) => q.step !== t.step);
+          t.say(CALIB_LINES.eyes);
+          if (beacons[0]) beacons[0].state = "on";
+        }
+      } else if (c.part === "eyes") {
+        const b = beacons[c.beacon];
+        if (b && on) {
+          const yaw = aimAnglesForGame(g).yaw;
+          const off = Math.atan2(b.y - p.y, b.x - p.x) - yaw;
+          const looking = Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < CALIB_LOOK_CONE;
+          c.hold = looking ? c.hold + dt : Math.max(0, c.hold - dt * 2);
+          b.hold = c.hold / CALIB_LOOK_HOLD;
+          if (c.hold >= CALIB_LOOK_HOLD) {
+            b.state = "locked";
+            playChronoSound(g.audio, "lock");
+            c.hold = 0;
+            c.beacon++;
+            if (beacons[c.beacon]) beacons[c.beacon].state = "on";
+          }
+        }
+        if (c.beacon >= beacons.length) {
+          c.part = "anchor";
+          c.read = 0;
+          c.anchorAt = t.clock;
+          t.script = t.script.filter((q) => q.step !== t.step);
+          t.say(CALIB_LINES.anchor);
+        }
+      } else if (c.part === "anchor") {
+        // Her lines first: the jolt waits for "you'll feel this".
+        if (on && still && (c.jolted || t.stepLinesDone() || t.clock - c.anchorAt > CALIB_WARN_WAIT)) c.read += dt;
+        if (!c.jolted && c.read >= CALIB_JOLT_AT) {
+          // The anchor holds the cadet while the room skips a second: a
+          // small 06:47, here, on purpose.
+          c.jolted = true;
+          g.screenShake = Math.max(g.screenShake || 0, 3);
+          g.glitchEffect = Math.max(g.glitchEffect || 0, 0.7);
+          playChronoSound(g.audio, "shiftLoud");
+          t.flicker(g, 0.35);
+          // Said through the step's end: what it was matters more than when.
+          t.say(CALIB_LINES.jolt, { keep: true });
+        }
+        if (c.read >= CALIB_ANCHOR_TIME && c.jolted) return true;
+      }
+      return false;
     },
     progress: (t, g) => {
-      if (!t.near(g, RIG_AT.x, RIG_AT.y, 0.75)) return t.c.read > 0 ? "BACK ON THE PAD · THE READING WAITS" : "STAND ON THE PAD · INSIDE THE LIT RING";
-      const k = t.c.read / READ_TIME;
-      const stage = READ_STAGES.find(([at]) => k < at)?.[1] ?? "MIND";
-      return `CALIBRATING ${Math.min(100, Math.round(k * 100))}% · ${stage} · HOLD STILL`;
+      const c = t.c;
+      if (!t.near(g, RIG_AT.x, RIG_AT.y, 0.75)) return c.started ? "BACK ON THE PAD · THE READING WAITS" : "STAND ON THE PAD · INSIDE THE LIT RING";
+      const part = CALIB_STAGES[c.part];
+      if (c.part === "eyes") return `CALIBRATING · ${part} · LOOK AT THE LIT BEACON ${Math.min(c.beacon + 1, CALIB_BEACONS.length)}/${CALIB_BEACONS.length}`;
+      const k = c.read / (c.part === "frame" ? CALIB_FRAME_TIME : CALIB_ANCHOR_TIME);
+      return `CALIBRATING · ${part} ${Math.min(100, Math.round(k * 100))}% · HOLD STILL`;
     },
-    exit(t) {
+    exit(t, g) {
       if (t.c.rig) t.c.rig.scan = t.c.rig.wait = 0;
+      CALIB_BEACONS.forEach((_, i) => t.clearTag(g, `calib${i}`));
       t.say([["DR. ORR", "There. It took. It's yours now.", "happy"]], { keep: true });
     },
   },
@@ -1506,12 +1614,27 @@ const LOGIC = {
         t.minute(g);
       }
       if (c.phase === "wait") return false;
-      return t.alive(g, "glitch") === 0 || t.clock - c.at > 12;
+      // It's down, and he's free of the minute: he goes to Orr first, then
+      // looks round the hall and finds it isn't only her.
+      if (c.phase === "stopped" && (t.alive(g, "glitch") === 0 || t.clock - c.at > 12) && !t.sup?.frozen) {
+        c.phase = "look";
+        c.look = [...LOOK_AROUND];
+      }
+      if (c.phase !== "look") return false;
+      if (c.look.length && t.scriptIdle()) {
+        const [who, line] = c.look.shift();
+        const n = who === "cadet" ? g.player : t.people[who];
+        if (n) t.sup?.faceTo(n);
+        t.say([line]);
+      }
+      return !c.look.length && t.scriptIdle();
     },
     exit(t, g) {
       t.clearTag(g, "glitch");
-      if (t.c.phase !== "stopped") t.minute(g);
-      t.say([["SUPERVISOR", "Doctor Orr? ...Orr. Cadet, don't touch her. Don't anybody touch her.", "afraid"]]);
+      if (t.c.phase !== "stopped" && t.c.phase !== "look") t.minute(g);
+      // Skipped (a checkpoint, the bot) before he had looked: the line that matters.
+      if (t.c.phase !== "look") t.say([LOOK_AROUND[0][1]]);
+      t.sup?.faceTo(null);
     },
   },
 
@@ -1680,21 +1803,42 @@ const LOGIC = {
       }
       if (!c.armed) return false;
       const toCar = Math.hypot(p.x - LIFT_CAR.x, p.y - LIFT_CAR.y);
-      // You go to step in with him (or hang back): he puts you out of the
-      // car and locks it to his badge.
+      // You go to step in with him (or hang back): he steps out into the
+      // doorway, hand up, and locks the car to his badge.
       if (c.inCar && !c.refused && (toCar < ALARM_REFUSE_AT || t.clock - c.carAt > ALARM_REFUSE_WAIT)) {
         c.refused = true;
         c.refusedAt = t.clock;
+        c.shoves = 0;
         t.say(ALARM_REFUSAL, { cut: true });
-        if (toCar < ALARM_REFUSE_AT + 0.6) {
-          shovePlayer(p, Math.atan2(p.y - LIFT_CAR.y, p.x - LIFT_CAR.x), 1.4, g.map);
-          g.screenShake = Math.max(g.screenShake || 0, 3);
+        sup?.walk([[LIFT_BLOCK.x, LIFT_BLOCK.y]], {
+          speed: 3,
+          then: (n) => {
+            n.faceTo(g.player);
+            n.pose("point", ALARM_DOORS_AFTER);
+          },
+        });
+      }
+      // Until the doors shut the doorway is his: come at it and he puts you
+      // back, hard enough to feel. Then he steps back in for the doors.
+      if (c.refused && !c.shut && sup) {
+        if (!c.back && t.clock - c.refusedAt > ALARM_DOORS_AFTER - 1) {
+          c.back = true;
+          sup.walk([[LIFT_CAR.x, LIFT_CAR.y]], { speed: 2, then: (n) => n.faceTo(g.player) });
+        }
+        const near = Math.hypot(p.x - sup.x, p.y - sup.y);
+        if (!c.shove && near < ALARM_SHOVE_AT) {
+          c.shove = { a: Math.atan2(p.y - sup.y, p.x - sup.x), left: ALARM_SHOVE_TIME };
+          c.shoves++;
+          g.screenShake = Math.max(g.screenShake || 0, 4);
+          p.cameraPunch = Math.max(p.cameraPunch || 0, 0.06);
           g.audio.armorClank?.(0);
+          if (c.shoves === 2) t.say(ALARM_AGAIN);
         }
       }
-      // Until the doors shut, the car is his: step back in and he puts you out again.
-      if (c.refused && !c.shut && toCar < ALARM_REFUSE_AT - 0.4) {
-        shovePlayer(p, Math.atan2(p.y - LIFT_CAR.y, p.x - LIFT_CAR.x), 1.0, g.map);
+      if (c.shove) {
+        const d = Math.min(g.deltaTime || 0, 0.05);
+        shovePlayer(p, c.shove.a, ALARM_SHOVE_SPEED * d, g.map);
+        if ((c.shove.left -= d) <= 0) c.shove = null;
       }
       if (c.refused && !c.shut && t.clock - c.refusedAt > ALARM_DOORS_AFTER) {
         c.shut = true;
@@ -2003,6 +2147,8 @@ export class TutorialSystem {
     const g = this.game;
     g.mode = "tutorial";
     g.ariaComms?.flush();
+    // She is met in the locker room, once the suit is on.
+    if (g.ariaComms) g.ariaComms.introduced = false;
     g.player.reset();
     if (!g.cutsceneEngine) {
       return g._ensureCutsceneEngine().then(() => this._begin());

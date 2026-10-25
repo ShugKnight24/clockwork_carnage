@@ -1433,6 +1433,7 @@ export class Game {
     this.applyLoadoutBonuses();
     this.upgradeLevels = {};
     this.ariaEnabled = true;
+    this.ariaComms.introduced = true;
     this.ariaTriggered = {};
     this.queueAriaMessage("arenaStart");
     this.queueAriaMessage("arenaIntro");
@@ -1467,6 +1468,7 @@ export class Game {
     this.player.reset();
     this.applyLoadoutBonuses();
     this.ariaEnabled = true;
+    this.ariaComms.introduced = true;
     this.ariaTriggered = {};
 
     // Generate the meltdown corridor

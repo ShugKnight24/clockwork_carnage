@@ -167,6 +167,10 @@ export class AriaCommsSystem {
     this.game = game;
     this.queue = [];
     this.message = null; // { text, color, life, duration, prominent }
+    // Whether the player has met her yet: the prologue clears it until she
+    // first speaks (its "look" step), so nothing of hers, a quip on
+    // unpausing included, comes before her introduction.
+    this.introduced = true;
     this.triggered = {}; // one-shot triggers per level/round
     this.enabled = false;
     this.idleTimer = 0;
@@ -241,7 +245,7 @@ export class AriaCommsSystem {
   }
 
   queueMessage(category, arenaRound) {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.introduced) return;
     // The prologue writes every word she says (js/tutorial-system.js): her
     // stock chatter there only cut into the story and held up instructions.
     if (this.game?.mode === "tutorial") return;
@@ -317,6 +321,7 @@ export class AriaCommsSystem {
    */
   queueLine({ speaker = "ARIA", text, color = "#00ffdd", voice = null, emotion = null, duration = 4.5, prominent = true, ...extra }) {
     if (!this.enabled || !text) return;
+    if (speaker === "ARIA") this.introduced = true;
     this.queue.push({
       text,
       color,
@@ -332,8 +337,8 @@ export class AriaCommsSystem {
   }
 
   triggerOnce(key, category, arenaRound) {
-    // Muted in the prologue (queueMessage): don't spend the one-shot there.
-    if (this.game?.mode === "tutorial") return;
+    // Muted in the prologue and before she is met (queueMessage): don't spend the one-shot there.
+    if (this.game?.mode === "tutorial" || !this.introduced) return;
     if (this.triggered[key]) return;
     this.triggered[key] = true;
     this.queueMessage(category, arenaRound);

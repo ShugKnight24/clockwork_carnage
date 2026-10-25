@@ -98,6 +98,7 @@ export class CampaignManager {
     try {
       const data = Save.sanitizeCampaignSave(raw, level);
       g.mode = "campaign";
+      if (g.ariaComms) g.ariaComms.introduced = true;
       this.level = index;
       this.act = data.act || 1;
       this.ngPlusCycle = data.ngPlusCycle || 0;
@@ -173,6 +174,7 @@ export class CampaignManager {
     // The locker-room prologue already played "clocking_in"; don't repeat it.
     const fromTutorial = g.mode === "tutorial";
     g.mode = "campaign";
+    if (g.ariaComms) g.ariaComms.introduced = true;
     this.level = 0;
     this.act = 1;
     this.ngPlusCycle = 0;

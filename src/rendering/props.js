@@ -1409,6 +1409,55 @@ function renderTelemetryRig(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
 }
 PROP_RENDERERS.telemetry_rig = renderTelemetryRig;
 
+/**
+ * One of the calibration rig's eye-tracking beacons (js/tutorial-system.js
+ * calibrate): a brass ring with a lens, hung at eye height on a thin mast.
+ * Dark until its turn (`entity.state` "off"); lit amber and pulsing while it
+ * waits for your eyes ("on"), its ring filling as you hold on it
+ * (`entity.hold`, 0-1); teal once it has them ("locked").
+ */
+function renderCalibBeacon(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
+  const ground = groundY(cy, sh);
+  const y = ground - sh * 0.72;
+  const r = Math.max(3, sw * 0.08);
+  const state = entity?.state ?? "off";
+  const on = state === "on";
+  const locked = state === "locked";
+  const pulse = 0.5 + 0.5 * Math.sin(t * 0.008);
+  const lit = on ? "255,184,72" : locked ? "70,224,255" : "90,100,110";
+  ctx.save();
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = "#2c3036";
+  ctx.fillRect(sx - Math.max(1, r * 0.12), y + r, Math.max(2, r * 0.24), ground - y - r);
+  if (on || locked) {
+    const halo = ctx.createRadialGradient(sx, y, r * 0.2, sx, y, r * (on ? 3.2 + pulse : 2.4));
+    halo.addColorStop(0, `rgba(${lit},${on ? 0.45 + 0.25 * pulse : 0.35})`);
+    halo.addColorStop(1, `rgba(${lit},0)`);
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(sx, y, r * (on ? 3.2 + pulse : 2.4), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "#a8834a";
+  ctx.lineWidth = Math.max(1.5, r * 0.3);
+  ctx.beginPath();
+  ctx.arc(sx, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(${lit},${on || locked ? 0.9 : 0.5})`;
+  ctx.beginPath();
+  ctx.arc(sx, y, r * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  if (on && entity.hold > 0) {
+    ctx.strokeStyle = "rgba(255,240,200,0.95)";
+    ctx.lineWidth = Math.max(1.5, r * 0.22);
+    ctx.beginPath();
+    ctx.arc(sx, y, r * 1.45, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, entity.hold));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+PROP_RENDERERS.calib_beacon = renderCalibBeacon;
+
 /** The booking camera on its tripod, the ring light round the lens. */
 function renderBookingCamera(ctx, sx, cy, sw, sh, dist, t, fog) {
   const ground = groundY(cy, sh);

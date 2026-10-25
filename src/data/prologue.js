@@ -202,8 +202,8 @@ export const PROLOGUE_STEPS = [
     trial: "calibration",
     title: "SUIT CALIBRATION",
     color: "#46e0ff",
-    hint: "Stand on the rig's pad, inside the lit ring in the middle of the bay, and hold still while Dr. Orr reads you.",
-    lines: [[ORR, "That's the rig. On the pad, inside the ring. Hold still.", "calm"]],
+    hint: "Stand on the rig's pad, inside the lit ring in the middle of the bay. Hold still for the frame, look at each beacon as it lights, then hold still for the anchor.",
+    lines: [[ORR, "That's the rig. On the pad, inside the ring. It tunes the suit to you: frame, eyes, then the anchor.", "calm"]],
   },
 
   // ── 3. CERTIFICATION DAY: the hub ────────────────────────────────

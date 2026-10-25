@@ -2019,7 +2019,17 @@ function botCadet(game) {
       return walkTo(game, 64.5, 10.5, 1) || stepGame(game, 1);
     },
     // On the rig's pad, standing still.
-    calibrate: () => (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.4 ? walkTo(game, 70.5, 7.5, 1) || stepGame(game, 1) : (clearInput(game), stepGame(game, 1))),
+    calibrate: () => {
+      if (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.6) return walkTo(game, 70.5, 7.5, 0.3) || stepGame(game, 1);
+      clearInput(game);
+      // The eye part: look at the lit beacon.
+      const b = game.entities.find((e) => e.propType === "calib_beacon" && e.state === "on");
+      if (b) {
+        p.angle = Math.atan2(b.y - p.y, b.x - p.x);
+        p.aimOffsetX = 0;
+      }
+      return stepGame(game, 1);
+    },
     // The sheet: to the nearest trial still to do (the marker). At Lin's
     // booth, hear her out, then tell her to go.
     certify: () => {
