@@ -173,10 +173,91 @@ float glowSide(float d) {
   return t * t;
 }
 
-// A room's own deck (map.decks, the envMap's A byte): drawn here instead of
-// the act's art. 1: polished marble laid on the diagonal under a skylight's
-// glazing grid; 2: oak boards under a coffered plaster ceiling.
-vec3 deckFloor(vec2 wp, int kind) {
+// A room's own deck (map.decks, the envMap's A byte: the floor's kind in the
+// low four bits, the ceiling's in the high four, which a 0 leaves the floor's):
+// drawn here instead of the act's art. 1: polished marble laid on the
+// diagonal under a skylight's glazing grid; 2: oak boards under a coffered
+// plaster ceiling. The station's rooms (src/data/levels/rooms/):
+// floors 3 carpet tile, 4 vinyl tile, 5 sealed concrete, 6 rubber sport
+// floor, 7 ceramic tile; ceilings 3 suspended acoustic tile, 4 open plant
+// (beams, a duct, the pendant strips), 5 painted concrete, 6 the range's
+// felt baffles. Every room ceiling has its lamps on the same checkerboard of
+// cells (deckLamp), so the station's fixtures keep one spacing room to room
+// and the floor's pools (deckPool) always sit under them. fw is the
+// pixel's footprint in cells: lines widen and fine detail fades with it.
+
+float hash2(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+// 1 on a line w either side of the nearest multiple of period, antialiased.
+float gridLine(float v, float period, float w, float fw) {
+  float e = abs(fract(v / period + 0.5) - 0.5) * period;
+  return 1.0 - smoothstep(w - fw, w + fw, e);
+}
+// 1 inside the box |q| < h (cells), antialiased.
+float boxAA(vec2 q, vec2 h, float fw) {
+  vec2 d = abs(q) - h;
+  return 1.0 - smoothstep(-fw, fw, max(d.x, d.y));
+}
+// Whether a room ceiling has a lamp over cell c: every other cell.
+bool deckLamp(vec2 c) {
+  return mod(c.x + c.y, 2.0) < 0.5;
+}
+// The light a room ceiling's lamps pool on the floor at wp: soft, under each
+// lit cell's fixture, falling off over about a cell. On the checkerboard,
+// cos(pi x) cos(pi y) of the offset from a cell's middle is 1 under every lamp
+// and -1 between them, so one product stands in for summing the lamps.
+vec3 deckPool(vec2 wp, int ck) {
+  vec2 u = (wp - 0.5) * 3.14159265;
+  float k = 0.5 + 0.5 * cos(u.x) * cos(u.y);
+  vec3 tint = ck == 4 || ck == 6 ? vec3(0.92, 0.96, 1.0) : vec3(1.0, 0.95, 0.86);
+  return tint * (k * k);
+}
+
+vec3 deckFloor(vec2 wp, int kind, float fw) {
+  float detail = 1.0 - smoothstep(0.004, 0.03, fw);
+  if (kind == 3) {
+    // Carpet tile, the pile turned a quarter on alternate tiles.
+    vec2 t = floor(wp * 2.0);
+    float alt = mod(t.x + t.y, 2.0);
+    float pile = 0.5 + 0.5 * sin((alt > 0.5 ? wp.x : wp.y) * 160.0);
+    vec3 c = vec3(0.19, 0.22, 0.29) * (0.93 + 0.09 * alt) + (pile - 0.5) * 0.03 * detail;
+    c += (hash2(floor(wp * 90.0)) - 0.5) * 0.05 * detail;
+    return mix(c, c * 0.72, gridLine(wp.x, 0.5, 0.004, fw) + gridLine(wp.y, 0.5, 0.004, fw));
+  }
+  if (kind == 4) {
+    // Vinyl tile, each a shade off its neighbours, polished.
+    vec2 t = floor(wp * 4.0);
+    float tone = hash2(t);
+    vec3 c = mix(vec3(0.40, 0.40, 0.38), vec3(0.46, 0.45, 0.42), tone);
+    c += (hash2(floor(wp * 70.0)) - 0.5) * 0.04 * detail;
+    float seam = max(gridLine(wp.x, 0.25, 0.003, fw), gridLine(wp.y, 0.25, 0.003, fw));
+    return mix(c, vec3(0.22, 0.22, 0.21), seam * 0.7);
+  }
+  if (kind == 5) {
+    // Sealed concrete, mottled, its saw cuts on the cell lines.
+    float mott = 0.5 + 0.25 * sin(wp.x * 1.7 + sin(wp.y * 1.3) * 1.6) * sin(wp.y * 2.1 + 0.7) + 0.25 * sin(wp.x * 6.1 + wp.y * 4.3);
+    vec3 c = mix(vec3(0.24, 0.25, 0.26), vec3(0.31, 0.32, 0.32), mott);
+    c += (hash2(floor(wp * 60.0)) - 0.5) * 0.035 * detail;
+    float cut = max(gridLine(wp.x, 2.0, 0.006, fw), gridLine(wp.y, 2.0, 0.006, fw));
+    return mix(c, vec3(0.16, 0.16, 0.17), cut * 0.8);
+  }
+  if (kind == 6) {
+    // Rubber sport floor, flecked, laid in rolls along x.
+    vec3 c = vec3(0.13, 0.14, 0.16);
+    float fleck = step(0.86, hash2(floor(wp * 80.0)));
+    // The flecks average out to a lift far off, rather than glittering.
+    c += mix(vec3(0.012), vec3(0.08, 0.085, 0.09) * fleck, detail * detail);
+    return mix(c, vec3(0.06), gridLine(wp.y, 1.0, 0.004, fw) * 0.8);
+  }
+  if (kind == 7) {
+    // Ceramic tile with grey grout, the wet room's.
+    vec2 t = floor(wp * 8.0);
+    vec3 c = mix(vec3(0.38, 0.41, 0.43), vec3(0.43, 0.46, 0.48), hash2(t));
+    float grout = max(gridLine(wp.x, 0.125, 0.004, fw), gridLine(wp.y, 0.125, 0.004, fw));
+    // Far off, the grout reads as the tile's average, not a moire.
+    return mix(c, vec3(0.24, 0.26, 0.27), grout * mix(0.35, 0.8, detail));
+  }
   if (kind == 1) {
     vec2 q = vec2(wp.x + wp.y, wp.x - wp.y) * 0.7071;
     vec2 fq = fract(q);
@@ -194,7 +275,72 @@ vec3 deckFloor(vec2 wp, int kind) {
   float seam = max(1.0 - smoothstep(0.0, 0.06, fract(wp.y * 5.0)), 1.0 - smoothstep(0.0, 0.015, fract(wp.x * 1.25 + off)));
   return mix(c, vec3(0.10, 0.06, 0.04), seam * 0.6);
 }
-vec3 deckCeil(vec2 wp, int kind) {
+vec3 deckCeil(vec2 wp, int kind, float fw) {
+  vec2 f = fract(wp);
+  bool lamp = deckLamp(floor(wp));
+  // Lamp faces: bright enough that Realistic keeps them unlit (see main).
+  const vec3 LAMP = vec3(1.0, 0.97, 0.90);
+  const vec3 COOL = vec3(0.92, 0.97, 1.0);
+  if (kind == 3) {
+    // Suspended acoustic tile on a quarter-cell grid, a square LED panel
+    // filling the middle four tiles of each lit cell.
+    vec3 c = vec3(0.44, 0.44, 0.42) + (hash2(floor(wp * 4.0)) - 0.5) * 0.025;
+    c += (hash2(floor(wp * 64.0)) - 0.5) * 0.04 * (1.0 - smoothstep(0.004, 0.03, fw));
+    float bar = max(gridLine(wp.x, 0.25, 0.006, fw), gridLine(wp.y, 0.25, 0.006, fw));
+    c = mix(c, vec3(0.50, 0.50, 0.49), bar);
+    if (lamp) {
+      vec2 q = f - 0.5;
+      c = mix(c, vec3(0.30, 0.30, 0.30), boxAA(q, vec2(0.25), fw));
+      c = mix(c, LAMP, boxAA(q, vec2(0.225), fw));
+    }
+    return c;
+  }
+  if (kind == 4) {
+    // Open plant: a dark ribbed deck, a beam on every cell line along x, a
+    // duct down every other row, the pendant strips hung under them.
+    vec3 c = vec3(0.15, 0.16, 0.18) * (0.85 + 0.3 * gridLine(wp.x, 0.125, 0.02, fw));
+    float beam = gridLine(wp.y, 1.0, 0.045, fw);
+    c = mix(c, vec3(0.30, 0.31, 0.33), beam);
+    c = mix(c, vec3(0.08), gridLine(wp.y, 1.0, 0.008, fw) * beam);
+    float dy = (fract(wp.y * 0.5) - 0.25) * 2.0; // distance from the duct's axis (cells)
+    float duct = 1.0 - smoothstep(0.13 - fw, 0.13 + fw, abs(dy));
+    vec3 galv = vec3(0.25, 0.26, 0.28) * (1.0 - 0.45 * pow(abs(dy) / 0.13, 2.0));
+    galv *= 1.0 - 0.3 * gridLine(wp.x, 1.0, 0.01, fw);
+    c = mix(c, galv, duct);
+    if (lamp && duct < 0.5) {
+      vec2 q = f - vec2(0.5, 0.62);
+      c = mix(c, vec3(0.09), boxAA(q, vec2(0.36, 0.05), fw));
+      c = mix(c, COOL, boxAA(q, vec2(0.34, 0.03), fw));
+    }
+    return c;
+  }
+  if (kind == 5) {
+    // Painted concrete, a joint on every other cell line, a sealed round
+    // bulkhead lamp in its cage over each lit cell.
+    vec3 c = vec3(0.42, 0.43, 0.43) + 0.02 * sin(wp.x * 2.3 + sin(wp.y * 1.7) * 2.0);
+    c = mix(c, vec3(0.26), max(gridLine(wp.x, 2.0, 0.006, fw), gridLine(wp.y, 2.0, 0.006, fw)) * 0.7);
+    if (lamp) {
+      float r = length(f - 0.5);
+      c = mix(c, vec3(0.22), 1.0 - smoothstep(0.15 - fw, 0.15 + fw, r));
+      c = mix(c, LAMP, 1.0 - smoothstep(0.12 - fw, 0.12 + fw, r));
+      float cage = max(gridLine(f.x - 0.5, 1.0, 0.008, fw), gridLine(f.y - 0.5, 1.0, 0.008, fw));
+      c = mix(c, vec3(0.2), cage * (1.0 - smoothstep(0.13, 0.15, r)));
+    }
+    return c;
+  }
+  if (kind == 6) {
+    // The range: a black deck behind felt baffles hung across the lanes
+    // every half cell, the flood strips running downrange between them.
+    vec3 c = vec3(0.07, 0.075, 0.08);
+    float bx = abs(fract(wp.x * 2.0) - 0.5) / 2.0; // from a baffle's middle (cells)
+    float baffle = 1.0 - smoothstep(0.05 - fw, 0.05 + fw, bx);
+    c = mix(c, vec3(0.17, 0.175, 0.19) * (1.0 - 3.0 * bx), baffle);
+    if (lamp) {
+      vec2 q = f - vec2(0.5, 0.5);
+      c = mix(c, COOL, boxAA(q, vec2(0.16, 0.025), fw) * (1.0 - baffle));
+    }
+    return c;
+  }
   if (kind == 1) {
     vec2 f = fract(wp);
     float bar = 1.0 - smoothstep(0.012, 0.03, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
@@ -205,12 +351,10 @@ vec3 deckCeil(vec2 wp, int kind) {
     vec3 sky = mix(vec3(0.50, 0.64, 0.82), vec3(0.70, 0.76, 0.84), cloud);
     return mix(sky, vec3(0.42, 0.33, 0.20), max(bar * 0.85, beam * 0.7));
   }
-  vec2 f = fract(wp);
   float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
   vec3 c = vec3(0.50, 0.47, 0.41) * (0.75 + 0.25 * smoothstep(0.02, 0.16, e));
-  float lamp = 1.0 - smoothstep(0.08, 0.11, length(f - 0.5));
-  float on = mod(floor(wp.x) + floor(wp.y), 2.0) < 0.5 ? 1.0 : 0.0;
-  return mix(c, vec3(1.0, 0.94, 0.80), lamp * on);
+  float disc = 1.0 - smoothstep(0.08, 0.11, length(f - 0.5));
+  return mix(c, vec3(1.0, 0.94, 0.80), lamp ? disc : 0.0);
 }
 
 void main() {
@@ -231,6 +375,10 @@ void main() {
   vec3 floorC = texture(u_floorTex, wp).rgb;
   vec3 ceilC = texture(u_ceilTex, wp).rgb;
   vec3 color = isFloor ? floorC : ceilC;
+  // The pixel's footprint in cells, for the room decks' antialiasing: taken
+  // here, before any branch, like the texture samples.
+  vec2 fwv = fwidth(wp);
+  float fw = max(fwv.x, fwv.y);
 
   float ao = 1.0;
   vec3 glow = vec3(0.0);
@@ -262,7 +410,14 @@ void main() {
       glow = u_glowColors[gi] * g;
     }
   }
-  if (deck > 0) color = isFloor ? deckFloor(wp, deck) : deckCeil(wp, deck);
+  int fk = deck & 15;
+  int ck = deck >> 4;
+  if (ck == 0) ck = fk;
+  int kind = isFloor ? fk : ck;
+  if (kind > 0) color = isFloor ? deckFloor(wp, kind, fw) : deckCeil(wp, kind, fw);
+  // A room ceiling's lamps (kind 2 on) pool on the floor under them, in place
+  // of the act ceiling's (the floor art's baked pool, Realistic's bounce).
+  vec3 pool = isFloor && ck >= 2 ? deckPool(wp, ck) : vec3(0.0);
   if (u_realistic) {
     // Lights multiply the surface colour instead of adding over it, so a
     // light pool reads as illuminated concrete rather than a coloured decal.
@@ -287,9 +442,10 @@ void main() {
         + texture(u_ceilTex, wp + vec2(0.0, 0.3), 3.5).rgb * 0.15
         + texture(u_ceilTex, wp - vec2(0.0, 0.3), 3.5).rgb * 0.15;
       float emit = smoothstep(0.18, 0.6, dot(over, vec3(0.2126, 0.7152, 0.0722)));
-      lit += albedo * over * emit * 1.0 * occl;
+      if (ck < 2) lit += albedo * over * emit * 1.0 * occl;
+      else lit += albedo * pool * 0.35 * occl;
       // Under a skylight the deck has the day on it, not a lamp's pool.
-      if (deck == 1) lit += albedo * vec3(0.16, 0.17, 0.18) * occl;
+      if (ck == 1) lit += albedo * vec3(0.16, 0.17, 0.18) * occl;
     }
     // Floor roughness from the texture itself: bright plating is polished,
     // dark grime is matte, which breaks the specular up across the deck.
@@ -327,6 +483,8 @@ void main() {
   }
 
   color = color * ao + glow * (isFloor ? 1.0 : 0.45);
+  // A room's own floor has no pool baked in, as the act's art has.
+  if (fk > 0) color += pool * 0.12 * ao;
 
   vec2 toCam = normalize(u_camPos - wp);
   for (int i = 0; i < 16; i++) {

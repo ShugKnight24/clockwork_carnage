@@ -699,14 +699,16 @@ const BUMP = 0.085;
  * Returns the face's normal map: the relief normals the bake lit with (R, G:
  * x, y with 0.5 flat; z = sqrt(1 - x² - y²)) and its gloss (B, 0 on
  * emitters), so the wall shader can light the relief with dynamic lights.
+ * `floor: false` leaves out the grime rising from the floor line, for a face
+ * whose foot is not on the floor (the upper band).
  */
-export function bakeMaterial(canvas, m, p, act, seed) {
+export function bakeMaterial(canvas, m, p, act, seed, { floor = true } = {}) {
   const L = layers();
   bakeLayers(
     m.h.getImageData(0, 0, T, T).data,
     m.e.getImageData(0, 0, T, T).data,
     L.desat.data, L.paint.data, L.light.data, L.spec.data,
-    p, act, seed, L.normal.data,
+    p, act, seed, L.normal.data, floor,
   );
   const normals = makeCanvas(T);
   normals.getContext("2d").putImageData(L.normal, 0, 0);
@@ -753,7 +755,7 @@ const [hx, hy, hz] = HALF;
  * The bake on raw RGBA buffers: height `hd` + emissive alpha `ed` in, four
  * layers out, and the relief normals + gloss into `normal` when given.
  */
-export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed, normal = null) {
+export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed, normal = null, floorLine = true) {
   const { blotch, fine } = noiseFields();
   const { hs, hl, tmp, wet, acc, row, col } = buffers();
   const r = rng(seed ^ 0x5bd1e995);
@@ -777,14 +779,14 @@ export function bakeLayers(hd, ed, desat, paint, light, spec, p, act, seed, norm
   C[9] = act === 2 ? 0.85 : act >= 3 ? 0.6 : 0.55;
 
   // One call per row keeps the hot loop small for the optimising compiler.
-  for (let y = 0; y < T; y++) shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, row[y], ofs, normal);
+  for (let y = 0; y < T; y++) shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, row[y], ofs, normal, floorLine);
 }
 
-function shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, brushRow, ofs, normal) {
+function shadeRow(ed, desat, paint, light, spec, hs, hl, blotch, fine, wet, col, C, y, brushRow, ofs, normal, floorLine) {
   const yu = (y > 0 ? y - 1 : 0) * T;
   const yd = (y < MASK ? y + 1 : MASK) * T;
   const rowI = y * T;
-  const floor = y > 360 ? ((y - 360) / 152) ** 1.5 : 0;
+  const floor = floorLine && y > 360 ? ((y - 360) / 152) ** 1.5 : 0;
   const ceil = y < 48 ? (48 - y) / 48 : 0;
   const rustAmt = C[9];
   const lightScale = 255 / LIGHT_RANGE;

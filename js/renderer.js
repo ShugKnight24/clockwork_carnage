@@ -1,9 +1,10 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, ensureEnvBands, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
 import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
+import { BAND_UNTINTED } from "../src/rendering/env/wall-art.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
  *  floor/ceiling loop: both only read module constants, so rebuilding the
@@ -65,6 +66,9 @@ const NO_RGBA = [0, 0, 0, 0];
 const _bandTints = new WeakMap();
 const _bandChains = new WeakMap();
 const TALL_ART_WALLS = [8];
+// A band tint that leaves a finish in its own colours (128 × 2 = 1).
+const NEUTRAL_TINT = [128, 128, 128, 255];
+const hexToRGB = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 
 /**
  * The tint that makes an upper band (`band`, a mip chain) average out to a
@@ -325,7 +329,12 @@ export class Renderer {
     }
     // The map's own walls (`walls`, ids 10+) as well, so its dressed rooms
     // bake here too rather than in the level's first frame.
-    if (walls.length && ensureEnvWalls(env, walls, realistic) && this.glRenderer?._wallPass?.env === env) {
+    // Names in `walls` are room finishes (map.bands' styles), baked the same way.
+    const ids = walls.filter((w) => typeof w === "number");
+    const styles = walls.filter((w) => typeof w === "string");
+    const walled = ids.length > 0 && ensureEnvWalls(env, ids, realistic);
+    const banded = styles.length > 0 && ensureEnvBands(env, styles, realistic);
+    if ((walled || banded) && this.glRenderer?._wallPass?.env === env) {
       this.glRenderer._wallPass.env = null;
     }
   }
@@ -388,6 +397,10 @@ export class Renderer {
     }
     // The civic wing's glass, cut out once the city behind it is painted.
     if (map._ownWalls.length && prepareCityView(env, map._ownWalls)) added = true;
+    // The rooms' finishes over their art (map.bands): a lookup outside the
+    // map builds the map's table of them.
+    this._finishAt(map, -1, -1);
+    if (map._finishes && ensureEnvBands(env, map._finishes.styles, !!env.realistic)) added = true;
     const wp = this.glRenderer?._wallPass;
     // The wing, out of sight, goes up a few faces a frame while the array
     // without it keeps drawing: re-uploading the whole station in one frame
@@ -613,6 +626,51 @@ export class Renderer {
     return map._tallWalls;
   }
 
+  /**
+   * The room finish (an entry of map.bands: { style, rgb }) whose band runs
+   * over a wall seen from open cell (cx, cy), or null for the bulkhead tinted
+   * to the wall. Looked up by the cell in front of the face, so each side of
+   * a wall between two rooms takes its own room's finish.
+   */
+  _finishAt(map, cx, cy) {
+    let f = map._finishes;
+    if (f === undefined) {
+      f = map._finishes = null;
+      if (map.bands?.length) {
+        const w = map.width;
+        const cells = new Uint8Array(w * map.height);
+        const entries = map.bands.map((b) => ({ style: b.style, rgb: BAND_UNTINTED.has(b.style) || !b.color ? null : hexToRGB(b.color) }));
+        // Later boxes win where they overlap (a room inside another's box).
+        map.bands.forEach((b, i) => {
+          for (let y = Math.max(0, b.y0); y <= Math.min(map.height - 1, b.y1); y++) {
+            for (let x = Math.max(0, b.x0); x <= Math.min(w - 1, b.x1); x++) cells[y * w + x] = i + 1;
+          }
+        });
+        f = map._finishes = { cells, entries, styles: [...new Set(entries.map((e) => e.style))] };
+      }
+    }
+    if (!f || cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) return null;
+    const i = f.cells[cy * map.width + cx];
+    return i ? f.entries[i - 1] : null;
+  }
+
+  /**
+   * The GL tint for a band: a room finish's colour (bandTint against that
+   * finish's band), neutral for a finish in its own colours, or the wall's.
+   */
+  _finishTint(menv, mmips, finish) {
+    const chain = finish && menv.bands?.[finish.style];
+    if (!chain) return this._bandTint(menv, mmips);
+    let byFinish = _bandTints.get(chain);
+    if (!byFinish) _bandTints.set(chain, (byFinish = new Map()));
+    let t = byFinish.get(finish);
+    if (!t) {
+      t = finish.rgb ? bandTint(finish.rgb, chain) : NEUTRAL_TINT;
+      byFinish.set(finish, t);
+    }
+    return t;
+  }
+
   /** A wall's tint for the GL upper band (bandTint), as bytes. */
   _bandTint(menv, mmips) {
     let t = _bandTints.get(mmips);
@@ -623,8 +681,23 @@ export class Renderer {
     return t;
   }
 
-  /** The env's upper band tinted to one wall's colour, per mip (Canvas2D path). */
-  _bandMips(menv, mmips) {
+  /**
+   * The env's upper band tinted to one wall's colour, per mip (Canvas2D path),
+   * or a room finish's band tinted to the room.
+   */
+  _bandMips(menv, mmips, finish = null) {
+    const own = finish && menv.bands?.[finish.style];
+    if (own) {
+      let byFinish = _bandChains.get(own);
+      if (!byFinish) _bandChains.set(own, (byFinish = new Map()));
+      let tinted = byFinish.get(finish);
+      if (!tinted) {
+        const tint = this._finishTint(menv, mmips, finish);
+        tinted = own.map((m) => tintUpperBand(m, tint));
+        byFinish.set(finish, tinted);
+      }
+      return tinted;
+    }
     let chain = _bandChains.get(mmips);
     if (!chain) {
       const tint = this._bandTint(menv, mmips);
@@ -639,19 +712,23 @@ export class Renderer {
    * 256 wide, the band (CEILING_Z - 1 of a wall) over the 256px art, so the
    * wall pass draws a full wall in one blit at the art's own scale.
    */
-  _legacyBanded(tex) {
-    let c = _bandChains.get(tex);
+  _legacyBanded(tex, finish = null) {
+    let byFinish = _bandChains.get(tex);
+    if (!byFinish) _bandChains.set(tex, (byFinish = new Map()));
+    let c = byFinish.get(finish);
     if (!c) {
-      const band = legacyUpperBand();
+      // A room finish's band in the room's colour, as the Modern styles draw it.
+      const band = legacyUpperBand(finish?.style);
+      const tint = !finish ? bandTint(averageColor(tex), [band]) : finish.rgb ? bandTint(finish.rgb, [band]) : NEUTRAL_TINT;
       const bandH = Math.round(256 * (CEILING_Z - 1));
       c = document.createElement("canvas");
       c.width = 256;
       c.height = 256 + bandH;
       const g = c.getContext("2d");
       g.imageSmoothingQuality = "high";
-      g.drawImage(tintUpperBand(band, bandTint(averageColor(tex), [band])), 0, 0, 256, bandH);
+      g.drawImage(tintUpperBand(band, tint), 0, 0, 256, bandH);
       g.drawImage(tex, 0, bandH);
-      _bandChains.set(tex, c);
+      byFinish.set(finish, c);
     }
     return c;
   }
@@ -1319,6 +1396,8 @@ export class Renderer {
         const ceilDrawStart = full ? (horizon - lineHeight * (CEILING_Z - eye)) | 0 : fullDrawStart;
         const tallArt = full && tallWalls.has(wallType);
         const banded = full && !tallArt;
+        // The room's finish over the art (map.bands), from the cell in front.
+        const finish = banded ? this._finishAt(map, side === 0 ? mapX - stepX : mapX, side === 0 ? mapY : mapY - stepY) : null;
         // Where the art's top row lands, and its height on screen.
         const artTop = tallArt ? ceilDrawStart : fullDrawStart;
         const artH = tallArt ? lineHeight * CEILING_Z : lineHeight;
@@ -1488,10 +1567,12 @@ export class Renderer {
                 );
               }
               if (bandRows > 0 && glWalls.bandLayer >= 0) {
+                // A finish not uploaded yet draws as the bulkhead meanwhile.
+                const fLayer = finish ? glWalls.bandLayers[finish.style] : undefined;
                 glWalls.upper(
                   x, drawStart, bandEnd, lod < 0 ? lvl : lod, u, bandV0, bandV1,
-                  faceRGBA, fogRGBA, lt, this._bandTint(menv, mmips), hitX, hitY, nX, nY, zTop,
-                  eye - (bandEnd - horizon) / lineHeight,
+                  faceRGBA, fogRGBA, lt, this._finishTint(menv, mmips, fLayer === undefined ? null : finish), hitX, hitY, nX, nY, zTop,
+                  eye - (bandEnd - horizon) / lineHeight, fLayer ?? glWalls.bandLayer,
                 );
               }
             } else {
@@ -1499,7 +1580,7 @@ export class Renderer {
                 ctx.drawImage(mtex, texX, srcY, 1, srcH, x, artStart, 1, artRows);
               }
               if (bandRows > 0) {
-                const band = this._bandMips(menv, mmips)[lvl];
+                const band = this._bandMips(menv, mmips, finish)[lvl];
                 const B = band.width;
                 ctx.drawImage(band, (texX * B) / S, bandV0 * B, 1, (bandV1 - bandV0) * B, x, drawStart, 1, bandRows);
               }
@@ -1548,7 +1629,7 @@ export class Renderer {
             const art = this.textures[wallType];
             // A banded wall samples its art with the upper band stacked on
             // top (_legacyBanded): one blit a column, as before the band.
-            const tex = banded ? this._legacyBanded(art) : art;
+            const tex = banded ? this._legacyBanded(art, finish) : art;
             let texX = (wallX * 256) | 0;
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
               texX = 255 - texX;

@@ -49,7 +49,8 @@ void main() {
   v_lod = a_tex.w;
   v_face = a_face;
   v_fog = a_fog;
-  bool band = a_rect.w == u_bandLayer;
+  // The bands' layers are the last ones, from u_bandLayer on.
+  bool band = u_bandLayer >= 0.0 && a_rect.w >= u_bandLayer;
   v_add = a_light.rgb * a_light.a + (band ? vec3(0.0) : a_accent.rgb * a_accent.a);
   v_tint = band ? a_accent.rgb * 2.0 : vec3(1.0);
   v_z = mix(a_z.x, a_z.y, a_corner.y);
@@ -216,6 +217,7 @@ export class WallPass {
     this.uSpecGain = gl.getUniformLocation(prog, "u_specGain");
     this.uBandLayer = gl.getUniformLocation(prog, "u_bandLayer");
     this.bandLayer = -1;
+    this.bandLayers = {};
     this.cam = [0, 0];
     // Eye height (wall units) the specular view vector leaves from; the
     // renderer lowers it with a crouch or a slide.
@@ -298,9 +300,11 @@ export class WallPass {
     let st = this._next;
     // One array layer per wall type the env has, packed: indexed by the raw
     // id, a station's ids (10-120) cost a layer for every unused id below.
-    // The upper band (env.upper) takes the layer after them, as id -1.
+    // The upper band (env.upper) takes the layer after them, as id -1, and
+    // the rooms' finishes (env.bands) the layers after that, as -2, -3 ...
     const ids = Object.keys(env.walls).map(Number).sort((a, b) => a - b);
-    if (env.upper) ids.push(-1);
+    const finishes = env.upper ? Object.keys(env.bands ?? {}) : [];
+    if (env.upper) ids.push(-1, ...finishes.map((_, i) => -2 - i));
     // Up already, unless walls were added to it since.
     if (this.env === env && this.layers === ids.length) return true;
     if (!st || st.env !== env || st.ids.length !== ids.length) {
@@ -309,10 +313,12 @@ export class WallPass {
       const layerOf = new Int16Array(walls[walls.length - 1] + 1);
       walls.forEach((id, i) => (layerOf[id] = i));
       const band = env.upper ? walls.length : -1;
+      const bands = { bulkhead: band };
+      finishes.forEach((name, i) => (bands[name] = band + 1 + i));
       st = this._next = {
-        env, ids, left: ids.slice(), tex: null, layerOf, band,
-        chain: (id) => (id < 0 ? env.upper : env.walls[id]),
-        layer: (id) => (id < 0 ? band : layerOf[id]),
+        env, ids, left: ids.slice(), tex: null, layerOf, band, bands,
+        chain: (id) => (id === -1 ? env.upper : id < 0 ? env.bands[finishes[-2 - id]] : env.walls[id]),
+        layer: (id) => (id < 0 ? band - 1 - id : layerOf[id]),
       };
       const fits = ids.every((id) => {
         const mips = st.chain(id);
@@ -335,6 +341,7 @@ export class WallPass {
     this.layers = ids.length;
     this.layerOf = st.layerOf;
     this.bandLayer = st.band;
+    this.bandLayers = st.bands;
     this._layerOf = st.layer;
     this.tex = st.tex;
     this.normalTex = null;
@@ -490,12 +497,13 @@ export class WallPass {
   }
 
   /**
-   * A full wall's upper band, rows y0..y1, as wall() but on the band's layer
-   * and multiplied by twice `tint` ([r, g, b, _], from the wall's average
-   * colour), so the band's mid-grey comes out the wall's colour.
+   * A full wall's upper band, rows y0..y1, as wall() but on a band's layer
+   * (`layer`, from bandLayers) and multiplied by twice `tint` ([r, g, b, _],
+   * from the wall's or the room's colour), so the band's mid-grey comes out
+   * that colour.
    */
-  upper(x, y0, y1, lod, u, v0, v1, face, fog, light, tint, hitX, hitY, nX, nY, z0, z1) {
-    this._put(x, y0, y1, this.bandLayer, u, v0, v1, lod, face, fog, light, tint);
+  upper(x, y0, y1, lod, u, v0, v1, face, fog, light, tint, hitX, hitY, nX, nY, z0, z1, layer = this.bandLayer) {
+    this._put(x, y0, y1, layer, u, v0, v1, lod, face, fog, light, tint);
     this._hit(hitX, hitY, nX, nY, z0, z1);
   }
 

@@ -318,16 +318,16 @@ export function generateWallTextures() {
   return textures;
 }
 
-let _legacyUpper = null;
+const _legacyUpper = {};
 
-/** Legacy's upper band: the Modern one, downscaled once to 256px. */
-export function legacyUpperBand() {
-  if (!_legacyUpper) {
-    const mips = buildUpperBand(1, null, CEILING_Z - 1);
-    _legacyUpper = mips[1];
+/** Legacy's upper band in `style` (BAND_STYLES): the Modern one, downscaled once to 256px. */
+export function legacyUpperBand(style = "bulkhead") {
+  if (!_legacyUpper[style]) {
+    const mips = buildUpperBand(1, null, CEILING_Z - 1, false, style);
+    _legacyUpper[style] = mips[1];
     mips[0].width = mips[0].height = 0;
   }
-  return _legacyUpper;
+  return _legacyUpper[style];
 }
 
 /**
@@ -612,6 +612,25 @@ export function ensureEnvWalls(env, ids, realistic = false, average = true) {
   return added.length > 0;
 }
 
+/**
+ * Add the upper bands in `styles` (BAND_STYLES names: a map's room finishes,
+ * map.bands) to an env, finished as its bulkhead band is. They live in
+ * env.bands by name; true when it painted any.
+ */
+export function ensureEnvBands(env, styles, realistic = false) {
+  env.bands ??= {};
+  let added = false;
+  for (const style of styles) {
+    if (env.bands[style] || style === "bulkhead") continue;
+    const mips = buildUpperBand(env.act, env.palette, CEILING_Z - 1, realistic, style);
+    if (realistic) bakeContactShadow(mips, BAND_SHADOW);
+    averageColor(mips[mips.length - 1]);
+    env.bands[style] = mips;
+    added = true;
+  }
+  return added;
+}
+
 export function generateModernEnv(act, brutal, level = null, { realistic = false } = {}) {
   const a = act || 1;
   // Each campaign level derives its own steel, light and air from the act.
@@ -689,6 +708,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     palette: p,
     walls,
     upper,
+    bands: {},
     deck,
     fogLUT,
     fogAmbientLUT,

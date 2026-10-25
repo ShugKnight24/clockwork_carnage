@@ -766,22 +766,166 @@ function paintUpperBand(ctx, g, sy) {
   grit(ctx, T, T, 0.1);
 }
 
+// The station's rooms carry their walls on up to the ceiling in their own
+// finish (map.bands, by room), each painted in grey like the bulkhead and
+// tinted to the room's wall colour, so one face serves every room in that
+// finish. The shared rules: the ceiling joint is a shadow line, the band
+// meets the art over a trim at z = 1 (a rail, a bead, a cap), and seams fall
+// on the cell's edge and its middle, where the art's pilasters and panels do.
+// The plant room's ducts are painted in their own colours and left untinted.
+
+/** Painted plaster up to a crown moulding, a picture rail over the art: offices, the civic wing. */
+function paintPlasterBand(ctx, g, sy, r) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = lin(ctx, 0, 0, 0, T, [[0, g.s2], [0.5, g.s3], [1, g.s3]]);
+  ctx.fillRect(0, 0, T, T);
+  // Trowel marks under the paint.
+  for (let i = 0; i < 30; i++) {
+    ctx.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.035)";
+    ctx.fillRect(r() * T, Y(30) + r() * (T - Y(60)), 20 + r() * 90, 1 + r() * 2);
+  }
+  // Crown moulding: the ceiling's shadow line, a cove, a bead and its fillet.
+  plate(ctx, 0, 0, T, Y(4), g, { tones: [g.s1, g.s0, g.s0], bevel: 1, ink: 0, spec: false, recess: true });
+  plate(ctx, 0, Y(4), T, Y(16), g, { tones: [g.s4, g.s3, g.s2], bevel: 3, ink: 0, spec: false });
+  plate(ctx, 0, Y(20), T, Y(6), g, { tones: [g.s4, g.s4, g.s3], bevel: 2, ink: 0 });
+  ink(ctx, 0, Y(26), T, Y(2), 12);
+  // The picture rail along the top of the art.
+  plate(ctx, 0, T - Y(14), T, Y(9), g, { tones: [g.s4, g.s3, g.s2], bevel: 2, ink: 0 });
+  ink(ctx, 0, T - Y(5), T, Y(5), 22);
+  grit(ctx, T, T, 0.06);
+}
+
+/** Painted block in 46px courses, the corridor wall's (rooms/corridor.js stationWall) carried up. */
+function paintBlockBand(ctx, g, sy, r) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = g.s3;
+  ctx.fillRect(0, 0, T, T);
+  // Courses counted up from the art's top, so they run on from its blocks.
+  for (let row = 0, y1 = T; y1 > 0; row++, y1 -= Y(46)) {
+    const y0 = Math.max(0, y1 - Y(46));
+    for (let x = row % 2 ? -64 : 0; x < T; x += 128) {
+      const tone = r() < 0.5 ? g.s3 : g.s2;
+      plate(ctx, x + 2, y0 + 1, 124, y1 - y0 - 2, g, { tones: [tone, tone, g.s2], bevel: 2, ink: 0, spec: false });
+      ink(ctx, x, y0, 2, y1 - y0, 6);
+    }
+    ink(ctx, 0, y0, T, 2, 6);
+  }
+  // A shadow line at the ceiling, a bullnose cap over the art.
+  ink(ctx, 0, 0, T, Y(4), 18);
+  plate(ctx, 0, T - Y(10), T, Y(7), g, { tones: [g.s4, g.s3, g.s2], bevel: 2, ink: 0, spec: false });
+  ink(ctx, 0, T - Y(3), T, Y(3), 20);
+  grit(ctx, T, T, 0.1);
+}
+
+/** Glazed tile with a bullnose cap over the art: the locker room's wet wall. */
+function paintTileBand(ctx, g, sy, r) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = g.s1;
+  ctx.fillRect(0, 0, T, T);
+  const cap = T - Y(12);
+  for (let y1 = cap, row = 0; y1 > 0; y1 -= Y(64), row++) {
+    const y0 = Math.max(0, y1 - Y(64));
+    for (let x = 0; x < T; x += 64) {
+      const tone = r() < 0.3 ? g.s3 : g.s4;
+      plate(ctx, x + 2, y0 + 2, 60, y1 - y0 - 4, g, { tones: [g.s4, tone, g.s3], bevel: 3, ink: 0 });
+      // The glaze's highlight across the tile's top.
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(x + 6, y0 + 5, 40, 2);
+    }
+  }
+  ink(ctx, 0, 0, T, Y(3), 16);
+  plate(ctx, 0, cap, T, Y(9), g, { tones: [g.s4, g.s4, g.s2], bevel: 3, ink: 0 });
+  ink(ctx, 0, T - Y(3), T, Y(3), 22);
+}
+
+/** Framed acoustic panels in felt: the range, the interview rooms. */
+function paintAcousticBand(ctx, g, sy, r) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = g.s0;
+  ctx.fillRect(0, 0, T, T);
+  const top = Y(8);
+  const bot = T - Y(16);
+  for (const x0 of [0, T / 2]) {
+    plate(ctx, x0 + 3, top, T / 2 - 6, bot - top, g, { tones: [g.s4, g.s3, g.s2], bevel: 3, ink: 0 });
+    const fx = x0 + 11;
+    const fy = top + Y(8);
+    const fw = T / 2 - 22;
+    const fh = bot - top - Y(16);
+    plate(ctx, fx, fy, fw, fh, g, { tones: [g.s2, g.s2, g.s1], bevel: 4, ink: 0, spec: false });
+    // The felt's weave, fine enough to vanish into its colour at a distance.
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.06)";
+      ctx.fillRect(fx + 4 + r() * (fw - 10), fy + 4 + r() * (fh - 10), 1 + r() * 3, 1 + r() * 3);
+    }
+  }
+  plate(ctx, 0, T - Y(12), T, Y(9), g, { tones: [g.s4, g.s3, g.s2], bevel: 2, ink: 0 });
+  ink(ctx, 0, T - Y(3), T, Y(3), 22);
+}
+
+/**
+ * The plant room's open band, in its own colours: a cable ladder under the
+ * ceiling, a galvanised duct on its hangers, a strut rail over the art. R&D
+ * and the sim hall, whose ceilings (gl-renderer deckCeil 4) are open plant.
+ */
+function paintDuctBand(ctx, g, sy, r) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = lin(ctx, 0, 0, 0, T, [[0, "#15181c"], [1, "#262a30"]]);
+  ctx.fillRect(0, 0, T, T);
+  const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
+  // Cable ladder: two rails, rungs, the bundles laid in it.
+  const ly = Y(16);
+  const lh = Y(22);
+  for (const [y, c] of [[ly + Y(5), "#c8a030"], [ly + Y(9), "#1c1c1e"], [ly + Y(13), "#2f5c9e"], [ly + Y(16), "#1c1c1e"]]) {
+    ctx.fillStyle = c;
+    ctx.fillRect(0, y, T, Math.max(2, Y(3)));
+  }
+  for (let x = 12; x < T; x += 32) plate(ctx, x, ly, 5, lh, g, { tones: STEEL, bevel: 1, ink: 0, spec: false });
+  plate(ctx, 0, ly, T, Y(4), g, { tones: STEEL, bevel: 1, ink: 0, spec: false });
+  plate(ctx, 0, ly + lh - Y(4), T, Y(4), g, { tones: STEEL, bevel: 1, ink: 0, spec: false });
+  // The duct on its hangers, a seam and clamp every half cell.
+  const dy = Y(56);
+  const dh = Y(70);
+  for (const x of [64, 320]) plate(ctx, x, 0, 6, dy + 4, g, { tones: STEEL, bevel: 1, ink: 0, spec: false });
+  plate(ctx, 0, dy, T, dh, g, { tones: ["#c4cad0", "#8e959c", "#4e555c"], bevel: Math.max(3, Y(10)), ink: 0 });
+  ctx.fillStyle = lin(ctx, 0, dy, 0, dy + dh, [[0, "rgba(255,255,255,0.14)"], [0.3, "rgba(255,255,255,0)"], [0.8, "rgba(0,0,0,0.18)"], [1, "rgba(0,0,0,0.32)"]]);
+  ctx.fillRect(0, dy, T, dh);
+  for (const x of [0, T / 2]) {
+    plate(ctx, x - 6, dy - 3, 12, dh + 6, g, { tones: ["#d0d6dc", "#9aa2ac", "#5a6068"], bevel: 2, ink: 0, spec: false });
+    ink(ctx, x - 1, dy, 2, dh, 10);
+  }
+  // The strut rail along the art's top, a junction box on it.
+  plate(ctx, 0, T - Y(16), T, Y(12), g, { tones: ["#7a828c", "#5a626c", "#30363e"], bevel: 2, ink: 0 });
+  for (let x = 16; x < T; x += 48) ink(ctx, x, T - Y(12), 14, Y(4), 10);
+  plate(ctx, 380, T - Y(46), 60, Y(30), g, { tones: ["#8a929c", "#626a74", "#3a4048"], bevel: 3, ink: 0 });
+  ink(ctx, 0, T - Y(4), T, Y(4), 26);
+  grit(ctx, T, T, 0.1);
+}
+
+/** The upper band's finishes, by name (map.bands' `style`): 0 is the bulkhead. */
+export const BAND_STYLES = ["bulkhead", "plaster", "block", "tile", "acoustic", "ducts"];
+const BAND_PAINTERS = [paintUpperBand, paintPlasterBand, paintBlockBand, paintTileBand, paintAcousticBand, paintDuctBand];
+/** Finishes painted in their own colours, which the renderer leaves untinted. */
+export const BAND_UNTINTED = new Set(["ducts"]);
+
 /**
  * The upper band as a mip chain (with relief normals when `realistic`),
- * finished like a wall face. `span` is the band's height in walls.
+ * finished like a wall face. `span` is the band's height in walls, `style`
+ * one of BAND_STYLES.
  */
-export function buildUpperBand(act, pal, span, realistic = false) {
+export function buildUpperBand(act, pal, span, realistic = false, style = "bulkhead") {
   const p = { ...(pal || getEnvPalette(act)), ...BAND_GREYS };
   const c = makeCanvas(T);
   const mat = realistic ? beginMaterial(p) : null;
+  const k = Math.max(0, BAND_STYLES.indexOf(style));
   if (mat) useMaterial(mat);
   try {
-    paintUpperBand(c.getContext("2d"), p, 1 / span);
+    BAND_PAINTERS[k](c.getContext("2d"), p, 1 / span, rng(0x0ba11ad + k * 7919));
   } finally {
     useMaterial(null);
   }
   if (!mat) return buildMips(c);
-  const normals = bakeMaterial(c, mat, p, act, 0x0ba11ad);
+  // No floor line to gather grime along: the band's foot is the art's top.
+  const normals = bakeMaterial(c, mat, p, act, 0x0ba11ad + k, { floor: false });
   const mips = buildMips(c);
   mips.normals = buildMips(normals);
   return mips;

@@ -364,6 +364,61 @@ const ALL_ROOMS = [...ROOMS, ...EAST_ROOMS];
 // plate is in it (js/tutorial-system.js, after 06:47).
 g[37][22] = STATION_WALLS.LOCKERS_SUP;
 
+// ── 23. FINISHES: what each room's floor, ceiling and upper walls are made of ──
+// One rule book for the whole station, so it reads as one building: painted
+// block is its construction (the corridors, the halls, the gym, the cells),
+// plaster where the public and the brass sit, tile in the wet room, felt where
+// it is loud or private, open plant where the engineers work. Ceilings keep
+// their lamps on one checkerboard of cells (the deck shader's deckLamp).
+// Floors (deck `kind`): 0 the act's steel, 3 carpet tile, 4 vinyl tile,
+// 5 sealed concrete, 6 rubber, 7 ceramic tile. Ceilings (`ceil`): 3 acoustic
+// tile, 4 open plant, 5 painted concrete, 6 the range's baffles. Upper bands
+// (`band`, the renderer's map.bands): a finish from BAND_STYLES
+// (src/rendering/env/wall-art.js) in the room's wall colour, over the art.
+// Later rows win where boxes overlap. The civic wing has decks of its own.
+const FINISH_BOXES = {
+  locker: { x0: 3, y0: 37, x1: 24, y1: 47 },
+  range: { x0: 35, y0: 37, x1: 56, y1: 47 },
+  ...Object.assign({}, ...ALL_ROOMS.map((r) => r.boxes)),
+};
+const BLOCK_PAINT = "#a9a79e"; // the corridor's wall (rooms/corridor.js stationWall)
+const PLASTER = "#a0997f"; // the office's (rooms/office.js)
+const MARBLE = "#ddd5c4"; // the civic wing's
+const STATION_FINISHES = [
+  // room          floor ceil band        colour
+  ["corridor", 4, 3, "block", BLOCK_PAINT],
+  ["corridor_s", 4, 3, "block", BLOCK_PAINT],
+  ["lobby", 4, 3, "block", BLOCK_PAINT],
+  ["breakroom", 4, 3, "block", BLOCK_PAINT],
+  ["armory", 5, 4, "block", BLOCK_PAINT],
+  ["spineN", 4, 3, "block", BLOCK_PAINT],
+  ["spineS", 4, 3, "block", BLOCK_PAINT],
+  ["southHall", 4, 3, "block", BLOCK_PAINT],
+  ["northHall", 4, 3, "block", BLOCK_PAINT],
+  ["locker", 7, 5, "tile", "#b4bec6"],
+  ["range", 5, 6, "acoustic", "#5a5e63"],
+  ["gym", 6, 4, "block", "#8a949e"],
+  ["evidence", 4, 5, "block", "#8a949e"],
+  ["obsDeck", 4, 3, "block", BLOCK_PAINT],
+  ["office", 3, 3, "plaster", PLASTER],
+  ["captain", 3, 3, "plaster", PLASTER],
+  ["arena", 0, 4, "ducts"],
+  ["booth", 3, 3, "ducts"],
+  ["rnd", 5, 4, "ducts"],
+  ["dispatch", 3, 3, "plaster", "#b8b2a2"],
+  ["atrium", 4, 4, "block", "#96968f"],
+  ["holding", 4, 5, "block", "#a8b8a4"],
+  ["interview", 4, 3, "acoustic", "#5a5e66"],
+  ["track", 6, 4, "block", "#aeb6c0"],
+  ["trackPassage", 4, 3, "block", "#aeb6c0"],
+  ["civicPassage", null, null, "plaster", MARBLE],
+  ["civicHall", null, null, "plaster", MARBLE],
+  ["records", null, null, "plaster", MARBLE],
+  ["bureau", null, null, "plaster", MARBLE],
+];
+const FINISH_DECKS = STATION_FINISHES.filter(([, floor]) => floor !== null).map(([room, kind, ceil]) => ({ ...FINISH_BOXES[room], kind, ceil }));
+const FINISH_BANDS = STATION_FINISHES.map(([room, , , style, color]) => ({ ...FINISH_BOXES[room], style, color }));
+
 /** Props for environmental decoration (consumed by Track 2B props system). */
 const CORE_PROPS = [
   // Locker Room
@@ -426,9 +481,12 @@ export const TUTORIAL_MAP = {
     ...ALL_ROOMS.flatMap((r) => r.lights),
   ],
   rooms: { range: { x0: 35, y0: 37, x1: 56, y1: 47 }, ...Object.assign({}, ...ALL_ROOMS.map((r) => r.boxes)) },
-  // Rooms with floors and ceilings of their own (the WebGL deck shader):
-  // the civic wing's marble and skylight, its oak and plaster.
-  decks: ALL_ROOMS.flatMap((r) => r.decks ?? []),
+  // Rooms with floors and ceilings of their own (the WebGL deck shader): the
+  // station's finishes, then the civic wing's marble and skylight, its oak
+  // and plaster.
+  decks: [...FINISH_DECKS, ...ALL_ROOMS.flatMap((r) => r.decks ?? [])],
+  // What each room's walls are above their art (the renderer's upper band).
+  bands: FINISH_BANDS,
   // Walls whose art runs to the ceiling rather than under the upper band
   // (the renderer's tall-art walls): the civic wing's glass onto the city.
   tallWalls: ALL_ROOMS.flatMap((r) => r.tallWalls ?? []),

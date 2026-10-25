@@ -2188,7 +2188,9 @@ export class TutorialSystem {
     const level = r._envLevel ?? null;
     // The rooms in view at the start first, the east wing after.
     const late = TUTORIAL_MAP.lateWalls ?? [];
-    const walls = [...TUTORIAL_MAP.ownWalls.filter((id) => !late.includes(id)), ...late];
+    // The rooms' finishes over their art (map.bands) go in the queue by name.
+    const finishes = [...new Set((TUTORIAL_MAP.bands ?? []).map((b) => b.style))];
+    const walls = [...finishes, ...TUTORIAL_MAP.ownWalls.filter((id) => !late.includes(id)), ...late];
     const halfHeights = [viewH / 2.4, viewH / 5];
     // Who the first step shows (the squad, the Supervisor), then the looks
     // it warms for later (warmNpc), which otherwise decode under play.
