@@ -43,6 +43,8 @@ let _adsProgress = 0;
 let _adsBlend = 0;
 /** Seconds for a full hip ↔ ADS transition. */
 const ADS_TRANSITION = 0.2;
+/** How far a peek from cover must be up before the sights start coming up. */
+const COVER_ADS_AFTER = 0.75;
 /**
  * The sight's magnification and look speed, eased toward the held weapon's
  * (src/data/weapons.js adsZoom / adsSens) so a swap while aimed zooms over
@@ -228,7 +230,12 @@ export function updateAdsFov(player, dt, settings = null) {
   const hold = settings && player && Number.isFinite(player.angle);
   const yaw0 = hold ? reticleYaw(player, effectiveAimFov(player, settings)) : 0;
   const step = Math.min(dt, 0.1) / ADS_TRANSITION;
-  _adsProgress = clamp(_adsProgress + (player?.isAiming ? step : -step), 0, 1);
+  // From cover, the sights wait for the pop-out (src/systems/cover-play.js
+  // peek): stand up or lean out first, then settle into them. Both at once
+  // stacked a rise, a zoom and the zoom's turn into one lurch.
+  const peek = player?.cover?.peek;
+  const aiming = !!player?.isAiming && !(peek != null && peek < COVER_ADS_AFTER);
+  _adsProgress = clamp(_adsProgress + (aiming ? step : -step), 0, 1);
   const t = _adsProgress;
   _adsBlend = t * t * t * (t * (t * 6 - 15) + 10);
   const wep = player?.getWeaponDef?.() ?? null;
@@ -238,7 +245,7 @@ export function updateAdsFov(player, dt, settings = null) {
   _adsSens = wep?.adsSens ?? PLAYER_ADS_SENS;
   if (player) scopeBreath(player, wep, dt);
   if (!hold) return;
-  if (player.isAiming && player.aimOffsetX) {
+  if (aiming && player.aimOffsetX) {
     player.aimOffsetX *= 1 - Math.min(1, ADS_CENTER_RATE * Math.min(dt, 0.1));
     if (Math.abs(player.aimOffsetX) < 1e-4) player.aimOffsetX = 0;
   }

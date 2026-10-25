@@ -235,3 +235,24 @@ describe("aim — aiming down sights keeps the target under the reticle", () => 
     resetAdsFov();
   });
 });
+
+describe("aim — from cover, the sights wait for the pop-out", () => {
+  it("does not zoom until the peek is mostly up, then does", () => {
+    resetAdsFov();
+    const player = { isAiming: true, cover: { peek: 0.3 } };
+    for (let i = 0; i < 10; i++) updateAdsFov(player, 1 / 60);
+    expect(getAimBlend()).toBe(0);
+    player.cover.peek = 1;
+    for (let i = 0; i < 30; i++) updateAdsFov(player, 1 / 60);
+    expect(getAimBlend()).toBe(1);
+    resetAdsFov();
+  });
+
+  it("zooms straight away out of cover", () => {
+    resetAdsFov();
+    const player = { isAiming: true, cover: null };
+    updateAdsFov(player, 1 / 60);
+    expect(getAimBlend()).toBeGreaterThan(0);
+    resetAdsFov();
+  });
+});
