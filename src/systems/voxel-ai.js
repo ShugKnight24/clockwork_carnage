@@ -21,7 +21,7 @@ import {
   hasLineOfSight3D,
   playerEyeZ3D,
 } from "../world/voxel-physics.js";
-import { beginWindup, enemyTimeRate } from "./ai.js";
+import { beginWindup, enemyTimeRate, turnShield } from "./ai.js";
 import { AIR, isWater } from "../world/blocks.js";
 import { Projectile } from "../../js/entities.js";
 import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
@@ -171,7 +171,11 @@ export class VoxelAISystem {
       let stepX = 0, stepY = 0;
       if (!stunned && e.state !== "dead") {
         if (e.state === "chase" || e.state === "windup" || e.state === "attack") {
-          e.angle = Math.atan2(dy, dx);
+          // A shield bearer turns its shield as slowly here as on a grid
+          // level (ai.js turnShield); snapping it to face you every frame
+          // made its back unreachable.
+          if (def.frontShield) turnShield(e, Math.atan2(dy, dx), enemyDt, time, player);
+          else e.angle = Math.atan2(dy, dx);
         }
         if (e.state === "chase") {
           // Press in until the player is inside range with a clear shot; a

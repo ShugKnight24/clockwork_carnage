@@ -1081,6 +1081,137 @@ const CIV_DEFS = {
     grad("slacks", "#4e4a52", "#36333a", "#141216") + grad("shoe", "#3a2a22", "#20160f", "#0a0604"),
 };
 
+/* ── Turned views (shield bearers) ──────────────────────────────────────── */
+
+// A shield bearer is drawn from five sides (src/rendering/facing-view.js), so
+// you can see where its shield points: `idle@side`, `moveA@back`… The bash's
+// windup and strike only happen with you in front of it and stay front-on.
+export const TURNED_POSES = ["idle", "moveA", "moveB", "hurt"];
+export const TURNED_VIEWS = ["threeNear", "threeFar", "side", "back"];
+
+/** Add every turned view of the turned poses to a pose table (same joints). */
+function withTurnedViews(table) {
+  for (const p of TURNED_POSES) {
+    if (!table[p]) continue;
+    for (const v of TURNED_VIEWS) table[`${p}@${v}`] = table[p];
+  }
+  return table;
+}
+
+/** Split a table key into its pose and view ("idle@side" → ["idle", "side"]). */
+const viewOf = (name) => {
+  const i = name.indexOf("@");
+  return i < 0 ? [name, "front"] : [name.slice(0, i), name.slice(i + 1)];
+};
+
+/** Squeeze markup horizontally about x = cx, then shift it by dx (a body or shield turning). */
+const turnX = (m, k, dx = 0, cx = 0) => (m ? `<g transform="translate(${f(cx + dx)} 0) scale(${f(k)} 1) translate(${f(-cx)} 0)">${m}</g>` : "");
+const mirrorX = (m) => `<g transform="scale(-1 1)">${m}</g>`;
+
+/**
+ * The power core on a shield bearer's back: the rear-only `core` hit zone
+ * (data/enemies.js SHIELDED_FRONT_ZONES), drawn hot so its back reads as the
+ * place to shoot. Returns { body, glow }.
+ */
+function backCore(x, y, r) {
+  let body = circ(x, y, r + 3, "url(#armorDk)", 1.6) + circ(x, y, r, "#2a1206", 1.1);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    body += ln(`M${P(x + Math.cos(a) * (r + 0.5), y + Math.sin(a) * (r + 0.5))}L${P(x + Math.cos(a) * (r + 3), y + Math.sin(a) * (r + 3))}`, INK, 1.4, 0.8);
+  }
+  body += ln(`M${P(x - r - 8, y - 2)}h4M${P(x - r - 8, y + 2)}h4M${P(x + r + 4, y - 2)}h4M${P(x + r + 4, y + 2)}h4`, "#1a0d06", 1.6, 0.9);
+  const g =
+    circ(x, y, r * 0.86, "#ff7a1e", 0) + circ(x, y, r * 0.55, "#ffc45a", 0) + circ(x, y, r * 0.26, "#fff4d6", 0) +
+    glyphRing(x, y, r + 0.5, 6, "#ffae4a", 1) +
+    ln(`M${P(x - r - 8, y - 2)}h4M${P(x - r - 8, y + 2)}h4M${P(x + r + 4, y - 2)}h4M${P(x + r + 4, y + 2)}h4`, "#ff9a3a", 1, 0.9);
+  return { body, glow: g };
+}
+
+/** The core's rim seen from the side, at the back edge of a profile. */
+function coreSliver(x, y, r) {
+  return {
+    body: ell(x, y, r * 0.42, r + 3, "url(#armorDk)", 1.4),
+    glow: ell(x + 0.6, y, r * 0.24, r * 0.8, "#ff8a2a", 0) + ell(x + 0.8, y, r * 0.12, r * 0.45, "#ffe0a0", 0),
+  };
+}
+
+/**
+ * Compose one view of a shield bearer from its parts (all in upper-body space
+ * except `legs`, which sit under the torso lean):
+ *   legs, torso, weapon (weapon arm and what it holds), head, offArm (the
+ *   shield arm), shield (face-on, centred on x = shieldX), edge (the shield
+ *   edge-on, centred on x = 0), backBody / backHead (its back), core
+ *   ([x, y, r] of the power core on its back);
+ *   glows: eyes (eyesSide in profile), chest, weaponGlow, rune (on the shield
+ *   face), edgeGlow (on the edge-on shield).
+ * `side` is the side of the front view the shield is on (-1 left, +1 right);
+ * `shieldUnder` draws it behind the body from the front.
+ * `sideFx` / `backFx` say what its secondary-motion layers do in those views
+ * ("over": its back layers, a cape, hang in front of it; "none": hidden).
+ * `R` is the pose's rig. Returns { body, glow, fx? } for the view.
+ */
+function turnedView(R, view, p) {
+  const { legs, torso, weapon, head, offArm, shield, shieldX, edge, eyes, rune, core } = p;
+  const chest = p.chest || "";
+  const wg = p.weaponGlow || "";
+  const s = p.side ?? -1;
+  const headAt = (m, dx) => `<g transform="translate(${f(dx)} 0)">${m}</g>`;
+  switch (view) {
+    case "threeFar": {
+      // Turned toward its shield side, the shield arm away: the shield,
+      // foreshortened, out at that edge and partly behind it.
+      const k = 0.82;
+      const bodyUp = turnX(torso + weapon + headAt(head, s * 4) + offArm, k, -s * 3);
+      const sh0 = turnX(shield, 0.66, s * 12, shieldX);
+      return {
+        body: turnX(legs, k, -s * 3) + up(R, sh0 + bodyUp),
+        glow: up(R, glow(turnX(headAt(eyes, s * 4) + chest + wg, k, -s * 3) + turnX(rune, 0.66, s * 12, shieldX))),
+      };
+    }
+    case "threeNear": {
+      // Turned away from its shield side, the shield arm toward you: the
+      // shield slides across in front of its chest.
+      const k = 0.82;
+      const bodyUp = turnX(torso + weapon + headAt(head, -s * 4) + offArm, k, s * 3);
+      const sh0 = turnX(shield, 0.72, -s * 28, shieldX);
+      return {
+        body: turnX(legs, k, s * 3) + up(R, bodyUp + sh0),
+        glow: up(R, glow(turnX(headAt(eyes, -s * 4) + wg, k, s * 3) + turnX(rune, 0.72, -s * 28, shieldX))),
+      };
+    }
+    case "side": {
+      // A profile facing its shield side: narrow, the visor at the front
+      // edge, the shield edge-on out in front, the core's rim at its back.
+      const k = 0.58;
+      const back = coreSliver(-s * 19, core[1], core[2]);
+      // Its arms come in over its middle, the shield arm reaching forward.
+      const bodyUp = turnX(torso + headAt(head, s * 6), k) + back.body + turnX(offArm, k) + turnX(weapon, k, s * 14);
+      const slab = headAt(edge, s * 26);
+      return {
+        body: turnX(legs, k) + up(R, bodyUp + slab),
+        glow: up(R, glow(turnX(headAt(p.eyesSide ?? eyes, s * 6), k) + turnX(wg, k, s * 14) + back.glow + headAt(p.edgeGlow || "", s * 26))),
+        fx: p.sideFx,
+      };
+    }
+    case "back": {
+      // Its back: arms swapped over, the shield behind it with an edge past
+      // its shoulder, and the core in the middle of its back.
+      const c = backCore(core[0], core[1], core[2]);
+      const sh0 = turnX(shield, 0.5, -s * 44 - shieldX, shieldX);
+      const arms = mirrorX(weapon + offArm);
+      return {
+        body: legs + up(R, sh0 + arms + p.backBody + c.body + p.backHead),
+        glow: up(R, glow(c.glow, true)),
+        fx: p.backFx,
+      };
+    }
+    default: {
+      const rest = torso + weapon + head + offArm;
+      return { body: legs + up(R, p.shieldUnder ? shield + rest : rest + shield), glow: up(R, glow(eyes + chest + wg + rune)) };
+    }
+  }
+}
+
 /* ── Chrono Sentinel ────────────────────────────────────────────────────── */
 
 const SENTINEL = { hipY: 10, hipW: 13, stance: 4, thigh: 34, shin: 30, foot: 10, shY: -46, shW: 32, ua: 28, fa: 26, headY: -70 };
@@ -1088,24 +1219,25 @@ const SENTINEL = { hipY: 10, hipW: 13, stance: 4, thigh: 34, shin: 30, foot: 10,
 function sentinel(v = 0) {
   const halberd = v % 2 === 1;
   const shieldArm = { sh: -4, el: -70, kf: 0.8 };
-  const table = {
+  const table = withTurnedViews({
     idle: { armL: shieldArm, armR: { sh: 18, el: -4 } },
     moveA: pose(WALK_A, { armL: shieldArm, armR: { sh: 14, el: -2 }, crouch: 2 }),
     moveB: pose(WALK_B, { armL: shieldArm, armR: { sh: 22, el: -6 }, crouch: 2 }),
     windup: pose({ crouch: 9, tilt: -7, headX: -2, legL: { spread: -6 }, legR: { spread: 7 } }, { armL: { sh: -12, el: -56, kf: 0.8 }, armR: { sh: 128, el: 30, kf: 0.9 } }),
     attack: pose({ crouch: 10, tilt: 7, headDy: 3, legL: { spread: -5 }, legR: { spread: 8, lift: 2 } }, { armL: { sh: 10, el: -36, kf: 0.8 }, armR: { sh: 36, el: -100, kf: 0.9 } }),
     hurt: pose(HURT, { tilt: 6, armL: { sh: 16, el: -50, kf: 0.8 }, armR: { sh: 36, el: 4 } }),
-  };
-  const poses = build(SENTINEL, table, (R, name) => {
-    let body = legsOf(R, { thighW: 18, kneeW: 16, ankleW: 14, bootW: 20, under: "url(#armorDk)", pad: "url(#armor)", boot: "url(#armorDk)" });
-    let upper = "";
+  });
+  const poses = build(SENTINEL, table, (R, key) => {
+    const [name, view] = viewOf(key);
+    const legs = legsOf(R, { thighW: 18, kneeW: 16, ankleW: 14, bootW: 20, under: "url(#armorDk)", pad: "url(#armor)", boot: "url(#armorDk)" });
     const { shY, hipY } = R;
-    upper += plate([[-34, shY - 6], [34, shY - 6], [28, hipY - 6], [-28, hipY - 6]], "url(#armor)", 1.6, 0.6);
-    upper += plate([[-18, hipY - 12], [18, hipY - 12], [16, hipY + 4], [-16, hipY + 4]], "url(#armorDk)", 1.2, 0.3);
-    upper += plate([[-22, shY + 4], [22, shY + 4], [18, shY + 30], [-18, shY + 30]], "url(#steel)", 1.1, 0.5);
-    upper += ln(`M0 ${f(shY + 4)}V${f(shY + 30)}M-20 ${f(shY + 17)}H20`, INK, 1, 0.6);
-    for (const [x, y] of [[-28, shY - 2], [28, shY - 2], [-24, hipY - 10], [24, hipY - 10]]) upper += circ(x, y, 1.5, "url(#brass)", 0.5);
-    upper += glyphRing(0, shY + 17, 7, 8, "#1b2a3f", 1);
+    let torso = plate([[-34, shY - 6], [34, shY - 6], [28, hipY - 6], [-28, hipY - 6]], "url(#armor)", 1.6, 0.6);
+    const belt = plate([[-18, hipY - 12], [18, hipY - 12], [16, hipY + 4], [-16, hipY + 4]], "url(#armorDk)", 1.2, 0.3);
+    torso += belt;
+    torso += plate([[-22, shY + 4], [22, shY + 4], [18, shY + 30], [-18, shY + 30]], "url(#steel)", 1.1, 0.5);
+    torso += ln(`M0 ${f(shY + 4)}V${f(shY + 30)}M-20 ${f(shY + 17)}H20`, INK, 1, 0.6);
+    for (const [x, y] of [[-28, shY - 2], [28, shY - 2], [-24, hipY - 10], [24, hipY - 10]]) torso += circ(x, y, 1.5, "url(#brass)", 0.5);
+    torso += glyphRing(0, shY + 17, 7, 8, "#1b2a3f", 1);
     // Weapon arm (right): great axe or halberd.
     const WR = R.arms[1].W;
     const axeDeg = name === "windup" ? 196 : name === "attack" ? 252 : name === "hurt" ? 150 : 166;
@@ -1113,50 +1245,74 @@ function sentinel(v = 0) {
     const shaftBot = polar(WR, axeDeg + 180, 30);
     const hd = heading(shaftBot, shaftEnd);
     const L = (bx, by) => polar(polar(shaftEnd, hd + 180, by), hd + 90, bx);
-    upper += sh(capsule(shaftBot, shaftEnd, 3.8, 3.2), "url(#gun)", 1.1);
-    for (const t of [0.35, 0.6]) upper += ln(`M${P(...lerp(shaftBot, shaftEnd, t))}l1 1`, "url(#brass)", 3);
+    let weapon = sh(capsule(shaftBot, shaftEnd, 3.8, 3.2), "url(#gun)", 1.1);
+    for (const t of [0.35, 0.6]) weapon += ln(`M${P(...lerp(shaftBot, shaftEnd, t))}l1 1`, "url(#brass)", 3);
     if (halberd) {
       const blade = [L(-2, 8), L(0, 6), L(22, 4), L(30, 20), L(20, 30), L(0, 24)];
-      upper += sh(poly(blade), "url(#steel)", 1.3) + sh(poly([L(-2, 8), L(-12, 14), L(-2, 20)]), "url(#steel)", 1.1);
-      upper += sh(poly([L(-2.5, 6), L(0, -16), L(2.5, 6)]), "url(#steel)", 1.1);
-      upper += spec(`M${P(...L(24, 8))}L${P(...L(29, 19))}`, 0.8, 1.4);
+      weapon += sh(poly(blade), "url(#steel)", 1.3) + sh(poly([L(-2, 8), L(-12, 14), L(-2, 20)]), "url(#steel)", 1.1);
+      weapon += sh(poly([L(-2.5, 6), L(0, -16), L(2.5, 6)]), "url(#steel)", 1.1);
+      weapon += spec(`M${P(...L(24, 8))}L${P(...L(29, 19))}`, 0.8, 1.4);
     } else {
       const blade = [L(-6, 4), L(0, 0), L(26, -12), L(40, 6), L(34, 34), L(12, 24), L(0, 20), L(-6, 18)];
-      upper += sh(poly(blade), "url(#steel)", 1.3) + spec(`M${P(...L(40, 6))}L${P(...L(34, 34))}`, 0.9, 1.6);
-      upper += ln(`M${P(...L(8, 6))}L${P(...L(22, 14))}`, INK, 0.8, 0.5);
+      weapon += sh(poly(blade), "url(#steel)", 1.3) + spec(`M${P(...L(40, 6))}L${P(...L(34, 34))}`, 0.9, 1.6);
+      weapon += ln(`M${P(...L(8, 6))}L${P(...L(22, 14))}`, INK, 0.8, 0.5);
     }
-    upper += circ(shaftEnd[0], shaftEnd[1], 3.2, "url(#brass)", 1);
-    upper += armOf(R, 1, { upW: 17, foreW: 16, mat: "url(#armorDk)", guard: "url(#armor)", padR: 16 });
+    weapon += circ(shaftEnd[0], shaftEnd[1], 3.2, "url(#brass)", 1);
+    const armPlate = { upW: 17, foreW: 16, mat: "url(#armorDk)", guard: "url(#armor)", padR: 16 };
+    weapon += armOf(R, 1, armPlate);
     const [hx, hy] = R.head;
-    upper += sh(`M${P(hx - 17, hy - 14)}Q${P(hx, hy - 20)} ${P(hx + 17, hy - 14)}V${f(hy + 10)}L${P(hx + 11, hy + 17)}H${f(hx - 11)}L${P(hx - 17, hy + 10)}Z`, "url(#armor)", 1.6);
-    upper += spec(`M${P(hx - 14, hy - 12)}Q${P(hx - 6, hy - 16)} ${P(hx + 2, hy - 16)}`, 0.7, 1.4);
+    const helm = `M${P(hx - 17, hy - 14)}Q${P(hx, hy - 20)} ${P(hx + 17, hy - 14)}V${f(hy + 10)}L${P(hx + 11, hy + 17)}H${f(hx - 11)}L${P(hx - 17, hy + 10)}Z`;
+    let horns = "";
+    if (halberd) for (const s of [-1, 1]) horns += sh(`M${P(hx + s * 14, hy - 12)}Q${P(hx + s * 26, hy - 20)} ${P(hx + s * 24, hy - 34)}Q${P(hx + s * 20, hy - 22)} ${P(hx + s * 10, hy - 16)}Z`, "url(#steel)", 1.1);
+    let head = sh(helm, "url(#armor)", 1.6) + spec(`M${P(hx - 14, hy - 12)}Q${P(hx - 6, hy - 16)} ${P(hx + 2, hy - 16)}`, 0.7, 1.4) + horns;
     let eyes;
     if (halberd) {
-      for (const s of [-1, 1]) upper += sh(`M${P(hx + s * 14, hy - 12)}Q${P(hx + s * 26, hy - 20)} ${P(hx + s * 24, hy - 34)}Q${P(hx + s * 20, hy - 22)} ${P(hx + s * 10, hy - 16)}Z`, "url(#steel)", 1.1);
-      upper += sh(`M${P(hx - 11, hy - 4)}H${f(hx + 11)}V${f(hy)}H${f(hx + 2)}V${f(hy + 11)}H${f(hx - 2)}V${f(hy)}H${f(hx - 11)}Z`, "#05070b", 0.8);
+      head += sh(`M${P(hx - 11, hy - 4)}H${f(hx + 11)}V${f(hy)}H${f(hx + 2)}V${f(hy + 11)}H${f(hx - 2)}V${f(hy)}H${f(hx - 11)}Z`, "#05070b", 0.8);
       eyes = bar(hx, hy - 2, 20, 3, "#bfe6ff") + bar(hx, hy + 4, 3, 12, "#bfe6ff");
     } else {
-      upper += sh(`M${P(hx - 9, hy - 3)}H${f(hx + 9)}V${f(hy + 1)}H${f(hx - 9)}Z`, "#05070b", 0.8) + sh(`M${P(hx - 2, hy - 9)}H${f(hx + 2)}V${f(hy + 8)}H${f(hx - 2)}Z`, "#05070b", 0.8);
+      head += sh(`M${P(hx - 9, hy - 3)}H${f(hx + 9)}V${f(hy + 1)}H${f(hx - 9)}Z`, "#05070b", 0.8) + sh(`M${P(hx - 2, hy - 9)}H${f(hx + 2)}V${f(hy + 8)}H${f(hx - 2)}Z`, "#05070b", 0.8);
       eyes = bar(hx, hy - 1, 17, 3, "#bfe6ff") + bar(hx, hy, 3, 15, "#bfe6ff");
     }
-    for (let i = 0; i < 4; i++) upper += circ(hx - 12 + i * 8, hy + 12, 1.2, "#0b1119", 0);
-    upper += armOf(R, -1, { upW: 17, foreW: 16, mat: "url(#armorDk)", guard: "url(#armor)", padR: 16 });
+    for (let i = 0; i < 4; i++) head += circ(hx - 12 + i * 8, hy + 12, 1.2, "#0b1119", 0);
+    const offArm = armOf(R, -1, armPlate);
     // Tower shield with a rune cross.
     const WL = R.arms[-1].W;
     const t = name === "hurt" ? -10 : name === "windup" ? 6 : 0;
     const o = [WL[0] - 6, WL[1] + 2];
     const T = (pts) => rot(pts, t, [0, 0], o);
-    upper += sh(poly(T([[-19, -58], [19, -58], [21, 52], [0, 62], [-21, 52]])), "url(#steel)", 1.9);
-    upper += sh(poly(T([[-13, -50], [13, -50], [14, 46], [0, 54], [-14, 46]])), "url(#armorDk)", 0.9);
-    upper += spec(`M${P(...T([[-17, -54]])[0])}L${P(...T([[-19, 48]])[0])}`, 0.6, 1.5);
+    let shield = sh(poly(T([[-19, -58], [19, -58], [21, 52], [0, 62], [-21, 52]])), "url(#steel)", 1.9);
+    shield += sh(poly(T([[-13, -50], [13, -50], [14, 46], [0, 54], [-14, 46]])), "url(#armorDk)", 0.9);
+    shield += spec(`M${P(...T([[-17, -54]])[0])}L${P(...T([[-19, 48]])[0])}`, 0.6, 1.5);
     const cross = T([[-2, -40], [2, -40], [2, -8], [11, -8], [11, -4], [2, -4], [2, 36], [-2, 36], [-2, -4], [-11, -4], [-11, -8], [-2, -8]]);
-    upper += sh(poly(cross), "url(#steel)", 0.7);
+    shield += sh(poly(cross), "url(#steel)", 0.7);
+    // Edge-on: the tower shield's thickness, banded, with its rim lit.
+    const [, eTop] = T([[0, -58]])[0];
+    const [, eBot] = T([[0, 62]])[0];
+    const edge =
+      sh(`M-6 ${f(eTop + 3)}Q0 ${f(eTop - 3)} 6 ${f(eTop + 3)}Q8 ${f((eTop + eBot) / 2)} 6 ${f(eBot - 6)}Q0 ${f(eBot + 3)} -6 ${f(eBot - 6)}Q-3 ${f((eTop + eBot) / 2)} -6 ${f(eTop + 3)}Z`, "url(#steel)", 1.9) +
+      ln(`M-2 ${f(eTop + 4)}Q0 ${f((eTop + eBot) / 2)} -2 ${f(eBot - 6)}`, "url(#brass)", 1.6, 0.9) +
+      ln(`M-5 ${f(eTop + 30)}h11M-5 ${f(eTop + 70)}h11`, INK, 1, 0.6) + spec(`M4 ${f(eTop + 5)}Q6 ${f((eTop + eBot) / 2)} 4 ${f(eBot - 8)}`, 0.5, 1);
     const runeC = T([[0, -6]])[0];
     const charging = name === "windup" || name === "attack";
-    const core = circ(0, shY + 17, charging ? 5.5 : 3.5, "#9fd8ff", 0) + glyphRing(0, shY + 17, 7, 8, "#6fb4ff", 0.9);
+    const chest = circ(0, shY + 17, charging ? 5.5 : 3.5, "#9fd8ff", 0) + glyphRing(0, shY + 17, 7, 8, "#6fb4ff", 0.9);
     const rune = glyphRing(runeC[0], runeC[1], 9, 6, "#8cc8ff", 1.1) + circ(runeC[0], runeC[1], 2.4, "#cfeaff", 0);
-    body += up(R, upper);
-    return { body, glow: up(R, glow(eyes + core + rune)), at: { hip: R.upPt([0, hipY - 2]) } };
+    // Its back: the back plate, a spine, the helm's back with no visor.
+    const backBody =
+      plate([[-34, shY - 6], [34, shY - 6], [28, hipY - 6], [-28, hipY - 6]], "url(#armorDk)", 1.6, 0.5) + belt +
+      plate([[-30, shY - 2], [-4, shY - 2], [-6, shY + 12], [-26, shY + 10]], "url(#armor)", 1.1, 0.5) +
+      plate([[4, shY - 2], [30, shY - 2], [26, shY + 10], [6, shY + 12]], "url(#armor)", 1.1, 0.2) +
+      ln(`M0 ${f(shY + 30)}V${f(hipY - 12)}`, INK, 1.4, 0.7) +
+      [0, 1, 2].map((i) => plate([[-5, shY + 32 + i * 6], [5, shY + 32 + i * 6], [4, shY + 36 + i * 6], [-4, shY + 36 + i * 6]], "url(#steel)", 0.8, 0.2)).join("");
+    const backHead =
+      sh(helm, "url(#armorDk)", 1.6) + horns + spec(`M${P(hx - 14, hy - 12)}Q${P(hx - 6, hy - 16)} ${P(hx + 2, hy - 16)}`, 0.5, 1.2) +
+      ln(`M${P(hx, hy - 18)}V${f(hy + 14)}M${P(hx - 15, hy + 4)}H${f(hx + 15)}`, INK, 1.2, 0.7) +
+      [-10, -4, 4, 10].map((dx) => circ(hx + dx, hy + 4, 1.3, "url(#brass)", 0.4)).join("");
+    const eyesSide = bar(hx - 11, hy - 1, 7, 3, "#bfe6ff");
+    const v2 = turnedView(R, view, {
+      legs, torso, weapon, head, offArm, shield, shieldX: o[0], edge, eyes, eyesSide, chest, rune,
+      core: [0, shY + 17, 10], backBody, backHead,
+    });
+    return { body: v2.body, glow: v2.glow, at: { hip: R.upPt([0, hipY - 2]) } };
   });
   // Tabard hanging between the legs.
   const tabard = sh(`M-9 0H9L10 34Q5 38 0 35Q-5 38 -10 34Z`, "url(#tabard)", 1.3) + ln(`M-5 4V30M5 4V30`, INK, 0.7, 0.4) + glyphRing(0, 14, 3.5, 6, "#8fb0d8", 0.8, 2);
@@ -1168,37 +1324,39 @@ function sentinel(v = 0) {
 const COMMANDER = { ...HUMAN, shW: 23, hipW: 9, headY: -60 };
 
 function shieldCommander() {
-  const table = {
+  const table = withTurnedViews({
     idle: { armL: { sh: -10, el: -70, kf: 0.8 }, armR: { sh: 12, el: -10 } },
     moveA: pose(WALK_A, { armL: { sh: -10, el: -70, kf: 0.8 }, armR: { sh: 8, el: -6 } }),
     moveB: pose(WALK_B, { armL: { sh: -10, el: -70, kf: 0.8 }, armR: { sh: 16, el: -14 } }),
     windup: pose(BRACE, { tilt: -3 }, { armL: { sh: -14, el: -76, kf: 0.8, dy: -3 }, armR: { sh: 150, el: -30, ku: 0.9, kf: 0.8 } }),
     attack: pose(BRACE, { crouch: 2, tilt: 3 }, { armL: { sh: -14, el: -76, kf: 0.8, dy: -3 }, armR: { sh: 80, el: 10, ku: 0.9, kf: 0.8 } }),
     hurt: pose(HURT, { armL: { sh: 20, el: -60, kf: 0.8 }, armR: { sh: 44, el: 8 } }),
-  };
-  const poses = build(COMMANDER, table, (R, name) => {
+  });
+  const poses = build(COMMANDER, table, (R, key) => {
+    const [name, view] = viewOf(key);
     const { shY, hipY } = R;
-    let body = legsOf(R, { pad: "url(#armor)", trim: "#e8c46a" });
-    let upper = torsoOf(R, { w: 27, waist: 17, mat: "url(#armor)" });
-    upper += plate([[-10, shY + 2], [10, shY + 2], [7, shY + 24], [-7, shY + 24]], "url(#armorDk)", 1, 0.3);
-    for (const y of [shY + 8, shY + 13, shY + 18]) upper += ln(`M-4 ${f(y)}Q0 ${f(y - 2)} 4 ${f(y)}`, "#e8c46a", 1, 0.9);
-    upper += ln(`M${P(-24, shY + 1)}Q0 ${f(shY + 10)} 24 ${f(shY + 1)}`, "#e8c46a", 1.4, 0.8);
+    const legs = legsOf(R, { pad: "url(#armor)", trim: "#e8c46a" });
+    let torso = torsoOf(R, { w: 27, waist: 17, mat: "url(#armor)" });
+    torso += plate([[-10, shY + 2], [10, shY + 2], [7, shY + 24], [-7, shY + 24]], "url(#armorDk)", 1, 0.3);
+    for (const y of [shY + 8, shY + 13, shY + 18]) torso += ln(`M-4 ${f(y)}Q0 ${f(y - 2)} 4 ${f(y)}`, "#e8c46a", 1, 0.9);
+    torso += ln(`M${P(-24, shY + 1)}Q0 ${f(shY + 10)} 24 ${f(shY + 1)}`, "#e8c46a", 1.4, 0.8);
     const bigPad = { pad: "url(#armor)", padR: 15, upW: 13, foreW: 12, mat: "url(#cloth)", guard: "url(#armorDk)", trim: "#e8c46a" };
-    upper += armOf(R, 1, bigPad);
+    let weapon = armOf(R, 1, bigPad);
     const WR = R.arms[1].W;
     const cd = heading(R.arms[1].E, WR);
-    upper += sh(capsule(R.arms[1].E, polar(WR, cd, 9), 9, 8), "url(#gun)", 1.2) + circ(...polar(WR, cd, 9), 3, "url(#armorDk)", 1);
+    weapon += sh(capsule(R.arms[1].E, polar(WR, cd, 9), 9, 8), "url(#gun)", 1.2) + circ(...polar(WR, cd, 9), 3, "url(#armorDk)", 1);
     const [hx, hy] = R.head;
-    upper += ao(hx, hy + 12, 9, 3, 0.55);
-    upper += sh(`M${P(hx - 12, hy + 5)}Q${P(hx - 13, hy - 14)} ${P(hx, hy - 15)}Q${P(hx + 13, hy - 14)} ${P(hx + 12, hy + 5)}L${P(hx + 8, hy + 12)}H${f(hx - 8)}Z`, "url(#armor)", 1.4);
-    upper += sh(`M${P(hx - 2.5, hy - 24)}H${f(hx + 2.5)}L${P(hx + 2, hy - 6)}H${f(hx - 2)}Z`, "url(#plume)", 1);
-    upper += sh(`M${P(hx - 9, hy - 3)}H${f(hx + 9)}V${f(hy + 2)}H${f(hx - 9)}Z`, "#04070c", 0.8);
-    upper += spec(`M${P(hx - 10, hy - 2)}Q${P(hx - 10, hy - 12)} ${P(hx - 2, hy - 13)}`, 0.6, 1.3);
-    upper += armOf(R, -1, bigPad);
-    let glowUp = bar(hx, hy - 0.5, 16, 3, "#8cc8ff");
+    const helm = `M${P(hx - 12, hy + 5)}Q${P(hx - 13, hy - 14)} ${P(hx, hy - 15)}Q${P(hx + 13, hy - 14)} ${P(hx + 12, hy + 5)}L${P(hx + 8, hy + 12)}H${f(hx - 8)}Z`;
+    const plume = sh(`M${P(hx - 2.5, hy - 24)}H${f(hx + 2.5)}L${P(hx + 2, hy - 6)}H${f(hx - 2)}Z`, "url(#plume)", 1);
+    let head = ao(hx, hy + 12, 9, 3, 0.55);
+    head += sh(helm, "url(#armor)", 1.4) + plume;
+    head += sh(`M${P(hx - 9, hy - 3)}H${f(hx + 9)}V${f(hy + 2)}H${f(hx - 9)}Z`, "#04070c", 0.8);
+    head += spec(`M${P(hx - 10, hy - 2)}Q${P(hx - 10, hy - 12)} ${P(hx - 2, hy - 13)}`, 0.6, 1.3);
+    const offArm = armOf(R, -1, bigPad);
+    const eyes = bar(hx, hy - 0.5, 16, 3, "#8cc8ff");
     const muzzle = polar(WR, cd, 9);
-    glowUp += name === "attack" ? flash(muzzle[0], muzzle[1], 16, "#8cd0ff") : circ(muzzle[0], muzzle[1], name === "windup" ? 4.5 : 1.8, "#9fd8ff", 0);
-    if (name === "windup") glowUp += `<circle cx="${f(muzzle[0])}" cy="${f(muzzle[1])}" r="9" fill="none" stroke="#8cd0ff" stroke-width="1.6"/>`;
+    let weaponGlow = name === "attack" ? flash(muzzle[0], muzzle[1], 16, "#8cd0ff") : circ(muzzle[0], muzzle[1], name === "windup" ? 4.5 : 1.8, "#9fd8ff", 0);
+    if (name === "windup") weaponGlow += `<circle cx="${f(muzzle[0])}" cy="${f(muzzle[1])}" r="9" fill="none" stroke="#8cd0ff" stroke-width="1.6"/>`;
     const WL = R.arms[-1].W;
     const hexPts = [];
     for (let i = 0; i < 6; i++) {
@@ -1206,10 +1364,24 @@ function shieldCommander() {
       hexPts.push([WL[0] - 4 + Math.cos(a) * 21, WL[1] - 4 + Math.sin(a) * 25]);
     }
     const hex = poly(hexPts);
-    upper += `<path d="${hex}" fill="#3a8cff" fill-opacity=".22" stroke="#6fb4ff" stroke-width="1.4"/>`;
-    glowUp += `<path d="${hex}" fill="none" stroke="#8cc8ff" stroke-width="${name === "hurt" ? 1 : 2.2}"/>` + glyphRing(WL[0] - 4, WL[1] - 4, 8, 6, "#8cc8ff", 1);
-    body += up(R, upper);
-    return { body, glow: up(R, glow(glowUp)), at: { neck: R.upPt([0, shY - 4]) } };
+    const shield = `<path d="${hex}" fill="#3a8cff" fill-opacity=".22" stroke="#6fb4ff" stroke-width="1.4"/>`;
+    const rune = `<path d="${hex}" fill="none" stroke="#8cc8ff" stroke-width="${name === "hurt" ? 1 : 2.2}"/>` + glyphRing(WL[0] - 4, WL[1] - 4, 8, 6, "#8cc8ff", 1);
+    // The energy shield edge-on: a thin lens of light.
+    const ey = WL[1] - 4;
+    const lens = `M0 ${f(ey - 25)}Q4 ${f(ey)} 0 ${f(ey + 25)}Q-4 ${f(ey)} 0 ${f(ey - 25)}Z`;
+    const edge = `<path d="${lens}" fill="#3a8cff" fill-opacity=".3" stroke="#6fb4ff" stroke-width="1.4"/>`;
+    const edgeGlow = `<path d="${lens}" fill="none" stroke="#8cc8ff" stroke-width="2.2"/>`;
+    const backBody =
+      torsoOf(R, { w: 27, waist: 17, mat: "url(#armorDk)", plates: false }) +
+      plate([[-22, shY - 2], [22, shY - 2], [16, shY + 26], [-16, shY + 26]], "url(#armorDk)", 1.2, 0.4) +
+      ln(`M${P(-24, shY + 1)}Q0 ${f(shY + 8)} 24 ${f(shY + 1)}`, "#e8c46a", 1.4, 0.8);
+    const backHead = ao(hx, hy + 12, 9, 3, 0.55) + sh(helm, "url(#armorDk)", 1.4) + plume +
+      ln(`M${P(hx - 10, hy + 4)}Q${P(hx, hy + 7)} ${P(hx + 10, hy + 4)}`, "#e8c46a", 1.2, 0.8);
+    const out = turnedView(R, view, {
+      legs, torso, weapon, head, offArm, shield, shieldX: WL[0] - 4, edge, edgeGlow, eyes, eyesSide: bar(hx - 7, hy - 0.5, 6, 3, "#8cc8ff"),
+      weaponGlow, rune, core: [0, shY + 14, 8], backBody, backHead, backFx: "over",
+    });
+    return { body: out.body, glow: out.glow, fx: out.fx, at: { neck: R.upPt([0, shY - 4]) } };
   });
   const cape = sh(`M-24 0Q0 -6 24 0L36 ${SOLE + 34}Q18 ${SOLE + 42} 0 ${SOLE + 38}Q-18 ${SOLE + 42} -36 ${SOLE + 34}Z`, "url(#capeM)", 1.4) +
     ln(`M-12 8Q-18 60 -22 ${SOLE + 30}M12 8Q18 60 22 ${SOLE + 30}M0 6V${SOLE + 32}`, INK, 1, 0.5) +
@@ -1236,45 +1408,65 @@ const clockHands = (r, color = "#ffffff") =>
   ln(`M0 0L${f(r * 0.3)} ${f(-r * 0.3)}M0 0L0 ${f(-r * 0.72)}`, INK, 2.6) + ln(`M0 0L${f(r * 0.3)} ${f(-r * 0.3)}M0 0L0 ${f(-r * 0.72)}`, color, 1.3) + circ(0, 0, 1.4, "url(#brass)", 0.6);
 
 function timeWarden() {
-  const table = {
+  const table = withTurnedViews({
     idle: { armL: { sh: 20, el: -4 }, armR: { sh: 20, el: -4 } },
     moveA: pose(WALK_A, { armL: { sh: 16, el: -2 }, armR: { sh: 24, el: -6 }, crouch: 2 }),
     moveB: pose(WALK_B, { armL: { sh: 24, el: -6 }, armR: { sh: 16, el: -2 }, crouch: 2 }),
     windup: pose(BRACE, { tilt: -3 }, { armL: { sh: 80, el: 40 }, armR: { sh: 80, el: 40 } }),
     attack: pose({ crouch: 3, tilt: 3, legL: { spread: -3 }, legR: { spread: 3 } }, { armL: { sh: 34, el: -64, kf: 0.8 }, armR: { sh: 34, el: -64, kf: 0.8 } }),
     hurt: pose(HURT, { armL: { sh: 36, el: -40 }, armR: { sh: 44, el: 6 } }),
-  };
-  const poses = build(WARDEN, table, (R, name) => {
+  });
+  const poses = build(WARDEN, table, (R, key) => {
+    const [name, view] = viewOf(key);
     const { shY, hipY } = R;
-    let body = legsOf(R, { thighW: 16, kneeW: 15, ankleW: 13, bootW: 18, under: "url(#armorDk)", pad: "url(#armor)", boot: "url(#armorDk)" });
+    const legs = legsOf(R, { thighW: 16, kneeW: 15, ankleW: 13, bootW: 18, under: "url(#armorDk)", pad: "url(#armor)", boot: "url(#armorDk)" });
+    // Its shield: an arc of light on its left (screen right).
     const arc = `M${P(40, shY - 30)}Q${P(78, hipY - 20)} ${P(40, hipY + 34)}`;
-    body += up(R, ln(arc, "#1a3a7a", 6, 0.9) + ln(arc, "#4d8cff", 2.5, 0.8));
-    let upper = sh(`M${P(-32, shY - 6)}Q0 ${f(shY - 14)} 32 ${f(shY - 6)}L${P(26, hipY - 8)}Q0 ${f(hipY + 2)} -26 ${f(hipY - 8)}Z`, "url(#armor)", 1.6);
-    upper += spec(`M${P(-28, shY - 3)}Q${P(-14, shY - 10)} ${P(-2, shY - 10)}`, 0.6, 1.4);
-    upper += ao(0, shY + 33, 18, 4, 0.5);
-    upper += plate([[-20, hipY - 14], [20, hipY - 14], [17, hipY + 4], [-17, hipY + 4]], "url(#armorDk)", 1.2, 0.3);
-    for (const s of [-1, 1]) upper += cable([s * 12, shY + 30], [s * 20, hipY - 12], 3, "#2a3550", 1.6);
-    upper += clockFace(0, shY + 17, 14);
+    const shield = ln(arc, "#1a3a7a", 6, 0.9) + ln(arc, "#4d8cff", 2.5, 0.8);
+    const shell = `M${P(-32, shY - 6)}Q0 ${f(shY - 14)} 32 ${f(shY - 6)}L${P(26, hipY - 8)}Q0 ${f(hipY + 2)} -26 ${f(hipY - 8)}Z`;
+    const waist = plate([[-20, hipY - 14], [20, hipY - 14], [17, hipY + 4], [-17, hipY + 4]], "url(#armorDk)", 1.2, 0.3);
+    let torso = sh(shell, "url(#armor)", 1.6);
+    torso += spec(`M${P(-28, shY - 3)}Q${P(-14, shY - 10)} ${P(-2, shY - 10)}`, 0.6, 1.4);
+    torso += ao(0, shY + 33, 18, 4, 0.5);
+    torso += waist;
+    for (const s of [-1, 1]) torso += cable([s * 12, shY + 30], [s * 20, hipY - 12], 3, "#2a3550", 1.6);
+    torso += clockFace(0, shY + 17, 14);
     const armO = { upW: 13, foreW: 13, mat: "url(#armorDk)", guard: "url(#armor)", pad: "url(#armor)", padR: 12 };
-    upper += armOf(R, -1, armO) + armOf(R, 1, armO);
-    for (const s of [-1, 1]) {
+    const pauldron = (s) => {
       const { S } = R.arms[s];
-      upper += plate([[S[0] - 11, S[1] - 12], [S[0] + 11, S[1] - 12], [S[0] + 11, S[1] + 2], [S[0] - 11, S[1] + 2]], "url(#armor)", 1.4, 0.6);
-      upper += circ(S[0], S[1] - 5, 2.4, "url(#brass)", 0.7);
-    }
+      return plate([[S[0] - 11, S[1] - 12], [S[0] + 11, S[1] - 12], [S[0] + 11, S[1] + 2], [S[0] - 11, S[1] + 2]], "url(#armor)", 1.4, 0.6) + circ(S[0], S[1] - 5, 2.4, "url(#brass)", 0.7);
+    };
+    // Both arms, then both pauldrons over them.
+    const arms = armOf(R, -1, armO) + armOf(R, 1, armO);
+    const pads = pauldron(-1) + pauldron(1);
     const [hx, hy] = R.head;
-    upper += ao(hx, hy + 11, 10, 3, 0.55);
-    upper += sh(`M${P(hx - 13, hy + 8)}V${f(hy - 4)}Q${P(hx, hy - 20)} ${P(hx + 13, hy - 4)}V${f(hy + 8)}Z`, "url(#armor)", 1.5);
-    upper += sh(`M${P(hx - 1.5, hy - 17)}H${f(hx + 1.5)}V${f(hy - 6)}H${f(hx - 1.5)}Z`, "url(#armorDk)", 0.7);
-    upper += sh(`M${P(hx - 10, hy - 3)}H${f(hx + 10)}V${f(hy + 2)}H${f(hx - 10)}Z`, "#04070c", 0.8);
-    upper += spec(`M${P(hx - 11, hy - 3)}Q${P(hx - 10, hy - 13)} ${P(hx - 3, hy - 15)}`, 0.6, 1.2);
+    const helm = `M${P(hx - 13, hy + 8)}V${f(hy - 4)}Q${P(hx, hy - 20)} ${P(hx + 13, hy - 4)}V${f(hy + 8)}Z`;
+    let head = ao(hx, hy + 11, 10, 3, 0.55);
+    head += sh(helm, "url(#armor)", 1.5);
+    head += sh(`M${P(hx - 1.5, hy - 17)}H${f(hx + 1.5)}V${f(hy - 6)}H${f(hx - 1.5)}Z`, "url(#armorDk)", 0.7);
+    head += sh(`M${P(hx - 10, hy - 3)}H${f(hx + 10)}V${f(hy + 2)}H${f(hx - 10)}Z`, "#04070c", 0.8);
+    head += spec(`M${P(hx - 11, hy - 3)}Q${P(hx - 10, hy - 13)} ${P(hx - 3, hy - 15)}`, 0.6, 1.2);
     const coreR = name === "windup" ? 17 : name === "attack" ? 21 : 12;
-    let glowUp = bar(hx, hy - 0.5, 17, 3, "#9ecbff") + `<circle cx="0" cy="${f(shY + 17)}" r="${coreR}" fill="none" stroke="#6fb0ff" stroke-width="${name === "attack" ? 4 : 2}"/>`;
-    if (name === "windup") glowUp += glyphRing(0, shY + 17, 22, 12, "#9ecbff", 1.2);
-    if (name === "attack") glowUp += flash(0, shY + 17, 26, "#8cc8ff");
-    glowUp += ln(arc, "#8cc0ff", 1.6);
-    body += up(R, upper);
-    return { body, glow: up(R, glow(glowUp)), at: { dial: R.upPt([0, shY + 17]) } };
+    let chest = `<circle cx="0" cy="${f(shY + 17)}" r="${coreR}" fill="none" stroke="#6fb0ff" stroke-width="${name === "attack" ? 4 : 2}"/>`;
+    if (name === "windup") chest += glyphRing(0, shY + 17, 22, 12, "#9ecbff", 1.2);
+    if (name === "attack") chest += flash(0, shY + 17, 26, "#8cc8ff");
+    const eyes = bar(hx, hy - 0.5, 17, 3, "#9ecbff");
+    const rune = ln(arc, "#8cc0ff", 1.6);
+    // The arc edge-on: a line of light down its front.
+    const line = `M0 ${f(shY - 26)}Q3 ${f((shY + hipY) / 2)} 0 ${f(hipY + 30)}`;
+    const edge = ln(line, "#1a3a7a", 6, 0.9) + ln(line, "#4d8cff", 2.5, 0.8);
+    const edgeGlow = ln(line, "#8cc0ff", 1.6);
+    const backBody = sh(shell, "url(#armorDk)", 1.6) + waist +
+      plate([[-20, shY - 4], [20, shY - 4], [16, shY + 28], [-16, shY + 28]], "url(#armor)", 1.2, 0.4) +
+      ln(`M0 ${f(shY + 28)}V${f(hipY - 14)}`, INK, 1.3, 0.7);
+    const backHead = ao(hx, hy + 11, 10, 3, 0.55) + sh(helm, "url(#armorDk)", 1.5) +
+      sh(`M${P(hx - 1.5, hy - 17)}H${f(hx + 1.5)}V${f(hy + 6)}H${f(hx - 1.5)}Z`, "url(#armor)", 0.7);
+    const out = turnedView(R, view, {
+      legs, torso, weapon: arms + (view === "back" ? "" : pads), head, offArm: "", shield, shieldX: 52, shieldUnder: true, side: 1, edge, edgeGlow,
+      eyes, eyesSide: bar(hx + 8, hy - 0.5, 6, 3, "#9ecbff"), chest, rune, core: [0, shY + 14, 10],
+      backBody: backBody + pads, backHead, sideFx: "none", backFx: "none",
+    });
+    return { body: out.body, glow: out.glow, fx: out.fx, at: { dial: R.upPt([0, shY + 17]) } };
   });
   return {
     poses,
@@ -1640,9 +1832,9 @@ export const HUMANOIDS = {
   supervisorKit: { build: supervisorKit, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.1 },
   staff: { build: civilian("staff"), variants: 2, box: HUMANOID_BOX, rim: "#bfe8e0", size: 1.0 },
   clerk: { build: civilian("clerk"), variants: 2, box: HUMANOID_BOX, rim: "#ffd6b8", size: 0.98 },
-  sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30] },
-  shieldCommander: { build: shieldCommander, box: [-74, -90, 148, 184], rim: "#7fb8ff", aura: "#3f7fe0", size: 1.08, shield: [-30, -30] },
-  timeWarden: { build: timeWarden, box: [-80, -92, 170, 186], rim: "#7fb0ff", size: 1.05, shield: [52, -20] },
+  sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30], views: true, core: [0, -29] },
+  shieldCommander: { build: shieldCommander, box: [-74, -90, 148, 184], rim: "#7fb8ff", aura: "#3f7fe0", size: 1.08, shield: [-30, -30], views: true, core: [0, -24] },
+  timeWarden: { build: timeWarden, box: [-80, -92, 170, 186], rim: "#7fb0ff", size: 1.05, shield: [52, -20], views: true, shieldSide: 1, core: [0, -26] },
   temporalEngineer: { build: temporalEngineer, variants: 2, box: HUMANOID_BOX, rim: "#ffe08a", size: 1.1 },
   temporalSummoner: { build: temporalSummoner, box: [-66, -120, 132, 214], rim: "#e39bff", aura: "#a23cf0", size: 1.05 },
   phaseStalker: { build: phaseStalker, variants: 2, box: [-80, -140, 160, 234], rim: "#8fffe6" },

@@ -287,13 +287,17 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   // A precision weapon pays more for the head (the sniper's headshotMult).
   const zoneDamage = damage * zoneMult * (isHead ? shot?.headshotMult ?? 1 : 1);
 
-  const { finalDamage, isCrit, shieldSpark } = calculateEnemyDamage(
+  const { finalDamage, isCrit, shieldSpark, flank: flankShot } = calculateEnemyDamage(
     zoneDamage, enemy, game.player.critChance, game.player,
     // Piercing goes through front and energy shields as phasing does; a
     // boss's carapace (def.armor) still caps it.
     { phasesShields: !!(shot?.phasesShields || shot?.piercesArmor), zone: zoneName, capScale: stopScale },
   );
-  if (shieldSpark) {
+  // A hit in a shield bearer's side or back (past its plate) counts as one
+  // even when its energy shield soaks it: that wears the energy shield down,
+  // and calling it SHIELDED there taught the player going round did nothing.
+  const flank = !!flankShot;
+  if (shieldSpark && !flank) {
     game.glitchEffect = Math.max(game.glitchEffect, 0.08);
     // Say so, now and then: a hit that the shield took reads as a gun that
     // does nothing, and the answer (flank it, or aim for the head) is the lesson.
@@ -308,6 +312,10 @@ export function damageEnemy(game, enemy, damage, zone = null) {
     enemy._ariaTriggered = true;
     game.queueAriaMessage("subBossEncounter");
   }
+
+  // Shown and heard as the opposite of a block (a crit-style marker, a heavy
+  // thunk, the core on its back flaring), so going round it feels like it worked.
+  if (flank) enemy.lastFlankAt = game.time;
 
   enemy.health -= finalDamage;
   // A headshot from a heavy bolt staggers what it does not drop: the
@@ -347,28 +355,30 @@ export function damageEnemy(game, enemy, damage, zone = null) {
   // A round the shield took (front plate, Commander's shield, a ward) pings
   // off and gets its own grey deflect tick, not the hit ding and marker: the
   // player should hear that the shot did little and go round.
-  const blocked = shieldSpark && enemy.health > 0;
+  const blocked = shieldSpark && !flank && enemy.health > 0;
   if (blocked) {
     game.audio.shieldBlock?.(pan);
   } else {
     game.audio.enemyHit(pan, dist);
     game.audio.hitConfirm?.(pan); // Distinct metallic ding for hit feedback
+    if (flank) game.audio.flankHit?.(pan);
   }
   if (isHead) game.audio.headshotConfirm?.(pan);
 
-  game.hitMarker = (isCrit || isHead) ? 0.22 : 0.15;
-  game.hitMarkerCrit = isCrit;
+  game.hitMarker = (isCrit || isHead || flank) ? 0.22 : 0.15;
+  game.hitMarkerCrit = isCrit || flank;
   game.hitMarkerHead = isHead;
   game.hitMarkerBlocked = blocked;
   game.hitMarkerKill = enemy.health <= 0;
   game._lastHitWasCrit = isCrit || isHead;
-  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead, hitHeightOf(game, enemy));
+  game._spawnHitImpact(enemy.x, enemy.y, enemy.def.color1, isCrit || isHead || flank, hitHeightOf(game, enemy));
   game.damageNumbers.push({
     x: enemy.x, y: enemy.y,
     value: Math.round(finalDamage),
     crit: isCrit,
     zone: zoneName,
     head: isHead,
+    flank,
     life: 0.8,
     vx: (Math.random() - 0.5) * 30,
   });

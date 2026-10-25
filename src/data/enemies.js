@@ -332,8 +332,9 @@ export const ENEMY_TYPES = {
     ai: "guard",
     shove: 0.9,
     // Radians/s its shield turns (~46°/s), after a beat to react once you
-    // leave its front arc (ai.js turnShield): a walk round it at bash range,
-    // or a sprint round it a few cells out, gets behind it.
+    // leave its front arc (ai.js turnShield), and never faster than it can
+    // follow you round at your range (SHIELD_TRACK_SPEED cells/s): a walk
+    // round it gets behind it at any range, a sprint in a second or three.
     shieldTurnRate: 0.8,
     frontShield: true,
     shieldRegen: true,

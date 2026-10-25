@@ -235,6 +235,15 @@ export function shovePlayer(player, angle, dist, map, margin = 0.3) {
 
 /** Radians per second a front-shielded enemy can turn its shield (~100°/s). */
 const SHIELD_TURN_RATE = 1.75;
+/**
+ * Cells/s a shield bearer's shield can follow you round it, at your distance:
+ * its turn is capped at this over your range as well as by its def's
+ * `shieldTurnRate`. A fixed rate in radians made a flank impossible beyond a
+ * few cells (a walk four cells out circles it at 0.9 rad/s, a hair faster
+ * than it turns, and you never got out of its arc). Under walking pace
+ * (3.5), so a walk round it always gets there, and a sprint (5.6) quickly.
+ */
+export const SHIELD_TRACK_SPEED = 2.4;
 /** Radians/s a shield bearer turns while braced after a bash (~20°/s). */
 export const SHIELD_BRACE_TURN_RATE = 0.35;
 /** Seconds (its own time) a shield bearer stays braced after it swings. */
@@ -251,7 +260,8 @@ export const SHIELD_WHEEL_TURN_RATE = 2.4;
  * `dt` (its own seconds). It tracks a target inside its front
  * arc at its def's `shieldTurnRate`; one that slips out of the arc it lets go
  * for SHIELD_REACT_MS before it follows; after a bash it is braced and turns
- * at a crawl. A hit in the back (combat.js sets `_flankHit`) gives you
+ * at a crawl. However fast it can turn, it follows you round no faster than
+ * SHIELD_TRACK_SPEED cells/s at your range. A hit in the back (combat.js sets `_flankHit`) gives you
  * FLANK_WINDOW_MS of free hits, then it wheels round fast until you are in
  * front of it again, and you have to work round it once more.
  */
@@ -270,6 +280,10 @@ export function turnShield(e, want, dt, time, target) {
     if (!inArc) e._flankedAt ??= 0;
   } else if (e._flankedAt != null) e._flankedAt += dt;
   let rate = e.def.shieldTurnRate ?? SHIELD_TURN_RATE;
+  if (target) {
+    const range = Math.max(0.5, Math.hypot(target.x - e.x, target.y - e.y));
+    rate = Math.min(rate, (e.def.shieldTrackSpeed ?? SHIELD_TRACK_SPEED) / range);
+  }
   if (e._braceT > 0) {
     e._braceT = Math.max(0, e._braceT - dt);
     rate = Math.min(rate, SHIELD_BRACE_TURN_RATE);

@@ -196,6 +196,7 @@ function drawHitMarker(ctx, game, cx, cy) {
  * Floating damage number sprite. Style varies with hit category:
  *   crit  → gold, bold, with stroke shadow
  *   head  → orange, bold, with "HEAD!" tag above
+ *   flank → amber, bold, with "FLANK!" tag above (past a shield bearer's shield)
  *   else  → white outlined number
  *
  * Caller controls font scale via `large` flag (true = HUD/builder paths,
@@ -231,6 +232,16 @@ function drawDamageNumber(ctx, dn, x, y, large) {
     ctx.font = `bold ${large ? 10 : 9}px monospace`;
     ctx.fillStyle = "#ffaa44";
     ctx.fillText("HEAD!", x, y - (large ? 16 : 13));
+  } else if (dn.flank) {
+    ctx.font = `bold ${f}px monospace`;
+    ctx.shadowColor = "#ff9a2a";
+    ctx.shadowBlur = large ? 8 : 6;
+    ctx.fillStyle = "#ffc04a";
+    ctx.fillText(dn.value, x, y);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${large ? 10 : 9}px monospace`;
+    ctx.fillStyle = "#ffd27a";
+    ctx.fillText("FLANK!", x, y - (large ? 16 : 13));
   } else {
     ctx.font = `bold ${fSmall}px monospace`;
     ctx.strokeStyle = "rgba(0,0,0,0.6)";

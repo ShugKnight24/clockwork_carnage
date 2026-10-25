@@ -1290,6 +1290,18 @@ export class AudioManager {
     this._blip("sine", 3730, 3520, 0.2, 0.05, pan, 0.005);
   }
 
+  /**
+   * A hit past a shield bearer's shield, in its side or back: a heavy low
+   * thunk under the hit ding and a bright rising tone, the opposite of the
+   * block's dry glancing ping. Tells you going round it worked.
+   */
+  flankHit(pan = 0) {
+    if (!this.ctx || !this.enabled) return;
+    this._blip("sine", 220, 70, 0.16, 0.34, pan);
+    this._blip("square", 330, 140, 0.05, 0.08, pan);
+    this._blip("triangle", 1180, 1770, 0.12, 0.12, pan, 0.02);
+  }
+
   /** The magazine drops out: a dry slide and a light knock. */
   reloadStart() {
     if (!this.ctx || !this.enabled) return;

@@ -595,6 +595,12 @@ export function drawModernDamageNumber(ctx, dn, x, y, large) {
     inkText(ctx, `${dn.value}`, x, y, HT.realistic ? UI.amber : "#ff8a3a", 4);
     ctx.font = uiFont(large ? 11 : 10, 800);
     inkText(ctx, "HEADSHOT", x, y - (large ? 20 : 17), HT.realistic ? UI.ammoLowPale : "#ffd0a0", 3);
+  } else if (dn.flank) {
+    // Past a shield bearer's shield: the hit going round it was for.
+    ctx.font = uiFont(f + 2, 800);
+    inkText(ctx, `${dn.value}`, x, y, "#ffc04a", 4);
+    ctx.font = uiFont(large ? 11 : 10, 800);
+    inkText(ctx, "FLANKED", x, y - (large ? 20 : 17), "#ffe0a8", 3);
   } else {
     ctx.font = uiFont(f - 3, 700);
     inkText(ctx, `${dn.value}`, x, y, "#ffffff", 3);

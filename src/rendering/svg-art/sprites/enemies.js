@@ -17,6 +17,8 @@
  *   id                      stable variant choice (falls back to spawn point)
  *   elite / champion / isElite
  *                           gold glow trim
+ *   lastFlankAt (ms)        a hit past a shield bearer's shield: the core on
+ *                           its back flares
  *   lastBlockedAt (ms) or blockFlash (> 0)
  *                           armour spark on a blocked hit; without them a hit
  *                           on the shielded front arc of a frontShield type is
@@ -33,7 +35,8 @@ import { isRealisticArt } from "../../art-style.js";
 import {
   baseDefs, BASE_MATERIALS, paletteMaterials, lit, withRealisticBuild, realDefs, REAL_BASE_MATERIALS, realPaletteMaterials,
 } from "./kit.js";
-import { HUMANOIDS, HUMANOID_DEFS, SOLE } from "./humanoids.js";
+import { HUMANOIDS, HUMANOID_DEFS, SOLE, TURNED_POSES, TURNED_VIEWS } from "./humanoids.js";
+import { facingView } from "../../facing-view.js";
 import { CREATURES, CREATURE_DEFS } from "./creatures.js";
 import { BOSSES } from "./boss.js";
 
@@ -42,17 +45,24 @@ const ATTACK_MS = 240;
 const HIT_POSE_MS = 160;
 const FLASH_MS = 150;
 const SPARK_MS = 220;
+const FLANK_MS = 280;
 // `bristle` is the Hound's quill-volley tell; every other type falls back to idle.
 // The back* poses are the station's people seen from behind (an NPC walking
-// away); an enemy always faces you, and its back* fall back to idle. The
+// away); an enemy's back* fall back to idle (a shield bearer has its own
+// turned views, below). The
 // people also walk on four frames (step A/B: both feet down, move A/B: a leg
 // swinging through), ease into a gesture through its *In frame, and the
 // civilians have their horror-beat poses (cower, frozen, slumped). A type
 // without one of these falls back to idle, which costs no extra bitmap.
+// A shield bearer's turned views (`idle@side`, `hurt@back`…, see
+// src/rendering/facing-view.js) are poses too; a type drawn from one side only
+// falls back to the front pose, which costs no extra bitmap.
 const POSES = [
   "idle", "moveA", "moveB", "windup", "attack", "hurt", "bristle", "salute", "point", "backIdle", "backA", "backB",
   "stepA", "stepB", "backStepA", "backStepB", "saluteIn", "pointIn", "cower", "frozen", "slumped",
+  ...TURNED_POSES.flatMap((p) => TURNED_VIEWS.map((v) => `${p}@${v}`)),
 ];
+const TURNABLE = new Set(TURNED_POSES);
 /** An NPC facing within this of straight away from the camera shows its back. */
 const BACK_DOT = 0.25;
 const BACK_OF = { idle: "backIdle", moveA: "backA", moveB: "backB", stepA: "backStepA", stepB: "backStepB" };
@@ -134,11 +144,13 @@ function buildModelIn(type, real) {
     const built = spec.build(v);
     const poses = {};
     for (const name of POSES) {
-      const p = built.poses[name] || built.poses.idle;
+      const p = built.poses[name] || built.poses[name.split("@")[0]] || built.poses.idle;
       poses[name] = {
         body: ref(lit(p.body, box, spec.rim), `v${v}:${name}:body`),
         glow: ref(glowOf(p.glow), `v${v}:${name}:glow`),
         at: p.at || {},
+        // A turned view may hang its back layers (a cape) in front, or hide its fx.
+        fx: p.fx || null,
       };
     }
     const fx = (built.fx || []).map((l, i) => ({
@@ -161,6 +173,8 @@ function buildModelIn(type, real) {
     floater: !!spec.floater,
     jitter: !!spec.jitter,
     sideOn: type === "beast" || type === "hound",
+    // Drawn from five sides (facing-view.js); the shield on this side of the front view.
+    views: spec.views ? { shieldSide: spec.shieldSide ?? -1, core: spec.core || [0, -28] } : null,
     shield: spec.shield || null,
     rim: spec.rim,
     variants,
@@ -475,6 +489,7 @@ function motionOf(enemy, time, model) {
       seed, variant: -1, filter: undefined,
       hitSeen: enemy.hitTime || 0, hitAt: -1e9, impact: null, impactPending: false,
       blockAt: -1e9, blockSeen: enemy.lastBlockedAt || 0,
+      facing: null, flankAt: -1e9, flankSeen: enemy.lastFlankAt || 0,
     };
     motion.set(enemy, m);
   }
@@ -494,6 +509,10 @@ function motionOf(enemy, time, model) {
     const recentlyHit = enemy.hitTime && time - enemy.hitTime < 300;
     if (m.prev === "windup" && enemy.state !== "windup" && enemy.state !== "pain" && !recentlyHit && !enemy.dissolving) m.attackAt = time;
     m.prev = enemy.state;
+  }
+  if (enemy.lastFlankAt && enemy.lastFlankAt !== m.flankSeen) {
+    m.flankSeen = enemy.lastFlankAt;
+    m.flankAt = time;
   }
   if (enemy.hitTime && enemy.hitTime !== m.hitSeen) {
     m.hitSeen = enemy.hitTime;
@@ -529,12 +548,30 @@ function updateBlock(enemy, m, model, time, camRightX, camRightY, newHit) {
  * camera when they face away from it: walking off down a corridor, they are
  * seen from behind, not walking backwards toward you.
  */
-function pickPose(enemy, m, time, model, camRightX = null, camRightY = null) {
+function pickPose(enemy, m, time, model, camRightX = null, camRightY = null, camX = null, camY = null) {
   const pose = pickFrontPose(enemy, m, time, model);
+  if (model.views) return turnedPose(enemy, m, pose, model, camRightX, camRightY, camX, camY);
   if (enemy.type !== "npc" || camRightX == null || !BACK_OF[pose]) return pose;
   // Camera forward is the right vector turned back 90°.
   const away = Math.cos(enemy.angle) * camRightY - Math.sin(enemy.angle) * camRightX;
   return away > BACK_DOT ? BACK_OF[pose] : pose;
+}
+
+/**
+ * A shield bearer's pose as seen from the camera: the front pose, or one of
+ * its turned views of it (facing-view.js), mirrored when the view says so.
+ * The line to the camera is from the camera's position when the renderer
+ * gives it, else straight back along the camera's forward.
+ */
+function turnedPose(enemy, m, pose, model, camRightX, camRightY, camX, camY) {
+  m.flip = false;
+  if (camRightX == null) return pose;
+  const toX = camX != null ? camX - enemy.x : -camRightY;
+  const toY = camY != null ? camY - enemy.y : camRightX;
+  m.facing = facingView(enemy.angle, toX, toY, camRightX, camRightY, model.views.shieldSide, m.facing, m.facing || {});
+  if (m.facing.view === "front" || !TURNABLE.has(pose)) return pose;
+  m.flip = m.facing.flip;
+  return `${pose}@${m.facing.view}`;
 }
 
 function pickFrontPose(enemy, m, time, model) {
@@ -624,7 +661,7 @@ const frame = {
  * relative to (screenX, centerY), or null when the type has no sprite or its
  * bitmaps are still decoding.
  */
-export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, camRightY = null) {
+export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, camRightY = null, camX = null, camY = null) {
   const model = modelFor(enemy.enemyType);
   if (!model) return null;
   if (time !== budgetTime) {
@@ -639,7 +676,7 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
   const m = motionOf(enemy, time, model);
   const newHit = m.hitAt === time;
   updateBlock(enemy, m, model, time, camRightX, camRightY, newHit);
-  const pose = pickPose(enemy, m, time, model, camRightX, camRightY);
+  const pose = pickPose(enemy, m, time, model, camRightX, camRightY, camX, camY);
   if (model.boss) {
     frame.parts.length = model.refs.length;
     let solid = false;
@@ -657,6 +694,7 @@ export function prepareEnemySprite(ctx, enemy, halfH, time, camRightX = null, ca
     frame.aura = layer(model.aura, px);
     frame.fx = variant.fx;
     frame.at = p.at;
+    frame.fxMode = p.fx;
     frame.fxImg.length = variant.fx.length;
     for (let i = 0; i < variant.fx.length; i++) frame.fxImg[i] = layer(variant.fx[i].ref, px);
   }
@@ -823,6 +861,36 @@ function drawDissolve(ctx, img, box, dissolve, time, alpha, rim, seed) {
   ctx.globalCompositeOperation = "source-over";
 }
 
+/**
+ * A hit past a shield bearer's shield: the power core on its back flares
+ * amber and throws a starburst, where the block throws its grey-gold spark
+ * off the shield. Drawn where the core shows in the view (its back, or the
+ * back edge of a profile).
+ */
+function drawFlankBurst(ctx, fr, time, alpha) {
+  const { model, m } = fr;
+  const age = time - m.flankAt;
+  if (!model.views || age < 0 || age > FLANK_MS) return;
+  const k = 1 - age / FLANK_MS;
+  const side = m.facing?.view === "side";
+  const x = side ? -model.views.shieldSide * 19 : model.views.core[0];
+  const y = model.views.core[1];
+  const s = 58 * (0.7 + 0.6 * (1 - k));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = alpha * k;
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 0.5);
+  g.addColorStop(0, "rgba(255,240,200,1)");
+  g.addColorStop(0.35, "rgba(255,150,50,0.85)");
+  g.addColorStop(1, "rgba(255,90,20,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(-s / 2, -s / 2, s, s);
+  ctx.rotate(hash(m.flankAt) * Math.PI);
+  ctx.drawImage(spark(), -s * 0.45, -s * 0.45, s * 0.9, s * 0.9);
+  ctx.restore();
+}
+
 function drawSpark(ctx, fr, time, alpha) {
   const { model, m } = fr;
   const age = time - m.blockAt;
@@ -953,10 +1021,12 @@ function drawRegular(ctx, fr, alpha, time, dissolve, windupT, flashK, hitFlash) 
     ctx.globalCompositeOperation = "source-over";
   }
   if (m.filter) ctx.filter = m.filter;
-  drawFx(ctx, fr, "back", alpha, time);
+  const fxOn = fr.fxMode !== "none";
+  if (fxOn && fr.fxMode !== "over") drawFx(ctx, fr, "back", alpha, time);
   ctx.globalAlpha = alpha;
   drawBox(ctx, fr.body, box);
-  drawFx(ctx, fr, "front", alpha, time);
+  if (fr.fxMode === "over") drawFx(ctx, fr, "back", alpha, time);
+  if (fxOn) drawFx(ctx, fr, "front", alpha, time);
   if (m.filter) ctx.filter = "none";
   ctx.globalCompositeOperation = "lighter";
   if (model.real && fr.body.width > 0) {
@@ -977,10 +1047,11 @@ function drawRegular(ctx, fr, alpha, time, dissolve, windupT, flashK, hitFlash) 
       drawBox(ctx, fr.glow, box);
     }
   }
-  drawFx(ctx, fr, "glow", alpha, time);
+  if (fxOn) drawFx(ctx, fr, "glow", alpha, time);
   ctx.globalCompositeOperation = "source-over";
   if (flashK > 0 || hitFlash) drawHitFlash(ctx, fr.body, box, m.impact, Math.max(flashK, hitFlash ? 0.6 : 0), alpha);
   drawSpark(ctx, fr, time, alpha);
+  drawFlankBurst(ctx, fr, time, alpha);
 }
 
 function armAngle(role, pose, time, m, windupT) {

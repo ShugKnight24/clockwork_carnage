@@ -21,7 +21,10 @@ import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
  * Mutates enemy._shield if present (absorbs damage).
  *
- * @returns {{ finalDamage: number, isCrit: boolean, shieldSpark: boolean }}
+ * `flank`: the hit came from outside a shield bearer's front arc (its side or
+ * back), the hit the player was working round it for.
+ *
+ * @returns {{ finalDamage: number, isCrit: boolean, shieldSpark: boolean, flank: boolean }}
  */
 /** Seconds after a hit before an energy shield starts to regenerate. */
 export const SHIELD_REGEN_DELAY = 2.5;
@@ -30,6 +33,7 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
   let finalDamage = baseDamage;
   let isCrit = false;
   let shieldSpark = false;
+  let flank = false;
 
   // Critical hit
   if (playerCritChance && Math.random() < playerCritChance) {
@@ -76,6 +80,7 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
       // Hit from outside its shield's arc: it will wheel round, but only
       // after a window to keep hitting it (turnShield in ai.js).
       enemy._flankHit = true;
+      flank = true;
     } else if (!phasesShields && zone !== "head" && zone !== "armor" && zone !== "visor") {
       finalDamage *= 0.2;
       shieldSpark = true; // show the block, so the player knows to go round
@@ -95,7 +100,7 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     if (absorb > 0) shieldSpark = true;
   }
 
-  return { finalDamage, isCrit, shieldSpark };
+  return { finalDamage, isCrit, shieldSpark, flank };
 }
 
 /**

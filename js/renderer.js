@@ -85,6 +85,9 @@ function _getFogString(r, g, b, alpha) {
   return lut[step];
 }
 
+// A shield bearer's floor arc, projected (x, y pairs): its rim, then its centre.
+const _arcPts = new Float64Array(28);
+
 // --- Performance: Pre-allocated sprite sort arrays ---
 // Reused each frame to avoid per-frame allocation + GC pressure.
 let _spriteDistBuf = new Float64Array(256);
@@ -110,6 +113,8 @@ export class Renderer {
     // Ray-march scratch for the wall pass; short-wall records for sprites are
     // sized per frame (_ensureCoverBufs).
     this._colHits = createColumnHits();
+    // The camera a Legacy shield bearer is drawn turned toward (renderSprites).
+    this._facingCam = { rx: null, ry: null, x: 0, y: 0 };
     // The eye's height in wall units this frame (0.5 standing) and how far it
     // sits under the standing eye. Sprites, particles and _projectWorld place
     // things relative to the standing eye line and lift them by `_eyeDrop`.
@@ -1697,6 +1702,13 @@ export class Renderer {
     // Camera right vector, so side-on enemy sprites can face their heading.
     this._camRightX = -dirY;
     this._camRightY = dirX;
+    // …and where it stands, so a shield bearer is drawn from the side you see.
+    this._camX = cx;
+    this._camY = cy;
+    this._facingCam.rx = this._camRightX;
+    this._facingCam.ry = this._camRightY;
+    this._facingCam.x = cx;
+    this._facingCam.y = cy;
     // The stopped people's echo steps through the same camera (frozen-look.js).
     this._spritePlaneMul = planeMul;
     if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
@@ -1789,6 +1801,11 @@ export class Renderer {
         }
       }
 
+      // A shield bearer's front arc, faint on the floor under it.
+      if (entity.type === "enemy" && entity.def?.frontShield) {
+        this._drawShieldArc(ctx, entity, cx, cy, dirX, dirY, planeX, planeY, transformY, eyeLift, time);
+      }
+
       // Draw the entity. One dropping out of a ceiling vent (arrival.js
       // liftZ, a share of its height) is drawn that far up.
       const lift = entity.liftZ > 0 ? entity.liftZ * spriteHeight : 0;
@@ -1813,6 +1830,81 @@ export class Renderer {
       if (eyeLift) ctx.translate(0, eyeLift);
     }
     this._clipBias = 0;
+  }
+
+  /**
+   * A shield bearer's front arc (±60°, combat.js), drawn faintly on the floor
+   * around its feet in every art style: a fan the way its shield faces, its
+   * two edges a little brighter, since past them your shots land. Brighter
+   * while you stand in it (it is blocking you), dimmer once you are round it.
+   * Points project as the sprite's feet do (h/2 + h/2ty, lifted by the eye
+   * drop); the caller has already lifted the canvas by the enemy's own.
+   */
+  _drawShieldArc(ctx, e, cx, cy, dirX, dirY, planeX, planeY, depth, eyeLift, time) {
+    if (e.dissolving || e.state === "dead" || e._phased || e._arriving || e.renderAlpha < 1) return;
+    const w = this.width;
+    const h = this.height;
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    const R = 0.95;
+    const N = 12;
+    const a0 = e.angle || 0;
+    const pts = _arcPts;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i <= N + 1; i++) {
+      // The fan's points round the rim, then its centre at the feet.
+      const a = a0 - Math.PI / 3 + ((2 * Math.PI) / 3) * (i / N);
+      const wx = i > N ? e.x : e.x + Math.cos(a) * R;
+      const wy = i > N ? e.y : e.y + Math.sin(a) * R;
+      const sx = wx - cx;
+      const sy = wy - cy;
+      const tx = invDet * (dirY * sx - dirX * sy);
+      const ty = invDet * (-planeY * sx + planeX * sy);
+      if (ty <= 0.2) return;
+      const px = (w / 2) * (1 + tx / ty);
+      const py = h / 2 + h / (2 * ty) - (this._eyeDrop * h) / ty + eyeLift;
+      pts[i * 2] = px;
+      pts[i * 2 + 1] = py;
+      if (px < x0) x0 = px;
+      if (px > x1) x1 = px;
+      if (py < y0) y0 = py;
+      if (py > y1) y1 = py;
+    }
+    if (x1 < 0 || x0 > w) return;
+    const fade = Math.max(0, Math.min(1, 2.6 / depth)) * Math.max(0, 1 - depth / 16);
+    if (fade <= 0.02) return;
+    const vis = this._spriteClipPath(ctx, Math.floor(x0), Math.ceil(x1), y0 - 2, y1 + 2, depth);
+    if (!vis) return;
+    const da = Math.atan2(cy - e.y, cx - e.x) - a0;
+    const facingYou = Math.abs(Math.atan2(Math.sin(da), Math.cos(da))) < Math.PI / 3;
+    const k = fade * (facingYou ? 1 : 0.55) * (0.85 + 0.15 * Math.sin(time * 0.004));
+    const cxp = pts[(N + 1) * 2];
+    const cyp = pts[(N + 1) * 2 + 1];
+    ctx.save();
+    if (vis === 1) ctx.clip();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(cxp, cyp);
+    for (let i = 0; i <= N; i++) ctx.lineTo(pts[i * 2], pts[i * 2 + 1]);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(110,170,255,${(0.14 * k).toFixed(3)})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pts[0], pts[1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(pts[i * 2], pts[i * 2 + 1]);
+    ctx.strokeStyle = `rgba(150,205,255,${(0.55 * k).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, 3 / depth);
+    ctx.stroke();
+    // Its edges: where the flank starts.
+    ctx.beginPath();
+    ctx.moveTo(cxp, cyp);
+    ctx.lineTo(pts[0], pts[1]);
+    ctx.moveTo(cxp, cyp);
+    ctx.lineTo(pts[N * 2], pts[N * 2 + 1]);
+    ctx.strokeStyle = `rgba(190,225,255,${(0.6 * k).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, 4 / depth);
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawEntity(
@@ -2000,7 +2092,7 @@ export class Renderer {
     // Modern art: SVG pose sprites. Falls through to the procedural sprite
     // until the type's bitmaps have decoded.
     if (isModernArt()) {
-      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY);
+      const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY, this._camX, this._camY);
       if (frame) {
         this._drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog);
         return;
@@ -2054,7 +2146,7 @@ export class Renderer {
     if (renderFn) {
       // The station's people turn their back on the camera when facing away.
       const away = enemy.type === "npc" && Math.cos(enemy.angle) * this._camRightY - Math.sin(enemy.angle) * this._camRightX > 0.3;
-      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash, away);
+      renderFn(ctx, screenX, centerY, halfW, halfH, bodyTop, bodyBottom, bodyWidth, baseColor, darkColor, alpha, time, enemy, hitFlash, away, this._facingCam);
     } else {
       // Fallback: generic rectangle
       ctx.fillStyle = darkColor;
