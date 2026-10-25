@@ -16,6 +16,10 @@
  * As everywhere in the station: anything with lettering or a picture is on
  * a raised plate (Realistic's bake repaints a flat face), and the view out
  * is marked as giving light, so the morning stays bright in every style.
+ *
+ * The curtain wall's painted view is only its stand-in: GLASS cuts its
+ * panes out once the city behind them is ready, and src/rendering/env/
+ * city-view.js draws the city there by depth (rooms/civic-city.js).
  */
 import { CIVIC_WALLS as W } from "../../../data/levels/rooms/civic.js";
 import { T, lin, rad, plate, rivet, led, sink, raise, relief, grey, lightStrip } from "../paint.js";
@@ -424,9 +428,52 @@ function paintWindow(kind) {
     for (const x of [0, T - 10]) plate(ctx, x, 30, 10, PLINTH - 30, p, { tones: BRONZE, bevel: 2, ink: 1.5 });
     plate(ctx, 0, 150, T, 10, p, { tones: BRONZE, bevel: 2, ink: 1.5 });
     plate(ctx, 0, 22, T, 14, p, { tones: BRONZE, bevel: 2, ink: 1.5 });
+    // The bosses where the transom meets the mullions, and the sill's drip.
+    for (const x of [5, T - 5]) rivet(ctx, x, 155, 5, p);
+    plate(ctx, 0, PLINTH - 6, T, 8, p, { tones: BRONZE, bevel: 2, ink: 1 });
     plate(ctx, 0, PLINTH, T, T - PLINTH, p, { tones: GRANITE, bevel: 3, ink: 2, spec: false });
   };
 }
+
+/**
+ * What stays on a pane once the city shows through it (city-view.js): a
+ * breath of tint, the hall's light caught in long streaks (placed by
+ * `kind`, so a run of panes doesn't repeat), the skylight's sheen along the
+ * head, dust toward the sill, the mullions' shadow at the edges.
+ */
+function glassSheen(kind) {
+  const streaks = [[[70, 60], [330, 26], [400, 14]], [[150, 40], [230, 16], [440, 50]], [[30, 18], [260, 70], [380, 22]]][kind];
+  return (ctx) => {
+    ctx.fillStyle = "rgba(176,198,220,0.07)";
+    ctx.fillRect(0, 0, T, T);
+    for (const [x, w] of streaks) {
+      ctx.fillStyle = lin(ctx, x, 0, x + w, 0, [[0, "rgba(255,252,244,0)"], [0.5, "rgba(255,252,244,0.11)"], [1, "rgba(255,252,244,0)"]]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + w, 0);
+      ctx.lineTo(x + w - 150, T);
+      ctx.lineTo(x - 150, T);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = lin(ctx, 0, 36, 0, 110, [[0, "rgba(255,250,236,0.16)"], [1, "rgba(255,250,236,0)"]]);
+    ctx.fillRect(0, 36, T, 74);
+    ctx.fillStyle = lin(ctx, 0, 390, 0, PLINTH - 6, [[0, "rgba(210,200,186,0)"], [1, "rgba(210,200,186,0.14)"]]);
+    ctx.fillRect(0, 390, T, PLINTH - 396);
+    ctx.fillStyle = lin(ctx, 10, 0, 26, 0, [[0, "rgba(30,22,12,0.28)"], [1, "rgba(30,22,12,0)"]]);
+    ctx.fillRect(10, 0, 16, T);
+    ctx.fillStyle = lin(ctx, T - 10, 0, T - 26, 0, [[0, "rgba(30,22,12,0.28)"], [1, "rgba(30,22,12,0)"]]);
+    ctx.fillRect(T - 26, 0, 16, T);
+  };
+}
+
+/** The curtain wall's panes (x, y, w, h on the 512px face), for city-view.js. */
+const PANES = [[10, 36, T - 20, 114], [10, 160, T - 20, PLINTH - 166]];
+export const GLASS = {
+  [W.WINDOW_A]: { panes: PANES, paint: glassSheen(0) },
+  [W.WINDOW_B]: { panes: PANES, paint: glassSheen(1) },
+  [W.WINDOW_C]: { panes: PANES, paint: glassSheen(2) },
+};
 
 /** Someone standing on the steps outside, seen through the glass: `s` tall to the shoulder. */
 function figure(ctx, x, feet, s, coat) {

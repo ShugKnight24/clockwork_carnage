@@ -3,6 +3,7 @@ import { WALL_COLORS } from "./data.js";
 import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
+import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
  *  floor/ceiling loop: both only read module constants, so rebuilding the
@@ -368,6 +369,8 @@ export class Renderer {
       console.warn("[renderer] map walls failed to paint", err);
       map._ownWalls = [];
     }
+    // The civic wing's glass, cut out once the city behind it is painted.
+    if (map._ownWalls.length && prepareCityView(env, map._ownWalls)) added = true;
     const wp = this.glRenderer?._wallPass;
     // The wing, out of sight, goes up a few faces a frame while the array
     // without it keeps drawing: re-uploading the whole station in one frame
@@ -1359,6 +1362,11 @@ export class Renderer {
               }
             }
 
+            // Glass onto the city: the view behind the pane goes down first.
+            if (CITY_GLASS[wallType] && menv.cityView) {
+              drawCityView(glWalls || ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+            }
+
             if (glWalls) {
               const lt = this._glLight;
               lt[0] = lr; lt[1] = lg; lt[2] = lb; lt[3] = Math.round(lightA * 255);
@@ -1438,6 +1446,9 @@ export class Renderer {
             // Use drawImage for textured columns
             const srcY = Math.max(0, texPos);
             const srcH = Math.min(256, (drawEnd - drawStart) * step);
+            if (CITY_GLASS[wallType] && glazeLegacyGlass(tex, wallType)) {
+              drawCityView(ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+            }
             if (srcH > 0 && drawEnd > drawStart) {
               ctx.drawImage(
                 tex,
