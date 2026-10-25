@@ -3352,11 +3352,22 @@ export class Game {
 
   // Third-person player silhouette (back view)
   drawThirdPersonModel(ctx, w, h) {
-    const bobX = Math.sin(this.player.weaponBob) * 3;
-    const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 4;
-    const cx = w / 2 + bobX;
-    const cy = h - 160 + bobY;
-    const sc = 2.8;
+    // Projected like any sprite at the camera's distance behind the player
+    // (js/renderer.js): a box h/dist tall standing on the floor, which a
+    // person fills to about 90%. A fixed size drew the cadet a third the
+    // height of everyone else. The model is 55 units, helmet to boots.
+    const r = this.renderer;
+    const dist = Math.max(0.6, r?.thirdPersonDist || 1.8);
+    const box = h / dist;
+    const sc = (box * 0.9) / 55;
+    const eyeLift = ((r?._eyeDrop || 0) * h) / dist;
+    const bobX = Math.sin(this.player.weaponBob) * 0.06 * sc;
+    const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 0.08 * sc;
+    const feetY = h / 2 + box / 2 + eyeLift;
+    // Off-centre with the camera over the shoulder; the renderer's x is in
+    // its own (render-scaled) pixels.
+    const cx = (r?.thirdPersonX != null && r.width ? (r.thirdPersonX * w) / r.width : w / 2) + bobX;
+    const cy = feetY - 20 * sc + bobY;
 
     ctx.save();
     ctx.translate(cx, cy);

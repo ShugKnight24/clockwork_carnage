@@ -91,6 +91,9 @@ let _spriteDistBuf = new Float64Array(256);
 let _spriteOrderBuf = new Int32Array(256);
 let _spriteOrderCount = 0;
 const _byDistanceDesc = (a, b) => _spriteDistBuf[b] - _spriteDistBuf[a];
+/** The third-person camera: how far behind the cadet, and how far off to their right. */
+const TP_CAM_BACK = 2.4;
+const TP_CAM_SIDE = 0.6;
 
 // TODO: Improve variety w/ textures
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
@@ -1030,28 +1033,39 @@ export class Renderer {
     let camY = player.y;
 
     if (viewMode === 1) {
-      const offset = 1.8;
-      let tryX = player.x - dirX * offset;
-      let tryY = player.y - dirY * offset;
-      // Push camera forward if it would be inside a wall
-      for (let step = 0; step < 6; step++) {
+      // Over the right shoulder: back and to the side, so the cadet stands
+      // left of the reticle instead of over it. Pulled in toward them, a
+      // step at a time, if that would be inside a wall.
+      const back = TP_CAM_BACK;
+      const side = TP_CAM_SIDE;
+      const wantX = player.x - dirX * back - dirY * side;
+      const wantY = player.y - dirY * back + dirX * side;
+      camX = player.x;
+      camY = player.y;
+      for (let k = 8; k >= 0; k--) {
+        const tryX = player.x + ((wantX - player.x) * k) / 8;
+        const tryY = player.y + ((wantY - player.y) * k) / 8;
         const mx = Math.floor(tryX);
         const my = Math.floor(tryY);
-        if (
-          mx >= 0 &&
-          my >= 0 &&
-          mx < map.width &&
-          my < map.height &&
-          map.grid[my][mx] === 0
-        ) {
+        if (mx >= 0 && my >= 0 && mx < map.width && my < map.height && map.grid[my][mx] === 0) {
+          camX = tryX;
+          camY = tryY;
           break;
         }
-        tryX += dirX * 0.3;
-        tryY += dirY * 0.3;
       }
-      camX = tryX;
-      camY = tryY;
     }
+    // Where the cadet stands in the third-person view, projected like any
+    // sprite (renderSprites): depth and screen x (game.drawThirdPersonModel).
+    if (viewMode === 1) {
+      const relX = player.x - camX;
+      const relY = player.y - camY;
+      const pX = -dirY * planeMul;
+      const pY = dirX * planeMul;
+      const invDet = 1 / (pX * dirY - dirX * pY);
+      const tx = invDet * (dirY * relX - dirX * relY);
+      this.thirdPersonDist = Math.max(0.6, invDet * (-pY * relX + pX * relY));
+      this.thirdPersonX = (w / 2) * (1 + tx / this.thirdPersonDist);
+    } else this.thirdPersonDist = 0;
 
     // Draw textured floor and ceiling (with yShift for pitch support)
     let glWalls = null;
