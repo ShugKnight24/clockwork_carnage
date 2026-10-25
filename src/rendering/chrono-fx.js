@@ -29,6 +29,7 @@ import { pendingReplay, FORM2 } from "../systems/boss-form2.js";
 import { quillFan } from "../systems/ai.js";
 import { FORMS } from "../systems/paradox-forms.js";
 import { telegraphK, LINGER, VENT_BANGS, ARRIVALS } from "../systems/arrival.js";
+import { EYE_Z, CEILING_Z } from "../systems/physics.js";
 
 const FLOOR = 0.5;
 const WAIST = 0.12;
@@ -763,7 +764,8 @@ function hash01(n) {
 }
 
 const TEAR_TOP = -0.42;
-const CEILING = -0.5;
+// Screen-down heights from the standing eye line (_projectWorld): the ceiling.
+const CEILING = EYE_Z - CEILING_Z;
 const VENT_HALF = 0.26;
 const CRACK_JOINTS = 10;
 

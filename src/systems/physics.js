@@ -11,10 +11,19 @@
  * @returns {boolean}
  */
 /**
- * Eye height in wall units: the floor is 0, the ceiling 1, and the horizon —
- * where a standing agent looks — is halfway up.
+ * Eye height in wall units: the floor is 0, the top of the wall art 1, and the
+ * horizon — where a standing agent looks — is halfway up.
  */
 export const EYE_Z = 0.5;
+
+/**
+ * Height of the ceiling plane, and of a full wall, as drawn. The figures and
+ * the wall art keep their scale (art on 0..1, see wallHeight); the raycaster
+ * runs each full wall on up to here with an upper band above its art, so a
+ * room has headroom over people drawn about a wall tall. Drawing only: line
+ * of sight, shots and cover still measure against 1.
+ */
+export const CEILING_Z = 1.4;
 
 /**
  * Where the player's own eye sits standing. People are drawn about 0.9 of a

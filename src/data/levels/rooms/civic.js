@@ -78,6 +78,8 @@ const WARM = [255, 226, 180];
 export const room = {
   /** Wall ids this room paints (the map's ownWalls). */
   ownWalls: Object.values(W),
+  /** The curtain wall's art runs up to the ceiling (the map's tallWalls). */
+  tallWalls: [W.WINDOW_A, W.WINDOW_B, W.WINDOW_C],
   /** Lamps, on while the player is in one of `boxes` (TutorialSystem._syncRoomLights). */
   lights: [
     // The skylight's daylight down the balconies, and the low sun in

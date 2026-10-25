@@ -26,7 +26,7 @@
  * pipeline draws them (src/rendering/chrono-fx.js renderArrivals).
  */
 import { ACQUIRE_SECONDS } from "./ai.js";
-import { isPassable } from "./physics.js";
+import { isPassable, CEILING_Z } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import { spawnEnergyBurst, spawnDebris } from "../../js/particle-system.js";
 
@@ -53,8 +53,8 @@ const STEP_IN = 0.45;
 export const LINGER = 0.5;
 /** When a vent's bangs land, seconds into its telegraph. */
 export const VENT_BANGS = [0.12, 0.6];
-/** How high a vent's drop starts, as a share of the sprite's height. */
-const DROP_FROM = 0.5;
+/** How high a vent's drop starts, as a share of the sprite's height: half of it through the ceiling. */
+const DROP_FROM = CEILING_Z - 0.5;
 
 let _serial = 0;
 

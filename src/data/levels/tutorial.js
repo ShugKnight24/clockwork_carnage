@@ -422,6 +422,9 @@ export const TUTORIAL_MAP = {
   // Rooms with floors and ceilings of their own (the WebGL deck shader):
   // the civic wing's marble and skylight, its oak and plaster.
   decks: ALL_ROOMS.flatMap((r) => r.decks ?? []),
+  // Walls whose art runs to the ceiling rather than under the upper band
+  // (the renderer's tall-art walls): the civic wing's glass onto the city.
+  tallWalls: ALL_ROOMS.flatMap((r) => r.tallWalls ?? []),
   // The range's weapons and the Supervisor's desk are put down by the
   // prologue as their steps begin (js/tutorial-system.js).
   pickups: [

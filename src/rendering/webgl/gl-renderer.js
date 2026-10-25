@@ -16,6 +16,10 @@
 
 import { WallPass } from "./wall-pass.js";
 import { isModernArt, isRealisticArt } from "../art-style.js";
+import { CEILING_Z } from "../../systems/physics.js";
+
+// The ceiling plane's height in wall units, as a GLSL literal.
+const CEIL = CEILING_Z.toFixed(4);
 
 // ── Shader sources (inlined for zero-fetch boot) ──────────────────
 
@@ -79,9 +83,9 @@ void main() {
     return;
   }
 
-  // The floor is eyeZ below the eye and the ceiling 1 - eyeZ above it, so a
+  // The floor is eyeZ below the eye and the ceiling CEILING_Z - eyeZ above it, so a
   // crouch brings the floor in and pushes the ceiling away.
-  float rowDist = (isFloor ? u_eyeZ : 1.0 - u_eyeZ) * 2.0 * projH / p;
+  float rowDist = (isFloor ? u_eyeZ : ${CEIL} - u_eyeZ) * 2.0 * projH / p;
 
   // Ray direction for this pixel's column
   float cameraX = (2.0 * uv.x / w) - 1.0;
@@ -217,8 +221,8 @@ void main() {
   float screenY = h - 1.0 - gl_FragCoord.y;
   bool isFloor = screenY > halfH;
   float p = max(abs(screenY - halfH), 0.5);
-  // Floor eyeZ below the eye, ceiling 1 - eyeZ above it (see FLOOR_FRAG).
-  float rowDist = (isFloor ? u_eyeZ : 1.0 - u_eyeZ) * 2.0 * projH / p;
+  // Floor eyeZ below the eye, ceiling CEILING_Z - eyeZ above it (see FLOOR_FRAG).
+  float rowDist = (isFloor ? u_eyeZ : ${CEIL} - u_eyeZ) * 2.0 * projH / p;
 
   float cameraX = (2.0 * gl_FragCoord.x / w) - 1.0;
   vec2 ray = u_dir + u_plane * cameraX;

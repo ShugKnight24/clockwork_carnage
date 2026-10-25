@@ -15,6 +15,10 @@
  * finished colour plus how much of the background survives, and premultiplied
  * blending (ONE, ONE_MINUS_SRC_ALPHA) composites it in one step — see-through
  * wall art included.
+ *
+ * A full wall's upper band (from the top of its art up to the ceiling) is one
+ * more instance on its own layer, a grey bulkhead multiplied by the wall's
+ * tint, which it carries in the accent slot (a door's spill stays on the art).
  */
 
 const VERT = `#version 300 es
@@ -26,12 +30,16 @@ in vec4 a_fog;
 in vec4 a_light;
 in vec4 a_accent;
 in vec4 a_hit;    // world hit x, y and face normal x, y (per-pixel lights)
+in vec2 a_z;      // world height at y0 and y1
 uniform vec2 u_size;
+uniform float u_bandLayer;
 out vec3 v_uvl;
+out float v_z;
 flat out float v_lod;
 flat out vec4 v_face;
 flat out vec4 v_fog;
 flat out vec3 v_add;
+flat out vec3 v_tint;
 flat out vec4 v_hit;
 void main() {
   float x = a_rect.x + a_corner.x;
@@ -41,7 +49,10 @@ void main() {
   v_lod = a_tex.w;
   v_face = a_face;
   v_fog = a_fog;
-  v_add = a_light.rgb * a_light.a + a_accent.rgb * a_accent.a;
+  bool band = a_rect.w == u_bandLayer;
+  v_add = a_light.rgb * a_light.a + (band ? vec3(0.0) : a_accent.rgb * a_accent.a);
+  v_tint = band ? a_accent.rgb * 2.0 : vec3(1.0);
+  v_z = mix(a_z.x, a_z.y, a_corner.y);
   v_hit = a_hit;
 }`;
 
@@ -54,14 +65,16 @@ flat in float v_lod;
 flat in vec4 v_face;
 flat in vec4 v_fog;
 flat in vec3 v_add;
+flat in vec3 v_tint;
 flat in vec4 v_hit;
+in float v_z;
 uniform int u_numLights;
 uniform vec4 u_lights[16];      // x, y, radius, intensity
 uniform vec3 u_lightColors[16]; // 0-1
 uniform float u_lightGain;      // > 0: Realistic per-pixel wall lighting
 out vec4 outColor;
 
-// Lights hang at eye height; the texture's v runs ceiling (0) to deck (1).
+// Lights hang at eye height; v_z is the pixel's height up the wall.
 const float LIGHT_Z = 0.5;
 
 uniform bool u_hasNormals;
@@ -76,7 +89,7 @@ uniform float u_specGain;
 // glints. The per-column Canvas2D light was one flat additive colour for the
 // whole column, lit whichever way the wall faced.
 vec3 wallLight(vec3 albedo) {
-  vec3 p = vec3(v_hit.xy, 1.0 - v_uvl.y);
+  vec3 p = vec3(v_hit.xy, v_z);
   vec3 n0 = vec3(v_hit.zw, 0.0);
   vec3 n = n0;
   float gloss = 0.0;
@@ -115,6 +128,7 @@ vec3 wallLight(vec3 albedo) {
 
 void main() {
   vec4 t = v_lod < 0.0 ? vec4(0.0) : textureLod(u_walls, v_uvl, v_lod);
+  t.rgb = min(t.rgb * v_tint, 1.0);
   if (u_lightGain > 0.0 && v_lod >= 0.0) t.rgb = min(t.rgb + wallLight(t.rgb), 1.0);
   float keepFace = 1.0 - v_face.a;
   float keepFog = 1.0 - v_fog.a;
@@ -141,8 +155,9 @@ void main() {
 }`;
 
 // Per instance: 8 floats (rect, tex), 4 × RGBA8 (face, fog, light, accent),
-// then 4 floats (world hit point and face normal).
-const STRIDE = 64;
+// then 4 floats (world hit point and face normal) and 2 (height at y0, y1).
+const STRIDE = 72;
+const FLOATS = STRIDE / 4;
 const LEVELS = 6; // 512 .. 16, as buildMips makes them
 const SIZE = 512;
 
@@ -199,6 +214,8 @@ export class WallPass {
     this.uNormals = gl.getUniformLocation(prog, "u_normals");
     this.uCam = gl.getUniformLocation(prog, "u_cam");
     this.uSpecGain = gl.getUniformLocation(prog, "u_specGain");
+    this.uBandLayer = gl.getUniformLocation(prog, "u_bandLayer");
+    this.bandLayer = -1;
     this.cam = [0, 0];
     // Eye height (wall units) the specular view vector leaves from; the
     // renderer lowers it with a crouch or a slide.
@@ -238,6 +255,7 @@ export class WallPass {
     inst("a_light", 4, gl.UNSIGNED_BYTE, true, 40);
     inst("a_accent", 4, gl.UNSIGNED_BYTE, true, 44);
     inst("a_hit", 4, gl.FLOAT, false, 48);
+    inst("a_z", 2, gl.FLOAT, false, 64);
     gl.bindVertexArray(null);
 
     this.tex = null;
@@ -280,15 +298,24 @@ export class WallPass {
     let st = this._next;
     // One array layer per wall type the env has, packed: indexed by the raw
     // id, a station's ids (10-120) cost a layer for every unused id below.
+    // The upper band (env.upper) takes the layer after them, as id -1.
     const ids = Object.keys(env.walls).map(Number).sort((a, b) => a - b);
+    if (env.upper) ids.push(-1);
     // Up already, unless walls were added to it since.
     if (this.env === env && this.layers === ids.length) return true;
     if (!st || st.env !== env || st.ids.length !== ids.length) {
       if (st?.tex) gl.deleteTexture(st.tex);
-      st = this._next = { env, ids, left: ids.slice(), tex: null, layerOf: new Int16Array(ids[ids.length - 1] + 1) };
-      ids.forEach((id, i) => (st.layerOf[id] = i));
+      const walls = ids.filter((id) => id >= 0);
+      const layerOf = new Int16Array(walls[walls.length - 1] + 1);
+      walls.forEach((id, i) => (layerOf[id] = i));
+      const band = env.upper ? walls.length : -1;
+      st = this._next = {
+        env, ids, left: ids.slice(), tex: null, layerOf, band,
+        chain: (id) => (id < 0 ? env.upper : env.walls[id]),
+        layer: (id) => (id < 0 ? band : layerOf[id]),
+      };
       const fits = ids.every((id) => {
-        const mips = env.walls[id];
+        const mips = st.chain(id);
         return mips.length >= LEVELS && mips[0].width === SIZE && mips[0].height === SIZE;
       });
       if (fits) {
@@ -299,7 +326,7 @@ export class WallPass {
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       } else st.left.length = 0;
     }
-    if (st.left.length) this._fill(st.tex, st.left.splice(0, count), (id) => env.walls[id], 0, gl.RGBA, st.layerOf);
+    if (st.left.length) this._fill(st.tex, st.left.splice(0, count), st.chain, 0, gl.RGBA, st.layer);
     if (st.left.length) return false;
     this._next = null;
     if (this.tex) gl.deleteTexture(this.tex);
@@ -307,6 +334,8 @@ export class WallPass {
     this.env = env;
     this.layers = ids.length;
     this.layerOf = st.layerOf;
+    this.bandLayer = st.band;
+    this._layerOf = st.layer;
     this.tex = st.tex;
     this.normalTex = null;
     // Not the expected 512px chains: the caller draws walls on the Canvas2D path.
@@ -317,8 +346,8 @@ export class WallPass {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
-    this.normalTex = ids.every((id) => env.walls[id].normals?.length >= LEVELS)
-      ? this._uploadArray(ids, (id) => env.walls[id].normals, ids.length)
+    this.normalTex = ids.every((id) => st.chain(id).normals?.length >= LEVELS)
+      ? this._uploadArray(ids, (id) => st.chain(id).normals, ids.length)
       : null;
     return true;
   }
@@ -354,7 +383,7 @@ export class WallPass {
    * layer, which also writes the RGB565 normals a framebuffer copy from RGBA8
    * may not. Without the blit program it uploads as before.
    */
-  _fill(tex, ids, chainOf, from, format, layerOf = this.layerOf) {
+  _fill(tex, ids, chainOf, from, format, layer = this._layerOf) {
     const gl = this.gl;
     if (!this._blitReady()) {
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
@@ -362,7 +391,7 @@ export class WallPass {
         const mips = chainOf(id);
         for (let l = from; l < LEVELS; l++) {
           const s = SIZE >> l;
-          gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, layerOf[id], s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
+          gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, layer(id), s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
         }
       }
       return;
@@ -379,7 +408,7 @@ export class WallPass {
       for (let l = from; l < LEVELS; l++) {
         const s = SIZE >> l;
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
-        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, layerOf[id]);
+        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, layer(id));
         gl.viewport(0, 0, s, s);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
@@ -452,15 +481,33 @@ export class WallPass {
    * One wall segment: screen column x, rows y0..y1, showing wall `layer`
    * (wall type) at texture u, v0..v1 (0-1) and mip `lod` (fractional blends
    * the two nearest levels; < 0 draws no texture). face/fog are
-   * [r, g, b, a255] source-over overlays; light/accent additive.
+   * [r, g, b, a255] source-over overlays; light/accent additive. z0/z1 are
+   * the wall's height at y0 and y1, for the per-pixel lights.
    */
-  wall(x, y0, y1, layer, lod, u, v0, v1, face, fog, light, accent, hitX = 0, hitY = 0, nX = 0, nY = 0) {
+  wall(x, y0, y1, layer, lod, u, v0, v1, face, fog, light, accent, hitX = 0, hitY = 0, nX = 0, nY = 0, z0 = 1, z1 = 0) {
     this._put(x, y0, y1, this.layerOf?.[layer] ?? 0, u, v0, v1, lod, face, fog, light, accent);
-    const i = (this.n - 1) * 16 + 12;
-    this.f32[i] = hitX;
-    this.f32[i + 1] = hitY;
-    this.f32[i + 2] = nX;
-    this.f32[i + 3] = nY;
+    this._hit(hitX, hitY, nX, nY, z0, z1);
+  }
+
+  /**
+   * A full wall's upper band, rows y0..y1, as wall() but on the band's layer
+   * and multiplied by twice `tint` ([r, g, b, _], from the wall's average
+   * colour), so the band's mid-grey comes out the wall's colour.
+   */
+  upper(x, y0, y1, lod, u, v0, v1, face, fog, light, tint, hitX, hitY, nX, nY, z0, z1) {
+    this._put(x, y0, y1, this.bandLayer, u, v0, v1, lod, face, fog, light, tint);
+    this._hit(hitX, hitY, nX, nY, z0, z1);
+  }
+
+  _hit(hitX, hitY, nX, nY, z0, z1) {
+    const i = (this.n - 1) * FLOATS + 12;
+    const f = this.f32;
+    f[i] = hitX;
+    f[i + 1] = hitY;
+    f[i + 2] = nX;
+    f[i + 3] = nY;
+    f[i + 4] = z0;
+    f[i + 5] = z1;
   }
 
   /** An opaque flat-colour segment (a short wall's top face). */
@@ -472,7 +519,7 @@ export class WallPass {
     if (this.n >= this.cap) this._grow(this.n + 1);
     const f = this.f32;
     const b = this.u8;
-    const i = this.n * 16;
+    const i = this.n * FLOATS;
     f[i] = x;
     f[i + 1] = y0;
     f[i + 2] = y1;
@@ -486,7 +533,7 @@ export class WallPass {
     b[o + 4] = fog[0]; b[o + 5] = fog[1]; b[o + 6] = fog[2]; b[o + 7] = fog[3];
     b[o + 8] = light[0]; b[o + 9] = light[1]; b[o + 10] = light[2]; b[o + 11] = light[3];
     b[o + 12] = accent[0]; b[o + 13] = accent[1]; b[o + 14] = accent[2]; b[o + 15] = accent[3];
-    f[i + 12] = f[i + 13] = f[i + 14] = f[i + 15] = 0;
+    f[i + 12] = f[i + 13] = f[i + 14] = f[i + 15] = f[i + 16] = f[i + 17] = 0;
     this.n++;
   }
 
@@ -503,6 +550,7 @@ export class WallPass {
     gl.uniform1f(this.uLightGain, this.lightGain);
     gl.uniform1f(this.uSpecGain, this.specGain);
     gl.uniform3f(this.uCam, this.cam[0], this.cam[1], this.camZ);
+    gl.uniform1f(this.uBandLayer, this.bandLayer);
     const normals = this.lightGain > 0 && this.useNormals && this.normalTex;
     gl.uniform1i(this.uHasNormals, normals ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);

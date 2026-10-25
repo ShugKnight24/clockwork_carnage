@@ -1,6 +1,6 @@
 import { WALL_COLORS } from "./data.js";
 
-import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, REAL_AMBIENT, averageColor } from "../src/rendering/textures.js";
+import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
 import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
@@ -47,7 +47,7 @@ const _litFilters = new Map();
 import { prepareEnemySprite, drawEnemySprite, hasEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
 import { drawFrozenPerson } from "../src/rendering/frozen-look.js";
 import { isFrozen } from "../src/systems/stillness.js";
-import { EYE_Z, playerEyeZ, wallHeight } from "../src/systems/physics.js";
+import { EYE_Z, CEILING_Z, playerEyeZ, wallHeight } from "../src/systems/physics.js";
 
 // Short-wall records kept per screen column (one per wall the ray crosses).
 const COVER_STRIDE = MAX_COLUMN_HITS;
@@ -59,6 +59,23 @@ const CAP_SHADE = 0.28;
 const _capCache = new WeakMap();
 const _noTexture = {}; // cache slot for a wall type with no art
 const NO_RGBA = [0, 0, 0, 0];
+// Upper bands (Renderer._bandTint and friends): the GL tint and the tinted
+// Canvas2D canvases, per wall art. Glass is the one common wall whose art
+// runs to the ceiling (see _tallWalls).
+const _bandTints = new WeakMap();
+const _bandChains = new WeakMap();
+const TALL_ART_WALLS = [8];
+
+/**
+ * The tint that makes an upper band (`band`, a mip chain) average out to a
+ * wall's colour `avg` once multiplied by twice it: the wall's colour, scaled
+ * by how far the band's own grey (lit and worn, in Realistic) sits from mid.
+ */
+function bandTint(avg, band) {
+  const [r, g, b] = averageColor(band[band.length - 1]);
+  const k = 128 / Math.max(24, 0.299 * r + 0.587 * g + 0.114 * b);
+  return [Math.min(255, avg[0] * k) | 0, Math.min(255, avg[1] * k) | 0, Math.min(255, avg[2] * k) | 0, 255];
+}
 // Realistic per-pixel wall light: multiplies the wall's own colour, so it
 // needs more gain than the old additive fill to read as bright up close.
 const WALL_LIGHT_GAIN = 12;
@@ -588,6 +605,58 @@ export class Renderer {
   }
 
   /**
+   * Wall types whose art runs floor to ceiling instead of under an upper band:
+   * reinforced glass, and a map's own `tallWalls` (windows onto a view).
+   */
+  _tallWalls(map) {
+    if (!map._tallWalls) map._tallWalls = new Set([...TALL_ART_WALLS, ...(map.tallWalls ?? [])]);
+    return map._tallWalls;
+  }
+
+  /** A wall's tint for the GL upper band (bandTint), as bytes. */
+  _bandTint(menv, mmips) {
+    let t = _bandTints.get(mmips);
+    if (!t) {
+      t = bandTint(averageColor(mmips[mmips.length - 1]), menv.upper);
+      _bandTints.set(mmips, t);
+    }
+    return t;
+  }
+
+  /** The env's upper band tinted to one wall's colour, per mip (Canvas2D path). */
+  _bandMips(menv, mmips) {
+    let chain = _bandChains.get(mmips);
+    if (!chain) {
+      const tint = this._bandTint(menv, mmips);
+      chain = menv.upper.map((m) => tintUpperBand(m, tint));
+      _bandChains.set(mmips, chain);
+    }
+    return chain;
+  }
+
+  /**
+   * A Legacy wall texture with the upper band, tinted to it, stacked on top:
+   * 256 wide, the band (CEILING_Z - 1 of a wall) over the 256px art, so the
+   * wall pass draws a full wall in one blit at the art's own scale.
+   */
+  _legacyBanded(tex) {
+    let c = _bandChains.get(tex);
+    if (!c) {
+      const band = legacyUpperBand();
+      const bandH = Math.round(256 * (CEILING_Z - 1));
+      c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 256 + bandH;
+      const g = c.getContext("2d");
+      g.imageSmoothingQuality = "high";
+      g.drawImage(tintUpperBand(band, bandTint(averageColor(tex), [band])), 0, 0, 256, bandH);
+      g.drawImage(tex, 0, bandH);
+      _bandChains.set(tex, c);
+    }
+    return c;
+  }
+
+  /**
    * Fogged cap colours for one wall texture, CAP_FOG_STEPS + 1 of them from
    * clear to fully fogged, using the same fog colour and ceiling as the wall
    * pass of the active style. Built once per texture and fog setting.
@@ -637,9 +706,10 @@ export class Renderer {
    * resolution like the legacy loop.
    *
    * A row `p` px from the horizon is floor `eye·h/p` away and ceiling
-   * `(1 - eye)·h/p` away. Standing those match, so one pass fills each floor
-   * row and the ceiling row mirrored across the horizon; from a lower eye they
-   * differ, and the ceiling gets a pass of its own.
+   * `(CEILING_Z - eye)·h/p` away. With the eye halfway up the room those
+   * match, so one pass fills each floor row and the ceiling row mirrored
+   * across the horizon; from any other eye (standing is above halfway, a
+   * crouch below) they differ, and the ceiling gets a pass of its own.
    */
   _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, eye = 0.5) {
     const w = this.width;
@@ -685,9 +755,9 @@ export class Renderer {
     R.mw = this._envMap.w;
     R.mh = this._envMap.h;
 
-    const mirrored = Math.abs(eye - 0.5) < 1e-4;
+    const mirrored = Math.abs(eye - CEILING_Z / 2) < 1e-4;
     const floorK = 2 * eye * projH;
-    const ceilK = 2 * (1 - eye) * projH;
+    const ceilK = 2 * (CEILING_Z - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
@@ -870,9 +940,9 @@ export class Renderer {
   }
 
   /**
-   * Legacy Canvas2D floor/ceiling. Like the Modern loop, a lower eye puts the
-   * floor and ceiling rows at different distances, so the ceiling gets its
-   * own pass instead of mirroring the floor.
+   * Legacy Canvas2D floor/ceiling. Like the Modern loop, an eye off the room's
+   * middle puts the floor and ceiling rows at different distances, so the
+   * ceiling gets its own pass instead of mirroring the floor.
    */
   _renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift = 0, eye = 0.5) {
     const w = this.width;
@@ -938,9 +1008,9 @@ export class Renderer {
     R.fogB = fogB;
     R.fogMaxOpacity = fogMaxOpacity;
 
-    const mirrored = Math.abs(eye - 0.5) < 1e-4;
+    const mirrored = Math.abs(eye - CEILING_Z / 2) < 1e-4;
     const floorK = 2 * eye * projH;
-    const ceilK = 2 * (1 - eye) * projH;
+    const ceilK = 2 * (CEILING_Z - eye) * projH;
     const floorStart = Math.max(1, halfH + 1);
     const loopEnd = h % 2 === 0 ? h : h - 1;
 
@@ -1209,6 +1279,7 @@ export class Renderer {
     const occN = this._occN;
     const occDist = this._occDist;
     const occY = this._occY;
+    const tallWalls = this._tallWalls(map);
 
     this._spanN = 0;
 
@@ -1236,15 +1307,25 @@ export class Renderer {
         // Variable height: 5 layers = full wall, 1 layer = 20% (from the floor up).
         const heightFrac = hits.frac[hi];
 
-        // A full wall runs from `1 - eye` of its height above the horizon to
-        // `eye` of it below: halfway each way standing, mostly above crouched.
+        // A wall's art runs from `1 - eye` of a wall above the horizon to
+        // `eye` of one below; short walls are fractions of that. A full wall
+        // goes on up to the ceiling, `CEILING_Z - eye` above: a tall-art type
+        // (glass onto a view) stretches its art over the whole height, the
+        // rest keep their art's scale and show the upper band over it.
         const lineHeight = (h / perpWallDist) | 0;
         const fullDrawStart = (horizon - lineHeight * (1 - eye)) | 0;
         const fullDrawEnd = (horizon + lineHeight * eye) | 0;
+        const full = heightFrac >= 1;
+        const ceilDrawStart = full ? (horizon - lineHeight * (CEILING_Z - eye)) | 0 : fullDrawStart;
+        const tallArt = full && tallWalls.has(wallType);
+        const banded = full && !tallArt;
+        // Where the art's top row lands, and its height on screen.
+        const artTop = tallArt ? ceilDrawStart : fullDrawStart;
+        const artH = tallArt ? lineHeight * CEILING_Z : lineHeight;
 
         const faceTop = heightFrac < 1
           ? (fullDrawEnd - (fullDrawEnd - fullDrawStart) * heightFrac) | 0
-          : fullDrawStart;
+          : ceilDrawStart;
         let drawStart = faceTop;
         let drawEnd = fullDrawEnd;
         // A nearer short wall hides the lower part of this one.
@@ -1253,6 +1334,9 @@ export class Renderer {
 
         if (drawStart < 0) drawStart = 0;
         if (drawEnd >= h) drawEnd = h - 1;
+        // The band's rows (none unless banded), then the art's under them.
+        const bandEnd = banded ? Math.min(fullDrawStart, drawEnd) : drawStart;
+        const artStart = banded ? Math.max(drawStart, fullDrawStart) : drawStart;
 
         if (drawEnd > drawStart) {
           // Texture coordinate
@@ -1280,10 +1364,17 @@ export class Renderer {
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
               texX = S - 1 - texX;
             }
-            const mstep = S / lineHeight;
-            const srcY = (drawStart - fullDrawStart) * mstep;
+            const mstep = S / artH;
+            const srcY = (artStart - artTop) * mstep;
             const colH = drawEnd - drawStart;
-            const srcH = Math.min(S - srcY, colH * mstep);
+            const artRows = drawEnd - artStart;
+            const srcH = Math.min(S - srcY, artRows * mstep);
+            // The upper band, mapped onto the rows from the ceiling down to
+            // the art's top (texX as the art's: its seams line up).
+            const bandRows = bandEnd - drawStart;
+            const bandPx = fullDrawStart - ceilDrawStart;
+            const bandV0 = bandRows > 0 ? (drawStart - ceilDrawStart) / bandPx : 0;
+            const bandV1 = bandRows > 0 ? (bandEnd - ceilDrawStart) / bandPx : 0;
 
             // Directional key light: faces turned away from it fall toward ink.
             const face = side === 0 ? (stepX > 0 ? 0 : 1) : (stepY > 0 ? 2 : 3);
@@ -1380,17 +1471,37 @@ export class Renderer {
               const flip = (side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0);
               const u = tri ? (flip ? 1 - wallX : wallX) : (texX + 0.5) / S;
               const lod = srcH <= 0 ? -1 : tri ? Math.min(5, Math.max(0, Math.log2(WALL_TEX / lineHeight))) : lvl;
-              glWalls.wall(
-                x, drawStart, drawEnd, wallType, lod, u, srcY / S, (srcY + srcH) / S,
-                face !== 0 ? rgbaBytes(menv.faceShade[face]) : NO_RGBA,
-                fogCss ? rgbaBytes(fogCss) : NO_RGBA,
-                lt, at,
-                camX + perpWallDist * rayDirX, camY + perpWallDist * rayDirY,
-                side === 0 ? -stepX : 0, side === 1 ? -stepY : 0,
-              );
+              const faceRGBA = face !== 0 ? rgbaBytes(menv.faceShade[face]) : NO_RGBA;
+              const fogRGBA = fogCss ? rgbaBytes(fogCss) : NO_RGBA;
+              const hitX = camX + perpWallDist * rayDirX;
+              const hitY = camY + perpWallDist * rayDirY;
+              const nX = side === 0 ? -stepX : 0;
+              const nY = side === 1 ? -stepY : 0;
+              // Heights at the segments' ends, for the per-pixel lights.
+              const zTop = eye - (drawStart - horizon) / lineHeight;
+              const zArt = eye - (artStart - horizon) / lineHeight;
+              const zBot = eye - (drawEnd - horizon) / lineHeight;
+              if (artRows > 0) {
+                glWalls.wall(
+                  x, artStart, drawEnd, wallType, lod, u, srcY / S, (srcY + srcH) / S,
+                  faceRGBA, fogRGBA, lt, at, hitX, hitY, nX, nY, zArt, zBot,
+                );
+              }
+              if (bandRows > 0 && glWalls.bandLayer >= 0) {
+                glWalls.upper(
+                  x, drawStart, bandEnd, lod < 0 ? lvl : lod, u, bandV0, bandV1,
+                  faceRGBA, fogRGBA, lt, this._bandTint(menv, mmips), hitX, hitY, nX, nY, zTop,
+                  eye - (bandEnd - horizon) / lineHeight,
+                );
+              }
             } else {
               if (srcH > 0) {
-                ctx.drawImage(mtex, texX, srcY, 1, srcH, x, drawStart, 1, colH);
+                ctx.drawImage(mtex, texX, srcY, 1, srcH, x, artStart, 1, artRows);
+              }
+              if (bandRows > 0) {
+                const band = this._bandMips(menv, mmips)[lvl];
+                const B = band.width;
+                ctx.drawImage(band, (texX * B) / S, bandV0 * B, 1, (bandV1 - bandV0) * B, x, drawStart, 1, bandRows);
               }
               if (face !== 0) {
                 ctx.fillStyle = menv.faceShade[face];
@@ -1423,6 +1534,8 @@ export class Renderer {
             if (!real && colH > inkT * 2) {
               if (drawStart > 0) this._addSpan(x, drawStart, inkT);
               if (drawEnd < h - 1 && !clipped) this._addSpan(x, drawEnd - inkT, inkT);
+              // The art's top edge, under the band's trim rail.
+              if (bandRows > 0 && artRows > 0) this._addSpan(x, artStart - 1, 1);
             }
             if (hi === 0) {
               // The silhouette pass outlines the nearest surface in each column.
@@ -1432,7 +1545,10 @@ export class Renderer {
               this._colZ[x] = perpWallDist;
             }
           } else if (this.textures[wallType]) {
-            const tex = this.textures[wallType];
+            const art = this.textures[wallType];
+            // A banded wall samples its art with the upper band stacked on
+            // top (_legacyBanded): one blit a column, as before the band.
+            const tex = banded ? this._legacyBanded(art) : art;
             let texX = (wallX * 256) | 0;
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
               texX = 255 - texX;
@@ -1440,13 +1556,13 @@ export class Renderer {
 
             // Draw textured wall strip
             const texHeight = 256;
-            const step = texHeight / lineHeight;
-            let texPos = (drawStart - fullDrawStart) * step;
+            const step = texHeight / artH;
+            let texPos = (drawStart - (banded ? ceilDrawStart : artTop)) * step;
 
             // Use drawImage for textured columns
             const srcY = Math.max(0, texPos);
-            const srcH = Math.min(256, (drawEnd - drawStart) * step);
-            if (CITY_GLASS[wallType] && glazeLegacyGlass(tex, wallType)) {
+            const srcH = Math.min(tex.height, (drawEnd - drawStart) * step);
+            if (CITY_GLASS[wallType] && glazeLegacyGlass(art, wallType)) {
               drawCityView(ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
             }
             if (srcH > 0 && drawEnd > drawStart) {
@@ -2087,8 +2203,10 @@ export class Renderer {
       // Z-buffer clipping — same pattern as enemies so props behind walls
       // and low cover don't bleed through
       // The clip also crops the art to its sprite box, so it applies even
-      // when nothing is in front.
-      if (!this._spriteClipPath(ctx, startX, endX, startY, endY, dist)) return;
+      // when nothing is in front. The box runs up to the ceiling: a tree
+      // taller than a wall's art is cut there, not at the art's top.
+      const propTop = startY - (CEILING_Z - 1) * sprHeight;
+      if (!this._spriteClipPath(ctx, startX, endX, propTop, endY, dist)) return;
       ctx.save();
       ctx.clip();
       if (isRealisticArt()) {

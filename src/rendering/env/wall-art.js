@@ -731,6 +731,62 @@ export function paintWall(id, act, pal, salt = 0, mat = null) {
   return c;
 }
 
+// ── Upper band ──────────────────────────────────────────────────────────────
+
+/** Grey steel for the upper band: the renderer tints it to each wall's colour. */
+const BAND_GREYS = { s0: "#161616", s1: "#5e5e5e", s2: "#7c7c7c", s3: "#959595", s4: "#cdcdcd" };
+
+/**
+ * The bulkhead over a wall's art, from the top of the art (z = 1) up to the
+ * ceiling (CEILING_Z): two plain panels a cell, a trim rail along the art's
+ * top edge and a soffit under the ceiling. Painted in grey around mid-tone,
+ * so a multiply by twice a wall's average colour (the renderer's tint) gives
+ * it that wall's palette. The face is squashed into the band's height, so
+ * vertical sizes are scaled by `sy` to keep the trim and bolts square.
+ */
+function paintUpperBand(ctx, g, sy) {
+  const Y = (v) => Math.round(v * sy);
+  ctx.fillStyle = g.s1;
+  ctx.fillRect(0, 0, T, T);
+  // Soffit under the ceiling.
+  plate(ctx, 0, 0, T, Y(10), g, { tones: [g.s1, g.s0, g.s0], bevel: 2, ink: 0, spec: false, recess: true });
+  // The two panels, their seams on the cell's edge and its middle.
+  const top = Y(14);
+  const bot = T - Y(26);
+  for (const x0 of [0, T / 2]) {
+    plate(ctx, x0 + 5, top, T / 2 - 10, bot - top, g, { tones: [g.s3, g.s2, g.s2], bevel: 5 });
+    for (const bx of [x0 + 18, x0 + T / 2 - 26]) {
+      for (const by of [top + Y(8), bot - Y(14)]) plate(ctx, bx, by, 8, Y(6), g, { tones: [g.s4, g.s3, g.s1], bevel: 1, ink: 1, spec: false });
+    }
+  }
+  ink(ctx, 0, top - 3, T, 3, 20);
+  // The trim rail along the top of the art, and the joint's shadow under it.
+  plate(ctx, 0, T - Y(22), T, Y(16), g, { tones: [g.s4, g.s3, g.s2], bevel: 3, ink: 0 });
+  ink(ctx, 0, T - Y(6), T, Y(6), 34);
+  grit(ctx, T, T, 0.1);
+}
+
+/**
+ * The upper band as a mip chain (with relief normals when `realistic`),
+ * finished like a wall face. `span` is the band's height in walls.
+ */
+export function buildUpperBand(act, pal, span, realistic = false) {
+  const p = { ...(pal || getEnvPalette(act)), ...BAND_GREYS };
+  const c = makeCanvas(T);
+  const mat = realistic ? beginMaterial(p) : null;
+  if (mat) useMaterial(mat);
+  try {
+    paintUpperBand(c.getContext("2d"), p, 1 / span);
+  } finally {
+    useMaterial(null);
+  }
+  if (!mat) return buildMips(c);
+  const normals = bakeMaterial(c, mat, p, act, 0x0ba11ad);
+  const mips = buildMips(c);
+  mips.normals = buildMips(normals);
+  return mips;
+}
+
 /**
  * All wall faces for a level as { [id]: mipChain[] } (level 0 = 512px).
  * `realistic` bakes each face's lighting and wear into its albedo, so

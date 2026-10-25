@@ -1,6 +1,7 @@
 // Pickup, exit, and projectile rendering — extracted from Renderer class
 
 import { isModernArt, isRealisticArt } from "./art-style.js";
+import { CEILING_Z } from "../systems/physics.js";
 import { projectileKind } from "../../js/vfx.js";
 import { drawSvgSprite, warmSvgSprites } from "./props.js";
 import { DEFS as PICKUP_DEFS, PICKUP_SPRITES } from "./svg-art/sprites/pickups.js";
@@ -425,9 +426,10 @@ const RING_R = 0.62;
 const BEAM_R = 0.34;
 
 /**
- * Draw the exit at its sprite position. `sprHeight` is the floor-to-ceiling
- * height at `dist`, so the floor is `centerY + sprHeight / 2`. `sealed` turns
- * it red and dim (an objective still holds the exit shut).
+ * Draw the exit at its sprite position. `sprHeight` is a wall's art height at
+ * `dist`, so the floor is `centerY + sprHeight / 2` and the ceiling CEILING_Z
+ * walls over it. `sealed` turns it red and dim (an objective still holds the
+ * exit shut).
  */
 export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog, sealed = false) {
   if (fog <= 0) return;
@@ -436,7 +438,7 @@ export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time,
   const t = time / 1000;
   const unit = sprHeight; // screen px per cell at this distance
   const floorY = centerY + unit / 2;
-  const ceilY = centerY - unit / 2;
+  const ceilY = floorY - unit * CEILING_Z;
   // Sealed: a slow, uneven flicker. Open: a steady breathing pulse.
   const pulse = sealed
     ? 0.55 + 0.25 * Math.sin(t * 2.1) * Math.sin(t * 7.3)

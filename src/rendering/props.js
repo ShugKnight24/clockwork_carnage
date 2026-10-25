@@ -4,6 +4,7 @@
 
 import { getLayerImage, layerBaked, onRasterRelease, scaleBucket, touchLayer } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
+import { CEILING_Z } from "../systems/physics.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
 
@@ -1213,7 +1214,8 @@ const SHUTTER_LIP = 0.4;
  */
 function renderShutter(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   const ground = groundY(cy, sh);
-  const top = cy - sh * 0.55;
+  // From a little over the ceiling (CEILING_Z walls up), so no gap shows.
+  const top = cy + sh * (0.45 - CEILING_Z);
   // Measured from the floor the walls stand on (half a wall under the
   // standing eye), so the lip is over a crouched or sliding eye
   // (CROUCH_EYE_Z, SLIDE_EYE_Z in src/systems/physics.js) and under a

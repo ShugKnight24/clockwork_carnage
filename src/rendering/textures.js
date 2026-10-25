@@ -4,7 +4,8 @@
  * Upgraded to 256x256 resolution for sharper visuals.
  */
 import { WALL_COLORS } from "../../js/data.js";
-import { buildWallSet, extendWallSet, hasWallPainter, paintWall } from "./env/wall-art.js";
+import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand } from "./env/wall-art.js";
+import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
@@ -317,6 +318,50 @@ export function generateWallTextures() {
   return textures;
 }
 
+let _legacyUpper = null;
+
+/** Legacy's upper band: the Modern one, downscaled once to 256px. */
+export function legacyUpperBand() {
+  if (!_legacyUpper) {
+    const mips = buildUpperBand(1, null, CEILING_Z - 1);
+    _legacyUpper = mips[1];
+    mips[0].width = mips[0].height = 0;
+  }
+  return _legacyUpper;
+}
+
+/**
+ * The upper band `band` tinted to a wall's average colour `avg` for the
+ * Canvas2D paths: band × avg × 2, as the GL wall pass multiplies it, so its
+ * mid-grey becomes the wall's own colour. Cached per band canvas and colour.
+ */
+const _tintCache = new WeakMap();
+export function tintUpperBand(band, avg) {
+  let byKey = _tintCache.get(band);
+  if (!byKey) _tintCache.set(band, (byKey = new Map()));
+  const key = `${avg[0] | 0},${avg[1] | 0},${avg[2] | 0}`;
+  let c = byKey.get(key);
+  if (c) return c;
+  const half = document.createElement("canvas");
+  half.width = band.width;
+  half.height = band.height;
+  const h = half.getContext("2d");
+  h.drawImage(band, 0, 0);
+  h.globalCompositeOperation = "multiply";
+  h.fillStyle = `rgb(${key})`;
+  h.fillRect(0, 0, half.width, half.height);
+  c = document.createElement("canvas");
+  c.width = band.width;
+  c.height = band.height;
+  const g = c.getContext("2d");
+  g.drawImage(half, 0, 0);
+  g.globalCompositeOperation = "lighter";
+  g.drawImage(half, 0, 0);
+  half.width = half.height = 0;
+  byKey.set(key, c);
+  return c;
+}
+
 /** Act-based floor/ceiling palettes (3 acts x 2 visual styles) */
 const ACT_PALETTES = {
   1: {
@@ -533,21 +578,23 @@ const CONTACT_SHADOW_LEVELS = 4;
  * blit took Realistic from vsync to ~30 fps. It spans the wall's full height
  * exactly as the texture does, so baking it changes nothing on screen.
  */
-function bakeContactShadow(mips) {
+function bakeContactShadow(mips, stops = WALL_SHADOW) {
   for (let i = 0; i < CONTACT_SHADOW_LEVELS && i < mips.length; i++) {
     const c = mips[i];
     const g = c.getContext("2d");
     const grad = g.createLinearGradient(0, 0, 0, c.height);
-    grad.addColorStop(0, "rgba(0,0,0,0.55)");
-    grad.addColorStop(0.1, "rgba(0,0,0,0.14)");
-    grad.addColorStop(0.22, "rgba(0,0,0,0)");
-    grad.addColorStop(0.74, "rgba(0,0,0,0)");
-    grad.addColorStop(0.9, "rgba(0,0,0,0.22)");
-    grad.addColorStop(1, "rgba(0,0,0,0.62)");
+    for (const [o, a] of stops) grad.addColorStop(o, `rgba(0,0,0,${a})`);
     g.fillStyle = grad;
     g.fillRect(0, 0, c.width, c.height);
   }
 }
+
+// The art's top meets the upper band's trim rail now, not the ceiling: a
+// light shadow under the rail there, and the ceiling joint's dark one at the
+// top of the band (which is CEILING_Z - 1 of a wall tall, so the same fall-off
+// covers more of it).
+const WALL_SHADOW = [[0, 0.24], [0.06, 0.06], [0.14, 0], [0.74, 0], [0.9, 0.22], [1, 0.62]];
+const BAND_SHADOW = [[0, 0.55], [0.1 / (CEILING_Z - 1), 0.14], [Math.min(0.9, 0.22 / (CEILING_Z - 1)), 0], [1, 0]];
 
 /**
  * Add a map's own wall faces (the station's lockers, say) to an env built
@@ -572,6 +619,10 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
   const salt = envSalt(level);
   const walls = buildWallSet(a, p, salt, realistic);
   if (realistic) for (const mips of Object.values(walls)) bakeContactShadow(mips);
+  // The upper band over every full wall's art (the renderer tints it).
+  const upper = buildUpperBand(a, p, CEILING_Z - 1, realistic);
+  if (realistic) bakeContactShadow(upper, BAND_SHADOW);
+  averageColor(upper[upper.length - 1]);
   // The raycaster's cap colours come from each wall's smallest mip.
   for (const mips of Object.values(walls)) averageColor(mips[mips.length - 1]);
   const deck = buildDeckSet(a, brutal, p, salt);
@@ -637,6 +688,7 @@ export function generateModernEnv(act, brutal, level = null, { realistic = false
     realistic: !!realistic,
     palette: p,
     walls,
+    upper,
     deck,
     fogLUT,
     fogAmbientLUT,
