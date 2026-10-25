@@ -167,7 +167,15 @@ export class PlayerUpdateSystem {
     // Crouch & Slide handling
     const crouchHeld = !!keys[kb.crouch];
     const crouchJustPressed = crouchHeld && !this._prevCrouchKey;
-    p.isCrouching = crouchHeld && !p.isSliding;
+    // Under something low (the map's lowCells: the prologue's bars and
+    // tunnel), a slide running out or crouch let go does not stand you up
+    // into it: you stay down (lowHold) until you are out from under it.
+    const lowCells = ctx.map?.lowCells;
+    const inLow = !!lowCells?.has(`${Math.floor(p.x)},${Math.floor(p.y)}`);
+    // However you came to be under it (a slide, a shove, a respawn), you
+    // cannot stand up in it.
+    p.lowHold = inLow;
+    p.isCrouching = (crouchHeld || p.lowHold) && !p.isSliding;
 
     // Ease the stance. Dropping is quicker than standing back up — going down
     // is gravity, getting up is work — and a slide drops fastest of all.
@@ -324,8 +332,20 @@ export class PlayerUpdateSystem {
     const fromY = p.y;
     const newX = p.x + moveX;
     const newY = p.y + moveY;
-    if (noclip || isPassable(map, Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
-    if (noclip || isPassable(map, Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
+    // A low cell (map.lowCells) is a wall to anyone upright: only sliding or
+    // crouched gets under it. Never the cell you are in, so nothing can
+    // leave you boxed inside one.
+    const upright = map.lowCells && !(p.isSliding || p.isCrouching || p.lowHold);
+    const cx = Math.floor(fromX);
+    const cy = Math.floor(fromY);
+    const open = (mx, my) => {
+      if (!isPassable(map, mx, my)) return false;
+      if (!upright || (mx === cx && my === cy) || !map.lowCells.has(`${mx},${my}`)) return true;
+      p.lowBlocked = true;
+      return false;
+    };
+    if (noclip || open(Math.floor(newX + margin * Math.sign(moveX)), Math.floor(p.y))) p.x = newX;
+    if (noclip || open(Math.floor(p.x), Math.floor(newY + margin * Math.sign(moveY)))) p.y = newY;
     // Someone stopped in time does not give way: the player slides round
     // them. If that would put the player in a wall, the step is not taken.
     if (!noclip && holdOffFrozen(ctx.entities, p, fromX, fromY) && !isPassable(map, Math.floor(p.x), Math.floor(p.y))) {

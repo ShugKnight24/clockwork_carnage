@@ -86,6 +86,10 @@ export class Player {
     this.isDashing = false;
     // Crouch & Slide
     this.isCrouching = false;
+    // Something low overhead (the prologue's bars and tunnel): the stance
+    // stays down, crouch held or not, until the player is out from under it.
+    this.lowHold = false;
+    this.lowBlocked = false;
     // 0 = standing, 1 = fully lowered. Eased, so the camera settles into a
     // crouch instead of snapping 28px in one frame.
     this.crouchBlend = 0;
