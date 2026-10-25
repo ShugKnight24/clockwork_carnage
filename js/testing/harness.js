@@ -1844,12 +1844,13 @@ function botCadet(game) {
   game.mouse.locked = true;
 
   const skipScene = () => {
-    for (let i = 0; i < 200 && game.state === GameState.CUTSCENE; i++) {
-      game.handleKeyPress("Space");
+    for (let i = 0; i < 200 && (game.state === GameState.CUTSCENE || game.state === GameState.CHARACTER_CREATE); i++) {
+      // At the locker the prologue opens the creator (deploy as the saved
+      // agent), then plays the suit going on.
+      if (game.state === GameState.CHARACTER_CREATE) game._exitCreator(false);
+      else game.handleKeyPress("Space");
       stepGame(game, 5);
     }
-    // Suited up, the prologue opens the creator: deploy as the saved agent.
-    if (game.state === GameState.CHARACTER_CREATE) game._exitCreator(false);
   };
   skipScene();
 
@@ -2158,7 +2159,7 @@ function botCadet(game) {
   };
 
   // Per-step budget in ticks (60 a second). Scenes wait on dialogue.
-  const BUDGET = { arrive: 4800, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800, toLab: 4800, escort: 6000 };
+  const BUDGET = { arrive: 7200, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800, toLab: 4800, escort: 6000 };
   // Pacing, as the plan measures it: seconds from the creator to the first
   // shot, and the longest the cadet stands still while someone talks.
   const pacing = { standing: {}, time: {}, stood: 0, lastX: p.x, lastY: p.y, shots: 0 };
@@ -2177,7 +2178,7 @@ function botCadet(game) {
     const budget = BUDGET[id] ?? 3600;
     let ticks = 0;
     while (t.step === at && ticks < budget && game.mode === "tutorial") {
-      if (game.state === GameState.CUTSCENE) skipScene();
+      if (game.state === GameState.CUTSCENE || game.state === GameState.CHARACTER_CREATE) skipScene();
       if (game.state !== GameState.PLAYING) {
         stepGame(game, 1);
         ticks++;

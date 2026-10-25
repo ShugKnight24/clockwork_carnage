@@ -39,6 +39,7 @@ import { NPC_TYPES } from "../src/data/npcs.js";
 import { ARENA_WALLS, COVER_LAYOUTS, DRILL_COVER, BOOTH_AT, BOOTH_FRONT } from "../src/data/levels/rooms/arena.js";
 import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, TRACK_WALLS, LANES } from "../src/data/levels/rooms/track.js";
 import { arrive as startArrival, pendingArrivals, clearArrivals } from "../src/systems/arrival.js";
+import { shovePlayer } from "../src/systems/ai.js";
 import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
 import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
 import { ATRIUM_GAP } from "../src/data/levels/rooms/atrium.js";
@@ -149,6 +150,40 @@ const LIFT_DOORS = [
 ];
 /** Inside the car, and where the open car's beacon stands. */
 const LIFT_CAR = { x: 30.0, y: 2.6 };
+/**
+ * The alarm at Lift B: how close you get to the car before he puts you out
+ * of it (or how long he waits for you), and how long after that the doors
+ * shut. What he says when he does.
+ */
+const ALARM_REFUSE_AT = 2.2;
+const ALARM_REFUSE_WAIT = 6;
+const ALARM_DOORS_AFTER = 4.5;
+const ALARM_REFUSAL = [
+  ["SUPERVISOR", "No. Not you.", "urgent"],
+  ["SUPERVISOR", "Bureau property doesn't go down there uncertified. Neither do you. Hold this floor, Cadet. That's an order.", "urgent"],
+  ["ARIA", "He's keyed the car to his badge. I can't call it back.", "afraid"],
+];
+/**
+ * The breach on this floor: up through the sim hall as the lift shuts on
+ * him, between you and it; then his office, the override on the desk.
+ */
+const COVER_WAVES = [
+  [
+    [22.5, 9.5, "henchman"],
+    [38.5, 9.5, "henchman"],
+    [33.5, 4.5, "drone"],
+  ],
+  [
+    [53.5, 24.5, "henchman"],
+    [53.5, 16.5, "henchman"],
+    [48.5, 24.5, "henchman"],
+  ],
+];
+const COVER_TO_OFFICE = [
+  ["SUPERVISOR", "Breach, every sector, they're already insi—", "afraid", { radio: true }],
+  ["ARIA", "Lost him. Lost the whole network. Whatever came up that shaft, more will follow.", "urgent"],
+  ["ARIA", "His override's on his desk. He said hold the floor, {AGENT}. He didn't say which one.", "urgent"],
+];
 
 /**
  * The floor's people that morning, who aren't police on the Engine detail.
@@ -193,6 +228,9 @@ const STATIONS = {
 };
 /** How fast Orr walks you to R&D: a little under your own walk, so you keep together. */
 const ORR_WALK = 2.7;
+/** How far ahead of you she'll get before she stops for you, and the longest she waits to start. */
+const ORR_LEASH = 4;
+const ORR_WAIT_MAX = 20;
 
 /**
  * The rooms the story asks you to be in, as their floors are carved
@@ -213,6 +251,12 @@ const inArea = (p, name) => {
 /** R&D's people by the name their lines go under, and how far a voice carries outside its room. */
 const EARSHOT_OF = { "DR. ORR": "orr", LIN: "lin", VALE: "vale" };
 const EARSHOT = 14;
+/**
+ * The room each of them carries through, wherever they stand in it: Lin
+ * talks the sim hall through from her booth's mic (the booth is below the
+ * hall's floor box), Orr has R&D, Vale the track.
+ */
+const ROOM_OF = { orr: "rnd", lin: "arena", vale: "track" };
 
 /**
  * What the floor's people say if you talk to them (press interact facing
@@ -397,6 +441,11 @@ const RUN_GATES = [
 const SEGMENT_END = { sprint: 1, slide: 3, tunnel: 4, dash: 5, runHome: 6 };
 /** How far either side of its line a gate counts you through. */
 const RUN_GATE_DY = 0.9;
+/**
+ * Seconds Vale counts you in on the start line, once she has finished
+ * talking. Step off it before "Go" and the count starts again.
+ */
+const RUN_COUNTDOWN = 3;
 /** Every cell with something at 0.9 m across it, the bars and the tunnel: only low gets through. */
 const LOW_CELLS = new Set([...TRACK_BARS, ...TRACK_TUNNEL].map(([x, y]) => `${x},${y}`));
 /**
@@ -601,6 +650,8 @@ const LOGIC = {
         return n;
       });
       t.warmNpc(g, "officerKit");
+      t.warmNpc(g, "rasczakKit");
+      t.warmNpc(g, "kaelKit");
       t.warmNpc(g, "staff");
       t.warmNpc(g, "clerk");
       if (!t.sup) {
@@ -658,7 +709,7 @@ const LOGIC = {
               then: (n) => {
                 n.faceTo({ x: kx, y: ky < 42 ? ky - 2 : ky + 2 });
                 setTimeoutGame(t, 1.6 + (i % 3) * 0.45, () => {
-                  n.dress("officerKit");
+                  n.dress(i === 3 ? "rasczakKit" : i === 1 ? "kaelKit" : "officerKit");
                   g.audio.armorClank?.(g.audio.calculatePan?.(n.x, n.y, g.player.x, g.player.y, g.player.angle) ?? 0);
                   setTimeoutGame(t, 0.5, () => {
                     n.faceTo(t.sup);
@@ -671,6 +722,25 @@ const LOGIC = {
         });
       }
       if (c.phase === "kit" && c.kitted >= t.squad.length && t.scriptIdle()) {
+        // Kitted up, someone notices the lieutenant's plate isn't the
+        // standard issue. The squad has a go; the Supervisor ends it.
+        c.phase = "banter";
+        const [kael, lt, brandt, okafor] = [t.squad[1], t.squad[3], t.squad[4], t.squad[6]];
+        brandt?.faceTo(lt);
+        lt?.faceTo(brandt);
+        okafor?.faceTo(brandt);
+        t.say([
+          ["OFFICER", "LT, how come your suit's so much better than the standard issue?", "curious", { as: "OFC. BRANDT" }],
+          ["LT. RASCZAK", "Top performers need elite equipment, Brandt. Dedicate yourself to the craft and one day you might earn one too.", "happy"],
+          ["OFFICER", "He's dedicated. Mostly to the vending machine.", "happy", { as: "OFC. OKAFOR" }],
+          ["SGT. KAEL", "Fancy plate's for people who get shot at, Lieutenant. I'm the one who gets shot.", "calm"],
+          ["LT. RASCZAK", "And we're all very grateful, Sergeant. That's why yours weighs more than Brandt's car.", "happy"],
+          ["SUPERVISOR", "When you've finished admiring each other, Lieutenant.", "calm"],
+          ["LT. RASCZAK", "Sir. Moving out.", "calm"],
+        ]);
+        kael?.faceTo(lt);
+      }
+      if (c.phase === "banter" && t.scriptIdle()) {
         // The squads leave for the Engine level, one after another. The
         // Supervisor keeps the cadet back, and two of them have a word for
         // the cadet about it on the way past.
@@ -764,13 +834,43 @@ const LOGIC = {
       if (!t.sup?.path?.length) t.supWalk(g, "atRange");
       const orr = t.person(g, "orr");
       orr.faceTo(g.player);
-      // She lets him say his piece, then sets off.
-      setTimeoutGame(t, 3.2, () => {
-        orr.speed = ORR_WALK;
-        t.toStation(g, "orr");
-      });
+      t.c.go = false;
+      t.c.waited = 0;
+      t.c.rest = null;
     },
-    update: (t, g) => inArea(g.player, "rnd"),
+    update(t, g) {
+      const c = t.c;
+      const p = g.player;
+      const orr = t.person(g, "orr");
+      // She lets him say his piece and waits for you: she sets off once she
+      // is talking (or, if the comms never free up, after a while).
+      if (!c.go) {
+        orr.faceTo(p);
+        c.waited += g.deltaTime || 0;
+        if (g.ariaComms?.message?.speaker === "DR. ORR" || c.waited > ORR_WAIT_MAX) c.go = true;
+        return inArea(p, "rnd");
+      }
+      // Then she walks with you: ahead of you and out of earshot, she stops
+      // and waits; caught up, she goes on.
+      const s = STATIONS.orr;
+      const there = Math.hypot(orr.x - s.x, orr.y - s.y) < 0.45;
+      const behind = !there && t.leftBehind(orr, s, ORR_LEASH - ESCORT_LEASH);
+      if (behind && orr.walking) {
+        c.rest = orr.path.map((q) => [q.x, q.y]);
+        orr.path = [];
+        orr.faceTo(p);
+        if (!c.called) {
+          c.called = true;
+          t.say([["DR. ORR", "This way, Cadet. R&D's at the top of the east wing.", "calm"]], { first: true });
+        }
+      } else if (!behind && !orr.walking && !there) {
+        orr.speed = ORR_WALK;
+        if (c.rest?.length) orr.walk(c.rest, { then: (m) => m.faceTo(s.face) });
+        else t.toStation(g, "orr");
+        c.rest = null;
+      }
+      return inArea(p, "rnd");
+    },
   },
 
   /**
@@ -1303,6 +1403,8 @@ const LOGIC = {
       t.sim = null;
       t.clearTag(g, "sim");
       clearShots(g);
+      // The sim's off: its holo cover sinks with it.
+      t.raiseCover(g, null);
     },
   },
 
@@ -1515,8 +1617,8 @@ const LOGIC = {
   },
 
   alarm: {
-    // Once he's on his way down, the marker points at his office: the
-    // override, and the fight. (Until then you watch him go.)
+    // He calls the lift and steps in; the marker is the car, beside him.
+    // Once he has refused you, nothing: you watch the doors close.
     get waypoint() {
       return null;
     },
@@ -1526,53 +1628,85 @@ const LOGIC = {
       t.openDoors(g, "door4");
     },
     update(t, g) {
-      if (!t.c.armed && t.clock > 1 && (t.scriptIdle() || t.clock > 3)) {
-        t.c.armed = true;
-        t.c.at = t.clock;
+      const c = t.c;
+      const p = g.player;
+      const sup = t.sup;
+      if (!c.armed && t.clock > 1 && (t.scriptIdle() || t.clock > 3)) {
+        c.armed = true;
+        c.at = t.clock;
         g.audio.alarmKlaxon?.();
         g.screenShake = 4;
         g.glitchEffect = 0.6;
         t.alert = true;
         t.say(t.def.lines, { cut: true });
-      }
-      // He tells you to stay, and goes: into Lift B, at a run. He turns in
-      // the car to look at you, and the doors close on him (_updateLift).
-      if (t.c.armed && !t.c.gone && t.clock - t.c.at > 6 && t.sup?.active) {
-        t.c.gone = true;
+        // Into Lift B at a run, holding it for you; you think you're going too.
         t.lift(g, true);
-        t.sup.thaw?.(); // torn free of 06:47 by now, however fast you got here
-        t.sup.walk(SUP_ROUTES.leave, {
+        sup?.thaw?.(); // torn free of 06:47 by now, however fast you got here
+        sup?.walk(SUP_ROUTES.leave, {
           speed: 3.4,
-          then: (sup) => {
-            sup.faceTo(g.player);
-            setTimeoutGame(t, 1.6, () => {
-              t.liftWant = false;
-              t.supDown = true;
-            });
+          then: (n) => {
+            n.faceTo(g.player);
+            c.inCar = true;
+            c.carAt = t.clock;
           },
         });
       }
-      if (t.c.armed && t.clock - t.c.at > 5) g.objectiveWaypoint = { x: 37.5, y: 20.5 };
-      // Once he's gone the fight is on; his last lines play over it.
-      return t.c.armed && t.clock - t.c.at > 9;
+      if (!c.armed) return false;
+      const toCar = Math.hypot(p.x - LIFT_CAR.x, p.y - LIFT_CAR.y);
+      // You go to step in with him (or hang back): he puts you out of the
+      // car and locks it to his badge.
+      if (c.inCar && !c.refused && (toCar < ALARM_REFUSE_AT || t.clock - c.carAt > ALARM_REFUSE_WAIT)) {
+        c.refused = true;
+        c.refusedAt = t.clock;
+        t.say(ALARM_REFUSAL, { cut: true });
+        if (toCar < ALARM_REFUSE_AT + 0.6) {
+          shovePlayer(p, Math.atan2(p.y - LIFT_CAR.y, p.x - LIFT_CAR.x), 1.4, g.map);
+          g.screenShake = Math.max(g.screenShake || 0, 3);
+          g.audio.armorClank?.(0);
+        }
+      }
+      // Until the doors shut, the car is his: step back in and he puts you out again.
+      if (c.refused && !c.shut && toCar < ALARM_REFUSE_AT - 0.4) {
+        shovePlayer(p, Math.atan2(p.y - LIFT_CAR.y, p.x - LIFT_CAR.x), 1.0, g.map);
+      }
+      if (c.refused && !c.shut && t.clock - c.refusedAt > ALARM_DOORS_AFTER) {
+        c.shut = true;
+        c.shutAt = t.clock;
+        t.liftWant = false;
+        t.supDown = true;
+      }
+      g.objectiveWaypoint = !c.refused && sup ? { x: LIFT_CAR.x, y: LIFT_CAR.y + 1.2 } : null;
+      // The doors close on him, and the floor tears open between you and them.
+      return c.shut && t.clock - c.shutAt > 1.2;
     },
   },
 
   // ── The breach ─────────────────────────────────────────────────
 
   cover: {
-    waypoint: { x: 37.5, y: 20.5 },
+    // First the sim hall, where the lift just shut; then his office, where
+    // the override is, through the rest of them.
+    get waypoint() {
+      return null;
+    },
     enter(t, g) {
       t.alert = true;
       t.lift(g, false);
-      // Through tears in the office: each glows and crackles before it opens.
-      t.arrive(g, "cover", [
-        [53.5, 24.5, "henchman"],
-        [53.5, 16.5, "henchman"],
-        [48.5, 24.5, "henchman"],
-      ]);
+      t.c.wave = 0;
+      // Through tears in the hall: each glows and crackles before it opens.
+      t.arrive(g, "cover", COVER_WAVES[0]);
     },
-    update: (t, g) => t.cleared(g, "cover"),
+    update(t, g) {
+      const c = t.c;
+      if (c.wave === 0 && t.cleared(g, "cover")) {
+        c.wave = 1;
+        t.say(COVER_TO_OFFICE, { cut: true });
+        t.arrive(g, "cover", COVER_WAVES[1], { again: true });
+        return false;
+      }
+      if (c.wave === 1) g.objectiveWaypoint = { x: 37.5, y: 20.5 };
+      return c.wave === 1 && t.cleared(g, "cover");
+    },
     progress: (t, g) => `HOSTILES ${t.alive(g, "cover")}`,
   },
 
@@ -1799,7 +1933,8 @@ export class TutorialSystem {
     this.cert = { done: {}, order: [], briefed: false, run: null };
     /** The mobility run while it lasts: its gates, and whether the clock still waits for the start line. */
     this.course = null;
-    this._lowSafe = null;
+    this._barBumped = false;
+    this._falseStart = false;
     /** The holo cover standing in the sim hall: [row, col] cells. */
     this._cover = [];
     /** Lift B's doors: wanted open, and open now. */
@@ -1865,6 +2000,8 @@ export class TutorialSystem {
   initLevel() {
     const g = this.game;
     g.map = structuredClone(TUTORIAL_MAP);
+    // The training hall's bars and tunnel: only low gets under (_updateBars).
+    g.map.lowCells = LOW_CELLS;
     g.world = null;
     g.player.x = TUTORIAL_MAP.playerStart.x;
     g.player.y = TUTORIAL_MAP.playerStart.y;
@@ -2304,16 +2441,17 @@ export class TutorialSystem {
       g.state = GameState.PLAYING;
       g.lockPointer?.();
     };
-    // Dressed, the cadet gets a look at themself: the creator, pre-filled
-    // with the saved agent, then back to the locker room.
-    const fitting = () => {
-      g.unlockPointer?.();
-      g.creatorCategory = 0;
-      g._creatorSaveCallback = done;
-      g.state = GameState.CHARACTER_CREATE;
+    // The cadet makes the suit theirs first (the creator, pre-filled with the
+    // saved agent), then puts it on (the suit-up film), and ARIA comes
+    // online after, in the locker room.
+    const putOn = () => {
+      if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", done);
+      else done();
     };
-    if (g.hasCutsceneScript?.("suit_up")) g.startCutscene("suit_up", fitting);
-    else fitting();
+    g.unlockPointer?.();
+    g.creatorCategory = 0;
+    g._creatorSaveCallback = putOn;
+    g.state = GameState.CHARACTER_CREATE;
     return true;
   }
 
@@ -2579,8 +2717,9 @@ export class TutorialSystem {
       g.entities.push(gate);
       return gate;
     });
-    // Until the start line, the clock holds (update()).
-    this.course = { gate: from, gates, held: from === 0 };
+    // Until Vale's count on the start line runs out, the clock holds
+    // (update()). `count`: seconds left of it, null until it starts.
+    this.course = { gate: from, gates, held: from === 0, count: null };
   }
 
   /** The run is over: its gates come down. */
@@ -2600,11 +2739,13 @@ export class TutorialSystem {
     const p = g.player;
     const gate = RUN_GATES[c.gate];
     g.objectiveWaypoint = gate;
+    let on = p.x >= gate.x0 && p.x < gate.x1 && Math.abs(p.y - gate.y) < RUN_GATE_DY;
+    if (c.gate === 0 && !this._countIn(g, on)) on = false;
     c.gates.forEach((prop, i) => {
       prop.gate.state = i < c.gate ? "done" : i === c.gate ? "next" : "ahead";
-      prop.gate.label = i === RUN_GATES.length - 1 && i >= c.gate ? "END" : undefined;
+      prop.gate.label = i === RUN_GATES.length - 1 && i >= c.gate ? "END" : i === 0 && c.gate === 0 && c.count != null ? String(Math.ceil(c.count)) : undefined;
     });
-    if (p.x >= gate.x0 && p.x < gate.x1 && Math.abs(p.y - gate.y) < RUN_GATE_DY) {
+    if (on) {
       g.audio.menuConfirm?.();
       if (c.gate === 0) {
         c.held = false;
@@ -2616,38 +2757,73 @@ export class TutorialSystem {
     return false;
   }
 
+  /**
+   * The start line: Vale counts you in once you are on it and she has said
+   * her piece (this step's lines: other chatter doesn't hold it), a tick a
+   * second. Step off and the count starts over. True on
+   * the frame the count runs out: go.
+   */
+  _countIn(g, on) {
+    const c = this.course;
+    if (!on) {
+      if (c.count != null && !this._falseStart) {
+        this._falseStart = true;
+        this.say([["VALE", "Back on the line. Wait for it.", "calm"]]);
+      }
+      c.count = null;
+      return false;
+    }
+    if (c.count == null) {
+      if (!this.stepLinesDone()) return false;
+      c.count = RUN_COUNTDOWN;
+      g.audio.menuNav?.();
+      return false;
+    }
+    const was = Math.ceil(c.count);
+    c.count -= g.deltaTime || 0;
+    if (c.count <= 0) return true;
+    if (Math.ceil(c.count) !== was) g.audio.menuNav?.();
+    return false;
+  }
+
   /** The run's line on the card: the gate, and the clock. */
   courseText() {
     const c = this.course;
     const time = (this.cert.run?.clock ?? 0).toFixed(1);
     if (!c) return `${time} s`;
-    if (c.held) return "TO THE START LINE · TOP OF LANE ONE";
+    if (c.held) {
+      if (c.count != null) return `ON YOUR MARK · ${Math.ceil(c.count)}`;
+      const s = RUN_GATES[0];
+      const p = this.game.player;
+      const on = p.x >= s.x0 && p.x < s.x1 && Math.abs(p.y - s.y) < RUN_GATE_DY;
+      return on ? "ON THE LINE · VALE COUNTS YOU IN" : "TO THE START LINE · TOP OF LANE ONE";
+    }
     const n = Math.min(c.gate, RUN_GATES.length - 1);
     return `GATE ${n} / ${RUN_GATES.length - 1} · ${time} s · PAR ${PROLOGUE_TRIALS.find((tr) => tr.id === "mobility").par} s`;
   }
 
   /**
    * The training hall's bars and tunnel: only low gets under them (sliding,
-   * or crouched). Standing in one, you are back where you last were clear,
-   * or low: stand up in the tunnel and you stay put until you crouch again.
+   * or crouched). They are the map's lowCells, which the player's movement
+   * honours (src/systems/player-update.js): standing, a bar stops you like a
+   * wall; once under, you stay low until you are out, so a slide that runs
+   * out under a bar, or crouch let go in the tunnel, leaves you crouch-walking
+   * rather than pinned where you stood up. Here: a bump the first frame you
+   * walk into one upright, and Vale's word the first time.
    */
   _updateBars(g) {
     const p = g.player;
-    const under = LOW_CELLS.has(`${Math.floor(p.x)},${Math.floor(p.y)}`);
-    const low = p.isSliding || p.isCrouching || p.crouchBlend > 0.6;
-    if (!under || low) {
-      this._lowSafe = { x: p.x, y: p.y };
-      return;
+    const bumped = !!p.lowBlocked;
+    p.lowBlocked = false;
+    if (bumped && !this._barBumped) {
+      g.screenShake = Math.max(g.screenShake || 0, 1.5);
+      g.audio.menuBack?.();
+      if (!this._barWarned) {
+        this._barWarned = true;
+        this.say([["VALE", "Under it, not through it. Slide, or crouch and walk.", "warm"]]);
+      }
     }
-    if (!this._lowSafe) return;
-    p.x = this._lowSafe.x;
-    p.y = this._lowSafe.y;
-    g.screenShake = Math.max(g.screenShake || 0, 1.5);
-    g.audio.menuBack?.();
-    if (!this._barWarned) {
-      this._barWarned = true;
-      this.say([["VALE", "Under it, not through it. Slide, or crouch and walk.", "warm"]]);
-    }
+    this._barBumped = bumped;
   }
 
   /**
@@ -2770,14 +2946,21 @@ export class TutorialSystem {
     // line about the range is no use in the gym (see _updateScript). A
     // `keep` line (the sheet, the calibration's oddities) is never stale.
     // `first`: someone in front of you, ahead of the queue (not over the line being said).
-    const queued = lines.map((line) => ({ line, step: keep ? null : this.step }));
+    const queued = lines.map((line) => ({ line, step: keep ? null : this.step, from: this.step }));
     if (first) this.script.unshift(...queued);
     else this.script.push(...queued);
   }
 
+  /** Whether the current step's own lines have all been said (other chatter aside). */
+  stepLinesDone() {
+    // As in scriptIdle, a line waiting for you to come within earshot holds nothing up.
+    return !this.script.some((q) => q.step === this.step && this._audible(q.line[0])) && !(this._ourLine && this._ourLineStep === this.step);
+  }
+
   /** Whether every queued line has been said and the last has finished. */
   scriptIdle() {
-    return this.script.length === 0 && !this._ourLine;
+    // A line waiting for you to come within earshot holds nothing up.
+    return !this._ourLine && this.script.every((s) => !this._audible(s.line[0]));
   }
 
   _updateScript(dt) {
@@ -2794,9 +2977,18 @@ export class TutorialSystem {
     // play, not two places in it.)
     const recent = this._recentSteps ?? [];
     const stale = (s) => s !== null && s !== this.step && !recent.includes(s);
-    while (this.script.length && (stale(this.script[0].step) || !this._audible(this.script[0].line[0]))) this.script.shift();
+    // A `keep` line is never stale, except one still waiting on someone you
+    // walked away from: once its step is long gone, it would only play out of context.
+    this.script = this.script.filter((s) => !stale(s.step) && !(s.step === null && stale(s.from) && !this._audible(s.line[0])));
     if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
-    const [speaker, text, emotion, opts] = this.script.shift().line;
+    // Someone out of earshot keeps their line until you are back in it (or
+    // it goes stale); whoever you can hear goes on meanwhile. Dropping it
+    // lost whole briefings: Orr's walk, Lin's calls across the sim hall.
+    const at = this.script.findIndex((s) => this._audible(s.line[0]));
+    if (at < 0) return;
+    const [next] = this.script.splice(at, 1);
+    this._ourLineStep = next.step;
+    const [speaker, text, emotion, opts] = next.line;
     const style = SPEAKER_STYLE[speaker] ?? SPEAKER_STYLE.ARIA;
     const radio = style.radioVoice && (opts?.radio || !this.supPresent);
     const id = {};
@@ -2818,7 +3010,7 @@ export class TutorialSystem {
   /**
    * Whether you can hear R&D's people from where you are: they talk in
    * person, with no suit channel, so a line of theirs you have walked away
-   * from (out of their room, and out of earshot) goes unsaid.
+   * from (out of their room, and out of earshot) waits for you to come back.
    */
   _audible(speaker) {
     const id = EARSHOT_OF[speaker];
@@ -2826,6 +3018,7 @@ export class TutorialSystem {
     if (!n?.active) return true;
     const p = this.game.player;
     if (Math.hypot(n.x - p.x, n.y - p.y) < EARSHOT) return true;
+    if (ROOM_OF[id] && inArea(p, ROOM_OF[id])) return true;
     return Object.keys(AREAS).some((a) => inArea(p, a) && inArea(n, a));
   }
 

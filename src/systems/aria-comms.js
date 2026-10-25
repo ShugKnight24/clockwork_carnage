@@ -241,6 +241,9 @@ export class AriaCommsSystem {
 
   queueMessage(category, arenaRound) {
     if (!this.enabled) return;
+    // The prologue writes every word she says (js/tutorial-system.js): her
+    // stock chatter there only cut into the story and held up instructions.
+    if (this.game?.mode === "tutorial") return;
     const pool = ARIA_COMMS[category];
     if (!pool || pool.length === 0) return;
     if (!this._allowChatter(category)) return;
@@ -328,6 +331,8 @@ export class AriaCommsSystem {
   }
 
   triggerOnce(key, category, arenaRound) {
+    // Muted in the prologue (queueMessage): don't spend the one-shot there.
+    if (this.game?.mode === "tutorial") return;
     if (this.triggered[key]) return;
     this.triggered[key] = true;
     this.queueMessage(category, arenaRound);

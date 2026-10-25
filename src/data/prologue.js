@@ -393,12 +393,12 @@ export const PROLOGUE_STEPS = [
     title: "SPRINT — LANE ONE",
     color: "#ff44ff",
     hint: {
-      key: (k) => `Start line, top of lane one. Hold ${k("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
-      touch: "Start line, top of lane one. Tap RUN: the bar won't last the straight. Ease off before it's empty and it comes back.",
-      pad: (b) => `Start line, top of lane one. Hold ${b("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
+      key: (k) => `Stand on the start line, top of lane one: Vale counts you in. On "Go", hold ${k("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
+      touch: "Stand on the start line, top of lane one: Vale counts you in. On \"Go\", tap RUN: the bar won't last the straight. Ease off before it's empty and it comes back.",
+      pad: (b) => `Stand on the start line, top of lane one: Vale counts you in. On "Go", hold ${b("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
     },
     lines: [
-      [VALE, "That's the warm-up. Lane one, on the line. Clock starts when you cross it.", "happy"],
+      [VALE, "That's the warm-up. Take a breath. Lane one, on the line, and I'll count you in.", "happy"],
       [ARIA, "Long straight. Don't spend it all at once.", "warm"],
     ],
   },
@@ -548,8 +548,8 @@ export const PROLOGUE_STEPS = [
     hint: "Walk the Supervisor back to Lift B, in the sim hall.",
     lines: [
       [SUP, "Better. Servos do the walking.", "calm"],
-      [SUP, "If the lift won't come back up for you, my office has the override. Code's on the desk.", "calm"],
-      [ARIA, "He's going down there. You know that, right?", "worried"],
+      [SUP, "Lift B. We go down, we bring my people up.", "calm"],
+      [ARIA, "We. He said we.", "worried"],
     ],
   },
   {
@@ -557,16 +557,15 @@ export const PROLOGUE_STEPS = [
     beat: 7,
     title: "⚡ ALERT — INTRUSION DETECTED",
     color: "#ff2244",
-    hint: "Something has gone very wrong. Listen.",
-    // The logic plays these when the klaxon goes, and the beat's checkpoint
-    // is the fight after it.
+    hint: "The Supervisor is taking Lift B down. Go with him.",
+    // The logic plays these when the klaxon goes, then his refusal at the
+    // car (js/tutorial-system.js ALARM_REFUSAL); the beat's checkpoint is
+    // the fight after it.
     defer: true,
     checkpoint: false,
     lines: [
-      [SUP, "All units, all units: breach, sim hall, Lift B. It came up the shaft from the Engine level.", "afraid"],
-      [SUP, "Cadet, you stay here. That's an order. Those are my people down there.", "urgent"],
-      [SUP, "Breach, every sector, they're already insi—", "afraid", { radio: true }],
-      [ARIA, "Lost him. Lost the whole network. Whatever came up that shaft, more will follow. His office, {AGENT}. The override. Move.", "urgent"],
+      [SUP, "All units, all units: breach on the Engine level. It's coming up the shaft.", "afraid"],
+      [SUP, "Cadet, with me. Lift B, now.", "urgent"],
     ],
   },
 
@@ -582,7 +581,7 @@ export const PROLOGUE_STEPS = [
       pad: (b) => `These ones are real. Push into a wall or a low block and press ${b("dash")} to take cover, aim to pop out and fire. The red arc shows where you're hit from.`,
     },
     lines: [
-      [ARIA, "Watch the air. Where it cracks and glows, something's coming through.", "urgent"],
+      [ARIA, "Tears, in the hall. Between us and the lift. Watch the air: where it cracks and glows, something's coming through.", "urgent"],
       [ARIA, "They pause before they fire. That glint and whine is your cue to duck.", "urgent"],
     ],
     // How it reached this floor: up from the Engine level, a floor at a time.
