@@ -170,7 +170,7 @@ const ALARM_SHOVE_SPEED = 5.5;
 const ALARM_SHOVE_TIME = 0.3;
 const ALARM_REFUSAL = [
   ["SUPERVISOR", "No. Not you.", "urgent"],
-  ["SUPERVISOR", "You've had that suit four hours, Cadet. You passed drills. What's down there isn't a drill, and you're not ready for it.", "urgent"],
+  ["SUPERVISOR", "You've had that suit since half six, Cadet. You passed drills. What's down there isn't a drill, and you're not ready for it.", "urgent"],
   ["SUPERVISOR", "Hold this floor. That's an order.", "urgent"],
   ["ARIA", "He's keyed the car to his badge. I can't call it back.", "afraid"],
 ];
@@ -924,7 +924,7 @@ const LOGIC = {
         const before = t.script.some((q) => q.line[0] !== "DR. ORR" && q.line[0] !== "ARIA") || (t._ourLine && g.ariaComms?.message?.speaker !== "DR. ORR");
         if (!before) c.waited += g.deltaTime || 0;
         if (g.ariaComms?.message?.speaker === "DR. ORR" || c.waited > ORR_WAIT_MAX) c.go = true;
-        return inArea(p, "rnd");
+        return false;
       }
       // Then she walks with you: ahead of you and out of earshot, she stops
       // and waits; caught up, she goes on.
@@ -945,7 +945,9 @@ const LOGIC = {
         else t.toStation(g, "orr");
         c.rest = null;
       }
-      return inArea(p, "rnd");
+      // Into the bay together: run ahead and the rig waits for her, rather
+      // than her turning up at it (calibrate puts her there unseen).
+      return inArea(p, "rnd") && (inArea(orr, "rnd") || Math.hypot(orr.x - p.x, orr.y - p.y) < 2.5);
     },
   },
 
