@@ -361,7 +361,146 @@ function paintRack(ctx, p, r) {
   }
 }
 
+/**
+ * The lab's safety board: the hazard diamonds for what is in here (laser,
+ * cryogen, high voltage), the PPE pictograms, the permit sheet on its clip.
+ */
+function paintNotice(ctx, p, r) {
+  labWall(ctx, p, r);
+  plate(ctx, 36, 74, T - 72, 236, p, { tones: STEEL, bevel: 4, ink: 2 });
+  plate(ctx, 46, 84, T - 92, 216, p, { tones: ["#f6f8f8", "#eaeeee", "#cad0d0"], bevel: 2, ink: 1.5, spec: false });
+  plate(ctx, 46, 84, T - 92, 36, p, { tones: ["#e8c23a", "#c8a020", "#7a6010"], bevel: 2, ink: 1.5 });
+  letter(ctx, "CAUTION · LAB HAZARDS", T / 2, 102, 18, "#1a1a1a", 900);
+  // Three warning triangles, each on its own plate so the bake keeps them.
+  const tri = (x, label, glyph) => {
+    plate(ctx, x - 52, 132, 104, 112, p, { tones: ["#f6f8f8", "#eaeeee", "#cad0d0"], bevel: 3, ink: 1.5 });
+    ctx.fillStyle = "#1a1a1a";
+    ctx.beginPath();
+    ctx.moveTo(x, 142); ctx.lineTo(x + 44, 214); ctx.lineTo(x - 44, 214);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#e8c23a";
+    ctx.beginPath();
+    ctx.moveTo(x, 154); ctx.lineTo(x + 34, 208); ctx.lineTo(x - 34, 208);
+    ctx.closePath();
+    ctx.fill();
+    letter(ctx, glyph, x, 190, 26, "#1a1a1a", 900);
+    letter(ctx, label, x, 230, 11, "#1a1c20", 900);
+  };
+  tri(T - 112, "LASER", "✶");
+  tri(T / 2, "CRYOGEN", "❄");
+  tri(112, "HIGH VOLTAGE", "⚡");
+  // PPE row: the blue mandatory roundels.
+  [["EYES", T - 150], ["GLOVES", T / 2], ["COAT", 150]].forEach(([t, x]) => {
+    ctx.fillStyle = "#1f5fbf";
+    ctx.beginPath();
+    ctx.arc(x, 270, 18, 0, Math.PI * 2);
+    ctx.fill();
+    letter(ctx, t, x, 270, 9, "#ffffff", 900);
+  });
+  // Permit sheet, clipped below the board.
+  plate(ctx, T / 2 - 60, 318, 120, 4, p, { tones: STEEL, bevel: 1, ink: 1 });
+  ctx.fillStyle = "#f4f2ea";
+  ctx.fillRect(T / 2 - 44, 322, 88, 6);
+  led(ctx, 60, 88, 4, "#ff3a2a");
+}
+
+/**
+ * The D-series on a blueprint: front and side elevations in white line on
+ * blue, the anchor module called out in amber, Orr's revision block.
+ */
+function paintSchematic(ctx, p, r) {
+  labWall(ctx, p, r);
+  plate(ctx, 22, 70, T - 44, 300, p, { tones: STEEL, bevel: 4, ink: 2 });
+  plate(ctx, 32, 80, T - 64, 280, p, { tones: ["#1f4a8a", "#1a3f78", "#11305e"], bevel: 2, ink: 1.5, spec: false });
+  onScreen(ctx, () => {
+    // Grid.
+    ctx.strokeStyle = "rgba(200,225,255,0.14)";
+    ctx.lineWidth = 1;
+    for (let x = 40; x < T - 32; x += 20) { ctx.beginPath(); ctx.moveTo(x, 84); ctx.lineTo(x, 356); ctx.stroke(); }
+    for (let y = 92; y < 356; y += 20) { ctx.beginPath(); ctx.moveTo(36, y); ctx.lineTo(T - 36, y); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(235,245,255,0.9)";
+    ctx.lineWidth = 2;
+    // Front elevation.
+    const fig = (x, s, side) => {
+      ctx.strokeRect(x - s * 0.3, 112, s * 0.6, s * 0.5);
+      ctx.strokeRect(x - (side ? s * 0.35 : s * 0.6), 170, side ? s * 0.7 : s * 1.2, s * 1.0);
+      if (!side) {
+        ctx.strokeRect(x - s * 0.95, 172, s * 0.3, s * 0.9);
+        ctx.strokeRect(x + s * 0.65, 172, s * 0.3, s * 0.9);
+      } else {
+        ctx.strokeRect(x - s * 0.18, 176, s * 0.36, s * 0.8);
+        ctx.strokeRect(x + s * 0.35, 182, s * 0.18, s * 0.5);
+      }
+      ctx.strokeRect(x - s * 0.5, 170 + s * 1.04, s * 0.42, s * 1.0);
+      if (!side) ctx.strokeRect(x + s * 0.08, 170 + s * 1.04, s * 0.42, s * 1.0);
+    };
+    fig(150, 70, false);
+    fig(330, 70, true);
+    // Dimension line.
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, 112); ctx.lineTo(60, 315); ctx.stroke();
+    text(ctx, "2.14 M", 74, 214, 11, "rgba(235,245,255,0.9)", 800, "left");
+    // The anchor module, called out.
+    ctx.strokeStyle = AMBER;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(150, 205, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(166, 196); ctx.lineTo(236, 130); ctx.lineTo(300, 130); ctx.stroke();
+    text(ctx, "ANCHOR MODULE", 304, 122, 12, AMBER, 900, "left");
+    text(ctx, "Δτ ISOLATION · REV C", 304, 140, 10, AMBER, 800, "left");
+    // Title block.
+    ctx.strokeStyle = "rgba(235,245,255,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(T - 196, 318, 160, 36);
+    text(ctx, "D-SERIES · GA", T - 116, 330, 12, "#ffffff", 900);
+    text(ctx, "DWG 06-47 · N. ORR", T - 116, 346, 9, "rgba(235,245,255,0.85)", 800);
+  });
+  for (const [x, y] of [[38, 86], [T - 38, 86], [38, 354], [T - 38, 354]]) rivet(ctx, x, y, 4, p);
+}
+
+/**
+ * Gas cylinders chained to the wall in their rack, the regulators and the
+ * lines up into the cable tray: nitrogen for the cryo, argon for the welder.
+ */
+function paintGas(ctx, p, r) {
+  labWall(ctx, p, r);
+  const cyl = [[110, "#2a6a3a", "N2"], [T / 2, "#3a3e44", "AR"], [T - 110, "#2a6a3a", "N2"]];
+  for (const [x, c, label] of cyl) {
+    // The line up to the tray.
+    ctx.fillStyle = "#9aa2ac";
+    ctx.fillRect(x - 3, 24, 6, 78);
+    ctx.fillStyle = lin(ctx, x - 44, 0, x + 44, 0, [[0, "#0e1013"], [0.3, c], [0.55, "#f4f6f8"], [0.62, c], [1, "#0e1013"]]);
+    ctx.beginPath();
+    ctx.roundRect(x - 44, 132, 88, 330, [40, 40, 6, 6]);
+    ctx.fill();
+    raise(x - 44, 132, 88, 330, 30);
+    // Neck, valve and regulator gauge.
+    ctx.fillStyle = "#c8ced6";
+    ctx.fillRect(x - 12, 104, 24, 30);
+    plate(ctx, x - 26, 92, 52, 18, p, { tones: STEEL, bevel: 2, ink: 1.5 });
+    ctx.fillStyle = "#1a1c20";
+    ctx.beginPath(); ctx.arc(x + 30, 112, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f4f6f8";
+    ctx.beginPath(); ctx.arc(x + 30, 112, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#c22a1e"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + 30, 112); ctx.lineTo(x + 36, 104); ctx.stroke();
+    // Collar label on a plate, so it survives the bake.
+    plate(ctx, x - 36, 196, 72, 40, p, { tones: ["#f4f2ea", "#e2e0d8", "#b8b6ae"], bevel: 2, ink: 1.5 });
+    letter(ctx, label, x, 216, 20, "#1a1c20", 900);
+  }
+  // The restraint chain and the rack's rail.
+  plate(ctx, 30, 270, T - 60, 16, p, { tones: STEEL, bevel: 2, ink: 1.5 });
+  ctx.strokeStyle = "#e8c23a";
+  ctx.lineWidth = 4;
+  for (let x = 36; x < T - 36; x += 14) {
+    ctx.beginPath(); ctx.ellipse(x, 300, 7, 4, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
 export const PAINTERS = {
+  [W.NOTICE]: paintNotice,
+  [W.SCHEMATIC]: paintSchematic,
+  [W.GAS]: paintGas,
   [W.FRIDGE]: paintFridge,
   [W.CLEANROOM]: paintCleanroom,
   [W.BIOMON]: paintBiomon,

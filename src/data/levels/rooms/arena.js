@@ -35,6 +35,8 @@ export const ARENA_WALLS = {
   /** Lin's control booth (`booth`, below): its desk, a low wall (heightMap WAIST), and the screens behind it. */
   BOOTH_DESK: 157,
   BOOTH_CONSOLE: 158,
+  /** The booth's middle screen: the sim hall's cameras, live. */
+  BOOTH_FEED: 173,
 };
 
 /**
@@ -125,7 +127,7 @@ export const BOOTH_AT = { x: 21.5, y: 12.6 };
 export const BOOTH_FRONT = { x: 21.5, y: 10.3 };
 
 export const booth = {
-  ownWalls: [W.BOOTH_DESK, W.BOOTH_CONSOLE],
+  ownWalls: [W.BOOTH_DESK, W.BOOTH_CONSOLE, W.BOOTH_FEED],
   lights: [{ room: "booth", x: 21.5, y: 12.8, color: [120, 230, 255], radius: 3, intensity: 0.6 }],
   boxes: { booth: { x0: 18, y0: 11, x1: 24, y1: 14 } },
   props: [{ x: 23, y: 13, type: "chair" }],
@@ -134,6 +136,7 @@ export const booth = {
     carve(11, 19, 13, 23);
     lowWall(g, hm, 11, 20, 11, 23, LAYER.WAIST, W.BOOTH_DESK);
     for (let c = 19; c <= 23; c++) g[14][c] = W.BOOTH_CONSOLE;
+    g[14][21] = W.BOOTH_FEED;
     for (const r of [12, 13]) {
       g[r][18] = W.GRID;
       g[r][24] = W.GRID;

@@ -39,6 +39,10 @@ export const RND_WALLS = {
   /** The cadet's live readouts: heart, breath, the neural match. */
   BIOMON: 155,
   RACK: 156,
+  /** The lab's hazard board, the D-series blueprint, the gas cylinders. */
+  NOTICE: 170,
+  SCHEMATIC: 171,
+  GAS: 172,
 };
 const W = RND_WALLS;
 
@@ -118,6 +122,14 @@ export const room = {
     // Two of the rig's consoles read the cadet: the body, then the mind.
     g[14][69] = W.BIOMON;
     g[14][70] = W.BIOMON;
+    // The plain runs between: the safety board by each door, the blueprint
+    // over the benches, the gas rack in the corners nearest the cleanroom.
+    g[1][67] = W.NOTICE;
+    g[14][78] = W.NOTICE;
+    g[1][71] = W.SCHEMATIC;
+    g[14][62] = W.SCHEMATIC;
+    g[1][79] = W.GAS;
+    g[13][80] = W.GAS;
     // The workbenches, waist-high islands down the west half, and the
     // rig's console island south of it.
     lowWall(g, hm, 4, 64, 5, 67, LAYER.WAIST, W.BENCH);

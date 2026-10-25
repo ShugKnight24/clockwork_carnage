@@ -552,7 +552,71 @@ function paintBoothConsole(ctx, p, r) {
   for (let i = 0; i < 12; i++) led(ctx, 48 + i * 36, 236, 4, i % 4 ? CYAN : AMBER);
 }
 
+/**
+ * The booth's middle screen, one big panel over the console: the sim hall's
+ * four cameras live, a cadet's outline in one, the REC tally lit, the run's
+ * clock under them.
+ */
+function paintBoothFeed(ctx, p, r) {
+  ctx.fillStyle = GUN[1];
+  ctx.fillRect(0, 0, T, T);
+  frameBands(ctx, p);
+  plate(ctx, 22, 46, T - 44, 236, p, { tones: DARK, bevel: 4, ink: 3 });
+  const cams = [[40, 62], [262, 62], [40, 168], [262, 168]];
+  cams.forEach(([x, y], i) => {
+    const w = 210, h = 98;
+    ctx.fillStyle = lin(ctx, 0, y, 0, y + h, [[0, "#0a2430"], [1, "#06161e"]]);
+    ctx.fillRect(x, y, w, h);
+    sink(x, y, w, h, 10);
+    // The hall in perspective: floor grid to a vanishing point, a cover block.
+    ctx.strokeStyle = "rgba(70,240,255,0.35)";
+    ctx.lineWidth = 1;
+    const vx = x + w * (0.35 + 0.3 * ((i * 7) % 3) / 2), vy = y + h * 0.38;
+    for (let k = -4; k <= 4; k++) {
+      ctx.beginPath();
+      ctx.moveTo(vx, vy);
+      ctx.lineTo(x + w / 2 + k * 40, y + h);
+      ctx.stroke();
+    }
+    for (let k = 1; k < 4; k++) {
+      const yy = vy + (y + h - vy) * (k / 4) ** 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, yy);
+      ctx.lineTo(x + w, yy);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,176,56,0.7)";
+    ctx.fillRect(x + 30 + i * 30, y + h * 0.55, 34, 16);
+    if (i === 1) {
+      // The cadet, on camera two.
+      ctx.fillStyle = "rgba(200,250,255,0.85)";
+      ctx.beginPath();
+      ctx.arc(x + 120, y + 44, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(x + 112, y + 52, 16, 28);
+    }
+    glow(x, y, w, h, 0.7, 6);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.fillRect(x, y, w, h * 0.3);
+    // Camera number tag.
+    plate(ctx, x + w - 46, y + 4, 42, 18, p, { tones: DARK, bevel: 1, ink: 1 });
+    letter(ctx, `CAM ${i + 1}`, x + w - 25, y + 13, 10, CYAN, 900);
+  });
+  // The tally and the run clock under the screens.
+  plate(ctx, 40, 290, T - 80, 50, p, { tones: GUN, bevel: 3, ink: 2 });
+  lightStrip(ctx, T - 130, 302, 70, 26, RED, { blur: 16 });
+  letter(ctx, "● REC", T - 95, 315, 14, "#2a0806", 900);
+  plate(ctx, 60, 298, 220, 34, p, { tones: DARK, bevel: 2, ink: 1.5, recess: true });
+  letter(ctx, "SIM 04 · 00:00.0", 170, 315, 16, "#3aff6a", 900);
+  glow(62, 300, 216, 30, 0.6, 4);
+  // The console under it, as its neighbours have.
+  plate(ctx, 30, 352, T - 60, 90, p, { tones: GUN, bevel: 4, ink: 2 });
+  for (let i = 0; i < 8; i++) plate(ctx, 52 + i * 52, 370, 40, 26, p, { tones: STEEL, bevel: 2, ink: 1.5 });
+  for (let i = 0; i < 12; i++) led(ctx, 48 + i * 36, 420, 4, i % 4 ? CYAN : AMBER);
+}
+
 export const PAINTERS = {
+  [W.BOOTH_FEED]: paintBoothFeed,
   [W.BOOTH_DESK]: paintBoothDesk,
   [W.BOOTH_CONSOLE]: paintBoothConsole,
   [W.HOLO_BLOCK]: paintHoloBlock,

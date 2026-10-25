@@ -15,6 +15,8 @@ export const INTERVIEW_WALLS = {
   RECORDER: 230,
   NOTICE: 231,
   DOOR_PLATE: 232,
+  /** Across from the glass: the clock the suspect watches, the camera that watches him. */
+  CLOCK_CAM: 174,
 };
 const W = INTERVIEW_WALLS;
 
@@ -57,5 +59,7 @@ export const room = {
     g[58][50] = W.RECORDER;
     g[52][45] = W.DOOR_PLATE;
     g[52][55] = W.DOOR_PLATE;
+    g[55][42] = W.CLOCK_CAM;
+    g[55][56] = W.CLOCK_CAM;
   },
 };

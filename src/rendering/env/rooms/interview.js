@@ -10,7 +10,7 @@
 import { INTERVIEW_WALLS as W } from "../../../data/levels/rooms/interview.js";
 import { letter } from "../locker-art.js";
 import { T, lin, plate, led, lightStrip, sink } from "../paint.js";
-import { bust, lit } from "./east-kit.js";
+import { bust, lit, clockFace } from "./east-kit.js";
 
 const PANEL = ["#6a6e76", "#5a5e66", "#42464e"];
 const STEEL = ["#9aa2ac", "#6e767f", "#3e444c"];
@@ -112,7 +112,44 @@ function paintDoorPlate(ctx, p, r) {
   led(ctx, T / 2, 210, 8, "#ff3a2a");
 }
 
+/**
+ * Across from the glass: the wall clock the suspect watches (twenty to
+ * seven), the dome camera over it with its tally lit, and the rights card
+ * screwed to the panel beside the table.
+ */
+function paintClockCam(ctx, p, r) {
+  acoustic(ctx, p, r);
+  // Dome camera on its bracket, high in the corner (on screen, the right).
+  plate(ctx, 40, 24, 110, 20, p, { tones: STEEL, bevel: 2, ink: 1.5 });
+  ctx.fillStyle = lin(ctx, 0, 44, 0, 100, [[0, "#3a3e44"], [1, "#0e1013"]]);
+  ctx.beginPath();
+  ctx.arc(95, 44, 46, 0, Math.PI);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(80, 60, 14, 8, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  led(ctx, 130, 54, 4, "#ff3a2a");
+  // The clock: on a panel of its own, so its face reads in Realistic.
+  plate(ctx, T / 2 - 90, 70, 180, 180, p, { tones: DARK, bevel: 3, ink: 2 });
+  clockFace(ctx, T / 2, 160, 70, 6, 40);
+  // The rights card.
+  plate(ctx, T / 2 - 110, 290, 220, 130, p, { tones: ["#f4f2ea", "#e2e0d8", "#b8b6ae"], bevel: 3, ink: 2 });
+  letter(ctx, "YOUR RIGHTS", T / 2, 312, 16, "#1a1c20", 900);
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = "rgba(30,34,40,0.6)";
+    ctx.fillRect(T / 2 - 90, 334 + i * 13, 180 - ((i * 37) % 60), 3);
+  }
+  for (const x of [T / 2 - 100, T / 2 + 100]) {
+    ctx.fillStyle = "#5a5e66";
+    ctx.beginPath();
+    ctx.arc(x, 300, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 export const PAINTERS = {
+  [W.CLOCK_CAM]: paintClockCam,
   [W.WALL]: paintWall,
   [W.ONE_WAY]: paintOneWay,
   [W.RECORDER]: paintRecorder,

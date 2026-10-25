@@ -105,6 +105,13 @@ for (const [from, to, colour] of [
   [153, 156, { r: 150, g: 160, b: 172 }],
   [157, 158, { r: 40, g: 70, b: 96 }],
   [160, 161, { r: 44, g: 64, b: 104 }],
+  // The second pass on them: the hall's lane headers, distance boards,
+  // pace clocks and first-aid points; R&D's notice, blueprint and gas rack;
+  // the booth's camera feed; the interview rooms' clock and camera.
+  [162, 169, { r: 70, g: 86, b: 104 }],
+  [170, 172, { r: 150, g: 160, b: 172 }],
+  [173, 173, { r: 40, g: 70, b: 96 }],
+  [174, 174, { r: 52, g: 54, b: 62 }],
 ]) {
   for (let id = from; id <= to; id++) WALL_COLORS[id] ??= colour;
 }

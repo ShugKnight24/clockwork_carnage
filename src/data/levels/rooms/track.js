@@ -28,6 +28,18 @@ export const TRACK_WALLS = {
   SIGN: 150,
   /** A lane rail: a low wall, knee-high (heightMap KNEE), so you see across the lanes. */
   RAIL: 151,
+  /** Distance boards down both long walls, from the lanes' north ends. */
+  DIST_10: 162,
+  DIST_20: 163,
+  /** The pace clock: a big sweep hand over sixty seconds. */
+  CLOCK: 164,
+  /** The first-aid point: defibrillator, extinguisher, the drinking fountain. */
+  AID: 165,
+  /** Each lane's header over its north end: number, what it is for. */
+  LANE_1: 166,
+  LANE_2: 167,
+  LANE_3: 168,
+  LANE_4: 169,
 };
 const W = TRACK_WALLS;
 
@@ -56,6 +68,9 @@ export const room = {
     { room: "track", x: 10.5, y: 55.5, color: LED, radius: 5, intensity: 0.6 },
     { room: "track", x: 10.5, y: 72.5, color: LED, radius: 5, intensity: 0.6 },
     { room: "track", x: 15.0, y: 52.5, color: [255, 228, 180], radius: 4.5, intensity: 0.55 },
+    // Washers down lane 4, so the east wall and its boards are not lost.
+    { room: "track", x: 15.5, y: 64.5, color: LED, radius: 5, intensity: 0.6 },
+    { room: "track", x: 15.5, y: 76.0, color: [255, 228, 180], radius: 4.5, intensity: 0.55 },
     // The pit, lit from inside its foam.
     { room: "track", x: 10.5, y: 64.0, color: [255, 150, 60], radius: 2.6, intensity: 0.5 },
     { room: "trackPassage", x: 1.5, y: 30.5, color: LED, radius: 4, intensity: 0.45 },
@@ -104,11 +119,30 @@ export const room = {
       g[r][0] = W.WALL;
       if (g[r][17] !== 0) g[r][17] = W.WALL;
     }
-    g[49][6] = W.SIGN;
-    g[49][10] = W.BOARD;
-    g[49][14] = W.BOARD;
-    g[80][14] = W.BOARD;
-    g[51][17] = W.SIGN;
+    // Dressing only ever goes on wall: an opening stays open.
+    const dress = (r, c, v) => {
+      if (g[r][c] !== 0) g[r][c] = v;
+    };
+    // North wall, over the lanes' heads: each lane's header, the hall's
+    // sign, the pace clock over the middle rail, the timing board.
+    dress(49, 3, W.LANE_1);
+    dress(49, 4, W.SIGN);
+    dress(49, 6, W.LANE_2);
+    dress(49, 8, W.CLOCK);
+    dress(49, 10, W.LANE_3);
+    dress(49, 12, W.BOARD);
+    dress(49, 15, W.LANE_4);
+    dress(80, 14, W.BOARD);
+    dress(80, 16, W.CLOCK);
+    dress(51, 17, W.SIGN);
+    // Down the long walls: distance boards level with 10 m and 20 m from
+    // the lanes' north ends, and a first-aid point either side.
+    for (const c of [0, 17]) {
+      dress(61, c, W.DIST_10);
+      dress(71, c, W.DIST_20);
+    }
+    dress(66, 17, W.AID);
+    dress(56, 0, W.AID);
     // The rails between the lanes, open at both ends for the turns.
     for (const c of [4, 8, 12]) lowWall(g, hm, 53, c, 76, c, LAYER.KNEE, W.RAIL);
   },
