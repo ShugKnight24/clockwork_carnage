@@ -475,6 +475,9 @@ function comicFlash(ctx, x, y, fk, accent, drawGlow) {
   ctx.restore();
 }
 
+/** True when weapon `id` has a vector viewmodel (decoded or not). */
+export const hasViewmodel = (id) => !!WEAPON_MODELS[id];
+
 /**
  * Draw the modern viewmodel with its own pose, driven by the same bob / sway /
  * kick / recoil inputs as the procedural one plus the eased aim blend.
@@ -483,7 +486,7 @@ function comicFlash(ctx, x, y, fk, accent, drawGlow) {
  *
  * @param {number} alpha   viewmodel visibility (fades out off-gameplay screens)
  * @param {number} blend   aim-down-sights blend, 0 hip … 1 aimed
- * @returns {boolean} false while bitmaps decode or without a DOM (caller draws procedural art)
+ * @returns {boolean} false while bitmaps decode (caller draws nothing, see hasViewmodel) or without a DOM (caller draws procedural art)
  */
 export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 0) {
   // Headless/mock contexts (unit tests, no DOM) keep the procedural model.

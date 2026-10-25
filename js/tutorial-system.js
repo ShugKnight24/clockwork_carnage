@@ -54,6 +54,7 @@ import { hasLineOfSight } from "../src/systems/physics.js";
 import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
+import { warmPropSet } from "../src/rendering/props.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -2160,6 +2161,7 @@ export class TutorialSystem {
   _begin() {
     const g = this.game;
     if (g.hasCutsceneScript("clocking_in")) {
+      this._prewarmStation(g);
       g.startCutscene("clocking_in", () => {
         g.ariaEnabled = true;
         this.initLevel();
@@ -2168,6 +2170,55 @@ export class TutorialSystem {
       g.ariaEnabled = true;
       this.initLevel();
     }
+  }
+
+  /**
+   * Bake the station and decode the locker room's people and props while the
+   * opening scene plays, a few walls per idle moment, then its people. Left
+   * to the first frame in the station, the walls froze it for ~1 s while the
+   * squad stood there in Legacy art. Whatever the scene leaves undone when it
+   * is skipped, the level finishes as before.
+   */
+  _prewarmStation(g) {
+    const r = g.renderer;
+    const ctx = r?.ctx;
+    const viewH = r?.height;
+    if (!r?.prewarmEnv || !ctx || !viewH || getArtStyle() === ART_LEGACY) return;
+    const act = r._actPalette || 1;
+    const level = r._envLevel ?? null;
+    // The rooms in view at the start first, the east wing after.
+    const late = TUTORIAL_MAP.lateWalls ?? [];
+    const walls = [...TUTORIAL_MAP.ownWalls.filter((id) => !late.includes(id)), ...late];
+    const halfHeights = [viewH / 2.4, viewH / 5];
+    // Who the first step shows (the squad, the Supervisor), then the looks
+    // it warms for later (warmNpc), which otherwise decode under play.
+    const people = ["officer", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
+    let built = false;
+    let uploaded = false;
+    const until = performance.now() + 20000;
+    const idle = (fn) =>
+      typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 100 }) : setTimeout(() => fn({ timeRemaining: () => 8 }), 16);
+    const slice = (deadline) => {
+      // The level adopts the env once it starts: painting into it then
+      // would re-upload the wall pass for every wall.
+      if (g.mode !== "tutorial" || g.state === GameState.PLAYING || performance.now() > until) return;
+      if (!built) {
+        r.prewarmEnv(act, level);
+        built = true;
+      } else if (walls.length) {
+        // At least one a slice: an idle callback that timed out has no time left.
+        do r.prewarmEnv(act, level, [walls.shift()]);
+        while (walls.length && deadline.timeRemaining() > 4);
+      } else if (!uploaded) {
+        // Then onto the GPU, a few faces a slice.
+        uploaded = r.prewarmWallPass(act, level, 8);
+        if (uploaded) warmPropSet(viewH / 2);
+      } else if (prefetchEnemyModel(ctx, people[0], halfHeights, undefined, 2)) {
+        people.shift();
+      }
+      if (people.length) idle(slice);
+    };
+    idle(slice);
   }
 
   initLevel() {

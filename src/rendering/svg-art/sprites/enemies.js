@@ -24,8 +24,9 @@
  *                           on the shielded front arc of a frontShield type is
  *                           treated as blocked
  *
- * `prepareEnemySprite` returns null until the bitmaps it needs have decoded, so
- * the renderer can fall back to the procedural sprite for that frame.
+ * `prepareEnemySprite` returns null until the bitmaps it needs have decoded.
+ * The renderer then draws nothing for a type `hasEnemySprite` knows, rather
+ * than flash its procedural Legacy sprite, and the procedural one otherwise.
  */
 
 import { getLayerImage, layerBaked, onRasterRelease } from "../raster.js";
@@ -192,6 +193,9 @@ function modelFor(type, real = isRealisticArt()) {
   }
   return m;
 }
+
+/** True when `type` has vector art in the style showing, decoded or not (never without a DOM, where nothing decodes). */
+export const hasEnemySprite = (type) => typeof Image !== "undefined" && !!modelFor(type);
 
 /**
  * Build (uncached) one enemy's model for the given style. For tests and

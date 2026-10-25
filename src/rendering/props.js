@@ -45,7 +45,11 @@ const PROP_RENDERERS = {
 
 export function drawProp(ctx, entity, screenX, centerY, sprWidth, sprHeight, dist, time, fog) {
   if (fog <= 0) return;
-  if (isModernArt() && drawModernProp(ctx, entity.propType, screenX, centerY, sprWidth, sprHeight, time, fog)) return;
+  if (isModernArt()) {
+    if (drawModernProp(ctx, entity.propType, screenX, centerY, sprWidth, sprHeight, time, fog)) return;
+    // A prop with art draws nothing until it has decoded, not its Legacy model.
+    if (PROP_SPRITES[entity.propType] && typeof Image !== "undefined") return;
+  }
   const fn = PROP_RENDERERS[entity.propType];
   if (fn) fn(ctx, screenX, centerY, sprWidth, sprHeight, dist, time, fog, entity);
 }

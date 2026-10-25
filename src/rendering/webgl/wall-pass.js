@@ -264,37 +264,61 @@ export class WallPass {
   useEnv(env) {
     if (!this.ok) return false;
     if (this.env === env) return !!this.tex;
-    this.env = env;
+    this.prepareEnv(env);
+    return !!this.tex;
+  }
+
+  /**
+   * useEnv `count` walls at a time, ahead of the env's first frame (a
+   * prologue's two hundred faces are ~1200 mip blits, a ~400 ms frame in one
+   * go): call once a frame until true. The env being drawn meanwhile keeps
+   * its own textures; this one takes over once every wall is in.
+   */
+  prepareEnv(env, count = Infinity) {
+    if (!this.ok) return true;
     const gl = this.gl;
-    if (this.tex) gl.deleteTexture(this.tex);
-    if (this.normalTex) gl.deleteTexture(this.normalTex);
-    this.tex = null;
-    this.normalTex = null;
+    let st = this._next;
     // One array layer per wall type the env has, packed: indexed by the raw
     // id, a station's ids (10-120) cost a layer for every unused id below.
     const ids = Object.keys(env.walls).map(Number).sort((a, b) => a - b);
-    const layers = ids.length;
-    this.layerOf = new Int16Array(ids[ids.length - 1] + 1);
-    ids.forEach((id, i) => (this.layerOf[id] = i));
-    for (const id of ids) {
-      const mips = env.walls[id];
-      if (mips.length < LEVELS || mips[0].width !== SIZE || mips[0].height !== SIZE) return false;
+    // Up already, unless walls were added to it since.
+    if (this.env === env && this.layers === ids.length) return true;
+    if (!st || st.env !== env || st.ids.length !== ids.length) {
+      if (st?.tex) gl.deleteTexture(st.tex);
+      st = this._next = { env, ids, left: ids.slice(), tex: null, layerOf: new Int16Array(ids[ids.length - 1] + 1) };
+      ids.forEach((id, i) => (st.layerOf[id] = i));
+      const fits = ids.every((id) => {
+        const mips = env.walls[id];
+        return mips.length >= LEVELS && mips[0].width === SIZE && mips[0].height === SIZE;
+      });
+      if (fits) {
+        st.tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, st.tex);
+        gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, ids.length);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      } else st.left.length = 0;
     }
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, layers);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    this._fill(tex, ids, (id) => env.walls[id], 0, gl.RGBA);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    if (st.left.length) this._fill(st.tex, st.left.splice(0, count), (id) => env.walls[id], 0, gl.RGBA, st.layerOf);
+    if (st.left.length) return false;
+    this._next = null;
+    if (this.tex) gl.deleteTexture(this.tex);
+    if (this.normalTex) gl.deleteTexture(this.normalTex);
+    this.env = env;
+    this.layers = ids.length;
+    this.layerOf = st.layerOf;
+    this.tex = st.tex;
+    this.normalTex = null;
+    // Not the expected 512px chains: the caller draws walls on the Canvas2D path.
+    if (!st.tex) return true;
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, st.tex);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
-    this.tex = tex;
     this.normalTex = ids.every((id) => env.walls[id].normals?.length >= LEVELS)
-      ? this._uploadArray(ids, (id) => env.walls[id].normals, layers)
+      ? this._uploadArray(ids, (id) => env.walls[id].normals, ids.length)
       : null;
     return true;
   }
@@ -330,7 +354,7 @@ export class WallPass {
    * layer, which also writes the RGB565 normals a framebuffer copy from RGBA8
    * may not. Without the blit program it uploads as before.
    */
-  _fill(tex, ids, chainOf, from, format) {
+  _fill(tex, ids, chainOf, from, format, layerOf = this.layerOf) {
     const gl = this.gl;
     if (!this._blitReady()) {
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
@@ -338,7 +362,7 @@ export class WallPass {
         const mips = chainOf(id);
         for (let l = from; l < LEVELS; l++) {
           const s = SIZE >> l;
-          gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, this.layerOf[id], s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
+          gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, layerOf[id], s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
         }
       }
       return;
@@ -355,7 +379,7 @@ export class WallPass {
       for (let l = from; l < LEVELS; l++) {
         const s = SIZE >> l;
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
-        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, this.layerOf[id]);
+        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, layerOf[id]);
         gl.viewport(0, 0, s, s);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
@@ -504,6 +528,7 @@ export class WallPass {
     const gl = this.gl;
     if (this.tex) gl.deleteTexture(this.tex);
     if (this.normalTex) gl.deleteTexture(this.normalTex);
+    if (this._next?.tex) gl.deleteTexture(this._next.tex);
     if (this.buf) gl.deleteBuffer(this.buf);
     if (this.corners) gl.deleteBuffer(this.corners);
     if (this.vao) gl.deleteVertexArray(this.vao);

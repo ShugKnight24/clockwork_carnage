@@ -1,6 +1,6 @@
 import { isModernArt } from "../src/rendering/art-style.js";
 import { isCompactPhone } from "./layout.js";
-import { drawViewmodel } from "../src/rendering/svg-art/viewmodels.js";
+import { drawViewmodel, hasViewmodel } from "../src/rendering/svg-art/viewmodels.js";
 import { getAimBlend } from "../src/systems/aim.js";
 import { GameState } from "../src/types.js";
 
@@ -42,7 +42,12 @@ export function drawWeapon(ctx, w, h, opts) {
   const scoped = opts.wep.scope ? Math.max(0, Math.min(1, (blend - 0.35) / 0.45)) : 0;
   const alpha = viewmodelFade(opts) * (1 - scoped);
   if (alpha <= 0) return;
-  if (isModernArt() && drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+  if (isModernArt()) {
+    if (drawViewmodel(ctx, w, h, opts, alpha, blend)) return;
+    // Still decoding: no gun for a frame or two rather than the Legacy one
+    // (mock contexts in tests have no transform and keep the procedural one).
+    if (hasViewmodel(opts.wep.id) && typeof Image !== "undefined" && typeof ctx.getTransform === "function") return;
+  }
   // Aimed, the procedural model sits over the reticle: look through it.
   const sight = blend > 0.01 && typeof document !== "undefined" && typeof ctx.getTransform === "function";
   if (alpha >= 1) {

@@ -43,10 +43,10 @@ import { buildLampField, sampleLight } from "../src/rendering/lighting.js";
 // quantised ctx.filter strings, so lighting sprites allocates nothing per frame.
 const _litOut = { r: 0, g: 0, b: 0 };
 const _litFilters = new Map();
-import { prepareEnemySprite, drawEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
+import { prepareEnemySprite, drawEnemySprite, hasEnemySprite } from "../src/rendering/svg-art/sprites/enemies.js";
 import { drawFrozenPerson } from "../src/rendering/frozen-look.js";
 import { isFrozen } from "../src/systems/stillness.js";
-import { EYE_Z, playerEyeZ } from "../src/systems/physics.js";
+import { EYE_Z, playerEyeZ, wallHeight } from "../src/systems/physics.js";
 
 // Short-wall records kept per screen column (one per wall the ray crosses).
 const COVER_STRIDE = MAX_COLUMN_HITS;
@@ -313,6 +313,26 @@ export class Renderer {
   }
 
   /**
+   * Upload a prewarmed env's walls to the GPU wall pass ahead of its first
+   * frame, `count` walls a call, once they are all painted (a wall added
+   * later re-uploads). The station's two hundred faces are ~1200 mip blits:
+   * left to the first frame in the station, a ~400 ms stall. Call once a
+   * frame until true.
+   */
+  prewarmWallPass(act, level = null, count = Infinity) {
+    if (!isModernArt() || !this.useWebGL || !this.gpuWalls || !this.glRenderer) return true;
+    const a = act || 1;
+    const lv = level ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    const env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(
+      (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic,
+    );
+    const wp = env && this.glRenderer.wallPass();
+    return !wp || wp.prepareEnv(env, count);
+  }
+
+  /**
    * Hand over an environment bundle built ahead of time (generateModernEnv,
    * with `realistic` set): the next _getModernEnv adopts it when it matches
    * the act, level and finish being drawn, as it would a prewarmEnv's.
@@ -338,19 +358,23 @@ export class Renderer {
     // first frame doesn't wait on them, and go up together.
     const late = map.lateWalls ?? [];
     let added = false;
+    let wing = false;
     try {
       added = ensureEnvWalls(env, late.length ? map._ownWalls.filter((id) => !late.includes(id)) : map._ownWalls, !!env.realistic);
-      if (late.length && !added) added = this._paintLateWalls(env, late, () => nearWalls(map, player, late));
+      if (late.length && !added) added = wing = this._paintLateWalls(env, late, () => nearWalls(map, player, late));
     } catch (err) {
       // A face that will not paint must not fail every frame: those cells
       // draw with the common walls instead.
       console.warn("[renderer] map walls failed to paint", err);
       map._ownWalls = [];
     }
-    if (added) {
-      const wp = this.glRenderer?._wallPass;
-      if (wp) wp.env = null;
-    }
+    const wp = this.glRenderer?._wallPass;
+    // The wing, out of sight, goes up a few faces a frame while the array
+    // without it keeps drawing: re-uploading the whole station in one frame
+    // was a ~700 ms stall.
+    if (wing && wp && !nearWalls(map, player, late)) this._restage = env;
+    else if (added && wp) wp.env = null;
+    if (this._restage === env && (!wp || wp.prepareEnv(env, 16))) this._restage = null;
   }
 
   /**
@@ -372,8 +396,10 @@ export class Renderer {
     const t0 = performance.now();
     // Standing in the wing (an art-style switch rebuilds the env there), the
     // walls in view would draw as nothing while they wait: paint them all now.
-    while (st.left.length && (now || performance.now() - t0 < 6)) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic);
+    while (st.left.length && (now || performance.now() - t0 < 6)) ensureEnvWalls(st.stage, [st.left.shift()], !!env.realistic, false);
     if (st.left.length) return false;
+    // Their cap colours in one go: one wait on the GPU, not one a frame.
+    for (const mips of Object.values(st.stage.walls)) averageColor(mips[mips.length - 1]);
     Object.assign(env.walls, st.stage.walls);
     return true;
   }
@@ -2089,14 +2115,16 @@ export class Renderer {
     // Someone the pulse caught: drained, doubled, echoing, in any style.
     if (enemy.type === "npc" && isFrozen(enemy) && drawFrozenPerson(this, ctx, enemy, screenX, centerY, halfH, dist, time, fog)) return;
 
-    // Modern art: SVG pose sprites. Falls through to the procedural sprite
-    // until the type's bitmaps have decoded.
+    // Modern art: SVG pose sprites. A type with art draws nothing until its
+    // bitmaps have decoded: its procedural Legacy sprite flashed in first,
+    // a different figure standing there. Types without art fall through.
     if (isModernArt()) {
       const frame = prepareEnemySprite(ctx, enemy, halfH, time, this._camRightX, this._camRightY, this._camX, this._camY);
       if (frame) {
         this._drawEnemyModern(ctx, frame, enemy, screenX, centerY, halfW, halfH, dist, time, fog);
         return;
       }
+      if (hasEnemySprite(enemy.enemyType)) return;
     }
 
     // Prefer per-instance palette (set at spawn with slight HSL jitter so
@@ -2345,17 +2373,31 @@ export class Renderer {
 
 }
 
-/** Whether any of `ids` stands within a dozen tiles of the player. */
+/**
+ * Whether any of `ids` faces floor the player can see, within a dozen steps:
+ * a walk over open cells (and over short walls), checking the walls each one
+ * touches. A plain radius counted the track room's walls through the solid
+ * wall behind the locker room, so the prologue's first frames painted the
+ * whole east wing at once (~900 ms) instead of a few a frame.
+ */
 function nearWalls(map, player, ids) {
   if (!player || !map?.grid) return false;
   const R = 12;
-  const px = Math.floor(player.x);
-  const py = Math.floor(player.y);
-  for (let y = Math.max(0, py - R); y <= Math.min(map.grid.length - 1, py + R); y++) {
-    const row = map.grid[y];
-    for (let x = Math.max(0, px - R); x <= Math.min(row.length - 1, px + R); x++) {
-      if (row[x] >= 10 && ids.includes(row[x])) return true;
+  const grid = map.grid;
+  const seen = new Set();
+  let ring = [[Math.floor(player.x), Math.floor(player.y)]];
+  for (let step = 0; step <= R && ring.length; step++) {
+    const next = [];
+    for (const [x, y] of ring) {
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        const v = grid[ny]?.[nx];
+        if (v === undefined || seen.has(ny * 4096 + nx)) continue;
+        seen.add(ny * 4096 + nx);
+        if (v >= 10 && ids.includes(v)) return true;
+        if (wallHeight(map, nx, ny) < 1) next.push([nx, ny]);
+      }
     }
+    ring = next;
   }
   return false;
 }
