@@ -331,9 +331,10 @@ export const ENEMY_TYPES = {
     // Advances behind its shield and bashes; the bash shoves you back (cells).
     ai: "guard",
     shove: 0.9,
-    // Radians/s its shield turns (~65°/s): a run round it at bash range, or
-    // a sprint round it a few cells out, gets behind it.
-    shieldTurnRate: 1.1,
+    // Radians/s its shield turns (~46°/s), after a beat to react once you
+    // leave its front arc (ai.js turnShield): a walk round it at bash range,
+    // or a sprint round it a few cells out, gets behind it.
+    shieldTurnRate: 0.8,
     frontShield: true,
     shieldRegen: true,
     shieldRegenRate: 3,

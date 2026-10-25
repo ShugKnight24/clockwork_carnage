@@ -600,7 +600,7 @@ describe("Chronos in the combat systems", () => {
 
   it("sends the swing at the echo instead of the player", () => {
     const ai = new AISystem();
-    const e = Object.assign(new Enemy(10, 10, "sentinel"), { state: "chase", lastAttackTime: -1e9 });
+    const e = Object.assign(new Enemy(10, 10, "sentinel"), { state: "chase", lastAttackTime: -1e9, angle: 0 });
     const player = { x: 16, y: 10, angle: 0, chronoActive: false };
     const chrono = { echo: { x: 11, y: 10 }, enemyTimeScale: () => 1 };
     let hits = 0;

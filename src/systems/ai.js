@@ -235,6 +235,53 @@ export function shovePlayer(player, angle, dist, map, margin = 0.3) {
 
 /** Radians per second a front-shielded enemy can turn its shield (~100°/s). */
 const SHIELD_TURN_RATE = 1.75;
+/** Radians/s a shield bearer turns while braced after a bash (~20°/s). */
+export const SHIELD_BRACE_TURN_RATE = 0.35;
+/** Seconds (its own time) a shield bearer stays braced after it swings. */
+export const SHIELD_BRACE_SECONDS = 0.8;
+/** Ms of its own time a shield bearer stands before it turns after a target that left its front arc. */
+export const SHIELD_REACT_MS = 450;
+/** Ms of its own time after a hit in its side or back before a shield bearer wheels round. */
+export const FLANK_WINDOW_MS = 1200;
+/** Radians/s it wheels round once that window is up (~140°/s). */
+export const SHIELD_WHEEL_TURN_RATE = 2.4;
+
+/**
+ * Turn a shield bearer's shield toward `want` (radians), as far as it can in
+ * `dt` (its own seconds). It tracks a target inside its front
+ * arc at its def's `shieldTurnRate`; one that slips out of the arc it lets go
+ * for SHIELD_REACT_MS before it follows; after a bash it is braced and turns
+ * at a crawl. A hit in the back (combat.js sets `_flankHit`) gives you
+ * FLANK_WINDOW_MS of free hits, then it wheels round fast until you are in
+ * front of it again, and you have to work round it once more.
+ */
+export function turnShield(e, want, dt, time, target) {
+  const cur = e.angle ?? want;
+  const inArc = !target || inFrontArc(e, target);
+  // Both windows run on its own time (dt), like the turn: a chrono freeze
+  // that stops it also stops them, or it would wheel the instant time ran again.
+  if (inArc) {
+    e._outOfArcT = null;
+    e._flankedAt = null;
+  } else e._outOfArcT = (e._outOfArcT ?? -dt) + dt;
+  // `_flankedAt`: its seconds since the hit in the back that opened the window.
+  if (e._flankHit) {
+    e._flankHit = false;
+    if (!inArc) e._flankedAt ??= 0;
+  } else if (e._flankedAt != null) e._flankedAt += dt;
+  let rate = e.def.shieldTurnRate ?? SHIELD_TURN_RATE;
+  if (e._braceT > 0) {
+    e._braceT = Math.max(0, e._braceT - dt);
+    rate = Math.min(rate, SHIELD_BRACE_TURN_RATE);
+  }
+  if (!inArc && e._outOfArcT * 1000 < SHIELD_REACT_MS) rate = 0;
+  if (e._flankedAt != null && e._flankedAt * 1000 >= FLANK_WINDOW_MS) rate = Math.max(rate, SHIELD_WHEEL_TURN_RATE);
+  let d = want - cur;
+  d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+  const step = rate * dt;
+  e.angle = cur + Math.max(-step, Math.min(step, d));
+  return e.angle;
+}
 
 export class AISystem {
   constructor() {
@@ -482,10 +529,7 @@ export class AISystem {
         } else if (e.def.frontShield && e._chargeState === "recover") {
           // planted, facing the way it ran
         } else if (e.def.frontShield) {
-          let d = angle - (e.angle ?? angle);
-          d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
-          const step = (e.def.shieldTurnRate ?? SHIELD_TURN_RATE) * enemyDt;
-          e.angle = (e.angle ?? angle) + Math.max(-step, Math.min(step, d));
+          turnShield(e, angle, enemyDt, time, target);
         } else {
           e.angle = angle;
         }
@@ -795,6 +839,8 @@ export class AISystem {
             }
           }
           // else: the player stepped out during the telegraph — the swing whiffs.
+          // A shield bearer is braced a moment after its bash, hit or miss.
+          if (e.def.frontShield && e.def.attackType === "melee") e._braceT = SHIELD_BRACE_SECONDS;
         }
         e.state = "chase";
         e.stateTime = 0;

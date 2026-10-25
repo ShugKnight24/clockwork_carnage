@@ -63,7 +63,7 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
   // A shot that landed on the armour plate zone already took the plate's own
   // cut (hitZones), so the shield does not cut it a second time: stacked, a
   // Sentinel took 8% from the front and out-regenerated a pistol.
-  if (enemy.def.frontShield && !phasesShields && zone !== "head" && zone !== "armor" && zone !== "visor") {
+  if (enemy.def.frontShield && playerPos) {
     const dx = playerPos.x - enemy.x;
     const dy = playerPos.y - enemy.y;
     const angleToPlayer = Math.atan2(dy, dx);
@@ -72,7 +72,11 @@ export function calculateEnemyDamage(baseDamage, enemy, playerCritChance, player
     // wrap the difference rather than fold it once.
     const d = angleToPlayer - facingAngle;
     const angleDiff = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
-    if (angleDiff < Math.PI / 3) {
+    if (angleDiff >= Math.PI / 3) {
+      // Hit from outside its shield's arc: it will wheel round, but only
+      // after a window to keep hitting it (turnShield in ai.js).
+      enemy._flankHit = true;
+    } else if (!phasesShields && zone !== "head" && zone !== "armor" && zone !== "visor") {
       finalDamage *= 0.2;
       shieldSpark = true; // show the block, so the player knows to go round
     }
