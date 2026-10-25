@@ -393,7 +393,7 @@ const CORE_PROPS = [
   { x: 40, y: 33, type: "weapon_rack" },
   // Entrance Lobby
   { x: 29, y: 53, type: "desk" }, { x: 30, y: 53, type: "desk" },
-  { x: 24, y: 55, type: "chair" }, { x: 35, y: 55, type: "chair" },
+  { x: 24, y: 55, type: "stack_chair" }, { x: 35, y: 55, type: "stack_chair" },
   { x: 29, y: 56, type: "potted_plant" }, { x: 30, y: 56, type: "potted_plant" },
   // Combat Arena
   { x: 30, y: 6, type: "ammo_crate" },

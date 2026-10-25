@@ -49,10 +49,10 @@ export const room = {
     // Plants at the catwalk's corners, a bench on each long side.
     { x: 62, y: 33, type: "potted_plant" }, { x: 84, y: 33, type: "potted_plant" },
     { x: 84, y: 50, type: "potted_plant" }, { x: 62, y: 50, type: "potted_plant" },
-    { x: 72, y: 33, type: "bench" }, { x: 74, y: 50, type: "bench" },
+    { x: 72, y: 33, type: "waiting_bench" }, { x: 74, y: 50, type: "waiting_bench" },
     // The concourse below, over the balustrade: its trees and benches.
     { x: 68, y: 37, type: "potted_plant" }, { x: 79, y: 38, type: "potted_plant" },
-    { x: 70, y: 46, type: "potted_plant" }, { x: 76, y: 45, type: "bench" },
+    { x: 70, y: 46, type: "potted_plant" }, { x: 76, y: 45, type: "waiting_bench" },
     // The bridge's missing section.
     { x: ATRIUM_GAP.x, y: ATRIUM_GAP.y0, type: "floor_gap" },
     { x: ATRIUM_GAP.x, y: ATRIUM_GAP.y1, type: "floor_gap" },

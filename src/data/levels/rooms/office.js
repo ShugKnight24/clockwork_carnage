@@ -58,21 +58,32 @@ export const room = {
     // Stops short of row 14 so its lamps stay off while you are in the office.
     captain: { x0: 52, y0: 3, x1: 57, y1: 11 },
   },
-  /** Props to add, and cells whose existing props to drop. */
+  /** Props to add (`variant` picks a look), and cells whose existing props to drop. */
   props: [
     // The Supervisor's desk stands where its pillars stood (the map's own desk
     // props, 46-47); his chair behind it.
-    { x: 46, y: 22, type: "chair" },
+    { x: 46, y: 22, type: "chair", variant: 1 },
     { x: 43, y: 20, type: "potted_plant" },
     // Filing cabinets against the north wall, an officer's desk by the south.
     { x: 38, y: 16, type: "filing_cabinet" }, { x: 39, y: 16, type: "filing_cabinet" },
     { x: 40, y: 16, type: "filing_cabinet" },
     { x: 51, y: 16, type: "filing_cabinet" }, { x: 52, y: 16, type: "filing_cabinet" },
     { x: 38, y: 25, type: "desk" }, { x: 39, y: 25, type: "desk" }, { x: 38, y: 24, type: "chair" },
+    { x: 40, y: 25, type: "waste_bin" },
     { x: 36, y: 25, type: "potted_plant" }, { x: 55, y: 25, type: "potted_plant" },
+    // A second officer's desk in the east half, the squad's board, the
+    // copier by the cabinets, the water and the coffee in the corner by the
+    // door.
+    { x: 52, y: 25, type: "desk" }, { x: 53, y: 25, type: "desk" }, { x: 52, y: 24, type: "chair" },
+    { x: 54, y: 25, type: "waste_bin" }, { x: 55, y: 18, type: "whiteboard" },
+    { x: 50, y: 16, type: "copier" },
+    { x: 36, y: 16, type: "water_cooler" }, { x: 37, y: 16, type: "coffee_cart" },
+    // His office: a reading lamp by the bookcase, a bin by the desk.
+    { x: 49, y: 20, type: "floor_lamp" }, { x: 48, y: 22, type: "waste_bin" },
     // The Captain's: a desk under the portrait, a cabinet, a plant.
-    { x: 54, y: 4, type: "desk" }, { x: 55, y: 4, type: "desk" }, { x: 54, y: 5, type: "chair" },
+    { x: 54, y: 4, type: "desk" }, { x: 55, y: 4, type: "desk" }, { x: 54, y: 5, type: "chair", variant: 1 },
     { x: 56, y: 5, type: "potted_plant" }, { x: 53, y: 4, type: "filing_cabinet" },
+    { x: 56, y: 4, type: "floor_lamp" },
   ],
   dropProps: [
     { x: 39, y: 17 }, { x: 41, y: 17 }, { x: 53, y: 17 }, { x: 55, y: 17 },

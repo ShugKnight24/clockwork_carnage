@@ -51,10 +51,10 @@ export const room = {
     { x: 68, y: 53, type: "chair" },
     { x: 63, y: 56, type: "booking_camera" },
     { x: 72, y: 54, type: "filing_cabinet" }, { x: 73, y: 54, type: "filing_cabinet" },
-    // The property cage: crates of bagged property.
-    { x: 79, y: 54, type: "crate" }, { x: 83, y: 53, type: "crate" }, { x: 83, y: 56, type: "crate" },
+    // The property cage: boxes of bagged property.
+    { x: 79, y: 54, type: "archive_boxes" }, { x: 83, y: 53, type: "archive_boxes" }, { x: 83, y: 56, type: "archive_boxes" },
     // The cell walkway's bench.
-    { x: 63, y: 58, type: "bench" },
+    { x: 63, y: 58, type: "waiting_bench" },
   ],
   dropProps: [],
   /** Rewrite the room's cells. `h` has the floor plan's helpers, and its heightMap. */

@@ -50,6 +50,11 @@ export const room = {
     { x: 63, y: 16, type: "filing_cabinet" }, { x: 64, y: 16, type: "filing_cabinet" },
     { x: 83, y: 30, type: "potted_plant" }, { x: 62, y: 30, type: "potted_plant" },
     { x: 78, y: 16, type: "vending_machine" },
+    // The coffee and the water beside the machine, the copier in the far
+    // corner, the shift board by the dispatchers, bins at the desk islands.
+    { x: 79, y: 16, type: "water_cooler" }, { x: 80, y: 16, type: "coffee_cart" },
+    { x: 62, y: 16, type: "copier" }, { x: 83, y: 19, type: "whiteboard" },
+    { x: 67, y: 17, type: "waste_bin" }, { x: 73, y: 25, type: "waste_bin" },
   ],
   dropProps: [],
   /** Rewrite the room's cells. `h` has the floor plan's helpers, and its heightMap. */

@@ -41,7 +41,7 @@ export const room = {
     // Observation: the recorder desk and a chair at the glass.
     { x: 50, y: 56, type: "desk" }, { x: 51, y: 56, type: "monitor_bank" }, { x: 49, y: 54, type: "chair" },
     // Interview 2, empty: the table, two chairs.
-    { x: 54, y: 55, type: "table" }, { x: 54, y: 54, type: "chair" }, { x: 54, y: 56, type: "chair" },
+    { x: 54, y: 55, type: "table" }, { x: 54, y: 54, type: "stack_chair" }, { x: 54, y: 56, type: "stack_chair" },
   ],
   dropProps: [],
   /** Rewrite the rooms' cells. */

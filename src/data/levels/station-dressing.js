@@ -117,8 +117,8 @@ function dressEntry(level) {
   d.walls({ r1: 44, c1: 17, r2: 51, c2: 42 }, { n: HALL, s: [S.PHOTOS, S.CORRIDOR, S.WANTED, S.CORRIDOR], w: [S.CREST], e: [S.CREST] });
   d.at(43, 26, S.CREST);
   d.at(43, 33, S.CREST);
-  d.prop(48, 24, "bench");
-  d.prop(48, 35, "bench");
+  d.prop(48, 24, "waiting_bench");
+  d.prop(48, 35, "waiting_bench");
   d.prop(51, 21, "vending_machine");
   // Locker room and bunk room off the south cross corridor.
   d.walls({ r1: 34, c1: 4, r2: 38, c2: 14 }, { n: LOCKERS, w: LOCKERS, s: [null, ...LOCKERS] });
@@ -151,20 +151,26 @@ function dressEntry(level) {
   for (const [r, c] of [[22, 25], [38, 18], [22, 34], [38, 41]]) d.prop(r, c, "filing_cabinet");
   d.prop(27, 25, "potted_plant");
   d.prop(27, 34, "potted_plant");
+  // Its water and copier by the cabinets, the squad's board, bins at the desks.
+  d.prop(22, 17, "water_cooler");
+  d.prop(38, 40, "copier");
+  d.prop(30, 42, "whiteboard");
+  d.prop(24, 20, "waste_bin");
+  d.prop(33, 38, "waste_bin");
   // Interview 1 and 2 either side of the observation room, through one-way glass.
   d.walls({ r1: 21, c1: 4, r2: 23, c2: 15 }, { n: [P.INTERVIEW], w: [P.INTERVIEW], s: [P.ONE_WAY] });
   d.walls({ r1: 25, c1: 4, r2: 27, c2: 15 }, { w: [S.MONITORS, S.MONITORS_CASE] });
   d.walls({ r1: 29, c1: 4, r2: 31, c2: 15 }, { n: [P.ONE_WAY], w: [P.INTERVIEW], s: [P.INTERVIEW] });
   for (const r of [22, 30]) {
-    d.prop(r, 7, "chair");
-    d.prop(r, 9, "chair");
+    d.prop(r, 7, "stack_chair");
+    d.prop(r, 9, "stack_chair");
   }
   d.prop(26, 6, "monitor_bank");
   d.prop(26, 10, "chair");
   // Briefing room and records, east, behind the glass.
   d.walls({ r1: 21, c1: 44, r2: 25, c2: 55 }, { e: [P.CASE_BOARD], s: [S.BLIND, S.OFFICE_NOTICES] });
   d.walls({ r1: 27, c1: 44, r2: 31, c2: 55 }, { e: [S.SHELVES_A, S.SHELVES_B], s: [S.BINDERS, S.BOOKCASE] });
-  for (const c of [47, 50, 53]) d.prop(24, c, "chair");
+  for (const c of [47, 50, 53]) d.prop(24, c, "stack_chair");
   d.prop(30, 47, "filing_cabinet");
   d.prop(30, 53, "filing_cabinet");
   // The watch commander's floor, where the level ends.
@@ -184,8 +190,8 @@ function dressCheckpoint(level) {
   d.walls({ r1: 52, c1: 20, r2: 57, c2: 39 }, { w: [S.NOTICE, S.CORRIDOR], e: [S.CORRIDOR, S.WANTED], s: HALL_QUIET });
   // Booking: height charts down the plaza's sides, the sign over the lanes.
   d.walls({ r1: 45, c1: 14, r2: 51, c2: 45 }, { w: [P.BOOKING, S.CORRIDOR], e: [P.BOOKING, S.CORRIDOR], s: [S.CORRIDOR, S.NOTICE] });
-  d.prop(50, 16, "bench");
-  d.prop(50, 43, "bench");
+  d.prop(50, 16, "waiting_bench");
+  d.prop(50, 43, "waiting_bench");
   // Holding, west and east: bars to the walkway, the bunk wall at the back.
   for (const r1 of [28, 36, 40]) {
     d.walls({ r1, c1: 4, r2: r1 + 2, c2: 11 }, { e: CELL_FRONT.slice(1, 4), w: [P.CELL_BACK] });
@@ -211,7 +217,7 @@ function dressCheckpoint(level) {
   d.walls({ r1: 13, c1: 5, r2: 18, c2: 54 }, { n: HALL, s: HALL_QUIET });
   // Briefing room: the case board, the blinds, rows of chairs to it.
   d.walls({ r1: 4, c1: 4, r2: 10, c2: 17 }, { n: [S.BLIND, P.CASE_BOARD, P.CASE_BOARD, S.BLIND], w: [S.OFFICE_NOTICES, S.BLIND], e: OFFICE });
-  for (const c of [6, 8, 11, 14, 16]) d.prop(9, c, "chair");
+  for (const c of [6, 8, 11, 14, 16]) d.prop(9, c, "stack_chair");
   // Evidence: the cage along the north, intake by the door.
   d.at(11, 47, P.INTAKE);
   d.walls({ r1: 4, c1: 42, r2: 10, c2: 55 }, { n: EVIDENCE, e: [S.SHELVES_A, S.CUSTODY_LOG], w: [S.SHELVES_B], s: [S.SHELVES_B, S.SHELVES_A] });
@@ -259,8 +265,8 @@ function dressContainment(level) {
   const d = toolkit(level);
   d.walls({ r1: 53, c1: 26, r2: 57, c2: 33 }, { w: [S.NOTICE, S.CORRIDOR], e: [S.WANTED, S.CORRIDOR] });
   d.walls({ r1: 44, c1: 13, r2: 52, c2: 46 }, { s: [P.BOOKING, S.CORRIDOR, P.INTAKE, S.CORRIDOR], w: [P.BOOKING, S.CORRIDOR], e: [P.BOOKING, S.CORRIDOR] });
-  d.prop(46, 16, "bench");
-  d.prop(46, 43, "bench");
+  d.prop(46, 16, "waiting_bench");
+  d.prop(46, 43, "waiting_bench");
   // The cell banks: bars to the walkway, bunks at the back.
   for (const r1 of [29, 33, 37, 41]) {
     d.walls({ r1, c1: 4, r2: r1 + 2, c2: 11 }, { e: CELL_FRONT.slice(1, 4), w: [P.CELL_BACK] });

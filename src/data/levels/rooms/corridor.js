@@ -70,20 +70,23 @@ export const room = {
     armory: { x0: 33, y0: 29, x1: 41, y1: 35 },
     lobby: { x0: 18, y0: 48, x1: 41, y1: 57 },
   },
-  /** Props to add, and cells whose existing props to drop. */
+  /** Props to add (`variant` picks a look), and cells whose existing props to drop. */
   props: [
     // Corridor: plants at the north end.
     { x: 27, y: 14, type: "potted_plant" }, { x: 32, y: 14, type: "potted_plant" },
     // Break room: four chairs round the two tables, the vending machine and a plant in the corners.
-    { x: 21, y: 31, type: "chair" }, { x: 23, y: 31, type: "chair" },
-    { x: 21, y: 33, type: "chair" }, { x: 23, y: 33, type: "chair" },
+    { x: 21, y: 31, type: "stack_chair" }, { x: 23, y: 31, type: "stack_chair" },
+    { x: 21, y: 33, type: "stack_chair" }, { x: 23, y: 33, type: "stack_chair" },
     { x: 19, y: 34, type: "vending_machine" }, { x: 25, y: 34, type: "potted_plant" },
+    { x: 20, y: 34, type: "waste_bin" },
     // Armory: ammo crates by the lockers.
     { x: 35, y: 34, type: "ammo_crate" }, { x: 40, y: 30, type: "ammo_crate" },
     // Lobby: the front desk's chair, the waiting area, plants by the crests.
-    { x: 30, y: 52, type: "chair" },
-    { x: 25, y: 55, type: "chair" }, { x: 34, y: 55, type: "chair" },
+    { x: 30, y: 52, type: "chair", variant: 2 },
+    { x: 25, y: 55, type: "stack_chair" }, { x: 34, y: 55, type: "stack_chair" },
     { x: 22, y: 49, type: "potted_plant" }, { x: 37, y: 49, type: "potted_plant" },
+    // The public's water by the east wall, a bin by the waiting chairs.
+    { x: 40, y: 53, type: "water_cooler" }, { x: 26, y: 55, type: "waste_bin" },
   ],
   dropProps: [
     { x: 20, y: 31 }, { x: 24, y: 31 }, { x: 20, y: 33 },

@@ -55,12 +55,12 @@ export const room = {
   props: [
     // The spine: a bench and a plant at each stretch, the coffee machine
     // halfway, so no length of it is bare.
-    { x: 58, y: 14, type: "bench" }, { x: 59, y: 17, type: "potted_plant" },
+    { x: 58, y: 14, type: "waiting_bench" }, { x: 59, y: 17, type: "potted_plant" },
     { x: 59, y: 24, type: "vending_machine" }, { x: 58, y: 31, type: "potted_plant" },
-    { x: 58, y: 40, type: "bench" }, { x: 59, y: 44, type: "potted_plant" },
-    { x: 58, y: 53, type: "bench" },
+    { x: 58, y: 40, type: "waiting_bench" }, { x: 59, y: 44, type: "potted_plant" },
+    { x: 58, y: 53, type: "waiting_bench" },
     // South hall: the waiting bench outside interview, a machine, a plant.
-    { x: 46, y: 49, type: "bench" }, { x: 52, y: 49, type: "vending_machine" },
+    { x: 46, y: 49, type: "waiting_bench" }, { x: 52, y: 49, type: "vending_machine" },
     { x: 56, y: 50, type: "potted_plant" },
     // North hall.
     { x: 57, y: 9, type: "potted_plant" },

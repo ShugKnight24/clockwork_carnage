@@ -129,7 +129,10 @@ async function stage(game, spec, shot, live, wait = idle) {
   const props = [];
   for (const p of TUTORIAL_MAP.props ?? []) {
     const pos = validatePropPosition(p.x, p.y, map.grid, map.width, map.height);
-    if (pos) props.push(new Prop(pos.x + 0.5, pos.y + 0.5, p.type));
+    if (!pos) continue;
+    const prop = new Prop(pos.x + 0.5, pos.y + 0.5, p.type);
+    if (p.variant) prop.variant = p.variant;
+    props.push(prop);
   }
   const pickups = spec.pickups ? (TUTORIAL_MAP.pickups ?? []).map((p) => new Pickup(p.x, p.y, p.type, p)) : [];
   const foes = [];
