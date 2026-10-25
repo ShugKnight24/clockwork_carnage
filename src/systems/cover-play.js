@@ -29,6 +29,7 @@ import {
   BLIND_FIRE_MIN_CONE,
 } from "./cover.js";
 import { activeDevice } from "../ui/input-glyphs.js";
+import { playerEyeZ } from "./physics.js";
 
 /** The ease onto the face. */
 const SNAP_SECONDS = 0.16;
@@ -38,6 +39,10 @@ const COVER_MOVE_MULT = 0.7;
 const AWAY_SECONDS = 0.18;
 /** Rate the peek / lean blend eases at (per second). */
 const PEEK_RATE = 12;
+/** How near the aim line an enemy must be to be what a blind-fired round is sent at (radians). */
+const BLIND_AIM_CONE = 0.2;
+/** With nothing under the reticle, blind fire converges this far out (cells). */
+const BLIND_AIM_FALLBACK = 8;
 /** A kill this soon after a blind-fire shot counts as a blind-fire kill (ms). */
 const BLIND_KILL_MS = 800;
 
@@ -259,10 +264,13 @@ export function beginCoverShot(game) {
   const p = game.player;
   if (!isBlindFiring(p)) return null;
   p._blindFireAt = game.time;
-  const saved = { x: p.x, y: p.y, crouchBlend: p.crouchBlend };
+  const saved = { x: p.x, y: p.y, crouchBlend: p.crouchBlend, lift: 0 };
   const f = p.cover.face;
-  if (f.low) p.crouchBlend = 0;
-  else {
+  if (f.low) {
+    const eye = playerEyeZ(p);
+    p.crouchBlend = 0;
+    saved.lift = playerEyeZ(p) - eye;
+  } else {
     const edge = edgeAt(f, p.cover.s);
     if (edge) {
       const pt = facePoint(f, leanS(f, edge));
@@ -271,6 +279,27 @@ export function beginCoverShot(game) {
     }
   }
   return saved;
+}
+
+/**
+ * The pitch a blind-fired round leaves at. It leaves from the standing eye,
+ * `saved.lift` over the crouched camera; flown on the camera's own pitch it
+ * passed that far over whatever the reticle was on (a head and more since
+ * the eye stood level with everyone's). It is sent instead at the point the
+ * reticle sits on: the nearest enemy close to the aim line, or a few cells
+ * out when there is none.
+ */
+export function coverShotPitch(game, saved, yaw, pitch) {
+  if (!saved?.lift) return pitch;
+  const p = game.player;
+  let dist = BLIND_AIM_FALLBACK;
+  for (const e of game.entities) {
+    if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    const off = Math.atan2(e.y - p.y, e.x - p.x) - yaw;
+    if (d > 0.5 && d < dist && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < BLIND_AIM_CONE) dist = d;
+  }
+  return Math.atan(Math.tan(pitch) - saved.lift / dist);
 }
 
 export function endCoverShot(game, saved) {

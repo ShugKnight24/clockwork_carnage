@@ -81,21 +81,36 @@ export function createDebugBridge(game) {
 
     /**
      * Each enemy's drawn height on a grid level, [top, bottom] from the eye
-     * line: the table in src/data/enemy-art.js, measured afresh.
+     * line, in the current art style: the tables in src/data/enemy-art.js,
+     * measured afresh. Each figure is drawn alone by the renderer onto a clear
+     * canvas, idle and facing the camera, over a few animation frames, and
+     * its inked rows (alpha over 110) are kept: not the sprite's padded box.
      */
     async measureEnemyArt() {
       const { prepareEnemySprite } = await import("../../src/rendering/svg-art/sprites/enemies.js");
-      const ctx = document.createElement("canvas").getContext("2d");
+      const r = game.renderer;
+      const W = r.width, H = r.height, D = 3, sh = H / D;
+      const c = document.createElement("canvas");
+      c.width = W;
+      c.height = H;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
       const out = {};
       for (const [type, def] of Object.entries(ENEMY_TYPES)) {
-        const e = { type: "enemy", enemyType: type, def, x: 0, y: 0, angle: Math.PI, state: "idle" };
-        let f = null;
-        for (let i = 0; i < 40 && !f; i++) {
-          f = prepareEnemySprite(ctx, e, 100, 1, 0, 1);
-          if (!f) await new Promise((r) => setTimeout(r, 50));
+        if (def.boss) continue;
+        const e = new Enemy(D, 0, type);
+        Object.assign(e, { angle: Math.PI, state: "idle", hitTime: 0 });
+        for (let i = 0; i < 40 && !prepareEnemySprite(ctx, e, 100, 1); i++) await new Promise((q) => setTimeout(q, 50));
+        let top = Infinity, bot = -Infinity;
+        for (const time of [100, 700, 1300, 1900, 2500]) {
+          r.zBuffer.fill(Infinity);
+          ctx.clearRect(0, 0, W, H);
+          r.drawEntity(ctx, e, W / 2, (H - sh) / 2 | 0, (H + sh) / 2 | 0, (W - sh) / 2 | 0, (W + sh) / 2 | 0, sh, sh, D, time);
+          const d = ctx.getImageData(0, 0, W, H).data;
+          const inked = (y) => { for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 110) return true; return false; };
+          for (let y = 0; y < H; y++) if (inked(y)) { top = Math.min(top, y); break; }
+          for (let y = H - 1; y >= 0; y--) if (inked(y)) { bot = Math.max(bot, y); break; }
         }
-        // halfH 100: one world unit is 200 px. Less the sprite's ink margin.
-        if (f) out[type] = [+(-f.y0 / 200 - 0.02).toFixed(2), Math.max(-0.5, +(-f.y1 / 200 + 0.03).toFixed(2))];
+        if (top <= bot) out[type] = [+((H / 2 - top) / sh).toFixed(2), +((H / 2 - bot) / sh).toFixed(2)];
       }
       return out;
     },

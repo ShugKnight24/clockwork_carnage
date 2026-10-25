@@ -26,7 +26,7 @@ import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
 import { readyToFire, spendShot } from "./reload.js";
 import { noteConditioningKill } from "./conditioning-play.js";
-import { coverCone, beginCoverShot, endCoverShot, shotClearsCover, noteCoverKill } from "./cover-play.js";
+import { coverCone, beginCoverShot, endCoverShot, coverShotPitch, shotClearsCover, noteCoverKill } from "./cover-play.js";
 import { arrive, QUICK_TEAR } from "./arrival.js";
 
 // Per-weapon lookup tables, indexed by weapon id.
@@ -109,7 +109,7 @@ export function fireWeapon(game) {
   if (soundMethod) game.audio[soundMethod]();
 
   const damage = wep.damage * game.player.damageMultiplier * boost;
-  const { yaw: aimAngle, pitch: aimPitch } = aimAnglesForGame(game);
+  const { yaw: aimAngle, pitch: cameraPitch } = aimAnglesForGame(game);
   // Every round scatters inside the weapon's cone: the hip `spread`, easing
   // to its `adsSpread` as the sights come up. Single rounds used to ignore
   // the cone and pellets spread only sideways, so the sights and the
@@ -119,6 +119,7 @@ export function fireWeapon(game) {
   const fanMul = game.player.isAiming ? ADS_FAN_MULT : 1;
 
   const coverShot = beginCoverShot(game);
+  const aimPitch = coverShotPitch(game, coverShot, aimAngle, cameraPitch);
   if (wep.type === "hitscan") {
     const pellets = (wep.pellets || 1) * (game.player.multiShot || 1);
     // damageEnemy reads the weapon's mechanics (shield phasing, slowing) off this.

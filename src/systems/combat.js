@@ -15,7 +15,8 @@ import {
 import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
-import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN } from "../data/enemy-art.js";
+import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN, LEGACY_ART_SPAN, LEGACY_DEFAULT_ART_SPAN } from "../data/enemy-art.js";
+import { isModernArt } from "../rendering/art-style.js";
 
 /**
  * Calculate final damage to an enemy after crit, front shield, and energy shield.
@@ -187,7 +188,10 @@ export function hitSpan(enemy, grid = true) {
   const z = enemy.z || 0;
   // A def that names its own hit volume (hitCenter) keeps it, on either kind.
   if (grid && enemy.def?.hitCenter == null) {
-    const [top, bottom] = ENEMY_ART_SPAN[enemy.enemyType] ?? DEFAULT_ART_SPAN;
+    // Legacy draws its own, smaller figures; a boss keeps the vector span.
+    const [top, bottom] = isModernArt()
+      ? ENEMY_ART_SPAN[enemy.enemyType] ?? DEFAULT_ART_SPAN
+      : LEGACY_ART_SPAN[enemy.enemyType] ?? ENEMY_ART_SPAN[enemy.enemyType] ?? LEGACY_DEFAULT_ART_SPAN;
     // A figure drawn smaller than its art (the Shell once it cracks) stands
     // on the same floor, shorter.
     const s = enemy._spriteScale ?? 1;

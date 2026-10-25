@@ -24,10 +24,11 @@ import {
   coverDash,
   beginCoverShot,
   endCoverShot,
+  coverShotPitch,
   noteCoverKill,
   leaveCover,
 } from "../../src/systems/cover-play.js";
-import { hasLineOfSight, EYE_Z, CROUCH_EYE_Z } from "../../src/systems/physics.js";
+import { hasLineOfSight, EYE_Z, CROUCH_EYE_Z, STAND_EYE_Z } from "../../src/systems/physics.js";
 import { createGrid, createHeights, lowWall, lowTile, coverBlocks, LAYER, room } from "../../src/data/levels/map-helpers.js";
 
 /**
@@ -315,6 +316,24 @@ describe("firing from cover", () => {
     game.player.isAiming = true;
     expect(coverCone(game.player, 0.01)).toBe(0.01);
     expect(beginCoverShot(game)).toBeNull();
+  });
+
+  it("sends a blind-fired round over low cover at what the reticle is on", () => {
+    const game = fakeGame(5.5, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    game.player.crouchBlend = 1;
+    const enemy = { type: "enemy", active: true, state: "chase", x: game.player.x, y: game.player.y - 6 };
+    game.entities = [enemy];
+    const eye = CROUCH_EYE_Z;
+    const pitch = Math.atan(0.3 / 6); // the reticle on a point 0.3 over the crouched eye, 6 out
+    const saved = beginCoverShot(game);
+    expect(saved.lift).toBeCloseTo(STAND_EYE_Z - CROUCH_EYE_Z);
+    const sent = coverShotPitch(game, saved, -Math.PI / 2, pitch);
+    // From the standing eye it still meets that point, not 0.45 over it.
+    expect(STAND_EYE_Z + Math.tan(sent) * 6).toBeCloseTo(eye + 0.3);
+    endCoverShot(game, saved);
+    expect(coverShotPitch(game, null, 0, pitch)).toBe(pitch);
   });
 
   it("counts peeked and blind-fired kills", () => {
