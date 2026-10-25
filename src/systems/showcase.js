@@ -13,7 +13,7 @@ import { spawnWallSparks } from "../../js/vfx.js";
 import { particlePool } from "../utils/particle-pool.js";
 import { prefetchIdleEnemy, prefetchEnemyModel } from "../rendering/svg-art/sprites/enemies.js";
 import { isModernArt } from "../rendering/art-style.js";
-import { prefetchPropSprite, warmPropSet } from "../rendering/props.js";
+import { prefetchPropLook, propKey, warmPropSet } from "../rendering/props.js";
 import { createCampaignEntities } from "./spawner.js";
 import { buildShowcasePath, hasLineOfSight, samplePath } from "./showcase-path.js";
 
@@ -225,9 +225,12 @@ async function prewarmSprites(game, map, path, props, enemies, live, wait, route
   const fov = fovOf(game);
   const cams = route ?? simulateCamera(path, fov);
   // Sprites are as tall on screen as a wall at their depth: viewH / depth.
-  const propJobs = [...new Set(props.map((p) => p.propType))].map((type) => {
-    const hs = props.filter((p) => p.propType === type).flatMap((p) => sightHeights(map.grid, cams, p, fov, viewH));
-    return [() => prefetchPropSprite(ctx, type, hs), hs];
+  // One job a look (a type's variant, propKey), for the placements wearing it.
+  const looks = new Map();
+  for (const p of props) looks.set(propKey(p), [...(looks.get(propKey(p)) ?? []), p]);
+  const propJobs = [...looks.values()].map((same) => {
+    const hs = same.flatMap((p) => sightHeights(map.grid, cams, p, fov, viewH));
+    return [() => prefetchPropLook(ctx, same[0], hs), hs];
   });
   const jobs = [
     ...enemies.map((e) => {
@@ -264,9 +267,12 @@ export async function prewarmStyle(game, { map, props, foes }, cams, realistic, 
   if (!ctx || !viewH || !cams?.length) return;
   const fov = fovOf(game);
   const seen = (e) => sightHeights(map.grid, cams, e, fov, viewH);
-  const propJobs = [...new Set(props.map((p) => p.propType))].map((type) => {
-    const hs = props.filter((p) => p.propType === type).flatMap(seen);
-    return [() => prefetchPropSprite(ctx, type, hs, realistic), hs];
+  // One job a look (a type's variant, propKey), for the placements wearing it.
+  const looks = new Map();
+  for (const p of props) looks.set(propKey(p), [...(looks.get(propKey(p)) ?? []), p]);
+  const propJobs = [...looks.values()].map((same) => {
+    const hs = same.flatMap(seen);
+    return [() => prefetchPropLook(ctx, same[0], hs, realistic), hs];
   });
   const byType = new Map();
   for (const e of fighters) byType.set(e.enemyType, [...(byType.get(e.enemyType) ?? []), ...seen(e)]);

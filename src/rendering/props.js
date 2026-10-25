@@ -313,6 +313,15 @@ export function prefetchPropSprite(ctx, type, sprHeights, realistic) {
   return ready;
 }
 
+/**
+ * prefetchPropSprite for the look `entity` wears (propKey): what a reel shot
+ * prewarms, rather than every variant of the type it will never show.
+ */
+export function prefetchPropLook(ctx, entity, sprHeights, realistic) {
+  if (typeof Image === "undefined" || (realistic === undefined && !isModernArt())) return true;
+  return prefetchPropKey(ctx, propKey(entity), sprHeights, realistic);
+}
+
 /** prefetchPropSprite for one sprite key (a type or one of its variants). */
 function prefetchPropKey(ctx, key, sprHeights, realistic) {
   let sprite = PROP_SPRITES[key];

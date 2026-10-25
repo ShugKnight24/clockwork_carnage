@@ -207,7 +207,9 @@ test("before any gesture the attract loop is silent and still captioned", async 
   expect(audio.ctx === null || audio.ctx !== "running").toBe(true);
   expect(audio.muted).toBe(true);
   // "Chrono-Corp Station." is up from 0.5 s to 3 s: bright pixels in the caption lane.
-  await expect.poll(async () => (await reelState(page))?.t ?? 0).toBeGreaterThan(1.2);
+  // The opening shot waits up to 3 s (showcase.js PREWARM_MS) for the
+  // station's props to decode before its clock starts.
+  await expect.poll(async () => (await reelState(page))?.t ?? 0, { timeout: 10_000 }).toBeGreaterThan(1.2);
   const bright = await page.evaluate(() => {
     const c = document.getElementById("hudCanvas");
     const g = c.getContext("2d");

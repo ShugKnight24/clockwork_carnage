@@ -11,8 +11,10 @@ vi.mock("../../src/rendering/svg-art/sprites/enemies.js", () => ({
   },
 }));
 vi.mock("../../src/rendering/props.js", () => ({
-  prefetchPropSprite: (ctx, type, hs) => {
-    calls.prop.push([type, hs]);
+  // One call a look the props wear: the type here, as none has a variant.
+  propKey: (p) => p.propType,
+  prefetchPropLook: (ctx, p, hs) => {
+    calls.prop.push([p.propType, hs]);
     return true;
   },
   warmPropSet: () => { calls.warmSet++; },
