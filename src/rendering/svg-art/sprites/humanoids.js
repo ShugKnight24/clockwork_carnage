@@ -592,16 +592,197 @@ function officerKit() {
 }
 
 /**
- * The Supervisor in his own heavy plate, after 06:47 (js/tutorial-system.js):
- * the squads' C-series, but with his gold where their cyan is, rank boards
- * on the pauldrons, and the visor up, so it is still his face.
+ * Lt. Rasczak kitted up: the squads' C-series, blacked out and made his own.
+ * A command whip off the radio pack, a tech module strapped to the left
+ * forearm, pouches of tools on the belt, his lieutenant's bar and a tally
+ * on the pauldrons, the helmet's crown striped and scarred. The visor
+ * burns red, and he carries the shotgun he signs out every morning.
  */
-function supervisorKit() {
-  return heavyKit({ trim: "#e0b84a", rank: true, visorDown: false, older: true });
+function rasczakKit() {
+  const red = "#ff4a2e";
+  const bar1 = (s, shY) => sh(`M${P(s * 22 - 4.5, shY - 5)}h9v3.4h-9Z`, "#dfe4ea", 0.6);
+  // Five kills to a gate, notched in the paint.
+  const tally = (shY) => ln(`M${P(-27, shY - 3)}v5M${P(-24.8, shY - 3)}v5M${P(-22.6, shY - 3)}v5M${P(-20.4, shY - 3)}v5M${P(-28.4, shY + 1.4)}l9.6 -4`, "#e8e2d6", 0.9, 0.85);
+  // The command whip: from the radio pack on the right shoulder to above his head.
+  const whip = (x, shY) => ln(`M${P(x, shY - 6)}L${P(x * 1.3, -100)}`, "#16191e", 1.8) + ln(`M${P(x - 0.4, shY - 6)}L${P(x * 1.3 - 0.4, -100)}`, "#7a828c", 0.5, 0.6) + sh(`M${P(x - 3, shY - 9)}h6v5h-6Z`, "url(#gun)", 0.8);
+  const stripe = (R) => {
+    const [x, y] = R.head;
+    return sh(`M${P(x - 1.8, y - 20)}h3.6l-0.4 11h-2.8Z`, "#d8dde4", 0.5);
+  };
+  return heavyKit({
+    trim: red,
+    gun: "shotgun",
+    gunLen: 46,
+    padTrim: "#8a1c14",
+    deco: {
+      frontBehind: (R) => whip(14, R.shY),
+      chest: (R) => {
+        const { shY, hipY } = R;
+        // A valour ribbon under the name bar, and the pouches on the belt.
+        let m = sh(`M${P(4, shY + 8.6)}h10v2.4h-10Z`, "#c23a3a", 0.4) + sh(`M${P(8, shY + 8.6)}h2v2.4h-2Z`, "#f0f0ec", 0);
+        for (const [px, w] of [[-18, 6], [-11.5, 5.5], [10, 7]]) m += sh(`M${P(px, hipY - 13)}h${f(w)}v8h${f(-w)}Z`, "url(#armorDk)", 0.8) + ln(`M${P(px, hipY - 10.5)}h${f(w)}`, INK, 0.6, 0.6);
+        return m;
+      },
+      frontOver: (R) => {
+        const { shY } = R;
+        const [x, y] = R.head;
+        const { E, W } = R.arms[-1];
+        // The tech module over the left forearm: a dark case, a cable to the elbow.
+        const m0 = lerp(E, W, 0.55);
+        let m = sh(`M${P(m0[0] - 6.5, m0[1] - 5)}h13v10h-13Z`, "url(#gun)", 1.1) + sh(`M${P(m0[0] - 4.5, m0[1] - 3)}h9v4.5h-9Z`, "#0a0e12", 0.5);
+        m += ln(`M${P(m0[0] + 6, m0[1] + 2)}Q${P(E[0] + 7, E[1] + 2)} ${P(E[0] + 3, E[1] - 4)}`, "#20242a", 1.4);
+        // Scratches across the shell, the stripe up the crown.
+        m += stripe(R) + ln(`M${P(x + 4, y - 17)}l7 6M${P(x + 5.5, y - 18.5)}l7 6M${P(x + 7, y - 19.5)}l6 5`, "#c4cad2", 0.7, 0.75);
+        m += bar1(1, shY) + tally(shY);
+        return m;
+      },
+      frontGlow: (R) => {
+        const m0 = lerp(R.arms[-1].E, R.arms[-1].W, 0.55);
+        return bar(m0[0], m0[1] - 0.8, 8, 2.2, "#ffb347") + circ(14 * 1.3, -100, 1.7, red, 0);
+      },
+      backOver: (R) => whip(-14, R.shY) + sh(`M${P(-17, R.shY - 4)}h10v14h-10Z`, "url(#gun)", 0.9),
+      backTop: (R) => stripe(R) + bar1(-1, R.shY),
+      backGlow: () => circ(-14 * 1.3, -100, 1.7, red, 0),
+    },
+  });
 }
 
-/** C-series heavy plate on the NPC rig, in a squad's trim or the Supervisor's. */
-function heavyKit({ trim = "#5fd8ff", rank = false, visorDown = true, older = false } = {}) {
+/**
+ * Sgt. Kael kitted up: the squad's wall. A wider frame in the heaviest plate
+ * there is: doubled pauldrons, a slab over the chest, thick thigh and shin
+ * plate, a brow guard on the helmet, and on his left arm the breacher shield
+ * with his blue chevron, a viewport slit near its top. A short carbine in the
+ * other hand; the shield is the weapon.
+ */
+function kaelKit() {
+  const blue = "#4488ff";
+  const shield = (R, back) => {
+    const W = R.arms[-1].W;
+    const cx = W[0] - 3;
+    const top = R.shY - 10;
+    const bot = R.hipY + 34;
+    const pts = [[cx - 15, top + 4], [cx - 11, top], [cx + 11, top], [cx + 15, top + 4], [cx + 15, bot - 6], [cx + 9, bot], [cx - 9, bot], [cx - 15, bot - 6]];
+    let m = ao(cx, bot + 2, 14, 3, 0.4) + sh(poly(pts), back ? "url(#armorDk)" : "url(#steel)", 1.6);
+    if (back) {
+      // The back face: two straps and the arm brace.
+      m += sh(`M${P(cx - 12, top + 20)}h24v4h-24Z`, "url(#gun)", 0.8) + sh(`M${P(cx - 12, top + 40)}h24v4h-24Z`, "url(#gun)", 0.8);
+      return m;
+    }
+    m += sh(poly([[cx - 12, top + 5], [cx - 9, top + 2.5], [cx + 9, top + 2.5], [cx + 12, top + 5], [cx + 12, bot - 7.5], [cx + 7.5, bot - 3], [cx - 7.5, bot - 3], [cx - 12, bot - 7.5]]), "url(#armor)", 0.8);
+    // Viewport slit, rivets, the PD stencil.
+    m += sh(`M${P(cx - 8, top + 8)}h16v3.6h-16Z`, "url(#glass)", 0.8);
+    for (const [rx, ry] of [[-12.5, 8], [12.5, 8], [-12.5, 40], [12.5, 40], [-12.5, 72], [12.5, 72]]) m += circ(cx + rx, top + ry, 1, "url(#steel)", 0.5);
+    m += backLettering(bot - 9, "PD", "#c3ccd8", 6.4, { opacity: 0.75 });
+    m += spec(`M${P(cx - 13, top + 6)}L${P(cx - 13, bot - 9)}`, 0.5, 1.2);
+    return m;
+  };
+  const chevron = (R) => {
+    const cx = R.arms[-1].W[0] - 3;
+    const top = R.shY - 10;
+    return ln(`M${P(cx, top + 16)}V${f(top + 58)}M${P(cx - 7, top + 26)}L${P(cx, top + 19)}L${P(cx + 7, top + 26)}`, blue, 2);
+  };
+  return heavyKit({
+    trim: blue,
+    rig: { ...HUMAN, shW: 24, hipW: 10, stance: 5 },
+    bulk: 1.24,
+    gun: "smg",
+    gunLen: 36,
+    deco: {
+      chest: (R) => {
+        const { shY } = R;
+        // The slab over the chest, riveted, and a second lame under each pauldron.
+        let m = plate([[-21, shY - 1], [21, shY - 1], [20, shY + 25], [0, shY + 29], [-20, shY + 25]], "url(#armor)", 1.5, 0.5);
+        m += plate([[-15, shY + 4], [15, shY + 4], [14, shY + 20], [0, shY + 23], [-14, shY + 20]], "url(#armorDk)", 1, 0.25);
+        for (const [rx, ry] of [[-18, shY + 2], [18, shY + 2], [-17, shY + 22], [17, shY + 22]]) m += circ(rx, ry, 1.1, "url(#steel)", 0.5);
+        for (const s of [-1, 1]) {
+          const [sx, sy] = R.arms[s].S;
+          m += sh(`M${P(sx - 17, sy + 5)}H${f(sx + 17)}L${P(sx + 15, sy + 15)}Q${P(sx, sy + 18)} ${P(sx - 15, sy + 15)}Z`, "url(#armorDk)", 1.3);
+        }
+        return m;
+      },
+      frontOver: (R) => {
+        const [x, y] = R.head;
+        // Brow guard over the visor, then the shield on the left arm.
+        return sh(`M${P(x - 16, y - 5)}Q${P(x, y - 9)} ${P(x + 16, y - 5)}L${P(x + 14, y - 10)}Q${P(x, y - 14)} ${P(x - 14, y - 10)}Z`, "url(#armorDk)", 1.2) + shield(R, false);
+      },
+      frontGlow: (R) => chevron(R),
+      backBehind: (R) => shield(R, true),
+    },
+  });
+}
+
+/**
+ * The Supervisor in his own heavy plate, after 06:47 (js/tutorial-system.js):
+ * the C-series in its dress finish, the plate he usually wears on parade.
+ * Polished navy, every edge in gold: gold-rimmed pauldrons with three bars
+ * and a star, a brass gorget, a gold ridge down the helmet, the sash and the
+ * ribbons, an aiguillette from the right shoulder, a short crimson cape. Still
+ * plate, and still a rifle: the visor up, so it is still his face.
+ */
+function supervisorKit() {
+  const gold = "#e0b84a";
+  const boards = (shY) => [-1, 1].map((s) => {
+    let m = "";
+    for (let k = 0; k < 3; k++) m += sh(`M${P(s * 22 - 4.5, shY - 7 + k * 3.2)}h9v2.4h-9Z`, "url(#brass)", 0.5);
+    return m + sh(`M${P(s * 22, shY + 3)}l1.2 2.6 2.8 0.3 -2.1 1.9 0.6 2.8 -2.5 -1.4 -2.5 1.4 0.6 -2.8 -2.1 -1.9 2.8 -0.3Z`, "url(#brass)", 0.5);
+  }).join("");
+  const ridge = (R) => {
+    const [x, y] = R.head;
+    return sh(`M${P(x - 2.4, y - 21)}h4.8l-0.8 10h-3.2Z`, "url(#brass)", 0.7);
+  };
+  const cape = (R, back) => {
+    const { shY, hipY } = R;
+    const hem = hipY + (back ? 30 : 28);
+    let m = sh(`M${P(-22, shY - 4)}Q${P(0, shY - (back ? 10 : 6))} ${P(22, shY - 4)}L${P(31, hem)}Q${P(0, hem + 5)} ${P(-31, hem)}Z`, "url(#capeS)", 1.3);
+    m += ln(`M${P(-30.4, hem - 1.2)}Q${P(0, hem + 3.6)} ${P(30.4, hem - 1.2)}`, gold, 1.8, 0.95);
+    if (back) {
+      m += ln(`M${P(-10, shY + 4)}Q${P(-14, hipY)} ${P(-17, hem - 2)}M${P(10, shY + 4)}Q${P(14, hipY)} ${P(17, hem - 2)}`, INK, 0.9, 0.5);
+      // The Bureau's clock in gold between the shoulder blades.
+      m += circ(0, shY + 16, 6, "none", 0, ` stroke="${gold}" stroke-width="1.4"`) + ln(`M0 ${f(shY + 16)}v-4M0 ${f(shY + 16)}l3 1.5`, gold, 1.1);
+    }
+    return m;
+  };
+  return heavyKit({
+    trim: gold,
+    padTrim: gold,
+    visorDown: false,
+    older: true,
+    gorget: "url(#brass)",
+    deco: {
+      under: (R) => cape(R, false),
+      chest: (R) => {
+        const { shY, hipY } = R;
+        // The sash, shoulder to hip, gold-edged; the ribbon rack beside it.
+        let m = sh(`M${P(-19, shY - 1)}L${P(-12, shY - 3)}L${P(18, hipY - 6)}L${P(12, hipY - 3)}Z`, "#8a1a22", 0.8);
+        m += ln(`M${P(-18.5, shY - 1)}L${P(12.5, hipY - 3)}M${P(-12.5, shY - 3)}L${P(17.5, hipY - 6)}`, gold, 0.8, 0.9);
+        const rib = ["#c23a3a", "#2a6ac2", "#e0b84a", "#2a8a5a", "#f0f0ec", "#7a2a9a"];
+        rib.forEach((c, i) => {
+          m += sh(`M${P(4 + (i % 3) * 3.6, shY + 3 + Math.floor(i / 3) * 2.6)}h3.4v2.4h-3.4Z`, c, 0.3);
+        });
+        return m;
+      },
+      frontOver: (R) => {
+        const { shY } = R;
+        // The aiguillette, looped from the right pauldron to the chest.
+        let m = ln(`M${P(22, shY - 1)}Q${P(16, shY + 14)} ${P(6, shY + 9)}M${P(22, shY + 1)}Q${P(18, shY + 18)} ${P(7, shY + 12)}`, "#f0d27a", 1.3, 0.95);
+        m += ridge(R) + boards(shY);
+        return m;
+      },
+      backOver: (R) => cape(R, true),
+      backTop: (R) => ridge(R) + boards(R.shY),
+    },
+  });
+}
+
+/**
+ * C-series heavy plate on the NPC rig, in a squad's trim, a lieutenant's,
+ * a sergeant's or the Supervisor's. `rig` and `bulk` size the frame and its
+ * plate; `deco` hooks add a character's own kit at each layer: `under` behind
+ * the legs, `frontBehind` behind the torso, `chest` over the breastplate and
+ * under the arms, `frontOver` over everything; `backBehind`, `backOver`
+ * (before the head) and `backTop` from behind; and their emissive layers.
+ */
+function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUMAN, bulk = 1, gun = "rifle", gunLen = 44, padTrim = "", gorget = "url(#armorDk)", deco = {} } = {}) {
   const slung = { sh: 14, el: -64, kf: 0.85 };
   const table = npcTable(
     { armL: { sh: 10, el: 6 }, armR: slung },
@@ -610,48 +791,56 @@ function heavyKit({ trim = "#5fd8ff", rank = false, visorDown = true, older = fa
     pose({ armL: { sh: 8, el: 6 } }, POINT),
     { frozen: { ...CIV_POSES.frozen, armR: slung } },
   );
-  // Gold boards on each pauldron, two bars: the rank the squads salute.
-  const boards = (shY) => [-1, 1].map((s) => sh(`M${P(s * 22 - 4, shY - 4)}h8v3h-8Z`, "url(#brass)", 0.6) + sh(`M${P(s * 22 - 4, shY + 0.5)}h8v3h-8Z`, "url(#brass)", 0.6)).join("");
-  const poses = build(HUMAN, table, (R, name) => {
+  const b = bulk;
+  const call = (k, R, name) => (deco[k] ? deco[k](R, name) : "");
+  const poses = build(rig, table, (R, name) => {
     const { shY, hipY } = R;
-    let body = legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17, kneeW: 14, bootW: 16, trim });
     const back = name.startsWith("back");
-    const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 15, upW: 13, foreW: 12.5 };
+    const under = back ? "" : call("under", R, name);
+    let body = under ? up(R, under) : "";
+    body += legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17 * b, kneeW: 14 * b, ankleW: 10 * b, bootW: 16 * b, trim });
+    const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 15 * b, upW: 13 * b, foreW: 12.5 * b, trim: padTrim };
     let upper = "";
     let glowUp = "";
     if (back) {
+      upper += call("backBehind", R, name);
       upper += armOf(R, -1, pad) + armOf(R, 1, pad);
-      upper += torsoBack(R, { w: 26, waist: 18, mat: "url(#armor)" });
+      upper += torsoBack(R, { w: 26 * b, waist: 18 * b, mat: "url(#armor)" });
       // The rifle's stock and sling across the back, under the pack and placard.
-      upper += ln(`M${P(-20, shY - 2)}L${P(17, hipY - 4)}`, "#141a24", 2.6, 0.9);
+      upper += ln(`M${P(-20 * b, shY - 2)}L${P(17 * b, hipY - 4)}`, "#141a24", 2.6, 0.9);
       // Power pack between the shoulder blades, and the unit's lettering.
-      upper += plate([[-13, shY - 2], [13, shY - 2], [12, shY + 19], [-12, shY + 19]], "url(#armorDk)", 1.3, 0.4);
+      upper += plate([[-13 * b, shY - 2], [13 * b, shY - 2], [12 * b, shY + 19], [-12 * b, shY + 19]], "url(#armorDk)", 1.3, 0.4);
       for (const s of [-1, 1]) upper += sh(`M${P(s * 8 - 1.5, shY + 2)}h3v13h-3Z`, "url(#gun)", 0.6);
       upper += backPlacard(shY + 21);
-      if (rank) upper += boards(shY);
+      upper += call("backOver", R, name);
       glowUp += bar(-8, shY + 8.5, 2.4, 11, trim) + bar(8, shY + 8.5, 2.4, 11, trim);
+      glowUp += call("backGlow", R, name);
       upper += headBack(R, { gear: "helmet", older }).body;
+      upper += call("backTop", R, name);
     } else {
-      upper += torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armorDk)", w: 26, waist: 18 });
+      upper += call("frontBehind", R, name);
+      upper += torsoOf(R, { mat: "url(#armor)", dark: "url(#armorDk)", under: "url(#armorDk)", w: 26 * b, waist: 18 * b });
       // Gorget over the collar, and the breastplate's ballistic insert.
-      upper += plate([[-11, shY - 9], [11, shY - 9], [13, shY - 2], [0, shY + 1], [-13, shY - 2]], "url(#armorDk)", 1.2, 0.45);
-      upper += plate([[-17, shY + 1], [17, shY + 1], [15, shY + 21], [0, shY + 24], [-15, shY + 21]], "url(#armor)", 1.3, 0.5);
+      upper += plate([[-11 * b, shY - 9], [11 * b, shY - 9], [13 * b, shY - 2], [0, shY + 1], [-13 * b, shY - 2]], gorget, 1.2, 0.45);
+      upper += plate([[-17 * b, shY + 1], [17 * b, shY + 1], [15 * b, shY + 21], [0, shY + 24], [-15 * b, shY + 21]], "url(#armor)", 1.3, 0.5);
       // Chest rig: the PD shield, a name bar, the C-series power cells.
       upper += sh(`M${P(-12, shY + 5)}l3.5 -3.5 3.5 3.5 -1.2 4.6h-4.6Z`, "url(#brass)", 0.7);
       upper += sh(`M${P(4, shY + 5)}h10v2.6h-10Z`, "#d8dee8", 0.5);
       for (let i = 0; i < 3; i++) upper += sh(`M${P(-10 + i * 7, shY + 26)}h5.5v8h-5.5Z`, "url(#armorDk)", 0.7);
+      upper += call("chest", R, name);
       glowUp += bar(0, shY + 16, 16, 1.6, trim);
-      glowUp += bar(-16, shY + 11, 4, 1.4, trim) + bar(16, shY + 11, 4, 1.4, trim);
+      glowUp += bar(-16 * b, shY + 11, 4, 1.4, trim) + bar(16 * b, shY + 11, 4, 1.4, trim);
       const head = kitHead(R, { down: visorDown, older, trim });
       glowUp += head.glow;
       upper += armOf(R, -1, pad);
       if (name.startsWith("salute")) {
-        upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, "rifle", 42);
+        upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, gun, gunLen - 2);
       } else {
-        // Rifle slung across the chest, the right hand on its grip.
-        upper += head.body + gunSide(R.arms[1].W, 210, "rifle", 44) + armOf(R, 1, pad);
+        // Weapon slung across the chest, the right hand on its grip.
+        upper += head.body + gunSide(R.arms[1].W, 210, gun, gunLen) + armOf(R, 1, pad);
       }
-      if (rank) upper += boards(shY);
+      upper += call("frontOver", R, name);
+      glowUp += call("frontGlow", R, name);
     }
     body += up(R, upper);
     return { body, glow: glowUp ? up(R, glow(glowUp)) : "", at: {} };
@@ -1422,7 +1611,10 @@ const EXTRA_DEFS = {
   temporalEngineer: `<linearGradient id="apron" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#6e4a22"/><stop offset=".5" stop-color="#4a2e12"/><stop offset="1" stop-color="#1e1206"/></linearGradient>` +
     `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#d9a37c"/><stop offset=".5" stop-color="#a06a48"/><stop offset="1" stop-color="#4a2a1a"/></linearGradient>`,
   officerKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
-  supervisorKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
+  rasczakKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  kaelKit: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  supervisorKit: `<linearGradient id="capeS" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#a8323a"/><stop offset=".5" stop-color="#6a1620"/><stop offset="1" stop-color="#22060a"/></linearGradient>` +
+    `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   officer: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
   supervisor: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   staff: CIV_DEFS.staff,
@@ -1441,6 +1633,9 @@ export const HUMANOIDS = {
   corruptCop: { build: corruptCop, variants: 3, box: [-72, -92, 142, 186], rim: "#ffd35a", size: 1.08, shield: [-18, -30] },
   officer: { build: officer, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
   officerKit: { build: officerKit, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.08 },
+  // Taller box: the command whip stands over his head.
+  rasczakKit: { build: rasczakKit, box: [-70, -106, 140, 200], rim: "#ffb09a", size: 1.1 },
+  kaelKit: { build: kaelKit, box: [-76, -88, 152, 182], rim: "#9fbcff", size: 1.17 },
   supervisor: { build: supervisor, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.08 },
   supervisorKit: { build: supervisorKit, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.1 },
   staff: { build: civilian("staff"), variants: 2, box: HUMANOID_BOX, rim: "#bfe8e0", size: 1.0 },

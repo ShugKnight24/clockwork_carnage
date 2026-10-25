@@ -186,7 +186,7 @@ describe("the people's sprites", () => {
 
   it("walk on four frames, front and back, and ease into gestures", async () => {
     const { buildEnemyModel } = await import("../../src/rendering/svg-art/sprites/enemies.js");
-    for (const kind of ["officer", "officerKit", "supervisor", "staff", "clerk"]) {
+    for (const kind of ["officer", "officerKit", "rasczakKit", "kaelKit", "supervisor", "supervisorKit", "staff", "clerk"]) {
       for (const real of [false, true]) {
         const m = buildEnemyModel(kind, real);
         const poses = m.variants[0].poses;

@@ -21,17 +21,37 @@ export const NPC_TYPES = {
     color2: "#161b24",
     speed: 1.6,
   },
+  /**
+   * Lt. Rasczak kitted up: the same C-series, blacked out and made his own.
+   * A command whip and an arm-mounted tech module, the shotgun he signs out.
+   */
+  rasczakKit: {
+    name: "Lt. Rasczak",
+    color1: "#3a3f4a",
+    color2: "#0b0d12",
+    speed: 1.6,
+  },
+  /** Sgt. Kael kitted up: the squad's wall, in the heaviest plate and behind a breacher shield. */
+  kaelKit: {
+    name: "Sgt. Kael",
+    color1: "#4a5672",
+    color2: "#111622",
+    speed: 1.5,
+  },
   supervisor: {
     name: "Supervisor Simon",
     color1: "#3b4150",
     color2: "#1a1d24",
     speed: 1.4,
   },
-  /** The Supervisor in his own heavy plate, after 06:47: the squads' C-series, his gold trim. */
+  /**
+   * The Supervisor in his own heavy plate, after 06:47: the C-series in its
+   * dress finish, polished navy and gold, the plate he usually wears on parade.
+   */
   supervisorKit: {
     name: "Supervisor Simon",
-    color1: "#4b5568",
-    color2: "#161b24",
+    color1: "#4e5f8c",
+    color2: "#101830",
     speed: 1.8,
   },
   /**

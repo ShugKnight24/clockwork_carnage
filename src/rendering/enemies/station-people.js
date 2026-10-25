@@ -1,6 +1,7 @@
 /**
  * Legacy sprites for the station's people (js/npc.js): patrol officers in
- * duty blues, the same officers in heavy kit, Supervisor Simon, and the
+ * duty blues, the same officers in heavy kit (Lt. Rasczak and Sgt. Kael each
+ * in their own), Supervisor Simon in his suit and in his parade plate, and the
  * office floor's staff and clerks. Drawn front-on, or from behind when they
  * face away from the camera (`away`), in the sprite box the enemies use.
  * A walker's legs and arms swing with its step cycle (`stride`, advanced by
@@ -30,16 +31,42 @@ const LOOKS = {
     trim: "#8fd8ff",
     hat: "helmet",
   },
-  // The Supervisor in his own plate after 06:47: the squads' kit, gold
-  // trim and rank boards, the visor up so his face shows.
+  // Lt. Rasczak's plate, blacked out: a red visor, the command whip, a tech
+  // module on the left forearm, tool pouches, his bar, a tally and a striped,
+  // scratched helmet.
+  rasczakKit: {
+    coat: "#3a3f4a",
+    coatDark: "#22262e",
+    legs: "#17191f",
+    trim: "#ff4a2e",
+    hat: "helmet",
+    whip: true,
+    techArm: true,
+    lieutenant: true,
+  },
+  // Sgt. Kael's: a wider frame in heavier plate, doubled pauldrons, a brow
+  // guard, and the breacher shield on his left arm with his blue chevron.
+  kaelKit: {
+    coat: "#4a5672",
+    coatDark: "#2c3448",
+    legs: "#1d2331",
+    trim: "#4488ff",
+    hat: "helmet",
+    bulk: 1.28,
+    shield: true,
+  },
+  // The Supervisor in his own plate after 06:47, in its parade finish:
+  // polished navy, gold-rimmed pauldrons with three bars, a gold ridge on the
+  // helmet, the sash and a short crimson cape; the visor up so his face shows.
   supervisorKit: {
-    coat: "#4f5a6e",
-    coatDark: "#323a48",
-    legs: "#262c37",
+    coat: "#4e5f8c",
+    coatDark: "#2c3758",
+    legs: "#1d2436",
     trim: "#e0b84a",
     hat: "helmet",
     visorUp: true,
-    rank: true,
+    rank: 3,
+    cape: "#7a1a24",
     skin: "#d8a982",
     hair: "#9a9a9a",
   },
@@ -116,10 +143,11 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
   const held = walking ? null : npc.gesture;
   const gk = gestureAmount(npc);
   const body = held === "cower" || held === "frozen" || held === "slumped" ? held : null;
-  const sh = (kit ? 0.24 : 0.2) * H; // half the shoulders
-  const hip = 0.15 * H;
-  const leg = 0.1 * H;
-  const arm = (kit ? 0.085 : 0.07) * H;
+  const bulk = look.bulk ?? 1;
+  const sh = (kit ? 0.24 : 0.2) * H * bulk; // half the shoulders
+  const hip = 0.15 * H * bulk;
+  const leg = 0.1 * H * bulk;
+  const arm = (kit ? 0.085 : 0.07) * H * bulk;
   // Cowering and sitting drop the upper body toward the floor.
   const drop = (body === "cower" ? 0.2 : body === "slumped" ? 0.5 : 0) * H * gk;
 
@@ -146,6 +174,67 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
   ctx.beginPath();
   ctx.ellipse(x, y(0.86) + bob, sh * 1.2, H * 0.035, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // A short cape, behind everything when seen from the front.
+  const drawCape = () => {
+    ctx.fillStyle = look.cape;
+    ctx.beginPath();
+    ctx.moveTo(x - sh * 0.95, y(-0.45));
+    ctx.lineTo(x + sh * 0.95, y(-0.45));
+    ctx.lineTo(x + sh * 1.12, y(0.4));
+    ctx.quadraticCurveTo(x, y(0.45), x - sh * 1.12, y(0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = look.trim;
+    ctx.lineWidth = Math.max(1, H * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(x + sh * 1.1, y(0.39));
+    ctx.quadraticCurveTo(x, y(0.44), x - sh * 1.1, y(0.39));
+    ctx.stroke();
+  };
+  if (look.cape && !away) drawCape();
+  if (look.whip) {
+    // The command whip off the radio pack, over the right shoulder.
+    const wx = x + (away ? -1 : 1) * sh * 0.55;
+    ctx.strokeStyle = "#6a717c";
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(wx, y(-0.44));
+    ctx.lineTo(wx + (away ? -1 : 1) * H * 0.05, y(-1.08));
+    ctx.stroke();
+    ctx.fillStyle = look.trim;
+    ctx.globalAlpha *= 0.7 + Math.sin(time * 0.006) * 0.3;
+    ctx.beginPath();
+    ctx.arc(wx + (away ? -1 : 1) * H * 0.05, y(-1.08), Math.max(1, H * 0.014), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = alpha;
+  }
+  // The breacher shield on the left arm: its back face, behind him, from behind.
+  const drawShield = (backFace) => {
+    const sx = x - sh * 1.18;
+    const sw = sh * 0.9;
+    ctx.fillStyle = backFace ? look.coatDark : "#6c7688";
+    ctx.beginPath();
+    ctx.roundRect(sx - sw / 2, y(-0.46), sw, H * 0.92, H * 0.03);
+    ctx.fill();
+    if (backFace) return;
+    ctx.fillStyle = "#4e586a";
+    ctx.beginPath();
+    ctx.roundRect(sx - sw * 0.4, y(-0.42), sw * 0.8, H * 0.84, H * 0.02);
+    ctx.fill();
+    ctx.fillStyle = "#0e1a26";
+    ctx.fillRect(sx - sw * 0.3, y(-0.38), sw * 0.6, H * 0.035);
+    ctx.strokeStyle = look.trim;
+    ctx.lineWidth = Math.max(1, H * 0.02);
+    ctx.beginPath();
+    ctx.moveTo(sx, y(-0.28));
+    ctx.lineTo(sx, y(0.3));
+    ctx.moveTo(sx - sw * 0.25, y(-0.16));
+    ctx.lineTo(sx, y(-0.26));
+    ctx.lineTo(sx + sw * 0.25, y(-0.16));
+    ctx.stroke();
+  };
+  if (look.shield && away) drawShield(true);
 
   // Legs, then boots.
   const stride = (body === "frozen" ? 0.9 : swing) * H * 0.08;
@@ -281,16 +370,57 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.fillStyle = look.trim;
       ctx.fillRect(x - sh * 0.35, y(-0.3), sh * 0.7, H * 0.025);
     }
+    if (look.shield) {
+      // A slab over the chest, and a second lame under each pauldron.
+      if (!away) {
+        ctx.fillStyle = look.coat;
+        ctx.beginPath();
+        ctx.roundRect(x - sh * 0.8, y(-0.4), sh * 1.6, H * 0.24, H * 0.03);
+        ctx.fill();
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.fillRect(x - sh * 0.62, y(-0.34), sh * 1.24, H * 0.12);
+      }
+      ctx.fillStyle = look.coatDark;
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(x + side * sh * 1.0, y(-0.36), sh * 0.32, H * 0.05, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.fillStyle = look.coat;
     for (const side of [-1, 1]) {
       ctx.beginPath();
       ctx.ellipse(x + side * sh * 0.95, y(-0.42), sh * 0.32, H * 0.06, 0, 0, Math.PI * 2);
       ctx.fill();
+      if (look.cape) {
+        // Gold rims on the parade pauldrons.
+        ctx.strokeStyle = look.trim;
+        ctx.lineWidth = Math.max(1, H * 0.012);
+        ctx.stroke();
+      }
     }
     if (look.rank) {
       // His rank boards on the pauldrons.
       ctx.fillStyle = look.trim;
-      for (const side of [-1, 1]) for (const k of [0, 1]) ctx.fillRect(x + side * sh * 0.95 - sh * 0.14, y(-0.45) + k * H * 0.025, sh * 0.28, H * 0.014);
+      for (const side of [-1, 1]) for (let k = 0; k < look.rank; k++) ctx.fillRect(x + side * sh * 0.95 - sh * 0.14, y(-0.46) + k * H * 0.022, sh * 0.28, H * 0.013);
+    }
+    if (look.lieutenant) {
+      // His silver bar on one pauldron, a tally on the other.
+      ctx.fillStyle = "#dfe4ea";
+      ctx.fillRect(x + sh * 0.95 - sh * 0.15, y(-0.445), sh * 0.3, H * 0.02);
+      ctx.fillStyle = "#e8e2d6";
+      for (let k = 0; k < 4; k++) ctx.fillRect(x - sh * 1.07 + k * sh * 0.07, y(-0.45), Math.max(1, H * 0.006), H * 0.03);
+    }
+    if (look.cape && !away) {
+      // The sash, shoulder to hip.
+      ctx.strokeStyle = "#8a1a22";
+      ctx.lineWidth = H * 0.045;
+      ctx.beginPath();
+      ctx.moveTo(x - sh * 0.7, y(-0.42));
+      ctx.lineTo(x + sh * 0.6, y(0.08));
+      ctx.stroke();
+      ctx.fillStyle = look.trim;
+      ctx.fillRect(x + sh * 0.2, y(-0.36), sh * 0.36, H * 0.03);
     }
     if (!away) {
       ctx.save();
@@ -451,6 +581,8 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
     }
   }
 
+  if (look.cape && away) drawCape();
+
   // Belt (a tool belt on coveralls; none shows under a lab coat).
   ctx.fillStyle = kit ? "#1d2026" : civ === "coveralls" ? "#3a2a1a" : "#101114";
   if (civ !== "labcoat") ctx.fillRect(x - hip * 1.08, y(0.1), hip * 2.16, H * 0.05);
@@ -463,6 +595,12 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
     }
   }
 
+  if (look.techArm && !away) {
+    // Tool pouches on the belt.
+    ctx.fillStyle = look.coatDark;
+    for (const px of [-0.95, -0.55, 0.45]) ctx.fillRect(x + hip * px, y(0.08), hip * 0.36, H * 0.08);
+  }
+
   // Hands.
   ctx.fillStyle = kit ? "#1d2026" : skin;
   for (const hnd of [handL, handR]) {
@@ -470,6 +608,18 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
     ctx.arc(hnd.x, hnd.y, arm * 0.55, 0, Math.PI * 2);
     ctx.fill();
   }
+  if (look.techArm && !away) {
+    // The tech module on the left forearm, its readout lit.
+    const mx = (x - sh + handL.x) / 2;
+    const my = (armY + handL.y) / 2 + H * 0.04;
+    ctx.fillStyle = "#2c3038";
+    ctx.fillRect(mx - arm * 0.75, my - H * 0.045, arm * 1.5, H * 0.09);
+    ctx.fillStyle = "#ffb347";
+    ctx.globalAlpha *= 0.8 + Math.sin(time * 0.005) * 0.2;
+    ctx.fillRect(mx - arm * 0.5, my - H * 0.02, arm, H * 0.03);
+    ctx.globalAlpha = alpha;
+  }
+  if (look.shield && !away) drawShield(false);
 
   // Neck and head (bowed when cowering, fallen to a shoulder when slumped).
   const hx = x + (body === "slumped" ? H * 0.04 * gk : 0);
@@ -535,6 +685,29 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.globalAlpha *= 0.75 + Math.sin(time * 0.004) * 0.15;
       ctx.fillRect(hx - hr * 0.7, hy + hr * 0.02, hr * 1.4, hr * 0.12);
       ctx.globalAlpha = alpha;
+    }
+    if (look.lieutenant) {
+      // The stripe up the crown, and scratches across the shell.
+      ctx.fillStyle = "#d8dde4";
+      ctx.fillRect(hx - hr * 0.12, hy - hr * 1.12, hr * 0.24, hr * 0.7);
+      if (!away) {
+        ctx.strokeStyle = "rgba(200,206,214,0.8)";
+        ctx.lineWidth = Math.max(1, hr * 0.06);
+        ctx.beginPath();
+        for (let k = 0; k < 3; k++) {
+          ctx.moveTo(hx + hr * (0.3 + k * 0.12), hy - hr * (0.95 - k * 0.04));
+          ctx.lineTo(hx + hr * (0.7 + k * 0.12), hy - hr * (0.5 - k * 0.04));
+        }
+        ctx.stroke();
+      }
+    } else if (look.cape) {
+      // A gold ridge down the helmet.
+      ctx.fillStyle = look.trim;
+      ctx.fillRect(hx - hr * 0.13, hy - hr * 1.14, hr * 0.26, hr * 0.62);
+    } else if (look.shield && !away) {
+      // Kael's brow guard over the visor.
+      ctx.fillStyle = look.coatDark;
+      ctx.fillRect(hx - hr * 1.1, hy - hr * 0.3, hr * 2.2, hr * 0.24);
     }
   } else {
     // Hair: a cap of it on top, all of it from behind.
