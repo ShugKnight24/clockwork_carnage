@@ -504,6 +504,11 @@ const ctx = game.hudCtx;
 const w = game.hudW;
 const h = game.hudH;
 ctx.clearRect(0, 0, w, h);
+// The HUD canvas keeps its state from frame to frame: a panel that left the
+// baseline at "top" or "middle" dropped next frame's ammo count off the
+// bottom of the screen, until something (the reload bar) set it back.
+ctx.textBaseline = "alphabetic";
+ctx.textAlign = "left";
 
 if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
   return;
@@ -1398,6 +1403,7 @@ if (game.settings.showKills) {
   const brY = h - 14;
   // Ammo (large number, right-aligned)
   ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
   ctx.fillStyle = ammoTint(game, "#ffcc00");
   ctx.font = game.scaledFont(38, "bold");
   ctx.fillText(`${game.player.ammoLabel ?? game.player.ammo}`, brX, brY - 18);
@@ -1703,6 +1709,7 @@ drawPanel(pad, panelY, ammoPanelW, panelH);
 ctx.fillStyle = "#ffcc00";
 ctx.font = "bold 16px monospace";
 ctx.textAlign = "center";
+ctx.textBaseline = "alphabetic";
 ctx.fillText("AMMO", pad + ammoPanelW / 2, panelY + 22);
 ctx.fillStyle = ammoTint(game, "#ffaa00");
 ctx.font = game.scaledFont(64, "bold");

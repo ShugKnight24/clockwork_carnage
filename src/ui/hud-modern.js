@@ -137,6 +137,9 @@ function shieldShards(ctx, x, y, w) {
 
 /** Number that kicks (scale + white flash) right after a shot. */
 function kickNumber(ctx, str, x, y, size, color, align) {
+  // The ammo counts: on the baseline whatever drew last left behind (the
+  // HUD canvas keeps its state), they dropped off the bottom of the screen.
+  ctx.textBaseline = "alphabetic";
   const k = since(M.shotAt, 160);
   if (k < 0) {
     number(ctx, str, x, y, size, color, align);

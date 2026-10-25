@@ -533,6 +533,7 @@ function drawWeaponBlock(game, ctx, right, bottom, f, fs, compact) {
   ctx.scale(sc, sc);
   ctx.translate(0, -kick * 2);
   ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
   if (HT.outline) {
     ctx.lineJoin = "round";
     ctx.lineWidth = 4;
