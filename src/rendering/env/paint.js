@@ -18,6 +18,70 @@ export function makeCanvas(w, h = w) {
   return c;
 }
 
+/**
+ * The largest wall mip kept. Faces are always painted at T, but a phone keeps
+ * its chains from half that: iOS caps every page's canvases at ~384 MB in
+ * all, and a station's two hundred faces at 512px (with their mips) are
+ * ~280 MB on their own, so the prologue's bake ran the page out and every
+ * canvas after that came back without a context. A phone screen never shows
+ * a wall's 512px level anyway.
+ */
+let wallBase = T;
+export const getWallBase = () => wallBase;
+/** Set the largest wall mip (T or T / 2) before any env is built. */
+export function setWallBase(px) {
+  wallBase = px >= T ? T : T >> 1;
+}
+
+let starved = false;
+/**
+ * True once a canvas has come back without a context: the page is out of
+ * canvas memory (iOS refuses past its cap rather than failing the page), so
+ * wall bakes stop and unbaked walls keep their fallback art.
+ */
+export const canvasStarved = () => starved;
+
+/**
+ * Run a texture bake. A null context from a starved page marks it starved
+ * and returns `fallback`, instead of throwing out of the frame: that throw
+ * every frame sent the prologue back to the menu on iPhones. Other errors
+ * still throw.
+ */
+export function guardBake(fn, fallback) {
+  if (starved) return fallback;
+  try {
+    return fn();
+  } catch (e) {
+    if (!(e instanceof TypeError) || !/null/i.test(e.message)) throw e;
+    starved = true;
+    console.warn("[Clockwork Carnage] Out of canvas memory: wall art stops baking here.", e);
+    return fallback;
+  }
+}
+
+/** Give a canvas's pixels back now, not at the next GC (iOS counts them until then). */
+export function releaseCanvas(c) {
+  c.width = 0;
+  c.height = 0;
+}
+
+/**
+ * A wall face's mip chain from its painted T×T canvas, starting at the wall
+ * base (getWallBase). Level 0 is the base, so a chain from a smaller base is
+ * one level shorter; consumers read the base off chain[0].width. The full-size
+ * canvas is released once it is scaled down.
+ */
+export function wallMips(canvas) {
+  if (canvas.width <= wallBase) return buildMips(canvas);
+  const c = makeCanvas(wallBase);
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(canvas, 0, 0, c.width, c.height);
+  releaseCanvas(canvas);
+  return buildMips(c);
+}
+
 /** Small deterministic PRNG (mulberry32) so textures are stable between runs. */
 export function rng(seed) {
   let a = seed >>> 0;

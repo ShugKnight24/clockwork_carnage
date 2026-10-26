@@ -21,7 +21,7 @@
  * first draws (prepareCityView); until it is, the panes keep their painted
  * view.
  */
-import { buildMips, makeCanvas } from "./paint.js";
+import { wallMips, makeCanvas } from "./paint.js";
 import { GLASS } from "./rooms/civic.js";
 import { TS, SKY, LAYERS, SPRITES, paintSky, paintLayer, paintSprites } from "./rooms/civic-city.js";
 
@@ -53,7 +53,7 @@ function flat() {
   const g = c.getContext("2d");
   g.fillStyle = "rgb(128,128,0)";
   g.fillRect(0, 0, TS, TS);
-  return (flatNormals = buildMips(c));
+  return (flatNormals = wallMips(c));
 }
 
 /** Cut a band into TS tiles, each a mip chain under its own id. */
@@ -62,7 +62,7 @@ function cut(band, firstId) {
   for (let i = 0; i < band.width / TS; i++) {
     const c = makeCanvas(TS);
     c.getContext("2d").drawImage(band, i * TS, 0, TS, TS, 0, 0, TS, TS);
-    const chain = buildMips(c);
+    const chain = wallMips(c);
     chain.normals = flat();
     out.push({ id: firstId + i, chain });
   }
@@ -140,7 +140,7 @@ function glaze(canvas, id) {
 function glazeChain(chain, id) {
   if (chain.glazed) return;
   glaze(chain[0], id);
-  const mips = buildMips(chain[0]);
+  const mips = wallMips(chain[0]);
   for (let i = 1; i < mips.length && i < chain.length; i++) chain[i] = mips[i];
   chain.glazed = true;
 }

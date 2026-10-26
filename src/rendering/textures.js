@@ -7,6 +7,7 @@ import { WALL_COLORS } from "../../js/data.js";
 import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand } from "./env/wall-art.js";
 import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";
+import { guardBake } from "./env/paint.js";
 import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
@@ -622,9 +623,13 @@ export function ensureEnvBands(env, styles, realistic = false) {
   let added = false;
   for (const style of styles) {
     if (env.bands[style] || style === "bulkhead") continue;
-    const mips = buildUpperBand(env.act, env.palette, CEILING_Z - 1, realistic, style);
-    if (realistic) bakeContactShadow(mips, BAND_SHADOW);
-    averageColor(mips[mips.length - 1]);
+    const mips = guardBake(() => {
+      const m = buildUpperBand(env.act, env.palette, CEILING_Z - 1, realistic, style);
+      if (realistic) bakeContactShadow(m, BAND_SHADOW);
+      averageColor(m[m.length - 1]);
+      return m;
+    }, null);
+    if (!mips) break;
     env.bands[style] = mips;
     added = true;
   }

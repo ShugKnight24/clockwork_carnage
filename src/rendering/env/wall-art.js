@@ -15,7 +15,7 @@ import { STATION_PAINTERS } from "./locker-art.js";
 import { rangePainters } from "./range-art.js";
 import { ROOM_PAINTERS } from "./rooms/index.js";
 import {
-  T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, buildMips,
+  T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, wallMips, guardBake,
   material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
 } from "./paint.js";
 
@@ -923,11 +923,11 @@ export function buildUpperBand(act, pal, span, realistic = false, style = "bulkh
   } finally {
     useMaterial(null);
   }
-  if (!mat) return buildMips(c);
+  if (!mat) return wallMips(c);
   // No floor line to gather grime along: the band's foot is the art's top.
   const normals = bakeMaterial(c, mat, p, act, 0x0ba11ad + k, { floor: false });
-  const mips = buildMips(c);
-  mips.normals = buildMips(normals);
+  const mips = wallMips(c);
+  mips.normals = wallMips(normals);
   return mips;
 }
 
@@ -948,22 +948,36 @@ export function buildWallSet(act, pal, salt = 0, realistic = false) {
  */
 export function extendWallSet(set, wanted, act, pal, salt = 0, realistic = false) {
   const ids = wanted.map(String).filter((id) => PAINTERS[id] && !set[id]);
+  // A page out of canvas memory stops painting (guardBake): the faces done
+  // so far are returned, and the rest keep their fallback art.
+  const done = [];
   if (!realistic) {
-    for (const id of ids) set[id] = buildMips(paintWall(+id, act, pal, salt));
-    return ids;
+    for (const id of ids) {
+      const mips = guardBake(() => wallMips(paintWall(+id, act, pal, salt)), null);
+      if (!mips) break;
+      set[id] = mips;
+      done.push(id);
+    }
+    return done;
   }
   const p = pal || getEnvPalette(act);
   // Paint every face before reading any back, so the GPU rasterises the
   // earlier faces while later ones are still being recorded.
-  const faces = ids.map((id) => {
+  const faces = guardBake(() => ids.map((id) => {
     const mat = beginMaterial(p);
     return { id, mat, canvas: paintWall(+id, act, p, salt, mat) };
-  });
+  }), []);
   for (const { id, mat, canvas } of faces) {
-    const normals = bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
-    set[id] = buildMips(canvas);
-    // Relief normals for the GPU wall pass's dynamic lights (WallPass).
-    set[id].normals = buildMips(normals);
+    const mips = guardBake(() => {
+      const normals = bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
+      const m = wallMips(canvas);
+      // Relief normals for the GPU wall pass's dynamic lights (WallPass).
+      m.normals = wallMips(normals);
+      return m;
+    }, null);
+    if (!mips) break;
+    set[id] = mips;
+    done.push(id);
   }
-  return ids;
+  return done;
 }
