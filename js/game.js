@@ -2,7 +2,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 
 // Reused light sample for the Realistic viewmodel; no per-frame allocation.
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
-import { releaseRasterCache } from "../src/rendering/svg-art/raster.js";
+import { releaseRasterCache, setRasterBudget, PHONE_RASTER_BUDGET } from "../src/rendering/svg-art/raster.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
@@ -153,6 +153,7 @@ import { LevelBeats } from "../src/systems/level-beats.js";
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { setWallBase, T } from "../src/rendering/env/paint.js";
 import { installInputTracking, padActive, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
 import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
@@ -261,6 +262,13 @@ export class Game {
     this.dpr = 1;
     this.hudW = hudCanvas.width;
     this.hudH = hudCanvas.height;
+    // Phones keep wall art from 256px (paint.js setWallBase) and less decoded
+    // SVG art: iOS caps a page's canvases, and the station's walls at 512px
+    // ran it out.
+    if (isPrimaryTouchDevice()) {
+      setWallBase(T / 2);
+      setRasterBudget(PHONE_RASTER_BUDGET);
+    }
     this.renderer = new Renderer(canvas, 0); // renderMode applied after settings load
     this.audio = new AudioManager();
     this.cutsceneEngine = null; // Lazy-loaded on first cutscene

@@ -4,6 +4,7 @@ import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ens
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
 import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
+import { guardBake } from "../src/rendering/env/paint.js";
 import { BAND_UNTINTED } from "../src/rendering/env/wall-art.js";
 
 /** Ambient-occlusion falloff toward a nearby occluder. Hoisted out of the
@@ -396,7 +397,7 @@ export class Renderer {
       map._ownWalls = [];
     }
     // The civic wing's glass, cut out once the city behind it is painted.
-    if (map._ownWalls.length && prepareCityView(env, map._ownWalls)) added = true;
+    if (map._ownWalls.length && guardBake(() => prepareCityView(env, map._ownWalls), false)) added = true;
     // The rooms' finishes over their art (map.bands): a lookup outside the
     // map builds the map's table of them.
     this._finishAt(map, -1, -1);
@@ -1437,7 +1438,11 @@ export class Renderer {
                   lineHeight >= 96 ? 2 :
                     lineHeight >= 48 ? 3 :
                       lineHeight >= 24 ? 4 : 5;
-            const mtex = mmips[lvl];
+            // A phone's chains start a level down (paint.js wallBase): the
+            // same screen size reads the same texels.
+            const base = mmips[0].width;
+            const lv = base < WALL_TEX ? Math.max(0, lvl - Math.log2(WALL_TEX / base)) : lvl;
+            const mtex = mmips[lv];
             const S = mtex.width;
             let texX = (wallX * S) | 0;
             if ((side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0)) {
@@ -1549,7 +1554,7 @@ export class Renderer {
               const tri = this.gpuWallTrilinear;
               const flip = (side === 0 && rayDirX > 0) || (side === 1 && rayDirY < 0);
               const u = tri ? (flip ? 1 - wallX : wallX) : (texX + 0.5) / S;
-              const lod = srcH <= 0 ? -1 : tri ? Math.min(5, Math.max(0, Math.log2(WALL_TEX / lineHeight))) : lvl;
+              const lod = srcH <= 0 ? -1 : tri ? Math.min(mmips.length - 1, Math.max(0, Math.log2(base / lineHeight))) : lv;
               const faceRGBA = face !== 0 ? rgbaBytes(menv.faceShade[face]) : NO_RGBA;
               const fogRGBA = fogCss ? rgbaBytes(fogCss) : NO_RGBA;
               const hitX = camX + perpWallDist * rayDirX;
@@ -1570,7 +1575,7 @@ export class Renderer {
                 // A finish not uploaded yet draws as the bulkhead meanwhile.
                 const fLayer = finish ? glWalls.bandLayers[finish.style] : undefined;
                 glWalls.upper(
-                  x, drawStart, bandEnd, lod < 0 ? lvl : lod, u, bandV0, bandV1,
+                  x, drawStart, bandEnd, lod < 0 ? lv : lod, u, bandV0, bandV1,
                   faceRGBA, fogRGBA, lt, this._finishTint(menv, mmips, fLayer === undefined ? null : finish), hitX, hitY, nX, nY, zTop,
                   eye - (bandEnd - horizon) / lineHeight, fLayer ?? glWalls.bandLayer,
                 );
@@ -1580,7 +1585,8 @@ export class Renderer {
                 ctx.drawImage(mtex, texX, srcY, 1, srcH, x, artStart, 1, artRows);
               }
               if (bandRows > 0) {
-                const band = this._bandMips(menv, mmips, finish)[lvl];
+                const bands = this._bandMips(menv, mmips, finish);
+                const band = bands[Math.min(lv, bands.length - 1)];
                 const B = band.width;
                 ctx.drawImage(band, (texX * B) / S, bandV0 * B, 1, (bandV1 - bandV0) * B, x, drawStart, 1, bandRows);
               }

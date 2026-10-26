@@ -159,8 +159,10 @@ void main() {
 // then 4 floats (world hit point and face normal) and 2 (height at y0, y1).
 const STRIDE = 72;
 const FLOATS = STRIDE / 4;
-const LEVELS = 6; // 512 .. 16, as buildMips makes them
-const SIZE = 512;
+// Chains run from their base (512, or 256 on a phone: paint.js wallBase)
+// down to 16, as buildMips makes them.
+const MIN_MIP = 16;
+const levelsFor = (size) => Math.log2(size / MIN_MIP) + 1;
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -320,19 +322,23 @@ export class WallPass {
         chain: (id) => (id === -1 ? env.upper : id < 0 ? env.bands[finishes[-2 - id]] : env.walls[id]),
         layer: (id) => (id < 0 ? band - 1 - id : layerOf[id]),
       };
-      const fits = ids.every((id) => {
+      // Every chain the same size, a power of two from its base down to 16.
+      const size = st.chain(ids[0])?.[0]?.width ?? 0;
+      st.size = size;
+      st.levels = size >= MIN_MIP && Number.isInteger(levelsFor(size)) ? levelsFor(size) : 0;
+      const fits = st.levels > 0 && ids.every((id) => {
         const mips = st.chain(id);
-        return mips.length >= LEVELS && mips[0].width === SIZE && mips[0].height === SIZE;
+        return mips.length >= st.levels && mips[0].width === size && mips[0].height === size;
       });
       if (fits) {
         st.tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D_ARRAY, st.tex);
-        gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS, gl.RGBA8, SIZE, SIZE, ids.length);
+        gl.texStorage3D(gl.TEXTURE_2D_ARRAY, st.levels, gl.RGBA8, size, size, ids.length);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       } else st.left.length = 0;
     }
-    if (st.left.length) this._fill(st.tex, st.left.splice(0, count), st.chain, 0, gl.RGBA, st.layer);
+    if (st.left.length) this._fill(st.tex, st.left.splice(0, count), st.chain, 0, gl.RGBA, st.layer, st.size);
     if (st.left.length) return false;
     this._next = null;
     if (this.tex) gl.deleteTexture(this.tex);
@@ -352,9 +358,9 @@ export class WallPass {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 1);
-    this.normalTex = ids.every((id) => st.chain(id).normals?.length >= LEVELS)
-      ? this._uploadArray(ids, (id) => st.chain(id).normals, ids.length)
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, st.levels - 1);
+    this.normalTex = ids.every((id) => st.chain(id).normals?.length >= st.levels && st.chain(id).normals[0].width === st.size)
+      ? this._uploadArray(ids, (id) => st.chain(id).normals, ids.length, st.size)
       : null;
     return true;
   }
@@ -365,18 +371,18 @@ export class WallPass {
    * full RGBA8 array: a station's hundred wall types cost ~145 MB of normals
    * at full size, ~18 MB like this. The shader samples them a level lower.
    */
-  _uploadArray(ids, chainOf, layers) {
+  _uploadArray(ids, chainOf, layers, size) {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, LEVELS - 1, gl.RGB565, SIZE >> 1, SIZE >> 1, layers);
-    this._fill(tex, ids, chainOf, 1, gl.RGB);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, levelsFor(size) - 1, gl.RGB565, size >> 1, size >> 1, layers);
+    this._fill(tex, ids, chainOf, 1, gl.RGB, this._layerOf, size);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, LEVELS - 2);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, levelsFor(size) - 2);
     return tex;
   }
 
@@ -390,14 +396,15 @@ export class WallPass {
    * layer, which also writes the RGB565 normals a framebuffer copy from RGBA8
    * may not. Without the blit program it uploads as before.
    */
-  _fill(tex, ids, chainOf, from, format, layer = this._layerOf) {
+  _fill(tex, ids, chainOf, from, format, layer = this._layerOf, size = 512) {
     const gl = this.gl;
+    const levels = levelsFor(size);
     if (!this._blitReady()) {
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
       for (const id of ids) {
         const mips = chainOf(id);
-        for (let l = from; l < LEVELS; l++) {
-          const s = SIZE >> l;
+        for (let l = from; l < levels; l++) {
+          const s = size >> l;
           gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, l - from, 0, 0, layer(id), s, s, 1, format, gl.UNSIGNED_BYTE, mips[l]);
         }
       }
@@ -412,8 +419,8 @@ export class WallPass {
     gl.bindTexture(gl.TEXTURE_2D, this._stage);
     for (const id of ids) {
       const mips = chainOf(id);
-      for (let l = from; l < LEVELS; l++) {
-        const s = SIZE >> l;
+      for (let l = from; l < levels; l++) {
+        const s = size >> l;
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mips[l]);
         gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, l - from, layer(id));
         gl.viewport(0, 0, s, s);

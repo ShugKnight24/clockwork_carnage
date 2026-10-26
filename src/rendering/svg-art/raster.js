@@ -11,7 +11,14 @@
 const MAX_PX = 4096;
 // Decoded bitmaps cost width×height×4 bytes. Past this budget the least
 // recently used sizes are dropped (a level can show dozens of sprite sizes).
-const BYTE_BUDGET = 256 * 1024 * 1024;
+// Phones get less (setRasterBudget): iOS caps all of a page's canvases at
+// ~384 MB, and the station's wall art needs its share of that.
+let BYTE_BUDGET = 256 * 1024 * 1024;
+export const PHONE_RASTER_BUDGET = 112 * 1024 * 1024;
+/** Cap decoded art at `bytes`; idle layers past it are dropped on the next draw. */
+export function setRasterBudget(bytes) {
+  BYTE_BUDGET = bytes;
+}
 const EVICT_IDLE_MS = 2000;
 const layers = new Map(); // layer id -> Map(bucket -> { img, ready, failed, bytes, lastUsed })
 let totalBytes = 0;
