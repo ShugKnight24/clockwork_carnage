@@ -288,7 +288,7 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
   ctx.font = TITLE_FONT;
   const titleW = ctx.measureText(step.title).width;
   ctx.font = HINT_FONT;
-  const hintLines = wrapText(ctx, step.hint, MAX_W - PAD_X * 2);
+  const hintLines = place.collapsed ? [] : wrapText(ctx, step.hint, MAX_W - PAD_X * 2);
   const hintW = hintLines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
   // ARIA's folded line, as a footer: "ARIA: ..." in her colour.
   const narr = narrationState(place.narration);
@@ -463,7 +463,14 @@ export function renderTutorialCard(ctx, w, h, state, lane = {}) {
   const now = performance.now();
   const fadeIn = Math.min(1, (now - tutorialStepTime) / 400);
   const pulse = 0.85 + 0.15 * Math.sin(now / 300);
-  const place = { caption: beatCaption(step.beat), progress: state.progress || "", top: 66, ...lane };
+  const place = {
+    caption: beatCaption(step.beat),
+    progress: state.progress || "",
+    top: 66,
+    ...lane,
+    // On a phone the card folds to its title and counter once it has been read.
+    collapsed: !!lane.compact && !!isTouchDevice && now - tutorialStepTime > CARD_COLLAPSE_AFTER * 1000,
+  };
   if (isModernArt()) {
     return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
   }
@@ -486,12 +493,16 @@ export function renderTutorialCard(ctx, w, h, state, lane = {}) {
 export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1, lay = {}) {
   const fadeIn = Math.min(1, elapsed / 0.4) * Math.max(0, Math.min(1, fade));
   if (fadeIn <= 0) return 0;
+  if (lay.compact && elapsed > CARD_COLLAPSE_AFTER) lay = { ...lay, collapsed: true };
   const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
   if (isModernArt()) return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
   return renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
 }
 
 const NARRATION_TYPE_RATE = 60; // chars/s, ARIA's own plate rate
+
+/** Seconds a phone shows a card's hint before folding it to the title. */
+export const CARD_COLLAPSE_AFTER = 6;
 
 /**
  * A folded comms line's presence (0..1: in over 0.3 s, out over its last
@@ -790,7 +801,7 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const cx = Math.round(place.cx ?? w / 2);
 
   const titleW = measureSpaced(titleFont, step.title, 1);
-  const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont, step.pad);
+  const lay = place.collapsed ? { lines: [], w: 0 } : layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont, step.pad);
   // ARIA's folded line: a footer row under a hairline, typed as she speaks.
   const narr = narrationState(place.narration);
   const narrFont = uiFont(compact ? 11 : 13, 600);

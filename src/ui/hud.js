@@ -31,6 +31,7 @@ import { coverCone, blindFireNow } from "../systems/cover-play.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { activeDevice, drawPrompt, glyph } from "./input-glyphs.js";
 import { drawReloadHud, drawConditioningChip, ammoTint } from "./reload-hud.js";
+import { phoneMinimapSize } from "./touch-layout.js";
 
 /**
  * Weapon name → asset slug. Mirrors the slugifier in
@@ -587,8 +588,13 @@ if (isCompactMobile) {
   else _renderCompactMobileHUD(game, ctx, w, h, barH, hudFactor);
 
   // Minimap (smaller on compact mobile)
-  let mmSize = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
-  _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
+  // Where the touch layout put it, so pause sits against its left edge.
+  const mr = game.touchControls?.zones?.minimap;
+  if (mr) _drawHudMinimap(ctx, mr.x, mr.y, mr.s, _minimapState(game));
+  else {
+    const mmSize = phoneMinimapSize(game.settings.minimapSize, w, h);
+    _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
+  }
 
   drawCombatCues(game, ctx, w, h, barH);
   if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH);

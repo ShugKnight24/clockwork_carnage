@@ -146,6 +146,14 @@ function glazeChain(chain, id) {
 }
 
 /**
+ * Paint the next piece of the city ahead of the level that shows it (the
+ * prologue's bake before play). True once it is all painted.
+ */
+export function warmCityView() {
+  return step();
+}
+
+/**
  * Bring the city into Modern env `env` for a map whose own walls (`ids`)
  * include the glass: paint a piece a call, and once it is all painted and
  * the env has the glass, glaze it and add the city's tiles. True when the

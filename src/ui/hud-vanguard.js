@@ -39,6 +39,7 @@ import { reticlePoint } from "../systems/aim.js";
 import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { ammoTint } from "./reload-hud.js";
+import { phoneMinimapSize, phoneVitalsLeft } from "./touch-layout.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -1106,12 +1107,13 @@ function safeInsets(w, h) {
 /**
  * Landscape phone Vanguard. Touch controls own the lower corners, so vitals
  * move to the top-left and the weapon block to the bottom centre. The minimap
- * and pause buttons (top-right) are drawn by hud.js / touch.js.
+ * (top-right) and pause button (top-left, before the vitals) are drawn by hud.js / touch.js.
  */
 export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   const fs = (game.settings.fontScale || 100) / 100;
   const sa = safeInsets(w, h);
-  const left = 10 + sa.left;
+  // Right of the pause button in the corner.
+  const left = phoneVitalsLeft(game.touchControls?.zones, sa.left);
 
   const R = Math.round(27 * f);
   const tw = Math.max(4, Math.round(6 * f));
@@ -1132,7 +1134,7 @@ export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   drawBossBar(game, ctx, w, fs, 44);
 
   // Kills / score left of the minimap.
-  let mm = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
+  let mm = phoneMinimapSize(game.settings.minimapSize, w, h);
   let chipsRight = w - mm - 22 - sa.right;
   if (game.settings.showKills) {
     const pop = since(M.killAt, 320);

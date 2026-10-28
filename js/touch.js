@@ -3,7 +3,8 @@
  *
  * Left side: Virtual joystick for movement (feeds game.keys)
  * Right side: Touch-drag area for look (feeds game.mouse.dx/dy)
- * Buttons: Fire, Aim, Dash, Interact, Chrono Shift, Sprint toggle, Pause
+ * Buttons: Fire, Aim, Dash, Crouch, Reload, Interact, Chrono Shift, Pause.
+ * The stick pushed past its rim sprints; FIRE and AIM double as look pads.
  *
  * Self-contained — call TouchControls.init(game) after game is created.
  * Only activates on touch-capable devices.
@@ -20,6 +21,16 @@ import {
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
+import { isReloading } from "../src/systems/reload.js";
+import { gyroLookDelta, gyroActive, webkitRotationOrder } from "../src/systems/gyro-aim.js";
+import { findAssistTarget, assistFriction, applyAssistPull } from "../src/systems/aim-assist.js";
+import { PLAYER_MOUSE_TURN_RATE } from "../src/constants.js";
+
+/** A press shorter than this latches AIM or SLOW on; a longer one holds it. */
+const TAP_LATCH_MS = 250;
+/** The stick runs past this fraction of its radius, and walks again inside the second. */
+const SPRINT_OUT = 1.2;
+const SPRINT_IN = 0.7;
 import { directorInput } from "../src/cinematic/director.js";
 
 export class TouchControls {
@@ -49,9 +60,12 @@ export class TouchControls {
     this.lookActive = false;
     this.lookTapTime = 0; // for swipe detection
 
-    // Fire state
+    // Fire state. FIRE and AIM are look pads too: dragging off either one
+    // turns the view, so one thumb can shoot and track a target at once.
     this.fireTouch = null;
     this.aimTouch = null;
+    this.fireLast = { x: 0, y: 0 };
+    this.aimLast = { x: 0, y: 0 };
 
     // Layout zones (set on resize)
     this.zones = {};
@@ -66,13 +80,37 @@ export class TouchControls {
     // Track active button touches
     this.activeButtons = new Set();
 
-    // Sprint toggle state (tap to toggle auto-sprint)
-    this.sprintToggleActive = false;
+    // Sprinting: the stick is out past its rim (with hysteresis, so a thumb
+    // on the edge does not flicker between walk and run).
+    this.sprinting = false;
+
+    // AIM and SLOW: a tap latches them on until the next tap, a hold lasts
+    // as long as the thumb is down.
+    this.aimDownAt = 0;
+    this.aimLatched = false;
+    this.aimUnlatching = false;
+    this.chronoDownAt = 0;
+    this.chronoLatched = false;
+    this.chronoUnlatching = false;
 
     // Chrono shift touch tracking
     this.chronoTouch = null;
     // Crouch touch tracking
     this.crouchTouch = null;
+
+    // Gyro aim: the motion listener goes on at the first tap after the
+    // setting is on. iOS asks for motion access only inside a finished tap
+    // (touchend or click): asked from touchstart, it refuses.
+    this.gyroAttached = false;
+    this.gyroAsking = false;
+    this.gyroDenied = false;
+    this.gyroLast = 0;
+
+    // Aim assist (src/systems/aim-assist.js): the target under the reticle
+    // this frame, and whether the player steered it.
+    this.assistTarget = null;
+    this.assistLast = 0;
+    this.lookedThisFrame = false;
 
     // Cutscene hold-to-skip state
     this.cutsceneHoldTouch = null;
@@ -104,7 +142,7 @@ export class TouchControls {
     this.canvas = document.createElement("canvas");
     this.canvas.id = "touchCanvas";
     this.canvas.style.cssText =
-      "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:20;pointer-events:none;";
+      "position:fixed;top:0;left:0;width:100%;height:100vh;height:100dvh;z-index:20;pointer-events:none;";
     document.body.appendChild(this.canvas);
     // resize() applies the DPR transform, so the context must exist first.
     this.ctx = this.canvas.getContext("2d");
@@ -113,7 +151,7 @@ export class TouchControls {
     this.touchLayer = document.createElement("div");
     this.touchLayer.id = "touchLayer";
     this.touchLayer.style.cssText =
-      "position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:15;touch-action:none;";
+      "position:fixed;top:0;left:0;width:100%;height:100vh;height:100dvh;z-index:15;touch-action:none;";
     document.body.appendChild(this.touchLayer);
 
     this.resize();
@@ -121,6 +159,7 @@ export class TouchControls {
     this._onTouchStart = (e) => this.onTouchStart(e);
     this._onTouchMove = (e) => this.onTouchMove(e);
     this._onTouchEnd = (e) => this.onTouchEnd(e);
+    this._onMotion = (e) => this.onMotion(e);
 
     window.addEventListener("resize", this._onResize);
 
@@ -146,11 +185,13 @@ export class TouchControls {
   }
 
   destroy() {
+    this.destroyed = true;
     window.removeEventListener("resize", this._onResize);
     this.touchLayer.removeEventListener("touchstart", this._onTouchStart);
     this.touchLayer.removeEventListener("touchmove", this._onTouchMove);
     this.touchLayer.removeEventListener("touchend", this._onTouchEnd);
     this.touchLayer.removeEventListener("touchcancel", this._onTouchEnd);
+    if (this.gyroAttached) window.removeEventListener("devicemotion", this._onMotion);
     this.canvas.remove();
     this.touchLayer.remove();
   }
@@ -167,7 +208,7 @@ export class TouchControls {
 
     this._updateSafeArea();
 
-    this.zones = touchZones({ w, h, safeArea: this.safeArea });
+    this.zones = touchZones({ w, h, safeArea: this.safeArea, minimapSize: this.game?.settings?.minimapSize });
     // Keep the joystick radius in sync with the viewport.
     this.joyRadius = this.zones.isCompactPhone ? 45 : 60;
   }
@@ -216,11 +257,8 @@ export class TouchControls {
       return "rewind";
     if (powers?.has("timeLock") && this.dist(x, y, z.lockBtn.x, z.lockBtn.y) < z.lockBtn.r * hitShrink)
       return "lock";
-    if (
-      this.dist(x, y, z.sprintBtn.x, z.sprintBtn.y) <
-      z.sprintBtn.r * hitShrink
-    )
-      return "sprint";
+    if (this.dist(x, y, z.reloadBtn.x, z.reloadBtn.y) < z.reloadBtn.r * hitShrink)
+      return "reload";
     if (
       this.dist(x, y, z.crouchBtn.x, z.crouchBtn.y) <
       z.crouchBtn.r * hitShrink
@@ -236,6 +274,7 @@ export class TouchControls {
     if (
       this.canFullscreen &&
       !this.isStandalone &&
+      z.fullscreenBtn &&
       this.dist(x, y, z.fullscreenBtn.x, z.fullscreenBtn.y) < z.fullscreenBtn.r
     )
       return "fullscreen";
@@ -406,17 +445,28 @@ export class TouchControls {
         this.lookTapTime = performance.now();
       } else if (zone === "fire" && this.fireTouch === null) {
         this.fireTouch = touch.identifier;
+        this.fireLast = { x, y };
         g.player.isFiring = true;
         this.activeButtons.add("fire");
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
       } else if (zone === "aim" && this.aimTouch === null) {
         this.aimTouch = touch.identifier;
-        g.player.isAiming = true;
+        this.aimLast = { x, y };
+        this.aimDownAt = performance.now();
+        // A tap on a latched AIM lets go; anything else aims while it lasts.
+        if (this.aimLatched) {
+          this.aimLatched = false;
+          this.aimUnlatching = true;
+        }
+        g.player.isAiming = !this.aimUnlatching;
         this.activeButtons.add("aim");
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "dash") {
         this.activeButtons.add("dash");
         this.triggerDirectionalDash(g, true);
+      } else if (zone === "reload") {
+        this.activeButtons.add("reload");
+        if (g.reloadPress() && g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
       } else if (zone === "interact") {
         this.activeButtons.add("interact");
         // USE reloads when there is nothing to use, as the pad's X does.
@@ -424,7 +474,12 @@ export class TouchControls {
       } else if (zone === "chrono" && this.chronoTouch === null) {
         this.activeButtons.add("chrono");
         this.chronoTouch = touch.identifier;
-        g.keys[g.keybinds.chronoShift] = true;
+        this.chronoDownAt = performance.now();
+        if (this.chronoLatched) {
+          this.chronoLatched = false;
+          this.chronoUnlatching = true;
+        }
+        g.keys[g.keybinds.chronoShift] = !this.chronoUnlatching;
       } else if (zone === "rewind") {
         this.activeButtons.add("rewind");
         if (g.chronoRewind() && g.settings.haptics && navigator.vibrate) navigator.vibrate(25);
@@ -436,10 +491,6 @@ export class TouchControls {
         this.crouchTouch = touch.identifier;
         g.keys[g.keybinds.crouch] = true;
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(10);
-      } else if (zone === "sprint") {
-        this.sprintToggleActive = !this.sprintToggleActive;
-        this.activeButtons.add("sprint");
-        g.keys[g.keybinds.sprint] = this.sprintToggleActive;
       } else if (zone === "weapon") {
         this.activeButtons.add("weapon");
         const p = g.player;
@@ -471,17 +522,16 @@ export class TouchControls {
         this.joyPos.x = touch.clientX;
         this.joyPos.y = touch.clientY;
         this.updateJoystickKeys();
+      } else if (touch.identifier === this.fireTouch) {
+        this.look(touch.clientX - this.fireLast.x, touch.clientY - this.fireLast.y);
+        this.fireLast.x = touch.clientX;
+        this.fireLast.y = touch.clientY;
+      } else if (touch.identifier === this.aimTouch) {
+        this.look(touch.clientX - this.aimLast.x, touch.clientY - this.aimLast.y);
+        this.aimLast.x = touch.clientX;
+        this.aimLast.y = touch.clientY;
       } else if (touch.identifier === this.lookTouch) {
-        const dx = touch.clientX - this.lookLast.x;
-        const dy = touch.clientY - this.lookLast.y;
-
-        // Touch look uses the same reticle path as mouse so visual crosshair
-        // and bullet trajectory stay aligned. Auto-fire only gates firing.
-        let rawSens = Number(this.game.settings.touchSensitivity);
-        if (!Number.isFinite(rawSens)) rawSens = 1.5;
-        const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
-        this.game.mouse.dx += dx * touchSens;
-        this.game.mouse.dy += dy * touchSens;
+        this.look(touch.clientX - this.lookLast.x, touch.clientY - this.lookLast.y);
 
         // Twin-stick auto-fire handling
         if (this.game.settings.autoFire) {
@@ -515,9 +565,24 @@ export class TouchControls {
 
   onTouchEnd(e) {
     e.preventDefault();
+    this.ensureGyro();
 
     if (this.game.state === "cinematic") {
-      if (e.touches.length === 0) directorInput(this.game, "pointer", { down: false });
+      if (e.touches.length === 0) {
+        directorInput(this.game, "pointer", { down: false });
+        // A thumb held on a button into the reel lifts here, not over play:
+        // let go of everything it was holding.
+        this.joyTouch = this.lookTouch = this.fireTouch = this.aimTouch = null;
+        this.chronoTouch = this.crouchTouch = null;
+        this.joyActive = this.lookActive = false;
+        this.aimUnlatching = this.chronoUnlatching = false;
+        this.clearMovementKeys();
+        this.releaseLatches();
+        const g = this.game;
+        if (g.player) g.player.isFiring = false;
+        g.keys[g.keybinds.crouch] = false;
+        this.activeButtons.clear();
+      }
       return;
     }
 
@@ -583,11 +648,17 @@ export class TouchControls {
         this.activeButtons.delete("fire");
       } else if (touch.identifier === this.aimTouch) {
         this.aimTouch = null;
-        this.game.player.isAiming = false;
+        const tap = performance.now() - this.aimDownAt < TAP_LATCH_MS;
+        this.aimLatched = tap && !this.aimUnlatching;
+        this.aimUnlatching = false;
+        this.game.player.isAiming = this.aimLatched;
         this.activeButtons.delete("aim");
       } else if (touch.identifier === this.chronoTouch) {
         this.chronoTouch = null;
-        this.game.keys[this.game.keybinds.chronoShift] = false;
+        const tap = performance.now() - this.chronoDownAt < TAP_LATCH_MS;
+        this.chronoLatched = tap && !this.chronoUnlatching;
+        this.chronoUnlatching = false;
+        this.game.keys[this.game.keybinds.chronoShift] = this.chronoLatched;
         this.activeButtons.delete("chrono");
       } else if (touch.identifier === this.crouchTouch) {
         this.crouchTouch = null;
@@ -601,9 +672,103 @@ export class TouchControls {
     this.activeButtons.delete("lock");
     this.activeButtons.delete("interact");
     this.activeButtons.delete("pause");
-    this.activeButtons.delete("sprint");
+    this.activeButtons.delete("reload");
     this.activeButtons.delete("weapon");
 
+  }
+
+  /** Start listening to the gyro once it is wanted; on iOS, ask first. */
+  ensureGyro() {
+    if (this.gyroAttached || this.gyroAsking || this.gyroDenied) return;
+    if (!Number(this.game.settings.gyroAim)) return;
+    const DM = window.DeviceMotionEvent;
+    if (!DM) return;
+    const attach = () => {
+      if (this.destroyed) return;
+      window.addEventListener("devicemotion", this._onMotion);
+      this.gyroAttached = true;
+    };
+    if (typeof DM.requestPermission !== "function") {
+      attach();
+      return;
+    }
+    this.gyroAsking = true;
+    DM.requestPermission()
+      .then((answer) => {
+        if (answer === "granted") attach();
+        // Only the player's own "Don't Allow" stops the asking; a refusal
+        // for want of a gesture gets another go at the next tap.
+        else this.gyroDenied = true;
+      })
+      .catch(() => {})
+      .finally(() => {
+        this.gyroAsking = false;
+      });
+  }
+
+  /** A motion sample: the phone's turn becomes look input, in mouse pixels. */
+  onMotion(e) {
+    const g = this.game;
+    const now = performance.now();
+    const dt = (now - this.gyroLast) / 1000;
+    this.gyroLast = now;
+    const p = g.player;
+    if (g.state !== "playing" || !p || !gyroActive(Number(g.settings.gyroAim), p.isAiming)) return;
+    const angle = screen.orientation?.angle ?? window.orientation ?? 0;
+    this.gyroWebkit ??= webkitRotationOrder();
+    const { yaw, pitch } = gyroLookDelta(e.rotationRate, angle, dt, this.gyroWebkit);
+    // Pixels whose camera turn (player-update applyMouseAim) is that many
+    // radians, times the gyro's own gain; the sights' zoom then scales it
+    // down like any other look input.
+    const gain = Number(g.settings.gyroSensitivity) || 2;
+    const pxPerRad = gain / (PLAYER_MOUSE_TURN_RATE * (p.rotSpeed || 3) * (g.settings.sensitivity || 1));
+    g.mouse.dx += yaw * pxPerRad;
+    g.mouse.dy -= pitch * pxPerRad;
+  }
+
+  /** Whether the first-launch controls card is up, holding the game still behind it. */
+  holdsPlay() {
+    return this.showTutorial && !this.tutorialDismissed;
+  }
+
+  /** Drop a latched AIM or SLOW (a menu, a cutscene, a death took the screen). */
+  releaseLatches() {
+    const g = this.game;
+    if (this.aimLatched && this.aimTouch === null) {
+      this.aimLatched = false;
+      if (g.player) g.player.isAiming = false;
+    }
+    if (this.chronoLatched && this.chronoTouch === null) {
+      this.chronoLatched = false;
+      g.keys[g.keybinds.chronoShift] = false;
+    }
+  }
+
+  /** Turn the view by a touch drag of (dx, dy) CSS px. */
+  look(dx, dy) {
+    // Touch look uses the same reticle path as mouse so visual crosshair
+    // and bullet trajectory stay aligned. Auto-fire only gates firing.
+    let rawSens = Number(this.game.settings.touchSensitivity);
+    if (!Number.isFinite(rawSens)) rawSens = 1.5;
+    const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
+    const slow = assistFriction(this.assistTarget, Number(this.game.settings.aimAssist) || 0);
+    this.game.mouse.dx += dx * touchSens * slow;
+    this.game.mouse.dy += dy * touchSens * slow;
+    if (dx || dy) this.lookedThisFrame = true;
+  }
+
+  /** Once a frame in play: find the target under the reticle and lean toward it. */
+  updateAssist() {
+    const g = this.game;
+    const now = performance.now();
+    const dt = this.assistLast ? (now - this.assistLast) / 1000 : 0;
+    this.assistLast = now;
+    const level = Number(g.settings.aimAssist) || 0;
+    this.assistTarget = level ? findAssistTarget(g) : null;
+    const p = g.player;
+    const input = this.lookedThisFrame ? 1 : p?.isFiring ? 0.6 : this.joyActive ? 0.4 : 0;
+    applyAssistPull(g, this.assistTarget, level, dt, input);
+    this.lookedThisFrame = false;
   }
 
   updateJoystickKeys() {
@@ -617,10 +782,10 @@ export class TouchControls {
     this.game.keys[kb.moveLeft] = dx < -deadzone;
     this.game.keys[kb.moveRight] = dx > deadzone;
 
-    // Sprint if toggle is active OR joystick pushed far enough
     const dist = Math.sqrt(dx * dx + dy * dy);
-    this.game.keys[kb.sprint] =
-      this.sprintToggleActive || dist > this.joyRadius * 1.2;
+    if (dist > this.joyRadius * SPRINT_OUT) this.sprinting = true;
+    else if (dist < this.joyRadius * SPRINT_IN) this.sprinting = false;
+    this.game.keys[kb.sprint] = this.sprinting;
   }
 
   clearMovementKeys() {
@@ -629,8 +794,8 @@ export class TouchControls {
     this.game.keys[kb.moveBack] = false;
     this.game.keys[kb.moveLeft] = false;
     this.game.keys[kb.moveRight] = false;
-    // Preserve sprint toggle state
-    this.game.keys[kb.sprint] = this.sprintToggleActive;
+    this.sprinting = false;
+    this.game.keys[kb.sprint] = false;
   }
 
   handlePauseTap(touch) {
@@ -807,7 +972,17 @@ export class TouchControls {
     }
 
     // Nothing to draw during cutscenes or other non-playing states
-    if (gs !== "playing") return;
+    if (gs !== "playing") {
+      this.releaseLatches();
+      return;
+    }
+    if (!this.holdsPlay()) this.updateAssist();
+    // A latched SLOW lets go once the energy it runs on is spent.
+    const p = this.game.player;
+    if (this.chronoLatched && this.chronoTouch === null && p && p.chronoEnergy <= 0) {
+      this.chronoLatched = false;
+      this.game.keys[this.game.keybinds.chronoShift] = false;
+    }
 
     // First-launch mobile tutorial overlay
     if (this.showTutorial && !this.tutorialDismissed) {
@@ -959,15 +1134,22 @@ export class TouchControls {
       this.activeButtons.has("crouch") ? "#66dd66" : "#558855",
     );
 
-    // ── Sprint toggle button (left side) ──
-    this.drawButton(
-      ctx,
-      z.sprintBtn.x,
-      z.sprintBtn.y,
-      z.sprintBtn.r,
-      this.sprintToggleActive ? "RUN" : "WALK",
-      this.sprintToggleActive ? "#ffaa00" : "#887744",
-    );
+    // ── Reload (pulses on an empty mag; lit while the reload runs) ──
+    {
+      const p = this.game.player;
+      const wep = p?.weapons?.[p.currentWeapon];
+      const empty = !!wep && p.loadedOf?.(wep) === 0;
+      const running = isReloading(this.game);
+      const pulseOn = empty && !running && Math.sin(performance.now() / 120) > 0;
+      this.drawButton(
+        ctx,
+        z.reloadBtn.x,
+        z.reloadBtn.y,
+        z.reloadBtn.r,
+        "RELOAD",
+        running || this.activeButtons.has("reload") ? "#ffffff" : pulseOn ? "#ffcc33" : "#aa9966",
+      );
+    }
 
     // ── Weapon cycle button ──
     {
@@ -986,7 +1168,7 @@ export class TouchControls {
       }
     }
 
-    // ── Pause / Menu button (top-right) ──
+    // ── Pause / Menu button (top-right; a short phone's top-left) ──
     this.drawButton(
       ctx,
       z.pauseBtn.x,
@@ -997,7 +1179,7 @@ export class TouchControls {
     );
 
     // ── Fullscreen button (top-right, next to pause) — hidden when API unavailable ──
-    if (this.canFullscreen && !this.isStandalone) {
+    if (this.canFullscreen && !this.isStandalone && z.fullscreenBtn) {
       const isFS = !!(
         document.fullscreenElement || document.webkitFullscreenElement
       );
@@ -1066,11 +1248,9 @@ export class TouchControls {
     const hintGap = isCompact ? 15 : 25;
     const dismissY = h - this.safeArea.bottom - (isCompact ? 14 : 30);
     const hints = [
-      { label: "FIRE", desc: "Big button", color: "#ff6644" },
-      { label: "DASH", desc: "Top-right", color: "#00cccc" },
-      { label: "USE", desc: "Top-left", color: "#00cc44" },
-      { label: "SLOW", desc: "Time slow", color: "#9944ff" },
-      { label: "RUN/WALK", desc: "Sprint toggle", color: "#ffaa00" },
+      { label: "FIRE / AIM", desc: "Hold and drag to track", color: "#ff6644" },
+      { label: "RUN", desc: "Push the stick past its ring", color: "#ffaa00" },
+      { label: "CROUCH", desc: "Tap while running to slide", color: "#66dd66" },
     ];
     const hintBase =
       dismissY - (isCompact ? 20 : 28) - (hints.length - 1) * hintGap;

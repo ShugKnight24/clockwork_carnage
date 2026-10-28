@@ -16,6 +16,15 @@
 
 const WARM_FRAMES = 30;
 
+/**
+ * Widest picture an art shot fills. The backdrops and figures are composed
+ * for 16:9 and fill the width, so a landscape phone with its browser bars
+ * (852x276, past 3:1) lost their tops and feet, a picture "zoomed in". Past
+ * this the shot is framed at it, centred, the backdrop dimmed out to the
+ * sides.
+ */
+const MAX_ASPECT = 2;
+
 let cs = null; // the cutscene drawing functions, once their chunk has loaded
 
 function nextFrame() {
@@ -51,10 +60,21 @@ export const art = {
   update() {},
   event() {},
   teardown() {},
-  draw(ctx, w, h, local, { game, shotLen, handle }) {
+  draw(ctx, w0, h, local, { game, shotLen, handle }) {
     if (!cs) return;
     const spec = handle.shot.scene;
     ctx.save();
+    let w = w0;
+    if (w0 / h > MAX_ASPECT) {
+      cs.drawCutsceneBg(ctx, w0, h, spec.bg, local);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(0, 0, w0, h);
+      w = Math.round(h * MAX_ASPECT);
+      ctx.translate(Math.round((w0 - w) / 2), 0);
+      ctx.beginPath();
+      ctx.rect(0, 0, w, h);
+      ctx.clip();
+    }
     const pan = spec.pan;
     if (pan?.from && pan?.to) {
       const k = smooth(shotLen > 0 ? local / shotLen : 0);

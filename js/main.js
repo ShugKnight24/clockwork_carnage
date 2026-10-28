@@ -2,7 +2,7 @@ import { Game, GameState, GAME_VERSION } from "./game.js";
 import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
-import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { isPrimaryTouchDevice, lockPageZoom } from "../src/utils/device.js";
 import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
@@ -21,6 +21,7 @@ import { filmById } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
 
 const primaryTouch = isPrimaryTouchDevice();
+if (primaryTouch) lockPageZoom();
 const debugParam = new URLSearchParams(window.location.search).has("debug");
 // ?bench runs the scripted benchmark (js/testing/bench.js) once the bridge loads.
 const benchParam = new URLSearchParams(window.location.search).has("bench");
@@ -393,6 +394,47 @@ document.getElementById("btnBack").addEventListener("click", () => {
   game.state = GameState.TITLE;
 });
 
+/**
+ * iPhone, in the browser: its bars take a third of a landscape screen and
+ * there is no Fullscreen API. Say once, on the title, how to get the whole
+ * screen (a home screen app), until the player closes it.
+ */
+function showHomeScreenBanner() {
+  try {
+    if (localStorage.getItem("cc_a2hs_banner_closed")) return;
+  } catch (_) {}
+  const bar = document.createElement("div");
+  bar.id = "a2hsBanner";
+  bar.setAttribute("role", "note");
+  bar.style.cssText =
+    "position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;" +
+    "display:flex;align-items:center;gap:10px;max-width:calc(100vw - 32px);padding:8px 8px 8px 14px;border-radius:10px;" +
+    "background:rgba(4,6,11,0.92);border:1px solid rgba(34,230,255,0.45);color:var(--cc-text,#e4edf5);" +
+    "font:600 13px/1.3 var(--cc-font,system-ui);box-shadow:0 6px 24px rgba(0,0,0,0.5)";
+  const text = document.createElement("span");
+  text.textContent = "Play full screen: tap Share (↑), then Add to Home Screen, and open it from there.";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "✕";
+  close.setAttribute("aria-label", "Close");
+  close.style.cssText =
+    "flex:none;width:44px;height:44px;border:0;border-radius:8px;background:rgba(34,230,255,0.12);color:inherit;font:700 16px system-ui";
+  close.addEventListener("click", () => {
+    bar.remove();
+    try {
+      localStorage.setItem("cc_a2hs_banner_closed", "1");
+    } catch (_) {}
+  });
+  bar.append(text, close);
+  document.body.appendChild(bar);
+  // Only the title has room for it: it goes once a mode starts.
+  const hide = () => {
+    if (titleScreen.classList.contains("hidden")) bar.remove();
+    else requestAnimationFrame(hide);
+  };
+  requestAnimationFrame(hide);
+}
+
 // Fullscreen toggle (with iOS webkit prefix fallback)
 const btnFullscreen = document.getElementById("btnFullscreen");
 const canFullscreen =
@@ -411,13 +453,16 @@ if (btnFullscreen) {
       primaryTouch &&
       /iP(hone|ad|od)/.test(navigator.userAgent)
     ) {
-      // iOS device without Fullscreen API — offer PWA install via home screen
+      // iOS device without Fullscreen API — offer PWA install via home screen.
+      // Since iOS 16.4 every browser's Share sheet can add one, not only Safari's.
+      showHomeScreenBanner();
       const ua = navigator.userAgent;
+      const shareSheetA2HS = /OS (1[7-9]|[2-9]\d)_|OS 16_([4-9])/.test(ua);
       const isSafari =
         /Safari/.test(ua) &&
         !/CriOS|FxiOS|OPiOS|EdgiOS|DuckDuckGo|brave/i.test(ua) &&
         /Apple/.test(navigator.vendor);
-      if (isSafari) {
+      if (isSafari || shareSheetA2HS) {
         btnFullscreen.textContent = "📲 ADD TO HOME SCREEN";
         btnFullscreen.setAttribute("aria-label", "Add to Home Screen");
         btnFullscreen.title =
@@ -425,7 +470,7 @@ if (btnFullscreen) {
         btnFullscreen.addEventListener("click", () => {
           alert(
             "To play fullscreen on this device:\n\n" +
-              "1. Tap the Share button (↑) in Safari\n" +
+              "1. Tap the Share button (↑) in your browser\n" +
               '2. Select "Add to Home Screen"\n' +
               "3. Open Clockwork Carnage from your home screen\n\n" +
               "The game will run in fullscreen mode!",
@@ -514,6 +559,7 @@ titleScreen.addEventListener("click", () => {
   game.audio.menuConfirm();
   enterModeSelect();
 });
+
 
 document.addEventListener("keydown", (e) => {
   if (
@@ -608,7 +654,10 @@ function gameLoop(timestamp) {
   try {
     const updateStart = devToolsEnabled || game.profiling ? performance.now() : 0;
     game.update(timestamp);
-    attract.tick();
+    // Not on a phone: the reel builds the station and four campaign levels
+    // to film them, and that on top of the game it was tapped into ended the
+    // page on an iPhone. "Watch trailer" still plays it there.
+    if (!primaryTouch) attract.tick();
     // The attract loop runs unattended on the title: 30 fps is plenty.
     const cap = attractFrameCap(game, frameCapFor(game.settings));
     if (!pacer.shouldRender(timestamp, cap)) {

@@ -7,6 +7,7 @@ import {
   layoutKind,
   CHIP_H,
   CHIP_H_COMPACT,
+  subtitleLines,
 } from "../../src/ui/message-lanes.js";
 
 const DESKTOP = [
@@ -17,6 +18,9 @@ const DESKTOP = [
 const PHONES = [
   { name: "iPhone 14 landscape", w: 844, h: 390 },
   { name: "iPhone SE landscape", w: 667, h: 375 },
+  { name: "iPhone 15 Pro, Brave bars", w: 849, h: 316 },
+  { name: "iPhone 15 Pro, Safari toolbar", w: 852, h: 323 },
+  { name: "iPhone 15 Pro, Brave bars (narrow)", w: 734, h: 333 },
 ];
 const STYLES = [
   { name: "DOOM", hudStyle: 1, modern: true },
@@ -57,7 +61,8 @@ describe("message lanes", () => {
       expect(r.x + r.w, k).toBeLessThanOrEqual(c.w);
       expect(r.y + r.h, k).toBeLessThanOrEqual(c.h);
       // On a small phone the headline may cover the kill feed, nothing else.
-      const soft = c.compact && k === "headline" ? ["killFeed"] : [];
+      // On a phone the subtitle may share the corner with Vanguard's pickup captions.
+      const soft = c.compact && k === "headline" ? ["killFeed", "bossBar", "compass"] : c.compact && k === "chips" ? ["killFeed"] : c.compact && (k === "commsLow" || k === "comms") ? ["pickups"] : [];
       expect(hits(r, L.reserved).filter((n) => !soft.includes(n)), k).toEqual([]);
     }
     for (const [a, b] of PAIRS) {
@@ -74,7 +79,13 @@ describe("message lanes", () => {
     expect(L.headline.w).toBeGreaterThanOrEqual(c.compact ? 260 : 600);
     expect(L.headline.h).toBeGreaterThanOrEqual(c.compact ? 80 : 150);
     expect(L.commsLow.w).toBeGreaterThanOrEqual(c.compact ? 300 : 360);
-    expect(L.commsLow.h).toBeGreaterThanOrEqual(c.compact ? 64 : 90);
+    expect(L.commsLow.h).toBeGreaterThanOrEqual(c.compact ? subtitleLines(c.h) * 16 + 24 : 90);
+  });
+
+  it.each(cases.filter((c) => c.compact).map((c) => [label(c), c]))("%s: the phone subtitle stays under the reticle", (_, c) => {
+    const L = messageLanes(c);
+    // The strip (below its name tab) starts well clear of the screen's centre.
+    expect(L.commsLow.y + 14, "subtitle top").toBeGreaterThan(c.h / 2 + 20);
   });
 
   it("puts the headline under Vanguard's compass, and under the boss bar when there is one", () => {

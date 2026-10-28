@@ -55,6 +55,7 @@ import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
+import { CITY_GLASS, warmCityView } from "../src/rendering/env/city-view.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -828,7 +829,7 @@ const LOGIC = {
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
           ["OFFICER", "Six years and you're still a cadet. Ugh.", "calm"],
           ["OFFICER", "Hold the fort, Cadet. Somebody's got to mind the coffee.", "happy"],
-          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Put it on, get used to it, and meet me at the range.", "calm"],
+          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Put it on and meet me at the range. Dr. Orr's coming down to look you over.", "calm"],
         ]);
       }
       return c.phase === "leave" && t.scriptIdle();
@@ -2163,10 +2164,16 @@ export class TutorialSystem {
   _begin() {
     const g = this.game;
     if (g.hasCutsceneScript("clocking_in")) {
-      this._prewarmStation(g);
+      const warm = this._prewarmStation(g);
       g.startCutscene("clocking_in", () => {
-        g.ariaEnabled = true;
-        this.initLevel();
+        const start = () => {
+          g.ariaEnabled = true;
+          this.initLevel();
+        };
+        // Skipped early: finish the station behind a short hold rather than
+        // bake it under play (7 s at ~3 fps on an iPhone).
+        if (warm && !warm.done()) warm.finish(start);
+        else start();
       });
     } else {
       g.ariaEnabled = true;
@@ -2179,13 +2186,14 @@ export class TutorialSystem {
    * opening scene plays, a few walls per idle moment, then its people. Left
    * to the first frame in the station, the walls froze it for ~1 s while the
    * squad stood there in Legacy art. Whatever the scene leaves undone when it
-   * is skipped, the level finishes as before.
+   * is skipped, `finish` bakes behind a progress bar before the level starts.
+   * @returns {{ done: () => boolean, finish: (onDone: () => void) => void } | null}
    */
   _prewarmStation(g) {
     const r = g.renderer;
     const ctx = r?.ctx;
     const viewH = r?.height;
-    if (!r?.prewarmEnv || !ctx || !viewH || getArtStyle() === ART_LEGACY) return;
+    if (!r?.prewarmEnv || !ctx || !viewH || getArtStyle() === ART_LEGACY) return null;
     const act = r._actPalette || 1;
     const level = r._envLevel ?? null;
     // The rooms in view at the start first, the east wing after.
@@ -2199,30 +2207,118 @@ export class TutorialSystem {
     const people = ["officer", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
     let built = false;
     let uploaded = false;
+    const cityGlass = TUTORIAL_MAP.ownWalls.some((id) => CITY_GLASS[id] === 1);
+    let city = false;
     const until = performance.now() + 20000;
+    const total = 3 + walls.length;
+    // An iPhone browser paints canvases later, in its GPU process: a bake
+    // costs next to nothing here and lands on whatever next waits for the GPU
+    // (a pixel read froze the comic 1.1 s; the first frames in the station
+    // waited on every 3D blit). Reading one pixel back makes each bake pay
+    // its own cost inside the slice that queued it.
+    const queued = typeof requestIdleCallback !== "function";
+    const settle = () => {
+      if (!queued) return;
+      try {
+        ctx.getImageData(0, 0, 1, 1);
+      } catch (_) {
+        // A tainted or lost canvas: the next frame settles it instead.
+      }
+    };
+    // Safari has no requestIdleCallback. Its stand-in deadline must run out:
+    // a fixed timeRemaining() kept the loop below baking every wall in one
+    // slice, a ~4 s freeze in the opening comic on an iPhone.
     const idle = (fn) =>
-      typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 100 }) : setTimeout(() => fn({ timeRemaining: () => 8 }), 16);
-    const slice = (deadline) => {
-      // The level adopts the env once it starts: painting into it then
-      // would re-upload the wall pass for every wall.
-      if (g.mode !== "tutorial" || g.state === GameState.PLAYING || performance.now() > until) return;
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback(fn, { timeout: 100 })
+        : setTimeout(() => {
+            // 12 of every 16 ms: the opening's panels are mostly still, and
+            // the bake left at the comic's end shows as untextured walls.
+            const end = performance.now() + 12;
+            fn({ timeRemaining: () => Math.max(0, end - performance.now()) });
+          }, 16);
+    // One piece of the work; false once there is none left.
+    const work = (deadline) => {
       if (!built) {
         r.prewarmEnv(act, level);
         built = true;
       } else if (walls.length) {
         // At least one a slice: an idle callback that timed out has no time left.
-        do r.prewarmEnv(act, level, [walls.shift()]);
-        while (walls.length && deadline.timeRemaining() > 4);
+        do {
+          r.prewarmEnv(act, level, [walls.shift()]);
+          settle();
+        } while (walls.length && deadline.timeRemaining() > 4);
+      } else if (!city) {
+        // The city through the windows, a piece a slice: left to play, its
+        // pixel reads held the first second in the station (~300 ms each).
+        city = !cityGlass || warmCityView();
+        settle();
       } else if (!uploaded) {
         // Then onto the GPU, a few faces a slice.
         uploaded = r.prewarmWallPass(act, level, 8);
         if (uploaded) warmPropSet(viewH / 2);
+        settle();
       } else if (prefetchEnemyModel(ctx, people[0], halfHeights, undefined, 2)) {
         people.shift();
       }
-      if (people.length) idle(slice);
+      return people.length > 0;
+    };
+    const stationReady = () => built && !walls.length && city && uploaded;
+    let finishing = false;
+    const slice = (deadline) => {
+      // The level adopts the env once it starts: painting into it then
+      // would re-upload the wall pass for every wall.
+      if (finishing || g.mode !== "tutorial" || g.state === GameState.PLAYING || performance.now() > until) return;
+      if (work(deadline)) idle(slice);
     };
     idle(slice);
+
+    // The comic's last frame, dimmed, with how far the station has got.
+    const hold = () => {
+      const w = ctx.canvas.width;
+      const h = ctx.canvas.height;
+      const left = (built ? 0 : 1) + walls.length + (city ? 0 : 1) + (uploaded ? 0 : 1);
+      const bw = Math.min(260, w * 0.4);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.06)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(w / 2 - bw / 2 - 12, h - 64, bw + 24, 44);
+      ctx.fillStyle = "#cfe";
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("PREPARING THE STATION", w / 2, h - 46);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(w / 2 - bw / 2, h - 34, bw, 4);
+      ctx.fillStyle = "#4ef";
+      ctx.fillRect(w / 2 - bw / 2, h - 34, bw * (1 - left / total), 4);
+      ctx.restore();
+    };
+    // The walls and their upload, which play would otherwise bake on sight.
+    // The people still decode as the steps call for them.
+    return {
+      done: stationReady,
+      finish(onDone) {
+        finishing = true;
+        // A slice a frame from the game's cutscene update (so a stepped test
+        // run drives it too). No scene is up meanwhile: the hook also keeps
+        // the game from taking that for a lost scene.
+        g.cutsceneHold = () => {
+          if (g.mode !== "tutorial") {
+            g.cutsceneHold = null;
+            return;
+          }
+          const end = performance.now() + 50;
+          const deadline = { timeRemaining: () => Math.max(0, end - performance.now()) };
+          while (!stationReady() && performance.now() < end) work(deadline);
+          if (stationReady()) {
+            g.cutsceneHold = null;
+            onDone();
+          } else hold();
+        };
+      },
+    };
   }
 
   initLevel() {
@@ -2611,12 +2707,16 @@ export class TutorialSystem {
   /**
    * Rasterise an NPC look now, a few layers a frame, before a scene changes
    * someone into it: left to the swap, the new sprite blinked out while its
-   * layers decoded.
+   * layers decoded. Not on a phone (no requestIdleCallback): there the
+   * locker room's five looks held its first ~8 s at 2-5 fps (measured on an
+   * iPhone 15 Pro), with the page's own work under 20 ms a frame. A blink at
+   * the swap costs less. The opening comic still warms them (_prewarmStation).
    */
   warmNpc(g, kind) {
     const ctx = g.renderer?.ctx;
     const viewH = g.renderer?.height;
     if (!ctx || !viewH || getArtStyle() === ART_LEGACY || typeof requestAnimationFrame !== "function") return;
+    if (typeof requestIdleCallback !== "function") return;
     const halfHeights = [viewH / 2.4, viewH / 5];
     const until = performance.now() + 8000;
     const step = () => {

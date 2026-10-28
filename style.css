@@ -1,4 +1,6 @@
 /* Clockwork Carnage - Styles */
+/* Heights use dvh after a vh fallback: on a phone 100vh is the screen
+   without the browser's bars, so the title and menus ran under them. */
 * {
   margin: 0;
   padding: 0;
@@ -13,13 +15,30 @@
   --sal: env(safe-area-inset-left, 0px);
 }
 
+/* No double-tap zoom anywhere (iPhone browsers ignore user-scalable=no);
+   panning and taps still work. Pinches are refused in src/utils/device.js. */
+html,
+body {
+  touch-action: manipulation;
+}
+
+/* iPhone browsers enlarge text in landscape unless told not to: the title,
+   menus and creator came up "zoomed in" on every iOS browser. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: #000;
   color: #ccc;
   font-family: "Courier New", monospace;
   overflow: hidden;
-  width: 100vw;
+  /* 100%, not 100vw: Brave on iPhone makes 100vw the whole screen (852 px)
+     while the page sits between the notch insets (734 px). */
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   cursor: none;
   overscroll-behavior: none;
 }
@@ -35,8 +54,9 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: none;
   image-rendering: pixelated;
   touch-action: none;
@@ -46,8 +66,9 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: none;
   pointer-events: none;
   z-index: 10;
@@ -59,8 +80,9 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -86,6 +108,7 @@ body {
      the whole title column inside short viewports without flex-shrink
      collapsing the art (it was being squeezed from 400px to ~143px). */
   width: min(700px, 90vw, 77vh);
+  width: min(700px, 90vw, 77dvh);
   aspect-ratio: 7 / 4;
   height: auto;
   flex: 0 0 auto;
@@ -176,8 +199,9 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -428,8 +452,9 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.95);
   z-index: 9999;
   justify-content: center;
@@ -607,9 +632,10 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
   }
 
   #titleScreen .title-svg-container {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 70vh;
+    height: 70dvh;
     margin-bottom: 0;
   }
 
@@ -642,6 +668,7 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
      give the scene back the height it needs. */
   #titleScreen .title-svg-container {
     height: 62vh;
+    height: 62dvh;
   }
 
   #titleScreen .landing-features {
@@ -778,6 +805,7 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
 
   #titleScreen .title-svg-container {
     height: min(50vh, 260px);
+    height: min(50dvh, 260px);
     margin-bottom: 10px;
   }
 
@@ -1315,5 +1343,78 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
 @media (max-height: 500px) {
   #titleScreen .title-logo {
     width: min(340px, 50vw);
+  }
+}
+
+/* ── Landscape phone title: two columns ──
+   The logo floated over the scene and hid it, and the scene's 100vw plus the
+   notch padding made the page wider than the screen (Brave zoomed out to fit
+   and drew it off centre). The logo, subtitle and prompt take the left
+   column, the scene the right, the capability row the foot; every width is
+   inside the padded screen. */
+@media (max-height: 420px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  #titleScreen .title-svg-container {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    width: 54%;
+    max-width: 54%;
+    height: 74vh;
+    height: 74dvh;
+  }
+
+  :root #titleScreen h1.title-logo-wrap {
+    position: absolute;
+    top: 10vh;
+    top: 10dvh;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: auto;
+    width: 40%;
+    margin: 0;
+  }
+
+  #titleScreen .title-logo {
+    width: 100%;
+    max-height: 44vh;
+    max-height: 44dvh;
+    object-fit: contain;
+  }
+
+  /* Centred in the left column, each as wide as its own text (the
+     subtitle's plate stretched to the column otherwise). The art-style
+     selector matches the Modern plate's rule, which pins it to the foot. */
+  :root[data-art-style] #titleScreen .subtitle,
+  :root[data-art-style] #titleScreen .start-prompt {
+    left: calc(max(12px, env(safe-area-inset-left, 0px)) + 20%);
+    right: auto;
+    width: max-content;
+    max-width: 40%;
+    transform: translateX(-50%);
+  }
+
+  :root[data-art-style] #titleScreen .subtitle {
+    top: 60vh;
+    top: 60dvh;
+    bottom: auto;
+  }
+
+  :root[data-art-style] #titleScreen .start-prompt {
+    top: 72vh;
+    top: 72dvh;
+    bottom: auto;
+    font-size: 14px;
+  }
+
+  /* The capability row under the scene, in the right column. */
+  #titleScreen .title-svg-container {
+    height: 64vh;
+    height: 64dvh;
+  }
+
+  #titleScreen .landing-features {
+    left: auto;
+    right: max(8px, env(safe-area-inset-right, 0px));
+    width: 54%;
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
   }
 }

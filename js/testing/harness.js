@@ -2184,7 +2184,9 @@ function botCadet(game) {
   };
 
   // Per-step budget in ticks (60 a second). Scenes wait on dialogue.
-  const BUDGET = { arrive: 7200, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800, toLab: 4800, escort: 6000 };
+  // arrive and toLab hold every line for its reading time (aria-comms
+  // readingTime), and the Supervisor explains the range on the way to R&D.
+  const BUDGET = { arrive: 8400, alarm: 5400, reveal: 3600, sim: 7200, breaker: 6000, certify: 4800, toLab: 6000, escort: 6000 };
   // Pacing, as the plan measures it: seconds from the creator to the first
   // shot, and the longest the cadet stands still while someone talks.
   const pacing = { standing: {}, time: {}, stood: 0, lastX: p.x, lastY: p.y, shots: 0 };
