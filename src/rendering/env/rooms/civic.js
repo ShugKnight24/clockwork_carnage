@@ -469,10 +469,29 @@ function glassSheen(kind) {
 
 /** The curtain wall's panes (x, y, w, h on the 512px face), for city-view.js. */
 const PANES = [[10, 36, T - 20, 114], [10, 160, T - 20, PLINTH - 166]];
+/** The public doors' two leaves, inside their bronze frames (paintEntrance). */
+const DOOR_PANES = [[16, 116, T / 2 - 24, PLINTH - 116], [T / 2 + 8, 116, T / 2 - 24, PLINTH - 116]];
+
+/** The doors' glass once the city shows through: the windows' sheen and the push bars across it. */
+function doorGlass() {
+  const sheen = glassSheen(1);
+  return (ctx) => {
+    sheen(ctx);
+    for (const x of [40, T / 2 + 30]) {
+      ctx.fillStyle = BRONZE[1];
+      ctx.fillRect(x, 300, T / 2 - 80, 12);
+      ctx.fillStyle = "rgba(255,226,170,0.45)";
+      ctx.fillRect(x, 300, T / 2 - 80, 3);
+    }
+  };
+}
+
 export const GLASS = {
   [W.WINDOW_A]: { panes: PANES, paint: glassSheen(0) },
   [W.WINDOW_B]: { panes: PANES, paint: glassSheen(1) },
   [W.WINDOW_C]: { panes: PANES, paint: glassSheen(2) },
+  // The doors look onto the same street as the windows beside them.
+  [W.ENTRANCE]: { panes: DOOR_PANES, paint: doorGlass() },
 };
 
 /** Someone standing on the steps outside, seen through the glass: `s` tall to the shoulder. */
